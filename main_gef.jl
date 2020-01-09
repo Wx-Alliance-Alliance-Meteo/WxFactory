@@ -3,7 +3,7 @@ include("get_parameters.jl")
 include("initialize.jl")
 include("matrices.jl")
 include("plot_cubedsphere.jl")
-include("plot_field.jl")
+#include("plot_field.jl")
 
 function main(argv)
 
