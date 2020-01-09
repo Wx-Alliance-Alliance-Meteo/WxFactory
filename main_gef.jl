@@ -2,8 +2,8 @@ include("cubed_sphere.jl")
 include("get_parameters.jl")
 include("initialize.jl")
 include("matrices.jl")
-include("plot_cubedsphere.jl")
-#include("plot_field.jl")
+#include("plot_cubedsphere.jl")
+include("plot_field.jl")
 
 function main(argv)
 
@@ -26,7 +26,7 @@ function main(argv)
    Q = initialize(geom, param.case_number, param.α)
 
    println("\nTODO : Plot initial conditions\n")
-#   plot_field(geom, Q[:,:,:,1])
+   plot_field(geom, Q[:,:,:,1])
 
 
 
