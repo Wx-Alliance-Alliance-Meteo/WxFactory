@@ -25,9 +25,6 @@ function main(argv)
    # Initialize state variables
    Q = initialize(geom, param.case_number, param.α)
 
-   display(minimum(abs.(Q[:,:,:,1])))
-   display(maximum(abs.(Q[:,:,:,1])))
-
    println("\nTODO : Plot initial conditions\n")
 #   plot_field(geom, Q[:,:,:,1])
 
