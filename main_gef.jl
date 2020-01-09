@@ -3,6 +3,7 @@ include("get_parameters.jl")
 include("initialize.jl")
 include("matrices.jl")
 include("plot_cubedsphere.jl")
+include("plot_field.jl")
 
 function main(argv)
 
@@ -16,16 +17,22 @@ function main(argv)
    # Create the mesh
    geom = cubed_sphere(param.nb_elements, param.degree)
 
-   plot_cubedsphere(geom)
+#   plot_cubedsphere(geom)
 
    # Build differentiation matrices and DFR boundary correction
    mtrx = matrices(geom)
 
    # Initialize state variables
-   Q = initialize(geom, param.case_number)
+   Q = initialize(geom, param.case_number, param.α)
+
+   display(minimum(abs.(Q[:,:,:,1])))
+   display(maximum(abs.(Q[:,:,:,1])))
 
    println("\nTODO : Plot initial conditions\n")
-#
+#   plot_field(geom, Q[:,:,:,1])
+
+
+
    # Time stepping
    t           = 0.
    step::Int64 = 0

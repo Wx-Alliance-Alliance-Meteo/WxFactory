@@ -1,106 +1,66 @@
 include("constants.jl")
 
-function initialize(geom, case_number)
+function initialize(geom, case_number, α)
 
-#   bubble_θ = 303.15
-#
-   # Initial state at rest, isentropic, hydrostatic
-#   nk, ni = size(geom.X)
-#   Q = zeros(nk, ni, nb_equations)
-#   U = zeros(size(geom.X))
-#   W = zeros(size(geom.X))
-#   Π = zeros(size(geom.X))
-#   θ = ones(size(geom.X)) * bubble_θ
-#
-#   if case_number == 1
-#
-#         xc = 500.0
-#         zc = 260.0
-#         rad = 250.0
-#
-#         pert = 0.5
-#
-#         for k in 1:nk
-#            for i in 1:ni
-#               r = (geom.X[k,i]-xc)^2 + (geom.Z[k,i]-zc)^2
-#               if r < rad^2
-#                  θ[k,i] = θ[k,i] + pert
-#               end
-#            end
-#         end
-#
-#
-#   elseif case_number == 2
-#
-#         A = 0.5
-#         a = 50.
-#         s = 100.
-#         x0 = 500.
-#         z0 = 260.
-#
-#         for k in 1:nk
-#            for i in 1:ni
-#               r = sqrt( (geom.X[k,i]-x0)^2 + (geom.Z[k,i]-z0)^2 )
-#               if r <= a
-#                  θ[k,i] = θ[k,i] + A
-#               else
-#                  θ[k,i] = θ[k,i] + A*exp(-((r-a)/s)^2)
-#               end
-#            end
-#         end
-#
-#   else
-#
-#         A = 0.5
-#         a = 150.
-#         s = 50.
-#         x0 = 500.
-#         z0 = 300.
-#
-#         for k in 1:nk
-#            for i in 1:ni
-#               r = sqrt( (geom.X[k,i]-x0)^2 + (geom.Z[k,i]-z0)^2 )
-#               if r <= a
-#                  θ[k,i] = θ[k,i] + A
-#               else
-#                  θ[k,i] = θ[k,i] + A*exp(-((r-a)/s)^2)
-#               end
-#            end
-#         end
-#
-#         A = -0.15
-#         a = 0.
-#         s = 50.
-#         x0 = 560.
-#         z0 = 640.
-#
-#         for k in 1:nk
-#            for i in 1:ni
-#               r = sqrt( (geom.X[k,i]-x0)^2 + (geom.Z[k,i]-z0)^2 )
-#               if r <= a
-#                  θ[k,i] = θ[k,i] + A
-#               else
-#                  θ[k,i] = θ[k,i] + A*exp(-((r-a)/s)^2)
-#               end
-#            end
-#         end
-#
-#   end
-#
-#   for k in 1:nk
-#      for i in 1:ni
-#         Π[k,i] = ( 1.0 - gravity / (cpd * bubble_θ) * geom.Z[k,i])
-#      end
-#   end
-#
-#   ρ = P0 ./ (Rd .* bubble_θ) .* Π.^(cvd / Rd)
-#
-#   Q[:,:,RHO]       = ρ
-#   Q[:,:,RHO_U]     = ρ .* U
-#   Q[:,:,RHO_W]     = ρ .* W
-#   Q[:,:,RHO_THETA] = ρ .* θ
-#
-#   return Q
-return Any
+   ni, nj, = size(geom.lon)
+
+   if case_number == 1
+      # Initialize gaussian bell
+
+      lon_center = 3.0 * pi / 2.0
+      lat_center = 0.0
+
+      h0 = 1000.0
+
+      radius = 1.0 / 3.0
+
+      dist = acos.(sin(lat_center) .* sin.(geom.lat) .+ cos(lat_center) .* cos.(geom.lat) .* cos.(geom.lon .- lon_center))
+
+      h = 0.5 .* h0 .* (1.0 .+ cos.(pi .* dist ./ radius)) .* (dist .<= radius)
+
+#      h_analytic = h
+#      hsurf = zeros(ni, nj, nbfaces)
+   end
+
+   if case_number == 1
+      # Solid body rotation
+
+      u¹ = zeros(ni, nj, nbfaces)
+      u² = zeros(ni, nj, nbfaces)
+
+      u0 = 2.0 * pi * earth_radius / (12.0 * day_in_secs)
+      sinα = sin(α)
+      cosα = cos(α)
+
+      u¹[:,:,1] .= u0 ./ earth_radius .* (cosα .+ geom.Y ./ (1.0 .+ geom.X.^2) .* sinα)
+      u²[:,:,1] .= u0 .* geom.X ./ (earth_radius .* (1.0 .+ geom.Y.^2)) .* (geom.Y .* cosα .- sinα)
+
+      u¹[:,:,2] .= u0 ./ earth_radius .* (cosα .- geom.X .* geom.Y ./ (1.0 .+ geom.X.^2) .* sinα)
+      u²[:,:,2] .= u0 ./ earth_radius .* (geom.X .* geom.Y ./ (1.0 .+ geom.Y.^2) .* cosα .- sinα)
+
+      u¹[:,:,3] .= u0 ./ earth_radius .* (cosα .- geom.Y ./ (1.0 .+ geom.X.^2) .* sinα)
+      u²[:,:,3] .= u0 .* geom.X ./ (earth_radius .* (1.0 .+ geom.Y.^2)) .* (geom.Y .* cosα .+ sinα)
+
+      u¹[:,:,4] .= u0 ./ earth_radius .* (cosα .+ geom.X .* geom.Y ./ (1.0 .+ geom.X.^2) .* sinα)
+      u²[:,:,4] .= u0 ./ earth_radius .* (geom.X .* geom.Y ./ (1.0 .+ geom.Y.^2) .* cosα .+ sinα)
+
+      u¹[:,:,5] .= u0 ./ earth_radius .* (- geom.Y ./ (1.0 .+ geom.X.^2) .* cosα .+ sinα)
+      u²[:,:,5] .= u0 .* geom.X ./ (earth_radius .* (1.0 .+ geom.Y.^2)) .* (cosα .+ geom.Y .* sinα)
+
+      u¹[:,:,6] .= u0 ./ earth_radius .* (geom.Y ./ (1.0 .+ geom.X.^2) .* cosα .- sinα)
+      u²[:,:,6] .=-u0 .* geom.X ./ (earth_radius .* (1.0 .+ geom.Y.^2)) .* (cosα .+ geom.Y .* sinα)
+
+#      u = u¹_contra * earth_radius * 2/grd.elementSize
+#      v = u²_contra * earth_radius * 2/grd.elementSize
+
+   end
+
+   Q = zeros(ni, nj, nbfaces, nb_equations)
+
+   Q[:,:,:,1] .= h
+   Q[:,:,:,2] .= h .* u¹
+   Q[:,:,:,3] .= h .* u²
+
+   return Q
 
 end
