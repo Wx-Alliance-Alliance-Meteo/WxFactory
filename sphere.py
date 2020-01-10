@@ -1,4 +1,6 @@
-function sph2cart(az, elev, radius)
+import numpy
+
+def sph2cart(az, elev, radius):
    """ SPH2CART Transform spherical to Cartesian coordinates.
       [X,Y,Z] = SPH2CART(TH,PHI,radius) transforms corresponding elements of
       data stored in spherical coordinates (azimuth TH, elevation PHI,
@@ -10,15 +12,14 @@ function sph2cart(az, elev, radius)
       positive x axis.  PHI is the elevation angle from the xy plane.
    """
 
-   z        = radius .* sin.(elev)
-   rcoselev = radius .* cos.(elev)
-   x        = rcoselev .* cos.(az)
-   y        = rcoselev .* sin.(az)
+   z        = radius * numpy.sin(elev)
+   rcoselev = radius * numpy.cos(elev)
+   x        = rcoselev * numpy.cos(az)
+   y        = rcoselev * numpy.sin(az)
 
    return x, y, z
-end
 
-function cart2sph(x,y,z)
+def cart2sph(x,y,z):
    """ CART2SPH Transform Cartesian to spherical coordinates.
       [TH,PHI,R] = CART2SPH(X,Y,Z) transforms corresponding elements of
       data stored in Cartesian coordinates X,Y,Z to spherical
@@ -30,10 +31,9 @@ function cart2sph(x,y,z)
       positive x axis.  PHI is the elevation angle from the xy plane.
    """
 
-   hypotxy = hypot.(x, y)
-   r       = hypot.(hypotxy, z)
-   elev    = atan.(z, hypotxy)
-   az      = atan.(y, x)
+   hypotxy = numpy.hypot(x, y)
+   r       = numpy.hypot(hypotxy, z)
+   elev    = numpy.arctan(z, hypotxy)
+   az      = numpy.arctan2(y, x)
 
-   return az,elev,r
-end
+   return az, elev, r

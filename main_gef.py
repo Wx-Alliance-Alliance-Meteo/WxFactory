@@ -1,18 +1,25 @@
-include("cubed_sphere.jl")
-include("get_parameters.jl")
-include("initialize.jl")
-include("matrices.jl")
+#!/usr/bin/env python3
+
+from cubed_sphere import cubed_sphere
+from parameters import get_parameters
+from plots import *
+from matrices import set_operators
+from initialize import initialize
+#include("matrices.jl")
 #include("plot_cubedsphere.jl")
-include("plot_field.jl")
+#include("plot_field.jl")
 
-function main(argv)
+import sys
+import numpy
 
-   if isempty(argv)
-      argv=["config/gef_settings.yml"]
-   end
+def main():
+   if len(sys.argv) == 1:
+      cfg_file = 'config/gef_settings.ini'
+   else:
+      cfg_file = sys.argv[1]
 
    # Read configuration file
-   param = get_parameters(argv)
+   param = get_parameters(cfg_file)
 
    # Create the mesh
    geom = cubed_sphere(param.nb_elements, param.degree)
@@ -20,21 +27,18 @@ function main(argv)
 #   plot_cubedsphere(geom)
 
    # Build differentiation matrices and DFR boundary correction
-   mtrx = matrices(geom)
+   mtrx = set_operators(geom)
 
    # Initialize state variables
    Q = initialize(geom, param.case_number, param.α)
 
-   println("\nTODO : Plot initial conditions\n")
-   plot_field(geom, Q[:,:,:,1])
-
-
+   plot_field(geom, Q[:,:,:,0])
 
    # Time stepping
    t           = 0.
-   step::Int64 = 0
+   step        = 0
    krylov_size = param.krylov_size
-#
+
 #   rhs_handle(q) = rhs_fun(q, grd, mtrx, param.degree+1, param.nb_elements_x, param.nb_elements_z, param.α)
 #
 #   nb_steps = ceil(Int, param.t_end / param.dt)
@@ -126,4 +130,8 @@ function main(argv)
 #
 #   end
 
-end; main(ARGS)
+#end; main(ARGS)
+
+if __name__ == '__main__':
+   numpy.set_printoptions(suppress=True, linewidth=256)
+   main()
