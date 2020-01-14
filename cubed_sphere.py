@@ -29,7 +29,7 @@ def cubed_sphere(nb_elements, degree):
    nb_elements_x2 = nb_elements
 
    # Gauss-Legendre solution points
-   solutionPoints, weights = quadrature.gauss_legendre(degree+1)
+   solutionPoints, _ = quadrature.gauss_legendre(degree+1)
    print('Solution points : ', solutionPoints)
 
    nb_solpts = len(solutionPoints)
@@ -42,9 +42,6 @@ def cubed_sphere(nb_elements, degree):
    # Equiangular coordinates
    Δx1 = (domain_x1[1] - domain_x1[0]) / nb_elements_x1
    Δx2 = (domain_x2[1] - domain_x2[0]) / nb_elements_x2
-
-#   faces_x1 = LinRange(domain_x1[1], domain_x1[2], nb_elements_x1 + 1) |> collect
-#   faces_x2 = LinRange(domain_x2[1], domain_x2[2], nb_elements_x2 + 1) |> collect
 
    faces_x1 = numpy.linspace(start = domain_x1[0], stop = domain_x1[1], num = nb_elements_x1 + 1)
    faces_x2 = numpy.linspace(start = domain_x2[0], stop = domain_x2[1], num = nb_elements_x2 + 1)
@@ -61,7 +58,7 @@ def cubed_sphere(nb_elements, degree):
       idx = i * nb_solpts
       x2[idx : idx + nb_solpts] = faces_x2[i] + scaled_points * Δx2
 
-   X1, X2 = numpy.meshgrid(x1, x2);
+   X1, X2 = numpy.meshgrid(x1, x2)
 
    # Gnomonic coordinates
    X = numpy.tan(X1)

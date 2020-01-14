@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
 
+import sys
+import numpy
+
+from blockstats import blockstats
 from cubed_sphere import cubed_sphere
 from parameters import get_parameters
 from plots import *
@@ -8,9 +12,6 @@ from initialize import initialize
 #include("matrices.jl")
 #include("plot_cubedsphere.jl")
 #include("plot_field.jl")
-
-import sys
-import numpy
 
 def main():
    if len(sys.argv) == 1:
@@ -32,10 +33,10 @@ def main():
    # Initialize state variables
    Q = initialize(geom, param.case_number, param.α)
 
-   plot_field(geom, Q[:,:,:,0])
+#   plot_field(geom, Q[:,:,:,0])
 
    # Time stepping
-   t           = 0.
+   t           = 0.0
    step        = 0
    krylov_size = param.krylov_size
 
@@ -43,7 +44,7 @@ def main():
 #
 #   nb_steps = ceil(Int, param.t_end / param.dt)
 #
-#   blockstats(Q, step)
+   blockstats(Q, step)
 #
 #   local previous_Q, previous_rhs
 #   while t < param.t_end
