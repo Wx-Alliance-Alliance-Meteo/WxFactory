@@ -5,7 +5,6 @@ import math
 import numpy
 import time
 
-
 from blockstats   import blockstats
 from constants    import *
 from cubed_sphere import cubed_sphere
@@ -38,7 +37,6 @@ def main():
 
    if param.plot_freq  > 0:
       print('TODO : plot solution')
-#   plot_field(geom, Q[:,:,:,0])
 
    # Time stepping
    t           = 0.0

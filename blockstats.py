@@ -20,6 +20,3 @@ def blockstats(Q, step):
    print("w\t\tmean = %e\tmin = %e\tmax = %e\n" % (numpy.mean(ww), numpy.amin(ww), numpy.amax(ww)) )
 
    print("==================================================================================")
-
-
-

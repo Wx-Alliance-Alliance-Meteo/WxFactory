@@ -54,7 +54,6 @@ def initialize(geom, case_number, α):
 #      u = u1_contra * earth_radius * 2/grd.elementSize
 #      v = u2_contra * earth_radius * 2/grd.elementSize
 
-
    Q = numpy.zeros((ni, nj, nbfaces, nb_equations))
 
    Q[:,:,:,0] = h
