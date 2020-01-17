@@ -1,7 +1,10 @@
 import math
 import numpy
+import scipy.special
 
 def gauss_legendre(n):
+
+   # https://en.wikipedia.org/wiki/Gaussian_quadrature#Gauss%E2%80%93Legendre_quadrature
 
    if n == 1:
       points  = [0.0]
@@ -27,6 +30,6 @@ def gauss_legendre(n):
                  (322.0 + 13.0 * math.sqrt(70.0)) / 900.0, (322.0 - 13.0 * math.sqrt(70.0)) / 900.0]
 
    else:
-         points, weights = numpy.polynomial.legendre.leggauss(n)
+         points, weights = scipy.special.roots_legendre(n)
 
    return numpy.array(points), numpy.array(weights)

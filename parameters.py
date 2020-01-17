@@ -12,6 +12,7 @@ class Param:
       self.degree = degree
       self.nb_elements = nb_elements
       self.stat_freq = stat_freq
+      self.plot_freq = plot_freq
 
 def get_parameters(cfg_file):
 
