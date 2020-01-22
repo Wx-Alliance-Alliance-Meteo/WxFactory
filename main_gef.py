@@ -34,19 +34,18 @@ def main():
    # Initialize state variables
    Q, hsurf = initialize(geom, param.case_number, param.α)
 
-   if param.plot_freq  > 0:
+#   if param.plot_freq  > 0:
 #      plot_sphere(geom)
 #      plot_field(geom, geom.lon)
 #      plot_field(geom, geom.lat)
-      plot_field(geom, Q[:,:,:,0] + hsurf)
+#      plot_field(geom, Q[:,:,:,0] + hsurf)
 
    # Time stepping
    t           = 0.0
    step        = 0
    krylov_size = param.krylov_size
 
-   exit(0)
-   rhs_handle = lambda q: rhs_fun(q, geom, mtrx, param.degree+1, param.nb_elements_x, param.nb_elements_z, param.α)
+   rhs_handle = lambda q: rhs_fun(q, geom, mtrx, param.degree+1, param.nb_elements, param.nb_elements, param.α)
 
    nb_steps = math.ceil(param.t_end / param.dt)
 
@@ -130,8 +129,6 @@ def main():
       # Plot solution
       if step % param.plot_freq == 0:
          print('TODO : plot solution')
-
-
 
 if __name__ == '__main__':
    numpy.set_printoptions(suppress=True, linewidth=256)
