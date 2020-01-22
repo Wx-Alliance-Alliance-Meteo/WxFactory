@@ -32,13 +32,13 @@ def main():
    mtrx = set_operators(geom)
 
    # Initialize state variables
-   Q = initialize(geom, param.case_number, param.α)
+   Q, hsurf = initialize(geom, param.case_number, param.α)
 
    if param.plot_freq  > 0:
 #      plot_sphere(geom)
 #      plot_field(geom, geom.lon)
 #      plot_field(geom, geom.lat)
-#      plot_field(geom, Q[:,:,:,0])
+      plot_field(geom, Q[:,:,:,0] + hsurf)
 
    # Time stepping
    t           = 0.0
