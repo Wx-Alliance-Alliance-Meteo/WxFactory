@@ -64,51 +64,43 @@ def cubed_sphere(nb_elements, degree):
    X = numpy.tan(X1)
    Y = numpy.tan(X2)
 
-   # Cartesian coordinates on unit sphere
-   cartX = numpy.zeros((ni,nj,nbfaces))
-   cartY = numpy.zeros((ni,nj,nbfaces))
-   cartZ = numpy.zeros((ni,nj,nbfaces))
-
-   R = 1.0
-   a = R / math.sqrt(3)
-   x = a * numpy.tan(X1)
-   y = a * numpy.tan(X2)
-   proj = R / numpy.sqrt(a**2 + x**2 + y**2)
-
-   cartX[:,:,0] = proj * a
-   cartY[:,:,0] = proj * x
-   cartZ[:,:,0] = proj * y
-
-   cartX[:,:,1] = proj * -x
-   cartY[:,:,1] = proj * a
-   cartZ[:,:,1] = proj * y
-
-   cartX[:,:,2] = proj * -a
-   cartY[:,:,2] = proj * -x
-   cartZ[:,:,2] = proj * y
-
-   cartX[:,:,3] = proj * x
-   cartY[:,:,3] = proj * -a
-   cartZ[:,:,3] = proj * y
-
-   cartX[:,:,4] = proj * -y
-   cartY[:,:,4] = proj * x
-   cartZ[:,:,4] = proj * a
-
-   cartX[:,:,5] = proj * y
-   cartY[:,:,5] = proj * x
-   cartZ[:,:,5] = proj * -a
-
    # Spherical coordinates
    lon = numpy.zeros((ni,nj,nbfaces))
    lat = numpy.zeros((ni,nj,nbfaces))
 
-   for pannel in range(nbfaces):
-      lon[:,:,pannel] = X1 + math.pi/2.0 * (pannel - 1)
+   # Equatorial panel
+   for pannel in range(4):
+      lon[:,:,pannel] = X1 + math.pi/2.0 * pannel
       lat[:,:,pannel] = numpy.arctan(Y * numpy.cos(X1))
 
-   lon[:,:,-2:-1], lat[:,:,-2:-1], r = sphere.cart2sph(cartX[:,:,-2:-1], cartY[:,:,-2:-1], cartZ[:,:,-2:-1])
+   # North polar panel
+   pannel = 4
+   for j in range(nj):
+      for i in range(ni):
+         if abs(X[i,j]) > numpy.finfo(float).eps :
+            lon[i,j,pannel] = math.atan2(X[i,j], -Y[i,j])
+         elif Y[i,j] <= 0.0:
+            lon[i,j,pannel] = 0.0
+         else:
+            lon[i,j,pannel] = math.pi
+   lat[:,:,pannel] = math.pi/2 - numpy.arctan(numpy.sqrt(X**2 + Y**2))
 
+   # South polar panel
+   pannel = 5
+   for j in range(nj):
+      for i in range(ni):
+         if abs(X[i,j]) > numpy.finfo(float).eps :
+            lon[i,j,pannel] = math.atan2(X[i,j], Y[i,j])
+         elif Y[i,j] > 0.0:
+            lon[i,j,pannel] = 0.0
+         else:
+            lon[i,j,pannel] = math.pi
+   lat[:,:,pannel] = -math.pi/2 + numpy.arctan(numpy.sqrt(X**2 + Y**2))
+
+   # Map to the interval [0, 2 pi]
    lon[lon<0] = lon[lon<0] + (2.0 * math.pi)
+
+   # Cartesian coordinates on unit sphere
+   cartX, cartY, cartZ = sphere.sph2cart(lon, lat, 1.0)
 
    return Geom(solutionPoints, extension, X1, X2, Δx1, Δx2, X, Y, cartX, cartY, cartZ, lon, lat)

@@ -35,11 +35,10 @@ def main():
    Q = initialize(geom, param.case_number, param.α)
 
    if param.plot_freq  > 0:
-#      plot_field(geom, Q[:,:,:,0])
-#      plot_field(geom, geom.lat)
-      plot_field(geom, geom.lon)
 #      plot_sphere(geom)
-#      print('TODO : plot solution')
+#      plot_field(geom, geom.lon)
+#      plot_field(geom, geom.lat)
+#      plot_field(geom, Q[:,:,:,0])
 
    # Time stepping
    t           = 0.0
