@@ -8,6 +8,7 @@ import time
 from blockstats   import blockstats
 from constants    import *
 from cubed_sphere import cubed_sphere
+from graphx       import *
 from initialize   import initialize
 from kiops        import kiops
 from matrices     import set_operators
@@ -30,19 +31,22 @@ def main():
    # Build differentiation matrices and DFR boundary correction
    mtrx = set_operators(geom)
 
-   print('TODO'); exit(0)
-
    # Initialize state variables
    Q = initialize(geom, param.case_number, param.α)
 
    if param.plot_freq  > 0:
-      print('TODO : plot solution')
+#      plot_field(geom, Q[:,:,:,0])
+#      plot_field(geom, geom.lat)
+      plot_field(geom, geom.lon)
+#      plot_sphere(geom)
+#      print('TODO : plot solution')
 
    # Time stepping
    t           = 0.0
    step        = 0
    krylov_size = param.krylov_size
 
+   exit(0)
    rhs_handle = lambda q: rhs_fun(q, geom, mtrx, param.degree+1, param.nb_elements_x, param.nb_elements_z, param.α)
 
    nb_steps = math.ceil(param.t_end / param.dt)

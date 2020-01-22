@@ -109,7 +109,6 @@ def cubed_sphere(nb_elements, degree):
 
    lon[:,:,-2:-1], lat[:,:,-2:-1], r = sphere.cart2sph(cartX[:,:,-2:-1], cartY[:,:,-2:-1], cartZ[:,:,-2:-1])
 
-
    lon[lon<0] = lon[lon<0] + (2.0 * math.pi)
 
    return Geom(solutionPoints, extension, X1, X2, Δx1, Δx2, X, Y, cartX, cartY, cartZ, lon, lat)

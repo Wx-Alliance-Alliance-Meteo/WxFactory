@@ -1,6 +1,7 @@
 import math
 import numpy
 from constants import *
+from wind2contra import *
 
 def initialize(geom, case_number, α):
 
@@ -53,6 +54,34 @@ def initialize(geom, case_number, α):
 
 #      u = u1_contra * earth_radius * 2/grd.elementSize
 #      v = u2_contra * earth_radius * 2/grd.elementSize
+
+   elif case_number == 6:
+
+      # Rossby-Haurwitz wave
+
+      R = 4
+
+      omega = 7.848e-6
+      K     = omega
+      h0    = 8000
+
+      A = omega/2 * (2*rotation_speed+omega) * numpy.cos(geom.lat)**2 + (K**2)/4 * numpy.cos(geom.lat)**(2*R) \
+         * ( (R+1)*numpy.cos(geom.lat)**2 + (2*R**2-R-2) - 2*(R**2)*numpy.cos(geom.lat)**(-2) )
+
+      B = 2 * (rotation_speed+omega) * K / ((R+1)*(R+2)) * numpy.cos(geom.lat)**R * ( (R**2+2*R+2) - (R+1)**2*numpy.cos(geom.lat)**2 )
+
+      C = (K**2)/4 * numpy.cos(geom.lat)**(2*R) * ( (R+1)*(numpy.cos(geom.lat)**2) - (R+2) )
+
+      h = h0 + ( earth_radius**2*A + earth_radius**2*B*numpy.cos(R*geom.lon) + earth_radius**2*C*numpy.cos(2*R*geom.lon) ) / gravity
+
+      u = earth_radius * omega * numpy.cos(geom.lat) + earth_radius * K * numpy.cos(geom.lat)**(R-1) * \
+            ( R*numpy.sin(geom.lat)**2-numpy.cos(geom.lat)**2 ) * numpy.cos(R*geom.lon)
+      v = -earth_radius * K * R * numpy.cos(geom.lat)**(R-1) * numpy.sin(geom.lat) * numpy.sin(R*geom.lon)
+
+      u1, u2 = wind2contra(u, v, geom)
+
+      hsurf = numpy.zeros_like(h)
+
 
    Q = numpy.zeros((ni, nj, nbfaces, nb_equations))
 
