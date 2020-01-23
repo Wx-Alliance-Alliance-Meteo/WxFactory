@@ -7,33 +7,55 @@ def wind2contra(u, v, geom):
    u1_contra = numpy.zeros_like(u)
    u2_contra = numpy.zeros_like(v)
 
-   for face in range(4):
+   for face in range(nbfaces):
       for j in range(nj):
          for i in range(ni):
-            delta2 = 1 + geom.X[i,j]**2 + geom.Y[i,j]**2
-            u1_contra[i,j,face] = u[i,j,face]
-            u2_contra[i,j,face] = ( geom.X[i,j] * geom.Y[i,j] / (1 + geom.Y[i,j]**2) ) * u[i,j,face] \
-                                + ((1 + geom.Y[i,j]**2) * math.sqrt(1 + geom.X[i,j]**2) / delta2) * v[i,j,face]
+            dX = geom.X[i,j]
+            dY = geom.Y[i,j]
+            delta2 = 1.0 + dX * dX + dY * dY
 
-   face = 4
-   s = 1
-   for j in range(nj):
-      for i in range(ni):
-         delta2 = 1 + geom.X[i,j]**2 + geom.Y[i,j]**2
-         u1_contra[i,j,face] = (-s * geom.Y[i,j] / (1 + geom.X[i,j]**2)) * u[i,j,face] \
-                             + (-s * delta2 * geom.X[i,j] / ((1 + geom.X[i,j]**2) * math.sqrt(geom.X[i,j]**2 + geom.Y[i,j]**2))) * v[i,j,face]
+            if (face > 3) and (abs(dX) < 1.0e-13) and (abs(dY) < 1.0e-13):
+               if face == 4:
+                  u1_contra[i,j,face] = u[i,j,face]
+               else:
+                  u1_contra[i,j,face] = -u[i,j,face]
+               u2_contra[i,j,face] = v[i,j,face]
 
-         u2_contra[i,j,face] = ( s * geom.X[i,j] / (1 + geom.Y[i,j]**2)) * u[i,j,face] \
-                             + ((-s * delta2 * geom.Y[i,j]) / ((1+geom.Y[i,j]**2) * math.sqrt(geom.X[i,j]**2 + geom.Y[i,j]**2))) * v[i,j,face]
+            if face <= 3:
+               # Convert spherical coords to geometric basis
+               uu = u[i,j,face] / math.cos(geom.lat[i,j,face])
 
-   face = 5
-   s = -1
-   for j in range(nj):
-      for i in range(ni):
-         delta2 = 1 + geom.X[i,j]**2 + geom.Y[i,j]**2
-         u1_contra[i,j,face] = (-s * geom.Y[i,j] / (1 + geom.X[i,j]**2)) * u[i,j,face] \
-                             + (-s * delta2 * geom.X[i,j] / ((1 + geom.X[i,j]**2) * math.sqrt(geom.X[i,j]**2 + geom.Y[i,j]**2))) * v[i,j,face]
+               # Calculate new vector components
+               u1_contra[i,j,face] = uu
 
-         u2_contra[i,j,face] = ( s * geom.X[i,j] / (1 + geom.Y[i,j]**2)) * u[i,j,face] \
-                             + ((-s * delta2 * geom.Y[i,j]) / ((1+geom.Y[i,j]**2) * math.sqrt(geom.X[i,j]**2 + geom.Y[i,j]**2))) * v[i,j,face]
+               u2_contra[i,j,face] = dX * dY / (1.0 + dY * dY) * uu \
+				                       + delta2 / ((1.0 + dY * dY) * math.sqrt(1.0 + dX * dX)) * v[i,j,face]
+		      # North polar panel
+            if face == 4:
+			      # Convert spherical coords to geometric basis
+               uu = u[i,j,face] / math.cos(geom.lat[i,j,face])
+
+			      # Calculate new vector components
+               radius = math.sqrt(dX * dX + dY * dY)
+
+               u1_contra[i,j,face] = - dY / (1.0 + dX * dX) * uu \
+				                       - delta2 * dX / ((1.0 + dX * dX) * radius) * v[i,j,face]
+
+               u2_contra[i,j,face] = dX / (1.0 + dY * dY) * uu \
+				                       - delta2 * dY / ((1.0 + dY * dY) * radius) * v[i,j,face]
+
+		      # South polar panel
+            if face == 5:
+			      # Convert spherical coords to geometric basis
+               uu = u[i,j,face] / math.cos(geom.lat[i,j,face])
+
+			      # Calculate new vector components
+               radius = math.sqrt(dX * dX + dY * dY)
+
+               u1_contra[i,j,face] = dY / (1.0 + dX * dX) * uu \
+				                       + delta2 * dX / ((1.0 + dX * dX) * radius) * v[i,j,face]
+
+               u2_contra[i,j,face] = - dX / (1.0 + dY * dY) * uu \
+				                       + delta2 * dY / ((1.0 + dY * dY) * radius) * v[i,j,face]
+
    return u1_contra, u2_contra
