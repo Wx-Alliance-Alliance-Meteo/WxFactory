@@ -5,7 +5,7 @@ import quadrature
 from constants import *
 
 class Geom:
-  def __init__(self, solutionPoints, extension, x1, x2, Δx1, Δx2, X, Y, cartX, cartY, cartZ, lon, lat):
+  def __init__(self, solutionPoints, extension, x1, x2, Δx1, Δx2, X, Y, cartX, cartY, cartZ, lon, lat, cube_face):
     self.solutionPoints = solutionPoints
     self.extension = extension
     self.x1 = x1
@@ -19,8 +19,9 @@ class Geom:
     self.cartZ = cartZ
     self.lon = lon
     self.lat = lat
+    self.cube_face = cube_face
 
-def cubed_sphere(nb_elements, degree):
+def cubed_sphere(nb_elements, degree, cube_face):
 
    domain_x1 = (-math.pi/4, math.pi/4)
    domain_x2 = (-math.pi/4, math.pi/4)
@@ -65,37 +66,37 @@ def cubed_sphere(nb_elements, degree):
    Y = numpy.tan(X2)
 
    # Spherical coordinates
-   lon = numpy.zeros((ni,nj,nbfaces))
-   lat = numpy.zeros((ni,nj,nbfaces))
+   lon = numpy.zeros((ni,nj))
+   lat = numpy.zeros((ni,nj))
 
    # Equatorial panel
-   for pannel in range(4):
-      lon[:,:,pannel] = X1 + math.pi/2.0 * pannel
-      lat[:,:,pannel] = numpy.arctan(Y * numpy.cos(X1))
+   if cube_face < 4:
+      lon[:,:] = X1 + math.pi/2.0 * cube_face
+      lat[:,:] = numpy.arctan(Y * numpy.cos(X1))
 
    # North polar panel
-   pannel = 4
-   for j in range(nj):
-      for i in range(ni):
-         if abs(X[i,j]) > numpy.finfo(float).eps :
-            lon[i,j,pannel] = math.atan2(X[i,j], -Y[i,j])
-         elif Y[i,j] <= 0.0:
-            lon[i,j,pannel] = 0.0
-         else:
-            lon[i,j,pannel] = math.pi
-   lat[:,:,pannel] = math.pi/2 - numpy.arctan(numpy.sqrt(X**2 + Y**2))
+   if cube_face == 4:
+      for j in range(nj):
+         for i in range(ni):
+            if abs(X[i,j]) > numpy.finfo(float).eps :
+               lon[i,j] = math.atan2(X[i,j], -Y[i,j])
+            elif Y[i,j] <= 0.0:
+               lon[i,j] = 0.0
+            else:
+               lon[i,j] = math.pi
+      lat[:,:] = math.pi/2 - numpy.arctan(numpy.sqrt(X**2 + Y**2))
 
    # South polar panel
-   pannel = 5
-   for j in range(nj):
-      for i in range(ni):
-         if abs(X[i,j]) > numpy.finfo(float).eps :
-            lon[i,j,pannel] = math.atan2(X[i,j], Y[i,j])
-         elif Y[i,j] > 0.0:
-            lon[i,j,pannel] = 0.0
-         else:
-            lon[i,j,pannel] = math.pi
-   lat[:,:,pannel] = -math.pi/2 + numpy.arctan(numpy.sqrt(X**2 + Y**2))
+   if cube_face == 5:
+      for j in range(nj):
+         for i in range(ni):
+            if abs(X[i,j]) > numpy.finfo(float).eps :
+               lon[i,j] = math.atan2(X[i,j], Y[i,j])
+            elif Y[i,j] > 0.0:
+               lon[i,j] = 0.0
+            else:
+               lon[i,j] = math.pi
+      lat[:,:] = -math.pi/2 + numpy.arctan(numpy.sqrt(X**2 + Y**2))
 
    # Map to the interval [0, 2 pi]
    lon[lon<0] = lon[lon<0] + (2.0 * math.pi)
@@ -103,4 +104,4 @@ def cubed_sphere(nb_elements, degree):
    # Cartesian coordinates on unit sphere
    cartX, cartY, cartZ = sphere.sph2cart(lon, lat, 1.0)
 
-   return Geom(solutionPoints, extension, X1, X2, Δx1, Δx2, X, Y, cartX, cartY, cartZ, lon, lat)
+   return Geom(solutionPoints, extension, X1, X2, Δx1, Δx2, X, Y, cartX, cartY, cartZ, lon, lat, cube_face)

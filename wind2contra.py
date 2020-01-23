@@ -1,61 +1,62 @@
-import math
 import numpy
 
 def wind2contra(u, v, geom):
-   ni,nj,nbfaces = u.shape
+   ni, nj = u.shape
 
    u1_contra = numpy.zeros_like(u)
    u2_contra = numpy.zeros_like(v)
 
-   for face in range(nbfaces):
-      for j in range(nj):
-         for i in range(ni):
-            dX = geom.X[i,j]
-            dY = geom.Y[i,j]
-            delta2 = 1.0 + dX * dX + dY * dY
+   delta2 = 1.0 + geom.X**2 + geom.Y**2
 
-            if (face > 3) and (abs(dX) < 1.0e-13) and (abs(dY) < 1.0e-13):
-               if face == 4:
-                  u1_contra[i,j,face] = u[i,j,face]
-               else:
-                  u1_contra[i,j,face] = -u[i,j,face]
-               u2_contra[i,j,face] = v[i,j,face]
+   if geom.cube_face <= 3:
+      # Convert spherical coords to geometric basis
+      uu = u / numpy.cos(geom.lat)
 
-            if face <= 3:
-               # Convert spherical coords to geometric basis
-               uu = u[i,j,face] / math.cos(geom.lat[i,j,face])
+      # Calculate new vector components
+      u1_contra = uu
 
-               # Calculate new vector components
-               u1_contra[i,j,face] = uu
+      u2_contra = geom.X * geom.Y / (1.0 + geom.Y**2) * uu \
+                + delta2 / ((1.0 + geom.Y**2) * numpy.sqrt(1.0 + geom.X**2)) * v
+   else:
 
-               u2_contra[i,j,face] = dX * dY / (1.0 + dY * dY) * uu \
-				                       + delta2 / ((1.0 + dY * dY) * math.sqrt(1.0 + dX * dX)) * v[i,j,face]
-		      # North polar panel
-            if face == 4:
-			      # Convert spherical coords to geometric basis
-               uu = u[i,j,face] / math.cos(geom.lat[i,j,face])
+	   # North polar panel
+      if geom.cube_face == 4:
+		   # Convert spherical coords to geometric basis
+         uu = u / numpy.cos(geom.lat)
 
-			      # Calculate new vector components
-               radius = math.sqrt(dX * dX + dY * dY)
+		   # Calculate new vector components
+         radius = numpy.sqrt(geom.X**2 + geom.Y**2)
 
-               u1_contra[i,j,face] = - dY / (1.0 + dX * dX) * uu \
-				                       - delta2 * dX / ((1.0 + dX * dX) * radius) * v[i,j,face]
+         u1_contra = - geom.Y / (1.0 + geom.X**2) * uu \
+		             - delta2 * geom.X / ((1.0 + geom.X**2) * radius) * v
 
-               u2_contra[i,j,face] = dX / (1.0 + dY * dY) * uu \
-				                       - delta2 * dY / ((1.0 + dY * dY) * radius) * v[i,j,face]
+         u2_contra = geom.X / (1.0 + geom.Y**2) * uu \
+		             - delta2 * geom.Y / ((1.0 + geom.Y**2) * radius) * v
 
-		      # South polar panel
-            if face == 5:
-			      # Convert spherical coords to geometric basis
-               uu = u[i,j,face] / math.cos(geom.lat[i,j,face])
+         for j in range(nj):
+            for i in range(ni):
+               if abs(geom.X[i,j]) < 1.0e-13 and abs(geom.Y[i,j]) < 1.0e-13:
+                  u1_contra[i,j] = u[i,j]
+                  u2_contra[i,j] = v[i,j]
 
-			      # Calculate new vector components
-               radius = math.sqrt(dX * dX + dY * dY)
+	   # South polar panel
+      if geom.cube_face == 5:
+		   # Convert spherical coords to geometric basis
+         uu = u / numpy.cos(geom.lat)
 
-               u1_contra[i,j,face] = dY / (1.0 + dX * dX) * uu \
-				                       + delta2 * dX / ((1.0 + dX * dX) * radius) * v[i,j,face]
+		   # Calculate new vector components
+         radius = numpy.sqrt(geom.X**2 + geom.Y**2)
 
-               u2_contra[i,j,face] = - dX / (1.0 + dY * dY) * uu \
-				                       + delta2 * dY / ((1.0 + dY * dY) * radius) * v[i,j,face]
+         u1_contra = geom.Y / (1.0 + geom.X * geom.X) * uu \
+		             + delta2 * geom.X / ((1.0 + geom.X * geom.X) * radius) * v
+
+         u2_contra = - geom.X / (1.0 + geom.Y * geom.Y) * uu \
+		             + delta2 * geom.Y / ((1.0 + geom.Y * geom.Y) * radius) * v
+
+         for j in range(nj):
+            for i in range(ni):
+               if abs(geom.X[i,j]) < 1.0e-13 and abs(geom.Y[i,j]) < 1.0e-13:
+                  u1_contra[i,j] = -u[i,j]
+                  u2_contra[i,j] = v[i,j]
 
    return u1_contra, u2_contra

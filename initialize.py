@@ -5,7 +5,7 @@ from wind2contra import *
 
 def initialize(geom, case_number, α):
 
-   ni, nj, _= geom.lon.shape
+   ni, nj = geom.lon.shape
 
    if case_number == -1 or \
       case_number == 1  or \
@@ -13,8 +13,8 @@ def initialize(geom, case_number, α):
       case_number == 5:
       # Solid body rotation
 
-      u1 = numpy.zeros((ni, nj, nbfaces))
-      u2 = numpy.zeros((ni, nj, nbfaces))
+      u1 = numpy.zeros((ni, nj))
+      u2 = numpy.zeros((ni, nj))
 
       if case_number == 5:
          u0 = 20.0
@@ -58,8 +58,7 @@ def initialize(geom, case_number, α):
 
       h = 0.5 * h0 * (1.0 + numpy.cos(math.pi * dist / radius)) * (dist <= radius)
 
-      h_analytic = h
-      hsurf = numpy.zeros((ni, nj, nbfaces))
+      hsurf = numpy.zeros_like(h)
 
 
    elif case_number == 2:
@@ -97,7 +96,7 @@ def initialize(geom, case_number, α):
 
       r = numpy.sqrt(numpy.minimum(rr**2,(geom.lon-lon_mountain)**2 + (geom.lat-lat_mountain)**2))
 
-      hsurf = hs0 * (1-r / rr)
+      hsurf = hs0 * (1 - r / rr)
 
       h = h_star - hsurf
 
@@ -130,10 +129,10 @@ def initialize(geom, case_number, α):
 
 #      u = u1_contra * earth_radius * 2/grd.elementSize
 #      v = u2_contra * earth_radius * 2/grd.elementSize
-   Q = numpy.zeros((ni, nj, nbfaces, nb_equations))
+   Q = numpy.zeros((ni, nj, nb_equations))
 
-   Q[:,:,:,0] = h
-   Q[:,:,:,1] = h * u1
-   Q[:,:,:,2] = h * u2
+   Q[:,:,0] = h
+   Q[:,:,1] = h * u1
+   Q[:,:,2] = h * u2
 
    return Q, hsurf

@@ -2,6 +2,7 @@
 
 import sys
 import math
+import mpi4py.MPI
 import numpy
 import time
 
@@ -13,6 +14,7 @@ from initialize   import initialize
 from kiops        import kiops
 from matrices     import set_operators
 from matvec       import matvec_fun
+from metric       import build_metric
 from parameters   import get_parameters
 from rhs_fun      import rhs_fun
 
@@ -25,27 +27,39 @@ def main():
    # Read configuration file
    param = get_parameters(cfg_file)
 
+   # Set up distributed world
+   communicator = mpi4py.MPI.COMM_WORLD
+
+   if communicator.Get_size() % 6 != 0:
+      raise Exception('Number of processes should be a multiple of 6 ...')
+
+   # TODO : changer ceci quand on aura plus qu'un PE par face
+   my_cube_face = communicator.rank
+
    # Create the mesh
-   geom = cubed_sphere(param.nb_elements, param.degree)
+   geom = cubed_sphere(param.nb_elements, param.degree, my_cube_face)
 
    # Build differentiation matrices and DFR boundary correction
    mtrx = set_operators(geom)
 
+   # Initialize metric tensor
+   metric = build_metric(geom)
+
    # Initialize state variables
    Q, hsurf = initialize(geom, param.case_number, param.α)
 
-#   if param.plot_freq  > 0:
+   if param.plot_freq  > 0:
 #      plot_sphere(geom)
-#      plot_field(geom, geom.lon)
-#      plot_field(geom, geom.lat)
-#      plot_field(geom, Q[:,:,:,0] + hsurf)
+      plot_field(geom, geom.lon)
+      plot_field(geom, geom.lat)
+      plot_field(geom, Q[:,:,0] + hsurf)
 
    # Time stepping
    t           = 0.0
    step        = 0
    krylov_size = param.krylov_size
 
-   rhs_handle = lambda q: rhs_fun(q, geom, mtrx, param.degree+1, param.nb_elements, param.nb_elements, param.α)
+   rhs_handle = lambda q: rhs_fun(q, geom, mtrx, metric, param.degree+1, param.nb_elements, param.nb_elements, param.α)
 
    nb_steps = math.ceil(param.t_end / param.dt)
 
@@ -129,6 +143,8 @@ def main():
       # Plot solution
       if step % param.plot_freq == 0:
          print('TODO : plot solution')
+
+      communicator.Disconnect()
 
 if __name__ == '__main__':
    numpy.set_printoptions(suppress=True, linewidth=256)
