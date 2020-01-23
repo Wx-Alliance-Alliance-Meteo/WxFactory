@@ -1,4 +1,5 @@
 import mayavi.mlab
+import numpy
 
 from constants import *
 
@@ -38,13 +39,11 @@ def plot_field(geom, field):
 #   for f in range(nbfaces):
 #      plt.plot_source[f].mlab_source.scalars = field[f]
 
-#def plot_vect(geom, u, v): # TODO : cov, contra
-#
-#   if mpi4py.MPI.COMM_WORLD.Get_rank() == 0:
-#      fig = mayavi.mlab.figure(0, size=(800, 800), bgcolor=(0, 0, 0))
-#      for f in range(nbfaces):
-#         xdot = -glb_u[f] * numpy.sin(glb_lon[f]) - glb_v[f] * numpy.cos(glb_lon[f]) * numpy.sin(glb_lat[f])
-#         ydot =  glb_u[f] * numpy.cos(glb_lon[f]) - glb_v[f] * numpy.sin(glb_lon[f]) * numpy.sin(glb_lat[f])
-#         zdot =  glb_v[f] * numpy.cos(glb_lat[f])
-#         mayavi.mlab.quiver3d(glb_x[f], glb_y[f], glb_z[f], xdot, ydot, zdot);
-#      mayavi.mlab.show()
+def plot_uv(geom, u, v): # TODO : cov, contra
+   fig = mayavi.mlab.figure(0, size=(800, 800), bgcolor=(0, 0, 0))
+   for f in range(nbfaces):
+      xdot = -u[:,:,f] * numpy.sin(geom.lon[:,:,f]) - v[:,:,f] * numpy.cos(geom.lon[:,:,f]) * numpy.sin(geom.lat[:,:,f])
+      ydot =  u[:,:,f] * numpy.cos(geom.lon[:,:,f]) - v[:,:,f] * numpy.sin(geom.lon[:,:,f]) * numpy.sin(geom.lat[:,:,f])
+      zdot =  v[:,:,f] * numpy.cos(geom.lat[:,:,f])
+      mayavi.mlab.quiver3d(geom.cartX.T[f], geom.cartY.T[f], geom.cartZ.T[f], xdot.T, ydot.T, zdot.T)
+   mayavi.mlab.show()
