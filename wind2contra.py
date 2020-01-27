@@ -33,8 +33,8 @@ def wind2contra(u, v, geom):
          u2_contra = geom.X / (1.0 + geom.Y**2) * uu \
 		             - delta2 * geom.Y / ((1.0 + geom.Y**2) * radius) * v
 
-         for j in range(nj):
-            for i in range(ni):
+         for i in range(ni):
+            for j in range(nj):
                if abs(geom.X[i,j]) < 1.0e-13 and abs(geom.Y[i,j]) < 1.0e-13:
                   u1_contra[i,j] = u[i,j]
                   u2_contra[i,j] = v[i,j]
@@ -53,8 +53,8 @@ def wind2contra(u, v, geom):
          u2_contra = - geom.X / (1.0 + geom.Y * geom.Y) * uu \
 		             + delta2 * geom.Y / ((1.0 + geom.Y * geom.Y) * radius) * v
 
-         for j in range(nj):
-            for i in range(ni):
+         for i in range(ni):
+            for j in range(nj):
                if abs(geom.X[i,j]) < 1.0e-13 and abs(geom.Y[i,j]) < 1.0e-13:
                   u1_contra[i,j] = -u[i,j]
                   u2_contra[i,j] = v[i,j]

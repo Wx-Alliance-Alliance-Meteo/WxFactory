@@ -76,8 +76,8 @@ def cubed_sphere(nb_elements, degree, cube_face):
 
    # North polar panel
    if cube_face == 4:
-      for j in range(nj):
-         for i in range(ni):
+      for i in range(ni):
+         for j in range(nj):
             if abs(X[i,j]) > numpy.finfo(float).eps :
                lon[i,j] = math.atan2(X[i,j], -Y[i,j])
             elif Y[i,j] <= 0.0:
@@ -88,8 +88,8 @@ def cubed_sphere(nb_elements, degree, cube_face):
 
    # South polar panel
    if cube_face == 5:
-      for j in range(nj):
-         for i in range(ni):
+      for i in range(ni):
+         for j in range(nj):
             if abs(X[i,j]) > numpy.finfo(float).eps :
                lon[i,j] = math.atan2(X[i,j], Y[i,j])
             elif Y[i,j] > 0.0:
