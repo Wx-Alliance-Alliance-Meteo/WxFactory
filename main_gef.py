@@ -48,11 +48,11 @@ def main():
    # Initialize state variables
    Q, hsurf = initialize(geom, param.case_number, param.α)
 
-   if param.plot_freq  > 0:
+#   if param.plot_freq  > 0:
 #      plot_sphere(geom)
-      plot_field(geom, geom.lon)
-      plot_field(geom, geom.lat)
-      plot_field(geom, Q[:,:,0] + hsurf)
+#      plot_field(geom, geom.lon)
+#      plot_field(geom, geom.lat)
+#      plot_field(geom, Q[:,:,0] + hsurf)
 
    # Time stepping
    t           = 0.0

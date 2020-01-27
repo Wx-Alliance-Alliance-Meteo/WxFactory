@@ -20,18 +20,15 @@ def rhs_fun(Q, geom, mtrx, metric, nbsolpts, nb_elements_x1, nb_elements_x2, α)
    Q_yy             = numpy.zeros_like(Q, dtype=type_vec)
    upwind_diffusion = numpy.zeros_like(Q, dtype=type_vec)
 
-   print ('TODO : nb faces')
-   exit(0)
-
-   kfaces_flux      = numpy.zeros((2, nbsolpts*nb_elements_x1, nb_equations, nb_elements_x2), dtype=type_vec)
-   kfaces_var       = numpy.zeros((2, nbsolpts*nb_elements_x1, nb_equations, nb_elements_x2), dtype=type_vec)
-   kfaces_diffusion = numpy.zeros((2, nbsolpts*nb_elements_x1, nb_equations, nb_elements_x2), dtype=type_vec)
+   jfaces_flux      = numpy.zeros((2, nbsolpts*nb_elements_x1, nb_equations, nb_elements_x2), dtype=type_vec)
+   jfaces_var       = numpy.zeros((2, nbsolpts*nb_elements_x1, nb_equations, nb_elements_x2), dtype=type_vec)
+   jfaces_diffusion = numpy.zeros((2, nbsolpts*nb_elements_x1, nb_equations, nb_elements_x2), dtype=type_vec)
 
    ifaces_flux      = numpy.zeros((nbsolpts*nb_elements_x2, 2, nb_equations, nb_elements_x1), dtype=type_vec)
    ifaces_var       = numpy.zeros((nbsolpts*nb_elements_x2, 2, nb_equations, nb_elements_x1), dtype=type_vec)
    ifaces_diffusion = numpy.zeros((nbsolpts*nb_elements_x2, 2, nb_equations, nb_elements_x1), dtype=type_vec)
 
-   kfaces_pres = numpy.zeros((2, nbsolpts*nb_elements_x1, nb_elements_x2), dtype=type_vec)
+   jfaces_pres = numpy.zeros((2, nbsolpts*nb_elements_x1, nb_elements_x2), dtype=type_vec)
    ifaces_pres = numpy.zeros((nbsolpts*nb_elements_x2, 2, nb_elements_x1), dtype=type_vec)
 
    # Unpack physical variables
@@ -53,15 +50,11 @@ def rhs_fun(Q, geom, mtrx, metric, nbsolpts, nb_elements_x1, nb_elements_x2, α)
       epais = elem * nbsolpts + numpy.arange(nbsolpts)
 
       for eq in range(nb_equations):
-         kfaces_flux[0,:,eq,elem] = mtrx.lcoef @ flux_x2[epais,:,eq]
-         kfaces_flux[1,:,eq,elem] = mtrx.rcoef @ flux_x2[epais,:,eq]
+         jfaces_flux[0,:,eq,elem] = mtrx.lcoef @ flux_x2[epais,:,eq]
+         jfaces_flux[1,:,eq,elem] = mtrx.rcoef @ flux_x2[epais,:,eq]
 
-         kfaces_var[0,:,eq,elem] = mtrx.lcoef @ Q[epais,:,eq]
-         kfaces_var[1,:,eq,elem] = mtrx.rcoef @ Q[epais,:,eq]
-
-         kfaces_pres[0,:,elem] = mtrx.lcoef @ pressure[epais,:]
-         kfaces_pres[1,:,elem] = mtrx.rcoef @ pressure[epais,:]
-
+         jfaces_var[0,:,eq,elem] = mtrx.lcoef @ Q[epais,:,eq]
+         jfaces_var[1,:,eq,elem] = mtrx.rcoef @ Q[epais,:,eq]
 
    for elem in range(nb_elements_x1):
       epais = elem * nbsolpts + numpy.arange(nbsolpts)
@@ -73,47 +66,46 @@ def rhs_fun(Q, geom, mtrx, metric, nbsolpts, nb_elements_x1, nb_elements_x2, α)
          ifaces_var[:,0,eq,elem] = Q[:,epais,eq] @ mtrx.lcoef
          ifaces_var[:,1,eq,elem] = Q[:,epais,eq] @ mtrx.rcoef
 
-         ifaces_pres[:,0,elem] = pressure[:,epais] @ mtrx.lcoef
-         ifaces_pres[:,1,elem] = pressure[:,epais] @ mtrx.rcoef
+   print('TODO : halo exchange');exit(0)
 
    # Bondary treatement
    # zeros flux BCs everywhere ...
-   kfaces_flux[0,:,:,0]  = 0.0
-   kfaces_flux[1,:,:,-1] = 0.0
+   jfaces_flux[0,:,:,0]  = 0.0
+   jfaces_flux[1,:,:,-1] = 0.0
 
    ifaces_flux[:,0,:,0]  = 0.0
    ifaces_flux[:,1,:,-1] = 0.0
 
-   kfaces_diffusion[0,:,:,0]  = 0.0
-   kfaces_diffusion[1,:,:,-1] = 0.0
+   jfaces_diffusion[0,:,:,0]  = 0.0
+   jfaces_diffusion[1,:,:,-1] = 0.0
 
    ifaces_diffusion[:,0,:,0]  = 0.0
    ifaces_diffusion[:,1,:,-1] = 0.0
 
    # ... except for momentum eqs where pressure is extrapolated to BCs.
-   kfaces_flux[0,:,RHO_W,0]  = kfaces_pres[0,:,0]
-   kfaces_flux[1,:,RHO_W,-1] = kfaces_pres[1,:,-1]
+   jfaces_flux[0,:,RHO_W,0]  = jfaces_pres[0,:,0]
+   jfaces_flux[1,:,RHO_W,-1] = jfaces_pres[1,:,-1]
 
    ifaces_flux[:,0,RHO_U,0]   = ifaces_pres[:,0,0]  # TODO : theo seulement ...
    ifaces_flux[:,1,RHO_U,-1] = ifaces_pres[:,1,-1]
-#
+
    # Common Rusanov fluxes
    for itf in range(nb_interfaces_x2):
 
-      eig_L = numpy.abs(kfaces_var[1,:,RHO_W,itf] / kfaces_var[1,:,RHO,itf]) \
-            + numpy.sqrt( heat_capacity_ratio * kfaces_pres[1,:,itf] / kfaces_var[1,:,RHO,itf]  )
+      eig_L = numpy.abs(jfaces_var[1,:,RHO_W,itf] / jfaces_var[1,:,RHO,itf]) \
+            + numpy.sqrt( heat_capacity_ratio * jfaces_pres[1,:,itf] / jfaces_var[1,:,RHO,itf]  )
 
-      eig_R = numpy.abs(kfaces_var[0,:,RHO_W,itf+1] / kfaces_var[0,:,RHO,itf+1]) \
-            + numpy.sqrt( heat_capacity_ratio * kfaces_pres[0,:,itf+1] / kfaces_var[0,:,RHO,itf+1])
+      eig_R = numpy.abs(jfaces_var[0,:,RHO_W,itf+1] / jfaces_var[0,:,RHO,itf+1]) \
+            + numpy.sqrt( heat_capacity_ratio * jfaces_pres[0,:,itf+1] / jfaces_var[0,:,RHO,itf+1])
 
       for eq in range(nb_equations):
-         kfaces_flux[0,:,eq,itf+1] = 0.5 * ( kfaces_flux[1,:,eq,itf] + kfaces_flux[0,:,eq,itf+1] \
-               - numpy.maximum(numpy.abs(eig_L), numpy.abs(eig_R)) * ( kfaces_var[0,:,eq,itf+1] - kfaces_var[1,:,eq,itf] ) )
+         jfaces_flux[0,:,eq,itf+1] = 0.5 * ( jfaces_flux[1,:,eq,itf] + jfaces_flux[0,:,eq,itf+1] \
+               - numpy.maximum(numpy.abs(eig_L), numpy.abs(eig_R)) * ( jfaces_var[0,:,eq,itf+1] - jfaces_var[1,:,eq,itf] ) )
 
-      kfaces_flux[1,:,:,itf] = kfaces_flux[0,:,:,itf+1]
+      jfaces_flux[1,:,:,itf] = jfaces_flux[0,:,:,itf+1]
 
-      kfaces_diffusion[0,:,:,itf+1] = 0.5 * ( kfaces_var[1,:,:,itf] + kfaces_var[0,:,:,itf+1] )
-      kfaces_diffusion[1,:,:,itf]   = kfaces_diffusion[0,:,:,itf+1]
+      jfaces_diffusion[0,:,:,itf+1] = 0.5 * ( jfaces_var[1,:,:,itf] + jfaces_var[0,:,:,itf+1] )
+      jfaces_diffusion[1,:,:,itf]   = jfaces_diffusion[0,:,:,itf+1]
 
    for itf in range(nb_interfaces_x1):
 
@@ -136,8 +128,8 @@ def rhs_fun(Q, geom, mtrx, metric, nbsolpts, nb_elements_x1, nb_elements_x2, α)
       epais = elem * nbsolpts + numpy.arange(nbsolpts)
 
       for eq in range(nb_equations):
-         df2_dx2[epais,:,eq] = ( mtrx.diff_solpt @ flux_x2[epais,:,eq] + mtrx.correction @ kfaces_flux[:,:,eq,elem] ) * 2.0/geom.Δz
-         dQ_dx2[epais,:,eq]  = ( mtrx.diff_solpt @ Q[epais,:,eq] + mtrx.correction @ kfaces_diffusion[:,:,eq,elem] ) * 2.0/geom.Δz
+         df2_dx2[epais,:,eq] = ( mtrx.diff_solpt @ flux_x2[epais,:,eq] + mtrx.correction @ jfaces_flux[:,:,eq,elem] ) * 2.0/geom.Δz
+         dQ_dx2[epais,:,eq]  = ( mtrx.diff_solpt @ Q[epais,:,eq] + mtrx.correction @ jfaces_diffusion[:,:,eq,elem] ) * 2.0/geom.Δz
 
    for elem in range(nb_elements_x1):
       epais = elem * nbsolpts + numpy.arange(nbsolpts)
@@ -151,8 +143,8 @@ def rhs_fun(Q, geom, mtrx, metric, nbsolpts, nb_elements_x1, nb_elements_x2, α)
       epais = elem * nbsolpts + numpy.arange(nbsolpts)
 
       for eq in range(nb_equations):
-         kfaces_var[0,:,eq,elem] = mtrx.lcoef @ dQ_dx2[epais,:,eq]
-         kfaces_var[1,:,eq,elem] = mtrx.rcoef @ dQ_dx2[epais,:,eq]
+         jfaces_var[0,:,eq,elem] = mtrx.lcoef @ dQ_dx2[epais,:,eq]
+         jfaces_var[1,:,eq,elem] = mtrx.rcoef @ dQ_dx2[epais,:,eq]
 
    for elem in range(nb_elements_x1):
       epais = elem * nbsolpts + numpy.arange(nbsolpts)
@@ -163,16 +155,16 @@ def rhs_fun(Q, geom, mtrx, metric, nbsolpts, nb_elements_x1, nb_elements_x2, α)
 
    # Communication at cell interfaces with central flux
    for itf in range(nb_interfaces_x2):
-      kfaces_diffusion[0,:,:,itf+1] = 0.5 * ( kfaces_var[1,:,:,itf] + kfaces_var[0,:,:,itf+1] )
-      kfaces_diffusion[1,:,:,itf]   = kfaces_diffusion[0,:,:,itf+1]
+      jfaces_diffusion[0,:,:,itf+1] = 0.5 * ( jfaces_var[1,:,:,itf] + jfaces_var[0,:,:,itf+1] )
+      jfaces_diffusion[1,:,:,itf]   = jfaces_diffusion[0,:,:,itf+1]
 
    for itf in range(nb_interfaces_x1):
       ifaces_diffusion[:,0,:,itf+1] = 0.5 * ( ifaces_var[:,1,:,itf] + ifaces_var[:,0,:,itf+1] )
       ifaces_diffusion[:,1,:,itf]   = ifaces_diffusion[:,0,:,itf+1]
 
    # Bondary treatement (this should be equivalent to a zero diffusion coefficient at the boundary)
-   kfaces_diffusion[0,:,:,0]  = 0.0
-   kfaces_diffusion[1,:,:,-1] = 0.0
+   jfaces_diffusion[0,:,:,0]  = 0.0
+   jfaces_diffusion[1,:,:,-1] = 0.0
 
    ifaces_diffusion[:,0,:,0]  = 0.0
    ifaces_diffusion[:,1,:,-1] = 0.0
@@ -182,7 +174,7 @@ def rhs_fun(Q, geom, mtrx, metric, nbsolpts, nb_elements_x1, nb_elements_x2, α)
       epais = elem * nbsolpts + numpy.arange(nbsolpts)
 
       for eq in range(nb_equations):
-         Q_yy[epais,:,eq] = ( mtrx.diff_solpt @ dQ_dx2[epais,:,eq] + mtrx.correction @ kfaces_diffusion[:,:,eq,elem] ) * 2.0/geom.Δz
+         Q_yy[epais,:,eq] = ( mtrx.diff_solpt @ dQ_dx2[epais,:,eq] + mtrx.correction @ jfaces_diffusion[:,:,eq,elem] ) * 2.0/geom.Δz
 
    for elem in range(nb_elements_x1):
       epais = elem * nbsolpts + numpy.arange(nbsolpts)
