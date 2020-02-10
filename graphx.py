@@ -2,7 +2,7 @@ import mayavi.mlab
 import mpi4py.MPI
 import numpy
 
-from constants import *
+from definitions import *
 
 def plot_sphere(geom):
    glb_x = mpi4py.MPI.COMM_WORLD.gather(geom.cartX.T, root=0)
@@ -15,7 +15,6 @@ def plot_sphere(geom):
          mayavi.mlab.mesh(glb_x[f], glb_y[f], glb_z[f])
       mayavi.mlab.show()
 
-   # TODO : Dans une classe graphic ???
 def plot_field(geom, field):
    glb_x     = mpi4py.MPI.COMM_WORLD.gather(geom.cartX.T, root=0)
    glb_y     = mpi4py.MPI.COMM_WORLD.gather(geom.cartY.T, root=0)
@@ -52,10 +51,20 @@ def plot_field(geom, field):
 #      plt.plot_source[f].mlab_source.scalars = field[f]
 
 def plot_uv(geom, u, v): # TODO : cov, contra
-   fig = mayavi.mlab.figure(0, size=(800, 800), bgcolor=(0, 0, 0))
-   for f in range(nbfaces):
-      xdot = -u[:,:,f] * numpy.sin(geom.lon[:,:,f]) - v[:,:,f] * numpy.cos(geom.lon[:,:,f]) * numpy.sin(geom.lat[:,:,f])
-      ydot =  u[:,:,f] * numpy.cos(geom.lon[:,:,f]) - v[:,:,f] * numpy.sin(geom.lon[:,:,f]) * numpy.sin(geom.lat[:,:,f])
-      zdot =  v[:,:,f] * numpy.cos(geom.lat[:,:,f])
-      mayavi.mlab.quiver3d(geom.cartX.T[f], geom.cartY.T[f], geom.cartZ.T[f], xdot.T, ydot.T, zdot.T)
-   mayavi.mlab.show()
+
+   glb_x = mpi4py.MPI.COMM_WORLD.gather(geom.cartX, root=0)
+   glb_y = mpi4py.MPI.COMM_WORLD.gather(geom.cartY, root=0)
+   glb_z = mpi4py.MPI.COMM_WORLD.gather(geom.cartZ, root=0)
+   glb_lon = mpi4py.MPI.COMM_WORLD.gather(geom.lon, root=0)
+   glb_lat = mpi4py.MPI.COMM_WORLD.gather(geom.lat, root=0)
+   glb_u = mpi4py.MPI.COMM_WORLD.gather(u, root=0)
+   glb_v = mpi4py.MPI.COMM_WORLD.gather(v, root=0)
+
+   if mpi4py.MPI.COMM_WORLD.Get_rank() == 0:
+      fig = mayavi.mlab.figure(0, size=(800, 800), bgcolor=(0, 0, 0))
+      for f in range(nbfaces):
+         xdot = -glb_u[f] * numpy.sin(glb_lon[f]) - glb_v[f] * numpy.cos(glb_lon[f]) * numpy.sin(glb_lat[f])
+         ydot =  glb_u[f] * numpy.cos(glb_lon[f]) - glb_v[f] * numpy.sin(glb_lon[f]) * numpy.sin(glb_lat[f])
+         zdot =  glb_v[f] * numpy.cos(glb_lat[f])
+         mayavi.mlab.quiver3d(glb_x[f], glb_y[f], glb_z[f], xdot, ydot, zdot)
+      mayavi.mlab.show()

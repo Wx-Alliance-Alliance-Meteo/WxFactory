@@ -1,5 +1,6 @@
 import math
 import numpy
+import mpi4py.MPI
 import scipy.linalg
 
 """
@@ -82,15 +83,19 @@ def kiops(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 2,
    w_aug = numpy.zeros(p)
    w[:, 0] = u[:, 0]
 
+   # compute the 1-norm of u
+   local_sum = numpy.sum(abs(u[:, 1:]), axis=0)
+   global_sum = mpi4py.MPI.COMM_WORLD.allreduce(local_sum) # TODO : tester avec p>1
+   normU = numpy.amax(global_sum)
+
    # Normalization factors
-   normU = scipy.linalg.norm(u[:, 1:], 1)
    if ppo > 1 and normU > 0:
       ex = math.ceil(math.log2(normU))
       nu = 2**(-ex)
       mu = 2**(ex)
    else:
-      nu = 1
-      mu = 1
+      nu = 1.0
+      mu = 1.0
 
    # Flip the rest of the u matrix
    u_flip = nu * numpy.fliplr(u[:, 1:])
@@ -112,7 +117,7 @@ def kiops(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 2,
    oldm = -1; oldτ = math.nan; ω = math.nan
    orderold = True; kestold = True
 
-   l=0
+   l = 0
 
    while τ_now < τ_end:
 
@@ -147,10 +152,12 @@ def kiops(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 2,
 
          # Modified Gram-Schmidt
          for i in range(max(0, j - iop), j):
-            H[i, j-1] = V[:, i] @ V[:, j]
+            local_sum = V[:, i] @ V[:, j]
+            H[i, j-1] = mpi4py.MPI.COMM_WORLD.allreduce(local_sum)
             V[:, j] = V[:, j] - H[i, j-1] * V[:, i]
 
-         nrm = scipy.linalg.norm(V[:, j], 2)
+         local_sum = V[:, j] @ V[:, j]
+         nrm = numpy.sqrt( mpi4py.MPI.COMM_WORLD.allreduce(local_sum) )
 
          # Happy breakdown
          if nrm < tol:
@@ -160,7 +167,7 @@ def kiops(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 2,
          H[j, j-1] = nrm
          V[:, j]   = (1.0 / nrm) * V[:, j]
 
-         krystep = krystep + 1
+         krystep += 1
 
 
       # To obtain the phi_1 function which is needed for error estimate
@@ -172,7 +179,7 @@ def kiops(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 2,
 
       # Compute the exponential of the augmented matrix
       F = scipy.linalg.expm(sgn * τ * H[0:j + 1, 0:j + 1])
-      exps = exps + 1
+      exps += 1
 
       # Restore the value of H_{m+1,m}
       H[j, j-1] = nrm
@@ -244,33 +251,33 @@ def kiops(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 2,
       if ω <= delta:
 
          # Yep, got the required tolerance; update
-         reject = reject + ireject
-         step = step + 1
+         reject += ireject
+         step   += 1
 
          # Udate for τ_out in the interval (τ_now, τ_now + τ)
          blownTs = 0
          nextT = τ_now + τ
-         for k in range(numSteps):
+         for k in range(l, numSteps):
             if abs(τ_out[k]) < abs(nextT):
-               blownTs = blownTs + 1
+               blownTs += 1
 
          if blownTs != 0:
             # Copy current w to w we continue with.
             w[:, l+blownTs] = w[:, l]
 
             for k in range(blownTs):
-               τPhantom = τ_out[l+k-1] - τ_now
-               F2 = expm_kiops(sgn * τPhantom * H[:j, :j])
-               w[:, l+k-1] = beta * V[:n, :j] * F2[:j, 0]
+               τPhantom = τ_out[l+k] - τ_now
+               F2 = scipy.linalg.expm(sgn * τPhantom * H[0:j, :j])
+               w[:, l+k] = β * V[:n, :j] @ F2[:j, 0]
 
             # Advance l.
-            l = l + blownTs
+            l += blownTs
 
          # Using the standard scheme
          w[:, l] = β * V[:n, :j] @ F[:j, 0]
 
          # Update τ_out
-         τ_now = τ_now + τ
+         τ_now += τ
 
          j = 0
          ireject = 0
@@ -279,7 +286,7 @@ def kiops(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 2,
 
       else:
          # Nope, try again
-         ireject = ireject + 1
+         ireject += 1
 
          # Restore the original matrix
          H[0, j] = 0.0

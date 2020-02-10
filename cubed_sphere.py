@@ -2,26 +2,85 @@ import math
 import numpy
 import sphere
 import quadrature
-from constants import *
+from definitions import *
 
 class Geom:
-  def __init__(self, solutionPoints, extension, x1, x2, Δx1, Δx2, X, Y, cartX, cartY, cartZ, lon, lat, cube_face):
-    self.solutionPoints = solutionPoints
-    self.extension = extension
-    self.x1 = x1
-    self.x2 = x2
-    self.Δx1 = Δx1
-    self.Δx2 = Δx2
-    self.X = X
-    self.Y = Y
-    self.cartX = cartX
-    self.cartY = cartY
-    self.cartZ = cartZ
-    self.lon = lon
-    self.lat = lat
-    self.cube_face = cube_face
+   def __init__(self, solutionPoints, extension, x1, x2, Δx1, Δx2, X, Y, cartX, cartY, cartZ, lon, lat, X_itf_i, Y_itf_i, X_itf_j, Y_itf_j, cube_face):
+      self.solutionPoints = solutionPoints
+      self.extension = extension
+      self.x1 = x1
+      self.x2 = x2
+      self.Δx1 = Δx1
+      self.Δx2 = Δx2
+      self.X = X
+      self.Y = Y
+      self.cartX = cartX
+      self.cartY = cartY
+      self.cartZ = cartZ
+      self.lon = lon
+      self.lat = lat
+      self.X_itf_i = X_itf_i
+      self.Y_itf_i = Y_itf_i
+      self.X_itf_j = X_itf_j
+      self.Y_itf_j = Y_itf_j
+      self.cube_face = cube_face
 
-def cubed_sphere(nb_elements, degree, cube_face):
+      delta2 = 1.0 + X**2 + Y**2
+      delta  = numpy.sqrt(delta2)
+
+      if cube_face == 0:
+         self.coslon = 1.0 / numpy.sqrt( 1.0 + X**2 )
+         self.sinlon = X / numpy.sqrt( 1.0 + X**2 )
+   
+         self.coslat = numpy.sqrt( (1.0 + X**2) / delta2 )
+         self.sinlat = Y / delta
+   
+      elif cube_face == 1:
+         self.coslon = -X / numpy.sqrt( 1.0 + X**2 )
+         self.sinlon = 1.0 / numpy.sqrt( 1.0 + X**2 )
+   
+         self.coslat = numpy.sqrt( (1.0 + X**2) / delta2 )
+         self.sinlat = Y / delta
+   
+      elif cube_face == 2:
+         self.coslon = -1.0 / numpy.sqrt( 1.0 + X**2 )
+         self.sinlon = -X / numpy.sqrt( 1.0 + X**2 )
+   
+         self.coslat = numpy.sqrt( (1.0 + X**2) / delta2 )
+         self.sinlat = Y / delta
+   
+      elif cube_face == 3:
+         self.coslon = X / numpy.sqrt( 1.0 + X**2 )
+         self.sinlon = -1.0 / numpy.sqrt( 1.0 + X**2 )
+   
+         self.coslat = numpy.sqrt( (1.0 + X**2) / delta2 )
+         self.sinlat = Y / delta
+   
+      elif cube_face == 4:
+         self.coslon = -Y / numpy.sqrt( X**2 + Y**2 )
+         self.sinlon = X / numpy.sqrt( X**2 + Y**2 )
+   
+         self.coslat = numpy.sqrt( (X**2 + Y**2) / delta2 )
+         self.sinlat = 1.0 / delta
+   
+      elif cube_face == 5:
+         self.coslon = Y / numpy.sqrt( X**2 + Y**2 )
+         self.sinlon = X / numpy.sqrt( X**2 + Y**2 )
+   
+         self.coslat = numpy.sqrt( (X**2 + Y**2) / delta2 )
+         self.sinlat = -1.0 / delta
+   
+
+
+def cubed_sphere(nb_elements, nbsolpts, cube_face):
+
+#      +---+
+#      | 4 |
+#  +---+---+---+---+
+#  | 3 | 0 | 1 | 2 |
+#  +---+---+---+---+
+#      | 5 |
+#      +---+
 
    domain_x1 = (-math.pi/4, math.pi/4)
    domain_x2 = (-math.pi/4, math.pi/4)
@@ -30,10 +89,8 @@ def cubed_sphere(nb_elements, degree, cube_face):
    nb_elements_x2 = nb_elements
 
    # Gauss-Legendre solution points
-   solutionPoints, _ = quadrature.gauss_legendre(degree+1)
+   solutionPoints = quadrature.gauss_legendre(nbsolpts)
    print('Solution points : ', solutionPoints)
-
-   nb_solpts = len(solutionPoints)
 
    # Extend the solution points to include -1 and 1
    extension = numpy.append(numpy.append([-1], solutionPoints), [1])
@@ -50,20 +107,28 @@ def cubed_sphere(nb_elements, degree, cube_face):
    ni = nb_elements_x1 * len(solutionPoints)
    x1 = numpy.zeros(ni)
    for i in range(nb_elements_x1):
-      idx = i * nb_solpts
-      x1[idx : idx + nb_solpts] = faces_x1[i] + scaled_points * Δx1
+      idx = i * nbsolpts
+      x1[idx : idx + nbsolpts] = faces_x1[i] + scaled_points * Δx1
 
    nj = nb_elements_x2 * len(solutionPoints)
    x2 = numpy.zeros(nj)
    for i in range(nb_elements_x2):
-      idx = i * nb_solpts
-      x2[idx : idx + nb_solpts] = faces_x2[i] + scaled_points * Δx2
+      idx = i * nbsolpts
+      x2[idx : idx + nbsolpts] = faces_x2[i] + scaled_points * Δx2
 
    X1, X2 = numpy.meshgrid(x1, x2)
+
+   X1_itf_i, X2_itf_i = numpy.meshgrid(faces_x1, x2)
+   X1_itf_j, X2_itf_j = numpy.meshgrid(x1, faces_x2)
 
    # Gnomonic coordinates
    X = numpy.tan(X1)
    Y = numpy.tan(X2)
+
+   X_itf_i = numpy.tan(X1_itf_i)
+   Y_itf_i = numpy.tan(X2_itf_i)
+   X_itf_j = numpy.tan(X1_itf_j)
+   Y_itf_j = numpy.tan(X2_itf_j)
 
    # Spherical coordinates
    lon = numpy.zeros((ni,nj))
@@ -99,9 +164,9 @@ def cubed_sphere(nb_elements, degree, cube_face):
       lat[:,:] = -math.pi/2 + numpy.arctan(numpy.sqrt(X**2 + Y**2))
 
    # Map to the interval [0, 2 pi]
-   lon[lon<0] = lon[lon<0] + (2.0 * math.pi)
+   lon[lon<0.0] = lon[lon<0.0] + (2.0 * math.pi)
 
    # Cartesian coordinates on unit sphere
    cartX, cartY, cartZ = sphere.sph2cart(lon, lat, 1.0)
 
-   return Geom(solutionPoints, extension, X1, X2, Δx1, Δx2, X, Y, cartX, cartY, cartZ, lon, lat, cube_face)
+   return Geom(solutionPoints, extension, X1, X2, Δx1, Δx2, X, Y, cartX, cartY, cartZ, lon, lat, X_itf_i, Y_itf_i, X_itf_j, Y_itf_j, cube_face)

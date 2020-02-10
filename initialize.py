@@ -1,11 +1,17 @@
 import math
 import numpy
-from constants import *
+from definitions import *
 from wind2contra import *
 
-def initialize(geom, case_number, α):
+def initialize(geom, metric, cube_face, case_number, Williamson_angle):
 
    ni, nj = geom.lon.shape
+
+   if case_number <= 1:
+      # advection only, save u1 and u2
+      Q = numpy.zeros((nb_equations+2, ni, nj))
+   else:
+      Q = numpy.zeros((nb_equations, ni, nj))
 
    if case_number == -1 or \
       case_number == 1  or \
@@ -22,29 +28,74 @@ def initialize(geom, case_number, α):
          cosα = 1
       else:
          u0 = 2.0 * math.pi * earth_radius / (12.0 * day_in_secs)
-         sinα = math.sin(α)
-         cosα = math.cos(α)
+         sinα = math.sin(Williamson_angle)
+         cosα = math.cos(Williamson_angle)
 
-      u1[:,:,0] = u0 / earth_radius * (cosα + geom.Y / (1.0 + geom.X**2) * sinα)
-      u2[:,:,0] = u0 * geom.X / (earth_radius * (1.0 + geom.Y**2)) * (geom.Y * cosα - sinα)
+      if cube_face == 0:
+         u1[:,:] = u0 / earth_radius * (cosα + geom.Y / (1.0 + geom.X**2) * sinα)
+         u2[:,:] = u0 * geom.X / (earth_radius * (1.0 + geom.Y**2)) * (geom.Y * cosα - sinα)
+      elif cube_face == 1:
+         u1[:,:] = u0 / earth_radius * (cosα - geom.X * geom.Y / (1.0 + geom.X**2) * sinα)
+         u2[:,:] = u0 / earth_radius * (geom.X * geom.Y / (1.0 + geom.Y**2) * cosα - sinα)
+      elif cube_face == 2:
+         u1[:,:] = u0 / earth_radius * (cosα - geom.Y / (1.0 + geom.X**2) * sinα)
+         u2[:,:] = u0 * geom.X / (earth_radius * (1.0 + geom.Y**2)) * (geom.Y * cosα + sinα)
+      elif cube_face == 3:
+         u1[:,:] = u0 / earth_radius * (cosα + geom.X * geom.Y / (1.0 + geom.X**2) * sinα)
+         u2[:,:] = u0 / earth_radius * (geom.X * geom.Y / (1.0 + geom.Y**2) * cosα + sinα)
+      elif cube_face == 4:
+         u1[:,:] = u0 / earth_radius * (- geom.Y / (1.0 + geom.X**2) * cosα + sinα)
+         u2[:,:] = u0 * geom.X / (earth_radius * (1.0 + geom.Y**2)) * (cosα + geom.Y * sinα)
+      elif cube_face == 5:
+         u1[:,:] = u0 / earth_radius * (geom.Y / (1.0 + geom.X**2) * cosα - sinα)
+         u2[:,:] =-u0 * geom.X / (earth_radius * (1.0 + geom.Y**2)) * (cosα + geom.Y * sinα)
 
-      u1[:,:,1] = u0 / earth_radius * (cosα - geom.X * geom.Y / (1.0 + geom.X**2) * sinα)
-      u2[:,:,1] = u0 / earth_radius * (geom.X * geom.Y / (1.0 + geom.Y**2) * cosα - sinα)
+      u1 *= earth_radius * 2.0 / geom.Δx1 # TODO : enlever earth_radius ?
+      u2 *= earth_radius * 2.0 / geom.Δx2
 
-      u1[:,:,2] = u0 / earth_radius * (cosα - geom.Y / (1.0 + geom.X**2) * sinα)
-      u2[:,:,2] = u0 * geom.X / (earth_radius * (1.0 + geom.Y**2)) * (geom.Y * cosα + sinα)
+   if case_number == 0:
 
-      u1[:,:,3] = u0 / earth_radius * (cosα + geom.X * geom.Y / (1.0 + geom.X**2) * sinα)
-      u2[:,:,3] = u0 / earth_radius * (geom.X * geom.Y / (1.0 + geom.Y**2) * cosα + sinα)
+      # Deformational Flow (Nair and Machenhauer, 2002)
+      lon_center = math.pi - 0.8
+      lat_center = math.pi / 4.8
 
-      u1[:,:,4] = u0 / earth_radius * (- geom.Y / (1.0 + geom.X**2) * cosα + sinα)
-      u2[:,:,4] = u0 * geom.X / (earth_radius * (1.0 + geom.Y**2)) * (cosα + geom.Y * sinα)
+      V0    = 2.0 * math.pi / (12.0 * day_in_secs) * earth_radius
+      rho_0 = 3.0
+      gamma = 5.0
 
-      u1[:,:,5] = u0 / earth_radius * (geom.Y / (1.0 + geom.X**2) * cosα - sinα)
-      u2[:,:,5] =-u0 * geom.X / (earth_radius * (1.0 + geom.Y**2)) * (cosα + geom.Y * sinα)
+      lonR = numpy.arctan2( geom.coslat * numpy.sin(geom.lon - lon_center), \
+         geom.coslat * math.sin(lat_center) * numpy.cos(geom.lon - lon_center) - math.cos(lat_center) * geom.sinlat )
+      
+      lonR[lonR<0.0] = lonR[lonR<0.0] + (2.0 * math.pi)
+
+      latR = numpy.arcsin( geom.sinlat * math.sin(lat_center) + geom.coslat * math.cos(lat_center) * numpy.cos(geom.lon - lon_center) )
+
+      rho = rho_0 * numpy.cos(latR)
+
+      Vt  = V0 * (3.0/2.0 * math.sqrt(3)) * (1.0 / numpy.cosh(rho))**2 * numpy.tanh(rho)
+
+      Omega = numpy.zeros_like(geom.lat)
+
+      ni, nj = geom.lat.shape
+
+      for i in range(ni):
+         for j in range(nj):
+            if (abs(rho[i,j]) > 1e-9):
+                  Omega[i,j] = Vt[i,j] / (earth_radius * rho[i,j])
+      
+
+      h     = 1.0 - numpy.tanh( (rho / gamma) * numpy.sin(lonR) )
+      hsurf = numpy.zeros_like(h)
+
+      u = earth_radius * Omega * (math.sin(lat_center) * geom.coslat - math.cos(lat_center) * numpy.cos(geom.lon - lon_center) * geom.sinlat)
+      v = earth_radius * Omega * numpy.cos(lat_center) * numpy.sin(geom.lon - lon_center)
+      u1, u2 = wind2contra(u, v, geom)
+
+      u1 *= earth_radius * 2.0 / geom.Δx1 # TODO : enlever earth_radius ?
+      u2 *= earth_radius * 2.0 / geom.Δx2
 
 
-   if case_number == 1:
+   elif case_number == 1:
       # Initialize gaussian bell
 
       lon_center = 3.0 * math.pi / 2.0
@@ -54,7 +105,7 @@ def initialize(geom, case_number, α):
 
       radius = 1.0 / 3.0
 
-      dist = numpy.arccos(math.sin(lat_center) * numpy.sin(geom.lat) + math.cos(lat_center) * numpy.cos(geom.lat) * numpy.cos(geom.lon - lon_center))
+      dist = numpy.arccos(math.sin(lat_center) * geom.sinlat + math.cos(lat_center) * geom.coslat * numpy.cos(geom.lon - lon_center))
 
       h = 0.5 * h0 * (1.0 + numpy.cos(math.pi * dist / radius)) * (dist <= radius)
 
@@ -67,15 +118,11 @@ def initialize(geom, case_number, α):
       gh0 = 29400.0
       u0 = 2.0 * math.pi * earth_radius / (12.0 * day_in_secs)
 
-      sinα = math.sin(α)
-      cosα = math.cos(α)
-
-      sinlat = numpy.sin(geom.lat)
-      coslat = numpy.cos(geom.lat)
-      coslon = numpy.cos(geom.lon)
+      sinα = math.sin(Williamson_angle)
+      cosα = math.cos(Williamson_angle)
 
       h = (gh0 - (earth_radius * rotation_speed * u0 + (0.5 * u0**2)) \
-        * (-coslon * coslat * sinα + sinlat * cosα)**2) / gravity
+        * (-geom.coslon * geom.coslat * sinα + geomsinlat * cosα)**2) / gravity
 
       hsurf = numpy.zeros_like(h)
 
@@ -84,7 +131,7 @@ def initialize(geom, case_number, α):
       u0 = 20.0   # Max wind (m/s)
       h0 = 5960.0 # Mean height (m)
 
-      h_star = (gravity*h0 - (earth_radius * rotation_speed * u0 + 0.5*u0**2)*(numpy.sin(geom.lat))**2) / gravity
+      h_star = (gravity*h0 - (earth_radius * rotation_speed * u0 + 0.5*u0**2)*(geom.sinlat)**2) / gravity
 
       # Isolated mountain
       hs0 = 2000.0
@@ -110,29 +157,30 @@ def initialize(geom, case_number, α):
       K     = omega
       h0    = 8000.0
 
-      A = omega/2 * (2*rotation_speed+omega) * numpy.cos(geom.lat)**2 + (K**2)/4 * numpy.cos(geom.lat)**(2*R) \
-         * ( (R+1)*numpy.cos(geom.lat)**2 + (2*R**2-R-2) - 2*(R**2)*numpy.cos(geom.lat)**(-2) )
+      A = omega/2.0 * (2*rotation_speed+omega) * geom.coslat**2 + (K**2)/4 * geom.coslat**(2*R) \
+         * ( (R+1) * geom.coslat**2 + (2*R**2-R-2) - 2*(R**2) * geom.coslat**(-2) )
 
-      B = 2 * (rotation_speed+omega) * K / ((R+1)*(R+2)) * numpy.cos(geom.lat)**R * ( (R**2+2*R+2) - (R+1)**2*numpy.cos(geom.lat)**2 )
+      B = 2 * (rotation_speed+omega) * K / ((R+1)*(R+2)) * geom.coslat**R * ( (R**2+2*R+2) - (R+1)**2 * geom.coslat**2 )
 
-      C = (K**2)/4 * numpy.cos(geom.lat)**(2*R) * ( (R+1)*(numpy.cos(geom.lat)**2) - (R+2) )
+      C = (K**2)/4.0 * geom.coslat**(2*R) * ( (R+1) * (geom.coslat**2) - (R + 2.0) )
 
       h = h0 + ( earth_radius**2*A + earth_radius**2*B*numpy.cos(R*geom.lon) + earth_radius**2*C*numpy.cos(2*R*geom.lon) ) / gravity
 
-      u = earth_radius * omega * numpy.cos(geom.lat) + earth_radius * K * numpy.cos(geom.lat)**(R-1) * \
-            ( R*numpy.sin(geom.lat)**2-numpy.cos(geom.lat)**2 ) * numpy.cos(R*geom.lon)
-      v = -earth_radius * K * R * numpy.cos(geom.lat)**(R-1) * numpy.sin(geom.lat) * numpy.sin(R*geom.lon)
+      u = earth_radius * omega * geom.coslat + earth_radius * K * geom.coslat**(R-1) * \
+            ( R*geom.sinlat**2 - geom.coslat**2 ) * numpy.cos(R*geom.lon)
+      v = -earth_radius * K * R * geom.coslat**(R-1) * geom.sinlat * numpy.sin(R*geom.lon)
 
       u1, u2 = wind2contra(u, v, geom)
 
       hsurf = numpy.zeros_like(h)
 
-#      u = u1_contra * earth_radius * 2/grd.elementSize
-#      v = u2_contra * earth_radius * 2/grd.elementSize
-   Q = numpy.zeros((ni, nj, nb_equations))
+   Q[idx_h,:,:]   = metric.sqrtG * h
+   Q[idx_hu1,:,:] = metric.sqrtG * h * u1
+   Q[idx_hu2,:,:] = metric.sqrtG * h * u2
 
-   Q[:,:,0] = h
-   Q[:,:,1] = h * u1
-   Q[:,:,2] = h * u2
+   if case_number <= 1:
+      # advection only
+      Q[idx_u1,:,:] = u1
+      Q[idx_u2,:,:] = u2
 
    return Q, hsurf
