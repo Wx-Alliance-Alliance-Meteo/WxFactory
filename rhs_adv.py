@@ -1,6 +1,6 @@
 import numpy
 
-from definitions import idx_h, idx_u1, idx_u2, inv_earth_radius
+from definitions import idx_h, idx_u1, idx_u2
 from xchange import xchange_scalars, xchange_vectors
 
 def rhs_adv(Q, geom, mtrx, metric, cube_face, nbsolpts, nb_elements_horiz, α):
@@ -30,14 +30,13 @@ def rhs_adv(Q, geom, mtrx, metric, cube_face, nbsolpts, nb_elements_horiz, α):
    flux_R         = numpy.zeros(nbsolpts*nb_elements_horiz, dtype=type_vec)
 
    # Unpack physical variables
-   h_sqrtG  = Q[idx_h, :, :]
-   h        = h_sqrtG / metric.sqrtG
+   h        = Q[idx_h, :, :]
    u1       = Q[idx_u1, :, :]
    u2       = Q[idx_u2, :, :]
 
    # Compute the fluxes
-   flux_Eq1_x1 = h_sqrtG * u1
-   flux_Eq1_x2 = h_sqrtG * u2
+   flux_Eq1_x1 = h * metric.sqrtG * u1
+   flux_Eq1_x2 = h * metric.sqrtG * u2
 
    # Offset due to the halo
    offset = 1
@@ -122,7 +121,7 @@ def rhs_adv(Q, geom, mtrx, metric, cube_face, nbsolpts, nb_elements_horiz, α):
       df2_dx2[idx_h,epais,:] = mtrx.diff_solpt @ flux_Eq1_x2[epais,:] + mtrx.correction @ flux_Eq1_itf_j[elem+offset,:,:]
       
    # Assemble the right-hand sides
-   rhs = inv_earth_radius * ( - df1_dx1 - df2_dx2 )
+   rhs = metric.inv_sqrtG * ( - df1_dx1 - df2_dx2 )
 
    rhs[1:,:,:] = numpy.zeros_like(rhs[1:,:,:])
 

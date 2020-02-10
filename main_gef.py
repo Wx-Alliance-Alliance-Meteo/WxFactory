@@ -8,7 +8,7 @@ import mpi4py.MPI
 import numpy
 
 from blockstats   import blockstats
-from definitions    import idx_h
+from definitions  import idx_h
 from cubed_sphere import cubed_sphere
 from graphx       import plot_field
 from initialize   import initialize
@@ -51,7 +51,7 @@ def main():
    Q, hsurf = initialize(geom, metric, my_cube_face, param.case_number, param.Williamson_angle)
 
    if param.plot_freq > 0:
-      plot_field(geom, (Q[idx_h,:,:] + hsurf) / metric.sqrtG)
+      plot_field(geom, (Q[idx_h,:,:] + hsurf) )
 
    # Time stepping
    t           = 0.0
@@ -225,7 +225,7 @@ def main():
       # Plot solution
       if param.plot_freq > 0:
          if step % param.plot_freq == 0:
-            plot_field(geom, (Q[idx_h,:,:] + hsurf) / metric.sqrtG)
+            plot_field(geom, (Q[idx_h,:,:] + hsurf) )
  
       # TODO : plot error
 

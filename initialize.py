@@ -50,8 +50,8 @@ def initialize(geom, metric, cube_face, case_number, Williamson_angle):
          u1[:,:] = u0 / earth_radius * (geom.Y / (1.0 + geom.X**2) * cosα - sinα)
          u2[:,:] =-u0 * geom.X / (earth_radius * (1.0 + geom.Y**2)) * (cosα + geom.Y * sinα)
 
-      u1 *= earth_radius * 2.0 / geom.Δx1 # TODO : enlever earth_radius ?
-      u2 *= earth_radius * 2.0 / geom.Δx2
+      u1 *= 2.0 / geom.Δx1
+      u2 *= 2.0 / geom.Δx2
 
    if case_number == 0:
 
@@ -82,7 +82,6 @@ def initialize(geom, metric, cube_face, case_number, Williamson_angle):
          for j in range(nj):
             if (abs(rho[i,j]) > 1e-9):
                   Omega[i,j] = Vt[i,j] / (earth_radius * rho[i,j])
-      
 
       h     = 1.0 - numpy.tanh( (rho / gamma) * numpy.sin(lonR) )
       hsurf = numpy.zeros_like(h)
@@ -91,8 +90,8 @@ def initialize(geom, metric, cube_face, case_number, Williamson_angle):
       v = earth_radius * Omega * numpy.cos(lat_center) * numpy.sin(geom.lon - lon_center)
       u1, u2 = wind2contra(u, v, geom)
 
-      u1 *= earth_radius * 2.0 / geom.Δx1 # TODO : enlever earth_radius ?
-      u2 *= earth_radius * 2.0 / geom.Δx2
+      u1 *= 2.0 / geom.Δx1
+      u2 *= 2.0 / geom.Δx2
 
 
    elif case_number == 1:
@@ -174,7 +173,7 @@ def initialize(geom, metric, cube_face, case_number, Williamson_angle):
 
       hsurf = numpy.zeros_like(h)
 
-   Q[idx_h,:,:]   = metric.sqrtG * h
+   Q[idx_h,:,:]   = h
    Q[idx_hu1,:,:] = metric.sqrtG * h * u1
    Q[idx_hu2,:,:] = metric.sqrtG * h * u2
 
