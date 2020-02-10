@@ -1,23 +1,28 @@
 import numpy
 
 class Ops:
-   def __init__(self, lcoef, rcoef, diff_ext, diff_solpt, correction):
-      self.lcoef = lcoef
-      self.rcoef = rcoef
+   def __init__(self, extrap_west, extrap_east, extrap_south, extrap_north, diff_ext, diff_solpt, correction):
+      self.extrap_west  = extrap_west
+      self.extrap_east  = extrap_east
+      self.extrap_south = extrap_south
+      self.extrap_north = extrap_north
       self.diff_ext = diff_ext
       self.diff_solpt = diff_solpt
       self.correction = correction
 
 def set_operators(grd):
-   lcoef = lagrangeEval(grd.solutionPoints, -1)
-   rcoef = lagrangeEval(grd.solutionPoints,  1)
+   extrap_west = lagrangeEval(grd.solutionPoints, -1)
+   extrap_east = lagrangeEval(grd.solutionPoints,  1)
+
+   extrap_south = lagrangeEval(grd.solutionPoints, -1)
+   extrap_north = lagrangeEval(grd.solutionPoints,  1)
 
    diff_ext = diffmat(grd.extension)
    diff_solpt = diff_ext[1:-1, 1:-1]
 
    correction = numpy.column_stack((diff_ext[1:-1,0], diff_ext[1:-1,-1]))
 
-   return Ops(lcoef, rcoef, diff_ext, diff_solpt, correction)
+   return Ops(extrap_west, extrap_east, extrap_south, extrap_north, diff_ext, diff_solpt, correction)
 
 def lagrangeEval(points, pos):
    x = pos
