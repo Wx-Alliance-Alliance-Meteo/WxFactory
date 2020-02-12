@@ -13,11 +13,10 @@ from cubed_sphere import cubed_sphere
 from graphx       import plot_field
 from initialize   import initialize
 from kiops        import kiops
-from matrices     import set_operators
+from matrices     import DFR_operators
 from matvec       import matvec_fun
-from metric       import build_metric
+from metric       import Metric
 from parameters   import get_parameters
-from rhs_adv      import rhs_adv
 from rhs_sw       import rhs_sw
 
 def main():
@@ -41,14 +40,14 @@ def main():
    # Create the mesh
    geom = cubed_sphere(param.nb_elements, param.nbsolpts, my_cube_face)
 
-   # Build differentiation matrices and DFR boundary correction
-   mtrx = set_operators(geom)
+   # Build differentiation matrice and boundary correction
+   mtrx = DFR_operators(geom)
 
    # Initialize metric tensor
-   metric = build_metric(geom)
+   metric = Metric(geom)
 
    # Initialize state variables
-   Q, hsurf = initialize(geom, metric, my_cube_face, param.case_number, param.Williamson_angle)
+   Q, hsurf = initialize(geom, metric, param.case_number, param.Williamson_angle)
 
    if param.plot_freq > 0:
       plot_field(geom, (Q[idx_h,:,:] + hsurf) )
@@ -58,12 +57,8 @@ def main():
    step        = 0
    krylov_size = param.krylov_size
 
-   if param.case_number <= 1:
-      rhs_handle = lambda q: rhs_adv(q, geom, mtrx, metric, my_cube_face, \
-            param.nbsolpts, param.nb_elements, param.α)
-   else:
-      rhs_handle = lambda q: rhs_sw(q, geom, mtrx, metric, my_cube_face, \
-            param.nbsolpts, param.nb_elements, param.nb_elements, param.α)
+   rhs_handle = lambda q: rhs_sw(q, geom, mtrx, metric, param.nbsolpts, param.nb_elements, \
+         param.α, param.case_number)
 
    nb_steps = math.ceil(param.t_end / param.dt)
 
@@ -72,27 +67,27 @@ def main():
    if (param.time_integrator).lower() == "epirk4s3a":
       g21=1/2
       g31=2/3
-   
+
       alpha21=1/2
       alpha31=2/3
-   
+
       alpha32=0
-   
+
       p211=1
       p212=0
       p213=0
-   
+
       p311=1
       p312=0
       p313=0
-   
-   
+
+
       b2p3=32
       b2p4=-144
-   
+
       b3p3=-27/2
       b3p4=81
-   
+
       if g21 > g31:
          gCoeffVec = numpy.array([g31, g21])
          KryIndex  = numpy.array([2, 1])
@@ -190,31 +185,31 @@ def main():
          hF = rhs_handle(Q) * param.dt
          ni, nj, ne = Q.shape
          zeroVec = numpy.zeros(ni * nj * ne)
-   
+
          matvec_handle = lambda v: matvec_fun(v, param.dt, Q, rhs_handle)
-      
+
          # stage 1
          u_mtrx = numpy.column_stack((zeroVec, hF.flatten()))
          phiv, stats = kiops(gCoeffVec, matvec_handle, u_mtrx, tol=param.tolerance, m_init=krylov_size, mmin=14, mmax=64, task1=True)
 
          U2 = Q + alpha21 * numpy.reshape(phiv[:,0], Q.shape)
-   
+
          # Calculate residual r(U2)
          mv = numpy.reshape( matvec_handle(U2 - Q), Q.shape)
          hb1 = param.dt * rhs_handle(U2) - hF - mv
-   
+
          # stage 2
          U3 = Q + alpha31 * numpy.reshape(phiv[:,1], Q.shape)
-   
+
          # Calculate residual r(U3)
          mv = numpy.reshape( matvec_handle(U3 - Q), Q.shape)
          hb2 = param.dt * rhs_handle(U3) - hF - mv
-   
+
          # stage 3
          u_mtrx = numpy.column_stack((zeroVec, hF.flatten(), zeroVec, (b2p3*hb1+b3p3*hb2).flatten(), (b2p4*hb1+b3p4*hb2).flatten() ))
          phiv, stats = kiops([1], matvec_handle, u_mtrx, tol=param.tolerance, m_init=krylov_size, mmin=14, mmax=64, task1=False)
          Q = Q + numpy.reshape(phiv, Q.shape)
-   
+
          time_epirk4s3 = time.time() - tic
          print('Elapsed time for EPIRK4s3A: %0.3f secs' % time_epirk4s3)
 
@@ -226,7 +221,7 @@ def main():
       if param.plot_freq > 0:
          if step % param.plot_freq == 0:
             plot_field(geom, (Q[idx_h,:,:] + hsurf) )
- 
+
       # TODO : plot error
 
 

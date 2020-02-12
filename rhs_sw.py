@@ -1,256 +1,217 @@
 import numpy
 
-from definitions import *
-from xchange import *
+from definitions import idx_h, idx_hu1, idx_hu2, idx_u1, idx_u2, gravity
+from xchange import xchange_scalars, xchange_vectors
 
-def rhs_sw(Q, geom, mtrx, metric, cube_face, nbsolpts, nb_elements_x1, nb_elements_x2, α):
+def rhs_sw(Q, geom, mtrx, metric, nbsolpts, nb_elements_horiz, α, case_number):
 
    type_vec = type(Q[0, 0, 0])
 
-   nb_interfaces_x1 = nb_elements_x1 + 1
-   nb_interfaces_x2 = nb_elements_x2 + 1
+   shallow_water_equations = ( case_number > 1 )
 
-   flux_x1          = numpy.zeros_like(Q, dtype=type_vec)
-   flux_x2          = numpy.zeros_like(Q, dtype=type_vec)
+   nb_interfaces_horiz = nb_elements_horiz + 1
 
-   df1_dx1          = numpy.zeros_like(Q, dtype=type_vec)
-   df2_dx2          = numpy.zeros_like(Q, dtype=type_vec)
-   dQ_dx1           = numpy.zeros_like(Q, dtype=type_vec)
-   dQ_dx2           = numpy.zeros_like(Q, dtype=type_vec)
-   Q_xx             = numpy.zeros_like(Q, dtype=type_vec)
-   Q_yy             = numpy.zeros_like(Q, dtype=type_vec)
-   upwind_diffusion = numpy.zeros_like(Q, dtype=type_vec)
+   df1_dx1 = numpy.zeros_like(Q, dtype=type_vec)
+   df2_dx2 = numpy.zeros_like(Q, dtype=type_vec)
+   forcing = numpy.zeros_like(Q, dtype=type_vec)
 
-   flux_itf_j      = numpy.zeros((nb_equations, nb_interfaces_x2, 2, nbsolpts*nb_elements_x1), dtype=type_vec)
-   var_itf_j       = numpy.zeros((nb_equations, nb_interfaces_x2, 2, nbsolpts*nb_elements_x1), dtype=type_vec)
-   diffusion_itf_j = numpy.zeros((nb_equations, nb_interfaces_x2, 2, nbsolpts*nb_elements_x1), dtype=type_vec)
+   flux_Eq0_itf_j = numpy.zeros((nb_elements_horiz+2, 2, nbsolpts*nb_elements_horiz), dtype=type_vec)
+   flux_Eq1_itf_j = numpy.zeros((nb_elements_horiz+2, 2, nbsolpts*nb_elements_horiz), dtype=type_vec)
+   flux_Eq2_itf_j = numpy.zeros((nb_elements_horiz+2, 2, nbsolpts*nb_elements_horiz), dtype=type_vec)
+   h_itf_j        = numpy.zeros((nb_elements_horiz+2, 2, nbsolpts*nb_elements_horiz), dtype=type_vec)
+   u1_itf_j       = numpy.zeros((nb_elements_horiz+2, 2, nbsolpts*nb_elements_horiz), dtype=type_vec)
+   u2_itf_j       = numpy.zeros((nb_elements_horiz+2, 2, nbsolpts*nb_elements_horiz), dtype=type_vec)
 
-   flux_itf_i      = numpy.zeros((nb_equations, nb_interfaces_x1, 2, nbsolpts*nb_elements_x2), dtype=type_vec)
-   var_itf_i       = numpy.zeros((nb_equations, nb_interfaces_x1, 2, nbsolpts*nb_elements_x2), dtype=type_vec)
-   diffusion_itf_i = numpy.zeros((nb_equations, nb_interfaces_x1, 2, nbsolpts*nb_elements_x2), dtype=type_vec)
+   flux_Eq0_itf_i = numpy.zeros((nb_elements_horiz+2, 2, nbsolpts*nb_elements_horiz), dtype=type_vec)
+   flux_Eq1_itf_i = numpy.zeros((nb_elements_horiz+2, 2, nbsolpts*nb_elements_horiz), dtype=type_vec)
+   flux_Eq2_itf_i = numpy.zeros((nb_elements_horiz+2, 2, nbsolpts*nb_elements_horiz), dtype=type_vec)
+   h_itf_i        = numpy.zeros((nb_elements_horiz+2, 2, nbsolpts*nb_elements_horiz), dtype=type_vec)
+   u1_itf_i       = numpy.zeros((nb_elements_horiz+2, 2, nbsolpts*nb_elements_horiz), dtype=type_vec)
+   u2_itf_i       = numpy.zeros((nb_elements_horiz+2, 2, nbsolpts*nb_elements_horiz), dtype=type_vec)
+
+   eig_L          = numpy.zeros(nbsolpts*nb_elements_horiz, dtype=type_vec)
+   eig_R          = numpy.zeros(nbsolpts*nb_elements_horiz, dtype=type_vec)
+   eig            = numpy.zeros(nbsolpts*nb_elements_horiz, dtype=type_vec)
+
+   flux_L         = numpy.zeros(nbsolpts*nb_elements_horiz, dtype=type_vec)
+   flux_R         = numpy.zeros(nbsolpts*nb_elements_horiz, dtype=type_vec)
 
    # Unpack physical variables
-   h  = Q[idx_h, :, :]
-   u1 = Q[idx_hu1, :, :] / Q[idx_h, :, :]
-   u2 = Q[idx_hu2, :, :] / Q[idx_h, :, :]
+   h = Q[idx_h, :, :]
 
-   # Interpolate to the element interface
-   for elem in range(nb_elements_x2):
-      epais = elem * nbsolpts + numpy.arange(nbsolpts)
-      itf_l = elem
-      itf_r = elem + 1
-
-      var_itf_j[idx_h, itf_l, 1, :] = mtrx.lcoef @ h[epais, :]
-      var_itf_j[idx_h, itf_r, 0, :] = mtrx.rcoef @ h[epais, :]
-
-      var_itf_j[idx_u1, itf_l, 1, :] = mtrx.lcoef @ u1[epais, :]
-      var_itf_j[idx_u1, itf_r, 0, :] = mtrx.rcoef @ u1[epais, :]
-
-      var_itf_j[idx_u2, itf_l, 1, :] = mtrx.lcoef @ u2[epais, :]
-      var_itf_j[idx_u2, itf_r, 0, :] = mtrx.rcoef @ u2[epais, :]
-
-   for elem in range(nb_elements_x1):
-      epais = elem * nbsolpts + numpy.arange(nbsolpts)
-      itf_l = elem
-      itf_r = elem + 1
-
-      var_itf_i[idx_h, itf_l, 1, :] = h[:, epais] @ mtrx.lcoef
-      var_itf_i[idx_h, itf_r, 0, :] = h[:, epais] @ mtrx.rcoef
-
-      var_itf_i[idx_u1, itf_l, 1, :] = u1[:, epais] @ mtrx.lcoef
-      var_itf_i[idx_u1, itf_r, 0, :] = u1[:, epais] @ mtrx.rcoef
-
-      var_itf_i[idx_u2, itf_l, 1, :] = u2[:, epais] @ mtrx.lcoef
-      var_itf_i[idx_u2, itf_r, 0, :] = u2[:, epais] @ mtrx.rcoef
-
-   xchange_halo(geom, var_itf_i, var_itf_j, cube_face)
-
-#   import graphx
-#   graphx.plot_uv(geom, u1, u2)
-
-#   print(h[:,0])
-#   print("////////////")
-#   print(var_itf_i[0, 0, 0, :])
-#   print("-------------")
-#   print(h[:,0] - var_itf_i[0, 0, 0, :])
-
-#   print(h[:,-1])
-#   print("////////////")
-#   print(var_itf_i[0, -1, 1, :])
-#   print("-------------")
-#   print(h[:,-1] - var_itf_i[0, -1, 1, :])
-
-#   print(h[0,:])
-#   print("////////////")
-#   print(var_itf_j[0, 0, 0, :])
-#   print("-------------")
-#   print(h[0,:] - var_itf_j[0, 0, 0, :])
-
-#   print(h[-1,:])
-#   print("////////////")
-#   print(var_itf_j[0, -1, 1, :])
-#   print("-------------")
-#   print(h[-1,:] - var_itf_j[0, -1, 1, :])
-
-#   print(u1[:,0])
-#   print("////////////")
-#   print(var_itf_i[1, 0, 0, :])
-#   print("-------------")
-#   print(u1[:,0] - var_itf_i[1, 0, 0, :])
-
-#   print(u1[:,-1])
-#   print("////////////")
-#   print(var_itf_i[1, -1, 1, :])
-#   print("-------------")
-#   print(u1[:,-1] - var_itf_i[1, -1, 1, :])
-
-#   print(u1[0,:])
-#   print("////////////")
-#   print(var_itf_j[1, 0, 0, :])
-#   print("-------------")
-#   print(u1[0,:] - var_itf_j[1, 0, 0, :])
-
-#   print(u1[-1,:])
-#   print("////////////")
-#   print(var_itf_j[1, -1, 1, :])
-#   print("-------------")
-#   print(u1[-1,:] - var_itf_j[1, -1, 1, :])
-
-#   print(u2[:,0])
-#   print("////////////")
-#   print(var_itf_i[2, 0, 0, :])
-#   print("-------------")
-#   print(u2[:,0] - var_itf_i[2, 0, 0, :])
-
-#   print(u2[:,-1])
-#   print("////////////")
-#   print(var_itf_i[2, -1, 1, :])
-#   print("-------------")
-#   print(u2[:,-1] - var_itf_i[2, -1, 1, :])
-
-#   print(u2[0,:])
-#   print("////////////")
-#   print(var_itf_j[2, 0, 0, :])
-#   print("-------------")
-#   print(u2[0,:] - var_itf_j[2, 0, 0, :])
-
-#   print(u1[-1,:])
-#   print("////////////")
-#   print(var_itf_j[1, -1, 1, :])
-#   print("-------------")
-#   print(u1[-1,:] - var_itf_j[1, -1, 1, :])
-
-   print("SW, rendu icitte")
-   exit(0)
+   if shallow_water_equations:
+      u1 = Q[idx_hu1,:,:] / h
+      u2 = Q[idx_hu2,:,:] / h
+   else:
+      u1 = Q[idx_u1, :, :]
+      u2 = Q[idx_u2, :, :]
 
    # Compute the fluxes
-   flux_x1[idx_h, :, :]   = Q[idx_hu1, :, :]
-   flux_x1[idx_hu1, :, :] = Q[idx_hu1, :, :] * u1 + 0.5 * metric.H_contra_11 * gravity * Q[idx_h, :, :]**2
-   flux_x1[idx_hu2, :, :] = Q[idx_hu1, :, :] * u2 + 0.5 * metric.H_contra_12 * gravity * Q[idx_h, :, :]**2
+   flux_Eq0_x1 = h * metric.sqrtG * u1
+   flux_Eq0_x2 = h * metric.sqrtG * u2
 
-   flux_x2[idx_h, :, :]   = Q[idx_hu2, :, :]
-   flux_x2[idx_hu1, :, :] = Q[idx_hu2, :, :] * u1 + 0.5 * metric.H_contra_21 * gravity * Q[idx_h, :, :]**2
-   flux_x2[idx_hu2, :, :] = Q[idx_hu2, :, :] * u2 + 0.5 * metric.H_contra_22 * gravity * Q[idx_h, :, :]**2
+   flux_Eq1_x1 = metric.sqrtG * ( Q[idx_hu1,:,:] * u1 + 0.5 * gravity * metric.H_contra_11 * h**2 )
+   flux_Eq1_x2 = metric.sqrtG * ( Q[idx_hu1,:,:] * u2 + 0.5 * gravity * metric.H_contra_12 * h**2 )
+
+   flux_Eq2_x1 = metric.sqrtG * ( Q[idx_hu2,:,:] * u1 + 0.5 * gravity * metric.H_contra_21 * h**2 )
+   flux_Eq2_x2 = metric.sqrtG * ( Q[idx_hu2,:,:] * u2 + 0.5 * gravity * metric.H_contra_22 * h**2 )
+
+   # Offset due to the halo
+   offset = 1
+
+   # Interpolate to the element interface
+   for elem in range(nb_elements_horiz):
+      epais = elem * nbsolpts + numpy.arange(nbsolpts)
+
+      pos = elem + offset
+
+      # --- Direction x1
+
+      h_itf_i[pos, 0, :] = h[:, epais] @ mtrx.extrap_west
+      h_itf_i[pos, 1, :] = h[:, epais] @ mtrx.extrap_east
+
+      u1_itf_i[pos, 0, :] = u1[:, epais] @ mtrx.extrap_west
+      u1_itf_i[pos, 1, :] = u1[:, epais] @ mtrx.extrap_east
+
+      u2_itf_i[pos, 0, :] = u2[:, epais] @ mtrx.extrap_west
+      u2_itf_i[pos, 1, :] = u2[:, epais] @ mtrx.extrap_east
+
+      # --- Direction x2
+
+      h_itf_j[pos, 0, :] = mtrx.extrap_south @ h[epais, :]
+      h_itf_j[pos, 1, :] = mtrx.extrap_north @ h[epais, :]
+
+      u1_itf_j[pos, 0, :] = mtrx.extrap_south @ u1[epais, :]
+      u1_itf_j[pos, 1, :] = mtrx.extrap_north @ u1[epais, :]
+
+      u2_itf_j[pos, 0, :] = mtrx.extrap_south @ u2[epais, :]
+      u2_itf_j[pos, 1, :] = mtrx.extrap_north @ u2[epais, :]
+
+   xchange_scalars(geom, h_itf_i, h_itf_j)
+   xchange_vectors(geom, u1_itf_i, u2_itf_i, u1_itf_j, u2_itf_j)
 
    # Common Rusanov fluxes
-   for itf in range(nb_interfaces_x2):
+   for itf in range(nb_interfaces_horiz):
 
-      eig_L = numpy.abs(var_itf_j[1,:,RHO_W,itf] / var_itf_j[1,:,RHO,itf]) \
-            + numpy.sqrt( heat_capacity_ratio * itf_j_pres[1,:,itf] / var_itf_j[1,:,RHO,itf]  )
+      elem_L = itf
+      elem_R = itf + 1
 
-      eig_R = numpy.abs(var_itf_j[0,:,RHO_W,itf+1] / var_itf_j[0,:,RHO,itf+1]) \
-            + numpy.sqrt( heat_capacity_ratio * itf_j_pres[0,:,itf+1] / var_itf_j[0,:,RHO,itf+1])
+      # Direction x1
 
-      for eq in range(nb_equations):
-         flux_itf_j[0,:,eq,itf+1] = 0.5 * ( flux_itf_j[1,:,eq,itf] + flux_itf_j[0,:,eq,itf+1] \
-               - numpy.maximum(numpy.abs(eig_L), numpy.abs(eig_R)) * ( var_itf_j[0,:,eq,itf+1] - var_itf_j[1,:,eq,itf] ) )
+      if shallow_water_equations:
+         eig_L[:] = numpy.abs( u1_itf_i[elem_L, 1, :] ) + numpy.sqrt(gravity * h_itf_i[elem_L, 1, :] * metric.H_contra_11_itf_i[:, itf])
+         eig_R[:] = numpy.abs( u1_itf_i[elem_R, 0, :] ) + numpy.sqrt(gravity * h_itf_i[elem_R, 0, :] * metric.H_contra_11_itf_i[:, itf])
+      else:
+         eig_L[:] = numpy.abs( u1_itf_i[elem_L, 1, :] )
+         eig_R[:] = numpy.abs( u1_itf_i[elem_R, 0, :] )
+      eig[:]   = numpy.maximum(eig_L, eig_R)
 
-      flux_itf_j[1,:,:,itf] = flux_itf_j[0,:,:,itf+1]
+      # --- Continuity equation
 
-      diffusion_itf_j[0,:,:,itf+1] = 0.5 * ( var_itf_j[1,:,:,itf] + var_itf_j[0,:,:,itf+1] )
-      diffusion_itf_j[1,:,:,itf]   = diffusion_itf_j[0,:,:,itf+1]
+      flux_L[:] = metric.sqrtG_itf_i[:, itf] * h_itf_i[elem_L, 1, :] * u1_itf_i[elem_L, 1, :]
+      flux_R[:] = metric.sqrtG_itf_i[:, itf] * h_itf_i[elem_R, 0, :] * u1_itf_i[elem_R, 0, :]
 
-   for itf in range(nb_interfaces_x1):
+      flux_Eq0_itf_i[elem_L, 1, :] = 0.5 * ( flux_L  + flux_R - eig * metric.sqrtG_itf_i[:, itf] * ( h_itf_i[elem_R, 0, :]  - h_itf_i[elem_L, 1, :] ) )
+      flux_Eq0_itf_i[elem_R, 0, :] = flux_Eq0_itf_i[elem_L, 1, :]
 
-      eig_L = numpy.abs(var_itf_i[:,1,RHO_U,itf] / var_itf_i[:,1,RHO,itf]) \
-            + numpy.sqrt( heat_capacity_ratio * itf_i_pres[:,1,itf] / var_itf_i[:,1,RHO,itf] )
-      eig_R = numpy.abs(var_itf_i[:,0,RHO_U,itf+1] / var_itf_i[:,0,RHO,itf+1]) \
-            + numpy.sqrt( heat_capacity_ratio * itf_i_pres[:,0,itf+1] / var_itf_i[:,0,RHO,itf+1] )
+      # --- u1 equation
 
-      for eq in range(nb_equations):
-         flux_itf_i[:,0,eq,itf+1] = 0.5 * ( flux_itf_i[:,1,eq,itf] + flux_itf_i[:,0,eq,itf+1] \
-               - numpy.maximum(numpy.abs(eig_L), numpy.abs(eig_R)) * ( var_itf_i[:,0,eq,itf+1] - var_itf_i[:,1,eq,itf] ) )
+      flux_L[:] = metric.sqrtG_itf_i[:, itf] * ( h_itf_i[elem_L, 1, :] * u1_itf_i[elem_L, 1, :]**2 \
+            + 0.5 * gravity * metric.H_contra_11_itf_i[:, itf] * h_itf_i[elem_L, 1, :]**2 )
+      flux_R[:] = metric.sqrtG_itf_i[:, itf] * ( h_itf_i[elem_R, 0, :] * u1_itf_i[elem_R, 0, :]**2 \
+            + 0.5 * gravity * metric.H_contra_11_itf_i[:, itf] * h_itf_i[elem_R, 0, :]**2 )
 
-      flux_itf_i[:,1,:,itf] = flux_itf_i[:,0,:,itf+1]
+      flux_Eq1_itf_i[elem_L, 1, :] = 0.5 * ( flux_L  + flux_R - eig * metric.sqrtG_itf_i[:, itf] \
+            * ( h_itf_i[elem_R, 0, :] * u1_itf_i[elem_R, 0, :]  - h_itf_i[elem_L, 1, :] * u1_itf_i[elem_L, 1, :] ) )
+      flux_Eq1_itf_i[elem_R, 0, :] = flux_Eq1_itf_i[elem_L, 1, :]
 
-      diffusion_itf_i[:,0,:,itf+1] = 0.5 * ( var_itf_i[:,1,:,itf] + var_itf_i[:,0,:,itf+1] )
-      diffusion_itf_i[:,1,:,itf]   = diffusion_itf_i[:,0,:,itf+1]
+      # --- u2 equation
+
+      flux_L[:] = metric.sqrtG_itf_i[:, itf] * ( h_itf_i[elem_L, 1, :] * u2_itf_i[elem_L, 1, :] * u1_itf_i[elem_L, 1, :] \
+            + 0.5 * gravity * metric.H_contra_21_itf_i[:, itf] * h_itf_i[elem_L, 1, :]**2 )
+      flux_R[:] = metric.sqrtG_itf_i[:, itf] * ( h_itf_i[elem_R, 0, :] * u2_itf_i[elem_R, 0, :] * u1_itf_i[elem_R, 0, :] \
+            + 0.5 * gravity * metric.H_contra_21_itf_i[:, itf] * h_itf_i[elem_R, 0, :]**2 )
+
+      flux_Eq2_itf_i[elem_L, 1, :] = 0.5 * ( flux_L  + flux_R - eig * metric.sqrtG_itf_i[:, itf] \
+            * ( h_itf_i[elem_R, 0, :] * u2_itf_i[elem_R, 0, :]  - h_itf_i[elem_L, 1, :] * u2_itf_i[elem_L, 1, :] ) )
+      flux_Eq2_itf_i[elem_R, 0, :] = flux_Eq2_itf_i[elem_L, 1, :]
+
+      # Direction x2
+
+      if shallow_water_equations:
+         eig_L[:] = numpy.abs( u2_itf_j[elem_L, 1, :] ) + numpy.sqrt(gravity * h_itf_j[elem_L, 1, :] * metric.H_contra_22_itf_j[itf, :])
+         eig_R[:] = numpy.abs( u2_itf_j[elem_R, 0, :] ) + numpy.sqrt(gravity * h_itf_j[elem_L, 1, :] * metric.H_contra_22_itf_j[itf, :])
+      else:
+         eig_L[:] = numpy.abs( u2_itf_j[elem_L, 1, :] )
+         eig_R[:] = numpy.abs( u2_itf_j[elem_R, 0, :] )
+      eig[:]   = numpy.maximum(eig_L, eig_R)
+
+      # --- Continuity equation
+
+      flux_L[:] = metric.sqrtG_itf_j[itf, :] * h_itf_j[elem_L, 1, :] * u2_itf_j[elem_L, 1, :]
+      flux_R[:] = metric.sqrtG_itf_j[itf, :] * h_itf_j[elem_R, 0, :] * u2_itf_j[elem_R, 0, :]
+
+      flux_Eq0_itf_j[elem_L, 1, :] = 0.5 * ( flux_L + flux_R - eig * metric.sqrtG_itf_j[itf, :] * ( h_itf_j[elem_R, 0, :] - h_itf_j[elem_L, 1, :] ) )
+      flux_Eq0_itf_j[elem_R, 0, :] = flux_Eq0_itf_j[elem_L, 1, :]
+
+      # --- u1 equation
+
+      flux_L[:] = metric.sqrtG_itf_j[itf, :] * ( h_itf_j[elem_L, 1, :] * u1_itf_j[elem_L, 1, :] * u2_itf_j[elem_L, 1, :] \
+            + 0.5 * gravity * metric.H_contra_12_itf_j[itf, :] * h_itf_j[elem_L, 1, :]**2 )
+      flux_R[:] = metric.sqrtG_itf_j[itf, :] * ( h_itf_j[elem_R, 0, :] * u1_itf_j[elem_R, 0, :] * u2_itf_j[elem_R, 0, :] \
+            + 0.5 * gravity * metric.H_contra_12_itf_j[itf, :] * h_itf_j[elem_R, 0, :]**2 )
+
+      flux_Eq1_itf_j[elem_L, 1, :] = 0.5 * ( flux_L + flux_R - eig * metric.sqrtG_itf_j[itf, :] \
+            * ( h_itf_j[elem_R, 0, :] * u1_itf_j[elem_R, 0, :] - h_itf_j[elem_L, 1, :] * u1_itf_j[elem_L, 1, :]) )
+      flux_Eq1_itf_j[elem_R, 0, :] = flux_Eq1_itf_j[elem_L, 1, :]
+
+      # --- u2 equation
+
+      flux_L[:] = metric.sqrtG_itf_j[itf, :] * ( h_itf_j[elem_L, 1, :] * u2_itf_j[elem_L, 1, :]**2 \
+            + 0.5 * gravity * metric.H_contra_22_itf_j[itf, :] * h_itf_j[elem_L, 1, :]**2 )
+      flux_R[:] = metric.sqrtG_itf_j[itf, :] * ( h_itf_j[elem_R, 0, :] * u2_itf_j[elem_R, 0, :]**2 \
+            + 0.5 * gravity * metric.H_contra_22_itf_j[itf, :] * h_itf_j[elem_R, 0, :]**2 )
+
+      flux_Eq2_itf_j[elem_L, 1, :] = 0.5 * ( flux_L + flux_R - eig * metric.sqrtG_itf_j[itf, :] \
+            * ( h_itf_j[elem_R, 0, :] * u2_itf_j[elem_R, 0, :] - h_itf_j[elem_L, 1, :] * u2_itf_j[elem_L, 1, :]) )
+      flux_Eq2_itf_j[elem_R, 0, :] = flux_Eq2_itf_j[elem_L, 1, :]
 
    # Compute the derivatives
-   for elem in range(nb_elements_x2):
+   for elem in range(nb_elements_horiz):
       epais = elem * nbsolpts + numpy.arange(nbsolpts)
 
-      for eq in range(nb_equations):
-         df2_dx2[epais,:,eq] = ( mtrx.diff_solpt @ flux_x2[epais,:,eq] + mtrx.correction @ flux_itf_j[:,:,eq,elem] ) * 2.0/geom.Δz
-         dQ_dx2[epais,:,eq]  = ( mtrx.diff_solpt @ Q[epais,:,eq] + mtrx.correction @ diffusion_itf_j[:,:,eq,elem] ) * 2.0/geom.Δz
+      # --- Direction x1
 
-   for elem in range(nb_elements_x1):
-      epais = elem * nbsolpts + numpy.arange(nbsolpts)
+      df1_dx1[idx_h,:,epais]   = mtrx.diff_solpt @ flux_Eq0_x1[:,epais].T + mtrx.correction @ flux_Eq0_itf_i[elem+offset,:,:] # TODO : éviter la transpose
+      df1_dx1[idx_hu1,:,epais] = mtrx.diff_solpt @ flux_Eq1_x1[:,epais].T + mtrx.correction @ flux_Eq1_itf_i[elem+offset,:,:]
+      df1_dx1[idx_hu2,:,epais] = mtrx.diff_solpt @ flux_Eq2_x1[:,epais].T + mtrx.correction @ flux_Eq2_itf_i[elem+offset,:,:]
 
-      for eq in range(nb_equations):
-         df1_dx1[:,epais,eq] = ( flux_x1[:,epais,eq] @ mtrx.diff_solpt.T + flux_itf_i[:,:,eq,elem] @ mtrx.correction.T ) * 2.0/geom.Δx
-         dQ_dx1[:,epais,eq]  = ( Q[:,epais,eq] @ mtrx.diff_solpt.T + diffusion_itf_i[:,:,eq,elem] @ mtrx.correction.T ) * 2.0/geom.Δx
+      # --- Direction x2
 
-   # Interpolate first derivative of diffusion to the interface
-   for elem in range(nb_elements_x2):
-      epais = elem * nbsolpts + numpy.arange(nbsolpts)
+      df2_dx2[idx_h,epais,:]   = mtrx.diff_solpt @ flux_Eq0_x2[epais,:] + mtrx.correction @ flux_Eq0_itf_j[elem+offset,:,:]
+      df2_dx2[idx_hu1,epais,:] = mtrx.diff_solpt @ flux_Eq1_x2[epais,:] + mtrx.correction @ flux_Eq1_itf_j[elem+offset,:,:]
+      df2_dx2[idx_hu2,epais,:] = mtrx.diff_solpt @ flux_Eq2_x2[epais,:] + mtrx.correction @ flux_Eq2_itf_j[elem+offset,:,:]
 
-      for eq in range(nb_equations):
-         var_itf_j[0,:,eq,elem] = mtrx.lcoef @ dQ_dx2[epais,:,eq]
-         var_itf_j[1,:,eq,elem] = mtrx.rcoef @ dQ_dx2[epais,:,eq]
+   # Convert derivative from standard element to the cubed-sphere domain
+   df1_dx1 *= 2.0 / geom.Δx1
+   df2_dx2 *= 2.0 / geom.Δx2
 
-   for elem in range(nb_elements_x1):
-      epais = elem * nbsolpts + numpy.arange(nbsolpts)
+   # Add coriolis, metric and terms due to varying bottom topography
+   forcing[idx_h,:,:]   = 0.0
 
-      for eq in range(nb_equations):
-         var_itf_i[:,0,eq,elem] = dQ_dx1[:,epais,eq] @ mtrx.lcoef
-         var_itf_i[:,1,eq,elem] = dQ_dx1[:,epais,eq] @ mtrx.rcoef
+   forcing[idx_hu1,:,:] = 2.0 * ( metric.christoffel_1_01 * h * u1 + metric.christoffel_1_02 * h * u2) \
+         + metric.christoffel_1_11 * h * u1**2 + 2.0 * metric.christoffel_1_12 * h * u1 * u2 \
+         + 0 # TODO : topo
 
-   # Communication at cell interfaces with central flux
-   for itf in range(nb_interfaces_x2):
-      diffusion_itf_j[0,:,:,itf+1] = 0.5 * ( var_itf_j[1,:,:,itf] + var_itf_j[0,:,:,itf+1] )
-      diffusion_itf_j[1,:,:,itf]   = diffusion_itf_j[0,:,:,itf+1]
-
-   for itf in range(nb_interfaces_x1):
-      diffusion_itf_i[:,0,:,itf+1] = 0.5 * ( var_itf_i[:,1,:,itf] + var_itf_i[:,0,:,itf+1] )
-      diffusion_itf_i[:,1,:,itf]   = diffusion_itf_i[:,0,:,itf+1]
-
-   # Bondary treatement (this should be equivalent to a zero diffusion coefficient at the boundary)
-   diffusion_itf_j[0,:,:,0]  = 0.0
-   diffusion_itf_j[1,:,:,-1] = 0.0
-
-   diffusion_itf_i[:,0,:,0]  = 0.0
-   diffusion_itf_i[:,1,:,-1] = 0.0
-
-   # Finalize the diffusion operator
-   for elem in range(nb_elements_x2):
-      epais = elem * nbsolpts + numpy.arange(nbsolpts)
-
-      for eq in range(nb_equations):
-         Q_yy[epais,:,eq] = ( mtrx.diff_solpt @ dQ_dx2[epais,:,eq] + mtrx.correction @ diffusion_itf_j[:,:,eq,elem] ) * 2.0/geom.Δz
-
-   for elem in range(nb_elements_x1):
-      epais = elem * nbsolpts + numpy.arange(nbsolpts)
-
-      for eq in range(nb_equations):
-         Q_xx[:,epais,eq] = ( dQ_dx1[:,epais,eq] @ mtrx.diff_solpt.T + diffusion_itf_i[:,:,eq,elem] @ mtrx.correction.T ) * 2.0/geom.Δx
-
-   for eq in range(nb_equations):
-      upwind_diffusion[:,:,eq] = (α * 0.5 * geom.Δx / nbsolpts) * numpy.abs(u1) * Q_xx[:,:,eq] + (α * 0.5 * geom.Δz / nbsolpts) * numpy.abs(u2) * Q_yy[:,:,eq]
+   forcing[idx_hu2,:,:] = 2.0 * (metric.christoffel_2_01 * h * u1 + metric.christoffel_2_02 * h * u2) \
+         + 2.0 * metric.christoffel_2_21 * h * u2 * u1 + metric.christoffel_2_22 * h * u2**2 \
+         + 0 # TODO : topo
 
    # Assemble the right-hand sides
-   rhs = - df1_dx1 - df2_dx2 + upwind_diffusion
+   rhs = metric.inv_sqrtG * ( - df1_dx1 - df2_dx2 ) - forcing
 
-   rhs[:,:,RHO_W] = rhs[:,:,RHO_W] - Q[:,:,RHO] * gravity
+   if case_number <= 1:
+      rhs[1,:,:] = 0.0
+      rhs[2,:,:] = 0.0
 
    return rhs

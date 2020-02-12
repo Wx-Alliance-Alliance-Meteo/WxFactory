@@ -4,7 +4,7 @@ from definitions import *
 
 def blockstats(Q, step, case_number):
 
-   # TODO: paralléliser 
+   # TODO: les stats devraient être globals (MPI)
 
    h  = Q[:,:,0]
    if case_number > 1:

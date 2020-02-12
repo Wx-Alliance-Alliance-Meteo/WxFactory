@@ -1,28 +1,17 @@
 import numpy
 
-class Ops:
-   def __init__(self, extrap_west, extrap_east, extrap_south, extrap_north, diff_ext, diff_solpt, correction):
-      self.extrap_west  = extrap_west
-      self.extrap_east  = extrap_east
-      self.extrap_south = extrap_south
-      self.extrap_north = extrap_north
-      self.diff_ext = diff_ext
-      self.diff_solpt = diff_solpt
-      self.correction = correction
+class DFR_operators:
+   def __init__(self, grd):
+      self.extrap_west = lagrangeEval(grd.solutionPoints, -1)
+      self.extrap_east = lagrangeEval(grd.solutionPoints,  1)
 
-def set_operators(grd):
-   extrap_west = lagrangeEval(grd.solutionPoints, -1)
-   extrap_east = lagrangeEval(grd.solutionPoints,  1)
+      self.extrap_south = lagrangeEval(grd.solutionPoints, -1)
+      self.extrap_north = lagrangeEval(grd.solutionPoints,  1)
 
-   extrap_south = lagrangeEval(grd.solutionPoints, -1)
-   extrap_north = lagrangeEval(grd.solutionPoints,  1)
+      self.diff_ext = diffmat(grd.extension)
+      self.diff_solpt = self.diff_ext[1:-1, 1:-1]
 
-   diff_ext = diffmat(grd.extension)
-   diff_solpt = diff_ext[1:-1, 1:-1]
-
-   correction = numpy.column_stack((diff_ext[1:-1,0], diff_ext[1:-1,-1]))
-
-   return Ops(extrap_west, extrap_east, extrap_south, extrap_north, diff_ext, diff_solpt, correction)
+      self.correction = numpy.column_stack((self.diff_ext[1:-1,0], self.diff_ext[1:-1,-1]))
 
 def lagrangeEval(points, pos):
    x = pos

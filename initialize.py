@@ -3,7 +3,7 @@ import numpy
 from definitions import *
 from wind2contra import *
 
-def initialize(geom, metric, cube_face, case_number, Williamson_angle):
+def initialize(geom, metric, case_number, Williamson_angle):
 
    ni, nj = geom.lon.shape
 
@@ -19,9 +19,6 @@ def initialize(geom, metric, cube_face, case_number, Williamson_angle):
       case_number == 5:
       # Solid body rotation
 
-      u1 = numpy.zeros((ni, nj))
-      u2 = numpy.zeros((ni, nj))
-
       if case_number == 5:
          u0 = 20.0
          sinα = 0
@@ -31,29 +28,30 @@ def initialize(geom, metric, cube_face, case_number, Williamson_angle):
          sinα = math.sin(Williamson_angle)
          cosα = math.cos(Williamson_angle)
 
-      if cube_face == 0:
-         u1[:,:] = u0 / earth_radius * (cosα + geom.Y / (1.0 + geom.X**2) * sinα)
-         u2[:,:] = u0 * geom.X / (earth_radius * (1.0 + geom.Y**2)) * (geom.Y * cosα - sinα)
-      elif cube_face == 1:
-         u1[:,:] = u0 / earth_radius * (cosα - geom.X * geom.Y / (1.0 + geom.X**2) * sinα)
-         u2[:,:] = u0 / earth_radius * (geom.X * geom.Y / (1.0 + geom.Y**2) * cosα - sinα)
-      elif cube_face == 2:
-         u1[:,:] = u0 / earth_radius * (cosα - geom.Y / (1.0 + geom.X**2) * sinα)
-         u2[:,:] = u0 * geom.X / (earth_radius * (1.0 + geom.Y**2)) * (geom.Y * cosα + sinα)
-      elif cube_face == 3:
-         u1[:,:] = u0 / earth_radius * (cosα + geom.X * geom.Y / (1.0 + geom.X**2) * sinα)
-         u2[:,:] = u0 / earth_radius * (geom.X * geom.Y / (1.0 + geom.Y**2) * cosα + sinα)
-      elif cube_face == 4:
-         u1[:,:] = u0 / earth_radius * (- geom.Y / (1.0 + geom.X**2) * cosα + sinα)
-         u2[:,:] = u0 * geom.X / (earth_radius * (1.0 + geom.Y**2)) * (cosα + geom.Y * sinα)
-      elif cube_face == 5:
-         u1[:,:] = u0 / earth_radius * (geom.Y / (1.0 + geom.X**2) * cosα - sinα)
-         u2[:,:] =-u0 * geom.X / (earth_radius * (1.0 + geom.Y**2)) * (cosα + geom.Y * sinα)
+      if geom.cube_face == 0:
+         u1 = u0 / earth_radius * (cosα + geom.Y / (1.0 + geom.X**2) * sinα)
+         u2 = u0 * geom.X / (earth_radius * (1.0 + geom.Y**2)) * (geom.Y * cosα - sinα)
+      elif geom.cube_face == 1:
+         u1 = u0 / earth_radius * (cosα - geom.X * geom.Y / (1.0 + geom.X**2) * sinα)
+         u2 = u0 / earth_radius * (geom.X * geom.Y / (1.0 + geom.Y**2) * cosα - sinα)
+      elif geom.cube_face == 2:
+         u1 = u0 / earth_radius * (cosα - geom.Y / (1.0 + geom.X**2) * sinα)
+         u2 = u0 * geom.X / (earth_radius * (1.0 + geom.Y**2)) * (geom.Y * cosα + sinα)
+      elif geom.cube_face == 3:
+         u1 = u0 / earth_radius * (cosα + geom.X * geom.Y / (1.0 + geom.X**2) * sinα)
+         u2 = u0 / earth_radius * (geom.X * geom.Y / (1.0 + geom.Y**2) * cosα + sinα)
+      elif geom.cube_face == 4:
+         u1 = u0 / earth_radius * (- geom.Y / (1.0 + geom.X**2) * cosα + sinα)
+         u2 = u0 * geom.X / (earth_radius * (1.0 + geom.Y**2)) * (cosα + geom.Y * sinα)
+      elif geom.cube_face == 5:
+         u1 = u0 / earth_radius * (geom.Y / (1.0 + geom.X**2) * cosα - sinα)
+         u2 =-u0 * geom.X / (earth_radius * (1.0 + geom.Y**2)) * (cosα + geom.Y * sinα)
 
-      u1 *= 2.0 / geom.Δx1
-      u2 *= 2.0 / geom.Δx2
 
    if case_number == 0:
+      print("--------------------------------------------------------------")
+      print("CASE0 (Tracer): Circular vortex, Nair and Machenhauer,2002    ")
+      print("--------------------------------------------------------------")
 
       # Deformational Flow (Nair and Machenhauer, 2002)
       lon_center = math.pi - 0.8
@@ -65,7 +63,7 @@ def initialize(geom, metric, cube_face, case_number, Williamson_angle):
 
       lonR = numpy.arctan2( geom.coslat * numpy.sin(geom.lon - lon_center), \
          geom.coslat * math.sin(lat_center) * numpy.cos(geom.lon - lon_center) - math.cos(lat_center) * geom.sinlat )
-      
+
       lonR[lonR<0.0] = lonR[lonR<0.0] + (2.0 * math.pi)
 
       latR = numpy.arcsin( geom.sinlat * math.sin(lat_center) + geom.coslat * math.cos(lat_center) * numpy.cos(geom.lon - lon_center) )
@@ -90,13 +88,13 @@ def initialize(geom, metric, cube_face, case_number, Williamson_angle):
       v = earth_radius * Omega * numpy.cos(lat_center) * numpy.sin(geom.lon - lon_center)
       u1, u2 = wind2contra(u, v, geom)
 
-      u1 *= 2.0 / geom.Δx1
-      u2 *= 2.0 / geom.Δx2
-
 
    elif case_number == 1:
-      # Initialize gaussian bell
+      print("--------------------------------------------------------------")
+      print("WILLIAMSON CASE1 (Tracer): Cosine Bell, Williamson et al.,1992")
+      print("--------------------------------------------------------------")
 
+      # Initialize gaussian bell
       lon_center = 3.0 * math.pi / 2.0
       lat_center = 0.0
 
@@ -112,6 +110,14 @@ def initialize(geom, metric, cube_face, case_number, Williamson_angle):
 
 
    elif case_number == 2:
+      print("--------------------------------------------")
+      print("WILLIAMSON CASE2, Williamson et al. (1992)  ")
+      print("Steady state nonlinear geostrophic flow     ")
+      print("--------------------------------------------")
+
+      if abs(Williamson_angle) > 0.0:
+         print("Williamson_angle != 0 not yet implemented for case 2")
+         exit(0)
 
       # Global Steady State Nonlinear Zonal Geostrophic Flow
       gh0 = 29400.0
@@ -121,11 +127,14 @@ def initialize(geom, metric, cube_face, case_number, Williamson_angle):
       cosα = math.cos(Williamson_angle)
 
       h = (gh0 - (earth_radius * rotation_speed * u0 + (0.5 * u0**2)) \
-        * (-geom.coslon * geom.coslat * sinα + geomsinlat * cosα)**2) / gravity
+        * (-geom.coslon * geom.coslat * sinα + geom.sinlat * cosα)**2) / gravity
 
       hsurf = numpy.zeros_like(h)
 
    elif case_number == 5:
+
+      print("Not yet implemented")
+      exit(0)
 
       u0 = 20.0   # Max wind (m/s)
       h0 = 5960.0 # Mean height (m)
@@ -147,23 +156,27 @@ def initialize(geom, metric, cube_face, case_number, Williamson_angle):
       h = h_star - hsurf
 
    elif case_number == 6:
+      print("--------------------------------------------")
+      print("WILLIAMSON CASE6, Williamson et al. (1992)  ")
+      print("Rossby-Haurwitz wave                        ")
+      print("--------------------------------------------")
 
       # Rossby-Haurwitz wave
 
-      R = 4.0
+      R = 4
 
       omega = 7.848e-6
       K     = omega
       h0    = 8000.0
 
-      A = omega/2.0 * (2*rotation_speed+omega) * geom.coslat**2 + (K**2)/4 * geom.coslat**(2*R) \
-         * ( (R+1) * geom.coslat**2 + (2*R**2-R-2) - 2*(R**2) * geom.coslat**(-2) )
+      A = omega/2.0 * (2.0 * rotation_speed + omega) * geom.coslat**2 + (K**2) / 4.0 * geom.coslat**(2*R) \
+         * ( (R+1) * geom.coslat**2 + (2.0 * R**2 - R - 2.0) - 2.0 * (R**2) * geom.coslat**(-2) )
 
-      B = 2 * (rotation_speed+omega) * K / ((R+1)*(R+2)) * geom.coslat**R * ( (R**2+2*R+2) - (R+1)**2 * geom.coslat**2 )
+      B = 2.0 * (rotation_speed+omega) * K / ((R + 1) * (R + 2)) * geom.coslat**R * ( (R**2 + 2 * R + 2) - (R + 1)**2 * geom.coslat**2 )
 
-      C = (K**2)/4.0 * geom.coslat**(2*R) * ( (R+1) * (geom.coslat**2) - (R + 2.0) )
+      C = (K**2) / 4.0 * geom.coslat**(2*R) * ( (R + 1) * (geom.coslat**2) - (R + 2.0) )
 
-      h = h0 + ( earth_radius**2*A + earth_radius**2*B*numpy.cos(R*geom.lon) + earth_radius**2*C*numpy.cos(2*R*geom.lon) ) / gravity
+      h = h0 + ( earth_radius**2 * A + earth_radius**2*B*numpy.cos(R * geom.lon) + earth_radius**2 * C * numpy.cos(2.0 * R * geom.lon) ) / gravity
 
       u = earth_radius * omega * geom.coslat + earth_radius * K * geom.coslat**(R-1) * \
             ( R*geom.sinlat**2 - geom.coslat**2 ) * numpy.cos(R*geom.lon)
@@ -173,13 +186,26 @@ def initialize(geom, metric, cube_face, case_number, Williamson_angle):
 
       hsurf = numpy.zeros_like(h)
 
+
+   elif case_number == 8:
+      print("--------------------------------------------")
+      print("CASE8, Galewsky et al. (2004)               ")
+      print("Barotropic wave                             ")
+      print("--------------------------------------------")
+
+      print("Not yet implemented")
+      exit(0)
+
+
+
    Q[idx_h,:,:]   = h
-   Q[idx_hu1,:,:] = metric.sqrtG * h * u1
-   Q[idx_hu2,:,:] = metric.sqrtG * h * u2
 
    if case_number <= 1:
       # advection only
       Q[idx_u1,:,:] = u1
       Q[idx_u2,:,:] = u2
+   else:
+      Q[idx_hu1,:,:] = h * u1
+      Q[idx_hu2,:,:] = h * u2
 
    return Q, hsurf
