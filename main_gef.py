@@ -9,14 +9,14 @@ import numpy
 
 from blockstats   import blockstats
 from definitions  import idx_h
+from config       import Configuration
 from cubed_sphere import cubed_sphere
-from graphx       import plot_field
+from graphx       import image_field
 from initialize   import initialize
 from kiops        import kiops
 from matrices     import DFR_operators
 from matvec       import matvec_fun
 from metric       import Metric
-from parameters   import get_parameters
 from rhs_sw       import rhs_sw
 
 def main():
@@ -25,8 +25,10 @@ def main():
    else:
       cfg_file = sys.argv[1]
 
+   step = 0
+
    # Read configuration file
-   param = get_parameters(cfg_file)
+   param = Configuration(cfg_file)
 
    # Set up distributed world
    communicator = mpi4py.MPI.COMM_WORLD
@@ -47,14 +49,15 @@ def main():
    metric = Metric(geom)
 
    # Initialize state variables
-   Q, hsurf = initialize(geom, metric, param.case_number, param.Williamson_angle)
+   Q, hsurf, h_analytic = initialize(geom, metric, param.case_number, param.Williamson_angle)
+
 
    if param.plot_freq > 0:
-      plot_field(geom, (Q[idx_h,:,:] + hsurf) )
+#      plot_field(geom, (Q[idx_h,:,:] + hsurf) )
+      image_field(geom, (Q[idx_h,:,:] + hsurf), "/home/stef/tmp/case" + str(param.case_number) + "_" + str(step) )
 
    # Time stepping
    t           = 0.0
-   step        = 0
    krylov_size = param.krylov_size
 
    rhs_handle = lambda q: rhs_sw(q, geom, mtrx, metric, param.nbsolpts, param.nb_elements, \
@@ -64,7 +67,7 @@ def main():
 
    blockstats(Q, step, param.case_number)
 
-   if (param.time_integrator).lower() == "epirk4s3a":
+   if (param.time_integrator).lower() == "epirk4s3a" or (param.time_integrator).lower() == 'epi4':
       g21=1/2
       g31=2/3
 
@@ -167,6 +170,43 @@ def main():
          time_epi3 = time.time() - tic
          print('Elapsed time for EPI3: %0.3f secs' % time_epi3)
 
+      elif (param.time_integrator).lower() == "epi4" and step > 2:
+
+         # Using EPI4 time integration
+         tic = time.time()
+
+         matvec_handle = lambda v: matvec_fun(v, param.dt, Q, rhs_handle)
+
+         rhs = rhs_handle(Q)
+
+         J_deltaQ1 = matvec_fun(previous_Q - Q, 1., Q, rhs_handle)
+         J_deltaQ2 = matvec_fun(prev_previous_Q - Q, 1., Q, rhs_handle)
+
+         r1 = (previous_rhs - rhs)      - numpy.reshape(J_deltaQ1, Q.shape)
+         r2 = (prev_previous_rhs - rhs) - numpy.reshape(J_deltaQ2, Q.shape)
+
+         # We need the second and third phi functions (φ_1, φ_3)
+         vec = numpy.column_stack((numpy.zeros(len(rhs.flatten())), rhs.flatten(), numpy.zeros(len(rhs.flatten())), 11.0/2.0 * r1.flatten()  - 7.0/8.0 * r2.flatten()  ))
+
+         phiv, stats = kiops([1], matvec_handle, vec, tol=param.tolerance, m_init=krylov_size, mmin=14, mmax=64, task1=False)
+
+         print('KIOPS converged at iteration %d to a solution with local error %e' % (stats[2], stats[4]))
+
+         krylov_size = math.floor(0.7 * stats[5] + 0.3 * krylov_size)
+
+         # Save values for the next timestep
+         prev_previous_Q   = previous_Q
+         prev_previous_rhs = previous_rhs
+         previous_Q        = Q
+         previous_rhs      = rhs
+
+         # Update solution
+         Q = Q + numpy.reshape(phiv, Q.shape) * param.dt
+
+         time_epi3 = time.time() - tic
+         print('Elapsed time for EPI4: %0.3f secs' % time_epi3)
+
+
       elif (param.time_integrator).lower() == "tvdrk3":
          # Using a 3th Order TVD-RK time integration
          tic = time.time()
@@ -178,11 +218,14 @@ def main():
          time_tvdrk3 = time.time() - tic
          print('Elapsed time for TVD-RK3: %0.3f secs' % time_tvdrk3)
 
-      elif (param.time_integrator).lower() == "epirk4s3a":
+      elif (param.time_integrator).lower() == "epirk4s3a" or ( (param.time_integrator).lower() == 'epi4' and step <= 2 ):
+
          # Using a 4th Order 3-stage EPIRK time integration
          tic = time.time()
 
-         hF = rhs_handle(Q) * param.dt
+         rhs = rhs_handle(Q)
+
+         hF = rhs * param.dt
          ni, nj, ne = Q.shape
          zeroVec = numpy.zeros(ni * nj * ne)
 
@@ -210,19 +253,35 @@ def main():
          phiv, stats = kiops([1], matvec_handle, u_mtrx, tol=param.tolerance, m_init=krylov_size, mmin=14, mmax=64, task1=False)
          Q = Q + numpy.reshape(phiv, Q.shape)
 
+         if (param.time_integrator).lower() == 'epi4':
+            if step == 1:
+               prev_previous_Q   = Q
+               prev_previous_rhs = rhs
+            if step == 2:
+               previous_Q   = Q
+               previous_rhs = rhs
+
          time_epirk4s3 = time.time() - tic
          print('Elapsed time for EPIRK4s3A: %0.3f secs' % time_epirk4s3)
 
-
-      if step % param.stat_freq == 0:
-         blockstats(Q, step, param.case_number)
+      if param.stat_freq > 0:
+         if step % param.stat_freq == 0:
+            blockstats(Q, step, param.case_number)
 
       # Plot solution
       if param.plot_freq > 0:
          if step % param.plot_freq == 0:
-            plot_field(geom, (Q[idx_h,:,:] + hsurf) )
+#            plot_field(geom, (Q[idx_h,:,:] + hsurf) )
+            image_field(geom, (Q[idx_h,:,:] + hsurf), "/home/stef/tmp/case" + str(param.case_number) + "_" + str(param.time_integrator) + "_" + str(step) )
+            if param.plot_error and ( param.case_number == 0 or param.case_number == 2 ):
+               image_field(geom, (h_analytic - ( Q[idx_h,:,:] + hsurf)), "/home/stef/tmp/err" + str(param.case_number) + "_" + str(param.time_integrator) + "_" + str(step) )
 
-      # TODO : plot error
+
+   if param.plot_error:
+      if param.case_number <= 2:
+         image_field(geom, (h_analytic - ( Q[idx_h,:,:] + hsurf)), "/home/stef/tmp/err" + str(param.case_number) + "_" + str(param.time_integrator) + "_" + str(step) )
+      else:
+         print('There is no analytical solution to plot for this test case')
 
 
 if __name__ == '__main__':

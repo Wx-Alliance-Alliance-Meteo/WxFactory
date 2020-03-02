@@ -45,7 +45,7 @@ class Metric:
 
       if geom.cube_face <= 3:
          self.christoffel_1_01 = rotation_speed * geom.X * geom.Y**2 / delta2
-         self.christoffel_1_02 =-rotation_speed * geom.Y * (1.0 + geom.Y**2) / delta2
+         self.christoffel_1_02 =-rotation_speed * (geom.Y + geom.Y**3) / delta2
 
          self.christoffel_1_10 = self.christoffel_1_01
          self.christoffel_1_20 = self.christoffel_1_02
@@ -84,7 +84,7 @@ class Metric:
 
 
       self.christoffel_1_11 = 2 * geom.X * geom.Y**2 / delta2
-      self.christoffel_1_12 = -geom.Y * (1.0 + geom.Y**2) / delta2
+      self.christoffel_1_12 = - (geom.Y + geom.Y**3) / delta2
 
       self.christoffel_1_21 = self.christoffel_1_12
       self.christoffel_1_22 = numpy.zeros_like(geom.X)

@@ -3,9 +3,11 @@ import numpy
 from definitions import *
 from wind2contra import *
 
-def initialize(geom, metric, case_number, Williamson_angle):
+def initialize(geom, metric, case_number, Williamson_angle, t_anal=0):
 
    ni, nj = geom.lon.shape
+
+   h_analytic = None
 
    if case_number <= 1:
       # advection only, save u1 and u2
@@ -81,7 +83,8 @@ def initialize(geom, metric, case_number, Williamson_angle):
             if (abs(rho[i,j]) > 1e-9):
                   Omega[i,j] = Vt[i,j] / (earth_radius * rho[i,j])
 
-      h     = 1.0 - numpy.tanh( (rho / gamma) * numpy.sin(lonR) )
+      h          = 1.0 - numpy.tanh( (rho / gamma) * numpy.sin(lonR) )
+      h_analytic = 1.0 - numpy.tanh( (rho / gamma) * numpy.sin(lonR - Omega * t_anal) )
       hsurf = numpy.zeros_like(h)
 
       u = earth_radius * Omega * (math.sin(lat_center) * geom.coslat - math.cos(lat_center) * numpy.cos(geom.lon - lon_center) * geom.sinlat)
@@ -105,7 +108,7 @@ def initialize(geom, metric, case_number, Williamson_angle):
       dist = numpy.arccos(math.sin(lat_center) * geom.sinlat + math.cos(lat_center) * geom.coslat * numpy.cos(geom.lon - lon_center))
 
       h = 0.5 * h0 * (1.0 + numpy.cos(math.pi * dist / radius)) * (dist <= radius)
-
+      h_analytic = h
       hsurf = numpy.zeros_like(h)
 
 
@@ -129,6 +132,7 @@ def initialize(geom, metric, case_number, Williamson_angle):
       h = (gh0 - (earth_radius * rotation_speed * u0 + (0.5 * u0**2)) \
         * (-geom.coslon * geom.coslat * sinα + geom.sinlat * cosα)**2) / gravity
 
+      h_analytic = h
       hsurf = numpy.zeros_like(h)
 
    elif case_number == 5:
@@ -208,4 +212,4 @@ def initialize(geom, metric, case_number, Williamson_angle):
       Q[idx_hu1,:,:] = h * u1
       Q[idx_hu2,:,:] = h * u2
 
-   return Q, hsurf
+   return Q, hsurf, h_analytic

@@ -2,6 +2,9 @@ import mayavi.mlab
 import mpi4py.MPI
 import numpy
 
+import cartopy.crs
+import matplotlib.pyplot
+
 from definitions import *
 
 def plot_sphere(geom):
@@ -14,6 +17,41 @@ def plot_sphere(geom):
       for f in range(nbfaces):
          mayavi.mlab.mesh(glb_x[f], glb_y[f], glb_z[f])
       mayavi.mlab.show()
+
+def image_field(geom, field, filename):
+
+   lon     = numpy.array( mpi4py.MPI.COMM_WORLD.gather(geom.lon, root=0) )
+   lat     = numpy.array( mpi4py.MPI.COMM_WORLD.gather(geom.lat, root=0) )
+   data    = numpy.array( mpi4py.MPI.COMM_WORLD.gather(field, root=0) )
+
+   if mpi4py.MPI.COMM_WORLD.Get_rank() == 0:
+
+      fig = matplotlib.pyplot.figure(figsize=[12.8,9.6])
+      ax = matplotlib.pyplot.axes(projection=cartopy.crs.PlateCarree())
+
+      # Have to use the same range for all tiles!
+      # cannot just pass None to plt.pcolormesh()
+      vmin = numpy.amin(data)
+      vmax = numpy.amax(data)
+#      print((vmin,vmax)); exit(0)
+
+#      vmin,vmax = (8100, 10500) # case 6
+#      vmin,vmax = (0.4, 1.6) # vortex
+
+      for i in range(6):
+         # 6 tiles have the same color configuration so we only return one QuadMesh object
+         im = ax.pcolormesh(numpy.degrees(lon[i]), numpy.degrees(lat[i]), data[i], vmin=vmin, vmax=vmax, transform=cartopy.crs.PlateCarree(), cmap='jet')
+
+      cbar = fig.colorbar(im, ax=ax, orientation='vertical', shrink=0.5)
+      cbar.set_label("height (m)",)
+
+      ax.coastlines(alpha=0.3)
+
+#      matplotlib.pyplot.show()
+      matplotlib.pyplot.savefig(filename) #, bbox_inches="tight")
+      matplotlib.pyplot.close(fig)
+
+   return
 
 def plot_field(geom, field):
    glb_x     = mpi4py.MPI.COMM_WORLD.gather(geom.cartX.T, root=0)
