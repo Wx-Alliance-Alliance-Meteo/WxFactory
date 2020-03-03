@@ -3,11 +3,20 @@ import numpy
 from definitions import *
 from wind2contra import *
 
-def initialize(geom, metric, case_number, Williamson_angle, t_anal=0):
+class Topo:
+   def __init__(self, hsurf, dzdx1, dzdx2):
+      self.hsurf = hsurf
+      self.dzdx1 = dzdx1
+      self.dzdx2 = dzdx2
+
+def initialize(geom, metric, mtrx, nbsolpts, nb_elements_horiz, case_number, Williamson_angle, t_anal=0):
 
    ni, nj = geom.lon.shape
 
    h_analytic = None
+   hsurf = numpy.zeros((ni, nj))
+   dzdx1 = numpy.zeros((ni, nj))
+   dzdx2 = numpy.zeros((ni, nj))
 
    if case_number <= 1:
       # advection only, save u1 and u2
@@ -85,7 +94,6 @@ def initialize(geom, metric, case_number, Williamson_angle, t_anal=0):
 
       h          = 1.0 - numpy.tanh( (rho / gamma) * numpy.sin(lonR) )
       h_analytic = 1.0 - numpy.tanh( (rho / gamma) * numpy.sin(lonR - Omega * t_anal) )
-      hsurf = numpy.zeros_like(h)
 
       u = earth_radius * Omega * (math.sin(lat_center) * geom.coslat - math.cos(lat_center) * numpy.cos(geom.lon - lon_center) * geom.sinlat)
       v = earth_radius * Omega * numpy.cos(lat_center) * numpy.sin(geom.lon - lon_center)
@@ -109,8 +117,6 @@ def initialize(geom, metric, case_number, Williamson_angle, t_anal=0):
 
       h = 0.5 * h0 * (1.0 + numpy.cos(math.pi * dist / radius)) * (dist <= radius)
       h_analytic = h
-      hsurf = numpy.zeros_like(h)
-
 
    elif case_number == 2:
       print("--------------------------------------------")
@@ -133,12 +139,8 @@ def initialize(geom, metric, case_number, Williamson_angle, t_anal=0):
         * (-geom.coslon * geom.coslat * sinα + geom.sinlat * cosα)**2) / gravity
 
       h_analytic = h
-      hsurf = numpy.zeros_like(h)
 
    elif case_number == 5:
-
-      print("Not yet implemented")
-      exit(0)
 
       u0 = 20.0   # Max wind (m/s)
       h0 = 5960.0 # Mean height (m)
@@ -155,7 +157,38 @@ def initialize(geom, metric, case_number, Williamson_angle, t_anal=0):
 
       r = numpy.sqrt(numpy.minimum(rr**2,(geom.lon-lon_mountain)**2 + (geom.lat-lat_mountain)**2))
 
+      r_itf_i = numpy.sqrt(numpy.minimum(rr**2,(geom.lon_itf_i-lon_mountain)**2 + (geom.lat_itf_i-lat_mountain)**2))
+      r_itf_j = numpy.sqrt(numpy.minimum(rr**2,(geom.lon_itf_j-lon_mountain)**2 + (geom.lat_itf_j-lat_mountain)**2))
+
       hsurf = hs0 * (1 - r / rr)
+
+      nb_interfaces_horiz = nb_elements_horiz + 1
+      hsurf_itf_i = numpy.zeros((nb_elements_horiz+2, 2, nbsolpts*nb_elements_horiz))
+      hsurf_itf_j = numpy.zeros((nb_elements_horiz+2, 2, nbsolpts*nb_elements_horiz))
+
+      for itf in range(nb_interfaces_horiz):
+         elem_L = itf
+         elem_R = itf + 1
+
+         hsurf_itf_i[elem_L, 1, :] = hs0 * (1 - r_itf_i[:, itf] / rr)
+         hsurf_itf_i[elem_R, 0, :] = hsurf_itf_i[elem_L, 1, :]
+
+         hsurf_itf_j[elem_L, 1, :] = hs0 * (1 - r_itf_j[itf, :] / rr)
+         hsurf_itf_j[elem_R, 0, :] = hsurf_itf_j[elem_L, 1, :]
+
+      offset = 1 # Offset due to the halo
+      for elem in range(nb_elements_horiz):
+         epais = elem * nbsolpts + numpy.arange(nbsolpts)
+
+         # --- Direction x1
+         dzdx1[:, epais] = ( mtrx.diff_solpt @ hsurf[:,epais].T + mtrx.correction @ hsurf_itf_i[elem+offset,:,:] ).T # TODO : éviter la transpose ...
+
+         # --- Direction x2
+         dzdx2[epais,:] = mtrx.diff_solpt @ hsurf[epais,:] + mtrx.correction @ hsurf_itf_j[elem+offset,:,:]
+
+      # Convert derivative from standard element to the cubed-sphere domain
+      dzdx1 *= 2.0 / geom.Δx1
+      dzdx2 *= 2.0 / geom.Δx2
 
       h = h_star - hsurf
 
@@ -188,8 +221,6 @@ def initialize(geom, metric, case_number, Williamson_angle, t_anal=0):
 
       u1, u2 = wind2contra(u, v, geom)
 
-      hsurf = numpy.zeros_like(h)
-
 
    elif case_number == 8:
       print("--------------------------------------------")
@@ -199,8 +230,6 @@ def initialize(geom, metric, case_number, Williamson_angle, t_anal=0):
 
       print("Not yet implemented")
       exit(0)
-
-
 
    Q[idx_h,:,:]   = h
 
@@ -212,4 +241,4 @@ def initialize(geom, metric, case_number, Williamson_angle, t_anal=0):
       Q[idx_hu1,:,:] = h * u1
       Q[idx_hu2,:,:] = h * u2
 
-   return Q, hsurf, h_analytic
+   return Q, Topo(hsurf, dzdx1, dzdx2), h_analytic

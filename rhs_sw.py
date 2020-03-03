@@ -3,7 +3,7 @@ import numpy
 from definitions import idx_h, idx_hu1, idx_hu2, idx_u1, idx_u2, gravity
 from xchange import xchange_scalars, xchange_vectors
 
-def rhs_sw(Q, geom, mtrx, metric, nbsolpts, nb_elements_horiz, α, case_number):
+def rhs_sw(Q, geom, mtrx, metric, topo, nbsolpts, nb_elements_horiz, α, case_number):
 
    type_vec = type(Q[0, 0, 0])
 
@@ -201,11 +201,11 @@ def rhs_sw(Q, geom, mtrx, metric, nbsolpts, nb_elements_horiz, α, case_number):
 
    forcing[idx_hu1,:,:] = 2.0 * ( metric.christoffel_1_01 * h * u1 + metric.christoffel_1_02 * h * u2) \
          + metric.christoffel_1_11 * h * u1**2 + 2.0 * metric.christoffel_1_12 * h * u1 * u2 \
-         + 0 # TODO : topo
+         + gravity * h * ( metric.H_contra_11 * topo.dzdx1 + metric.H_contra_12 * topo.dzdx2)
 
    forcing[idx_hu2,:,:] = 2.0 * (metric.christoffel_2_01 * h * u1 + metric.christoffel_2_02 * h * u2) \
          + 2.0 * metric.christoffel_2_21 * h * u2 * u1 + metric.christoffel_2_22 * h * u2**2 \
-         + 0 # TODO : topo
+         + gravity * h * ( metric.H_contra_21 * topo.dzdx1 + metric.H_contra_22 * topo.dzdx2)
 
    # Assemble the right-hand sides
    rhs = metric.inv_sqrtG * ( - df1_dx1 - df2_dx2 ) - forcing

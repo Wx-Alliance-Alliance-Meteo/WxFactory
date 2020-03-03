@@ -5,7 +5,7 @@ import quadrature
 from definitions import *
 
 class Geom:
-   def __init__(self, solutionPoints, extension, x1, x2, Δx1, Δx2, X, Y, cartX, cartY, cartZ, lon, lat, X_itf_i, Y_itf_i, X_itf_j, Y_itf_j, cube_face):
+   def __init__(self, solutionPoints, extension, x1, x2, Δx1, Δx2, X, Y, cartX, cartY, cartZ, lon, lat, X_itf_i, Y_itf_i, X_itf_j, Y_itf_j, lon_itf_i, lat_itf_i, lon_itf_j, lat_itf_j, cube_face):
       self.solutionPoints = solutionPoints
       self.extension = extension
       self.x1 = x1
@@ -23,6 +23,11 @@ class Geom:
       self.Y_itf_i = Y_itf_i
       self.X_itf_j = X_itf_j
       self.Y_itf_j = Y_itf_j
+      self.lon_itf_i = lon_itf_i
+      self.lat_itf_i = lat_itf_i
+      self.lon_itf_j = lon_itf_j
+      self.lat_itf_j = lat_itf_j
+
       self.cube_face = cube_face
 
       delta2 = 1.0 + X**2 + Y**2
@@ -31,45 +36,44 @@ class Geom:
       if cube_face == 0:
          self.coslon = 1.0 / numpy.sqrt( 1.0 + X**2 )
          self.sinlon = X / numpy.sqrt( 1.0 + X**2 )
-   
+
          self.coslat = numpy.sqrt( (1.0 + X**2) / delta2 )
          self.sinlat = Y / delta
-   
+
       elif cube_face == 1:
          self.coslon = -X / numpy.sqrt( 1.0 + X**2 )
          self.sinlon = 1.0 / numpy.sqrt( 1.0 + X**2 )
-   
+
          self.coslat = numpy.sqrt( (1.0 + X**2) / delta2 )
          self.sinlat = Y / delta
-   
+
       elif cube_face == 2:
          self.coslon = -1.0 / numpy.sqrt( 1.0 + X**2 )
          self.sinlon = -X / numpy.sqrt( 1.0 + X**2 )
-   
+
          self.coslat = numpy.sqrt( (1.0 + X**2) / delta2 )
          self.sinlat = Y / delta
-   
+
       elif cube_face == 3:
          self.coslon = X / numpy.sqrt( 1.0 + X**2 )
          self.sinlon = -1.0 / numpy.sqrt( 1.0 + X**2 )
-   
+
          self.coslat = numpy.sqrt( (1.0 + X**2) / delta2 )
          self.sinlat = Y / delta
-   
+
       elif cube_face == 4:
          self.coslon = -Y / numpy.sqrt( X**2 + Y**2 )
          self.sinlon = X / numpy.sqrt( X**2 + Y**2 )
-   
+
          self.coslat = numpy.sqrt( (X**2 + Y**2) / delta2 )
          self.sinlat = 1.0 / delta
-   
+
       elif cube_face == 5:
          self.coslon = Y / numpy.sqrt( X**2 + Y**2 )
          self.sinlon = X / numpy.sqrt( X**2 + Y**2 )
-   
+
          self.coslat = numpy.sqrt( (X**2 + Y**2) / delta2 )
          self.sinlat = -1.0 / delta
-   
 
 
 def cubed_sphere(nb_elements, nbsolpts, cube_face):
@@ -134,10 +138,20 @@ def cubed_sphere(nb_elements, nbsolpts, cube_face):
    lon = numpy.zeros((ni,nj))
    lat = numpy.zeros((ni,nj))
 
+   lon_itf_i = numpy.zeros_like(X1_itf_i)
+   lon_itf_j = numpy.zeros_like(X1_itf_j)
+   lat_itf_i = numpy.zeros_like(X2_itf_i)
+   lat_itf_j = numpy.zeros_like(X2_itf_j)
+
    # Equatorial panel
    if cube_face < 4:
       lon[:,:] = X1 + math.pi/2.0 * cube_face
       lat[:,:] = numpy.arctan(Y * numpy.cos(X1))
+
+      lon_itf_i[:,:] = X1_itf_i + math.pi/2.0 * cube_face
+      lat_itf_i[:,:] = numpy.arctan(Y_itf_i * numpy.cos(X1_itf_i))
+      lon_itf_j[:,:] = X1_itf_j + math.pi/2.0 * cube_face
+      lat_itf_j[:,:] = numpy.arctan(Y_itf_j * numpy.cos(X1_itf_j))
 
    # North polar panel
    if cube_face == 4:
@@ -151,6 +165,28 @@ def cubed_sphere(nb_elements, nbsolpts, cube_face):
                lon[i,j] = math.pi
       lat[:,:] = math.pi/2 - numpy.arctan(numpy.sqrt(X**2 + Y**2))
 
+      nni, nnj = lon_itf_i.shape
+      for i in range(nni):
+         for j in range(nnj):
+            if abs(X_itf_i[i,j]) > numpy.finfo(float).eps :
+               lon_itf_i[i,j] = math.atan2(X_itf_i[i,j], -Y_itf_i[i,j])
+            elif Y_itf_i[i,j] <= 0.0:
+               lon_itf_i[i,j] = 0.0
+            else:
+               lon_itf_i[i,j] = math.pi
+      lat_itf_i[:,:] = math.pi/2 - numpy.arctan(numpy.sqrt(X_itf_i**2 + Y_itf_i**2))
+
+      nni, nnj = lon_itf_j.shape
+      for i in range(nni):
+         for j in range(nnj):
+            if abs(X_itf_j[i,j]) > numpy.finfo(float).eps :
+               lon_itf_j[i,j] = math.atan2(X_itf_j[i,j], -Y_itf_j[i,j])
+            elif Y_itf_j[i,j] <= 0.0:
+               lon_itf_j[i,j] = 0.0
+            else:
+               lon_itf_j[i,j] = math.pi
+      lat_itf_j[:,:] = math.pi/2 - numpy.arctan(numpy.sqrt(X_itf_j**2 + Y_itf_j**2))
+
    # South polar panel
    if cube_face == 5:
       for i in range(ni):
@@ -163,10 +199,32 @@ def cubed_sphere(nb_elements, nbsolpts, cube_face):
                lon[i,j] = math.pi
       lat[:,:] = -math.pi/2 + numpy.arctan(numpy.sqrt(X**2 + Y**2))
 
+      nni, nnj = lon_itf_i.shape
+      for i in range(nni):
+         for j in range(nnj):
+            if abs(X_itf_i[i,j]) > numpy.finfo(float).eps :
+               lon_itf_i[i,j] = math.atan2(X_itf_i[i,j], Y_itf_i[i,j])
+            elif Y_itf_i[i,j] > 0.0:
+               lon_itf_i[i,j] = 0.0
+            else:
+               lon_itf_i[i,j] = math.pi
+      lat_itf_i[:,:] = -math.pi/2 + numpy.arctan(numpy.sqrt(X_itf_i**2 + Y_itf_i**2))
+
+      nni, nnj = lon_itf_j.shape
+      for i in range(nni):
+         for j in range(nnj):
+            if abs(X_itf_j[i,j]) > numpy.finfo(float).eps :
+               lon_itf_j[i,j] = math.atan2(X_itf_j[i,j], Y_itf_j[i,j])
+            elif Y_itf_j[i,j] > 0.0:
+               lon_itf_j[i,j] = 0.0
+            else:
+               lon_itf_j[i,j] = math.pi
+      lat_itf_j[:,:] = -math.pi/2 + numpy.arctan(numpy.sqrt(X_itf_j**2 + Y_itf_j**2))
+
    # Map to the interval [0, 2 pi]
    lon[lon<0.0] = lon[lon<0.0] + (2.0 * math.pi)
 
    # Cartesian coordinates on unit sphere
    cartX, cartY, cartZ = sphere.sph2cart(lon, lat, 1.0)
 
-   return Geom(solutionPoints, extension, X1, X2, Δx1, Δx2, X, Y, cartX, cartY, cartZ, lon, lat, X_itf_i, Y_itf_i, X_itf_j, Y_itf_j, cube_face)
+   return Geom(solutionPoints, extension, X1, X2, Δx1, Δx2, X, Y, cartX, cartY, cartZ, lon, lat, X_itf_i, Y_itf_i, X_itf_j, Y_itf_j, lon_itf_i, lat_itf_i, lon_itf_j, lat_itf_j, cube_face)

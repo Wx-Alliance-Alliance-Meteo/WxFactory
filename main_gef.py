@@ -11,7 +11,7 @@ from blockstats   import blockstats
 from definitions  import idx_h
 from config       import Configuration
 from cubed_sphere import cubed_sphere
-from graphx       import image_field
+from graphx       import image_field, plot_field
 from initialize   import initialize
 from kiops        import kiops
 from matrices     import DFR_operators
@@ -49,18 +49,18 @@ def main():
    metric = Metric(geom)
 
    # Initialize state variables
-   Q, hsurf, h_analytic = initialize(geom, metric, param.case_number, param.Williamson_angle)
+   Q, topo, h_analytic = initialize(geom, metric, mtrx, param.nbsolpts, param.nb_elements, param.case_number, param.Williamson_angle)
 
 
    if param.plot_freq > 0:
-#      plot_field(geom, (Q[idx_h,:,:] + hsurf) )
-      image_field(geom, (Q[idx_h,:,:] + hsurf), "/home/stef/tmp/case" + str(param.case_number) + "_" + str(step) )
+      plot_field(geom, (Q[idx_h,:,:] + topo.hsurf) )
+#      image_field(geom, (Q[idx_h,:,:] + topo.hsurf), "/home/stef/tmp/case" + str(param.case_number) + "_" + str(step) )
 
    # Time stepping
    t           = 0.0
    krylov_size = param.krylov_size
 
-   rhs_handle = lambda q: rhs_sw(q, geom, mtrx, metric, param.nbsolpts, param.nb_elements, \
+   rhs_handle = lambda q: rhs_sw(q, geom, mtrx, metric, topo, param.nbsolpts, param.nb_elements, \
          param.α, param.case_number)
 
    nb_steps = math.ceil(param.t_end / param.dt)
@@ -271,15 +271,16 @@ def main():
       # Plot solution
       if param.plot_freq > 0:
          if step % param.plot_freq == 0:
-#            plot_field(geom, (Q[idx_h,:,:] + hsurf) )
-            image_field(geom, (Q[idx_h,:,:] + hsurf), "/home/stef/tmp/case" + str(param.case_number) + "_" + str(param.time_integrator) + "_" + str(step) )
+            plot_field(geom, (Q[idx_h,:,:] + topo.hsurf) )
+#            image_field(geom, (Q[idx_h,:,:] + topo.hsurf), "/home/stef/tmp/case" + str(param.case_number) + "_" + str(param.time_integrator) + "_" + str(step) )
             if param.plot_error and ( param.case_number == 0 or param.case_number == 2 ):
-               image_field(geom, (h_analytic - ( Q[idx_h,:,:] + hsurf)), "/home/stef/tmp/err" + str(param.case_number) + "_" + str(param.time_integrator) + "_" + str(step) )
+               image_field(geom, (h_analytic - ( Q[idx_h,:,:] + topo.hsurf)), "/home/stef/tmp/err" + str(param.case_number) + "_" + str(param.time_integrator) + "_" + str(step) )
 
 
    if param.plot_error:
       if param.case_number <= 2:
-         image_field(geom, (h_analytic - ( Q[idx_h,:,:] + hsurf)), "/home/stef/tmp/err" + str(param.case_number) + "_" + str(param.time_integrator) + "_" + str(step) )
+         plot_field(geom, (h_analytic - ( Q[idx_h,:,:] + topo.hsurf)) )
+#         image_field(geom, (h_analytic - ( Q[idx_h,:,:] + topo.hsurf)), "/home/stef/tmp/err" + str(param.case_number) + "_" + str(param.time_integrator) + "_" + str(step) )
       else:
          print('There is no analytical solution to plot for this test case')
 
