@@ -278,7 +278,7 @@ def main():
 
 
    if param.plot_error:
-      if param.case_number <= 2:
+      if param.case_number <= 2 or param.case_number == 9:
          plot_field(geom, (h_analytic - ( Q[idx_h,:,:] + topo.hsurf)) )
 #         image_field(geom, (h_analytic - ( Q[idx_h,:,:] + topo.hsurf)), "/home/stef/tmp/err" + str(param.case_number) + "_" + str(param.time_integrator) + "_" + str(step) )
       else:
