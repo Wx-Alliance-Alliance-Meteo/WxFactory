@@ -3,7 +3,7 @@ import numpy
 from definitions import *
 from wind2contra import *
 
-import pymaws
+import matsuno
 
 class Topo:
    def __init__(self, hsurf, dzdx1, dzdx2):
@@ -245,9 +245,9 @@ def initialize(geom, metric, mtrx, nbsolpts, nb_elements_horiz, case_number, Wil
 
       for i in range(ni):
          for j in range(nj):
-            h[i, j] = pymaws.eval_field(geom.lat[i,j], geom.lon[i,j], 0., field='phi') / gravity
-            u[i, j] = pymaws.eval_field(geom.lat[i,j], geom.lon[i,j], 0., field='u')
-            v[i, j] = pymaws.eval_field(geom.lat[i,j], geom.lon[i,j], 0., field='v')
+            h[i, j] = matsuno.eval_field(geom.lat[i,j], geom.lon[i,j], 0., field='phi') / gravity
+            u[i, j] = matsuno.eval_field(geom.lat[i,j], geom.lon[i,j], 0., field='u')
+            v[i, j] = matsuno.eval_field(geom.lat[i,j], geom.lon[i,j], 0., field='v')
 
       u1, u2 = wind2contra(u, v, geom)
 
