@@ -3,6 +3,8 @@ import numpy
 from definitions import *
 from wind2contra import *
 
+import pymaws
+
 class Topo:
    def __init__(self, hsurf, dzdx1, dzdx2):
       self.hsurf = hsurf
@@ -61,7 +63,7 @@ def initialize(geom, metric, mtrx, nbsolpts, nb_elements_horiz, case_number, Wil
 
    if case_number == 0:
       print("--------------------------------------------------------------")
-      print("CASE0 (Tracer): Circular vortex, Nair and Machenhauer,2002    ")
+      print("CASE 0 (Tracer): Circular vortex, Nair and Machenhauer,2002   ")
       print("--------------------------------------------------------------")
 
       # Deformational Flow (Nair and Machenhauer, 2002)
@@ -101,9 +103,9 @@ def initialize(geom, metric, mtrx, nbsolpts, nb_elements_horiz, case_number, Wil
 
 
    elif case_number == 1:
-      print("--------------------------------------------------------------")
-      print("WILLIAMSON CASE1 (Tracer): Cosine Bell, Williamson et al.,1992")
-      print("--------------------------------------------------------------")
+      print("---------------------------------------------------------------")
+      print("WILLIAMSON CASE 1 (Tracer): Cosine Bell, Williamson et al.,1992")
+      print("---------------------------------------------------------------")
 
       # Initialize gaussian bell
       lon_center = 3.0 * math.pi / 2.0
@@ -120,7 +122,7 @@ def initialize(geom, metric, mtrx, nbsolpts, nb_elements_horiz, case_number, Wil
 
    elif case_number == 2:
       print("--------------------------------------------")
-      print("WILLIAMSON CASE2, Williamson et al. (1992)  ")
+      print("WILLIAMSON CASE 2, Williamson et al. (1992) ")
       print("Steady state nonlinear geostrophic flow     ")
       print("--------------------------------------------")
 
@@ -194,7 +196,7 @@ def initialize(geom, metric, mtrx, nbsolpts, nb_elements_horiz, case_number, Wil
 
    elif case_number == 6:
       print("--------------------------------------------")
-      print("WILLIAMSON CASE6, Williamson et al. (1992)  ")
+      print("WILLIAMSON CASE 6, Williamson et al. (1992) ")
       print("Rossby-Haurwitz wave                        ")
       print("--------------------------------------------")
 
@@ -224,12 +226,31 @@ def initialize(geom, metric, mtrx, nbsolpts, nb_elements_horiz, case_number, Wil
 
    elif case_number == 8:
       print("--------------------------------------------")
-      print("CASE8, Galewsky et al. (2004)               ")
+      print("CASE 8, Galewsky et al. (2004)              ")
       print("Barotropic wave                             ")
       print("--------------------------------------------")
 
       print("Not yet implemented")
       exit(0)
+
+   elif case_number == 9:
+      print("--------------------------------------------")
+      print("CASE 9, Shamir et al.,2019,GMD,12,2181-2193 ")
+      print("The Matsuno baroclinic wave                 ")
+      print("--------------------------------------------")
+
+      u = numpy.zeros((ni,nj))
+      v = numpy.zeros((ni,nj))
+      h = numpy.zeros((ni,nj))
+
+      for i in range(ni):
+         for j in range(nj):
+            h[i, j] = pymaws.eval_field(geom.lat[i,j], geom.lon[i,j], 0., field='phi') / gravity
+            u[i, j] = pymaws.eval_field(geom.lat[i,j], geom.lon[i,j], 0., field='u')
+            v[i, j] = pymaws.eval_field(geom.lat[i,j], geom.lon[i,j], 0., field='v')
+
+      u1, u2 = wind2contra(u, v, geom)
+
 
    Q[idx_h,:,:]   = h
 
