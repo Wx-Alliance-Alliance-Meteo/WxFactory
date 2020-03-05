@@ -230,8 +230,65 @@ def initialize(geom, metric, mtrx, nbsolpts, nb_elements_horiz, case_number, Wil
       print("Barotropic wave                             ")
       print("--------------------------------------------")
 
-      print("Not yet implemented")
-      exit(0)
+      H0 = 10158.18617045463179
+      HHat = 120.0
+      HPhi2 = math.pi / 4.0
+      HAlpha = 1.0 / 3.0
+      HBeta = 1.0 / 15.0
+      Alpha = 0.0
+
+      u = numpy.zeros((ni,nj))
+      v = numpy.zeros((ni,nj))
+      h = numpy.zeros((ni,nj))
+
+      for i in range(ni):
+         for j in range(nj):
+
+            # Calculate height field via numerical integration
+            nIntervals = int((geom.lat[i,j] + 0.5 * math.pi) / (1.0e-2))
+
+            if nIntervals < 1:
+               nIntervals = 1
+
+            dLatX = numpy.zeros(nIntervals+1)
+
+            for k in range(nIntervals+1):
+               dLatX[k] = - 0.5 * math.pi + ((geom.lat[i,j] + 0.5 * math.pi) / nIntervals) * k
+
+            dH = 0.0
+
+            for k in range(nIntervals):
+               for m in range(-1,2,2):
+                  dXeval = 0.5 * (dLatX[k+1] + dLatX[k]) + m * math.sqrt(1.0 / 3.0) * 0.5 * (dLatX[k+1] - dLatX[k])
+
+                  dU = EvaluateUPrime(geom.lon[i,j], dXeval)
+
+                  dH += (2.0 * earth_radius * rotation_speed * math.sin(dXeval) + dU * math.tan(dXeval)) * dU
+
+            dH *= 0.5 * (dLatX[1] - dLatX[0])
+
+            h[i,j] = H0 - dH / gravity
+
+            # Add perturbation
+            h[i,j] += HHat * math.cos(geom.lat[i,j]) * math.exp(-(geom.lon[i,j]**2 / (HAlpha * HAlpha))) * math.exp(-((HPhi2 - geom.lat[i,j]) * (HPhi2 - geom.lat[i,j]) / (HBeta * HBeta)))
+
+            # Evaluate the velocity field
+            dUP = EvaluateUPrime(geom.lon[i,j], geom.lat[i,j])
+
+            v[i,j] = (- dUP * math.sin(Alpha) * math.sin(geom.lon[i,j])) / math.cos(geom.lat[i,j])
+
+            if abs(math.cos(geom.lon[i,j])) < 1.0e-13:
+               if abs(Alpha) > 1.0e-13:
+                  if math.cos(geom.lon[i,j]) > 0.0:
+                     u[i,j] = - v[i,j] * math.cos(geo.lat[i,j]) / math.tan(Alpha)
+                  else:
+                     u[i,j] = v[i,j] * math.cos(geom.lat[i,j]) / math.tan(Alpha)
+               else:
+                  u[i,j] = dUP
+            else:
+               u[i,j] = (v[i,j] * math.sin(geom.lat[i,j]) * math.sin(geom.lon[i,j]) + dUP * math.cos(geom.lon[i,j])) / math.cos(geom.lon[i,j])
+
+      u1, u2 = wind2contra(u, v, geom)
 
    elif case_number == 9:
       print("--------------------------------------------")
@@ -264,3 +321,20 @@ def initialize(geom, metric, mtrx, nbsolpts, nb_elements_horiz, case_number, Wil
       Q[idx_hu2,:,:] = h * u2
 
    return Q, Topo(hsurf, dzdx1, dzdx2), h_analytic
+
+
+def EvaluateUPrime(dLonP, dLatP):
+   U0 = 80.0
+   Theta0 = math.pi / 7.0
+   Theta1 = math.pi / 2.0 - Theta0
+
+   if dLatP < Theta0:
+      return 0.0
+   elif dLatP > Theta1:
+      return 0.0
+
+   dNormalizer = math.exp(- 4.0 / (Theta1 - Theta0) / (Theta1 - Theta0))
+
+   dUp = math.exp(1.0 / (dLatP - Theta0) / (dLatP - Theta1))
+
+   return U0 / dNormalizer * dUp
