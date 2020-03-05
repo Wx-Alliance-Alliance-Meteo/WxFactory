@@ -250,6 +250,7 @@ def initialize(geom, metric, mtrx, nbsolpts, nb_elements_horiz, case_number, Wil
             v[i, j] = matsuno.eval_field(geom.lat[i,j], geom.lon[i,j], 0., field='v')
 
       u1, u2 = wind2contra(u, v, geom)
+      h_analytic = h
 
 
    Q[idx_h,:,:]   = h
