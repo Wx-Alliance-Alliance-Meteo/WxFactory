@@ -230,12 +230,11 @@ def initialize(geom, metric, mtrx, nbsolpts, nb_elements_horiz, case_number, Wil
       print("Barotropic wave                             ")
       print("--------------------------------------------")
 
-      H0 = 10158.18617045463179
-      HHat = 120.0
-      HPhi2 = math.pi / 4.0
-      HAlpha = 1.0 / 3.0
-      HBeta = 1.0 / 15.0
-      Alpha = 0.0
+      h0 = 10158.18617045463179
+      h_hat = 120.0
+      phi2 = math.pi / 4.0
+      alpha = 1.0 / 3.0
+      beta  = 1.0 / 15.0
 
       u = numpy.zeros((ni,nj))
       v = numpy.zeros((ni,nj))
@@ -250,43 +249,35 @@ def initialize(geom, metric, mtrx, nbsolpts, nb_elements_horiz, case_number, Wil
             if nIntervals < 1:
                nIntervals = 1
 
-            dLatX = numpy.zeros(nIntervals+1)
+            latX = numpy.zeros(nIntervals+1)
 
             for k in range(nIntervals+1):
-               dLatX[k] = - 0.5 * math.pi + ((geom.lat[i,j] + 0.5 * math.pi) / nIntervals) * k
+               latX[k] = - 0.5 * math.pi + ((geom.lat[i,j] + 0.5 * math.pi) / nIntervals) * k
 
-            dH = 0.0
+            h_integrand = 0.0
 
             for k in range(nIntervals):
                for m in range(-1,2,2):
-                  dXeval = 0.5 * (dLatX[k+1] + dLatX[k]) + m * math.sqrt(1.0 / 3.0) * 0.5 * (dLatX[k+1] - dLatX[k])
+                  dXeval = 0.5 * (latX[k+1] + latX[k]) + m * math.sqrt(1.0 / 3.0) * 0.5 * (latX[k+1] - latX[k])
 
-                  dU = EvaluateUPrime(geom.lon[i,j], dXeval)
+                  dU = eval_u_prime(dXeval)
 
-                  dH += (2.0 * earth_radius * rotation_speed * math.sin(dXeval) + dU * math.tan(dXeval)) * dU
+                  h_integrand += (2.0 * earth_radius * rotation_speed * math.sin(dXeval) + dU * math.tan(dXeval)) * dU
 
-            dH *= 0.5 * (dLatX[1] - dLatX[0])
+            h_integrand *= 0.5 * (latX[1] - latX[0])
 
-            h[i,j] = H0 - dH / gravity
+            h[i,j] = h0 - h_integrand / gravity
 
             # Add perturbation
-            h[i,j] += HHat * math.cos(geom.lat[i,j]) * math.exp(-(geom.lon[i,j]**2 / (HAlpha * HAlpha))) * math.exp(-((HPhi2 - geom.lat[i,j]) * (HPhi2 - geom.lat[i,j]) / (HBeta * HBeta)))
+            h[i,j] += h_hat * math.cos(geom.lat[i,j]) * math.exp(-(geom.lon[i,j] / alpha)**2) * math.exp(-((phi2 - geom.lat[i,j]) / beta)**2)
 
             # Evaluate the velocity field
-            dUP = EvaluateUPrime(geom.lon[i,j], geom.lat[i,j])
-
-            v[i,j] = (- dUP * math.sin(Alpha) * math.sin(geom.lon[i,j])) / math.cos(geom.lat[i,j])
+            u_p = eval_u_prime(geom.lat[i,j])
 
             if abs(math.cos(geom.lon[i,j])) < 1.0e-13:
-               if abs(Alpha) > 1.0e-13:
-                  if math.cos(geom.lon[i,j]) > 0.0:
-                     u[i,j] = - v[i,j] * math.cos(geo.lat[i,j]) / math.tan(Alpha)
-                  else:
-                     u[i,j] = v[i,j] * math.cos(geom.lat[i,j]) / math.tan(Alpha)
-               else:
-                  u[i,j] = dUP
+               u[i,j] = u_p
             else:
-               u[i,j] = (v[i,j] * math.sin(geom.lat[i,j]) * math.sin(geom.lon[i,j]) + dUP * math.cos(geom.lon[i,j])) / math.cos(geom.lon[i,j])
+               u[i,j] = (v[i,j] * math.sin(geom.lat[i,j]) * math.sin(geom.lon[i,j]) + u_p * math.cos(geom.lon[i,j])) / math.cos(geom.lon[i,j])
 
       u1, u2 = wind2contra(u, v, geom)
 
@@ -323,18 +314,18 @@ def initialize(geom, metric, mtrx, nbsolpts, nb_elements_horiz, case_number, Wil
    return Q, Topo(hsurf, dzdx1, dzdx2), h_analytic
 
 
-def EvaluateUPrime(dLonP, dLatP):
-   U0 = 80.0
-   Theta0 = math.pi / 7.0
-   Theta1 = math.pi / 2.0 - Theta0
+def eval_u_prime(lat):
+   u_max = 80.0
+   phi0 = math.pi / 7.0
+   phi1 = math.pi / 2.0 - phi0
 
-   if dLatP < Theta0:
+   if lat < phi0:
       return 0.0
-   elif dLatP > Theta1:
+   elif lat > phi1:
       return 0.0
 
-   dNormalizer = math.exp(- 4.0 / (Theta1 - Theta0) / (Theta1 - Theta0))
+   e_n = math.exp( -4.0 / ((phi1 - phi0)**2) )
 
-   dUp = math.exp(1.0 / (dLatP - Theta0) / (dLatP - Theta1))
+   u_p = math.exp( 1.0 / ((lat - phi0) * (lat - phi1)) )
 
-   return U0 / dNormalizer * dUp
+   return u_max / e_n * u_p
