@@ -21,6 +21,6 @@ def blockstats(Q, step, case_number):
    print("h\t\tmean = %e\tmin = %e\tmax = %e\n" % (numpy.mean(h),  numpy.amin(h),  numpy.amax(h)) )
    if case_number > 1:
       print("u\t\tmean = %e\tmin = %e\tmax = %e\n" % (numpy.mean(uu), numpy.amin(uu), numpy.amax(uu)) )
-      print("w\t\tmean = %e\tmin = %e\tmax = %e\n" % (numpy.mean(vv), numpy.amin(vv), numpy.amax(vv)) )
+      print("v\t\tmean = %e\tmin = %e\tmax = %e\n" % (numpy.mean(vv), numpy.amin(vv), numpy.amax(vv)) )
 
    print("==================================================================================")
