@@ -13,6 +13,9 @@ class DFR_operators:
 
       self.correction = numpy.column_stack((self.diff_ext[1:-1,0], self.diff_ext[1:-1,-1]))
 
+      self.diff_solpt_tr = self.diff_solpt.T
+      self.correction_tr = self.correction.T
+
 def lagrangeEval(points, pos):
    x = pos
    l = numpy.zeros_like(points)

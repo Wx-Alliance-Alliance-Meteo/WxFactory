@@ -22,9 +22,9 @@ def rhs_sw(Q, geom, mtrx, metric, topo, nbsolpts, nb_elements_horiz, α, case_nu
    u1_itf_j       = numpy.zeros((nb_elements_horiz+2, 2, nbsolpts*nb_elements_horiz), dtype=type_vec)
    u2_itf_j       = numpy.zeros((nb_elements_horiz+2, 2, nbsolpts*nb_elements_horiz), dtype=type_vec)
 
-   flux_Eq0_itf_i = numpy.zeros((nb_elements_horiz+2, 2, nbsolpts*nb_elements_horiz), dtype=type_vec)
-   flux_Eq1_itf_i = numpy.zeros((nb_elements_horiz+2, 2, nbsolpts*nb_elements_horiz), dtype=type_vec)
-   flux_Eq2_itf_i = numpy.zeros((nb_elements_horiz+2, 2, nbsolpts*nb_elements_horiz), dtype=type_vec)
+   flux_Eq0_itf_i = numpy.zeros((nb_elements_horiz+2, nbsolpts*nb_elements_horiz, 2), dtype=type_vec)
+   flux_Eq1_itf_i = numpy.zeros((nb_elements_horiz+2, nbsolpts*nb_elements_horiz, 2), dtype=type_vec)
+   flux_Eq2_itf_i = numpy.zeros((nb_elements_horiz+2, nbsolpts*nb_elements_horiz, 2), dtype=type_vec)
    h_itf_i        = numpy.zeros((nb_elements_horiz+2, 2, nbsolpts*nb_elements_horiz), dtype=type_vec)
    u1_itf_i       = numpy.zeros((nb_elements_horiz+2, 2, nbsolpts*nb_elements_horiz), dtype=type_vec)
    u2_itf_i       = numpy.zeros((nb_elements_horiz+2, 2, nbsolpts*nb_elements_horiz), dtype=type_vec)
@@ -111,8 +111,8 @@ def rhs_sw(Q, geom, mtrx, metric, topo, nbsolpts, nb_elements_horiz, α, case_nu
       flux_L[:] = metric.sqrtG_itf_i[:, itf] * h_itf_i[elem_L, 1, :] * u1_itf_i[elem_L, 1, :]
       flux_R[:] = metric.sqrtG_itf_i[:, itf] * h_itf_i[elem_R, 0, :] * u1_itf_i[elem_R, 0, :]
 
-      flux_Eq0_itf_i[elem_L, 1, :] = 0.5 * ( flux_L  + flux_R - eig * metric.sqrtG_itf_i[:, itf] * ( h_itf_i[elem_R, 0, :]  - h_itf_i[elem_L, 1, :] ) )
-      flux_Eq0_itf_i[elem_R, 0, :] = flux_Eq0_itf_i[elem_L, 1, :]
+      flux_Eq0_itf_i[elem_L, :, 1] = 0.5 * ( flux_L  + flux_R - eig * metric.sqrtG_itf_i[:, itf] * ( h_itf_i[elem_R, 0, :]  - h_itf_i[elem_L, 1, :] ) )
+      flux_Eq0_itf_i[elem_R, :, 0] = flux_Eq0_itf_i[elem_L, :, 1]
 
       # --- u1 equation
 
@@ -121,9 +121,9 @@ def rhs_sw(Q, geom, mtrx, metric, topo, nbsolpts, nb_elements_horiz, α, case_nu
       flux_R[:] = metric.sqrtG_itf_i[:, itf] * ( h_itf_i[elem_R, 0, :] * u1_itf_i[elem_R, 0, :]**2 \
             + 0.5 * gravity * metric.H_contra_11_itf_i[:, itf] * h_itf_i[elem_R, 0, :]**2 )
 
-      flux_Eq1_itf_i[elem_L, 1, :] = 0.5 * ( flux_L  + flux_R - eig * metric.sqrtG_itf_i[:, itf] \
+      flux_Eq1_itf_i[elem_L, :, 1] = 0.5 * ( flux_L  + flux_R - eig * metric.sqrtG_itf_i[:, itf] \
             * ( h_itf_i[elem_R, 0, :] * u1_itf_i[elem_R, 0, :]  - h_itf_i[elem_L, 1, :] * u1_itf_i[elem_L, 1, :] ) )
-      flux_Eq1_itf_i[elem_R, 0, :] = flux_Eq1_itf_i[elem_L, 1, :]
+      flux_Eq1_itf_i[elem_R, :, 0] = flux_Eq1_itf_i[elem_L, :, 1]
 
       # --- u2 equation
 
@@ -132,9 +132,9 @@ def rhs_sw(Q, geom, mtrx, metric, topo, nbsolpts, nb_elements_horiz, α, case_nu
       flux_R[:] = metric.sqrtG_itf_i[:, itf] * ( h_itf_i[elem_R, 0, :] * u2_itf_i[elem_R, 0, :] * u1_itf_i[elem_R, 0, :] \
             + 0.5 * gravity * metric.H_contra_21_itf_i[:, itf] * h_itf_i[elem_R, 0, :]**2 )
 
-      flux_Eq2_itf_i[elem_L, 1, :] = 0.5 * ( flux_L  + flux_R - eig * metric.sqrtG_itf_i[:, itf] \
+      flux_Eq2_itf_i[elem_L, :, 1] = 0.5 * ( flux_L  + flux_R - eig * metric.sqrtG_itf_i[:, itf] \
             * ( h_itf_i[elem_R, 0, :] * u2_itf_i[elem_R, 0, :]  - h_itf_i[elem_L, 1, :] * u2_itf_i[elem_L, 1, :] ) )
-      flux_Eq2_itf_i[elem_R, 0, :] = flux_Eq2_itf_i[elem_L, 1, :]
+      flux_Eq2_itf_i[elem_R, :, 0] = flux_Eq2_itf_i[elem_L, :, 1]
 
       # Direction x2
 
@@ -182,22 +182,18 @@ def rhs_sw(Q, geom, mtrx, metric, topo, nbsolpts, nb_elements_horiz, α, case_nu
 
       # --- Direction x1
 
-      df1_dx1[idx_h,:,epais]   = mtrx.diff_solpt @ flux_Eq0_x1[:,epais].T + mtrx.correction @ flux_Eq0_itf_i[elem+offset,:,:] # TODO : éviter la transpose
-      df1_dx1[idx_hu1,:,epais] = mtrx.diff_solpt @ flux_Eq1_x1[:,epais].T + mtrx.correction @ flux_Eq1_itf_i[elem+offset,:,:]
-      df1_dx1[idx_hu2,:,epais] = mtrx.diff_solpt @ flux_Eq2_x1[:,epais].T + mtrx.correction @ flux_Eq2_itf_i[elem+offset,:,:]
+      df1_dx1[idx_h][:,epais]   = ( flux_Eq0_x1[:,epais] @ mtrx.diff_solpt_tr + flux_Eq0_itf_i[elem+offset,:,:] @ mtrx.correction_tr ) * 2.0 / geom.Δx1
+      df1_dx1[idx_hu1][:,epais] = ( flux_Eq1_x1[:,epais] @ mtrx.diff_solpt_tr + flux_Eq1_itf_i[elem+offset,:,:] @ mtrx.correction_tr ) * 2.0 / geom.Δx1
+      df1_dx1[idx_hu2][:,epais] = ( flux_Eq2_x1[:,epais] @ mtrx.diff_solpt_tr + flux_Eq2_itf_i[elem+offset,:,:] @ mtrx.correction_tr ) * 2.0 / geom.Δx1
 
       # --- Direction x2
 
-      df2_dx2[idx_h,epais,:]   = mtrx.diff_solpt @ flux_Eq0_x2[epais,:] + mtrx.correction @ flux_Eq0_itf_j[elem+offset,:,:]
-      df2_dx2[idx_hu1,epais,:] = mtrx.diff_solpt @ flux_Eq1_x2[epais,:] + mtrx.correction @ flux_Eq1_itf_j[elem+offset,:,:]
-      df2_dx2[idx_hu2,epais,:] = mtrx.diff_solpt @ flux_Eq2_x2[epais,:] + mtrx.correction @ flux_Eq2_itf_j[elem+offset,:,:]
-
-   # Convert derivative from standard element to the cubed-sphere domain
-   df1_dx1 *= 2.0 / geom.Δx1
-   df2_dx2 *= 2.0 / geom.Δx2
+      df2_dx2[idx_h,epais,:]   = ( mtrx.diff_solpt @ flux_Eq0_x2[epais,:] + mtrx.correction @ flux_Eq0_itf_j[elem+offset,:,:] ) * 2.0 / geom.Δx2
+      df2_dx2[idx_hu1,epais,:] = ( mtrx.diff_solpt @ flux_Eq1_x2[epais,:] + mtrx.correction @ flux_Eq1_itf_j[elem+offset,:,:] ) * 2.0 / geom.Δx2
+      df2_dx2[idx_hu2,epais,:] = ( mtrx.diff_solpt @ flux_Eq2_x2[epais,:] + mtrx.correction @ flux_Eq2_itf_j[elem+offset,:,:] ) * 2.0 / geom.Δx2
 
    # Add coriolis, metric and terms due to varying bottom topography
-   forcing[idx_h,:,:]   = 0.0
+   forcing[idx_h,:,:] = 0.0
 
    forcing[idx_hu1,:,:] = 2.0 * ( metric.christoffel_1_01 * h * u1 + metric.christoffel_1_02 * h * u2) \
          + metric.christoffel_1_11 * h * u1**2 + 2.0 * metric.christoffel_1_12 * h * u1 * u2 \

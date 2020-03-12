@@ -144,6 +144,11 @@ def initialize(geom, metric, mtrx, nbsolpts, nb_elements_horiz, case_number, Wil
 
    elif case_number == 5:
 
+      print('--------------------------------------------')
+      print('WILLIAMSON CASE 5, Williamson et al. (1992) ')
+      print('Zonal Flow over an isolated mountain        ')
+      print('--------------------------------------------')
+
       u0 = 20.0   # Max wind (m/s)
       h0 = 5960.0 # Mean height (m)
 
@@ -165,15 +170,15 @@ def initialize(geom, metric, mtrx, nbsolpts, nb_elements_horiz, case_number, Wil
       hsurf = hs0 * (1 - r / rr)
 
       nb_interfaces_horiz = nb_elements_horiz + 1
-      hsurf_itf_i = numpy.zeros((nb_elements_horiz+2, 2, nbsolpts*nb_elements_horiz))
+      hsurf_itf_i = numpy.zeros((nb_elements_horiz+2, nbsolpts*nb_elements_horiz, 2))
       hsurf_itf_j = numpy.zeros((nb_elements_horiz+2, 2, nbsolpts*nb_elements_horiz))
 
       for itf in range(nb_interfaces_horiz):
          elem_L = itf
          elem_R = itf + 1
 
-         hsurf_itf_i[elem_L, 1, :] = hs0 * (1 - r_itf_i[:, itf] / rr)
-         hsurf_itf_i[elem_R, 0, :] = hsurf_itf_i[elem_L, 1, :]
+         hsurf_itf_i[elem_L, :, 1] = hs0 * (1 - r_itf_i[:, itf] / rr)
+         hsurf_itf_i[elem_R, :, 0] = hsurf_itf_i[elem_L, :, 1]
 
          hsurf_itf_j[elem_L, 1, :] = hs0 * (1 - r_itf_j[itf, :] / rr)
          hsurf_itf_j[elem_R, 0, :] = hsurf_itf_j[elem_L, 1, :]
@@ -183,14 +188,10 @@ def initialize(geom, metric, mtrx, nbsolpts, nb_elements_horiz, case_number, Wil
          epais = elem * nbsolpts + numpy.arange(nbsolpts)
 
          # --- Direction x1
-         dzdx1[:, epais] = ( mtrx.diff_solpt @ hsurf[:,epais].T + mtrx.correction @ hsurf_itf_i[elem+offset,:,:] ).T # TODO : éviter la transpose ...
+         dzdx1[:, epais] = ( hsurf[:,epais] @ mtrx.diff_solpt_tr + hsurf_itf_i[elem+offset,:,:] @ mtrx.correction_tr ) * 2.0 / geom.Δx1
 
          # --- Direction x2
-         dzdx2[epais,:] = mtrx.diff_solpt @ hsurf[epais,:] + mtrx.correction @ hsurf_itf_j[elem+offset,:,:]
-
-      # Convert derivative from standard element to the cubed-sphere domain
-      dzdx1 *= 2.0 / geom.Δx1
-      dzdx2 *= 2.0 / geom.Δx2
+         dzdx2[epais,:] = ( mtrx.diff_solpt @ hsurf[epais,:] + mtrx.correction @ hsurf_itf_j[elem+offset,:,:] ) * 2.0 / geom.Δx2
 
       h = h_star - hsurf
 
