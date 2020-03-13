@@ -11,7 +11,7 @@ class Topo:
       self.dzdx1 = dzdx1
       self.dzdx2 = dzdx2
 
-def initialize(geom, metric, mtrx, nbsolpts, nb_elements_horiz, case_number, Williamson_angle, t_anal=0):
+def initialize(geom, metric, mtrx, nbsolpts, nb_elements_horiz, case_number, Williamson_angle, t_end):
 
    ni, nj = geom.lon.shape
 
@@ -95,7 +95,7 @@ def initialize(geom, metric, mtrx, nbsolpts, nb_elements_horiz, case_number, Wil
                   Omega[i,j] = Vt[i,j] / (earth_radius * rho[i,j])
 
       h          = 1.0 - numpy.tanh( (rho / gamma) * numpy.sin(lonR) )
-      h_analytic = 1.0 - numpy.tanh( (rho / gamma) * numpy.sin(lonR - Omega * t_anal) )
+      h_analytic = 1.0 - numpy.tanh( (rho / gamma) * numpy.sin(lonR - Omega * t_end) )
 
       u = earth_radius * Omega * (math.sin(lat_center) * geom.coslat - math.cos(lat_center) * numpy.cos(geom.lon - lon_center) * geom.sinlat)
       v = earth_radius * Omega * numpy.cos(lat_center) * numpy.sin(geom.lon - lon_center)
@@ -282,24 +282,42 @@ def initialize(geom, metric, mtrx, nbsolpts, nb_elements_horiz, case_number, Wil
 
       u1, u2 = wind2contra(u, v, geom)
 
-   elif case_number == 9:
-      print("--------------------------------------------")
-      print("CASE 9, Shamir et al.,2019,GMD,12,2181-2193 ")
-      print("The Matsuno baroclinic wave                 ")
-      print("--------------------------------------------")
+   elif case_number >= 9 and case_number <= 11:
+
+      if case_number ==  9: 
+         print("--------------------------------------------")
+         print("CASE 9, Shamir et al.,2019,GMD,12,2181-2193 ")
+         print("The Matsuno baroclinic wave (Rosby)         ")
+         print("--------------------------------------------")
+         wave_type = 'Rossby'
+      elif case_number == 10: 
+         print("--------------------------------------------")
+         print("CASE 10, Shamir et al.,2019,GMD,12,2181-2193")
+         print("The Matsuno baroclinic wave (EIG)           ")
+         print("--------------------------------------------")
+         wave_type = 'EIG'
+      elif case_number == 11: 
+         print("--------------------------------------------")
+         print("CASE 11, Shamir et al.,2019,GMD,12,2181-2193")
+         print("The Matsuno baroclinic wave (WIG)           ")
+         print("--------------------------------------------")
+         wave_type = 'WIG'
 
       u = numpy.zeros((ni,nj))
       v = numpy.zeros((ni,nj))
       h = numpy.zeros((ni,nj))
 
+      h_analytic = numpy.zeros((ni,nj))
+
       for i in range(ni):
          for j in range(nj):
-            h[i, j] = matsuno.eval_field(geom.lat[i,j], geom.lon[i,j], 0., field='phi') / gravity
-            u[i, j] = matsuno.eval_field(geom.lat[i,j], geom.lon[i,j], 0., field='u')
-            v[i, j] = matsuno.eval_field(geom.lat[i,j], geom.lon[i,j], 0., field='v')
+            h[i, j] = matsuno.eval_field(geom.lat[i,j], geom.lon[i,j], 0., field='phi', wave_type=wave_type) / gravity
+            u[i, j] = matsuno.eval_field(geom.lat[i,j], geom.lon[i,j], 0., field='u', wave_type=wave_type)
+            v[i, j] = matsuno.eval_field(geom.lat[i,j], geom.lon[i,j], 0., field='v', wave_type=wave_type)
+
+            h_analytic[i, j] = matsuno.eval_field(geom.lat[i,j], geom.lon[i,j], t_end, field='phi', wave_type=wave_type) / gravity
 
       u1, u2 = wind2contra(u, v, geom)
-      h_analytic = h
 
 
    Q[idx_h,:,:]   = h

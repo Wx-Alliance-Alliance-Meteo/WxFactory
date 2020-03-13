@@ -8,7 +8,7 @@ import mpi4py.MPI
 import numpy
 
 from blockstats   import blockstats
-from definitions  import idx_h
+from definitions  import idx_h, idx_hu1, idx_hu2
 from config       import Configuration
 from cubed_sphere import cubed_sphere
 from graphx       import image_field, plot_field
@@ -49,11 +49,14 @@ def main():
    metric = Metric(geom)
 
    # Initialize state variables
-   Q, topo, h_analytic = initialize(geom, metric, mtrx, param.nbsolpts, param.nb_elements, param.case_number, param.Williamson_angle)
+   Q, topo, h_analytic = initialize(geom, metric, mtrx, param.nbsolpts, param.nb_elements, param.case_number, param.Williamson_angle, param.t_end)
 
 
    if param.plot_freq > 0:
-      plot_field(geom, (Q[idx_h,:,:] + topo.hsurf) )
+      if param.case_number == 8:
+         vorticity = relative_vorticity(Q[idx_hu1] / Q[idx_h], Q[idx_hu2] / Q[idx_h], metric)
+      else:
+         plot_field(geom, (Q[idx_h,:,:] + topo.hsurf) )
 #      image_field(geom, (Q[idx_h,:,:] + topo.hsurf), "/home/stef/tmp/case" + str(param.case_number) + "_" + str(step) )
 
    # Time stepping
@@ -271,15 +274,18 @@ def main():
       # Plot solution
       if param.plot_freq > 0:
          if step % param.plot_freq == 0:
-            plot_field(geom, (Q[idx_h,:,:] + topo.hsurf) )
+            if param.case_number == 8:
+               vorticity = relative_vorticity(Q[idx_hu1] / Q[idx_h], Q[idx_hu2] / Q[idx_h], metric)
+            else:
+               plot_field(geom, (Q[idx_h,:,:] + topo.hsurf) )
 #            image_field(geom, (Q[idx_h,:,:] + topo.hsurf), "/home/stef/tmp/case" + str(param.case_number) + "_" + str(param.time_integrator) + "_" + str(step) )
-            if param.plot_error and ( param.case_number == 0 or param.case_number == 2 ):
-               image_field(geom, (h_analytic - ( Q[idx_h,:,:] + topo.hsurf)), "/home/stef/tmp/err" + str(param.case_number) + "_" + str(param.time_integrator) + "_" + str(step) )
+               if param.plot_error and ( param.case_number == 0 or param.case_number == 2 ):
+                  image_field(geom, (h_analytic -  Q[idx_h,:,:]), "/home/stef/tmp/err" + str(param.case_number) + "_" + str(param.time_integrator) + "_" + str(step) )
 
 
    if param.plot_error:
-      if param.case_number <= 2 or param.case_number == 9:
-         plot_field(geom, (h_analytic - ( Q[idx_h,:,:] + topo.hsurf)) )
+      if param.case_number <= 2 or ( param.case_number >= 9 and param.case_number <= 11):
+         plot_field(geom, (h_analytic - Q[idx_h,:,:]) )
 #         image_field(geom, (h_analytic - ( Q[idx_h,:,:] + topo.hsurf)), "/home/stef/tmp/err" + str(param.case_number) + "_" + str(param.time_integrator) + "_" + str(step) )
       else:
          print('There is no analytical solution to plot for this test case')
