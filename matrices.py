@@ -16,22 +16,25 @@ class DFR_operators:
       self.diff_solpt_tr = self.diff_solpt.T
       self.correction_tr = self.correction.T
 
-def lagrangeEval(points, pos):
-   x = pos
+def lagrangeEval(points, x):
    l = numpy.zeros_like(points)
    for i in range(len(points)):
-      l[i] = x / x
+      l[i] = 1.0
       for j in range(len(points)):
          if(i != j):
             l[i] = l[i] * (x-points[j]) / (points[i] - points[j])
    return l
 
-def diffmat(X):
-   M = len(X)
+def diffmat(points):
+   M = len(points)
    D = numpy.zeros((M,M))
    for i in range(M):
+      dsum = 0.
       for j in range(M):
-         D[i,j] = dLagrange(j, X[i], X)
+         if i != j:
+            D[i,j] = dLagrange(j, points[i], points)
+            dsum += D[i,j]
+      D[i, i] = -dsum
    return D
 
 def dLagrange(j, xi, x):
