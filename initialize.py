@@ -26,41 +26,6 @@ def initialize(geom, metric, mtrx, param):
    else:
       Q = numpy.zeros((nb_equations, ni, nj))
 
-   if param.case_number == -1 or \
-      param.case_number == 1  or \
-      param.case_number == 2  or \
-      param.case_number == 5:
-      # Solid body rotation
-
-      if param.case_number == 5:
-         u0 = 20.0
-         sinα = 0
-         cosα = 1
-      else:
-         u0 = 2.0 * math.pi * earth_radius / (12.0 * day_in_secs)
-         sinα = math.sin(param.Williamson_angle)
-         cosα = math.cos(param.Williamson_angle)
-
-      if geom.cube_face == 0:
-         u1 = u0 / earth_radius * (cosα + geom.Y / (1.0 + geom.X**2) * sinα)
-         u2 = u0 * geom.X / (earth_radius * (1.0 + geom.Y**2)) * (geom.Y * cosα - sinα)
-      elif geom.cube_face == 1:
-         u1 = u0 / earth_radius * (cosα - geom.X * geom.Y / (1.0 + geom.X**2) * sinα)
-         u2 = u0 / earth_radius * (geom.X * geom.Y / (1.0 + geom.Y**2) * cosα - sinα)
-      elif geom.cube_face == 2:
-         u1 = u0 / earth_radius * (cosα - geom.Y / (1.0 + geom.X**2) * sinα)
-         u2 = u0 * geom.X / (earth_radius * (1.0 + geom.Y**2)) * (geom.Y * cosα + sinα)
-      elif geom.cube_face == 3:
-         u1 = u0 / earth_radius * (cosα + geom.X * geom.Y / (1.0 + geom.X**2) * sinα)
-         u2 = u0 / earth_radius * (geom.X * geom.Y / (1.0 + geom.Y**2) * cosα + sinα)
-      elif geom.cube_face == 4:
-         u1 = u0 / earth_radius * (- geom.Y / (1.0 + geom.X**2) * cosα + sinα)
-         u2 = u0 * geom.X / (earth_radius * (1.0 + geom.Y**2)) * (cosα + geom.Y * sinα)
-      elif geom.cube_face == 5:
-         u1 = u0 / earth_radius * (geom.Y / (1.0 + geom.X**2) * cosα - sinα)
-         u2 =-u0 * geom.X / (earth_radius * (1.0 + geom.Y**2)) * (cosα + geom.Y * sinα)
-
-
    if param.case_number == 0:
       print("--------------------------------------------------------------")
       print("CASE 0 (Tracer): Circular vortex, Nair and Machenhauer,2002   ")
@@ -107,6 +72,8 @@ def initialize(geom, metric, mtrx, param):
       print("WILLIAMSON CASE 1 (Tracer): Cosine Bell, Williamson et al.,1992")
       print("---------------------------------------------------------------")
 
+      u1, u2 = solid_body_rotation(geom, metric, param)
+
       # Initialize gaussian bell
       lon_center = 3.0 * math.pi / 2.0
       lat_center = 0.0
@@ -130,6 +97,8 @@ def initialize(geom, metric, mtrx, param):
          print("param.Williamson_angle != 0 not yet implemented for case 2")
          exit(0)
 
+      u1, u2 = solid_body_rotation(geom, metric, param)
+
       # Global Steady State Nonlinear Zonal Geostrophic Flow
       gh0 = 29400.0
       u0 = 2.0 * math.pi * earth_radius / (12.0 * day_in_secs)
@@ -151,6 +120,8 @@ def initialize(geom, metric, mtrx, param):
 
       u0 = 20.0   # Max wind (m/s)
       h0 = 5960.0 # Mean height (m)
+
+      u1, u2 = solid_body_rotation(geom, metric, param)
 
       h_star = (gravity*h0 - (earth_radius * rotation_speed * u0 + 0.5*u0**2)*(geom.sinlat)**2) / gravity
 
@@ -341,3 +312,34 @@ def eval_u_prime(lat):
    u_p = math.exp( 1.0 / ((lat - phi0) * (lat - phi1)) )
 
    return u_max / e_n * u_p
+
+def solid_body_rotation(geom, metric, param):
+   if param.case_number == 5:
+      u0 = 20.0
+      sinα = 0
+      cosα = 1
+   else:
+      u0 = 2.0 * math.pi * earth_radius / (12.0 * day_in_secs)
+      sinα = math.sin(param.Williamson_angle)
+      cosα = math.cos(param.Williamson_angle)
+
+   if geom.cube_face == 0:
+      u1 = u0 / earth_radius * (cosα + geom.Y / (1.0 + geom.X**2) * sinα)
+      u2 = u0 * geom.X / (earth_radius * (1.0 + geom.Y**2)) * (geom.Y * cosα - sinα)
+   elif geom.cube_face == 1:
+      u1 = u0 / earth_radius * (cosα - geom.X * geom.Y / (1.0 + geom.X**2) * sinα)
+      u2 = u0 / earth_radius * (geom.X * geom.Y / (1.0 + geom.Y**2) * cosα - sinα)
+   elif geom.cube_face == 2:
+      u1 = u0 / earth_radius * (cosα - geom.Y / (1.0 + geom.X**2) * sinα)
+      u2 = u0 * geom.X / (earth_radius * (1.0 + geom.Y**2)) * (geom.Y * cosα + sinα)
+   elif geom.cube_face == 3:
+      u1 = u0 / earth_radius * (cosα + geom.X * geom.Y / (1.0 + geom.X**2) * sinα)
+      u2 = u0 / earth_radius * (geom.X * geom.Y / (1.0 + geom.Y**2) * cosα + sinα)
+   elif geom.cube_face == 4:
+      u1 = u0 / earth_radius * (- geom.Y / (1.0 + geom.X**2) * cosα + sinα)
+      u2 = u0 * geom.X / (earth_radius * (1.0 + geom.Y**2)) * (cosα + geom.Y * sinα)
+   elif geom.cube_face == 5:
+      u1 = u0 / earth_radius * (geom.Y / (1.0 + geom.X**2) * cosα - sinα)
+      u2 =-u0 * geom.X / (earth_radius * (1.0 + geom.Y**2)) * (cosα + geom.Y * sinα)
+
+   return u1, u2
