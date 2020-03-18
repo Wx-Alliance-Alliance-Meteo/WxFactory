@@ -49,7 +49,7 @@ def main():
    metric = Metric(geom)
 
    # Initialize state variables
-   Q, topo, h_analytic = initialize(geom, metric, mtrx, param.nbsolpts, param.nb_elements, param.case_number, param.Williamson_angle, param.t_end)
+   Q, topo, h_analytic = initialize(geom, metric, mtrx, param)
 
 
    if param.plot_freq > 0:
@@ -284,7 +284,7 @@ def main():
 
 
    if param.plot_error:
-      if param.case_number <= 2 or ( param.case_number >= 9 and param.case_number <= 11):
+      if param.case_number <= 2 or param.case_number == 9:
          plot_field(geom, (h_analytic - Q[idx_h,:,:]) )
 #         image_field(geom, (h_analytic - ( Q[idx_h,:,:] + topo.hsurf)), "/home/stef/tmp/err" + str(param.case_number) + "_" + str(param.time_integrator) + "_" + str(step) )
       else:

@@ -11,7 +11,7 @@ class Topo:
       self.dzdx1 = dzdx1
       self.dzdx2 = dzdx2
 
-def initialize(geom, metric, mtrx, nbsolpts, nb_elements_horiz, case_number, Williamson_angle, t_end):
+def initialize(geom, metric, mtrx, param): 
 
    ni, nj = geom.lon.shape
 
@@ -20,26 +20,26 @@ def initialize(geom, metric, mtrx, nbsolpts, nb_elements_horiz, case_number, Wil
    dzdx1 = numpy.zeros((ni, nj))
    dzdx2 = numpy.zeros((ni, nj))
 
-   if case_number <= 1:
+   if param.case_number <= 1:
       # advection only, save u1 and u2
       Q = numpy.zeros((nb_equations+2, ni, nj))
    else:
       Q = numpy.zeros((nb_equations, ni, nj))
 
-   if case_number == -1 or \
-      case_number == 1  or \
-      case_number == 2  or \
-      case_number == 5:
+   if param.case_number == -1 or \
+      param.case_number == 1  or \
+      param.case_number == 2  or \
+      param.case_number == 5:
       # Solid body rotation
 
-      if case_number == 5:
+      if param.case_number == 5:
          u0 = 20.0
          sinα = 0
          cosα = 1
       else:
          u0 = 2.0 * math.pi * earth_radius / (12.0 * day_in_secs)
-         sinα = math.sin(Williamson_angle)
-         cosα = math.cos(Williamson_angle)
+         sinα = math.sin(param.Williamson_angle)
+         cosα = math.cos(param.Williamson_angle)
 
       if geom.cube_face == 0:
          u1 = u0 / earth_radius * (cosα + geom.Y / (1.0 + geom.X**2) * sinα)
@@ -61,7 +61,7 @@ def initialize(geom, metric, mtrx, nbsolpts, nb_elements_horiz, case_number, Wil
          u2 =-u0 * geom.X / (earth_radius * (1.0 + geom.Y**2)) * (cosα + geom.Y * sinα)
 
 
-   if case_number == 0:
+   if param.case_number == 0:
       print("--------------------------------------------------------------")
       print("CASE 0 (Tracer): Circular vortex, Nair and Machenhauer,2002   ")
       print("--------------------------------------------------------------")
@@ -95,14 +95,14 @@ def initialize(geom, metric, mtrx, nbsolpts, nb_elements_horiz, case_number, Wil
                   Omega[i,j] = Vt[i,j] / (earth_radius * rho[i,j])
 
       h          = 1.0 - numpy.tanh( (rho / gamma) * numpy.sin(lonR) )
-      h_analytic = 1.0 - numpy.tanh( (rho / gamma) * numpy.sin(lonR - Omega * t_end) )
+      h_analytic = 1.0 - numpy.tanh( (rho / gamma) * numpy.sin(lonR - Omega * param.t_end) )
 
       u = earth_radius * Omega * (math.sin(lat_center) * geom.coslat - math.cos(lat_center) * numpy.cos(geom.lon - lon_center) * geom.sinlat)
       v = earth_radius * Omega * numpy.cos(lat_center) * numpy.sin(geom.lon - lon_center)
       u1, u2 = wind2contra(u, v, geom)
 
 
-   elif case_number == 1:
+   elif param.case_number == 1:
       print("---------------------------------------------------------------")
       print("WILLIAMSON CASE 1 (Tracer): Cosine Bell, Williamson et al.,1992")
       print("---------------------------------------------------------------")
@@ -120,29 +120,29 @@ def initialize(geom, metric, mtrx, nbsolpts, nb_elements_horiz, case_number, Wil
       h = 0.5 * h0 * (1.0 + numpy.cos(math.pi * dist / radius)) * (dist <= radius)
       h_analytic = h
 
-   elif case_number == 2:
+   elif param.case_number == 2:
       print("--------------------------------------------")
       print("WILLIAMSON CASE 2, Williamson et al. (1992) ")
       print("Steady state nonlinear geostrophic flow     ")
       print("--------------------------------------------")
 
-      if abs(Williamson_angle) > 0.0:
-         print("Williamson_angle != 0 not yet implemented for case 2")
+      if abs(param.Williamson_angle) > 0.0:
+         print("param.Williamson_angle != 0 not yet implemented for case 2")
          exit(0)
 
       # Global Steady State Nonlinear Zonal Geostrophic Flow
       gh0 = 29400.0
       u0 = 2.0 * math.pi * earth_radius / (12.0 * day_in_secs)
 
-      sinα = math.sin(Williamson_angle)
-      cosα = math.cos(Williamson_angle)
+      sinα = math.sin(param.Williamson_angle)
+      cosα = math.cos(param.Williamson_angle)
 
       h = (gh0 - (earth_radius * rotation_speed * u0 + (0.5 * u0**2)) \
         * (-geom.coslon * geom.coslat * sinα + geom.sinlat * cosα)**2) / gravity
 
       h_analytic = h
 
-   elif case_number == 5:
+   elif param.case_number == 5:
 
       print('--------------------------------------------')
       print('WILLIAMSON CASE 5, Williamson et al. (1992) ')
@@ -169,9 +169,9 @@ def initialize(geom, metric, mtrx, nbsolpts, nb_elements_horiz, case_number, Wil
 
       hsurf = hs0 * (1 - r / rr)
 
-      nb_interfaces_horiz = nb_elements_horiz + 1
-      hsurf_itf_i = numpy.zeros((nb_elements_horiz+2, nbsolpts*nb_elements_horiz, 2))
-      hsurf_itf_j = numpy.zeros((nb_elements_horiz+2, 2, nbsolpts*nb_elements_horiz))
+      nb_interfaces_horiz = param.nb_elements + 1
+      hsurf_itf_i = numpy.zeros((param.nb_elements+2, param.nbsolpts*param.nb_elements, 2))
+      hsurf_itf_j = numpy.zeros((param.nb_elements+2, 2, param.nbsolpts*param.nb_elements))
 
       for itf in range(nb_interfaces_horiz):
          elem_L = itf
@@ -184,8 +184,8 @@ def initialize(geom, metric, mtrx, nbsolpts, nb_elements_horiz, case_number, Wil
          hsurf_itf_j[elem_R, 0, :] = hsurf_itf_j[elem_L, 1, :]
 
       offset = 1 # Offset due to the halo
-      for elem in range(nb_elements_horiz):
-         epais = elem * nbsolpts + numpy.arange(nbsolpts)
+      for elem in range(param.nb_elements):
+         epais = elem * param.nbsolpts + numpy.arange(param.nbsolpts)
 
          # --- Direction x1
          dzdx1[:, epais] = ( hsurf[:,epais] @ mtrx.diff_solpt_tr + hsurf_itf_i[elem+offset,:,:] @ mtrx.correction_tr ) * 2.0 / geom.Δx1
@@ -195,7 +195,7 @@ def initialize(geom, metric, mtrx, nbsolpts, nb_elements_horiz, case_number, Wil
 
       h = h_star - hsurf
 
-   elif case_number == 6:
+   elif param.case_number == 6:
       print("--------------------------------------------")
       print("WILLIAMSON CASE 6, Williamson et al. (1992) ")
       print("Rossby-Haurwitz wave                        ")
@@ -225,7 +225,7 @@ def initialize(geom, metric, mtrx, nbsolpts, nb_elements_horiz, case_number, Wil
       u1, u2 = wind2contra(u, v, geom)
 
 
-   elif case_number == 8:
+   elif param.case_number == 8:
       print("--------------------------------------------")
       print("CASE 8, Galewsky et al. (2004)              ")
       print("Barotropic wave                             ")
@@ -282,26 +282,19 @@ def initialize(geom, metric, mtrx, nbsolpts, nb_elements_horiz, case_number, Wil
 
       u1, u2 = wind2contra(u, v, geom)
 
-   elif case_number >= 9 and case_number <= 11:
+   elif param.case_number == 9: 
+         
+      print("--------------------------------------------")
+      print("CASE 9, Shamir et al.,2019,GMD,12,2181-2193 ")
 
-      if case_number ==  9: 
-         print("--------------------------------------------")
-         print("CASE 9, Shamir et al.,2019,GMD,12,2181-2193 ")
+      if param.matsuno_wave_type == 'Rossby': 
          print("The Matsuno baroclinic wave (Rosby)         ")
-         print("--------------------------------------------")
-         wave_type = 'Rossby'
-      elif case_number == 10: 
-         print("--------------------------------------------")
-         print("CASE 10, Shamir et al.,2019,GMD,12,2181-2193")
+      elif param.matsuno_wave_type == 'EIG': 
          print("The Matsuno baroclinic wave (EIG)           ")
          print("--------------------------------------------")
-         wave_type = 'EIG'
-      elif case_number == 11: 
-         print("--------------------------------------------")
-         print("CASE 11, Shamir et al.,2019,GMD,12,2181-2193")
+      elif param.matsuno_wave_type == 'WIG': 
          print("The Matsuno baroclinic wave (WIG)           ")
-         print("--------------------------------------------")
-         wave_type = 'WIG'
+      print("--------------------------------------------")
 
       u = numpy.zeros((ni,nj))
       v = numpy.zeros((ni,nj))
@@ -311,18 +304,18 @@ def initialize(geom, metric, mtrx, nbsolpts, nb_elements_horiz, case_number, Wil
 
       for i in range(ni):
          for j in range(nj):
-            h[i, j] = matsuno.eval_field(geom.lat[i,j], geom.lon[i,j], 0., field='phi', wave_type=wave_type) / gravity
-            u[i, j] = matsuno.eval_field(geom.lat[i,j], geom.lon[i,j], 0., field='u', wave_type=wave_type)
-            v[i, j] = matsuno.eval_field(geom.lat[i,j], geom.lon[i,j], 0., field='v', wave_type=wave_type)
+            h[i, j] = matsuno.eval_field(geom.lat[i,j], geom.lon[i,j], 0., field='phi', wave_type=param.matsuno_wave_type) / gravity
+            u[i, j] = matsuno.eval_field(geom.lat[i,j], geom.lon[i,j], 0., field='u', wave_type=param.matsuno_wave_type)
+            v[i, j] = matsuno.eval_field(geom.lat[i,j], geom.lon[i,j], 0., field='v', wave_type=param.matsuno_wave_type)
 
-            h_analytic[i, j] = matsuno.eval_field(geom.lat[i,j], geom.lon[i,j], t_end, field='phi', wave_type=wave_type) / gravity
+            h_analytic[i, j] = matsuno.eval_field(geom.lat[i,j], geom.lon[i,j], param.t_end, field='phi', wave_type=param.matsuno_wave_type) / gravity
 
       u1, u2 = wind2contra(u, v, geom)
 
 
    Q[idx_h,:,:]   = h
 
-   if case_number <= 1:
+   if param.case_number <= 1:
       # advection only
       Q[idx_u1,:,:] = u1
       Q[idx_u2,:,:] = u2

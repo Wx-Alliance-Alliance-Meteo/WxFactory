@@ -16,7 +16,9 @@ class Configuration:
          self.Williamson_angle = parser.getfloat('Test_case', 'Williamson_angle')
       except (NoSectionError, NoOptionError):
          self.Williamson_angle = 0.
-
+      
+      if self.case_number == 9:
+         self.matsuno_wave_type = parser.get('Test_case', 'matsuno_wave_type')
 
       self.dt               = parser.getfloat('Time_integration', 'dt')
       self.t_end            = parser.getint('Time_integration', 't_end')
