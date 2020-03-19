@@ -17,6 +17,7 @@ from kiops        import kiops
 from matrices     import DFR_operators
 from matvec       import matvec_fun
 from metric       import Metric
+from output       import *
 from rhs_sw       import rhs_sw
 
 def main():
@@ -52,12 +53,24 @@ def main():
    Q, topo, h_analytic = initialize(geom, metric, mtrx, param)
 
 
-   if param.plot_freq > 0:
-      if param.case_number == 8:
-         vorticity = relative_vorticity(Q[idx_hu1] / Q[idx_h], Q[idx_hu2] / Q[idx_h], metric)
-      else:
-         plot_field(geom, (Q[idx_h,:,:] + topo.hsurf) )
+#   if param.plot_freq > 0:
+#      if param.case_number == 8:
+#         vorticity = relative_vorticity(Q[idx_hu1] / Q[idx_h], Q[idx_hu2] / Q[idx_h], metric)
+#      else:
+#         plot_field(geom, (Q[idx_h,:,:] + topo.hsurf) )
 #      image_field(geom, (Q[idx_h,:,:] + topo.hsurf), "/home/stef/tmp/case" + str(param.case_number) + "_" + str(step) )
+
+   # TODO : mettre une condition
+   output_nc_ini(geom)
+   h = Q[idx_h] + topo.hsurf
+   u = Q[idx_hu1] / Q[idx_h] # TODO : convertir en vrai vents
+   v = Q[idx_hu2] / Q[idx_h]
+
+   output_nc(u, v, h, 0, step)  # store initial conditions
+
+   output_nc_fin()
+   exit(0)
+
 
    # Time stepping
    t           = 0.0
