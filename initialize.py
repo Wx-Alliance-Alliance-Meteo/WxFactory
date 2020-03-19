@@ -12,11 +12,6 @@ def initialize(geom, metric, mtrx, param):
 
    ni, nj = geom.lon.shape
 
-   h_analytic = None
-   hsurf = numpy.zeros((ni, nj))
-   dzdx1 = numpy.zeros((ni, nj))
-   dzdx2 = numpy.zeros((ni, nj))
-
    if param.case_number <= 1:
       # advection only, save u1 and u2
       Q = numpy.zeros((nb_equations+2, ni, nj)) # TODO : reviser
@@ -33,7 +28,7 @@ def initialize(geom, metric, mtrx, param):
       u1, u2, h, h_analytic = williamson_case2(geom, metric, param)
 
    elif param.case_number == 5:
-      u1, u2, h, h_analytic = williamson_case5(geom, metric, mtrx, param)
+      u1, u2, h, h_analytic, hsurf, dzdx1, dzdx2 = williamson_case5(geom, metric, mtrx, param)
 
    elif param.case_number == 6:
       u1, u2, h, h_analytic = williamson_case6(geom, metric, param)

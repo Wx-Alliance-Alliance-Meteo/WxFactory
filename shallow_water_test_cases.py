@@ -184,6 +184,10 @@ def williamson_case5(geom, metric, mtrx, param):
       hsurf_itf_j[elem_L, 1, :] = hs0 * (1 - r_itf_j[itf, :] / rr)
       hsurf_itf_j[elem_R, 0, :] = hsurf_itf_j[elem_L, 1, :]
 
+   ni, nj = geom.lon.shape
+   dzdx1 = numpy.zeros((ni, nj))
+   dzdx2 = numpy.zeros((ni, nj))
+
    offset = 1 # Offset due to the halo
    for elem in range(param.nb_elements):
       epais = elem * param.nbsolpts + numpy.arange(param.nbsolpts)
@@ -196,7 +200,7 @@ def williamson_case5(geom, metric, mtrx, param):
 
    h = h_star - hsurf
 
-   return u1, u2, h, h_analytic
+   return u1, u2, h, None, hsurf, dzdx1, dzdx2
 
 
 

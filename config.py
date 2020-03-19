@@ -37,4 +37,4 @@ class Configuration:
 
       self.stat_freq        = parser.getint('Plot_options', 'stat_freq')
       self.plot_freq        = parser.getint('Plot_options', 'plot_freq')
-      self.plot_error       = parser.getboolean('Plot_options', 'plot_error')
+      self.plot_error       = parser.getboolean('Plot_options', 'plot_error') # TODO : defaut
