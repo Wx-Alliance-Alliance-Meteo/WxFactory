@@ -1,6 +1,6 @@
 import numpy
 from definitions import *
-from shallow_water_test_cases import *
+from shallow_water_test import *
 
 class Topo:
    def __init__(self, hsurf, dzdx1, dzdx2):
