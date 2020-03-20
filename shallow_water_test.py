@@ -1,7 +1,7 @@
 import math
 import numpy
 from definitions import *
-from wind2contra import *
+from winds import wind2contra
 
 import matsuno
 

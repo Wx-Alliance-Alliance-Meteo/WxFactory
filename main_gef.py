@@ -17,7 +17,7 @@ from kiops        import kiops
 from matrices     import DFR_operators
 from matvec       import matvec_fun
 from metric       import Metric
-from output       import *
+from output       import output_init, output_netcdf, output_finalize
 from rhs_sw       import rhs_sw
 
 def main():
@@ -61,16 +61,8 @@ def main():
 #      image_field(geom, (Q[idx_h,:,:] + topo.hsurf), "/home/stef/tmp/case" + str(param.case_number) + "_" + str(step) )
 
    # TODO : mettre une condition
-   output_nc_ini(geom)
-   h = Q[idx_h] + topo.hsurf
-   u = Q[idx_hu1] / Q[idx_h] # TODO : convertir en vrai vents
-   v = Q[idx_hu2] / Q[idx_h]
-
-   output_nc(u, v, h, 0, step)  # store initial conditions
-
-   output_nc_fin()
-   exit(0)
-
+   output_init(geom)
+   output_netcdf(Q, geom, topo, step, param)  # store initial conditions
 
    # Time stepping
    t           = 0.0
@@ -295,6 +287,8 @@ def main():
                if param.plot_error and ( param.case_number == 0 or param.case_number == 2 ):
                   image_field(geom, (h_analytic -  Q[idx_h,:,:]), "/home/stef/tmp/err" + str(param.case_number) + "_" + str(param.time_integrator) + "_" + str(step) )
 
+      output_netcdf(Q, geom, topo, step, param)  # store initial conditions
+
 
    if param.plot_error:
       if param.case_number <= 2 or param.case_number == 9:
@@ -302,6 +296,8 @@ def main():
 #         image_field(geom, (h_analytic - ( Q[idx_h,:,:] + topo.hsurf)), "/home/stef/tmp/err" + str(param.case_number) + "_" + str(param.time_integrator) + "_" + str(step) )
       else:
          print('There is no analytical solution to plot for this test case')
+
+   output_finalize()
 
 
 if __name__ == '__main__':
