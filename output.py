@@ -105,7 +105,6 @@ def output_netcdf(Q, geom, topo, step, param):
       u2 = Q[idx_hu2,:,:] / h
 
    u, v = contra2wind(u1, u2, geom)
-#   u, v = u1, u2
 
    # Assemble global array
    glb_h = numpy.array( mpi4py.MPI.COMM_WORLD.gather(h, root=0) )

@@ -50,47 +50,36 @@ def contra2wind(u1_contra, u2_contra, geom):
    ni,nj = u1_contra.shape
 
    delta2 = 1.0 + geom.X**2 + geom.Y**2
-   delta  = numpy.sqrt(delta2)
 
    if geom.cube_face <= 3:
 
-      u = numpy.sqrt(geom.X**2 + 1.0) / delta * u1_contra
+      u = u1_contra
       v =  - geom.X * geom.Y * numpy.sqrt(1.0 + geom.X**2) / delta2 * u1_contra \
            + (1.0 + geom.Y**2) * numpy.sqrt(1.0 + geom.X**2) / delta2 * u2_contra
 
 	# North polar panel
-#   elif geom.cube_face == 4:
-#      hyp2 = geom.X**2 + geom.Y**2
-#      hyp = sqrt(hyp2)
-#
-#      u = - geom.Y * (1.0 + geom.X**2) / hyp2 * u1_contra \
-#          + geom.X * (1.0 + geom.Y**2) / hyp2 * u2_contra
-#
-#      v = - geom.X * (1.0 + geom.X**2) / (delta2 * hyp) * u1_contra \
-#          - geom.Y * (1.0 + geom.Y**2) / (delta2 * hyp) * u2_contra
-#
-#      lat = 0.5 * math.pi - numpy.atan(hyp)
-#      u *= lat
-#
-	# South polar panel
-#   elif geom.cube_face == 5:
-#      radius = sqrt(geom.X * geom.X + geom.Y * geom.Y)
-#
-#      u = geom.Y * (1.0 + geom.X * geom.X) / (radius**2) * u1_contra \
-#        - geom.X * (1.0 + geom.Y * geom.Y) / (radius**2) * u2_contra
-#
-#      v = geom.X * (1.0 + geom.X * geom.X) / (delta2 * radius) * u1_contra \
-#        + geom.Y * (1.0 + geom.Y * geom.Y) / (delta2 * radius) * u2_contra
-#
-#      u *= geom.coslat
-#
-#   u = lambda_dot * earth_radius * geom.coslat
-#   v = phi_dot * earth_radius
-   else:
-      u = numpy.zeros((ni,nj)) # TODO : debug
-      v = numpy.zeros((ni,nj))
+   elif geom.cube_face == 4:
+      hyp2 = geom.X**2 + geom.Y**2
+      hyp = numpy.sqrt(hyp2)
 
-   u *= earth_radius
+      u = - geom.Y * (1.0 + geom.X**2) / hyp2 * u1_contra \
+          + geom.X * (1.0 + geom.Y**2) / hyp2 * u2_contra
+
+      v = - geom.X * (1.0 + geom.X**2) / (delta2 * hyp) * u1_contra \
+          - geom.Y * (1.0 + geom.Y**2) / (delta2 * hyp) * u2_contra
+
+	# South polar panel
+   elif geom.cube_face == 5:
+      hyp2 = geom.X**2 + geom.Y**2
+      hyp = numpy.sqrt(hyp2)
+
+      u = geom.Y * (1.0 + geom.X**2) / hyp2 * u1_contra \
+        - geom.X * (1.0 + geom.Y**2) / hyp2 * u2_contra
+
+      v = geom.X * (1.0 + geom.X**2) / (delta2 * hyp) * u1_contra \
+        + geom.Y * (1.0 + geom.Y**2) / (delta2 * hyp) * u2_contra
+
+   u *= ( geom.coslat * earth_radius )
    v *= earth_radius
 
    return u, v
