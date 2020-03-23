@@ -206,8 +206,8 @@ def rhs_sw(Q, geom, mtrx, metric, topo, nbsolpts, nb_elements_horiz, α, case_nu
    # Assemble the right-hand sides
    rhs = metric.inv_sqrtG * ( - df1_dx1 - df2_dx2 ) - forcing
 
-   if case_number <= 1:
-      rhs[1,:,:] = 0.0
-      rhs[2,:,:] = 0.0
+   if not shallow_water_equations:
+      rhs[idx_hu1,:,:] = 0.0
+      rhs[idx_hu2,:,:] = 0.0
 
    return rhs

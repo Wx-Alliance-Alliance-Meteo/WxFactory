@@ -3,5 +3,10 @@
 *.swp
 *.swo
 
+doc/*.pdf
+doc/*.aux
+doc/*.log
+doc/*.out
+
 __pycache__/
 *.py[cod]
