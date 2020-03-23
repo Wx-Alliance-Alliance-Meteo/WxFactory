@@ -7,7 +7,7 @@ import time
 from definitions import idx_h, idx_hu1, idx_hu2, idx_u1, idx_u2
 from winds import contra2wind
 
-def output_init(geom):
+def output_init(geom, param):
    """ Initialise the netCDF4 file."""
 
    glb_lon = numpy.array( mpi4py.MPI.COMM_WORLD.gather(geom.lon, root=0) )
@@ -17,7 +17,7 @@ def output_init(geom):
 
       # creating the netcdf files
       global ncfile
-      ncfile = netCDF4.Dataset('/tmp/out.nc', 'w', format='NETCDF4')
+      ncfile = netCDF4.Dataset(param.output_file, 'w', format='NETCDF4')
    
       # write general attributes
       ncfile.history = 'Created ' + time.ctime(time.time())
@@ -68,19 +68,20 @@ def output_init(geom):
       hhh.coordinates = 'lons lats'
       hhh.grid_mapping = 'cubed_sphere'
       
-      uuu = ncfile.createVariable('U', numpy.dtype('double').char, ('time', 'nf', 'Xdim', 'Ydim'))
-      uuu.long_name = 'eastward_wind'
-      uuu.units = 'm s-1'
-      uuu.standard_name = 'eastward_wind'
-      uuu.coordinates = 'lons lats'
-      uuu.grid_mapping = 'cubed_sphere'
-
-      vvv = ncfile.createVariable('V', numpy.dtype('double').char, ('time', 'nf', 'Xdim', 'Ydim'))
-      vvv.long_name = 'northward_wind'
-      vvv.units = 'm s-1'
-      vvv.standard_name = 'northward_wind'
-      vvv.coordinates = 'lons lats'
-      vvv.grid_mapping = 'cubed_sphere'
+      if param.case_number >= 2:
+         uuu = ncfile.createVariable('U', numpy.dtype('double').char, ('time', 'nf', 'Xdim', 'Ydim'))
+         uuu.long_name = 'eastward_wind'
+         uuu.units = 'm s-1'
+         uuu.standard_name = 'eastward_wind'
+         uuu.coordinates = 'lons lats'
+         uuu.grid_mapping = 'cubed_sphere'
+   
+         vvv = ncfile.createVariable('V', numpy.dtype('double').char, ('time', 'nf', 'Xdim', 'Ydim'))
+         vvv.long_name = 'northward_wind'
+         vvv.units = 'm s-1'
+         vvv.standard_name = 'northward_wind'
+         vvv.coordinates = 'lons lats'
+         vvv.grid_mapping = 'cubed_sphere'
 
       xxx[:] = geom.x1[:]
       yyy[:] = geom.x2[:]
@@ -95,29 +96,29 @@ def output_netcdf(Q, geom, topo, step, param):
    # Unpack physical variables
    h = Q[idx_h, :, :] + topo.hsurf
 
-   advection_only = ( param.case_number <= 1 )
+   shallow_water = ( param.case_number >= 2 )
 
-   if advection_only:
-      u1 = Q[idx_u1, :, :]
-      u2 = Q[idx_u2, :, :]
-   else:
+   if shallow_water:
       u1 = Q[idx_hu1,:,:] / h
       u2 = Q[idx_hu2,:,:] / h
-
-   u, v = contra2wind(u1, u2, geom)
+      u, v = contra2wind(u1, u2, geom)
 
    # Assemble global array
    glb_h = numpy.array( mpi4py.MPI.COMM_WORLD.gather(h, root=0) )
-   glb_u = numpy.array( mpi4py.MPI.COMM_WORLD.gather(u, root=0) )
-   glb_v = numpy.array( mpi4py.MPI.COMM_WORLD.gather(v, root=0) )
+
+   if shallow_water:
+      glb_u = numpy.array( mpi4py.MPI.COMM_WORLD.gather(u, root=0) )
+      glb_v = numpy.array( mpi4py.MPI.COMM_WORLD.gather(v, root=0) )
 
    
    if mpi4py.MPI.COMM_WORLD.Get_rank() == 0:
 
       ncfile['time'][step] = step * param.dt
       ncfile['h'][step,:,:,:] = glb_h
-      ncfile['U'][step,:,:,:] = glb_u
-      ncfile['V'][step,:,:,:] = glb_v
+
+      if shallow_water:
+         ncfile['U'][step,:,:,:] = glb_u
+         ncfile['V'][step,:,:,:] = glb_v
 
 
 def output_finalize():

@@ -35,6 +35,6 @@ class Configuration:
       except (NoOptionError):
          self.nb_levels = 1
 
-      self.stat_freq        = parser.getint('Plot_options', 'stat_freq')
-      self.plot_freq        = parser.getint('Plot_options', 'plot_freq')
-      self.plot_error       = parser.getboolean('Plot_options', 'plot_error') # TODO : defaut
+      self.stat_freq   = parser.getint('Output_options', 'stat_freq')
+      self.output_freq = parser.getint('Output_options', 'output_freq')
+      self.output_file = parser.get('Output_options', 'output_file')
