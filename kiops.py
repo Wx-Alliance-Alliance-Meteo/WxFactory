@@ -134,7 +134,8 @@ def kiops(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 2,
          H[:,:] = 0.0
 
          # Normalize initial vector (this norm is nonzero)
-         β = math.sqrt( w[:,l] @ w[:,l] + w_aug @ w_aug )
+         local_sum = w[:,l] @ w[:,l]
+         β = math.sqrt( mpi4py.MPI.COMM_WORLD.allreduce(local_sum) + w_aug @ w_aug )
 
          # The first Krylov basis vector
          V[0:n, j]   = (1/β) * w[:,l]

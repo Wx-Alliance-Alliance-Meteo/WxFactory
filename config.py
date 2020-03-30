@@ -26,7 +26,11 @@ class Configuration:
       self.krylov_size      = parser.getint('Time_integration', 'krylov_size')
       self.tolerance        = parser.getfloat('Time_integration', 'tolerance')
 
-      self.α                = parser.getfloat('Spatial_discretization', 'α')
+      try:
+         self.α                = parser.getfloat('Spatial_discretization', 'α')
+      except (NoOptionError):
+         self.α                = 0.0
+
       self.nbsolpts         = parser.getint('Spatial_discretization', 'nbsolpts')
       self.nb_elements      = parser.getint('Spatial_discretization', 'nb_elements')
 
