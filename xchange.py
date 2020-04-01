@@ -1,6 +1,14 @@
 import mpi4py.MPI
 import numpy
 
+#      +---+
+#      | 4 |
+#  +---+---+---+---+
+#  | 3 | 0 | 1 | 2 |
+#  +---+---+---+---+
+#      | 5 |
+#      +---+
+
 def xchange_scalars(geom, field_itf_i, field_itf_j):
 
    glb_field_itf_i = mpi4py.MPI.COMM_WORLD.allgather(field_itf_i)

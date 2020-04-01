@@ -4,7 +4,7 @@ import sys
 import math
 import time
 
-import mpi4py.MPI
+
 import numpy
 
 from blockstats   import blockstats
@@ -17,6 +17,7 @@ from matrices     import DFR_operators
 from matvec       import matvec_fun
 from metric       import Metric
 from output       import output_init, output_netcdf, output_finalize
+from parallel     import create_ptopo
 from rhs_sw       import rhs_sw
 
 def main():
@@ -31,13 +32,8 @@ def main():
    param = Configuration(cfg_file)
 
    # Set up distributed world
-   communicator = mpi4py.MPI.COMM_WORLD
-
-   if communicator.Get_size() % 6 != 0:
-      raise Exception('Number of processes should be a multiple of 6 ...')
-
-   # TODO : changer ceci quand on aura plus qu'un PE par face
-   my_cube_face = communicator.rank
+   global comm_dist_graph
+   comm_dist_graph, my_cube_face = create_ptopo()
 
    # Create the mesh
    geom = cubed_sphere(param.nb_elements, param.nbsolpts, my_cube_face)
@@ -67,28 +63,28 @@ def main():
    blockstats(Q, step, param.case_number)
 
    if (param.time_integrator).lower() == "epirk4s3a" or (param.time_integrator).lower() == 'epi4':
-      g21=1/2
-      g31=2/3
+      g21 = 1/2
+      g31 = 2/3
 
-      alpha21=1/2
-      alpha31=2/3
+      alpha21 = 1/2
+      alpha31 = 2/3
 
-      alpha32=0
+      alpha32 = 0
 
-      p211=1
-      p212=0
-      p213=0
+      p211 = 1
+      p212 = 0
+      p213 = 0
 
-      p311=1
-      p312=0
-      p313=0
+      p311 = 1
+      p312 = 0
+      p313 = 0
 
 
-      b2p3=32
-      b2p4=-144
+      b2p3 = 32
+      b2p4 = -144
 
-      b3p3=-27/2
-      b3p4=81
+      b3p3 = -27/2
+      b3p4 = 81
 
       if g21 > g31:
          gCoeffVec = numpy.array([g31, g21])
