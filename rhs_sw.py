@@ -3,7 +3,7 @@ import numpy
 from definitions import idx_h, idx_hu1, idx_hu2, idx_u1, idx_u2, gravity
 from xchange import xchange_scalars, xchange_vectors
 
-def rhs_sw(Q, geom, mtrx, metric, topo, nbsolpts, nb_elements_horiz, α, case_number):
+def rhs_sw(Q, geom, mtrx, metric, topo, comm_dist_graph, nbsolpts, nb_elements_horiz, α, case_number):
 
    type_vec = type(Q[0, 0, 0])
 
@@ -87,7 +87,7 @@ def rhs_sw(Q, geom, mtrx, metric, topo, nbsolpts, nb_elements_horiz, α, case_nu
       u2_itf_j[pos, 0, :] = mtrx.extrap_south @ u2[epais, :]
       u2_itf_j[pos, 1, :] = mtrx.extrap_north @ u2[epais, :]
 
-   xchange_scalars(geom, h_itf_i, h_itf_j)
+   xchange_scalars(comm_dist_graph, geom, h_itf_i, h_itf_j)
    xchange_vectors(geom, u1_itf_i, u2_itf_i, u1_itf_j, u2_itf_j)
 
    # Common Rusanov fluxes

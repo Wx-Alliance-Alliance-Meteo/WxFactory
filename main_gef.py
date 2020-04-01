@@ -32,7 +32,6 @@ def main():
    param = Configuration(cfg_file)
 
    # Set up distributed world
-   global comm_dist_graph
    comm_dist_graph, my_cube_face = create_ptopo()
 
    # Create the mesh
@@ -55,7 +54,7 @@ def main():
    t           = 0.0
    krylov_size = param.krylov_size
 
-   rhs_handle = lambda q: rhs_sw(q, geom, mtrx, metric, topo, param.nbsolpts, param.nb_elements, \
+   rhs_handle = lambda q: rhs_sw(q, geom, mtrx, metric, topo, comm_dist_graph, param.nbsolpts, param.nb_elements, \
          param.α, param.case_number)
 
    nb_steps = math.ceil(param.t_end / param.dt)
