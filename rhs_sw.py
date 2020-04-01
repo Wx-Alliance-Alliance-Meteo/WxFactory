@@ -88,7 +88,7 @@ def rhs_sw(Q, geom, mtrx, metric, topo, comm_dist_graph, nbsolpts, nb_elements_h
       u2_itf_j[pos, 1, :] = mtrx.extrap_north @ u2[epais, :]
 
    xchange_scalars(comm_dist_graph, geom, h_itf_i, h_itf_j)
-   xchange_vectors(geom, u1_itf_i, u2_itf_i, u1_itf_j, u2_itf_j)
+   xchange_vectors(comm_dist_graph, geom, u1_itf_i, u2_itf_i, u1_itf_j, u2_itf_j)
 
    # Common Rusanov fluxes
    for itf in range(nb_interfaces_horiz):
