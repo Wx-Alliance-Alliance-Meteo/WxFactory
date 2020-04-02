@@ -267,7 +267,8 @@ def main():
          if step % param.output_freq == 0:
             output_netcdf(Q, geom, topo, step, param)
 
-   output_finalize()
+   if param.output_freq > 0:
+      output_finalize()
 
 
 if __name__ == '__main__':
