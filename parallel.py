@@ -60,7 +60,7 @@ def xchange_scalars(comm_dist_graph, geom, field_itf_i, field_itf_j):
 
    elif geom.cube_face == 4:
       # neighbors = [2, 0, 3, 1]
-      sendbuf = [ numpy.flipud( field_itf_j[-2, 1, :] ), field_itf_j[1, 0, :], numpy.flipud( field_itf_i[1, 0, :] ), field_itf_j[1, 0, :] ]
+      sendbuf = [ numpy.flipud( field_itf_j[-2, 1, :] ), field_itf_j[1, 0, :], numpy.flipud( field_itf_i[1, 0, :] ), field_itf_i[-2, 1, :] ]
 
    elif geom.cube_face == 5:
       # neighbors = [0, 2, 3, 1]
