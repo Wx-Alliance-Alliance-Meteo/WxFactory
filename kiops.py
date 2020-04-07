@@ -153,12 +153,12 @@ def kiops(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 2,
 
          # Modified Gram-Schmidt
          for i in range(max(0, j - iop), j):
-            local_sum = V[:, i] @ V[:, j]
-            H[i, j-1] = mpi4py.MPI.COMM_WORLD.allreduce(local_sum)
+            local_sum = V[0:n, i] @ V[0:n, j]
+            H[i, j-1] = mpi4py.MPI.COMM_WORLD.allreduce(local_sum) + V[n:n+p, i] @ V[n:n+p, j]
             V[:, j] = V[:, j] - H[i, j-1] * V[:, i]
 
-         local_sum = V[:, j] @ V[:, j]
-         nrm = numpy.sqrt( mpi4py.MPI.COMM_WORLD.allreduce(local_sum) )
+         local_sum = V[0:n, j] @ V[0:n, j]
+         nrm = numpy.sqrt( mpi4py.MPI.COMM_WORLD.allreduce(local_sum) + V[n:n+p, j] @ V[n:n+p, j])
 
          # Happy breakdown
          if nrm < tol:
