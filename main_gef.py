@@ -59,7 +59,8 @@ def main():
 
    nb_steps = math.ceil(param.t_end / param.dt)
 
-   blockstats(Q, step, param.case_number)
+   if param.stat_freq > 0:
+      blockstats(Q, step, param.case_number)
 
    if (param.time_integrator).lower() == "epirk4s3a" or (param.time_integrator).lower() == 'epi4':
       g21 = 1/2

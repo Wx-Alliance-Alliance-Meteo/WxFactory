@@ -79,14 +79,12 @@ def kiops(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 2,
    numSteps = len(τ_out)
 
    # Initial condition
-   w     = numpy.zeros((n, numSteps))
-   w_aug = numpy.zeros(p)
+   w = numpy.zeros((n, numSteps))
    w[:, 0] = u[:, 0]
 
    # compute the 1-norm of u
-   local_sum = numpy.sum(abs(u[:, 1:]), axis=0)
-   global_sum = mpi4py.MPI.COMM_WORLD.allreduce(local_sum) # TODO : tester avec p>1
-   normU = numpy.amax(global_sum)
+   local_nrmU = numpy.sum(abs(u[:, 1:]), axis=0)
+   normU = numpy.amax( mpi4py.MPI.COMM_WORLD.allreduce(local_nrmU) )
 
    # Normalization factors
    if ppo > 1 and normU > 0:
@@ -123,23 +121,23 @@ def kiops(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 2,
 
       # Compute necessary starting information
       if j == 0:
+
+         H[:,:] = 0.0
+
+         V[0:n, 0] = w[:,l]
+
          # Update the last part of w
          for k in range(p-1):
             i = p - k + 1
-            w_aug[k] = (τ_now**i) / math.factorial(i) * mu
-
-         w_aug[p-1] = mu
-
-         # Initialize the matrices V and H
-         H[:,:] = 0.0
+            V[n+k, j] = (τ_now**i) / math.factorial(i) * mu
+         V[n+p-1, j] = mu
 
          # Normalize initial vector (this norm is nonzero)
-         local_sum = w[:,l] @ w[:,l]
-         β = math.sqrt( mpi4py.MPI.COMM_WORLD.allreduce(local_sum) + w_aug @ w_aug )
+         local_sum = V[0:n, 0] @ V[0:n, 0]
+         β = math.sqrt( mpi4py.MPI.COMM_WORLD.allreduce(local_sum) + V[n:n+p, j] @ V[n:n+p, j] )
 
          # The first Krylov basis vector
-         V[0:n, j]   = (1/β) * w[:,l]
-         V[n:n+p, j] = (1/β) * w_aug
+         V[:, j] /= β
 
       # Incomplete orthogonalization process
       while j < m:
@@ -151,11 +149,11 @@ def kiops(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 2,
          V[n:n+p-1, j] = V[n+1:n+p, j-1]
          V[-1     , j] = 0.
 
-         # Modified Gram-Schmidt
-         for i in range(max(0, j - iop), j):
-            local_sum = V[0:n, i] @ V[0:n, j]
-            H[i, j-1] = mpi4py.MPI.COMM_WORLD.allreduce(local_sum) + V[n:n+p, i] @ V[n:n+p, j]
-            V[:, j] = V[:, j] - H[i, j-1] * V[:, i]
+         # Classical Gram-Schmidt
+         ilow = max(0, j - iop)
+         local_sum = V[0:n, j] @ V[0:n, ilow:j]
+         H[ilow:j, j-1] = mpi4py.MPI.COMM_WORLD.allreduce(local_sum) + V[n:n+p, j] @ V[n:n+p, ilow:j]
+         V[:,j] = V[:,j] - V[:, ilow:j] @ H[ilow:j, j-1]
 
          local_sum = V[0:n, j] @ V[0:n, j]
          nrm = numpy.sqrt( mpi4py.MPI.COMM_WORLD.allreduce(local_sum) + V[n:n+p, j] @ V[n:n+p, j])
