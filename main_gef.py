@@ -114,7 +114,7 @@ def main():
          rhs = rhs_handle(Q)
 
          # We only need the second phi function
-         vec = numpy.column_stack((numpy.zeros(len(rhs.flatten())), rhs.flatten()))
+         vec = numpy.row_stack((numpy.zeros(len(rhs.flatten())), rhs.flatten()))
 
          phiv, stats = kiops([1], matvec_handle, vec, tol=param.tolerance, m_init=krylov_size, mmin=14, mmax=64, task1=False)
 
@@ -147,7 +147,7 @@ def main():
          residual = (previous_rhs - rhs) - numpy.reshape(J_deltaQ, Q.shape)
 
          # We need the second and third phi functions (φ_1, φ_2)
-         vec = numpy.column_stack((numpy.zeros(len(rhs.flatten())), rhs.flatten(), 2.0/3.0 * residual.flatten()))
+         vec = numpy.row_stack((numpy.zeros(len(rhs.flatten())), rhs.flatten(), 2.0/3.0 * residual.flatten()))
 
          phiv, stats = kiops([1], matvec_handle, vec, tol=param.tolerance, m_init=krylov_size, mmin=14, mmax=64, task1=False)
 
@@ -181,7 +181,7 @@ def main():
          r2 = (prev_previous_rhs - rhs) - numpy.reshape(J_deltaQ2, Q.shape)
 
          # We need the second and third phi functions (φ_1, φ_3)
-         vec = numpy.column_stack((numpy.zeros(len(rhs.flatten())), rhs.flatten(), numpy.zeros(len(rhs.flatten())), 11.0/2.0 * r1.flatten()  - 7.0/8.0 * r2.flatten()  ))
+         vec = numpy.row_stack((numpy.zeros(len(rhs.flatten())), rhs.flatten(), numpy.zeros(len(rhs.flatten())), 11.0/2.0 * r1.flatten()  - 7.0/8.0 * r2.flatten()  ))
 
          phiv, stats = kiops([1], matvec_handle, vec, tol=param.tolerance, m_init=krylov_size, mmin=14, mmax=64, task1=False)
 
@@ -227,24 +227,24 @@ def main():
          matvec_handle = lambda v: matvec_fun(v, param.dt, Q, rhs_handle)
 
          # stage 1
-         u_mtrx = numpy.column_stack((zeroVec, hF.flatten()))
+         u_mtrx = numpy.row_stack((zeroVec, hF.flatten()))
          phiv, stats = kiops(gCoeffVec, matvec_handle, u_mtrx, tol=param.tolerance, m_init=krylov_size, mmin=14, mmax=64, task1=True)
 
-         U2 = Q + alpha21 * numpy.reshape(phiv[:,0], Q.shape)
+         U2 = Q + alpha21 * numpy.reshape(phiv[0, :], Q.shape)
 
          # Calculate residual r(U2)
          mv = numpy.reshape( matvec_handle(U2 - Q), Q.shape)
          hb1 = param.dt * rhs_handle(U2) - hF - mv
 
          # stage 2
-         U3 = Q + alpha31 * numpy.reshape(phiv[:,1], Q.shape)
+         U3 = Q + alpha31 * numpy.reshape(phiv[1, :], Q.shape)
 
          # Calculate residual r(U3)
          mv = numpy.reshape( matvec_handle(U3 - Q), Q.shape)
          hb2 = param.dt * rhs_handle(U3) - hF - mv
 
          # stage 3
-         u_mtrx = numpy.column_stack((zeroVec, hF.flatten(), zeroVec, (b2p3*hb1+b3p3*hb2).flatten(), (b2p4*hb1+b3p4*hb2).flatten() ))
+         u_mtrx = numpy.row_stack((zeroVec, hF.flatten(), zeroVec, (b2p3*hb1+b3p3*hb2).flatten(), (b2p4*hb1+b3p4*hb2).flatten() ))
          phiv, stats = kiops([1], matvec_handle, u_mtrx, tol=param.tolerance, m_init=krylov_size, mmin=14, mmax=64, task1=False)
          Q = Q + numpy.reshape(phiv, Q.shape)
 
