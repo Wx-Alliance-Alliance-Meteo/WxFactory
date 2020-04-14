@@ -13,8 +13,9 @@ from config       import Configuration
 from cubed_sphere import cubed_sphere
 from initialize   import initialize
 from kiops        import kiops
+from linsol       import gmres_mgs
 from matrices     import DFR_operators
-from matvec       import matvec_fun
+from matvec       import matvec_fun, matvec_rat
 from metric       import Metric
 from output       import output_init, output_netcdf, output_finalize
 from parallel     import create_ptopo
@@ -258,6 +259,31 @@ def main():
 
          time_epirk4s3 = time.time() - tic
          print('Elapsed time for EPIRK4s3A: %0.3f secs' % time_epirk4s3)
+
+      elif (param.time_integrator).lower() == 'rat2':
+
+         # Using RAT2 time integration
+         tic = time.time()
+
+         matvec_handle = lambda v: matvec_rat(v, param.dt, Q, rhs_handle)
+
+         rhs = rhs_handle(Q).flatten()
+
+         x0 = numpy.zeros_like(rhs)
+      
+         phiv, local_error, niter, flag = gmres_mgs(matvec_handle, rhs, x0, tol=param.tolerance)
+
+         if flag == 0:
+            print('GMRES converged at iteration %d to a solution with local error %e' % (niter, local_error))
+         else:
+            print('GMRES stagnation at iteration %d, returning a solution with local error %e' % (niter, local_error))
+
+         # Update solution
+         Q = Q + numpy.reshape(phiv, Q.shape) * param.dt
+         
+         time_rat2 = time.time() - tic
+         print('Elapsed time for RAR2: %0.3f secs' % time_rat2)
+
 
       if param.stat_freq > 0:
          if step % param.stat_freq == 0:
