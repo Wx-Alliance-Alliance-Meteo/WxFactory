@@ -292,6 +292,7 @@ def main():
       # Plot solution
       if param.output_freq > 0:
          if step % param.output_freq == 0:
+            print('=> Writing dynamic output for step', step)
             output_netcdf(Q, geom, topo, step, param)
 
    if param.output_freq > 0:
