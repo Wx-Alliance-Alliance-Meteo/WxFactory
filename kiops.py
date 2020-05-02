@@ -80,7 +80,7 @@ def kiops(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 2,
 
    # Initial condition
    w = numpy.zeros((numSteps, n))
-   w[0, :] = u[0, :]
+   w[0, :] = u[0, :].copy()
 
    # compute the 1-norm of u
    local_nrmU = numpy.sum(abs(u[1:, :]), axis=0)
@@ -261,7 +261,7 @@ def kiops(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 2,
 
          if blownTs != 0:
             # Copy current w to w we continue with.
-            w[l+blownTs, :] = w[l, :]
+            w[l+blownTs, :] = w[l, :].copy()
 
             for k in range(blownTs):
                τPhantom = τ_out[l+k] - τ_now
