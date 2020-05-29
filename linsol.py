@@ -11,7 +11,7 @@ def gmres_mgs(A, b, x0=None, tol=1e-5, restart=20, maxiter=None, M=None, callbac
    if x0 is None:
       x = numpy.zeros_like(b)
    else:
-      x = x0 # TODO
+      x = x0.copy()
 
    n = len(b)
 

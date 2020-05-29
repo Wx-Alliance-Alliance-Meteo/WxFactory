@@ -1,3 +1,5 @@
+import adaptive_ark
+import butcher
 import linsol
 import math
 import numpy
@@ -47,7 +49,7 @@ References:
 * Niesen, J. and Wright, W.M., 2011. A Krylov subspace method for option pricing. SSRN 1799124
 * Niesen, J. and Wright, W.M., 2012. Algorithm 919: A Krylov subspace algorithm for evaluating the ``φ``-functions appearing in exponential integrators. ACM Transactions on Mathematical Software (TOMS), 38(3), p.22
 """
-def phi_imex(τ_out, A_exp, A_imp, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 2, task1 = False):
+def phi_ark(τ_out, J_exp, J_imp, u, tol = 1e-7, task1 = False):
 
    ppo, n = u.shape
    p = ppo - 1
@@ -57,12 +59,9 @@ def phi_imex(τ_out, A_exp, A_imp, u, tol = 1e-7, m_init = 10, mmin = 10, mmax =
       # Add extra column of zeros
       u = numpy.row_stack((u, numpy.zeros(len(u))))
 
-   # We only allow m to vary between mmin and mmax
-   m = max(mmin, min(m_init, mmax))
-
    # Preallocate matrix
-   V = numpy.zeros((mmax + 1, n + p))
-   H = numpy.zeros((mmax + 1, mmax + 1))
+   res_mv = numpy.zeros(n + p)
+   V = numpy.zeros(n + p)
 
    step    = 0
    krystep = 0
@@ -80,8 +79,8 @@ def phi_imex(τ_out, A_exp, A_imp, u, tol = 1e-7, m_init = 10, mmin = 10, mmax =
    numSteps = len(τ_out)
 
    # Initial condition
-   w = numpy.zeros((numSteps, n))
-   w[0, :] = u[0, :]
+   w = numpy.zeros((n, numSteps))
+   w[:, 0] = u[0, :]
 
    # compute the 1-norm of u
    local_nrmU = numpy.sum(abs(u[1:, :]), axis=0)
@@ -100,50 +99,62 @@ def phi_imex(τ_out, A_exp, A_imp, u, tol = 1e-7, m_init = 10, mmin = 10, mmax =
    u_flip = nu * numpy.flipud(u[1:, :])
 
    # Compute and initial starting approximation for the step size
-   τ = τ_end / 200. # Wild guess
+   τ = τ_end / 200 # Wild guess
 
    l = 0
-   V[0, 0:n] = w[l, :]
+   V[0:n] = w[:, l]
 
    niter = 0
 
-   while τ_now < τ_end:
+   f_e = lambda vec: rhs_exp(vec, n, p, J_exp, u_flip)
+   f_i = lambda vec: rhs_imp(vec, n, J_imp)
 
-      # TODO : adaptive step size
 
-      # Update the last part of w
-      for k in range(p-1):
-         i = p - k + 1
-         V[0, n+k] = (τ_now**i) / math.factorial(i) * mu
-      V[0, n+p-1] = mu
+   name_e = 'ARK3(2)4L[2]SA-ERK'
+   Be = butcher.tableau(name_e)
+   name_i = 'ARK3(2)4L[2]SA-ESDIRK'
+   Bi = butcher.tableau(name_i)
+   print('Solving for the φ-functions with ARK integrator : ', name_e, '/', name_i)
+
+   # Update the last part of w
+   for k in range(p-1):    # TODO : tranférer dans ark et mettre à jour a chaque pas de temps
+      i = p - k + 1
+      V[n+k] = (τ_now**i) / math.factorial(i) * mu
+   V[n+p-1] = mu
+
+   rtol = 1e-3
+   atol = tol
+   atol = 1e-3
+   hmin = 1e-7
+   hmax = 1.0
+
+   tvals, V, nsteps, ierr = adaptive_ark.solve(f_e, f_i, J_imp, τ_out, V, Be, Bi, rtol, atol, hmin, hmax, n)
+
+   if ierr != 0:
+      print('Something has gone horribly wrong. Back away slowly')
+      exit(1)
+
+   w = V[:n,:] # TODO : switch the order of indices in w
    
-      # Augmented matrix - vector product
-      V[1, 0:n    ] = A_exp( V[0, 0:n] ) + V[0, n:n+p] @ u_flip
-      V[1, n:n+p-1] = V[0, n+1:n+p]
-      V[1, -1     ] = 0.0
-   
-      V[1, :] = V[0, :] + V[1, :] * τ
-      
-      A_implicit = lambda v: A_imp(v, τ, n)
-
-      # implicit correction
-      V[0,:], gmres_error, nb_gmres_iter, flag = linsol.gmres_mgs(A_implicit, V[1,:]) 
-
-      niter += nb_gmres_iter
-
-      if flag != 0:
-         print('GMRES stagnation at iteration %d, returning a solution with local error %e' % (niter, gmres_error))
-
-      # Update τ_out
-      remaining_time = τ_end - τ_now
-      τ_now += min(remaining_time, τ)
-
-   w[l, :] = V[0, :n]
-
    if task1 is True:
       for k in range(numSteps):
-         w[k, :] = w[k, :] / τ_out[k]
-
-   m_ret=m
+         w[:, k] = w[:, k] / τ_out[k]
 
    return w, niter
+
+def rhs_exp(vec, n, p, J_exp, B):
+   retval = numpy.zeros_like(vec)
+   retval[0:n] = J_exp( vec[0:n] ) + vec[n:n+p] @ B
+   retval[n:n+p-1] = vec[n+1:n+p]
+   retval[-1] = 0.0
+   return retval
+
+def rhs_imp(vec, n, J_imp):
+   retval = numpy.zeros_like(vec)
+   retval[0:n] = J_imp( vec[0:n] )
+   return retval
+
+def I_minus_tauJ_imp(vec, τ, n, J_imp):
+   mv = numpy.zeros_like(vec)
+   mv[:n] = J_imp(vec[:n])
+   return vec - τ * mv

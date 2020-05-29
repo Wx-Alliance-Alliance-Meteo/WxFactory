@@ -14,11 +14,11 @@ from initialize   import initialize
 from kiops        import kiops
 from linsol       import gmres_mgs
 from matrices     import DFR_operators
-from matvec       import matvec_fun, matvec_rat, matvec_implicit
+from matvec       import matvec_fun, matvec_rat
 from metric       import Metric
 from output       import output_init, output_netcdf, output_finalize
 from parallel     import create_ptopo
-from phi          import phi_imex
+from phi          import phi_ark
 from rhs_sw       import rhs_sw
 from rhs_sw_explicit import rhs_sw_explicit
 from rhs_sw_implicit import rhs_sw_implicit
@@ -286,9 +286,9 @@ def main():
          time_rat2 = time.time() - tic
          print('Elapsed time for RAR2: %0.3f secs' % time_rat2)
 
-      elif (param.time_integrator).lower() == 'epi2/imex':
+      elif (param.time_integrator).lower() == 'epi2/ark':
 
-         # Using EPI2/IMEX time integration
+         # Using EPI2/ARK time integration
          tic = time.time()
 
          rhs_explicit = lambda q: rhs_sw_explicit(q, geom, mtrx, metric, topo, comm_dist_graph, param.nbsolpts, param.nb_elements, \
@@ -297,23 +297,23 @@ def main():
          rhs_implicit = lambda q: rhs_sw_implicit(q, geom, mtrx, metric, topo, comm_dist_graph, param.nbsolpts, param.nb_elements, \
             param.α, param.case_number)
 
-         mv_explicit = lambda v: matvec_fun(v, param.dt, Q, rhs_explicit)
-         mv_implicit = lambda v, τ, n: matvec_implicit(v, τ, n, param.dt, Q, rhs_implicit) # ugly hack : leave tau unspecified until we are in the solver, then define a new handle with the correct tau value
+         J_e = lambda v: matvec_fun(v, param.dt, Q, rhs_explicit)
+         J_i = lambda v: matvec_fun(v, param.dt, Q, rhs_implicit)
 
          rhs = rhs_handle(Q)
 
          # We only need the second phi function
          vec = numpy.row_stack((numpy.zeros(len(rhs.flatten())), rhs.flatten()))
 
-         phiv, stats = phi_imex([1], mv_explicit, mv_implicit, vec, tol=param.tolerance, m_init=krylov_size, mmin=14, mmax=64, task1=False)
+         phiv, stats = phi_ark([0, 1], J_e, J_i, vec, tol=param.tolerance, task1=False)
 
-         print('PHI/IMEX converged at iteration %d' % stats)
+         print('PHI/ARK converged at iteration %d' % stats)
 
          # Update solution
-         Q = Q + numpy.reshape(phiv, Q.shape) * param.dt
+         Q = Q + numpy.reshape(phiv[:,-1], Q.shape) * param.dt
 
          time_epi2 = time.time() - tic
-         print('Elapsed time for EPI2/IMEX: %0.3f secs' % time_epi2)
+         print('Elapsed time for EPI2/ARK: %0.3f secs' % time_epi2)
 
       if param.stat_freq > 0:
          if step % param.stat_freq == 0:

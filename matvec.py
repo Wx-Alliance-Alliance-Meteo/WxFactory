@@ -19,13 +19,3 @@ def matvec_rat(vec, dt, Q, rhs_handle):
    jac = dt * (rhs_handle(Qvec) / epsilon).imag
 
    return vec - 0.5 * jac.flatten()
-
-def matvec_implicit(vec, τ, n, dt, Q, rhs_handle):
-   # Complex-step approximation
-   epsilon = math.sqrt(numpy.finfo(float).eps)
-   Qvec = Q + 1j * epsilon * numpy.reshape(vec[:n], Q.shape)
-   jac =  τ * dt * (rhs_handle(Qvec) / epsilon).imag 
-   mv = numpy.zeros_like(vec)
-   mv[:n] = jac.flatten()
-
-   return vec - mv
