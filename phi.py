@@ -90,9 +90,9 @@ def phi_ark(τ_out, J_exp, J_imp, u, tol = 1e-7, task1 = False):
       V[n+k] = (τ_now**i) / math.factorial(i) * mu
    V[n+p-1] = mu
 
-   rtol = 1e-7
+   # TODO : rtol and atol should be specified separately in config
+   rtol = tol
    atol = tol
-   atol = 1e-7
    hmin = 1e-7
    hmax = 1.0
 
