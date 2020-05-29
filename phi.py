@@ -21,33 +21,19 @@ The Krylov subspace is computed using the incomplete orthogonalization method.
 
 Arguments:
   - `τ_out`    - Array of `τ_out`
-  - `A`        - the matrix argument of the ``φ`` functions
+  - `J_exp`    - non-stiff part of the matrix argument of the ``φ`` functions
+  - `J_imp`    - stiff part of the matrix argument of the ``φ`` functions
   - `u`        - the matrix with rows representing the vectors to be multiplied by the ``φ`` functions
 
 Optional arguments:
   - `tol`      - the convergence tolerance required (default: 1e-7)
-  - `mmin`, `mmax` - let the Krylov size vary between mmin and mmax (default: 10, 128)
-  - `m`        - an estimate of the appropriate Krylov size (default: mmin)
-  - `iop`      - length of incomplete orthogonalization procedure (default: 2)
-  - `ishermitian` -  whether ``A`` is Hermitian (default: ishermitian(A))
   - `task1`     - if true, divide the result by 1/T**p
 
 Returns:
   - `w`      - the linear combination of the ``φ`` functions evaluated at ``tA`` acting on the vectors from ``u``
-  - `stats[1]` - number of substeps
-  - `stats[2]` - number of rejected steps
-  - `stats[3]` - number of Krylov steps
-  - `stats[4]` - number of matrix exponentials
-  - `stats[5]` - Error estimate
-  - `stats[6]` - the Krylov size of the last substep
 
 `n` is the size of the original problem
 `p` is the highest index of the ``φ`` functions
-
-References:
-* Gaudreault, S., Rainwater, G. and Tokman, M., 2018. KIOPS: A fast adaptive Krylov subspace solver for exponential integrators. Journal of Computational Physics. Based on the PHIPM and EXPMVP codes (http://www1.maths.leeds.ac.uk/~jitse/software.html). https://gitlab.com/stephane.gaudreault/kiops.
-* Niesen, J. and Wright, W.M., 2011. A Krylov subspace method for option pricing. SSRN 1799124
-* Niesen, J. and Wright, W.M., 2012. Algorithm 919: A Krylov subspace algorithm for evaluating the ``φ``-functions appearing in exponential integrators. ACM Transactions on Mathematical Software (TOMS), 38(3), p.22
 """
 def phi_ark(τ_out, J_exp, J_imp, u, tol = 1e-7, task1 = False):
 
@@ -60,22 +46,9 @@ def phi_ark(τ_out, J_exp, J_imp, u, tol = 1e-7, task1 = False):
       u = numpy.row_stack((u, numpy.zeros(len(u))))
 
    # Preallocate matrix
-   res_mv = numpy.zeros(n + p)
    V = numpy.zeros(n + p)
 
-   step    = 0
-   krystep = 0
-   ireject = 0
-   reject  = 0
-   exps    = 0
-   sgn     = numpy.sign(τ_out[-1])
    τ_now   = 0.0
-   τ_end   = abs(τ_out[-1])
-   happy   = False
-   j       = 0
-
-   conv    = 0.0
-
    numSteps = len(τ_out)
 
    # Initial condition
@@ -98,13 +71,8 @@ def phi_ark(τ_out, J_exp, J_imp, u, tol = 1e-7, task1 = False):
    # Flip the rest of the u matrix
    u_flip = nu * numpy.flipud(u[1:, :])
 
-   # Compute and initial starting approximation for the step size
-   τ = τ_end / 200 # Wild guess
-
    l = 0
    V[0:n] = w[:, l]
-
-   niter = 0
 
    f_e = lambda vec: rhs_exp(vec, n, p, J_exp, u_flip)
    f_i = lambda vec: rhs_imp(vec, n, J_imp)
@@ -140,7 +108,7 @@ def phi_ark(τ_out, J_exp, J_imp, u, tol = 1e-7, task1 = False):
       for k in range(numSteps):
          w[:, k] = w[:, k] / τ_out[k]
 
-   return w, niter
+   return w
 
 def rhs_exp(vec, n, p, J_exp, B):
    retval = numpy.zeros_like(vec)
