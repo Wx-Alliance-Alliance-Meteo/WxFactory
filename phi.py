@@ -60,13 +60,17 @@ def phi_ark(τ_out, J_exp, J_imp, u, tol = 1e-7, task1 = False):
    normU = numpy.amax( mpi4py.MPI.COMM_WORLD.allreduce(local_nrmU) )
 
    # Normalization factors
-   if ppo > 1 and normU > 0:
-      ex = math.ceil(math.log2(normU))
-      nu = 2**(-ex)
-      mu = 2**(ex)
-   else:
-      nu = 1.0
-      mu = 1.0
+#   if ppo > 1 and normU > 0:
+#      ex = math.ceil(math.log2(normU))
+#      nu = 2**(-ex)
+#      mu = 2**(ex)
+#   else:
+#      nu = 1.0
+#      mu = 1.0
+
+   # TODO : debug
+   nu = 1.0
+   mu = 1.0
 
    # Flip the rest of the u matrix
    u_flip = nu * numpy.flipud(u[1:, :])
@@ -77,7 +81,6 @@ def phi_ark(τ_out, J_exp, J_imp, u, tol = 1e-7, task1 = False):
    f_e = lambda vec: rhs_exp(vec, n, p, J_exp, u_flip)
    f_i = lambda vec: rhs_imp(vec, n, J_imp)
 
-
    name_e = 'ARK3(2)4L[2]SA-ERK'
    Be = butcher.tableau(name_e)
    name_i = 'ARK3(2)4L[2]SA-ESDIRK'
@@ -85,7 +88,7 @@ def phi_ark(τ_out, J_exp, J_imp, u, tol = 1e-7, task1 = False):
    print('Solving for the φ-functions with ARK integrator : ', name_e, '/', name_i)
 
    # Update the last part of w
-   for k in range(p-1):    # TODO : tranférer dans ark et mettre à jour a chaque pas de temps
+   for k in range(p-1):
       i = p - k + 1
       V[n+k] = (τ_now**i) / math.factorial(i) * mu
    V[n+p-1] = mu
@@ -96,7 +99,7 @@ def phi_ark(τ_out, J_exp, J_imp, u, tol = 1e-7, task1 = False):
    hmin = 1e-7
    hmax = 1.0
 
-   tvals, V, nsteps, ierr = adaptive_ark.solve(f_e, f_i, J_imp, τ_out, V, Be, Bi, rtol, atol, hmin, hmax, n)
+   tvals, V, nsteps, ierr = adaptive_ark.solve(f_e, f_i, J_imp, τ_out, V, Be, Bi, rtol, atol, hmin, hmax, n, p, mu)
 
    if ierr != 0:
       print('Something has gone horribly wrong. Back away slowly')

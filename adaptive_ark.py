@@ -10,10 +10,10 @@ import math
 import numpy
 import mpi4py.MPI
 
-def solve(fe,fi,Ji,tvals,Y0,Be,Bi,rtol,atol,hmin,hmax,nn):
+def solve(fe,fi,Ji,tvals,Y0,Be,Bi,rtol,atol,hmin,hmax,nn,p_phi,mu):
 
    """
-   Usage: tvals,Y,nsteps,ierr = adaptive_ark(fe,fi,tvals,Y0,Ae,be,ce,de,Ai,bi,ci,di,p,rtol,atol,hmin,hmax)
+   Usage: tvals,Y,nsteps,ierr = adaptive_ark(fe,fi,tvals,Y0,Be,Bi,rtol,atol,hmin,hmax,nn,p_phi,mu)
 
    Adaptive time step, additive Runge-Kutta solver for the vector-valued ODE problem
       y' = fe(Y(t)) + fi(Y(t)), t in tvals, y in R^m,
@@ -24,18 +24,15 @@ def solve(fe,fi,Ji,tvals,Y0,Be,Bi,rtol,atol,hmin,hmax,nn):
       fi     = function handle for evaluating fi(Y)
       tvals  = [t0, t1, t2, ..., tN]
       Y0     = initial value array (column vector of length m)
-      Ae,be,ce,de = Butcher table matrices for ERK method:
-         Ae is an s-by-s matrix of coefficients (strictly lower-triangular)
-         be is an array of s solution coefficients
-         ce is an array of s abcissae for each stage
-         de is an array of s embedding coefficients
-      Ai,bi,ci,di = Butcher table matrices for DIRK method
-      p      = order of accuracy for embedded solution
+      Be     = Butcher table matrices for ERK method. s-by-s matrix of coefficients (strictly lower-triangular)
+      Bi     = Butcher table matrices for DIRK method
       rtol   = desired relative error of solution  (scalar)
       atol   = desired absolute error of solution  (vector or scalar)
       hmin   = minimum internal time step size (hmin <= t(i)-t(i-1), for all i)
       hmax   = maximum internal time step size (hmax >= hmin)
-      nn     = lenght of the "useful" part of the solution
+      nn     = the size of the original problem
+      p_phi  = the highest index of the ``φ`` functions
+      mu     = normalization factor
 
    Outputs:
       tvals  = the same as the input array tvals
@@ -234,6 +231,12 @@ def solve(fe,fi,Ji,tvals,Y0,Be,Bi,rtol,atol,hmin,hmax,nn):
 
             # enforce maximum growth rate on step sizes
             h = min(h_growth*h_old, h)
+
+      # Update the last part of Ynew using analytical formula
+      for k in range(p_phi-1):
+         i = p_phi - k + 1
+         Ynew[nn+k] = (tvals[tstep]**i) / math.factorial(i) * mu
+      Ynew[nn+p_phi-1] = mu
 
       # store updated solution in output array
       Y[:,tstep] = Ynew
