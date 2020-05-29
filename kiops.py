@@ -26,7 +26,6 @@ Optional arguments:
   - `mmin`, `mmax` - let the Krylov size vary between mmin and mmax (default: 10, 128)
   - `m`        - an estimate of the appropriate Krylov size (default: mmin)
   - `iop`      - length of incomplete orthogonalization procedure (default: 2)
-  - `ishermitian` -  whether ``A`` is Hermitian (default: ishermitian(A))
   - `task1`     - if true, divide the result by 1/T**p
 
 Returns:
