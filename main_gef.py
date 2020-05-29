@@ -305,9 +305,9 @@ def main():
          # We only need the second phi function
          vec = numpy.row_stack((numpy.zeros(len(rhs.flatten())), rhs.flatten()))
 
-         phiv, stats = phi_ark([0, 1], J_e, J_i, vec, tol=param.tolerance, task1=False)
+         phiv = phi_ark([0, 1], J_e, J_i, vec, tol=param.tolerance, task1=False)
 
-         print('PHI/ARK converged at iteration %d' % stats)
+#         print('PHI/ARK converged at iteration %d' % stats)
 
          # Update solution
          Q = Q + numpy.reshape(phiv[:,-1], Q.shape) * param.dt
