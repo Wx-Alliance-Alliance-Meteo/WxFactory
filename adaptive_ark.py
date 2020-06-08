@@ -13,7 +13,7 @@ import mpi4py.MPI
 def solve(fe,fi,Ji,tvals,Y0,Be,Bi,rtol,atol,hmin,hmax,nn,p_phi,mu):
 
    """
-   Usage: tvals,Y,nsteps,ierr = adaptive_ark(fe,fi,tvals,Y0,Be,Bi,rtol,atol,hmin,hmax,nn,p_phi,mu)
+   Usage: tvals,Y,nsteps,ierr = solve(fe,fi,Ji,tvals,Y0,Be,Bi,rtol,atol,hmin,hmax,nn,p_phi,mu)
 
    Adaptive time step, additive Runge-Kutta solver for the vector-valued ODE problem
       y' = fe(Y(t)) + fi(Y(t)), t in tvals, y in R^m,
@@ -21,11 +21,16 @@ def solve(fe,fi,Ji,tvals,Y0,Be,Bi,rtol,atol,hmin,hmax,nn,p_phi,mu):
 
    Inputs:
       fe     = function handle for evaluating fe(Y)
-      fi     = function handle for evaluating fi(Y)
+      fi     = function handle for evaluating fi(Y) -- assumed linear in Y, i.e., fi(Y)=Ji*Y
+      Ji     = function handle for evaluating fi'(Y) -- assumed a fixed matrix
       tvals  = [t0, t1, t2, ..., tN]
       Y0     = initial value array (column vector of length m)
-      Be     = Butcher table matrices for ERK method. s-by-s matrix of coefficients (strictly lower-triangular)
-      Bi     = Butcher table matrices for DIRK method
+      Be     = Butcher table dictionary for ERK method, containing:
+                 'A' = s-by-s matrix of coefficients (strictly lower-triangular)
+                 'b' = s array of solution coefficients
+                 'c' = s array of abcissae
+                 'p' = embedding order
+      Bi     = Butcher table dictionary for DIRK method (same fields as Be)
       rtol   = desired relative error of solution  (scalar)
       atol   = desired absolute error of solution  (vector or scalar)
       hmin   = minimum internal time step size (hmin <= t(i)-t(i-1), for all i)
@@ -59,7 +64,7 @@ def solve(fe,fi,Ji,tvals,Y0,Be,Bi,rtol,atol,hmin,hmax,nn,p_phi,mu):
    # number of stages
    s = Be['A'].shape[0]
 
-   if Be['p'] != Bi['p']:
+   if Be['q'] != Bi['q']:
       print('ark.solve error: Be and Bi must have the same method order')
 
    # extract ERK method information from Be
@@ -83,10 +88,10 @@ def solve(fe,fi,Ji,tvals,Y0,Be,Bi,rtol,atol,hmin,hmax,nn,p_phi,mu):
    # check whether adaptivity is desired
    adaptive = (abs(hmax-hmin)/abs(hmax) > math.sqrt(eps))
 
-   if adaptive is True:
+   if adaptive:
       de = Be['b2']
       di = Bi['b2']
-      if not numpy.array_equal(de,di):
+      if (Be['p'] != Bi['p']):
          print('solve_ARK error: Be and Bi must have the same embedding order')
 
    # initialize outputs
@@ -124,7 +129,7 @@ def solve(fe,fi,Ji,tvals,Y0,Be,Bi,rtol,atol,hmin,hmax,nn,p_phi,mu):
    nsteps = 0
 
    # iterate over output time steps
-   for tstep in range(len(tvals)):
+   for tstep in range(1,len(tvals)):
 
       # loop over internal time steps to get to desired output time
       while (t < tvals[tstep]*ONEMSM):
@@ -146,34 +151,36 @@ def solve(fe,fi,Ji,tvals,Y0,Be,Bi,rtol,atol,hmin,hmax,nn,p_phi,mu):
             # set 'time' for current [implicit] stage
             tcur = t + h*ci[stage]
 
-            # compute implicit RHS using known data:
-            #     zi = y_n + h*sum_{j=1}^i (Ai(i,j)*fI_j) + h*sum_{j=1}^{i-1} (Ae(i,j)*fE_j)
-            #  <=>
-            #     zi - h*(a(i,i)*fi) = y_n + h*sum_{j=1}^{i-1} (Ai(i,j)*fI_j + Ae(i,j)*fE_j)
-            #  =>
-            #     rhs = y_n + h*sum_{j=1}^{i-1} (Ai(i,j)*fI_j + Ae(i,j)*fE_j)
-            rhs = Y0
-            for j in range(stage-1):
-               rhs += h*( Ae[stage,j]*ke[:,j] + Ai[stage,j]*ki[:,j])
-
-
-            # solve implicit linear system for new stage solution,
-            #    A*z = rhs
+            # perform single Newton update for implicit solve of new stage solution,
+            # with initial Newton guess = y_n:
+            #     zi = Y0 - A^{-1}*Res(Y0),
             # where
-            #    A = I - h*AI(i,i)*Ji
-            #    Ji = \frac{\partial}{\partial Y} fi(tcur,Y0)
-            # to a tolerance || A*z - rhs ||_wrms <= lin_tol.
-            #
-            # set a flag 'lierr' to equal 0 if this solve succeeded, or 1 otherwise
-            matvec_gmres = lambda vec: I_minus_tauJ_imp(vec, h*Ai[stage,stage], nn, Ji)
-            z, gmres_error, nb_gmres_iter, lierr = linsol.gmres_mgs(matvec_gmres, rhs, tol=lin_tol)
+            #     Res(z) = z - h*AI(i,i)*fi(z) - Y0 - h*sum_{j=1}^{i-1} (Ai_{i,j}*fI_j + Ae_{i,j}*fE_j),
+            #     A = I - h*AI(i,i)*Ji
+            # Simplifying:
+            #     zi = Y0 + A^{-1}*rhs, where
+            #     rhs = h*[AI(i,i)*fi(Y0) + sum_{j=1}^{i-1} (Ai_{i,j}*fI_j + Ae_{i,j}*fE_j)]
+            rhs = h*Ai[stage,stage]*fi(tcur,Y0)
+            for j in range(stage):
+               rhs += h*( Ae[stage,j]*ke[:,j] + Ai[stage,j]*ki[:,j] )
 
-            # if linear solver failed to converge, set relevant flags/statistics
-            # and break out of stage loop
-            if (lierr != 0):
-               st_fail = 1
-               break
+            # if stage requires a solve, then do that here, and set a flag 'lierr'
+            # to equal 0 if this solve succeeded, or 1 otherwise
+            if (numpy.abs(Ai[stage,stage]) > 1.e-14):
+               matvec_gmres = lambda vec: I_minus_tauJ_imp(vec, h*Ai[stage,stage], nn, Ji)
+               dz, gmres_error, nb_gmres_iter, lierr = linsol.gmres_mgs(matvec_gmres, rhs, tol=lin_tol)
 
+               # if linear solver failed to converge, set relevant flags/statistics
+               # and break out of stage loop
+               if (lierr != 0):
+                  st_fail = 1
+                  break
+            else:
+               dz = rhs
+
+            # construct stage solution
+            z = Y0 + dz
+               
             # store implicit and explicit RHS at current stage solution
             ke[:,stage] = fe(z)
             ki[:,stage] = fi(z)
@@ -181,6 +188,12 @@ def solve(fe,fi,Ji,tvals,Y0,Be,Bi,rtol,atol,hmin,hmax,nn,p_phi,mu):
          # increment number of internal time steps taken
          nsteps += 1
 
+         # compute new solution and embedding
+         Ynew = Y0.copy()
+         Yerr = numpy.zeros(m, dtype=float)
+         for j in range(s):
+            Ynew += h*(ke[:,j]*be[j] + ki[:,j]*bi[j])
+            Yerr += h*(ke[:,j]*(be[j]-de[j]) + ki[:,j]*(bi[j]-di[j]))
          # if a stage solve failed
          if (st_fail == 1):
 
@@ -195,12 +208,6 @@ def solve(fe,fi,Ji,tvals,Y0,Be,Bi,rtol,atol,hmin,hmax,nn,p_phi,mu):
 
          # if we made it to this point, then all stage solves succeeded
 
-         # compute new solution and embedding
-         Ynew = Y0
-         Yerr = numpy.zeros(m, dtype=float)
-         for j in range(s):
-            Ynew += h*(ke[:,j]*be[j] + ki[:,j]*bi[j])
-            Yerr += h*(ke[:,j]*(be[j]-de[j]) + ki[:,j]*(de[j]-di[j]))
 
          # estimate error in current step
          local_sum = numpy.sum((Yerr*ewt)**2)/m
@@ -227,10 +234,7 @@ def solve(fe,fi,Ji,tvals,Y0,Be,Bi,rtol,atol,hmin,hmax,nn,p_phi,mu):
 
             # use error estimate to adapt the time step (I-controller)
             h_old = h
-            h = h_safety * h_old * err_step**(-1.0/p)
-
-            # enforce maximum growth rate on step sizes
-            h = min(h_growth*h_old, h)
+            h = min(h_safety * h_old * err_step**(-1.0/p), h_old*h_growth)
 
       # Update the last part of Ynew using analytical formula
       for k in range(p_phi-1):
