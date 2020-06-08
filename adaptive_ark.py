@@ -229,7 +229,7 @@ def solve(fe,fi,Ji,tvals,Y0,Be,Bi,rtol,atol,hmin,hmax,nn,p_phi,mu):
          else:
 
             # update solution and time for last successful step
-            Y0 = Ynew
+            Y0 = Ynew.copy()
             t += h
 
             # use error estimate to adapt the time step (I-controller)
