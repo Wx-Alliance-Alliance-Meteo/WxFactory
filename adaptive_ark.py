@@ -120,7 +120,7 @@ def solve(fe,fi,Ji,tvals,Y0,Be,Bi,rtol,atol,hmin,hmax,nn,p_phi,mu):
    z  = numpy.zeros(m, dtype=float)
    ki = numpy.zeros((m,s), dtype=float)
    ke = numpy.zeros((m,s), dtype=float)
-   Ynew = Y0.copy() # TODO : requis ???
+   Ynew = Y0.copy()
 
    # set initial time step size
    h = hmin
@@ -160,7 +160,7 @@ def solve(fe,fi,Ji,tvals,Y0,Be,Bi,rtol,atol,hmin,hmax,nn,p_phi,mu):
             # Simplifying:
             #     zi = Y0 + A^{-1}*rhs, where
             #     rhs = h*[AI(i,i)*fi(Y0) + sum_{j=1}^{i-1} (Ai_{i,j}*fI_j + Ae_{i,j}*fE_j)]
-            rhs = h*Ai[stage,stage]*fi(tcur,Y0)
+            rhs = h*Ai[stage,stage]*fi(Y0)
             for j in range(stage):
                rhs += h*( Ae[stage,j]*ke[:,j] + Ai[stage,j]*ki[:,j] )
 
