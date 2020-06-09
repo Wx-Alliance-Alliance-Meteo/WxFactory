@@ -123,4 +123,5 @@ def output_netcdf(Q, geom, topo, step, param):
 
 def output_finalize():
    """ Finalise the output netCDF4 file."""
-   ncfile.close()
+   if mpi4py.MPI.COMM_WORLD.Get_rank() == 0:
+      ncfile.close()
