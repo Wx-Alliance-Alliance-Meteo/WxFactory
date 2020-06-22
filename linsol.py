@@ -60,7 +60,6 @@ def gmres_mgs(A, b, x0=None, tol=1e-5, restart=20, maxiter=None, M=None, callbac
          for k in range(inner+1):
             local_sum[0] = V[k, :] @ V[inner+1, :]
             H[k, inner] = mpi4py.MPI.COMM_WORLD.allreduce(local_sum)
-#            H[k, inner] = dot(V[k, :], V[inner+1, :])
             V[inner+1, :] = axpy(V[k, :], V[inner+1, :], n, -H[k, inner])
 
          normv = norm(V[inner+1, :])
@@ -70,7 +69,6 @@ def gmres_mgs(A, b, x0=None, tol=1e-5, restart=20, maxiter=None, M=None, callbac
             for k in range(inner+1):
                local_sum[0] = V[k, :] @ V[inner+1, :]
                corr = mpi4py.MPI.COMM_WORLD.allreduce(local_sum)
-#               corr = dot(V[k, :], V[inner+1, :])
                H[k, inner] = H[k, inner] + corr
                V[inner+1, :] = axpy(V[k, :], V[inner+1, :], n, -corr)
 
