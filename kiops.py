@@ -311,7 +311,7 @@ def kiops(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 2,
             for k in range(blownTs):
                τPhantom = τ_out[l+k] - τ_now
                F2 = scipy.linalg.expm(sgn * τPhantom * H[0:j, :j])
-               w[l+k, :] = β * V[:j, :n] @ F2[:j, 0]
+               w[l+k, :] = β * F2[:j, 0] @ V[:j, :n]
 
             # Advance l.
             l += blownTs
