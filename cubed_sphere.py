@@ -236,44 +236,7 @@ class cubed_sphere:
 
       self.cube_face = cube_face
 
-      if cube_face == 0:
-         self.coslon = 1.0 / numpy.sqrt( 1.0 + X**2 )
-         self.sinlon = X / numpy.sqrt( 1.0 + X**2 )
-
-         self.coslat = numpy.sqrt( (1.0 + X**2) / delta2 )
-         self.sinlat = Y / delta
-
-      elif cube_face == 1:
-         self.coslon = -X / numpy.sqrt( 1.0 + X**2 )
-         self.sinlon = 1.0 / numpy.sqrt( 1.0 + X**2 )
-
-         self.coslat = numpy.sqrt( (1.0 + X**2) / delta2 )
-         self.sinlat = Y / delta
-
-      elif cube_face == 2:
-         self.coslon = -1.0 / numpy.sqrt( 1.0 + X**2 )
-         self.sinlon = -X / numpy.sqrt( 1.0 + X**2 )
-
-         self.coslat = numpy.sqrt( (1.0 + X**2) / delta2 )
-         self.sinlat = Y / delta
-
-      elif cube_face == 3:
-         self.coslon = X / numpy.sqrt( 1.0 + X**2 )
-         self.sinlon = -1.0 / numpy.sqrt( 1.0 + X**2 )
-
-         self.coslat = numpy.sqrt( (1.0 + X**2) / delta2 )
-         self.sinlat = Y / delta
-
-      elif cube_face == 4:
-         self.coslon = -Y / numpy.sqrt( X**2 + Y**2 )
-         self.sinlon = X / numpy.sqrt( X**2 + Y**2 )
-
-         self.coslat = numpy.sqrt( (X**2 + Y**2) / delta2 )
-         self.sinlat = 1.0 / delta
-
-      elif cube_face == 5:
-         self.coslon = Y / numpy.sqrt( X**2 + Y**2 )
-         self.sinlon = X / numpy.sqrt( X**2 + Y**2 )
-
-         self.coslat = numpy.sqrt( (X**2 + Y**2) / delta2 )
-         self.sinlat = -1.0 / delta
+      self.coslon = numpy.cos(lon)
+      self.sinlon = numpy.sin(lon)
+      self.coslat = numpy.cos(lat)
+      self.sinlat = numpy.sin(lat)
