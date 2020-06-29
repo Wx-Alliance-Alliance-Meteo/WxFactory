@@ -214,6 +214,12 @@ class cubed_sphere:
       self.Δx2 = Δx2
       self.X = X
       self.Y = Y
+      self.delta2 = delta2
+      self.delta = delta
+      self.delta2_itf_i = delta2_itf_i
+      self.delta_itf_i  = delta_itf_i
+      self.delta2_itf_j = delta2_itf_j
+      self.delta_itf_j  = delta_itf_j
       self.cartX = cartX
       self.cartY = cartY
       self.cartZ = cartZ
