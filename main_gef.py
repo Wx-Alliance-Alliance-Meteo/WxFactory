@@ -32,7 +32,7 @@ def main():
    comm_dist_graph, my_cube_face = create_ptopo()
 
    # Create the mesh
-   geom = cubed_sphere(param.nb_elements, param.nbsolpts, my_cube_face)
+   geom = cubed_sphere(param.nb_elements, param.nbsolpts, param.λ0, param.ϕ0, param.α0, my_cube_face)
 
    # Build differentiation matrice and boundary correction
    mtrx = DFR_operators(geom)
@@ -48,8 +48,7 @@ def main():
       output_netcdf(Q, geom, topo, step, param)  # store initial conditions
 
    # Time stepping
-   rhs_handle = lambda q: rhs_sw(q, geom, mtrx, metric, topo, comm_dist_graph, param.nbsolpts, param.nb_elements, \
-         param.α, param.case_number)
+   rhs_handle = lambda q: rhs_sw(q, geom, mtrx, metric, topo, comm_dist_graph, param.nbsolpts, param.nb_elements, param.case_number)
 
    if param.time_integrator.lower()[:3] == 'epi' and param.time_integrator[3:].isdigit():
       order = int(param.time_integrator[3:])

@@ -21,19 +21,19 @@ def sph2cart(az, elev, radius):
 
 def cart2sph(x,y,z):
    """ CART2SPH Transform Cartesian to spherical coordinates.
-      [TH,PHI,R] = CART2SPH(X,Y,Z) transforms corresponding elements of
+      az,elev,r = CART2SPH(X,Y,Z) transforms corresponding elements of
       data stored in Cartesian coordinates X,Y,Z to spherical
-      coordinates (azimuth TH, elevation PHI, and radius R).  The arrays
+      coordinates (azimuth, elevation, and radius).  The arrays
       X,Y, and Z must be the same size (or any of them can be scalar).
-      TH and PHI are returned in radians.
+      az and elev are returned in radians.
 
-      TH is the counterclockwise angle in the xy plane measured from the
-      positive x axis.  PHI is the elevation angle from the xy plane.
+      az is the counterclockwise angle in the xy plane measured from the
+      positive x axis.  elev is the elevation angle from the xy plane.
    """
 
    hypotxy = numpy.hypot(x, y)
    r       = numpy.hypot(hypotxy, z)
-   elev    = numpy.arctan(z, hypotxy)
+   elev    = numpy.arctan2(z, hypotxy)
    az      = numpy.arctan2(y, x)
 
    return az, elev, r
