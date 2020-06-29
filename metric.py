@@ -1,4 +1,5 @@
 import numpy
+import math
 
 from definitions import earth_radius, rotation_speed
 
@@ -43,45 +44,19 @@ class Metric:
 
       # Christoffel symbols
 
-      if geom.cube_face <= 3:
-         self.christoffel_1_01 = rotation_speed * geom.X * geom.Y**2 / delta2
-         self.christoffel_1_02 =-rotation_speed * (geom.Y + geom.Y**3) / delta2
+      gridrot = math.sin(geom.lat_p) - geom.X * math.cos(geom.lat_p) * math.sin(geom.angle_p) + geom.Y * math.cos(geom.lat_p) * math.cos(geom.angle_p)
 
-         self.christoffel_1_10 = self.christoffel_1_01
-         self.christoffel_1_20 = self.christoffel_1_02
+      self.christoffel_1_01 = rotation_speed * geom.X * geom.Y / delta2 * gridrot
+      self.christoffel_1_10 = self.christoffel_1_01
 
-         self.christoffel_2_01 = rotation_speed * geom.Y * (1.0 + geom.X**2) / delta2
-         self.christoffel_2_02 =-rotation_speed * geom.X * geom.Y**2 / delta2
+      self.christoffel_1_02 = -rotation_speed * (1.0 + geom.Y**2) / delta2 * gridrot
+      self.christoffel_1_20 = self.christoffel_1_02
 
-         self.christoffel_2_10 = self.christoffel_2_01
-         self.christoffel_2_20 = self.christoffel_2_02
-
-      elif geom.cube_face == 4:
-         self.christoffel_1_01 = rotation_speed * geom.X * geom.Y / delta2
-         self.christoffel_1_02 =-rotation_speed * (1.0 + geom.Y**2) / delta2
-
-         self.christoffel_1_10 = self.christoffel_1_01
-         self.christoffel_1_20 = self.christoffel_1_02
-
-         self.christoffel_2_01 = rotation_speed * (1.0 + geom.X**2) / delta2
-         self.christoffel_2_02 =-rotation_speed * geom.X * geom.Y / delta2
-
-         self.christoffel_2_10 = self.christoffel_2_01
-         self.christoffel_2_20 = self.christoffel_2_02
-
-      elif geom.cube_face == 5:
-         self.christoffel_1_01 =-rotation_speed * geom.X * geom.Y / delta2
-         self.christoffel_1_02 = rotation_speed * (1.0 + geom.Y**2) / delta2
-
-         self.christoffel_1_10 = self.christoffel_1_01
-         self.christoffel_1_20 = self.christoffel_1_02
-
-         self.christoffel_2_01 =-rotation_speed * (1.0 + geom.X**2) / delta2
-         self.christoffel_2_02 = rotation_speed * geom.X * geom.Y / delta2
-
-         self.christoffel_2_10 = self.christoffel_2_01
-         self.christoffel_2_20 = self.christoffel_2_02
-
+      self.christoffel_2_01 = rotation_speed * (1.0 + geom.X**2) / delta2 * gridrot
+      self.christoffel_2_10 = self.christoffel_2_01
+      
+      self.christoffel_2_02 =-rotation_speed * geom.X * geom.Y / delta2 * gridrot
+      self.christoffel_2_20 = self.christoffel_2_02
 
       self.christoffel_1_11 = 2 * geom.X * geom.Y**2 / delta2
       self.christoffel_1_12 = - (geom.Y + geom.Y**3) / delta2
