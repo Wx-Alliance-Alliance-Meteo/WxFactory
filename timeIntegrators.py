@@ -1,5 +1,6 @@
 import numpy
 import math
+from collections import deque
 
 from matvec import matvec_fun, matvec_rat
 from kiops  import kiops
@@ -103,8 +104,8 @@ class Epi:
 
       k, self.n_prev = self.A.shape
       self.max_phi = k+1
-      self.previous_Q = []
-      self.previous_rhs = []
+      self.previous_Q = deque()
+      self.previous_rhs = deque()
       self.dt = 0.0
 
       if init_method or self.n_prev == 0:
@@ -119,14 +120,14 @@ class Epi:
    def step(self, Q, dt):
       # If dt changes, discard saved value and redo initialization
       if self.dt and abs(self.dt - dt) > 1e-10:
-         self.previous_Q = []
-         self.previous_rhs = []
+         self.previous_Q = deque()
+         self.previous_rhs = deque()
       self.dt = dt
 
       # Initialize saved values using init_step method
       if len(self.previous_Q) < self.n_prev:
-         self.previous_Q.append(Q)
-         self.previous_rhs.append(self.rhs(Q))
+         self.previous_Q.appendleft(Q)
+         self.previous_rhs.appendleft(self.rhs(Q))
 
          dt /= self.init_substeps
          for i in range(self.init_substeps):
@@ -159,10 +160,10 @@ class Epi:
 
       # Save values for the next timestep
       if self.n_prev > 0:
-         self.previous_Q[1:] = self.previous_Q[:-1]
-         self.previous_Q[0] = Q
-         self.previous_rhs[1:] = self.previous_rhs[:-1]
-         self.previous_rhs[0] = rhs
+         self.previous_Q.pop()
+         self.previous_Q.appendleft(Q)
+         self.previous_rhs.pop()
+         self.previous_rhs.appendleft(rhs)
 
       # Update solution
       return Q + numpy.reshape(phiv, Q.shape) * dt
