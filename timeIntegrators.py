@@ -90,8 +90,9 @@ class Epi:
          ])
       elif order == 5:
          self.A = numpy.array([
-            [-19/20, 2/5, -13/180],
-            [66/5, -9/2, 34/45]
+            [-4/5, 2/5, -4/45],
+            [12, -9/2, 8/9],
+            [3, 0, -1/3]
          ])
       elif order == 6:
          self.A = numpy.array([
