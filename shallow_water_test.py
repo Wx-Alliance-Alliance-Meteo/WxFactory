@@ -24,31 +24,12 @@ def eval_u_prime(lat):
 def solid_body_rotation(geom, metric, param):
    if param.case_number == 5:
       u0 = 20.0
-      sinα = 0
-      cosα = 1
    else:
       u0 = 2.0 * math.pi * earth_radius / (12.0 * day_in_secs)
-      sinα = math.sin(param.Williamson_angle)
-      cosα = math.cos(param.Williamson_angle)
 
-   if geom.cube_face == 0:
-      u1 = u0 / earth_radius * (cosα + geom.Y / (1.0 + geom.X**2) * sinα)
-      u2 = u0 * geom.X / (earth_radius * (1.0 + geom.Y**2)) * (geom.Y * cosα - sinα)
-   elif geom.cube_face == 1:
-      u1 = u0 / earth_radius * (cosα - geom.X * geom.Y / (1.0 + geom.X**2) * sinα)
-      u2 = u0 / earth_radius * (geom.X * geom.Y / (1.0 + geom.Y**2) * cosα - sinα)
-   elif geom.cube_face == 2:
-      u1 = u0 / earth_radius * (cosα - geom.Y / (1.0 + geom.X**2) * sinα)
-      u2 = u0 * geom.X / (earth_radius * (1.0 + geom.Y**2)) * (geom.Y * cosα + sinα)
-   elif geom.cube_face == 3:
-      u1 = u0 / earth_radius * (cosα + geom.X * geom.Y / (1.0 + geom.X**2) * sinα)
-      u2 = u0 / earth_radius * (geom.X * geom.Y / (1.0 + geom.Y**2) * cosα + sinα)
-   elif geom.cube_face == 4:
-      u1 = u0 / earth_radius * (- geom.Y / (1.0 + geom.X**2) * cosα + sinα)
-      u2 = u0 * geom.X / (earth_radius * (1.0 + geom.Y**2)) * (cosα + geom.Y * sinα)
-   elif geom.cube_face == 5:
-      u1 = u0 / earth_radius * (geom.Y / (1.0 + geom.X**2) * cosα - sinα)
-      u2 =-u0 * geom.X / (earth_radius * (1.0 + geom.Y**2)) * (cosα + geom.Y * sinα)
+   u = u0 * geom.coslat
+   v = 0.0
+   u1, u2 = wind2contra(u, v, geom)
 
    return u1, u2
 
@@ -74,7 +55,7 @@ def circular_vortex(geom, metric, param):
 
    rho = rho_0 * numpy.cos(latR)
 
-   Vt  = V0 * (3.0/2.0 * math.sqrt(3)) * (1.0 / numpy.cosh(rho))**2 * numpy.tanh(rho)
+   Vt  = V0 * (3.0/2.0 * math.sqrt(3.0)) * (1.0 / numpy.cosh(rho))**2 * numpy.tanh(rho)
 
    Omega = numpy.zeros_like(geom.lat)
 
@@ -122,21 +103,13 @@ def williamson_case2(geom, metric, param):
    print("Steady state nonlinear geostrophic flow     ")
    print("--------------------------------------------")
 
-   if abs(param.Williamson_angle) > 0.0:
-      print("param.Williamson_angle != 0 not yet implemented for case 2")
-      exit(0)
-
    u1, u2 = solid_body_rotation(geom, metric, param)
 
    # Global Steady State Nonlinear Zonal Geostrophic Flow
    gh0 = 29400.0
    u0 = 2.0 * math.pi * earth_radius / (12.0 * day_in_secs)
 
-   sinα = math.sin(param.Williamson_angle)
-   cosα = math.cos(param.Williamson_angle)
-
-   h = (gh0 - (earth_radius * rotation_speed * u0 + (0.5 * u0**2)) \
-     * (-geom.coslon * geom.coslat * sinα + geom.sinlat * cosα)**2) / gravity
+   h = ( gh0 - (earth_radius * rotation_speed * u0 + (0.5 * u0**2)) * geom.sinlat**2 ) / gravity
 
    h_analytic = h
 
