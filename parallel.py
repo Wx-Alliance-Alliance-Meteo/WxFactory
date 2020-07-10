@@ -117,8 +117,6 @@ def xchange_vectors(comm_dist_graph, geom, u1_itf_i, u2_itf_i, u1_itf_j, u2_itf_
 
    X = geom.X[0,:]
    Y = geom.Y[:,0]
-   X_flip = numpy.flipud(X)
-   Y_flip = numpy.flipud(Y)
 
    if geom.cube_face == 0:
       # neighbors = [4, 5, 3, 1]
@@ -175,10 +173,10 @@ def xchange_vectors(comm_dist_graph, geom, u1_itf_i, u2_itf_i, u1_itf_j, u2_itf_
    elif geom.cube_face == 4:
       # neighbors = [2, 0, 3, 1]
 
-      sendbuf_u1 = [ numpy.flipud( -u1_itf_j[-2, 1, :] - 2 * X_flip / ( 1 + X_flip**2 ) * u2_itf_j[-2, 1, :] ), \
+      sendbuf_u1 = [ numpy.flipud( -u1_itf_j[-2, 1, :] + 2 * X / ( 1 + X**2 ) * u2_itf_j[-2, 1, :] ), \
                      u1_itf_j[1, 0, :] + 2 * X / ( 1 + X**2) * u2_itf_j[1, 0, :], \
-                     numpy.flipud( 2 * X_flip / ( 1 + X_flip**2 ) * u1_itf_i[1, 0, :] - u2_itf_i[1, 0, :] ), \
-                     u1_itf_j[1, 0, :] + 2 * X / ( 1 + X**2) * u2_itf_j[1, 0, :] ]
+                     numpy.flipud( -2 * Y / ( 1 + Y**2 ) * u1_itf_i[1, 0, :] - u2_itf_i[1, 0, :] ), \
+                     -2 * Y / ( 1 + Y**2) * u1_itf_i[-2, 1, :] + u2_itf_i[-2, 1, :] ]
 
       sendbuf_u2 = [ numpy.flipud( -u2_itf_j[-2, 1, :] ), \
                      u2_itf_j[1, 0, :], \
@@ -190,9 +188,9 @@ def xchange_vectors(comm_dist_graph, geom, u1_itf_i, u2_itf_i, u1_itf_j, u2_itf_
       # neighbors = [0, 2, 3, 1]
 
       sendbuf_u1 = [ u1_itf_j[-2, 1, :] - 2 * X / ( 1 + X**2) * u2_itf_j[-2, 1, :], \
-                     numpy.flipud( -u1_itf_j[1, 0, :] + 2 * X_flip / ( 1 + X_flip**2 ) * u2_itf_j[1, 0, :] ), \
-                     2 * X / ( 1 + X**2 ) * u1_itf_i[1, 0, :] + u2_itf_i[1, 0, :], \
-                     numpy.flipud( -2 * X_flip / ( 1 + X_flip**2 ) * u1_itf_i[-2, 1, :] - u2_itf_i[-2, 1, :] ) ]
+                     numpy.flipud( -u1_itf_j[1, 0, :] - 2 * X / ( 1 + X**2 ) * u2_itf_j[1, 0, :] ), \
+                     2 * Y / ( 1 + Y**2 ) * u1_itf_i[1, 0, :] + u2_itf_i[1, 0, :], \
+                     numpy.flipud( 2 * Y / ( 1 + Y**2 ) * u1_itf_i[-2, 1, :] - u2_itf_i[-2, 1, :] ) ]
 
       sendbuf_u2 = [ u2_itf_j[-2, 1, :], \
                      numpy.flipud( -u2_itf_j[1, 0, :] ), \
