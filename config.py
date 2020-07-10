@@ -14,6 +14,7 @@ class Configuration:
       
       if self.case_number == 9:
          self.matsuno_wave_type = parser.get('Test_case', 'matsuno_wave_type')
+         self.matsuno_amp = parser.getfloat('Test_case', 'matsuno_amp')
 
       self.dt               = parser.getfloat('Time_integration', 'dt')
       self.t_end            = parser.getint('Time_integration', 't_end')

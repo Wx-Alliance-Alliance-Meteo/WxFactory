@@ -292,9 +292,9 @@ def case_matsuno(geom, metric, param):
 
    for i in range(ni):
       for j in range(nj):
-         h[i, j] = matsuno.eval_field(geom.lat[i,j], geom.lon[i,j], 0., field='phi', wave_type=param.matsuno_wave_type) / gravity
-         u[i, j] = matsuno.eval_field(geom.lat[i,j], geom.lon[i,j], 0., field='u', wave_type=param.matsuno_wave_type)
-         v[i, j] = matsuno.eval_field(geom.lat[i,j], geom.lon[i,j], 0., field='v', wave_type=param.matsuno_wave_type)
+         h[i, j] = matsuno.eval_field(geom.lat[i,j], geom.lon[i,j], 0., amp=param.matsuno_amp, field='phi', wave_type=param.matsuno_wave_type) / gravity
+         u[i, j] = matsuno.eval_field(geom.lat[i,j], geom.lon[i,j], 0., amp=param.matsuno_amp, field='u',   wave_type=param.matsuno_wave_type)
+         v[i, j] = matsuno.eval_field(geom.lat[i,j], geom.lon[i,j], 0., amp=param.matsuno_amp, field='v',   wave_type=param.matsuno_wave_type)
 
          h_analytic[i, j] = matsuno.eval_field(geom.lat[i,j], geom.lon[i,j], param.t_end, field='phi', wave_type=param.matsuno_wave_type) / gravity
 
