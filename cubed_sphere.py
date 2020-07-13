@@ -155,9 +155,6 @@ class cubed_sphere:
       # Spherical coordinates
       lon, lat, _ = sphere.cart2sph(cartX, cartY, cartZ)
 
-      # Map to the interval [0, 2 pi]
-      lon[lon<0.0] = lon[lon<0.0] + (2.0 * math.pi)
-
       # Cartesian and spherical coordinates for interfaces
 
       cartX_itf_i = 1.0 / delta_itf_i * ( math.cos(lon_p) * math.cos(lat_p) \
@@ -171,10 +168,6 @@ class cubed_sphere:
       cartZ_itf_i = 1.0 / delta_itf_i * ( math.sin(lat_p) - X_itf_i * math.cos(lat_p) * math.sin(angle_p) + Y_itf_i * math.cos(lat_p) * math.cos(angle_p) )
 
       lon_itf_i, lat_itf_i, _ = sphere.cart2sph(cartX_itf_i, cartY_itf_i, cartZ_itf_i)
-
-      # Map to the interval [0, 2 pi]
-
-      lon_itf_i[lon_itf_i<0.0] = lon_itf_i[lon_itf_i<0.0] + (2.0 * math.pi)
 
       cartX_itf_j = 1.0 / delta_itf_j * ( math.cos(lon_p) * math.cos(lat_p) \
             + X_itf_j * ( math.cos(lon_p) * math.sin(lat_p) * math.sin(angle_p) - math.sin(lon_p) * math.cos(angle_p) ) \
