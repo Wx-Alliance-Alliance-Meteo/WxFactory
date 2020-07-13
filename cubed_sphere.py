@@ -99,7 +99,7 @@ class cubed_sphere:
          angle_p = α0
 
       elif cube_face == 1:
-         lon_p = abs(math.atan2(s1*s2*s3+c1*c3, c1*s2*s3-s1*c3))
+         lon_p = math.atan2(s1*s2*s3+c1*c3, c1*s2*s3-s1*c3)
          lat_p = -math.asin(c2*s3)
          angle_p = math.atan(s2/c2/c3)
 
@@ -109,7 +109,7 @@ class cubed_sphere:
          angle_p = -α0
 
       elif cube_face == 3:
-         lon_p = abs(math.atan2(s1*s2*s3+c1*c3, c1*s2*s3-s1*c3)) + math.pi
+         lon_p = math.atan2(s1*s2*s3+c1*c3, c1*s2*s3-s1*c3) + math.pi
          lat_p = math.asin(c2*s3)
          angle_p = -math.atan(s2/c2/c3)
 
