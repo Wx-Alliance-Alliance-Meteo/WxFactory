@@ -97,6 +97,8 @@ def main():
    if param.output_freq > 0:
       output_finalize()
 
+#   import graphx
+#   graphx.plot_field(geom, Q[0,:,:] + topo.hsurf)
 
 if __name__ == '__main__':
    numpy.set_printoptions(suppress=True, linewidth=256)

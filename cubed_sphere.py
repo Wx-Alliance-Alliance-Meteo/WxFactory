@@ -101,17 +101,17 @@ class cubed_sphere:
       elif cube_face == 1:
          lon_p = math.atan2(s1*s2*s3+c1*c3, c1*s2*s3-s1*c3)
          lat_p = -math.asin(c2*s3)
-         angle_p = math.atan(s2/c2/c3)
+         angle_p = -math.atan2(-s2, c2*c3)
 
       elif cube_face == 2:
-         lon_p = λ0 + math.pi
+         lon_p = math.atan2(-s1, -c1)
          lat_p = -ϕ0
-         angle_p = -α0
+         angle_p = -math.atan2(s3, c3)
 
       elif cube_face == 3:
-         lon_p = math.atan2(s1*s2*s3+c1*c3, c1*s2*s3-s1*c3) + math.pi
+         lon_p = math.atan2(-s1*s2*s3-c1*c3, -c1*s2*s3+s1*c3)
          lat_p = math.asin(c2*s3)
-         angle_p = -math.atan(s2/c2/c3)
+         angle_p = -math.atan2(s2, c2*c3)
 
       elif cube_face == 4:
          if (abs(ϕ0) < 1e-13) and (abs(α0) < 1e-13):
@@ -119,12 +119,9 @@ class cubed_sphere:
             lat_p = math.pi / 2.0
             angle_p = -λ0
          else:
-            lon_p = math.atan2(s1*s2*c3-c1*s3, c1*s2*c3+s1*s3)
+            lon_p = math.atan2(-s1*s2*c3+c1*s3, -c1*s2*c3-s1*s3)
             lat_p = math.asin(c2*c3)
-            angle_p = -math.atan2(c2*s3, s2)
-            if s2 > -1e-13:
-               lon_p += math.pi
-               angle_p += math.pi
+            angle_p = -math.atan2(-c2*s3, -s2)
 
       elif cube_face == 5:
          if (abs(ϕ0)<1e-13) and (abs(α0)<1e-13):
@@ -132,13 +129,9 @@ class cubed_sphere:
             lat_p = -math.pi/2.0
             angle_p = λ0
          else:
-            lon_p = math.atan2(s1*s2*c3-c1*s3, c1*s2*c3+s1*s3) - math.pi
-            if s2 > -1e-13:
-               lon_p += math.pi
+            lon_p = math.atan2(s1*s2*c3-c1*s3, c1*s2*c3+s1*s3)
             lat_p = -math.asin(c2*c3)
-            angle_p = math.atan2(c2*s3, s2)
-            if s2<-1e-13:
-               angle_p += math.pi
+            angle_p = -math.atan2(-c2*s3, s2)
 
       # Cartesian coordinates on unit sphere
 
