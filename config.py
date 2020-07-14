@@ -12,13 +12,9 @@ class Configuration:
 
       self.case_number      = parser.getint('Test_case', 'case_number')
       
-      try:
-         self.Williamson_angle = parser.getfloat('Test_case', 'Williamson_angle')
-      except (NoSectionError, NoOptionError):
-         self.Williamson_angle = 0.
-      
       if self.case_number == 9:
          self.matsuno_wave_type = parser.get('Test_case', 'matsuno_wave_type')
+         self.matsuno_amp = parser.getfloat('Test_case', 'matsuno_amp')
 
       self.dt               = parser.getfloat('Time_integration', 'dt')
       self.t_end            = parser.getint('Time_integration', 't_end')
@@ -27,9 +23,19 @@ class Configuration:
       self.tolerance        = parser.getfloat('Time_integration', 'tolerance')
 
       try:
-         self.α                = parser.getfloat('Spatial_discretization', 'α')
-      except (NoOptionError):
-         self.α                = 0.0
+         self.λ0 = parser.getfloat('Grid', 'λ0')
+      except (NoOptionError,NoSectionError):
+         self.λ0 = 0.0
+
+      try:
+         self.ϕ0 = parser.getfloat('Grid', 'ϕ0')
+      except (NoOptionError,NoSectionError):
+         self.ϕ0 = 0.0
+
+      try:
+         self.α0 = parser.getfloat('Grid', 'α0')
+      except (NoOptionError,NoSectionError):
+         self.α0 = 0.0
 
       self.nbsolpts         = parser.getint('Spatial_discretization', 'nbsolpts')
       self.nb_elements      = parser.getint('Spatial_discretization', 'nb_elements')
