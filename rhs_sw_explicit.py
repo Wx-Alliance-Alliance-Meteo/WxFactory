@@ -3,7 +3,7 @@ import numpy
 from definitions import idx_h, idx_hu1, idx_hu2, idx_u1, idx_u2, gravity
 from parallel import xchange_scalars, xchange_vectors
 
-def rhs_sw_explicit(Q, geom, mtrx, metric, topo, comm_dist_graph, nbsolpts, nb_elements_horiz, α, case_number):
+def rhs_sw_explicit(Q, geom, mtrx, metric, topo, comm_dist_graph, nbsolpts, nb_elements_horiz, case_number):
 
    type_vec = type(Q[0, 0, 0])
 

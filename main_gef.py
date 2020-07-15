@@ -15,7 +15,9 @@ from metric          import Metric
 from output          import output_init, output_netcdf, output_finalize
 from parallel        import create_ptopo
 from rhs_sw          import rhs_sw
-from timeIntegrators import Epi, Epirk4s3a, Tvdrk3, Rat2
+from rhs_sw_explicit import rhs_sw_explicit
+from rhs_sw_implicit import rhs_sw_implicit
+from timeIntegrators import Epi, Epirk4s3a, Tvdrk3, Rat2, ARK_epi2
 
 def main():
    if len(sys.argv) == 1:
@@ -60,6 +62,12 @@ def main():
       stepper = Tvdrk3(rhs_handle)
    elif param.time_integrator.lower() == 'rat2':
       stepper = Rat2(rhs_handle, param.tolerance)
+   elif  param.time_integrator.lower() =='epi2/ark':
+      rhs_explicit = lambda q: rhs_sw_explicit(q, geom, mtrx, metric, topo, comm_dist_graph, param.nbsolpts, param.nb_elements, param.case_number)
+
+      rhs_implicit = lambda q: rhs_sw_implicit(q, geom, mtrx, metric, topo, comm_dist_graph, param.nbsolpts, param.nb_elements, param.case_number)
+
+      stepper = ARK_epi2(rhs_handle, rhs_explicit, rhs_implicit, param.tolerance)
    else:
       raise ValueError(f'Time integration method {param.time_integrator} not supported')
 

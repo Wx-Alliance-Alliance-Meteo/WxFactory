@@ -5,6 +5,7 @@ from collections import deque
 from matvec import matvec_fun, matvec_rat
 from kiops  import kiops
 from linsol import gmres_mgs
+from phi    import phi_ark
 
 class Epirk4s3a:
    g21 = 1/2
@@ -201,3 +202,26 @@ class Rat2:
 
       # Update solution
       return Q + numpy.reshape(phiv, Q.shape) * dt
+
+class ARK_epi2:
+   def __init__(self, rhs, rhs_explicit, rhs_implicit, tol):
+      self.rhs = rhs
+      self.rhs_explicit = rhs_explicit
+      self.rhs_implicit = rhs_implicit
+      self.tol = tol
+
+   def step(self, Q, dt):
+      rhs = self.rhs(Q).flatten()
+
+      J_e = lambda v: matvec_fun(v, dt, Q, self.rhs_explicit)
+      J_i = lambda v: matvec_fun(v, dt, Q, self.rhs_implicit)
+
+      # We only need the second phi function
+      vec = numpy.row_stack((numpy.zeros_like(rhs), rhs))
+
+      phiv = phi_ark([0, 1], J_e, J_i, vec, tol=self.tol, task1=False)
+
+#     print('PHI/ARK converged at iteration %d' % stats)
+
+      # Update solution
+      return Q + numpy.reshape(phiv[:,-1], Q.shape) * dt
