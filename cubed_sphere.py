@@ -22,8 +22,9 @@ class cubed_sphere:
       nb_elements_x2 = nb_elements
 
       # Gauss-Legendre solution points
-      solutionPoints = quadrature.gauss_legendre(nbsolpts)
+      solutionPoints, glweights = quadrature.gauss_legendre(nbsolpts)
       print('Solution points : ', solutionPoints)
+      print('GL weights : ', glweights)
 
       # Extend the solution points to include -1 and 1
       extension = numpy.append(numpy.append([-1], solutionPoints), [1])
@@ -178,6 +179,7 @@ class cubed_sphere:
       lon_itf_j[lon_itf_j<0.0] = lon_itf_j[lon_itf_j<0.0] + (2.0 * math.pi)
 
       self.solutionPoints = solutionPoints
+      self.glweights = glweights
       self.extension = extension
       self.lon_p = lon_p
       self.lat_p = lat_p
