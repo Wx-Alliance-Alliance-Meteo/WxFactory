@@ -133,7 +133,7 @@ def williamson_case5(geom, metric, mtrx, param):
    rr = math.pi / 9.0
 
    # Mountain location
-   lon_mountain = math.pi / 2.0
+   lon_mountain = 3.0 * math.pi / 2.0
    lat_mountain = math.pi / 6.0
 
    r = numpy.sqrt(numpy.minimum(rr**2,(geom.lon-lon_mountain)**2 + (geom.lat-lat_mountain)**2))
