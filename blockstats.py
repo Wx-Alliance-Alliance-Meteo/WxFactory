@@ -1,10 +1,9 @@
 import numpy
+import mpi4py.MPI
 
 from definitions import *
 
 def blockstats(Q, step, case_number):
-
-   # TODO: les stats devraient être globals (MPI)
 
    h  = Q[:,:,0]
    if case_number > 1:
@@ -24,3 +23,12 @@ def blockstats(Q, step, case_number):
       print("v\t\tmean = %e\tmin = %e\tmax = %e\n" % (numpy.mean(vv), numpy.amin(vv), numpy.amax(vv)) )
 
    print("==================================================================================")
+
+def global_integral(field, geom, mtrx, nbsolpts, nb_elements_horiz):
+
+   local_sum = 0.
+   for elem in range(nb_elements_horiz):
+      epais = elem * nbsolpts + numpy.arange(nbsolpts)
+      local_sum += numpy.sum( field[epais,epais] * mtrx.quad_weights )
+
+   return mpi4py.MPI.COMM_WORLD.allreduce(local_sum)

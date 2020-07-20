@@ -16,6 +16,8 @@ class DFR_operators:
       self.diff_solpt_tr = self.diff_solpt.T
       self.correction_tr = self.correction.T
 
+      self.quad_weights = numpy.outer(grd.glweights, grd.glweights)
+
 def lagrangeEval(points, x):
    l = numpy.zeros_like(points)
    for i in range(len(points)):
