@@ -38,6 +38,7 @@ def rhs_sw(Q, geom, mtrx, metric, topo, comm_dist_graph, nbsolpts, nb_elements_h
 
    # Unpack physical variables
    h = Q[idx_h, :, :]
+   hsquared = Q[idx_h, :, :]**2
 
    if shallow_water_equations:
       u1 = Q[idx_hu1,:,:] / h
@@ -50,14 +51,16 @@ def rhs_sw(Q, geom, mtrx, metric, topo, comm_dist_graph, nbsolpts, nb_elements_h
    flux_Eq0_x1 = h * metric.sqrtG * u1
    flux_Eq0_x2 = h * metric.sqrtG * u2
 
-   flux_Eq1_x1 = metric.sqrtG * ( Q[idx_hu1,:,:] * u1 + 0.5 * gravity * metric.H_contra_11 * h**2 )
-   flux_Eq1_x2 = metric.sqrtG * ( Q[idx_hu1,:,:] * u2 + 0.5 * gravity * metric.H_contra_12 * h**2 )
+   flux_Eq1_x1 = metric.sqrtG * ( Q[idx_hu1,:,:] * u1 + 0.5 * gravity * metric.H_contra_11 * hsquared )
+   flux_Eq1_x2 = metric.sqrtG * ( Q[idx_hu1,:,:] * u2 + 0.5 * gravity * metric.H_contra_12 * hsquared )
 
-   flux_Eq2_x1 = metric.sqrtG * ( Q[idx_hu2,:,:] * u1 + 0.5 * gravity * metric.H_contra_21 * h**2 )
-   flux_Eq2_x2 = metric.sqrtG * ( Q[idx_hu2,:,:] * u2 + 0.5 * gravity * metric.H_contra_22 * h**2 )
+   flux_Eq2_x1 = metric.sqrtG * ( Q[idx_hu2,:,:] * u1 + 0.5 * gravity * metric.H_contra_21 * hsquared )
+   flux_Eq2_x2 = metric.sqrtG * ( Q[idx_hu2,:,:] * u2 + 0.5 * gravity * metric.H_contra_22 * hsquared )
 
    # Offset due to the halo
    offset = 1
+
+   HH = h + topo.hsurf
 
    # Interpolate to the element interface
    for elem in range(nb_elements_horiz):
@@ -67,8 +70,8 @@ def rhs_sw(Q, geom, mtrx, metric, topo, comm_dist_graph, nbsolpts, nb_elements_h
 
       # --- Direction x1
 
-      h_itf_i[pos, 0, :] = h[:, epais] @ mtrx.extrap_west
-      h_itf_i[pos, 1, :] = h[:, epais] @ mtrx.extrap_east
+      h_itf_i[pos, 0, :] = HH[:, epais] @ mtrx.extrap_west
+      h_itf_i[pos, 1, :] = HH[:, epais] @ mtrx.extrap_east
 
       u1_itf_i[pos, 0, :] = u1[:, epais] @ mtrx.extrap_west
       u1_itf_i[pos, 1, :] = u1[:, epais] @ mtrx.extrap_east
@@ -78,8 +81,8 @@ def rhs_sw(Q, geom, mtrx, metric, topo, comm_dist_graph, nbsolpts, nb_elements_h
 
       # --- Direction x2
 
-      h_itf_j[pos, 0, :] = mtrx.extrap_south @ h[epais, :]
-      h_itf_j[pos, 1, :] = mtrx.extrap_north @ h[epais, :]
+      h_itf_j[pos, 0, :] = mtrx.extrap_south @ HH[epais, :]
+      h_itf_j[pos, 1, :] = mtrx.extrap_north @ HH[epais, :]
 
       u1_itf_j[pos, 0, :] = mtrx.extrap_south @ u1[epais, :]
       u1_itf_j[pos, 1, :] = mtrx.extrap_north @ u1[epais, :]
@@ -96,22 +99,29 @@ def rhs_sw(Q, geom, mtrx, metric, topo, comm_dist_graph, nbsolpts, nb_elements_h
       elem_L = itf
       elem_R = itf + 1
 
+      h_itf_i[elem_L, 1, :] -= topo.hsurf_itf_i[elem_L, :, 1]
+      h_itf_i[elem_R, 0, :] -= topo.hsurf_itf_i[elem_R, :, 0]
+
+      h_itf_j[elem_L, 1, :] -= topo.hsurf_itf_j[elem_L, 1, :]
+      h_itf_j[elem_R, 0, :] -= topo.hsurf_itf_j[elem_R, 0, :]
+
       # Direction x1
 
       if shallow_water_equations:
-         eig_L[:] = numpy.abs( u1_itf_i[elem_L, 1, :] ) + numpy.sqrt(gravity * h_itf_i[elem_L, 1, :] * metric.H_contra_11_itf_i[:, itf])
-         eig_R[:] = numpy.abs( u1_itf_i[elem_R, 0, :] ) + numpy.sqrt(gravity * h_itf_i[elem_R, 0, :] * metric.H_contra_11_itf_i[:, itf])
+         eig_L[:] = numpy.abs( u1_itf_i[elem_L, 1, :] ) + numpy.sqrt( gravity * h_itf_i[elem_L, 1, :] * metric.H_contra_11_itf_i[:, itf] )
+         eig_R[:] = numpy.abs( u1_itf_i[elem_R, 0, :] ) + numpy.sqrt( gravity * h_itf_i[elem_R, 0, :] * metric.H_contra_11_itf_i[:, itf] )
       else:
          eig_L[:] = numpy.abs( u1_itf_i[elem_L, 1, :] )
          eig_R[:] = numpy.abs( u1_itf_i[elem_R, 0, :] )
-      eig[:]   = numpy.maximum(eig_L, eig_R)
+
+      eig[:] = numpy.maximum(eig_L, eig_R)
 
       # --- Continuity equation
 
       flux_L[:] = metric.sqrtG_itf_i[:, itf] * h_itf_i[elem_L, 1, :] * u1_itf_i[elem_L, 1, :]
       flux_R[:] = metric.sqrtG_itf_i[:, itf] * h_itf_i[elem_R, 0, :] * u1_itf_i[elem_R, 0, :]
 
-      flux_Eq0_itf_i[elem_L, :, 1] = 0.5 * ( flux_L  + flux_R - eig * metric.sqrtG_itf_i[:, itf] * ( h_itf_i[elem_R, 0, :]  - h_itf_i[elem_L, 1, :] ) )
+      flux_Eq0_itf_i[elem_L, :, 1] = 0.5 * ( flux_L  + flux_R - eig * metric.sqrtG_itf_i[:, itf] * ( h_itf_i[elem_R, 0, :] - h_itf_i[elem_L, 1, :] ) )
       flux_Eq0_itf_i[elem_R, :, 0] = flux_Eq0_itf_i[elem_L, :, 1]
 
       # --- u1 equation
@@ -122,7 +132,7 @@ def rhs_sw(Q, geom, mtrx, metric, topo, comm_dist_graph, nbsolpts, nb_elements_h
             + 0.5 * gravity * metric.H_contra_11_itf_i[:, itf] * h_itf_i[elem_R, 0, :]**2 )
 
       flux_Eq1_itf_i[elem_L, :, 1] = 0.5 * ( flux_L  + flux_R - eig * metric.sqrtG_itf_i[:, itf] \
-            * ( h_itf_i[elem_R, 0, :] * u1_itf_i[elem_R, 0, :]  - h_itf_i[elem_L, 1, :] * u1_itf_i[elem_L, 1, :] ) )
+            * ( h_itf_i[elem_R, 0, :] * u1_itf_i[elem_R, 0, :] - h_itf_i[elem_L, 1, :] * u1_itf_i[elem_L, 1, :] ) )
       flux_Eq1_itf_i[elem_R, :, 0] = flux_Eq1_itf_i[elem_L, :, 1]
 
       # --- u2 equation
@@ -133,18 +143,19 @@ def rhs_sw(Q, geom, mtrx, metric, topo, comm_dist_graph, nbsolpts, nb_elements_h
             + 0.5 * gravity * metric.H_contra_21_itf_i[:, itf] * h_itf_i[elem_R, 0, :]**2 )
 
       flux_Eq2_itf_i[elem_L, :, 1] = 0.5 * ( flux_L  + flux_R - eig * metric.sqrtG_itf_i[:, itf] \
-            * ( h_itf_i[elem_R, 0, :] * u2_itf_i[elem_R, 0, :]  - h_itf_i[elem_L, 1, :] * u2_itf_i[elem_L, 1, :] ) )
+            * ( h_itf_i[elem_R, 0, :] * u2_itf_i[elem_R, 0, :] - h_itf_i[elem_L, 1, :] * u2_itf_i[elem_L, 1, :] ) )
       flux_Eq2_itf_i[elem_R, :, 0] = flux_Eq2_itf_i[elem_L, :, 1]
 
       # Direction x2
 
       if shallow_water_equations:
-         eig_L[:] = numpy.abs( u2_itf_j[elem_L, 1, :] ) + numpy.sqrt(gravity * h_itf_j[elem_L, 1, :] * metric.H_contra_22_itf_j[itf, :])
-         eig_R[:] = numpy.abs( u2_itf_j[elem_R, 0, :] ) + numpy.sqrt(gravity * h_itf_j[elem_L, 1, :] * metric.H_contra_22_itf_j[itf, :])
+         eig_L[:] = numpy.abs( u2_itf_j[elem_L, 1, :] ) + numpy.sqrt( gravity * h_itf_j[elem_L, 1, :] * metric.H_contra_22_itf_j[itf, :] )
+         eig_R[:] = numpy.abs( u2_itf_j[elem_R, 0, :] ) + numpy.sqrt( gravity * h_itf_j[elem_L, 1, :] * metric.H_contra_22_itf_j[itf, :] )
       else:
          eig_L[:] = numpy.abs( u2_itf_j[elem_L, 1, :] )
          eig_R[:] = numpy.abs( u2_itf_j[elem_R, 0, :] )
-      eig[:]   = numpy.maximum(eig_L, eig_R)
+
+      eig[:] = numpy.maximum(eig_L, eig_R)
 
       # --- Continuity equation
 

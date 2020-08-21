@@ -173,7 +173,7 @@ def williamson_case5(geom, metric, mtrx, param):
 
    h = h_star - hsurf
 
-   return u1, u2, h, None, hsurf, dzdx1, dzdx2
+   return u1, u2, h, None, hsurf, dzdx1, dzdx2, hsurf_itf_i, hsurf_itf_j
 
 
 

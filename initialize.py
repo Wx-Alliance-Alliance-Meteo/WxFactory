@@ -3,10 +3,12 @@ from definitions import *
 from shallow_water_test import *
 
 class Topo:
-   def __init__(self, hsurf, dzdx1, dzdx2):
+   def __init__(self, hsurf, dzdx1, dzdx2, hsurf_itf_i, hsurf_itf_j):
       self.hsurf = hsurf
       self.dzdx1 = dzdx1
       self.dzdx2 = dzdx2
+      self.hsurf_itf_i = hsurf_itf_i
+      self.hsurf_itf_j = hsurf_itf_j
 
 def initialize(geom, metric, mtrx, param):
 
@@ -16,6 +18,8 @@ def initialize(geom, metric, mtrx, param):
       hsurf = numpy.zeros((ni, nj))
       dzdx1 = numpy.zeros((ni, nj))
       dzdx2 = numpy.zeros((ni, nj))
+      hsurf_itf_i = numpy.zeros((param.nb_elements+2, param.nbsolpts*param.nb_elements, 2))
+      hsurf_itf_j = numpy.zeros((param.nb_elements+2, 2, param.nbsolpts*param.nb_elements))
 
    # --- Shallow water
    if param.case_number == 0:
@@ -28,7 +32,7 @@ def initialize(geom, metric, mtrx, param):
       u1_contra, u2_contra, fluid_height, h_analytic = williamson_case2(geom, metric, param)
 
    elif param.case_number == 5:
-      u1_contra, u2_contra, fluid_height, h_analytic, hsurf, dzdx1, dzdx2 = williamson_case5(geom, metric, mtrx, param)
+      u1_contra, u2_contra, fluid_height, h_analytic, hsurf, dzdx1, dzdx2, hsurf_itf_i, hsurf_itf_j = williamson_case5(geom, metric, mtrx, param)
 
    elif param.case_number == 6:
       u1_contra, u2_contra, fluid_height, h_analytic = williamson_case6(geom, metric, param)
@@ -55,4 +59,4 @@ def initialize(geom, metric, mtrx, param):
       Q[idx_hu1, :, :] = fluid_height * u1_contra
       Q[idx_hu2, :, :] = fluid_height * u2_contra
 
-   return Q, Topo(hsurf, dzdx1, dzdx2), h_analytic
+   return Q, Topo(hsurf, dzdx1, dzdx2, hsurf_itf_i, hsurf_itf_j), h_analytic
