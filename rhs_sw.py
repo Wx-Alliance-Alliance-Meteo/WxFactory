@@ -14,6 +14,7 @@ def rhs_sw(Q, geom, mtrx, metric, topo, comm_dist_graph, nbsolpts, nb_elements_h
    df1_dx1 = numpy.zeros_like(Q, dtype=type_vec)
    df2_dx2 = numpy.zeros_like(Q, dtype=type_vec)
    forcing = numpy.zeros_like(Q, dtype=type_vec)
+   rhs = numpy.zeros_like(Q, dtype=type_vec)
 
    flux_Eq0_itf_j = numpy.zeros((nb_elements_horiz+2, 2, nbsolpts*nb_elements_horiz), dtype=type_vec)
    flux_Eq1_itf_j = numpy.zeros((nb_elements_horiz+2, 2, nbsolpts*nb_elements_horiz), dtype=type_vec)
@@ -215,7 +216,8 @@ def rhs_sw(Q, geom, mtrx, metric, topo, comm_dist_graph, nbsolpts, nb_elements_h
          + gravity * h * ( metric.H_contra_21 * topo.dzdx1 + metric.H_contra_22 * topo.dzdx2)
 
    # Assemble the right-hand sides
-   rhs = metric.inv_sqrtG * ( - df1_dx1 - df2_dx2 ) - forcing
+   for var in range(3):
+      rhs[var] = metric.inv_sqrtG * ( - df1_dx1[var] - df2_dx2[var] ) - forcing[var]
 
    if not shallow_water_equations:
       rhs[idx_hu1,:,:] = 0.0

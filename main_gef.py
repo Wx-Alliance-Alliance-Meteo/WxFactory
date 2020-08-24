@@ -43,7 +43,7 @@ def main():
    metric = Metric(geom)
 
    # Initialize state variables
-   Q, topo, h_analytic = initialize(geom, metric, mtrx, param)
+   Q, topo = initialize(geom, metric, mtrx, param)
 
    if param.output_freq > 0:
       output_init(geom, param)
@@ -72,7 +72,7 @@ def main():
       raise ValueError(f'Time integration method {param.time_integrator} not supported')
 
    if param.stat_freq > 0:
-      blockstats(Q, step, param.case_number)
+      blockstats(Q, geom, metric, mtrx, param, step)
 
    t = 0.0
    nb_steps = math.ceil(param.t_end / param.dt)
@@ -94,7 +94,7 @@ def main():
 
       if param.stat_freq > 0:
          if step % param.stat_freq == 0:
-            blockstats(Q, step, param.case_number)
+            blockstats(Q, geom, metric, mtrx, param, step)
 
       # Plot solution
       if param.output_freq > 0:

@@ -1,6 +1,6 @@
 import math
 import numpy
-from definitions import *
+from definitions import day_in_secs, earth_radius, rotation_speed, gravity
 from winds import wind2contra
 
 import matsuno
@@ -42,6 +42,20 @@ def circular_vortex(geom, metric, param):
    lon_center = math.pi - 0.8
    lat_center = math.pi / 4.8
 
+   h, Omega = height_vortex(geom, metric, param, 0)
+
+   u = earth_radius * Omega * (math.sin(lat_center) * geom.coslat - math.cos(lat_center) * numpy.cos(geom.lon - lon_center) * geom.sinlat)
+   v = earth_radius * Omega * numpy.cos(lat_center) * numpy.sin(geom.lon - lon_center)
+   u1, u2 = wind2contra(u, v, geom)
+
+   return u1, u2, h
+
+def height_vortex(geom, metric, param, step):
+   step_time = step * param.dt
+
+   lon_center = math.pi - 0.8
+   lat_center = math.pi / 4.8
+
    V0    = 2.0 * math.pi / (12.0 * day_in_secs) * earth_radius
    rho_0 = 3.0
    gamma = 5.0
@@ -66,14 +80,9 @@ def circular_vortex(geom, metric, param):
          if (abs(rho[i,j]) > 1e-9):
                Omega[i,j] = Vt[i,j] / (earth_radius * rho[i,j])
 
-   h          = 1.0 - numpy.tanh( (rho / gamma) * numpy.sin(lonR) )
-   h_analytic = 1.0 - numpy.tanh( (rho / gamma) * numpy.sin(lonR - Omega * param.t_end) )
+   h = 1.0 - numpy.tanh( (rho / gamma) * numpy.sin(lonR - Omega * step_time) )
 
-   u = earth_radius * Omega * (math.sin(lat_center) * geom.coslat - math.cos(lat_center) * numpy.cos(geom.lon - lon_center) * geom.sinlat)
-   v = earth_radius * Omega * numpy.cos(lat_center) * numpy.sin(geom.lon - lon_center)
-   u1, u2 = wind2contra(u, v, geom)
-
-   return u1, u2, h, h_analytic
+   return h, Omega
 
 def williamson_case1(geom, metric, param):
    print("---------------------------------------------------------------")
@@ -82,8 +91,20 @@ def williamson_case1(geom, metric, param):
 
    u1, u2 = solid_body_rotation(geom, metric, param)
 
+   h = height_case1(geom, metric, param, 0)
+
+   return u1, u2, h
+
+def height_case1(geom, metric, param, step):
    # Initialize gaussian bell
-   lon_center = 3.0 * math.pi / 2.0
+   step_time = step * param.dt
+
+   ubar = 2.0 * math.pi / (12.0 * day_in_secs)
+
+   lon_center = ( 3.0 * math.pi / 2.0 ) + ubar * step_time
+   if lon_center > 2.0 * math.pi:
+      lon_center -= 2.0 * math.pi
+
    lat_center = 0.0
 
    h0 = 1000.0
@@ -92,10 +113,7 @@ def williamson_case1(geom, metric, param):
 
    dist = numpy.arccos(math.sin(lat_center) * geom.sinlat + math.cos(lat_center) * geom.coslat * numpy.cos(geom.lon - lon_center))
 
-   h = 0.5 * h0 * (1.0 + numpy.cos(math.pi * dist / radius)) * (dist <= radius)
-   h_analytic = h
-
-   return u1, u2, h, h_analytic
+   return 0.5 * h0 * (1.0 + numpy.cos(math.pi * dist / radius)) * (dist <= radius)
 
 def williamson_case2(geom, metric, param):
    print("--------------------------------------------")
@@ -111,9 +129,7 @@ def williamson_case2(geom, metric, param):
 
    h = ( gh0 - (earth_radius * rotation_speed * u0 + (0.5 * u0**2)) * geom.sinlat**2 ) / gravity
 
-   h_analytic = h
-
-   return u1, u2, h, h_analytic
+   return u1, u2, h
 
 def williamson_case5(geom, metric, mtrx, param):
    print('--------------------------------------------')
@@ -173,7 +189,7 @@ def williamson_case5(geom, metric, mtrx, param):
 
    h = h_star - hsurf
 
-   return u1, u2, h, None, hsurf, dzdx1, dzdx2, hsurf_itf_i, hsurf_itf_j
+   return u1, u2, h, hsurf, dzdx1, dzdx2, hsurf_itf_i, hsurf_itf_j
 
 
 
@@ -206,7 +222,7 @@ def williamson_case6(geom, metric, param):
 
    u1, u2 = wind2contra(u, v, geom)
 
-   return u1, u2, h, None
+   return u1, u2, h
 
 def case_galewsky(geom, metric, param):
    print("--------------------------------------------")
@@ -267,7 +283,7 @@ def case_galewsky(geom, metric, param):
 
    u1, u2 = wind2contra(u, v, geom)
 
-   return u1, u2, h, None
+   return u1, u2, h
 
 def case_matsuno(geom, metric, param):
    print("--------------------------------------------")
@@ -300,4 +316,4 @@ def case_matsuno(geom, metric, param):
 
    u1, u2 = wind2contra(u, v, geom)
 
-   return u1, u2, h, h_analytic
+   return u1, u2, h

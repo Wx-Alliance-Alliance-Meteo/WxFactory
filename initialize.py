@@ -23,25 +23,25 @@ def initialize(geom, metric, mtrx, param):
 
    # --- Shallow water
    if param.case_number == 0:
-      u1_contra, u2_contra, fluid_height, h_analytic = circular_vortex(geom, metric, param)
+      u1_contra, u2_contra, fluid_height = circular_vortex(geom, metric, param)
 
    elif param.case_number == 1:
-      u1_contra, u2_contra, fluid_height, h_analytic = williamson_case1(geom, metric, param)
+      u1_contra, u2_contra, fluid_height = williamson_case1(geom, metric, param)
 
    elif param.case_number == 2:
-      u1_contra, u2_contra, fluid_height, h_analytic = williamson_case2(geom, metric, param)
+      u1_contra, u2_contra, fluid_height = williamson_case2(geom, metric, param)
 
    elif param.case_number == 5:
-      u1_contra, u2_contra, fluid_height, h_analytic, hsurf, dzdx1, dzdx2, hsurf_itf_i, hsurf_itf_j = williamson_case5(geom, metric, mtrx, param)
+      u1_contra, u2_contra, fluid_height, hsurf, dzdx1, dzdx2, hsurf_itf_i, hsurf_itf_j = williamson_case5(geom, metric, mtrx, param)
 
    elif param.case_number == 6:
-      u1_contra, u2_contra, fluid_height, h_analytic = williamson_case6(geom, metric, param)
+      u1_contra, u2_contra, fluid_height = williamson_case6(geom, metric, param)
 
    elif param.case_number == 8:
-      u1_contra, u2_contra, fluid_height, h_analytic = case_galewsky(geom, metric, param)
+      u1_contra, u2_contra, fluid_height = case_galewsky(geom, metric, param)
 
    elif param.case_number == 9:
-      u1_contra, u2_contra, fluid_height, h_analytic = case_matsuno(geom, metric, param)
+      u1_contra, u2_contra, fluid_height = case_matsuno(geom, metric, param)
 
    # --- DCMIP 2012
    elif param.case_number == 11:
@@ -59,4 +59,4 @@ def initialize(geom, metric, mtrx, param):
       Q[idx_hu1, :, :] = fluid_height * u1_contra
       Q[idx_hu2, :, :] = fluid_height * u2_contra
 
-   return Q, Topo(hsurf, dzdx1, dzdx2, hsurf_itf_i, hsurf_itf_j), h_analytic
+   return Q, Topo(hsurf, dzdx1, dzdx2, hsurf_itf_i, hsurf_itf_j)
