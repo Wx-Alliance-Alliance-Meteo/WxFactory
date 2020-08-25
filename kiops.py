@@ -30,12 +30,12 @@ Optional arguments:
 
 Returns:
   - `w`      - the linear combination of the ``φ`` functions evaluated at ``tA`` acting on the vectors from ``u``
-  - `stats[1]` - number of substeps
-  - `stats[2]` - number of rejected steps
-  - `stats[3]` - number of Krylov steps
-  - `stats[4]` - number of matrix exponentials
-  - `stats[5]` - Error estimate
-  - `stats[6]` - the Krylov size of the last substep
+  - `stats[0]` - number of substeps
+  - `stats[1]` - number of rejected steps
+  - `stats[2]` - number of Krylov steps
+  - `stats[3]` - number of matrix exponentials
+  - `stats[4]` - Error estimate
+  - `stats[5]` - the Krylov size of the last substep
 
 `n` is the size of the original problem
 `p` is the highest index of the ``φ`` functions
