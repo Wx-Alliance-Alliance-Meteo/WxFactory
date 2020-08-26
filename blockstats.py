@@ -12,6 +12,8 @@ def blockstats(Q, geom, metric, mtrx, param, step):
       h_anal, _ = height_vortex(geom, metric, param, step)
    elif param.case_number == 1:
       h_anal = height_case1(geom, metric, param, step)
+   elif param.case_number == 2:
+      h_anal = height_case2(geom, metric, param)
    else:
       print('not yet implemented')
       exit(1)
@@ -20,7 +22,7 @@ def blockstats(Q, geom, metric, mtrx, param, step):
       uu = Q[1,:,:] / h
       vv = Q[2,:,:] / h
 
-   print("\n==================================================================================")
+   print("\n================================================================================================")
 
    if step == 0:
       print("Blockstats for initial conditions")
@@ -47,7 +49,7 @@ def blockstats(Q, geom, metric, mtrx, param, step):
 #      print("u\t\tmean = %e\tmin = %e\tmax = %e\n" % (numpy.mean(uu), numpy.amin(uu), numpy.amax(uu)) )
 #      print("v\t\tmean = %e\tmin = %e\tmax = %e\n" % (numpy.mean(vv), numpy.amin(vv), numpy.amax(vv)) )
 
-   print("==================================================================================")
+   print("================================================================================================")
 
 def global_integral(field, mtrx, metric, nbsolpts, nb_elements_horiz):
 

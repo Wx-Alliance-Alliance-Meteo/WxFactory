@@ -124,12 +124,16 @@ def williamson_case2(geom, metric, param):
    u1, u2 = solid_body_rotation(geom, metric, param)
 
    # Global Steady State Nonlinear Zonal Geostrophic Flow
+   h = height_case2(geom, metric, param)
+   return u1, u2, h
+
+def height_case2(geom, metric, param):
    gh0 = 29400.0
    u0 = 2.0 * math.pi * earth_radius / (12.0 * day_in_secs)
 
    h = ( gh0 - (earth_radius * rotation_speed * u0 + (0.5 * u0**2)) * geom.sinlat**2 ) / gravity
+   return h
 
-   return u1, u2, h
 
 def williamson_case5(geom, metric, mtrx, param):
    print('--------------------------------------------')
