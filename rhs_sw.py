@@ -151,7 +151,7 @@ def rhs_sw(Q, geom, mtrx, metric, topo, comm_dist_graph, nbsolpts, nb_elements_h
 
       if shallow_water_equations:
          eig_L[:] = numpy.abs( u2_itf_j[elem_L, 1, :] ) + numpy.sqrt( gravity * h_itf_j[elem_L, 1, :] * metric.H_contra_22_itf_j[itf, :] )
-         eig_R[:] = numpy.abs( u2_itf_j[elem_R, 0, :] ) + numpy.sqrt( gravity * h_itf_j[elem_L, 1, :] * metric.H_contra_22_itf_j[itf, :] )
+         eig_R[:] = numpy.abs( u2_itf_j[elem_R, 0, :] ) + numpy.sqrt( gravity * h_itf_j[elem_R, 0, :] * metric.H_contra_22_itf_j[itf, :] )
       else:
          eig_L[:] = numpy.abs( u2_itf_j[elem_L, 1, :] )
          eig_R[:] = numpy.abs( u2_itf_j[elem_R, 0, :] )
