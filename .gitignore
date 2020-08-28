@@ -10,3 +10,5 @@ doc/*.out
 
 __pycache__/
 *.py[cod]
+
+model_output/

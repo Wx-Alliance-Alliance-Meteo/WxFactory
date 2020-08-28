@@ -2,6 +2,7 @@ import mpi4py
 import netCDF4
 import numpy 
 import math
+import os
 import time
 
 from diagnostic import vorticity
@@ -16,6 +17,7 @@ def output_init(geom, param):
 
    # creating the netcdf files
    global ncfile
+   os.makedirs(os.path.dirname(param.output_file), exist_ok=True)
    ncfile = netCDF4.Dataset(param.output_file, 'w', format='NETCDF4', parallel = True)
 
    # write general attributes
