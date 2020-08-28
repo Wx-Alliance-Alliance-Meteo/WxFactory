@@ -6,7 +6,8 @@ from definitions import earth_radius, rotation_speed
 class Metric:
    def __init__(self, geom):
 
-      # Initialize 2D Jacobian
+      # 2D Jacobian
+
       self.sqrtG       = earth_radius**2 * (1.0 + geom.X**2) * (1.0 + geom.Y**2) / ( geom.delta2 * geom.delta )
       self.sqrtG_itf_i = earth_radius**2 * (1.0 + geom.X_itf_i**2) * (1.0 + geom.Y_itf_i**2) / ( geom.delta2_itf_i * geom.delta_itf_i )
       self.sqrtG_itf_j = earth_radius**2 * (1.0 + geom.X_itf_j**2) * (1.0 + geom.Y_itf_j**2) / ( geom.delta2_itf_j * geom.delta_itf_j )
@@ -16,7 +17,7 @@ class Metric:
       self.dsqrtGdx1 = earth_radius**2 * geom.X * (1.0 + geom.X**2) * (1.0 + geom.Y**2) * (2.0 * geom.Y**2 - geom.X**2 - 1.0) / ( geom.delta**5 )
       self.dsqrtGdx2 = earth_radius**2 * geom.Y * (1.0 + geom.X**2) * (1.0 + geom.Y**2) * (2.0 * geom.X**2 - geom.Y**2 - 1.0) / ( geom.delta**5 )
 
-      # Initialize 2D contravariant metric
+      # 2D contravariant metric
 
       self.H_contra_11 = geom.delta2 / ( earth_radius**2 * (1.0 + geom.X**2) )
       self.H_contra_12 = geom.delta2 * geom.X * geom.Y / ( earth_radius**2 * (1.0 + geom.X**2) * (1.0 + geom.Y**2) )
@@ -32,6 +33,14 @@ class Metric:
       self.H_contra_12_itf_j = geom.delta2_itf_j * geom.X_itf_j * geom.Y_itf_j / ( earth_radius**2 * (1.0 + geom.X_itf_j**2) * (1.0 + geom.Y_itf_j**2) )
       self.H_contra_21_itf_j = self.H_contra_12_itf_j
       self.H_contra_22_itf_j = geom.delta2_itf_j / ( earth_radius**2 * (1.0 + geom.Y_itf_j**2) )
+
+      # 2D covariant metric
+
+      fact = earth_radius**2 / geom.delta**4
+      self.H_cov_11 = fact * (1 + geom.X**2)**2 * (1 + geom.Y**2)
+      self.H_cov_12 = - fact * geom.X * geom.Y * (1 + geom.X**2) * (1 + geom.Y**2)
+      self.H_cov_21 = self.H_cov_12
+      self.H_cov_22 = fact * (1 + geom.X**2) * (1 + geom.Y**2)**2
 
       # Christoffel symbols
 

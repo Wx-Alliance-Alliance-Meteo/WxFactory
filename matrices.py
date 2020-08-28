@@ -16,6 +16,10 @@ class DFR_operators:
       self.diff_solpt_tr = self.diff_solpt.T
       self.correction_tr = self.correction.T
 
+      # Ordinairy differentiation matrices
+      self.diff = diffmat(grd.solutionPoints)
+      self.diff_tr = self.diff.T
+
       self.quad_weights = numpy.outer(grd.glweights, grd.glweights)
 
 def lagrangeEval(points, x):

@@ -4,6 +4,7 @@ import numpy
 import math
 import time
 
+from diagnostic import vorticity
 from definitions import idx_h, idx_hu1, idx_hu2, idx_u1, idx_u2
 from winds import contra2wind
 
@@ -85,6 +86,14 @@ def output_init(geom, param):
       vvv.grid_mapping = 'cubed_sphere'
       vvv.set_collective(True)
 
+      drv = ncfile.createVariable('RV', numpy.dtype('double').char, ('time', 'nf', 'Xdim', 'Ydim'))
+      drv.long_name = 'Relative vorticity'
+      drv.units = 'kg/s/m^4'
+      drv.standard_name = 'Relative vorticity'
+      drv.coordinates = 'lons lats'
+      drv.grid_mapping = 'cubed_sphere'
+      drv.set_collective(True)
+
    rank = mpi4py.MPI.COMM_WORLD.Get_rank()
 
    if rank == 0:
@@ -96,7 +105,7 @@ def output_init(geom, param):
    lat[rank,:,:] = geom.lat * 180/math.pi
 
 
-def output_netcdf(Q, geom, topo, step, param):
+def output_netcdf(Q, geom, metric, mtrx, topo, step, param):
    """ Writes u,v,eta fields on every nth time step """
    rank = mpi4py.MPI.COMM_WORLD.Get_rank()
 
@@ -110,9 +119,11 @@ def output_netcdf(Q, geom, topo, step, param):
       u1 = Q[idx_hu1,:,:] / h
       u2 = Q[idx_hu2,:,:] / h
       u, v = contra2wind(u1, u2, geom)
+      vort = vorticity(u1, u2, geom, metric, mtrx, param)
 
       ncfile['U'][step, rank, :, :] = u
       ncfile['V'][step, rank, :, :] = v
+      ncfile['RV'][step, rank, :, :] = vort
 
 
 def output_finalize():

@@ -47,7 +47,7 @@ def main():
 
    if param.output_freq > 0:
       output_init(geom, param)
-      output_netcdf(Q, geom, topo, step, param)  # store initial conditions
+      output_netcdf(Q, geom, metric, mtrx, topo, step, param)  # store initial conditions
 
    # Time stepping
    rhs_handle = lambda q: rhs_sw(q, geom, mtrx, metric, topo, comm_dist_graph, param.nbsolpts, param.nb_elements, param.case_number)
@@ -100,7 +100,7 @@ def main():
       if param.output_freq > 0:
          if step % param.output_freq == 0:
             print('=> Writing dynamic output for step', step)
-            output_netcdf(Q, geom, topo, step, param)
+            output_netcdf(Q, geom, metric, mtrx, topo, step, param)
 
    if param.output_freq > 0:
       output_finalize()
