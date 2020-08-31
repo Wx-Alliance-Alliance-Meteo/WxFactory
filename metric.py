@@ -69,3 +69,6 @@ class Metric:
 
       self.christoffel_2_21 = self.christoffel_2_12
       self.christoffel_2_22 = 2.0 * geom.X**2 * geom.Y / geom.delta2
+
+      # Coriolis parameter
+      self.coriolis_f = 2 * rotation_speed / geom.delta * ( math.sin(geom.lat_p) - geom.X * math.cos(geom.lat_p) * math.sin(geom.angle_p) + geom.Y * math.cos(geom.lat_p) * math.cos(geom.angle_p))

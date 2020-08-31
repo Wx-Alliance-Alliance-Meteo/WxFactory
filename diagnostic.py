@@ -1,6 +1,8 @@
 import numpy
 
-def vorticity(u1_contra, u2_contra, geom, metric, mtrx, param):
+from definitions import gravity
+
+def relative_vorticity(u1_contra, u2_contra, geom, metric, mtrx, param):
    
    u1_cov = metric.H_cov_11 * u1_contra + metric.H_cov_12 * u2_contra
    u2_cov = metric.H_cov_21 * u1_contra + metric.H_cov_22 * u2_contra
@@ -22,3 +24,33 @@ def vorticity(u1_contra, u2_contra, geom, metric, mtrx, param):
    vort = metric.inv_sqrtG * ( du2dx1 - du1dx2 )
 
    return vort
+
+def potential_vorticity(h, u1_contra, u2_contra, geom, metric, mtrx, param):
+
+   rv = relative_vorticity(u1_contra, u2_contra, geom, metric, mtrx, param)
+   
+   return ( rv + metric.coriolis_f ) / h
+
+def absolute_vorticity(u1_contra, u2_contra, geom, metric, mtrx, param):
+
+   rv = relative_vorticity(u1_contra, u2_contra, geom, metric, mtrx, param)
+   
+   return rv + metric.coriolis_f
+
+def total_energy(h, u1_contra, u2_contra, geom, topo, metric):
+   u1_cov = metric.H_cov_11 * u1_contra + metric.H_cov_12 * u2_contra
+   u2_cov = metric.H_cov_21 * u1_contra + metric.H_cov_22 * u2_contra
+
+   # Kinetic energy
+   kinetic = 0.5 * (u1_cov * u1_contra + u2_cov * u2_contra)
+
+   # Potential energy
+   potential = gravity * (h + topo.hsurf)
+
+   # "Total" energy
+   return kinetic + potential
+
+def potential_enstrophy(h, u1_contra, u2_contra, geom, metric, mtrx, param):
+   rv = relative_vorticity(u1_contra, u2_contra, geom, metric, mtrx, param)
+   return 0.5 * (rv + metric.coriolis_f)**2 / h
+

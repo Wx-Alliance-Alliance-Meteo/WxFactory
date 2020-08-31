@@ -5,7 +5,7 @@ import math
 import os
 import time
 
-from diagnostic import vorticity
+from diagnostic import relative_vorticity
 from definitions import idx_h, idx_hu1, idx_hu2, idx_u1, idx_u2
 from winds import contra2wind
 
@@ -121,7 +121,7 @@ def output_netcdf(Q, geom, metric, mtrx, topo, step, param):
       u1 = Q[idx_hu1,:,:] / h
       u2 = Q[idx_hu2,:,:] / h
       u, v = contra2wind(u1, u2, geom)
-      vort = vorticity(u1, u2, geom, metric, mtrx, param)
+      vort = relative_vorticity(u1, u2, geom, metric, mtrx, param)
 
       ncfile['U'][step, rank, :, :] = u
       ncfile['V'][step, rank, :, :] = v
