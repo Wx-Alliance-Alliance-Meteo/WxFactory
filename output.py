@@ -5,7 +5,7 @@ import math
 import os
 import time
 
-from diagnostic import relative_vorticity
+from diagnostic import relative_vorticity, potential_vorticity
 from definitions import idx_h, idx_hu1, idx_hu2, idx_u1, idx_u2
 from winds import contra2wind
 
@@ -96,6 +96,14 @@ def output_init(geom, param):
       drv.grid_mapping = 'cubed_sphere'
       drv.set_collective(True)
 
+      dpv = ncfile.createVariable('PV', numpy.dtype('double').char, ('time', 'nf', 'Xdim', 'Ydim'))
+      dpv.long_name = 'Potential vorticity'
+      dpv.units = 'kg/s/m^4' # TODO: 1/(m s) ???
+      dpv.standard_name = 'Potential vorticity'
+      dpv.coordinates = 'lons lats'
+      dpv.grid_mapping = 'cubed_sphere'
+      dpv.set_collective(True)
+
    rank = mpi4py.MPI.COMM_WORLD.Get_rank()
 
    if rank == 0:
@@ -121,12 +129,13 @@ def output_netcdf(Q, geom, metric, mtrx, topo, step, param):
       u1 = Q[idx_hu1,:,:] / h
       u2 = Q[idx_hu2,:,:] / h
       u, v = contra2wind(u1, u2, geom)
-      vort = relative_vorticity(u1, u2, geom, metric, mtrx, param)
+      rv = relative_vorticity(u1, u2, geom, metric, mtrx, param)
+      pv = potential_vorticity(h, u1, u2, geom, metric, mtrx, param)
 
       ncfile['U'][step, rank, :, :] = u
       ncfile['V'][step, rank, :, :] = v
-      ncfile['RV'][step, rank, :, :] = vort
-
+      ncfile['RV'][step, rank, :, :] = rv
+      ncfile['PV'][step, rank, :, :] = pv
 
 def output_finalize():
    """ Finalise the output netCDF4 file."""

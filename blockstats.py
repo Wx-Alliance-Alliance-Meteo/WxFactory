@@ -3,7 +3,7 @@ import math
 import mpi4py.MPI
 
 from shallow_water_test import *
-from diagnostic import total_energy, potential_enstrophy, absolute_vorticity
+from diagnostic import total_energy, potential_enstrophy
 
 def blockstats(Q, geom, topo, metric, mtrx, param, step):
 
@@ -23,7 +23,6 @@ def blockstats(Q, geom, topo, metric, mtrx, param, step):
    if param.case_number >= 2:
       energy = total_energy(h, u1_contra, u2_contra, geom, topo, metric)
       enstrophy = potential_enstrophy(h, u1_contra, u2_contra, geom, metric, mtrx, param)
-#      vorticity = absolute_vorticity(u1_contra, u2_contra, geom, metric, mtrx, param)
 
    print("\n================================================================================================")
 
@@ -33,16 +32,13 @@ def blockstats(Q, geom, topo, metric, mtrx, param, step):
       if param.case_number >= 2:
          global initial_mass
          global initial_energy
-#         global initial_vorticity
          global initial_enstrophy
          initial_mass = global_integral(h, mtrx, metric, param.nbsolpts, param.nb_elements) 
          initial_energy = global_integral(energy, mtrx, metric, param.nbsolpts, param.nb_elements) 
-#         initial_vorticity = global_integral(vorticity, mtrx, metric, param.nbsolpts, param.nb_elements) 
          initial_enstrophy = global_integral(enstrophy, mtrx, metric, param.nbsolpts, param.nb_elements) 
 
          print(f'Integral of mass = {initial_mass}')
          print(f'Integral of energy = {initial_energy}')
-#         print(f'Integral of vorticity = {initial_vorticity}')
          print(f'Integral of enstrophy = {initial_enstrophy}')
 
    else:
@@ -66,16 +62,13 @@ def blockstats(Q, geom, topo, metric, mtrx, param, step):
       if param.case_number >= 2:
             int_mass = global_integral(h, mtrx, metric, param.nbsolpts, param.nb_elements) 
             int_energy = global_integral(energy, mtrx, metric, param.nbsolpts, param.nb_elements) 
-#            int_vorticity = global_integral(vorticity, mtrx, metric, param.nbsolpts, param.nb_elements) 
             int_enstrophy = global_integral(enstrophy, mtrx, metric, param.nbsolpts, param.nb_elements) 
          
             normalized_mass = ( int_mass - initial_mass ) / initial_mass
             normalized_energy = ( int_energy - initial_energy ) / initial_energy
-#            normalized_vorticity = ( int_vorticity - initial_vorticity ) / initial_vorticity
             normalized_enstrophy = ( int_enstrophy - initial_enstrophy ) / initial_enstrophy
             print(f'normalized integral of mass = {normalized_mass}')
             print(f'normalized integral of energy = {normalized_energy}')
-#            print(f'normalized integral of PV = {normalized_vorticity}')
             print(f'normalized integral of enstrophy = {normalized_enstrophy}')
 
 

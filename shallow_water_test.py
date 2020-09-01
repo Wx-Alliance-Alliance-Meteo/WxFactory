@@ -321,3 +321,62 @@ def case_matsuno(geom, metric, param):
    u1, u2 = wind2contra(u, v, geom)
 
    return u1, u2, h
+
+
+def case_unsteady_zonal(geom, metric, mtrx, param):
+   print("--------------------------------------------")
+   print("CASE 10, Läuter et al. (2005)               ")
+   print("Zonal balanced time dependent flow          ")
+   print("--------------------------------------------")
+
+   t = 0
+   
+   u0 = 2. * math.pi * earth_radius / (12. * 24. * 3600.)
+   
+   # Note, units of k1 and k2 are gpm, m^2/s^2
+   k1 = 133681.
+   k2 = 10.
+   
+   u = u0 * numpy.cos(geom.lat)
+   v = numpy.zeros_like(geom.lat)
+   
+   # Geopotential heights
+   h = -0.5 * ( u0 * numpy.sin(geom.lat) + earth_radius * rotation_speed * numpy.sin(geom.lat))**2 + 0.5 * (earth_radius * rotation_speed * numpy.sin(geom.lat))**2 + k1
+   
+   hs = 0.5 * (earth_radius * rotation_speed * numpy.sin(geom.lat))**2 + k2
+   
+   # Revert to height, in metres
+   # Note, need h as depth rather than height
+   h = (h - hs) / gravity
+   hsurf = hs / gravity
+   
+   nb_interfaces_horiz = param.nb_elements + 1
+   hsurf_itf_i = numpy.zeros((param.nb_elements+2, param.nbsolpts*param.nb_elements, 2))
+   hsurf_itf_j = numpy.zeros((param.nb_elements+2, 2, param.nbsolpts*param.nb_elements))
+
+   for itf in range(nb_interfaces_horiz):
+      elem_L = itf
+      elem_R = itf + 1
+
+      hsurf_itf_i[elem_L, :, 1] = ( 0.5*(earth_radius * rotation_speed * numpy.sin(geom.lat_itf_i[:, itf]))**2 + k2 ) / gravity
+      hsurf_itf_i[elem_R, :, 0] = hsurf_itf_i[elem_L, :, 1]
+
+      hsurf_itf_j[elem_L, 1, :] = ( 0.5*(earth_radius * rotation_speed * numpy.sin(geom.lat_itf_j[itf, :]))**2 + k2 ) / gravity
+      hsurf_itf_j[elem_R, 0, :] = hsurf_itf_j[elem_L, 1, :]
+
+   ni, nj = geom.lon.shape
+   dzdx1 = numpy.zeros((ni, nj))
+   dzdx2 = numpy.zeros((ni, nj))
+
+   offset = 1 # Offset due to the halo
+   for elem in range(param.nb_elements):
+      epais = elem * param.nbsolpts + numpy.arange(param.nbsolpts)
+
+      # --- Direction x1
+      dzdx1[:, epais] = ( hsurf[:,epais] @ mtrx.diff_solpt_tr + hsurf_itf_i[elem+offset,:,:] @ mtrx.correction_tr ) * 2.0 / geom.Δx1
+
+      # --- Direction x2
+      dzdx2[epais,:] = ( mtrx.diff_solpt @ hsurf[epais,:] + mtrx.correction @ hsurf_itf_j[elem+offset,:,:] ) * 2.0 / geom.Δx2
+
+   u1, u2 = wind2contra(u, v, geom)
+   return u1, u2, h, hsurf, dzdx1, dzdx2, hsurf_itf_i, hsurf_itf_j
