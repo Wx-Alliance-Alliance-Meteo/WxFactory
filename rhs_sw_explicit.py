@@ -14,6 +14,11 @@ def rhs_sw_explicit(Q, geom, mtrx, metric, topo, comm_dist_graph, nbsolpts, nb_e
    df1_dx1 = numpy.zeros_like(Q, dtype=type_vec)
    df2_dx2 = numpy.zeros_like(Q, dtype=type_vec)
    forcing = numpy.zeros_like(Q, dtype=type_vec)
+   rhs = numpy.zeros_like(Q, dtype=type_vec)
+
+#   return rhs
+#   import rhs_sw
+#   return rhs_sw.rhs_sw(Q, geom, mtrx, metric, topo, comm_dist_graph, nbsolpts, nb_elements_horiz, case_number)
 
    flux_Eq0_itf_j = numpy.zeros((nb_elements_horiz+2, 2, nbsolpts*nb_elements_horiz), dtype=type_vec)
    flux_Eq1_itf_j = numpy.zeros((nb_elements_horiz+2, 2, nbsolpts*nb_elements_horiz), dtype=type_vec)
@@ -59,6 +64,8 @@ def rhs_sw_explicit(Q, geom, mtrx, metric, topo, comm_dist_graph, nbsolpts, nb_e
    # Offset due to the halo
    offset = 1
 
+   HH = h + topo.hsurf
+
    # Interpolate to the element interface
    for elem in range(nb_elements_horiz):
       epais = elem * nbsolpts + numpy.arange(nbsolpts)
@@ -67,8 +74,8 @@ def rhs_sw_explicit(Q, geom, mtrx, metric, topo, comm_dist_graph, nbsolpts, nb_e
 
       # --- Direction x1
 
-      h_itf_i[pos, 0, :] = h[:, epais] @ mtrx.extrap_west
-      h_itf_i[pos, 1, :] = h[:, epais] @ mtrx.extrap_east
+      h_itf_i[pos, 0, :] = HH[:, epais] @ mtrx.extrap_west
+      h_itf_i[pos, 1, :] = HH[:, epais] @ mtrx.extrap_east
 
       u1_itf_i[pos, 0, :] = u1[:, epais] @ mtrx.extrap_west
       u1_itf_i[pos, 1, :] = u1[:, epais] @ mtrx.extrap_east
@@ -78,8 +85,8 @@ def rhs_sw_explicit(Q, geom, mtrx, metric, topo, comm_dist_graph, nbsolpts, nb_e
 
       # --- Direction x2
 
-      h_itf_j[pos, 0, :] = mtrx.extrap_south @ h[epais, :]
-      h_itf_j[pos, 1, :] = mtrx.extrap_north @ h[epais, :]
+      h_itf_j[pos, 0, :] = mtrx.extrap_south @ HH[epais, :]
+      h_itf_j[pos, 1, :] = mtrx.extrap_north @ HH[epais, :]
 
       u1_itf_j[pos, 0, :] = mtrx.extrap_south @ u1[epais, :]
       u1_itf_j[pos, 1, :] = mtrx.extrap_north @ u1[epais, :]
@@ -96,27 +103,34 @@ def rhs_sw_explicit(Q, geom, mtrx, metric, topo, comm_dist_graph, nbsolpts, nb_e
       elem_L = itf
       elem_R = itf + 1
 
+      h_itf_i[elem_L, 1, :] -= topo.hsurf_itf_i[elem_L, :, 1]
+      h_itf_i[elem_R, 0, :] -= topo.hsurf_itf_i[elem_R, :, 0]
+
+      h_itf_j[elem_L, 1, :] -= topo.hsurf_itf_j[elem_L, 1, :]
+      h_itf_j[elem_R, 0, :] -= topo.hsurf_itf_j[elem_R, 0, :]
+
       # Direction x1
 
       eig_L[:] = numpy.abs( u1_itf_i[elem_L, 1, :] )
       eig_R[:] = numpy.abs( u1_itf_i[elem_R, 0, :] )
-      eig[:]   = numpy.maximum(eig_L, eig_R)
+
+      eig[:] = numpy.maximum(eig_L, eig_R)
 
       # --- Continuity equation
 
       flux_L[:] = metric.sqrtG_itf_i[:, itf] * h_itf_i[elem_L, 1, :] * u1_itf_i[elem_L, 1, :]
       flux_R[:] = metric.sqrtG_itf_i[:, itf] * h_itf_i[elem_R, 0, :] * u1_itf_i[elem_R, 0, :]
 
-      flux_Eq0_itf_i[elem_L, :, 1] = 0.5 * ( flux_L  + flux_R - eig * metric.sqrtG_itf_i[:, itf] * ( h_itf_i[elem_R, 0, :]  - h_itf_i[elem_L, 1, :] ) )
+      flux_Eq0_itf_i[elem_L, :, 1] = 0.5 * ( flux_L  + flux_R - eig * metric.sqrtG_itf_i[:, itf] * ( h_itf_i[elem_R, 0, :] - h_itf_i[elem_L, 1, :] ) )
       flux_Eq0_itf_i[elem_R, :, 0] = flux_Eq0_itf_i[elem_L, :, 1]
 
       # --- u1 equation
 
-      flux_L[:] = metric.sqrtG_itf_i[:, itf] * ( h_itf_i[elem_L, 1, :] * u1_itf_i[elem_L, 1, :]**2 )
-      flux_R[:] = metric.sqrtG_itf_i[:, itf] * ( h_itf_i[elem_R, 0, :] * u1_itf_i[elem_R, 0, :]**2 )
+      flux_L[:] = metric.sqrtG_itf_i[:, itf] * ( h_itf_i[elem_L, 1, :] * u1_itf_i[elem_L, 1, :]**2  )
+      flux_R[:] = metric.sqrtG_itf_i[:, itf] * ( h_itf_i[elem_R, 0, :] * u1_itf_i[elem_R, 0, :]**2  )
 
       flux_Eq1_itf_i[elem_L, :, 1] = 0.5 * ( flux_L  + flux_R - eig * metric.sqrtG_itf_i[:, itf] \
-            * ( h_itf_i[elem_R, 0, :] * u1_itf_i[elem_R, 0, :]  - h_itf_i[elem_L, 1, :] * u1_itf_i[elem_L, 1, :] ) )
+            * ( h_itf_i[elem_R, 0, :] * u1_itf_i[elem_R, 0, :] - h_itf_i[elem_L, 1, :] * u1_itf_i[elem_L, 1, :] ) )
       flux_Eq1_itf_i[elem_R, :, 0] = flux_Eq1_itf_i[elem_L, :, 1]
 
       # --- u2 equation
@@ -125,14 +139,15 @@ def rhs_sw_explicit(Q, geom, mtrx, metric, topo, comm_dist_graph, nbsolpts, nb_e
       flux_R[:] = metric.sqrtG_itf_i[:, itf] * ( h_itf_i[elem_R, 0, :] * u2_itf_i[elem_R, 0, :] * u1_itf_i[elem_R, 0, :] )
 
       flux_Eq2_itf_i[elem_L, :, 1] = 0.5 * ( flux_L  + flux_R - eig * metric.sqrtG_itf_i[:, itf] \
-            * ( h_itf_i[elem_R, 0, :] * u2_itf_i[elem_R, 0, :]  - h_itf_i[elem_L, 1, :] * u2_itf_i[elem_L, 1, :] ) )
+            * ( h_itf_i[elem_R, 0, :] * u2_itf_i[elem_R, 0, :] - h_itf_i[elem_L, 1, :] * u2_itf_i[elem_L, 1, :] ) )
       flux_Eq2_itf_i[elem_R, :, 0] = flux_Eq2_itf_i[elem_L, :, 1]
 
       # Direction x2
 
       eig_L[:] = numpy.abs( u2_itf_j[elem_L, 1, :] )
       eig_R[:] = numpy.abs( u2_itf_j[elem_R, 0, :] )
-      eig[:]   = numpy.maximum(eig_L, eig_R)
+
+      eig[:] = numpy.maximum(eig_L, eig_R)
 
       # --- Continuity equation
 
@@ -154,7 +169,7 @@ def rhs_sw_explicit(Q, geom, mtrx, metric, topo, comm_dist_graph, nbsolpts, nb_e
       # --- u2 equation
 
       flux_L[:] = metric.sqrtG_itf_j[itf, :] * ( h_itf_j[elem_L, 1, :] * u2_itf_j[elem_L, 1, :]**2 )
-      flux_R[:] = metric.sqrtG_itf_j[itf, :] * ( h_itf_j[elem_R, 0, :] * u2_itf_j[elem_R, 0, :]**2  )
+      flux_R[:] = metric.sqrtG_itf_j[itf, :] * ( h_itf_j[elem_R, 0, :] * u2_itf_j[elem_R, 0, :]**2 )
 
       flux_Eq2_itf_j[elem_L, 1, :] = 0.5 * ( flux_L + flux_R - eig * metric.sqrtG_itf_j[itf, :] \
             * ( h_itf_j[elem_R, 0, :] * u2_itf_j[elem_R, 0, :] - h_itf_j[elem_L, 1, :] * u2_itf_j[elem_L, 1, :]) )
@@ -186,7 +201,8 @@ def rhs_sw_explicit(Q, geom, mtrx, metric, topo, comm_dist_graph, nbsolpts, nb_e
          + 2.0 * metric.christoffel_2_21 * h * u2 * u1 + metric.christoffel_2_22 * h * u2**2 
 
    # Assemble the right-hand sides
-   rhs = metric.inv_sqrtG * ( - df1_dx1 - df2_dx2 ) - forcing
+   for var in range(3):
+      rhs[var] = metric.inv_sqrtG * ( - df1_dx1[var] - df2_dx2[var] ) - forcing[var]
 
    if not shallow_water_equations:
       rhs[idx_hu1,:,:] = 0.0
