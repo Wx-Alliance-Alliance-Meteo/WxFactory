@@ -328,8 +328,6 @@ def case_unsteady_zonal(geom, metric, mtrx, param):
    print("CASE 10, Läuter et al. (2005)               ")
    print("Zonal balanced time dependent flow          ")
    print("--------------------------------------------")
-
-   t = 0
    
    u0 = 2. * math.pi * earth_radius / (12. * 24. * 3600.)
    
@@ -341,13 +339,9 @@ def case_unsteady_zonal(geom, metric, mtrx, param):
    v = numpy.zeros_like(geom.lat)
    
    # Geopotential heights
-   h = -0.5 * ( u0 * numpy.sin(geom.lat) + earth_radius * rotation_speed * numpy.sin(geom.lat))**2 + 0.5 * (earth_radius * rotation_speed * numpy.sin(geom.lat))**2 + k1
+   h = height_unsteady_zonal(geom, metric, param)
    
    hs = 0.5 * (earth_radius * rotation_speed * numpy.sin(geom.lat))**2 + k2
-   
-   # Revert to height, in metres
-   # Note, need h as depth rather than height
-   h = (h - hs) / gravity
    hsurf = hs / gravity
    
    nb_interfaces_horiz = param.nb_elements + 1
@@ -380,3 +374,24 @@ def case_unsteady_zonal(geom, metric, mtrx, param):
 
    u1, u2 = wind2contra(u, v, geom)
    return u1, u2, h, hsurf, dzdx1, dzdx2, hsurf_itf_i, hsurf_itf_j
+
+def height_unsteady_zonal(geom, metric, param):
+   
+   u0 = 2. * math.pi * earth_radius / (12. * 24. * 3600.)
+   
+   # Note, units of k1 and k2 are gpm, m^2/s^2
+   k1 = 133681.
+   k2 = 10.
+   
+   u = u0 * numpy.cos(geom.lat)
+   v = numpy.zeros_like(geom.lat)
+   
+   # Geopotential heights
+   h = -0.5 * ( u0 * numpy.sin(geom.lat) + earth_radius * rotation_speed * numpy.sin(geom.lat))**2 + 0.5 * (earth_radius * rotation_speed * numpy.sin(geom.lat))**2 + k1
+   
+   hs = 0.5 * (earth_radius * rotation_speed * numpy.sin(geom.lat))**2 + k2
+   
+   # Revert to height, in metres
+   # Note, need h as depth rather than height
+   h = (h - hs) / gravity
+   return h

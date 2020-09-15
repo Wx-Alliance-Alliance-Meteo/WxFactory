@@ -15,6 +15,8 @@ def blockstats(Q, geom, topo, metric, mtrx, param, step):
       h_anal = height_case1(geom, metric, param, step)
    elif param.case_number == 2:
       h_anal = height_case2(geom, metric, param)
+   elif param.case_number == 10:
+      h_anal = height_unsteady_zonal(geom, metric, param)
 
    if param.case_number > 1:
       u1_contra = Q[1,:,:] / h
@@ -44,7 +46,7 @@ def blockstats(Q, geom, topo, metric, mtrx, param, step):
    else:
       print("Blockstats for timestep ", step)
 
-      if param.case_number <= 2:
+      if param.case_number <= 2 or param.case_number == 10:
          absol_err = global_integral(abs(h - h_anal), mtrx, metric, param.nbsolpts, param.nb_elements) 
          int_h_anal = global_integral(abs(h_anal), mtrx, metric, param.nbsolpts, param.nb_elements) 
    
