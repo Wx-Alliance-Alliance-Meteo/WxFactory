@@ -3,7 +3,9 @@ import numpy
 from definitions import idx_h, idx_hu1, idx_hu2, idx_u1, idx_u2, gravity
 from parallel import xchange_scalars, xchange_vectors
 
-def rhs_sw(Q, geom, mtrx, metric, topo, comm_dist_graph, nbsolpts, nb_elements_horiz, case_number):
+from dgfilter import apply_filter
+
+def rhs_sw(Q, geom, mtrx, metric, topo, comm_dist_graph, nbsolpts, nb_elements_horiz, case_number, filter_rhs=False):
 
    type_vec = type(Q[0, 0, 0])
 
@@ -222,5 +224,10 @@ def rhs_sw(Q, geom, mtrx, metric, topo, comm_dist_graph, nbsolpts, nb_elements_h
    if not shallow_water_equations:
       rhs[idx_hu1,:,:] = 0.0
       rhs[idx_hu2,:,:] = 0.0
+
+   if filter_rhs:
+      rhs[0,:,:] = apply_filter(rhs[0,:,:], mtrx, nb_elements_horiz, nbsolpts)
+      rhs[1,:,:] = apply_filter(rhs[1,:,:], mtrx, nb_elements_horiz, nbsolpts)
+      rhs[2,:,:] = apply_filter(rhs[2,:,:], mtrx, nb_elements_horiz, nbsolpts)
 
    return rhs

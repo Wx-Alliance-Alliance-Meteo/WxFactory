@@ -1,5 +1,4 @@
 import math
-
 import numpy
 
 def matvec_fun(vec, dt, Q, rhs_handle):

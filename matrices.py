@@ -1,5 +1,8 @@
 import numpy
 import numpy.linalg
+import scipy.special
+
+import dgfilter
 
 class DFR_operators:
    def __init__(self, grd):
@@ -23,8 +26,11 @@ class DFR_operators:
 
       self.quad_weights = numpy.outer(grd.glweights, grd.glweights)
 
-      self.Vandermonde = numpy.vander(grd.solutionPoints)
-      self.inv_Vandermonde = numpy.linalg.inv(self.Vandermonde) # TODO : An explicit formula for the inverse is known.
+      self.V = vandermonde(grd.solutionPoints)
+      self.invV = numpy.linalg.inv(self.V) # TODO : An explicit formula for the inverse is known.
+
+      self.filter = dgfilter.exponential(len(grd.solutionPoints)-1, 0, 16, self.V, self.invV)
+      self.filter_tr = self.filter.T
 
 def lagrangeEval(points, x):
    l = numpy.zeros_like(points)
@@ -58,3 +64,14 @@ def dLagrange(j, xi, x):
                k = k*(xi-x[m])/(x[j]-x[m])
          y = y + k
    return y
+
+def vandermonde(x):
+   """
+   Initialize the 1D Vandermonde matrix, \(\mathcal{V}_{ij}=P_j(x_i)\)
+   """
+   N = len(x)
+   V = numpy.zeros((N, N))
+   for j in range(1,N+1):
+      V[:,j-1] = scipy.special.eval_jacobi(j-1, 0, 0, x)
+
+   return V
