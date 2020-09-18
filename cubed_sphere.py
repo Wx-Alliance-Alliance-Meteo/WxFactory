@@ -178,6 +178,24 @@ class cubed_sphere:
       # Map to the interval [0, 2 pi]
       lon_itf_j[lon_itf_j<0.0] = lon_itf_j[lon_itf_j<0.0] + (2.0 * math.pi)
 
+
+      # Element node grid (helps debugging)
+      faces_X1, faces_X2 = numpy.meshgrid(faces_x1, faces_x2)
+      faces_X = numpy.tan(faces_X1)
+      faces_Y = numpy.tan(faces_X2)
+      faces_delta2 = 1.0 + faces_X**2 + faces_Y**2
+      faces_delta = numpy.sqrt(faces_delta2)
+
+      elem_cartX = 1.0 / faces_delta * ( math.cos(lon_p) * math.cos(lat_p) \
+            + faces_X * ( math.cos(lon_p) * math.sin(lat_p) * math.sin(angle_p) - math.sin(lon_p) * math.cos(angle_p) ) \
+            - faces_Y * ( math.cos(lon_p) * math.sin(lat_p) * math.cos(angle_p) + math.sin(lon_p) * math.sin(angle_p) ) )
+
+      elem_cartY = 1.0 / faces_delta * ( math.sin(lon_p) * math.cos(lat_p) \
+            + faces_X * ( math.sin(lon_p) * math.sin(lat_p) * math.sin(angle_p) + math.cos(lon_p) * math.cos(angle_p) ) \
+            - faces_Y * ( math.sin(lon_p) * math.sin(lat_p) * math.cos(angle_p) - math.cos(lon_p) * math.sin(angle_p) ) )
+
+      elem_cartZ = 1.0 / faces_delta * ( math.sin(lat_p) - faces_X * math.cos(lat_p) * math.sin(angle_p) + faces_Y * math.cos(lat_p) * math.cos(angle_p) )
+
       self.solutionPoints = solutionPoints
       self.glweights = glweights
       self.extension = extension
@@ -209,6 +227,10 @@ class cubed_sphere:
       self.lat_itf_i = lat_itf_i
       self.lon_itf_j = lon_itf_j
       self.lat_itf_j = lat_itf_j
+
+      self.elem_cartX = elem_cartX
+      self.elem_cartY = elem_cartY
+      self.elem_cartZ = elem_cartZ
 
       self.cube_face = cube_face
 
