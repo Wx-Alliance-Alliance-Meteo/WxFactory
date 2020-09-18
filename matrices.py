@@ -1,4 +1,5 @@
 import numpy
+import numpy.linalg
 
 class DFR_operators:
    def __init__(self, grd):
@@ -21,6 +22,9 @@ class DFR_operators:
       self.diff_tr = self.diff.T
 
       self.quad_weights = numpy.outer(grd.glweights, grd.glweights)
+
+      self.Vandermonde = numpy.vander(grd.solutionPoints)
+      self.inv_Vandermonde = numpy.linalg.inv(self.Vandermonde) # TODO : An explicit formula for the inverse is known.
 
 def lagrangeEval(points, x):
    l = numpy.zeros_like(points)
