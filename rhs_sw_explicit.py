@@ -2,8 +2,9 @@ import numpy
 
 from definitions import idx_h, idx_hu1, idx_hu2, idx_u1, idx_u2, gravity
 from parallel import xchange_scalars, xchange_vectors
+from dgfilter import apply_filter
 
-def rhs_sw_explicit(Q, geom, mtrx, metric, topo, comm_dist_graph, nbsolpts, nb_elements_horiz, case_number):
+def rhs_sw_explicit(Q, geom, mtrx, metric, topo, comm_dist_graph, nbsolpts, nb_elements_horiz, case_number, filter_rhs=False):
 
    type_vec = type(Q[0, 0, 0])
 
@@ -148,6 +149,9 @@ def rhs_sw_explicit(Q, geom, mtrx, metric, topo, comm_dist_graph, nbsolpts, nb_e
 
    # Assemble the right-hand sides
    
-   rhs[idx_h] = metric.inv_sqrtG * ( - df1_dx1[idx_h] - df2_dx2[idx_h] ) 
+   rhs[idx_h,:,:] = metric.inv_sqrtG * ( - df1_dx1[idx_h] - df2_dx2[idx_h] ) 
+
+   if filter_rhs:
+      rhs[idx_h,:,:] = apply_filter(rhs[idx_h,:,:], mtrx, nb_elements_horiz, nbsolpts)
 
    return rhs
