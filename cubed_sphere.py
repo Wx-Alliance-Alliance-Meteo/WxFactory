@@ -202,6 +202,8 @@ class cubed_sphere:
       self.lon_p = lon_p
       self.lat_p = lat_p
       self.angle_p = angle_p
+      self.domain_x1 = domain_x1
+      self.domain_x2 = domain_x2
       self.x1 = x1
       self.x2 = x2
       self.Δx1 = Δx1

@@ -140,3 +140,57 @@ def plot_uv(geom, u, v): # TODO : cov, contra
          zdot =  glb_v[f] * numpy.cos(glb_lat[f])
          mayavi.mlab.quiver3d(glb_x[f], glb_y[f], glb_z[f], xdot, ydot, zdot)
       mayavi.mlab.show()
+
+
+def plot_field_pair(geom1, field1, geom2, field2):
+
+
+   def plot_single_field(geom, field, fig_id, minmax = None):
+      glb_x     = mpi4py.MPI.COMM_WORLD.gather(geom.cartX.T, root=0)
+      glb_y     = mpi4py.MPI.COMM_WORLD.gather(geom.cartY.T, root=0)
+      glb_z     = mpi4py.MPI.COMM_WORLD.gather(geom.cartZ.T, root=0)
+      glb_field = mpi4py.MPI.COMM_WORLD.gather(field.T, root=0)
+
+      min_val = float("inf")
+      max_val = -float("inf")
+
+      if mpi4py.MPI.COMM_WORLD.Get_rank() == 0:
+
+         if minmax is None:
+            for f in range(nbfaces):
+              face_min = glb_field[f].min()
+              face_max = glb_field[f].max()
+              if face_max > max_val:
+                 max_val = face_max
+              if face_min < min_val:
+                 min_val = face_min
+
+            min_val *= 1.03
+            max_val *= 1.03
+
+         else:
+            min_val = minmax[0]
+            max_val = minmax[1]
+
+         fig = mayavi.mlab.figure(fig_id, size=(800, 800), bgcolor=(0,0,0))
+         for f in range(nbfaces):
+            s = mayavi.mlab.mesh(glb_x[f], glb_y[f], glb_z[f], scalars=glb_field[f], colormap="jet", vmin=min_val, vmax=max_val)
+
+         (_,_,dist,_) = mayavi.mlab.view()
+         mayavi.mlab.view(azimuth=270, elevation=90, distance=dist)
+
+         mayavi.mlab.colorbar()
+
+      if minmax is None:
+          return (min_val, max_val)
+      else:
+          return minmax
+  
+   min_val, max_val = plot_single_field(geom1, field1, 0)
+   plot_single_field(geom2, field2, 1, [min_val, max_val])
+
+
+   if mpi4py.MPI.COMM_WORLD.Get_rank() == 0:
+
+      mayavi.mlab.show()
+
