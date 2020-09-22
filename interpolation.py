@@ -14,14 +14,14 @@ class BilinearInterpolator:
       iy = 0
 
       while self.x_pos[ix + 1] < x:
-         ix += 1
-         if ix + 1 >= len(self.x_pos):
+         if ix + 2 >= len(self.x_pos):
             break
+         ix += 1
 
       while self.y_pos[iy + 1] < y:
-         iy += 1
-         if iy + 1 >= len(self.x_pos):
+         if iy + 2 >= len(self.y_pos):
             break
+         iy += 1
 
       x_small = self.x_pos[ix]
       x_large = self.x_pos[ix+1]
@@ -37,7 +37,7 @@ class BilinearInterpolator:
       return val
 
 
-class LagrangeInterpolator:
+class LagrangeBadInterpolator:
    def __init__(self, grid, field):
       self.grid  = grid
       self.field = field
@@ -55,14 +55,14 @@ class LagrangeInterpolator:
       iy = 0
 
       while self.x_pos[ix + 1] < x:
-         ix += 1
-         if ix + 1 >= len(self.x_pos):
+         if ix + 2 >= len(self.x_pos):
             break
+         ix += 1
 
       while self.y_pos[iy + 1] < y:
-         iy += 1
-         if iy + 1 >= len(self.x_pos):
+         if iy + 2 >= len(self.x_pos):
             break
+         iy += 1
 
       # Find element boundaries within the set of solution point positions
       elem_i  = int((x - self.min_x) / self.delta_x)
@@ -135,7 +135,7 @@ def interpolate(dest_grid, src_grid, field):
    result = numpy.zeros((dest_ni, dest_nj))
 
    #interpolator = BilinearInterpolator(src_grid, field)
-   interpolator = LagrangeInterpolator(src_grid, field)
+   interpolator = LagrangeBadInterpolator(src_grid, field)
 
    for i in range(dest_ni):
       for j in range(dest_nj):
@@ -143,6 +143,31 @@ def interpolate(dest_grid, src_grid, field):
          target_y = dest_y_pos[j]
 
          result[i, j] = interpolator.getValueAtXY(target_x, target_y)
+
+
+   #dest_interpolator = BilinearInterpolator(dest_grid, result)
+   dest_interpolator = LagrangeBadInterpolator(dest_grid, result)
+
+   num_samples = 101
+   sample_width_x = (src_grid.domain_x1[1] - src_grid.domain_x1[0]) / num_samples
+   sample_width_y = (src_grid.domain_x2[1] - src_grid.domain_x2[0]) / num_samples
+
+   total_val = 0.0
+   total_diff = 0.0
+   for i in range(num_samples):
+      x = (i + 0.5) * sample_width_x + src_grid.domain_x1[0]
+      for j in range(num_samples):
+         y = (j + 0.5) * sample_width_y + src_grid.domain_x2[0]
+
+         src_val = interpolator.getValueAtXY(x, y)
+         dest_val= dest_interpolator.getValueAtXY(x, y)
+
+         total_val += numpy.abs(src_val)
+         total_diff += numpy.abs((dest_val - src_val)/src_val)
+
+   avg_diff = total_diff / (num_samples**2)
+
+   print('Average relative diff: {:.2f}%, average value: {}'.format(avg_diff * 100, total_val / num_samples**2))
 
    return result
 
