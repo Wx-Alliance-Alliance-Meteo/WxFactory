@@ -18,6 +18,8 @@ from rhs_sw          import rhs_sw
 from rhs_sw_explicit import rhs_sw_explicit
 from rhs_sw_implicit import rhs_sw_implicit
 from timeIntegrators import Epi, Epirk4s3a, Tvdrk3, Rat2, ARK_epi2
+from graphx          import plot_field, plot_grid, plot_field_pair, plot_times
+from interpolation   import interpolate
 
 def main():
    if len(sys.argv) == 1:
@@ -35,6 +37,8 @@ def main():
 
    # Create the mesh
    geom = cubed_sphere(param.nb_elements, param.nbsolpts, param.λ0, param.ϕ0, param.α0, my_cube_face)
+   geom_interp = cubed_sphere(
+      param.nb_elements, param.nbsolpts - 3, param.λ0, param.ϕ0, param.α0, my_cube_face)
 
    # Build differentiation matrice and boundary correction
    mtrx = DFR_operators(geom)
@@ -45,6 +49,9 @@ def main():
    # Initialize state variables
    Q, topo = initialize(geom, metric, mtrx, param)
 
+   Q_interp = interpolate(geom_interp, geom, Q[0,:,:], comm_dist_graph)
+   plot_field_pair(geom, Q[0,:,:], geom_interp, Q_interp)
+   exit(0)
    if param.output_freq > 0:
       output_init(geom, param)
       output_netcdf(Q, geom, metric, mtrx, topo, step, param)  # store initial conditions
