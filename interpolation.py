@@ -1,9 +1,11 @@
 import numpy
 from mpi4py import MPI
+import time
 
 from matrices   import lagrangeEval
 from parallel   import xchange_scalars
 from quadrature import gauss_legendre
+from timer      import Timer
 
 class BilinearInterpolator:
    def __init__(self, grid, field):
@@ -56,12 +58,15 @@ class LagrangeSimpleInterpolator:
       self.min_y, self.max_y = grid.domain_x2
       self.delta_x = grid.Δx1
       self.delta_y = grid.Δx2
-
       self.n_elem_i = int(len(self.x_pos) / self.num_basis_points)
+
       self.rank = MPI.COMM_WORLD.Get_rank()
+      self.grid_eval_timer = Timer(time.time())
 
 
    def evalGrid(self, new_num_basis_points):
+
+      self.grid_eval_timer.start()
 
       new_grid_size = self.n_elem_i * new_num_basis_points
       new_basis_points, _ = gauss_legendre(new_num_basis_points)
@@ -93,13 +98,15 @@ class LagrangeSimpleInterpolator:
             stop_j = start_j + new_num_basis_points
 
             new_field[start_i:stop_i, start_j:stop_j] = interp_2[i, j]
-            
-      if self.rank == 0:
-         print('elem_interp: \n{}'.format(elem_interp))
-         print('col_interp: \n{}'.format(col_interp))
-         print('interp_1: \n{}'.format(interp_1))
-         print('interp_2: \n{}'.format(interp_2))
-         print('new_field:\n{}'.format(new_field))
+
+      self.grid_eval_timer.stop()
+
+#      if self.rank == 0:
+#         print('elem_interp: \n{}'.format(elem_interp))
+#         print('col_interp: \n{}'.format(col_interp))
+#         print('interp_1: \n{}'.format(interp_1))
+#         print('interp_2: \n{}'.format(interp_2))
+#         print('new_field:\n{}'.format(new_field))
 
 
       return new_field
@@ -334,6 +341,8 @@ def interpolate(dest_grid, src_grid, field, comm_dist_graph):
 
    alt_result = interpolator.evalGrid(len(dest_grid.solutionPoints))
 
+   point_by_point_timer = Timer(time.time())
+   point_by_point_timer.start()
    for i in range(dest_ni):
       for j in range(dest_nj):
          target_x = dest_x_pos[i]
@@ -341,10 +350,14 @@ def interpolate(dest_grid, src_grid, field, comm_dist_graph):
 
          result[i, j] = interpolator.getValueAtXY(target_x, target_y)
 
+   point_by_point_timer.stop()
+
    difference = alt_result - result
 
    if interpolator.rank == 0:
-      print('difference: \n{}'.format(difference))
+      print('time (point by point): {}'.format(point_by_point_timer.times))
+      print('time (entire grid):    {}'.format(interpolator.grid_eval_timer.times))
+      #print('difference: \n{}'.format(difference))
 
 
    if False:
