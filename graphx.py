@@ -1,7 +1,7 @@
 import mayavi.mlab
 import matplotlib.pyplot as plt
 from matplotlib.widgets import Slider
-from mpi4py import MPI
+import mpi4py
 import numpy
 
 #import cartopy.crs
@@ -197,26 +197,22 @@ def plot_field_pair(geom1, field1, geom2, field2):
 
 def plot_times(comm, timer):
 
-   rank = MPI.COMM_WORLD.Get_rank()
+   rank = mpi4py.MPI.COMM_WORLD.Get_rank()
 
    all_timers = comm.gather(timer, root = 0)
 
    colors = ['red', 'blue', 'green', 'yellow', 'cyan', 'magenta']
 
    if rank == 0:
+      plt.ion()
       fig, ax = plt.subplots()
-
-#      for i, t in enumerate(all_timers):
-#          first_start = t.start_times[0]
-#          x = [time - first_start for time in t.start_times]
-#          ax.plot(x, t.times, label = 'Node {}'.format(i))
-
 
       for i, t in enumerate(all_timers):
           starts = numpy.array(t.start_times) - timer.initial_time
           stops  = starts + numpy.array(t.times) 
-          for start, stop in zip(starts, stops):
-              plt.hlines(i, start, stop, color = colors[i], lw = 20)
+          y = [i/2.0 for j in range(len(starts))]
+          plt.hlines(y, starts, stops, color = colors[i], lw = 30)
 
-      plt.show()
-      
+      #plt.show()
+      plt.pause(0)
+

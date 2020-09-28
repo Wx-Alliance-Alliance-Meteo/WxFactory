@@ -62,9 +62,45 @@ class LagrangeSimpleInterpolator:
 
       self.rank = MPI.COMM_WORLD.Get_rank()
       self.grid_eval_timer = Timer(time.time())
+      self.grid_eval_fast_timer = Timer(self.grid_eval_timer.initial_time)
+
+
+   def evalGridFast(self, new_num_basis_points):
+      '''
+      Interpolate the current grid to a new one with the same number of elements,
+      but with a different number of solution points, using vectorized operations
+      as much as possible.
+      '''
+
+      self.grid_eval_fast_timer.start()
+
+      #new_grid_size = self.n_elem_i * new_num_basis_points
+      new_basis_points, _ = gauss_legendre(new_num_basis_points)
+
+      elem_interp = numpy.array([lagrangeEval(self.basis_points, px) for px in new_basis_points])
+
+      # Interpolate (vertically) on entire rows of elements (horizontally) at once
+      interp_1 = numpy.empty((self.n_elem_i * new_num_basis_points, self.n_elem_i * self.num_basis_points))
+      for i in range(self.n_elem_i):
+         interp_1[i * new_num_basis_points:(i+1) * new_num_basis_points, :] = \
+            elem_interp @ self.field[i * self.num_basis_points:(i+1) * self.num_basis_points, :]
+
+      # Interpolate (horizontally) on columns of interpolated elements
+      new_field = numpy.empty((self.n_elem_i * new_num_basis_points, self.n_elem_i * new_num_basis_points))
+      for i in range(self.n_elem_i):
+         new_field[:,i * new_num_basis_points:(i+1) * new_num_basis_points] = \
+               interp_1[:,i*self.num_basis_points:(i+1) * self.num_basis_points] @ elem_interp.T
+
+      self.grid_eval_fast_timer.stop()
+
+      return new_field
 
 
    def evalGrid(self, new_num_basis_points):
+      '''
+      Interpolate the current grid to a new one with the same number of elements,
+      but with a different number of solution points, element by element
+      '''
 
       self.grid_eval_timer.start()
 
@@ -90,6 +126,7 @@ class LagrangeSimpleInterpolator:
                 for i in range(self.n_elem_i)])
 
 
+      # Put in global grid form (rather than element by element)
       for i in range(self.n_elem_i):
          start_i = i * new_num_basis_points
          stop_i = start_i + new_num_basis_points
@@ -100,14 +137,6 @@ class LagrangeSimpleInterpolator:
             new_field[start_i:stop_i, start_j:stop_j] = interp_2[i, j]
 
       self.grid_eval_timer.stop()
-
-#      if self.rank == 0:
-#         print('elem_interp: \n{}'.format(elem_interp))
-#         print('col_interp: \n{}'.format(col_interp))
-#         print('interp_1: \n{}'.format(interp_1))
-#         print('interp_2: \n{}'.format(interp_2))
-#         print('new_field:\n{}'.format(new_field))
-
 
       return new_field
 
@@ -340,23 +369,12 @@ def interpolate(dest_grid, src_grid, field, comm_dist_graph):
    #int_test = LagrangeInterpolator(src_grid, field, comm_dist_graph)
 
    alt_result = interpolator.evalGrid(len(dest_grid.solutionPoints))
-
-   point_by_point_timer = Timer(time.time())
-   point_by_point_timer.start()
-   for i in range(dest_ni):
-      for j in range(dest_nj):
-         target_x = dest_x_pos[i]
-         target_y = dest_y_pos[j]
-
-         result[i, j] = interpolator.getValueAtXY(target_x, target_y)
-
-   point_by_point_timer.stop()
-
-   difference = alt_result - result
+   alt_result_fast = interpolator.evalGridFast(len(dest_grid.solutionPoints))
+   difference = alt_result - alt_result_fast
 
    if interpolator.rank == 0:
-      print('time (point by point): {}'.format(point_by_point_timer.times))
-      print('time (entire grid):    {}'.format(interpolator.grid_eval_timer.times))
+      print('time (entire grid):          {}'.format(interpolator.grid_eval_timer.times))
+      print('time (entire grid, fast):    {}'.format(interpolator.grid_eval_fast_timer.times))
       #print('difference: \n{}'.format(difference))
 
 
