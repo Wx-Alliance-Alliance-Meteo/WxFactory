@@ -2,10 +2,12 @@ import numpy
 import math
 from collections import deque
 
-from matvec import matvec_fun, matvec_rat
-from kiops  import kiops
-from linsol import gmres_mgs
-from phi    import phi_ark
+from matvec        import matvec_fun, matvec_rat
+from kiops         import kiops
+from linsol        import gmres_mgs, fgmres
+from phi           import phi_ark
+from interpolation import LagrangeSimpleInterpolator
+from matvec_product_caller import MatvecCaller
 
 class Epirk4s3a:
    g21 = 1/2
@@ -182,21 +184,34 @@ class Tvdrk3:
       return Q
 
 class Rat2:
-   def __init__(self, rhs, tol):
-      self.rhs = rhs
-      self.tol = tol
+   def __init__(self, rhs, rhs_precond, tol):
+      self.rhs         = rhs
+      self.rhs_precond = rhs_precond
+      self.tol         = tol
 
    def step(self, Q, dt):
-      matvec_handle = lambda v: matvec_rat(v, dt, Q, self.rhs)
+      matvec_handle = MatvecCaller(matvec_rat, dt, Q, self.rhs)
+      interpolator = LagrangeSimpleInterpolator(self.rhs.geometry)
+      lowres_field = interpolator.evalGridFast(Q, self.rhs_precond.nb_sol_pts, self.rhs.nb_sol_pts)
+      matvec_precond_handle = MatvecCaller(matvec_rat, dt, lowres_field, self.rhs_precond)
 
       rhs = self.rhs(Q).flatten()
-
+      rhs_precond = self.rhs_precond(lowres_field).flatten()
       x0 = numpy.zeros_like(rhs)
 
-      phiv, local_error, niter, flag = gmres_mgs(matvec_handle, rhs, x0, tol=self.tol)
+      #phiv, local_error, niter, flag = gmres_mgs(matvec_handle, rhs, x0, tol=self.tol)
+      phiv, local_error, niter, flag = fgmres(
+            matvec_handle, rhs, matvec_precond_handle, rhs_precond, interpolator, x0, tol=self.tol)
+      phiv2, local_error2, niter2, flag2 = gmres_mgs(matvec_handle, rhs, phiv, tol=self.tol)
+
+      total_diff = numpy.linalg.norm(phiv - phiv2)
+      if total_diff > self.tol:
+         print('AAAAHHHHHHHHHH THERE IS A DIFFERENCE')
+         print('Diff = {}, out of {} or {}'.format(total_diff, numpy.linalg.norm(phiv), numpy.linalg.norm(phiv2)))
+         raise ValueError
 
       if flag == 0:
-         print('GMRES converged at iteration %d to a solution with local error %e' % (niter, local_error))
+         print('GMRES converged at iteration %d (%d) to a solution with local error %e' % (niter, niter2, local_error))
       else:
          print('GMRES stagnation at iteration %d, returning a solution with local error %e' % (niter, local_error))
 

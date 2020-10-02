@@ -43,17 +43,21 @@ class BilinearInterpolator:
 
 
 class LagrangeSimpleInterpolator:
-   def __init__(self, grid, field):
+   def __init__(self, grid):
 
       numpy.set_printoptions(precision=2)
 
       self.grid  = grid
-      self.field = field
+
+      self.basis_point_sets = {}
 
       self.x_pos = grid.x1
       self.y_pos = grid.x2
       self.basis_points = grid.solutionPoints
       self.num_basis_points = len(self.basis_points)
+
+      self.basis_point_sets[self.num_basis_points] = self.basis_points
+
       self.min_x, self.max_x = grid.domain_x1
       self.min_y, self.max_y = grid.domain_x2
       self.delta_x = grid.Δx1
@@ -64,43 +68,62 @@ class LagrangeSimpleInterpolator:
       self.grid_eval_timer = Timer(time.time())
       self.grid_eval_fast_timer = Timer(self.grid_eval_timer.initial_time)
 
+   def evalSingleField(self, field, elem_interp, new_num_basis_points, old_num_basis_points, result = None):
+      # Interpolate (vertically) on entire rows of elements (horizontally) at once
+      interp_1 = numpy.empty((self.n_elem_i * new_num_basis_points, self.n_elem_i * old_num_basis_points))
+      for i in range(self.n_elem_i):
+         interp_1[i * new_num_basis_points:(i+1) * new_num_basis_points, :] = \
+            elem_interp @ field[i * old_num_basis_points:(i+1) * old_num_basis_points, :]
 
-   def evalGridFast(self, new_num_basis_points):
-      '''
+      # Interpolate (horizontally) on columns of interpolated elements
+      if result is None:
+         result = numpy.empty((self.n_elem_i * new_num_basis_points, self.n_elem_i * new_num_basis_points))
+
+      for i in range(self.n_elem_i):
+         result[:,i * new_num_basis_points:(i+1) * new_num_basis_points] = \
+            interp_1[:,i*old_num_basis_points:(i+1) * old_num_basis_points] @ elem_interp.T
+
+
+      return result
+      pass
+
+   def evalGridFast(self, field, new_num_basis_points, old_num_basis_points):
+      """
       Interpolate the current grid to a new one with the same number of elements,
       but with a different number of solution points, using vectorized operations
       as much as possible.
-      '''
+      """
 
       self.grid_eval_fast_timer.start()
 
-      #new_grid_size = self.n_elem_i * new_num_basis_points
-      new_basis_points, _ = gauss_legendre(new_num_basis_points)
+      for i in [new_num_basis_points, old_num_basis_points]:
+         if i not in self.basis_point_sets:
+            self.basis_point_sets[i], _ = gauss_legendre(i)
 
-      elem_interp = numpy.array([lagrangeEval(self.basis_points, px) for px in new_basis_points])
+      new_basis_points = self.basis_point_sets[new_num_basis_points]
+      old_basis_points = self.basis_point_sets[old_num_basis_points]
 
-      # Interpolate (vertically) on entire rows of elements (horizontally) at once
-      interp_1 = numpy.empty((self.n_elem_i * new_num_basis_points, self.n_elem_i * self.num_basis_points))
-      for i in range(self.n_elem_i):
-         interp_1[i * new_num_basis_points:(i+1) * new_num_basis_points, :] = \
-            elem_interp @ self.field[i * self.num_basis_points:(i+1) * self.num_basis_points, :]
+      elem_interp = numpy.array([lagrangeEval(old_basis_points, px) for px in new_basis_points])
 
-      # Interpolate (horizontally) on columns of interpolated elements
-      new_field = numpy.empty((self.n_elem_i * new_num_basis_points, self.n_elem_i * new_num_basis_points))
-      for i in range(self.n_elem_i):
-         new_field[:,i * new_num_basis_points:(i+1) * new_num_basis_points] = \
-               interp_1[:,i*self.num_basis_points:(i+1) * self.num_basis_points] @ elem_interp.T
+      result = None
+      if field.ndim == 2:
+         result = self.evalSingleField(field, elem_interp, new_num_basis_points, old_num_basis_points)
+      elif field.ndim == 3:
+         num_fields = field.shape[0]
+         result = numpy.empty((num_fields, self.n_elem_i * new_num_basis_points, self.n_elem_i * new_num_basis_points))
+         for i, f in enumerate(field):
+            self.evalSingleField(f, elem_interp, new_num_basis_points, old_num_basis_points, result[i])
 
       self.grid_eval_fast_timer.stop()
 
-      return new_field
+      return result
 
 
-   def evalGrid(self, new_num_basis_points):
-      '''
+   def evalGrid(self, field, new_num_basis_points):
+      """
       Interpolate the current grid to a new one with the same number of elements,
       but with a different number of solution points, element by element
-      '''
+      """
 
       self.grid_eval_timer.start()
 
@@ -113,9 +136,9 @@ class LagrangeSimpleInterpolator:
 
       # interpolate along vertical axis
       interp_1 = numpy.array([[
-         elem_interp @ self.field[
-                                i * self.num_basis_points:(i+1)*self.num_basis_points,
-                                j * self.num_basis_points:(j+1)*self.num_basis_points]
+         elem_interp @ field[
+                           i * self.num_basis_points:(i+1)*self.num_basis_points,
+                           j * self.num_basis_points:(j+1)*self.num_basis_points]
             for j in range(self.n_elem_i)]
                 for i in range(self.n_elem_i)])
 
@@ -364,12 +387,12 @@ def interpolate(dest_grid, src_grid, field, comm_dist_graph):
    result = numpy.zeros((dest_ni, dest_nj))
 
    #interpolator = BilinearInterpolator(src_grid, field)
-   interpolator = LagrangeSimpleInterpolator(src_grid, field)
+   interpolator = LagrangeSimpleInterpolator(src_grid)
 
    #int_test = LagrangeInterpolator(src_grid, field, comm_dist_graph)
 
-   alt_result = interpolator.evalGrid(len(dest_grid.solutionPoints))
-   alt_result_fast = interpolator.evalGridFast(len(dest_grid.solutionPoints))
+   alt_result = interpolator.evalGrid(field, len(dest_grid.solutionPoints))
+   alt_result_fast = interpolator.evalGridFast(field, len(dest_grid.solutionPoints))
    difference = alt_result - alt_result_fast
 
    if interpolator.rank == 0:
