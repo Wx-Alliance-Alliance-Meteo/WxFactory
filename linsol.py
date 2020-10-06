@@ -4,34 +4,33 @@ import mpi4py.MPI
 import scipy
 import scipy.sparse.linalg
 
-def gmres_mgs(A, b, x0=None, tol=1e-5, restart=20, maxiter=None, M=None, callback=None, reorth=False):
+def gmres_mgs(A, b, x0=None, tol=1e-5, restart=20, maxiter=None, M=None, callback=None, reorth=False, hegedus=False):
 
    niter = 0
-
-   if x0 is None:
-      x = numpy.zeros_like(b)
-   else:
-      x = x0.copy()
 
    n = len(b)
 
    if maxiter is None:
       maxiter = n * 10 # Wild guess
 
-   # Get fast access to underlying BLAS routines
-   [lartg] = scipy.linalg.get_lapack_funcs(['lartg'], [x])
-   [axpy, dotu, scal] = scipy.linalg.get_blas_funcs(['axpy', 'dotu', 'scal'], [x])
-
-   local_sum = numpy.zeros(1)
-   def norm(x):
-      local_sum[0] = x @ x
-      return math.sqrt( mpi4py.MPI.COMM_WORLD.allreduce(local_sum) )
+   if x0 is None:
+      x = numpy.zeros_like(b)
+   else:
+      x = x0.copy()
+      
+   Ax0 = A(x)
+   # Rescale the initial approximation using the Hegedüs trick
+   if hegedus:
+      norm_Ax0 = norm(Ax0)
+      if norm_Ax0 != 0.:
+         ksi_min = numpy.sum(b * Ax0) / norm_Ax0
+         x = ksi_min * x0
 
    bnrm2 = norm(b)
    if bnrm2 == 0.0:
       return numpy.zeros_like(b), 0., niter, 0
 
-   r = b - A(x)
+   r = b - Ax0
 
    normr = norm(r)
 
@@ -39,6 +38,10 @@ def gmres_mgs(A, b, x0=None, tol=1e-5, restart=20, maxiter=None, M=None, callbac
 
    if error < tol:
       return x, error, niter, 0
+
+   # Get fast access to underlying BLAS routines
+   [lartg] = scipy.linalg.get_lapack_funcs(['lartg'], [x])
+   [axpy, dotu, scal] = scipy.linalg.get_blas_funcs(['axpy', 'dotu', 'scal'], [x])
 
    for outer in range(maxiter):
 
@@ -48,6 +51,8 @@ def gmres_mgs(A, b, x0=None, tol=1e-5, restart=20, maxiter=None, M=None, callbac
       Q = []  # Givens Rotations
 
       V[0, :] = r / normr
+
+      local_sum = numpy.zeros(1)
 
       # This is the RHS vector for the problem in the Krylov Space
       g = numpy.zeros(n)
@@ -139,6 +144,10 @@ def gmres_mgs(A, b, x0=None, tol=1e-5, restart=20, maxiter=None, M=None, callbac
 
    return x, normr/bnrm2, niter, 0
 
+
+def norm(var):
+   local_sum = numpy.sum(var * var)
+   return math.sqrt( mpi4py.MPI.COMM_WORLD.allreduce(local_sum) )
 
 def apply_givens(Q, v, k):
    """Apply the first k Givens rotations in Q to v.
