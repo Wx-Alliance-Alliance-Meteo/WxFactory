@@ -17,7 +17,7 @@ def fgmres(A, b, preconditioner, b_precond, interpolator,
 
    # Get fast access to underlying BLAS routines
    [lartg] = scipy.linalg.get_lapack_funcs(['lartg'], [x])
-   [axpy, dot, scal] = scipy.linalg.get_blas_funcs(['axpy', 'dot', 'scal'], [x])
+   [axpy, dotu, scal] = scipy.linalg.get_blas_funcs(['axpy', 'dotu', 'scal'], [x])
 
    local_sum = numpy.zeros(1)
    def global_norm(vec):
@@ -40,8 +40,8 @@ def fgmres(A, b, preconditioner, b_precond, interpolator,
       """Modified Gram-Schmidt process"""
       for k in range(num + 1):
          local_sum[0] = mat[k, :] @ vec
-         h_mat[k, num] = mpi4py.MPI.COMM_WORLD.allreduce(local_sum)
-         vec = axpy(mat[k, :], vec, num_dofs, -h_mat[k, num])
+         h_mat[num, k] = mpi4py.MPI.COMM_WORLD.allreduce(local_sum)
+         vec = axpy(mat[k, :], vec, num_dofs, -h_mat[num, k])
       return vec
 
    def apply_preconditioner(vec):
@@ -61,10 +61,11 @@ def fgmres(A, b, preconditioner, b_precond, interpolator,
 
    for outer in range(maxiter):
 
-      Q = []  # Givens Rotations
+      # NOTE: We are dealing with row-major matrices, but we store the transpose of H and V.
       H = numpy.zeros((restart + 1, restart + 1))
       V = numpy.zeros((restart + 1, num_dofs))  # row-major ordering
       Z = numpy.zeros((restart + 1, num_dofs))  # row-major ordering
+      Q = []  # Givens Rotations
 
       V[0, :] = r / norm_r
 
@@ -74,9 +75,6 @@ def fgmres(A, b, preconditioner, b_precond, interpolator,
       for inner in range(restart):
 
          num_iter += 1
-
-         if rank == 0:
-            print('Outer = {}, inner = {}'.format(outer, inner))
 
          Z[inner,:]   = apply_preconditioner(V[inner, :])
          w            = A(Z[inner,:])
@@ -89,24 +87,24 @@ def fgmres(A, b, preconditioner, b_precond, interpolator,
             for k in range(inner + 1):
                local_sum[0] = V[k, :] @ V[inner + 1, :]
                corr = mpi4py.MPI.COMM_WORLD.allreduce(local_sum)
-               H[k, inner] = H[k, inner] + corr
+               H[inner, k] = H[inner, k] + corr
                V[inner + 1, :] = axpy(V[k, :], V[inner + 1, :], num_dofs, -corr)
 
          # Check for breakdown
-         if H[inner + 1, inner] != 0.0:
-            V[inner + 1, :] = scal(1.0 / H[inner + 1, inner], V[inner + 1, :])
+         if H[inner, inner + 1] != 0.0:
+            V[inner + 1, :] = scal(1.0 / H[inner, inner + 1], V[inner + 1, :])
 
          # Apply previous Givens rotations to H
          if inner > 0:
-            apply_givens(Q, H[:, inner], inner)
+            apply_givens(Q, H[inner, :], inner)
 
          # Calculate and apply next complex-valued Givens Rotation
          # ==> Note that if restart = num_dofs, then this is unnecessary
          # for the last inner
          #    iteration, when inner = num_dofs-1.
          if inner != num_dofs - 1:
-            if H[inner + 1, inner] != 0:
-               [c, s, r] = lartg(H[inner, inner], H[inner + 1, inner])
+            if H[inner, inner + 1] != 0:
+               [c, s, r] = lartg(H[inner, inner], H[inner, inner + 1])
                Qblock = numpy.array([[c, s], [-numpy.conjugate(s), c]])
                Q.append(Qblock)
 
@@ -115,13 +113,17 @@ def fgmres(A, b, preconditioner, b_precond, interpolator,
                g[inner:inner + 2] = Qblock @ g[inner:inner + 2]
 
                # Apply effect of Givens Rotation to H
-               H[inner, inner] = dot(Qblock[0, :], H[inner:inner + 2, inner])
-               H[inner + 1, inner] = 0.0
+               H[inner, inner] = dotu(Qblock[0, :], H[inner, inner:inner + 2])
+               H[inner, inner + 1] = 0.0
 
          # Don't update norm_r if last inner iteration, because
          # norm_r is calculated directly after this loop ends.
          if inner < restart - 1:
             norm_r = numpy.abs(g[inner + 1])
+
+            if rank == 0:
+               print('Outer = {}, inner = {}, norm_r = {}'.format(outer, inner, norm_r))
+
             if norm_r < tol:
                if rank == 0:
                   print('exit loop b/c error is below tol')
@@ -134,16 +136,12 @@ def fgmres(A, b, preconditioner, b_precond, interpolator,
       Z[-1,:] = apply_preconditioner(V[-1,:])
       # end inner loop, back to outer loop
 
-      # Why is "inner" used after the inner loop??
-      y = scipy.linalg.solve_triangular(H[0:inner + 1, 0:inner + 1], g[0:inner + 1])
-
-      #update = numpy.ravel(y.reshape(-1, 1) @ V[:inner + 1, :])
-      update = numpy.ravel(y.reshape(-1, 1) @ Z[:inner + 1, :])
+      # Find best update to x in Krylov Space V.
+      y = scipy.linalg.solve_triangular(H[0:inner + 1, 0:inner + 1].T, g[0:inner + 1])
+      #update = numpy.ravel(V[:inner + 1, :].T @ y.reshape(-1, 1))
+      update = numpy.ravel(Z[:inner + 1, :].T @ y.reshape(-1, 1))
       x = x + update
       r = b - A(x)
-
-      # Apply preconditioner
-      #      r = M * r
 
       norm_r = global_norm(r)
 
