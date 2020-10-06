@@ -20,6 +20,7 @@ from rhs_sw_implicit import rhs_sw_implicit
 from timeIntegrators import Epi, Epirk4s3a, Tvdrk3, Rat2, ARK_epi2
 from graphx          import plot_field, plot_grid, plot_field_pair, plot_times
 from interpolation   import interpolate
+from timer           import Timer, TimerGroup
 
 def main():
    if len(sys.argv) == 1:
@@ -28,12 +29,14 @@ def main():
       cfg_file = sys.argv[1]
 
    step = 0
+   initial_time_tmp = time()
 
    # Read configuration file
    param = Configuration(cfg_file)
 
    # Set up distributed world
    comm_dist_graph, my_cube_face = create_ptopo()
+   initial_time = comm_dist_graph.bcast(initial_time_tmp, root = 0)
 
    # Create the mesh
    geom = cubed_sphere(param.nb_elements, param.nbsolpts, param.λ0, param.ϕ0, param.α0, my_cube_face)
@@ -51,13 +54,17 @@ def main():
 
    Q_interp = interpolate(geom_interp, geom, Q[0,:,:], comm_dist_graph)
    plot_field_pair(geom, Q[0,:,:], geom_interp, Q_interp)
-   exit(0)
+   #plot_field(geom, Q[0,:,:])
+#   plot_field_pair(geom, Q[0,:,:], geom_interp, Q_interp)
+#   exit(0)
    if param.output_freq > 0:
       output_init(geom, param)
       output_netcdf(Q, geom, metric, mtrx, topo, step, param)  # store initial conditions
 
    # Time stepping
-   rhs_handle = lambda q: rhs_sw(q, geom, mtrx, metric, topo, comm_dist_graph, param.nbsolpts, param.nb_elements, param.case_number)
+   rhs_timers = TimerGroup(5, initial_time)
+   rhs_handle = lambda q: rhs_sw(q, geom, mtrx, metric, topo, comm_dist_graph, param.nbsolpts, param.nb_elements,
+                                 param.case_number, timers = rhs_timers)
 
    if param.time_integrator.lower()[:3] == 'epi' and param.time_integrator[3:].isdigit():
       order = int(param.time_integrator[3:])
@@ -84,6 +91,7 @@ def main():
    t = 0.0
    nb_steps = math.ceil(param.t_end / param.dt)
 
+   step_timer = Timer(initial_time)
    while t < param.t_end:
       if t + param.dt > param.t_end:
          param.dt = param.t_end - t
@@ -94,10 +102,11 @@ def main():
       step += 1
       print('\nStep', step, 'of', nb_steps)
 
-      tic = time()
+      step_timer.start()
       Q = stepper.step(Q, param.dt)
-      time_step = time() - tic
-      print('Elapsed time for step: %0.3f secs' % time_step)
+      step_timer.stop()
+      #print('Elapsed time for step %d: %0.3f secs' % step, time_step)
+      print('Elapsed time for step {}: {:.3f} secs'.format(step, step_timer.last_time()))
 
       if param.stat_freq > 0:
          if step % param.stat_freq == 0:
@@ -108,6 +117,10 @@ def main():
          if step % param.output_freq == 0:
             print('=> Writing dynamic output for step', step)
             output_netcdf(Q, geom, metric, mtrx, topo, step, param)
+
+   print('Times: {}'.format(step_timer.times))
+
+   plot_times(comm_dist_graph, rhs_timers)
 
    if param.output_freq > 0:
       output_finalize()

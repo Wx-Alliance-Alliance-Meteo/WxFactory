@@ -1,6 +1,5 @@
 import mayavi.mlab
 import matplotlib.pyplot as plt
-from matplotlib.widgets import Slider
 import mpi4py
 import numpy
 
@@ -195,11 +194,11 @@ def plot_field_pair(geom1, field1, geom2, field2):
 
       mayavi.mlab.show()
 
-def plot_times(comm, timer):
+def plot_times(comm, timers):
 
    rank = mpi4py.MPI.COMM_WORLD.Get_rank()
 
-   all_timers = comm.gather(timer, root = 0)
+   all_timers = [comm.gather(timers[i], root = 0) for i in range(len(timers.timers))]
 
    colors = ['red', 'blue', 'green', 'yellow', 'cyan', 'magenta']
 
@@ -207,11 +206,12 @@ def plot_times(comm, timer):
       plt.ion()
       fig, ax = plt.subplots()
 
-      for i, t in enumerate(all_timers):
-          starts = numpy.array(t.start_times) - timer.initial_time
-          stops  = starts + numpy.array(t.times) 
-          y = [i/2.0 for j in range(len(starts))]
-          plt.hlines(y, starts, stops, color = colors[i], lw = 30)
+      for i, t_list in enumerate(all_timers):
+         for j, t in enumerate(t_list):
+            starts = numpy.array(t.start_times) - timers[0].initial_time
+            stops  = starts + numpy.array(t.times) 
+            y = [j/2.0 for x in range(len(starts))]
+            plt.hlines(y, starts, stops, color = colors[i], lw = 30)
 
       #plt.show()
       plt.pause(0)

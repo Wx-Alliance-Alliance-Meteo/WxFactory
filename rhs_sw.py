@@ -4,8 +4,12 @@ from definitions import idx_h, idx_hu1, idx_hu2, idx_u1, idx_u2, gravity
 from parallel import xchange_scalars, xchange_vectors
 
 from dgfilter import apply_filter
+from timer import TimerGroup
 
-def rhs_sw(Q, geom, mtrx, metric, topo, comm_dist_graph, nbsolpts, nb_elements_horiz, case_number, filter_rhs=False):
+def rhs_sw(Q, geom, mtrx, metric, topo, comm_dist_graph, nbsolpts, nb_elements_horiz, case_number, filter_rhs=False, timers = None):
+
+   timers = timers if timers is not None else TimerGroup(5, 0.0)
+   timers[0].start()
 
    type_vec = type(Q[0, 0, 0])
 
@@ -93,9 +97,14 @@ def rhs_sw(Q, geom, mtrx, metric, topo, comm_dist_graph, nbsolpts, nb_elements_h
       u2_itf_j[pos, 0, :] = mtrx.extrap_south @ u2[epais, :]
       u2_itf_j[pos, 1, :] = mtrx.extrap_north @ u2[epais, :]
 
+   timers[0].stop()
+
+   timers[1].start()
    xchange_scalars(comm_dist_graph, geom, h_itf_i, h_itf_j)
    xchange_vectors(comm_dist_graph, geom, u1_itf_i, u2_itf_i, u1_itf_j, u2_itf_j)
+   timers[1].stop()
 
+   timers[2].start()
    # Common Rusanov fluxes
    for itf in range(nb_interfaces_horiz):
 
@@ -229,5 +238,7 @@ def rhs_sw(Q, geom, mtrx, metric, topo, comm_dist_graph, nbsolpts, nb_elements_h
       rhs[0,:,:] = apply_filter(rhs[0,:,:], mtrx, nb_elements_horiz, nbsolpts)
       rhs[1,:,:] = apply_filter(rhs[1,:,:], mtrx, nb_elements_horiz, nbsolpts)
       rhs[2,:,:] = apply_filter(rhs[2,:,:], mtrx, nb_elements_horiz, nbsolpts)
+
+   timers[2].stop()
 
    return rhs
