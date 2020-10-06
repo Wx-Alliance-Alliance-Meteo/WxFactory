@@ -5,7 +5,7 @@ import scipy
 import scipy.sparse.linalg
 
 def gmres_mgs(A, b, x0=None, tol=1e-5, restart=20, maxiter=None, M=None, callback=None, reorth=False):
-     
+
    niter = 0
 
    if x0 is None:
@@ -20,20 +20,19 @@ def gmres_mgs(A, b, x0=None, tol=1e-5, restart=20, maxiter=None, M=None, callbac
 
    # Get fast access to underlying BLAS routines
    [lartg] = scipy.linalg.get_lapack_funcs(['lartg'], [x])
-   [axpy, dot, scal] = scipy.linalg.get_blas_funcs(['axpy', 'dot', 'scal'], [x])
+   [axpy, dotu, scal] = scipy.linalg.get_blas_funcs(['axpy', 'dotu', 'scal'], [x])
 
    local_sum = numpy.zeros(1)
    def norm(x):
       local_sum[0] = x @ x
       return math.sqrt( mpi4py.MPI.COMM_WORLD.allreduce(local_sum) )
-      
 
    bnrm2 = norm(b)
    if bnrm2 == 0.0:
       return numpy.zeros_like(b), 0., niter, 0
 
    r = b - A(x)
-   
+
    normr = norm(r)
 
    error =  normr / bnrm2
@@ -43,10 +42,11 @@ def gmres_mgs(A, b, x0=None, tol=1e-5, restart=20, maxiter=None, M=None, callbac
 
    for outer in range(maxiter):
 
-      Q = []  # Givens Rotations
+      # NOTE: We are dealing with row-major matrices, but we store the transpose of H and V.
       H = numpy.zeros((restart+1, restart+1))
       V = numpy.zeros((restart+1, n))  # row-major ordering
-      
+      Q = []  # Givens Rotations
+
       V[0, :] = r / normr
 
       # This is the RHS vector for the problem in the Krylov Space
@@ -59,8 +59,8 @@ def gmres_mgs(A, b, x0=None, tol=1e-5, restart=20, maxiter=None, M=None, callbac
          #  Modified Gram Schmidt
          for k in range(inner+1):
             local_sum[0] = V[k, :] @ V[inner+1, :]
-            H[k, inner] = mpi4py.MPI.COMM_WORLD.allreduce(local_sum)
-            V[inner+1, :] = axpy(V[k, :], V[inner+1, :], n, -H[k, inner])
+            H[inner, k] = mpi4py.MPI.COMM_WORLD.allreduce(local_sum)
+            V[inner+1, :] = axpy(V[k, :], V[inner+1, :], n, -H[inner, k])
 
          normv = norm(V[inner+1, :])
          H[inner, inner+1] = normv
@@ -69,24 +69,24 @@ def gmres_mgs(A, b, x0=None, tol=1e-5, restart=20, maxiter=None, M=None, callbac
             for k in range(inner+1):
                local_sum[0] = V[k, :] @ V[inner+1, :]
                corr = mpi4py.MPI.COMM_WORLD.allreduce(local_sum)
-               H[k, inner] = H[k, inner] + corr
+               H[inner, k] = H[inner, k] + corr
                V[inner+1, :] = axpy(V[k, :], V[inner+1, :], n, -corr)
 
          # Check for breakdown
-         if H[inner+1, inner] != 0.0:
-            V[inner+1, :] = scal(1.0/H[inner+1, inner], V[inner+1, :])
+         if H[inner, inner+1] != 0.0:
+            V[inner+1, :] = scal(1.0/H[inner, inner+1], V[inner+1, :])
 
          # Apply previous Givens rotations to H
          if inner > 0:
-            apply_givens(Q, H[:, inner], inner)
+            apply_givens(Q, H[inner, :], inner)
 
          # Calculate and apply next complex-valued Givens Rotation
          # ==> Note that if restart = n, then this is unnecessary
          # for the last inner
          #    iteration, when inner = n-1.
          if inner != n-1:
-            if H[inner+1, inner] != 0:
-               [c, s, r] = lartg(H[inner, inner], H[inner+1, inner])
+            if H[inner, inner+1] != 0:
+               [c, s, r] = lartg(H[inner, inner], H[inner, inner+1])
                Qblock = numpy.array([[c, s], [-numpy.conjugate(s), c]])
                Q.append(Qblock)
 
@@ -95,8 +95,8 @@ def gmres_mgs(A, b, x0=None, tol=1e-5, restart=20, maxiter=None, M=None, callbac
                g[inner:inner+2] = Qblock @ g[inner:inner+2]
 
                # Apply effect of Givens Rotation to H
-               H[inner, inner] = dot(Qblock[0, :], H[inner:inner+2,inner])
-               H[inner+1, inner] = 0.0
+               H[inner, inner] = dotu(Qblock[0, :], H[inner, inner:inner+2])
+               H[inner, inner+1] = 0.0
 
          # Don't update normr if last inner iteration, because
          # normr is calculated directly after this loop ends.
@@ -111,15 +111,12 @@ def gmres_mgs(A, b, x0=None, tol=1e-5, restart=20, maxiter=None, M=None, callbac
 
       # end inner loop, back to outer loop
 
-      y = scipy.linalg.solve_triangular(H[0:inner+1, 0:inner+1], g[0:inner+1])
-
-      update = numpy.ravel(y.reshape(-1, 1) @ V[:inner+1, :])
+      # Find best update to x in Krylov Space V.
+      y = scipy.linalg.solve_triangular(H[0:inner+1, 0:inner+1].T, g[0:inner+1])
+      update = numpy.ravel(V[:inner+1, :].T @ y.reshape(-1, 1))
       x = x + update
       r = b - A(x)
 
-      # Apply preconditioner
-#      r = M * r
-      
       normr = norm(r)
 
       # Allow user access to the iterates
@@ -167,4 +164,4 @@ def apply_givens(Q, v, k):
 
    """
    for j in range(k):
-      v[j+2:j] = Q[j] @ v[j+2:j]
+      v[j:j+2] = Q[j] @ v[j:j+2]
