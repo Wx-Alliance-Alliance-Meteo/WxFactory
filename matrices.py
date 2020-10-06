@@ -1,11 +1,12 @@
 import numpy
 import numpy.linalg
+import math
 import scipy.special
 
 import dgfilter
 
 class DFR_operators:
-   def __init__(self, grd):
+   def __init__(self, grd, param):
       self.extrap_west = lagrangeEval(grd.solutionPoints, -1)
       self.extrap_east = lagrangeEval(grd.solutionPoints,  1)
 
@@ -25,12 +26,14 @@ class DFR_operators:
       self.diff_tr = self.diff.T
 
       self.quad_weights = numpy.outer(grd.glweights, grd.glweights)
-
-      self.V = vandermonde(grd.solutionPoints)
-      self.invV = numpy.linalg.inv(self.V) # TODO : An explicit formula for the inverse is known.
-
-      self.filter = dgfilter.exponential(len(grd.solutionPoints)-1, 0, 16, self.V, self.invV)
-      self.filter_tr = self.filter.T
+   
+      if param.filter_apply:
+         self.V = vandermonde(grd.solutionPoints)
+         self.invV = numpy.linalg.inv(self.V)
+         N = len(grd.solutionPoints)-1
+         Nc = math.floor(param.filter_cutoff * N)
+         self.filter = dgfilter.exponential(N, Nc, param.filter_order, self.V, self.invV)
+         self.filter_tr = self.filter.T
 
 def lagrangeEval(points, x):
    l = numpy.zeros_like(points)

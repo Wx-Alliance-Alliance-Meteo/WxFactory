@@ -37,7 +37,7 @@ def main():
    geom = cubed_sphere(param.nb_elements, param.nbsolpts, param.λ0, param.ϕ0, param.α0, my_cube_face)
 
    # Build differentiation matrice and boundary correction
-   mtrx = DFR_operators(geom)
+   mtrx = DFR_operators(geom, param)
 
    # Initialize metric tensor
    metric = Metric(geom)
@@ -50,7 +50,7 @@ def main():
       output_netcdf(Q, geom, metric, mtrx, topo, step, param)  # store initial conditions
 
    # Time stepping
-   rhs_handle = lambda q: rhs_sw(q, geom, mtrx, metric, topo, comm_dist_graph, param.nbsolpts, param.nb_elements, param.case_number)
+   rhs_handle = lambda q: rhs_sw(q, geom, mtrx, metric, topo, comm_dist_graph, param.nbsolpts, param.nb_elements, param.case_number, param.filter_apply)
 
    if param.time_integrator.lower()[:3] == 'epi' and param.time_integrator[3:].isdigit():
       order = int(param.time_integrator[3:])
@@ -63,9 +63,9 @@ def main():
    elif param.time_integrator.lower() == 'rat2':
       stepper = Rat2(rhs_handle, param.tolerance)
    elif  param.time_integrator.lower() =='epi2/ark':
-      rhs_explicit = lambda q: rhs_sw_explicit(q, geom, mtrx, metric, topo, comm_dist_graph, param.nbsolpts, param.nb_elements, param.case_number)
+      rhs_explicit = lambda q: rhs_sw_explicit(q, geom, mtrx, metric, topo, comm_dist_graph, param.nbsolpts, param.nb_elements, param.case_number, param.filter_apply)
 
-      rhs_implicit = lambda q: rhs_sw_implicit(q, geom, mtrx, metric, topo, comm_dist_graph, param.nbsolpts, param.nb_elements, param.case_number)
+      rhs_implicit = lambda q: rhs_sw_implicit(q, geom, mtrx, metric, topo, comm_dist_graph, param.nbsolpts, param.nb_elements, param.case_number, param.filter_apply)
 
       stepper = ARK_epi2(rhs_handle, rhs_explicit, rhs_implicit, param.tolerance)
    else:
