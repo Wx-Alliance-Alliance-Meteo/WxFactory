@@ -12,9 +12,6 @@ from winds import contra2wind
 def output_init(geom, param):
    """ Initialise the netCDF4 file."""
 
-   # Code needs to be modified if MPI size > 6
-   assert mpi4py.MPI.COMM_WORLD.Get_size() == 6, 'MPI size must be equal to 6'
-
    # creating the netcdf files
    global ncfile
    os.makedirs(os.path.dirname(param.output_file), exist_ok=True)
@@ -28,7 +25,7 @@ def output_init(geom, param):
    # create dimensions
    ni, nj= geom.lat.shape
    ncfile.createDimension('time', None) # unlimited
-   ncfile.createDimension('nf', 6)
+   ncfile.createDimension('npe', mpi4py.MPI.COMM_WORLD.Get_size())
    ncfile.createDimension('Ydim', nj)
    ncfile.createDimension('Xdim', ni)
 
@@ -38,12 +35,12 @@ def output_init(geom, param):
    tme.long_name = 'time'
    tme.set_collective(True)
 
-   # create faces axis
-   face = ncfile.createVariable('nf', 'i4', ('nf'))
-   face.grads_dim = 'e'
-   face.standard_name = 'face'
-   face.long_name = 'cubed-sphere face'
-   face.axis = 'e'
+   # create tiles axis
+   tile = ncfile.createVariable('npe', 'i4', ('npe'))
+   tile.grads_dim = 'e'
+   tile.standard_name = 'tile'
+   tile.long_name = 'cubed-sphere tile'
+   tile.axis = 'e'
 
    # create latitude axis
    yyy = ncfile.createVariable('Ydim', numpy.float64, ('Ydim'))
@@ -56,15 +53,15 @@ def output_init(geom, param):
    xxx.units = 'radians_east'
 
    # create variable array
-   lat = ncfile.createVariable('lats', numpy.float64, ('nf', 'Xdim', 'Ydim'))
+   lat = ncfile.createVariable('lats', numpy.float64, ('npe', 'Xdim', 'Ydim'))
    lat.long_name = 'latitude'
    lat.units = 'degrees_north'
 
-   lon = ncfile.createVariable('lons', numpy.dtype('double').char, ('nf', 'Xdim', 'Ydim'))
+   lon = ncfile.createVariable('lons', numpy.dtype('double').char, ('npe', 'Xdim', 'Ydim'))
    lon.long_name = 'longitude'
    lon.units = 'degrees_east'
 
-   hhh = ncfile.createVariable('h', numpy.dtype('double').char, ('time', 'nf', 'Xdim', 'Ydim'))
+   hhh = ncfile.createVariable('h', numpy.dtype('double').char, ('time', 'npe', 'Xdim', 'Ydim'))
    hhh.long_name = 'fluid height'
    hhh.units = 'm'
    hhh.coordinates = 'lons lats'
@@ -72,7 +69,7 @@ def output_init(geom, param):
    hhh.set_collective(True)
 
    if param.case_number >= 2:
-      uuu = ncfile.createVariable('U', numpy.dtype('double').char, ('time', 'nf', 'Xdim', 'Ydim'))
+      uuu = ncfile.createVariable('U', numpy.dtype('double').char, ('time', 'npe', 'Xdim', 'Ydim'))
       uuu.long_name = 'eastward_wind'
       uuu.units = 'm s-1'
       uuu.standard_name = 'eastward_wind'
@@ -80,7 +77,7 @@ def output_init(geom, param):
       uuu.grid_mapping = 'cubed_sphere'
       uuu.set_collective(True)
 
-      vvv = ncfile.createVariable('V', numpy.dtype('double').char, ('time', 'nf', 'Xdim', 'Ydim'))
+      vvv = ncfile.createVariable('V', numpy.dtype('double').char, ('time', 'npe', 'Xdim', 'Ydim'))
       vvv.long_name = 'northward_wind'
       vvv.units = 'm s-1'
       vvv.standard_name = 'northward_wind'
@@ -88,7 +85,7 @@ def output_init(geom, param):
       vvv.grid_mapping = 'cubed_sphere'
       vvv.set_collective(True)
 
-      drv = ncfile.createVariable('RV', numpy.dtype('double').char, ('time', 'nf', 'Xdim', 'Ydim'))
+      drv = ncfile.createVariable('RV', numpy.dtype('double').char, ('time', 'npe', 'Xdim', 'Ydim'))
       drv.long_name = 'Relative vorticity'
       drv.units = 'kg/s/m^4'
       drv.standard_name = 'Relative vorticity'
@@ -96,7 +93,7 @@ def output_init(geom, param):
       drv.grid_mapping = 'cubed_sphere'
       drv.set_collective(True)
 
-      dpv = ncfile.createVariable('PV', numpy.dtype('double').char, ('time', 'nf', 'Xdim', 'Ydim'))
+      dpv = ncfile.createVariable('PV', numpy.dtype('double').char, ('time', 'npe', 'Xdim', 'Ydim'))
       dpv.long_name = 'Potential vorticity'
       dpv.units = 'kg/s/m^4' # TODO: 1/(m s) ???
       dpv.standard_name = 'Potential vorticity'
@@ -110,7 +107,7 @@ def output_init(geom, param):
       xxx[:] = geom.x1[:]
       yyy[:] = geom.x2[:]
 
-   face[rank] = rank
+   tile[rank] = rank
    lon[rank,:,:] = geom.lon * 180/math.pi
    lat[rank,:,:] = geom.lat * 180/math.pi
 

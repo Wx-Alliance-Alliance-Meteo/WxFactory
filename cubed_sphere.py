@@ -5,7 +5,7 @@ import quadrature
 from definitions import *
 
 class cubed_sphere:
-   def __init__(self, nb_elements, nbsolpts, λ0, ϕ0, α0, cube_face):
+   def __init__(self, nb_elements, nbsolpts, λ0, ϕ0, α0, ptopo):
 
       #      +---+
       #      | 4 |
@@ -15,8 +15,20 @@ class cubed_sphere:
       #      | 5 |
       #      +---+
 
-      domain_x1 = (-math.pi/4, math.pi/4)
-      domain_x2 = (-math.pi/4, math.pi/4)
+      panel_domain_x1 = (-math.pi/4, math.pi/4)
+      panel_domain_x2 = (-math.pi/4, math.pi/4)
+
+      Δx1_PE = (panel_domain_x1[1] - panel_domain_x1[0]) / ptopo.nb_lines_per_panel
+      Δx2_PE = (panel_domain_x2[1] - panel_domain_x2[0]) / ptopo.nb_lines_per_panel
+
+      PE_start_x1 = -math.pi/4 + ptopo.my_col * Δx1_PE
+      PE_end_x1 = PE_start_x1 + Δx1_PE
+
+      PE_start_x2 = -math.pi/4 + ptopo.my_row * Δx2_PE
+      PE_end_x2 = PE_start_x2 + Δx2_PE
+
+      domain_x1 = (PE_start_x1, PE_end_x1)
+      domain_x2 = (PE_start_x2, PE_end_x2)
 
       nb_elements_x1 = nb_elements
       nb_elements_x2 = nb_elements
@@ -94,27 +106,27 @@ class cubed_sphere:
       s2=math.sin(ϕ0)
       s3=math.sin(α0)
 
-      if cube_face == 0:
+      if ptopo.my_panel == 0:
          lon_p = λ0
          lat_p = ϕ0
          angle_p = α0
 
-      elif cube_face == 1:
+      elif ptopo.my_panel == 1:
          lon_p = math.atan2(s1*s2*s3+c1*c3, c1*s2*s3-s1*c3)
          lat_p = -math.asin(c2*s3)
          angle_p = math.atan2(s2, c2*c3)
 
-      elif cube_face == 2:
+      elif ptopo.my_panel == 2:
          lon_p = math.atan2(-s1, -c1)
          lat_p = -ϕ0
          angle_p = -math.atan2(s3, c3)
 
-      elif cube_face == 3:
+      elif ptopo.my_panel == 3:
          lon_p = math.atan2(-s1*s2*s3-c1*c3, -c1*s2*s3+s1*c3)
          lat_p = math.asin(c2*s3)
          angle_p = -math.atan2(s2, c2*c3)
 
-      elif cube_face == 4:
+      elif ptopo.my_panel == 4:
          if (abs(ϕ0) < 1e-13) and (abs(α0) < 1e-13):
             lon_p = 0.0
             lat_p = math.pi / 2.0
@@ -124,7 +136,7 @@ class cubed_sphere:
             lat_p = math.asin(c2*c3)
             angle_p = math.atan2(c2*s3, -s2)
 
-      elif cube_face == 5:
+      elif ptopo.my_panel == 5:
          if (abs(ϕ0)<1e-13) and (abs(α0)<1e-13):
             lon_p = 0.0
             lat_p = -math.pi/2.0
@@ -209,8 +221,6 @@ class cubed_sphere:
       self.lat_itf_i = lat_itf_i
       self.lon_itf_j = lon_itf_j
       self.lat_itf_j = lat_itf_j
-
-      self.cube_face = cube_face
 
       self.coslon = numpy.cos(lon)
       self.sinlon = numpy.sin(lon)
