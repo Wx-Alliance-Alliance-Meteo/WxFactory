@@ -6,7 +6,7 @@ from matvec        import matvec_fun, matvec_rat
 from kiops         import kiops
 from linsol        import gmres_mgs, fgmres
 from phi           import phi_ark
-from interpolation import LagrangeSimpleInterpolator
+from interpolation import LagrangeSimpleInterpolator, BilinearInterpolator
 from matvec_product_caller import MatvecCaller
 
 class Epirk4s3a:
@@ -192,6 +192,7 @@ class Rat2:
    def step(self, Q, dt):
       matvec_handle = MatvecCaller(matvec_rat, dt, Q, self.rhs)
       interpolator = LagrangeSimpleInterpolator(self.rhs.geometry)
+      # interpolator = BilinearInterpolator(self.rhs.geometry)
       lowres_field = interpolator.evalGridFast(Q, self.rhs_precond.nb_sol_pts, self.rhs.nb_sol_pts)
       matvec_precond_handle = MatvecCaller(matvec_rat, dt, lowres_field, self.rhs_precond)
 

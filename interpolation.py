@@ -7,12 +7,79 @@ from parallel   import xchange_scalars
 from quadrature import gauss_legendre
 from timer      import Timer
 
+
+basis_point_sets = {}
+
+def evalSingleField(num_elem, field, elem_interp, new_num_basis_points, old_num_basis_points, result=None):
+   # Interpolate (vertically) on entire rows of elements (horizontally) at once
+   interp_1 = numpy.empty((num_elem * new_num_basis_points, num_elem * old_num_basis_points))
+   for i in range(num_elem):
+      interp_1[i * new_num_basis_points:(i + 1) * new_num_basis_points, :] = \
+         elem_interp @ field[i * old_num_basis_points:(i + 1) * old_num_basis_points, :]
+
+   # Interpolate (horizontally) on columns of interpolated elements
+   if result is None:
+      result = numpy.empty((num_elem * new_num_basis_points, num_elem * new_num_basis_points))
+
+   for i in range(num_elem):
+      result[:, i * new_num_basis_points:(i + 1) * new_num_basis_points] = \
+         interp_1[:, i * old_num_basis_points:(i + 1) * old_num_basis_points] @ elem_interp.T
+
+   return result
+
+
 class BilinearInterpolator:
-   def __init__(self, grid, field):
+   def __init__(self, grid):
       self.grid = grid
-      self.field = field
       self.x_pos = grid.x1
       self.y_pos = grid.x2
+
+      self.basis_points = grid.solutionPoints
+      self.num_basis_points = len(self.basis_points)
+      self.n_elem_i = int(len(self.x_pos) / self.num_basis_points)
+
+      basis_point_sets[self.num_basis_points] = self.basis_points
+
+   def getWeights(self, point_set, x):
+      ix = 0
+      while point_set[ix + 1] < x:
+         if ix + 2 >= len(point_set):
+            break
+         ix += 1
+
+      x_small = point_set[ix]
+      x_large = point_set[ix+1]
+
+      alpha = 1.0 - (x - x_small) / (x_large - x_small)
+
+      result       = numpy.zeros_like(point_set)
+      result[ix]   = alpha
+      result[ix+1] = 1.0 - alpha
+
+      return result
+
+
+   def evalGridFast(self, field, new_num_basis_points, old_num_basis_points):
+      for i in [new_num_basis_points, old_num_basis_points]:
+         if i not in basis_point_sets:
+            basis_point_sets[i], _ = gauss_legendre(i)
+
+      new_basis_points = basis_point_sets[new_num_basis_points]
+      old_basis_points = basis_point_sets[old_num_basis_points]
+
+      elem_interp = numpy.array([self.getWeights(old_basis_points, px) for px in new_basis_points])
+
+      result = None
+      if field.ndim == 2:
+         result = evalSingleField(self.n_elem_i, field, elem_interp, new_num_basis_points, old_num_basis_points)
+      elif field.ndim == 3:
+         num_fields = field.shape[0]
+         result = numpy.empty((num_fields, self.n_elem_i * new_num_basis_points, self.n_elem_i * new_num_basis_points))
+         for i, f in enumerate(field):
+            evalSingleField(self.n_elem_i, f, elem_interp, new_num_basis_points, old_num_basis_points, result[i])
+
+      return result
+
 
    def getValueAtXY(self, x, y):
       ix = 0
@@ -49,14 +116,12 @@ class LagrangeSimpleInterpolator:
 
       self.grid  = grid
 
-      self.basis_point_sets = {}
-
       self.x_pos = grid.x1
       self.y_pos = grid.x2
       self.basis_points = grid.solutionPoints
       self.num_basis_points = len(self.basis_points)
 
-      self.basis_point_sets[self.num_basis_points] = self.basis_points
+      basis_point_sets[self.num_basis_points] = self.basis_points
 
       self.min_x, self.max_x = grid.domain_x1
       self.min_y, self.max_y = grid.domain_x2
@@ -68,24 +133,6 @@ class LagrangeSimpleInterpolator:
       self.grid_eval_timer = Timer(time.time())
       self.grid_eval_fast_timer = Timer(self.grid_eval_timer.initial_time)
 
-   def evalSingleField(self, field, elem_interp, new_num_basis_points, old_num_basis_points, result = None):
-      # Interpolate (vertically) on entire rows of elements (horizontally) at once
-      interp_1 = numpy.empty((self.n_elem_i * new_num_basis_points, self.n_elem_i * old_num_basis_points))
-      for i in range(self.n_elem_i):
-         interp_1[i * new_num_basis_points:(i+1) * new_num_basis_points, :] = \
-            elem_interp @ field[i * old_num_basis_points:(i+1) * old_num_basis_points, :]
-
-      # Interpolate (horizontally) on columns of interpolated elements
-      if result is None:
-         result = numpy.empty((self.n_elem_i * new_num_basis_points, self.n_elem_i * new_num_basis_points))
-
-      for i in range(self.n_elem_i):
-         result[:,i * new_num_basis_points:(i+1) * new_num_basis_points] = \
-            interp_1[:,i*old_num_basis_points:(i+1) * old_num_basis_points] @ elem_interp.T
-
-
-      return result
-      pass
 
    def evalGridFast(self, field, new_num_basis_points, old_num_basis_points):
       """
@@ -97,22 +144,22 @@ class LagrangeSimpleInterpolator:
       self.grid_eval_fast_timer.start()
 
       for i in [new_num_basis_points, old_num_basis_points]:
-         if i not in self.basis_point_sets:
-            self.basis_point_sets[i], _ = gauss_legendre(i)
+         if i not in basis_point_sets:
+            basis_point_sets[i], _ = gauss_legendre(i)
 
-      new_basis_points = self.basis_point_sets[new_num_basis_points]
-      old_basis_points = self.basis_point_sets[old_num_basis_points]
+      new_basis_points = basis_point_sets[new_num_basis_points]
+      old_basis_points = basis_point_sets[old_num_basis_points]
 
       elem_interp = numpy.array([lagrangeEval(old_basis_points, px) for px in new_basis_points])
 
       result = None
       if field.ndim == 2:
-         result = self.evalSingleField(field, elem_interp, new_num_basis_points, old_num_basis_points)
+         result = evalSingleField(self.n_elem_i, field, elem_interp, new_num_basis_points, old_num_basis_points)
       elif field.ndim == 3:
          num_fields = field.shape[0]
          result = numpy.empty((num_fields, self.n_elem_i * new_num_basis_points, self.n_elem_i * new_num_basis_points))
          for i, f in enumerate(field):
-            self.evalSingleField(f, elem_interp, new_num_basis_points, old_num_basis_points, result[i])
+            evalSingleField(self.n_elem_i, f, elem_interp, new_num_basis_points, old_num_basis_points, result[i])
 
       self.grid_eval_fast_timer.stop()
 
