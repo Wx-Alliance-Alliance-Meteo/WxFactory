@@ -36,6 +36,9 @@ def rhs_sw_implicit(Q, geom, mtrx, metric, topo, comm_dist_graph, nbsolpts, nb_e
    flux_L         = numpy.zeros(nbsolpts*nb_elements_horiz, dtype=type_vec)
    flux_R         = numpy.zeros(nbsolpts*nb_elements_horiz, dtype=type_vec)
 
+   if not shallow_water_equations:
+      return rhs
+
    # Unpack physical variables
    h = Q[idx_h, :, :]
    hsquared = Q[idx_h, :, :]**2
