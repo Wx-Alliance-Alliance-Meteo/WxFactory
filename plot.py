@@ -13,6 +13,8 @@ def plot_field(dataFile, outputFile, idx = -1, field = 'h', contour = True, nCon
    data = netCDF4.Dataset(dataFile, 'r')
    nx = data['Xdim'].shape[0]
    ny = data['Ydim'].shape[0]
+   npe = data['npe'].shape[0]
+
    global_val = data[field][:,:,:,:]
    if error:
       global_val = numpy.maximum(numpy.finfo(float).eps, numpy.abs((global_val - global_val[0,:,:,:])/global_val[0,:,:,:]))
@@ -25,14 +27,14 @@ def plot_field(dataFile, outputFile, idx = -1, field = 'h', contour = True, nCon
    ax = fig.add_subplot(1, 1, 1, projection=ccrs.PlateCarree())
    ax.set_global()
 
-   for face in range(6):
-      v = global_val[idx, face, :, :]
+   for pe in range(npe):
+      v = global_val[idx, pe, :, :]
 
-      lats = data['lats'][face, :, :]
+      lats = data['lats'][pe, :, :]
       shift = 180 - lats[nx // 2, ny // 2]
       lats = (lats + shift) % 360 - shift
 
-      lons = data['lons'][face, :, :]
+      lons = data['lons'][pe, :, :]
       shift = 180 - lons[nx // 2, ny // 2]
       lons = (lons + shift) % 360 - shift
 
@@ -64,6 +66,7 @@ def plot_quiver(dataFile, outputFile, idx = -1, nArrows = 15):
    data = netCDF4.Dataset(dataFile, 'r')
    nx = data['Xdim'].shape[0]
    ny = data['Ydim'].shape[0]
+   npe = data['npe'].shape[0]
    vmin, vmax = data['h'][:, :, :, :].min(), data['h'][:, :, :, :].max()
 
    # Setup figure
@@ -75,15 +78,15 @@ def plot_quiver(dataFile, outputFile, idx = -1, nArrows = 15):
    stepX = ceil(nx / nArrows)
    stepY = ceil(ny / nArrows)
 
-   for face in range(6):
-      U = data['U'][idx, face, ::stepX, ::stepY]
-      V = data['V'][idx, face, ::stepX, ::stepY]
+   for pe in range(npe):
+      U = data['U'][idx, pe, ::stepX, ::stepY]
+      V = data['V'][idx, pe, ::stepX, ::stepY]
 
-      lats = data['lats'][face, ::stepX, ::stepY]
+      lats = data['lats'][pe, ::stepX, ::stepY]
       shift = 180 - lats[nArrows // 2, nArrows // 2]
       lats = (lats + shift) % 360 - shift
 
-      lons = data['lons'][face, ::stepX, ::stepY]
+      lons = data['lons'][pe, ::stepX, ::stepY]
       shift = 180 - lons[nArrows // 2, nArrows // 2]
       lons = (lons + shift) % 360 - shift
 
