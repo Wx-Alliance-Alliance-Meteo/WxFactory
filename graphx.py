@@ -61,11 +61,11 @@ def plot_field(geom, field):
    glb_field = mpi4py.MPI.COMM_WORLD.gather(field.T, root=0)
 
 #   plt.plot_source = []
-
+   ptopo_size = mpi4py.MPI.COMM_WORLD.Get_size()
    if mpi4py.MPI.COMM_WORLD.Get_rank() == 0:
       min_val = float("inf")
       max_val = -float("inf")
-      for f in range(nbfaces):
+      for f in range(ptopo_size):
          face_min = glb_field[f].min()
          face_max = glb_field[f].max()
          if face_max > max_val:
@@ -74,7 +74,7 @@ def plot_field(geom, field):
             min_val = face_min
 
       fig = mayavi.mlab.figure(0, size=(800, 800), bgcolor=(0,0,0))
-      for f in range(nbfaces):
+      for f in range(ptopo_size):
          s = mayavi.mlab.mesh(glb_x[f], glb_y[f], glb_z[f], scalars=glb_field[f], colormap="jet", vmin=min_val, vmax=max_val)
    #      plt.plot_source.append(s)
 
