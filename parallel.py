@@ -16,7 +16,7 @@ class Distributed_World:
       #       0 |  + -->x_1 |
       #         +-----------+
       #
-      # For instance, the panel 0 with n=24 will be endowed with a 4x4 topology like this
+      # For instance, with n=96 the panel 0 will be endowed with a 4x4 topology like this
       #
       #      +---+---+---+---+
       #      | 12| 13| 14| 15|
