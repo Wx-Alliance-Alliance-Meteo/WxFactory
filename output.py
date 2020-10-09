@@ -26,8 +26,8 @@ def output_init(geom, param):
    ni, nj= geom.lat.shape
    ncfile.createDimension('time', None) # unlimited
    ncfile.createDimension('npe', mpi4py.MPI.COMM_WORLD.Get_size())
-   ncfile.createDimension('Ydim', nj)
-   ncfile.createDimension('Xdim', ni)
+   ncfile.createDimension('Ydim', ni)
+   ncfile.createDimension('Xdim', nj)
 
    # create time axis
    tme = ncfile.createVariable('time', numpy.float64, ('time',))
@@ -53,15 +53,15 @@ def output_init(geom, param):
    xxx.units = 'radians_east'
 
    # create variable array
-   lat = ncfile.createVariable('lats', numpy.float64, ('npe', 'Xdim', 'Ydim'))
+   lat = ncfile.createVariable('lats', numpy.float64, ('npe', 'Ydim', 'Xdim'))
    lat.long_name = 'latitude'
    lat.units = 'degrees_north'
 
-   lon = ncfile.createVariable('lons', numpy.dtype('double').char, ('npe', 'Xdim', 'Ydim'))
+   lon = ncfile.createVariable('lons', numpy.dtype('double').char, ('npe', 'Ydim', 'Xdim'))
    lon.long_name = 'longitude'
    lon.units = 'degrees_east'
 
-   hhh = ncfile.createVariable('h', numpy.dtype('double').char, ('time', 'npe', 'Xdim', 'Ydim'))
+   hhh = ncfile.createVariable('h', numpy.dtype('double').char, ('time', 'npe', 'Ydim', 'Xdim'))
    hhh.long_name = 'fluid height'
    hhh.units = 'm'
    hhh.coordinates = 'lons lats'
@@ -69,7 +69,7 @@ def output_init(geom, param):
    hhh.set_collective(True)
 
    if param.case_number >= 2:
-      uuu = ncfile.createVariable('U', numpy.dtype('double').char, ('time', 'npe', 'Xdim', 'Ydim'))
+      uuu = ncfile.createVariable('U', numpy.dtype('double').char, ('time', 'npe', 'Ydim', 'Xdim'))
       uuu.long_name = 'eastward_wind'
       uuu.units = 'm s-1'
       uuu.standard_name = 'eastward_wind'
@@ -77,7 +77,7 @@ def output_init(geom, param):
       uuu.grid_mapping = 'cubed_sphere'
       uuu.set_collective(True)
 
-      vvv = ncfile.createVariable('V', numpy.dtype('double').char, ('time', 'npe', 'Xdim', 'Ydim'))
+      vvv = ncfile.createVariable('V', numpy.dtype('double').char, ('time', 'npe', 'Ydim', 'Xdim'))
       vvv.long_name = 'northward_wind'
       vvv.units = 'm s-1'
       vvv.standard_name = 'northward_wind'
@@ -85,7 +85,7 @@ def output_init(geom, param):
       vvv.grid_mapping = 'cubed_sphere'
       vvv.set_collective(True)
 
-      drv = ncfile.createVariable('RV', numpy.dtype('double').char, ('time', 'npe', 'Xdim', 'Ydim'))
+      drv = ncfile.createVariable('RV', numpy.dtype('double').char, ('time', 'npe', 'Ydim', 'Xdim'))
       drv.long_name = 'Relative vorticity'
       drv.units = 'kg/s/m^4'
       drv.standard_name = 'Relative vorticity'
@@ -93,7 +93,7 @@ def output_init(geom, param):
       drv.grid_mapping = 'cubed_sphere'
       drv.set_collective(True)
 
-      dpv = ncfile.createVariable('PV', numpy.dtype('double').char, ('time', 'npe', 'Xdim', 'Ydim'))
+      dpv = ncfile.createVariable('PV', numpy.dtype('double').char, ('time', 'npe', 'Ydim', 'Xdim'))
       dpv.long_name = 'Potential vorticity'
       dpv.units = 'kg/s/m^4' # TODO: 1/(m s) ???
       dpv.standard_name = 'Potential vorticity'
