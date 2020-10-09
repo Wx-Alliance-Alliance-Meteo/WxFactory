@@ -20,7 +20,7 @@ class Distributed_World:
       #      +---+
 
       self.nb_pe_per_panel = int(self.size / 6)
-      self.nb_lines_per_panel = math.sqrt(self.nb_pe_per_panel)
+      self.nb_lines_per_panel = int(math.sqrt(self.nb_pe_per_panel))
       self.nb_elems_per_line = self.nb_lines_per_panel
 
       rank_from_location = lambda panel, row, col: panel * self.nb_pe_per_panel + row * self.nb_lines_per_panel + col
