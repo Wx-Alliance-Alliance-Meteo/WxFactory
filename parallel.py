@@ -8,18 +8,11 @@ class Distributed_World:
       self.size = mpi4py.MPI.COMM_WORLD.Get_size()
       self.rank = mpi4py.MPI.COMM_WORLD.Get_rank()
 
-      if (self.size % 6 != 0) or (self.size > 6 and self.size % 4 != 0):
-         raise Exception('The minimum Number of processes is 6. If greater than 6, then it should be a common multiple of 4 and 6. For instance: 6, 24, 96, ...')
-
-      #      +---+
-      #      | 4 |
-      #  +---+---+---+---+
-      #  | 3 | 0 | 1 | 2 |
-      #  +---+---+---+---+
-      #      | 5 |
-      #      +---+
-
       self.nb_pe_per_panel = int(self.size / 6)
+
+      if self.size < 6 or self.nb_pe_per_panel != math.isqrt(self.nb_pe_per_panel) ** 2 or self.nb_pe_per_panel * 6 != self.size:
+         raise Exception('Wrong number of PEs. This topology is not allowed')
+
       self.nb_lines_per_panel = int(math.sqrt(self.nb_pe_per_panel))
       self.nb_elems_per_line = self.nb_lines_per_panel
 
@@ -31,6 +24,14 @@ class Distributed_World:
       self.my_col = int(self.my_rank_in_panel % self.nb_lines_per_panel)
 
       # --- List of panel neighbours for my panel
+      #
+      #      +---+
+      #      | 4 |
+      #  +---+---+---+---+
+      #  | 3 | 0 | 1 | 2 |
+      #  +---+---+---+---+
+      #      | 5 |
+      #      +---+
 
       if self.my_panel == 0:
          my_north_panel = 4
