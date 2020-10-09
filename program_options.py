@@ -56,11 +56,6 @@ class Configuration:
       except (NoOptionError):
          self.filter_cutoff    = 0
 
-      try:
-         self.nb_levels = parser.getint('Spatial_discretization', 'nb_levels')
-      except (NoOptionError):
-         self.nb_levels = 1
-
       self.stat_freq   = parser.getint('Output_options', 'stat_freq')
       self.output_freq = parser.getint('Output_options', 'output_freq')
       self.output_file = parser.get('Output_options', 'output_file')
