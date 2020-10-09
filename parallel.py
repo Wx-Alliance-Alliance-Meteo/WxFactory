@@ -5,6 +5,29 @@ import math
 class Distributed_World:
    def __init__(self):
 
+      # The numbering of the PEs starts at the bottom right. Pannel ranks increase towards the east in the x1 direction and increases towards the north in the x2 direction:
+      #
+      #            0 1 2 3 4 
+      #         +-----------+
+      #       4 |           |
+      #       3 |  x_2      |
+      #       2 |  ^        |
+      #       1 |  |        |
+      #       0 |  + -->x_1 |
+      #         +-----------+
+      #
+      # For instance, the panel 0 with n=24 will be endowed with a 4x4 topology like this
+      #
+      #      +---+---+---+---+
+      #      | 12| 13| 14| 15|
+      #      |---+---+---+---|
+      #      | 8 | 9 | 10| 11|
+      #      |---+---+---+---|
+      #      | 4 | 5 | 6 | 7 |
+      #      |---+---+---+---|
+      #      | 0 | 1 | 2 | 3 |
+      #      +---+---+---+---+
+
       self.size = mpi4py.MPI.COMM_WORLD.Get_size()
       self.rank = mpi4py.MPI.COMM_WORLD.Get_rank()
 
