@@ -10,7 +10,7 @@ class Topo:
       self.hsurf_itf_i = hsurf_itf_i
       self.hsurf_itf_j = hsurf_itf_j
 
-def initialize(geom, metric, mtrx, param):
+def initialize_sw(geom, metric, mtrx, param):
 
    ni, nj = geom.lon.shape
 

@@ -7,13 +7,13 @@ from time import time
 import numpy
 
 from blockstats      import blockstats
-from config          import Configuration
 from cubed_sphere    import cubed_sphere
-from initialize      import initialize
+from initialize      import initialize_sw
 from matrices        import DFR_operators
 from metric          import Metric
 from output          import output_init, output_netcdf, output_finalize
 from parallel        import Distributed_World
+from program_options import Configuration
 from rhs_sw          import rhs_sw
 from rhs_sw_explicit import rhs_sw_explicit
 from rhs_sw_implicit import rhs_sw_implicit
@@ -43,7 +43,7 @@ def main():
    metric = Metric(geom)
 
    # Initialize state variables
-   Q, topo = initialize(geom, metric, mtrx, param)
+   Q, topo = initialize_sw(geom, metric, mtrx, param)
 
    if param.output_freq > 0:
       output_init(geom, param)
