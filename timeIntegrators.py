@@ -4,10 +4,11 @@ from collections import deque
 
 from matvec        import matvec_fun, matvec_rat
 from kiops         import kiops
-from linsol        import gmres_mgs, fgmres
+from linsol        import Fgmres
 from phi           import phi_ark
 from interpolation import LagrangeSimpleInterpolator, BilinearInterpolator
 from matvec_product_caller import MatvecCaller
+from timer         import Timer
 
 class Epirk4s3a:
    g21 = 1/2
@@ -184,35 +185,43 @@ class Tvdrk3:
       return Q
 
 class Rat2:
-   def __init__(self, rhs, rhs_precond, tol):
-      self.rhs         = rhs
-      self.rhs_precond = rhs_precond
-      self.tol         = tol
+   def __init__(self, rhs, tol, rank, preconditioner = None):
+      self.rhs            = rhs
+      self.preconditioner = preconditioner
+      self.out_stat_file  = 'rat2out.txt'
+
+      self.solver = Fgmres(tol = tol)
+
+      self.fgmres_time = Timer(0.0)
+      self.no_precond_time  = Timer(0.0)
+      self.rank = rank
 
    def step(self, Q, dt):
       matvec_handle = MatvecCaller(matvec_rat, dt, Q, self.rhs)
-      interpolator = LagrangeSimpleInterpolator(self.rhs.geometry)
-      # interpolator = BilinearInterpolator(self.rhs.geometry)
-      lowres_field = interpolator.evalGridFast(Q, self.rhs_precond.nb_sol_pts, self.rhs.nb_sol_pts)
-      matvec_precond_handle = MatvecCaller(matvec_rat, dt, lowres_field, self.rhs_precond)
+      if self.preconditioner: self.preconditioner.compute_matrix_caller(matvec_rat, dt, Q)
 
       rhs = self.rhs(Q).flatten()
-      rhs_precond = self.rhs_precond(lowres_field).flatten()
       x0 = numpy.zeros_like(rhs)
 
-      #phiv, local_error, niter, flag = gmres_mgs(matvec_handle, rhs, x0, tol=self.tol)
-      phiv, local_error, niter, flag = fgmres(
-            matvec_handle, rhs, matvec_precond_handle, rhs_precond, interpolator, x0, tol=self.tol)
-      phiv2, local_error2, niter2, flag2 = gmres_mgs(matvec_handle, rhs, phiv, tol=self.tol)
+      self.fgmres_time.start()
+      phiv, local_error, niter, flag = self.solver.solve(
+            matvec_handle, rhs, preconditioner = self.preconditioner, x0 = x0)
+      self.fgmres_time.stop()
 
-      total_diff = numpy.linalg.norm(phiv - phiv2)
-      if total_diff > self.tol:
-         print('AAAAHHHHHHHHHH THERE IS A DIFFERENCE')
-         print('Diff = {}, out of {} or {}'.format(total_diff, numpy.linalg.norm(phiv), numpy.linalg.norm(phiv2)))
-         raise ValueError
+      self.no_precond_time.start()
+      phiv_no_precond, _, iter_no_precond, _ = self.solver.solve(
+         matvec_handle, rhs, preconditioner = None, x0 = x0
+      )
+      self.no_precond_time.stop()
+
+      if self.rank == 0:
+         with open(self.out_stat_file, 'a') as out_file:
+            out_file.write('{} {} -- {} {} {} -- {} {}\n'.format(
+               self.preconditioner.order + 1, self.preconditioner.num_elements,
+               niter, flag, self.fgmres_time.last_time(), iter_no_precond, self.no_precond_time.last_time()))
 
       if flag == 0:
-         print('GMRES converged at iteration %d (%d) to a solution with local error %e' % (niter, niter2, local_error))
+         print('GMRES converged at iteration %d to a solution with local error %e' % (niter, local_error))
       else:
          print('GMRES stagnation at iteration %d, returning a solution with local error %e' % (niter, local_error))
 

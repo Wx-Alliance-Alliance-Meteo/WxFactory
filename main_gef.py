@@ -22,7 +22,7 @@ from timeIntegrators import Epi, Epirk4s3a, Tvdrk3, Rat2, ARK_epi2
 #from graphx          import plot_field_pair
 from interpolation   import interpolate
 from timer           import Timer, TimerGroup
-from preconditioner  import make_preconditioner_data
+from preconditioner  import Preconditioner
 from rhs_caller      import RhsCaller
 
 def main():
@@ -78,13 +78,8 @@ def main():
    elif param.time_integrator.lower() == 'tvdrk3':
       stepper = Tvdrk3(rhs_handle)
    elif param.time_integrator.lower() == 'rat2':
-      lowres_grid_size = 2
-      geom_precond, mtrx_precond, metric_precond, topo_precond = make_preconditioner_data(
-            param, lowres_grid_size, my_cube_face)
-      rhs_precond_handle = RhsCaller(
-            rhs_sw, geom_precond, mtrx_precond, metric_precond, topo_precond, comm_dist_graph,
-            len(geom_precond.solutionPoints), param.nb_elements, param.case_number, TimerGroup(5, initial_time))
-      stepper = Rat2(rhs_handle, rhs_precond_handle, param.tolerance)
+      preconditioner = Preconditioner(param, geom, rhs_sw, comm_dist_graph, my_cube_face, initial_time)
+      stepper = Rat2(rhs_handle, param.tolerance, my_cube_face, preconditioner = preconditioner)
    elif  param.time_integrator.lower() =='epi2/ark':
       rhs_explicit = lambda q: rhs_sw_explicit(q, geom, mtrx, metric, topo, comm_dist_graph, param.nbsolpts, param.nb_elements, param.case_number)
 
