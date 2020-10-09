@@ -3,7 +3,7 @@ import netCDF4
 import cartopy.crs as ccrs
 import matplotlib.pyplot as plt
 from matplotlib import ticker
-from math import ceil
+from math import ceil, floor, sqrt
 import sys
 from glob import glob
 import re
@@ -14,6 +14,13 @@ def plot_field(dataFile, outputFile, idx = -1, field = 'h', contour = True, nCon
    nx = data['Xdim'].shape[0]
    ny = data['Ydim'].shape[0]
    npe = data['npe'].shape[0]
+
+   nb_pe_per_panel = npe // 6
+   nb_lines_per_panel = int(sqrt(nb_pe_per_panel))
+   nb_elems_per_line = nb_lines_per_panel
+
+   nx_panel = nx * nb_elems_per_line
+   ny_panel = ny * nb_lines_per_panel
 
    global_val = data[field][:,:,:,:]
    if error:
@@ -27,33 +34,40 @@ def plot_field(dataFile, outputFile, idx = -1, field = 'h', contour = True, nCon
    ax = fig.add_subplot(1, 1, 1, projection=ccrs.PlateCarree())
    ax.set_global()
 
-   for pe in range(npe):
-      v = global_val[idx, pe, :, :]
+   pe = 0
+   for face in range(6):
+      panel_lats = numpy.zeros((ny_panel, nx_panel))
+      panel_lons = numpy.zeros((ny_panel, nx_panel))
+      panel_vals = numpy.zeros((ny_panel, nx_panel))
+      for idx_y in range(nb_lines_per_panel):
+         for idx_x in range(nb_elems_per_line):
+            panel_lats[idx_y*ny : (idx_y+1)*ny, idx_x*nx : (idx_x+1)*nx] = data['lats'][pe, :, :]
+            panel_lons[idx_y*ny : (idx_y+1)*ny, idx_x*nx : (idx_x+1)*nx] = data['lons'][pe, :, :]
+            panel_vals [idx_y * ny: (idx_y + 1) * ny, idx_x * nx: (idx_x + 1) * nx] = global_val[idx, pe, :, :]
+            pe += 1
 
-      lats = data['lats'][pe, :, :]
-      shift = 180 - lats[nx // 2, ny // 2]
-      lats = (lats + shift) % 360 - shift
+      shift = 180 - panel_lats[ny_panel//2, nx_panel//2]
+      panel_lats = (panel_lats + shift) % 360 - shift
 
-      lons = data['lons'][pe, :, :]
-      shift = 180 - lons[nx // 2, ny // 2]
-      lons = (lons + shift) % 360 - shift
+      shift = 180 - panel_lons[ny_panel//2, nx_panel//2]
+      panel_lons = (panel_lons + shift) % 360 - shift
 
       if contour :
          if contoursLevels:
-            filled_c = plt.contourf(lons, lats, v, contoursLevels, vmin=contoursLevels[0], vmax=contoursLevels[-1],
+            filled_c = plt.contourf(panel_lons, panel_lats, panel_vals, contoursLevels, vmin=contoursLevels[0], vmax=contoursLevels[-1],
                                     transform=ccrs.PlateCarree(), cmap='jet')
          elif error:
-            filled_c = plt.contourf(lons, lats, v, locator=ticker.LogLocator(), vmin=1e-12, vmax=2e-5,
+            filled_c = plt.contourf(panel_lons, panel_lats, panel_vals, locator=ticker.LogLocator(), vmin=1e-12, vmax=2e-5,
                                     transform=ccrs.PlateCarree(), cmap='jet')
          else:
-            filled_c = plt.contourf(lons, lats, v, numpy.linspace(vmin, vmax, nContour), vmin=vmin, vmax=vmax,
+            filled_c = plt.contourf(panel_lons, panel_lats, panel_vals, numpy.linspace(vmin, vmax, nContour), vmin=vmin, vmax=vmax,
                                     transform=ccrs.PlateCarree(), cmap = 'jet')
          if showContour:
-            line_c = plt.contour(lons, lats, v, levels=filled_c.levels, colors=['black'], transform=ccrs.PlateCarree())
+            line_c = plt.contour(panel_lons, panel_lats, panel_vals, levels=filled_c.levels, colors=['black'], transform=ccrs.PlateCarree())
             if labelContour:
                plt.clabel(line_c, colors=['black'], manual=False, inline=True, fmt=' {:.0f} '.format)
       else :
-         filled_c = plt.pcolormesh(lons, lats, v, vmin=vmin, vmax=vmax, transform=ccrs.PlateCarree())
+         filled_c = plt.pcolormesh(panel_lons, panel_lats, panel_vals, vmin=vmin, vmax=vmax, transform=ccrs.PlateCarree())
 
    cbar = fig.colorbar(filled_c, orientation='vertical', shrink=.3)
    cbar.ax.tick_params(labelsize=35)
