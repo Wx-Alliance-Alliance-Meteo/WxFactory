@@ -6,48 +6,24 @@ import scipy.sparse.linalg
 
 class Fgmres:
 
-   def __init__(self, tol = 1e-5, restart = 20, callback = None, reorth = False, prefix = ''):
+   def __init__(self, tol = 1e-5, restart = 20, callback = None, reorth = False, hegedus = False, prefix = ''):
       self.tol = tol
       self.restart = restart
       self.callback = callback
       self.reorth = reorth
+      self.hegedus = hegedus
       self.rank = mpi4py.MPI.COMM_WORLD.Get_rank()
 
    def solve(self, A, b, x0 = None, preconditioner = None, max_iter = None, prefix = '', tol = None):
 
-      tol = tol if tol else self.tol
-
       if self.rank == 0:
          print('{} CALLING SOLVE WITH PRECONDITIONER = {}'.format(prefix, preconditioner))
 
-
-      num_iter = 0
-      x = x0.copy() if x0 is not None else numpy.zeros_like(b)  # Zero if nothing given
-      num_dofs = len(b)
-      max_iter = max_iter if max_iter else num_dofs * 10  # Wild guess if nothing given
-
-      # Get fast access to underlying BLAS routines
-      [lartg] = scipy.linalg.get_lapack_funcs(['lartg'], [x])
-      [axpy, dotu, scal] = scipy.linalg.get_blas_funcs(['axpy', 'dotu', 'scal'], [x])
-
       local_sum = numpy.zeros(1)
-
       def global_norm(vec):
          """Compute vector norm across all PEs"""
          local_sum[0] = vec @ vec
          return math.sqrt(mpi4py.MPI.COMM_WORLD.allreduce(local_sum))
-
-      norm_b = global_norm(b)
-      if norm_b == 0.0:
-         return numpy.zeros_like(b), 0., num_iter, 0
-
-      r = b - A(x)
-      norm_r = global_norm(r)
-      old_norm_r = norm_r
-      error = norm_r / norm_b
-
-      if error < tol:
-         return x, error, 0, 0
 
       def gram_schmidt_mod(num, mat, vec, h_mat):
          """Modified Gram-Schmidt process"""
@@ -57,10 +33,38 @@ class Fgmres:
             vec = axpy(mat[k, :], vec, num_dofs, -h_mat[num, k])
          return vec
 
+      tol      = tol if tol else self.tol
+      x        = x0.copy() if x0 is not None else numpy.zeros_like(b)  # Zero if nothing given
+      Ax0      = A(x)
+      num_dofs = len(b)
+      max_iter = max_iter if max_iter else num_dofs * 10  # Wild guess if nothing given
 
+      # Get fast access to underlying BLAS routines
+      [lartg] = scipy.linalg.get_lapack_funcs(['lartg'], [x])
+      [axpy, dotu, scal] = scipy.linalg.get_blas_funcs(['axpy', 'dotu', 'scal'], [x])
+
+      # Check for early stop
+      norm_b = global_norm(b)
+      if norm_b == 0.0:
+         return numpy.zeros_like(b), 0., 0, 0
+
+      # Rescale the initial approximation using the Hegedüs trick
+      if self.hegedus:
+         norm_Ax0 = global_norm(Ax0)
+         if norm_Ax0 != 0.:
+            ksi_min = numpy.sum(b * Ax0) / norm_Ax0
+            x = ksi_min * x0
+
+      r          = b - Ax0
+      norm_r     = global_norm(r)
+      old_norm_r = norm_r
+      error      = norm_r / norm_b
+
+      # Loop init
+      num_iter       = 0
       total_num_iter = 0
+      use_precond    = True
 
-      use_precond = True
       for outer in range(int(math.ceil(max_iter / self.restart))):
 
          # NOTE: We are dealing with row-major matrices, but we store the transpose of H and V.
@@ -185,6 +189,10 @@ class Fgmres:
 
       return x, norm_r / norm_b, total_num_iter, 0
 
+
+def norm(var):
+   local_sum = numpy.sum(var * var)
+   return math.sqrt( mpi4py.MPI.COMM_WORLD.allreduce(local_sum) )
 
 def apply_givens(Q, v, k):
    """Apply the first k Givens rotations in Q to v.

@@ -6,8 +6,8 @@ RUN="/usr/bin/mpirun -H 127.0.0.1:6 -merge-stderr-to-stdout -tag-output -n 6 -cp
 
 #sed -i ${case_file} -e 's/nbsolpts=[0-9]/nbsolpts=7/'
 #${RUN}
-#sed -i ${case_file} -e 's/nbsolpts=[0-9]/nbsolpts=6/'
-#${RUN}
+sed -i ${case_file} -e 's/nbsolpts=[0-9]/nbsolpts=6/'
+${RUN}
 sed -i ${case_file} -e 's/nbsolpts=[0-9]/nbsolpts=5/'
 ${RUN}
 sed -i ${case_file} -e 's/nbsolpts=[0-9]/nbsolpts=4/'

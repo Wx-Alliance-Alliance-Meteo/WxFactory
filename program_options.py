@@ -39,11 +39,22 @@ class Configuration:
 
       self.nbsolpts         = parser.getint('Spatial_discretization', 'nbsolpts')
       self.nb_elements      = parser.getint('Spatial_discretization', 'nb_elements')
-
+      
       try:
-         self.nb_levels = parser.getint('Spatial_discretization', 'nb_levels')
+         self.filter_apply     = parser.getint('Spatial_discretization', 'filter_apply') == 1
       except (NoOptionError):
-         self.nb_levels = 1
+         self.filter_apply     = False
+      try:
+         self.filter_order     = parser.getint('Spatial_discretization', 'filter_order')
+      except (NoOptionError):
+         if self.filter_apply:
+            self.filter_order  = 16
+         else:
+            self.filter_order  = 0
+      try:
+         self.filter_cutoff    = parser.getfloat('Spatial_discretization', 'filter_cutoff')
+      except (NoOptionError):
+         self.filter_cutoff    = 0
 
       self.stat_freq   = parser.getint('Output_options', 'stat_freq')
       self.output_freq = parser.getint('Output_options', 'output_freq')

@@ -16,7 +16,7 @@ cvd = (cpd - Rd)  # chal. spec. air sec (volume constant) [J kg-1 K-1]
 
 heat_capacity_ratio = cpd / cvd
 
-# TODO : reviser
+# Indices for the model variables
 idx_h   = 0
 idx_hu1 = 1
 idx_hu2 = 2

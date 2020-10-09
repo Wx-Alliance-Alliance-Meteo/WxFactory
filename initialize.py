@@ -10,7 +10,7 @@ class Topo:
       self.hsurf_itf_i = hsurf_itf_i
       self.hsurf_itf_j = hsurf_itf_j
 
-def initialize(geom, metric, mtrx, param):
+def initialize_sw(geom, metric, mtrx, param):
 
    ni, nj = geom.lon.shape
 
@@ -45,11 +45,6 @@ def initialize(geom, metric, mtrx, param):
 
    elif param.case_number == 10:
       u1_contra, u2_contra, fluid_height, hsurf, dzdx1, dzdx2, hsurf_itf_i, hsurf_itf_j = case_unsteady_zonal(geom, metric, mtrx, param)
-
-   # --- DCMIP 2012
-   elif param.case_number == 11:
-      print('TODO : test 11')
-      exit(1)
 
    Q = numpy.zeros((nb_equations, ni, nj))
    Q[idx_h, :, :] = fluid_height

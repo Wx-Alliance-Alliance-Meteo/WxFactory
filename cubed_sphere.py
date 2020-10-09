@@ -5,7 +5,7 @@ import quadrature
 from definitions import *
 
 class cubed_sphere:
-   def __init__(self, nb_elements, nbsolpts, λ0, ϕ0, α0, cube_face):
+   def __init__(self, nb_elements_horizontal, nbsolpts, λ0, ϕ0, α0, ptopo):
 
       #      +---+
       #      | 4 |
@@ -15,11 +15,23 @@ class cubed_sphere:
       #      | 5 |
       #      +---+
 
-      domain_x1 = (-math.pi/4, math.pi/4)
-      domain_x2 = (-math.pi/4, math.pi/4)
+      panel_domain_x1 = (-math.pi/4, math.pi/4)
+      panel_domain_x2 = (-math.pi/4, math.pi/4)
 
-      nb_elements_x1 = nb_elements
-      nb_elements_x2 = nb_elements
+      Δx1_PE = (panel_domain_x1[1] - panel_domain_x1[0]) / ptopo.nb_lines_per_panel
+      Δx2_PE = (panel_domain_x2[1] - panel_domain_x2[0]) / ptopo.nb_lines_per_panel
+
+      PE_start_x1 = -math.pi/4 + ptopo.my_col * Δx1_PE
+      PE_end_x1 = PE_start_x1 + Δx1_PE
+
+      PE_start_x2 = -math.pi/4 + ptopo.my_row * Δx2_PE
+      PE_end_x2 = PE_start_x2 + Δx2_PE
+
+      domain_x1 = (PE_start_x1, PE_end_x1)
+      domain_x2 = (PE_start_x2, PE_end_x2)
+
+      nb_elements_x1 = nb_elements_horizontal
+      nb_elements_x2 = nb_elements_horizontal
 
       # Gauss-Legendre solution points
       solutionPoints, glweights = quadrature.gauss_legendre(nbsolpts)
@@ -35,25 +47,25 @@ class cubed_sphere:
       Δx1 = (domain_x1[1] - domain_x1[0]) / nb_elements_x1
       Δx2 = (domain_x2[1] - domain_x2[0]) / nb_elements_x2
 
-      faces_x1 = numpy.linspace(start = domain_x1[0], stop = domain_x1[1], num = nb_elements_x1 + 1)
-      faces_x2 = numpy.linspace(start = domain_x2[0], stop = domain_x2[1], num = nb_elements_x2 + 1)
+      interfaces_x1 = numpy.linspace(start = domain_x1[0], stop = domain_x1[1], num = nb_elements_x1 + 1)
+      interfaces_x2 = numpy.linspace(start = domain_x2[0], stop = domain_x2[1], num = nb_elements_x2 + 1)
 
       ni = nb_elements_x1 * len(solutionPoints)
       x1 = numpy.zeros(ni)
       for i in range(nb_elements_x1):
          idx = i * nbsolpts
-         x1[idx : idx + nbsolpts] = faces_x1[i] + scaled_points * Δx1
+         x1[idx : idx + nbsolpts] = interfaces_x1[i] + scaled_points * Δx1
 
       nj = nb_elements_x2 * len(solutionPoints)
       x2 = numpy.zeros(nj)
-      for i in range(nb_elements_x2):
-         idx = i * nbsolpts
-         x2[idx : idx + nbsolpts] = faces_x2[i] + scaled_points * Δx2
+      for j in range(nb_elements_x2):
+         idx = j * nbsolpts
+         x2[idx : idx + nbsolpts] = interfaces_x2[j] + scaled_points * Δx2
 
       X1, X2 = numpy.meshgrid(x1, x2)
 
-      X1_itf_i, X2_itf_i = numpy.meshgrid(faces_x1, x2)
-      X1_itf_j, X2_itf_j = numpy.meshgrid(x1, faces_x2)
+      X1_itf_i, X2_itf_i = numpy.meshgrid(interfaces_x1, x2)
+      X1_itf_j, X2_itf_j = numpy.meshgrid(x1, interfaces_x2)
 
       # Gnomonic coordinates
       X = numpy.tan(X1)
@@ -94,27 +106,27 @@ class cubed_sphere:
       s2=math.sin(ϕ0)
       s3=math.sin(α0)
 
-      if cube_face == 0:
+      if ptopo.my_panel == 0:
          lon_p = λ0
          lat_p = ϕ0
          angle_p = α0
 
-      elif cube_face == 1:
+      elif ptopo.my_panel == 1:
          lon_p = math.atan2(s1*s2*s3+c1*c3, c1*s2*s3-s1*c3)
          lat_p = -math.asin(c2*s3)
          angle_p = math.atan2(s2, c2*c3)
 
-      elif cube_face == 2:
+      elif ptopo.my_panel == 2:
          lon_p = math.atan2(-s1, -c1)
          lat_p = -ϕ0
          angle_p = -math.atan2(s3, c3)
 
-      elif cube_face == 3:
+      elif ptopo.my_panel == 3:
          lon_p = math.atan2(-s1*s2*s3-c1*c3, -c1*s2*s3+s1*c3)
          lat_p = math.asin(c2*s3)
          angle_p = -math.atan2(s2, c2*c3)
 
-      elif cube_face == 4:
+      elif ptopo.my_panel == 4:
          if (abs(ϕ0) < 1e-13) and (abs(α0) < 1e-13):
             lon_p = 0.0
             lat_p = math.pi / 2.0
@@ -124,7 +136,7 @@ class cubed_sphere:
             lat_p = math.asin(c2*c3)
             angle_p = math.atan2(c2*s3, -s2)
 
-      elif cube_face == 5:
+      elif ptopo.my_panel == 5:
          if (abs(ϕ0)<1e-13) and (abs(α0)<1e-13):
             lon_p = 0.0
             lat_p = -math.pi/2.0
@@ -149,7 +161,7 @@ class cubed_sphere:
       # Spherical coordinates
       lon, lat, _ = sphere.cart2sph(cartX, cartY, cartZ)
 
-      # Cartesian and spherical coordinates for interfaces
+      # Cartesian and spherical coordinates for elements interfaces
 
       cartX_itf_i = 1.0 / delta_itf_i * ( math.cos(lon_p) * math.cos(lat_p) \
             + X_itf_i * ( math.cos(lon_p) * math.sin(lat_p) * math.sin(angle_p) - math.sin(lon_p) * math.cos(angle_p) ) \
@@ -180,7 +192,7 @@ class cubed_sphere:
 
 
       # Element node grid (helps debugging)
-      faces_X1, faces_X2 = numpy.meshgrid(faces_x1, faces_x2)
+      faces_X1, faces_X2 = numpy.meshgrid(interfaces_x1, interfaces_x2)
       faces_X = numpy.tan(faces_X1)
       faces_Y = numpy.tan(faces_X2)
       faces_delta2 = 1.0 + faces_X**2 + faces_Y**2
@@ -233,8 +245,6 @@ class cubed_sphere:
       self.elem_cartX = elem_cartX
       self.elem_cartY = elem_cartY
       self.elem_cartZ = elem_cartZ
-
-      self.cube_face = cube_face
 
       self.coslon = numpy.cos(lon)
       self.sinlon = numpy.sin(lon)

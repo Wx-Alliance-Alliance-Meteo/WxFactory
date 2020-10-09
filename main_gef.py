@@ -7,20 +7,17 @@ from time import time
 import numpy
 
 from blockstats      import blockstats
-from config          import Configuration
 from cubed_sphere    import cubed_sphere
-from initialize      import initialize
+from initialize      import initialize_sw
 from matrices        import DFR_operators
 from metric          import Metric
 from output          import output_init, output_netcdf, output_finalize
-from parallel        import create_ptopo
+from parallel        import Distributed_World
+from program_options import Configuration
 from rhs_sw          import rhs_sw
 from rhs_sw_explicit import rhs_sw_explicit
 from rhs_sw_implicit import rhs_sw_implicit
 from timeIntegrators import Epi, Epirk4s3a, Tvdrk3, Rat2, ARK_epi2
-#from graphx          import plot_field #, plot_grid, plot_times
-#from graphx          import plot_field_pair
-from interpolation   import interpolate
 from timer           import Timer, TimerGroup
 from preconditioner  import Preconditioner
 from rhs_caller      import RhsCaller
@@ -38,22 +35,22 @@ def main():
    param = Configuration(cfg_file)
 
    # Set up distributed world
-   comm_dist_graph, my_cube_face = create_ptopo()
-   initial_time = comm_dist_graph.bcast(initial_time_tmp, root = 0)
+   ptopo = Distributed_World()
+
+   # Give initial time to everyone to synchronize clocks
+   initial_time = ptopo.comm_dist_graph.bcast(initial_time_tmp, root=0)
 
    # Create the mesh
-   geom = cubed_sphere(param.nb_elements, param.nbsolpts, param.λ0, param.ϕ0, param.α0, my_cube_face)
-   # geom_interp = cubed_sphere(
-   #    param.nb_elements, max(param.nbsolpts - 3, 2), param.λ0, param.ϕ0, param.α0, my_cube_face)
+   geom = cubed_sphere(param.nb_elements, param.nbsolpts, param.λ0, param.ϕ0, param.α0, ptopo)
 
    # Build differentiation matrice and boundary correction
-   mtrx = DFR_operators(geom)
+   mtrx = DFR_operators(geom, param)
 
    # Initialize metric tensor
    metric = Metric(geom)
 
    # Initialize state variables
-   Q, topo = initialize(geom, metric, mtrx, param)
+   Q, topo = initialize_sw(geom, metric, mtrx, param)
 
    # Q_interp = interpolate(geom_interp, geom, Q[0,:,:], comm_dist_graph)
    #plot_field(geom, Q[0,:,:])
@@ -66,8 +63,8 @@ def main():
 
    # Time stepping
    rhs_timers = TimerGroup(5, initial_time)
-   rhs_handle = RhsCaller(rhs_sw, geom, mtrx, metric, topo, comm_dist_graph, param.nbsolpts, param.nb_elements,
-                          param.case_number, timers = rhs_timers)
+   rhs_handle = RhsCaller(rhs_sw, geom, mtrx, metric, topo, ptopo, param.nbsolpts, param.nb_elements,
+                          param.case_number, use_filter = param.filter_apply, timers = rhs_timers)
 
    if param.time_integrator.lower()[:3] == 'epi' and param.time_integrator[3:].isdigit():
       order = int(param.time_integrator[3:])
@@ -78,12 +75,12 @@ def main():
    elif param.time_integrator.lower() == 'tvdrk3':
       stepper = Tvdrk3(rhs_handle)
    elif param.time_integrator.lower() == 'rat2':
-      preconditioner = Preconditioner(param, geom, rhs_sw, comm_dist_graph, my_cube_face, initial_time)
-      stepper = Rat2(rhs_handle, param.tolerance, my_cube_face, preconditioner = preconditioner)
+      preconditioner = Preconditioner(param, geom, rhs_sw, ptopo, initial_time)
+      stepper = Rat2(rhs_handle, param.tolerance, ptopo.rank, preconditioner = preconditioner)
    elif  param.time_integrator.lower() =='epi2/ark':
-      rhs_explicit = lambda q: rhs_sw_explicit(q, geom, mtrx, metric, topo, comm_dist_graph, param.nbsolpts, param.nb_elements, param.case_number)
+      rhs_explicit = lambda q: rhs_sw_explicit(q, geom, mtrx, metric, topo, ptopo, param.nbsolpts, param.nb_elements, param.case_number, param.filter_apply)
 
-      rhs_implicit = lambda q: rhs_sw_implicit(q, geom, mtrx, metric, topo, comm_dist_graph, param.nbsolpts, param.nb_elements, param.case_number)
+      rhs_implicit = lambda q: rhs_sw_implicit(q, geom, mtrx, metric, topo, ptopo, param.nbsolpts, param.nb_elements, param.case_number, param.filter_apply)
 
       stepper = ARK_epi2(rhs_handle, rhs_explicit, rhs_implicit, param.tolerance)
    else:
@@ -128,9 +125,6 @@ def main():
 
    if param.output_freq > 0:
       output_finalize()
-
-#   import graphx
-#   graphx.plot_field(geom, Q[0,:,:] + topo.hsurf)
 
 if __name__ == '__main__':
    numpy.set_printoptions(suppress=True, linewidth=256)

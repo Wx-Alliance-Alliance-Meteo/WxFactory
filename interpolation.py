@@ -3,14 +3,12 @@ from mpi4py import MPI
 import time
 
 from matrices   import lagrangeEval
-from parallel   import xchange_scalars
 from quadrature import gauss_legendre
 from timer      import Timer
 
-
 basis_point_sets = {}
 
-def evalSingleField(num_elem, field, elem_interp, new_num_basis_points, old_num_basis_points, result=None):
+def eval_single_field(num_elem, field, elem_interp, new_num_basis_points, old_num_basis_points, result=None):
    # Interpolate (vertically) on entire rows of elements (horizontally) at once
    interp_1 = numpy.empty((num_elem * new_num_basis_points, num_elem * old_num_basis_points))
    for i in range(num_elem):
@@ -40,7 +38,7 @@ class BilinearInterpolator:
 
       basis_point_sets[self.num_basis_points] = self.basis_points
 
-   def getWeights(self, point_set, x):
+   def get_weights(self, point_set, x):
       ix = 0
       while point_set[ix + 1] < x:
          if ix + 2 >= len(point_set):
@@ -59,7 +57,7 @@ class BilinearInterpolator:
       return result
 
 
-   def evalGridFast(self, field, new_num_basis_points, old_num_basis_points):
+   def eval_grid_fast(self, field, new_num_basis_points, old_num_basis_points):
       for i in [new_num_basis_points, old_num_basis_points]:
          if i not in basis_point_sets:
             basis_point_sets[i], _ = gauss_legendre(i)
@@ -67,21 +65,21 @@ class BilinearInterpolator:
       new_basis_points = basis_point_sets[new_num_basis_points]
       old_basis_points = basis_point_sets[old_num_basis_points]
 
-      elem_interp = numpy.array([self.getWeights(old_basis_points, px) for px in new_basis_points])
+      elem_interp = numpy.array([self.get_weights(old_basis_points, px) for px in new_basis_points])
 
       result = None
       if field.ndim == 2:
-         result = evalSingleField(self.n_elem_i, field, elem_interp, new_num_basis_points, old_num_basis_points)
+         result = eval_single_field(self.n_elem_i, field, elem_interp, new_num_basis_points, old_num_basis_points)
       elif field.ndim == 3:
          num_fields = field.shape[0]
          result = numpy.empty((num_fields, self.n_elem_i * new_num_basis_points, self.n_elem_i * new_num_basis_points))
          for i, f in enumerate(field):
-            evalSingleField(self.n_elem_i, f, elem_interp, new_num_basis_points, old_num_basis_points, result[i])
+            eval_single_field(self.n_elem_i, f, elem_interp, new_num_basis_points, old_num_basis_points, result[i])
 
       return result
 
 
-   def getValueAtXY(self, x, y):
+   def get_value_at_pos(self, x, y):
       ix = 0
       iy = 0
 
@@ -134,7 +132,7 @@ class LagrangeSimpleInterpolator:
       self.grid_eval_fast_timer = Timer(self.grid_eval_timer.initial_time)
 
 
-   def evalGridFast(self, field, new_num_basis_points, old_num_basis_points):
+   def eval_grid_fast(self, field, new_num_basis_points, old_num_basis_points):
       """
       Interpolate the current grid to a new one with the same number of elements,
       but with a different number of solution points, using vectorized operations
@@ -154,19 +152,19 @@ class LagrangeSimpleInterpolator:
 
       result = None
       if field.ndim == 2:
-         result = evalSingleField(self.n_elem_i, field, elem_interp, new_num_basis_points, old_num_basis_points)
+         result = eval_single_field(self.n_elem_i, field, elem_interp, new_num_basis_points, old_num_basis_points)
       elif field.ndim == 3:
          num_fields = field.shape[0]
          result = numpy.empty((num_fields, self.n_elem_i * new_num_basis_points, self.n_elem_i * new_num_basis_points))
          for i, f in enumerate(field):
-            evalSingleField(self.n_elem_i, f, elem_interp, new_num_basis_points, old_num_basis_points, result[i])
+            eval_single_field(self.n_elem_i, f, elem_interp, new_num_basis_points, old_num_basis_points, result[i])
 
       self.grid_eval_fast_timer.stop()
 
       return result
 
 
-   def evalGrid(self, field, new_num_basis_points):
+   def eval_grid(self, field, new_num_basis_points):
       """
       Interpolate the current grid to a new one with the same number of elements,
       but with a different number of solution points, element by element
@@ -212,7 +210,7 @@ class LagrangeSimpleInterpolator:
 
 
    # TODO Lagrange on both axes
-   def getValueAtXY(self, x, y):
+   def get_value_at_pos(self, x, y):
 
       # Determine the element point (x,y) belongs to
       elem_i  = int((x - self.min_x) / self.delta_x)
@@ -295,6 +293,10 @@ class LagrangeSimpleInterpolator:
 
 class LagrangeInterpolator:
    def __init__(self, grid, field, comm_dist_graph):
+
+      print('LagrangeInterpolator is not working (yet?). You need to fix xchange stuff (MPI communication).')
+      raise ValueError
+
       self.grid  = grid
       self.field = field
 
@@ -438,8 +440,8 @@ def interpolate(dest_grid, src_grid, field, comm_dist_graph):
 
    #int_test = LagrangeInterpolator(src_grid, field, comm_dist_graph)
 
-   alt_result = interpolator.evalGrid(field, len(dest_grid.solutionPoints))
-   alt_result_fast = interpolator.evalGridFast(field, len(dest_grid.solutionPoints))
+   alt_result = interpolator.eval_grid(field, len(dest_grid.solutionPoints))
+   alt_result_fast = interpolator.eval_grid_fast(field, len(dest_grid.solutionPoints))
    difference = alt_result - alt_result_fast
 
    if interpolator.rank == 0:
@@ -463,8 +465,8 @@ def interpolate(dest_grid, src_grid, field, comm_dist_graph):
          for j in range(num_samples):
             y = (j + 0.5) * sample_width_y + src_grid.domain_x2[0]
 
-            src_val = interpolator.getValueAtXY(x, y)
-            dest_val= dest_interpolator.getValueAtXY(x, y)
+            src_val = interpolator.get_value_at_pos(x, y)
+            dest_val= dest_interpolator.get_value_at_pos(x, y)
 
             total_val += numpy.abs(src_val)
             total_diff += numpy.abs((dest_val - src_val)/src_val)
