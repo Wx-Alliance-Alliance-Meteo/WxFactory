@@ -1,6 +1,6 @@
 import mpi4py
 import netCDF4
-import numpy 
+import numpy
 import math
 import os
 import time
@@ -87,7 +87,7 @@ def output_init(geom, param):
 
       drv = ncfile.createVariable('RV', numpy.dtype('double').char, ('time', 'npe', 'Ydim', 'Xdim'))
       drv.long_name = 'Relative vorticity'
-      drv.units = 'kg/s/m^4'
+      drv.units = '1/(m s)'
       drv.standard_name = 'Relative vorticity'
       drv.coordinates = 'lons lats'
       drv.grid_mapping = 'cubed_sphere'
@@ -95,7 +95,7 @@ def output_init(geom, param):
 
       dpv = ncfile.createVariable('PV', numpy.dtype('double').char, ('time', 'npe', 'Ydim', 'Xdim'))
       dpv.long_name = 'Potential vorticity'
-      dpv.units = 'kg/s/m^4' # TODO: 1/(m s) ???
+      dpv.units = '1/(m s)'
       dpv.standard_name = 'Potential vorticity'
       dpv.coordinates = 'lons lats'
       dpv.grid_mapping = 'cubed_sphere'
