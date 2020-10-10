@@ -2,74 +2,65 @@ import numpy
 import netCDF4
 import cartopy.crs as ccrs
 import matplotlib.pyplot as plt
+import matplotlib.tri as tri
 from matplotlib import ticker
-from math import ceil, floor, sqrt
+from math import ceil
 import sys
 from glob import glob
 import re
 
-def plot_field(dataFile, outputFile, idx = -1, field = 'h', contour = True, nContour = 10, showContour = False, labelContour = False, contoursLevels = None, error = False):
+def plot_field(dataFile, outputFile, idx = -1, field = 'h', nContour = 10, contoursLevels = None, error = False):
    # Load data
    data = netCDF4.Dataset(dataFile, 'r')
-   nx = data['Xdim'].shape[0]
-   ny = data['Ydim'].shape[0]
-   npe = data['npe'].shape[0]
 
-   nb_pe_per_panel = npe // 6
-   nb_lines_per_panel = int(sqrt(nb_pe_per_panel))
-   nb_elems_per_line = nb_lines_per_panel
-
-   nx_panel = nx * nb_elems_per_line
-   ny_panel = ny * nb_lines_per_panel
-
-   global_val = data[field][:,:,:,:]
-   if error:
-      global_val = numpy.maximum(numpy.finfo(float).eps, numpy.abs((global_val - global_val[0,:,:,:])/global_val[0,:,:,:]))
-      # global_val = (global_val - global_val[0, :, :, :]) / global_val[0, :, :, :]
-
-   vmin, vmax = global_val.min(), global_val.max()
-   print(vmin, vmax)
    # Setup figure
-   fig = plt.figure(figsize=(20, 30))
-   ax = fig.add_subplot(1, 1, 1, projection=ccrs.PlateCarree())
-   ax.set_global()
+   fig = plt.figure(figsize=(30, 15))
 
-   pe = 0
-   for face in range(6):
-      panel_lats = numpy.zeros((ny_panel, nx_panel))
-      panel_lons = numpy.zeros((ny_panel, nx_panel))
-      panel_vals = numpy.zeros((ny_panel, nx_panel))
-      for idx_y in range(nb_lines_per_panel):
-         for idx_x in range(nb_elems_per_line):
-            panel_lats[idx_y*ny : (idx_y+1)*ny, idx_x*nx : (idx_x+1)*nx] = data['lats'][pe, :, :]
-            panel_lons[idx_y*ny : (idx_y+1)*ny, idx_x*nx : (idx_x+1)*nx] = data['lons'][pe, :, :]
-            panel_vals [idx_y * ny: (idx_y + 1) * ny, idx_x * nx: (idx_x + 1) * nx] = global_val[idx, pe, :, :]
-            pe += 1
+   lons = data['lons'][:].flatten()
+   lats = data['lats'][:].flatten()
+   vals = data[field][idx,...].flatten()
+   if error:
+      vals = numpy.maximum(numpy.finfo(float).eps, numpy.abs((vals - data['h'][0,...].flatten()) / data['h'][0,...].flatten()))
 
-      shift = 180 - panel_lats[ny_panel//2, nx_panel//2]
-      panel_lats = (panel_lats + shift) % 360 - shift
+   delta_lat = 30
+   delta_lon = 30
 
-      shift = 180 - panel_lons[ny_panel//2, nx_panel//2]
-      panel_lons = (panel_lons + shift) % 360 - shift
+   selection = (lats >= 90 - delta_lat) & (lats <= 90)
+   lons = numpy.concatenate((lons, (lons[selection] + 180) % 360))
+   lats = numpy.concatenate((lats, 180 - lats[selection] ))
+   vals = numpy.concatenate((vals, vals[selection]))
 
-      if contour :
-         if contoursLevels:
-            filled_c = plt.contourf(panel_lons, panel_lats, panel_vals, contoursLevels, vmin=contoursLevels[0], vmax=contoursLevels[-1],
-                                    transform=ccrs.PlateCarree(), cmap='jet')
-         elif error:
-            filled_c = plt.contourf(panel_lons, panel_lats, panel_vals, locator=ticker.LogLocator(), vmin=1e-12, vmax=2e-5,
-                                    transform=ccrs.PlateCarree(), cmap='jet')
-         else:
-            filled_c = plt.contourf(panel_lons, panel_lats, panel_vals, numpy.linspace(vmin, vmax, nContour), vmin=vmin, vmax=vmax,
-                                    transform=ccrs.PlateCarree(), cmap = 'jet')
-         if showContour:
-            line_c = plt.contour(panel_lons, panel_lats, panel_vals, levels=filled_c.levels, colors=['black'], transform=ccrs.PlateCarree())
-            if labelContour:
-               plt.clabel(line_c, colors=['black'], manual=False, inline=True, fmt=' {:.0f} '.format)
-      else :
-         filled_c = plt.pcolormesh(panel_lons, panel_lats, panel_vals, vmin=vmin, vmax=vmax, transform=ccrs.PlateCarree())
+   selection = (lats >= -90) & (lats <= -90 + delta_lat)
+   lons = numpy.concatenate((lons, (lons[selection] + 180) % 360))
+   lats = numpy.concatenate((lats, -180 - lats[selection] ))
+   vals = numpy.concatenate((vals, vals[selection]))
 
-   cbar = fig.colorbar(filled_c, orientation='vertical', shrink=.3)
+   lons[lons > 180] -= 360
+
+   selection = (-180 <= lons) & (lons <= -180 + delta_lon)
+   lons = numpy.concatenate((lons, lons[selection] + 360))
+   lats = numpy.concatenate((lats, lats[selection]))
+   vals = numpy.concatenate((vals, vals[selection]))
+
+   selection = (180 - delta_lon <= lons) & (lons <= 180)
+   lons = numpy.concatenate((lons, lons[selection] - 360))
+   lats = numpy.concatenate((lats, lats[selection]))
+   vals = numpy.concatenate((vals, vals[selection]))
+
+   vmin = vals.min()
+   vmax = vals.max()
+   triang = tri.Triangulation(lons, lats)
+
+   if contoursLevels:
+      filled_c = plt.tricontourf(triang, vals, levels = contoursLevels, cmap='jet')
+   elif error:
+      filled_c = plt.tricontourf(triang, vals, locator = ticker.LogLocator(), vmin = 1e-12, vmax = 2e-5, cmap='jet')
+   else:
+      filled_c = plt.tricontourf(triang, vals, levels = numpy.linspace(vmin, vmax, nContour), cmap='jet')
+
+   plt.xlim((-180,180))
+   plt.ylim((-90, 90))
+   cbar = fig.colorbar(filled_c, orientation='vertical', shrink=1)
    cbar.ax.tick_params(labelsize=35)
    fig.savefig(outputFile, bbox_inches='tight')
    plt.close()
@@ -114,7 +105,7 @@ def plot_quiver(dataFile, outputFile, idx = -1, nArrows = 15):
 
 
 def plot_conservation(logFolder, outputFolder):
-   orders = [3,4,5,6]
+   orders = [6,5,4,3]
    for case in ['case2','case5','case6','galewsky']:
       for match in ['mass', 'energy', 'enstrophy']:
          for order in orders:
@@ -122,15 +113,17 @@ def plot_conservation(logFolder, outputFolder):
                content = of.read()
             m = re.findall('normalized integral of ' + match + ' = (.*)$', content, re.MULTILINE)
             val = list(map(float, m))
-            plt.plot(numpy.arange(len(val)) * 900/(60*60*24), val)
-            plt.xlabel('Time (days)')
+            ax = plt.plot(numpy.arange(len(val)) * 900/(60*60*24), val)
+            if case == 'case2':
+               plt.yscale('symlog', linthreshy=1e-12)
 
-         plt.legend(['Order ' + str(o) for o in [3,4,5,6]])
+         plt.legend(['Order ' + str(o) for o in orders])
+         plt.xlabel('Time (days)')
          plt.savefig(outputFolder + '/' + match + '_' + case + '.pdf', bbox_inches='tight')
          plt.close()
 
 def plot_error(logFolder, outputFolder):
-   orders = [3,4,5,6]
+   orders = [6,5,4,3]
    for case in ['case2']:
       for match in ['l1', 'l2', 'linf']:
          for order in orders:
@@ -142,7 +135,7 @@ def plot_error(logFolder, outputFolder):
             plt.xlabel('Time (days)')
             plt.ylabel('Error')
 
-         plt.legend(['Order ' + str(o) for o in [3,4,5,6]], loc='upper center', bbox_to_anchor=(0.5, -0.12), ncol=5)
+         plt.legend(['Order ' + str(o) for o in orders], loc='upper center', bbox_to_anchor=(0.5, -0.12), ncol=5)
          plt.savefig(outputFolder + '/' + match + '_' + case + '.pdf', bbox_inches='tight')
          plt.close()
 
@@ -202,11 +195,11 @@ def plot_res(dataFolder, plotFolder):
          dataFile = dataFolder + '/' + name + '.nc'
 
          fieldFile = plotFolder + '/' + name + '_field.pdf'
-         plot_field(dataFile, fieldFile, showContour=False, labelContour=False, contoursLevels=contoursLevels, field=field)
+         plot_field(dataFile, fieldFile, field=field, contoursLevels=contoursLevels)
 
          if case == 'case2':
             fieldFile = plotFolder + '/' + name + '_error_field.pdf'
-            plot_field(dataFile, fieldFile, showContour=False, labelContour=False, error=True)
+            plot_field(dataFile, fieldFile, error=True)
 
          # windFile = plotFolder + '/' + name + '_wind.pdf'
          # plot_quiver(dataFile, windFile)
@@ -216,7 +209,8 @@ if __name__ == '__main__':
       print('USAGE : python plot.py dataFolder plotFolder')
    else:
       plot_res(sys.argv[1]+'/model_output', sys.argv[2])
-
-   plot_conservation(sys.argv[1], sys.argv[2])
-   plot_error(sys.argv[1], sys.argv[2])
+      plot_conservation(sys.argv[1], sys.argv[2])
+      plot_error(sys.argv[1], sys.argv[2])
+      plot_conv(sys.argv[1], sys.argv[2], 'ne')
+      plot_conv(sys.argv[1], sys.argv[2], 'solpts')
 
