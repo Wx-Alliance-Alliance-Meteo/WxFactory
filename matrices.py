@@ -27,13 +27,13 @@ class DFR_operators:
 
       self.quad_weights = numpy.outer(grd.glweights, grd.glweights)
    
-      if param.filter_apply:
-         self.V = vandermonde(grd.solutionPoints)
-         self.invV = numpy.linalg.inv(self.V)
-         N = len(grd.solutionPoints)-1
-         Nc = math.floor(param.filter_cutoff * N)
-         self.filter = dgfilter.exponential(N, Nc, param.filter_order, self.V, self.invV)
-         self.filter_tr = self.filter.T
+      # if param.filter_apply:
+      self.V = vandermonde(grd.solutionPoints)
+      self.invV = numpy.linalg.inv(self.V)
+      N = len(grd.solutionPoints)-1
+      Nc = math.floor(param.filter_cutoff * N)
+      self.filter = dgfilter.exponential(N, Nc, param.filter_order, self.V, self.invV)
+      self.filter_tr = self.filter.T
 
 def lagrangeEval(points, x):
    l = numpy.zeros_like(points)
