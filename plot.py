@@ -9,7 +9,7 @@ import sys
 from glob import glob
 import re
 
-def plot_field(dataFile, outputFile, idx = -1, field = 'h', nContour = 10, contoursLevels = None, error = False):
+def plot_field(dataFile, outputFile, idx = -1, field = 'h', nContour = 10, contoursLevels = None, error = False, lat_lims = (-90, 90), lon_lims = (-180,180)):
    # Load data
    data = netCDF4.Dataset(dataFile, 'r')
 
@@ -58,8 +58,8 @@ def plot_field(dataFile, outputFile, idx = -1, field = 'h', nContour = 10, conto
    else:
       filled_c = plt.tricontourf(triang, vals, levels = numpy.linspace(vmin, vmax, nContour), cmap='jet')
 
-   plt.xlim((-180,180))
-   plt.ylim((-90, 90))
+   plt.xlim(lon_lims)
+   plt.ylim(lat_lims)
    cbar = fig.colorbar(filled_c, orientation='vertical', shrink=1)
    cbar.ax.tick_params(labelsize=35)
    fig.savefig(outputFile, bbox_inches='tight')
@@ -180,22 +180,30 @@ def plot_res(dataFolder, plotFolder):
          if case == 'case2':
             contoursLevels = list(range(1000,3200,200))
             field = 'h'
+            lat_lims = (-90, 90)
+            lon_lims = (-180, 180)
          elif case == 'galewsky':
-            contoursLevels = list(numpy.arange(-1.5e-4, 1.7e-4, 2e-5))
+            contoursLevels = list(numpy.arange(-1.5e-4, 1.8e-4, 2e-5))
             field = 'RV'
+            lat_lims = (0, 90)
+            lon_lims = (-180, 180)
          elif case == 'case6':
             contoursLevels = list(range(8000, 10700, 100))
             field = 'h'
+            lat_lims = (-90, 90)
+            lon_lims = (-180, 180)
          else:
             contoursLevels = list(range(5000,6050,50))
             field = 'h'
+            lat_lims = (-90, 90)
+            lon_lims = (-180, 180)
 
          print(case, resolution, order)
          name = case + '_' + str(resolution) + 'x' + str(order)
          dataFile = dataFolder + '/' + name + '.nc'
 
          fieldFile = plotFolder + '/' + name + '_field.pdf'
-         plot_field(dataFile, fieldFile, field=field, contoursLevels=contoursLevels)
+         plot_field(dataFile, fieldFile, field=field, contoursLevels=contoursLevels, lat_lims = lat_lims, lon_lims = lon_lims)
 
          if case == 'case2':
             fieldFile = plotFolder + '/' + name + '_error_field.pdf'
