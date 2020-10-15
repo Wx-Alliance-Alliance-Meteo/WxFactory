@@ -128,6 +128,8 @@ def solve(fe,fi,Ji,tvals,Y0,Be,Bi,rtol,atol,hmin,hmax,nn,p_phi,mu):
    # initialize work counters
    nsteps = 0
 
+   fgmres_solver = linsol.Fgmres(tol = lin_tol)
+
    # iterate over output time steps
    for tstep in range(1,len(tvals)):
 
@@ -168,7 +170,7 @@ def solve(fe,fi,Ji,tvals,Y0,Be,Bi,rtol,atol,hmin,hmax,nn,p_phi,mu):
             # to equal 0 if this solve succeeded, or 1 otherwise
             if (numpy.abs(Ai[stage,stage]) > 1.e-14):
                matvec_gmres = lambda vec: I_minus_tauJ_imp(vec, h*Ai[stage,stage], nn, Ji)
-               dz, gmres_error, nb_gmres_iter, lierr = linsol.gmres_mgs(matvec_gmres, rhs, tol=lin_tol)
+               dz, gmres_error, nb_gmres_iter, lierr = fgmres_solver.solve(matvec_gmres, rhs)
 
                # if linear solver failed to converge, set relevant flags/statistics
                # and break out of stage loop
