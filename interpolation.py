@@ -10,14 +10,14 @@ basis_point_sets = {}
 
 def eval_single_field(num_elem, field, elem_interp, new_num_basis_points, old_num_basis_points, result=None):
    # Interpolate (vertically) on entire rows of elements (horizontally) at once
-   interp_1 = numpy.empty((num_elem * new_num_basis_points, num_elem * old_num_basis_points))
+   interp_1 = numpy.empty((num_elem * new_num_basis_points, num_elem * old_num_basis_points), dtype = field.dtype)
    for i in range(num_elem):
       interp_1[i * new_num_basis_points:(i + 1) * new_num_basis_points, :] = \
          elem_interp @ field[i * old_num_basis_points:(i + 1) * old_num_basis_points, :]
 
    # Interpolate (horizontally) on columns of interpolated elements
    if result is None:
-      result = numpy.empty((num_elem * new_num_basis_points, num_elem * new_num_basis_points))
+      result = numpy.empty((num_elem * new_num_basis_points, num_elem * old_num_basis_points), dtype = field.dtype)
 
    for i in range(num_elem):
       result[:, i * new_num_basis_points:(i + 1) * new_num_basis_points] = \
@@ -72,7 +72,8 @@ class BilinearInterpolator:
          result = eval_single_field(self.n_elem_i, field, elem_interp, new_num_basis_points, old_num_basis_points)
       elif field.ndim == 3:
          num_fields = field.shape[0]
-         result = numpy.empty((num_fields, self.n_elem_i * new_num_basis_points, self.n_elem_i * new_num_basis_points))
+         result = numpy.empty((num_fields, self.n_elem_i * new_num_basis_points, self.n_elem_i * new_num_basis_points),
+                              dtype = field.dtype)
          for i, f in enumerate(field):
             eval_single_field(self.n_elem_i, f, elem_interp, new_num_basis_points, old_num_basis_points, result[i])
 
@@ -155,7 +156,8 @@ class LagrangeSimpleInterpolator:
          result = eval_single_field(self.n_elem_i, field, elem_interp, new_num_basis_points, old_num_basis_points)
       elif field.ndim == 3:
          num_fields = field.shape[0]
-         result = numpy.empty((num_fields, self.n_elem_i * new_num_basis_points, self.n_elem_i * new_num_basis_points))
+         result = numpy.empty((num_fields, self.n_elem_i * new_num_basis_points, self.n_elem_i * new_num_basis_points),
+                              dtype = field.dtype)
          for i, f in enumerate(field):
             eval_single_field(self.n_elem_i, f, elem_interp, new_num_basis_points, old_num_basis_points, result[i])
 
