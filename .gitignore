@@ -17,3 +17,5 @@ model_output/
 venv
 
 rat2out.txt
+
+*.png
