@@ -134,7 +134,7 @@ def solve(fe,fi,Ji,tvals,Y0,Be,Bi,rtol,atol,hmin,hmax,nn,p_phi,mu):
    for tstep in range(1,len(tvals)):
 
       # loop over internal time steps to get to desired output time
-      while (t < tvals[tstep]*ONEMSM):
+      while t < tvals[tstep]*ONEMSM:
 
          # bound internal time step
          h = max(h, hmin)            # enforce minimum time step size

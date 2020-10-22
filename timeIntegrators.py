@@ -1,6 +1,8 @@
 import numpy
 import math
+import pickle
 from collections import deque
+
 
 from matvec        import matvec_fun, matvec_rat
 from kiops         import kiops
@@ -229,24 +231,59 @@ class Rat2:
       return Q + numpy.reshape(phiv, Q.shape) * dt
 
 class ARK_epi2:
-   def __init__(self, rhs, rhs_explicit, rhs_implicit, tol):
+   def __init__(self, rhs, rhs_explicit1, rhs_implicit1, rhs_explicit2, rhs_implicit2, tol, rank):
       self.rhs = rhs
-      self.rhs_explicit = rhs_explicit
-      self.rhs_implicit = rhs_implicit
+      self.rhs_explicit1 = rhs_explicit1
+      self.rhs_implicit1 = rhs_implicit1
+      self.rhs_explicit2 = rhs_explicit2
+      self.rhs_implicit2 = rhs_implicit2
       self.tol = tol
+      self.rank = rank
+
+      self.timer = Timer(0.0)
+      self.interp_timer = Timer(0.0)
 
    def step(self, Q, dt):
       rhs = self.rhs(Q).flatten()
 
-      J_e = lambda v: matvec_fun(v, dt, Q, self.rhs_explicit)
-      J_i = lambda v: matvec_fun(v, dt, Q, self.rhs_implicit)
+      self.interp_timer.start()
+      J_e_interp = lambda v: matvec_fun(v, dt, Q, self.rhs_explicit2)
+      J_i_interp = lambda v: matvec_fun(v, dt, Q, self.rhs_implicit2)
+      vec = numpy.row_stack((numpy.zeros_like(rhs), rhs))
+
+      phiv_interp, num_steps_interp = phi_ark([0, 1], J_e_interp, J_i_interp, vec, tol = self.tol, task1 = False)
+      self.interp_timer.stop()
+
+      self.timer.start()
+      J_e = lambda v: matvec_fun(v, dt, Q, self.rhs_explicit1)
+      J_i = lambda v: matvec_fun(v, dt, Q, self.rhs_implicit1)
 
       # We only need the second phi function
       vec = numpy.row_stack((numpy.zeros_like(rhs), rhs))
 
-      phiv = phi_ark([0, 1], J_e, J_i, vec, tol=self.tol, task1=False)
+      phiv, num_steps = phi_ark([0, 1], J_e, J_i, vec, tol=self.tol, task1=False)
+      # phiv, num_steps = phiv_interp, num_steps_interp
+      # phiv_interp, num_steps_interp = phiv, num_steps
+      self.timer.stop()
 
-#     print('PHI/ARK converged at iteration %d' % stats)
+      if self.rank == 0:
+         print('Finished in {} / {} iterations and {:.3f} / {:.3f} seconds'.format(
+            num_steps, num_steps_interp, self.timer.last_time(), self.interp_timer.last_time()))
+
+      diff = phiv[:,-1] - phiv_interp[:,-1]
+      diff_norm = numpy.linalg.norm(diff)
+      sol_norm = numpy.linalg.norm(phiv)
+
+      print('Difference: {}'.format(diff_norm/sol_norm))
+      if diff_norm / sol_norm > self.tol:
+         print('AHHHHH not the same answer!!! Diff = {} / {}'.format(diff_norm, sol_norm))
+         with open('geom{:04d}.dat'.format(self.rank), 'wb') as file:
+            pickle.dump(self.rhs.geometry, file)
+         with open('diff{:04d}.dat'.format(self.rank), 'wb') as file:
+            pickle.dump(diff.reshape(Q.shape), file)
+         # raise ValueError
+
+   #     print('PHI/ARK converged at iteration %d' % stats)
 
       # Update solution
       return Q + numpy.reshape(phiv[:,-1], Q.shape) * dt

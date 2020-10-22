@@ -20,7 +20,7 @@ from rhs_sw_implicit import rhs_sw_implicit
 from timeIntegrators import Epi, Epirk4s3a, Tvdrk3, Rat2, ARK_epi2
 from timer           import Timer, TimerGroup
 from preconditioner  import Preconditioner
-from rhs_caller      import RhsCaller
+from rhs_caller      import RhsCaller, RhsCallerLowRes
 
 def main():
    if len(sys.argv) == 1:
@@ -78,11 +78,16 @@ def main():
       preconditioner = Preconditioner(param, geom, rhs_sw, ptopo, initial_time)
       stepper = Rat2(rhs_handle, param.tolerance, ptopo.rank, preconditioner = preconditioner)
    elif  param.time_integrator.lower() =='epi2/ark':
-      rhs_explicit = lambda q: rhs_sw_explicit(q, geom, mtrx, metric, topo, ptopo, param.nbsolpts, param.nb_elements, param.case_number, param.filter_apply)
+      rhs_explicit1 = lambda q: rhs_sw_explicit(q, geom, mtrx, metric, topo, ptopo, param.nbsolpts, param.nb_elements, param.case_number, param.filter_apply)
+      rhs_implicit1 = lambda q: rhs_sw_implicit(q, geom, mtrx, metric, topo, ptopo, param.nbsolpts, param.nb_elements, param.case_number, param.filter_apply)
 
-      rhs_implicit = lambda q: rhs_sw_implicit(q, geom, mtrx, metric, topo, ptopo, param.nbsolpts, param.nb_elements, param.case_number, param.filter_apply)
+      rhs_implicit2 = RhsCallerLowRes(rhs_sw_implicit, geom, mtrx, metric, topo, ptopo, param.nbsolpts,
+                                     param.nb_elements, param.case_number, param.filter_apply,
+                                     timers = rhs_timers, param = param)
+      rhs_explicit2 = lambda q: rhs_handle(q) - rhs_implicit2(q)
 
-      stepper = ARK_epi2(rhs_handle, rhs_explicit, rhs_implicit, param.tolerance)
+      stepper = ARK_epi2(rhs_handle, rhs_explicit1, rhs_implicit1, rhs_explicit2, rhs_implicit2,
+                         param.tolerance, ptopo.rank)
    else:
       raise ValueError(f'Time integration method {param.time_integrator} not supported')
 

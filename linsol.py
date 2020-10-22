@@ -16,8 +16,8 @@ class Fgmres:
 
    def solve(self, A, b, x0 = None, preconditioner = None, max_iter = None, prefix = '', tol = None):
 
-      if self.rank == 0:
-         print('{} CALLING SOLVE WITH PRECONDITIONER = {}'.format(prefix, preconditioner))
+      # if self.rank == 0:
+      #    print('{} CALLING SOLVE WITH PRECONDITIONER = {}'.format(prefix, preconditioner))
 
       local_sum = numpy.zeros(1)
       def global_norm(vec):
@@ -137,8 +137,8 @@ class Fgmres:
                   print('{} Outer = {}, inner = {}, norm_r = {}'.format(prefix, outer, inner, norm_r))
 
                if norm_r < tol:
-                  if self.rank == 0:
-                     print('{} exit loop b/c error is below tol'.format(prefix))
+                  # if self.rank == 0:
+                  #    print('{} exit loop b/c error is below tol'.format(prefix))
                   break
 
                if (old_norm_r - norm_r) / old_norm_r < 0.1: use_precond = False
@@ -172,8 +172,8 @@ class Fgmres:
                # No change, halt
                return x, norm_r, total_num_iter, -1
 
-         if self.rank == 0:
-            print('{} norm_r = {}'.format(prefix, norm_r))
+         # if self.rank == 0:
+         #    print('{} norm_r = {}'.format(prefix, norm_r))
 
          # test for convergence
          if norm_r < tol:
