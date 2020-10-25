@@ -1,4 +1,5 @@
 import sys
+import os
 from itertools import product
 
 import mpi4py
@@ -140,6 +141,7 @@ def main():
    if sys.argv[1] == 'gen':
       config = sys.argv[2]
       name = sys.argv[3]
+      os.makedirs(f'./jacobian/{name}/', exist_ok=True)
       for rhs in rhs_type:
          (Q, matvec) = get_matvec_sw(config, rhs)
          gen_matrix(Q, matvec, f'./jacobian/{name}/J_{rhs}')
