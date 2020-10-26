@@ -45,7 +45,7 @@ class RhsCallerLowRes(RhsCaller):
       self.low_geometry  = cubed_sphere(self.nb_elem, self.low_order, param.λ0, param.ϕ0, param.α0, self.ptopo)
       self.low_operators = DFR_operators(self.low_geometry, param_small)
       self.low_metric    = Metric(self.low_geometry)
-      _, self.low_topo   = initialize_sw(self.low_geometry, self.low_operators, self.low_metric, param_small)
+      _, self.low_topo   = initialize_sw(self.low_geometry, self.low_metric, self.low_operators, param_small)
 
       self.interpolator  = LagrangeSimpleInterpolator(self.geometry)
 
