@@ -242,6 +242,7 @@ class ARK_epi2:
 
       self.timer = Timer(0.0)
       self.interp_timer = Timer(0.0)
+      self.out_stat_file = 'epi2out.txt'
 
    def step(self, Q, dt):
       rhs = self.rhs(Q).flatten()
@@ -269,6 +270,11 @@ class ARK_epi2:
       if self.rank == 0:
          print('Finished in {} / {} iterations and {:.3f} / {:.3f} seconds'.format(
             num_steps, num_steps_interp, self.timer.last_time(), self.interp_timer.last_time()))
+
+         with open(self.out_stat_file, 'a') as out_file:
+             out_file.write('{:4d} {:5d} {:5.0f} -- {:4d} {:5.0f} -- {:4d} {:5.0f}\n'.format(
+               self.rhs.nb_sol_pts, self.rhs.nb_elem, dt,
+               num_steps_interp, self.interp_timer.last_time(), num_steps, self.timer.last_time()))
 
       diff = phiv[:,-1] - phiv_interp[:,-1]
       diff_norm = numpy.linalg.norm(diff)
