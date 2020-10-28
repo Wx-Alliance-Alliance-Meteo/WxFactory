@@ -14,9 +14,6 @@ class Metric:
 
       self.inv_sqrtG   = 1.0 / self.sqrtG
 
-      self.dsqrtGdx1 = earth_radius**2 * geom.X * (1.0 + geom.X**2) * (1.0 + geom.Y**2) * (2.0 * geom.Y**2 - geom.X**2 - 1.0) / ( geom.delta**5 )
-      self.dsqrtGdx2 = earth_radius**2 * geom.Y * (1.0 + geom.X**2) * (1.0 + geom.Y**2) * (2.0 * geom.X**2 - geom.Y**2 - 1.0) / ( geom.delta**5 )
-
       # 2D contravariant metric
 
       self.H_contra_11 = geom.delta2 / ( earth_radius**2 * (1.0 + geom.X**2) )
