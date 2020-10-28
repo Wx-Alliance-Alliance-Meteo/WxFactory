@@ -5,7 +5,7 @@ from cubed_sphere  import cubed_sphere
 from matrices      import DFR_operators
 from metric        import Metric
 from initialize    import initialize_sw
-from interpolation import LagrangeSimpleInterpolator
+from interpolation import LagrangeSimpleInterpolator, BilinearInterpolator
 
 
 class RhsCaller:
@@ -48,6 +48,7 @@ class RhsCallerLowRes(RhsCaller):
       _, self.low_topo   = initialize_sw(self.low_geometry, self.low_metric, self.low_operators, param_small)
 
       self.interpolator  = LagrangeSimpleInterpolator(self.geometry)
+      # self.interpolator  = BilinearInterpolator(self.geometry)
 
       print('large order = {}, small order = {}'.format(self.nb_sol_pts, self.low_order))
 
