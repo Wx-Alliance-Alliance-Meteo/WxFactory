@@ -156,7 +156,7 @@ class Epi:
       phiv, stats = kiops([1], matvec_handle, vec, tol=self.tol, m_init=self.krylov_size, mmin=14, mmax=64,
                           task1=False)
 
-      print('KIOPS converged at iteration %d to a solution with local error %e' % (stats[2], stats[4]))
+      print('KIOPS converged at iteration %d (using %d internal substeps) to a solution with local error %e' % (stats[2], stats[0], stats[4]))
 
       self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
 
@@ -219,9 +219,9 @@ class ARK_epi2:
       # We only need the second phi function
       vec = numpy.row_stack((numpy.zeros_like(rhs), rhs))
 
-      phiv = phi_ark([0, 1], J_e, J_i, vec, tol=self.tol, task1=False)
+      phiv, nstep = phi_ark([0, 1], J_e, J_i, vec, tol=self.tol, task1=False)
 
-#     print('PHI/ARK converged at iteration %d' % stats)
+      print('PHI/ARK converged using %d internal time steps' % nstep)
 
       # Update solution
       return Q + numpy.reshape(phiv[:,-1], Q.shape) * dt
