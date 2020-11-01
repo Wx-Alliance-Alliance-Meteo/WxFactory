@@ -7,7 +7,7 @@ class Distributed_World:
 
       # The numbering of the PEs starts at the bottom right. Pannel ranks increase towards the east in the x1 direction and increases towards the north in the x2 direction:
       #
-      #            0 1 2 3 4 
+      #            0 1 2 3 4
       #         +-----------+
       #       4 |           |
       #       3 |  x_2      |
@@ -154,8 +154,8 @@ class Distributed_World:
 
    def xchange_scalars(self, geom, field_itf_i, field_itf_j):
 
-      type_itf = type(field_itf_i[0, 0, :])
-      sendbuf = numpy.empty((4, len(field_itf_i[0, 0, :])), dtype=type_itf)
+      data_type = type(field_itf_i[0, 0, :])
+      sendbuf = numpy.empty((4, len(field_itf_i[0, 0, :])), dtype=data_type)
 
       # --- Send to northern neighbours
 
@@ -186,11 +186,11 @@ class Distributed_World:
          sendbuf[3,:] = field_itf_i[-2, 1, :]
 
       # --- All to all communication
-      
+
       recvbuf = self.comm_dist_graph.neighbor_alltoall(sendbuf)
 
       # --- Unpack received messages
-         
+
       field_itf_j[-1, 0, :] = recvbuf[0]
       field_itf_j[0, 1, :]  = recvbuf[1]
       field_itf_i[0, 1, :]  = recvbuf[2]
@@ -207,8 +207,8 @@ class Distributed_World:
       #      | 5 |
       #      +---+
 
-      type_itf = type(u1_itf_i[0, 0, :])
-      sendbuf_u1 = numpy.zeros((4, len(u1_itf_i[0, 0, :])), dtype=type_itf)
+      data_type = type(u1_itf_i[0, 0, :])
+      sendbuf_u1 = numpy.zeros((4, len(u1_itf_i[0, 0, :])), dtype=data_type)
       sendbuf_u2 = numpy.zeros_like(sendbuf_u1)
 
       X = geom.X[0,:]
@@ -219,33 +219,33 @@ class Distributed_World:
       if self.my_row == self.nb_lines_per_panel -1:
 
          if self.my_panel == 0:
-   
-            sendbuf_u1[0,:] = u1_itf_j[-2, 1, :] - 2 * X / ( 1 + X**2) * u2_itf_j[-2, 1, :]
+
+            sendbuf_u1[0,:] = u1_itf_j[-2, 1, :] - 2. * X / ( 1. + X**2) * u2_itf_j[-2, 1, :]
             sendbuf_u2[0,:] = u2_itf_j[-2, 1, :]
-   
+
          elif self.my_panel == 1:
-   
+
             sendbuf_u1[0,:] = -u2_itf_j[-2, 1, :]
-            sendbuf_u2[0,:] = u1_itf_j[-2, 1, :] - 2 * X / ( 1 + X**2 ) * u2_itf_j[-2, 1, :]
-   
+            sendbuf_u2[0,:] = u1_itf_j[-2, 1, :] - 2. * X / ( 1. + X**2 ) * u2_itf_j[-2, 1, :]
+
          elif self.my_panel == 2:
-   
-            sendbuf_u1[0,:] = numpy.flipud( -u1_itf_j[-2, 1, :] + 2 * X / ( 1 + X**2 ) * u2_itf_j[-2, 1, :] )
+
+            sendbuf_u1[0,:] = numpy.flipud( -u1_itf_j[-2, 1, :] + 2. * X / ( 1. + X**2 ) * u2_itf_j[-2, 1, :] )
             sendbuf_u2[0,:] = numpy.flipud( -u2_itf_j[-2, 1, :] )
-   
+
          elif self.my_panel == 3:
-   
+
             sendbuf_u1[0,:] = numpy.flipud( u2_itf_j[-2, 1, :] )
-            sendbuf_u2[0,:] = numpy.flipud( -u1_itf_j[-2, 1, :] + 2 * X / ( 1 + X**2 ) * u2_itf_j[-2, 1, :] )
-   
+            sendbuf_u2[0,:] = numpy.flipud( -u1_itf_j[-2, 1, :] + 2. * X / ( 1. + X**2 ) * u2_itf_j[-2, 1, :] )
+
          elif self.my_panel == 4:
-   
-            sendbuf_u1[0,:] = numpy.flipud( -u1_itf_j[-2, 1, :] + 2 * X / ( 1 + X**2 ) * u2_itf_j[-2, 1, :] )
+
+            sendbuf_u1[0,:] = numpy.flipud( -u1_itf_j[-2, 1, :] + 2. * X / ( 1. + X**2 ) * u2_itf_j[-2, 1, :] )
             sendbuf_u2[0,:] = numpy.flipud( -u2_itf_j[-2, 1, :] )
-   
+
          elif self.my_panel == 5:
-   
-            sendbuf_u1[0,:] = u1_itf_j[-2, 1, :] - 2 * X / ( 1 + X**2) * u2_itf_j[-2, 1, :]
+
+            sendbuf_u1[0,:] = u1_itf_j[-2, 1, :] - 2. * X / ( 1. + X**2) * u2_itf_j[-2, 1, :]
             sendbuf_u2[0,:] = u2_itf_j[-2, 1, :]
 
       else:
@@ -253,39 +253,38 @@ class Distributed_World:
          sendbuf_u1[0,:] = u1_itf_j[-2, 1, :]
          sendbuf_u2[0,:] = u2_itf_j[-2, 1, :]
 
-   
       # --- Send to southern neighbours
 
       if self.my_row == 0:
 
          if self.my_panel == 0:
-   
-            sendbuf_u1[1,:] = u1_itf_j[1, 0, :] + 2 * X / ( 1 + X**2 ) * u2_itf_j[1, 0, :]
+
+            sendbuf_u1[1,:] = u1_itf_j[1, 0, :] + 2. * X / ( 1. + X**2 ) * u2_itf_j[1, 0, :]
             sendbuf_u2[1,:] = u2_itf_j[1, 0, :]
-   
+
          elif self.my_panel == 1:
-   
+
             sendbuf_u1[1,:] = numpy.flipud( u2_itf_j[1, 0, :] )
-            sendbuf_u2[1,:] = numpy.flipud( -u1_itf_j[1, 0, :] -2 * X / ( 1 + X**2 ) * u2_itf_j[1, 0, :] )
-   
+            sendbuf_u2[1,:] = numpy.flipud( -u1_itf_j[1, 0, :] -2. * X / ( 1. + X**2 ) * u2_itf_j[1, 0, :] )
+
          elif self.my_panel == 2:
-   
-            sendbuf_u1[1,:] = numpy.flipud( -u1_itf_j[1, 0, :] -2 * X / ( 1 + X**2 ) * u2_itf_j[1, 0, :] )
+
+            sendbuf_u1[1,:] = numpy.flipud( -u1_itf_j[1, 0, :] -2. * X / ( 1. + X**2 ) * u2_itf_j[1, 0, :] )
             sendbuf_u2[1,:] = numpy.flipud( -u2_itf_j[1, 0, :] )
-   
+
          elif self.my_panel == 3:
-   
+
             sendbuf_u1[1,:] = -u2_itf_j[1, 0, :]
-            sendbuf_u2[1,:] = u1_itf_j[1, 0, :] + 2 * X / ( 1 + X**2 ) * u2_itf_j[1, 0, :]
-   
+            sendbuf_u2[1,:] = u1_itf_j[1, 0, :] + 2. * X / ( 1. + X**2 ) * u2_itf_j[1, 0, :]
+
          elif self.my_panel == 4:
-   
-            sendbuf_u1[1,:] = u1_itf_j[1, 0, :] + 2 * X / ( 1 + X**2) * u2_itf_j[1, 0, :]
+
+            sendbuf_u1[1,:] = u1_itf_j[1, 0, :] + 2. * X / ( 1. + X**2) * u2_itf_j[1, 0, :]
             sendbuf_u2[1,:] = u2_itf_j[1, 0, :]
-   
+
          elif self.my_panel == 5:
-   
-            sendbuf_u1[1,:] = numpy.flipud( -u1_itf_j[1, 0, :] - 2 * X / ( 1 + X**2 ) * u2_itf_j[1, 0, :] )
+
+            sendbuf_u1[1,:] = numpy.flipud( -u1_itf_j[1, 0, :] - 2. * X / ( 1. + X**2 ) * u2_itf_j[1, 0, :] )
             sendbuf_u2[1,:] = numpy.flipud( -u2_itf_j[1, 0, :] )
       else:
 
@@ -296,83 +295,49 @@ class Distributed_World:
 
       if self.my_col == 0:
 
-         if self.my_panel == 0:
+         if self.my_panel <= 3:
 
             sendbuf_u1[2,:] = u1_itf_i[1, 0, :]
-            sendbuf_u2[2,:] = 2 * Y / ( 1 + Y**2 ) * u1_itf_i[1, 0, :] + u2_itf_i[1, 0, :]
-                        
-   
-         elif self.my_panel == 1:
-   
-            sendbuf_u1[2,:] = u1_itf_i[1, 0, :]
-            sendbuf_u2[2,:] = 2 * Y / ( 1 + Y**2 ) * u1_itf_i[1, 0, :] + u2_itf_i[1, 0, :]
-                        
-   
-         elif self.my_panel == 2:
-   
-            sendbuf_u1[2,:] = u1_itf_i[1, 0, :]
-            sendbuf_u2[2,:] = 2 * Y / ( 1 + Y**2 ) * u1_itf_i[1, 0, :] + u2_itf_i[1, 0, :]
-                         
-   
-         elif self.my_panel == 3:
-   
-            sendbuf_u1[2,:] = u1_itf_i[1, 0, :]
-            sendbuf_u2[2,:] = 2 * Y / ( 1 + Y**2 ) * u1_itf_i[1, 0, :] + u2_itf_i[1, 0, :]
-                         
-   
+            sendbuf_u2[2,:] = 2. * Y / ( 1. + Y**2 ) * u1_itf_i[1, 0, :] + u2_itf_i[1, 0, :]
+
+
          elif self.my_panel == 4:
-   
-            sendbuf_u1[2,:] = numpy.flipud( -2 * Y / ( 1 + Y**2 ) * u1_itf_i[1, 0, :] - u2_itf_i[1, 0, :] )
+
+            sendbuf_u1[2,:] = numpy.flipud( -2. * Y / ( 1. + Y**2 ) * u1_itf_i[1, 0, :] - u2_itf_i[1, 0, :] )
             sendbuf_u2[2,:] = numpy.flipud( u1_itf_i[1, 0, :] )
-   
+
          elif self.my_panel == 5:
 
-            sendbuf_u1[2,:] = 2 * Y / ( 1 + Y**2 ) * u1_itf_i[1, 0, :] + u2_itf_i[1, 0, :]
+            sendbuf_u1[2,:] = 2. * Y / ( 1. + Y**2 ) * u1_itf_i[1, 0, :] + u2_itf_i[1, 0, :]
             sendbuf_u2[2,:] = -u1_itf_i[1, 0, :]
       else:
 
          sendbuf_u1[2,:] = u1_itf_i[1, 0, :]
-         sendbuf_u2[2,:] = u2_itf_i[1, 0, :]                        
+         sendbuf_u2[2,:] = u2_itf_i[1, 0, :]
 
       # --- Send to eastern neighbours
 
       if self.my_col == self.nb_elems_per_line-1:
 
-         if self.my_panel == 0:
+         if self.my_panel <= 3:
 
-            sendbuf_u1[3,:] = u1_itf_i[-2, 1, :] 
-            sendbuf_u2[3,:] = -2 * Y / (1 + Y**2 ) * u1_itf_i[-2, 1, :] + u2_itf_i[-2, 1, :] 
-   
-         elif self.my_panel == 1:
-   
-            sendbuf_u1[3,:] = u1_itf_i[-2, 1, :] 
-            sendbuf_u2[3,:] = -2 * Y / ( 1 + Y**2 ) * u1_itf_i[-2, 1, :] + u2_itf_i[-2, 1, :] 
-   
-         elif self.my_panel == 2:
-   
-            sendbuf_u1[3,:] = u1_itf_i[-2, 1, :] 
-            sendbuf_u2[3,:] = -2 * Y / ( 1 + Y**2 ) * u1_itf_i[-2, 1, :] + u2_itf_i[-2, 1, :] 
-   
-         elif self.my_panel == 3:
-   
-            sendbuf_u1[3,:] = u1_itf_i[-2, 1, :] 
-            sendbuf_u2[3,:] = -2 * Y / (1 + Y**2 ) * u1_itf_i[-2, 1, :] + u2_itf_i[-2, 1, :] 
-   
+            sendbuf_u1[3,:] = u1_itf_i[-2, 1, :]
+            sendbuf_u2[3,:] = -2. * Y / (1. + Y**2 ) * u1_itf_i[-2, 1, :] + u2_itf_i[-2, 1, :]
+
          elif self.my_panel == 4:
-   
-            sendbuf_u1[3,:] = -2 * Y / ( 1 + Y**2) * u1_itf_i[-2, 1, :] + u2_itf_i[-2, 1, :] 
+
+            sendbuf_u1[3,:] = -2. * Y / ( 1. + Y**2) * u1_itf_i[-2, 1, :] + u2_itf_i[-2, 1, :]
             sendbuf_u2[3,:] = -u1_itf_i[-2, 1, :]
-   
-   
+
+
          elif self.my_panel == 5:
-   
-            sendbuf_u1[3,:] = numpy.flipud( 2 * Y / ( 1 + Y**2 ) * u1_itf_i[-2, 1, :] - u2_itf_i[-2, 1, :] )
-            sendbuf_u2[3,:] = numpy.flipud( u1_itf_i[-2, 1, :] ) 
+
+            sendbuf_u1[3,:] = numpy.flipud( 2. * Y / ( 1. + Y**2 ) * u1_itf_i[-2, 1, :] - u2_itf_i[-2, 1, :] )
+            sendbuf_u2[3,:] = numpy.flipud( u1_itf_i[-2, 1, :] )
       else:
 
-         sendbuf_u1[3,:] = u1_itf_i[-2, 1, :] 
-         sendbuf_u2[3,:] = u2_itf_i[-2, 1, :] 
-
+         sendbuf_u1[3,:] = u1_itf_i[-2, 1, :]
+         sendbuf_u2[3,:] = u2_itf_i[-2, 1, :]
 
       # --- All to all communication
 
@@ -390,3 +355,247 @@ class Distributed_World:
       u2_itf_j[0, 1, :]  = recvbuf_u2[1]
       u2_itf_i[0, 1, :]  = recvbuf_u2[2]
       u2_itf_i[-1, 0, :] = recvbuf_u2[3]
+
+
+   def xchange_fluxes(self, geom, T01_itf_i, T02_itf_i, T11_itf_i, T12_itf_i, T22_itf_i, T01_itf_j, T02_itf_j, T11_itf_j, T12_itf_j, T22_itf_j):
+
+      #      +---+
+      #      | 4 |
+      #  +---+---+---+---+
+      #  | 3 | 0 | 1 | 2 |
+      #  +---+---+---+---+
+      #      | 5 |
+      #      +---+
+
+      data_type = type(T11_itf_i[0, 0, :])
+      sendbuf_T01 = numpy.zeros((4, len(T01_itf_i[0, 0, :])), dtype=data_type)
+      sendbuf_T02 = numpy.zeros_like(sendbuf_T01)
+      sendbuf_T11 = numpy.zeros_like(sendbuf_T01)
+      sendbuf_T12 = numpy.zeros_like(sendbuf_T01)
+      sendbuf_T22 = numpy.zeros_like(sendbuf_T01)
+
+      X = geom.X[0,:]
+      Y = geom.Y[:,0]
+
+      # --- Send to northern neighbours
+
+      if self.my_row == self.nb_lines_per_panel -1:
+
+         if self.my_panel == 0:
+
+            sendbuf_T01[0,:] = T01_itf_j[-2, 1, :] - 2. * X / (1. + X**2) * T02_itf_j[-2, 1, :]
+            sendbuf_T02[0,:] = T02_itf_j[-2, 1, :]
+            sendbuf_T11[0,:] = T11_itf_j[-2, 1, :] - 4. * X / ( 1. + X**2) * T12_itf_j[-2, 1, :] + (2. * X/(1. + X**2))**2 * T22_itf_j[-2, 1, :]
+            sendbuf_T12[0,:] = T12_itf_j[-2, 1, :] - 2. * X / (1. + X**2) * T22_itf_j[-2, 1, :]
+            sendbuf_T22[0,:] = T22_itf_j[-2, 1, :]
+
+         elif self.my_panel == 1:
+
+            sendbuf_T01[0,:] = -T02_itf_j[-2, 1, :]
+            sendbuf_T02[0,:] = T01_itf_j[-2, 1, :] - 2. * X / ( 1. + X**2 ) * T02_itf_j[-2, 1, :]
+            sendbuf_T11[0,:] = T22_itf_j[-2, 1, :]
+            sendbuf_T12[0,:] = -T12_itf_j[-2, 1, :] + 2. * X / ( 1. + X**2 ) * T22_itf_j[-2, 1, :]
+            sendbuf_T22[0,:] =  T11_itf_j[-2, 1, :] - 4. * X / ( 1. + X**2 ) * T12_itf_j[-2, 1, :] + (2. * X / ( 1. + X**2 ))**2 * T22_itf_j[-2, 1, :]
+
+         elif self.my_panel == 2:
+
+            sendbuf_T01[0,:] = numpy.flipud( -T01_itf_j[-2, 1, :] + 2. * X / ( 1. + X**2 ) * T02_itf_j[-2, 1, :] )
+            sendbuf_T02[0,:] = numpy.flipud( -T02_itf_j[-2, 1, :] )
+            sendbuf_T11[0,:] = numpy.flipud(  T11_itf_j[-2, 1, :] - 4. * X / ( 1. + X**2 ) * T12_itf_j[-2, 1, :] + (2. * X / ( 1. + X**2 ))**2 * T22_itf_j[-2, 1, :] )
+            sendbuf_T12[0,:] = numpy.flipud( T12_itf_j[-2, 1, :] - 2. * X / ( 1. + X**2 ) * T22_itf_j[-2, 1, :] )
+            sendbuf_T22[0,:] = numpy.flipud( T22_itf_j[-2, 1, :] )
+
+         elif self.my_panel == 3:
+
+            sendbuf_T01[0,:] = numpy.flipud( T02_itf_j[-2, 1, :] )
+            sendbuf_T02[0,:] = numpy.flipud( -T01_itf_j[-2, 1, :] + 2. * X / ( 1. + X**2 ) * T02_itf_j[-2, 1, :] )
+            sendbuf_T11[0,:] = numpy.flipud( T22_itf_j[-2, 1, :] )
+            sendbuf_T12[0,:] = numpy.flipud( -T12_itf_j[-2, 1, :] + 2. * X / ( 1. + X**2 ) * T22_itf_j[-2, 1, :] )
+            sendbuf_T22[0,:] = numpy.flipud( T11_itf_j[-2, 1, :] - 4. * X / ( 1. + X**2 ) * T12_itf_j[-2, 1, :] + (2. * X / ( 1. + X**2 ))**2 * T22_itf_j[-2, 1, :] )
+
+         elif self.my_panel == 4:
+
+            sendbuf_T01[0,:] = numpy.flipud( -T01_itf_j[-2, 1, :] + 2. * X / ( 1. + X**2 ) * T02_itf_j[-2, 1, :] )
+            sendbuf_T02[0,:] = numpy.flipud( -T02_itf_j[-2, 1, :] )
+            sendbuf_T11[0,:] = numpy.flipud( T11_itf_j[-2, 1, :] - 4. * X / ( 1. + X**2 ) * T12_itf_j[-2, 1, :] + (2. * X / ( 1. + X**2 ))**2 * T22_itf_j[-2, 1, :])
+            sendbuf_T12[0,:] = numpy.flipud( T12_itf_j[-2, 1, :] - 2. * X / ( 1. + X**2 ) * T22_itf_j[-2, 1, :] )
+            sendbuf_T22[0,:] = numpy.flipud( T22_itf_j[-2, 1, :] )
+
+         elif self.my_panel == 5:
+
+            sendbuf_T01[0,:] = T01_itf_j[-2, 1, :] - 2. * X / ( 1. + X**2) * T02_itf_j[-2, 1, :]
+            sendbuf_T02[0,:] = T02_itf_j[-2, 1, :]
+            sendbuf_T11[0,:] = T11_itf_j[-2, 1, :] - 4. * X / ( 1. + X**2) * T12_itf_j[-2, 1, :] + (2. * X / ( 1. + X**2))**2 * T22_itf_j[-2, 1, :]
+            sendbuf_T12[0,:] = T12_itf_j[-2, 1, :] - 2. * X / ( 1. + X**2) * T22_itf_j[-2, 1, :]
+            sendbuf_T22[0,:] = T22_itf_j[-2, 1, :]
+
+      else:
+
+         sendbuf_T01[0,:] = T01_itf_j[-2, 1, :]
+         sendbuf_T02[0,:] = T02_itf_j[-2, 1, :]
+         sendbuf_T11[0,:] = T11_itf_j[-2, 1, :]
+         sendbuf_T12[0,:] = T12_itf_j[-2, 1, :]
+         sendbuf_T22[0,:] = T22_itf_j[-2, 1, :]
+
+      # --- Send to southern neighbours
+
+      if self.my_row == 0:
+
+         if self.my_panel == 0:
+
+            sendbuf_T01[1,:] = T01_itf_j[1, 0, :] + 2. * X / ( 1. + X**2 ) * T02_itf_j[1, 0, :]
+            sendbuf_T02[1,:] = T02_itf_j[1, 0, :]
+            sendbuf_T11[1,:] = T11_itf_j[1, 0, :] + 4. * X / ( 1. + X**2 ) * T12_itf_j[1, 0, :] + (2. * X / ( 1. + X**2 ))**2 * T22_itf_j[1, 0, :]
+            sendbuf_T12[1,:] = T12_itf_j[1, 0, :] + 2. * X / ( 1. + X**2 ) * T22_itf_j[1, 0, :]
+            sendbuf_T22[1,:] = T22_itf_j[1, 0, :]
+
+         elif self.my_panel == 1:
+
+            sendbuf_T01[1,:] = numpy.flipud( T02_itf_j[1, 0, :] )
+            sendbuf_T02[1,:] = numpy.flipud( -T01_itf_j[1, 0, :] -2 * X / ( 1 + X**2 ) * T02_itf_j[1, 0, :] )
+            sendbuf_T11[1,:] = numpy.flipud( T22_itf_j[1, 0, :] )
+            sendbuf_T12[1,:] = numpy.flipud( -T12_itf_j[1, 0, :] -2 * X / ( 1 + X**2 ) * T22_itf_j[1, 0, :] )
+            sendbuf_T22[1,:] = numpy.flipud( T11_itf_j[1, 0, :] + 4 * X / ( 1 + X**2 ) * T12_itf_j[1, 0, :] + (2 * X / ( 1 + X**2 ))**2 * T22_itf_j[1, 0, :])
+
+         elif self.my_panel == 2:
+
+            sendbuf_T01[1,:] = numpy.flipud( -T01_itf_j[1, 0, :] - 2. * X / ( 1. + X**2 ) * T02_itf_j[1, 0, :] )
+            sendbuf_T02[1,:] = numpy.flipud( -T02_itf_j[1, 0, :] )
+            sendbuf_T11[1,:] = numpy.flipud( T11_itf_j[1, 0, :] + 4. * X / ( 1. + X**2 ) * T12_itf_j[1, 0, :] + (2. * X / ( 1. + X**2 ))**2 * T22_itf_j[1, 0, :])
+            sendbuf_T12[1,:] = numpy.flipud( T12_itf_j[1, 0, :] + 2. * X / ( 1. + X**2 ) * T22_itf_j[1, 0, :] )
+            sendbuf_T22[1,:] = numpy.flipud( T22_itf_j[1, 0, :] )
+
+         elif self.my_panel == 3:
+
+            sendbuf_T01[1,:] = -T02_itf_j[1, 0, :]
+            sendbuf_T02[1,:] = T01_itf_j[1, 0, :] + 2. * X / ( 1. + X**2 ) * T02_itf_j[1, 0, :]
+            sendbuf_T11[1,:] = T22_itf_j[1, 0, :]
+            sendbuf_T12[1,:] = -T12_itf_j[1, 0, :] - 2. * X / ( 1. + X**2 ) * T22_itf_j[1, 0, :]
+            sendbuf_T22[1,:] = T11_itf_j[1, 0, :] + 4. * X / ( 1. + X**2 ) * T12_itf_j[1, 0, :] + (2. * X / ( 1. + X**2 ))**2 * T22_itf_j[1, 0, :]
+
+         elif self.my_panel == 4:
+
+            sendbuf_T01[1,:] = T01_itf_j[1, 0, :] + 2. * X / ( 1. + X**2) * T02_itf_j[1, 0, :]
+            sendbuf_T02[1,:] = T02_itf_j[1, 0, :]
+            sendbuf_T11[1,:] = T11_itf_j[1, 0, :] + 4. * X / ( 1. + X**2) * T12_itf_j[1, 0, :] + (2. * X / (1. + X**2))**2 * T22_itf_j[1, 0, :]
+            sendbuf_T12[1,:] = T12_itf_j[1, 0, :] + 2. * X / ( 1. + X**2) * T22_itf_j[1, 0, :]
+            sendbuf_T22[1,:] = T22_itf_j[1, 0, :]
+
+         elif self.my_panel == 5:
+
+            sendbuf_T01[1,:] = numpy.flipud( -T01_itf_j[1, 0, :] - 2. * X / ( 1. + X**2 ) * T02_itf_j[1, 0, :] )
+            sendbuf_T02[1,:] = numpy.flipud( -T02_itf_j[1, 0, :] )
+            sendbuf_T11[1,:] = numpy.flipud( T11_itf_j[1, 0, :] + 4. * X / ( 1. + X**2 ) * T12_itf_j[1, 0, :] + (2. * X / ( 1. + X**2 ))**2 * T22_itf_j[1, 0, :])
+            sendbuf_T12[1,:] = numpy.flipud( T12_itf_j[1, 0, :] + 2. * X / ( 1. + X**2 ) * T22_itf_j[1, 0, :] )
+            sendbuf_T22[1,:] = numpy.flipud( T22_itf_j[1, 0, :] )
+      else:
+
+         sendbuf_T01[1,:] = T01_itf_j[1, 0, :]
+         sendbuf_T02[1,:] = T02_itf_j[1, 0, :]
+         sendbuf_T11[1,:] = T11_itf_j[1, 0, :]
+         sendbuf_T12[1,:] = T12_itf_j[1, 0, :]
+         sendbuf_T22[1,:] = T22_itf_j[1, 0, :]
+
+      # --- Send to western neighbours
+
+      if self.my_col == 0:
+
+         if self.my_panel <= 3:
+
+            sendbuf_T01[2,:] = T01_itf_i[1, 0, :]
+            sendbuf_T02[2,:] = 2. * Y / ( 1 + Y**2 ) * T01_itf_i[1, 0, :] + T02_itf_i[1, 0, :]
+            sendbuf_T11[2,:] = T11_itf_i[1, 0, :]
+            sendbuf_T12[2,:] = 2. * Y / ( 1 + Y**2 ) * T11_itf_i[1, 0, :] + T12_itf_i[1, 0, :]
+            sendbuf_T22[2,:] = (2. * Y / ( 1 + Y**2 ))**2 * T11_itf_i[1, 0, :] + 4. * Y / (1. + Y**2) * T12_itf_i[1, 0, :] + T22_itf_i[1, 0, :]
+
+         elif self.my_panel == 4:
+
+            sendbuf_T01[2,:] = numpy.flipud( -2. * Y / ( 1. + Y**2 ) * T01_itf_i[1, 0, :] - T02_itf_i[1, 0, :] )
+            sendbuf_T02[2,:] = numpy.flipud( T01_itf_i[1, 0, :] )
+            sendbuf_T11[2,:] = numpy.flipud( (2. * Y / ( 1. + Y**2 ))**2 * T11_itf_i[1, 0, :] + 4. * Y / ( 1. + Y**2 ) * T12_itf_i[1, 0, :] + T22_itf_i[1, 0, :] )
+            sendbuf_T12[2,:] = numpy.flipud( -2. * Y / ( 1. + Y**2 ) * T11_itf_i[1, 0, :] - T12_itf_i[1, 0, :] )
+            sendbuf_T22[2,:] = numpy.flipud( T11_itf_i[1, 0, :] )
+
+         elif self.my_panel == 5:
+
+            sendbuf_T01[2,:] = 2. * Y / ( 1. + Y**2 ) * T01_itf_i[1, 0, :] + T02_itf_i[1, 0, :]
+            sendbuf_T02[2,:] = -T01_itf_i[1, 0, :]
+            sendbuf_T11[2,:] = (2. * Y / ( 1. + Y**2 ))**2 * T11_itf_i[1, 0, :] + 4. * Y / ( 1. + Y**2 ) * T12_itf_i[1, 0, :] + T22_itf_i[1, 0, :]
+            sendbuf_T12[2,:] = -2. * Y / ( 1. + Y**2 ) * T11_itf_i[1, 0, :] - T12_itf_i[1, 0, :]
+            sendbuf_T22[2,:] = T11_itf_i[1, 0, :]
+      else:
+
+         sendbuf_T01[2,:] = T01_itf_i[1, 0, :]
+         sendbuf_T02[2,:] = T02_itf_i[1, 0, :]
+         sendbuf_T11[2,:] = T11_itf_i[1, 0, :]
+         sendbuf_T12[2,:] = T12_itf_i[1, 0, :]
+         sendbuf_T22[2,:] = T22_itf_i[1, 0, :]
+
+      # --- Send to eastern neighbours
+
+      if self.my_col == self.nb_elems_per_line-1:
+
+         if self.my_panel <= 3:
+
+            sendbuf_T01[3,:] = T01_itf_i[-2, 1, :]
+            sendbuf_T02[3,:] = -2 * Y / ( 1 + Y**2 ) * T01_itf_i[-2, 1, :] + T02_itf_i[-2, 1, :]
+            sendbuf_T11[3,:] = T11_itf_i[-2, 1, :]
+            sendbuf_T12[3,:] = -2 * Y / ( 1 + Y**2 ) * T11_itf_i[-2, 1, :] + T12_itf_i[-2, 1, :]
+            sendbuf_T22[3,:] = (2 * Y / ( 1 + Y**2 ))**2 * T11_itf_i[-2, 1, :] - 4. * Y/(1. + Y**2) * T12_itf_i[-2, 1, :] + T22_itf_i[-2, 1, :]
+
+         elif self.my_panel == 4:
+
+            sendbuf_T01[3,:] = -2 * Y / ( 1 + Y**2) * T01_itf_i[-2, 1, :] + T02_itf_i[-2, 1, :]
+            sendbuf_T02[3,:] = -T01_itf_i[-2, 1, :]
+            sendbuf_T11[3,:] = (2. * Y / ( 1. + Y**2))**2 * T11_itf_i[-2, 1, :] - 4. * Y / ( 1. + Y**2) * T12_itf_i[-2, 1, :] + T22_itf_i[-2, 1, :]
+            sendbuf_T12[3,:] = 2 * Y / ( 1 + Y**2) * T11_itf_i[-2, 1, :] - T12_itf_i[-2, 1, :]
+            sendbuf_T22[3,:] = T11_itf_i[-2, 1, :]
+
+         elif self.my_panel == 5:
+
+            sendbuf_T01[3,:] = numpy.flipud( 2. * Y / ( 1. + Y**2 ) * T01_itf_i[-2, 1, :] - T02_itf_i[-2, 1, :] )
+            sendbuf_T02[3,:] = numpy.flipud( T01_itf_i[-2, 1, :] )
+            sendbuf_T11[3,:] = numpy.flipud( (2. * Y / ( 1. + Y**2 ))**2 * T11_itf_i[-2, 1, :] - 4. * Y / ( 1. + Y**2 ) * T12_itf_i[-2, 1, :] + T22_itf_i[-2, 1, :] )
+            sendbuf_T12[3,:] = numpy.flipud( 2. * Y / ( 1. + Y**2 ) * T11_itf_i[-2, 1, :] - T12_itf_i[-2, 1, :] )
+            sendbuf_T22[3,:] = numpy.flipud( T11_itf_i[-2, 1, :] )
+      else:
+
+         sendbuf_T01[3,:] = T01_itf_i[-2, 1, :]
+         sendbuf_T02[3,:] = T02_itf_i[-2, 1, :]
+         sendbuf_T11[3,:] = T11_itf_i[-2, 1, :]
+         sendbuf_T12[3,:] = T12_itf_i[-2, 1, :]
+         sendbuf_T22[3,:] = T22_itf_i[-2, 1, :]
+
+      # --- All to all communication
+
+      recvbuf_T01 = self.comm_dist_graph.neighbor_alltoall(sendbuf_T01)
+      recvbuf_T02 = self.comm_dist_graph.neighbor_alltoall(sendbuf_T02)
+      recvbuf_T11 = self.comm_dist_graph.neighbor_alltoall(sendbuf_T11)
+      recvbuf_T12 = self.comm_dist_graph.neighbor_alltoall(sendbuf_T12)
+      recvbuf_T22 = self.comm_dist_graph.neighbor_alltoall(sendbuf_T22)
+
+      # --- Unpack received messages
+      T01_itf_j[-1, 0, :] = recvbuf_T01[0]
+      T01_itf_j[0, 1, :]  = recvbuf_T01[1]
+      T01_itf_i[0, 1, :]  = recvbuf_T01[2]
+      T01_itf_i[-1, 0, :] = recvbuf_T01[3]
+
+      T02_itf_j[-1, 0, :] = recvbuf_T02[0]
+      T02_itf_j[0, 1, :]  = recvbuf_T02[1]
+      T02_itf_i[0, 1, :]  = recvbuf_T02[2]
+      T02_itf_i[-1, 0, :] = recvbuf_T02[3]
+
+      T11_itf_j[-1, 0, :] = recvbuf_T11[0]
+      T11_itf_j[0, 1, :]  = recvbuf_T11[1]
+      T11_itf_i[0, 1, :]  = recvbuf_T11[2]
+      T11_itf_i[-1, 0, :] = recvbuf_T11[3]
+
+      T12_itf_j[-1, 0, :] = recvbuf_T12[0]
+      T12_itf_j[0, 1, :]  = recvbuf_T12[1]
+      T12_itf_i[0, 1, :]  = recvbuf_T12[2]
+      T12_itf_i[-1, 0, :] = recvbuf_T12[3]
+
+      T22_itf_j[-1, 0, :] = recvbuf_T22[0]
+      T22_itf_j[0, 1, :]  = recvbuf_T22[1]
+      T22_itf_i[0, 1, :]  = recvbuf_T22[2]
+      T22_itf_i[-1, 0, :] = recvbuf_T22[3]
