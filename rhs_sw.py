@@ -4,6 +4,57 @@ from definitions import idx_h, idx_hu1, idx_hu2, idx_u1, idx_u2, gravity
 from dgfilter import apply_filter
 from timer import TimerGroup
 
+
+def compute_derivatives(nb_elements, nb_sol_pts, offset,
+                        flux_x1, flux_itf_i, flux_x2, flux_itf_j,
+                        dx1, dx2,
+                        diff_sol_pt, diff_sol_pt_tr, correction, correction_tr,
+                        timer):
+   """
+   Compute the 'derivatives' part of the right-hand side
+
+   :param nb_elements:     Number of elements in one direction
+   :param nb_sol_pts:      Number of solution points in an element (= order)
+   :param offset:          Size of the halo (on one side)
+   :param flux_x1:         Flux along axis 1 at every solution point
+   :param flux_itf_i:      Flux along axis 1, across element interfaces
+   :param flux_x2:         Flux along axis 2 at every solution point
+   :param flux_itf_j:      Flux along axis 2, across element interfaces
+   :param dx1:             Element size along axis 1
+   :param dx2:             Element size along axis 2
+   :param diff_sol_pt:     Weights matrix for computing Lagrange interpolation derivatives
+   :param diff_sol_pt_tr:  Transpose of diff_sol_pt
+   :param correction:
+   :param correction_tr:
+   :param timer:           To know how much time it took
+
+   :return:                2 arrays, each containing the derivative of the 3 fields along an axis
+   """
+
+   timer.start()
+
+   datatype = flux_itf_i[0].dtype
+   nb_dof = nb_elements * nb_sol_pts
+   df1_dx1 = numpy.empty((3, nb_dof, nb_dof), dtype = datatype)
+   df2_dx2 = numpy.empty((3, nb_dof, nb_dof), dtype = datatype)
+
+   for elem in range(nb_elements):
+      slice = elem * nb_sol_pts + numpy.arange(nb_sol_pts)
+
+      # --- Direction x1
+      df1_dx1[idx_h]  [:,slice] = ( flux_x1[0][:,slice] @ diff_sol_pt_tr + flux_itf_i[0][elem+offset,:,:] @ correction_tr ) * 2.0 / dx1
+      df1_dx1[idx_hu1][:,slice] = ( flux_x1[1][:,slice] @ diff_sol_pt_tr + flux_itf_i[1][elem+offset,:,:] @ correction_tr ) * 2.0 / dx1
+      df1_dx1[idx_hu2][:,slice] = ( flux_x1[2][:,slice] @ diff_sol_pt_tr + flux_itf_i[2][elem+offset,:,:] @ correction_tr ) * 2.0 / dx1
+
+      # --- Direction x2
+      df2_dx2[idx_h,  slice,:] = ( diff_sol_pt @ flux_x2[0][slice,:] + correction @ flux_itf_j[0][elem+offset,:,:] ) * 2.0 / dx2
+      df2_dx2[idx_hu1,slice,:] = ( diff_sol_pt @ flux_x2[1][slice,:] + correction @ flux_itf_j[1][elem+offset,:,:] ) * 2.0 / dx2
+      df2_dx2[idx_hu2,slice,:] = ( diff_sol_pt @ flux_x2[2][slice,:] + correction @ flux_itf_j[2][elem+offset,:,:] ) * 2.0 / dx2
+   timer.stop()
+
+   return df1_dx1, df2_dx2
+
+
 def rhs_sw(Q, geom, mtrx, metric, topo, ptopo, nbsolpts, nb_elements_horiz, case_number, filter_rhs=False, timers = None):
 
    timers = timers if timers is not None else TimerGroup(5, 0.0)
@@ -15,8 +66,6 @@ def rhs_sw(Q, geom, mtrx, metric, topo, ptopo, nbsolpts, nb_elements_horiz, case
 
    nb_interfaces_horiz = nb_elements_horiz + 1
 
-   df1_dx1 = numpy.zeros_like(Q, dtype=type_vec)
-   df2_dx2 = numpy.zeros_like(Q, dtype=type_vec)
    forcing = numpy.zeros_like(Q, dtype=type_vec)
    rhs = numpy.zeros_like(Q, dtype=type_vec)
 
@@ -104,6 +153,7 @@ def rhs_sw(Q, geom, mtrx, metric, topo, ptopo, nbsolpts, nb_elements_horiz, case
 
    timers[2].start()
    # Common Rusanov fluxes
+   timers[3].start()
    for itf in range(nb_interfaces_horiz):
 
       elem_L = itf
@@ -196,22 +246,15 @@ def rhs_sw(Q, geom, mtrx, metric, topo, ptopo, nbsolpts, nb_elements_horiz, case
       flux_Eq2_itf_j[elem_L, 1, :] = 0.5 * ( flux_L + flux_R - eig * metric.sqrtG_itf_j[itf, :] \
             * ( h_itf_j[elem_R, 0, :] * u2_itf_j[elem_R, 0, :] - h_itf_j[elem_L, 1, :] * u2_itf_j[elem_L, 1, :]) )
       flux_Eq2_itf_j[elem_R, 0, :] = flux_Eq2_itf_j[elem_L, 1, :]
+   timers[3].stop()
 
    # Compute the derivatives
-   for elem in range(nb_elements_horiz):
-      epais = elem * nbsolpts + numpy.arange(nbsolpts)
+   df1_dx1, df2_dx2 = compute_derivatives(
+      nb_elements_horiz, nbsolpts, offset,
+      [flux_Eq0_x1, flux_Eq1_x1, flux_Eq2_x1], [flux_Eq0_itf_i, flux_Eq1_itf_i, flux_Eq2_itf_i],
+      [flux_Eq0_x2, flux_Eq1_x2, flux_Eq2_x2], [flux_Eq0_itf_j, flux_Eq1_itf_j, flux_Eq2_itf_j],
+      geom.Δx1, geom.Δx2, mtrx.diff_solpt, mtrx.diff_solpt_tr, mtrx.correction, mtrx.correction_tr, timers[4])
 
-      # --- Direction x1
-
-      df1_dx1[idx_h][:,epais]   = ( flux_Eq0_x1[:,epais] @ mtrx.diff_solpt_tr + flux_Eq0_itf_i[elem+offset,:,:] @ mtrx.correction_tr ) * 2.0 / geom.Δx1
-      df1_dx1[idx_hu1][:,epais] = ( flux_Eq1_x1[:,epais] @ mtrx.diff_solpt_tr + flux_Eq1_itf_i[elem+offset,:,:] @ mtrx.correction_tr ) * 2.0 / geom.Δx1
-      df1_dx1[idx_hu2][:,epais] = ( flux_Eq2_x1[:,epais] @ mtrx.diff_solpt_tr + flux_Eq2_itf_i[elem+offset,:,:] @ mtrx.correction_tr ) * 2.0 / geom.Δx1
-
-      # --- Direction x2
-
-      df2_dx2[idx_h,epais,:]   = ( mtrx.diff_solpt @ flux_Eq0_x2[epais,:] + mtrx.correction @ flux_Eq0_itf_j[elem+offset,:,:] ) * 2.0 / geom.Δx2
-      df2_dx2[idx_hu1,epais,:] = ( mtrx.diff_solpt @ flux_Eq1_x2[epais,:] + mtrx.correction @ flux_Eq1_itf_j[elem+offset,:,:] ) * 2.0 / geom.Δx2
-      df2_dx2[idx_hu2,epais,:] = ( mtrx.diff_solpt @ flux_Eq2_x2[epais,:] + mtrx.correction @ flux_Eq2_itf_j[elem+offset,:,:] ) * 2.0 / geom.Δx2
 
    # Add coriolis, metric and terms due to varying bottom topography
    forcing[idx_h,:,:] = 0.0

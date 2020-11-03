@@ -62,7 +62,7 @@ def main():
       output_netcdf(Q, geom, metric, mtrx, topo, step, param)  # store initial conditions
 
    # Time stepping
-   rhs_timers = TimerGroup(5, initial_time)
+   rhs_timers = TimerGroup(10, initial_time)
    rhs_handle = RhsCaller(rhs_sw, geom, mtrx, metric, topo, ptopo, param.nbsolpts, param.nb_elements,
                           param.case_number, use_filter = param.filter_apply, timers = rhs_timers)
 
@@ -124,7 +124,11 @@ def main():
             print('=> Writing dynamic output for step', step)
             output_netcdf(Q, geom, metric, mtrx, topo, step, param)
 
-   print('Times: {}'.format(step_timer.times))
+   # print('Times: {}'.format(step_timer.times))
+
+   print('Before/during/after exchange: {:5.3f} {:5.3f} {:5.3f} (rusanov/deriv  {:5.3f}  {:5.3f})'.format(
+      rhs_timers[0].average_time(), rhs_timers[1].average_time(), rhs_timers[2].average_time(),
+      rhs_timers[3].average_time(), rhs_timers[4].average_time()))
 
    #plot_times(comm_dist_graph, rhs_timers)
 
