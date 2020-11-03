@@ -19,3 +19,5 @@ venv
 rat2out.txt
 
 *.png
+
+*.out

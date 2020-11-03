@@ -21,6 +21,8 @@ class Timer:
    def last_time(self):
        return self.times[-1]
 
+   def average_time(self):
+      return sum(self.times) / len(self.times)
 
 class TimerGroup:
    def __init__(self, num_timers, initial_time):

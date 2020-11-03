@@ -131,6 +131,15 @@ def main():
    if param.output_freq > 0:
       output_finalize()
 
+   return ptopo.rank
+
 if __name__ == '__main__':
+
+   import cProfile
+
    numpy.set_printoptions(suppress=True, linewidth=256)
-   main()
+   pr = cProfile.Profile()
+   pr.enable()
+   rank = main()
+   pr.disable()
+   pr.dump_stats('prof_{:04d}.out'.format(rank))
