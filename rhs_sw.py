@@ -1,8 +1,17 @@
 import numpy
+import cupy
 
 from definitions import idx_h, idx_hu1, idx_hu2, idx_u1, idx_u2, gravity
 from dgfilter import apply_filter
 from timer import TimerGroup
+
+# Preload some CuPy stuff
+dummy1_d = cupy.array([1])
+dummy2 = numpy.array([2])
+dummy2_d = cupy.asarray(dummy2)
+dummy3_d = dummy1_d @ dummy2_d
+dummy3 = cupy.asnumpy(cupy.linalg.norm(dummy3_d))
+# Done preloading
 
 
 def compute_derivatives(nb_elements, nb_sol_pts, offset,
@@ -53,6 +62,44 @@ def compute_derivatives(nb_elements, nb_sol_pts, offset,
    timer.stop()
 
    return df1_dx1, df2_dx2
+
+def compute_derivatives_alt(nb_elements, nb_sol_pts, offset,
+                            flux_x1, flux_itf_i, flux_x2, flux_itf_j,
+                            dx1, dx2,
+                            diff_sol_pt, diff_sol_pt_tr, correction, correction_tr,
+                            timer):
+
+   timer.start()
+
+   datatype = flux_itf_i[0].dtype
+   nb_dof = nb_elements * nb_sol_pts
+   df1_dx1 = numpy.empty((3, nb_dof, nb_dof), dtype = datatype)
+   df2_dx2 = numpy.empty((3, nb_dof, nb_dof), dtype = datatype)
+
+   # Transpose before, for better use of cache (for derivative along axis 1)
+   fx1 = [flux_x1[i].T for i in range(3)]
+   fix1 = [flux_itf_i[i].transpose((0, 2, 1)) for i in range(3)]
+
+   for elem in range(nb_elements):
+      slice = elem * nb_sol_pts + numpy.arange(nb_sol_pts)
+      pos = elem + offset
+
+      # --- Direction x1
+      df1_dx1[idx_h]  [slice,:] = ( diff_sol_pt @ fx1[0][slice,:] + correction @ fix1[0][pos,:,:] ) * 2.0 / dx1
+      df1_dx1[idx_hu1][slice,:] = ( diff_sol_pt @ fx1[1][slice,:] + correction @ fix1[1][pos,:,:] ) * 2.0 / dx1
+      df1_dx1[idx_hu2][slice,:] = ( diff_sol_pt @ fx1[2][slice,:] + correction @ fix1[2][pos,:,:] ) * 2.0 / dx1
+
+      # --- Direction x2
+      df2_dx2[idx_h,  slice,:] = ( diff_sol_pt @ flux_x2[0][slice,:] + correction @ flux_itf_j[0][pos,:,:] ) * 2.0 / dx2
+      df2_dx2[idx_hu1,slice,:] = ( diff_sol_pt @ flux_x2[1][slice,:] + correction @ flux_itf_j[1][pos,:,:] ) * 2.0 / dx2
+      df2_dx2[idx_hu2,slice,:] = ( diff_sol_pt @ flux_x2[2][slice,:] + correction @ flux_itf_j[2][pos,:,:] ) * 2.0 / dx2
+
+   # Don't forget to transpose back for axis 1
+   result = numpy.array([df1_dx1[i].T for i in range(3)]), df2_dx2
+
+   timer.stop()
+
+   return result
 
 
 def rhs_sw(Q, geom, mtrx, metric, topo, ptopo, nbsolpts, nb_elements_horiz, case_number, filter_rhs=False, timers = None):
@@ -255,6 +302,18 @@ def rhs_sw(Q, geom, mtrx, metric, topo, ptopo, nbsolpts, nb_elements_horiz, case
       [flux_Eq0_x2, flux_Eq1_x2, flux_Eq2_x2], [flux_Eq0_itf_j, flux_Eq1_itf_j, flux_Eq2_itf_j],
       geom.Δx1, geom.Δx2, mtrx.diff_solpt, mtrx.diff_solpt_tr, mtrx.correction, mtrx.correction_tr, timers[4])
 
+   test_d1, test_d2 = compute_derivatives_alt(
+      nb_elements_horiz, nbsolpts, offset,
+      [flux_Eq0_x1, flux_Eq1_x1, flux_Eq2_x1], [flux_Eq0_itf_i, flux_Eq1_itf_i, flux_Eq2_itf_i],
+      [flux_Eq0_x2, flux_Eq1_x2, flux_Eq2_x2], [flux_Eq0_itf_j, flux_Eq1_itf_j, flux_Eq2_itf_j],
+      geom.Δx1, geom.Δx2, mtrx.diff_solpt, mtrx.diff_solpt_tr, mtrx.correction, mtrx.correction_tr, timers[5])
+
+   norm1 = numpy.linalg.norm(df1_dx1 - test_d1)
+   norm2 = numpy.linalg.norm(df2_dx2 - test_d2)
+
+   if norm1 > 1e-12 or norm2 > 1e-12:
+      print('Got a big difference! ({} and {})'.format(norm1, norm2))
+      raise ValueError
 
    # Add coriolis, metric and terms due to varying bottom topography
    forcing[idx_h,:,:] = 0.0
