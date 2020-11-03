@@ -12,3 +12,12 @@ __pycache__/
 *.py[cod]
 
 model_output/
+
+.idea
+venv
+
+rat2out.txt
+
+*.png
+*.out
+
