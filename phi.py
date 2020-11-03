@@ -111,7 +111,7 @@ def phi_ark(τ_out, J_exp, J_imp, u, tol = 1e-7, task1 = False):
       for k in range(numSteps):
          w[:, k] = w[:, k] / τ_out[k]
 
-   return w
+   return w, nsteps
 
 def rhs_exp(vec, n, p, J_exp, B):
    retval = numpy.zeros_like(vec)
