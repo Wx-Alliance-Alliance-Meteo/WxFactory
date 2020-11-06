@@ -5,7 +5,7 @@ from dgfilter import apply_filter
 
 def rhs_sw(Q, geom, mtrx, metric, topo, ptopo, nbsolpts, nb_elements_horiz, case_number, filter_rhs=False):
 
-   type_vec = type(Q[0, 0, 0])
+   type_vec = Q.dtype
 
    shallow_water_equations = ( case_number > 1 )
 
