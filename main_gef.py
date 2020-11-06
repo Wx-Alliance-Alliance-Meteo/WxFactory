@@ -126,10 +126,10 @@ def main():
 
    # print('Times: {}'.format(step_timer.times))
 
-   print('Before/during/after exchange: {:5.3f} {:5.3f} {:5.3f} (rusanov/deriv  {:5.3f}  {:5.3f}), new {:5.3f}'.format(
+   print('Around exchange: {:5.3f} {:5.3f} {:5.3f} (rusanov/deriv  {:5.3f}  {:5.3f}), new {:5.3f}, gpu {:5.3f}'.format(
       rhs_timers[0].average_time(), rhs_timers[1].average_time(), rhs_timers[2].average_time(),
       rhs_timers[3].average_time(), rhs_timers[4].average_time(),
-      rhs_timers[5].average_time()))
+      rhs_timers[5].average_time(), rhs_timers[6].average_time()))
 
    #plot_times(comm_dist_graph, rhs_timers)
 
