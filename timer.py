@@ -22,7 +22,7 @@ class Timer:
        return self.times[-1]
 
    def average_time(self):
-      return sum(self.times) / len(self.times)
+      return sum(self.times) / len(self.times) if len(self.times) > 0 else 0.0
 
 class TimerGroup:
    def __init__(self, num_timers, initial_time):
