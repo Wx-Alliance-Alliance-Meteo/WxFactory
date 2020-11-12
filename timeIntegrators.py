@@ -52,7 +52,7 @@ class Epirk4s3a:
       # stage 1
       u_mtrx = numpy.row_stack((zeroVec, hF.flatten()))
       print(u_mtrx.shape)
-      phiv, stats = kiops(self.gCoeffVec, matvec_handle, u_mtrx, tol=self.tol, m_init=self.krylov_size[0], mmin=14, mmax=64, task1=True)
+      phiv, stats = kiops(self.gCoeffVec, matvec_handle, u_mtrx, tol=self.tol, m_init=self.krylov_size[0], mmin=16, mmax=64, task1=True)
       self.krylov_size[0] = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size[0])
       U2 = Q + self.alpha21 * numpy.reshape(phiv[0, :], Q.shape)
 
@@ -70,7 +70,7 @@ class Epirk4s3a:
       # stage 3
       u_mtrx = numpy.row_stack(
          (zeroVec, hF.flatten(), zeroVec, (self.b2p3 * hb1 + self.b3p3 * hb2).flatten(), (self.b2p4 * hb1 + self.b3p4 * hb2).flatten()))
-      phiv, stats = kiops([1], matvec_handle, u_mtrx, tol=self.tol, m_init=self.krylov_size[1], mmin=14, mmax=64, task1=False)
+      phiv, stats = kiops([1], matvec_handle, u_mtrx, tol=self.tol, m_init=self.krylov_size[1], mmin=16, mmax=64, task1=False)
       self.krylov_size[1] = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size[1])
 
       return Q + numpy.reshape(phiv, Q.shape)
@@ -153,7 +153,7 @@ class Epi:
             # v_k = Sum_{i=1}^{n_prev} A_{k,i} R(y_{n-i})
             vec[k,:] += alpha * r.flatten()
 
-      phiv, stats = kiops([1], matvec_handle, vec, tol=self.tol, m_init=self.krylov_size, mmin=14, mmax=64,
+      phiv, stats = kiops([1], matvec_handle, vec, tol=self.tol, m_init=self.krylov_size, mmin=16, mmax=64,
                           task1=False)
 
       print('KIOPS converged at iteration %d (using %d internal substeps) to a solution with local error %e' % (stats[2], stats[0], stats[4]))

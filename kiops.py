@@ -120,8 +120,8 @@ def kiops(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 2,
 
    while τ_now < τ_end:
 
-      if j < m:
-         update_rnm = True
+      if j <= m:
+         update_nrm = True
 
       # Compute necessary starting information
       if j == 0:
@@ -163,7 +163,7 @@ def kiops(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 2,
          V[1, :] = (inv_nrm * V[1, :] ) - ( H[0, 0] * V[0,:] )
 
       # Incomplete orthogonalization process
-      while j < m:
+      while j <= m:
 
          j = j + 1
 
@@ -201,7 +201,7 @@ def kiops(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 2,
 
          krystep += 1
 
-      if update_rnm is True:
+      if update_nrm is True:
          # Since we use the so-called standard scheme, it does not matter that
          # the last vector is left not normalized.
          # However, we need the norm of the last vector for the error estimate
@@ -211,7 +211,7 @@ def kiops(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 2,
          H[j, j-1] = nrm
          V[j, :] /= nrm
 
-         update_rnm = False
+         update_nrm = False
 
       # To obtain the phi_1 function which is needed for error estimate
       H[0, j] = 1.0
