@@ -35,7 +35,8 @@ Returns:
 `n` is the size of the original problem
 `p` is the highest index of the ``φ`` functions
 """
-def phi_ark(τ_out, J_exp, J_imp, u, tol = 1e-7, task1 = False):
+def phi_ark(τ_out, J_exp, J_imp, u,
+            tol = 1e-7, task1 = False, butcher_exp = 'ARK3(2)4L[2]SA-ERK', butcher_imp = 'ARK3(2)4L[2]SA-ESDIRK'):
 
    ppo, n = u.shape
    p = ppo - 1
@@ -81,11 +82,9 @@ def phi_ark(τ_out, J_exp, J_imp, u, tol = 1e-7, task1 = False):
    f_e = lambda vec: rhs_exp(vec, n, p, J_exp, u_flip)
    f_i = lambda vec: rhs_imp(vec, n, J_imp)
 
-   name_e = 'ARK3(2)4L[2]SA-ERK'
-   Be = butcher.tableau(name_e)
-   name_i = 'ARK3(2)4L[2]SA-ESDIRK'
-   Bi = butcher.tableau(name_i)
-   print('Solving for the φ-functions with ARK integrator : ', name_e, '/', name_i)
+   Be = butcher.tableau(butcher_exp)
+   Bi = butcher.tableau(butcher_imp)
+   print('Solving for the φ-functions with ARK integrator : ', butcher_exp, '/', butcher_imp)
 
    # Update the last part of w
    for k in range(p-1):

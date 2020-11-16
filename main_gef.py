@@ -67,7 +67,7 @@ def main():
 
       rhs_implicit = lambda q: rhs_sw_implicit(q, geom, mtrx, metric, topo, ptopo, param.nbsolpts, param.nb_elements, param.case_number, param.filter_apply)
 
-      stepper = ARK_epi2(rhs_handle, rhs_explicit, rhs_implicit, param.tolerance)
+      stepper = ARK_epi2(rhs_handle, rhs_explicit, rhs_implicit, param)
    else:
       raise ValueError(f'Time integration method {param.time_integrator} not supported')
 

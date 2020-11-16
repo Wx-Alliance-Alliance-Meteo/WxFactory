@@ -23,6 +23,16 @@ class Configuration:
       self.tolerance        = parser.getfloat('Time_integration', 'tolerance')
 
       try:
+         self.ark_solver_exp = parser.get('Time_integration', 'ark_solver_exp')
+      except (NoOptionError,NoSectionError):
+         self.ark_solver_exp = 'ARK3(2)4L[2]SA-ERK'
+
+      try:
+         self.ark_solver_imp = parser.get('Time_integration', 'ark_solver_imp')
+      except (NoOptionError,NoSectionError):
+         self.ark_solver_imp = 'ARK3(2)4L[2]SA-ESDIRK'
+
+      try:
          self.λ0 = parser.getfloat('Grid', 'λ0')
       except (NoOptionError,NoSectionError):
          self.λ0 = 0.0
