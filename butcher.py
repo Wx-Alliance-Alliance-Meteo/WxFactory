@@ -1813,6 +1813,6 @@ def tableau(method_name):
    else:
 
       B = 0
-      fprintf('Butcher error, method %s not defined\n',method_name)
+      print('Butcher error, method {} not defined\n'.format(method_name))
 
    return B
