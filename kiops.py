@@ -120,7 +120,7 @@ def kiops(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 2,
 
    while τ_now < τ_end:
 
-      if j <= m:
+      if j < m:
          update_nrm = True
 
       # Compute necessary starting information
@@ -163,7 +163,7 @@ def kiops(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 2,
          V[1, :] = (inv_nrm * V[1, :] ) - ( H[0, 0] * V[0,:] )
 
       # Incomplete orthogonalization process
-      while j <= m:
+      while j < m:
 
          j = j + 1
 
