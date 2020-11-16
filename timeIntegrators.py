@@ -204,11 +204,13 @@ class Rat2:
       return Q + numpy.reshape(phiv, Q.shape) * dt
 
 class ARK_epi2:
-   def __init__(self, rhs, rhs_explicit, rhs_implicit, tol):
+   def __init__(self, rhs, rhs_explicit, rhs_implicit, param):
       self.rhs = rhs
       self.rhs_explicit = rhs_explicit
       self.rhs_implicit = rhs_implicit
-      self.tol = tol
+      self.tol = param.tolerance
+      self.butcher_exp = param.ark_solver_exp
+      self.butcher_imp = param.ark_solver_imp
 
    def step(self, Q, dt):
       rhs = self.rhs(Q).flatten()
@@ -219,7 +221,8 @@ class ARK_epi2:
       # We only need the second phi function
       vec = numpy.row_stack((numpy.zeros_like(rhs), rhs))
 
-      phiv, nstep = phi_ark([0, 1], J_e, J_i, vec, tol=self.tol, task1=False)
+      phiv, nstep = phi_ark([0, 1], J_e, J_i, vec, tol=self.tol, task1=False,
+                            butcher_exp = self.butcher_exp, butcher_imp = self.butcher_imp)
 
       print('PHI/ARK converged using %d internal time steps' % nstep)
 
