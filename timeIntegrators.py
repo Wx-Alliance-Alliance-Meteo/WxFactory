@@ -2,6 +2,7 @@ import numpy
 import math
 import pickle
 from collections import deque
+import mpi4py
 
 
 from matvec        import matvec_fun, matvec_rat
@@ -124,6 +125,12 @@ class Epi:
 
       self.init_substeps = init_substeps
 
+      self.out_stat_file = 'kiops_out.txt'
+      self.rank = mpi4py.MPI.COMM_WORLD.Get_rank()
+      if self.rank == 0:
+         with open(self.out_stat_file, 'a') as out_file:
+            out_file.write('\n')
+
 
    def step(self, Q, dt):
       # If dt changes, discard saved value and redo initialization
@@ -164,6 +171,12 @@ class Epi:
 
       print_out(f'KIOPS converged at iteration {stats[2]} (using {stats[0]} internal substeps)'
                 f' to a solution with local error {stats[4]:.2e}')
+
+      if self.rank == 0:
+         with open(self.out_stat_file, 'a') as out_file:
+            out_file.write('{:5.0f} -- {:4d} kry {:4d} sub\n'.format(
+               dt, stats[2], stats[0]
+            ))
 
       self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
 
@@ -239,14 +252,14 @@ class ARK_epi2:
       self.rhs = rhs
       self.butcher_exp = param.ark_solver_exp
       self.butcher_imp = param.ark_solver_imp
-      self.tol = param.tolerance
-
       self.rank = rank
-
-      self.out_stat_file = 'epi2out.txt'
+      self.tol = param.tolerance
 
       self.runs = []
       self.add_run(rhs_explicit, rhs_implicit)
+
+      self.out_stat_file = 'ark_out.txt'
+      print_to_file(self.out_stat_file, f'exp {self.butcher_exp} -- imp {self.butcher_imp}')
 
 
    def add_run(self, rhs_explicit, rhs_implicit):
