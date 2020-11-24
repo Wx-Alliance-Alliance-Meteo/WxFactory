@@ -1,18 +1,21 @@
 import sys
 import os
 from itertools import product
+from time import time
 
 import mpi4py
-from numpy import zeros, zeros_like, save, load, real, imag, vstack, max, abs
+import numpy
+from numpy import zeros, zeros_like, save, load, real, imag, hstack, vstack, max, abs
 from numpy.linalg import eigvals
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
+from scipy.sparse import csc_matrix, save_npz, load_npz
 
 from program_options import Configuration
 from cubed_sphere import cubed_sphere
 from initialize import initialize_sw
 from matrices import DFR_operators
-from matvec import matvec_fun
+from matvec import matvec_fun, matvec_rat
 from metric import Metric
 from parallel import Distributed_World
 from rhs_sw import rhs_sw
@@ -42,10 +45,11 @@ def get_matvec_sw(cfg_file, rhs):
    else:
       raise Exception('Wrong rhs name')
 
-   return (Q, lambda v: matvec_fun(v, 1, Q, rhs))
+   # return (Q, lambda v: matvec_fun(v, 1, Q, rhs), rhs)
+   return (Q, lambda v: matvec_rat(v, 1800.0, Q, rhs), rhs)
 
 
-def gen_matrix(Q, matvec, jac_file):
+def gen_matrix(Q, matvec, rhs_fun, jac_file, rhs_file):
    """
    Compute and store the Jacobian matrix
    :param Q: Solution vector where the Jacobian is computed
@@ -62,20 +66,39 @@ def gen_matrix(Q, matvec, jac_file):
    J = zeros((n_loc, size*n_loc))
 
    idx = 0
+   total_num_iter = size * n_loc
+
+   if rank == 0:
+      print('')
+      t0 = time()
+
+   def print_progress(current, total, t0):
+      remaining = (time() - t0) * (float(total) / current - 1.0)
+      print(f'\r {current * 100.0 / total : 5.1f}% ({remaining: 4.0f}s)', end = ' ')
+
    for r in range(size):
       for (i,j,k) in product(range(neq),range(ni),range(nj)):
          if rank == r:
             Qid[i,j,k] = 1.0
 
-         J[:, idx] = matvec(Qid)
+         J[:, idx] = matvec(Qid.flatten())
          idx += 1
          Qid[i, j, k] = 0.0
 
+         if rank == 0:
+            print_progress(idx, total_num_iter, t0)
+
    J_comm = mpi4py.MPI.COMM_WORLD.gather(J, root=0)
+   rhs_comm = mpi4py.MPI.COMM_WORLD.gather(rhs_fun(Q).flatten(), root=0)
 
    if rank == 0:
+      print('')
       glb_J = vstack(J_comm)
-      save(jac_file, glb_J)
+      # save(jac_file, glb_J)
+      save_npz(jac_file, csc_matrix(glb_J))
+
+      glb_rhs = hstack(rhs_comm)
+      save(rhs_file, glb_rhs)
 
 
 def compute_eig(jac_file, eig_file):
@@ -84,7 +107,7 @@ def compute_eig(jac_file, eig_file):
    :param jac_file: Path to the file where the matrix is stored
    :param eig_file: Path to the file where the eigenvalues will be stored
    """
-   J = load(jac_file)
+   J = load_npz(f'{jac_file}.npz').toarray()
    eig = eigvals(J)
    save(eig_file, eig)
 
@@ -121,7 +144,7 @@ def plot_spy(jac_file, plot_file, prec = 0):
    :param plot_file: Path to the file where the plot will be saved. Can also be a PdfPages to have more then one figure on a single pdf.
    :param prec: If precision is 0, any non-zero value will be plotted. Otherwise, values of |Z|>precision will be plotted.
    """
-   J = load(jac_file)
+   J = load_npz(f'{jac_file}.npz').toarray()
 
    if type(plot_file) == str:
       pdf = PdfPages(plot_file)
@@ -143,15 +166,15 @@ def main():
       name = sys.argv[3]
       os.makedirs(f'./jacobian/{name}/', exist_ok=True)
       for rhs in rhs_type:
-         (Q, matvec) = get_matvec_sw(config, rhs)
-         gen_matrix(Q, matvec, f'./jacobian/{name}/J_{rhs}')
+         (Q, matvec, rhs_fun) = get_matvec_sw(config, rhs)
+         gen_matrix(Q, matvec, rhs_fun, f'./jacobian/{name}/J_{rhs}', f'./jacobian/{name}/initial_rhs_{rhs}.npy')
    elif sys.argv[1] == 'plot':
       name = sys.argv[2]
       pdf_spy = PdfPages('./jacobian/spy_' + name + '.pdf')
       pdf_eig = PdfPages('./jacobian/eig_' + name + '.pdf')
 
       for rhs in rhs_type:
-         jac_file = f'./jacobian/{name}/J_{rhs}.npy'
+         jac_file = f'./jacobian/{name}/J_{rhs}'
          eig_file = f'./jacobian/{name}/eig_{rhs}.npy'
          compute_eig(jac_file, eig_file)
          plot_eig(eig_file, pdf_eig)
