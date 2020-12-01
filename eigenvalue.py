@@ -5,11 +5,11 @@ from time import time
 
 import mpi4py
 import numpy
-from numpy import zeros, zeros_like, save, load, real, imag, hstack, vstack, max, abs
+from numpy import zeros, zeros_like, save, load, real, imag, hstack, max, abs #, vstack
 from numpy.linalg import eigvals
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
-from scipy.sparse import csc_matrix, save_npz, load_npz
+from scipy.sparse import csc_matrix, save_npz, load_npz, vstack
 
 from program_options import Configuration
 from cubed_sphere import cubed_sphere
@@ -63,7 +63,8 @@ def gen_matrix(Q, matvec, rhs_fun, jac_file, rhs_file):
    size = mpi4py.MPI.COMM_WORLD.Get_size()
 
    Qid = zeros_like(Q)
-   J = zeros((n_loc, size*n_loc))
+   # J = zeros((n_loc, size*n_loc))
+   J = csc_matrix((n_loc, size*n_loc), dtype = Q.dtype)
 
    idx = 0
    total_num_iter = size * n_loc
@@ -81,7 +82,8 @@ def gen_matrix(Q, matvec, rhs_fun, jac_file, rhs_file):
          if rank == r:
             Qid[i,j,k] = 1.0
 
-         J[:, idx] = matvec(Qid.flatten())
+         col = csc_matrix(matvec(Qid.flatten())).transpose()
+         J[:, idx] = col
          idx += 1
          Qid[i, j, k] = 0.0
 
@@ -95,7 +97,7 @@ def gen_matrix(Q, matvec, rhs_fun, jac_file, rhs_file):
       print('')
       glb_J = vstack(J_comm)
       # save(jac_file, glb_J)
-      save_npz(jac_file, csc_matrix(glb_J))
+      save_npz(jac_file, glb_J)
 
       glb_rhs = hstack(rhs_comm)
       save(rhs_file, glb_rhs)
