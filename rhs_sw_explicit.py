@@ -5,7 +5,7 @@ from dgfilter import apply_filter
 
 def rhs_sw_explicit(Q, geom, mtrx, metric, topo, ptopo, nbsolpts, nb_elements_horiz, case_number, filter_rhs=False):
 
-   type_vec = type(Q[0, 0, 0])
+   type_vec = Q.dtype
 
    shallow_water_equations = ( case_number > 1 )
 
@@ -140,15 +140,15 @@ def rhs_sw_explicit(Q, geom, mtrx, metric, topo, ptopo, nbsolpts, nb_elements_ho
 
       # --- Direction x1
 
-      df1_dx1[idx_h][:,epais]   = ( flux_Eq0_x1[:,epais] @ mtrx.diff_solpt_tr + flux_Eq0_itf_i[elem+offset,:,:] @ mtrx.correction_tr ) * 2.0 / geom.Δx1
+      df1_dx1[idx_h][:,epais] = flux_Eq0_x1[:,epais] @ mtrx.diff_solpt_tr + flux_Eq0_itf_i[elem+offset,:,:] @ mtrx.correction_tr
 
       # --- Direction x2
 
-      df2_dx2[idx_h,epais,:]   = ( mtrx.diff_solpt @ flux_Eq0_x2[epais,:] + mtrx.correction @ flux_Eq0_itf_j[elem+offset,:,:] ) * 2.0 / geom.Δx2
+      df2_dx2[idx_h,epais,:] = mtrx.diff_solpt @ flux_Eq0_x2[epais,:] + mtrx.correction @ flux_Eq0_itf_j[elem+offset,:,:]
 
    # Assemble the right-hand sides
-   
-   rhs[idx_h,:,:] = metric.inv_sqrtG * ( - df1_dx1[idx_h] - df2_dx2[idx_h] ) 
+
+   rhs[idx_h,:,:] = metric.inv_sqrtG * ( - df1_dx1[idx_h] - df2_dx2[idx_h] )
 
    if filter_rhs:
       rhs[idx_h,:,:] = apply_filter(rhs[idx_h,:,:], mtrx, nb_elements_horiz, nbsolpts)

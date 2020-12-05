@@ -26,7 +26,7 @@ class DFR_operators:
       self.diff_tr = self.diff.T
 
       self.quad_weights = numpy.outer(grd.glweights, grd.glweights)
-   
+
       if param.filter_apply:
          self.V = vandermonde(grd.solutionPoints)
          self.invV = numpy.linalg.inv(self.V)

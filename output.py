@@ -125,7 +125,7 @@ def output_netcdf(Q, geom, metric, mtrx, topo, step, param):
    if param.case_number >= 2: # Shallow water
       u1 = Q[idx_hu1,:,:] / h
       u2 = Q[idx_hu2,:,:] / h
-      u, v = contra2wind(u1, u2, geom)
+      u, v = contra2wind(u1*geom.Δx1/2., u2*geom.Δx1/2., geom)
       rv = relative_vorticity(u1, u2, geom, metric, mtrx, param)
       pv = potential_vorticity(h, u1, u2, geom, metric, mtrx, param)
 
