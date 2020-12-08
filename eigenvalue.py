@@ -1,7 +1,10 @@
+#!/usr/bin/env python3
+
 import sys
 import os
 from itertools import product
 from time import time
+import argparse
 
 import mpi4py
 import numpy
@@ -21,6 +24,7 @@ from parallel import Distributed_World
 from rhs_sw import rhs_sw
 from rhs_sw_explicit import rhs_sw_explicit
 from rhs_sw_implicit import rhs_sw_implicit
+
 
 def get_matvec_sw(cfg_file, rhs):
    """
@@ -109,8 +113,11 @@ def compute_eig(jac_file, eig_file):
    :param jac_file: Path to the file where the matrix is stored
    :param eig_file: Path to the file where the eigenvalues will be stored
    """
+   print(f'loading {jac_file}')
    J = load_npz(f'{jac_file}.npz').toarray()
+   print(f'Computing eigenvalues')
    eig = eigvals(J)
+   print(f'Saving {eig_file}')
    save(eig_file, eig)
 
 
@@ -121,6 +128,7 @@ def plot_eig(eig_file, plot_file, normalize = True):
    :param plot_file: Path to the file where the plot will be saved. Can also be a PdfPages to have more then one figure on a single pdf.
    :param normalize: If True then the eigenvalues are normalized such that max |e_i| = 1
    """
+   print(f'loading {eig_file}')
    eig = load(eig_file)
    if normalize: eig /= max(abs(eig))
 
@@ -131,6 +139,7 @@ def plot_eig(eig_file, plot_file, normalize = True):
    else:
       raise Exception('Wrong plot file format')
 
+   print(f'Plotting eigenvalues')
    plt.figure(figsize=(20, 10))
    plt.plot(real(eig), imag(eig), '.')
    plt.hlines(0, min(real(eig)), max(real(eig)), 'k')
@@ -146,6 +155,7 @@ def plot_spy(jac_file, plot_file, prec = 0):
    :param plot_file: Path to the file where the plot will be saved. Can also be a PdfPages to have more then one figure on a single pdf.
    :param prec: If precision is 0, any non-zero value will be plotted. Otherwise, values of |Z|>precision will be plotted.
    """
+   print(f'Loading {jac_file}')
    J = load_npz(f'{jac_file}.npz').toarray()
 
    if type(plot_file) == str:
@@ -155,43 +165,50 @@ def plot_spy(jac_file, plot_file, prec = 0):
    else:
       raise Exception('Wrong plot file format')
 
+   print(f'Plotting spy')
    plt.figure(figsize=(20, 20))
    plt.spy(J, precision=prec)
    pdf.savefig(bbox_inches='tight')
    plt.close()
 
 
-def main():
+def main(args):
    rhs_type = ['all', 'exp', 'imp']
-   if sys.argv[1] == 'gen':
-      config = sys.argv[2]
-      name = sys.argv[3]
+   if args.gen_case is not None:
+      config = args.gen_case
+      name = args.name
       os.makedirs(f'./jacobian/{name}/', exist_ok=True)
+
       for rhs in rhs_type:
          (Q, matvec, rhs_fun) = get_matvec_sw(config, rhs)
          gen_matrix(Q, matvec, rhs_fun, f'./jacobian/{name}/J_{rhs}', f'./jacobian/{name}/initial_rhs_{rhs}.npy')
-   elif sys.argv[1] == 'plot':
-      name = sys.argv[2]
+   elif args.plot:
+      name = args.name
       pdf_spy = PdfPages('./jacobian/spy_' + name + '.pdf')
       pdf_eig = PdfPages('./jacobian/eig_' + name + '.pdf')
 
       for rhs in rhs_type:
-         jac_file = f'./jacobian/{name}/J_{rhs}'
-         eig_file = f'./jacobian/{name}/eig_{rhs}.npy'
-         compute_eig(jac_file, eig_file)
-         plot_eig(eig_file, pdf_eig)
-         plot_spy(jac_file, pdf_spy)
+         try:
+            jac_file = f'./jacobian/{name}/J_{rhs}'
+            eig_file = f'./jacobian/{name}/eig_{rhs}.npy'
+            compute_eig(jac_file, eig_file)
+            plot_eig(eig_file, pdf_eig)
+            plot_spy(jac_file, pdf_spy)
+         except(FileNotFoundError, IOError):
+            print(f'Could not open file for case {name}, rhs {rhs}')
 
       pdf_spy.close()
       pdf_eig.close()
 
 
 if __name__ == '__main__':
-   if len(sys.argv) < 2:
-      print("Usage: ")
-      print("   - Generate the jacobian matrices:")
-      print("mpirun -n 6 python eigenvalue.py gen config.ini case_name")
-      print("   - Plot the eigenvalues:")
-      print("python eigenvalue.py plot case_name")
-   else:
-      main()
+
+   parser = argparse.ArgumentParser(description='''Generate or plot system matrix and eigenvalues\njoijoi''')
+   command = parser.add_mutually_exclusive_group()
+   command.add_argument('--gen-case', type = str, default = None, help = 'Generate a system matrix from given case file')
+   command.add_argument('--plot', action = 'store_true', help = 'Plot the given system matrix and its eigenvalues')
+   parser.add_argument('name', type = str, help = 'Name of the case/system matrix')
+
+   args = parser.parse_args()
+
+   main(args)
