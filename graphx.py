@@ -1,6 +1,7 @@
 import mayavi.mlab
+import mpi4py
 import mpi4py.MPI
-import numpy
+import pickle
 
 from definitions import *
 
@@ -14,6 +15,7 @@ def plot_sphere(geom):
       for f in range(nbfaces):
          mayavi.mlab.mesh(glb_x[f], glb_y[f], glb_z[f])
       mayavi.mlab.show()
+
 
 def plot_field(geom, field):
    glb_x     = mpi4py.MPI.COMM_WORLD.gather(geom.cartX.T, root=0)
@@ -42,3 +44,22 @@ def plot_field(geom, field):
 
       mayavi.mlab.colorbar()
       mayavi.mlab.show()
+
+   mpi4py.MPI.COMM_WORLD.Barrier()
+
+
+def plot_field_from_file(geom_prefix, field_prefix):
+   rank = mpi4py.MPI.COMM_WORLD.Get_rank()
+   suffix = '{:04d}.dat'.format(rank)
+   geom_filename = geom_prefix + suffix
+   field_filename = field_prefix + suffix
+
+   geom  = pickle.load(open(geom_filename, 'rb'))
+   field = pickle.load(open(field_filename, 'rb'))
+
+   # if rank == 0:
+   #    print('field = {}'.format(field[0,:,:]))
+
+   plot_field(geom, field[0,:,:]**2)
+
+

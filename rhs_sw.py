@@ -2,8 +2,12 @@ import numpy
 
 from definitions import idx_h, idx_hu1, idx_hu2, idx_u1, idx_u2, gravity
 from dgfilter import apply_filter
+from timer import TimerGroup
 
-def rhs_sw(Q, geom, mtrx, metric, topo, ptopo, nbsolpts, nb_elements_horiz, case_number, filter_rhs=False):
+def rhs_sw(Q, geom, mtrx, metric, topo, ptopo, nbsolpts, nb_elements_horiz, case_number, filter_rhs=False, timers = None):
+
+   timers = timers if timers is not None else TimerGroup(5, 0.0)
+   timers[0].start()
 
    type_vec = Q.dtype
 
@@ -89,9 +93,14 @@ def rhs_sw(Q, geom, mtrx, metric, topo, ptopo, nbsolpts, nb_elements_horiz, case
       u2_itf_j[pos, 0, :] = mtrx.extrap_south @ u2[epais, :]
       u2_itf_j[pos, 1, :] = mtrx.extrap_north @ u2[epais, :]
 
+   timers[0].stop()
+
+   timers[1].start()
    ptopo.xchange_scalars(geom, h_itf_i, h_itf_j)
    ptopo.xchange_vectors(geom, u1_itf_i, u2_itf_i, u1_itf_j, u2_itf_j)
+   timers[1].stop()
 
+   timers[2].start()
    # Common Rusanov fluxes
    for itf in range(nb_interfaces_horiz):
 
@@ -216,5 +225,7 @@ def rhs_sw(Q, geom, mtrx, metric, topo, ptopo, nbsolpts, nb_elements_horiz, case
    if filter_rhs:
       for var in range(3):
          rhs[var,:,:] = apply_filter(rhs[var,:,:], mtrx, nb_elements_horiz, nbsolpts)
+
+   timers[2].stop()
 
    return rhs

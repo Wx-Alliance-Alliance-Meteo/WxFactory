@@ -1,11 +1,16 @@
 import numpy
 import math
+import pickle
 from collections import deque
 
-from matvec import matvec_fun, matvec_rat
-from kiops  import kiops
-from linsol import gmres_mgs
-from phi    import phi_ark
+
+from matvec        import matvec_fun, matvec_rat
+from kiops         import kiops
+from linsol        import Fgmres
+from phi           import phi_ark
+from interpolation import LagrangeSimpleInterpolator, BilinearInterpolator
+from matvec_product_caller import MatvecCaller
+from timer         import Timer
 
 class Epirk4s3a:
    g21 = 1/2
@@ -182,18 +187,40 @@ class Tvdrk3:
       return Q
 
 class Rat2:
-   def __init__(self, rhs, tol):
-      self.rhs = rhs
-      self.tol = tol
+   def __init__(self, rhs, tol, rank, preconditioner = None):
+      self.rhs            = rhs
+      self.preconditioner = preconditioner
+      self.out_stat_file  = 'rat2out.txt'
+
+      self.solver = Fgmres(tol = tol)
+
+      self.fgmres_time = Timer(0.0)
+      self.no_precond_time  = Timer(0.0)
+      self.rank = rank
 
    def step(self, Q, dt):
-      matvec_handle = lambda v: matvec_rat(v, dt, Q, self.rhs)
+      matvec_handle = MatvecCaller(matvec_rat, dt, Q, self.rhs)
+      if self.preconditioner: self.preconditioner.compute_matrix_caller(matvec_rat, dt, Q)
 
       rhs = self.rhs(Q).flatten()
-
       x0 = numpy.zeros_like(rhs)
 
-      phiv, local_error, niter, flag = gmres_mgs(matvec_handle, rhs, x0, tol=self.tol)
+      self.fgmres_time.start()
+      phiv, local_error, niter, flag = self.solver.solve(
+            matvec_handle, rhs, preconditioner = self.preconditioner, x0 = x0)
+      self.fgmres_time.stop()
+
+      self.no_precond_time.start()
+      phiv_no_precond, _, iter_no_precond, _ = self.solver.solve(
+         matvec_handle, rhs, preconditioner = None, x0 = x0
+      )
+      self.no_precond_time.stop()
+
+      if self.rank == 0:
+         with open(self.out_stat_file, 'a') as out_file:
+            out_file.write('{} {} -- {} {} {} -- {} {}\n'.format(
+               self.preconditioner.order + 1, self.preconditioner.num_elements,
+               niter, flag, self.fgmres_time.last_time(), iter_no_precond, self.no_precond_time.last_time()))
 
       if flag == 0:
          print('GMRES converged at iteration %d to a solution with local error %e' % (niter, local_error))
@@ -204,27 +231,70 @@ class Rat2:
       return Q + numpy.reshape(phiv, Q.shape) * dt
 
 class ARK_epi2:
-   def __init__(self, rhs, rhs_explicit, rhs_implicit, param):
+   def __init__(self, rhs, rhs_explicit1, rhs_implicit1, rhs_explicit2, rhs_implicit2, param, rank):
       self.rhs = rhs
-      self.rhs_explicit = rhs_explicit
-      self.rhs_implicit = rhs_implicit
-      self.tol = param.tolerance
+      self.rhs_explicit1 = rhs_explicit1
+      self.rhs_implicit1 = rhs_implicit1
+      self.rhs_explicit2 = rhs_explicit2
+      self.rhs_implicit2 = rhs_implicit2
+
       self.butcher_exp = param.ark_solver_exp
       self.butcher_imp = param.ark_solver_imp
+      self.tol = param.tolerance
+
+      self.rank = rank
+
+      self.timer = Timer(0.0)
+      self.interp_timer = Timer(0.0)
+      self.out_stat_file = 'epi2out.txt'
 
    def step(self, Q, dt):
       rhs = self.rhs(Q).flatten()
 
-      J_e = lambda v: matvec_fun(v, dt, Q, self.rhs_explicit)
-      J_i = lambda v: matvec_fun(v, dt, Q, self.rhs_implicit)
+      self.interp_timer.start()
+      J_e_interp = lambda v: matvec_fun(v, dt, Q, self.rhs_explicit2)
+      J_i_interp = lambda v: matvec_fun(v, dt, Q, self.rhs_implicit2)
+      vec = numpy.row_stack((numpy.zeros_like(rhs), rhs))
+
+      phiv_interp, num_steps_interp = phi_ark([0, 1], J_e_interp, J_i_interp, vec, tol = self.tol, task1 = False)
+      self.interp_timer.stop()
+
+      self.timer.start()
+      J_e = lambda v: matvec_fun(v, dt, Q, self.rhs_explicit1)
+      J_i = lambda v: matvec_fun(v, dt, Q, self.rhs_implicit1)
 
       # We only need the second phi function
       vec = numpy.row_stack((numpy.zeros_like(rhs), rhs))
 
-      phiv, nstep = phi_ark([0, 1], J_e, J_i, vec, tol=self.tol, task1=False,
-                            butcher_exp = self.butcher_exp, butcher_imp = self.butcher_imp)
+      phiv, num_steps = phi_ark([0, 1], J_e, J_i, vec, tol=self.tol, task1=False)
+      # phiv, num_steps = phiv_interp, num_steps_interp
+      # phiv_interp, num_steps_interp = phiv, num_steps
+      self.timer.stop()
 
-      print('PHI/ARK converged using %d internal time steps' % nstep)
+      print(f'PHI/ARK converged using {num_steps} internal time steps')
+
+      if self.rank == 0:
+         print('Finished in {} / {} iterations and {:.3f} / {:.3f} seconds'.format(
+            num_steps, num_steps_interp, self.timer.last_time(), self.interp_timer.last_time()))
+
+         with open(self.out_stat_file, 'a') as out_file:
+             out_file.write('{:4d} {:5d} {:5.0f} -- {:4d} {:5.0f} -- {:4d} {:5.0f}\n'.format(
+               self.rhs.nb_sol_pts, self.rhs.nb_elem, dt,
+               num_steps_interp, self.interp_timer.last_time(), num_steps, self.timer.last_time()))
+
+      diff = phiv[:,-1] - phiv_interp[:,-1]
+      diff_norm = numpy.linalg.norm(diff)
+      sol_norm = numpy.linalg.norm(phiv)
+
+      print('Difference: {}'.format(diff_norm/sol_norm))
+      if diff_norm / sol_norm > self.tol:
+         print('AHHHHH not the same answer!!! Diff = {} / {}'.format(diff_norm, sol_norm))
+         with open('geom{:04d}.dat'.format(self.rank), 'wb') as file:
+            pickle.dump(self.rhs.geometry, file)
+         with open('diff{:04d}.dat'.format(self.rank), 'wb') as file:
+            pickle.dump(diff.reshape(Q.shape), file)
+         # raise ValueError
+
 
       # Update solution
       return Q + numpy.reshape(phiv[:,-1], Q.shape) * dt
