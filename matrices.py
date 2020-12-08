@@ -21,7 +21,7 @@ class DFR_operators:
       self.diff_solpt_tr = self.diff_solpt.T
       self.correction_tr = self.correction.T
 
-      # Ordinairy differentiation matrices
+      # Ordinary differentiation matrices
       self.diff = diffmat(grd.solutionPoints)
       self.diff_tr = self.diff.T
 
