@@ -30,8 +30,6 @@ def rhs_sw(Q, geom, mtrx, metric, topo, ptopo, nbsolpts, nb_elements_horiz, case
    u1_itf_i       = numpy.zeros((nb_elements_horiz+2, 2, nbsolpts*nb_elements_horiz), dtype=type_vec)
    u2_itf_i       = numpy.zeros((nb_elements_horiz+2, 2, nbsolpts*nb_elements_horiz), dtype=type_vec)
 
-   eig_L          = numpy.zeros(nbsolpts*nb_elements_horiz, dtype=type_vec)
-   eig_R          = numpy.zeros(nbsolpts*nb_elements_horiz, dtype=type_vec)
    eig            = numpy.zeros(nbsolpts*nb_elements_horiz, dtype=type_vec)
 
    flux_L         = numpy.zeros(nbsolpts*nb_elements_horiz, dtype=type_vec)
@@ -108,14 +106,9 @@ def rhs_sw(Q, geom, mtrx, metric, topo, ptopo, nbsolpts, nb_elements_horiz, case
 
       # Direction x1
 
-      if shallow_water_equations:
-         eig_L[:] = numpy.abs( u1_itf_i[elem_L, 1, :] ) + numpy.sqrt( gravity * h_itf_i[elem_L, 1, :] * metric.H_contra_11_itf_i[:, itf] )
-         eig_R[:] = numpy.abs( u1_itf_i[elem_R, 0, :] ) + numpy.sqrt( gravity * h_itf_i[elem_R, 0, :] * metric.H_contra_11_itf_i[:, itf] )
-      else:
-         eig_L[:] = numpy.abs( u1_itf_i[elem_L, 1, :] )
-         eig_R[:] = numpy.abs( u1_itf_i[elem_R, 0, :] )
-
-      eig[:] = numpy.maximum(eig_L, eig_R)
+      u1_bar = 0.5 * ( u1_itf_i[elem_L, 1, :] + u1_itf_i[elem_R, 0, :] )
+      h_bar  = 0.5 * ( h_itf_i[elem_L, 1, :] + h_itf_i[elem_R, 0, :] )
+      eig[:] = numpy.abs( u1_bar ) +  numpy.sqrt( float(shallow_water_equations) * gravity * h_bar* metric.H_contra_11_itf_i[:, itf] )
 
       # --- Continuity equation
 
@@ -149,14 +142,9 @@ def rhs_sw(Q, geom, mtrx, metric, topo, ptopo, nbsolpts, nb_elements_horiz, case
 
       # Direction x2
 
-      if shallow_water_equations:
-         eig_L[:] = numpy.abs( u2_itf_j[elem_L, 1, :] ) + numpy.sqrt( gravity * h_itf_j[elem_L, 1, :] * metric.H_contra_22_itf_j[itf, :] )
-         eig_R[:] = numpy.abs( u2_itf_j[elem_R, 0, :] ) + numpy.sqrt( gravity * h_itf_j[elem_R, 0, :] * metric.H_contra_22_itf_j[itf, :] )
-      else:
-         eig_L[:] = numpy.abs( u2_itf_j[elem_L, 1, :] )
-         eig_R[:] = numpy.abs( u2_itf_j[elem_R, 0, :] )
-
-      eig[:] = numpy.maximum(eig_L, eig_R)
+      u2_bar = 0.5 * ( u2_itf_j[elem_L, 1, :] + u2_itf_j[elem_R, 0, :] )
+      h_bar  = 0.5 * ( h_itf_j[elem_L, 1, :] + h_itf_j[elem_R, 0, :] )
+      eig[:] = numpy.abs( u2_bar ) + numpy.sqrt( float(shallow_water_equations) * gravity * h_bar * metric.H_contra_22_itf_j[itf, :] )
 
       # --- Continuity equation
 
@@ -209,12 +197,12 @@ def rhs_sw(Q, geom, mtrx, metric, topo, ptopo, nbsolpts, nb_elements_horiz, case
 
    # Note: christoffel_1_22 is zero
    forcing[idx_hu1,:,:] = 2.0 * ( metric.christoffel_1_01 * h * u1 + metric.christoffel_1_02 * h * u2) \
-         + metric.christoffel_1_11 * h * u1**2 + 2.0 * metric.christoffel_1_12 * h * u1 * u2 + metric.christoffel_1_22 * h * u2**2\
+         + metric.christoffel_1_11 * h * u1**2 + 2.0 * metric.christoffel_1_12 * h * u1 * u2 \
          + gravity * h * ( metric.H_contra_11 * topo.dzdx1 + metric.H_contra_12 * topo.dzdx2)
 
    # Note: metric.christoffel_2_11 is zero
    forcing[idx_hu2,:,:] = 2.0 * (metric.christoffel_2_01 * h * u1 + metric.christoffel_2_02 * h * u2) \
-         + metric.christoffel_2_11 * h * u1**2 + 2.0 * metric.christoffel_2_12 * h * u1 * u2 + metric.christoffel_2_22 * h * u2**2 \
+         + 2.0 * metric.christoffel_2_12 * h * u1 * u2 + metric.christoffel_2_22 * h * u2**2 \
          + gravity * h * ( metric.H_contra_21 * topo.dzdx1 + metric.H_contra_22 * topo.dzdx2)
 
    # Assemble the right-hand sides
