@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
-import sys
 import math
+import os
 from time import time
 
 import numpy
@@ -22,17 +22,13 @@ from timer           import Timer, TimerGroup
 from preconditioner  import Preconditioner
 from rhs_caller      import RhsCaller, RhsCallerLowRes
 
-def main():
-   if len(sys.argv) == 1:
-      cfg_file = 'config/gef_settings.ini'
-   else:
-      cfg_file = sys.argv[1]
+def main(args):
 
    step = 0
    initial_time_tmp = time()
 
    # Read configuration file
-   param = Configuration(cfg_file)
+   param = Configuration(args.config)
 
    # Set up distributed world
    ptopo = Distributed_World()
@@ -129,11 +125,29 @@ def main():
 
 if __name__ == '__main__':
 
+   import argparse
    import cProfile
 
+   parser = argparse.ArgumentParser(description='Solve CFD problems with GEF!')
+   parser.add_argument('--profile', action='store_true', help='Produce an execution profile when running')
+   parser.add_argument('config', type=str, help='File that contains simulation parameters')
+
+   args = parser.parse_args()
+
    numpy.set_printoptions(suppress=True, linewidth=256)
-   pr = cProfile.Profile()
-   pr.enable()
-   rank = main()
-   pr.disable()
-   pr.dump_stats(f'prof_{rank:04d}.out')
+
+   # Start profiling
+   if args.profile:
+      pr = cProfile.Profile()
+      pr.enable()
+
+   rank = main(args)
+
+   # Stop profiling and save results
+   if args.profile:
+      pr.disable()
+      profile_dir = 'profiles'
+      if not os.path.exists(profile_dir):
+         os.mkdir(profile_dir)
+      out_file = os.path.join(profile_dir, f'prof_{rank:04d}.out')
+      pr.dump_stats(out_file)
