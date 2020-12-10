@@ -5,7 +5,6 @@ from initialize    import initialize_sw
 from interpolation import LagrangeSimpleInterpolator
 from matrices      import DFR_operators
 from metric        import Metric
-from timer         import TimerGroup
 from dgfilter      import apply_filter
 
 from rhs_caller            import RhsCaller
@@ -13,7 +12,7 @@ from matvec_product_caller import MatvecCaller
 
 class Preconditioner:
 
-   def __init__(self, param, geometry, rhs_func, ptopo, initial_time,
+   def __init__(self, param, geometry, rhs_func, ptopo,
                 prefix = '   ', depth = 1, filter_before = False, filter_during = False, filter_after = False):
 
       min_order = 2
@@ -28,7 +27,6 @@ class Preconditioner:
       self.num_precond_iter = 0
       self.ptopo            = ptopo
       self.rank             = ptopo.rank
-      self.initial_time     = initial_time
       self.prefix           = prefix
       self.depth            = depth
 
@@ -63,8 +61,7 @@ class Preconditioner:
       _, self.topo = initialize_sw(self.geom, self.metric, self.mtrx, param_small)
 
       self.rhs = RhsCaller(rhs_func, self.geom, self.mtrx, self.metric, self.topo, self.ptopo, self.order,
-                           param.nb_elements, param.case_number,
-                           use_filter = filter_during, timers = TimerGroup(5, initial_time))
+                           param.nb_elements, param.case_number, use_filter = filter_during)
 
       self.interpolator = LagrangeSimpleInterpolator(geometry)
 
@@ -72,7 +69,7 @@ class Preconditioner:
       self.preconditioner = None
       if self.order > min_order and self.depth < max_depth:
          self.preconditioner = Preconditioner(
-            param_small, self.geom, rhs_func, self.ptopo, initial_time,
+            param_small, self.geom, rhs_func, self.ptopo,
             self.prefix + '   ', self.depth + 1, filter_before = self.filter_before,
             filter_during = self.filter_during, filter_after = self.filter_after)
 

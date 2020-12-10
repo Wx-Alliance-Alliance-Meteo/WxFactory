@@ -18,23 +18,19 @@ from rhs_sw          import rhs_sw
 from rhs_sw_explicit import rhs_sw_explicit
 from rhs_sw_implicit import rhs_sw_implicit
 from timeIntegrators import Epi, Epirk4s3a, Tvdrk3, Rat2, ARK_epi2
-from timer           import Timer, TimerGroup
+from timer           import Timer
 from preconditioner  import Preconditioner
 from rhs_caller      import RhsCaller, RhsCallerLowRes
 
 def main(args):
 
    step = 0
-   initial_time_tmp = time()
 
    # Read configuration file
    param = Configuration(args.config)
 
    # Set up distributed world
    ptopo = Distributed_World()
-
-   # Give initial time to everyone to synchronize clocks
-   initial_time = ptopo.comm_dist_graph.bcast(initial_time_tmp, root=0)
 
    # Create the mesh
    geom = cubed_sphere(param.nb_elements, param.nbsolpts, param.λ0, param.ϕ0, param.α0, ptopo)
@@ -53,9 +49,8 @@ def main(args):
       output_netcdf(Q, geom, metric, mtrx, topo, step, param)  # store initial conditions
 
    # Time stepping
-   rhs_timers = TimerGroup(5, initial_time)
    rhs_handle = RhsCaller(rhs_sw, geom, mtrx, metric, topo, ptopo, param.nbsolpts, param.nb_elements,
-                          param.case_number, use_filter = param.filter_apply, timers = rhs_timers)
+                          param.case_number, use_filter = param.filter_apply)
 
    if param.time_integrator.lower()[:3] == 'epi' and param.time_integrator[3:].isdigit():
       order = int(param.time_integrator[3:])
@@ -73,8 +68,7 @@ def main(args):
       rhs_implicit1 = lambda q: rhs_sw_implicit(q, geom, mtrx, metric, topo, ptopo, param.nbsolpts, param.nb_elements, param.case_number, param.filter_apply)
 
       rhs_implicit2 = RhsCallerLowRes(rhs_sw_implicit, geom, mtrx, metric, topo, ptopo, param.nbsolpts,
-                                     param.nb_elements, param.case_number, param.filter_apply,
-                                     timers = rhs_timers, param = param)
+                                     param.nb_elements, param.case_number, param.filter_apply, param = param)
       rhs_explicit2 = lambda q: rhs_handle(q) - rhs_implicit2(q)
 
       stepper = ARK_epi2(rhs_handle, rhs_explicit1, rhs_implicit1, rhs_explicit2, rhs_implicit2,
@@ -88,7 +82,7 @@ def main(args):
    t = 0.0
    nb_steps = math.ceil(param.t_end / param.dt)
 
-   step_timer = Timer(initial_time)
+   step_timer = Timer()
    while t < param.t_end:
       if t + param.dt > param.t_end:
          param.dt = param.t_end - t

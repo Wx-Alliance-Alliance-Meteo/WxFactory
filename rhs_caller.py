@@ -10,7 +10,7 @@ from interpolation import LagrangeSimpleInterpolator, BilinearInterpolator
 
 class RhsCaller:
    def __init__(self, function, geometry, operators, metric, topo, ptopo, nb_sol_pts, nb_elements, case_num,
-                use_filter, timers):
+                use_filter):
       self.function   = function
       self.geometry   = geometry
       self.operators  = operators
@@ -21,20 +21,19 @@ class RhsCaller:
       self.nb_elem    = nb_elements
       self.case_num   = case_num
       self.use_filter = use_filter
-      self.timers     = timers
 
    def __call__(self, field):
       return self.function(field, self.geometry, self.operators, self.metric, self.topo, self.ptopo,
-                           self.nb_sol_pts, self.nb_elem, self.case_num, self.use_filter, self.timers)
+                           self.nb_sol_pts, self.nb_elem, self.case_num, self.use_filter)
 
 
 
 class RhsCallerLowRes(RhsCaller):
    def __init__(self, function, geometry, operators, metric, topo, ptopo, nb_sol_pts, nb_elements, case_num,
-                use_filter, timers, param):
+                use_filter, param):
 
       RhsCaller.__init__(self, function, geometry, operators, metric, topo, ptopo, nb_sol_pts, nb_elements,
-                         case_num, use_filter, timers)
+                         case_num, use_filter)
 
       self.rank = self.ptopo.rank
       self.low_order = max(self.nb_sol_pts - 2, 3)
