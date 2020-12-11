@@ -2,8 +2,6 @@ import numpy
 import math
 import pickle
 from collections import deque
-import mpi4py
-
 
 from matvec        import matvec_fun, matvec_rat
 from kiops         import kiops
@@ -126,10 +124,7 @@ class Epi:
       self.init_substeps = init_substeps
 
       self.out_stat_file = 'kiops_out.txt'
-      self.rank = mpi4py.MPI.COMM_WORLD.Get_rank()
-      if self.rank == 0:
-         with open(self.out_stat_file, 'a') as out_file:
-            out_file.write('\n')
+      print_to_file(self.out_stat_file, '')
 
 
    def step(self, Q, dt):
@@ -171,12 +166,7 @@ class Epi:
 
       print_out(f'KIOPS converged at iteration {stats[2]} (using {stats[0]} internal substeps)'
                 f' to a solution with local error {stats[4]:.2e}')
-
-      if self.rank == 0:
-         with open(self.out_stat_file, 'a') as out_file:
-            out_file.write('{:5.0f} -- {:4d} kry {:4d} sub\n'.format(
-               dt, stats[2], stats[0]
-            ))
+      print_to_file(self.out_stat_file, f'{dt:5.0f} -- {stats[2]:4d} kry {stats[0]:4d} sub')
 
       self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
 
