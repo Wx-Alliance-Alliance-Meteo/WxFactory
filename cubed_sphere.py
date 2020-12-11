@@ -3,6 +3,7 @@ import numpy
 import sphere
 import quadrature
 from definitions import *
+from print_out import print_out
 
 class cubed_sphere:
    def __init__(self, nb_elements_horizontal, nbsolpts, λ0, ϕ0, α0, ptopo):
@@ -35,8 +36,8 @@ class cubed_sphere:
 
       # Gauss-Legendre solution points
       solutionPoints, glweights = quadrature.gauss_legendre(nbsolpts)
-      print('Solution points : ', solutionPoints)
-      print('GL weights : ', glweights)
+      print_out(f'Solution points : {solutionPoints}')
+      print_out(f'GL weights : {glweights}')
 
       # Extend the solution points to include -1 and 1
       extension = numpy.append(numpy.append([-1], solutionPoints), [1])

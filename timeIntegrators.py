@@ -11,6 +11,7 @@ from phi           import phi_ark
 from interpolation import LagrangeSimpleInterpolator, BilinearInterpolator
 from matvec_product_caller import MatvecCaller
 from timer         import Timer
+from print_out     import print_out, print_to_file
 
 class Epirk4s3a:
    g21 = 1/2
@@ -161,7 +162,8 @@ class Epi:
       phiv, stats = kiops([1], matvec_handle, vec, tol=self.tol, m_init=self.krylov_size, mmin=16, mmax=64,
                           task1=False)
 
-      print('KIOPS converged at iteration %d (using %d internal substeps) to a solution with local error %e' % (stats[2], stats[0], stats[4]))
+      print_out(f'KIOPS converged at iteration {stats[2]} (using {stats[0]} internal substeps)'
+                f' to a solution with local error {stats[4]:.2e}')
 
       self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
 
@@ -216,16 +218,14 @@ class Rat2:
       )
       self.no_precond_time.stop()
 
-      if self.rank == 0:
-         with open(self.out_stat_file, 'a') as out_file:
-            out_file.write('{} {} -- {} {} {} -- {} {}\n'.format(
-               self.preconditioner.order + 1, self.preconditioner.num_elements,
-               niter, flag, self.fgmres_time.last_time(), iter_no_precond, self.no_precond_time.last_time()))
+      print_to_file(self.out_stat_file, f'{self.preconditioner.order + 1 : 3d} {self.preconditioner.num_elements : 3d} -- '
+                                        f'{niter: 3d} {flag} {self.fgmres_time.last_time() : 7.3f} -- '
+                                        f'{iter_no_precond: 3d} {self.no_precond_time.last_time() : 7.3f}')
 
       if flag == 0:
-         print('GMRES converged at iteration %d to a solution with local error %e' % (niter, local_error))
+         print_out(f'GMRES converged at iteration {niter} to a solution with local error {local_error : .2e}')
       else:
-         print('GMRES stagnation at iteration %d, returning a solution with local error %e' % (niter, local_error))
+         print_out(f'GMRES stagnation at iteration {niter}, returning a solution with local error {local_error: .2e}')
 
       # Update solution
       return Q + numpy.reshape(phiv, Q.shape) * dt
@@ -271,24 +271,21 @@ class ARK_epi2:
       # phiv_interp, num_steps_interp = phiv, num_steps
       self.timer.stop()
 
-      print(f'PHI/ARK converged using {num_steps} internal time steps')
+      print_out(f'PHI/ARK converged using {num_steps} internal time steps')
+      print_out(f'Finished in {num_steps} / {num_steps_interp} iterations '
+                f'and {self.timer.last_time():.3f} / {self.interp_timer.last_time():.3f} seconds')
 
-      if self.rank == 0:
-         print('Finished in {} / {} iterations and {:.3f} / {:.3f} seconds'.format(
-            num_steps, num_steps_interp, self.timer.last_time(), self.interp_timer.last_time()))
-
-         with open(self.out_stat_file, 'a') as out_file:
-             out_file.write('{:4d} {:5d} {:5.0f} -- {:4d} {:5.0f} -- {:4d} {:5.0f}\n'.format(
-               self.rhs.nb_sol_pts, self.rhs.nb_elem, dt,
-               num_steps_interp, self.interp_timer.last_time(), num_steps, self.timer.last_time()))
+      print_to_file(self.out_stat_file, f'{self.rhs.nb_sol_pts:4d} {self.rhs.nb_elem:5d} {dt:5.0f} -- '
+                                        f'{num_steps_interp:4d} {self.interp_timer.last_time():5.0f} -- '
+                                        f'{num_steps:4d} {self.timer.last_time():5.0f}\n')
 
       diff = phiv[:,-1] - phiv_interp[:,-1]
       diff_norm = numpy.linalg.norm(diff)
       sol_norm = numpy.linalg.norm(phiv)
 
-      print('Difference: {}'.format(diff_norm/sol_norm))
+      print_out(f'Difference: {diff_norm/sol_norm : .3e}')
       if diff_norm / sol_norm > self.tol:
-         print('AHHHHH not the same answer!!! Diff = {} / {}'.format(diff_norm, sol_norm))
+         print_out(f'AHHHHH not the same answer!!! Diff = {diff_norm : .3e} / {sol_norm : .3e}')
          with open('geom{:04d}.dat'.format(self.rank), 'wb') as file:
             pickle.dump(self.rhs.geometry, file)
          with open('diff{:04d}.dat'.format(self.rank), 'wb') as file:

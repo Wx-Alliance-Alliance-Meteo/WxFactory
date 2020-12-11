@@ -1,10 +1,13 @@
-import adaptive_ark
-import butcher
-import linsol
 import math
 import numpy
 import mpi4py.MPI
 import scipy.linalg
+
+import adaptive_ark
+import butcher
+import linsol
+from print_out import print_out
+
 
 """
    kiops(tstops, A, u; kwargs...) -> (w, stats)
@@ -84,7 +87,7 @@ def phi_ark(τ_out, J_exp, J_imp, u,
 
    Be = butcher.tableau(butcher_exp)
    Bi = butcher.tableau(butcher_imp)
-   print('Solving for the φ-functions with ARK integrator : ', butcher_exp, '/', butcher_imp)
+   print_out(f'Solving for the φ-functions with ARK integrator : {butcher_exp} / {butcher_imp}')
 
    # Update the last part of w
    for k in range(p-1):

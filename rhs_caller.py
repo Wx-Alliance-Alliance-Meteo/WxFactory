@@ -6,6 +6,7 @@ from matrices      import DFR_operators
 from metric        import Metric
 from initialize    import initialize_sw
 from interpolation import LagrangeSimpleInterpolator, BilinearInterpolator
+from print_out     import print_out
 
 
 class RhsCaller:
@@ -49,7 +50,7 @@ class RhsCallerLowRes(RhsCaller):
       self.interpolator  = LagrangeSimpleInterpolator(self.geometry)
       # self.interpolator  = BilinearInterpolator(self.geometry)
 
-      print('large order = {}, small order = {}'.format(self.nb_sol_pts, self.low_order))
+      print_out(f'large order = {self.nb_sol_pts}, small order = {self.low_order}')
 
 
    def __call__(self, field):

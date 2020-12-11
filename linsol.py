@@ -4,6 +4,8 @@ import mpi4py.MPI
 import scipy
 import scipy.sparse.linalg
 
+from print_out import print_out
+
 class Fgmres:
 
    def __init__(self, tol = 1e-5, restart = 20, callback = None, reorth = False, hegedus = False, prefix = ''):
@@ -133,12 +135,10 @@ class Fgmres:
                old_norm_r = norm_r
                norm_r = numpy.abs(g[inner + 1])
 
-               if self.rank == 0 and preconditioner:
-                  print('{} Outer = {}, inner = {}, norm_r = {}'.format(prefix, outer, inner, norm_r))
+               if preconditioner:
+                  print_out(f'{prefix} Outer = {outer}, inner = {inner}, norm_r = {norm_r:.2e}')
 
                if norm_r < tol:
-                  # if self.rank == 0:
-                  #    print('{} exit loop b/c error is below tol'.format(prefix))
                   break
 
                if (old_norm_r - norm_r) / old_norm_r < 0.1: use_precond = False
@@ -171,9 +171,6 @@ class Fgmres:
             if change < 1e-12:
                # No change, halt
                return x, norm_r, total_num_iter, -1
-
-         # if self.rank == 0:
-         #    print('{} norm_r = {}'.format(prefix, norm_r))
 
          # test for convergence
          if norm_r < tol:

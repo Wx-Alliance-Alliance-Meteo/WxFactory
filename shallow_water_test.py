@@ -2,6 +2,7 @@ import math
 import numpy
 from definitions import day_in_secs, earth_radius, rotation_speed, gravity
 from winds import wind2contra
+from print_out import print_out
 
 import matsuno
 
@@ -198,10 +199,10 @@ def williamson_case5(geom, metric, mtrx, param):
 
 
 def williamson_case6(geom, metric, param):
-   print("--------------------------------------------")
-   print("WILLIAMSON CASE 6, Williamson et al. (1992) ")
-   print("Rossby-Haurwitz wave                        ")
-   print("--------------------------------------------")
+   print_out("--------------------------------------------")
+   print_out("WILLIAMSON CASE 6, Williamson et al. (1992) ")
+   print_out("Rossby-Haurwitz wave                        ")
+   print_out("--------------------------------------------")
 
    # Rossby-Haurwitz wave
 

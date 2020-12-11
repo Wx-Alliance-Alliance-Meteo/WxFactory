@@ -13,14 +13,15 @@ from matrices        import DFR_operators
 from metric          import Metric
 from output          import output_init, output_netcdf, output_finalize
 from parallel        import Distributed_World
+from preconditioner  import Preconditioner
+from print_out       import print_out, enable_print_out
 from program_options import Configuration
+from rhs_caller      import RhsCaller, RhsCallerLowRes
 from rhs_sw          import rhs_sw
 from rhs_sw_explicit import rhs_sw_explicit
 from rhs_sw_implicit import rhs_sw_implicit
 from timeIntegrators import Epi, Epirk4s3a, Tvdrk3, Rat2, ARK_epi2
 from timer           import Timer
-from preconditioner  import Preconditioner
-from rhs_caller      import RhsCaller, RhsCallerLowRes
 
 def main(args):
 
@@ -31,6 +32,9 @@ def main(args):
 
    # Set up distributed world
    ptopo = Distributed_World()
+
+   # Disable printing if requested
+   if param.output_ranks != 'all':  enable_print_out(ptopo.rank in param.output_ranks)
 
    # Create the mesh
    geom = cubed_sphere(param.nb_elements, param.nbsolpts, param.λ0, param.ϕ0, param.α0, ptopo)
@@ -54,14 +58,14 @@ def main(args):
 
    if param.time_integrator.lower()[:3] == 'epi' and param.time_integrator[3:].isdigit():
       order = int(param.time_integrator[3:])
-      print(f'Running with EPI{order}')
+      print_out(f'Running with EPI{order}')
       stepper = Epi(order, rhs_handle, param.tolerance, param.krylov_size, init_substeps=10)
    elif param.time_integrator.lower() == 'epirk4s3a':
       stepper = Epirk4s3a(rhs_handle, param.tolerance, param.krylov_size)
    elif param.time_integrator.lower() == 'tvdrk3':
       stepper = Tvdrk3(rhs_handle)
    elif param.time_integrator.lower() == 'rat2':
-      preconditioner = Preconditioner(param, geom, rhs_sw, ptopo, initial_time)
+      preconditioner = Preconditioner(param, geom, rhs_sw, ptopo)
       stepper = Rat2(rhs_handle, param.tolerance, ptopo.rank, preconditioner = preconditioner)
    elif  param.time_integrator.lower() =='epi2/ark':
       rhs_explicit1 = lambda q: rhs_sw_explicit(q, geom, mtrx, metric, topo, ptopo, param.nbsolpts, param.nb_elements, param.case_number, param.filter_apply)
@@ -91,12 +95,12 @@ def main(args):
          t += param.dt
 
       step += 1
-      print('\nStep', step, 'of', nb_steps)
+      print_out(f'\nStep {step} of {nb_steps}')
 
       step_timer.start()
       Q = stepper.step(Q, param.dt)
       step_timer.stop()
-      print(f'Elapsed time for step {step}: {step_timer.last_time():.3f} secs')
+      print_out(f'Elapsed time for step {step}: {step_timer.last_time():.3f} secs')
 
       if param.stat_freq > 0:
          if step % param.stat_freq == 0:
@@ -105,10 +109,10 @@ def main(args):
       # Plot solution
       if param.output_freq > 0:
          if step % param.output_freq == 0:
-            print(f'=> Writing dynamic output for step {step}')
+            print_out(f'=> Writing dynamic output for step {step}')
             output_netcdf(Q, geom, metric, mtrx, topo, step, param)
 
-   print(f'Times: {step_timer.times}')
+   print_out(f'Times: {step_timer.times}')
 
    #plot_times(comm_dist_graph, rhs_timers)
 
