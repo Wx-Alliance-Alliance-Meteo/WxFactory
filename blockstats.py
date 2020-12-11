@@ -3,7 +3,7 @@ import math
 import mpi4py.MPI
 
 from shallow_water_test import *
-from diagnostic import total_energy, potential_enstrophy
+from diagnostic import total_energy, potential_enstrophy, global_integral
 
 def blockstats(Q, geom, topo, metric, mtrx, param, step):
 
@@ -75,14 +75,3 @@ def blockstats(Q, geom, topo, metric, mtrx, param, step):
 
 
    print("================================================================================================")
-
-def global_integral(field, mtrx, metric, nbsolpts, nb_elements_horiz):
-
-   local_sum = 0.
-   for line in range(nb_elements_horiz):
-      epais_lin = line * nbsolpts + numpy.arange(nbsolpts)
-      for column in range(nb_elements_horiz):
-         epais_col = column * nbsolpts + numpy.arange(nbsolpts)
-         local_sum += numpy.sum( field[epais_lin,epais_col] * metric.sqrtG[epais_lin,epais_col] * mtrx.quad_weights )
-
-   return mpi4py.MPI.COMM_WORLD.allreduce(local_sum)

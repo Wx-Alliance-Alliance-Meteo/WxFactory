@@ -8,6 +8,7 @@ import numpy
 
 from blockstats      import blockstats
 from cubed_sphere    import cubed_sphere
+from fixer           import fix_mass
 from initialize      import initialize_sw
 from matrices        import DFR_operators
 from metric          import Metric
@@ -86,7 +87,10 @@ def main(args):
    t = 0.0
    nb_steps = math.ceil(param.t_end / param.dt)
 
+   fix_mass(Q, geom, topo, metric, mtrx, param, step)
+
    step_timer = Timer()
+
    while t < param.t_end:
       if t + param.dt > param.t_end:
          param.dt = param.t_end - t
@@ -101,6 +105,8 @@ def main(args):
       Q = stepper.step(Q, param.dt)
       step_timer.stop()
       print_out(f'Elapsed time for step {step}: {step_timer.last_time():.3f} secs')
+
+      fix_mass(Q, geom, topo, metric, mtrx, param, step)
 
       if param.stat_freq > 0:
          if step % param.stat_freq == 0:

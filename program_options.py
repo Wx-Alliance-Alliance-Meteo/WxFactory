@@ -67,6 +67,11 @@ class Configuration:
       except (NoOptionError):
          self.filter_cutoff    = 0
 
+      try:
+         self.mass_fixer      = parser.getint('Spatial_discretization', 'mass_fixer') == 1
+      except (NoOptionError):
+         self.mass_fixer      = False
+
       self.stat_freq   = parser.getint('Output_options', 'stat_freq')
       self.output_freq = parser.getint('Output_options', 'output_freq')
       self.output_file = parser.get('Output_options', 'output_file')
