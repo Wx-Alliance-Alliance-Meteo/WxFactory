@@ -65,20 +65,20 @@ def main(args):
    elif param.time_integrator.lower() == 'tvdrk3':
       stepper = Tvdrk3(rhs_handle)
    elif param.time_integrator.lower() == 'rat2':
-      preconditioner = Preconditioner(param, geom, rhs_sw, ptopo)
-      stepper = Rat2(rhs_handle, param.tolerance, ptopo.rank, preconditioner = preconditioner)
+      stepper = Rat2(rhs_handle, param.tolerance)
+      # stepper.add_run(Preconditioner(param, geom, rhs_sw, ptopo))
    elif  param.time_integrator.lower() =='epi2/ark':
-      rhs_explicit1 = lambda q: rhs_sw_explicit(q, geom, mtrx, metric, topo, ptopo, param.nbsolpts, param.nb_elements, param.case_number, param.filter_apply)
-      rhs_implicit1 = lambda q: rhs_sw_implicit(q, geom, mtrx, metric, topo, ptopo, param.nbsolpts, param.nb_elements, param.case_number, param.filter_apply)
+      rhs_explicit = lambda q: rhs_sw_explicit(q, geom, mtrx, metric, topo, ptopo, param.nbsolpts, param.nb_elements, param.case_number, param.filter_apply)
+      rhs_implicit = lambda q: rhs_sw_implicit(q, geom, mtrx, metric, topo, ptopo, param.nbsolpts, param.nb_elements, param.case_number, param.filter_apply)
 
-      rhs_implicit2 = RhsCallerLowRes(rhs_sw_implicit, geom, mtrx, metric, topo, ptopo, param.nbsolpts,
-                                     param.nb_elements, param.case_number, param.filter_apply, param = param)
-      rhs_explicit2 = lambda q: rhs_handle(q) - rhs_implicit2(q)
+      stepper = ARK_epi2(rhs_handle, rhs_explicit, rhs_implicit, param, ptopo.rank)
 
-      stepper = ARK_epi2(rhs_handle, rhs_explicit1, rhs_implicit1, rhs_explicit2, rhs_implicit2,
-                         param, ptopo.rank)
+      # rhs_implicit2 = RhsCallerLowRes(rhs_sw_implicit, geom, mtrx, metric, topo, ptopo, param.nbsolpts,
+      #                                 param.nb_elements, param.case_number, param.filter_apply, param=param)
+      # rhs_explicit2 = lambda q: rhs_handle(q) - rhs_implicit2(q)
+      # stepper.add_run(rhs_explicit2, rhs_implicit2)
    else:
-      raise ValueError(f'Time integration method {param.time_integrator} not supported')
+         raise ValueError(f'Time integration method {param.time_integrator} not supported')
 
    if param.stat_freq > 0:
       blockstats(Q, geom, topo, metric, mtrx, param, step)

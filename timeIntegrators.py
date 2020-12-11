@@ -189,109 +189,111 @@ class Tvdrk3:
       return Q
 
 class Rat2:
-   def __init__(self, rhs, tol, rank, preconditioner = None):
-      self.rhs            = rhs
-      self.preconditioner = preconditioner
+   def __init__(self, rhs, tol, preconditioner = None):
+      self.rhs = rhs
       self.out_stat_file  = 'rat2out.txt'
-
       self.solver = Fgmres(tol = tol)
 
-      self.fgmres_time = Timer(0.0)
-      self.no_precond_time  = Timer(0.0)
-      self.rank = rank
+      self.runs = []
+      self.add_run(preconditioner)
+
+
+   def add_run(self, preconditioner):
+      self.runs.append({'precond': preconditioner, 'timer': Timer()})
+
+   def exec_run(self, run_params, dt, Q, rhs, x0):
+      preconditioner = run_params['precond']
+      if preconditioner: preconditioner.compute_matrix_caller(matvec_rat, dt, Q)
+      matvec_handle = MatvecCaller(matvec_rat, dt, Q, self.rhs)
+      run_params['timer'].start()
+      run_params['output'] = self.solver.solve(matvec_handle, rhs, preconditioner = preconditioner, x0 = x0)
+      run_params['timer'].stop()
+
+      return run_params['output']
 
    def step(self, Q, dt):
-      matvec_handle = MatvecCaller(matvec_rat, dt, Q, self.rhs)
-      if self.preconditioner: self.preconditioner.compute_matrix_caller(matvec_rat, dt, Q)
-
       rhs = self.rhs(Q).flatten()
       x0 = numpy.zeros_like(rhs)
 
-      self.fgmres_time.start()
-      phiv, local_error, niter, flag = self.solver.solve(
-            matvec_handle, rhs, preconditioner = self.preconditioner, x0 = x0)
-      self.fgmres_time.stop()
+      for run_params in self.runs:
+         self.exec_run(run_params, dt, Q, rhs, x0)
 
-      self.no_precond_time.start()
-      phiv_no_precond, _, iter_no_precond, _ = self.solver.solve(
-         matvec_handle, rhs, preconditioner = None, x0 = x0
-      )
-      self.no_precond_time.stop()
+      out_line = f'{self.rhs.nb_sol_pts : 3d} {self.rhs.nb_elem : 3d}'
+      for run in self.runs:
+         _, _, num_iter, _ = run['output']
+         time = run['timer'].last_time()
+         out_line += f' -- {num_iter: 3d} {time: 7.3f}'
+      print_to_file(self.out_stat_file, out_line)
 
-      print_to_file(self.out_stat_file, f'{self.preconditioner.order + 1 : 3d} {self.preconditioner.num_elements : 3d} -- '
-                                        f'{niter: 3d} {flag} {self.fgmres_time.last_time() : 7.3f} -- '
-                                        f'{iter_no_precond: 3d} {self.no_precond_time.last_time() : 7.3f}')
-
+      phiv, local_error, num_iter, flag = self.runs[-1]['output']
       if flag == 0:
-         print_out(f'GMRES converged at iteration {niter} to a solution with local error {local_error : .2e}')
+         print_out(f'GMRES converged at iteration {num_iter} to a solution with local error {local_error : .2e}')
       else:
-         print_out(f'GMRES stagnation at iteration {niter}, returning a solution with local error {local_error: .2e}')
+         print_out(f'GMRES stagnation at iteration {num_iter}, returning a solution with local error {local_error: .2e}')
 
       # Update solution
       return Q + numpy.reshape(phiv, Q.shape) * dt
 
 class ARK_epi2:
-   def __init__(self, rhs, rhs_explicit1, rhs_implicit1, rhs_explicit2, rhs_implicit2, param, rank):
+   def __init__(self, rhs, rhs_explicit, rhs_implicit, param, rank):
       self.rhs = rhs
-      self.rhs_explicit1 = rhs_explicit1
-      self.rhs_implicit1 = rhs_implicit1
-      self.rhs_explicit2 = rhs_explicit2
-      self.rhs_implicit2 = rhs_implicit2
-
       self.butcher_exp = param.ark_solver_exp
       self.butcher_imp = param.ark_solver_imp
       self.tol = param.tolerance
 
       self.rank = rank
 
-      self.timer = Timer(0.0)
-      self.interp_timer = Timer(0.0)
       self.out_stat_file = 'epi2out.txt'
 
-   def step(self, Q, dt):
-      rhs = self.rhs(Q).flatten()
+      self.runs = []
+      self.add_run(rhs_explicit, rhs_implicit)
 
-      self.interp_timer.start()
-      J_e_interp = lambda v: matvec_fun(v, dt, Q, self.rhs_explicit2)
-      J_i_interp = lambda v: matvec_fun(v, dt, Q, self.rhs_implicit2)
-      vec = numpy.row_stack((numpy.zeros_like(rhs), rhs))
 
-      phiv_interp, num_steps_interp = phi_ark([0, 1], J_e_interp, J_i_interp, vec, tol = self.tol, task1 = False)
-      self.interp_timer.stop()
+   def add_run(self, rhs_explicit, rhs_implicit):
+      self.runs.append({'rhs_explicit': rhs_explicit, 'rhs_implicit': rhs_implicit, 'timer': Timer()})
 
-      self.timer.start()
-      J_e = lambda v: matvec_fun(v, dt, Q, self.rhs_explicit1)
-      J_i = lambda v: matvec_fun(v, dt, Q, self.rhs_implicit1)
+   def exec_run(self, run_params, dt, Q, rhs):
+      run_params['timer'].start()
+      J_explicit = lambda v: matvec_fun(v, dt, Q, run_params['rhs_explicit'])
+      J_implicit = lambda v: matvec_fun(v, dt, Q, run_params['rhs_implicit'])
 
       # We only need the second phi function
       vec = numpy.row_stack((numpy.zeros_like(rhs), rhs))
 
-      phiv, num_steps = phi_ark([0, 1], J_e, J_i, vec, tol=self.tol, task1=False)
-      # phiv, num_steps = phiv_interp, num_steps_interp
-      # phiv_interp, num_steps_interp = phiv, num_steps
-      self.timer.stop()
+      run_params['output'] = phi_ark([0, 1], J_explicit, J_implicit, vec, tol = self.tol, task1 = False)
+      run_params['timer'].stop()
 
-      print_out(f'PHI/ARK converged using {num_steps} internal time steps')
-      print_out(f'Finished in {num_steps} / {num_steps_interp} iterations '
-                f'and {self.timer.last_time():.3f} / {self.interp_timer.last_time():.3f} seconds')
+      return run_params['output']
 
-      print_to_file(self.out_stat_file, f'{self.rhs.nb_sol_pts:4d} {self.rhs.nb_elem:5d} {dt:5.0f} -- '
-                                        f'{num_steps_interp:4d} {self.interp_timer.last_time():5.0f} -- '
-                                        f'{num_steps:4d} {self.timer.last_time():5.0f}\n')
+   def step(self, Q, dt):
+      rhs = self.rhs(Q).flatten()
 
-      diff = phiv[:,-1] - phiv_interp[:,-1]
-      diff_norm = numpy.linalg.norm(diff)
-      sol_norm = numpy.linalg.norm(phiv)
+      out_line = f'{self.rhs.nb_sol_pts:4d} {self.rhs.nb_elem:5d} {dt:5.0f} '
+      for r in self.runs:
+         _, num_steps = self.exec_run(r, dt, Q, rhs)
+         time = r['timer'].last_time()
+         print_out(f'PHI/ARK converged using {num_steps} internal time steps in {time: .3f} s')
+         out_line += f' -- {num_steps:4d} {time:5.0f}'
 
-      print_out(f'Difference: {diff_norm/sol_norm : .3e}')
-      if diff_norm / sol_norm > self.tol:
-         print_out(f'AHHHHH not the same answer!!! Diff = {diff_norm : .3e} / {sol_norm : .3e}')
-         with open('geom{:04d}.dat'.format(self.rank), 'wb') as file:
-            pickle.dump(self.rhs.geometry, file)
-         with open('diff{:04d}.dat'.format(self.rank), 'wb') as file:
-            pickle.dump(diff.reshape(Q.shape), file)
-         # raise ValueError
+      print_to_file(self.out_stat_file, out_line)
 
+      phiv, _ = self.runs[0]['output']
+
+      if len(self.runs) > 1:
+         # Only do the first comparison for now
+         phiv2, _ = self.runs[1]['output']
+         diff = phiv[:,-1] - phiv2[:,-1]
+         diff_norm = numpy.linalg.norm(diff)
+         sol_norm = numpy.linalg.norm(phiv)
+
+         print_out(f'Difference: {diff_norm/sol_norm : .3e}')
+         if diff_norm / sol_norm > self.tol:
+            print_out(f'AHHHHH not the same answer!!! Diff = {diff_norm : .3e} / {sol_norm : .3e}')
+            with open('geom{:04d}.dat'.format(self.rank), 'wb') as file:
+               pickle.dump(self.rhs.geometry, file)
+            with open('diff{:04d}.dat'.format(self.rank), 'wb') as file:
+               pickle.dump(diff.reshape(Q.shape), file)
+            # raise ValueError
 
       # Update solution
       return Q + numpy.reshape(phiv[:,-1], Q.shape) * dt
