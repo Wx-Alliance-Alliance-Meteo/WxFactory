@@ -58,9 +58,10 @@ def potential_enstrophy(h, u1_contra, u2_contra, geom, metric, mtrx, param):
 def global_integral(field, mtrx, metric, nbsolpts, nb_elements_horiz):
    local_sum = 0.
    for line in range(nb_elements_horiz):
-      epais_lin = line * nbsolpts + numpy.arange(nbsolpts)
+      min_lin, max_lin = line * nbsolpts + numpy.array([0, nbsolpts])
       for column in range(nb_elements_horiz):
-         epais_col = column * nbsolpts + numpy.arange(nbsolpts)
-         local_sum += numpy.sum( field[epais_lin,epais_col] * metric.sqrtG[epais_lin,epais_col] * mtrx.quad_weights )
+         min_col, max_col = column * nbsolpts + numpy.array([0, nbsolpts])
+         local_sum += numpy.sum( field[min_lin:max_lin,min_col:max_col] * metric.sqrtG[min_lin:max_lin,min_col:max_col] * mtrx.quad_weights )
 
    return mpi4py.MPI.COMM_WORLD.allreduce(local_sum)
+
