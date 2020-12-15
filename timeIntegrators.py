@@ -123,10 +123,6 @@ class Epi:
 
       self.init_substeps = init_substeps
 
-      self.out_stat_file = 'kiops_out.txt'
-      print_to_file(self.out_stat_file, '')
-
-
    def step(self, Q, dt):
       # If dt changes, discard saved value and redo initialization
       if self.dt and abs(self.dt - dt) > 1e-10:
@@ -166,7 +162,6 @@ class Epi:
 
       print_out(f'KIOPS converged at iteration {stats[2]} (using {stats[0]} internal substeps)'
                 f' to a solution with local error {stats[4]:.2e}')
-      print_to_file(self.out_stat_file, f'{dt:5.0f} -- {stats[2]:4d} kry {stats[0]:4d} sub')
 
       self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
 
