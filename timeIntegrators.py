@@ -10,7 +10,6 @@ from phi           import phi_ark
 from interpolation import LagrangeSimpleInterpolator, BilinearInterpolator
 from matvec_product_caller import MatvecCaller
 from timer         import Timer
-from print_out     import print_out, print_to_file
 
 class Epirk4s3a:
    g21 = 1/2
@@ -160,8 +159,8 @@ class Epi:
       phiv, stats = kiops([1], matvec_handle, vec, tol=self.tol, m_init=self.krylov_size, mmin=16, mmax=64,
                           task1=False)
 
-      print_out(f'KIOPS converged at iteration {stats[2]} (using {stats[0]} internal substeps)'
-                f' to a solution with local error {stats[4]:.2e}')
+      print(f'KIOPS converged at iteration {stats[2]} (using {stats[0]} internal substeps)'
+            f' to a solution with local error {stats[4]:.2e}')
 
       self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
 
@@ -221,13 +220,13 @@ class Rat2:
          _, _, num_iter, _ = run['output']
          time = run['timer'].last_time()
          out_line += f' -- {num_iter: 3d} {time: 7.3f}'
-      print_to_file(self.out_stat_file, out_line)
+#      print_to_file(self.out_stat_file, out_line)
 
       phiv, local_error, num_iter, flag = self.runs[-1]['output']
       if flag == 0:
-         print_out(f'GMRES converged at iteration {num_iter} to a solution with local error {local_error : .2e}')
+         print(f'GMRES converged at iteration {num_iter} to a solution with local error {local_error : .2e}')
       else:
-         print_out(f'GMRES stagnation at iteration {num_iter}, returning a solution with local error {local_error: .2e}')
+         print(f'GMRES stagnation at iteration {num_iter}, returning a solution with local error {local_error: .2e}')
 
       # Update solution
       return Q + numpy.reshape(phiv, Q.shape) * dt
@@ -244,7 +243,7 @@ class ARK_epi2:
       self.add_run(rhs_explicit, rhs_implicit)
 
       self.out_stat_file = 'ark_out.txt'
-      print_to_file(self.out_stat_file, f'exp {self.butcher_exp} -- imp {self.butcher_imp}')
+#      print_to_file(self.out_stat_file, f'exp {self.butcher_exp} -- imp {self.butcher_imp}')
 
 
    def add_run(self, rhs_explicit, rhs_implicit):
@@ -270,7 +269,7 @@ class ARK_epi2:
       for r in self.runs:
          _, num_steps = self.exec_run(r, dt, Q, rhs)
          time = r['timer'].last_time()
-         print_out(f'PHI/ARK converged using {num_steps} internal time steps in {time: .3f} s')
+         print(f'PHI/ARK converged using {num_steps} internal time steps in {time: .3f} s')
          out_line += f' -- {num_steps:4d} {time:5.0f}'
 
       print_to_file(self.out_stat_file, out_line)
@@ -284,9 +283,9 @@ class ARK_epi2:
          diff_norm = numpy.linalg.norm(diff)
          sol_norm = numpy.linalg.norm(phiv)
 
-         print_out(f'Difference: {diff_norm/sol_norm : .3e}')
+         print(f'Difference: {diff_norm/sol_norm : .3e}')
          if diff_norm / sol_norm > self.tol:
-            print_out(f'AHHHHH not the same answer!!! Diff = {diff_norm : .3e} / {sol_norm : .3e}')
+            print(f'AHHHHH not the same answer!!! Diff = {diff_norm : .3e} / {sol_norm : .3e}')
             with open('geom{:04d}.dat'.format(self.rank), 'wb') as file:
                pickle.dump(self.rhs.geometry, file)
             with open('diff{:04d}.dat'.format(self.rank), 'wb') as file:

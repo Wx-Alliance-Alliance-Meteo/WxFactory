@@ -4,8 +4,6 @@ import mpi4py.MPI
 import scipy
 import scipy.sparse.linalg
 
-from print_out import print_out
-
 class Fgmres:
 
    def __init__(self, tol = 1e-5, restart = 20, callback = None, reorth = False, hegedus = False, prefix = ''):
@@ -136,7 +134,7 @@ class Fgmres:
                norm_r = numpy.abs(g[inner + 1])
 
                if preconditioner:
-                  print_out(f'{prefix} Outer = {outer}, inner = {inner}, norm_r = {norm_r:.2e}')
+                  print(f'{prefix} Outer = {outer}, inner = {inner}, norm_r = {norm_r:.2e}')
 
                if norm_r < tol:
                   break

@@ -6,11 +6,9 @@ import scipy.linalg
 import adaptive_ark
 import butcher
 import linsol
-from print_out import print_out
-
 
 """
-   kiops(tstops, A, u; kwargs...) -> (w, stats)
+   phi_ark(tstops, A, u; kwargs...) -> (w, stats)
 
 Evaluate a linear combinaton of the ``φ`` functions evaluated at ``tA`` acting on
 vectors from ``u``, that is
@@ -87,7 +85,7 @@ def phi_ark(τ_out, J_exp, J_imp, u,
 
    Be = butcher.tableau(butcher_exp)
    Bi = butcher.tableau(butcher_imp)
-   print_out(f'Solving for the φ-functions with ARK integrator : {butcher_exp} / {butcher_imp}')
+   print(f'Solving for the φ-functions with ARK integrator : {butcher_exp} / {butcher_imp}')
 
    # Update the last part of w
    for k in range(p-1):

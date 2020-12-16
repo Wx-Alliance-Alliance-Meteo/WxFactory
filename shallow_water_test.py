@@ -2,7 +2,6 @@ import math
 import numpy
 from definitions import day_in_secs, earth_radius, rotation_speed, gravity
 from winds import wind2contra
-from print_out import print_out
 
 import matsuno
 
@@ -199,10 +198,10 @@ def williamson_case5(geom, metric, mtrx, param):
 
 
 def williamson_case6(geom, metric, param):
-   print_out("--------------------------------------------")
-   print_out("WILLIAMSON CASE 6, Williamson et al. (1992) ")
-   print_out("Rossby-Haurwitz wave                        ")
-   print_out("--------------------------------------------")
+   print("--------------------------------------------")
+   print("WILLIAMSON CASE 6, Williamson et al. (1992) ")
+   print("Rossby-Haurwitz wave                        ")
+   print("--------------------------------------------")
 
    # Rossby-Haurwitz wave
 
@@ -368,10 +367,10 @@ def case_unsteady_zonal(geom, metric, mtrx, param):
       epais = elem * param.nbsolpts + numpy.arange(param.nbsolpts)
 
       # --- Direction x1
-      dzdx1[:, epais] = ( hsurf[:,epais] @ mtrx.diff_solpt_tr + hsurf_itf_i[elem+offset,:,:] @ mtrx.correction_tr ) * 2.0 / geom.Δx1
+      dzdx1[:, epais] = hsurf[:,epais] @ mtrx.diff_solpt_tr + hsurf_itf_i[elem+offset,:,:] @ mtrx.correction_tr 
 
       # --- Direction x2
-      dzdx2[epais,:] = ( mtrx.diff_solpt @ hsurf[epais,:] + mtrx.correction @ hsurf_itf_j[elem+offset,:,:] ) * 2.0 / geom.Δx2
+      dzdx2[epais,:] = mtrx.diff_solpt @ hsurf[epais,:] + mtrx.correction @ hsurf_itf_j[elem+offset,:,:]
 
    u1, u2 = wind2contra(u, v, geom)
    return u1, u2, h, hsurf, dzdx1, dzdx2, hsurf_itf_i, hsurf_itf_j
