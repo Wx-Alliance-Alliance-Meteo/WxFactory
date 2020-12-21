@@ -49,10 +49,6 @@ def initialize_sw(geom, metric, mtrx, param):
    Q = numpy.zeros((nb_equations, ni, nj))
    Q[idx_h, :, :] = fluid_height
 
-   # transform to the reference element
-   u1_contra *= 2. / geom.Δx1
-   u2_contra *= 2. / geom.Δx2
-
    if param.case_number <= 1:
       # advection only
       Q[idx_u1, :, :] = u1_contra
