@@ -22,6 +22,7 @@ geom*.dat
 
 *.png
 *.out
+*.nc
 
 precondition_test/**/*.npy
 precondition_test/**/*.npz
