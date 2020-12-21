@@ -1,430 +1,80 @@
-
-  450 --    8 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-  450 --    8 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-  450 --    8 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-  450 --   10 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-  450 --    8 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-  450 --   12 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-  450 --    8 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-  450 --   12 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-  450 --    8 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-  450 --   10 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-  450 --   10 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-  450 --   10 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-  450 --    8 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-  450 --   10 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-  450 --   10 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-  450 --   10 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-  450 --   10 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-  450 --   10 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-  450 --   10 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-  450 --   12 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-
- 1800 --   13 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
- 1800 --   24 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
- 1800 --   22 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
- 1800 --   21 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
- 1800 --   22 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-
-  450 --    8 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-  450 --   10 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-  450 --   14 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-  450 --   10 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-  450 --   14 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-  450 --   17 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-  450 --   19 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-  450 --   12 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-  450 --   11 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-  450 --   12 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-  450 --   18 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-  450 --   13 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-  450 --   17 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-  450 --   14 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-  450 --   12 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-  450 --   17 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-  450 --   17 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-  450 --   15 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-  450 --   13 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-  450 --   13 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-
- 1800 --   36 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
- 1800 --   69 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
- 1800 --   66 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
- 1800 --   69 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
- 1800 --   67 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-
-  450 --    8 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-  450 --   10 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-  450 --   12 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-  450 --   16 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-  450 --   12 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-  450 --   14 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-  450 --   14 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-  450 --   14 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-  450 --   14 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-  450 --   14 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-  450 --   14 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-  450 --   14 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-  450 --   14 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-  450 --   14 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-  450 --   14 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-  450 --   14 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-  450 --   14 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-  450 --   14 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-  450 --   14 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-  450 --   14 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-
- 1800 --   16 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
- 1800 --   30 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
- 1800 --   39 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
- 1800 --   32 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
- 1800 --   27 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-
-  450 --    8 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-  450 --   22 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-  450 --   17 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-  450 --   16 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-  450 --   19 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-  450 --   24 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-  450 --   20 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-  450 --   22 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-  450 --   24 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-  450 --   20 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-  450 --   19 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-  450 --   24 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-  450 --   19 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-  450 --   16 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-  450 --   21 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-  450 --   17 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-  450 --   24 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-  450 --   20 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-  450 --   18 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-  450 --   17 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-
- 1800 --   57 -- exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
-
-  450 --   14 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-  450 --   10 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-  450 --   14 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-  450 --   14 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-  450 --   14 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-  450 --   14 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-  450 --   14 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-  450 --   14 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-  450 --   14 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-  450 --   14 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-  450 --   14 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-  450 --   14 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-  450 --   16 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-  450 --   10 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-  450 --   14 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-  450 --   16 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-  450 --   14 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-  450 --   14 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-  450 --   16 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-  450 --   14 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-
- 1800 --   33 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
- 1800 --   37 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
- 1800 --   27 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
- 1800 --   36 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
- 1800 --   41 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-
-  450 --   13 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-  450 --   20 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-  450 --   18 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-  450 --   20 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-  450 --   20 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-  450 --   23 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-  450 --   18 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-  450 --   20 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-  450 --   22 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-  450 --   22 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-  450 --   16 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-  450 --   22 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-  450 --   20 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-  450 --   25 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-  450 --   21 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-  450 --   20 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-  450 --   22 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-  450 --   26 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-  450 --   20 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-  450 --   20 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-
- 1800 --   87 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
- 1800 --  107 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
- 1800 --   95 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
- 1800 --   90 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
- 1800 --   85 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-
-  450 --   10 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-  450 --   15 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-  450 --   16 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-  450 --   17 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-  450 --   16 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-  450 --   14 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-  450 --   16 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-  450 --   15 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-  450 --   15 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-  450 --   16 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-  450 --   12 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-  450 --   14 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-  450 --   12 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-  450 --   12 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-  450 --   12 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-  450 --   16 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-  450 --   12 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-  450 --   12 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-  450 --   15 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-  450 --   15 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-
- 1800 --   40 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
- 1800 --   60 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
- 1800 --   60 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
- 1800 --   60 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
- 1800 --   59 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-
-  450 --   14 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-  450 --   32 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-  450 --   31 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-  450 --   31 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-  450 --   33 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-  450 --   31 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-  450 --   31 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-  450 --   33 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-  450 --   33 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-  450 --   21 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-  450 --   33 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-  450 --   29 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-  450 --   34 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-  450 --   27 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-  450 --   33 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-  450 --   29 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-  450 --   31 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-  450 --   33 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-  450 --   26 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-  450 --   29 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-
- 1800 --   86 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
- 1800 --  146 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
- 1800 --  110 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
- 1800 --   89 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
- 1800 --  106 -- exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
-
-  450 --   10 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-  450 --   12 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-  450 --   10 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-  450 --   10 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-  450 --   10 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-  450 --   12 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-  450 --   10 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-  450 --   10 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-  450 --   12 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-  450 --   10 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-  450 --   10 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-  450 --   12 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-  450 --   10 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-  450 --   12 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-  450 --   10 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-  450 --   12 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-  450 --   10 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-  450 --   12 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-  450 --   10 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-  450 --   12 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-
- 1800 --   20 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
- 1800 --   24 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
- 1800 --   26 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
- 1800 --   26 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
- 1800 --   24 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-
-  450 --   12 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-  450 --   17 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-  450 --   17 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-  450 --   15 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-  450 --   17 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-  450 --   17 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-  450 --   17 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-  450 --   15 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-  450 --   17 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-  450 --   18 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-  450 --   15 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-  450 --   16 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-  450 --   17 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-  450 --   15 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-  450 --   19 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-  450 --   20 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-  450 --   17 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-  450 --   22 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-  450 --   15 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-  450 --   17 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-
- 1800 --   49 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
- 1800 --   62 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
- 1800 --   58 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
- 1800 --   58 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
- 1800 --   60 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-
-  450 --   10 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-  450 --   12 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-  450 --   11 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-  450 --   12 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-  450 --   11 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-  450 --   14 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-  450 --   10 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-  450 --   15 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-  450 --   12 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-  450 --   14 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-  450 --   10 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-  450 --   13 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-  450 --   14 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-  450 --   14 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-  450 --   11 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-  450 --   12 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-  450 --   11 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-  450 --    9 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-  450 --   15 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-  450 --   12 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-
- 1800 --   30 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
- 1800 --   35 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
- 1800 --   35 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
- 1800 --   35 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
- 1800 --   35 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-
-  450 --   14 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-  450 --   25 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-  450 --   27 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-  450 --   27 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-  450 --   18 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-  450 --   26 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-  450 --   23 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-  450 --   22 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-  450 --   25 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-  450 --   24 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-  450 --   27 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-  450 --   34 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-  450 --   24 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-  450 --   25 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-  450 --   25 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-  450 --   22 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-  450 --   27 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-  450 --   27 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-  450 --   27 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-  450 --   25 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-
- 1800 --   62 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
- 1800 --   87 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
- 1800 --   92 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
- 1800 --   87 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
- 1800 --   87 -- exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
-
-
-  450 --   12 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-  450 --    8 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-  450 --   11 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-  450 --    8 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-  450 --   11 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-  450 --    8 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-  450 --   11 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-  450 --    8 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-  450 --   12 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-  450 --    8 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-  450 --    8 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-  450 --   10 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-  450 --    8 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-  450 --    8 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-  450 --   11 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-  450 --    8 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-  450 --   12 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-  450 --    8 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-  450 --    9 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-  450 --    8 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-
- 1800 --   18 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
- 1800 --   30 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
- 1800 --   18 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
- 1800 --   22 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
- 1800 --   17 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-
-  450 --    8 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-  450 --   17 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-  450 --   12 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-  450 --   17 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-  450 --   16 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-  450 --   18 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-  450 --   16 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-  450 --   14 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-  450 --   13 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-  450 --   18 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-  450 --   16 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-  450 --   13 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-  450 --   15 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-  450 --   16 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-  450 --   13 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-  450 --   13 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-  450 --   18 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-  450 --   16 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-  450 --   14 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-  450 --   15 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-
- 1800 --   36 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
- 1800 --   54 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
- 1800 --   52 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
- 1800 --   72 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
- 1800 --   85 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-
-  450 --    8 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-  450 --   10 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-  450 --   10 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-  450 --   10 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-  450 --   10 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-  450 --   13 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-  450 --   10 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-  450 --   10 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-  450 --   11 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-  450 --    8 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-  450 --   10 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-  450 --   10 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-  450 --   10 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-  450 --   15 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-  450 --   11 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-  450 --   10 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-  450 --   10 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-  450 --   10 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-  450 --   15 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-  450 --   11 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-
- 1800 --   24 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
- 1800 --   38 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
- 1800 --   46 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
- 1800 --   31 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
- 1800 --   27 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-
-  450 --    8 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-  450 --   19 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-  450 --   16 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-  450 --   14 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-  450 --   29 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-  450 --   20 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-  450 --   21 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-  450 --   24 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-  450 --   23 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-  450 --   32 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-  450 --   21 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-  450 --   23 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-  450 --   14 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-  450 --   31 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-  450 --   29 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-  450 --   21 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-  450 --   14 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-  450 --   29 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-  450 --   17 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-  450 --   27 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-
- 1800 --   79 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
- 1800 --   65 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
- 1800 --   97 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
- 1800 --   72 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
- 1800 --   75 -- exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
-
+exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
+   4    15  1800  --   30   131
+   4    15  1800  --   37   163
+   4    15  1800  --   34   159
+   4    15  1800  --   30   139
+exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
+   4    30  1800  --   66   300
+   4    30  1800  --   79   367
+   4    30  1800  --   80   362
+   4    30  1800  --   80   348
+exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
+   5    15  1800  --   46   156
+   5    15  1800  --   64   223
+   5    15  1800  --   59   207
+   5    15  1800  --   46   198
+exp ARK4(3)7L[2]SA-ERK -- imp ARK4(3)7L[2]SA-ESDIRK
+   5    30  1800  --  104   567
+   5    30  1800  --  113   604
+   5    30  1800  --   96   488
+   5    30  1800  --  118   617
+exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
+   4    15  1800  --   55   270
+   4    15  1800  --   49   202
+   4    15  1800  --   55   255
+   4    15  1800  --   46   197
+exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
+   4    30  1800  --   72   386
+   4    30  1800  --  100   504
+   4    30  1800  --  112   571
+   4    30  1800  --  107   624
+exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
+   5    15  1800  --   83   375
+   5    15  1800  --   93   424
+   5    15  1800  --   91   401
+   5    15  1800  --   89   380
+exp ARK5(4)8L[2]SA-ERK -- imp ARK5(4)8L[2]SA-ESDIRK
+   5    30  1800  --  121   679
+   5    30  1800  --  222  1223
+   5    30  1800  --  178   947
+   5    30  1800  --  203  1211
+exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
+   4    15  1800  --   25    84
+   4    15  1800  --   49   239
+   4    15  1800  --   40   186
+   4    15  1800  --   37   167
+exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
+   4    30  1800  --   75   395
+   4    30  1800  --   85   446
+   4    30  1800  --   76   392
+   4    30  1800  --   80   427
+exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
+   5    15  1800  --   59   240
+   5    15  1800  --   65   268
+   5    15  1800  --   61   240
+   5    15  1800  --   56   249
+exp ARK5(4)8L[2]SAb-ERK -- imp ARK5(4)8L[2]SAb-ESDIRK
+   5    30  1800  --  105   615
+   5    30  1800  --  109   671
+   5    30  1800  --  114   677
+   5    30  1800  --  109   651
+exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
+   4    15  1800  --   66   146
+   4    15  1800  --   57   124
+   4    15  1800  --   29    62
+   4    15  1800  --   56   138
+exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
+   4    30  1800  --   82   225
+   4    30  1800  --   69   193
+   4    30  1800  --   82   242
+   4    30  1800  --   65   189
+exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
+   5    15  1800  --   51   136
+   5    15  1800  --   86   204
+   5    15  1800  --   66   163
+   5    15  1800  --   85   191
+exp ARK3(2)4L[2]SA-ERK -- imp ARK3(2)4L[2]SA-ESDIRK
+   5    30  1800  --   80   271
+   5    30  1800  --   96   304
+   5    30  1800  --   88   300
+   5    30  1800  --  158   479
