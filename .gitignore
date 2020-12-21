@@ -16,6 +16,7 @@ model_output/
 .idea
 venv
 
+stdout
 *out.txt
 diff*.dat
 geom*.dat
