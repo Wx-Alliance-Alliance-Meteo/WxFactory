@@ -257,7 +257,8 @@ class ARK_epi2:
       # We only need the second phi function
       vec = numpy.row_stack((numpy.zeros_like(rhs), rhs))
 
-      run_params['output'] = phi_ark([0, 1], J_explicit, J_implicit, vec, tol = self.tol, task1 = False)
+      run_params['output'] = phi_ark([0, 1], J_explicit, J_implicit, vec, tol = self.tol, task1 = False,
+              butcher_exp = self.butcher_exp, butcher_imp = self.butcher_imp)
       run_params['timer'].stop()
 
       return run_params['output']
