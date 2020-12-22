@@ -32,11 +32,11 @@ class Distributed_World:
       self.rank = mpi4py.MPI.COMM_WORLD.Get_rank()
 
       self.nb_pe_per_panel = int(self.size / 6)
+      self.nb_lines_per_panel = math.isqrt(self.nb_pe_per_panel)
 
-      if self.size < 6 or self.nb_pe_per_panel != math.isqrt(self.nb_pe_per_panel) ** 2 or self.nb_pe_per_panel * 6 != self.size:
+      if self.size < 6 or self.nb_pe_per_panel != self.nb_lines_per_panel**2 or self.nb_pe_per_panel * 6 != self.size:
          raise Exception('Wrong number of PEs. This topology is not allowed')
 
-      self.nb_lines_per_panel = int(math.sqrt(self.nb_pe_per_panel))
       self.nb_elems_per_line = self.nb_lines_per_panel
 
       rank_from_location = lambda panel, row, col: panel * self.nb_pe_per_panel + row * self.nb_lines_per_panel + col
@@ -154,12 +154,12 @@ class Distributed_World:
 
    def xchange_scalars(self, geom, field_itf_i, field_itf_j):
 
-      data_type = type(field_itf_i[0, 0, :])
+      data_type = field_itf_i.dtype
       sendbuf = numpy.empty((4, len(field_itf_i[0, 0, :])), dtype=data_type)
 
       # --- Send to northern neighbours
 
-      if self.my_row == self.nb_lines_per_panel -1 and ( self.my_panel == 2 or self.my_panel == 3 or self.my_panel == 4 ):
+      if self.my_row == self.nb_lines_per_panel - 1 and ( self.my_panel == 2 or self.my_panel == 3 or self.my_panel == 4 ):
          sendbuf[0,:] = numpy.flipud( field_itf_j[-2, 1, :] )
       else:
          sendbuf[0,:] = field_itf_j[-2, 1, :]
@@ -180,7 +180,7 @@ class Distributed_World:
 
       # --- Send to eastern neighbours
 
-      if self.my_col == self.nb_elems_per_line-1 and self.my_panel == 5:
+      if self.my_col == self.nb_elems_per_line - 1 and self.my_panel == 5:
          sendbuf[3,:] = numpy.flipud( field_itf_i[-2, 1, :] )
       else:
          sendbuf[3,:] = field_itf_i[-2, 1, :]
@@ -207,7 +207,7 @@ class Distributed_World:
       #      | 5 |
       #      +---+
 
-      data_type = type(u1_itf_i[0, 0, :])
+      data_type = u1_itf_i.dtype
       sendbuf_u1 = numpy.zeros((4, len(u1_itf_i[0, 0, :])), dtype=data_type)
       sendbuf_u2 = numpy.zeros_like(sendbuf_u1)
 
@@ -216,7 +216,7 @@ class Distributed_World:
 
       # --- Send to northern neighbours
 
-      if self.my_row == self.nb_lines_per_panel -1:
+      if self.my_row == self.nb_lines_per_panel - 1:
 
          if self.my_panel == 0:
 
@@ -366,7 +366,7 @@ class Distributed_World:
       #      | 5 |
       #      +---+
 
-      data_type = type(u1_itf_i[0, 0, :])
+      data_type = u1_itf_i.dtype
       sendbuf_u1 = numpy.zeros((4, len(u1_itf_i[0, 0, :])), dtype=data_type)
       sendbuf_u2 = numpy.zeros_like(sendbuf_u1)
 
@@ -375,7 +375,7 @@ class Distributed_World:
 
       # --- Send to northern neighbours
 
-      if self.my_row == self.nb_lines_per_panel -1:
+      if self.my_row == self.nb_lines_per_panel - 1:
 
          if self.my_panel == 0:
 
@@ -529,7 +529,7 @@ class Distributed_World:
       #      | 5 |
       #      +---+
 
-      data_type = type(T11_itf_i[0, 0, :])
+      data_type = T11_itf_i.dtype
       sendbuf_T01 = numpy.zeros((4, len(T01_itf_i[0, 0, :])), dtype=data_type)
       sendbuf_T02 = numpy.zeros_like(sendbuf_T01)
       sendbuf_T11 = numpy.zeros_like(sendbuf_T01)
@@ -541,7 +541,7 @@ class Distributed_World:
 
       # --- Send to northern neighbours
 
-      if self.my_row == self.nb_lines_per_panel -1:
+      if self.my_row == self.nb_lines_per_panel - 1:
 
          if self.my_panel == 0:
 

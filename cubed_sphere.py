@@ -76,13 +76,6 @@ class cubed_sphere:
       X_itf_j = numpy.tan(X1_itf_j)
       Y_itf_j = numpy.tan(X2_itf_j)
 
-      # Make sure there is no roundoff error at the panel boundaries
-      X_itf_i[:,0] = -1.
-      X_itf_i[:,-1] = 1.
-
-      Y_itf_j[0, :] = -1.
-      Y_itf_j[-1, :] = 1.
-
       delta2 = 1.0 + X**2 + Y**2
       delta  = numpy.sqrt(delta2)
 
