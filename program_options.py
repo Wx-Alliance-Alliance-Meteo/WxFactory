@@ -70,14 +70,3 @@ class Configuration:
       self.stat_freq   = parser.getint('Output_options', 'stat_freq')
       self.output_freq = parser.getint('Output_options', 'output_freq')
       self.output_file = parser.get('Output_options', 'output_file')
-
-      try:
-         self.output_ranks = parser.get('Output_options', 'output_ranks')
-      except (NoOptionError):
-         self.output_ranks = 'all'
-
-      if self.output_ranks != 'all':
-         self.output_ranks = [int(x) for x in re.findall(r"[0-9]+", self.output_ranks)]
-
-      print(f'output ranks: {self.output_ranks}')
-
