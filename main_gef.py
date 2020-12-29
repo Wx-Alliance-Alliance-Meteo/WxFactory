@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 
-import sys
 import math
 from time import time
 
@@ -19,16 +18,11 @@ from rhs_sw_explicit import rhs_sw_explicit
 from rhs_sw_implicit import rhs_sw_implicit
 from timeIntegrators import Epi, Epirk4s3a, Tvdrk3, Rat2, ARK_epi2
 
-def main():
-   if len(sys.argv) == 1:
-      cfg_file = 'config/gef_settings.ini'
-   else:
-      cfg_file = sys.argv[1]
-
+def main(args):
    step = 0
 
    # Read configuration file
-   param = Configuration(cfg_file)
+   param = Configuration(args.config)
 
    # Set up distributed world
    ptopo = Distributed_World()
@@ -105,6 +99,31 @@ def main():
    if param.output_freq > 0:
       output_finalize()
 
+   return ptopo.rank
+
 if __name__ == '__main__':
+
+   import argparse
+   import cProfile
+
+   parser = argparse.ArgumentParser(description='Solve CFD problems with GEF!')
+   parser.add_argument('--profile', action='store_true', help='Produce an execution profile when running')
+   parser.add_argument('config', type=str, help='File that contains simulation parameters')
+
+   args = parser.parse_args()
+
+   # Start profiling
+   if args.profile:
+      pr = cProfile.Profile()
+      pr.enable()
+
    numpy.set_printoptions(suppress=True, linewidth=256)
-   main()
+   rank = main(args)
+
+   if args.profile:
+      pr.disable()
+
+      out_file = f'prof_{rank:04d}.out'
+      pr.dump_stats(out_file)
+
+
