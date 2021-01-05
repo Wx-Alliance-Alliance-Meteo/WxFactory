@@ -4,189 +4,146 @@ import mpi4py.MPI
 import scipy
 import scipy.sparse.linalg
 
-class Fgmres:
+def fgmres(A, b, x0 = None, tol = 1e-5, restart = 20, maxiter = None, preconditioner = None, reorth = False, hegedus = False):
 
-   def __init__(self, tol = 1e-5, restart = 20, callback = None, reorth = False, hegedus = False, prefix = ''):
-      self.tol = tol
-      self.restart = restart
-      self.callback = callback
-      self.reorth = reorth
-      self.hegedus = hegedus
-      self.rank = mpi4py.MPI.COMM_WORLD.Get_rank()
+   niter = 0
 
-   def solve(self, A, b, x0 = None, preconditioner = None, max_iter = None, prefix = '', tol = None):
+   num_dofs = len(b)
 
-      # if self.rank == 0:
-      #    print('{} CALLING SOLVE WITH PRECONDITIONER = {}'.format(prefix, preconditioner))
+   if maxiter is None:
+      maxiter = num_dofs * 10 # Wild guess
 
-      local_sum = numpy.zeros(1)
-      def global_norm(vec):
-         """Compute vector norm across all PEs"""
-         local_sum[0] = vec @ vec
-         return math.sqrt(mpi4py.MPI.COMM_WORLD.allreduce(local_sum))
+   if x0 is None:
+      x = numpy.zeros_like(b)
+   else:
+      x = x0.copy()
 
-      def gram_schmidt_mod(num, mat, vec, h_mat):
-         """Modified Gram-Schmidt process"""
-         for k in range(num + 1):
-            local_sum[0] = mat[k, :] @ vec
-            h_mat[num, k] = mpi4py.MPI.COMM_WORLD.allreduce(local_sum)
-            vec = axpy(mat[k, :], vec, num_dofs, -h_mat[num, k])
-         return vec
+   # Check for early stop
+   norm_b = global_norm(b)
+   if norm_b == 0.0:
+      return numpy.zeros_like(b), 0., 0, 0
 
-      tol      = tol if tol else self.tol
-      x        = x0.copy() if x0 is not None else numpy.zeros_like(b)  # Zero if nothing given
-      Ax0      = A(x)
-      num_dofs = len(b)
-      max_iter = max_iter if max_iter else num_dofs * 10  # Wild guess if nothing given
+   Ax0 = A(x)
 
-      # Get fast access to underlying BLAS routines
-      [lartg] = scipy.linalg.get_lapack_funcs(['lartg'], [x])
-      [axpy, dotu, scal] = scipy.linalg.get_blas_funcs(['axpy', 'dotu', 'scal'], [x])
+   # Rescale the initial approximation using the Hegedüs trick
+   if hegedus:
+      norm_Ax0 = global_norm(Ax0)
+      if norm_Ax0 != 0.:
+         ksi_min = numpy.sum(b * Ax0) / norm_Ax0
+         x = ksi_min * x0
 
-      # Check for early stop
-      norm_b = global_norm(b)
-      if norm_b == 0.0:
-         return numpy.zeros_like(b), 0., 0, 0
+   r          = b - Ax0
+   norm_r     = global_norm(r)
+   error      = norm_r / norm_b
 
-      # Rescale the initial approximation using the Hegedüs trick
-      if self.hegedus:
-         norm_Ax0 = global_norm(Ax0)
-         if norm_Ax0 != 0.:
-            ksi_min = numpy.sum(b * Ax0) / norm_Ax0
-            x = ksi_min * x0
+   # Get fast access to underlying BLAS routines
+   [lartg] = scipy.linalg.get_lapack_funcs(['lartg'], [x])
+   [axpy, dotu, scal] = scipy.linalg.get_blas_funcs(['axpy', 'dotu', 'scal'], [x])
 
-      r          = b - Ax0
-      norm_r     = global_norm(r)
-      old_norm_r = norm_r
-      error      = norm_r / norm_b
+   for outer in range(maxiter):
 
-      # Loop init
-      num_iter       = 0
-      total_num_iter = 0
-      use_precond    = True
+      # NOTE: We are dealing with row-major matrices, but we store the transpose of H and V.
+      H = numpy.zeros((restart+1, restart+1))
+      V = numpy.zeros((restart+1, num_dofs))  # row-major ordering
+      Z = numpy.zeros((restart+1, num_dofs))  # row-major ordering
+      Q = []  # Givens Rotations
 
-      for outer in range(int(math.ceil(max_iter / self.restart))):
+      V[0, :] = r / norm_r
 
-         # NOTE: We are dealing with row-major matrices, but we store the transpose of H and V.
-         H = numpy.zeros((self.restart + 1, self.restart + 1))
-         V = numpy.zeros((self.restart + 1, num_dofs))  # row-major ordering
-         Z = numpy.zeros((self.restart + 1, num_dofs))  # row-major ordering
-         Q = []  # Givens Rotations
+      # This is the RHS vector for the problem in the Krylov Space
+      g = numpy.zeros(num_dofs)
+      g[0] = norm_r
+      for inner in range(restart):
 
-         V[0, :] = r / norm_r
+         niter += 1
 
+         # Flexible preconditioner 
+         if preconditioner is not None:
+            Z[inner, :] = preconditioner(V[inner, :])
+         else:
+            Z[inner, :] = V[inner, :]
 
-         # This is the RHS vector for the problem in the Krylov Space
-         g = numpy.zeros(num_dofs)
-         g[0] = norm_r
-         for inner in range(self.restart):
+         w = A(Z[inner, :])
 
-            num_iter += 1
+         # Modified Gram-Schmidt process
+         for k in range(inner + 1):
+            local_sum = V[k, :] @ w
+            H[inner, k] = mpi4py.MPI.COMM_WORLD.allreduce(local_sum)
+            V[inner+1, :] = axpy(V[k, :], w, num_dofs, -H[inner, k])
 
-            (Z[inner, :], num_precond_iter) = preconditioner.apply(V[inner, :], self, A) \
-                  if preconditioner and use_precond else (V[inner, :], 1)
-            w = A(Z[inner, :])
-            V[inner + 1] = gram_schmidt_mod(inner, V, w, H)
+         local_sum = V[inner+1, :] @ V[inner+1, :]
+         H[inner, inner+1] = math.sqrt( mpi4py.MPI.COMM_WORLD.allreduce(local_sum) )
 
-            norm_v = global_norm(V[inner + 1, :])
-            H[inner, inner + 1] = norm_v
+         if reorth is True:
+            for k in range(inner + 1):
+               local_sum[0] = V[k, :] @ V[inner + 1, :]
+               corr = mpi4py.MPI.COMM_WORLD.allreduce(local_sum)
+               H[inner, k] = H[inner, k] + corr
+               V[inner+1, :] = axpy(V[k, :], V[inner+1, :], num_dofs, -corr)
 
-            total_num_iter += num_precond_iter
-            use_precond = False
+         # Check for breakdown
+         if H[inner, inner+1] != 0.0:
+            V[inner+1, :] = scal(1.0 / H[inner, inner+1], V[inner + 1, :])
 
-            if self.reorth is True:
-               for k in range(inner + 1):
-                  local_sum[0] = V[k, :] @ V[inner + 1, :]
-                  corr = mpi4py.MPI.COMM_WORLD.allreduce(local_sum)
-                  H[inner, k] = H[inner, k] + corr
-                  V[inner + 1, :] = axpy(V[k, :], V[inner + 1, :], num_dofs, -corr)
+         # Apply previous Givens rotations to H
+         if inner > 0:
+            apply_givens(Q, H[inner, :], inner)
 
-            # Check for breakdown
-            if H[inner, inner + 1] != 0.0:
-               V[inner + 1, :] = scal(1.0 / H[inner, inner + 1], V[inner + 1, :])
+         # Calculate and apply next complex-valued Givens Rotation
+         # ==> Note that if restart = num_dofs, then this is unnecessary
+         # for the last inner
+         #    iteration, when inner = num_dofs-1.
+         if inner != num_dofs - 1:
+            if H[inner, inner + 1] != 0:
+               [c, s, r] = lartg(H[inner, inner], H[inner, inner + 1])
+               Qblock = numpy.array([[c, s], [-numpy.conjugate(s), c]])
+               Q.append(Qblock)
 
-            # Apply previous Givens rotations to H
-            if inner > 0:
-               apply_givens(Q, H[inner, :], inner)
+               # Apply Givens Rotation to g,
+               #   the RHS for the linear system in the Krylov Subspace.
+               g[inner:inner + 2] = Qblock @ g[inner:inner + 2]
 
-            # Calculate and apply next complex-valued Givens Rotation
-            # ==> Note that if restart = num_dofs, then this is unnecessary
-            # for the last inner
-            #    iteration, when inner = num_dofs-1.
-            if inner != num_dofs - 1:
-               if H[inner, inner + 1] != 0:
-                  [c, s, r] = lartg(H[inner, inner], H[inner, inner + 1])
-                  Qblock = numpy.array([[c, s], [-numpy.conjugate(s), c]])
-                  Q.append(Qblock)
+               # Apply effect of Givens Rotation to H
+               H[inner, inner] = dotu(Qblock[0, :], H[inner, inner:inner + 2])
+               H[inner, inner + 1] = 0.0
 
-                  # Apply Givens Rotation to g,
-                  #   the RHS for the linear system in the Krylov Subspace.
-                  g[inner:inner + 2] = Qblock @ g[inner:inner + 2]
+         # Don't update norm_r if last inner iteration, because
+         # norm_r is calculated directly after this loop ends.
+         if inner < restart - 1:
+            norm_r = numpy.abs(g[inner+1])
+            if norm_r < tol:
+               break
 
-                  # Apply effect of Givens Rotation to H
-                  H[inner, inner] = dotu(Qblock[0, :], H[inner, inner:inner + 2])
-                  H[inner, inner + 1] = 0.0
+      # end inner loop, back to outer loop
+      Z[inner+1, :] = V[inner+1, :]
 
-            # Don't update norm_r if last inner iteration, because
-            # norm_r is calculated directly after this loop ends.
-            if inner < self.restart - 1:
-               old_norm_r = norm_r
-               norm_r = numpy.abs(g[inner + 1])
+      # Find best update to x in Krylov Space V.
+      y = scipy.linalg.solve_triangular(H[0:inner + 1, 0:inner + 1].T, g[0:inner + 1])
+      update = numpy.ravel(Z[:inner+1, :].T @ y.reshape(-1, 1))
+      x = x + update
+      r = b - A(x)
 
-               if preconditioner:
-                  print(f'{prefix} Outer = {outer}, inner = {inner}, norm_r = {norm_r:.2e}')
+      norm_r = global_norm(r)
 
-               if norm_r < tol:
-                  break
+      # Has GMRES stagnated?
+      indices = (x != 0)
+      if indices.any():
+         change = numpy.max(numpy.abs(update[indices] / x[indices]))
+         if change < 1e-12:
+            # No change, halt
+            return x, norm_r, niter, -1
 
-               if (old_norm_r - norm_r) / old_norm_r < 0.1: use_precond = False
+      # test for convergence
+      if norm_r < tol:
+         return x, norm_r, niter, 0
 
-            # Allow user access to the iterates
-            if self.callback is not None:
-               self.callback(x)
+   # end outer loop
 
-         # end inner loop, back to outer loop
-         Z[inner + 1, :] = V[inner + 1, :]
+   return x, norm_r / norm_b, niter, 0
 
-         # Find best update to x in Krylov Space V.
-         y = scipy.linalg.solve_triangular(H[0:inner + 1, 0:inner + 1].T, g[0:inner + 1])
-         update = numpy.ravel(Z[:inner + 1, :].T @ y.reshape(-1, 1))
-         x = x + update
-         r = b - A(x)
-
-         norm_r = global_norm(r)
-
-         # Allow user access to the iterates
-         if self.callback is not None:
-            self.callback(x)
-
-         num_precond_iter = preconditioner.num_iter + preconditioner.num_precond_iter if preconditioner else 0
-
-         # Has GMRES stagnated?
-         indices = (x != 0)
-         if indices.any():
-            change = numpy.max(numpy.abs(update[indices] / x[indices]))
-            if change < 1e-12:
-               # No change, halt
-               return x, norm_r, total_num_iter, -1
-
-         # test for convergence
-         if norm_r < tol:
-            return x, norm_r, total_num_iter, 0
-
-         if (old_norm_r - norm_r) / old_norm_r < 1e-10:
-            print('{} Stopping because solver is stuck!'.format(prefix))
-            return x, norm_r, total_num_iter, -1
-
-         old_norm_r = norm_r
-
-      # end outer loop
-
-      return x, norm_r / norm_b, total_num_iter, 0
-
-
-def norm(var):
-   local_sum = numpy.sum(var * var)
+def global_norm(vec):
+   """Compute vector norm across all PEs"""
+   local_sum = vec @ vec
    return math.sqrt( mpi4py.MPI.COMM_WORLD.allreduce(local_sum) )
 
 def apply_givens(Q, v, k):

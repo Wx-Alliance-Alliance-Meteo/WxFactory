@@ -5,7 +5,7 @@ from collections import deque
 
 from matvec        import matvec_fun, matvec_rat
 from kiops         import kiops
-from linsol        import Fgmres
+from linsol        import fgmres
 from phi           import phi_ark
 from interpolation import LagrangeSimpleInterpolator, BilinearInterpolator
 from matvec_product_caller import MatvecCaller
@@ -186,47 +186,24 @@ class Tvdrk3:
       return Q
 
 class Rat2:
-   def __init__(self, rhs, tol, preconditioner = None):
+   def __init__(self, rhs, tol):
       self.rhs = rhs
-      self.out_stat_file  = 'rat2out.txt'
-      self.solver = Fgmres(tol = tol)
-
-      self.runs = []
-      self.add_run(preconditioner)
-
-
-   def add_run(self, preconditioner):
-      self.runs.append({'precond': preconditioner, 'timer': Timer()})
-
-   def exec_run(self, run_params, dt, Q, rhs, x0):
-      preconditioner = run_params['precond']
-      if preconditioner: preconditioner.compute_matrix_caller(matvec_rat, dt, Q)
-      matvec_handle = MatvecCaller(matvec_rat, dt, Q, self.rhs)
-      run_params['timer'].start()
-      run_params['output'] = self.solver.solve(matvec_handle, rhs, preconditioner = preconditioner, x0 = x0)
-      run_params['timer'].stop()
-
-      return run_params['output']
+      self.tol = tol
 
    def step(self, Q, dt):
-      rhs = self.rhs(Q).flatten()
-      x0 = numpy.zeros_like(rhs)
+      matvec_handle = lambda v: matvec_rat(v, dt, Q, self.rhs)
 
-      for run_params in self.runs:
-         self.exec_run(run_params, dt, Q, rhs, x0)
+      # Transform to the shifted linear system (I/dt - J/2) x = F/dt
+      rhs = self.rhs(Q).flatten() / dt
 
-      out_line = f'{self.rhs.nb_sol_pts : 3d} {self.rhs.nb_elem : 3d}'
-      for run in self.runs:
-         _, _, num_iter, _ = run['output']
-         time = run['timer'].last_time()
-         out_line += f' -- {num_iter: 3d} {time: 7.3f}'
-#      print_to_file(self.out_stat_file, out_line)
+      first_guess = numpy.zeros_like(rhs)
 
-      phiv, local_error, num_iter, flag = self.runs[-1]['output']
+      phiv, local_error, num_iter, flag = fgmres(matvec_handle, rhs, x0=first_guess, tol=self.tol)
+
       if flag == 0:
-         print(f'GMRES converged at iteration {num_iter} to a solution with local error {local_error : .2e}')
+         print(f'FGMRES converged at iteration {num_iter} to a solution with local error {local_error : .2e}')
       else:
-         print(f'GMRES stagnation at iteration {num_iter}, returning a solution with local error {local_error: .2e}')
+         print(f'FGMRES stagnation at iteration {num_iter}, returning a solution with local error {local_error: .2e}')
 
       # Update solution
       return Q + numpy.reshape(phiv, Q.shape) * dt
@@ -241,10 +218,6 @@ class ARK_epi2:
 
       self.runs = []
       self.add_run(rhs_explicit, rhs_implicit)
-
-      self.out_stat_file = 'ark_out.txt'
-#      print_to_file(self.out_stat_file, f'exp {self.butcher_exp} -- imp {self.butcher_imp}')
-
 
    def add_run(self, rhs_explicit, rhs_implicit):
       self.runs.append({'rhs_explicit': rhs_explicit, 'rhs_implicit': rhs_implicit, 'timer': Timer()})
@@ -272,8 +245,6 @@ class ARK_epi2:
          time = r['timer'].last_time()
          print(f'PHI/ARK converged using {num_steps} internal time steps in {time: .3f} s')
          out_line += f' -- {num_steps:4d} {time:5.0f}'
-
-      print_to_file(self.out_stat_file, out_line)
 
       phiv, _ = self.runs[0]['output']
 

@@ -15,6 +15,6 @@ def matvec_rat(vec, dt, Q, rhs_handle):
    # Complex-step approximation
    epsilon = math.sqrt(numpy.finfo(float).eps)
    Qvec = Q + 1j * epsilon * numpy.reshape(vec, Q.shape)
-   jac = dt * (rhs_handle(Qvec) / epsilon).imag
+   jac = (rhs_handle(Qvec) / epsilon).imag
 
-   return vec - 0.5 * jac.flatten()
+   return vec/dt - 0.5 * jac.flatten()
