@@ -1,6 +1,5 @@
 import numpy
 import math
-import pickle
 from collections import deque
 
 from matvec        import matvec_fun, matvec_rat
@@ -209,11 +208,10 @@ class Rat2:
       return Q + numpy.reshape(phiv, Q.shape) * dt
 
 class ARK_epi2:
-   def __init__(self, rhs, rhs_explicit, rhs_implicit, param, rank):
+   def __init__(self, rhs, rhs_explicit, rhs_implicit, param):
       self.rhs = rhs
       self.butcher_exp = param.ark_solver_exp
       self.butcher_imp = param.ark_solver_imp
-      self.rank = rank
       self.tol = param.tolerance
 
       self.runs = []
@@ -239,30 +237,12 @@ class ARK_epi2:
    def step(self, Q, dt):
       rhs = self.rhs(Q).flatten()
 
-      out_line = f'{self.rhs.nb_sol_pts:4d} {self.rhs.nb_elem:5d} {dt:5.0f} '
       for r in self.runs:
          _, num_steps = self.exec_run(r, dt, Q, rhs)
          time = r['timer'].last_time()
-         print(f'PHI/ARK converged using {num_steps} internal time steps in {time: .3f} s')
-         out_line += f' -- {num_steps:4d} {time:5.0f}'
+         print(f'PHI/ARK converged using {num_steps} substeps in {time: .3f} s')
 
       phiv, _ = self.runs[0]['output']
-
-      if len(self.runs) > 1:
-         # Only do the first comparison for now
-         phiv2, _ = self.runs[1]['output']
-         diff = phiv[:,-1] - phiv2[:,-1]
-         diff_norm = numpy.linalg.norm(diff)
-         sol_norm = numpy.linalg.norm(phiv)
-
-         print(f'Difference: {diff_norm/sol_norm : .3e}')
-         if diff_norm / sol_norm > self.tol:
-            print(f'AHHHHH not the same answer!!! Diff = {diff_norm : .3e} / {sol_norm : .3e}')
-            with open('geom{:04d}.dat'.format(self.rank), 'wb') as file:
-               pickle.dump(self.rhs.geometry, file)
-            with open('diff{:04d}.dat'.format(self.rank), 'wb') as file:
-               pickle.dump(diff.reshape(Q.shape), file)
-            # raise ValueError
 
       # Update solution
       return Q + numpy.reshape(phiv[:,-1], Q.shape) * dt

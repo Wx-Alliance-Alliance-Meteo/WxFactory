@@ -104,12 +104,14 @@ def solve(fe,fi,Ji,tvals,Y0,Be,Bi,rtol,atol,hmin,hmax,nn,p_phi,mu):
    Y[:,0] = Y0
    ierr = 0
 
+   # TODO : the following parameters should be defined in config file
+
    # set the solver parameters
    h_cfail    = 0.25        # failed linear solve step reduction factor
    h_reduce   = 0.1         # failed step reduction factor
    h_safety   = 0.96        # adaptivity safety factor
    h_growth   = 10          # adaptivity growth bound
-   lin_tol    = 1e-7        # implicit solver tolerance factor
+   lin_tol    = 1e-7        # implicit solver tolerance factor 
    e_bias     = 1.5         # error bias factor
    ONEMSM     = 1-1e-10     # coefficient to account for floating-point roundoff
    ERRTOL     = 1.1         # upper bound on allowed step error
@@ -127,8 +129,6 @@ def solve(fe,fi,Ji,tvals,Y0,Be,Bi,rtol,atol,hmin,hmax,nn,p_phi,mu):
 
    # initialize work counters
    nsteps = 0
-
-   fgmres_solver = linsol.Fgmres(tol = lin_tol)
 
    # iterate over output time steps
    for tstep in range(1,len(tvals)):
@@ -170,7 +170,7 @@ def solve(fe,fi,Ji,tvals,Y0,Be,Bi,rtol,atol,hmin,hmax,nn,p_phi,mu):
             # to equal 0 if this solve succeeded, or 1 otherwise
             if (numpy.abs(Ai[stage,stage]) > 1.e-14):
                matvec_gmres = lambda vec: I_minus_tauJ_imp(vec, h*Ai[stage,stage], nn, Ji)
-               dz, gmres_error, nb_gmres_iter, lierr = fgmres_solver.solve(matvec_gmres, rhs)
+               dz, gmres_error, nb_gmres_iter, lierr = linsol.fgmres(matvec_gmres, rhs, tol = lin_tol)
 
                # if linear solver failed to converge, set relevant flags/statistics
                # and break out of stage loop

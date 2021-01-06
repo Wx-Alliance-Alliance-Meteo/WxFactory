@@ -36,8 +36,7 @@ Returns:
 `n` is the size of the original problem
 `p` is the highest index of the ``φ`` functions
 """
-def phi_ark(τ_out, J_exp, J_imp, u,
-            tol = 1e-7, task1 = False, butcher_exp = 'ARK3(2)4L[2]SA-ERK', butcher_imp = 'ARK3(2)4L[2]SA-ESDIRK'):
+def phi_ark(τ_out, J_exp, J_imp, u, tol = 1e-7, task1 = False, butcher_exp = 'ARK3(2)4L[2]SA-ERK', butcher_imp = 'ARK3(2)4L[2]SA-ESDIRK'):
 
    ppo, n = u.shape
    p = ppo - 1
