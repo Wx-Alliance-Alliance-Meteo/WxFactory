@@ -82,7 +82,7 @@ def kiops(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 2,
    w[0, :] = u[0, :].copy()
 
    # compute the 1-norm of u
-   local_nrmU = numpy.sum(abs(u[1:, :]), axis=0)
+   local_nrmU = numpy.sum(abs(u[1:, :]), axis=1)
    normU = numpy.amax( mpi4py.MPI.COMM_WORLD.allreduce(local_nrmU) )
 
    # Normalization factors
@@ -150,7 +150,7 @@ def kiops(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 2,
          local_sum[1] = V[0, 0:n] @ V[1, 0:n]
          global_sum = mpi4py.MPI.COMM_WORLD.allreduce(local_sum[:2])
 
-         β = math.sqrt(global_sum[0]) + ( V[0, n:n+p] @ V[0, n:n+p] )
+         β = math.sqrt(global_sum[0] + ( V[0, n:n+p] @ V[0, n:n+p] ))
 
          inv_nrm = 1 / β
 
