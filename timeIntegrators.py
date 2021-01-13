@@ -108,6 +108,9 @@ class Epi:
          raise ValueError('Unsupported order for EPI method')
 
       k, self.n_prev = self.A.shape
+      # Limit max phi to 1 for EPI 2
+      if order == 2:
+         k -= 1
       self.max_phi = k+1
       self.previous_Q = deque()
       self.previous_rhs = deque()
