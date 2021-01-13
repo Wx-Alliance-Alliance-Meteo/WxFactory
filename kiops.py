@@ -333,6 +333,7 @@ def kiops(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 2,
 
          # Restore the original matrix
          H[0, j] = 0.0
+         V[j, :] *= nrm
 
 
       oldτ = τ
