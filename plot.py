@@ -14,7 +14,7 @@ def plot_field(dataFile, outputFile, idx = -1, field = 'h', nContour = 10, conto
    data = netCDF4.Dataset(dataFile, 'r')
 
    # Setup figure
-   fig = plt.figure(figsize=(30, 15))
+   fig = plt.figure(figsize=(6, 3))
 
    lons = data['lons'][:].flatten()
    lats = data['lats'][:].flatten()
@@ -53,6 +53,7 @@ def plot_field(dataFile, outputFile, idx = -1, field = 'h', nContour = 10, conto
 
    if contoursLevels:
       filled_c = plt.tricontourf(triang, vals, levels = contoursLevels, cmap='jet')
+      plt.tricontour(triang, vals, levels=contoursLevels, colors='k')
    elif error:
       filled_c = plt.tricontourf(triang, vals, locator = ticker.LogLocator(), vmin = 1e-12, vmax = 2e-5, cmap='jet')
    else:
@@ -61,7 +62,7 @@ def plot_field(dataFile, outputFile, idx = -1, field = 'h', nContour = 10, conto
    plt.xlim(lon_lims)
    plt.ylim(lat_lims)
    cbar = fig.colorbar(filled_c, orientation='vertical', shrink=1)
-   cbar.ax.tick_params(labelsize=35)
+   #cbar.ax.tick_params(labelsize=45)
    fig.savefig(outputFile, bbox_inches='tight')
    plt.close()
 
@@ -105,27 +106,31 @@ def plot_quiver(dataFile, outputFile, idx = -1, nArrows = 15):
 
 
 def plot_conservation(logFolder, outputFolder):
-   orders = [6,5,4,3]
-   for case in ['case2','case5','case6','galewsky']:
+   orders = [3,4,5,6]
+   for case in ['case2','case5','case6']:
       for match in ['mass', 'energy', 'enstrophy']:
+         fig = plt.figure(figsize=(5, 3))
          for order in orders:
             with open(logFolder + '/log_18x' + str(order) + '_' + case + '/1/rank.0/stdout') as of :
                content = of.read()
             m = re.findall('normalized integral of ' + match + ' = (.*)$', content, re.MULTILINE)
             val = list(map(float, m))
-            ax = plt.plot(numpy.arange(len(val)) * 900/(60*60*24), val)
-            if case == 'case2':
-               plt.yscale('symlog', linthreshy=1e-12)
+            plt.plot(numpy.arange(len(val)) * 900/(60*60*24), val)
+            ax = plt.gca()
+            ax.yaxis.get_major_formatter().set_powerlimits((0, 1))
 
-         plt.legend(['Order ' + str(o) for o in orders])
+
+         plt.legend(['Order ' + str(o) for o in orders], loc='upper center', bbox_to_anchor=(0.5, -0.22), ncol=5)
          plt.xlabel('Time (days)')
-         plt.savefig(outputFolder + '/' + match + '_' + case + '.pdf', bbox_inches='tight')
+
+         fig.savefig(outputFolder + '/' + match + '_' + case + '.pdf', bbox_inches='tight')
          plt.close()
 
 def plot_error(logFolder, outputFolder):
-   orders = [6,5,4,3]
+   orders = [3,4,5,6]
    for case in ['case2']:
       for match in ['l1', 'l2', 'linf']:
+         fig = plt.figure(figsize=(5, 3))
          for order in orders:
             with open(logFolder + '/log_18x' + str(order) + '_' + case + '/1/rank.0/stdout') as of :
                content = of.read()
@@ -135,8 +140,8 @@ def plot_error(logFolder, outputFolder):
             plt.xlabel('Time (days)')
             plt.ylabel('Error')
 
-         plt.legend(['Order ' + str(o) for o in orders], loc='upper center', bbox_to_anchor=(0.5, -0.12), ncol=5)
-         plt.savefig(outputFolder + '/' + match + '_' + case + '.pdf', bbox_inches='tight')
+         plt.legend(['Order ' + str(o) for o in orders], loc='upper center', bbox_to_anchor=(0.5, -0.25), ncol=5)
+         fig.savefig(outputFolder + '/' + match + '_' + case + '.pdf', bbox_inches='tight')
          plt.close()
 
 def plot_conv(logFolder, outputFolder, type):
@@ -145,7 +150,7 @@ def plot_conv(logFolder, outputFolder, type):
    else:
       nvec = [3,4,5,6,7,8]
 
-   print(nvec)
+   fig = plt.figure(figsize=(5, 3))
    for match in ['l1', 'l2', 'linf']:
       error = []
       for n in nvec:
@@ -156,7 +161,6 @@ def plot_conv(logFolder, outputFolder, type):
          error.append( float(m[-1]) )
 
       plt.semilogy(nvec, error)
-      print (error)
 
    if type == 'ne':
       plt.xlabel('Number of elements')
@@ -166,7 +170,7 @@ def plot_conv(logFolder, outputFolder, type):
    plt.ylabel('Error')
 
    plt.legend(['$l_1$', '$l_2$', '$l_\infty$'])
-   plt.savefig(outputFolder + '/' + 'lauther_' + type + '.pdf', bbox_inches='tight')
+   fig.savefig(outputFolder + '/' + 'lauther_' + type + '.pdf', bbox_inches='tight')
    plt.close()
 
 def plot_res(dataFolder, plotFolder):
@@ -178,23 +182,27 @@ def plot_res(dataFolder, plotFolder):
          (case, resolution, order) = m.group(1, 2, 3)
 
          if case == 'case2':
-            contoursLevels = list(range(1000,3200,200))
-            field = 'h'
+            contoursLevels = []
+            field = []
+            idx = []
             lat_lims = (-90, 90)
             lon_lims = (-180, 180)
          elif case == 'galewsky':
-            contoursLevels = list(numpy.arange(-1.5e-4, 1.8e-4, 2e-5))
-            field = 'RV'
+            contoursLevels = [list(numpy.arange(-1.5e-4, 1.8e-4, 2e-5))]
+            field = ['RV']
+            idx = [-1]
             lat_lims = (0, 90)
             lon_lims = (-180, 180)
          elif case == 'case6':
-            contoursLevels = list(range(8000, 10700, 100))
-            field = 'h'
+            contoursLevels = [list(range(8000, 10700, 100))]
+            field = ['h']
+            idx= [-1, -1]
             lat_lims = (-90, 90)
             lon_lims = (-180, 180)
          else:
-            contoursLevels = list(range(5000,6050,50))
-            field = 'h'
+            contoursLevels = [list(range(5000,6050,50)), list(numpy.arange(-5e-5, 5e-5, 5e-6))]
+            field = ['h', 'RV']
+            idx = [-1, -1, 7*24*3600//900]
             lat_lims = (-90, 90)
             lon_lims = (-180, 180)
 
@@ -202,8 +210,9 @@ def plot_res(dataFolder, plotFolder):
          name = case + '_' + str(resolution) + 'x' + str(order)
          dataFile = dataFolder + '/' + name + '.nc'
 
-         fieldFile = plotFolder + '/' + name + '_field.pdf'
-         plot_field(dataFile, fieldFile, field=field, contoursLevels=contoursLevels, lat_lims = lat_lims, lon_lims = lon_lims)
+         for i,f in enumerate(field):
+            fieldFile = plotFolder + '/' + name + '_' + f + '.pdf'
+            plot_field(dataFile, fieldFile, idx = idx[i], field=f, contoursLevels=contoursLevels[i], lat_lims = lat_lims, lon_lims = lon_lims)
 
          if case == 'case2':
             fieldFile = plotFolder + '/' + name + '_error_field.pdf'
