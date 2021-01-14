@@ -154,7 +154,7 @@ def kiops(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 2,
 
          inv_nrm = 1 / β
 
-         H[0, 0] = inv_nrm**2 * global_sum[1] + V[0, n:n+p] @ V[1, n:n+p]
+         H[0, 0] = inv_nrm**2 * (global_sum[1] + V[0, n:n+p] @ V[1, n:n+p])
 
          # Normalize the first Krylov basis vector
          V[0, :] *= inv_nrm
