@@ -116,12 +116,7 @@ def kiops(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 2,
 
    l = 0
 
-   local_sum = numpy.zeros(3)
-
    while τ_now < τ_end:
-
-      if j < m:
-         update_nrm = True
 
       # Compute necessary starting information
       if j == 0:
@@ -136,31 +131,12 @@ def kiops(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 2,
             V[j, n+k] = (τ_now**i) / math.factorial(i) * mu
          V[j, n+p-1] = mu
 
-         # The second basis vector
-         j = 1
-
-         # Matrix-vector product
-         # Augmented matrix - vector product
-         V[j, 0:n    ] = A( V[j-1, 0:n] ) + V[j-1, n:n+p] @ u_flip
-         V[j, n:n+p-1] = V[j-1, n+1:n+p]
-         V[j, -1     ] = 0.0
-
          # Normalize initial vector (this norm is nonzero)
-         local_sum[0] = V[0, 0:n] @ V[0, 0:n]
-         local_sum[1] = V[0, 0:n] @ V[1, 0:n]
-         global_sum = mpi4py.MPI.COMM_WORLD.allreduce(local_sum[:2])
+         local_sum = V[0, 0:n] @ V[0, 0:n]
+         β = math.sqrt( mpi4py.MPI.COMM_WORLD.allreduce(local_sum) + V[j, n:n+p] @ V[j, n:n+p] )
 
-         β = math.sqrt(global_sum[0] + ( V[0, n:n+p] @ V[0, n:n+p] ))
-
-         inv_nrm = 1 / β
-
-         H[0, 0] = inv_nrm**2 * (global_sum[1] + V[0, n:n+p] @ V[1, n:n+p])
-
-         # Normalize the first Krylov basis vector
-         V[0, :] *= inv_nrm
-
-         # Orthogonalize the second vector against the first
-         V[1, :] = (inv_nrm * V[1, :] ) - ( H[0, 0] * V[0,:] )
+         # The first Krylov basis vector
+         V[j, :] /= β
 
       # Incomplete orthogonalization process
       while j < m:
@@ -172,46 +148,24 @@ def kiops(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 2,
          V[j, n:n+p-1] = V[j-1, n+1:n+p]
          V[j, -1     ] = 0.0
 
-         local_sum[0] = V[j-1, 0:n] @ V[j-1, 0:n]
-         local_sum[1] = V[j-1, 0:n] @ V[j, 0:n]
-         local_sum[2] = V[j-2, 0:n] @ V[j, 0:n]
-         global_sum = mpi4py.MPI.COMM_WORLD.allreduce(local_sum)
+         # Classical Gram-Schmidt
+         ilow = max(0, j - iop)
+         local_sum = V[ilow:j, 0:n] @ V[j, 0:n]
+         H[ilow:j, j-1] = mpi4py.MPI.COMM_WORLD.allreduce(local_sum) + V[ilow:j, n:n+p] @ V[j, n:n+p]
+         V[j, :] = V[j, :] - H[ilow:j, j-1] @ V[ilow:j,:]
 
-         nrm = numpy.sqrt( global_sum[0] + ( V[j-1, n:n+p] @ V[j-1, n:n+p] ) )
-         proj1 = global_sum[1] + ( V[j-1, n:n+p] @ V[j, n:n+p] )
-         proj2 = global_sum[2] + ( V[j-2, n:n+p] @ V[j, n:n+p] )
+         local_sum = V[j, 0:n] @ V[j, 0:n]
+         nrm = numpy.sqrt( mpi4py.MPI.COMM_WORLD.allreduce(local_sum) + V[j, n:n+p] @ V[j, n:n+p])
 
          # Happy breakdown
          if nrm < tol:
-            j = j - 1
             happy = True
             break
 
-         inv_nrm = 1 / nrm
-
-         H[j-2, j-1] = inv_nrm * proj2
-         H[j-1, j-1] = inv_nrm**2 * proj1
-
-         # Normalize the previous vector
-         H[j-1, j-2] = nrm
-         V[j-1, :] *= inv_nrm
-
-         # Orthogonalize the new vector
-         V[j, :] = (inv_nrm * V[j, :]) - ( H[j-2, j-1] * V[j-2,:] + H[j-1, j-1] * V[j-1,:] )
+         H[j, j-1] = nrm
+         V[j, :]   = (1.0 / nrm) * V[j, :]
 
          krystep += 1
-
-      if update_nrm is True:
-         # Since we use the so-called standard scheme, it does not matter that
-         # the last vector is left not normalized.
-         # However, we need the norm of the last vector for the error estimate
-         local_sum[0] = V[j, 0:n] @ V[j, 0:n]
-         nrm = numpy.sqrt( mpi4py.MPI.COMM_WORLD.allreduce(local_sum[0] ) + V[j, n:n+p] @ V[j, n:n+p])
-
-         H[j, j-1] = nrm
-         V[j, :] /= nrm
-
-         update_nrm = False
 
       # To obtain the phi_1 function which is needed for error estimate
       H[0, j] = 1.0
@@ -333,7 +287,6 @@ def kiops(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 2,
 
          # Restore the original matrix
          H[0, j] = 0.0
-         V[j, :] *= nrm
 
 
       oldτ = τ
