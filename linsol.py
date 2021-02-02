@@ -4,6 +4,48 @@ import mpi4py.MPI
 import scipy
 import scipy.sparse.linalg
 
+
+def ortho_1_sync(Q, R, j):
+   """Orthonormalization process that only requires a single synchronization step.
+
+   This processes row j of matrix Q so that the first j+1 rows are orthogonal, and the first j rows are orthonormal.
+   It normalizes row j-1 of matrix Q during that process.
+
+   Arguments:
+      Q -- The matrix to orthogonalize. We assume that the first (j-1) columns of that matrix are already orthonormal
+      R -- Data from previous iterations of the orthonormalization process (?)
+      j -- Which row vector we want to make orthogonal to the previous ones
+   """
+   m, _ = Q.shape
+
+   if j == 0: return Q, R, 0.0
+
+   local_tmp = Q[:j, :].conj() @ Q[j-1:j+1, :].T
+   global_tmp = mpi4py.MPI.COMM_WORLD.allreduce(local_tmp) # Expensive step on multi-node execution
+
+   T            = numpy.zeros_like(R)
+   T[:j-1, j-1] = global_tmp[:j-1, 0]
+   norm2        = global_tmp[-1, 0]
+   norm         = numpy.sqrt(norm2)
+   R[j-1, j-1]  = norm
+
+   R[:j, j]     = global_tmp[:,1]
+   R[:j, j]     /= norm # Only do this for Arnoldi iterations
+   Q[j-1, :]    /= norm
+   Q[j, :]      /= norm # Only do this for Arnoldi iterations
+   T[:j-1, j-1] /= norm
+   R[j-1, j]    /= norm
+
+   T[j-1, j-1] = 1.0
+   L = numpy.tril(T[:j, :j], -1)
+   R[:j, j] = (numpy.eye(j) - L) @ R[:j, j]
+
+   delta = -R[:j, j].T @ Q[:j, :]
+   Q[j, :] += delta
+
+   return Q, R, norm
+
+
 def fgmres(A, b, x0 = None, tol = 1e-5, restart = 20, maxiter = None, preconditioner = None, reorth = False, hegedus = False):
 
    niter = 0
@@ -40,15 +82,21 @@ def fgmres(A, b, x0 = None, tol = 1e-5, restart = 20, maxiter = None, preconditi
    [lartg] = scipy.linalg.get_lapack_funcs(['lartg'], [x])
    [axpy, dotu, scal] = scipy.linalg.get_blas_funcs(['axpy', 'dotu', 'scal'], [x])
 
+   use_new_orth = True
+
    for outer in range(maxiter):
 
       # NOTE: We are dealing with row-major matrices, but we store the transpose of H and V.
       H = numpy.zeros((restart+1, restart+1))
-      V = numpy.zeros((restart+1, num_dofs))  # row-major ordering
+      R = numpy.zeros((restart+2, restart+2)) # rhs of the MGS factorization (should be H.transposed?)
+      V = numpy.zeros((restart+2, num_dofs))  # row-major ordering
       Z = numpy.zeros((restart+1, num_dofs))  # row-major ordering
       Q = []  # Givens Rotations
 
       V[0, :] = r / norm_r
+      Z[0, :] = V[0, :] if preconditioner is None else preconditioner(V[0, :])
+      V[1, :] = A(Z[0, :])
+      V, R, _ = ortho_1_sync(V, R, 1)
 
       # This is the RHS vector for the problem in the Krylov Space
       g = numpy.zeros(num_dofs)
@@ -63,27 +111,11 @@ def fgmres(A, b, x0 = None, tol = 1e-5, restart = 20, maxiter = None, preconditi
          else:
             Z[inner, :] = V[inner, :]
 
-         w = A(Z[inner, :])
-
-         # Modified Gram-Schmidt process
-         for k in range(inner + 1):
-            local_sum = V[k, :] @ w
-            H[inner, k] = mpi4py.MPI.COMM_WORLD.allreduce(local_sum)
-            V[inner+1, :] = axpy(V[k, :], w, num_dofs, -H[inner, k])
-
-         local_sum = V[inner+1, :] @ V[inner+1, :]
-         H[inner, inner+1] = math.sqrt( mpi4py.MPI.COMM_WORLD.allreduce(local_sum) )
-
-         if reorth is True:
-            for k in range(inner + 1):
-               local_sum[0] = V[k, :] @ V[inner + 1, :]
-               corr = mpi4py.MPI.COMM_WORLD.allreduce(local_sum)
-               H[inner, k] = H[inner, k] + corr
-               V[inner+1, :] = axpy(V[k, :], V[inner+1, :], num_dofs, -corr)
-
-         # Check for breakdown
-         if H[inner, inner+1] != 0.0:
-            V[inner+1, :] = scal(1.0 / H[inner, inner+1], V[inner + 1, :])
+         # Modified Gram-Schmidt process (1-sync version, with lagged normalization)
+         z_mod = V[inner+1] if preconditioner is None else preconditioner(V[inner+1])
+         V[inner+2, :] = A(z_mod)
+         V, R, norm = ortho_1_sync(V, R, inner + 2)
+         H[inner, :] = R[:restart+1, inner+1]
 
          # Apply previous Givens rotations to H
          if inner > 0:
@@ -115,7 +147,7 @@ def fgmres(A, b, x0 = None, tol = 1e-5, restart = 20, maxiter = None, preconditi
                break
 
       # end inner loop, back to outer loop
-      Z[inner+1, :] = V[inner+1, :]
+      Z[inner+1, :] = V[inner+1, :] # Is this line really useful?
 
       # Find best update to x in Krylov Space V.
       y = scipy.linalg.solve_triangular(H[0:inner + 1, 0:inner + 1].T, g[0:inner + 1])
