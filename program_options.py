@@ -1,8 +1,7 @@
 from configparser import ConfigParser, NoSectionError, NoOptionError
-import re
 
 class Configuration:
-   def __init__(self, cfg_file):
+   def __init__(self, cfg_file: str):
 
       parser = ConfigParser()
       parser.read(cfg_file)
@@ -11,8 +10,16 @@ class Configuration:
       print(parser._sections)
       print(' ')
 
-      self.case_number      = parser.getint('Test_case', 'case_number')
-      
+      try:
+         self.equations = parser.get('General', 'equations')
+      except (NoOptionError,NoSectionError):
+         self.equations = "shallow water" # TODO : changer
+
+      if self.equations == "shallow water":
+         self.case_number = parser.getint('Test_case', 'case_number')
+      else:
+         self.case_number = parser.get('Test_case', 'case_number')
+
       if self.case_number == 9:
          self.matsuno_wave_type = parser.get('Test_case', 'matsuno_wave_type')
          self.matsuno_amp = parser.getfloat('Test_case', 'matsuno_amp')
@@ -48,9 +55,24 @@ class Configuration:
       except (NoOptionError,NoSectionError):
          self.α0 = 0.0
 
+      try:
+         self.ztop = parser.getfloat('Grid', 'ztop')
+      except (NoOptionError,NoSectionError):
+         self.ztop = 0.0
+
       self.nbsolpts         = parser.getint('Spatial_discretization', 'nbsolpts')
-      self.nb_elements      = parser.getint('Spatial_discretization', 'nb_elements')
-      
+      self.nb_elements_horizontal = parser.getint('Spatial_discretization', 'nb_elements_horizontal')
+
+      try:
+         self.nb_elements_vertical   = parser.getint('Spatial_discretization', 'nb_elements_vertical')
+      except (NoOptionError):
+         self.nb_elements_vertical   = 1
+
+      try:
+         self.nb_levels = parser.getint('Spatial_discretization', 'nb_levels')
+      except (NoOptionError):
+         self.nb_levels = 1
+
       try:
          self.filter_apply     = parser.getint('Spatial_discretization', 'filter_apply') == 1
       except (NoOptionError):

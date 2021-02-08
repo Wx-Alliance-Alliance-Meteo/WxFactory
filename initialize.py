@@ -10,6 +10,9 @@ class Topo:
       self.hsurf_itf_i = hsurf_itf_i
       self.hsurf_itf_j = hsurf_itf_j
 
+def initialize_euler(geom, metric, mtrx, param):
+   return None
+
 def initialize_sw(geom, metric, mtrx, param):
 
    ni, nj = geom.lon.shape
@@ -18,8 +21,8 @@ def initialize_sw(geom, metric, mtrx, param):
       hsurf = numpy.zeros((ni, nj))
       dzdx1 = numpy.zeros((ni, nj))
       dzdx2 = numpy.zeros((ni, nj))
-      hsurf_itf_i = numpy.zeros((param.nb_elements+2, param.nbsolpts*param.nb_elements, 2))
-      hsurf_itf_j = numpy.zeros((param.nb_elements+2, 2, param.nbsolpts*param.nb_elements))
+      hsurf_itf_i = numpy.zeros((param.nb_elements_horizontal+2, param.nbsolpts*param.nb_elements_horizontal, 2))
+      hsurf_itf_j = numpy.zeros((param.nb_elements_horizontal+2, 2, param.nbsolpts*param.nb_elements_horizontal))
 
    # --- Shallow water
    if param.case_number == 0:

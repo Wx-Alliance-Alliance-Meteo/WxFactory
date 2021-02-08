@@ -35,17 +35,17 @@ def get_matvec_sw(cfg_file, rhs):
    """
    param = Configuration(cfg_file)
    ptopo = Distributed_World()
-   geom = cubed_sphere(param.nb_elements, param.nbsolpts, param.λ0, param.ϕ0, param.α0, ptopo)
+   geom = cubed_sphere(param.nb_elements_horizontal, param.nbsolpts, param.λ0, param.ϕ0, param.α0, ptopo)
    mtrx = DFR_operators(geom, param)
    metric = Metric(geom)
    Q, topo = initialize_sw(geom, metric, mtrx, param)
 
    if rhs == 'all':
-      rhs = lambda q: rhs_sw(q, geom, mtrx, metric, topo, ptopo, param.nbsolpts, param.nb_elements, param.case_number, param.filter_apply)
+      rhs = lambda q: rhs_sw(q, geom, mtrx, metric, topo, ptopo, param.nbsolpts, param.nb_elements_horizontal, param.case_number, param.filter_apply)
    elif rhs == 'exp':
-      rhs = lambda q: rhs_sw_explicit(q, geom, mtrx, metric, topo, ptopo, param.nbsolpts, param.nb_elements, param.case_number, param.filter_apply)
+      rhs = lambda q: rhs_sw_explicit(q, geom, mtrx, metric, topo, ptopo, param.nbsolpts, param.nb_elements_horizontal, param.case_number, param.filter_apply)
    elif rhs == 'imp':
-      rhs = lambda q: rhs_sw_implicit(q, geom, mtrx, metric, topo, ptopo, param.nbsolpts, param.nb_elements, param.case_number, param.filter_apply)
+      rhs = lambda q: rhs_sw_implicit(q, geom, mtrx, metric, topo, ptopo, param.nbsolpts, param.nb_elements_horizontal, param.case_number, param.filter_apply)
    else:
       raise Exception('Wrong rhs name')
 

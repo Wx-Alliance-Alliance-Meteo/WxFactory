@@ -163,9 +163,9 @@ def williamson_case5(geom, metric, mtrx, param):
 
    hsurf = hs0 * (1 - r / rr)
 
-   nb_interfaces_horiz = param.nb_elements + 1
-   hsurf_itf_i = numpy.zeros((param.nb_elements+2, param.nbsolpts*param.nb_elements, 2))
-   hsurf_itf_j = numpy.zeros((param.nb_elements+2, 2, param.nbsolpts*param.nb_elements))
+   nb_interfaces_horiz = param.nb_elements_horizontal + 1
+   hsurf_itf_i = numpy.zeros((param.nb_elements_horizontal+2, param.nbsolpts*param.nb_elements_horizontal, 2))
+   hsurf_itf_j = numpy.zeros((param.nb_elements_horizontal+2, 2, param.nbsolpts*param.nb_elements_horizontal))
 
    for itf in range(nb_interfaces_horiz):
       elem_L = itf
@@ -182,7 +182,7 @@ def williamson_case5(geom, metric, mtrx, param):
    dzdx2 = numpy.zeros((ni, nj))
 
    offset = 1 # Offset due to the halo
-   for elem in range(param.nb_elements):
+   for elem in range(param.nb_elements_horizontal):
       epais = elem * param.nbsolpts + numpy.arange(param.nbsolpts)
 
       # --- Direction x1
@@ -344,9 +344,9 @@ def case_unsteady_zonal(geom, metric, mtrx, param):
    hs = 0.5 * (earth_radius * rotation_speed * numpy.sin(geom.lat))**2 + k2
    hsurf = hs / gravity
 
-   nb_interfaces_horiz = param.nb_elements + 1
-   hsurf_itf_i = numpy.zeros((param.nb_elements+2, param.nbsolpts*param.nb_elements, 2))
-   hsurf_itf_j = numpy.zeros((param.nb_elements+2, 2, param.nbsolpts*param.nb_elements))
+   nb_interfaces_horiz = param.nb_elements_horizontal + 1
+   hsurf_itf_i = numpy.zeros((param.nb_elements_horizontal+2, param.nbsolpts*param.nb_elements_horizontal, 2))
+   hsurf_itf_j = numpy.zeros((param.nb_elements_horizontal+2, 2, param.nbsolpts*param.nb_elements_horizontal))
 
    for itf in range(nb_interfaces_horiz):
       elem_L = itf
@@ -363,7 +363,7 @@ def case_unsteady_zonal(geom, metric, mtrx, param):
    dzdx2 = numpy.zeros((ni, nj))
 
    offset = 1 # Offset due to the halo
-   for elem in range(param.nb_elements):
+   for elem in range(param.nb_elements_horizontal):
       epais = elem * param.nbsolpts + numpy.arange(param.nbsolpts)
 
       # --- Direction x1

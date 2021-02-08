@@ -11,7 +11,7 @@ def relative_vorticity(u1_contra, u2_contra, geom, metric, mtrx, param):
    du1dx2 = numpy.zeros_like(u1_contra)
    du2dx1 = numpy.zeros_like(u2_contra)
 
-   for elem in range(param.nb_elements):
+   for elem in range(param.nb_elements_horizontal):
       epais = elem * param.nbsolpts + numpy.arange(param.nbsolpts)
 
       # --- Direction x1

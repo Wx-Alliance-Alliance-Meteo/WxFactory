@@ -36,7 +36,7 @@ class Preconditioner:
 
       self.order = param.nbsolpts - 1
       self.big_order = param.nbsolpts
-      self.num_elements = param.nb_elements
+      self.num_elements = param.nb_elements_horizontal
 
       if self.order == 2:
          self.max_iter = 20
@@ -55,13 +55,13 @@ class Preconditioner:
       param_small.filter_apply = True
       param_small.filter_order = 8
 
-      self.geom    = cubed_sphere(param.nb_elements, self.order, param.λ0, param.ϕ0, param.α0, self.ptopo)
+      self.geom    = cubed_sphere(param.nb_elements_horizontal, self.order, param.λ0, param.ϕ0, param.α0, self.ptopo)
       self.mtrx    = DFR_operators(self.geom, param_small)
       self.metric  = Metric(self.geom)
       _, self.topo = initialize_sw(self.geom, self.metric, self.mtrx, param_small)
 
       self.rhs = RhsCaller(rhs_func, self.geom, self.mtrx, self.metric, self.topo, self.ptopo, self.order,
-                           param.nb_elements, param.case_number, use_filter = filter_during)
+                           param.nb_elements_horizontal, param.case_number, use_filter = filter_during)
 
       self.interpolator = LagrangeSimpleInterpolator(geometry)
 
