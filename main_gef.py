@@ -13,6 +13,7 @@ from metric          import Metric
 from output          import output_init, output_netcdf, output_finalize
 from parallel        import Distributed_World
 from program_options import Configuration
+from rhs_3d          import rhs_3d
 from rhs_sw          import rhs_sw
 from rhs_sw_explicit import rhs_sw_explicit
 from rhs_sw_implicit import rhs_sw_implicit
@@ -47,7 +48,11 @@ def main(args) -> int:
       output_netcdf(Q, geom, metric, mtrx, topo, step, param)  # store initial conditions
 
    # Time stepping
-   rhs_handle = lambda q: rhs_sw(q, geom, mtrx, metric, topo, ptopo, param.nbsolpts, param.nb_elements_horizontal, param.case_number, param.filter_apply)
+   if param.nb_elements_vertical <= 1:
+      rhs_handle = lambda q: rhs_sw(q, geom, mtrx, metric, topo, ptopo, param.nbsolpts, param.nb_elements_horizontal, param.case_number, param.filter_apply)
+   else:
+      rhs_handle = lambda q: rhs_3d(q, geom, mtrx, metric, topo, ptopo, param.nbsolpts, param.nb_elements_horizontal,
+                                    param.nb_elements_vertical, param.case_number, param.filter_apply)
 
    if param.time_integrator.lower()[:3] == 'epi' and param.time_integrator[3:].isdigit():
       order = int(param.time_integrator[3:])

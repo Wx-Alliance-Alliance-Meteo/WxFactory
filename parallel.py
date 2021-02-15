@@ -146,58 +146,73 @@ class Distributed_World:
          my_east = rank_from_location(self.my_panel, self.my_row, self.my_col+1)
 
       # Distributed Graph
-      sources = [my_north, my_south, my_west, my_east]
-      destinations = sources
+      self.sources = [my_north, my_south, my_west, my_east]
+      self.destinations = self.sources
 
-      self.comm_dist_graph = mpi4py.MPI.COMM_WORLD.Create_dist_graph_adjacent(sources, destinations)
+      self.comm_dist_graph = mpi4py.MPI.COMM_WORLD.Create_dist_graph_adjacent(self.sources, self.destinations)
 
 
    def xchange_scalars(self, geom, field_itf_i, field_itf_j):
 
       data_type = field_itf_i.dtype
-      sendbuf = numpy.empty((4, len(field_itf_i[0, 0, :])), dtype=data_type)
+
+      # --- Buffer and array shape setup
+      is_3d = field_itf_i.ndim >= 4
+      if is_3d:
+         sendbuf = numpy.empty((4, field_itf_i.shape[0], field_itf_i.shape[3]), dtype=data_type)
+         flip_dim = 1
+
+         def get_rows(array, index1, index2):
+            return array[:, index1, index2, :]
+
+      else:
+         sendbuf = numpy.empty((4, field_itf_i.shape[2]), dtype=data_type)
+         flip_dim = 0
+
+         def get_rows(array, index1, index2):
+            return array[index1, index2, :]
 
       # --- Send to northern neighbours
-
       if self.my_row == self.nb_lines_per_panel - 1 and ( self.my_panel == 2 or self.my_panel == 3 or self.my_panel == 4 ):
-         sendbuf[0,:] = numpy.flipud( field_itf_j[-2, 1, :] )
+         sendbuf[0, :] = numpy.flip(get_rows(field_itf_j, -2, 1), flip_dim)
       else:
-         sendbuf[0,:] = field_itf_j[-2, 1, :]
+         sendbuf[0, :] = get_rows(field_itf_j, -2, 1)
 
       # --- Send to southern neighbours
-
       if self.my_row == 0 and ( self.my_panel == 1 or self.my_panel == 2 or self.my_panel == 5 ):
-         sendbuf[1,:] = numpy.flipud( field_itf_j[1, 0, :] )
+         sendbuf[1, :] = numpy.flip(get_rows(field_itf_j, 1, 0), flip_dim)
       else:
-         sendbuf[1,:] = field_itf_j[1, 0, :]
+         sendbuf[1, :] = get_rows(field_itf_j, 1, 0)
 
       # --- Send to western neighbours
-
       if self.my_col == 0 and self.my_panel == 4:
-         sendbuf[2,:] = numpy.flipud( field_itf_i[1, 0, :] )
+         sendbuf[2, :] = numpy.flip(get_rows(field_itf_i, 1, 0), flip_dim)
       else:
-         sendbuf[2,:] = field_itf_i[1, 0, :]
+         sendbuf[2, :] = get_rows(field_itf_i, 1, 0)
 
       # --- Send to eastern neighbours
-
       if self.my_col == self.nb_elems_per_line - 1 and self.my_panel == 5:
-         sendbuf[3,:] = numpy.flipud( field_itf_i[-2, 1, :] )
+         sendbuf[3, :] = numpy.flip(get_rows(field_itf_i, -2, 1), flip_dim)
       else:
-         sendbuf[3,:] = field_itf_i[-2, 1, :]
+         sendbuf[3, :] = get_rows(field_itf_i, -2, 1)
 
       # --- All to all communication
-
       recvbuf = self.comm_dist_graph.neighbor_alltoall(sendbuf)
 
       # --- Unpack received messages
+      if is_3d:
+         field_itf_j[:, -1, 0, :] = recvbuf[0]
+         field_itf_j[:, 0, 1, :]  = recvbuf[1]
+         field_itf_i[:, 0, 1, :]  = recvbuf[2]
+         field_itf_i[:, -1, 0, :] = recvbuf[3]
+      else:
+         field_itf_j[-1, 0, :] = recvbuf[0]
+         field_itf_j[0, 1, :]  = recvbuf[1]
+         field_itf_i[0, 1, :]  = recvbuf[2]
+         field_itf_i[-1, 0, :] = recvbuf[3]
 
-      field_itf_j[-1, 0, :] = recvbuf[0]
-      field_itf_j[0, 1, :]  = recvbuf[1]
-      field_itf_i[0, 1, :]  = recvbuf[2]
-      field_itf_i[-1, 0, :] = recvbuf[3]
 
-
-   def xchange_vectors(self, geom, u1_itf_i, u2_itf_i, u1_itf_j, u2_itf_j):
+   def xchange_vectors(self, geom, u1_itf_i, u2_itf_i, u1_itf_j, u2_itf_j, u3_itf_i = None, u3_itf_j = None):
 
       #      +---+
       #      | 4 |
@@ -208,153 +223,209 @@ class Distributed_World:
       #      +---+
 
       data_type = u1_itf_i.dtype
-      sendbuf_u1 = numpy.zeros((4, len(u1_itf_i[0, 0, :])), dtype=data_type)
-      sendbuf_u2 = numpy.zeros_like(sendbuf_u1)
+      is_3d     = u1_itf_i.ndim >= 4
+
+      sendbuf_u3 = None
+      if is_3d:
+         sendbuf_u1 = numpy.zeros((4, u1_itf_i.shape[0], u1_itf_i.shape[3]), dtype = data_type)
+         sendbuf_u2 = numpy.zeros_like(sendbuf_u1)
+         if u3_itf_i is not None: sendbuf_u3 = numpy.zeros_like(sendbuf_u1)
+
+         flip_dim = 1
+         def get_rows(array, index1, index2):
+            return array[:, index1, index2, :]
+
+      else:
+         sendbuf_u1 = numpy.zeros((4, u1_itf_i.shape[2]), dtype=data_type)
+         sendbuf_u2 = numpy.zeros_like(sendbuf_u1)
+         if u3_itf_i is not None: sendbuf_u3 = numpy.zeros_like(sendbuf_u1)
+
+         flip_dim = 0
+         def get_rows(array, index1, index2):
+            return array[index1, index2, :]
 
       X = geom.X[0,:]
       Y = geom.Y[:,0]
 
       # --- Send to northern neighbours
 
+      a1 = get_rows(u1_itf_j, -2, 1)
+      a2 = get_rows(u2_itf_j, -2, 1)
+      if sendbuf_u3 is not None: sendbuf_u3[0, :] = get_rows(u3_itf_j, -2, 1)
       if self.my_row == self.nb_lines_per_panel - 1:
 
          if self.my_panel == 0:
 
-            sendbuf_u1[0,:] = u1_itf_j[-2, 1, :] - 2. * X / ( 1. + X**2) * u2_itf_j[-2, 1, :]
-            sendbuf_u2[0,:] = u2_itf_j[-2, 1, :]
+            sendbuf_u1[0, :] = a1 - 2.0 * X / (1.0 + X**2) * a2
+            sendbuf_u2[0, :] = a2
 
          elif self.my_panel == 1:
 
-            sendbuf_u1[0,:] = -u2_itf_j[-2, 1, :]
-            sendbuf_u2[0,:] = u1_itf_j[-2, 1, :] - 2. * X / ( 1. + X**2 ) * u2_itf_j[-2, 1, :]
+            sendbuf_u1[0, :] = -a2
+            sendbuf_u2[0, :] = a1 - 2.0 * X / (1.0 + X**2) * a2
 
          elif self.my_panel == 2:
 
-            sendbuf_u1[0,:] = numpy.flipud( -u1_itf_j[-2, 1, :] + 2. * X / ( 1. + X**2 ) * u2_itf_j[-2, 1, :] )
-            sendbuf_u2[0,:] = numpy.flipud( -u2_itf_j[-2, 1, :] )
+            sendbuf_u1[0, :] = numpy.flip(-a1 + 2.0 * X / (1.0 + X**2) * a2, flip_dim)
+            sendbuf_u2[0, :] = numpy.flip(-a2, flip_dim)
 
          elif self.my_panel == 3:
 
-            sendbuf_u1[0,:] = numpy.flipud( u2_itf_j[-2, 1, :] )
-            sendbuf_u2[0,:] = numpy.flipud( -u1_itf_j[-2, 1, :] + 2. * X / ( 1. + X**2 ) * u2_itf_j[-2, 1, :] )
+            sendbuf_u1[0, :] = numpy.flip(a2, flip_dim)
+            sendbuf_u2[0, :] = numpy.flip(-a1 + 2.0 * X / (1.0 + X**2) * a2, flip_dim)
 
          elif self.my_panel == 4:
 
-            sendbuf_u1[0,:] = numpy.flipud( -u1_itf_j[-2, 1, :] + 2. * X / ( 1. + X**2 ) * u2_itf_j[-2, 1, :] )
-            sendbuf_u2[0,:] = numpy.flipud( -u2_itf_j[-2, 1, :] )
+            sendbuf_u1[0, :] = numpy.flip(-a1 + 2.0 * X / (1.0 + X**2) * a2, flip_dim)
+            sendbuf_u2[0, :] = numpy.flip(-a2, flip_dim)
 
          elif self.my_panel == 5:
 
-            sendbuf_u1[0,:] = u1_itf_j[-2, 1, :] - 2. * X / ( 1. + X**2) * u2_itf_j[-2, 1, :]
-            sendbuf_u2[0,:] = u2_itf_j[-2, 1, :]
+            sendbuf_u1[0, :] = a1 - 2.0 * X / (1.0 + X**2) * a2
+            sendbuf_u2[0, :] = a2
 
       else:
 
-         sendbuf_u1[0,:] = u1_itf_j[-2, 1, :]
-         sendbuf_u2[0,:] = u2_itf_j[-2, 1, :]
+         sendbuf_u1[0, :] = a1
+         sendbuf_u2[0, :] = a2
 
       # --- Send to southern neighbours
 
+      a1 = get_rows(u1_itf_j, 1, 0)
+      a2 = get_rows(u2_itf_j, 1, 0)
+      if sendbuf_u3 is not None: sendbuf_u3[1, :] = get_rows(u3_itf_j, 1, 0)
       if self.my_row == 0:
 
          if self.my_panel == 0:
 
-            sendbuf_u1[1,:] = u1_itf_j[1, 0, :] + 2. * X / ( 1. + X**2 ) * u2_itf_j[1, 0, :]
-            sendbuf_u2[1,:] = u2_itf_j[1, 0, :]
+            sendbuf_u1[1, :] = a1 + 2.0 * X / (1.0 + X**2) * a2
+            sendbuf_u2[1, :] = a2
 
          elif self.my_panel == 1:
 
-            sendbuf_u1[1,:] = numpy.flipud( u2_itf_j[1, 0, :] )
-            sendbuf_u2[1,:] = numpy.flipud( -u1_itf_j[1, 0, :] -2. * X / ( 1. + X**2 ) * u2_itf_j[1, 0, :] )
+            sendbuf_u1[1, :] = numpy.flip(a2, flip_dim)
+            sendbuf_u2[1, :] = numpy.flip(-a1 - 2.0 * X / (1.0 + X**2) * a2, flip_dim)
 
          elif self.my_panel == 2:
 
-            sendbuf_u1[1,:] = numpy.flipud( -u1_itf_j[1, 0, :] -2. * X / ( 1. + X**2 ) * u2_itf_j[1, 0, :] )
-            sendbuf_u2[1,:] = numpy.flipud( -u2_itf_j[1, 0, :] )
+            sendbuf_u1[1, :] = numpy.flip(-a1 - 2.0 * X / (1.0 + X**2) * a2, flip_dim)
+            sendbuf_u2[1, :] = numpy.flip(-a2, flip_dim)
 
          elif self.my_panel == 3:
 
-            sendbuf_u1[1,:] = -u2_itf_j[1, 0, :]
-            sendbuf_u2[1,:] = u1_itf_j[1, 0, :] + 2. * X / ( 1. + X**2 ) * u2_itf_j[1, 0, :]
+            sendbuf_u1[1, :] = -a2
+            sendbuf_u2[1, :] = a1 + 2.0 * X / (1.0 + X**2) * a2
 
          elif self.my_panel == 4:
 
-            sendbuf_u1[1,:] = u1_itf_j[1, 0, :] + 2. * X / ( 1. + X**2) * u2_itf_j[1, 0, :]
-            sendbuf_u2[1,:] = u2_itf_j[1, 0, :]
+            sendbuf_u1[1, :] = a1 + 2.0 * X / (1.0 + X**2) * a2
+            sendbuf_u2[1, :] = a2
 
          elif self.my_panel == 5:
 
-            sendbuf_u1[1,:] = numpy.flipud( -u1_itf_j[1, 0, :] - 2. * X / ( 1. + X**2 ) * u2_itf_j[1, 0, :] )
-            sendbuf_u2[1,:] = numpy.flipud( -u2_itf_j[1, 0, :] )
+            sendbuf_u1[1, :] = numpy.flip(-a1 - 2.0 * X / (1.0 + X**2) * a2, flip_dim)
+            sendbuf_u2[1, :] = numpy.flip(-a2, flip_dim)
       else:
 
-         sendbuf_u1[1,:] = u1_itf_j[1, 0, :]
-         sendbuf_u2[1,:] = u2_itf_j[1, 0, :]
+         sendbuf_u1[1, :] = a1
+         sendbuf_u2[1, :] = a2
 
       # --- Send to western neighbours
 
+      a1 = get_rows(u1_itf_i, 1, 0)
+      a2 = get_rows(u2_itf_i, 1, 0)
+      if sendbuf_u3 is not None: sendbuf_u3[2, :] = get_rows(u3_itf_i, 1, 0)
       if self.my_col == 0:
 
          if self.my_panel <= 3:
 
-            sendbuf_u1[2,:] = u1_itf_i[1, 0, :]
-            sendbuf_u2[2,:] = 2. * Y / ( 1. + Y**2 ) * u1_itf_i[1, 0, :] + u2_itf_i[1, 0, :]
-
+            sendbuf_u1[2, :] = a1
+            sendbuf_u2[2, :] = 2. * Y / ( 1. + Y**2 ) * a1 + a2
 
          elif self.my_panel == 4:
 
-            sendbuf_u1[2,:] = numpy.flipud( -2. * Y / ( 1. + Y**2 ) * u1_itf_i[1, 0, :] - u2_itf_i[1, 0, :] )
-            sendbuf_u2[2,:] = numpy.flipud( u1_itf_i[1, 0, :] )
+            sendbuf_u1[2, :] = numpy.flip( -2. * Y / ( 1. + Y**2 ) * a1 - a2, flip_dim )
+            sendbuf_u2[2, :] = numpy.flip( a1, flip_dim )
 
          elif self.my_panel == 5:
 
-            sendbuf_u1[2,:] = 2. * Y / ( 1. + Y**2 ) * u1_itf_i[1, 0, :] + u2_itf_i[1, 0, :]
-            sendbuf_u2[2,:] = -u1_itf_i[1, 0, :]
+            sendbuf_u1[2, :] = 2. * Y / ( 1. + Y**2 ) * a1 + a2
+            sendbuf_u2[2, :] = -a1
       else:
 
-         sendbuf_u1[2,:] = u1_itf_i[1, 0, :]
-         sendbuf_u2[2,:] = u2_itf_i[1, 0, :]
+         sendbuf_u1[2, :] = a1
+         sendbuf_u2[2, :] = a2
 
       # --- Send to eastern neighbours
 
+      a1 = get_rows(u1_itf_i, -2, 1)
+      a2 = get_rows(u2_itf_i, -2, 1)
+      if sendbuf_u3 is not None: sendbuf_u3[3, :] = get_rows(u3_itf_i, -2, 1)
       if self.my_col == self.nb_elems_per_line-1:
 
          if self.my_panel <= 3:
 
-            sendbuf_u1[3,:] = u1_itf_i[-2, 1, :]
-            sendbuf_u2[3,:] = -2. * Y / (1. + Y**2 ) * u1_itf_i[-2, 1, :] + u2_itf_i[-2, 1, :]
+            sendbuf_u1[3, :] = a1
+            sendbuf_u2[3, :] = -2. * Y / (1. + Y**2 ) * a1 + a2
 
          elif self.my_panel == 4:
 
-            sendbuf_u1[3,:] = -2. * Y / ( 1. + Y**2) * u1_itf_i[-2, 1, :] + u2_itf_i[-2, 1, :]
-            sendbuf_u2[3,:] = -u1_itf_i[-2, 1, :]
+            sendbuf_u1[3, :] = -2. * Y / ( 1. + Y**2) * a1 + a2
+            sendbuf_u2[3, :] = -a1
 
 
          elif self.my_panel == 5:
 
-            sendbuf_u1[3,:] = numpy.flipud( 2. * Y / ( 1. + Y**2 ) * u1_itf_i[-2, 1, :] - u2_itf_i[-2, 1, :] )
-            sendbuf_u2[3,:] = numpy.flipud( u1_itf_i[-2, 1, :] )
+            sendbuf_u1[3, :] = numpy.flip( 2. * Y / ( 1. + Y**2 ) * a1 - a2, flip_dim )
+            sendbuf_u2[3, :] = numpy.flip( a1, flip_dim )
       else:
 
-         sendbuf_u1[3,:] = u1_itf_i[-2, 1, :]
-         sendbuf_u2[3,:] = u2_itf_i[-2, 1, :]
+         sendbuf_u1[3, :] = a1
+         sendbuf_u2[3, :] = a2
 
       # --- All to all communication
 
       recvbuf_u1 = self.comm_dist_graph.neighbor_alltoall(sendbuf_u1)
       recvbuf_u2 = self.comm_dist_graph.neighbor_alltoall(sendbuf_u2)
+      recvbuf_u3 = None
+      if sendbuf_u3 is not None: recvbuf_u3 = self.comm_dist_graph.neighbor_alltoall(sendbuf_u3)
 
       # --- Unpack received messages
 
-      u1_itf_j[-1, 0, :] = recvbuf_u1[0]
-      u1_itf_j[0, 1, :]  = recvbuf_u1[1]
-      u1_itf_i[0, 1, :]  = recvbuf_u1[2]
-      u1_itf_i[-1, 0, :] = recvbuf_u1[3]
+      if is_3d:
+         u1_itf_j[:, -1, 0, :] = recvbuf_u1[0]
+         u1_itf_j[:, 0, 1, :]  = recvbuf_u1[1]
+         u1_itf_i[:, 0, 1, :]  = recvbuf_u1[2]
+         u1_itf_i[:, -1, 0, :] = recvbuf_u1[3]
 
-      u2_itf_j[-1, 0, :] = recvbuf_u2[0]
-      u2_itf_j[0, 1, :]  = recvbuf_u2[1]
-      u2_itf_i[0, 1, :]  = recvbuf_u2[2]
-      u2_itf_i[-1, 0, :] = recvbuf_u2[3]
+         u2_itf_j[:, -1, 0, :] = recvbuf_u2[0]
+         u2_itf_j[:, 0, 1, :]  = recvbuf_u2[1]
+         u2_itf_i[:, 0, 1, :]  = recvbuf_u2[2]
+         u2_itf_i[:, -1, 0, :] = recvbuf_u2[3]
+
+         if recvbuf_u3 is not None:
+            u3_itf_j[:, -1, 0, :] = recvbuf_u3[0]
+            u3_itf_j[:, 0, 1, :]  = recvbuf_u3[1]
+            u3_itf_i[:, 0, 1, :]  = recvbuf_u3[2]
+            u3_itf_i[:, -1, 0, :] = recvbuf_u3[3]
+
+      else:
+         u1_itf_j[-1, 0, :] = recvbuf_u1[0]
+         u1_itf_j[0, 1, :]  = recvbuf_u1[1]
+         u1_itf_i[0, 1, :]  = recvbuf_u1[2]
+         u1_itf_i[-1, 0, :] = recvbuf_u1[3]
+
+         u2_itf_j[-1, 0, :] = recvbuf_u2[0]
+         u2_itf_j[0, 1, :]  = recvbuf_u2[1]
+         u2_itf_i[0, 1, :]  = recvbuf_u2[2]
+         u2_itf_i[-1, 0, :] = recvbuf_u2[3]
+
+         if recvbuf_u3 is not None:
+            u3_itf_j[-1, 0, :] = recvbuf_u3[0]
+            u3_itf_j[0, 1, :]  = recvbuf_u3[1]
+            u3_itf_i[0, 1, :]  = recvbuf_u3[2]
+            u3_itf_i[-1, 0, :] = recvbuf_u3[3]
+
 
    def xchange_covectors(self, geom, u1_itf_i, u2_itf_i, u1_itf_j, u2_itf_j):
 
