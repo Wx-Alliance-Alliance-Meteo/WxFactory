@@ -268,16 +268,21 @@ class Distributed_World:
 
             sendbuf_u1[0, :] = numpy.flip(-a1 + 2.0 * X / (1.0 + X**2) * a2, flip_dim)
             sendbuf_u2[0, :] = numpy.flip(-a2, flip_dim)
+            if sendbuf_u3 is not None: sendbuf_u3[0, :] = numpy.flip(sendbuf_u3[0, :], flip_dim)
 
          elif self.my_panel == 3:
 
             sendbuf_u1[0, :] = numpy.flip(a2, flip_dim)
             sendbuf_u2[0, :] = numpy.flip(-a1 + 2.0 * X / (1.0 + X**2) * a2, flip_dim)
+            if sendbuf_u3 is not None: sendbuf_u3[0, :] = numpy.flip(sendbuf_u3[0, :], flip_dim)
+
 
          elif self.my_panel == 4:
 
             sendbuf_u1[0, :] = numpy.flip(-a1 + 2.0 * X / (1.0 + X**2) * a2, flip_dim)
             sendbuf_u2[0, :] = numpy.flip(-a2, flip_dim)
+            if sendbuf_u3 is not None: sendbuf_u3[0, :] = numpy.flip(sendbuf_u3[0, :], flip_dim)
+
 
          elif self.my_panel == 5:
 
@@ -305,11 +310,13 @@ class Distributed_World:
 
             sendbuf_u1[1, :] = numpy.flip(a2, flip_dim)
             sendbuf_u2[1, :] = numpy.flip(-a1 - 2.0 * X / (1.0 + X**2) * a2, flip_dim)
+            if sendbuf_u3 is not None: sendbuf_u3[1, :] = numpy.flip(sendbuf_u3[1, :], flip_dim)
 
          elif self.my_panel == 2:
 
             sendbuf_u1[1, :] = numpy.flip(-a1 - 2.0 * X / (1.0 + X**2) * a2, flip_dim)
             sendbuf_u2[1, :] = numpy.flip(-a2, flip_dim)
+            if sendbuf_u3 is not None: sendbuf_u3[1, :] = numpy.flip(sendbuf_u3[1, :], flip_dim)
 
          elif self.my_panel == 3:
 
@@ -325,6 +332,7 @@ class Distributed_World:
 
             sendbuf_u1[1, :] = numpy.flip(-a1 - 2.0 * X / (1.0 + X**2) * a2, flip_dim)
             sendbuf_u2[1, :] = numpy.flip(-a2, flip_dim)
+            if sendbuf_u3 is not None: sendbuf_u3[1, :] = numpy.flip(sendbuf_u3[1, :], flip_dim)
       else:
 
          sendbuf_u1[1, :] = a1
@@ -346,6 +354,7 @@ class Distributed_World:
 
             sendbuf_u1[2, :] = numpy.flip( -2. * Y / ( 1. + Y**2 ) * a1 - a2, flip_dim )
             sendbuf_u2[2, :] = numpy.flip( a1, flip_dim )
+            if sendbuf_u3 is not None: sendbuf_u3[2, :] = numpy.flip(sendbuf_u3[2, :], flip_dim)
 
          elif self.my_panel == 5:
 
@@ -378,6 +387,7 @@ class Distributed_World:
 
             sendbuf_u1[3, :] = numpy.flip( 2. * Y / ( 1. + Y**2 ) * a1 - a2, flip_dim )
             sendbuf_u2[3, :] = numpy.flip( a1, flip_dim )
+            if sendbuf_u3 is not None: sendbuf_u3[3, :] = numpy.flip(sendbuf_u3[3, :], flip_dim)
       else:
 
          sendbuf_u1[3, :] = a1
