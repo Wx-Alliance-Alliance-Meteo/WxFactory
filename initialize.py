@@ -1,6 +1,7 @@
 import numpy
 from definitions import *
 from shallow_water_test import *
+from dcmip import *
 
 class Topo:
    def __init__(self, hsurf, dzdx1, dzdx2, hsurf_itf_i, hsurf_itf_j):
@@ -11,7 +12,54 @@ class Topo:
       self.hsurf_itf_j = hsurf_itf_j
 
 def initialize_euler(geom, metric, mtrx, param):
-   return None
+
+   #-------------------------------------------------------------------------|
+   # case DCMIP 2012    | Pure advection                                     |
+   #                    | ---------------------------------------------------|
+   #                    | 11: 3D deformational flow                          |
+   #                    | 12: 3D Hadley-like meridional circulation          |
+   #                    | 13: 2D solid-body rotation of thin cloud-like      |
+   #                    |     tracer in the presence of orography            |
+   #                    | ---------------------------------------------------|
+   #                    | 20: Steady-state at rest in presence of orography. |
+   #                    | ---------------------------------------------------|
+   #                    | Gravity waves, Non-rotating small-planet           |
+   #                    | ---------------------------------------------------|
+   #                    | 21: Mountain waves over a Schaer-type mountain     |
+   #                    | 22: As 21 but with wind shear                      |
+   #                    | 31: Gravity wave along the equator                 |
+   #                    | ---------------------------------------------------|
+   #                    | Rotating planet: Hydro. to non-hydro. scales (X)   |
+   #                    | ---------------------------------------------------|
+   #                    | 41X: Dry Baroclinic Instability Small Planet       |
+   #                    | ---------------------------------------------------|
+   #                    | 43 : Moist Baroclinic Instability Simple physics   |
+   #--------------------|----------------------------------------------------|
+   # case DCMIP 2016    | 161: Baroclinic wave with Toy Terminal Chemistry   |
+   #                    | 162: Tropical cyclone                              |
+   #                    | 163: Supercell (Small Planet)                      |
+   #--------------------|----------------------------------------------------|
+   # DCMIP_2012: https://www.earthsystemcog.org/projects/dcmip-2012/         |
+   # DCMIP_2016: https://www.earthsystemcog.org/projects/dcmip-2016/         |
+   #-------------------------------------------------------------------------|
+   
+   ni, nj, nk = geom.height.shape
+
+   if param.case_number == 31:
+      u1_contra, u2_contra, u3_contra, density, potential_temperature = dcmip_gravity_wave(geom, metric, mtrx, param)
+   else:
+      print('Something has gone horribly wrong in initialization. Back away slowly')
+      exit(1)
+
+   Q = numpy.zeros((5, ni, nj, nk))
+
+   Q[0, :, :] = density * u1_contra
+   Q[1, :, :] = density * u2_contra
+   Q[2, :, :] = density * u3_contra
+   Q[3, :, :] = density
+   Q[4, :, :] = density * potential_temperature
+
+   return Q, None
 
 def initialize_sw(geom, metric, mtrx, param):
 
@@ -25,6 +73,12 @@ def initialize_sw(geom, metric, mtrx, param):
       hsurf_itf_j = numpy.zeros((param.nb_elements_horizontal+2, 2, param.nbsolpts*param.nb_elements_horizontal))
 
    # --- Shallow water
+   #   0 : deformation flow (passive advection only)
+   #   1 : cosine hill (passive advection only)
+   #   2 : zonal flow (shallow water)
+   #   5 : zonal flow over an isolated mountain (shallow water)
+   #   6 : Rossby-Haurvitz waves (shallow water)
+   #   8 : Unstable jet (shallow water)
    if param.case_number == 0:
       u1_contra, u2_contra, fluid_height = circular_vortex(geom, metric, param)
 
@@ -49,7 +103,7 @@ def initialize_sw(geom, metric, mtrx, param):
    elif param.case_number == 10:
       u1_contra, u2_contra, fluid_height, hsurf, dzdx1, dzdx2, hsurf_itf_i, hsurf_itf_j = case_unsteady_zonal(geom, metric, mtrx, param)
 
-   Q = numpy.zeros((nb_equations, ni, nj))
+   Q = numpy.zeros((3, ni, nj))
    Q[idx_h, :, :] = fluid_height
 
    if param.case_number <= 1:

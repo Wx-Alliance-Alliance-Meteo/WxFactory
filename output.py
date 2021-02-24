@@ -12,6 +12,8 @@ from winds import contra2wind
 def output_init(geom, param):
    """ Initialise the netCDF4 file."""
 
+   if param.equations == "Euler": return # TODO
+
    # creating the netcdf files
    global ncfile
    os.makedirs(os.path.dirname(param.output_file), exist_ok=True)
@@ -23,7 +25,7 @@ def output_init(geom, param):
    ncfile.details = 'Cubed-sphere coordinates, Gauss-Legendre collocated grid'
 
    # create dimensions
-   ni, nj= geom.lat.shape
+   ni, nj = geom.lat.shape
    ncfile.createDimension('time', None) # unlimited
    ncfile.createDimension('npe', mpi4py.MPI.COMM_WORLD.Get_size())
    ncfile.createDimension('Ydim', ni)
@@ -114,6 +116,9 @@ def output_init(geom, param):
 
 def output_netcdf(Q, geom, metric, mtrx, topo, step, param):
    """ Writes u,v,eta fields on every nth time step """
+
+   if param.equations == "Euler": return # TODO
+
    rank = mpi4py.MPI.COMM_WORLD.Get_rank()
 
    ncfile['time'][step] = step * param.dt

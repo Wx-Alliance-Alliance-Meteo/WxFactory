@@ -15,10 +15,7 @@ class Configuration:
       except (NoOptionError,NoSectionError):
          self.equations = "shallow water" # TODO : changer
 
-      if self.equations == "shallow water":
-         self.case_number = parser.getint('Test_case', 'case_number')
-      else:
-         self.case_number = parser.get('Test_case', 'case_number')
+      self.case_number = parser.getint('Test_case', 'case_number')
 
       if self.case_number == 9:
          self.matsuno_wave_type = parser.get('Test_case', 'matsuno_wave_type')
@@ -67,11 +64,6 @@ class Configuration:
          self.nb_elements_vertical   = parser.getint('Spatial_discretization', 'nb_elements_vertical')
       except (NoOptionError):
          self.nb_elements_vertical   = 1
-
-      try:
-         self.nb_levels = parser.getint('Spatial_discretization', 'nb_levels')
-      except (NoOptionError):
-         self.nb_levels = 1
 
       try:
          self.filter_apply     = parser.getint('Spatial_discretization', 'filter_apply') == 1

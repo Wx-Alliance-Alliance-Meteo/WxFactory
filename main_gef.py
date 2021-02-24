@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 
+import numpy
 import math
 from time import time
-
-import numpy
 
 from blockstats      import blockstats
 from cubed_sphere    import cubed_sphere
@@ -40,20 +39,20 @@ def main(args) -> int:
    # Initialize state variables
    if param.equations == "shallow water":
       Q, topo = initialize_sw(geom, metric, mtrx, param)
+
+      rhs_handle = lambda q: rhs_sw(q, geom, mtrx, metric, topo, ptopo, param.nbsolpts, param.nb_elements_horizontal, param.case_number, param.filter_apply)
+
    elif param.equations == "Euler":
       Q, topo = initialize_euler(geom, metric, mtrx, param)
+
+      rhs_handle = lambda q: rhs_3d(q, geom, mtrx, metric, topo, ptopo, param.nbsolpts, param.nb_elements_horizontal,
+                                    param.nb_elements_vertical, param.case_number, param.filter_apply)
 
    if param.output_freq > 0:
       output_init(geom, param)
       output_netcdf(Q, geom, metric, mtrx, topo, step, param)  # store initial conditions
 
    # Time stepping
-   if param.nb_elements_vertical <= 1:
-      rhs_handle = lambda q: rhs_sw(q, geom, mtrx, metric, topo, ptopo, param.nbsolpts, param.nb_elements_horizontal, param.case_number, param.filter_apply)
-   else:
-      rhs_handle = lambda q: rhs_3d(q, geom, mtrx, metric, topo, ptopo, param.nbsolpts, param.nb_elements_horizontal,
-                                    param.nb_elements_vertical, param.case_number, param.filter_apply)
-
    if param.time_integrator.lower()[:3] == 'epi' and param.time_integrator[3:].isdigit():
       order = int(param.time_integrator[3:])
       print(f'Running with EPI{order}')
@@ -64,7 +63,7 @@ def main(args) -> int:
       stepper = Tvdrk3(rhs_handle)
    elif param.time_integrator.lower() == 'rat2':
       stepper = Rat2(rhs_handle, param.tolerance)
-   elif  param.time_integrator.lower() =='epi2/ark':
+   elif  param.time_integrator.lower() =='epi2/ark' and param.equations == "shallow water": # TODO : Euler
       rhs_explicit = lambda q: rhs_sw_explicit(q, geom, mtrx, metric, topo, ptopo, param.nbsolpts, param.nb_elements_horizontal, param.case_number, param.filter_apply)
 
       rhs_implicit = lambda q: rhs_sw_implicit(q, geom, mtrx, metric, topo, ptopo, param.nbsolpts, param.nb_elements_horizontal, param.case_number, param.filter_apply)
