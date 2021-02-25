@@ -120,12 +120,13 @@ def output_netcdf(Q, geom, metric, mtrx, topo, step, param):
    if param.equations == "Euler": return # TODO
 
    rank = mpi4py.MPI.COMM_WORLD.Get_rank()
+   idx = len(ncfile["time"])
 
-   ncfile['time'][step] = step * param.dt
+   ncfile['time'][idx] = step * param.dt
 
    # Unpack physical variables
    h = Q[idx_h, :, :] + topo.hsurf
-   ncfile['h'][step, rank, :, :] = h
+   ncfile['h'][idx, rank, :, :] = h
 
    if param.case_number >= 2: # Shallow water
       u1 = Q[idx_hu1,:,:] / h
@@ -134,10 +135,10 @@ def output_netcdf(Q, geom, metric, mtrx, topo, step, param):
       rv = relative_vorticity(u1, u2, geom, metric, mtrx, param)
       pv = potential_vorticity(h, u1, u2, geom, metric, mtrx, param)
 
-      ncfile['U'][step, rank, :, :] = u
-      ncfile['V'][step, rank, :, :] = v
-      ncfile['RV'][step, rank, :, :] = rv
-      ncfile['PV'][step, rank, :, :] = pv
+      ncfile['U'][idx, rank, :, :] = u
+      ncfile['V'][idx, rank, :, :] = v
+      ncfile['RV'][idx, rank, :, :] = rv
+      ncfile['PV'][idx, rank, :, :] = pv
 
 def output_finalize():
    """ Finalise the output netCDF4 file."""
