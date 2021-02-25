@@ -6,13 +6,11 @@ import os
 import time
 
 from diagnostic import relative_vorticity, potential_vorticity
-from definitions import idx_h, idx_hu1, idx_hu2, idx_u1, idx_u2
+from definitions import *
 from winds import contra2wind
 
 def output_init(geom, param):
    """ Initialise the netCDF4 file."""
-
-   if param.equations == "Euler": return # TODO
 
    # creating the netcdf files
    global ncfile
@@ -25,7 +23,13 @@ def output_init(geom, param):
    ncfile.details = 'Cubed-sphere coordinates, Gauss-Legendre collocated grid'
 
    # create dimensions
-   ni, nj = geom.lat.shape
+   if param.equations == "shallow water":
+      ni, nj = geom.lat.shape
+      grid_data = ('npe', 'Xdim', 'Ydim')
+   elif param.equations == "Euler":
+      ni, nj, nk = geom.lat.shape
+      grid_data = ('npe', 'Xdim', 'Ydim', 'Zdim')
+
    ncfile.createDimension('time', None) # unlimited
    ncfile.createDimension('npe', mpi4py.MPI.COMM_WORLD.Get_size())
    ncfile.createDimension('Ydim', ni)
@@ -47,31 +51,75 @@ def output_init(geom, param):
    # create latitude axis
    yyy = ncfile.createVariable('Ydim', numpy.float64, ('Ydim'))
    yyy.long_name = 'Ydim'
+   yyy.axis = 'Y'
    yyy.units = 'radians_north'
 
    # create longitude axis
    xxx = ncfile.createVariable('Xdim', numpy.float64, ('Xdim'))
    xxx.long_name = 'Xdim'
+   xxx.axis = 'X'
    xxx.units = 'radians_east'
 
+   if param.equations == "Euler":
+      ncfile.createDimension('Zdim', nk)
+      zzz = ncfile.createVariable('Zdim', numpy.float64, ('Zdim'))
+      zzz.long_name = 'Zdim'
+      zzz.axis = 'Z'
+      zzz.units = 'm'
+
    # create variable array
-   lat = ncfile.createVariable('lats', numpy.float64, ('npe', 'Ydim', 'Xdim'))
+   lat = ncfile.createVariable('lats', numpy.float64, grid_data)
    lat.long_name = 'latitude'
    lat.units = 'degrees_north'
 
-   lon = ncfile.createVariable('lons', numpy.dtype('double').char, ('npe', 'Ydim', 'Xdim'))
+   lon = ncfile.createVariable('lons', numpy.dtype('double').char, grid_data)
    lon.long_name = 'longitude'
    lon.units = 'degrees_east'
 
-   hhh = ncfile.createVariable('h', numpy.dtype('double').char, ('time', 'npe', 'Ydim', 'Xdim'))
-   hhh.long_name = 'fluid height'
-   hhh.units = 'm'
-   hhh.coordinates = 'lons lats'
-   hhh.grid_mapping = 'cubed_sphere'
-   hhh.set_collective(True)
+   if param.equations == "shallow water":
 
-   if param.case_number >= 2:
-      uuu = ncfile.createVariable('U', numpy.dtype('double').char, ('time', 'npe', 'Ydim', 'Xdim'))
+      hhh = ncfile.createVariable('h', numpy.dtype('double').char, ('time', ) + grid_data)
+      hhh.long_name = 'fluid height'
+      hhh.units = 'm'
+      hhh.coordinates = 'lons lats'
+      hhh.grid_mapping = 'cubed_sphere'
+      hhh.set_collective(True)
+
+      if param.case_number >= 2:
+         uuu = ncfile.createVariable('U', numpy.dtype('double').char, ('time', ) + grid_data)
+         uuu.long_name = 'eastward_wind'
+         uuu.units = 'm s-1'
+         uuu.standard_name = 'eastward_wind'
+         uuu.coordinates = 'lons lats'
+         uuu.grid_mapping = 'cubed_sphere'
+         uuu.set_collective(True)
+
+         vvv = ncfile.createVariable('V', numpy.dtype('double').char, ('time', ) + grid_data)
+         vvv.long_name = 'northward_wind'
+         vvv.units = 'm s-1'
+         vvv.standard_name = 'northward_wind'
+         vvv.coordinates = 'lons lats'
+         vvv.grid_mapping = 'cubed_sphere'
+         vvv.set_collective(True)
+
+         drv = ncfile.createVariable('RV', numpy.dtype('double').char, ('time', ) + grid_data)
+         drv.long_name = 'Relative vorticity'
+         drv.units = '1/(m s)'
+         drv.standard_name = 'Relative vorticity'
+         drv.coordinates = 'lons lats'
+         drv.grid_mapping = 'cubed_sphere'
+         drv.set_collective(True)
+
+         dpv = ncfile.createVariable('PV', numpy.dtype('double').char, ('time', ) + grid_data)
+         dpv.long_name = 'Potential vorticity'
+         dpv.units = '1/(m s)'
+         dpv.standard_name = 'Potential vorticity'
+         dpv.coordinates = 'lons lats'
+         dpv.grid_mapping = 'cubed_sphere'
+         dpv.set_collective(True)
+
+   elif param.equations == "Euler":
+      uuu = ncfile.createVariable('U', numpy.dtype('double').char, ('time', ) + grid_data)
       uuu.long_name = 'eastward_wind'
       uuu.units = 'm s-1'
       uuu.standard_name = 'eastward_wind'
@@ -79,7 +127,7 @@ def output_init(geom, param):
       uuu.grid_mapping = 'cubed_sphere'
       uuu.set_collective(True)
 
-      vvv = ncfile.createVariable('V', numpy.dtype('double').char, ('time', 'npe', 'Ydim', 'Xdim'))
+      vvv = ncfile.createVariable('V', numpy.dtype('double').char, ('time', ) + grid_data)
       vvv.long_name = 'northward_wind'
       vvv.units = 'm s-1'
       vvv.standard_name = 'northward_wind'
@@ -87,27 +135,37 @@ def output_init(geom, param):
       vvv.grid_mapping = 'cubed_sphere'
       vvv.set_collective(True)
 
-      drv = ncfile.createVariable('RV', numpy.dtype('double').char, ('time', 'npe', 'Ydim', 'Xdim'))
-      drv.long_name = 'Relative vorticity'
-      drv.units = '1/(m s)'
-      drv.standard_name = 'Relative vorticity'
-      drv.coordinates = 'lons lats'
-      drv.grid_mapping = 'cubed_sphere'
-      drv.set_collective(True)
+      www = ncfile.createVariable('W', numpy.dtype('double').char, ('time', ) + grid_data)
+      www.long_name = 'upward_air_velocity'
+      www.units = 'm s-1'
+      www.standard_name = 'upward_air_velocity'
+      www.coordinates = 'lons lats'
+      www.grid_mapping = 'cubed_sphere'
+      www.set_collective(True)
 
-      dpv = ncfile.createVariable('PV', numpy.dtype('double').char, ('time', 'npe', 'Ydim', 'Xdim'))
-      dpv.long_name = 'Potential vorticity'
-      dpv.units = '1/(m s)'
-      dpv.standard_name = 'Potential vorticity'
-      dpv.coordinates = 'lons lats'
-      dpv.grid_mapping = 'cubed_sphere'
-      dpv.set_collective(True)
+      density = ncfile.createVariable('rho', numpy.dtype('double').char, ('time',) + grid_data)
+      density.long_name = 'air_density'
+      density.units = 'kg m-3'
+      density.standard_name = 'air_density'
+      density.coordinates = 'lons lats'
+      density.grid_mapping = 'cubed_sphere'
+      density.set_collective(True)
+
+      potential_temp = ncfile.createVariable('theta', numpy.dtype('double').char, ('time',) + grid_data)
+      potential_temp.long_name = 'air_potential_temperature'
+      potential_temp.units = 'K'
+      potential_temp.standard_name = 'air_potential_temperature'
+      potential_temp.coordinates = 'lons lats'
+      potential_temp.grid_mapping = 'cubed_sphere'
+      potential_temp.set_collective(True)
 
    rank = mpi4py.MPI.COMM_WORLD.Get_rank()
 
    if rank == 0:
       xxx[:] = geom.x1[:]
       yyy[:] = geom.x2[:]
+      if param.equations == "Euler":
+         zzz[:] = geom.x3[:]
 
    tile[rank] = rank
    lon[rank,:,:] = geom.lon * 180/math.pi
@@ -116,29 +174,43 @@ def output_init(geom, param):
 
 def output_netcdf(Q, geom, metric, mtrx, topo, step, param):
    """ Writes u,v,eta fields on every nth time step """
-
-   if param.equations == "Euler": return # TODO
-
    rank = mpi4py.MPI.COMM_WORLD.Get_rank()
    idx = len(ncfile["time"])
 
    ncfile['time'][idx] = step * param.dt
 
-   # Unpack physical variables
-   h = Q[idx_h, :, :] + topo.hsurf
-   ncfile['h'][idx, rank, :, :] = h
+   if param.equations == "shallow water":
 
-   if param.case_number >= 2: # Shallow water
-      u1 = Q[idx_hu1,:,:] / h
-      u2 = Q[idx_hu2,:,:] / h
-      u, v = contra2wind(u1, u2, geom)
-      rv = relative_vorticity(u1, u2, geom, metric, mtrx, param)
-      pv = potential_vorticity(h, u1, u2, geom, metric, mtrx, param)
+      # Unpack physical variables
+      h = Q[idx_h, :, :] + topo.hsurf
+      ncfile['h'][idx, rank, :, :] = h
 
-      ncfile['U'][idx, rank, :, :] = u
-      ncfile['V'][idx, rank, :, :] = v
-      ncfile['RV'][idx, rank, :, :] = rv
-      ncfile['PV'][idx, rank, :, :] = pv
+      if param.case_number >= 2: # Shallow water
+         u1 = Q[idx_hu1,:,:] / h
+         u2 = Q[idx_hu2,:,:] / h
+         u, v = contra2wind(u1, u2, geom)
+         rv = relative_vorticity(u1, u2, geom, metric, mtrx, param)
+         pv = potential_vorticity(h, u1, u2, geom, metric, mtrx, param)
+
+         ncfile['U'][idx, rank, :, :] = u
+         ncfile['V'][idx, rank, :, :] = v
+         ncfile['RV'][idx, rank, :, :] = rv
+         ncfile['PV'][idx, rank, :, :] = pv
+
+   if param.equations == "Euler":
+      rho = Q[idx_rho, :, :]
+      u1 = Q[idx_rho_u1, :, :] / rho
+      u2 = Q[idx_rho, :, :] / rho
+      u3 = Q[idx_rho, :, :] / rho
+
+      # TODO: Add 3d contra2wind to compute U,V and W
+      # u, v, w = contra2wind(u1, u2, u3, geom)
+
+      ncfile['rho'][idx, rank, :,:,:] = Q[idx_rho, :,:,:]
+      #ncfile['U'][idx, rank, :, :] = u
+      #ncfile['V'][idx, rank, :, :] = v
+      #ncfile['W'][idx, rank, :, :] = w
+      ncfile['theta'][idx, rank, :,:,:] = Q[idx_rho_theta, :,:,:] / rho
 
 def output_finalize():
    """ Finalise the output netCDF4 file."""
