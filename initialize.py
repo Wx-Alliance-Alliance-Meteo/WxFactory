@@ -46,7 +46,7 @@ def initialize_euler(geom, metric, mtrx, param):
    ni, nj, nk = geom.height.shape
 
    if param.case_number == 31:
-      u1_contra, u2_contra, u3_contra, density, potential_temperature = dcmip_gravity_wave(geom, metric, mtrx, param)
+      density, u1_contra, u2_contra, u3_contra, potential_temperature = dcmip_gravity_wave(geom, metric, mtrx, param)
    else:
       print('Something has gone horribly wrong in initialization. Back away slowly')
       exit(1)
