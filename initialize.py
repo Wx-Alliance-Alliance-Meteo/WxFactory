@@ -53,11 +53,11 @@ def initialize_euler(geom, metric, mtrx, param):
 
    Q = numpy.zeros((5, ni, nj, nk))
 
-   Q[idx_rho_u1, :, :] = density * u1_contra
-   Q[idx_rho_u2, :, :] = density * u2_contra
-   Q[idx_rho_u3, :, :] = density * u3_contra
-   Q[idx_rho, :, :] = density
-   Q[idx_rho_theta, :, :] = density * potential_temperature
+   Q[idx_rho_u1, :, :, :]    = density * u1_contra
+   Q[idx_rho_u2, :, :, :]    = density * u2_contra
+   Q[idx_rho_u3, :, :, :]    = density * u3_contra
+   Q[idx_rho, :, :, :]       = density
+   Q[idx_rho_theta, :, :, :] = density * potential_temperature
 
    return Q, None
 
