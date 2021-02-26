@@ -63,3 +63,33 @@ def plot_field_from_file(geom_prefix, field_prefix):
    plot_field(geom, field[0,:,:]**2)
 
 
+def plot_array(array):
+   rank = mpi4py.MPI.COMM_WORLD.Get_rank()
+
+   all_arrays = mpi4py.MPI.COMM_WORLD.gather(array, root=0)
+
+
+   if rank == 0:
+      print(f'Doing the plotting')
+      import matplotlib.pyplot as plt
+      import numpy as np
+
+      z = np.zeros_like(all_arrays[0])
+      c1 = np.vstack((z, all_arrays[3], z))
+      c2 = np.vstack((all_arrays[4], all_arrays[0], all_arrays[5]))
+      c3 = np.vstack((z, all_arrays[1], z))
+      c4 = np.vstack((z, all_arrays[2], z))
+      common = np.hstack((c1, c2, c3, c4))
+
+      # fig, ((_, p4, _, _), (p3, p0, p1, p2), (_, p5, _, _)) = plt.subplots(3, 4, figsize = (16, 9))
+
+      # for ax, arr in zip([p0, p1, p2, p3, p4, p5], all_arrays):
+      #    ax.imshow(array)
+
+      plt.xticks(ticks = np.arange(common.shape[0]))
+      plt.yticks(ticks = np.arange(common.shape[1]))
+      plt.imshow(common, interpolation = 'nearest')
+
+      plt.show()
+
+   mpi4py.MPI.COMM_WORLD.Barrier()

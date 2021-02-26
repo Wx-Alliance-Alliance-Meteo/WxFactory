@@ -27,7 +27,7 @@ def output_init(geom, param):
       ni, nj = geom.lat.shape
       grid_data = ('npe', 'Xdim', 'Ydim')
    elif param.equations == "Euler":
-      ni, nj, nk = geom.lat.shape
+      nk, ni, nj = geom.lat.shape
       grid_data = ('npe', 'Xdim', 'Ydim', 'Zdim')
 
    ncfile.createDimension('time', None) # unlimited
@@ -198,10 +198,10 @@ def output_netcdf(Q, geom, metric, mtrx, topo, step, param):
          ncfile['PV'][idx, rank, :, :] = pv
 
    if param.equations == "Euler":
-      rho = Q[idx_rho, :, :]
-      u1 = Q[idx_rho_u1, :, :] / rho
-      u2 = Q[idx_rho, :, :] / rho
-      u3 = Q[idx_rho, :, :] / rho
+      rho = Q[idx_rho, :, :, :]
+      u1 = Q[idx_rho_u1, :, :, :] / rho
+      u2 = Q[idx_rho, :, :, :] / rho
+      u3 = Q[idx_rho, :, :, :] / rho
 
       # TODO: Add 3d contra2wind to compute U,V and W
       # u, v, w = contra2wind(u1, u2, u3, geom)

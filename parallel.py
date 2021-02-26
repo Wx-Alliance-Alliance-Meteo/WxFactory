@@ -235,6 +235,9 @@ class Distributed_World:
          def get_rows(array, index1, index2):
             return array[:, index1, index2, :]
 
+         X = geom.X[0, 0, :]
+         Y = geom.Y[0, :, 0]
+
       else:
          sendbuf_u1 = numpy.zeros((4, u1_itf_i.shape[2]), dtype=data_type)
          sendbuf_u2 = numpy.zeros_like(sendbuf_u1)
@@ -244,8 +247,8 @@ class Distributed_World:
          def get_rows(array, index1, index2):
             return array[index1, index2, :]
 
-      X = geom.X[0,:]
-      Y = geom.Y[:,0]
+         X = geom.X[0,:]
+         Y = geom.Y[:,0]
 
       # --- Send to northern neighbours
 

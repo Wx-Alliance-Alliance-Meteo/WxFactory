@@ -77,7 +77,7 @@ class cubed_sphere:
             x3[idx : idx + nbsolpts] = interfaces_x3[k] + scaled_points * Δx3
 
          # TODO: terrain-following coordinate system
-         X1, X2, X3 = numpy.meshgrid(x1, x2, x3)
+         X3, X2, X1 = numpy.meshgrid(x3, x1, x2, indexing = 'ij')
       else:
          nk = 0
          x3 = numpy.zeros(nk)

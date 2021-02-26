@@ -52,8 +52,8 @@ def rhs_euler(Q, geom, mtrx, metric, topo, ptopo, nb_sol_pts: int, nb_elements_h
    u2 = Q[idx_rho_u2, :, :, :]
    u3 = Q[idx_rho_u3, :, :, :]
 
-   rho   = Q[idx_rho,:, :, :]
-   theta = Q[idx_rho_theta, :, :, :]
+   rho   = Q[idx_rho,:, :, :] # density
+   theta = Q[idx_rho_theta, :, :, :] # p-temp
 
    # Compute the fluxes
    # flux_Eq0_x1 = h * metric.sqrtG * u1
