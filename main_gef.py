@@ -12,7 +12,7 @@ from metric          import Metric
 from output          import output_init, output_netcdf, output_finalize
 from parallel        import Distributed_World
 from program_options import Configuration
-from rhs_3d          import rhs_3d
+from rhs_euler          import rhs_euler
 from rhs_sw          import rhs_sw
 from rhs_sw_explicit import rhs_sw_explicit
 from rhs_sw_implicit import rhs_sw_implicit
@@ -45,7 +45,7 @@ def main(args) -> int:
    elif param.equations == "Euler":
       Q, topo = initialize_euler(geom, metric, mtrx, param)
 
-      rhs_handle = lambda q: rhs_3d(q, geom, mtrx, metric, topo, ptopo, param.nbsolpts, param.nb_elements_horizontal,
+      rhs_handle = lambda q: rhs_euler(q, geom, mtrx, metric, topo, ptopo, param.nbsolpts, param.nb_elements_horizontal,
                                     param.nb_elements_vertical, param.case_number, param.filter_apply)
 
    if param.output_freq > 0:

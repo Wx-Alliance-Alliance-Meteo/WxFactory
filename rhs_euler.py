@@ -3,7 +3,7 @@ import numpy
 from definitions import idx_h, idx_hu1, idx_hu2, idx_u1, idx_u2, gravity
 from dgfilter import apply_filter
 
-def rhs_3d(Q, geom, mtrx, metric, topo, ptopo, nb_sol_pts: int, nb_elements_horiz: int, nb_elements_vert: int, case_number: int, filter_rhs: bool = False):
+def rhs_euler(Q, geom, mtrx, metric, topo, ptopo, nb_sol_pts: int, nb_elements_horiz: int, nb_elements_vert: int, case_number: int, filter_rhs: bool = False):
 
    type_vec = Q.dtype
 
