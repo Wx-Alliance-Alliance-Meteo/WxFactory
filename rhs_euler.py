@@ -1,121 +1,122 @@
 import numpy
 
-from definitions import idx_rho_u1, idx_rho_u2, idx_rho_u3, idx_rho, idx_rho_theta, gravity
+from definitions import idx_rho_u1, idx_rho_u2, idx_rho_u3, idx_rho, idx_rho_theta, gravity, p0, Rd, cpd, cvd
 from dgfilter import apply_filter
 
 def rhs_euler(Q, geom, mtrx, metric, topo, ptopo, nb_sol_pts: int, nb_elements_horiz: int, nb_elements_vert: int, case_number: int, filter_rhs: bool = False):
 
-   type_vec = Q.dtype
-
-   shallow_water_equations = ( case_number > 1 )
-
+   datatype = Q.dtype
+   nb_equations = 5
    nb_interfaces_horiz = nb_elements_horiz + 1
+   nb_total_sol_pt_horiz = nb_elements_horiz * nb_sol_pts
+   nb_total_sol_pt_vert = nb_elements_vert * nb_sol_pts
 
-   df1_dx1 = numpy.zeros_like(Q, dtype=type_vec)
-   df2_dx2 = numpy.zeros_like(Q, dtype=type_vec)
-   forcing = numpy.zeros_like(Q, dtype=type_vec)
-   rhs = numpy.zeros_like(Q, dtype=type_vec)
+   # Result
+   rhs = numpy.zeros_like(Q)
 
-   # flux_Eq0_itf_j = numpy.zeros((nb_sol_pts * nb_elements_vert, nb_elements_horiz + 2, 2, nb_sol_pts * nb_elements_horiz), dtype=type_vec)
-   # flux_Eq1_itf_j = numpy.zeros((nb_sol_pts * nb_elements_vert, nb_elements_horiz + 2, 2, nb_sol_pts * nb_elements_horiz), dtype=type_vec)
-   # flux_Eq2_itf_j = numpy.zeros((nb_sol_pts * nb_elements_vert, nb_elements_horiz + 2, 2, nb_sol_pts * nb_elements_horiz), dtype=type_vec)
-   # h_itf_j        = numpy.zeros((nb_sol_pts * nb_elements_vert, nb_elements_horiz + 2, 2, nb_sol_pts * nb_elements_horiz), dtype=type_vec)
-   u1_itf_j    = numpy.zeros((nb_sol_pts * nb_elements_vert, nb_elements_horiz + 2, 2, nb_sol_pts * nb_elements_horiz), dtype=type_vec)
-   u2_itf_j    = numpy.zeros_like(u1_itf_j)
-   u3_itf_j    = numpy.zeros_like(u1_itf_j)
-   rho_itf_j   = numpy.zeros_like(u1_itf_j)
-   theta_itf_j = numpy.zeros_like(u1_itf_j)
+   # Work arrays
+   flux_x1 = numpy.zeros_like(Q)
+   flux_x2 = numpy.zeros_like(Q)
+   flux_x3 = numpy.zeros_like(Q)
 
-   # flux_Eq0_itf_i = numpy.zeros((nb_sol_pts * nb_elements_vert, nb_elements_horiz + 2, nb_sol_pts * nb_elements_horiz, 2), dtype=type_vec)
-   # flux_Eq1_itf_i = numpy.zeros((nb_sol_pts * nb_elements_vert, nb_elements_horiz + 2, nb_sol_pts * nb_elements_horiz, 2), dtype=type_vec)
-   # flux_Eq2_itf_i = numpy.zeros((nb_sol_pts * nb_elements_vert, nb_elements_horiz + 2, nb_sol_pts * nb_elements_horiz, 2), dtype=type_vec)
-   # h_itf_i        = numpy.zeros((nb_sol_pts * nb_elements_vert, nb_elements_horiz + 2, 2, nb_sol_pts * nb_elements_horiz), dtype=type_vec)
-   u1_itf_i    = numpy.zeros((nb_sol_pts * nb_elements_vert, nb_elements_horiz + 2, 2, nb_sol_pts * nb_elements_horiz), dtype=type_vec)
-   u2_itf_i    = numpy.zeros_like(u1_itf_i)
-   u3_itf_i    = numpy.zeros_like(u1_itf_i)
-   rho_itf_i   = numpy.zeros_like(u1_itf_i)
-   theta_itf_i = numpy.zeros_like(u1_itf_i)
+   df1_dx1 = numpy.zeros_like(Q)
+   df2_dx2 = numpy.zeros_like(Q)
+   df3_dx3 = numpy.zeros_like(Q)
 
-   eig_L          = numpy.zeros(nb_sol_pts * nb_elements_horiz, dtype=type_vec)
-   eig_R          = numpy.zeros(nb_sol_pts * nb_elements_horiz, dtype=type_vec)
-   eig            = numpy.zeros(nb_sol_pts * nb_elements_horiz, dtype=type_vec)
+   # forcing = numpy.zeros_like(Q, dtype=type_vec)
 
-   flux_L         = numpy.zeros(nb_sol_pts * nb_elements_horiz, dtype=type_vec)
-   flux_R         = numpy.zeros(nb_sol_pts * nb_elements_horiz, dtype=type_vec)
+   itf_variable_i  = numpy.zeros((nb_equations, nb_total_sol_pt_vert, nb_elements_horiz + 2, 2, nb_total_sol_pt_horiz), dtype=datatype)
+   itf_flux_i      = numpy.zeros_like(itf_variable_i)
+   itf_diffusion_i = numpy.zeros_like(itf_variable_i)
+
+   itf_variable_j  = numpy.zeros((nb_equations, nb_total_sol_pt_vert, nb_elements_horiz + 2, 2, nb_total_sol_pt_horiz), dtype=datatype)
+   itf_flux_j      = numpy.zeros_like(itf_variable_j)
+   itf_diffusion_j = numpy.zeros_like(itf_variable_j)
+
+   itf_variable_k  = numpy.zeros((nb_equations, nb_elements_vert + 2, 2, nb_total_sol_pt_horiz, nb_total_sol_pt_horiz), dtype=datatype)
+   itf_flux_k      = numpy.zeros_like(itf_variable_k)
+   itf_diffusion_k = numpy.zeros_like(itf_variable_k)
+
+   # eig_L          = numpy.zeros(nb_sol_pts * nb_elements_horiz, dtype=type_vec)
+   # eig_R          = numpy.zeros(nb_sol_pts * nb_elements_horiz, dtype=type_vec)
+   # eig            = numpy.zeros(nb_sol_pts * nb_elements_horiz, dtype=type_vec)
+   #
+   # flux_L         = numpy.zeros(nb_sol_pts * nb_elements_horiz, dtype=type_vec)
+   # flux_R         = numpy.zeros(nb_sol_pts * nb_elements_horiz, dtype=type_vec)
 
    # Unpack dynamical variables
-   # h = Q[idx_h, :, :]
-   # hsquared = Q[idx_h, :, :]**2
+   rho_u1  = Q[idx_rho_u1, :, :, :]
+   rho_u2  = Q[idx_rho_u2, :, :, :]
+   rho_u3  = Q[idx_rho_u3, :, :, :]
+   density = Q[idx_rho,:, :, :]
+   rho_potential_temp = Q[idx_rho_theta, :, :, :]
 
-   # TODO Replace 1, 2, 3 with ids_rho_u1/2/3
-   u1 = Q[idx_rho_u1, :, :, :]
-   u2 = Q[idx_rho_u2, :, :, :]
-   u3 = Q[idx_rho_u3, :, :, :]
+   u1 = rho_u1 / density
+   u2 = rho_u2 / density
+   u3 = rho_u3 / density
+   potential_temp = rho_potential_temp / density
+   pressure = p0 + (rho_potential_temp * Rd / p0)**(cpd/cvd)
 
-   rho   = Q[idx_rho,:, :, :] # density
-   theta = Q[idx_rho_theta, :, :, :] # p-temp
-
+   #######################
    # Compute the fluxes
-   # flux_Eq0_x1 = h * metric.sqrtG * u1
-   # flux_Eq0_x2 = h * metric.sqrtG * u2
-   #
-   # flux_Eq1_x1 = metric.sqrtG * ( Q[idx_hu1,:,:] * u1 + 0.5 * gravity * metric.H_contra_11 * hsquared )
-   # flux_Eq1_x2 = metric.sqrtG * ( Q[idx_hu1,:,:] * u2 + 0.5 * gravity * metric.H_contra_12 * hsquared )
-   #
-   # flux_Eq2_x1 = metric.sqrtG * ( Q[idx_hu2,:,:] * u1 + 0.5 * gravity * metric.H_contra_21 * hsquared )
-   # flux_Eq2_x2 = metric.sqrtG * ( Q[idx_hu2,:,:] * u2 + 0.5 * gravity * metric.H_contra_22 * hsquared )
+   flux_x1[idx_rho_u1,    :, :, :] = metric.sqrtG * (rho_u1 * u1 + metric.H_contra_11 * pressure)
+   flux_x1[idx_rho_u2,    :, :, :] = metric.sqrtG * (rho_u1 * u2 + metric.H_contra_21 * pressure)
+   flux_x1[idx_rho_u3,    :, :, :] = metric.sqrtG * rho_u1 * u3
+   flux_x1[idx_rho,       :, :, :] = metric.sqrtG * rho_u1
+   flux_x1[idx_rho_theta, :, :, :] = metric.sqrtG * rho_potential_temp * u1
+
+   flux_x2[idx_rho_u1,    :, :, :] = metric.sqrtG * (rho_u2 * u1 + metric.H_contra_12 * pressure)
+   flux_x2[idx_rho_u2,    :, :, :] = metric.sqrtG * (rho_u2 * u2 + metric.H_contra_22 * pressure)
+   flux_x2[idx_rho_u3,    :, :, :] = metric.sqrtG * rho_u2 * u3
+   flux_x2[idx_rho,       :, :, :] = metric.sqrtG * rho_u2
+   flux_x2[idx_rho_theta, :, :, :] = metric.sqrtG * rho_potential_temp * u2
+
+   flux_x3[idx_rho_u1,    :, :, :] = metric.sqrtG * (rho_u3 * u1 + metric.H_contra_13 * pressure)
+   flux_x3[idx_rho_u2,    :, :, :] = metric.sqrtG * (rho_u3 * u2 + metric.H_contra_23 * pressure)
+   flux_x3[idx_rho_u3,    :, :, :] = metric.sqrtG * rho_u3 * u3
+   flux_x3[idx_rho,       :, :, :] = metric.sqrtG * rho_u3
+   flux_x3[idx_rho_theta, :, :, :] = metric.sqrtG * rho_potential_temp * u3
 
    # Offset due to the halo
    offset = 1
 
-   # HH = h + topo.hsurf
-
-   # layer = 5 # Which of the vertical layers to use (for testing communications)
-
+   ########################################
    # Interpolate to the element interface
    for elem in range(nb_elements_horiz):
       epais = elem * nb_sol_pts + numpy.arange(nb_sol_pts)
-
       pos = elem + offset
 
       # --- Direction x1
+      itf_variable_i[:, :, pos, 0, :] = Q[:, :, :, epais] @ mtrx.extrap_west
+      itf_variable_i[:, :, pos, 1, :] = Q[:, :, :, epais] @ mtrx.extrap_east
 
-      u1_itf_i[:, pos, 0, :] = u1[:, :, epais] @ mtrx.extrap_west
-      u1_itf_i[:, pos, 1, :] = u1[:, :, epais] @ mtrx.extrap_east
-
-      u2_itf_i[:, pos, 0, :] = u2[:, :, epais] @ mtrx.extrap_west
-      u2_itf_i[:, pos, 1, :] = u2[:, :, epais] @ mtrx.extrap_east
-
-      u3_itf_i[:, pos, 0, :] = u3[:, :, epais] @ mtrx.extrap_west
-      u3_itf_i[:, pos, 1, :] = u3[:, :, epais] @ mtrx.extrap_east
-
-      rho_itf_i[:, pos, 0, :] = rho[:, :, epais] @ mtrx.extrap_west
-      rho_itf_i[:, pos, 1, :] = rho[:, :, epais] @ mtrx.extrap_east
-
-      theta_itf_i[:, pos, 0, :] = theta[:, :, epais] @ mtrx.extrap_west
-      theta_itf_i[:, pos, 1, :] = theta[:, :, epais] @ mtrx.extrap_east
+      itf_flux_i[:, :, pos, 0, :] = flux_x1[:, :, :, epais] @ mtrx.extrap_west
+      itf_flux_i[:, :, pos, 1, :] = flux_x1[:, :, :, epais] @ mtrx.extrap_east
 
       # --- Direction x2
+      itf_variable_j[:, :, pos, 0, :] = mtrx.extrap_south @ Q[:, :, epais, :]
+      itf_variable_j[:, :, pos, 1, :] = mtrx.extrap_north @ Q[:, :, epais, :]
 
-      u1_itf_j[:, pos, 0, :] = mtrx.extrap_south @ u1[:, epais, :]
-      u1_itf_j[:, pos, 1, :] = mtrx.extrap_north @ u1[:, epais, :]
+      itf_flux_j[:, :, pos, 0, :] = mtrx.extrap_south @ flux_x2[:, :, epais, :]
+      itf_flux_j[:, :, pos, 1, :] = mtrx.extrap_north @ flux_x2[:, :, epais, :]
 
-      u2_itf_j[:, pos, 0, :] = mtrx.extrap_south @ u2[:, epais, :]
-      u2_itf_j[:, pos, 1, :] = mtrx.extrap_north @ u2[:, epais, :]
+   # --- Direction x3
+   for i, (val_ground, val_sky) in enumerate(zip(mtrx.extrap_ground, mtrx.extrap_sky)):
+      slice = [i + nb_sol_pts * x for x in range(nb_elements_vert)]
+      itf_variable_k[:, 1:-1, 0, :, :] += val_ground * Q[:, slice, :, :]
+      itf_variable_k[:, 1:-1, 1, :, :] += val_sky * Q[:, slice, :, :]
 
-      u3_itf_j[:, pos, 0, :] = mtrx.extrap_south @ u3[:, epais, :]
-      u3_itf_j[:, pos, 1, :] = mtrx.extrap_north @ u3[:, epais, :]
+      itf_flux_k[:, 1:-1, 0, :, :] += val_ground * flux_x3[:, slice, :, :]
+      itf_flux_k[:, 1:-1, 1, :, :] += val_sky * flux_x3[:, slice, :, :]
 
-      rho_itf_j[:, pos, 0, :] = mtrx.extrap_south @ rho[:, epais, :]
-      rho_itf_j[:, pos, 1, :] = mtrx.extrap_north @ rho[:, epais, :]
-
-      theta_itf_j[:, pos, 0, :] = mtrx.extrap_south @ theta[:, epais, :]
-      theta_itf_j[:, pos, 1, :] = mtrx.extrap_north @ theta[:, epais, :]
-
+   ##########################################
+   # Exchange necessary info with neighbors
+   # TODO which of these do we need?
    ptopo.xchange_vectors(geom, u1_itf_i, u2_itf_i, u1_itf_j, u2_itf_j, u3_itf_i, u3_itf_j)
-   ptopo.xchange_scalars(geom, rho_itf_i, rho_itf_j)
-   ptopo.xchange_scalars(geom, theta_itf_i, theta_itf_j)
+   ptopo.xchange_scalars(geom, density_itf_i, density_itf_j)
+   ptopo.xchange_scalars(geom, temp_itf_i, temp_itf_j)
 
+   #########################
    # Common Rusanov fluxes
    for itf in range(nb_interfaces_horiz):
 
@@ -212,6 +213,7 @@ def rhs_euler(Q, geom, mtrx, metric, topo, ptopo, nb_sol_pts: int, nb_elements_h
             * ( h_itf_j[layer, elem_R, 0, :] * u2_itf_j[layer, elem_R, 0, :] - h_itf_j[layer, elem_L, 1, :] * u2_itf_j[layer, elem_L, 1, :]) )
       flux_Eq2_itf_j[elem_R, 0, :] = flux_Eq2_itf_j[elem_L, 1, :]
 
+   ###########################
    # Compute the derivatives
    for elem in range(nb_elements_horiz):
       epais = elem * nb_sol_pts + numpy.arange(nb_sol_pts)
