@@ -158,7 +158,7 @@ def output_init(geom, param):
       potential_temp.coordinates = 'lons lats'
       potential_temp.grid_mapping = 'cubed_sphere'
       potential_temp.set_collective(True)
-   
+
       if param.case_number == 11:
          q1 = ncfile.createVariable('q1', numpy.dtype('double').char, ('time',) + grid_data)
          q1.long_name = 'q1'
@@ -233,10 +233,9 @@ def output_netcdf(Q, geom, metric, mtrx, topo, step, param):
    if param.equations == "Euler":
       rho = Q[idx_rho, :, :, :]
       u1 = Q[idx_rho_u1, :, :, :] / rho
-      u2 = Q[idx_rho, :, :, :] / rho
-      u3 = Q[idx_rho, :, :, :] / rho
+      u2 = Q[idx_rho_u2, :, :, :] / rho
+      u3 = Q[idx_rho_u3, :, :, :] / rho
 
-      # TODO: Add 3d contra2wind to compute U,V and W
       u, v = contra2wind(u1, u2, geom)
       w = u3
 
