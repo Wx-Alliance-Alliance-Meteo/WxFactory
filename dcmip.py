@@ -4,6 +4,62 @@ import math
 from definitions import *
 from winds import *
 
+def dcmip_mountain(geom, metric, mtrx, param):
+
+   lon_m = 3.0 * numpy.pi / 2.0
+   # lon_m = 0.0
+   lat_m = 0.0
+   radius_m   = 3.0 * numpy.pi / 4.0 * 0.5
+   height_max = 2000.0
+   oscillation_half_width = numpy.pi / 16.0
+
+   def compute_distance_radian(lon, lat):
+      """ Compute the angular distance (in radians) of the given lon/lat coordinates from the center of the mountain """
+      return numpy.minimum(radius_m, numpy.sqrt((lon - lon_m)**2 + (lat - lat_m)**2))
+
+   def compute_height_from_dist(dist):
+      """ Compute the height of the surface that corresponds to the given distance(s) from the mountain center.
+       Based on the DCMIP case 1-3 description """
+      return height_max / 2.0 * \
+             (1.0 + numpy.cos(numpy.pi * dist / radius_m)) * \
+             numpy.cos(numpy.pi * dist / oscillation_half_width)
+
+   # Distances from the mountain on all grid and interface points
+   distance = compute_distance_radian(geom.lon[0, :, :], geom.lat[0, :, :])
+   distance_itf_i = compute_distance_radian(geom.lon_itf_i, geom.lat_itf_i)
+   distance_itf_j = compute_distance_radian(geom.lon_itf_j, geom.lat_itf_j)
+
+   # Height at every grid and interface point
+   h_surf = compute_height_from_dist(distance)
+
+   nb_interfaces_horiz = param.nb_elements_horizontal + 1
+   h_surf_itf_i = numpy.zeros((param.nb_elements_horizontal+2, param.nbsolpts*param.nb_elements_horizontal, 2))
+   h_surf_itf_j = numpy.zeros((param.nb_elements_horizontal+2, 2, param.nbsolpts*param.nb_elements_horizontal))
+
+   h_surf_itf_i[0:nb_interfaces_horiz,   :, 1] = compute_height_from_dist(distance_itf_i.T)
+   h_surf_itf_i[1:nb_interfaces_horiz+1, :, 0] = h_surf_itf_i[0:nb_interfaces_horiz, :, 1]
+
+   h_surf_itf_j[0:nb_interfaces_horiz,   1, :] = compute_height_from_dist(distance_itf_j)
+   h_surf_itf_j[1:nb_interfaces_horiz+1, 0, :] = h_surf_itf_j[0:nb_interfaces_horiz, 1, :]
+
+   # Height derivative along x and y at every grid point
+   _, ni, nj = geom.lon.shape
+   dhdx1 = numpy.zeros((ni, nj))
+   dhdx2 = numpy.zeros((ni, nj))
+
+   offset = 1 # Offset due to the halo
+   for elem in range(param.nb_elements_horizontal):
+      epais = elem * param.nbsolpts + numpy.arange(param.nbsolpts)
+
+      # --- Direction x1
+      dhdx1[:, epais] = h_surf[:,epais] @ mtrx.diff_solpt_tr + h_surf_itf_i[elem+offset,:,:] @ mtrx.correction_tr
+
+      # --- Direction x2
+      dhdx2[epais,:] = mtrx.diff_solpt @ h_surf[epais,:] + mtrx.correction @ h_surf_itf_j[elem+offset,:,:]
+
+   return h_surf, h_surf_itf_i, h_surf_itf_j, dhdx1, dhdx2
+
+
 def dcmip_gravity_wave(geom, metric, mtrx, param):
 
    X       = 125.0                # Reduced Earth reduction factor

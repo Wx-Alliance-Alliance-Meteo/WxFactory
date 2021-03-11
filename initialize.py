@@ -45,6 +45,8 @@ def initialize_euler(geom, metric, mtrx, param):
    
    ni, nj, nk = geom.height.shape
 
+   if param.case_number == 20:
+      dcmip_mountain(geom, metric, mtrx, param)
    if param.case_number == 31:
       density, u1_contra, u2_contra, u3_contra, potential_temperature = dcmip_gravity_wave(geom, metric, mtrx, param)
    else:
