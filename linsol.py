@@ -105,17 +105,12 @@ def fgmres(A, b, x0 = None, tol = 1e-5, restart = 20, maxiter = None, preconditi
 
          niter += 1
 
-         # Flexible preconditioner 
-         if preconditioner is not None:
-            Z[inner, :] = preconditioner(V[inner, :])
-         else:
-            Z[inner, :] = V[inner, :]
-
          # Modified Gram-Schmidt process (1-sync version, with lagged normalization)
-         z_mod = V[inner+1] if preconditioner is None else preconditioner(V[inner+1])
-         V[inner+2, :] = A(z_mod)
+         Z[inner + 1, :] = V[inner + 1] if preconditioner is None else preconditioner(V[inner + 1])
+         V[inner + 2, :] = A(Z[inner + 1, :])
          V, R, norm = ortho_1_sync(V, R, inner + 2)
-         H[inner, :] = R[:restart+1, inner+1]
+         H[inner, :] = R[:restart + 1, inner + 1]
+         Z[inner + 1, :] = V[inner + 1, :]
 
          # Apply previous Givens rotations to H
          if inner > 0:
@@ -147,7 +142,7 @@ def fgmres(A, b, x0 = None, tol = 1e-5, restart = 20, maxiter = None, preconditi
                break
 
       # end inner loop, back to outer loop
-      Z[inner+1, :] = V[inner+1, :] # Is this line really useful?
+      Z[inner+1, :] = V[inner+1, :]
 
       # Find best update to x in Krylov Space V.
       y = scipy.linalg.solve_triangular(H[0:inner + 1, 0:inner + 1].T, g[0:inner + 1])
