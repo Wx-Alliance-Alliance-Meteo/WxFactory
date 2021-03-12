@@ -57,30 +57,28 @@ def rhs_euler(Q, geom, mtrx, metric, topo, ptopo, nb_sol_pts: int, nb_elements_h
    potential_temp = rho_potential_temp / density
    pressure = p0 * (rho_potential_temp * Rd / p0)**(cpd/cvd)
 
-   #######################
    # Compute the fluxes
-   flux_x1[idx_rho_u1,    :, :, :] = metric.sqrtG * (rho_u1 * u1 + metric.H_contra_11 * pressure)
-   flux_x1[idx_rho_u2,    :, :, :] = metric.sqrtG * (rho_u1 * u2 + metric.H_contra_21 * pressure)
-   flux_x1[idx_rho_u3,    :, :, :] = metric.sqrtG * rho_u1 * u3
    flux_x1[idx_rho,       :, :, :] = metric.sqrtG * rho_u1
+   flux_x1[idx_rho_u1,    :, :, :] = metric.sqrtG * (rho_u1 * u1 + metric.H_contra_11 * pressure)
+   flux_x1[idx_rho_u2,    :, :, :] = metric.sqrtG * (rho_u2 * u1 + metric.H_contra_21 * pressure)
+   flux_x1[idx_rho_u3,    :, :, :] = metric.sqrtG * (rho_u3 * u1 + metric.H_contra_31 * pressure)
    flux_x1[idx_rho_theta, :, :, :] = metric.sqrtG * rho_potential_temp * u1
 
-   flux_x2[idx_rho_u1,    :, :, :] = metric.sqrtG * (rho_u2 * u1 + metric.H_contra_12 * pressure)
-   flux_x2[idx_rho_u2,    :, :, :] = metric.sqrtG * (rho_u2 * u2 + metric.H_contra_22 * pressure)
-   flux_x2[idx_rho_u3,    :, :, :] = metric.sqrtG * rho_u2 * u3
    flux_x2[idx_rho,       :, :, :] = metric.sqrtG * rho_u2
+   flux_x2[idx_rho_u1,    :, :, :] = metric.sqrtG * (rho_u1 * u2 + metric.H_contra_12 * pressure)
+   flux_x2[idx_rho_u2,    :, :, :] = metric.sqrtG * (rho_u2 * u2 + metric.H_contra_22 * pressure)
+   flux_x2[idx_rho_u3,    :, :, :] = metric.sqrtG * (rho_u3 * u2 + metric.H_contra_32 * pressure)
    flux_x2[idx_rho_theta, :, :, :] = metric.sqrtG * rho_potential_temp * u2
 
-   flux_x3[idx_rho_u1,    :, :, :] = metric.sqrtG * (rho_u3 * u1 + metric.H_contra_13 * pressure)
-   flux_x3[idx_rho_u2,    :, :, :] = metric.sqrtG * (rho_u3 * u2 + metric.H_contra_23 * pressure)
-   flux_x3[idx_rho_u3,    :, :, :] = metric.sqrtG * rho_u3 * u3
    flux_x3[idx_rho,       :, :, :] = metric.sqrtG * rho_u3
+   flux_x3[idx_rho_u1,    :, :, :] = metric.sqrtG * (rho_u1 * u3 + metric.H_contra_13 * pressure)
+   flux_x3[idx_rho_u2,    :, :, :] = metric.sqrtG * (rho_u2 * u3 + metric.H_contra_23 * pressure)
+   flux_x3[idx_rho_u3,    :, :, :] = metric.sqrtG * (rho_u3 * u3 + metric.H_contra_33 * pressure)
    flux_x3[idx_rho_theta, :, :, :] = metric.sqrtG * rho_potential_temp * u3
 
    # Offset due to the halo
    offset = 1
 
-   ########################################
    # Interpolate to the element interface
    for elem in range(nb_elements_horiz):
       epais = elem * nb_sol_pts + numpy.arange(nb_sol_pts)
