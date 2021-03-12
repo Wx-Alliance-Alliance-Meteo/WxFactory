@@ -45,17 +45,17 @@ def rhs_euler(Q, geom, mtrx, metric, topo, ptopo, nb_sol_pts: int, nb_elements_h
    # flux_R         = numpy.zeros(nb_sol_pts * nb_elements_horiz, dtype=type_vec)
 
    # Unpack dynamical variables
+   density = Q[idx_rho,:, :, :]
    rho_u1  = Q[idx_rho_u1, :, :, :]
    rho_u2  = Q[idx_rho_u2, :, :, :]
    rho_u3  = Q[idx_rho_u3, :, :, :]
-   density = Q[idx_rho,:, :, :]
    rho_potential_temp = Q[idx_rho_theta, :, :, :]
 
    u1 = rho_u1 / density
    u2 = rho_u2 / density
    u3 = rho_u3 / density
    potential_temp = rho_potential_temp / density
-   pressure = p0 + (rho_potential_temp * Rd / p0)**(cpd/cvd)
+   pressure = p0 * (rho_potential_temp * Rd / p0)**(cpd/cvd)
 
    #######################
    # Compute the fluxes
