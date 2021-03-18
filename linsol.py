@@ -25,11 +25,11 @@ def ortho_1_sync(Q, R, j):
 
    T            = numpy.zeros_like(R)
    T[:j-1, j-1] = global_tmp[:j-1, 0]
-   norm2        = global_tmp[-1, 0]
+   norm2        = global_tmp[j-1, 0]
    norm         = numpy.sqrt(norm2)
    R[j-1, j-1]  = norm
 
-   R[:j, j]     = global_tmp[:,1]
+   R[:j, j]     = global_tmp[:j,1]
    R[:j, j]     /= norm # Only do this for Arnoldi iterations
    Q[j-1, :]    /= norm
    Q[j, :]      /= norm # Only do this for Arnoldi iterations
@@ -96,7 +96,7 @@ def fgmres(A, b, x0 = None, tol = 1e-5, restart = 20, maxiter = None, preconditi
       V[0, :] = r / norm_r
       Z[0, :] = V[0, :] if preconditioner is None else preconditioner(V[0, :])
       V[1, :] = A(Z[0, :])
-      V, R, _ = ortho_1_sync(V, R, 1)
+      V, R, v_norm = ortho_1_sync(V, R, 1)
 
       # This is the RHS vector for the problem in the Krylov Space
       g = numpy.zeros(num_dofs)
@@ -107,8 +107,8 @@ def fgmres(A, b, x0 = None, tol = 1e-5, restart = 20, maxiter = None, preconditi
 
          # Modified Gram-Schmidt process (1-sync version, with lagged normalization)
          Z[inner + 1, :] = V[inner + 1] if preconditioner is None else preconditioner(V[inner + 1])
-         V[inner + 2, :] = A(Z[inner + 1, :])
-         V, R, norm = ortho_1_sync(V, R, inner + 2)
+         V[inner + 2, :] = A(Z[inner + 1, :] / v_norm) * v_norm
+         V, R, v_norm = ortho_1_sync(V, R, inner + 2)
          H[inner, :] = R[:restart + 1, inner + 1]
          Z[inner + 1, :] = V[inner + 1, :]
 
