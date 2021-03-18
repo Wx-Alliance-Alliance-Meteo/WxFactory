@@ -13,6 +13,9 @@ class DFR_operators:
       self.extrap_south = lagrangeEval(grd.solutionPoints, -1)
       self.extrap_north = lagrangeEval(grd.solutionPoints,  1)
 
+      self.extrap_down = lagrangeEval(grd.solutionPoints, -1) # TODO : vertical grid is not unform
+      self.extrap_up   = lagrangeEval(grd.solutionPoints,  1)
+
       self.diff_ext = diffmat(grd.extension)
       self.diff_solpt = self.diff_ext[1:-1, 1:-1]
 
