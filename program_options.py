@@ -38,6 +38,26 @@ class Configuration:
          self.ark_solver_imp = 'ARK3(2)4L[2]SA-ESDIRK'
 
       try:
+         self.use_preconditioner = parser.getint('Time_integration', 'use_preconditioner')
+      except (NoOptionError, NoSectionError):
+         self.use_preconditioner = 0
+
+      try:
+         self.precond_filter_before = parser.getint('Time_integration', 'precond_filter_before')
+      except (NoOptionError, NoSectionError):
+         self.precond_filter_before = 0
+
+      try:
+         self.precond_filter_during = parser.getint('Time_integration', 'precond_filter_during')
+      except (NoOptionError, NoSectionError):
+         self.precond_filter_during = 0
+
+      try:
+         self.precond_filter_after = parser.getint('Time_integration', 'precond_filter_after')
+      except (NoOptionError, NoSectionError):
+         self.precond_filter_after = 0
+
+      try:
          self.λ0 = parser.getfloat('Grid', 'λ0')
       except (NoOptionError,NoSectionError):
          self.λ0 = 0.0

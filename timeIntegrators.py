@@ -7,7 +7,6 @@ from kiops         import kiops
 from linsol        import fgmres
 from phi           import phi_ark
 from interpolation import LagrangeSimpleInterpolator, BilinearInterpolator
-from matvec_product_caller import MatvecCaller
 from timer         import Timer
 
 class Epirk4s3a:
@@ -188,19 +187,24 @@ class Tvdrk3:
       return Q
 
 class Rat2:
-   def __init__(self, rhs, tol):
+   def __init__(self, rhs, tol, preconditioner = None):
       self.rhs = rhs
       self.tol = tol
+      self.preconditioner = preconditioner
 
    def step(self, Q, dt):
       matvec_handle = lambda v: matvec_rat(v, dt, Q, self.rhs)
+
+      if self.preconditioner:
+         self.preconditioner.init_time_step(matvec_rat, dt, Q, matvec_handle)
 
       # Transform to the shifted linear system (I/dt - J/2) x = F/dt
       rhs = self.rhs(Q).flatten() / dt
 
       first_guess = numpy.zeros_like(rhs)
 
-      phiv, local_error, num_iter, flag = fgmres(matvec_handle, rhs, x0=first_guess, tol=self.tol)
+      phiv, local_error, num_iter, flag = fgmres(matvec_handle, rhs,
+                                                 x0=first_guess, tol=self.tol, preconditioner=self.preconditioner)
 
       if flag == 0:
          print(f'FGMRES converged at iteration {num_iter} to a solution with local error {local_error : .2e}')

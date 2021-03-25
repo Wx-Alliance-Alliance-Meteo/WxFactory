@@ -11,8 +11,9 @@ from matrices        import DFR_operators
 from metric          import Metric
 from output          import output_init, output_netcdf, output_finalize
 from parallel        import Distributed_World
+from preconditioner  import Preconditioner
 from program_options import Configuration
-from rhs_euler          import rhs_euler
+from rhs_euler       import rhs_euler
 from rhs_sw          import rhs_sw
 from rhs_sw_explicit import rhs_sw_explicit
 from rhs_sw_implicit import rhs_sw_implicit
@@ -62,8 +63,9 @@ def main(args) -> int:
    elif param.time_integrator.lower() == 'tvdrk3':
       stepper = Tvdrk3(rhs_handle)
    elif param.time_integrator.lower() == 'rat2':
-      stepper = Rat2(rhs_handle, param.tolerance)
-   elif  param.time_integrator.lower() =='epi2/ark' and param.equations == "shallow water": # TODO : Euler
+      preconditioner = Preconditioner(param, geom, ptopo, mtrx, rhs_sw) if param.use_preconditioner == 1 else None
+      stepper = Rat2(rhs_handle, param.tolerance, preconditioner=preconditioner)
+   elif  param.time_integrator.lower() == 'epi2/ark' and param.equations == "shallow water": # TODO : Euler
       rhs_explicit = lambda q: rhs_sw_explicit(q, geom, mtrx, metric, topo, ptopo, param.nbsolpts, param.nb_elements_horizontal, param.case_number, param.filter_apply)
 
       rhs_implicit = lambda q: rhs_sw_implicit(q, geom, mtrx, metric, topo, ptopo, param.nbsolpts, param.nb_elements_horizontal, param.case_number, param.filter_apply)
