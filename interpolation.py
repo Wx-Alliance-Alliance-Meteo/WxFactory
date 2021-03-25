@@ -122,8 +122,6 @@ class LagrangeSimpleInterpolator:
 
       basis_point_sets[self.num_basis_points] = self.basis_points
 
-      self.min_x, self.max_x = grid.domain_x1
-      self.min_y, self.max_y = grid.domain_x2
       self.delta_x = grid.Δx1
       self.delta_y = grid.Δx2
       self.n_elem_i = int(len(self.x_pos) / self.num_basis_points)
@@ -195,7 +193,6 @@ class LagrangeSimpleInterpolator:
             for j in range(self.n_elem_i)]
                 for i in range(self.n_elem_i)])
 
-
       # Put in global grid form (rather than element by element)
       for i in range(self.n_elem_i):
          start_i = i * new_num_basis_points
@@ -211,88 +208,6 @@ class LagrangeSimpleInterpolator:
       return new_field
 
 
-   # TODO Lagrange on both axes
-   def get_value_at_pos(self, x, y):
-
-      # Determine the element point (x,y) belongs to
-      elem_i  = int((x - self.min_x) / self.delta_x)
-      start_i = elem_i * self.num_basis_points
-      stop_i  = start_i + self.num_basis_points
-
-      elem_j  = int((y - self.min_y) / self.delta_y)
-      start_j = elem_j * self.num_basis_points
-      stop_j  = start_j + self.num_basis_points
-
-      # Find exactly between which solution points (x,y) is
-      ix = start_i
-      iy = start_j
-
-      while self.x_pos[ix + 1] < x:
-         if ix + 2 >= stop_i:
-            break
-         ix += 1
-
-      while self.y_pos[iy + 1] < y:
-         if iy + 2 >= stop_j:
-            break
-         iy += 1
-
-      # Compute element boundaries within the set of solution point positions
-      x_elem_small = self.min_x + elem_i * self.delta_x
-      x_elem_large = self.min_x + (elem_i+1) * self.delta_x
-      y_elem_small = self.min_y + elem_j * self.delta_y
-      y_elem_large = self.min_y + (elem_j+1) * self.delta_y
-
-      # Find which points to use for the linear interpolation between sets of lagrange polynomials
-      if ix < start_i:
-         ix += 1
-      elif ix + 1 > stop_i:
-         ix -= 1
-
-      if iy < start_j:
-         iy += 1
-      elif iy + 1> stop_j:
-         iy -= 1
-
-      x_small = self.x_pos[ix]
-      x_large = self.x_pos[ix + 1]
-      y_small = self.y_pos[iy]
-      y_large = self.y_pos[iy + 1]
-
-      # Lagrange interpolation, along x, at the 2 y-sets found
-      sol_pt_x = (x - x_elem_small) / (x_elem_large - x_elem_small) * 2.0 - 1.0
-      sol_pt_x_interp = lagrangeEval(self.basis_points, sol_pt_x)
-      vals_y_minus = self.field[start_i:stop_i, iy]
-      vals_y_plus  = self.field[start_i:stop_i, iy + 1]
-
-      xs = self.x_pos[start_i:stop_i]
-
-      val_y_minus = numpy.dot(vals_y_minus, sol_pt_x_interp)
-      val_y_plus  = numpy.dot(vals_y_plus, sol_pt_x_interp)
-
-      # Linear interpolation between y- and y+ values
-      alpha = 1.0 - (y - y_small) / (y_large - y_small)
-      val_x = val_y_minus * alpha + val_y_plus * (1.0 - alpha)
-
-      # Lagrange interpolation, along y, at the 2 x-sets found
-      sol_pt_y = (y - y_elem_small) / (y_elem_large - y_elem_small) * 2.0 - 1.0
-      sol_pt_y_interp = lagrangeEval(self.basis_points, sol_pt_y)
-      vals_x_minus = self.field[ix, start_j:stop_j]
-      vals_x_plus  = self.field[ix + 1, start_j:stop_j]
-
-      ys = self.y_pos[start_j:stop_j]
-      val_x_minus = numpy.dot(vals_x_minus, sol_pt_y_interp)
-      val_x_plus  = numpy.dot(vals_x_plus,  sol_pt_y_interp)
-
-      # TODO Should use Lagrange polynomial too
-      # Linear interpolation between x- and x+ values
-      beta = 1.0 - (x - x_small) / (x_large - x_small)
-      val_y = val_x_minus * beta + val_x_plus * (1.0 - beta)
-
-      # Just take the average of the 2 values
-      return (val_x + val_y) * 0.5
-
-
 class LagrangeInterpolator:
    def __init__(self, grid, field, comm_dist_graph):
 
@@ -305,8 +220,6 @@ class LagrangeInterpolator:
       self.x_pos = grid.x1
       self.y_pos = grid.x2
       self.basis_points = grid.solutionPoints
-      self.min_x, self.max_x = grid.domain_x1
-      self.min_y, self.max_y = grid.domain_x2
       self.delta_x = grid.Δx1
       self.delta_y = grid.Δx2
 
@@ -450,32 +363,6 @@ def interpolate(dest_grid, src_grid, field, comm_dist_graph):
       print('time (entire grid):          {}'.format(interpolator.grid_eval_timer.times))
       print('time (entire grid, fast):    {}'.format(interpolator.grid_eval_fast_timer.times))
       #print('difference: \n{}'.format(difference))
-
-
-   if False:
-      #dest_interpolator = BilinearInterpolator(dest_grid, result)
-      dest_interpolator = LagrangeSimpleInterpolator(dest_grid, result)
-
-      num_samples = 101
-      sample_width_x = (src_grid.domain_x1[1] - src_grid.domain_x1[0]) / num_samples
-      sample_width_y = (src_grid.domain_x2[1] - src_grid.domain_x2[0]) / num_samples
-
-      total_val = 0.0
-      total_diff = 0.0
-      for i in range(num_samples):
-         x = (i + 0.5) * sample_width_x + src_grid.domain_x1[0]
-         for j in range(num_samples):
-            y = (j + 0.5) * sample_width_y + src_grid.domain_x2[0]
-
-            src_val = interpolator.get_value_at_pos(x, y)
-            dest_val= dest_interpolator.get_value_at_pos(x, y)
-
-            total_val += numpy.abs(src_val)
-            total_diff += numpy.abs((dest_val - src_val)/src_val)
-
-      avg_diff = total_diff / (num_samples**2)
-
-      print('Average relative diff: {:.2f}%, average value: {}'.format(avg_diff * 100, total_val / num_samples**2))
 
    return alt_result
 
