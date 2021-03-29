@@ -65,6 +65,8 @@ def fgmres(A, b, x0 = None, tol = 1e-5, restart = 20, maxiter = None, preconditi
    if norm_b == 0.0:
       return numpy.zeros_like(b), 0., 0, 0
 
+   tol_relative = tol * norm_b
+
    Ax0 = A(x)
 
    # Rescale the initial approximation using the Hegedüs trick
@@ -138,7 +140,7 @@ def fgmres(A, b, x0 = None, tol = 1e-5, restart = 20, maxiter = None, preconditi
          # norm_r is calculated directly after this loop ends.
          if inner < restart - 1:
             norm_r = numpy.abs(g[inner+1])
-            if norm_r < tol:
+            if norm_r < tol_relative:
                break
 
       # end inner loop, back to outer loop
@@ -161,7 +163,7 @@ def fgmres(A, b, x0 = None, tol = 1e-5, restart = 20, maxiter = None, preconditi
             return x, norm_r, niter, -1
 
       # test for convergence
-      if norm_r < tol:
+      if norm_r < tol_relative:
          return x, norm_r, niter, 0
 
    # end outer loop
