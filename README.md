@@ -32,7 +32,31 @@ pip3 install --user mayavi
 ```
 sudo pacman -S python-numpy python-scipy python-mpi4py python-netcdf4-openmpi mayavi python-matplotlib 
 ```
-The python-cartopy package can be installed for AUR.
+The python-cartopy package can be installed from the AUR.
+
+## Conda
+The necessary packages are available from the conda-forge channel, so it should
+be added to the list of default channels for easier use of the various commands
+
+```
+    conda config --add channels conda-forge
+    conda create -n gef "python>=3.8"
+    conda activate gef
+    conda install numpy scipy mpi4py netcdf4=*=mpi*
+```
+
+If you want the OpenMPI implementation of MPI:
+
+```
+    conda install mpi=*=openmpi
+```
+
+If you want the visualization capabilities of GEF (and do not mind a bigger
+conda environment):
+
+```
+    conda install mayavi matplotlib cartopy
+```
 
 # Executing the model
 
