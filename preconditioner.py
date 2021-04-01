@@ -1,4 +1,5 @@
 from copy import copy
+from time import time
 
 from cubed_sphere  import cubed_sphere
 from dgfilter      import apply_filter
@@ -29,6 +30,7 @@ class Preconditioner:
       self.num_precond_iter = 0
       self.remaining_uses   = 0
       self.max_num_uses     = 1
+      self.precond_time     = 0.0
       self.big_param        = copy(param)
       self.ptopo            = ptopo
       self.rhs_func         = rhs_func
@@ -71,6 +73,7 @@ class Preconditioner:
       self.interpolator = LagrangeSimpleInterpolator(geometry)
 
       self.big_shape      = None
+      self.big_mat        = None
       self.small_shape    = None
       self.small_rhs      = None
       self.small_mat      = None
@@ -99,6 +102,7 @@ class Preconditioner:
       self.big_mat = matvec_handle
 
       self.remaining_uses = self.max_num_uses
+      self.precond_time   = 0.0
 
       if self.preconditioner:
          self.preconditioner.init_time_step(matvec_func, dt, lowres_field, matvec_handle)
@@ -115,6 +119,8 @@ class Preconditioner:
          return vec
 
       self.remaining_uses -= 1
+
+      start_time = time()
 
       input_vec_grid = self.restrict(vec.reshape(self.big_shape))
       if self.filter_before:
@@ -138,9 +144,13 @@ class Preconditioner:
 
       result = result_grid.flatten()
 
-      self.num_iter += num_iter
+      stop_time = time()
 
-      print(f'{self.prefix}Preconditioned in {num_iter} iterations (total {self.total_num_iter()})')
+      self.precond_time += stop_time - start_time
+      self.num_iter     += num_iter
+
+      print(f'{self.prefix}Preconditioned in {num_iter} iterations (total {self.total_num_iter()}) '
+            f'and {self.precond_time:.2f} s')
 
       return result
 

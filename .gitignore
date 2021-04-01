@@ -8,6 +8,8 @@ doc/*.aux
 doc/*.log
 doc/*.out
 
+jacobian/*
+
 __pycache__/
 *.py[cod]
 
