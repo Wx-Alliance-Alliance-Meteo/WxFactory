@@ -12,7 +12,7 @@ from numpy import zeros, zeros_like, save, load, real, imag, hstack, max, abs #,
 from numpy.linalg import eigvals
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
-from scipy.sparse import csc_matrix, save_npz, load_npz, vstack
+from scipy.sparse import csc_matrix, lil_matrix, save_npz, load_npz, vstack
 import scipy.sparse.linalg
 
 from program_options import Configuration
@@ -26,6 +26,27 @@ from rhs_sw import rhs_sw
 from rhs_sw_explicit import rhs_sw_explicit
 from rhs_sw_implicit import rhs_sw_implicit
 
+
+num_el = 0
+order = 0
+num_var = 3
+num_tile = 0
+timestep = 0.0
+
+def permutations():
+   p = []
+   for t in range(num_tile):
+      for e1 in range(num_el):
+         for e2 in range(num_el):
+            for o1 in range(order):
+               for o2 in range(order):
+                  for v in range(num_var):
+                     p.append(num_var*order*order*num_el*num_el*t +
+                           order*order*num_el*num_el*v +
+                           order*order*num_el*e1 +
+                           order*num_el*o1 +
+                           order*e2 + o2)
+   return p
 
 def manual_spy(mat, ax):
    from scipy.sparse import coo_matrix
@@ -49,12 +70,19 @@ def get_matvec_sw(cfg_file, rhs):
    :return: (Q, matvec)
    """
    param = Configuration(cfg_file)
+
    ptopo = Distributed_World()
    geom = cubed_sphere(param.nb_elements_horizontal, param.nb_elements_vertical, param.nbsolpts, param.λ0, param.ϕ0,
                        param.α0, param.ztop, ptopo)
    mtrx = DFR_operators(geom, param)
    metric = Metric(geom)
    Q, topo = initialize_sw(geom, metric, mtrx, param)
+
+   global num_el, order, num_tile, timestep
+   num_el   = param.nb_elements_horizontal
+   order    = param.nbsolpts
+   num_tile = ptopo.size
+   timestep = param.dt
 
    if rhs == 'all':
       rhs = lambda q: rhs_sw(q, geom, mtrx, metric, topo, ptopo, param.nbsolpts, param.nb_elements_horizontal, param.case_number, param.filter_apply)
@@ -69,12 +97,13 @@ def get_matvec_sw(cfg_file, rhs):
    return Q, lambda v: matvec_rat(v, param.dt, Q, rhs), rhs
 
 
-def gen_matrix(Q, matvec, rhs_fun, jac_file, rhs_file):
+def gen_matrix(Q, matvec, rhs_fun, jac_file, rhs_file, permute):
    """
    Compute and store the Jacobian matrix
    :param Q: Solution vector where the Jacobian is computed
    :param matvec: Function handle to compute the action of the jacobian on a vector
    :param jac_file: Path to the file where the jacobian will be stored
+   :param permute: Whether to permute matrix rows and columns to groups entries associated with an element into a block
    """
    neq, ni, nj = Q.shape
    n_loc = Q.size
@@ -95,7 +124,8 @@ def gen_matrix(Q, matvec, rhs_fun, jac_file, rhs_file):
       t0 = time()
 
    def print_progress(current, total, t_init):
-      remaining = (time() - t_init) * (float(total) / current - 1.0)
+      now = time()
+      remaining = (now - t_init) * (float(total) / current - 1.0)
       print(f'\r {current * 100.0 / total : 5.1f}% ({remaining: 4.0f}s)', end=' ')
 
    for r in range(size):
@@ -112,24 +142,22 @@ def gen_matrix(Q, matvec, rhs_fun, jac_file, rhs_file):
             print_progress(idx, total_num_iter, t0)
 
    J_comm = mpi4py.MPI.COMM_WORLD.gather(J, root=0)
-   rhs_comm = mpi4py.MPI.COMM_WORLD.gather(rhs_fun(Q).flatten() / 1800.0, root=0)
-   Q_comm = mpi4py.MPI.COMM_WORLD.gather(Q.flatten(), root=0)
+   rhs_comm = mpi4py.MPI.COMM_WORLD.gather(rhs_fun(Q).flatten() / timestep, root=0)
 
    if rank == 0:
       print('')
+
       glb_J = vstack(J_comm)
+      glb_rhs = hstack(rhs_comm)
+
+      if permute:
+         p = permutations()
+         glb_J = csc_matrix(lil_matrix(glb_J)[p, :][:, p])
+         glb_rhs = glb_rhs[p]
+
       # save(jac_file, glb_J)
       save_npz(jac_file, glb_J)
-
-      glb_rhs = hstack(rhs_comm)
       save(rhs_file, glb_rhs)
-
-      glb_Q = hstack(Q_comm)
-
-      # print(f'Q: \n{Q[0]}')
-      # print(f'rhs: \n{rhs_comm[0]}')
-      # print(f'shape Q.flat: {glb_Q.shape}, shape J: {glb_J.shape}')
-      # print(f'Ax: \n{glb_J @ glb_Q}')
 
 
 def compute_eig(jac_file, eig_file):
@@ -214,7 +242,8 @@ def main(args):
 
       for rhs in rhs_type:
          (Q, matvec, rhs_fun) = get_matvec_sw(config, rhs)
-         gen_matrix(Q, matvec, rhs_fun, f'./jacobian/{name}/J_{rhs}', f'./jacobian/{name}/initial_rhs_{rhs}.npy')
+         gen_matrix(Q, matvec, rhs_fun, f'./jacobian/{name}/J_{rhs}', f'./jacobian/{name}/initial_rhs_{rhs}.npy',
+                    permute=args.permute)
    elif args.plot:
       name = args.name
       pdf_spy = PdfPages('./jacobian/spy_' + name + '.pdf')
@@ -240,6 +269,7 @@ if __name__ == '__main__':
    command = parser.add_mutually_exclusive_group()
    command.add_argument('--gen-case', type=str, default=None, help='Generate a system matrix from given case file (need to run it with 6 processes')
    command.add_argument('--plot', action='store_true', help='Plot the given system matrix and its eigenvalues')
+   parser.add_argument('--permute', action='store_true', help='Permute the jacobian matrix so that all nodes/variables associated with an element form a block')
    parser.add_argument('name', type=str, help='Name of the case/system matrix')
 
    main(parser.parse_args())
