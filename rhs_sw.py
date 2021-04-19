@@ -90,7 +90,7 @@ def rhs_sw(Q, geom, mtrx, metric, topo, ptopo, nbsolpts: int, nb_elements_horiz:
    ptopo.xchange_scalars(geom, h_itf_i, h_itf_j)
    ptopo.xchange_vectors(geom, u1_itf_i, u2_itf_i, u1_itf_j, u2_itf_j)
 
-   # Common Rusanov fluxes
+   # Common AUSM fluxes
    for itf in range(nb_interfaces_horiz):
 
       elem_L = itf
