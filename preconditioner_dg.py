@@ -10,7 +10,7 @@ from matrices      import DFR_operators
 from metric        import Metric
 
 
-class Preconditioner:
+class DG_preconditioner:
 
    def __init__(self, param, geometry, ptopo, operators, rhs_func, prefix='   ', depth=1):
 
@@ -79,7 +79,7 @@ class Preconditioner:
       self.small_mat      = None
       self.preconditioner = None
       if self.small_order > min_order and self.depth < max_depth:
-         self.preconditioner = Preconditioner(
+         self.preconditioner = DG_preconditioner(
             self.small_param, self.small_geom, self.ptopo, self.small_operators, self.rhs_func, self.prefix + '   ',
             self.depth + 1)
 
