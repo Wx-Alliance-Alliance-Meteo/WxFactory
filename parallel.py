@@ -235,7 +235,7 @@ class Distributed_World:
          def get_rows(array, index1, index2):
             return array[:, index1, index2, :]
 
-         X = geom.X[0, 0, :]
+         X = geom.X[0, 0, :] # TODO : debug avec niveau 0
          Y = geom.Y[0, :, 0]
 
       else:

@@ -1,8 +1,139 @@
 import numpy
 import math
 
-from definitions import *
+from definitions import cpd, gravity, p0, Rd
 from winds import *
+
+def dcmip_advection_deformation(geom, metric, mtrx, param, time=0):
+   """ Test 11 - Deformational Advection Test """
+   tau     = 12.0 * 86400.0                             # period of motion 12 days
+   u0      = (2.0 * math.pi * geom.earth_radius) / tau  # 2 pi a / 12 days
+   k0      = (10.0 * geom.earth_radius) / tau,          # Velocity Magnitude
+   omega0  = (23000.0 * math.pi) / tau                  # Velocity Magnitude
+   T0      = 300.0                                      # temperature
+   H       = Rd * T0 / gravity                          # scale height
+   RR      = 1.0/2.0                                    # horizontal half width divided by 'a'
+   ZZ      = 1000.0                                     # vertical half width
+   z0      = 5000.0                                     # center point in z
+   lambda0 = 5.0 * math.pi / 6.0                        # center point in longitudes
+   lambda1 = 7.0 * math.pi / 6.0                        # center point in longitudes
+   phi0    = 0.0                                        # center point in latitudes
+   phi1    = 0.0
+
+   #-----------------------------------------------------------------------
+   #    HEIGHT AND PRESSURE
+   #-----------------------------------------------------------------------
+
+   p    = p0 * numpy.exp(-geom.height / H)
+   ptop = p0 * math.exp(-12000.0 / H)
+
+   #-----------------------------------------------------------------------
+   #    THE VELOCITIES ARE TIME DEPENDENT AND THEREFORE MUST BE UPDATED
+   #    IN THE DYNAMICAL CORE
+   #-----------------------------------------------------------------------
+
+   lonp = geom.lon - 2.0 * math.pi * time / tau
+
+   # Shape function
+   bs = 0.2
+   s = 1.0 + math.exp( (ptop-p0)/(bs*ptop) ) - numpy.exp( (p-p0)/(bs*ptop)) - numpy.exp( (ptop-p)/(bs*ptop))
+
+   # Zonal Velocity
+        
+   ud = (omega0 * geom.earth_radius)/(bs*ptop) * numpy.cos(lonp) * (numpy.cos(geom.lat)**2.0) * math.cos(2.0 * math.pi * time / tau) * ( - numpy.exp( (p-p0)/(bs*ptop)) + numpy.exp( (ptop-p)/(bs*ptop))  )
+
+   u = k0 * numpy.sin(lonp) * numpy.sin(lonp) * numpy.sin(2.0 * geom.lat) * math.cos(math.pi * time / tau) + u0 * numpy.cos(geom.lat) + ud
+
+   # Meridional Velocity
+
+   v = k0 * numpy.sin(2.0 * lonp) * numpy.cos(geom.lat) * math.cos(math.pi * time / tau)
+
+   # Vertical Velocity 
+        
+   w = -((Rd * T0) / (gravity * p)) * omega0 * numpy.sin(lonp) * numpy.cos(geom.lat) * math.cos(2.0 * math.pi * time / tau) * s
+
+   # Contravariant components
+
+   u1_contra, u2_contra = wind2contra(u, v, geom)
+   u3_contra = w
+
+   #-----------------------------------------------------------------------
+   #    TEMPERATURE IS CONSTANT 300 K
+	#-----------------------------------------------------------------------
+
+   t = T0
+
+	#-----------------------------------------------------------------------
+	#    PHIS (surface geopotential)
+	#-----------------------------------------------------------------------
+
+   phis = 0.0
+
+	#-----------------------------------------------------------------------
+	#    PS (surface pressure)
+	#-----------------------------------------------------------------------
+
+   ps = p0
+
+	#-----------------------------------------------------------------------
+	#    RHO (density)
+	#-----------------------------------------------------------------------
+
+   rho = p/(Rd*t)
+
+	#-----------------------------------------------------------------------
+	#     initialize Q, set to zero
+	#-----------------------------------------------------------------------
+
+   q = 0.0
+
+	#-----------------------------------------------------------------------
+	#     initialize TV (virtual temperature)
+	#-----------------------------------------------------------------------
+   
+   tv = t
+   theta = tv * (p0 / p)**(Rd/cpd)
+
+	#-----------------------------------------------------------------------
+	#     initialize tracers
+	#-----------------------------------------------------------------------
+
+   # Tracer 1 - Cosine Bells
+
+   # To calculate great circle distance
+
+   sin_tmp  = numpy.sin(geom.lat) * math.sin(phi0)
+   cos_tmp  = numpy.cos(geom.lat) * math.cos(phi0)
+   sin_tmp2 = numpy.sin(geom.lat) * math.sin(phi1)
+   cos_tmp2 = numpy.cos(geom.lat) * math.cos(phi1)
+
+   # great circle distance without 'a'
+
+   r  = numpy.arccos(sin_tmp + cos_tmp * numpy.cos(geom.lon-lambda0))
+   r2  = numpy.arccos(sin_tmp2 + cos_tmp2 * numpy.cos(geom.lon-lambda1))
+   d1 = numpy.minimum( 1.0, (r / RR)**2 + ((geom.height - z0) / ZZ)**2 )
+   d2 = numpy.minimum( 1.0, (r2 / RR)**2 + ((geom.height - z0) / ZZ)**2 )
+
+   q1 = 0.5 * (1.0 + numpy.cos(math.pi * d1)) + 0.5 * (1.0 + numpy.cos(math.pi * d2))
+
+   # Tracer 2 - Correlated Cosine Bells
+
+   q2 = 0.9 - 0.8 * q1**2
+
+   # Tracer 3 - Slotted Ellipse
+
+   # Make the ellipse
+   q3 = numpy.where(d1 <= RR, 1.0, numpy.where(d2 <= RR, 1.0, 0.1))
+
+   # Put in the slot
+   q3 = numpy.where(numpy.logical_and(geom.height > z0, abs(geom.lat) < 0.125), 0.1, q3)
+
+   # Tracer 4: q4 is chosen so that, in combination with the other three tracer
+   #           fields with weight (3/10), the sum is equal to one
+
+   q4 = 1.0 - 0.30 * (q1 + q2 + q3)
+
+   return rho, u1_contra, u2_contra, u3_contra, theta, q1, q2, q3, q4
 
 def dcmip_mountain(geom, metric, mtrx, param):
 
@@ -62,9 +193,6 @@ def dcmip_mountain(geom, metric, mtrx, param):
 
 def dcmip_gravity_wave(geom, metric, mtrx, param):
 
-   X       = 125.0                # Reduced Earth reduction factor
-   rotation_speed      = 0.0                  # Rotation Rate of Earth (om)
-   radius      = earth_radius/X              # New Radius of small Earth (as)
    u0      = 20.0                 # Reference Velocity
    Teq     = 300.0                # Temperature at Equator
    Peq     = 100000.0             # Reference PS at Equator
@@ -81,28 +209,25 @@ def dcmip_gravity_wave(geom, metric, mtrx, param):
 
    p0 = 100000.0 # reference pressure (Pa)
 
-   ni, nj, nk = geom.height.shape
+   fld_shape = geom.height.shape
 
    # Zonal Velocity
    u = u0 * numpy.cos(geom.lat)
-#   u = numpy.zeros((ni, nj, nk))
-#   for k in range(nk):
-#      u[:,:,k] = u0 * numpy.cos(geom.lat)
    
    # Meridional Velocity
-   v = numpy.zeros((ni,nj,nk))
+   v = numpy.zeros(fld_shape)
 
    # Contravariant components
    u1_contra, u2_contra = wind2contra(u, v, geom)
 
    # Vertical Velocity
-   u3_contra = numpy.zeros((ni,nj,nk))
+   u3_contra = numpy.zeros(fld_shape)
 
    # Surface temperature
-   Ts = bigG + (Teq - bigG) * numpy.exp( -(u0 * N2 / (4.0 * gravity**2)) * (u0 + 2.0 * rotation_speed * radius) * (numpy.cos(2.0 * geom.lat) - 1.0) )
+   Ts = bigG + (Teq - bigG) * numpy.exp( -(u0 * N2 / (4.0 * gravity**2)) * (u0 + 2.0 * geom.rotation_speed * geom.earth_radius) * (numpy.cos(2.0 * geom.lat) - 1.0) )
    
    # Pressure
-   ps = Peq * numpy.exp( (u0 / (4.0 * bigG * Rd)) * (u0 + 2.0 * rotation_speed * radius) * (numpy.cos(2.0 * geom.lat) - 1.0) ) * (Ts/Teq)**inv_kappa
+   ps = Peq * numpy.exp( (u0 / (4.0 * bigG * Rd)) * (u0 + 2.0 * geom.rotation_speed * geom.earth_radius) * (numpy.cos(2.0 * geom.lat) - 1.0) ) * (Ts/Teq)**inv_kappa
 
    p = ps * ( (bigG / Ts) * numpy.exp(-N2 * geom.height / gravity) + 1.0 - (bigG / Ts) )**inv_kappa
 
@@ -113,18 +238,18 @@ def dcmip_gravity_wave(geom, metric, mtrx, param):
    Tb = bigG * (1.0 - numpy.exp(N2 * geom.height / gravity)) + Ts * numpy.exp(N2 * geom.height / gravity)
 
    # density is initialized with unperturbed background temperature, temperature perturbation is added afterwards
-   density = p / (Rd * Tb)
+   rho = p / (Rd * Tb)
 
    # Potential temperature perturbation
    sin_tmp = numpy.sin(geom.lat) * math.sin(phic)
    cos_tmp = numpy.cos(geom.lat) * math.cos(phic)
 
-   r = radius * numpy.cos(sin_tmp + cos_tmp * numpy.cos(geom.lon - lambdac))
+   r = earth_radius * numpy.cos(sin_tmp + cos_tmp * numpy.cos(geom.lon - lambdac))
    s = (d**2)/(d**2 + r**2)
 
    theta_pert = delta_theta * s * numpy.sin(2.0 * math.pi * geom.height / Lz)
 
    # Potential temperature
    theta = theta_base + theta_pert
-  
-   return density, u1_contra, u2_contra, u3_contra, theta
+
+   return rho, u1_contra, u2_contra, u3_contra, theta

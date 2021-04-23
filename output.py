@@ -158,6 +158,39 @@ def output_init(geom, param):
       potential_temp.coordinates = 'lons lats'
       potential_temp.grid_mapping = 'cubed_sphere'
       potential_temp.set_collective(True)
+   
+      if param.case_number == 11:
+         q1 = ncfile.createVariable('q1', numpy.dtype('double').char, ('time',) + grid_data)
+         q1.long_name = 'q1'
+         q1.units = 'kg m-3'
+         q1.standard_name = 'Tracer q1'
+         q1.coordinates = 'lons lats'
+         q1.grid_mapping = 'cubed_sphere'
+         q1.set_collective(True)
+
+         q2 = ncfile.createVariable('q2', numpy.dtype('double').char, ('time',) + grid_data)
+         q2.long_name = 'q2'
+         q2.units = 'kg m-3'
+         q2.standard_name = 'Tracer q2'
+         q2.coordinates = 'lons lats'
+         q2.grid_mapping = 'cubed_sphere'
+         q2.set_collective(True)
+
+         q3 = ncfile.createVariable('q3', numpy.dtype('double').char, ('time',) + grid_data)
+         q3.long_name = 'q3'
+         q3.units = 'kg m-3'
+         q3.standard_name = 'Tracer q3'
+         q3.coordinates = 'lons lats'
+         q3.grid_mapping = 'cubed_sphere'
+         q3.set_collective(True)
+
+         q4 = ncfile.createVariable('q4', numpy.dtype('double').char, ('time',) + grid_data)
+         q4.long_name = 'q4'
+         q4.units = 'kg m-3'
+         q4.standard_name = 'Tracer q4'
+         q4.coordinates = 'lons lats'
+         q4.grid_mapping = 'cubed_sphere'
+         q4.set_collective(True)
 
    rank = mpi4py.MPI.COMM_WORLD.Get_rank()
 
@@ -204,13 +237,23 @@ def output_netcdf(Q, geom, metric, mtrx, topo, step, param):
       u3 = Q[idx_rho, :, :, :] / rho
 
       # TODO: Add 3d contra2wind to compute U,V and W
-      # u, v, w = contra2wind(u1, u2, u3, geom)
+      u, v = contra2wind(u1, u2, geom)
+      w = u3
 
       ncfile['rho'][idx, rank, :,:,:] = Q[idx_rho, :,:,:]
-      #ncfile['U'][idx, rank, :, :] = u
-      #ncfile['V'][idx, rank, :, :] = v
-      #ncfile['W'][idx, rank, :, :] = w
+      ncfile['U'][idx, rank, :, :] = u
+      ncfile['V'][idx, rank, :, :] = v
+      ncfile['W'][idx, rank, :, :] = w
       ncfile['theta'][idx, rank, :,:,:] = Q[idx_rho_theta, :,:,:] / rho
+
+      if param.case_number == 11:
+         ncfile['q1'][idx, rank, :,:,:] = Q[5, :,:,:]
+         ncfile['q2'][idx, rank, :,:,:] = Q[6, :,:,:]
+         ncfile['q3'][idx, rank, :,:,:] = Q[7, :,:,:]
+         ncfile['q4'][idx, rank, :,:,:] = Q[8, :,:,:]
+
+         import graphx
+         graphx.plot_level(geom, Q[8,:,:,:], 24)
 
 def output_finalize():
    """ Finalise the output netCDF4 file."""

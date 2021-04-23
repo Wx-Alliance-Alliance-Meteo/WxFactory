@@ -29,7 +29,7 @@ def main(args) -> int:
    ptopo = Distributed_World()
 
    # Create the mesh
-   geom = cubed_sphere(param.nb_elements_horizontal, param.nb_elements_vertical, param.nbsolpts, param.λ0, param.ϕ0, param.α0, param.ztop, ptopo)
+   geom = cubed_sphere(param.nb_elements_horizontal, param.nb_elements_vertical, param.nbsolpts, param.λ0, param.ϕ0, param.α0, param.ztop, ptopo, param)
 
    # Build differentiation matrice and boundary correction
    mtrx = DFR_operators(geom, param)
@@ -52,7 +52,7 @@ def main(args) -> int:
    if param.output_freq > 0:
       output_init(geom, param)
       output_netcdf(Q, geom, metric, mtrx, topo, step, param)  # store initial conditions
-
+   
    # Time stepping
    if param.time_integrator.lower()[:3] == 'epi' and param.time_integrator[3:].isdigit():
       order = int(param.time_integrator[3:])

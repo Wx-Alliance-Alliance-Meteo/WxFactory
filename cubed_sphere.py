@@ -2,10 +2,10 @@ import math
 import numpy
 import sphere
 import quadrature
-from definitions import *
+import definitions
 
 class cubed_sphere:
-   def __init__(self, nb_elements_horizontal:int , nb_elements_vertical: int, nbsolpts: int, λ0: float, ϕ0: float, α0: float, ztop: float, ptopo):
+   def __init__(self, nb_elements_horizontal:int , nb_elements_vertical: int, nbsolpts: int, λ0: float, ϕ0: float, α0: float, ztop: float, ptopo, param):
 
       #      +---+
       #      | 4 |
@@ -77,7 +77,7 @@ class cubed_sphere:
             x3[idx : idx + nbsolpts] = interfaces_x3[k] + scaled_points * Δx3
 
          # TODO: terrain-following coordinate system
-         X3, X2, X1 = numpy.meshgrid(x3, x1, x2, indexing = 'ij')
+         X3, X1, X2 = numpy.meshgrid(x3, x1, x2, indexing = 'ij')
       else:
          nk = 0
          x3 = numpy.zeros(nk)
@@ -210,6 +210,16 @@ class cubed_sphere:
 
       # Map to the interval [0, 2 pi]
       lon_itf_j[lon_itf_j<0.0] = lon_itf_j[lon_itf_j<0.0] + (2.0 * math.pi)
+
+      # Check for resized planet
+      fact_X = 1.
+      planet_is_rotating = 1
+      if param.equations == "Euler":
+         if param.case_number == 31:
+            fact_X = 125.
+            planet_is_rotating = 0.
+      self.earth_radius   = definitions.earth_radius / fact_X
+      self.rotation_speed = definitions.rotation_speed / fact_X * planet_is_rotating
 
       self.solutionPoints = solutionPoints
       self.glweights = glweights

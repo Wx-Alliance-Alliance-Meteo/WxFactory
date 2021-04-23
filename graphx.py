@@ -16,6 +16,37 @@ def plot_sphere(geom):
          mayavi.mlab.mesh(glb_x[f], glb_y[f], glb_z[f])
       mayavi.mlab.show()
 
+def plot_level(geom, field, lvl):
+   glb_x     = mpi4py.MPI.COMM_WORLD.gather(geom.cartX[lvl].T, root=0)
+   glb_y     = mpi4py.MPI.COMM_WORLD.gather(geom.cartY[lvl].T, root=0)
+   glb_z     = mpi4py.MPI.COMM_WORLD.gather(geom.cartZ[lvl].T, root=0)
+   glb_field = mpi4py.MPI.COMM_WORLD.gather(field[lvl].T, root=0)
+
+   ptopo_size = mpi4py.MPI.COMM_WORLD.Get_size()
+   if mpi4py.MPI.COMM_WORLD.Get_rank() == 0:
+      min_val = float("inf")
+      max_val = -float("inf")
+      for f in range(ptopo_size):
+         face_min = glb_field[f].min()
+         face_max = glb_field[f].max()
+         if face_max > max_val:
+            max_val = face_max
+         if face_min < min_val:
+            min_val = face_min
+
+      fig = mayavi.mlab.figure(0, size=(800, 800), bgcolor=(0,0,0))
+      for f in range(ptopo_size):
+         s = mayavi.mlab.mesh(glb_x[f], glb_y[f], glb_z[f], scalars=glb_field[f], colormap="jet", vmin=min_val, vmax=max_val)
+
+      (_,_,dist,_) = mayavi.mlab.view()
+      mayavi.mlab.view(azimuth=270, elevation=90, distance=dist)
+
+      mayavi.mlab.colorbar()
+      mayavi.mlab.show()
+
+   mpi4py.MPI.COMM_WORLD.Barrier()
+
+
 
 def plot_field(geom, field):
    glb_x     = mpi4py.MPI.COMM_WORLD.gather(geom.cartX.T, root=0)
