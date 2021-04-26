@@ -9,18 +9,29 @@ import sys
 from glob import glob
 import re
 
-def plot_field(dataFile, outputFile, idx = -1, field = 'h', nContour = 10, contoursLevels = None, error = False, lat_lims = (-90, 90), lon_lims = (-180,180)):
+def plot_field(dataFile, outputFile, idx = -1, field = 'h', nContour = 10, contoursLevels = None, error = False, lat_lims = (-90, 90), lon_lims = (-180,180), t = None, dataRefFile = None):
    # Load data
    data = netCDF4.Dataset(dataFile, 'r')
 
    # Setup figure
    fig = plt.figure(figsize=(6, 3))
 
+   time = data['time'][:]
+   if t is not None:
+      idx = numpy.where(time == t * 3600 * 24)[0][0]
+
    lons = data['lons'][:].flatten()
    lats = data['lats'][:].flatten()
    vals = data[field][idx,...].flatten()
+
    if error:
-      vals = numpy.maximum(numpy.finfo(float).eps, numpy.abs((vals - data['h'][0,...].flatten()) / data['h'][0,...].flatten()))
+      if dataRefFile is None:
+         vals_ref = data[field][0,...].flatten()
+      else:
+         data_ref = netCDF4.Dataset(dataRefFile, 'r')
+         vals_ref = data_ref[field][idx, ...].flatten()
+
+      vals = numpy.maximum(numpy.finfo(float).eps, numpy.abs((vals - vals_ref) / vals_ref))
 
    delta_lat = 30
    delta_lon = 30
@@ -53,9 +64,10 @@ def plot_field(dataFile, outputFile, idx = -1, field = 'h', nContour = 10, conto
 
    if contoursLevels:
       filled_c = plt.tricontourf(triang, vals, levels = contoursLevels, cmap='jet')
-      plt.tricontour(triang, vals, levels=contoursLevels, colors='k')
+      #plt.tricontour(triang, vals, levels=contoursLevels, colors='k')
    elif error:
-      filled_c = plt.tricontourf(triang, vals, locator = ticker.LogLocator(), vmin = 1e-12, vmax = 2e-5, cmap='jet')
+      #filled_c = plt.tricontourf(triang, vals, locator = ticker.LogLocator(), vmin = 1e-14, vmax = 2e-5, cmap='jet')
+      filled_c = plt.tricontourf(triang, vals, locator=ticker.LogLocator(), cmap='jet')
    else:
       filled_c = plt.tricontourf(triang, vals, levels = numpy.linspace(vmin, vmax, nContour), cmap='jet')
 
@@ -111,13 +123,15 @@ def plot_conservation(logFolder, outputFolder):
       for match in ['mass', 'energy', 'enstrophy']:
          fig = plt.figure(figsize=(5, 3))
          for order in orders:
-            with open(logFolder + '/log_18x' + str(order) + '_' + case + '/1/rank.0/stdout') as of :
+            print('log_' + case + '_order' + str(order) + '.ini')
+            with open(logFolder + '/log_' + case + '_order' + str(order) + '.ini/1/rank.0/stdout') as of :
                content = of.read()
             m = re.findall('normalized integral of ' + match + ' = (.*)$', content, re.MULTILINE)
             val = list(map(float, m))
             plt.plot(numpy.arange(len(val)) * 900/(60*60*24), val)
             ax = plt.gca()
-            ax.yaxis.get_major_formatter().set_powerlimits((0, 1))
+            ax.set_yscale('symlog', linthresh=1e-15)
+            #ax.yaxis.get_major_formatter().set_powerlimits((0, 1))
 
 
          plt.legend(['Order ' + str(o) for o in orders], loc='upper center', bbox_to_anchor=(0.5, -0.22), ncol=5)
@@ -132,7 +146,8 @@ def plot_error(logFolder, outputFolder):
       for match in ['l1', 'l2', 'linf']:
          fig = plt.figure(figsize=(5, 3))
          for order in orders:
-            with open(logFolder + '/log_18x' + str(order) + '_' + case + '/1/rank.0/stdout') as of :
+            print('log_' + case + '_order' + str(order) + '.ini')
+            with open(logFolder + '/log_' + case + '_order' + str(order) + '.ini/1/rank.0/stdout') as of :
                content = of.read()
             m = re.findall(match + ' = (.*?)\s', content, re.MULTILINE)
             val = list(map(float, m))
@@ -154,7 +169,8 @@ def plot_conv(logFolder, outputFolder, type):
    for match in ['l1', 'l2', 'linf']:
       error = []
       for n in nvec:
-         with open(logFolder + '/log_lauter_' + str(type) + '_' + str(n) + '/1/rank.0/stdout') as of:
+         print('log_lauter_' + str(type) + '_' + str(n) + '.ini')
+         with open(logFolder + '/log_lauter_' + str(type) + '_' + str(n) + '.ini/1/rank.0/stdout') as of:
             content = of.read()
 
          m = re.findall(match + ' = (.*?)\s', content, re.MULTILINE)
@@ -182,41 +198,53 @@ def plot_res(dataFolder, plotFolder):
          (case, resolution, order) = m.group(1, 2, 3)
 
          if case == 'case2':
+            large_dt = False
             contoursLevels = []
             field = []
-            idx = []
             lat_lims = (-90, 90)
             lon_lims = (-180, 180)
+            time = [5]
          elif case == 'galewsky':
+            large_dt = False
             contoursLevels = [list(numpy.arange(-1.5e-4, 1.8e-4, 2e-5))]
             field = ['RV']
-            idx = [-1]
             lat_lims = (0, 90)
             lon_lims = (-180, 180)
+            time = [6]
          elif case == 'case6':
+            large_dt = True
             contoursLevels = [list(range(8000, 10700, 100))]
             field = ['h']
-            idx= [-1, -1]
             lat_lims = (-90, 90)
             lon_lims = (-180, 180)
-         else:
+            time = [14]
+         else: # case 5
+            large_dt = True
             contoursLevels = [list(range(5000,6050,50)), list(numpy.arange(-5e-5, 5e-5, 5e-6))]
             field = ['h', 'RV']
-            idx = [-1, -1, 7*24*3600//900]
             lat_lims = (-90, 90)
             lon_lims = (-180, 180)
+            time = [15, 7]
 
-         print(case, resolution, order)
          name = case + '_' + str(resolution) + 'x' + str(order)
          dataFile = dataFolder + '/' + name + '.nc'
+         print(name + '.nc')
 
          for i,f in enumerate(field):
             fieldFile = plotFolder + '/' + name + '_' + f + '.pdf'
-            plot_field(dataFile, fieldFile, idx = idx[i], field=f, contoursLevels=contoursLevels[i], lat_lims = lat_lims, lon_lims = lon_lims)
+            plot_field(dataFile, fieldFile, field=f, contoursLevels=contoursLevels[i], lat_lims = lat_lims, lon_lims = lon_lims, t = time[i])
 
          if case == 'case2':
             fieldFile = plotFolder + '/' + name + '_error_field.pdf'
-            plot_field(dataFile, fieldFile, error=True)
+            plot_field(dataFile, fieldFile, error=True, t = time[0])
+
+         if large_dt:
+            print(name + '_dt_4h.nc')
+            dataFile_large_dt = dataFolder + '/' + name + '_dt_4h.nc'
+            fieldFile = plotFolder + '/' + name + '_h_dt_4h.pdf'
+            plot_field(dataFile_large_dt, fieldFile, contoursLevels=contoursLevels[0], lat_lims=lat_lims, lon_lims=lon_lims, t=time[0])
+            fieldFile = plotFolder + '/' + name + '_error_h_dt_4h.pdf'
+            plot_field(dataFile_large_dt, fieldFile, error=True, t=time[0], dataRefFile=dataFile)
 
          # windFile = plotFolder + '/' + name + '_wind.pdf'
          # plot_quiver(dataFile, windFile)
@@ -225,7 +253,7 @@ if __name__ == '__main__':
    if len(sys.argv) != 3:
       print('USAGE : python plot.py dataFolder plotFolder')
    else:
-      plot_res(sys.argv[1]+'/model_output', sys.argv[2])
+      plot_res(sys.argv[1], sys.argv[2])
       plot_conservation(sys.argv[1], sys.argv[2])
       plot_error(sys.argv[1], sys.argv[2])
       plot_conv(sys.argv[1], sys.argv[2], 'ne')
