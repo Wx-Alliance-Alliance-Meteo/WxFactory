@@ -15,6 +15,7 @@ from preconditioner_dg import DG_preconditioner
 from preconditioner_fv import FV_preconditioner
 from program_options import Configuration
 from rhs_euler       import rhs_euler
+from rhs_fv          import rhs_sw_fv
 from rhs_sw          import rhs_sw
 from rhs_sw_explicit import rhs_sw_explicit
 from rhs_sw_implicit import rhs_sw_implicit
@@ -25,6 +26,11 @@ def main(args) -> int:
 
    # Read configuration file
    param = Configuration(args.config)
+
+   if param.discretization == 'fv':
+      param.nb_elements_horizontal = param.nb_elements_horizontal * param.nbsolpts
+      param.nb_elements_vertical   = param.nb_elements_vertical * param.nbsolpts
+      param.nbsolpts = 1
 
    # Set up distributed world
    ptopo = Distributed_World()
@@ -42,7 +48,12 @@ def main(args) -> int:
    if param.equations == "shallow water":
       Q, topo = initialize_sw(geom, metric, mtrx, param)
 
-      rhs_handle = lambda q: rhs_sw(q, geom, mtrx, metric, topo, ptopo, param.nbsolpts, param.nb_elements_horizontal, param.case_number, param.filter_apply)
+      if param.discretization == 'dg':
+         rhs_handle = lambda q: rhs_sw(q, geom, mtrx, metric, topo, ptopo, param.nbsolpts, param.nb_elements_horizontal, param.case_number, param.filter_apply)
+      elif param.discretization == 'fv':
+         rhs_handle = lambda q: rhs_sw_fv(q, geom, mtrx, metric, topo, ptopo, param.nbsolpts, param.nb_elements_horizontal, param.case_number, param.filter_apply)
+      else:
+         raise ValueError('Unknown discretization given')
 
    elif param.equations == "Euler":
       Q, topo = initialize_euler(geom, metric, mtrx, param)
