@@ -1,6 +1,7 @@
 import numpy
 
-from definitions import idx_h, idx_hu1, idx_hu2, gravity
+from definitions  import idx_h, idx_hu1, idx_hu2, gravity
+from graphx       import plot_field, plot_array, plot_vector_field
 
 def rhs_sw_fv(Q, geom, mtrx, metric, topo, ptopo,
               nbsolpts: int, nb_elements_horiz: int, case_number: int,
@@ -31,67 +32,146 @@ def rhs_sw_fv(Q, geom, mtrx, metric, topo, ptopo,
    flux_e2_x2 = metric.sqrtG * (h_u2 * u2 + 0.5 * gravity * metric.H_contra_22 * h_squared)
 
    # --- Compute flux at interfaces
-   flux_itf = numpy.zeros((3, 2, 2, num_elements + 1, num_elements), dtype=datatype)
-   f0_itf_ns = flux_itf[0, 0, :, :, :]
-   f0_itf_ew = flux_itf[0, 1, :, :, :]
-   f1_itf_ns = flux_itf[1, 0, :, :, :]
-   f1_itf_ew = flux_itf[1, 1, :, :, :]
-   f2_itf_ns = flux_itf[2, 0, :, :, :]
-   f2_itf_ew = flux_itf[2, 1, :, :, :]
+   # flux_itf = numpy.zeros((3, 2, 2, num_elements + 1, num_elements), dtype=datatype)
 
-   # e0
-   f0_itf_ew[0, :-1, :] = flux_e0_x1[:, :]    # west-east, first component
-   f0_itf_ew[1, :-1, :] = flux_e0_x2[:, :]    # west-east, second component
-   f0_itf_ns[0, :-1, :] = flux_e0_x1[:, :].T  # south-north
-   f0_itf_ns[1, :-1, :] = flux_e0_x2[:, :].T  # south-north
+   f0_itf_ew = numpy.zeros((num_elements, num_elements + 1), dtype=datatype)
+   f1_itf_ew = numpy.zeros_like(f0_itf_ew)
+   f2_itf_ew = numpy.zeros_like(f0_itf_ew)
 
-   # e1
-   f1_itf_ew[0, :-1, :] = flux_e1_x1[:, :]    # west-east
-   f1_itf_ew[1, :-1, :] = flux_e1_x2[:, :]    # west-east
-   f1_itf_ns[0, :-1, :] = flux_e1_x1[:, :].T  # south-north
-   f1_itf_ns[1, :-1, :] = flux_e1_x2[:, :].T  # south-north
+   f0_itf_ns = numpy.zeros((num_elements + 1, num_elements), dtype=datatype)
+   f1_itf_ns = numpy.zeros_like(f0_itf_ns)
+   f2_itf_ns = numpy.zeros_like(f0_itf_ns)
 
-   # e2
-   f2_itf_ew[0, :-1, :] = flux_e2_x1[:, :]    # west-east
-   f2_itf_ew[1, :-1, :] = flux_e2_x2[:, :]    # west-east
-   f2_itf_ns[0, :-1, :] = flux_e2_x1[:, :].T  # south-north
-   f2_itf_ns[1, :-1, :] = flux_e2_x2[:, :].T  # south-north
+   f0_itf_ew[:, :-1]  = flux_e0_x1[:, :]
+   f0_itf_ew[:, 1:]  += flux_e0_x1[:, :]
 
-   for i in range(3):
-      for j in range(2):
-         for k in range(2):
-            flux_itf[i, j, k, 1:, :] += flux_itf[i, j, k, :-1, :]
+   f1_itf_ew[:, :-1]  = flux_e1_x1[:, :]
+   f1_itf_ew[:, 1:]  += flux_e1_x1[:, :]
 
-   for iEq in range(3):
-      f_n, f_s, f_w, f_e = ptopo.xchange_simple_vectors(
-         geom.X[0, :], geom.Y[:, 0],
-         flux_itf[iEq, 0, 0, -1, :], flux_itf[iEq, 0, 1, -1, :],  # North
-         flux_itf[iEq, 0, 0,  0, :], flux_itf[iEq, 0, 1,  0, :],  # South
-         flux_itf[iEq, 1, 0,  0, :], flux_itf[iEq, 1, 1,  0, :],  # West
-         flux_itf[iEq, 1, 0, -1, :], flux_itf[iEq, 1, 1, -1, :]   # East
-      )
+   f2_itf_ew[:, :-1]  = flux_e2_x1[:, :]
+   f2_itf_ew[:, 1:]  += flux_e2_x1[:, :]
 
-      flux_itf[iEq, 0, 0, -1, :] += f_n[0]
-      flux_itf[iEq, 0, 1, -1, :] += f_n[1]
-      flux_itf[iEq, 0, 0,  0, :] += f_s[0]
-      flux_itf[iEq, 0, 1,  0, :] += f_s[1]
-      flux_itf[iEq, 1, 0,  0, :] += f_w[0]
-      flux_itf[iEq, 1, 1,  0, :] += f_w[1]
-      flux_itf[iEq, 1, 0, -1, :] += f_e[0]
-      flux_itf[iEq, 1, 1, -1, :] += f_e[1]
+   f0_itf_ns[:-1, :]  = flux_e0_x2[:, :]
+   f0_itf_ns[1:, :]  += flux_e0_x2[:, :]
 
-   flux_itf[:] *= 0.5
+   f1_itf_ns[:-1, :]  = flux_e1_x2[:, :]
+   f1_itf_ns[1:, :]  += flux_e1_x2[:, :]
+
+   f2_itf_ns[:-1, :]  = flux_e2_x2[:, :]
+   f2_itf_ns[1:, :]  += flux_e2_x2[:, :]
+
+   # f0_itf_ew[:, 1:] += flux_e0_x1[:, :]
+   # f1_itf_ew[:, 1:] += f1_itf_ew[:, :-1]
+   # f2_itf_ew[:, 1:] += f2_itf_ew[:, :-1]
+
+   # f0_itf_ns[1:, :] += f0_itf_ns[:-1, :]
+   # f1_itf_ns[1:, :] += f1_itf_ns[:-1, :]
+   # f2_itf_ns[1:, :] += f2_itf_ns[:-1, :]
+
+   X = geom.X[0, :]
+   Y = geom.Y[:, 0]
+
+   f0_n, f0_s, f0_w, f0_e = ptopo.xchange_simple_vectors(
+      X, Y,
+      flux_e0_x1[-1, :], flux_e0_x2[-1, :],  # North
+      flux_e0_x1[0, :],  flux_e0_x2[0, :],   # South
+      flux_e0_x1[:, 0],  flux_e0_x2[:, 0],   # West
+      flux_e0_x1[:, -1], flux_e0_x2[:, -1]   # East
+   )
+
+   f0_itf_ns[-1, :] += f0_n[1]
+   f0_itf_ns[0, :]  += f0_s[1]
+   f0_itf_ew[:, 0]  += f0_w[0]
+   f0_itf_ew[:, -1] += f0_e[0]
+
+   # if ptopo.rank == 3:
+   #    flux_e1_x2[0, :] = numpy.flip(flux_e1_x2[0, :])
+
+   f1_n, f1_s, f1_w, f1_e = ptopo.xchange_simple_vectors(
+      X, Y,
+      flux_e1_x1[-1, :], flux_e1_x2[-1, :],  # North
+      flux_e1_x1[0, :],  flux_e1_x2[0, :],   # South
+      flux_e1_x1[:, 0],  flux_e1_x2[:, 0],   # West
+      flux_e1_x1[:, -1], flux_e1_x2[:, -1]   # East
+   )
+
+   f1_itf_ns[-1, :] += f1_n[1]
+   f1_itf_ns[0, :]  += f1_s[1]
+   f1_itf_ew[:, 0]  = f1_w[0] * 2.0
+   # f1_itf_ew[:, 0]  *= 2.0
+   f1_itf_ew[:, -1] += f1_e[0]
+
+   f2_n, f2_s, f2_w, f2_e = ptopo.xchange_simple_vectors(
+      X, Y,
+      flux_e2_x1[-1, :], flux_e2_x2[-1, :],  # North
+      flux_e2_x1[0, :],  flux_e2_x2[0, :],   # South
+      flux_e2_x1[:, 0],  flux_e2_x2[:, 0],   # West
+      flux_e2_x1[:, -1], flux_e2_x2[:, -1]   # East
+   )
+
+   f2_itf_ns[-1, :] += f2_n[1]
+   f2_itf_ns[0, :]  += f2_s[1]
+   f2_itf_ew[:, 0]  += f2_w[0]
+   f2_itf_ew[:, -1] += f2_e[0]
+
+   f0_itf_ew *= 0.5
+   f1_itf_ew *= 0.5
+   f2_itf_ew *= 0.5
+   f0_itf_ns *= 0.5
+   f1_itf_ns *= 0.5
+   f2_itf_ns *= 0.5
 
    #TODO Should divide these by elem size ?
-   df0_dx1 = f0_itf_ew[0, 1:, :] - f0_itf_ew[0, :-1, :]
-   df1_dx1 = f1_itf_ew[0, 1:, :] - f1_itf_ew[0, :-1, :]
-   df2_dx1 = f2_itf_ew[0, 1:, :] - f2_itf_ew[0, :-1, :]
+   df0_dx1 = f0_itf_ew[:, 1:] - f0_itf_ew[:, :-1]
+   df1_dx1 = f1_itf_ew[:, 1:] - f1_itf_ew[:, :-1]
+   df2_dx1 = f2_itf_ew[:, 1:] - f2_itf_ew[:, :-1]
 
-   df0_dx2 = (f0_itf_ns[1, 1:, :] - f0_itf_ns[1, :-1, :]).T
-   df1_dx2 = (f1_itf_ns[1, 1:, :] - f1_itf_ns[1, :-1, :]).T
-   df2_dx2 = (f2_itf_ns[1, 1:, :] - f2_itf_ns[1, :-1, :]).T
+   df0_dx2 = f0_itf_ns[1:, :] - f0_itf_ns[:-1, :]
+   df1_dx2 = f1_itf_ns[1:, :] - f1_itf_ns[:-1, :]
+   df2_dx2 = f2_itf_ns[1:, :] - f2_itf_ns[:-1, :]
+
+   # use_west  = f1_itf_ew[:, 1:] > f1_itf_ew[:, :-1]
+   # df0_dx1 = f0_itf_ew[:, 1:]
+   # df0_dx1[use_west] = f0_itf_ew[:, :-1][use_west]
+   # df1_dx1 = f1_itf_ew[:, 1:]
+   # df1_dx1[use_west] = f1_itf_ew[:, :-1][use_west]
+   # df2_dx1 = f2_itf_ew[:, 1:]
+   # df2_dx1[use_west] = f2_itf_ew[:, :-1][use_west]
+   #
+   # use_south = f2_itf_ns[1:, :] > f2_itf_ns[:-1, :]
+   # df0_dx2 = f0_itf_ns[1:, :]
+   # df0_dx2[use_south] = f0_itf_ns[:-1, :][use_south]
+   # df1_dx2 = f1_itf_ns[1:, :]
+   # df1_dx2[use_south] = f1_itf_ns[:-1, :][use_south]
+   # df2_dx2 = f2_itf_ns[1:, :]
+   # df2_dx2[use_south] = f2_itf_ns[:-1, :][use_south]
 
    forcing_0 = numpy.zeros((num_elements, num_elements))
+
+   # plot_array(flux_e0_x1, filename='flux_e0_x1.png')
+   # plot_array(f0_itf_ew[:, :-1], filename='f_itf_ew.png')
+
+   plot_array(f0_itf_ew[:, :-1], filename='f0_itf_w_fv.png')
+   plot_array(f1_itf_ew[:, :-1], filename='f1_itf_w_fv.png')
+   plot_array(f2_itf_ew[:, :-1], filename='f2_itf_w_fv.png')
+   # plot_array(f0_itf_ew[:, 1:], filename='f_itf_e_fv.png')
+
+   plot_array(flux_e1_x1, filename='f1_x1_fv.png')
+   plot_array(flux_e1_x2, filename='f1_x2_fv.png')
+
+   # plot_array(f0_itf_ns[:-1, :], filename='f_itf_ns.png')
+   # plot_array(df0_dx1, filename='f0_itf.png')
+   # plot_array(df0_dx1)
+   # plot_field(geom, f0_itf_ew[:, 1:])
+   # plot_field(geom, df1_dx1, filename='df0_dx1_fv.png')
+   # plot_field(geom, df0_dx1)
+   # plot_field(geom, f0_itf_ew[:, :-1])
+
+   # plot_field(geom, df0_dx1.real)
+   # plot_array(df0_dx1)
+
+   # plot_vector_field(geom, u1, u2)
+   raise ValueError
 
    # Note: christoffel_1_22 is zero
    forcing_1 = 2.0 * (metric.christoffel_1_01 * h * u1 + metric.christoffel_1_02 * h * u2) \
