@@ -251,6 +251,47 @@ class Distributed_World:
       return self.send_recv_neighbors(sendbuf[0], sendbuf[1], sendbuf[2], sendbuf[3], flip_dim)
 
 
+   def xchange_halo(self, f, halo_size=1):
+      h = halo_size
+      f_ext = numpy.zeros((f.shape[0] + halo_size*2, f.shape[1] + halo_size*2))
+
+      f_ext[h:-h, h:-h] = f[:, :]
+
+      f_ext[-1, h:-h], f_ext[0, h:-h], f_ext[h:-h, 0], f_ext[h:-h, -1] = self.send_recv_neighbors(
+         f[-1, :], f[0, :], f[:, 0], f[:, -1], 0)
+
+      return f_ext
+
+
+   def xchange_halo_vector(self, geom, f_x1, f_x2, halo_size=1):
+
+      h = halo_size
+
+      f_x1_ext = numpy.zeros((f_x1.shape[0] + halo_size*2, f_x1.shape[1] + halo_size*2))
+      f_x2_ext = numpy.zeros_like(f_x1_ext)
+
+      f_x1_ext[h:-h, h:-h] = f_x1[:, :]
+      f_x2_ext[h:-h, h:-h] = f_x2[:, :]
+
+      X = geom.X[0, :]
+      Y = geom.Y[:, 0]
+
+      f_n, f_s, f_w, f_e = self.xchange_simple_vectors(
+         X, Y, f_x1[-1, :], f_x2[-1, :], f_x1[0, :], f_x2[0, :], f_x1[:, 0], f_x2[:, 0], f_x1[:, -1], f_x2[:, -1])
+
+      f_x1_ext[-1, h:-h] = f_n[0]
+      f_x2_ext[-1, h:-h] = f_n[1]
+      f_x1_ext[0, h:-h]  = f_s[0]
+      f_x2_ext[0, h:-h]  = f_s[1]
+
+      f_x1_ext[h:-h, 0]  = f_w[0]
+      f_x2_ext[h:-h, 0]  = f_w[1]
+      f_x1_ext[h:-h, -1] = f_e[0]
+      f_x2_ext[h:-h, -1] = f_e[1]
+
+      return f_x1_ext, f_x2_ext
+
+
    def xchange_vectors(self, geom, u1_itf_i, u2_itf_i, u1_itf_j, u2_itf_j, u3_itf_i=None, u3_itf_j=None):
 
       # --- 2D/3D setup

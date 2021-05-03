@@ -187,10 +187,12 @@ class Tvdrk3:
       return Q
 
 class Rat2:
-   def __init__(self, rhs, tol, preconditioner = None):
+   def __init__(self, rhs, tol, preconditioner=None, geom=None, param=None):
       self.rhs = rhs
       self.tol = tol
       self.preconditioner = preconditioner
+      self.geom = geom
+      self.param = param
 
    def step(self, Q, dt):
       matvec_handle = lambda v: matvec_rat(v, dt, Q, self.rhs)
@@ -200,6 +202,9 @@ class Rat2:
 
       # Transform to the shifted linear system (I/dt - J/2) x = F/dt
       rhs = self.rhs(Q).flatten() / dt
+
+      from graphx import plot_field
+      plot_field(self.geom, rhs.reshape(Q.shape)[0], filename=f'init_rhs_{self.param.discretization}.png')
 
       first_guess = numpy.zeros_like(rhs)
 

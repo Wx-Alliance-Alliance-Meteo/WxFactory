@@ -31,6 +31,23 @@ def rhs_sw_fv(Q, geom, mtrx, metric, topo, ptopo,
    flux_e2_x1 = metric.sqrtG * (h_u2 * u1 + 0.5 * gravity * metric.H_contra_21 * h_squared)
    flux_e2_x2 = metric.sqrtG * (h_u2 * u2 + 0.5 * gravity * metric.H_contra_22 * h_squared)
 
+   # h_ext         = ptopo.xchange_halo(h)
+   # h_squared_ext = ptopo.xchange_halo(h_squared)
+   # sqrtG_ext     = ptopo.xchange_halo(metric.sqrtG)
+   #
+   # h11_ext = ptopo.xchange_halo(metric.H_contra_11)
+   # h12_ext = ptopo.xchange_halo(metric.H_contra_12)
+   # h21_ext = ptopo.xchange_halo(metric.H_contra_21)
+   # h22_ext = ptopo.xchange_halo(metric.H_contra_22)
+   #
+   # hu1_ext, hu2_ext = ptopo.xchange_halo_vector(geom, h_u1, h_u2)
+   u1_ext,  u2_ext  = ptopo.xchange_halo_vector(geom, u1, u2)
+   #
+   # f1_x1_ext = sqrtG_ext * (hu1_ext * u1_ext + 0.5 * gravity * h11_ext * h_squared_ext)
+   # f1_x2_ext = sqrtG_ext * (hu1_ext * u2_ext + 0.5 * gravity * h12_ext * h_squared_ext)
+
+   f1_x1_ext, f1_x2_ext = ptopo.xchange_halo_vector(geom, flux_e1_x1, flux_e1_x2)
+
    # --- Compute flux at interfaces
    # flux_itf = numpy.zeros((3, 2, 2, num_elements + 1, num_elements), dtype=datatype)
 
@@ -85,7 +102,8 @@ def rhs_sw_fv(Q, geom, mtrx, metric, topo, ptopo,
    f0_itf_ew[:, -1] += f0_e[0]
 
    # if ptopo.rank == 3:
-   #    flux_e1_x2[0, :] = numpy.flip(flux_e1_x2[0, :])
+   #    flux_e1_x2[0, :-3] = -1e7
+   #    flux_e1_x2[0, -3:] = 1e7
 
    f1_n, f1_s, f1_w, f1_e = ptopo.xchange_simple_vectors(
       X, Y,
@@ -97,7 +115,8 @@ def rhs_sw_fv(Q, geom, mtrx, metric, topo, ptopo,
 
    f1_itf_ns[-1, :] += f1_n[1]
    f1_itf_ns[0, :]  += f1_s[1]
-   f1_itf_ew[:, 0]  = f1_w[0] * 2.0
+   f1_itf_ew[:, 0]  += f1_w[0]
+   # f1_itf_ew[:, 0]  = f1_w[0] * 2.0
    # f1_itf_ew[:, 0]  *= 2.0
    f1_itf_ew[:, -1] += f1_e[0]
 
@@ -120,6 +139,7 @@ def rhs_sw_fv(Q, geom, mtrx, metric, topo, ptopo,
    f0_itf_ns *= 0.5
    f1_itf_ns *= 0.5
    f2_itf_ns *= 0.5
+
 
    #TODO Should divide these by elem size ?
    df0_dx1 = f0_itf_ew[:, 1:] - f0_itf_ew[:, :-1]
@@ -153,11 +173,19 @@ def rhs_sw_fv(Q, geom, mtrx, metric, topo, ptopo,
 
    plot_array(f0_itf_ew[:, :-1], filename='f0_itf_w_fv.png')
    plot_array(f1_itf_ew[:, :-1], filename='f1_itf_w_fv.png')
+   plot_array(f1_itf_ew[:, 1:], filename='f1_itf_e_fv.png')
+   plot_array(f1_itf_ns[1:, :], filename='f1_itf_n_fv.png')
+   plot_array(f1_itf_ns[:-1, :], filename='f1_itf_s_fv.png')
    plot_array(f2_itf_ew[:, :-1], filename='f2_itf_w_fv.png')
-   # plot_array(f0_itf_ew[:, 1:], filename='f_itf_e_fv.png')
 
    plot_array(flux_e1_x1, filename='f1_x1_fv.png')
    plot_array(flux_e1_x2, filename='f1_x2_fv.png')
+
+   plot_array(u1_ext, filename='u1_full.png')
+   plot_array(u2_ext, filename='u2_full.png')
+
+   plot_array(f1_x1_ext, filename='f1_x1_full.png')
+   plot_array(f1_x2_ext, filename='f1_x2_full.png')
 
    # plot_array(f0_itf_ns[:-1, :], filename='f_itf_ns.png')
    # plot_array(df0_dx1, filename='f0_itf.png')

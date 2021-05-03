@@ -21,6 +21,8 @@ from rhs_sw_explicit import rhs_sw_explicit
 from rhs_sw_implicit import rhs_sw_implicit
 from timeIntegrators import Epi, Epirk4s3a, Tvdrk3, Rat2, ARK_epi2
 
+from graphx import plot_field
+
 def main(args) -> int:
    step = 0
 
@@ -61,6 +63,9 @@ def main(args) -> int:
       rhs_handle = lambda q: rhs_euler(q, geom, mtrx, metric, topo, ptopo, param.nbsolpts, param.nb_elements_horizontal,
                                     param.nb_elements_vertical, param.case_number, param.filter_apply)
 
+   # plot_field(geom, Q[0], filename=f'init_field_{param.discretization}.png')
+   # plot_field(geom, Q[0])
+
    if param.output_freq > 0:
       output_init(geom, param)
       output_netcdf(Q, geom, metric, mtrx, topo, step, param)  # store initial conditions
@@ -79,7 +84,7 @@ def main(args) -> int:
       if param.use_preconditioner:
          # preconditioner = DG_preconditioner(param, geom, ptopo, mtrx, rhs_sw)
          preconditioner = FV_preconditioner(param, geom, mtrx, metric, topo, ptopo)
-      stepper = Rat2(rhs_handle, param.tolerance, preconditioner=preconditioner)
+      stepper = Rat2(rhs_handle, param.tolerance, preconditioner=preconditioner, geom=geom, param=param)
    elif  param.time_integrator.lower() == 'epi2/ark' and param.equations == "shallow water": # TODO : Euler
       rhs_explicit = lambda q: rhs_sw_explicit(q, geom, mtrx, metric, topo, ptopo, param.nbsolpts, param.nb_elements_horizontal, param.case_number, param.filter_apply)
 
