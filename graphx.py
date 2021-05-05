@@ -142,7 +142,6 @@ def plot_field_from_file(geom_prefix, field_prefix):
    plot_field(geom, field[0,:,:]**2)
 
 
-has_colorbar = False
 def plot_array(array, filename=None):
    rank = mpi4py.MPI.COMM_WORLD.Get_rank()
 
@@ -160,19 +159,13 @@ def plot_array(array, filename=None):
       c4 = np.vstack((z, np.flipud(all_arrays[2]), z))
       common = np.hstack((c1, c2, c3, c4))
 
-      # fig, ((_, p4, _, _), (p3, p0, p1, p2), (_, p5, _, _)) = plt.subplots(3, 4, figsize = (16, 9))
+      plt.clf()
+      ax = plt.gca()
 
-      # for ax, arr in zip([p0, p1, p2, p3, p4, p5], all_arrays):
-      #    ax.imshow(array)
-
-      plt.xticks(ticks=np.arange(0, common.shape[0], 2))
-      plt.yticks(ticks=np.arange(0, common.shape[1], 2))
-      im = plt.imshow(common, interpolation='nearest')
-
-      global has_colorbar
-      if not has_colorbar:
-         plt.colorbar(im)
-         has_colorbar = True
+      im = ax.imshow(common, interpolation='nearest')
+      cbar = ax.figure.colorbar(im, ax=ax)
+      ax.set_xticks(ticks=np.arange(0, common.shape[0], 2))
+      ax.set_yticks(ticks=np.arange(0, common.shape[1], 2))
 
       plt.tight_layout()
 
