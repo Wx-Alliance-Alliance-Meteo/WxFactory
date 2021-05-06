@@ -126,16 +126,21 @@ class LagrangeSimpleInterpolator:
       self.delta_y = grid.Δx2
       self.n_elem_i = int(len(self.x_pos) / self.num_basis_points)
 
-      self.rank = MPI.COMM_WORLD.Get_rank()
       self.grid_eval_timer = Timer(time.time())
       self.grid_eval_fast_timer = Timer(self.grid_eval_timer.initial_time)
 
 
-   def eval_grid_fast(self, field, new_num_basis_points, old_num_basis_points):
+   def eval_grid_fast(self, field, new_num_basis_points: int, old_num_basis_points: int, equidistant: bool):
       """
       Interpolate the current grid to a new one with the same number of elements,
       but with a different number of solution points, using vectorized operations
       as much as possible.
+
+         field -- the field we want to interpolate
+         new_num_basis_points -- How many points per initial grid element we want to have in the new grid
+         old_num_basis_points -- How many points per element there are in the initial grid
+         equidistance {bool} -- Whether we want the new grid to have equally-distanced points or
+            Gauss-Legendre points
       """
 
       self.grid_eval_fast_timer.start()
@@ -144,8 +149,13 @@ class LagrangeSimpleInterpolator:
          if i not in basis_point_sets:
             basis_point_sets[i], _ = gauss_legendre(i)
 
-      new_basis_points = basis_point_sets[new_num_basis_points]
       old_basis_points = basis_point_sets[old_num_basis_points]
+
+      if equidistant:
+         pts = numpy.linspace(-1.0, 1.0, new_num_basis_points + 1)
+         new_basis_points = (pts[:-1] + pts[1:]) / 2.0
+      else:
+         new_basis_points = basis_point_sets[new_num_basis_points]
 
       elem_interp = numpy.array([lagrangeEval(old_basis_points, px) for px in new_basis_points])
 
@@ -158,8 +168,13 @@ class LagrangeSimpleInterpolator:
                               dtype = field.dtype)
          for i, f in enumerate(field):
             eval_single_field(self.n_elem_i, f, elem_interp, new_num_basis_points, old_num_basis_points, result[i])
+      else:
+         print(f'We have a problem. ndim = {field.ndim}')
+         raise ValueError
 
       self.grid_eval_fast_timer.stop()
+
+      # print(f'result:\n{result}')
 
       return result
 

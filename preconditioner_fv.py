@@ -1,36 +1,67 @@
+from copy import copy
 from time import time
 
-from linsol import fgmres
-from matvec import matvec_rat
-from rhs_fv import rhs_sw_fv
-from rhs_sw import rhs_sw
+from cubed_sphere    import cubed_sphere
+from initialize      import initialize_sw
+from interpolation   import LagrangeSimpleInterpolator
+from linsol          import fgmres
+from matvec          import matvec_rat
+from matrices        import DFR_operators
+from metric          import Metric
+from rhs_sw          import rhs_sw
 
 class FV_preconditioner:
 
-   def __init__(self, param, geometry, operators, metric, topo, ptopo):
+   def __init__(self, param, initial_geom, ptopo):
       self.max_iter = 1000
 
-      self.geometry     = geometry
-      self.operators    = operators
-      self.metric       = metric
-      self.topo         = topo
+      self.param = copy(param)
+      self.param.discretization         = 'fv'
+      self.param.nb_elements_horizontal = self.param.nb_elements_horizontal * self.param.nbsolpts
+      self.param.nbsolpts               = 1
+
+      if self.param.equations != 'shallow water':
+         raise ValueError('Preconditioner is only implemented for the shallow water equations. '
+                          'Need to make it a bit more flexible')
+
       self.ptopo        = ptopo
-      self.rhs_function = rhs_sw_fv
-      # self.rhs_function = rhs_sw
+      self.fv_geom      = cubed_sphere(self.param.nb_elements_horizontal, self.param.nb_elements_vertical,
+                                       self.param.nbsolpts, self.param.λ0, self.param.ϕ0, self.param.α0, self.param.ztop,
+                                       self.ptopo, self.param)
+      self.fv_operators = DFR_operators(self.fv_geom, self.param)
+      self.fv_metric    = Metric(self.fv_geom)
+      field, self.fv_topo   = initialize_sw(self.fv_geom, self.fv_metric, self.fv_operators, self.param)
+      self.field_shape  = field.shape
+      self.rhs_function = rhs_sw
 
       self.fv_matrix    = None
       self.fv_rhs       = None
-      self.nb_sol_pts   = param.nbsolpts
-      self.nb_elements  = param.nb_elements_horizontal
-      self.case_number  = param.case_number
+
+      self.dg_geom       = initial_geom
+      self.dg_nb_sol_pts = param.nbsolpts
+      self.interpolator  = LagrangeSimpleInterpolator(initial_geom)
+
+      self.remaining_uses = 1
+
+   def dg_to_fv(self, vec):
+      return self.interpolator.eval_grid_fast(vec.reshape(self.field_shape), self.dg_nb_sol_pts, self.dg_nb_sol_pts, equidistant=True)
 
    def apply(self, vec):
 
       t0 = time()
 
-      input_vec = vec  # TODO interpolate to FV grid
+      if self.remaining_uses <= 0:
+         return vec
+
+      self.remaining_uses -= 1
+
+      # input_vec = self.dg_to_fv(vec).flatten()
+      input_vec = vec
+      # print(f'vec:\n{vec}\ninput_vec: \n{input_vec}')
       output_vec, _, num_iter, _ = fgmres(
-         self.fv_matrix, input_vec, preconditioner=None, tol=1e-4, maxiter=self.max_iter)
+         self.fv_matrix, input_vec, preconditioner=None, tol=1e-2, maxiter=self.max_iter)
+
+      #TODO interpolate output from FV to DG grid
 
       t1 = time()
       precond_time = t1 - t0
@@ -40,11 +71,13 @@ class FV_preconditioner:
       return output_vec
 
    def init_time_step(self, matvec_func, dt, field, matvec_handle):
-      fv_field = field  # TODO interpolate to FV grid
+      fv_field = self.dg_to_fv(field)
       self.fv_rhs = lambda vec: self.rhs_function(
-         vec, self.geometry, self.operators, self.metric, self.topo, self.ptopo, self.nb_sol_pts, self.nb_elements,
-         self.case_number, False)
+         vec, self.fv_geom, self.fv_operators, self.fv_metric, self.fv_topo, self.ptopo, self.param.nbsolpts,
+         self.param.nb_elements_horizontal, self.param.case_number, False)
       self.fv_matrix = lambda vec: matvec_rat(vec, dt, fv_field, self.fv_rhs)
+
+      self.remaining_uses = 1
 
    def __call__(self, vec):
       return self.apply(vec)

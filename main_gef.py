@@ -48,10 +48,8 @@ def main(args) -> int:
    if param.equations == "shallow water":
       Q, topo = initialize_sw(geom, metric, mtrx, param)
 
-      if param.discretization == 'dg':
+      if param.discretization in ['dg', 'fv']:
          rhs_handle = lambda q: rhs_sw(q, geom, mtrx, metric, topo, ptopo, param.nbsolpts, param.nb_elements_horizontal, param.case_number, param.filter_apply)
-      elif param.discretization == 'fv':
-         rhs_handle = lambda q: rhs_sw_fv(q, geom, mtrx, metric, topo, ptopo, param.nbsolpts, param.nb_elements_horizontal, param.case_number, param.filter_apply)
       else:
          raise ValueError('Unknown discretization given')
 
@@ -78,7 +76,7 @@ def main(args) -> int:
       preconditioner = None
       if param.use_preconditioner:
          # preconditioner = DG_preconditioner(param, geom, ptopo, mtrx, rhs_sw)
-         preconditioner = FV_preconditioner(param, geom, mtrx, metric, topo, ptopo)
+         preconditioner = FV_preconditioner(param, geom, ptopo)
       stepper = Rat2(rhs_handle, param.tolerance, preconditioner=preconditioner)
    elif  param.time_integrator.lower() == 'epi2/ark' and param.equations == "shallow water": # TODO : Euler
       rhs_explicit = lambda q: rhs_sw_explicit(q, geom, mtrx, metric, topo, ptopo, param.nbsolpts, param.nb_elements_horizontal, param.case_number, param.filter_apply)

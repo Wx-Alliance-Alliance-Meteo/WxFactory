@@ -65,7 +65,7 @@ class DG_preconditioner:
       self.small_param.filter_order = 8
 
       self.small_geom      = cubed_sphere(param.nb_elements_horizontal, param.nb_elements_vertical, self.small_order,
-                                          param.λ0, param.ϕ0, param.α0, param.ztop, self.ptopo)
+                                          param.λ0, param.ϕ0, param.α0, param.ztop, self.ptopo, self.small_param)
       self.small_operators = DFR_operators(self.small_geom, self.small_param)
       self.small_metric    = Metric(self.small_geom)
       _, self.small_topo   = initialize_sw(self.small_geom, self.small_metric, self.small_operators, self.small_param)
@@ -108,10 +108,10 @@ class DG_preconditioner:
          self.preconditioner.init_time_step(matvec_func, dt, lowres_field, matvec_handle)
 
    def restrict(self, field):
-      return self.interpolator.eval_grid_fast(field, self.small_order, self.big_order)
+      return self.interpolator.eval_grid_fast(field, self.small_order, self.big_order, equidistant=False)
 
    def prolong(self, field):
-      return self.interpolator.eval_grid_fast(field, self.big_order, self.small_order)
+      return self.interpolator.eval_grid_fast(field, self.big_order, self.small_order, equidistant=False)
 
    def apply(self, vec):
 
