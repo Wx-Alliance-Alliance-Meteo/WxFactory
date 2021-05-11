@@ -6,24 +6,124 @@ from matrices   import lagrangeEval
 from quadrature import gauss_legendre
 from timer      import Timer
 
+from graphx import plot_array
+
 basis_point_sets = {}
 
-def eval_single_field(num_elem, field, elem_interp, new_num_basis_points, old_num_basis_points, result=None):
+def eval_single_field(field, elem_interp, result=None):
+
+   new_num_points = elem_interp.shape[0]
+   old_num_points = elem_interp.shape[1]
+   num_elem = int(field.shape[0] // old_num_points)
+
    # Interpolate (vertically) on entire rows of elements (horizontally) at once
-   interp_1 = numpy.empty((num_elem * new_num_basis_points, num_elem * old_num_basis_points), dtype = field.dtype)
+   interp_1 = numpy.empty((num_elem * new_num_points, num_elem * old_num_points), dtype=field.dtype)
    for i in range(num_elem):
-      interp_1[i * new_num_basis_points:(i + 1) * new_num_basis_points, :] = \
-         elem_interp @ field[i * old_num_basis_points:(i + 1) * old_num_basis_points, :]
+      interp_1[i * new_num_points:(i + 1) * new_num_points, :] = \
+         elem_interp @ field[i * old_num_points:(i + 1) * old_num_points, :]
 
    # Interpolate (horizontally) on columns of interpolated elements
    if result is None:
-      result = numpy.empty((num_elem * new_num_basis_points, num_elem * old_num_basis_points), dtype = field.dtype)
+      result = numpy.empty((num_elem * new_num_points, num_elem * new_num_points), dtype=field.dtype)
 
    for i in range(num_elem):
-      result[:, i * new_num_basis_points:(i + 1) * new_num_basis_points] = \
-         interp_1[:, i * old_num_basis_points:(i + 1) * old_num_basis_points] @ elem_interp.T
+      result[:, i * new_num_points:(i + 1) * new_num_points] = \
+         interp_1[:, i * old_num_points:(i + 1) * old_num_points] @ elem_interp.T
+
+   # print(f'Num_elem: {num_elem}, field.shape: {field.shape}, elem_interp.shape: {elem_interp.shape},')
+
+   # plot_array(field, filename='origin_field.png')
+   # plot_array(result, filename='dest_field.png')
+
+   # raise ValueError
 
    return result
+
+
+def eval_field(field, elem_interp):
+   result = None
+   if field.ndim == 2:
+      result = eval_single_field(field, elem_interp)
+   elif field.ndim == 3:
+      num_fields = field.shape[0]
+      new_size = field.shape[1] * elem_interp.shape[0] // elem_interp.shape[1]
+      result = numpy.empty((num_fields, new_size, new_size), dtype=field.dtype)
+      for i, f in enumerate(field):
+         eval_single_field(f, elem_interp, result[i])
+   else:
+      raise ValueError(f'We have a problem. ndim = {field.ndim}')
+
+   return result
+
+
+def get_linear_weights(points, x):
+   result = numpy.zeros_like(points)
+
+   if len(result) == 1:
+      result[0] = 1.0
+      return result
+
+   ix = 0
+   while points[ix + 1] < x:
+      if ix + 2 >= len(points):
+         break
+      ix += 1
+
+   x_small = points[ix]
+   x_large = points[ix+1]
+
+   alpha = 1.0 - (x - x_small) / (x_large - x_small)
+
+   result       = numpy.zeros_like(points)
+   result[ix]   = alpha
+   result[ix+1] = 1.0 - alpha
+
+   return result
+
+
+def interpolator(origin_type: str, origin_order: int, dest_type: str, dest_order: int, interp_type: str):
+   origin_points = None
+   if origin_type == 'dg':
+      origin_points, _ = gauss_legendre(origin_order)
+   elif origin_type == 'fv':
+      pts = numpy.linspace(-1.0, 1.0, origin_order + 1)
+      origin_points = (pts[:-1] + pts[1:]) / 2.0
+   else:
+      raise ValueError('Unsupported origin grid type')
+
+   dest_points = None
+   if dest_type == 'dg':
+      dest_points, _ = gauss_legendre(dest_order)
+   elif dest_type == 'fv':
+      pts = numpy.linspace(-1.0, 1.0, dest_order + 1)
+      dest_points = (pts[:-1] + pts[1:]) / 2.0
+   else:
+      raise ValueError('Unsupported destination grid type')
+
+   elem_interp = None
+   reverse_interp = None
+   if interp_type == 'lagrange':
+      elem_interp    = numpy.array([lagrangeEval(origin_points, x) for x in dest_points])
+      reverse_interp = numpy.array([lagrangeEval(dest_points, x) for x in origin_points])
+   elif interp_type == 'bilinear':
+      elem_interp    = numpy.array([get_linear_weights(origin_points, x) for x in dest_points])
+      reverse_interp = numpy.array([get_linear_weights(dest_points, x) for x in origin_points])
+   else:
+      raise ValueError('interp_type not one of available interpolation types')
+
+   if dest_order == origin_order:
+      inverse = numpy.linalg.inv(elem_interp)
+      diff = numpy.linalg.norm(reverse_interp - inverse)
+      print(f'Diff b/w computed reverse and inverted matrix = {diff}')
+      reverse_interp = numpy.linalg.inv(elem_interp)
+
+   def interpolate(field, reverse=False):
+      if reverse:
+         return eval_field(field, reverse_interp)
+      else:
+         return eval_field(field, elem_interp)
+
+   return interpolate
 
 
 class BilinearInterpolator:
@@ -38,25 +138,6 @@ class BilinearInterpolator:
 
       basis_point_sets[self.num_basis_points] = self.basis_points
 
-   def get_weights(self, point_set, x):
-      ix = 0
-      while point_set[ix + 1] < x:
-         if ix + 2 >= len(point_set):
-            break
-         ix += 1
-
-      x_small = point_set[ix]
-      x_large = point_set[ix+1]
-
-      alpha = 1.0 - (x - x_small) / (x_large - x_small)
-
-      result       = numpy.zeros_like(point_set)
-      result[ix]   = alpha
-      result[ix+1] = 1.0 - alpha
-
-      return result
-
-
    def eval_grid_fast(self, field, new_num_basis_points, old_num_basis_points):
       for i in [new_num_basis_points, old_num_basis_points]:
          if i not in basis_point_sets:
@@ -65,20 +146,9 @@ class BilinearInterpolator:
       new_basis_points = basis_point_sets[new_num_basis_points]
       old_basis_points = basis_point_sets[old_num_basis_points]
 
-      elem_interp = numpy.array([self.get_weights(old_basis_points, px) for px in new_basis_points])
+      elem_interp = numpy.array([get_linear_weights(old_basis_points, px) for px in new_basis_points])
 
-      result = None
-      if field.ndim == 2:
-         result = eval_single_field(self.n_elem_i, field, elem_interp, new_num_basis_points, old_num_basis_points)
-      elif field.ndim == 3:
-         num_fields = field.shape[0]
-         result = numpy.empty((num_fields, self.n_elem_i * new_num_basis_points, self.n_elem_i * new_num_basis_points),
-                              dtype = field.dtype)
-         for i, f in enumerate(field):
-            eval_single_field(self.n_elem_i, f, elem_interp, new_num_basis_points, old_num_basis_points, result[i])
-
-      return result
-
+      return eval_field(field, elem_interp)
 
    def get_value_at_pos(self, x, y):
       ix = 0
@@ -124,7 +194,7 @@ class LagrangeSimpleInterpolator:
 
       self.delta_x = grid.Δx1
       self.delta_y = grid.Δx2
-      self.n_elem_i = int(len(self.x_pos) / self.num_basis_points)
+      # self.n_elem_i = int(len(self.x_pos) / self.num_basis_points)
 
       self.grid_eval_timer = Timer(time.time())
       self.grid_eval_fast_timer = Timer(self.grid_eval_timer.initial_time)
@@ -158,23 +228,9 @@ class LagrangeSimpleInterpolator:
          new_basis_points = basis_point_sets[new_num_basis_points]
 
       elem_interp = numpy.array([lagrangeEval(old_basis_points, px) for px in new_basis_points])
-
-      result = None
-      if field.ndim == 2:
-         result = eval_single_field(self.n_elem_i, field, elem_interp, new_num_basis_points, old_num_basis_points)
-      elif field.ndim == 3:
-         num_fields = field.shape[0]
-         result = numpy.empty((num_fields, self.n_elem_i * new_num_basis_points, self.n_elem_i * new_num_basis_points),
-                              dtype = field.dtype)
-         for i, f in enumerate(field):
-            eval_single_field(self.n_elem_i, f, elem_interp, new_num_basis_points, old_num_basis_points, result[i])
-      else:
-         print(f'We have a problem. ndim = {field.ndim}')
-         raise ValueError
+      result      = eval_field(field, elem_interp)
 
       self.grid_eval_fast_timer.stop()
-
-      # print(f'result:\n{result}')
 
       return result
 

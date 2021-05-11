@@ -3,7 +3,7 @@ from time import time
 
 from cubed_sphere    import cubed_sphere
 from initialize      import initialize_sw
-from interpolation   import LagrangeSimpleInterpolator
+from interpolation   import LagrangeSimpleInterpolator, interpolator
 from linsol          import fgmres
 from matvec          import matvec_rat
 from matrices        import DFR_operators
@@ -41,25 +41,33 @@ class FV_preconditioner:
       self.dg_nb_sol_pts = param.nbsolpts
       self.interpolator  = LagrangeSimpleInterpolator(initial_geom)
 
+      self.interpolate = interpolator('dg', self.dg_nb_sol_pts, 'fv', self.dg_nb_sol_pts, 'lagrange')
+
       self.remaining_uses = 1
 
    def dg_to_fv(self, vec):
-      return self.interpolator.eval_grid_fast(vec.reshape(self.field_shape), self.dg_nb_sol_pts, self.dg_nb_sol_pts, equidistant=True)
+      # return self.interpolator.eval_grid_fast(vec.reshape(self.field_shape), self.dg_nb_sol_pts - 3, self.dg_nb_sol_pts, equidistant=False)
+      return self.interpolate(vec.reshape(self.field_shape))
+
+   def fv_to_dg(self, vec):
+      return self.interpolate(vec.reshape(self.field_shape), reverse=True)
 
    def apply(self, vec):
 
       t0 = time()
 
-      if self.remaining_uses <= 0:
-         return vec
+      # if self.remaining_uses <= 0:
+         # return vec
 
       self.remaining_uses -= 1
 
-      # input_vec = self.dg_to_fv(vec).flatten()
-      input_vec = vec
+      input_vec = self.dg_to_fv(vec).flatten()
+      # input_vec = vec
       # print(f'vec:\n{vec}\ninput_vec: \n{input_vec}')
       output_vec, _, num_iter, _ = fgmres(
-         self.fv_matrix, input_vec, preconditioner=None, tol=1e-2, maxiter=self.max_iter)
+         self.fv_matrix, input_vec, preconditioner=None, tol=1e-7, maxiter=self.max_iter)
+
+      output_vec = self.fv_to_dg(output_vec).flatten()
 
       #TODO interpolate output from FV to DG grid
 
