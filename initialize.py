@@ -43,40 +43,41 @@ def initialize_euler(geom, metric, mtrx, param):
    # DCMIP_2016: https://www.earthsystemcog.org/projects/dcmip-2016/         |
    #-------------------------------------------------------------------------|
    
-   ni, nj, nk = geom.height.shape
+   nk, nj, ni = geom.height.shape
 
    nb_equations = 5
    
    if param.case_number == 11:
       nb_equations = 9
-      density, u1_contra, u2_contra, u3_contra, potential_temperature, q1, q2, q3, q4 =dcmip_advection_deformation(geom, metric, mtrx, param)
+      rho, u1_contra, u2_contra, u3_contra, potential_temperature, q1, q2, q3, q4 =dcmip_advection_deformation(geom, metric, mtrx, param)
    elif param.case_number == 20:
       dcmip_mountain(geom, metric, mtrx, param)
    elif param.case_number == 31:
-      density, u1_contra, u2_contra, u3_contra, potential_temperature = dcmip_gravity_wave(geom, metric, mtrx, param)
+      rho, u1_contra, u2_contra, u3_contra, potential_temperature = dcmip_gravity_wave(geom, metric, mtrx, param)
    else:
       print('Something has gone horribly wrong in initialization. Back away slowly')
       exit(1)
 
-   Q = numpy.zeros((nb_equations, ni, nj, nk))
+   Q = numpy.zeros((nb_equations, nk, nj, ni))
 
-   Q[idx_rho_u1, :, :, :]    = density * u1_contra
-   Q[idx_rho_u2, :, :, :]    = density * u2_contra
-   Q[idx_rho_u3, :, :, :]    = density * u3_contra
-   Q[idx_rho, :, :, :]       = density
-   Q[idx_rho_theta, :, :, :] = density * potential_temperature
+   Q[idx_rho   , :, :, :]    = rho
+   Q[idx_rho_u1, :, :, :]    = rho * u1_contra
+   Q[idx_rho_u2, :, :, :]    = rho * u2_contra
+   Q[idx_rho_u3, :, :, :]    = rho * u3_contra
+   Q[idx_rho_theta, :, :, :] = rho * potential_temperature
 
    if param.case_number == 11:
-      Q[5, :, :, :] = q1
-      Q[6, :, :, :] = q2
-      Q[7, :, :, :] = q3
-      Q[8, :, :, :] = q4
+      Q[5, :, :, :] = rho * q1
+      Q[6, :, :, :] = rho * q2
+      Q[7, :, :, :] = rho * q3
+      Q[8, :, :, :] = rho * q4
    
    return Q, None
 
 def initialize_sw(geom, metric, mtrx, param):
 
    ni, nj = geom.lon.shape
+   nb_equations = 3
 
    if param.case_number != 5:
       hsurf = numpy.zeros((ni, nj))
@@ -116,7 +117,7 @@ def initialize_sw(geom, metric, mtrx, param):
    elif param.case_number == 10:
       u1_contra, u2_contra, fluid_height, hsurf, dzdx1, dzdx2, hsurf_itf_i, hsurf_itf_j = case_unsteady_zonal(geom, metric, mtrx, param)
 
-   Q = numpy.zeros((3, ni, nj))
+   Q = numpy.zeros((nb_equations, ni, nj))
    Q[idx_h, :, :] = fluid_height
 
    if param.case_number <= 1:

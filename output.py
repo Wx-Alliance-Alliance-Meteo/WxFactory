@@ -23,11 +23,12 @@ def output_init(geom, param):
    ncfile.details = 'Cubed-sphere coordinates, Gauss-Legendre collocated grid'
 
    # create dimensions
-   if param.equations == "shallow water":
+   if param.equations == "shallow_water":
       ni, nj = geom.lat.shape
+      print(geom.lat.shape)
       grid_data = ('npe', 'Xdim', 'Ydim')
    elif param.equations == "Euler":
-      nk, ni, nj = geom.lat.shape
+      nk, nj, ni = geom.nk, geom.nj, geom.ni
       grid_data = ('npe', 'Xdim', 'Ydim', 'Zdim')
 
    ncfile.createDimension('time', None) # unlimited
@@ -250,9 +251,6 @@ def output_netcdf(Q, geom, metric, mtrx, topo, step, param):
          ncfile['q2'][idx, rank, :,:,:] = Q[6, :,:,:]
          ncfile['q3'][idx, rank, :,:,:] = Q[7, :,:,:]
          ncfile['q4'][idx, rank, :,:,:] = Q[8, :,:,:]
-
-         import graphx
-         graphx.plot_level(geom, Q[8,:,:,:], 24)
 
 def output_finalize():
    """ Finalise the output netCDF4 file."""

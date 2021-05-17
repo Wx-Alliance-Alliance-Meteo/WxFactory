@@ -75,14 +75,12 @@ class cubed_sphere:
          for k in range(nb_elements_x3):
             idx = k * nbsolpts
             x3[idx : idx + nbsolpts] = interfaces_x3[k] + scaled_points * Δx3
-
-         # TODO: terrain-following coordinate system
-         X3, X1, X2 = numpy.meshgrid(x3, x1, x2, indexing = 'ij')
       else:
-         nk = 0
+         nk = 1
          x3 = numpy.zeros(nk)
          X3 = numpy.zeros(nk)
-         X1, X2 = numpy.meshgrid(x1, x2)
+
+      X1, X2 = numpy.meshgrid(x1, x2)
 
       X1_itf_i, X2_itf_i = numpy.meshgrid(interfaces_x1, x2)
       X1_itf_j, X2_itf_j = numpy.meshgrid(x1, interfaces_x2)
@@ -90,7 +88,9 @@ class cubed_sphere:
       # Gnomonic coordinates
       X = numpy.tan(X1)
       Y = numpy.tan(X2)
-      height = X3.copy() # TODO: terrain-following coordinate system
+
+      # TODO : terrain following
+      height, _, _ = numpy.meshgrid(x3, x1, x2, indexing = 'ij') # TODO: terrain-following coordinate system
 
       X_itf_i = numpy.tan(X1_itf_i)
       Y_itf_i = numpy.tan(X2_itf_i)
@@ -227,6 +227,9 @@ class cubed_sphere:
       self.lon_p = lon_p
       self.lat_p = lat_p
       self.angle_p = angle_p
+      self.ni = ni
+      self.nj = nj
+      self.nk = nk
       self.x1 = x1
       self.x2 = x2
       self.x3 = x3

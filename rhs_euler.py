@@ -1,8 +1,8 @@
 import numpy
 
 from definitions import idx_rho_u1, idx_rho_u2, idx_rho_u3, idx_rho, idx_rho_theta, gravity, p0, Rd, cpd, cvd
-from dgfilter import apply_filter
 from rhs_euler_hori import * # TODO : mettre ensemble
+from rhs_euler_vert import * # TODO : mettre ensemble
 
 def rhs_euler(Q, geom, mtrx, metric, topo, ptopo, nb_solpts: int, nb_elements_horiz: int, nb_elements_vert: int, case_number: int, filter_rhs: bool = False):
 
@@ -14,14 +14,13 @@ def rhs_euler(Q, geom, mtrx, metric, topo, ptopo, nb_solpts: int, nb_elements_ho
 
    # Result
    rhs_H = numpy.zeros_like(Q)
+   rhs_V = numpy.zeros_like(Q) # TODO
    
-   # TODO : échanges
-
    for lvl in range(nb_elements_vert*nb_solpts):
-      # TODO: ordre des indices
       rhs_H[:,lvl,:,:] = rhs_euler_hori(Q[:,lvl,:,:], geom, mtrx, metric, topo, ptopo, nb_solpts, nb_elements_horiz, case_number, filter_rhs)
-   
-#   rhs_V = rhs_euler_vert()
-   rhs_V = numpy.zeros_like(Q)
+
+   for i in range(nb_elements_horiz*nb_solpts):
+      for j in range(nb_elements_horiz*nb_solpts):
+         rhs_V[:,:,i,j] = rhs_euler_vert(Q[:,:,i,j], metric.sqrtG[i,j], mtrx, nb_solpts, nb_elements_vert, case_number, filter_rhs) #, geom, mtrx, metric, topo, ptopo, , )
 
    return rhs_H + rhs_V

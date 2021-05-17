@@ -1,15 +1,55 @@
 import numpy
 import math
 
-from definitions import cpd, gravity, p0, Rd
+from definitions import cpd, day_in_secs, gravity, p0, Rd
 from winds import *
 
-def dcmip_advection_deformation(geom, metric, mtrx, param, time=0):
-   """ Test 11 - Deformational Advection Test """
+def dcmip_T11_update_winds(geom, metric, mtrx, param, time=0):
+   """
+   Test 11 - Deformational Advection Test
+   The velocities are time dependent and therefore must be updated in the dynamical core.
+   """
+
    tau     = 12.0 * 86400.0                             # period of motion 12 days
    u0      = (2.0 * math.pi * geom.earth_radius) / tau  # 2 pi a / 12 days
    k0      = (10.0 * geom.earth_radius) / tau,          # Velocity Magnitude
    omega0  = (23000.0 * math.pi) / tau                  # Velocity Magnitude
+   T0      = 300.0                                      # temperature
+   H       = Rd * T0 / gravity                          # scale height
+
+   p    = p0 * numpy.exp(-geom.height / H)
+   ptop = p0 * math.exp(-12000.0 / H)
+
+   lonp = geom.lon - 2.0 * math.pi * time / tau
+
+   # Shape function
+   bs = 0.2
+   s = 1.0 + math.exp( (ptop-p0)/(bs*ptop) ) - numpy.exp( (p-p0)/(bs*ptop)) - numpy.exp( (ptop-p)/(bs*ptop))
+
+   # Zonal Velocity
+
+   ud = (omega0 * geom.earth_radius)/(bs*ptop) * numpy.cos(lonp) * (numpy.cos(geom.lat)**2.0) * math.cos(2.0 * math.pi * time / tau) * ( - numpy.exp( (p-p0)/(bs*ptop)) + numpy.exp( (ptop-p)/(bs*ptop))  )
+
+   u = k0 * numpy.sin(lonp) * numpy.sin(lonp) * numpy.sin(2.0 * geom.lat) * math.cos(math.pi * time / tau) + u0 * numpy.cos(geom.lat) + ud
+
+   # Meridional Velocity
+
+   v = k0 * numpy.sin(2.0 * lonp) * numpy.cos(geom.lat) * math.cos(math.pi * time / tau)
+
+   # Vertical Velocity
+
+   w = -((Rd * T0) / (gravity * p)) * omega0 * numpy.sin(lonp) * numpy.cos(geom.lat) * math.cos(2.0 * math.pi * time / tau) * s
+
+   # Contravariant components
+
+   u1_contra, u2_contra = wind2contra(u, v, geom)
+   u3_contra = w
+
+   return u1_contra, u2_contra, u3_contra
+
+def dcmip_advection_deformation(geom, metric, mtrx, param):
+   """ Test 11 - Deformational Advection Test """
+   tau     = 12.0 * 86400.0                             # period of motion 12 days
    T0      = 300.0                                      # temperature
    H       = Rd * T0 / gravity                          # scale height
    RR      = 1.0/2.0                                    # horizontal half width divided by 'a'
@@ -25,37 +65,11 @@ def dcmip_advection_deformation(geom, metric, mtrx, param, time=0):
    #-----------------------------------------------------------------------
 
    p    = p0 * numpy.exp(-geom.height / H)
-   ptop = p0 * math.exp(-12000.0 / H)
 
    #-----------------------------------------------------------------------
-   #    THE VELOCITIES ARE TIME DEPENDENT AND THEREFORE MUST BE UPDATED
-   #    IN THE DYNAMICAL CORE
+   #    WINDS
    #-----------------------------------------------------------------------
-
-   lonp = geom.lon - 2.0 * math.pi * time / tau
-
-   # Shape function
-   bs = 0.2
-   s = 1.0 + math.exp( (ptop-p0)/(bs*ptop) ) - numpy.exp( (p-p0)/(bs*ptop)) - numpy.exp( (ptop-p)/(bs*ptop))
-
-   # Zonal Velocity
-        
-   ud = (omega0 * geom.earth_radius)/(bs*ptop) * numpy.cos(lonp) * (numpy.cos(geom.lat)**2.0) * math.cos(2.0 * math.pi * time / tau) * ( - numpy.exp( (p-p0)/(bs*ptop)) + numpy.exp( (ptop-p)/(bs*ptop))  )
-
-   u = k0 * numpy.sin(lonp) * numpy.sin(lonp) * numpy.sin(2.0 * geom.lat) * math.cos(math.pi * time / tau) + u0 * numpy.cos(geom.lat) + ud
-
-   # Meridional Velocity
-
-   v = k0 * numpy.sin(2.0 * lonp) * numpy.cos(geom.lat) * math.cos(math.pi * time / tau)
-
-   # Vertical Velocity 
-        
-   w = -((Rd * T0) / (gravity * p)) * omega0 * numpy.sin(lonp) * numpy.cos(geom.lat) * math.cos(2.0 * math.pi * time / tau) * s
-
-   # Contravariant components
-
-   u1_contra, u2_contra = wind2contra(u, v, geom)
-   u3_contra = w
+   u1_contra, u2_contra, u3_contra = dcmip_T11_update_winds(geom, metric, mtrx, param, time=0)
 
    #-----------------------------------------------------------------------
    #    TEMPERATURE IS CONSTANT 300 K
@@ -64,33 +78,16 @@ def dcmip_advection_deformation(geom, metric, mtrx, param, time=0):
    t = T0
 
 	#-----------------------------------------------------------------------
-	#    PHIS (surface geopotential)
-	#-----------------------------------------------------------------------
-
-   phis = 0.0
-
-	#-----------------------------------------------------------------------
-	#    PS (surface pressure)
-	#-----------------------------------------------------------------------
-
-   ps = p0
-
-	#-----------------------------------------------------------------------
 	#    RHO (density)
 	#-----------------------------------------------------------------------
 
    rho = p/(Rd*t)
 
-	#-----------------------------------------------------------------------
-	#     initialize Q, set to zero
-	#-----------------------------------------------------------------------
-
-   q = 0.0
 
 	#-----------------------------------------------------------------------
-	#     initialize TV (virtual temperature)
+	#     Initialize theta (potential virtual temperature)
 	#-----------------------------------------------------------------------
-   
+
    tv = t
    theta = tv * (p0 / p)**(Rd/cpd)
 
@@ -213,7 +210,7 @@ def dcmip_gravity_wave(geom, metric, mtrx, param):
 
    # Zonal Velocity
    u = u0 * numpy.cos(geom.lat)
-   
+
    # Meridional Velocity
    v = numpy.zeros(fld_shape)
 
@@ -225,7 +222,7 @@ def dcmip_gravity_wave(geom, metric, mtrx, param):
 
    # Surface temperature
    Ts = bigG + (Teq - bigG) * numpy.exp( -(u0 * N2 / (4.0 * gravity**2)) * (u0 + 2.0 * geom.rotation_speed * geom.earth_radius) * (numpy.cos(2.0 * geom.lat) - 1.0) )
-   
+
    # Pressure
    ps = Peq * numpy.exp( (u0 / (4.0 * bigG * Rd)) * (u0 + 2.0 * geom.rotation_speed * geom.earth_radius) * (numpy.cos(2.0 * geom.lat) - 1.0) ) * (Ts/Teq)**inv_kappa
 
@@ -244,7 +241,7 @@ def dcmip_gravity_wave(geom, metric, mtrx, param):
    sin_tmp = numpy.sin(geom.lat) * math.sin(phic)
    cos_tmp = numpy.cos(geom.lat) * math.cos(phic)
 
-   r = earth_radius * numpy.cos(sin_tmp + cos_tmp * numpy.cos(geom.lon - lambdac))
+   r = geom.earth_radius * numpy.cos(sin_tmp + cos_tmp * numpy.cos(geom.lon - lambdac))
    s = (d**2)/(d**2 + r**2)
 
    theta_pert = delta_theta * s * numpy.sin(2.0 * math.pi * geom.height / Lz)

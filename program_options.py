@@ -13,7 +13,7 @@ class Configuration:
       try:
          self.equations = parser.get('General', 'equations')
       except (NoOptionError,NoSectionError):
-         self.equations = "shallow water" # TODO : changer
+         self.equations = "Euler"
 
       self.case_number = parser.getint('Test_case', 'case_number')
 

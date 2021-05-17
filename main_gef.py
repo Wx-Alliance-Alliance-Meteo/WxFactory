@@ -6,6 +6,8 @@ from time import time
 
 from blockstats      import blockstats
 from cubed_sphere    import cubed_sphere
+from dcmip           import dcmip_T11_update_winds
+from definitions     import idx_rho
 from initialize      import initialize_sw, initialize_euler
 from matrices        import DFR_operators
 from metric          import Metric
@@ -38,21 +40,18 @@ def main(args) -> int:
    metric = Metric(geom)
 
    # Initialize state variables
-   if param.equations == "shallow water":
-      Q, topo = initialize_sw(geom, metric, mtrx, param)
-
-      rhs_handle = lambda q: rhs_sw(q, geom, mtrx, metric, topo, ptopo, param.nbsolpts, param.nb_elements_horizontal, param.case_number, param.filter_apply)
-
-   elif param.equations == "Euler":
+   if param.equations == "Euler":
       Q, topo = initialize_euler(geom, metric, mtrx, param)
-
       rhs_handle = lambda q: rhs_euler(q, geom, mtrx, metric, topo, ptopo, param.nbsolpts, param.nb_elements_horizontal,
-                                    param.nb_elements_vertical, param.case_number, param.filter_apply)
+            param.nb_elements_vertical, param.case_number, param.filter_apply)
+   else: # Shallow water
+      Q, topo = initialize_sw(geom, metric, mtrx, param)
+      rhs_handle = lambda q: rhs_sw(q, geom, mtrx, metric, topo, ptopo, param.nbsolpts, param.nb_elements_horizontal, param.case_number, param.filter_apply)
 
    if param.output_freq > 0:
       output_init(geom, param)
       output_netcdf(Q, geom, metric, mtrx, topo, step, param)  # store initial conditions
-   
+
    # Time stepping
    if param.time_integrator.lower()[:3] == 'epi' and param.time_integrator[3:].isdigit():
       order = int(param.time_integrator[3:])
@@ -94,6 +93,13 @@ def main(args) -> int:
       Q = stepper.step(Q, param.dt)
       time_step = time() - tic
       print('Elapsed time for step: %0.3f secs' % time_step)
+
+      # Overwrite winds for some DCMIP tests
+      if param.case_number == 11:
+         u1_contra, u2_contra, u3_contra = dcmip_T11_update_winds(geom, metric, mtrx, param, time=t)
+         Q[1,:,:,:] = Q[idx_rho, :, :, :] * u1_contra
+         Q[2,:,:,:] = Q[idx_rho, :, :, :] * u2_contra
+         Q[3,:,:,:] = Q[idx_rho, :, :, :] * u3_contra
 
       if param.stat_freq > 0:
          if step % param.stat_freq == 0:
