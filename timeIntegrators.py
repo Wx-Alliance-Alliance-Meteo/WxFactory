@@ -187,7 +187,7 @@ class Tvdrk3:
       return Q
 
 class Rat2:
-   def __init__(self, rhs, tol, preconditioner = None):
+   def __init__(self, rhs, tol, preconditioner=None):
       self.rhs = rhs
       self.tol = tol
       self.preconditioner = preconditioner

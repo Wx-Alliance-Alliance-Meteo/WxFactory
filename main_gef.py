@@ -13,9 +13,11 @@ from matrices        import DFR_operators
 from metric          import Metric
 from output          import output_init, output_netcdf, output_finalize
 from parallel        import Distributed_World
-from preconditioner  import Preconditioner
+from preconditioner_dg import DG_preconditioner
+from preconditioner_fv import FV_preconditioner
 from program_options import Configuration
 from rhs_euler       import rhs_euler
+from rhs_fv          import rhs_sw_fv
 from rhs_sw          import rhs_sw
 from rhs_sw_explicit import rhs_sw_explicit
 from rhs_sw_implicit import rhs_sw_implicit
@@ -26,6 +28,11 @@ def main(args) -> int:
 
    # Read configuration file
    param = Configuration(args.config)
+
+   if param.discretization == 'fv':
+      param.nb_elements_horizontal = param.nb_elements_horizontal * param.nbsolpts
+      param.nb_elements_vertical   = param.nb_elements_vertical * param.nbsolpts
+      param.nbsolpts = 1
 
    # Set up distributed world
    ptopo = Distributed_World()
@@ -62,7 +69,10 @@ def main(args) -> int:
    elif param.time_integrator.lower() == 'tvdrk3':
       stepper = Tvdrk3(rhs_handle)
    elif param.time_integrator.lower() == 'rat2':
-      preconditioner = Preconditioner(param, geom, ptopo, mtrx, rhs_sw) if param.use_preconditioner == 1 else None
+      preconditioner = None
+      if param.use_preconditioner:
+         # preconditioner = DG_preconditioner(param, geom, ptopo, mtrx, rhs_sw)
+         preconditioner = FV_preconditioner(param, geom, ptopo)
       stepper = Rat2(rhs_handle, param.tolerance, preconditioner=preconditioner)
    elif  param.time_integrator.lower() == 'epi2/ark' and param.equations == "shallow water": # TODO : Euler
       rhs_explicit = lambda q: rhs_sw_explicit(q, geom, mtrx, metric, topo, ptopo, param.nbsolpts, param.nb_elements_horizontal, param.case_number, param.filter_apply)

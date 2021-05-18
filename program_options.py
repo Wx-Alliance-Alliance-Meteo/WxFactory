@@ -58,6 +58,11 @@ class Configuration:
          self.precond_filter_after = 0
 
       try:
+         self.discretization = parser.get('Grid', 'discretization')
+      except (NoOptionError, NoSectionError):
+         self.discretization = 'dg'
+
+      try:
          self.λ0 = parser.getfloat('Grid', 'λ0')
       except (NoOptionError,NoSectionError):
          self.λ0 = 0.0

@@ -8,11 +8,14 @@ doc/*.aux
 doc/*.log
 doc/*.out
 
+jacobian/*
+
 __pycache__/
 *.py[cod]
 
 model_output/
 
+.vscode
 .idea
 venv
 

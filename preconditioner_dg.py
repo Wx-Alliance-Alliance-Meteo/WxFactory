@@ -1,4 +1,5 @@
 from copy import copy
+from time import time
 
 from cubed_sphere  import cubed_sphere
 from dgfilter      import apply_filter
@@ -9,7 +10,7 @@ from matrices      import DFR_operators
 from metric        import Metric
 
 
-class Preconditioner:
+class DG_preconditioner:
 
    def __init__(self, param, geometry, ptopo, operators, rhs_func, prefix='   ', depth=1):
 
@@ -29,6 +30,7 @@ class Preconditioner:
       self.num_precond_iter = 0
       self.remaining_uses   = 0
       self.max_num_uses     = 1
+      self.precond_time     = 0.0
       self.big_param        = copy(param)
       self.ptopo            = ptopo
       self.rhs_func         = rhs_func
@@ -63,7 +65,7 @@ class Preconditioner:
       self.small_param.filter_order = 8
 
       self.small_geom      = cubed_sphere(param.nb_elements_horizontal, param.nb_elements_vertical, self.small_order,
-                                          param.λ0, param.ϕ0, param.α0, param.ztop, self.ptopo)
+                                          param.λ0, param.ϕ0, param.α0, param.ztop, self.ptopo, self.small_param)
       self.small_operators = DFR_operators(self.small_geom, self.small_param)
       self.small_metric    = Metric(self.small_geom)
       _, self.small_topo   = initialize_sw(self.small_geom, self.small_metric, self.small_operators, self.small_param)
@@ -71,12 +73,13 @@ class Preconditioner:
       self.interpolator = LagrangeSimpleInterpolator(geometry)
 
       self.big_shape      = None
+      self.big_mat        = None
       self.small_shape    = None
       self.small_rhs      = None
       self.small_mat      = None
       self.preconditioner = None
       if self.small_order > min_order and self.depth < max_depth:
-         self.preconditioner = Preconditioner(
+         self.preconditioner = DG_preconditioner(
             self.small_param, self.small_geom, self.ptopo, self.small_operators, self.rhs_func, self.prefix + '   ',
             self.depth + 1)
 
@@ -99,15 +102,16 @@ class Preconditioner:
       self.big_mat = matvec_handle
 
       self.remaining_uses = self.max_num_uses
+      self.precond_time   = 0.0
 
       if self.preconditioner:
          self.preconditioner.init_time_step(matvec_func, dt, lowres_field, matvec_handle)
 
    def restrict(self, field):
-      return self.interpolator.eval_grid_fast(field, self.small_order, self.big_order)
+      return self.interpolator.eval_grid_fast(field, self.small_order, self.big_order, equidistant=False)
 
    def prolong(self, field):
-      return self.interpolator.eval_grid_fast(field, self.big_order, self.small_order)
+      return self.interpolator.eval_grid_fast(field, self.big_order, self.small_order, equidistant=False)
 
    def apply(self, vec):
 
@@ -115,6 +119,8 @@ class Preconditioner:
          return vec
 
       self.remaining_uses -= 1
+
+      start_time = time()
 
       input_vec_grid = self.restrict(vec.reshape(self.big_shape))
       if self.filter_before:
@@ -138,9 +144,13 @@ class Preconditioner:
 
       result = result_grid.flatten()
 
-      self.num_iter += num_iter
+      stop_time = time()
 
-      print(f'{self.prefix}Preconditioned in {num_iter} iterations (total {self.total_num_iter()})')
+      self.precond_time += stop_time - start_time
+      self.num_iter     += num_iter
+
+      print(f'{self.prefix}Preconditioned in {num_iter} iterations (total {self.total_num_iter()}) '
+            f'and {self.precond_time:.2f} s')
 
       return result
 
