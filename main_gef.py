@@ -17,7 +17,6 @@ from preconditioner_dg import DG_preconditioner
 from preconditioner_fv import FV_preconditioner
 from program_options import Configuration
 from rhs_euler       import rhs_euler
-from rhs_fv          import rhs_sw_fv
 from rhs_sw          import rhs_sw
 from rhs_sw_explicit import rhs_sw_explicit
 from rhs_sw_implicit import rhs_sw_implicit
