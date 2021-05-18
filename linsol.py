@@ -112,7 +112,7 @@ def fgmres(A, b, x0 = None, tol = 1e-5, restart = 20, maxiter = None, preconditi
          V[inner + 2, :] = A(Z[inner + 1, :] / v_norm) * v_norm
          V, R, v_norm = ortho_1_sync(V, R, inner + 2)
          H[inner, :] = R[:restart + 1, inner + 1]
-         Z[inner + 1, :] = V[inner + 1, :]
+         Z[inner + 1, :] /= v_norm
 
          # Apply previous Givens rotations to H
          if inner > 0:
@@ -144,7 +144,6 @@ def fgmres(A, b, x0 = None, tol = 1e-5, restart = 20, maxiter = None, preconditi
                break
 
       # end inner loop, back to outer loop
-      Z[inner+1, :] = V[inner+1, :]
 
       # Find best update to x in Krylov Space V.
       y = scipy.linalg.solve_triangular(H[0:inner + 1, 0:inner + 1].T, g[0:inner + 1])
