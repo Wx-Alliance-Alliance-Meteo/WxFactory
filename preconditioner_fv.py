@@ -1,6 +1,8 @@
 from copy import copy
 from time import time
 
+import numpy
+
 from cubed_sphere    import cubed_sphere
 from initialize      import initialize_sw
 from interpolation   import LagrangeSimpleInterpolator, interpolator
@@ -39,11 +41,10 @@ class FV_preconditioner:
 
       self.dg_geom       = initial_geom
       self.dg_nb_sol_pts = param.nbsolpts
+      self.fv_nb_sol_pts = self.dg_nb_sol_pts # Cannot be different from dg_nb_sol_pts for now. TODO implement
       self.interpolator  = LagrangeSimpleInterpolator(initial_geom)
 
-      self.interpolate = interpolator('dg', self.dg_nb_sol_pts, 'fv', self.dg_nb_sol_pts, 'lagrange')
-
-      self.remaining_uses = 1
+      self.interpolate = interpolator('dg', self.dg_nb_sol_pts, 'fv', self.fv_nb_sol_pts, 'lagrange')
 
    def dg_to_fv(self, vec):
       # return self.interpolator.eval_grid_fast(vec.reshape(self.field_shape), self.dg_nb_sol_pts - 3, self.dg_nb_sol_pts, equidistant=False)
@@ -56,24 +57,13 @@ class FV_preconditioner:
 
       t0 = time()
 
-      # if self.remaining_uses <= 0:
-         # return vec
-
-      self.remaining_uses -= 1
-
-      input_vec = self.dg_to_fv(vec).flatten()
-      # input_vec = vec
-      # print(f'vec:\n{vec}\ninput_vec: \n{input_vec}')
+      input_vec = numpy.ravel(self.dg_to_fv(vec))
       output_vec, _, num_iter, _ = fgmres(
-         self.fv_matrix, input_vec, preconditioner=None, tol=1e-7, maxiter=self.max_iter)
-
-      output_vec = self.fv_to_dg(output_vec).flatten()
-
-      #TODO interpolate output from FV to DG grid
+         self.fv_matrix, input_vec, preconditioner=None, tol=1e-2, maxiter=self.max_iter)
+      output_vec = numpy.ravel(self.fv_to_dg(output_vec))
 
       t1 = time()
       precond_time = t1 - t0
-
       print(f'Preconditioned in {num_iter} iterations and {precond_time:.2f} s')
 
       return output_vec

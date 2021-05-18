@@ -219,16 +219,16 @@ def solve_jacobi(jacobian, rhs):
 def main(args):
    jacobian, initial_rhs = load_matrix(args.case_name)
 
-   sol_scipy  = solve_gmres(jacobian, initial_rhs)
    sol_gef    = solve_gef_fgmres(jacobian, initial_rhs)
-   sol_lgmres = solve_lgmres(jacobian, initial_rhs)
+   sol_scipy  = solve_gmres(jacobian, initial_rhs)
+   # sol_lgmres = solve_lgmres(jacobian, initial_rhs)
    sol_amg    = solve_pyamg_gmres(pyamg.krylov.gmres, jacobian, initial_rhs)
    solve_pyamg_gmres(pyamg.krylov.fgmres, jacobian, initial_rhs)
-   solve_pyamg_krylov(pyamg.krylov.cg, jacobian, initial_rhs)
-   solve_pyamg_krylov(pyamg.krylov.bicgstab, jacobian, initial_rhs)
-   solve_pyamg_krylov(pyamg.krylov.cgne, jacobian, initial_rhs)
+   # solve_pyamg_krylov(pyamg.krylov.cg, jacobian, initial_rhs)
+   # solve_pyamg_krylov(pyamg.krylov.bicgstab, jacobian, initial_rhs)
+   # solve_pyamg_krylov(pyamg.krylov.cgne, jacobian, initial_rhs)
 
-   solve_jacobi(jacobian, initial_rhs)
+   # solve_jacobi(jacobian, initial_rhs)
 
    # solve_gmres_diag_precond(jacobian, initial_rhs)
    # solve_gmres_diag_precond(jacobian, initial_rhs, 2)
@@ -244,37 +244,39 @@ def main(args):
 
    A = scipy.sparse.csr_matrix(jacobian)
    # A = pyamg.gallery.poisson((jacobian.shape[0],), format='csr')
-   print(f'jacobian shape: {jacobian.shape}, A shape: {A.shape}')
+   # print(f'jacobian shape: {jacobian.shape}, A shape: {A.shape}')
 
    print('Rootnode preconditioner... ', end='')
    mg_solver_rootnode = pyamg.rootnode_solver(A, max_levels=2)
    precond_rootnode   = mg_solver_rootnode.aspreconditioner(cycle='V')
    print(' initialized.')
+
+   solve_gef_fgmres(A, initial_rhs, precond=precond_rootnode)
+   solve_gmres(A, initial_rhs, precond=precond_rootnode)
    solve_pyamg_gmres(pyamg.krylov.gmres, A, initial_rhs, precond=precond_rootnode)
    solve_pyamg_gmres(pyamg.krylov.fgmres, A, initial_rhs, precond=precond_rootnode)
    # solve_pyamg_krylov(pyamg.krylov.cg, A, initial_rhs, precond=precond_rootnode)
-   solve_pyamg_krylov(pyamg.krylov.bicgstab, A, initial_rhs, precond=precond_rootnode)
-   solve_pyamg_krylov(pyamg.krylov.cgne, A, initial_rhs, precond=precond_rootnode)
-   solve_gmres(A, initial_rhs, precond=precond_rootnode)
-   solve_gef_fgmres(A, initial_rhs, precond=precond_rootnode)
+   # solve_pyamg_krylov(pyamg.krylov.bicgstab, A, initial_rhs, precond=precond_rootnode)
+   # solve_pyamg_krylov(pyamg.krylov.cgne, A, initial_rhs, precond=precond_rootnode)
 
    print('Smoothed aggregation preconditioner... ', end='')
    mg_solver_sas = pyamg.smoothed_aggregation_solver(A, max_levels=2)
    precond_sas   = mg_solver_sas.aspreconditioner(cycle='V')
    print(' initialized.')
+   
+   solve_gef_fgmres(A, initial_rhs, precond=precond_sas)
+   solve_gmres(A, initial_rhs, precond=precond_sas)
    solve_pyamg_gmres(pyamg.krylov.gmres, A, initial_rhs, precond=precond_sas)
    solve_pyamg_gmres(pyamg.krylov.fgmres, A, initial_rhs, precond=precond_sas)
    # solve_pyamg_krylov(pyamg.krylov.cg, A, initial_rhs, precond=precond_sas)
-   solve_pyamg_krylov(pyamg.krylov.bicgstab, A, initial_rhs, precond=precond_sas)
-   solve_pyamg_krylov(pyamg.krylov.cgne, A, initial_rhs, precond=precond_sas)
-   solve_gmres(A, initial_rhs, precond=precond_sas)
-   solve_gef_fgmres(A, initial_rhs, precond=precond_sas)
+   # solve_pyamg_krylov(pyamg.krylov.bicgstab, A, initial_rhs, precond=precond_sas)
+   # solve_pyamg_krylov(pyamg.krylov.cgne, A, initial_rhs, precond=precond_sas)
 
    gef_sci_diff = sol_scipy - sol_gef
    norm = scipy.linalg.norm(gef_sci_diff)
    print(f'Sci-GEF diff:    {norm:.3e}, rel {norm/scipy.linalg.norm(sol_scipy):.3e}')
    print(f'Sci-AMG diff:    {scipy.linalg.norm(sol_scipy - sol_amg):.3e}')
-   print(f'Sci-Lgmres diff: {scipy.linalg.norm(sol_scipy - sol_lgmres):.3e}')
+   # print(f'Sci-Lgmres diff: {scipy.linalg.norm(sol_scipy - sol_lgmres):.3e}')
 
 
 if __name__ == '__main__':

@@ -6,8 +6,6 @@ from matrices   import lagrangeEval
 from quadrature import gauss_legendre
 from timer      import Timer
 
-from graphx import plot_array
-
 basis_point_sets = {}
 
 def eval_single_field(field, elem_interp, result=None):
@@ -29,13 +27,6 @@ def eval_single_field(field, elem_interp, result=None):
    for i in range(num_elem):
       result[:, i * new_num_points:(i + 1) * new_num_points] = \
          interp_1[:, i * old_num_points:(i + 1) * old_num_points] @ elem_interp.T
-
-   # print(f'Num_elem: {num_elem}, field.shape: {field.shape}, elem_interp.shape: {elem_interp.shape},')
-
-   # plot_array(field, filename='origin_field.png')
-   # plot_array(result, filename='dest_field.png')
-
-   # raise ValueError
 
    return result
 
@@ -81,6 +72,36 @@ def get_linear_weights(points, x):
    return result
 
 
+def lagrange_poly(index, order):
+    points, _ = gauss_legendre(order)
+
+    def L(x):
+        return numpy.prod(
+           [(x - points[i]) / (points[index] - points[i])
+            for i in range(order) if i != index],
+           axis=0)
+
+    return L
+
+
+def compute_dg_to_fv_small_projection(dg_order, fv_order, quad_order=1):
+    width = 2.0 / fv_order
+    points, quad_weights = gauss_legendre(quad_order)
+    result = []
+
+    lagranges = [lagrange_poly(i, dg_order) for i in range(dg_order)]
+    quad_weights *= width / 2.0 * (fv_order / 2.0)**0.5
+
+    def compute_row(index):
+        x0 = -1.0 + width * index
+        x = x0 + width * (points + 1.0) / 2.0
+        return [l(x) @ quad_weights for l in lagranges]
+
+    result = numpy.array([compute_row(i) for i in range(fv_order)])
+
+    return result
+
+
 def interpolator(origin_type: str, origin_order: int, dest_type: str, dest_order: int, interp_type: str):
    origin_points = None
    if origin_type == 'dg':
@@ -103,8 +124,9 @@ def interpolator(origin_type: str, origin_order: int, dest_type: str, dest_order
    elem_interp = None
    reverse_interp = None
    if interp_type == 'lagrange':
-      elem_interp    = numpy.array([lagrangeEval(origin_points, x) for x in dest_points])
-      reverse_interp = numpy.array([lagrangeEval(dest_points, x) for x in origin_points])
+      # elem_interp    = numpy.array([lagrangeEval(origin_points, x) for x in dest_points])
+      elem_interp = compute_dg_to_fv_small_projection(origin_order, dest_order, quad_order=3)
+      reverse_interp = numpy.array([lagrangeEval(dest_points, x) for x in origin_points]) * (dest_order / 2.0)**0.5
    elif interp_type == 'bilinear':
       elem_interp    = numpy.array([get_linear_weights(origin_points, x) for x in dest_points])
       reverse_interp = numpy.array([get_linear_weights(dest_points, x) for x in origin_points])
@@ -113,7 +135,7 @@ def interpolator(origin_type: str, origin_order: int, dest_type: str, dest_order
 
    if dest_order == origin_order:
       inverse = numpy.linalg.inv(elem_interp)
-      diff = numpy.linalg.norm(reverse_interp - inverse)
+      diff = numpy.linalg.norm(reverse_interp - inverse) / numpy.linalg.norm(reverse_interp)
       print(f'Diff b/w computed reverse and inverted matrix = {diff}')
       reverse_interp = numpy.linalg.inv(elem_interp)
 
