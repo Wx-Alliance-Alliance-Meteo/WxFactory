@@ -124,20 +124,31 @@ def interpolator(origin_type: str, origin_order: int, dest_type: str, dest_order
    elem_interp = None
    reverse_interp = None
    if interp_type == 'lagrange':
-      # elem_interp    = numpy.array([lagrangeEval(origin_points, x) for x in dest_points])
       elem_interp = compute_dg_to_fv_small_projection(origin_order, dest_order, quad_order=3)
-      reverse_interp = numpy.array([lagrangeEval(dest_points, x) for x in origin_points]) * (dest_order / 2.0)**0.5
+      # reverse_interp = numpy.array([lagrangeEval(dest_points, x) for x in origin_points]) * (dest_order / 2.0)**0.5
    elif interp_type == 'bilinear':
-      elem_interp    = numpy.array([get_linear_weights(origin_points, x) for x in dest_points])
-      reverse_interp = numpy.array([get_linear_weights(dest_points, x) for x in origin_points])
+      elem_interp    = numpy.array([get_linear_weights(origin_points, x) for x in dest_points])# * (dest_order / origin_order)**0.5
+      # reverse_interp = numpy.array([get_linear_weights(dest_points, x) for x in origin_points])
    else:
       raise ValueError('interp_type not one of available interpolation types')
 
    if dest_order == origin_order:
       inverse = numpy.linalg.inv(elem_interp)
-      diff = numpy.linalg.norm(reverse_interp - inverse) / numpy.linalg.norm(reverse_interp)
-      print(f'Diff b/w computed reverse and inverted matrix = {diff}')
-      reverse_interp = numpy.linalg.inv(elem_interp)
+   else:
+      inverse = numpy.linalg.pinv(elem_interp)
+
+   # diff = numpy.linalg.norm(reverse_interp - inverse) / numpy.linalg.norm(reverse_interp)
+   # print(f'Diff b/w computed reverse and inverted matrix = {diff}')
+   reverse_interp = inverse
+
+   full = numpy.empty((dest_order*dest_order, origin_order*origin_order), dtype=elem_interp.dtype)
+   for i in range(dest_order):
+      for j in range(origin_order):
+         full[i*dest_order:(i+1)*dest_order, j*origin_order:(j+1)*origin_order] = elem_interp[i, j] * elem_interp
+      
+   # print(f'Full:\n{full}\n{numpy.linalg.pinv(full)}')
+   # print(f'elem_interp:\n{elem_interp}')
+   # print(f'reverse:\n{reverse_interp}')
 
    def interpolate(field, reverse=False):
       if reverse:

@@ -196,7 +196,7 @@ class Rat2:
       matvec_handle = lambda v: matvec_rat(v, dt, Q, self.rhs)
 
       if self.preconditioner:
-         self.preconditioner.init_time_step(matvec_rat, dt, Q, matvec_handle)
+         self.preconditioner.init_time_step(dt, Q)
 
       # Transform to the shifted linear system (I/dt - J/2) x = F/dt
       rhs = self.rhs(Q).flatten() / dt

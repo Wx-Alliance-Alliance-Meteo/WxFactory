@@ -82,8 +82,9 @@ class Configuration:
       except (NoOptionError,NoSectionError):
          self.ztop = 0.0
 
-      self.nbsolpts         = parser.getint('Spatial_discretization', 'nbsolpts')
+      self.nbsolpts               = parser.getint('Spatial_discretization', 'nbsolpts')
       self.nb_elements_horizontal = parser.getint('Spatial_discretization', 'nb_elements_horizontal')
+      self.initial_nbsolpts       = self.nbsolpts
 
       try:
          self.nb_elements_vertical   = parser.getint('Spatial_discretization', 'nb_elements_vertical')
@@ -109,3 +110,32 @@ class Configuration:
       self.stat_freq   = parser.getint('Output_options', 'stat_freq')
       self.output_freq = parser.getint('Output_options', 'output_freq')
       self.output_file = parser.get('Output_options', 'output_file')
+
+   def __str__(self):
+      return \
+         f'Equations: {self.equations}\n' \
+         f'Case number: {self.case_number}\n' \
+         f'dt:          {self.dt}\n' \
+         f't_end:       {self.t_end}\n' \
+         f'Time integrator: {self.time_integrator}\n' \
+         f'Krylov size:     {self.krylov_size}\n' \
+         f'tolerance:       {self.tolerance}\n' \
+         f'ARK solver exp:  {self.ark_solver_exp}\n' \
+         f'ARK solver imp:  {self.ark_solver_imp}\n' \
+         f'Use precond:     {self.use_preconditioner}\n' \
+         f'Precond filter \n  before: {self.precond_filter_before}\n  during: {self.precond_filter_during}\n  after:  {self.precond_filter_after}\n' \
+         f'Discretization:  {self.discretization}\n' \
+         f'λ0: {self.λ0}\n' \
+         f'ϕ0: {self.ϕ0}\n' \
+         f'α0: {self.α0}\n' \
+         f'ztop: {self.ztop}\n' \
+         f'initial nbsolpts: {self.initial_nbsolpts}\n' \
+         f'nbsolpts: {self.nbsolpts}\n' \
+         f'# elem horiz: {self.nb_elements_horizontal}\n' \
+         f'# elem vert:  {self.nb_elements_vertical}\n' \
+         f'apply filter: {self.filter_apply}\n' \
+         f'filer order:  {self.filter_order}\n' \
+         f'filter cutoff: {self.filter_cutoff}\n' \
+         f'stat frequency: {self.stat_freq}\n' \
+         f'output frequency: {self.output_freq}\n' \
+         f'output file:      {self.output_file}\n'
