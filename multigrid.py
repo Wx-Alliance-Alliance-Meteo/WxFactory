@@ -17,8 +17,17 @@ from rhs_sw        import rhs_sw
 def func_that_returns_its_input(x):
    return x
 
-def explicit_euler_smoothe(x, A, b, h):
-   return x + h * (b - A(x))
+def explicit_euler_smoothe(x, A, b, h, num_iter=1):
+   for i in range(num_iter):
+      x = x + h * (b - A(x))
+   return x
+
+def runge_kutta_smoothe(x, A, b, h, num_iter=1):
+   for i in range(num_iter):
+      x1 = x + h * (b - A(x))
+      x2 = 0.75 * x + 0.25 * x1 + 0.25 * h * (b - A(x))
+      x = 1.0/3.0 * x + 2.0/3.0 * x2 + 2.0/3.0 * h * (b - A(x))
+   return x
 
 def make_restrict(interp, shape):
    def restrict(vec):

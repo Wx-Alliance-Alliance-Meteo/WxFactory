@@ -100,7 +100,7 @@ class FV_preconditioner:
       #    num_iter += 1
 
       output_vec, num_iter, mg_time = mg_solve(input_vec, self.dt, self.mg_params, max_num_it=1)
-      # output_vec, _, num_iter, _ = fgmres(self.dest_matrix, input_vec, preconditioner=self.preconditioner, tol=1e-1, maxiter=self.max_iter, prefix=self.prefix+'  ')
+      # output_vec, _, num_iter, _ = fgmres(self.dest_matrix, input_vec, preconditioner=self.preconditioner, tol=1e-1, maxiter=self.max_iter)
       output_vec = numpy.ravel(self.prolong(output_vec))
 
       t1 = time()
