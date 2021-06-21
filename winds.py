@@ -26,7 +26,7 @@ def contra2wind(u1, u2, geom):
    # Convert from reference element to "physical winds"
 
    u1_contra = u1*geom.Δx1/2.
-   u2_contra = u1*geom.Δx1/2.
+   u2_contra = u2*geom.Δx2/2.
 
    denom = (math.cos(geom.lat_p) + geom.X * math.sin(geom.lat_p) * math.sin(geom.angle_p) - geom.Y * math.sin(geom.lat_p) * math.cos(geom.angle_p))**2 + (geom.X * math.cos(geom.angle_p) + geom.Y * math.sin(geom.angle_p))**2
 
