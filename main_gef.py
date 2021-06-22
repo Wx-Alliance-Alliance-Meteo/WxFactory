@@ -71,10 +71,10 @@ def main(args) -> int:
       stepper = Tvdrk3(rhs_handle)
    elif param.time_integrator.lower() == 'rat2':
       preconditioner = None
-      if param.use_preconditioner:
+      if param.use_preconditioner > 0:
          # preconditioner = DG_preconditioner(param, geom, ptopo, mtrx, rhs_sw)
-         preconditioner = FV_preconditioner(param, Q, ptopo)
-      stepper = Rat2(rhs_handle, param.tolerance, preconditioner=preconditioner)
+         preconditioner = FV_preconditioner(param, Q, ptopo, precond_type=param.use_preconditioner)
+      stepper = Rat2(rhs_handle, param.tolerance, preconditioner=preconditioner, rank=ptopo.rank, param=param)
    elif  param.time_integrator.lower() == 'epi2/ark' and param.equations == "shallow water": # TODO : Euler
       rhs_explicit = lambda q: rhs_sw_explicit(q, geom, mtrx, metric, topo, ptopo, param.nbsolpts, param.nb_elements_horizontal, param.case_number, param.filter_apply)
 

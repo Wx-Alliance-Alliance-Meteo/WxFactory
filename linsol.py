@@ -68,11 +68,13 @@ def fgmres(A, b, x0 = None, tol = 1e-5, restart = 20, maxiter = None, preconditi
    # Check for early stop
    norm_b = global_norm(b)
    if norm_b == 0.0:
-      return numpy.zeros_like(b), 0., 0, 0
+      return numpy.zeros_like(b), 0., 0, 0, [0.0]
 
    tol_relative = tol * norm_b
 
    Ax0 = A(x)
+
+   residuals = []
 
    # Rescale the initial approximation using the Hegedüs trick
    if hegedus:
@@ -85,6 +87,8 @@ def fgmres(A, b, x0 = None, tol = 1e-5, restart = 20, maxiter = None, preconditi
    r          = b - Ax0
    norm_r     = global_norm(r)
    error      = norm_r / norm_b
+
+   residuals.append(error)
 
    # Get fast access to underlying BLAS routines
    [lartg] = scipy.linalg.get_lapack_funcs(['lartg'], [x])
@@ -146,6 +150,7 @@ def fgmres(A, b, x0 = None, tol = 1e-5, restart = 20, maxiter = None, preconditi
          # norm_r is calculated directly after this loop ends.
          if inner < restart - 1:
             norm_r = numpy.abs(g[inner+1])
+            residuals.append(norm_r / norm_b)
             if norm_r < tol_relative:
                break
 
@@ -158,6 +163,7 @@ def fgmres(A, b, x0 = None, tol = 1e-5, restart = 20, maxiter = None, preconditi
       r = b - A(x)
 
       norm_r = global_norm(r)
+      residuals.append(norm_r / norm_b)
 
       # Has GMRES stagnated?
       indices = (x != 0)
@@ -165,15 +171,15 @@ def fgmres(A, b, x0 = None, tol = 1e-5, restart = 20, maxiter = None, preconditi
          change = numpy.max(numpy.abs(update[indices] / x[indices]))
          if change < 1e-12:
             # No change, halt
-            return x, norm_r, niter, -1
+            return x, norm_r, niter, -1, residuals
 
       # test for convergence
       if norm_r < tol_relative:
-         return x, norm_r, niter, 0
+         return x, norm_r, niter, 0, residuals
 
    # end outer loop
 
-   return x, norm_r / norm_b, niter, 0
+   return x, norm_r / norm_b, niter, 0, residuals
 
 def global_norm(vec):
    """Compute vector norm across all PEs"""

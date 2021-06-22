@@ -1,6 +1,7 @@
 import numpy
 import math
 from collections import deque
+from time        import time
 
 from matvec        import matvec_fun, matvec_rat
 from kiops         import kiops
@@ -187,10 +188,30 @@ class Tvdrk3:
       return Q
 
 class Rat2:
-   def __init__(self, rhs, tol, preconditioner=None):
+   def __init__(self, rhs, tol, preconditioner=None, mg_params=None, rank=-1, param=None):
       self.rhs = rhs
       self.tol = tol
       self.preconditioner = preconditioner
+      self.mg_params = mg_params
+      self.rank = rank
+
+      if self.rank == 0:
+         try:
+            f = open('test_result.txt')
+            file_exists = True
+            f.close()
+         except:
+            file_exists = False
+
+         with open('test_result.txt', 'a+') as output_file:
+            if not file_exists:
+               output_file.write('order | num_elements | precond | precond tol | max MG lvl | MG smoothe only | MG dt | # pre smoothe | # post smoothe | CFL # | FGMRES #it | FGMRES time | precond #it | precond time \n')
+            if param is not None:
+               output_file.write(f'{param.nbsolpts} {param.nb_elements_horizontal:3d} {param.use_preconditioner} {param.precond_tolerance:9.1e} '
+                                 f'{param.max_mg_level:2d} {param.mg_smoothe_only} {param.mg_dt:4d} '
+                                 f'{param.num_pre_smoothing} {param.num_post_smoothing} {param.mg_cfl:6.3f} - ')
+            else:
+               output_file.write(f'NO PARAMS - ')
 
    def step(self, Q, dt):
       matvec_handle = lambda v: matvec_rat(v, dt, Q, self.rhs)
@@ -203,8 +224,22 @@ class Rat2:
 
       first_guess = numpy.zeros_like(rhs)
 
-      phiv, local_error, num_iter, flag = fgmres(matvec_handle, rhs,
-                                                 x0=first_guess, tol=self.tol, preconditioner=self.preconditioner)
+      t0 = time()
+      phiv, local_error, num_iter, flag, residuals = \
+         fgmres(matvec_handle, rhs, x0=first_guess, tol=self.tol, preconditioner=self.preconditioner, restart=20, maxiter=max_it)
+      print(f'Finished time step')
+      t1 = time()
+
+      if self.rank == 0:
+         with open('test_result.txt', 'a+') as output_file:
+            output_file.write(f'{num_iter:4d} {t1 - t0:6.1f} ')
+            precond_it, precond_time = 0, 0.0
+            if self.preconditioner is not None:
+               precond_it, precond_time = self.preconditioner.total_iter, self.preconditioner.total_time
+            output_file.write(f'{precond_it:5d} {precond_time:6.1f} ')
+            output_file.write(f'- {" ".join(f"{r:.2e}" for r in residuals)} ')
+            output_file.write('\n')
+
 
       if flag == 0:
          print(f'FGMRES converged at iteration {num_iter} to a solution with local error {local_error : .2e}')
