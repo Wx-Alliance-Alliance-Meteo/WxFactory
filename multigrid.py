@@ -7,12 +7,14 @@ from time import time
 
 from cubed_sphere  import cubed_sphere
 from initialize    import initialize_sw
-from interpolation import interpolator
+from interpolation import compute_dg_to_fv_small_projection, interpolator
 from linsol        import fgmres, global_norm
 from matrices      import DFR_operators
 from matvec        import matvec_rat
 from metric        import Metric
 from rhs_sw        import rhs_sw
+
+from definitions import idx_h, idx_hu1, idx_hu2, gravity
 
 def func_that_returns_its_input(x):
    return x
@@ -52,11 +54,15 @@ def make_rhs_op(rhs, geom, operators, metric, topo, ptopo, num_points, num_elem_
 
 class MG_params:
 
-   def __init__(self, param, ptopo, num_levels=None) -> None:
-      if num_levels is None:
-         num_levels = int(math.log2(param.initial_nbsolpts))
-         if 2**num_levels != param.initial_nbsolpts:
-            raise ValueError('Cannot do multigrid stuff if the order of the problem is not a power of 2')
+   def __init__(self, param, ptopo, num_levels=-1, use_solver=True, pdt=100, num_pre_smoothing=1, num_post_smoothing=1, cfl=0.7) -> None:
+      max_levels = int(math.log2(param.initial_nbsolpts))
+      if 2**max_levels != param.initial_nbsolpts:
+         raise ValueError('Cannot do multigrid stuff if the order of the problem is not a power of 2')
+
+      if num_levels < 0:
+         num_levels = max_levels
+      else:
+         num_levels = min(int(num_levels), int(max_levels))
 
       if param.equations != 'shallow_water':
          raise ValueError('Cannot use the multigrid solver with anything other than shallow water')
@@ -65,6 +71,11 @@ class MG_params:
 
       self.rhs = rhs_sw
       self.matvec = matvec_rat
+      self.use_solver = use_solver
+      self.pdt = pdt
+      self.num_pre_smoothing = num_pre_smoothing
+      self.num_post_smoothing = num_post_smoothing
+      self.cfl = cfl
 
       self.smoothers = {}
       self.interpolators = {}
@@ -95,6 +106,7 @@ class MG_params:
          self.rhs_operators[level] = make_rhs_op(self.rhs, geom, operators, metric, topo, ptopo, p.nbsolpts, p.nb_elements_horizontal, p.case_number, False)
 
          self.smoothers[level] = explicit_euler_smoothe
+         # self.smoothers[level] = runge_kutta_smoothe
 
          if level > 0:
             self.interpolators[level] = interpolator('fv', order, 'fv', order//2, 'bilinear')
@@ -105,15 +117,54 @@ class MG_params:
 
          order = order // 2
 
-   def compute_matrix_operators(self, field, dt):
+   def compute_matrix_operators(self, field, dt, X, Y, geom, metric):
 
+      # Compute pseudo time step from CFL condition
+      dx = numpy.empty_like(X)
+      dy = numpy.empty_like(Y)
+
+      dx[:,  0]   = X[:, 1] - X[:, 0]
+      dx[:, -1]   = X[:, -1] - X[:, -2]
+      dx[:, 1:-1] = (X[:, 2:] - X[:, :-2]) * 0.5
+
+      dy[ 0, :]   = Y[ 1, :] - Y[ 0, :]
+      dy[-1, :]   = Y[-1, :] - Y[-2, :]
+      dy[1:-1, :] = (Y[2:, :] - Y[:-2, :]) * 0.5
+
+      h  = field[idx_h]
+      u1 = field[idx_hu1] / h
+      u2 = field[idx_hu2] / h
+
+      elem_size = numpy.minimum(dx.min(), dy.min())
+
+      real_u1 = u1 * dx / 2.0
+      real_u2 = u2 * dy / 2.0
+
+      real_h_11 = metric.H_contra_11 * dx * dy / 4.0
+      real_h_22 = metric.H_contra_22 * dx * dy / 4.0
+
+      v1 = numpy.absolute(real_u1) + numpy.sqrt(real_h_11 * gravity * h)
+      v2 = numpy.absolute(real_u2) + numpy.sqrt(real_h_22 * gravity * h)
+
+      vel = numpy.maximum(v1, v2)
+
+      pseudo_dt = self.cfl * elem_size / vel
+
+      numpy.set_printoptions(precision=1)
+      print(f'pseudo dt:\n{pseudo_dt}')
+      print(f'max: {pseudo_dt.max()}, min: {pseudo_dt.min()}, avg: {numpy.average(pseudo_dt)} ')
+
+      self.pseudo_dts = {}
+      next_dt = numpy.broadcast_to(pseudo_dt, field.shape)
       next_field = field
       for level in range(self.max_level, -1, -1):
          # print(f'Level: {level}, next_field.shape: {next_field.shape}')
          # self.matrix_operators[level] = lambda v: self.matvec(v, dt, next_field, self.rhs_operators[level])
          self.matrix_operators[level] = make_matrix_op(next_field, self.rhs_operators[level], dt, self.matvec)
+         self.pseudo_dts[level] = next_dt
          if level > 0:
             next_field = self.restrict_operators[level](next_field)
+            next_dt = self.restrict_operators[level](next_dt) * 2.0
 
    def get_smoother(self, level):
       return self.smoothers[level]
@@ -130,6 +181,9 @@ class MG_params:
    def get_prolong_op(self, level):
       return self.prolong_operators[level]
 
+   def get_pseudo_dt(self, level):
+      return self.pseudo_dts[level]
+
 
 def mg(b, x0, level, mg_params, gamma=1, dt=0.0):
 
@@ -137,24 +191,27 @@ def mg(b, x0, level, mg_params, gamma=1, dt=0.0):
    smoothe  = mg_params.get_smoother(level)
    restrict = mg_params.get_restrict_op(level)    if level > 0 else None
    prolong  = mg_params.get_prolong_op(level - 1) if level > 0 else None
+   dt_shaped = mg_params.get_pseudo_dt(level)
+   dt = numpy.ravel(dt_shaped)
 
-   if level == 0:
-      return x0
-      # Just solve the problem (approximately)
-      x, _, num_iter, _ = fgmres(A, b, x0=x0, tol=1e-1)
-      return x
+   # Pre smoothing
+   x = smoothe(x0, A, b, dt, mg_params.num_pre_smoothing)
 
-   x = smoothe(x0, A, b, dt)
-
-   if level > 1:
+   if level > 0:
       # Go down a level and solve that
       residual = numpy.ravel(restrict(A(x) - b))
       v = numpy.zeros_like(residual)
       for i in range(gamma):
-         v = mg(residual, v, level - 1, mg_params, gamma=gamma)
-
+         v = mg(residual, v, level - 1, mg_params, gamma=gamma, dt=dt*2)
       x = x - numpy.ravel(prolong(v))  # Correction
-   x = smoothe(x, A, b, dt)
+   else:
+      # Just directly solve the problem
+      # That's no good, we should not use FGMRES to precondition FGMRES...
+      if mg_params.use_solver:
+         x, _, _, _ = fgmres(A, b, x0=x, tol=1e-1)
+   
+   # Post smoothing
+   x = smoothe(x, A, b, dt, mg_params.num_post_smoothing)
 
    return x
 
@@ -178,7 +235,7 @@ def mg_solve(b, dt, mg_params, field=None, tolerance=1e-7, gamma=1, max_num_it=1
    A = mg_params.get_matrix_op(level)
    num_it = 0
    for it in range(max_num_it):
-      x = mg(b, x, level, mg_params, gamma=gamma, dt=500)
+      x = mg(b, x, level, mg_params, gamma=gamma, dt=mg_params.pdt)
       num_it += 1
 
       # Check tolerance exit condition

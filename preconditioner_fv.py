@@ -26,8 +26,12 @@ def select_order(origin_order, origin_field):
 
 class FV_preconditioner:
 
-   def __init__(self, param, sample_field, ptopo, origin_field='dg', origin_order=None, prefix=''):
+   def __init__(self, param, sample_field, ptopo, precond_type=1, origin_field='dg', origin_order=None, prefix=''):
       self.max_iter = 1000
+      self.precond_type = precond_type
+
+      if self.precond_type not in [1, 2]:
+         raise ValueError('precond_type can only be 1 or 2')
 
       # print(f'Params:\n{param}')
 
@@ -70,12 +74,18 @@ class FV_preconditioner:
       self.preconditioner = None
 
       self.mg_params = None
-      self.mg_params = MG_params(self.param, ptopo)
+      self.mg_params = MG_params(self.param, ptopo,
+         num_levels=self.param.max_mg_level, use_solver=(self.param.mg_smoothe_only <= 0), pdt=self.param.mg_dt,
+         num_pre_smoothing=self.param.num_pre_smoothing, num_post_smoothing=self.param.num_post_smoothing,
+         cfl=param.mg_cfl)
 
       print(f'Origin field shape: {self.origin_field_shape}, dest field shape: {self.dest_field_shape}')
 
       # if self.dest_order > 3:
       #    self.preconditioner = FV_preconditioner(self.param, dest_field, ptopo, origin_field='fv', origin_order=self.dest_order, prefix=self.prefix+'  ')
+
+      self.total_iter = 0
+      self.total_time = 0.0
 
    def restrict(self, vec):
       return self.interpolate(vec.reshape(self.origin_field_shape))
@@ -99,12 +109,20 @@ class FV_preconditioner:
       #    output_vec = mg(input_vec, output_vec, level, self.mg_params, dt=500)
       #    num_iter += 1
 
-      output_vec, num_iter, mg_time = mg_solve(input_vec, self.dt, self.mg_params, max_num_it=1)
-      # output_vec, _, num_iter, _ = fgmres(self.dest_matrix, input_vec, preconditioner=self.preconditioner, tol=1e-1, maxiter=self.max_iter)
+      if self.precond_type == 1:
+         output_vec, _, num_iter, _, _ = fgmres(
+            self.dest_matrix, input_vec, preconditioner=self.preconditioner, tol=self.param.precond_tolerance, maxiter=self.max_iter)
+      elif self.precond_type == 2:
+         output_vec, num_iter, mg_time = mg_solve(
+            input_vec, self.dt, self.mg_params, tolerance=self.param.precond_tolerance, max_num_it=1)
+      # output_vec, _, num_iter, _ = fgmres(self.dest_matrix, input_vec, preconditioner=self.preconditioner, tol=1e-1, maxiter=1, restart=2)
       output_vec = numpy.ravel(self.prolong(output_vec))
 
       t1 = time()
       precond_time = t1 - t0
+      self.total_time += precond_time
+      self.total_iter += num_iter
+
       print(f'{self.prefix}Preconditioned in {num_iter} iterations and {precond_time:.2f} s')
 
       return output_vec
@@ -122,7 +140,7 @@ class FV_preconditioner:
          self.preconditioner.init_time_step(dt, self.dest_field)
 
       if self.mg_params:
-         self.mg_params.compute_matrix_operators(self.dest_field, dt)
+         self.mg_params.compute_matrix_operators(self.dest_field, dt, self.dest_geom.X1, self.dest_geom.X2, self.dest_geom, self.dest_metric)
 
    def __call__(self, vec):
       return self.apply(vec)

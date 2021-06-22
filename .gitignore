@@ -32,3 +32,6 @@ precondition_test/**/*.npy
 precondition_test/**/*.npz
 precondition_test/**/*.pdf
 
+mg_tests/configs*
+mg_tests/*.txt
+

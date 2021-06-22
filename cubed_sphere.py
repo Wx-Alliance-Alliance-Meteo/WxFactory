@@ -238,6 +238,8 @@ class cubed_sphere:
       self.Δx3 = Δx3
       self.X = X
       self.Y = Y
+      self.X1 = X1
+      self.X2 = X2
       self.height = height
       self.delta2 = delta2
       self.delta = delta

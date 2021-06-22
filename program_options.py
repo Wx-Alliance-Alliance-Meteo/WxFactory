@@ -43,6 +43,41 @@ class Configuration:
          self.use_preconditioner = 0
 
       try:
+         self.precond_tolerance = parser.getfloat('Time_integration', 'precond_tolerance')
+      except (NoOptionError, NoSectionError):
+         self.precond_tolerance = 1e-7
+
+      try:
+         self.max_mg_level = parser.getint('Time_integration', 'max_mg_level')
+      except (NoOptionError, NoSectionError):
+         self.max_mg_level = -1
+
+      try:
+         self.mg_smoothe_only = parser.getint('Time_integration', 'mg_smoothe_only')
+      except (NoOptionError, NoSectionError):
+         self.mg_smoothe_only = 0
+
+      try:
+         self.mg_dt = parser.getint('Time_integration', 'mg_dt')
+      except (NoOptionError, NoSectionError):
+         self.mg_dt = 100
+
+      try:
+         self.num_pre_smoothing = parser.getint('Time_integration', 'num_pre_smoothing')
+      except (NoOptionError, NoSectionError):
+         self.num_pre_smoothing = 1
+
+      try:
+         self.num_post_smoothing = parser.getint('Time_integration', 'num_post_smoothing')
+      except (NoOptionError, NoSectionError):
+         self.num_post_smoothing = 1
+
+      try:
+         self.mg_cfl = parser.getfloat('Time_integration', 'mg_cfl')
+      except (NoOptionError, NoSectionError):
+         self.mg_cfl = 0.7
+
+      try:
          self.precond_filter_before = parser.getint('Time_integration', 'precond_filter_before')
       except (NoOptionError, NoSectionError):
          self.precond_filter_before = 0
