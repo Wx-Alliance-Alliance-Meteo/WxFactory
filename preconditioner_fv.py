@@ -74,10 +74,7 @@ class FV_preconditioner:
       self.preconditioner = None
 
       self.mg_params = None
-      self.mg_params = MG_params(self.param, ptopo,
-         num_levels=self.param.max_mg_level, use_solver=(self.param.mg_smoothe_only <= 0), pdt=self.param.mg_dt,
-         num_pre_smoothing=self.param.num_pre_smoothing, num_post_smoothing=self.param.num_post_smoothing,
-         cfl=param.mg_cfl)
+      self.mg_params = MG_params(self.param, ptopo)
 
       print(f'Origin field shape: {self.origin_field_shape}, dest field shape: {self.dest_field_shape}')
 

@@ -54,11 +54,12 @@ def make_rhs_op(rhs, geom, operators, metric, topo, ptopo, num_points, num_elem_
 
 class MG_params:
 
-   def __init__(self, param, ptopo, num_levels=-1, use_solver=True, pdt=100, num_pre_smoothing=1, num_post_smoothing=1, cfl=0.7) -> None:
+   def __init__(self, param, ptopo) -> None:
       max_levels = int(math.log2(param.initial_nbsolpts))
       if 2**max_levels != param.initial_nbsolpts:
          raise ValueError('Cannot do multigrid stuff if the order of the problem is not a power of 2')
 
+      num_levels = param.max_mg_level
       if num_levels < 0:
          num_levels = max_levels
       else:
@@ -71,11 +72,11 @@ class MG_params:
 
       self.rhs = rhs_sw
       self.matvec = matvec_rat
-      self.use_solver = use_solver
-      self.pdt = pdt
-      self.num_pre_smoothing = num_pre_smoothing
-      self.num_post_smoothing = num_post_smoothing
-      self.cfl = cfl
+      self.use_solver = (param.mg_smoothe_only <= 0)
+      self.pdt = param.mg_dt
+      self.num_pre_smoothing = param.num_pre_smoothing
+      self.num_post_smoothing = param.num_post_smoothing
+      self.cfl = param.mg_cfl
 
       self.smoothers = {}
       self.interpolators = {}
@@ -96,8 +97,6 @@ class MG_params:
          
          self.params[level] = p
 
-         # print(f'level: {level}. Params: {self.params[level]}')
-         
          geom        = cubed_sphere(p.nb_elements_horizontal, p.nb_elements_vertical, p.nbsolpts, p.λ0, p.ϕ0, p.α0, p.ztop, ptopo, p)
          operators   = DFR_operators(geom, p)
          metric      = Metric(geom)
@@ -158,8 +157,6 @@ class MG_params:
       next_dt = numpy.broadcast_to(pseudo_dt, field.shape)
       next_field = field
       for level in range(self.max_level, -1, -1):
-         # print(f'Level: {level}, next_field.shape: {next_field.shape}')
-         # self.matrix_operators[level] = lambda v: self.matvec(v, dt, next_field, self.rhs_operators[level])
          self.matrix_operators[level] = make_matrix_op(next_field, self.rhs_operators[level], dt, self.matvec)
          self.pseudo_dts[level] = next_dt
          if level > 0:
