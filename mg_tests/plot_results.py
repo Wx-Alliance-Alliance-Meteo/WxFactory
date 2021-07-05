@@ -190,7 +190,7 @@ def plot_residual(result, order, num_elem, filename):
    no_precond = [x['residuals'] for x in result
       if x['order'] == order
       and x['num_elements'] == num_elem
-      and x['preconditioner'] == 'None'][0][:min(order*num_elem, 120)]
+      and x['preconditioner'] == 'None'][0][:min(order*num_elem, 100)]
    fv_ref = [x['residuals'] for x in result
       if x['order'] == order
       and x['num_elements'] == num_elem
@@ -232,6 +232,68 @@ def plot_residual(result, order, num_elem, filename):
    fig.legend()
    fig.savefig(f'{filename}_{order}x{num_elem}.png')
 
+def plot_residual_2(result, order, num_elem, filename):
+   no_precond = [x['residuals'] for x in result
+      if x['order'] == order
+      and x['num_elements'] == num_elem
+      and x['preconditioner'] == 'None'][0][:min(order*num_elem, 100)]
+   fv_ref = [x['residuals'] for x in result
+      if x['order'] == order
+      and x['num_elements'] == num_elem
+      and x['preconditioner'] == 'Finite volume'
+      and x['precond_tolerance'] == 1e-7]
+   fv_fast = [x['residuals'] for x in result
+      if x['order'] == order
+      and x['num_elements'] == num_elem
+      and x['preconditioner'] == 'Finite volume'
+      and x['precond_tolerance'] == 1e-1]
+
+   if order == 4:
+      multigrid_results = [x for x in result
+         if x['order'] == order
+         and x['num_elements'] == num_elem
+         and x['mg_level'] != 1
+         and x['preconditioner'] == 'Multigrid']
+   elif order == 8:
+      multigrid_results = [x for x in result
+         if x['order'] == order
+         and x['num_elements'] == num_elem
+         and (x['mg_level'] == 0 or x['mg_level'] == 3)
+         and x['preconditioner'] == 'Multigrid']
+   else:
+      multigrid_results = [x for x in result
+         if x['order'] == order
+         and x['num_elements'] == num_elem
+         and x['preconditioner'] == 'Multigrid']
+
+   fig, ax_res = plt.subplots(1, 1)
+
+   ax_res.plot(no_precond, label='No precond')
+   for data in fv_ref:
+      ax_res.plot(data, color='orange', label='Reference precond')
+   for data in fv_fast:
+      ax_res.plot(data, color='magenta', label='Fast FV precond')
+
+   # mg_linestyles = {20: '-.', 50: ':', 100: '--', 200: '-.', 300: ':', 400: '--'}
+   # mg_colors = ['black', 'blue', 'green', 'orange']
+   mg_linestyles = [None, '--', '-.', ':', None, '--', '-.', ':']
+   mg_colors = ['blue', 'green', 'purple', 'teal', 'blue', 'green', 'purple']
+   for data in multigrid_results:
+      res = data['residuals']
+      ax_res.plot(res,
+                  color=mg_colors[data['mg_level']],
+                  linestyle=mg_linestyles[data['num_pre_smoothe']],
+                  label=f'MG levels={data["mg_level"]}, sm={data["num_pre_smoothe"]}')
+
+   ax_res.set_yscale('log')
+   ax_res.grid(True)
+   ax_res.set_xlabel('Iteration #')
+   ax_res.set_ylabel('Residual')
+
+   fig.suptitle(f'Residual evolution, {order}x{num_elem} elem')
+   fig.legend()
+   fig.savefig(f'{filename}_{order}x{num_elem}.pdf')
+
 def main(args):
    results = read_results(args.results_file)
 
@@ -247,6 +309,13 @@ def main(args):
       plot_residual(results, 2, 60, 'residual')
       plot_residual(results, 2, 120, 'residual')
 
+   if args.plot_residual2:
+      plot_residual_2(results, 2, 30, 'residual')
+      plot_residual_2(results, 2, 60, 'residual')
+      plot_residual_2(results, 2, 120, 'residual')
+      plot_residual_2(results, 4, 30, 'residual')
+      plot_residual_2(results, 4, 60, 'residual')
+      plot_residual_2(results, 8, 30, 'residual')
 
    # for i, order in enumerate([2, 4, 8]):
       # sizes, it, times = get_plot_data(results, order, 'Finite volume', tol=1e-1)
@@ -261,6 +330,7 @@ if __name__ == '__main__':
    parser.add_argument('results_file', type=str, help='File that contains test results')
    parser.add_argument('--plot-iter', action='store_true', help='Plot the iterations and time with respect to various parameters')
    parser.add_argument('--plot-residual', action='store_true', help='Plot residual evolution')
+   parser.add_argument('--plot-residual2', action='store_true', help='Plot residual evolution')
 
    args = parser.parse_args()
 

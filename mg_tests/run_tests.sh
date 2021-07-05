@@ -33,50 +33,54 @@ function set_parameters() {
                           -e 's/^mg_cfl *= *.*$/mg_cfl = '${10}'/'
 }
 
-use_precond=2
+use_precond=1
 order=2
-nb_elements=30
-precond_tolerance=1e-1
+nb_elements=60
+precond_tolerance=1e-7
 max_mg_level=1
 mg_smoothe_only=1
 mg_dt=200
 num_pre_smoothing=3
 num_post_smoothing=3
-mg_cfl=0.8
+mg_cfl=0.9
 
 
 if [ "x${1}" == "x--gen-configs" ]; then
 
-    #orders="2 4 8"
-    orders=2
-    element_counts="120"
+    orders="2 4 8"
+    # orders=2
+    element_counts="30 60 120"
     deltats="20 50 100"
-    smoothings="1 2 3"
+    smoothings="1 2 3 4"
+    # smoothings="4"
+    mg_levels="0 1 2 3"
+    pre_tols="1e-1 1e-7"
     for order in ${orders}; do
         for nb_elements in ${element_counts}; do
-            [ $nb_elements -gt 60 ] && [ $order -gt 4 ] && continue
+            [ $nb_elements -gt 60 ] && [ $order -gt 2 ] && continue
+            [ $nb_elements -gt 30 ] && [ $order -gt 4 ] && continue
             use_precond=0
             set_parameters ${use_precond} ${order} ${nb_elements} ${precond_tolerance} ${max_mg_level} ${mg_smoothe_only} ${mg_dt} ${num_pre_smoothing} ${num_post_smoothing} ${mg_cfl}
             cp ${CONFIG_FILE} "${CONFIG_DIR}/config.${use_precond}_${order}_${nb_elements}_${precond_tolerance}_${max_mg_level}_${mg_smoothe_only}_${mg_dt}_${num_pre_smoothing}_${num_post_smoothing}_${mg_cfl}.ini"
 
             use_precond=1
-            for precond_tolerance in 1e-7 1e-1; do
+            for precond_tolerance in ${pre_tols}; do
                 set_parameters ${use_precond} ${order} ${nb_elements} ${precond_tolerance} ${max_mg_level} ${mg_smoothe_only} ${mg_dt} ${num_pre_smoothing} ${num_post_smoothing} ${mg_cfl}
                 cp ${CONFIG_FILE} "${CONFIG_DIR}/config.${use_precond}_${order}_${nb_elements}_${precond_tolerance}_${max_mg_level}_${mg_smoothe_only}_${mg_dt}_${num_pre_smoothing}_${num_post_smoothing}_${mg_cfl}.ini"
             done
 
             use_precond=2
-            for max_mg_level in 1 2 3; do
+            for max_mg_level in ${mg_levels}; do
                 [ $max_mg_level -gt 1 ] && [ $order -lt 4 ] && continue
                 [ $max_mg_level -gt 2 ] && [ $order -lt 8 ] && continue
                 for mg_smoothe_only in 1; do
-                    for mg_dt in ${deltats}; do
+                    # for mg_dt in ${deltats}; do
                         for num_pre_smoothing in ${smoothings}; do
                             num_post_smoothing=${num_pre_smoothing}
                             set_parameters ${use_precond} ${order} ${nb_elements} ${precond_tolerance} ${max_mg_level} ${mg_smoothe_only} ${mg_dt} ${num_pre_smoothing} ${num_post_smoothing} ${mg_cfl}
                             cp ${CONFIG_FILE} "${CONFIG_DIR}/config.${use_precond}_${order}_${nb_elements}_${precond_tolerance}_${max_mg_level}_${mg_smoothe_only}_${mg_dt}_${num_pre_smoothing}_${num_post_smoothing}_${mg_cfl}.ini"
                         done
-                    done
+                    # done
                 done
             done
         done
