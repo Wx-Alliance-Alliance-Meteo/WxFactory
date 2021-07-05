@@ -5,6 +5,7 @@ import time
 from matrices   import lagrangeEval
 from quadrature import gauss_legendre
 from timer      import Timer
+from definitions import idx_h, idx_hu1, idx_hu2
 
 basis_point_sets = {}
 
@@ -31,16 +32,21 @@ def eval_single_field(field, elem_interp, result=None):
    return result
 
 
-def eval_field(field, elem_interp):
+def eval_field(field, elem_interp, velocity_interp = None):
    result = None
    if field.ndim == 2:
       result = eval_single_field(field, elem_interp)
    elif field.ndim == 3:
       num_fields = field.shape[0]
+      if num_fields != 3:
+         raise ValueError('Can only interpolate on grids for Shallow Water')
+      if velocity_interp is None:
+         raise ValueError('Need to pass a velocity interpolation matrix!')
       new_size = field.shape[1] * elem_interp.shape[0] // elem_interp.shape[1]
       result = numpy.empty((num_fields, new_size, new_size), dtype=field.dtype)
-      for i, f in enumerate(field):
-         eval_single_field(f, elem_interp, result[i])
+      eval_single_field(field[idx_h], elem_interp, result[idx_h])
+      eval_single_field(field[idx_hu1], velocity_interp, result[idx_hu1])
+      eval_single_field(field[idx_hu2], velocity_interp, result[idx_hu2])
    else:
       raise ValueError(f'We have a problem. ndim = {field.ndim}')
 
@@ -103,6 +109,7 @@ def compute_dg_to_fv_small_projection(dg_order, fv_order, quad_order=1):
 
 
 def interpolator(origin_type: str, origin_order: int, dest_type: str, dest_order: int, interp_type: str):
+   print(f'interpolator: origin type/order: {origin_type}/{origin_order}, dest type/order: {dest_type}/{dest_order}')
    origin_points = None
    if origin_type == 'dg':
       origin_points, _ = gauss_legendre(origin_order)
@@ -132,14 +139,22 @@ def interpolator(origin_type: str, origin_order: int, dest_type: str, dest_order
    else:
       raise ValueError('interp_type not one of available interpolation types')
 
-   if dest_order == origin_order:
-      inverse = numpy.linalg.inv(elem_interp)
-   else:
-      inverse = numpy.linalg.pinv(elem_interp)
+   velocity_interp = elem_interp.copy()
+   if dest_order < origin_order:
+      velocity_interp *= numpy.sqrt(dest_order / origin_order)
+   elif origin_type == 'dg' and dest_type == 'fv':
+      # velocity_interp *= 0.5 **(origin_order/2.0) 
+      velocity_interp *= numpy.sqrt(origin_order)
+      # elem_interp *= 0.85
+      # velocity_interp *= origin_order ** 0.5
 
-   # diff = numpy.linalg.norm(reverse_interp - inverse) / numpy.linalg.norm(reverse_interp)
-   # print(f'Diff b/w computed reverse and inverted matrix = {diff}')
-   reverse_interp = inverse
+
+   if dest_order == origin_order:
+      reverse_interp = numpy.linalg.inv(elem_interp)
+      velocity_reverse_interp = numpy.linalg.pinv(velocity_interp)
+   else:
+      reverse_interp = numpy.linalg.pinv(elem_interp)
+      velocity_reverse_interp = numpy.linalg.pinv(velocity_interp)
 
    full = numpy.empty((dest_order*dest_order, origin_order*origin_order), dtype=elem_interp.dtype)
    for i in range(dest_order):
@@ -147,14 +162,15 @@ def interpolator(origin_type: str, origin_order: int, dest_type: str, dest_order
          full[i*dest_order:(i+1)*dest_order, j*origin_order:(j+1)*origin_order] = elem_interp[i, j] * elem_interp
       
    # print(f'Full:\n{full}\n{numpy.linalg.pinv(full)}')
-   # print(f'elem_interp:\n{elem_interp}')
+   print(f'elem_interp:\n{elem_interp}')
+   print(f'vel interp:\n{velocity_interp}')
    # print(f'reverse:\n{reverse_interp}')
 
    def interpolate(field, reverse=False):
       if reverse:
-         return eval_field(field, reverse_interp)
+         return eval_field(field, reverse_interp, velocity_reverse_interp)
       else:
-         return eval_field(field, elem_interp)
+         return eval_field(field, elem_interp, velocity_interp)
 
    return interpolate
 
