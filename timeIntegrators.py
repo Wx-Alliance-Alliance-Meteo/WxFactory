@@ -205,7 +205,7 @@ class Rat2:
 
          with open('test_result.txt', 'a+') as output_file:
             if not file_exists:
-               output_file.write('order | num_elements | precond | precond tol | max MG lvl | MG smoothe only | MG dt | # pre smoothe | # post smoothe | CFL # | FGMRES #it | FGMRES time | precond #it | precond time \n')
+               output_file.write('# order | num_elements | precond | precond tol | max MG lvl | MG smoothe only | MG dt | # pre smoothe | # post smoothe | CFL # | FGMRES #it | FGMRES time | precond #it | precond time \n')
             if param is not None:
                output_file.write(f'{param.nbsolpts} {param.nb_elements_horizontal:3d} {param.use_preconditioner} {param.precond_tolerance:9.1e} '
                                  f'{param.max_mg_level:2d} {param.mg_smoothe_only} {param.mg_dt:4d} '
@@ -224,6 +224,8 @@ class Rat2:
 
       first_guess = numpy.zeros_like(rhs)
 
+      max_it = 60 if self.preconditioner is None else 5
+
       t0 = time()
       phiv, local_error, num_iter, flag, residuals = \
          fgmres(matvec_handle, rhs, x0=first_guess, tol=self.tol, preconditioner=self.preconditioner, restart=20, maxiter=max_it)
@@ -239,7 +241,6 @@ class Rat2:
             output_file.write(f'{precond_it:5d} {precond_time:6.1f} ')
             output_file.write(f'- {" ".join(f"{r:.2e}" for r in residuals)} ')
             output_file.write('\n')
-
 
       if flag == 0:
          print(f'FGMRES converged at iteration {num_iter} to a solution with local error {local_error : .2e}')
