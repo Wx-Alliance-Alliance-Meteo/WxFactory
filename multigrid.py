@@ -161,7 +161,9 @@ class MG_params:
          self.pseudo_dts[level] = next_dt
          if level > 0:
             next_field = self.restrict_operators[level](next_field)
-            next_dt = self.restrict_operators[level](next_dt) * 2.0
+            next_dt = self.restrict_operators[level](next_dt) #* 2.0
+            next_dt[1] *= 2.0
+            next_dt[2] *= 2.0
 
    def get_smoother(self, level):
       return self.smoothers[level]
