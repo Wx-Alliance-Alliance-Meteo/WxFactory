@@ -32,10 +32,10 @@ class Distributed_World:
       self.rank = mpi4py.MPI.COMM_WORLD.Get_rank()
 
       self.nb_pe_per_panel = int(self.size / 6)
-      self.nb_lines_per_panel = math.isqrt(self.nb_pe_per_panel)
+      self.nb_lines_per_panel = int(math.sqrt(self.nb_pe_per_panel))
 
       if self.size < 6 or self.nb_pe_per_panel != self.nb_lines_per_panel**2 or self.nb_pe_per_panel * 6 != self.size:
-         raise Exception('Wrong number of PEs. This topology is not allowed')
+         raise Exception(f'Wrong number of PEs ({self.size}). This topology is not allowed')
 
       self.nb_elems_per_line = self.nb_lines_per_panel
 

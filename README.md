@@ -55,6 +55,39 @@ conda environment):
 conda install mayavi matplotlib cartopy
 ```
 
+## XC50 clusters
+Most necessary python modules are already available in an environment module. 
+`netCDF4` is missing, so don't try to write the output without installing it.
+`mpi4py` is not working in that environment, so you need to install it manually (and locally):
+
+1. Load the python module
+```
+module load cray-python/#.#.#
+```
+2. Create a virtual environment, and activate it
+```
+python -m venv [path to env directory] --system-site-packages
+source [path to env directory]/bin/activate
+```
+3. Download the mpi4py package from https://mpi4py.readthedocs.io/en/stable/install.html
+2. Unpack the tarball, go to into the directory
+3. Compile the module, specifying the mpi compiler
+```
+python setup.py build --mpicc=cc
+```
+4. Install it (will be installed in the virtual environment)
+```
+python setup.py install
+```
+
+### Running on XC50
+Before launching the program, don't forget to load the python module and activate the
+virtual environment where `mpi4py` has been installed
+```
+module load cray-python/#.#.#
+source [virtual environment directory]/bin/activate
+```
+
 # Executing the model
 
 The allowed number of PEs is of the form $6 n^2$, for $n \ge 0$.

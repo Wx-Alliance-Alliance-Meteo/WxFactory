@@ -11,7 +11,6 @@ from definitions     import idx_rho
 from initialize      import initialize_sw, initialize_euler
 from matrices        import DFR_operators
 from metric          import Metric
-from output          import output_init, output_netcdf, output_finalize
 from parallel        import Distributed_World
 from preconditioner_dg import DG_preconditioner
 from preconditioner_fv import FV_preconditioner
@@ -27,6 +26,9 @@ def main(args) -> int:
 
    # Read configuration file
    param = Configuration(args.config)
+
+   if param.output_freq > 0:
+      from output import output_init, output_netcdf, output_finalize
 
    if param.discretization == 'fv':
       param.nb_elements_horizontal = param.nb_elements_horizontal * param.nbsolpts
