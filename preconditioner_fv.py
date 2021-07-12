@@ -137,7 +137,7 @@ class FV_preconditioner:
          self.preconditioner.init_time_step(dt, self.dest_field)
 
       if self.mg_params:
-         self.mg_params.compute_matrix_operators(self.dest_field, dt, self.dest_geom.X1, self.dest_geom.X2, self.dest_geom, self.dest_metric)
+         self.mg_params.compute_matrix_operators(self.dest_field, dt)
 
    def __call__(self, vec):
       return self.apply(vec)

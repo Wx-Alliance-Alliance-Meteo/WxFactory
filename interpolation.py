@@ -108,25 +108,20 @@ def compute_dg_to_fv_small_projection(dg_order, fv_order, quad_order=1):
     return result
 
 
+def get_basis_points(type: str, order: int):
+   if type == 'dg':
+      points, _ = gauss_legendre(order)
+   elif type == 'fv':
+      pts = numpy.linspace(-1.0, 1.0, order + 1)
+      points = (pts[:-1] + pts[1:]) / 2.0
+   else:
+      raise ValueError('Unsupported grid type')
+   return points
+
 def interpolator(origin_type: str, origin_order: int, dest_type: str, dest_order: int, interp_type: str):
    print(f'interpolator: origin type/order: {origin_type}/{origin_order}, dest type/order: {dest_type}/{dest_order}')
-   origin_points = None
-   if origin_type == 'dg':
-      origin_points, _ = gauss_legendre(origin_order)
-   elif origin_type == 'fv':
-      pts = numpy.linspace(-1.0, 1.0, origin_order + 1)
-      origin_points = (pts[:-1] + pts[1:]) / 2.0
-   else:
-      raise ValueError('Unsupported origin grid type')
-
-   dest_points = None
-   if dest_type == 'dg':
-      dest_points, _ = gauss_legendre(dest_order)
-   elif dest_type == 'fv':
-      pts = numpy.linspace(-1.0, 1.0, dest_order + 1)
-      dest_points = (pts[:-1] + pts[1:]) / 2.0
-   else:
-      raise ValueError('Unsupported destination grid type')
+   origin_points = get_basis_points(origin_type, origin_order)
+   dest_points = get_basis_points(dest_type, dest_order)
 
    elem_interp = None
    reverse_interp = None

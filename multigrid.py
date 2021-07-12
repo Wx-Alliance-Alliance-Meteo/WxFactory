@@ -85,6 +85,8 @@ class MG_params:
       self.matrix_operators = {}
       self.rhs_operators = {}
       self.params = {}
+      self.geometries = {}
+      self.metrics = {}
 
       order = param.initial_nbsolpts
       for level in range(self.max_level, -1, -1):
@@ -97,12 +99,14 @@ class MG_params:
          
          self.params[level] = p
 
-         geom        = cubed_sphere(p.nb_elements_horizontal, p.nb_elements_vertical, p.nbsolpts, p.λ0, p.ϕ0, p.α0, p.ztop, ptopo, p)
-         operators   = DFR_operators(geom, p)
-         metric      = Metric(geom)
-         field, topo = initialize_sw(geom, metric, operators, p)
+         self.geometries[level] = cubed_sphere(p.nb_elements_horizontal, p.nb_elements_vertical, p.nbsolpts, p.λ0, p.ϕ0, p.α0, p.ztop, ptopo, p)
+         operators              = DFR_operators(self.geometries[level], p)
+         self.metrics[level]    = Metric(self.geometries[level])
+         field, topo = initialize_sw(self.geometries[level], self.metrics[level], operators, p)
 
-         self.rhs_operators[level] = make_rhs_op(self.rhs, geom, operators, metric, topo, ptopo, p.nbsolpts, p.nb_elements_horizontal, p.case_number, False)
+         self.rhs_operators[level] = make_rhs_op(
+            self.rhs, self.geometries[level], operators, self.metrics[level], topo, ptopo,
+            p.nbsolpts, p.nb_elements_horizontal, p.case_number, False)
 
          self.smoothers[level] = explicit_euler_smoothe
          # self.smoothers[level] = runge_kutta_smoothe
@@ -116,9 +120,10 @@ class MG_params:
 
          order = order // 2
 
-   def compute_matrix_operators(self, field, dt, X, Y, geom, metric):
-
-      # Compute pseudo time step from CFL condition
+   def compute_pseudo_dt(self, field, X, Y, h_contra_11, h_contra_22):
+      """
+      Compute pseudo time step from CFL condition
+      """
       dx = numpy.empty_like(X)
       dy = numpy.empty_like(Y)
 
@@ -139,8 +144,8 @@ class MG_params:
       real_u1 = u1 * dx / 2.0
       real_u2 = u2 * dy / 2.0
 
-      real_h_11 = metric.H_contra_11 * dx * dy / 4.0
-      real_h_22 = metric.H_contra_22 * dx * dy / 4.0
+      real_h_11 = h_contra_11 * dx * dy / 4.0
+      real_h_22 = h_contra_22 * dx * dy / 4.0
 
       v1 = numpy.absolute(real_u1) + numpy.sqrt(real_h_11 * gravity * h)
       v2 = numpy.absolute(real_u2) + numpy.sqrt(real_h_22 * gravity * h)
@@ -153,17 +158,18 @@ class MG_params:
       print(f'pseudo dt:\n{pseudo_dt}')
       print(f'max: {pseudo_dt.max()}, min: {pseudo_dt.min()}, avg: {numpy.average(pseudo_dt)} ')
 
+      return numpy.broadcast_to(pseudo_dt, field.shape)
+
+   def compute_matrix_operators(self, field, dt):
       self.pseudo_dts = {}
-      next_dt = numpy.broadcast_to(pseudo_dt, field.shape)
       next_field = field
       for level in range(self.max_level, -1, -1):
          self.matrix_operators[level] = make_matrix_op(next_field, self.rhs_operators[level], dt, self.matvec)
-         self.pseudo_dts[level] = next_dt
+         self.pseudo_dts[level] = self.compute_pseudo_dt(
+            next_field, self.geometries[level].X1, self.geometries[level].X2,
+            self.metrics[level].H_contra_11, self.metrics[level].H_contra_22)
          if level > 0:
             next_field = self.restrict_operators[level](next_field)
-            next_dt = self.restrict_operators[level](next_dt) #* 2.0
-            next_dt[1] *= 2.0
-            next_dt[2] *= 2.0
 
    def get_smoother(self, level):
       return self.smoothers[level]

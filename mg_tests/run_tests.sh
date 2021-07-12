@@ -30,18 +30,21 @@ function set_parameters() {
                           -e 's/^mg_dt *= *.*$/mg_dt = '${7}'/' \
                           -e 's/^num_pre_smoothing *= *.*$/num_pre_smoothing = '${8}'/' \
                           -e 's/^num_post_smoothing *= *.*$/num_post_smoothing = '${9}'/' \
-                          -e 's/^mg_cfl *= *.*$/mg_cfl = '${10}'/'
+                          -e 's/^mg_cfl *= *.*$/mg_cfl = '${10}'/' \
+                          -e 's/^dt *= *.*$/dt = '${11}'/' \
+                          -e 's/^t_end *= *.*$/t_end = '${11}'/'
 }
 
-use_precond=1
-order=2
+time_step=1800
+use_precond=0
+order=4
 nb_elements=60
-precond_tolerance=1e-7
-max_mg_level=1
+precond_tolerance=1e-1
+max_mg_level=0
 mg_smoothe_only=1
 mg_dt=200
-num_pre_smoothing=3
-num_post_smoothing=3
+num_pre_smoothing=4
+num_post_smoothing=4
 mg_cfl=0.9
 
 
@@ -60,12 +63,12 @@ if [ "x${1}" == "x--gen-configs" ]; then
             [ $nb_elements -gt 60 ] && [ $order -gt 2 ] && continue
             [ $nb_elements -gt 30 ] && [ $order -gt 4 ] && continue
             use_precond=0
-            set_parameters ${use_precond} ${order} ${nb_elements} ${precond_tolerance} ${max_mg_level} ${mg_smoothe_only} ${mg_dt} ${num_pre_smoothing} ${num_post_smoothing} ${mg_cfl}
+            set_parameters ${use_precond} ${order} ${nb_elements} ${precond_tolerance} ${max_mg_level} ${mg_smoothe_only} ${mg_dt} ${num_pre_smoothing} ${num_post_smoothing} ${mg_cfl} ${time_step}
             cp ${CONFIG_FILE} "${CONFIG_DIR}/config.${use_precond}_${order}_${nb_elements}_${precond_tolerance}_${max_mg_level}_${mg_smoothe_only}_${mg_dt}_${num_pre_smoothing}_${num_post_smoothing}_${mg_cfl}.ini"
 
             use_precond=1
             for precond_tolerance in ${pre_tols}; do
-                set_parameters ${use_precond} ${order} ${nb_elements} ${precond_tolerance} ${max_mg_level} ${mg_smoothe_only} ${mg_dt} ${num_pre_smoothing} ${num_post_smoothing} ${mg_cfl}
+                set_parameters ${use_precond} ${order} ${nb_elements} ${precond_tolerance} ${max_mg_level} ${mg_smoothe_only} ${mg_dt} ${num_pre_smoothing} ${num_post_smoothing} ${mg_cfl} ${time_step}
                 cp ${CONFIG_FILE} "${CONFIG_DIR}/config.${use_precond}_${order}_${nb_elements}_${precond_tolerance}_${max_mg_level}_${mg_smoothe_only}_${mg_dt}_${num_pre_smoothing}_${num_post_smoothing}_${mg_cfl}.ini"
             done
 
@@ -77,7 +80,7 @@ if [ "x${1}" == "x--gen-configs" ]; then
                     # for mg_dt in ${deltats}; do
                         for num_pre_smoothing in ${smoothings}; do
                             num_post_smoothing=${num_pre_smoothing}
-                            set_parameters ${use_precond} ${order} ${nb_elements} ${precond_tolerance} ${max_mg_level} ${mg_smoothe_only} ${mg_dt} ${num_pre_smoothing} ${num_post_smoothing} ${mg_cfl}
+                            set_parameters ${use_precond} ${order} ${nb_elements} ${precond_tolerance} ${max_mg_level} ${mg_smoothe_only} ${mg_dt} ${num_pre_smoothing} ${num_post_smoothing} ${mg_cfl} ${time_step}
                             cp ${CONFIG_FILE} "${CONFIG_DIR}/config.${use_precond}_${order}_${nb_elements}_${precond_tolerance}_${max_mg_level}_${mg_smoothe_only}_${mg_dt}_${num_pre_smoothing}_${num_post_smoothing}_${mg_cfl}.ini"
                         done
                     # done
@@ -86,7 +89,7 @@ if [ "x${1}" == "x--gen-configs" ]; then
         done
     done
 
-    #set_parameters ${use_precond} ${order} ${nb_elements} ${precond_tolerance} ${max_mg_level} ${mg_smoothe_only} ${mg_dt} ${num_pre_smoothing} ${num_post_smoothing} ${mg_cfl}
+    #set_parameters ${use_precond} ${order} ${nb_elements} ${precond_tolerance} ${max_mg_level} ${mg_smoothe_only} ${mg_dt} ${num_pre_smoothing} ${num_post_smoothing} ${mg_cfl} ${time_step}
     #cp ${CONFIG_FILE} "${CONFIG_DIR}/config.${use_precond}_${order}_${nb_elements}_${precond_tolerance}_${max_mg_level}_${mg_smoothe_only}_${mg_dt}_${num_pre_smoothing}_${num_post_smoothing}_${mg_cfl}.ini"
 
 elif [ "x${1}" == "x--run-configs" ]; then
@@ -97,6 +100,6 @@ elif [ "x${1}" == "x--run-configs" ]; then
         run_program ${CONFIG_DIR}/${config} && rm -v ${CONFIG_DIR}/${config} || exit
     done
 else
-    set_parameters ${use_precond} ${order} ${nb_elements} ${precond_tolerance} ${max_mg_level} ${mg_smoothe_only} ${mg_dt} ${num_pre_smoothing} ${num_post_smoothing} ${mg_cfl}
+    set_parameters ${use_precond} ${order} ${nb_elements} ${precond_tolerance} ${max_mg_level} ${mg_smoothe_only} ${mg_dt} ${num_pre_smoothing} ${num_post_smoothing} ${mg_cfl} ${time_step}
     run_program
 fi

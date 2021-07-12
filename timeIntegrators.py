@@ -224,7 +224,7 @@ class Rat2:
 
       first_guess = numpy.zeros_like(rhs)
 
-      max_it = 60 if self.preconditioner is None else 5
+      max_it = 1200//20 if self.preconditioner is None else 160//20
 
       t0 = time()
       phiv, local_error, num_iter, flag, residuals = \
