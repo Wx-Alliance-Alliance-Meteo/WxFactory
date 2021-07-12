@@ -6,6 +6,9 @@ GEF_MAIN=main_gef.py
 CONFIG_FILE=${SCRIPT_DIR}/test.ini
 CONFIG_DIR=${SCRIPT_DIR}/configs
 
+MPIRUN="aprun"
+# MPIRUN="mpirun -tag-output"
+
 cd ${SCRIPT_DIR}
 mkdir -p ${CONFIG_DIR}
 
@@ -16,7 +19,7 @@ function run_program() {
         the_config=${CONFIG_FILE}
     fi
     set -x
-    mpirun -n 6 -tag-output python ${GEF_DIR}/${GEF_MAIN} ${the_config} 2>&1 | grep ',0]'
+    ${MPIRUN} -n 6 python3 ${GEF_DIR}/${GEF_MAIN} ${the_config} 2>&1 | grep ',0]'
     set +x
 }
 
@@ -37,10 +40,10 @@ function set_parameters() {
 
 time_step=1800
 use_precond=0
-order=4
+order=2
 nb_elements=60
 precond_tolerance=1e-1
-max_mg_level=0
+max_mg_level=1
 mg_smoothe_only=1
 mg_dt=200
 num_pre_smoothing=4
