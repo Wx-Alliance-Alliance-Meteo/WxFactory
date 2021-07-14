@@ -87,10 +87,12 @@ python setup.py install
 
 ### Running on XC50
 Before launching the program, don't forget to load the python module and activate the
-virtual environment where `mpi4py` has been installed
+virtual environment where `mpi4py` has been installed. Additionally, you need to set
+the locale to UTF-8.
 ```
 module load cray-python/#.#.#
 source [virtual environment directory]/bin/activate
+export LANG=en_CA.UTF-8
 ```
 
 # Executing the model
