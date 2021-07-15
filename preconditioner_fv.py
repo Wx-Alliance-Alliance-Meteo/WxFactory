@@ -5,7 +5,7 @@ import numpy
 
 from cubed_sphere    import cubed_sphere
 from initialize      import initialize_sw
-from interpolation   import LagrangeSimpleInterpolator, interpolator
+from interpolation   import interpolator
 from linsol          import fgmres
 from matvec          import matvec_rat
 from matrices        import DFR_operators
@@ -38,7 +38,13 @@ class FV_preconditioner:
       self.origin_order = param.nbsolpts if origin_order is None else origin_order
       self.dest_order = select_order(self.origin_order, origin_field)
 
-      interpolate_fct = 'lagrange' if origin_field == 'dg' else 'bilinear'
+      interp_method = param.dg_to_fv_interp
+      ok_interps = ['l2-norm', 'lagrange']
+      if not interp_method in ok_interps:
+         print(f'ERROR: invalid interpolation method for DG to FV conversion ({interp_method}). Should pick one of {ok_interps}. Choosing "lagrange" as default.')
+         interp_method = 'lagrange'
+
+      interpolate_fct = interp_method if origin_field == 'dg' else 'bilinear'
       self.interpolate = interpolator(origin_field, self.origin_order, 'fv', self.dest_order, interpolate_fct)
 
       print(f'origin order: {self.origin_order}, dest order: {self.dest_order}')

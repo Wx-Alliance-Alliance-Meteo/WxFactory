@@ -4,7 +4,7 @@ from time import time
 from cubed_sphere  import cubed_sphere
 from dgfilter      import apply_filter
 from initialize    import initialize_sw
-from interpolation import LagrangeSimpleInterpolator
+#from interpolation import LagrangeSimpleInterpolator
 from linsol        import fgmres
 from matrices      import DFR_operators
 from metric        import Metric

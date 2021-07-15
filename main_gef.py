@@ -12,7 +12,7 @@ from initialize      import initialize_sw, initialize_euler
 from matrices        import DFR_operators
 from metric          import Metric
 from parallel        import Distributed_World
-from preconditioner_dg import DG_preconditioner
+#from preconditioner_dg import DG_preconditioner
 from preconditioner_fv import FV_preconditioner
 from program_options import Configuration
 from rhs_euler       import rhs_euler

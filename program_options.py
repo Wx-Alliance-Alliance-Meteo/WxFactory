@@ -93,6 +93,11 @@ class Configuration:
          self.precond_filter_after = 0
 
       try:
+         self.dg_to_fv_interp = parser.get('Time_integration', 'dg_to_fv_interp')
+      except (NoOptionError, NoSectionError):
+         self.dg_to_fv_interp = 'lagrange'
+
+      try:
          self.discretization = parser.get('Grid', 'discretization')
       except (NoOptionError, NoSectionError):
          self.discretization = 'dg'

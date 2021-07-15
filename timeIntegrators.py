@@ -7,7 +7,6 @@ from matvec        import matvec_fun, matvec_rat
 from kiops         import kiops
 from linsol        import fgmres
 from phi           import phi_ark
-from interpolation import LagrangeSimpleInterpolator, BilinearInterpolator
 from timer         import Timer
 
 class Epirk4s3a:
@@ -205,11 +204,11 @@ class Rat2:
 
          with open('test_result.txt', 'a+') as output_file:
             if not file_exists:
-               output_file.write('# order | num_elements | precond | precond tol | max MG lvl | MG smoothe only | MG dt | # pre smoothe | # post smoothe | CFL # | FGMRES #it | FGMRES time | precond #it | precond time \n')
+               output_file.write('# order | num_elements | dt | precond | precond_interp | precond tol | max MG lvl | MG smoothe only | MG dt | # pre smoothe | # post smoothe | CFL # ::: FGMRES #it | FGMRES time | precond #it | precond time | conv. flag \n')
             if param is not None:
-               output_file.write(f'{param.nbsolpts} {param.nb_elements_horizontal:3d} {param.use_preconditioner} {param.precond_tolerance:9.1e} '
+               output_file.write(f'{param.nbsolpts} {param.nb_elements_horizontal:3d} {int(param.dt):5d} {param.use_preconditioner} {param.dg_to_fv_interp[:8]:8s} {param.precond_tolerance:9.1e} '
                                  f'{param.max_mg_level:2d} {param.mg_smoothe_only} {param.mg_dt:4d} '
-                                 f'{param.num_pre_smoothing} {param.num_post_smoothing} {param.mg_cfl:6.3f} - ')
+                                 f'{param.num_pre_smoothing} {param.num_post_smoothing} {param.mg_cfl:6.3f} ::: ')
             else:
                output_file.write(f'NO PARAMS - ')
 
@@ -238,7 +237,7 @@ class Rat2:
             precond_it, precond_time = 0, 0.0
             if self.preconditioner is not None:
                precond_it, precond_time = self.preconditioner.total_iter, self.preconditioner.total_time
-            output_file.write(f'{precond_it:5d} {precond_time:6.1f} ')
+            output_file.write(f'{precond_it:5d} {precond_time:6.1f} {flag:2d} ')
             output_file.write(f'- {" ".join(f"{r:.2e}" for r in residuals)} ')
             output_file.write('\n')
 
