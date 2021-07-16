@@ -33,16 +33,15 @@ def read_results(filename):
                'precond_tolerance': float(items[5]),
                'mg_level': int(items[6]),
                'mg_smoothe_only': True if int(items[7]) == 1 else False,
-               'mg_dt': float(items[8]),
-               'num_pre_smoothe': int(items[9]),
-               'num_post_smoothe': int(items[10]),
-               'cfl': float(items[11]),
-               'num_fgmres_it': int(items[13]),
-               'fgmres_time': float(items[14]),
-               'num_precond_it': int(items[15]),
-               'precond_time': float(items[16]),
-               'return_flag': int(items[17]),
-               'residuals': [float(x) for x in items[19:]]
+               'num_pre_smoothe': int(items[8]),
+               'num_post_smoothe': int(items[9]),
+               'cfl': float(items[10]),
+               'num_fgmres_it': int(items[12]),
+               'fgmres_time': float(items[13]),
+               'num_precond_it': int(items[14]),
+               'precond_time': float(items[15]),
+               'return_flag': int(items[16]),
+               'residuals': [float(x) for x in items[18:]]
                }
             # print(f'Line: {data}')
             results.append(data)
@@ -65,25 +64,6 @@ def get_plot_data(results, order, precond, tol=None):
    times = [x[2] for x in all_data]
 
    return sizes, it, times
-
-def get_mg_data(results, order, num_elem, smoothe_only, num_smoothes):
-
-   res = [x for x in results
-      if x['order'] == order
-      and x['num_elements'] == num_elem
-      and x['preconditioner'] == 'Multigrid'
-      and x['mg_smoothe_only'] == smoothe_only
-      and x['num_pre_smoothe'] == num_smoothes]
-
-   # print(f'Res:\n{res}')
-
-   all_data = [(x['mg_dt'], x['num_fgmres_it'], x['fgmres_time']) for x in res]
-   all_data.sort()
-   dts = [x[0] for x in all_data]
-   it = [x[1] for x in all_data]
-   times = [x[2] for x in all_data]
-
-   return dts, it, times
 
 colors = ['blue', 'orange', 'green']
 
@@ -143,57 +123,6 @@ def plot_fv(results, filename):
    fig.tight_layout()
    fig.savefig(filename)
 
-def plot_fv_mg_solve(results, order, num_elem, filename):
-   fig, (ax_it, ax_time) = plt.subplots(2, 1)
-
-   # for i, order in enumerate([2, 4, 8]):
-   #    sizes, it, times = get_plot_data(results, order, 'Finite volume', tol=1e-1)
-   #    ax_it.plot(sizes, it, 'o-', color=colors[i], label=f'FV ref, o{order}')
-   #    ax_time.plot(sizes, times, 'o-', color=colors[i])
-
-   dts, it, times = get_mg_data(results, order, num_elem, True, 1)
-   ax_it.plot(dts, it, 'o-', label=f'no solve, 1 smoothe')
-   ax_time.plot(dts, times, 'o-')
-
-   dts, it, times = get_mg_data(results, order, num_elem, True, 2)
-   ax_it.plot(dts, it, 'o-', label=f'no solve, 2 smoothes')
-   ax_time.plot(dts, times, 'o-')
-
-   dts, it, times = get_mg_data(results, order, num_elem, False, 1)
-   ax_it.plot(dts, it, 'o-', label=f'w/ solve, 1 smoothe')
-   ax_time.plot(dts, times, 'o-')
-
-   dts, it, times = get_mg_data(results, order, num_elem, False, 2)
-   ax_it.plot(dts, it, 'o-', label=f'w/ solve, 2 smoothes')
-   ax_time.plot(dts, times, 'o-')
-
-   res = [x for x in results
-    if x['order'] == order
-    and x['num_elements'] == num_elem and x['preconditioner'] == 'Finite volume'
-    and x['precond_tolerance'] == 1e-1]
-   ax_it.plot(dts, [res[0]['num_fgmres_it'] for i in range(len(dts))], 'o-', label=f'FV precond (fast)')
-   ax_time.plot(dts, [res[0]['fgmres_time'] for i in range(len(dts))], 'o-')
-
-   res = [x for x in results
-    if x['order'] == order
-    and x['num_elements'] == num_elem and x['preconditioner'] == 'None']
-   ax_it.plot(dts, [res[0]['num_fgmres_it'] for i in range(len(dts))], 'o-', label=f'No precond')
-   ax_time.plot(dts, [res[0]['fgmres_time'] for i in range(len(dts))], 'o-')
-
-   ax_it.set_ylabel('# Iterations')
-   ax_time.set_xlabel('pseudo dt')
-   ax_time.set_ylabel('Time (s)')
-
-   # ax_it.set_xscale('log')
-   # ax_it.set_yscale('log')
-   # ax_time.set_xscale('log')
-   # ax_time.set_yscale('log')
-
-   fig.suptitle(f'MG with solve vs MG smoothe only, {order}x{num_elem}')
-   fig.legend(loc='center right')
-   fig.tight_layout()
-   fig.savefig(f'{filename}_{order}x{num_elem}.png')
-
 def plot_residual(result, order, num_elem, filename):
    no_precond = [x['residuals'] for x in result
       if x['order'] == order
@@ -230,9 +159,8 @@ def plot_residual(result, order, num_elem, filename):
    for data in multigrid_results:
       res = data['residuals']
       ax_res.plot(res,
-                  color=mg_colors[data['mg_dt']],
                   linestyle=mg_linestyles[data['num_pre_smoothe']],
-                  label=f'MG dt={data["mg_dt"]}, sm={data["num_pre_smoothe"]}')
+                  label=f'sm={data["num_pre_smoothe"]}')
 
    ax_res.set_yscale('log')
    ax_res.grid(True)
@@ -311,9 +239,6 @@ def main(args):
    if args.plot_iter:
       plot_base_results(results, 'base_fv_precond.png')
       plot_fv(results, 'fv_precond.png')
-      plot_fv_mg_solve(results, 2, 120, 'mg_precond')
-      plot_fv_mg_solve(results, 2, 30, 'mg_precond')
-      plot_fv_mg_solve(results, 2, 60, 'mg_precond')
 
    if args.plot_residual:
       plot_residual(results, 2, 30, 'residual')

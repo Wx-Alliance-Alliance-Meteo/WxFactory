@@ -58,11 +58,6 @@ class Configuration:
          self.mg_smoothe_only = 0
 
       try:
-         self.mg_dt = parser.getint('Time_integration', 'mg_dt')
-      except (NoOptionError, NoSectionError):
-         self.mg_dt = 100
-
-      try:
          self.num_pre_smoothing = parser.getint('Time_integration', 'num_pre_smoothing')
       except (NoOptionError, NoSectionError):
          self.num_pre_smoothing = 1

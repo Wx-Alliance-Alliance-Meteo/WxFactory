@@ -16,12 +16,12 @@ from rhs_sw        import rhs_sw
 
 from definitions import idx_h, idx_hu1, idx_hu2, gravity
 
-def explicit_euler_smoothe(x, A, b, h, num_iter=1):
+def explicit_euler_smoothe(A, b, x, h, num_iter=1):
    for i in range(num_iter):
       x = x + h * (b - A(x))
    return x
 
-def runge_kutta_smoothe(x, A, b, h, num_iter=1):
+def runge_kutta_smoothe(A, b, x, h, num_iter=1):
    for i in range(num_iter):
       x1 = x + h * (b - A(x))
       x2 = 0.75 * x + 0.25 * x1 + 0.25 * h * (b - A(x))
@@ -49,7 +49,6 @@ class MG_params:
       self.rhs = rhs_sw
       self.matvec = matvec_rat
       self.use_solver = (param.mg_smoothe_only <= 0)
-      self.pdt = param.mg_dt
       self.num_pre_smoothing = param.num_pre_smoothing
       self.num_post_smoothing = param.num_post_smoothing
       self.cfl = param.mg_cfl
@@ -75,10 +74,14 @@ class MG_params:
          
          self.params[level] = p
 
+         # Initialize problem for this level
          self.geometries[level] = cubed_sphere(p.nb_elements_horizontal, p.nb_elements_vertical, p.nbsolpts, p.λ0, p.ϕ0, p.α0, p.ztop, ptopo, p)
          operators              = DFR_operators(self.geometries[level], p)
          self.metrics[level]    = Metric(self.geometries[level])
          field, topo = initialize_sw(self.geometries[level], self.metrics[level], operators, p)
+
+         # Now set up the various operators: RHS, smoother, restriction, prolongation
+         # matrix-vector product is done at every step, so not here
 
          self.rhs_operators[level] = lambda vec, rhs=self.rhs, p=self.params[level], geom=self.geometries[level], op=operators, met=self.metrics[level], topo=topo, ptopo=ptopo: \
             rhs(vec, geom, op, met, topo, ptopo, p.nbsolpts, p.nb_elements_horizontal, p.case_number, False)
@@ -99,6 +102,8 @@ class MG_params:
       """
       Compute pseudo time step from CFL condition
       """
+
+      # Compute the size of each element
       dx = numpy.empty_like(X)
       dy = numpy.empty_like(Y)
 
@@ -110,23 +115,27 @@ class MG_params:
       dy[-1, :]   = Y[-1, :] - Y[-2, :]
       dy[1:-1, :] = (Y[2:, :] - Y[:-2, :]) * 0.5
 
+      elem_size = numpy.minimum(dx.min(), dy.min()) # Get min size in either direction (per element)
+
+      # Extract the variables
       h  = field[idx_h]
       u1 = field[idx_hu1] / h
       u2 = field[idx_hu2] / h
 
-      elem_size = numpy.minimum(dx.min(), dy.min())
-
+      # Compute variables in global coordinates
       real_u1 = u1 * dx / 2.0
       real_u2 = u2 * dy / 2.0
 
       real_h_11 = h_contra_11 * dx * dy / 4.0
       real_h_22 = h_contra_22 * dx * dy / 4.0
 
+      # Get max velocity (per element)
       v1 = numpy.absolute(real_u1) + numpy.sqrt(real_h_11 * gravity * h)
       v2 = numpy.absolute(real_u2) + numpy.sqrt(real_h_22 * gravity * h)
 
       vel = numpy.maximum(v1, v2)
 
+      # The pseudo dt (per element)
       pseudo_dt = self.cfl * elem_size / vel
 
       numpy.set_printoptions(precision=1)
@@ -136,18 +145,31 @@ class MG_params:
       return numpy.broadcast_to(pseudo_dt, field.shape)
 
    def compute_matrix_operators(self, field, dt):
+      """
+      Compute the matrix-vector operator for every grid level. Also compute the pseudo time step size for each level.
+      """
+
       self.pseudo_dts = {}
       next_field = field
       for level in range(self.max_level, -1, -1):
          self.matrix_operators[level] = lambda vec, mat=self.matvec, dt=dt, f=next_field, rhs=self.rhs_operators[level] : mat(numpy.ravel(vec), dt, f, rhs)
          self.pseudo_dts[level] = self.compute_pseudo_dt(
-            next_field, self.geometries[level].X1, self.geometries[level].X2,
-            self.metrics[level].H_contra_11, self.metrics[level].H_contra_22)
+            next_field, self.geometries[level].X1, self.geometries[level].X2, self.metrics[level].H_contra_11, self.metrics[level].H_contra_22)
          if level > 0:
             next_field = self.restrict_operators[level](next_field)
 
 
 def mg(b, x0, level, mg_params, gamma=1):
+   """
+   Do one pass of the multigrid algorithm.
+
+   Arguments:
+   b         -- Right-hand side of the system we want to solve
+   x0        -- An estimate of the solution. Might be anything
+   level     -- The level (depth) at which we are within the multiple grids. 0 is the coarsest grid
+   mg_params -- MG_params object that describes the system to solve at each grid level
+   gamma     -- (optional) How many passes to do at the next grid level
+   """
 
    A        = mg_params.matrix_operators[level]
    smoothe  = mg_params.smoothers[level]
@@ -157,15 +179,14 @@ def mg(b, x0, level, mg_params, gamma=1):
    dt = numpy.ravel(dt_shaped)
 
    # Pre smoothing
-   x = smoothe(x0, A, b, dt, mg_params.num_pre_smoothing)
+   x = smoothe(A, b, x0, dt, mg_params.num_pre_smoothing)
 
-   if level > 0:
-      # Go down a level and solve that
-      residual = numpy.ravel(restrict(A(x) - b))
-      v = numpy.zeros_like(residual)
+   if level > 0:                                   # Go down a level and solve that
+      residual = numpy.ravel(restrict(b - A(x)))   # Compute the (restricted) residual of the current grid level system
+      v = numpy.zeros_like(residual)               # A guess of the next solution (0 is pretty good, that's what we're aiming for)
       for i in range(gamma):
-         v = mg(residual, v, level - 1, mg_params, gamma=gamma)
-      x = x - numpy.ravel(prolong(v))  # Correction
+         v = mg(residual, v, level - 1, mg_params, gamma=gamma)  # MG pass on next lower level
+      x = x + numpy.ravel(prolong(v))              # Correction
    else:
       # Just directly solve the problem
       # That's no good, we should not use FGMRES to precondition FGMRES...
@@ -173,23 +194,43 @@ def mg(b, x0, level, mg_params, gamma=1):
          x, _, _, _ = fgmres(A, b, x0=x, tol=1e-1)
    
    # Post smoothing
-   x = smoothe(x, A, b, dt, mg_params.num_post_smoothing)
+   x = smoothe(A, b, x, dt, mg_params.num_post_smoothing)
 
    return x
 
 
-def mg_solve(b, dt, mg_params, field=None, tolerance=1e-7, gamma=1, max_num_it=100):
+def mg_solve(b, dt, mg_params, x0=None, field=None, tolerance=1e-7, gamma=1, max_num_it=100):
+   """
+   Solve the system defined by mg_params using the multigrid method.
+
+   Mandatory arguments:
+   b         -- The right-hand side of the linear system to solve.
+   dt        -- The time step size (in seconds) 
+   mg_params -- The MG_params object that describes the system at all grid levels
+
+   Optional arguments
+   x0         -- Initial guess for the system solution
+   field      -- Current solution vector (before time-stepping). If present, we compute the
+                 matrix operators to be used at each grid level
+   tolerance  -- Size of the residual below which we consider the system solved
+   gamma      -- Number of solves at each grid level. You might want to keep it at 1 (the default)
+   max_num_it -- Max number of iterations to do. If we reach it, we return no matter what
+                 the residual is
+   """
 
    t0 = time()
 
-   x = numpy.zeros_like(b)
+   # Initial guess
+   x = x0 if x0 is not None else numpy.zeros_like(b)
 
    norm_b = global_norm(b)
    tol_relative = tolerance * norm_b
 
+   # Early return if rhs is zero
    if norm_b < 1e-15:
       return x, 0, time() - t0
 
+   # Init system for this time step, if not done already
    if field is not None:
       mg_params.compute_matrix_operators(field, dt)
 
@@ -202,7 +243,7 @@ def mg_solve(b, dt, mg_params, field=None, tolerance=1e-7, gamma=1, max_num_it=1
 
       # Check tolerance exit condition
       if it < max_num_it - 1:
-         residual = A(x) - b
+         residual = b - A(x)
          norm_r = global_norm(residual)
          # print(f'norm_r = {norm_r:.2e} (rel tol {tol_relative:.2e})')
          if norm_r < tol_relative:

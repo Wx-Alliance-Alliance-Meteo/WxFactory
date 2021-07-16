@@ -58,7 +58,7 @@ mg_smoothe_only=1
 num_pre_smoothing=4
 num_post_smoothing=4
 mg_cfl=0.9
-dg_to_fv_interp="l2-norm"
+dg_to_fv_interp="lagrange"
 
 
 if [ "x${1}" == "x--gen-configs" ]; then

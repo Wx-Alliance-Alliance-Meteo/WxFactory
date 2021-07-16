@@ -49,6 +49,7 @@ class FV_preconditioner:
 
       print(f'origin order: {self.origin_order}, dest order: {self.dest_order}')
 
+      # Create a set of parameters for the FV formulation
       self.param = copy(param)
       self.param.discretization = 'fv'
       if origin_field == 'dg':
@@ -61,6 +62,7 @@ class FV_preconditioner:
          raise ValueError('Preconditioner is only implemented for the shallow water equations. '
                           'Need to make it a bit more flexible')
 
+      # Finite volume formulation of the problem
       self.ptopo          = ptopo
       self.dest_geom      = cubed_sphere(self.param.nb_elements_horizontal, self.param.nb_elements_vertical,
                                          self.param.nbsolpts, self.param.λ0, self.param.ϕ0, self.param.α0, self.param.ztop,
@@ -97,30 +99,26 @@ class FV_preconditioner:
       return self.interpolate(vec.reshape(self.dest_field_shape), reverse=True)
 
    def apply(self, vec):
+      """
+      Apply the preconditioner on the given vector
+      """
 
-      # return vec
       t0 = time()
 
       input_vec = numpy.ravel(self.restrict(vec))
-
-      # print(f'input_vec.shape = {input_vec.shape}')
-
-      # output_vec = numpy.zeros_like(input_vec)
-      # level = self.mg_params.max_level
-      # num_iter = 0
-      # for i in range(5):
-      #    output_vec = mg(input_vec, output_vec, level, self.mg_params, dt=500)
-      #    num_iter += 1
-
-      if self.precond_type == 1:
+     
+      if self.precond_type == 1:    # Finite volume preconditioner (reference, or simple FV)
          output_vec, _, num_iter, _, _ = fgmres(
             self.dest_matrix, input_vec, preconditioner=self.preconditioner, tol=self.param.precond_tolerance, maxiter=self.max_iter)
-      elif self.precond_type == 2:
+      elif self.precond_type == 2:  # Multigrid preconditioner
          output_vec, num_iter, mg_time = mg_solve(
             input_vec, self.dt, self.mg_params, tolerance=self.param.precond_tolerance, max_num_it=1)
-      # output_vec, _, num_iter, _ = fgmres(self.dest_matrix, input_vec, preconditioner=self.preconditioner, tol=1e-1, maxiter=1, restart=2)
+
+      self.last_solution = output_vec
+
       output_vec = numpy.ravel(self.prolong(output_vec))
 
+      # Some stats
       t1 = time()
       precond_time = t1 - t0
       self.total_time += precond_time
@@ -131,6 +129,15 @@ class FV_preconditioner:
       return output_vec
 
    def init_time_step(self, dt, field):
+      """
+      Prepare the preconditioner for solving one time step of the problem.
+
+      This implies
+         - computing the latest value of the variables vector in the finite volume formulation
+         - assembling the RHS function and the matrix-vector operator
+         - computing the matrix-vector operator for each grid level (if using the MG preconditioner)
+      """
+
       self.dest_field = self.restrict(field)
       self.dest_rhs = lambda vec: self.rhs_function(
          vec, self.dest_geom, self.dest_operators, self.dest_metric, self.dest_topo, self.ptopo, self.param.nbsolpts,
@@ -138,6 +145,7 @@ class FV_preconditioner:
       self.dest_matrix = lambda vec: matvec_rat(vec, dt, self.dest_field, self.dest_rhs)
 
       self.dt = dt
+      self.last_solution = numpy.ravel(numpy.zeros_like(self.dest_field))
 
       if self.preconditioner:
          self.preconditioner.init_time_step(dt, self.dest_field)
