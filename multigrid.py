@@ -16,9 +16,6 @@ from rhs_sw        import rhs_sw
 
 from definitions import idx_h, idx_hu1, idx_hu2, gravity
 
-def func_that_returns_its_input(x):
-   return x
-
 def explicit_euler_smoothe(x, A, b, h, num_iter=1):
    for i in range(num_iter):
       x = x + h * (b - A(x))
@@ -30,27 +27,6 @@ def runge_kutta_smoothe(x, A, b, h, num_iter=1):
       x2 = 0.75 * x + 0.25 * x1 + 0.25 * h * (b - A(x))
       x = 1.0/3.0 * x + 2.0/3.0 * x2 + 2.0/3.0 * h * (b - A(x))
    return x
-
-def make_restrict(interp, shape):
-   def restrict(vec):
-      return interp(vec.reshape(shape))
-   return restrict
-
-def make_prolong(interp, shape):
-   def prolong(vec):
-      return interp(vec.reshape(shape), reverse=True)
-   return prolong
-
-def make_matrix_op(field, rhs, dt, matvec):
-   def op(vec):
-      return matvec(numpy.ravel(vec), dt, field, rhs)
-   return op
-
-def make_rhs_op(rhs, geom, operators, metric, topo, ptopo, num_points, num_elem_horiz, case_number, apply_filter):
-   def op(vec):
-      return rhs(vec, geom, operators, metric, topo, ptopo, num_points, num_elem_horiz, case_number, apply_filter)
-   return op
-
 
 class MG_params:
 
@@ -104,19 +80,18 @@ class MG_params:
          self.metrics[level]    = Metric(self.geometries[level])
          field, topo = initialize_sw(self.geometries[level], self.metrics[level], operators, p)
 
-         self.rhs_operators[level] = make_rhs_op(
-            self.rhs, self.geometries[level], operators, self.metrics[level], topo, ptopo,
-            p.nbsolpts, p.nb_elements_horizontal, p.case_number, False)
+         self.rhs_operators[level] = lambda vec, rhs=self.rhs, p=self.params[level], geom=self.geometries[level], op=operators, met=self.metrics[level], topo=topo, ptopo=ptopo: \
+            rhs(vec, geom, op, met, topo, ptopo, p.nbsolpts, p.nb_elements_horizontal, p.case_number, False)
 
          self.smoothers[level] = explicit_euler_smoothe
          # self.smoothers[level] = runge_kutta_smoothe
 
          if level > 0:
             self.interpolators[level] = interpolator('fv', order, 'fv', order//2, 'bilinear')
-            self.restrict_operators[level] = make_restrict(self.interpolators[level], field.shape)
+            self.restrict_operators[level] = lambda vec, op=self.interpolators[level], sh=field.shape: op(vec.reshape(sh))
 
          if level < self.max_level:
-            self.prolong_operators[level] = make_prolong(self.interpolators[level + 1], field.shape)
+            self.prolong_operators[level] = lambda vec, op=self.interpolators[level + 1], sh=field.shape: op(vec.reshape(sh), reverse=True)
 
          order = order // 2
 
@@ -164,39 +139,21 @@ class MG_params:
       self.pseudo_dts = {}
       next_field = field
       for level in range(self.max_level, -1, -1):
-         self.matrix_operators[level] = make_matrix_op(next_field, self.rhs_operators[level], dt, self.matvec)
+         self.matrix_operators[level] = lambda vec, mat=self.matvec, dt=dt, f=next_field, rhs=self.rhs_operators[level] : mat(numpy.ravel(vec), dt, f, rhs)
          self.pseudo_dts[level] = self.compute_pseudo_dt(
             next_field, self.geometries[level].X1, self.geometries[level].X2,
             self.metrics[level].H_contra_11, self.metrics[level].H_contra_22)
          if level > 0:
             next_field = self.restrict_operators[level](next_field)
 
-   def get_smoother(self, level):
-      return self.smoothers[level]
 
-   def get_matrix_op(self, level):
-      return self.matrix_operators[level]
+def mg(b, x0, level, mg_params, gamma=1):
 
-   def get_interpolator(self, level):
-      return self.interpolators[level]
-
-   def get_restrict_op(self, level):
-      return self.restrict_operators[level]
-
-   def get_prolong_op(self, level):
-      return self.prolong_operators[level]
-
-   def get_pseudo_dt(self, level):
-      return self.pseudo_dts[level]
-
-
-def mg(b, x0, level, mg_params, gamma=1, dt=0.0):
-
-   A        = mg_params.get_matrix_op(level)
-   smoothe  = mg_params.get_smoother(level)
-   restrict = mg_params.get_restrict_op(level)    if level > 0 else None
-   prolong  = mg_params.get_prolong_op(level - 1) if level > 0 else None
-   dt_shaped = mg_params.get_pseudo_dt(level)
+   A        = mg_params.matrix_operators[level]
+   smoothe  = mg_params.smoothers[level]
+   restrict = mg_params.restrict_operators[level]    if level > 0 else None
+   prolong  = mg_params.prolong_operators[level - 1] if level > 0 else None
+   dt_shaped = mg_params.pseudo_dts[level]
    dt = numpy.ravel(dt_shaped)
 
    # Pre smoothing
@@ -207,7 +164,7 @@ def mg(b, x0, level, mg_params, gamma=1, dt=0.0):
       residual = numpy.ravel(restrict(A(x) - b))
       v = numpy.zeros_like(residual)
       for i in range(gamma):
-         v = mg(residual, v, level - 1, mg_params, gamma=gamma, dt=dt*2)
+         v = mg(residual, v, level - 1, mg_params, gamma=gamma)
       x = x - numpy.ravel(prolong(v))  # Correction
    else:
       # Just directly solve the problem
@@ -237,10 +194,10 @@ def mg_solve(b, dt, mg_params, field=None, tolerance=1e-7, gamma=1, max_num_it=1
       mg_params.compute_matrix_operators(field, dt)
 
    level = mg_params.max_level
-   A = mg_params.get_matrix_op(level)
+   A = mg_params.matrix_operators[level]
    num_it = 0
    for it in range(max_num_it):
-      x = mg(b, x, level, mg_params, gamma=gamma, dt=mg_params.pdt)
+      x = mg(b, x, level, mg_params, gamma=gamma)
       num_it += 1
 
       # Check tolerance exit condition
