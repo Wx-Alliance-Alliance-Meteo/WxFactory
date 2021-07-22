@@ -93,6 +93,11 @@ class Configuration:
          self.dg_to_fv_interp = 'lagrange'
 
       try:
+         self.linear_solver = parser.get('Time_integration', 'linear_solver')
+      except (NoOptionError, NoSectionError):
+         self.linear_solver = 'fgmres'
+
+      try:
          self.discretization = parser.get('Grid', 'discretization')
       except (NoOptionError, NoSectionError):
          self.discretization = 'dg'

@@ -151,7 +151,7 @@ class FV_preconditioner:
          self.preconditioner.init_time_step(dt, self.dest_field)
 
       if self.mg_params:
-         self.mg_params.compute_matrix_operators(self.dest_field, dt)
+         self.mg_params.init_time_step(self.dest_field, dt)
 
    def __call__(self, vec):
       return self.apply(vec)

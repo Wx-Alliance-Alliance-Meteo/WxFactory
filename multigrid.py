@@ -18,7 +18,9 @@ from definitions import idx_h, idx_hu1, idx_hu2, gravity
 
 def explicit_euler_smoothe(A, b, x, h, num_iter=1):
    for i in range(num_iter):
-      x = x + h * (b - A(x))
+      res = (b - A(x))
+      # print(f'res: {global_norm(res)}')
+      x = x + h * res
    return x
 
 def runge_kutta_smoothe(A, b, x, h, num_iter=1):
@@ -144,7 +146,7 @@ class MG_params:
 
       return numpy.broadcast_to(pseudo_dt, field.shape)
 
-   def compute_matrix_operators(self, field, dt):
+   def init_time_step(self, field, dt):
       """
       Compute the matrix-vector operator for every grid level. Also compute the pseudo time step size for each level.
       """
@@ -199,26 +201,31 @@ def mg(b, x0, level, mg_params, gamma=1):
    return x
 
 
-def mg_solve(b, dt, mg_params, x0=None, field=None, tolerance=1e-7, gamma=1, max_num_it=100):
+def mg_solve(b, mg_params, x0=None, field=None, dt=None, tolerance=1e-7, gamma=1, max_num_it=100):
    """
    Solve the system defined by mg_params using the multigrid method.
 
    Mandatory arguments:
    b         -- The right-hand side of the linear system to solve.
-   dt        -- The time step size (in seconds) 
    mg_params -- The MG_params object that describes the system at all grid levels
 
-   Optional arguments
+   Optional arguments:
    x0         -- Initial guess for the system solution
    field      -- Current solution vector (before time-stepping). If present, we compute the
                  matrix operators to be used at each grid level
+   dt         -- The time step size (in seconds). *Must* be included if [field] is present
    tolerance  -- Size of the residual below which we consider the system solved
    gamma      -- Number of solves at each grid level. You might want to keep it at 1 (the default)
    max_num_it -- Max number of iterations to do. If we reach it, we return no matter what
                  the residual is
-   """
 
-   t0 = time()
+   Returns:
+   1. The solution
+   2. The latest computed residual
+   3. Number of iterations performed
+   4. Convergence status flag (0 if converge, -1 if not)
+   5. List of residuals at every iteration
+   """
 
    # Initial guess
    x = x0 if x0 is not None else numpy.zeros_like(b)
@@ -226,17 +233,21 @@ def mg_solve(b, dt, mg_params, x0=None, field=None, tolerance=1e-7, gamma=1, max
    norm_b = global_norm(b)
    tol_relative = tolerance * norm_b
 
+   norm_r = -norm_b
+
    # Early return if rhs is zero
    if norm_b < 1e-15:
-      return x, 0, time() - t0
+      return x, 0.0, 0, 0, [0.0]
 
    # Init system for this time step, if not done already
    if field is not None:
+      if dt is None: dt = 1.0
       mg_params.compute_matrix_operators(field, dt)
 
-   level = mg_params.max_level
-   A = mg_params.matrix_operators[level]
-   num_it = 0
+   residuals = []
+   level     = mg_params.max_level
+   A         = mg_params.matrix_operators[level]
+   num_it    = 0
    for it in range(max_num_it):
       x = mg(b, x, level, mg_params, gamma=gamma)
       num_it += 1
@@ -246,10 +257,15 @@ def mg_solve(b, dt, mg_params, x0=None, field=None, tolerance=1e-7, gamma=1, max
          residual = b - A(x)
          norm_r = global_norm(residual)
          # print(f'norm_r = {norm_r:.2e} (rel tol {tol_relative:.2e})')
+         residuals.append(norm_r / norm_b)
          if norm_r < tol_relative:
-            return x, num_it, time() - t0
+            return x, norm_r / norm_b, num_it, 0, residuals
+         elif norm_r > 10.0:
+            return x, norm_r / norm_b, num_it, -1, residuals
 
-   return x, num_it, time() - t0
+   flag = 0
+   if num_it >= max_num_it: flag = -1
+   return x, norm_r / norm_b, num_it, flag, residuals
 
 
 def global_norm(vec):

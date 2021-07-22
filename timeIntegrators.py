@@ -6,6 +6,7 @@ from time        import time
 from matvec        import matvec_fun, matvec_rat
 from kiops         import kiops
 from linsol        import fgmres
+from multigrid     import mg_solve
 from phi           import phi_ark
 from timer         import Timer
 
@@ -187,12 +188,23 @@ class Tvdrk3:
       return Q
 
 class Rat2:
-   def __init__(self, rhs, tol, preconditioner=None, mg_params=None, rank=-1, param=None):
+   def __init__(self, rhs, tol, solver = 'fgmres', preconditioner=None, mg_params=None, rank=-1, param=None):
       self.rhs = rhs
       self.tol = tol
       self.preconditioner = preconditioner
       self.mg_params = mg_params
       self.rank = rank
+      self.use_mg = False
+      if solver == 'fgmres':
+         self.solver_name = 'FGMRES'
+         self.max_it = 1200//20 if self.preconditioner is None else 160//20
+         self.solve = lambda A, b, x0 : fgmres(A, b, x0=x0, tol=self.tol, preconditioner=self.preconditioner, restart=20, maxiter=self.max_it)
+
+      elif solver in ['mg', 'multigrid']:
+         self.solver_name = 'Multigrid'
+         self.use_mg = True
+         self.max_it = 80
+         self.solve = lambda A, b, x0 : mg_solve(b, self.mg_params, x0=x0, tolerance=self.tol, max_num_it=self.max_it)
 
       if self.rank == 0:
          try:
@@ -207,8 +219,8 @@ class Rat2:
                output_file.write('# order | num_elements | dt | precond | precond_interp | precond tol | max MG lvl | MG smoothe only | # pre smoothe | # post smoothe | CFL # ::: FGMRES #it | FGMRES time | precond #it | precond time | conv. flag \n')
             if param is not None:
                output_file.write(f'{param.nbsolpts} {param.nb_elements_horizontal:3d} {int(param.dt):5d} {param.use_preconditioner} {param.dg_to_fv_interp[:8]:8s} {param.precond_tolerance:9.1e} '
-                                 f'{param.max_mg_level:2d} {param.mg_smoothe_only} '
-                                 f'{param.num_pre_smoothing} {param.num_post_smoothing} {param.mg_cfl:6.3f} ::: ')
+                                 f'{param.max_mg_level:3d} {param.mg_smoothe_only} '
+                                 f'{param.num_pre_smoothing:3d} {param.num_post_smoothing:3d} {param.mg_cfl:6.3f} ::: ')
             else:
                output_file.write(f'NO PARAMS - ')
 
@@ -218,17 +230,16 @@ class Rat2:
       if self.preconditioner:
          self.preconditioner.init_time_step(dt, Q)
 
+      if self.use_mg:
+         self.mg_params.init_time_step(Q, dt)
+
       # Transform to the shifted linear system (I/dt - J/2) x = F/dt
       rhs = self.rhs(Q).flatten() / dt
 
       first_guess = numpy.zeros_like(rhs)
 
-      max_it = 1200//20 if self.preconditioner is None else 160//20
-
       t0 = time()
-      phiv, local_error, num_iter, flag, residuals = \
-         fgmres(matvec_handle, rhs, x0=first_guess, tol=self.tol, preconditioner=self.preconditioner, restart=20, maxiter=max_it)
-      print(f'Finished time step')
+      phiv, local_error, num_iter, flag, residuals = self.solve(matvec_handle, rhs, first_guess)
       t1 = time()
 
       if self.rank == 0:
@@ -242,9 +253,9 @@ class Rat2:
             output_file.write('\n')
 
       if flag == 0:
-         print(f'FGMRES converged at iteration {num_iter} to a solution with local error {local_error : .2e}')
+         print(f'{self.solver_name} converged at iteration {num_iter} to a solution with local error {local_error : .2e}')
       else:
-         print(f'FGMRES stagnation at iteration {num_iter}, returning a solution with local error {local_error: .2e}')
+         print(f'{self.solver_name} stagnation at iteration {num_iter}, returning a solution with local error {local_error: .2e}')
 
       # Update solution
       return Q + numpy.reshape(phiv, Q.shape) * dt

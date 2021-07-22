@@ -35,7 +35,8 @@ function set_parameters() {
                           -e 's/^mg_cfl *= *.*$/mg_cfl = '${9}'/' \
                           -e 's/^dt *= *.*$/dt = '${10}'/' \
                           -e 's/^t_end *= *.*$/t_end = '${10}'/' \
-                          -e 's/^dg_to_fv_interp *= *.*$/dg_to_fv_interp = '${11}'/'
+                          -e 's/^dg_to_fv_interp *= *.*$/dg_to_fv_interp = '${11}'/' \
+                          -e 's/^linear_solver *= *.*$/linear_solver = '${12}'/'
 }
 
 function compute_time_step() {
@@ -59,6 +60,7 @@ num_pre_smoothing=4
 num_post_smoothing=4
 mg_cfl=0.9
 dg_to_fv_interp="lagrange"
+linear_solver="mg"
 
 
 if [ "x${1}" == "x--gen-configs" ]; then
@@ -81,13 +83,13 @@ if [ "x${1}" == "x--gen-configs" ]; then
             time_step=$(compute_time_step ${order} ${nb_elements} ${ref_time_step})
 
             use_precond=0
-            set_parameters ${use_precond} ${order} ${nb_elements} ${precond_tolerance} ${max_mg_level} ${mg_smoothe_only} ${num_pre_smoothing} ${num_post_smoothing} ${mg_cfl} ${time_step} ${dg_to_fv_interp}
+            set_parameters ${use_precond} ${order} ${nb_elements} ${precond_tolerance} ${max_mg_level} ${mg_smoothe_only} ${num_pre_smoothing} ${num_post_smoothing} ${mg_cfl} ${time_step} ${dg_to_fv_interp} ${linear_solver}
             cp ${CONFIG_FILE} "${CONFIG_DIR}/config.${use_precond}_${order}_${nb_elements}_${time_step}.ini"
 
             use_precond=1
             for precond_tolerance in ${pre_tols}; do
                 for dg_to_fv_interp in ${interps}; do
-                    set_parameters ${use_precond} ${order} ${nb_elements} ${precond_tolerance} ${max_mg_level} ${mg_smoothe_only} ${num_pre_smoothing} ${num_post_smoothing} ${mg_cfl} ${time_step} ${dg_to_fv_interp}
+                    set_parameters ${use_precond} ${order} ${nb_elements} ${precond_tolerance} ${max_mg_level} ${mg_smoothe_only} ${num_pre_smoothing} ${num_post_smoothing} ${mg_cfl} ${time_step} ${dg_to_fv_interp} ${linear_solver}
                     cp ${CONFIG_FILE} "${CONFIG_DIR}/config.${use_precond}_${order}_${nb_elements}_${dg_to_fv_interp:0:3}_${precond_tolerance}_${time_step}.ini"
                 done
             done
@@ -100,7 +102,7 @@ if [ "x${1}" == "x--gen-configs" ]; then
                 for mg_smoothe_only in 1; do
                     for num_pre_smoothing in ${smoothings}; do
                         num_post_smoothing=${num_pre_smoothing}
-                        set_parameters ${use_precond} ${order} ${nb_elements} ${precond_tolerance} ${max_mg_level} ${mg_smoothe_only} ${num_pre_smoothing} ${num_post_smoothing} ${mg_cfl} ${time_step} ${dg_to_fv_interp}
+                        set_parameters ${use_precond} ${order} ${nb_elements} ${precond_tolerance} ${max_mg_level} ${mg_smoothe_only} ${num_pre_smoothing} ${num_post_smoothing} ${mg_cfl} ${time_step} ${dg_to_fv_interp} ${linear_solver}
                         cp ${CONFIG_FILE} "${CONFIG_DIR}/config.${use_precond}_${order}_${nb_elements}_${precond_tolerance}_${max_mg_level}_${mg_smoothe_only}_${num_pre_smoothing}_${num_post_smoothing}_${mg_cfl}_${time_step}_${dg_to_fv_interp:0:3}.ini"
                     done
                 done
@@ -116,6 +118,6 @@ elif [ "x${1}" == "x--run-configs" ]; then
         run_program ${CONFIG_DIR}/${config} && rm -v ${CONFIG_DIR}/${config} || exit
     done
 else
-    set_parameters ${use_precond} ${order} ${nb_elements} ${precond_tolerance} ${max_mg_level} ${mg_smoothe_only} ${num_pre_smoothing} ${num_post_smoothing} ${mg_cfl} ${time_step} ${dg_to_fv_interp}
+    set_parameters ${use_precond} ${order} ${nb_elements} ${precond_tolerance} ${max_mg_level} ${mg_smoothe_only} ${num_pre_smoothing} ${num_post_smoothing} ${mg_cfl} ${time_step} ${dg_to_fv_interp} ${linear_solver}
     run_program
 fi

@@ -11,6 +11,7 @@ from definitions     import idx_rho
 from initialize      import initialize_sw, initialize_euler
 from matrices        import DFR_operators
 from metric          import Metric
+from multigrid       import MG_params
 from parallel        import Distributed_World
 #from preconditioner_dg import DG_preconditioner
 from preconditioner_fv import FV_preconditioner
@@ -74,7 +75,10 @@ def main(args) -> int:
       if param.use_preconditioner > 0:
          # preconditioner = DG_preconditioner(param, geom, ptopo, mtrx, rhs_sw)
          preconditioner = FV_preconditioner(param, Q, ptopo, precond_type=param.use_preconditioner)
-      stepper = Rat2(rhs_handle, param.tolerance, preconditioner=preconditioner, rank=ptopo.rank, param=param)
+      mg_params = None
+      if param.linear_solver in ['mg', 'multigrid']:
+         mg_params = MG_params(param, ptopo)
+      stepper = Rat2(rhs_handle, param.tolerance, solver=param.linear_solver, preconditioner=preconditioner, rank=ptopo.rank, param=param, mg_params=mg_params)
    elif  param.time_integrator.lower() == 'epi2/ark' and param.equations == "shallow water": # TODO : Euler
       rhs_explicit = lambda q: rhs_sw_explicit(q, geom, mtrx, metric, topo, ptopo, param.nbsolpts, param.nb_elements_horizontal, param.case_number, param.filter_apply)
 
