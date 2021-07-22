@@ -79,7 +79,7 @@ def output_init(geom, param):
    lon.long_name = 'longitude'
    lon.units = 'degrees_east'
 
-   if param.equations == "shallow water":
+   if param.equations == "shallow_water":
 
       hhh = ncfile.createVariable('h', numpy.dtype('double').char, ('time', ) + grid_data)
       hhh.long_name = 'fluid height'
@@ -215,7 +215,7 @@ def output_netcdf(Q, geom, metric, mtrx, topo, step, param):
 
    ncfile['time'][idx] = step * param.dt
 
-   if param.equations == "shallow water":
+   if param.equations == "shallow_water":
 
       # Unpack physical variables
       h = Q[idx_h, :, :] + topo.hsurf
