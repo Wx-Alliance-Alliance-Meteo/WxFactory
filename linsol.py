@@ -51,7 +51,29 @@ def ortho_1_sync(Q, R, j):
    return Q, R, norm
 
 
-def fgmres(A, b, x0 = None, tol = 1e-5, restart = 20, maxiter = None, preconditioner = None, reorth = False, hegedus = False):
+def fgmres(A, b, x0 = None, tol = 1e-5, restart = 20, maxiter = None, preconditioner = None, hegedus = False) -> tuple[bool, float, int, int, list[float]]:
+   """
+   Solve the given linear system (Ax = b) for x, using the FGMRES algorithm. 
+
+   Mandatory arguments:
+   A              -- System matrix. This may be an operator that when applied to a vector [v] results in A*v
+   b              -- The right-hand side of the system to solve.
+
+   Optional arguments:
+   x0             -- Initial guess for the solution. The zero vector if absent.
+   tol            -- Maximum residual (|b - Ax| / |b|), below which we consider the system solved
+   restart        -- Number of iterations in the inner loop
+   maxiter        -- Maximum number of *outer loop* iterations. If absent, it's going to be a very large number
+   preconditioner -- Operator [M^-1] that preconditions a given vector [v]. Computes the product (M^-1)*v
+   hegedus        -- Whether to apply the Hegedüs trick (whatever that is)
+
+   Returns:
+   1. The result [x]
+   2. The relative residual |b - Ax| / |b|
+   3. The number of (inner loop) iterations performed
+   4. A flag that indicates the convergence status (0 if converged, -1 if not)
+   5. The list of residuals at every iteration
+   """
 
    niter = 0
 
@@ -93,8 +115,6 @@ def fgmres(A, b, x0 = None, tol = 1e-5, restart = 20, maxiter = None, preconditi
    # Get fast access to underlying BLAS routines
    [lartg] = scipy.linalg.get_lapack_funcs(['lartg'], [x])
    [axpy, dotu, scal] = scipy.linalg.get_blas_funcs(['axpy', 'dotu', 'scal'], [x])
-
-   use_new_orth = True
 
    for outer in range(maxiter):
 
@@ -171,15 +191,18 @@ def fgmres(A, b, x0 = None, tol = 1e-5, restart = 20, maxiter = None, preconditi
          change = numpy.max(numpy.abs(update[indices] / x[indices]))
          if change < 1e-12:
             # No change, halt
-            return x, norm_r, niter, -1, residuals
+            return x, norm_r / norm_b, niter, -1, residuals
 
       # test for convergence
       if norm_r < tol_relative:
-         return x, norm_r, niter, 0, residuals
+         return x, norm_r / norm_b, niter, 0, residuals
 
    # end outer loop
 
-   return x, norm_r / norm_b, niter, 0, residuals
+   flag = 0
+   if norm_r >= tol_relative: flag = -1
+
+   return x, norm_r / norm_b, niter, flag, residuals
 
 def global_norm(vec):
    """Compute vector norm across all PEs"""
