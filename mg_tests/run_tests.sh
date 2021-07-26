@@ -62,17 +62,18 @@ function compute_time_step() {
 }
 
 time_step=7200
-use_precond=0
+use_precond=2
 order=2
-nb_elements=60
+nb_elements=30
 precond_tolerance=1e-1
-max_mg_level=1
+max_mg_level=0
 mg_smoothe_only=1
-num_pre_smoothing=4
-num_post_smoothing=4
-mg_cfl=0.9
+num_pre_smoothing=1
+num_post_smoothing=1
+# mg_cfl=0.9
+mg_cfl=3.0
 dg_to_fv_interp="lagrange"
-linear_solver="mg"
+linear_solver="fgmres"
 
 
 if [ "x${1}" == "x--gen-configs" ]; then

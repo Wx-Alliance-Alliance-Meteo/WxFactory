@@ -17,14 +17,23 @@ from rhs_sw        import rhs_sw
 from definitions import idx_h, idx_hu1, idx_hu2, gravity
 
 def explicit_euler_smoothe(A, b, x, h, num_iter=1):
-   for i in range(num_iter):
+   for _ in range(num_iter):
       res = (b - A(x))
       # print(f'res: {global_norm(res)}')
       x = x + h * res
    return x
 
-def runge_kutta_smoothe(A, b, x, h, num_iter=1):
-   for i in range(num_iter):
+def runge_kutta_stable_smoothe(A, b, x, h, num_iter=1):
+   alpha1 = 0.145
+   alpha2 = 0.395
+   for _ in range(num_iter):
+      s1 = x + alpha1 * h * (b - A(x))
+      s2 = x + alpha2 * h * (b - A(s1))
+      x = x + h * (b - A(s2))
+   return x
+
+def runge_kutta_gef_smoothe(A, b, x, h, num_iter=1):
+   for _ in range(num_iter):
       x1 = x + h * (b - A(x))
       x2 = 0.75 * x + 0.25 * x1 + 0.25 * h * (b - A(x))
       x = 1.0/3.0 * x + 2.0/3.0 * x2 + 2.0/3.0 * h * (b - A(x))
@@ -88,8 +97,8 @@ class MG_params:
          self.rhs_operators[level] = lambda vec, rhs=self.rhs, p=self.params[level], geom=self.geometries[level], op=operators, met=self.metrics[level], topo=topo, ptopo=ptopo: \
             rhs(vec, geom, op, met, topo, ptopo, p.nbsolpts, p.nb_elements_horizontal, p.case_number, False)
 
-         self.smoothers[level] = explicit_euler_smoothe
-         # self.smoothers[level] = runge_kutta_smoothe
+         # self.smoothers[level] = explicit_euler_smoothe
+         self.smoothers[level] = runge_kutta_stable_smoothe
 
          if level > 0:
             self.interpolators[level] = interpolator('fv', order, 'fv', order//2, 'bilinear')
