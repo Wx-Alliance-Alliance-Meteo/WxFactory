@@ -42,11 +42,23 @@ function set_parameters() {
 function compute_time_step() {
     if [ $# -lt 3 ]; then
         echo "Needs 3 arguments: the order, the number of elements, the reference time step"
-        echo "The reference time step is for a problem of 2x20 (order 2, 20 elements)"
+        echo "The reference time step is for a problem of 2x30 (order 2, 30 elements)"
         exit
     fi
 
-    echo $((($3 / ($1 * $2) * 40)))
+    order=$1
+    num_el=$2
+
+    factor=1.00
+    if [ ${order} == 4 ]; then
+        #factor=0.66
+        factor=0.83
+    elif [ ${order} == 8 ]; then
+        #factor=0.38
+        factor=0.69
+    fi
+
+    echo "${3} / ($order * $num_el) * $factor * 60" | bc | sed -e 's/\.[0-9]*//'
 }
 
 time_step=7200
@@ -69,23 +81,38 @@ if [ "x${1}" == "x--gen-configs" ]; then
     orders="2 4 8"
     # orders=2
     # element_counts="30 60 120"
-    element_counts="20 40 80"
-    smoothings="1 3 4"
+    element_counts="30 60 120"
+    smoothings="1 4"
     # smoothings="4"
     mg_levels="0 1 2 3"
     pre_tols="1e-1 1e-7"
-    interps="lagrange l2-norm"
+    #interps="lagrange l2-norm"
+    interps="lagrange"
     for order in ${orders}; do
         for nb_elements in ${element_counts}; do
-            [ $nb_elements -gt 40 ] && [ $order -gt 2 ] && continue
-            [ $nb_elements -gt 20 ] && [ $order -gt 4 ] && continue
+            [ $nb_elements -gt 60 ] && [ $order -gt 2 ] && continue
+            [ $nb_elements -gt 30 ] && [ $order -gt 4 ] && continue
 
             time_step=$(compute_time_step ${order} ${nb_elements} ${ref_time_step})
 
-            use_precond=0
-            set_parameters ${use_precond} ${order} ${nb_elements} ${precond_tolerance} ${max_mg_level} ${mg_smoothe_only} ${num_pre_smoothing} ${num_post_smoothing} ${mg_cfl} ${time_step} ${dg_to_fv_interp} ${linear_solver}
-            cp ${CONFIG_FILE} "${CONFIG_DIR}/config.${use_precond}_${order}_${nb_elements}_${time_step}.ini"
+            echo "Time step: ${time_step}"
 
+            use_precond=0
+            linear_solver="fgmres"
+            set_parameters ${use_precond} ${order} ${nb_elements} ${precond_tolerance} ${max_mg_level} ${mg_smoothe_only} ${num_pre_smoothing} ${num_post_smoothing} ${mg_cfl} ${time_step} ${dg_to_fv_interp} ${linear_solver}
+            cp ${CONFIG_FILE} "${CONFIG_DIR}/config.${use_precond}_${order}_${nb_elements}_${time_step}_${linear_solver}.ini"
+
+            linear_solver="multigrid"
+            for max_mg_level in 0 1; do
+                for sm in 8 25; do
+                    num_pre_smoothing=${sm}
+                    num_post_smoothing=${sm}
+                    set_parameters ${use_precond} ${order} ${nb_elements} ${precond_tolerance} ${max_mg_level} ${mg_smoothe_only} ${num_pre_smoothing} ${num_post_smoothing} ${mg_cfl} ${time_step} ${dg_to_fv_interp} ${linear_solver}
+                    cp ${CONFIG_FILE} "${CONFIG_DIR}/config.${use_precond}_${order}_${nb_elements}_${time_step}_${linear_solver}_${max_mg_level}_${num_pre_smoothing}_${num_post_smoothing}.ini"
+                done
+            done
+
+            linear_solver="fgmres"
             use_precond=1
             for precond_tolerance in ${pre_tols}; do
                 for dg_to_fv_interp in ${interps}; do

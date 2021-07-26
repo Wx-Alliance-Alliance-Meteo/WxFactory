@@ -12,36 +12,42 @@ def read_results(filename):
 
          items = [x for x in short_line.split(' ') if x != '']
 
+         def get_lin_sol(name):
+            if 'fgmres' in name: return 'fgmres'
+            if name in ['mg', 'multigrid']: return 'multigrid'
+            return 'Big ERROR'
+
          def get_precond(num):
-            if   num == 0: return 'None'
-            elif num == 1: return 'Finite volume'
-            elif num == 2: return 'Multigrid'
-            else: return 'Big ERROR'
+            if num == 0: return 'None'
+            if num == 1: return 'Finite volume'
+            if num == 2: return 'Multigrid'
+            return 'Big ERROR'
 
          def get_interp(name):
             if 'l2' in name: return 'l2'
-            elif 'lag' in name: return 'lag'
-            else: return 'Big ERROR'
+            if 'lag' in name: return 'lag'
+            return 'Big ERROR'
 
          try:
             data = {
                'order': int(items[0]),
                'num_elements': int(items[1]),
                'time_step': int(items[2]),
-               'preconditioner': get_precond(int(items[3])),
-               'interp': get_interp(items[4]),
-               'precond_tolerance': float(items[5]),
-               'mg_level': int(items[6]),
-               'mg_smoothe_only': True if int(items[7]) == 1 else False,
-               'num_pre_smoothe': int(items[8]),
-               'num_post_smoothe': int(items[9]),
-               'cfl': float(items[10]),
-               'num_fgmres_it': int(items[12]),
-               'fgmres_time': float(items[13]),
-               'num_precond_it': int(items[14]),
-               'precond_time': float(items[15]),
-               'return_flag': int(items[16]),
-               'residuals': [float(x) for x in items[18:]]
+               'linear_solver': get_lin_sol(items[3]),
+               'preconditioner': get_precond(int(items[4])),
+               'interp': get_interp(items[5]),
+               'precond_tolerance': float(items[6]),
+               'mg_level': int(items[7]),
+               'mg_smoothe_only': True if int(items[8]) == 1 else False,
+               'num_pre_smoothe': int(items[9]),
+               'num_post_smoothe': int(items[10]),
+               'cfl': float(items[11]),
+               'num_fgmres_it': int(items[13]),
+               'fgmres_time': float(items[14]),
+               'num_precond_it': int(items[15]),
+               'precond_time': float(items[16]),
+               'return_flag': int(items[17]),
+               'residuals': [float(x) for x in items[19:]]
                }
             # print(f'Line: {data}')
             results.append(data)
@@ -170,12 +176,13 @@ def plot_residual(result, order, num_elem, filename):
 
 def plot_residual_2(result, order, num_elem, filename):
 
-   MAX_IT = 120
+   MAX_IT = 80
 
    no_precond = [x['residuals'] for x in result
       if x['order'] == order
       and x['num_elements'] == num_elem
-      and x['preconditioner'] == 'None'][0][:MAX_IT]
+      and x['preconditioner'] == 'None'
+      and x['linear_solver'] == 'fgmres']
    fv_ref = [x for x in result
       if x['order'] == order
       and x['num_elements'] == num_elem
@@ -186,6 +193,14 @@ def plot_residual_2(result, order, num_elem, filename):
       and x['num_elements'] == num_elem
       and x['preconditioner'] == 'Finite volume'
       and x['precond_tolerance'] == 1e-1]
+   mg_solver = [x for x in result
+      if x['order'] == order
+      and x['num_elements'] == num_elem
+      and x['preconditioner'] == 'None'
+      and x['linear_solver'] == 'multigrid']
+
+   mg_solver.sort(key=lambda k:k['num_pre_smoothe'])
+   mg_solver.sort(key=lambda k:k['mg_level'])
 
    if order == 4:
       multigrid_results = [x for x in result
@@ -205,24 +220,31 @@ def plot_residual_2(result, order, num_elem, filename):
          and x['num_elements'] == num_elem
          and x['preconditioner'] == 'Multigrid']
 
+   multigrid_results.sort(key=lambda k:k['num_pre_smoothe'])
+   multigrid_results.sort(key=lambda k:k['mg_level'])
 
    mg_linestyles = [None, '--', '-.', ':', None, '--', '-.', ':']
    mg_colors = ['blue', 'green', 'purple', 'teal', 'blue', 'green', 'purple']
 
    fig, ax_res = plt.subplots(1, 1)
-   ax_res.plot(no_precond, label='No precond')
+   if len(no_precond) > 0:
+      ax_res.plot(no_precond[0][:MAX_IT], color='black', label='FGMRES No precond')
 
+   for i, data in enumerate(mg_solver):
+      # ax_res.plot(data['residuals'][:MAX_IT], color='teal', marker='.', markersize=6, markevery=4, linestyle=mg_linestyles[i], label=f'MG solv ({data["mg_level"]} lvl, {data["num_pre_smoothe"]} sm)')
+      color = 'pink' if data['mg_level'] == 0 else 'indigo'
+      ax_res.plot(data['residuals'][:MAX_IT], color=color, linestyle=mg_linestyles[i], label=f'MG solv ({data["mg_level"]} lvl, {data["num_pre_smoothe"]} sm)')
    for i, data in enumerate(fv_ref):
-      ax_res.plot(data['residuals'][:MAX_IT], color='orange', linestyle=mg_linestyles[i], label=f'Ref precond ({data["interp"]})')
+      ax_res.plot(data['residuals'][:MAX_IT], color='orange', linestyle=mg_linestyles[i], label=f'Ref precond')
    for i, data in enumerate(fv_fast):
-      ax_res.plot(data['residuals'][:MAX_IT], color='magenta', linestyle=mg_linestyles[i], label=f'Simple FV precond ({data["interp"]})')
+      ax_res.plot(data['residuals'][:MAX_IT], color='magenta', linestyle=mg_linestyles[i], label=f'Simple FV precond')
 
    for i, data in enumerate(multigrid_results):
       res = data['residuals']
       ax_res.plot(res[:MAX_IT],
                   color=mg_colors[data['mg_level']],
                   linestyle=mg_linestyles[i],
-                  label=f'MG levels={data["mg_level"]}, sm={data["num_pre_smoothe"]}')
+                  label=f'MG prec ({data["mg_level"]} lvl, {data["num_pre_smoothe"]} sm)')
 
    ax_res.set_yscale('log')
    ax_res.grid(True)
@@ -246,12 +268,12 @@ def main(args):
       plot_residual(results, 2, 120, 'residual')
 
    if args.plot_residual2:
-      plot_residual_2(results, 2, 20, 'residual')
-      plot_residual_2(results, 2, 40, 'residual')
-      plot_residual_2(results, 2, 80, 'residual')
-      plot_residual_2(results, 4, 20, 'residual')
-      plot_residual_2(results, 4, 40, 'residual')
-      plot_residual_2(results, 8, 20, 'residual')
+      plot_residual_2(results, 2, 30, 'residual')
+      plot_residual_2(results, 2, 60, 'residual')
+      plot_residual_2(results, 2, 120, 'residual')
+      plot_residual_2(results, 4, 30, 'residual')
+      plot_residual_2(results, 4, 60, 'residual')
+      plot_residual_2(results, 8, 30, 'residual')
 
    # for i, order in enumerate([2, 4, 8]):
       # sizes, it, times = get_plot_data(results, order, 'Finite volume', tol=1e-1)

@@ -216,9 +216,10 @@ class Rat2:
 
          with open('test_result.txt', 'a+') as output_file:
             if not file_exists:
-               output_file.write('# order | num_elements | dt | precond | precond_interp | precond tol | max MG lvl | MG smoothe only | # pre smoothe | # post smoothe | CFL # ::: FGMRES #it | FGMRES time | precond #it | precond time | conv. flag \n')
+               output_file.write('# order | num_elements | dt | linear solver | precond | precond_interp | precond tol | max MG lvl | MG smoothe only | # pre smoothe | # post smoothe | CFL # ::: FGMRES #it | FGMRES time | precond #it | precond time | conv. flag \n')
             if param is not None:
-               output_file.write(f'{param.nbsolpts} {param.nb_elements_horizontal:3d} {int(param.dt):5d} {param.use_preconditioner} {param.dg_to_fv_interp[:8]:8s} {param.precond_tolerance:9.1e} '
+               output_file.write(f'{param.nbsolpts} {param.nb_elements_horizontal:3d} {int(param.dt):5d} {param.linear_solver[:10]:10s} '
+                                 f'{param.use_preconditioner} {param.dg_to_fv_interp[:8]:8s} {param.precond_tolerance:9.1e} '
                                  f'{param.max_mg_level:3d} {param.mg_smoothe_only} '
                                  f'{param.num_pre_smoothing:3d} {param.num_post_smoothing:3d} {param.mg_cfl:6.3f} ::: ')
             else:
@@ -255,7 +256,7 @@ class Rat2:
       if flag == 0:
          print(f'{self.solver_name} converged at iteration {num_iter} to a solution with local error {local_error : .2e}')
       else:
-         print(f'{self.solver_name} stagnation at iteration {num_iter}, returning a solution with local error {local_error: .2e}')
+         print(f'{self.solver_name} stagnation/interruption at iteration {num_iter}, returning a solution with local error {local_error: .2e}')
 
       # Update solution
       return Q + numpy.reshape(phiv, Q.shape) * dt

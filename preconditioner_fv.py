@@ -111,8 +111,8 @@ class FV_preconditioner:
          output_vec, _, num_iter, _, _ = fgmres(
             self.dest_matrix, input_vec, preconditioner=self.preconditioner, tol=self.param.precond_tolerance, maxiter=self.max_iter)
       elif self.precond_type == 2:  # Multigrid preconditioner
-         output_vec, num_iter, mg_time = mg_solve(
-            input_vec, self.dt, self.mg_params, tolerance=self.param.precond_tolerance, max_num_it=1)
+         output_vec, _, num_iter, _, _ = mg_solve(
+            input_vec, self.mg_params, tolerance=self.param.precond_tolerance, max_num_it=1)
 
       self.last_solution = output_vec
 

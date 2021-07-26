@@ -51,7 +51,7 @@ def ortho_1_sync(Q, R, j):
    return Q, R, norm
 
 
-def fgmres(A, b, x0 = None, tol = 1e-5, restart = 20, maxiter = None, preconditioner = None, hegedus = False) -> tuple[bool, float, int, int, list[float]]:
+def fgmres(A, b, x0 = None, tol = 1e-5, restart = 20, maxiter = None, preconditioner = None, hegedus = False):
    """
    Solve the given linear system (Ax = b) for x, using the FGMRES algorithm. 
 

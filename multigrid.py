@@ -233,7 +233,7 @@ def mg_solve(b, mg_params, x0=None, field=None, dt=None, tolerance=1e-7, gamma=1
    norm_b = global_norm(b)
    tol_relative = tolerance * norm_b
 
-   norm_r = -norm_b
+   norm_r = norm_b
 
    # Early return if rhs is zero
    if norm_b < 1e-15:
@@ -244,7 +244,7 @@ def mg_solve(b, mg_params, x0=None, field=None, dt=None, tolerance=1e-7, gamma=1
       if dt is None: dt = 1.0
       mg_params.compute_matrix_operators(field, dt)
 
-   residuals = []
+   residuals = [norm_r / norm_b]
    level     = mg_params.max_level
    A         = mg_params.matrix_operators[level]
    num_it    = 0
@@ -260,7 +260,7 @@ def mg_solve(b, mg_params, x0=None, field=None, dt=None, tolerance=1e-7, gamma=1
          residuals.append(norm_r / norm_b)
          if norm_r < tol_relative:
             return x, norm_r / norm_b, num_it, 0, residuals
-         elif norm_r > 10.0:
+         elif norm_r > 2.0 * norm_b:
             return x, norm_r / norm_b, num_it, -1, residuals
 
    flag = 0
