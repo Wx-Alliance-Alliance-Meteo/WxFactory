@@ -75,6 +75,7 @@ def fgmres(A, b, x0 = None, tol = 1e-5, restart = 20, maxiter = None, preconditi
       if norm_Ax0_2 != 0.:
          ksi_min = global_dotprod(b, Ax0) / norm_Ax0_2
          x = ksi_min * x0
+         Ax0 = A(x)
 
    r          = b - Ax0
    norm_r     = global_norm(r)
