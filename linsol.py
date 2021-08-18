@@ -71,9 +71,9 @@ def fgmres(A, b, x0 = None, tol = 1e-5, restart = 20, maxiter = None, preconditi
 
    # Rescale the initial approximation using the Hegedüs trick
    if hegedus:
-      norm_Ax0_2 = global_dotprod(Ax0)
+      norm_Ax0_2 = global_dotprod(Ax0, Ax0)
       if norm_Ax0_2 != 0.:
-         ksi_min = global_dotprod(b * Ax0) / norm_Ax0_2
+         ksi_min = global_dotprod(b, Ax0) / norm_Ax0_2
          x = ksi_min * x0
 
    r          = b - Ax0
@@ -174,9 +174,9 @@ def global_norm(vec):
    local_sum = vec @ vec
    return math.sqrt( mpi4py.MPI.COMM_WORLD.allreduce(local_sum) )
 
-def global_dotprod(vec):
+def global_dotprod(vec1, vec2):
    """Compute dot product across all PEs"""
-   local_sum = vec @ vec
+   local_sum = vec1 @ vec2
    return mpi4py.MPI.COMM_WORLD.allreduce(local_sum)
 
 def apply_givens(Q, v, k):
