@@ -73,7 +73,7 @@ def fgmres(A, b, x0 = None, tol = 1e-5, restart = 20, maxiter = None, preconditi
    if hegedus:
       norm_Ax0_2 = global_dotprod(Ax0)
       if norm_Ax0_2 != 0.:
-         ksi_min = numpy.sum(b * Ax0) / norm_Ax0_2
+         ksi_min = global_dotprod(b * Ax0) / norm_Ax0_2
          x = ksi_min * x0
 
    r          = b - Ax0
