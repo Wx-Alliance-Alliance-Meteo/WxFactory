@@ -6,9 +6,10 @@ from time        import time
 from matvec        import matvec_fun, matvec_rat
 from kiops         import kiops
 from linsol        import fgmres
-from multigrid     import mg_solve
+from multigrid     import Multigrid
 from phi           import phi_ark
 from timer         import Timer
+from preconditioner_fv import FV_preconditioner
 
 class Epirk4s3a:
    g21 = 1/2
@@ -188,23 +189,33 @@ class Tvdrk3:
       return Q
 
 class Rat2:
-   def __init__(self, rhs, tol, solver = 'fgmres', preconditioner=None, mg_params=None, rank=-1, param=None):
+   def __init__(self, Q, rhs, param, ptopo):
+
+      self.preconditioner = None
+      if param.use_preconditioner > 0:
+         self.preconditioner = FV_preconditioner(param, Q, ptopo, precond_type=param.use_preconditioner)
+
+      # mg_params = None
+      # if param.linear_solver in ['mg', 'multigrid']:
+      #    mg_params = MG_params(param, ptopo)
+
       self.rhs = rhs
-      self.tol = tol
-      self.preconditioner = preconditioner
-      self.mg_params = mg_params
-      self.rank = rank
+      self.tol = param.tolerance
+
+      self.rank = ptopo.rank
       self.use_mg = False
-      if solver == 'fgmres':
+      if param.linear_solver == 'fgmres':
          self.solver_name = 'FGMRES'
          self.max_it = 1200//20 if self.preconditioner is None else 160//20
          self.solve = lambda A, b, x0 : fgmres(A, b, x0=x0, tol=self.tol, preconditioner=self.preconditioner, restart=20, maxiter=self.max_it)
 
-      elif solver in ['mg', 'multigrid']:
+      elif param.linear_solver in ['mg', 'multigrid']:
          self.solver_name = 'Multigrid'
+         param.mg_cfl *= 1.0 / (2 * (2 * param.initial_nbsolpts + 1))
+         self.mg_solver = Multigrid(param, ptopo, discretization='dg')
          self.use_mg = True
-         self.max_it = 80
-         self.solve = lambda A, b, x0 : mg_solve(b, self.mg_params, x0=x0, tolerance=self.tol, max_num_it=self.max_it)
+         self.max_it = 120
+         self.solve = lambda A, b, x0 : self.mg_solver.solve(b, x0=x0, tolerance=self.tol, max_num_it=self.max_it)
 
       if self.rank == 0:
          try:
@@ -232,7 +243,7 @@ class Rat2:
          self.preconditioner.init_time_step(dt, Q)
 
       if self.use_mg:
-         self.mg_params.init_time_step(Q, dt)
+         self.mg_solver.init_time_step(Q, dt)
 
       # Transform to the shifted linear system (I/dt - J/2) x = F/dt
       rhs = self.rhs(Q).flatten() / dt
@@ -254,9 +265,22 @@ class Rat2:
             output_file.write('\n')
 
       if flag == 0:
-         print(f'{self.solver_name} converged at iteration {num_iter} to a solution with local error {local_error : .2e}')
+         print(f'{self.solver_name} converged at iteration {num_iter} in {t1 - t0:4.1f} s to a solution with local error {local_error : .2e}')
       else:
-         print(f'{self.solver_name} stagnation/interruption at iteration {num_iter}, returning a solution with local error {local_error: .2e}')
+         print(f'{self.solver_name} stagnation/interruption at iteration {num_iter} in {t1 - t0:4.1f} s, returning a solution with local error {local_error: .2e}')
+
+      gmres_sol, gmres_res, num_gmres_it, gmres_flag, res = fgmres(matvec_handle, rhs, x0=phiv, tol=self.tol, preconditioner=None, restart=20, maxiter=1200//20)
+      diff = gmres_sol - phiv
+      diff_norm = numpy.linalg.norm(diff) / numpy.linalg.norm(gmres_sol)
+
+      res1 = numpy.linalg.norm(matvec_handle(phiv) - rhs)
+      res2 = numpy.linalg.norm(matvec_handle(gmres_sol) - rhs)
+
+      print(f'Diff norm = {diff_norm}')
+      print(f'error: {local_error:.2e}/{gmres_res:.2e}, flag {flag}/{gmres_flag}, res1/2 {res1:.2e}/{res2:.2e}')
+
+      if num_gmres_it > 1 or gmres_flag != 0 or diff_norm > self.tol:
+         raise ValueError(f'Solver did not give the same result as GMRES! num_gmres_it = {num_gmres_it}, gmres_flag = {gmres_flag}, res = {res}')
 
       # Update solution
       return Q + numpy.reshape(phiv, Q.shape) * dt

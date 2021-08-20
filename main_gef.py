@@ -11,10 +11,7 @@ from definitions     import idx_rho
 from initialize      import initialize_sw, initialize_euler
 from matrices        import DFR_operators
 from metric          import Metric
-from multigrid       import MG_params
 from parallel        import Distributed_World
-#from preconditioner_dg import DG_preconditioner
-from preconditioner_fv import FV_preconditioner
 from program_options import Configuration
 from rhs_euler       import rhs_euler
 from rhs_sw          import rhs_sw
@@ -71,14 +68,7 @@ def main(args) -> int:
    elif param.time_integrator.lower() == 'tvdrk3':
       stepper = Tvdrk3(rhs_handle)
    elif param.time_integrator.lower() == 'rat2':
-      preconditioner = None
-      if param.use_preconditioner > 0:
-         # preconditioner = DG_preconditioner(param, geom, ptopo, mtrx, rhs_sw)
-         preconditioner = FV_preconditioner(param, Q, ptopo, precond_type=param.use_preconditioner)
-      mg_params = None
-      if param.linear_solver in ['mg', 'multigrid']:
-         mg_params = MG_params(param, ptopo)
-      stepper = Rat2(rhs_handle, param.tolerance, solver=param.linear_solver, preconditioner=preconditioner, rank=ptopo.rank, param=param, mg_params=mg_params)
+      stepper = Rat2(Q, rhs_handle, param, ptopo)
    elif  param.time_integrator.lower() == 'epi2/ark' and param.equations == "shallow water": # TODO : Euler
       rhs_explicit = lambda q: rhs_sw_explicit(q, geom, mtrx, metric, topo, ptopo, param.nbsolpts, param.nb_elements_horizontal, param.case_number, param.filter_apply)
 

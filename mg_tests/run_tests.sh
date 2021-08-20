@@ -51,11 +51,11 @@ function compute_time_step() {
 
     factor=1.00
     if [ ${order} == 4 ]; then
-        #factor=0.66
-        factor=0.83
+        factor=0.66
+        # factor=0.83
     elif [ ${order} == 8 ]; then
-        #factor=0.38
-        factor=0.69
+        factor=0.38
+        # factor=0.69
     fi
 
     echo "${3} / ($order * $num_el) * $factor * 60" | bc | sed -e 's/\.[0-9]*//'
@@ -83,7 +83,7 @@ if [ "x${1}" == "x--gen-configs" ]; then
     # orders=2
     # element_counts="30 60 120"
     element_counts="30 60 120"
-    smoothings="1 4"
+    smoothings="1 2 3"
     # smoothings="4"
     mg_levels="0 1 2 3"
     pre_tols="1e-1 1e-7"
@@ -101,24 +101,27 @@ if [ "x${1}" == "x--gen-configs" ]; then
             use_precond=0
             linear_solver="fgmres"
             set_parameters ${use_precond} ${order} ${nb_elements} ${precond_tolerance} ${max_mg_level} ${mg_smoothe_only} ${num_pre_smoothing} ${num_post_smoothing} ${mg_cfl} ${time_step} ${dg_to_fv_interp} ${linear_solver}
-            cp ${CONFIG_FILE} "${CONFIG_DIR}/config.${use_precond}_${order}_${nb_elements}_${time_step}_${linear_solver}.ini"
+            cp ${CONFIG_FILE} "${CONFIG_DIR}/config.a${use_precond}_${order}_${nb_elements}_${time_step}_${linear_solver}.ini"
 
             linear_solver="multigrid"
-            for max_mg_level in 0 1; do
-                for sm in 8 25; do
-                    num_pre_smoothing=${sm}
-                    num_post_smoothing=${sm}
+            max_mg_level=0
+            num_pre_smoothing=1
+            num_post_smoothing=1
+            # for max_mg_level in 0 1; do
+                # for sm in 2 5 10; do
+                    # num_pre_smoothing=${sm}
+                    # num_post_smoothing=${sm}
                     set_parameters ${use_precond} ${order} ${nb_elements} ${precond_tolerance} ${max_mg_level} ${mg_smoothe_only} ${num_pre_smoothing} ${num_post_smoothing} ${mg_cfl} ${time_step} ${dg_to_fv_interp} ${linear_solver}
-                    cp ${CONFIG_FILE} "${CONFIG_DIR}/config.${use_precond}_${order}_${nb_elements}_${time_step}_${linear_solver}_${max_mg_level}_${num_pre_smoothing}_${num_post_smoothing}.ini"
-                done
-            done
+                    cp ${CONFIG_FILE} "${CONFIG_DIR}/config.b${use_precond}_${order}_${nb_elements}_${time_step}_${linear_solver}_${max_mg_level}_${num_pre_smoothing}_${num_post_smoothing}.ini"
+                # done
+            # done
 
             linear_solver="fgmres"
             use_precond=1
             for precond_tolerance in ${pre_tols}; do
                 for dg_to_fv_interp in ${interps}; do
                     set_parameters ${use_precond} ${order} ${nb_elements} ${precond_tolerance} ${max_mg_level} ${mg_smoothe_only} ${num_pre_smoothing} ${num_post_smoothing} ${mg_cfl} ${time_step} ${dg_to_fv_interp} ${linear_solver}
-                    cp ${CONFIG_FILE} "${CONFIG_DIR}/config.${use_precond}_${order}_${nb_elements}_${dg_to_fv_interp:0:3}_${precond_tolerance}_${time_step}.ini"
+                    cp ${CONFIG_FILE} "${CONFIG_DIR}/config.z${use_precond}_${order}_${nb_elements}_${dg_to_fv_interp:0:3}_${precond_tolerance}_${time_step}.ini"
                 done
             done
 
@@ -131,7 +134,7 @@ if [ "x${1}" == "x--gen-configs" ]; then
                     for num_pre_smoothing in ${smoothings}; do
                         num_post_smoothing=${num_pre_smoothing}
                         set_parameters ${use_precond} ${order} ${nb_elements} ${precond_tolerance} ${max_mg_level} ${mg_smoothe_only} ${num_pre_smoothing} ${num_post_smoothing} ${mg_cfl} ${time_step} ${dg_to_fv_interp} ${linear_solver}
-                        cp ${CONFIG_FILE} "${CONFIG_DIR}/config.${use_precond}_${order}_${nb_elements}_${precond_tolerance}_${max_mg_level}_${mg_smoothe_only}_${num_pre_smoothing}_${num_post_smoothing}_${mg_cfl}_${time_step}_${dg_to_fv_interp:0:3}.ini"
+                        cp ${CONFIG_FILE} "${CONFIG_DIR}/config.c${use_precond}_${order}_${nb_elements}_${precond_tolerance}_${max_mg_level}_${mg_smoothe_only}_${num_pre_smoothing}_${num_post_smoothing}_${mg_cfl}_${time_step}_${dg_to_fv_interp:0:3}.ini"
                     done
                 done
             done

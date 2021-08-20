@@ -10,33 +10,23 @@ from linsol          import fgmres
 from matvec          import matvec_rat
 from matrices        import DFR_operators
 from metric          import Metric
-from multigrid       import MG_params, mg_solve, mg
+from multigrid       import Multigrid
 from rhs_sw          import rhs_sw
-
-
-def select_order(origin_order, origin_field):
-   if origin_field == 'dg':
-      return origin_order
-
-   if origin_order % 2 != 0:
-      raise ValueError(f'order {origin_order} is not a multiple of 2, so it\'s going to be hard to precondition.')
-
-   return origin_order // 2
 
 
 class FV_preconditioner:
 
-   def __init__(self, param, sample_field, ptopo, precond_type=1, origin_field='dg', origin_order=None, prefix=''):
+   def __init__(self, param, sample_field, ptopo, precond_type=1, prefix=''):
       self.max_iter = 1000
       self.precond_type = precond_type
 
       if self.precond_type not in [1, 2]:
-         raise ValueError('precond_type can only be 1 or 2')
+         raise ValueError('precond_type can only be 1 (finite volume) or 2 (multigrid FV)')
 
       # print(f'Params:\n{param}')
 
-      self.origin_order = param.nbsolpts if origin_order is None else origin_order
-      self.dest_order = select_order(self.origin_order, origin_field)
+      self.origin_order = param.nbsolpts
+      self.dest_order   = self.origin_order
 
       interp_method = param.dg_to_fv_interp
       ok_interps = ['l2-norm', 'lagrange']
@@ -44,18 +34,15 @@ class FV_preconditioner:
          print(f'ERROR: invalid interpolation method for DG to FV conversion ({interp_method}). Should pick one of {ok_interps}. Choosing "lagrange" as default.')
          interp_method = 'lagrange'
 
-      interpolate_fct = interp_method if origin_field == 'dg' else 'bilinear'
-      self.interpolate = interpolator(origin_field, self.origin_order, 'fv', self.dest_order, interpolate_fct)
+      interpolate_fct = interp_method
+      self.interpolate = interpolator('dg', self.origin_order, 'fv', self.dest_order, interpolate_fct)
 
       print(f'origin order: {self.origin_order}, dest order: {self.dest_order}')
 
       # Create a set of parameters for the FV formulation
       self.param = copy(param)
       self.param.discretization = 'fv'
-      if origin_field == 'dg':
-         self.param.nb_elements_horizontal = self.param.nb_elements_horizontal * self.dest_order
-      else:
-         self.param.nb_elements_horizontal = self.param.nb_elements_horizontal // 2
+      self.param.nb_elements_horizontal = self.param.nb_elements_horizontal * self.dest_order
       self.param.nbsolpts               = 1
 
       if self.param.equations != 'shallow_water':
@@ -81,13 +68,11 @@ class FV_preconditioner:
       self.prefix = prefix
       self.preconditioner = None
 
-      self.mg_params = None
-      self.mg_params = MG_params(self.param, ptopo)
+      self.mg_solver = None
+      if self.precond_type == 2:
+         self.mg_solver = Multigrid(self.param, ptopo, 'fv')
 
       print(f'Origin field shape: {self.origin_field_shape}, dest field shape: {self.dest_field_shape}')
-
-      # if self.dest_order > 3:
-      #    self.preconditioner = FV_preconditioner(self.param, dest_field, ptopo, origin_field='fv', origin_order=self.dest_order, prefix=self.prefix+'  ')
 
       self.total_iter = 0
       self.total_time = 0.0
@@ -111,8 +96,8 @@ class FV_preconditioner:
          output_vec, _, num_iter, _, _ = fgmres(
             self.dest_matrix, input_vec, preconditioner=self.preconditioner, tol=self.param.precond_tolerance, maxiter=self.max_iter)
       elif self.precond_type == 2:  # Multigrid preconditioner
-         output_vec, _, num_iter, _, _ = mg_solve(
-            input_vec, self.mg_params, tolerance=self.param.precond_tolerance, max_num_it=1)
+         output_vec, _, num_iter, _, _ = self.mg_solver.solve(
+            input_vec, tolerance=self.param.precond_tolerance, max_num_it=1)
 
       self.last_solution = output_vec
 
@@ -124,7 +109,7 @@ class FV_preconditioner:
       self.total_time += precond_time
       self.total_iter += num_iter
 
-      print(f'{self.prefix}Preconditioned in {num_iter} iterations and {precond_time:.2f} s')
+      # print(f'{self.prefix}Preconditioned in {num_iter} iterations and {precond_time:.2f} s')
 
       return output_vec
 
@@ -150,8 +135,8 @@ class FV_preconditioner:
       if self.preconditioner:
          self.preconditioner.init_time_step(dt, self.dest_field)
 
-      if self.mg_params:
-         self.mg_params.init_time_step(self.dest_field, dt)
+      if self.mg_solver:
+         self.mg_solver.init_time_step(self.dest_field, dt)
 
    def __call__(self, vec):
       return self.apply(vec)
