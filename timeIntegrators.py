@@ -261,7 +261,7 @@ class Rat2:
             if self.preconditioner is not None:
                precond_it, precond_time = self.preconditioner.total_iter, self.preconditioner.total_time
             output_file.write(f'{precond_it:5d} {precond_time:6.1f} {flag:2d} ')
-            output_file.write(f'- {" ".join(f"{r:.2e}" for r in residuals)} ')
+            output_file.write(f'- {" ".join(f"{r[0]:.2e}/{r[1]:.2e}/{r[2]}" for r in residuals)} ')
             output_file.write('\n')
 
       if flag == 0:

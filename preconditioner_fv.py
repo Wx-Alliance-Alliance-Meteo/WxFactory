@@ -93,10 +93,10 @@ class FV_preconditioner:
       input_vec = numpy.ravel(self.restrict(vec))
      
       if self.precond_type == 1:    # Finite volume preconditioner (reference, or simple FV)
-         output_vec, _, num_iter, _, _ = fgmres(
+         output_vec, _, num_iter, _, residuals = fgmres(
             self.dest_matrix, input_vec, preconditioner=self.preconditioner, tol=self.param.precond_tolerance, maxiter=self.max_iter)
       elif self.precond_type == 2:  # Multigrid preconditioner
-         output_vec, _, num_iter, _, _ = self.mg_solver.solve(
+         output_vec, _, num_iter, _, residuals = self.mg_solver.solve(
             input_vec, tolerance=self.param.precond_tolerance, max_num_it=1)
 
       self.last_solution = output_vec
@@ -108,10 +108,13 @@ class FV_preconditioner:
       precond_time = t1 - t0
       self.total_time += precond_time
       self.total_iter += num_iter
+      
+      work = residuals[-1][2] # Last iteration contains total amount of work up to then
+      # print(f'FV precond, work = {work}, residuals = {residuals[:5]}')
 
       # print(f'{self.prefix}Preconditioned in {num_iter} iterations and {precond_time:.2f} s')
 
-      return output_vec
+      return output_vec, work
 
    def init_time_step(self, dt, field):
       """

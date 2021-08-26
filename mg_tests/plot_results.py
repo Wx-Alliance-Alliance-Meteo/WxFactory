@@ -29,6 +29,8 @@ def read_results(filename):
             return 'Big ERROR'
 
          try:
+            res_data_raw = [d.split('/') for d in items[19:]]
+            res_data = [(float(d[0]), float(d[1]), float(d[2])) for d in res_data_raw]
             data = {
                'order': int(items[0]),
                'num_elements': int(items[1]),
@@ -47,7 +49,9 @@ def read_results(filename):
                'num_precond_it': int(items[15]),
                'precond_time': float(items[16]),
                'return_flag': int(items[17]),
-               'residuals': [float(x) for x in items[19:]]
+               'residuals': np.array([r[0] for r in res_data]),
+               'times': np.array([r[1] for r in res_data]),
+               'work': np.array([r[2] for r in res_data])
                }
             # print(f'Line: {data}')
             results.append(data)
@@ -174,11 +178,8 @@ def plot_residual(result, order, num_elem, filename):
    fig.legend()
    fig.savefig(f'{filename}_{order}x{num_elem}.png')
 
-def plot_residual_2(result, order, num_elem, filename):
-
-   MAX_IT = 80
-
-   no_precond = [x['residuals'] for x in result
+def extract_results(result, order, num_elem):
+   no_precond = [x for x in result
       if x['order'] == order
       and x['num_elements'] == num_elem
       and x['preconditioner'] == 'None'
@@ -223,37 +224,117 @@ def plot_residual_2(result, order, num_elem, filename):
    multigrid_results.sort(key=lambda k:k['num_pre_smoothe'])
    multigrid_results.sort(key=lambda k:k['mg_level'])
 
+   return no_precond, fv_ref, fv_fast, mg_solver, multigrid_results
+
+
+def plot_residual_2(result, order, num_elem, filename):
+
+   MAX_IT = 80
+
+   no_precond, fv_ref, fv_fast, mg_solver, mg_precond = extract_results(result, order, num_elem)
+
    mg_linestyles = [None, '--', '-.', ':', None, '--', '-.', ':']
    mg_colors = ['blue', 'green', 'purple', 'teal', 'blue', 'green', 'purple']
 
    fig, ax_res = plt.subplots(1, 1)
    if len(no_precond) > 0:
-      ax_res.plot(no_precond[0][:MAX_IT], color='black', label='FGMRES No precond')
+      ax_res.plot(no_precond[0]['residuals'][:MAX_IT], color='black', label='FGMRES No precond')
 
    for i, data in enumerate(mg_solver):
       # ax_res.plot(data['residuals'][:MAX_IT], color='teal', marker='.', markersize=6, markevery=4, linestyle=mg_linestyles[i], label=f'MG solv ({data["mg_level"]} lvl, {data["num_pre_smoothe"]} sm)')
       color = 'pink' if data['mg_level'] == 0 else 'indigo'
-      ax_res.plot(data['residuals'][:MAX_IT], color=color, linestyle=mg_linestyles[i], label=f'MG solv ({data["mg_level"]} lvl, {data["num_pre_smoothe"]} sm)')
+      ax_res.plot(data['residuals'][:MAX_IT], color=color, linestyle=mg_linestyles[i%4], label=f'MG solv ({data["mg_level"]} lvl, {data["num_pre_smoothe"]} sm)')
    for i, data in enumerate(fv_ref):
-      ax_res.plot(data['residuals'][:MAX_IT], color='orange', linestyle=mg_linestyles[i], label=f'Ref precond')
+      ax_res.plot(data['residuals'][:MAX_IT], color='orange', linestyle=mg_linestyles[i%4], label=f'Ref precond')
    for i, data in enumerate(fv_fast):
-      ax_res.plot(data['residuals'][:MAX_IT], color='magenta', linestyle=mg_linestyles[i], label=f'Simple FV precond')
+      ax_res.plot(data['residuals'][:MAX_IT], color='magenta', linestyle=mg_linestyles[i%4], label=f'Simple FV precond')
 
-   for i, data in enumerate(multigrid_results):
+   for i, data in enumerate(mg_precond):
       res = data['residuals']
       ax_res.plot(res[:MAX_IT],
                   color=mg_colors[data['mg_level']],
-                  linestyle=mg_linestyles[i],
+                  linestyle=mg_linestyles[i%4],
                   label=f'MG prec ({data["mg_level"]} lvl, {data["num_pre_smoothe"]} sm)')
 
    ax_res.set_yscale('log')
    ax_res.grid(True)
    ax_res.set_xlabel('Iteration #')
    ax_res.set_ylabel('Residual')
+   ax_res.set_ylim([6e-8, 2e0])
 
    fig.suptitle(f'Residual evolution, {order}x{num_elem} elem')
    fig.legend()
    fig.savefig(f'{filename}_{order}x{num_elem}.pdf')
+
+def plot_error_time(result, order, num_elem, filename):
+
+   no_precond, fv_ref, fv_fast, mg_solver, mg_precond = extract_results(result, order, num_elem)
+
+   mg_linestyles = [None, '--', '-.', ':', None, '--', '-.', ':']
+   mg_colors = ['blue', 'green', 'purple', 'teal', 'blue', 'green', 'purple']
+
+   max_time = 0.0
+   max_work = 0.0
+
+   # fig, ax_res = plt.subplots(1, 1)
+   fig, (ax_time, ax_work) = plt.subplots(2, 1)
+   if len(no_precond) > 0:
+      data = no_precond[0]
+      ax_time.plot(1.0 / data['residuals'], data['times'], color='black', label='GMRES')
+      ax_work.plot(1.0 / data['residuals'], data['work'], color='black')
+      max_time = np.max([max_time, data['times'].max()])
+      max_work = np.max([max_work, data['work'].max()])
+
+   max_time *= 2.0
+   max_work *= 1.2
+
+   for i, data in enumerate(mg_solver):
+      # ax_time.plot(data['residuals'][:MAX_IT], color='teal', marker='.', markersize=6, markevery=4, linestyle=mg_linestyles[i], label=f'MG solv ({data["mg_level"]} lvl, {data["num_pre_smoothe"]} sm)')
+      color = 'pink' if data['mg_level'] == 0 else 'indigo'
+      ax_time.plot(1.0 / data['residuals'], data['times'], color=color, linestyle=mg_linestyles[i%4], label=f'MG solv ({data["mg_level"]}l, {data["num_pre_smoothe"]}s)')
+      ax_work.plot(1.0 / data['residuals'], data['work'], color=color, linestyle=mg_linestyles[i%4])
+      # max_time = np.max([max_time, data['times'].max()])
+   for i, data in enumerate(fv_ref):
+      ax_time.plot(1.0 /data['residuals'], data['times'], color='orange', linestyle=mg_linestyles[i%4], label=f'Ref pre')
+      ax_work.plot(1.0 /data['residuals'], data['work'], color='orange')
+      # max_time = np.max([max_time, data['times'].max()])
+   for i, data in enumerate(fv_fast):
+      ax_time.plot(1.0 / data['residuals'], data['times'], color='magenta', linestyle=mg_linestyles[i%4], label=f'Simple FV pre')
+      ax_work.plot(1.0 / data['residuals'], data['work'], color='magenta', linestyle=mg_linestyles[i%4])
+      # max_time = np.max([max_time, data['times'].max()])
+
+   for i, data in enumerate(mg_precond):
+      res = 1.0 / data['residuals']
+      time = data['times']
+      work = data['work']
+      ax_time.plot(res, time,
+                  color=mg_colors[data['mg_level']],
+                  linestyle=mg_linestyles[i%4],
+                  label=f'MG pre ({data["mg_level"]}l, {data["num_pre_smoothe"]}s)')
+      ax_work.plot(res, work,
+                  color=mg_colors[data['mg_level']],
+                  linestyle=mg_linestyles[i%4])
+      # max_time = np.max([max_time, time.max()])
+
+   ax_time.set_xscale('log')
+   # ax_time.set_yscale('log', base=2)
+   ax_time.grid(True)
+   # ax_time.set_xlabel('Accuracy')
+   ax_time.set_ylabel('Time')
+   ax_time.set_ylim([1.0, max_time])
+
+   ax_work.set_xscale('log')
+   # ax_work.set_yscale('log')
+   ax_work.grid(True)
+   ax_work.set_ylim([1.0, max_work])
+   ax_work.set_ylabel('Work (estimate)')
+   ax_work.set_xlabel('Accuracy (1/residual)')
+
+   fig.suptitle(f'Work to reach accuracy, {order}x{num_elem} elem')
+   fig.legend(loc='upper right')
+   fig.savefig(f'{filename}_{order}x{num_elem}.pdf')
+
+   pass
 
 def main(args):
    results = read_results(args.results_file)
@@ -275,6 +356,14 @@ def main(args):
       plot_residual_2(results, 4, 60, 'residual')
       plot_residual_2(results, 8, 30, 'residual')
 
+   if args.error_time:
+      plot_error_time(results, 2, 30, 'error_time')
+      plot_error_time(results, 2, 60, 'error_time')
+      plot_error_time(results, 2, 120, 'error_time')
+      plot_error_time(results, 4, 30, 'error_time')
+      plot_error_time(results, 4, 60, 'error_time')
+      plot_error_time(results, 8, 30, 'error_time')
+
    # for i, order in enumerate([2, 4, 8]):
       # sizes, it, times = get_plot_data(results, order, 'Finite volume', tol=1e-1)
       # ax_it.plot(sizes, it, '*-')
@@ -289,6 +378,7 @@ if __name__ == '__main__':
    parser.add_argument('--plot-iter', action='store_true', help='Plot the iterations and time with respect to various parameters')
    parser.add_argument('--plot-residual', action='store_true', help='Plot residual evolution')
    parser.add_argument('--plot-residual2', action='store_true', help='Plot residual evolution')
+   parser.add_argument('--error-time', action='store_true', help='Plot time needed to reach a certain error (residual) level')
 
    args = parser.parse_args()
 

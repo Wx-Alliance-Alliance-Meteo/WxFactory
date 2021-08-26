@@ -48,10 +48,13 @@ class MultigridLevel:
       
       self.param = p
       self.cfl   = cfl
+      self.work_ratio = (source_order / param.initial_nbsolpts) ** 2
 
       print(
          f'Grid level! nb_elem_horiz = {source_num_elem}, target {target_num_elem},'
-         f' discr = {discretization}, source order = {source_order}, target order = {target_order}, nbsolpts = {p.nbsolpts}')
+         f' discr = {discretization}, source order = {source_order}, target order = {target_order}, nbsolpts = {p.nbsolpts}'
+         f' work ratio = {self.work_ratio}'
+         )
 
       # Initialize problem for this level
       self.geometry = cubed_sphere(p.nb_elements_horizontal, p.nb_elements_vertical, p.nbsolpts, p.λ0, p.ϕ0, p.α0, p.ztop, ptopo, p)
@@ -66,6 +69,7 @@ class MultigridLevel:
          rhs(vec, geom, op, met, topo, ptopo, p.nbsolpts, p.nb_elements_horizontal, p.case_number, False)
 
       self.smoothe = runge_kutta_stable_smoothe
+      self.smoother_work_unit = 3.0
 
       if target_order > 0:
          interp_method     = 'bilinear' if discretization is 'fv' else 'lagrange'
@@ -198,32 +202,39 @@ class Multigrid:
       """
 
       if level < 0: level = self.max_level
+      level_work = 0.0
 
-      A        = self.levels[level].matrix_operator
-      smoothe  = self.levels[level].smoothe
-      restrict = self.levels[level].restrict
-      prolong  = self.levels[level].prolong
-      dt       = numpy.ravel(self.levels[level].pseudo_dt)
+      lvl_param = self.levels[level]
+      A         = lvl_param.matrix_operator
+      smoothe   = lvl_param.smoothe
+      restrict  = lvl_param.restrict
+      prolong   = lvl_param.prolong
+      dt        = numpy.ravel(lvl_param.pseudo_dt)
 
       # Pre smoothing
       x = smoothe(A, b, x0, dt, self.num_pre_smoothing)
+
+      level_work += lvl_param.smoother_work_unit * self.num_pre_smoothing * lvl_param.work_ratio
 
       if level > 0:                                   # Go down a level and solve that
          residual = numpy.ravel(restrict(b - A(x)))   # Compute the (restricted) residual of the current grid level system
          v = numpy.zeros_like(residual)               # A guess of the next solution (0 is pretty good, that's what we're aiming for)
          for i in range(gamma):
-            v = self.iterate(residual, v, level - 1, gamma=gamma)  # MG pass on next lower level
+            v, work = self.iterate(residual, v, level - 1, gamma=gamma)  # MG pass on next lower level
+            level_work += work
          x = x + numpy.ravel(prolong(v))              # Correction
       else:
          # Just directly solve the problem
          # That's no very good, we should not use FGMRES to precondition FGMRES...
          if self.use_solver:
-            x, _, _, _, _ = fgmres(A, b, x0=x, tol=1e-5)
+            x, _, num_iter, _, _ = fgmres(A, b, x0=x, tol=1e-5)
+            level_work += num_iter * lvl_param.work_ratio
       
       # Post smoothing
       x = smoothe(A, b, x, dt, self.num_post_smoothing)
+      level_work += self.num_post_smoothing * lvl_param.smoother_work_unit * lvl_param.work_ratio
 
-      return x
+      return x, level_work
 
    def solve(self, b, x0=None, field=None, dt=None, tolerance=1e-7, gamma=1, max_num_it=100):
       """
@@ -249,6 +260,8 @@ class Multigrid:
       4. Convergence status flag (0 if converge, -1 if not)
       5. List of residuals at every iteration
       """
+      t_start = time()
+      total_work = 0.0
 
       # Initial guess
       x = x0 if x0 is not None else numpy.zeros_like(b)
@@ -260,31 +273,36 @@ class Multigrid:
 
       # Early return if rhs is zero
       if norm_b < 1e-15:
-         return numpy.zeros_like(b), 0.0, 0, 0, [0.0]
+         return numpy.zeros_like(b), 0.0, 0, 0, [(0.0, time() - t_start, 0)]
 
       # Init system for this time step, if not done already
       if field is not None:
          if dt is None: dt = 1.0
          self.init_time_step(field, dt)
 
-      residuals = [norm_r / norm_b]
+      residuals = [(norm_r / norm_b, time() - t_start, 0)]
+
       level     = self.max_level
       A         = self.levels[level].matrix_operator
       num_it    = 0
       for it in range(max_num_it):
-         x = self.iterate(b, x, level, gamma=gamma)
+         x, work = self.iterate(b, x, level, gamma=gamma)
          num_it += 1
+         total_work += work
 
          # Check tolerance exit condition
          if it < max_num_it - 1:
             residual = b - A(x)
+            total_work += 1.0
             norm_r = global_norm(residual)
             # print(f'norm_r = {norm_r:.2e} (rel tol {tol_relative:.2e})')
-            residuals.append(norm_r / norm_b)
+            residuals.append((norm_r / norm_b, time() - t_start, total_work))
             if norm_r < tol_relative:
                return x, norm_r / norm_b, num_it, 0, residuals
             elif norm_r > 2.0 * norm_b:
                return x, norm_r / norm_b, num_it, -1, residuals
+         else:
+            residuals.append((0.0, time() - t_start, total_work))
 
       flag = 0
       if num_it >= max_num_it: flag = -1
