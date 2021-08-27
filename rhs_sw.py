@@ -44,6 +44,52 @@ def rhs_sw(Q, geom, mtrx, metric, topo, ptopo, nbsolpts: int, nb_elements_horiz:
       u1 = Q[idx_u1, :, :]
       u2 = Q[idx_u2, :, :]
 
+   # Offset due to the halo
+   offset = 1
+
+   HH = h + topo.hsurf
+
+   blocking = False
+
+   # Interpolate to the element interface
+   for elem in range(nb_elements_horiz):
+      epais = elem * nbsolpts + numpy.arange(nbsolpts)
+      pos   = elem + offset
+
+      # --- Direction x1
+      h_itf_i[pos, 0, :] = HH[:, epais] @ mtrx.extrap_west
+      h_itf_i[pos, 1, :] = HH[:, epais] @ mtrx.extrap_east
+
+      # --- Direction x2
+      h_itf_j[pos, 0, :] = mtrx.extrap_south @ HH[epais, :]
+      h_itf_j[pos, 1, :] = mtrx.extrap_north @ HH[epais, :]
+
+   # Initiate transfer
+   h_request = ptopo.xchange_scalars(geom, h_itf_i, h_itf_j, blocking=blocking)
+
+   for elem in range(nb_elements_horiz):
+      epais = elem * nbsolpts + numpy.arange(nbsolpts)
+      pos   = elem + offset
+
+      # --- Direction x1
+
+      u1_itf_i[pos, 0, :] = u1[:, epais] @ mtrx.extrap_west
+      u1_itf_i[pos, 1, :] = u1[:, epais] @ mtrx.extrap_east
+
+      u2_itf_i[pos, 0, :] = u2[:, epais] @ mtrx.extrap_west
+      u2_itf_i[pos, 1, :] = u2[:, epais] @ mtrx.extrap_east
+
+      # --- Direction x2
+
+      u1_itf_j[pos, 0, :] = mtrx.extrap_south @ u1[epais, :]
+      u1_itf_j[pos, 1, :] = mtrx.extrap_north @ u1[epais, :]
+
+      u2_itf_j[pos, 0, :] = mtrx.extrap_south @ u2[epais, :]
+      u2_itf_j[pos, 1, :] = mtrx.extrap_north @ u2[epais, :]
+
+   # Initiate transfer
+   u_request = ptopo.xchange_vectors(geom, u1_itf_i, u2_itf_i, u1_itf_j, u2_itf_j, blocking=blocking)
+
    # Compute the fluxes
    flux_Eq0_x1 = h * metric.sqrtG * u1
    flux_Eq0_x2 = h * metric.sqrtG * u2
@@ -54,41 +100,8 @@ def rhs_sw(Q, geom, mtrx, metric, topo, ptopo, nbsolpts: int, nb_elements_horiz:
    flux_Eq2_x1 = metric.sqrtG * ( Q[idx_hu2,:,:] * u1 + 0.5 * gravity * metric.H_contra_21 * hsquared )
    flux_Eq2_x2 = metric.sqrtG * ( Q[idx_hu2,:,:] * u2 + 0.5 * gravity * metric.H_contra_22 * hsquared )
 
-   # Offset due to the halo
-   offset = 1
-
-   HH = h + topo.hsurf
-
-   # Interpolate to the element interface
-   for elem in range(nb_elements_horiz):
-      epais = elem * nbsolpts + numpy.arange(nbsolpts)
-
-      pos = elem + offset
-
-      # --- Direction x1
-
-      h_itf_i[pos, 0, :] = HH[:, epais] @ mtrx.extrap_west
-      h_itf_i[pos, 1, :] = HH[:, epais] @ mtrx.extrap_east
-
-      u1_itf_i[pos, 0, :] = u1[:, epais] @ mtrx.extrap_west
-      u1_itf_i[pos, 1, :] = u1[:, epais] @ mtrx.extrap_east
-
-      u2_itf_i[pos, 0, :] = u2[:, epais] @ mtrx.extrap_west
-      u2_itf_i[pos, 1, :] = u2[:, epais] @ mtrx.extrap_east
-
-      # --- Direction x2
-
-      h_itf_j[pos, 0, :] = mtrx.extrap_south @ HH[epais, :]
-      h_itf_j[pos, 1, :] = mtrx.extrap_north @ HH[epais, :]
-
-      u1_itf_j[pos, 0, :] = mtrx.extrap_south @ u1[epais, :]
-      u1_itf_j[pos, 1, :] = mtrx.extrap_north @ u1[epais, :]
-
-      u2_itf_j[pos, 0, :] = mtrx.extrap_south @ u2[epais, :]
-      u2_itf_j[pos, 1, :] = mtrx.extrap_north @ u2[epais, :]
-
-   ptopo.xchange_scalars(geom, h_itf_i, h_itf_j)
-   ptopo.xchange_vectors(geom, u1_itf_i, u2_itf_i, u1_itf_j, u2_itf_j)
+   h_request.wait()
+   u_request.wait()
 
    # Common AUSM fluxes
    for itf in range(nb_interfaces_horiz):

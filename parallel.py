@@ -194,7 +194,7 @@ class Distributed_World:
       self.get_rows_2d = lambda array, index1, index2: array[index1, index2, :] if array is not None else None
 
 
-   def send_recv_neighbors(self, north_send, south_send, west_send, east_send, flip_dim):
+   def send_recv_neighbors(self, north_send, south_send, west_send, east_send, flip_dim, sync=True):
 
       send_buffer = numpy.empty(((4,) + north_send.shape), dtype=north_send.dtype)
       for do_flip, data, buffer in zip([self.flip_north, self.flip_south, self.flip_west, self.flip_east],
@@ -202,11 +202,15 @@ class Distributed_World:
                                        [send_buffer[0], send_buffer[1], send_buffer[2], send_buffer[3]]):
          buffer[:] = numpy.flip(data, flip_dim) if do_flip else data
 
-      receive_buffer = self.comm_dist_graph.neighbor_alltoall(send_buffer)
-      return receive_buffer[0], receive_buffer[1], receive_buffer[2], receive_buffer[3]
+      # receive_buffer = self.comm_dist_graph.neighbor_alltoall(send_buffer)
+      receive_buffer = numpy.empty_like(send_buffer)
+      request = self.comm_dist_graph.Ineighbor_alltoall(send_buffer, receive_buffer)
+      if sync:
+         request.Wait()
+      return request, receive_buffer[0], receive_buffer[1], receive_buffer[2], receive_buffer[3]
 
 
-   def xchange_scalars(self, geom, field_itf_i, field_itf_j):
+   def xchange_scalars(self, geom, field_itf_i, field_itf_j, blocking=True):
 
       is_3d = field_itf_i.ndim >= 4
       if is_3d:
@@ -226,11 +230,17 @@ class Distributed_World:
       w_recv = get_rows(field_itf_i, 0, 1)
       e_recv = get_rows(field_itf_i, -1, 0)
 
-      n_recv[:], s_recv[:], w_recv[:], e_recv[:] = self.send_recv_neighbors(n_send, s_send, w_send, e_send, flip_dim)
+      request, n_recv_buf, s_recv_buf, w_recv_buf, e_recv_buf = self.send_recv_neighbors(n_send, s_send, w_send, e_send, flip_dim, sync=False)
+      request = ScalarNonBlockingExchangeRequest((n_recv_buf, s_recv_buf, w_recv_buf, e_recv_buf), (n_recv, s_recv, w_recv, e_recv), request)
+
+      if blocking:
+         request.wait()
+
+      return request
 
 
    def xchange_simple_vectors(self, X, Y, u1_n, u2_n, u1_s, u2_s, u1_w, u2_w, u1_e, u2_e, u3_n=None, u3_s=None,
-                              u3_w=None, u3_e=None):
+                              u3_w=None, u3_e=None, sync=True):
       ndim = 2
       if u3_n is not None: ndim = 3
 
@@ -248,7 +258,7 @@ class Distributed_World:
          sendbuf[2, 2, :] = u3_w
          sendbuf[3, 2, :] = u3_e
 
-      return self.send_recv_neighbors(sendbuf[0], sendbuf[1], sendbuf[2], sendbuf[3], flip_dim)
+      return self.send_recv_neighbors(sendbuf[0], sendbuf[1], sendbuf[2], sendbuf[3], flip_dim, sync=sync)
 
 
    def xchange_halo(self, f, halo_size=1):
@@ -257,10 +267,10 @@ class Distributed_World:
 
       f_ext[h:-h, h:-h] = f[:, :]
 
-      f_ext[-1, h:-h], f_ext[0, h:-h], f_ext[h:-h, 0], f_ext[h:-h, -1] = self.send_recv_neighbors(
+      request, f_ext[-1, h:-h], f_ext[0, h:-h], f_ext[h:-h, 0], f_ext[h:-h, -1] = self.send_recv_neighbors(
          f[-1, :], f[0, :], f[:, 0], f[:, -1], 0)
 
-      return f_ext
+      return request, f_ext
 
 
    def xchange_halo_vector(self, geom, f_x1, f_x2, halo_size=1):
@@ -276,7 +286,7 @@ class Distributed_World:
       X = geom.X[0, :]
       Y = geom.Y[:, 0]
 
-      f_n, f_s, f_w, f_e = self.xchange_simple_vectors(
+      request, f_n, f_s, f_w, f_e = self.xchange_simple_vectors(
          X, Y, f_x1[-1, :], f_x2[-1, :], f_x1[0, :], f_x2[0, :], f_x1[:, 0], f_x2[:, 0], f_x1[:, -1], f_x2[:, -1])
 
       f_x1_ext[-1, h:-h] = f_n[0]
@@ -289,10 +299,10 @@ class Distributed_World:
       f_x1_ext[h:-h, -1] = f_e[0]
       f_x2_ext[h:-h, -1] = f_e[1]
 
-      return f_x1_ext, f_x2_ext
+      return request, f_x1_ext, f_x2_ext
 
 
-   def xchange_vectors(self, geom, u1_itf_i, u2_itf_i, u1_itf_j, u2_itf_j, u3_itf_i=None, u3_itf_j=None):
+   def xchange_vectors(self, geom, u1_itf_i, u2_itf_i, u1_itf_j, u2_itf_j, u3_itf_i=None, u3_itf_j=None, blocking=True):
 
       # --- 2D/3D setup
 
@@ -325,26 +335,23 @@ class Distributed_World:
 
       # --- Convert vector coords and transmit them
 
-      n_recv, s_recv, w_recv, e_recv = self.xchange_simple_vectors(
-         X, Y, u1_n, u2_n, u1_s, u2_s, u1_w, u2_w, u1_e, u2_e, u3_n, u3_s, u3_w, u3_e)
+      request, n_recv_buf, s_recv_buf, w_recv_buf, e_recv_buf = self.xchange_simple_vectors(
+         X, Y, u1_n, u2_n, u1_s, u2_s, u1_w, u2_w, u1_e, u2_e, u3_n, u3_s, u3_w, u3_e, sync=blocking)
 
-      # --- Unpack received data
+      u1_n_recv, u2_n_recv, u3_n_recv = (get_rows(u1_itf_j, -1, 0), get_rows(u2_itf_j, -1, 0), get_rows(u3_itf_j, -1, 0))
+      u1_s_recv, u2_s_recv, u3_s_recv = (get_rows(u1_itf_j, 0, 1),  get_rows(u2_itf_j, 0, 1),  get_rows(u3_itf_j, 0, 1))
+      u1_w_recv, u2_w_recv, u3_w_recv = (get_rows(u1_itf_i, 0, 1),  get_rows(u2_itf_i, 0, 1),  get_rows(u3_itf_i, 0, 1))
+      u1_e_recv, u2_e_recv, u3_e_recv = (get_rows(u1_itf_i, -1, 0), get_rows(u2_itf_i, -1, 0), get_rows(u3_itf_i, -1, 0))
 
-      get_rows(u1_itf_j, -1, 0)[:] = n_recv[0]
-      get_rows(u1_itf_j, 0, 1)[:]  = s_recv[0]
-      get_rows(u1_itf_i, 0, 1)[:]  = w_recv[0]
-      get_rows(u1_itf_i, -1, 0)[:] = e_recv[0]
+      request = VectorNonBlockingExchangeRequest( \
+         (n_recv_buf, s_recv_buf, w_recv_buf, e_recv_buf), \
+         ((u1_n_recv, u2_n_recv, u3_n_recv), (u1_s_recv, u2_s_recv, u3_s_recv), (u1_w_recv, u2_w_recv, u3_w_recv), (u1_e_recv, u2_e_recv, u3_e_recv)), \
+         request, is_3d)
 
-      get_rows(u2_itf_j, -1, 0)[:] = n_recv[1]
-      get_rows(u2_itf_j, 0, 1)[:]  = s_recv[1]
-      get_rows(u2_itf_i, 0, 1)[:]  = w_recv[1]
-      get_rows(u2_itf_i, -1, 0)[:] = e_recv[1]
+      if blocking:
+         request.wait()
 
-      if is_3d:
-         get_rows(u3_itf_j, -1, 0)[:] = n_recv[2]
-         get_rows(u3_itf_j, 0, 1)[:]  = s_recv[2]
-         get_rows(u3_itf_i, 0, 1)[:]  = w_recv[2]
-         get_rows(u3_itf_i, -1, 0)[:] = e_recv[2]
+      return request
 
 
    def xchange_covectors(self, geom, u1_itf_i, u2_itf_i, u1_itf_j, u2_itf_j):
@@ -752,3 +759,51 @@ class Distributed_World:
       T22_itf_j[0, 1, :]  = recvbuf_T22[1]
       T22_itf_i[0, 1, :]  = recvbuf_T22[2]
       T22_itf_i[-1, 0, :] = recvbuf_T22[3]
+
+
+class ScalarNonBlockingExchangeRequest():
+   def __init__(self, recv_buffers, outputs, request) -> None:
+      self.recv_buffers = recv_buffers
+      self.outputs      = outputs
+      self.request      = request
+
+      self.is_complete = False
+
+   def wait(self):
+      if not self.is_complete:
+         self.request.Wait()
+         self.outputs[0][:] = self.recv_buffers[0]
+         self.outputs[1][:] = self.recv_buffers[1]
+         self.outputs[2][:] = self.recv_buffers[2]
+         self.outputs[3][:] = self.recv_buffers[3]
+         self.is_complete = True
+
+class VectorNonBlockingExchangeRequest():
+   def __init__(self, recv_buffers, outputs, request, is_3d) -> None:
+      self.recv_buffers = recv_buffers
+      self.outputs      = outputs
+      self.request      = request
+      self.is_3d        = is_3d
+
+      self.is_complete = False
+
+   def wait(self):
+      if not self.is_complete:
+         self.request.Wait()
+         self.outputs[0][0][:] = self.recv_buffers[0][0]
+         self.outputs[1][0][:] = self.recv_buffers[1][0]
+         self.outputs[2][0][:] = self.recv_buffers[2][0]
+         self.outputs[3][0][:] = self.recv_buffers[3][0]
+
+         self.outputs[0][1][:] = self.recv_buffers[0][1]
+         self.outputs[1][1][:] = self.recv_buffers[1][1]
+         self.outputs[2][1][:] = self.recv_buffers[2][1]
+         self.outputs[3][1][:] = self.recv_buffers[3][1]
+
+         if self.is_3d:
+            self.outputs[0][2][:] = self.recv_buffers[0][2]
+            self.outputs[1][2][:] = self.recv_buffers[1][2]
+            self.outputs[2][2][:] = self.recv_buffers[2][2]
+            self.outputs[3][2][:] = self.recv_buffers[3][2]
+
+         self.is_complete = True
