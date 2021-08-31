@@ -23,11 +23,13 @@ def explicit_euler_smoothe(A, b, x, h, num_iter=1):
       x = x + h * res
    return x
 
-def runge_kutta_stable_smoothe(A, b, x, h, num_iter=1):
+def runge_kutta_stable_smoothe(A, b, x, h, num_iter=1, first_zero=False):
    alpha1 = 0.145
    alpha2 = 0.395
    for _ in range(num_iter):
-      s1 = x + alpha1 * h * (b - A(x))
+      first_res = b if first_zero else (b - A(x))
+      first_zero = False
+      s1 = x + alpha1 * h * first_res
       s2 = x + alpha2 * h * (b - A(s1))
       x = x + h * (b - A(s2))
    return x
@@ -190,7 +192,7 @@ class Multigrid:
       for level in reversed(self.levels):
          next_field = level.init_time_step(self.matvec, next_field, dt)
 
-   def iterate(self, b, x0, level=-1, gamma=1):
+   def iterate(self, b, x0, level=-1, gamma=1, in_first_zero=False):
       """
       Do one pass of the multigrid algorithm.
 
@@ -212,15 +214,17 @@ class Multigrid:
       dt        = numpy.ravel(lvl_param.pseudo_dt)
 
       # Pre smoothing
-      x = smoothe(A, b, x0, dt, self.num_pre_smoothing)
+      x = smoothe(A, b, x0, dt, self.num_pre_smoothing, first_zero=in_first_zero)
 
       level_work += lvl_param.smoother_work_unit * self.num_pre_smoothing * lvl_param.work_ratio
 
       if level > 0:                                   # Go down a level and solve that
          residual = numpy.ravel(restrict(b - A(x)))   # Compute the (restricted) residual of the current grid level system
          v = numpy.zeros_like(residual)               # A guess of the next solution (0 is pretty good, that's what we're aiming for)
-         for i in range(gamma):
-            v, work = self.iterate(residual, v, level - 1, gamma=gamma)  # MG pass on next lower level
+         first_zero = True
+         for _ in range(gamma):
+            v, work = self.iterate(residual, v, level - 1, gamma=gamma, in_first_zero=first_zero)  # MG pass on next lower level
+            first_zero = False
             level_work += work
          x = x + numpy.ravel(prolong(v))              # Correction
       else:
@@ -264,7 +268,8 @@ class Multigrid:
       total_work = 0.0
 
       # Initial guess
-      x = x0 if x0 is not None else numpy.zeros_like(b)
+      first_zero = (x0 is None)
+      x = x0 if not first_zero else numpy.zeros_like(b)
 
       norm_b = global_norm(b)
       tol_relative = tolerance * norm_b
@@ -286,7 +291,8 @@ class Multigrid:
       A         = self.levels[level].matrix_operator
       num_it    = 0
       for it in range(max_num_it):
-         x, work = self.iterate(b, x, level, gamma=gamma)
+         x, work = self.iterate(b, x, level, gamma=gamma, in_first_zero=first_zero)
+         first_zero = False
          num_it += 1
          total_work += work
 
