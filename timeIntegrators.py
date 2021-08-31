@@ -214,7 +214,7 @@ class Rat2:
          param.mg_cfl *= 1.0 / (2 * (2 * param.initial_nbsolpts + 1))
          self.mg_solver = Multigrid(param, ptopo, discretization='dg')
          self.use_mg = True
-         self.max_it = 120
+         self.max_it = 500
          self.solve = lambda A, b, x0 : self.mg_solver.solve(b, x0=x0, tolerance=self.tol, max_num_it=self.max_it)
 
       if self.rank == 0:
@@ -280,7 +280,7 @@ class Rat2:
       print(f'error: {local_error:.2e}/{gmres_res:.2e}, flag {flag}/{gmres_flag}, res1/2 {res1:.2e}/{res2:.2e}')
 
       if num_gmres_it > 1 or gmres_flag != 0 or diff_norm > self.tol:
-         raise ValueError(f'Solver did not give the same result as GMRES! num_gmres_it = {num_gmres_it}, gmres_flag = {gmres_flag}, res = {res}')
+         raise ValueError(f'Solver did not give the same result as GMRES! num_gmres_it = {num_gmres_it}, gmres_flag = {gmres_flag}')
 
       # Update solution
       return Q + numpy.reshape(phiv, Q.shape) * dt

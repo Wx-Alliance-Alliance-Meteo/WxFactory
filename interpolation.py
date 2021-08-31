@@ -131,7 +131,7 @@ def interpolator(origin_type: str, origin_order: int, dest_type: str, dest_order
       elem_interp = compute_dg_to_fv_small_projection(origin_order, dest_order, quad_order=3)
       print('Doing L2 norm!')
    elif interp_type == 'bilinear':
-      elem_interp    = numpy.array([get_linear_weights(origin_points, x) for x in dest_points])
+      elem_interp = numpy.array([get_linear_weights(origin_points, x) for x in dest_points])
    else:
       raise ValueError('interp_type not one of available interpolation types')
 

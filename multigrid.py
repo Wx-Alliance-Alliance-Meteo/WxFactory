@@ -45,7 +45,7 @@ class MultigridLevel:
    def __init__(self, param, ptopo, rhs, discretization, source_num_elem, target_num_elem, source_order, target_order, cfl):
       p = copy(param)
       p.nb_elements_horizontal = source_num_elem
-      p.nbsolpts = source_order if discretization is 'dg' else 1
+      p.nbsolpts = source_order if discretization == 'dg' else 1
       p.discretization = discretization
       
       self.param = p
@@ -74,7 +74,7 @@ class MultigridLevel:
       self.smoother_work_unit = 3.0
 
       if target_order > 0:
-         interp_method     = 'bilinear' if discretization is 'fv' else 'lagrange'
+         interp_method     = 'bilinear' if discretization == 'fv' else 'lagrange'
          self.interpolator = interpolator(discretization, source_order, discretization, target_order, interp_method)
          self.restrict     = lambda vec, op=self.interpolator, sh=field.shape: op(vec.reshape(sh))
          restricted_shape  = self.restrict(field).shape
@@ -140,11 +140,11 @@ class MultigridLevel:
 class Multigrid:
 
    def __init__(self, param, ptopo, discretization) -> None:
-      if discretization is 'fv':
+      if discretization == 'fv':
          max_levels = int(math.log2(param.initial_nbsolpts))
          if 2**max_levels != param.initial_nbsolpts:
             raise ValueError('Cannot do h-multigrid stuff if the order of the problem is not a power of 2')
-      elif discretization is 'dg':
+      elif discretization == 'dg':
          max_levels = param.initial_nbsolpts - 1
 
       num_levels = param.max_mg_level
@@ -171,7 +171,7 @@ class Multigrid:
       order    = param.initial_nbsolpts
       num_elem = param.nb_elements_horizontal
 
-      if discretization is 'fv':
+      if discretization == 'fv':
          def next_level(order, num_elem):
             return order // 2, num_elem // 2
       else:
