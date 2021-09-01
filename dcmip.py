@@ -73,36 +73,40 @@ def dcmip_advection_deformation(geom, metric, mtrx, param):
 
    #-----------------------------------------------------------------------
    #    TEMPERATURE IS CONSTANT 300 K
-	#-----------------------------------------------------------------------
+   #-----------------------------------------------------------------------
 
    t = T0
 
-	#-----------------------------------------------------------------------
-	#    RHO (density)
-	#-----------------------------------------------------------------------
+   #-----------------------------------------------------------------------
+   #    RHO (density)
+   #-----------------------------------------------------------------------
 
    rho = p/(Rd*t)
 
 
-	#-----------------------------------------------------------------------
-	#     Initialize theta (potential virtual temperature)
-	#-----------------------------------------------------------------------
+   #-----------------------------------------------------------------------
+   #     Initialize theta (potential virtual temperature)
+   #-----------------------------------------------------------------------
 
    tv = t
    theta = tv * (p0 / p)**(Rd/cpd)
 
-	#-----------------------------------------------------------------------
-	#     initialize tracers
-	#-----------------------------------------------------------------------
+   #-----------------------------------------------------------------------
+   #     initialize tracers
+   #-----------------------------------------------------------------------
 
    # Tracer 1 - Cosine Bells
 
    # To calculate great circle distance
+   sin_tmp = numpy.empty_like(p)
+   cos_tmp = numpy.empty_like(p)
+   sin_tmp2 = numpy.empty_like(p)
+   cos_tmp2 = numpy.empty_like(p)
 
-   sin_tmp  = numpy.sin(geom.lat) * math.sin(phi0)
-   cos_tmp  = numpy.cos(geom.lat) * math.cos(phi0)
-   sin_tmp2 = numpy.sin(geom.lat) * math.sin(phi1)
-   cos_tmp2 = numpy.cos(geom.lat) * math.cos(phi1)
+   sin_tmp[:,:,:] = numpy.sin(geom.lat) * math.sin(phi0)
+   cos_tmp[:,:,:]  = numpy.cos(geom.lat) * math.cos(phi0)
+   sin_tmp2[:,:,:] = numpy.sin(geom.lat) * math.sin(phi1)
+   cos_tmp2[:,:,:] = numpy.cos(geom.lat) * math.cos(phi1)
 
    # great circle distance without 'a'
 
@@ -120,15 +124,27 @@ def dcmip_advection_deformation(geom, metric, mtrx, param):
    # Tracer 3 - Slotted Ellipse
 
    # Make the ellipse
-   q3 = numpy.where(d1 <= RR, 1.0, numpy.where(d2 <= RR, 1.0, 0.1))
+   q3 = numpy.zeros_like(q1)
+   nk, ni, nj = q3.shape
+   for k in range(nk):
+      for i in range(ni):
+         for j in range(nj):
+            # Make the ellipse
+            if d1[k,i,j] <= RR:
+                q3[k,i,j] = 1.0
+            elif d2[k,i,j] <= RR:
+                q3[k,i,j] = 1.0
+            else:
+                q3[k,i,j] = 0.1
 
-   # Put in the slot
-   q3 = numpy.where(numpy.logical_and(geom.height > z0, abs(geom.lat) < 0.125), 0.1, q3)
+            # Put in the slot
+            if geom.height[k,i,j] > z0 and abs(geom.lat[i,j]) < 0.125:
+                q3[k,i,j] = 0.1
 
    # Tracer 4: q4 is chosen so that, in combination with the other three tracer
    #           fields with weight (3/10), the sum is equal to one
 
-   q4 = 1.0 - 0.30 * (q1 + q2 + q3)
+   q4 = 1.0 - 0.3 * (q1 + q2 + q3)
 
    return rho, u1_contra, u2_contra, u3_contra, theta, q1, q2, q3, q4
 

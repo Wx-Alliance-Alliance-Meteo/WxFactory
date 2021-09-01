@@ -29,7 +29,9 @@ def output_init(geom, param):
       grid_data = ('npe', 'Xdim', 'Ydim')
    elif param.equations == "Euler":
       nk, nj, ni = geom.nk, geom.nj, geom.ni
-      grid_data = ('npe', 'Xdim', 'Ydim', 'Zdim')
+      grid_data = ('npe', 'Zdim', 'Xdim', 'Ydim')
+
+   grid_data2D = ('npe', 'Xdim', 'Ydim')
 
    ncfile.createDimension('time', None) # unlimited
    ncfile.createDimension('npe', mpi4py.MPI.COMM_WORLD.Get_size())
@@ -69,11 +71,11 @@ def output_init(geom, param):
       zzz.units = 'm'
 
    # create variable array
-   lat = ncfile.createVariable('lats', numpy.float64, grid_data)
+   lat = ncfile.createVariable('lats', numpy.float64, grid_data2D)
    lat.long_name = 'latitude'
    lat.units = 'degrees_north'
 
-   lon = ncfile.createVariable('lons', numpy.dtype('double').char, grid_data)
+   lon = ncfile.createVariable('lons', numpy.dtype('double').char, grid_data2D)
    lon.long_name = 'longitude'
    lon.units = 'degrees_east'
 
@@ -247,10 +249,10 @@ def output_netcdf(Q, geom, metric, mtrx, topo, step, param):
       ncfile['theta'][idx, rank, :,:,:] = Q[idx_rho_theta, :,:,:] / rho
 
       if param.case_number == 11:
-         ncfile['q1'][idx, rank, :,:,:] = Q[5, :,:,:]
-         ncfile['q2'][idx, rank, :,:,:] = Q[6, :,:,:]
-         ncfile['q3'][idx, rank, :,:,:] = Q[7, :,:,:]
-         ncfile['q4'][idx, rank, :,:,:] = Q[8, :,:,:]
+         ncfile['q1'][idx, rank, :,:,:] = Q[5, :,:,:] / rho
+         ncfile['q2'][idx, rank, :,:,:] = Q[6, :,:,:] / rho
+         ncfile['q3'][idx, rank, :,:,:] = Q[7, :,:,:] / rho
+         ncfile['q4'][idx, rank, :,:,:] = Q[8, :,:,:] / rho
 
 def output_finalize():
    """ Finalise the output netCDF4 file."""

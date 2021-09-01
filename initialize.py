@@ -49,7 +49,7 @@ def initialize_euler(geom, metric, mtrx, param):
    
    if param.case_number == 11:
       nb_equations = 9
-      rho, u1_contra, u2_contra, u3_contra, potential_temperature, q1, q2, q3, q4 =dcmip_advection_deformation(geom, metric, mtrx, param)
+      rho, u1_contra, u2_contra, u3_contra, potential_temperature, q1, q2, q3, q4 = dcmip_advection_deformation(geom, metric, mtrx, param)
    elif param.case_number == 20:
       dcmip_mountain(geom, metric, mtrx, param)
    elif param.case_number == 31:
