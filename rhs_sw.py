@@ -11,27 +11,27 @@ def rhs_sw(Q, geom, mtrx, metric, topo, ptopo, nbsolpts: int, nb_elements_horiz:
 
    nb_interfaces_horiz = nb_elements_horiz + 1
 
-   df1_dx1 = numpy.zeros_like(Q, dtype=type_vec)
-   df2_dx2 = numpy.zeros_like(Q, dtype=type_vec)
-   forcing = numpy.zeros_like(Q, dtype=type_vec)
-   rhs = numpy.zeros_like(Q, dtype=type_vec)
+   df1_dx1 = numpy.empty_like(Q, dtype=type_vec)
+   df2_dx2 = numpy.empty_like(Q, dtype=type_vec)
+   forcing = numpy.empty_like(Q, dtype=type_vec)
+   rhs = numpy.empty_like(Q, dtype=type_vec)
 
-   flux_Eq0_itf_j = numpy.zeros((nb_elements_horiz+2, 2, nbsolpts*nb_elements_horiz), dtype=type_vec)
-   flux_Eq1_itf_j = numpy.zeros((nb_elements_horiz+2, 2, nbsolpts*nb_elements_horiz), dtype=type_vec)
-   flux_Eq2_itf_j = numpy.zeros((nb_elements_horiz+2, 2, nbsolpts*nb_elements_horiz), dtype=type_vec)
-   h_itf_j        = numpy.zeros((nb_elements_horiz+2, 2, nbsolpts*nb_elements_horiz), dtype=type_vec)
-   u1_itf_j       = numpy.zeros((nb_elements_horiz+2, 2, nbsolpts*nb_elements_horiz), dtype=type_vec)
-   u2_itf_j       = numpy.zeros((nb_elements_horiz+2, 2, nbsolpts*nb_elements_horiz), dtype=type_vec)
+   flux_Eq0_itf_j = numpy.empty((nb_elements_horiz+2, 2, nbsolpts*nb_elements_horiz), dtype=type_vec)
+   flux_Eq1_itf_j = numpy.empty((nb_elements_horiz+2, 2, nbsolpts*nb_elements_horiz), dtype=type_vec)
+   flux_Eq2_itf_j = numpy.empty((nb_elements_horiz+2, 2, nbsolpts*nb_elements_horiz), dtype=type_vec)
+   h_itf_j        = numpy.empty((nb_elements_horiz+2, 2, nbsolpts*nb_elements_horiz), dtype=type_vec)
+   u1_itf_j       = numpy.empty((nb_elements_horiz+2, 2, nbsolpts*nb_elements_horiz), dtype=type_vec)
+   u2_itf_j       = numpy.empty((nb_elements_horiz+2, 2, nbsolpts*nb_elements_horiz), dtype=type_vec)
 
-   flux_Eq0_itf_i = numpy.zeros((nb_elements_horiz+2, nbsolpts*nb_elements_horiz, 2), dtype=type_vec)
-   flux_Eq1_itf_i = numpy.zeros((nb_elements_horiz+2, nbsolpts*nb_elements_horiz, 2), dtype=type_vec)
-   flux_Eq2_itf_i = numpy.zeros((nb_elements_horiz+2, nbsolpts*nb_elements_horiz, 2), dtype=type_vec)
-   h_itf_i        = numpy.zeros((nb_elements_horiz+2, 2, nbsolpts*nb_elements_horiz), dtype=type_vec)
-   u1_itf_i       = numpy.zeros((nb_elements_horiz+2, 2, nbsolpts*nb_elements_horiz), dtype=type_vec)
-   u2_itf_i       = numpy.zeros((nb_elements_horiz+2, 2, nbsolpts*nb_elements_horiz), dtype=type_vec)
+   flux_Eq0_itf_i = numpy.empty((nb_elements_horiz+2, nbsolpts*nb_elements_horiz, 2), dtype=type_vec)
+   flux_Eq1_itf_i = numpy.empty((nb_elements_horiz+2, nbsolpts*nb_elements_horiz, 2), dtype=type_vec)
+   flux_Eq2_itf_i = numpy.empty((nb_elements_horiz+2, nbsolpts*nb_elements_horiz, 2), dtype=type_vec)
+   h_itf_i        = numpy.empty((nb_elements_horiz+2, 2, nbsolpts*nb_elements_horiz), dtype=type_vec)
+   u1_itf_i       = numpy.empty((nb_elements_horiz+2, 2, nbsolpts*nb_elements_horiz), dtype=type_vec)
+   u2_itf_i       = numpy.empty((nb_elements_horiz+2, 2, nbsolpts*nb_elements_horiz), dtype=type_vec)
 
-   flux_P         = numpy.zeros(nbsolpts*nb_elements_horiz, dtype=type_vec)
-   flux_M         = numpy.zeros(nbsolpts*nb_elements_horiz, dtype=type_vec)
+   flux_P         = numpy.empty(nbsolpts*nb_elements_horiz, dtype=type_vec)
+   flux_M         = numpy.empty(nbsolpts*nb_elements_horiz, dtype=type_vec)
 
    # Unpack dynamical variables
    h = Q[idx_h, :, :]
