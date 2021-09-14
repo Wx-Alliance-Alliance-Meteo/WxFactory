@@ -60,19 +60,6 @@ def rhs_sw(Q, geom, mtrx, metric, topo, ptopo, nbsolpts: int, nb_elements_horiz:
       h_itf_i[pos, 0, :] = HH[:, epais] @ mtrx.extrap_west
       h_itf_i[pos, 1, :] = HH[:, epais] @ mtrx.extrap_east
 
-      # --- Direction x2
-      h_itf_j[pos, 0, :] = mtrx.extrap_south @ HH[epais, :]
-      h_itf_j[pos, 1, :] = mtrx.extrap_north @ HH[epais, :]
-
-   # Initiate transfer
-   h_request = ptopo.xchange_scalars(geom, h_itf_i, h_itf_j, blocking=blocking)
-
-   for elem in range(nb_elements_horiz):
-      epais = elem * nbsolpts + numpy.arange(nbsolpts)
-      pos   = elem + offset
-
-      # --- Direction x1
-
       u1_itf_i[pos, 0, :] = u1[:, epais] @ mtrx.extrap_west
       u1_itf_i[pos, 1, :] = u1[:, epais] @ mtrx.extrap_east
 
@@ -80,6 +67,8 @@ def rhs_sw(Q, geom, mtrx, metric, topo, ptopo, nbsolpts: int, nb_elements_horiz:
       u2_itf_i[pos, 1, :] = u2[:, epais] @ mtrx.extrap_east
 
       # --- Direction x2
+      h_itf_j[pos, 0, :] = mtrx.extrap_south @ HH[epais, :]
+      h_itf_j[pos, 1, :] = mtrx.extrap_north @ HH[epais, :]
 
       u1_itf_j[pos, 0, :] = mtrx.extrap_south @ u1[epais, :]
       u1_itf_j[pos, 1, :] = mtrx.extrap_north @ u1[epais, :]
@@ -87,8 +76,10 @@ def rhs_sw(Q, geom, mtrx, metric, topo, ptopo, nbsolpts: int, nb_elements_horiz:
       u2_itf_j[pos, 0, :] = mtrx.extrap_south @ u2[epais, :]
       u2_itf_j[pos, 1, :] = mtrx.extrap_north @ u2[epais, :]
 
-   # Initiate transfer
-   u_request = ptopo.xchange_vectors(geom, u1_itf_i, u2_itf_i, u1_itf_j, u2_itf_j, blocking=blocking)
+   # Initiate transfers
+   # h_request = ptopo.xchange_scalars(geom, h_itf_i, h_itf_j, blocking=blocking)
+   # u_request = ptopo.xchange_vectors(geom, u1_itf_i, u2_itf_i, u1_itf_j, u2_itf_j, blocking=blocking)
+   all_request = ptopo.xchange_sw_interfaces(geom, h_itf_i, h_itf_j, u1_itf_i, u2_itf_i, u1_itf_j, u2_itf_j, blocking=blocking)
 
    # Compute the fluxes
    flux_Eq0_x1 = h * metric.sqrtG * u1
@@ -114,8 +105,10 @@ def rhs_sw(Q, geom, mtrx, metric, topo, ptopo, nbsolpts: int, nb_elements_horiz:
       df2_dx2[idx_hu1,epais,:] = mtrx.diff_solpt @ flux_Eq1_x2[epais,:]
       df2_dx2[idx_hu2,epais,:] = mtrx.diff_solpt @ flux_Eq2_x2[epais,:]
 
-   h_request.wait()
-   u_request.wait()
+   # Finish transfers
+   # h_request.wait()
+   # u_request.wait()
+   all_request.wait()
 
    # Common AUSM fluxes
    for itf in range(nb_interfaces_horiz):

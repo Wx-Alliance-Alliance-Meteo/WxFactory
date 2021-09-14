@@ -302,6 +302,52 @@ class Distributed_World:
       return request, f_x1_ext, f_x2_ext
 
 
+   def xchange_sw_interfaces(self, geom, h_i, h_j, u1_i, u2_i, u1_j, u2_j, blocking=True):
+      get_rows = self.get_rows_2d
+      X = geom.X[0, :]
+      Y = geom.Y[:, 0]
+      flip_dim = 0
+
+      # Get the right origin vectors
+      h_n, u1_n, u2_n = (get_rows(h_j, -2, 1), get_rows(u1_j, -2, 1), get_rows(u2_j, -2, 1))
+      h_s, u1_s, u2_s = (get_rows(h_j,  1, 0), get_rows(u1_j,  1, 0), get_rows(u2_j,  1, 0))
+      h_w, u1_w, u2_w = (get_rows(h_i,  1, 0), get_rows(u1_i,  1, 0), get_rows(u2_i,  1, 0))
+      h_e, u1_e, u2_e = (get_rows(h_i, -2, 1), get_rows(u1_i, -2, 1), get_rows(u2_i, -2, 1))
+
+      send_buffer    = numpy.empty((4, 3) + h_n.shape, dtype=h_n.dtype)
+      receive_buffer = numpy.empty_like(send_buffer)
+
+      # Flip data (if needed), convert u vectors to neighbor coordinate system, and put all that into send buffer
+      for do_flip, convert, positions, h, (u1, u2), buffer in zip(
+            [self.flip_north, self.flip_south, self.flip_west, self.flip_east],
+            [self.convert_contra_north, self.convert_contra_south, self.convert_contra_west, self.convert_contra_east],
+            [X, X, Y, Y],
+            [h_n, h_s, h_w, h_e], [(u1_n, u2_n), (u1_s, u2_s), (u1_w, u2_w), (u1_e, u2_e)],
+            [send_buffer[0], send_buffer[1], send_buffer[2], send_buffer[3]]):
+         buffer[0, :] = numpy.flip(h) if do_flip else h
+         tmp1, tmp2 = convert(u1, u2, positions)
+         buffer[1, :] = numpy.flip(tmp1, flip_dim) if do_flip else tmp1
+         buffer[2, :] = numpy.flip(tmp2, flip_dim) if do_flip else tmp2
+
+      # Initiate data transfer
+      mpi_request = self.comm_dist_graph.Ineighbor_alltoall(send_buffer, receive_buffer)
+
+      # Destination vectors
+      h_n_dest, u1_n_dest, u2_n_dest = (get_rows(h_j, -1, 0), get_rows(u1_j, -1, 0), get_rows(u2_j, -1, 0))
+      h_s_dest, u1_s_dest, u2_s_dest = (get_rows(h_j,  0, 1), get_rows(u1_j,  0, 1), get_rows(u2_j,  0, 1))
+      h_w_dest, u1_w_dest, u2_w_dest = (get_rows(h_i,  0, 1), get_rows(u1_i,  0, 1), get_rows(u2_i,  0, 1))
+      h_e_dest, u1_e_dest, u2_e_dest = (get_rows(h_i, -1, 0), get_rows(u1_i, -1, 0), get_rows(u2_i, -1, 0))
+      request = ShallowWaterExchangeRequest(
+         receive_buffer,
+         ((h_n_dest, u1_n_dest, u2_n_dest), (h_s_dest, u1_s_dest, u2_s_dest),
+          (h_w_dest, u1_w_dest, u2_w_dest), (h_e_dest, u1_e_dest, u2_e_dest)),
+         mpi_request)
+
+      if blocking:
+         request.wait()
+
+      return request
+
    def xchange_vectors(self, geom, u1_itf_i, u2_itf_i, u1_itf_j, u2_itf_j, u3_itf_i=None, u3_itf_j=None, blocking=True):
 
       # --- 2D/3D setup
@@ -336,7 +382,7 @@ class Distributed_World:
       # --- Convert vector coords and transmit them
 
       request, n_recv_buf, s_recv_buf, w_recv_buf, e_recv_buf = self.xchange_simple_vectors(
-         X, Y, u1_n, u2_n, u1_s, u2_s, u1_w, u2_w, u1_e, u2_e, u3_n, u3_s, u3_w, u3_e, sync=blocking)
+         X, Y, u1_n, u2_n, u1_s, u2_s, u1_w, u2_w, u1_e, u2_e, u3_n, u3_s, u3_w, u3_e, sync=False)
 
       u1_n_recv, u2_n_recv, u3_n_recv = (get_rows(u1_itf_j, -1, 0), get_rows(u2_itf_j, -1, 0), get_rows(u3_itf_j, -1, 0))
       u1_s_recv, u2_s_recv, u3_s_recv = (get_rows(u1_itf_j, 0, 1),  get_rows(u2_itf_j, 0, 1),  get_rows(u3_itf_j, 0, 1))
@@ -806,4 +852,19 @@ class VectorNonBlockingExchangeRequest():
             self.outputs[2][2][:] = self.recv_buffers[2][2]
             self.outputs[3][2][:] = self.recv_buffers[3][2]
 
+         self.is_complete = True
+
+class ShallowWaterExchangeRequest():
+   def __init__(self, recv_buffers, outputs, request) -> None:
+      self.recv_buffers = recv_buffers
+      self.outputs = outputs
+      self.request = request
+      self.is_complete = False
+
+   def wait(self):
+      if not self.is_complete:
+         self.request.Wait()
+         for i in range(4):
+            for j in range(3):
+               self.outputs[i][j][:] = self.recv_buffers[i, j]
          self.is_complete = True
