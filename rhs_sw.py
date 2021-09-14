@@ -14,7 +14,7 @@ def rhs_sw(Q, geom, mtrx, metric, topo, ptopo, nbsolpts: int, nb_elements_horiz:
    df1_dx1 = numpy.empty_like(Q, dtype=type_vec)
    df2_dx2 = numpy.empty_like(Q, dtype=type_vec)
    forcing = numpy.empty_like(Q, dtype=type_vec)
-   rhs = numpy.empty_like(Q, dtype=type_vec)
+   rhs     = numpy.empty_like(Q, dtype=type_vec)
 
    flux_Eq0_itf_j = numpy.empty((nb_elements_horiz+2, 2, nbsolpts*nb_elements_horiz), dtype=type_vec)
    flux_Eq1_itf_j = numpy.empty((nb_elements_horiz+2, 2, nbsolpts*nb_elements_horiz), dtype=type_vec)
@@ -99,6 +99,20 @@ def rhs_sw(Q, geom, mtrx, metric, topo, ptopo, nbsolpts: int, nb_elements_horiz:
 
    flux_Eq2_x1 = metric.sqrtG * ( Q[idx_hu2,:,:] * u1 + 0.5 * gravity * metric.H_contra_21 * hsquared )
    flux_Eq2_x2 = metric.sqrtG * ( Q[idx_hu2,:,:] * u2 + 0.5 * gravity * metric.H_contra_22 * hsquared )
+
+   # Compute the derivatives (without corrections, these will be added later)
+   for elem in range(nb_elements_horiz):
+      epais = elem * nbsolpts + numpy.arange(nbsolpts)
+
+      # --- Direction x1
+      df1_dx1[idx_h][:,epais]   = flux_Eq0_x1[:,epais] @ mtrx.diff_solpt_tr
+      df1_dx1[idx_hu1][:,epais] = flux_Eq1_x1[:,epais] @ mtrx.diff_solpt_tr 
+      df1_dx1[idx_hu2][:,epais] = flux_Eq2_x1[:,epais] @ mtrx.diff_solpt_tr
+
+      # --- Direction x2
+      df2_dx2[idx_h,epais,:]   = mtrx.diff_solpt @ flux_Eq0_x2[epais,:]
+      df2_dx2[idx_hu1,epais,:] = mtrx.diff_solpt @ flux_Eq1_x2[epais,:]
+      df2_dx2[idx_hu2,epais,:] = mtrx.diff_solpt @ flux_Eq2_x2[epais,:]
 
    h_request.wait()
    u_request.wait()
@@ -271,15 +285,15 @@ def rhs_sw(Q, geom, mtrx, metric, topo, ptopo, nbsolpts: int, nb_elements_horiz:
 
       # --- Direction x1
 
-      df1_dx1[idx_h][:,epais]   = flux_Eq0_x1[:,epais] @ mtrx.diff_solpt_tr + flux_Eq0_itf_i[elem+offset,:,:] @ mtrx.correction_tr
-      df1_dx1[idx_hu1][:,epais] = flux_Eq1_x1[:,epais] @ mtrx.diff_solpt_tr + flux_Eq1_itf_i[elem+offset,:,:] @ mtrx.correction_tr
-      df1_dx1[idx_hu2][:,epais] = flux_Eq2_x1[:,epais] @ mtrx.diff_solpt_tr + flux_Eq2_itf_i[elem+offset,:,:] @ mtrx.correction_tr
+      df1_dx1[idx_h][:,epais]   += flux_Eq0_itf_i[elem+offset,:,:] @ mtrx.correction_tr
+      df1_dx1[idx_hu1][:,epais] += flux_Eq1_itf_i[elem+offset,:,:] @ mtrx.correction_tr
+      df1_dx1[idx_hu2][:,epais] += flux_Eq2_itf_i[elem+offset,:,:] @ mtrx.correction_tr
 
       # --- Direction x2
 
-      df2_dx2[idx_h,epais,:]   = mtrx.diff_solpt @ flux_Eq0_x2[epais,:] + mtrx.correction @ flux_Eq0_itf_j[elem+offset,:,:]
-      df2_dx2[idx_hu1,epais,:] = mtrx.diff_solpt @ flux_Eq1_x2[epais,:] + mtrx.correction @ flux_Eq1_itf_j[elem+offset,:,:]
-      df2_dx2[idx_hu2,epais,:] = mtrx.diff_solpt @ flux_Eq2_x2[epais,:] + mtrx.correction @ flux_Eq2_itf_j[elem+offset,:,:]
+      df2_dx2[idx_h,epais,:]   += mtrx.correction @ flux_Eq0_itf_j[elem+offset,:,:]
+      df2_dx2[idx_hu1,epais,:] += mtrx.correction @ flux_Eq1_itf_j[elem+offset,:,:]
+      df2_dx2[idx_hu2,epais,:] += mtrx.correction @ flux_Eq2_itf_j[elem+offset,:,:]
 
    # Add coriolis, metric and terms due to varying bottom topography
    forcing[idx_h,:,:] = 0.0
