@@ -55,6 +55,11 @@ conda environment):
 conda install mayavi matplotlib cartopy
 ```
 
+To visualize profiles from python applications, install `snakeviz`:
+```
+conda install snakeviz
+```
+
 ## XC50 clusters
 Most necessary python modules are already available in an environment module. 
 `netCDF4` is missing, so don't try to write the output without installing it.
@@ -94,3 +99,16 @@ The allowed number of PEs is of the form $6 n^2$, for $n \ge 0$.
 
 Here is a sample command to run the model:
 `mpirun -merge-stderr-to-stdout -tag-output -n 6 python3 ./main_gef.py config/case6.ini`
+
+
+## Profiling GEF
+
+You can generate an execution profile when running GEF by adding the `--profile` flag to the main command. For example:
+```
+mpirun -n 6 python3 ./main_gef.py --profile config/case6.ini
+```
+
+This will generate a set of `profile_####.out` files, one for each launched process, that can be viewed with `snakeviz`. _You need to be able to open a browser window from the terminal to use this command_:
+```
+snakeviz ./profile_0000.out
+```
