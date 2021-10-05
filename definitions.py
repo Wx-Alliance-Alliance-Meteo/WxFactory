@@ -23,8 +23,8 @@ idx_u1 = 1
 idx_u2 = 2
 
 # Indices for the Euler model variables
-idx_rho_u1 = 0
-idx_rho_u2 = 1
-idx_rho_u3 = 2
-idx_rho    = 3
+idx_rho       = 0
+idx_rho_u1    = 1
+idx_rho_u2    = 2
+idx_rho_w     = 3
 idx_rho_theta = 4

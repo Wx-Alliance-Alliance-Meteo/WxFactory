@@ -43,9 +43,8 @@ def dcmip_T11_update_winds(geom, metric, mtrx, param, time=0):
    # Contravariant components
 
    u1_contra, u2_contra = wind2contra(u, v, geom)
-   u3_contra = w
 
-   return u1_contra, u2_contra, u3_contra
+   return u1_contra, u2_contra, w
 
 def dcmip_advection_deformation(geom, metric, mtrx, param):
    """ Test 11 - Deformational Advection Test """
@@ -69,7 +68,7 @@ def dcmip_advection_deformation(geom, metric, mtrx, param):
    #-----------------------------------------------------------------------
    #    WINDS
    #-----------------------------------------------------------------------
-   u1_contra, u2_contra, u3_contra = dcmip_T11_update_winds(geom, metric, mtrx, param, time=0)
+   u1_contra, u2_contra, w = dcmip_T11_update_winds(geom, metric, mtrx, param, time=0)
 
    #-----------------------------------------------------------------------
    #    TEMPERATURE IS CONSTANT 300 K
@@ -146,7 +145,7 @@ def dcmip_advection_deformation(geom, metric, mtrx, param):
 
    q4 = 1.0 - 0.3 * (q1 + q2 + q3)
 
-   return rho, u1_contra, u2_contra, u3_contra, theta, q1, q2, q3, q4
+   return rho, u1_contra, u2_contra, w, theta, q1, q2, q3, q4
 
 def dcmip_mountain(geom, metric, mtrx, param):
 
@@ -234,7 +233,7 @@ def dcmip_gravity_wave(geom, metric, mtrx, param):
    u1_contra, u2_contra = wind2contra(u, v, geom)
 
    # Vertical Velocity
-   u3_contra = numpy.zeros(fld_shape)
+   w = numpy.zeros(fld_shape)
 
    # Surface temperature
    Ts = bigG + (Teq - bigG) * numpy.exp( -(u0 * N2 / (4.0 * gravity**2)) * (u0 + 2.0 * geom.rotation_speed * geom.earth_radius) * (numpy.cos(2.0 * geom.lat) - 1.0) )
@@ -265,4 +264,4 @@ def dcmip_gravity_wave(geom, metric, mtrx, param):
    # Potential temperature
    theta = theta_base + theta_pert
 
-   return rho, u1_contra, u2_contra, u3_contra, theta
+   return rho, u1_contra, u2_contra, w, theta
