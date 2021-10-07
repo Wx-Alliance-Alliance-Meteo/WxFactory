@@ -67,7 +67,7 @@ def rhs_euler(Q, geom, mtrx, metric, topo, ptopo, nbsolpts: int, nb_elements_hor
    # --- Direction x3
 
    # Initiate transfers
-   all_request = ptopo.xchange_Euler_interfaces(geom, variables_itf_i, variables_itf_j, blocking=blocking) # TODO : Vincent
+   all_request = ptopo.xchange_Euler_interfaces(geom, variables_itf_i, variables_itf_j, blocking=blocking)
 
    # Unpack dynamical variables
    rho = Q[idx_rho,:, :, :]

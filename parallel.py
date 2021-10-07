@@ -2,6 +2,10 @@ import mpi4py.MPI
 import numpy
 import math
 
+from numpy.core.shape_base import block
+
+from definitions import *
+
 class Distributed_World:
    def __init__(self):
 
@@ -342,6 +346,96 @@ class Distributed_World:
          ((h_n_dest, u1_n_dest, u2_n_dest), (h_s_dest, u1_s_dest, u2_s_dest),
           (h_w_dest, u1_w_dest, u2_w_dest), (h_e_dest, u1_e_dest, u2_e_dest)),
          mpi_request)
+
+      if blocking:
+         request.wait()
+
+      return request
+
+   def xchange_Euler_interfaces(self, geom, variables_itf_i, variables_itf_j, blocking=True):
+
+      # if self.rank == 0:
+      #    print(f'Shapes: i {variables_itf_i.shape}, j {variables_itf_j.shape}')
+
+      X = geom.X[0, :]
+      Y = geom.Y[:, 0]
+      flip_dim = 1
+
+      def get_val(i, j, k, l, m):
+         return (i+1) * 1e4 + (j+1) * 1e3 + (k+1) * 1e2 + (l+1) * 1e1 + (m+1)
+
+      var_n = variables_itf_j[:, :, -2, 1, :]
+      var_s = variables_itf_j[:, :, 1, 0, :]
+      var_w = variables_itf_i[:, :, 1, 0, :]
+      var_e = variables_itf_i[:, :, -2, 1, :]
+
+      # numpy.set_printoptions(precision=0)
+
+      # if self.rank == 1:
+      #    sh = variables_itf_j.shape
+      #    for i in range(sh[0]):
+      #       for j in range(sh[1]):
+      #          for k in range(sh[2]):
+      #             for l in range(sh[3]):
+      #                for m in range(sh[4]):
+      #                   variables_itf_j[i, j, k, l, m] = get_val(i, j, k, l, m)
+      #                   variables_itf_i[i, j, k, l, m] = get_val(i, j, k, l, m)
+                     
+      #    print(f'Sending n: \n{var_n}')
+
+      # if self.rank == 0:
+      #    print(f'Var shapes: n {var_n.shape}, s {var_s.shape}, w {var_w.shape}, e {var_e.shape}')
+
+      init_shape = variables_itf_i.shape
+      send_buffer = numpy.empty((4, init_shape[0], init_shape[1], init_shape[4]), dtype=variables_itf_i.dtype)
+      recv_buffer = numpy.empty_like(send_buffer)
+
+      # if self.rank == 0:
+      #    print(f'buf shape: {send_buffer.shape}')
+
+      id_first_tracer = 5
+
+      for do_flip, convert, positions, var, buffer in zip(
+         [self.flip_north, self.flip_south, self.flip_west, self.flip_east],
+         [self.convert_contra_north, self.convert_contra_south, self.convert_contra_west, self.convert_contra_east],
+         [X, X, Y, Y],
+         [var_n, var_s, var_w, var_e],
+         [send_buffer[0], send_buffer[1], send_buffer[2], send_buffer[3]]):
+         
+         # if self.rank == 0:
+         #    print(f'.. var shape: {var.shape}, buf shape: {buffer.shape}')
+
+         for id in [idx_rho, idx_rho_w, idx_rho_theta]:
+            # if self.rank == 0:
+            #    print(f'.... var[{id}].shape = {var[id].shape}')
+            buffer[id, :] = numpy.flip(var[id], flip_dim) if do_flip else var[id]
+
+         tmp1, tmp2 = convert(var[idx_rho_u1], var[idx_hu2], positions)
+         buffer[idx_rho_u1] = numpy.flip(tmp1, flip_dim) if do_flip else tmp1
+         buffer[idx_rho_u2] = numpy.flip(tmp2, flip_dim) if do_flip else tmp2
+
+         buffer[id_first_tracer:] = numpy.flip(var[id_first_tracer:], flip_dim + 1) if do_flip else var[id_first_tracer:]
+
+      mpi_request = self.comm_dist_graph.Ineighbor_alltoall(send_buffer, recv_buffer)
+
+      var_n_dest = variables_itf_j[:, :, -1, 0, :]
+      var_s_dest = variables_itf_j[:, :, 0, 1, :]
+      var_w_dest = variables_itf_i[:, :, 0, 1, :]
+      var_e_dest = variables_itf_i[:, :, -1, 0, :]
+
+      request = EulerExchangeRequest(recv_buffer, (var_n_dest, var_s_dest, var_w_dest, var_e_dest), mpi_request)
+
+      # Test result
+      # TODO remove this!!!
+      # request.wait()
+
+      # err = numpy.linalg.norm(var_n_dest[:, :, :] - variables_itf_j[:, :, -1, 0, :])
+      # print(f'ERR = {1}')
+
+      # if self.rank == 4:
+      #    print(f'Got from e: \n{var_e_dest}')
+
+      # raise ValueError
 
       if blocking:
          request.wait()
@@ -866,5 +960,20 @@ class ShallowWaterExchangeRequest():
          self.request.Wait()
          for i in range(4):
             for j in range(3):
+               self.outputs[i][j][:] = self.recv_buffers[i, j]
+         self.is_complete = True
+
+class EulerExchangeRequest():
+   def __init__(self, recv_buffers, outputs, mpi_request) -> None:
+      self.recv_buffers = recv_buffers
+      self.outputs = outputs
+      self.mpi_request = mpi_request
+      self.is_complete = False
+   
+   def wait(self):
+      if not self.is_complete:
+         self.mpi_request.Wait()
+         for i in range(4):
+            for j in range(self.recv_buffers.shape[1]):
                self.outputs[i][j][:] = self.recv_buffers[i, j]
          self.is_complete = True
