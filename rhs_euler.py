@@ -26,7 +26,7 @@ def rhs_euler(Q, geom, mtrx, metric, topo, ptopo, nbsolpts: int, nb_elements_hor
    df2dx2 = numpy.empty_like(Q, dtype=type_vec)
 #   df3_dx3 = numpy.empty_like(Q)
 
-   forcing = numpy.empty_like(Q, dtype=type_vec)
+   forcing = numpy.zeros_like(Q, dtype=type_vec)
 
    variables_itf_i  = numpy.empty((nb_equations, nb_vertical_levels, nb_elements_horiz + 2, 2, nb_pts_horiz), dtype=type_vec)
    flux_x1_itf_i    = numpy.empty((nb_equations, nb_vertical_levels, nb_elements_horiz + 2, nb_pts_horiz, 2), dtype=type_vec)
