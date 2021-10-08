@@ -26,7 +26,7 @@ def rhs_euler(Q, geom, mtrx, metric, topo, ptopo, nbsolpts: int, nb_elements_hor
    df2dx2 = numpy.empty_like(Q, dtype=type_vec)
 #   df3_dx3 = numpy.empty_like(Q)
 
-   forcing = numpy.empty_like(Q, dtype=type_vec)
+   forcing = numpy.zeros_like(Q, dtype=type_vec)
 
    variables_itf_i  = numpy.empty((nb_equations, nb_vertical_levels, nb_elements_horiz + 2, 2, nb_pts_horiz), dtype=type_vec)
    flux_x1_itf_i    = numpy.empty((nb_equations, nb_vertical_levels, nb_elements_horiz + 2, nb_pts_horiz, 2), dtype=type_vec)
@@ -190,9 +190,12 @@ def rhs_euler(Q, geom, mtrx, metric, topo, ptopo, nbsolpts: int, nb_elements_hor
    # Assemble the right-hand sides
    rhs = - metric.inv_sqrtG * ( df1dx1 + df2dx2 ) - forcing
 
-   # TODO : debug
-   rhs[:idx_first_tracer, :, :, :] = 0.
-
+   # For pure advection problems, we do not update the dynamical variables
+   rhs[idx_rho,:,:]       = 0.0
+   rhs[idx_rho_u1,:,:]    = 0.0
+   rhs[idx_rho_u2,:,:]    = 0.0
+   rhs[idx_rho_theta,:,:] = 0.0
+   
 #   if filter_rhs:
 #      for var in range(3):
 #         rhs[var,:,:] = apply_filter(rhs[var,:,:], mtrx, nb_elements_horiz, nbsolpts)
