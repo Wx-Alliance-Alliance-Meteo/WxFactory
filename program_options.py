@@ -37,10 +37,14 @@ class Configuration:
       except (NoOptionError,NoSectionError):
          self.ark_solver_imp = 'ARK3(2)4L[2]SA-ESDIRK'
 
+      self.possible_precond = ['none', 'fv', 'fv-mg', 'p-mg']
       try:
-         self.use_preconditioner = parser.getint('Time_integration', 'use_preconditioner')
+         self.preconditioner = parser.get('Time_integration', 'preconditioner').lower()
+         if not self.preconditioner in self.possible_precond:
+            print(f'Warning: chosen preconditioner {self.preconditioner} is not within available preconditioners. Possible values are {possible_precond}')
+            self.preconditioner = 'none'
       except (NoOptionError, NoSectionError):
-         self.use_preconditioner = 0
+         self.preconditioner = 'none'
 
       try:
          self.precond_tolerance = parser.getfloat('Time_integration', 'precond_tolerance')
@@ -48,9 +52,9 @@ class Configuration:
          self.precond_tolerance = 1e-7
 
       try:
-         self.max_mg_level = parser.getint('Time_integration', 'max_mg_level')
+         self.coarsest_mg_order = parser.getint('Time_integration', 'coarsest_mg_order')
       except (NoOptionError, NoSectionError):
-         self.max_mg_level = -1
+         self.coarsest_mg_order = 1
 
       try:
          self.mg_smoothe_only = parser.getint('Time_integration', 'mg_smoothe_only')

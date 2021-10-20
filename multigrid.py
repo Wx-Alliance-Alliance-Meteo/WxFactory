@@ -1,3 +1,4 @@
+import functools
 import math
 import mpi4py
 import numpy
@@ -69,6 +70,8 @@ class MultigridLevel:
 
       self.rhs_operator = lambda vec, rhs=rhs, p=self.param, geom=self.geometry, op=operators, met=self.metric, topo=topo, ptopo=ptopo: \
          rhs(vec, geom, op, met, topo, ptopo, p.nbsolpts, p.nb_elements_horizontal, p.case_number, False)
+      # self.rhs_operator = functools.partial(rhs, geom=self.geometry, mtrx=operators, metric=self.metric, topo=topo,
+      #    ptopo=ptopo, nbsolpts=p.nbsolpts, nb_elements_horizontal=p.nb_elements_horizontal, case_number=p.case_number, filter_rhs=False)
 
       self.smoothe = runge_kutta_stable_smoothe
       self.smoother_work_unit = 3.0
@@ -140,48 +143,43 @@ class MultigridLevel:
 class Multigrid:
 
    def __init__(self, param, ptopo, discretization) -> None:
+
+      self.max_level = param.initial_nbsolpts
+      self.min_level = 1
+
       if discretization == 'fv':
-         max_levels = int(math.log2(param.initial_nbsolpts))
-         if 2**max_levels != param.initial_nbsolpts:
-            raise ValueError('Cannot do h-multigrid stuff if the order of the problem is not a power of 2')
+         self.num_levels = int(math.log2(param.initial_nbsolpts))
+         if 2**self.num_levels != param.initial_nbsolpts:
+            raise ValueError('Cannot do h/fv-multigrid stuff if the order of the problem is not a power of 2 (currently {param.initial_nbsolpts})')
       elif discretization == 'dg':
-         max_levels = param.initial_nbsolpts - 1
+         self.num_levels = param.initial_nbsolpts
 
-      num_levels = param.max_mg_level
-      if num_levels < 0:
-         num_levels = max_levels
+      if param.equations == 'shallow_water':
+         self.rhs = rhs_sw
       else:
-         num_levels = min(int(num_levels), int(max_levels))
-
-      if param.equations != 'shallow_water':
          raise ValueError('Cannot use the multigrid solver with anything other than shallow water')
 
-      # This is the number of times we will restrict the grid (can be 0)
-      self.max_level = num_levels
-
-      self.rhs = rhs_sw
       self.matvec = matvec_rat
       self.use_solver = (param.mg_smoothe_only <= 0)
       self.num_pre_smoothing = param.num_pre_smoothing
       self.num_post_smoothing = param.num_post_smoothing
       self.cfl = param.mg_cfl
 
-      self.levels = []
+      self.levels = {}
 
       order    = param.initial_nbsolpts
       num_elem = param.nb_elements_horizontal
 
       if discretization == 'fv':
-         def next_level(order, num_elem):
-            return order // 2, num_elem // 2
+         self.next_level = lambda order: order // 2
       else:
-         def next_level(order, num_elem):
-            return order - 1, num_elem
+         self.next_level = lambda order: order - 1
 
-      for l in range(self.max_level + 1):
-         print(f'Initializing level {l}')
-         new_order, new_num_elem = next_level(order, num_elem)
-         self.levels.insert(0, MultigridLevel(param, ptopo, self.rhs, discretization, num_elem, new_num_elem, order, new_order, self.cfl))
+      for _ in range(self.max_level):
+         print(f'Initializing level {order}')
+         new_order = self.next_level(order)
+         new_num_elem = num_elem // 2 if discretization == 'fv' else num_elem
+         self.levels[order] = MultigridLevel(param, ptopo, self.rhs, discretization, num_elem, new_num_elem, order, new_order, self.cfl)
          order, num_elem = new_order, new_num_elem
 
    def init_time_step(self, field, dt):
@@ -189,10 +187,12 @@ class Multigrid:
       Compute the matrix-vector operator for every grid level. Also compute the pseudo time step size for each level.
       """
       next_field = field
-      for level in reversed(self.levels):
-         next_field = level.init_time_step(self.matvec, next_field, dt)
+      order = self.max_level
+      while order >= self.min_level:
+         next_field = self.levels[order].init_time_step(self.matvec, next_field, dt)
+         order = self.next_level(order)
 
-   def iterate(self, b, x0, level=-1, gamma=1, in_first_zero=False):
+   def iterate(self, b, x0=None, level=-1, coarsest_level=1, gamma=1, in_first_zero=False):
       """
       Do one pass of the multigrid algorithm.
 
@@ -206,6 +206,9 @@ class Multigrid:
       if level < 0: level = self.max_level
       level_work = 0.0
 
+      if x0 is None:
+         x0 = numpy.zeros_like(b)
+
       lvl_param = self.levels[level]
       A         = lvl_param.matrix_operator
       smoothe   = lvl_param.smoothe
@@ -218,12 +221,12 @@ class Multigrid:
 
       level_work += lvl_param.smoother_work_unit * self.num_pre_smoothing * lvl_param.work_ratio
 
-      if level > 0:                                   # Go down a level and solve that
+      if level > coarsest_level:                      # Go down a level and solve that
          residual = numpy.ravel(restrict(b - A(x)))   # Compute the (restricted) residual of the current grid level system
          v = numpy.zeros_like(residual)               # A guess of the next solution (0 is pretty good, that's what we're aiming for)
          first_zero = True
          for _ in range(gamma):
-            v, work = self.iterate(residual, v, level - 1, gamma=gamma, in_first_zero=first_zero)  # MG pass on next lower level
+            v, work = self.iterate(residual, v, self.next_level(level), coarsest_level=coarsest_level, gamma=gamma, in_first_zero=first_zero)  # MG pass on next lower level
             first_zero = False
             level_work += work
          x = x + numpy.ravel(prolong(v))              # Correction
@@ -240,7 +243,7 @@ class Multigrid:
 
       return x, level_work
 
-   def solve(self, b, x0=None, field=None, dt=None, tolerance=1e-7, gamma=1, max_num_it=100):
+   def solve(self, b, x0=None, field=None, dt=None, coarsest_level=1, tolerance=1e-7, gamma=1, max_num_it=100):
       """
       Solve the system defined by [self] using the multigrid method.
 
@@ -291,7 +294,7 @@ class Multigrid:
       A         = self.levels[level].matrix_operator
       num_it    = 0
       for it in range(max_num_it):
-         x, work = self.iterate(b, x, level, gamma=gamma, in_first_zero=first_zero)
+         x, work = self.iterate(b, x, level, coarsest_level=coarsest_level, gamma=gamma, in_first_zero=first_zero)
          first_zero = False
          num_it += 1
          total_work += work
@@ -301,7 +304,7 @@ class Multigrid:
             residual = b - A(x)
             total_work += 1.0
             norm_r = global_norm(residual)
-            # print(f'norm_r = {norm_r:.2e} (rel tol {tol_relative:.2e})')
+            # print(f'norm_r/b = {norm_r/norm_b:.2e}')
             residuals.append((norm_r / norm_b, time() - t_start, total_work))
             if norm_r < tol_relative:
                return x, norm_r / norm_b, num_it, 0, residuals

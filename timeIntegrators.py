@@ -191,9 +191,20 @@ class Tvdrk3:
 class Rat2:
    def __init__(self, Q, rhs, param, ptopo):
 
+      from quadrature import gauss_legendre
+
       self.preconditioner = None
-      if param.use_preconditioner > 0:
-         self.preconditioner = FV_preconditioner(param, Q, ptopo, precond_type=param.use_preconditioner)
+      self.apply_precond = None
+      if param.preconditioner in ['fv', 'fv-mg']:
+         self.preconditioner = FV_preconditioner(param, Q, ptopo, precond_type=param.preconditioner)
+         self.apply_precond = lambda vec: self.preconditioner.apply(vec)
+      elif param.preconditioner == 'p-mg':
+         pts, _ = gauss_legendre(param.initial_nbsolpts)
+         param.mg_cfl *= abs(1.0 - pts[-1]) / (2 * (2 * param.initial_nbsolpts + 1)) # This looks very iffy
+         self.preconditioner = Multigrid(param, ptopo, discretization='dg')
+         # print(f'Coarsest mg order: {param.coarsest_mg_order}')
+         self.apply_precond = lambda vec: self.preconditioner.iterate(vec, coarsest_level=param.coarsest_mg_order)
+         # raise ValueError(f'p-multigrid preconditioner is not implemented yet')
 
       # mg_params = None
       # if param.linear_solver in ['mg', 'multigrid']:
@@ -206,12 +217,15 @@ class Rat2:
       self.use_mg = False
       if param.linear_solver == 'fgmres':
          self.solver_name = 'FGMRES'
-         self.max_it = 1200//20 if self.preconditioner is None else 160//20
-         self.solve = lambda A, b, x0 : fgmres(A, b, x0=x0, tol=self.tol, preconditioner=self.preconditioner, restart=20, maxiter=self.max_it)
+         self.max_it = 1200//20 if self.preconditioner is None else 260//20
+         self.solve = lambda A, b, x0 : fgmres(A, b, x0=x0, tol=self.tol, preconditioner=self.apply_precond, restart=20, maxiter=self.max_it)
 
       elif param.linear_solver in ['mg', 'multigrid']:
+         if param.preconditioner != 'none':
+            print(f'Warning: Requesting multigrid solver and preconditioner. That solver does *not* use a preconditioner so we will ignore the preconditioner option')
          self.solver_name = 'Multigrid'
-         param.mg_cfl *= 1.0 / (2 * (2 * param.initial_nbsolpts + 1))
+         pts, _ = gauss_legendre(param.initial_nbsolpts)
+         param.mg_cfl *= abs(1.0 - pts[-1]) / (2 * (2 * param.initial_nbsolpts + 1)) # This looks very iffy
          self.mg_solver = Multigrid(param, ptopo, discretization='dg')
          self.use_mg = True
          self.max_it = 500
@@ -227,11 +241,11 @@ class Rat2:
 
          with open('test_result.txt', 'a+') as output_file:
             if not file_exists:
-               output_file.write('# order | num_elements | dt | linear solver | precond | precond_interp | precond tol | max MG lvl | MG smoothe only | # pre smoothe | # post smoothe | CFL # ::: FGMRES #it | FGMRES time | precond #it | precond time | conv. flag \n')
+               output_file.write('# order | num_elements | dt | linear solver | precond | precond_interp | precond tol | coarsest MG order | MG smoothe only | # pre smoothe | # post smoothe | CFL # ::: FGMRES #it | FGMRES time | conv. flag \n')
             if param is not None:
                output_file.write(f'{param.nbsolpts} {param.nb_elements_horizontal:3d} {int(param.dt):5d} {param.linear_solver[:10]:10s} '
-                                 f'{param.use_preconditioner} {param.dg_to_fv_interp[:8]:8s} {param.precond_tolerance:9.1e} '
-                                 f'{param.max_mg_level:3d} {param.mg_smoothe_only} '
+                                 f'{param.preconditioner[:8]:8s} {param.dg_to_fv_interp[:8]:8s} {param.precond_tolerance:9.1e} '
+                                 f'{param.coarsest_mg_order:3d} {param.mg_smoothe_only} '
                                  f'{param.num_pre_smoothing:3d} {param.num_post_smoothing:3d} {param.mg_cfl:6.3f} ::: ')
             else:
                output_file.write(f'NO PARAMS - ')
@@ -240,7 +254,7 @@ class Rat2:
       matvec_handle = lambda v: matvec_rat(v, dt, Q, self.rhs)
 
       if self.preconditioner:
-         self.preconditioner.init_time_step(dt, Q)
+         self.preconditioner.init_time_step(Q, dt)
 
       if self.use_mg:
          self.mg_solver.init_time_step(Q, dt)
@@ -254,20 +268,17 @@ class Rat2:
       phiv, local_error, num_iter, flag, residuals = self.solve(matvec_handle, rhs, first_guess)
       t1 = time()
 
-      if self.rank == 0:
-         with open('test_result.txt', 'a+') as output_file:
-            output_file.write(f'{num_iter:4d} {t1 - t0:6.1f} ')
-            precond_it, precond_time = 0, 0.0
-            if self.preconditioner is not None:
-               precond_it, precond_time = self.preconditioner.total_iter, self.preconditioner.total_time
-            output_file.write(f'{precond_it:5d} {precond_time:6.1f} {flag:2d} ')
-            output_file.write(f'- {" ".join(f"{r[0]:.2e}/{r[1]:.2e}/{r[2]}" for r in residuals)} ')
-            output_file.write('\n')
-
       if flag == 0:
          print(f'{self.solver_name} converged at iteration {num_iter} in {t1 - t0:4.1f} s to a solution with local error {local_error : .2e}')
       else:
          print(f'{self.solver_name} stagnation/interruption at iteration {num_iter} in {t1 - t0:4.1f} s, returning a solution with local error {local_error: .2e}')
+
+      if self.rank == 0:
+         with open('test_result.txt', 'a+') as output_file:
+            output_file.write(f'{num_iter:4d} {t1 - t0:6.1f} ')
+            output_file.write(f'{flag:2d} ')
+            output_file.write(f'- {" ".join(f"{r[0]:.2e}/{r[1]:.2e}/{r[2]}" for r in residuals)} ')
+            output_file.write('\n')
 
       gmres_sol, gmres_res, num_gmres_it, gmres_flag, res = fgmres(matvec_handle, rhs, x0=phiv, tol=self.tol, preconditioner=None, restart=20, maxiter=1200//20)
       diff = gmres_sol - phiv
@@ -279,7 +290,7 @@ class Rat2:
       print(f'Diff norm = {diff_norm}')
       print(f'error: {local_error:.2e}/{gmres_res:.2e}, flag {flag}/{gmres_flag}, res1/2 {res1:.2e}/{res2:.2e}')
 
-      if num_gmres_it > 1 or gmres_flag != 0 or diff_norm > self.tol:
+      if num_gmres_it > 1 or gmres_flag != 0 or diff_norm > 2*self.tol:
          raise ValueError(f'Solver did not give the same result as GMRES! num_gmres_it = {num_gmres_it}, gmres_flag = {gmres_flag}')
 
       # Update solution

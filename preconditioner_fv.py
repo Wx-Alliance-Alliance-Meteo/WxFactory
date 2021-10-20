@@ -16,12 +16,12 @@ from rhs_sw          import rhs_sw
 
 class FV_preconditioner:
 
-   def __init__(self, param, sample_field, ptopo, precond_type=1, prefix=''):
+   def __init__(self, param, sample_field, ptopo, precond_type='fv', prefix=''):
       self.max_iter = 1000
       self.precond_type = precond_type
 
-      if self.precond_type not in [1, 2]:
-         raise ValueError('precond_type can only be 1 (finite volume) or 2 (multigrid FV)')
+      if self.precond_type not in ['fv', 'fv-mg']:
+         raise ValueError('precond_type can only be "fv" (finite volume) or "fv-mg" (multigrid FV)')
 
       # print(f'Params:\n{param}')
 
@@ -62,14 +62,14 @@ class FV_preconditioner:
       self.origin_field_shape = sample_field.shape
       self.rhs_function       = rhs_sw
 
-      self.dest_matrix = None
-      self.dest_rhs    = None
+      self.dest_matrix = None # System mat-vec function for the FV problem
+      self.dest_rhs    = None # RHS function for the FV problem
 
       self.prefix = prefix
-      self.preconditioner = None
+      self.preconditioner = None # We could recursively precondition (with FV only) by initializing this
 
       self.mg_solver = None
-      if self.precond_type == 2:
+      if self.precond_type == 'fv-mg':
          self.mg_solver = Multigrid(self.param, ptopo, 'fv')
 
       print(f'Origin field shape: {self.origin_field_shape}, dest field shape: {self.dest_field_shape}')
@@ -91,13 +91,13 @@ class FV_preconditioner:
       t0 = time()
 
       input_vec = numpy.ravel(self.restrict(vec))
-     
-      if self.precond_type == 1:    # Finite volume preconditioner (reference, or simple FV)
+
+      if self.precond_type == 'fv':    # Finite volume preconditioner (reference, or simple FV)
+         max_num_iter = self.max_iter if self.param.precond_tolerance < 1e-1 else 1
          output_vec, _, num_iter, _, residuals = fgmres(
-            self.dest_matrix, input_vec, preconditioner=self.preconditioner, tol=self.param.precond_tolerance, maxiter=self.max_iter)
-      elif self.precond_type == 2:  # Multigrid preconditioner
-         output_vec, _, num_iter, _, residuals = self.mg_solver.solve(
-            input_vec, tolerance=self.param.precond_tolerance, max_num_it=1)
+            self.dest_matrix, input_vec, preconditioner=self.preconditioner, tol=self.param.precond_tolerance, maxiter=max_num_iter)
+      elif self.precond_type == 'fv-mg':  # Multigrid preconditioner
+         output_vec, _, num_iter, _, residuals = self.mg_solver.solve(input_vec, coarsest_level=self.param.coarsest_mg_order, max_num_it=1)
 
       self.last_solution = output_vec
 
@@ -116,7 +116,7 @@ class FV_preconditioner:
 
       return output_vec, work
 
-   def init_time_step(self, dt, field):
+   def init_time_step(self, field, dt):
       """
       Prepare the preconditioner for solving one time step of the problem.
 
