@@ -14,7 +14,7 @@ from multigrid       import Multigrid
 from rhs_sw          import rhs_sw
 
 
-class FV_preconditioner:
+class FiniteVolume:
 
    def __init__(self, param, sample_field, ptopo, precond_type='fv', prefix=''):
       self.max_iter = 1000

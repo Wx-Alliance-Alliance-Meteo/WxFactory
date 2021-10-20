@@ -9,7 +9,7 @@ from linsol        import fgmres
 from multigrid     import Multigrid
 from phi           import phi_ark
 from timer         import Timer
-from preconditioner_fv import FV_preconditioner
+from finite_volume import FiniteVolume
 
 class Epirk4s3a:
    g21 = 1/2
@@ -196,7 +196,7 @@ class Rat2:
       self.preconditioner = None
       self.apply_precond = None
       if param.preconditioner in ['fv', 'fv-mg']:
-         self.preconditioner = FV_preconditioner(param, Q, ptopo, precond_type=param.preconditioner)
+         self.preconditioner = FiniteVolume(param, Q, ptopo, precond_type=param.preconditioner)
          self.apply_precond = lambda vec: self.preconditioner.apply(vec)
       elif param.preconditioner == 'p-mg':
          pts, _ = gauss_legendre(param.initial_nbsolpts)
