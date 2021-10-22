@@ -2,6 +2,10 @@ import mpi4py.MPI
 import numpy
 import math
 
+from numpy.core.shape_base import block
+
+from definitions import *
+
 class Distributed_World:
    def __init__(self):
 
@@ -342,6 +346,55 @@ class Distributed_World:
          ((h_n_dest, u1_n_dest, u2_n_dest), (h_s_dest, u1_s_dest, u2_s_dest),
           (h_w_dest, u1_w_dest, u2_w_dest), (h_e_dest, u1_e_dest, u2_e_dest)),
          mpi_request)
+
+      if blocking:
+         request.wait()
+
+      return request
+
+   def xchange_Euler_interfaces(self, geom, variables_itf_i, variables_itf_j, blocking=True):
+
+      X = geom.X[0, :]
+      Y = geom.Y[:, 0]
+      flip_dim = 1
+      id_first_tracer = 5
+
+      init_shape = variables_itf_i.shape
+      send_buffer = numpy.empty((4, init_shape[0], init_shape[1], init_shape[4]), dtype=variables_itf_i.dtype)
+      recv_buffer = numpy.empty_like(send_buffer)
+
+      var_n = variables_itf_j[:, :, -2, 1, :]
+      var_s = variables_itf_j[:, :, 1, 0, :]
+      var_w = variables_itf_i[:, :, 1, 0, :]
+      var_e = variables_itf_i[:, :, -2, 1, :]
+
+      # Fill the send buffer, flipping when necessary and converting vector values
+      for do_flip, convert, positions, var, buffer in zip(
+         [self.flip_north, self.flip_south, self.flip_west, self.flip_east],
+         [self.convert_contra_north, self.convert_contra_south, self.convert_contra_west, self.convert_contra_east],
+         [X, X, Y, Y],
+         [var_n, var_s, var_w, var_e],
+         [send_buffer[0], send_buffer[1], send_buffer[2], send_buffer[3]]):
+         
+         for id in [idx_rho, idx_rho_w, idx_rho_theta]:
+            buffer[id, :] = numpy.flip(var[id], flip_dim) if do_flip else var[id]
+
+         tmp1, tmp2 = convert(var[idx_rho_u1], var[idx_rho_u2], positions)
+         buffer[idx_rho_u1] = numpy.flip(tmp1, flip_dim) if do_flip else tmp1
+         buffer[idx_rho_u2] = numpy.flip(tmp2, flip_dim) if do_flip else tmp2
+
+         buffer[id_first_tracer:] = numpy.flip(var[id_first_tracer:], flip_dim + 1) if do_flip else var[id_first_tracer:]
+
+      # Initiate MPI transfer
+      mpi_request = self.comm_dist_graph.Ineighbor_alltoall(send_buffer, recv_buffer)
+
+      # Setup request to that data ends up in the right arrays when the wait() function is called
+      var_n_dest = variables_itf_j[:, :, -1, 0, :]
+      var_s_dest = variables_itf_j[:, :, 0, 1, :]
+      var_w_dest = variables_itf_i[:, :, 0, 1, :]
+      var_e_dest = variables_itf_i[:, :, -1, 0, :]
+
+      request = EulerExchangeRequest(recv_buffer, (var_n_dest, var_s_dest, var_w_dest, var_e_dest), mpi_request)
 
       if blocking:
          request.wait()
@@ -866,5 +919,20 @@ class ShallowWaterExchangeRequest():
          self.request.Wait()
          for i in range(4):
             for j in range(3):
+               self.outputs[i][j][:] = self.recv_buffers[i, j]
+         self.is_complete = True
+
+class EulerExchangeRequest():
+   def __init__(self, recv_buffers, outputs, mpi_request) -> None:
+      self.recv_buffers = recv_buffers
+      self.outputs = outputs
+      self.mpi_request = mpi_request
+      self.is_complete = False
+   
+   def wait(self):
+      if not self.is_complete:
+         self.mpi_request.Wait()
+         for i in range(4):
+            for j in range(self.recv_buffers.shape[1]):
                self.outputs[i][j][:] = self.recv_buffers[i, j]
          self.is_complete = True

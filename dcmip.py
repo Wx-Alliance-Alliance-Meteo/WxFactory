@@ -6,7 +6,7 @@ from winds import *
 
 def dcmip_T11_update_winds(geom, metric, mtrx, param, time=0):
    """
-   Test 11 - Deformational Advection Test
+   Test 11 - Deformational Advection
    The velocities are time dependent and therefore must be updated in the dynamical core.
    """
 
@@ -43,12 +43,60 @@ def dcmip_T11_update_winds(geom, metric, mtrx, param, time=0):
    # Contravariant components
 
    u1_contra, u2_contra = wind2contra(u, v, geom)
-   u3_contra = w
 
-   return u1_contra, u2_contra, u3_contra
+   return u1_contra, u2_contra, w
+
+def dcmip_T12_update_winds(geom, metric, mtrx, param, time=0):
+   """
+   Test 12 - 3D Hadley-like flow
+   The velocities are time dependent and therefore must be updated in the dynamical core.
+   """
+   tau  = 86400.0               # period of motion 1 day (in s)
+   u0   = 40.0                  # Zonal velocity magnitude (m/s)
+   w0   = 0.15                  # Vertical velocity magnitude (m/s), changed in v5
+   T0   = 300.0                 # temperature (K)
+   H    = Rd * T0 / gravity     # scale height
+   K    = 5.0                   # number of Hadley-like cells
+   ztop = 12000.0               # model top (m)
+
+
+   # Height and pressure are aligned (p = p0 exp(-z/H))
+   p = p0 * numpy.exp(-geom.height / H)
+
+   #-----------------------------------------------------------------------
+   #    TEMPERATURE IS CONSTANT 300 K
+   #-----------------------------------------------------------------------
+
+   t = T0
+
+   #-----------------------------------------------------------------------
+   #    RHO (density)
+   #-----------------------------------------------------------------------
+
+   rho = p / (Rd * t)
+   rho0 = p0 / (Rd * t)
+
+   # Zonal Velocity
+
+   u = u0 * numpy.cos(geom.lat)
+
+   # Meridional Velocity
+
+   v = -(rho0 / rho) * (geom.earth_radius * w0 * math.pi) / (K * ztop) * numpy.cos(geom.lat) * numpy.sin(K * geom.lat) * numpy.cos(math.pi * geom.height / ztop) * numpy.cos(math.pi * time / tau)
+
+   # Vertical Velocity - can be changed to vertical pressure velocity by
+   # omega = -g*rho*w
+
+   w = (rho0 / rho) * (w0 / K) * (-2.0 * numpy.sin(K * geom.lat) * numpy.sin(geom.lat) + K * numpy.cos(geom.lat) * numpy.cos(K * geom.lat)) * numpy.sin(math.pi * geom.height / ztop) * numpy.cos(math.pi * time / tau)
+
+   # Contravariant components
+
+   u1_contra, u2_contra = wind2contra(u, v, geom)
+
+   return u1_contra, u2_contra, w
 
 def dcmip_advection_deformation(geom, metric, mtrx, param):
-   """ Test 11 - Deformational Advection Test """
+   """ Test 11 - Deformational Advection """
    tau     = 12.0 * 86400.0                             # period of motion 12 days
    T0      = 300.0                                      # temperature
    H       = Rd * T0 / gravity                          # scale height
@@ -64,12 +112,13 @@ def dcmip_advection_deformation(geom, metric, mtrx, param):
    #    HEIGHT AND PRESSURE
    #-----------------------------------------------------------------------
 
-   p    = p0 * numpy.exp(-geom.height / H)
+   p = p0 * numpy.exp(-geom.height / H)
 
    #-----------------------------------------------------------------------
    #    WINDS
    #-----------------------------------------------------------------------
-   u1_contra, u2_contra, u3_contra = dcmip_T11_update_winds(geom, metric, mtrx, param, time=0)
+
+   u1_contra, u2_contra, w = dcmip_T11_update_winds(geom, metric, mtrx, param, time=0)
 
    #-----------------------------------------------------------------------
    #    TEMPERATURE IS CONSTANT 300 K
@@ -81,7 +130,7 @@ def dcmip_advection_deformation(geom, metric, mtrx, param):
    #    RHO (density)
    #-----------------------------------------------------------------------
 
-   rho = p/(Rd*t)
+   rho = p / (Rd * t)
 
 
    #-----------------------------------------------------------------------
@@ -146,7 +195,64 @@ def dcmip_advection_deformation(geom, metric, mtrx, param):
 
    q4 = 1.0 - 0.3 * (q1 + q2 + q3)
 
-   return rho, u1_contra, u2_contra, u3_contra, theta, q1, q2, q3, q4
+   return rho, u1_contra, u2_contra, w, theta, q1, q2, q3, q4
+
+def dcmip_advection_hadley(geom, metric, mtrx, param):
+   """ Test 12 - 3D Hadley-like flow """
+   tau  = 86400.0               # period of motion 1 day (in s)
+   T0   = 300.0                 # temperature (K)
+   H    = Rd * T0 / gravity     # scale height
+   z1   = 2000.0                # position of lower tracer bound (m), changed in v5
+   z2   = 5000.0                # position of upper tracer bound (m), changed in v5
+   z0   = 0.5 * (z1 + z2)       # midpoint (m)
+
+   #-----------------------------------------------------------------------
+   #    HEIGHT AND PRESSURE
+   #-----------------------------------------------------------------------
+
+   # Height and pressure are aligned (p = p0 exp(-z/H))
+   p = p0 * numpy.exp(-geom.height / H)
+
+   #-----------------------------------------------------------------------
+   #    WINDS
+   #-----------------------------------------------------------------------
+
+   u1_contra, u2_contra, w = dcmip_T12_update_winds(geom, metric, mtrx, param, time=0)
+
+   #-----------------------------------------------------------------------
+   #    TEMPERATURE IS CONSTANT 300 K
+   #-----------------------------------------------------------------------
+
+   t = T0
+
+   #-----------------------------------------------------------------------
+   #    RHO (density)
+   #-----------------------------------------------------------------------
+
+   rho = p / (Rd * t)
+   rho0 = p0 / (Rd * t)
+
+   #-----------------------------------------------------------------------
+   #     initialize TV (virtual temperature)
+   #-----------------------------------------------------------------------
+   tv = t
+   theta = tv * (p0 / p)**(Rd/cpd)
+
+   #-----------------------------------------------------------------------
+   #     initialize tracers
+   #-----------------------------------------------------------------------
+
+   # Tracer 1 - Layer
+
+   q1 = numpy.zeros_like(p)
+   nk, ni, nj = q1.shape
+   for k in range(nk):
+      for i in range(ni):
+         for j in range(nj):
+            if geom.height[k,i,j] < z2 and geom.height[k,i,j] > z1:
+               q1[k,i,j] = 0.5 * (1.0 + math.cos( 2.0 * math.pi * (geom.height[k,i,j] - z0) / (z2 - z1) ) )
+
+   return rho, u1_contra, u2_contra, w, theta, q1
 
 def dcmip_mountain(geom, metric, mtrx, param):
 
@@ -203,7 +309,6 @@ def dcmip_mountain(geom, metric, mtrx, param):
 
    return h_surf, h_surf_itf_i, h_surf_itf_j, dhdx1, dhdx2
 
-
 def dcmip_gravity_wave(geom, metric, mtrx, param):
 
    u0      = 20.0                 # Reference Velocity
@@ -234,7 +339,7 @@ def dcmip_gravity_wave(geom, metric, mtrx, param):
    u1_contra, u2_contra = wind2contra(u, v, geom)
 
    # Vertical Velocity
-   u3_contra = numpy.zeros(fld_shape)
+   w = numpy.zeros(fld_shape)
 
    # Surface temperature
    Ts = bigG + (Teq - bigG) * numpy.exp( -(u0 * N2 / (4.0 * gravity**2)) * (u0 + 2.0 * geom.rotation_speed * geom.earth_radius) * (numpy.cos(2.0 * geom.lat) - 1.0) )
@@ -265,4 +370,4 @@ def dcmip_gravity_wave(geom, metric, mtrx, param):
    # Potential temperature
    theta = theta_base + theta_pert
 
-   return rho, u1_contra, u2_contra, u3_contra, theta
+   return rho, u1_contra, u2_contra, w, theta
