@@ -162,7 +162,7 @@ def output_init(geom, param):
       potential_temp.grid_mapping = 'cubed_sphere'
       potential_temp.set_collective(True)
 
-      if param.case_number == 11:
+      if param.case_number == 11 or param.case_number == 12:
          q1 = ncfile.createVariable('q1', numpy.dtype('double').char, ('time',) + grid_data)
          q1.long_name = 'q1'
          q1.units = 'kg m-3'
@@ -170,7 +170,8 @@ def output_init(geom, param):
          q1.coordinates = 'lons lats'
          q1.grid_mapping = 'cubed_sphere'
          q1.set_collective(True)
-
+   
+      if param.case_number == 11:
          q2 = ncfile.createVariable('q2', numpy.dtype('double').char, ('time',) + grid_data)
          q2.long_name = 'q2'
          q2.units = 'kg m-3'
@@ -247,8 +248,10 @@ def output_netcdf(Q, geom, metric, mtrx, topo, step, param):
       ncfile['W'][idx, rank, :, :] = w
       ncfile['theta'][idx, rank, :,:,:] = Q[idx_rho_theta, :,:,:] / rho
 
-      if param.case_number == 11:
+      if param.case_number == 11 or param.case_number == 12:
          ncfile['q1'][idx, rank, :,:,:] = Q[5, :,:,:] / rho
+
+      if param.case_number == 11:
          ncfile['q2'][idx, rank, :,:,:] = Q[6, :,:,:] / rho
          ncfile['q3'][idx, rank, :,:,:] = Q[7, :,:,:] / rho
          ncfile['q4'][idx, rank, :,:,:] = Q[8, :,:,:] / rho

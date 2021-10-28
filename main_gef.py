@@ -6,7 +6,7 @@ from time import time
 
 from blockstats      import blockstats
 from cubed_sphere    import cubed_sphere
-from dcmip           import dcmip_T11_update_winds
+from dcmip           import dcmip_T11_update_winds, dcmip_T12_update_winds
 from definitions     import idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_w
 from initialize      import initialize_sw, initialize_euler
 from matrices        import DFR_operators
@@ -102,6 +102,11 @@ def main(args) -> int:
       # Overwrite winds for some DCMIP tests
       if param.case_number == 11:
          u1_contra, u2_contra, w = dcmip_T11_update_winds(geom, metric, mtrx, param, time=t)
+         Q[idx_rho_u1,:,:,:] = Q[idx_rho, :, :, :] * u1_contra
+         Q[idx_rho_u2,:,:,:] = Q[idx_rho, :, :, :] * u2_contra
+         Q[idx_rho_w,:,:,:]  = Q[idx_rho, :, :, :] * w
+      elif param.case_number == 12:
+         u1_contra, u2_contra, w = dcmip_T12_update_winds(geom, metric, mtrx, param, time=t)
          Q[idx_rho_u1,:,:,:] = Q[idx_rho, :, :, :] * u1_contra
          Q[idx_rho_u2,:,:,:] = Q[idx_rho, :, :, :] * u2_contra
          Q[idx_rho_w,:,:,:]  = Q[idx_rho, :, :, :] * w
