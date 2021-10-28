@@ -8,7 +8,7 @@ from time import time
 
 from cubed_sphere  import cubed_sphere
 from initialize    import initialize_sw
-from interpolation import compute_dg_to_fv_small_projection, interpolator
+from interpolation import interpolator
 from linsol        import fgmres, global_norm
 from matrices      import DFR_operators
 from matvec        import matvec_rat
@@ -148,8 +148,8 @@ class Multigrid:
       self.min_level = 1
 
       if discretization == 'fv':
-         self.num_levels = int(math.log2(param.initial_nbsolpts))
-         if 2**self.num_levels != param.initial_nbsolpts:
+         self.num_levels = int(math.log2(param.initial_nbsolpts)) + 1
+         if 2**(self.num_levels - 1) != param.initial_nbsolpts:
             raise ValueError('Cannot do h/fv-multigrid stuff if the order of the problem is not a power of 2 (currently {param.initial_nbsolpts})')
       elif discretization == 'dg':
          self.num_levels = param.initial_nbsolpts
@@ -175,7 +175,7 @@ class Multigrid:
       else:
          self.next_level = lambda order: order - 1
 
-      for _ in range(self.max_level):
+      for _ in range(self.num_levels):
          print(f'Initializing level {order}')
          new_order = self.next_level(order)
          new_num_elem = num_elem // 2 if discretization == 'fv' else num_elem

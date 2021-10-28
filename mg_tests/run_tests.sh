@@ -3,8 +3,14 @@
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 GEF_DIR=${SCRIPT_DIR}/..
 GEF_MAIN=main_gef.py
-CONFIG_FILE=${SCRIPT_DIR}/test_sw.ini
+CONFIG_FILE=${1:-${SCRIPT_DIR}/test_sw.ini}
 CONFIG_DIR=${SCRIPT_DIR}/configs
+
+echo "Config file is ${CONFIG_FILE}"
+
+if [[ ${CONFIG_FILE} == "-"* ]]; then
+    CONFIG_FILE=${SCRIPT_DIR}/test_sw.ini
+fi
 
 # MPIRUN="aprun"
 MPIRUN="mpirun -tag-output"
@@ -63,10 +69,10 @@ function compute_time_step() {
 
 time_step=3600
 precond="fv-mg"
-order=2
-nb_elements=15
+order=4
+nb_elements=10
 precond_tolerance=1e-1
-coarsest_mg_order=2
+coarsest_mg_order=4
 mg_smoothe_only=1
 num_pre_smoothing=1
 num_post_smoothing=1

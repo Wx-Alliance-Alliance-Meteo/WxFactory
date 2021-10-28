@@ -92,7 +92,11 @@ class Configuration:
          self.precond_filter_after = 0
 
       try:
+         ok_interps = ['l2-norm', 'lagrange']
          self.dg_to_fv_interp = parser.get('Time_integration', 'dg_to_fv_interp')
+         if not self.dg_to_fv_interp in ok_interps:
+            print(f'ERROR: invalid interpolation method for DG to FV conversion ({self.dg_to_fv_interp}). Should pick one of {ok_interps}. Choosing "lagrange" as default.')
+            self.dg_to_fv_interp = 'lagrange'
       except (NoOptionError, NoSectionError):
          self.dg_to_fv_interp = 'lagrange'
 

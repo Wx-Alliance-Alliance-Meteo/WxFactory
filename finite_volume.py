@@ -1,4 +1,4 @@
-from copy import copy
+from copy import deepcopy
 from time import time
 
 import numpy
@@ -28,19 +28,12 @@ class FiniteVolume:
       self.origin_order = param.nbsolpts
       self.dest_order   = self.origin_order
 
-      interp_method = param.dg_to_fv_interp
-      ok_interps = ['l2-norm', 'lagrange']
-      if not interp_method in ok_interps:
-         print(f'ERROR: invalid interpolation method for DG to FV conversion ({interp_method}). Should pick one of {ok_interps}. Choosing "lagrange" as default.')
-         interp_method = 'lagrange'
-
-      interpolate_fct = interp_method
-      self.interpolate = interpolator('dg', self.origin_order, 'fv', self.dest_order, interpolate_fct)
+      self.interpolate = interpolator('dg', self.origin_order, 'fv', self.dest_order, param.dg_to_fv_interp)
 
       print(f'origin order: {self.origin_order}, dest order: {self.dest_order}')
 
       # Create a set of parameters for the FV formulation
-      self.param = copy(param)
+      self.param = deepcopy(param)
       self.param.discretization = 'fv'
       self.param.nb_elements_horizontal = self.param.nb_elements_horizontal * self.dest_order
       self.param.nbsolpts               = 1
