@@ -33,6 +33,7 @@ function set_parameters() {
     sed -i ${CONFIG_FILE} -e 's/^preconditioner *= *.*$/preconditioner = '${1}'/' \
                           -e 's/^nbsolpts *= *.*$/nbsolpts = '${2}'/' \
                           -e 's/^nb_elements_horizontal *= *.*$/nb_elements_horizontal = '${3}'/' \
+                          -e 's/^nb_elements_vertical *= *.*$/nb_elements_vertical = '${3}'/' \
                           -e 's/^precond_tolerance *= *.*$/precond_tolerance = '${4}'/' \
                           -e 's/^coarsest_mg_order *= *.*$/coarsest_mg_order = '${5}'/' \
                           -e 's/^mg_smoothe_only *= *.*$/mg_smoothe_only = '${6}'/' \
@@ -67,18 +68,19 @@ function compute_time_step() {
     echo "${3} / ($order * $num_el) * $factor * 60" | bc | sed -e 's/\.[0-9]*//'
 }
 
-time_step=3600
-precond="fv-mg"
-order=4
-nb_elements=10
+time_step=500000
+precond="none"
+order=2
+nb_elements=8
 precond_tolerance=1e-1
-coarsest_mg_order=4
+coarsest_mg_order=1
 mg_smoothe_only=1
 num_pre_smoothing=1
 num_post_smoothing=1
 # mg_cfl=0.9
-mg_cfl=3.0
-# mg_cfl=0.53
+# mg_cfl=3.0
+mg_cfl=1.9
+# mg_cfl=20.0
 dg_to_fv_interp="lagrange"
 # linear_solver="mg"
 linear_solver="fgmres"

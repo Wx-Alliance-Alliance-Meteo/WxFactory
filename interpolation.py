@@ -168,7 +168,7 @@ def eval_fields(fields, elem_interp, velocity_interp, method):
    if fields.ndim == 3:
       num_fields = fields.shape[0]
       if num_fields != 3:
-         raise ValueError('Can only interpolate on 2D grids for Shallow Water')
+         raise ValueError('Can only interpolate on three 2D grids for Shallow Water (we assume shallow water, because 2D)')
       new_size = fields.shape[1] * elem_interp.shape[0] // elem_interp.shape[1]
       result = numpy.empty((num_fields, new_size, new_size), dtype=fields.dtype)
       
@@ -278,7 +278,7 @@ def get_basis_points(type: str, order: int):
       raise ValueError('Unsupported grid type')
    return points
 
-def interpolator(origin_type: str, origin_order: int, dest_type: str, dest_order: int, interp_type: str, method=0, ndim=2):
+def interpolator(origin_type: str, origin_order: int, dest_type: str, dest_order: int, interp_type: str, ndim, method=0):
    origin_points = get_basis_points(origin_type, origin_order)
    dest_points = get_basis_points(dest_type, dest_order)
 

@@ -3,16 +3,17 @@ import math
 import mpi4py
 import numpy
 
-from copy import copy
+from copy import deepcopy
 from time import time
 
 from cubed_sphere  import cubed_sphere
-from initialize    import initialize_sw
+from initialize    import initialize_euler, initialize_sw
 from interpolation import interpolator
 from linsol        import fgmres, global_norm
 from matrices      import DFR_operators
 from matvec        import matvec_rat
 from metric        import Metric
+from rhs_euler     import rhs_euler
 from rhs_sw        import rhs_sw
 
 from definitions import idx_h, idx_hu1, idx_hu2, gravity
@@ -44,41 +45,53 @@ def runge_kutta_gef_smoothe(A, b, x, h, num_iter=1):
 
 class MultigridLevel:
    def __init__(self, param, ptopo, rhs, discretization, source_num_elem, target_num_elem, source_order, target_order, cfl):
-      p = copy(param)
+      p = deepcopy(param)
+      print(f'nb_elem_hor {p.nb_elements_horizontal}, vert {p.nb_elements_vertical}')
       p.nb_elements_horizontal = source_num_elem
+      if p.equations == 'Euler': p.nb_elements_vertical = source_num_elem #TODO make it different than horizontal!
       p.nbsolpts = source_order if discretization == 'dg' else 1
       p.discretization = discretization
       
+      print(f'nb_elem_hor {p.nb_elements_horizontal}, vert {p.nb_elements_vertical}')
       self.param = p
       self.cfl   = cfl
-      self.work_ratio = (source_order / param.initial_nbsolpts) ** 2
 
       print(
          f'Grid level! nb_elem_horiz = {source_num_elem}, target {target_num_elem},'
          f' discr = {discretization}, source order = {source_order}, target order = {target_order}, nbsolpts = {p.nbsolpts}'
-         f' work ratio = {self.work_ratio}'
+         # f' work ratio = {self.work_ratio}'
          )
 
       # Initialize problem for this level
       self.geometry = cubed_sphere(p.nb_elements_horizontal, p.nb_elements_vertical, p.nbsolpts, p.λ0, p.ϕ0, p.α0, p.ztop, ptopo, p)
       operators     = DFR_operators(self.geometry, p)
       self.metric   = Metric(self.geometry)
-      field, topo   = initialize_sw(self.geometry, self.metric, operators, p)
+
+      if self.param.equations == 'Euler':
+         ndim = 3
+         field, topo = initialize_euler(self.geometry, self.metric, operators, self.param)
+         self.rhs_operator = lambda vec, rhs=rhs, p=self.param, geom=self.geometry, op=operators, met=self.metric, topo=topo, ptopo=ptopo: \
+            rhs(vec, geom, op, met, topo, ptopo, p.nbsolpts, p.nb_elements_horizontal, p.nb_elements_vertical, p.case_number, False)
+      elif self.param.equations == 'shallow_water':
+         ndim = 2
+         field, topo = initialize_sw(self.geometry, self.metric, operators, p)
+         self.rhs_operator = lambda vec, rhs=rhs, p=self.param, geom=self.geometry, op=operators, met=self.metric, topo=topo, ptopo=ptopo: \
+            rhs(vec, geom, op, met, topo, ptopo, p.nbsolpts, p.nb_elements_horizontal, p.case_number, False)
+         # self.rhs_operator = functools.partial(rhs, geom=self.geometry, mtrx=operators, metric=self.metric, topo=topo,
+         #    ptopo=ptopo, nbsolpts=p.nbsolpts, nb_elements_horizontal=p.nb_elements_horizontal, case_number=p.case_number, filter_rhs=False)
+
+      print(f'field shape: {field.shape}')
 
       # Now set up the various operators: RHS, smoother, restriction, prolongation
       # matrix-vector product is done at every step, so not here
 
-      self.rhs_operator = lambda vec, rhs=rhs, p=self.param, geom=self.geometry, op=operators, met=self.metric, topo=topo, ptopo=ptopo: \
-         rhs(vec, geom, op, met, topo, ptopo, p.nbsolpts, p.nb_elements_horizontal, p.case_number, False)
-      # self.rhs_operator = functools.partial(rhs, geom=self.geometry, mtrx=operators, metric=self.metric, topo=topo,
-      #    ptopo=ptopo, nbsolpts=p.nbsolpts, nb_elements_horizontal=p.nb_elements_horizontal, case_number=p.case_number, filter_rhs=False)
-
+      self.work_ratio = (source_order / param.initial_nbsolpts) ** ndim
       self.smoothe = runge_kutta_stable_smoothe
       self.smoother_work_unit = 3.0
 
       if target_order > 0:
          interp_method     = 'bilinear' if discretization == 'fv' else 'lagrange'
-         self.interpolator = interpolator(discretization, source_order, discretization, target_order, interp_method)
+         self.interpolator = interpolator(discretization, source_order, discretization, target_order, interp_method, ndim)
          self.restrict     = lambda vec, op=self.interpolator, sh=field.shape: op(vec.reshape(sh))
          restricted_shape  = self.restrict(field).shape
          self.prolong      = lambda vec, op=self.interpolator, sh=restricted_shape: op(vec.reshape(sh), reverse=True)
@@ -156,8 +169,13 @@ class Multigrid:
 
       if param.equations == 'shallow_water':
          self.rhs = rhs_sw
+      elif param.equations == 'Euler':
+         self.rhs = rhs_euler
+         if param.nb_elements_horizontal != param.nb_elements_vertical:
+            raise ValueError(f'MG with Euler equations needs same number of elements horizontally and vertically. '
+                             f'Now we have {param.nb_elements_horizontal} and {param.nb_elements_vertical}')
       else:
-         raise ValueError('Cannot use the multigrid solver with anything other than shallow water')
+         raise ValueError('Cannot use the multigrid solver with anything other than shallow water or Euler')
 
       self.matvec = matvec_rat
       self.use_solver = (param.mg_smoothe_only <= 0)
@@ -192,7 +210,7 @@ class Multigrid:
          next_field = self.levels[order].init_time_step(self.matvec, next_field, dt)
          order = self.next_level(order)
 
-   def iterate(self, b, x0=None, level=-1, coarsest_level=1, gamma=1, in_first_zero=False):
+   def iterate(self, b, x0=None, level=-1, coarsest_level=1, gamma=1, in_first_zero=False, verbose=False):
       """
       Do one pass of the multigrid algorithm.
 
@@ -205,6 +223,9 @@ class Multigrid:
 
       if level < 0: level = self.max_level
       level_work = 0.0
+
+      if verbose:
+         print(f'MG level {level}')
 
       if x0 is None:
          x0 = numpy.zeros_like(b)
@@ -243,7 +264,7 @@ class Multigrid:
 
       return x, level_work
 
-   def solve(self, b, x0=None, field=None, dt=None, coarsest_level=1, tolerance=1e-7, gamma=1, max_num_it=100):
+   def solve(self, b, x0=None, field=None, dt=None, coarsest_level=1, tolerance=1e-7, gamma=1, max_num_it=100, verbose=False):
       """
       Solve the system defined by [self] using the multigrid method.
 
@@ -294,7 +315,7 @@ class Multigrid:
       A         = self.levels[level].matrix_operator
       num_it    = 0
       for it in range(max_num_it):
-         x, work = self.iterate(b, x, level, coarsest_level=coarsest_level, gamma=gamma, in_first_zero=first_zero)
+         x, work = self.iterate(b, x, level, coarsest_level=coarsest_level, gamma=gamma, in_first_zero=first_zero, verbose=verbose)
          first_zero = False
          num_it += 1
          total_work += work

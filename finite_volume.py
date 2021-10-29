@@ -4,7 +4,7 @@ from time import time
 import numpy
 
 from cubed_sphere    import cubed_sphere
-from initialize      import initialize_sw
+from initialize      import initialize_sw, initialize_euler
 from interpolation   import interpolator
 from linsol          import fgmres
 from matvec          import matvec_rat
@@ -12,35 +12,42 @@ from matrices        import DFR_operators
 from metric          import Metric
 from multigrid       import Multigrid
 from rhs_sw          import rhs_sw
+from rhs_euler       import rhs_euler
 
 
 class FiniteVolume:
 
    def __init__(self, param, sample_field, ptopo, precond_type='fv', prefix=''):
-      self.max_iter = 1000
+      self.param        = deepcopy(param)
+      self.max_iter     = 1000
       self.precond_type = precond_type
 
       if self.precond_type not in ['fv', 'fv-mg']:
          raise ValueError('precond_type can only be "fv" (finite volume) or "fv-mg" (multigrid FV)')
+
+      implemented_equations = ['shallow_water', 'Euler']
+      if self.param.equations not in implemented_equations:
+         raise ValueError(f'Preconditioner is only implemented for the following equations: {implemented_equations}. '
+                          'Need to make it a bit more flexible')
 
       # print(f'Params:\n{param}')
 
       self.origin_order = param.nbsolpts
       self.dest_order   = self.origin_order
 
-      self.interpolate = interpolator('dg', self.origin_order, 'fv', self.dest_order, param.dg_to_fv_interp)
+      ndim = 2 if self.param.equations == 'shallow_water' else 3
+
+      self.interpolate = interpolator('dg', self.origin_order, 'fv', self.dest_order, param.dg_to_fv_interp, ndim)
 
       print(f'origin order: {self.origin_order}, dest order: {self.dest_order}')
 
       # Create a set of parameters for the FV formulation
-      self.param = deepcopy(param)
       self.param.discretization = 'fv'
       self.param.nb_elements_horizontal = self.param.nb_elements_horizontal * self.dest_order
       self.param.nbsolpts               = 1
 
-      if self.param.equations != 'shallow_water':
-         raise ValueError('Preconditioner is only implemented for the shallow water equations. '
-                          'Need to make it a bit more flexible')
+      if self.param.equations == 'Euler':
+         self.param.nb_elements_vertical = self.param.nb_elements_vertical * self.dest_order
 
       # Finite volume formulation of the problem
       self.ptopo          = ptopo
@@ -49,11 +56,16 @@ class FiniteVolume:
                                          self.ptopo, self.param)
       self.dest_operators = DFR_operators(self.dest_geom, self.param)
       self.dest_metric    = Metric(self.dest_geom)
-      dest_field, self.dest_topo = initialize_sw(self.dest_geom, self.dest_metric, self.dest_operators, self.param)
+
+      if self.param.equations == 'Euler':
+         dest_field, self.dest_topo = initialize_euler(self.dest_geom, self.dest_metric, self.dest_operators, self.param)
+         self.rhs_function          = rhs_euler
+      elif self.param.equations == 'shallow_water':
+         dest_field, self.dest_topo = initialize_sw(self.dest_geom, self.dest_metric, self.dest_operators, self.param)
+         self.rhs_function          = rhs_sw
 
       self.dest_field_shape   = dest_field.shape
       self.origin_field_shape = sample_field.shape
-      self.rhs_function       = rhs_sw
 
       self.dest_matrix = None # System mat-vec function for the FV problem
       self.dest_rhs    = None # RHS function for the FV problem
@@ -76,7 +88,7 @@ class FiniteVolume:
    def prolong(self, vec):
       return self.interpolate(vec.reshape(self.dest_field_shape), reverse=True)
 
-   def apply(self, vec):
+   def apply(self, vec, verbose=False):
       """
       Apply the preconditioner on the given vector
       """
@@ -90,7 +102,7 @@ class FiniteVolume:
          output_vec, _, num_iter, _, residuals = fgmres(
             self.dest_matrix, input_vec, preconditioner=self.preconditioner, tol=self.param.precond_tolerance, maxiter=max_num_iter)
       elif self.precond_type == 'fv-mg':  # Multigrid preconditioner
-         output_vec, _, num_iter, _, residuals = self.mg_solver.solve(input_vec, coarsest_level=self.param.coarsest_mg_order, max_num_it=1)
+         output_vec, _, num_iter, _, residuals = self.mg_solver.solve(input_vec, coarsest_level=self.param.coarsest_mg_order, max_num_it=1, verbose=verbose)
 
       self.last_solution = output_vec
 
@@ -120,9 +132,15 @@ class FiniteVolume:
       """
 
       self.dest_field = self.restrict(field)
-      self.dest_rhs = lambda vec: self.rhs_function(
-         vec, self.dest_geom, self.dest_operators, self.dest_metric, self.dest_topo, self.ptopo, self.param.nbsolpts,
-         self.param.nb_elements_horizontal, self.param.case_number, False)
+      self.dest_rhs = None
+      if self.param.equations == 'Euler':
+         self.dest_rhs = lambda vec: self.rhs_function(
+            vec, self.dest_geom, self.dest_operators, self.dest_metric, self.dest_topo, self.ptopo, self.param.nbsolpts,
+            self.param.nb_elements_horizontal, self.param.nb_elements_vertical, self.param.case_number, False)
+      elif self.param.equations == 'shallow_water':
+         self.dest_rhs = lambda vec: self.rhs_function(
+            vec, self.dest_geom, self.dest_operators, self.dest_metric, self.dest_topo, self.ptopo, self.param.nbsolpts,
+            self.param.nb_elements_horizontal, self.param.case_number, False)
       self.dest_matrix = lambda vec: matvec_rat(vec, dt, self.dest_field, self.dest_rhs)
 
       self.dt = dt

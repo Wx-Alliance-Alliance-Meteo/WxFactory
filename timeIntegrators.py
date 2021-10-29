@@ -197,7 +197,7 @@ class Rat2:
       self.apply_precond = None
       if param.preconditioner in ['fv', 'fv-mg']:
          self.preconditioner = FiniteVolume(param, Q, ptopo, precond_type=param.preconditioner)
-         self.apply_precond = lambda vec: self.preconditioner.apply(vec)
+         self.apply_precond = lambda vec: self.preconditioner.apply(vec, verbose=False)
       elif param.preconditioner == 'p-mg':
          pts, _ = gauss_legendre(param.initial_nbsolpts)
          param.mg_cfl *= abs(1.0 - pts[-1]) / (2 * (2 * param.initial_nbsolpts + 1)) # This looks very iffy
@@ -217,7 +217,7 @@ class Rat2:
       self.use_mg = False
       if param.linear_solver == 'fgmres':
          self.solver_name = 'FGMRES'
-         self.max_it = 1200//20 if self.preconditioner is None else 260//20
+         self.max_it = 2400//20 if self.preconditioner is None else 300//20
          self.solve = lambda A, b, x0 : fgmres(A, b, x0=x0, tol=self.tol, preconditioner=self.apply_precond, restart=20, maxiter=self.max_it)
 
       elif param.linear_solver in ['mg', 'multigrid']:
@@ -282,7 +282,7 @@ class Rat2:
 
       gmres_sol, gmres_res, num_gmres_it, gmres_flag, res = fgmres(matvec_handle, rhs, x0=phiv, tol=self.tol, preconditioner=None, restart=20, maxiter=1200//20)
       diff = gmres_sol - phiv
-      diff_norm = numpy.linalg.norm(diff) / numpy.linalg.norm(gmres_sol)
+      diff_norm = numpy.linalg.norm(diff) / numpy.linalg.norm(phiv)
 
       res1 = numpy.linalg.norm(matvec_handle(phiv) - rhs)
       res2 = numpy.linalg.norm(matvec_handle(gmres_sol) - rhs)
@@ -290,7 +290,7 @@ class Rat2:
       print(f'Diff norm = {diff_norm}')
       print(f'error: {local_error:.2e}/{gmres_res:.2e}, flag {flag}/{gmres_flag}, res1/2 {res1:.2e}/{res2:.2e}')
 
-      if num_gmres_it > 1 or gmres_flag != 0 or diff_norm > 2*self.tol:
+      if num_gmres_it > 1 or gmres_flag != 0 or diff_norm > 5e-6:
          raise ValueError(f'Solver did not give the same result as GMRES! num_gmres_it = {num_gmres_it}, gmres_flag = {gmres_flag}')
 
       # Update solution
