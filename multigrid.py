@@ -14,6 +14,7 @@ from matrices      import DFR_operators
 from matvec        import matvec_rat
 from metric        import Metric
 from rhs_euler     import rhs_euler
+from rhs_euler_fv  import rhs_euler_fv
 from rhs_sw        import rhs_sw
 
 from definitions import idx_h, idx_hu1, idx_hu2, gravity
@@ -170,7 +171,7 @@ class Multigrid:
       if param.equations == 'shallow_water':
          self.rhs = rhs_sw
       elif param.equations == 'Euler':
-         self.rhs = rhs_euler
+         self.rhs = rhs_euler_fv if discretization == 'fv' else rhs_euler
          if param.nb_elements_horizontal != param.nb_elements_vertical:
             raise ValueError(f'MG with Euler equations needs same number of elements horizontally and vertically. '
                              f'Now we have {param.nb_elements_horizontal} and {param.nb_elements_vertical}')

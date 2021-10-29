@@ -12,7 +12,7 @@ from matrices        import DFR_operators
 from metric          import Metric
 from multigrid       import Multigrid
 from rhs_sw          import rhs_sw
-from rhs_euler       import rhs_euler
+from rhs_euler_fv    import rhs_euler_fv
 
 
 class FiniteVolume:
@@ -59,7 +59,7 @@ class FiniteVolume:
 
       if self.param.equations == 'Euler':
          dest_field, self.dest_topo = initialize_euler(self.dest_geom, self.dest_metric, self.dest_operators, self.param)
-         self.rhs_function          = rhs_euler
+         self.rhs_function          = rhs_euler_fv
       elif self.param.equations == 'shallow_water':
          dest_field, self.dest_topo = initialize_sw(self.dest_geom, self.dest_metric, self.dest_operators, self.param)
          self.rhs_function          = rhs_sw
