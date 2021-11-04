@@ -4,9 +4,33 @@ import math
 from definitions import cpd, day_in_secs, gravity, p0, Rd
 from winds import *
 
+#=======================================================================
+#
+#  Module for setting up initial conditions for the dynamical core tests:
+#
+#  11 - Deformational Advection Test
+#  12 - Hadley Cell Advection Test
+#  13 - Orography Advection Test
+#  20 - Impact of orography on a steady-state at rest
+#  21 and 22 - Non-Hydrostatic Mountain Waves Over A Schaer-Type Mountain without and with vertical wind shear
+#  31 - Non-Hydrostatic Gravity Waves
+#
+#=======================================================================
+
+#==========================================================================================
+# TEST CASE 11 - PURE ADVECTION - 3D DEFORMATIONAL FLOW
+#==========================================================================================
+
+# The 3D deformational flow test is based on the deformational flow test of Nair and Lauritzen (JCP 2010),
+# with a prescribed vertical wind velocity which makes the test truly 3D. An unscaled planet (with scale parameter
+# X = 1) is selected.
+
 def dcmip_T11_update_winds(geom, metric, mtrx, param, time=0):
    """
    Test 11 - Deformational Advection
+
+   The 3D deformational flow test is based on the deformational flow test of Nair and Lauritzen (JCP 2010), with a prescribed vertical wind velocity which makes the test truly 3D. An unscaled planet (with scale parameter X = 1) is selected.
+
    The velocities are time dependent and therefore must be updated in the dynamical core.
    """
 
@@ -96,7 +120,11 @@ def dcmip_T12_update_winds(geom, metric, mtrx, param, time=0):
    return u1_contra, u2_contra, w
 
 def dcmip_advection_deformation(geom, metric, mtrx, param):
-   """ Test 11 - Deformational Advection """
+   """
+   Test 11 - Deformational Advection
+
+   The 3D deformational flow test is based on the deformational flow test of Nair and Lauritzen (JCP 2010), with a prescribed vertical wind velocity which makes the test truly 3D. An unscaled planet (with scale parameter X = 1) is selected.
+   """
    tau     = 12.0 * 86400.0                             # period of motion 12 days
    T0      = 300.0                                      # temperature
    H       = Rd * T0 / gravity                          # scale height
@@ -309,65 +337,99 @@ def dcmip_mountain(geom, metric, mtrx, param):
 
    return h_surf, h_surf_itf_i, h_surf_itf_j, dhdx1, dhdx2
 
+#==========================================================================================
+# TEST CASE 3 - GRAVITY WAVES
+#==========================================================================================
+
 def dcmip_gravity_wave(geom, metric, mtrx, param):
+   """
+   Test case 31 - gravity waves
 
-   u0      = 20.0                 # Reference Velocity
-   Teq     = 300.0                # Temperature at Equator
-   Peq     = 100000.0             # Reference PS at Equator
-   lambdac = 2.0 * math.pi / 3.0  # Lon of Pert Center
-   d       = 5000.0               # Width for Pert
-   phic    = 0.0                  # Lat of Pert Center
-   delta_theta = 1.0              # Max Amplitude of Pert
-   Lz      = 20000.0              # Vertical Wavelength of Pert
-   N       = 0.010                 # Brunt-Vaisala frequency
-   N2      = N**2                  # Brunt-Vaisala frequency Squared
-   bigG    = (gravity**2)/(N2*cpd) # Constant
+   The non-hydrostatic gravity wave test examines the response of models to short time-scale wavemotion triggered by a localized perturbation. The formulation presented in this document is new, but is based on previous approaches by Skamarock et al. (JAS 1994), Tomita and Satoh (FDR 2004), and Jablonowski et al. (NCAR Tech Report 2008)
+   """
 
-   inv_kappa = cpd/Rd
+   u0      = 20.                       # Reference Velocity
+   Teq     = 300.                      # Temperature at Equator
+   Peq     = 100000.                   # Reference PS at Equator
+   ztop    = 10000.                    # Model Top
+   lambdac = 2. * math.pi / 3.         # Lon of Pert Center
+   d       = 5000.                     # Width for Pert
+   phic    = 0.                        # Lat of Pert Center
+   delta_theta = 1.                    # Max Amplitude of Pert
+   Lz      = 20000.                    # Vertical Wavelength of Pert
+   N       = 0.01                      # Brunt-Vaisala frequency
+   N2      = N*N                       # Brunt-Vaisala frequency Squared
+   bigG    = (gravity**2)/(N2*cpd)
 
-   p0 = 100000.0 # reference pressure (Pa)
+   kappa = Rd / cpd
+   inv_kappa = cpd / Rd
 
-   fld_shape = geom.height.shape
+   #-----------------------------------------------------------------------
+   #    THE VELOCITIES
+   #-----------------------------------------------------------------------
 
    # Zonal Velocity
+
    u = u0 * numpy.cos(geom.lat)
 
    # Meridional Velocity
-   v = numpy.zeros(fld_shape)
 
-   # Contravariant components
+   v = numpy.zeros_like(u)
+
+   # Vertical Velocity = Vertical Pressure Velocity = 0
+
+   w = numpy.zeros_like(u)
+
    u1_contra, u2_contra = wind2contra(u, v, geom)
 
-   # Vertical Velocity
-   w = numpy.zeros(fld_shape)
+   #-----------------------------------------------------------------------
+   #    SURFACE TEMPERATURE
+   #-----------------------------------------------------------------------
 
-   # Surface temperature
-   Ts = bigG + (Teq - bigG) * numpy.exp( -(u0 * N2 / (4.0 * gravity**2)) * (u0 + 2.0 * geom.rotation_speed * geom.earth_radius) * (numpy.cos(2.0 * geom.lat) - 1.0) )
+   TS = bigG + (Teq - bigG) * numpy.exp( -(u0 * N2 / (4.0 * gravity**2)) * (u0 + 2.0 * geom.rotation_speed * geom.earth_radius) * (numpy.cos(2.0 * geom.lat) - 1.0)    )
 
-   # Pressure
-   ps = Peq * numpy.exp( (u0 / (4.0 * bigG * Rd)) * (u0 + 2.0 * geom.rotation_speed * geom.earth_radius) * (numpy.cos(2.0 * geom.lat) - 1.0) ) * (Ts/Teq)**inv_kappa
+   #-----------------------------------------------------------------------
+   #    PS (surface pressure)
+   #-----------------------------------------------------------------------
 
-   p = ps * ( (bigG / Ts) * numpy.exp(-N2 * geom.height / gravity) + 1.0 - (bigG / Ts) )**inv_kappa
+   ps = Peq * numpy.exp( (u0/(4.0 * bigG * Rd)) * (u0 + 2.0 * geom.rotation_speed * geom.earth_radius) * (numpy.cos(2.0 * geom.lat) - 1.0)  ) * (TS/Teq)**inv_kappa
 
-   # Background potential temperature
-   theta_base = Ts * (p0/ps)**kappa * numpy.exp(N2 * geom.height / gravity)
+   #-----------------------------------------------------------------------
+   #    HEIGHT AND PRESSURE AND MEAN TEMPERATURE
+   #-----------------------------------------------------------------------
 
-   # Background temperature
-   Tb = bigG * (1.0 - numpy.exp(N2 * geom.height / gravity)) + Ts * numpy.exp(N2 * geom.height / gravity)
+   p = ps * ( (bigG / TS) * numpy.exp(-N2 * geom.height / gravity) + 1.0 - (bigG / TS)  )**inv_kappa
 
-   # density is initialized with unperturbed background temperature, temperature perturbation is added afterwards
-   rho = p / (Rd * Tb)
+   t_mean = bigG * (1.0 - numpy.exp(N2 * geom.height / gravity)) + TS * numpy.exp(N2 * geom.height / gravity)
 
-   # Potential temperature perturbation
+   theta_base = t_mean * (p0 / p)**kappa
+
+   #-----------------------------------------------------------------------
+   #    rho (density), unperturbed using the background temperature t_mean
+   #-----------------------------------------------------------------------
+
+   rho = p / (Rd * t_mean)
+
+   #-----------------------------------------------------------------------
+   #    POTENTIAL TEMPERATURE PERTURBATION,
+   #    here: converted to temperature and added to the temperature field
+   #    models with a prognostic potential temperature field can utilize
+   #    the potential temperature perturbation theta_pert directly and add it
+   #    to the background theta field (not included here)
+   #-----------------------------------------------------------------------
+
    sin_tmp = numpy.sin(geom.lat) * math.sin(phic)
    cos_tmp = numpy.cos(geom.lat) * math.cos(phic)
 
-   r = geom.earth_radius * numpy.cos(sin_tmp + cos_tmp * numpy.cos(geom.lon - lambdac))
-   s = (d**2)/(d**2 + r**2)
+   # great circle distance with 'a/X'
+
+   r  = geom.earth_radius * numpy.arccos(sin_tmp + cos_tmp * numpy.cos(geom.lon - lambdac))
+
+   s = (d**2) / (d**2 + r**2)
 
    theta_pert = delta_theta * s * numpy.sin(2.0 * math.pi * geom.height / Lz)
+#   theta_pert = 0. # for debuging
 
-   # Potential temperature
    theta = theta_base + theta_pert
 
    return rho, u1_contra, u2_contra, w, theta

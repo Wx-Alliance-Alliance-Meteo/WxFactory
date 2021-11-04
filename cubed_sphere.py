@@ -211,15 +211,19 @@ class cubed_sphere:
       # Map to the interval [0, 2 pi]
       lon_itf_j[lon_itf_j<0.0] = lon_itf_j[lon_itf_j<0.0] + (2.0 * math.pi)
 
+      # --- define planet radius and rotation speed
+      self.earth_radius   = 6371220.0      # Mean radius of the earth (m)
+      self.rotation_speed = 7.29212e-5     # Angular speed of rotation of the earth (radians/s)
+
       # Check for resized planet
-      fact_X = 1.
-      planet_is_rotating = 1
+      planet_scaling_factor = 1.
+      planet_is_rotating = 1.
       if param.equations == "Euler":
          if param.case_number == 31:
-            fact_X = 125.
+            planet_scaling_factor = 125.
             planet_is_rotating = 0.
-      self.earth_radius   = definitions.earth_radius / fact_X
-      self.rotation_speed = definitions.rotation_speed / fact_X * planet_is_rotating
+      self.earth_radius   /= planet_scaling_factor
+      self.rotation_speed *= planet_is_rotating / planet_scaling_factor
 
       self.solutionPoints = solutionPoints
       self.glweights = glweights

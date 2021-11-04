@@ -75,7 +75,7 @@ def main(args) -> int:
          # preconditioner = DG_preconditioner(param, geom, ptopo, mtrx, rhs_sw)
          preconditioner = FV_preconditioner(param, Q, ptopo)
       stepper = Rat2(rhs_handle, param.tolerance, preconditioner=preconditioner)
-   elif  param.time_integrator.lower() == 'epi2/ark' and param.equations == "shallow water": # TODO : Euler
+   elif  param.time_integrator.lower() == 'epi2/ark' and param.equations == "shallow_water": # TODO : Euler
       rhs_explicit = lambda q: rhs_sw_explicit(q, geom, mtrx, metric, topo, ptopo, param.nbsolpts, param.nb_elements_horizontal, param.case_number, param.filter_apply)
 
       rhs_implicit = lambda q: rhs_sw_implicit(q, geom, mtrx, metric, topo, ptopo, param.nbsolpts, param.nb_elements_horizontal, param.case_number, param.filter_apply)

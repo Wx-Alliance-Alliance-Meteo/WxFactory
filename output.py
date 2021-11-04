@@ -25,7 +25,6 @@ def output_init(geom, param):
    # create dimensions
    if param.equations == "shallow_water":
       ni, nj = geom.lat.shape
-      print(geom.lat.shape)
       grid_data = ('npe', 'Xdim', 'Ydim')
    elif param.equations == "Euler":
       nk, nj, ni = geom.nk, geom.nj, geom.ni
@@ -79,7 +78,7 @@ def output_init(geom, param):
    lon.long_name = 'longitude'
    lon.units = 'degrees_east'
 
-   if param.equations == "shallow water":
+   if param.equations == "shallow_water":
 
       hhh = ncfile.createVariable('h', numpy.dtype('double').char, ('time', ) + grid_data)
       hhh.long_name = 'fluid height'
@@ -162,6 +161,14 @@ def output_init(geom, param):
       potential_temp.grid_mapping = 'cubed_sphere'
       potential_temp.set_collective(True)
 
+      press = ncfile.createVariable('P', numpy.dtype('double').char, ('time',) + grid_data)
+      press.long_name = 'air_pressure'
+      press.units = 'Pa'
+      press.standard_name = 'air_pressure'
+      press.coordinates = 'lons lats'
+      press.grid_mapping = 'cubed_sphere'
+      press.set_collective(True)
+
       if param.case_number == 11 or param.case_number == 12:
          q1 = ncfile.createVariable('q1', numpy.dtype('double').char, ('time',) + grid_data)
          q1.long_name = 'q1'
@@ -170,7 +177,7 @@ def output_init(geom, param):
          q1.coordinates = 'lons lats'
          q1.grid_mapping = 'cubed_sphere'
          q1.set_collective(True)
-   
+
       if param.case_number == 11:
          q2 = ncfile.createVariable('q2', numpy.dtype('double').char, ('time',) + grid_data)
          q2.long_name = 'q2'
@@ -216,7 +223,7 @@ def output_netcdf(Q, geom, metric, mtrx, topo, step, param):
 
    ncfile['time'][idx] = step * param.dt
 
-   if param.equations == "shallow water":
+   if param.equations == "shallow_water":
 
       # Unpack physical variables
       h = Q[idx_h, :, :] + topo.hsurf
@@ -229,24 +236,26 @@ def output_netcdf(Q, geom, metric, mtrx, topo, step, param):
          rv = relative_vorticity(u1, u2, geom, metric, mtrx, param)
          pv = potential_vorticity(h, u1, u2, geom, metric, mtrx, param)
 
-         ncfile['U'][idx, rank, :, :] = u
-         ncfile['V'][idx, rank, :, :] = v
+         ncfile['U'][idx, rank, :, :]  = u
+         ncfile['V'][idx, rank, :, :]  = v
          ncfile['RV'][idx, rank, :, :] = rv
          ncfile['PV'][idx, rank, :, :] = pv
 
    if param.equations == "Euler":
-      rho = Q[idx_rho, :, :, :]
-      u1  = Q[idx_rho_u1, :, :, :] / rho
-      u2  = Q[idx_rho_u2, :, :, :] / rho
-      w   = Q[idx_rho_w, :, :, :]  / rho
+      rho   = Q[idx_rho, :, :, :]
+      u1    = Q[idx_rho_u1, :, :, :]  / rho
+      u2    = Q[idx_rho_u2, :, :, :]  / rho
+      w     = Q[idx_rho_w, :, :, :]   / rho
+      theta = Q[idx_rho_theta, :,:,:] / rho
 
       u, v = contra2wind(u1, u2, geom)
 
-      ncfile['rho'][idx, rank, :,:,:] = Q[idx_rho, :,:,:]
-      ncfile['U'][idx, rank, :, :] = u
-      ncfile['V'][idx, rank, :, :] = v
-      ncfile['W'][idx, rank, :, :] = w
-      ncfile['theta'][idx, rank, :,:,:] = Q[idx_rho_theta, :,:,:] / rho
+      ncfile['rho'][idx, rank, :,:,:]   = rho
+      ncfile['U'][idx, rank, :, :]      = u
+      ncfile['V'][idx, rank, :, :]      = v
+      ncfile['W'][idx, rank, :, :]      = w
+      ncfile['theta'][idx, rank, :,:,:] = theta
+      ncfile['P'][idx, rank, :,:,:] = p0 * (Q[idx_rho_theta] * Rd / p0)**(cpd / cvd)
 
       if param.case_number == 11 or param.case_number == 12:
          ncfile['q1'][idx, rank, :,:,:] = Q[5, :,:,:] / rho

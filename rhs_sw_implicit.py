@@ -1,7 +1,7 @@
 import numpy
 
 from definitions import idx_h, idx_hu1, idx_hu2, idx_u1, idx_u2, gravity
-from dgfilter import apply_filter
+from dgfilter import apply_filter2D
 
 def rhs_sw_implicit(Q, geom, mtrx, metric, topo, ptopo, nbsolpts, nb_elements_horiz, case_number, filter_rhs=False):
 
@@ -207,6 +207,6 @@ def rhs_sw_implicit(Q, geom, mtrx, metric, topo, ptopo, nbsolpts, nb_elements_ho
 
    if filter_rhs:
       for var in range(1,3):
-         rhs[var,:,:] = apply_filter(rhs[var,:,:], mtrx, nb_elements_horiz, nbsolpts)
+         rhs[var,:,:] = apply_filter2D(rhs[var,:,:], mtrx, nb_elements_horiz, nbsolpts)
 
    return rhs

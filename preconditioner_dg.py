@@ -2,7 +2,7 @@ from copy import copy
 from time import time
 
 from cubed_sphere  import cubed_sphere
-from dgfilter      import apply_filter
+from dgfilter      import apply_filter2D
 from initialize    import initialize_sw
 from interpolation import LagrangeSimpleInterpolator
 from linsol        import fgmres
@@ -22,7 +22,7 @@ class DG_preconditioner:
                f" (currently asking for order {param.nbsolpts - 1})")
          raise ValueError
 
-      if param.equations != 'shallow water':
+      if param.equations != 'shallow_water':
          raise ValueError('Preconditioner is only implemented for the shallow water equations. '
                           'Need to make it a bit more flexible')
 
@@ -124,9 +124,9 @@ class DG_preconditioner:
 
       input_vec_grid = self.restrict(vec.reshape(self.big_shape))
       if self.filter_before:
-         input_vec_grid[0] = apply_filter(input_vec_grid[0], self.small_operators, self.num_elements, self.small_order)
-         input_vec_grid[1] = apply_filter(input_vec_grid[1], self.small_operators, self.num_elements, self.small_order)
-         input_vec_grid[2] = apply_filter(input_vec_grid[2], self.small_operators, self.num_elements, self.small_order)
+         input_vec_grid[0] = apply_filter2D(input_vec_grid[0], self.small_operators, self.num_elements, self.small_order)
+         input_vec_grid[1] = apply_filter2D(input_vec_grid[1], self.small_operators, self.num_elements, self.small_order)
+         input_vec_grid[2] = apply_filter2D(input_vec_grid[2], self.small_operators, self.num_elements, self.small_order)
 
       input_vec = input_vec_grid.flatten()
 
@@ -138,9 +138,9 @@ class DG_preconditioner:
       result_grid = self.prolong(output_vec.reshape(self.small_shape))
 
       if self.filter_after:
-         result_grid[0] = apply_filter(result_grid[0], self.big_operators, self.num_elements, self.big_order)
-         result_grid[1] = apply_filter(result_grid[1], self.big_operators, self.num_elements, self.big_order)
-         result_grid[2] = apply_filter(result_grid[2], self.big_operators, self.num_elements, self.big_order)
+         result_grid[0] = apply_filter2D(result_grid[0], self.big_operators, self.num_elements, self.big_order)
+         result_grid[1] = apply_filter2D(result_grid[1], self.big_operators, self.num_elements, self.big_order)
+         result_grid[2] = apply_filter2D(result_grid[2], self.big_operators, self.num_elements, self.big_order)
 
       result = result_grid.flatten()
 
