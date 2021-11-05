@@ -141,9 +141,14 @@ class Metric:
       self.H_contra_33 = numpy.ones_like(geom.X)  # TODO : terrain following
 
       self.H_contra_13_itf_i = numpy.zeros_like(self.H_contra_11_itf_i) # TODO : terrain following
+      self.H_contra_23_itf_i = numpy.zeros_like(self.H_contra_11_itf_i) # TODO : terrain following
+      self.H_contra_33_itf_i = numpy.ones_like(self.H_contra_11_itf_i) # TODO : terrain following
       self.H_contra_31_itf_i = numpy.zeros_like(self.H_contra_11_itf_i) # TODO : terrain following
+      self.H_contra_32_itf_i = numpy.zeros_like(self.H_contra_11_itf_i) # TODO : terrain following
+      self.H_contra_13_itf_j = numpy.zeros_like(self.H_contra_11_itf_j) # TODO : terrain following
       self.H_contra_23_itf_j = numpy.zeros_like(self.H_contra_11_itf_j) # TODO : terrain following
-      self.H_contra_32_itf_j = numpy.zeros_like(self.H_contra_11_itf_j) # TODO : terrain following
       self.H_contra_33_itf_j = numpy.ones_like(self.H_contra_11_itf_j)  # TODO : terrain following
+      self.H_contra_31_itf_j = numpy.zeros_like(self.H_contra_11_itf_j)  # TODO : terrain following
+      self.H_contra_32_itf_j = numpy.zeros_like(self.H_contra_11_itf_j) # TODO : terrain following
 
-      self.inv_dzdeta = numpy.zeros_like(geom.X)
+      self.inv_dzdeta = numpy.ones_like(geom.X)

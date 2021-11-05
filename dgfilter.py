@@ -43,7 +43,7 @@ def exponential(N, Nc, s, V, invV):
 
    return F
 
-def apply_filter(S, mtrx, nb_elements, nbsolpts):
+def apply_filter2D(S, mtrx, nb_elements, nbsolpts):
    """
    Apply filter \(\mathcal{F}\) on variable \(\mathcal{S}\)
    """
@@ -54,10 +54,38 @@ def apply_filter(S, mtrx, nb_elements, nbsolpts):
 
       # --- Direction x1
 
-      R[:,epais] =  S[:,epais] @ mtrx.filter_tr 
+      R[:,:,epais] = S[:,:,epais] @ mtrx.filter_tr 
+
+   for elem in range(nb_elements):
+      epais = elem * nbsolpts + numpy.arange(nbsolpts)
 
       # --- Direction x2
 
-      R[epais,:] = mtrx.filter @ S[epais,:]
+      R[:,epais,:] = mtrx.filter @ R[:,epais,:]
+
+   return R
+
+
+def apply_filter3D(S, mtrx, nb_elements_hori, nb_elements_vert, nbsolpts):
+   """
+   Apply filter \(\mathcal{F}\) on variable \(\mathcal{S}\)
+   """
+   R = numpy.empty_like(S)
+
+   # --- Direction x1
+   for elem in range(nb_elements_hori):
+      epais = elem * nbsolpts + numpy.arange(nbsolpts)
+      R[:, :, epais] = S[:, :, epais] @ mtrx.filter_tr 
+   
+   # --- Direction x2
+   for elem in range(nb_elements_hori):
+      epais = elem * nbsolpts + numpy.arange(nbsolpts)
+      R[:, epais, :] = mtrx.filter @ R[:, epais, :]
+   
+   # --- Direction x3
+   for slab in range(nb_elements_hori * nbsolpts):
+      for elem in range(nb_elements_vert):
+         epais = elem * nbsolpts + numpy.arange(nbsolpts)
+         R[epais, slab, :] = mtrx.filter @ R[epais, slab, :]
 
    return R

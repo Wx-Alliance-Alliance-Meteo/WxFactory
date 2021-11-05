@@ -69,7 +69,7 @@ def main(args) -> int:
       stepper = Tvdrk3(rhs_handle)
    elif param.time_integrator.lower() == 'rat2':
       stepper = Rat2(Q, rhs_handle, param, ptopo)
-   elif  param.time_integrator.lower() == 'epi2/ark' and param.equations == "shallow water": # TODO : Euler
+   elif  param.time_integrator.lower() == 'epi2/ark' and param.equations == "shallow_water": # TODO : Euler
       rhs_explicit = lambda q: rhs_sw_explicit(q, geom, mtrx, metric, topo, ptopo, param.nbsolpts, param.nb_elements_horizontal, param.case_number, param.filter_apply)
 
       rhs_implicit = lambda q: rhs_sw_implicit(q, geom, mtrx, metric, topo, ptopo, param.nbsolpts, param.nb_elements_horizontal, param.case_number, param.filter_apply)
