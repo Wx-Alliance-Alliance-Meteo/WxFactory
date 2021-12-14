@@ -41,10 +41,10 @@ class Configuration:
       try:
          self.preconditioner = parser.get('Time_integration', 'preconditioner').lower()
          if not self.preconditioner in self.possible_precond:
-            print(f'Warning: chosen preconditioner {self.preconditioner} is not within available preconditioners. Possible values are {possible_precond}')
-            self.preconditioner = 'none'
+            print(f'Warning: chosen preconditioner {self.preconditioner} is not within available preconditioners. Possible values are {self.possible_precond}')
+            self.preconditioner = self.possible_precond[0]
       except (NoOptionError, NoSectionError):
-         self.preconditioner = 'none'
+         self.preconditioner = self.possible_precond[0]
 
       try:
          self.precond_tolerance = parser.getfloat('Time_integration', 'precond_tolerance')
@@ -55,6 +55,20 @@ class Configuration:
          self.coarsest_mg_order = parser.getint('Time_integration', 'coarsest_mg_order')
       except (NoOptionError, NoSectionError):
          self.coarsest_mg_order = 1
+
+      self.possible_smoothers = ['erk', 'irk']
+      try:
+         self.mg_smoother = parser.get('Time_integration', 'mg_smoother')
+         if not self.mg_smoother in self.possible_smoothers:
+            print(f'Warning: chosen multigrid smoother {self.mg_smoother} is not within available smoothers. Possible values are {self.possible_smoothers}')
+            self.mg_smoother = self.possible_smoothers[0]
+      except (NoOptionError, NoSectionError):
+         self.mg_smoother = self.possible_smoothers[0]
+
+      try:
+         self.sgs_eta = parser.getfloat('Time_integration', 'sgs_eta')
+      except (NoOptionError, NoSectionError):
+         self.sgs_eta = 0.5
 
       try:
          self.mg_smoothe_only = parser.getint('Time_integration', 'mg_smoothe_only')

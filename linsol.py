@@ -52,7 +52,7 @@ def ortho_1_sync(Q, R, j):
    return Q, R, norm
 
 
-def fgmres(A, b, x0 = None, tol = 1e-5, restart = 20, maxiter = None, preconditioner = None, hegedus = False):
+def fgmres(A, b, x0 = None, tol = 1e-5, restart = 20, maxiter = None, preconditioner = None, hegedus = False, verbose = False):
    """
    Solve the given linear system (Ax = b) for x, using the FGMRES algorithm. 
 
@@ -179,6 +179,7 @@ def fgmres(A, b, x0 = None, tol = 1e-5, restart = 20, maxiter = None, preconditi
          if inner < restart - 1:
             norm_r = numpy.abs(g[inner+1])
             residuals.append((norm_r / norm_b, time() - t_start, total_work))
+            if verbose: print(f'norm_r / b = {residuals[-1][0]:.3e}')
             if norm_r < tol_relative:
                break
 
@@ -193,6 +194,8 @@ def fgmres(A, b, x0 = None, tol = 1e-5, restart = 20, maxiter = None, preconditi
       total_work += 1.0
 
       norm_r = global_norm(r)
+      if verbose:
+         print(f'res: {norm_r/norm_b:.2e} (iter {niter})')
       residuals.append((norm_r / norm_b, time() - t_start, total_work))
 
       # Has GMRES stagnated?

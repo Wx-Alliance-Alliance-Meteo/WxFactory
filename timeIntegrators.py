@@ -218,7 +218,7 @@ class Rat2:
       if param.linear_solver == 'fgmres':
          self.solver_name = 'FGMRES'
          self.max_it = 2400//20 if self.preconditioner is None else 300//20
-         self.solve = lambda A, b, x0 : fgmres(A, b, x0=x0, tol=self.tol, preconditioner=self.apply_precond, restart=20, maxiter=self.max_it)
+         self.solve = lambda A, b, x0 : fgmres(A, b, x0=x0, tol=self.tol, preconditioner=self.apply_precond, restart=20, maxiter=self.max_it, verbose=True)
 
       elif param.linear_solver in ['mg', 'multigrid']:
          if param.preconditioner != 'none':
@@ -290,7 +290,7 @@ class Rat2:
       print(f'Diff norm = {diff_norm}')
       print(f'error: {local_error:.2e}/{gmres_res:.2e}, flag {flag}/{gmres_flag}, res1/2 {res1:.2e}/{res2:.2e}')
 
-      if num_gmres_it > 1 or gmres_flag != 0 or diff_norm > 5e-6:
+      if num_gmres_it > 1 or gmres_flag != 0 or diff_norm > 6e-6:
          raise ValueError(f'Solver did not give the same result as GMRES! num_gmres_it = {num_gmres_it}, gmres_flag = {gmres_flag}')
 
       # Update solution

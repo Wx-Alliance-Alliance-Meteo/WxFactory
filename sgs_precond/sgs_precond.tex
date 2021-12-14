@@ -1,0 +1,543 @@
+\documentclass[12pt]{article}
+
+\usepackage{amsmath}
+\usepackage{bm}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{mathalpha}
+\usepackage{xcolor}
+
+\newcommand{\todo}[1]{\textcolor{blue}{#1}}
+
+\title{How to implement an SGS preconditioner for a smoother for a multigrid preconditioner for GEF}
+
+\begin{document}
+\maketitle
+
+We have a 3-stage RK smoother that does this:
+\begin{align}
+    \bm{s}_1 &= \bm{x} + \alpha_1 \bm{\Delta t}^* (\bm{b} - \bm{Ax}) \\
+    \bm{s}_2 &= \bm{x} + \alpha_2 \bm{\Delta t}^* (\bm{b} - \bm{As}_1) \\
+    \bm{x}^{next} &= \bm{x} + \bm{\Delta t}^* (\bm{b} - \bm{As}_2),
+\end{align}
+with $\alpha_1 = 0.145$ and $\alpha_2 = 0.395$.
+
+\todo{Gotta compute $\bm{\Delta t}^*$ properly. Currently it's the same as for shallow water, so it should be good enough.}
+\begin{equation}
+    \bm{\Delta t}^* = ...
+\end{equation}
+
+We're adding a preconditioner $\mathcal{W}$ to it, to get
+\begin{subequations}\label{eq:precond_rk_smoother}
+\begin{align}
+    \bm{s}_1      &= \bm{x} + \alpha_1 \bm{\Delta t}^* \mathcal{W}(\bm{b} - \bm{Ax}) \\
+    \bm{s}_2      &= \bm{x} + \alpha_2 \bm{\Delta t}^* \mathcal{W}(\bm{b} - \bm{As}_1) \\
+    \bm{x}^{next} &= \bm{x} + \bm{\Delta t}^* \mathcal{W}(\bm{b} - \bm{As}_2),
+\end{align}
+\end{subequations}
+where $\mathcal{W}$ basically multiplies its input by $\bm{W}^{-1}$.
+
+% \todo{How many times should we smoothe per MG level? Do we post-smoothe too?}
+
+\todo{What about the $\beta_i$ coefficients, do we just keep them all to 1?}
+
+\todo{Are we doing preconditioned additive RK or additive-W? Is the only difference between the two the definition of $\mathcal{W}$?}
+
+% \subsection{Very long question}
+
+% In the paper, we have
+% \begin{equation}\label{eq:paper_unext}
+%     \bm{u}_{i_t} = \dfrac{3}{2\Delta t^*}\bm{I} + 
+%                    \dfrac{1}{\Omega_i} \sum_{e_{ij} \in N(i)} |e_{ij}| 
+%                         (\bm{A}_{ij}^+ \bm{u}_i + \bm{A}_{ij}^- \bm{u}_j)
+% \end{equation}
+
+% In eq.~\ref{eq:paper_unext}:
+% \begin{enumerate}
+%     \item Does $\bm{A}_{ij}^+$ actually mean the flux jacobian along whatever axis $i$ and $j$ are aligned? (So it would be either $\bm{A}_{ij}^+$, $\bm{B}_{ij}^+$ or $\bm{C}_{ij}^+$)
+%     \item Is that a formula that gives the solution to $\bm{u}_t = \left( \bm{I} + \eta\Delta t^*\bm{J} \right) \bm{u}_{t-1}$, where $\left( \bm{I} + \eta\Delta t^*\bm{J} \right) = \bm{L} + \bm{D} + \bm{U}$?
+%     Or (this sounds better), $u_{i_t}$ is the formula for the time derivative at $u_i$ when using the FV discretization and an upwind flux (?)
+%     \item Does $\bm{A}_{ij}^+ = -\bm{A}_{ji}^+$?
+%     \item If we use directly eq.~\ref{eq:paper_unext} to construct $\bm{L}$, $\bm{D}$ and $\bm{U}$, only $\bm{D}$ will ever contain positive flux matrices ($\bm{A}^+$, $\bm{B}^+$, $\bm{C}^+$), $\bm{L}$ and $\bm{U}$ will only contain negative ones. If the previous question (3.) is true, that would make $\bm{L}_{ij}$ (eq.~\ref{eq:Lij}) actually equal to $-\frac{\eta\Delta t_i^*}{\Omega_i}|e_{ij}|\bm{J}_{ij}^-$. The only difference would be $\bm{J}^+ \to \bm{J}^-$.
+%     \item $\bm{D}$ would also look different, with only positive flux matrices. The part in brackets in eq.~\ref{eq:Dij} would be $\sum_{e_{ij} \in N(i)} |e_{ij}|\bm{J}_{ij}^+$, with $\bm{J}_{ij}$ replaced by $-\bm{J}_{ji}$ when $j < i$, which is exactly half of the time. So, with some arbitrary numbering of the neighbors, it would look like
+%     \begin{equation}
+%         \Delta y \Delta z (\bm{A}_{i4}^+ - \bm{A}_{0i}^+) +
+%         \Delta x \Delta z (\bm{B}_{i5}^+ - \bm{B}_{1i}^+) +
+%         \Delta x \Delta y (\bm{C}_{i6}^+ - \bm{C}_{2i}^+)
+%     \end{equation}
+%     \item How do we get from $\left(\bm{L} + \bm{D} + \bm{U}\right)$ to $(\bm{D} + \bm{U}) \bm{D}^{-1} (\bm{D} + \bm{L})$?
+% \end{enumerate} 
+
+% \subsection{What we should have}
+
+% \begin{equation}\label{eq:gef_unext}
+%     \bm{u}_{i_t} = \dfrac{2}{\Delta t}\bm{I} + \text{(or -?)}
+%                    \dfrac{1}{|\Omega_i|} \sum_{e_{ij} \in N(i)} |e_{ij}| 
+%                         (\bm{J}_{\bm{n}_{ij}}^+ \bm{u}_i + \bm{J}_{\bm{n}_{ij}}^- \bm{u}_j)
+% \end{equation}
+
+% \begin{figure}[tbh]
+%     \centering
+%     \includegraphics[width=0.45\linewidth]{elem_numbering_1}
+%     \includegraphics[width=0.45\linewidth]{elem_numbering_2}
+%     \caption{Element numbering}\label{fig:element_numbering}
+% \end{figure}
+
+% For element $13$ in Fig.~\ref{fig:element_numbering}, this would result in 
+% \begin{align}
+%     \bm{u}_{13_t} = &\cdots + \dfrac{1}{2|\Omega_{13}|} \bigg( \\
+%             & \bm{J}_{\bm{n}_{13,12}}^+ \bm{u}_{13} + \bm{J}_{\bm{n}_{13,12}}^- \bm{u}_{12} +
+%               \bm{J}_{\bm{n}_{13,14}}^+ \bm{u}_{13} + \bm{J}_{\bm{n}_{13,14}}^- \bm{u}_{14} +
+%               &\leftarrow \text{along x} \notag\\
+%             & \bm{J}_{\bm{n}_{13,16}}^+ \bm{u}_{13} + \bm{J}_{\bm{n}_{13,16}}^- \bm{u}_{16} +
+%               \bm{J}_{\bm{n}_{13,10}}^+ \bm{u}_{13} + \bm{J}_{\bm{n}_{13,10}}^- \bm{u}_{10} +
+%               &\leftarrow \text{along y} \notag\\
+%             & \bm{J}_{\bm{n}_{13,22}}^+ \bm{u}_{13} + \bm{J}_{\bm{n}_{13,22}}^- \bm{u}_{22} +
+%               \bm{J}_{\bm{n}_{13,4}}^+ \bm{u}_{13} + \bm{J}_{\bm{n}_{13,4}}^- \bm{u}_{4} \bigg)
+%               &\leftarrow \text{along z} \notag \\
+%             =& \cdots + \dfrac{1}{2|\Omega_{13}|} \bigg( \\
+%             & \big[ \bm{J}_{\bm{n}_{13,12}}^+ + \bm{J}_{\bm{n}_{13,14}}^+ + \bm{J}_{\bm{n}_{13,22}}^+ +
+%                & \leftarrow \text{on diagonal}     \notag\\
+%             & \qquad \bm{J}_{\bm{n}_{13,4}}^+ + \bm{J}_{\bm{n}_{13,16}}^+ + \bm{J}_{\bm{n}_{13,10}}^+\big] \bm{u}_{13} + \notag\\
+%             & \bm{J}_{\bm{n}_{13,12}}^- \bm{u}_{12} + \bm{J}_{\bm{n}_{13,14}}^- \bm{u}_{14} + \bm{J}_{\bm{n}_{13,22}}^- \bm{u}_{22} +
+%               &\leftarrow \text{off diagonal}  \notag\\
+%             & \bm{J}_{\bm{n}_{13,4}}^- \bm{u}_{4} + \bm{J}_{\bm{n}_{13,16}}^- \bm{u}_{16} + \bm{J}_{\bm{n}_{13,10}}^- \bm{u}_{10} \bigg)
+%              \notag
+% \end{align}
+
+
+\section{Defining the preconditioner}
+
+We define $\bm{W}^{-1}$ to be
+\begin{equation}
+    \bm{W}^{-1} = (\bm{D} + \bm{L})^{-1} \bm{D} (\bm{D} + \bm{U})^{-1},
+\end{equation}
+where $\bm{L}$, $\bm{D}$ and $\bm{U}$ are block matrices with $5 \times 5$ blocks.
+
+The blocks in each of them are as follows:
+\begin{subequations}\label{eq:paper_lower_upper_diag}
+\begin{align}
+    \bm{L}_{ij} =& -\dfrac{\eta \Delta t_i^*}{\Omega_i} |e_{ij}| \bm{J}_{ij}^+ \label{eq:Lij}\\
+    \bm{U}_{ij} =&  \dfrac{\eta \Delta t_i^*}{\Omega_i} |e_{ij}| \bm{J}_{ij}^- \\
+    \bm{D}_{ii} =& \bm{I} + \dfrac{3\eta\Delta t_i^*}{2\Delta t} \bm{I} + 
+                   \dfrac{\eta\Delta t_i^*}{\Omega_i} \left[
+                     \Delta y \Delta z \left( \bm{A}_{ii}^+ - \bm{A}_{ii}^- \right) + \right.
+                \notag\\ &\qquad\qquad \label{eq:Dij}
+                   \left.\Delta x \Delta z \left( \bm{B}_{ii}^+ - \bm{B}_{ii}^- \right) +
+                     \Delta x \Delta y \left( \bm{C}_{ii}^+ - \bm{C}_{ii}^- \right)
+                   \right]
+                   \text{,}
+\end{align}
+\end{subequations}
+where $e_{ij}$ is the size of the edge between elements $i$ and $j$ and $\bm{J}_{ij}^+$ is the (positive) flux jacobian between these elements, evalutated at the center of edge $e_{ij}$. $\bm{J}$ is either $\bm{A}$, $\bm{B}$ or $\bm{C}$, depending on how the border between elements $i$ and $j$ is oriented. Basically,
+\begin{equation}
+    \bm{A}_{ij}^+ = \dfrac{1}{2} \left( \left.\bm{A}_i^+\right|_{e_{ij}} + \left.\bm{A}_j^+\right|_{e_{ij}}\right)
+    \text{.}
+\end{equation}
+Additionally, when $i = j$,
+\begin{equation}
+    \bm{A}_{ii}^+ = \left. \bm{A}_i^+ \right|_{c_i}
+    \text{,}
+\end{equation}
+so it's the positive flux jacobian of element $i$ \todo{evaluated at the center of that element?}.
+
+For the deltas, we have $\Delta x = \Delta y = 2$, because computations are done in reference element coordinates for the 2 horizontal direction, and $\Delta z$ is the size of a grid element in meters, because we're using global coordinates for the vertical direction.
+
+
+$\bm{A}$ is split into $\bm{A}^+$ and ${\bm{A}^-}$, with
+\begin{subequations}\label{eq:fj_split}
+\begin{align}
+    \bm{A}   &= \bm{A}^+ + \bm{A}^- \\
+    \bm{A}^+ &= \bm{R} \Lambda^+ \bm{R}^{-1} \\
+    \bm{A}^- &= \bm{R} \Lambda^- \bm{R}^{-1}.
+\end{align}
+\end{subequations}
+
+$\bm{R}$ are the right eigenvectors and $\bm{R}^{-1}$ are the left eigenvectors.
+$\Lambda^+$ is $\Lambda$ with the negative values set to zero. $\Lambda^-$ is $\Lambda$ with the positive values set to zero.
+
+We apply a cutoff to all $\lambda$ values in $\Lambda$ before computing $\bm{A}$, $\bm{B}$ and $\bm{C}$:
+\begin{equation}
+    |\lambda| = \left\{\begin{matrix}
+        \dfrac{1}{2}\left(ad + \dfrac{|\lambda|^2}{ad}\right) & |\lambda| \le ad \\
+        |\lambda| & |\lambda| > ad
+    \end{matrix}\right.
+\end{equation}
+Using $d = 0.2$ for now.
+
+
+\section{Solving the system}
+
+So. We want to solve $\bm{Wx} = \bm{b}$, with
+$\bm{W} = (\bm{D} + \bm{U}) \bm{D}^{-1} (\bm{D} + \bm{L})$. This can be done in three steps:
+\begin{enumerate}
+\item Solve $ (\bm{D} + \bm{U}) \bm{y} = \bm{b} $ (with backward substitution, $i = [n..1]$):
+    \begin{equation}\label{eq:backward_step}
+        y_i = \bm{D}_{ii}^{-1} \left( b_i - \sum_{j=i+1}^{n} \bm{U}_{ij} y_j \right)
+    \end{equation}
+\item Solve $ \bm{D}^{-1} \bm{z} = \bm{y} $:
+    \begin{equation}\label{eq:diagonal_step}
+        z_i = \bm{D}_{ii} y_i
+    \end{equation}
+\item Solve $ (\bm{D} + \bm{L}) \bm{x} = \bm{z} $ (with forward substitution $i = [1..n]$):
+    \begin{equation}\label{eq:forward_step}
+        x_i = \bm{D}_{ii}^{-1} \left( z_i - \sum_{j=0}^{i-1} \bm{L}_{ij} x_j \right)
+    \end{equation}
+\end{enumerate}
+
+The summation term in equations~\ref{eq:backward_step} and~\ref{eq:forward_step} only have (up to) 3 non-zero items. So eq.~\ref{eq:backward_step} looks more like
+\begin{equation}
+    y_i = \bm{D}_{ii}^{-1} \left( b_i - \sum_{j\in N_i^+} \bm{U}_{ij} y_j \right)
+    \text{,}
+\end{equation}
+where $N_i^+$ is the set of neighbors of $i$ that are within the tile (out of 6 tiles), and that are in the positive direction along each of the 3 axes.
+
+\section{How did we get there?}
+
+\subsection{Some math}
+
+We have a bunch of scary equations, like the continuity equation:
+\begin{align}
+    \dfrac{\partial\sqrt{g}\rho}{\partial t} &= -\dfrac{\partial\sqrt{g}u^i}{\partial x^i} \\
+        &= -\dfrac{\partial\sqrt{g}u^1}{\partial x^1}
+           -\dfrac{\partial\sqrt{g}u^2}{\partial x^2} 
+           -\dfrac{\partial\sqrt{g}u^3}{\partial x^3}
+\end{align}
+\todo{is that missing a $\rho$ in front of each $u^i$? To get $\frac{\partial\rho u^i}{\partial x^i}$}
+
+$\sqrt{g}$ does not depend on time, so we can take it out of the time derivative, divide both sides by it, and get
+\begin{equation}
+    \dfrac{\partial\rho}{\partial t} = -\dfrac{1}{\sqrt{g}} \left(
+            \dfrac{\partial\sqrt{g}u^1}{\partial x^1}
+           +\dfrac{\partial\sqrt{g}u^2}{\partial x^2} 
+           +\dfrac{\partial\sqrt{g}u^3}{\partial x^3}\right)
+\end{equation}
+
+We are using finite volumes, so we integrate all that:
+\begin{align}
+    \iiint_{\Omega} \dfrac{\partial\rho}{\partial t} \sqrt{g}dx^1dx^2dx^3
+        &= -\iiint_{\Omega} \dfrac{1}{\sqrt{g}}\dfrac{\partial\sqrt{g}u^i}{\partial x^i} \sqrt{g}dx^1dx^2dx^3 \\
+        &= -\iiint_{\Omega} \dfrac{\partial\sqrt{g}u^i}{\partial x^i} dx^1dx^2dx^3 
+\end{align}
+
+After discretization (i.e. magic) + quadrature integration in 3D on the left, 2D + exact integration on the right (?), we get
+\begin{align}
+    \Delta x^1 \Delta x^2 \Delta x^3 \dfrac{\partial\sqrt{g}\rho}{\partial t} =
+      & -\Delta x^2 \Delta x^3 \left( \left. \sqrt{g}\rho u^1 \right|_{east} - \left. \sqrt{g}\rho u^1 \right|_{west} \right) \\
+      & -\Delta x^1 \Delta x^3 \left( \left. \sqrt{g}\rho u^2 \right|_{north} - \left. \sqrt{g}\rho u^2 \right|_{south} \right) \\
+      & -\Delta x^1 \Delta x^2 \left( \left. \sqrt{g}\rho u^3 \right|_{up} - \left. \sqrt{g}\rho u^3 \right|_{down} \right)
+      \text{,}
+\end{align}
+then divide by $\Delta x^1 \Delta x^2 \Delta x^3$ on both sides:
+\begin{align}
+    \dfrac{\partial\sqrt{g}\rho}{\partial t} =
+      & -\dfrac{1}{\Delta x^3} \left( \left. \sqrt{g}\rho u^1 \right|_{e} - \left. \sqrt{g}\rho u^1 \right|_{w} \right) \\
+      & -\dfrac{1}{\Delta x^2} \left( \left. \sqrt{g}\rho u^2 \right|_{n} - \left. \sqrt{g}\rho u^2 \right|_{s} \right) \\
+      & -\dfrac{1}{\Delta x^3} \left( \left. \sqrt{g}\rho u^3 \right|_{u} - \left. \sqrt{g}\rho u^3 \right|_{d} \right)
+      \text{.}
+\end{align}
+
+Why are we doing this?
+
+
+\subsection{Summary of the entire method}
+
+Anyway, the entire (3D) equations we solve are
+\begin{align}
+    \dfrac{\partial\sqrt{g}\bm{q}}{\partial t}
+        &= \dfrac{\partial F^1(\bm{q})}{\partial x^1} + \dfrac{\partial F^1(\bm{q})}{\partial x^3} +
+           \dfrac{\partial F^3(\bm{q})}{\partial x^3} + S(\bm{q})\\
+    \dfrac{\partial\bm{q}}{\partial t}
+        &= \dfrac{1}{\sqrt{g}}
+           \dfrac{\partial F^i(\bm{q})}{\partial x^i} + S(\bm{q}) \label{eq:basic_euler}\\
+    &= \dfrac{1}{\sqrt{g}}\dfrac{\partial F^i(\bm{q})}{\partial\sqrt{g}\bm{q}} \dfrac{\partial\sqrt{g}\bm{q}}{\partial x^i} + S(\bm{q})   \label{eq:fj_euler}\\
+    &= \Psi(\bm{q})
+    \text{,}
+\end{align}
+with $\bm{q} = \left[\begin{matrix} \rho & \rho u^1 & \rho u^2 & \rho u^3 & \rho\theta \end{matrix}\right]^T$
+(so that's 5 equations),
+$S(\bm{q})$ are the terms that have no derivative, including Christoffel symbols,
+ $F^i$ the terms that do contain a derivative, $\sqrt{q}$ the square root of the metric tensor (?).
+ Eq.~\ref{eq:fj_euler} is the flux jacobian formulation of the equations.
+
+\subsubsection{Finite volume discretization}
+
+The finite volume discretization of $\Psi(\bm{q})$:
+\begin{align}
+    \Psi(\bm{q}) \approx  \tilde{\bm{\Psi}}(\tilde{\bm{q}})
+    &= \dfrac{1}{\sqrt{g}} \left[ \dfrac{\Delta F^i(\tilde{\bm{q}})}{\Delta x^i} + 
+        \left.S(\tilde{\bm{q}})\right|_{p} \right] \\
+    &= \dfrac{1}{\sqrt{g}} \bigg[ 
+        \dfrac{\left. F^1(\tilde{\bm{q}}) \right|_{e} - \left.F^1(\tilde{\bm{q}}) \right|_{w} }{\Delta x^1} +
+        \dfrac{\left. F^2(\tilde{\bm{q}}) \right|_{n} - \left.F^2(\tilde{\bm{q}}) \right|_{s} }{\Delta x^2} +
+        \notag\\ & \qquad\qquad\qquad
+        \dfrac{\left. F^3(\tilde{\bm{q}}) \right|_{u} - \left.F^3(\tilde{\bm{q}}) \right|_{d} }{\Delta x^3} +
+        \left.S(\tilde{\bm{q}})\right|_{p}
+     \bigg]
+    \text{,}
+\end{align}
+where $p$ is the point at the center of an element, $e$ and $w$ on the eastern and western interface of an element (along $x^1$), $n$ and $s$ on the northern and southern interface (along $x^2$) and $u$ and $d$ at the up/down interface (along $x^3$).
+Axes are oriented from west to east, south to north, down to up.
+
+With the flux jacobian formulation of the equation (eq.~\ref{eq:fj_euler}), we have
+\begin{align}
+    \tilde{\bm{\Psi}}(\tilde{\bm{q}})
+    &= \dfrac{1}{\sqrt{g}} 
+    \left[
+        \left.\dfrac{\partial F^i(\tilde{\bm{q}})}{\partial(\sqrt{g}\tilde{\bm{q}})}\right|_{p}
+            \dfrac{\Delta\sqrt{g}\tilde{\bm{q}}}{\Delta x^i}
+          + \left.S(\tilde{\bm{q}})\right|_p
+    \right] \\
+    &= \dfrac{1}{\sqrt{g}} \bigg[
+    \left. \dfrac{\partial F^1(\tilde{\bm{q}})}{\partial\sqrt{g}\tilde{\bm{q}}} \right|_p
+      \dfrac{ \left.\sqrt{g}\tilde{\bm{q}}\right|_e - \left.\sqrt{g}\tilde{\bm{q}}\right|_w }{\Delta x^1} +
+    \left. \dfrac{\partial F^2(\tilde{\bm{q}})}{\partial\sqrt{g}\tilde{\bm{q}}} \right|_p
+      \dfrac{ \left.\sqrt{g}\tilde{\bm{q}}\right|_n - \left.\sqrt{g}\tilde{\bm{q}}\right|_s }{\Delta x^2} +
+        \notag\\ & \qquad\qquad\qquad
+    \left. \dfrac{\partial F^3(\tilde{\bm{q}})}{\partial\sqrt{g}\tilde{\bm{q}}} \right|_p
+      \dfrac{ \left.\sqrt{g}\tilde{\bm{q}}\right|_u - \left.\sqrt{g}\tilde{\bm{q}}\right|_d }{\Delta x^3} +
+    \left.S(\tilde{\bm{q}})\right|_{p}
+    \bigg]
+    \text{.}
+\end{align}
+Using $J^i = \frac{\partial F^i}{\partial\sqrt{g}\tilde{\bm{q}}}$, this becomes
+\begin{align}
+    \tilde{\bm{\Psi}}(\tilde{\bm{q}})
+    &= \dfrac{1}{\sqrt{g}}\bigg[
+        \dfrac{\left.J^1(\tilde{\bm{q}})\right|_p}{\Delta x^1} \left( \left.\sqrt{g}\tilde{\bm{q}}\right|_e - \left.\sqrt{g}\tilde{\bm{q}}\right|_w \right) +
+        \dfrac{\left.J^2(\tilde{\bm{q}})\right|_p}{\Delta x^2} \left( \left.\sqrt{g}\tilde{\bm{q}}\right|_n - \left.\sqrt{g}\tilde{\bm{q}}\right|_s \right) +
+        \notag\\ & \qquad\qquad\qquad
+        \dfrac{\left.J^3(\tilde{\bm{q}})\right|_p}{\Delta x^3} \left( \left.\sqrt{g}\tilde{\bm{q}}\right|_u - \left.\sqrt{g}\tilde{\bm{q}}\right|_d \right) +
+        \left.S(\tilde{\bm{q}})\right|_p
+    \bigg] \\
+    &= \dfrac{1}{\sqrt{g}} \left[
+        T^1(\tilde{\bm{q}}) + T^2(\tilde{\bm{q}}) + T^3(\tilde{\bm{q}}) + \left.S(\tilde{\bm{q}})\right|_p
+    \right]
+    \text{.}
+\end{align}
+
+This is a huge mess, so let's focus on $T^1(\tilde{\bm{q}})$ for a single element $i$ (dropping the $\sqrt{g}$ to lighten the notation), use $\bm{J}^1(\bm{q}_i) = \bm{J}_{n^{we}_i}$, and try to figure out what happens at element interfaces:
+\begin{align}
+    T^1(\bm{q}_i) &=
+        \dfrac{1}{\Delta x^1} \left. \bm{J}_{n^{we}_i} \right|_p \left( \bm{q}_{i_e} - \bm{q}_{i_w} \right)
+\end{align}
+With an upwind scheme for getting interface values, this would result in
+\begin{align}\label{eq:upwind_split}
+    T^1(\bm{q}_i) \Delta x^1 &= \left\{\begin{matrix}
+        \bm{J}_{n^{we}_i} \left( \bm{q}_{i} - \bm{q}_{i+1} \right) & q^1_i < 0 \\
+        \bm{J}_{n^{we}_i} \left( \bm{q}_{i-1} - \bm{q}_{i} \right) & q^1_i > 0 
+    \end{matrix} \right.
+\end{align}
+with all values evaluated at the center of their respective element.
+\todo{Now is the time for a magic step:} Let's split $\bm{J}$ into $\bm{J}^+$ and $\bm{J}^-$,
+as described in Eq.~\ref{eq:fj_split}. This would give
+\begin{align}
+    \bm{J}^+ &\approx \left\{\begin{matrix}
+        \bm{0} & q < 0 \\
+        \bm{J} & q > 0
+    \end{matrix}\right.
+    \\
+    \bm{J}^- &\approx \left\{\begin{matrix}
+        \bm{J} & q < 0 \\
+        \bm{0} & q > 0
+    \end{matrix}\right.
+\end{align}
+and Eq.~\ref{eq:upwind_split} then becomes
+\begin{align}
+    T^1(\bm{q}_i) \Delta x^1
+    &\approx
+       \bm{J}^-_{n^{we}_i} \left( \bm{q}_{i} - \bm{q}_{i+1} \right) +
+       \bm{J}^+_{n^{we}_i} \left( \bm{q}_{i-1} - \bm{q}_{i} \right)  \\
+    &= \bm{J}^+_{n^{we}_i} \bm{q}_{i-1} + \bm{J}^-_{n^{we}_i} \bm{q}_i 
+       - \bm{J}^+_{n^{we}_i} \bm{q}_i - \bm{J}^-_{n^{we}_i} \bm{q}_{i+1} \label{eq:psi_q_axis1}
+\end{align}
+
+However, in the paper they have (with our notation)
+\begin{align}
+    \tilde{T^1}(\bm{q}_i) \Delta x^1 &=
+       \bm{J}^+_{n_{i,i-1}} \bm{q}_i + \bm{J}^-_{n_{i,i-1}} \bm{q}_{i-1} + 
+       \bm{J}^+_{n_{i,i+1}} \bm{q}_i + \bm{J}^-_{n_{i,i+1}} \bm{q}_{i+1}
+    \\ &=
+       -\bm{J}^+_{n_{i-1,i}} \bm{q}_i - \bm{J}^-_{n_{i-1,i}} \bm{q}_{i-1} + 
+       \bm{J}^+_{n_{i,i+1}} \bm{q}_i + \bm{J}^-_{n_{i,i+1}} \bm{q}_{i+1}
+    \\ &\text{\todo{times $-1$ (because there's a different sign elsewhere)}} \notag
+    \\ &=
+       \bm{J}^+_{n_{i-1,i}} \bm{q}_i + \bm{J}^-_{n_{i-1,i}} \bm{q}_{i-1} - 
+       \bm{J}^+_{n_{i,i+1}} \bm{q}_i - \bm{J}^-_{n_{i,i+1}} \bm{q}_{i+1}
+    \\ &\text{\todo{I probably made a sign mistake somewhere, because }} \notag
+    \\ &\text{\todo{the following makes more sense}} \notag
+    \\ &=
+       \bm{J}^+_{n_{i-1,i}} \bm{q}_{i-1} + \bm{J}^-_{n_{i-1,i}} \bm{q}_i - 
+       \bm{J}^+_{n_{i,i+1}} \bm{q}_i - \bm{J}^-_{n_{i,i+1}} \bm{q}_{i+1}
+       \label{eq:paper_ldu_matrix_line}
+\end{align}
+The last line (eq.~\ref{eq:paper_ldu_matrix_line}) makes sense and actually corresponds to their written definitions for
+$\bm{L}_{ij}$, $\bm{D}_{ii}$ and $\bm{U}_{ij}$ (eq.~\ref{eq:paper_lower_upper_diag}).
+
+That's still different from Eq.~\ref{eq:psi_q_axis1}. \todo{Is that just another scheme to determine interface values?}
+Or is there another magic step missing from our method:
+\begin{align}
+    \bm{J}^+_{n_i}
+        & \to \bm{J}^+_{n_{i-1,i}} & \text{when multiplying $\bm{q}_{i-1}$} \\
+        & \to \bm{J}^+_{n_{i,i+1}} \text{\todo{or stay the same?}} & \text{when multiplying $\bm{q}_i$} \\
+    \bm{J}^-_{n_i}
+        & \to \bm{J}^-_{n_{i-1,i}} \text{\todo{or stay the same?}} & \text{when multiplying $\bm{q}_i$} \\
+        & \to \bm{J}^-_{n_{i,i+1}} & \text{when multiplying $\bm{q}_{i+1}$}
+        \text{,}
+\end{align}
+where
+\begin{equation}
+    \bm{J}_{n_{ij}}^+ = \left\{ \begin{matrix}
+         \dfrac{1}{2}\left( \bm{J}_{n_i}^+ + \bm{J}_{n_j}^+ \right)  & i \le j \\
+         -\dfrac{1}{2}\left( \bm{J}_{n_i}^+ + \bm{J}_{n_j}^+ \right) & i > j
+    \end{matrix} \right.
+    \text{,}
+\end{equation}
+so $\bm{J}_{n_{ij}} = -\bm{J}_{n_{ji}}$.
+
+So, in the end, we get
+\begin{align}
+    \tilde{\bm{\Psi}}(\bm{q}_i) &=
+        \dfrac{1}{\sqrt{g}} \bigg[
+           \sum_{j \in N_i^-} \dfrac{1}{\Delta x^{ij}}\left( \bm{J}^-_{n_{ji}} \bm{q}_i + \bm{J}^+_{n_{ji}} \bm{q}_j \right) -
+           \notag \\ & \qquad\qquad\qquad \label{eq:psi_q_i}
+           \sum_{j \in N_i^+} \dfrac{1}{\Delta x^{ij}}\left( \bm{J}^+_{n_{ij}} \bm{q}_i + \bm{J}^-_{n_{ij}} \bm{q}_j \right)
+           + S(\bm{q}_i)
+        \bigg]
+    \text{,}
+\end{align}
+where $N_i^+$ are the neighbors of $i$ that have a higher index along their common axis and
+$N_i^-$ the neighbors of $i$ that have a lower index along their common axis.
+
+
+\subsubsection{Time discretization}
+
+Once discretized, we have the jacobian matrix
+\begin{equation}
+    \tilde{\bm{J}} = \dfrac{\partial\tilde{\bm{\Psi}}(\tilde{\bm{q}})}{\partial\bm{q}}
+    \text{,}
+\end{equation}
+which we use to advance the system at every time step. $\tilde{\bm{q}}$ is the vector containing the values of $\bm{q}$ at every point in the discretization. For time stepping, we use the rat2 method, done in two steps:
+first find the change $\tilde{\bm{x}}$ in the vector $\tilde{\bm{q}_n}$ of field values so that
+\begin{equation}
+    \underbrace{\left( \bm{I} - \dfrac{\Delta t}{2} \tilde{\bm{J}}_n \right)}_{\bm{A}_n}{}
+        \tilde{\bm{x}}_n
+    = \tilde{\bm{\Psi}}(\tilde{\bm{q}}_n) \label{eq:rat2_step1}
+    \text{,}
+\end{equation}
+\begin{align}
+    \left( \bm{I} - \dfrac{\Delta t}{2} \tilde{\bm{J}}_n \right)
+        (\tilde{\bm{q}}_{n+1} - \tilde{\bm{q}}_n)
+    \\
+\end{align}
+then update the field values with
+\begin{equation}
+    \tilde{\bm{q}}_{n+1} = \tilde{\bm{q}}_n + \Delta t \tilde{\bm{x}}_n 
+    \text{.}
+\end{equation}
+
+Plugging Eq.~\ref{eq:psi_q_i} into~\ref{eq:rat2_step1} gives (with some open-mindedness)
+\begin{align}
+    \left( \bm{A} \tilde{\bm{x}} \right)_i &=
+    % \notag\\ & \qquad
+    \sum_{j \in N_i^-} \dfrac{1}{\Delta x^{ij}}\left( \bm{J}^-_{n_{ji}} \bm{q}_i + \bm{J}^+_{n_{ji}} \bm{q}_j \right) -
+    \notag\\ & \qquad
+    \sum_{j \in N_i^+} \dfrac{1}{\Delta x^{ij}}\left( \bm{J}^+_{n_{ij}} \bm{q}_i + \bm{J}^-_{n_{ij}} \bm{q}_j \right) + S(\bm{q}_i)
+\end{align}
+
+And somehow, we get the approximation of $\bm{I} + \eta\Delta t^*\bm{A} = \bm{L} + \bm{D} + \bm{U}$ with
+\begin{align}
+    \bm{L}_{ij} &= - \dfrac{\eta\Delta t^*}{\Delta x^{ij}} \bm{J}^+_{n_{ij}} \\
+    \bm{U}_{ij} &= + \dfrac{\eta\Delta t^*}{\Delta x^{ij}} \bm{J}^-_{n_{ij}} \\
+    \bm{D}_{ij} &= \bm{I}  +  \dfrac{2\eta\Delta t^*}{\Delta t}\bm{I}
+                    +
+                    % \notag\\ & \qquad\qquad
+                    \eta\Delta t^* \left[ \sum_{j \in N_i^+} \dfrac{\bm{J}^+_{n_i}}{\Delta x^{ij}}
+                    - \sum_{j \in N_i^-} \dfrac{\bm{J}^-_{n_i}}{\Delta x^{ij}} \right]
+\end{align}
+Where did $S(\bm{q}_i)$ go?? Should it not be on the diagonal?
+
+\subsubsection{Solving the time-stepping problem}
+
+(We skip the DG part and assume the discretization is and has always been FV.)
+
+Soving for $x_n$ in Eq.~\ref{eq:rat2_step1} is complicated, so we use an iterative solver, \texttt{FGMRES}. For that, we compute the basis of a Krylov space
+$$K = \left[\begin{matrix} v & A_n v & A_n^2 v & \cdots \end{matrix}\right],$$
+ starting with $v$ as the residual given by our first guess
+$ v = \tilde{\Psi}(q_n) - A_n q_{n+1}^{guess}$.
+
+Since the solver converges slowly with that particular set of vector, we precondition each of them with $\mathcal{S}$. \emph{Forget abount multigrid, let's just smoothe it for now. Also, assume the discretization is FV, not DG.} So we get 
+$$K = \left[\begin{matrix} \mathcal{S}(v) & \mathcal{S}(A_n v) & \mathcal{S}(A_n^2 v) & \cdots \end{matrix}\right].$$
+$\mathcal{S}$ just happens to be our RK smoother from eq.~\ref{eq:precond_rk_smoother}. However, these equations are not entirely accurate, because we are missing the $\beta_i$ factors. It should be something like.
+
+More specifically, when applying the first stage of the smoother (eq.~\ref{eq:precond_rk_smoother}) to the first vector in \texttt{FGMRES}, we have
+\begin{align}
+    v &= \dfrac{\tilde{\Psi}(q)}{\Delta t} \\
+    A &= \left( \dfrac{1}{\Delta t} I - \dfrac{1}{2} \tilde{J} \right) \\
+    s_1 &= \alpha_1 \Delta t^* \mathcal{W}v \\
+        &= \alpha_1 \Delta t^* (D + L)^{-1} D (D + U)^{-1} v \\
+        &= \alpha_1 \Delta t^* (D + L)^{-1} D (D + U)^{-1} \dfrac{\tilde{\Psi}(q)}{\Delta t}
+\end{align}
+
+\subsubsection{BDF-2 time stepping}
+
+Step defined as
+\begin{equation}
+    \bm{q}_{n+1} - \dfrac{4}{3}\bm{q}_n + \dfrac{1}{3}\bm{q}_{n-1} = \dfrac{2}{3}\Delta t \bm{f}(\bm{q}_{n+1})
+\end{equation}
+so
+\begin{align}
+    \dfrac{3\bm{q}_{n+1} - 4\bm{q}_n + \bm{q}_{n-1}}{2\Delta t} = \bm{f}(\bm{q}_{n+1})
+    \text{.}
+\end{align}
+Define
+\begin{align}
+    \bm{F}(\bm{q}_{n+1}) := 
+        \underbrace{\dfrac{3\bm{q}_{n+1} - 4\bm{q}_n + \bm{q}_{n-1}}{2\Delta t}}_{\bm{x}_{n+1}}{}
+         - \bm{f}(\bm{q}_{n+1})
+        = \bm{0}
+    \text{.}
+\end{align}
+Then
+\begin{align}
+    \dfrac{\partial \bm{F}}{\partial\bm{q}} =
+        \dfrac{3}{2\Delta t}\bm{I} - \dfrac{\partial\bm{f}}{\partial\bm{q}}
+\end{align}
+\todo{Is that actually}
+\begin{align}
+    \left. \dfrac{\partial \bm{F}}{\partial\bm{q}} \right|_{n+1} =
+        \left. \dfrac{3}{2\Delta t}\bm{I} - \dfrac{\partial\bm{f}}{\partial\bm{q}} \right|_{n+1}
+    \text{\todo{?}}
+\end{align}
+A Newton iteration would then be
+\begin{align}
+    \left. \dfrac{\partial\bm{F}}{\partial\bm{q}} \right|_{n+1} \Delta\bm{x}_{n+1}
+        &= -\bm{F}(\bm{q}_{n+1})
+        \\
+    \left( \dfrac{3}{2\Delta t}\bm{I} - \left. \dfrac{\partial\bm{f}}{\partial\bm{q}}\right|_{n+1}  \right)
+        \Delta\bm{x}_{n+1}
+        &= \bm{f(\bm{q}_{n+1})} - \bm{x}_{n+1}
+\end{align}
+Starting with $\bm{x}_{n+1}^0$ = $\bm{0}$, doing a single iteration, we get
+\begin{align}
+    \left( \dfrac{3}{2\Delta t}\bm{I} - \left. \dfrac{\partial\bm{f}}{\partial\bm{q}}\right|_{n}  \right)
+        \bm{x}_{n+1}
+    &= \bm{f}(\bm{q}_n)
+    \\
+    \bm{x}_{n+1} &= 
+    \left( \dfrac{3}{2\Delta t}\bm{I} - \left. \dfrac{\partial\bm{f}}{\partial\bm{q}}\right|_{n}  \right)^{-1}
+    \bm{f}(\bm{q}_n)
+\end{align}
+\todo{Compare with RAT-2 step:}
+\begin{align}
+    \left( \bm{I} - \dfrac{\Delta t}{2} \left.\dfrac{\partial\bm{\Psi}}{\partial\bm{q}}\right|_n \right)
+    \bm{x}_{n+1}
+    &= \bm{\Psi}(\bm{q}_n)
+    \\
+    \bm{x}_{n+1}
+    &=
+    \left( \bm{I} - \dfrac{\Delta t}{2} \left.\dfrac{\partial\bm{\Psi}}{\partial\bm{q}}\right|_n \right) ^{-1}
+    \bm{\Psi}(\bm{q}_n)
+\end{align}
+
+\end{document}
