@@ -3,6 +3,7 @@ import numpy
 import sphere
 import quadrature
 import definitions
+import sympy
 
 class cubed_sphere:
    def __init__(self, nb_elements_horizontal:int , nb_elements_vertical: int, nbsolpts: int, λ0: float, ϕ0: float, α0: float, ztop: float, ptopo, param):
@@ -39,12 +40,15 @@ class cubed_sphere:
       nb_elements_x3 = nb_elements_vertical
 
       # Gauss-Legendre solution points
-      solutionPoints, glweights = quadrature.gauss_legendre(nbsolpts)
+      solutionPoints_sym, solutionPoints, glweights = quadrature.gauss_legendre(nbsolpts)
       print(f'Solution points : {solutionPoints}')
       print(f'GL weights : {glweights}')
 
       # Extend the solution points to include -1 and 1
       extension = numpy.append(numpy.append([-1], solutionPoints), [1])
+      extension_sym = solutionPoints_sym.copy()
+      extension_sym.insert(0, sympy.sympify('-1'))
+      extension_sym.append(sympy.sympify('1'))
 
       scaled_points = 0.5 * (1.0 + solutionPoints)
 
@@ -226,8 +230,10 @@ class cubed_sphere:
       self.rotation_speed *= planet_is_rotating / planet_scaling_factor
 
       self.solutionPoints = solutionPoints
+      self.solutionPoints_sym = solutionPoints_sym
       self.glweights = glweights
       self.extension = extension
+      self.extension_sym = extension_sym
       self.lon_p = lon_p
       self.lat_p = lat_p
       self.angle_p = angle_p

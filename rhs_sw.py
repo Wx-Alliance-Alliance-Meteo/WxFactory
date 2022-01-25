@@ -1,9 +1,8 @@
 import numpy
 
 from definitions import idx_h, idx_hu1, idx_hu2, idx_u1, idx_u2, gravity
-from dgfilter import apply_filter2D
 
-def rhs_sw(Q, geom, mtrx, metric, topo, ptopo, nbsolpts: int, nb_elements_horiz: int, case_number: int, filter_rhs: bool = False):
+def rhs_sw(Q, geom, mtrx, metric, topo, ptopo, nbsolpts: int, nb_elements_horiz: int, case_number: int):
 
    type_vec = Q.dtype
 
@@ -308,8 +307,5 @@ def rhs_sw(Q, geom, mtrx, metric, topo, ptopo, nbsolpts: int, nb_elements_horiz:
    if not shallow_water_equations:
       rhs[idx_hu1,:,:] = 0.0
       rhs[idx_hu2,:,:] = 0.0
-
-   if filter_rhs:
-      rhs = apply_filter2D(rhs, mtrx, nb_elements_horiz, nbsolpts)
 
    return rhs

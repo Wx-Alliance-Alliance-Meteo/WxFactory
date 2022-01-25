@@ -51,10 +51,10 @@ def main(args) -> int:
    if param.equations == "Euler":
       Q, topo = initialize_euler(geom, metric, mtrx, param)
       rhs_handle = lambda q: rhs_euler(q, geom, mtrx, metric, topo, ptopo, param.nbsolpts, param.nb_elements_horizontal,
-            param.nb_elements_vertical, param.case_number, param.filter_apply)
+            param.nb_elements_vertical, param.case_number)
    else: # Shallow water
       Q, topo = initialize_sw(geom, metric, mtrx, param)
-      rhs_handle = lambda q: rhs_sw(q, geom, mtrx, metric, topo, ptopo, param.nbsolpts, param.nb_elements_horizontal, param.case_number, param.filter_apply)
+      rhs_handle = lambda q: rhs_sw(q, geom, mtrx, metric, topo, ptopo, param.nbsolpts, param.nb_elements_horizontal, param.case_number)
 
    if param.output_freq > 0:
       output_init(geom, param)
@@ -76,9 +76,9 @@ def main(args) -> int:
          preconditioner = FV_preconditioner(param, Q, ptopo)
       stepper = Rat2(rhs_handle, param.tolerance, preconditioner=preconditioner)
    elif  param.time_integrator.lower() == 'epi2/ark' and param.equations == "shallow_water": # TODO : Euler
-      rhs_explicit = lambda q: rhs_sw_explicit(q, geom, mtrx, metric, topo, ptopo, param.nbsolpts, param.nb_elements_horizontal, param.case_number, param.filter_apply)
+      rhs_explicit = lambda q: rhs_sw_explicit(q, geom, mtrx, metric, topo, ptopo, param.nbsolpts, param.nb_elements_horizontal, param.case_number)
 
-      rhs_implicit = lambda q: rhs_sw_implicit(q, geom, mtrx, metric, topo, ptopo, param.nbsolpts, param.nb_elements_horizontal, param.case_number, param.filter_apply)
+      rhs_implicit = lambda q: rhs_sw_implicit(q, geom, mtrx, metric, topo, ptopo, param.nbsolpts, param.nb_elements_horizontal, param.case_number)
 
       stepper = ARK_epi2(rhs_handle, rhs_explicit, rhs_implicit, param)
    else:

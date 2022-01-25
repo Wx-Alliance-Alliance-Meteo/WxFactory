@@ -1,10 +1,9 @@
 import numpy
 
 from definitions import idx_rho_u1, idx_rho_u2, idx_rho_w, idx_rho, idx_rho_theta, gravity, p0, Rd, cpd, cvd, heat_capacity_ratio
-from dgfilter import apply_filter3D
 
 # TODO : restructurer, réviser les paramètres
-def rhs_euler(Q, geom, mtrx, metric, topo, ptopo, nbsolpts: int, nb_elements_hori: int, nb_elements_vert: int, case_number: int, filter_rhs: bool = False):
+def rhs_euler(Q, geom, mtrx, metric, topo, ptopo, nbsolpts: int, nb_elements_hori: int, nb_elements_vert: int, case_number: int):
 
    type_vec = Q.dtype
    nb_equations = Q.shape[0]
@@ -281,10 +280,6 @@ def rhs_euler(Q, geom, mtrx, metric, topo, ptopo, nbsolpts: int, nb_elements_hor
 
    # Assemble the right-hand sides
    rhs = - metric.inv_sqrtG * ( df1_dx1 + df2_dx2 + df3_dx3 ) - forcing
-
-   if filter_rhs:
-      for var in range(nb_equations):
-         rhs[var] = apply_filter3D(rhs[var], mtrx, nb_elements_hori, nb_elements_vert, nbsolpts)
 
    # For pure advection problems, we do not update the dynamical variables
    if advection_only:

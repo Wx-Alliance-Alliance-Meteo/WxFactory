@@ -2,7 +2,6 @@ from copy import copy
 from time import time
 
 from cubed_sphere  import cubed_sphere
-from dgfilter      import apply_filter2D
 from initialize    import initialize_sw
 from interpolation import LagrangeSimpleInterpolator
 from linsol        import fgmres
@@ -123,10 +122,6 @@ class DG_preconditioner:
       start_time = time()
 
       input_vec_grid = self.restrict(vec.reshape(self.big_shape))
-      if self.filter_before:
-         input_vec_grid[0] = apply_filter2D(input_vec_grid[0], self.small_operators, self.num_elements, self.small_order)
-         input_vec_grid[1] = apply_filter2D(input_vec_grid[1], self.small_operators, self.num_elements, self.small_order)
-         input_vec_grid[2] = apply_filter2D(input_vec_grid[2], self.small_operators, self.num_elements, self.small_order)
 
       input_vec = input_vec_grid.flatten()
 
@@ -136,11 +131,6 @@ class DG_preconditioner:
       output_vec, _, num_iter, _ = fgmres(
          self.small_mat, input_vec, preconditioner=self.preconditioner, tol=1e-4, maxiter=self.max_iter)
       result_grid = self.prolong(output_vec.reshape(self.small_shape))
-
-      if self.filter_after:
-         result_grid[0] = apply_filter2D(result_grid[0], self.big_operators, self.num_elements, self.big_order)
-         result_grid[1] = apply_filter2D(result_grid[1], self.big_operators, self.num_elements, self.big_order)
-         result_grid[2] = apply_filter2D(result_grid[2], self.big_operators, self.num_elements, self.big_order)
 
       result = result_grid.flatten()
 
