@@ -51,8 +51,11 @@ def lagrangeEval(points, newPt):
    M = len(points)
    x = sympy.symbols('x')
    l = numpy.zeros_like(points)
-   for i in range(M):
-      l[i] = Lagrange_poly(x, M-1, i, points).evalf(subs={x: newPt}, n=20)
+   if M == 1: 
+      l[0] = 1 # Constant
+   else:
+      for i in range(M):
+         l[i] = Lagrange_poly(x, M-1, i, points).evalf(subs={x: newPt}, n=20)
    return l.astype(float)
 
 
