@@ -80,6 +80,15 @@ def Lagrange_poly(x,order,i,xi):
     return sympy.prod([(x-xi[j])/(xi[i]-xi[j]) for j in index])
 
 
+def lebesgue(points):
+   M = len(points)
+   eval_set = numpy.linspace(-1,1,M)
+   x = sympy.symbols('x')
+   l = 0
+   for i in range(M):
+      l = l + sympy.Abs( Lagrange_poly(x,M-1,i,points) )
+   return [l.subs(x, eval_set[i]) for i in range(M)]
+
 def vandermonde(x):
    """
    Initialize the 1D Vandermonde matrix, \(\mathcal{V}_{ij}=P_j(x_i)\)
