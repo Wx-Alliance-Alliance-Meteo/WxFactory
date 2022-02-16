@@ -10,7 +10,7 @@ Evaluate a linear combinaton of the ``φ`` functions evaluated at ``tA`` acting 
 vectors from ``u``, that is
 
 ```math
-  w(i) = φ_0(t[i] A) u[:, 1] + φ_1(t[i] A) u[:, 2] + φ_2(t[i] A) u[:, 3] + ...
+  w(i) = φ_0(t[i] A) u[0, :] + φ_1(t[i] A) u[1, :] + φ_2(t[i] A) u[2, :] + ...
 ```
 
 The size of the Krylov subspace is changed dynamically during the integration.
@@ -152,7 +152,7 @@ def kiops(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 2,
          ilow = max(0, j - iop)
          local_sum = V[ilow:j, 0:n] @ V[j, 0:n]
          H[ilow:j, j-1] = mpi4py.MPI.COMM_WORLD.allreduce(local_sum) + V[ilow:j, n:n+p] @ V[j, n:n+p]
-         V[j, :] = V[j, :] - H[ilow:j, j-1] @ V[ilow:j,:]
+         V[j, :] = V[j, :] - V[ilow:j,:].T @ H[ilow:j, j-1]
 
          local_sum = V[j, 0:n] @ V[j, 0:n]
          nrm = numpy.sqrt( mpi4py.MPI.COMM_WORLD.allreduce(local_sum) + V[j, n:n+p] @ V[j, n:n+p])
