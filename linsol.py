@@ -84,7 +84,6 @@ def fgmres(A, b, x0 = None, tol = 1e-5, restart = 20, maxiter = None, preconditi
 
    r          = b - Ax0
    norm_r     = global_norm(r)
-   error      = norm_r / norm_b
 
    # Get fast access to underlying BLAS routines
    [lartg] = scipy.linalg.get_lapack_funcs(['lartg'], [x])
