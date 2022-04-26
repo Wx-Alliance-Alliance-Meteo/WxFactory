@@ -1,5 +1,6 @@
 import numpy
 import math
+import scipy.sparse.linalg
 from collections import deque
 
 from matvec        import matvec_fun, matvec_rat

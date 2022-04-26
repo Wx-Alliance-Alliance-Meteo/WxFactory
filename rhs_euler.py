@@ -180,27 +180,27 @@ def rhs_euler(Q, geom, mtrx, metric, topo, ptopo, nbsolpts: int, nb_elements_hor
          eig_L = numpy.abs( u1_L )
          eig_R = numpy.abs( u1_R )
       else:
-         eig_L = numpy.abs( u1_L ) + numpy.sqrt(metric.H_contra_11_itf_i[:, itf] * heat_capacity_ratio * pressure_itf_i[:, elem_L, 1, :] / variables_itf_i[idx_rho, :, elem_L, 1, :])
-         eig_R = numpy.abs( u1_R ) + numpy.sqrt(metric.H_contra_11_itf_i[:, itf] * heat_capacity_ratio * pressure_itf_i[:, elem_R, 0, :] / variables_itf_i[idx_rho, :, elem_R, 0, :])
+         eig_L = numpy.abs( u1_L ) + numpy.sqrt(metric.H_contra_11_itf_i[itf, :] * heat_capacity_ratio * pressure_itf_i[:, elem_L, 1, :] / variables_itf_i[idx_rho, :, elem_L, 1, :])
+         eig_R = numpy.abs( u1_R ) + numpy.sqrt(metric.H_contra_11_itf_i[itf, :] * heat_capacity_ratio * pressure_itf_i[:, elem_R, 0, :] / variables_itf_i[idx_rho, :, elem_R, 0, :])
 
       eig = numpy.maximum(eig_L, eig_R)
 
       # Advective part of the flux ...
-      flux_L = metric.sqrtG_itf_i[:, itf] * u1_L * variables_itf_i[:, :, elem_L, 1, :]
-      flux_R = metric.sqrtG_itf_i[:, itf] * u1_R * variables_itf_i[:, :, elem_R, 0, :]
+      flux_L = metric.sqrtG_itf_i[itf, :] * u1_L * variables_itf_i[:, :, elem_L, 1, :]
+      flux_R = metric.sqrtG_itf_i[itf, :] * u1_R * variables_itf_i[:, :, elem_R, 0, :]
 
       # ... and now add the pressure contribution
-      flux_L[idx_rho_u1] += metric.sqrtG_itf_i[:, itf] * metric.H_contra_11_itf_i[:, itf] * pressure_itf_i[:, elem_L, 1, :]
-      flux_L[idx_rho_u2] += metric.sqrtG_itf_i[:, itf] * metric.H_contra_12_itf_i[:, itf] * pressure_itf_i[:, elem_L, 1, :]
-      flux_L[idx_rho_w] += metric.sqrtG_itf_i[:, itf] * metric.H_contra_13_itf_i[:, itf] * pressure_itf_i[:, elem_L, 1, :]
-
-      flux_R[idx_rho_u1] += metric.sqrtG_itf_i[:, itf] * metric.H_contra_11_itf_i[:, itf] * pressure_itf_i[:, elem_R, 0, :]
-      flux_R[idx_rho_u2] += metric.sqrtG_itf_i[:, itf] * metric.H_contra_12_itf_i[:, itf] * pressure_itf_i[:, elem_R, 0, :]
-      flux_R[idx_rho_w] += metric.sqrtG_itf_i[:, itf] * metric.H_contra_13_itf_i[:, itf] * pressure_itf_i[:, elem_R, 0, :]
+      flux_L[idx_rho_u1] += metric.sqrtG_itf_i[itf, :] * metric.H_contra_11_itf_i[itf, :] * pressure_itf_i[:, elem_L, 1, :]
+      flux_L[idx_rho_u2] += metric.sqrtG_itf_i[itf, :] * metric.H_contra_12_itf_i[itf, :] * pressure_itf_i[:, elem_L, 1, :]
+      flux_L[idx_rho_w]  += metric.sqrtG_itf_i[itf, :] * metric.H_contra_13_itf_i[itf, :] * pressure_itf_i[:, elem_L, 1, :]
+                                                                                        
+      flux_R[idx_rho_u1] += metric.sqrtG_itf_i[itf, :] * metric.H_contra_11_itf_i[itf, :] * pressure_itf_i[:, elem_R, 0, :]
+      flux_R[idx_rho_u2] += metric.sqrtG_itf_i[itf, :] * metric.H_contra_12_itf_i[itf, :] * pressure_itf_i[:, elem_R, 0, :]
+      flux_R[idx_rho_w]  += metric.sqrtG_itf_i[itf, :] * metric.H_contra_13_itf_i[itf, :] * pressure_itf_i[:, elem_R, 0, :]
 
       # --- Common Rusanov fluxes
 
-      flux_x1_itf_i[:, :, elem_L, :, 1] = 0.5 * ( flux_L  + flux_R - eig * metric.sqrtG_itf_i[:, itf] * ( variables_itf_i[:, :, elem_R, 0, :] - variables_itf_i[:, :, elem_L, 1, :] ) )
+      flux_x1_itf_i[:, :, elem_L, :, 1] = 0.5 * ( flux_L  + flux_R - eig * metric.sqrtG_itf_i[itf, :] * ( variables_itf_i[:, :, elem_R, 0, :] - variables_itf_i[:, :, elem_L, 1, :] ) )
       flux_x1_itf_i[:, :, elem_R, :, 0] = flux_x1_itf_i[:, :, elem_L, :, 1]
 
       # Direction x2
