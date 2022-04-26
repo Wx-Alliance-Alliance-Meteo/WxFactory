@@ -86,7 +86,7 @@ class cubed_sphere:
 
       X1, X2 = numpy.meshgrid(x1, x2)
 
-      X1_itf_i, X2_itf_i = numpy.meshgrid(interfaces_x1, x2)
+      X2_itf_i, X1_itf_i,  = numpy.meshgrid(x2, interfaces_x1)
       X1_itf_j, X2_itf_j = numpy.meshgrid(x1, interfaces_x2)
 
       # Gnomonic coordinates

@@ -30,11 +30,6 @@ def main(args) -> int:
    if param.output_freq > 0:
       from output import output_init, output_netcdf, output_finalize
 
-   if param.discretization == 'fv':
-      param.nb_elements_horizontal = param.nb_elements_horizontal * param.nbsolpts
-      param.nb_elements_vertical   = param.nb_elements_vertical * param.nbsolpts
-      param.nbsolpts = 1
-
    # Set up distributed world
    ptopo = Distributed_World()
 
@@ -54,7 +49,7 @@ def main(args) -> int:
             param.nb_elements_vertical, param.case_number)
    else: # Shallow water
       Q, topo = initialize_sw(geom, metric, mtrx, param)
-      rhs_handle = lambda q: rhs_sw(q, geom, mtrx, metric, topo, ptopo, param.nbsolpts, param.nb_elements_horizontal, param.case_number)
+      rhs_handle = lambda q: rhs_sw(q, geom, mtrx, metric, topo, ptopo, param.nbsolpts, param.nb_elements_horizontal)
 
    if param.output_freq > 0:
       output_init(geom, param)
@@ -64,7 +59,7 @@ def main(args) -> int:
    if param.time_integrator.lower()[:3] == 'epi' and param.time_integrator[3:].isdigit():
       order = int(param.time_integrator[3:])
       print(f'Running with EPI{order}')
-      stepper = Epi(order, rhs_handle, param.tolerance, param.krylov_size, init_substeps=10)
+      stepper = Epi(order, rhs_handle, param.tolerance, param.krylov_size, jacobian_method=param.jacobian_method, init_substeps=10)
    elif param.time_integrator.lower() == 'epirk4s3a':
       stepper = Epirk4s3a(rhs_handle, param.tolerance, param.krylov_size)
    elif param.time_integrator.lower() == 'tvdrk3':
@@ -76,9 +71,9 @@ def main(args) -> int:
          preconditioner = FV_preconditioner(param, Q, ptopo)
       stepper = Rat2(rhs_handle, param.tolerance, preconditioner=preconditioner)
    elif  param.time_integrator.lower() == 'epi2/ark' and param.equations == "shallow_water": # TODO : Euler
-      rhs_explicit = lambda q: rhs_sw_explicit(q, geom, mtrx, metric, topo, ptopo, param.nbsolpts, param.nb_elements_horizontal, param.case_number)
+      rhs_explicit = lambda q: rhs_sw_explicit(q, geom, mtrx, metric, topo, ptopo, param.nbsolpts, param.nb_elements_horizontal)
 
-      rhs_implicit = lambda q: rhs_sw_implicit(q, geom, mtrx, metric, topo, ptopo, param.nbsolpts, param.nb_elements_horizontal, param.case_number)
+      rhs_implicit = lambda q: rhs_sw_implicit(q, geom, mtrx, metric, topo, ptopo, param.nbsolpts, param.nb_elements_horizontal)
 
       stepper = ARK_epi2(rhs_handle, rhs_explicit, rhs_implicit, param)
    else:

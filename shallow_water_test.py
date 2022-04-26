@@ -171,10 +171,10 @@ def williamson_case5(geom, metric, mtrx, param):
       elem_L = itf
       elem_R = itf + 1
 
-      hsurf_itf_i[elem_L, :, 1] = hs0 * (1 - r_itf_i[:, itf] / rr)
+      hsurf_itf_i[elem_L, :, 1] = hs0 * (1. - r_itf_i[itf, :] / rr)
       hsurf_itf_i[elem_R, :, 0] = hsurf_itf_i[elem_L, :, 1]
 
-      hsurf_itf_j[elem_L, 1, :] = hs0 * (1 - r_itf_j[itf, :] / rr)
+      hsurf_itf_j[elem_L, 1, :] = hs0 * (1. - r_itf_j[itf, :] / rr)
       hsurf_itf_j[elem_R, 0, :] = hsurf_itf_j[elem_L, 1, :]
 
    ni, nj = geom.lon.shape

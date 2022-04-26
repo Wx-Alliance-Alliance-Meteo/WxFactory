@@ -49,7 +49,7 @@ class Epirk4s3a:
       ni, nj, ne = Q.shape
       zeroVec = numpy.zeros(ni * nj * ne)
 
-      matvec_handle = lambda v: matvec_fun(v, dt, Q, self.rhs)
+      matvec_handle = lambda v: matvec_fun(v, dt, Q, self.rhs(Q), self.rhs)
 
       # stage 1
       u_mtrx = numpy.row_stack((zeroVec, hF.flatten()))
@@ -78,10 +78,11 @@ class Epirk4s3a:
       return Q + numpy.reshape(phiv, Q.shape)
 
 class Epi:
-   def __init__(self, order, rhs, tol, krylov_size, init_method=None, init_substeps=1):
+   def __init__(self, order, rhs, tol, krylov_size, jacobian_method='complex', init_method=None, init_substeps=1):
       self.rhs = rhs
       self.tol = tol
       self.krylov_size = krylov_size
+      self.jacobian_method = jacobian_method
 
       if order == 2:
          self.A = numpy.array([[]])
@@ -141,14 +142,14 @@ class Epi:
          return Q
 
       # Regular EPI step
-      matvec_handle = lambda v: matvec_fun(v, dt, Q, self.rhs)
-
       rhs = self.rhs(Q)
+
+      matvec_handle = lambda v: matvec_fun(v, dt, Q, rhs, self.rhs, self.jacobian_method)
 
       vec = numpy.zeros((self.max_phi+1, rhs.size))
       vec[1,:] = rhs.flatten()
       for i in range(self.n_prev):
-         J_deltaQ = matvec_fun(self.previous_Q[i] - Q, 1., Q, self.rhs)
+         J_deltaQ = matvec_fun(self.previous_Q[i] - Q, 1., Q, rhs, self.rhs, self.jacobian_method)
 
          # R(y_{n-i})
          r = (self.previous_rhs[i] - rhs) - numpy.reshape(J_deltaQ, Q.shape)
@@ -175,7 +176,6 @@ class Epi:
       # Update solution
       return Q + numpy.reshape(phiv, Q.shape) * dt
 
-
 class Tvdrk3:
    def __init__(self, rhs):
       self.rhs = rhs
@@ -187,32 +187,29 @@ class Tvdrk3:
       return Q
 
 class Rat2:
-   def __init__(self, rhs, tol, preconditioner=None):
-      self.rhs = rhs
-      self.tol = tol
+   def __init__(self, rhs_handle, tol, preconditioner=None):
+      self.rhs_handle     = rhs_handle
+      self.tol            = tol
       self.preconditioner = preconditioner
 
    def step(self, Q, dt):
-      matvec_handle = lambda v: matvec_rat(v, dt, Q, self.rhs)
+      
+      rhs    = self.rhs_handle(Q)
+      Q_flat = Q.flatten()
+      n      = Q_flat.shape[0]
 
-      if self.preconditioner:
-         self.preconditioner.init_time_step(dt, Q)
+      A = scipy.sparse.linalg.LinearOperator((n,n), matvec=lambda v: matvec_rat(v, dt, Q, rhs, self.rhs_handle))
+      b = A(Q_flat) + rhs.flatten() * dt
 
-      # Transform to the shifted linear system (I/dt - J/2) x = F/dt
-      rhs = self.rhs(Q).flatten() / dt
-
-      first_guess = numpy.zeros_like(rhs)
-
-      phiv, local_error, num_iter, flag = fgmres(matvec_handle, rhs,
-                                                 x0=first_guess, tol=self.tol, preconditioner=self.preconditioner)
+      # TODO : gcro
+      Qnew, local_error, num_iter, flag = fgmres(A, b, x0=Q_flat, tol=self.tol, preconditioner=self.preconditioner)
 
       if flag == 0:
          print(f'FGMRES converged at iteration {num_iter} to a solution with local error {local_error : .2e}')
       else:
          print(f'FGMRES stagnation at iteration {num_iter}, returning a solution with local error {local_error: .2e}')
 
-      # Update solution
-      return Q + numpy.reshape(phiv, Q.shape) * dt
+      return numpy.reshape(Qnew, Q.shape)
 
 class ARK_epi2:
    def __init__(self, rhs, rhs_explicit, rhs_implicit, param):
@@ -229,8 +226,10 @@ class ARK_epi2:
 
    def exec_run(self, run_params, dt, Q, rhs):
       run_params['timer'].start()
-      J_explicit = lambda v: matvec_fun(v, dt, Q, run_params['rhs_explicit'])
-      J_implicit = lambda v: matvec_fun(v, dt, Q, run_params['rhs_implicit'])
+      rhs_exp = run_params['rhs_explicit']
+      rhs_imp = run_params['rhs_implicit']
+      J_explicit = lambda v: matvec_fun(v, dt, Q, rhs_exp(Q), rhs_exp)
+      J_implicit = lambda v: matvec_fun(v, dt, Q, rhs_imp(Q), rhs_imp)
 
       # We only need the second phi function
       vec = numpy.row_stack((numpy.zeros_like(rhs), rhs))

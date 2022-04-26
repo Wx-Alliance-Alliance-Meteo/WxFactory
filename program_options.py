@@ -24,8 +24,17 @@ class Configuration:
       self.dt               = parser.getfloat('Time_integration', 'dt')
       self.t_end            = parser.getint('Time_integration', 't_end')
       self.time_integrator  = parser.get('Time_integration', 'time_integrator')
-      self.krylov_size      = parser.getint('Time_integration', 'krylov_size')
       self.tolerance        = parser.getfloat('Time_integration', 'tolerance')
+
+      try:
+         self.krylov_size = parser.getint('Time_integration', 'krylov_size')
+      except (NoOptionError,NoSectionError):
+         self.krylov_size = 1
+
+      try:
+         self.jacobian_method = parser.get('Time_integration', 'jacobian_method')
+      except (NoOptionError,NoSectionError):
+         self.jacobian_method = 'complex'
 
       try:
          self.ark_solver_exp = parser.get('Time_integration', 'ark_solver_exp')
@@ -61,6 +70,11 @@ class Configuration:
          self.discretization = parser.get('Grid', 'discretization')
       except (NoOptionError, NoSectionError):
          self.discretization = 'dg'
+
+      if self.discretization == 'fv':
+         if self.nbsolpts != 1:
+            print('The number of solution of solution points in configuration file is inconsistent with a finite volume discretization')
+            exit(0)
 
       try:
          self.λ0 = parser.getfloat('Grid', 'λ0')

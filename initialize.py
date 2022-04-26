@@ -132,4 +132,5 @@ def initialize_sw(geom, metric, mtrx, param):
       Q[idx_hu1, :, :] = fluid_height * u1_contra
       Q[idx_hu2, :, :] = fluid_height * u2_contra
 
-   return Q, Topo(hsurf, dzdx1, dzdx2, hsurf_itf_i, hsurf_itf_j)
+   # Note : we move the last axis of the first topo array so that both have similiar ordering
+   return Q, Topo(hsurf, dzdx1, dzdx2, numpy.moveaxis(hsurf_itf_i, -1, -2), hsurf_itf_j)
