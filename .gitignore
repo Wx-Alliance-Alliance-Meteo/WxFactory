@@ -2,6 +2,7 @@
 *~
 *.swp
 *.swo
+*.code-workspace
 
 doc/*.pdf
 doc/*.aux

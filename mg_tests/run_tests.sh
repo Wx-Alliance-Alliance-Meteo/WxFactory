@@ -13,7 +13,7 @@ if [[ ${CONFIG_FILE} == "-"* ]]; then
 fi
 
 # MPIRUN="aprun"
-MPIRUN="mpirun -tag-output"
+MPIRUN="mpirun"
 
 cd ${SCRIPT_DIR}
 mkdir -p ${CONFIG_DIR}
@@ -25,7 +25,7 @@ function run_program() {
         the_config=${CONFIG_FILE}
     fi
     set -x
-    ${MPIRUN} -n 6 python3 ${GEF_DIR}/${GEF_MAIN} ${the_config} 2>&1 | grep ',0]'
+    ${MPIRUN} -n 6 python3 ${GEF_DIR}/${GEF_MAIN} ${the_config}
     set +x
 }
 

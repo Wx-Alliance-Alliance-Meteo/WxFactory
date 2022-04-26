@@ -95,6 +95,15 @@ source [virtual environment directory]/bin/activate
 export LANG=en_CA.UTF-8
 ```
 
+## Parallel NetCDF4 python module
+Sometimes, the netCDF4 python module that comes on a system is linked with a serial version of the NetCDF library, but we need the parallel one in GEF (at least if you want an output file). 
+
+Ideally in a virtual environment
+```
+source [virtual environmen]/bin/activate
+pip install netcdf4 --no-binary netcdf4
+```
+
 # Executing the model
 
 The allowed number of PEs is of the form $6 n^2$, for $n \ge 0$.
