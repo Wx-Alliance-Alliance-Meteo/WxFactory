@@ -1,10 +1,9 @@
 import numpy
 
 from definitions import idx_rho_u1, idx_rho_u2, idx_rho_w, idx_rho, idx_rho_theta, gravity, p0, Rd, cpd, cvd, heat_capacity_ratio
-from dgfilter import apply_filter3D
 
 # TODO : restructurer, réviser les paramètres
-def rhs_euler(Q, geom, mtrx, metric, topo, ptopo, nbsolpts: int, nb_elements_hori: int, nb_elements_vert: int, case_number: int, filter_rhs: bool = False):
+def rhs_euler(Q, geom, mtrx, metric, topo, ptopo, nbsolpts: int, nb_elements_hori: int, nb_elements_vert: int, case_number: int):
 
    type_vec = Q.dtype
    nb_equations = Q.shape[0]
@@ -181,27 +180,27 @@ def rhs_euler(Q, geom, mtrx, metric, topo, ptopo, nbsolpts: int, nb_elements_hor
          eig_L = numpy.abs( u1_L )
          eig_R = numpy.abs( u1_R )
       else:
-         eig_L = numpy.abs( u1_L ) + numpy.sqrt(metric.H_contra_11_itf_i[:, itf] * heat_capacity_ratio * pressure_itf_i[:, elem_L, 1, :] / variables_itf_i[idx_rho, :, elem_L, 1, :])
-         eig_R = numpy.abs( u1_R ) + numpy.sqrt(metric.H_contra_11_itf_i[:, itf] * heat_capacity_ratio * pressure_itf_i[:, elem_R, 0, :] / variables_itf_i[idx_rho, :, elem_R, 0, :])
+         eig_L = numpy.abs( u1_L ) + numpy.sqrt(metric.H_contra_11_itf_i[itf, :] * heat_capacity_ratio * pressure_itf_i[:, elem_L, 1, :] / variables_itf_i[idx_rho, :, elem_L, 1, :])
+         eig_R = numpy.abs( u1_R ) + numpy.sqrt(metric.H_contra_11_itf_i[itf, :] * heat_capacity_ratio * pressure_itf_i[:, elem_R, 0, :] / variables_itf_i[idx_rho, :, elem_R, 0, :])
 
       eig = numpy.maximum(eig_L, eig_R)
 
       # Advective part of the flux ...
-      flux_L = metric.sqrtG_itf_i[:, itf] * u1_L * variables_itf_i[:, :, elem_L, 1, :]
-      flux_R = metric.sqrtG_itf_i[:, itf] * u1_R * variables_itf_i[:, :, elem_R, 0, :]
+      flux_L = metric.sqrtG_itf_i[itf, :] * u1_L * variables_itf_i[:, :, elem_L, 1, :]
+      flux_R = metric.sqrtG_itf_i[itf, :] * u1_R * variables_itf_i[:, :, elem_R, 0, :]
 
       # ... and now add the pressure contribution
-      flux_L[idx_rho_u1] += metric.sqrtG_itf_i[:, itf] * metric.H_contra_11_itf_i[:, itf] * pressure_itf_i[:, elem_L, 1, :]
-      flux_L[idx_rho_u2] += metric.sqrtG_itf_i[:, itf] * metric.H_contra_12_itf_i[:, itf] * pressure_itf_i[:, elem_L, 1, :]
-      flux_L[idx_rho_w] += metric.sqrtG_itf_i[:, itf] * metric.H_contra_13_itf_i[:, itf] * pressure_itf_i[:, elem_L, 1, :]
-
-      flux_R[idx_rho_u1] += metric.sqrtG_itf_i[:, itf] * metric.H_contra_11_itf_i[:, itf] * pressure_itf_i[:, elem_R, 0, :]
-      flux_R[idx_rho_u2] += metric.sqrtG_itf_i[:, itf] * metric.H_contra_12_itf_i[:, itf] * pressure_itf_i[:, elem_R, 0, :]
-      flux_R[idx_rho_w] += metric.sqrtG_itf_i[:, itf] * metric.H_contra_13_itf_i[:, itf] * pressure_itf_i[:, elem_R, 0, :]
+      flux_L[idx_rho_u1] += metric.sqrtG_itf_i[itf, :] * metric.H_contra_11_itf_i[itf, :] * pressure_itf_i[:, elem_L, 1, :]
+      flux_L[idx_rho_u2] += metric.sqrtG_itf_i[itf, :] * metric.H_contra_12_itf_i[itf, :] * pressure_itf_i[:, elem_L, 1, :]
+      flux_L[idx_rho_w]  += metric.sqrtG_itf_i[itf, :] * metric.H_contra_13_itf_i[itf, :] * pressure_itf_i[:, elem_L, 1, :]
+                                                                                        
+      flux_R[idx_rho_u1] += metric.sqrtG_itf_i[itf, :] * metric.H_contra_11_itf_i[itf, :] * pressure_itf_i[:, elem_R, 0, :]
+      flux_R[idx_rho_u2] += metric.sqrtG_itf_i[itf, :] * metric.H_contra_12_itf_i[itf, :] * pressure_itf_i[:, elem_R, 0, :]
+      flux_R[idx_rho_w]  += metric.sqrtG_itf_i[itf, :] * metric.H_contra_13_itf_i[itf, :] * pressure_itf_i[:, elem_R, 0, :]
 
       # --- Common Rusanov fluxes
 
-      flux_x1_itf_i[:, :, elem_L, :, 1] = 0.5 * ( flux_L  + flux_R - eig * metric.sqrtG_itf_i[:, itf] * ( variables_itf_i[:, :, elem_R, 0, :] - variables_itf_i[:, :, elem_L, 1, :] ) )
+      flux_x1_itf_i[:, :, elem_L, :, 1] = 0.5 * ( flux_L  + flux_R - eig * metric.sqrtG_itf_i[itf, :] * ( variables_itf_i[:, :, elem_R, 0, :] - variables_itf_i[:, :, elem_L, 1, :] ) )
       flux_x1_itf_i[:, :, elem_R, :, 0] = flux_x1_itf_i[:, :, elem_L, :, 1]
 
       # Direction x2
@@ -281,10 +280,6 @@ def rhs_euler(Q, geom, mtrx, metric, topo, ptopo, nbsolpts: int, nb_elements_hor
 
    # Assemble the right-hand sides
    rhs = - metric.inv_sqrtG * ( df1_dx1 + df2_dx2 + df3_dx3 ) - forcing
-
-   if filter_rhs:
-      for var in range(nb_equations):
-         rhs[var] = apply_filter3D(rhs[var], mtrx, nb_elements_hori, nb_elements_vert, nbsolpts)
 
    # For pure advection problems, we do not update the dynamical variables
    if advection_only:

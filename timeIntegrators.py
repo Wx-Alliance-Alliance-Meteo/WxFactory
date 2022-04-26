@@ -1,5 +1,6 @@
 import numpy
 import math
+import scipy.sparse.linalg
 from collections import deque
 from time        import time
 
@@ -51,7 +52,7 @@ class Epirk4s3a:
       ni, nj, ne = Q.shape
       zeroVec = numpy.zeros(ni * nj * ne)
 
-      matvec_handle = lambda v: matvec_fun(v, dt, Q, self.rhs)
+      matvec_handle = lambda v: matvec_fun(v, dt, Q, self.rhs(Q), self.rhs)
 
       # stage 1
       u_mtrx = numpy.row_stack((zeroVec, hF.flatten()))
@@ -80,10 +81,11 @@ class Epirk4s3a:
       return Q + numpy.reshape(phiv, Q.shape)
 
 class Epi:
-   def __init__(self, order, rhs, tol, krylov_size, init_method=None, init_substeps=1):
+   def __init__(self, order, rhs, tol, krylov_size, jacobian_method='complex', init_method=None, init_substeps=1):
       self.rhs = rhs
       self.tol = tol
       self.krylov_size = krylov_size
+      self.jacobian_method = jacobian_method
 
       if order == 2:
          self.A = numpy.array([[]])
@@ -143,14 +145,14 @@ class Epi:
          return Q
 
       # Regular EPI step
-      matvec_handle = lambda v: matvec_fun(v, dt, Q, self.rhs)
-
       rhs = self.rhs(Q)
+
+      matvec_handle = lambda v: matvec_fun(v, dt, Q, rhs, self.rhs, self.jacobian_method)
 
       vec = numpy.zeros((self.max_phi+1, rhs.size))
       vec[1,:] = rhs.flatten()
       for i in range(self.n_prev):
-         J_deltaQ = matvec_fun(self.previous_Q[i] - Q, 1., Q, self.rhs)
+         J_deltaQ = matvec_fun(self.previous_Q[i] - Q, 1., Q, rhs, self.rhs, self.jacobian_method)
 
          # R(y_{n-i})
          r = (self.previous_rhs[i] - rhs) - numpy.reshape(J_deltaQ, Q.shape)
@@ -177,7 +179,6 @@ class Epi:
       # Update solution
       return Q + numpy.reshape(phiv, Q.shape) * dt
 
-
 class Tvdrk3:
    def __init__(self, rhs):
       self.rhs = rhs
@@ -189,112 +190,42 @@ class Tvdrk3:
       return Q
 
 class Rat2:
-   def __init__(self, Q, rhs, param, ptopo):
-
-      from quadrature import gauss_legendre
-
-      self.preconditioner = None
-      self.apply_precond = None
-      if param.preconditioner in ['fv', 'fv-mg']:
-         self.preconditioner = FiniteVolume(param, Q, ptopo, precond_type=param.preconditioner)
-         self.apply_precond = lambda vec: self.preconditioner.apply(vec, verbose=False)
-      elif param.preconditioner == 'p-mg':
-         pts, _ = gauss_legendre(param.initial_nbsolpts)
-         param.mg_cfl *= abs(1.0 - pts[-1]) / (2 * (2 * param.initial_nbsolpts + 1)) # This looks very iffy
-         self.preconditioner = Multigrid(param, ptopo, discretization='dg')
-         # print(f'Coarsest mg order: {param.coarsest_mg_order}')
-         self.apply_precond = lambda vec: self.preconditioner.iterate(vec, coarsest_level=param.coarsest_mg_order)
-         # raise ValueError(f'p-multigrid preconditioner is not implemented yet')
-
-      # mg_params = None
-      # if param.linear_solver in ['mg', 'multigrid']:
-      #    mg_params = MG_params(param, ptopo)
-
-      self.rhs = rhs
-      self.tol = param.tolerance
-
-      self.rank = ptopo.rank
-      self.use_mg = False
-      if param.linear_solver == 'fgmres':
-         self.solver_name = 'FGMRES'
-         self.max_it = 2400//20 if self.preconditioner is None else 300//20
-         self.solve = lambda A, b, x0 : fgmres(A, b, x0=x0, tol=self.tol, preconditioner=self.apply_precond, restart=20, maxiter=self.max_it, verbose=True)
-
-      elif param.linear_solver in ['mg', 'multigrid']:
-         if param.preconditioner != 'none':
-            print(f'Warning: Requesting multigrid solver and preconditioner. That solver does *not* use a preconditioner so we will ignore the preconditioner option')
-         self.solver_name = 'Multigrid'
-         pts, _ = gauss_legendre(param.initial_nbsolpts)
-         param.mg_cfl *= abs(1.0 - pts[-1]) / (2 * (2 * param.initial_nbsolpts + 1)) # This looks very iffy
-         self.mg_solver = Multigrid(param, ptopo, discretization='dg')
-         self.use_mg = True
-         self.max_it = 500
-         self.solve = lambda A, b, x0 : self.mg_solver.solve(b, x0=x0, tolerance=self.tol, max_num_it=self.max_it)
-
-      if self.rank == 0:
-         try:
-            f = open('test_result.txt')
-            file_exists = True
-            f.close()
-         except:
-            file_exists = False
-
-         with open('test_result.txt', 'a+') as output_file:
-            if not file_exists:
-               output_file.write('# order | num_elements | dt | linear solver | precond | precond_interp | precond tol | coarsest MG order | MG smoothe only | # pre smoothe | # post smoothe | CFL # ::: FGMRES #it | FGMRES time | conv. flag \n')
-            if param is not None:
-               output_file.write(f'{param.nbsolpts} {param.nb_elements_horizontal:3d} {int(param.dt):5d} {param.linear_solver[:10]:10s} '
-                                 f'{param.preconditioner[:8]:8s} {param.dg_to_fv_interp[:8]:8s} {param.precond_tolerance:9.1e} '
-                                 f'{param.coarsest_mg_order:3d} {param.mg_smoothe_only} '
-                                 f'{param.num_pre_smoothing:3d} {param.num_post_smoothing:3d} {param.mg_cfl:6.3f} ::: ')
-            else:
-               output_file.write(f'NO PARAMS - ')
+   def __init__(self, rhs_handle, tol, preconditioner=None):
+      self.rhs_handle     = rhs_handle
+      self.tol            = tol
+      self.preconditioner = preconditioner
 
    def step(self, Q, dt):
-      matvec_handle = lambda v: matvec_rat(v, dt, Q, self.rhs)
+      
+      rhs    = self.rhs_handle(Q)
+      Q_flat = Q.flatten()
+      n      = Q_flat.shape[0]
 
-      if self.preconditioner:
-         self.preconditioner.init_time_step(Q, dt)
+      A = scipy.sparse.linalg.LinearOperator((n,n), matvec=lambda v: matvec_rat(v, dt, Q, rhs, self.rhs_handle))
+      b = A(Q_flat) + rhs.flatten() * dt
 
-      if self.use_mg:
-         self.mg_solver.init_time_step(Q, dt)
-
-      # Transform to the shifted linear system (I/dt - J/2) x = F/dt
-      rhs = self.rhs(Q).flatten() / dt
-
-      first_guess = numpy.zeros_like(rhs)
-
-      t0 = time()
-      phiv, local_error, num_iter, flag, residuals = self.solve(matvec_handle, rhs, first_guess)
-      t1 = time()
+      # TODO : gcro
+      Qnew, local_error, num_iter, flag = fgmres(A, b, x0=Q_flat, tol=self.tol, preconditioner=self.preconditioner)
 
       if flag == 0:
          print(f'{self.solver_name} converged at iteration {num_iter} in {t1 - t0:4.1f} s to a solution with local error {local_error : .2e}')
       else:
          print(f'{self.solver_name} stagnation/interruption at iteration {num_iter} in {t1 - t0:4.1f} s, returning a solution with local error {local_error: .2e}')
 
-      if self.rank == 0:
-         with open('test_result.txt', 'a+') as output_file:
-            output_file.write(f'{num_iter:4d} {t1 - t0:6.1f} ')
-            output_file.write(f'{flag:2d} ')
-            output_file.write(f'- {" ".join(f"{r[0]:.2e}/{r[1]:.2e}/{r[2]}" for r in residuals)} ')
-            output_file.write('\n')
+      # gmres_sol, gmres_res, num_gmres_it, gmres_flag, res = fgmres(matvec_handle, rhs, x0=phiv, tol=self.tol, preconditioner=None, restart=20, maxiter=1200//20)
+      # diff = gmres_sol - phiv
+      # diff_norm = numpy.linalg.norm(diff) / numpy.linalg.norm(phiv)
 
-      gmres_sol, gmres_res, num_gmres_it, gmres_flag, res = fgmres(matvec_handle, rhs, x0=phiv, tol=self.tol, preconditioner=None, restart=20, maxiter=1200//20)
-      diff = gmres_sol - phiv
-      diff_norm = numpy.linalg.norm(diff) / numpy.linalg.norm(phiv)
+      # res1 = numpy.linalg.norm(matvec_handle(phiv) - rhs)
+      # res2 = numpy.linalg.norm(matvec_handle(gmres_sol) - rhs)
 
-      res1 = numpy.linalg.norm(matvec_handle(phiv) - rhs)
-      res2 = numpy.linalg.norm(matvec_handle(gmres_sol) - rhs)
+      # print(f'Diff norm = {diff_norm}')
+      # print(f'error: {local_error:.2e}/{gmres_res:.2e}, flag {flag}/{gmres_flag}, res1/2 {res1:.2e}/{res2:.2e}')
 
-      print(f'Diff norm = {diff_norm}')
-      print(f'error: {local_error:.2e}/{gmres_res:.2e}, flag {flag}/{gmres_flag}, res1/2 {res1:.2e}/{res2:.2e}')
+      # if num_gmres_it > 1 or gmres_flag != 0 or diff_norm > 6e-6:
+      #    raise ValueError(f'Solver did not give the same result as GMRES! num_gmres_it = {num_gmres_it}, gmres_flag = {gmres_flag}')
 
-      if num_gmres_it > 1 or gmres_flag != 0 or diff_norm > 6e-6:
-         raise ValueError(f'Solver did not give the same result as GMRES! num_gmres_it = {num_gmres_it}, gmres_flag = {gmres_flag}')
-
-      # Update solution
-      return Q + numpy.reshape(phiv, Q.shape) * dt
+      return numpy.reshape(Qnew, Q.shape)
 
 class ARK_epi2:
    def __init__(self, rhs, rhs_explicit, rhs_implicit, param):
@@ -311,8 +242,10 @@ class ARK_epi2:
 
    def exec_run(self, run_params, dt, Q, rhs):
       run_params['timer'].start()
-      J_explicit = lambda v: matvec_fun(v, dt, Q, run_params['rhs_explicit'])
-      J_implicit = lambda v: matvec_fun(v, dt, Q, run_params['rhs_implicit'])
+      rhs_exp = run_params['rhs_explicit']
+      rhs_imp = run_params['rhs_implicit']
+      J_explicit = lambda v: matvec_fun(v, dt, Q, rhs_exp(Q), rhs_exp)
+      J_implicit = lambda v: matvec_fun(v, dt, Q, rhs_imp(Q), rhs_imp)
 
       # We only need the second phi function
       vec = numpy.row_stack((numpy.zeros_like(rhs), rhs))

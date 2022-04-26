@@ -7,6 +7,7 @@ GEF was built for Python3.  It also requires an MPI implementation.
 ## Python packages
 * `numpy` Scientific tools for Python
 * `scipy` Python-based ecosystem of open-source software for mathematics, science, and engineering
+* `sympy` Python library for symbolic mathematics
 * `mpi4py` Python interface for MPI
 * `netcdf4-openmpi` Python/NumPy interface to the netCDF C library (openmpi version)
 

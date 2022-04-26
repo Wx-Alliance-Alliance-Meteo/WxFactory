@@ -23,11 +23,8 @@ def ortho_1_sync(Q, R, j):
 
    local_tmp = Q[:j, :].conj() @ Q[j-1:j+1, :].T
 
-
    global_tmp = numpy.empty_like(local_tmp)
    mpi4py.MPI.COMM_WORLD.Allreduce(local_tmp, global_tmp)
-
-   # global_tmp = mpi4py.MPI.COMM_WORLD.allreduce(local_tmp) # Expensive step on multi-node execution
 
    T            = numpy.zeros_like(R)
    T[:j-1, j-1] = global_tmp[:j-1, 0]
@@ -111,7 +108,6 @@ def fgmres(A, b, x0 = None, tol = 1e-5, restart = 20, maxiter = None, preconditi
 
    r          = b - Ax0
    norm_r     = global_norm(r)
-   error      = norm_r / norm_b
 
    residuals.append((error, time() - t_start, total_work))
 
@@ -220,7 +216,6 @@ def fgmres(A, b, x0 = None, tol = 1e-5, restart = 20, maxiter = None, preconditi
 def global_norm(vec):
    """Compute vector norm across all PEs"""
    local_sum = vec @ vec
-   # return math.sqrt( mpi4py.MPI.COMM_WORLD.allreduce(local_sum) )
    global_sum = numpy.array([0.0])
    mpi4py.MPI.COMM_WORLD.Allreduce(numpy.array([local_sum]), global_sum)
    return math.sqrt(global_sum[0])

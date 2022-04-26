@@ -2,7 +2,7 @@ import numpy
 
 from definitions import idx_rho_u1, idx_rho_u2, idx_rho_u3, idx_rho, idx_rho_theta, gravity, p0, Rd, cpd, cvd, heat_capacity_ratio
 
-def rhs_euler_hori(Q, geom, mtrx, metric, topo, ptopo, nbsolpts: int, nb_elements_horiz: int, case_number: int, filter_rhs: bool = False):
+def rhs_euler_hori(Q, geom, mtrx, metric, topo, ptopo, nbsolpts: int, nb_elements_horiz: int, case_number: int):
 
    datatype = Q.dtype
 

@@ -375,7 +375,7 @@ class Distributed_World:
          [X, X, Y, Y],
          [var_n, var_s, var_w, var_e],
          [send_buffer[0], send_buffer[1], send_buffer[2], send_buffer[3]]):
-         
+
          for id in [idx_rho, idx_rho_w, idx_rho_theta]:
             buffer[id, :] = numpy.flip(var[id], flip_dim) if do_flip else var[id]
 
@@ -970,7 +970,7 @@ class GefExchangeRequest():
       self.outputs = outputs
       self.mpi_request = mpi_request
       self.is_complete = False
-   
+
    def wait(self):
       if not self.is_complete:
          self.mpi_request.Wait()

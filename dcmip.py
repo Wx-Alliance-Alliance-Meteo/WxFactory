@@ -70,6 +70,11 @@ def dcmip_T11_update_winds(geom, metric, mtrx, param, time=0):
 
    return u1_contra, u2_contra, w
 
+
+#==========================================================================================
+# TEST CASE 12 - PURE ADVECTION - 3D HADLEY-LIKE FLOW
+#==========================================================================================
+
 def dcmip_T12_update_winds(geom, metric, mtrx, param, time=0):
    """
    Test 12 - 3D Hadley-like flow
@@ -81,7 +86,6 @@ def dcmip_T12_update_winds(geom, metric, mtrx, param, time=0):
    T0   = 300.0                 # temperature (K)
    H    = Rd * T0 / gravity     # scale height
    K    = 5.0                   # number of Hadley-like cells
-   ztop = 12000.0               # model top (m)
 
 
    # Height and pressure are aligned (p = p0 exp(-z/H))
@@ -106,7 +110,7 @@ def dcmip_T12_update_winds(geom, metric, mtrx, param, time=0):
 
    # Meridional Velocity
 
-   v = -(rho0 / rho) * (geom.earth_radius * w0 * math.pi) / (K * ztop) * numpy.cos(geom.lat) * numpy.sin(K * geom.lat) * numpy.cos(math.pi * geom.height / ztop) * numpy.cos(math.pi * time / tau)
+   v = -(rho0 / rho) * (geom.earth_radius * w0 * math.pi) / (K * param.ztop) * numpy.cos(geom.lat) * numpy.sin(K * geom.lat) * numpy.cos(math.pi * geom.height / param.ztop) * numpy.cos(math.pi * time / tau)
 
    # Vertical Velocity - can be changed to vertical pressure velocity by
    # omega = -g*rho*w
@@ -281,6 +285,10 @@ def dcmip_advection_hadley(geom, metric, mtrx, param):
 
    return rho, u1_contra, u2_contra, w, theta, q1
 
+#============================================================================================
+# TEST CASE 13 - HORIZONTAL ADVECTION OF THIN CLOUD-LIKE TRACERS IN THE PRESENCE OF OROGRAPHY
+#============================================================================================
+
 def dcmip_mountain(geom, metric, mtrx, param):
 
    lon_m = 3.0 * numpy.pi / 2.0
@@ -336,6 +344,165 @@ def dcmip_mountain(geom, metric, mtrx, param):
 
    return h_surf, h_surf_itf_i, h_surf_itf_j, dhdx1, dhdx2
 
+#def dcmip_advection_orography(geom, metric, mtrx, param):
+#   tau     = 12.0 * 86400.0             # period of motion 12 days (s)
+#   u0      = 2.0*math.pi*a_ref/tau      # Velocity Magnitude (m/s)
+#   T0      = 300.0                      # temperature (K)
+#   H       = Rd * T0 / grav             # scale height (m)
+#   alpha   = math.pi/6.0                # rotation angle (radians), 30 degrees
+#   lambdam = 3.0*math.pi/2.0            # mountain longitude center point (radians)
+#   phim    = 0.0                        # mountain latitude center point (radians)
+#   h0      = 2000.0                     # peak height of the mountain range (m)
+#   Rm      = 3.0*math.pi/4.0            # mountain radius (radians)
+#   zetam   = math.pi/16.0               # mountain oscillation half-width (radians)
+#   lambdap = math.pi/2.0                # cloud-like tracer longitude center point (radians)
+#   phip    = 0.0                        # cloud-like tracer latitude center point (radians)
+#   Rp      = mathpi/4.0                 # cloud-like tracer radius (radians)
+#   zp1     = 3050.0                     # midpoint of first (lowermost) tracer (m)
+#   zp2     = 5050.0                     # midpoint of second tracer (m)
+#   zp3     = 8200.0                     # midpoint of third (topmost) tracer (m)
+#   dzp1    = 1000.0                     # thickness of first (lowermost) tracer (m)
+#   dzp2    = 1000.0                     # thickness of second tracer (m)
+#   dzp3    = 400.0                      # thickness of third (topmost) tracer (m)
+#   ztop    = 12000.0                     # model top (m)
+#
+#   return rho, u1_contra, u2_contra, w, theta, q1
+
+
+
+
+
+
+
+
+#==========================================================================================
+# TEST CASE 2X - IMPACT OF OROGRAPHY ON A NON-ROTATING PLANET
+#==========================================================================================
+# The tests in section 2-x examine the impact of 3D Schaer-like circular mountain profiles on an
+# atmosphere at rest (2-0), and on flow fields with wind shear (2-1) and without vertical wind shear (2-2).
+# A non-rotating planet is used for all configurations. Test 2-0 is conducted on an unscaled regular-size
+# planet and primarily examines the accuracy of the pressure gradient calculation in a steady-state
+# hydrostatically-balanced atmosphere at rest. This test is especially appealing for models with
+# orography-following vertical coordinates. It increases the complexity of test 1-3, that investigated
+# the impact of the same Schaer-type orographic profile on the accuracy of purely-horizontal passive
+# tracer advection.
+#
+# Tests 2-1 and 2-2 increase the complexity even further since non-zero flow fields are now prescribed
+# with and without vertical wind shear. In order to trigger non-hydrostatic responses the two tests are
+# conducted on a reduced-size planet with reduction factor $X=500$ which makes the horizontal and
+# vertical grid spacing comparable. This test clearly discriminates between non-hydrostatic and hydrostatic
+# models since the expected response is in the non-hydrostatic regime. Therefore, the flow response is
+# captured differently by hydrostatic models.
+
+
+
+
+#=========================================================================
+# Test 2-0:  Steady-State Atmosphere at Rest in the Presence of Orography
+#=========================================================================
+
+def dcmip_steady_state_mountain(geom, metric, mtrx, param):
+   T0      = 300.0                      # temperature (K)
+   gamma   = 0.00650                    # temperature lapse rate (K/m)
+   lambdam = 3.0*math.pi/2.0            # mountain longitude center point (radians)
+   phim    = 0.0                        # mountain latitude center point (radians)
+   h0      = 2000.0                     # peak height of the mountain range (m)
+   Rm      = 3.0*math.pi/4.0            # mountain radius (radians)
+   zetam   = math.pi/16.0               # mountain oscillation half-width (radians)
+
+   #-----------------------------------------------------------------------
+   #    compute exponents
+   #-----------------------------------------------------------------------
+   if gamma != 0:
+      exponent     = gravity / (Rd * gamma)
+      exponent_rev = 1.0 / exponent
+
+   #-----------------------------------------------------------------------
+   #    Set topography
+   #-----------------------------------------------------------------------
+
+#   r = numpy.acos( math.sin(phim) * numpy.sin(lat) + math.cos(phim) * numpy.cos(lat) * numpy.cos(lon - lambdam) )
+#
+#   if (r < Rm) then
+#      zs = (h0/2.d0)*(1.d0+cos(pi*r/Rm))*cos(pi*r/zetam)**2.d0   ! mountain height
+#   else
+      zs = 0.0
+#   endif
+
+   #-----------------------------------------------------------------------
+   #    PS (surface pressure)
+   #-----------------------------------------------------------------------
+
+   if gamma == 0.0:
+      ps = p0 * numpy.exp(-gravity * zs / (Rd*T0))
+   else:
+      ps = p0 * (1.0 - gamma / T0 * zs)**exponent
+
+   #-----------------------------------------------------------------------
+   #    PRESSURE
+   #-----------------------------------------------------------------------
+
+   p = p0 * (1.0 - gamma / T0 * geom.height)**exponent
+
+   #-----------------------------------------------------------------------
+   #    THE VELOCITIES ARE ZERO (STATE AT REST)
+   #-----------------------------------------------------------------------
+
+   # Zonal Velocity
+
+   u = 0.0
+
+   # Meridional Velocity
+
+   v = 0.0
+
+   # Vertical Velocity
+
+   w = 0.0
+
+   u1_contra, u2_contra = wind2contra(u, v, geom)
+
+   #-----------------------------------------------------------------------
+   #    TEMPERATURE WITH CONSTANT LAPSE RATE
+   #-----------------------------------------------------------------------
+
+   t = T0 - gamma * geom.height
+
+   #-----------------------------------------------------------------------
+   #    RHO (density)
+   #-----------------------------------------------------------------------
+
+   rho = p / (Rd * t)
+
+   #-----------------------------------------------------------------------
+   #     initialize Q, set to zero
+   #-----------------------------------------------------------------------
+
+   q = 0.0
+
+   #-----------------------------------------------------------------------
+   #     initialize TV (virtual temperature)
+   #-----------------------------------------------------------------------
+
+   tv = t
+
+   theta = tv * (p0 / p)**(Rd/cpd)
+
+   return rho, u1_contra, u2_contra, w, theta
+
+
+
+#=====================================================================================
+# Tests 2-1 and 2-2:  Non-hydrostatic Mountain Waves over a Schaer-type Mountain
+#=====================================================================================
+
+
+
+
+
+
+
+
 #==========================================================================================
 # TEST CASE 3 - GRAVITY WAVES
 #==========================================================================================
@@ -350,7 +517,6 @@ def dcmip_gravity_wave(geom, metric, mtrx, param):
    u0      = 20.                       # Reference Velocity
    Teq     = 300.                      # Temperature at Equator
    Peq     = 100000.                   # Reference PS at Equator
-   ztop    = 10000.                    # Model Top
    lambdac = 2. * math.pi / 3.         # Lon of Pert Center
    d       = 5000.                     # Width for Pert
    phic    = 0.                        # Lat of Pert Center

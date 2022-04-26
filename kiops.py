@@ -10,7 +10,7 @@ Evaluate a linear combinaton of the ``φ`` functions evaluated at ``tA`` acting 
 vectors from ``u``, that is
 
 ```math
-  w(i) = φ_0(t[i] A) u[:, 1] + φ_1(t[i] A) u[:, 2] + φ_2(t[i] A) u[:, 3] + ...
+  w(i) = φ_0(t[i] A) u[0, :] + φ_1(t[i] A) u[1, :] + φ_2(t[i] A) u[2, :] + ...
 ```
 
 The size of the Krylov subspace is changed dynamically during the integration.
@@ -83,7 +83,9 @@ def kiops(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 2,
 
    # compute the 1-norm of u
    local_nrmU = numpy.sum(abs(u[1:, :]), axis=1)
-   normU = numpy.amax( mpi4py.MPI.COMM_WORLD.allreduce(local_nrmU) )
+   global_normU = numpy.empty_like(local_nrmU)
+   mpi4py.MPI.COMM_WORLD.Allreduce([local_nrmU, mpi4py.MPI.DOUBLE], [global_normU, mpi4py.MPI.DOUBLE])
+   normU = numpy.amax(global_normU)
 
    # Normalization factors
    if ppo > 1 and normU > 0:
@@ -133,7 +135,9 @@ def kiops(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 2,
 
          # Normalize initial vector (this norm is nonzero)
          local_sum = V[0, 0:n] @ V[0, 0:n]
-         β = math.sqrt( mpi4py.MPI.COMM_WORLD.allreduce(local_sum) + V[j, n:n+p] @ V[j, n:n+p] )
+         global_sum_nrm = numpy.empty_like(local_sum)
+         mpi4py.MPI.COMM_WORLD.Allreduce([local_sum, mpi4py.MPI.DOUBLE], [global_sum_nrm, mpi4py.MPI.DOUBLE])
+         β = math.sqrt( global_sum_nrm + V[j, n:n+p] @ V[j, n:n+p] )
 
          # The first Krylov basis vector
          V[j, :] /= β
@@ -150,12 +154,17 @@ def kiops(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 2,
 
          # Classical Gram-Schmidt
          ilow = max(0, j - iop)
+
          local_sum = V[ilow:j, 0:n] @ V[j, 0:n]
-         H[ilow:j, j-1] = mpi4py.MPI.COMM_WORLD.allreduce(local_sum) + V[ilow:j, n:n+p] @ V[j, n:n+p]
-         V[j, :] = V[j, :] - H[ilow:j, j-1] @ V[ilow:j,:]
+         global_sum = numpy.empty_like(local_sum)
+         mpi4py.MPI.COMM_WORLD.Allreduce([local_sum, mpi4py.MPI.DOUBLE], [global_sum, mpi4py.MPI.DOUBLE])
+         H[ilow:j, j-1] = global_sum + V[ilow:j, n:n+p] @ V[j, n:n+p]
+
+         V[j, :] = V[j, :] - V[ilow:j,:].T @ H[ilow:j, j-1]
 
          local_sum = V[j, 0:n] @ V[j, 0:n]
-         nrm = numpy.sqrt( mpi4py.MPI.COMM_WORLD.allreduce(local_sum) + V[j, n:n+p] @ V[j, n:n+p])
+         mpi4py.MPI.COMM_WORLD.Allreduce([local_sum, mpi4py.MPI.DOUBLE], [global_sum_nrm, mpi4py.MPI.DOUBLE])
+         nrm = numpy.sqrt( global_sum_nrm + V[j, n:n+p] @ V[j, n:n+p] )
 
          # Happy breakdown
          if nrm < tol:
