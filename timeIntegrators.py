@@ -79,7 +79,7 @@ class Epirk4s3a:
       return Q + numpy.reshape(phiv, Q.shape)
 
 class Epi:
-   def __init__(self, order, rhs, tol, krylov_size, jacobian_method='complex', init_method=None, init_substeps=1):
+   def __init__(self, order: int, rhs, tol: float, krylov_size: int, jacobian_method='complex', init_method=None, init_substeps: int = 1):
       self.rhs = rhs
       self.tol = tol
       self.krylov_size = krylov_size
@@ -125,7 +125,7 @@ class Epi:
 
       self.init_substeps = init_substeps
 
-   def step(self, Q, dt):
+   def step(self, Q: numpy.ndarray, dt: float):
       # If dt changes, discard saved value and redo initialization
       if self.dt and abs(self.dt - dt) > 1e-10:
          self.previous_Q = deque()
@@ -188,12 +188,12 @@ class Tvdrk3:
       return Q
 
 class Rat2:
-   def __init__(self, rhs_handle, tol, preconditioner=None):
+   def __init__(self, rhs_handle, tol: float, preconditioner=None):
       self.rhs_handle     = rhs_handle
       self.tol            = tol
       self.preconditioner = preconditioner
 
-   def step(self, Q, dt):
+   def step(self, Q: numpy.ndarray, dt: float):
       
       rhs    = self.rhs_handle(Q)
       Q_flat = Q.flatten()

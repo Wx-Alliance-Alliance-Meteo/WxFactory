@@ -2,16 +2,16 @@ import numpy
 
 from definitions import idx_h, idx_hu1, idx_hu2, idx_u1, idx_u2, gravity
 
-def rhs_sw (Q, geom, mtrx, metric, topo, ptopo, nbsolpts: int, nb_elements_horiz: int):
+def rhs_sw (Q: numpy.ndarray, geom, mtrx, metric, topo, ptopo, nbsolpts: int, nb_elements_hori: int):
 
    type_vec = Q.dtype
-   nb_equations, _, _ = Q.shape
-   nb_interfaces_horiz = nb_elements_horiz + 1
+   nb_equations = Q.shape[0]
+   nb_interfaces_hori = nb_elements_hori + 1
 
-   flux_x1, flux_x2, df1_dx1, df2_dx2 = [numpy.empty_like(Q, dtype=type_vec) for _ in range(4)]
+   df1_dx1, df2_dx2, flux_x1, flux_x2 = [numpy.empty_like(Q, dtype=type_vec) for _ in range(4)]
 
-   flux_x1_itf_i = numpy.empty((nb_equations, nb_elements_horiz+2, nbsolpts*nb_elements_horiz, 2), dtype=type_vec)
-   flux_x2_itf_j, var_itf_i, var_itf_j= [numpy.empty((nb_equations, nb_elements_horiz+2, 2, nbsolpts*nb_elements_horiz), dtype=type_vec) for _ in range(3)]
+   flux_x1_itf_i = numpy.empty((nb_equations, nb_elements_hori+2, nbsolpts*nb_elements_hori, 2), dtype=type_vec)
+   flux_x2_itf_j, var_itf_i, var_itf_j= [numpy.empty((nb_equations, nb_elements_hori+2, 2, nbsolpts*nb_elements_hori), dtype=type_vec) for _ in range(3)]
 
    forcing = numpy.zeros_like(Q, dtype=type_vec)
 
@@ -24,7 +24,7 @@ def rhs_sw (Q, geom, mtrx, metric, topo, ptopo, nbsolpts: int, nb_elements_horiz
    u2 = Q[idx_hu2] / Q[idx_h]
 
    # Interpolate to the element interface
-   for elem in range(nb_elements_horiz):
+   for elem in range(nb_elements_hori):
       epais = elem * nbsolpts + numpy.arange(nbsolpts)
       pos   = elem + offset
 
@@ -57,8 +57,8 @@ def rhs_sw (Q, geom, mtrx, metric, topo, ptopo, nbsolpts: int, nb_elements_horiz
    flux_x1[idx_hu2] = metric.sqrtG * ( Q[idx_hu2] * u1 + 0.5 * gravity * metric.H_contra_21 * hsquared )
    flux_x2[idx_hu2] = metric.sqrtG * ( Q[idx_hu2] * u2 + 0.5 * gravity * metric.H_contra_22 * hsquared )
 
-   # Compute the derivatives (without corrections, these will be added later)
-   for elem in range(nb_elements_horiz):
+   # Interior contribution to the derivatives, corrections for the boundaries will be added later
+   for elem in range(nb_elements_hori):
       epais = elem * nbsolpts + numpy.arange(nbsolpts)
 
       # --- Direction x1
@@ -75,7 +75,7 @@ def rhs_sw (Q, geom, mtrx, metric, topo, ptopo, nbsolpts: int, nb_elements_horiz
    var_itf_j[idx_h] -= topo.hsurf_itf_j
 
    # Common AUSM fluxes
-   for itf in range(nb_interfaces_horiz):
+   for itf in range(nb_interfaces_hori):
 
       elem_L = itf
       elem_R = itf + 1
@@ -139,7 +139,7 @@ def rhs_sw (Q, geom, mtrx, metric, topo, ptopo, nbsolpts: int, nb_elements_horiz
       flux_x2_itf_j[:, elem_R, 0, :] = flux_x2_itf_j[:, elem_L, 1, :]
 
    # Compute the derivatives
-   for elem in range(nb_elements_horiz):
+   for elem in range(nb_elements_hori):
       epais = elem * nbsolpts + numpy.arange(nbsolpts)
 
       # --- Direction x1

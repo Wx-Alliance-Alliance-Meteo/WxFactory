@@ -1,7 +1,7 @@
 import math
 import numpy
 
-def matvec_fun(vec, dt, Q, rhs, rhs_handle, method='complex'):
+def matvec_fun(vec: numpy.ndarray, dt: float, Q: numpy.ndarray, rhs: numpy.ndarray, rhs_handle, method='complex'):
    
    if method == 'complex':
       # Complex-step approximation
@@ -17,7 +17,7 @@ def matvec_fun(vec, dt, Q, rhs, rhs_handle, method='complex'):
 
    return jac.flatten()
 
-def matvec_rat(vec, dt, Q, rhs, rhs_handle):
+def matvec_rat(vec: numpy.ndarray, dt: float, Q: numpy.ndarray, rhs: numpy.ndarray, rhs_handle):
 
    epsilon = math.sqrt(numpy.finfo(numpy.float32).eps)
    Qvec = Q + epsilon * numpy.reshape(vec, Q.shape)
