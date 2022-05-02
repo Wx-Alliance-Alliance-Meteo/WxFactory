@@ -21,10 +21,12 @@ class Configuration:
          self.matsuno_wave_type = parser.get('Test_case', 'matsuno_wave_type')
          self.matsuno_amp = parser.getfloat('Test_case', 'matsuno_amp')
 
-      self.dt               = parser.getfloat('Time_integration', 'dt')
-      self.t_end            = parser.getint('Time_integration', 't_end')
-      self.time_integrator  = parser.get('Time_integration', 'time_integrator')
-      self.tolerance        = parser.getfloat('Time_integration', 'tolerance')
+      ####################
+      # Time integration
+      self.dt              = parser.getfloat('Time_integration', 'dt')
+      self.t_end           = parser.getint('Time_integration', 't_end')
+      self.time_integrator = parser.get('Time_integration', 'time_integrator')
+      self.tolerance       = parser.getfloat('Time_integration', 'tolerance')
 
       try:
          self.krylov_size = parser.getint('Time_integration', 'krylov_size')
@@ -46,88 +48,13 @@ class Configuration:
       except (NoOptionError,NoSectionError):
          self.ark_solver_imp = 'ARK3(2)4L[2]SA-ESDIRK'
 
-      self.possible_precond = ['none', 'fv', 'fv-mg', 'p-mg']
-      try:
-         self.preconditioner = parser.get('Time_integration', 'preconditioner').lower()
-         if not self.preconditioner in self.possible_precond:
-            print(f'Warning: chosen preconditioner {self.preconditioner} is not within available preconditioners. Possible values are {self.possible_precond}')
-            self.preconditioner = self.possible_precond[0]
-      except (NoOptionError, NoSectionError):
-         self.preconditioner = self.possible_precond[0]
-
-      try:
-         self.precond_tolerance = parser.getfloat('Time_integration', 'precond_tolerance')
-      except (NoOptionError, NoSectionError):
-         self.precond_tolerance = 1e-7
-
-      try:
-         self.coarsest_mg_order = parser.getint('Time_integration', 'coarsest_mg_order')
-      except (NoOptionError, NoSectionError):
-         self.coarsest_mg_order = 1
-
-      self.possible_smoothers = ['erk', 'irk']
-      try:
-         self.mg_smoother = parser.get('Time_integration', 'mg_smoother')
-         if not self.mg_smoother in self.possible_smoothers:
-            print(f'Warning: chosen multigrid smoother {self.mg_smoother} is not within available smoothers. Possible values are {self.possible_smoothers}')
-            self.mg_smoother = self.possible_smoothers[0]
-      except (NoOptionError, NoSectionError):
-         self.mg_smoother = self.possible_smoothers[0]
-
-      try:
-         self.sgs_eta = parser.getfloat('Time_integration', 'sgs_eta')
-      except (NoOptionError, NoSectionError):
-         self.sgs_eta = 0.5
-
-      try:
-         self.mg_smoothe_only = parser.getint('Time_integration', 'mg_smoothe_only')
-      except (NoOptionError, NoSectionError):
-         self.mg_smoothe_only = 0
-
-      try:
-         self.num_pre_smoothing = parser.getint('Time_integration', 'num_pre_smoothing')
-      except (NoOptionError, NoSectionError):
-         self.num_pre_smoothing = 1
-
-      try:
-         self.num_post_smoothing = parser.getint('Time_integration', 'num_post_smoothing')
-      except (NoOptionError, NoSectionError):
-         self.num_post_smoothing = 1
-
-      try:
-         self.mg_cfl = parser.getfloat('Time_integration', 'mg_cfl')
-      except (NoOptionError, NoSectionError):
-         self.mg_cfl = 0.7
-
-      try:
-         self.precond_filter_before = parser.getint('Time_integration', 'precond_filter_before')
-      except (NoOptionError, NoSectionError):
-         self.precond_filter_before = 0
-
-      try:
-         self.precond_filter_during = parser.getint('Time_integration', 'precond_filter_during')
-      except (NoOptionError, NoSectionError):
-         self.precond_filter_during = 0
-
-      try:
-         self.precond_filter_after = parser.getint('Time_integration', 'precond_filter_after')
-      except (NoOptionError, NoSectionError):
-         self.precond_filter_after = 0
-
-      try:
-         ok_interps = ['l2-norm', 'lagrange']
-         self.dg_to_fv_interp = parser.get('Time_integration', 'dg_to_fv_interp')
-         if not self.dg_to_fv_interp in ok_interps:
-            print(f'ERROR: invalid interpolation method for DG to FV conversion ({self.dg_to_fv_interp}). Should pick one of {ok_interps}. Choosing "lagrange" as default.')
-            self.dg_to_fv_interp = 'lagrange'
-      except (NoOptionError, NoSectionError):
-         self.dg_to_fv_interp = 'lagrange'
-
       try:
          self.linear_solver = parser.get('Time_integration', 'linear_solver')
       except (NoOptionError, NoSectionError):
          self.linear_solver = 'fgmres'
 
+      ##################
+      # Grid
       try:
          self.discretization = parser.get('Grid', 'discretization')
       except (NoOptionError, NoSectionError):
@@ -158,6 +85,8 @@ class Configuration:
       except (NoOptionError,NoSectionError):
          self.ztop = 0.0
 
+      ##########################
+      # Spatial discretization
       self.nbsolpts               = parser.getint('Spatial_discretization', 'nbsolpts')
       self.nb_elements_horizontal = parser.getint('Spatial_discretization', 'nb_elements_horizontal')
       self.initial_nbsolpts       = self.nbsolpts
@@ -183,6 +112,96 @@ class Configuration:
       except (NoOptionError):
          self.filter_cutoff    = 0
 
+      ###################
+      # Preconditioning
+      available_preconditioners = ['none', 'fv', 'fv-mg', 'p-mg']
+      try:
+         self.preconditioner = parser.get('Preconditioning', 'preconditioner').lower()
+         if self.preconditioner not in available_preconditioners:
+            print(f'Warning: chosen preconditioner {self.preconditioner} is not within available preconditioners. Possible values are {available_preconditioners}')
+            self.preconditioner = available_preconditioners[0]
+      except (NoOptionError, NoSectionError):
+         self.preconditioner = available_preconditioners[0]
+
+      try:
+         self.coarsest_mg_order = parser.getint('Preconditioning', 'coarsest_mg_order')
+      except (NoOptionError, NoSectionError):
+         self.coarsest_mg_order = 1
+
+      try:
+         self.precond_tolerance = parser.getfloat('Preconditioning', 'precond_tolerance')
+      except (NoOptionError, NoSectionError):
+         self.precond_tolerance = 1e-1
+
+      try:
+         self.num_pre_smoothe = parser.getint('Preconditioning', 'num_pre_smoothe')
+      except (NoOptionError, NoSectionError):
+         self.num_pre_smoothe = 1
+
+      try:
+         self.num_post_smoothe = parser.getint('Preconditioning', 'num_post_smoothe')
+      except (NoOptionError, NoSectionError):
+         self.num_post_smoothe = 1
+
+      self.possible_smoothers = ['erk', 'irk']
+      try:
+         self.mg_smoother = parser.get('Preconditioning', 'mg_smoother')
+         if not self.mg_smoother in self.possible_smoothers:
+            print(f'Warning: chosen multigrid smoother {self.mg_smoother} is not within available smoothers. Possible values are {self.possible_smoothers}')
+            self.mg_smoother = self.possible_smoothers[0]
+      except (NoOptionError, NoSectionError):
+         self.mg_smoother = self.possible_smoothers[0]
+
+      if self.mg_smoother == 'irk':
+         self.num_pre_smoothe = 1
+         self.num_post_smoothe = 0
+
+      try:
+         self.sgs_eta = parser.getfloat('Preconditioning', 'sgs_eta')
+      except (NoOptionError, NoSectionError):
+         self.sgs_eta = 0.5
+
+      try:
+         self.pseudo_cfl = parser.getfloat('Preconditioning', 'pseudo_cfl')
+      except (NoOptionError, NoSectionError):
+         self.pseudo_cfl = 1.0
+
+      try:
+         self.mg_smoothe_only = parser.getint('Preconditioning', 'mg_smoothe_only')
+      except (NoOptionError, NoSectionError):
+         self.mg_smoothe_only = 0
+
+
+      try:
+         self.precond_filter_before = parser.getint('Preconditioning', 'precond_filter_before')
+         print(f'Warning: preconditioner filter option  is not properly implemented. Please do not use.')
+      except (NoOptionError, NoSectionError):
+         self.precond_filter_before = 0
+
+      try:
+         self.precond_filter_during = parser.getint('Preconditioning', 'precond_filter_during')
+         print(f'Warning: preconditioner filter option  is not properly implemented. Please do not use.')
+      except (NoOptionError, NoSectionError):
+         self.precond_filter_during = 0
+
+      try:
+         self.precond_filter_after = parser.getint('Preconditioning', 'precond_filter_after')
+         print(f'Warning: preconditioner filter option  is not properly implemented. Please do not use.')
+      except (NoOptionError, NoSectionError):
+         self.precond_filter_after = 0
+
+      try:
+         ok_interps = ['l2-norm', 'lagrange']
+         self.dg_to_fv_interp = parser.get('Preconditioning', 'dg_to_fv_interp')
+         if not self.dg_to_fv_interp in ok_interps:
+            print(f'ERROR: invalid interpolation method for DG to FV conversion ({self.dg_to_fv_interp}). Should pick one of {ok_interps}. Choosing "lagrange" as default.')
+            self.dg_to_fv_interp = 'lagrange'
+      except (NoOptionError, NoSectionError):
+         self.dg_to_fv_interp = 'lagrange'
+
+
+      ################
+      # Output options
       self.stat_freq   = parser.getint('Output_options', 'stat_freq')
       self.output_freq = parser.getint('Output_options', 'output_freq')
       self.output_file = parser.get('Output_options', 'output_file')

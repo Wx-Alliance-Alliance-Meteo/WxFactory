@@ -63,13 +63,16 @@ def diffmat(points):
    M = len(points)
    D = numpy.zeros((M,M))
 
-   x = sympy.symbols('x')
-   for i in range(M):
-      dL = Lagrange_poly(x, M-1, i, points).diff()
-      for j in range(M):
-         if i != j:
-            D[j,i] = dL.subs(x, points[j])
-      D[i, i] = dL.subs(x, points[i])
+   if M == 1:
+      D[0,0] = 1.0
+   else:
+      x = sympy.symbols('x')
+      for i in range(M):
+         dL = Lagrange_poly(x, M-1, i, points).diff()
+         for j in range(M):
+            if i != j:
+               D[j,i] = dL.subs(x, points[j])
+         D[i, i] = dL.subs(x, points[i])
 
    return D
 

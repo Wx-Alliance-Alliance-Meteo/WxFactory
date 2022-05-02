@@ -239,7 +239,7 @@ def get_linear_weights(points, x):
 
 
 def lagrange_poly(index, order):
-    points, _ = gauss_legendre(order)
+    points, _, _ = gauss_legendre(order)
 
     def L(x):
         return numpy.prod(
@@ -252,7 +252,7 @@ def lagrange_poly(index, order):
 
 def compute_dg_to_fv_small_projection(dg_order, fv_order, quad_order=1):
     width = 2.0 / fv_order
-    points, quad_weights = gauss_legendre(quad_order)
+    points, quad_weights, _ = gauss_legendre(quad_order)
     result = []
 
     lagranges = [lagrange_poly(i, dg_order) for i in range(dg_order)]
@@ -270,7 +270,7 @@ def compute_dg_to_fv_small_projection(dg_order, fv_order, quad_order=1):
 
 def get_basis_points(type: str, order: int):
    if type == 'dg':
-      points, _ = gauss_legendre(order)
+      points, _, _ = gauss_legendre(order)
    elif type == 'fv':
       pts = numpy.linspace(-1.0, 1.0, order + 1)
       points = (pts[:-1] + pts[1:]) / 2.0

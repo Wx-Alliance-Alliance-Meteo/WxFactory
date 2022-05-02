@@ -20,7 +20,7 @@ class FiniteVolume:
 
    def __init__(self, param, sample_field, ptopo, precond_type='fv', prefix=''):
       self.param        = deepcopy(param)
-      self.max_iter     = 1000
+      self.max_iter     = 100
       self.precond_type = precond_type
 
       if self.precond_type not in ['fv', 'fv-mg']:
@@ -34,52 +34,56 @@ class FiniteVolume:
       # print(f'Params:\n{param}')
 
       self.origin_order = param.nbsolpts
-      self.dest_order   = self.origin_order
+      self.fv_order     = self.origin_order
 
       ndim = 2 if self.param.equations == 'shallow_water' else 3
 
-      self.interpolate = interpolator('dg', self.origin_order, 'fv', self.dest_order, param.dg_to_fv_interp, ndim)
+      self.interpolate = interpolator('dg', self.origin_order, 'fv', self.fv_order, param.dg_to_fv_interp, ndim)
 
-      print(f'origin order: {self.origin_order}, dest order: {self.dest_order}')
+      print(f'origin order: {self.origin_order}, fv order: {self.fv_order}')
 
       # Create a set of parameters for the FV formulation
       self.param.discretization = 'fv'
-      self.param.nb_elements_horizontal = self.param.nb_elements_horizontal * self.dest_order
+      self.param.nb_elements_horizontal = self.param.nb_elements_horizontal * self.fv_order
       self.param.nbsolpts               = 1
-
-      if self.param.equations == 'Euler':
-         self.param.nb_elements_vertical = self.param.nb_elements_vertical * self.dest_order
+      if ndim >= 3:
+         self.param.nb_elements_vertical = self.param.nb_elements_vertical * self.fv_order
 
       # Finite volume formulation of the problem
-      self.ptopo          = ptopo
-      self.dest_geom      = cubed_sphere(self.param.nb_elements_horizontal, self.param.nb_elements_vertical,
-                                         self.param.nbsolpts, self.param.λ0, self.param.ϕ0, self.param.α0, self.param.ztop,
-                                         self.ptopo, self.param)
-      self.dest_operators = DFR_operators(self.dest_geom, self.param)
-      self.dest_metric    = Metric(self.dest_geom)
+      self.ptopo        = ptopo
+      self.fv_geom      = cubed_sphere(self.param.nb_elements_horizontal, self.param.nb_elements_vertical,
+                                       self.param.nbsolpts, self.param.λ0, self.param.ϕ0, self.param.α0, self.param.ztop,
+                                       self.ptopo, self.param)
+      self.fv_operators = DFR_operators(self.fv_geom, self.param)
+      self.fv_metric    = Metric(self.fv_geom)
 
       if self.param.equations == 'Euler':
-         dest_field, self.dest_topo = initialize_euler(self.dest_geom, self.dest_metric, self.dest_operators, self.param)
-         # self.rhs_function          = rhs_euler_fv
-         self.rhs_function          = rhs_euler
+         fv_field, self.fv_topo = initialize_euler(self.fv_geom, self.fv_metric, self.fv_operators, self.param)
+         # self.generic_rhs_function = rhs_euler_fv
+         self.generic_rhs_function = rhs_euler
       elif self.param.equations == 'shallow_water':
-         dest_field, self.dest_topo = initialize_sw(self.dest_geom, self.dest_metric, self.dest_operators, self.param)
-         self.rhs_function          = rhs_sw
+         fv_field, self.fv_topo = initialize_sw(self.fv_geom, self.fv_metric, self.fv_operators, self.param)
+         self.generic_rhs_function = rhs_sw
 
-      self.dest_field_shape   = dest_field.shape
+      self.fv_field_shape     = fv_field.shape
       self.origin_field_shape = sample_field.shape
 
-      self.dest_matrix = None # System mat-vec function for the FV problem
-      self.dest_rhs    = None # RHS function for the FV problem
+      # To be understood as a linear operator by Scipy
+      n = 1
+      for s in self.fv_field_shape: n *= s
+      self.shape = (n, n)
+      self.dtype = float
+
+      # self.fv_matrix = None # System mat-vec function for the FV problem
+      # self.fv_rhs    = None # RHS function for the FV problem
 
       self.prefix = prefix
-      self.preconditioner = None # We could recursively precondition (with FV only) by initializing this
 
       self.mg_solver = None
       if self.precond_type == 'fv-mg':
          self.mg_solver = Multigrid(self.param, ptopo, 'fv')
 
-      print(f'Origin field shape: {self.origin_field_shape}, dest field shape: {self.dest_field_shape}')
+      print(f'Origin field shape: {self.origin_field_shape}, fv field shape: {self.fv_field_shape}')
 
       self.total_iter = 0
       self.total_time = 0.0
@@ -88,7 +92,10 @@ class FiniteVolume:
       return self.interpolate(vec.reshape(self.origin_field_shape))
 
    def prolong(self, vec):
-      return self.interpolate(vec.reshape(self.dest_field_shape), reverse=True)
+      return self.interpolate(vec.reshape(self.fv_field_shape), reverse=True)
+
+   def matvec(self, vec):
+      return self.apply(vec)
 
    def apply(self, vec, verbose=False):
       """
@@ -99,16 +106,19 @@ class FiniteVolume:
 
       # print(f'preconditioning \n{vec.reshape(self.origin_field_shape)}')
       # print(f'preconditioning \n{self.restrict(vec)}')
+
       input_vec = numpy.ravel(self.restrict(vec))
 
+      max_iter = self.max_iter if self.param.precond_tolerance < 1e-1 else 1
       if self.precond_type == 'fv':    # Finite volume preconditioner (reference, or simple FV)
-         max_num_iter = self.max_iter if self.param.precond_tolerance < 1e-1 else 1
          output_vec, _, num_iter, _, residuals = fgmres(
-            self.dest_matrix, input_vec, preconditioner=self.preconditioner, tol=self.param.precond_tolerance, maxiter=max_num_iter)
+            self.fv_matrix, input_vec, preconditioner=None, tol=self.param.precond_tolerance, maxiter=max_iter)
       elif self.precond_type == 'fv-mg':  # Multigrid preconditioner
-         output_vec, _, num_iter, _, residuals = self.mg_solver.solve(input_vec, coarsest_level=self.param.coarsest_mg_order, max_num_it=1, verbose=verbose)
+         # output_vec, _, num_iter, _, residuals = self.mg_solver.solve(input_vec, coarsest_level=self.param.coarsest_mg_order, max_num_it=1, verbose=verbose)
+         output_vec = self.mg_solver.iterate(input_vec, coarsest_level=self.param.coarsest_mg_order)
+         num_iter = 1
 
-      self.last_solution = output_vec
+      # self.last_solution = output_vec
 
       output_vec = numpy.ravel(self.prolong(output_vec))
 
@@ -118,14 +128,11 @@ class FiniteVolume:
       self.total_time += precond_time
       self.total_iter += num_iter
       
-      work = residuals[-1][2] # Last iteration contains total amount of work up to then
-      # print(f'FV precond, work = {work}, residuals = {residuals[:5]}')
-
       # print(f'{self.prefix}Preconditioned in {num_iter} iterations and {precond_time:.2f} s')
 
-      return output_vec, work
+      return output_vec
 
-   def init_time_step(self, field, dt):
+   def prepare(self, dt, field):
       """
       Prepare the preconditioner for solving one time step of the problem.
 
@@ -135,26 +142,23 @@ class FiniteVolume:
          - computing the matrix-vector operator for each grid level (if using the MG preconditioner)
       """
 
-      self.dest_field = self.restrict(field)
-      self.dest_rhs = None
+      self.fv_field = self.restrict(field)
+      self.fv_rhs   = None
       if self.param.equations == 'Euler':
-         self.dest_rhs = lambda vec: self.rhs_function(
-            vec, self.dest_geom, self.dest_operators, self.dest_metric, self.dest_topo, self.ptopo, self.param.nbsolpts,
-            self.param.nb_elements_horizontal, self.param.nb_elements_vertical, self.param.case_number, False)
+         self.fv_rhs = lambda vec: self.generic_rhs_function(
+            vec, self.fv_geom, self.fv_operators, self.fv_metric, self.fv_topo, self.ptopo, self.param.nbsolpts,
+            self.param.nb_elements_horizontal, self.param.nb_elements_vertical, self.param.case_number)
       elif self.param.equations == 'shallow_water':
-         self.dest_rhs = lambda vec: self.rhs_function(
-            vec, self.dest_geom, self.dest_operators, self.dest_metric, self.dest_topo, self.ptopo, self.param.nbsolpts,
-            self.param.nb_elements_horizontal, self.param.case_number, False)
-      self.dest_matrix = lambda vec: matvec_rat(vec, dt, self.dest_field, self.dest_rhs)
+         self.fv_rhs = lambda vec: self.generic_rhs_function(
+            vec, self.fv_geom, self.fv_operators, self.fv_metric, self.fv_topo, self.ptopo, self.param.nbsolpts,
+            self.param.nb_elements_horizontal, self.param.case_number)
+      self.fv_matrix = lambda vec: matvec_rat(vec, dt, self.fv_field, self.fv_rhs(self.fv_field), self.fv_rhs)
 
       self.dt = dt
-      self.last_solution = numpy.ravel(numpy.zeros_like(self.dest_field))
-
-      if self.preconditioner:
-         self.preconditioner.init_time_step(dt, self.dest_field)
+      # self.last_solution = numpy.ravel(numpy.zeros_like(self.fv_field))
 
       if self.mg_solver:
-         self.mg_solver.init_time_step(self.dest_field, dt)
+         self.mg_solver.prepare(dt, self.fv_field)
 
    def __call__(self, vec):
       return self.apply(vec)

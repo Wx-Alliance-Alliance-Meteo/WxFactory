@@ -204,13 +204,24 @@ class Rat2:
       A = scipy.sparse.linalg.LinearOperator((n,n), matvec=lambda v: matvec_rat(v, dt, Q, rhs, self.rhs_handle))
       b = A(Q_flat) + rhs.flatten() * dt
 
+      if self.preconditioner is not None:
+         self.preconditioner.prepare(dt, Q)
+
       # TODO : gcro
-      Qnew, local_error, num_iter, flag = fgmres(A, b, x0=Q_flat, tol=self.tol, preconditioner=self.preconditioner)
+      t0 = time()
+      Qnew, local_error, num_iter, flag, residuals = fgmres(A, b, x0=Q_flat, tol=self.tol, preconditioner=self.preconditioner, verbose=True)
+      t1 = time()
+
+      t2 = time()
+      Qnew_noprecond, _, num_iter_noprecond, _, _ = fgmres(A, b, x0=Qnew, tol=self.tol, preconditioner=None, verbose=True)
+      if num_iter_noprecond > 1:
+         raise ValueError(f'Comparison failed!')
+      t3 = time()
 
       if flag == 0:
-         print(f'{self.solver_name} converged at iteration {num_iter} in {t1 - t0:4.1f} s to a solution with local error {local_error : .2e}')
+         print(f'FGMRES converged at iteration {num_iter} in {t1 - t0:4.1f} s to a solution with local error {local_error : .2e}')
       else:
-         print(f'{self.solver_name} stagnation/interruption at iteration {num_iter} in {t1 - t0:4.1f} s, returning a solution with local error {local_error: .2e}')
+         print(f'FGMRES stagnation/interruption at iteration {num_iter} in {t1 - t0:4.1f} s, returning a solution with local error {local_error: .2e}')
 
       # gmres_sol, gmres_res, num_gmres_it, gmres_flag, res = fgmres(matvec_handle, rhs, x0=phiv, tol=self.tol, preconditioner=None, restart=20, maxiter=1200//20)
       # diff = gmres_sol - phiv

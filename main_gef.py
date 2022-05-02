@@ -19,6 +19,10 @@ from rhs_sw_explicit import rhs_sw_explicit
 from rhs_sw_implicit import rhs_sw_implicit
 from timeIntegrators import Epi, Epirk4s3a, Tvdrk3, Rat2, ARK_epi2
 
+# Preconditioners
+from finite_volume import FiniteVolume
+from multigrid     import Multigrid
+
 def main(args) -> int:
    step = 0
 
@@ -53,6 +57,15 @@ def main(args) -> int:
       output_init(geom, param)
       output_netcdf(Q, geom, metric, mtrx, topo, step, param)  # store initial conditions
 
+   # Preconditioning
+   preconditioner = None
+   if param.preconditioner == 'p-mg':
+      preconditioner = Multigrid(param, ptopo, discretization='dg')
+   elif param.preconditioner == 'fv-mg':
+      preconditioner = FiniteVolume(param, Q, ptopo, precond_type='fv-mg')
+   elif param.preconditioner == 'fv':
+      preconditioner = FiniteVolume(param, Q, ptopo, precond_type='fv')
+
    # Time stepping
    if param.time_integrator.lower()[:3] == 'epi' and param.time_integrator[3:].isdigit():
       order = int(param.time_integrator[3:])
@@ -63,7 +76,7 @@ def main(args) -> int:
    elif param.time_integrator.lower() == 'tvdrk3':
       stepper = Tvdrk3(rhs_handle)
    elif param.time_integrator.lower() == 'rat2':
-      stepper = Rat2(Q, rhs_handle, param, ptopo)
+      stepper = Rat2(rhs_handle, param.tolerance, preconditioner=preconditioner)
    elif  param.time_integrator.lower() == 'epi2/ark' and param.equations == "shallow_water": # TODO : Euler
       rhs_explicit = lambda q: rhs_sw_explicit(q, geom, mtrx, metric, topo, ptopo, param.nbsolpts, param.nb_elements_horizontal)
 
@@ -138,6 +151,7 @@ if __name__ == '__main__':
       pr.enable()
 
    numpy.set_printoptions(suppress=True, linewidth=256)
+   numpy.seterr(invalid='raise')
    rank = main(args)
 
    if args.profile:

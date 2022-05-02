@@ -75,6 +75,10 @@ def fgmres(A, b, x0 = None, tol = 1e-5, restart = 20, maxiter = None, preconditi
 
    t_start = time()
    niter = 0
+
+   if preconditioner is None:
+      preconditioner = lambda x: x     # Set up a preconditioner that does nothing
+
    num_dofs = len(b)
    total_work = 0.0
 
@@ -94,8 +98,6 @@ def fgmres(A, b, x0 = None, tol = 1e-5, restart = 20, maxiter = None, preconditi
    tol_relative = tol * norm_b
 
    Ax0 = A(x)
-   total_work += 1.0
-
    residuals = []
 
    # Rescale the initial approximation using the Hegedüs trick
@@ -106,10 +108,10 @@ def fgmres(A, b, x0 = None, tol = 1e-5, restart = 20, maxiter = None, preconditi
          x = ksi_min * x0
          Ax0 = A(x)
 
-   r          = b - Ax0
-   norm_r     = global_norm(r)
+   r      = b - Ax0
+   norm_r = global_norm(r)
 
-   residuals.append((error, time() - t_start, total_work))
+   residuals.append((norm_r / norm_b, time() - t_start, 0.0))
 
    # Get fast access to underlying BLAS routines
    [lartg] = scipy.linalg.get_lapack_funcs(['lartg'], [x])
@@ -125,12 +127,9 @@ def fgmres(A, b, x0 = None, tol = 1e-5, restart = 20, maxiter = None, preconditi
       Q = []  # Givens Rotations
 
       V[0, :] = r / norm_r
-      Z[0, :], work = (V[0, :], 0.0) if preconditioner is None else preconditioner(V[0, :])
+      Z[0, :] = preconditioner(V[0, :])
       V[1, :] = A(Z[0, :])
       V, R, v_norm = ortho_1_sync(V, R, 1)
-
-      # print(f'work = {work}, total work {total_work}')
-      total_work += work + 1.0
 
       # This is the RHS vector for the problem in the Krylov Space
       g = numpy.zeros(num_dofs)
@@ -140,13 +139,11 @@ def fgmres(A, b, x0 = None, tol = 1e-5, restart = 20, maxiter = None, preconditi
          niter += 1
 
          # Modified Gram-Schmidt process (1-sync version, with lagged normalization)
-         Z[inner + 1, :], work = (V[inner + 1], 0.0) if preconditioner is None else preconditioner(V[inner + 1])
+         Z[inner + 1, :] = preconditioner(V[inner + 1])
          V[inner + 2, :] = A(Z[inner + 1, :] / v_norm) * v_norm
          V, R, v_norm = ortho_1_sync(V, R, inner + 2)
          H[inner, :] = R[:restart + 1, inner + 1]
          Z[inner + 1, :] /= v_norm
-
-         total_work += work + 1.0
 
          # Apply previous Givens rotations to H
          if inner > 0:
@@ -174,8 +171,8 @@ def fgmres(A, b, x0 = None, tol = 1e-5, restart = 20, maxiter = None, preconditi
          # norm_r is calculated directly after this loop ends.
          if inner < restart - 1:
             norm_r = numpy.abs(g[inner+1])
-            residuals.append((norm_r / norm_b, time() - t_start, total_work))
-            if verbose: print(f'norm_r / b = {residuals[-1][0]:.3e}')
+            residuals.append((norm_r / norm_b, time() - t_start, 0.0))
+            # if verbose: print(f'norm_r / b = {residuals[-1][0]:.3e}')
             if norm_r < tol_relative:
                break
 
@@ -187,12 +184,9 @@ def fgmres(A, b, x0 = None, tol = 1e-5, restart = 20, maxiter = None, preconditi
       x = x + update
       r = b - A(x)
 
-      total_work += 1.0
-
       norm_r = global_norm(r)
-      if verbose:
-         print(f'res: {norm_r/norm_b:.2e} (iter {niter})')
-      residuals.append((norm_r / norm_b, time() - t_start, total_work))
+      residuals.append((norm_r / norm_b, time() - t_start, 0.0))
+      if verbose: print(f'res: {norm_r/norm_b:.2e} (iter {niter})')
 
       # Has GMRES stagnated?
       indices = (x != 0)

@@ -36,4 +36,5 @@ precondition_test/**/*.pdf
 mg_tests/configs*
 mg_tests/*.txt
 mg_tests/*.pdf
+mg_tests/test.ini
 

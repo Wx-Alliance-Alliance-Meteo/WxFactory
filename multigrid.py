@@ -7,6 +7,7 @@ from copy import deepcopy
 from time import time
 
 from cubed_sphere  import cubed_sphere
+from definitions import idx_h, idx_hu1, idx_hu2, gravity
 from initialize    import initialize_euler, initialize_sw
 from interpolation import interpolator
 from linsol        import fgmres, global_norm
@@ -17,8 +18,6 @@ from rhs_euler     import rhs_euler
 # from rhs_euler_fv  import rhs_euler_fv
 from rhs_sw        import rhs_sw
 from sgs_precond   import SymmetricGaussSeidel
-
-from definitions import idx_h, idx_hu1, idx_hu2, gravity
 
 def explicit_euler_smoothe(x, b, A, dt):
    if x is None:
@@ -32,13 +31,13 @@ def runge_kutta_stable_smoothe(x, b, A, dt, P=lambda v:v):
    alpha2 = 0.395
    t0 = time()
    if x is None:
-      res0 = b
+      # res0 = b
       s1 = alpha1 * dt * P(b)
       s2 = alpha2 * dt * P(b - A(s1))
       x  = dt * P(b - A(s2))
    else:
-      res0 = b - A(x)
-      s1 = x + alpha1 * dt * P(res0)
+      # res0 = b - A(x)
+      s1 = x + alpha1 * dt * P(b - A(x))
       s2 = x + alpha2 * dt * P(b - A(s1))
       x = x + dt * P(b - A(s2))
 
@@ -85,12 +84,12 @@ class MultigridLevel:
          field, topo = initialize_euler(self.geometry, self.metric, operators, self.param)
          self.rhs_operator = functools.partial(rhs, geom=self.geometry, mtrx=operators, metric=self.metric, topo=topo,
             ptopo=ptopo, nbsolpts=p.nbsolpts, nb_elements_hori=p.nb_elements_horizontal,
-            nb_elements_vert=p.nb_elements_vertical, case_number=p.case_number, filter_rhs=False)
+            nb_elements_vert=p.nb_elements_vertical, case_number=p.case_number)
       elif self.param.equations == 'shallow_water':
          ndim = 2
          field, topo = initialize_sw(self.geometry, self.metric, operators, p)
          self.rhs_operator = functools.partial(rhs, geom=self.geometry, mtrx=operators, metric=self.metric, topo=topo,
-            ptopo=ptopo, nbsolpts=p.nbsolpts, nb_elements_horiz=p.nb_elements_horizontal, case_number=p.case_number, filter_rhs=False)
+            ptopo=ptopo, nbsolpts=p.nbsolpts, nb_elements_horiz=p.nb_elements_horizontal, case_number=p.case_number)
 
       print(f'field shape: {field.shape}')
       self.shape = field.shape
@@ -127,7 +126,7 @@ class MultigridLevel:
 
       self.elem_size = numpy.minimum(self.dx.min(), self.dy.min()) # Get min size in either direction (per element)
 
-   def compute_pseudo_dt(self, field):
+   def compute_pseudo_dt(self, real_dt, field):
       """
       Compute pseudo time step from CFL condition
       """
@@ -150,7 +149,7 @@ class MultigridLevel:
       vel = numpy.maximum(v1, v2)
 
       # The pseudo dt (per element)
-      pseudo_dt = self.cfl * self.elem_size / vel
+      pseudo_dt = (self.cfl / real_dt) * self.elem_size / vel
 
       # numpy.set_printoptions(precision=1)
       # print(f'pseudo dt:\n{pseudo_dt}')
@@ -160,9 +159,9 @@ class MultigridLevel:
 
       return self.pseudo_dt
 
-   def init_time_step(self, matvec, field, dt):
-      self.matrix_operator = lambda vec, mat=matvec, dt=dt, f=field, rhs=self.rhs_operator : mat(numpy.ravel(vec), dt, f, rhs)
-      self.compute_pseudo_dt(field)
+   def prepare(self, dt, field, matvec):
+      self.matrix_operator = lambda vec, mat=matvec, dt=dt, f=field, rhs=self.rhs_operator(field), rhs_handle=self.rhs_operator : mat(numpy.ravel(vec), dt, f, rhs, rhs_handle)
+      self.compute_pseudo_dt(dt, field)
       if self.param.discretization == 'fv':
          # a = sgs_precond()
          if self.param.mg_smoother in ['erk', 'irk']:
@@ -190,6 +189,8 @@ class Multigrid:
             raise ValueError('Cannot do h/fv-multigrid stuff if the order of the problem is not a power of 2 (currently {param.initial_nbsolpts})')
       elif discretization == 'dg':
          self.num_levels = param.initial_nbsolpts
+      else:
+         raise ValueError(f'Unrecognized discretization "{discretization}"')
 
       if param.equations == 'shallow_water':
          self.rhs = rhs_sw
@@ -203,9 +204,9 @@ class Multigrid:
 
       self.matvec = matvec_rat
       self.use_solver = (param.mg_smoothe_only <= 0)
-      self.num_pre_smoothing = param.num_pre_smoothing
-      self.num_post_smoothing = param.num_post_smoothing
-      self.cfl = param.mg_cfl
+      self.num_pre_smoothe = param.num_pre_smoothe
+      self.num_post_smoothe = param.num_post_smoothe
+      self.cfl = param.pseudo_cfl
 
       self.levels = {}
 
@@ -224,15 +225,23 @@ class Multigrid:
          self.levels[order] = MultigridLevel(param, ptopo, self.rhs, discretization, num_elem, new_num_elem, order, new_order, self.cfl)
          order, num_elem = new_order, new_num_elem
 
-   def init_time_step(self, field, dt):
+   def prepare(self, dt, field):
       """
       Compute the matrix-vector operator for every grid level. Also compute the pseudo time step size for each level.
       """
       next_field = field
       order = self.max_level
       while order >= self.min_level:
-         next_field = self.levels[order].init_time_step(self.matvec, next_field, dt)
+         next_field = self.levels[order].prepare(dt, next_field, self.matvec)
          order = self.next_level(order)
+
+   def __call__(self, vec):
+      return self.apply(vec)
+
+   def apply(self, vec):
+      param = self.levels[self.max_level].param
+      coarsest_level = param.coarsest_mg_order
+      return self.iterate(vec, coarsest_level=coarsest_level)
 
    def iterate(self, b, x0=None, level=-1, coarsest_level=1, gamma=1, verbose=False):
       """
@@ -261,39 +270,39 @@ class Multigrid:
       dt        = numpy.ravel(lvl_param.pseudo_dt)
 
       # Pre smoothing
-      # x = smoothe(A, b, x0, dt, self.num_pre_smoothing, first_zero=in_first_zero)
-      for _ in range(self.num_pre_smoothing):
+      # x = smoothe(A, b, x0, dt, self.num_pre_smoothe, first_zero=in_first_zero)
+      for _ in range(self.num_pre_smoothe):
          x = smoothe(x, b)
 
       # Avoid having "None" in the solution from now on
       if x is None:
          x = numpy.zeros_like(b)
 
-      level_work += lvl_param.smoother_work_unit * self.num_pre_smoothing * lvl_param.work_ratio
+      # level_work += lvl_param.smoother_work_unit * self.num_pre_smoothe * lvl_param.work_ratio
 
       if level > coarsest_level:                      # Go down a level and solve that
          residual = numpy.ravel(restrict(b - A(x)))   # Compute the (restricted) residual of the current grid level system
          v = numpy.zeros_like(residual)               # A guess of the next solution (0 is pretty good, that's what we're aiming for)
          first_zero = True
          for _ in range(gamma):
-            v, work = self.iterate(residual, v, self.next_level(level), coarsest_level=coarsest_level, gamma=gamma)  # MG pass on next lower level
+            v = self.iterate(residual, v, self.next_level(level), coarsest_level=coarsest_level, gamma=gamma)  # MG pass on next lower level
             first_zero = False
-            level_work += work
+            # level_work += work
          x = x + numpy.ravel(prolong(v))              # Correction
       else:
          # Just directly solve the problem
          # That's no very good, we should not use FGMRES to precondition FGMRES...
          if self.use_solver:
             x, _, num_iter, _, _ = fgmres(A, b, x0=x, tol=1e-5)
-            level_work += num_iter * lvl_param.work_ratio
+            # level_work += num_iter * lvl_param.work_ratio
       
       # Post smoothing
-      # x = smoothe(A, b, x, dt, self.num_post_smoothing)
-      for _ in range(self.num_post_smoothing):
+      # x = smoothe(A, b, x, dt, self.num_post_smoothe)
+      for _ in range(self.num_post_smoothe):
          x = smoothe(x, b)
-      level_work += self.num_post_smoothing * lvl_param.smoother_work_unit * lvl_param.work_ratio
+      # level_work += self.num_post_smoothe * lvl_param.smoother_work_unit * lvl_param.work_ratio
 
-      return x, level_work
+      return x #, level_work
 
    def solve(self, b, x0=None, field=None, dt=None, coarsest_level=1, tolerance=1e-7, gamma=1, max_num_it=100, verbose=False):
       """

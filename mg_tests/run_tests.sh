@@ -3,14 +3,15 @@
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 GEF_DIR=${SCRIPT_DIR}/..
 GEF_MAIN=main_gef.py
-CONFIG_FILE=${1:-${SCRIPT_DIR}/test_sw.ini}
+CONFIG_FILE_BASE=${1:-${SCRIPT_DIR}/test_euler.ini}
 CONFIG_DIR=${SCRIPT_DIR}/configs
+CONFIG_FILE=test.ini
 
-echo "Config file is ${CONFIG_FILE}"
+test -f ${CONFIG_FILE_BASE} || CONFIG_FILE_BASE=${SCRIPT_DIR}/test_sw.ini
 
-if [[ ${CONFIG_FILE} == "-"* ]]; then
-    CONFIG_FILE=${SCRIPT_DIR}/test_sw.ini
-fi
+echo "Base config file is ${CONFIG_FILE_BASE}"
+
+cp ${CONFIG_FILE_BASE} ${CONFIG_FILE}
 
 # MPIRUN="aprun"
 MPIRUN="mpirun"
@@ -37,9 +38,9 @@ function set_parameters() {
                           -e 's/^precond_tolerance *= *.*$/precond_tolerance = '${4}'/' \
                           -e 's/^coarsest_mg_order *= *.*$/coarsest_mg_order = '${5}'/' \
                           -e 's/^mg_smoothe_only *= *.*$/mg_smoothe_only = '${6}'/' \
-                          -e 's/^num_pre_smoothing *= *.*$/num_pre_smoothing = '${7}'/' \
-                          -e 's/^num_post_smoothing *= *.*$/num_post_smoothing = '${8}'/' \
-                          -e 's/^mg_cfl *= *.*$/mg_cfl = '${9}'/' \
+                          -e 's/^num_pre_smoothe *= *.*$/num_pre_smoothe = '${7}'/' \
+                          -e 's/^num_post_smoothe *= *.*$/num_post_smoothe = '${8}'/' \
+                          -e 's/^pseudo_cfl *= *.*$/pseudo_cfl = '${9}'/' \
                           -e 's/^dt *= *.*$/dt = '${10}'/' \
                           -e 's/^t_end *= *.*$/t_end = '${10}'/' \
                           -e 's/^dg_to_fv_interp *= *.*$/dg_to_fv_interp = '${11}'/' \
@@ -71,22 +72,31 @@ function compute_time_step() {
 }
 
 time_step=10
-# precond="none"
-precond="fv-mg"
 order=2
 nb_elements=8
+
+precond="p-mg"
 precond_tolerance=1e-1
-coarsest_mg_order=2
-mg_smoother="irk"
+coarsest_mg_order=1
 mg_smoothe_only=1
-num_pre_smoothing=1
-num_post_smoothing=0
-mg_cfl=100.0045
+num_pre_smoothe=1
+num_post_smoothe=1
+
+mg_smoother="erk"
 sgs_eta=0.1
+
 dg_to_fv_interp="lagrange"
 # linear_solver="mg"
 linear_solver="fgmres"
 
+#################################
+# 
+# pseudo_cfl=0.0039       # FV-MG RAT2
+pseudo_cfl=0.00156       # P-MG RAT2
+
+rat2_fv_pseudo_cfl=0.0039
+rat2_p_pseudo_cfl=0.00156
+#################################
 
 if [ "x${1}" == "x--gen-configs" ]; then
 
@@ -112,19 +122,19 @@ if [ "x${1}" == "x--gen-configs" ]; then
 
             precond="none"
             linear_solver="fgmres"
-            set_parameters ${precond} ${order} ${nb_elements} ${precond_tolerance} ${coarsest_mg_order} ${mg_smoothe_only} ${num_pre_smoothing} ${num_post_smoothing} ${mg_cfl} ${time_step} ${dg_to_fv_interp} ${linear_solver} ${mg_smoother} ${sgs_eta}
+            set_parameters ${precond} ${order} ${nb_elements} ${precond_tolerance} ${coarsest_mg_order} ${mg_smoothe_only} ${num_pre_smoothe} ${num_post_smoothe} ${pseudo_cfl} ${time_step} ${dg_to_fv_interp} ${linear_solver} ${mg_smoother} ${sgs_eta}
             cp ${CONFIG_FILE} "${CONFIG_DIR}/config.a${precond}_${order}_${nb_elements}_${time_step}_${linear_solver}.ini"
 
             linear_solver="multigrid"
             coarsest_mg_order=${order}
-            num_pre_smoothing=1
-            num_post_smoothing=1
+            num_pre_smoothe=1
+            num_post_smoothe=1
             # for coarsest_mg_order in 1 2 4 8; do
                 # for sm in 2 5 10; do
-                    # num_pre_smoothing=${sm}
-                    # num_post_smoothing=${sm}
-                    set_parameters ${precond} ${order} ${nb_elements} ${precond_tolerance} ${coarsest_mg_order} ${mg_smoothe_only} ${num_pre_smoothing} ${num_post_smoothing} ${mg_cfl} ${time_step} ${dg_to_fv_interp} ${linear_solver} ${mg_smoother} ${sgs_eta}
-                    cp ${CONFIG_FILE} "${CONFIG_DIR}/config.b${precond}_${order}_${nb_elements}_${time_step}_${linear_solver}_${coarsest_mg_order}_${mg_smoother}_${num_pre_smoothing}_${num_post_smoothing}.ini"
+                    # num_pre_smoothe=${sm}
+                    # num_post_smoothe=${sm}
+                    set_parameters ${precond} ${order} ${nb_elements} ${precond_tolerance} ${coarsest_mg_order} ${mg_smoothe_only} ${num_pre_smoothe} ${num_post_smoothe} ${pseudo_cfl} ${time_step} ${dg_to_fv_interp} ${linear_solver} ${mg_smoother} ${sgs_eta}
+                    cp ${CONFIG_FILE} "${CONFIG_DIR}/config.b${precond}_${order}_${nb_elements}_${time_step}_${linear_solver}_${coarsest_mg_order}_${mg_smoother}_${num_pre_smoothe}_${num_post_smoothe}.ini"
                 # done
             # done
 
@@ -132,7 +142,7 @@ if [ "x${1}" == "x--gen-configs" ]; then
             precond="fv"
             for precond_tolerance in ${pre_tols}; do
                 for dg_to_fv_interp in ${interps}; do
-                    set_parameters ${precond} ${order} ${nb_elements} ${precond_tolerance} ${coarsest_mg_order} ${mg_smoothe_only} ${num_pre_smoothing} ${num_post_smoothing} ${mg_cfl} ${time_step} ${dg_to_fv_interp} ${linear_solver} ${mg_smoother} ${sgs_eta}
+                    set_parameters ${precond} ${order} ${nb_elements} ${precond_tolerance} ${coarsest_mg_order} ${mg_smoothe_only} ${num_pre_smoothe} ${num_post_smoothe} ${pseudo_cfl} ${time_step} ${dg_to_fv_interp} ${linear_solver} ${mg_smoother} ${sgs_eta}
                     cp ${CONFIG_FILE} "${CONFIG_DIR}/config.z${precond}_${order}_${nb_elements}_${dg_to_fv_interp:0:3}_${precond_tolerance}_${time_step}.ini"
                 done
             done
@@ -142,10 +152,10 @@ if [ "x${1}" == "x--gen-configs" ]; then
             for coarsest_mg_order in ${mg_orders}; do
                 [ $coarsest_mg_order -gt $order ] && continue
                 for mg_smoothe_only in 1; do
-                    for num_pre_smoothing in ${smoothings}; do
-                        num_post_smoothing=${num_pre_smoothing}
-                        set_parameters ${precond} ${order} ${nb_elements} ${precond_tolerance} ${coarsest_mg_order} ${mg_smoothe_only} ${num_pre_smoothing} ${num_post_smoothing} ${mg_cfl} ${time_step} ${dg_to_fv_interp} ${linear_solver} ${mg_smoother} ${sgs_eta}
-                        cp ${CONFIG_FILE} "${CONFIG_DIR}/config.c${precond}_${order}_${nb_elements}_${precond_tolerance}_${coarsest_mg_order}_${mg_smoother}_${mg_smoothe_only}_${num_pre_smoothing}_${num_post_smoothing}_${mg_cfl}_${time_step}_${dg_to_fv_interp:0:3}.ini"
+                    for num_pre_smoothe in ${smoothings}; do
+                        num_post_smoothe=${num_pre_smoothe}
+                        set_parameters ${precond} ${order} ${nb_elements} ${precond_tolerance} ${coarsest_mg_order} ${mg_smoothe_only} ${num_pre_smoothe} ${num_post_smoothe} ${pseudo_cfl} ${time_step} ${dg_to_fv_interp} ${linear_solver} ${mg_smoother} ${sgs_eta}
+                        cp ${CONFIG_FILE} "${CONFIG_DIR}/config.c${precond}_${order}_${nb_elements}_${precond_tolerance}_${coarsest_mg_order}_${mg_smoother}_${mg_smoothe_only}_${num_pre_smoothe}_${num_post_smoothe}_${pseudo_cfl}_${time_step}_${dg_to_fv_interp:0:3}.ini"
                     done
                 done
             done
@@ -160,6 +170,6 @@ elif [ "x${1}" == "x--run-configs" ]; then
         run_program ${CONFIG_DIR}/${config} && rm -v ${CONFIG_DIR}/${config} || exit
     done
 else
-    set_parameters ${precond} ${order} ${nb_elements} ${precond_tolerance} ${coarsest_mg_order} ${mg_smoothe_only} ${num_pre_smoothing} ${num_post_smoothing} ${mg_cfl} ${time_step} ${dg_to_fv_interp} ${linear_solver} ${mg_smoother} ${sgs_eta}
+    set_parameters ${precond} ${order} ${nb_elements} ${precond_tolerance} ${coarsest_mg_order} ${mg_smoothe_only} ${num_pre_smoothe} ${num_post_smoothe} ${pseudo_cfl} ${time_step} ${dg_to_fv_interp} ${linear_solver} ${mg_smoother} ${sgs_eta}
     run_program
 fi
