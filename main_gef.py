@@ -11,6 +11,7 @@ from definitions     import idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_w
 from initialize      import initialize_sw, initialize_euler
 from matrices        import DFR_operators
 from metric          import Metric
+from output_residual import prepare_output
 from parallel        import Distributed_World
 from program_options import Configuration
 from rhs_euler       import rhs_euler
@@ -52,6 +53,8 @@ def main(args) -> int:
    else: # Shallow water
       Q, topo = initialize_sw(geom, metric, mtrx, param)
       rhs_handle = lambda q: rhs_sw(q, geom, mtrx, metric, topo, ptopo, param.nbsolpts, param.nb_elements_horizontal)
+
+   prepare_output(param)
 
    if param.output_freq > 0:
       output_init(geom, param)

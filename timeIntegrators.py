@@ -4,13 +4,14 @@ import scipy.sparse.linalg
 from collections import deque
 from time        import time
 
-from matvec        import matvec_fun, matvec_rat
-from kiops         import kiops
-from linsol        import fgmres
-from multigrid     import Multigrid
-from phi           import phi_ark
-from timer         import Timer
-from finite_volume import FiniteVolume
+from matvec          import matvec_fun, matvec_rat
+from kiops           import kiops
+from linsol          import fgmres
+from multigrid       import Multigrid
+from output_residual import write_output
+from phi             import phi_ark
+from timer           import Timer
+from finite_volume   import FiniteVolume
 
 class Epirk4s3a:
    g21 = 1/2
@@ -209,8 +210,10 @@ class Rat2:
 
       # TODO : gcro
       t0 = time()
-      Qnew, local_error, num_iter, flag, residuals = fgmres(A, b, x0=Q_flat, tol=self.tol, preconditioner=self.preconditioner, verbose=True)
+      Qnew, local_error, nb_iter, flag, residuals = fgmres(A, b, x0=Q_flat, tol=self.tol, preconditioner=self.preconditioner, verbose=True)
       t1 = time()
+
+      write_output(nb_iter, t1 - t0, flag, residuals)
 
       t2 = time()
       Qnew_noprecond, _, num_iter_noprecond, _, _ = fgmres(A, b, x0=Qnew, tol=self.tol, preconditioner=None, verbose=True)
@@ -219,22 +222,11 @@ class Rat2:
       t3 = time()
 
       if flag == 0:
-         print(f'FGMRES converged at iteration {num_iter} in {t1 - t0:4.1f} s to a solution with local error {local_error : .2e}')
+         print(f'FGMRES converged at iteration {nb_iter} in {t1 - t0:4.1f} s to a solution with local error {local_error : .2e}')
       else:
-         print(f'FGMRES stagnation/interruption at iteration {num_iter} in {t1 - t0:4.1f} s, returning a solution with local error {local_error: .2e}')
+         print(f'FGMRES stagnation/interruption at iteration {nb_iter} in {t1 - t0:4.1f} s, returning a solution with local error {local_error: .2e}')
 
       # gmres_sol, gmres_res, num_gmres_it, gmres_flag, res = fgmres(matvec_handle, rhs, x0=phiv, tol=self.tol, preconditioner=None, restart=20, maxiter=1200//20)
-      # diff = gmres_sol - phiv
-      # diff_norm = numpy.linalg.norm(diff) / numpy.linalg.norm(phiv)
-
-      # res1 = numpy.linalg.norm(matvec_handle(phiv) - rhs)
-      # res2 = numpy.linalg.norm(matvec_handle(gmres_sol) - rhs)
-
-      # print(f'Diff norm = {diff_norm}')
-      # print(f'error: {local_error:.2e}/{gmres_res:.2e}, flag {flag}/{gmres_flag}, res1/2 {res1:.2e}/{res2:.2e}')
-
-      # if num_gmres_it > 1 or gmres_flag != 0 or diff_norm > 6e-6:
-      #    raise ValueError(f'Solver did not give the same result as GMRES! num_gmres_it = {num_gmres_it}, gmres_flag = {gmres_flag}')
 
       return numpy.reshape(Qnew, Q.shape)
 
