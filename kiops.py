@@ -1,7 +1,8 @@
 import math
 import numpy
-import mpi4py.MPI
 import scipy.linalg
+
+from gef_mpi import GLOBAL_COMM
 
 """
    kiops(tstops, A, u; kwargs...) -> (w, stats)
@@ -84,7 +85,7 @@ def kiops(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 2,
    # compute the 1-norm of u
    local_nrmU = numpy.sum(abs(u[1:, :]), axis=1)
    global_normU = numpy.empty_like(local_nrmU)
-   mpi4py.MPI.COMM_WORLD.Allreduce([local_nrmU, mpi4py.MPI.DOUBLE], [global_normU, mpi4py.MPI.DOUBLE])
+   GLOBAL_COMM().Allreduce([local_nrmU, mpi4py.MPI.DOUBLE], [global_normU, mpi4py.MPI.DOUBLE])
    normU = numpy.amax(global_normU)
 
    # Normalization factors
@@ -136,7 +137,7 @@ def kiops(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 2,
          # Normalize initial vector (this norm is nonzero)
          local_sum = V[0, 0:n] @ V[0, 0:n]
          global_sum_nrm = numpy.empty_like(local_sum)
-         mpi4py.MPI.COMM_WORLD.Allreduce([local_sum, mpi4py.MPI.DOUBLE], [global_sum_nrm, mpi4py.MPI.DOUBLE])
+         GLOBAL_COMM().Allreduce([local_sum, mpi4py.MPI.DOUBLE], [global_sum_nrm, mpi4py.MPI.DOUBLE])
          β = math.sqrt( global_sum_nrm + V[j, n:n+p] @ V[j, n:n+p] )
 
          # The first Krylov basis vector
@@ -157,13 +158,13 @@ def kiops(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 2,
 
          local_sum = V[ilow:j, 0:n] @ V[j, 0:n]
          global_sum = numpy.empty_like(local_sum)
-         mpi4py.MPI.COMM_WORLD.Allreduce([local_sum, mpi4py.MPI.DOUBLE], [global_sum, mpi4py.MPI.DOUBLE])
+         GLOBAL_COMM().Allreduce([local_sum, mpi4py.MPI.DOUBLE], [global_sum, mpi4py.MPI.DOUBLE])
          H[ilow:j, j-1] = global_sum + V[ilow:j, n:n+p] @ V[j, n:n+p]
 
          V[j, :] = V[j, :] - V[ilow:j,:].T @ H[ilow:j, j-1]
 
          local_sum = V[j, 0:n] @ V[j, 0:n]
-         mpi4py.MPI.COMM_WORLD.Allreduce([local_sum, mpi4py.MPI.DOUBLE], [global_sum_nrm, mpi4py.MPI.DOUBLE])
+         GLOBAL_COMM().Allreduce([local_sum, mpi4py.MPI.DOUBLE], [global_sum_nrm, mpi4py.MPI.DOUBLE])
          nrm = numpy.sqrt( global_sum_nrm + V[j, n:n+p] @ V[j, n:n+p] )
 
          # Happy breakdown

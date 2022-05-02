@@ -1,13 +1,13 @@
 import functools
 import math
-import mpi4py
 import numpy
 
 from copy import deepcopy
 from time import time
 
 from cubed_sphere  import cubed_sphere
-from definitions import idx_h, idx_hu1, idx_hu2, gravity
+from definitions   import idx_h, idx_hu1, idx_hu2, gravity
+from gef_mpi       import GLOBAL_COMM
 from initialize    import initialize_euler, initialize_sw
 from interpolation import interpolator
 from linsol        import fgmres, global_norm
@@ -377,9 +377,3 @@ class Multigrid:
       flag = 0
       if num_it >= max_num_it: flag = -1
       return x, norm_r / norm_b, num_it, flag, residuals
-
-
-def global_norm(vec):
-   """Compute vector norm across all PEs"""
-   local_sum = vec @ vec
-   return math.sqrt( mpi4py.MPI.COMM_WORLD.allreduce(local_sum) )

@@ -1,4 +1,4 @@
-import mpi4py.MPI
+from gef_mpi import GLOBAL_COMM
 
 output_filename = 'test_result.txt'
 output_param = None
@@ -10,7 +10,7 @@ def prepare_output(param):
    output_param = param
 
    global is_writer
-   if mpi4py.MPI.COMM_WORLD.rank == 0: is_writer = True
+   if GLOBAL_COMM().rank == 0: is_writer = True
    if not is_writer: return
 
    try:

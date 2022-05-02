@@ -1,11 +1,11 @@
 import math
 import numpy
-import mpi4py.MPI
 import scipy.linalg
 
 import adaptive_ark
 import butcher
 import linsol
+from   gef_mpi       import GLOBAL_COMM
 
 """
    phi_ark(tstops, A, u; kwargs...) -> (w, stats)
@@ -58,7 +58,7 @@ def phi_ark(τ_out, J_exp, J_imp, u, tol = 1e-7, task1 = False, butcher_exp = 'A
 
    # compute the 1-norm of u
    local_nrmU = numpy.sum(abs(u[1:, :]), axis=0)
-   normU = numpy.amax( mpi4py.MPI.COMM_WORLD.allreduce(local_nrmU) )
+   normU = numpy.amax( GLOBAL_COMM().allreduce(local_nrmU) )
 
    # Normalization factors
 #   if ppo > 1 and normU > 0:

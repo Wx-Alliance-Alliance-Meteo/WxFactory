@@ -8,7 +8,8 @@
 import linsol
 import math
 import numpy
-import mpi4py.MPI
+
+from gef_mpi import GLOBAL_COMM
 
 def solve(fe,fi,Ji,tvals,Y0,Be,Bi,rtol,atol,hmin,hmax,nn,p_phi,mu):
 
@@ -213,7 +214,7 @@ def solve(fe,fi,Ji,tvals,Y0,Be,Bi,rtol,atol,hmin,hmax,nn,p_phi,mu):
 
          # estimate error in current step
          local_sum = numpy.sum((Yerr*ewt)**2)/m
-         err_step = e_bias * max(numpy.sqrt( mpi4py.MPI.COMM_WORLD.allreduce(local_sum) ), eps)
+         err_step = e_bias * max(numpy.sqrt( GLOBAL_COMM().allreduce(local_sum) ), eps)
 
          # if error too high, either reduce step size or return with failure
          if (err_step > ERRTOL):

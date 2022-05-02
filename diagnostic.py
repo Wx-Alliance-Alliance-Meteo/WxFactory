@@ -1,7 +1,7 @@
-import mpi4py.MPI
 import numpy
 
 from definitions import gravity
+from gef_mpi     import GLOBAL_COMM
 
 def relative_vorticity(u1_contra, u2_contra, geom, metric, mtrx, param):
 
@@ -63,5 +63,5 @@ def global_integral(field, mtrx, metric, nbsolpts, nb_elements_horiz):
          min_col, max_col = column * nbsolpts + numpy.array([0, nbsolpts])
          local_sum += numpy.sum( field[min_lin:max_lin,min_col:max_col] * metric.sqrtG[min_lin:max_lin,min_col:max_col] * mtrx.quad_weights )
 
-   return mpi4py.MPI.COMM_WORLD.allreduce(local_sum)
+   return GLOBAL_COMM().allreduce(local_sum)
 

@@ -1,10 +1,10 @@
 import math
 import numpy
-import mpi4py.MPI
 import scipy
 import scipy.sparse.linalg
 from time import time
 
+from gef_mpi import GLOBAL_COMM
 
 def ortho_1_sync(Q, R, j):
    """Orthonormalization process that only requires a single synchronization step.
@@ -24,7 +24,7 @@ def ortho_1_sync(Q, R, j):
    local_tmp = Q[:j, :].conj() @ Q[j-1:j+1, :].T
 
    global_tmp = numpy.empty_like(local_tmp)
-   mpi4py.MPI.COMM_WORLD.Allreduce(local_tmp, global_tmp)
+   GLOBAL_COMM().Allreduce(local_tmp, global_tmp)
 
    T            = numpy.zeros_like(R)
    T[:j-1, j-1] = global_tmp[:j-1, 0]
@@ -211,13 +211,13 @@ def global_norm(vec):
    """Compute vector norm across all PEs"""
    local_sum = vec @ vec
    global_sum = numpy.array([0.0])
-   mpi4py.MPI.COMM_WORLD.Allreduce(numpy.array([local_sum]), global_sum)
+   GLOBAL_COMM().Allreduce(numpy.array([local_sum]), global_sum)
    return math.sqrt(global_sum[0])
 
 def global_dotprod(vec1, vec2):
    """Compute dot product across all PEs"""
    local_sum = vec1 @ vec2
-   return mpi4py.MPI.COMM_WORLD.allreduce(local_sum)
+   return GLOBAL_COMM().allreduce(local_sum)
 
 def apply_givens(Q, v, k):
    """Apply the first k Givens rotations in Q to v.

@@ -1,5 +1,4 @@
 import numpy
-from mpi4py import MPI
 from time   import time
 
 from matrices   import lagrangeEval

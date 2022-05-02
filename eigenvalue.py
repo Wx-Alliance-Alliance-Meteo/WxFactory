@@ -6,7 +6,6 @@ from itertools import product
 from time import time
 import argparse
 
-import mpi4py
 import numpy
 from numpy import zeros, zeros_like, save, load, real, imag, hstack, max, abs #, vstack
 from numpy.linalg import eigvals
@@ -16,13 +15,14 @@ from scipy.sparse import csc_matrix, lil_matrix, save_npz, load_npz, vstack
 import scipy.sparse.linalg
 
 from program_options import Configuration
-from cubed_sphere import cubed_sphere
-from initialize import initialize_sw
-from matrices import DFR_operators
-from matvec import matvec_fun, matvec_rat
-from metric import Metric
-from parallel import Distributed_World
-from rhs_sw import rhs_sw
+from cubed_sphere    import cubed_sphere
+from gef_mpi         import GLOBAL_COMM
+from initialize      import initialize_sw
+from matrices        import DFR_operators
+from matvec          import matvec_fun, matvec_rat
+from metric          import Metric
+from parallel        import Distributed_World
+from rhs_sw          import rhs_sw
 from rhs_sw_explicit import rhs_sw_explicit
 from rhs_sw_implicit import rhs_sw_implicit
 
@@ -108,8 +108,8 @@ def gen_matrix(Q, matvec, rhs_fun, jac_file, rhs_file, permute):
    neq, ni, nj = Q.shape
    n_loc = Q.size
 
-   rank = mpi4py.MPI.COMM_WORLD.Get_rank()
-   size = mpi4py.MPI.COMM_WORLD.Get_size()
+   rank = GLOBAL_COMM().Get_rank()
+   size = GLOBAL_COMM().Get_size()
 
    Qid = zeros_like(Q)
    # J = zeros((n_loc, size*n_loc))
@@ -141,8 +141,8 @@ def gen_matrix(Q, matvec, rhs_fun, jac_file, rhs_file, permute):
          if rank == 0:
             print_progress(idx, total_num_iter, t0)
 
-   J_comm = mpi4py.MPI.COMM_WORLD.gather(J, root=0)
-   rhs_comm = mpi4py.MPI.COMM_WORLD.gather(rhs_fun(Q).flatten() / timestep, root=0)
+   J_comm = GLOBAL_COMM().gather(J, root=0)
+   rhs_comm = GLOBAL_COMM().gather(rhs_fun(Q).flatten() / timestep, root=0)
 
    if rank == 0:
       print('')

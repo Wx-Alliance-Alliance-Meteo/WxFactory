@@ -1,4 +1,3 @@
-import mpi4py
 import netCDF4
 import numpy
 import math
@@ -7,6 +6,7 @@ import time
 
 from diagnostic import relative_vorticity, potential_vorticity
 from definitions import *
+from gef_mpi import GLOBAL_COMM
 from winds import contra2wind
 
 def output_init(geom, param):
@@ -33,7 +33,7 @@ def output_init(geom, param):
    grid_data2D = ('npe', 'Xdim', 'Ydim')
 
    ncfile.createDimension('time', None) # unlimited
-   ncfile.createDimension('npe', mpi4py.MPI.COMM_WORLD.Get_size())
+   ncfile.createDimension('npe', GLOBAL_COMM().Get_size())
    ncfile.createDimension('Ydim', ni)
    ncfile.createDimension('Xdim', nj)
 
@@ -203,7 +203,7 @@ def output_init(geom, param):
          q4.grid_mapping = 'cubed_sphere'
          q4.set_collective(True)
 
-   rank = mpi4py.MPI.COMM_WORLD.Get_rank()
+   rank = GLOBAL_COMM().Get_rank()
 
    if rank == 0:
       xxx[:] = geom.x1[:]
@@ -218,7 +218,7 @@ def output_init(geom, param):
 
 def output_netcdf(Q, geom, metric, mtrx, topo, step, param):
    """ Writes u,v,eta fields on every nth time step """
-   rank = mpi4py.MPI.COMM_WORLD.Get_rank()
+   rank = GLOBAL_COMM().Get_rank()
    idx = len(ncfile["time"])
 
    ncfile['time'][idx] = step * param.dt
@@ -267,5 +267,5 @@ def output_netcdf(Q, geom, metric, mtrx, topo, step, param):
 
 def output_finalize():
    """ Finalise the output netCDF4 file."""
-   if mpi4py.MPI.COMM_WORLD.Get_rank() == 0:
+   if GLOBAL_COMM().Get_rank() == 0:
       ncfile.close()

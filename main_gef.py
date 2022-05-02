@@ -2,6 +2,7 @@
 
 import numpy
 import math
+import os
 from time import time
 
 from blockstats      import blockstats
@@ -24,11 +25,23 @@ from timeIntegrators import Epi, Epirk4s3a, Tvdrk3, Rat2, ARK_epi2
 from finite_volume import FiniteVolume
 from multigrid     import Multigrid
 
+from gef_mpi import GLOBAL_COMM, split_comm
+
 def main(args) -> int:
    step = 0
 
-   # Read configuration file
-   param = Configuration(args.config)
+   # Read configuration file(s)
+   if len(args.config) > 1:
+      old_rank = GLOBAL_COMM().rank
+      split_comm()
+      config_id = old_rank // 6
+      if config_id >= len(args.config): return -1
+      my_config = os.path.abspath(args.config[config_id])
+      my_dir = os.path.dirname(my_config)
+      os.chdir(my_dir)
+      param = Configuration(my_config)
+   else:
+      param = Configuration(args.config[0])
 
    if param.output_freq > 0:
       from output import output_init, output_netcdf, output_finalize
@@ -144,7 +157,7 @@ if __name__ == '__main__':
 
    parser = argparse.ArgumentParser(description='Solve NWP problems with GEF!')
    parser.add_argument('--profile', action='store_true', help='Produce an execution profile when running')
-   parser.add_argument('config', type=str, help='File that contains simulation parameters')
+   parser.add_argument('config', type=str, nargs='+', help='File that contains simulation parameters')
 
    args = parser.parse_args()
 

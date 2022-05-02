@@ -1,29 +1,28 @@
 import mayavi.mlab
-import mpi4py
-import mpi4py.MPI
 import pickle
 
 from definitions import *
+from gef_mpi     import GLOBAL_COMM
 
 def plot_sphere(geom):
-   glb_x = mpi4py.MPI.COMM_WORLD.gather(geom.cartX.T, root=0)
-   glb_y = mpi4py.MPI.COMM_WORLD.gather(geom.cartY.T, root=0)
-   glb_z = mpi4py.MPI.COMM_WORLD.gather(geom.cartZ.T, root=0)
+   glb_x = GLOBAL_COMM().gather(geom.cartX.T, root=0)
+   glb_y = GLOBAL_COMM().gather(geom.cartY.T, root=0)
+   glb_z = GLOBAL_COMM().gather(geom.cartZ.T, root=0)
 
-   if mpi4py.MPI.COMM_WORLD.Get_rank() == 0:
+   if GLOBAL_COMM().Get_rank() == 0:
       mayavi.mlab.figure(0, size=(800, 800), bgcolor=(0,0,0))
       for f in range(nbfaces):
          mayavi.mlab.mesh(glb_x[f], glb_y[f], glb_z[f])
       mayavi.mlab.show()
 
 def plot_level(geom, field, lvl):
-   glb_x     = mpi4py.MPI.COMM_WORLD.gather(geom.cartX[lvl].T, root=0)
-   glb_y     = mpi4py.MPI.COMM_WORLD.gather(geom.cartY[lvl].T, root=0)
-   glb_z     = mpi4py.MPI.COMM_WORLD.gather(geom.cartZ[lvl].T, root=0)
-   glb_field = mpi4py.MPI.COMM_WORLD.gather(field[lvl].T, root=0)
+   glb_x     = GLOBAL_COMM().gather(geom.cartX[lvl].T, root=0)
+   glb_y     = GLOBAL_COMM().gather(geom.cartY[lvl].T, root=0)
+   glb_z     = GLOBAL_COMM().gather(geom.cartZ[lvl].T, root=0)
+   glb_field = GLOBAL_COMM().gather(field[lvl].T, root=0)
 
-   ptopo_size = mpi4py.MPI.COMM_WORLD.Get_size()
-   if mpi4py.MPI.COMM_WORLD.Get_rank() == 0:
+   ptopo_size = GLOBAL_COMM().Get_size()
+   if GLOBAL_COMM().Get_rank() == 0:
       min_val = float("inf")
       max_val = -float("inf")
       for f in range(ptopo_size):
@@ -44,18 +43,18 @@ def plot_level(geom, field, lvl):
       mayavi.mlab.colorbar()
       mayavi.mlab.show()
 
-   mpi4py.MPI.COMM_WORLD.Barrier()
+   GLOBAL_COMM().Barrier()
 
 
 
 def plot_field(geom, field, filename=None):
-   glb_x     = mpi4py.MPI.COMM_WORLD.gather(geom.cartX.T, root=0)
-   glb_y     = mpi4py.MPI.COMM_WORLD.gather(geom.cartY.T, root=0)
-   glb_z     = mpi4py.MPI.COMM_WORLD.gather(geom.cartZ.T, root=0)
-   glb_field = mpi4py.MPI.COMM_WORLD.gather(field.T, root=0)
+   glb_x     = GLOBAL_COMM().gather(geom.cartX.T, root=0)
+   glb_y     = GLOBAL_COMM().gather(geom.cartY.T, root=0)
+   glb_z     = GLOBAL_COMM().gather(geom.cartZ.T, root=0)
+   glb_field = GLOBAL_COMM().gather(field.T, root=0)
 
-   ptopo_size = mpi4py.MPI.COMM_WORLD.Get_size()
-   if mpi4py.MPI.COMM_WORLD.Get_rank() == 0:
+   ptopo_size = GLOBAL_COMM().Get_size()
+   if GLOBAL_COMM().Get_rank() == 0:
       min_val = float("inf")
       max_val = -float("inf")
       for f in range(ptopo_size):
@@ -80,18 +79,18 @@ def plot_field(geom, field, filename=None):
       else:
          mayavi.mlab.show()
 
-   mpi4py.MPI.COMM_WORLD.Barrier()
+   GLOBAL_COMM().Barrier()
 
 
 def plot_vector_field(geom, field_x1, field_x2, filename=None):
-   glb_x        = mpi4py.MPI.COMM_WORLD.gather(geom.cartX.T, root=0)
-   glb_y        = mpi4py.MPI.COMM_WORLD.gather(geom.cartY.T, root=0)
-   glb_z        = mpi4py.MPI.COMM_WORLD.gather(geom.cartZ.T, root=0)
-   glb_field_x1 = mpi4py.MPI.COMM_WORLD.gather(field_x1.T, root=0)
-   glb_field_x2 = mpi4py.MPI.COMM_WORLD.gather(field_x2.T, root=0)
+   glb_x        = GLOBAL_COMM().gather(geom.cartX.T, root=0)
+   glb_y        = GLOBAL_COMM().gather(geom.cartY.T, root=0)
+   glb_z        = GLOBAL_COMM().gather(geom.cartZ.T, root=0)
+   glb_field_x1 = GLOBAL_COMM().gather(field_x1.T, root=0)
+   glb_field_x2 = GLOBAL_COMM().gather(field_x2.T, root=0)
 
-   ptopo_size = mpi4py.MPI.COMM_WORLD.Get_size()
-   if mpi4py.MPI.COMM_WORLD.Get_rank() == 0:
+   ptopo_size = GLOBAL_COMM().Get_size()
+   if GLOBAL_COMM().Get_rank() == 0:
       min_val = float("inf")
       max_val = -float("inf")
       for f in range(ptopo_size):
@@ -124,11 +123,11 @@ def plot_vector_field(geom, field_x1, field_x2, filename=None):
       else:
          mayavi.mlab.show()
 
-   mpi4py.MPI.COMM_WORLD.Barrier()
+   GLOBAL_COMM().Barrier()
 
 
 def plot_field_from_file(geom_prefix, field_prefix):
-   rank = mpi4py.MPI.COMM_WORLD.Get_rank()
+   rank = GLOBAL_COMM().Get_rank()
    suffix = '{:04d}.dat'.format(rank)
    geom_filename = geom_prefix + suffix
    field_filename = field_prefix + suffix
@@ -143,9 +142,9 @@ def plot_field_from_file(geom_prefix, field_prefix):
 
 
 def plot_array(array, filename=None):
-   rank = mpi4py.MPI.COMM_WORLD.Get_rank()
+   rank = GLOBAL_COMM().Get_rank()
 
-   all_arrays = mpi4py.MPI.COMM_WORLD.gather(array, root=0)
+   all_arrays = GLOBAL_COMM().gather(array, root=0)
 
    if rank == 0:
       print(f'Doing the plotting')
@@ -174,4 +173,4 @@ def plot_array(array, filename=None):
       else:
          plt.savefig(filename)
 
-   mpi4py.MPI.COMM_WORLD.Barrier()
+   GLOBAL_COMM().Barrier()
