@@ -29,6 +29,8 @@ geom*.dat
 *.out
 *.nc
 
+test_result.txt
+
 precondition_test/**/*.npy
 precondition_test/**/*.npz
 precondition_test/**/*.pdf
@@ -36,5 +38,7 @@ precondition_test/**/*.pdf
 mg_tests/configs*
 mg_tests/*.txt
 mg_tests/*.pdf
-mg_tests/test.ini
+mg_tests/**/*.ini
+!mg_tests/test_euler.ini
+!mg_tests/test_sw.ini
 

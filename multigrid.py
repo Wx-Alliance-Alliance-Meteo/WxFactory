@@ -7,7 +7,6 @@ from time import time
 
 from cubed_sphere  import cubed_sphere
 from definitions   import idx_h, idx_hu1, idx_hu2, gravity
-from gef_mpi       import GLOBAL_COMM
 from initialize    import initialize_euler, initialize_sw
 from interpolation import interpolator
 from linsol        import fgmres, global_norm
@@ -53,11 +52,11 @@ def runge_kutta_stable_smoothe(x, b, A, dt, P=lambda v:v):
 
 
 class MultigridLevel:
-   def __init__(self, param, ptopo, rhs, discretization, source_num_elem, target_num_elem, source_order, target_order, cfl):
+   def __init__(self, param, ptopo, rhs, discretization, nb_elem_horiz, nb_elem_vert, source_order, target_order, cfl):
       p = deepcopy(param)
       print(f'nb_elem_hor {p.nb_elements_horizontal}, vert {p.nb_elements_vertical}')
-      p.nb_elements_horizontal = source_num_elem
-      if p.equations == 'Euler': p.nb_elements_vertical = source_num_elem #TODO make it different than horizontal!
+      p.nb_elements_horizontal = nb_elem_horiz
+      p.nb_elements_vertical   = nb_elem_vert
       p.nbsolpts = source_order if discretization == 'dg' else 1
       p.discretization = discretization
 
@@ -69,7 +68,7 @@ class MultigridLevel:
       self.ptopo = ptopo
 
       print(
-         f'Grid level! nb_elem_horiz = {source_num_elem}, target {target_num_elem},'
+         f'Grid level! nb_elem_horiz = {nb_elem_horiz}, nb_elem_vert = {nb_elem_vert} '
          f' discr = {discretization}, source order = {source_order}, target order = {target_order}, nbsolpts = {p.nbsolpts}'
          # f' work ratio = {self.work_ratio}'
          )
@@ -196,9 +195,9 @@ class Multigrid:
          self.rhs = rhs_sw
       elif param.equations == 'Euler':
          self.rhs = rhs_euler if discretization == 'fv' else rhs_euler
-         if param.nb_elements_horizontal != param.nb_elements_vertical:
-            raise ValueError(f'MG with Euler equations needs same number of elements horizontally and vertically. '
-                             f'Now we have {param.nb_elements_horizontal} and {param.nb_elements_vertical}')
+         # if param.nb_elements_horizontal != param.nb_elements_vertical:
+         #    raise ValueError(f'MG with Euler equations needs same number of elements horizontally and vertically. '
+         #                     f'Now we have {param.nb_elements_horizontal} and {param.nb_elements_vertical}')
       else:
          raise ValueError('Cannot use the multigrid solver with anything other than shallow water or Euler')
 
@@ -210,20 +209,24 @@ class Multigrid:
 
       self.levels = {}
 
-      order    = param.initial_nbsolpts
-      num_elem = param.nb_elements_horizontal
+      order         = param.initial_nbsolpts
+      nb_elem_horiz = param.nb_elements_horizontal
+      nb_elem_vert  = param.nb_elements_vertical
 
       if discretization == 'fv':
-         self.next_level = lambda order: order // 2
+         self.next_level   = lambda order: order // 2
+         self.next_nb_elem = lambda nb_elem: nb_elem // 2
       else:
-         self.next_level = lambda order: order - 1
+         self.next_level   = lambda order: order - 1
+         self.next_nb_elem = lambda nb_elem: nb_elem
 
       for _ in range(self.num_levels):
          print(f'Initializing level {order}')
-         new_order = self.next_level(order)
-         new_num_elem = num_elem // 2 if discretization == 'fv' else num_elem
-         self.levels[order] = MultigridLevel(param, ptopo, self.rhs, discretization, num_elem, new_num_elem, order, new_order, self.cfl)
-         order, num_elem = new_order, new_num_elem
+         new_order         = self.next_level(order)
+         new_nb_elem_horiz = self.next_nb_elem(nb_elem_horiz)
+         new_nb_elem_vert  = self.next_nb_elem(nb_elem_vert)
+         self.levels[order] = MultigridLevel(param, ptopo, self.rhs, discretization, nb_elem_horiz, nb_elem_vert, order, new_order, self.cfl)
+         order, nb_elem_horiz, nb_elem_vert = new_order, new_nb_elem_horiz, new_nb_elem_vert
 
    def prepare(self, dt, field):
       """

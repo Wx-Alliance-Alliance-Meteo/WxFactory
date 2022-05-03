@@ -132,7 +132,7 @@ def eval_field_3d(field, elem_interp, result=None):
 
    t0 = time()
 
-   # Interpolate along second dimension (should be the fastest)
+   # Interpolate along second dimension (should be the fastest) (horizontal)
    for j in range(num_elem_horiz):
       j_start_dst =  j    * new_num_points
       j_end_dst   = (j+1) * new_num_points
@@ -140,7 +140,7 @@ def eval_field_3d(field, elem_interp, result=None):
       j_end_src   = (j+1) * old_num_points
       interp_1[:, j_start_dst:j_end_dst, :] = elem_interp @ field[:, j_start_src:j_end_src, :]
 
-   # Interpolate along 3rd dimension
+   # Interpolate along 3rd dimension (horizontal)
    for k in range(num_elem_horiz):
       k_start_dst =  k    * new_num_points
       k_end_dst   = (k+1) * new_num_points
@@ -148,7 +148,7 @@ def eval_field_3d(field, elem_interp, result=None):
       k_end_src   = (k+1) * old_num_points
       interp_2[:, :, k_start_dst:k_end_dst] = interp_1[:, :, k_start_src:k_end_src] @ elem_interp.T
 
-   # Interpolate along 1st dimension (possibly slowest? cause we need to go by hand along one of the other dimensions)
+   # Interpolate along 1st dimension (possibly slowest? cause we need to go by hand along one of the other dimensions) (vertical)
    for i in range(num_elem_vert):
       for j in range(num_elem_horiz * new_num_points):
          i_start_src =  i    * old_num_points
