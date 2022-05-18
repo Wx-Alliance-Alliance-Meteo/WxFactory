@@ -102,6 +102,8 @@ def fgmres(A, b, x0 = None, tol = 1e-5, restart = 20, maxiter = None, preconditi
       V[1, :] = A(Z[0, :])
       V, R, v_norm = ortho_1_sync(V, R, 1)
 
+      niter += 1
+
       # This is the RHS vector for the problem in the Krylov Space
       g = numpy.zeros(num_dofs)
       g[0] = norm_r
