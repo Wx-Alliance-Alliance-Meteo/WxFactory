@@ -6,7 +6,7 @@ from copy import deepcopy
 from time import time
 
 from cubed_sphere  import cubed_sphere
-from definitions   import idx_h, idx_hu1, idx_hu2, gravity
+from definitions   import idx_h, idx_hu1, idx_hu2, gravity, idx_rho_w
 from initialize    import initialize_euler, initialize_sw
 from interpolation import interpolator
 from linsol        import fgmres, global_norm
@@ -79,13 +79,13 @@ class MultigridLevel:
       self.metric   = Metric(self.geometry)
 
       if self.param.equations == 'Euler':
-         ndim = 3
+         self.ndim = 3
          field, topo = initialize_euler(self.geometry, self.metric, operators, self.param)
          self.rhs_operator = functools.partial(rhs, geom=self.geometry, mtrx=operators, metric=self.metric, topo=topo,
             ptopo=ptopo, nbsolpts=p.nbsolpts, nb_elements_hori=p.nb_elements_horizontal,
             nb_elements_vert=p.nb_elements_vertical, case_number=p.case_number)
       elif self.param.equations == 'shallow_water':
-         ndim = 2
+         self.ndim = 2
          field, topo = initialize_sw(self.geometry, self.metric, operators, p)
          self.rhs_operator = functools.partial(rhs, geom=self.geometry, mtrx=operators, metric=self.metric, topo=topo,
             ptopo=ptopo, nbsolpts=p.nbsolpts, nb_elements_horiz=p.nb_elements_horizontal, case_number=p.case_number)
@@ -96,12 +96,12 @@ class MultigridLevel:
       # Now set up the various operators: RHS, smoother, restriction, prolongation
       # matrix-vector product is done at every step, so not here
 
-      self.work_ratio = (source_order / param.initial_nbsolpts) ** ndim
+      self.work_ratio = (source_order / param.initial_nbsolpts) ** self.ndim
       self.smoother_work_unit = 3.0
 
       if target_order > 0:
          interp_method         = 'bilinear' if discretization == 'fv' else 'lagrange'
-         self.interpolator     = interpolator(discretization, source_order, discretization, target_order, interp_method, ndim)
+         self.interpolator     = interpolator(discretization, source_order, discretization, target_order, interp_method, self.ndim)
          self.restrict         = lambda vec, op=self.interpolator, sh=field.shape: op(vec.reshape(sh))
          self.restricted_shape = self.restrict(field).shape
          self.prolong          = lambda vec, op=self.interpolator, sh=self.restricted_shape: op(vec.reshape(sh), reverse=True)
@@ -112,6 +112,7 @@ class MultigridLevel:
 
       # Compute grid spacing
       X1, X2 = self.geometry.X1, self.geometry.X2
+
       self.dx = numpy.empty_like(X1)
       self.dy = numpy.empty_like(X2)
 
@@ -123,11 +124,41 @@ class MultigridLevel:
       self.dy[-1, :]   = X2[-1, :] - X2[-2, :]
       self.dy[1:-1, :] = (X2[2:, :] - X2[:-2, :]) * 0.5
 
-      self.elem_size = numpy.minimum(self.dx.min(), self.dy.min()) # Get min size in either direction (per element)
+      # TODO make this per element (?)
+      # self.elem_size = numpy.minimum(self.dx.min(), self.dy.min())
+
+      # print(f'dx: \n{self.dx}')
+      # print(f'dy: \n{self.dy}')
+
+      if self.ndim == 3:
+         x3 = self.geometry.x3
+         self.dz = numpy.empty_like(x3)
+         self.dz[ 0] = x3[ 1] - x3[ 0]
+         self.dz[-1] = x3[-1] - x3[-2]
+         self.dz[1:-1] = (x3[2:] - x3[:-2]) * 0.5
+         dz_min = self.dz.min()
+         # print(f'dz: \n{self.dz}')
+         # print(f'x3: \n{x3}')
+         # print(f'dz min: {dz_min}')
+         # self.elem_size = numpy.minimum(dz.min(), self.elem_size) # Get min size in either direction
+
+      # raise ValueError(f'elem size: {self.elem_size}')
 
    def compute_pseudo_dt(self, real_dt, field):
       """
       Compute pseudo time step from CFL condition
+
+      In a solver in general, we need
+         dt < CFL * h_min / (d * (2N+1) * abs(lambda_max))
+
+      where "CFL" is the constant we chose, "h_min" the smallest distance between two solution points,
+      "d" the number of dimensions, "N" the order of the DG discretization, and
+      "lambda_max" the maximum wave speed in the system.
+
+      Since we're using this as a preconditioner (always?), we have to further divide the result by the size
+      of the real time step:
+         pseudo_dt < pseudo_CFL / real_dt * h_min / (d * (2N+1) * abs(lambda_max))
+
       """
       # Extract the variables
       h  = field[idx_h]
@@ -147,12 +178,28 @@ class MultigridLevel:
 
       vel = numpy.maximum(v1, v2)
 
+      if self.ndim == 3:
+         w = field[idx_rho_w] / h
+         v3 = numpy.absolute(w)
+
+      elem_size_h = numpy.sqrt(numpy.minimum(self.dx, self.dy))
+      ratio_h = elem_size_h / vel
+      ratio_v = self.dz.min() / v3
+
+      # print(f'ratio_h: \n{ratio_h}')
+      # print(f'ratio_v: \n{ratio_v}')
+
+      discr_factor = 1.0 / (self.ndim * (2 * self.param.nbsolpts + 1))
+      print(f'discr_factor = {discr_factor}')
+
       # The pseudo dt (per element)
-      pseudo_dt = (self.cfl / real_dt) * self.elem_size / vel
+      pseudo_dt = (self.cfl * discr_factor / real_dt) * numpy.minimum(ratio_h, ratio_v)
 
       # numpy.set_printoptions(precision=1)
       # print(f'pseudo dt:\n{pseudo_dt}')
       print(f'pseudo dt max: {pseudo_dt.max()}, min: {pseudo_dt.min()}, avg: {numpy.average(pseudo_dt)} ')
+
+      # raise ValueError
 
       self.pseudo_dt = numpy.broadcast_to(pseudo_dt, field.shape)
 

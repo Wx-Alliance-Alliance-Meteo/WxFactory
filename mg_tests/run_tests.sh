@@ -69,19 +69,19 @@ function compute_time_step() {
         # factor=0.69
     fi
 
-    echo "${3} / ($order * $num_el) * $factor * 60" | bc | sed -e 's/\.[0-9]*//'
+    echo "${3} / ($order * $num_el) * $factor * 120" | bc | sed -e 's/\.[0-9]*//'
 }
 
 time_step=30
-order=2
-nb_elements=24
+order=4
+nb_elements=5
 
-precond="none"
+precond="fv-mg"
 precond_tolerance=1e-1
 coarsest_mg_order=1
 mg_smoothe_only=1
-num_pre_smoothe=1
-num_post_smoothe=1
+num_pre_smoothe=2
+num_post_smoothe=2
 
 mg_smoother="erk"
 sgs_eta=0.1
@@ -92,31 +92,32 @@ linear_solver="fgmres"
 
 #################################
 # 
-pseudo_cfl=0.0039       # FV-MG RAT2
+pseudo_cfl=0.0135       # FV-MG RAT2
 # pseudo_cfl=0.00156       # P-MG RAT2
 
-rat2_fv_pseudo_cfl=0.0039
-rat2_p_pseudo_cfl=0.00156
+# rat2_fv_pseudo_cfl=0.0039
+rat2_fv_pseudo_cfl=0.0135
+rat2_p_pseudo_cfl=0.0009
 #################################
 
 if [ "x${1}" == "x--gen-configs" ]; then
 
-    ref_time_step=120
-    orders="2 4"
+    ref_time_step=90
+    orders="4"
     # orders=2
     # element_counts="30 60 120"
-    element_counts="10 20"
+    element_counts="50 100"
     smoothings="1 2"
     # smoothings="4"
     mg_orders="1 2 4"
-    pre_tols="1e-1 1e-6"
-    preconds="fv-mg p-mg"
+    pre_tols="1e-1 1e-5"
+    preconds="fv-mg"
     #interps="lagrange l2-norm"
     interps="lagrange"
     for order in ${orders}; do
         for nb_elements in ${element_counts}; do
-            [ $nb_elements -gt 60 ] && [ $order -gt 2 ] && continue
-            [ $nb_elements -gt 30 ] && [ $order -gt 4 ] && continue
+            # [ $nb_elements -gt 60 ] && [ $order -gt 2 ] && continue
+            # [ $nb_elements -gt 30 ] && [ $order -gt 4 ] && continue
 
             # time_step=$(compute_time_step ${order} ${nb_elements} ${ref_time_step})
 
@@ -152,16 +153,18 @@ if [ "x${1}" == "x--gen-configs" ]; then
             precond="fv-mg"
             dg_to_fv_interp="lagrange"
             for precond in ${preconds}; do
-            for coarsest_mg_order in ${mg_orders}; do
-                [ $coarsest_mg_order -gt $order ] && continue
-                for mg_smoothe_only in 1; do
-                for num_pre_smoothe in ${smoothings}; do
-                    num_post_smoothe=${num_pre_smoothe}
-                    set_parameters ${precond} ${order} ${nb_elements} ${precond_tolerance} ${coarsest_mg_order} ${mg_smoothe_only} ${num_pre_smoothe} ${num_post_smoothe} ${pseudo_cfl} ${time_step} ${dg_to_fv_interp} ${linear_solver} ${mg_smoother} ${sgs_eta}
-                    cp ${CONFIG_FILE} "${CONFIG_DIR}/config.c${precond}_${order}_${nb_elements}_${precond_tolerance}_${coarsest_mg_order}_${mg_smoother}_${mg_smoothe_only}_${num_pre_smoothe}_${num_post_smoothe}_${pseudo_cfl}_${time_step}_${dg_to_fv_interp:0:3}.ini"
+                [ "x${precond}" == "xfv-mg" ] && pseudo_cfl=${rat2_fv_pseudo_cfl}
+                [ "x${precond}" == "xp-mg" ] && pseudo_cfl=${rat2_p_pseudo_cfl}
+                for coarsest_mg_order in ${mg_orders}; do
+                    [ $coarsest_mg_order -gt $order ] && continue
+                    for mg_smoothe_only in 1; do
+                    for num_pre_smoothe in ${smoothings}; do
+                        num_post_smoothe=${num_pre_smoothe}
+                        set_parameters ${precond} ${order} ${nb_elements} ${precond_tolerance} ${coarsest_mg_order} ${mg_smoothe_only} ${num_pre_smoothe} ${num_post_smoothe} ${pseudo_cfl} ${time_step} ${dg_to_fv_interp} ${linear_solver} ${mg_smoother} ${sgs_eta}
+                        cp ${CONFIG_FILE} "${CONFIG_DIR}/config.c${precond}_${order}_${nb_elements}_${precond_tolerance}_${coarsest_mg_order}_${mg_smoother}_${mg_smoothe_only}_${num_pre_smoothe}_${num_post_smoothe}_${pseudo_cfl}_${time_step}_${dg_to_fv_interp:0:3}.ini"
+                    done
+                    done
                 done
-                done
-            done
             done
         done
     done

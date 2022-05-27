@@ -3,6 +3,7 @@ import numpy
 import scipy
 import scipy.sparse.linalg
 from time import time
+import sys
 
 from gef_mpi import GLOBAL_COMM
 
@@ -186,7 +187,9 @@ def fgmres(A, b, x0 = None, tol = 1e-5, restart = 20, maxiter = None, preconditi
 
       norm_r = global_norm(r)
       residuals.append((norm_r / norm_b, time() - t_start, 0.0))
-      if verbose: print(f'res: {norm_r/norm_b:.2e} (iter {niter})')
+      if verbose:
+         print(f'res: {norm_r/norm_b:.2e} (iter {niter})')
+         sys.stdout.flush()
 
       # Has GMRES stagnated?
       indices = (x != 0)

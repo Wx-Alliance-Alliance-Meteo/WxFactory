@@ -171,7 +171,6 @@ class Configuration:
       except (NoOptionError, NoSectionError):
          self.mg_smoothe_only = 0
 
-
       try:
          self.precond_filter_before = parser.getint('Preconditioning', 'precond_filter_before')
          print(f'Warning: preconditioner filter option  is not properly implemented. Please do not use.')

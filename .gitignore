@@ -28,6 +28,7 @@ geom*.dat
 *.png
 *.out
 *.nc
+*.db
 
 test_result.txt
 
