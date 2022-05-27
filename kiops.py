@@ -3,6 +3,8 @@ import numpy
 import mpi4py.MPI
 import scipy.linalg
 
+import scipy.linalg
+
 """
    kiops(tstops, A, u; kwargs...) -> (w, stats)
 
@@ -10,11 +12,15 @@ Evaluate a linear combinaton of the ``φ`` functions evaluated at ``tA`` acting 
 vectors from ``u``, that is
 
 ```math
-  w(i) = φ_0(t[i] A) u[0, :] + φ_1(t[i] A) u[1, :] + φ_2(t[i] A) u[2, :] + ...
+  w(i) = φ_0(t[i] A) u[:, 1] + φ_1(t[i] A) u[:, 2] + φ_2(t[i] A) u[:, 3] + ...
 ```
 
 The size of the Krylov subspace is changed dynamically during the integration.
 The Krylov subspace is computed using the incomplete orthogonalization method.
+
+This version is using post-modern MGS without lagged normalization. A norm
+estimate is computed to normalize the next vector at each step and to check
+for happy break down.
 
 Arguments:
   - `τ_out`    - Array of `τ_out`
@@ -44,6 +50,7 @@ References:
 * Gaudreault, S., Rainwater, G. and Tokman, M., 2018. KIOPS: A fast adaptive Krylov subspace solver for exponential integrators. Journal of Computational Physics. Based on the PHIPM and EXPMVP codes (http://www1.maths.leeds.ac.uk/~jitse/software.html). https://gitlab.com/stephane.gaudreault/kiops.
 * Niesen, J. and Wright, W.M., 2011. A Krylov subspace method for option pricing. SSRN 1799124
 * Niesen, J. and Wright, W.M., 2012. Algorithm 919: A Krylov subspace algorithm for evaluating the ``φ``-functions appearing in exponential integrators. ACM Transactions on Mathematical Software (TOMS), 38(3), p.22
+[4] Thomas, S., Carson, E., Rozlonik, M., Carr, A., Swirydowicz, K. (2022). Post-Modern GMRES. No. 7734. EasyChair, 2022.
 """
 def kiops(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 2, task1 = False):
 
@@ -61,6 +68,9 @@ def kiops(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 2,
    # Preallocate matrix
    V = numpy.zeros((mmax + 1, n + p))
    H = numpy.zeros((mmax + 1, mmax + 1))
+   Minv = numpy.eye(mmax)
+   M = numpy.eye(mmax)
+   N = numpy.zeros([mmax,mmax])
 
    step    = 0
    krystep = 0
@@ -72,8 +82,8 @@ def kiops(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 2,
    τ_end   = abs(τ_out[-1])
    happy   = False
    j       = 0
-
    conv    = 0.0
+   reg_comm = 0
 
    numSteps = len(τ_out)
 
@@ -152,27 +162,51 @@ def kiops(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 2,
          V[j, n:n+p-1] = V[j-1, n+1:n+p]
          V[j, -1     ] = 0.0
 
-         # Classical Gram-Schmidt
-         ilow = max(0, j - iop)
+         #2. compute terms needed for R and T
+         temp = V[0:j+1, 0:n].dot(numpy.transpose(V[j-1:j+1, 0:n]))
+         global_temp_vec = mpi4py.MPI.COMM_WORLD.allreduce(temp)
+         global_temp_vec += V[0:j+1, n:n+p].dot(numpy.transpose(V[j-1:j+1, n:n+p]))
 
-         local_sum = V[ilow:j, 0:n] @ V[j, 0:n]
-         global_sum = numpy.empty_like(local_sum)
-         mpi4py.MPI.COMM_WORLD.Allreduce([local_sum, mpi4py.MPI.DOUBLE], [global_sum, mpi4py.MPI.DOUBLE])
-         H[ilow:j, j-1] = global_sum + V[ilow:j, n:n+p] @ V[j, n:n+p]
+         #3. set values for Hessenberg matrix H
+         H[0:j, j-1] = global_temp_vec[0:j,1]
 
-         V[j, :] = V[j, :] - V[ilow:j,:].T @ H[ilow:j, j-1]
+         #4. Procection of 2-step Gauss-Sidel to the orthogonal complement
+         # Note: this is done in two steps. (1) matvec and (2) a lower
+         # triangular solve
+         # 4a. here we set the values for matrix M, Minv, N
+         if (j > 1):
+           M[j-1, 0:j-1]    =  global_temp_vec[0:j-1,0]
+           N[0:j-1, j-1]    = -global_temp_vec[0:j-1,0]
+           Minv[j-1, 0:j-1] = -Minv[0:j-1, 0:j-1].dot(global_temp_vec[0:j-1,0])
 
-         local_sum = V[j, 0:n] @ V[j, 0:n]
-         mpi4py.MPI.COMM_WORLD.Allreduce([local_sum, mpi4py.MPI.DOUBLE], [global_sum_nrm, mpi4py.MPI.DOUBLE])
-         nrm = numpy.sqrt( global_sum_nrm + V[j, n:n+p] @ V[j, n:n+p] )
+         #4b. part 1: the mat-vec
+         temp_rhs = numpy.eye(j) + numpy.matmul(N[0:j, 0:j], Minv[0:j,0:j])
+         temp_rhs = temp_rhs.dot(global_temp_vec[0:j,1])
+
+         #4c. part 2: the lower triangular solve
+         sol = scipy.linalg.solve_triangular(M[0:j, 0:j], temp_rhs, unit_diagonal=True)
+
+         #5. Orthogonalize
+         V[j, :] -= sol.dot(V[0:j, :])
+
+         #7. compute norm estimate
+         sum_sqrd = sum(global_temp_vec[0:j,1]**2)
+         if (global_temp_vec[-1,1] < sum_sqrd):
+           #use communication to compute norm estimate
+           reg_comm += 1
+           local_sum = V[j, 0:n] @ V[j, 0:n]
+           curr_nrm = numpy.sqrt(mpi4py.MPI.COMM_WORLD.allreduce(local_sum) + V[j,n:n+p] @ V[j, n:n+p])
+         else:
+           curr_nrm = numpy.sqrt(global_temp_vec[-1,1] - sum_sqrd)
 
          # Happy breakdown
-         if nrm < tol:
+         if curr_nrm < tol:
             happy = True
             break
 
-         H[j, j-1] = nrm
-         V[j, :]   = (1.0 / nrm) * V[j, :]
+         #normalize vector and set norm to H matrix
+         V[j,:] /= curr_nrm
+         H[j,j-1] = curr_nrm
 
          krystep += 1
 
