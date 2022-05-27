@@ -68,7 +68,7 @@ def main(args) -> int:
       preconditioner = None
       if param.use_preconditioner:
          # preconditioner = DG_preconditioner(param, geom, ptopo, mtrx, rhs_sw)
-         preconditioner = Multigrid(param, Q, ptopo)
+         preconditioner = Multigrid(param, ptopo, param.nbsolpts, rhs_handle)
 
       stepper = Rat2(rhs_handle, param.tolerance, preconditioner=preconditioner)
    elif  param.time_integrator.lower() == 'epi2/ark' and param.equations == "shallow_water": # TODO : Euler
