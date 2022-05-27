@@ -1,6 +1,6 @@
 import numpy
 
-from definitions import idx_h, idx_hu1, idx_hu2, idx_u1, idx_u2, gravity
+from definitions import idx_h, idx_hu1, idx_hu2, gravity
 
 def rhs_sw (Q: numpy.ndarray, geom, mtrx, metric, topo, ptopo, nbsolpts: int, nb_elements_hori: int):
 
@@ -19,7 +19,7 @@ def rhs_sw (Q: numpy.ndarray, geom, mtrx, metric, topo, ptopo, nbsolpts: int, nb
    offset = 1
 
    # Unpack dynamical variables
-   HH = Q[idx_h] + topo.hsurf
+   HH = Q[idx_h] if topo is None else Q[idx_h] + topo.hsurf
    u1 = Q[idx_hu1] / Q[idx_h]
    u2 = Q[idx_hu2] / Q[idx_h]
 
@@ -71,8 +71,9 @@ def rhs_sw (Q: numpy.ndarray, geom, mtrx, metric, topo, ptopo, nbsolpts: int, nb
    all_request.wait()
 
    # Substract topo after extrapolation
-   var_itf_i[idx_h] -= topo.hsurf_itf_i
-   var_itf_j[idx_h] -= topo.hsurf_itf_j
+   if topo is not None:
+      var_itf_i[idx_h] -= topo.hsurf_itf_i
+      var_itf_j[idx_h] -= topo.hsurf_itf_j
 
    # Common AUSM fluxes
    for itf in range(nb_interfaces_hori):
@@ -150,15 +151,22 @@ def rhs_sw (Q: numpy.ndarray, geom, mtrx, metric, topo, ptopo, nbsolpts: int, nb
 
       df2_dx2[:,epais,:] += mtrx.correction @ flux_x2_itf_j[:, elem+offset,:,:]
 
+   if topo is None:
+      topo_dzdx1 = numpy.zeros_like(metric.H_contra_11)
+      topo_dzdx2 = numpy.zeros_like(metric.H_contra_11)
+   else:
+      topo_dzdx1 = topo.dzdx1
+      topo_dzdx2 = topo.dzdx2
+
    # Add coriolis, metric and terms due to varying bottom topography
    # Note: christoffel_1_22 and metric.christoffel_2_11 are zero
    forcing[idx_hu1,:,:] = 2.0 * ( metric.christoffel_1_01 * Q[idx_hu1] + metric.christoffel_1_02 * Q[idx_hu2]) \
          + metric.christoffel_1_11 * Q[idx_hu1] * u1 + 2.0 * metric.christoffel_1_12 * Q[idx_hu1] * u2 \
-         + gravity * Q[idx_h] * ( metric.H_contra_11 * topo.dzdx1 + metric.H_contra_12 * topo.dzdx2)
+         + gravity * Q[idx_h] * ( metric.H_contra_11 * topo_dzdx1 + metric.H_contra_12 * topo_dzdx2)
 
    forcing[idx_hu2,:,:] = 2.0 * (metric.christoffel_2_01 * Q[idx_hu1] + metric.christoffel_2_02 * Q[idx_hu2]) \
          + 2.0 * metric.christoffel_2_12 * Q[idx_hu1] * u2 + metric.christoffel_2_22 * Q[idx_hu2] * u2 \
-         + gravity * Q[idx_h] * ( metric.H_contra_21 * topo.dzdx1 + metric.H_contra_22 * topo.dzdx2)
+         + gravity * Q[idx_h] * ( metric.H_contra_21 * topo_dzdx1 + metric.H_contra_22 * topo_dzdx2)
 
    # Assemble the right-hand sides
    rhs = metric.inv_sqrtG * - ( df1_dx1 + df2_dx2 ) - forcing

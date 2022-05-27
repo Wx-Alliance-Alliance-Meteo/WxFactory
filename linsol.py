@@ -4,51 +4,7 @@ import mpi4py.MPI
 import scipy
 import scipy.sparse.linalg
 
-
-def ortho_1_sync(Q, R, j):
-   """Orthonormalization process that only requires a single synchronization step.
-
-   This processes row j of matrix Q so that the first j+1 rows are orthogonal, and the first j rows are orthonormal.
-   It normalizes row j-1 of matrix Q during that process.
-
-   Arguments:
-      Q -- The matrix to orthogonalize. We assume that the first (j-1) columns of that matrix are already orthonormal
-      R -- Data from previous iterations of the orthonormalization process (?)
-      j -- Which row vector we want to make orthogonal to the previous ones
-   """
-   m, _ = Q.shape
-
-   if j == 0: return Q, R, 0.0
-
-   local_tmp = Q[:j, :].conj() @ Q[j-1:j+1, :].T
-
-   global_tmp = numpy.empty_like(local_tmp)
-   mpi4py.MPI.COMM_WORLD.Allreduce(local_tmp, global_tmp)
-
-   T            = numpy.zeros_like(R)
-   T[:j-1, j-1] = global_tmp[:j-1, 0]
-   norm2        = global_tmp[j-1, 0]
-   norm         = numpy.sqrt(norm2)
-   R[j-1, j-1]  = norm
-
-   R[:j, j]     = global_tmp[:j,1]
-   R[:j, j]     /= norm # Only do this for Arnoldi iterations
-   Q[j-1, :]    /= norm
-   Q[j, :]      /= norm # Only do this for Arnoldi iterations
-   T[:j-1, j-1] /= norm
-   R[j-1, j]    /= norm
-
-   T[j-1, j-1] = 1.0
-   L = numpy.tril(T[:j, :j], -1)
-   R[:j, j] = (numpy.eye(j) - L) @ R[:j, j]
-
-   delta = -R[:j, j].T @ Q[:j, :]
-   Q[j, :] += delta
-
-   return Q, R, norm
-
-
-def fgmres(A, b, x0 = None, tol = 1e-5, restart = 20, maxiter = None, preconditioner = None, reorth = False, hegedus = False):
+def fgmres(A, b, x0 = None, tol = 1e-5, restart = 20, maxiter = None, preconditioner = None, hegedus = False):
 
    niter = 0
 
@@ -84,25 +40,17 @@ def fgmres(A, b, x0 = None, tol = 1e-5, restart = 20, maxiter = None, preconditi
 
    # Get fast access to underlying BLAS routines
    [lartg] = scipy.linalg.get_lapack_funcs(['lartg'], [x])
-   [axpy, dotu, scal] = scipy.linalg.get_blas_funcs(['axpy', 'dotu', 'scal'], [x])
-
-   use_new_orth = True
+   [dotu, scal] = scipy.linalg.get_blas_funcs(['dotu', 'scal'], [x])
 
    for outer in range(maxiter):
 
       # NOTE: We are dealing with row-major matrices, but we store the transpose of H and V.
       H = numpy.zeros((restart+1, restart+1))
-      R = numpy.zeros((restart+2, restart+2)) # rhs of the MGS factorization (should be H.transposed?)
-      V = numpy.zeros((restart+2, num_dofs))  # row-major ordering
+      V = numpy.zeros((restart+1, num_dofs))  # row-major ordering
       Z = numpy.zeros((restart+1, num_dofs))  # row-major ordering
       Q = []  # Givens Rotations
 
       V[0, :] = r / norm_r
-      Z[0, :] = V[0, :] if preconditioner is None else preconditioner(V[0, :])
-      V[1, :] = A(Z[0, :])
-      V, R, v_norm = ortho_1_sync(V, R, 1)
-
-      niter += 1
 
       # This is the RHS vector for the problem in the Krylov Space
       g = numpy.zeros(num_dofs)
@@ -111,12 +59,22 @@ def fgmres(A, b, x0 = None, tol = 1e-5, restart = 20, maxiter = None, preconditi
 
          niter += 1
 
-         # Modified Gram-Schmidt process (1-sync version, with lagged normalization)
-         Z[inner + 1, :] = V[inner + 1] if preconditioner is None else preconditioner(V[inner + 1])
-         V[inner + 2, :] = A(Z[inner + 1, :] / v_norm) * v_norm
-         V, R, v_norm = ortho_1_sync(V, R, inner + 2)
-         H[inner, :] = R[:restart + 1, inner + 1]
-         Z[inner + 1, :] /= v_norm
+         # Flexible preconditioner
+         Z[inner, :] = V[inner, :] if preconditioner is None else preconditioner(V[inner, :])
+
+         w = A(Z[inner, :])
+
+         # Classical Gram-Schmidt process
+         local_sum = V[:inner+1, :] @ w
+         H[inner, :inner+1] = mpi4py.MPI.COMM_WORLD.allreduce(local_sum)
+         V[inner+1, :] = w - H[inner, :inner+1] @ V[:inner+1, :]
+
+         local_sum = V[inner+1, :] @ V[inner+1, :]
+         H[inner, inner+1] = math.sqrt( mpi4py.MPI.COMM_WORLD.allreduce(local_sum) )
+
+         # Check for breakdown
+         if H[inner, inner+1] != 0.0:
+            V[inner+1, :] = scal(1.0 / H[inner, inner+1], V[inner + 1, :])
 
          # Apply previous Givens rotations to H
          if inner > 0:
@@ -176,14 +134,7 @@ def fgmres(A, b, x0 = None, tol = 1e-5, restart = 20, maxiter = None, preconditi
 def global_norm(vec):
    """Compute vector norm across all PEs"""
    local_sum = vec @ vec
-   global_sum = numpy.array([0.0])
-   mpi4py.MPI.COMM_WORLD.Allreduce(numpy.array([local_sum]), global_sum)
-   return math.sqrt(global_sum[0])
-
-def global_dotprod(vec1, vec2):
-   """Compute dot product across all PEs"""
-   local_sum = vec1 @ vec2
-   return mpi4py.MPI.COMM_WORLD.allreduce(local_sum)
+   return math.sqrt( mpi4py.MPI.COMM_WORLD.allreduce(local_sum) )
 
 def apply_givens(Q, v, k):
    """Apply the first k Givens rotations in Q to v.

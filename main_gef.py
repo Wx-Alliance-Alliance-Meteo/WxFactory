@@ -12,8 +12,8 @@ from initialize      import initialize_sw, initialize_euler
 from matrices        import DFR_operators
 from metric          import Metric
 from parallel        import Distributed_World
-from preconditioner_dg import DG_preconditioner
-from preconditioner_fv import FV_preconditioner
+from multigrid import Multigrid
+#from preconditioner_fv import FV_preconditioner
 from program_options import Configuration
 from rhs_euler       import rhs_euler
 from rhs_sw          import rhs_sw
@@ -37,7 +37,7 @@ def main(args) -> int:
    geom = cubed_sphere(param.nb_elements_horizontal, param.nb_elements_vertical, param.nbsolpts, param.λ0, param.ϕ0, param.α0, param.ztop, ptopo, param)
 
    # Build differentiation matrice and boundary correction
-   mtrx = DFR_operators(geom, param)
+   mtrx = DFR_operators(geom, param.filter_apply, param.filter_order, param.filter_cutoff)
 
    # Initialize metric tensor
    metric = Metric(geom)
@@ -59,7 +59,7 @@ def main(args) -> int:
    if param.time_integrator.lower()[:3] == 'epi' and param.time_integrator[3:].isdigit():
       order = int(param.time_integrator[3:])
       print(f'Running with EPI{order}')
-      stepper = Epi(order, rhs_handle, param.tolerance, param.krylov_size, jacobian_method=param.jacobian_method, init_substeps=10)
+      stepper = Epi(order, rhs_handle, param.tolerance, param.exponential_solver, jacobian_method=param.jacobian_method, init_substeps=10)
    elif param.time_integrator.lower() == 'epirk4s3a':
       stepper = Epirk4s3a(rhs_handle, param.tolerance, param.krylov_size)
    elif param.time_integrator.lower() == 'tvdrk3':
@@ -68,7 +68,8 @@ def main(args) -> int:
       preconditioner = None
       if param.use_preconditioner:
          # preconditioner = DG_preconditioner(param, geom, ptopo, mtrx, rhs_sw)
-         preconditioner = FV_preconditioner(param, Q, ptopo)
+         preconditioner = Multigrid(param, Q, ptopo)
+
       stepper = Rat2(rhs_handle, param.tolerance, preconditioner=preconditioner)
    elif  param.time_integrator.lower() == 'epi2/ark' and param.equations == "shallow_water": # TODO : Euler
       rhs_explicit = lambda q: rhs_sw_explicit(q, geom, mtrx, metric, topo, ptopo, param.nbsolpts, param.nb_elements_horizontal)

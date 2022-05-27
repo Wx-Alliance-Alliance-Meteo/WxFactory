@@ -27,6 +27,11 @@ class Configuration:
       self.tolerance        = parser.getfloat('Time_integration', 'tolerance')
 
       try:
+         self.exponential_solver = parser.get('Time_integration', 'exponential_solver')
+      except (NoOptionError,NoSectionError):
+         self.exponential_solver = 'kiops'
+
+      try:
          self.krylov_size = parser.getint('Time_integration', 'krylov_size')
       except (NoOptionError,NoSectionError):
          self.krylov_size = 1

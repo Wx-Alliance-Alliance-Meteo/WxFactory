@@ -4,6 +4,7 @@ import scipy.sparse.linalg
 from collections import deque
 
 from matvec        import matvec_fun, matvec_rat
+from exode         import exode
 from kiops         import kiops
 from linsol        import fgmres
 from phi           import phi_ark
@@ -79,11 +80,12 @@ class Epirk4s3a:
       return Q + numpy.reshape(phiv, Q.shape)
 
 class Epi:
-   def __init__(self, order: int, rhs, tol: float, krylov_size: int, jacobian_method='complex', init_method=None, init_substeps: int = 1):
+   def __init__(self, order: int, rhs, tol: float, exponential_solver='kiops', jacobian_method='complex', init_method=None, init_substeps: int = 1):
       self.rhs = rhs
       self.tol = tol
-      self.krylov_size = krylov_size
+      self.krylov_size = 1
       self.jacobian_method = jacobian_method
+      self.exponential_solver = exponential_solver
 
       if order == 2:
          self.A = numpy.array([[]])
@@ -121,7 +123,7 @@ class Epi:
          self.init_method = init_method
       else:
          #self.init_method = Epirk4s3a(rhs, tol, krylov_size)
-         self.init_method = Epi(2, rhs, tol, krylov_size)
+         self.init_method = Epi(2, rhs, tol, self.krylov_size)
 
       self.init_substeps = init_substeps
 
@@ -159,13 +161,17 @@ class Epi:
             # v_k = Sum_{i=1}^{n_prev} A_{k,i} R(y_{n-i})
             vec[k,:] += alpha * r.flatten()
 
-      phiv, stats = kiops([1], matvec_handle, vec, tol=self.tol, m_init=self.krylov_size, mmin=16, mmax=64,
-                          task1=False)
+      if self.exponential_solver == 'kiops':
+         phiv, stats = kiops([1], matvec_handle, vec, tol=self.tol, m_init=self.krylov_size, mmin=16, mmax=64, task1=False)
 
-      print(f'KIOPS converged at iteration {stats[2]} (using {stats[0]} internal substeps)'
-            f' to a solution with local error {stats[4]:.2e}')
+         print(f'KIOPS converged at iteration {stats[2]} (using {stats[0]} internal substeps)'
+               f' to a solution with local error {stats[4]:.2e}')
 
-      self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
+         self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
+      else:
+         phiv, stats = exode([1], matvec_handle, vec, atol=self.tol, task1=False, verbose=False)
+
+         print(f'EXODE converged using {stats[0]} calls to matvec ({stats[1]} rejected steps)')
 
       # Save values for the next timestep
       if self.n_prev > 0:
@@ -202,13 +208,15 @@ class Rat2:
       A = scipy.sparse.linalg.LinearOperator((n,n), matvec=lambda v: matvec_rat(v, dt, Q, rhs, self.rhs_handle))
       b = A(Q_flat) + rhs.flatten() * dt
 
-      # TODO : gcro
+      if self.preconditioner is not None:
+         self.preconditioner.prepare(dt, Q)
+
       Qnew, local_error, num_iter, flag = fgmres(A, b, x0=Q_flat, tol=self.tol, preconditioner=self.preconditioner)
 
       if flag == 0:
-         print(f'FGMRES converged at iteration {num_iter} to a solution with local error {local_error : .2e}')
+         print(f'FGMRES converged at iteration {num_iter} to a solution with relative local error {local_error : .2e}')
       else:
-         print(f'FGMRES stagnation at iteration {num_iter}, returning a solution with local error {local_error: .2e}')
+         print(f'FGMRES stagnation at iteration {num_iter}, returning a solution with relative local error {local_error: .2e}')
 
       return numpy.reshape(Qnew, Q.shape)
 

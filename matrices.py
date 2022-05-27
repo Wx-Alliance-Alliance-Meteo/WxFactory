@@ -4,7 +4,7 @@ import math
 import sympy
 
 class DFR_operators:
-   def __init__(self, grd, param):
+   def __init__(self, grd, filter_apply=False, filter_order=8, filter_cutoff=0.25):
       self.extrap_west = lagrangeEval(grd.solutionPoints_sym, -1)
       self.extrap_east = lagrangeEval(grd.solutionPoints_sym,  1)
 
@@ -14,16 +14,16 @@ class DFR_operators:
       self.extrap_down = lagrangeEval(grd.solutionPoints_sym, -1)
       self.extrap_up   = lagrangeEval(grd.solutionPoints_sym,  1)
 
-      if param.filter_apply:
+      if filter_apply:
          self.V = vandermonde(grd.extension)
          self.invV = inv(self.V)
          N = len(grd.extension)-1
-         Nc = math.floor(param.filter_cutoff * N)
-         self.filter = filter_exponential(N, Nc, param.filter_order, self.V, self.invV)
+         Nc = math.floor(filter_cutoff * N)
+         self.filter = filter_exponential(N, Nc, filter_order, self.V, self.invV)
 
       diff = diffmat(grd.extension_sym)
 
-      if param.filter_apply:
+      if filter_apply:
          self.diff_ext = ( self.filter @ diff ).astype(float)
          self.diff_ext[numpy.abs(self.diff_ext) < 1e-20] = 0.
       else:
@@ -65,7 +65,7 @@ def diffmat(points):
 
    x = sympy.symbols('x')
    for i in range(M):
-      dL = Lagrange_poly(x, M-1, i, points).diff()
+      dL = sympy.diff( Lagrange_poly(x, M-1, i, points) )
       for j in range(M):
          if i != j:
             D[j,i] = dL.subs(x, points[j])
@@ -78,7 +78,6 @@ def Lagrange_poly(x,order,i,xi):
     index = list(range(order+1))
     index.pop(i)
     return sympy.prod([(x-xi[j])/(xi[i]-xi[j]) for j in index])
-
 
 def lebesgue(points):
    M = len(points)
@@ -102,6 +101,16 @@ def vandermonde(x):
          V[i, j] = sympy.legendre(j, y).evalf(subs={y: x[i]}, n=30, chop=True)
 
    return V
+
+
+def remesh_operator(src_points, target_points):
+   src_nbsolpts = len(src_points)
+   target_nbsolpts = len(target_points)
+
+   interp = numpy.zeros((target_nbsolpts, src_nbsolpts))
+   for i in range(target_nbsolpts):
+      interp[i,:] = lagrangeEval(src_points, target_points[i])
+   return interp
 
 
 def filter_exponential(N, Nc, s, V, invV):
