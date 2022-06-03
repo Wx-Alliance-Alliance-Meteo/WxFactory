@@ -5,54 +5,7 @@ import scipy.linalg
 
 import scipy.linalg
 
-"""
-   kiops(tstops, A, u; kwargs...) -> (w, stats)
-
-Evaluate a linear combinaton of the ``φ`` functions evaluated at ``tA`` acting on
-vectors from ``u``, that is
-
-```math
-  w(i) = φ_0(t[i] A) u[:, 1] + φ_1(t[i] A) u[:, 2] + φ_2(t[i] A) u[:, 3] + ...
-```
-
-The size of the Krylov subspace is changed dynamically during the integration.
-The Krylov subspace is computed using the incomplete orthogonalization method.
-
-This version is using post-modern MGS without lagged normalization. A norm
-estimate is computed to normalize the next vector at each step and to check
-for happy break down.
-
-Arguments:
-  - `τ_out`    - Array of `τ_out`
-  - `A`        - the matrix argument of the ``φ`` functions
-  - `u`        - the matrix with rows representing the vectors to be multiplied by the ``φ`` functions
-
-Optional arguments:
-  - `tol`      - the convergence tolerance required (default: 1e-7)
-  - `mmin`, `mmax` - let the Krylov size vary between mmin and mmax (default: 10, 128)
-  - `m`        - an estimate of the appropriate Krylov size (default: mmin)
-  - `iop`      - length of incomplete orthogonalization procedure (default: 2)
-  - `task1`     - if true, divide the result by 1/T**p
-
-Returns:
-  - `w`      - the linear combination of the ``φ`` functions evaluated at ``tA`` acting on the vectors from ``u``
-  - `stats[0]` - number of substeps
-  - `stats[1]` - number of rejected steps
-  - `stats[2]` - number of Krylov steps
-  - `stats[3]` - number of matrix exponentials
-  - `stats[4]` - Error estimate
-  - `stats[5]` - the Krylov size of the last substep
-
-`n` is the size of the original problem
-`p` is the highest index of the ``φ`` functions
-
-References:
-* Gaudreault, S., Rainwater, G. and Tokman, M., 2018. KIOPS: A fast adaptive Krylov subspace solver for exponential integrators. Journal of Computational Physics. Based on the PHIPM and EXPMVP codes (http://www1.maths.leeds.ac.uk/~jitse/software.html). https://gitlab.com/stephane.gaudreault/kiops.
-* Niesen, J. and Wright, W.M., 2011. A Krylov subspace method for option pricing. SSRN 1799124
-* Niesen, J. and Wright, W.M., 2012. Algorithm 919: A Krylov subspace algorithm for evaluating the ``φ``-functions appearing in exponential integrators. ACM Transactions on Mathematical Software (TOMS), 38(3), p.22
-[4] Thomas, S., Carson, E., Rozlonik, M., Carr, A., Swirydowicz, K. (2022). Post-Modern GMRES. No. 7734. EasyChair, 2022.
-"""
-def kiops(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 2, task1 = False):
+def kiops(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, task1 = False):
 
    ppo, n = u.shape
    p = ppo - 1
@@ -83,7 +36,6 @@ def kiops(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 2,
    happy   = False
    j       = 0
    conv    = 0.0
-   reg_comm = 0
 
    numSteps = len(τ_out)
 
@@ -163,48 +115,49 @@ def kiops(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 2,
          V[j, -1     ] = 0.0
 
          #2. compute terms needed for R and T
-         temp = V[0:j+1, 0:n].dot(numpy.transpose(V[j-1:j+1, 0:n]))
-         global_temp_vec = mpi4py.MPI.COMM_WORLD.allreduce(temp)
-         global_temp_vec += V[0:j+1, n:n+p].dot(numpy.transpose(V[j-1:j+1, n:n+p]))
+         local_vec = V[0:j+1, 0:n] @ V[j-1:j+1, 0:n].T
+         global_vec = numpy.empty_like(local_vec)
+         mpi4py.MPI.COMM_WORLD.Allreduce([local_vec, mpi4py.MPI.DOUBLE], [global_vec, mpi4py.MPI.DOUBLE])
+         global_vec += V[0:j+1, n:n+p] @ V[j-1:j+1, n:n+p].T
 
          #3. set values for Hessenberg matrix H
-         H[0:j, j-1] = global_temp_vec[0:j,1]
+         H[0:j, j-1] = global_vec[0:j,1]
 
          #4. Procection of 2-step Gauss-Sidel to the orthogonal complement
          # Note: this is done in two steps. (1) matvec and (2) a lower
          # triangular solve
          # 4a. here we set the values for matrix M, Minv, N
          if (j > 1):
-           M[j-1, 0:j-1]    =  global_temp_vec[0:j-1,0]
-           N[0:j-1, j-1]    = -global_temp_vec[0:j-1,0]
-           Minv[j-1, 0:j-1] = -Minv[0:j-1, 0:j-1].dot(global_temp_vec[0:j-1,0])
+           M[j-1, 0:j-1]    =  global_vec[0:j-1,0]
+           N[0:j-1, j-1]    = -global_vec[0:j-1,0]
+           Minv[j-1, 0:j-1] = -Minv[0:j-1, 0:j-1] @ global_vec[0:j-1,0]
 
          #4b. part 1: the mat-vec
-         temp_rhs = numpy.eye(j) + numpy.matmul(N[0:j, 0:j], Minv[0:j,0:j])
-         temp_rhs = temp_rhs.dot(global_temp_vec[0:j,1])
+         rhs = ( numpy.eye(j) + numpy.matmul(N[0:j, 0:j], Minv[0:j,0:j]) ) @ global_vec[0:j,1]
 
          #4c. part 2: the lower triangular solve
-         sol = scipy.linalg.solve_triangular(M[0:j, 0:j], temp_rhs, unit_diagonal=True)
+         sol = scipy.linalg.solve_triangular(M[0:j, 0:j], rhs, unit_diagonal=True, check_finite=False, overwrite_b=True)
 
          #5. Orthogonalize
-         V[j, :] -= sol.dot(V[0:j, :])
+         V[j, :] -= sol @ V[0:j, :]
 
          #7. compute norm estimate
-         sum_sqrd = sum(global_temp_vec[0:j,1]**2)
-         if (global_temp_vec[-1,1] < sum_sqrd):
-           #use communication to compute norm estimate
-           reg_comm += 1
-           local_sum = V[j, 0:n] @ V[j, 0:n]
-           curr_nrm = numpy.sqrt(mpi4py.MPI.COMM_WORLD.allreduce(local_sum) + V[j,n:n+p] @ V[j, n:n+p])
+         sum_sqrd = sum(global_vec[0:j,1]**2)
+         if (global_vec[-1,1] < sum_sqrd):
+            #use communication to compute norm estimate
+            local_sum = V[j, 0:n] @ V[j, 0:n]
+            global_sum_nrm = numpy.empty_like(local_sum)
+            mpi4py.MPI.COMM_WORLD.Allreduce([local_sum, mpi4py.MPI.DOUBLE], [global_sum_nrm, mpi4py.MPI.DOUBLE])
+            curr_nrm = math.sqrt( global_sum_nrm + V[j,n:n+p] @ V[j, n:n+p] )
          else:
-           curr_nrm = numpy.sqrt(global_temp_vec[-1,1] - sum_sqrd)
+           curr_nrm = numpy.sqrt(global_vec[-1,1] - sum_sqrd)
 
          # Happy breakdown
          if curr_nrm < tol:
             happy = True
             break
 
-         #normalize vector and set norm to H matrix
+         # Normalize vector and set norm to H matrix
          V[j,:] /= curr_nrm
          H[j,j-1] = curr_nrm
 
