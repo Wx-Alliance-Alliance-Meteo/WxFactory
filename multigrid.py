@@ -1,15 +1,16 @@
 import functools
-import math
 import numpy
+import scipy
 
 from copy import deepcopy
 from time import time
 
+import linsol
 from cubed_sphere  import cubed_sphere
 from definitions   import idx_h, idx_hu1, idx_hu2, gravity, idx_rho_w
 from initialize    import initialize_euler, initialize_sw
 from interpolation import interpolator
-from linsol        import fgmres, global_norm
+from kiops         import kiops
 from matrices      import DFR_operators
 from matvec        import matvec_rat
 from metric        import Metric
@@ -17,38 +18,6 @@ from rhs_euler     import rhs_euler
 # from rhs_euler_fv  import rhs_euler_fv
 from rhs_sw        import rhs_sw
 from sgs_precond   import SymmetricGaussSeidel
-
-def explicit_euler_smoothe(x, b, A, dt):
-   if x is None:
-      result = dt * b
-   else:
-      result = x + dt * (b - A(x))
-   return result
-
-def runge_kutta_stable_smoothe(x, b, A, dt, P=lambda v:v):
-   alpha1 = 0.145
-   alpha2 = 0.395
-   t0 = time()
-   if x is None:
-      # res0 = b
-      s1 = alpha1 * dt * P(b)
-      s2 = alpha2 * dt * P(b - A(s1))
-      x  = dt * P(b - A(s2))
-   else:
-      # res0 = b - A(x)
-      s1 = x + alpha1 * dt * P(b - A(x))
-      s2 = x + alpha2 * dt * P(b - A(s1))
-      x = x + dt * P(b - A(s2))
-
-   t1 = time()
-   # print(f'Smoothed in {t1-t0:.2f} s')
-
-   # res1 = b - A(x)
-   # n0 = numpy.linalg.norm(res0)
-   # n1 = numpy.linalg.norm(res1)
-   # print(f'res before {n0:.2e}, after {n1:.2e}, diff {(n0 - n1)/n0:.2e}')
-
-   return x
 
 
 class MultigridLevel:
@@ -67,6 +36,9 @@ class MultigridLevel:
       self.cfl   = cfl
       self.ptopo = ptopo
 
+      self.num_pre_smoothe = self.param.num_pre_smoothe
+      self.num_post_smoothe = self.param.num_post_smoothe
+
       print(
          f'Grid level! nb_elem_horiz = {nb_elem_horiz}, nb_elem_vert = {nb_elem_vert} '
          f' discr = {discretization}, source order = {source_order}, target order = {target_order}, nbsolpts = {p.nbsolpts}'
@@ -75,7 +47,7 @@ class MultigridLevel:
 
       # Initialize problem for this level
       self.geometry = cubed_sphere(p.nb_elements_horizontal, p.nb_elements_vertical, p.nbsolpts, p.λ0, p.ϕ0, p.α0, p.ztop, ptopo, p)
-      operators     = DFR_operators(self.geometry, p)
+      operators     = DFR_operators(self.geometry, p.filter_apply, p.filter_order, p.filter_cutoff)
       self.metric   = Metric(self.geometry)
 
       if self.param.equations == 'Euler':
@@ -87,8 +59,8 @@ class MultigridLevel:
       elif self.param.equations == 'shallow_water':
          self.ndim = 2
          field, topo = initialize_sw(self.geometry, self.metric, operators, p)
-         self.rhs_operator = functools.partial(rhs, geom=self.geometry, mtrx=operators, metric=self.metric, topo=topo,
-            ptopo=ptopo, nbsolpts=p.nbsolpts, nb_elements_horiz=p.nb_elements_horizontal, case_number=p.case_number)
+         self.rhs_operator = functools.partial(rhs, geom=self.geometry, mtrx=operators, metric=self.metric, topo=None,
+            ptopo=ptopo, nbsolpts=p.nbsolpts, nb_elements_hori=p.nb_elements_horizontal)
 
       print(f'field shape: {field.shape}')
       self.shape = field.shape
@@ -184,7 +156,9 @@ class MultigridLevel:
 
       elem_size_h = numpy.sqrt(numpy.minimum(self.dx, self.dy))
       ratio_h = elem_size_h / vel
-      ratio_v = self.dz.min() / v3
+      ratio_v = ratio_h
+      if self.ndim == 3:
+         ratio_v = self.dz.min() / v3 if self.ndim >= 3 else ratio
 
       # print(f'ratio_h: \n{ratio_h}')
       # print(f'ratio_v: \n{ratio_v}')
@@ -208,22 +182,24 @@ class MultigridLevel:
    def prepare(self, dt, field, matvec):
       self.matrix_operator = lambda vec, mat=matvec, dt=dt, f=field, rhs=self.rhs_operator(field), rhs_handle=self.rhs_operator : mat(numpy.ravel(vec), dt, f, rhs, rhs_handle)
       self.compute_pseudo_dt(dt, field)
-      if self.param.discretization == 'fv':
-         # a = sgs_precond()
-         if self.param.mg_smoother in ['erk', 'irk']:
-            self.smoother_precond = lambda v: v
-            if self.param.mg_smoother == 'irk':
-               # self.smoother_precond = functools.partial(sgs_precond, Q_0=field, metric=self.metric, pseudo_dt=self.pseudo_dt[0], ptopo=self.ptopo, geom=self.geometry)
-               self.smoother_precond = SymmetricGaussSeidel(field, self.metric, self.pseudo_dt[0], self.ptopo, self.geometry, self.param.sgs_eta)
-               self.smoothe = functools.partial(runge_kutta_stable_smoothe, A=self.matrix_operator, dt=numpy.ravel(self.pseudo_dt), P=self.smoother_precond)
-            else:
-               self.smoothe = functools.partial(runge_kutta_stable_smoothe, A=self.matrix_operator, dt=numpy.ravel(self.pseudo_dt))
-      else:
+
+      if self.param.mg_smoother == 'erk':
          self.smoothe = functools.partial(runge_kutta_stable_smoothe, A=self.matrix_operator, dt=numpy.ravel(self.pseudo_dt))
+
+      elif self.param.mg_smoother == 'irk':
+         if self.param.discretization != 'fv': raise ValueError(f'Can only use the irk smoother with the finite volume discretization')
+         self.smoother_precond = SymmetricGaussSeidel(field, self.metric, self.pseudo_dt[0], self.ptopo, self.geometry, self.param.sgs_eta)
+         self.smoothe = functools.partial(runge_kutta_stable_smoothe, A=self.matrix_operator, dt=numpy.ravel(self.pseudo_dt), P=self.smoother_precond)
+
+      elif self.param.mg_smoother == 'kiops':
+         self.smoothe = functools.partial(kiops_smoothe, A=self.matrix_operator, real_dt=dt)
+
+      else:
+         raise ValueError(f'Unsupported smoother for MG: {self.param.mg_smoother}')
+
       return self.restrict(field)
 
 class Multigrid:
-
    def __init__(self, param, ptopo, discretization) -> None:
 
       self.max_level = param.initial_nbsolpts
@@ -250,8 +226,6 @@ class Multigrid:
 
       self.matvec = matvec_rat
       self.use_solver = (param.mg_smoothe_only <= 0)
-      self.num_pre_smoothe = param.num_pre_smoothe
-      self.num_post_smoothe = param.num_post_smoothe
       self.cfl = param.pseudo_cfl
 
       self.levels = {}
@@ -285,15 +259,20 @@ class Multigrid:
          next_field = self.levels[order].prepare(dt, next_field, self.matvec)
          order = self.next_level(order)
 
+   ############
+   # Call MG
    def __call__(self, vec):
       return self.apply(vec)
 
    def apply(self, vec):
       param = self.levels[self.max_level].param
       coarsest_level = param.coarsest_mg_order
-      return self.iterate(vec, coarsest_level=coarsest_level)
+      return self.iterate(vec, coarsest_level=coarsest_level, verbose=False)
 
-   def iterate(self, b, x0=None, level=-1, coarsest_level=1, gamma=1, verbose=False):
+###############
+# The algorithm
+
+   def iterate(self, b, x0=None, level=None, coarsest_level=1, gamma=1, verbose=False):
       """
       Do one pass of the multigrid algorithm.
 
@@ -304,53 +283,65 @@ class Multigrid:
       gamma     -- (optional) How many passes to do at the next grid level
       """
 
-      if level < 0: level = self.max_level
+      if level is None:
+         level = self.max_level
+
       level_work = 0.0
 
-      if verbose:
-         print(f'MG level {level}')
-
       x = x0  # Initial guess can be None
-
-      lvl_param = self.levels[level]
-      A         = lvl_param.matrix_operator
-      smoothe   = lvl_param.smoothe
-      restrict  = lvl_param.restrict
-      prolong   = lvl_param.prolong
-      dt        = numpy.ravel(lvl_param.pseudo_dt)
-
-      # Pre smoothing
-      # x = smoothe(A, b, x0, dt, self.num_pre_smoothe, first_zero=in_first_zero)
-      for _ in range(self.num_pre_smoothe):
-         x = smoothe(x, b)
 
       # Avoid having "None" in the solution from now on
       if x is None:
          x = numpy.zeros_like(b)
 
-      # level_work += lvl_param.smoother_work_unit * self.num_pre_smoothe * lvl_param.work_ratio
+      lvl_param = self.levels[level]
+      A               = lvl_param.matrix_operator
+      smoothe         = lvl_param.smoothe
+      restrict        = lvl_param.restrict
+      prolong         = lvl_param.prolong
+      dt              = numpy.ravel(lvl_param.pseudo_dt)
 
-      if level > coarsest_level:                      # Go down a level and solve that
-         residual = numpy.ravel(restrict(b - A(x)))   # Compute the (restricted) residual of the current grid level system
-         v = numpy.zeros_like(residual)               # A guess of the next solution (0 is pretty good, that's what we're aiming for)
-         first_zero = True
+      if verbose:
+         print(f'Residual at level {level}, : {linsol.global_norm(b.flatten() - (A(x.flatten()))):.4e}')
+
+      # Pre smoothing
+      for _ in range(lvl_param.num_pre_smoothe):
+         x = smoothe(x, b)
+         if verbose: print(f'   Presmooth  : {linsol.global_norm(b.flatten() - (A(x.flatten()))):.4e}')
+
+      # level_work += lvl_param.smoother_work_unit * lvl_param.num_pre_smoothe * lvl_param.work_ratio
+
+      if level > coarsest_level:
+
+         # Residual at the current grid level, and its corresponding correction
+         residual   = numpy.ravel(restrict(b - A(x)))
+         correction = numpy.zeros_like(residual)
+
          for _ in range(gamma):
-            v = self.iterate(residual, v, self.next_level(level), coarsest_level=coarsest_level, gamma=gamma)  # MG pass on next lower level
-            first_zero = False
+            correction = self.iterate(residual, correction, self.next_level(level), coarsest_level=coarsest_level, gamma=gamma, verbose=verbose)  # MG pass on next lower level
             # level_work += work
-         x = x + numpy.ravel(prolong(v))              # Correction
+
+         x = x + numpy.ravel(prolong(correction))
+
       else:
          # Just directly solve the problem
          # That's no very good, we should not use FGMRES to precondition FGMRES...
          if self.use_solver:
-            x, _, num_iter, _, _ = fgmres(A, b, x0=x, tol=1e-5)
+            x, _, num_iter, _, _ = linsol.fgmres(A, b, x0=x, tol=1e-5)
             # level_work += num_iter * lvl_param.work_ratio
       
       # Post smoothing
-      # x = smoothe(A, b, x, dt, self.num_post_smoothe)
-      for _ in range(self.num_post_smoothe):
+      for _ in range(lvl_param.num_post_smoothe):
          x = smoothe(x, b)
-      # level_work += self.num_post_smoothe * lvl_param.smoother_work_unit * lvl_param.work_ratio
+         if verbose: print(f'   Postsmooth : {linsol.global_norm(b.flatten() - (A(x.flatten()))):.4e}')
+
+      # level_work += lvl_param.num_post_smoothe * lvl_param.smoother_work_unit * lvl_param.work_ratio
+
+      if verbose: print(f'retour {level}: {linsol.global_norm(b.flatten() - (A(x.flatten())))}')
+
+      if verbose is True and level == self.max_level:
+         print('End multigrid')
+         print(' ')
 
       return x #, level_work
 
@@ -427,3 +418,61 @@ class Multigrid:
       flag = 0
       if num_it >= max_num_it: flag = -1
       return x, norm_r / norm_b, num_it, flag, residuals
+
+######################
+# Smoothers
+######################
+
+def kiops_smoothe(x, b, A, real_dt):
+
+   def residual(t, xx):
+      return (b - A(xx))/real_dt
+
+   n = x.size
+   vec = numpy.zeros((2, n))
+
+   pseudo_dt = 1.1 * real_dt   # TODO : wild guess
+
+   J = lambda v: -A(v) * pseudo_dt / real_dt
+
+   R = residual(0, x)
+   vec[1,:] = R.flatten()
+
+   phiv, stats = kiops([1], J, vec, tol=1e-6, m_init=10, mmin=10, mmax=64, task1=False)
+
+#      print('norm phiv', linsol.global_norm(phiv.flatten()))
+#      print(f'KIOPS converged at iteration {stats[2]} (using {stats[0]} internal substeps)'
+#               f' to a solution with local error {stats[4]:.2e}')
+   return x + phiv.flatten() * pseudo_dt
+
+def explicit_euler_smoothe(x, b, A, dt):
+   if x is None:
+      result = dt * b
+   else:
+      result = x + dt * (b - A(x))
+   return result
+
+def runge_kutta_stable_smoothe(x, b, A, dt, P=lambda v:v):
+   alpha1 = 0.145
+   alpha2 = 0.395
+   t0 = time()
+   if x is None:
+      # res0 = b
+      s1 = alpha1 * dt * P(b)
+      s2 = alpha2 * dt * P(b - A(s1))
+      x  = dt * P(b - A(s2))
+   else:
+      # res0 = b - A(x)
+      s1 = x + alpha1 * dt * P(b - A(x))
+      s2 = x + alpha2 * dt * P(b - A(s1))
+      x = x + dt * P(b - A(s2))
+
+   t1 = time()
+   # print(f'Smoothed in {t1-t0:.2f} s')
+
+   # res1 = b - A(x)
+   # n0 = numpy.linalg.norm(res0)
+   # n1 = numpy.linalg.norm(res1)
+   # print(f'res before {n0:.2e}, after {n1:.2e}, diff {(n0 - n1)/n0:.2e}')
+
+   return x

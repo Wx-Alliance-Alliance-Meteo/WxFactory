@@ -5,13 +5,13 @@ from collections import deque
 from time        import time
 
 from matvec          import matvec_fun, matvec_rat
+from exode           import exode
 from kiops           import kiops
 from linsol          import fgmres
 from multigrid       import Multigrid
 from output_residual import write_output
 from phi             import phi_ark
 from timer           import Timer
-from finite_volume   import FiniteVolume
 
 class Epirk4s3a:
    g21 = 1/2
@@ -82,11 +82,12 @@ class Epirk4s3a:
       return Q + numpy.reshape(phiv, Q.shape)
 
 class Epi:
-   def __init__(self, order, rhs, tol, krylov_size, jacobian_method='complex', init_method=None, init_substeps=1):
+   def __init__(self, order: int, rhs, tol: float, exponential_solver='kiops', jacobian_method='complex', init_method=None, init_substeps: int = 1):
       self.rhs = rhs
       self.tol = tol
-      self.krylov_size = krylov_size
+      self.krylov_size = 1
       self.jacobian_method = jacobian_method
+      self.exponential_solver = exponential_solver
 
       if order == 2:
          self.A = numpy.array([[]])
@@ -124,11 +125,11 @@ class Epi:
          self.init_method = init_method
       else:
          #self.init_method = Epirk4s3a(rhs, tol, krylov_size)
-         self.init_method = Epi(2, rhs, tol, krylov_size)
+         self.init_method = Epi(2, rhs, tol, self.krylov_size)
 
       self.init_substeps = init_substeps
 
-   def step(self, Q, dt):
+   def step(self, Q: numpy.ndarray, dt: float):
       # If dt changes, discard saved value and redo initialization
       if self.dt and abs(self.dt - dt) > 1e-10:
          self.previous_Q = deque()
@@ -162,13 +163,17 @@ class Epi:
             # v_k = Sum_{i=1}^{n_prev} A_{k,i} R(y_{n-i})
             vec[k,:] += alpha * r.flatten()
 
-      phiv, stats = kiops([1], matvec_handle, vec, tol=self.tol, m_init=self.krylov_size, mmin=16, mmax=64,
-                          task1=False)
+      if self.exponential_solver == 'kiops':
+         phiv, stats = kiops([1], matvec_handle, vec, tol=self.tol, m_init=self.krylov_size, mmin=16, mmax=64, task1=False)
 
-      print(f'KIOPS converged at iteration {stats[2]} (using {stats[0]} internal substeps)'
-            f' to a solution with local error {stats[4]:.2e}')
+         print(f'KIOPS converged at iteration {stats[2]} (using {stats[0]} internal substeps)'
+               f' to a solution with local error {stats[4]:.2e}')
 
-      self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
+         self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
+      else:
+         phiv, stats = exode([1], matvec_handle, vec, atol=self.tol, task1=False, verbose=False)
+
+         print(f'EXODE converged using {stats[0]} calls to matvec ({stats[1]} rejected steps)')
 
       # Save values for the next timestep
       if self.n_prev > 0:
@@ -191,12 +196,12 @@ class Tvdrk3:
       return Q
 
 class Rat2:
-   def __init__(self, rhs_handle, tol, preconditioner=None):
+   def __init__(self, rhs_handle, tol: float, preconditioner=None):
       self.rhs_handle     = rhs_handle
       self.tol            = tol
       self.preconditioner = preconditioner
 
-   def step(self, Q, dt):
+   def step(self, Q: numpy.ndarray, dt: float):
       
       rhs    = self.rhs_handle(Q)
       Q_flat = Q.flatten()
@@ -208,25 +213,22 @@ class Rat2:
       if self.preconditioner is not None:
          self.preconditioner.prepare(dt, Q)
 
-      # TODO : gcro
       t0 = time()
-      Qnew, local_error, nb_iter, flag, residuals = fgmres(A, b, x0=Q_flat, tol=self.tol, preconditioner=self.preconditioner, verbose=True)
+      Qnew, local_error, num_iter, flag, residuals = fgmres(A, b, x0=Q_flat, tol=self.tol, preconditioner=self.preconditioner, verbose=False)
       t1 = time()
 
-      write_output(nb_iter, t1 - t0, flag, residuals)
+      write_output(num_iter, t1 - t0, flag, residuals)
 
       t2 = time()
-      Qnew_noprecond, _, num_iter_noprecond, _, _ = fgmres(A, b, x0=Qnew, tol=self.tol, preconditioner=None, verbose=True)
+      Qnew_noprecond, _, num_iter_noprecond, _, _ = fgmres(A, b, x0=Qnew, tol=self.tol, preconditioner=None, verbose=False)
       if num_iter_noprecond > 1:
          raise ValueError(f'Comparison failed!')
       t3 = time()
 
       if flag == 0:
-         print(f'FGMRES converged at iteration {nb_iter} in {t1 - t0:4.1f} s to a solution with local error {local_error : .2e}')
+         print(f'FGMRES converged at iteration {num_iter} in {t1 - t0:4.1f} s to a solution with relative local error {local_error : .2e}')
       else:
-         print(f'FGMRES stagnation/interruption at iteration {nb_iter} in {t1 - t0:4.1f} s, returning a solution with local error {local_error: .2e}')
-
-      # gmres_sol, gmres_res, num_gmres_it, gmres_flag, res = fgmres(matvec_handle, rhs, x0=phiv, tol=self.tol, preconditioner=None, restart=20, maxiter=1200//20)
+         print(f'FGMRES stagnation/interruption at iteration {num_iter} in {t1 - t0:4.1f} s, returning a solution with relative local error {local_error: .2e}')
 
       return numpy.reshape(Qnew, Q.shape)
 

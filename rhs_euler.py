@@ -2,24 +2,17 @@ import numpy
 
 from definitions import idx_rho_u1, idx_rho_u2, idx_rho_w, idx_rho, idx_rho_theta, gravity, p0, Rd, cpd, cvd, heat_capacity_ratio
 
-# TODO : restructurer, réviser les paramètres
-def rhs_euler(Q, geom, mtrx, metric, topo, ptopo, nbsolpts: int, nb_elements_hori: int, nb_elements_vert: int, case_number: int):
+def rhs_euler (Q: numpy.ndarray, geom, mtrx, metric, topo, ptopo, nbsolpts: int, nb_elements_hori: int, nb_elements_vert: int, case_number: int):
 
    type_vec = Q.dtype
    nb_equations = Q.shape[0]
-   idx_first_tracer = 5
-
-   advection_only = case_number < 13
-
    nb_interfaces_hori = nb_elements_hori + 1
    nb_interfaces_vert = nb_elements_vert + 1
    nb_pts_hori = nb_elements_hori * nbsolpts
    nb_vertical_levels = nb_elements_vert * nbsolpts
 
-   df1_dx1 = numpy.empty_like(Q, dtype=type_vec)
-   df2_dx2 = numpy.empty_like(Q, dtype=type_vec)
-   df3_dx3 = numpy.empty_like(Q, dtype=type_vec)
-   rhs     = numpy.empty_like(Q, dtype=type_vec)
+   df1_dx1, df2_dx2, df3_dx3, rhs = [numpy.empty_like(Q, dtype=type_vec) for _ in range(4)]
+
    forcing = numpy.zeros_like(Q, dtype=type_vec)
 
    variables_itf_i = numpy.ones((nb_equations, nb_vertical_levels, nb_elements_hori + 2, 2, nb_pts_hori), dtype=type_vec) # Initialized to one in the halo to avoid division by zero later
@@ -31,13 +24,15 @@ def rhs_euler(Q, geom, mtrx, metric, topo, ptopo, nbsolpts: int, nb_elements_hor
    variables_itf_k = numpy.empty((nb_equations, nb_pts_hori, nb_elements_vert + 2, 2, nb_pts_hori), dtype=type_vec)
    flux_x3_itf_k   = numpy.empty((nb_equations, nb_pts_hori, nb_elements_vert + 2, 2, nb_pts_hori), dtype=type_vec)
 
+   advection_only = case_number < 13
+
    # Offset due to the halo
    offset = 1
 
    # Interpolate to the element interface
    for elem in range(nb_elements_hori):
       epais = elem * nbsolpts + numpy.arange(nbsolpts)
-      pos = elem + offset
+      pos   = elem + offset
 
       # --- Direction x1
       variables_itf_i[:, :, pos, 0, :] = Q[:, :, :, epais] @ mtrx.extrap_west
@@ -66,15 +61,15 @@ def rhs_euler(Q, geom, mtrx, metric, topo, ptopo, nbsolpts: int, nb_elements_hor
 
    flux_x1[idx_rho_u1] += metric.sqrtG * metric.H_contra_11 * pressure
    flux_x1[idx_rho_u2] += metric.sqrtG * metric.H_contra_12 * pressure
-   flux_x1[idx_rho_w] += metric.sqrtG * metric.H_contra_13 * pressure
+   flux_x1[idx_rho_w]  += metric.sqrtG * metric.H_contra_13 * pressure
 
    flux_x2[idx_rho_u1] += metric.sqrtG * metric.H_contra_21 * pressure
    flux_x2[idx_rho_u2] += metric.sqrtG * metric.H_contra_22 * pressure
-   flux_x2[idx_rho_w] += metric.sqrtG * metric.H_contra_23 * pressure
+   flux_x2[idx_rho_w]  += metric.sqrtG * metric.H_contra_23 * pressure
 
    flux_x3[idx_rho_u1] += metric.sqrtG * metric.H_contra_31 * pressure
    flux_x3[idx_rho_u2] += metric.sqrtG * metric.H_contra_32 * pressure
-   flux_x3[idx_rho_w] += metric.sqrtG * metric.H_contra_33 * pressure
+   flux_x3[idx_rho_w]  += metric.sqrtG * metric.H_contra_33 * pressure
 
    # Interior contribution to the derivatives, corrections for the boundaries will be added later
    for elem in range(nb_elements_hori):
@@ -288,19 +283,5 @@ def rhs_euler(Q, geom, mtrx, metric, topo, ptopo, nbsolpts: int, nb_elements_hor
       rhs[idx_rho_u2]    = 0.0
       rhs[idx_rho_w]     = 0.0
       rhs[idx_rho_theta] = 0.0
-
-#   print(abs(numpy.max(  rhs[idx_rho] )))
-#   print(abs(numpy.max(  rhs[idx_rho_u1] )))
-#   print(abs(numpy.max(  rhs[idx_rho_u2] )))
-#   print(abs(numpy.max(  rhs[idx_rho_w] )))
-#   print(abs(numpy.max(  rhs[idx_rho_theta] )))
-#   print('----------')
-#   exit(0)
-
-#   rhs[idx_rho]       = 0.0
-#   rhs[idx_rho_u1]    = 0.0
-#   rhs[idx_rho_u2]    = 0.0
-#   rhs[idx_rho_w]     = 0.0
-#   rhs[idx_rho_theta] = 0.0
 
    return rhs

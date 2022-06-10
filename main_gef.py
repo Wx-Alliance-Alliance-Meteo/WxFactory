@@ -53,7 +53,7 @@ def main(args) -> int:
    geom = cubed_sphere(param.nb_elements_horizontal, param.nb_elements_vertical, param.nbsolpts, param.λ0, param.ϕ0, param.α0, param.ztop, ptopo, param)
 
    # Build differentiation matrice and boundary correction
-   mtrx = DFR_operators(geom, param)
+   mtrx = DFR_operators(geom, param.filter_apply, param.filter_order, param.filter_cutoff)
 
    # Initialize metric tensor
    metric = Metric(geom)
@@ -86,7 +86,7 @@ def main(args) -> int:
    if param.time_integrator.lower()[:3] == 'epi' and param.time_integrator[3:].isdigit():
       order = int(param.time_integrator[3:])
       print(f'Running with EPI{order}')
-      stepper = Epi(order, rhs_handle, param.tolerance, param.krylov_size, jacobian_method=param.jacobian_method, init_substeps=10)
+      stepper = Epi(order, rhs_handle, param.tolerance, param.exponential_solver, jacobian_method=param.jacobian_method, init_substeps=10)
    elif param.time_integrator.lower() == 'epirk4s3a':
       stepper = Epirk4s3a(rhs_handle, param.tolerance, param.krylov_size)
    elif param.time_integrator.lower() == 'tvdrk3':

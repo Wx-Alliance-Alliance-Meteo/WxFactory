@@ -29,6 +29,11 @@ class Configuration:
       self.tolerance       = parser.getfloat('Time_integration', 'tolerance')
 
       try:
+         self.exponential_solver = parser.get('Time_integration', 'exponential_solver')
+      except (NoOptionError,NoSectionError):
+         self.exponential_solver = 'kiops'
+
+      try:
          self.krylov_size = parser.getint('Time_integration', 'krylov_size')
       except (NoOptionError,NoSectionError):
          self.krylov_size = 1
@@ -143,7 +148,7 @@ class Configuration:
       except (NoOptionError, NoSectionError):
          self.num_post_smoothe = 1
 
-      self.possible_smoothers = ['erk', 'irk']
+      self.possible_smoothers = ['erk', 'kiops', 'irk']
       try:
          self.mg_smoother = parser.get('Preconditioning', 'mg_smoother')
          if not self.mg_smoother in self.possible_smoothers:
