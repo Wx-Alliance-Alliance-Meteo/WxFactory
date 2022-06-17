@@ -85,8 +85,9 @@ class cubed_sphere:
 
       # Gauss-Legendre solution points
       solutionPoints_sym, solutionPoints, glweights = quadrature.gauss_legendre(nbsolpts)
-      print(f'Solution points : {solutionPoints}')
-      print(f'GL weights : {glweights}')
+      if (ptopo.rank == 0):
+         print(f'Solution points : {solutionPoints}')
+         print(f'GL weights : {glweights}')
 
       # Extend the solution points to include -1 and 1
       extension = numpy.append(numpy.append([-1], solutionPoints), [1])

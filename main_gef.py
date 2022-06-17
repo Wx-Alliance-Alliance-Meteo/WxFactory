@@ -43,6 +43,7 @@ def main(args) -> int:
    # Initialize state variables
    if param.equations == "Euler":
       Q, topo = initialize_euler(geom, metric, mtrx, param)
+      # Q: dimensions [5,nk,nj,ni], order ρ, u, v, w, θ
       rhs_handle = lambda q: rhs_euler(q, geom, mtrx, metric, topo, ptopo, param.nbsolpts, param.nb_elements_horizontal,
             param.nb_elements_vertical, param.case_number)
    else: # Shallow water
@@ -60,7 +61,7 @@ def main(args) -> int:
       stepper = EpiStiff(order, rhs_handle, param.tolerance, param.exponential_solver, jacobian_method=param.jacobian_method, init_substeps=10)
    elif param.time_integrator.lower()[:3] == 'epi' and param.time_integrator[3:].isdigit():
       order = int(param.time_integrator[3:])
-      print(f'Running with EPI{order}')
+      if (ptopo.rank == 0): print(f'Running with EPI{order}')
       stepper = Epi(order, rhs_handle, param.tolerance, param.exponential_solver, jacobian_method=param.jacobian_method, init_substeps=10)
    elif param.time_integrator.lower()[:5] == 'srerk' and param.time_integrator[5:].isdigit():
       order = int(param.time_integrator[5:])
@@ -92,13 +93,13 @@ def main(args) -> int:
          t += param.dt
 
       step += 1
-      print('\nStep', step, 'of', nb_steps)
+      if (ptopo.rank == 0): print('\nStep', step, 'of', nb_steps)
 
       tic = time()
       Q = stepper.step(Q, param.dt)
 
       time_step = time() - tic
-      print('Elapsed time for step: %0.3f secs' % time_step)
+      if (ptopo.rank == 0): print('Elapsed time for step: %0.3f secs' % time_step)
 
       # Overwrite winds for some DCMIP tests
       if param.case_number == 11:
@@ -119,7 +120,7 @@ def main(args) -> int:
       # Plot solution
       if param.output_freq > 0:
          if step % param.output_freq == 0:
-            print('=> Writing dynamic output for step', step)
+            if (ptopo.rank == 0): print('=> Writing dynamic output for step', step)
             output_netcdf(Q, geom, metric, mtrx, topo, step, param)
 
    if param.output_freq > 0:

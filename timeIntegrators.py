@@ -9,6 +9,7 @@ from matvec        import matvec_fun, matvec_rat
 from kiops         import kiops
 from pmex          import pmex
 from timer         import Timer
+import mpi4py.MPI
 
 # Computes the coefficients for stiffness resilient exponential methods based on node values c
 def alpha_coeff(c):
@@ -174,6 +175,7 @@ class Epi:
 
    def step(self, Q: numpy.ndarray, dt: float):
       # If dt changes, discard saved value and redo initialization
+      mpirank = mpi4py.MPI.COMM_WORLD.Get_rank()
       if self.dt and abs(self.dt - dt) > 1e-10:
          self.previous_Q = deque()
          self.previous_rhs = deque()
@@ -209,15 +211,18 @@ class Epi:
       if self.exponential_solver == 'pmex':
          phiv, stats = pmex([1.], matvec_handle, vec, tol=self.tol, mmax=64, task1=False)
 
-         print(f'PMEX converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)'
-               f' to a solution with local error {stats[4]:.2e}')
+         if (mpirank == 0):
+            print(f'PMEX converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)'
+                  f' to a solution with local error {stats[4]:.2e}')
+
       else:
          phiv, stats = kiops([1], matvec_handle, vec, tol=self.tol, m_init=self.krylov_size, mmin=16, mmax=64, task1=False)
 
          self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
 
-         print(f'KIOPS converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)'
-               f' to a solution with local error {stats[4]:.2e}')
+         if (mpirank == 0):
+            print(f'KIOPS converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)'
+                  f' to a solution with local error {stats[4]:.2e}')
 
       # Save values for the next timestep
       if self.n_prev > 0:
@@ -257,6 +262,8 @@ class EpiStiff:
       self.init_substeps = init_substeps
 
    def step(self, Q: numpy.ndarray, dt: float):
+      mpirank = mpi4py.MPI.COMM_WORLD.Get_rank()
+      
       # If dt changes, discard saved value and redo initialization
       if self.dt and abs(self.dt - dt) > 1e-10:
          self.previous_Q = deque()
@@ -294,16 +301,18 @@ class EpiStiff:
 
          phiv, stats = pmex([1.], matvec_handle, vec, tol=self.tol, mmax=64, task1=False)
 
-         print(f'PMEX converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)'
-               f' to a solution with local error {stats[4]:.2e}')
+         if (mpirank == 0):
+            print(f'PMEX converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)'
+                  f' to a solution with local error {stats[4]:.2e}')
 
       else:
          phiv, stats = kiops([1], matvec_handle, vec, tol=self.tol, m_init=self.krylov_size, mmin=16, mmax=64, task1=False)
 
          self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
 
-         print(f'KIOPS converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)'
-               f' to a solution with local error {stats[4]:.2e}')
+         if (mpirank == 0):
+            print(f'KIOPS converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)'
+                  f' to a solution with local error {stats[4]:.2e}')
 
       # Save values for the next timestep
       if self.n_prev > 0:
