@@ -2,9 +2,31 @@ import numpy
 import numpy.linalg
 import math
 import sympy
+import sys
+
+from cubed_sphere import cubed_sphere
 
 class DFR_operators:
-   def __init__(self, grd, filter_apply=False, filter_order=8, filter_cutoff=0.25):
+   def __init__(self, grd: cubed_sphere, filter_apply=False, filter_order=8, filter_cutoff=0.25):
+      '''Initialize the Direct Flux Reconstruction operators
+      
+      This initializes the DFR operators (matrices) based on input grid parameters.  The relevant internal matrices are:
+         * The extrapolation matrices, `extrap_west`, `extrap_east`, `extrap_south`, `extrap_north`, `extrap_down`, and
+           `extrap_up`.
+         *
+
+      Parameters
+      ----------
+      grd : cubed_sphere
+         Underlying grid, which must define `solutionPoints`, `solutionPoints_sym`, `extension`, and `extension_sym` as mmeber variables
+      filter_apply : bool
+         Whether to apply an exponential filter in defininng the differential operators
+      filter_order : int
+         If applied, what order of exponential to use for the filter
+      filter_cutoff : float
+         If applied, at what relative wavenumber (0 < cutoff < 1) to begin applying the filter
+      '''
+      
       self.extrap_west = lagrangeEval(grd.solutionPoints_sym, -1)
       self.extrap_east = lagrangeEval(grd.solutionPoints_sym,  1)
 

@@ -5,16 +5,60 @@ import quadrature
 import definitions
 import sympy
 
-class cubed_sphere:
-   def __init__(self, nb_elements_horizontal:int , nb_elements_vertical: int, nbsolpts: int, λ0: float, ϕ0: float, α0: float, ztop: float, ptopo, param):
+# For type hints
+from parallel import Distributed_World
+from program_options import Configuration
 
-      #      +---+
-      #      | 4 |
-      #  +---+---+---+---+
-      #  | 3 | 0 | 1 | 2 |
-      #  +---+---+---+---+
-      #      | 5 |
-      #      +---+
+class cubed_sphere:
+   def __init__(self, nb_elements_horizontal:int , nb_elements_vertical: int, nbsolpts: int, λ0: float, ϕ0: float, α0: float, ztop: float, ptopo: Distributed_World, param: Configuration):
+      '''Initialized the cubed sphere geometry, for an earthlike sphere with no topography.
+      
+      This function initializes the basic cubed_sphere geometry object, which provides the parameters necessary to define
+      the coodinates in both spherical coordinates and Cartesian space.  These parameters are then used to define the metric
+      object.
+      
+      The cubed-sphere panelization is as follows:
+      ```
+            +---+
+            | 4 |
+        +---+---+---+---+
+        | 3 | 0 | 1 | 2 |
+        +---+---+---+---+
+            | 5 |
+            +---+
+      ```
+      ... where each panel has its own local (x1,x2) coordinate axis.  With typical parameters, panel 0
+      contains the intersection of the prime meridian and equator, the equator runs through panels 3-0-1-2
+      from west to east, panel 4 contains the north pole, and panel 5 contains the south pole.
+      
+      Parameters:
+      -----------
+      nb_elements_horizontal: int
+         Number of elements in the (x1,x2) directions, per panel
+      nb_elements_vertical: int
+         Number of elements in the vertical, between 0 and ztop
+      nbsolpts: int
+         Number of nodal points in each of the (x1,x2,x3) dimensions inside the element
+      λ0: float
+         Grid rotation: physical longitude of the central point of the 0 panel
+         Valid range ]-π/2,0]
+      ϕ0: float
+         Grid rotation: physical latitude of the central point of the 0 panel
+         Valid range ]-π/4,π/4]
+      α0: float
+         Grid rotation: rotation of the central meridian of the 0 panel, relatve to true north
+         Valid range ]-π/2,0]
+      ztop: float
+         Physical height of the model top, in meters.  x3 values will range from 0 to ztop, with
+         the center of the planet located at x3=(-radius_earth).  Note that this parameter is
+         defined prior to any topography mapping.
+      ptopo: Distributed_World
+         Wraps the parameters and helper functions necessary for MPI parallelism.  By assumption,
+         each panel is a separate MPI process.
+      param: Configuration
+         Wraps parameters from the configuration pole that are not otherwise specified in this
+         constructor.      
+      '''
 
       panel_domain_x1 = (-math.pi/4, math.pi/4)
       panel_domain_x2 = (-math.pi/4, math.pi/4)
@@ -73,6 +117,9 @@ class cubed_sphere:
          idx = j * nbsolpts
          x2[idx : idx + nbsolpts] = interfaces_x2[j] + scaled_points * Δx2
 
+      # x3 is η, the generalized vertical coordinate.  With no topography, this vertical coordinate
+      # coincides with height above the surface.  With topography, this coordinate will be mapped
+      # as z(x1,x2,η)
       if ztop > 0:
          nk = nb_elements_x3 * len(solutionPoints)
          x3 = numpy.zeros(nk)
@@ -82,7 +129,6 @@ class cubed_sphere:
       else:
          nk = 1
          x3 = numpy.zeros(nk)
-         X3 = numpy.zeros(nk)
 
       X1, X2 = numpy.meshgrid(x1, x2)
 
