@@ -136,6 +136,11 @@ def global_norm(vec):
    local_sum = vec @ vec
    return math.sqrt( mpi4py.MPI.COMM_WORLD.allreduce(local_sum) )
 
+def global_dotprod(vec1, vec2):
+   """Compute dot product across all PEs"""
+   local_sum = vec1 @ vec2
+   return mpi4py.MPI.COMM_WORLD.allreduce(local_sum)
+
 def apply_givens(Q, v, k):
    """Apply the first k Givens rotations in Q to v.
 

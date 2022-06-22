@@ -1,10 +1,17 @@
-import math
 import numpy
-import mpi4py.MPI
-import sys
+from math import sqrt, copysign
+from warnings import warn
+import logging
+from scipy.integrate._ivp.common import validate_max_step, validate_first_step, warn_extraneous
+from scipy.integrate._ivp.base import OdeSolver, DenseOutput
 
-MIN_FACTOR = 0.2  # Minimum allowed decrease in a step size.
-MAX_FACTOR = 10  # Maximum allowed increase in a step size.
+import math
+import mpi4py.MPI
+import linsol
+
+def limiter(u, kappa):
+   # Step-size ratio limiter. Applies an arctangent limiter parametrized by KAPPA to U.
+   return  1 + kappa * math.atan((u - 1) / kappa)
 
 def norm(x):
    """Compute RMS norm across all PEs."""
@@ -18,29 +25,31 @@ def global_size(x):
    mpi4py.MPI.COMM_WORLD.Allreduce(numpy.array([x.size]), global_sum)
    return global_sum
 
-def validate_tol(rtol, atol, n):
-   """Validate tolerance values."""
-   EPS = numpy.finfo(float).eps
-   if rtol < 100 * EPS:
-      warn("`rtol` is too low, setting to {}".format(100 * EPS))
-      rtol = 100 * EPS
+def validate_tol(rtol, atol, y):
+    """Validate tolerance values. atol can be scalar or array-like, rtol a
+    scalar. The bound values are from RKSuite. These differ from those in
+    scipy. Bounds are applied without warning.
+    """
+    atol = numpy.asarray(atol)
+    if atol.ndim > 0 and atol.shape != (y.size, ):
+        raise ValueError("`atol` has wrong shape.")
+    if numpy.any(atol < 0):
+        raise ValueError("`atol` must be positive.")
+    if not isinstance(rtol, float):
+        raise ValueError("`rtol` must be a float.")
+    if rtol < 0:
+        raise ValueError("`rtol` must be positive.")
 
-   atol = numpy.asarray(atol)
-   if atol.ndim > 0 and atol.shape != (n,):
-      raise ValueError("`atol` has wrong shape.")
+    # atol cannot be exactly zero.
+    # For double precision float: sqrt(tiny) ~ 1.5e-154
+    tiny = numpy.finfo(y.dtype).tiny
+    atol = numpy.maximum(atol, sqrt(tiny))
 
-   if numpy.any(atol < 0):
-      raise ValueError("`atol` must be positive.")
-
-   return rtol, atol
-
-def validate_first_step(first_step, t0, t_bound):
-   """Assert that first_step is valid and return it."""
-   if first_step <= 0:
-      raise ValueError("`first_step` must be positive.")
-   if first_step > numpy.abs(t_bound - t0):
-      raise ValueError("`first_step` exceeds bounds.")
-   return first_step
+    # rtol is bounded from both sides.
+    # The lower bound is lower than in scipy.
+    epsneg = numpy.finfo(y.dtype).epsneg
+    rtol = numpy.minimum(numpy.maximum(rtol, 10 * epsneg), 0.01)
+    return rtol, atol
 
 def select_initial_step(fun, t0, y0, f0, order, rtol, atol):
    """Empirically select a good initial step."""
@@ -66,253 +75,269 @@ def select_initial_step(fun, t0, y0, f0, order, rtol, atol):
 
    return min(100 * h0, h1)
 
-def limiter(u, kappa):
-   # Step-size ratio limiter. Applies an arctangent limiter parametrized by KAPPA to U.
-   return  1 + kappa * math.atan((u - 1) / kappa)
+class RungeKutta(OdeSolver):
+    """
+    Base class for explicit runge kutta methods.
+    """
 
-class RungeKutta:
-   """Base class for explicit Runge-Kutta methods."""
-   C: numpy.ndarray = NotImplemented
-   A: numpy.ndarray = NotImplemented
-   B: numpy.ndarray = NotImplemented
-   E: numpy.ndarray = NotImplemented
-   order: int = NotImplemented
-   error_estimator_order: int = NotImplemented
-   n_stages: int = NotImplemented
+    # effective number of stages
+    n_stages: int = NotImplemented
 
-   def __init__(self, fun, y0, t0:float = 0, t_bound=math.inf, rtol:float = 1e-3, atol:float = 1e-6, first_step=None, nb_step=None, sc_params="H211b", verbose=False):
-      self.nfev = 0
-      def fun_handle(t, y):
-         self.nfev += 1
-         return fun(t, y)
-      self.fun = fun_handle
+    # order of the main method
+    order: int = NotImplemented
 
-      self.nb_step = nb_step
+    # order of the secondary embedded method
+    error_estimator_order: int = NotImplemented
 
-      self.t = t0
-      self.t_bound = t_bound
+    # runge kutta coefficient matrix
+    A: numpy.ndarray = NotImplemented              # shape: [n_stages, n_stages]
 
-      self.y = y0
-      self.n = y0.size
-      self.f = self.fun(self.t, self.y)
+    # output coefficients (weights)
+    B: numpy.ndarray = NotImplemented              # shape: [n_stages]
 
-      self.nb_rejected = 0
+    # time fraction coefficients (nodes)
+    C: numpy.ndarray = NotImplemented              # shape: [n_stages]
 
-      self.status = 'running'
+    # error coefficients (weights Bh - B)
+    E: numpy.ndarray = NotImplemented              # shape: [n_stages + 1]
 
-      self.rtol, self.atol = validate_tol(rtol, atol, self.n)
+    # Parameters for stepsize control, optional
+    sc_params = NotImplemented                     # tuple, or str
 
-      if first_step is None:
-         self.h_abs = select_initial_step(self.fun, self.t, self.y, self.f, self.error_estimator_order, self.rtol, self.atol)
-      else:
-         self.h_abs = validate_first_step(first_step, t0, self.t_bound)
+    def _init_min_step_parameters(self):
+        """Define the parameters h_min_a and h_min_b for the min_step rule:
+            min_step = max(h_min_a * abs(t), h_min_b)
+        from RKSuite.
+        """
 
-      self.error_exponent = -1 / (self.error_estimator_order + 1)
-      self._init_sc_control(sc_params)
+        # minimum difference between distinct C-values
+        cdiff = 1.
+        for c1 in self.C:
+            for c2 in self.C:
+                diff = abs(c1 - c2)
+                if diff:
+                    cdiff = min(cdiff, diff)
+        if cdiff < 1e-3:
+            cdiff = 1e-3
+            logging.warning(
+                'Some C-values of this Runge Kutta method are nearly the '
+                'same but not identical. This limits the minimum stepsize'
+                'You may want to check the implementation of this method.')
 
-      self.K = numpy.empty((self.n_stages + 1, self.n), self.y.dtype)
-      self.FSAL = 1 if self.E[self.n_stages] else 0
-      self.h_previous = None
-      self.y_old = None
+        # determine min_step parameters
+        epsneg = numpy.finfo(self.y.dtype).epsneg
+        tiny = numpy.finfo(self.y.dtype).tiny
+        h_min_a = 10 * epsneg / cdiff
+        h_min_b = sqrt(tiny)
+        return h_min_a, h_min_b
 
-      self.verbose = verbose
-
-   def _init_sc_control(self, sc_params):
-      coefs = {
-            "deadbeat": (1, 0, 0, 0.8),    # elementary controller (I)
+    def _init_sc_control(self, sc_params):
+        coefs = {
+            "deadbeat": (1, 0, 0, 0.9),    # elementary controller (I)
             "PI3040": (0.7, -0.4, 0, 0.8), # PI controller (Gustafsson)
             "PI4020": (0.6, -0.2, 0, 0.8), # PI controller for nonstiff methods
             "H211PI": (1/6, 1/6, 0, 0.8),  # LP filter of PI structure
             "H110": (1/3, 0, 0, 0.8),      # I controller (convolution filter)
             "H211D": (1/2, 1/2, 1/2, 0.8), # LP filter with gain = 1/2
             "H211b": (1/4, 1/4, 1/4, 0.8)  # general purpose LP filter
-      }
+        }
+        if self.sc_params == NotImplemented:
+            # use standard controller if not specified otherwise
+            sc_params = sc_params or "standard"
+        else:
+            # use default controller of method if not specified otherwise
+            sc_params = sc_params or self.sc_params
+        if (isinstance(sc_params, str) and sc_params in coefs):
+            kb1, kb2, a, g = coefs[sc_params]
+        elif isinstance(sc_params, tuple) and len(sc_params) == 4:
+            kb1, kb2, a, g = sc_params
+        else:
+            raise ValueError('invalid sc_params')
 
-      if (isinstance(sc_params, str) and sc_params in coefs):
-         kb1, kb2, a, g = coefs[sc_params]
-      elif isinstance(sc_params, tuple) and len(sc_params) == 4:
-         kb1, kb2, a, g = sc_params
-      else:
-         raise ValueError('Invalid sc_params')
+        # set all parameters
+        self.minbeta1 = kb1 * self.error_exponent
+        self.minbeta2 = kb2 * self.error_exponent
+        self.minalpha = -a
+        self.safety = g
+        self.safety_sc = g ** (kb1 + kb2)
+        self.standard_sc = True                                # for first step
 
-      # set all parameters
-      self.minbeta1 = kb1 * self.error_exponent
-      self.minbeta2 = kb2 * self.error_exponent
-      self.minalpha = -a
-      self.safety = g
-      self.safety_sc = g**(kb1 + kb2)
-      self.elementary = True     # for first step
+    def __init__(self, fun, y0, t0, t_bound, max_step=numpy.inf, rtol=1e-3,
+                 atol=1e-6, vectorized=False, first_step=None,
+                 sc_params="H211b", verbose=False, **extraneous):
+        warn_extraneous(extraneous)
+        super(RungeKutta, self).__init__(fun, t0, y0, t_bound, vectorized,
+                                         support_complex=True)
+        self.max_step = validate_max_step(max_step)
+        self.rtol, self.atol = validate_tol(rtol, atol, self.y)
+        self.f = self.fun(self.t, self.y)
+        if self.f.dtype != self.y.dtype:
+            raise TypeError('dtypes of solution and derivative do not match')
+        self.error_exponent = -1 / (self.error_estimator_order + 1)
+        self.h_min_a, self.h_min_b = self._init_min_step_parameters()
+        self._init_sc_control(sc_params)
 
-   def _estimate_error(self, K, h):
-       # exclude K[-1] if not FSAL.
-       return numpy.dot(K[:self.n_stages + self.FSAL].T, self.E[:self.n_stages + self.FSAL]) * h
+        # size of first step:
+        if first_step is None:
+            b = self.t + self.direction * min(
+                abs(self.t_bound - self.t), self.max_step)
+            self.h_abs = select_initial_step(self.fun, self.t, self.y, self.f, self.error_estimator_order, self.rtol, self.atol)
+        else:
+            self.h_abs = validate_first_step(first_step, t0, t_bound)
 
-   def _estimate_error_norm(self, K, h, scale):
-       return norm(self._estimate_error(K, h) / scale)
+        self.K = numpy.empty((self.n_stages + 1, self.n), self.y.dtype)
+        self.FSAL = 1 if self.E[self.n_stages] else 0
+        self.h_previous = None
+        self.y_old = None
+        self.nb_rejected = 0
 
-   def step(self):
-       """Perform one integration step.
-       Returns
-       -------
-       message : string or None
-           Report from the solver. Typically a reason for a failure if
-           `self.status` is 'failed' after the step was taken or None
-           otherwise.
-       """
-       if self.status != 'running':
-           raise RuntimeError("Attempt to step on a failed or finished "
-                              "solver.")
+    def run(self):
+       step=0
+       while self.status == 'running':
+          message = self.step()
+          step += 1
+       return self.y
 
-       if self.n == 0 or self.t == self.t_bound:
-           # Handle corner cases of empty solver or no integration.
-           self.t_old = self.t
-           self.t = self.t_bound
-           message = None
-           self.status = 'finished'
-       else:
-           t = self.t
-           success, message = self._step_impl()
+    def _step_impl(self):
+        # mostly follows the scipy implementation of scipy's RungeKutta
+        t = self.t
+        y = self.y
 
-           if not success:
-               self.status = 'failed'
-           else:
-               self.t_old = t
-               if self.t - self.t_bound >= 0:
-                   self.status = 'finished'
-       return message
+        h_abs, min_step = self._reassess_stepsize(t, y)
+        if h_abs is None:
+            # linear extrapolation for last step
+            return True, None
 
-   def run(self):
-      step=0
-      while self.status == 'running':
-         message = self.step()
-         step += 1
-         if self.nb_step is not None:
-            if step >= self.nb_step:
-               return self.y
-      return self.y
+        # loop until the step is accepted
+        step_accepted = False
+        step_rejected = False
+        while not step_accepted:
 
-   def _step_impl(self):
+            if h_abs < min_step:
+                return False, self.TOO_SMALL_STEP
+            h = h_abs * self.direction
+            t_new = t + h
 
-      t = self.t
-      y = self.y
+            # calculate stages needed for output
+            self.K[0] = self.f
+            for i in range(1, self.n_stages):
+                self._rk_stage(h, i)
 
-      min_step = 10 * numpy.abs(numpy.nextafter(t, numpy.inf) - t)
+            # calculate error norm and solution
+            y_new, error_norm = self._comp_sol_err(y, h)
 
-      if self.h_abs < min_step:
-          h_abs = min_step
-      else:
-          h_abs = self.h_abs
+            # TODO : option
+            delta = 1.2
 
-      step_accepted = False
-      step_rejected = False
+            # evaluate error
+            if error_norm < delta:
+                step_accepted = True
 
-      while not step_accepted:
-         if h_abs < min_step:
-            return False, self.TOO_SMALL_STEP
+                if self.standard_sc:
+                    factor = self.safety * error_norm ** self.error_exponent
+                    self.standard_sc = False
 
-         h = h_abs
-         t_new = t + h
+                else:
+                    # use second order SC controller
+                    h_ratio = h / self.h_previous
+                    factor = self.safety_sc * ( error_norm**self.minbeta1 * self.error_norm_old**self.minbeta2 * h_ratio**self.minalpha)
 
-         if t_new - self.t_bound > 0:
-             t_new = self.t_bound
+                if step_rejected:
+                    factor = min(1, factor)
 
-         h = t_new - t
-         h_abs = numpy.abs(h)
-
-         self.K[0] = self.f
-         for i in range(1, self.n_stages):
-            self._rk_stage(h, i)
-         y_new, error_norm = self._comp_sol_err(y, h)
-
-         if error_norm < 1:
-            step_accepted = True
-
-            if self.elementary:
-               factor = self.safety * error_norm**self.error_exponent
-               self.elementary = False
+                h_abs *= limiter(factor,2)
 
             else:
-               # Second order controller
-               h_ratio = h / self.h_previous
-               factor = self.safety_sc * ( error_norm**self.minbeta1 * self.error_norm_old**self.minbeta2 * h_ratio**self.minalpha )
-#               factor = min(MAX_FACTOR, max(MIN_FACTOR, factor))
-               factor = limiter(factor, 2)
+                h_abs *= limiter(self.safety * error_norm ** self.error_exponent, 2)
+                step_rejected = True
+                self.nb_rejected += 1
 
-            if step_rejected:
-               factor = min(1, factor)
+        if not self.FSAL:
+            # evaluate ouput point for interpolation and next step
+            self.K[self.n_stages] = self.fun(t + h, y_new)
 
-            h_abs *= factor
+        # store for next step, interpolation and stepsize control
+        self.h_previous = h
+        self.y_old = y
+        self.h_abs = h_abs
+        self.f = self.K[self.n_stages].copy()
+        self.error_norm_old = error_norm
 
-         else:
-#            h_abs *= max(MIN_FACTOR, self.safety * error_norm**self.error_exponent)
-            h_abs *= limiter(self.safety * error_norm**self.error_exponent, 2)
-            step_rejected = True
-            self.nb_rejected += 1
-            if self.verbose: print(f"dt={h} rejected")
+        # output
+        self.t = t_new
+        self.y = y_new
 
-      if not self.FSAL:
-          # evaluate ouput point for interpolation and next step
-          self.K[self.n_stages] = self.fun(t + h, y_new)
+        return True, None
 
-      if self.verbose: print(f"dt={h} accepted")
-      self.h_previous = h
-      self.y_old = y
-      self.h_abs = h_abs
-      self.f = self.K[self.n_stages].copy()
-      self.error_norm_old = error_norm
+    def _reassess_stepsize(self, t, y):
+        # limit step size
+        h_abs = self.h_abs
+        min_step = max(self.h_min_a * (abs(t) + h_abs), self.h_min_b)
+        if h_abs < min_step or h_abs > self.max_step:
+            h_abs = min(self.max_step, max(min_step, h_abs))
+            self.standard_sc = True
 
-      # output
-      self.t = t_new
-      self.y = y_new
+        # handle final integration steps
+        d = abs(self.t_bound - t)                     # remaining interval
+        if d < 2 * h_abs:
+            if d > h_abs:
+                # h_abs < d < 2 * h_abs: "look ahead".
+                # split d over last two steps. This reduces the chance of a
+                # very small last step.
+                h_abs = max(0.5 * d, min_step)
+                self.standard_sc = True
+            elif d >= min_step:
+                # d <= h_abs: Don't step over t_bound
+                h_abs = d
+            else:
+                # d < min_step: use linear extrapolation in this rare case
+                h = self.t_bound - t
+                y_new = y + h * self.f
+                self.h_previous = h
+                self.y_old = y
+                self.t = self.t_bound
+                self.y = y_new
+                self.f = None                      # signals _dense_output_impl
+                logging.warning(
+                    'Linear extrapolation was used in the final step.')
+                return None, min_step
 
-      return True, None
+        return h_abs, min_step
 
-   def _rk_stage(self, h, i):
-       """compute a single RK stage"""
-       dy = h * (self.K[:i, :].T @ self.A[i, :i])
-       self.K[i] = self.fun(self.t + self.C[i] * h, self.y + dy)
+    def _estimate_error(self, K, h):
+        # exclude K[-1] if not FSAL. It could contain nan or inf
+        _, n = K[:self.n_stages + self.FSAL].shape
+        err = numpy.empty(n)
+        for i in range(n): # TODO : this is slow
+           err[i] = linsol.global_dotprod(K[:self.n_stages + self.FSAL,i], self.E[:self.n_stages + self.FSAL])
+        return err * h
 
-   def _comp_sol_err(self, y, h):
-       """Compute solution and error.
-       The calculation of `scale` differs from scipy: The average instead of
-       the maximum of abs(y) of the current and previous steps is used.
-       """
-       y_new = y + h * (self.K[:self.n_stages].T @ self.B)
-       scale = self.atol + self.rtol * 0.5*(numpy.abs(y) + numpy.abs(y_new))
+    def _estimate_error_norm(self, K, h, scale):
+        return norm(self._estimate_error(K, h) / scale)
 
-       if self.FSAL:
-           # do FSAL evaluation if needed for error estimate
-           self.K[self.n_stages, :] = self.fun(self.t + h, y_new)
+    def _comp_sol_err(self, y, h):
+        """Compute solution and error.
+        The calculation of `scale` differs from scipy: The average instead of
+        the maximum of abs(y) of the current and previous steps is used.
+        """
+        _, n = self.K[:self.n_stages].shape
+        y_new = y.copy()
+        for i in range(n): # TODO : this is slow
+           y_new[i] = h * linsol.global_dotprod(self.K[:self.n_stages,i], self.B)
+        scale = self.atol + self.rtol * 0.5*(numpy.abs(y) + numpy.abs(y_new))
 
-       error_norm = self._estimate_error_norm(self.K, h, scale)
-       return y_new, error_norm
+        if self.FSAL:
+            # do FSAL evaluation if needed for error estimate
+            self.K[self.n_stages, :] = self.fun(self.t + h, y_new)
 
-class Heun_Euler(RungeKutta):
-    """Explicit Runge-Kutta method of order 2(1)."""
-    order = 2
-    error_estimator_order = 1
-    n_stages = 2
-    C = numpy.array([0, 1])
-    A = numpy.array([
-        [0, 0],
-        [1, 0]
-    ])
-    B = numpy.array([1/2, 1/2])
-    E = numpy.array([1, 0, 0])
+        error_norm = self._estimate_error_norm(self.K, h, scale)
+        return y_new, error_norm
 
-class RK12(RungeKutta):
-    """Explicit Runge-Kutta method of order 1(2)."""
-    order = 2
-    error_estimator_order = 1
-    n_stages = 3
-    C = numpy.array([0, 1/2, 1])
-    A = numpy.array([
-        [0, 0, 0],
-        [1/2, 0, 0],
-        [1/256, 255/256, 0]
-    ])
-    B = numpy.array([1/512, 255/256, 1/512])
-    E = numpy.array( [1/256, 255/256, 0, 0])
+    def _rk_stage(self, h, i):
+        """compute a single RK stage"""
+        dy = h * linsol.global_dotprod(self.K[:i, :].T,  self.A[i, :i])
+        self.K[i] = self.fun(self.t + self.C[i] * h, self.y + dy)
+
 
 class RK23(RungeKutta):
     """Explicit Runge-Kutta method of order 3(2)."""
@@ -321,7 +346,7 @@ class RK23(RungeKutta):
     n_stages = 3
     C = numpy.array([0, 1/2, 3/4])
     A = numpy.array([
-        [0,   0, 0],
+        [0, 0, 0],
         [1/2, 0, 0],
         [0, 3/4, 0]
     ])
