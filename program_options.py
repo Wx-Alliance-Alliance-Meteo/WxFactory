@@ -132,6 +132,7 @@ class Configuration:
          self.coarsest_mg_order = parser.getint('Preconditioning', 'coarsest_mg_order')
       except (NoOptionError, NoSectionError):
          self.coarsest_mg_order = 1
+      self.coarsest_mg_order = min(self.coarsest_mg_order, self.nbsolpts)
 
       try:
          self.precond_tolerance = parser.getfloat('Preconditioning', 'precond_tolerance')

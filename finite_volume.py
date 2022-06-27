@@ -151,7 +151,7 @@ class FiniteVolume:
       elif self.param.equations == 'shallow_water':
          self.fv_rhs = lambda vec: self.generic_rhs_function(
             vec, self.fv_geom, self.fv_operators, self.fv_metric, self.fv_topo, self.ptopo, self.param.nbsolpts,
-            self.param.nb_elements_horizontal, self.param.case_number)
+            self.param.nb_elements_horizontal)
       self.fv_matrix = lambda vec: matvec_rat(vec, dt, self.fv_field, self.fv_rhs(self.fv_field), self.fv_rhs)
 
       self.dt = dt

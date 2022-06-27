@@ -206,7 +206,7 @@ class Multigrid:
       self.min_level = 1
 
       if discretization == 'fv':
-         self.num_levels = int(math.log2(param.initial_nbsolpts)) + 1
+         self.num_levels = int(numpy.log2(param.initial_nbsolpts)) + 1
          if 2**(self.num_levels - 1) != param.initial_nbsolpts:
             raise ValueError('Cannot do h/fv-multigrid stuff if the order of the problem is not a power of 2 (currently {param.initial_nbsolpts})')
       elif discretization == 'dg':
@@ -214,9 +214,11 @@ class Multigrid:
       else:
          raise ValueError(f'Unrecognized discretization "{discretization}"')
 
+      self.ndim = 2
       if param.equations == 'shallow_water':
          self.rhs = rhs_sw
       elif param.equations == 'Euler':
+         self.ndim = 3
          self.rhs = rhs_euler if discretization == 'fv' else rhs_euler
          # if param.nb_elements_horizontal != param.nb_elements_vertical:
          #    raise ValueError(f'MG with Euler equations needs same number of elements horizontally and vertically. '
@@ -245,7 +247,7 @@ class Multigrid:
          print(f'Initializing level {order}')
          new_order         = self.next_level(order)
          new_nb_elem_horiz = self.next_nb_elem(nb_elem_horiz)
-         new_nb_elem_vert  = self.next_nb_elem(nb_elem_vert)
+         new_nb_elem_vert  = self.next_nb_elem(nb_elem_vert) if self.ndim >= 3 else nb_elem_vert
          self.levels[order] = MultigridLevel(param, ptopo, self.rhs, discretization, nb_elem_horiz, nb_elem_vert, order, new_order, self.cfl)
          order, nb_elem_horiz, nb_elem_vert = new_order, new_nb_elem_horiz, new_nb_elem_vert
 
