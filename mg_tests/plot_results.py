@@ -2,8 +2,32 @@
 
 import matplotlib
 matplotlib.use('Agg')  # To be able to make plots even without an X server
+
 import matplotlib.pyplot as plt
 import numpy as np
+import sqlite3
+
+db_connection = None
+db_cursor     = None
+
+class StdevFunc:
+    def __init__(self):
+        self.M = 0.0
+        self.S = 0.0
+        self.k = 1
+
+    def step(self, value):
+        if value is None:
+            return
+        tM = self.M
+        self.M += (value - tM) / self.k
+        self.S += (value - tM) * (value - self.M)
+        self.k += 1
+
+    def finalize(self):
+        if self.k < 3:
+            return None
+        return np.sqrt(self.S / (self.k-2))
 
 def read_results(filename):
    results = []
@@ -48,7 +72,7 @@ def read_results(filename):
                'interp': get_interp(items[6]),
                'precond_tolerance': float(items[7]),
                'coarsest_level': int(items[8]),
-               'mg_smoothe_only': True if int(items[9]) == 1 else False,
+               'mg_smoothe_only': True if items[9] == 'True' else False,
                'num_pre_smoothe': int(items[10]),
                'num_post_smoothe': int(items[11]),
                'cfl': float(items[12]),
@@ -79,6 +103,9 @@ def read_results(filename):
    return results, sizes
 
 def keep_best_result(result_set, check_param):
+   
+   if len(result_set) == 0: return []
+
    if not check_param:
       best_time = np.inf
       best_it   = np.iinfo(0).max
@@ -112,72 +139,160 @@ def keep_best_result(result_set, check_param):
    return [result_set[best[k][2]] for k in best]
 
 def extract_results(result, order, num_elem_h, num_elem_v, dt, best_cfl = True):
-   no_precond = [x for x in result
-      if x['order'] == order
-      and x['num_elements_h'] == num_elem_h
-      and x['num_elements_v'] == num_elem_v
-      and x['time_step'] == dt
-      and x['preconditioner'] == 'none']
 
-   fv_ref = [x for x in result
-      if x['order'] == order
-      and x['num_elements_h'] == num_elem_h
-      and x['num_elements_v'] == num_elem_v
-      and x['time_step'] == dt
-      and x['preconditioner'] == 'fv'
-      and x['precond_tolerance'] <= 1e-5]
-   fv_fast = [x for x in result
-      if x['order'] == order
-      and x['num_elements_h'] == num_elem_h
-      and x['num_elements_v'] == num_elem_v
-      and x['time_step'] == dt
-      and x['preconditioner'] == 'fv'
-      and x['precond_tolerance'] >= 1e-1]
+   # no_precond = [x for x in result
+   #    if x['order'] == order
+   #    and x['num_elements_h'] == num_elem_h
+   #    and x['num_elements_v'] == num_elem_v
+   #    and x['time_step'] == dt
+   #    and x['preconditioner'] == 'none']
 
-   mg_precond_results = {}
-   for mg_type in ['p-mg', 'fv-mg']:
-      if order == 4:
-         mg_precond_results[mg_type] = [x for x in result
-            if x['order'] == order
-            and x['num_elements_h'] == num_elem_h
-            and x['num_elements_v'] == num_elem_v
-            and x['time_step'] == dt
-            # and x['coarsest_level'] != 1
-            and x['preconditioner'] == mg_type]
-      elif order == 8:
-         mg_precond_results[mg_type] = [x for x in result
-            if x['order'] == order
-            and x['num_elements_h'] == num_elem_h
-            and x['num_elements_v'] == num_elem_v
-            and x['time_step'] == dt
-            and (x['coarsest_level'] == 4 or x['coarsest_level'] == 1)
-            and x['preconditioner'] == mg_type]
-      else:
-         mg_precond_results[mg_type] = [x for x in result
-            if x['order'] == order
-            and x['num_elements'] == num_elem
-            and x['num_elements_h'] == num_elem_h
-            and x['num_elements_v'] == num_elem_v
-            and x['time_step'] == dt
-            and x['preconditioner'] == mg_type]
+   # fv_ref = [x for x in result
+   #    if x['order'] == order
+   #    and x['num_elements_h'] == num_elem_h
+   #    and x['num_elements_v'] == num_elem_v
+   #    and x['time_step'] == dt
+   #    and x['preconditioner'] == 'fv'
+   #    and x['precond_tolerance'] <= 1e-5]
+   # fv_fast = [x for x in result
+   #    if x['order'] == order
+   #    and x['num_elements_h'] == num_elem_h
+   #    and x['num_elements_v'] == num_elem_v
+   #    and x['time_step'] == dt
+   #    and x['preconditioner'] == 'fv'
+   #    and x['precond_tolerance'] >= 1e-1]
 
-      mg_precond_results[mg_type].sort(key=lambda k:k['num_pre_smoothe'])
-      mg_precond_results[mg_type].sort(key=lambda k:k['coarsest_level'])
 
-   if best_cfl:
-      no_precond = keep_best_result(no_precond, False)
-      fv_ref     = keep_best_result(fv_ref, False)
-      fv_fast    = keep_best_result(fv_fast, False)
-      mg_precond_results['p-mg']  = keep_best_result(mg_precond_results['p-mg'], True)
-      mg_precond_results['fv-mg'] = keep_best_result(mg_precond_results['fv-mg'], True)
+   # p_mg_columns = ['linear_solver', 'precond_interp', 'coarsest_mg_order', 'mg_smoothe_only', 'num_pre_smoothe', 'num_post_smoothe']
+   # p_mg_condition = 'precond = "p-mg"'
 
-   return no_precond, fv_ref, fv_fast, mg_precond_results['p-mg'], mg_precond_results['fv-mg']
+   def get_single_precond_results(columns, precond_condition):
+      base_subtable_query = f'''
+         select * from results_param
+         where
+            dg_order   = {order} AND
+            num_elem_h = {num_elem_h} AND
+            num_elem_v = {num_elem_v} AND
+            dt         = {dt} AND
+            {{precond_condition}}
+      '''
+
+      base_query = f'''
+         select distinct {{columns}}
+         from ({base_subtable_query})
+      '''.strip()
+
+      base_residual_query = f'''
+         select iteration, avg(residual), stdev(residual)
+         from results_data
+         where run_id in (
+            with subtable as ({base_subtable_query})
+            select distinct run_id
+            from subtable
+            where {{inner_condition}}
+         )
+         group by iteration
+         order by run_id, iteration
+      '''.strip()
+
+      results = []
+      param_query = base_query.format(columns = ', '.join(columns), precond_condition = precond_condition)
+      param_sets = db_cursor.execute(param_query).fetchall()
+      
+      for set in param_sets:
+         # print(f'set = {set}')
+         residual_query = base_residual_query.format(
+            inner_condition = ' AND '.join([f'{c} = "{set[i]}"' for i, c in enumerate(columns)]),
+            precond_condition = precond_condition)
+         # print(f'res query: {residual_query}')
+         residuals = db_cursor.execute(residual_query).fetchall()
+
+         set_result = {}
+         for i, c in enumerate(columns):
+            set_result[c] = set[i]
+         set_result['residuals'] = np.array([r[1] for r in residuals])
+         set_result['stdevs']    = np.array([r[2] if r[2] is not None else 0.0 for r in residuals])
+
+         results.append(set_result)
+
+      return results
+
+   p_mg_results = get_single_precond_results(
+      ['linear_solver', 'precond_interp', 'coarsest_mg_order', 'mg_smoothe_only', 'num_pre_smoothe', 'num_post_smoothe'],
+      'precond = "p-mg"'
+   )
+
+   fv_mg_results = get_single_precond_results(
+      ['linear_solver', 'precond_interp', 'coarsest_mg_order', 'mg_smoothe_only', 'num_pre_smoothe', 'num_post_smoothe'],
+      'precond = "fv-mg"'
+   )
+
+   # print(f'p_mg_results: {p_mg_results}')
+
+   fv_ref = get_single_precond_results(['linear_solver', 'precond_tol'], 'precond = "fv"')
+   # print(f'fv_results: {fv_ref}')
+
+   no_precond = get_single_precond_results(['linear_solver'], 'precond = "none"')
+   # print(f'no precond result: {no_precond}')
+
+   # mg_precond_results = {}
+   # # residuals = db_cursor.execute(residual_query2, [order, num_elem_h, num_elem_v, dt, 'p-mg']).fetchall()
+   # for mg_type in ['fv-mg']:
+   #    # ids = db_cursor.execute(run_id_query, [order, num_elem_h, num_elem_v, dt, mg_type])
+   #    # id_list = [id[0] for id in ids]
+   #    # id_list.append(0)
+   #    # print(f'ids: {ids} (list {id_list})')
+   #    # residuals = db_cursor.execute(residual_query, [ids, 0]).fetchall()
+
+   #    if order == 4:
+   #       mg_precond_results[mg_type] = [x for x in result
+   #          if x['order'] == order
+   #          and x['num_elements_h'] == num_elem_h
+   #          and x['num_elements_v'] == num_elem_v
+   #          and x['time_step'] == dt
+   #          # and x['coarsest_level'] != 1
+   #          and x['preconditioner'] == mg_type]
+   #    elif order == 8:
+   #       mg_precond_results[mg_type] = [x for x in result
+   #          if x['order'] == order
+   #          and x['num_elements_h'] == num_elem_h
+   #          and x['num_elements_v'] == num_elem_v
+   #          and x['time_step'] == dt
+   #          and (x['coarsest_level'] == 4 or x['coarsest_level'] == 1)
+   #          and x['preconditioner'] == mg_type]
+   #    else:
+   #       mg_precond_results[mg_type] = [x for x in result
+   #          if x['order'] == order
+   #          and x['num_elements_h'] == num_elem_h
+   #          and x['num_elements_v'] == num_elem_v
+   #          and x['time_step'] == dt
+   #          and x['preconditioner'] == mg_type]
+
+   #    mg_precond_results[mg_type].sort(key=lambda k:k['num_pre_smoothe'])
+   #    mg_precond_results[mg_type].sort(key=lambda k:k['coarsest_level'])
+
+   # if best_cfl:
+   #    no_precond = keep_best_result(no_precond, False)
+   #    fv_ref     = keep_best_result(fv_ref, False)
+   #    fv_fast    = keep_best_result(fv_fast, False)
+   #    mg_precond_results['p-mg']  = keep_best_result(mg_precond_results['p-mg'], True)
+   #    mg_precond_results['fv-mg'] = keep_best_result(mg_precond_results['fv-mg'], True)
+
+   # res = np.array([r[1] for r in residuals])
+   # stdev = np.array([r[2] for r in residuals])
+   # print(f'res = {res}')
+   # mg_precond_results['p-mg'][0]['residuals'] = res
+   # mg_precond_results['p-mg'][0]['stdevs'] = stdev
+
+   # return no_precond, fv_ref, fv_fast, mg_precond_results['p-mg'], mg_precond_results['fv-mg']
+   return no_precond, fv_ref,  p_mg_results, fv_mg_results
 
 
 mg_linestyles = [None, '--', '-.', ':', None, '--', '-.', ':']
 # smoothings_linestyles = [':', '-.', '--', None]
 smoothings_linestyles = [None, (0, (1, 4)), (0, (1, 2)), (0, (3, 5, 1, 5)), (0, (3, 1, 1, 1)), (0, (5, 3)), (0, (5, 1)), None]
 mg_colors = ['blue', 'green', 'purple', 'teal', 'blue', 'green', 'purple']
+ref_colors = ['orange', 'magenta']
 
 def plot_iter(result, sizes):
 
@@ -288,53 +403,60 @@ def plot_iter(result, sizes):
 
 def plot_residual(result, order, num_elem_h, num_elem_v, dt):
 
-   no_precond, fv_ref, fv_fast, p_mg, fv_mg = extract_results(result, order, num_elem_h, num_elem_v, dt)
-   MAX_IT = 1000
+   no_precond, fv_ref, p_mg, fv_mg = extract_results(result, order, num_elem_h, num_elem_v, dt, False)
+   MAX_IT = 20
    max_res = 0
    min_res = np.inf
    max_it = 0
 
    fig, ax_res = plt.subplots(1, 1)
    for i, data in enumerate(no_precond):
-      ax_res.plot(data['residuals'][:MAX_IT], color='black', label='No precond')
+      ax_res.plot(data['residuals'][:MAX_IT], color='black', label=f'No precond, solver {data["linear_solver"]}')
       max_res = max(data['residuals'][:MAX_IT].max(), max_res)
       max_it = len(data['residuals'][:])
-      break
 
    for i, data in enumerate(fv_ref):
-      ax_res.plot(data['residuals'][:MAX_IT], color='orange', linestyle=mg_linestyles[i%4], label=f'Ref precond')
+      ax_res.errorbar(np.arange(len(data['residuals'][:MAX_IT])),
+         y = data['residuals'][:MAX_IT], yerr = data['stdevs'][:MAX_IT],
+         color = ref_colors[i%len(ref_colors)], linestyle=mg_linestyles[i%4],
+         label=f'Ref precond, tol={data["precond_tol"]:.0e}')
       max_res = max(data['residuals'][:MAX_IT].max(), max_res)
       min_res = min(data['residuals'][:MAX_IT].min(), min_res)
-      break
 
-   for i, data in enumerate(fv_fast):
-      ax_res.plot(data['residuals'][:MAX_IT], color='magenta', linestyle=mg_linestyles[i%4], label=f'Simple FV precond')
-      max_res = max(data['residuals'][:MAX_IT].max(), max_res)
-      min_res = min(data['residuals'][:MAX_IT].min(), min_res)
-      break
+   # for i, data in enumerate(fv_fast):
+   #    ax_res.plot(data['residuals'][:MAX_IT], color='magenta', linestyle=mg_linestyles[i%4], label=f'Simple FV precond')
+   #    max_res = max(data['residuals'][:MAX_IT].max(), max_res)
+   #    min_res = min(data['residuals'][:MAX_IT].min(), min_res)
+   #    break
 
    for i, data in enumerate(p_mg):
-      ax_res.plot(data['residuals'][:MAX_IT], color=mg_colors[data['mg_levels']],
-                  linestyle=mg_linestyles[0],
-                  label=f'p-MG prec ({data["mg_levels"]} lvl, {data["num_pre_smoothe"]}/{data["num_post_smoothe"]} sm)')
+      # ax_res.plot(data['residuals'][:MAX_IT], color=mg_colors[data['mg_levels']],
+      ax_res.errorbar(x = np.arange(len(data['residuals'][:MAX_IT])),
+            y = data['residuals'][:MAX_IT], yerr = data['stdevs'][:MAX_IT],
+            color=mg_colors[data['coarsest_mg_order']], linestyle=mg_linestyles[0],
+            label=f'p-MG prec ({data["coarsest_mg_order"]} lvl, {data["num_pre_smoothe"]}/{data["num_post_smoothe"]} sm)')
       max_res = max(data['residuals'][:MAX_IT].max(), max_res)
       min_res = min(data['residuals'][:MAX_IT].min(), min_res)
 
    for i, data in enumerate(fv_mg):
       ls = smoothings_linestyles[data['num_pre_smoothe'] + data['num_post_smoothe']]
       # if data['smoother'] == 'irk': ls = ':'
-      ax_res.plot(data['residuals'][:MAX_IT], color=mg_colors[data['mg_levels']],
-                  linestyle=ls,
-                  label=f'FV-MG prec {data["mg_levels"]} lvl, {data["num_pre_smoothe"]}/{data["num_post_smoothe"]} sm, p-cfl {data["cfl"]}')
+      ax_res.errorbar(
+            np.arange(len(data['residuals'][:MAX_IT])),
+            data['residuals'][:MAX_IT], yerr = data['stdevs'][:MAX_IT],
+            color=mg_colors[data['coarsest_mg_order']], linestyle=ls,
+            label=f'FV-MG prec {data["coarsest_mg_order"]} lvl, {data["num_pre_smoothe"]}/{data["num_post_smoothe"]} sm')
       max_res = max(data['residuals'][:MAX_IT].max(), max_res)
       min_res = min(data['residuals'][:MAX_IT].min(), min_res)
 
+   ax_res.set_xlabel('Iteration #')
+   if max_it > 0: ax_res.set_xlim([-1, min(max_it, MAX_IT)])
+   # ax_res.set_xscale('log')
+
    ax_res.set_yscale('log')
    ax_res.grid(True)
-   ax_res.set_xlabel('Iteration #')
-   ax_res.set_xlim([-1, min(max_it, MAX_IT)])
    ax_res.set_ylabel('Residual')
-   ax_res.set_ylim([min_res * 0.8, min(2e0, max_res * 1.5)])
+   if max_res > 0.0: ax_res.set_ylim([min_res * 0.8, min(2e0, max_res * 1.5)])
 
    fig.suptitle(f'Residual evolution\n{order}x{num_elem_h}x{num_elem_v} elem, {dt} dt')
    fig.legend()
@@ -429,7 +551,15 @@ def plot_error_time(result, order, num_elem_h, num_elem_v, dt):
    print(f'Saving {full_filename}')
 
 def main(args):
-   results, sizes = read_results(args.results_file)
+   # results, sizes = read_results(args.results_file)
+   results = None
+
+   sizes_query = '''
+      select distinct dg_order, num_elem_h, num_elem_v, dt
+      from results_param
+   '''
+   sizes = [s for s in db_cursor.execute(sizes_query).fetchall()]
+
    print(f'Sizes: {sizes}')
 
    if args.plot_iter:
@@ -448,10 +578,16 @@ if __name__ == '__main__':
 
    parser = argparse.ArgumentParser(description='Plot results from automated preconditioner tests')
    parser.add_argument('results_file', type=str, help='File that contains test results')
+   parser.add_argument('--db', type=str, help='Database file containing the results to plot')
    parser.add_argument('--plot-iter', action='store_true', help='Plot the iterations and time with respect to various parameters')
    parser.add_argument('--plot-residual', action='store_true', help='Plot residual evolution')
    parser.add_argument('--error-time', action='store_true', help='Plot time needed to reach a certain error (residual) level')
 
    args = parser.parse_args()
+
+   if args.db is not None:
+      db_connection = sqlite3.connect(args.db)
+      db_connection.create_aggregate("stdev", 1, StdevFunc)
+      db_cursor     = db_connection.cursor()
 
    main(args)
