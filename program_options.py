@@ -129,10 +129,9 @@ class Configuration:
          self.preconditioner = available_preconditioners[0]
 
       try:
-         self.coarsest_mg_order = parser.getint('Preconditioning', 'coarsest_mg_order')
+         self.num_mg_levels = max(parser.getint('Preconditioning', 'num_mg_levels'), 1)
       except (NoOptionError, NoSectionError):
-         self.coarsest_mg_order = 1
-      self.coarsest_mg_order = min(self.coarsest_mg_order, self.nbsolpts)
+         self.num_mg_levels = 1
 
       try:
          self.precond_tolerance = parser.getfloat('Preconditioning', 'precond_tolerance')
@@ -222,7 +221,7 @@ class Configuration:
          f'tolerance:       {self.tolerance}\n' \
          f'ARK solver exp:  {self.ark_solver_exp}\n' \
          f'ARK solver imp:  {self.ark_solver_imp}\n' \
-         f'Use precond:     {self.use_preconditioner}\n' \
+         f'Precond:         {self.preconditioner}\n' \
          f'Precond filter \n  before: {self.precond_filter_before}\n  during: {self.precond_filter_during}\n  after:  {self.precond_filter_after}\n' \
          f'Discretization:  {self.discretization}\n' \
          f'λ0: {self.λ0}\n' \

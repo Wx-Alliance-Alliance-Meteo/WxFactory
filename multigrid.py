@@ -23,7 +23,7 @@ from sgs_precond   import SymmetricGaussSeidel
 class MultigridLevel:
    def __init__(self, param, ptopo, rhs, discretization, nb_elem_horiz, nb_elem_vert, source_order, target_order, cfl):
       p = deepcopy(param)
-      print(f'nb_elem_hor {p.nb_elements_horizontal}, vert {p.nb_elements_vertical}')
+      # print(f'nb_elem_hor {p.nb_elements_horizontal}, vert {p.nb_elements_vertical}')
       p.nb_elements_horizontal = nb_elem_horiz
       p.nb_elements_vertical   = nb_elem_vert
       p.nbsolpts = source_order if discretization == 'dg' else 1
@@ -31,7 +31,7 @@ class MultigridLevel:
 
       # p.sgs_eta *= source_order / param.initial_nbsolpts
       
-      print(f'nb_elem_hor {p.nb_elements_horizontal}, vert {p.nb_elements_vertical}')
+      # print(f'nb_elem_hor {p.nb_elements_horizontal}, vert {p.nb_elements_vertical}')
       self.param = p
       self.cfl   = cfl
       self.ptopo = ptopo
@@ -42,6 +42,7 @@ class MultigridLevel:
       print(
          f'Grid level! nb_elem_horiz = {nb_elem_horiz}, nb_elem_vert = {nb_elem_vert} '
          f' discr = {discretization}, source order = {source_order}, target order = {target_order}, nbsolpts = {p.nbsolpts}'
+         f' num_mg_levels: {p.num_mg_levels}'
          # f' work ratio = {self.work_ratio}'
          )
 
@@ -202,17 +203,23 @@ class MultigridLevel:
 class Multigrid:
    def __init__(self, param, ptopo, discretization) -> None:
 
-      self.max_level = param.initial_nbsolpts
-      self.min_level = 1
+      # self.max_level = param.initial_nbsolpts
+      # self.min_level = 1
 
       if discretization == 'fv':
-         self.num_levels = int(numpy.log2(param.initial_nbsolpts)) + 1
-         if 2**(self.num_levels - 1) != param.initial_nbsolpts:
-            raise ValueError('Cannot do h/fv-multigrid stuff if the order of the problem is not a power of 2 (currently {param.initial_nbsolpts})')
+         self.max_num_levels = int(numpy.log2(param.initial_nbsolpts)) + 1
+         self.max_num_fv_elems = 2**(self.max_num_levels - 1)
+         self.extra_fv_step = (self.max_num_fv_elems != param.initial_nbsolpts)
+         # if 2**(self.max_num_levels - 1) != param.initial_nbsolpts:
+         #    raise ValueError('Cannot do h/fv-multigrid stuff if the order of the problem is not a power of 2 (currently {param.initial_nbsolpts})')
       elif discretization == 'dg':
-         self.num_levels = param.initial_nbsolpts
+         # Subtract 1 because we include level 0
+         self.max_num_levels = param.initial_nbsolpts
       else:
          raise ValueError(f'Unrecognized discretization "{discretization}"')
+
+      param.num_mg_levels = min(param.num_mg_levels, self.max_num_levels)
+      print(f'num_mg_levels: {param.num_mg_levels}')
 
       self.ndim = 2
       if param.equations == 'shallow_water':
@@ -232,34 +239,39 @@ class Multigrid:
 
       self.levels = {}
 
-      order         = param.initial_nbsolpts
-      nb_elem_horiz = param.nb_elements_horizontal
-      nb_elem_vert  = param.nb_elements_vertical
+      # order         = param.initial_nbsolpts
+      # nb_elem_horiz = param.nb_elements_horizontal
+      # nb_elem_vert  = param.nb_elements_vertical
 
       if discretization == 'fv':
-         self.next_level   = lambda order: order // 2
-         self.next_nb_elem = lambda nb_elem: nb_elem // 2
+         self.orders = [self.max_num_fv_elems // (2**i) for i in range(self.max_num_levels + 1)]
+         if self.extra_fv_step:
+            self.orders = [param.initial_nbsolpts] + self.orders
+         self.elem_counts_hori = [param.nb_elements_horizontal * order // 4 for order in self.orders]
+         print(f'REMOVE THE FACTOR')
+         self.elem_counts_vert =  [param.nb_elements_vertical for _ in self.orders]
+         if self.ndim == 3:
+            self.elem_counts_vert =  [param.nb_elements_vertical * order for order in self.orders]
       else:
-         self.next_level   = lambda order: order - 1
-         self.next_nb_elem = lambda nb_elem: nb_elem
+         self.orders = [param.initial_nbsolpts - i for i in range(self.max_num_levels + 1)]
+         self.elem_counts_hori = [param.nb_elements_horizontal for _ in range(len(self.orders))]
+         self.elem_counts_vert = [param.nb_elements_vertical for _ in range(len(self.orders))]
 
-      for _ in range(self.num_levels):
-         print(f'Initializing level {order}')
-         new_order         = self.next_level(order)
-         new_nb_elem_horiz = self.next_nb_elem(nb_elem_horiz)
-         new_nb_elem_vert  = self.next_nb_elem(nb_elem_vert) if self.ndim >= 3 else nb_elem_vert
-         self.levels[order] = MultigridLevel(param, ptopo, self.rhs, discretization, nb_elem_horiz, nb_elem_vert, order, new_order, self.cfl)
-         order, nb_elem_horiz, nb_elem_vert = new_order, new_nb_elem_horiz, new_nb_elem_vert
+      for i_level in range(self.max_num_levels):
+         order                = self.orders[i_level]
+         new_order            = self.orders[i_level + 1]
+         nb_elem_hori         = self.elem_counts_hori[i_level]
+         nb_elem_vert         = self.elem_counts_vert[i_level]
+         print(f'Initializing level {i_level}, {discretization}, order {order}->{new_order}, elems {nb_elem_hori}x{nb_elem_vert}, cfl {self.cfl}')
+         self.levels[i_level] = MultigridLevel(param, ptopo, self.rhs, discretization, nb_elem_hori, nb_elem_vert, order, new_order, self.cfl)
 
    def prepare(self, dt, field):
       """
       Compute the matrix-vector operator for every grid level. Also compute the pseudo time step size for each level.
       """
       next_field = field
-      order = self.max_level
-      while order >= self.min_level:
-         next_field = self.levels[order].prepare(dt, next_field, self.matvec)
-         order = self.next_level(order)
+      for i_level in range(self.max_num_levels):
+         next_field = self.levels[i_level].prepare(dt, next_field, self.matvec)
 
    ############
    # Call MG
@@ -267,14 +279,13 @@ class Multigrid:
       return self.apply(vec)
 
    def apply(self, vec):
-      param = self.levels[self.max_level].param
-      coarsest_level = param.coarsest_mg_order
-      return self.iterate(vec, coarsest_level=coarsest_level, verbose=False)
+      param = self.levels[0].param
+      return self.iterate(vec, num_levels=param.num_mg_levels, verbose=False)
 
 ###############
 # The algorithm
 
-   def iterate(self, b, x0=None, level=None, coarsest_level=1, gamma=1, verbose=False):
+   def iterate(self, b, x0=None, level=None, num_levels=1, gamma=1, verbose=False):
       """
       Do one pass of the multigrid algorithm.
 
@@ -286,7 +297,7 @@ class Multigrid:
       """
 
       if level is None:
-         level = self.max_level
+         level = 0
 
       level_work = 0.0
 
@@ -313,14 +324,14 @@ class Multigrid:
 
       # level_work += lvl_param.smoother_work_unit * lvl_param.num_pre_smoothe * lvl_param.work_ratio
 
-      if level > coarsest_level:
+      if level < num_levels - 1:
 
          # Residual at the current grid level, and its corresponding correction
          residual   = numpy.ravel(restrict(b - A(x)))
          correction = numpy.zeros_like(residual)
 
          for _ in range(gamma):
-            correction = self.iterate(residual, correction, self.next_level(level), coarsest_level=coarsest_level, gamma=gamma, verbose=verbose)  # MG pass on next lower level
+            correction = self.iterate(residual, correction, level + 1, num_levels=num_levels, gamma=gamma, verbose=verbose)  # MG pass on next lower level
             # level_work += work
 
          x = x + numpy.ravel(prolong(correction))
@@ -341,7 +352,7 @@ class Multigrid:
 
       if verbose: print(f'retour {level}: {linsol.global_norm(b.flatten() - (A(x.flatten())))}')
 
-      if verbose is True and level == self.max_level:
+      if verbose is True and level == num_levels:
          print('End multigrid')
          print(' ')
 

@@ -115,7 +115,7 @@ class FiniteVolume:
             self.fv_matrix, input_vec, preconditioner=None, tol=self.param.precond_tolerance, maxiter=max_iter)
       elif self.precond_type == 'fv-mg':  # Multigrid preconditioner
          # output_vec, _, num_iter, _, residuals = self.mg_solver.solve(input_vec, coarsest_level=self.param.coarsest_mg_order, max_num_it=1, verbose=verbose)
-         output_vec = self.mg_solver.iterate(input_vec, coarsest_level=self.param.coarsest_mg_order)
+         output_vec = self.mg_solver.iterate(input_vec, num_levels=self.param.num_mg_levels, verbose=False)
          num_iter = 1
 
       # self.last_solution = output_vec
