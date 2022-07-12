@@ -82,6 +82,8 @@ class FiniteVolume:
       self.mg_solver = None
       if self.precond_type == 'fv-mg':
          self.mg_solver = Multigrid(self.param, ptopo, 'fv')
+         self.param.num_mg_levels = self.mg_solver.levels[0].param.num_mg_levels
+         param.num_mg_levels = self.param.num_mg_levels
 
       print(f'Origin field shape: {self.origin_field_shape}, fv field shape: {self.fv_field_shape}')
 
@@ -102,6 +104,8 @@ class FiniteVolume:
       Apply the preconditioner on the given vector
       """
 
+      # print(f'Applying FV preconditioner')
+
       t0 = time()
 
       # print(f'preconditioning \n{vec.reshape(self.origin_field_shape)}')
@@ -112,7 +116,7 @@ class FiniteVolume:
       max_iter = self.max_iter if self.param.precond_tolerance < 1e-1 else 1
       if self.precond_type == 'fv':    # Finite volume preconditioner (reference, or simple FV)
          output_vec, _, num_iter, _, residuals = fgmres(
-            self.fv_matrix, input_vec, preconditioner=None, tol=self.param.precond_tolerance, maxiter=max_iter)
+            self.fv_matrix, input_vec, preconditioner=None, tol=self.param.precond_tolerance, maxiter=max_iter, verbose=False)
       elif self.precond_type == 'fv-mg':  # Multigrid preconditioner
          # output_vec, _, num_iter, _, residuals = self.mg_solver.solve(input_vec, coarsest_level=self.param.coarsest_mg_order, max_num_it=1, verbose=verbose)
          output_vec = self.mg_solver.iterate(input_vec, num_levels=self.param.num_mg_levels, verbose=False)
@@ -128,7 +132,7 @@ class FiniteVolume:
       self.total_time += precond_time
       self.total_iter += num_iter
       
-      # print(f'{self.prefix}Preconditioned in {num_iter} iterations and {precond_time:.2f} s')
+      if verbose: print(f'{self.prefix}Preconditioned in {num_iter} iterations and {precond_time:.2f} s')
 
       return output_vec
 
@@ -152,7 +156,7 @@ class FiniteVolume:
          self.fv_rhs = lambda vec: self.generic_rhs_function(
             vec, self.fv_geom, self.fv_operators, self.fv_metric, self.fv_topo, self.ptopo, self.param.nbsolpts,
             self.param.nb_elements_horizontal)
-      self.fv_matrix = lambda vec: matvec_rat(vec, dt, self.fv_field, self.fv_rhs(self.fv_field), self.fv_rhs)
+      self.fv_matrix = lambda vec, rhs=self.fv_rhs(self.fv_field): matvec_rat(vec, dt, self.fv_field, rhs, self.fv_rhs)
 
       self.dt = dt
       # self.last_solution = numpy.ravel(numpy.zeros_like(self.fv_field))

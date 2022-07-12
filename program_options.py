@@ -133,6 +133,8 @@ class Configuration:
       except (NoOptionError, NoSectionError):
          self.num_mg_levels = 1
 
+      if 'mg' not in self.preconditioner: self.num_mg_levels = 1
+
       try:
          self.precond_tolerance = parser.getfloat('Preconditioning', 'precond_tolerance')
       except (NoOptionError, NoSectionError):
@@ -148,7 +150,7 @@ class Configuration:
       except (NoOptionError, NoSectionError):
          self.num_post_smoothe = 1
 
-      self.possible_smoothers = ['erk', 'kiops', 'irk']
+      self.possible_smoothers = ['kiops']
       try:
          self.mg_smoother = parser.get('Preconditioning', 'mg_smoother')
          if not self.mg_smoother in self.possible_smoothers:
@@ -157,24 +159,15 @@ class Configuration:
       except (NoOptionError, NoSectionError):
          self.mg_smoother = self.possible_smoothers[0]
 
-      if self.mg_smoother == 'irk':
-         self.num_pre_smoothe = 1
-         self.num_post_smoothe = 0
-
-      try:
-         self.sgs_eta = parser.getfloat('Preconditioning', 'sgs_eta')
-      except (NoOptionError, NoSectionError):
-         self.sgs_eta = 0.5
-
-      try:
-         self.pseudo_cfl = parser.getfloat('Preconditioning', 'pseudo_cfl')
-      except (NoOptionError, NoSectionError):
-         self.pseudo_cfl = 1.0
-
       try:
          self.mg_smoothe_only = parser.getint('Preconditioning', 'mg_smoothe_only')
       except (NoOptionError, NoSectionError):
          self.mg_smoothe_only = 0
+
+      try:
+         self.kiops_dt_factor = parser.getfloat('Preconditioning', 'kiops_dt_factor')
+      except (NoOptionError, NoSectionError):
+         self.kiops_dt_factor = 1.1
 
       try:
          self.precond_filter_before = parser.getint('Preconditioning', 'precond_filter_before')

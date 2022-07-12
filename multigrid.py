@@ -21,7 +21,7 @@ from sgs_precond   import SymmetricGaussSeidel
 
 
 class MultigridLevel:
-   def __init__(self, param, ptopo, rhs, discretization, nb_elem_horiz, nb_elem_vert, source_order, target_order, cfl):
+   def __init__(self, param, ptopo, rhs, discretization, nb_elem_horiz, nb_elem_vert, source_order, target_order):
       p = deepcopy(param)
       # print(f'nb_elem_hor {p.nb_elements_horizontal}, vert {p.nb_elements_vertical}')
       p.nb_elements_horizontal = nb_elem_horiz
@@ -33,7 +33,6 @@ class MultigridLevel:
       
       # print(f'nb_elem_hor {p.nb_elements_horizontal}, vert {p.nb_elements_vertical}')
       self.param = p
-      self.cfl   = cfl
       self.ptopo = ptopo
 
       self.num_pre_smoothe = self.param.num_pre_smoothe
@@ -83,118 +82,11 @@ class MultigridLevel:
          self.restrict     = lambda a: None
          self.prolong      = lambda a: None
 
-      # Compute grid spacing
-      X1, X2 = self.geometry.X1, self.geometry.X2
-
-      self.dx = numpy.empty_like(X1)
-      self.dy = numpy.empty_like(X2)
-
-      self.dx[:,  0]   = X1[:, 1] - X1[:, 0]
-      self.dx[:, -1]   = X1[:, -1] - X1[:, -2]
-      self.dx[:, 1:-1] = (X1[:, 2:] - X1[:, :-2]) * 0.5
-
-      self.dy[ 0, :]   = X2[ 1, :] - X2[ 0, :]
-      self.dy[-1, :]   = X2[-1, :] - X2[-2, :]
-      self.dy[1:-1, :] = (X2[2:, :] - X2[:-2, :]) * 0.5
-
-      # TODO make this per element (?)
-      # self.elem_size = numpy.minimum(self.dx.min(), self.dy.min())
-
-      # print(f'dx: \n{self.dx}')
-      # print(f'dy: \n{self.dy}')
-
-      if self.ndim == 3:
-         x3 = self.geometry.x3
-         self.dz = numpy.empty_like(x3)
-         self.dz[ 0] = x3[ 1] - x3[ 0]
-         self.dz[-1] = x3[-1] - x3[-2]
-         self.dz[1:-1] = (x3[2:] - x3[:-2]) * 0.5
-         dz_min = self.dz.min()
-         # print(f'dz: \n{self.dz}')
-         # print(f'x3: \n{x3}')
-         # print(f'dz min: {dz_min}')
-         # self.elem_size = numpy.minimum(dz.min(), self.elem_size) # Get min size in either direction
-
-      # raise ValueError(f'elem size: {self.elem_size}')
-
-   def compute_pseudo_dt(self, real_dt, field):
-      """
-      Compute pseudo time step from CFL condition
-
-      In a solver in general, we need
-         dt < CFL * h_min / (d * (2N+1) * abs(lambda_max))
-
-      where "CFL" is the constant we chose, "h_min" the smallest distance between two solution points,
-      "d" the number of dimensions, "N" the order of the DG discretization, and
-      "lambda_max" the maximum wave speed in the system.
-
-      Since we're using this as a preconditioner (always?), we have to further divide the result by the size
-      of the real time step:
-         pseudo_dt < pseudo_CFL / real_dt * h_min / (d * (2N+1) * abs(lambda_max))
-
-      """
-      # Extract the variables
-      h  = field[idx_h]
-      u1 = field[idx_hu1] / h
-      u2 = field[idx_hu2] / h
-
-      # Compute variables in global coordinates
-      real_u1 = u1 * self.dx / 2.0
-      real_u2 = u2 * self.dy / 2.0
-
-      real_h_11 = self.metric.H_contra_11 * self.dx * self.dy / 4.0
-      real_h_22 = self.metric.H_contra_22 * self.dx * self.dy / 4.0
-
-      # Get max velocity (per element)
-      v1 = numpy.absolute(real_u1) + numpy.sqrt(real_h_11 * gravity * h)
-      v2 = numpy.absolute(real_u2) + numpy.sqrt(real_h_22 * gravity * h)
-
-      vel = numpy.maximum(v1, v2)
-
-      if self.ndim == 3:
-         w = field[idx_rho_w] / h
-         v3 = numpy.absolute(w)
-
-      elem_size_h = numpy.sqrt(numpy.minimum(self.dx, self.dy))
-      ratio_h = elem_size_h / vel
-      ratio_v = ratio_h
-      if self.ndim == 3:
-         ratio_v = self.dz.min() / v3 if self.ndim >= 3 else ratio
-
-      # print(f'ratio_h: \n{ratio_h}')
-      # print(f'ratio_v: \n{ratio_v}')
-
-      discr_factor = 1.0 / (self.ndim * (2 * self.param.nbsolpts + 1))
-      print(f'discr_factor = {discr_factor}')
-
-      # The pseudo dt (per element)
-      pseudo_dt = (self.cfl * discr_factor / real_dt) * numpy.minimum(ratio_h, ratio_v)
-
-      # numpy.set_printoptions(precision=1)
-      # print(f'pseudo dt:\n{pseudo_dt}')
-      print(f'pseudo dt max: {pseudo_dt.max()}, min: {pseudo_dt.min()}, avg: {numpy.average(pseudo_dt)} ')
-
-      # raise ValueError
-
-      self.pseudo_dt = numpy.broadcast_to(pseudo_dt, field.shape)
-
-      return self.pseudo_dt
-
    def prepare(self, dt, field, matvec):
       self.matrix_operator = lambda vec, mat=matvec, dt=dt, f=field, rhs=self.rhs_operator(field), rhs_handle=self.rhs_operator : mat(numpy.ravel(vec), dt, f, rhs, rhs_handle)
-      self.compute_pseudo_dt(dt, field)
 
-      if self.param.mg_smoother == 'erk':
-         self.smoothe = functools.partial(runge_kutta_stable_smoothe, A=self.matrix_operator, dt=numpy.ravel(self.pseudo_dt))
-
-      elif self.param.mg_smoother == 'irk':
-         if self.param.discretization != 'fv': raise ValueError(f'Can only use the irk smoother with the finite volume discretization')
-         self.smoother_precond = SymmetricGaussSeidel(field, self.metric, self.pseudo_dt[0], self.ptopo, self.geometry, self.param.sgs_eta)
-         self.smoothe = functools.partial(runge_kutta_stable_smoothe, A=self.matrix_operator, dt=numpy.ravel(self.pseudo_dt), P=self.smoother_precond)
-
-      elif self.param.mg_smoother == 'kiops':
-         self.smoothe = functools.partial(kiops_smoothe, A=self.matrix_operator, real_dt=dt)
-
+      if self.param.mg_smoother == 'kiops':
+         self.smoothe = functools.partial(kiops_smoothe, A=self.matrix_operator, real_dt=dt, dt_factor=self.param.kiops_dt_factor)
       else:
          raise ValueError(f'Unsupported smoother for MG: {self.param.mg_smoother}')
 
@@ -235,7 +127,6 @@ class Multigrid:
 
       self.matvec = matvec_rat
       self.use_solver = (param.mg_smoothe_only <= 0)
-      self.cfl = param.pseudo_cfl
 
       self.levels = {}
 
@@ -262,8 +153,8 @@ class Multigrid:
          new_order            = self.orders[i_level + 1]
          nb_elem_hori         = self.elem_counts_hori[i_level]
          nb_elem_vert         = self.elem_counts_vert[i_level]
-         print(f'Initializing level {i_level}, {discretization}, order {order}->{new_order}, elems {nb_elem_hori}x{nb_elem_vert}, cfl {self.cfl}')
-         self.levels[i_level] = MultigridLevel(param, ptopo, self.rhs, discretization, nb_elem_hori, nb_elem_vert, order, new_order, self.cfl)
+         print(f'Initializing level {i_level}, {discretization}, order {order}->{new_order}, elems {nb_elem_hori}x{nb_elem_vert}')
+         self.levels[i_level] = MultigridLevel(param, ptopo, self.rhs, discretization, nb_elem_hori, nb_elem_vert, order, new_order)
 
    def prepare(self, dt, field):
       """
@@ -303,16 +194,11 @@ class Multigrid:
 
       x = x0  # Initial guess can be None
 
-      # Avoid having "None" in the solution from now on
-      if x is None:
-         x = numpy.zeros_like(b)
-
       lvl_param = self.levels[level]
       A               = lvl_param.matrix_operator
       smoothe         = lvl_param.smoothe
       restrict        = lvl_param.restrict
       prolong         = lvl_param.prolong
-      dt              = numpy.ravel(lvl_param.pseudo_dt)
 
       if verbose:
          print(f'Residual at level {level}, : {linsol.global_norm(b.flatten() - (A(x.flatten()))):.4e}')
@@ -321,6 +207,10 @@ class Multigrid:
       for _ in range(lvl_param.num_pre_smoothe):
          x = smoothe(x, b)
          if verbose: print(f'   Presmooth  : {linsol.global_norm(b.flatten() - (A(x.flatten()))):.4e}')
+
+      # Avoid having "None" in the solution from now on
+      if x is None:
+         x = numpy.zeros_like(b)
 
       # level_work += lvl_param.smoother_work_unit * lvl_param.num_pre_smoothe * lvl_param.work_ratio
 
@@ -340,7 +230,10 @@ class Multigrid:
          # Just directly solve the problem
          # That's no very good, we should not use FGMRES to precondition FGMRES...
          if self.use_solver:
-            x, _, num_iter, _, _ = linsol.fgmres(A, b, x0=x, tol=1e-5)
+            t0 = time()
+            x, _, num_iter, _, _ = linsol.fgmres(A, b, x0=x, tol=lvl_param.param.precond_tolerance, verbose=False)
+            t1 = time()
+            if verbose: print(f'   Solved coarsest grid in {num_iter} iterations and {t1 - t0:.2f}s')
             # level_work += num_iter * lvl_param.work_ratio
       
       # Post smoothing
@@ -352,7 +245,7 @@ class Multigrid:
 
       if verbose: print(f'retour {level}: {linsol.global_norm(b.flatten() - (A(x.flatten())))}')
 
-      if verbose is True and level == num_levels:
+      if verbose is True and level == num_levels - 1:
          print('End multigrid')
          print(' ')
 
@@ -436,15 +329,16 @@ class Multigrid:
 # Smoothers
 ######################
 
-def kiops_smoothe(x, b, A, real_dt):
+def kiops_smoothe(x, b, A, real_dt, dt_factor):
 
-   def residual(t, xx):
+   def residual(t, xx=None):
+      if xx is None: return b / real_dt
       return (b - A(xx))/real_dt
 
-   n = x.size
+   n = b.size
    vec = numpy.zeros((2, n))
 
-   pseudo_dt = 1.1 * real_dt   # TODO : wild guess
+   pseudo_dt = dt_factor * real_dt   # TODO : wild guess
 
    J = lambda v: -A(v) * pseudo_dt / real_dt
 
@@ -456,36 +350,6 @@ def kiops_smoothe(x, b, A, real_dt):
 #      print('norm phiv', linsol.global_norm(phiv.flatten()))
 #      print(f'KIOPS converged at iteration {stats[2]} (using {stats[0]} internal substeps)'
 #               f' to a solution with local error {stats[4]:.2e}')
-   return x + phiv.flatten() * pseudo_dt
-
-def explicit_euler_smoothe(x, b, A, dt):
-   if x is None:
-      result = dt * b
-   else:
-      result = x + dt * (b - A(x))
+   result = phiv.flatten() * pseudo_dt
+   if x is not None: result += x
    return result
-
-def runge_kutta_stable_smoothe(x, b, A, dt, P=lambda v:v):
-   alpha1 = 0.145
-   alpha2 = 0.395
-   t0 = time()
-   if x is None:
-      # res0 = b
-      s1 = alpha1 * dt * P(b)
-      s2 = alpha2 * dt * P(b - A(s1))
-      x  = dt * P(b - A(s2))
-   else:
-      # res0 = b - A(x)
-      s1 = x + alpha1 * dt * P(b - A(x))
-      s2 = x + alpha2 * dt * P(b - A(s1))
-      x = x + dt * P(b - A(s2))
-
-   t1 = time()
-   # print(f'Smoothed in {t1-t0:.2f} s')
-
-   # res1 = b - A(x)
-   # n0 = numpy.linalg.norm(res0)
-   # n1 = numpy.linalg.norm(res1)
-   # print(f'res before {n0:.2e}, after {n1:.2e}, diff {(n0 - n1)/n0:.2e}')
-
-   return x

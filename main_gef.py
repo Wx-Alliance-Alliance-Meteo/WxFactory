@@ -67,12 +67,6 @@ def main(args) -> int:
       Q, topo = initialize_sw(geom, metric, mtrx, param)
       rhs_handle = lambda q: rhs_sw(q, geom, mtrx, metric, topo, ptopo, param.nbsolpts, param.nb_elements_horizontal)
 
-   prepare_output(param)
-
-   if param.output_freq > 0:
-      output_init(geom, param)
-      output_netcdf(Q, geom, metric, mtrx, topo, step, param)  # store initial conditions
-
    # Preconditioning
    preconditioner = None
    if param.preconditioner == 'p-mg':
@@ -81,6 +75,12 @@ def main(args) -> int:
       preconditioner = FiniteVolume(param, Q, ptopo, precond_type='fv-mg')
    elif param.preconditioner == 'fv':
       preconditioner = FiniteVolume(param, Q, ptopo, precond_type='fv')
+
+   prepare_output(param)
+
+   if param.output_freq > 0:
+      output_init(geom, param)
+      output_netcdf(Q, geom, metric, mtrx, topo, step, param)  # store initial conditions
 
    # Time stepping
    if param.time_integrator.lower()[:3] == 'epi' and param.time_integrator[3:].isdigit():
