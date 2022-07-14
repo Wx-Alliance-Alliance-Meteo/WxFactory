@@ -50,8 +50,6 @@ class StepState:
 
    def set_divided_differences(self, dd):
       self.divided_differences[self.latest_id] = dd
-      # print(f'setting dd to {dd}')
-      # raise ValueError
 
    def get_big_f(self):
       return self.F[self.latest_id]
@@ -64,9 +62,6 @@ class StepState:
 
    def set_x_complex(self, new_map):
       self.x_complex[self.latest_id] = new_map
-
-   # def tol(self):
-   #    return self.tolerances[self.latest_id]
 
    def get_jump(self):
       return self.jumps[self.latest_id]
