@@ -6,6 +6,7 @@ matplotlib.use('Agg')  # To be able to make plots even without an X server
 import matplotlib.pyplot as plt
 import numpy as np
 import sqlite3
+from time import time
 
 db_connection = None
 db_cursor     = None
@@ -26,45 +27,8 @@ class StdevFunc:
 
     def finalize(self):
         if self.k < 3:
-            return None
+            return 0.0
         return np.sqrt(self.S / (self.k-2))
-
-
-def keep_best_result(result_set, check_param):
-   
-   if len(result_set) == 0: return []
-
-   if not check_param:
-      best_time = np.inf
-      best_it   = np.iinfo(0).max
-      best_id   = -1
-
-      for i, data in enumerate(result_set):
-         num_it = data['num_solver_it']
-         time = data['solver_time']
-         if num_it >= 1:
-            if num_it < best_it or (num_it == best_it and time < best_time):
-               best_it   = num_it
-               best_time = time
-               best_id   = i
-         
-      return [result_set[best_id]]
-
-   # Gotta check params... Let's do this
-   best = {}
-   for i, data in enumerate(result_set):
-      param_set = (data['mg_levels'], data['mg_smoothe_only'], data['num_pre_smoothe'], data['num_post_smoothe'])
-      if param_set not in best:
-         if data['num_solver_it'] >= 1: best[param_set] = (data['num_solver_it'], data['solver_time'], i)
-      else:
-         best_it, best_time, best_id = best[param_set]
-         num_it = data['num_solver_it']
-         time   = data['solver_time']
-         if num_it >= 1:
-            if num_it < best_it or (num_it == best_it and time < best_time):
-               best[param_set] = (num_it, time, i)
-   
-   return [result_set[best[k][2]] for k in best]
 
 def extract_results(order, num_elem_h, num_elem_v, dt):
 
@@ -79,9 +43,11 @@ def extract_results(order, num_elem_h, num_elem_v, dt):
             {{precond_condition}}
       '''
 
-      base_query = f'''
-         select distinct {{columns}}
+      base_param_query = f'''
+         select {{columns}}, avg(solver_time), stdev(solver_time), avg(num_solver_it), stdev(num_solver_it)
          from ({base_subtable_query})
+         group by {{columns}}
+         order by num_mg_levels, mg_smoothe_only, kiops_dt_factor, (num_pre_smoothe + num_post_smoothe)
       '''.strip()
 
       base_residual_query = f'''
@@ -98,7 +64,7 @@ def extract_results(order, num_elem_h, num_elem_v, dt):
       '''.strip()
 
       results = []
-      param_query = base_query.format(columns = ', '.join(columns), precond_condition = precond_condition)
+      param_query = base_param_query.format(columns = ', '.join(columns), precond_condition = precond_condition)
       param_sets = db_cursor.execute(param_query).fetchall()
       
       for set in param_sets:
@@ -112,30 +78,41 @@ def extract_results(order, num_elem_h, num_elem_v, dt):
          set_result = {}
          for i, c in enumerate(columns):
             set_result[c] = set[i]
-         set_result['residuals'] = np.array([r[1] for r in residuals])
-         set_result['stdevs']    = np.array([r[2] if r[2] is not None else 0.0 for r in residuals])
+         set_result['time_avg']   = set[-4]
+         set_result['time_stdev'] = set[-3]
+         set_result['it_avg']     = set[-2]
+         set_result['it_stdev']   = set[-1]
+         set_result['residuals']  = np.array([r[1] for r in residuals])
+         set_result['stdevs']     = np.array([r[2] if r[2] is not None else 0.0 for r in residuals])
 
          results.append(set_result)
 
       return results
 
-   p_mg_results = get_single_precond_results(
-      ['linear_solver', 'precond_interp', 'num_mg_levels', 'mg_smoothe_only', 'num_pre_smoothe', 'num_post_smoothe'],
-      'precond = "p-mg"'
-   )
-
-   fv_mg_results = get_single_precond_results(
-      ['linear_solver', 'precond_interp', 'num_mg_levels', 'mg_smoothe_only', 'num_pre_smoothe', 'num_post_smoothe'],
-      'precond = "fv-mg"'
-   )
-
-   # print(f'p_mg_results: {p_mg_results}')
-
-   fv_ref = get_single_precond_results(['linear_solver', 'precond_tol'], 'precond = "fv"')
-   # print(f'fv_results: {fv_ref}')
-
+   t0 = time()
    no_precond = get_single_precond_results(['linear_solver'], 'precond = "none"')
-   # print(f'no precond result: {no_precond}')
+
+   no_precond_time = no_precond[0]['time_avg']
+   print(f'precond avg = {no_precond_time}')
+
+   t1 = time()
+   fv_ref = get_single_precond_results(['linear_solver', 'precond_tol'], f'precond = "fv" AND precond_tol > 1e-2')
+
+   t2 = time()
+   p_mg_results = get_single_precond_results(
+      ['linear_solver', 'precond_interp', 'num_mg_levels', 'kiops_dt_factor', 'mg_smoothe_only', 'precond_tol', 'num_pre_smoothe', 'num_post_smoothe'],
+      f'precond = "p-mg" AND solver_time < {3.0 * no_precond_time} AND (mg_smoothe_only = 1 OR precond_tol > 1e-5)'
+   )
+
+   t3 = time()
+   fv_mg_results = get_single_precond_results(
+      ['linear_solver', 'precond_interp', 'num_mg_levels', 'kiops_dt_factor', 'mg_smoothe_only', 'precond_tol', 'num_pre_smoothe', 'num_post_smoothe'],
+      f'precond = "fv-mg" AND solver_time < {3.0 * no_precond_time} AND (mg_smoothe_only = 1 OR precond_tol > 1e-5)'
+   )
+
+   t4 = time()
+
+   print(f'extracted results in {t4 - t0:.2f}s ({t1 - t0:.3f}, {t2 - t1:.3f}, {t3 - t2:.3f}, {t4 - t3:.3f})')
 
    return no_precond, fv_ref, p_mg_results, fv_mg_results
 
@@ -146,10 +123,9 @@ smoothings_linestyles = [None, (0, (1, 4)), (0, (1, 2)), (0, (3, 5, 1, 5)), (0, 
 mg_colors = ['blue', 'green', 'purple', 'teal', 'blue', 'green', 'purple']
 ref_colors = ['orange', 'magenta']
 
-def plot_residual(order, num_elem_h, num_elem_v, dt):
+def plot_residual(no_precond, fv_ref, p_mg, fv_mg, size):
 
-   no_precond, fv_ref, p_mg, fv_mg = extract_results(order, num_elem_h, num_elem_v, dt)
-   MAX_IT = 20
+   MAX_IT = 30
    max_res = 0
    min_res = np.inf
    max_it = 0
@@ -195,18 +171,56 @@ def plot_residual(order, num_elem_h, num_elem_v, dt):
    ax_res.set_yscale('log')
    ax_res.grid(True)
    ax_res.set_ylabel('Residual')
-   if max_res > 0.0: ax_res.set_ylim([min_res * 0.8, min(2e0, max_res * 1.5)])
+   if max_res > 0.0: ax_res.set_ylim([max(min_res * 0.8, 5e-8), min(2e0, max_res * 1.5)])
 
-   fig.suptitle(f'Residual evolution\n{order}x{num_elem_h}x{num_elem_v} elem, {dt} dt')
+   fig.suptitle(f'Residual evolution\n{size[0]}x{size[1]}x{size[2]} elem, {size[3]} dt')
    fig.legend()
-   full_filename = f'residual_{order}x{num_elem_h}x{num_elem_v}_{int(dt)}.pdf'
+   full_filename = f'residual_{size[0]}x{size[1]}x{size[2]}_{int(size[3])}.pdf'
    fig.savefig(full_filename)
    plt.close(fig)
    print(f'Saving {full_filename}')
 
-def plot_error_time(order, num_elem_h, num_elem_v, dt):
+def plot_time(no_precond, fv_ref, p_mg, fv_mg, size):
 
-   no_precond, fv_ref, p_mg, fv_mg = extract_results(order, num_elem_h, num_elem_v, dt)
+   factors = [f[0] for f in db_cursor.execute(f'select distinct kiops_dt_factor from results_param').fetchall()]
+
+   for factor in factors:
+      fig, ax_time = plt.subplots(1, 1, figsize=(20, 9))
+
+      names = []
+      times = []
+      errors = []
+
+      for _, data in enumerate(no_precond):
+         names.append('no_precond')
+         times.append(data['time_avg'])
+         errors.append(data['time_stdev'])
+
+      for _, data in enumerate(fv_ref):
+         names.append(f'fv, tol={data["precond_tol"]:.0e}')
+         times.append(data['time_avg'])
+         errors.append(data['time_stdev'])
+
+      for _, data in enumerate(p_mg):
+         if data['kiops_dt_factor'] == factor:
+            names.append(f'p-MG, {data["num_mg_levels"]} lvl, {data["num_pre_smoothe"]}/{data["num_post_smoothe"]} sm, {data["mg_smoothe_only"]}, {data["precond_tol"]:.0e}')
+            times.append(data['time_avg'])
+            errors.append(data['time_stdev'])
+
+      for i, data in enumerate(fv_mg):
+         pass
+
+      ax_time.barh(names, times, xerr=errors, log=False)
+      ax_time.invert_yaxis()
+
+      fig.suptitle(f'Time to solution for each timestep\n{size[0]}x{size[1]}x{size[2]} elem, {size[3]} dt\nkiops factor {factor}')
+      full_filename = f'step_time_{size[0]}x{size[1]}x{size[2]}_{int(size[3])}_{int(factor*100):03d}.pdf'
+      fig.savefig(full_filename)
+      plt.close(fig)
+      print(f'Saving {full_filename}')
+   
+
+def plot_error_time(no_precond, fv_ref, p_mg, fv_mg, size):
 
    max_time  = 0.0
    max_work  = 0.0
@@ -276,9 +290,9 @@ def plot_error_time(order, num_elem_h, num_elem_v, dt):
       ax_work.set_ylabel('Residual')
       ax_work.set_yscale('log')
 
-   fig.suptitle(f'Time (work) to reach accuracy\n{order}x{num_elem_h}x{num_elem_v} elem, {dt} dt')
+   fig.suptitle(f'Time (work) to reach accuracy\n{size[0]}x{size[1]}x{size[2]} elem, {size[3]} dt')
    fig.legend(loc='upper right')
-   full_filename = f'error_{order}x{num_elem_h}x{num_elem_v}_{int(dt)}.pdf'
+   full_filename = f'error_{size[0]}x{size[1]}x{size[2]}_{int(size[3])}.pdf'
    fig.savefig(full_filename)
    plt.close(fig)
    print(f'Saving {full_filename}')
@@ -292,23 +306,17 @@ def main(args):
 
    print(f'Sizes: {sizes}')
 
-   if args.plot_iter:
-      plot_iter(sizes)
-
-   if args.plot_residual:
-      for size in sizes:
-         plot_residual(size[0], size[1], size[2], size[3])
-
-   if args.error_time:
-      for size in sizes:
-         plot_error_time(size[0], size[1], size[2], size[3])
+   for size in sizes:
+      no_precond, fv_ref, p_mg, fv_mg = extract_results(size[0], size[1], size[2], size[3])
+      if args.plot_residual: plot_residual(no_precond, fv_ref, p_mg, fv_mg, size)
+      if args.plot_time:     plot_time(no_precond, fv_ref, p_mg, fv_mg, size)
+      if args.error_time:    plot_error_time(no_precond, fv_ref, p_mg, fv_mg, size)
 
 if __name__ == '__main__':
    import argparse
 
    parser = argparse.ArgumentParser(description='Plot results from automated preconditioner tests')
    parser.add_argument('results_file', type=str, help='DB file that contains test results')
-   parser.add_argument('--plot-iter', action='store_true', help='Plot the iterations and time with respect to various parameters')
    parser.add_argument('--plot-residual', action='store_true', help='Plot residual evolution')
    parser.add_argument('--plot-time', action='store_true', help='Plot the time needed to reach target residual')
    parser.add_argument('--error-time', action='store_true', help='Plot time needed to reach a certain error (residual) level')
