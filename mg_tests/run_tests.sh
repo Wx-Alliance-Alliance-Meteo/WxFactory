@@ -73,7 +73,7 @@ function compute_time_step() {
 }
 
 time_step=1800
-num_steps=1
+num_steps=10
 order=4
 nb_elements=10
 
@@ -100,13 +100,13 @@ if [ "x${1}" == "x--gen-configs" ]; then
     # element_counts="30 60 120"
     element_counts="60 120"
     # smoothings="0 1 2"
-    smoothe_patterns="01 10 11 12 21 22 33"
+    smoothe_patterns="01 10 11 12 21 22"
     # smoothe_patterns="33"
     mg_levels="1 2 3 4"
-    pre_tols="1e-1 1e-2 1e-5"
+    pre_tols="1e-1 1e-2"
     preconds="p-mg fv-mg"
     smoothe_onlys="1 0"
-    kiops_factors="0.8 1.0 1.2"
+    kiops_factors="0.7 1.0 1.2"
     #interps="lagrange l2-norm"
     interps="lagrange"
     for order in ${orders}; do
