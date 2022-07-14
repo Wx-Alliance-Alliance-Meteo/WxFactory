@@ -3,6 +3,7 @@
 import numpy
 import math
 import os
+import sys
 from time import time
 
 from blockstats      import blockstats
@@ -122,6 +123,7 @@ def main(args) -> int:
       Q = stepper.step(Q, param.dt)
       time_step = time() - tic
       print('Elapsed time for step: %0.3f secs' % time_step)
+      sys.stdout.flush()
 
       # Overwrite winds for some DCMIP tests
       if param.case_number == 11:
