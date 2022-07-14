@@ -113,10 +113,9 @@ class FiniteVolume:
 
       input_vec = numpy.ravel(self.restrict(vec))
 
-      max_iter = self.max_iter if self.param.precond_tolerance < 1e-1 else 1
-      if self.precond_type == 'fv':    # Finite volume preconditioner (reference, or simple FV)
+      if self.precond_type == 'fv':    # Finite volume preconditioner
          output_vec, _, num_iter, _, residuals = fgmres(
-            self.fv_matrix, input_vec, preconditioner=None, tol=self.param.precond_tolerance, maxiter=max_iter, verbose=False)
+            self.fv_matrix, input_vec, preconditioner=None, tol=self.param.precond_tolerance, maxiter=self.max_iter, verbose=False)
       elif self.precond_type == 'fv-mg':  # Multigrid preconditioner
          # output_vec, _, num_iter, _, residuals = self.mg_solver.solve(input_vec, coarsest_level=self.param.coarsest_mg_order, max_num_it=1, verbose=verbose)
          output_vec = self.mg_solver.iterate(input_vec, num_levels=self.param.num_mg_levels, verbose=False)
