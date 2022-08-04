@@ -6,11 +6,11 @@ from definitions import idx_rho_u1, idx_rho_u2, idx_rho_w, idx_rho, idx_rho_thet
 # For type hints
 from cubed_sphere import cubed_sphere
 from matrices import DFR_operators
-from metric import Metric
+from metric import Metric_3d_topo
 from parallel import Distributed_World
 
 #@profile
-def rhs_euler (Q: numpy.ndarray, geom: cubed_sphere, mtrx: DFR_operators, metric: Metric, topo, ptopo: Distributed_World, nbsolpts: int, nb_elements_hori: int, nb_elements_vert: int, case_number: int):
+def rhs_euler (Q: numpy.ndarray, geom: cubed_sphere, mtrx: DFR_operators, metric: Metric_3d_topo, topo, ptopo: Distributed_World, nbsolpts: int, nb_elements_hori: int, nb_elements_vert: int, case_number: int):
    '''Evaluate the right-hand side of the three-dimensional Euler equations
 
    This function evaluates RHS of the Euler equations using the four-demsional tensor formulation (see Charron 2014), returning
@@ -23,7 +23,7 @@ def rhs_euler (Q: numpy.ndarray, geom: cubed_sphere, mtrx: DFR_operators, metric
 
    Parameters
    ----------
-   Q : numpy.dtarray
+   Q : numpy.ndarray
       Input array of the current model state, indexed as (var,k,j,i)
    geom : cubed_sphere
       Geometry definition, containing parameters relating to the spherical coordinate system
@@ -125,7 +125,8 @@ def rhs_euler (Q: numpy.ndarray, geom: cubed_sphere, mtrx: DFR_operators, metric
    flux_x3 = metric.sqrtG * w  * Q
 
    # ... and add the pressure component
-   pressure = p0 * (Q[idx_rho_theta] * Rd / p0)**(cpd / cvd)
+   # Performance note: exp(log) is measuably faster than ** (pow)
+   pressure = p0 * numpy.exp((cpd/cvd) * numpy.log((Rd/p0)*Q[idx_rho_theta]))
 
    flux_x1[idx_rho_u1] += metric.sqrtG * metric.H_contra_11 * pressure
    flux_x1[idx_rho_u2] += metric.sqrtG * metric.H_contra_12 * pressure
@@ -138,6 +139,8 @@ def rhs_euler (Q: numpy.ndarray, geom: cubed_sphere, mtrx: DFR_operators, metric
    flux_x3[idx_rho_u1] += metric.sqrtG * metric.H_contra_31 * pressure
    flux_x3[idx_rho_u2] += metric.sqrtG * metric.H_contra_32 * pressure
    flux_x3[idx_rho_w]  += metric.sqrtG * metric.H_contra_33 * pressure
+
+   # if (ptopo.rank == 0): print('√g: %e, H^33: %e' % (metric.sqrtG[0,0],metric.H_contra_33[0,0]))
 
    # Interior contribution to the derivatives, corrections for the boundaries will be added later
    # The "interior contribution" here is evaluated as if the fluxes at the element boundaries are
@@ -175,7 +178,8 @@ def rhs_euler (Q: numpy.ndarray, geom: cubed_sphere, mtrx: DFR_operators, metric
    variables_itf_k[:, :, -1, 0, :] = variables_itf_k[:, :, -2, 1, :]
    variables_itf_k[:, :, -1, 1, :] = variables_itf_k[:, :, -1, 0, :] # Unused?
 
-   pressure_itf_k = p0 * (variables_itf_k[idx_rho_theta] * Rd / p0)**(cpd / cvd)
+   # Evaluate pressure at the vertical element interfaces based on ρθ.
+   pressure_itf_k = p0 * numpy.exp((cpd/cvd)*numpy.log(variables_itf_k[idx_rho_theta] * (Rd / p0)))
 
    # Take w ← (wρ)/ ρ at the vertical interfaces
    w_itf_k = variables_itf_k[idx_rho_w] / variables_itf_k[idx_rho]
@@ -187,10 +191,14 @@ def rhs_euler (Q: numpy.ndarray, geom: cubed_sphere, mtrx: DFR_operators, metric
    w_itf_k[:, -2, 1, :] = 0.
 
    # Common Rusanov vertical fluxes
+   # flux_D_itf_k = numpy.empty((nb_equations, nb_interfaces_vert, geom.nj, geom.ni))
+   # flux_U_itf_k = numpy.empty((nb_equations, nb_interfaces_vert, geom.nj, geom.ni))
+   # eig_D_itf_k = numpy.empty((nb_interfaces_vert, geom.nj, geom.ni))
+   # eig_U_itf_k = numpy.empty((nb_interfaces_vert, geom.nj, geom.ni))
    for itf in range(nb_interfaces_vert):
 
       elem_D = itf
-      elem_U = itf + 1
+      elem_U = itf + 1 
 
       # Direction x3
 
@@ -201,49 +209,59 @@ def rhs_euler (Q: numpy.ndarray, geom: cubed_sphere, mtrx: DFR_operators, metric
          eig_D = numpy.abs(w_D)
          eig_U = numpy.abs(w_U)
       else: # Maximum eigenvalue is w + (c_sound)
-         eig_D = numpy.abs(w_D) + numpy.sqrt(metric.H_contra_33 * heat_capacity_ratio * pressure_itf_k[:, elem_D, 1, :] / variables_itf_k[idx_rho, :, elem_D, 1, :])
-         eig_U = numpy.abs(w_U) + numpy.sqrt(metric.H_contra_33 * heat_capacity_ratio * pressure_itf_k[:, elem_U, 0, :] / variables_itf_k[idx_rho, :, elem_U, 0, :])
+         eig_D = numpy.abs(w_D) + numpy.sqrt(metric.H_contra_33_itf_k[itf,:,:] * heat_capacity_ratio * \
+                                                pressure_itf_k[:, elem_D, 1, :] / variables_itf_k[idx_rho, :, elem_D, 1, :])
+         eig_U = numpy.abs(w_U) + numpy.sqrt(metric.H_contra_33_itf_k[itf,:,:] * heat_capacity_ratio * \
+                                                pressure_itf_k[:, elem_U, 0, :] / variables_itf_k[idx_rho, :, elem_U, 0, :])
 
       eig = numpy.maximum(eig_D, eig_U)
 
       # Advective part of the flux ...
-      flux_D = metric.sqrtG * w_D * variables_itf_k[:, :, elem_D, 1, :]
-      flux_U = metric.sqrtG * w_U * variables_itf_k[:, :, elem_U, 0, :]
+      flux_D = metric.sqrtG_itf_k[itf,:,:] * w_D * variables_itf_k[:, :, elem_D, 1, :]
+      flux_U = metric.sqrtG_itf_k[itf,:,:] * w_U * variables_itf_k[:, :, elem_U, 0, :]
+
+      # eig_D_itf_k[itf,:,:] = eig_D
+      # eig_U_itf_k[itf,:,:] = eig_U
+      # flux_D_itf_k[:,itf,:,:] = flux_D
+      # flux_U_itf_k[:,itf,:,:] = flux_U
 
       # ... and add the pressure part
-      flux_D[idx_rho_u1] += metric.sqrtG * metric.H_contra_31 * pressure_itf_k[:, elem_D, 1, :]
-      flux_D[idx_rho_u2] += metric.sqrtG * metric.H_contra_32 * pressure_itf_k[:, elem_D, 1, :]
-      flux_D[idx_rho_w] += metric.sqrtG * metric.H_contra_33 * pressure_itf_k[:, elem_D, 1, :]
+      flux_D[idx_rho_u1] += metric.sqrtG_itf_k[itf,:,:] * metric.H_contra_31_itf_k[itf,:,:] * pressure_itf_k[:, elem_D, 1, :]
+      flux_D[idx_rho_u2] += metric.sqrtG_itf_k[itf,:,:] * metric.H_contra_32_itf_k[itf,:,:] * pressure_itf_k[:, elem_D, 1, :]
+      flux_D[idx_rho_w]  += metric.sqrtG_itf_k[itf,:,:] * metric.H_contra_33_itf_k[itf,:,:] * pressure_itf_k[:, elem_D, 1, :]
 
-      flux_U[idx_rho_u1] += metric.sqrtG * metric.H_contra_31 * pressure_itf_k[:, elem_U, 0, :]
-      flux_U[idx_rho_u2] += metric.sqrtG * metric.H_contra_32 * pressure_itf_k[:, elem_U, 0, :]
-      flux_U[idx_rho_w] += metric.sqrtG * metric.H_contra_33 * pressure_itf_k[:, elem_U, 0, :]
+      flux_U[idx_rho_u1] += metric.sqrtG_itf_k[itf,:,:] * metric.H_contra_31_itf_k[itf,:,:] * pressure_itf_k[:, elem_U, 0, :]
+      flux_U[idx_rho_u2] += metric.sqrtG_itf_k[itf,:,:] * metric.H_contra_32_itf_k[itf,:,:] * pressure_itf_k[:, elem_U, 0, :]
+      flux_U[idx_rho_w]  += metric.sqrtG_itf_k[itf,:,:] * metric.H_contra_33_itf_k[itf,:,:] * pressure_itf_k[:, elem_U, 0, :]
 
       # Riemann solver
-      flux_x3_itf_k[:, :, elem_D, 1, :] = 0.5 * ( flux_D + flux_U - eig * metric.sqrtG * ( variables_itf_k[:, :, elem_U, 0, :] - variables_itf_k[:, :, elem_D, 1, :] ) )
+      flux_x3_itf_k[:, :, elem_D, 1, :] = 0.5 * ( flux_D + flux_U - eig * metric.sqrtG_itf_k[itf,:,:] * ( variables_itf_k[:, :, elem_U, 0, :] - variables_itf_k[:, :, elem_D, 1, :] ) )
       flux_x3_itf_k[:, :, elem_U, 0, :] = flux_x3_itf_k[:, :, elem_D, 1, :]
 
    for slab in range(nb_pts_hori):
       for elem in range(nb_elements_vert):
          epais = elem * nbsolpts + numpy.arange(nbsolpts)
          # TODO : inclure la transformation vers l'élément de référence dans la vitesse w.
-         df3_dx3[:, epais, slab, :] = ( mtrx.diff_solpt @ flux_x3[:, epais, slab, :] + mtrx.correction @ flux_x3_itf_k[:, slab, elem+offset, :, :] ) * 2.0 / geom.Δx3
+         df3_dx3[:, epais, slab, :] = ( mtrx.diff_solpt @ flux_x3[:, epais, slab, :] + mtrx.correction @ flux_x3_itf_k[:, slab, elem+offset, :, :] ) #* 2.0 / geom.Δx3
 
    # Finish transfers
    all_request.wait()
+   
+   # sys.exit(1)
 
    # Define u, v at the interface by dividing momentum and density
    u1_itf_i = variables_itf_i[idx_rho_u1] / variables_itf_i[idx_rho]
    u2_itf_j = variables_itf_j[idx_rho_u2] / variables_itf_j[idx_rho]
 
-   pressure_itf_i = p0 * (variables_itf_i[idx_rho_theta] * Rd / p0)**(cpd / cvd)
-   pressure_itf_j = p0 * (variables_itf_j[idx_rho_theta] * Rd / p0)**(cpd / cvd)
+   # Evaluate pressure at the lateral interfaces
+   pressure_itf_i = p0 * numpy.exp((cpd/cvd) * numpy.log(variables_itf_i[idx_rho_theta] * (Rd / p0)))
+   pressure_itf_j = p0 * numpy.exp((cpd/cvd) * numpy.log(variables_itf_j[idx_rho_theta] * (Rd / p0)))
 
    # Riemann solver
    for itf in range(nb_interfaces_hori):
 
       elem_L = itf
-      elem_R = itf + 1
+      elem_R = itf + 1 
 
       # Direction x1
       u1_L = u1_itf_i[:, elem_L, 1, :] # u at the right interface of the left element
@@ -253,27 +271,27 @@ def rhs_euler (Q: numpy.ndarray, geom: cubed_sphere, mtrx: DFR_operators, metric
          eig_L = numpy.abs( u1_L )
          eig_R = numpy.abs( u1_R )
       else: # Otherwise, maximum eigenvalue is |u| + c_sound
-         eig_L = numpy.abs( u1_L ) + numpy.sqrt(metric.H_contra_11_itf_i[itf, :] * heat_capacity_ratio * pressure_itf_i[:, elem_L, 1, :] / variables_itf_i[idx_rho, :, elem_L, 1, :])
-         eig_R = numpy.abs( u1_R ) + numpy.sqrt(metric.H_contra_11_itf_i[itf, :] * heat_capacity_ratio * pressure_itf_i[:, elem_R, 0, :] / variables_itf_i[idx_rho, :, elem_R, 0, :])
+         eig_L = numpy.abs( u1_L ) + numpy.sqrt(metric.H_contra_11_itf_i[:,:,itf] * heat_capacity_ratio * pressure_itf_i[:, elem_L, 1, :] / variables_itf_i[idx_rho, :, elem_L, 1, :])
+         eig_R = numpy.abs( u1_R ) + numpy.sqrt(metric.H_contra_11_itf_i[:,:,itf] * heat_capacity_ratio * pressure_itf_i[:, elem_R, 0, :] / variables_itf_i[idx_rho, :, elem_R, 0, :])
 
       eig = numpy.maximum(eig_L, eig_R)
 
       # Advective part of the flux ...
-      flux_L = metric.sqrtG_itf_i[itf, :] * u1_L * variables_itf_i[:, :, elem_L, 1, :]
-      flux_R = metric.sqrtG_itf_i[itf, :] * u1_R * variables_itf_i[:, :, elem_R, 0, :]
+      flux_L = metric.sqrtG_itf_i[:, :, itf] * u1_L * variables_itf_i[:, :, elem_L, 1, :]
+      flux_R = metric.sqrtG_itf_i[:, :, itf] * u1_R * variables_itf_i[:, :, elem_R, 0, :]
 
       # ... and now add the pressure contribution
-      flux_L[idx_rho_u1] += metric.sqrtG_itf_i[itf, :] * metric.H_contra_11_itf_i[itf, :] * pressure_itf_i[:, elem_L, 1, :]
-      flux_L[idx_rho_u2] += metric.sqrtG_itf_i[itf, :] * metric.H_contra_12_itf_i[itf, :] * pressure_itf_i[:, elem_L, 1, :]
-      flux_L[idx_rho_w]  += metric.sqrtG_itf_i[itf, :] * metric.H_contra_13_itf_i[itf, :] * pressure_itf_i[:, elem_L, 1, :]
+      flux_L[idx_rho_u1] += metric.sqrtG_itf_i[:, :, itf] * metric.H_contra_11_itf_i[:, :, itf] * pressure_itf_i[:, elem_L, 1, :]
+      flux_L[idx_rho_u2] += metric.sqrtG_itf_i[:, :, itf] * metric.H_contra_12_itf_i[:, :, itf] * pressure_itf_i[:, elem_L, 1, :]
+      flux_L[idx_rho_w]  += metric.sqrtG_itf_i[:, :, itf] * metric.H_contra_13_itf_i[:, :, itf] * pressure_itf_i[:, elem_L, 1, :]
                                                                                         
-      flux_R[idx_rho_u1] += metric.sqrtG_itf_i[itf, :] * metric.H_contra_11_itf_i[itf, :] * pressure_itf_i[:, elem_R, 0, :]
-      flux_R[idx_rho_u2] += metric.sqrtG_itf_i[itf, :] * metric.H_contra_12_itf_i[itf, :] * pressure_itf_i[:, elem_R, 0, :]
-      flux_R[idx_rho_w]  += metric.sqrtG_itf_i[itf, :] * metric.H_contra_13_itf_i[itf, :] * pressure_itf_i[:, elem_R, 0, :]
+      flux_R[idx_rho_u1] += metric.sqrtG_itf_i[:, :, itf] * metric.H_contra_11_itf_i[:, :, itf] * pressure_itf_i[:, elem_R, 0, :]
+      flux_R[idx_rho_u2] += metric.sqrtG_itf_i[:, :, itf] * metric.H_contra_12_itf_i[:, :, itf] * pressure_itf_i[:, elem_R, 0, :]
+      flux_R[idx_rho_w]  += metric.sqrtG_itf_i[:, :, itf] * metric.H_contra_13_itf_i[:, :, itf] * pressure_itf_i[:, elem_R, 0, :]
 
       # --- Common Rusanov fluxes
 
-      flux_x1_itf_i[:, :, elem_L, :, 1] = 0.5 * ( flux_L  + flux_R - eig * metric.sqrtG_itf_i[itf, :] * ( variables_itf_i[:, :, elem_R, 0, :] - variables_itf_i[:, :, elem_L, 1, :] ) )
+      flux_x1_itf_i[:, :, elem_L, :, 1] = 0.5 * ( flux_L  + flux_R - eig * metric.sqrtG_itf_i[:, :, itf] * ( variables_itf_i[:, :, elem_R, 0, :] - variables_itf_i[:, :, elem_L, 1, :] ) )
       flux_x1_itf_i[:, :, elem_R, :, 0] = flux_x1_itf_i[:, :, elem_L, :, 1]
 
       # Direction x2
@@ -285,27 +303,27 @@ def rhs_euler (Q: numpy.ndarray, geom: cubed_sphere, mtrx: DFR_operators, metric
          eig_L = numpy.abs( u2_L )
          eig_R = numpy.abs( u2_R )
       else:
-         eig_L = numpy.abs( u2_L ) + numpy.sqrt(metric.H_contra_22_itf_j[itf, :] * heat_capacity_ratio * pressure_itf_j[:, elem_L, 1, :] / variables_itf_j[idx_rho, :, elem_L, 1, :])
-         eig_R = numpy.abs( u2_R ) + numpy.sqrt(metric.H_contra_22_itf_j[itf, :] * heat_capacity_ratio * pressure_itf_j[:, elem_R, 0, :] / variables_itf_j[idx_rho, :, elem_R, 0, :])
+         eig_L = numpy.abs( u2_L ) + numpy.sqrt(metric.H_contra_22_itf_j[:, itf, :] * heat_capacity_ratio * pressure_itf_j[:, elem_L, 1, :] / variables_itf_j[idx_rho, :, elem_L, 1, :])
+         eig_R = numpy.abs( u2_R ) + numpy.sqrt(metric.H_contra_22_itf_j[:, itf, :]  * heat_capacity_ratio * pressure_itf_j[:, elem_R, 0, :] / variables_itf_j[idx_rho, :, elem_R, 0, :])
 
       eig = numpy.maximum(eig_L, eig_R)
 
       # Advective part of the flux
-      flux_L = metric.sqrtG_itf_j[itf, :] * u2_L * variables_itf_j[:, :, elem_L, 1, :]
-      flux_R = metric.sqrtG_itf_j[itf, :] * u2_R * variables_itf_j[:, :, elem_R, 0, :]
+      flux_L = metric.sqrtG_itf_j[:, itf, :] * u2_L * variables_itf_j[:, :, elem_L, 1, :]
+      flux_R = metric.sqrtG_itf_j[:, itf, :] * u2_R * variables_itf_j[:, :, elem_R, 0, :]
 
       # ... and now add the pressure contribution
-      flux_L[idx_rho_u1] += metric.sqrtG_itf_j[itf, :] * metric.H_contra_21_itf_j[itf, :] * pressure_itf_j[:, elem_L, 1, :]
-      flux_L[idx_rho_u2] += metric.sqrtG_itf_j[itf, :] * metric.H_contra_22_itf_j[itf, :] * pressure_itf_j[:, elem_L, 1, :]
-      flux_L[idx_rho_w] += metric.sqrtG_itf_j[itf, :] * metric.H_contra_23_itf_j[itf, :] * pressure_itf_j[:, elem_L, 1, :]
+      flux_L[idx_rho_u1] += metric.sqrtG_itf_j[:, itf, :]  * metric.H_contra_21_itf_j[:, itf, :]  * pressure_itf_j[:, elem_L, 1, :]
+      flux_L[idx_rho_u2] += metric.sqrtG_itf_j[:, itf, :]  * metric.H_contra_22_itf_j[:, itf, :]  * pressure_itf_j[:, elem_L, 1, :]
+      flux_L[idx_rho_w] += metric.sqrtG_itf_j[:, itf, :]  * metric.H_contra_23_itf_j[:, itf, :]  * pressure_itf_j[:, elem_L, 1, :]
 
-      flux_R[idx_rho_u1] += metric.sqrtG_itf_j[itf, :] * metric.H_contra_21_itf_j[itf, :] * pressure_itf_j[:, elem_R, 0, :]
-      flux_R[idx_rho_u2] += metric.sqrtG_itf_j[itf, :] * metric.H_contra_22_itf_j[itf, :] * pressure_itf_j[:, elem_R, 0, :]
-      flux_R[idx_rho_w] += metric.sqrtG_itf_j[itf, :] * metric.H_contra_23_itf_j[itf, :] * pressure_itf_j[:, elem_R, 0, :]
+      flux_R[idx_rho_u1] += metric.sqrtG_itf_j[:, itf, :]  * metric.H_contra_21_itf_j[:, itf, :]  * pressure_itf_j[:, elem_R, 0, :]
+      flux_R[idx_rho_u2] += metric.sqrtG_itf_j[:, itf, :]  * metric.H_contra_22_itf_j[:, itf, :]  * pressure_itf_j[:, elem_R, 0, :]
+      flux_R[idx_rho_w] += metric.sqrtG_itf_j[:, itf, :]  * metric.H_contra_23_itf_j[:, itf, :]  * pressure_itf_j[:, elem_R, 0, :]
 
       # --- Common Rusanov fluxes
 
-      flux_x2_itf_j[:, :, elem_L, 1, :] = 0.5 * ( flux_L + flux_R - eig * metric.sqrtG_itf_j[itf, :] * ( variables_itf_j[:, :, elem_R, 0, :] - variables_itf_j[:, :, elem_L, 1, :] ) )
+      flux_x2_itf_j[:, :, elem_L, 1, :] = 0.5 * ( flux_L + flux_R - eig * metric.sqrtG_itf_j[:, itf, :]  * ( variables_itf_j[:, :, elem_R, 0, :] - variables_itf_j[:, :, elem_L, 1, :] ) )
       flux_x2_itf_j[:, :, elem_R, 0, :] = flux_x2_itf_j[:, :, elem_L, 1, :]
 
    # Add corrections to the derivatives
@@ -323,30 +341,33 @@ def rhs_euler (Q: numpy.ndarray, geom: cubed_sphere, mtrx: DFR_operators, metric
    # Add coriolis, metric terms and other forcings
    forcing[idx_rho,:,:,:] = 0.0
 
+
+
    # TODO: could be simplified
+   #pressure = 0
    forcing[idx_rho_u1] = 2.0 * ( metric.christoffel_1_01 * rho * u1 + metric.christoffel_1_02 * rho * u2 + metric.christoffel_1_03 * rho * w) \
-         +       metric.christoffel_1_11 * rho * u1 * u1  \
-         + 2.0 * metric.christoffel_1_12 * rho * u1 * u2 \
-         + 2.0 * metric.christoffel_1_13 * rho * u1 * w \
-         +       metric.christoffel_1_22 * rho * u2 * u2 \
-         + 2.0 * metric.christoffel_1_23 * rho * u2 * w \
-         +       metric.christoffel_1_33 * rho * w * w
+         +       metric.christoffel_1_11 * (rho * u1 * u1 + metric.H_contra_11*pressure) \
+         + 2.0 * metric.christoffel_1_12 * (rho * u1 * u2 + metric.H_contra_12*pressure) \
+         + 2.0 * metric.christoffel_1_13 * (rho * u1 * w  + metric.H_contra_13*pressure) \
+         +       metric.christoffel_1_22 * (rho * u2 * u2 + metric.H_contra_22*pressure) \
+         + 2.0 * metric.christoffel_1_23 * (rho * u2 * w  + metric.H_contra_23*pressure) \
+         +       metric.christoffel_1_33 * (rho * w * w   + metric.H_contra_33*pressure) 
 
    forcing[idx_rho_u2] = 2.0 * (metric.christoffel_2_01 * rho * u1 + metric.christoffel_2_02 * rho * u2 + metric.christoffel_2_03 * rho * w) \
-         +       metric.christoffel_2_11 * rho * u1 * u1  \
-         + 2.0 * metric.christoffel_2_12 * rho * u1 * u2 \
-         + 2.0 * metric.christoffel_2_13 * rho * u1 * w \
-         +       metric.christoffel_2_22 * rho * u2 * u2 \
-         + 2.0 * metric.christoffel_2_23 * rho * u2 * w \
-         +       metric.christoffel_2_33 * rho * w * w
+         +       metric.christoffel_2_11 * (rho * u1 * u1 + metric.H_contra_11*pressure) \
+         + 2.0 * metric.christoffel_2_12 * (rho * u1 * u2 + metric.H_contra_12*pressure) \
+         + 2.0 * metric.christoffel_2_13 * (rho * u1 * w  + metric.H_contra_13*pressure) \
+         +       metric.christoffel_2_22 * (rho * u2 * u2 + metric.H_contra_22*pressure) \
+         + 2.0 * metric.christoffel_2_23 * (rho * u2 * w  + metric.H_contra_23*pressure) \
+         +       metric.christoffel_2_33 * (rho * w * w   + metric.H_contra_33*pressure) 
 
    forcing[idx_rho_w] = 2.0 * (metric.christoffel_3_01 * rho * u1 + metric.christoffel_3_02 * rho * u2 + metric.christoffel_3_03 * rho * w) \
-         +       metric.christoffel_3_11 * rho * u1 * u1 \
-         + 2.0 * metric.christoffel_3_12 * rho * u1 * u2 \
-         + 2.0 * metric.christoffel_3_13 * rho * u1 * w \
-         +       metric.christoffel_3_22 * rho * u2 * u2 \
-         + 2.0 * metric.christoffel_3_23 * rho * u2 * w \
-         +       metric.christoffel_3_33 * rho * w * w \
+         +       metric.christoffel_3_11 * (rho * u1 * u1 + metric.H_contra_11*pressure) \
+         + 2.0 * metric.christoffel_3_12 * (rho * u1 * u2 + metric.H_contra_12*pressure) \
+         + 2.0 * metric.christoffel_3_13 * (rho * u1 * w  + metric.H_contra_13*pressure) \
+         +       metric.christoffel_3_22 * (rho * u2 * u2 + metric.H_contra_22*pressure) \
+         + 2.0 * metric.christoffel_3_23 * (rho * u2 * w  + metric.H_contra_23*pressure) \
+         +       metric.christoffel_3_33 * (rho * w * w   + metric.H_contra_33*pressure) \
          + metric.inv_dzdeta * rho * gravity
 
    forcing[idx_rho_theta] = 0.0

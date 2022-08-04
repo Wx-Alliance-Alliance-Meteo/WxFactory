@@ -174,6 +174,7 @@ class Epi:
       self.init_substeps = init_substeps
 
    def step(self, Q: numpy.ndarray, dt: float):
+      # print('step')
       # If dt changes, discard saved value and redo initialization
       mpirank = mpi4py.MPI.COMM_WORLD.Get_rank()
       if self.dt and abs(self.dt - dt) > 1e-10:
@@ -324,12 +325,21 @@ class EpiStiff:
       # Update solution
       return Q + numpy.reshape(phiv, Q.shape) * dt
 
+class Euler1:
+   def __init__(self, rhs):
+      self.rhs = rhs
+
+   def step(self, Q, dt):
+      Q = Q + self.rhs(Q) * dt
+      return Q
+
 class Tvdrk3:
    def __init__(self, rhs):
       self.rhs = rhs
 
    def step(self, Q, dt):
       Q1 = Q + self.rhs(Q) * dt
+      #Q = Q + self.rhs(Q) * dt
       Q2 = 0.75 * Q + 0.25 * Q1 + 0.25 * self.rhs(Q1) * dt
       Q = 1.0 / 3.0 * Q + 2.0 / 3.0 * Q2 + 2.0 / 3.0 * self.rhs(Q2) * dt
       return Q

@@ -33,7 +33,8 @@ def output_init(geom, param):
    grid_data2D = ('npe', 'Xdim', 'Ydim')
 
    ncfile.createDimension('time', None) # unlimited
-   ncfile.createDimension('npe', mpi4py.MPI.COMM_WORLD.Get_size())
+   npe = mpi4py.MPI.COMM_WORLD.Get_size()
+   ncfile.createDimension('npe', npe)
    ncfile.createDimension('Ydim', ni)
    ncfile.createDimension('Xdim', nj)
 
@@ -121,6 +122,22 @@ def output_init(geom, param):
          dpv.set_collective(True)
 
    elif param.equations == "Euler":
+      elev = ncfile.createVariable('elev', numpy.dtype('double').char, grid_data)
+      elev.long_name = 'Elevation'
+      elev.units = 'm'
+      elev.standard_name = 'Elevation'
+      elev.coordinates = 'lons lats'
+      elev.grid_mapping = 'cubed_sphere'
+      elev.set_collective(True)
+
+      topo = ncfile.createVariable('topo', numpy.dtype('double').char, grid_data2D)
+      topo.long_name = 'Topopgraphy'
+      topo.units = 'm'
+      topo.standard_name = 'Topography'
+      topo.coordinates = 'lons lats'
+      topo.grid_mapping = 'cubed_sphere'
+      topo.set_collective(True)
+
       uuu = ncfile.createVariable('U', numpy.dtype('double').char, ('time', ) + grid_data)
       uuu.long_name = 'eastward_wind'
       uuu.units = 'm s-1'
@@ -209,11 +226,15 @@ def output_init(geom, param):
       xxx[:] = geom.x1[:]
       yyy[:] = geom.x2[:]
       if param.equations == "Euler":
-         zzz[:] = geom.x3[:]
+         # FIXME: With mapped coordinates, x3/height is a truly 3D coordinate
+         zzz[:] = geom.x3[:,0,0] 
 
    tile[rank] = rank
    lon[rank,:,:] = geom.lon * 180/math.pi
    lat[rank,:,:] = geom.lat * 180/math.pi
+   if param.equations == "Euler":
+      elev[rank,:,:,:] = geom.coordVec_latlon[2,:,:,:]
+      topo[rank,:,:] = geom.zbot[:,:]
 
 
 def output_netcdf(Q, geom, metric, mtrx, topo, step, param):

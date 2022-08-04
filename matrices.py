@@ -6,14 +6,15 @@ import sys
 
 from cubed_sphere import cubed_sphere
 
+# from cubed_sphere import cubed_sphere
+
 class DFR_operators:
-   def __init__(self, grd: cubed_sphere, filter_apply=False, filter_order=8, filter_cutoff=0.25):
+   def __init__(self, grd, filter_apply=False, filter_order=8, filter_cutoff=0.25):
       '''Initialize the Direct Flux Reconstruction operators
       
       This initializes the DFR operators (matrices) based on input grid parameters.  The relevant internal matrices are:
          * The extrapolation matrices, `extrap_west`, `extrap_east`, `extrap_south`, `extrap_north`, `extrap_down`, and
            `extrap_up`.
-         *
 
       Parameters
       ----------
@@ -51,9 +52,9 @@ class DFR_operators:
       else:
          self.diff_ext = diff
 
-      if check_skewcentrosymmetry(self.diff_ext) is False:
-         print('Something horribly wrong has happened in the creation of the differentiation matrix')
-         exit(1)
+      # if check_skewcentrosymmetry(self.diff_ext) is False:
+      #    print('Something horribly wrong has happened in the creation of the differentiation matrix')
+      #    exit(1)
 
       # Force matrices to be in C-contiguous order
       self.diff_solpt = numpy.ascontiguousarray( self.diff_ext[1:-1, 1:-1] )
@@ -67,6 +68,264 @@ class DFR_operators:
       self.diff_tr = self.diff.T
 
       self.quad_weights = numpy.outer(grd.glweights, grd.glweights)
+
+   def comma_i(self, field_interior, border_i, grid: cubed_sphere):
+      '''Take a partial derivative along the i-index
+      
+      This method takes the partial derivative of an input field, potentially consisting of several
+      variables, along the `i` index.  This derivative is performed with respect to the canonical element,
+      so it contains no corrections for the problem geometry.
+
+      Parameters
+      ----------
+      field_interior : numpy.array
+         The element-interior values of the variable(s) to be differentiated.  This should have
+         a shape of `(numvars,npts_z,npts_y,npts_x)`, respecting the prevailing parallel decomposition.
+      border_i : numpy.array
+         The element-boundary values of the fields to be differentiated, along the i-axis.  This should
+         have a shape of `(numvars,npts_z,npts_y,nels_x,2)`, with [:,0] being the leftmost boundary
+         (minimal `i`), and [:,1] being the rightmost boundary (maximal `i`)
+      grid : cubed_sphere
+         Grid-defining class, used here solely to provide the canonical definition of the local
+         computational region.
+      '''
+      # Create an empty array for output
+      output = numpy.empty_like(field_interior)
+
+      # Create views of the input arrays for reshaping, in order to express the differentiation as
+      # a set of matrix multiplications
+
+      field_view = field_interior.view()
+      border_i_view = border_i.view()
+
+      # Reshape to a flat view.  Assigning to array.shape will raise an exception if the new shape would
+      # require a memory copy; this implicitly ensures that the input arrays are fully contiguous in
+      # memory.
+      field_view.shape = (-1, grid.nbsolpts)
+      border_i_view.shape = (-1,2)
+      output.shape = field_view.shape
+
+      # Perform the matrix transposition
+      output[:] = field_view @ self.diff_solpt_tr + border_i_view @ self.correction_tr
+      # print(grid.ptopo.rank, field_view[:2,:], '\n', border_i_view[:2,:],'\n',output[:2,:])
+
+      # Reshape the output array back to its canonical extents
+      output.shape = field_interior.shape
+
+      return output
+
+   def extrapolate_i(self, field_interior, grid):
+      '''Compute the i-border values along each element of field_interior
+
+      This method extrapolates the variables in `field_interior` to the boundary along
+      the i-dimension (last index), using the `extrap_west` and `extrap_east` matrices.
+
+      Parameters
+      ----------
+      field_interior : numpy.array
+         The element-interior values of the variable(s) to be differentiated.  This should have
+         a shape of `(numvars,npts_z,npts_y,npts_x)`, respecting the prevailing parallel decomposition.
+      grid : cubed_sphere
+         Grid-defining class, used here solely to provide the canonical definition of the local
+         computational region.'''
+
+      # Array shape for the i-border of a single variable, based on the grid decomposition
+      border_shape = (grid.nb_elements_x1,2)
+      # Number of variables we're extending
+      nbvars = numpy.prod(field_interior.shape) // (grid.ni)
+
+      # Create an array for the output
+      border = numpy.empty((nbvars,) + border_shape, dtype=field_interior.dtype)
+      # Reshape to the from required for matrix multiplication
+      border.shape = (-1,2)
+
+      # Create an array view of the interior, reshaped for matrix multiplication
+      field_interior_view = field_interior.view()
+      field_interior_view.shape = (-1,grid.nbsolpts)
+
+      # Perform the extrapolations via matrix multiplication
+      border[:,0] = field_interior_view @ self.extrap_west
+      border[:,1] = field_interior_view @ self.extrap_east
+
+      border.shape = tuple(field_interior.shape[0:-1]) + border_shape
+      return border
+
+   def comma_j(self, field_interior, border_j, grid):
+      '''Take a partial derivative along the j-index
+      
+      This method takes the partial derivative of an input field, potentially consisting of several
+      variables, along the `j` index.  This derivative is performed with respect to the canonical element,
+      so it contains no corrections for the problem geometry.
+
+      Parameters
+      ----------
+      field_interior : numpy.array
+         The element-interior values of the variable(s) to be differentiated.  This should have
+         a shape of `(numvars,npts_z,npts_y,npts_x)`, respecting the prevailing parallel decomposition.
+      border_j : numpy.array
+         The element-boundary values of the fields to be differentiated, along the i-axis.  This should
+         have a shape of `(numvars,npts_z,nels_y,2,npts_x)`, with [:,0,:] being the southmost boundary
+         (minimal `j`), and [:,1,:] being the north boundary (maximal `j`)
+      grid : cubed_sphere
+         Grid-defining class, used here solely to provide the canonical definition of the local
+         computational region.
+      '''
+      # Create an empty array for output
+      output = numpy.empty_like(field_interior)
+      # Compute the number of variables we're differentiating, including number of levels
+      nbvars = numpy.prod(output.shape) // (grid.ni * grid.nj)
+
+      # Create views of the input arrays for reshaping, in order to express the differentiation as
+      # a set of matrix multiplications
+
+      field_view = field_interior.view()
+      border_j_view = border_j.view()
+
+      # Reshape to a flat view.  Assigning to array.shape will raise an exception if the new shape would
+      # require a memory copy; this implicitly ensures that the input arrays are fully contiguous in
+      # memory.
+      field_view.shape = (nbvars*grid.nb_elements_x2,grid.nbsolpts,grid.ni)
+      border_j_view.shape = (nbvars*grid.nb_elements_x2,2,grid.ni)
+      output.shape = field_view.shape
+
+      # Perform the matrix transposition
+      output[:] = self.diff_solpt @ field_view + self.correction @ border_j_view
+
+      # Reshape the output array back to its canonical extents
+      output.shape = field_interior.shape
+
+      return output
+
+   def extrapolate_j(self, field_interior, grid):
+      '''Compute the j-border values along each element of field_interior
+
+      This method extrapolates the variables in `field_interior` to the boundary along
+      the j-dimension (second last index), using the `extrap_south` and `extrap_north` matrices.
+
+      Parameters
+      ----------
+      field_interior : numpy.array
+         The element-interior values of the variable(s) to be differentiated.  This should have
+         a shape of `(numvars,npts_z,npts_y,npts_x)`, respecting the prevailing parallel decomposition.
+         To allow for differentiation of 2D objects, npts_z can be one.
+      grid : cubed_sphere
+         Grid-defining class, used here solely to provide the canonical definition of the local
+         computational region.'''
+
+      # Array shape for the i-border of a single variable, based on the grid decomposition
+      border_shape = (grid.nb_elements_x2,2,
+                      grid.ni)
+      # Number of variables times number of vertical levels we're extending
+      nbvars = numpy.prod(field_interior.shape) // (grid.ni * grid.nj)
+
+      # Create an array for the output
+      border = numpy.empty((nbvars,) + border_shape, dtype=field_interior.dtype)
+      # Reshape to the from required for matrix multiplication
+      border.shape = (-1,2,grid.ni)
+
+      # Create an array view of the interior, reshaped for matrix multiplication
+      field_interior_view = field_interior.view()
+      field_interior_view.shape = (-1,grid.nbsolpts,grid.ni)
+
+      # Perform the extrapolations via matrix multiplication
+      # print(border[:,0,:].shape, field_interior_view.shape, self.extrap_south.T.shape)
+      border[:,0,:] = (self.extrap_south @ field_interior_view)
+      border[:,1,:] = (self.extrap_north @ field_interior_view)
+
+      # field_interior.shape[0:-2] is (nbvars,nk) for many 3D fields, (nbvars,) for many 2D fields,
+      # (nk) for a single 3D field, and () for a single 2D field.
+      border.shape = tuple(field_interior.shape[0:-2]) + border_shape
+      return border
+
+   def comma_k(self, field_interior, border_k, grid):
+      '''Take a partial derivative along the k-index
+      
+      This method takes the partial derivative of an input field, potentially consisting of several
+      variables, along the `k` index.  This derivative is performed with respect to the canonical element,
+      so it contains no corrections for the problem geometry.
+
+      Parameters
+      ----------
+      field_interior : numpy.array
+         The element-interior values of the variable(s) to be differentiated.  This should have
+         a shape of `(numvars,npts_z,npts_y,npts_x)`, respecting the prevailing parallel decomposition.
+      border_k : numpy.array
+         The element-boundary values of the fields to be differentiated, along the i-axis.  This should
+         have a shape of `(numvars,nels_z,2,npts_y,npts_x)`, with [:,0,:] being the downmost boundary
+         (minimal `k`), and [:,1,:] being the upmost boundary (maximal `k`)
+      grid : cubed_sphere
+         Grid-defining class, used here solely to provide the canonical definition of the local
+         computational region.
+      '''
+      # Create an empty array for output
+      output = numpy.empty_like(field_interior)
+      # Compute the number of variables we're differentiating
+      nbvars = numpy.prod(output.shape) // (grid.ni * grid.nj * grid.nk)
+
+      # Create views of the input arrays for reshaping, in order to express the differentiation as
+      # a set of matrix multiplications
+
+      field_view = field_interior.view()
+      border_k_view = border_k.view()
+
+      # Reshape to a flat view.  Assigning to array.shape will raise an exception if the new shape would
+      # require a memory copy; this implicitly ensures that the input arrays are fully contiguous in
+      # memory.
+      field_view.shape = (nbvars*grid.nb_elements_x3,grid.nbsolpts,grid.ni*grid.nj)
+      border_k_view.shape = (nbvars*grid.nb_elements_x3,2,grid.ni*grid.nj)
+      output.shape = field_view.shape
+
+      # Perform the matrix transposition
+      output[:] = self.diff_solpt @ field_view + self.correction @ border_k_view
+
+      # Reshape the output array back to its canonical extents
+      output.shape = field_interior.shape
+
+      return output
+
+   def extrapolate_k(self, field_interior, grid):
+      '''Compute the k-border values along each element of field_interior
+
+      This method extrapolates the variables in `field_interior` to the boundary along
+      the k-dimension (third last index), using the `extrap_down` and `extrap_up` matrices.
+
+      Parameters
+      ----------
+      field_interior : numpy.array
+         The element-interior values of the variable(s) to be differentiated.  This should have
+         a shape of `(numvars,npts_z,npts_y,npts_x)`, respecting the prevailing parallel decomposition.
+      grid : cubed_sphere
+         Grid-defining class, used here solely to provide the canonical definition of the local
+         computational region.'''
+
+      # Array shape for the i-border of a single variable, based on the grid decomposition
+      border_shape = (grid.nb_elements_x3,2,
+                      grid.nj,
+                      grid.ni)
+      # Number of variables we're extending
+      nbvars = numpy.prod(field_interior.shape) // (grid.ni * grid.nj * grid.nk)
+
+      # Create an array for the output
+      border = numpy.empty((nbvars,) + border_shape, dtype=field_interior.dtype)
+      # Reshape to the from required for matrix multiplication
+      border.shape = (-1,2,grid.ni*grid.nj)
+
+      # Create an array view of the interior, reshaped for matrix multiplication
+      field_interior_view = field_interior.view()
+      field_interior_view.shape = (-1,grid.nbsolpts,grid.ni*grid.nj)
+
+      # Perform the extrapolations via matrix multiplication
+      border[:,0,:] = (self.extrap_down @ field_interior_view)
+      border[:,1,:] = (self.extrap_up @ field_interior_view)
+
+      if (nbvars > 1):
+         border.shape = (nbvars,) + border_shape
+      else:
+         border.shape = border_shape   
+      return border
+
+
+
 
 
 def lagrangeEval(points, newPt):
@@ -111,7 +370,7 @@ def lebesgue(points):
    return [l.subs(x, eval_set[i]) for i in range(M)]
 
 def vandermonde(x):
-   """
+   r"""
    Initialize the 1D Vandermonde matrix, \(\mathcal{V}_{ij}=P_j(x_i)\)
    """
    N = len(x)
@@ -136,7 +395,7 @@ def remesh_operator(src_points, target_points):
 
 
 def filter_exponential(N, Nc, s, V, invV):
-   """
+   r"""
    Create an exponential filter matrix that can be used to filter out
    high-frequency noise.
 

@@ -10,14 +10,14 @@ from dcmip           import dcmip_T11_update_winds, dcmip_T12_update_winds
 from definitions     import idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_w
 from initialize      import initialize_sw, initialize_euler
 from matrices        import DFR_operators
-from metric          import Metric
+from metric          import Metric, Metric_3d_topo
 from parallel        import Distributed_World
 from multigrid import Multigrid
 #from preconditioner_fv import FV_preconditioner
 from program_options import Configuration
 from rhs_euler       import rhs_euler
 from rhs_sw          import rhs_sw
-from timeIntegrators import Epi, EpiStiff, SRERK, Tvdrk3, Ros2
+from timeIntegrators import Epi, EpiStiff, SRERK, Tvdrk3, Ros2, Euler1
 
 def main(args) -> int:
    step = 0
@@ -38,7 +38,9 @@ def main(args) -> int:
    mtrx = DFR_operators(geom, param.filter_apply, param.filter_order, param.filter_cutoff)
 
    # Initialize metric tensor
-   metric = Metric(geom)
+   oldmetric = Metric(geom)
+   metric = Metric_3d_topo(geom,mtrx)
+   #metric.build_metric()
 
    # Initialize state variables
    if param.equations == "Euler":
@@ -68,7 +70,9 @@ def main(args) -> int:
       print(f'Running with SRERK{order}')
       stepper = SRERK(order, rhs_handle, param.tolerance, param.exponential_solver, jacobian_method=param.jacobian_method)
    elif param.time_integrator.lower() == 'tvdrk3':
-      stepper = Tvdrk3(rhs_handle)
+      stepper = Tvdrk3(rhs_handle)   
+   elif param.time_integrator.lower() == 'euler1':
+      stepper = Euler1(rhs_handle)
    elif param.time_integrator.lower() == 'ros2':
       preconditioner = None
       if param.use_preconditioner:

@@ -3,6 +3,7 @@ import math
 
 from definitions import cpd, day_in_secs, gravity, p0, Rd
 from winds import *
+from cubed_sphere import cubed_sphere
 
 #=======================================================================
 #
@@ -115,7 +116,7 @@ def dcmip_T12_update_winds(geom, metric, mtrx, param, time=0):
    # Vertical Velocity - can be changed to vertical pressure velocity by
    # omega = -g*rho*w
 
-   w = (rho0 / rho) * (w0 / K) * (-2.0 * numpy.sin(K * geom.lat) * numpy.sin(geom.lat) + K * numpy.cos(geom.lat) * numpy.cos(K * geom.lat)) * numpy.sin(math.pi * geom.height / ztop) * numpy.cos(math.pi * time / tau)
+   w = (rho0 / rho) * (w0 / K) * (-2.0 * numpy.sin(K * geom.lat) * numpy.sin(geom.lat) + K * numpy.cos(geom.lat) * numpy.cos(K * geom.lat)) * numpy.sin(math.pi * geom.height / param.ztop) * numpy.cos(math.pi * time / tau)
 
    # Contravariant components
 
@@ -290,7 +291,7 @@ def dcmip_advection_hadley(geom, metric, mtrx, param):
 # TEST CASE 13 - HORIZONTAL ADVECTION OF THIN CLOUD-LIKE TRACERS IN THE PRESENCE OF OROGRAPHY
 #============================================================================================
 
-def dcmip_mountain(geom, metric, mtrx, param):
+def dcmip_mountain(geom: cubed_sphere, metric, mtrx, param):
 
    lon_m = 3.0 * numpy.pi / 2.0
    # lon_m = 0.0
@@ -402,7 +403,7 @@ def dcmip_mountain(geom, metric, mtrx, param):
 # Test 2-0:  Steady-State Atmosphere at Rest in the Presence of Orography
 #=========================================================================
 
-def dcmip_steady_state_mountain(geom, metric, mtrx, param):
+def dcmip_steady_state_mountain(geom: cubed_sphere, metric, mtrx, param):
    T0      = 300.0                      # temperature (K)
    gamma   = 0.00650                    # temperature lapse rate (K/m)
    lambdam = 3.0*math.pi/2.0            # mountain longitude center point (radians)
@@ -414,36 +415,48 @@ def dcmip_steady_state_mountain(geom, metric, mtrx, param):
    #-----------------------------------------------------------------------
    #    compute exponents
    #-----------------------------------------------------------------------
+   exponent = 0.0
    if gamma != 0:
       exponent     = gravity / (Rd * gamma)
-      exponent_rev = 1.0 / exponent
+      #exponent_rev = 1.0 / exponent # Unused
 
    #-----------------------------------------------------------------------
    #    Set topography
    #-----------------------------------------------------------------------
+   zbot = numpy.zeros(geom.coordVec_latlon.shape[2:])
+   zbot_itf_i = numpy.zeros(geom.coordVec_latlon_itf_i.shape[2:])
+   zbot_itf_j = numpy.zeros(geom.coordVec_latlon_itf_j.shape[2:])
 
-#   r = numpy.acos( math.sin(phim) * numpy.sin(lat) + math.cos(phim) * numpy.cos(lat) * numpy.cos(lon - lambdam) )
-#
-#   if (r < Rm) then
-#      zs = (h0/2.d0)*(1.d0+cos(pi*r/Rm))*cos(pi*r/zetam)**2.d0   ! mountain height
-#   else
-      zs = 0.0
-#   endif
+   for (z, coord) in zip([zbot, zbot_itf_i, zbot_itf_j],
+                         [geom.coordVec_latlon, geom.coordVec_latlon_itf_i, geom.coordVec_latlon_itf_j]):
+      lat = coord[1,0,:,:]
+      lon = coord[0,0,:,:]
+      r = numpy.arccos( math.sin(phim) * numpy.sin(lat) + math.cos(phim) * numpy.cos(lat) * numpy.cos(lon - lambdam) )
+      z[r<Rm] = (h0/2.0)*(1.0+numpy.cos(math.pi*r[r<Rm]/Rm))*numpy.cos(math.pi*r[r<Rm]/zetam)**2   # mountain height
 
+
+   # Update the geometry object with the new bottom topography
+   geom.apply_topography(zbot,zbot_itf_i,zbot_itf_j)
+   # And regenerate the metric to take this new topography into account
+   metric.build_metric()
+   
    #-----------------------------------------------------------------------
    #    PS (surface pressure)
    #-----------------------------------------------------------------------
 
    if gamma == 0.0:
-      ps = p0 * numpy.exp(-gravity * zs / (Rd*T0))
+      ps = p0 * numpy.exp(-gravity * zbot / (Rd*T0))
    else:
-      ps = p0 * (1.0 - gamma / T0 * zs)**exponent
+      ps = p0 * (1.0 - gamma / T0 * zbot)**exponent
 
    #-----------------------------------------------------------------------
    #    PRESSURE
    #-----------------------------------------------------------------------
 
-   p = p0 * (1.0 - gamma / T0 * geom.height)**exponent
+   if (gamma != 0):
+      p = p0 * (1.0 - gamma / T0 * geom.height)**exponent
+   else:
+      p = p0 * numpy.exp(-gravity/Rd * geom.height/T0)
 
    #-----------------------------------------------------------------------
    #    THE VELOCITIES ARE ZERO (STATE AT REST)
@@ -473,7 +486,7 @@ def dcmip_steady_state_mountain(geom, metric, mtrx, param):
    #    RHO (density)
    #-----------------------------------------------------------------------
 
-   rho = p / (Rd * t)
+   rho = (p / (Rd * t))
 
    #-----------------------------------------------------------------------
    #     initialize Q, set to zero
@@ -487,9 +500,9 @@ def dcmip_steady_state_mountain(geom, metric, mtrx, param):
 
    tv = t
 
-   theta = tv * (p0 / p)**(Rd/cpd)
+   theta = (tv * (p0 / p)**(Rd/cpd))
 
-   return rho, u1_contra, u2_contra, w, theta
+   return rho, u1_contra, u2_contra, w, theta, zbot
 
 
 
