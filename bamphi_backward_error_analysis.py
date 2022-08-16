@@ -20,8 +20,6 @@ def backward_error_analysis(step_state, points, polygon):
    See Polygon for details on Gamma (the convex hull of the field of values of an approximation of A)
    """
    
-   print(f' --- Backward error analysis')
-
    num_samples = 64
 
    x   = step_state.get_x() - points.avg
@@ -123,7 +121,7 @@ def phi_divided_differences(x, index=0, L=0):
 
    # Compute F_0
    N = n + 30        # TODO why?
-   divided_diff = numpy.append(1.0, 1.0 / (numpy.cumprod(numpy.arange(1, N+1, dtype=float) * max_val) ))
+   divided_diff = numpy.append(1.0, numpy.cumprod((1.0 / numpy.arange(1, N+1)) / max_val)).astype(x.dtype)
 
    for j in range(n - L - 1, -1, -1):
       divided_diff[j + L : n - 1] += x[n - L - 1 : j : -1] * divided_diff[j + L + 1 : n]
