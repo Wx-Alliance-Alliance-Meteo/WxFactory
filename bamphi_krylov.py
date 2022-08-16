@@ -7,8 +7,8 @@ class KrylovSystem:
       self.num_arnoldi_iter = options.num_arnoldi_iter
       self.tolerance = options.tolerance
 
-      self.V = numpy.zeros((self.num_arnoldi_iter + p + 1, f.shape[1]))
-      self.H = numpy.zeros((self.num_arnoldi_iter + 1, self.num_arnoldi_iter + 1))
+      self.V = numpy.zeros((self.num_arnoldi_iter + p + 1, f.shape[1]), dtype=f.dtype)
+      self.H = numpy.zeros((self.num_arnoldi_iter + 1, self.num_arnoldi_iter + 1), dtype=f.dtype)
 
       self.V[0, :] = f[0, :]
 
@@ -39,8 +39,6 @@ class KrylovSystem:
 
    def assemble(self, A, jump, p, is_real, info):
 
-      print(f' --- Krylov assemble')
-
       ret   = 1      
       its   = 0
       w     = None
@@ -69,7 +67,7 @@ class KrylovSystem:
             e_t = min(e_t, i)
 
       w1 = ts * d[m + 1] * (A(w1) - x[m] * w1)
-      w += w1
+      w  = w1 + w
 
       if is_real:
          x  = numpy.real(x)
