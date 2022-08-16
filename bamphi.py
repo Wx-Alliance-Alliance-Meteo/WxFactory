@@ -20,7 +20,7 @@ class BamphiOptions:
 
       # Approximation options
       self.max_poly_degree  = 128
-      self.num_arnoldi_iter = 6
+      self.num_arnoldi_iter = 64
 
 class BamphiInfo:
    def __init__(self):
@@ -141,14 +141,13 @@ def bamphi(t, A, u):
    # Analyse timesteps
    # ...
 
-   print(f'times:      {times}')
 
    # Do the work
    for step_id in range(1, times.size):
       step_forward(A, A_tilde, step_id, times, new_p, options, info, f, f_bar)
 
    # Adjust stuff
-   print(f'TODO adjustments at the end of the function')
+   f *= n_u
 
    return f, info
 
@@ -170,8 +169,6 @@ def step_forward(A, A_tilde, step_id, times, p, options, info, solution, f_bar):
    f_bar          -- [in,out] Some variation of the solution (TODO wtf is it?)
    """
 
-   print(f'Doing step {step_id}')
-
    tau = times[step_id] - times[step_id - 1]
    info.step_state.prepare_step(tau, p, options.tolerance, options.max_poly_degree, info.points, info.field_of_values)
    info.is_real = info.is_real and numpy.isreal(tau)
@@ -188,8 +185,6 @@ def step_forward(A, A_tilde, step_id, times, p, options, info, solution, f_bar):
 
    solution[step_id, :] = w
    f_bar[step_id, :]    = w_bar
-
-   print(f'sol: \n{solution}')
 
 def krylov_step(A, p, previous_f, previous_f_bar, info, options):
    step = 1
@@ -242,7 +237,7 @@ def hermite_newton_step(A, A_tilde, w, w_bar, step_size, jump_size, scaling_ref_
             w = w_prev
             w_bar = w_bar_prev
 
-   return w, w_bar
+   return numpy.real_if_close(w), w_bar
 
 def refine_scaling(step_size, jump_size, jump_limit, e_t, ret, lower, options):
    accept = True
@@ -253,12 +248,12 @@ def refine_scaling(step_size, jump_size, jump_limit, e_t, ret, lower, options):
       elif e_t > options.scaling_refinement_high * options.max_poly_degree and jump_size > 1:
          jump_size -= 1
       lower = min(options.scaling_refinement_low, lower * 1.05)
-   elif jump > 1:
+   elif jump_size > 1:
       # Adjust jump, step and decrease scaling_ref_low
       step_size -= jump_size
       jump_size -= 1
       lower *= 0.5
-      accecpt = False
+      accept = False
 
    jump_size = min(jump_size, jump_limit)
 
@@ -266,8 +261,6 @@ def refine_scaling(step_size, jump_size, jump_limit, e_t, ret, lower, options):
 
 def newton_talezer(jump, A, A_tilde, w1, w1_bar, is_real, e_t, options, info):
    
-   print(f' --- Newton-Tal-Ezer')
-
    ret = 1
    
    # Initialize parameters
@@ -325,13 +318,14 @@ def newton_talezer(jump, A, A_tilde, w1, w1_bar, is_real, e_t, options, info):
       # We have complex data points in conjugated pairs, so we go with Tal-Ezer
       # print(f'Tal-Ezer!')
       cof_w2 = d_real
-      for k in range(k, m):
+      k_iter = iter(range(k, m))
+      for k in k_iter:
          if x_complex[k + 1] == -1 or not is_real:
             w1 = (ts * cof_w1[k + 1] / cof_w1[k]) * (A(w1) - x[k] * w1)
             c1 = c2
             c2 = options.early_stop_norm(w1) if k >= e_t else None
             if c2 is not None and not numpy.isfinite(c2): break
-            p_A += w1
+            p_A = w1 + p_A
 
          else:
             w2 = (ts * cof_w2[k + 1] / cof_w1[k]) * (A(w1) - z_real[k] * w1)
@@ -350,7 +344,7 @@ def newton_talezer(jump, A, A_tilde, w1, w1_bar, is_real, e_t, options, info):
                c2 = options.early_stop_norm(w1) if k >= e_t else None
                if c2 is not None and not numpy.isfinite(c2): break
                p_A += w1
-            k += 1 # Skip an iteration
+            _ = next(k_iter) # Skip an iteration
 
          # Relative error, checking for early termination
          if k >= e_t and c1 + c2 <= tol * options.early_stop_norm(p_A):
@@ -374,6 +368,11 @@ def compute_field_of_values(A, A_tilde, f, p, info, options):
 def hermite_ext(input, conjugated):
    """
    Not entirely sure, but this seems to sort the input array according to some order
+   Hermite-Leja ordering. See 
+      REFERENCE: M.Caliari, P.Kandolf and F.Zivcovich, Backward error analysis of
+      polynomial approximations for computing the action of the matrix exponential,
+      Bit Numer. Math. 58 (2018), 907, https://doi.org/10.1007/s10543-018-0718-9 .
+      Section 4
    """
    num_elem = input.size
 
@@ -388,10 +387,22 @@ def hermite_ext(input, conjugated):
          remaining = numpy.delete(remaining, elems[0])
 
    # Create a vector w_x = [1, -sum(stuff), stuff..., prod(stuff), a bunch of zeros]
-   w_x = numpy.zeros((num_elem + 1))
+   # Not sure exactly how to express this. Basically:
+   #   n = len(input)
+   #   w_x [0] = 1
+   #   w_x [1] = -sum[0:n](input_i)
+   #   w_x [2] = -sum[0:n]{ -input_i * sum[i:n](input_j) }
+   #   w_x [3] = -sum[0:n]((  -input_i * sum[i:n]{ -input_j * sum[j:n](input_k) }  ))
+   #   ...
+   #   w_x [n:] = 0
+   #
+   # Since the entries in [input] are supposed to come in conjugate pairs, all values
+   # in w_x should be real. There's most likely a more accurate way to compute that
+   w_x = numpy.zeros((num_elem + 1), dtype=input.dtype)
    w_x[0] = 1.0
    for i in range(result.size):
       w_x[1:i+2] -= result[i] * w_x[:i+1]
+   w_x = numpy.real_if_close(w_x)
 
    K = numpy.zeros_like(remaining)
    M = numpy.zeros((remaining.size, num_elem), dtype=bool)
@@ -417,7 +428,6 @@ def hermite_sort(w_x, x, index, values, conjugated, num_elem):
    num_z = values.size
    num_total = num_x + num_z
 
-   values.sort()
    tiled = numpy.tile(values, (num_total - index - 1, 1))
    cumulated = numpy.cumprod(tiled, axis=0)
    flipped = numpy.flip(cumulated, axis=0)
@@ -431,16 +441,14 @@ def hermite_sort(w_x, x, index, values, conjugated, num_elem):
       num_x += 1
       num_z -= 1
       d = diff_dx[:num_x - index] * w_x[:num_x - index]
-      tmp = numpy.abs(vandermonde[:, num_z:num_total - index + 1] @ d)
       id_max = numpy.abs(vandermonde[:, num_z:num_total - index + 1] @ d).argmax()
       x = numpy.append(x, values[id_max])
       values = numpy.delete(values, id_max)
       vandermonde = numpy.delete(vandermonde, id_max, axis=0)
 
       if conjugated:
-         sames = numpy.where(values == x[-1].conj())
-         if numpy.any(sames):
-            # THIS CODE HAS NOT BEEN TESTED
+         sames, = numpy.where(numpy.abs(values - x[-1].conj()) <= 1e-15)
+         if len(sames) > 0:
             # We're trying to transfer a value from the "values" vector into "x", and remove the corresponding row from "vandermonde"
             num_x += 1
             num_z -= 1
@@ -449,12 +457,11 @@ def hermite_sort(w_x, x, index, values, conjugated, num_elem):
             vandermonde = numpy.delete(vandermonde, sames, axis=0)
 
             # Update w_x and move on to next iteration
-            w_x[1:num_x + 1] -= 2 * numpy.real(x[-1]) * w_x[:num_x]
-            w_x[2:num_x + 1] += numpy.abs(x[-1] ** 2 * w_x[:num_x - 1])
+            w_x[1:num_x + 1] -= 2 * numpy.real(x[-1]) * w_x[:num_x] - numpy.append(0, numpy.abs(x[-2])**2 * w_x[:num_x-1])
             continue
 
       # Update w_x. It should *not* have already been done in this iteration
-      w_x[1:num_x + 1] -= x[-1] * w_x[:num_x]
+      w_x[1:num_x + 1] -= numpy.real_if_close(x[-1]) * w_x[:num_x]
 
    return x
 
@@ -479,3 +486,15 @@ def compute_timesteps(t):
          raise ValueError(f'Can only deal with real time steps for now')
 
    return times
+
+def bamphi_with_octave(t, A, u, mat = None):
+   from oct2py import octave
+   from print_system_matrix import generate_system_matrix
+
+   if mat is None:
+      M = generate_system_matrix(A, u)
+   else:
+      M = mat
+
+   octave.addpath('/home/vma000/site5/bamphi')
+   return octave.bamphi_wrapper(t, M, u.T)
