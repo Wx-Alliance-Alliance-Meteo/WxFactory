@@ -9,7 +9,6 @@ from kiops         import kiops
 from pmex          import pmex
 from linsol        import fgmres
 from phi           import phi_ark
-from interpolation import LagrangeSimpleInterpolator, BilinearInterpolator
 from timer         import Timer
 
 class Epirk4s3a:
