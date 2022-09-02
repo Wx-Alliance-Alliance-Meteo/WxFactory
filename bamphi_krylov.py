@@ -1,5 +1,7 @@
 import numpy
 
+import global_op
+
 class KrylovSystem:
    def __init__(self, A, A_tilde, f, p, options, info):
 
@@ -18,7 +20,7 @@ class KrylovSystem:
       for k in range(p):
          self.V[k + 1], V_bar[k + 1] = A_tilde(self.V[k], V_bar[k])
 
-      self.norm_V = numpy.linalg.norm(self.V[p])
+      self.norm_V = global_op.norm(self.V[p])
       self.V[p] /= self.norm_V
 
       for i in range(self.num_arnoldi_iter):
@@ -28,10 +30,10 @@ class KrylovSystem:
          # Orthogonalize wrt previous vectors
          for k in range(i, max(i-2, -1), -1):
             inner_index = p + k
-            self.H[k, i] = self.V[inner_index].conj() @ self.V[index + 1]
+            self.H[k, i] = global_op.dotprod(self.V[inner_index].conj(), self.V[index + 1])
             self.V[index + 1] -= self.H[k, i] * self.V[inner_index]
 
-         self.H[i + 1, i] = numpy.linalg.norm(self.V[index + 1])
+         self.H[i + 1, i] = global_op.norm(self.V[index + 1])
          if abs(self.H[i+1, i]) < self.CONVERGENCE_THRESHOLD:
             break
 
@@ -57,13 +59,14 @@ class KrylovSystem:
 
       w_bar = cf_out[p-1::-1]
       e_t   = numpy.min([int(numpy.ceil(1.1 * m)), self.num_arnoldi_iter])
-      w     = 0.0
-      w1    = 0.0
+      w     = 0.0    # Global vec
+      w1    = 0.0    # Global vec
       for i in range(self.V.shape[0]):
          w += cf_out[i] * self.V[i]
+         # print(f'w shape: {w.shape}, cf_out.shape: {cf_out.shape}')
          if i >= p:
             w1 += cf_aux[i - p] * self.V[i]
-         if numpy.abs(cf_out[i]) < self.tolerance * numpy.linalg.norm(w):
+         if numpy.abs(cf_out[i]) < self.tolerance * global_op.norm(w):
             e_t = min(e_t, i)
 
       w1 = ts * d[m + 1] * (A(w1) - x[m] * w1)
@@ -75,12 +78,12 @@ class KrylovSystem:
          w1 = numpy.real(w1)
          w  = numpy.real(w)
 
-      c1 = numpy.linalg.norm(w1, numpy.inf)
+      c1 = global_op.inf_norm(w1)
       for i in range(2, len(x) - m):
          w1 = (ts * d[m + i] / d[m + i - 1]) * (A(w1) - x[m + i - 1] * w1)
          w += w1
-         c2 = numpy.linalg.norm(w1, numpy.inf)
-         if c1 + c2 < numpy.linalg.norm(w, numpy.inf) * self.tolerance:
+         c2 = global_op.inf_norm(w1)
+         if c1 + c2 < global_op.inf_norm(w) * self.tolerance:
             ret = 0
             break
          c1 = c2

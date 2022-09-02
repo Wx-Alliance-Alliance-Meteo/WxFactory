@@ -1,8 +1,10 @@
 import math
+import mpi4py
 import numpy
-import mpi4py.MPI
 import scipy
 import scipy.sparse.linalg
+
+import global_op
 
 def fgmres(A, b, x0 = None, tol = 1e-5, restart = 20, maxiter = None, preconditioner = None, hegedus = False):
 
@@ -19,7 +21,7 @@ def fgmres(A, b, x0 = None, tol = 1e-5, restart = 20, maxiter = None, preconditi
       x = x0.copy()
 
    # Check for early stop
-   norm_b = global_norm(b)
+   norm_b = global_op.norm(b)
    if norm_b == 0.0:
       return numpy.zeros_like(b), 0., 0, 0
 
@@ -29,14 +31,14 @@ def fgmres(A, b, x0 = None, tol = 1e-5, restart = 20, maxiter = None, preconditi
 
    # Rescale the initial approximation using the Hegedüs trick
    if hegedus:
-      norm_Ax0_2 = global_dotprod(Ax0, Ax0)
+      norm_Ax0_2 = global_op.dotprod(Ax0, Ax0)
       if norm_Ax0_2 != 0.:
-         ksi_min = global_dotprod(b, Ax0) / norm_Ax0_2
+         ksi_min = global_op.dotprod(b, Ax0) / norm_Ax0_2
          x = ksi_min * x0
          Ax0 = A(x)
 
    r          = b - Ax0
-   norm_r     = global_norm(r)
+   norm_r     = global_op.norm(r)
 
    # Get fast access to underlying BLAS routines
    [lartg] = scipy.linalg.get_lapack_funcs(['lartg'], [x])
@@ -113,7 +115,7 @@ def fgmres(A, b, x0 = None, tol = 1e-5, restart = 20, maxiter = None, preconditi
       x = x + update
       r = b - A(x)
 
-      norm_r = global_norm(r)
+      norm_r = global_op.norm(r)
 
       # Has GMRES stagnated?
       indices = (x != 0)
@@ -130,16 +132,6 @@ def fgmres(A, b, x0 = None, tol = 1e-5, restart = 20, maxiter = None, preconditi
    # end outer loop
 
    return x, norm_r / norm_b, niter, 0
-
-def global_norm(vec):
-   """Compute vector norm across all PEs"""
-   local_sum = vec @ vec
-   return math.sqrt( mpi4py.MPI.COMM_WORLD.allreduce(local_sum) )
-
-def global_dotprod(vec1, vec2):
-   """Compute dot product across all PEs"""
-   local_sum = vec1 @ vec2
-   return mpi4py.MPI.COMM_WORLD.allreduce(local_sum)
 
 def apply_givens(Q, v, k):
    """Apply the first k Givens rotations in Q to v.
