@@ -4,6 +4,8 @@ import scipy.special
 from bamphi_krylov       import KrylovSystem
 from bamphi_step_state   import StepState
 
+import global_op
+
 from numpy.random import default_rng
 bamphi_rng = default_rng()
 
@@ -12,7 +14,7 @@ class BamphiOptions:
       # Error options
       self.tolerance = numpy.finfo(float).eps
       # self.error  = True
-      self.early_stop_norm   = lambda x: numpy.linalg.norm(x, numpy.inf)
+      self.early_stop_norm   = lambda x: global_op.inf_norm(x)
 
       # Technical options
       self.scaling_refinement_low  = 0.6
@@ -94,8 +96,8 @@ def bamphi(t, A, u):
 
    Arguments:
    t  -- Vector of timesteps. Can be complex, for some reason. TODO Why?
-   A  -- Operator that takes a vector x and returns the A*x matrix-vector product
-   u  -- Vector u. Not sure what it does yet
+   A  -- Operator that takes a (global) vector x and returns the A*x matrix-vector product
+   u  -- Set of (global) vectors. Not sure what it does yet
    """
 
    num_p, num_dofs = u.shape
@@ -105,6 +107,7 @@ def bamphi(t, A, u):
    # Find FOV and Ritz values (what are these?)
    n_u = 1.0
    if new_p > 0:
+      # TODO make this work on the cube-sphere
       n_u = max(1, 2.0 ** numpy.ceil( numpy.log2( numpy.sqrt( numpy.linalg.norm( u @ u.T ))))) # u * u^T is pxp. Are we computing the norm of u? If so, might change the name of n_u
 
    u /= n_u
@@ -112,7 +115,7 @@ def bamphi(t, A, u):
    times = compute_timesteps(t)
 
    # Initialize the solution vectors
-   f = numpy.zeros((times.size, num_dofs)) # the solution (eventually)
+   f = numpy.zeros((times.size, num_dofs)) # the solution (eventually). That's a set of global vectors
    f[0, :] = u[0, :]
 
    f_bar = numpy.zeros((times.size, new_p))
@@ -162,11 +165,11 @@ def step_forward(A, A_tilde, step_id, times, p, options, info, solution, f_bar):
    A_tilde        -- [in]     Operator to do [???]
    step_id        -- [in]     The step we are computing
    times          -- [in]     The list of times corresponding to each step
-   p              -- [in]     ???
+   p              -- [in]     ??? Number of u-vectors
    options        -- [in]     Options for driving the algo
    info           -- [in,out] Information about the course of the algorithm
-   solution       -- [in,out] The solution matrix, updated at every time step
-   f_bar          -- [in,out] Some variation of the solution (TODO wtf is it?)
+   solution       -- [in,out] The solution matrix, updated at every time step. Global vectors
+   f_bar          -- [in,out] Some variation of the solution (TODO wtf is it?). Size of [# times x p]
    """
 
    tau = times[step_id] - times[step_id - 1]
