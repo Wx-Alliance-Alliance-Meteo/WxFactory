@@ -4,6 +4,7 @@ import scipy.sparse.linalg
 from collections import deque
 from time        import time
 
+from bamphi          import bamphi
 from matvec          import matvec_fun, matvec_rat
 from exode           import exode
 from kiops           import kiops
@@ -11,6 +12,7 @@ from linsol          import fgmres
 from multigrid       import Multigrid
 from output_residual import write_output
 from phi             import phi_ark
+from pmex          import pmex
 from timer           import Timer
 
 class Epirk4s3a:
@@ -82,7 +84,7 @@ class Epirk4s3a:
       return Q + numpy.reshape(phiv, Q.shape)
 
 class Epi:
-   def __init__(self, order: int, rhs, tol: float, exponential_solver='kiops', jacobian_method='complex', init_method=None, init_substeps: int = 1):
+   def __init__(self, order: int, rhs, tol: float, exponential_solver, jacobian_method='complex', init_method=None, init_substeps: int = 1):
       self.rhs = rhs
       self.tol = tol
       self.krylov_size = 1
@@ -125,7 +127,7 @@ class Epi:
          self.init_method = init_method
       else:
          #self.init_method = Epirk4s3a(rhs, tol, krylov_size)
-         self.init_method = Epi(2, rhs, tol, self.krylov_size)
+         self.init_method = Epi(2, rhs, tol, self.exponential_solver, self.jacobian_method)
 
       self.init_substeps = init_substeps
 
@@ -166,14 +168,27 @@ class Epi:
       if self.exponential_solver == 'kiops':
          phiv, stats = kiops([1], matvec_handle, vec, tol=self.tol, m_init=self.krylov_size, mmin=16, mmax=64, task1=False)
 
-         print(f'KIOPS converged at iteration {stats[2]} (using {stats[0]} internal substeps)'
+         print(f'KIOPS converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)'
                f' to a solution with local error {stats[4]:.2e}')
 
          self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
-      else:
-         phiv, stats = exode([1], matvec_handle, vec, atol=self.tol, task1=False, verbose=False)
 
-         print(f'EXODE converged using {stats[0]} calls to matvec ({stats[1]} rejected steps)')
+      elif self.exponential_solver == 'bamphi':
+         t0 = time()
+         phiv_bamphi, _ = bamphi([1.], matvec_handle, vec)
+         t1 = time()
+         phiv = phiv_bamphi[-1]
+         print(f'BAMPHI finished in {t1 - t0:.3f}s')
+
+      elif self.exponential_solver == 'pmex':
+
+         phiv, stats = pmex([1.], matvec_handle, vec, tol=self.tol, mmax=64, task1=False)
+
+         print(f'PMEX converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)'
+               f' to a solution with local error {stats[4]:.2e}')
+      else:
+         print('There is nothing to see here, go away!')
+         exit(0)
 
       # Save values for the next timestep
       if self.n_prev > 0:

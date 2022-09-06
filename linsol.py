@@ -1,10 +1,12 @@
 import math
+import mpi4py
 import numpy
 import scipy
 import scipy.sparse.linalg
 from time import time
 import sys
 
+import global_op
 from gef_mpi import GLOBAL_COMM
 
 def fgmres(A, b, x0 = None, tol = 1e-5, restart = 20, maxiter = None, preconditioner = None, hegedus = False, verbose = False):
@@ -49,7 +51,7 @@ def fgmres(A, b, x0 = None, tol = 1e-5, restart = 20, maxiter = None, preconditi
       x = x0.copy()
 
    # Check for early stop
-   norm_b = global_norm(b)
+   norm_b = global_op.norm(b)
    if norm_b == 0.0:
       return numpy.zeros_like(b), 0., 0, 0, [(0.0, time() - t_start(), 0)]
 
@@ -60,14 +62,14 @@ def fgmres(A, b, x0 = None, tol = 1e-5, restart = 20, maxiter = None, preconditi
 
    # Rescale the initial approximation using the Hegedüs trick
    if hegedus:
-      norm_Ax0_2 = global_dotprod(Ax0, Ax0)
+      norm_Ax0_2 = global_op.dotprod(Ax0, Ax0)
       if norm_Ax0_2 != 0.:
-         ksi_min = global_dotprod(b, Ax0) / norm_Ax0_2
+         ksi_min = global_op.dotprod(b, Ax0) / norm_Ax0_2
          x = ksi_min * x0
          Ax0 = A(x)
 
    r      = b - Ax0
-   norm_r = global_norm(r)
+   norm_r = global_op.norm(r)
 
    residuals.append((norm_r / norm_b, time() - t_start, 0.0))
 
@@ -148,7 +150,7 @@ def fgmres(A, b, x0 = None, tol = 1e-5, restart = 20, maxiter = None, preconditi
       x = x + update
       r = b - A(x)
 
-      norm_r = global_norm(r)
+      norm_r = global_op.norm(r)
       residuals.append((norm_r / norm_b, time() - t_start, 0.0))
       if verbose:
          print(f'res: {norm_r/norm_b:.2e} (iter {niter})')
@@ -172,13 +174,6 @@ def fgmres(A, b, x0 = None, tol = 1e-5, restart = 20, maxiter = None, preconditi
    if norm_r >= tol_relative: flag = -1
 
    return x, norm_r / norm_b, niter, flag, residuals
-
-def global_norm(vec):
-   """Compute vector norm across all PEs"""
-   local_sum = vec @ vec
-   global_sum = numpy.array([0.0])
-   GLOBAL_COMM().Allreduce(numpy.array([local_sum]), global_sum)
-   return math.sqrt(global_sum[0])
 
 def apply_givens(Q, v, k):
    """Apply the first k Givens rotations in Q to v.
