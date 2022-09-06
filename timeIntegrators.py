@@ -6,6 +6,7 @@ from itertools import combinations
 
 from linsol        import fgmres
 from matvec        import matvec_fun, matvec_rat
+from bamphi        import bamphi
 from kiops         import kiops
 from pmex          import pmex
 from timer         import Timer
