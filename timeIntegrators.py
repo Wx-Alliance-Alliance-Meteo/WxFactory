@@ -2,8 +2,10 @@ import numpy
 import math
 import scipy.sparse.linalg
 from collections import deque
+from bamphi import bamphi
 
 from matvec        import matvec_fun, matvec_rat
+from bamphi        import bamphi
 from exode         import exode
 from kiops         import kiops
 from pmex          import pmex
@@ -168,6 +170,9 @@ class Epi:
                f' to a solution with local error {stats[4]:.2e}')
 
          self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
+
+      elif self.exponential_solver == 'bamphi':
+         phiv, _ = bamphi([1.], matvec_handle, vec)
 
       elif self.exponential_solver == 'pmex':
 
