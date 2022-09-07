@@ -5,6 +5,7 @@ import scipy
 from copy import deepcopy
 from time import time
 
+import global_op
 import linsol
 from cubed_sphere  import cubed_sphere
 from definitions   import idx_h, idx_hu1, idx_hu2, gravity, idx_rho_w
@@ -22,16 +23,13 @@ from sgs_precond   import SymmetricGaussSeidel
 
 class MultigridLevel:
    def __init__(self, param, ptopo, rhs, discretization, nb_elem_horiz, nb_elem_vert, source_order, target_order):
+
       p = deepcopy(param)
-      # print(f'nb_elem_hor {p.nb_elements_horizontal}, vert {p.nb_elements_vertical}')
       p.nb_elements_horizontal = nb_elem_horiz
       p.nb_elements_vertical   = nb_elem_vert
       p.nbsolpts = source_order if discretization == 'dg' else 1
       p.discretization = discretization
 
-      # p.sgs_eta *= source_order / param.initial_nbsolpts
-      
-      # print(f'nb_elem_hor {p.nb_elements_horizontal}, vert {p.nb_elements_vertical}')
       self.param = p
       self.ptopo = ptopo
 
@@ -93,17 +91,38 @@ class MultigridLevel:
       return self.restrict(field)
 
 class Multigrid:
-   def __init__(self, param, ptopo, discretization) -> None:
+   def __init__(self, param, ptopo, discretization, fv_only=False) -> None:
 
-      # self.max_level = param.initial_nbsolpts
-      # self.min_level = 1
+      param = deepcopy(param)
 
+      # Detect problem dimension
+      self.ndim = 2 if param.equations == 'shallow_water' else 3
+
+      # Default "0th step" conversion function
+      self.initial_interpolate = lambda x, reverse=False : x
+      if discretization == 'fv':
+         self.initial_interpolate = interpolator('dg', param.initial_nbsolpts, 'fv', param.initial_nbsolpts, param.dg_to_fv_interp, self.ndim)
+
+      # Adjust some parameters as needed
+      if discretization == 'fv':
+         param.nb_elements_horizontal *= param.nbsolpts
+         param.nbsolpts = 1
+         param.discretization = 'fv'
+         if fv_only:
+            param.num_mg_levels    = 1
+            param.num_pre_smoothe  = 0
+            param.num_post_smoothe = 0
+            param.mg_smoothe_only  = 0
+      else:
+         param.discretization = 'dg'
+
+      self.use_solver = (param.mg_smoothe_only <= 0)
+
+      # Determine number of multigrid levels
       if discretization == 'fv':
          self.max_num_levels = int(numpy.log2(param.initial_nbsolpts)) + 1
          self.max_num_fv_elems = 2**(self.max_num_levels - 1)
          self.extra_fv_step = (self.max_num_fv_elems != param.initial_nbsolpts)
-         # if 2**(self.max_num_levels - 1) != param.initial_nbsolpts:
-         #    raise ValueError('Cannot do h/fv-multigrid stuff if the order of the problem is not a power of 2 (currently {param.initial_nbsolpts})')
       elif discretization == 'dg':
          # Subtract 1 because we include level 0
          self.max_num_levels = param.initial_nbsolpts
@@ -113,41 +132,39 @@ class Multigrid:
       param.num_mg_levels = min(param.num_mg_levels, self.max_num_levels)
       print(f'num_mg_levels: {param.num_mg_levels}')
 
-      self.ndim = 2
+      # Determine correct RHS function to use
       if param.equations == 'shallow_water':
          self.rhs = rhs_sw
       elif param.equations == 'Euler':
-         self.ndim = 3
          self.rhs = rhs_euler if discretization == 'fv' else rhs_euler
-         # if param.nb_elements_horizontal != param.nb_elements_vertical:
-         #    raise ValueError(f'MG with Euler equations needs same number of elements horizontally and vertically. '
-         #                     f'Now we have {param.nb_elements_horizontal} and {param.nb_elements_vertical}')
       else:
-         raise ValueError('Cannot use the multigrid solver with anything other than shallow water or Euler')
+         raise ValueError(f'Cannot use the multigrid solver with anything other than shallow water or Euler (got {param.equations})')
 
+      # Determine correct matrix-vector product function to use
       self.matvec = matvec_rat
-      self.use_solver = (param.mg_smoothe_only <= 0)
 
-      self.levels = {}
-
-      # order         = param.initial_nbsolpts
-      # nb_elem_horiz = param.nb_elements_horizontal
-      # nb_elem_vert  = param.nb_elements_vertical
-
+      # Determine level-specific parameters for each level (order, num elements)
       if discretization == 'fv':
          self.orders = [self.max_num_fv_elems // (2**i) for i in range(self.max_num_levels + 1)]
          if self.extra_fv_step:
+            print(f'There is an extra FV step, from order {param.initial_nbsolpts} to {self.orders[0]}')
             self.orders = [param.initial_nbsolpts] + self.orders
-         self.elem_counts_hori = [param.nb_elements_horizontal * order // 4 for order in self.orders]
-         print(f'REMOVE THE FACTOR')
-         self.elem_counts_vert =  [param.nb_elements_vertical for _ in self.orders]
+         self.elem_counts_hori = [param.nb_elements_horizontal * order // param.initial_nbsolpts for order in self.orders]
          if self.ndim == 3:
             self.elem_counts_vert =  [param.nb_elements_vertical * order for order in self.orders]
-      else:
+         else:
+            self.elem_counts_vert =  [param.nb_elements_vertical for _ in self.orders]
+      elif discretization == 'dg':
          self.orders = [param.initial_nbsolpts - i for i in range(self.max_num_levels + 1)]
          self.elem_counts_hori = [param.nb_elements_horizontal for _ in range(len(self.orders))]
          self.elem_counts_vert = [param.nb_elements_vertical for _ in range(len(self.orders))]
+      else:
+         raise ValueError(f'Unknown discretization: {discretization}')
 
+      print(f'orders: {self.orders}, h elem counts: {self.elem_counts_hori}, v elem counts: {self.elem_counts_vert}')
+
+      # Create config set for each level (whether they will be used or not, in case we want to change that at runtime)
+      self.levels = {}
       for i_level in range(self.max_num_levels):
          order                = self.orders[i_level]
          new_order            = self.orders[i_level + 1]
@@ -160,7 +177,7 @@ class Multigrid:
       """
       Compute the matrix-vector operator for every grid level. Also compute the pseudo time step size for each level.
       """
-      next_field = field
+      next_field = self.initial_interpolate(field)
       for i_level in range(self.max_num_levels):
          next_field = self.levels[i_level].prepare(dt, next_field, self.matvec)
 
@@ -171,7 +188,10 @@ class Multigrid:
 
    def apply(self, vec):
       param = self.levels[0].param
-      return self.iterate(vec, num_levels=param.num_mg_levels, verbose=False)
+      shape = self.levels[0].shape
+
+      result = self.iterate(numpy.ravel(self.initial_interpolate(vec.reshape(shape))), num_levels=param.num_mg_levels, verbose=False)
+      return numpy.ravel(self.initial_interpolate(result.reshape(shape), reverse=True))
 
 ###############
 # The algorithm
@@ -201,12 +221,14 @@ class Multigrid:
       prolong         = lvl_param.prolong
 
       if verbose:
-         print(f'Residual at level {level}, : {linsol.global_norm(b.flatten() - (A(x.flatten()))):.4e}')
+         res = b.flatten()
+         if x is not None: res -= A(x.flatten())
+         print(f'Residual at level {level}, : {global_op.norm(res):.4e}')
 
       # Pre smoothing
       for _ in range(lvl_param.num_pre_smoothe):
          x = smoothe(x, b)
-         if verbose: print(f'   Presmooth  : {linsol.global_norm(b.flatten() - (A(x.flatten()))):.4e}')
+         if verbose: print(f'   Presmooth  : {global_op.norm(b.flatten() - (A(x.flatten()))):.4e}')
 
       # Avoid having "None" in the solution from now on
       if x is None:
@@ -239,11 +261,11 @@ class Multigrid:
       # Post smoothing
       for _ in range(lvl_param.num_post_smoothe):
          x = smoothe(x, b)
-         if verbose: print(f'   Postsmooth : {linsol.global_norm(b.flatten() - (A(x.flatten()))):.4e}')
+         if verbose: print(f'   Postsmooth : {global_op.norm(b.flatten() - (A(x.flatten()))):.4e}')
 
       # level_work += lvl_param.num_post_smoothe * lvl_param.smoother_work_unit * lvl_param.work_ratio
 
-      if verbose: print(f'retour {level}: {linsol.global_norm(b.flatten() - (A(x.flatten())))}')
+      if verbose: print(f'retour {level}: {global_op.norm(b.flatten() - (A(x.flatten())))}')
 
       if verbose is True and level == num_levels - 1:
          print('End multigrid')
@@ -278,7 +300,7 @@ class Multigrid:
       t_start = time()
       total_work = 0.0
 
-      norm_b = global_norm(b)
+      norm_b = global_op.norm(b)
       tol_relative = tolerance * norm_b
 
       norm_r = norm_b
@@ -311,7 +333,7 @@ class Multigrid:
          if it < max_num_it - 1:
             residual = b - A(x)
             total_work += 1.0
-            norm_r = global_norm(residual)
+            norm_r = global_op.norm(residual)
             # print(f'norm_r/b = {norm_r/norm_b:.2e}')
             residuals.append((norm_r / norm_b, time() - t_start, total_work))
             if norm_r < tol_relative:

@@ -13,6 +13,7 @@ from definitions     import idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_w
 from initialize      import initialize_sw, initialize_euler
 from matrices        import DFR_operators
 from metric          import Metric
+from multigrid       import Multigrid
 from output_residual import prepare_output
 from parallel        import Distributed_World
 from program_options import Configuration
@@ -21,10 +22,6 @@ from rhs_sw          import rhs_sw
 from rhs_sw_explicit import rhs_sw_explicit
 from rhs_sw_implicit import rhs_sw_implicit
 from timeIntegrators import Epi, Epirk4s3a, Tvdrk3, Rat2, ARK_epi2
-
-# Preconditioners
-from finite_volume import FiniteVolume
-from multigrid     import Multigrid
 
 from gef_mpi import GLOBAL_COMM, split_comm
 
@@ -73,9 +70,9 @@ def main(args) -> int:
    if param.preconditioner == 'p-mg':
       preconditioner = Multigrid(param, ptopo, discretization='dg')
    elif param.preconditioner == 'fv-mg':
-      preconditioner = FiniteVolume(param, Q, ptopo, precond_type='fv-mg')
+      preconditioner = Multigrid(param, ptopo, discretization='fv')
    elif param.preconditioner == 'fv':
-      preconditioner = FiniteVolume(param, Q, ptopo, precond_type='fv')
+      preconditioner = Multigrid(param, ptopo, discretization='fv', fv_only=True)
 
    prepare_output(param)
 
