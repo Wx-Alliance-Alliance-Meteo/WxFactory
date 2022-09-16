@@ -19,7 +19,7 @@ from rhs_euler       import rhs_euler
 from rhs_sw          import rhs_sw
 from rhs_sw_explicit import rhs_sw_explicit
 from rhs_sw_implicit import rhs_sw_implicit
-from timeIntegrators import Epi, Epirk4s3a, Tvdrk3, Rat2, ARK_epi2
+from timeIntegrators import Epi, EpiStiff, Epirk4s3a, Tvdrk3, Rat2, ARK_epi2
 
 def main(args) -> int:
    step = 0
@@ -59,7 +59,7 @@ def main(args) -> int:
    if param.time_integrator.lower()[:9] == 'epi_stiff' and param.time_integrator[9:].isdigit():
       order = int(param.time_integrator[9:])
       print(f'Running with EPI_stiff{order}')
-      stepper = Epi(order, rhs_handle, param.tolerance, param.exponential_solver, jacobian_method=param.jacobian_method, init_substeps=10)
+      stepper = EpiStiff(order, rhs_handle, param.tolerance, param.exponential_solver, jacobian_method=param.jacobian_method, init_substeps=10)
    elif param.time_integrator.lower()[:3] == 'epi' and param.time_integrator[3:].isdigit():
       order = int(param.time_integrator[3:])
       print(f'Running with EPI{order}')

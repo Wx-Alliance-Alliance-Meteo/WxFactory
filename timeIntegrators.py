@@ -2,6 +2,7 @@ import numpy
 import math
 import scipy.sparse.linalg
 from collections import deque
+from itertools import combinations
 
 from matvec        import matvec_fun, matvec_rat
 from exode         import exode
@@ -195,10 +196,10 @@ def alpha_coeff(c):
     alpha = numpy.zeros((m,m))
     for i in range(m):
         c_no_i =  [cc for (j, cc) in enumerate(c) if j!=i ]
-        denom = c[i]**2 * prod( [ c[i] - cl for cl in c_no_i ] )
+        denom = c[i]**2 * math.prod( [ c[i] - cl for cl in c_no_i ] )
         for k in range(m):
-            sp = sum([prod(v) for v in combinations(c_no_i, m-k-1)])
-            alpha[k, i] = (-1)**(m-k+1) * factorial(k+2) * sp / denom
+            sp = sum([math.prod(v) for v in combinations(c_no_i, m-k-1)])
+            alpha[k, i] = (-1)**(m-k+1) * math.factorial(k+2) * sp / denom
 
     return alpha 
 
