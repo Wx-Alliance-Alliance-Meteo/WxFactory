@@ -19,7 +19,7 @@ from rhs_euler       import rhs_euler
 from rhs_sw          import rhs_sw
 from rhs_sw_explicit import rhs_sw_explicit
 from rhs_sw_implicit import rhs_sw_implicit
-from timeIntegrators import Epi, EpiStiff, Epirk4s3a, Tvdrk3, Rat2, ARK_epi2
+from timeIntegrators import Epi, EpiStiff, Epirk4s3a, SRERK, Tvdrk3, Rat2, ARK_epi2
 
 def main(args) -> int:
    step = 0
@@ -66,6 +66,13 @@ def main(args) -> int:
       stepper = Epi(order, rhs_handle, param.tolerance, param.exponential_solver, jacobian_method=param.jacobian_method, init_substeps=10)
    elif param.time_integrator.lower() == 'epirk4s3a':
       stepper = Epirk4s3a(rhs_handle, param.tolerance, param.krylov_size)
+   elif param.time_integrator.lower()[:5] == 'srerk' and param.time_integrator[5:].isdigit():
+      order = int(param.time_integrator[5:])
+      print(f'Running with SRERK{order}')
+      #stepper = SRERK(order, rhs_handle, param.tolerance, param.exponential_solver,
+      #                   jacobian_method=param.jacobian_method)
+      stepper = SRERK(0, rhs_handle, param.tolerance, param.exponential_solver,
+                         jacobian_method=param.jacobian_method, nodes=[[1/2, 2/3], [1]])
    elif param.time_integrator.lower() == 'tvdrk3':
       stepper = Tvdrk3(rhs_handle)
    elif param.time_integrator.lower() == 'rat2':
@@ -102,6 +109,8 @@ def main(args) -> int:
 
       tic = time()
       Q = stepper.step(Q, param.dt)
+      print(numpy.linalg.norm(Q))
+
       time_step = time() - tic
       print('Elapsed time for step: %0.3f secs' % time_step)
 
