@@ -66,13 +66,12 @@ def main(args) -> int:
       stepper = Epi(order, rhs_handle, param.tolerance, param.exponential_solver, jacobian_method=param.jacobian_method, init_substeps=10)
    elif param.time_integrator.lower() == 'epirk4s3a':
       stepper = Epirk4s3a(rhs_handle, param.tolerance, param.krylov_size)
+      #stepper = SRERK(0, rhs_handle, param.tolerance, param.exponential_solver,
+      #                   jacobian_method=param.jacobian_method, nodes=[[1/2, 2/3], [1]])
    elif param.time_integrator.lower()[:5] == 'srerk' and param.time_integrator[5:].isdigit():
       order = int(param.time_integrator[5:])
       print(f'Running with SRERK{order}')
-      #stepper = SRERK(order, rhs_handle, param.tolerance, param.exponential_solver,
-      #                   jacobian_method=param.jacobian_method)
-      stepper = SRERK(0, rhs_handle, param.tolerance, param.exponential_solver,
-                         jacobian_method=param.jacobian_method, nodes=[[1/2, 2/3], [1]])
+      stepper = SRERK(order, rhs_handle, param.tolerance, param.exponential_solver, jacobian_method=param.jacobian_method)
    elif param.time_integrator.lower() == 'tvdrk3':
       stepper = Tvdrk3(rhs_handle)
    elif param.time_integrator.lower() == 'rat2':
