@@ -35,6 +35,7 @@ def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 1, mmax = 128, reuse_in
       pmex.suggested_step = τ_end 
       pmex.suggested_m = mmax
       m_init = 1
+      m_opt  = 1
    else:
       m_init = pmex.suggested_m
 
@@ -132,14 +133,14 @@ def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 1, mmax = 128, reuse_in
          #3. set values for Hessenberg matrix H
          H[0:j, j-1] = global_vec[0:j,1]
 
-         #4. Procection of 2-step Gauss-Sidel to the orthogonal complement
+         #4. Projection with 2-step Gauss-Seidel to the orthogonal complement
          # Note: this is done in two steps. (1) matvec and (2) a lower
          # triangular solve
          # 4a. here we set the values for matrix M, Minv, N
          if (j > 1):
            M[j-1, 0:j-1]    =  global_vec[0:j-1,0]
            N[0:j-1, j-1]    = -global_vec[0:j-1,0]
-           Minv[j-1, 0:j-1] = -Minv[0:j-1, 0:j-1] @ global_vec[0:j-1,0]
+           Minv[j-1, 0:j-1] = -global_vec[0:j-1,0].T @ Minv[0:j-1, 0:j-1]
 
          #4b. part 1: the mat-vec
          rhs = ( numpy.eye(j) + numpy.matmul(N[0:j, 0:j], Minv[0:j,0:j]) ) @ global_vec[0:j,1]

@@ -108,7 +108,6 @@ def main(args) -> int:
 
       tic = time()
       Q = stepper.step(Q, param.dt)
-      print(numpy.linalg.norm(Q))
 
       time_step = time() - tic
       print('Elapsed time for step: %0.3f secs' % time_step)
