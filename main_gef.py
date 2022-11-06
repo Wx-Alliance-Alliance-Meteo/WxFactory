@@ -17,9 +17,7 @@ from multigrid import Multigrid
 from program_options import Configuration
 from rhs_euler       import rhs_euler
 from rhs_sw          import rhs_sw
-from rhs_sw_explicit import rhs_sw_explicit
-from rhs_sw_implicit import rhs_sw_implicit
-from timeIntegrators import Epi, EpiStiff, Epirk4s3a, SRERK, Tvdrk3, Rat2, ARK_epi2
+from timeIntegrators import Epi, EpiStiff, SRERK, Tvdrk3, Ros2
 
 def main(args) -> int:
    step = 0
@@ -64,29 +62,19 @@ def main(args) -> int:
       order = int(param.time_integrator[3:])
       print(f'Running with EPI{order}')
       stepper = Epi(order, rhs_handle, param.tolerance, param.exponential_solver, jacobian_method=param.jacobian_method, init_substeps=10)
-   elif param.time_integrator.lower() == 'epirk4s3a':
-      stepper = Epirk4s3a(rhs_handle, param.tolerance, param.krylov_size)
-      #stepper = SRERK(0, rhs_handle, param.tolerance, param.exponential_solver,
-      #                   jacobian_method=param.jacobian_method, nodes=[[1/2, 2/3], [1]])
    elif param.time_integrator.lower()[:5] == 'srerk' and param.time_integrator[5:].isdigit():
       order = int(param.time_integrator[5:])
       print(f'Running with SRERK{order}')
       stepper = SRERK(order, rhs_handle, param.tolerance, param.exponential_solver, jacobian_method=param.jacobian_method)
    elif param.time_integrator.lower() == 'tvdrk3':
       stepper = Tvdrk3(rhs_handle)
-   elif param.time_integrator.lower() == 'rat2':
+   elif param.time_integrator.lower() == 'ros2':
       preconditioner = None
       if param.use_preconditioner:
          # preconditioner = DG_preconditioner(param, geom, ptopo, mtrx, rhs_sw)
          preconditioner = Multigrid(param, ptopo, param.nbsolpts, rhs_handle)
 
-      stepper = Rat2(rhs_handle, param.tolerance, preconditioner=preconditioner)
-   elif  param.time_integrator.lower() == 'epi2/ark' and param.equations == "shallow_water": # TODO : Euler
-      rhs_explicit = lambda q: rhs_sw_explicit(q, geom, mtrx, metric, topo, ptopo, param.nbsolpts, param.nb_elements_horizontal)
-
-      rhs_implicit = lambda q: rhs_sw_implicit(q, geom, mtrx, metric, topo, ptopo, param.nbsolpts, param.nb_elements_horizontal)
-
-      stepper = ARK_epi2(rhs_handle, rhs_explicit, rhs_implicit, param)
+      stepper = Ros2(rhs_handle, param.tolerance, preconditioner=preconditioner)
    else:
       raise ValueError(f'Time integration method {param.time_integrator} not supported')
 
