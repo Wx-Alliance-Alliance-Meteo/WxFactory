@@ -67,7 +67,7 @@ def dcmip_T11_update_winds(geom, metric, mtrx, param, time=0):
 
    # Contravariant components
 
-   u1_contra, u2_contra = wind2contra(u, v, geom)
+   u1_contra, u2_contra = wind2contra_2d(u, v, geom)
 
    return u1_contra, u2_contra, w
 
@@ -120,7 +120,7 @@ def dcmip_T12_update_winds(geom, metric, mtrx, param, time=0):
 
    # Contravariant components
 
-   u1_contra, u2_contra = wind2contra(u, v, geom)
+   u1_contra, u2_contra = wind2contra_2d(u, v, geom)
 
    return u1_contra, u2_contra, w
 
@@ -474,7 +474,7 @@ def dcmip_steady_state_mountain(geom: cubed_sphere, metric, mtrx, param):
 
    w = 0.0
 
-   u1_contra, u2_contra = wind2contra(u, v, geom)
+   u1_contra, u2_contra = wind2contra_2d(u, v, geom)
 
    #-----------------------------------------------------------------------
    #    TEMPERATURE WITH CONSTANT LAPSE RATE
@@ -559,7 +559,16 @@ def dcmip_gravity_wave(geom, metric, mtrx, param):
 
    w = numpy.zeros_like(u)
 
-   u1_contra, u2_contra = wind2contra(u, v, geom)
+   ## Set a trivial topography
+   zbot = numpy.zeros(geom.coordVec_latlon.shape[2:])
+   zbot_itf_i = numpy.zeros(geom.coordVec_latlon_itf_i.shape[2:])
+   zbot_itf_j = numpy.zeros(geom.coordVec_latlon_itf_j.shape[2:])
+   # Update the geometry object with the new bottom topography
+   geom.apply_topography(zbot,zbot_itf_i,zbot_itf_j)
+   # And regenerate the metric to take this new topography into account
+   metric.build_metric()
+
+   u1_contra, u2_contra = wind2contra_2d(u, v, geom)
 
    #-----------------------------------------------------------------------
    #    SURFACE TEMPERATURE

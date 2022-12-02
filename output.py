@@ -7,7 +7,7 @@ import time
 
 from diagnostic import relative_vorticity, potential_vorticity
 from definitions import *
-from winds import contra2wind
+from winds import contra2wind_2d, contra2wind_3d
 
 def output_init(geom, param):
    """ Initialise the netCDF4 file."""
@@ -253,7 +253,7 @@ def output_netcdf(Q, geom, metric, mtrx, topo, step, param):
       if param.case_number >= 2: # Shallow water
          u1 = Q[idx_hu1,:,:] / h
          u2 = Q[idx_hu2,:,:] / h
-         u, v = contra2wind(u1, u2, geom)
+         u, v = contra2wind_2d(u1, u2, geom)
          rv = relative_vorticity(u1, u2, geom, metric, mtrx, param)
          pv = potential_vorticity(h, u1, u2, geom, metric, mtrx, param)
 
@@ -266,10 +266,10 @@ def output_netcdf(Q, geom, metric, mtrx, topo, step, param):
       rho   = Q[idx_rho, :, :, :]
       u1    = Q[idx_rho_u1, :, :, :]  / rho
       u2    = Q[idx_rho_u2, :, :, :]  / rho
-      w     = Q[idx_rho_w, :, :, :]   / rho
+      u3    = Q[idx_rho_w, :, :, :]   / rho
       theta = Q[idx_rho_theta, :,:,:] / rho
 
-      u, v = contra2wind(u1, u2, geom)
+      u, v, w = contra2wind_3d(u1, u2, u3, geom, metric)
 
       ncfile['rho'][idx, rank, :,:,:]   = rho
       ncfile['U'][idx, rank, :, :]      = u
