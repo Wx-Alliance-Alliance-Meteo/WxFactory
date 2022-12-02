@@ -189,9 +189,17 @@ class Metric_3d_topo:
 
          rootG[:] = (Δx/2)*(Δy/2)*(Δeta/2)*R**2*(1+X**2)*(1+Y**2)*numpy.abs(dRdeta)/delsq**(1.5)  
 
-      # Christoffel symbols, including time as the 0th index
-      # Note that we only need the Γ^(1..3)_ab terms.
-      # Christoffel = numpy.empty((4,4) +  X.shape,dtype=numpy.double)
+
+      ## Computation of the Christoffel symbols
+      ## Part 1: Analytic definition
+      ##
+      ## This section uses the analytic definition of the Christoffel symbols, which computes the mixed derivatives
+      ## with respect to x and y analytically when possible.  For the topographic terms, the derivative is computed
+      ## numerically and substituted into the appropriate analytic expression (deriving from the covariant derivative
+      ## of the covariant metric tensor being zero).
+
+      ## Even when using the christoffel symbols computed numerically via \sqrt{g}(h^ab)_{;c}, this analytic form is used
+      ## for the rotation terms (zero indices)
 
       # Rotation terms that appear throughout the symbol definitions:
       rot1 = sphi - X_int*cphi*salp + Y_int*cphi*calp
@@ -329,6 +337,88 @@ class Metric_3d_topo:
       Christoffel_3_23 *= (2/Δeta) *   (Δy/2) * (Δeta/2); self.christoffel_3_23 = Christoffel_3_23
 
       Christoffel_3_33 *= (2/Δeta) * (Δeta/2) * (Δeta/2); self.christoffel_3_33 = Christoffel_3_33
+
+      ## Part 2: Christoffel symbols computed numerically
+
+      ## Here, we have an alternative construction of the spatial Chrstoffel symbols (non-zero indices), based on
+      ## the alternative ideneity √g h^{ij}_{:k} = 0
+      ## Inside the flux-form Euler equations, this form effectively enforces that a constant-pressure fluid at rest
+      ## remain at rest unless acted on by an external force.
+
+      ## This is more expensive to compute than the analytic form because there is no simple expression for Γ; we must
+      ## solve for it pointwise via a linear system.  (The current formulation does not take advantage of symmetry in the
+      ## lower indices of Γ).
+
+      # √g (h^ab)_:c = 0 = h^ab * 0  + √g h^ab_:c
+      #                  = h^ab (√g,c - √g Γ^d_cd) + √g (h^ab,c + h^db Γ^a_dc + h^ad Γ^b_cd)
+      # h^ab √g,c + √g h^ab,c = √g (h^ab Γ^d_cd - h^db Γ^a_dc - h^ad Γ^b_cd )
+      # (√g h^ab),c = √g (h^ab Γ^d_cd - h^db Γ^a_dc - h^ad Γ^b_cd )
+
+      # Switch to use the numerical formulation of the Christoffel symbol
+      numer_christoffel = True
+
+      if (numer_christoffel):
+         if (True and geom.ptopo.rank == 0):
+            print('Computing (√g h^{ab})_{,c}')
+         grad_sqrtG_metric_contra = matrix.grad(H_contra*sqrtG[numpy.newaxis,numpy.newaxis,:,:,:], 
+                                       H_contra_itf_i*sqrtG_itf_i[numpy.newaxis,numpy.newaxis,:,:,:], 
+                                       H_contra_itf_j*sqrtG_itf_j[numpy.newaxis,numpy.newaxis,:,:,:], 
+                                       H_contra_itf_k*sqrtG_itf_k[numpy.newaxis,numpy.newaxis,:,:,:],geom)
+
+         ni = geom.ni
+         nj = geom.nj
+         nk = geom.nk
+
+         c_rhs = numpy.empty((nk,nj,ni,3,3,3)) # h(i,j,k)^(ab)_(,c)
+         c_lhs = numpy.zeros((nk,nj,ni,3,3,3,3,3,3)) # Γ(i,j,k)^d_{ef} for row (ab,c)
+
+         if (True and geom.ptopo.rank == 0):
+            print('Assembling linear operator for Γ')
+
+         for a in range(3):
+            for b in range(3):
+               for c in range(3):
+                     c_rhs[:,:,:,a,b,c] = grad_sqrtG_metric_contra[c,a,b,:,:,:]
+                     for d in range(3):
+                        c_lhs[:,:,:,a,b,c,d,c,d] += sqrtG[:,:,:]*H_contra[a,b,:,:,:]
+                        c_lhs[:,:,:,a,b,c,a,d,c] -= sqrtG[:,:,:]*H_contra[d,b,:,:,:]
+                        c_lhs[:,:,:,a,b,c,b,c,d] -= sqrtG[:,:,:]*H_contra[a,d,:,:,:]
+                        
+         if (True and geom.ptopo.rank == 0):
+            print('Solving linear operator for Γ')
+         space_christoffel = numpy.linalg.solve(c_lhs.reshape(nk,nj,ni,27,27),c_rhs.reshape(nk,nj,ni,27))
+         space_christoffel.shape = (nk,nj,ni,3,3,3)
+         space_christoffel = space_christoffel.transpose((3,4,5,0,1,2))
+
+         if (True and geom.ptopo.rank == 0):
+            print('Copying Γ to destination arrays')
+
+
+         self.num_christoffel = space_christoffel                                    
+
+         self.christoffel_1_11 = space_christoffel[0,0,0,:,:,:].copy()
+         self.christoffel_1_12 = space_christoffel[0,0,1,:,:,:].copy()
+         self.christoffel_1_13 = space_christoffel[0,0,2,:,:,:].copy()
+         self.christoffel_1_22 = space_christoffel[0,1,1,:,:,:].copy()
+         self.christoffel_1_23 = space_christoffel[0,1,2,:,:,:].copy()
+         self.christoffel_1_33 = space_christoffel[0,2,2,:,:,:].copy()
+
+         self.christoffel_2_11 = space_christoffel[1,0,0,:,:,:].copy()
+         self.christoffel_2_12 = space_christoffel[1,0,1,:,:,:].copy()
+         self.christoffel_2_13 = space_christoffel[1,0,2,:,:,:].copy()
+         self.christoffel_2_22 = space_christoffel[1,1,1,:,:,:].copy()
+         self.christoffel_2_23 = space_christoffel[1,1,2,:,:,:].copy()
+         self.christoffel_2_33 = space_christoffel[1,2,2,:,:,:].copy()
+
+         self.christoffel_3_11 = space_christoffel[2,0,0,:,:,:].copy()
+         self.christoffel_3_12 = space_christoffel[2,0,1,:,:,:].copy()
+         self.christoffel_3_13 = space_christoffel[2,0,2,:,:,:].copy()
+         self.christoffel_3_22 = space_christoffel[2,1,1,:,:,:].copy()
+         self.christoffel_3_23 = space_christoffel[2,1,2,:,:,:].copy()
+         self.christoffel_3_33 = space_christoffel[2,2,2,:,:,:].copy()
+
+         if (True and geom.ptopo.rank == 0):
+            print('Done assembling Γ')
 
       # Assign H_cov and its elements to the object
       self.H_cov = H_cov

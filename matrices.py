@@ -324,7 +324,47 @@ class DFR_operators:
          border.shape = border_shape   
       return border
 
-
+   # Take the gradient of one or more variables, with output shape [3,nvars,ni,nj,nk]
+   def grad(self, field, itf_i, itf_j, itf_k, geom):
+      (nk, nj, ni) = field.shape[-3:]
+      ff = field.view()
+      ff.shape = (-1,nk,nj,ni)
+      
+      nvar = ff.shape[0]
+      nel_i = itf_i.shape[-1]-1
+      nel_j = itf_j.shape[-2]-1
+      nel_k = itf_k.shape[-3]-1
+      
+      iti = itf_i.view()
+      iti.shape = (nvar,nk,nj,nel_i+1)
+      
+      itj = itf_j.view()
+      itj.shape = (nvar,nk,nel_j+1,ni)
+      
+      itk = itf_k.view()
+      itk.shape = (nvar,nel_k+1,nj,ni)
+      
+      ext_i = numpy.zeros((nvar,nk,nj,nel_i,2))
+      ext_j = numpy.zeros((nvar,nk,nel_j,2,ni))
+      ext_k = numpy.zeros((nvar,nel_k,2,nj,ni))
+      
+      ext_i[:,:,:,:,0] = iti[:,:,:,0:-1]
+      ext_i[:,:,:,:,1] = iti[:,:,:,1:]
+      
+      ext_j[:,:,:,0,:] = itj[:,:,0:-1,:]
+      ext_j[:,:,:,1,:] = itj[:,:,1:,:]
+      
+      ext_k[:,:,0,:,:] = itk[:,0:-1,:,:]
+      ext_k[:,:,1,:,:] = itk[:,1:,:,:]
+      
+      output = numpy.zeros((3,nvar,nk,nj,ni))
+      output[0,:,:,:,:] = self.comma_i(ff,ext_i,geom)
+      output[1,:,:,:,:] = self.comma_j(ff,ext_j,geom)
+      output[2,:,:,:,:] = self.comma_k(ff,ext_k,geom)
+      
+      output.shape = (3,)+field.shape
+      
+      return output
 
 
 
