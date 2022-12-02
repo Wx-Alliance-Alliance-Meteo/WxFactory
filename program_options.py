@@ -1,14 +1,15 @@
 from configparser import ConfigParser, NoSectionError, NoOptionError
 
 class Configuration:
-   def __init__(self, cfg_file: str):
+   def __init__(self, cfg_file: str, noisy: bool=True):
 
       parser = ConfigParser()
       parser.read(cfg_file)
 
-      print('\nLoading config: ' + cfg_file)
-      print(parser._sections)
-      print(' ')
+      if (noisy):
+         print('\nLoading config: ' + cfg_file)
+         print(parser._sections)
+         print(' ')
 
       try:
          self.equations = parser.get('General', 'equations')
@@ -78,7 +79,8 @@ class Configuration:
 
       if self.discretization == 'fv':
          if self.nbsolpts != 1:
-            print('The number of solution of solution points in configuration file is inconsistent with a finite volume discretization')
+            if (noisy):
+               print('The number of solution of solution points in configuration file is inconsistent with a finite volume discretization')
             exit(0)
 
       try:

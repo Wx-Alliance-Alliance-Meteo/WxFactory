@@ -325,7 +325,37 @@ class DFR_operators:
       return border
 
    # Take the gradient of one or more variables, with output shape [3,nvars,ni,nj,nk]
-   def grad(self, field, itf_i, itf_j, itf_k, geom):
+   def grad(self, field : numpy.ndarray,
+                  itf_i : numpy.ndarray,
+                  itf_j : numpy.ndarray,
+                  itf_k : numpy.ndarray,
+                  geom : cubed_sphere) -> numpy.ndarray:
+      ''' Take the gradient of one or more variables, given interface values (not element extensions)
+      
+      This function takes the gradient (covariant derivative) along i, j, and k of each of the input
+      variables.  Unlike comma_{i,j,k}, this function builds the extended element view internally
+      based on the provided interface arrays, making the implicit assumption that the field is
+      continuous.
+      
+      Parameters:
+      -----------
+      field: numpy.ndarray (shape [neqs,nk,nj,ni] or [nk,nj,ni])
+         Input variable, on element-internal nodal points in the conventional lexical order.  If this
+         field is a four-dimensional array, the first dimension is the one separating equations.
+      itf_i : numpy.ndarray (shape [...,nk,nj,nel_i])
+         Values along the i-interface
+      itf_j : numpy.ndarray (shape [...,nk,nel_j,ni])
+         Values along the j-interface
+      itf_k : numpy.ndarray (shape [...,nel_k,nj,ni])
+         Values along the k-interface
+      geom : cubed_sphere
+         Geometry object
+      
+      Returns:
+      -------
+      grad : numpy.ndarray, shape [3,...]
+         Gradiant (covariant derivatives) of the input field
+      '''
       (nk, nj, ni) = field.shape[-3:]
       ff = field.view()
       ff.shape = (-1,nk,nj,ni)

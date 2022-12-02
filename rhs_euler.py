@@ -10,7 +10,7 @@ from metric import Metric_3d_topo
 from parallel import Distributed_World
 
 #@profile
-def rhs_euler (Q: numpy.ndarray, geom: cubed_sphere, mtrx: DFR_operators, metric: Metric_3d_topo, topo, ptopo: Distributed_World, nbsolpts: int, nb_elements_hori: int, nb_elements_vert: int, case_number: int):
+def rhs_euler (Q: numpy.ndarray, geom: cubed_sphere, mtrx: DFR_operators, metric: Metric_3d_topo, ptopo: Distributed_World, nbsolpts: int, nb_elements_hori: int, nb_elements_vert: int, case_number: int):
    '''Evaluate the right-hand side of the three-dimensional Euler equations
 
    This function evaluates RHS of the Euler equations using the four-demsional tensor formulation (see Charron 2014), returning
@@ -33,8 +33,6 @@ def rhs_euler (Q: numpy.ndarray, geom: cubed_sphere, mtrx: DFR_operators, metric
    metric : Metric
       Contains the various metric terms associated with the tensor formulation, notably including the
       scalar √g, the spatial metric h, and the Christoffel symbols
-   topo
-      Unused, would contain information about the topography
    ptopo : Distributed_World
       Wraps the information and communication functions necessary for MPI distribution
    nbsolpts : int
@@ -46,6 +44,11 @@ def rhs_euler (Q: numpy.ndarray, geom: cubed_sphere, mtrx: DFR_operators, metric
    case_number : int
       DCMIP case number, used to selectively enable or disable parts of the Euler equations to accomplish
       specialized tests like advection-only
+
+   Returns:
+   --------
+   rhs : numpy.ndarray
+      Output of right-hand-side terms of Euler equations
    '''
 
    type_vec = Q.dtype #  Output/processing type -- may be complex
