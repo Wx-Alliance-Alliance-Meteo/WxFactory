@@ -26,7 +26,7 @@ from cubed_sphere import cubed_sphere
 # with a prescribed vertical wind velocity which makes the test truly 3D. An unscaled planet (with scale parameter
 # X = 1) is selected.
 
-def dcmip_T11_update_winds(geom, metric, mtrx, param, time=0):
+def dcmip_T11_update_winds(geom, metric, mtrx, param, time=float(0)):
    """
    Test 11 - Deformational Advection
 
@@ -76,7 +76,7 @@ def dcmip_T11_update_winds(geom, metric, mtrx, param, time=0):
 # TEST CASE 12 - PURE ADVECTION - 3D HADLEY-LIKE FLOW
 #==========================================================================================
 
-def dcmip_T12_update_winds(geom, metric, mtrx, param, time=0):
+def dcmip_T12_update_winds(geom, metric, mtrx, param, time=float(0)):
    """
    Test 12 - 3D Hadley-like flow
    The velocities are time dependent and therefore must be updated in the dynamical core.

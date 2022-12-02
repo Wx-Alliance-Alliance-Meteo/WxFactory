@@ -9,7 +9,7 @@ from cubed_sphere import cubed_sphere
 # from cubed_sphere import cubed_sphere
 
 class DFR_operators:
-   def __init__(self, grd, filter_apply=False, filter_order=8, filter_cutoff=0.25):
+   def __init__(self, grd : cubed_sphere, filter_apply : bool=False, filter_order: int=8, filter_cutoff: float=0.25):
       '''Initialize the Direct Flux Reconstruction operators
       
       This initializes the DFR operators (matrices) based on input grid parameters.  The relevant internal matrices are:
@@ -69,7 +69,7 @@ class DFR_operators:
 
       self.quad_weights = numpy.outer(grd.glweights, grd.glweights)
 
-   def comma_i(self, field_interior, border_i, grid: cubed_sphere):
+   def comma_i(self, field_interior : numpy.ndarray, border_i : numpy.ndarray, grid: cubed_sphere) -> numpy.ndarray :
       '''Take a partial derivative along the i-index
       
       This method takes the partial derivative of an input field, potentially consisting of several
@@ -78,7 +78,7 @@ class DFR_operators:
 
       Parameters
       ----------
-      field_interior : numpy.array
+      field_interior : numpy.ndarray
          The element-interior values of the variable(s) to be differentiated.  This should have
          a shape of `(numvars,npts_z,npts_y,npts_x)`, respecting the prevailing parallel decomposition.
       border_i : numpy.array
@@ -114,7 +114,7 @@ class DFR_operators:
 
       return output
 
-   def extrapolate_i(self, field_interior, grid):
+   def extrapolate_i(self, field_interior : numpy.ndarray, grid : cubed_sphere) -> numpy.ndarray:
       '''Compute the i-border values along each element of field_interior
 
       This method extrapolates the variables in `field_interior` to the boundary along
@@ -122,7 +122,7 @@ class DFR_operators:
 
       Parameters
       ----------
-      field_interior : numpy.array
+      field_interior : numpy.ndarray
          The element-interior values of the variable(s) to be differentiated.  This should have
          a shape of `(numvars,npts_z,npts_y,npts_x)`, respecting the prevailing parallel decomposition.
       grid : cubed_sphere
@@ -150,7 +150,7 @@ class DFR_operators:
       border.shape = tuple(field_interior.shape[0:-1]) + border_shape
       return border
 
-   def comma_j(self, field_interior, border_j, grid):
+   def comma_j(self, field_interior : numpy.ndarray, border_j : numpy.ndarray, grid : cubed_sphere) -> numpy.ndarray:
       '''Take a partial derivative along the j-index
       
       This method takes the partial derivative of an input field, potentially consisting of several
@@ -159,10 +159,10 @@ class DFR_operators:
 
       Parameters
       ----------
-      field_interior : numpy.array
+      field_interior : numpy.ndarray
          The element-interior values of the variable(s) to be differentiated.  This should have
          a shape of `(numvars,npts_z,npts_y,npts_x)`, respecting the prevailing parallel decomposition.
-      border_j : numpy.array
+      border_j : numpy.ndarray
          The element-boundary values of the fields to be differentiated, along the i-axis.  This should
          have a shape of `(numvars,npts_z,nels_y,2,npts_x)`, with [:,0,:] being the southmost boundary
          (minimal `j`), and [:,1,:] being the north boundary (maximal `j`)
@@ -196,7 +196,7 @@ class DFR_operators:
 
       return output
 
-   def extrapolate_j(self, field_interior, grid):
+   def extrapolate_j(self, field_interior : numpy.ndarray, grid : cubed_sphere) -> numpy.ndarray :
       '''Compute the j-border values along each element of field_interior
 
       This method extrapolates the variables in `field_interior` to the boundary along
@@ -204,7 +204,7 @@ class DFR_operators:
 
       Parameters
       ----------
-      field_interior : numpy.array
+      field_interior : numpy.ndarray
          The element-interior values of the variable(s) to be differentiated.  This should have
          a shape of `(numvars,npts_z,npts_y,npts_x)`, respecting the prevailing parallel decomposition.
          To allow for differentiation of 2D objects, npts_z can be one.
@@ -237,7 +237,7 @@ class DFR_operators:
       border.shape = tuple(field_interior.shape[0:-2]) + border_shape
       return border
 
-   def comma_k(self, field_interior, border_k, grid):
+   def comma_k(self, field_interior : numpy.ndarray, border_k : numpy.ndarray, grid : cubed_sphere) -> numpy.ndarray:
       '''Take a partial derivative along the k-index
       
       This method takes the partial derivative of an input field, potentially consisting of several
@@ -246,7 +246,7 @@ class DFR_operators:
 
       Parameters
       ----------
-      field_interior : numpy.array
+      field_interior : numpy.ndarray
          The element-interior values of the variable(s) to be differentiated.  This should have
          a shape of `(numvars,npts_z,npts_y,npts_x)`, respecting the prevailing parallel decomposition.
       border_k : numpy.array
@@ -283,7 +283,7 @@ class DFR_operators:
 
       return output
 
-   def extrapolate_k(self, field_interior, grid):
+   def extrapolate_k(self, field_interior : numpy.ndarray, grid : cubed_sphere) -> numpy.ndarray:
       '''Compute the k-border values along each element of field_interior
 
       This method extrapolates the variables in `field_interior` to the boundary along
@@ -291,7 +291,7 @@ class DFR_operators:
 
       Parameters
       ----------
-      field_interior : numpy.array
+      field_interior : numpy.ndarray
          The element-interior values of the variable(s) to be differentiated.  This should have
          a shape of `(numvars,npts_z,npts_y,npts_x)`, respecting the prevailing parallel decomposition.
       grid : cubed_sphere

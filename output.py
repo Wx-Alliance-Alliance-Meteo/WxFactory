@@ -29,6 +29,9 @@ def output_init(geom, param):
    elif param.equations == "Euler":
       nk, nj, ni = geom.nk, geom.nj, geom.ni
       grid_data = ('npe', 'Zdim', 'Xdim', 'Ydim')
+   else:
+      print(f"Unsupported equation type {param.equations}")
+      exit(1)
 
    grid_data2D = ('npe', 'Xdim', 'Ydim')
 

@@ -387,6 +387,9 @@ class cubed_sphere:
             lon_p = math.atan2(s1*s2*c3-c1*s3, c1*s2*c3+s1*s3)
             lat_p = -math.asin(c2*c3)
             angle_p = math.atan2(c2*s3, s2)
+      else:
+         print(f'Invalid panel number {ptopo.my_panel}')
+         exit(1)
 
       self.lon_p = lon_p
       self.lat_p = lat_p
