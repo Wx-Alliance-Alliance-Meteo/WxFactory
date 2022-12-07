@@ -4,6 +4,7 @@ import math
 from definitions import cpd, day_in_secs, gravity, p0, Rd
 from winds import *
 from cubed_sphere import cubed_sphere
+from matrices import DFR_operators
 
 #=======================================================================
 #
@@ -502,7 +503,7 @@ def dcmip_steady_state_mountain(geom: cubed_sphere, metric, mtrx, param):
 
    theta = (tv * (p0 / p)**(Rd/cpd))
 
-   return rho, u1_contra, u2_contra, w, theta, zbot
+   return rho, u1_contra, u2_contra, w, theta
 
 
 
