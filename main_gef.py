@@ -18,6 +18,8 @@ from program_options import Configuration
 from rhs_euler       import rhs_euler
 from rhs_sw          import rhs_sw
 from timeIntegrators import Epi, EpiStiff, SRERK, Tvdrk3, Ros2, Euler1
+import mpi4py.MPI
+
 
 def main(args) -> int:
    step = 0
@@ -104,6 +106,15 @@ def main(args) -> int:
 
       time_step = time() - tic
       if (ptopo.rank == 0): print('Elapsed time for step: %0.3f secs' % time_step)
+
+      error_detected = numpy.array([0],dtype=numpy.int32)
+      if (numpy.any(numpy.isnan(Q))):
+         print('NaN detected on process %d' % ptopo.rank)
+         error_detected[0] = 1
+      mpi4py.MPI.COMM_WORLD.Allreduce(error_detected,error_detected,mpi4py.MPI.MAX)
+      if (error_detected[0]):
+         import sys
+         sys.exit(1)
 
       # Overwrite winds for some DCMIP tests
       if param.case_number == 11:
