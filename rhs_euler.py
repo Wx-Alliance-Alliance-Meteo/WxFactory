@@ -8,6 +8,7 @@ from cubed_sphere import cubed_sphere
 from matrices import DFR_operators
 from metric import Metric_3d_topo
 from parallel import Distributed_World
+from dcmip import dcmip_schar_damping
 
 #@profile
 def rhs_euler (Q: numpy.ndarray, geom: cubed_sphere, mtrx: DFR_operators, metric: Metric_3d_topo, ptopo: Distributed_World, nbsolpts: int, nb_elements_hori: int, nb_elements_vert: int, case_number: int):
@@ -375,6 +376,15 @@ def rhs_euler (Q: numpy.ndarray, geom: cubed_sphere, mtrx: DFR_operators, metric
 
    forcing[idx_rho_theta] = 0.0
 
+
+   # DCMIP cases 2-1 and 2-2 involve rayleigh damping
+   if (case_number == 21):
+      # dcmip_schar_damping modifies the 'forcing' variable to apply the requried Rayleigh damping
+      dcmip_schar_damping(forcing, rho, u1, u2, w, metric, geom, shear=False)
+   elif (case_number == 22):
+      dcmip_schar_damping(forcing, rho, u1, u2, w, metric, geom, shear=True)
+
+
    # Assemble the right-hand sides
    rhs = - metric.inv_sqrtG * ( df1_dx1 + df2_dx2 + df3_dx3 ) - forcing
 
@@ -385,5 +395,4 @@ def rhs_euler (Q: numpy.ndarray, geom: cubed_sphere, mtrx: DFR_operators, metric
       rhs[idx_rho_u2]    = 0.0
       rhs[idx_rho_w]     = 0.0
       rhs[idx_rho_theta] = 0.0
-
    return rhs

@@ -511,8 +511,144 @@ def dcmip_steady_state_mountain(geom: cubed_sphere, metric, mtrx, param):
 # Tests 2-1 and 2-2:  Non-hydrostatic Mountain Waves over a Schaer-type Mountain
 #=====================================================================================
 
+def dcmip_schar_waves(geom: cubed_sphere, metric, mtrx: DFR_operators, param, shear=False):
+   T0      = 300.0             # temperature (K)
+   lambdam = math.pi/4.0       # mountain longitude center point (radians)
+   phim    = 0.0               # mountain latitude center point (radians)
+   h0      = 250.0             # peak height of the mountain range (m)
+   Dm      = 5000.0            # mountain radius (meters)
+   Dxi     = 4000.0            # Mountain wavelength (meters)
+   Ueq     = 20.0              # Reference zonal wind velocity (equator)
+   Peq     = 100000.0          # Reference surface pressure (Pa)
+
+   if (shear):
+      Cs = 2.5e-4              # Wind shear rate (1/m), for shear case
+   else:
+      Cs = 0.0
+
+   #-----------------------------------------------------------------------
+   #    Set topography
+   #-----------------------------------------------------------------------
+   zbot = numpy.zeros(geom.coordVec_latlon.shape[2:])
+   zbot_itf_i = numpy.zeros(geom.coordVec_latlon_itf_i.shape[2:])
+   zbot_itf_j = numpy.zeros(geom.coordVec_latlon_itf_j.shape[2:])
+
+   # Build topography based on lateral great-circle distance from the mountain center
+   for (z, coord) in zip([zbot, zbot_itf_i, zbot_itf_j],
+                         [geom.coordVec_latlon, geom.coordVec_latlon_itf_i, geom.coordVec_latlon_itf_j]):
+      lat = coord[1,0,:,:]
+      lon = coord[0,0,:,:]
+      r = geom.earth_radius * numpy.arccos( math.sin(phim) * numpy.sin(lat) + math.cos(phim) * numpy.cos(lat) * numpy.cos(lon - lambdam) )
+      #z[r<Rm] = (h0/2.0)*(1.0+numpy.cos(math.pi*r[r<Rm]/Rm))*numpy.cos(math.pi*r[r<Rm]/zetam)**2   # mountain height
+      z[:,:] = h0 * numpy.exp(-r**2/Dm**2) * numpy.cos(numpy.pi*r/Dxi)**2
+
+   # Update the geometry object with the new bottom topography
+   geom.apply_topography(zbot,zbot_itf_i,zbot_itf_j)
+   # And regenerate the metric to take this new topography into account
+   metric.build_metric()
+   
+   ## Coordinate vectors in 3D
+
+   lat = geom.coordVec_latlon[1,:,:,:] # Latitude as 3D field
+   z_3d = geom.coordVec_latlon[2,:,:,:] # Retrieve all z-levels
+
+   ## Temperature in 3D
+   T = T0*(1 - Cs*Ueq**2/gravity*numpy.sin(lat)**2)
+
+   ## Pressure (eqn 80)
+   p = Peq * numpy.exp(-Ueq**2/(2*Rd*T0)*numpy.sin(lat)**2 - gravity*z_3d/(Rd*T))
+
+   #-----------------------------------------------------------------------
+   #    THE VELOCITIES ARE ZERO (STATE AT REST)
+   #-----------------------------------------------------------------------
+
+   # Zonal Velocity (eqn 82)
+
+   u = Ueq * numpy.cos(lat) * (2*T0/T*Cs*z_3d + T/T0)**0.5
+
+   # Meridional Velocity
+
+   v = 0.0
+
+   # Vertical Velocity
+
+   w = 0.0
+
+   u1_contra, u2_contra, u3_contra = wind2contra_3d(u, v, w, geom, metric)
+
+   #-----------------------------------------------------------------------
+   #    RHO (density)
+   #-----------------------------------------------------------------------
+
+   rho = (p / (Rd * T))
+
+   #-----------------------------------------------------------------------
+   #     potential temperature
+   #-----------------------------------------------------------------------
+
+   theta = (T * (p0 / p)**(Rd/cpd))
+
+   return rho, u1_contra, u2_contra, u3_contra, theta
 
 
+def dcmip_schar_damping(forcing : numpy.ndarray, rho : numpy.ndarray, 
+                        u1 : numpy.ndarray, u2 : numpy.ndarray, u3 : numpy.ndarray, 
+                        metric : Metric_3d_topo, geom : cubed_sphere, shear : bool):
+   ''' Implements the required Rayleigh damping for DCMIP cases 2-1 and 2-2 
+   
+   Parameters:
+   -----------
+   forcing : numpy.ndarray
+      The RHS forcing variable as used by rhs_euler, which will be modified in-place to add
+      the required Rayleigh damping.  This variable is in flux form (ρu1, ρu2, etc), so this
+      function will calculate the required momentum fluxes.
+   rho, u1, u2, u3 : numpy.ndarray
+      Input variables at the current timestemp
+   metric : Metric_3d_topo
+      3D metric, used to convert velocities between contravariant and geophysical winds
+   geom : cubed_sphere
+      Geometry object, also used for velocity conversion
+   shear : bool
+      flag for whether the reference velocity field has vertical shear (case 2-2) or not (2-1)'''
+   
+   # Grab forcing index variables from 'definitions', since forcing is modified in-place
+   from definitions import idx_rho_u1, idx_rho_u2, idx_rho_w
+
+   # Case parameters
+   T0      = 300.0             # temperature (K)
+   Ueq     = 20.0              # Reference zonal wind velocity (equator)
+   Zh      = 20000.0           # Threshold level for Rayleigh damping/sponge layer (m)
+   tau0    = 25.0              # Time scale of Rayleigh damping (s)
+
+   if (shear):
+      Cs = 2.5e-4              # Wind shear rate (1/m), for shear case
+   else:
+      Cs = 0.0
+
+   # Get coordinates
+   lat = geom.coordVec_latlon[1,:,:,:] # Latitude as 3D field
+   z_3d = geom.coordVec_latlon[2,:,:,:] # Retrieve all z-levels
+
+   # Build the damping mask (eqn 79), weighted by ρ and τ0^(-1)
+   damping_weight = rho/tau0*numpy.sin(numpy.pi/2*(z_3d - Zh)/(geom.ztop - Zh))**2 # z > zh, defined everywhere at first
+   # Reset to 0 below the threshold height
+   damping_weight[z_3d <= Zh] = 0.0 
+
+   ## Temperature in 3D
+   Tref = T0*(1 - Cs*Ueq**2/gravity*numpy.sin(lat)**2)
+
+   # Get u, v, w reference velocities and convert to contravariant
+   uref = Ueq * numpy.cos(lat) * (2*T0/Tref*Cs*z_3d + Tref/T0)**0.5
+   vref = 0.0
+   wref = 0.0
+
+   u1ref, u2ref, u3ref = wind2contra_3d(uref, vref, wref, geom, metric)
+
+   # Increment velocity forcing (eqn 78).  Take note that this modification is in-place,
+   # and the sign is positive because rhs_euler includes its own negative sign
+   forcing[idx_rho_u1] += damping_weight*(u1 - u1ref) 
+   forcing[idx_rho_u2] += damping_weight*(u2 - u2ref)
+   forcing[idx_rho_w]  += damping_weight*(u3 - u3ref)
 
 
 
