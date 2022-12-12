@@ -76,53 +76,136 @@ class Metric_3d_topo:
       height_ext_k[:,0,:,:] = height_itf_k[:-1,:,:] # Bottom boundary of each element
       height_ext_k[:,1,:,:] = height_itf_k[1:,:,:] # Top boundary of each element
 
-      #dRdx1_int = 0*R_int
-      #dRdx2_int = 0*R_int
-      #dRdeta_int = (geom.ztop - 0) + 0*R_int
-
       dRdx1_int = matrix.comma_i(height_int,height_ext_i,geom)*2/Δx
       dRdx2_int = matrix.comma_j(height_int,height_ext_j,geom)*2/Δy
       dRdeta_int = matrix.comma_k(height_int,height_ext_k,geom)*2/Δeta
-      
-      debug_col = geom.nj//2
 
-      # With the derivative performed, define the averaged interface values
+      # The i/j interface values now need to be "fixed up" with a boundary exchange.  However, the existing vector
+      # exchange code demands contravariant components, and dRd(...) is covariant.  We can perform the conversion
+      # by constructing a (temporary) 2D metric in terms of X and Y only at the interfaces:
+
+      metric_2d_contra_itf_i = numpy.zeros((2,2) + geom.itf_i_shape_3d,dtype=numpy.double)
+      metric_2d_contra_itf_j = numpy.zeros((2,2) + geom.itf_j_shape_3d,dtype=numpy.double)
+      metric_2d_cov_itf_i = numpy.zeros((2,2) + geom.itf_i_shape_3d,dtype=numpy.double)
+      metric_2d_cov_itf_j = numpy.zeros((2,2) + geom.itf_j_shape_3d,dtype=numpy.double)
+
+      for (metric_contra, metric_cov, X, Y) in zip((metric_2d_contra_itf_i, metric_2d_contra_itf_j),
+                                                   (metric_2d_cov_itf_i, metric_2d_cov_itf_j),
+                                                   (X_itf_i, X_itf_j),
+                                                   (Y_itf_i, Y_itf_j)):
+         delta2 = 1 + X**2 + Y**2
+         metric_contra[0,0,:,:,:] = delta2/(1+X**2)
+         metric_contra[0,1,:,:,:] = delta2*X*Y/((1+X**2) + (1+Y**2))
+         metric_contra[1,0,:,:,:] = metric_contra[0,1,:,:,:]
+         metric_contra[1,1,:,:,:] = delta2/(1+Y**2)
+
+         metric_cov[0,0,:,:,:] = (1+X**2)**2 * (1+Y**2)/delta2**2
+         metric_cov[0,1,:,:,:] = -X*Y*(1+X**2) * (1+Y**2) / delta2**2
+         metric_cov[1,0,:,:,:] = metric_cov[0,1,:,:,:]
+         metric_cov[1,1,:,:,:] = (1+X**2) * (1+Y**2)**2/delta2**2
+
+      # Arrays for boundary info:  arrays for parallel exchange have a different shape than the 'natural' extrapolation,
+      # in order for the MPI exchange to occur with contiguous subarrays.
+
+      exch_itf_i = numpy.zeros((3,geom.nk,geom.nb_elements_x1+2,2,geom.nj),dtype=numpy.double)
+      exch_itf_j = numpy.zeros((3,geom.nk,geom.nb_elements_x2+2,2,geom.ni),dtype=numpy.double)
+
+      # Perform extrapolation.  Extrapolation in i and j will be written to arrays for exchange, but k does not
+      # require an exchange; we can average directly and will handle this afterwards
+      dRdx1_itf_k = numpy.empty_like(R_itf_k)
+      dRdx2_itf_k = numpy.empty_like(R_itf_k)
+      dRdeta_itf_k = numpy.empty_like(R_itf_k)
+
+      # Extrapolate the interior values to each edge
+      dRdx1_extrap_i = matrix.extrapolate_i(dRdx1_int, geom) # Output dims: (nk,nj,nel_x,2)
+      dRdx1_extrap_j = matrix.extrapolate_j(dRdx1_int, geom) # Output dims: (nk,nel_y,2,ni)
+      dRdx1_extrap_k = matrix.extrapolate_k(dRdx1_int, geom) # Output dims: (nel_z,2,nj,ni)
+      dRdx2_extrap_i = matrix.extrapolate_i(dRdx2_int, geom)
+      dRdx2_extrap_j = matrix.extrapolate_j(dRdx2_int, geom)
+      dRdx2_extrap_k = matrix.extrapolate_k(dRdx2_int, geom)
+      dRdeta_extrap_i = matrix.extrapolate_i(dRdeta_int, geom)
+      dRdeta_extrap_j = matrix.extrapolate_j(dRdeta_int, geom)
+      dRdeta_extrap_k = matrix.extrapolate_k(dRdeta_int, geom)
+
+      # _k only needs permutation to assign to the exchange arrays
+      exch_itf_i[2,:,1:-1,:,:] = dRdeta_extrap_i.transpose(0,2,3,1)
+      exch_itf_j[2,:,1:-1,:,:] = dRdeta_extrap_j.transpose(0,1,2,3)
+
+      # _i and _j additionally need conversion to contravariant coordinates
+      for el in range(geom.nb_elements_x1):
+         # Left boundary of the element
+         exch_itf_i[0,:,el+1,0,:] = metric_2d_contra_itf_i[0,0,:,:,el] * dRdx1_extrap_i[:,:,el,0] + \
+                                    metric_2d_contra_itf_i[0,1,:,:,el] * dRdx2_extrap_i[:,:,el,0]
+         exch_itf_i[1,:,el+1,0,:] = metric_2d_contra_itf_i[1,0,:,:,el] * dRdx1_extrap_i[:,:,el,0] + \
+                                    metric_2d_contra_itf_i[1,1,:,:,el] * dRdx2_extrap_i[:,:,el,0]
+         # Right boundary of the element
+         exch_itf_i[0,:,el+1,1,:] = metric_2d_contra_itf_i[0,0,:,:,el+1] * dRdx1_extrap_i[:,:,el,1] + \
+                                    metric_2d_contra_itf_i[0,1,:,:,el+1] * dRdx2_extrap_i[:,:,el,1]
+         exch_itf_i[1,:,el+1,1,:] = metric_2d_contra_itf_i[1,0,:,:,el+1] * dRdx1_extrap_i[:,:,el,1] + \
+                                    metric_2d_contra_itf_i[1,1,:,:,el+1] * dRdx2_extrap_i[:,:,el,1]
+
+      for el in range(geom.nb_elements_x2):   
+         # 'south' boundary of the element
+         exch_itf_j[0,:,el+1,0,:] = metric_2d_contra_itf_j[0,0,:,el,:] * dRdx1_extrap_j[:,el,0,:] + \
+                                    metric_2d_contra_itf_j[0,1,:,el,:] * dRdx2_extrap_j[:,el,0,:]
+         exch_itf_j[1,:,el+1,0,:] = metric_2d_contra_itf_j[1,0,:,el,:] * dRdx1_extrap_j[:,el,0,:] + \
+                                    metric_2d_contra_itf_j[1,1,:,el,:] * dRdx2_extrap_j[:,el,0,:]
+         # 'north' boundary of the element
+         exch_itf_j[0,:,el+1,1,:] = metric_2d_contra_itf_j[0,0,:,el+1,:] * dRdx1_extrap_j[:,el,1,:] + \
+                                    metric_2d_contra_itf_j[0,1,:,el+1,:] * dRdx2_extrap_j[:,el,1,:]
+         exch_itf_j[1,:,el+1,1,:] = metric_2d_contra_itf_j[1,0,:,el+1,:] * dRdx1_extrap_j[:,el,1,:] + \
+                                    metric_2d_contra_itf_j[1,1,:,el+1,:] * dRdx2_extrap_j[:,el,1,:]
+
+
+      ## Perform the exchange.  This function requires u1/u2/u3 contravariant vectors, and in that
+      # formulation u3 exchanges like a scalar (because there is no orientation change at panel
+      # boundaries))
+
+      geom.ptopo.xchange_vectors(geom, exch_itf_i[0,:], exch_itf_i[1,:], 
+                                       exch_itf_j[0,:], exch_itf_j[1,:],
+                                       exch_itf_i[2,:], exch_itf_j[2,:], blocking=True)
+
+      # With the exchange performed, average left and right values at each interface to fill the
+      # itf_i and itf_j arrays, converting back to the covariant representation via the 2d metric.
+      # The itf_k arrays are handled locally, without the exchange.
+
+      # Define the averaged interface values
       dRdx1_itf_i = numpy.empty_like(R_itf_i)
       dRdx2_itf_i = numpy.empty_like(R_itf_i)
       dRdeta_itf_i = numpy.empty_like(R_itf_i)
       dRdx1_itf_j = numpy.empty_like(R_itf_j)
       dRdx2_itf_j = numpy.empty_like(R_itf_j)
       dRdeta_itf_j = numpy.empty_like(R_itf_j)
-      dRdx1_itf_k = numpy.empty_like(R_itf_k)
-      dRdx2_itf_k = numpy.empty_like(R_itf_k)
-      dRdeta_itf_k = numpy.empty_like(R_itf_k)
-      for (d_int, d_itf_i, d_itf_j, d_itf_k) in zip((dRdx1_int, dRdx2_int, dRdeta_int),
-                                                    (dRdx1_itf_i, dRdx2_itf_i, dRdeta_itf_i),
-                                                    (dRdx1_itf_j, dRdx2_itf_j, dRdeta_itf_j),
-                                                    (dRdx1_itf_k, dRdx2_itf_k, dRdeta_itf_k)):
-         # Extrapolate the interior values to each edge
-         d_extrap_i = matrix.extrapolate_i(d_int, geom)
-         d_extrap_j = matrix.extrapolate_j(d_int, geom)
-         d_extrap_k = matrix.extrapolate_k(d_int, geom)
+
+      # i-interface values
+      for bdy in range(geom.nb_elements_x1+1):
+         # Iterate from leftmost to rightmost boundary
+         dRdx1_itf_i[:,:,bdy] = metric_2d_cov_itf_i[0,0,:,:,bdy]*(0.5*exch_itf_i[0,:,bdy,1,:] + 0.5*exch_itf_i[0,:,bdy+1,0,:]) + \
+                                metric_2d_cov_itf_i[0,1,:,:,bdy]*(0.5*exch_itf_i[1,:,bdy,1,:] + 0.5*exch_itf_i[1,:,bdy+1,0,:])
+         dRdx2_itf_i[:,:,bdy] = metric_2d_cov_itf_i[1,0,:,:,bdy]*(0.5*exch_itf_i[0,:,bdy,1,:] + 0.5*exch_itf_i[0,:,bdy+1,0,:]) + \
+                                metric_2d_cov_itf_i[1,1,:,:,bdy]*(0.5*exch_itf_i[1,:,bdy,1,:] + 0.5*exch_itf_i[1,:,bdy+1,0,:])
+         dRdeta_itf_i[:,:,bdy] = 0.5*exch_itf_i[2,:,bdy,1,:] + 0.5*exch_itf_i[2,:,bdy+1,0,:]
+      
+      # j-interface values
+      for bdy in range(geom.nb_elements_x2+1):
+         # iterate from 'south'most to 'north'most boundary
+         dRdx1_itf_j[:,bdy,:] = metric_2d_cov_itf_j[0,0,:,bdy,:]*(0.5*exch_itf_j[0,:,bdy,1,:] + 0.5*exch_itf_j[0,:,bdy+1,0,:]) + \
+                                metric_2d_cov_itf_j[0,1,:,bdy,:]*(0.5*exch_itf_j[1,:,bdy,1,:] + 0.5*exch_itf_j[1,:,bdy+1,0,:])
+         dRdx2_itf_j[:,bdy,:] = metric_2d_cov_itf_j[1,0,:,bdy,:]*(0.5*exch_itf_j[0,:,bdy,1,:] + 0.5*exch_itf_j[0,:,bdy+1,0,:]) + \
+                                metric_2d_cov_itf_j[1,1,:,bdy,:]*(0.5*exch_itf_j[1,:,bdy,1,:] + 0.5*exch_itf_j[1,:,bdy+1,0,:]) 
+         dRdeta_itf_j[:,bdy,:] = 0.5*exch_itf_j[2,:,bdy,1,:] + 0.5*exch_itf_j[2,:,bdy+1,0,:] 
+
+      # k-interface values require either copying (top/bottom boundary) or simple averaging; no exchange required
+      for (d_itf_k, d_extrap_k) in zip((dRdx1_itf_k, dRdx2_itf_k, dRdeta_itf_k),
+                                       (dRdx1_extrap_k,dRdx2_extrap_k,dRdeta_extrap_k)):
 
          # Assign absolute minimum/maximum interface values based on the one-sided extrapolation
-         d_itf_i[:,:,0] = d_extrap_i[:,:,0,0]
-         d_itf_i[:,:,-1] = d_extrap_i[:,:,-1,1]
-         d_itf_j[:,0,:] = d_extrap_j[:,0,0,:]
-         d_itf_j[:,-1,:] = d_extrap_j[:,-1,1,:]
          d_itf_k[0,:,:] = d_extrap_k[0,0,:,:]
          d_itf_k[-1,:,:] = d_extrap_k[-1,1,:,:]
 
          # Assign interior values based on the average of the bordering extrapolations
-         d_itf_i[:,:,1:-1] = 0.5*(d_extrap_i[:,:,1:,0] + d_extrap_i[:,:,:-1,1])
-         d_itf_j[:,1:-1,:] = 0.5*(d_extrap_j[:,1:,0,:] + d_extrap_j[:,:-1,1,:])
          d_itf_k[1:-1,:,:] = 0.5*(d_extrap_k[1:,0,:,:] + d_extrap_k[:-1,1,:,:])
 
-      # FIXME
-      # The i/j interface values should now be "fixed up" with a boundary exchange.  However, the vector
-      # exchange code is specialized for u^i*e_i = u^i(δ_i), but here we essentially have covariant components
-      # with respect to x1/x2/eta (not X/Y/eta).  This will require a scalar exchange and manual processing of
-      # the boundaries.
 
       # Initialize metric arrays
 
