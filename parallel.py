@@ -413,12 +413,12 @@ class Distributed_World:
             raise ValueError
 
          get_rows = self.get_rows_3d
-         X = geom.X[0, 0, :] # TODO : debug avec niveau 0
-         Y = geom.Y[0, :, 0]
+         X = geom.X[0, :] # TODO : debug avec niveau 0
+         Y = geom.Y[:, 0]
 
       else:
          if u3_itf_i is not None:
-            print(f'Calling xchange_vectors with arrays that look like they are from a 3D problem, '
+            print(f'Calling xchange_vectors with arrays that look like they are from a 2D problem, '
                   f'but you also provide a 3rd component! We will just ignore it.')
 
          get_rows = self.get_rows_2d

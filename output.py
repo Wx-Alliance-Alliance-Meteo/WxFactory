@@ -7,7 +7,7 @@ import time
 
 from diagnostic import relative_vorticity, potential_vorticity
 from definitions import *
-from winds import contra2wind
+from winds import contra2wind_2d, contra2wind_3d
 
 def output_init(geom, param):
    """ Initialise the netCDF4 file."""
@@ -29,11 +29,15 @@ def output_init(geom, param):
    elif param.equations == "Euler":
       nk, nj, ni = geom.nk, geom.nj, geom.ni
       grid_data = ('npe', 'Zdim', 'Xdim', 'Ydim')
+   else:
+      print(f"Unsupported equation type {param.equations}")
+      exit(1)
 
    grid_data2D = ('npe', 'Xdim', 'Ydim')
 
    ncfile.createDimension('time', None) # unlimited
-   ncfile.createDimension('npe', mpi4py.MPI.COMM_WORLD.Get_size())
+   npe = mpi4py.MPI.COMM_WORLD.Get_size()
+   ncfile.createDimension('npe', npe)
    ncfile.createDimension('Ydim', ni)
    ncfile.createDimension('Xdim', nj)
 
@@ -121,6 +125,22 @@ def output_init(geom, param):
          dpv.set_collective(True)
 
    elif param.equations == "Euler":
+      elev = ncfile.createVariable('elev', numpy.dtype('double').char, grid_data)
+      elev.long_name = 'Elevation'
+      elev.units = 'm'
+      elev.standard_name = 'Elevation'
+      elev.coordinates = 'lons lats'
+      elev.grid_mapping = 'cubed_sphere'
+      elev.set_collective(True)
+
+      topo = ncfile.createVariable('topo', numpy.dtype('double').char, grid_data2D)
+      topo.long_name = 'Topopgraphy'
+      topo.units = 'm'
+      topo.standard_name = 'Topography'
+      topo.coordinates = 'lons lats'
+      topo.grid_mapping = 'cubed_sphere'
+      topo.set_collective(True)
+
       uuu = ncfile.createVariable('U', numpy.dtype('double').char, ('time', ) + grid_data)
       uuu.long_name = 'eastward_wind'
       uuu.units = 'm s-1'
@@ -209,11 +229,15 @@ def output_init(geom, param):
       xxx[:] = geom.x1[:]
       yyy[:] = geom.x2[:]
       if param.equations == "Euler":
-         zzz[:] = geom.x3[:]
+         # FIXME: With mapped coordinates, x3/height is a truly 3D coordinate
+         zzz[:] = geom.x3[:,0,0] 
 
    tile[rank] = rank
    lon[rank,:,:] = geom.lon * 180/math.pi
    lat[rank,:,:] = geom.lat * 180/math.pi
+   if param.equations == "Euler":
+      elev[rank,:,:,:] = geom.coordVec_latlon[2,:,:,:]
+      topo[rank,:,:] = geom.zbot[:,:]
 
 
 def output_netcdf(Q, geom, metric, mtrx, topo, step, param):
@@ -232,7 +256,7 @@ def output_netcdf(Q, geom, metric, mtrx, topo, step, param):
       if param.case_number >= 2: # Shallow water
          u1 = Q[idx_hu1,:,:] / h
          u2 = Q[idx_hu2,:,:] / h
-         u, v = contra2wind(u1, u2, geom)
+         u, v = contra2wind_2d(u1, u2, geom)
          rv = relative_vorticity(u1, u2, geom, metric, mtrx, param)
          pv = potential_vorticity(h, u1, u2, geom, metric, mtrx, param)
 
@@ -245,10 +269,10 @@ def output_netcdf(Q, geom, metric, mtrx, topo, step, param):
       rho   = Q[idx_rho, :, :, :]
       u1    = Q[idx_rho_u1, :, :, :]  / rho
       u2    = Q[idx_rho_u2, :, :, :]  / rho
-      w     = Q[idx_rho_w, :, :, :]   / rho
+      u3    = Q[idx_rho_w, :, :, :]   / rho
       theta = Q[idx_rho_theta, :,:,:] / rho
 
-      u, v = contra2wind(u1, u2, geom)
+      u, v, w = contra2wind_3d(u1, u2, u3, geom, metric)
 
       ncfile['rho'][idx, rank, :,:,:]   = rho
       ncfile['U'][idx, rank, :, :]      = u

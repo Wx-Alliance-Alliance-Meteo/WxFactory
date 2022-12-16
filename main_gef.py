@@ -10,26 +10,28 @@ from dcmip           import dcmip_T11_update_winds, dcmip_T12_update_winds
 from definitions     import idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_w
 from initialize      import initialize_sw, initialize_euler
 from matrices        import DFR_operators
-from metric          import Metric
+from metric          import Metric, Metric_3d_topo
 from parallel        import Distributed_World
 from multigrid import Multigrid
 #from preconditioner_fv import FV_preconditioner
 from program_options import Configuration
 from rhs_euler       import rhs_euler
 from rhs_sw          import rhs_sw
-from timeIntegrators import Epi, EpiStiff, SRERK, Tvdrk3, Ros2
+from timeIntegrators import Epi, EpiStiff, SRERK, Tvdrk3, Ros2, Euler1
+import mpi4py.MPI
+
 
 def main(args) -> int:
    step = 0
 
+   # Set up distributed world
+   ptopo = Distributed_World()
+
    # Read configuration file
-   param = Configuration(args.config)
+   param = Configuration(args.config, ptopo.rank == 0)
 
    if param.output_freq > 0:
       from output import output_init, output_netcdf, output_finalize
-
-   # Set up distributed world
-   ptopo = Distributed_World()
 
    # Create the mesh
    geom = cubed_sphere(param.nb_elements_horizontal, param.nb_elements_vertical, param.nbsolpts, param.λ0, param.ϕ0, param.α0, param.ztop, ptopo, param)
@@ -37,15 +39,15 @@ def main(args) -> int:
    # Build differentiation matrice and boundary correction
    mtrx = DFR_operators(geom, param.filter_apply, param.filter_order, param.filter_cutoff)
 
-   # Initialize metric tensor
-   metric = Metric(geom)
-
    # Initialize state variables
    if param.equations == "Euler":
+      metric = Metric_3d_topo(geom, mtrx)
       Q, topo = initialize_euler(geom, metric, mtrx, param)
-      rhs_handle = lambda q: rhs_euler(q, geom, mtrx, metric, topo, ptopo, param.nbsolpts, param.nb_elements_horizontal,
+      # Q: dimensions [5,nk,nj,ni], order ρ, u, v, w, θ
+      rhs_handle = lambda q: rhs_euler(q, geom, mtrx, metric, ptopo, param.nbsolpts, param.nb_elements_horizontal,
             param.nb_elements_vertical, param.case_number)
    else: # Shallow water
+      metric = Metric(geom)
       Q, topo = initialize_sw(geom, metric, mtrx, param)
       rhs_handle = lambda q: rhs_sw(q, geom, mtrx, metric, topo, ptopo, param.nbsolpts, param.nb_elements_horizontal)
 
@@ -56,18 +58,23 @@ def main(args) -> int:
    # Time stepping
    if param.time_integrator.lower()[:9] == 'epi_stiff' and param.time_integrator[9:].isdigit():
       order = int(param.time_integrator[9:])
-      print(f'Running with EPI_stiff{order}')
+      if (ptopo.rank == 0): print(f'Running with EPI_stiff{order}')
       stepper = EpiStiff(order, rhs_handle, param.tolerance, param.exponential_solver, jacobian_method=param.jacobian_method, init_substeps=10)
    elif param.time_integrator.lower()[:3] == 'epi' and param.time_integrator[3:].isdigit():
       order = int(param.time_integrator[3:])
-      print(f'Running with EPI{order}')
+      if (ptopo.rank == 0): print(f'Running with EPI{order}')
       stepper = Epi(order, rhs_handle, param.tolerance, param.exponential_solver, jacobian_method=param.jacobian_method, init_substeps=10)
    elif param.time_integrator.lower()[:5] == 'srerk' and param.time_integrator[5:].isdigit():
       order = int(param.time_integrator[5:])
-      print(f'Running with SRERK{order}')
+      if (ptopo.rank == 0): print(f'Running with SRERK{order}')
       stepper = SRERK(order, rhs_handle, param.tolerance, param.exponential_solver, jacobian_method=param.jacobian_method)
    elif param.time_integrator.lower() == 'tvdrk3':
-      stepper = Tvdrk3(rhs_handle)
+      stepper = Tvdrk3(rhs_handle)   
+   elif param.time_integrator.lower() == 'euler1':
+      stepper = Euler1(rhs_handle)
+      if (ptopo.rank == 0): 
+         print('WARNING: Running with first-order explicit Euler timestepping.')
+         print('         This is UNSTABLE and should be used only for debugging.')
    elif param.time_integrator.lower() == 'ros2':
       preconditioner = None
       if param.use_preconditioner:
@@ -92,13 +99,22 @@ def main(args) -> int:
          t += param.dt
 
       step += 1
-      print('\nStep', step, 'of', nb_steps)
+      if (ptopo.rank == 0): print('\nStep', step, 'of', nb_steps)
 
       tic = time()
       Q = stepper.step(Q, param.dt)
 
       time_step = time() - tic
-      print('Elapsed time for step: %0.3f secs' % time_step)
+      if (ptopo.rank == 0): print('Elapsed time for step: %0.3f secs' % time_step)
+
+      error_detected = numpy.array([0],dtype=numpy.int32)
+      if (numpy.any(numpy.isnan(Q))):
+         print('NaN detected on process %d' % ptopo.rank)
+         error_detected[0] = 1
+      mpi4py.MPI.COMM_WORLD.Allreduce(error_detected,error_detected,mpi4py.MPI.MAX)
+      if (error_detected[0]):
+         import sys
+         sys.exit(1)
 
       # Overwrite winds for some DCMIP tests
       if param.case_number == 11:
@@ -119,7 +135,7 @@ def main(args) -> int:
       # Plot solution
       if param.output_freq > 0:
          if step % param.output_freq == 0:
-            print('=> Writing dynamic output for step', step)
+            if (ptopo.rank == 0): print('=> Writing dynamic output for step', step)
             output_netcdf(Q, geom, metric, mtrx, topo, step, param)
 
    if param.output_freq > 0:

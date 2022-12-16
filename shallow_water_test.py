@@ -1,7 +1,7 @@
 import math
 import numpy
 from definitions import day_in_secs, gravity
-from winds import wind2contra
+from winds import wind2contra_2d
 
 import matsuno
 
@@ -29,7 +29,7 @@ def solid_body_rotation(geom, metric, param):
 
    u = u0 * geom.coslat
    v = 0.0
-   u1, u2 = wind2contra(u, v, geom)
+   u1, u2 = wind2contra_2d(u, v, geom)
 
    return u1, u2
 
@@ -46,7 +46,7 @@ def circular_vortex(geom, metric, param):
 
    u = geom.earth_radius * Omega * (math.sin(lat_center) * geom.coslat - math.cos(lat_center) * numpy.cos(geom.lon - lon_center) * geom.sinlat)
    v = geom.earth_radius * Omega * numpy.cos(lat_center) * numpy.sin(geom.lon - lon_center)
-   u1, u2 = wind2contra(u, v, geom)
+   u1, u2 = wind2contra_2d(u, v, geom)
 
    return u1, u2, h
 
@@ -224,7 +224,7 @@ def williamson_case6(geom, metric, param):
          ( R*geom.sinlat**2 - geom.coslat**2 ) * numpy.cos(R*geom.lon)
    v = -geom.earth_radius * K * R * geom.coslat**(R-1) * geom.sinlat * numpy.sin(R*geom.lon)
 
-   u1, u2 = wind2contra(u, v, geom)
+   u1, u2 = wind2contra_2d(u, v, geom)
 
    return u1, u2, h
 
@@ -285,7 +285,7 @@ def case_galewsky(geom, metric, param):
          else:
             u[i,j] = (v[i,j] * math.sin(geom.lat[i,j]) * math.sin(geom.lon[i,j]) + u_p * math.cos(geom.lon[i,j])) / math.cos(geom.lon[i,j])
 
-   u1, u2 = wind2contra(u, v, geom)
+   u1, u2 = wind2contra_2d(u, v, geom)
 
    return u1, u2, h
 
@@ -318,7 +318,7 @@ def case_matsuno(geom, metric, param):
 
          h_analytic[i, j] = matsuno.eval_field(geom.lat[i,j], geom.lon[i,j], param.t_end, field='phi', wave_type=param.matsuno_wave_type) / gravity
 
-   u1, u2 = wind2contra(u, v, geom)
+   u1, u2 = wind2contra_2d(u, v, geom)
 
    return u1, u2, h
 
@@ -372,7 +372,7 @@ def case_unsteady_zonal(geom, metric, mtrx, param):
       # --- Direction x2
       dzdx2[epais,:] = mtrx.diff_solpt @ hsurf[epais,:] + mtrx.correction @ hsurf_itf_j[elem+offset,:,:]
 
-   u1, u2 = wind2contra(u, v, geom)
+   u1, u2 = wind2contra_2d(u, v, geom)
    return u1, u2, h, hsurf, dzdx1, dzdx2, hsurf_itf_i, hsurf_itf_j
 
 def height_unsteady_zonal(geom, metric, param):
