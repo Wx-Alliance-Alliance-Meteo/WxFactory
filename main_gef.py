@@ -111,8 +111,9 @@ def main(args) -> int:
       if (numpy.any(numpy.isnan(Q))):
          print('NaN detected on process %d' % ptopo.rank)
          error_detected[0] = 1
-      mpi4py.MPI.COMM_WORLD.Allreduce(error_detected,error_detected,mpi4py.MPI.MAX)
-      if (error_detected[0]):
+      error_detected_out = numpy.zeros_like(error_detected)
+      mpi4py.MPI.COMM_WORLD.Allreduce(error_detected,error_detected_out,mpi4py.MPI.MAX)
+      if (error_detected_out[0]):
          import sys
          sys.exit(1)
 
