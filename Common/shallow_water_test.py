@@ -1,9 +1,9 @@
 import math
 import numpy
-from definitions import day_in_secs, gravity
-from winds import wind2contra_2d
 
-import matsuno
+import Common.matsuno
+from Common.definitions import day_in_secs, gravity
+from Grid.winds         import wind2contra_2d
 
 def eval_u_prime(lat):
    u_max = 80.0

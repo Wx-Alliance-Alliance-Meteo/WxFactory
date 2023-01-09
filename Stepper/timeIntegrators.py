@@ -3,14 +3,14 @@ import math
 import scipy.sparse.linalg
 from collections import deque
 from itertools import combinations
-
-from linsol        import fgmres
-from matvec        import matvec_fun, matvec_rat
-from bamphi        import bamphi
-from kiops         import kiops
-from pmex          import pmex
-from timer         import Timer
 import mpi4py.MPI
+
+from Bamphi.bamphi   import bamphi
+from Common.timer    import Timer
+from Solver.linsol   import fgmres
+from Solver.kiops    import kiops
+from Solver.pmex     import pmex
+from Stepper.matvec  import matvec_fun, matvec_rat
 
 # Computes the coefficients for stiffness resilient exponential methods based on node values c
 def alpha_coeff(c):

@@ -1,10 +1,10 @@
 import numpy
 import math
 
-from definitions import cpd, day_in_secs, gravity, p0, Rd
-from winds import *
-from cubed_sphere import cubed_sphere
-from matrices import DFR_operators
+from Common.definitions import cpd, day_in_secs, gravity, p0, Rd
+from Grid.cubed_sphere  import cubed_sphere
+from Grid.matrices      import DFR_operators
+from Grid.winds         import *
 
 #=======================================================================
 #

@@ -1,6 +1,6 @@
 import numpy
 
-import global_op
+from Solver.linsol import global_norm, global_dotprod
 
 class KrylovSystem:
    def __init__(self, A, A_tilde, f, p, options, info):
@@ -20,7 +20,7 @@ class KrylovSystem:
       for k in range(p):
          self.V[k + 1], V_bar[k + 1] = A_tilde(self.V[k], V_bar[k])
 
-      self.norm_V = global_op.norm(self.V[p])
+      self.norm_V = global_norm(self.V[p])
       self.V[p] /= self.norm_V
 
       for i in range(self.num_arnoldi_iter):
@@ -30,10 +30,10 @@ class KrylovSystem:
          # Orthogonalize wrt previous vectors
          for k in range(i, max(i-2, -1), -1):
             inner_index = p + k
-            self.H[k, i] = global_op.dotprod(self.V[inner_index].conj(), self.V[index + 1])
+            self.H[k, i] = global_dotprod(self.V[inner_index].conj(), self.V[index + 1])
             self.V[index + 1] -= self.H[k, i] * self.V[inner_index]
 
-         self.H[i + 1, i] = global_op.norm(self.V[index + 1])
+         self.H[i + 1, i] = global_norm(self.V[index + 1])
          if abs(self.H[i+1, i]) < self.CONVERGENCE_THRESHOLD:
             break
 

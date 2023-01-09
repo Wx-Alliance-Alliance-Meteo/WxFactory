@@ -1,8 +1,8 @@
 import numpy
 import math
 
-from cubed_sphere import cubed_sphere
-from matrices import DFR_operators
+from Grid.cubed_sphere  import cubed_sphere
+from Grid.matrices      import DFR_operators
 
 class Metric_3d_topo:
    def __init__(self, geom : cubed_sphere, matrix: DFR_operators):

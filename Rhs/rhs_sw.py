@@ -1,6 +1,6 @@
 import numpy
 
-from definitions import idx_h, idx_hu1, idx_hu2, gravity
+from Common.definitions import idx_h, idx_hu1, idx_hu2, gravity
 
 def rhs_sw (Q: numpy.ndarray, geom, mtrx, metric, topo, ptopo, nbsolpts: int, nb_elements_hori: int):
 

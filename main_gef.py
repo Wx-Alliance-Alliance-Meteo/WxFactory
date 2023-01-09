@@ -3,22 +3,21 @@
 import numpy
 import math
 from time import time
-
-from blockstats      import blockstats
-from cubed_sphere    import cubed_sphere
-from dcmip           import dcmip_T11_update_winds, dcmip_T12_update_winds
-from definitions     import idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_w
-from initialize      import initialize_sw, initialize_euler
-from matrices        import DFR_operators
-from metric          import Metric, Metric_3d_topo
-from parallel        import Distributed_World
-from multigrid import Multigrid
-#from preconditioner_fv import FV_preconditioner
-from program_options import Configuration
-from rhs_euler       import rhs_euler
-from rhs_sw          import rhs_sw
-from timeIntegrators import Epi, EpiStiff, SRERK, Tvdrk3, Ros2, Euler1
 import mpi4py.MPI
+
+from Common.blockstats        import blockstats
+from Common.dcmip             import dcmip_T11_update_winds, dcmip_T12_update_winds
+from Common.definitions       import idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_w
+from Common.initialize        import initialize_sw, initialize_euler
+from Common.parallel          import Distributed_World
+from Common.program_options   import Configuration
+from Grid.cubed_sphere        import cubed_sphere
+from Grid.matrices            import DFR_operators
+from Grid.metric              import Metric, Metric_3d_topo
+from Precondition.multigrid   import Multigrid
+from Rhs.rhs_euler            import rhs_euler
+from Rhs.rhs_sw               import rhs_sw
+from Stepper.timeIntegrators  import Epi, EpiStiff, SRERK, Tvdrk3, Ros2, Euler1
 
 
 def main(args) -> int:

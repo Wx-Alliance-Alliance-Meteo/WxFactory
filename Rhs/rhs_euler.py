@@ -1,14 +1,14 @@
 import numpy
 import sys
 
-from definitions import idx_rho_u1, idx_rho_u2, idx_rho_w, idx_rho, idx_rho_theta, gravity, p0, Rd, cpd, cvd, heat_capacity_ratio
+from Common.definitions import idx_rho_u1, idx_rho_u2, idx_rho_w, idx_rho, idx_rho_theta, gravity, p0, Rd, cpd, cvd, heat_capacity_ratio
 
 # For type hints
-from cubed_sphere import cubed_sphere
-from matrices import DFR_operators
-from metric import Metric_3d_topo
-from parallel import Distributed_World
-from dcmip import dcmip_schar_damping
+from Common.parallel    import Distributed_World
+from Common.dcmip       import dcmip_schar_damping
+from Grid.cubed_sphere  import cubed_sphere
+from Grid.matrices      import DFR_operators
+from Grid.metric        import Metric_3d_topo
 
 #@profile
 def rhs_euler (Q: numpy.ndarray, geom: cubed_sphere, mtrx: DFR_operators, metric: Metric_3d_topo, ptopo: Distributed_World, nbsolpts: int, nb_elements_hori: int, nb_elements_vert: int, case_number: int):

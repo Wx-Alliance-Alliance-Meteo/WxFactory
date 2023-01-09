@@ -4,7 +4,7 @@ import math
 
 from numpy.core.shape_base import block
 
-from definitions import *
+from Common.definitions import *
 
 class Distributed_World:
    def __init__(self):

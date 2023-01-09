@@ -1,7 +1,7 @@
 import mpi4py.MPI
 import numpy
 
-from definitions import gravity
+from Common.definitions import gravity
 
 def relative_vorticity(u1_contra, u2_contra, geom, metric, mtrx, param):
 

@@ -1,7 +1,8 @@
 import numpy
-from definitions import *
-from shallow_water_test import *
-from dcmip import *
+
+from Common.dcmip              import *
+from Common.definitions        import *
+from Common.shallow_water_test import *
 
 class Topo:
    def __init__(self, hsurf, dzdx1, dzdx2, hsurf_itf_i, hsurf_itf_j):

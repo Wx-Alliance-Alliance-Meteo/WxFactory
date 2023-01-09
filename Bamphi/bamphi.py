@@ -1,10 +1,9 @@
 import numpy
 import scipy.special
 
-from bamphi_krylov       import KrylovSystem
-from bamphi_step_state   import StepState
-
-import global_op
+from Bamphi.bamphi_krylov     import KrylovSystem
+from Bamphi.bamphi_step_state import StepState
+from Solver.linsol            import global_inf_norm
 
 from numpy.random import default_rng
 bamphi_rng = default_rng()
@@ -14,7 +13,7 @@ class BamphiOptions:
       # Error options
       self.tolerance = numpy.finfo(float).eps
       # self.error  = True
-      self.early_stop_norm   = lambda x: global_op.inf_norm(x)
+      self.early_stop_norm   = lambda x: global_inf_norm(x)
 
       # Technical options
       self.scaling_refinement_low  = 0.6

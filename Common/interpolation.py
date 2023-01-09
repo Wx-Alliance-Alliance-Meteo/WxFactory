@@ -2,9 +2,9 @@ import numpy
 from mpi4py import MPI
 import time
 
-from matrices   import lagrangeEval
-from quadrature import gauss_legendre
-from timer      import Timer
+from Common.quadrature  import gauss_legendre
+from Common.timer       import Timer
+from Grid.matrices      import lagrangeEval
 
 basis_point_sets = {}
 

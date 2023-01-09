@@ -1,8 +1,9 @@
 import numpy
 import math
-from cubed_sphere import cubed_sphere
-from metric import Metric_3d_topo
 from typing import Union
+
+from Grid.cubed_sphere  import cubed_sphere
+from Grid.metric        import Metric_3d_topo
 
 def wind2contra_2d(u : Union[float, numpy.ndarray], v : Union[float, numpy.ndarray], geom : cubed_sphere):
    '''Convert wind fields from the spherical basis (zonal, meridional) to panel-appropriate contrvariant winds, in two dimensions

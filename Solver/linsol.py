@@ -189,6 +189,11 @@ def global_dotprod(vec1, vec2):
    local_sum = vec1 @ vec2
    return mpi4py.MPI.COMM_WORLD.allreduce(local_sum)
 
+def global_inf_norm(vec):
+    """Compute infinity norm across all PEs"""
+    local_max = numpy.amax(numpy.abs(vec))
+    return mpi4py.MPI.COMM_WORLD.allreduce(local_max, op=mpi4py.MPI.MAX)
+
 def apply_givens(Q, v, k):
    """Apply the first k Givens rotations in Q to v.
 

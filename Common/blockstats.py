@@ -2,8 +2,8 @@ import numpy
 import math
 import mpi4py.MPI
 
-from shallow_water_test import *
-from diagnostic import total_energy, potential_enstrophy, global_integral
+from Common.diagnostic           import total_energy, potential_enstrophy, global_integral
+from Common.shallow_water_test   import *
 
 def blockstats(Q, geom, topo, metric, mtrx, param, step):
 

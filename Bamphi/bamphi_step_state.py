@@ -1,6 +1,6 @@
 import numpy
 
-from bamphi_backward_error_analysis import backward_error_analysis
+from Bamphi.bamphi_backward_error_analysis import backward_error_analysis
 
 class StepState:
    def __init__(self):

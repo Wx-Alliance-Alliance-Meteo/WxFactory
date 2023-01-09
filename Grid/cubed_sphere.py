@@ -1,14 +1,15 @@
 import math
 import numpy
-import sphere
-import quadrature
-import definitions
 import sympy
 import sys
 
+import Common.quadrature   as quadrature
+import Common.definitions
+import Grid.sphere         as sphere
+
 # For type hints
-from parallel import Distributed_World
-from program_options import Configuration
+from Common.parallel          import Distributed_World
+from Common.program_options   import Configuration
 
 class cubed_sphere:
    def __init__(self, nb_elements_horizontal:int , nb_elements_vertical: int, nbsolpts: int, 

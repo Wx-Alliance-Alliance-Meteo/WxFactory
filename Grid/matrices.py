@@ -4,9 +4,7 @@ import math
 import sympy
 import sys
 
-from cubed_sphere import cubed_sphere
-
-# from cubed_sphere import cubed_sphere
+from Grid.cubed_sphere import cubed_sphere
 
 class DFR_operators:
    def __init__(self, grd : cubed_sphere, filter_apply : bool=False, filter_order: int=8, filter_cutoff: float=0.25):

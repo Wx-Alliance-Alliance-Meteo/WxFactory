@@ -1,17 +1,15 @@
 import functools
 import numpy
 import scipy
-
-from kiops import kiops
-
-import linsol
-
 from copy import deepcopy
-from matvec import matvec_rat
-from metric import Metric
-from cubed_sphere import cubed_sphere
-from matrices import DFR_operators, remesh_operator
-from rhs_sw import rhs_sw
+
+from Grid.matrices      import DFR_operators, remesh_operator
+from Grid.metric        import Metric
+from Grid.cubed_sphere  import cubed_sphere
+from Rhs.rhs_sw         import rhs_sw
+from Solver.kiops       import kiops
+from Solver.linsol      import global_norm
+from Stepper.matvec     import matvec_rat
 
 class Multigrid:
    def __init__(self, param, ptopo, num_levels, rhs_handle, increment=1):
@@ -99,13 +97,13 @@ class Multigrid:
          x0 = numpy.zeros_like(b)
 
       if verbose:
-         print('Residual at level', level, ':', linsol.global_norm(b.flatten() - (self.A[level](x0.flatten()))) )
+         print('Residual at level', level, ':', global_norm(b.flatten() - (self.A[level](x0.flatten()))) )
 
       x = x0
 
       for step in range(nb_presmooth):
          x = self.smoothing(self.A[level], b, x, self.dt, level)
-         if verbose: print('   Presmooth : ', linsol.global_norm(b.flatten() - (self.A[level](x.flatten()))) )
+         if verbose: print('   Presmooth : ', global_norm(b.flatten() - (self.A[level](x.flatten()))) )
 
       if level > coarsest_level:
 
@@ -118,13 +116,13 @@ class Multigrid:
          if verbose: print('Back to level', level)
 
          x -= self.prolongation(correction, level)
-         if verbose: print('   Correction : ', linsol.global_norm(b.flatten() - (self.A[level](x.flatten()))) )
+         if verbose: print('   Correction : ', global_norm(b.flatten() - (self.A[level](x.flatten()))) )
 
          for step in range(nb_postmooth):
             x = self.smoothing(self.A[level], b, x, self.dt, level)
-            if verbose: print('   Postsmooth : ', linsol.global_norm(b.flatten() - (self.A[level](x.flatten()))) )
+            if verbose: print('   Postsmooth : ', global_norm(b.flatten() - (self.A[level](x.flatten()))) )
 
-      if verbose: print('retour', level, ' : ', linsol.global_norm(b.flatten() - (self.A[level](x.flatten()))) )
+      if verbose: print('retour', level, ' : ', global_norm(b.flatten() - (self.A[level](x.flatten()))) )
 
       if verbose is True and level == self.max_level:
          print('End multigrid')
@@ -197,7 +195,7 @@ class Multigrid:
 
       phiv, stats = kiops([1], J, vec, tol=1e-6, m_init=10, mmin=10, mmax=64, task1=False)
 
-#      print('norm phiv', linsol.global_norm(phiv.flatten()))
+#      print('norm phiv', global_norm(phiv.flatten()))
 #      print(f'KIOPS converged at iteration {stats[2]} (using {stats[0]} internal substeps)'
 #               f' to a solution with local error {stats[4]:.2e}')
       return x + phiv.flatten() * exp_dt
