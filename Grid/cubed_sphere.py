@@ -11,12 +11,12 @@ import Grid.sphere         as sphere
 from Common.parallel          import Distributed_World
 from Common.program_options   import Configuration
 
-class cubed_sphere:
+class CubedSphere:
    def __init__(self, nb_elements_horizontal:int , nb_elements_vertical: int, nbsolpts: int, 
                 λ0: float, ϕ0: float, α0: float, ztop: float, ptopo: Distributed_World, param: Configuration):
       '''Initialized the cubed sphere geometry, for an earthlike sphere with no topography.
       
-      This function initializes the basic cubed_sphere geometry object, which provides the parameters necessary to define
+      This function initializes the basic CubedSphere geometry object, which provides the parameters necessary to define
       the values in numeric (x1, x2, η) coordinates, gnomonic (projected; X, Y, Z) coordinates, spherical (lat, lon, Z),
       Cartesian (Xc, Yc, Zc) coordinates.  
 
@@ -24,7 +24,7 @@ class cubed_sphere:
       differentiation.
 
       On initialization, the coordinate is defined with respect to a smooth sphere, with geometric height varying between
-      0 and ztop.  To impose a topographic mapping, the cubed_sphere object must be updated via the update_topo method.
+      0 and ztop.  To impose a topographic mapping, the CubedSphere object must be updated via the update_topo method.
       
       The cubed-sphere panelization is as follows:
       ```
@@ -106,7 +106,7 @@ class cubed_sphere:
       nb_elements_x2 = nb_elements_horizontal
       nb_elements_x3 = nb_elements_vertical
 
-      # Assign the number of elements and solution points to the cubed_sphere
+      # Assign the number of elements and solution points to the CubedSphere
       # object, in order to generate compatible grids and loops elsewhere
       self.nb_elements_x1 = nb_elements_x1
       self.nb_elements_x2 = nb_elements_x2

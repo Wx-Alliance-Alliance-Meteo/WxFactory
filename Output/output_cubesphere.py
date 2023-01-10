@@ -5,9 +5,9 @@ import math
 import os
 import time
 
-from diagnostic import relative_vorticity, potential_vorticity
-from definitions import *
-from winds import contra2wind_2d, contra2wind_3d
+from Common.definitions import *
+from Grid.winds         import contra2wind_2d, contra2wind_3d
+from Output.diagnostic  import relative_vorticity, potential_vorticity
 
 def output_init(geom, param):
    """ Initialise the netCDF4 file."""

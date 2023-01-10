@@ -2,10 +2,10 @@ import numpy
 import math
 from typing import Union
 
-from Grid.cubed_sphere  import cubed_sphere
+from Grid.cubed_sphere  import CubedSphere
 from Grid.metric        import Metric_3d_topo
 
-def wind2contra_2d(u : Union[float, numpy.ndarray], v : Union[float, numpy.ndarray], geom : cubed_sphere):
+def wind2contra_2d(u : Union[float, numpy.ndarray], v : Union[float, numpy.ndarray], geom : CubedSphere):
    '''Convert wind fields from the spherical basis (zonal, meridional) to panel-appropriate contrvariant winds, in two dimensions
    
    Parameters:
@@ -14,8 +14,8 @@ def wind2contra_2d(u : Union[float, numpy.ndarray], v : Union[float, numpy.ndarr
       Input zonal winds, in meters per second
    v : float | numpy.ndarray
       Input meridional winds, in meters per second
-   geom : cubed_sphere
-      Geometry object (cubed_sphere), describing the grid configuration and globe paramters.  Required parameters:
+   geom : CubedSphere
+      Geometry object (CubedSphere), describing the grid configuration and globe paramters.  Required parameters:
       earth_radius, coslat, lat_p, angle_p, X, Y, delta2
       
    Returns:
@@ -44,7 +44,7 @@ def wind2contra_2d(u : Union[float, numpy.ndarray], v : Union[float, numpy.ndarr
 def wind2contra_3d(u : Union[float, numpy.ndarray],
                    v : Union[float, numpy.ndarray],
                    w : Union[float, numpy.ndarray],
-                   geom : cubed_sphere,metric : Metric_3d_topo):
+                   geom : CubedSphere,metric : Metric_3d_topo):
    '''Convert wind fields from spherical values (zonal, meridional, vertical) to contravariant winds
    on a terrain-following grid.
    
@@ -56,8 +56,8 @@ def wind2contra_3d(u : Union[float, numpy.ndarray],
       Input meridional winds, in meters per second
    w : float | numpy.ndarray
       Input vertical winds, in meters per second
-   geom : cubed_sphere
-      Geometry object (cubed_sphere), describing the grid configuration and globe paramters.  Required parameters:
+   geom : CubedSphere
+      Geometry object (CubedSphere), describing the grid configuration and globe paramters.  Required parameters:
       earth_radius, coslat, lat_p, angle_p, X, Y, delta2
    metric : NewMetric2
       Metric object containing H_contra and inv_dzdeta parameters
@@ -89,7 +89,7 @@ def wind2contra_3d(u : Union[float, numpy.ndarray],
 
 def contra2wind_2d(u1 : Union[float, numpy.ndarray], 
                    u2 : Union[float, numpy.ndarray],
-                   geom : cubed_sphere):
+                   geom : CubedSphere):
    ''' Convert from reference element to "physical winds", in two dimensions 
    
    Parameters:
@@ -98,7 +98,7 @@ def contra2wind_2d(u1 : Union[float, numpy.ndarray],
       Contravariant winds along first component (X)
    u2 : float | numpy.ndarray
       Contravariant winds along second component (Y)
-   geom : cubed_sphere
+   geom : CubedSphere
       Geometry object, containing:
          Δx1, Δx2, lat_p, angle_p, X, Y, coslat, earth_radius
 
@@ -131,7 +131,7 @@ def contra2wind_2d(u1 : Union[float, numpy.ndarray],
 def contra2wind_3d(u1_contra : numpy.ndarray, 
                    u2_contra : numpy.ndarray, 
                    u3_contra : numpy.ndarray, 
-                   geom : cubed_sphere, metric : Metric_3d_topo):
+                   geom : CubedSphere, metric : Metric_3d_topo):
    ''' contra2wind_3d: convert from contravariant wind fields to "physical winds" in three dimensions
    
    This function transforms the contravariant fields u1, u2, and u3 into their physical equivalents, assuming a cubed-sphere-like
@@ -150,7 +150,7 @@ def contra2wind_3d(u1_contra : numpy.ndarray,
       contravariant wind, u2 component
    u3_contra: numpy.ndarray
       contravariant wind, u3 component
-   geom: cubed_sphere
+   geom: CubedSphere
       geometry object, implementing:
          Δx1, Δx2, lat_p, angle_p, X, Y, coslat, earth_radius
    metric: Metric_3d_topo

@@ -141,3 +141,114 @@ def initialize_sw(geom, metric, mtrx, param):
 
    # Note : we move the last axis of the first topo array so that both have similiar ordering
    return Q, Topo(hsurf, dzdx1, dzdx2, numpy.moveaxis(hsurf_itf_i, -1, -2), hsurf_itf_j)
+
+def initialize_cartesian2d(geom, param):
+
+   nb_equations = 4
+
+   # Initial state at rest, isentropic, hydrostatic
+   nk, ni = geom.X.shape
+   Q = numpy.zeros((nb_equations, nk, ni))
+   uu    = numpy.zeros_like(geom.X)
+   ww    = numpy.zeros_like(geom.X)
+   exner = numpy.zeros_like(geom.X)
+   θ = numpy.ones_like(geom.X) * param.bubble_theta
+
+   if param.case_number == 1:
+      # Pill
+
+      xc=500.0
+      zc=260.0
+
+      pert = 0.5
+
+      for k in range(nk):
+         for i in range(ni):
+            r = (geom.X[k,i]-xc)**2 + (geom.Z[k,i]-zc)**2
+            if r < param.bubble_rad**2:
+               θ[k,i] += pert
+
+   elif param.case_number == 2:
+      # Gaussian bubble
+
+      A = 0.5
+      a = 50
+      s = 100
+      x0 = 500
+      z0 = 260
+      for k in range(nk):
+         for i in range(ni):
+            r = math.sqrt( (geom.X[k,i]-x0)**2 + (geom.Z[k,i]-z0)**2 )
+            if r <= a:
+               θ[k,i] += A
+            else:
+               θ[k,i] += A * math.exp(-((r-a)/s)**2)
+
+      # Enforce mirror symmetry
+      if ni % 2 == 0:
+         middle_col = ni / 2;
+      else:
+         middle_col = ni / 2 + 1;
+
+      for i in range(int(middle_col)):
+         θ[:, ni-i-1] = θ[:, i]
+
+   elif param.case_number == 3:
+      # Colliding bubbles
+
+      A = 0.5
+      a = 150
+      s = 50
+      x0 = 500
+      z0 = 300
+      for k in range(nk):
+         for i in range(ni):
+            r = math.sqrt( (geom.X[k,i]-x0)**2 + (geom.Z[k,i]-z0)**2 )
+            if r <= a:
+               θ[k,i] += A
+            else:
+               θ[k,i] += A * math.exp(-((r-a)/s)**2)
+
+      A = -0.15
+      a = 0
+      s = 50
+      x0 = 560
+      z0 = 640
+      for k in range(nk):
+         for i in range(ni):
+            r = math.sqrt( (geom.X[k,i]-x0)**2 + (geom.Z[k,i]-z0)**2 )
+            if r <= a:
+               θ[k,i] += A
+            else:
+               θ[k,i] += A * math.exp(-((r-a)/s)**2)
+
+   elif param.case_number == 4:
+      # Cold density current
+      x0 = 0.
+      z0 = 3000.
+      xr = 4000.
+      zr = 2000.
+      θc = -15.
+
+      # Use periodic BC in x-direction
+#      geom.xperiodic = True      
+
+      for k in range(nk):
+         for i in range(ni):
+            r = math.sqrt( ((geom.X[k,i]-x0)/xr)**2 + ((geom.Z[k,i]-z0)/zr)**2 )
+            if r <= 1.:
+               θ[k,i] += 0.5 * θc * (1. + math.cos(math.pi * r))
+
+
+   for k in range(nk):
+      for i in range(ni):
+         exner[k,i] = ( 1.0 - gravity / (cpd * θ[k,i]) * geom.Z[k,i])
+
+   ρ = p0 / (Rd * θ) * exner**(cvd / Rd)
+
+   Q[idx_2d_rho,:,:]       = ρ
+   Q[idx_2d_rho_u,:,:]     = ρ * uu
+   Q[idx_2d_rho_w,:,:]     = ρ * ww
+   Q[idx_2d_rho_theta,:,:] = ρ * θ
+
+   return Q

@@ -5,7 +5,7 @@ from copy import deepcopy
 
 from Grid.matrices      import DFR_operators, remesh_operator
 from Grid.metric        import Metric
-from Grid.cubed_sphere  import cubed_sphere
+from Grid.cubed_sphere  import CubedSphere
 from Rhs.rhs_sw         import rhs_sw
 from Solver.kiops       import kiops
 from Solver.linsol      import global_norm

@@ -1,11 +1,11 @@
 import numpy
 import math
 
-from Grid.cubed_sphere  import cubed_sphere
+from Grid.cubed_sphere  import CubedSphere
 from Grid.matrices      import DFR_operators
 
 class Metric_3d_topo:
-   def __init__(self, geom : cubed_sphere, matrix: DFR_operators):
+   def __init__(self, geom : CubedSphere, matrix: DFR_operators):
       # Token initialization: store geometry and matrix objects.  Defer construction of the metric itself,
       # so that initialization can take place after topography is defined inside the 'geom' object
 
@@ -606,7 +606,7 @@ class Metric_3d_topo:
 
 class Metric:
    '''Metric for a smooth, three-dimensional earthlike cubed-sphere with the shallow atmosphere approximation'''
-   def __init__(self, geom : cubed_sphere):
+   def __init__(self, geom : CubedSphere):
       # 3D Jacobian, for the cubed-sphere mapping
       # Note that with no topography, ∂z/∂η=1; the model top is included
       # inside the geometry definition, and η=x3

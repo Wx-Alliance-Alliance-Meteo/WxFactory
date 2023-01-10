@@ -1,9 +1,17 @@
-import mayavi.mlab
 import mpi4py
 import mpi4py.MPI
+import numpy
 import pickle
+import matplotlib.pyplot
 
-from definitions import *
+try:
+   import mayavi.mlab
+except:
+   print(f'WARNING: Could not import mayavi module. There will be a crash if you try to plot stuff on the cubed sphere')
+
+# from Common.definitions import *
+
+plot_index = 0
 
 def plot_sphere(geom):
    glb_x = mpi4py.MPI.COMM_WORLD.gather(geom.cartX.T, root=0)
@@ -175,3 +183,61 @@ def plot_array(array, filename=None):
          plt.savefig(filename)
 
    mpi4py.MPI.COMM_WORLD.Barrier()
+
+def image_field(geom, field, filename, vmin, vmax, n):
+   fig, ax = matplotlib.pyplot.subplots()
+      
+   cmap = matplotlib.pyplot.contourf(geom.X, geom.Z, field, cmap='jet', levels=numpy.linspace(vmin,vmax,n), extend="both")
+   ax.set_aspect('equal', 'box')
+
+   cbar = fig.colorbar(cmap, ax=ax, orientation='vertical', shrink=0.5)
+   cbar.set_label("K",)
+
+   matplotlib.pyplot.savefig(filename)
+   matplotlib.pyplot.close(fig) 
+
+   return
+
+def print_residual_per_variable(geom, field, filename = None):
+
+   num_levels = 20
+
+   fig, axes = matplotlib.pyplot.subplots(2, 2, sharex=True, sharey=True)
+
+   def plot_var(ax, vals, title):
+      # Always include 0 (?), avoid null range 
+      # minval = min(vals.min() - 1e-15, 0.0)
+      # maxval = max(vals.max() + 1e-15, 0.0)
+      minval = vals.min() - 1e-15
+      maxval = vals.max() + 1e-15
+      if minval < 0.0 and maxval > 0.0:
+         ratio = maxval  / (maxval - minval)
+         num_pos = int(numpy.rint((num_levels) * ratio))
+         num_neg = num_levels - num_pos
+         minval = -maxval / num_pos * num_neg
+
+      levels = numpy.linspace(minval, maxval, num_levels)
+
+      cmap = ax.contourf(geom.X, geom.Z, vals, levels=levels)
+      ax.set_title(title)
+      cbar = fig.colorbar(cmap, ax=ax, orientation='vertical', format = '%8.1e')
+      cbar.set_label('Residual',)
+
+   plot_var(axes[0][0], field[RHO], 'Rho')
+   plot_var(axes[0][1], field[RHO_THETA], 'Rho-theta')
+   plot_var(axes[1][0], field[RHO_U], 'Rho-u')
+   plot_var(axes[1][1], field[RHO_W], 'Rho-w')
+
+   # cbar = fig.colorbar(cmap, ax=axes, orientation='vertical')
+   # cbar.set_label('Residual',)
+
+   global plot_index
+
+   fn = filename
+   if fn is None: fn = f'res_plot/residual{plot_index:04d}.png'
+   matplotlib.pyplot.savefig(fn)
+   matplotlib.pyplot.close(fig)
+
+   plot_index += 1
+
+   return

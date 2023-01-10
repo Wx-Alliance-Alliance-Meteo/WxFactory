@@ -12,20 +12,37 @@ class Configuration:
          print(' ')
 
       try:
-         self.equations = parser.get('General', 'equations')
+         self.equations = parser.get('General', 'equations').lower()
       except (NoOptionError,NoSectionError):
-         self.equations = "Euler"
+         self.equations = "euler"
 
+      ################################
+      # Test case
       self.case_number = parser.getint('Test_case', 'case_number')
 
       if self.case_number == 9:
          self.matsuno_wave_type = parser.get('Test_case', 'matsuno_wave_type')
          self.matsuno_amp = parser.getfloat('Test_case', 'matsuno_amp')
 
+      self.bubble_theta = 0.0
+      self.bubble_rad   = 0.0
+      try:
+         self.bubble_theta    = parser.getfloat('Test_case', 'bubble_theta')
+         self.bubble_rad      = parser.getfloat('Test_case', 'bubble_rad')
+      except(NoOptionError,NoSectionError):
+         pass
+
+      ################################
+      # Time integration
       self.dt               = parser.getfloat('Time_integration', 'dt')
       self.t_end            = parser.getint('Time_integration', 't_end')
       self.time_integrator  = parser.get('Time_integration', 'time_integrator')
       self.tolerance        = parser.getfloat('Time_integration', 'tolerance')
+
+      try:
+         self.starting_step = parser.getint('Time_integration', 'starting_step')
+      except:
+         self.starting_step = 0
 
       try:
          self.exponential_solver = parser.get('Time_integration', 'exponential_solver')
@@ -72,6 +89,8 @@ class Configuration:
       except (NoOptionError, NoSectionError):
          self.precond_filter_after = 0
 
+      ###############################
+      # Grid
       try:
          self.discretization = parser.get('Grid', 'discretization')
       except (NoOptionError, NoSectionError):
@@ -82,6 +101,15 @@ class Configuration:
             if (noisy):
                print('The number of solution of solution points in configuration file is inconsistent with a finite volume discretization')
             exit(0)
+
+      possible_grid_types = ['cubed_sphere', 'cartesian2d']
+      try:
+         self.grid_type = parser.get('Grid', 'type').lower()
+         if self.grid_type not in possible_grid_types:
+            print(f'Selected grid type "{self.grid_type}" is not valid. Possible values are {possible_grid_types}')
+            raise ValueError
+      except:
+         self.grid_type = 'cubed_sphere'
 
       try:
          self.λ0 = parser.getfloat('Grid', 'λ0')
@@ -103,6 +131,21 @@ class Configuration:
       except (NoOptionError,NoSectionError):
          self.ztop = 0.0
 
+      # Cartesian grid bounds
+      self.x0 = 0.0
+      self.x1 = 0.0
+      self.z0 = 0.0
+      self.z1 = 0.0
+      try: 
+         self.x0 = parser.getfloat('Grid', 'x0')
+         self.x1 = parser.getfloat('Grid', 'x1')
+         self.z0 = parser.getfloat('Grid', 'z0')
+         self.z1 = parser.getfloat('Grid', 'z1')
+      except(NoOptionError, NoSectionError):
+         pass
+
+      ################################
+      # Spatial discretization
       self.nbsolpts               = parser.getint('Spatial_discretization', 'nbsolpts')
       self.nb_elements_horizontal = parser.getint('Spatial_discretization', 'nb_elements_horizontal')
       self.initial_nbsolpts       = self.nbsolpts
@@ -128,9 +171,27 @@ class Configuration:
       except (NoOptionError):
          self.filter_cutoff    = 0
 
+      ###############################
+      # Output options
+
       self.stat_freq   = parser.getint('Output_options', 'stat_freq')
       self.output_freq = parser.getint('Output_options', 'output_freq')
-      self.output_file = parser.get('Output_options', 'output_file')
+
+      # Frequency (in timesteps) at which to save the state vector of the simulation
+      try:
+         self.save_state_freq = parser.getint('Output_options', 'save_state_freq')
+      except (NoOptionError, NoSectionError):
+         self.save_state_freq = 0
+
+      try:
+         self.output_dir = parser.get('Output_options', 'output_dir')
+      except:
+         self.output_dir = 'results'
+
+      try:
+         self.output_file = f'{self.output_dir}/{parser.get("Output_options", "output_file")}.nc'
+      except:
+         self.output_file = f'{self.output_dir}/out.nc'
 
    def __str__(self):
       return \

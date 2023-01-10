@@ -4,10 +4,13 @@ import math
 import sympy
 import sys
 
-from Grid.cubed_sphere import cubed_sphere
+from typing import Union
+
+from Grid.cubed_sphere       import CubedSphere
+from Grid.cartesian_2d_mesh  import Cartesian2d
 
 class DFR_operators:
-   def __init__(self, grd : cubed_sphere, filter_apply : bool=False, filter_order: int=8, filter_cutoff: float=0.25):
+   def __init__(self, grd : Union[CubedSphere, Cartesian2d], filter_apply : bool=False, filter_order: int=8, filter_cutoff: float=0.25):
       '''Initialize the Direct Flux Reconstruction operators
       
       This initializes the DFR operators (matrices) based on input grid parameters.  The relevant internal matrices are:
@@ -16,7 +19,7 @@ class DFR_operators:
 
       Parameters
       ----------
-      grd : cubed_sphere
+      grd : CubedSphere, Cartesian2d
          Underlying grid, which must define `solutionPoints`, `solutionPoints_sym`, `extension`, and `extension_sym` as mmeber variables
       filter_apply : bool
          Whether to apply an exponential filter in defininng the differential operators
@@ -67,7 +70,7 @@ class DFR_operators:
 
       self.quad_weights = numpy.outer(grd.glweights, grd.glweights)
 
-   def comma_i(self, field_interior : numpy.ndarray, border_i : numpy.ndarray, grid: cubed_sphere) -> numpy.ndarray :
+   def comma_i(self, field_interior : numpy.ndarray, border_i : numpy.ndarray, grid: CubedSphere) -> numpy.ndarray :
       '''Take a partial derivative along the i-index
       
       This method takes the partial derivative of an input field, potentially consisting of several
@@ -83,7 +86,7 @@ class DFR_operators:
          The element-boundary values of the fields to be differentiated, along the i-axis.  This should
          have a shape of `(numvars,npts_z,npts_y,nels_x,2)`, with [:,0] being the leftmost boundary
          (minimal `i`), and [:,1] being the rightmost boundary (maximal `i`)
-      grid : cubed_sphere
+      grid : CubedSphere
          Grid-defining class, used here solely to provide the canonical definition of the local
          computational region.
       '''
@@ -112,7 +115,7 @@ class DFR_operators:
 
       return output
 
-   def extrapolate_i(self, field_interior : numpy.ndarray, grid : cubed_sphere) -> numpy.ndarray:
+   def extrapolate_i(self, field_interior : numpy.ndarray, grid : CubedSphere) -> numpy.ndarray:
       '''Compute the i-border values along each element of field_interior
 
       This method extrapolates the variables in `field_interior` to the boundary along
@@ -123,7 +126,7 @@ class DFR_operators:
       field_interior : numpy.ndarray
          The element-interior values of the variable(s) to be differentiated.  This should have
          a shape of `(numvars,npts_z,npts_y,npts_x)`, respecting the prevailing parallel decomposition.
-      grid : cubed_sphere
+      grid : CubedSphere
          Grid-defining class, used here solely to provide the canonical definition of the local
          computational region.'''
 
@@ -148,7 +151,7 @@ class DFR_operators:
       border.shape = tuple(field_interior.shape[0:-1]) + border_shape
       return border
 
-   def comma_j(self, field_interior : numpy.ndarray, border_j : numpy.ndarray, grid : cubed_sphere) -> numpy.ndarray:
+   def comma_j(self, field_interior : numpy.ndarray, border_j : numpy.ndarray, grid : CubedSphere) -> numpy.ndarray:
       '''Take a partial derivative along the j-index
       
       This method takes the partial derivative of an input field, potentially consisting of several
@@ -164,7 +167,7 @@ class DFR_operators:
          The element-boundary values of the fields to be differentiated, along the i-axis.  This should
          have a shape of `(numvars,npts_z,nels_y,2,npts_x)`, with [:,0,:] being the southmost boundary
          (minimal `j`), and [:,1,:] being the north boundary (maximal `j`)
-      grid : cubed_sphere
+      grid : CubedSphere
          Grid-defining class, used here solely to provide the canonical definition of the local
          computational region.
       '''
@@ -194,7 +197,7 @@ class DFR_operators:
 
       return output
 
-   def extrapolate_j(self, field_interior : numpy.ndarray, grid : cubed_sphere) -> numpy.ndarray :
+   def extrapolate_j(self, field_interior : numpy.ndarray, grid : CubedSphere) -> numpy.ndarray :
       '''Compute the j-border values along each element of field_interior
 
       This method extrapolates the variables in `field_interior` to the boundary along
@@ -206,7 +209,7 @@ class DFR_operators:
          The element-interior values of the variable(s) to be differentiated.  This should have
          a shape of `(numvars,npts_z,npts_y,npts_x)`, respecting the prevailing parallel decomposition.
          To allow for differentiation of 2D objects, npts_z can be one.
-      grid : cubed_sphere
+      grid : CubedSphere
          Grid-defining class, used here solely to provide the canonical definition of the local
          computational region.'''
 
@@ -235,7 +238,7 @@ class DFR_operators:
       border.shape = tuple(field_interior.shape[0:-2]) + border_shape
       return border
 
-   def comma_k(self, field_interior : numpy.ndarray, border_k : numpy.ndarray, grid : cubed_sphere) -> numpy.ndarray:
+   def comma_k(self, field_interior : numpy.ndarray, border_k : numpy.ndarray, grid : CubedSphere) -> numpy.ndarray:
       '''Take a partial derivative along the k-index
       
       This method takes the partial derivative of an input field, potentially consisting of several
@@ -251,7 +254,7 @@ class DFR_operators:
          The element-boundary values of the fields to be differentiated, along the i-axis.  This should
          have a shape of `(numvars,nels_z,2,npts_y,npts_x)`, with [:,0,:] being the downmost boundary
          (minimal `k`), and [:,1,:] being the upmost boundary (maximal `k`)
-      grid : cubed_sphere
+      grid : CubedSphere
          Grid-defining class, used here solely to provide the canonical definition of the local
          computational region.
       '''
@@ -281,7 +284,7 @@ class DFR_operators:
 
       return output
 
-   def extrapolate_k(self, field_interior : numpy.ndarray, grid : cubed_sphere) -> numpy.ndarray:
+   def extrapolate_k(self, field_interior : numpy.ndarray, grid : CubedSphere) -> numpy.ndarray:
       '''Compute the k-border values along each element of field_interior
 
       This method extrapolates the variables in `field_interior` to the boundary along
@@ -292,7 +295,7 @@ class DFR_operators:
       field_interior : numpy.ndarray
          The element-interior values of the variable(s) to be differentiated.  This should have
          a shape of `(numvars,npts_z,npts_y,npts_x)`, respecting the prevailing parallel decomposition.
-      grid : cubed_sphere
+      grid : CubedSphere
          Grid-defining class, used here solely to provide the canonical definition of the local
          computational region.'''
 
@@ -327,7 +330,7 @@ class DFR_operators:
                   itf_i : numpy.ndarray,
                   itf_j : numpy.ndarray,
                   itf_k : numpy.ndarray,
-                  geom : cubed_sphere) -> numpy.ndarray:
+                  geom : CubedSphere) -> numpy.ndarray:
       ''' Take the gradient of one or more variables, given interface values (not element extensions)
       
       This function takes the gradient (covariant derivative) along i, j, and k of each of the input
@@ -346,7 +349,7 @@ class DFR_operators:
          Values along the j-interface
       itf_k : numpy.ndarray (shape [...,nel_k,nj,ni])
          Values along the k-interface
-      geom : cubed_sphere
+      geom : CubedSphere
          Geometry object
       
       Returns:
@@ -438,7 +441,7 @@ def lebesgue(points):
    return [l.subs(x, eval_set[i]) for i in range(M)]
 
 def vandermonde(x):
-   r"""
+   """
    Initialize the 1D Vandermonde matrix, \(\mathcal{V}_{ij}=P_j(x_i)\)
    """
    N = len(x)
@@ -456,10 +459,16 @@ def remesh_operator(src_points, target_points):
    src_nbsolpts = len(src_points)
    target_nbsolpts = len(target_points)
 
-   interp = numpy.zeros((target_nbsolpts, src_nbsolpts))
-   for i in range(target_nbsolpts):
-      interp[i,:] = lagrangeEval(src_points, target_points[i])
-   return interp
+   # Projection
+   inv_V_src = inv(vandermonde(src_points))
+   V_target = vandermonde(target_points)
+   
+   modes = numpy.zeros((target_nbsolpts, src_nbsolpts))
+   for i in range(min(src_nbsolpts,target_nbsolpts)):
+      modes[i,i] = 1. 
+   modes[i,i] = 0.5  # damp the highest mode
+   
+   return ( V_target @ modes @ inv_V_src ).astype(float)
 
 
 def filter_exponential(N, Nc, s, V, invV):

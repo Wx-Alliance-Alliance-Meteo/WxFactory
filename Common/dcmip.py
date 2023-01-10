@@ -2,7 +2,7 @@ import numpy
 import math
 
 from Common.definitions import cpd, day_in_secs, gravity, p0, Rd
-from Grid.cubed_sphere  import cubed_sphere
+from Grid.cubed_sphere  import CubedSphere
 from Grid.matrices      import DFR_operators
 from Grid.winds         import *
 
@@ -292,7 +292,7 @@ def dcmip_advection_hadley(geom, metric, mtrx, param):
 # TEST CASE 13 - HORIZONTAL ADVECTION OF THIN CLOUD-LIKE TRACERS IN THE PRESENCE OF OROGRAPHY
 #============================================================================================
 
-def dcmip_mountain(geom: cubed_sphere, metric, mtrx, param):
+def dcmip_mountain(geom: CubedSphere, metric, mtrx, param):
 
    lon_m = 3.0 * numpy.pi / 2.0
    # lon_m = 0.0
@@ -404,7 +404,7 @@ def dcmip_mountain(geom: cubed_sphere, metric, mtrx, param):
 # Test 2-0:  Steady-State Atmosphere at Rest in the Presence of Orography
 #=========================================================================
 
-def dcmip_steady_state_mountain(geom: cubed_sphere, metric, mtrx, param):
+def dcmip_steady_state_mountain(geom: CubedSphere, metric, mtrx, param):
    T0      = 300.0                      # temperature (K)
    gamma   = 0.00650                    # temperature lapse rate (K/m)
    lambdam = 3.0*math.pi/2.0            # mountain longitude center point (radians)
@@ -511,7 +511,7 @@ def dcmip_steady_state_mountain(geom: cubed_sphere, metric, mtrx, param):
 # Tests 2-1 and 2-2:  Non-hydrostatic Mountain Waves over a Schaer-type Mountain
 #=====================================================================================
 
-def dcmip_schar_waves(geom: cubed_sphere, metric, mtrx: DFR_operators, param, shear=False):
+def dcmip_schar_waves(geom: CubedSphere, metric, mtrx: DFR_operators, param, shear=False):
    T0      = 300.0             # temperature (K)
    lambdam = math.pi/4.0       # mountain longitude center point (radians)
    phim    = 0.0               # mountain latitude center point (radians)
@@ -593,7 +593,7 @@ def dcmip_schar_waves(geom: cubed_sphere, metric, mtrx: DFR_operators, param, sh
 
 def dcmip_schar_damping(forcing : numpy.ndarray, rho : numpy.ndarray, 
                         u1 : numpy.ndarray, u2 : numpy.ndarray, u3 : numpy.ndarray, 
-                        metric : Metric_3d_topo, geom : cubed_sphere, shear : bool):
+                        metric : Metric_3d_topo, geom : CubedSphere, shear : bool):
    ''' Implements the required Rayleigh damping for DCMIP cases 2-1 and 2-2 
    
    Parameters:
@@ -606,7 +606,7 @@ def dcmip_schar_damping(forcing : numpy.ndarray, rho : numpy.ndarray,
       Input variables at the current timestemp
    metric : Metric_3d_topo
       3D metric, used to convert velocities between contravariant and geophysical winds
-   geom : cubed_sphere
+   geom : CubedSphere
       Geometry object, also used for velocity conversion
    shear : bool
       flag for whether the reference velocity field has vertical shear (case 2-2) or not (2-1)'''

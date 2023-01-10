@@ -24,3 +24,9 @@ idx_rho_u1    = 1
 idx_rho_u2    = 2
 idx_rho_w     = 3
 idx_rho_theta = 4
+
+# Indices for the cartesian 2D grid (Euler)
+idx_2d_rho       = 0
+idx_2d_rho_u     = 1
+idx_2d_rho_w     = 2
+idx_2d_rho_theta = 3

@@ -5,7 +5,7 @@ from collections import deque
 from itertools import combinations
 import mpi4py.MPI
 
-from Bamphi.bamphi   import bamphi
+# from Bamphi.bamphi   import bamphi
 from Common.timer    import Timer
 from Solver.linsol   import fgmres
 from Solver.kiops    import kiops
