@@ -15,6 +15,7 @@ from Grid.cubed_sphere        import CubedSphere
 from Grid.matrices            import DFR_operators
 from Grid.metric              import Metric, Metric_3d_topo
 from Output.blockstats        import blockstats
+from Output.solver_stats      import prepare_solver_stats
 from Precondition.multigrid   import Multigrid
 from Rhs.rhs_bubble           import rhs_bubble
 from Rhs.rhs_bubble_implicit  import rhs_bubble_implicit
@@ -64,6 +65,15 @@ def main(args) -> int:
       Q, topo = initialize_sw(geom, metric, mtrx, param)
       rhs_handle = lambda q: rhs_sw(q, geom, mtrx, metric, topo, ptopo, param.nbsolpts, param.nb_elements_horizontal)
 
+   # Preconditioning
+   preconditioner = None
+   if param.preconditioner == 'p-mg':
+      preconditioner = Multigrid(param, ptopo, discretization='dg')
+   elif param.preconditioner == 'fv-mg':
+      preconditioner = Multigrid(param, ptopo, discretization='fv')
+   elif param.preconditioner == 'fv':
+      preconditioner = Multigrid(param, ptopo, discretization='fv', fv_only=True)
+
    # Determine starting step (if not 0)
    starting_step = param.starting_step
    if starting_step > 0:
@@ -91,6 +101,9 @@ def main(args) -> int:
       output_init(geom, param)
       output_step(Q, geom, step, param)  # store initial conditions
 
+   if param.store_solver_stats:
+      prepare_solver_stats(param)
+
    # Save initial output
    if param.save_state_freq > 0:
       numpy.save(state_file_name(0), Q)
@@ -116,11 +129,6 @@ def main(args) -> int:
          print('WARNING: Running with first-order explicit Euler timestepping.')
          print('         This is UNSTABLE and should be used only for debugging.')
    elif param.time_integrator.lower() == 'ros2':
-      preconditioner = None
-      if param.use_preconditioner:
-         # preconditioner = DG_preconditioner(param, geom, ptopo, mtrx, rhs_sw)
-         preconditioner = Multigrid(param, ptopo, param.nbsolpts, rhs_handle)
-
       stepper = Ros2(rhs_handle, param.tolerance, preconditioner=preconditioner)
    else:
       raise ValueError(f'Time integration method {param.time_integrator} not supported')

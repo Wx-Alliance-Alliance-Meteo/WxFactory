@@ -1,48 +1,212 @@
 import numpy
-from mpi4py import MPI
-import time
+from time   import time
 
+from Common.definitions import idx_h, idx_hu1, idx_hu2, idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_w, idx_rho_theta
 from Common.quadrature  import gauss_legendre
-from Common.timer       import Timer
 from Grid.matrices      import lagrangeEval
 
 basis_point_sets = {}
 
-def eval_single_field(field, elem_interp, result=None):
+def eval_field_2d(field, elem_interp, result=None):
 
    new_num_points = elem_interp.shape[0]
    old_num_points = elem_interp.shape[1]
    num_elem = int(field.shape[0] // old_num_points)
 
-   # Interpolate (vertically) on entire rows of elements (horizontally) at once
+   if result is None:
+      result = numpy.empty((num_elem * new_num_points, num_elem * new_num_points), dtype=field.dtype)
+
+   t0 = time()
+   # Interpolate (vertically) on entire rows of elements at once
    interp_1 = numpy.empty((num_elem * new_num_points, num_elem * old_num_points), dtype=field.dtype)
    for i in range(num_elem):
       interp_1[i * new_num_points:(i + 1) * new_num_points, :] = \
          elem_interp @ field[i * old_num_points:(i + 1) * old_num_points, :]
+      # print(f'shapes: elem interp {elem_interp.shape}, field {field[i * old_num_points:(i + 1) * old_num_points, :].shape}')
 
    # Interpolate (horizontally) on columns of interpolated elements
-   if result is None:
-      result = numpy.empty((num_elem * new_num_points, num_elem * new_num_points), dtype=field.dtype)
-
    for i in range(num_elem):
       result[:, i * new_num_points:(i + 1) * new_num_points] = \
          interp_1[:, i * old_num_points:(i + 1) * old_num_points] @ elem_interp.T
+   t1 = time()
 
-   return result
+   return result, t1 - t0
+
+def eval_field_2d_new(field, elem_interp, result=None):
+
+   new_num_points = elem_interp.shape[0]
+   old_num_points = elem_interp.shape[1]
+   num_elem = int(field.shape[0] // old_num_points)
+
+   if result is None:
+      result = numpy.empty((num_elem * new_num_points, num_elem * new_num_points), dtype=field.dtype)
+
+   t0 = time()
+   for i in range(num_elem):
+      i_start_dest = i * new_num_points
+      i_end_dest   = (i+1) * new_num_points
+      i_start_src = i * old_num_points
+      i_end_src   = (i+1) * old_num_points
+
+      for j in range(num_elem):
+         j_start_dest = j * new_num_points
+         j_end_dest   = (j+1) * new_num_points
+         j_start_src = j * old_num_points
+         j_end_src   = (j+1) * old_num_points
+         result[i_start_dest:i_end_dest, j_start_dest:j_end_dest] = elem_interp @ field[i_start_src:i_end_src, j_start_src:j_end_src] @ elem_interp.T
+
+   t1 = time()
+
+   return result, t1 - t0
+
+def eval_field_2d_alt(field, elem_interp, result=None):
+   new_num_points = elem_interp.shape[0]
+   old_num_points = elem_interp.shape[1]
+   num_elem = int(field.shape[0] // old_num_points)
+
+   new_elem_shape = (new_num_points, new_num_points)
+
+   num_pts = old_num_points * old_num_points
+
+   field_vec = numpy.empty((field.size//num_pts, num_pts))
+   for i in range(num_elem):
+      for j in range(num_elem):
+         # start = i * num_elem * num_pts + j * num_pts
+         # end   = i * num_elem * num_pts + (j+1) * num_pts
+         elem_id = i * num_elem + j
+
+         start_i = i * old_num_points
+         end_i   = (i+1) * old_num_points
+         start_j = j * old_num_points
+         end_j   = (j+1) * old_num_points
+
+         field_vec[elem_id, :] = field[start_i:end_i, start_j:end_j].ravel()
+
+   operator = numpy.empty((new_num_points*new_num_points, old_num_points*old_num_points), dtype=elem_interp.dtype)
+   for i in range(new_num_points):
+      start_i = i * new_num_points
+      end_i   = (i+1) * new_num_points
+      for j in range(old_num_points):
+         start_j = j * old_num_points
+         end_j   = (j+1) * old_num_points
+         operator[start_i:end_i, start_j:end_j] = elem_interp * elem_interp[i, j]
+
+   if result is None:
+      result = numpy.empty((num_elem * new_num_points, num_elem * new_num_points), dtype=field.dtype)
+
+   t0 = time()
+   # size = operator.shape[0] ** 2
+   # print(f'shapes: operator {operator.shape}, field_vec {field_vec.reshape(size, field_vec.shape[1]//size).shape}')
+   # tmp_result = operator @ field_vec.reshape(size, field_vec.shape[1]//size)
+   tmp_result = field_vec @ operator.T
+   t1 = time()
+
+   num_pts_new = new_num_points * new_num_points
+   for i in range(num_elem):
+      for j in range(num_elem):
+         start = i * num_elem * num_pts_new + j * num_pts_new
+         end   = i * num_elem * num_pts_new + (j+1) * num_pts_new
+         elem_id  =i * num_elem + j
+
+         start_i = i * new_num_points
+         end_i   = (i+1) * new_num_points
+         start_j = j * new_num_points
+         end_j   = (j+1) * new_num_points
+
+         result[start_i:end_i, start_j:end_j] = tmp_result[elem_id, :].reshape(new_elem_shape)
+
+   return result, t1 - t0
 
 
-def eval_field(field, elem_interp):
+def eval_field_3d(field, elem_interp, result=None):
+   new_num_points = elem_interp.shape[0]
+   old_num_points = elem_interp.shape[1]
+   num_elem_vert = int(field.shape[0] // old_num_points)
+   num_elem_horiz = int(field.shape[1] // old_num_points)
+
+   interp_1 = numpy.empty((num_elem_vert * old_num_points, num_elem_horiz * new_num_points, num_elem_horiz * old_num_points), dtype=field.dtype)
+   interp_2 = numpy.empty((num_elem_vert * old_num_points, num_elem_horiz * new_num_points, num_elem_horiz * new_num_points), dtype=field.dtype)
+   if result is None:
+      result = numpy.empty((num_elem_vert * new_num_points, num_elem_horiz * new_num_points, num_elem_horiz * new_num_points), dtype=field.dtype)
+
+   t0 = time()
+
+   # Interpolate along second dimension (should be the fastest) (horizontal)
+   for j in range(num_elem_horiz):
+      j_start_dst =  j    * new_num_points
+      j_end_dst   = (j+1) * new_num_points
+      j_start_src =  j    * old_num_points
+      j_end_src   = (j+1) * old_num_points
+      interp_1[:, j_start_dst:j_end_dst, :] = elem_interp @ field[:, j_start_src:j_end_src, :]
+
+   # Interpolate along 3rd dimension (horizontal)
+   for k in range(num_elem_horiz):
+      k_start_dst =  k    * new_num_points
+      k_end_dst   = (k+1) * new_num_points
+      k_start_src =  k    * old_num_points
+      k_end_src   = (k+1) * old_num_points
+      interp_2[:, :, k_start_dst:k_end_dst] = interp_1[:, :, k_start_src:k_end_src] @ elem_interp.T
+
+   # Interpolate along 1st dimension (possibly slowest? cause we need to go by hand along one of the other dimensions) (vertical)
+   for i in range(num_elem_vert):
+      for j in range(num_elem_horiz * new_num_points):
+         i_start_src =  i    * old_num_points
+         i_end_src   = (i+1) * old_num_points
+         i_start_dst =  i    * new_num_points
+         i_end_dst   = (i+1) * new_num_points
+         result[i_start_dst:i_end_dst, j, :] = elem_interp @ interp_2[i_start_src:i_end_src, j, :]
+
+   t1 = time()
+
+   return result, t1 - t0
+
+
+def eval_fields(fields, elem_interp, velocity_interp, method):
    result = None
-   if field.ndim == 2:
-      result = eval_single_field(field, elem_interp)
-   elif field.ndim == 3:
-      num_fields = field.shape[0]
-      new_size = field.shape[1] * elem_interp.shape[0] // elem_interp.shape[1]
-      result = numpy.empty((num_fields, new_size, new_size), dtype=field.dtype)
-      for i, f in enumerate(field):
-         eval_single_field(f, elem_interp, result[i])
+   if fields.ndim == 3:
+      num_fields = fields.shape[0]
+      if num_fields != 3:
+         raise ValueError('Can only interpolate on three 2D grids for Shallow Water (we assume shallow water, because 2D)')
+      new_size = fields.shape[1] * elem_interp.shape[0] // elem_interp.shape[1]
+      result = numpy.empty((num_fields, new_size, new_size), dtype=fields.dtype)
+      
+      if method == 2:
+         _, t0 = eval_field_2d_alt(fields[idx_h], elem_interp, result[idx_h])
+         _, t1 = eval_field_2d_alt(fields[idx_hu1], velocity_interp, result[idx_hu1])
+         _, t2 = eval_field_2d_alt(fields[idx_hu2], velocity_interp, result[idx_hu2])
+         total_t = t0 + t1 + t2
+      elif method == 1:
+         _, t0 = eval_field_2d_new(fields[idx_h], elem_interp, result[idx_h])
+         _, t1 = eval_field_2d_new(fields[idx_hu1], velocity_interp, result[idx_hu1])
+         _, t2 = eval_field_2d_new(fields[idx_hu2], velocity_interp, result[idx_hu2])
+         total_t = t0 + t1 + t2
+      else:
+         _, t0 = eval_field_2d(fields[idx_h], elem_interp, result[idx_h])
+         _, t1 = eval_field_2d(fields[idx_hu1], velocity_interp, result[idx_hu1])
+         _, t2 = eval_field_2d(fields[idx_hu2], velocity_interp, result[idx_hu2])
+         total_t = t0 + t1 + t2
+
+      # print(f'Time: {total_t:7.4f}')
+   elif fields.ndim == 4:
+      num_fields     = fields.shape[0]
+      new_size_vert  = fields.shape[1] * elem_interp.shape[0] // elem_interp.shape[1]
+      new_size_horiz = fields.shape[2] * elem_interp.shape[0] // elem_interp.shape[1]
+      result = numpy.empty((num_fields, new_size_vert, new_size_horiz, new_size_horiz), dtype=fields.dtype)
+      total_t = 0.0
+      for id in [idx_rho, idx_rho_theta, idx_rho_w]:
+         _, t = eval_field_3d(fields[id], elem_interp, result[id])
+         total_t += t
+      for id in [idx_rho_u1, idx_rho_u2]:
+         _, t = eval_field_3d(fields[id], velocity_interp, result[id])
+         total_t += t
+      idx_first_tracer = 5
+      for id in range(idx_first_tracer, num_fields):
+         _, t = eval_field_3d(fields[id], elem_interp, result[id])
+         total_t += t
+
+      # print(f'Time: {total_t:7.4f}')
    else:
-      raise ValueError(f'We have a problem. ndim = {field.ndim}')
+      raise ValueError(f'We have a problem. ndim = {fields.ndim}')
 
    return result
 
@@ -73,7 +237,7 @@ def get_linear_weights(points, x):
 
 
 def lagrange_poly(index, order):
-    points, _ = gauss_legendre(order)
+    points, _, _ = gauss_legendre(order)
 
     def L(x):
         return numpy.prod(
@@ -86,7 +250,7 @@ def lagrange_poly(index, order):
 
 def compute_dg_to_fv_small_projection(dg_order, fv_order, quad_order=1):
     width = 2.0 / fv_order
-    points, quad_weights = gauss_legendre(quad_order)
+    points, quad_weights, _ = gauss_legendre(quad_order)
     result = []
 
     lagranges = [lagrange_poly(i, dg_order) for i in range(dg_order)]
@@ -102,371 +266,60 @@ def compute_dg_to_fv_small_projection(dg_order, fv_order, quad_order=1):
     return result
 
 
-def interpolator(origin_type: str, origin_order: int, dest_type: str, dest_order: int, interp_type: str):
-   origin_points = None
-   if origin_type == 'dg':
-      origin_points, _ = gauss_legendre(origin_order)
-   elif origin_type == 'fv':
-      pts = numpy.linspace(-1.0, 1.0, origin_order + 1)
-      origin_points = (pts[:-1] + pts[1:]) / 2.0
+def get_basis_points(type: str, order: int):
+   if type == 'dg':
+      points, _, _ = gauss_legendre(order)
+   elif type == 'fv':
+      pts = numpy.linspace(-1.0, 1.0, order + 1)
+      points = (pts[:-1] + pts[1:]) / 2.0
    else:
-      raise ValueError('Unsupported origin grid type')
+      raise ValueError('Unsupported grid type')
+   return points
 
-   dest_points = None
-   if dest_type == 'dg':
-      dest_points, _ = gauss_legendre(dest_order)
-   elif dest_type == 'fv':
-      pts = numpy.linspace(-1.0, 1.0, dest_order + 1)
-      dest_points = (pts[:-1] + pts[1:]) / 2.0
-   else:
-      raise ValueError('Unsupported destination grid type')
+def interpolator(origin_type: str, origin_order: int, dest_type: str, dest_order: int, interp_type: str, ndim, method=0):
+   origin_points = get_basis_points(origin_type, origin_order)
+   dest_points = get_basis_points(dest_type, dest_order)
 
+   # Base interpolation matrix
    elem_interp = None
-   reverse_interp = None
    if interp_type == 'lagrange':
+      elem_interp    = numpy.array([lagrangeEval(origin_points, x) for x in dest_points])
+      print('Doing Lagrange!')
+   elif interp_type == 'l2-norm':
       elem_interp = compute_dg_to_fv_small_projection(origin_order, dest_order, quad_order=3)
-      # reverse_interp = numpy.array([lagrangeEval(dest_points, x) for x in origin_points]) * (dest_order / 2.0)**0.5
-   elif interp_type == 'bilinear':
-      elem_interp    = numpy.array([get_linear_weights(origin_points, x) for x in dest_points])# * (dest_order / origin_order)**0.5
-      # reverse_interp = numpy.array([get_linear_weights(dest_points, x) for x in origin_points])
+      print('Doing L2 norm!')
+   elif interp_type in ['bilinear', 'trilinear']:
+      elem_interp = numpy.array([get_linear_weights(origin_points, x) for x in dest_points])
    else:
       raise ValueError('interp_type not one of available interpolation types')
 
+   # Velocity interpolation matrix ([base matrix] * [some factor])
+   velocity_interp = elem_interp.copy()
+   if origin_type == 'dg' and dest_type == 'fv':
+      # velocity_interp *= numpy.sqrt(origin_order)
+      velocity_interp *= origin_order ** (1./ndim)
+   elif dest_order < origin_order:
+      # velocity_interp *= numpy.sqrt(dest_order / origin_order)
+      velocity_interp *= (dest_order / origin_order) ** (1./ndim)
+
+   # Invert interpolation matrices to get the inverse operation
    if dest_order == origin_order:
-      inverse = numpy.linalg.inv(elem_interp)
+      reverse_interp = numpy.linalg.inv(elem_interp)
+      velocity_reverse_interp = numpy.linalg.inv(velocity_interp)
    else:
-      inverse = numpy.linalg.pinv(elem_interp)
+      reverse_interp = numpy.linalg.pinv(elem_interp)
+      velocity_reverse_interp = numpy.linalg.pinv(velocity_interp)
 
-   # diff = numpy.linalg.norm(reverse_interp - inverse) / numpy.linalg.norm(reverse_interp)
-   # print(f'Diff b/w computed reverse and inverted matrix = {diff}')
-   reverse_interp = inverse
-
-   full = numpy.empty((dest_order*dest_order, origin_order*origin_order), dtype=elem_interp.dtype)
-   for i in range(dest_order):
-      for j in range(origin_order):
-         full[i*dest_order:(i+1)*dest_order, j*origin_order:(j+1)*origin_order] = elem_interp[i, j] * elem_interp
-      
-   # print(f'Full:\n{full}\n{numpy.linalg.pinv(full)}')
-   # print(f'elem_interp:\n{elem_interp}')
+   # print(f'interpolator: origin type/order: {origin_type}/{origin_order}, dest type/order: {dest_type}/{dest_order}')
+   print(f'elem_interp:\n{elem_interp}')
+   print(f'vel interp:\n{velocity_interp}')
    # print(f'reverse:\n{reverse_interp}')
 
+   # Function that applies the specified operations on a field
    def interpolate(field, reverse=False):
       if reverse:
-         return eval_field(field, reverse_interp)
+         return eval_fields(field, reverse_interp, velocity_reverse_interp, method)
       else:
-         return eval_field(field, elem_interp)
+         return eval_fields(field, elem_interp, velocity_interp, method)
 
    return interpolate
-
-
-class BilinearInterpolator:
-   def __init__(self, grid):
-      self.grid = grid
-      self.x_pos = grid.x1
-      self.y_pos = grid.x2
-
-      self.basis_points = grid.solutionPoints
-      self.num_basis_points = len(self.basis_points)
-      self.n_elem_i = int(len(self.x_pos) / self.num_basis_points)
-
-      basis_point_sets[self.num_basis_points] = self.basis_points
-
-   def eval_grid_fast(self, field, new_num_basis_points, old_num_basis_points):
-      for i in [new_num_basis_points, old_num_basis_points]:
-         if i not in basis_point_sets:
-            basis_point_sets[i], _ = gauss_legendre(i)
-
-      new_basis_points = basis_point_sets[new_num_basis_points]
-      old_basis_points = basis_point_sets[old_num_basis_points]
-
-      elem_interp = numpy.array([get_linear_weights(old_basis_points, px) for px in new_basis_points])
-
-      return eval_field(field, elem_interp)
-
-   def get_value_at_pos(self, x, y):
-      ix = 0
-      iy = 0
-
-      while self.x_pos[ix + 1] < x:
-         if ix + 2 >= len(self.x_pos):
-            break
-         ix += 1
-
-      while self.y_pos[iy + 1] < y:
-         if iy + 2 >= len(self.y_pos):
-            break
-         iy += 1
-
-      x_small = self.x_pos[ix]
-      x_large = self.x_pos[ix+1]
-      y_small = self.y_pos[iy]
-      y_large = self.y_pos[iy+1]
-
-      alpha = 1.0 - (x - x_small) / (x_large - x_small)
-      beta  = 1.0 - (y - y_small) / (y_large - y_small)
-
-      val = (self.field[ix, iy]     * alpha + self.field[ix + 1, iy]     * (1.0 - alpha)) * beta  + \
-            (self.field[ix, iy + 1] * alpha + self.field[ix + 1, iy + 1] * (1.0 - alpha)) * (1.0 - beta)
-
-      return val
-
-
-class LagrangeSimpleInterpolator:
-   def __init__(self, grid):
-
-      numpy.set_printoptions(precision=2)
-
-      self.grid  = grid
-
-      self.x_pos = grid.x1
-      self.y_pos = grid.x2
-      self.basis_points = grid.solutionPoints
-      self.num_basis_points = len(self.basis_points)
-
-      basis_point_sets[self.num_basis_points] = self.basis_points
-
-      self.delta_x = grid.Δx1
-      self.delta_y = grid.Δx2
-      # self.n_elem_i = int(len(self.x_pos) / self.num_basis_points)
-
-      self.grid_eval_timer = Timer(time.time())
-      self.grid_eval_fast_timer = Timer(self.grid_eval_timer.initial_time)
-
-
-   def eval_grid_fast(self, field, new_num_basis_points: int, old_num_basis_points: int, equidistant: bool):
-      """
-      Interpolate the current grid to a new one with the same number of elements,
-      but with a different number of solution points, using vectorized operations
-      as much as possible.
-
-         field -- the field we want to interpolate
-         new_num_basis_points -- How many points per initial grid element we want to have in the new grid
-         old_num_basis_points -- How many points per element there are in the initial grid
-         equidistance {bool} -- Whether we want the new grid to have equally-distanced points or
-            Gauss-Legendre points
-      """
-
-      self.grid_eval_fast_timer.start()
-
-      for i in [new_num_basis_points, old_num_basis_points]:
-         if i not in basis_point_sets:
-            basis_point_sets[i], _ = gauss_legendre(i)
-
-      old_basis_points = basis_point_sets[old_num_basis_points]
-
-      if equidistant:
-         pts = numpy.linspace(-1.0, 1.0, new_num_basis_points + 1)
-         new_basis_points = (pts[:-1] + pts[1:]) / 2.0
-      else:
-         new_basis_points = basis_point_sets[new_num_basis_points]
-
-      elem_interp = numpy.array([lagrangeEval(old_basis_points, px) for px in new_basis_points])
-      result      = eval_field(field, elem_interp)
-
-      self.grid_eval_fast_timer.stop()
-
-      return result
-
-
-   def eval_grid(self, field, new_num_basis_points):
-      """
-      Interpolate the current grid to a new one with the same number of elements,
-      but with a different number of solution points, element by element
-      """
-
-      self.grid_eval_timer.start()
-
-      new_grid_size = self.n_elem_i * new_num_basis_points
-      new_basis_points, _ = gauss_legendre(new_num_basis_points)
-      new_field = numpy.zeros((new_grid_size, new_grid_size))
-
-      elem_interp = numpy.array([lagrangeEval(self.basis_points, px) for px in new_basis_points])
-      col_interp = numpy.array([numpy.append(elem_row, [elem_row for i in range(self.n_elem_i - 1)]) for elem_row in elem_interp])
-
-      # interpolate along vertical axis
-      interp_1 = numpy.array([[
-         elem_interp @ field[
-                           i * self.num_basis_points:(i+1)*self.num_basis_points,
-                           j * self.num_basis_points:(j+1)*self.num_basis_points]
-            for j in range(self.n_elem_i)]
-                for i in range(self.n_elem_i)])
-
-      # interpolate along horizontal axis
-      interp_2 = numpy.array([[
-         interp_1[i,j] @ elem_interp.T
-            for j in range(self.n_elem_i)]
-                for i in range(self.n_elem_i)])
-
-      # Put in global grid form (rather than element by element)
-      for i in range(self.n_elem_i):
-         start_i = i * new_num_basis_points
-         stop_i = start_i + new_num_basis_points
-         for j in range(self.n_elem_i):
-            start_j = j * new_num_basis_points
-            stop_j = start_j + new_num_basis_points
-
-            new_field[start_i:stop_i, start_j:stop_j] = interp_2[i, j]
-
-      self.grid_eval_timer.stop()
-
-      return new_field
-
-
-class LagrangeInterpolator:
-   def __init__(self, grid, field, comm_dist_graph):
-
-      print('LagrangeInterpolator is not working (yet?). You need to fix xchange stuff (MPI communication).')
-      raise ValueError
-
-      self.grid  = grid
-      self.field = field
-
-      self.x_pos = grid.x1
-      self.y_pos = grid.x2
-      self.basis_points = grid.solutionPoints
-      self.delta_x = grid.Δx1
-      self.delta_y = grid.Δx2
-
-      rank = MPI.COMM_WORLD.Get_rank()
-
-      num_basis_points = len(self.basis_points)
-
-      self.n_elem_i = int(len(self.x_pos) / num_basis_points)
-
-      left_extrapolate   = lagrangeEval(self.basis_points, -1.0)
-      right_extrapolate  = lagrangeEval(self.basis_points, 1.0)
-      bottom_extrapolate = left_extrapolate
-      top_extrapolate    = right_extrapolate
-
-      interface_i = numpy.zeros((self.n_elem_i + 2, 2, len(self.x_pos)))
-      interface_j = numpy.zeros((self.n_elem_i + 2, 2, len(self.x_pos)))
-
-      for i in range(self.n_elem_i):
-         sliceIds = i * num_basis_points + numpy.arange(num_basis_points)
-         pos = i + 1
-
-         interface_i[pos, 0, :] = field[:, sliceIds] @ left_extrapolate
-         interface_i[pos, 1, :] = field[:, sliceIds] @ right_extrapolate
-         interface_j[pos, 0, :] = bottom_extrapolate @ field[sliceIds, :]
-         interface_j[pos, 1, :] = top_extrapolate    @ field[sliceIds, :]
-
-
-      xchange_scalars(comm_dist_graph, grid, interface_i, interface_j)
-
-      grid_size = (num_basis_points + 1) * self.n_elem_i + 1
-      self.full_grid = numpy.zeros((grid_size, grid_size))
-
-      numpy.set_printoptions(precision=2)
-
-      if rank == 0:
-          print('field: \n{}'.format(self.field))        
-          print('interface i: \n{}'.format(interface_i))
-          print('full grid (1): \n{}'.format(self.full_grid))
-
-      for i in range(self.n_elem_i):
-         target_pos_i = i * (num_basis_points + 1) + 1
-         target_slice_range_i = range(target_pos_i, target_pos_i + num_basis_points)
-
-         src_pos_i = i * num_basis_points
-         src_slice_range_i = range(src_pos_i, src_pos_i + num_basis_points)
-
-         for j in range(self.n_elem_i):
-            target_pos_j = j * (num_basis_points + 1) + 1
-            src_pos_j = j * num_basis_points
-
-            target_slice_range_j = range(target_pos_j, target_pos_j + num_basis_points)
-            target_slice = numpy.ix_(target_slice_range_i, target_slice_range_j)
-
-            src_slice_range_j = range(src_pos_j, src_pos_j + num_basis_points)
-            src_slice = numpy.ix_(src_slice_range_i, src_slice_range_j)
-
-            self.full_grid[target_slice] = field[src_slice]
-
-      if rank == 0:
-         print('full grid (2): \n{}'.format(self.full_grid))
-
-      for i in range(self.n_elem_i + 1):
-         target_pos_left = i * (num_basis_points + 1)
-
-         itf_elem_pos = i + 1
-         for j in range(self.n_elem_i):
-            target_slice_start = j * (num_basis_points + 1) + 1
-            target_slice = target_slice_start + numpy.arange(num_basis_points)
-
-            src_slice_start = j * num_basis_points
-            src_slice = src_slice_start + numpy.arange(num_basis_points)
-
-            self.full_grid[target_slice, target_pos_left] = \
-                    (interface_i[itf_elem_pos - 1, 1, src_slice] + interface_i[itf_elem_pos, 0, src_slice]) * 0.5
-            self.full_grid[target_pos_left, target_slice] = \
-                    (interface_j[itf_elem_pos - 1, 1, src_slice] + interface_j[itf_elem_pos, 0, src_slice]) * 0.5
-         
-      if rank == 0:
-          print('full grid (3): \n{}'.format(self.full_grid))
-
-
-      corners_i = numpy.zeros((self.n_elem_i + 2, 2, self.n_elem_i + 1))
-      corners_j = numpy.zeros((self.n_elem_i + 2, 2, self.n_elem_i + 1))
-
-      for i in range(self.n_elem_i):
-         slice_i = i * (num_basis_points + 1) + 1 + numpy.arange(num_basis_points)
-         pos_i = i + 1
-         for j in range(self.n_elem_i + 1):
-            pos_j = j 
-            src_j = j * (num_basis_points + 1)
-
-            corners_i[pos_i, 0, pos_j] = self.full_grid[src_j, slice_i] @ left_extrapolate
-            corners_i[pos_i, 1, pos_j] = self.full_grid[src_j, slice_i] @ right_extrapolate
-            corners_j[pos_i, 0, pos_j] = bottom_extrapolate @ self.full_grid[slice_i, src_j]
-            corners_j[pos_i, 1, pos_j] = top_extrapolate    @ self.full_grid[slice_i, src_j]
-
-      if rank == 0:
-         print('corners_i: \n{}'.format(corners_i))
-         print('corners_j: \n{}'.format(corners_j))
-
-      xchange_scalars(comm_dist_graph, grid, corners_i, corners_j)
-
-      if rank == 0:
-         print('corners_i: \n{}'.format(corners_i))
-         print('corners_j: \n{}'.format(corners_j))
-
-      for i in range(self.n_elem_i + 1):
-        target_pos_i = i * (num_basis_points + 1)
-
-        for j in range(self.n_elem_i + 1):
-            target_pos_j = j * (num_basis_points + 1)
-
-            self.full_grid[target_pos_i, target_pos_j] = \
-                  (corners_i[j    , 1, i] +
-                   corners_i[j + 1, 0, i] +
-                   corners_j[i    , 1, j] +
-                   corners_j[i + 1, 0, j]) * 0.25
-
-
-      if rank == 0:
-         print('full grid(4): \n{}'.format(self.full_grid))
-
-
-def interpolate(dest_grid, src_grid, field, comm_dist_graph):
-
-   dest_ni, dest_nj = dest_grid.lon.shape
-   dest_x_pos, dest_y_pos = dest_grid.x1, dest_grid.x2
-
-   result = numpy.zeros((dest_ni, dest_nj))
-
-   #interpolator = BilinearInterpolator(src_grid, field)
-   interpolator = LagrangeSimpleInterpolator(src_grid)
-
-   #int_test = LagrangeInterpolator(src_grid, field, comm_dist_graph)
-
-   alt_result = interpolator.eval_grid(field, len(dest_grid.solutionPoints))
-   alt_result_fast = interpolator.eval_grid_fast(field, len(dest_grid.solutionPoints))
-   difference = alt_result - alt_result_fast
-
-   if interpolator.rank == 0:
-      print('time (entire grid):          {}'.format(interpolator.grid_eval_timer.times))
-      print('time (entire grid, fast):    {}'.format(interpolator.grid_eval_fast_timer.times))
-      #print('difference: \n{}'.format(difference))
-
-   return alt_result
-

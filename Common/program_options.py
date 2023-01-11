@@ -69,26 +69,6 @@ class Configuration:
       except (NoOptionError,NoSectionError):
          self.ark_solver_imp = 'ARK3(2)4L[2]SA-ESDIRK'
 
-      try:
-         self.use_preconditioner = parser.getint('Time_integration', 'use_preconditioner')
-      except (NoOptionError, NoSectionError):
-         self.use_preconditioner = 0
-
-      try:
-         self.precond_filter_before = parser.getint('Time_integration', 'precond_filter_before')
-      except (NoOptionError, NoSectionError):
-         self.precond_filter_before = 0
-
-      try:
-         self.precond_filter_during = parser.getint('Time_integration', 'precond_filter_during')
-      except (NoOptionError, NoSectionError):
-         self.precond_filter_during = 0
-
-      try:
-         self.precond_filter_after = parser.getint('Time_integration', 'precond_filter_after')
-      except (NoOptionError, NoSectionError):
-         self.precond_filter_after = 0
-
       ###############################
       # Grid
       try:
@@ -171,6 +151,85 @@ class Configuration:
       except (NoOptionError):
          self.filter_cutoff    = 0
 
+      ###################
+      # Preconditioning
+      available_preconditioners = ['none', 'fv', 'fv-mg', 'p-mg']
+      try:
+         self.preconditioner = parser.get('Preconditioning', 'preconditioner').lower()
+         if self.preconditioner not in available_preconditioners:
+            print(f'Warning: chosen preconditioner {self.preconditioner} is not within available preconditioners. Possible values are {available_preconditioners}')
+            self.preconditioner = available_preconditioners[0]
+      except (NoOptionError, NoSectionError):
+         self.preconditioner = available_preconditioners[0]
+
+      try:
+         self.num_mg_levels = max(parser.getint('Preconditioning', 'num_mg_levels'), 1)
+      except (NoOptionError, NoSectionError):
+         self.num_mg_levels = 1
+
+      if 'mg' not in self.preconditioner: self.num_mg_levels = 1
+
+      try:
+         self.precond_tolerance = parser.getfloat('Preconditioning', 'precond_tolerance')
+      except (NoOptionError, NoSectionError):
+         self.precond_tolerance = 1e-1
+
+      try:
+         self.num_pre_smoothe = parser.getint('Preconditioning', 'num_pre_smoothe')
+      except (NoOptionError, NoSectionError):
+         self.num_pre_smoothe = 1
+
+      try:
+         self.num_post_smoothe = parser.getint('Preconditioning', 'num_post_smoothe')
+      except (NoOptionError, NoSectionError):
+         self.num_post_smoothe = 1
+
+      self.possible_smoothers = ['kiops']
+      try:
+         self.mg_smoother = parser.get('Preconditioning', 'mg_smoother')
+         if not self.mg_smoother in self.possible_smoothers:
+            print(f'Warning: chosen multigrid smoother {self.mg_smoother} is not within available smoothers. Possible values are {self.possible_smoothers}')
+            self.mg_smoother = self.possible_smoothers[0]
+      except (NoOptionError, NoSectionError):
+         self.mg_smoother = self.possible_smoothers[0]
+
+      try:
+         self.mg_smoothe_only = parser.getint('Preconditioning', 'mg_smoothe_only')
+      except (NoOptionError, NoSectionError):
+         self.mg_smoothe_only = 0
+
+      try:
+         self.kiops_dt_factor = parser.getfloat('Preconditioning', 'kiops_dt_factor')
+      except (NoOptionError, NoSectionError):
+         self.kiops_dt_factor = 1.1
+
+      try:
+         self.precond_filter_before = parser.getint('Preconditioning', 'precond_filter_before')
+         print(f'Warning: preconditioner filter option  is not properly implemented. Please do not use.')
+      except (NoOptionError, NoSectionError):
+         self.precond_filter_before = 0
+
+      try:
+         self.precond_filter_during = parser.getint('Preconditioning', 'precond_filter_during')
+         print(f'Warning: preconditioner filter option  is not properly implemented. Please do not use.')
+      except (NoOptionError, NoSectionError):
+         self.precond_filter_during = 0
+
+      try:
+         self.precond_filter_after = parser.getint('Preconditioning', 'precond_filter_after')
+         print(f'Warning: preconditioner filter option  is not properly implemented. Please do not use.')
+      except (NoOptionError, NoSectionError):
+         self.precond_filter_after = 0
+
+      try:
+         ok_interps = ['l2-norm', 'lagrange']
+         self.dg_to_fv_interp = parser.get('Preconditioning', 'dg_to_fv_interp')
+         if not self.dg_to_fv_interp in ok_interps:
+            print(f'ERROR: invalid interpolation method for DG to FV conversion ({self.dg_to_fv_interp}). Should pick one of {ok_interps}. Choosing "lagrange" as default.')
+            self.dg_to_fv_interp = 'lagrange'
+      except (NoOptionError, NoSectionError):
+         self.dg_to_fv_interp = 'lagrange'
+
       ###############################
       # Output options
 
@@ -182,6 +241,12 @@ class Configuration:
          self.save_state_freq = parser.getint('Output_options', 'save_state_freq')
       except (NoOptionError, NoSectionError):
          self.save_state_freq = 0
+
+      try:
+         store_solver_stats_val = parser.getint('Output_options', 'store_solver_stats')
+         self.store_solver_stats = True if store_solver_stats_val > 0 else False
+      except (NoOptionError, NoSectionError):
+         self.store_solver_stats = False
 
       try:
          self.output_dir = parser.get('Output_options', 'output_dir')
@@ -204,7 +269,7 @@ class Configuration:
          f'tolerance:       {self.tolerance}\n' \
          f'ARK solver exp:  {self.ark_solver_exp}\n' \
          f'ARK solver imp:  {self.ark_solver_imp}\n' \
-         f'Use precond:     {self.use_preconditioner}\n' \
+         f'Precond:         {self.preconditioner}\n' \
          f'Precond filter \n  before: {self.precond_filter_before}\n  during: {self.precond_filter_during}\n  after:  {self.precond_filter_after}\n' \
          f'Discretization:  {self.discretization}\n' \
          f'λ0: {self.λ0}\n' \

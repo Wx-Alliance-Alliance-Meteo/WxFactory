@@ -1,16 +1,18 @@
 import numpy
 import math
 import scipy.sparse.linalg
-from collections import deque
-from itertools import combinations
 import mpi4py.MPI
 
-# from Bamphi.bamphi   import bamphi
-from Common.timer    import Timer
-from Solver.linsol   import fgmres
-from Solver.kiops    import kiops
-from Solver.pmex     import pmex
-from Stepper.matvec  import matvec_fun, matvec_rat
+from collections  import deque
+from itertools    import combinations
+from time         import time
+
+# from Bamphi.bamphi          import bamphi
+from Output.solver_stats   import write_solver_stats
+from Solver.kiops          import kiops
+from Solver.linsol         import fgmres
+from Solver.pmex           import pmex
+from Stepper.matvec        import matvec_fun, matvec_rat
 
 # Computes the coefficients for stiffness resilient exponential methods based on node values c
 def alpha_coeff(c):
@@ -363,11 +365,15 @@ class Ros2:
       if self.preconditioner is not None:
          self.preconditioner.prepare(dt, Q)
 
-      Qnew, local_error, num_iter, flag = fgmres(A, b, x0=Q_flat, tol=self.tol, preconditioner=self.preconditioner)
+      t0 = time()
+      Qnew, local_error, num_iter, flag, residuals = fgmres(A, b, x0=Q_flat, tol=self.tol, preconditioner=self.preconditioner, verbose=False)
+      t1 = time()
+
+      write_solver_stats(num_iter, t1 - t0, flag, residuals)
 
       if flag == 0:
-         print(f'FGMRES converged at iteration {num_iter} to a solution with relative local error {local_error : .2e}')
+         print(f'FGMRES converged at iteration {num_iter} in {t1 - t0:4.1f} s to a solution with relative local error {local_error : .2e}')
       else:
-         print(f'FGMRES stagnation at iteration {num_iter}, returning a solution with relative local error {local_error: .2e}')
+         print(f'FGMRES stagnation/interruption at iteration {num_iter} in {t1 - t0:4.1f} s, returning a solution with relative local error {local_error: .2e}')
 
       return numpy.reshape(Qnew, Q.shape)

@@ -932,7 +932,7 @@ class EulerExchangeRequest():
    def wait(self):
       if not self.is_complete:
          self.mpi_request.Wait()
-         for i in range(4):
+         for i in range(self.recv_buffers.shape[0]):
             for j in range(self.recv_buffers.shape[1]):
                self.outputs[i][j][:] = self.recv_buffers[i, j]
          self.is_complete = True
