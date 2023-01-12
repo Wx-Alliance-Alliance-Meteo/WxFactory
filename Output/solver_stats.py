@@ -5,6 +5,7 @@ try:
    sqlite_available = True
 except:
    sqlite_available = False
+   print(f'No sqlite, won\'t be able to print solver stats')
 
 class OutputManager:
    def __init__(self) -> None:
@@ -73,9 +74,6 @@ class OutputManager:
             );
          ''')
          self.db_connection.commit()
-
-      else:
-         print(f'Table exists!')
 
    def write_output(self, num_iter, time, flag, residuals):
       if not (sqlite_available and self.is_writer): return

@@ -5,21 +5,21 @@ import scipy
 from copy import deepcopy
 from time import time
 
-from Common.definitions    import idx_h, idx_hu1, idx_hu2, gravity, idx_rho_w
-from Common.initialize     import initialize_sw, initialize_euler, initialize_cartesian2d
-from Common.interpolation  import interpolator
-from Grid.cubed_sphere     import CubedSphere
-from Grid.matrices         import DFR_operators
-from Grid.metric           import Metric
-from Rhs.rhs_euler         import rhs_euler
-from Rhs.rhs_sw            import rhs_sw
-from Solver.kiops          import kiops
-from Solver.linsol         import fgmres, global_norm
-from Stepper.matvec        import matvec_rat
+from Common.definitions       import idx_h, idx_hu1, idx_hu2, gravity, idx_rho_w
+from Common.interpolation     import Interpolator
+from Grid.cartesian_2d_mesh   import Cartesian2d
+from Grid.cubed_sphere        import CubedSphere
+from Grid.matrices            import DFR_operators
+from Init.init_state_vars     import init_state_vars
+from Rhs.rhs_euler            import rhs_euler
+from Rhs.rhs_sw               import rhs_sw
+from Solver.kiops             import kiops
+from Solver.linsol            import fgmres, global_norm
+from Stepper.matvec           import matvec_rat
 
 
 class MultigridLevel:
-   def __init__(self, param, ptopo, rhs, discretization, nb_elem_horiz, nb_elem_vert, source_order, target_order):
+   def __init__(self, param, ptopo, discretization, nb_elem_horiz, nb_elem_vert, source_order, target_order, ndim):
 
       p = deepcopy(param)
       p.nb_elements_horizontal = nb_elem_horiz
@@ -33,6 +33,8 @@ class MultigridLevel:
       self.num_pre_smoothe = self.param.num_pre_smoothe
       self.num_post_smoothe = self.param.num_post_smoothe
 
+      self.ndim = ndim
+
       print(
          f'Grid level! nb_elem_horiz = {nb_elem_horiz}, nb_elem_vert = {nb_elem_vert} '
          f' discr = {discretization}, source order = {source_order}, target order = {target_order}, nbsolpts = {p.nbsolpts}'
@@ -41,22 +43,14 @@ class MultigridLevel:
          )
 
       # Initialize problem for this level
-      self.geometry = CubedSphere(p.nb_elements_horizontal, p.nb_elements_vertical, p.nbsolpts, p.λ0, p.ϕ0, p.α0, p.ztop, ptopo, p)
+      if p.grid_type == 'cubed_sphere':
+         self.geometry = CubedSphere(p.nb_elements_horizontal, p.nb_elements_vertical, p.nbsolpts, p.λ0, p.ϕ0, p.α0, p.ztop, ptopo, p)
+      elif p.grid_type == 'cartesian2d':
+         self.geometry = Cartesian2d((p.x0, p.x1), (p.z0, p.z1), p.nb_elements_horizontal, p.nb_elements_vertical, p.nbsolpts)
+
       operators     = DFR_operators(self.geometry, p.filter_apply, p.filter_order, p.filter_cutoff)
-      self.metric   = Metric(self.geometry)
 
-      if self.param.equations == 'Euler':
-         self.ndim = 3
-         field, topo = initialize_euler(self.geometry, self.metric, operators, self.param)
-         self.rhs_operator = functools.partial(rhs, geom=self.geometry, mtrx=operators, metric=self.metric, topo=topo,
-            ptopo=ptopo, nbsolpts=p.nbsolpts, nb_elements_hori=p.nb_elements_horizontal,
-            nb_elements_vert=p.nb_elements_vertical, case_number=p.case_number)
-      elif self.param.equations == 'shallow_water':
-         self.ndim = 2
-         field, topo = initialize_sw(self.geometry, self.metric, operators, p)
-         self.rhs_operator = functools.partial(rhs, geom=self.geometry, mtrx=operators, metric=self.metric, topo=None,
-            ptopo=ptopo, nbsolpts=p.nbsolpts, nb_elements_hori=p.nb_elements_horizontal)
-
+      field, _, self.metric, self.rhs_operator, _, _ = init_state_vars(self.geometry, operators, ptopo, self.param)
       print(f'field shape: {field.shape}')
       self.shape = field.shape
 
@@ -68,7 +62,7 @@ class MultigridLevel:
 
       if target_order > 0:
          interp_method         = 'bilinear' if discretization == 'fv' else 'lagrange'
-         self.interpolator     = interpolator(discretization, source_order, discretization, target_order, interp_method, self.ndim)
+         self.interpolator     = Interpolator(discretization, source_order, discretization, target_order, interp_method, self.param.grid_type, self.ndim)
          self.restrict         = lambda vec, op=self.interpolator, sh=field.shape: op(vec.reshape(sh))
          self.restricted_shape = self.restrict(field).shape
          self.prolong          = lambda vec, op=self.interpolator, sh=self.restricted_shape: op(vec.reshape(sh), reverse=True)
@@ -93,12 +87,8 @@ class Multigrid:
       param = deepcopy(param)
 
       # Detect problem dimension
-      self.ndim = 2 if param.equations == 'shallow_water' else 3
-
-      # Default "0th step" conversion function
-      self.initial_interpolate = lambda x, reverse=False : x
-      if discretization == 'fv':
-         self.initial_interpolate = interpolator('dg', param.initial_nbsolpts, 'fv', param.initial_nbsolpts, param.dg_to_fv_interp, self.ndim)
+      self.ndim = 2
+      if param.equations == 'euler' and param.grid_type == 'cubed_sphere': self.ndim = 3
 
       # Adjust some parameters as needed
       if discretization == 'fv':
@@ -127,27 +117,27 @@ class Multigrid:
          raise ValueError(f'Unrecognized discretization "{discretization}"')
 
       param.num_mg_levels = min(param.num_mg_levels, self.max_num_levels)
-      print(f'num_mg_levels: {param.num_mg_levels}')
+      print(f'num_mg_levels: {param.num_mg_levels} (max {self.max_num_levels})')
 
-      # Determine correct RHS function to use
-      if param.equations == 'shallow_water':
-         self.rhs = rhs_sw
-      elif param.equations == 'Euler':
-         self.rhs = rhs_euler if discretization == 'fv' else rhs_euler
-      else:
-         raise ValueError(f'Cannot use the multigrid solver with anything other than shallow water or Euler (got {param.equations})')
+      # # Determine correct RHS function to use
+      # if param.equations == 'shallow_water':
+      #    self.rhs = rhs_sw
+      # elif param.equations == 'euler':
+      #    self.rhs = rhs_euler if discretization == 'fv' else rhs_euler
+      # else:
+      #    raise ValueError(f'Cannot use the multigrid solver with anything other than shallow water or Euler (got {param.equations})')
 
       # Determine correct matrix-vector product function to use
       self.matvec = matvec_rat
 
       # Determine level-specific parameters for each level (order, num elements)
-      if discretization == 'fv':
+      if discretization == 'fv' and not fv_only:
          self.orders = [self.max_num_fv_elems // (2**i) for i in range(self.max_num_levels + 1)]
-         if self.extra_fv_step:
-            print(f'There is an extra FV step, from order {param.initial_nbsolpts} to {self.orders[0]}')
-            self.orders = [param.initial_nbsolpts] + self.orders
+         # if self.extra_fv_step:
+         #    print(f'There is an extra FV step, from order {param.initial_nbsolpts} to {self.orders[0]}')
+         #    self.orders = [param.initial_nbsolpts] + self.orders
          self.elem_counts_hori = [param.nb_elements_horizontal * order // param.initial_nbsolpts for order in self.orders]
-         if self.ndim == 3:
+         if self.ndim == 3 or param.grid_type == 'cartesian2d':
             self.elem_counts_vert =  [param.nb_elements_vertical * order for order in self.orders]
          else:
             self.elem_counts_vert =  [param.nb_elements_vertical for _ in self.orders]
@@ -168,7 +158,26 @@ class Multigrid:
          nb_elem_hori         = self.elem_counts_hori[i_level]
          nb_elem_vert         = self.elem_counts_vert[i_level]
          print(f'Initializing level {i_level}, {discretization}, order {order}->{new_order}, elems {nb_elem_hori}x{nb_elem_vert}')
-         self.levels[i_level] = MultigridLevel(param, ptopo, self.rhs, discretization, nb_elem_hori, nb_elem_vert, order, new_order)
+         self.levels[i_level] = MultigridLevel(param, ptopo, discretization, nb_elem_hori, nb_elem_vert, order, new_order, self.ndim)
+
+      # Default "0th step" conversion function
+      self.initial_interpolate = lambda x : x
+      self.get_solution_back   = self.initial_interpolate
+      if discretization == 'fv':
+         self.big_shape = self.levels[0].shape
+         int_shape = self.initial_interpolator.elem_interp.shape
+         if fv_only:
+            self.initial_interpolator = Interpolator('dg', param.initial_nbsolpts, 'fv', param.initial_nbsolpts, param.dg_to_fv_interp, param.grid_type, self.ndim)
+         else:
+            self.initial_interpolator = Interpolator('dg', param.initial_nbsolpts, 'fv', self.max_num_fv_elems, param.dg_to_fv_interp, param.grid_type, self.ndim)
+
+            dims = [1, 2, 3] if self.ndim == 3 else [1, 2]
+            self.big_shape = list(self.big_shape)
+            for d in dims: self.big_shape[d] = self.big_shape[d] * int_shape[1] // int_shape[0]
+            self.big_shape = tuple(self.big_shape)
+         
+         self.initial_interpolate = lambda vec, op=self.initial_interpolator, sh=self.big_shape: op(vec.reshape(sh))
+         self.get_solution_back   = lambda vec, op=self.initial_interpolator, sh=int_shape: op(vec.reshape(sh), reverse=True)
 
    def prepare(self, dt, field):
       """
@@ -187,8 +196,9 @@ class Multigrid:
       param = self.levels[0].param
       shape = self.levels[0].shape
 
-      result = self.iterate(numpy.ravel(self.initial_interpolate(vec.reshape(shape))), num_levels=param.num_mg_levels, verbose=False)
-      return numpy.ravel(self.initial_interpolate(result.reshape(shape), reverse=True))
+      # result = self.iterate(numpy.ravel(self.initial_interpolate(vec.reshape(shape))), num_levels=param.num_mg_levels, verbose=False)
+      result = self.iterate(numpy.ravel(self.initial_interpolate(vec)), num_levels=param.num_mg_levels, verbose=False)
+      return numpy.ravel(self.get_solution_back(result))
 
 ###############
 # The algorithm

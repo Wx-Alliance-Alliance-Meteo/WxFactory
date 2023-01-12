@@ -7,20 +7,15 @@ import mpi4py.MPI as MPI
 
 from Common.dcmip             import dcmip_T11_update_winds, dcmip_T12_update_winds
 from Common.definitions       import idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_w
-from Common.initialize        import initialize_sw, initialize_euler, initialize_cartesian2d
 from Common.parallel          import Distributed_World
 from Common.program_options   import Configuration
 from Grid.cartesian_2d_mesh   import Cartesian2d
 from Grid.cubed_sphere        import CubedSphere
 from Grid.matrices            import DFR_operators
-from Grid.metric              import Metric, Metric_3d_topo
+from Init.init_state_vars     import init_state_vars
 from Output.blockstats        import blockstats
 from Output.solver_stats      import prepare_solver_stats
 from Precondition.multigrid   import Multigrid
-from Rhs.rhs_bubble           import rhs_bubble
-from Rhs.rhs_bubble_implicit  import rhs_bubble_implicit
-from Rhs.rhs_euler            import rhs_euler
-from Rhs.rhs_sw               import rhs_sw
 from Stepper.timeIntegrators  import Epi, EpiStiff, SRERK, Tvdrk3, Ros2, Euler1
 
 
@@ -37,7 +32,6 @@ def main(args) -> int:
    ptopo = Distributed_World() if param.grid_type == 'cubed_sphere' else None
 
    # Create the mesh
-   geom = None
    if param.grid_type == 'cubed_sphere':
       geom = CubedSphere(param.nb_elements_horizontal, param.nb_elements_vertical, param.nbsolpts, param.λ0, param.ϕ0, param.α0, param.ztop, ptopo, param)
    elif param.grid_type == 'cartesian2d':
@@ -47,23 +41,7 @@ def main(args) -> int:
    mtrx = DFR_operators(geom, param.filter_apply, param.filter_order, param.filter_cutoff)
 
    # Initialize state variables
-   if param.equations == "euler" and param.grid_type == 'cubed_sphere':
-      metric = Metric_3d_topo(geom, mtrx)
-      Q, topo = initialize_euler(geom, metric, mtrx, param)
-      # Q: dimensions [5,nk,nj,ni], order ρ, u, v, w, θ
-      rhs_handle = lambda q: rhs_euler(q, geom, mtrx, metric, ptopo, param.nbsolpts, param.nb_elements_horizontal,
-            param.nb_elements_vertical, param.case_number)
-
-   elif param.equations == 'euler' and param.grid_type == 'cartesian2d':
-      Q = initialize_cartesian2d(geom, param)
-      rhs_handle = lambda q: rhs_bubble(q, geom, mtrx, param.nbsolpts, param.nb_elements_horizontal, param.nb_elements_vertical)
-      rhs_implicit = lambda q: rhs_bubble_implicit(q, geom, mtrx, param.nbsolpts, param.nb_elements_horizontal, param.nb_elements_vertical)
-      rhs_explicit = lambda q: rhs_handle(q) - rhs_implicit(q)
-
-   elif param.equations == "shallow_water":
-      metric = Metric(geom)
-      Q, topo = initialize_sw(geom, metric, mtrx, param)
-      rhs_handle = lambda q: rhs_sw(q, geom, mtrx, metric, topo, ptopo, param.nbsolpts, param.nb_elements_horizontal)
+   Q, topo, metric, rhs_handle, rhs_implicit, rhs_explicit = init_state_vars(geom, mtrx, ptopo, param)
 
    # Preconditioning
    preconditioner = None
@@ -83,6 +61,8 @@ def main(args) -> int:
             print(f'ERROR reading state vector from file for step {starting_step}. The shape is wrong! ({Q_tmp.shape}, should be {Q.shape})')
             raise ValueError
          print(f'Starting simulation from step {starting_step} (rather than 0)')
+         if starting_step * param.dt >= param.t_end:
+            print(f'WARNING: Won\'t run any steps, since we will stop at step {int(math.ceil(param.t_end / param.dt))}')
       except:
          print(f'WARNING: Tried to start from timestep {starting_step}, but unable to read initial state for that step. Will start from 0 instead.')
          starting_step = 0
