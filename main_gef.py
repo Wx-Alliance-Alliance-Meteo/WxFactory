@@ -69,7 +69,7 @@ def main(argv) -> int:
             print(f'ERROR reading state vector from file for step {starting_step}. '
                   f'The shape is wrong! ({starting_state.shape}, should be {Q.shape})')
             raise ValueError
-         Q = Q_tmp
+         Q = starting_state
 
          if MPI.COMM_WORLD.rank == 0:
             print(f'Starting simulation from step {starting_step} (rather than 0)')
