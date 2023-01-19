@@ -14,7 +14,7 @@ jacobian/*
 __pycache__/
 *.py[cod]
 
-model_output/
+results/
 
 .vscode
 .idea

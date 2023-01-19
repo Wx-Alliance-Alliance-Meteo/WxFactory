@@ -10,10 +10,10 @@ GEF was built for Python3.  It also requires an MPI implementation.
 * `sympy` Python library for symbolic mathematics
 * `mpi4py` Python interface for MPI
 * `netcdf4-openmpi` Python/NumPy interface to the netCDF C library (openmpi version)
+* `matplotlib` A python plotting library, making publication quality plots
 
 ## Optional
 * `mayavi` Visualization toolkit
-* `matplotlib` A python plotting library, making publication quality plots
 * `cartopy` A cartographic python library with matplotlib support for visualisation
 
 Python packages can be installed with the package management system of your
