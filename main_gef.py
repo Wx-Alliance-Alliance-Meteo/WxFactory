@@ -69,9 +69,13 @@ def main(argv) -> int:
             print(f'ERROR reading state vector from file for step {starting_step}. '
                   f'The shape is wrong! ({starting_state.shape}, should be {Q.shape})')
             raise ValueError
-         print(f'Starting simulation from step {starting_step} (rather than 0)')
-         if starting_step * param.dt >= param.t_end:
-            print(f'WARNING: Won\'t run any steps, since we will stop at step {int(math.ceil(param.t_end / param.dt))}')
+         Q = Q_tmp
+
+         if MPI.COMM_WORLD.rank == 0:
+            print(f'Starting simulation from step {starting_step} (rather than 0)')
+            if starting_step * param.dt >= param.t_end:
+               print(f'WARNING: Won\'t run any steps, since we will stop at step {int(math.ceil(param.t_end / param.dt))}')
+
       except (FileNotFoundError, ValueError):
          print(f'WARNING: Tried to start from timestep {starting_step}, but unable to read initial state for that step.'
                 ' Will start from 0 instead.')
