@@ -30,9 +30,6 @@ def rhs_bubble_implicit(Q, geom, mtrx, nbsolpts, nb_elements_x, nb_elements_z):
    theta    = Q[idx_2d_rho_theta,:,:] / rho
    pressure = p0 * (Q[idx_2d_rho_theta,:,:] * Rd / p0)**(cpd / cvd)
 
-   # Linearize variables
-   theta_bar = 303.15 # TODO: dans la config
-
    # --- Compute the fluxes
    flux_x1[idx_2d_rho,:,:]       = Q[idx_2d_rho_u,:,:]
    flux_x1[idx_2d_rho_u,:,:]     = pressure
@@ -130,6 +127,6 @@ def rhs_bubble_implicit(Q, geom, mtrx, nbsolpts, nb_elements_x, nb_elements_z):
 
    rhs[:-1,:,:] = - ( df1_dx[:-1,:,:] + df3_dz[:-1,:,:] )
    rhs[idx_2d_rho_w,:,:] -= Q[idx_2d_rho,:,:] * gravity
-   rhs[idx_2d_rho_theta] = - theta_bar * ( df1_dx[idx_2d_rho] + df3_dz[idx_2d_rho] )
+   rhs[idx_2d_rho_theta] = - theta * ( df1_dx[idx_2d_rho] + df3_dz[idx_2d_rho] )
 
    return rhs
