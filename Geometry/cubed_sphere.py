@@ -4,6 +4,7 @@ import sympy
 import sys
 
 import Common.definitions
+from Geometry.geometry     import Geometry
 import Geometry.sphere         as sphere
 import Geometry.quadrature     as quadrature
 
@@ -11,7 +12,7 @@ import Geometry.quadrature     as quadrature
 from Common.parallel          import Distributed_World
 from Common.program_options   import Configuration
 
-class CubedSphere:
+class CubedSphere(Geometry):
    def __init__(self, nb_elements_horizontal:int , nb_elements_vertical: int, nbsolpts: int, 
                 λ0: float, ϕ0: float, α0: float, ztop: float, ptopo: Distributed_World, param: Configuration):
       '''Initialized the cubed sphere geometry, for an earthlike sphere with no topography.
@@ -70,6 +71,8 @@ class CubedSphere:
          Wraps parameters from the configuration pole that are not otherwise specified in this
          constructor.      
       '''
+      super().__init__('cubed_sphere')
+
       ## Panel / parallel decomposition properties
       self.ptopo = ptopo
 

@@ -13,11 +13,12 @@ from Common.parallel            import Distributed_World
 from Common.program_options     import Configuration
 from Geometry.cartesian_2d_mesh import Cartesian2d
 from Geometry.cubed_sphere      import CubedSphere
+from Geometry.geometry          import Geometry
 from Geometry.matrices          import DFR_operators
 from Init.dcmip                 import dcmip_T11_update_winds, dcmip_T12_update_winds
 from Init.init_state_vars       import init_state_vars
 from Output.blockstats          import blockstats
-from Output.solver_stats        import prepare_solver_stats
+from Output.output_manager      import OutputManager
 from Precondition.multigrid     import Multigrid
 from Stepper.timeIntegrators    import Epi, EpiStiff, SRERK, Tvdrk3, Ros2, Euler1, Imex2, StrangSplitting, \
                                        PartRosExp2, RosExp2
@@ -26,18 +27,14 @@ from Stepper.timeIntegrators    import Epi, EpiStiff, SRERK, Tvdrk3, Ros2, Euler
 def main(argv) -> int:
    """ This function sets up the infrastructure and performs the time loop of the model. """
 
-   step = 0
-
    # Read configuration file
    param = Configuration(argv.config, MPI.COMM_WORLD.rank == 0)
-
-   def state_file_name(step_number: int):
-      return f'{param.output_dir}/state_vector_{MPI.COMM_WORLD.rank:03d}.{step_number:05d}.npy'
 
    # Set up distributed world
    ptopo = Distributed_World() if param.grid_type == 'cubed_sphere' else None
 
    # Create the mesh
+   geom = Geometry('')
    if param.grid_type == 'cubed_sphere':
       geom = CubedSphere(param.nb_elements_horizontal, param.nb_elements_vertical, param.nbsolpts, param.λ0, param.ϕ0,
                          param.α0, param.ztop, ptopo, param)
@@ -60,11 +57,13 @@ def main(argv) -> int:
    elif param.preconditioner == 'fv':
       preconditioner = Multigrid(param, ptopo, discretization='fv', fv_only=True)
 
+   output = OutputManager(param, geom, metric, mtrx, topo)
+
    # Determine starting step (if not 0)
    starting_step = param.starting_step
    if starting_step > 0:
       try:
-         starting_state = numpy.load(state_file_name(starting_step))
+         starting_state = numpy.load(output.state_file_name(starting_step))
          if starting_state.shape != Q.shape:
             print(f'ERROR reading state vector from file for step {starting_step}. '
                   f'The shape is wrong! ({starting_state.shape}, should be {Q.shape})')
@@ -74,33 +73,13 @@ def main(argv) -> int:
          if MPI.COMM_WORLD.rank == 0:
             print(f'Starting simulation from step {starting_step} (rather than 0)')
             if starting_step * param.dt >= param.t_end:
-               print(f'WARNING: Won\'t run any steps, since we will stop at step {int(math.ceil(param.t_end / param.dt))}')
+               print(f'WARNING: Won\'t run any steps, since we will stop at step '
+                     f'{int(math.ceil(param.t_end / param.dt))}')
 
       except (FileNotFoundError, ValueError):
          print(f'WARNING: Tried to start from timestep {starting_step}, but unable to read initial state for that step.'
                 ' Will start from 0 instead.')
          starting_step = 0
-
-   step = starting_step
-
-   # Prepare output
-   if param.output_freq > 0:
-      if param.grid_type == 'cubed_sphere':
-         from Output.output_cubesphere import output_init, output_netcdf, output_finalize
-         def output_step(Q, geom, step, param):
-            output_netcdf(Q, geom, metric, mtrx, topo, step, param)
-      elif param.grid_type == 'cartesian2d':
-         from Output.output_cartesian import output_init, output_step, output_finalize
-
-      output_init(geom, param)
-      output_step(Q, geom, step, param)  # store initial conditions
-
-   if param.store_solver_stats:
-      prepare_solver_stats(param)
-
-   # Save initial output
-   if param.save_state_freq > 0:
-      numpy.save(state_file_name(0), Q)
 
    # Time stepping
    if param.time_integrator.lower()[:9] == 'epi_stiff' and param.time_integrator[9:].isdigit():
@@ -144,15 +123,12 @@ def main(argv) -> int:
    else:
       raise ValueError(f'Time integration method {param.time_integrator} not supported')
 
-   if param.stat_freq > 0:
-      if param.grid_type == 'cartesian2d':
-         param.stat_freq = 0
-      else:
-         blockstats(Q, geom, topo, metric, mtrx, param, step)
+   output.step(Q, starting_step)
 
    t = param.dt * starting_step
    nb_steps = math.ceil(param.t_end / param.dt) - starting_step
 
+   step = starting_step
    while t < param.t_end:
       if t + param.dt > param.t_end:
          param.dt = param.t_end - t
@@ -191,20 +167,9 @@ def main(argv) -> int:
          Q[idx_rho_u2,:,:,:] = Q[idx_rho, :, :, :] * u2_contra
          Q[idx_rho_w,:,:,:]  = Q[idx_rho, :, :, :] * w_wind
 
-      if param.save_state_freq > 0 and step % param.save_state_freq == 0:
-         numpy.save(state_file_name(step), Q)
+      output.step(Q, step)
 
-      if param.stat_freq > 0 and step % param.stat_freq == 0:
-         blockstats(Q, geom, topo, metric, mtrx, param, step)
-
-      # Plot solution
-      if param.output_freq > 0:
-         if step % param.output_freq == 0:
-            if MPI.COMM_WORLD.rank == 0: print(f'=> Writing dynamic output for step {step}')
-            output_step(Q, geom, step, param)
-
-   if param.output_freq > 0:
-      output_finalize()
+   output.finalize()
 
    return MPI.COMM_WORLD.rank
 

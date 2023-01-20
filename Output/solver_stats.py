@@ -55,7 +55,7 @@ class OutputManager:
                precond_tol       float,
                kiops_dt_factor   float,
                num_mg_levels     int,
-               mg_smoothe_only   bool,
+               mg_solve_coarsest bool,
                num_pre_smoothe   int,
                num_post_smoothe  int,
                num_solver_it     int,
@@ -84,14 +84,14 @@ class OutputManager:
          (run_id, step_id, dg_order, num_elem_h, num_elem_v, dt,
          precond, precond_interp, precond_tol,
          kiops_dt_factor,
-         num_mg_levels, mg_smoothe_only, num_pre_smoothe, num_post_smoothe,
+         num_mg_levels, mg_solve_coarsest, num_pre_smoothe, num_post_smoothe,
          num_solver_it, solver_time, solver_flag)
          values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          returning results_param.entry_id;''',
          [self.run_id, self.step_id, p.nbsolpts, p.nb_elements_horizontal, p.nb_elements_vertical, p.dt,
           p.preconditioner, p.dg_to_fv_interp, p.precond_tolerance,
           p.kiops_dt_factor, p.num_mg_levels,
-          p.mg_smoothe_only, p.num_pre_smoothe, p.num_post_smoothe,
+          p.mg_solve_coarsest, p.num_pre_smoothe, p.num_post_smoothe,
           num_iter, time, flag])
 
       if self.run_id < 0:

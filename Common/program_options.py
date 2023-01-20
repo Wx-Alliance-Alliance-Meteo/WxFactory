@@ -44,6 +44,7 @@ class Configuration:
          self.starting_step = parser.getint('Time_integration', 'starting_step')
       except:
          self.starting_step = 0
+      self.starting_step = max(self.starting_step, 0)
 
       try:
          self.exponential_solver = parser.get('Time_integration', 'exponential_solver')

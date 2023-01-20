@@ -10,12 +10,11 @@ import numpy
 from typing import Callable, Union, Tuple
 from Common.parallel             import Distributed_World
 from Common.program_options      import Configuration
+from Geometry.geometry           import Geometry
 from Geometry.metric             import Metric, Metric_3d_topo
-from Geometry.cubed_sphere       import CubedSphere
-from Geometry.cartesian_2d_mesh  import Cartesian2d
 from Geometry.matrices           import DFR_operators
 
-def init_state_vars(geom: Union[CubedSphere, Cartesian2d], operators: DFR_operators, ptopo: Union[Distributed_World, None], param: Configuration) \
+def init_state_vars(geom: Geometry, operators: DFR_operators, ptopo: Union[Distributed_World, None], param: Configuration) \
       -> Tuple[numpy.ndarray, Topo, Union[Metric, Metric_3d_topo, None], Callable, Callable, Callable]:
    
    Q            = None
