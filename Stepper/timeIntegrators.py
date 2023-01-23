@@ -178,7 +178,6 @@ class Epi:
       self.init_substeps = init_substeps
 
    def step(self, Q: numpy.ndarray, dt: float):
-      # print('step')
       # If dt changes, discard saved value and redo initialization
       mpirank = mpi4py.MPI.COMM_WORLD.Get_rank()
       if self.dt and abs(self.dt - dt) > 1e-10:
@@ -378,7 +377,7 @@ class Ros2:
          self.preconditioner.prepare(dt, Q)
 
       t0 = time()
-      Qnew, local_error, num_iter, flag, residuals = fgmres(A, b, x0=Q_flat, tol=self.tol, preconditioner=self.preconditioner, verbose=False)
+      Qnew, local_error, num_iter, flag, residuals = fgmres(A, b, x0=Q_flat, tol=self.tol, restart=100, maxiter=None, preconditioner=self.preconditioner, verbose=False)
       t1 = time()
 
       write_solver_stats(num_iter, t1 - t0, flag, residuals)
@@ -503,9 +502,22 @@ class PartRosExp2:
       # num_pre_calls = 0
       # if self.preconditioner is not None: num_pre_calls = self.preconditioner.num_apply
       # print(f'gcrotmk converged at iteration {counter.nb_iter()*inner_m} using {counter.nb_iter()} restarts (and {num_pre_calls} preconditioner calls)')
-      print(f'fgmres converged at iteration {niter} using {-1} restarts')
+
+      t0 = time()
+      Qnew, local_error, num_iter, flag, residuals = fgmres(A, b, x0=Q_x0, tol=self.tol, preconditioner=self.preconditioner, verbose=False)
+      t1 = time()
+
+      write_solver_stats(num_iter, t1 - t0, flag, residuals)
+
+      if flag == 0:
+         print(f'fgmres converged at iteration {num_iter} to a solution with relative local error {local_error : .2e}')
+      else:
+         print(f'FGMRES stagnation/interruption at iteration {num_iter}, returning a solution with relative local error {local_error: .2e}')
+
 
       print(f'Elapsed time: exponential {time_exp:.3f} secs ; implicit {time_imp:.3f} secs')
+
+
 
       return numpy.reshape(Qnew, Q.shape)
 
