@@ -27,7 +27,8 @@ class MultigridLevel:
    pre_smoothe:      Callable[[LinearOperator, numpy.ndarray, numpy.ndarray], numpy.ndarray]
    post_smoothe:     Callable[[LinearOperator, numpy.ndarray, numpy.ndarray], numpy.ndarray]
    matrix_operator:  Callable[[numpy.ndarray], numpy.ndarray]
-   def __init__(self, param: Configuration, ptopo: Distributed_World, discretization: str, nb_elem_horiz: int, nb_elem_vert: int, source_order: int, target_order: int, ndim: int):
+   def __init__(self, param: Configuration, ptopo: Distributed_World, discretization: str, nb_elem_horiz: int,
+                nb_elem_vert: int, source_order: int, target_order: int, ndim: int):
 
       p = deepcopy(param)
       p.nb_elements_horizontal = nb_elem_horiz
@@ -46,16 +47,20 @@ class MultigridLevel:
       if self.param.verbose_precond:
          print(
             f'Grid level! nb_elem_horiz = {nb_elem_horiz}, nb_elem_vert = {nb_elem_vert} '
-            f' discr = {discretization}, source order = {source_order}, target order = {target_order}, nbsolpts = {p.nbsolpts}'
+            f' discr = {discretization}, source order = {source_order},'
+            f' target order = {target_order}, nbsolpts = {p.nbsolpts}'
             f' num_mg_levels: {p.num_mg_levels}'
+            f' exp radius: {p.exp_smoothe_spectral_radius}'
             # f' work ratio = {self.work_ratio}'
             )
 
       # Initialize problem for this level
       if p.grid_type == 'cubed_sphere':
-         self.geometry = CubedSphere(p.nb_elements_horizontal, p.nb_elements_vertical, p.nbsolpts, p.λ0, p.ϕ0, p.α0, p.ztop, ptopo, p)
+         self.geometry = CubedSphere(p.nb_elements_horizontal, p.nb_elements_vertical, p.nbsolpts, p.λ0, p.ϕ0, p.α0,
+                                     p.ztop, ptopo, p)
       elif p.grid_type == 'cartesian2d':
-         self.geometry = Cartesian2d((p.x0, p.x1), (p.z0, p.z1), p.nb_elements_horizontal, p.nb_elements_vertical, p.nbsolpts)
+         self.geometry = Cartesian2d((p.x0, p.x1), (p.z0, p.z1), p.nb_elements_horizontal, p.nb_elements_vertical,
+                                     p.nbsolpts)
 
       operators = DFR_operators(self.geometry, p.filter_apply, p.filter_order, p.filter_cutoff)
 
@@ -71,16 +76,18 @@ class MultigridLevel:
 
       if target_order > 0:
          interp_method         = 'bilinear' if discretization == 'fv' else 'lagrange'
-         self.interpolator     = Interpolator(discretization, source_order, discretization, target_order, interp_method, self.param.grid_type, self.ndim)
+         self.interpolator     = Interpolator(discretization, source_order, discretization, target_order, interp_method,
+                                              self.param.grid_type, self.ndim, verbose=self.param.verbose_precond)
          self.restrict         = lambda vec, op=self.interpolator, sh=field.shape: op(vec.reshape(sh))
          self.restricted_shape = self.restrict(field).shape
-         self.prolong          = lambda vec, op=self.interpolator, sh=self.restricted_shape: op(vec.reshape(sh), reverse=True)
+         self.prolong          = lambda vec, op=self.interpolator, sh=self.restricted_shape: \
+                                    op(vec.reshape(sh), reverse=True)
       else:
          self.restrict = lambda x: x
          self.prolong  = lambda x: x
 
       if param.mg_smoother == 'kiops':
-         self.pre_smoothe = functools.partial(kiops_smoothe, real_dt=param.dt, dt_factor=param.kiops_dt_factor) 
+         self.pre_smoothe = functools.partial(kiops_smoothe, real_dt=param.dt, dt_factor=param.kiops_dt_factor)
       elif param.mg_smoother == 'exp':
          # self.smoothe[level] = functools.partial(exp_smoothe, target_spectral_radius=4, global_dt=param.dt, niter=6)
          self.pre_smoothe = functools.partial(exp_smoothe,
@@ -92,16 +99,12 @@ class MultigridLevel:
 
       self.post_smoothe = self.pre_smoothe
 
-   def prepare(self, dt: float, field: numpy.ndarray, prev_field:Optional[numpy.ndarray] = None) -> tuple[numpy.ndarray, Optional[numpy.ndarray]]:
-
-      n = field.size
+   def prepare(self, dt: float, field: numpy.ndarray, prev_field:Optional[numpy.ndarray] = None) \
+         -> tuple[numpy.ndarray, Optional[numpy.ndarray]]:
 
       ##########################################
       # Matvec function of the system to solve
-      if self.param.time_integrator == 'ros2':
-         self.matrix_operator = functools.partial(matvec_rat, dt=dt, Q=field, rhs=self.rhs_operator(field), rhs_handle=self.rhs_operator)
-
-      elif self.param.time_integrator in ['rosexp2', 'partrosexp2']:
+      if self.param.time_integrator in ['ros2', 'rosexp2', 'partrosexp2', 'strang_epi2_ros2', 'strang_ros2_epi2']:
          self.matrix_operator = functools.partial(matvec_rat, dt=dt, Q=field, rhs=self.rhs_operator(field), rhs_handle=self.rhs_operator)
 
       elif self.param.time_integrator == 'crank_nicolson':
@@ -194,7 +197,7 @@ class Multigrid:
          print(f'orders: {self.orders}, h elem counts: {self.elem_counts_hori}, v elem counts: {self.elem_counts_vert}')
 
       def extended_list(list, target_len):
-         diff_len = target_len + 1 - len(list)
+         diff_len = target_len - len(list)
          new_list = deepcopy(list)
          if diff_len > 0:
             new_list.extend([list[-1] for _ in range(diff_len)])
@@ -224,9 +227,13 @@ class Multigrid:
       self.get_solution_back   = self.initial_interpolate
       if discretization == 'fv':
          if fv_only:
-            self.initial_interpolator = Interpolator('dg', param.initial_nbsolpts, 'fv', param.initial_nbsolpts, param.dg_to_fv_interp, param.grid_type, self.ndim)
+            self.initial_interpolator = Interpolator(                                                                \
+               'dg', param.initial_nbsolpts, 'fv', param.initial_nbsolpts, param.dg_to_fv_interp, param.grid_type,   \
+               self.ndim, verbose=self.verbose)
          else:
-            self.initial_interpolator = Interpolator('dg', param.initial_nbsolpts, 'fv', self.max_num_fv_elems, param.dg_to_fv_interp, param.grid_type, self.ndim)
+            self.initial_interpolator = Interpolator(                                                                \
+               'dg', param.initial_nbsolpts, 'fv', self.max_num_fv_elems, param.dg_to_fv_interp, param.grid_type,    \
+               self.ndim, verbose=self.verbose)
 
          self.big_shape = self.levels[0].shape
 

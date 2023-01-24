@@ -7,7 +7,7 @@ class Configuration:
       parser = ConfigParser()
       parser.read(cfg_file)
 
-      if (noisy):
+      if noisy:
          print('\nLoading config: ' + cfg_file)
          print(parser._sections)
          print(' ')
@@ -42,7 +42,7 @@ class Configuration:
 
       try:
          self.starting_step = parser.getint('Time_integration', 'starting_step')
-      except:
+      except (NoOptionError,NoSectionError):
          self.starting_step = 0
       self.starting_step = max(self.starting_step, 0)
 
@@ -71,6 +71,33 @@ class Configuration:
       except (NoOptionError,NoSectionError):
          self.ark_solver_imp = 'ARK3(2)4L[2]SA-ESDIRK'
 
+      ################################
+      # Spatial discretization
+      self.nbsolpts               = parser.getint('Spatial_discretization', 'nbsolpts')
+      self.nb_elements_horizontal = parser.getint('Spatial_discretization', 'nb_elements_horizontal')
+      self.initial_nbsolpts       = self.nbsolpts
+
+      try:
+         self.nb_elements_vertical   = parser.getint('Spatial_discretization', 'nb_elements_vertical')
+      except (NoOptionError, NoSectionError):
+         self.nb_elements_vertical   = 1
+
+      try:
+         self.filter_apply     = parser.getint('Spatial_discretization', 'filter_apply') == 1
+      except (NoOptionError, NoSectionError):
+         self.filter_apply     = False
+      try:
+         self.filter_order     = parser.getint('Spatial_discretization', 'filter_order')
+      except (NoOptionError, NoSectionError):
+         if self.filter_apply:
+            self.filter_order  = 16
+         else:
+            self.filter_order  = 0
+      try:
+         self.filter_cutoff    = parser.getfloat('Spatial_discretization', 'filter_cutoff')
+      except (NoOptionError, NoSectionError):
+         self.filter_cutoff    = 0
+
       ###############################
       # Grid
       try:
@@ -80,9 +107,8 @@ class Configuration:
 
       if self.discretization == 'fv':
          if self.nbsolpts != 1:
-            if (noisy):
-               print('The number of solution of solution points in configuration file is inconsistent with a finite volume discretization')
-            exit(0)
+            raise ValueError(f'The number of solution of solution points ({self.nbsolpts}) in configuration file'
+                              ' is inconsistent with a finite volume discretization')
 
       possible_grid_types = ['cubed_sphere', 'cartesian2d']
       try:
@@ -90,7 +116,7 @@ class Configuration:
          if self.grid_type not in possible_grid_types:
             print(f'Selected grid type "{self.grid_type}" is not valid. Possible values are {possible_grid_types}')
             raise ValueError
-      except:
+      except (NoOptionError, NoSectionError):
          self.grid_type = 'cubed_sphere'
 
       try:
@@ -126,40 +152,14 @@ class Configuration:
       except(NoOptionError, NoSectionError):
          pass
 
-      ################################
-      # Spatial discretization
-      self.nbsolpts               = parser.getint('Spatial_discretization', 'nbsolpts')
-      self.nb_elements_horizontal = parser.getint('Spatial_discretization', 'nb_elements_horizontal')
-      self.initial_nbsolpts       = self.nbsolpts
-
-      try:
-         self.nb_elements_vertical   = parser.getint('Spatial_discretization', 'nb_elements_vertical')
-      except (NoOptionError):
-         self.nb_elements_vertical   = 1
-
-      try:
-         self.filter_apply     = parser.getint('Spatial_discretization', 'filter_apply') == 1
-      except (NoOptionError):
-         self.filter_apply     = False
-      try:
-         self.filter_order     = parser.getint('Spatial_discretization', 'filter_order')
-      except (NoOptionError):
-         if self.filter_apply:
-            self.filter_order  = 16
-         else:
-            self.filter_order  = 0
-      try:
-         self.filter_cutoff    = parser.getfloat('Spatial_discretization', 'filter_cutoff')
-      except (NoOptionError):
-         self.filter_cutoff    = 0
-
       ###################
       # Preconditioning
       available_preconditioners = ['none', 'fv', 'fv-mg', 'p-mg']
       try:
          self.preconditioner = parser.get('Preconditioning', 'preconditioner').lower()
          if self.preconditioner not in available_preconditioners:
-            print(f'Warning: chosen preconditioner {self.preconditioner} is not within available preconditioners. Possible values are {available_preconditioners}')
+            print(f'Warning: chosen preconditioner {self.preconditioner} is not within available preconditioners.'
+                  f' Possible values are {available_preconditioners}')
             self.preconditioner = available_preconditioners[0]
       except (NoOptionError, NoSectionError):
          self.preconditioner = available_preconditioners[0]
@@ -189,24 +189,26 @@ class Configuration:
       self.possible_smoothers = ['exp', 'kiops']
       try:
          self.mg_smoother = parser.get('Preconditioning', 'mg_smoother')
-         if not self.mg_smoother in self.possible_smoothers:
-            print(f'Warning: chosen multigrid smoother {self.mg_smoother} is not within available smoothers. Possible values are {self.possible_smoothers}')
+         if self.mg_smoother not in self.possible_smoothers:
+            print(f'Warning: chosen multigrid smoother {self.mg_smoother} is not within available smoothers.'
+                  f' Possible values are {self.possible_smoothers}')
             self.mg_smoother = self.possible_smoothers[0]
       except (NoOptionError, NoSectionError):
          self.mg_smoother = self.possible_smoothers[0]
 
       try:
-         self.exp_smoothe_spectral_radii = [parser.getfloat('Preconditioning', 'exp_smoothe_spectral_radius')]
+         self.exp_smoothe_spectral_radii = [parser.getfloat('Preconditioning', 'exp_smoothe_spectral_radii')]
       except ValueError:
-         self.exp_smoothe_spectral_radii = [float(x) for x in json.loads(parser.get('Preconditioning', 'exp_smoothe_spectral_radius'))]
+         self.exp_smoothe_spectral_radii = [float(x) for x in \
+            json.loads(parser.get('Preconditioning', 'exp_smoothe_spectral_radii'))]
       except (NoOptionError, NoSectionError):
          self.exp_smoothe_spectral_radii = [2.0]
       self.exp_smoothe_spectral_radius = self.exp_smoothe_spectral_radii[0]
 
       try:
-         self.exp_smoothe_nb_iters = [parser.getint('Preconditioning', 'exp_smoothe_nb_iter')]
+         self.exp_smoothe_nb_iters = [parser.getint('Preconditioning', 'exp_smoothe_nb_iters')]
       except ValueError:
-         self.exp_smoothe_nb_iters = [int(x) for x in json.loads(parser.get('Preconditioning', 'exp_smoothe_nb_iter'))]
+         self.exp_smoothe_nb_iters = [int(x) for x in json.loads(parser.get('Preconditioning', 'exp_smoothe_nb_iters'))]
       except (NoOptionError, NoSectionError):
          self.exp_smoothe_nb_iters = [4]
       self.exp_smoothe_nb_iter = self.exp_smoothe_nb_iters[0]
@@ -247,8 +249,9 @@ class Configuration:
       try:
          ok_interps = ['l2-norm', 'lagrange']
          self.dg_to_fv_interp = parser.get('Preconditioning', 'dg_to_fv_interp')
-         if not self.dg_to_fv_interp in ok_interps:
-            print(f'ERROR: invalid interpolation method for DG to FV conversion ({self.dg_to_fv_interp}). Should pick one of {ok_interps}. Choosing "lagrange" as default.')
+         if self.dg_to_fv_interp not in ok_interps:
+            print(f'ERROR: invalid interpolation method for DG to FV conversion ({self.dg_to_fv_interp}).'
+                  f' Should pick one of {ok_interps}. Choosing "lagrange" as default.')
             self.dg_to_fv_interp = 'lagrange'
       except (NoOptionError, NoSectionError):
          self.dg_to_fv_interp = 'lagrange'
@@ -273,12 +276,12 @@ class Configuration:
 
       try:
          self.output_dir = parser.get('Output_options', 'output_dir')
-      except:
+      except (NoOptionError, NoSectionError):
          self.output_dir = 'results'
 
       try:
          self.output_file = f'{self.output_dir}/{parser.get("Output_options", "output_file")}.nc'
-      except:
+      except (NoOptionError, NoSectionError):
          self.output_file = f'{self.output_dir}/out.nc'
 
    def __str__(self):

@@ -174,7 +174,16 @@ def get_basis_points(type: str, order: int, include_boundary: bool = False):
 
 class Interpolator:
    elem_interp: numpy.ndarray
-   def __init__(self, origin_type: str, origin_order: int, dest_type: str, dest_order: int, interp_type: str, grid_type: str, ndim: int, include_boundary: bool = False):
+   def __init__(self,
+                origin_type: str,
+                origin_order: int,
+                dest_type: str,
+                dest_order: int,
+                interp_type: str,
+                grid_type: str,
+                ndim: int,
+                include_boundary: bool = False,
+                verbose: bool = False):
       origin_points = get_basis_points(origin_type, origin_order, include_boundary)
       dest_points = get_basis_points(dest_type, dest_order, include_boundary)
 
@@ -226,10 +235,11 @@ class Interpolator:
             self.velocity_reverse_interp = numpy.linalg.pinv(self.velocity_interp)
 
       # print(f'interpolator: origin type/order: {origin_type}/{origin_order}, dest type/order: {dest_type}/{dest_order}')
-      print(f'elem_interp:\n{self.elem_interp}')
-      print(f'reverse:\n{self.reverse_interp}')
-      print(f'vel interp:\n{self.velocity_interp}')
-      print(f'vel reverse interp:\n{self.velocity_reverse_interp}')
+      if verbose:
+         print(f'elem_interp:\n{self.elem_interp}')
+         print(f'reverse:\n{self.reverse_interp}')
+         print(f'vel interp:\n{self.velocity_interp}')
+         print(f'vel reverse interp:\n{self.velocity_reverse_interp}')
 
    def __call__(self, fields: numpy.ndarray, reverse: bool = False):
 

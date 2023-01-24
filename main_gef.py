@@ -110,10 +110,10 @@ def main(argv) -> int:
       stepper = Imex2(rhs_explicit, rhs_implicit, param.tolerance)
    elif param.time_integrator.lower() == 'strang_epi2_ros2':
       stepper1 = Epi(2, rhs_explicit, param.tolerance, exponential_solver=param.exponential_solver)
-      stepper2 = Ros2(rhs_implicit, param.tolerance)
+      stepper2 = Ros2(rhs_implicit, param.tolerance, preconditioner=preconditioner)
       stepper = StrangSplitting(stepper1, stepper2)
    elif param.time_integrator.lower() == 'strang_ros2_epi2':
-      stepper1 = Ros2(rhs_implicit, param.tolerance)
+      stepper1 = Ros2(rhs_implicit, param.tolerance, preconditioner=preconditioner)
       stepper2 = Epi(2, rhs_explicit, param.tolerance, exponential_solver=param.exponential_solver)
       stepper = StrangSplitting(stepper1, stepper2)
    elif param.time_integrator.lower() == 'rosexp2':

@@ -7,10 +7,15 @@ except:
    sqlite_available = False
    print(f'No sqlite, won\'t be able to print solver stats')
 
+from Common.program_options import Configuration
+
 class OutputManager:
+   param: Configuration
+   db_connection: sqlite3.Connection
+   db_cursor: sqlite3.Cursor
    def __init__(self) -> None:
       self.db_name   = 'test_result.db'
-      self.param     = None
+      # self.param     = None
       self.is_writer = False
 
       self.run_id    = -1
@@ -19,7 +24,7 @@ class OutputManager:
       self.db_connection = None
       self.db_cursor     = None
 
-   def prepare_output(self, param):
+   def prepare_output(self, param: Configuration):
       self.param = param
 
       self.is_writer = MPI.COMM_WORLD.rank == 0
@@ -60,7 +65,8 @@ class OutputManager:
                num_post_smoothe  int,
                num_solver_it     int,
                solver_time       float,
-               solver_flag       int
+               solver_flag       int,
+               smoother_radii    varchar(128)
             );
          ''')
          self.db_cursor.execute('''
@@ -85,14 +91,15 @@ class OutputManager:
          precond, precond_interp, precond_tol,
          kiops_dt_factor,
          num_mg_levels, mg_solve_coarsest, num_pre_smoothe, num_post_smoothe,
-         num_solver_it, solver_time, solver_flag)
-         values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         num_solver_it, solver_time, solver_flag, smoother_radii)
+         values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          returning results_param.entry_id;''',
          [self.run_id, self.step_id, p.nbsolpts, p.nb_elements_horizontal, p.nb_elements_vertical, p.dt,
           p.preconditioner, p.dg_to_fv_interp, p.precond_tolerance,
           p.kiops_dt_factor, p.num_mg_levels,
           p.mg_solve_coarsest, p.num_pre_smoothe, p.num_post_smoothe,
-          num_iter, time, flag])
+          num_iter, time, flag,
+          str(p.exp_smoothe_spectral_radii)])
 
       if self.run_id < 0:
          self.run_id = self.db_cursor.fetchall()[0][0]
