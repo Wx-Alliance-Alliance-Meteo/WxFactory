@@ -17,7 +17,6 @@ from Geometry.geometry          import Geometry
 from Geometry.matrices          import DFR_operators
 from Init.dcmip                 import dcmip_T11_update_winds, dcmip_T12_update_winds
 from Init.init_state_vars       import init_state_vars
-from Output.blockstats          import blockstats
 from Output.output_manager      import OutputManager
 from Precondition.multigrid     import Multigrid
 from Stepper.timeIntegrators    import Epi, EpiStiff, SRERK, Tvdrk3, Ros2, Euler1, Imex2, StrangSplitting, \

@@ -1,6 +1,7 @@
 
 from Init.initialize          import initialize_cartesian2d, initialize_euler, initialize_sw, Topo
 from Rhs.rhs_bubble           import rhs_bubble
+from Rhs.rhs_bubble_fv        import rhs_bubble_fv
 from Rhs.rhs_bubble_implicit  import rhs_bubble_implicit
 from Rhs.rhs_euler            import rhs_euler
 from Rhs.rhs_sw               import rhs_sw
@@ -33,7 +34,10 @@ def init_state_vars(geom: Geometry, operators: DFR_operators, ptopo: Union[Distr
 
    elif param.equations == 'euler' and param.grid_type == 'cartesian2d':
       Q = initialize_cartesian2d(geom, param)
-      rhs_handle = lambda q: rhs_bubble(q, geom, operators, param.nbsolpts, param.nb_elements_horizontal, param.nb_elements_vertical)
+      if param.discretization == 'dg':
+         rhs_handle = lambda q: rhs_bubble(q, geom, operators, param.nbsolpts, param.nb_elements_horizontal, param.nb_elements_vertical)
+      elif param.discretization == 'fv':
+         rhs_handle = lambda q: rhs_bubble_fv(q, geom, operators, param.nbsolpts, param.nb_elements_horizontal, param.nb_elements_vertical)
       rhs_implicit = lambda q: rhs_bubble_implicit(q, geom, operators, param.nbsolpts, param.nb_elements_horizontal, param.nb_elements_vertical)
       rhs_explicit = lambda q: rhs_handle(q) - rhs_implicit(q)
 
