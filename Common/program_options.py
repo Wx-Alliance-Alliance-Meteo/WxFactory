@@ -37,7 +37,7 @@ class Configuration:
       # Time integration
       self.dt               = parser.getfloat('Time_integration', 'dt')
       self.t_end            = parser.getint('Time_integration', 't_end')
-      self.time_integrator  = parser.get('Time_integration', 'time_integrator')
+      self.time_integrator  = parser.get('Time_integration', 'time_integrator').lower()
       self.tolerance        = parser.getfloat('Time_integration', 'tolerance')
 
       try:
