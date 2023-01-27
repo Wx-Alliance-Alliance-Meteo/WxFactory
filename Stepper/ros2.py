@@ -25,17 +25,20 @@ class Ros2(Stepper):
       b = A(Q_flat) + rhs.flatten() * dt
 
       t0 = time()
-      Qnew, local_error, num_iter, flag, residuals = fgmres(
-         A, b, x0=Q_flat, tol=self.tol, restart=100, maxiter=None, preconditioner=self.preconditioner, verbose=False)
-      t1 = time()
+#      Qnew, local_error, num_iter, flag, residuals = fgmres(
+#         A, b, x0=Q_flat, tol=self.tol, restart=100, maxiter=None, preconditioner=self.preconditioner, verbose=False)
 
+      from Solver.gcrot import gcrot
+      Qnew, local_error, num_iter, flag, residuals = gcrot(A, b, x0=Q_flat, tol=self.tol)
+      t1 = time()
       write_solver_stats(num_iter, t1 - t0, flag, residuals)
+      local_error = numpy.linalg.norm(b-A@Qnew)/numpy.linalg.norm(b)
 
       if flag == 0:
-         print(f'FGMRES converged at iteration {num_iter} in {t1 - t0:4.1f} s to a solution with'
-               f' relative local error {local_error : .2e}')
+         print(f'GCROT converged at iteration {num_iter} in {t1 - t0:4.1f} s to a solution with'
+               f' relative residual norm {local_error : .2e}')
       else:
-         print(f'FGMRES stagnation/interruption at iteration {num_iter} in {t1 - t0:4.1f} s, returning a solution with'
+         print(f'GCROT stagnation/interruption at iteration {num_iter} in {t1 - t0:4.1f} s, returning a solution with'
                f' relative local error {local_error: .2e}')
 
       return numpy.reshape(Qnew, Q.shape)
