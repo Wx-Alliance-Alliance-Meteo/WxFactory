@@ -202,6 +202,20 @@ def kiops_smoothe(A, b, x, real_dt, dt_factor):
    return result
 
 
+def rk1_smoothing(A, b, x, h):
+   # print(f'b:\n{b}')
+   # print(f'x:\n{x}')
+   if x is None:
+      x = h * b
+   else:
+      x += h * (b - A(x))
+
+   # print(f'A: \n{A}')
+   # print(f'x (after):\n{x}')
+
+   return x
+
+
 def rk_smoothing(A, b, x, h):
    # t0 = time()
 

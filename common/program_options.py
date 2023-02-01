@@ -186,7 +186,7 @@ class Configuration:
       except (NoOptionError, NoSectionError):
          self.num_post_smoothe = 1
 
-      self.possible_smoothers = ['exp', 'kiops']
+      self.possible_smoothers = ['exp', 'kiops', 'erk3', 'erk1']
       try:
          self.mg_smoother = parser.get('Preconditioning', 'mg_smoother')
          if self.mg_smoother not in self.possible_smoothers:
@@ -255,6 +255,11 @@ class Configuration:
             self.dg_to_fv_interp = 'lagrange'
       except (NoOptionError, NoSectionError):
          self.dg_to_fv_interp = 'lagrange'
+
+      try:
+         self.pseudo_cfl = parser.getfloat('Preconditioning', 'pseudo_cfl')
+      except (NoOptionError, NoSectionError):
+         self.pseudo_cfl = 1.0
 
       ###############################
       # Output options

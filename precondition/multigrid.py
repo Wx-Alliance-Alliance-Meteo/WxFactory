@@ -1,32 +1,42 @@
 import functools
-import numpy
+from copy         import deepcopy
+from time         import time
+from typing       import Callable, Optional, Union
 
-from copy import deepcopy
-from time import time
+import numpy
 from scipy.sparse.linalg import LinearOperator
 
+from common.definitions          import idx_2d_rho, idx_2d_rho_u, idx_2d_rho_w
 from common.interpolation        import Interpolator
 from geometry.cartesian_2d_mesh  import Cartesian2d
 from geometry.cubed_sphere       import CubedSphere
 from geometry.matrices           import DFR_operators
 from init.init_state_vars        import init_state_vars
-from precondition.smoother       import kiops_smoothe, exponential as exp_smoothe, rk_smoothing as rk_smoothe
-from solvers.linsol               import fgmres, global_norm
-from solvers.matvec               import matvec_rat
-from solvers.nonlin               import KrylovJacobian
+from precondition.smoother       import kiops_smoothe, exponential as exp_smoothe, rk_smoothing, rk1_smoothing
+from rhs.rhs_selector            import rhs_selector
+from solvers.linsol              import fgmres, global_norm
+from solvers.matvec              import matvec_rat
+from solvers.nonlin              import KrylovJacobian
 
 # For type hints
-from typing                 import Callable, Optional, Union
 from common.parallel        import Distributed_World
 from common.program_options import Configuration
 
 
 class MultigridLevel:
+   """
+   Class that contains all the parameters and operators describing one level of the multrigrid algorithm
+   """
+
+   # Type hints
    restrict:         Callable[[numpy.ndarray], numpy.ndarray]
    prolong:          Callable[[numpy.ndarray], numpy.ndarray]
    pre_smoothe:      Callable[[LinearOperator, numpy.ndarray, numpy.ndarray], numpy.ndarray]
    post_smoothe:     Callable[[LinearOperator, numpy.ndarray, numpy.ndarray], numpy.ndarray]
    matrix_operator:  Callable[[numpy.ndarray], numpy.ndarray]
+   pseudo_dt:        float
+   jacobian:         KrylovJacobian
+
    def __init__(self, param: Configuration, ptopo: Distributed_World, discretization: str, nb_elem_horiz: int,
                 nb_elem_vert: int, source_order: int, target_order: int, ndim: int):
 
@@ -64,7 +74,8 @@ class MultigridLevel:
 
       operators = DFR_operators(self.geometry, p.filter_apply, p.filter_order, p.filter_cutoff)
 
-      field, _, self.metric, self.rhs_operator, _, _ = init_state_vars(self.geometry, operators, ptopo, self.param)
+      field, topo, self.metric = init_state_vars(self.geometry, operators, self.param)
+      self.rhs_operator, _, _ = rhs_selector(self.geometry, operators, self.metric, topo, ptopo, self.param)
       if self.param.verbose_precond: print(f'field shape: {field.shape}')
       self.shape = field.shape
 
@@ -86,6 +97,7 @@ class MultigridLevel:
          self.restrict = lambda x: x
          self.prolong  = lambda x: x
 
+      self.pre_smoothe = lambda A, b, x: x
       if param.mg_smoother == 'kiops':
          self.pre_smoothe = functools.partial(kiops_smoothe, real_dt=param.dt, dt_factor=param.kiops_dt_factor)
       elif param.mg_smoother == 'exp':
@@ -95,31 +107,52 @@ class MultigridLevel:
                                        global_dt=param.dt,
                                        niter=self.param.exp_smoothe_nb_iter)
          if self.param.verbose_precond: print(f'spectral radius for level = {self.param.exp_smoothe_spectral_radius}')
-         # self.post_smoothe[level] = functools.partial(exp_smoothe, target_spectral_radius=2.2, global_dt=param.dt, niter=4)
 
       self.post_smoothe = self.pre_smoothe
 
    def prepare(self, dt: float, field: numpy.ndarray, prev_field:Optional[numpy.ndarray] = None) \
          -> tuple[numpy.ndarray, Optional[numpy.ndarray]]:
+      """ Initialize structures and data that will be used for preconditioning during the ongoing time step """
+
+      if self.param.mg_smoother in ['erk1', 'erk3']:
+         cfl       = self.param.pseudo_cfl
+         factor    = 1.0 / (self.ndim * (2 * self.param.nbsolpts + 1))
+         delta_min = abs(1.- self.geometry.solutionPoints[-1]) * min(self.geometry.Δx, self.geometry.Δz)
+         speed_max = numpy.maximum( abs( 343. +  field[idx_2d_rho_u,:,:] /  field[idx_2d_rho,:,:] ),
+                                    abs( 343. +  field[idx_2d_rho_w,:,:] /  field[idx_2d_rho,:,:]) )
+
+         self.pseudo_dt = numpy.amin(delta_min * factor / speed_max) * cfl / dt
+         if self.param.verbose_precond:
+            print(f'pseudo_dt = {self.pseudo_dt}')
+
+         if self.param.mg_smoother == 'erk1':
+            self.pre_smoothe  = functools.partial(rk1_smoothing, h=self.pseudo_dt)
+         elif self.param.mg_smoother == 'erk3':
+            self.pre_smoothe  = functools.partial(rk_smoothing, h=self.pseudo_dt)
+
+         self.post_smoothe = self.pre_smoothe
 
       ##########################################
       # Matvec function of the system to solve
       if self.param.time_integrator in ['ros2', 'rosexp2', 'partrosexp2', 'strang_epi2_ros2', 'strang_ros2_epi2']:
-         self.matrix_operator = functools.partial(matvec_rat, dt=dt, Q=field, rhs=self.rhs_operator(field), rhs_handle=self.rhs_operator)
+         self.matrix_operator = functools.partial(matvec_rat, dt=dt, Q=field, rhs=self.rhs_operator(field),
+                                                  rhs_handle=self.rhs_operator)
 
       elif self.param.time_integrator == 'crank_nicolson':
          cn_fun = CrankNicolsonFunFactory(field, dt, self.rhs_operator)
 
          # self.cn_fun = lambda Q_plus: (Q_plus - self.fv_field) / dt - 0.5 * ( self.fv_rhs_fun(Q_plus) + self.fv_rhs_fun(self.fv_field) )
          # self.cn_fun = cn_fun
-         self.jacobian = KrylovJacobian(numpy.ravel(field), numpy.ravel(cn_fun(field)), cn_fun, fgmres_restart=10, fgmres_maxiter=1, fgmres_precond=None)
+         self.jacobian = KrylovJacobian(numpy.ravel(field), numpy.ravel(cn_fun(field)), cn_fun, fgmres_restart=10,
+                                        fgmres_maxiter=1, fgmres_precond=None)
          self.matrix_operator = self.jacobian.op
 
       elif self.param.time_integrator == 'bdf2':
          if prev_field is None:
             raise ValueError(f'Need to specify Q_prev when using BDF2')
          nonlin_fun = Bdf2FunFactory(field, prev_field, dt, self.rhs_operator)
-         self.jacobian = KrylovJacobian(numpy.ravel(field), numpy.ravel(nonlin_fun(field)), nonlin_fun, fgmres_restart=10, fgmres_maxiter=1, fgmres_precond=None)
+         self.jacobian = KrylovJacobian(numpy.ravel(field), numpy.ravel(nonlin_fun(field)), nonlin_fun,
+               fgmres_restart=10, fgmres_maxiter=1, fgmres_precond=None)
          self.matrix_operator = self.jacobian.op
 
       else:

@@ -1,25 +1,29 @@
 import math
+from time import time
+import sys
+from typing import Callable
+
 import mpi4py
 import numpy
 import scipy
 import scipy.sparse.linalg
-from time import time
-import sys
-
 
 def ortho_1_sync_igs(Q, R, T, K, j):
    """Orthonormalization process that only requires a single synchronization step.
 
-   This processes row j of matrix Q (starting from 1) so that the first j rows are orthogonal, and the first (j-1) rows are orthonormal.
+   This processes row j of matrix Q (starting from 1) so that the first j rows are orthogonal, and the first (j-1)
+   rows are orthonormal.
    It normalizes row j-1 of matrix Q during that process.
 
    Arguments:
-      Q       -- The matrix to orthogonalize. We assume that the first (j-1) columns (or is it j-2?) of that matrix are already orthonormal
+      Q       -- The matrix to orthogonalize. We assume that the first (j-1) columns (or is it j-2?) of that matrix
+                 are already orthonormal
       R, T, K -- Data from previous iterations of the orthonormalization process (?)
-      j       -- Current number of vectors in the Kyrlov space. We orthogonalize the j^th vector (starting from 1) with the previous ones.
+      j       -- Current number of vectors in the Kyrlov space. We orthogonalize the j^th vector (starting from 1)
+                 with the previous ones.
                  _The matrices may be larger than that, so we can't rely on *.shape()_
    """
-   if j < 2: return
+   if j < 2: return -1.0
 
    local_tmp = Q[:j, :] @ Q[j-2:j, :].T     # Q multiplied by its own last 2 rows (up to j)
    global_tmp = mpi4py.MPI.COMM_WORLD.allreduce(local_tmp) # Expensive step on multi-node execution

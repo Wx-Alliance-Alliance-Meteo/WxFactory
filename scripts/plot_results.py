@@ -74,13 +74,13 @@ def extract_results(order: int, num_elem_h: int, num_elem_v: int, dt: int) \
          select *, avg(solver_time) as step_time, avg(num_solver_it) as step_it
          from ({base_subtable_query})
          group by {{columns}}, step_id
-         order by num_mg_levels, mg_solve_coarsest, kiops_dt_factor, (num_pre_smoothe + num_post_smoothe)
+         order by num_mg_levels, mg_solve_coarsest, kiops_dt_factor, (num_pre_smoothe + num_post_smoothe), step_id
       '''.strip().format(columns = ', '.join(columns), precond_condition = precond_condition)
 
       # Query to compute statistics from multiple time steps for each set of precondtioner parameters that
       # was found in the subtable (according to the given columns)
       base_param_query = f'''
-         select {{columns}}, group_concat(step_time), avg(step_time), stdev(step_time), avg(step_it), stdev(step_it)
+         select {{columns}}, group_concat(step_id), group_concat(step_time), avg(step_time), stdev(step_time), avg(step_it), stdev(step_it)
          from ({time_per_step_query})
          group by {{columns}}
          order by num_mg_levels, mg_solve_coarsest, kiops_dt_factor, (num_pre_smoothe + num_post_smoothe)
@@ -114,6 +114,7 @@ def extract_results(order: int, num_elem_h: int, num_elem_v: int, dt: int) \
          set_result = {}
          for i, c in enumerate(columns):
             set_result[c] = subset[i]
+         set_result['step_ids']      = np.array([int(x) for x in subset[-6].split(',')])
          set_result['time_per_step'] = np.array([float(x) for x in subset[-5].split(',')])
          set_result['time_avg']      = subset[-4]
          set_result['time_stdev']    = subset[-3]
@@ -124,29 +125,29 @@ def extract_results(order: int, num_elem_h: int, num_elem_v: int, dt: int) \
 
          results.append(set_result)
 
-         print(f'time per step: {set_result["time_per_step"]}')
+         # print(f'time per step: {set_result["time_per_step"]}')
 
       return results
 
    t0 = time()
-   no_precond = get_single_precond_results(['precond'], 'precond = "none"')
+   no_precond = get_single_precond_results(['solver_tol'], 'precond = "none"')
 
    no_precond_time = no_precond[0]['time_avg']
-   print(f'precond avg = {no_precond_time}')
+   # print(f'precond avg = {no_precond_time}')
 
    t1 = time()
-   fv_ref = get_single_precond_results(['precond_tol'], f'precond = "fv" AND precond_tol > 1e-2')
+   fv_ref = get_single_precond_results(['solver_tol', 'precond_tol'], f'precond = "fv" AND precond_tol > 1e-2')
 
    t2 = time()
    p_mg_results = get_single_precond_results(
-      ['precond_interp', 'num_mg_levels', 'kiops_dt_factor', 'mg_solve_coarsest', 'precond_tol',
+      ['solver_tol', 'precond_interp', 'num_mg_levels', 'kiops_dt_factor', 'mg_solve_coarsest', 'precond_tol',
        'num_pre_smoothe', 'num_post_smoothe'],
       f'precond = "p-mg"'
    )
 
    t3 = time()
    fv_mg_results = get_single_precond_results(
-      ['precond_interp', 'num_mg_levels', 'kiops_dt_factor', 'mg_solve_coarsest', 'precond_tol',
+      ['solver_tol', 'precond_interp', 'num_mg_levels', 'kiops_dt_factor', 'mg_solve_coarsest', 'precond_tol',
        'num_pre_smoothe', 'num_post_smoothe'],
       f'precond = "fv-mg"'
    )
@@ -158,6 +159,7 @@ def extract_results(order: int, num_elem_h: int, num_elem_v: int, dt: int) \
    return no_precond, fv_ref, p_mg_results, fv_mg_results
 
 
+main_linestyles = [None, ':', None, ':']
 mg_linestyles = [None, '--', '-.', ':', None, '--', '-.', ':']
 # smoothings_linestyles = [':', '-.', '--', None]
 smoothings_linestyles = [None, (0, (1, 4)), (0, (1, 2)), (0, (3, 5, 1, 5)), (0, (3, 1, 1, 1)), (0, (5, 3)),
@@ -365,17 +367,19 @@ def plot_time_per_step(no_precond, fv_ref, p_mg, fv_mg, size):
    """
    fig, ax = plt.subplots(1, 1)
 
-   for _, data in enumerate(no_precond):
-      ax.plot(data['time_per_step'][:], color='black', label=f'No precond')
+   for i, data in enumerate(no_precond):
+      ax.plot(data['step_ids'][:], data['time_per_step'][:],
+              color='black', linestyle=main_linestyles[i],
+              label=f'No precond, solver tol {data["solver_tol"]}')
 
-   for _, data in enumerate(fv_ref):
-      ax.plot(data['time_per_step'][:], color=ref_colors[0], label=f'Ref precond, tol {data["precond_tol"]:.0e}')
+   for i, data in enumerate(fv_ref):
+      ax.plot(data['time_per_step'][:], color=ref_colors[i], label=f'Ref precond, tol {data["precond_tol"]:.0e}')
 
-   for _, data in enumerate(p_mg):
-      ax.plot(data['time_per_step'][:], color=mg_colors[0], label=f'p-MG precond')
+   for i, data in enumerate(p_mg):
+      ax.plot(data['time_per_step'][:], color=mg_colors[i], linestyle=mg_linestyles[0], label=f'p-MG precond')
 
-   for _, data in enumerate(fv_mg):
-      ax.plot(data['time_per_step'][:], color=mg_colors[1], label=f'FV-MG precond')
+   for i, data in enumerate(fv_mg):
+      ax.plot(data['time_per_step'][:], color=mg_colors[i], label=f'solver tol {data["solver_tol"]}, FV-MG precond')
 
    timestamp_no_prec = [ \
       79654.30, 79708.78, 79779.66, 79847.73, 79915.75, 79983.20, 80050.10, 80116.78, 80182.95, 80249.07,
@@ -393,7 +397,7 @@ def plot_time_per_step(no_precond, fv_ref, p_mg, fv_mg, size):
                      for i in range(len(timestamp_no_prec) - 1)]
    time_prec = [float(timestamp_prec[i+1]) - float(timestamp_prec[i]) for i in range(len(timestamp_prec) - 1)]
 
-   ax.plot(time_no_prec, color='black', label=f'Dune no precond', linestyle='--')
+   # ax.plot(time_no_prec, color='black', label=f'Dune no precond', linestyle='--')
    ax.plot(time_prec, color=mg_colors[2], label=f'Dune precond', linestyle='--')
 
    ax.set_ylim(bottom=0)

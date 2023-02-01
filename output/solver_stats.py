@@ -1,9 +1,9 @@
-import mpi4py.MPI as MPI
+from mpi4py import MPI
 
 try:
    import sqlite3
    sqlite_available = True
-except:
+except ModuleNotFoundError:
    sqlite_available = False
    print(f'No sqlite, won\'t be able to print solver stats')
 
@@ -14,7 +14,7 @@ class OutputManager:
    db_connection: sqlite3.Connection
    db_cursor: sqlite3.Cursor
    def __init__(self) -> None:
-      self.db_name   = 'test_result.db'
+      self.db_name   = 'solver_stats.db'
       # self.param     = None
       self.is_writer = False
 
@@ -55,9 +55,11 @@ class OutputManager:
                num_elem_h        int,
                num_elem_v        int,
                dt                int,
+               solver_tol        float,
                precond           varchar(64),
                precond_interp    varchar(64),
                precond_tol       float,
+               mg_smoother       varchar(64),
                kiops_dt_factor   float,
                num_mg_levels     int,
                mg_solve_coarsest bool,
@@ -87,15 +89,15 @@ class OutputManager:
 
       self.db_cursor.execute('''
          insert into results_param
-         (run_id, step_id, dg_order, num_elem_h, num_elem_v, dt,
-         precond, precond_interp, precond_tol,
+         (run_id, step_id, dg_order, num_elem_h, num_elem_v, dt, solver_tol,
+         precond, precond_interp, precond_tol, mg_smoother,
          kiops_dt_factor,
          num_mg_levels, mg_solve_coarsest, num_pre_smoothe, num_post_smoothe,
          num_solver_it, solver_time, solver_flag, smoother_radii)
-         values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          returning results_param.entry_id;''',
-         [self.run_id, self.step_id, p.nbsolpts, p.nb_elements_horizontal, p.nb_elements_vertical, p.dt,
-          p.preconditioner, p.dg_to_fv_interp, p.precond_tolerance,
+         [self.run_id, self.step_id, p.nbsolpts, p.nb_elements_horizontal, p.nb_elements_vertical, p.dt, p.tolerance,
+          p.preconditioner, p.dg_to_fv_interp, p.precond_tolerance, p.mg_smoother,
           p.kiops_dt_factor, p.num_mg_levels,
           p.mg_solve_coarsest, p.num_pre_smoothe, p.num_post_smoothe,
           num_iter, time, flag,
