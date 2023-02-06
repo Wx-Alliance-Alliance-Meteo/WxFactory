@@ -622,11 +622,17 @@ class CubedSphere(Geometry):
       lon = coordVec_latlon[0,0,:,:]
       lat = coordVec_latlon[1,0,:,:]
 
-      lon_itf_i = coordVec_latlon_itf_i[0,0,:,:]
+      # The _itf_i variables are transposed here compared to the coordVec
+      # order to retain compatibility with the shallow water test cases.
+      # Those cases assume that the 2D interface variables are written
+      # with [interface#,interior#] indexing, and for the _itf_i variables
+      # this is effective the opposite of the geometric [k,j,i] order.
+
+      lon_itf_i = coordVec_latlon_itf_i[0,0,:,:].T
       lon_itf_j = coordVec_latlon_itf_j[0,0,:,:]
       lon_itf_k = coordVec_latlon_itf_k[0,0,:,:]
 
-      lat_itf_i = coordVec_latlon_itf_i[1,0,:,:]
+      lat_itf_i = coordVec_latlon_itf_i[1,0,:,:].T
       lat_itf_j = coordVec_latlon_itf_j[1,0,:,:]
       lat_itf_k = coordVec_latlon_itf_k[1,0,:,:]
 
