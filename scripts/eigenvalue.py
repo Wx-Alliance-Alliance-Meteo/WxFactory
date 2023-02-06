@@ -27,10 +27,10 @@ sys.path.append(main_gef_dir)
 
 from main_gef import create_geometry
 
-from Common.program_options import Configuration
-from Common.parallel        import Distributed_World
-from Geometry.matrices      import DFR_operators
-from Init.init_state_vars   import init_state_vars
+from common.program_options import Configuration
+from common.parallel        import Distributed_World
+from geometry.matrices      import DFR_operators
+from init.init_state_vars   import init_state_vars
 from Solver.matvec          import matvec_fun, matvec_rat
 
 

@@ -3,24 +3,24 @@
 """ The GEF model """
 
 import math
-from time import time
 from typing import Callable, Optional
 
 from mpi4py import MPI
 import numpy
 
-from Common.definitions         import idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_w
-from Common.parallel            import Distributed_World
-from Common.program_options     import Configuration
-from Geometry.cartesian_2d_mesh import Cartesian2d
-from Geometry.cubed_sphere      import CubedSphere
-from Geometry.geometry          import Geometry
-from Geometry.matrices          import DFR_operators
-from Init.dcmip                 import dcmip_T11_update_winds, dcmip_T12_update_winds
-from Init.init_state_vars       import init_state_vars
-from Output.output_manager      import OutputManager
-from Precondition.multigrid     import Multigrid
-from Stepper.stepper            import Stepper
+from common.definitions         import idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_w
+from common.parallel            import Distributed_World
+from common.program_options     import Configuration
+from geometry.cartesian_2d_mesh import Cartesian2d
+from geometry.cubed_sphere      import CubedSphere
+from geometry.geometry          import Geometry
+from geometry.matrices          import DFR_operators
+from init.dcmip                 import dcmip_T11_update_winds, dcmip_T12_update_winds
+from init.init_state_vars       import init_state_vars
+from integrators.stepper        import Stepper
+from output.output_manager      import OutputManager
+from precondition.multigrid     import Multigrid
+from rhs.rhs_selector           import rhs_selector
 
 def main(argv) -> int:
    """ This function sets up the infrastructure and performs the time loop of the model. """
@@ -38,7 +38,7 @@ def main(argv) -> int:
    mtrx = DFR_operators(geom, param.filter_apply, param.filter_order, param.filter_cutoff)
 
    # Initialize state variables
-   Q, topo, metric, rhs_handle, rhs_implicit, rhs_explicit = init_state_vars(geom, mtrx, ptopo, param)
+   Q, topo, metric = init_state_vars(geom, mtrx, param)
 
    # Preconditioning
    preconditioner = create_preconditioner(param, ptopo)
@@ -47,6 +47,9 @@ def main(argv) -> int:
 
    # Determine starting step (if not 0)
    Q, starting_step = determine_starting_state(param, output, Q)
+
+   # Get handle to the appropriate RHS functions
+   rhs_handle, rhs_implicit, rhs_explicit = rhs_selector(geom, mtrx, metric, topo, ptopo, param)
 
    # Time stepping
    stepper = create_time_integrator(param, rhs_handle, rhs_implicit, rhs_explicit, preconditioner)
@@ -139,17 +142,17 @@ def determine_starting_state(param: Configuration, output: OutputManager, Q: num
 
    return Q, starting_step
 
-def create_time_integrator(param: Configuration, rhs_handle: Callable, rhs_implicit: Callable, rhs_explicit: Callable, 
+def create_time_integrator(param: Configuration, rhs_handle: Callable, rhs_implicit: Callable, rhs_explicit: Callable,
                            preconditioner: Optional[Multigrid]) \
       -> Stepper:
    """ Create the appropriate time integrator object based on params """
 
-   from Stepper.epi     import Epi
-   from Stepper.ros2    import Ros2
-   from Stepper.stepper import StrangSplitting
+   from integrators.epi       import Epi
+   from integrators.ros2      import Ros2
+   from integrators.splitting import StrangSplitting
 
    if param.time_integrator[:9] == 'epi_stiff' and param.time_integrator[9:].isdigit():
-      from Stepper.epi_stiff import EpiStiff
+      from integrators.epi_stiff import EpiStiff
       order = int(param.time_integrator[9:])
       if MPI.COMM_WORLD.rank == 0: print(f'Running with EPI_stiff{order}')
       return EpiStiff(order, rhs_handle, param.tolerance, param.exponential_solver,
@@ -160,16 +163,16 @@ def create_time_integrator(param: Configuration, rhs_handle: Callable, rhs_impli
       return Epi(order, rhs_handle, param.tolerance, param.exponential_solver,
                    jacobian_method=param.jacobian_method, init_substeps=10)
    if param.time_integrator[:5] == 'srerk' and param.time_integrator[5:].isdigit():
-      from Stepper.srerk import Srerk
+      from integrators.srerk import Srerk
       order = int(param.time_integrator[5:])
       if MPI.COMM_WORLD.rank == 0: print(f'Running with SRERK{order}')
       return Srerk(order, rhs_handle, param.tolerance, param.exponential_solver,
                       jacobian_method=param.jacobian_method)
    if param.time_integrator == 'tvdrk3':
-      from Stepper.tvdrk3 import Tvdrk3
+      from integrators.tvdrk3 import Tvdrk3
       return Tvdrk3(rhs_handle)
    if param.time_integrator == 'euler1':
-      from Stepper.euler1 import Euler1
+      from integrators.euler1 import Euler1
       if MPI.COMM_WORLD.rank == 0:
          print('WARNING: Running with first-order explicit Euler timestepping.')
          print('         This is UNSTABLE and should be used only for debugging.')
@@ -177,7 +180,7 @@ def create_time_integrator(param: Configuration, rhs_handle: Callable, rhs_impli
    if param.time_integrator == 'ros2':
       return Ros2(rhs_handle, param.tolerance, preconditioner=preconditioner)
    if param.time_integrator == 'imex2':
-      from Stepper.imex2 import Imex2
+      from integrators.imex2 import Imex2
       return Imex2(rhs_explicit, rhs_implicit, param.tolerance)
    if param.time_integrator == 'strang_epi2_ros2':
       stepper1 = Epi(2, rhs_explicit, param.tolerance, exponential_solver=param.exponential_solver)
@@ -188,10 +191,10 @@ def create_time_integrator(param: Configuration, rhs_handle: Callable, rhs_impli
       stepper2 = Epi(2, rhs_explicit, param.tolerance, exponential_solver=param.exponential_solver)
       return StrangSplitting(stepper1, stepper2)
    if param.time_integrator == 'rosexp2':
-      from Stepper.ros_exp2 import RosExp2
+      from integrators.rosexp2 import RosExp2
       return RosExp2(rhs_handle, rhs_implicit, param.tolerance, preconditioner=preconditioner)
    if param.time_integrator == 'partrosexp2':
-      from Stepper.part_ros_exp2 import PartRosExp2
+      from integrators.part_ros_exp2 import PartRosExp2
       return PartRosExp2(rhs_handle, rhs_implicit, param.tolerance, preconditioner=preconditioner)
 
    raise ValueError(f'Time integration method {param.time_integrator} not supported')
