@@ -46,7 +46,17 @@ for k = 1:m
     else
         w = V(:,k);
     end
-    w = A*w;
+    if (isreal(w))
+        Aw = double(py.integrators.ros2.ros2matvec(w)).';
+    else
+        w_r = py.numpy.array(real(w));
+        w_i = py.numpy.array(imag(w));
+        dual = py.integrators.ros2.ros2matvec_complex(w_r, w_i);
+        new_r = double(dual{1}).';
+        new_i = double(dual{2}).';
+        Aw = complex(new_r, new_i);
+    end
+    w = Aw;
     if(existM1)
         w = M1 \ w;
     end

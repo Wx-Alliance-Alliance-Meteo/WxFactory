@@ -1,7 +1,7 @@
 import functools
 from copy         import deepcopy
 from time         import time
-from typing       import Callable, Optional, Union
+from typing       import Callable, Dict, Optional, Tuple, Union
 
 import numpy
 from scipy.sparse.linalg import LinearOperator
@@ -111,7 +111,7 @@ class MultigridLevel:
       self.post_smoothe = self.pre_smoothe
 
    def prepare(self, dt: float, field: numpy.ndarray, prev_field:Optional[numpy.ndarray] = None) \
-         -> tuple[numpy.ndarray, Optional[numpy.ndarray]]:
+         -> Tuple[numpy.ndarray, Optional[numpy.ndarray]]:
       """ Initialize structures and data that will be used for preconditioning during the ongoing time step """
 
       if self.param.mg_smoother in ['erk1', 'erk3']:
@@ -164,7 +164,7 @@ class MultigridLevel:
       return restricted_field, restricted_prev_field
 
 class Multigrid:
-   levels: dict[int, MultigridLevel]
+   levels: Dict[int, MultigridLevel]
    initial_interpolate: Callable[[numpy.ndarray], numpy.ndarray]
    def __init__(self, param, ptopo, discretization, fv_only=False) -> None:
 

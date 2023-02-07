@@ -37,3 +37,5 @@ mg_tests/**/*.ini
 !mg_tests/test_euler.ini
 !mg_tests/test_sw.ini
 
+gcro/*
+!gcro/**/**/*.m
