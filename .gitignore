@@ -11,6 +11,8 @@ doc/*.out
 
 jacobian/*
 
+scripts/*.pdf
+
 __pycache__/
 *.py[cod]
 
