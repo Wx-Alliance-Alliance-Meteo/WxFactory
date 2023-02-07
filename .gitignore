@@ -33,3 +33,6 @@ geom*.dat
 *.db
 *.npy
 *.npz
+
+gcro/*
+!gcro/**/**/*.m

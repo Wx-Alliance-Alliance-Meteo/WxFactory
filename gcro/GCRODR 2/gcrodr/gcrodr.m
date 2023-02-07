@@ -42,39 +42,40 @@
 %               tol = 1e-10;
 %               [x,resvec,r,nmv,relres] = gcrodr(A,b,10,4,[],tol);
 %               semilogy(resvec);
-function [x,resvec,r,nmv,relres] = gcrodr(A,b,m,k,x0,tol,M1,M2,reuse_name)
+function [x,resvec,r,nmv,relres] = gcrodr(A,b,m,k,x0, dt,tol,M1,M2,reuse_name)
 
 % Initialize optional variables.
-if(nargin < 5 | isempty(x0))
-   x0 = zeros(size(b));
-end
-if(nargin < 6 | isempty(tol))
+if(nargin < 7 | isempty(tol))
    tol = 1e-6;
 end
-if(nargin < 7 | isempty(M1))
+if(nargin < 8 | isempty(M1))
    existM1 = 0;
    M1 = [];
 else
    existM1 = 1;
 end
-if(nargin < 8 | isempty(M2))
+if(nargin < 9 | isempty(M2))
    existM2 = 0;
    M2 = [];
 else
    existM2 = 1;
 end
-if(nargin < 9 | isempty(reuse_name))
+if(nargin < 10 | isempty(reuse_name))
    reuse_name = 'default';
 end
 
+py.integrators.ros2.make_matvec(x0, dt)
 % initialize solution vector
+x0 = x0.';
+b = b.';
 x = zeros(size(x0));
 
 % initialize matvec count
 nmv = 1;
 
 % Calculate initial preconditioned residual.
-r = b - A*x0;
+Ax0 = double(py.integrators.ros2.ros2matvec(x0)).';
+r = b - Ax0;
 if(existM1)
    r = M1 \ r;
 end
@@ -109,7 +110,12 @@ if(isfield(U_persist,reuse_name))
    else
       C = U;
    end
-   C = A * C;
+   C_r = py.numpy.array(real(C));
+   C_i = py.numpy.array(imag(C));
+   dual = py.integrators.ros2.ros2matvec_complex(C_r, C_i);
+   new_r = double(dual{1}).';
+   new_i = double(dual{2}).';
+   C = complex(new_r, new_i);
    if(existM1)
       C = M1 \ C;
    end
@@ -161,7 +167,8 @@ else
       end      
       nmv = nmv - 1;
       relres = resvec(p+1) / bnorm;
-      rr = norm(b - A*x) / bnorm
+      Ax = double(py.integrators.ros2.ros2matvec(x0)).';
+      rr = norm(b - Ax) / bnorm;
       % Save information to be carried to next call to solver.
       if k < p
          eval(sprintf('U_persist.%s = U;',reuse_name));

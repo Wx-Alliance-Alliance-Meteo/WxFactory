@@ -139,6 +139,8 @@ def fgmres(A: MatvecOperator,
 
    residuals.append((norm_r / norm_b, time() - t_start, 0.0))
 
+   if verbose: print(f'res: {residuals[-1][0]:.2e} (iter {niter})')
+
    # Get fast access to underlying BLAS routines
    [lartg] = scipy.linalg.get_lapack_funcs(['lartg'], [x])
    [dotu, scal] = scipy.linalg.get_blas_funcs(['dotu', 'scal'], [x])

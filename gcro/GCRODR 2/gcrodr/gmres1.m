@@ -39,7 +39,8 @@ for k = 1:m
    else
       w = V(:,k);
    end
-   w = A*w;
+   Aw = double(py.integrators.ros2.ros2matvec(w)).';
+   w = Aw;
    if(existM1)
       w = M1 \ w;
    end

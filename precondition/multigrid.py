@@ -2,7 +2,7 @@ import functools
 from copy         import deepcopy
 import sys
 from time         import time
-from typing       import Callable, List, Optional
+from typing       import Callable, Dict, List, Optional, Tuple
 
 from mpi4py import MPI
 import numpy
@@ -112,7 +112,7 @@ class MultigridLevel:
       self.verbose = verbose
 
    def prepare(self, dt: float, field: numpy.ndarray, prev_field:Optional[numpy.ndarray] = None) \
-         -> tuple[numpy.ndarray, Optional[numpy.ndarray]]:
+         -> Tuple[numpy.ndarray, Optional[numpy.ndarray]]:
       """ Initialize structures and data that will be used for preconditioning during the ongoing time step """
 
       if self.param.mg_smoother in ['erk1', 'erk3', 'ark3']:
@@ -220,8 +220,8 @@ class MultigridLevel:
 
       return restricted_field, restricted_prev_field
 
-class Multigrid(MatvecOp):
-   levels: dict[int, MultigridLevel]
+class Multigrid:
+   levels: Dict[int, MultigridLevel]
    initial_interpolate: Callable[[numpy.ndarray], numpy.ndarray]
    def __init__(self, param, ptopo, discretization, fv_only=False) -> None:
 
