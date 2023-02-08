@@ -132,7 +132,7 @@ def extract_results(order: int, num_elem_h: int, num_elem_v: int, dt: int) \
    t0 = time()
    no_precond = get_single_precond_results(['solver_tol'], 'precond = "none"')
 
-   no_precond_time = no_precond[0]['time_avg']
+   # no_precond_time = no_precond[0]['time_avg']
    # print(f'precond avg = {no_precond_time}')
 
    t1 = time()
@@ -141,14 +141,14 @@ def extract_results(order: int, num_elem_h: int, num_elem_v: int, dt: int) \
    t2 = time()
    p_mg_results = get_single_precond_results(
       ['solver_tol', 'precond_interp', 'num_mg_levels', 'kiops_dt_factor', 'mg_solve_coarsest', 'precond_tol',
-       'num_pre_smoothe', 'num_post_smoothe'],
+       'num_pre_smoothe', 'num_post_smoothe', 'mg_smoother'],
       f'precond = "p-mg"'
    )
 
    t3 = time()
    fv_mg_results = get_single_precond_results(
       ['solver_tol', 'precond_interp', 'num_mg_levels', 'kiops_dt_factor', 'mg_solve_coarsest', 'precond_tol',
-       'num_pre_smoothe', 'num_post_smoothe'],
+       'num_pre_smoothe', 'num_post_smoothe', 'mg_smoother'],
       f'precond = "fv-mg"'
    )
 
@@ -376,10 +376,10 @@ def plot_time_per_step(no_precond, fv_ref, p_mg, fv_mg, size):
       ax.plot(data['time_per_step'][:], color=ref_colors[i], label=f'Ref precond, tol {data["precond_tol"]:.0e}')
 
    for i, data in enumerate(p_mg):
-      ax.plot(data['time_per_step'][:], color=mg_colors[i], linestyle=mg_linestyles[0], label=f'p-MG precond')
+      ax.plot(data['time_per_step'][:], color=mg_colors[i], linestyle=mg_linestyles[0], label=f'p-MG precond ({data["mg_smoother"]})')
 
    for i, data in enumerate(fv_mg):
-      ax.plot(data['time_per_step'][:], color=mg_colors[i], label=f'solver tol {data["solver_tol"]}, FV-MG precond')
+      ax.plot(data['time_per_step'][:], color=mg_colors[i], label=f'solver tol {data["solver_tol"]}, FV-MG precond ({data["mg_smoother"]})')
 
    timestamp_no_prec = [ \
       79654.30, 79708.78, 79779.66, 79847.73, 79915.75, 79983.20, 80050.10, 80116.78, 80182.95, 80249.07,

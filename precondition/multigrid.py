@@ -3,6 +3,7 @@ from copy         import deepcopy
 from time         import time
 from typing       import Callable, Optional, Union
 
+from mpi4py import MPI
 import numpy
 from scipy.sparse.linalg import LinearOperator
 
@@ -54,7 +55,7 @@ class MultigridLevel:
 
       self.ndim = ndim
 
-      if self.param.verbose_precond:
+      if self.param.verbose_precond > 0:
          print(
             f'Grid level! nb_elem_horiz = {nb_elem_horiz}, nb_elem_vert = {nb_elem_vert} '
             f' discr = {discretization}, source order = {source_order},'
@@ -76,7 +77,7 @@ class MultigridLevel:
 
       field, topo, self.metric = init_state_vars(self.geometry, operators, self.param)
       self.rhs_operator, _, _ = rhs_selector(self.geometry, operators, self.metric, topo, ptopo, self.param)
-      if self.param.verbose_precond: print(f'field shape: {field.shape}')
+      if self.param.verbose_precond > 0: print(f'field shape: {field.shape}')
       self.shape = field.shape
 
       # Now set up the various operators: RHS, smoother, restriction, prolongation
@@ -88,7 +89,7 @@ class MultigridLevel:
       if target_order > 0:
          interp_method         = 'bilinear' if discretization == 'fv' else 'lagrange'
          self.interpolator     = Interpolator(discretization, source_order, discretization, target_order, interp_method,
-                                              self.param.grid_type, self.ndim, verbose=self.param.verbose_precond)
+                                              self.param.grid_type, self.ndim, verbose=(self.param.verbose_precond > 0))
          self.restrict         = lambda vec, op=self.interpolator, sh=field.shape: op(vec.reshape(sh))
          self.restricted_shape = self.restrict(field).shape
          self.prolong          = lambda vec, op=self.interpolator, sh=self.restricted_shape: \
@@ -106,7 +107,7 @@ class MultigridLevel:
                                        target_spectral_radius=self.param.exp_smoothe_spectral_radius,
                                        global_dt=param.dt,
                                        niter=self.param.exp_smoothe_nb_iter)
-         if self.param.verbose_precond: print(f'spectral radius for level = {self.param.exp_smoothe_spectral_radius}')
+         if self.param.verbose_precond > 0: print(f'spectral radius for level = {self.param.exp_smoothe_spectral_radius}')
 
       self.post_smoothe = self.pre_smoothe
 
@@ -117,12 +118,13 @@ class MultigridLevel:
       if self.param.mg_smoother in ['erk1', 'erk3']:
          cfl       = self.param.pseudo_cfl
          factor    = 1.0 / (self.ndim * (2 * self.param.nbsolpts + 1))
-         delta_min = abs(1.- self.geometry.solutionPoints[-1]) * min(self.geometry.Δx, self.geometry.Δz)
+         # delta_min = abs(1.- self.geometry.solutionPoints[-1]) * min(self.geometry.Δx, self.geometry.Δz)
+         delta_min = abs(1.- self.geometry.solutionPoints[-1]) * min(self.geometry.Δx1, min(self.geometry.Δx2, self.geometry.Δx3))
          speed_max = numpy.maximum( abs( 343. +  field[idx_2d_rho_u,:,:] /  field[idx_2d_rho,:,:] ),
                                     abs( 343. +  field[idx_2d_rho_w,:,:] /  field[idx_2d_rho,:,:]) )
 
          self.pseudo_dt = numpy.amin(delta_min * factor / speed_max) * cfl / dt
-         if self.param.verbose_precond:
+         if self.param.verbose_precond > 0:
             print(f'pseudo_dt = {self.pseudo_dt}')
 
          if self.param.mg_smoother == 'erk1':
@@ -285,21 +287,26 @@ class Multigrid:
       """
       Compute the matrix-vector operator for every grid level. Also compute the pseudo time step size for each level.
       """
+      
+      # if MPI.COMM_WORLD.rank == 0: print(f'original field: \n{field[0]}')
       next_field = self.initial_interpolate(field)
+      # if MPI.COMM_WORLD.rank == 0: print(f'FV field: \n{next_field[0]}')
       next_prev_field = self.initial_interpolate(prev_field) if prev_field is not None else None
       for i_level in range(self.max_num_levels):
          next_field, next_prev_field = self.levels[i_level].prepare(dt, next_field, next_prev_field)
+         # if MPI.COMM_WORLD.rank == 0: print(f'FV field {i_level}: \n{next_field[0]}')
+      # raise ValueError
 
-   def __call__(self, vec: numpy.ndarray, x0:Optional[numpy.ndarray] = None, verbose:Optional[bool] = None):
+   def __call__(self, vec: numpy.ndarray, x0:Optional[numpy.ndarray] = None, verbose:Optional[int] = None):
       if verbose is None: verbose = self.verbose
       return self.apply(vec, x0=x0, verbose=verbose)
 
-   def apply(self, vec, x0=None, verbose=None):
+   def apply(self, vec, x0=None, verbose: Optional[int] = None):
       if verbose is None: verbose = self.verbose
       param = self.levels[0].param
 
       restricted_vec = numpy.ravel(self.initial_interpolate(vec))
-      result = self.iterate(restricted_vec, x0=x0, num_levels=param.num_mg_levels, verbose=verbose)
+      result = self.iterate(restricted_vec, x0=x0, num_levels=param.num_mg_levels, verbose=(verbose>1))
       prolonged_result = self.get_solution_back(result)
       return numpy.ravel(prolonged_result)
 

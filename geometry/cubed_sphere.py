@@ -16,17 +16,17 @@ class CubedSphere(Geometry):
    def __init__(self, nb_elements_horizontal:int , nb_elements_vertical: int, nbsolpts: int, 
                 λ0: float, ϕ0: float, α0: float, ztop: float, ptopo: Distributed_World, param: Configuration):
       '''Initialized the cubed sphere geometry, for an earthlike sphere with no topography.
-      
+
       This function initializes the basic CubedSphere geometry object, which provides the parameters necessary to define
       the values in numeric (x1, x2, η) coordinates, gnomonic (projected; X, Y, Z) coordinates, spherical (lat, lon, Z),
-      Cartesian (Xc, Yc, Zc) coordinates.  
+      Cartesian (Xc, Yc, Zc) coordinates.
 
       These coordinates respect the DG formulation, but they are themselves indifferent to the mechanics of
       differentiation.
 
       On initialization, the coordinate is defined with respect to a smooth sphere, with geometric height varying between
       0 and ztop.  To impose a topographic mapping, the CubedSphere object must be updated via the update_topo method.
-      
+
       The cubed-sphere panelization is as follows:
       ```
             +---+
@@ -41,7 +41,7 @@ class CubedSphere(Geometry):
       the panel center.  With typical parameters, panel 0 contains the intersection of the prime meridian and 
       equator, the equator runs through panels 3-0-1-2 from west to east, panel 4 contains the north pole, 
       and panel 5 contains the south pole.
-      
+
       Parameters:
       -----------
       nb_elements_horizontal: int
@@ -69,7 +69,7 @@ class CubedSphere(Geometry):
          each panel is a separate MPI process.
       param: Configuration
          Wraps parameters from the configuration pole that are not otherwise specified in this
-         constructor.      
+         constructor.
       '''
       super().__init__('cubed_sphere')
 
