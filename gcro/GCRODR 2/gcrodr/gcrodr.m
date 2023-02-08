@@ -180,8 +180,11 @@ end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%  Main Body of Solver  %%%%%%%%%%%%%%%%%%%%%%%%%
 
-while(resvec(nmv) / bnorm > tol)
+min_it = 1;
+num_it = 0;
+while(resvec(nmv) / bnorm > tol || num_it < min_it)
   
+   num_it = num_it + 1;
    % Do m-k steps of Arnoldi
 
    [V,H,B,p,resvec_inner] = gmres2(A,x,r,m-k,M1,M2,C,tol*bnorm);
@@ -212,7 +215,7 @@ while(resvec(nmv) / bnorm > tol)
    r = r - [C V] * (H2 * y);
 
    % If p < m-k, early convergence of GMRES
-   if p < m-k
+   if (p < m-k && num_it >= min_it)
       % Assign all (unassigned) outgoing values and return
       if(existM2)
          x = x0 + M2 \ x;
