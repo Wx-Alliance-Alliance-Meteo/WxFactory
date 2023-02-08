@@ -39,6 +39,9 @@ for i=1:size(C,2)
 L(i,i) =1;
 end
 
+min_it = 1;
+num_it = 1;
+
 for k = 1:m
     % Find w using preconditioning if available.
     if(existM2)
@@ -116,6 +119,10 @@ L(kk,kk) = 0; j = size(C,2)+1;
         x = x + V(:,1:k) * y;
         r = V * res;
         trueres = norm(r) / tr
-        return
+        if (num_it >= min_it)
+            return
+        end
     end
+
+    num_it = num_it + 1;
 end
