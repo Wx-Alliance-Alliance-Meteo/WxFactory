@@ -48,7 +48,7 @@ class PartRosExp2(Stepper):
       A = LinearOperator((n,n), matvec = lambda v: v - J_imp(v) / 2)
       b = ( A(Q_flat) + (phiv + 0.5 * f_imp) * dt ).flatten()
       Q_x0 = Q_flat.copy()
-      Qnew, local_error, num_iter, flag, residuals = fgmres(
+      Qnew, norm_r, norm_b, num_iter, flag, residuals = fgmres(
          A, b, x0=Q_x0, tol=self.tol, restart=100, maxiter=None, preconditioner=self.preconditioner, verbose=False)
       time_imp = time() - tic
 
@@ -56,10 +56,10 @@ class PartRosExp2(Stepper):
 
       if flag == 0:
          print(f'FGMRES converged at iteration {num_iter} in {time_imp:4.1f} s to a solution with'
-               f' relative local error {local_error : .2e}')
+               f' relative residual {norm_r/norm_b: .2e}')
       else:
          print(f'FGMRES stagnation/interruption at iteration {num_iter} in {time_imp:4.1f} s, returning a solution with'
-               f' relative local error {local_error: .2e}')
+               f' relative residual {norm_r/norm_b: .2e}')
 
       print(f'Elapsed time: exponential {time_exp:.3f} secs ; implicit {time_imp:.3f} secs')
 

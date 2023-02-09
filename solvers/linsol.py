@@ -103,7 +103,7 @@ def fgmres(A, b, x0 = None, tol = 1e-5, restart = 20, maxiter = None, preconditi
    # Check for early stop
    norm_b = global_norm(b)
    if norm_b == 0.0:
-      return numpy.zeros_like(b), 0., 0, 0, [(0.0, time() - t_start, 0)]
+      return numpy.zeros_like(b), 0., 0, 0, 0, [(0.0, time() - t_start, 0)]
 
    tol_relative = tol * norm_b
 
@@ -208,17 +208,17 @@ def fgmres(A, b, x0 = None, tol = 1e-5, restart = 20, maxiter = None, preconditi
          change = numpy.max(numpy.abs(update[indices] / x[indices]))
          if change < 1e-12:
             # No change, halt
-            return x, norm_r, niter, -1, residuals
+            return x, norm_r, norm_b, niter, -1, residuals
 
       # test for convergence
       if norm_r < tol_relative:
-         return x, norm_r, niter, 0, residuals
+         return x, norm_r, norm_b, niter, 0, residuals
 
    # end outer loop
 
    flag = 0
    if norm_r >= tol_relative: flag = -1
-   return x, norm_r, niter, flag, residuals
+   return x, norm_r, norm_b, niter, flag, residuals
 
 def global_norm(vec):
    """Compute vector norm across all PEs"""

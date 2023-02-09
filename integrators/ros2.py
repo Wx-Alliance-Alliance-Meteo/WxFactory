@@ -25,17 +25,17 @@ class Ros2(Stepper):
       b = A(Q_flat) + rhs.flatten() * dt
 
       t0 = time()
-      Qnew, local_error, num_iter, flag, residuals = fgmres(
-         A, b, x0=Q_flat, tol=self.tol, restart=100, maxiter=None, preconditioner=self.preconditioner, verbose=False)
+      Qnew, norm_r, norm_b, num_iter, flag, residuals = fgmres(
+         A, b, x0=Q_flat, tol=self.tol, restart=100, maxiter=None, preconditioner=self.preconditioner, verbose=True)
       t1 = time()
 
       write_solver_stats(num_iter, t1 - t0, flag, residuals)
 
       if flag == 0:
          print(f'FGMRES converged at iteration {num_iter} in {t1 - t0:4.1f} s to a solution with'
-               f' relative local error {local_error : .2e}')
+               f' relative residual {norm_r/norm_b : .2e}')
       else:
          print(f'FGMRES stagnation/interruption at iteration {num_iter} in {t1 - t0:4.1f} s, returning a solution with'
-               f' relative local error {local_error: .2e}')
+               f' relative residual {norm_r/norm_b : .2e}')
 
       return numpy.reshape(Qnew, Q.shape)
