@@ -26,7 +26,7 @@ class Ros2(Stepper):
 
       t0 = time()
       Qnew, norm_r, norm_b, num_iter, flag, residuals = fgmres(
-         A, b, x0=Q_flat, tol=self.tol, restart=100, maxiter=None, preconditioner=self.preconditioner, verbose=True)
+         A, b, x0=Q_flat, tol=self.tol, restart=100, maxiter=None, preconditioner=self.preconditioner, verbose=False)
       t1 = time()
 
       write_solver_stats(num_iter, t1 - t0, flag, residuals)
