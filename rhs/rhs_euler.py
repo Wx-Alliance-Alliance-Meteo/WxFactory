@@ -123,7 +123,7 @@ def rhs_euler (Q: numpy.ndarray, geom: CubedSphere, mtrx: DFR_operators, metric:
 
    # Compute the fluxes (equation 3 of Charron & Gaudreault 2021, LHS)
 
-   # Compute the advective fluxes ... 
+   # Compute the advective fluxes ...
    flux_x1 = metric.sqrtG * u1 * Q
    flux_x2 = metric.sqrtG * u2 * Q
    flux_x3 = metric.sqrtG * w  * Q
@@ -202,7 +202,7 @@ def rhs_euler (Q: numpy.ndarray, geom: CubedSphere, mtrx: DFR_operators, metric:
    for itf in range(nb_interfaces_vert):
 
       elem_D = itf
-      elem_U = itf + 1 
+      elem_U = itf + 1
 
       # Direction x3
 
@@ -250,7 +250,7 @@ def rhs_euler (Q: numpy.ndarray, geom: CubedSphere, mtrx: DFR_operators, metric:
 
    # Finish transfers
    all_request.wait()
-   
+
    # sys.exit(1)
 
    # Define u, v at the interface by dividing momentum and density
@@ -265,7 +265,7 @@ def rhs_euler (Q: numpy.ndarray, geom: CubedSphere, mtrx: DFR_operators, metric:
    for itf in range(nb_interfaces_hori):
 
       elem_L = itf
-      elem_R = itf + 1 
+      elem_R = itf + 1
 
       # Direction x1
       u1_L = u1_itf_i[:, elem_L, 1, :] # u at the right interface of the left element

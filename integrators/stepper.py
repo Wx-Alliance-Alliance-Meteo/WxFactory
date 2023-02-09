@@ -3,6 +3,7 @@ from itertools import combinations
 import math
 from time      import time
 from typing    import Optional
+import sys
 
 import numpy
 
@@ -36,10 +37,14 @@ class scipy_counter(object): # TODO : tempo
    def __init__(self, disp=False):
       self._disp = disp
       self.niter = 0
+      self.res = 0.0
    def __call__(self, rk=None):
       self.niter += 1
+      if rk is not None:
+         self.res = float(rk)
       if self._disp:
          print(f'iter {self.niter:3d}\trk = {str(rk)}')
+         sys.stdout.flush()
    def nb_iter(self):
       return self.niter
 
