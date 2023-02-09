@@ -26,7 +26,7 @@ def output_init(geom, param):
    if param.equations == "shallow_water":
       ni, nj = geom.lat.shape
       grid_data = ('npe', 'Xdim', 'Ydim')
-   elif param.equations == "Euler":
+   elif param.equations == "euler":
       nk, nj, ni = geom.nk, geom.nj, geom.ni
       grid_data = ('npe', 'Zdim', 'Xdim', 'Ydim')
    else:
@@ -66,7 +66,7 @@ def output_init(geom, param):
    xxx.axis = 'X'
    xxx.units = 'radians_east'
 
-   if param.equations == "Euler":
+   if param.equations == "euler":
       ncfile.createDimension('Zdim', nk)
       zzz = ncfile.createVariable('Zdim', numpy.float64, ('Zdim'))
       zzz.long_name = 'Zdim'
@@ -124,7 +124,7 @@ def output_init(geom, param):
          dpv.grid_mapping = 'cubed_sphere'
          dpv.set_collective(True)
 
-   elif param.equations == "Euler":
+   elif param.equations == "euler":
       elev = ncfile.createVariable('elev', numpy.dtype('double').char, grid_data)
       elev.long_name = 'Elevation'
       elev.units = 'm'
@@ -228,14 +228,14 @@ def output_init(geom, param):
    if rank == 0:
       xxx[:] = geom.x1[:]
       yyy[:] = geom.x2[:]
-      if param.equations == "Euler":
+      if param.equations == "euler":
          # FIXME: With mapped coordinates, x3/height is a truly 3D coordinate
          zzz[:] = geom.x3[:,0,0] 
 
    tile[rank] = rank
    lon[rank,:,:] = geom.lon * 180/math.pi
    lat[rank,:,:] = geom.lat * 180/math.pi
-   if param.equations == "Euler":
+   if param.equations == "euler":
       elev[rank,:,:,:] = geom.coordVec_latlon[2,:,:,:]
       topo[rank,:,:] = geom.zbot[:,:]
 
@@ -265,7 +265,7 @@ def output_netcdf(Q, geom, metric, mtrx, topo, step, param):
          ncfile['RV'][idx, rank, :, :] = rv
          ncfile['PV'][idx, rank, :, :] = pv
 
-   if param.equations == "Euler":
+   if param.equations == "euler":
       rho   = Q[idx_rho, :, :, :]
       u1    = Q[idx_rho_u1, :, :, :]  / rho
       u2    = Q[idx_rho_u2, :, :, :]  / rho
