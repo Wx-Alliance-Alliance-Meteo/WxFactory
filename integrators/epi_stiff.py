@@ -4,11 +4,11 @@ import math
 import numpy
 from mpi4py       import MPI
 
+from .epi            import Epi
+from .stepper        import Stepper, alpha_coeff
 from solvers.kiops   import kiops
 from solvers.matvec  import matvec_fun
 from solvers.pmex    import pmex
-from integrators.epi     import Epi
-from integrators.stepper import Stepper, alpha_coeff
 
 class EpiStiff(Stepper):
    def __init__(self, order: int, rhs, tol: float, exponential_solver, jacobian_method='complex', init_method=None, init_substeps: int = 1):

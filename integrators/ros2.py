@@ -6,7 +6,7 @@ from mpi4py import MPI
 
 from solvers.linsol      import fgmres
 from solvers.matvec      import matvec_rat
-from integrators.stepper     import Stepper
+from .stepper            import Stepper
 from output.solver_stats import write_solver_stats
 
 class Ros2(Stepper):

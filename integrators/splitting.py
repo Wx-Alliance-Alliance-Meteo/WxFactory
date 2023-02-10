@@ -1,4 +1,4 @@
-from integrators.stepper import Stepper
+from .stepper import Stepper
 
 class StrangSplitting(Stepper):
    def __init__(self, scheme1, scheme2):

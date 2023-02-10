@@ -23,6 +23,7 @@ from solvers.nonlin              import KrylovJacobian
 from common.parallel        import Distributed_World
 from common.program_options import Configuration
 
+MatvecOperator = Callable[[numpy.ndarray], numpy.ndarray]
 
 class MultigridLevel:
    """
@@ -32,9 +33,9 @@ class MultigridLevel:
    # Type hints
    restrict:         Callable[[numpy.ndarray], numpy.ndarray]
    prolong:          Callable[[numpy.ndarray], numpy.ndarray]
-   pre_smoothe:      Callable[[LinearOperator, numpy.ndarray, numpy.ndarray], numpy.ndarray]
-   post_smoothe:     Callable[[LinearOperator, numpy.ndarray, numpy.ndarray], numpy.ndarray]
-   matrix_operator:  Callable[[numpy.ndarray], numpy.ndarray]
+   pre_smoothe:      Callable[[MatvecOperator, numpy.ndarray, numpy.ndarray], numpy.ndarray]
+   post_smoothe:     Callable[[MatvecOperator, numpy.ndarray, numpy.ndarray], numpy.ndarray]
+   matrix_operator:  MatvecOperator
    pseudo_dt:        float
    jacobian:         KrylovJacobian
 

@@ -4,13 +4,13 @@ from mpi4py              import MPI
 import numpy
 from scipy.sparse.linalg import LinearOperator
 
+from .stepper            import Stepper
 from output.solver_stats import write_solver_stats
 from solvers.linsol      import fgmres
 from solvers.matvec      import matvec_fun, matvec_rat
 from solvers.pmex        import pmex
-from integrators.stepper  import Stepper
 
-class RosExp2((Stepper)): 
+class RosExp2(Stepper): 
    def __init__(self, rhs_full, rhs_imp, tol, preconditioner):
       super().__init__(preconditioner)
 

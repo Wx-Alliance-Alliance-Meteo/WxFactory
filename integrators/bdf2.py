@@ -5,7 +5,7 @@ from Output.solver_stats import write_solver_stats
 from solvers.nonlin      import newton_krylov
 from integrators.stepper     import Stepper
 
-class bdf2(Stepper):
+class Bdf2(Stepper):
    def __init__(self, rhs, tol, preconditioner=None, init_substeps=1):
       super().__init__(preconditioner)
       self.rhs = rhs

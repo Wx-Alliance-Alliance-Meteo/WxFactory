@@ -1,4 +1,4 @@
-from integrators.stepper import Stepper
+from .stepper import Stepper
 
 class Euler1(Stepper):
    def __init__(self, rhs):

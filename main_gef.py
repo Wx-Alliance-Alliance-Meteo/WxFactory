@@ -17,7 +17,8 @@ from geometry.geometry          import Geometry
 from geometry.matrices          import DFR_operators
 from init.dcmip                 import dcmip_T11_update_winds, dcmip_T12_update_winds
 from init.init_state_vars       import init_state_vars
-from integrators.stepper        import Stepper
+from integrators                import Stepper, Epi, EpiStiff, Euler1, Imex2, PartRosExp2, Ros2, RosExp2, \
+                                       StrangSplitting, Srerk, Tvdrk3
 from output.output_manager      import OutputManager
 from precondition.multigrid     import Multigrid
 from rhs.rhs_selector           import rhs_selector
@@ -147,12 +148,7 @@ def create_time_integrator(param: Configuration, rhs_handle: Callable, rhs_impli
       -> Stepper:
    """ Create the appropriate time integrator object based on params """
 
-   from integrators.epi       import Epi
-   from integrators.ros2      import Ros2
-   from integrators.splitting import StrangSplitting
-
    if param.time_integrator[:9] == 'epi_stiff' and param.time_integrator[9:].isdigit():
-      from integrators.epi_stiff import EpiStiff
       order = int(param.time_integrator[9:])
       if MPI.COMM_WORLD.rank == 0: print(f'Running with EPI_stiff{order}')
       return EpiStiff(order, rhs_handle, param.tolerance, param.exponential_solver,
@@ -163,16 +159,13 @@ def create_time_integrator(param: Configuration, rhs_handle: Callable, rhs_impli
       return Epi(order, rhs_handle, param.tolerance, param.exponential_solver,
                    jacobian_method=param.jacobian_method, init_substeps=10)
    if param.time_integrator[:5] == 'srerk' and param.time_integrator[5:].isdigit():
-      from integrators.srerk import Srerk
       order = int(param.time_integrator[5:])
       if MPI.COMM_WORLD.rank == 0: print(f'Running with SRERK{order}')
       return Srerk(order, rhs_handle, param.tolerance, param.exponential_solver,
                       jacobian_method=param.jacobian_method)
    if param.time_integrator == 'tvdrk3':
-      from integrators.tvdrk3 import Tvdrk3
       return Tvdrk3(rhs_handle)
    if param.time_integrator == 'euler1':
-      from integrators.euler1 import Euler1
       if MPI.COMM_WORLD.rank == 0:
          print('WARNING: Running with first-order explicit Euler timestepping.')
          print('         This is UNSTABLE and should be used only for debugging.')
@@ -180,7 +173,6 @@ def create_time_integrator(param: Configuration, rhs_handle: Callable, rhs_impli
    if param.time_integrator == 'ros2':
       return Ros2(rhs_handle, param.tolerance, preconditioner=preconditioner)
    if param.time_integrator == 'imex2':
-      from integrators.imex2 import Imex2
       return Imex2(rhs_explicit, rhs_implicit, param.tolerance)
    if param.time_integrator == 'strang_epi2_ros2':
       stepper1 = Epi(2, rhs_explicit, param.tolerance, exponential_solver=param.exponential_solver)
@@ -191,10 +183,8 @@ def create_time_integrator(param: Configuration, rhs_handle: Callable, rhs_impli
       stepper2 = Epi(2, rhs_explicit, param.tolerance, exponential_solver=param.exponential_solver)
       return StrangSplitting(stepper1, stepper2)
    if param.time_integrator == 'rosexp2':
-      from integrators.rosexp2 import RosExp2
       return RosExp2(rhs_handle, rhs_implicit, param.tolerance, preconditioner=preconditioner)
    if param.time_integrator == 'partrosexp2':
-      from integrators.part_ros_exp2 import PartRosExp2
       return PartRosExp2(rhs_handle, rhs_implicit, param.tolerance, preconditioner=preconditioner)
 
    raise ValueError(f'Time integration method {param.time_integrator} not supported')

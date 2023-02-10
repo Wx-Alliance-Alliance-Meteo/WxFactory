@@ -4,11 +4,11 @@ from mpi4py import MPI
 import numpy
 from scipy.sparse.linalg import LinearOperator
 
-from Output.solver_stats import write_solver_stats
+from output.solver_stats import write_solver_stats
 from solvers.linsol      import fgmres
 from solvers.matvec      import matvec_fun
 from solvers.pmex        import pmex
-from integrators.stepper     import Stepper
+from .stepper            import Stepper
 
 class PartRosExp2(Stepper):
    def __init__(self, rhs_full, rhs_imp, tol, preconditioner):

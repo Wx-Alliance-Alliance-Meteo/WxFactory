@@ -1,7 +1,7 @@
 from mpi4py import MPI
 
 from solvers.nonlin  import newton_krylov
-from integrators.stepper import Stepper
+from .stepper        import Stepper
 
 class Imex2(Stepper):
    def __init__(self, rhs_exp, rhs_imp, tol):

@@ -7,7 +7,7 @@ import numpy
 from solvers.kiops    import kiops
 from solvers.matvec   import matvec_fun
 from solvers.pmex     import pmex
-from integrators.stepper  import Stepper
+from .stepper         import Stepper
 
 class Epi(Stepper):
    def __init__(self, order: int, rhs, tol: float, exponential_solver, jacobian_method='complex', init_method=None, init_substeps: int = 1):
