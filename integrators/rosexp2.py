@@ -4,11 +4,11 @@ from mpi4py              import MPI
 import numpy
 from scipy.sparse.linalg import LinearOperator
 
-from Output.solver_stats import write_solver_stats
-from solvers.linsol       import fgmres
-from solvers.matvec       import matvec_fun
-from solvers.pmex         import pmex
-from (Stepper).stepper     import Stepper
+from output.solver_stats import write_solver_stats
+from solvers.linsol      import fgmres
+from solvers.matvec      import matvec_fun, matvec_rat
+from solvers.pmex        import pmex
+from integrators.stepper  import Stepper
 
 class RosExp2((Stepper)): 
    def __init__(self, rhs_full, rhs_imp, tol, preconditioner):
@@ -25,12 +25,12 @@ class RosExp2((Stepper)):
       rhs_full = self.rhs_full(Q)
       rhs_imp = self.rhs_imp(Q)
 
-      def J_full(v): return matvec_fun(v, dt, Q, rhs_full, self.rhs_full)
-      def J_imp(v):  return matvec_fun(v, dt, Q, rhs_imp, self.rhs_imp)
-      def J_exp(v):  return J_full(v) - J_imp(v)
-
       Q_flat = Q.flatten()
       n = len(Q_flat)
+
+      J_exp = LinearOperator((n,n), matvec = lambda v: 
+                             matvec_fun(v, dt, Q, rhs_full, self.rhs_full) 
+                             - matvec_fun(v, dt, Q, rhs_imp, self.rhs_imp))
 
       vec = numpy.zeros((2, n))
       vec[1,:] = rhs_full.flatten()
@@ -41,7 +41,7 @@ class RosExp2((Stepper)):
       print(f'PMEX converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)')
 
       tic = time()
-      A = LinearOperator((n,n), matvec = lambda v: v - J_imp(v) / 2)
+      A = LinearOperator((n,n), matvec = lambda v: matvec_rat(v, dt, Q, rhs_imp, self.rhs_imp))
       b = ( A(Q_flat) + phiv * dt ).flatten()
       Q_x0 = Q_flat.copy()
       Qnew, norm_r, norm_b, num_iter, flag, residuals = fgmres(
