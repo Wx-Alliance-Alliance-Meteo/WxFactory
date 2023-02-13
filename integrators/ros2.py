@@ -4,16 +4,17 @@ from typing import Callable
 
 from mpi4py import MPI
 
-from solvers.linsol      import fgmres
-from solvers.matvec      import matvec_rat
-from .stepper            import Stepper
-from output.solver_stats import write_solver_stats
+from common.program_options import Configuration
+from .integrator            import Integrator
+from solvers.linsol         import fgmres
+from solvers.matvec         import matvec_rat
+from output.solver_stats    import write_solver_stats
 
-class Ros2(Stepper):
-   def __init__(self, rhs_handle: Callable, tol: float, preconditioner=None) -> None:
-      super().__init__(preconditioner)
+class Ros2(Integrator):
+   def __init__(self, param: Configuration, rhs_handle: Callable, preconditioner=None) -> None:
+      super().__init__(param, preconditioner)
       self.rhs_handle     = rhs_handle
-      self.tol            = tol
+      self.tol            = param.tolerance
 
    def __step__(self, Q: numpy.ndarray, dt: float):
 

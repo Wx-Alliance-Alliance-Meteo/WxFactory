@@ -7,12 +7,14 @@ import sys
 
 import numpy
 
+from common.program_options import Configuration
 from precondition.multigrid import Multigrid
 
-class Stepper(ABC):
+class Integrator(ABC):
+   """Describes the time-stepping mechanisme of the simulation"""
    latest_time: float
    preconditioner: Optional[Multigrid]
-   def __init__(self, preconditioner: Optional[Multigrid] = None) -> None:
+   def __init__(self, param: Configuration, preconditioner: Optional[Multigrid]) -> None:
       self.preconditioner = preconditioner
 
    @abstractmethod

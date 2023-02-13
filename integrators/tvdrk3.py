@@ -1,8 +1,11 @@
-from .stepper import Stepper
+from typing import Callable
 
-class Tvdrk3(Stepper):
-   def __init__(self, rhs):
-      super().__init__()
+from common.program_options import Configuration
+from .integrator            import Integrator
+
+class Tvdrk3(Integrator):
+   def __init__(self, param: Configuration, rhs: Callable):
+      super().__init__(param, preconditioner=None)
       self.rhs = rhs
 
    def __step__(self, Q, dt):

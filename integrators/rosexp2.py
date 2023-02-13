@@ -1,25 +1,26 @@
-from time                import time
+from time    import time
+from typing  import Callable
 
-from mpi4py              import MPI
+from mpi4py  import MPI
 import numpy
-from scipy.sparse.linalg import LinearOperator
 
-from .stepper            import Stepper
-from output.solver_stats import write_solver_stats
-from solvers.linsol      import fgmres
-from solvers.matvec      import matvec_fun, matvec_rat
-from solvers.pmex        import pmex
+from common.program_options import Configuration
+from .integrator            import Integrator
+from output.solver_stats    import write_solver_stats
+from solvers.linsol         import fgmres
+from solvers.matvec         import matvec_fun, matvec_rat
+from solvers.pmex           import pmex
 
-class RosExp2(Stepper): 
-   def __init__(self, rhs_full, rhs_imp, tol, preconditioner):
-      super().__init__(preconditioner)
+class RosExp2(Integrator):
+   def __init__(self, param: Configuration, rhs_full: Callable, rhs_imp: Callable, preconditioner):
+      super().__init__(param, preconditioner)
 
       if MPI.COMM_WORLD.size > 1:
          raise ValueError(f'RosExp2 has only been tested with 1 PE. Gotta make sure it works with more than that.')
 
       self.rhs_full = rhs_full
       self.rhs_imp = rhs_imp
-      self.tol = tol
+      self.tol = param.tolerance
 
    def __step__(self, Q, dt):
       rhs_full = self.rhs_full(Q)

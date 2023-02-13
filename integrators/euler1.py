@@ -1,8 +1,9 @@
-from .stepper import Stepper
+from common.program_options import Configuration
+from .integrator            import Integrator
 
-class Euler1(Stepper):
-   def __init__(self, rhs):
-      super().__init__()
+class Euler1(Integrator):
+   def __init__(self, param: Configuration, rhs):
+      super().__init__(param, preconditioner=None)
       self.rhs = rhs
 
    def __step__(self, Q, dt):

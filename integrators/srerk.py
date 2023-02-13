@@ -1,11 +1,13 @@
 import math
+from typing import Callable, List, Optional
 
 import numpy
 
-from solvers.kiops   import kiops
-from solvers.matvec  import matvec_fun
-from solvers.pmex    import pmex
-from .stepper        import Stepper, alpha_coeff
+from common.program_options import Configuration
+from .integrator            import Integrator, alpha_coeff
+from solvers.kiops          import kiops
+from solvers.matvec         import matvec_fun
+from solvers.pmex           import pmex
 
 # Computes nodes for SRERK methods with minimal error terms
 def opt_nodes(order: int):
@@ -14,7 +16,7 @@ def opt_nodes(order: int):
 
    coeff = lambda p,q: (-1)**(p+q) * math.factorial(p+q+2) / (math.factorial(q) * math.factorial(q+2) * math.factorial(p-q))
 
-   c = [];
+   c = []
    # Compute optimal nodes for each stage order starting at order 2
    for o in list(range(2,order-2, 2)) + [order-2]:
       p = numpy.polynomial.Polynomial([coeff(o,q) for q in range(0,o+1)])
@@ -23,17 +25,20 @@ def opt_nodes(order: int):
    c.append(numpy.ones(1))
    return c
 
-class Srerk(Stepper):
-   # Stiffness resilient exponential Runge-Kutta methods
-   # If the nodes are NOT specified, return the SRERK method of the specified order with min error terms
-   # If the nodes are specified, return the SRERK method with these nodes and ignore the 'order' parameter
-   def __init__(self, order: int, rhs, tol: float, exponential_solver, jacobian_method='complex', nodes = None):
-      super().__init__()
+class Srerk(Integrator):
+   """Stiffness resilient exponential Runge-Kutta methods"""
+   def __init__(self, param: Configuration, order: int, rhs: Callable, nodes: Optional[List] = None):
+      """
+      If the nodes are NOT specified, return the SRERK method of the specified order with min error terms
+      If the nodes are specified, return the SRERK method with these nodes and ignore the 'order' parameter
+      """
+
+      super().__init__(param, preconditioner=None)
       self.rhs = rhs
-      self.tol = tol
+      self.tol = param.tolerance
       self.krylov_size = 1
-      self.jacobian_method = jacobian_method
-      self.exponential_solver = exponential_solver
+      self.jacobian_method = param.jacobian_method
+      self.exponential_solver = param.exponential_solver
 
       if nodes:
          self.c = nodes
