@@ -55,6 +55,7 @@ class OutputManager:
                num_elem_h        int,
                num_elem_v        int,
                dt                int,
+               time_integrator   varchar(64),
                solver_tol        float,
                precond           varchar(64),
                precond_interp    varchar(64),
@@ -65,6 +66,7 @@ class OutputManager:
                mg_solve_coarsest bool,
                num_pre_smoothe   int,
                num_post_smoothe  int,
+               pseudo_cfl        float,
                num_solver_it     int,
                solver_time       float,
                solver_flag       int,
@@ -89,17 +91,21 @@ class OutputManager:
 
       self.db_cursor.execute('''
          insert into results_param
-         (run_id, step_id, dg_order, num_elem_h, num_elem_v, dt, solver_tol,
+         (run_id, step_id, dg_order, num_elem_h, num_elem_v, dt,
+         time_integrator, solver_tol,
          precond, precond_interp, precond_tol, mg_smoother,
          kiops_dt_factor,
          num_mg_levels, mg_solve_coarsest, num_pre_smoothe, num_post_smoothe,
+         pseudo_cfl,
          num_solver_it, solver_time, solver_flag, smoother_radii)
-         values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          returning results_param.entry_id;''',
-         [self.run_id, self.step_id, p.nbsolpts, p.nb_elements_horizontal, p.nb_elements_vertical, p.dt, p.tolerance,
+         [self.run_id, self.step_id, p.nbsolpts, p.nb_elements_horizontal, p.nb_elements_vertical, p.dt,
+          p.time_integrator, p.tolerance,
           p.preconditioner, p.dg_to_fv_interp, p.precond_tolerance, p.mg_smoother,
           p.kiops_dt_factor, p.num_mg_levels,
           p.mg_solve_coarsest, p.num_pre_smoothe, p.num_post_smoothe,
+          p.pseudo_cfl,
           num_iter, time, flag,
           str(p.exp_smoothe_spectral_radii)])
 

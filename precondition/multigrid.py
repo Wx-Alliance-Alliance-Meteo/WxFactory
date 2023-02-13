@@ -374,7 +374,9 @@ class Multigrid:
          residual   = numpy.ravel(restrict(b - A(x)))
          correction = None
          for _ in range(gamma):
-            correction = self.iterate(residual, correction, level + 1, num_levels=num_levels, gamma=gamma, verbose=verbose)  # MG pass on next lower level
+            # MG pass on next lower level
+            correction = self.iterate(residual, correction, level + 1, num_levels=num_levels, gamma=gamma,
+                                      verbose=verbose)
             # level_work += work
 
          before_res = 0.0
@@ -392,13 +394,14 @@ class Multigrid:
          before_res = 0.0
          if verbose: before_res = global_norm(b - A(x).flatten())
          t0 = time()
-         x, _, num_iter, _, _ = fgmres(A, b, x0=x, tol=lvl_param.param.precond_tolerance, verbose=False)
+         x, _, _, num_iter, _, _ = fgmres(A, b, x0=x, tol=lvl_param.param.precond_tolerance, restart=100, verbose=False)
          t1 = time()
          if verbose:
             corr_res, rel = self.compare_res(A, b, x, before_res)
-            print(f'..Solved res:           {corr_res:.3e} (rel {rel:7.3f}) in {num_iter} iterations and {t1 - t0:.2f}s')
+            print(f'..Solved res:           {corr_res:.3e} (rel {rel:7.3f}) in {num_iter} iterations'
+                  f' and {t1 - t0:.2f}s')
          # level_work += num_iter * lvl_param.work_ratio
-      
+
       # Post smoothing
       for i in range(lvl_param.num_post_smoothe):
          x = post_smoothe(A, b, x)
