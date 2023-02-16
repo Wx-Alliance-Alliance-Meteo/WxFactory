@@ -9,7 +9,7 @@ from common.program_options import Configuration
 from solvers.kiops          import kiops
 from solvers.matvec         import matvec_fun
 from solvers.pmex           import pmex
-from .integrator            import Integrator
+from .integrator            import Integrator, SolverInfo
 
 class Epi(Integrator):
    def __init__(self, param: Configuration, order: int, rhs: Callable, init_method=None, init_substeps: int = 1):
@@ -109,6 +109,8 @@ class Epi(Integrator):
          if (mpirank == 0):
             print(f'KIOPS converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)'
                   f' to a solution with local error {stats[4]:.2e}')
+
+      self.solver_info = SolverInfo(total_num_it = stats[2])
 
       # Save values for the next timestep
       if self.n_prev > 0:

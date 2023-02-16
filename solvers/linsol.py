@@ -59,7 +59,7 @@ def ortho_1_sync_igs(Q, R, T, K, j):
 
    return norm
 
-def fgmres(A, b, x0 = None, tol = 1e-5, restart = 20, maxiter = None, preconditioner = None, hegedus = False, verbose = False):
+def fgmres(A, b, x0 = None, tol = 1e-5, restart = 20, maxiter = None, preconditioner = None, hegedus = False, verbose = 0, prefix = ''):
    """
    Solve the given linear system (Ax = b) for x, using the FGMRES algorithm. 
 
@@ -184,7 +184,9 @@ def fgmres(A, b, x0 = None, tol = 1e-5, restart = 20, maxiter = None, preconditi
          if inner < restart - 1:
             norm_r = numpy.abs(g[inner+1])
             residuals.append((norm_r / norm_b, time() - t_start, 0.0))
-            # if verbose: print(f'norm_r / b = {residuals[-1][0]:.3e}')
+            if verbose > 1:
+               if mpi4py.MPI.COMM_WORLD.rank == 0: print(f'{prefix}norm_r / b = {residuals[-1][0]:.3e}')
+               sys.stdout.flush()
             if norm_r < tol_relative:
                break
 
@@ -198,8 +200,8 @@ def fgmres(A, b, x0 = None, tol = 1e-5, restart = 20, maxiter = None, preconditi
 
       norm_r = global_norm(r)
       residuals.append((norm_r / norm_b, time() - t_start, 0.0))
-      if verbose:
-         print(f'res: {norm_r/norm_b:.2e} (iter {niter})')
+      if verbose > 0:
+         if mpi4py.MPI.COMM_WORLD.rank == 0: print(f'{prefix}res: {norm_r/norm_b:.2e} (iter {niter})')
          sys.stdout.flush()
 
       # Has GMRES stagnated?
@@ -231,9 +233,9 @@ def global_dotprod(vec1, vec2):
    return mpi4py.MPI.COMM_WORLD.allreduce(local_sum)
 
 def global_inf_norm(vec):
-    """Compute infinity norm across all PEs"""
-    local_max = numpy.amax(numpy.abs(vec))
-    return mpi4py.MPI.COMM_WORLD.allreduce(local_max, op=mpi4py.MPI.MAX)
+   """Compute infinity norm across all PEs"""
+   local_max = numpy.amax(numpy.abs(vec))
+   return mpi4py.MPI.COMM_WORLD.allreduce(local_max, op=mpi4py.MPI.MAX)
 
 def apply_givens(Q, v, k):
    """Apply the first k Givens rotations in Q to v.

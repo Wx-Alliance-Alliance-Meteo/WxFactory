@@ -9,13 +9,21 @@ import numpy
 
 from common.program_options import Configuration
 from precondition.multigrid import Multigrid
+from output.output_manager  import OutputManager
+from solvers.solver_info    import SolverInfo
 
 class Integrator(ABC):
    """Describes the time-stepping mechanisme of the simulation"""
    latest_time: float
+   output_manager: Optional[OutputManager]
    preconditioner: Optional[Multigrid]
+   solver_info: Optional[SolverInfo]
    def __init__(self, param: Configuration, preconditioner: Optional[Multigrid]) -> None:
+      self.output_manager = None
       self.preconditioner = preconditioner
+      self.verbose_solver = param.verbose_solver
+      self.solver_info    = None
+      self.sim_time       = -1.0
 
    @abstractmethod
    def __step__(self, Q: numpy.ndarray, dt: float) -> numpy.ndarray:
@@ -33,9 +41,16 @@ class Integrator(ABC):
       t1 = time()
       self.latest_time = t1 - t0
 
+      if self.solver_info is not None and self.output_manager is not None:
+         self.output_manager.store_solver_stats(t1 - t0, self.sim_time, dt, self.solver_info)
+         self.solver_info = None
+
+      self.sim_time += dt
+
       return result
 
 class scipy_counter(object): # TODO : tempo
+   """Serves as a callback object to linear solvers (from Scipy and others)"""
    def __init__(self, disp=False):
       self._disp = disp
       self.niter = 0

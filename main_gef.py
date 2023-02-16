@@ -54,10 +54,12 @@ def main(argv) -> int:
 
    # Time stepping
    stepper = create_time_integrator(param, rhs_handle, rhs_implicit, rhs_explicit, preconditioner)
+   stepper.output_manager = output
 
    output.step(Q, starting_step)
 
    t = param.dt * starting_step
+   stepper.sim_time = t
    nb_steps = math.ceil(param.t_end / param.dt) - starting_step
 
    step = starting_step

@@ -6,8 +6,7 @@ import numpy
 from scipy.sparse.linalg import LinearOperator
 
 from common.program_options import Configuration
-from .integrator            import Integrator
-from output.solver_stats    import write_solver_stats
+from .integrator            import Integrator, SolverInfo
 from solvers.linsol         import fgmres
 from solvers.matvec         import matvec_fun
 from solvers.pmex           import pmex
@@ -22,6 +21,7 @@ class PartRosExp2(Integrator):
       self.rhs_full = rhs_full
       self.rhs_imp = rhs_imp
       self.tol = param.tolerance
+      self.gmres_restart = param.gmres_restart
 
    def __step__(self, Q: numpy.ndarray, dt: float):
 
@@ -44,25 +44,26 @@ class PartRosExp2(Integrator):
       tic = time()
       phiv, stats = pmex([1.], J_exp, vec, tol=self.tol,task1=False)
       time_exp = time() - tic
-      print(f'PMEX converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)')
+      if MPI.COMM_WORLD.rank == 0:
+         print(f'PMEX convergence at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)')
 
       tic = time()
-      A = LinearOperator((n,n), matvec = lambda v: v - J_imp(v) / 2)
+      def A(v):
+         return v - J_imp(v) / 2
       b = ( A(Q_flat) + (phiv + 0.5 * f_imp) * dt ).flatten()
       Q_x0 = Q_flat.copy()
       Qnew, norm_r, norm_b, num_iter, flag, residuals = fgmres(
-         A, b, x0=Q_x0, tol=self.tol, restart=100, maxiter=None, preconditioner=self.preconditioner, verbose=False)
+         A, b, x0=Q_x0, tol=self.tol, restart=self.gmres_restart, maxiter=None, preconditioner=self.preconditioner,
+         verbose=self.verbose_solver)
       time_imp = time() - tic
 
-      write_solver_stats(num_iter, time_imp, flag, residuals)
+      self.solver_info = SolverInfo(flag, time_imp, num_iter, residuals)
 
-      if flag == 0:
-         print(f'FGMRES converged at iteration {num_iter} in {time_imp:4.1f} s to a solution with'
-               f' relative residual {norm_r/norm_b: .2e}')
-      else:
-         print(f'FGMRES stagnation/interruption at iteration {num_iter} in {time_imp:4.1f} s, returning a solution with'
+      if MPI.COMM_WORLD.rank == 0:
+         result_type = 'convergence' if flag == 0 else 'stagnation/interruption'
+         print(f'FGMRES {result_type} at iteration {num_iter} in {time_imp:4.1f} s to a solution with'
                f' relative residual {norm_r/norm_b: .2e}')
 
-      print(f'Elapsed time: exponential {time_exp:.3f} secs ; implicit {time_imp:.3f} secs')
+         print(f'Elapsed time: exponential {time_exp:.3f} secs ; implicit {time_imp:.3f} secs')
 
       return numpy.reshape(Qnew, Q.shape)

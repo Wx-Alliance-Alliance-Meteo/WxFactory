@@ -1,7 +1,7 @@
 
 import mpi4py.MPI
 
-from typing  import Callable, Optional, Union
+from typing  import Callable, List, Optional, Tuple, Union
 import numpy
 
 from common.program_options import Configuration
@@ -10,7 +10,8 @@ from geometry.metric        import Metric, Metric_3d_topo
 from geometry.matrices      import DFR_operators
 from init.initialize        import Topo
 from output.blockstats      import blockstats
-from output.solver_stats    import prepare_solver_stats
+from output.solver_stats    import SolverStatsOutput
+from solvers.solver_info    import SolverInfo
 
 class OutputManager:
    """
@@ -31,6 +32,8 @@ class OutputManager:
       self.operators = operators
       self.topo      = topo
 
+      self.solver_stats_output = SolverStatsOutput(param)
+
       self.final_function = lambda x=None: None
       self.blockstat_function = lambda Q, step_id: None
 
@@ -47,22 +50,23 @@ class OutputManager:
 
             self.output_file_name = lambda step_id: \
                f'{self.param.output_dir}/bubble_{self.param.case_number}_{step_id:05d}'
-            self.step_function = lambda Q, step_id: output_step(Q, self.geometry, self.param, self.output_file_name(step_id))
-
-      if param.store_solver_stats > 0:
-         prepare_solver_stats(param)
+            self.step_function = lambda Q, step_id: \
+               output_step(Q, self.geometry, self.param, self.output_file_name(step_id))
 
       if param.stat_freq > 0 and self.geometry.grid_type == 'cubed_sphere':
          self.blockstat_function = lambda Q, step_id: \
             blockstats(Q, self.geometry, self.topo, self.metric, self.operators, self.param, step_id)
-      
+
+      state_params = (param.dt, param.nb_elements_horizontal, param.nb_elements_vertical, param.nbsolpts)
+      self.config_hash = state_params.__hash__() & 0xffffffffffff
+
    def state_file_name(self, step_id: int) -> str:
-      return f'{self.param.output_dir}/state_vector_{mpi4py.MPI.COMM_WORLD.rank:03d}.{step_id:05d}.npy'
+      """Return the name of the file where to save the state vector for the current problem, for the given timestep."""
+      base_name = f'state_vector_{self.config_hash:012x}_{mpi4py.MPI.COMM_WORLD.rank:03d}'
+      return f'{self.param.output_dir}/{base_name}.{step_id:05d}.npy'
 
    def step(self, Q: numpy.ndarray, step_id: int) -> None:
-      """
-      Output the result of the latest timestep
-      """
+      """Output the result of the latest timestep."""
       if self.param.output_freq > 0:
          if step_id % self.param.output_freq == 0:
             if mpi4py.MPI.COMM_WORLD.rank == 0: print(f'=> Writing dynamic output for step {step_id}')
@@ -75,6 +79,12 @@ class OutputManager:
       if self.param.stat_freq > 0:
          if step_id % self.param.stat_freq == 0:
             self.blockstat_function(Q, step_id)
+
+   def store_solver_stats(self, total_time: float, simulation_time: float, dt: float, solver_info: SolverInfo):
+      if self.param.store_solver_stats > 0:
+         self.solver_stats_output.write_output(
+            total_time, simulation_time, dt, solver_info.total_num_it, solver_info.time, solver_info.flag,
+            solver_info.iterations)
 
    def finalize(self) -> None:
       """

@@ -66,12 +66,12 @@ def extract_results(order: int, num_elem_h: int, num_elem_v: int, dt: int) \
             dg_order   = {order} AND
             num_elem_h = {num_elem_h} AND
             num_elem_v = {num_elem_v} AND
-            dt         = {dt} AND
+            initial_dt = {dt} AND
             {{precond_condition}}
       '''
 
       time_per_step_query = f'''
-         select *, avg(solver_time) as step_time, avg(num_solver_it) as step_it
+         select *, avg(total_solve_time) as step_time, avg(num_solver_it) as step_it
          from ({base_subtable_query})
          group by {{columns}}, step_id
          order by num_mg_levels, mg_solve_coarsest, kiops_dt_factor, (num_pre_smoothe + num_post_smoothe), step_id
@@ -130,7 +130,7 @@ def extract_results(order: int, num_elem_h: int, num_elem_v: int, dt: int) \
       return results
 
    t0 = time()
-   no_precond = get_single_precond_results(['solver_tol'], 'precond = "none"')
+   no_precond = get_single_precond_results(['time_integrator', 'solver_tol'], 'precond = "none"')
 
    # no_precond_time = no_precond[0]['time_avg']
    # print(f'precond avg = {no_precond_time}')
@@ -371,7 +371,7 @@ def plot_time_per_step(no_precond, fv_ref, p_mg, fv_mg, size):
    for i, data in enumerate(no_precond):
       ax.plot(data['step_ids'][:], data['time_per_step'][:],
               color='black', linestyle=main_linestyles[i],
-              label=f'No precond, solver tol {data["solver_tol"]}')
+              label=f'No precond, {data["time_integrator"]}, solver tol {data["solver_tol"]}')
 
    for i, data in enumerate(fv_ref):
       ax.plot(data['time_per_step'][:], color=ref_colors[i], label=f'Ref precond, tol {data["precond_tol"]:.0e}')
@@ -435,7 +435,10 @@ def plot_time_per_step(no_precond, fv_ref, p_mg, fv_mg, size):
    if size in time_prec:
       ax.plot(time_prec[size], color=mg_colors[2], label=f'Dune precond', linestyle='--')
 
-   ax.set_ylim(bottom=0)
+   _, t = ax.get_ylim()
+   top_limit = size[0] * size[1] * size[2] * 0.8
+
+   ax.set_ylim(bottom=0, top=min(top_limit, t))
    ax.set_xlim(left=0)
 
    ax.set_xlabel('Time step')
@@ -454,12 +457,17 @@ def main(args):
    """
 
    sizes_query = '''
-      select distinct dg_order, num_elem_h, num_elem_v, dt
+      select distinct dg_order, num_elem_h, num_elem_v, initial_dt
       from results_param
    '''
    sizes = list(db_cursor.execute(sizes_query).fetchall())
+   dt_independent_size_query = '''
+      select distinct dg_order, num_elem_h, num_elem_v
+      from results_param
+   '''
+   dt_free_sizes = list(db_cursor.execute(dt_independent_size_query).fetchall())
 
-   print(f'Sizes: {sizes}')
+   print(f'Sizes: {sizes}, {dt_free_sizes}')
 
    for size in sizes:
       no_precond, fv_ref, p_mg, fv_mg = extract_results(size[0], size[1], size[2], size[3])
@@ -467,6 +475,9 @@ def main(args):
       if args.plot_time:          plot_time(no_precond, fv_ref, p_mg, fv_mg, size)
       if args.error_time:         plot_error_time(no_precond, fv_ref, p_mg, fv_mg, size)
       if args.plot_time_per_step: plot_time_per_step(no_precond, fv_ref, p_mg, fv_mg, size)
+
+   for size in sizes:
+      pass
 
 if __name__ == '__main__':
    import argparse

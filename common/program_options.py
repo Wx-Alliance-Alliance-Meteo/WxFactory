@@ -51,6 +51,7 @@ class Configuration:
       self.ark_solver_imp = self._get_option('Time_integration', 'ark_solver_imp', str, 'ARK3(2)4L[2]SA-ESDIRK')
 
       self.verbose_solver = self._get_option('Time_integration', 'verbose_solver', int, 0)
+      self.gmres_restart  = self._get_option('Time_integration', 'gmres_restart', int, 20)
 
       ################################
       # Spatial discretization
