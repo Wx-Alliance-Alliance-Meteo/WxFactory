@@ -5,6 +5,7 @@ from rhs.rhs_bubble           import rhs_bubble
 from rhs.rhs_bubble_fv        import rhs_bubble_fv
 from rhs.rhs_bubble_implicit  import rhs_bubble_implicit
 from rhs.rhs_euler            import rhs_euler
+from rhs.rhs_euler_fv         import rhs_euler_fv
 from rhs.rhs_sw               import rhs_sw
 
 # For type hints
@@ -22,8 +23,13 @@ def rhs_selector(geom: Geometry, operators: DFR_operators, metric: Metric, topo:
    rhs_explicit = None
 
    if param.equations == "euler" and param.grid_type == 'cubed_sphere':
-      rhs_handle = lambda q: rhs_euler(q, geom, operators, metric, ptopo, param.nbsolpts, param.nb_elements_horizontal,
-            param.nb_elements_vertical, param.case_number)
+      if param.discretization == 'dg':
+         rhs_handle = lambda q: rhs_euler(q, geom, operators, metric, ptopo, param.nbsolpts, param.nb_elements_horizontal,
+               param.nb_elements_vertical, param.case_number)
+      elif param.discretization == 'fv':
+         rhs_handle = lambda q: rhs_euler_fv(q, geom, operators, metric, ptopo, param.nbsolpts, param.nb_elements_horizontal,
+               param.nb_elements_vertical, param.case_number)
+
 
    elif param.equations == 'euler' and param.grid_type == 'cartesian2d':
       if param.discretization == 'dg':
