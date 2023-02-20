@@ -80,11 +80,11 @@ class OutputManager:
          if step_id % self.param.stat_freq == 0:
             self.blockstat_function(Q, step_id)
 
-   def store_solver_stats(self, total_time: float, simulation_time: float, dt: float, solver_info: SolverInfo):
+   def store_solver_stats(self, total_time: float, simulation_time: float, dt: float, solver_info: SolverInfo, has_precond: bool):
       if self.param.store_solver_stats > 0:
          self.solver_stats_output.write_output(
             total_time, simulation_time, dt, solver_info.total_num_it, solver_info.time, solver_info.flag,
-            solver_info.iterations)
+            solver_info.iterations, has_precond)
 
    def finalize(self) -> None:
       """

@@ -1,3 +1,4 @@
+from copy   import deepcopy
 from typing import List, Optional, Tuple
 
 from mpi4py import MPI
@@ -24,7 +25,7 @@ class SolverStatsOutput:
       self.run_id    = -1
       self.step_id   = 0
 
-      self.param = param
+      self.param = deepcopy(param)
 
       self.db_name       = 'solver_stats.db'
       self.db            = f'{self.param.output_dir}/{self.db_name}'
@@ -50,6 +51,8 @@ class SolverStatsOutput:
                num_elem_v        int,
                initial_dt        int,
                dt                int,
+               grid_type         varchar(64),
+               equations         varchar(64),
                time_integrator   varchar(64),
                solver_tol        float,
                gmres_restart     int,
@@ -90,13 +93,15 @@ class SolverStatsOutput:
                     num_iter: int,
                     local_time: float,
                     flag: int,
-                    residuals: List[Tuple[float, float, float]]):
+                    residuals: List[Tuple[float, float, float]],
+                    has_precond: bool):
       if not (sqlite_available and self.is_writer): return
       p = self.param
 
       self.db_cursor.execute('''
          insert into results_param
          (run_id, step_id, dg_order, num_elem_h, num_elem_v, initial_dt, dt,
+         grid_type, equations,
          time_integrator, solver_tol, gmres_restart,
          precond, precond_interp, precond_tol, mg_smoother,
          kiops_dt_factor,
@@ -104,11 +109,12 @@ class SolverStatsOutput:
          pseudo_cfl,
          simulation_time, total_solve_time,
          num_solver_it, solver_time, solver_flag, smoother_radii)
-         values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          returning results_param.entry_id;''',
          [self.run_id, self.step_id, p.nbsolpts, p.nb_elements_horizontal, p.nb_elements_vertical, p.dt, dt,
+          p.grid_type, p.equations,
           p.time_integrator, p.tolerance, p.gmres_restart,
-          p.preconditioner, p.dg_to_fv_interp, p.precond_tolerance, p.mg_smoother,
+          p.preconditioner if has_precond else 'none', p.dg_to_fv_interp, p.precond_tolerance, p.mg_smoother,
           p.kiops_dt_factor, p.num_mg_levels,
           p.mg_solve_coarsest, p.num_pre_smoothe, p.num_post_smoothe,
           p.pseudo_cfl,
