@@ -3,8 +3,7 @@ import numpy
 import mpi4py.MPI
 import scipy.linalg
 
-from solvers.kiops  import kiops
-from solvers.linsol import global_norm
+from solvers import kiops, global_norm
 
 def exponential(A, b: numpy.ndarray, x0: numpy.ndarray, niter:int=4, target_spectral_radius:float = 1.0, global_dt:float = 1.0, verbose:bool = False):
    """ Reduce the residual by integrating dx/dt = b - A x for an appropriate step size.

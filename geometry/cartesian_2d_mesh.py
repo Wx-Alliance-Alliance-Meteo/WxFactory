@@ -2,15 +2,15 @@ import numpy
 import sympy
 
 from common.definitions import *
-from geometry.geometry  import Geometry
-import geometry.quadrature as quadrature
+from .geometry          import Geometry
+from .quadrature        import gauss_legendre
 
-class Cartesian2d(Geometry):
+class Cartesian2D(Geometry):
    def __init__(self, domain_x, domain_z, nb_elements_x, nb_elements_z, nbsolpts):
       super().__init__('cartesian2d')
 
       # Gauss-Legendre solution points
-      solutionPoints_sym, solutionPoints, glweights = quadrature.gauss_legendre(nbsolpts)
+      solutionPoints_sym, solutionPoints, glweights = gauss_legendre(nbsolpts)
       print('Solution points : ', solutionPoints)
 
       # Extend the solution points to include -1 and 1

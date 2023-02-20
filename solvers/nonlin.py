@@ -6,7 +6,7 @@ import scipy.linalg
 import scipy.optimize
 from time import time
 
-from solvers.linsol import fgmres
+from .fgmres import fgmres
 
 def _maxnorm(x):
    return numpy.absolute(x).max()

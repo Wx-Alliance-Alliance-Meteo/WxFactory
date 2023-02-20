@@ -212,7 +212,7 @@ class Configuration:
          out += f' - {section_name}'
          long_options = {}
          i = 0
-         for option in sorted(section_options):
+         for option in section_options:
             val = str(getattr(self, option))
             if len(option) < 28 and len(val) < 12:
                if i % 2 == 0: out += '\n'

@@ -1,11 +1,11 @@
 import numpy
 import math
 
-from geometry.cubed_sphere  import CubedSphere
-from geometry.matrices      import DFR_operators
+from .cubed_sphere  import CubedSphere
+from .matrices      import DFROperators
 
-class Metric_3d_topo:
-   def __init__(self, geom : CubedSphere, matrix: DFR_operators):
+class Metric3DTopo:
+   def __init__(self, geom : CubedSphere, matrix: DFROperators):
       # Token initialization: store geometry and matrix objects.  Defer construction of the metric itself,
       # so that initialization can take place after topography is defined inside the 'geom' object
 

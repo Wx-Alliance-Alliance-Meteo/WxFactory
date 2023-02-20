@@ -5,13 +5,11 @@ from typing  import Callable, List, Optional, Tuple, Union
 import numpy
 
 from common.program_options import Configuration
-from geometry.geometry      import Geometry
-from geometry.metric        import Metric, Metric_3d_topo
-from geometry.matrices      import DFR_operators
+from geometry               import Geometry, Metric, Metric3DTopo, DFROperators
 from init.initialize        import Topo
 from output.blockstats      import blockstats
 from output.solver_stats    import SolverStatsOutput
-from solvers.solver_info    import SolverInfo
+from solvers                import SolverInfo
 
 class OutputManager:
    """
@@ -19,11 +17,11 @@ class OutputManager:
    """
    final_function: Callable[[], None]
    output_file_name: Callable[[int], str]
-   def __init__(self, \
-                param: Configuration, \
-                geometry: Geometry,     \
-                metric: Optional[Union[Metric, Metric_3d_topo]] = None, \
-                operators: Optional[DFR_operators] = None,              \
+   def __init__(self,
+                param: Configuration,
+                geometry: Geometry,
+                metric: Optional[Union[Metric, Metric3DTopo]] = None,
+                operators: Optional[DFROperators] = None,
                 topo: Optional[Topo] = None) -> None:
 
       self.param     = param

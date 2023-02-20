@@ -7,9 +7,7 @@ from scipy.sparse.linalg import LinearOperator
 
 from common.program_options import Configuration
 from .integrator            import Integrator, SolverInfo
-from solvers.linsol         import fgmres
-from solvers.matvec         import matvec_fun
-from solvers.pmex           import pmex
+from solvers                import fgmres, matvec_fun, pmex
 
 class PartRosExp2(Integrator):
    def __init__(self, param: Configuration, rhs_full: Callable, rhs_imp: Callable, preconditioner):

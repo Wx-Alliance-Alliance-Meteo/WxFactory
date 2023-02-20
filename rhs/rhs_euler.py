@@ -4,15 +4,14 @@ import sys
 from common.definitions import idx_rho_u1, idx_rho_u2, idx_rho_w, idx_rho, idx_rho_theta, gravity, p0, Rd, cpd, cvd, heat_capacity_ratio
 
 # For type hints
-from common.parallel       import Distributed_World
-from geometry.cubed_sphere import CubedSphere
-from geometry.matrices     import DFR_operators
-from geometry.metric       import Metric_3d_topo
-from init.dcmip            import dcmip_schar_damping
+from common.parallel import DistributedWorld
+from geometry        import CubedSphere, DFROperators, Metric3DTopo
+from init.dcmip      import dcmip_schar_damping
 
 #@profile
-def rhs_euler (Q: numpy.ndarray, geom: CubedSphere, mtrx: DFR_operators, metric: Metric_3d_topo, ptopo: Distributed_World, nbsolpts: int, nb_elements_hori: int, nb_elements_vert: int, case_number: int):
-   '''Evaluate the right-hand side of the three-dimensional Euler equations
+def rhs_euler (Q: numpy.ndarray, geom: CubedSphere, mtrx: DFROperators, metric: Metric3DTopo, ptopo: DistributedWorld,
+               nbsolpts: int, nb_elements_hori: int, nb_elements_vert: int, case_number: int):
+   '''Evaluate the right-hand side of the three-dimensional Euler equations.
 
    This function evaluates RHS of the Euler equations using the four-demsional tensor formulation (see Charron 2014), returning
    an array consisting of the time-derivative of the conserved variables (ρ,ρu,ρv,ρw,ρθ).  A "curried" version of this function,

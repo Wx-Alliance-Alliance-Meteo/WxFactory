@@ -7,9 +7,7 @@ from mpi4py       import MPI
 from common.program_options import Configuration
 from .epi            import Epi
 from .integrator     import Integrator, alpha_coeff
-from solvers.kiops   import kiops
-from solvers.matvec  import matvec_fun
-from solvers.pmex    import pmex
+from solvers         import kiops, matvec_fun, pmex
 
 class EpiStiff(Integrator):
    def __init__(self, param: Configuration, order: int, rhs, init_method=None, init_substeps: int = 1):

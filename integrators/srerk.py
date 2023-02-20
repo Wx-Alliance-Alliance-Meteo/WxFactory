@@ -5,9 +5,7 @@ import numpy
 
 from common.program_options import Configuration
 from .integrator            import Integrator, alpha_coeff
-from solvers.kiops          import kiops
-from solvers.matvec         import matvec_fun
-from solvers.pmex           import pmex
+from solvers                import kiops, matvec_fun, pmex
 
 # Computes nodes for SRERK methods with minimal error terms
 def opt_nodes(order: int):

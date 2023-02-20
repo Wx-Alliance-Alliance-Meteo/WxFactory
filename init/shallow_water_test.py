@@ -2,7 +2,7 @@ import math
 import numpy
 
 from common.definitions import day_in_secs, gravity
-from geometry.winds     import wind2contra_2d
+from geometry           import wind2contra_2d
 from init.matsuno       import eval_field
 
 def eval_u_prime(lat):

@@ -6,7 +6,7 @@ from numpy.core.shape_base import block
 
 from common.definitions import *
 
-class Distributed_World:
+class DistributedWorld:
    def __init__(self):
 
       # The numbering of the PEs starts at the bottom right. Pannel ranks increase towards the east in the x1 direction and increases towards the north in the x2 direction:

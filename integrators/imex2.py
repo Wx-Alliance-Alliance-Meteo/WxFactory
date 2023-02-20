@@ -4,7 +4,7 @@ from mpi4py import MPI
 
 from common.program_options import Configuration
 from .integrator     import Integrator
-from solvers.nonlin  import newton_krylov
+from solvers         import newton_krylov
 
 class Imex2(Integrator):
    def __init__(self, param: Configuration, rhs_exp: Callable, rhs_imp: Callable):

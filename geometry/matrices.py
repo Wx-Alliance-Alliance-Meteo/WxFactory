@@ -3,9 +3,9 @@ import numpy.linalg
 import math
 import sympy
 
-from geometry.geometry import Geometry
+from .geometry import Geometry
 
-class DFR_operators:
+class DFROperators:
    def __init__(self, grd : Geometry, filter_apply : bool=False, filter_order: int=8, filter_cutoff: float=0.25):
       '''Initialize the Direct Flux Reconstruction operators
       
@@ -25,14 +25,14 @@ class DFR_operators:
          If applied, at what relative wavenumber (0 < cutoff < 1) to begin applying the filter
       '''
       
-      self.extrap_west = lagrangeEval(grd.solutionPoints_sym, -1)
-      self.extrap_east = lagrangeEval(grd.solutionPoints_sym,  1)
+      self.extrap_west = lagrange_eval(grd.solutionPoints_sym, -1)
+      self.extrap_east = lagrange_eval(grd.solutionPoints_sym,  1)
 
-      self.extrap_south = lagrangeEval(grd.solutionPoints_sym, -1)
-      self.extrap_north = lagrangeEval(grd.solutionPoints_sym,  1)
+      self.extrap_south = lagrange_eval(grd.solutionPoints_sym, -1)
+      self.extrap_north = lagrange_eval(grd.solutionPoints_sym,  1)
 
-      self.extrap_down = lagrangeEval(grd.solutionPoints_sym, -1)
-      self.extrap_up   = lagrangeEval(grd.solutionPoints_sym,  1)
+      self.extrap_down = lagrange_eval(grd.solutionPoints_sym, -1)
+      self.extrap_up   = lagrange_eval(grd.solutionPoints_sym,  1)
 
       if filter_apply:
          self.V = vandermonde(grd.extension)
@@ -395,7 +395,7 @@ class DFR_operators:
 
 
 
-def lagrangeEval(points, newPt):
+def lagrange_eval(points, newPt):
    M = len(points)
    x = sympy.symbols('x')
    l = numpy.zeros_like(points)
@@ -403,7 +403,7 @@ def lagrangeEval(points, newPt):
       l[0] = 1 # Constant
    else:
       for i in range(M):
-         l[i] = Lagrange_poly(x, M-1, i, points).evalf(subs={x: newPt}, n=20)
+         l[i] = lagrange_poly(x, M-1, i, points).evalf(subs={x: newPt}, n=20)
    return l.astype(float)
 
 
@@ -413,7 +413,7 @@ def diffmat(points):
 
    x = sympy.symbols('x')
    for i in range(M):
-      dL = sympy.diff( Lagrange_poly(x, M-1, i, points) )
+      dL = sympy.diff( lagrange_poly(x, M-1, i, points) )
       for j in range(M):
          if i != j:
             D[j,i] = dL.subs(x, points[j])
@@ -422,10 +422,10 @@ def diffmat(points):
    return D
 
 
-def Lagrange_poly(x,order,i,xi):
-    index = list(range(order+1))
-    index.pop(i)
-    return sympy.prod([(x-xi[j])/(xi[i]-xi[j]) for j in index])
+def lagrange_poly(x,order,i,xi):
+   index = list(range(order+1))
+   index.pop(i)
+   return sympy.prod([(x-xi[j])/(xi[i]-xi[j]) for j in index])
 
 def lebesgue(points):
    M = len(points)
@@ -433,7 +433,7 @@ def lebesgue(points):
    x = sympy.symbols('x')
    l = 0
    for i in range(M):
-      l = l + sympy.Abs( Lagrange_poly(x,M-1,i,points) )
+      l = l + sympy.Abs( lagrange_poly(x,M-1,i,points) )
    return [l.subs(x, eval_set[i]) for i in range(M)]
 
 def vandermonde(x):
@@ -539,56 +539,56 @@ def check_skewcentrosymmetry(m):
 # Borrowed from Galois:
 # https://github.com/mhostetter/galois
 def inv(A):
-    if not (A.ndim == 2 and A.shape[0] == A.shape[1]):
-        raise numpy.linalg.LinAlgError(f"Argument `A` must be square, not {A.shape}.")
-    field = type(A)
-    n = A.shape[0]
-    I = numpy.eye(n, dtype=A.dtype)
+   if not (A.ndim == 2 and A.shape[0] == A.shape[1]):
+      raise numpy.linalg.LinAlgError(f"Argument `A` must be square, not {A.shape}.")
+   field = type(A)
+   n = A.shape[0]
+   I = numpy.eye(n, dtype=A.dtype)
 
-    # Concatenate A and I to get the matrix AI = [A | I]
-    AI = numpy.concatenate((A, I), axis=-1)
+   # Concatenate A and I to get the matrix AI = [A | I]
+   AI = numpy.concatenate((A, I), axis=-1)
 
-    # Perform Gaussian elimination to get the reduced row echelon form AI_rre = [I | A^-1]
-    AI_rre = row_reduce(AI, ncols=n)
+   # Perform Gaussian elimination to get the reduced row echelon form AI_rre = [I | A^-1]
+   AI_rre = row_reduce(AI, ncols=n)
 
-    # The rank is the number of non-zero rows of the row reduced echelon form
-    rank = numpy.sum(~numpy.all(AI_rre[:,0:n] == 0, axis=1))
-    if not rank == n:
-        raise numpy.linalg.LinAlgError(f"Argument `A` is singular and not invertible because it does not have full rank of {n}, but rank of {rank}.")
+   # The rank is the number of non-zero rows of the row reduced echelon form
+   rank = numpy.sum(~numpy.all(AI_rre[:,0:n] == 0, axis=1))
+   if not rank == n:
+      raise numpy.linalg.LinAlgError(f"Argument `A` is singular and not invertible because it does not have full rank of {n}, but rank of {rank}.")
 
-    A_inv = AI_rre[:,-n:]
+   A_inv = AI_rre[:,-n:]
 
-    return A_inv
+   return A_inv
 
 
 def row_reduce(A, ncols=None):
-    if not A.ndim == 2:
-        raise ValueError(f"Only 2-D matrices can be converted to reduced row echelon form, not {A.ndim}-D.")
+   if not A.ndim == 2:
+      raise ValueError(f"Only 2-D matrices can be converted to reduced row echelon form, not {A.ndim}-D.")
 
-    ncols = A.shape[1] if ncols is None else ncols
-    A_rre = A.copy()
-    p = 0  # The pivot
+   ncols = A.shape[1] if ncols is None else ncols
+   A_rre = A.copy()
+   p = 0  # The pivot
 
-    for j in range(ncols):
-        # Find a pivot in column `j` at or below row `p`
-        idxs = numpy.nonzero(A_rre[p:,j])[0]
-        if idxs.size == 0:
-            continue
-        i = p + idxs[0]  # Row with a pivot
+   for j in range(ncols):
+      # Find a pivot in column `j` at or below row `p`
+      idxs = numpy.nonzero(A_rre[p:,j])[0]
+      if idxs.size == 0:
+         continue
+      i = p + idxs[0]  # Row with a pivot
 
-        # Swap row `p` and `i`. The pivot is now located at row `p`.
-        A_rre[[p,i],:] = A_rre[[i,p],:]
+      # Swap row `p` and `i`. The pivot is now located at row `p`.
+      A_rre[[p,i],:] = A_rre[[i,p],:]
 
-        # Force pivot value to be 1
-        A_rre[p,:] /= A_rre[p,j]
+      # Force pivot value to be 1
+      A_rre[p,:] /= A_rre[p,j]
 
-        # Force zeros above and below the pivot
-        idxs = numpy.nonzero(A_rre[:,j])[0].tolist()
-        idxs.remove(p)
-        A_rre[idxs,:] -= numpy.multiply.outer(A_rre[idxs,j], A_rre[p,:])
+      # Force zeros above and below the pivot
+      idxs = numpy.nonzero(A_rre[:,j])[0].tolist()
+      idxs.remove(p)
+      A_rre[idxs,:] -= numpy.multiply.outer(A_rre[idxs,j], A_rre[p,:])
 
-        p += 1
-        if p == A_rre.shape[0]:
-            break
+      p += 1
+      if p == A_rre.shape[0]:
+         break
 
-    return A_rre
+   return A_rre

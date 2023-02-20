@@ -9,13 +9,16 @@ from rhs.rhs_euler_fv         import rhs_euler_fv
 from rhs.rhs_sw               import rhs_sw
 
 # For type hints
-from common.parallel             import Distributed_World
-from common.program_options      import Configuration
-from geometry.geometry           import Geometry
-from geometry.metric             import Metric
-from geometry.matrices           import DFR_operators
+from common.parallel        import DistributedWorld
+from common.program_options import Configuration
+from geometry               import DFROperators, Geometry, Metric
 
-def rhs_selector(geom: Geometry, operators: DFR_operators, metric: Metric, topo: Topo, ptopo: Union[Distributed_World, None], param: Configuration, ) \
+def rhs_selector(geom: Geometry,
+                 operators: DFROperators,
+                 metric: Metric,
+                 topo: Topo,
+                 ptopo: Union[DistributedWorld, None],
+                 param: Configuration, ) \
       -> Tuple[Callable, Callable, Callable]:
 
    rhs_handle   = None

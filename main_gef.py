@@ -9,12 +9,9 @@ from mpi4py import MPI
 import numpy
 
 from common.definitions         import idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_w
-from common.parallel            import Distributed_World
+from common.parallel            import DistributedWorld
 from common.program_options     import Configuration
-from geometry.cartesian_2d_mesh import Cartesian2d
-from geometry.cubed_sphere      import CubedSphere
-from geometry.geometry          import Geometry
-from geometry.matrices          import DFR_operators
+from geometry                   import Cartesian2D, CubedSphere, DFROperators, Geometry
 from init.dcmip                 import dcmip_T11_update_winds, dcmip_T12_update_winds
 from init.init_state_vars       import init_state_vars
 from integrators                import Integrator, Epi, EpiStiff, Euler1, Imex2, PartRosExp2, Ros2, RosExp2, \
@@ -30,13 +27,13 @@ def main(argv) -> int:
    param = Configuration(argv.config, MPI.COMM_WORLD.rank == 0)
 
    # Set up distributed world
-   ptopo = Distributed_World() if param.grid_type == 'cubed_sphere' else None
+   ptopo = DistributedWorld() if param.grid_type == 'cubed_sphere' else None
 
    # Create the mesh
    geom = create_geometry(param, ptopo)
 
    # Build differentiation matrice and boundary correction
-   mtrx = DFR_operators(geom, param.filter_apply, param.filter_order, param.filter_cutoff)
+   mtrx = DFROperators(geom, param.filter_apply, param.filter_order, param.filter_cutoff)
 
    # Initialize state variables
    Q, topo, metric = init_state_vars(geom, mtrx, param)
@@ -71,6 +68,7 @@ def main(argv) -> int:
          t += param.dt
 
       step += 1
+
       if MPI.COMM_WORLD.rank == 0: print(f'\nStep {step} of {nb_steps + starting_step}')
 
       Q = stepper.step(Q, param.dt)
@@ -98,19 +96,19 @@ def main(argv) -> int:
 
    return MPI.COMM_WORLD.rank
 
-def create_geometry(param: Configuration, ptopo: Optional[Distributed_World]) -> Geometry:
+def create_geometry(param: Configuration, ptopo: Optional[DistributedWorld]) -> Geometry:
    """ Create the appropriate geometry for the given problem """
 
    if param.grid_type == 'cubed_sphere':
       return CubedSphere(param.nb_elements_horizontal, param.nb_elements_vertical, param.nbsolpts, param.λ0, param.ϕ0,
                          param.α0, param.ztop, ptopo, param)
    if param.grid_type == 'cartesian2d':
-      return Cartesian2d((param.x0, param.x1), (param.z0, param.z1), param.nb_elements_horizontal,
+      return Cartesian2D((param.x0, param.x1), (param.z0, param.z1), param.nb_elements_horizontal,
                          param.nb_elements_vertical, param.nbsolpts)
 
    raise ValueError(f'Invalid grid type: {param.grid_type}')
 
-def create_preconditioner(param: Configuration, ptopo: Optional[Distributed_World]) -> Optional[Multigrid]:
+def create_preconditioner(param: Configuration, ptopo: Optional[DistributedWorld]) -> Optional[Multigrid]:
    """ Create the preconditioner required by the given params """
    if param.preconditioner == 'p-mg':
       return Multigrid(param, ptopo, discretization='dg')

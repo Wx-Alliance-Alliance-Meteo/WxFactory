@@ -1,8 +1,7 @@
 import numpy
 
-from common.definitions    import idx_u1, idx_u2
-from geometry.matrices     import lagrangeEval, remesh_operator
-from geometry.quadrature   import gauss_legendre
+from common.definitions import idx_u1, idx_u2
+from geometry           import gauss_legendre, lagrange_eval, remesh_operator
 
 basis_point_sets = {}
 
@@ -196,8 +195,8 @@ class Interpolator:
       self.elem_interp = None
       self.reverse_interp = None
       if interp_type == 'lagrange':
-         self.elem_interp    = numpy.array([lagrangeEval(origin_points, x) for x in dest_points])
-         self.reverse_interp = numpy.array([lagrangeEval(dest_points, x) for x in origin_points])
+         self.elem_interp    = numpy.array([lagrange_eval(origin_points, x) for x in dest_points])
+         self.reverse_interp = numpy.array([lagrange_eval(dest_points, x) for x in origin_points])
       elif interp_type == 'l2-norm':
          self.elem_interp = compute_dg_to_fv_small_projection(origin_order, dest_order, quad_order=3)
       elif interp_type in ['bilinear', 'trilinear']:

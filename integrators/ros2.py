@@ -5,9 +5,8 @@ from typing import Callable
 from mpi4py import MPI
 
 from common.program_options import Configuration
-from .integrator            import Integrator, SolverInfo
-from solvers.linsol         import fgmres
-from solvers.matvec         import matvec_rat
+from .integrator            import Integrator
+from solvers                import fgmres, matvec_rat, SolverInfo
 
 class Ros2(Integrator):
    def __init__(self, param: Configuration, rhs_handle: Callable, preconditioner=None) -> None:

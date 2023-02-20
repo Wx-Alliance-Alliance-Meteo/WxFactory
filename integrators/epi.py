@@ -6,10 +6,8 @@ from mpi4py      import MPI
 import numpy
 
 from common.program_options import Configuration
-from solvers.kiops          import kiops
-from solvers.matvec         import matvec_fun
-from solvers.pmex           import pmex
 from .integrator            import Integrator, SolverInfo
+from solvers                import kiops, matvec_fun, pmex
 
 class Epi(Integrator):
    def __init__(self, param: Configuration, order: int, rhs: Callable, init_method=None, init_substeps: int = 1):

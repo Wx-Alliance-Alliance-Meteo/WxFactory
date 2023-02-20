@@ -1,11 +1,11 @@
 import os
 import numpy
 
-from common.definitions         import idx_2d_rho       as RHO,           \
-                                       idx_2d_rho_theta as RHO_THETA
-from common.graphx              import image_field
-from common.program_options     import Configuration
-from geometry.geometry          import Geometry
+from common.definitions     import idx_2d_rho       as RHO,           \
+                                   idx_2d_rho_theta as RHO_THETA
+from common.graphx          import image_field
+from common.program_options import Configuration
+from geometry               import Geometry
 
 def output_init(param: Configuration):
    """

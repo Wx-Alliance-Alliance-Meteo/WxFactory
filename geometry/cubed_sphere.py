@@ -3,18 +3,17 @@ import numpy
 import sympy
 import sys
 
-import common.definitions
-from geometry.geometry     import Geometry
-import geometry.sphere         as sphere
-import geometry.quadrature     as quadrature
+from .geometry   import Geometry
+from .quadrature import gauss_legendre
+from .sphere     import cart2sph
 
 # For type hints
-from common.parallel          import Distributed_World
+from common.parallel          import DistributedWorld
 from common.program_options   import Configuration
 
 class CubedSphere(Geometry):
    def __init__(self, nb_elements_horizontal:int , nb_elements_vertical: int, nbsolpts: int, 
-                λ0: float, ϕ0: float, α0: float, ztop: float, ptopo: Distributed_World, param: Configuration):
+                λ0: float, ϕ0: float, α0: float, ztop: float, ptopo: DistributedWorld, param: Configuration):
       '''Initialized the cubed sphere geometry, for an earthlike sphere with no topography.
 
       This function initializes the basic CubedSphere geometry object, which provides the parameters necessary to define
@@ -119,7 +118,7 @@ class CubedSphere(Geometry):
       ## Element properties -- solution and extension points
 
       # Gauss-Legendre solution points
-      solutionPoints_sym, solutionPoints, glweights = quadrature.gauss_legendre(nbsolpts)
+      solutionPoints_sym, solutionPoints, glweights = gauss_legendre(nbsolpts)
       if (ptopo.rank == 0):
          print(f'Solution points : {solutionPoints}')
          print(f'GL weights : {glweights}')
@@ -585,7 +584,7 @@ class CubedSphere(Geometry):
       for (latlon, cart, gnom) in zip([coordVec_latlon, coordVec_latlon_itf_i, coordVec_latlon_itf_j, coordVec_latlon_itf_k],
                                       [coordVec_cart, coordVec_cart_itf_i, coordVec_cart_itf_j, coordVec_cart_itf_k],
                                       [coordVec_gnom, coordVec_gnom_itf_i, coordVec_gnom_itf_j, coordVec_gnom_itf_k]):
-         [latlon[0,:], latlon[1,:], _] = sphere.cart2sph(cart[0,:],cart[1,:],cart[2,:])
+         [latlon[0,:], latlon[1,:], _] = cart2sph(cart[0,:],cart[1,:],cart[2,:])
          latlon[2,:] = gnom[2,:]
 
       self.coordVec_gnom = coordVec_gnom

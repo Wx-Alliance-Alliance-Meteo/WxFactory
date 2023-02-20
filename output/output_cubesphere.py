@@ -6,7 +6,7 @@ import os
 import time
 
 from common.definitions import *
-from geometry.winds     import contra2wind_2d, contra2wind_3d
+from geometry           import contra2wind_2d, contra2wind_3d
 from output.diagnostic  import relative_vorticity, potential_vorticity
 
 def output_init(geom, param):

@@ -5,22 +5,17 @@ from typing       import Callable, Optional, Union
 
 from mpi4py import MPI
 import numpy
-from scipy.sparse.linalg import LinearOperator
 
-from common.definitions          import idx_2d_rho, idx_2d_rho_u, idx_2d_rho_w
-from common.interpolation        import Interpolator
-from geometry.cartesian_2d_mesh  import Cartesian2d
-from geometry.cubed_sphere       import CubedSphere
-from geometry.matrices           import DFR_operators
-from init.init_state_vars        import init_state_vars
-from precondition.smoother       import kiops_smoothe, exponential as exp_smoothe, rk_smoothing, rk1_smoothing
-from rhs.rhs_selector            import rhs_selector
-from solvers.linsol              import fgmres, global_norm
-from solvers.matvec              import matvec_rat
-from solvers.nonlin              import KrylovJacobian
+from common.definitions    import idx_2d_rho, idx_2d_rho_u, idx_2d_rho_w
+from common.interpolation  import Interpolator
+from geometry              import Cartesian2D, CubedSphere, DFROperators
+from init.init_state_vars  import init_state_vars
+from precondition.smoother import kiops_smoothe, exponential as exp_smoothe, rk_smoothing, rk1_smoothing
+from rhs.rhs_selector      import rhs_selector
+from solvers               import fgmres, global_norm, KrylovJacobian, matvec_rat, MatvecOp
 
 # For type hints
-from common.parallel        import Distributed_World
+from common.parallel        import DistributedWorld
 from common.program_options import Configuration
 
 MatvecOperator = Callable[[numpy.ndarray], numpy.ndarray]
@@ -39,7 +34,7 @@ class MultigridLevel:
    pseudo_dt:        float
    jacobian:         KrylovJacobian
 
-   def __init__(self, param: Configuration, ptopo: Distributed_World, discretization: str, nb_elem_horiz: int,
+   def __init__(self, param: Configuration, ptopo: DistributedWorld, discretization: str, nb_elem_horiz: int,
                 nb_elem_vert: int, source_order: int, target_order: int, ndim: int):
 
       p = deepcopy(param)
@@ -71,15 +66,17 @@ class MultigridLevel:
          self.geometry = CubedSphere(p.nb_elements_horizontal, p.nb_elements_vertical, p.nbsolpts, p.λ0, p.ϕ0, p.α0,
                                      p.ztop, ptopo, p)
       elif p.grid_type == 'cartesian2d':
-         self.geometry = Cartesian2d((p.x0, p.x1), (p.z0, p.z1), p.nb_elements_horizontal, p.nb_elements_vertical,
+         self.geometry = Cartesian2D((p.x0, p.x1), (p.z0, p.z1), p.nb_elements_horizontal, p.nb_elements_vertical,
                                      p.nbsolpts)
 
-      operators = DFR_operators(self.geometry, p.filter_apply, p.filter_order, p.filter_cutoff)
+      operators = DFROperators(self.geometry, p.filter_apply, p.filter_order, p.filter_cutoff)
 
       field, topo, self.metric = init_state_vars(self.geometry, operators, self.param)
       self.rhs_operator, _, _ = rhs_selector(self.geometry, operators, self.metric, topo, ptopo, self.param)
       if self.param.verbose_precond > 0: print(f'field shape: {field.shape}')
       self.shape = field.shape
+      self.dtype = field.dtype
+      self.size  = field.size
 
       # Now set up the various operators: RHS, smoother, restriction, prolongation
       # matrix-vector product is done at every step, so not here
@@ -168,7 +165,7 @@ class MultigridLevel:
 
       return restricted_field, restricted_prev_field
 
-class Multigrid:
+class Multigrid(MatvecOp):
    levels: dict[int, MultigridLevel]
    initial_interpolate: Callable[[numpy.ndarray], numpy.ndarray]
    def __init__(self, param, ptopo, discretization, fv_only=False) -> None:
@@ -208,9 +205,6 @@ class Multigrid:
 
       param.num_mg_levels = min(param.num_mg_levels, self.max_num_levels)
       print(f'num_mg_levels: {param.num_mg_levels} (max {self.max_num_levels})')
-
-      # Determine correct matrix-vector product function to use
-      self.matvec = matvec_rat
 
       # Determine level-specific parameters for each level (order, num elements)
       if discretization == 'fv':
@@ -255,10 +249,14 @@ class Multigrid:
          nb_elem_hori         = self.elem_counts_hori[i_level]
          nb_elem_vert         = self.elem_counts_vert[i_level]
          if self.verbose:
-            print(f'Initializing level {i_level}, {discretization}, order {order}->{new_order}, elems {nb_elem_hori}x{nb_elem_vert}')
+            print(f'Initializing level {i_level}, {discretization}, order {order}->{new_order},'
+                  f' elems {nb_elem_hori}x{nb_elem_vert}')
          param.exp_smoothe_spectral_radius = spectral_radii[i_level]
          param.exp_smoothe_nb_iter = exp_nb_iters[i_level]
-         self.levels[i_level] = MultigridLevel(param, ptopo, discretization, nb_elem_hori, nb_elem_vert, order, new_order, self.ndim)
+         self.levels[i_level] = MultigridLevel(param, ptopo, discretization, nb_elem_hori, nb_elem_vert, order,
+                                               new_order, self.ndim)
+
+      super().__init__(self.apply, self.levels[0].dtype, self.levels[0].shape)
 
       # Default "0th step" conversion function
       self.initial_interpolate = lambda x : x
@@ -282,15 +280,16 @@ class Multigrid:
             self.big_shape = list(self.big_shape)
             for d in dims: self.big_shape[d] = self.big_shape[d] * int_shape[1] // int_shape[0]
             self.big_shape = tuple(self.big_shape)
-         
+
          self.initial_interpolate = lambda vec, op=self.initial_interpolator, sh=self.big_shape: op(vec.reshape(sh))
-         self.get_solution_back   = lambda vec, op=self.initial_interpolator, sh=self.levels[0].shape: op(vec.reshape(sh), reverse=True)
+         self.get_solution_back   = lambda vec, op=self.initial_interpolator, sh=self.levels[0].shape: \
+                                       op(vec.reshape(sh), reverse=True)
 
    def prepare(self, dt: float, field: numpy.ndarray, prev_field:Optional[numpy.ndarray] = None):
       """
       Compute the matrix-vector operator for every grid level. Also compute the pseudo time step size for each level.
       """
-      
+
       # if MPI.COMM_WORLD.rank == 0: print(f'original field: \n{field[0]}')
       next_field = self.initial_interpolate(field)
       # if MPI.COMM_WORLD.rank == 0: print(f'FV field: \n{next_field[0]}')
