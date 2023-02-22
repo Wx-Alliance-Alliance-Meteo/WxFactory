@@ -31,11 +31,5 @@ geom*.dat
 *.out
 *.nc
 *.db
-
-mg_tests/configs*
-mg_tests/*.txt
-mg_tests/*.pdf
-mg_tests/**/*.ini
-!mg_tests/test_euler.ini
-!mg_tests/test_sw.ini
-
+*.npy
+*.npz

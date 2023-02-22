@@ -20,7 +20,10 @@ class SolverStatsOutput:
 
       # Only 1 PE will connect to the DB and log solver stats
       self.is_writer = MPI.COMM_WORLD.rank == 0
-      if not (sqlite_available and self.is_writer): return
+      if not (sqlite_available and self.is_writer):
+         if MPI.COMM_WORLD.allreduce(0) != 0:
+            raise ValueError("Seems like init failed on root PE...")
+         return
 
       self.run_id    = -1
       self.step_id   = 0
@@ -29,9 +32,17 @@ class SolverStatsOutput:
 
       self.db_name       = 'solver_stats.db'
       self.db            = f'{self.param.output_dir}/{self.db_name}'
-      self.db_connection = sqlite3.connect(self.db)
-      self.db_cursor     = self.db_connection.cursor()
-      self.create_results_table()
+
+      try:
+         self.db_connection = sqlite3.connect(self.db)
+         self.db_cursor     = self.db_connection.cursor()
+         self.create_results_table()
+         MPI.COMM_WORLD.allreduce(0)
+
+      except sqlite3.OperationalError:
+         # Signal failure to the other PEs
+         MPI.COMM_WORLD.allreduce(1)
+         raise
 
    def create_results_table(self):
       """Create the results tables in the database, if they don't already exist."""

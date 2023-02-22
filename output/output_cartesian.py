@@ -7,12 +7,6 @@ from common.graphx          import image_field
 from common.program_options import Configuration
 from geometry               import Geometry
 
-def output_init(param: Configuration):
-   """
-   Create output directory
-   """
-   os.makedirs(os.path.abspath(param.output_dir), exist_ok=True)
-
 def output_step(Q: numpy.ndarray, geom: Geometry, param: Configuration, filename: str) -> None:
    if param.case_number <= 2:
       image_field(geom, (Q[RHO_THETA,:,:] / Q[RHO,:,:]), filename, 303.1, 303.7, 7)

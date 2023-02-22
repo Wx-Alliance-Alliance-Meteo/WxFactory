@@ -1,7 +1,7 @@
-
-import mpi4py.MPI
-
+import os
 from typing  import Callable, List, Optional, Tuple, Union
+
+from mpi4py import MPI
 import numpy
 
 from common.program_options import Configuration
@@ -30,6 +30,8 @@ class OutputManager:
       self.operators = operators
       self.topo      = topo
 
+      os.makedirs(os.path.abspath(param.output_dir), exist_ok=True)
+
       self.solver_stats_output = SolverStatsOutput(param)
 
       self.final_function = lambda x=None: None
@@ -43,8 +45,7 @@ class OutputManager:
                output_netcdf(Q, self.geometry, self.metric, self.operators, self.topo, step_id, self.param)
             self.final_function = output_finalize
          elif self.geometry.grid_type == 'cartesian2d':
-            from output.output_cartesian import output_init, output_step
-            output_init(self.param)
+            from output.output_cartesian import output_step
 
             self.output_file_name = lambda step_id: \
                f'{self.param.output_dir}/bubble_{self.param.case_number}_{step_id:05d}'
@@ -60,14 +61,14 @@ class OutputManager:
 
    def state_file_name(self, step_id: int) -> str:
       """Return the name of the file where to save the state vector for the current problem, for the given timestep."""
-      base_name = f'state_vector_{self.config_hash:012x}_{mpi4py.MPI.COMM_WORLD.rank:03d}'
+      base_name = f'state_vector_{self.config_hash:012x}_{MPI.COMM_WORLD.rank:03d}'
       return f'{self.param.output_dir}/{base_name}.{step_id:05d}.npy'
 
    def step(self, Q: numpy.ndarray, step_id: int) -> None:
       """Output the result of the latest timestep."""
       if self.param.output_freq > 0:
          if step_id % self.param.output_freq == 0:
-            if mpi4py.MPI.COMM_WORLD.rank == 0: print(f'=> Writing dynamic output for step {step_id}')
+            if MPI.COMM_WORLD.rank == 0: print(f'=> Writing dynamic output for step {step_id}')
             self.step_function(Q, step_id)
 
       if self.param.save_state_freq > 0:
