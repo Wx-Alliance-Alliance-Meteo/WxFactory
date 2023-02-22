@@ -1,6 +1,7 @@
 import numpy
 
-from common.definitions import *
+from common.definitions import idx_2d_rho, idx_2d_rho_u, idx_2d_rho_w, idx_2d_rho_theta, \
+                               Rd, p0, cpd, cvd, gravity, heat_capacity_ratio
 
 def rhs_bubble_implicit(Q, geom, mtrx, nbsolpts, nb_elements_x, nb_elements_z):
 
@@ -14,8 +15,8 @@ def rhs_bubble_implicit(Q, geom, mtrx, nbsolpts, nb_elements_x, nb_elements_z):
    flux_x1 = numpy.zeros_like(Q, dtype=datatype)
    flux_x3 = numpy.zeros_like(Q, dtype=datatype)
 
-   df1_dx = numpy.zeros_like(Q, dtype=datatype)
-   df3_dz = numpy.zeros_like(Q, dtype=datatype)
+   df1_dx1 = numpy.zeros_like(Q, dtype=datatype)
+   df3_dx3 = numpy.zeros_like(Q, dtype=datatype)
 
    kfaces_flux = numpy.zeros((nb_equations, nb_elements_z, 2, nbsolpts*nb_elements_x), dtype=datatype)
    kfaces_var  = numpy.zeros((nb_equations, nb_elements_z, 2, nbsolpts*nb_elements_x), dtype=datatype)
@@ -115,18 +116,18 @@ def rhs_bubble_implicit(Q, geom, mtrx, nbsolpts, nb_elements_x, nb_elements_z):
    for elem in range(nb_elements_z):
       epais = elem * nbsolpts + numpy.arange(nbsolpts)
 
-      df3_dz[idx_2d_rho,epais,:] = ( mtrx.diff_solpt @ flux_x3[idx_2d_rho,epais,:] + mtrx.correction @ kfaces_flux[idx_2d_rho,elem,:,:] ) * 2.0/geom.Δz
-      df3_dz[idx_2d_rho_w,epais,:] = ( mtrx.diff_solpt @ flux_x3[idx_2d_rho_w,epais,:] + mtrx.correction @ kfaces_flux[idx_2d_rho_w,elem,:,:] ) * 2.0/geom.Δz
+      df3_dx3[idx_2d_rho,epais,:] = ( mtrx.diff_solpt @ flux_x3[idx_2d_rho,epais,:] + mtrx.correction @ kfaces_flux[idx_2d_rho,elem,:,:] ) * 2.0/geom.Δx3
+      df3_dx3[idx_2d_rho_w,epais,:] = ( mtrx.diff_solpt @ flux_x3[idx_2d_rho_w,epais,:] + mtrx.correction @ kfaces_flux[idx_2d_rho_w,elem,:,:] ) * 2.0/geom.Δx3
 
    for elem in range(nb_elements_x):
       epais = elem * nbsolpts + numpy.arange(nbsolpts)
 
-      df1_dx[:-2,:,epais] = ( flux_x1[:-2,:,epais] @ mtrx.diff_solpt.T + ifaces_flux[:-2,elem,:,:] @ mtrx.correction.T ) * 2.0/geom.Δx
+      df1_dx1[:-2,:,epais] = ( flux_x1[:-2,:,epais] @ mtrx.diff_solpt.T + ifaces_flux[:-2,elem,:,:] @ mtrx.correction.T ) * 2.0/geom.Δx1
 
    # --- Assemble the right-hand sides
 
-   rhs[:-1,:,:] = - ( df1_dx[:-1,:,:] + df3_dz[:-1,:,:] )
+   rhs[:-1,:,:] = - ( df1_dx1[:-1,:,:] + df3_dx3[:-1,:,:] )
    rhs[idx_2d_rho_w,:,:] -= Q[idx_2d_rho,:,:] * gravity
-   rhs[idx_2d_rho_theta] = - theta * ( df1_dx[idx_2d_rho] + df3_dz[idx_2d_rho] )
+   rhs[idx_2d_rho_theta] = - theta * ( df1_dx1[idx_2d_rho] + df3_dx3[idx_2d_rho] )
 
    return rhs

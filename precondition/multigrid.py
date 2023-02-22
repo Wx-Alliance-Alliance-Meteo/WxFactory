@@ -114,12 +114,11 @@ class MultigridLevel:
       """ Initialize structures and data that will be used for preconditioning during the ongoing time step """
 
       if self.param.mg_smoother in ['erk1', 'erk3']:
-         cfl       = self.param.pseudo_cfl
-         factor    = 1.0 / (self.ndim * (2 * self.param.nbsolpts + 1))
-         if self.param.grid_type == 'cartesian2d':
-            delta_min = abs(1.- self.geometry.solutionPoints[-1]) * min(self.geometry.Δx, self.geometry.Δz)
-         else:
-            delta_min = abs(1.- self.geometry.solutionPoints[-1]) * min(self.geometry.Δx1, min(self.geometry.Δx2, self.geometry.Δx3))
+         cfl    = self.param.pseudo_cfl
+         factor = 1.0 / (self.ndim * (2 * self.param.nbsolpts + 1))
+         
+         delta_min = abs(1.- self.geometry.solutionPoints[-1])                                                       \
+                     * min(self.geometry.Δx1, min(self.geometry.Δx2, self.geometry.Δx3))
          speed_max = numpy.maximum( abs( 343. +  field[idx_2d_rho_u,:,:] /  field[idx_2d_rho,:,:] ),
                                     abs( 343. +  field[idx_2d_rho_w,:,:] /  field[idx_2d_rho,:,:]) )
 

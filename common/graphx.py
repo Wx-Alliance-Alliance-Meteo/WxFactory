@@ -188,7 +188,7 @@ def plot_array(array, filename=None):
 def image_field(geom, field, filename, vmin, vmax, n):
    fig, ax = matplotlib.pyplot.subplots()
       
-   cmap = matplotlib.pyplot.contourf(geom.X, geom.Z, field, cmap='jet', levels=numpy.linspace(vmin,vmax,n), extend="both")
+   cmap = matplotlib.pyplot.contourf(geom.X1, geom.X3, field, cmap='jet', levels=numpy.linspace(vmin,vmax,n), extend="both")
    ax.set_aspect('equal', 'box')
 
    cbar = fig.colorbar(cmap, ax=ax, orientation='vertical', shrink=0.5)
@@ -219,7 +219,7 @@ def print_residual_per_variable(geom, field, filename = None):
 
       levels = numpy.linspace(minval, maxval, num_levels)
 
-      cmap = ax.contourf(geom.X, geom.Z, vals, levels=levels)
+      cmap = ax.contourf(geom.X1, geom.X3, vals, levels=levels)
       ax.set_title(title)
       cbar = fig.colorbar(cmap, ax=ax, orientation='vertical', format = '%8.1e')
       cbar.set_label('Residual',)
