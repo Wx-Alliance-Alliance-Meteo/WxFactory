@@ -6,11 +6,12 @@ from typing       import Callable, Optional, Union
 from mpi4py import MPI
 import numpy
 
-from common.definitions    import idx_2d_rho, idx_2d_rho_u, idx_2d_rho_w
+from common.definitions    import idx_2d_rho, idx_2d_rho_u, idx_2d_rho_w, \
+                                  idx_rho, idx_rho_u1, idx_rho_u2, gravity
 from common.interpolation  import Interpolator
 from geometry              import Cartesian2D, CubedSphere, DFROperators
 from init.init_state_vars  import init_state_vars
-from precondition.smoother import kiops_smoothe, exponential as exp_smoothe, rk_smoothing, rk1_smoothing
+from .smoother             import kiops_smoothe, exponential as exp_smoothe, rk_smoothing, rk1_smoothing
 from rhs.rhs_selector      import rhs_selector
 from solvers               import fgmres, global_norm, KrylovJacobian, matvec_rat, MatvecOp
 
@@ -31,7 +32,7 @@ class MultigridLevel:
    pre_smoothe:      Callable[[MatvecOperator, numpy.ndarray, numpy.ndarray], numpy.ndarray]
    post_smoothe:     Callable[[MatvecOperator, numpy.ndarray, numpy.ndarray], numpy.ndarray]
    matrix_operator:  MatvecOperator
-   pseudo_dt:        float
+   pseudo_dt:        Union[float, numpy.ndarray]
    jacobian:         KrylovJacobian
 
    def __init__(self, param: Configuration, ptopo: DistributedWorld, discretization: str, nb_elem_horiz: int,
@@ -114,23 +115,11 @@ class MultigridLevel:
       """ Initialize structures and data that will be used for preconditioning during the ongoing time step """
 
       if self.param.mg_smoother in ['erk1', 'erk3']:
-         cfl    = self.param.pseudo_cfl
-         factor = 1.0 / (self.ndim * (2 * self.param.nbsolpts + 1))
-         
-         delta_min = abs(1.- self.geometry.solutionPoints[-1])                                                       \
-                     * min(self.geometry.Δx1, min(self.geometry.Δx2, self.geometry.Δx3))
-         speed_max = numpy.maximum( abs( 343. +  field[idx_2d_rho_u,:,:] /  field[idx_2d_rho,:,:] ),
-                                    abs( 343. +  field[idx_2d_rho_w,:,:] /  field[idx_2d_rho,:,:]) )
-
-         self.pseudo_dt = numpy.amin(delta_min * factor / speed_max) * cfl / dt
-         if self.param.verbose_precond > 0:
-            print(f'pseudo_dt = {self.pseudo_dt}')
-
+         self.compute_pseudo_dt(field, dt)
          if self.param.mg_smoother == 'erk1':
             self.pre_smoothe  = functools.partial(rk1_smoothing, h=self.pseudo_dt)
          elif self.param.mg_smoother == 'erk3':
             self.pre_smoothe  = functools.partial(rk_smoothing, h=self.pseudo_dt)
-
          self.post_smoothe = self.pre_smoothe
 
       ##########################################
@@ -163,6 +152,76 @@ class MultigridLevel:
       restricted_prev_field = self.restrict(prev_field) if prev_field is not None else None
 
       return restricted_field, restricted_prev_field
+
+   def compute_pseudo_dt(self, field, dt):
+      r = MPI.COMM_WORLD.rank
+
+      cfl    = self.param.pseudo_cfl
+      factor = 1.0 / (self.ndim * (2 * self.param.nbsolpts + 1))
+
+      delta_min = abs(1.- self.geometry.solutionPoints[-1])                                                       \
+                  * min(self.geometry.Δx1, min(self.geometry.Δx2, self.geometry.Δx3))
+      if r == 0: print(f'dx, y, z: {self.geometry.Δx1}, {self.geometry.Δx2}, {self.geometry.Δx3}')
+      speed_max = numpy.maximum( abs( 343. +  field[idx_2d_rho_u,:,:] /  field[idx_2d_rho,:,:] ),
+                                 abs( 343. +  field[idx_2d_rho_w,:,:] /  field[idx_2d_rho,:,:]) )
+      self.pseudo_dt = numpy.amin(delta_min * factor / speed_max) * cfl / dt
+      if r == 0: print(f'pseudo dt = {self.pseudo_dt}')
+      if isinstance(self.geometry, Cartesian2D):
+         delta_min = abs(1.- self.geometry.solutionPoints[-1])                                                       \
+                     * min(self.geometry.Δx1, min(self.geometry.Δx2, self.geometry.Δx3))
+         speed_max = numpy.maximum( abs( 343. +  field[idx_2d_rho_u,:,:] /  field[idx_2d_rho,:,:] ),
+                                    abs( 343. +  field[idx_2d_rho_w,:,:] /  field[idx_2d_rho,:,:]) )
+         self.pseudo_dt = numpy.amin(delta_min * factor / speed_max) * cfl / dt
+
+      elif isinstance(self.geometry, CubedSphere):
+         # print(f'CubeSphere instance!')
+
+         X, Y = self.geometry.X, self.geometry.Y
+
+         dx = numpy.empty_like(self.geometry.X)
+         dy = numpy.empty_like(self.geometry.Y)
+
+         dx[:,  0]   = X[:, 1] - X[:, 0]
+         dx[:, -1]   = X[:, -1] - X[:, -2]
+         dx[:, 1:-1] = (X[:, 2:] - X[:, :-2]) * 0.5
+
+         dy[ 0, :]   = Y[ 1, :] - Y[ 0, :]
+         dy[-1, :]   = Y[-1, :] - Y[-2, :]
+         dy[1:-1, :] = (Y[2:, :] - Y[:-2, :]) * 0.5
+
+         # if r == 0:
+         #    print(f'dx = \n{dx}')
+
+         rho = field[idx_rho]
+         u1  = field[idx_rho_u1] / rho
+         u2  = field[idx_rho_u2] / rho
+
+         elem_size = numpy.minimum(dx.min(), dy.min())
+         # if r == 0: print(f'elem_size = {elem_size}')
+
+         real_u1 = u1 * dx / 2.0
+         real_u2 = u2 * dy / 2.0
+
+         v1 = numpy.absolute(real_u1) + 343.0
+         v2 = numpy.absolute(real_u2) + 343.0
+
+         if self.param.equations == 'shallow_water':
+            real_h_11 = self.metric.H_contra_11 * dx * dy / 4.0
+            real_h_22 = self.metric.H_contra_22 * dx * dy / 4.0
+            v1 += numpy.sqrt(real_h_11 * gravity * rho)
+            v2 += numpy.sqrt(real_h_22 * gravity * rho)
+
+         vel = numpy.maximum(v1, v2)
+         # vel = vel.max()
+         # if r == 0: print(f'vel: {vel}')
+
+         self.pseudo_dt = numpy.tile((elem_size * factor / vel) * cfl / dt, (field.shape[0], 1, 1, 1)).flatten()
+      if r == 0:
+      #    print(f'pdt shape: {self.pseudo_dt.shape}, field shape: {field.shape}')
+         print(f'pseudo dt avg = {numpy.average(self.pseudo_dt)}')
+
+      if self.param.verbose_precond > 0:
+         print(f'pseudo_dt = {self.pseudo_dt}')
 
 class Multigrid(MatvecOp):
    levels: dict[int, MultigridLevel]
