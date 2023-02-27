@@ -53,8 +53,13 @@ class OutputManager:
                output_step(Q, self.geometry, self.param, self.output_file_name(step_id))
 
       if param.stat_freq > 0 and self.geometry.grid_type == 'cubed_sphere':
-         self.blockstat_function = lambda Q, step_id: \
-            blockstats(Q, self.geometry, self.topo, self.metric, self.operators, self.param, step_id)
+         if self.param.equations == 'shallow_water':
+            if self.topo is None:
+               raise ValueError(f'Need a topo for this!')
+            self.blockstat_function = lambda Q, step_id: \
+               blockstats(Q, self.geometry, self.topo, self.metric, self.operators, self.param, step_id)
+         else:
+            print(f'WARNING: Blockstat only implemented for Shallow Water equations')
 
       state_params = (param.dt, param.nb_elements_horizontal, param.nb_elements_vertical, param.nbsolpts)
       self.config_hash = state_params.__hash__() & 0xffffffffffff

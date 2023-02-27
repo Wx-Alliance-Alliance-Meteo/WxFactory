@@ -1,9 +1,9 @@
 import math
 from time import time
 import sys
-from typing import Callable
+from typing import Callable, Optional
 
-import mpi4py
+from mpi4py import MPI
 import numpy
 import scipy
 import scipy.sparse.linalg
@@ -11,6 +11,8 @@ import scipy.sparse.linalg
 from .global_operations import global_dotprod, global_norm
 
 __all__ = ['fgmres']
+
+MatvecOperator = Callable[[numpy.ndarray], numpy.ndarray]
 
 def _ortho_1_sync_igs(Q, R, T, K, j):
    """Orthonormalization process that only requires a single synchronization step.
@@ -30,7 +32,7 @@ def _ortho_1_sync_igs(Q, R, T, K, j):
    if j < 2: return -1.0
 
    local_tmp = Q[:j, :] @ Q[j-2:j, :].T     # Q multiplied by its own last 2 rows (up to j)
-   global_tmp = mpi4py.MPI.COMM_WORLD.allreduce(local_tmp) # Expensive step on multi-node execution
+   global_tmp = MPI.COMM_WORLD.allreduce(local_tmp) # Expensive step on multi-node execution
    small_tmp = global_tmp[:j-2, 0]
 
    R[:j-1, j-1]  = global_tmp[:j-1, 1]
@@ -63,7 +65,16 @@ def _ortho_1_sync_igs(Q, R, T, K, j):
 
    return norm
 
-def fgmres(A, b, x0 = None, tol = 1e-5, restart = 20, maxiter = None, preconditioner = None, hegedus = False, verbose = 0, prefix = ''):
+def fgmres(A: MatvecOperator,
+           b: numpy.ndarray,
+           x0: Optional[numpy.ndarray] = None,
+           tol: float = 1e-5,
+           restart: int = 20,
+           maxiter: Optional[int] = None,
+           preconditioner: Optional[MatvecOperator] = None,
+           hegedus: bool = False,
+           verbose: int = 0,
+           prefix: str = ''):
    """
    Solve the given linear system (Ax = b) for x, using the FGMRES algorithm. 
 
@@ -189,7 +200,7 @@ def fgmres(A, b, x0 = None, tol = 1e-5, restart = 20, maxiter = None, preconditi
             norm_r = numpy.abs(g[inner+1])
             residuals.append((norm_r / norm_b, time() - t_start, 0.0))
             if verbose > 1:
-               if mpi4py.MPI.COMM_WORLD.rank == 0: print(f'{prefix}norm_r / b = {residuals[-1][0]:.3e}')
+               if MPI.COMM_WORLD.rank == 0: print(f'{prefix}norm_r / b = {residuals[-1][0]:.3e}')
                sys.stdout.flush()
             if norm_r < tol_relative:
                break
@@ -205,7 +216,7 @@ def fgmres(A, b, x0 = None, tol = 1e-5, restart = 20, maxiter = None, preconditi
       norm_r = global_norm(r)
       residuals.append((norm_r / norm_b, time() - t_start, 0.0))
       if verbose > 0:
-         if mpi4py.MPI.COMM_WORLD.rank == 0: print(f'{prefix}res: {norm_r/norm_b:.2e} (iter {niter})')
+         if MPI.COMM_WORLD.rank == 0: print(f'{prefix}res: {norm_r/norm_b:.2e} (iter {niter})')
          sys.stdout.flush()
 
       # Has GMRES stagnated?

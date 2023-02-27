@@ -1,6 +1,7 @@
-import mpi4py.MPI
-import numpy
 import math
+
+from mpi4py import MPI
+import numpy
 
 from numpy.core.shape_base import block
 
@@ -32,8 +33,8 @@ class DistributedWorld:
       #      | 0 | 1 | 2 | 3 |
       #      +---+---+---+---+
 
-      self.size = mpi4py.MPI.COMM_WORLD.Get_size()
-      self.rank = mpi4py.MPI.COMM_WORLD.Get_rank()
+      self.size = MPI.COMM_WORLD.Get_size()
+      self.rank = MPI.COMM_WORLD.Get_rank()
 
       self.nb_pe_per_panel = int(self.size / 6)
       self.nb_lines_per_panel = int(math.sqrt(self.nb_pe_per_panel))
@@ -192,7 +193,7 @@ class DistributedWorld:
       self.sources = [my_north, my_south, my_west, my_east]
       self.destinations = self.sources
 
-      self.comm_dist_graph = mpi4py.MPI.COMM_WORLD.Create_dist_graph_adjacent(self.sources, self.destinations)
+      self.comm_dist_graph = MPI.COMM_WORLD.Create_dist_graph_adjacent(self.sources, self.destinations)
 
       self.get_rows_3d = lambda array, index1, index2: array[:, index1, index2, :] if array is not None else None
       self.get_rows_2d = lambda array, index1, index2: array[index1, index2, :] if array is not None else None
