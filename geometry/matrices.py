@@ -25,20 +25,37 @@ class DFROperators:
          If applied, at what relative wavenumber (0 < cutoff < 1) to begin applying the filter
       '''
       
-      self.extrap_west = lagrange_eval(grd.solutionPoints_sym, -1)
-      self.extrap_east = lagrange_eval(grd.solutionPoints_sym,  1)
-
-      self.extrap_south = lagrange_eval(grd.solutionPoints_sym, -1)
-      self.extrap_north = lagrange_eval(grd.solutionPoints_sym,  1)
-
-      self.extrap_down = lagrange_eval(grd.solutionPoints_sym, -1)
-      self.extrap_up   = lagrange_eval(grd.solutionPoints_sym,  1)
-
       # Build Vandermonde matrix to transform the modal representation to the (interior)
       # nodal representation
       V = numpy.polynomial.legendre.legvander(grd.solutionPoints,grd.nbsolpts-1)
       # Invert the matrix to transform from interior nodes to modes
       invV = numpy.linalg.inv(V)
+
+      # Build the negative and positive-side extrapolation matrices by:
+      # *) transforming interior nodes to modes
+      # *) evaluating the modes at ± 1
+
+      # Note that extrap_neg and extrap_pos should be vectors, not a one-row matrix; numpy
+      # treats the two differently.
+      extrap_neg = (numpy.polynomial.legendre.legvander([-1],grd.nbsolpts-1) @ invV).reshape((-1,))
+      extrap_pos = (numpy.polynomial.legendre.legvander([+1],grd.nbsolpts-1) @ invV).reshape((-1,))
+
+      self.extrap_west = extrap_neg
+      self.extrap_east = extrap_pos
+      self.extrap_south = extrap_neg
+      self.extrap_north = extrap_pos
+      self.extrap_down = extrap_neg
+      self.extrap_up = extrap_pos
+
+
+      # self.extrap_west = lagrangeEval(grd.solutionPoints_sym, -1)
+      # self.extrap_east = lagrangeEval(grd.solutionPoints_sym,  1)
+
+      # self.extrap_south = lagrangeEval(grd.solutionPoints_sym, -1)
+      # self.extrap_north = lagrangeEval(grd.solutionPoints_sym,  1)
+
+      # self.extrap_down = lagrangeEval(grd.solutionPoints_sym, -1)
+      # self.extrap_up   = lagrangeEval(grd.solutionPoints_sym,  1)
 
       # Create highest-mode filter
       V = numpy.polynomial.legendre.legvander(grd.solutionPoints,grd.nbsolpts-1) # Transform mode space to grid space
