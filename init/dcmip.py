@@ -537,8 +537,8 @@ def dcmip_schar_waves(geom: CubedSphere, metric, mtrx: DFROperators, param, shea
       lat = coord[1,0,:,:]
       lon = coord[0,0,:,:]
       r = geom.earth_radius * numpy.arccos( math.sin(phim) * numpy.sin(lat) + math.cos(phim) * numpy.cos(lat) * numpy.cos(lon - lambdam) )
-      #z[r<Rm] = (h0/2.0)*(1.0+numpy.cos(math.pi*r[r<Rm]/Rm))*numpy.cos(math.pi*r[r<Rm]/zetam)**2   # mountain height
       z[:,:] = h0 * numpy.exp(-r**2/Dm**2) * numpy.cos(numpy.pi*r/Dxi)**2
+
 
    # Update the geometry object with the new bottom topography
    geom.apply_topography(zbot,zbot_itf_i,zbot_itf_j)
@@ -551,26 +551,31 @@ def dcmip_schar_waves(geom: CubedSphere, metric, mtrx: DFROperators, param, shea
    z_3d = geom.coordVec_latlon[2,:,:,:] # Retrieve all z-levels
 
    ## Temperature in 3D
-   T = T0*(1 - Cs*Ueq**2/gravity*numpy.sin(lat)**2)
+   if (Ueq != 0):
+      T = T0*(1 - Cs*Ueq**2/gravity*numpy.sin(lat)**2)
+   else:
+      T = T0*numpy.ones_like(lat)
+
+   ### NOTE: These equations are not in exact balance for the no-hill case.
+   ### The DCMIP document assumes a shallow-atmosphere discretization,
+   ### whereas we have a deep atmosphere.  This case still produces gravity
+   ### waves that propagate, but that is overlaid on top of a background 
+   ### adjustment.
 
    ## Pressure (eqn 80)
    p = Peq * numpy.exp(-Ueq**2/(2*Rd*T0)*numpy.sin(lat)**2 - gravity*z_3d/(Rd*T))
 
-   #-----------------------------------------------------------------------
-   #    THE VELOCITIES ARE ZERO (STATE AT REST)
-   #-----------------------------------------------------------------------
-
    # Zonal Velocity (eqn 82)
 
-   u = Ueq * numpy.cos(lat) * (2*T0/T*Cs*z_3d + T/T0)**0.5
+   u = Ueq * numpy.cos(lat) * (2*T0/T*Cs*z_3d + T/T0)**0.5 
 
    # Meridional Velocity
 
-   v = 0.0
+   v = numpy.zeros_like(lat)
 
    # Vertical Velocity
 
-   w = 0.0
+   w = numpy.zeros_like(lat)
 
    u1_contra, u2_contra, u3_contra = wind2contra_3d(u, v, w, geom, metric)
 
@@ -610,7 +615,7 @@ def dcmip_schar_damping(forcing : numpy.ndarray, rho : numpy.ndarray,
       flag for whether the reference velocity field has vertical shear (case 2-2) or not (2-1)'''
    
    # Grab forcing index variables from 'definitions', since forcing is modified in-place
-   from definitions import idx_rho_u1, idx_rho_u2, idx_rho_w
+   from common.definitions import idx_rho_u1, idx_rho_u2, idx_rho_w
 
    # Case parameters
    T0      = 300.0             # temperature (K)
@@ -633,7 +638,10 @@ def dcmip_schar_damping(forcing : numpy.ndarray, rho : numpy.ndarray,
    damping_weight[z_3d <= Zh] = 0.0 
 
    ## Temperature in 3D
-   Tref = T0*(1 - Cs*Ueq**2/gravity*numpy.sin(lat)**2)
+   if (Ueq != 0):
+      Tref = T0*(1 - Cs*Ueq**2/gravity*numpy.sin(lat)**2)
+   else:
+      Tref = T0
 
    # Get u, v, w reference velocities and convert to contravariant
    uref = Ueq * numpy.cos(lat) * (2*T0/Tref*Cs*z_3d + Tref/T0)**0.5
