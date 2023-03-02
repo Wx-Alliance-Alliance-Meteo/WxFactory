@@ -77,6 +77,14 @@ def rhs_euler (Q: numpy.ndarray, geom: CubedSphere, mtrx: DFROperators, metric: 
    variables_itf_k = numpy.empty((nb_equations, nb_pts_hori, nb_elements_vert + 2, 2, nb_pts_hori), dtype=type_vec)
    flux_x3_itf_k   = numpy.empty((nb_equations, nb_pts_hori, nb_elements_vert + 2, 2, nb_pts_hori), dtype=type_vec)
 
+   # Special arrays for calculation of (ρw) flux
+   wflux_adv_x1_itf_i = numpy.zeros_like(flux_x1_itf_i[0,:])
+   wflux_pres_x1_itf_i = numpy.zeros_like(wflux_adv_x1_itf_i)
+   wflux_adv_x2_itf_j = numpy.zeros_like(flux_x2_itf_j[0,:])
+   wflux_pres_x2_itf_j = numpy.zeros_like(wflux_adv_x2_itf_j)
+   wflux_adv_x3_itf_k = numpy.zeros_like(flux_x3_itf_k[0,:])
+   wflux_pres_x3_itf_k = numpy.zeros_like(flux_x3_itf_k[0,:])
+
    # Flag for advection-only processing, with DCMIP test cases 11 and 12
    advection_only = case_number < 13
 
@@ -111,6 +119,16 @@ def rhs_euler (Q: numpy.ndarray, geom: CubedSphere, mtrx: DFROperators, metric: 
    variables_itf_i[:,:,1:-1,:,:] = mtrx.extrapolate_i(Q,geom).transpose((0,1,3,4,2))
    variables_itf_j[:,:,1:-1,:,:] = mtrx.extrapolate_j(Q,geom)
 
+   # Scaled variables for separate reconstruction
+   logrho = numpy.log(Q[idx_rho,:])
+   logrhotheta = numpy.log(Q[idx_rho_theta,:])
+
+   variables_itf_i[idx_rho,:,1:-1,:,:] = numpy.exp(mtrx.extrapolate_i(logrho,geom)).transpose((0,2,3,1))
+   variables_itf_j[idx_rho,:,1:-1,:,:] = numpy.exp(mtrx.extrapolate_j(logrho,geom))
+
+   variables_itf_i[idx_rho_theta,:,1:-1,:,:] = numpy.exp(mtrx.extrapolate_i(logrhotheta,geom)).transpose((0,2,3,1))
+   variables_itf_j[idx_rho_theta,:,1:-1,:,:] = numpy.exp(mtrx.extrapolate_j(logrhotheta,geom))
+
    # Transfer boundary values to neighbouring proessors/panels, including conversion of vector quantities
    # to the recipient's local coordinate system
 
@@ -130,22 +148,36 @@ def rhs_euler (Q: numpy.ndarray, geom: CubedSphere, mtrx: DFROperators, metric: 
    flux_x2 = metric.sqrtG * u2 * Q
    flux_x3 = metric.sqrtG * w  * Q
 
+   wflux_adv_x1 = metric.sqrtG * u1 * Q[idx_rho_w,:]
+   wflux_adv_x2 = metric.sqrtG * u2 * Q[idx_rho_w,:]
+   wflux_adv_x3 = metric.sqrtG * w  * Q[idx_rho_w,:]
+
    # ... and add the pressure component
    # Performance note: exp(log) is measuably faster than ** (pow)
    pressure = p0 * numpy.exp((cpd/cvd) * numpy.log((Rd/p0)*Q[idx_rho_theta]))
    #pressure = Rd * Q[idx_rho_theta]
 
+   wflux_pres_x1 = numpy.zeros(metric.sqrtG.shape,dtype=type_vec)
+   wflux_pres_x2 = numpy.zeros(metric.sqrtG.shape,dtype=type_vec)
+   wflux_pres_x3 = numpy.zeros(metric.sqrtG.shape,dtype=type_vec)
+
    flux_x1[idx_rho_u1] += metric.sqrtG * metric.H_contra_11 * pressure
    flux_x1[idx_rho_u2] += metric.sqrtG * metric.H_contra_12 * pressure
    flux_x1[idx_rho_w]  += metric.sqrtG * metric.H_contra_13 * pressure
+
+   wflux_pres_x1[:] = metric.sqrtG * metric.H_contra_13 # times pressure
 
    flux_x2[idx_rho_u1] += metric.sqrtG * metric.H_contra_21 * pressure
    flux_x2[idx_rho_u2] += metric.sqrtG * metric.H_contra_22 * pressure
    flux_x2[idx_rho_w]  += metric.sqrtG * metric.H_contra_23 * pressure
 
+   wflux_pres_x2[:] = metric.sqrtG * metric.H_contra_23 # times pressure
+
    flux_x3[idx_rho_u1] += metric.sqrtG * metric.H_contra_31 * pressure
    flux_x3[idx_rho_u2] += metric.sqrtG * metric.H_contra_32 * pressure
    flux_x3[idx_rho_w]  += metric.sqrtG * metric.H_contra_33 * pressure
+
+   wflux_pres_x3[:] = metric.sqrtG * metric.H_contra_33 # times pressure
 
    # if (ptopo.rank == 0): print('√g: %e, H^33: %e' % (metric.sqrtG[0,0],metric.H_contra_33[0,0]))
 
@@ -179,6 +211,9 @@ def rhs_euler (Q: numpy.ndarray, geom: CubedSphere, mtrx: DFROperators, metric: 
 
    variables_itf_k[:,:,1:-1,:,:] = mtrx.extrapolate_k(Q,geom).transpose((0,3,1,2,4))
 
+   variables_itf_k[idx_rho,:,1:-1,:,:] = numpy.exp(mtrx.extrapolate_k(logrho,geom).transpose((2,0,1,3)))
+   variables_itf_k[idx_rho_theta,:,1:-1,:,:] = numpy.exp(mtrx.extrapolate_k(logrhotheta,geom).transpose((2,0,1,3)))
+
    # For consistency at the surface and top boundaries, treat the extrapolation as continuous.  That is,
    # the "top" of the ground is equal to the "bottom" of the atmosphere, and the "bottom" of the model top
    # is equal to the "top" of the atmosphere.
@@ -194,10 +229,16 @@ def rhs_euler (Q: numpy.ndarray, geom: CubedSphere, mtrx: DFROperators, metric: 
    w_itf_k = variables_itf_k[idx_rho_w] / variables_itf_k[idx_rho]
 
    # Surface and top boundary treatement, imposing no flow (w=0) through top and bottom
-   w_itf_k[:, 0, :, :] = 0.
-   w_itf_k[:, 1, 0, :] = 0.
-   w_itf_k[:, -1, :, :] = 0.
-   w_itf_k[:, -2, 1, :] = 0.
+   # csubich -- apply odd symmetry to w at boundary so there is no advective _flux_ through boundary
+   w_itf_k[:, 0, 0, :] = 0. # Bottom of bottom element (unused)
+   w_itf_k[:, 0, 1, :] = -w_itf_k[:,1,0,:] # Top of bottom element (negative symmetry)
+   #w_itf_k[:, 0, 1, :] = 0.0  # Top of bottom element (bottom boundary, 0)
+   #w_itf_k[:, 1, 0, :] = 0. # Bottom of lowest interior element (bottom boundary, 0)
+   
+   w_itf_k[:, -1, 1, :] = 0. # Top of top element (unused)
+   w_itf_k[:, -1, 0, :] = -w_itf_k[:,-2,1,:] # Bottom of top boundary element (negative symmetry)
+   #w_itf_k[:, -1, 0, :] = 0.0 # Bottom of top boundary element (0)
+   #w_itf_k[:, -2, 1, :] = 0. # Top of top interior element (0)
 
    # Common Rusanov vertical fluxes
    # flux_D_itf_k = numpy.empty((nb_equations, nb_interfaces_vert, geom.nj, geom.ni))
@@ -229,6 +270,10 @@ def rhs_euler (Q: numpy.ndarray, geom: CubedSphere, mtrx: DFROperators, metric: 
       flux_D = metric.sqrtG_itf_k[itf,:,:] * w_D * variables_itf_k[:, :, elem_D, 1, :]
       flux_U = metric.sqrtG_itf_k[itf,:,:] * w_U * variables_itf_k[:, :, elem_U, 0, :]
 
+      # Separate variables for rho-w flux
+      wflux_adv_D = flux_D[idx_rho_w,:].copy()
+      wflux_adv_U = flux_U[idx_rho_w,:].copy()
+
       # eig_D_itf_k[itf,:,:] = eig_D
       # eig_U_itf_k[itf,:,:] = eig_U
       # flux_D_itf_k[:,itf,:,:] = flux_D
@@ -243,9 +288,20 @@ def rhs_euler (Q: numpy.ndarray, geom: CubedSphere, mtrx: DFROperators, metric: 
       flux_U[idx_rho_u2] += metric.sqrtG_itf_k[itf,:,:] * metric.H_contra_32_itf_k[itf,:,:] * pressure_itf_k[:, elem_U, 0, :]
       flux_U[idx_rho_w]  += metric.sqrtG_itf_k[itf,:,:] * metric.H_contra_33_itf_k[itf,:,:] * pressure_itf_k[:, elem_U, 0, :]
 
+      # For rho_w pressure flux, account for the pressure terms separately from the advection terms
+      wflux_pres_D = metric.sqrtG_itf_k[itf,:,:] * metric.H_contra_33_itf_k[itf,:,:] * pressure_itf_k[:, elem_D, 1, :]
+      wflux_pres_U = metric.sqrtG_itf_k[itf,:,:] * metric.H_contra_33_itf_k[itf,:,:] * pressure_itf_k[:, elem_U, 0, :]
+
       # Riemann solver
       flux_x3_itf_k[:, :, elem_D, 1, :] = 0.5 * ( flux_D + flux_U - eig * metric.sqrtG_itf_k[itf,:,:] * ( variables_itf_k[:, :, elem_U, 0, :] - variables_itf_k[:, :, elem_D, 1, :] ) )
       flux_x3_itf_k[:, :, elem_U, 0, :] = flux_x3_itf_k[:, :, elem_D, 1, :]
+
+      # Riemann solver, separating pressure and advection terms for rho-w
+      wflux_adv_x3_itf_k[:, elem_D, 1, :] = 0.5 * ( wflux_adv_D + wflux_adv_U - eig * metric.sqrtG_itf_k[itf,:,:] * \
+                                          ( variables_itf_k[idx_rho_w, :, elem_U, 0, :] - variables_itf_k[idx_rho_w, :, elem_D, 1, :] ) )
+      wflux_adv_x3_itf_k[:, elem_U, 0, :] = wflux_adv_x3_itf_k[:, elem_D, 1, :]
+      wflux_pres_x3_itf_k[:, elem_D, 1, :] = 0.5 * (wflux_pres_D + wflux_pres_U)/pressure_itf_k[:,elem_D,1,:]
+      wflux_pres_x3_itf_k[:, elem_U, 0, :] = 0.5 * (wflux_pres_D + wflux_pres_U)/pressure_itf_k[:,elem_U,0,:]
 
    # for slab in range(nb_pts_hori):
    #    for elem in range(nb_elements_vert):
@@ -289,6 +345,10 @@ def rhs_euler (Q: numpy.ndarray, geom: CubedSphere, mtrx: DFROperators, metric: 
       flux_L = metric.sqrtG_itf_i[:, :, itf] * u1_L * variables_itf_i[:, :, elem_L, 1, :]
       flux_R = metric.sqrtG_itf_i[:, :, itf] * u1_R * variables_itf_i[:, :, elem_R, 0, :]
 
+      # rho-w specific advective flux
+      wflux_adv_L = flux_L[idx_rho_w,:].copy()
+      wflux_adv_R = flux_R[idx_rho_w,:].copy()
+
       # ... and now add the pressure contribution
       flux_L[idx_rho_u1] += metric.sqrtG_itf_i[:, :, itf] * metric.H_contra_11_itf_i[:, :, itf] * pressure_itf_i[:, elem_L, 1, :]
       flux_L[idx_rho_u2] += metric.sqrtG_itf_i[:, :, itf] * metric.H_contra_12_itf_i[:, :, itf] * pressure_itf_i[:, elem_L, 1, :]
@@ -298,10 +358,21 @@ def rhs_euler (Q: numpy.ndarray, geom: CubedSphere, mtrx: DFROperators, metric: 
       flux_R[idx_rho_u2] += metric.sqrtG_itf_i[:, :, itf] * metric.H_contra_12_itf_i[:, :, itf] * pressure_itf_i[:, elem_R, 0, :]
       flux_R[idx_rho_w]  += metric.sqrtG_itf_i[:, :, itf] * metric.H_contra_13_itf_i[:, :, itf] * pressure_itf_i[:, elem_R, 0, :]
 
+      # Pressure contribution specifically for rho-w
+      wflux_pres_L = metric.sqrtG_itf_i[:, :, itf] * metric.H_contra_13_itf_i[:, :, itf] * pressure_itf_i[:, elem_L, 1, :]
+      wflux_pres_R = metric.sqrtG_itf_i[:, :, itf] * metric.H_contra_13_itf_i[:, :, itf] * pressure_itf_i[:, elem_R, 0, :]
+
       # --- Common Rusanov fluxes
 
       flux_x1_itf_i[:, :, elem_L, :, 1] = 0.5 * ( flux_L  + flux_R - eig * metric.sqrtG_itf_i[:, :, itf] * ( variables_itf_i[:, :, elem_R, 0, :] - variables_itf_i[:, :, elem_L, 1, :] ) )
       flux_x1_itf_i[:, :, elem_R, :, 0] = flux_x1_itf_i[:, :, elem_L, :, 1]
+
+      # Separating advective and pressure fluxes for rho-w
+      wflux_adv_x1_itf_i[:,elem_L,:,1] = 0.5*(wflux_adv_L + wflux_adv_R - eig*metric.sqrtG_itf_i[:,:,itf] * \
+                                       ( variables_itf_i[idx_rho_w, :, elem_R, 0, :] - variables_itf_i[idx_rho_w, :, elem_L, 1, :] ))
+      wflux_adv_x1_itf_i[:,elem_R,:,0] = wflux_adv_x1_itf_i[:,elem_L,:,1]
+      wflux_pres_x1_itf_i[:,elem_L,:,1] = 0.5*(wflux_pres_L + wflux_pres_R)/pressure_itf_i[:,elem_L,1,:]
+      wflux_pres_x1_itf_i[:,elem_R,:,0] = 0.5*(wflux_pres_L + wflux_pres_R)/pressure_itf_i[:,elem_R,0,:]
 
       # Direction x2
 
@@ -321,6 +392,10 @@ def rhs_euler (Q: numpy.ndarray, geom: CubedSphere, mtrx: DFROperators, metric: 
       flux_L = metric.sqrtG_itf_j[:, itf, :] * u2_L * variables_itf_j[:, :, elem_L, 1, :]
       flux_R = metric.sqrtG_itf_j[:, itf, :] * u2_R * variables_itf_j[:, :, elem_R, 0, :]
 
+      # rho-w specific advective flux
+      wflux_adv_L = flux_L[idx_rho_w,:].copy()
+      wflux_adv_R = flux_R[idx_rho_w,:].copy()
+
       # ... and now add the pressure contribution
       flux_L[idx_rho_u1] += metric.sqrtG_itf_j[:, itf, :]  * metric.H_contra_21_itf_j[:, itf, :]  * pressure_itf_j[:, elem_L, 1, :]
       flux_L[idx_rho_u2] += metric.sqrtG_itf_j[:, itf, :]  * metric.H_contra_22_itf_j[:, itf, :]  * pressure_itf_j[:, elem_L, 1, :]
@@ -330,11 +405,21 @@ def rhs_euler (Q: numpy.ndarray, geom: CubedSphere, mtrx: DFROperators, metric: 
       flux_R[idx_rho_u2] += metric.sqrtG_itf_j[:, itf, :]  * metric.H_contra_22_itf_j[:, itf, :]  * pressure_itf_j[:, elem_R, 0, :]
       flux_R[idx_rho_w] += metric.sqrtG_itf_j[:, itf, :]  * metric.H_contra_23_itf_j[:, itf, :]  * pressure_itf_j[:, elem_R, 0, :]
 
+      wflux_pres_L = metric.sqrtG_itf_j[:, itf, :]  * metric.H_contra_23_itf_j[:, itf, :]  * pressure_itf_j[:, elem_L, 1, :]
+      wflux_pres_R = metric.sqrtG_itf_j[:, itf, :]  * metric.H_contra_23_itf_j[:, itf, :]  * pressure_itf_j[:, elem_R, 0, :]
+
       # --- Common Rusanov fluxes
 
       flux_x2_itf_j[:, :, elem_L, 1, :] = 0.5 * ( flux_L + flux_R - eig * metric.sqrtG_itf_j[:, itf, :]  * ( variables_itf_j[:, :, elem_R, 0, :] - variables_itf_j[:, :, elem_L, 1, :] ) )
       flux_x2_itf_j[:, :, elem_R, 0, :] = flux_x2_itf_j[:, :, elem_L, 1, :]
 
+      # Separation of advective and pressure flux for rho-w
+      wflux_adv_x2_itf_j[:,elem_L,1,:] =  0.5 * ( wflux_adv_L + wflux_adv_R - eig * metric.sqrtG_itf_j[:, itf, :]  *\
+                                          ( variables_itf_j[idx_rho_w, :, elem_R, 0, :] - variables_itf_j[idx_rho_w, :, elem_L, 1, :] ) )
+      wflux_adv_x2_itf_j[:,elem_R,0,:] = wflux_adv_x2_itf_j[:,elem_L,1,:]
+      
+      wflux_pres_x2_itf_j[:,elem_L,1,:] = 0.5 * (wflux_pres_L + wflux_pres_R)/pressure_itf_j[:,elem_L,1,:]
+      wflux_pres_x2_itf_j[:,elem_R,0,:] = 0.5 * (wflux_pres_L + wflux_pres_R)/pressure_itf_j[:,elem_R,0,:]
 
    # # Add corrections to the derivatives
    # for elem in range(nb_elements_hori):
@@ -357,13 +442,50 @@ def rhs_euler (Q: numpy.ndarray, geom: CubedSphere, mtrx: DFROperators, metric: 
    flux_x3_bdy = flux_x3_itf_k[:,:,1:-1,:,:].transpose(0,2,3,1,4).copy()
    df3_dx3[:,:,:,:] = mtrx.comma_k(flux_x3,flux_x3_bdy,geom)
 
+   logp_int = numpy.log(pressure)
+
+   pressure_bdy_i = pressure_itf_i[:,1:-1,:,:].transpose((0,3,1,2)).copy()
+   pressure_bdy_j = pressure_itf_j[:,1:-1,:,:].copy()
+   pressure_bdy_k = pressure_itf_k[:,1:-1,:,:].transpose(1,2,0,3).copy()
+
+   logp_bdy_i = numpy.log(pressure_bdy_i)
+   logp_bdy_j = numpy.log(pressure_bdy_j)
+   logp_bdy_k = numpy.log(pressure_bdy_k)
+
+   wflux_adv_x1_bdy_i = wflux_adv_x1_itf_i.transpose((0,2,1,3))[:,:,1:-1,:].copy()
+   wflux_pres_x1_bdy_i = wflux_pres_x1_itf_i.transpose((0,2,1,3))[:,:,1:-1,:].copy()
+
+   wflux_adv_x2_bdy_j = wflux_adv_x2_itf_j[:,1:-1,:,:].copy()
+   wflux_pres_x2_bdy_j = wflux_pres_x2_itf_j[:,1:-1,:,:].copy()
+
+   wflux_adv_x3_bdy_k = wflux_adv_x3_itf_k[:,1:-1,:,:].transpose(1,2,0,3).copy()
+   wflux_pres_x3_bdy_k = wflux_pres_x3_itf_k[:,1:-1,:,:].transpose(1,2,0,3).copy()
+
+   # dFw/dx = d(adv)/dx + d(pres*metric)/dx = d(adv)/dx + pres*(d(metric)/dx + metric*d(logp)/dx)
+   w_df1_dx1_adv = mtrx.comma_i(wflux_adv_x1,wflux_adv_x1_bdy_i,geom)
+   w_df1_dx1_presa = pressure*mtrx.comma_i(wflux_pres_x1,wflux_pres_x1_bdy_i,geom)
+   w_df1_dx1_presb = pressure*wflux_pres_x1*mtrx.comma_i(logp_int,logp_bdy_i,geom)
+   w_df1_dx1 = w_df1_dx1_adv + w_df1_dx1_presa + w_df1_dx1_presb
+
+   # dFw/dy = d(adv)/dy + d(pres*metric)/dy = d(adv)/dy + pres*(d(metric)/dy + metric*d(logp)/dy)
+   w_df2_dx2_adv = mtrx.comma_j(wflux_adv_x2,wflux_adv_x2_bdy_j,geom)
+   w_df2_dx2_presa = pressure*mtrx.comma_j(wflux_pres_x2,wflux_pres_x2_bdy_j,geom)
+   w_df2_dx2_presb = pressure*wflux_pres_x2*mtrx.comma_j(logp_int,logp_bdy_j,geom)
+   w_df2_dx2 = w_df2_dx2_adv + w_df2_dx2_presa + w_df2_dx2_presb
+
+
+   # dFw/dz = d(adv)/dz + d(pres*metric)/dz = d(adv)/dz + pres*(d(metric)/dz + metric*d(logp)/dz)
+   w_df3_dx3c = mtrx.comma_k(wflux_adv_x3,wflux_adv_x3_bdy_k,geom) 
+   w_df3_dx3a = pressure*mtrx.comma_k(wflux_pres_x3,wflux_pres_x3_bdy_k,geom) 
+   w_df3_dx3b = pressure*wflux_pres_x3*mtrx.comma_k(logp_int,logp_bdy_k,geom)
+   w_df3_dx3 = w_df3_dx3a + w_df3_dx3b + w_df3_dx3c
 
 
    # Add coriolis, metric terms and other forcings
    forcing[idx_rho,:,:,:] = 0.0
 
    # TODO: could be simplified
-   #pressure = 0
+   #pressure[:] = 0
    forcing[idx_rho_u1] = 2.0 * ( metric.christoffel_1_01 * rho * u1 + metric.christoffel_1_02 * rho * u2 + metric.christoffel_1_03 * rho * w) \
          +       metric.christoffel_1_11 * (rho * u1 * u1 + metric.H_contra_11*pressure) \
          + 2.0 * metric.christoffel_1_12 * (rho * u1 * u2 + metric.H_contra_12*pressure) \
@@ -405,6 +527,9 @@ def rhs_euler (Q: numpy.ndarray, geom: CubedSphere, mtrx: DFROperators, metric: 
 
    # Assemble the right-hand sides
    rhs = - metric.inv_sqrtG * ( df1_dx1 + df2_dx2 + df3_dx3 ) - forcing
+   rhs[idx_rho_w,:] = - metric.inv_sqrtG * ( w_df1_dx1 + \
+                                             w_df2_dx2 + \
+                                             w_df3_dx3 ) - forcing[idx_rho_w,:]
 
    # For pure advection problems, we do not update the dynamical variables
    if advection_only:
