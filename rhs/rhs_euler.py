@@ -84,29 +84,32 @@ def rhs_euler (Q: numpy.ndarray, geom: CubedSphere, mtrx: DFROperators, metric: 
    offset = 1
 
    # Interpolate to the element interface
-   for elem in range(nb_elements_hori):
-      # This loop performs extrapolation to element boundaries through the mtrix.extrap_* operator (matrix multiplication).
-      # Thanks to numpy's broadcasting, each iteration of this loop extrapolates an entire row/column of elements at once,
-      # operating on all variables simultaneously
+   # for elem in range(nb_elements_hori):
+   #    # This loop performs extrapolation to element boundaries through the mtrix.extrap_* operator (matrix multiplication).
+   #    # Thanks to numpy's broadcasting, each iteration of this loop extrapolates an entire row/column of elements at once,
+   #    # operating on all variables simultaneously
 
-      # Index of the 'live' interior elements inside the Q array, to be extrapolated
-      epais = elem * nbsolpts + numpy.arange(nbsolpts)
-      # Position in the output interface array for writing.  'pos' 1 corresponds to the west/southmost element, with
-      # 'pos' 0 (and nb_elements_hori+1) reserved for exchanges from neighbouring panels
-      pos   = elem + offset
+   #    # Index of the 'live' interior elements inside the Q array, to be extrapolated
+   #    epais = elem * nbsolpts + numpy.arange(nbsolpts)
+   #    # Position in the output interface array for writing.  'pos' 1 corresponds to the west/southmost element, with
+   #    # 'pos' 0 (and nb_elements_hori+1) reserved for exchanges from neighbouring panels
+   #    pos   = elem + offset
 
-      # --- Direction x1
-      # The implied matrix multiplication here sees a [numvar, nk] array of matrices, each 
-      # of size [nj, nbsolpoints], and the extrapolation is performed via right multiplication.
-      # (Note C-ordering of indices; in fortran or matlab the indices would be reversed)
-      variables_itf_i[:, :, pos, 0, :] = Q[:, :, :, epais] @ mtrx.extrap_west
-      variables_itf_i[:, :, pos, 1, :] = Q[:, :, :, epais] @ mtrx.extrap_east
+   #    # --- Direction x1
+   #    # The implied matrix multiplication here sees a [numvar, nk] array of matrices, each 
+   #    # of size [nj, nbsolpoints], and the extrapolation is performed via right multiplication.
+   #    # (Note C-ordering of indices; in fortran or matlab the indices would be reversed)
+   #    variables_itf_i[:, :, pos, 0, :] = Q[:, :, :, epais] @ mtrx.extrap_west
+   #    variables_itf_i[:, :, pos, 1, :] = Q[:, :, :, epais] @ mtrx.extrap_east
 
-      # --- Direction x2
-      # The matrix multiplication here sees a [numvar, nk] array of matrices, each of size
-      # [nbsolpoints, ni], and the extrapolation is performed by left multiplication
-      variables_itf_j[:, :, pos, 0, :] = mtrx.extrap_south @ Q[:, :, epais, :]
-      variables_itf_j[:, :, pos, 1, :] = mtrx.extrap_north @ Q[:, :, epais, :]
+   #    # --- Direction x2
+   #    # The matrix multiplication here sees a [numvar, nk] array of matrices, each of size
+   #    # [nbsolpoints, ni], and the extrapolation is performed by left multiplication
+   #    variables_itf_j[:, :, pos, 0, :] = mtrx.extrap_south @ Q[:, :, epais, :]
+   #    variables_itf_j[:, :, pos, 1, :] = mtrx.extrap_north @ Q[:, :, epais, :]
+
+   variables_itf_i[:,:,1:-1,:,:] = mtrx.extrapolate_i(Q,geom).transpose((0,1,3,4,2))
+   variables_itf_j[:,:,1:-1,:,:] = mtrx.extrapolate_j(Q,geom)
 
    # Transfer boundary values to neighbouring proessors/panels, including conversion of vector quantities
    # to the recipient's local coordinate system
@@ -130,6 +133,7 @@ def rhs_euler (Q: numpy.ndarray, geom: CubedSphere, mtrx: DFROperators, metric: 
    # ... and add the pressure component
    # Performance note: exp(log) is measuably faster than ** (pow)
    pressure = p0 * numpy.exp((cpd/cvd) * numpy.log((Rd/p0)*Q[idx_rho_theta]))
+   #pressure = Rd * Q[idx_rho_theta]
 
    flux_x1[idx_rho_u1] += metric.sqrtG * metric.H_contra_11 * pressure
    flux_x1[idx_rho_u2] += metric.sqrtG * metric.H_contra_12 * pressure
@@ -148,14 +152,14 @@ def rhs_euler (Q: numpy.ndarray, geom: CubedSphere, mtrx: DFROperators, metric: 
    # Interior contribution to the derivatives, corrections for the boundaries will be added later
    # The "interior contribution" here is evaluated as if the fluxes at the element boundaries are
    # zero.
-   for elem in range(nb_elements_hori):
-      epais = elem * nbsolpts + numpy.arange(nbsolpts)
+   # for elem in range(nb_elements_hori):
+   #    epais = elem * nbsolpts + numpy.arange(nbsolpts)
 
-      # --- Direction x1
-      df1_dx1[:, :, :, epais] = flux_x1[:, :, :, epais] @ mtrx.diff_solpt_tr
+   #    # --- Direction x1
+   #    df1_dx1[:, :, :, epais] = flux_x1[:, :, :, epais] @ mtrx.diff_solpt_tr
 
-      # --- Direction x2
-      df2_dx2[:, :, epais, :] = mtrx.diff_solpt @ flux_x2[:, :, epais, :]
+   #    # --- Direction x2
+   #    df2_dx2[:, :, epais, :] = mtrx.diff_solpt @ flux_x2[:, :, epais, :]
 
    # --- Direction x3
 
@@ -163,15 +167,17 @@ def rhs_euler (Q: numpy.ndarray, geom: CubedSphere, mtrx: DFROperators, metric: 
     # Since there is no communication step in the vertical, we can compute the boundary correction first
 
    # Extrapolate to top/bottom for each element
-   for slab in range(nb_pts_hori):
-      for elem in range(nb_elements_vert):
-         epais = elem * nbsolpts + numpy.arange(nbsolpts)
-         pos = elem + offset
+   # for slab in range(nb_pts_hori):
+   #    for elem in range(nb_elements_vert):
+   #       epais = elem * nbsolpts + numpy.arange(nbsolpts)
+   #       pos = elem + offset
 
-         # Extrapolate by left multiplication.  Note that this assignment also permutes the indices, going from
-         # (var,nk,nj,ni) to (var,nj,nk,top/bot,ni)
-         variables_itf_k[:, slab, pos, 0, :] = mtrx.extrap_down @ Q[:, epais, slab, :]
-         variables_itf_k[:, slab, pos, 1, :] = mtrx.extrap_up   @ Q[:, epais, slab, :]
+   #       # Extrapolate by left multiplication.  Note that this assignment also permutes the indices, going from
+   #       # (var,nk,nj,ni) to (var,nj,nk,top/bot,ni)
+   #       variables_itf_k[:, slab, pos, 0, :] = mtrx.extrap_down @ Q[:, epais, slab, :]
+   #       variables_itf_k[:, slab, pos, 1, :] = mtrx.extrap_up   @ Q[:, epais, slab, :]
+
+   variables_itf_k[:,:,1:-1,:,:] = mtrx.extrapolate_k(Q,geom).transpose((0,3,1,2,4))
 
    # For consistency at the surface and top boundaries, treat the extrapolation as continuous.  That is,
    # the "top" of the ground is equal to the "bottom" of the atmosphere, and the "bottom" of the model top
@@ -241,11 +247,11 @@ def rhs_euler (Q: numpy.ndarray, geom: CubedSphere, mtrx: DFROperators, metric: 
       flux_x3_itf_k[:, :, elem_D, 1, :] = 0.5 * ( flux_D + flux_U - eig * metric.sqrtG_itf_k[itf,:,:] * ( variables_itf_k[:, :, elem_U, 0, :] - variables_itf_k[:, :, elem_D, 1, :] ) )
       flux_x3_itf_k[:, :, elem_U, 0, :] = flux_x3_itf_k[:, :, elem_D, 1, :]
 
-   for slab in range(nb_pts_hori):
-      for elem in range(nb_elements_vert):
-         epais = elem * nbsolpts + numpy.arange(nbsolpts)
-         # TODO : inclure la transformation vers l'élément de référence dans la vitesse w.
-         df3_dx3[:, epais, slab, :] = ( mtrx.diff_solpt @ flux_x3[:, epais, slab, :] + mtrx.correction @ flux_x3_itf_k[:, slab, elem+offset, :, :] ) #* 2.0 / geom.Δx3
+   # for slab in range(nb_pts_hori):
+   #    for elem in range(nb_elements_vert):
+   #       epais = elem * nbsolpts + numpy.arange(nbsolpts)
+   #       # TODO : inclure la transformation vers l'élément de référence dans la vitesse w.
+   #       df3_dx3[:, epais, slab, :] = ( mtrx.diff_solpt @ flux_x3[:, epais, slab, :] + mtrx.correction @ flux_x3_itf_k[:, slab, elem+offset, :, :] ) #* 2.0 / geom.Δx3
 
    # Finish transfers
    all_request.wait()
@@ -259,7 +265,7 @@ def rhs_euler (Q: numpy.ndarray, geom: CubedSphere, mtrx: DFROperators, metric: 
    # Evaluate pressure at the lateral interfaces
    pressure_itf_i = p0 * numpy.exp((cpd/cvd) * numpy.log(variables_itf_i[idx_rho_theta] * (Rd / p0)))
    pressure_itf_j = p0 * numpy.exp((cpd/cvd) * numpy.log(variables_itf_j[idx_rho_theta] * (Rd / p0)))
-
+   
    # Riemann solver
    for itf in range(nb_interfaces_hori):
 
@@ -329,22 +335,32 @@ def rhs_euler (Q: numpy.ndarray, geom: CubedSphere, mtrx: DFROperators, metric: 
       flux_x2_itf_j[:, :, elem_L, 1, :] = 0.5 * ( flux_L + flux_R - eig * metric.sqrtG_itf_j[:, itf, :]  * ( variables_itf_j[:, :, elem_R, 0, :] - variables_itf_j[:, :, elem_L, 1, :] ) )
       flux_x2_itf_j[:, :, elem_R, 0, :] = flux_x2_itf_j[:, :, elem_L, 1, :]
 
-   # Add corrections to the derivatives
-   for elem in range(nb_elements_hori):
-      epais = elem * nbsolpts + numpy.arange(nbsolpts)
 
-      # --- Direction x1
+   # # Add corrections to the derivatives
+   # for elem in range(nb_elements_hori):
+   #    epais = elem * nbsolpts + numpy.arange(nbsolpts)
 
-      df1_dx1[:, :, :, epais] += flux_x1_itf_i[:, :, elem+offset, :, :] @ mtrx.correction_tr
+   #    # --- Direction x1
 
-      # --- Direction x2
+   #    df1_dx1[:, :, :, epais] += flux_x1_itf_i[:, :, elem+offset, :, :] @ mtrx.correction_tr
 
-      df2_dx2[:, :, epais, :] += mtrx.correction @ flux_x2_itf_j[:, :, elem+offset, :, :]
+   #    # --- Direction x2
+
+   #    df2_dx2[:, :, epais, :] += mtrx.correction @ flux_x2_itf_j[:, :, elem+offset, :, :]
+
+   # Perform flux derivatives
+
+   flux_x1_bdy = flux_x1_itf_i.transpose((0,1,3,2,4))[:,:,:,1:-1,:].copy()
+   df1_dx1 = mtrx.comma_i(flux_x1,flux_x1_bdy,geom)
+   flux_x2_bdy = flux_x2_itf_j[:,:,1:-1,:,:].copy()
+   df2_dx2 = mtrx.comma_j(flux_x2,flux_x2_bdy,geom)
+   flux_x3_bdy = flux_x3_itf_k[:,:,1:-1,:,:].transpose(0,2,3,1,4).copy()
+   df3_dx3[:,:,:,:] = mtrx.comma_k(flux_x3,flux_x3_bdy,geom)
+
+
 
    # Add coriolis, metric terms and other forcings
    forcing[idx_rho,:,:,:] = 0.0
-
-
 
    # TODO: could be simplified
    #pressure = 0
