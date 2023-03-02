@@ -161,13 +161,21 @@ class Metric3DTopo:
       # formulation u3 exchanges like a scalar (because there is no orientation change at panel
       # boundaries))
 
-      geom.ptopo.xchange_vectors(geom, exch_itf_i[0,:], exch_itf_i[1,:], 
-                                       exch_itf_j[0,:], exch_itf_j[1,:],
-                                       exch_itf_i[2,:], exch_itf_j[2,:], blocking=True)
-
-      # With the exchange performed, average left and right values at each interface to fill the
-      # itf_i and itf_j arrays, converting back to the covariant representation via the 2d metric.
-      # The itf_k arrays are handled locally, without the exchange.
+      if (geom.ptopo.size > 1):
+         # Perform exchanges if this is truly a parallel setup.
+         geom.ptopo.xchange_vectors(geom, exch_itf_i[0,:], exch_itf_i[1,:], 
+                                          exch_itf_j[0,:], exch_itf_j[1,:],
+                                          exch_itf_i[2,:], exch_itf_j[2,:], blocking=True)
+      else:
+         # Debugging cases might use a serial setup, so supply copied boundary values as a fallback
+         # The right boundary of the 0 element is the left boundary of the 1 element
+         exch_itf_i[:,:,0,1,:] = exch_itf_i[:,:,1,0,:]
+         # The left boundary of the -1 (end) element is the right boundary of the -2 element
+         exch_itf_i[:,:,-1,0,:] = exch_itf_i[:,:,-2,1,:]
+         # The north boundary of the 0 element is the south boundary of the 1 element
+         exch_itf_j[:,:,0,1,:] = exch_itf_j[:,:,1,0,:]
+         # The south boundary of the -1 element is the north boundary of the -2 element
+         exch_itf_j[:,:,-1,0,:] = exch_itf_j[:,:,-2,1,:]
 
       # Define the averaged interface values
       dRdx1_itf_i = numpy.empty_like(R_itf_i)
@@ -185,7 +193,7 @@ class Metric3DTopo:
          dRdx2_itf_i[:,:,bdy] = metric_2d_cov_itf_i[1,0,:,:,bdy]*(0.5*exch_itf_i[0,:,bdy,1,:] + 0.5*exch_itf_i[0,:,bdy+1,0,:]) + \
                                 metric_2d_cov_itf_i[1,1,:,:,bdy]*(0.5*exch_itf_i[1,:,bdy,1,:] + 0.5*exch_itf_i[1,:,bdy+1,0,:])
          dRdeta_itf_i[:,:,bdy] = 0.5*exch_itf_i[2,:,bdy,1,:] + 0.5*exch_itf_i[2,:,bdy+1,0,:]
-      
+
       # j-interface values
       for bdy in range(geom.nb_elements_x2+1):
          # iterate from 'south'most to 'north'most boundary
@@ -205,7 +213,6 @@ class Metric3DTopo:
 
          # Assign interior values based on the average of the bordering extrapolations
          d_itf_k[1:-1,:,:] = 0.5*(d_extrap_k[1:,0,:,:] + d_extrap_k[:-1,1,:,:])
-
 
       # Initialize metric arrays
 
@@ -343,7 +350,7 @@ class Metric3DTopo:
       dRdx2_ext_k = numpy.zeros((geom.nb_elements_x3, 2, geom.nj, geom.ni))
       dRdx2_ext_k[:,0,:,:] = dRdx2_itf_k[:-1,:,:] # Assign min-k boundary
       dRdx2_ext_k[:,1,:,:] = dRdx2_itf_k[1:,:,:]  # Assign max-k boundary
-
+     
       dRdeta_ext_k = numpy.zeros((geom.nb_elements_x3, 2, geom.nj, geom.ni))
       dRdeta_ext_k[:,0,:,:] = dRdeta_itf_k[:-1,:,:] # Assign min-k boundary
       dRdeta_ext_k[:,1,:,:] = dRdeta_itf_k[1:,:,:]  # Assign max-k boundary
@@ -424,7 +431,7 @@ class Metric3DTopo:
       ## Part 2: Christoffel symbols computed numerically
 
       ## Here, we have an alternative construction of the spatial Chrstoffel symbols (non-zero indices), based on
-      ## the alternative ideneity √g h^{ij}_{:k} = 0
+      ## the alternative identity √g h^{ij}_{:k} = 0
       ## Inside the flux-form Euler equations, this form effectively enforces that a constant-pressure fluid at rest
       ## remain at rest unless acted on by an external force.
 
