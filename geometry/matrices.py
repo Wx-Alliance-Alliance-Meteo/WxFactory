@@ -173,7 +173,9 @@ class DFROperators:
       output.shape = field_view.shape
 
       # Perform the matrix transposition
-      output[:] = field_view @ self.diff_solpt_tr + border_i_view @ self.correction_tr
+      numpy.dot(field_view, self.diff_solpt_tr,out=output)
+      #output[:] = field_view @ self.diff_solpt_tr# + border_i_view @ self.correction_tr
+      output[:] += border_i_view @ self.correction_tr
       # print(grid.ptopo.rank, field_view[:2,:], '\n', border_i_view[:2,:],'\n',output[:2,:])
 
       # Reshape the output array back to its canonical extents
@@ -199,7 +201,8 @@ class DFROperators:
       # Array shape for the i-border of a single variable, based on the grid decomposition
       border_shape = (grid.nb_elements_x1,2)
       # Number of variables we're extending
-      nbvars = numpy.prod(field_interior.shape) // (grid.ni)
+      #nbvars = numpy.prod(field_interior.shape) // (grid.ni)
+      nbvars = field_interior.size // grid.ni
 
       # Create an array for the output
       border = numpy.empty((nbvars,) + border_shape, dtype=field_interior.dtype)
@@ -240,7 +243,8 @@ class DFROperators:
       # Create an empty array for output
       output = numpy.empty_like(field_interior)
       # Compute the number of variables we're differentiating, including number of levels
-      nbvars = numpy.prod(output.shape) // (grid.ni * grid.nj)
+      #nbvars = numpy.prod(output.shape) // (grid.ni * grid.nj)
+      nbvars = output.size // (grid.ni * grid.nj)
 
       # Create views of the input arrays for reshaping, in order to express the differentiation as
       # a set of matrix multiplications
@@ -283,7 +287,8 @@ class DFROperators:
       border_shape = (grid.nb_elements_x2,2,
                       grid.ni)
       # Number of variables times number of vertical levels we're extending
-      nbvars = numpy.prod(field_interior.shape) // (grid.ni * grid.nj)
+      #nbvars = numpy.prod(field_interior.shape) // (grid.ni * grid.nj)
+      nbvars = field_interior.size // (grid.ni * grid.nj)
 
       # Create an array for the output
       border = numpy.empty((nbvars,) + border_shape, dtype=field_interior.dtype)
@@ -327,7 +332,8 @@ class DFROperators:
       # Create an empty array for output
       output = numpy.empty_like(field_interior)
       # Compute the number of variables we're differentiating
-      nbvars = numpy.prod(output.shape) // (grid.ni * grid.nj * grid.nk)
+      #nbvars = numpy.prod(output.shape) // (grid.ni * grid.nj * grid.nk)
+      nbvars = output.size // (grid.ni * grid.nj * grid.nj)
 
       # Create views of the input arrays for reshaping, in order to express the differentiation as
       # a set of matrix multiplications
@@ -404,7 +410,8 @@ class DFROperators:
                       grid.nj,
                       grid.ni)
       # Number of variables we're extending
-      nbvars = numpy.prod(field_interior.shape) // (grid.ni * grid.nj * grid.nk)
+      #nbvars = numpy.prod(field_interior.shape) // (grid.ni * grid.nj * grid.nk)
+      nbvars = field_interior.size // (grid.ni * grid.nj * grid.nk)
 
       # Create an array for the output
       border = numpy.empty((nbvars,) + border_shape, dtype=field_interior.dtype)
