@@ -371,10 +371,13 @@ def rhs_euler (Q: numpy.ndarray, geom: CubedSphere, mtrx: DFROperators, metric: 
          +       metric.christoffel_3_22 * (rho * u2 * u2 + metric.H_contra_22*pressure) \
          + 2.0 * metric.christoffel_3_23 * (rho * u2 * w  + metric.H_contra_23*pressure) \
          +       metric.christoffel_3_33 * (rho * w * w   + metric.H_contra_33*pressure) \
-         + metric.inv_dzdeta * rho * gravity
+         + metric.inv_dzdeta * gravity * metric.inv_sqrtG * mtrx.filter_k(metric.sqrtG*rho, geom)
+         #+ (metric.inv_dzdeta * rho * gravity)   
+         #+ metric.inv_dzdeta * gravity * numpy.exp(mtrx.filter_k(logrho, geom))    
+         
+         
 
    forcing[idx_rho_theta] = 0.0
-
 
    # DCMIP cases 2-1 and 2-2 involve rayleigh damping
    if (case_number == 21):

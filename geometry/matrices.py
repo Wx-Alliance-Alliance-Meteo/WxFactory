@@ -34,6 +34,19 @@ class DFROperators:
       self.extrap_down = lagrange_eval(grd.solutionPoints_sym, -1)
       self.extrap_up   = lagrange_eval(grd.solutionPoints_sym,  1)
 
+      # Build Vandermonde matrix to transform the modal representation to the (interior)
+      # nodal representation
+      V = numpy.polynomial.legendre.legvander(grd.solutionPoints,grd.nbsolpts-1)
+      # Invert the matrix to transform from interior nodes to modes
+      invV = numpy.linalg.inv(V)
+
+      # Create highest-mode filter
+      V = numpy.polynomial.legendre.legvander(grd.solutionPoints,grd.nbsolpts-1) # Transform mode space to grid space
+      invV = inv(V) # Transform grid space to mode space
+      feye = numpy.eye(grd.nbsolpts) # Suppress high mode
+      feye[-1,-1] = 0
+      self.highfilter = V @ (feye @ invV)
+
       if filter_apply:
          self.V = vandermonde(grd.extension)
          self.invV = inv(self.V)
@@ -336,6 +349,40 @@ class DFROperators:
       output.shape = field_interior.shape
 
       return output
+
+   def filter_k(self, field_interior, grid : Geometry) -> numpy.ndarray:
+      '''Apply a modal filter to remove the highest mode of fiield_interior along the k-dimension
+      
+      This method applies the pre-computed 'highfilter' matrix to the field-interior points along
+      the vertical (k) dimension, independently of other directions.  The typical use case is to
+      filter out the highest element mode to avoid an inconsistency in the gravity term of the
+      vertical-only Euler equations, where w_t is proportional to rho*g but rho_t is proportional 
+      to w_x.
+      
+      Parameters:
+      -----------
+      field_interior : numpy.ndarray 
+         The element-interior values of the variable(s) to be differentiated.  This should have
+         a shape of `(numvars,npts_z,npts_y,npts_x)`, respecting the prevailing parallel decomposition.
+      grid : Geometry
+         Grid-defining class, used here solely to provide the canonical definition of the local
+         computational region.'''
+         
+      # Number of variables we're extending
+      #nbvars = numpy.prod(field_interior.shape) // (grid.ni * grid.nj * grid.nk)
+      nbvars = field_interior.size // (grid.ni * grid.nj * grid.nk)
+      
+      # Output array
+      filtered = numpy.empty( (nbvars*grid.nb_elements_x3,grid.nbsolpts,grid.ni*grid.nj), dtype=field_interior.dtype)
+
+      # Create an array view of the interior, reshaped for matrix multiplication
+      field_interior_view = field_interior.view()
+      field_interior_view.shape = (nbvars*grid.nb_elements_x3,grid.nbsolpts,grid.ni*grid.nj)
+
+      filtered[:] = self.highfilter @ field_interior_view
+      filtered.shape = field_interior.shape
+      
+      return filtered
 
    def extrapolate_k(self, field_interior : numpy.ndarray, grid : Geometry) -> numpy.ndarray:
       '''Compute the k-border values along each element of field_interior
