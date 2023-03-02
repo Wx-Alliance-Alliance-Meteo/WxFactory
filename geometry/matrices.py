@@ -66,6 +66,63 @@ class DFROperators:
 
       self.quad_weights = numpy.outer(grd.glweights, grd.glweights)
 
+   def make_filter(self, alpha : float, order : int, cutoff : float, geom : Geometry):
+      # Build an exponential modal filter as described in Warburton, eqn 5.16
+
+      # Scaled mode numbers
+      modes = numpy.arange(geom.nbsolpts) / (geom.nbsolpts-1)
+      Nc = cutoff 
+
+      # After applying the filter, each mode is reduced in proportion to the filter order
+      # and the mode number relative to nbsolpts, with modes below the cutoff limit untouched
+
+      residual_modes = numpy.ones_like(modes)
+      residual_modes[modes > Nc] = numpy.exp(-alpha*((modes[modes > Nc] - cutoff)/(1 - cutoff))**order)
+
+      # Now, use a Vandermonde matrix to transform this modal filter into a nodal form
+
+      # mode-to-node operator
+      vander = numpy.polynomial.legendre.legvander(geom.solutionPoints,geom.nbsolpts-1)
+
+      # node-to-mode operator
+      ivander = numpy.linalg.inv(vander)
+
+      self.expfilter = vander @ numpy.diag(residual_modes) @ ivander
+
+   def apply_filter_3d(self,Q : numpy.ndarray, geom : Geometry, metric):
+      # Apply the exponential filter precomputed in expfilter to input fields \sqrt(g)*Q, and return the filtered array
+
+      if len(Q.shape) > 3:
+         nbvars = Q.shape[0]
+      else:
+         nbvars = 1
+
+      ni = geom.ni
+      nj = geom.nj
+      nk = geom.nk
+      np = geom.nbsolpts
+
+      # Filter in i
+      result = metric.sqrtG * Q
+      result.shape = (nbvars*nk*nj*(ni//np),np)
+      result = result @ self.expfilter.T 
+      #result = (self.expfilter @ result.T).T
+      #result = (self.expfilter @ result.transpose((0,2,1))).transpose((0,2,1))
+
+      # Filter in j
+      result.shape = (nbvars*nk*(nj//np), np, ni)
+      result = (self.expfilter @ result)
+
+      # Filter in k
+      result.shape = (nbvars*(nk//np), np, nj * ni)
+      result = (self.expfilter @ result)
+
+      result.shape = Q.shape
+      result *= metric.inv_sqrtG
+
+      return result
+
+      
    def comma_i(self, field_interior : numpy.ndarray, border_i : numpy.ndarray, grid: Geometry) -> numpy.ndarray :
       '''Take a partial derivative along the i-index
       

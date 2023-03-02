@@ -64,6 +64,12 @@ class Configuration:
       self.filter_order = self._get_option('Spatial_discretization', 'filter_order', int, 16 if self.filter_apply else 0)
       self.filter_cutoff = self._get_option('Spatial_discretization', 'filter_cutoff', float, 0.0)
 
+      self.expfilter_apply = self._get_option('Spatial_discretization', 'expfilter_apply', bool, False)
+      self.expfilter_order = self._get_option('Spatial_discretization', 'expfilter_order', int, None if self.expfilter_apply else 0)
+      self.expfilter_strength = self._get_option('Spatial_discretization', 'expfilter_strength', float, None if self.expfilter_apply else 0)
+      self.expfilter_cutoff = self._get_option('Spatial_discretization', 'expfilter_cutoff', float, None if self.expfilter_apply else 0)
+      
+
       ###############################
       # Grid
       possible_grid_types = ['cubed_sphere', 'cartesian2d']
