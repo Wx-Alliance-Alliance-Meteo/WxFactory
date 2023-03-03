@@ -405,7 +405,7 @@ class CubedSphere(Geometry):
       # Check for resized planet
       planet_scaling_factor = 1.
       planet_is_rotating = 1.
-      if param.equations == "Euler":
+      if param.equations.lower() == "euler":
          if param.case_number == 31:
             planet_scaling_factor = 125.
             planet_is_rotating = 0.
