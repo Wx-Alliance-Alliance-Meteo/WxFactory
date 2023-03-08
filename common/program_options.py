@@ -47,9 +47,6 @@ class Configuration:
       self.krylov_size = self._get_option('Time_integration', 'krylov_size', int, 1)
       self.jacobian_method = self._get_option('Time_integration', 'jacobian_method', str, 'complex')
 
-      self.ark_solver_exp = self._get_option('Time_integration', 'ark_solver_exp', str, 'ARK3(2)4L[2]SA-ERK')
-      self.ark_solver_imp = self._get_option('Time_integration', 'ark_solver_imp', str, 'ARK3(2)4L[2]SA-ESDIRK')
-
       self.verbose_solver = self._get_option('Time_integration', 'verbose_solver', int, 0)
       self.gmres_restart  = self._get_option('Time_integration', 'gmres_restart', int, 20)
 
