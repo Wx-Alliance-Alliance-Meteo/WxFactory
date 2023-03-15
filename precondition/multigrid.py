@@ -51,7 +51,9 @@ class MultigridLevel:
 
       self.ndim = ndim
 
-      if self.param.verbose_precond > 0:
+      verbose = self.param.verbose_precond and ptopo.rank == 0
+
+      if verbose > 0:
          print(
             f'Grid level! nb_elem_horiz = {nb_elem_horiz}, nb_elem_vert = {nb_elem_vert} '
             f' discr = {discretization}, source order = {source_order},'
@@ -73,7 +75,7 @@ class MultigridLevel:
 
       field, topo, self.metric = init_state_vars(self.geometry, operators, self.param)
       self.rhs_operator, _, _ = rhs_selector(self.geometry, operators, self.metric, topo, ptopo, self.param)
-      if self.param.verbose_precond > 0: print(f'field shape: {field.shape}')
+      if verbose > 0: print(f'field shape: {field.shape}')
       self.shape = field.shape
       self.dtype = field.dtype
       self.size  = field.size
@@ -87,7 +89,7 @@ class MultigridLevel:
       if target_order > 0:
          interp_method         = 'bilinear' if discretization == 'fv' else 'lagrange'
          self.interpolator     = Interpolator(discretization, source_order, discretization, target_order, interp_method,
-                                              self.param.grid_type, self.ndim, verbose=(self.param.verbose_precond > 0))
+                                              self.param.grid_type, self.ndim, verbose=verbose)
          self.restrict         = lambda vec, op=self.interpolator, sh=field.shape: op(vec.reshape(sh))
          self.restricted_shape = self.restrict(field).shape
          self.prolong          = lambda vec, op=self.interpolator, sh=self.restricted_shape: \
@@ -105,9 +107,10 @@ class MultigridLevel:
                                        target_spectral_radius=self.param.exp_smoothe_spectral_radius,
                                        global_dt=param.dt,
                                        niter=self.param.exp_smoothe_nb_iter)
-         if self.param.verbose_precond > 0: print(f'spectral radius for level = {self.param.exp_smoothe_spectral_radius}')
+         if verbose > 0: print(f'spectral radius for level = {self.param.exp_smoothe_spectral_radius}')
 
       self.post_smoothe = self.pre_smoothe
+      self.verbose = verbose
 
    def prepare(self, dt: float, field: numpy.ndarray, prev_field:Optional[numpy.ndarray] = None) \
          -> tuple[numpy.ndarray, Optional[numpy.ndarray]]:
@@ -123,7 +126,7 @@ class MultigridLevel:
                                     abs( 343. +  field[idx_2d_rho_w,:,:] /  field[idx_2d_rho,:,:]) )
 
          self.pseudo_dt = numpy.amin(delta_min * factor / speed_max) * cfl / dt
-         if self.param.verbose_precond > 0:
+         if self.verbose > 0:
             print(f'pseudo_dt = {self.pseudo_dt}')
 
          if self.param.mg_smoother == 'erk1':
@@ -189,7 +192,7 @@ class Multigrid(MatvecOp):
          param.discretization = 'dg'
 
       self.use_solver = param.mg_solve_coarsest
-      self.verbose = param.verbose_precond
+      self.verbose = param.verbose_precond and ptopo.rank == 0
 
       # Determine number of multigrid levels
       if discretization == 'fv':

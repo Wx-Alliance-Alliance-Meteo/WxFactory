@@ -416,6 +416,14 @@ class CubedSphere(Geometry):
             # Small planet, no rotation
             planet_scaling_factor = 500
             planet_is_rotating = 0.0
+
+         assert (param.depth_approx is not None)
+         if param.depth_approx.lower() == "deep":
+            self.deep = True
+         elif param.depth_approx.lower() == "shallow":
+            self.deep = False
+         else:
+            raise AssertionError('Invalid Euler atmosphere depth approximation (%s)' % param.depth_approx)
       self.earth_radius   /= planet_scaling_factor
       self.rotation_speed *= planet_is_rotating / planet_scaling_factor
 

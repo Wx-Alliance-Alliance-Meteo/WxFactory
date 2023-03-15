@@ -22,9 +22,10 @@ def wind2contra_2d(u : Union[float, numpy.ndarray], v : Union[float, numpy.ndarr
    -------
    (u1_contra, u2_contra) : tuple
       Tuple of contravariant winds'''
+   
    # Convert winds coords to spherical basis
 
-   if (geom.nk > 1):
+   if (geom.nk > 1 and geom.deep):
       # In 3D code with the deep atmosphere, the conversion to λ and φ
       # uses the full radial height of the grid point:
       lambda_dot = u / ((geom.earth_radius + geom.coordVec_gnom[:,:,2]) * geom.coslat)
@@ -133,7 +134,7 @@ def contra2wind_2d(u1 : Union[float, numpy.ndarray],
 
    dlatdx2 = ( ((1. + geom.X**2) * math.cos(geom.lat_p) * math.cos(geom.angle_p) + geom.X * geom.Y * math.cos(geom.lat_p) * math.sin(geom.angle_p) - geom.Y * math.sin(geom.lat_p)) * (1. + geom.Y**2) ) / ( geom.delta2 * denom)
 
-   if (geom.nk > 1):
+   if (geom.nk > 1 and geom.deep):
       # If we are in a 3D geometry with the deep atmosphere, the conversion from
       # contravariant → spherical → zonal/meridional winds uses the full radial distance
       # at the last step

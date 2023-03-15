@@ -18,10 +18,14 @@ class Configuration:
 
       if verbose:
          print('\nLoading config: ' + cfg_file)
-         print(self.parser._sections)
+         print(self.parser.sections())
          print(' ')
 
       self.equations = self._get_option('General', 'equations', str, 'euler')
+      if (self.equations == 'euler'):
+         self.depth_approx = self._get_option('General','depth_approx',str,'deep',['deep','shallow'])
+      else:
+         self.depth_approx = None
 
       ################################
       # Test case
@@ -163,6 +167,7 @@ class Configuration:
       else:
          raise ValueError(f'Cannot get this option type (not implemented): {option_type}')
 
+      assert (value is not None)
       return value
 
    def _validate_option(self,
@@ -193,8 +198,8 @@ class Configuration:
                    option_type: Type[OptionType],
                    default_value: Optional[OptionType],
                    valid_values: Optional[List[OptionType]]=None,
-                   min_value: OptionType=None,
-                   max_value: OptionType=None) -> OptionType:
+                   min_value: Optional[OptionType]=None,
+                   max_value: Optional[OptionType]=None) -> OptionType:
       value: Optional[OptionType] = None
 
       try:
