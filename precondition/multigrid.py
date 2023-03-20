@@ -232,13 +232,16 @@ class Multigrid(MatvecOp):
          new_list = deepcopy(list)
          if diff_len > 0:
             new_list.extend([list[-1] for _ in range(diff_len)])
+         elif diff_len < 0:
+            for _ in range(-diff_len):
+               new_list.pop(-1)
          # new_list.reverse()
          return new_list
 
-      spectral_radii = extended_list(param.exp_smoothe_spectral_radii, len(self.orders))
-      exp_nb_iters   = extended_list(param.exp_smoothe_nb_iters, len(self.orders))
+      self.spectral_radii = extended_list(param.exp_smoothe_spectral_radii, len(self.orders) - 1)
+      self.exp_nb_iters   = extended_list(param.exp_smoothe_nb_iters, len(self.orders) - 1)
       if self.verbose:
-         print(f'spectral radii = {spectral_radii}, num iterations: {exp_nb_iters}')
+         print(f'spectral radii = {self.spectral_radii}, num iterations: {self.exp_nb_iters}')
 
       # Create config set for each level (whether they will be used or not, in case we want to change that at runtime)
       self.levels = {}
@@ -250,8 +253,8 @@ class Multigrid(MatvecOp):
          if self.verbose:
             print(f'Initializing level {i_level}, {discretization}, order {order}->{new_order},'
                   f' elems {nb_elem_hori}x{nb_elem_vert}')
-         param.exp_smoothe_spectral_radius = spectral_radii[i_level]
-         param.exp_smoothe_nb_iter = exp_nb_iters[i_level]
+         param.exp_smoothe_spectral_radius = self.spectral_radii[i_level]
+         param.exp_smoothe_nb_iter = self.exp_nb_iters[i_level]
          self.levels[i_level] = MultigridLevel(param, ptopo, discretization, nb_elem_hori, nb_elem_vert, order,
                                                new_order, self.ndim)
 
