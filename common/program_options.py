@@ -18,14 +18,10 @@ class Configuration:
 
       if verbose:
          print('\nLoading config: ' + cfg_file)
-         print(self.parser.sections())
+         print(self.parser._sections)
          print(' ')
 
       self.equations = self._get_option('General', 'equations', str, 'euler')
-      if (self.equations == 'euler'):
-         self.depth_approx = self._get_option('General','depth_approx',str,'deep',['deep','shallow'])
-      else:
-         self.depth_approx = None
 
       ################################
       # Test case
@@ -65,12 +61,6 @@ class Configuration:
       self.filter_order  = self._get_option('Spatial_discretization', 'filter_order', int,
                                              default_value = 16 if self.filter_apply else 0)
       self.filter_cutoff = self._get_option('Spatial_discretization', 'filter_cutoff', float, 0.0)
-
-      self.expfilter_apply = self._get_option('Spatial_discretization', 'expfilter_apply', bool, False)
-      self.expfilter_order = self._get_option('Spatial_discretization', 'expfilter_order', int, None if self.expfilter_apply else 0)
-      self.expfilter_strength = self._get_option('Spatial_discretization', 'expfilter_strength', float, None if self.expfilter_apply else 0)
-      self.expfilter_cutoff = self._get_option('Spatial_discretization', 'expfilter_cutoff', float, None if self.expfilter_apply else 0)
-      
 
       ###############################
       # Grid
@@ -168,7 +158,6 @@ class Configuration:
       else:
          raise ValueError(f'Cannot get this option type (not implemented): {option_type}')
 
-      assert (value is not None)
       return value
 
    def _validate_option(self,
@@ -199,8 +188,8 @@ class Configuration:
                    option_type: Type[OptionType],
                    default_value: Optional[OptionType],
                    valid_values: Optional[List[OptionType]]=None,
-                   min_value: Optional[OptionType]=None,
-                   max_value: Optional[OptionType]=None) -> OptionType:
+                   min_value: OptionType=None,
+                   max_value: OptionType=None) -> OptionType:
       value: Optional[OptionType] = None
 
       try:
