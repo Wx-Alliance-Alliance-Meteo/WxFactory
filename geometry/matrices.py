@@ -350,7 +350,7 @@ class DFROperators:
       output = numpy.empty_like(field_interior)
       # Compute the number of variables we're differentiating
       #nbvars = numpy.prod(output.shape) // (grid.ni * grid.nj * grid.nk)
-      nbvars = output.size // (grid.ni * grid.nj * grid.nj)
+      nbvars = output.size // (grid.ni * grid.nj * grid.nk)
 
       # Create views of the input arrays for reshaping, in order to express the differentiation as
       # a set of matrix multiplications

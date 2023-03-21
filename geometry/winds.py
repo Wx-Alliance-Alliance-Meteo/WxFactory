@@ -28,8 +28,8 @@ def wind2contra_2d(u : Union[float, numpy.ndarray], v : Union[float, numpy.ndarr
    if (geom.nk > 1 and geom.deep):
       # In 3D code with the deep atmosphere, the conversion to λ and φ
       # uses the full radial height of the grid point:
-      lambda_dot = u / ((geom.earth_radius + geom.coordVec_gnom[:,:,2]) * geom.coslat)
-      phi_dot    = v / (geom.earth_radius + geom.coordVec_gnom[:,:,2])
+      lambda_dot = u / ((geom.earth_radius + geom.coordVec_gnom[2,:,:,:]) * geom.coslat)
+      phi_dot    = v / (geom.earth_radius + geom.coordVec_gnom[2,:,:,:])
    else:
       # Otherwise, the conversion uses just the planetary radius, with no
       # correction for height above the surface
@@ -138,8 +138,8 @@ def contra2wind_2d(u1 : Union[float, numpy.ndarray],
       # If we are in a 3D geometry with the deep atmosphere, the conversion from
       # contravariant → spherical → zonal/meridional winds uses the full radial distance
       # at the last step
-      u = ( dlondx1 * u1_contra + dlondx2 * u2_contra ) * geom.coslat * (geom.earth_radius + geom.coordVec_gnom[:,:,3])
-      v = ( dlatdx1 * u1_contra + dlatdx2 * u2_contra ) * (geom.earth_radius + geom.coordVec_gnom[:,:,3])
+      u = ( dlondx1 * u1_contra + dlondx2 * u2_contra ) * geom.coslat * (geom.earth_radius + geom.coordVec_gnom[2,:,:,:])
+      v = ( dlatdx1 * u1_contra + dlatdx2 * u2_contra ) * (geom.earth_radius + geom.coordVec_gnom[2,:,:,:])
    else:
       # Otherwise, the conversion is based on the spherical radius only, with no height correction
       u = ( dlondx1 * u1_contra + dlondx2 * u2_contra ) * geom.coslat * geom.earth_radius
