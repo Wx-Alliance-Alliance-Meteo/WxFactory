@@ -95,3 +95,9 @@ This will generate a set of `profile_####.out` files, one for each launched proc
 ```
 snakeviz ./profile_0000.out
 ```
+
+## 2D test cases
+Here is an example of a command to run the model for the André Robert bubble test case:
+```
+python main_bubble.py config/gaussian_bubble.ini
+```

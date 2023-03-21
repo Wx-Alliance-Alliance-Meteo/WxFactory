@@ -17,6 +17,7 @@ __pycache__/
 *.py[cod]
 
 results/
+test_configs/
 
 .vscode
 .idea

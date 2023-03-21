@@ -42,8 +42,7 @@ class Integrator(ABC):
       self.latest_time = t1 - t0
 
       if self.solver_info is not None and self.output_manager is not None:
-         self.output_manager.store_solver_stats(
-            t1 - t0, self.sim_time, dt, self.solver_info, (self.preconditioner is not None))
+         self.output_manager.store_solver_stats(t1 - t0, self.sim_time, dt, self.solver_info, self.preconditioner)
          self.solver_info = None
 
       self.sim_time += dt
