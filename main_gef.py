@@ -38,6 +38,9 @@ def main(argv) -> int:
    # Initialize state variables
    Q, topo, metric = init_state_vars(geom, mtrx, param)
 
+   if (param.expfilter_apply):
+      mtrx.make_filter(param.expfilter_strength,param.expfilter_order,param.expfilter_cutoff,geom)
+
    # Preconditioning
    preconditioner = create_preconditioner(param, ptopo)
 
@@ -72,6 +75,8 @@ def main(argv) -> int:
       if MPI.COMM_WORLD.rank == 0: print(f'\nStep {step} of {nb_steps + starting_step}')
 
       Q = stepper.step(Q, param.dt)
+      if (param.expfilter_apply):
+         Q = mtrx.apply_filter_3d(Q,geom,metric)
 
       if MPI.COMM_WORLD.rank == 0: print(f'Elapsed time for step: {stepper.latest_time:.3f} secs')
 
