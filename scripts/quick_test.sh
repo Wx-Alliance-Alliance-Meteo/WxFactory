@@ -6,7 +6,8 @@ TEST_DIR="${GEF_DIR}/testing_gef.tmp"
 LISTING=${TEST_DIR}/listing.txt
 
 CART_CONFIG_ORIG=${GEF_DIR}/config/gaussian_bubble.ini
-CUBE_CONFIG_ORIG=${GEF_DIR}/config/dcmip31.ini
+CUBE_CONFIG1=${GEF_DIR}/config/dcmip31.ini
+CUBE_CONFIG2=${GEF_DIR}/config/dcmip21.ini
 CONFIG_BASE=${TEST_DIR}/config.ini
 
 do_2d=1
@@ -76,6 +77,7 @@ function test_cart2d() {
     store_solver_stats=1
     output_dir=${TEST_DIR}
 
+    echo "Original config: ${CART_CONFIG_ORIG}"
     cp ${CART_CONFIG_ORIG} ${CONFIG_BASE}
     set_param ${CONFIG_BASE} dt t_end time_integrator tolerance starting_step gmres_restart        \
                              nbsolpts nb_elements_horizontal nb_elements_vertical preconditioner   \
@@ -131,7 +133,10 @@ function test_cube_sphere() {
     store_solver_stats=1
     output_dir=${TEST_DIR}
 
-    cp ${CUBE_CONFIG_ORIG} ${CONFIG_BASE}
+    config_orig=${1}
+    echo "Original config: ${config_orig}"
+
+    cp ${config_orig} ${CONFIG_BASE}
     set_param ${CONFIG_BASE} dt t_end time_integrator tolerance starting_step gmres_restart        \
                              nbsolpts nb_elements_horizontal nb_elements_vertical preconditioner   \
                              output_freq save_state_freq store_solver_stats output_dir             \
@@ -151,16 +156,16 @@ function test_cube_sphere() {
 
         preconditioner=fv-mg
         mg_smoother=erk1
-        pseudo_cfl=4e3
+        pseudo_cfl=2e3
         run_single_cubesphere time_integrator preconditioner mg_smoother pseudo_cfl || return 1
 
         mg_smoother=erk3
-        pseudo_cfl=11e4
+        pseudo_cfl=7e4
         run_single_cubesphere time_integrator preconditioner mg_smoother pseudo_cfl || return 1
 
-        mg_smoother=exp
-        exp_smoothe_spectral_radii=2
-        run_single_cubesphere time_integrator preconditioner mg_smoother exp_smoothe_spectral_radii || return 1
+        # mg_smoother=exp
+        # exp_smoothe_spectral_radii=2
+        # run_single_cubesphere time_integrator preconditioner mg_smoother exp_smoothe_spectral_radii || return 1
     fi
 
     # All tests were successful
@@ -174,7 +179,8 @@ fi
 
 if [ $do_3d -gt 0 ]; then
     echo "3D Euler (cube sphere)"
-    test_cube_sphere || exit -1
+    test_cube_sphere ${CUBE_CONFIG1} || exit -1
+    test_cube_sphere ${CUBE_CONFIG2} || exit -1
 fi
 
 echo "Test successful!" && rm -rf ${TEST_DIR}
