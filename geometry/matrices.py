@@ -8,7 +8,7 @@ from .geometry import Geometry
 class DFROperators:
    def __init__(self, grd : Geometry, filter_apply : bool=False, filter_order: int=8, filter_cutoff: float=0.25):
       '''Initialize the Direct Flux Reconstruction operators
-      
+
       This initializes the DFR operators (matrices) based on input grid parameters.  The relevant internal matrices are:
          * The extrapolation matrices, `extrap_west`, `extrap_east`, `extrap_south`, `extrap_north`, `extrap_down`, and
            `extrap_up`.
@@ -16,7 +16,8 @@ class DFROperators:
       Parameters
       ----------
       grd : Geometry
-         Underlying grid, which must define `solutionPoints`, `solutionPoints_sym`, `extension`, and `extension_sym` as mmeber variables
+         Underlying grid, which must define `solutionPoints`, `solutionPoints_sym`, `extension`, `extension_sym` and
+         `nbsolpts` as member variables
       filter_apply : bool
          Whether to apply an exponential filter in defininng the differential operators
       filter_order : int
@@ -24,7 +25,7 @@ class DFROperators:
       filter_cutoff : float
          If applied, at what relative wavenumber (0 < cutoff < 1) to begin applying the filter
       '''
-      
+
       # Build Vandermonde matrix to transform the modal representation to the (interior)
       # nodal representation
       V = numpy.polynomial.legendre.legvander(grd.solutionPoints,grd.nbsolpts-1)

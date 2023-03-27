@@ -1,10 +1,8 @@
 import math
 import numpy
-import sympy
 import sys
 
 from .geometry   import Geometry
-from .quadrature import gauss_legendre
 from .sphere     import cart2sph
 
 # For type hints
@@ -14,7 +12,7 @@ from common.program_options   import Configuration
 class CubedSphere(Geometry):
    def __init__(self, nb_elements_horizontal:int , nb_elements_vertical: int, nbsolpts: int, 
                 λ0: float, ϕ0: float, α0: float, ztop: float, ptopo: DistributedWorld, param: Configuration):
-      '''Initialized the cubed sphere geometry, for an earthlike sphere with no topography.
+      '''Initialize the cubed sphere geometry, for an earthlike sphere with no topography.
 
       This function initializes the basic CubedSphere geometry object, which provides the parameters necessary to define
       the values in numeric (x1, x2, η) coordinates, gnomonic (projected; X, Y, Z) coordinates, spherical (lat, lon, Z),
@@ -37,8 +35,8 @@ class CubedSphere(Geometry):
             +---+
       ```
       … where each panel has its own local (x1,x2) coordinate axis, representing the angular deviation from
-      the panel center.  With typical parameters, panel 0 contains the intersection of the prime meridian and 
-      equator, the equator runs through panels 3-0-1-2 from west to east, panel 4 contains the north pole, 
+      the panel center.  With typical parameters, panel 0 contains the intersection of the prime meridian and
+      equator, the equator runs through panels 3-0-1-2 from west to east, panel 4 contains the north pole,
       and panel 5 contains the south pole.
 
       Parameters:
@@ -70,7 +68,7 @@ class CubedSphere(Geometry):
          Wraps parameters from the configuration pole that are not otherwise specified in this
          constructor.
       '''
-      super().__init__('cubed_sphere')
+      super().__init__(nbsolpts, 'cubed_sphere')
 
       ## Panel / parallel decomposition properties
       self.ptopo = ptopo
@@ -113,39 +111,9 @@ class CubedSphere(Geometry):
       self.nb_elements_x1 = nb_elements_x1
       self.nb_elements_x2 = nb_elements_x2
       self.nb_elements_x3 = nb_elements_x3
-      self.nbsolpts = nbsolpts
-
-      ## Element properties -- solution and extension points
-
-      # Gauss-Legendre solution points
-      solutionPoints_sym, solutionPoints, glweights = gauss_legendre(nbsolpts)
-      if (ptopo.rank == 0):
-         print(f'Solution points : {solutionPoints}')
-         print(f'GL weights : {glweights}')
-
-      # Extend the solution points to include -1 and 1
-      extension = numpy.append(numpy.append([-1], solutionPoints), [1])
-      extension_sym = solutionPoints_sym.copy()
-      extension_sym.insert(0, sympy.sympify('-1'))
-      extension_sym.append(sympy.sympify('1'))
-
-      scaled_points = 0.5 * (1.0 + solutionPoints)
-
-      self.solutionPoints = solutionPoints
-      self.solutionPoints_sym = solutionPoints_sym
-      self.glweights = glweights
-      self.extension = extension
-      self.extension_sym = extension_sym
-
-      # Helper variables to normalize the intra-element computational coordinate
-      minComp = min(extension)
-      maxComp = max(extension)
-      Δcomp = maxComp - minComp
-
-      self.Δcomp = Δcomp
 
       ## Element sizes
-      
+
       # Equiangular coordinates
       Δx1 = (domain_x1[1] - domain_x1[0]) / nb_elements_x1
       Δx2 = (domain_x2[1] - domain_x2[0]) / nb_elements_x2
@@ -159,6 +127,11 @@ class CubedSphere(Geometry):
       self.Δx2 = Δx2
       self.Δx3 = Δx3
       self.Δeta = Δeta
+
+      # Helper variables to normalize the intra-element computational coordinate
+      minComp = min(self.extension)
+      maxComp = max(self.extension)
+      Δcomp = maxComp - minComp
 
       # Define the coordinate values at the interfaces between elements
       # interfaces_x1 = numpy.linspace(start = domain_x1[0], stop = domain_x1[1], num = nb_elements_x1 + 1)
@@ -214,25 +187,25 @@ class CubedSphere(Geometry):
       # Then broadcast the coordinate into the variable, using the structure:
       # <minimum> + <delta_element>*<element number> + <delta_inner>*<solutionPoints>
       x1[:] = domain_x1[0] + Δx1*elements_x1[:,numpy.newaxis] + \
-                  Δx1/Δcomp*(-minComp + solutionPoints[numpy.newaxis,:])
+                  Δx1/Δcomp*(-minComp + self.solutionPoints[numpy.newaxis,:])
       # Finally, reshape back to the unified view   
       x1.shape = (ni,)
 
       # Repeat for x2, x3, and eta
       x2.shape = (nb_elements_x2,nbsolpts)
       x2[:] = domain_x2[0] + Δx2*elements_x2[:,numpy.newaxis] + \
-                  Δx2/Δcomp*(-minComp + solutionPoints[numpy.newaxis,:])
+                  Δx2/Δcomp*(-minComp + self.solutionPoints[numpy.newaxis,:])
       x2.shape = (nj,)
 
       if (ztop > 0): # Note that x3 and eta are 3D arrays
          x3.shape = (nb_elements_x3,nbsolpts,nj,ni)
          x3[:] = domain_x3[0] + Δx3*elements_x3[:,numpy.newaxis,numpy.newaxis,numpy.newaxis] + \
-                     Δx3/Δcomp*(-minComp + solutionPoints[numpy.newaxis,:,numpy.newaxis,numpy.newaxis])
+                     Δx3/Δcomp*(-minComp + self.solutionPoints[numpy.newaxis,:,numpy.newaxis,numpy.newaxis])
          x3.shape = self.grid_shape_3d
 
          eta.shape = (nb_elements_x3,nbsolpts,nj,ni)
          eta[:] = domain_eta[0] + Δeta*elements_x3[:,numpy.newaxis,numpy.newaxis,numpy.newaxis] + \
-                     Δeta/Δcomp*(-minComp + solutionPoints[numpy.newaxis,:,numpy.newaxis,numpy.newaxis])
+                     Δeta/Δcomp*(-minComp + self.solutionPoints[numpy.newaxis,:,numpy.newaxis,numpy.newaxis])
          eta.shape = self.grid_shape_3d
       else:
          x3[:] = 0
