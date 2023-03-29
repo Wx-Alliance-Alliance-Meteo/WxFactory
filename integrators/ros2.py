@@ -25,9 +25,13 @@ class Ros2(Integrator):
 
       b = A(Q_flat) + rhs.flatten() * dt
 
+      maxiter = 20000 // self.gmres_restart
+      if self.preconditioner is not None:
+         maxiter = 200 // self.gmres_restart
+
       t0 = time()
       Qnew, norm_r, norm_b, num_iter, flag, residuals = fgmres(
-         A, b, x0=Q_flat, tol=self.tol, restart=self.gmres_restart, maxiter=None, preconditioner=self.preconditioner,
+         A, b, x0=Q_flat, tol=self.tol, restart=self.gmres_restart, maxiter=maxiter, preconditioner=self.preconditioner,
          verbose=self.verbose_solver)
       t1 = time()
 

@@ -147,7 +147,7 @@ class FullDataSet:
       time_condition += f'solver_tol < 10.0 AND '
 
       t0 = time()
-      self.no_precond = self._get_single_precond_results(
+      self.no_precond = self._get_single_result_set(
          ['time_integrator', 'solver_tol', 'initial_dt', 'precond'],
          time_condition + 'precond = "none"')
 
@@ -155,13 +155,13 @@ class FullDataSet:
       # print(f'precond avg = {no_precond_time}')
 
       t1 = time()
-      self.fv_ref = self._get_single_precond_results(
+      self.fv_ref = self._get_single_result_set(
          ['time_integrator', 'solver_tol', 'precond_tol', 'initial_dt', 'precond'],
          time_condition + f'precond = "fv"',
          num_best=3)
 
       t2 = time()
-      self.p_mg = self._get_single_precond_results(
+      self.p_mg = self._get_single_result_set(
          ['solver_tol', 'precond_interp', 'num_mg_levels', 'kiops_dt_factor', 'mg_solve_coarsest', 'precond_tol',
          'num_pre_smoothe', 'num_post_smoothe', 'mg_smoother', 'initial_dt', 'precond', 'time_integrator'],
          time_condition + f'precond = "p-mg"',
@@ -169,19 +169,19 @@ class FullDataSet:
 
       t3 = time()
       self.fv_mg = []
-      self.fv_mg += self._get_single_precond_results(
+      self.fv_mg += self._get_single_result_set(
          ['solver_tol', 'precond_interp', 'num_mg_levels', 'kiops_dt_factor', 'mg_solve_coarsest', #'precond_tol',
           'num_pre_smoothe', 'num_post_smoothe', 'mg_smoother', 'initial_dt', 'precond', 'pseudo_cfl',
           'time_integrator'],
          time_condition + f'precond = "fv-mg" AND mg_smoother = "erk1"',
          num_best=2)
-      self.fv_mg += self._get_single_precond_results(
+      self.fv_mg += self._get_single_result_set(
          ['solver_tol', 'precond_interp', 'num_mg_levels', 'kiops_dt_factor', 'mg_solve_coarsest', #'precond_tol',
           'num_pre_smoothe', 'num_post_smoothe', 'mg_smoother', 'initial_dt', 'precond', 'pseudo_cfl',
           'time_integrator'],
-         time_condition + f'precond = "fv-mg" AND mg_smoother = "erk3"',
-         num_best=8)
-      self.fv_mg += self._get_single_precond_results(
+         time_condition + f'precond = "fv-mg" AND mg_smoother = "erk3" AND (num_pre_smoothe + num_post_smoothe) = 3',
+         num_best=12)
+      self.fv_mg += self._get_single_result_set(
          ['solver_tol', 'precond_interp', 'num_mg_levels', 'kiops_dt_factor', 'mg_solve_coarsest', #'precond_tol',
           'num_pre_smoothe', 'num_post_smoothe', 'mg_smoother', 'initial_dt', 'precond', 'pseudo_cfl',
           'time_integrator', 'exp_radius_0', 'exp_radius_1', 'exp_radius_2'],
@@ -197,9 +197,10 @@ class FullDataSet:
       self.with_ref_precond_tol = has_diff([self.fv_ref], ['precond_tol'])
       self.same_mg_precond      = not has_diff([self.fv_mg, self.p_mg], ['precond'])
       self.same_fv_smoother     = not has_diff([self.fv_mg], ['mg_smoother'])
-      self.with_fv_pseudo_cfl   = has_diff([self.fv_mg], ['pseudo_cfl'],
-                                           conditions=lambda d: d['mg_smoother'] in ['erk1', 'erk3'])
-      self.same_fv_num_smoothe  = not has_diff([self.fv_mg], ['num_pre_smoothe', 'num_post_smoothe', 'mg_solve_coarsest'])
+      self.same_fv_pseudo_cfl   = not has_diff([self.fv_mg], ['pseudo_cfl'],
+                                               conditions=lambda d: d['mg_smoother'] in ['erk1', 'erk3'])
+      self.same_fv_num_smoothe  = not has_diff([self.fv_mg],
+                                               ['num_pre_smoothe', 'num_post_smoothe', 'mg_solve_coarsest'])
       self.same_fv_precond_tol  = not has_diff([self.fv_mg], ['precond_tol'])
 
       if self.same_tol:
@@ -218,6 +219,8 @@ class FullDataSet:
          self.fv_num_smoothe = f'{self.fv_mg[0]["num_pre_smoothe"]}/'      \
                                f'{self.fv_mg[0]["num_post_smoothe"]}/'     \
                                f'{self.fv_mg[0]["mg_solve_coarsest"]}'
+      if self.same_fv_pseudo_cfl:
+         self.fv_pseudo_cfl = self.fv_mg[0]["pseudo_cfl"]
 
    def _find_first(self, param: str) -> Any:
       if len(self.no_precond) > 0: return self.no_precond[0][param]
@@ -242,7 +245,7 @@ class FullDataSet:
       if data['precond'] == 'fv-mg':
          if not self.same_fv_smoother: elements.append(f'{data["mg_smoother"]}')
          if data['mg_smoother'] in ['erk1', 'erk3']:
-            if self.with_fv_pseudo_cfl:
+            if not self.same_fv_pseudo_cfl:
                cfl = data["pseudo_cfl"]
                if cfl >= 10000.0: elements.append(f'pdt {cfl/1000.0:.0f}k')
                elif cfl >= 100.0: elements.append(f'pdt {cfl:5.0f}')
@@ -264,6 +267,12 @@ class FullDataSet:
          if self.same_fv_smoother: title += f', smoother {self.fv_smoother}'
          if self.same_fv_num_smoothe: title += f', #sm {self.fv_num_smoothe}'
          if self.same_fv_precond_tol and self.fv_precond_tol is not None: title += f', tol {self.fv_precond_tol}'
+         if self.same_fv_pseudo_cfl:
+            cfl = self.fv_pseudo_cfl
+            if cfl >= 10000.0: title += f', pdt {cfl/1000.0:.0f}k'
+            elif cfl >= 100.0: title += f', pdt {cfl:5.0f}'
+            else: title += f', pdt {cfl:5.2f}'
+
       return title
 
    def _make_filename(self, base_name: str):
@@ -272,12 +281,12 @@ class FullDataSet:
          base_filename += f'_{self.output_suffix}'
       return f'{base_filename}.pdf'
 
-   def _get_single_precond_results(self,
-                                   columns: List[str],
-                                   custom_condition: str,
-                                   debug: bool = False,
-                                   num_best: int = 20) \
-                                    -> SingleResultSet:
+   def _get_single_result_set(self,
+                              columns: List[str],
+                              custom_condition: str,
+                              debug: bool = False,
+                              num_best: int = 20) \
+                               -> SingleResultSet:
       """
       Arguments:
       columns          -- Which additional columns you want to have in the set of results
@@ -497,6 +506,7 @@ class FullDataSet:
       ax_time.xaxis.set_minor_locator(AutoMinorLocator())
       ax_time.xaxis.grid(True, which='both')
       ax_time.xaxis.grid(True, which='minor', linestyle='dotted')
+      ax_time.set_xlabel('seconds')
 
       fig.suptitle(self._make_title('Solver time'))
 

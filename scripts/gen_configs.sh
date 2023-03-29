@@ -38,12 +38,13 @@ function make_config() {
 }
 
 # Problem size
-nb_elements_horizontal=30
+nb_elements_horizontal=48
 nb_elements_vertical=20
 RESULT_DIR=${GEF_DIR}/multi_config_results_${nb_elements_horizontal}x${nb_elements_vertical}
+RESULT_DIR=${GEF_DIR}/multi_config_results
 
 dt=30
-t_end=450
+t_end=300
 time_integrator=epi2
 tolerance=1e-7
 gmres_restart=200
@@ -54,7 +55,7 @@ save_state_freq=0
 store_solver_stats=1
 output_dir=${RESULT_DIR}
 solver_stats_file=solver_stats_7.db
-starting_step=10
+starting_step=0
 
 cp ${ORIG_CONFIG} ${TMP_BASE_CONFIG}
 set_param_strict ${TMP_BASE_CONFIG} dt t_end time_integrator tolerance starting_step gmres_restart          \
@@ -67,7 +68,8 @@ do_erk1_smoother=0
 do_erk3_smoother=1
 do_exp_smoother=0
 
-for tolerance in 1e-6 1e-7; do
+# for tolerance in 1e-6 1e-7; do
+for tolerance in 1e-6; do
     [ ${tolerance} == 1e-6 ] && solver_stats_file=solver_stats_6.db
     [ ${tolerance} == 1e-7 ] && solver_stats_file=solver_stats_7.db
 
@@ -99,10 +101,12 @@ for tolerance in 1e-6 1e-7; do
         preconditioner=fv-mg
         mg_smoother=erk3
         mg_solve_coarsest=1
-        for num_pre_smoothe in 0 1 2 3 4; do
-        for num_post_smoothe in 0 1 2 3 4; do
+        for num_pre_smoothe in 1 2 3; do
+        for num_post_smoothe in 1 2 3; do
         [ $(($num_pre_smoothe + $num_post_smoothe)) -lt 2 ] && continue
-        for pseudo_cfl in 16.5e4 17.0e4 17.5e4 18.0e4 18.5e4 19.0e4 19.5e4 20.0e4; do
+        [ $(($num_pre_smoothe + $num_post_smoothe)) -gt 4 ] && continue
+        # for pseudo_cfl in 16.5e4 17.0e4 17.5e4 18.0e4 18.5e4 19.0e4 19.5e4 20.0e4; do
+        for pseudo_cfl in $(seq 1800 100 2500); do
         for precond_tolerance in 1e-1; do
             make_config ${DEST_DIR}/fv-mg_${nb_elements_horizontal}x${nb_elements_vertical}_${tolerance}_${mg_smoother}_${num_pre_smoothe}${num_post_smoothe}_${pseudo_cfl}_${precond_tolerance}.ini \
                 time_integrator preconditioner mg_smoother num_pre_smoothe num_post_smoothe pseudo_cfl precond_tolerance tolerance solver_stats_file mg_solve_coarsest

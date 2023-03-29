@@ -50,6 +50,7 @@ class MultigridLevel:
       self.num_post_smoothe = self.param.num_post_smoothe
 
       self.ndim = ndim
+      self.grid_scaling = param.nb_elements_horizontal / nb_elem_horiz # Only valid for FV?
 
       verbose = self.param.verbose_precond and ptopo.rank == 0
 
@@ -60,6 +61,7 @@ class MultigridLevel:
             f' target order = {target_order}, nbsolpts = {p.nbsolpts}'
             f' num_mg_levels: {p.num_mg_levels}'
             f' exp radius: {p.exp_smoothe_spectral_radius}'
+            f' grid scaling: {self.grid_scaling:.2f}'
             # f' work ratio = {self.work_ratio}'
             )
 
@@ -118,10 +120,16 @@ class MultigridLevel:
 
       if self.param.mg_smoother in ['erk1', 'erk3']:
          cfl    = self.param.pseudo_cfl
-         factor = 1.0 / (self.ndim * (2 * self.param.nbsolpts + 1))
-         
-         delta_min = abs(1.- self.geometry.solutionPoints[-1])                                                       \
-                     * min(self.geometry.Δx1, min(self.geometry.Δx2, self.geometry.Δx3))
+         # factor = 1.0 / (self.ndim * (2 * self.param.nbsolpts + 1))
+         factor = 1.0 / (2 * (2 * self.param.nbsolpts + 1))
+
+         delta_min = 0.0
+         if isinstance(self.geometry, Cartesian2D):
+            delta_min = abs(1.- self.geometry.solutionPoints[-1])                                                      \
+                        * min(self.geometry.Δx1, min(self.geometry.Δx2, self.geometry.Δx3))
+         elif isinstance(self.geometry, CubedSphere):
+            delta_min = abs(1.- self.geometry.solutionPoints[-1]) * self.grid_scaling
+
          speed_max = numpy.maximum( abs( 343. +  field[idx_2d_rho_u,:,:] /  field[idx_2d_rho,:,:] ),
                                     abs( 343. +  field[idx_2d_rho_w,:,:] /  field[idx_2d_rho,:,:]) )
 
