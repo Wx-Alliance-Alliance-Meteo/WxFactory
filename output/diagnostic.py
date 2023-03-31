@@ -1,4 +1,4 @@
-import mpi4py.MPI
+from mpi4py import MPI
 import numpy
 
 from common.definitions import gravity
@@ -63,5 +63,5 @@ def global_integral(field, mtrx, metric, nbsolpts, nb_elements_horiz):
          min_col, max_col = column * nbsolpts + numpy.array([0, nbsolpts])
          local_sum += numpy.sum( field[min_lin:max_lin,min_col:max_col] * metric.sqrtG[min_lin:max_lin,min_col:max_col] * mtrx.quad_weights )
 
-   return mpi4py.MPI.COMM_WORLD.allreduce(local_sum)
+   return MPI.COMM_WORLD.allreduce(local_sum)
 

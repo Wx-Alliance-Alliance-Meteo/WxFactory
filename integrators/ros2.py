@@ -1,41 +1,41 @@
 import numpy
-from scipy.sparse.linalg import LinearOperator
 from time import time
-
 from typing import Callable
 
-from solvers.linsol      import fgmres
-from solvers.matvec      import matvec_rat
-from integrators.stepper     import Stepper
-from output.solver_stats import write_solver_stats
+from mpi4py import MPI
 
-class Ros2(Stepper):
-   def __init__(self, rhs_handle: Callable, tol: float, preconditioner=None) -> None:
-      super().__init__(preconditioner)
+from common.program_options import Configuration
+from .integrator            import Integrator
+from solvers                import fgmres, matvec_rat, SolverInfo
+
+class Ros2(Integrator):
+   def __init__(self, param: Configuration, rhs_handle: Callable, preconditioner=None) -> None:
+      super().__init__(param, preconditioner)
       self.rhs_handle     = rhs_handle
-      self.tol            = tol
+      self.tol            = param.tolerance
+      self.gmres_restart  = param.gmres_restart
 
    def __step__(self, Q: numpy.ndarray, dt: float):
 
       rhs    = self.rhs_handle(Q)
       Q_flat = Q.flatten()
-      n      = Q_flat.shape[0]
 
-      A = LinearOperator((n,n), matvec=lambda v: matvec_rat(v, dt, Q, rhs, self.rhs_handle))
+      def A(v):
+         return matvec_rat(v, dt, Q, rhs, self.rhs_handle)
+
       b = A(Q_flat) + rhs.flatten() * dt
 
       t0 = time()
-      Qnew, local_error, num_iter, flag, residuals = fgmres(
-         A, b, x0=Q_flat, tol=self.tol, restart=100, maxiter=None, preconditioner=self.preconditioner, verbose=False)
+      Qnew, norm_r, norm_b, num_iter, flag, residuals = fgmres(
+         A, b, x0=Q_flat, tol=self.tol, restart=self.gmres_restart, maxiter=None, preconditioner=self.preconditioner,
+         verbose=self.verbose_solver)
       t1 = time()
 
-      write_solver_stats(num_iter, t1 - t0, flag, residuals)
+      self.solver_info = SolverInfo(flag, t1 - t0, num_iter, residuals)
 
-      if flag == 0:
-         print(f'FGMRES converged at iteration {num_iter} in {t1 - t0:4.1f} s to a solution with'
-               f' relative local error {local_error : .2e}')
-      else:
-         print(f'FGMRES stagnation/interruption at iteration {num_iter} in {t1 - t0:4.1f} s, returning a solution with'
-               f' relative local error {local_error: .2e}')
+      if MPI.COMM_WORLD.rank == 0:
+         result_type = 'convergence' if flag == 0 else 'stagnation/interruption'
+         print(f'FGMRES {result_type} at iteration {num_iter} in {t1 - t0:4.1f} s to a solution with'
+               f' relative residual {norm_r/norm_b : .2e}')
 
       return numpy.reshape(Qnew, Q.shape)

@@ -1,6 +1,7 @@
 import math
+
+from mpi4py import MPI
 import numpy
-import mpi4py.MPI
 import scipy.linalg
 
 def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 1, mmax = 128, reuse_info = True, task1 = False):
@@ -57,7 +58,7 @@ def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 1, mmax = 128, reuse_in
    # compute the 1-norm of u
    local_nrmU = numpy.sum(abs(u[1:, :]), axis=1)
    global_normU = numpy.empty_like(local_nrmU)
-   mpi4py.MPI.COMM_WORLD.Allreduce([local_nrmU, mpi4py.MPI.DOUBLE], [global_normU, mpi4py.MPI.DOUBLE])
+   MPI.COMM_WORLD.Allreduce([local_nrmU, MPI.DOUBLE], [global_normU, MPI.DOUBLE])
    normU = numpy.amax(global_normU)
 
    # Normalization factors
@@ -108,7 +109,7 @@ def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 1, mmax = 128, reuse_in
          # Normalize initial vector (this norm is nonzero)
          local_sum = V[0, 0:n] @ V[0, 0:n]
          global_sum_nrm = numpy.empty_like(local_sum)
-         mpi4py.MPI.COMM_WORLD.Allreduce([local_sum, mpi4py.MPI.DOUBLE], [global_sum_nrm, mpi4py.MPI.DOUBLE])
+         MPI.COMM_WORLD.Allreduce([local_sum, MPI.DOUBLE], [global_sum_nrm, MPI.DOUBLE])
          β = math.sqrt( global_sum_nrm + V[j, n:n+p] @ V[j, n:n+p] )
 
          # The first Krylov basis vector
@@ -127,7 +128,7 @@ def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 1, mmax = 128, reuse_in
          #2. compute terms needed for R and T
          local_vec = V[0:j+1, 0:n] @ V[j-1:j+1, 0:n].T
          global_vec = numpy.empty_like(local_vec)
-         mpi4py.MPI.COMM_WORLD.Allreduce([local_vec, mpi4py.MPI.DOUBLE], [global_vec, mpi4py.MPI.DOUBLE])
+         MPI.COMM_WORLD.Allreduce([local_vec, MPI.DOUBLE], [global_vec, MPI.DOUBLE])
          global_vec += V[0:j+1, n:n+p] @ V[j-1:j+1, n:n+p].T
 
          #3. set values for Hessenberg matrix H
@@ -157,7 +158,7 @@ def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 1, mmax = 128, reuse_in
             #use communication to compute norm estimate
             local_sum = V[j, 0:n] @ V[j, 0:n]
             global_sum_nrm = numpy.empty_like(local_sum)
-            mpi4py.MPI.COMM_WORLD.Allreduce([local_sum, mpi4py.MPI.DOUBLE], [global_sum_nrm, mpi4py.MPI.DOUBLE])
+            MPI.COMM_WORLD.Allreduce([local_sum, MPI.DOUBLE], [global_sum_nrm, MPI.DOUBLE])
             curr_nrm = math.sqrt( global_sum_nrm + V[j,n:n+p] @ V[j, n:n+p] )
          else:
            curr_nrm = numpy.sqrt(global_vec[-1,1] - sum_sqrd)

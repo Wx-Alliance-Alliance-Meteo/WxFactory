@@ -1,29 +1,22 @@
-from integrators.stepper import Stepper
+
+from common.program_options import Configuration
+from .integrator            import Integrator
 import math
 import numpy
 
-class StrangSplitting(Stepper):
-   def __init__(self, scheme1, scheme2):
-      super().__init__()
+
+class LieSplitting(Integrator):
+   def __init__(self, param: Configuration, scheme1: Integrator, scheme2: Integrator):
+      super().__init__(param, preconditioner=None)
       self.scheme1 = scheme1
       self.scheme2 = scheme2
 
    def __step__(self, Q, dt):
-      Q = self.scheme1.step(Q, dt/2)
-      Q = self.scheme2.step(Q, dt)
-      Q = self.scheme1.step(Q, dt/2)
-      return Q
+       Q1 = self.scheme1.step(Q, dt)
+       Q2 = self.scheme2.step(Q1, dt)
+       return Q2
 
-class GodunovSplitting(Stepper):
-    def __init__(self, scheme1, scheme2):
-      super().__init__()
-      self.scheme1 = scheme1
-      self.scheme2 = scheme2
 
-    def __step__(self, Q, dt):
-      Q = self.scheme1.step(Q, dt)
-      Q = self.scheme2.step(Q, dt)
-      return Q
 
 class Best22Splitting(Stepper):
     def __init__(self, scheme1, scheme2):
@@ -55,3 +48,17 @@ class OS22Splitting(Stepper):
             if self.alpha[numofstage,1] != 0:
                   Q = self.scheme2.step(Q, self.alpha[numofstage,1] * dt)
       return Q
+
+
+class StrangSplitting(Integrator):
+   def __init__(self, param: Configuration, scheme1: Integrator, scheme2: Integrator):
+      super().__init__(param, preconditioner=None)
+      self.scheme1 = scheme1
+      self.scheme2 = scheme2
+
+   def __step__(self, Q, dt):
+      Q1 = self.scheme1.step(Q, dt/2)
+      Q2 = self.scheme2.step(Q1, dt)
+      Q3 = self.scheme1.step(Q2, dt/2)
+      return Q3
+ 

@@ -4,20 +4,19 @@
 
 import math
 from typing import Callable, Optional
+import sys
 
 from mpi4py import MPI
 import numpy
 
 from common.definitions         import idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_w
-from common.parallel            import Distributed_World
+from common.parallel            import DistributedWorld
 from common.program_options     import Configuration
-from geometry.cartesian_2d_mesh import Cartesian2d
-from geometry.cubed_sphere      import CubedSphere
-from geometry.geometry          import Geometry
-from geometry.matrices          import DFR_operators
+from geometry                   import Cartesian2D, CubedSphere, DFROperators, Geometry
 from init.dcmip                 import dcmip_T11_update_winds, dcmip_T12_update_winds
 from init.init_state_vars       import init_state_vars
-from integrators.stepper        import Stepper
+from integrators                import Integrator, Epi, EpiStiff, Euler1, Imex2, PartRosExp2, Ros2, RosExp2, \
+                                       StrangSplitting, Srerk, Tvdrk3
 from output.output_manager      import OutputManager
 from precondition.multigrid     import Multigrid
 from rhs.rhs_selector           import rhs_selector
@@ -29,16 +28,19 @@ def main(argv) -> int:
    param = Configuration(argv.config, MPI.COMM_WORLD.rank == 0)
 
    # Set up distributed world
-   ptopo = Distributed_World() if param.grid_type == 'cubed_sphere' else None
+   ptopo = DistributedWorld() if param.grid_type == 'cubed_sphere' else None
 
    # Create the mesh
    geom = create_geometry(param, ptopo)
 
    # Build differentiation matrice and boundary correction
-   mtrx = DFR_operators(geom, param.filter_apply, param.filter_order, param.filter_cutoff)
+   mtrx = DFROperators(geom, param.filter_apply, param.filter_order, param.filter_cutoff)
 
    # Initialize state variables
    Q, topo, metric = init_state_vars(geom, mtrx, param)
+
+   if (param.expfilter_apply):
+      mtrx.make_filter(param.expfilter_strength,param.expfilter_order,param.expfilter_cutoff,geom)
 
    # Preconditioning
    preconditioner = create_preconditioner(param, ptopo)
@@ -53,10 +55,13 @@ def main(argv) -> int:
 
    # Time stepping
    stepper = create_time_integrator(param, rhs_handle, rhs_implicit, rhs_explicit, preconditioner)
+   stepper.output_manager = output
 
    output.step(Q, starting_step)
+   sys.stdout.flush()
 
    t = param.dt * starting_step
+   stepper.sim_time = t
    nb_steps = math.ceil(param.t_end / param.dt) - starting_step
 
    step = starting_step
@@ -68,9 +73,12 @@ def main(argv) -> int:
          t += param.dt
 
       step += 1
+
       if MPI.COMM_WORLD.rank == 0: print(f'\nStep {step} of {nb_steps + starting_step}')
 
       Q = stepper.step(Q, param.dt)
+      if (param.expfilter_apply):
+         Q = mtrx.apply_filter_3d(Q,geom,metric)
 
       if MPI.COMM_WORLD.rank == 0: print(f'Elapsed time for step: {stepper.latest_time:.3f} secs')
 
@@ -90,24 +98,25 @@ def main(argv) -> int:
          Q[idx_rho_w,:,:,:]  = Q[idx_rho, :, :, :] * w_wind
 
       output.step(Q, step)
+      sys.stdout.flush()
 
    output.finalize()
 
    return MPI.COMM_WORLD.rank
 
-def create_geometry(param: Configuration, ptopo: Optional[Distributed_World]) -> Geometry:
+def create_geometry(param: Configuration, ptopo: Optional[DistributedWorld]) -> Geometry:
    """ Create the appropriate geometry for the given problem """
 
    if param.grid_type == 'cubed_sphere':
       return CubedSphere(param.nb_elements_horizontal, param.nb_elements_vertical, param.nbsolpts, param.λ0, param.ϕ0,
                          param.α0, param.ztop, ptopo, param)
    if param.grid_type == 'cartesian2d':
-      return Cartesian2d((param.x0, param.x1), (param.z0, param.z1), param.nb_elements_horizontal,
+      return Cartesian2D((param.x0, param.x1), (param.z0, param.z1), param.nb_elements_horizontal,
                          param.nb_elements_vertical, param.nbsolpts)
 
    raise ValueError(f'Invalid grid type: {param.grid_type}')
 
-def create_preconditioner(param: Configuration, ptopo: Optional[Distributed_World]) -> Optional[Multigrid]:
+def create_preconditioner(param: Configuration, ptopo: Optional[DistributedWorld]) -> Optional[Multigrid]:
    """ Create the preconditioner required by the given params """
    if param.preconditioner == 'p-mg':
       return Multigrid(param, ptopo, discretization='dg')
@@ -142,54 +151,51 @@ def determine_starting_state(param: Configuration, output: OutputManager, Q: num
 
    return Q, starting_step
 
-def create_time_integrator(param: Configuration, rhs_handle: Callable, rhs_implicit: Callable, rhs_explicit: Callable,
+def create_time_integrator(param: Configuration,
+                           rhs_handle: Callable,
+                           rhs_implicit: Optional[Callable],
+                           rhs_explicit: Optional[Callable],
                            preconditioner: Optional[Multigrid]) \
-      -> Stepper:
+      -> Integrator:
    """ Create the appropriate time integrator object based on params """
+
 
    from integrators.epi       import Epi
    from integrators.ros2      import Ros2
-   from integrators.splitting import StrangSplitting, GodunovSplitting, Best22Splitting, OS22Splitting
+   from integrators.splitting import StrangSplitting, LieSplitting, Best22Splitting, OS22Splitting
    from integrators.explicitRK import explicitRK
 
    if param.time_integrator[:9] == 'epi_stiff' and param.time_integrator[9:].isdigit():
-      from integrators.epi_stiff import EpiStiff
       order = int(param.time_integrator[9:])
       if MPI.COMM_WORLD.rank == 0: print(f'Running with EPI_stiff{order}')
-      return EpiStiff(order, rhs_handle, param.tolerance, param.exponential_solver,
-                         jacobian_method=param.jacobian_method, init_substeps=10)
+      return EpiStiff(param, order, rhs_handle, init_substeps=10)
    if param.time_integrator[:3] == 'epi' and param.time_integrator[3:].isdigit():
       order = int(param.time_integrator[3:])
       if MPI.COMM_WORLD.rank == 0: print(f'Running with EPI{order}')
-      return Epi(order, rhs_handle, param.tolerance, param.exponential_solver,
-                   jacobian_method=param.jacobian_method, init_substeps=10)
+      return Epi(param, order, rhs_handle, init_substeps=10)
    if param.time_integrator[:5] == 'srerk' and param.time_integrator[5:].isdigit():
-      from integrators.srerk import Srerk
       order = int(param.time_integrator[5:])
       if MPI.COMM_WORLD.rank == 0: print(f'Running with SRERK{order}')
-      return Srerk(order, rhs_handle, param.tolerance, param.exponential_solver,
-                      jacobian_method=param.jacobian_method)
+      return Srerk(param, order, rhs_handle)
    if param.time_integrator == 'tvdrk3':
-      from integrators.tvdrk3 import Tvdrk3
-      return Tvdrk3(rhs_handle)
+      return Tvdrk3(param, rhs_handle)
    if param.time_integrator == 'euler1':
-      from integrators.euler1 import Euler1
       if MPI.COMM_WORLD.rank == 0:
          print('WARNING: Running with first-order explicit Euler timestepping.')
          print('         This is UNSTABLE and should be used only for debugging.')
-      return Euler1(rhs_handle)
+      return Euler1(param, rhs_handle)
    if param.time_integrator == 'ros2':
-      return Ros2(rhs_handle, param.tolerance, preconditioner=preconditioner)
+      return Ros2(param, rhs_handle, preconditioner=preconditioner)
    if param.time_integrator == 'imex2':
       from integrators.imex2 import Imex2
-      return Imex2(rhs_explicit, rhs_implicit, param.tolerance)
+      return Imex2(param, rhs_explicit, rhs_implicit)
    if param.time_integrator == 'crank_nicolson':
       from integrators.crank_nicolson import CrankNicolson
       return CrankNicolson(rhs_handle, param.tolerance, preconditioner=preconditioner)
    if param.time_integrator == 'strang_epi2_ros2':
-      stepper1 = Epi(2, rhs_explicit, param.tolerance, exponential_solver=param.exponential_solver)
-      stepper2 = Ros2(rhs_implicit, param.tolerance, preconditioner=preconditioner)
-      return StrangSplitting(stepper1, stepper2)
+      stepper1 = Epi(param, 2, rhs_explicit)
+      stepper2 = Ros2(param, rhs_implicit, preconditioner=preconditioner)
+      return StrangSplitting(param, stepper1, stepper2)
    if param.time_integrator == 'strang_ros2_epi2':
       stepper1 = Ros2(rhs_implicit, param.tolerance, preconditioner=preconditioner)
       stepper2 = Epi(2, rhs_explicit, param.tolerance, exponential_solver=param.exponential_solver)
@@ -250,14 +256,14 @@ def create_time_integrator(param: Configuration, rhs_handle: Callable, rhs_impli
       stepper2 = Epi(6, rhs_implicit, param.tolerance, exponential_solver=param.exponential_solver)
       return OS22Splitting(stepper1, stepper2, os22_param)
    if param.time_integrator == 'rosexp2':
-      from integrators.rosexp2 import RosExp2
-      return RosExp2(rhs_handle, rhs_implicit, param.tolerance, preconditioner=preconditioner)
+      return RosExp2(param, rhs_handle, rhs_implicit, preconditioner=preconditioner)
    if param.time_integrator == 'partrosexp2':
       from integrators.part_ros_exp2 import PartRosExp2
       return PartRosExp2(rhs_handle, rhs_implicit, param.tolerance, preconditioner=preconditioner)
    if param.time_integrator[:10] == 'explicitrk':
       RKmethod = param.time_integrator[11:-1]
       return explicitRK(rhs_handle,RKmethod)
+
 
    raise ValueError(f'Time integration method {param.time_integrator} not supported')
 
@@ -284,6 +290,7 @@ if __name__ == '__main__':
    args = parser.parse_args()
 
    # Start profiling
+   pr = None
    if args.profile:
       pr = cProfile.Profile()
       pr.enable()

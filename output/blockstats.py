@@ -1,6 +1,7 @@
-import numpy
 import math
-import mpi4py.MPI
+
+from mpi4py import MPI
+import numpy
 
 from init.shallow_water_test import height_case1, height_case2, height_unsteady_zonal
 from output.diagnostic       import total_energy, potential_enstrophy, global_integral
@@ -55,8 +56,8 @@ def blockstats(Q, geom, topo, metric, mtrx, param, step):
       absol_err2 = global_integral((h - h_anal)**2, mtrx, metric, param.nbsolpts, param.nb_elements_horizontal) 
       int_h_anal2 = global_integral(h_anal**2, mtrx, metric, param.nbsolpts, param.nb_elements_horizontal) 
 
-      max_absol_err = mpi4py.MPI.COMM_WORLD.allreduce(numpy.max(abs(h - h_anal)), op=mpi4py.MPI.MAX)
-      max_h_anal = mpi4py.MPI.COMM_WORLD.allreduce(numpy.max(h_anal), op=mpi4py.MPI.MAX)
+      max_absol_err = MPI.COMM_WORLD.allreduce(numpy.max(abs(h - h_anal)), op=MPI.MAX)
+      max_h_anal = MPI.COMM_WORLD.allreduce(numpy.max(h_anal), op=MPI.MAX)
 
       l1 = absol_err / int_h_anal
       l2 = math.sqrt( absol_err2 / int_h_anal2 )

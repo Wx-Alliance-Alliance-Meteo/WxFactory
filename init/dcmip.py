@@ -2,9 +2,7 @@ import numpy
 import math
 
 from common.definitions    import cpd, day_in_secs, gravity, p0, Rd
-from geometry.cubed_sphere import CubedSphere
-from geometry.matrices     import DFR_operators
-from geometry.winds        import *
+from geometry              import CubedSphere, DFROperators, Metric3DTopo, wind2contra_2d, wind2contra_3d
 
 #=======================================================================
 #
@@ -214,15 +212,15 @@ def dcmip_advection_deformation(geom, metric, mtrx, param):
          for j in range(nj):
             # Make the ellipse
             if d1[k,i,j] <= RR:
-                q3[k,i,j] = 1.0
+               q3[k,i,j] = 1.0
             elif d2[k,i,j] <= RR:
-                q3[k,i,j] = 1.0
+               q3[k,i,j] = 1.0
             else:
-                q3[k,i,j] = 0.1
+               q3[k,i,j] = 0.1
 
             # Put in the slot
             if geom.height[k,i,j] > z0 and abs(geom.lat[i,j]) < 0.125:
-                q3[k,i,j] = 0.1
+               q3[k,i,j] = 0.1
 
    # Tracer 4: q4 is chosen so that, in combination with the other three tracer
    #           fields with weight (3/10), the sum is equal to one
@@ -511,7 +509,7 @@ def dcmip_steady_state_mountain(geom: CubedSphere, metric, mtrx, param):
 # Tests 2-1 and 2-2:  Non-hydrostatic Mountain Waves over a Schaer-type Mountain
 #=====================================================================================
 
-def dcmip_schar_waves(geom: CubedSphere, metric, mtrx: DFR_operators, param, shear=False):
+def dcmip_schar_waves(geom: CubedSphere, metric, mtrx: DFROperators, param, shear=False):
    T0      = 300.0             # temperature (K)
    lambdam = math.pi/4.0       # mountain longitude center point (radians)
    phim    = 0.0               # mountain latitude center point (radians)
@@ -539,8 +537,8 @@ def dcmip_schar_waves(geom: CubedSphere, metric, mtrx: DFR_operators, param, she
       lat = coord[1,0,:,:]
       lon = coord[0,0,:,:]
       r = geom.earth_radius * numpy.arccos( math.sin(phim) * numpy.sin(lat) + math.cos(phim) * numpy.cos(lat) * numpy.cos(lon - lambdam) )
-      #z[r<Rm] = (h0/2.0)*(1.0+numpy.cos(math.pi*r[r<Rm]/Rm))*numpy.cos(math.pi*r[r<Rm]/zetam)**2   # mountain height
       z[:,:] = h0 * numpy.exp(-r**2/Dm**2) * numpy.cos(numpy.pi*r/Dxi)**2
+
 
    # Update the geometry object with the new bottom topography
    geom.apply_topography(zbot,zbot_itf_i,zbot_itf_j)
@@ -553,26 +551,31 @@ def dcmip_schar_waves(geom: CubedSphere, metric, mtrx: DFR_operators, param, she
    z_3d = geom.coordVec_latlon[2,:,:,:] # Retrieve all z-levels
 
    ## Temperature in 3D
-   T = T0*(1 - Cs*Ueq**2/gravity*numpy.sin(lat)**2)
+   if (Ueq != 0):
+      T = T0*(1 - Cs*Ueq**2/gravity*numpy.sin(lat)**2)
+   else:
+      T = T0*numpy.ones_like(lat)
+
+   ### NOTE: These equations are not in exact balance for the no-hill case.
+   ### The DCMIP document assumes a shallow-atmosphere discretization,
+   ### whereas we have a deep atmosphere.  This case still produces gravity
+   ### waves that propagate, but that is overlaid on top of a background 
+   ### adjustment.
 
    ## Pressure (eqn 80)
    p = Peq * numpy.exp(-Ueq**2/(2*Rd*T0)*numpy.sin(lat)**2 - gravity*z_3d/(Rd*T))
 
-   #-----------------------------------------------------------------------
-   #    THE VELOCITIES ARE ZERO (STATE AT REST)
-   #-----------------------------------------------------------------------
-
    # Zonal Velocity (eqn 82)
 
-   u = Ueq * numpy.cos(lat) * (2*T0/T*Cs*z_3d + T/T0)**0.5
+   u = Ueq * numpy.cos(lat) * (2*T0/T*Cs*z_3d + T/T0)**0.5 
 
    # Meridional Velocity
 
-   v = 0.0
+   v = numpy.zeros_like(lat)
 
    # Vertical Velocity
 
-   w = 0.0
+   w = numpy.zeros_like(lat)
 
    u1_contra, u2_contra, u3_contra = wind2contra_3d(u, v, w, geom, metric)
 
@@ -593,7 +596,7 @@ def dcmip_schar_waves(geom: CubedSphere, metric, mtrx: DFR_operators, param, she
 
 def dcmip_schar_damping(forcing : numpy.ndarray, rho : numpy.ndarray, 
                         u1 : numpy.ndarray, u2 : numpy.ndarray, u3 : numpy.ndarray, 
-                        metric : Metric_3d_topo, geom : CubedSphere, shear : bool):
+                        metric : Metric3DTopo, geom : CubedSphere, shear : bool):
    ''' Implements the required Rayleigh damping for DCMIP cases 2-1 and 2-2 
    
    Parameters:
@@ -604,7 +607,7 @@ def dcmip_schar_damping(forcing : numpy.ndarray, rho : numpy.ndarray,
       function will calculate the required momentum fluxes.
    rho, u1, u2, u3 : numpy.ndarray
       Input variables at the current timestemp
-   metric : Metric_3d_topo
+   metric : Metric3DTopo
       3D metric, used to convert velocities between contravariant and geophysical winds
    geom : CubedSphere
       Geometry object, also used for velocity conversion
@@ -612,7 +615,7 @@ def dcmip_schar_damping(forcing : numpy.ndarray, rho : numpy.ndarray,
       flag for whether the reference velocity field has vertical shear (case 2-2) or not (2-1)'''
    
    # Grab forcing index variables from 'definitions', since forcing is modified in-place
-   from definitions import idx_rho_u1, idx_rho_u2, idx_rho_w
+   from common.definitions import idx_rho_u1, idx_rho_u2, idx_rho_w
 
    # Case parameters
    T0      = 300.0             # temperature (K)
@@ -635,7 +638,10 @@ def dcmip_schar_damping(forcing : numpy.ndarray, rho : numpy.ndarray,
    damping_weight[z_3d <= Zh] = 0.0 
 
    ## Temperature in 3D
-   Tref = T0*(1 - Cs*Ueq**2/gravity*numpy.sin(lat)**2)
+   if (Ueq != 0):
+      Tref = T0*(1 - Cs*Ueq**2/gravity*numpy.sin(lat)**2)
+   else:
+      Tref = T0
 
    # Get u, v, w reference velocities and convert to contravariant
    uref = Ueq * numpy.cos(lat) * (2*T0/Tref*Cs*z_3d + Tref/T0)**0.5

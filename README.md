@@ -20,6 +20,7 @@ GEF was built for Python3.  It also requires an MPI implementation.
 * `mayavi` Visualization toolkit
 * `cartopy` A cartographic python library with matplotlib support for visualisation
 * `tqdm`   Progress bar when generating matrices
+* `more-itertools` For using Bamphi solver
 
 Python packages can be installed with the package management system of your
 Linux distribution or with `pip`.  A few distribution specific instructions
@@ -93,4 +94,10 @@ mpirun -n 6 python3 ./main_gef.py --profile config/case6.ini
 This will generate a set of `profile_####.out` files, one for each launched process, that can be viewed with `snakeviz`. _You need to be able to open a browser window from the terminal to use this command_:
 ```
 snakeviz ./profile_0000.out
+```
+
+## 2D test cases
+Here is an example of a command to run the model for the André Robert bubble test case:
+```
+python main_bubble.py config/gaussian_bubble.ini
 ```

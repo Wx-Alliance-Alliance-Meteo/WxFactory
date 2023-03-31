@@ -1,15 +1,13 @@
 import math
+
+from mpi4py import MPI
 import numpy
-import mpi4py.MPI
 import scipy.linalg
 
-from solvers.kiops  import kiops
-from solvers.linsol import global_norm
+from solvers import kiops, global_norm
 
 def exponential(A, b: numpy.ndarray, x0: numpy.ndarray, niter:int=4, target_spectral_radius:float = 1.0, global_dt:float = 1.0, verbose:bool = False):
-   """ Reduce the residual by integrating dx/dt = b - A x for an appropriate step size.
-   """
-
+   """ Reduce the residual by integrating dx/dt = b - A x for an appropriate step size."""
    n = b.shape[0]
 
    x0_residual = b - A(x0) if x0 is not None else b
@@ -38,7 +36,7 @@ def exponential(A, b: numpy.ndarray, x0: numpy.ndarray, niter:int=4, target_spec
    # compute the 1-norm of u
    local_nrmU = numpy.sum(abs(u[1:, :]), axis=1)
    global_normU = numpy.empty_like(local_nrmU)
-   mpi4py.MPI.COMM_WORLD.Allreduce([local_nrmU, mpi4py.MPI.DOUBLE], [global_normU, mpi4py.MPI.DOUBLE])
+   MPI.COMM_WORLD.Allreduce([local_nrmU, MPI.DOUBLE], [global_normU, MPI.DOUBLE])
    normU = numpy.amax(global_normU)
 
    # Normalization factors
@@ -68,7 +66,7 @@ def exponential(A, b: numpy.ndarray, x0: numpy.ndarray, niter:int=4, target_spec
    # Normalize initial vector (this norm is nonzero)
    local_sum = V[j, 0:n] @ V[j, 0:n]
    global_sum_nrm = numpy.empty_like(local_sum)
-   mpi4py.MPI.COMM_WORLD.Allreduce([local_sum, mpi4py.MPI.DOUBLE], [global_sum_nrm, mpi4py.MPI.DOUBLE])
+   MPI.COMM_WORLD.Allreduce([local_sum, MPI.DOUBLE], [global_sum_nrm, MPI.DOUBLE])
    β = math.sqrt( global_sum_nrm + V[j, n:n+p] @ V[j, n:n+p] )
 
    # The first Krylov basis vector
@@ -87,7 +85,7 @@ def exponential(A, b: numpy.ndarray, x0: numpy.ndarray, niter:int=4, target_spec
       #2. compute terms needed for R and T
       local_vec = V[0:j+1, 0:n] @ V[j-1:j+1, 0:n].T
       global_vec = numpy.empty_like(local_vec)
-      mpi4py.MPI.COMM_WORLD.Allreduce([local_vec, mpi4py.MPI.DOUBLE], [global_vec, mpi4py.MPI.DOUBLE])
+      MPI.COMM_WORLD.Allreduce([local_vec, MPI.DOUBLE], [global_vec, MPI.DOUBLE])
       global_vec += V[0:j+1, n:n+p] @ V[j-1:j+1, n:n+p].T
 
       #3. set values for Hessenberg matrix H
@@ -117,7 +115,7 @@ def exponential(A, b: numpy.ndarray, x0: numpy.ndarray, niter:int=4, target_spec
          #use communication to compute norm estimate
          local_sum = V[j, 0:n] @ V[j, 0:n]
          global_sum_nrm = numpy.empty_like(local_sum)
-         mpi4py.MPI.COMM_WORLD.Allreduce([local_sum, mpi4py.MPI.DOUBLE], [global_sum_nrm, mpi4py.MPI.DOUBLE])
+         MPI.COMM_WORLD.Allreduce([local_sum, MPI.DOUBLE], [global_sum_nrm, MPI.DOUBLE])
          curr_nrm = math.sqrt( global_sum_nrm + V[j,n:n+p] @ V[j, n:n+p] )
       else:
         curr_nrm = numpy.sqrt(global_vec[-1,1] - sum_sqrd)
@@ -200,6 +198,20 @@ def kiops_smoothe(A, b, x, real_dt, dt_factor):
    result = phiv.flatten() * pseudo_dt
    if x is not None: result += x
    return result
+
+
+def rk1_smoothing(A, b, x, h):
+   # print(f'b:\n{b}')
+   # print(f'x:\n{x}')
+   if x is None:
+      x = h * b
+   else:
+      x += h * (b - A(x))
+
+   # print(f'A: \n{A}')
+   # print(f'x (after):\n{x}')
+
+   return x
 
 
 def rk_smoothing(A, b, x, h):

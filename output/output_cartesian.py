@@ -1,17 +1,11 @@
 import os
 import numpy
 
-from common.definitions         import idx_2d_rho       as RHO,           \
-                                       idx_2d_rho_theta as RHO_THETA
-from common.graphx              import image_field
-from common.program_options     import Configuration
-from geometry.geometry          import Geometry
-
-def output_init(param: Configuration):
-   """
-   Create output directory
-   """
-   os.makedirs(os.path.abspath(param.output_dir), exist_ok=True)
+from common.definitions     import idx_2d_rho       as RHO,           \
+                                   idx_2d_rho_theta as RHO_THETA
+from common.graphx          import image_field
+from common.program_options import Configuration
+from geometry               import Geometry
 
 def output_step(Q: numpy.ndarray, geom: Geometry, param: Configuration, filename: str) -> None:
    if param.case_number <= 2:

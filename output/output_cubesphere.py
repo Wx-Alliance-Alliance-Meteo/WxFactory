@@ -1,12 +1,11 @@
-import mpi4py
+from mpi4py import MPI
 import netCDF4
 import numpy
 import math
-import os
 import time
 
 from common.definitions import *
-from geometry.winds     import contra2wind_2d, contra2wind_3d
+from geometry           import contra2wind_2d, contra2wind_3d
 from output.diagnostic  import relative_vorticity, potential_vorticity
 
 def output_init(geom, param):
@@ -14,7 +13,6 @@ def output_init(geom, param):
 
    # creating the netcdf files
    global ncfile
-   os.makedirs(os.path.dirname(param.output_file), exist_ok=True)
    ncfile = netCDF4.Dataset(param.output_file, 'w', format='NETCDF4', parallel = True)
 
    # write general attributes
@@ -26,7 +24,7 @@ def output_init(geom, param):
    if param.equations == "shallow_water":
       ni, nj = geom.lat.shape
       grid_data = ('npe', 'Xdim', 'Ydim')
-   elif param.equations == "Euler":
+   elif param.equations == "euler":
       nk, nj, ni = geom.nk, geom.nj, geom.ni
       grid_data = ('npe', 'Zdim', 'Xdim', 'Ydim')
    else:
@@ -36,7 +34,7 @@ def output_init(geom, param):
    grid_data2D = ('npe', 'Xdim', 'Ydim')
 
    ncfile.createDimension('time', None) # unlimited
-   npe = mpi4py.MPI.COMM_WORLD.Get_size()
+   npe = MPI.COMM_WORLD.Get_size()
    ncfile.createDimension('npe', npe)
    ncfile.createDimension('Ydim', ni)
    ncfile.createDimension('Xdim', nj)
@@ -66,7 +64,7 @@ def output_init(geom, param):
    xxx.axis = 'X'
    xxx.units = 'radians_east'
 
-   if param.equations == "Euler":
+   if param.equations == "euler":
       ncfile.createDimension('Zdim', nk)
       zzz = ncfile.createVariable('Zdim', numpy.float64, ('Zdim'))
       zzz.long_name = 'Zdim'
@@ -124,7 +122,7 @@ def output_init(geom, param):
          dpv.grid_mapping = 'cubed_sphere'
          dpv.set_collective(True)
 
-   elif param.equations == "Euler":
+   elif param.equations == "euler":
       elev = ncfile.createVariable('elev', numpy.dtype('double').char, grid_data)
       elev.long_name = 'Elevation'
       elev.units = 'm'
@@ -223,26 +221,26 @@ def output_init(geom, param):
          q4.grid_mapping = 'cubed_sphere'
          q4.set_collective(True)
 
-   rank = mpi4py.MPI.COMM_WORLD.Get_rank()
+   rank = MPI.COMM_WORLD.Get_rank()
 
    if rank == 0:
       xxx[:] = geom.x1[:]
       yyy[:] = geom.x2[:]
-      if param.equations == "Euler":
+      if param.equations == "euler":
          # FIXME: With mapped coordinates, x3/height is a truly 3D coordinate
          zzz[:] = geom.x3[:,0,0] 
 
    tile[rank] = rank
    lon[rank,:,:] = geom.lon * 180/math.pi
    lat[rank,:,:] = geom.lat * 180/math.pi
-   if param.equations == "Euler":
+   if param.equations == "euler":
       elev[rank,:,:,:] = geom.coordVec_latlon[2,:,:,:]
       topo[rank,:,:] = geom.zbot[:,:]
 
 
 def output_netcdf(Q, geom, metric, mtrx, topo, step, param):
    """ Writes u,v,eta fields on every nth time step """
-   rank = mpi4py.MPI.COMM_WORLD.Get_rank()
+   rank = MPI.COMM_WORLD.Get_rank()
    idx = len(ncfile["time"])
 
    ncfile['time'][idx] = step * param.dt
@@ -265,7 +263,7 @@ def output_netcdf(Q, geom, metric, mtrx, topo, step, param):
          ncfile['RV'][idx, rank, :, :] = rv
          ncfile['PV'][idx, rank, :, :] = pv
 
-   if param.equations == "Euler":
+   if param.equations == "euler":
       rho   = Q[idx_rho, :, :, :]
       u1    = Q[idx_rho_u1, :, :, :]  / rho
       u2    = Q[idx_rho_u2, :, :, :]  / rho
@@ -291,5 +289,5 @@ def output_netcdf(Q, geom, metric, mtrx, topo, step, param):
 
 def output_finalize():
    """ Finalise the output netCDF4 file."""
-   if mpi4py.MPI.COMM_WORLD.Get_rank() == 0:
+   if MPI.COMM_WORLD.Get_rank() == 0:
       ncfile.close()

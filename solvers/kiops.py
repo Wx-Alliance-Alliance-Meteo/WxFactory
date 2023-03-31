@@ -1,51 +1,52 @@
 import math
+
+from mpi4py import MPI
 import numpy
-import mpi4py.MPI
 import scipy.linalg
 
-"""
-   kiops(tstops, A, u; kwargs...) -> (w, stats)
-
-Evaluate a linear combinaton of the ``φ`` functions evaluated at ``tA`` acting on
-vectors from ``u``, that is
-
-```math
-  w(i) = φ_0(t[i] A) u[0, :] + φ_1(t[i] A) u[1, :] + φ_2(t[i] A) u[2, :] + ...
-```
-
-The size of the Krylov subspace is changed dynamically during the integration.
-The Krylov subspace is computed using the incomplete orthogonalization method.
-
-Arguments:
-  - `τ_out`    - Array of `τ_out`
-  - `A`        - the matrix argument of the ``φ`` functions
-  - `u`        - the matrix with rows representing the vectors to be multiplied by the ``φ`` functions
-
-Optional arguments:
-  - `tol`      - the convergence tolerance required (default: 1e-7)
-  - `mmin`, `mmax` - let the Krylov size vary between mmin and mmax (default: 10, 128)
-  - `m`        - an estimate of the appropriate Krylov size (default: mmin)
-  - `iop`      - length of incomplete orthogonalization procedure (default: 2)
-  - `task1`     - if true, divide the result by 1/T**p
-
-Returns:
-  - `w`      - the linear combination of the ``φ`` functions evaluated at ``tA`` acting on the vectors from ``u``
-  - `stats[0]` - number of substeps
-  - `stats[1]` - number of rejected steps
-  - `stats[2]` - number of Krylov steps
-  - `stats[3]` - number of matrix exponentials
-  - `stats[4]` - Error estimate
-  - `stats[5]` - the Krylov size of the last substep
-
-`n` is the size of the original problem
-`p` is the highest index of the ``φ`` functions
-
-References:
-* Gaudreault, S., Rainwater, G. and Tokman, M., 2018. KIOPS: A fast adaptive Krylov subspace solver for exponential integrators. Journal of Computational Physics. Based on the PHIPM and EXPMVP codes (http://www1.maths.leeds.ac.uk/~jitse/software.html). https://gitlab.com/stephane.gaudreault/kiops.
-* Niesen, J. and Wright, W.M., 2011. A Krylov subspace method for option pricing. SSRN 1799124
-* Niesen, J. and Wright, W.M., 2012. Algorithm 919: A Krylov subspace algorithm for evaluating the ``φ``-functions appearing in exponential integrators. ACM Transactions on Mathematical Software (TOMS), 38(3), p.22
-"""
 def kiops(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 2, task1 = False):
+   """
+      kiops(tstops, A, u; kwargs...) -> (w, stats)
+
+   Evaluate a linear combinaton of the ``φ`` functions evaluated at ``tA`` acting on
+   vectors from ``u``, that is
+
+   ```math
+   w(i) = φ_0(t[i] A) u[0, :] + φ_1(t[i] A) u[1, :] + φ_2(t[i] A) u[2, :] + ...
+   ```
+
+   The size of the Krylov subspace is changed dynamically during the integration.
+   The Krylov subspace is computed using the incomplete orthogonalization method.
+
+   Arguments:
+   - `τ_out`    - Array of `τ_out`
+   - `A`        - the matrix argument of the ``φ`` functions
+   - `u`        - the matrix with rows representing the vectors to be multiplied by the ``φ`` functions
+
+   Optional arguments:
+   - `tol`      - the convergence tolerance required (default: 1e-7)
+   - `mmin`, `mmax` - let the Krylov size vary between mmin and mmax (default: 10, 128)
+   - `m`        - an estimate of the appropriate Krylov size (default: mmin)
+   - `iop`      - length of incomplete orthogonalization procedure (default: 2)
+   - `task1`     - if true, divide the result by 1/T**p
+
+   Returns:
+   - `w`      - the linear combination of the ``φ`` functions evaluated at ``tA`` acting on the vectors from ``u``
+   - `stats[0]` - number of substeps
+   - `stats[1]` - number of rejected steps
+   - `stats[2]` - number of Krylov steps
+   - `stats[3]` - number of matrix exponentials
+   - `stats[4]` - Error estimate
+   - `stats[5]` - the Krylov size of the last substep
+
+   `n` is the size of the original problem
+   `p` is the highest index of the ``φ`` functions
+
+   References:
+   * Gaudreault, S., Rainwater, G. and Tokman, M., 2018. KIOPS: A fast adaptive Krylov subspace solver for exponential integrators. Journal of Computational Physics. Based on the PHIPM and EXPMVP codes (http://www1.maths.leeds.ac.uk/~jitse/software.html). https://gitlab.com/stephane.gaudreault/kiops.
+   * Niesen, J. and Wright, W.M., 2011. A Krylov subspace method for option pricing. SSRN 1799124
+   * Niesen, J. and Wright, W.M., 2012. Algorithm 919: A Krylov subspace algorithm for evaluating the ``φ``-functions appearing in exponential integrators. ACM Transactions on Mathematical Software (TOMS), 38(3), p.22
+   """
 
    ppo, n = u.shape
    p = ppo - 1
@@ -84,7 +85,7 @@ def kiops(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 2,
    # compute the 1-norm of u
    local_nrmU = numpy.sum(abs(u[1:, :]), axis=1)
    global_normU = numpy.empty_like(local_nrmU)
-   mpi4py.MPI.COMM_WORLD.Allreduce([local_nrmU, mpi4py.MPI.DOUBLE], [global_normU, mpi4py.MPI.DOUBLE])
+   MPI.COMM_WORLD.Allreduce([local_nrmU, MPI.DOUBLE], [global_normU, MPI.DOUBLE])
    normU = numpy.amax(global_normU)
 
    # Normalization factors
@@ -136,7 +137,7 @@ def kiops(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 2,
          # Normalize initial vector (this norm is nonzero)
          local_sum = V[0, 0:n] @ V[0, 0:n]
          global_sum_nrm = numpy.empty_like(local_sum)
-         mpi4py.MPI.COMM_WORLD.Allreduce([local_sum, mpi4py.MPI.DOUBLE], [global_sum_nrm, mpi4py.MPI.DOUBLE])
+         MPI.COMM_WORLD.Allreduce([local_sum, MPI.DOUBLE], [global_sum_nrm, MPI.DOUBLE])
          β = math.sqrt( global_sum_nrm + V[j, n:n+p] @ V[j, n:n+p] )
 
          # The first Krylov basis vector
@@ -157,13 +158,13 @@ def kiops(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 2,
 
          local_sum = V[ilow:j, 0:n] @ V[j, 0:n]
          global_sum = numpy.empty_like(local_sum)
-         mpi4py.MPI.COMM_WORLD.Allreduce([local_sum, mpi4py.MPI.DOUBLE], [global_sum, mpi4py.MPI.DOUBLE])
+         MPI.COMM_WORLD.Allreduce([local_sum, MPI.DOUBLE], [global_sum, MPI.DOUBLE])
          H[ilow:j, j-1] = global_sum + V[ilow:j, n:n+p] @ V[j, n:n+p]
 
          V[j, :] = V[j, :] - V[ilow:j,:].T @ H[ilow:j, j-1]
 
          local_sum = V[j, 0:n] @ V[j, 0:n]
-         mpi4py.MPI.COMM_WORLD.Allreduce([local_sum, mpi4py.MPI.DOUBLE], [global_sum_nrm, mpi4py.MPI.DOUBLE])
+         MPI.COMM_WORLD.Allreduce([local_sum, MPI.DOUBLE], [global_sum_nrm, MPI.DOUBLE])
          nrm = numpy.sqrt( global_sum_nrm + V[j, n:n+p] @ V[j, n:n+p] )
 
          # Happy breakdown

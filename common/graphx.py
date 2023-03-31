@@ -1,5 +1,4 @@
-import mpi4py
-import mpi4py.MPI
+from mpi4py import MPI
 import numpy
 import pickle
 import matplotlib.pyplot
@@ -7,7 +6,7 @@ import matplotlib.pyplot
 try:
    import mayavi.mlab
 except ModuleNotFoundError:
-   if mpi4py.MPI.COMM_WORLD.Get_size() > 1:
+   if MPI.COMM_WORLD.Get_size() > 1:
       print(f'WARNING: Could not import mayavi module. There will be a crash if you try to plot stuff on the cubed sphere')
 
 from common.definitions import nbfaces
@@ -15,24 +14,24 @@ from common.definitions import nbfaces
 plot_index = 0
 
 def plot_sphere(geom):
-   glb_x = mpi4py.MPI.COMM_WORLD.gather(geom.cartX.T, root=0)
-   glb_y = mpi4py.MPI.COMM_WORLD.gather(geom.cartY.T, root=0)
-   glb_z = mpi4py.MPI.COMM_WORLD.gather(geom.cartZ.T, root=0)
+   glb_x = MPI.COMM_WORLD.gather(geom.cartX.T, root=0)
+   glb_y = MPI.COMM_WORLD.gather(geom.cartY.T, root=0)
+   glb_z = MPI.COMM_WORLD.gather(geom.cartZ.T, root=0)
 
-   if mpi4py.MPI.COMM_WORLD.Get_rank() == 0:
+   if MPI.COMM_WORLD.Get_rank() == 0:
       mayavi.mlab.figure(0, size=(800, 800), bgcolor=(0,0,0))
       for f in range(nbfaces):
          mayavi.mlab.mesh(glb_x[f], glb_y[f], glb_z[f])
       mayavi.mlab.show()
 
 def plot_level(geom, field, lvl):
-   glb_x     = mpi4py.MPI.COMM_WORLD.gather(geom.cartX[lvl].T, root=0)
-   glb_y     = mpi4py.MPI.COMM_WORLD.gather(geom.cartY[lvl].T, root=0)
-   glb_z     = mpi4py.MPI.COMM_WORLD.gather(geom.cartZ[lvl].T, root=0)
-   glb_field = mpi4py.MPI.COMM_WORLD.gather(field[lvl].T, root=0)
+   glb_x     = MPI.COMM_WORLD.gather(geom.cartX[lvl].T, root=0)
+   glb_y     = MPI.COMM_WORLD.gather(geom.cartY[lvl].T, root=0)
+   glb_z     = MPI.COMM_WORLD.gather(geom.cartZ[lvl].T, root=0)
+   glb_field = MPI.COMM_WORLD.gather(field[lvl].T, root=0)
 
-   ptopo_size = mpi4py.MPI.COMM_WORLD.Get_size()
-   if mpi4py.MPI.COMM_WORLD.Get_rank() == 0:
+   ptopo_size = MPI.COMM_WORLD.Get_size()
+   if MPI.COMM_WORLD.Get_rank() == 0:
       min_val = float("inf")
       max_val = -float("inf")
       for f in range(ptopo_size):
@@ -53,18 +52,18 @@ def plot_level(geom, field, lvl):
       mayavi.mlab.colorbar()
       mayavi.mlab.show()
 
-   mpi4py.MPI.COMM_WORLD.Barrier()
+   MPI.COMM_WORLD.Barrier()
 
 
 
 def plot_field(geom, field, filename=None):
-   glb_x     = mpi4py.MPI.COMM_WORLD.gather(geom.cartX.T, root=0)
-   glb_y     = mpi4py.MPI.COMM_WORLD.gather(geom.cartY.T, root=0)
-   glb_z     = mpi4py.MPI.COMM_WORLD.gather(geom.cartZ.T, root=0)
-   glb_field = mpi4py.MPI.COMM_WORLD.gather(field.T, root=0)
+   glb_x     = MPI.COMM_WORLD.gather(geom.cartX.T, root=0)
+   glb_y     = MPI.COMM_WORLD.gather(geom.cartY.T, root=0)
+   glb_z     = MPI.COMM_WORLD.gather(geom.cartZ.T, root=0)
+   glb_field = MPI.COMM_WORLD.gather(field.T, root=0)
 
-   ptopo_size = mpi4py.MPI.COMM_WORLD.Get_size()
-   if mpi4py.MPI.COMM_WORLD.Get_rank() == 0:
+   ptopo_size = MPI.COMM_WORLD.Get_size()
+   if MPI.COMM_WORLD.Get_rank() == 0:
       min_val = float("inf")
       max_val = -float("inf")
       for f in range(ptopo_size):
@@ -89,18 +88,18 @@ def plot_field(geom, field, filename=None):
       else:
          mayavi.mlab.show()
 
-   mpi4py.MPI.COMM_WORLD.Barrier()
+   MPI.COMM_WORLD.Barrier()
 
 
 def plot_vector_field(geom, field_x1, field_x2, filename=None):
-   glb_x        = mpi4py.MPI.COMM_WORLD.gather(geom.cartX.T, root=0)
-   glb_y        = mpi4py.MPI.COMM_WORLD.gather(geom.cartY.T, root=0)
-   glb_z        = mpi4py.MPI.COMM_WORLD.gather(geom.cartZ.T, root=0)
-   glb_field_x1 = mpi4py.MPI.COMM_WORLD.gather(field_x1.T, root=0)
-   glb_field_x2 = mpi4py.MPI.COMM_WORLD.gather(field_x2.T, root=0)
+   glb_x        = MPI.COMM_WORLD.gather(geom.cartX.T, root=0)
+   glb_y        = MPI.COMM_WORLD.gather(geom.cartY.T, root=0)
+   glb_z        = MPI.COMM_WORLD.gather(geom.cartZ.T, root=0)
+   glb_field_x1 = MPI.COMM_WORLD.gather(field_x1.T, root=0)
+   glb_field_x2 = MPI.COMM_WORLD.gather(field_x2.T, root=0)
 
-   ptopo_size = mpi4py.MPI.COMM_WORLD.Get_size()
-   if mpi4py.MPI.COMM_WORLD.Get_rank() == 0:
+   ptopo_size = MPI.COMM_WORLD.Get_size()
+   if MPI.COMM_WORLD.Get_rank() == 0:
       min_val = float("inf")
       max_val = -float("inf")
       for f in range(ptopo_size):
@@ -133,11 +132,11 @@ def plot_vector_field(geom, field_x1, field_x2, filename=None):
       else:
          mayavi.mlab.show()
 
-   mpi4py.MPI.COMM_WORLD.Barrier()
+   MPI.COMM_WORLD.Barrier()
 
 
 def plot_field_from_file(geom_prefix, field_prefix):
-   rank = mpi4py.MPI.COMM_WORLD.Get_rank()
+   rank = MPI.COMM_WORLD.Get_rank()
    suffix = '{:04d}.dat'.format(rank)
    geom_filename = geom_prefix + suffix
    field_filename = field_prefix + suffix
@@ -152,9 +151,9 @@ def plot_field_from_file(geom_prefix, field_prefix):
 
 
 def plot_array(array, filename=None):
-   rank = mpi4py.MPI.COMM_WORLD.Get_rank()
+   rank = MPI.COMM_WORLD.Get_rank()
 
-   all_arrays = mpi4py.MPI.COMM_WORLD.gather(array, root=0)
+   all_arrays = MPI.COMM_WORLD.gather(array, root=0)
 
    if rank == 0:
       print(f'Doing the plotting')
@@ -183,12 +182,12 @@ def plot_array(array, filename=None):
       else:
          plt.savefig(filename)
 
-   mpi4py.MPI.COMM_WORLD.Barrier()
+   MPI.COMM_WORLD.Barrier()
 
 def image_field(geom, field, filename, vmin, vmax, n):
    fig, ax = matplotlib.pyplot.subplots()
       
-   cmap = matplotlib.pyplot.contourf(geom.X, geom.Z, field, cmap='jet', levels=numpy.linspace(vmin,vmax,n), extend="both")
+   cmap = matplotlib.pyplot.contourf(geom.X1, geom.X3, field, cmap='jet', levels=numpy.linspace(vmin,vmax,n), extend="both")
    ax.set_aspect('equal', 'box')
 
    cbar = fig.colorbar(cmap, ax=ax, orientation='vertical', shrink=0.5)
@@ -219,7 +218,7 @@ def print_residual_per_variable(geom, field, filename = None):
 
       levels = numpy.linspace(minval, maxval, num_levels)
 
-      cmap = ax.contourf(geom.X, geom.Z, vals, levels=levels)
+      cmap = ax.contourf(geom.X1, geom.X3, vals, levels=levels)
       ax.set_title(title)
       cbar = fig.colorbar(cmap, ax=ax, orientation='vertical', format = '%8.1e')
       cbar.set_label('Residual',)

@@ -1,16 +1,17 @@
 import numpy
 import math
 
-from geometry.cubed_sphere  import CubedSphere
-from geometry.matrices      import DFR_operators
+from .cubed_sphere  import CubedSphere
+from .matrices      import DFROperators
 
-class Metric_3d_topo:
-   def __init__(self, geom : CubedSphere, matrix: DFR_operators):
+class Metric3DTopo:
+   def __init__(self, geom : CubedSphere, matrix: DFROperators):
       # Token initialization: store geometry and matrix objects.  Defer construction of the metric itself,
       # so that initialization can take place after topography is defined inside the 'geom' object
 
       self.geom = geom
       self.matrix = matrix
+      self.deep = geom.deep
    
    def build_metric(self):
       # Construct the metric terms, with the assurance that topography is now defined.  This defines full, 3D arrays
@@ -19,6 +20,12 @@ class Metric_3d_topo:
       # Retrieve geometry and matrix objects
       geom = self.geom
       matrix = self.matrix
+
+      # Whether computing deep or shallow metric
+      deep = self.deep
+
+      # Shorthand variable for the globe radius, used when computing a shallow-atmosphere metric
+      A = geom.earth_radius
 
       # Gnomonic coordinates in element interiors
       X_int = geom.coordVec_gnom[0,:,:,:]
@@ -161,13 +168,21 @@ class Metric_3d_topo:
       # formulation u3 exchanges like a scalar (because there is no orientation change at panel
       # boundaries))
 
-      geom.ptopo.xchange_vectors(geom, exch_itf_i[0,:], exch_itf_i[1,:], 
-                                       exch_itf_j[0,:], exch_itf_j[1,:],
-                                       exch_itf_i[2,:], exch_itf_j[2,:], blocking=True)
-
-      # With the exchange performed, average left and right values at each interface to fill the
-      # itf_i and itf_j arrays, converting back to the covariant representation via the 2d metric.
-      # The itf_k arrays are handled locally, without the exchange.
+      if (geom.ptopo.size > 1):
+         # Perform exchanges if this is truly a parallel setup.
+         geom.ptopo.xchange_vectors(geom, exch_itf_i[0,:], exch_itf_i[1,:], 
+                                          exch_itf_j[0,:], exch_itf_j[1,:],
+                                          exch_itf_i[2,:], exch_itf_j[2,:], blocking=True)
+      else:
+         # Debugging cases might use a serial setup, so supply copied boundary values as a fallback
+         # The right boundary of the 0 element is the left boundary of the 1 element
+         exch_itf_i[:,:,0,1,:] = exch_itf_i[:,:,1,0,:]
+         # The left boundary of the -1 (end) element is the right boundary of the -2 element
+         exch_itf_i[:,:,-1,0,:] = exch_itf_i[:,:,-2,1,:]
+         # The north boundary of the 0 element is the south boundary of the 1 element
+         exch_itf_j[:,:,0,1,:] = exch_itf_j[:,:,1,0,:]
+         # The south boundary of the -1 element is the north boundary of the -2 element
+         exch_itf_j[:,:,-1,0,:] = exch_itf_j[:,:,-2,1,:]
 
       # Define the averaged interface values
       dRdx1_itf_i = numpy.empty_like(R_itf_i)
@@ -185,7 +200,7 @@ class Metric_3d_topo:
          dRdx2_itf_i[:,:,bdy] = metric_2d_cov_itf_i[1,0,:,:,bdy]*(0.5*exch_itf_i[0,:,bdy,1,:] + 0.5*exch_itf_i[0,:,bdy+1,0,:]) + \
                                 metric_2d_cov_itf_i[1,1,:,:,bdy]*(0.5*exch_itf_i[1,:,bdy,1,:] + 0.5*exch_itf_i[1,:,bdy+1,0,:])
          dRdeta_itf_i[:,:,bdy] = 0.5*exch_itf_i[2,:,bdy,1,:] + 0.5*exch_itf_i[2,:,bdy+1,0,:]
-      
+
       # j-interface values
       for bdy in range(geom.nb_elements_x2+1):
          # iterate from 'south'most to 'north'most boundary
@@ -205,7 +220,6 @@ class Metric_3d_topo:
 
          # Assign interior values based on the average of the bordering extrapolations
          d_itf_k[1:-1,:,:] = 0.5*(d_extrap_k[1:,0,:,:] + d_extrap_k[:-1,1,:,:])
-
 
       # Initialize metric arrays
 
@@ -238,39 +252,75 @@ class Metric_3d_topo:
                        (dRdeta_int, dRdeta_itf_i, dRdeta_itf_j, dRdeta_itf_k)):
          delsq = 1 + X**2 + Y**2 # δ², per Charron May 2022
          del4 = delsq**2
-         Hcov[0,0,:] = (Δx**2/4)*(R**2/del4*(1+X**2)**2*(1+Y**2) + dRdx1**2) # g_11
-         
-         Hcov[0,1,:] = (Δx*Δy/4)*(-R**2/del4*X*Y*(1+X**2)*(1+Y**2) + dRdx1*dRdx2) # g_12
-         Hcov[1,0,:] = Hcov[0,1,:] # g_21 (by symmetry)
-         
-         Hcov[0,2,:] = Δeta*Δx/4*dRdx1*dRdeta # g_13
-         Hcov[2,0,:] = Hcov[0,2,:] # g_31 by symmetry
 
-         Hcov[1,1,:] = Δy**2/4*(R**2/del4*(1+X**2)*(1+Y**2)**2 + dRdx2**2) # g_22
-         
-         Hcov[1,2,:] = Δeta*Δy/4*dRdx2*dRdeta # g_23
-         Hcov[2,1,:] = Hcov[1,2,:] # g_32 by symmetry
+         if (deep):
+            Hcov[0,0,:] = (Δx**2/4)*(R**2/del4*(1+X**2)**2*(1+Y**2) + dRdx1**2) # g_11
+            
+            Hcov[0,1,:] = (Δx*Δy/4)*(-R**2/del4*X*Y*(1+X**2)*(1+Y**2) + dRdx1*dRdx2) # g_12
+            Hcov[1,0,:] = Hcov[0,1,:] # g_21 (by symmetry)
+            
+            Hcov[0,2,:] = Δeta*Δx/4*dRdx1*dRdeta # g_13
+            Hcov[2,0,:] = Hcov[0,2,:] # g_31 by symmetry
 
-         Hcov[2,2,:] = (Δeta**2/4)*dRdeta**2 # g_33
+            Hcov[1,1,:] = Δy**2/4*(R**2/del4*(1+X**2)*(1+Y**2)**2 + dRdx2**2) # g_22
+            
+            Hcov[1,2,:] = Δeta*Δy/4*dRdx2*dRdeta # g_23
+            Hcov[2,1,:] = Hcov[1,2,:] # g_32 by symmetry
 
-         Hcontra[0,0,:] = (4/Δx**2)*(delsq/(R**2*(1+X**2))) # h^11
+            Hcov[2,2,:] = (Δeta**2/4)*dRdeta**2 # g_33
 
-         Hcontra[0,1,:] = (4/Δx/Δy)*(X*Y*delsq/(R**2*(1+X**2)*(1+Y**2))) # h^12
-         Hcontra[1,0,:] = Hcontra[0,1,:] # h^21 by symmetry
+            Hcontra[0,0,:] = (4/Δx**2)*(delsq/(R**2*(1+X**2))) # h^11
 
-         Hcontra[0,2,:] = (4/Δx/Δeta)*(-(dRdx1*delsq/(R**2*(1+X**2)) + dRdx2*delsq*X*Y/(R**2*(1+X**2)*(1+Y**2)))/(dRdeta)) # h^13
-         Hcontra[2,0,:] = Hcontra[0,2,:] # h^31 by symmetry
+            Hcontra[0,1,:] = (4/Δx/Δy)*(X*Y*delsq/(R**2*(1+X**2)*(1+Y**2))) # h^12
+            Hcontra[1,0,:] = Hcontra[0,1,:] # h^21 by symmetry
 
-         Hcontra[1,1,:] = (4/Δy**2)*(delsq/(R**2*(1+Y**2))) # h^22
+            Hcontra[0,2,:] = (4/Δx/Δeta)*(-(dRdx1*delsq/(R**2*(1+X**2)) + dRdx2*delsq*X*Y/(R**2*(1+X**2)*(1+Y**2)))/(dRdeta)) # h^13
+            Hcontra[2,0,:] = Hcontra[0,2,:] # h^31 by symmetry
 
-         Hcontra[1,2,:] = (4/Δy/Δeta)*(-(dRdx1*X*Y*delsq/(R**2*(1+X**2)*(1+Y**2)) + dRdx2*delsq/(R**2*(1+Y**2)))/dRdeta) # h^23
-         Hcontra[2,1,:] = Hcontra[1,2,:] # h^32 by symmetry
+            Hcontra[1,1,:] = (4/Δy**2)*(delsq/(R**2*(1+Y**2))) # h^22
 
-         Hcontra[2,2,:] = (4/Δeta**2)*(1 + dRdx1**2*delsq/(R**2*(1+X**2)) + \
-                                       2*dRdx1*dRdx2*X*Y*delsq/(R**2*(1+X**2)*(1+Y**2)) + \
-                                       dRdx2**2*delsq/(R**2*(1+Y**2)))/dRdeta**2
+            Hcontra[1,2,:] = (4/Δy/Δeta)*(-(dRdx1*X*Y*delsq/(R**2*(1+X**2)*(1+Y**2)) + dRdx2*delsq/(R**2*(1+Y**2)))/dRdeta) # h^23
+            Hcontra[2,1,:] = Hcontra[1,2,:] # h^32 by symmetry
 
-         rootG[:] = (Δx/2)*(Δy/2)*(Δeta/2)*R**2*(1+X**2)*(1+Y**2)*numpy.abs(dRdeta)/delsq**(1.5)  
+            Hcontra[2,2,:] = (4/Δeta**2)*(1 + dRdx1**2*delsq/(R**2*(1+X**2)) + \
+                                          2*dRdx1*dRdx2*X*Y*delsq/(R**2*(1+X**2)*(1+Y**2)) + \
+                                          dRdx2**2*delsq/(R**2*(1+Y**2)))/dRdeta**2
+
+            rootG[:] = (Δx/2)*(Δy/2)*(Δeta/2)*R**2*(1+X**2)*(1+Y**2)*numpy.abs(dRdeta)/delsq**(1.5)  
+         else: # Shallow, so all bare R terms become A terms
+            Hcov[0,0,:] = (Δx**2/4)*(A**2/del4*(1+X**2)**2*(1+Y**2) + dRdx1**2) # g_11
+            
+            Hcov[0,1,:] = (Δx*Δy/4)*(-A**2/del4*X*Y*(1+X**2)*(1+Y**2) + dRdx1*dRdx2) # g_12
+            Hcov[1,0,:] = Hcov[0,1,:] # g_21 (by symmetry)
+            
+            Hcov[0,2,:] = Δeta*Δx/4*dRdx1*dRdeta # g_13
+            Hcov[2,0,:] = Hcov[0,2,:] # g_31 by symmetry
+
+            Hcov[1,1,:] = Δy**2/4*(A**2/del4*(1+X**2)*(1+Y**2)**2 + dRdx2**2) # g_22
+            
+            Hcov[1,2,:] = Δeta*Δy/4*dRdx2*dRdeta # g_23
+            Hcov[2,1,:] = Hcov[1,2,:] # g_32 by symmetry
+
+            Hcov[2,2,:] = (Δeta**2/4)*dRdeta**2 # g_33
+
+            Hcontra[0,0,:] = (4/Δx**2)*(delsq/(A**2*(1+X**2))) # h^11
+
+            Hcontra[0,1,:] = (4/Δx/Δy)*(X*Y*delsq/(A**2*(1+X**2)*(1+Y**2))) # h^12
+            Hcontra[1,0,:] = Hcontra[0,1,:] # h^21 by symmetry
+
+            Hcontra[0,2,:] = (4/Δx/Δeta)*(-(dRdx1*delsq/(A**2*(1+X**2)) + dRdx2*delsq*X*Y/(A**2*(1+X**2)*(1+Y**2)))/(dRdeta)) # h^13
+            Hcontra[2,0,:] = Hcontra[0,2,:] # h^31 by symmetry
+
+            Hcontra[1,1,:] = (4/Δy**2)*(delsq/(A**2*(1+Y**2))) # h^22
+
+            Hcontra[1,2,:] = (4/Δy/Δeta)*(-(dRdx1*X*Y*delsq/(A**2*(1+X**2)*(1+Y**2)) + dRdx2*delsq/(A**2*(1+Y**2)))/dRdeta) # h^23
+            Hcontra[2,1,:] = Hcontra[1,2,:] # h^32 by symmetry
+
+            Hcontra[2,2,:] = (4/Δeta**2)*(1 + dRdx1**2*delsq/(A**2*(1+X**2)) + \
+                                          2*dRdx1*dRdx2*X*Y*delsq/(A**2*(1+X**2)*(1+Y**2)) + \
+                                          dRdx2**2*delsq/(A**2*(1+Y**2)))/dRdeta**2
+
+            rootG[:] = (Δx/2)*(Δy/2)*(Δeta/2)*A**2*(1+X**2)*(1+Y**2)*numpy.abs(dRdeta)/delsq**(1.5)  
 
 
       ## Computation of the Christoffel symbols
@@ -293,13 +343,22 @@ class Metric_3d_topo:
       Omega = geom.rotation_speed
 
       # Γ^1_ab, a≤b
-      Christoffel_1_01 = Omega*X_int*Y_int/deltasq*rot1 + dRdx1_int*Omega/(R_int*(1+X_int**2))*rot2
-      Christoffel_1_02 = -Omega*(-(1+Y_int**2)/deltasq)*rot1 + dRdx2_int*Omega/(R_int*(1+X_int**2))*rot2
-      Christoffel_1_03 = dRdeta_int*Omega/(R_int*(1+X_int**2))*rot2
+      if (deep):
+         Christoffel_1_01 = Omega*X_int*Y_int/deltasq*rot1 + dRdx1_int*Omega/(R_int*(1+X_int**2))*rot2
+         Christoffel_1_02 = -Omega*(-(1+Y_int**2)/deltasq)*rot1 + dRdx2_int*Omega/(R_int*(1+X_int**2))*rot2
+         Christoffel_1_03 = dRdeta_int*Omega/(R_int*(1+X_int**2))*rot2
 
-      Christoffel_1_11 = 2*X_int*Y_int**2/deltasq + dRdx1_int*2/R_int
-      Christoffel_1_12 = -Y_int*(1+Y_int**2)/deltasq + dRdx2_int/R_int
-      Christoffel_1_13 = dRdeta_int/R_int
+         Christoffel_1_11 = 2*X_int*Y_int**2/deltasq + dRdx1_int*2/R_int
+         Christoffel_1_12 = -Y_int*(1+Y_int**2)/deltasq + dRdx2_int/R_int
+         Christoffel_1_13 = dRdeta_int/R_int
+      else: # Shallow atmosphere, R->A
+         Christoffel_1_01 = Omega*X_int*Y_int/deltasq*rot1 + dRdx1_int*Omega/(A*(1+X_int**2))*rot2
+         Christoffel_1_02 = -Omega*(-(1+Y_int**2)/deltasq)*rot1 + dRdx2_int*Omega/(A*(1+X_int**2))*rot2
+         Christoffel_1_03 = dRdeta_int*Omega/(A*(1+X_int**2))*rot2
+
+         Christoffel_1_11 = 2*X_int*Y_int**2/deltasq + dRdx1_int*2/A
+         Christoffel_1_12 = -Y_int*(1+Y_int**2)/deltasq + dRdx2_int/A
+         Christoffel_1_13 = dRdeta_int/A
 
       Christoffel_1_22 = 0
       Christoffel_1_23 = 0
@@ -307,16 +366,28 @@ class Metric_3d_topo:
       Christoffel_1_33 = 0
 
       # Γ^2_ab, a≤b
-      Christoffel_2_01 = Omega*(1+X_int**2)/deltasq*rot1 + dRdx1_int*Omega/(R_int*(1+Y_int**2))*rot3
-      Christoffel_2_02 = -Omega*X_int*Y_int/deltasq*rot2 + dRdx2_int*Omega/(R_int*(1+Y_int**2))*rot3
-      Christoffel_2_03 = dRdeta_int*Omega/(R_int*(1+Y_int**2))*rot3
+      if deep:
+         Christoffel_2_01 = Omega*(1+X_int**2)/deltasq*rot1 + dRdx1_int*Omega/(R_int*(1+Y_int**2))*rot3
+         Christoffel_2_02 = -Omega*X_int*Y_int/deltasq*rot2 + dRdx2_int*Omega/(R_int*(1+Y_int**2))*rot3
+         Christoffel_2_03 = dRdeta_int*Omega/(R_int*(1+Y_int**2))*rot3
 
-      Christoffel_2_11 = 0
-      Christoffel_2_12 = -X_int*(1+X_int**2)/deltasq + dRdx1_int/R_int
-      Christoffel_2_13 = 0
+         Christoffel_2_11 = 0
+         Christoffel_2_12 = -X_int*(1+X_int**2)/deltasq + dRdx1_int/R_int
+         Christoffel_2_13 = 0
 
-      Christoffel_2_22 = 2*X_int**2*Y_int/deltasq + dRdx2_int*2/R_int
-      Christoffel_2_23 = dRdeta_int/R_int
+         Christoffel_2_22 = 2*X_int**2*Y_int/deltasq + dRdx2_int*2/R_int
+         Christoffel_2_23 = dRdeta_int/R_int
+      else: # Shallow
+         Christoffel_2_01 = Omega*(1+X_int**2)/deltasq*rot1 + dRdx1_int*Omega/(A*(1+Y_int**2))*rot3
+         Christoffel_2_02 = -Omega*X_int*Y_int/deltasq*rot2 + dRdx2_int*Omega/(A*(1+Y_int**2))*rot3
+         Christoffel_2_03 = dRdeta_int*Omega/(A*(1+Y_int**2))*rot3
+
+         Christoffel_2_11 = 0
+         Christoffel_2_12 = -X_int*(1+X_int**2)/deltasq + dRdx1_int/A
+         Christoffel_2_13 = 0
+
+         Christoffel_2_22 = 2*X_int**2*Y_int/deltasq + dRdx2_int*2/A
+         Christoffel_2_23 = dRdeta_int/A
 
       Christoffel_2_33 = 0
 
@@ -343,7 +414,7 @@ class Metric_3d_topo:
       dRdx2_ext_k = numpy.zeros((geom.nb_elements_x3, 2, geom.nj, geom.ni))
       dRdx2_ext_k[:,0,:,:] = dRdx2_itf_k[:-1,:,:] # Assign min-k boundary
       dRdx2_ext_k[:,1,:,:] = dRdx2_itf_k[1:,:,:]  # Assign max-k boundary
-
+     
       dRdeta_ext_k = numpy.zeros((geom.nb_elements_x3, 2, geom.nj, geom.ni))
       dRdeta_ext_k[:,0,:,:] = dRdeta_itf_k[:-1,:,:] # Assign min-k boundary
       dRdeta_ext_k[:,1,:,:] = dRdeta_itf_k[1:,:,:]  # Assign max-k boundary
@@ -359,21 +430,38 @@ class Metric_3d_topo:
 
       d2Rdetaeta = matrix.comma_k(dRdeta_int,dRdeta_ext_k,geom)*2/Δeta
 
-      Christoffel_3_01 = -(dRdeta_int**-1)*(dRdx1_int*Christoffel_1_01 + dRdx2_int*Christoffel_2_01 + \
-                     R_int/deltasq*Omega*(1+X_int**2)*(cphi*calp - Y_int*sphi))
-      Christoffel_3_02 = -(dRdeta_int**-1)*(dRdx1_int*Christoffel_1_02 + dRdx2_int*Christoffel_2_02 + \
-                     R_int/deltasq*Omega*(1+Y_int**2)*(cphi*salp + X_int*sphi))
-      Christoffel_3_03 = -dRdx1_int*Omega/(R_int*(1+X_int**2))*rot2 - dRdx2_int*Omega/(R_int*(1+Y_int**2))*rot3
+      if deep:
+         Christoffel_3_01 = -(dRdeta_int**-1)*(dRdx1_int*Christoffel_1_01 + dRdx2_int*Christoffel_2_01 + \
+                        R_int/deltasq*Omega*(1+X_int**2)*(cphi*calp - Y_int*sphi))
+         Christoffel_3_02 = -(dRdeta_int**-1)*(dRdx1_int*Christoffel_1_02 + dRdx2_int*Christoffel_2_02 + \
+                        R_int/deltasq*Omega*(1+Y_int**2)*(cphi*salp + X_int*sphi))
+         Christoffel_3_03 = -dRdx1_int*Omega/(R_int*(1+X_int**2))*rot2 - dRdx2_int*Omega/(R_int*(1+Y_int**2))*rot3
 
-      Christoffel_3_11 = (dRdeta_int**-1)*(d2Rdx1x1 - dRdx1_int*Christoffel_1_11 - R_int/deltasq**2*(1+X_int**2)**2*(1+Y_int**2))
-      Christoffel_3_12 = (dRdeta_int**-1)*(d2Rdx1x2 - dRdx1_int*Christoffel_1_12 - dRdx2_int*Christoffel_2_12 + \
-                                             R_int/deltasq**2*X_int*Y_int*(1+X_int**2)*(1+Y_int**2))
-      Christoffel_3_13 = (dRdeta_int**-1)*d2Rdx1eta - dRdx1_int/R_int
+         Christoffel_3_11 = (dRdeta_int**-1)*(d2Rdx1x1 - dRdx1_int*Christoffel_1_11 - R_int/deltasq**2*(1+X_int**2)**2*(1+Y_int**2))
+         Christoffel_3_12 = (dRdeta_int**-1)*(d2Rdx1x2 - dRdx1_int*Christoffel_1_12 - dRdx2_int*Christoffel_2_12 + \
+                                                R_int/deltasq**2*X_int*Y_int*(1+X_int**2)*(1+Y_int**2))
+         Christoffel_3_13 = (dRdeta_int**-1)*d2Rdx1eta - dRdx1_int/R_int
 
-      Christoffel_3_22 = (dRdeta_int**-1)*(d2Rdx2x2 - dRdx2_int*Christoffel_2_22 - R_int/deltasq**2*(1+X_int**2)*(1+Y_int**2)**2)
-      Christoffel_3_23 = (dRdeta_int**-1)*d2Rdx2eta - dRdx2_int/R_int
+         Christoffel_3_22 = (dRdeta_int**-1)*(d2Rdx2x2 - dRdx2_int*Christoffel_2_22 - R_int/deltasq**2*(1+X_int**2)*(1+Y_int**2)**2)
+         Christoffel_3_23 = (dRdeta_int**-1)*d2Rdx2eta - dRdx2_int/R_int
 
-      Christoffel_3_33 = (dRdeta_int**-1)*d2Rdetaeta
+         Christoffel_3_33 = (dRdeta_int**-1)*d2Rdetaeta
+      else: # Shallow atmosphere
+         Christoffel_3_01 = -(dRdeta_int**-1)*(dRdx1_int*Christoffel_1_01 + dRdx2_int*Christoffel_2_01 + \
+                        A/deltasq*Omega*(1+X_int**2)*(cphi*calp - Y_int*sphi))
+         Christoffel_3_02 = -(dRdeta_int**-1)*(dRdx1_int*Christoffel_1_02 + dRdx2_int*Christoffel_2_02 + \
+                        A/deltasq*Omega*(1+Y_int**2)*(cphi*salp + X_int*sphi))
+         Christoffel_3_03 = -dRdx1_int*Omega/(A*(1+X_int**2))*rot2 - dRdx2_int*Omega/(A*(1+Y_int**2))*rot3
+
+         Christoffel_3_11 = (dRdeta_int**-1)*(d2Rdx1x1 - dRdx1_int*Christoffel_1_11 - A/deltasq**2*(1+X_int**2)**2*(1+Y_int**2))
+         Christoffel_3_12 = (dRdeta_int**-1)*(d2Rdx1x2 - dRdx1_int*Christoffel_1_12 - dRdx2_int*Christoffel_2_12 + \
+                                                A/deltasq**2*X_int*Y_int*(1+X_int**2)*(1+Y_int**2))
+         Christoffel_3_13 = (dRdeta_int**-1)*d2Rdx1eta - dRdx1_int/A
+
+         Christoffel_3_22 = (dRdeta_int**-1)*(d2Rdx2x2 - dRdx2_int*Christoffel_2_22 - A/deltasq**2*(1+X_int**2)*(1+Y_int**2)**2)
+         Christoffel_3_23 = (dRdeta_int**-1)*d2Rdx2eta - dRdx2_int/A
+
+         Christoffel_3_33 = (dRdeta_int**-1)*d2Rdetaeta
 
       # Now, normalize the Christoffel symbols by the appropriate grid scaling factor.  To this point, the symbols have
       # been defined in terms of x1, x2, and η, but for compatibility with the numerical differentiation we need to define
@@ -424,7 +512,7 @@ class Metric_3d_topo:
       ## Part 2: Christoffel symbols computed numerically
 
       ## Here, we have an alternative construction of the spatial Chrstoffel symbols (non-zero indices), based on
-      ## the alternative ideneity √g h^{ij}_{:k} = 0
+      ## the alternative identity √g h^{ij}_{:k} = 0
       ## Inside the flux-form Euler equations, this form effectively enforces that a constant-pressure fluid at rest
       ## remain at rest unless acted on by an external force.
 
