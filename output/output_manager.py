@@ -46,7 +46,7 @@ class OutputManager:
             output_init(self.param)
 
             self.output_file_name = lambda step_id: \
-               f'{self.param.output_dir}/bubble_{self.param.case_number}_{step_id:05d}'
+               f'{self.param.output_dir}/bubble_{self.param.case_number}_{step_id:07d}'
             self.step_function = lambda Q, step_id: output_step(Q, self.geometry, self.param, self.output_file_name(step_id))
 
       if param.store_solver_stats > 0:
@@ -57,7 +57,7 @@ class OutputManager:
             blockstats(Q, self.geometry, self.topo, self.metric, self.operators, self.param, step_id)
       
    def state_file_name(self, step_id: int) -> str:
-      return f'{self.param.output_dir}/state_vector_{mpi4py.MPI.COMM_WORLD.rank:03d}.{step_id:05d}.npy'
+      return f'{self.param.output_dir}/state_vector_{mpi4py.MPI.COMM_WORLD.rank:03d}.{step_id:07d}.npy'
 
    def step(self, Q: numpy.ndarray, step_id: int) -> None:
       """

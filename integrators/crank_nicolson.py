@@ -1,7 +1,7 @@
 import numpy
 from time import time
 
-from Output.solver_stats import write_solver_stats
+from output.solver_stats import write_solver_stats
 from solvers.nonlin      import newton_krylov
 from integrators.stepper     import Stepper
 

@@ -149,7 +149,8 @@ def create_time_integrator(param: Configuration, rhs_handle: Callable, rhs_impli
 
    from integrators.epi       import Epi
    from integrators.ros2      import Ros2
-   from integrators.splitting import StrangSplitting
+   from integrators.splitting import StrangSplitting, GodunovSplitting, Best22Splitting, OS22Splitting
+   from integrators.explicitRK import explicitRK
 
    if param.time_integrator[:9] == 'epi_stiff' and param.time_integrator[9:].isdigit():
       from integrators.epi_stiff import EpiStiff
@@ -182,6 +183,9 @@ def create_time_integrator(param: Configuration, rhs_handle: Callable, rhs_impli
    if param.time_integrator == 'imex2':
       from integrators.imex2 import Imex2
       return Imex2(rhs_explicit, rhs_implicit, param.tolerance)
+   if param.time_integrator == 'crank_nicolson':
+      from integrators.crank_nicolson import CrankNicolson
+      return CrankNicolson(rhs_handle, param.tolerance, preconditioner=preconditioner)
    if param.time_integrator == 'strang_epi2_ros2':
       stepper1 = Epi(2, rhs_explicit, param.tolerance, exponential_solver=param.exponential_solver)
       stepper2 = Ros2(rhs_implicit, param.tolerance, preconditioner=preconditioner)
@@ -190,12 +194,70 @@ def create_time_integrator(param: Configuration, rhs_handle: Callable, rhs_impli
       stepper1 = Ros2(rhs_implicit, param.tolerance, preconditioner=preconditioner)
       stepper2 = Epi(2, rhs_explicit, param.tolerance, exponential_solver=param.exponential_solver)
       return StrangSplitting(stepper1, stepper2)
+   if param.time_integrator == 'strang_epi2_ex_epi2_im':
+      stepper1 = Epi(2, rhs_explicit, param.tolerance, exponential_solver=param.exponential_solver)
+      stepper2 = Epi(2, rhs_implicit, param.tolerance, exponential_solver=param.exponential_solver)
+      return StrangSplitting(stepper1, stepper2)
+   if param.time_integrator == 'strang_epi2_im_epi2_ex':
+      stepper2 = Epi(2, rhs_explicit, param.tolerance, exponential_solver=param.exponential_solver)
+      stepper1 = Epi(2, rhs_implicit, param.tolerance, exponential_solver=param.exponential_solver)
+      return StrangSplitting(stepper1, stepper2)
+   if param.time_integrator == 'strang_epi6_im_epi6_ex':
+      stepper2 = Epi(6, rhs_explicit, param.tolerance, exponential_solver=param.exponential_solver)
+      stepper1 = Epi(6, rhs_implicit, param.tolerance, exponential_solver=param.exponential_solver)
+      return StrangSplitting(stepper1, stepper2)
+   if param.time_integrator == 'strang_epi6_ex_epi6_im':
+      stepper1 = Epi(6, rhs_explicit, param.tolerance, exponential_solver=param.exponential_solver)
+      stepper2 = Epi(6, rhs_implicit, param.tolerance, exponential_solver=param.exponential_solver)
+      return StrangSplitting(stepper1, stepper2)
+   if param.time_integrator == 'strang_epi6_ex_cn_im':
+      from integrators.crank_nicolson import CrankNicolson
+      stepper1 = Epi(6, rhs_explicit, param.tolerance, exponential_solver=param.exponential_solver)
+      stepper2 = CrankNicolson(rhs_implicit, param.tolerance, preconditioner=preconditioner)
+      return StrangSplitting(stepper1, stepper2)
+   if param.time_integrator == 'strang_ros2_ex_ros2_im':
+      stepper1 = Ros2(rhs_explicit, param.tolerance, preconditioner=preconditioner)
+      stepper2 = Ros2(rhs_implicit, param.tolerance, preconditioner=preconditioner)
+      return StrangSplitting(stepper1, stepper2)
+   if param.time_integrator == 'strang_ros2_im_ros2_ex':
+      stepper2 = Ros2(rhs_explicit, param.tolerance, preconditioner=preconditioner)
+      stepper1 = Ros2(rhs_implicit, param.tolerance, preconditioner=preconditioner)
+      return StrangSplitting(stepper1, stepper2)
+   if param.time_integrator == 'godunov_epi6_im_epi6_ex':
+      stepper2 = Epi(6, rhs_explicit, param.tolerance, exponential_solver=param.exponential_solver)
+      stepper1 = Epi(6, rhs_implicit, param.tolerance, exponential_solver=param.exponential_solver)
+      return GodunovSplitting(stepper1, stepper2)
+   if param.time_integrator == 'godunov_epi6_ex_epi6_im':
+      stepper1 = Epi(6, rhs_explicit, param.tolerance, exponential_solver=param.exponential_solver)
+      stepper2 = Epi(6, rhs_implicit, param.tolerance, exponential_solver=param.exponential_solver)
+      return GodunovSplitting(stepper1, stepper2)
+   if param.time_integrator == 'best22_epi6_im_epi6_ex':
+      stepper2 = Epi(6, rhs_explicit, param.tolerance, exponential_solver=param.exponential_solver)
+      stepper1 = Epi(6, rhs_implicit, param.tolerance, exponential_solver=param.exponential_solver)
+      return Best22Splitting(stepper1, stepper2)
+   if param.time_integrator == 'best_epi6_ex_epi6_im':
+      stepper1 = Epi(6, rhs_explicit, param.tolerance, exponential_solver=param.exponential_solver)
+      stepper2 = Epi(6, rhs_implicit, param.tolerance, exponential_solver=param.exponential_solver)
+      return Best22Splitting(stepper1, stepper2)
+   if param.time_integrator[:20] == 'os22_epi6_im_epi6_ex':
+      os22_param = float(param.time_integrator[21:-1])
+      stepper1 = Epi(6, rhs_implicit, param.tolerance, exponential_solver=param.exponential_solver)
+      stepper2 = Epi(6, rhs_explicit, param.tolerance, exponential_solver=param.exponential_solver)
+      return OS22Splitting(stepper1, stepper2, os22_param)
+   if param.time_integrator[:20] == 'os22_epi6_ex_epi6_im':
+      os22_param = float(param.time_integrator[21:-1])
+      stepper1 = Epi(6, rhs_explicit, param.tolerance, exponential_solver=param.exponential_solver)
+      stepper2 = Epi(6, rhs_implicit, param.tolerance, exponential_solver=param.exponential_solver)
+      return OS22Splitting(stepper1, stepper2, os22_param)
    if param.time_integrator == 'rosexp2':
       from integrators.rosexp2 import RosExp2
       return RosExp2(rhs_handle, rhs_implicit, param.tolerance, preconditioner=preconditioner)
    if param.time_integrator == 'partrosexp2':
       from integrators.part_ros_exp2 import PartRosExp2
       return PartRosExp2(rhs_handle, rhs_implicit, param.tolerance, preconditioner=preconditioner)
+   if param.time_integrator[:10] == 'explicitrk':
+      RKmethod = param.time_integrator[11:-1]
+      return explicitRK(rhs_handle,RKmethod)
 
    raise ValueError(f'Time integration method {param.time_integrator} not supported')
 
