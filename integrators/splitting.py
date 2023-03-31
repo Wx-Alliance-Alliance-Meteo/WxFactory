@@ -61,4 +61,3 @@ class StrangSplitting(Integrator):
       Q2 = self.scheme2.step(Q1, dt)
       Q3 = self.scheme1.step(Q2, dt/2)
       return Q3
- 

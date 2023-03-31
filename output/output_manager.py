@@ -70,7 +70,7 @@ class OutputManager:
       self.config_hash = state_params.__hash__() & 0xffffffffffff
 
    def state_file_name(self, step_id: int) -> str:
- 
+
       """Return the name of the file where to save the state vector for the current problem, for the given timestep."""
       base_name = f'{self.param.output_dir}/state_vector_{mpi4py.MPI.COMM_WORLD.rank:03d}'
       return f'{self.param.output_dir}/{base_name}.{step_id:07d}.npy'
