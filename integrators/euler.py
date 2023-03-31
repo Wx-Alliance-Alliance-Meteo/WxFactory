@@ -17,11 +17,11 @@ class BackwardEuler(Integrator):
       self.rhs = rhs
       self.tol = tol
 
-   def CN_system(self, Q_plus, Q, dt, rhs):
+   def BE_system(self, Q_plus, Q, dt, rhs):
       return (Q_plus - Q) / dt -(rhs(Q_plus))
 
    def __step__(self, Q, dt):
-      def CN_fun(Q_plus): return self.CN_system(Q_plus, Q, dt, self.rhs)
+      def BE_fun(Q_plus): return self.BE_system(Q_plus, Q, dt, self.rhs)
 
       maxiter = None
       if self.preconditioner is not None:
@@ -30,7 +30,7 @@ class BackwardEuler(Integrator):
 
       # Update solution
       t0 = time()
-      newQ, nb_iter, residuals = newton_krylov(CN_fun, Q, f_tol=self.tol, fgmres_restart=30,
+      newQ, nb_iter, residuals = newton_krylov(BE_fun, Q, f_tol=self.tol, fgmres_restart=30,
                                                fgmres_precond=self.preconditioner, verbose=False, maxiter=maxiter)
       t1 = time()
 
