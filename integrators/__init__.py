@@ -3,7 +3,7 @@
 # from .crank_nicolson import CrankNicolson
 from .epi           import Epi
 from .epi_stiff     import EpiStiff
-from .euler1        import Euler1
+from .euler        import Euler1
 from .imex2         import Imex2
 from .integrator    import Integrator
 from .part_ros_exp2 import PartRosExp2

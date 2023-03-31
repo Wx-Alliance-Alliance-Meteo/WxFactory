@@ -179,11 +179,11 @@ def create_time_integrator(param: Configuration,
       return Srerk(param, order, rhs_handle)
    if param.time_integrator == 'tvdrk3':
       return Tvdrk3(param, rhs_handle)
-   if param.time_integrator == 'euler1':
+   if param.time_integrator == 'forwardeuler':
       if MPI.COMM_WORLD.rank == 0:
          print('WARNING: Running with first-order explicit Euler timestepping.')
          print('         This is UNSTABLE and should be used only for debugging.')
-      return Euler1(param, rhs_handle)
+      return ForwardEuler(param, rhs_handle)
    if param.time_integrator == 'ros2':
       return Ros2(param, rhs_handle, preconditioner=preconditioner)
    if param.time_integrator == 'imex2':
