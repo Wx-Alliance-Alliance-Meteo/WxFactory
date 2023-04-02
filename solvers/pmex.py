@@ -6,6 +6,7 @@ import scipy.linalg
 
 def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 1, mmax = 128, reuse_info = True, task1 = False):
    
+   rank = mpi4py.MPI.COMM_WORLD.Get_rank()
 
    ppo, n = u.shape
    p = ppo - 1
@@ -35,7 +36,7 @@ def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 1, mmax = 128, reuse_in
       pmex.static_mem = True
       pmex.suggested_step = τ_end 
       pmex.suggested_m = mmax
-      m_init = 1
+      m_init = 12 #changing it to 12 because there were too many rejected steps for first steps
       m_opt  = 1
    else:
       m_init = pmex.suggested_m
@@ -43,6 +44,9 @@ def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 1, mmax = 128, reuse_in
    # We only allow m to vary between mmin and mmax
    mmin = 1
    m = max(mmin, min(m_init, mmax))
+
+   #if rank == 0:
+   #   print("in pmex, m_init = {}, m = {}".format(m_init, m))
 
    # Preallocate matrix
    V = numpy.zeros((mmax + 1, n + p))
@@ -132,7 +136,7 @@ def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 1, mmax = 128, reuse_in
          global_vec += V[0:j+1, n:n+p] @ V[j-1:j+1, n:n+p].T
 
          #3. set values for Hessenberg matrix H
-         H[0:j, j-1] = global_vec[0:j,1]
+         #H[0:j, j-1] = global_vec[0:j,1]
 
          #4. Projection with 2-step Gauss-Seidel to the orthogonal complement
          # Note: this is done in two steps. (1) matvec and (2) a lower
@@ -169,8 +173,9 @@ def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 1, mmax = 128, reuse_in
             break
 
          # Normalize vector and set norm to H matrix
-         V[j,:] /= curr_nrm
-         H[j,j-1] = curr_nrm
+         V[j,:]     /= curr_nrm
+         H[j,j-1]    = curr_nrm
+         H[0:j, j-1] = sol
 
          krystep += 1
 

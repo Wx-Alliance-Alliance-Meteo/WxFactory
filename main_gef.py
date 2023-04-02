@@ -20,6 +20,8 @@ from output.output_manager      import OutputManager
 from precondition.multigrid     import Multigrid
 from rhs.rhs_selector           import rhs_selector
 
+from time import time
+
 def main(argv) -> int:
    """ This function sets up the infrastructure and performs the time loop of the model. """
 
@@ -59,6 +61,9 @@ def main(argv) -> int:
    stepper.sim_time = t
    nb_steps = math.ceil(param.t_end / param.dt) - starting_step
 
+   #start_time = Timer.start
+   start_time = time()
+   #print("start_time = {}".format(start_time))
    step = starting_step
    while t < param.t_end:
       if t + param.dt > param.t_end:
@@ -92,7 +97,21 @@ def main(argv) -> int:
 
       output.step(Q, step)
 
+   #end_time   = stepper.latest_time
+   #print("end_time = {}".format(end_time))
+   total_time = time() - start_time
+
    output.finalize()
+
+   #print the total times to a file
+   if (MPI.COMM_WORLD.rank == 0):
+      size = MPI.COMM_WORLD.Get_size()
+      method      = str(param.time_integrator)
+      methodOrtho = str(param.exponential_solver)
+      caseNum     = str(param.case_number)
+      totaltime_name = "results_tanya/runtime_"+ methodOrtho + "_n" +  str(size) + "_" + str(method) + "_c" + caseNum +".txt"
+      with open(totaltime_name, 'a') as gg:
+          gg.write('{} \n'.format(total_time))
 
    return MPI.COMM_WORLD.rank
 

@@ -7,7 +7,7 @@ import numpy
 
 from common.program_options import Configuration
 from .integrator            import Integrator, SolverInfo
-from solvers                import kiops, matvec_fun, pmex
+from solvers                import kiops, matvec_fun, pmex, pmex_1s, pmex_ne1s, cwy_ne, cwy_1s, cwy_ne1s, icwy_1s, icwy_ne, icwy_ne1s, icwy_neiop, kiops_nest, dcgs2, kiops_nest
 
 class Epi(Integrator):
    def __init__(self, param: Configuration, order: int, rhs: Callable, init_method=None, init_substeps: int = 1):
@@ -92,14 +92,114 @@ class Epi(Integrator):
             # v_k = Sum_{i=1}^{n_prev} A_{k,i} R(y_{n-i})
             vec[k,:] += alpha * r.flatten()
 
+      #----pmex with norm estimate-----
       if self.exponential_solver == 'pmex':
          phiv, stats = pmex([1.], matvec_handle, vec, tol=self.tol, mmax=64, task1=False)
 
          if (mpirank == 0):
-            print(f'PMEX converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)'
+            print(f'PMEX NE converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)'
                   f' to a solution with local error {stats[4]:.2e}')
 
+      #----pmex with 1-sync-----
+      elif self.exponential_solver == 'pmex_1s':
+         phiv, stats = pmex_1s([1.], matvec_handle, vec, tol=self.tol, mmax=64, task1=False)
+
+         if (mpirank == 0):
+            print(f'PMEX 1s converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)'
+                  f' to a solution with local error {stats[4]:.2e}')
+
+      #----pmex with norm estimate+1s-----
+      elif self.exponential_solver == 'pmex_ne1s':
+         phiv, stats = pmex_ne1s([1.], matvec_handle, vec, tol=self.tol, mmax=64, task1=False)
+
+         if (mpirank == 0):
+            print(f'PMEX NE+1s converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)'
+                  f' to a solution with local error {stats[4]:.2e}')
+
+      #----- icwy norm estimate + 1sync-----
+      elif self.exponential_solver == 'icwy_ne1s':
+         phiv, stats = icwy_ne1s([1.], matvec_handle, vec, tol=self.tol,m_init=self.krylov_size, mmin=12, mmax=64, task1=False)
+         self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
+
+         if (mpirank == 0):
+            print(f'ICWY NE+1S converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)'
+                  f' to a solution with local error {stats[4]:.2e}')
+
+      #----- icwy norm estimate -----
+      elif self.exponential_solver == 'icwy_ne':
+         phiv, stats = icwy_ne([1.], matvec_handle, vec, tol=self.tol, m_init=self.krylov_size, mmin=12, mmax=64, task1=False)
+         self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
+
+         if (mpirank == 0):
+            print(f'ICWY NE converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)'
+                  f' to a solution with local error {stats[4]:.2e}')
+
+      #----- icwy 1-sync-----
+      elif self.exponential_solver == 'icwy_1s':
+         phiv, stats = icwy_1s([1.], matvec_handle, vec, tol=self.tol,m_init=self.krylov_size, mmin=12, mmax=64, task1=False)
+         self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
+
+         if (mpirank == 0):
+            print(f'ICWY 1S converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)'
+                  f' to a solution with local error {stats[4]:.2e}')
+
+      #----- icwy iop+norm estimate-----
+      elif self.exponential_solver == 'icwy_neiop':
+         phiv, stats = icwy_neiop([1.], matvec_handle, vec, tol=self.tol,m_init=self.krylov_size, mmin=12, mmax=64, task1=False)
+         self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
+
+         if (mpirank == 0):
+            print(f'ICWY NE+IOP converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)'
+                  f' to a solution with local error {stats[4]:.2e}')
+
+      #----- cwy norm estimate + 1sync-----
+      elif self.exponential_solver == 'cwy_ne1s':
+         phiv, stats = cwy_ne1s([1.], matvec_handle, vec, tol=self.tol,m_init=self.krylov_size, mmin=12, mmax=64, task1=False)
+         self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
+
+         if (mpirank == 0):
+            print(f'CWY NE+1S converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)'
+                  f' to a solution with local error {stats[4]:.2e}')
+
+      #----- cwy norm estimate -----
+      elif self.exponential_solver == 'cwy_ne':
+         phiv, stats = cwy_ne([1.], matvec_handle, vec, tol=self.tol,m_init=self.krylov_size, mmin=12, mmax=64, task1=False)
+         self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
+
+         if (mpirank == 0):
+            print(f'CWY NE converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)'
+                  f' to a solution with local error {stats[4]:.2e}')
+
+      #----- cwy 1-sync-----
+      elif self.exponential_solver == 'cwy_1s':
+         phiv, stats = cwy_1s([1.], matvec_handle, vec, tol=self.tol, m_init=self.krylov_size, mmin=12, mmax=64, task1=False)
+         self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
+
+         if (mpirank == 0):
+            print(f'CWY 1S converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)'
+                  f' to a solution with local error {stats[4]:.2e}')
+
+      #----- dcgs2 -----
+      elif self.exponential_solver == 'dcgs2':
+         phiv, stats = dcgs2([1.], matvec_handle, vec, tol=self.tol ,m_init=self.krylov_size, mmin=16,  mmax=64, task1=False)
+         self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
+
+         if (mpirank == 0):
+            print(f'DCGS2 converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)'
+                  f' to a solution with local error {stats[4]:.2e}')
+
+      #----- kiops + norm estimate-----
+      elif self.exponential_solver == 'kiops_ne':
+         phiv, stats = kiops_nest([1.], matvec_handle, vec, tol=self.tol ,m_init=self.krylov_size, mmin=16,  mmax=64, task1=False)
+         self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
+
+         if (mpirank == 0):
+            print(f'KIOPS NE converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)'
+                  f' to a solution with local error {stats[4]:.2e}')
+
+     #----------default: kiops-----------
       else:
+
          phiv, stats = kiops([1], matvec_handle, vec, tol=self.tol, m_init=self.krylov_size, mmin=16, mmax=64, task1=False)
 
          self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)

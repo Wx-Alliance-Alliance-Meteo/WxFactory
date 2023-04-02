@@ -1,6 +1,6 @@
 import math
 
-from mpi4py import MPI
+from  mpi4py import MPI
 import numpy
 import scipy.linalg
 
@@ -48,6 +48,8 @@ def kiops(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 2,
    * Niesen, J. and Wright, W.M., 2012. Algorithm 919: A Krylov subspace algorithm for evaluating the ``φ``-functions appearing in exponential integrators. ACM Transactions on Mathematical Software (TOMS), 38(3), p.22
    """
 
+   rank = MPI.COMM_WORLD.Get_rank()
+
    ppo, n = u.shape
    p = ppo - 1
 
@@ -58,6 +60,9 @@ def kiops(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 2,
 
    # We only allow m to vary between mmin and mmax
    m = max(mmin, min(m_init, mmax))
+
+   #if rank == 0:
+   #   print("in kiops, m_init = {}, m = {}".format(m_init, m))
 
    # Preallocate matrix
    V = numpy.zeros((mmax + 1, n + p))
