@@ -8,7 +8,7 @@ from .geometry import Geometry
 class DFROperators:
    def __init__(self, grd : Geometry, filter_apply : bool=False, filter_order: int=8, filter_cutoff: float=0.25):
       '''Initialize the Direct Flux Reconstruction operators
-      
+
       This initializes the DFR operators (matrices) based on input grid parameters.  The relevant internal matrices are:
          * The extrapolation matrices, `extrap_west`, `extrap_east`, `extrap_south`, `extrap_north`, `extrap_down`, and
            `extrap_up`.
@@ -16,7 +16,8 @@ class DFROperators:
       Parameters
       ----------
       grd : Geometry
-         Underlying grid, which must define `solutionPoints`, `solutionPoints_sym`, `extension`, and `extension_sym` as mmeber variables
+         Underlying grid, which must define `solutionPoints`, `solutionPoints_sym`, `extension`, `extension_sym` and
+         `nbsolpts` as member variables
       filter_apply : bool
          Whether to apply an exponential filter in defininng the differential operators
       filter_order : int
@@ -24,15 +25,45 @@ class DFROperators:
       filter_cutoff : float
          If applied, at what relative wavenumber (0 < cutoff < 1) to begin applying the filter
       '''
-      
-      self.extrap_west = lagrange_eval(grd.solutionPoints_sym, -1)
-      self.extrap_east = lagrange_eval(grd.solutionPoints_sym,  1)
 
-      self.extrap_south = lagrange_eval(grd.solutionPoints_sym, -1)
-      self.extrap_north = lagrange_eval(grd.solutionPoints_sym,  1)
+      # Build Vandermonde matrix to transform the modal representation to the (interior)
+      # nodal representation
+      V = numpy.polynomial.legendre.legvander(grd.solutionPoints,grd.nbsolpts-1)
+      # Invert the matrix to transform from interior nodes to modes
+      invV = numpy.linalg.inv(V)
 
-      self.extrap_down = lagrange_eval(grd.solutionPoints_sym, -1)
-      self.extrap_up   = lagrange_eval(grd.solutionPoints_sym,  1)
+      # Build the negative and positive-side extrapolation matrices by:
+      # *) transforming interior nodes to modes
+      # *) evaluating the modes at ± 1
+
+      # Note that extrap_neg and extrap_pos should be vectors, not a one-row matrix; numpy
+      # treats the two differently.
+      extrap_neg = (numpy.polynomial.legendre.legvander([-1],grd.nbsolpts-1) @ invV).reshape((-1,))
+      extrap_pos = (numpy.polynomial.legendre.legvander([+1],grd.nbsolpts-1) @ invV).reshape((-1,))
+
+      self.extrap_west = extrap_neg
+      self.extrap_east = extrap_pos
+      self.extrap_south = extrap_neg
+      self.extrap_north = extrap_pos
+      self.extrap_down = extrap_neg
+      self.extrap_up = extrap_pos
+
+
+      # self.extrap_west = lagrangeEval(grd.solutionPoints_sym, -1)
+      # self.extrap_east = lagrangeEval(grd.solutionPoints_sym,  1)
+
+      # self.extrap_south = lagrangeEval(grd.solutionPoints_sym, -1)
+      # self.extrap_north = lagrangeEval(grd.solutionPoints_sym,  1)
+
+      # self.extrap_down = lagrangeEval(grd.solutionPoints_sym, -1)
+      # self.extrap_up   = lagrangeEval(grd.solutionPoints_sym,  1)
+
+      # Create highest-mode filter
+      V = numpy.polynomial.legendre.legvander(grd.solutionPoints,grd.nbsolpts-1) # Transform mode space to grid space
+      invV = inv(V) # Transform grid space to mode space
+      feye = numpy.eye(grd.nbsolpts) # Suppress high mode
+      feye[-1,-1] = 0
+      self.highfilter = V @ (feye @ invV)
 
       if filter_apply:
          self.V = vandermonde(grd.extension)
@@ -66,6 +97,63 @@ class DFROperators:
 
       self.quad_weights = numpy.outer(grd.glweights, grd.glweights)
 
+   def make_filter(self, alpha : float, order : int, cutoff : float, geom : Geometry):
+      # Build an exponential modal filter as described in Warburton, eqn 5.16
+
+      # Scaled mode numbers
+      modes = numpy.arange(geom.nbsolpts) / (geom.nbsolpts-1)
+      Nc = cutoff 
+
+      # After applying the filter, each mode is reduced in proportion to the filter order
+      # and the mode number relative to nbsolpts, with modes below the cutoff limit untouched
+
+      residual_modes = numpy.ones_like(modes)
+      residual_modes[modes > Nc] = numpy.exp(-alpha*((modes[modes > Nc] - cutoff)/(1 - cutoff))**order)
+
+      # Now, use a Vandermonde matrix to transform this modal filter into a nodal form
+
+      # mode-to-node operator
+      vander = numpy.polynomial.legendre.legvander(geom.solutionPoints,geom.nbsolpts-1)
+
+      # node-to-mode operator
+      ivander = numpy.linalg.inv(vander)
+
+      self.expfilter = vander @ numpy.diag(residual_modes) @ ivander
+
+   def apply_filter_3d(self,Q : numpy.ndarray, geom : Geometry, metric):
+      # Apply the exponential filter precomputed in expfilter to input fields \sqrt(g)*Q, and return the filtered array
+
+      if len(Q.shape) > 3:
+         nbvars = Q.shape[0]
+      else:
+         nbvars = 1
+
+      ni = geom.ni
+      nj = geom.nj
+      nk = geom.nk
+      np = geom.nbsolpts
+
+      # Filter in i
+      result = metric.sqrtG * Q
+      result.shape = (nbvars*nk*nj*(ni//np),np)
+      result = result @ self.expfilter.T 
+      #result = (self.expfilter @ result.T).T
+      #result = (self.expfilter @ result.transpose((0,2,1))).transpose((0,2,1))
+
+      # Filter in j
+      result.shape = (nbvars*nk*(nj//np), np, ni)
+      result = (self.expfilter @ result)
+
+      # Filter in k
+      result.shape = (nbvars*(nk//np), np, nj * ni)
+      result = (self.expfilter @ result)
+
+      result.shape = Q.shape
+      result *= metric.inv_sqrtG
+
+      return result
+
+      
    def comma_i(self, field_interior : numpy.ndarray, border_i : numpy.ndarray, grid: Geometry) -> numpy.ndarray :
       '''Take a partial derivative along the i-index
       
@@ -103,7 +191,9 @@ class DFROperators:
       output.shape = field_view.shape
 
       # Perform the matrix transposition
-      output[:] = field_view @ self.diff_solpt_tr + border_i_view @ self.correction_tr
+      numpy.dot(field_view, self.diff_solpt_tr,out=output)
+      #output[:] = field_view @ self.diff_solpt_tr# + border_i_view @ self.correction_tr
+      output[:] += border_i_view @ self.correction_tr
       # print(grid.ptopo.rank, field_view[:2,:], '\n', border_i_view[:2,:],'\n',output[:2,:])
 
       # Reshape the output array back to its canonical extents
@@ -129,7 +219,8 @@ class DFROperators:
       # Array shape for the i-border of a single variable, based on the grid decomposition
       border_shape = (grid.nb_elements_x1,2)
       # Number of variables we're extending
-      nbvars = numpy.prod(field_interior.shape) // (grid.ni)
+      #nbvars = numpy.prod(field_interior.shape) // (grid.ni)
+      nbvars = field_interior.size // grid.ni
 
       # Create an array for the output
       border = numpy.empty((nbvars,) + border_shape, dtype=field_interior.dtype)
@@ -170,7 +261,8 @@ class DFROperators:
       # Create an empty array for output
       output = numpy.empty_like(field_interior)
       # Compute the number of variables we're differentiating, including number of levels
-      nbvars = numpy.prod(output.shape) // (grid.ni * grid.nj)
+      #nbvars = numpy.prod(output.shape) // (grid.ni * grid.nj)
+      nbvars = output.size // (grid.ni * grid.nj)
 
       # Create views of the input arrays for reshaping, in order to express the differentiation as
       # a set of matrix multiplications
@@ -213,7 +305,8 @@ class DFROperators:
       border_shape = (grid.nb_elements_x2,2,
                       grid.ni)
       # Number of variables times number of vertical levels we're extending
-      nbvars = numpy.prod(field_interior.shape) // (grid.ni * grid.nj)
+      #nbvars = numpy.prod(field_interior.shape) // (grid.ni * grid.nj)
+      nbvars = field_interior.size // (grid.ni * grid.nj)
 
       # Create an array for the output
       border = numpy.empty((nbvars,) + border_shape, dtype=field_interior.dtype)
@@ -257,7 +350,8 @@ class DFROperators:
       # Create an empty array for output
       output = numpy.empty_like(field_interior)
       # Compute the number of variables we're differentiating
-      nbvars = numpy.prod(output.shape) // (grid.ni * grid.nj * grid.nk)
+      #nbvars = numpy.prod(output.shape) // (grid.ni * grid.nj * grid.nk)
+      nbvars = output.size // (grid.ni * grid.nj * grid.nk)
 
       # Create views of the input arrays for reshaping, in order to express the differentiation as
       # a set of matrix multiplications
@@ -280,6 +374,40 @@ class DFROperators:
 
       return output
 
+   def filter_k(self, field_interior, grid : Geometry) -> numpy.ndarray:
+      '''Apply a modal filter to remove the highest mode of fiield_interior along the k-dimension
+      
+      This method applies the pre-computed 'highfilter' matrix to the field-interior points along
+      the vertical (k) dimension, independently of other directions.  The typical use case is to
+      filter out the highest element mode to avoid an inconsistency in the gravity term of the
+      vertical-only Euler equations, where w_t is proportional to rho*g but rho_t is proportional 
+      to w_x.
+      
+      Parameters:
+      -----------
+      field_interior : numpy.ndarray 
+         The element-interior values of the variable(s) to be differentiated.  This should have
+         a shape of `(numvars,npts_z,npts_y,npts_x)`, respecting the prevailing parallel decomposition.
+      grid : Geometry
+         Grid-defining class, used here solely to provide the canonical definition of the local
+         computational region.'''
+         
+      # Number of variables we're extending
+      #nbvars = numpy.prod(field_interior.shape) // (grid.ni * grid.nj * grid.nk)
+      nbvars = field_interior.size // (grid.ni * grid.nj * grid.nk)
+      
+      # Output array
+      filtered = numpy.empty( (nbvars*grid.nb_elements_x3,grid.nbsolpts,grid.ni*grid.nj), dtype=field_interior.dtype)
+
+      # Create an array view of the interior, reshaped for matrix multiplication
+      field_interior_view = field_interior.view()
+      field_interior_view.shape = (nbvars*grid.nb_elements_x3,grid.nbsolpts,grid.ni*grid.nj)
+
+      filtered[:] = self.highfilter @ field_interior_view
+      filtered.shape = field_interior.shape
+      
+      return filtered
+
    def extrapolate_k(self, field_interior : numpy.ndarray, grid : Geometry) -> numpy.ndarray:
       '''Compute the k-border values along each element of field_interior
 
@@ -300,7 +428,8 @@ class DFROperators:
                       grid.nj,
                       grid.ni)
       # Number of variables we're extending
-      nbvars = numpy.prod(field_interior.shape) // (grid.ni * grid.nj * grid.nk)
+      #nbvars = numpy.prod(field_interior.shape) // (grid.ni * grid.nj * grid.nk)
+      nbvars = field_interior.size // (grid.ni * grid.nj * grid.nk)
 
       # Create an array for the output
       border = numpy.empty((nbvars,) + border_shape, dtype=field_interior.dtype)

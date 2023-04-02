@@ -4,6 +4,7 @@
 
 import math
 from typing import Callable, Optional
+import sys
 
 from mpi4py import MPI
 import numpy
@@ -40,6 +41,9 @@ def main(argv) -> int:
    # Initialize state variables
    Q, topo, metric = init_state_vars(geom, mtrx, param)
 
+   if (param.expfilter_apply):
+      mtrx.make_filter(param.expfilter_strength,param.expfilter_order,param.expfilter_cutoff,geom)
+
    # Preconditioning
    preconditioner = create_preconditioner(param, ptopo)
 
@@ -56,6 +60,7 @@ def main(argv) -> int:
    stepper.output_manager = output
 
    output.step(Q, starting_step)
+   sys.stdout.flush()
 
    t = param.dt * starting_step
    stepper.sim_time = t
@@ -77,6 +82,8 @@ def main(argv) -> int:
       if MPI.COMM_WORLD.rank == 0: print(f'\nStep {step} of {nb_steps + starting_step}')
 
       Q = stepper.step(Q, param.dt)
+      if (param.expfilter_apply):
+         Q = mtrx.apply_filter_3d(Q,geom,metric)
 
       if MPI.COMM_WORLD.rank == 0: print(f'Elapsed time for step: {stepper.latest_time:.3f} secs')
 
@@ -96,6 +103,7 @@ def main(argv) -> int:
          Q[idx_rho_w,:,:,:]  = Q[idx_rho, :, :, :] * w_wind
 
       output.step(Q, step)
+      sys.stdout.flush()
 
    #end_time   = stepper.latest_time
    #print("end_time = {}".format(end_time))
@@ -162,7 +170,10 @@ def determine_starting_state(param: Configuration, output: OutputManager, Q: num
 
    return Q, starting_step
 
-def create_time_integrator(param: Configuration, rhs_handle: Callable, rhs_implicit: Callable, rhs_explicit: Callable,
+def create_time_integrator(param: Configuration,
+                           rhs_handle: Callable,
+                           rhs_implicit: Optional[Callable],
+                           rhs_explicit: Optional[Callable],
                            preconditioner: Optional[Multigrid]) \
       -> Integrator:
    """ Create the appropriate time integrator object based on params """
@@ -228,6 +239,7 @@ if __name__ == '__main__':
    args = parser.parse_args()
 
    # Start profiling
+   pr = None
    if args.profile:
       pr = cProfile.Profile()
       pr.enable()
