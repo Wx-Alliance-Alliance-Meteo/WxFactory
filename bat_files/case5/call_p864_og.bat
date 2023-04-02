@@ -9,8 +9,6 @@
 #SBATCH -t 03:00:00
 #SBATCH --array=1-7
 
-conda activate gef3
-
 #srun --mpi=pmi2 --cpu-bind=cores python3 ./main_gef.py config/case6.ini
 
 mpirun -np 864 python3 ./main_gef.py config/procs864/case5.ini
