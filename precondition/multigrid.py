@@ -11,7 +11,7 @@ from common.interpolation  import Interpolator
 from geometry              import Cartesian2D, CubedSphere, DFROperators
 from init.init_state_vars  import init_state_vars
 from precondition.smoother import kiops_smoothe, exponential as exp_smoothe, rk_smoothing, rk1_smoothing
-from rhs.rhs_selector      import rhs_selector
+from rhs.rhs_selector      import RhsBundle
 from solvers               import fgmres, global_norm, KrylovJacobian, matvec_rat, MatvecOp
 
 # For type hints
@@ -76,7 +76,7 @@ class MultigridLevel:
       operators = DFROperators(self.geometry, p.filter_apply, p.filter_order, p.filter_cutoff)
 
       field, topo, self.metric = init_state_vars(self.geometry, operators, self.param)
-      self.rhs_operator, _, _ = rhs_selector(self.geometry, operators, self.metric, topo, ptopo, self.param)
+      self.rhs = RhsBundle(self.geometry, operators, self.metric, topo, ptopo, self.param)
       if verbose > 0: print(f'field shape: {field.shape}')
       self.shape = field.shape
       self.dtype = field.dtype
@@ -147,13 +147,14 @@ class MultigridLevel:
       ##########################################
       # Matvec function of the system to solve
       if self.param.time_integrator in ['ros2', 'rosexp2', 'partrosexp2', 'strang_epi2_ros2', 'strang_ros2_epi2']:
-         self.matrix_operator = functools.partial(matvec_rat, dt=dt, Q=field, rhs=self.rhs_operator(field),
-                                                  rhs_handle=self.rhs_operator)
+         self.matrix_operator = functools.partial(matvec_rat, dt=dt, Q=field, rhs=self.rhs.full(field),
+                                                  rhs_handle=self.rhs.full)
 
       elif self.param.time_integrator == 'crank_nicolson':
-         cn_fun = CrankNicolsonFunFactory(field, dt, self.rhs_operator)
+         cn_fun = CrankNicolsonFunFactory(field, dt, self.rhs.full)
 
-         # self.cn_fun = lambda Q_plus: (Q_plus - self.fv_field) / dt - 0.5 * ( self.fv_rhs_fun(Q_plus) + self.fv_rhs_fun(self.fv_field) )
+         # self.cn_fun = lambda Q_plus: (Q_plus - self.fv_field) / dt - 0.5 * ( self.fv_rhs_fun(Q_plus) + 
+         #                              self.fv_rhs_fun(self.fv_field) )
          # self.cn_fun = cn_fun
          self.jacobian = KrylovJacobian(numpy.ravel(field), numpy.ravel(cn_fun(field)), cn_fun, fgmres_restart=10,
                                         fgmres_maxiter=1, fgmres_precond=None)
@@ -162,7 +163,7 @@ class MultigridLevel:
       elif self.param.time_integrator == 'bdf2':
          if prev_field is None:
             raise ValueError(f'Need to specify Q_prev when using BDF2')
-         nonlin_fun = Bdf2FunFactory(field, prev_field, dt, self.rhs_operator)
+         nonlin_fun = Bdf2FunFactory(field, prev_field, dt, self.rhs.full)
          self.jacobian = KrylovJacobian(numpy.ravel(field), numpy.ravel(nonlin_fun(field)), nonlin_fun,
                fgmres_restart=10, fgmres_maxiter=1, fgmres_precond=None)
          self.matrix_operator = self.jacobian.op
