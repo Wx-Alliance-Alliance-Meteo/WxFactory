@@ -11,7 +11,7 @@ class Imex2(Integrator):
       super().__init__(param, preconditioner=None)
 
       if MPI.COMM_WORLD.size > 1:
-         raise ValueError(f'RosExp2 has only been tested with 1 PE. Gotta make sure it works with more than that.')
+         raise ValueError(f'Imex2 has only been tested with 1 PE. Gotta make sure it works with more than that.')
 
       self.rhs_exp = rhs_exp
       self.rhs_imp = rhs_imp

@@ -3,6 +3,7 @@
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 GEF_DIR=${SCRIPT_DIR}/..
 ORIG_CONFIG=${GEF_DIR}/config/dcmip31.ini
+# ORIG_CONFIG=${GEF_DIR}/config/gaussian_bubble.ini
 TMP_BASE_CONFIG=${ORIG_CONFIG}.tmp
 DEST_DIR=${GEF_DIR}/test_configs
 
@@ -38,16 +39,16 @@ function make_config() {
 }
 
 # Problem size
-nb_elements_horizontal=48
+nb_elements_horizontal=4
 nb_elements_vertical=20
 RESULT_DIR=${GEF_DIR}/multi_config_results_${nb_elements_horizontal}x${nb_elements_vertical}
-RESULT_DIR=${GEF_DIR}/multi_config_results
+# RESULT_DIR=${GEF_DIR}/multi_config_results
 
 dt=30
 t_end=300
 time_integrator=epi2
 tolerance=1e-7
-gmres_restart=200
+gmres_restart=100
 nbsolpts=4
 preconditioner=none
 output_freq=0
@@ -55,7 +56,7 @@ save_state_freq=0
 store_solver_stats=1
 output_dir=${RESULT_DIR}
 solver_stats_file=solver_stats_7.db
-starting_step=0
+starting_step=50
 
 cp ${ORIG_CONFIG} ${TMP_BASE_CONFIG}
 set_param_strict ${TMP_BASE_CONFIG} dt t_end time_integrator tolerance starting_step gmres_restart          \
@@ -65,8 +66,9 @@ set_param_strict ${TMP_BASE_CONFIG} dt t_end time_integrator tolerance starting_
 do_no_precond=0
 do_fv_precond=0
 do_erk1_smoother=0
-do_erk3_smoother=1
+do_erk3_smoother=0
 do_exp_smoother=0
+do_ark3_smoother=1
 
 # for tolerance in 1e-6 1e-7; do
 for tolerance in 1e-6; do
@@ -88,7 +90,7 @@ for tolerance in 1e-6; do
     if [ ${do_fv_precond} -gt 0 ]; then
         time_integrator=ros2
         preconditioner=fv
-        for precond_tolerance in 2.0 1.0 8e-1 6e-1 5e-1 4e-1 3e-1 2e-1 1e-1 5e-2 2e-2; do
+        for precond_tolerance in 6e-1 5e-1 4e-1 3e-1 2e-1 1e-1 5e-2 2e-2; do
             make_config ${DEST_DIR}/fv_${nb_elements_horizontal}x${nb_elements_vertical}_${tolerance}_${precond_tolerance}.ini \
                 time_integrator precond_tolerance preconditioner tolerance solver_stats_file
         done
@@ -100,16 +102,37 @@ for tolerance in 1e-6; do
         time_integrator=ros2
         preconditioner=fv-mg
         mg_smoother=erk3
-        mg_solve_coarsest=1
-        for num_pre_smoothe in 1 2 3; do
-        for num_post_smoothe in 1 2 3; do
-        [ $(($num_pre_smoothe + $num_post_smoothe)) -lt 2 ] && continue
+        mg_solve_coarsest=0
+        for num_pre_smoothe in 0 1 2 3 4; do
+        for num_post_smoothe in 0 1 2 3 4; do
+        [ $(($num_pre_smoothe + $num_post_smoothe)) -lt 1 ] && continue
+        [ $(($num_pre_smoothe + $num_post_smoothe)) -gt 6 ] && continue
+        # for pseudo_cfl in 16.5e4 17.0e4 17.5e4 18.0e4 18.5e4 19.0e4 19.5e4 20.0e4; do
+        for pseudo_cfl in $(seq 2000.0 100.0 3000.0); do
+        for precond_tolerance in 1e-1; do
+            make_config ${DEST_DIR}/fv-mg_${nb_elements_horizontal}x${nb_elements_vertical}_${tolerance}_${mg_smoother}_${num_pre_smoothe}${num_post_smoothe}${mg_solve_coarsest}_${pseudo_cfl}_${precond_tolerance}.ini \
+                time_integrator preconditioner mg_smoother num_pre_smoothe num_post_smoothe pseudo_cfl precond_tolerance tolerance solver_stats_file mg_solve_coarsest
+        done
+        done
+        done
+        done
+    fi
+
+    if [ ${do_ark3_smoother} -gt 0 ]; then
+        time_integrator=ros2
+        preconditioner=fv-mg
+        mg_smoother=ark3
+        mg_solve_coarsest=0
+        gmres_restart=30
+        for num_pre_smoothe in 0 1 2 3; do
+        for num_post_smoothe in 0 1 2 3; do
+        [ $(($num_pre_smoothe + $num_post_smoothe)) -lt 1 ] && continue
         [ $(($num_pre_smoothe + $num_post_smoothe)) -gt 4 ] && continue
         # for pseudo_cfl in 16.5e4 17.0e4 17.5e4 18.0e4 18.5e4 19.0e4 19.5e4 20.0e4; do
-        for pseudo_cfl in $(seq 1800 100 2500); do
+        for pseudo_cfl in $(seq 65.0 2.0 75.0); do
         for precond_tolerance in 1e-1; do
-            make_config ${DEST_DIR}/fv-mg_${nb_elements_horizontal}x${nb_elements_vertical}_${tolerance}_${mg_smoother}_${num_pre_smoothe}${num_post_smoothe}_${pseudo_cfl}_${precond_tolerance}.ini \
-                time_integrator preconditioner mg_smoother num_pre_smoothe num_post_smoothe pseudo_cfl precond_tolerance tolerance solver_stats_file mg_solve_coarsest
+            make_config ${DEST_DIR}/fv-mg_${nb_elements_horizontal}x${nb_elements_vertical}_${tolerance}_${mg_smoother}_${num_pre_smoothe}${num_post_smoothe}${mg_solve_coarsest}_${pseudo_cfl}_${precond_tolerance}.ini \
+                time_integrator preconditioner mg_smoother num_pre_smoothe num_post_smoothe pseudo_cfl precond_tolerance tolerance solver_stats_file mg_solve_coarsest gmres_restart
         done
         done
         done
@@ -120,14 +143,16 @@ for tolerance in 1e-6; do
         time_integrator=ros2
         preconditioner=fv-mg
         mg_smoother=erk1
-        mg_solve_coarsest=1
-        for num_pre_smoothe in 1 2 3 4 5 6 7 8 9 10; do
-        for num_post_smoothe in 1 2 3 4 5 6 7 8 9 10; do
-        [ $(($num_pre_smoothe + $num_post_smoothe)) -lt 6 ] && continue
+        mg_solve_coarsest=0
+        for num_pre_smoothe in 1 2 3 4; do
+        for num_post_smoothe in 1 2 3 4; do
+        [ $(($num_pre_smoothe + $num_post_smoothe)) -lt 2 ] && continue
+        [ $(($num_pre_smoothe + $num_post_smoothe)) -gt 5 ] && continue
         # for pseudo_cfl in 4.0e4 4.2e4 4.4e4 4.6e4 4.8e4 5.0e4; do
-        for pseudo_cfl in 7.4e4 7.6e4; do
+        # for pseudo_cfl in 7.4e4 7.6e4; do
+        for pseudo_cfl in $(seq 4.0 0.5 9.0); do
         for precond_tolerance in 1e-1; do
-            make_config ${DEST_DIR}/fv-mg_${nb_elements_horizontal}x${nb_elements_vertical}_${tolerance}_${mg_smoother}_${num_pre_smoothe}${num_post_smoothe}_${pseudo_cfl}_${precond_tolerance}.ini \
+            make_config ${DEST_DIR}/fv-mg_${nb_elements_horizontal}x${nb_elements_vertical}_${tolerance}_${mg_smoother}_${num_pre_smoothe}${num_post_smoothe}${mg_solve_coarsest}_${pseudo_cfl}_${precond_tolerance}.ini \
                 time_integrator preconditioner mg_smoother num_pre_smoothe num_post_smoothe pseudo_cfl precond_tolerance tolerance solver_stats_file mg_solve_coarsest
         done
         done

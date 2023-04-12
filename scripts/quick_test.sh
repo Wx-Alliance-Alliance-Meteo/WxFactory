@@ -12,6 +12,7 @@ CONFIG_BASE=${TEST_DIR}/config.ini
 
 do_2d=1
 do_3d=1
+do_non_precond=1
 do_precond=0
 
 mkdir -pv ${TEST_DIR}
@@ -84,10 +85,12 @@ function test_cart2d() {
                              output_freq save_state_freq store_solver_stats output_dir
 
 
-    time_integrators="epi2 epi3 epi_stiff3 epi_stiff4 srerk3 imex2 tvdrk3 ros2 rosexp2 partrosexp2 strang_epi2_ros2 strang_ros2_epi2"
-    for time_integrator in ${time_integrators}; do
-        run_single_cart2d time_integrator || return 1
-    done
+    if [ $do_non_precond -gt 0 ]; then
+        time_integrators="epi2 epi3 epi_stiff3 epi_stiff4 srerk3 imex2 tvdrk3 ros2 rosexp2 partrosexp2 strang_epi2_ros2 strang_ros2_epi2"
+        for time_integrator in ${time_integrators}; do
+            run_single_cart2d time_integrator || return 1
+        done
+    fi
 
     if [ $do_precond -gt 0 ]; then
         time_integrator=ros2
@@ -142,11 +145,13 @@ function test_cube_sphere() {
                              output_freq save_state_freq store_solver_stats output_dir             \
                              num_pre_smoothe num_post_smoothe mg_solve_coarsest
 
-    time_integrators="epi2 epi3 epi_stiff3 epi_stiff4 srerk3 tvdrk3 ros2"
-    no_time_integrators="imex2 rosexp2 partrosexp2 strang_epi2_ros2 strang_ros2_epi2"
-    for time_integrator in ${time_integrators}; do
-        run_single_cubesphere time_integrator || return 1
-    done
+    if [ $do_non_precond -gt 0 ]; then
+        time_integrators="epi2 epi3 epi_stiff3 epi_stiff4 srerk3 tvdrk3 ros2"
+        no_time_integrators="imex2 rosexp2 partrosexp2 strang_epi2_ros2 strang_ros2_epi2"
+        for time_integrator in ${time_integrators}; do
+            run_single_cubesphere time_integrator || return 1
+        done
+    fi
 
     if [ $do_precond -gt 0 ]; then
         time_integrator=ros2
@@ -160,7 +165,7 @@ function test_cube_sphere() {
         run_single_cubesphere time_integrator preconditioner mg_smoother pseudo_cfl || return 1
 
         mg_smoother=erk3
-        pseudo_cfl=7e4
+        pseudo_cfl=2500
         run_single_cubesphere time_integrator preconditioner mg_smoother pseudo_cfl || return 1
 
         # mg_smoother=exp

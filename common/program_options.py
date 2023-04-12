@@ -107,7 +107,7 @@ class Configuration:
       self.num_pre_smoothe   = self._get_option('Preconditioning', 'num_pre_smoothe', int, 1, min_value=0)
       self.num_post_smoothe  = self._get_option('Preconditioning', 'num_post_smoothe', int, 1, min_value=0)
 
-      self.possible_smoothers = ['exp', 'kiops', 'erk3', 'erk1']
+      self.possible_smoothers = ['exp', 'kiops', 'erk3', 'erk1', 'ark3']
       self.mg_smoother = self._get_option('Preconditioning', 'mg_smoother', str, 'exp', valid_values=self.possible_smoothers)
 
       self.exp_smoothe_spectral_radii  = self._get_option('Preconditioning', 'exp_smoothe_spectral_radii', List[float], [2.0])

@@ -1,7 +1,7 @@
 import functools
 from copy         import deepcopy
 from time         import time
-from typing       import Callable, Optional, Union
+from typing       import Callable, List, Optional
 
 from mpi4py import MPI
 import numpy
@@ -10,7 +10,7 @@ from common.definitions    import idx_2d_rho, idx_2d_rho_u, idx_2d_rho_w
 from common.interpolation  import Interpolator
 from geometry              import Cartesian2D, CubedSphere, DFROperators
 from init.init_state_vars  import init_state_vars
-from precondition.smoother import kiops_smoothe, exponential as exp_smoothe, rk_smoothing, rk1_smoothing
+from precondition.smoother import KiopsSmoother, ExponentialSmoother, RK1Smoother, RK3Smoother, ARK3Smoother
 from rhs.rhs_selector      import RhsBundle
 from solvers               import fgmres, global_norm, KrylovJacobian, matvec_rat, MatvecOp
 
@@ -102,13 +102,9 @@ class MultigridLevel:
 
       self.pre_smoothe = lambda A, b, x: x
       if param.mg_smoother == 'kiops':
-         self.pre_smoothe = functools.partial(kiops_smoothe, real_dt=param.dt, dt_factor=param.kiops_dt_factor)
+         self.pre_smoothe = KiopsSmoother(param.dt, param.kiops_dt_factor)
       elif param.mg_smoother == 'exp':
-         # self.smoothe[level] = functools.partial(exp_smoothe, target_spectral_radius=4, global_dt=param.dt, niter=6)
-         self.pre_smoothe = functools.partial(exp_smoothe,
-                                       target_spectral_radius=self.param.exp_smoothe_spectral_radius,
-                                       global_dt=param.dt,
-                                       niter=self.param.exp_smoothe_nb_iter)
+         self.pre_smoothe = ExponentialSmoother(self.param.exp_smoothe_nb_iter, self.param.exp_smoothe_spectral_radius, param.dt)
          if verbose > 0: print(f'spectral radius for level = {self.param.exp_smoothe_spectral_radius}')
 
       self.post_smoothe = self.pre_smoothe
@@ -118,7 +114,7 @@ class MultigridLevel:
          -> tuple[numpy.ndarray, Optional[numpy.ndarray]]:
       """ Initialize structures and data that will be used for preconditioning during the ongoing time step """
 
-      if self.param.mg_smoother in ['erk1', 'erk3']:
+      if self.param.mg_smoother in ['erk1', 'erk3', 'ark3']:
          cfl    = self.param.pseudo_cfl
          # factor = 1.0 / (self.ndim * (2 * self.param.nbsolpts + 1))
          factor = 1.0 / (2 * (2 * self.param.nbsolpts + 1))
@@ -138,9 +134,11 @@ class MultigridLevel:
             print(f'pseudo_dt = {self.pseudo_dt}')
 
          if self.param.mg_smoother == 'erk1':
-            self.pre_smoothe  = functools.partial(rk1_smoothing, h=self.pseudo_dt)
+            self.pre_smoothe = RK1Smoother(self.pseudo_dt)
          elif self.param.mg_smoother == 'erk3':
-            self.pre_smoothe  = functools.partial(rk_smoothing, h=self.pseudo_dt)
+            self.pre_smoothe = RK3Smoother(self.pseudo_dt)
+         elif self.param.mg_smoother == 'ark3':
+            self.pre_smoothe = ARK3Smoother(self.pseudo_dt, field, dt, self.rhs)
 
          self.post_smoothe = self.pre_smoothe
 
@@ -224,7 +222,8 @@ class Multigrid(MatvecOp):
          # if self.extra_fv_step:
          #    print(f'There is an extra FV step, from order {param.initial_nbsolpts} to {self.orders[0]}')
          #    self.orders = [param.initial_nbsolpts] + self.orders
-         self.elem_counts_hori = [param.nb_elements_horizontal * order // param.initial_nbsolpts for order in self.orders]
+         self.elem_counts_hori = [param.nb_elements_horizontal * order // param.initial_nbsolpts 
+                                  for order in self.orders]
          if self.ndim == 3 or param.grid_type == 'cartesian2d':
             self.elem_counts_vert =  [param.nb_elements_vertical * order for order in self.orders]
          else:
@@ -239,11 +238,11 @@ class Multigrid(MatvecOp):
       if self.verbose:
          print(f'orders: {self.orders}, h elem counts: {self.elem_counts_hori}, v elem counts: {self.elem_counts_vert}')
 
-      def extended_list(list, target_len):
-         diff_len = target_len - len(list)
-         new_list = deepcopy(list)
+      def extended_list(old_list: List, target_len: int):
+         diff_len = target_len - len(old_list)
+         new_list = deepcopy(old_list)
          if diff_len > 0:
-            new_list.extend([list[-1] for _ in range(diff_len)])
+            new_list.extend([old_list[-1] for _ in range(diff_len)])
          elif diff_len < 0:
             for _ in range(-diff_len):
                new_list.pop(-1)
@@ -337,7 +336,14 @@ class Multigrid(MatvecOp):
 
       return abs_res, rel_res
 
-   def iterate(self, b: numpy.ndarray, x0:Optional[numpy.ndarray] = None, level:Optional[int] = None, num_levels:int = 1, gamma: int = 1, verbose:Optional[bool] = None) -> numpy.ndarray:
+   def iterate(self,
+               b: numpy.ndarray,
+               x0: Optional[numpy.ndarray] = None,
+               level: Optional[int] = None,
+               num_levels: int = 1,
+               gamma: int = 1,
+               verbose: Optional[bool] = None) \
+                  -> numpy.ndarray:
       """
       Do one pass of the multigrid algorithm.
 

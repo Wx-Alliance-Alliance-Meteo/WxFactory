@@ -1,7 +1,7 @@
 import math
 from time import time
 import sys
-from typing import Callable, Optional
+from typing import Callable, List, Optional, Tuple
 
 from mpi4py import MPI
 import numpy
@@ -74,9 +74,10 @@ def fgmres(A: MatvecOperator,
            preconditioner: Optional[MatvecOperator] = None,
            hegedus: bool = False,
            verbose: int = 0,
-           prefix: str = ''):
+           prefix: str = '') \
+            -> Tuple[numpy.ndarray, float, float, int, int, List[Tuple[float, float, float]]]:
    """
-   Solve the given linear system (Ax = b) for x, using the FGMRES algorithm. 
+   Solve the given linear system (Ax = b) for x, using the FGMRES algorithm.
 
    Mandatory arguments:
    A              -- System matrix. This may be an operator that when applied to a vector [v] results in A*v
@@ -118,7 +119,7 @@ def fgmres(A: MatvecOperator,
    # Check for early stop
    norm_b = global_norm(b)
    if norm_b == 0.0:
-      return numpy.zeros_like(b), 0., 0, 0, 0, [(0.0, time() - t_start, 0)]
+      return numpy.zeros_like(b), 0., 0., 0, 0, [(0.0, time() - t_start, 0.0)]
 
    tol_relative = tol * norm_b
 

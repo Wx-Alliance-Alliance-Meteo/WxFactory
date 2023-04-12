@@ -179,7 +179,7 @@ class SolverStatsOutput:
       self.columns.solver_time.value      = local_time
       self.columns.solver_flag.value      = flag
 
-      if len(self.param.exp_smoothe_spectral_radii) > 0:
+      if len(self.param.exp_smoothe_spectral_radii) > 0 and precond is not None:
          if len(precond.spectral_radii) > 0: self.columns.exp_radius_0.value = precond.spectral_radii[0]
          if len(precond.spectral_radii) > 1: self.columns.exp_radius_1.value = precond.spectral_radii[1]
          if len(precond.spectral_radii) > 2: self.columns.exp_radius_2.value = precond.spectral_radii[2]
@@ -227,11 +227,11 @@ def _sanitize_params(params: Configuration) -> Configuration:
       new_p.exp_smoothe_spectral_radii = []
       new_p.exp_smoothe_nb_iters = []
    elif new_p.preconditioner in ['p-mg', 'fv-mg']:
-      if new_p.mg_smoother not in ['erk1', 'erk3']:
+      if new_p.mg_smoother in ['kiops', 'exp']:
          new_p.pseudo_cfl = 0.0
-      if new_p.mg_smoother not in ['kiops']:
+      if new_p.mg_smoother in ['erk1', 'erk3', 'ark1', 'exp']:
          new_p.kiops_dt_factor = 0.0
-      if new_p.mg_smoother not in ['exp']:
+      if new_p.mg_smoother in ['erk1', 'erk3', 'ark1', 'kiops']:
          new_p.exp_smoothe_spectral_radii = []
          new_p.exp_smoothe_nb_iters = []
 

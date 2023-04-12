@@ -1,13 +1,15 @@
 from typing import Optional
 
-from geometry                 import Cartesian2D, CubedSphere
-from init.initialize          import Topo
-from rhs.rhs_bubble           import rhs_bubble
-from rhs.rhs_bubble_fv        import rhs_bubble_fv
-from rhs.rhs_bubble_implicit  import rhs_bubble_implicit
-from rhs.rhs_euler            import rhs_euler
-from rhs.rhs_euler_fv         import rhs_euler_fv
-from rhs.rhs_sw               import rhs_sw
+from geometry                  import Cartesian2D, CubedSphere
+from init.initialize           import Topo
+from rhs.rhs_bubble            import rhs_bubble
+from rhs.rhs_bubble_convective import rhs_bubble as rhs_bubble_convective
+from rhs.rhs_bubble_fv         import rhs_bubble_fv
+from rhs.rhs_bubble_implicit   import rhs_bubble_implicit
+from rhs.rhs_euler             import rhs_euler
+from rhs.rhs_euler_convective  import rhs_euler_convective
+from rhs.rhs_euler_fv          import rhs_euler_fv
+from rhs.rhs_sw                import rhs_sw
 
 # For type hints
 from common.parallel        import DistributedWorld
@@ -35,6 +37,11 @@ class RhsBundle:
                q, geom, operators, metric, ptopo, param.nbsolpts, param.nb_elements_horizontal,
                param.nb_elements_vertical, param.case_number)
 
+         self.convective = lambda q: rhs_euler_convective(
+            q, geom, operators, metric, ptopo, param.nbsolpts, param.nb_elements_horizontal,
+            param.nb_elements_vertical, param.case_number)
+         self.viscous = lambda q: self.full(q) - self.convective(q)
+
       elif param.equations == 'euler' and isinstance(geom, Cartesian2D):
          if param.discretization == 'dg':
             self.full = lambda q: rhs_bubble(
@@ -47,6 +54,10 @@ class RhsBundle:
          self.implicit = lambda q: rhs_bubble_implicit(
             q, geom, operators, param.nbsolpts, param.nb_elements_horizontal, param.nb_elements_vertical)
          self.explicit = lambda q: self.full(q) - self.implicit(q)
+
+         self.convective = lambda q: rhs_bubble_convective(
+            q, geom, operators, param.nbsolpts, param.nb_elements_horizontal, param.nb_elements_vertical)
+         self.viscous = lambda q: self.full(q) - self.convective(q)
 
       elif param.equations == "shallow_water":
          self.full = lambda q: rhs_sw(
