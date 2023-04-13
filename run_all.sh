@@ -3,18 +3,25 @@ methods=("call_p294_og.bat" "call_p294_cwy1s.bat" "call_p294_cwyne.bat" "call_p2
 methodlen=${#methods[@]}
 
 #for case 5
-for ((k = 0; k $methodlen; k++)); do
-     ord_soumet -cpus 294 -jn gef_294_c5 -mpi -clone 7 -share e bat_files/case5/${methods[$k]}
+for ((k = 0; k < $methodlen; k++)); do
+    ord_soumet -cpus 294                                    \
+               -w 180                                       \
+               -jn gef_294_c5_${k}                          \
+               -mpi                                         \
+               -clone 7                                     \
+               -share e                                     \
+               -jobfile bat_files/case5/${methods[$k]}      \
+               -listing $(pwd)/listings
 done
 
 #for case 6
-for ((k = 0; k $methodlen; k++)); do
-     ord_soumet -cpus 294 -jn gef_294_c6 -mpi -clone 7 -share e bat_files/case6/${methods[$k]}
+for ((k = 0; k < $methodlen; k++)); do
+    ord_soumet -cpus 294 -jn gef_294_c6_${k} -mpi -clone 7 -share e -jobfile bat_files/case6/${methods[$k]} -listing $(pwd)/listings
 done
 
 #for case 8
-for ((k = 0; k $methodlen; k++)); do
-     ord_soumet -cpus 294 -jn gef_294_c8 -mpi -clone 7 -share e bat_files/case8/${methods[$k]}
+for ((k = 0; k < $methodlen; k++)); do
+    ord_soumet -cpus 294 -jn gef_294_c8_${k} -mpi -clone 7 -share e -jobfile bat_files/case8/${methods[$k]} -listing $(pwd)/listings
 done
 
 
