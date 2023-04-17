@@ -9,12 +9,11 @@ from .integrator            import Integrator
 from solvers                import fgmres, matvec_rat, SolverInfo
 
 class Ros2(Integrator):
-   def __init__(self, param: Configuration, rhs_handle: Callable, preconditioner=None, verbose=False) -> None:
+   def __init__(self, param: Configuration, rhs_handle: Callable, preconditioner=None) -> None:
       super().__init__(param, preconditioner)
       self.rhs_handle     = rhs_handle
       self.tol            = param.tolerance
       self.gmres_restart  = param.gmres_restart
-      self.verbose_solver = verbose
 
    def __step__(self, Q: numpy.ndarray, dt: float):
 
