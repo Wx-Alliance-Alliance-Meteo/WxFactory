@@ -3,10 +3,11 @@ import math
 from mpi4py import MPI
 import numpy
 import scipy.linalg
+#import mpi4py.MPI
 
 def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 1, mmax = 128, reuse_info = True, task1 = False):
    
-   rank = mpi4py.MPI.COMM_WORLD.Get_rank()
+   rank = MPI.COMM_WORLD.Get_rank()
 
    ppo, n = u.shape
    p = ppo - 1
