@@ -10,6 +10,7 @@ from rhs.rhs_euler             import rhs_euler
 from rhs.rhs_euler_convective  import rhs_euler_convective
 from rhs.rhs_euler_fv          import rhs_euler_fv
 from rhs.rhs_sw                import rhs_sw
+from rhs.rhs_advection2d       import rhs_advection2d
 
 # For type hints
 from common.parallel        import DistributedWorld
@@ -60,5 +61,9 @@ class RhsBundle:
          self.viscous = lambda q: self.full(q) - self.convective(q)
 
       elif param.equations == "shallow_water":
-         self.full = lambda q: rhs_sw(
-            q, geom, operators, metric, topo, ptopo, param.nbsolpts, param.nb_elements_horizontal)
+         if param.case_number < 1: # Pure advection
+            self.full = lambda q: rhs_advection2d(
+               q, geom, operators, metric, ptopo, param.nbsolpts, param.nb_elements_horizontal)
+         else:
+            self.full = lambda q: rhs_sw(
+               q, geom, operators, metric, topo, ptopo, param.nbsolpts, param.nb_elements_horizontal)

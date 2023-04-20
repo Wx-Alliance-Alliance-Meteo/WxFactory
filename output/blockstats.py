@@ -3,7 +3,7 @@ import math
 from mpi4py import MPI
 import numpy
 
-from init.shallow_water_test import height_case1, height_case2, height_unsteady_zonal
+from init.shallow_water_test import height_vortex, height_case1, height_case2, height_unsteady_zonal
 from output.diagnostic       import total_energy, potential_enstrophy, global_integral
 
 def blockstats(Q, geom, topo, metric, mtrx, param, step):
