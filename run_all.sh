@@ -1,30 +1,30 @@
 
 
 #for case 5
-ord_soumet -cpus 864                                    \
+ord_soumet -cpus 1176                                    \
            -w 180                                       \
-           -jn gef_864_c5                               \
+           -jn gef_1176_c5                               \
            -mpi                                         \
            -share e                                     \
-           -jobfile bat_files/case5/call_p864.bat       \
+           -jobfile bat_files/case5/call_p1176.bat       \
            -listing $(pwd)/listings
 
 #for case 6
-ord_soumet -cpus 864                                    \
+ord_soumet -cpus 1176                                    \
            -w 180                                       \
-           -jn gef_864_c6                               \
+           -jn gef_1176_c6                               \
            -mpi                                         \
            -share e                                     \
-           -jobfile bat_files/case6/call_p864.bat       \
+           -jobfile bat_files/case6/call_p1176.bat       \
            -listing $(pwd)/listings
 
 #for case 8
-ord_soumet -cpus 864                                    \
+ord_soumet -cpus 1176                                    \
            -w 180                                       \
-           -jn gef_864_c8                               \
+           -jn gef_1176_c8                               \
            -mpi                                         \
            -share e                                     \
-           -jobfile bat_files/case8/call_p864.bat       \
+           -jobfile bat_files/case8/call_p1176.bat       \
            -listing $(pwd)/listings
 
 
