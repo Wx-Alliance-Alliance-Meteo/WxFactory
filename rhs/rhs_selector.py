@@ -7,6 +7,7 @@ from init.initialize          import Topo
 from rhs.rhs_bubble           import rhs_bubble
 from rhs.rhs_bubble_fv        import rhs_bubble_fv
 from rhs.rhs_bubble_implicit  import rhs_bubble_implicit
+from rhs.rhs_bubble_explicit  import rhs_bubble_explicit
 from rhs.rhs_euler            import rhs_euler
 from rhs.rhs_euler_fv         import rhs_euler_fv
 from rhs.rhs_sw               import rhs_sw
@@ -52,7 +53,7 @@ def rhs_selector(geom: Geometry,
 
       rhs_implicit = lambda q: rhs_bubble_implicit(
          q, geom, operators, param.nbsolpts, param.nb_elements_horizontal, param.nb_elements_vertical)
-      rhs_explicit = lambda q: rhs_handle(q) - rhs_implicit(q)
+      rhs_explicit = lambda q: rhs_bubble_explicit(q, geom, operators, param.nbsolpts, param.nb_elements_horizontal, param.nb_elements_vertical)
 
    elif param.equations == "shallow_water":
       rhs_handle = lambda q: rhs_sw(

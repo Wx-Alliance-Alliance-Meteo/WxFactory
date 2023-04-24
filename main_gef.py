@@ -183,11 +183,11 @@ def create_time_integrator(param: Configuration,
    if param.time_integrator == 'imex2':
       return Imex2(param, rhs_explicit, rhs_implicit)
    if param.time_integrator == 'strang_epi2_ros2':
-      stepper1 = Epi(param, 2, rhs_explicit)
-      stepper2 = Ros2(param, rhs_implicit, preconditioner=preconditioner)
+      stepper1 = Epi(param, 2, rhs_explicit)  
+      stepper2 = Epi(param, 2, rhs_implicit)
       return StrangSplitting(param, stepper1, stepper2)
    if param.time_integrator == 'strang_ros2_epi2':
-      stepper1 = Ros2(param, rhs_implicit, preconditioner=preconditioner)
+      stepper1 = Epi(param, 2, rhs_implicit)
       stepper2 = Epi(param, 2, rhs_explicit)
       return StrangSplitting(param, stepper1, stepper2)
    if param.time_integrator == 'rosexp2':
