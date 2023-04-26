@@ -30,6 +30,8 @@ def main(argv) -> int:
    # Set up distributed world
    ptopo = DistributedWorld() if param.grid_type == 'cubed_sphere' else None
 
+   adjust_nb_elements(param)
+
    # Create the mesh
    geom = create_geometry(param, ptopo)
 
@@ -104,6 +106,23 @@ def main(argv) -> int:
    output.finalize()
 
    return MPI.COMM_WORLD.rank
+
+def adjust_nb_elements(param: Configuration):
+   """ Adjust number of horizontal elements in the parameters so that it corresponds to the number *per processor* """
+   if param.grid_type == 'cubed_sphere':
+      allowed_pe_counts = [i**2 * 6 
+                           for i in range(1, param.nb_elements_horizontal // 2 + 1)
+                           if (param.nb_elements_horizontal % i) == 0]
+      if MPI.COMM_WORLD.size not in allowed_pe_counts:
+         raise ValueError(f'Invalid number of processors for this particular problem size. '
+                          f'Allowed counts are {allowed_pe_counts}')
+      num_pe_per_tile = MPI.COMM_WORLD.size // 6
+      num_pe_per_line = int(numpy.sqrt(num_pe_per_tile))
+      param.nb_elements_horizontal = param.nb_elements_horizontal_total // num_pe_per_line
+      if MPI.COMM_WORLD.rank == 0:
+         print(f'Adjusting horizontal number of elements from {param.nb_elements_horizontal_total} (total) '
+               f'to {param.nb_elements_horizontal} (per PE)')
+         print(f'allowd_pe_counts = {allowed_pe_counts}')
 
 def create_geometry(param: Configuration, ptopo: Optional[DistributedWorld]) -> Geometry:
    """ Create the appropriate geometry for the given problem """

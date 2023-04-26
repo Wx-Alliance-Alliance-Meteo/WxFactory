@@ -40,7 +40,10 @@ class DistributedWorld:
       self.nb_lines_per_panel = int(math.sqrt(self.nb_pe_per_panel))
 
       if self.size < 6 or self.nb_pe_per_panel != self.nb_lines_per_panel**2 or self.nb_pe_per_panel * 6 != self.size:
-         raise Exception(f'Wrong number of PEs ({self.size}). This topology is not allowed')
+         allowed_low = self.nb_lines_per_panel**2 * 6
+         allowed_high = (self.nb_lines_per_panel + 1)**2 * 6
+         raise Exception(f'Wrong number of PEs ({self.size}). '
+                         f'Closest allowed processor counts are {allowed_low} and {allowed_high}')
 
       self.nb_elems_per_line = self.nb_lines_per_panel
 
