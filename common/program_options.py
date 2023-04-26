@@ -60,6 +60,7 @@ class Configuration:
       self.nb_elements_horizontal = self._get_option('Spatial_discretization', 'nb_elements_horizontal', int, None)
       self.nb_elements_vertical   = self._get_option('Spatial_discretization', 'nb_elements_vertical', int, 1)
       self.initial_nbsolpts       = self.nbsolpts
+      self.nb_elements_horizontal_total = self.nb_elements_horizontal
 
       self.filter_apply  = self._get_option('Spatial_discretization', 'filter_apply', bool, False)
       self.filter_order  = self._get_option('Spatial_discretization', 'filter_order', int,
