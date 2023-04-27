@@ -1,12 +1,15 @@
 import functools
 from copy         import deepcopy
+import sys
 from time         import time
 from typing       import Callable, List, Optional
 
 from mpi4py import MPI
 import numpy
 
-from common.definitions    import idx_2d_rho, idx_2d_rho_u, idx_2d_rho_w
+from common.definitions    import idx_2d_rho, idx_2d_rho_u, idx_2d_rho_w, \
+                                  idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_w, idx_rho_theta, \
+                                  cpd, cvd, heat_capacity_ratio, p0, Rd
 from common.interpolation  import Interpolator
 from geometry              import Cartesian2D, CubedSphere, DFROperators
 from init.init_state_vars  import init_state_vars
@@ -50,7 +53,6 @@ class MultigridLevel:
       self.num_post_smoothe = self.param.num_post_smoothe
 
       self.ndim = ndim
-      self.grid_scaling = param.nb_elements_horizontal / nb_elem_horiz # Only valid for FV?
 
       verbose = self.param.verbose_precond and ptopo.rank == 0
 
@@ -61,7 +63,6 @@ class MultigridLevel:
             f' target order = {target_order}, nbsolpts = {p.nbsolpts}'
             f' num_mg_levels: {p.num_mg_levels}'
             f' exp radius: {p.exp_smoothe_spectral_radius}'
-            f' grid scaling: {self.grid_scaling:.2f}'
             # f' work ratio = {self.work_ratio}'
             )
 
@@ -119,17 +120,62 @@ class MultigridLevel:
          # factor = 1.0 / (self.ndim * (2 * self.param.nbsolpts + 1))
          factor = 1.0 / (2 * (2 * self.param.nbsolpts + 1))
 
-         delta_min = 0.0
+         min_geo = min(self.geometry.Δx1, min(self.geometry.Δx2, self.geometry.Δx3))
+         sound_speed = -1.0
          if isinstance(self.geometry, Cartesian2D):
-            delta_min = abs(1.- self.geometry.solutionPoints[-1])                                                      \
-                        * min(self.geometry.Δx1, min(self.geometry.Δx2, self.geometry.Δx3))
+            delta_min = abs(1.- self.geometry.solutionPoints[-1]) * min_geo
+            speed_x = abs(343. +  field[idx_2d_rho_u] /  field[idx_2d_rho])
+            speed_z = abs(343. +  field[idx_2d_rho_w] /  field[idx_2d_rho])
+            speed_max = numpy.maximum(speed_x, speed_z)
+
          elif isinstance(self.geometry, CubedSphere):
-            delta_min = abs(1.- self.geometry.solutionPoints[-1]) * self.grid_scaling
+            pressure = p0 * numpy.exp((cpd/cvd) * numpy.log((Rd/p0)*field[idx_rho_theta]))
+            sound_speed = numpy.sqrt(heat_capacity_ratio * pressure / field[idx_rho])
+            # sound_speed = 330.0
 
-         speed_max = numpy.maximum( abs( 343. +  field[idx_2d_rho_u,:,:] /  field[idx_2d_rho,:,:] ),
-                                    abs( 343. +  field[idx_2d_rho_w,:,:] /  field[idx_2d_rho,:,:]) )
+            delta_min = abs(1.- self.geometry.solutionPoints[-1])
 
-         self.pseudo_dt = numpy.amin(delta_min * factor / speed_max) * cfl / dt
+            sound_x =  numpy.sqrt(self.metric.H_contra_11) * sound_speed
+            sound_y =  numpy.sqrt(self.metric.H_contra_22) * sound_speed
+            sound_z =  numpy.sqrt(self.metric.H_contra_33) * sound_speed
+
+            speed_x = abs(field[idx_rho_u1] / field[idx_rho])
+            speed_y = abs(field[idx_rho_u2] / field[idx_rho])
+            speed_z = abs(field[idx_rho_w]  / field[idx_rho])
+
+            speed_max = numpy.maximum(numpy.maximum(sound_x + speed_x, sound_y + speed_y), sound_z + speed_z)
+
+            tile_shape = (field.shape[0],)
+            for _ in range(field.ndim - 1): tile_shape += (1,)
+            speed_max = numpy.ravel(numpy.tile(speed_max, tile_shape))
+            # speed_max = numpy.amax(speed_max)
+
+         else:
+            raise ValueError(f'Unrecognized type for Geometry object')
+
+         # self.pseudo_dt = numpy.amin(delta_min * factor / speed_max) * cfl / dt
+         self.pseudo_dt = (delta_min * factor / speed_max) * cfl / dt
+
+         if self.verbose > 1 and MPI.COMM_WORLD.rank == 0:
+            sp_z = numpy.mean(speed_z)
+            so_z = numpy.mean(sound_z)
+            sp_z_max = numpy.amax(speed_z)
+            so_z_max = numpy.amax(sound_z)
+            min_dt = numpy.amin(self.pseudo_dt)
+            max_dt = numpy.amax(self.pseudo_dt)
+            avg_dt = numpy.mean(self.pseudo_dt)
+            print(
+                  # f'factor {abs(1.- self.geometry.solutionPoints[-1])},'
+                  f' h_33 {numpy.mean(numpy.sqrt(self.metric.H_contra_33)):.4f}'
+                  f', min {min_geo:.3f}'
+                  f', delta {delta_min:.3f}'
+                  f', pseudo_dt = {avg_dt:.2e} ({min_dt:.2e} - {max_dt:.2e})'
+                  f', speed max = {numpy.amax(speed_max):.2e} (avg {numpy.mean(speed_max):.2e})'
+                  f', sound_speed = {numpy.mean(sound_speed):.2e} ({numpy.max(sound_speed):.2e})'
+                  f', speed_z / sound_z = {sp_z / so_z :.3f} ({sp_z_max / so_z_max :.3f})')
+            sys.stdout.flush()
+            # raise ValueError
+
          if self.verbose > 0:
             print(f'pseudo_dt = {self.pseudo_dt}')
 

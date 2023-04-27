@@ -275,8 +275,8 @@ class RK3Smoother(Smoother):
 
       return x
 
-class ARK3Smoother(Smoother):
-   """3-stage additive Runke-Kutta smoother."""
+class ARKSmoother(Smoother):
+   """Base additive Runge-Kutta smoother."""
    def __init__(self, h: float, field: numpy.ndarray, dt: float, rhs: RhsBundle) -> None:
       super().__init__()
       self.h = h
@@ -299,6 +299,9 @@ class ARK3Smoother(Smoother):
       return x - (self.dt / 2.0) * (matvec_fun(x, self.dt, self.field, self.rhs_full_0, self.rhs.full) \
                                     - matvec_fun(x, self.dt, self.field, self.rhs_conv_0, self.rhs.convective))
 
+
+class ARK3Smoother(ARKSmoother):
+   """3-stage additive Runke-Kutta smoother."""
    def __smoothe__(self, A: _MatvecOp, b: numpy.ndarray, x: numpy.ndarray) -> numpy.ndarray:
       alpha1 = 0.145
       alpha2 = 0.395

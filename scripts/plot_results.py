@@ -175,20 +175,20 @@ class FullDataSet:
       time_condition += f'solver_tol < 10.0 AND '
 
       t0 = time()
-      # self.no_precond = []
-      self.no_precond = self._extract_result_set(
-         ['time_integrator', 'solver_tol', 'initial_dt', 'precond'],
-         time_condition + 'precond = "none"')
+      self.no_precond = []
+      # self.no_precond = self._extract_result_set(
+      #    ['time_integrator', 'solver_tol', 'initial_dt', 'precond'],
+      #    time_condition + 'precond = "none"')
 
       # no_precond_time = no_precond[0]['time_avg']
       # print(f'precond avg = {no_precond_time}')
 
       t1 = time()
-      # self.fv_ref = []
-      self.fv_ref = self._extract_result_set(
-         ['time_integrator', 'solver_tol', 'precond_tol', 'initial_dt', 'precond'],
-         time_condition + f'precond = "fv"',
-         num_best=3)
+      self.fv_ref = []
+      # self.fv_ref = self._extract_result_set(
+      #    ['time_integrator', 'solver_tol', 'precond_tol', 'initial_dt', 'precond'],
+      #    time_condition + f'precond = "fv"',
+      #    num_best=3)
 
       t2 = time()
       self.p_mg = self._extract_result_set(
