@@ -221,7 +221,8 @@ class Configuration:
    def __str__(self):
       out = 'Configuration: \n'
       for section_name, section_options in self.sections.items():
-         out += f' - {section_name}'
+         out += '\n'
+         out += f'  {" " + section_name + " ":-^80s}  '
          long_options = {}
          i = 0
          for option in section_options:
@@ -233,6 +234,7 @@ class Configuration:
             else:
                long_options[option] = val
                # i = 1
+         if i % 2 == 1: out += ' |'
 
          for name, val in long_options.items():
             out += f'\n | {name:27s}: {val}'

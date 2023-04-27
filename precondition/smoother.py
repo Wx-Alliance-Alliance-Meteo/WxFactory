@@ -15,7 +15,7 @@ _Rhs      = Callable[[numpy.ndarray], numpy.ndarray]
 class Smoother(ABC):
    @abstractmethod
    def __smoothe__(self, A: _MatvecOp, b: numpy.ndarray, x: numpy.ndarray) -> numpy.ndarray:
-      pass
+      raise ValueError("You can't call an abstract method!")
 
    def __call__(self, A: _MatvecOp, b: numpy.ndarray, x: numpy.ndarray) -> numpy.ndarray:
       return self.__smoothe__(A, b, x)

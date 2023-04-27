@@ -255,15 +255,15 @@ class Metric3DTopo:
 
          if (deep):
             Hcov[0,0,:] = (Δx**2/4)*(R**2/del4*(1+X**2)**2*(1+Y**2) + dRdx1**2) # g_11
-            
+
             Hcov[0,1,:] = (Δx*Δy/4)*(-R**2/del4*X*Y*(1+X**2)*(1+Y**2) + dRdx1*dRdx2) # g_12
             Hcov[1,0,:] = Hcov[0,1,:] # g_21 (by symmetry)
-            
+
             Hcov[0,2,:] = Δeta*Δx/4*dRdx1*dRdeta # g_13
             Hcov[2,0,:] = Hcov[0,2,:] # g_31 by symmetry
 
             Hcov[1,1,:] = Δy**2/4*(R**2/del4*(1+X**2)*(1+Y**2)**2 + dRdx2**2) # g_22
-            
+
             Hcov[1,2,:] = Δeta*Δy/4*dRdx2*dRdeta # g_23
             Hcov[2,1,:] = Hcov[1,2,:] # g_32 by symmetry
 
@@ -289,15 +289,15 @@ class Metric3DTopo:
             rootG[:] = (Δx/2)*(Δy/2)*(Δeta/2)*R**2*(1+X**2)*(1+Y**2)*numpy.abs(dRdeta)/delsq**(1.5)  
          else: # Shallow, so all bare R terms become A terms
             Hcov[0,0,:] = (Δx**2/4)*(A**2/del4*(1+X**2)**2*(1+Y**2) + dRdx1**2) # g_11
-            
+
             Hcov[0,1,:] = (Δx*Δy/4)*(-A**2/del4*X*Y*(1+X**2)*(1+Y**2) + dRdx1*dRdx2) # g_12
             Hcov[1,0,:] = Hcov[0,1,:] # g_21 (by symmetry)
-            
+
             Hcov[0,2,:] = Δeta*Δx/4*dRdx1*dRdeta # g_13
             Hcov[2,0,:] = Hcov[0,2,:] # g_31 by symmetry
 
             Hcov[1,1,:] = Δy**2/4*(A**2/del4*(1+X**2)*(1+Y**2)**2 + dRdx2**2) # g_22
-            
+
             Hcov[1,2,:] = Δeta*Δy/4*dRdx2*dRdeta # g_23
             Hcov[2,1,:] = Hcov[1,2,:] # g_32 by symmetry
 
