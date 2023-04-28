@@ -49,7 +49,7 @@ class OutputManager:
             from output.output_cartesian import output_step
 
             self.output_file_name = lambda step_id: \
-               f'{self.param.output_dir}/bubble_{self.param.case_number}_{step_id:05d}'
+               f'{self.param.output_dir}/bubble_{self.param.case_number}_{step_id:08d}'
             self.step_function = lambda Q, step_id: \
                output_step(Q, self.geometry, self.param, self.output_file_name(step_id))
 
@@ -67,8 +67,9 @@ class OutputManager:
 
    def state_file_name(self, step_id: int) -> str:
       """Return the name of the file where to save the state vector for the current problem, for the given timestep."""
-      base_name = f'state_vector_{self.config_hash:012x}_{MPI.COMM_WORLD.rank:03d}'
-      return f'{self.param.output_dir}/{base_name}.{step_id:05d}.npy'
+      base_name = f'state_vector_{MPI.COMM_WORLD.rank:03d}'
+      #base_name = f'state_vector_{self.config_hash:012x}_{MPI.COMM_WORLD.rank:03d}'
+      return f'{self.param.output_dir}/{base_name}.{step_id:08d}.npy'
 
    def step(self, Q: numpy.ndarray, step_id: int) -> None:
       """Output the result of the latest timestep."""

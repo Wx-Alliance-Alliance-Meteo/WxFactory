@@ -1,0 +1,1048 @@
+
+Loading config: ./config/gaussian_bubble_testOS.ini
+['General', 'Grid', 'Test_case', 'Time_integration', 'Preconditioning', 'Spatial_discretization', 'Output_options']
+ 
+Configuration: 
+ - General
+ | equations                  : euler       | depth_approx               : deep       
+ - Test_case
+ | case_number                : 2           | bubble_theta               : 303.15     
+ | bubble_rad                 : 250.0      
+ - Time_integration
+ | dt                         : 2.0         | t_end                      : 500.0      
+ | tolerance                  : 1e-10       | starting_step              : 0          
+ | exponential_solver         : kiops       | krylov_size                : 10         
+ | jacobian_method            : fd          | verbose_solver             : 1          
+ | gmres_restart              : 30         
+ | time_integrator            : backward_euler
+ - Spatial_discretization
+ | nbsolpts                   : 5           | nb_elements_horizontal     : 19         
+ | nb_elements_vertical       : 30          | filter_apply               : False      
+ | filter_order               : 4           | filter_cutoff              : 0.5        
+ | expfilter_apply            : False       | expfilter_order            : 0          
+ | expfilter_strength         : 0           | expfilter_cutoff           : 0          
+ - Grid
+ | grid_type                  : cartesian2d | discretization             : dg         
+ | λ0                         : 0.0         | ϕ0                         : 0.0        
+ | α0                         : 0.0         | ztop                       : 0.0        
+ | x0                         : 0.0         | x1                         : 1000.0     
+ | z0                         : 0.0         | z1                         : 1500.0     
+ - Preconditioning
+ | preconditioner             : none        | num_mg_levels              : 1          
+ | precond_tolerance          : 0.1         | num_pre_smoothe            : 1          
+ | num_post_smoothe           : 1           | mg_smoother                : exp        
+ | exp_smoothe_spectral_radii : [2.0]       | exp_smoothe_nb_iters       : [4]        
+ | mg_solve_coarsest          : False       | kiops_dt_factor            : 1.2        
+ | verbose_precond            : 0           | dg_to_fv_interp            : lagrange   
+ | pseudo_cfl                 : 5.0        
+ - Output_options
+ | stat_freq                  : 1           | output_freq                : 0          
+ | save_state_freq            : 50          | store_solver_stats         : True       
+ | base_output_file           : out        
+ | output_dir                 : /home/vicky/documents/eccc/gef_pull_april17/gef/vicky/testoutput/backward_euler_scipy_optimize_newton_krylov_tol_1e-10_dt_2.0_tf_500
+ | solver_stats_file          : solver_stats.db
+
+Solution points : [-0.90617985 -0.53846931  0.          0.53846931  0.90617985]
+GL weights : [0.23692688505618908, 0.47862867049936647, 0.5688888888888889, 0.47862867049936647, 0.23692688505618908]
+domain: (0.0, 1000.0), (0.0, 1500.0)
+grid size: 52.63157894736842, 50.0
+
+Step 1 of 250
+A solution was found after 270 steps of the JFNK method.
+Elapsed time for step: 98.258 secs
+
+Step 2 of 250
+A solution was found after 265 steps of the JFNK method.
+Elapsed time for step: 96.257 secs
+
+Step 3 of 250
+A solution was found after 240 steps of the JFNK method.
+Elapsed time for step: 87.569 secs
+
+Step 4 of 250
+A solution was found after 225 steps of the JFNK method.
+Elapsed time for step: 81.973 secs
+
+Step 5 of 250
+A solution was found after 214 steps of the JFNK method.
+Elapsed time for step: 77.905 secs
+
+Step 6 of 250
+A solution was found after 204 steps of the JFNK method.
+Elapsed time for step: 74.012 secs
+
+Step 7 of 250
+A solution was found after 193 steps of the JFNK method.
+Elapsed time for step: 69.995 secs
+
+Step 8 of 250
+A solution was found after 184 steps of the JFNK method.
+Elapsed time for step: 67.068 secs
+
+Step 9 of 250
+A solution was found after 181 steps of the JFNK method.
+Elapsed time for step: 66.022 secs
+
+Step 10 of 250
+A solution was found after 178 steps of the JFNK method.
+Elapsed time for step: 64.751 secs
+
+Step 11 of 250
+A solution was found after 179 steps of the JFNK method.
+Elapsed time for step: 64.964 secs
+
+Step 12 of 250
+A solution was found after 180 steps of the JFNK method.
+Elapsed time for step: 65.441 secs
+
+Step 13 of 250
+A solution was found after 179 steps of the JFNK method.
+Elapsed time for step: 65.491 secs
+
+Step 14 of 250
+A solution was found after 178 steps of the JFNK method.
+Elapsed time for step: 64.893 secs
+
+Step 15 of 250
+A solution was found after 178 steps of the JFNK method.
+Elapsed time for step: 64.589 secs
+
+Step 16 of 250
+A solution was found after 176 steps of the JFNK method.
+Elapsed time for step: 64.239 secs
+
+Step 17 of 250
+A solution was found after 177 steps of the JFNK method.
+Elapsed time for step: 64.295 secs
+
+Step 18 of 250
+A solution was found after 176 steps of the JFNK method.
+Elapsed time for step: 64.250 secs
+
+Step 19 of 250
+A solution was found after 176 steps of the JFNK method.
+Elapsed time for step: 66.567 secs
+
+Step 20 of 250
+A solution was found after 175 steps of the JFNK method.
+Elapsed time for step: 66.098 secs
+
+Step 21 of 250
+A solution was found after 174 steps of the JFNK method.
+Elapsed time for step: 66.001 secs
+
+Step 22 of 250
+A solution was found after 175 steps of the JFNK method.
+Elapsed time for step: 64.999 secs
+
+Step 23 of 250
+A solution was found after 174 steps of the JFNK method.
+Elapsed time for step: 64.667 secs
+
+Step 24 of 250
+A solution was found after 174 steps of the JFNK method.
+Elapsed time for step: 64.689 secs
+
+Step 25 of 250
+A solution was found after 173 steps of the JFNK method.
+Elapsed time for step: 64.471 secs
+
+Step 26 of 250
+A solution was found after 173 steps of the JFNK method.
+Elapsed time for step: 64.220 secs
+
+Step 27 of 250
+A solution was found after 173 steps of the JFNK method.
+Elapsed time for step: 64.414 secs
+
+Step 28 of 250
+A solution was found after 172 steps of the JFNK method.
+Elapsed time for step: 63.667 secs
+
+Step 29 of 250
+A solution was found after 173 steps of the JFNK method.
+Elapsed time for step: 65.108 secs
+
+Step 30 of 250
+A solution was found after 172 steps of the JFNK method.
+Elapsed time for step: 63.869 secs
+
+Step 31 of 250
+A solution was found after 172 steps of the JFNK method.
+Elapsed time for step: 63.962 secs
+
+Step 32 of 250
+A solution was found after 172 steps of the JFNK method.
+Elapsed time for step: 63.841 secs
+
+Step 33 of 250
+A solution was found after 173 steps of the JFNK method.
+Elapsed time for step: 64.031 secs
+
+Step 34 of 250
+A solution was found after 172 steps of the JFNK method.
+Elapsed time for step: 63.789 secs
+
+Step 35 of 250
+A solution was found after 172 steps of the JFNK method.
+Elapsed time for step: 64.870 secs
+
+Step 36 of 250
+A solution was found after 172 steps of the JFNK method.
+Elapsed time for step: 64.079 secs
+
+Step 37 of 250
+A solution was found after 171 steps of the JFNK method.
+Elapsed time for step: 63.577 secs
+
+Step 38 of 250
+A solution was found after 171 steps of the JFNK method.
+Elapsed time for step: 63.534 secs
+
+Step 39 of 250
+A solution was found after 171 steps of the JFNK method.
+Elapsed time for step: 63.535 secs
+
+Step 40 of 250
+A solution was found after 171 steps of the JFNK method.
+Elapsed time for step: 63.573 secs
+
+Step 41 of 250
+A solution was found after 171 steps of the JFNK method.
+Elapsed time for step: 64.066 secs
+
+Step 42 of 250
+A solution was found after 172 steps of the JFNK method.
+Elapsed time for step: 64.081 secs
+
+Step 43 of 250
+A solution was found after 172 steps of the JFNK method.
+Elapsed time for step: 63.840 secs
+
+Step 44 of 250
+A solution was found after 171 steps of the JFNK method.
+Elapsed time for step: 63.422 secs
+
+Step 45 of 250
+A solution was found after 172 steps of the JFNK method.
+Elapsed time for step: 64.033 secs
+
+Step 46 of 250
+A solution was found after 174 steps of the JFNK method.
+Elapsed time for step: 64.497 secs
+
+Step 47 of 250
+A solution was found after 173 steps of the JFNK method.
+Elapsed time for step: 64.264 secs
+
+Step 48 of 250
+A solution was found after 174 steps of the JFNK method.
+Elapsed time for step: 64.566 secs
+
+Step 49 of 250
+A solution was found after 174 steps of the JFNK method.
+Elapsed time for step: 64.632 secs
+
+Step 50 of 250
+A solution was found after 174 steps of the JFNK method.
+Elapsed time for step: 64.514 secs
+
+Step 51 of 250
+A solution was found after 175 steps of the JFNK method.
+Elapsed time for step: 64.887 secs
+
+Step 52 of 250
+A solution was found after 176 steps of the JFNK method.
+Elapsed time for step: 65.464 secs
+
+Step 53 of 250
+A solution was found after 176 steps of the JFNK method.
+Elapsed time for step: 64.760 secs
+
+Step 54 of 250
+A solution was found after 175 steps of the JFNK method.
+Elapsed time for step: 63.664 secs
+
+Step 55 of 250
+A solution was found after 177 steps of the JFNK method.
+Elapsed time for step: 64.506 secs
+
+Step 56 of 250
+A solution was found after 178 steps of the JFNK method.
+Elapsed time for step: 64.764 secs
+
+Step 57 of 250
+A solution was found after 178 steps of the JFNK method.
+Elapsed time for step: 64.788 secs
+
+Step 58 of 250
+A solution was found after 178 steps of the JFNK method.
+Elapsed time for step: 64.628 secs
+
+Step 59 of 250
+A solution was found after 179 steps of the JFNK method.
+Elapsed time for step: 65.295 secs
+
+Step 60 of 250
+A solution was found after 181 steps of the JFNK method.
+Elapsed time for step: 65.838 secs
+
+Step 61 of 250
+A solution was found after 183 steps of the JFNK method.
+Elapsed time for step: 66.638 secs
+
+Step 62 of 250
+A solution was found after 183 steps of the JFNK method.
+Elapsed time for step: 66.629 secs
+
+Step 63 of 250
+A solution was found after 184 steps of the JFNK method.
+Elapsed time for step: 66.910 secs
+
+Step 64 of 250
+A solution was found after 185 steps of the JFNK method.
+Elapsed time for step: 67.827 secs
+
+Step 65 of 250
+A solution was found after 185 steps of the JFNK method.
+Elapsed time for step: 67.244 secs
+
+Step 66 of 250
+A solution was found after 184 steps of the JFNK method.
+Elapsed time for step: 66.920 secs
+
+Step 67 of 250
+A solution was found after 184 steps of the JFNK method.
+Elapsed time for step: 66.945 secs
+
+Step 68 of 250
+A solution was found after 185 steps of the JFNK method.
+Elapsed time for step: 67.395 secs
+
+Step 69 of 250
+A solution was found after 185 steps of the JFNK method.
+Elapsed time for step: 67.267 secs
+
+Step 70 of 250
+A solution was found after 184 steps of the JFNK method.
+Elapsed time for step: 67.211 secs
+
+Step 71 of 250
+A solution was found after 185 steps of the JFNK method.
+Elapsed time for step: 68.222 secs
+
+Step 72 of 250
+A solution was found after 186 steps of the JFNK method.
+Elapsed time for step: 68.031 secs
+
+Step 73 of 250
+A solution was found after 185 steps of the JFNK method.
+Elapsed time for step: 67.361 secs
+
+Step 74 of 250
+A solution was found after 186 steps of the JFNK method.
+Elapsed time for step: 67.707 secs
+
+Step 75 of 250
+A solution was found after 185 steps of the JFNK method.
+Elapsed time for step: 67.411 secs
+
+Step 76 of 250
+A solution was found after 188 steps of the JFNK method.
+Elapsed time for step: 68.746 secs
+
+Step 77 of 250
+A solution was found after 189 steps of the JFNK method.
+Elapsed time for step: 68.905 secs
+
+Step 78 of 250
+A solution was found after 187 steps of the JFNK method.
+Elapsed time for step: 68.275 secs
+
+Step 79 of 250
+A solution was found after 189 steps of the JFNK method.
+Elapsed time for step: 68.901 secs
+
+Step 80 of 250
+A solution was found after 189 steps of the JFNK method.
+Elapsed time for step: 68.911 secs
+
+Step 81 of 250
+A solution was found after 191 steps of the JFNK method.
+Elapsed time for step: 69.726 secs
+
+Step 82 of 250
+A solution was found after 191 steps of the JFNK method.
+Elapsed time for step: 69.644 secs
+
+Step 83 of 250
+A solution was found after 192 steps of the JFNK method.
+Elapsed time for step: 69.979 secs
+
+Step 84 of 250
+A solution was found after 192 steps of the JFNK method.
+Elapsed time for step: 70.035 secs
+
+Step 85 of 250
+A solution was found after 191 steps of the JFNK method.
+Elapsed time for step: 69.617 secs
+
+Step 86 of 250
+A solution was found after 192 steps of the JFNK method.
+Elapsed time for step: 70.082 secs
+
+Step 87 of 250
+A solution was found after 192 steps of the JFNK method.
+Elapsed time for step: 70.007 secs
+
+Step 88 of 250
+A solution was found after 191 steps of the JFNK method.
+Elapsed time for step: 69.368 secs
+
+Step 89 of 250
+A solution was found after 192 steps of the JFNK method.
+Elapsed time for step: 69.743 secs
+
+Step 90 of 250
+A solution was found after 193 steps of the JFNK method.
+Elapsed time for step: 70.111 secs
+
+Step 91 of 250
+A solution was found after 193 steps of the JFNK method.
+Elapsed time for step: 70.206 secs
+
+Step 92 of 250
+A solution was found after 193 steps of the JFNK method.
+Elapsed time for step: 69.581 secs
+
+Step 93 of 250
+A solution was found after 194 steps of the JFNK method.
+Elapsed time for step: 70.451 secs
+
+Step 94 of 250
+A solution was found after 194 steps of the JFNK method.
+Elapsed time for step: 70.548 secs
+
+Step 95 of 250
+A solution was found after 195 steps of the JFNK method.
+Elapsed time for step: 73.597 secs
+
+Step 96 of 250
+A solution was found after 196 steps of the JFNK method.
+Elapsed time for step: 74.088 secs
+
+Step 97 of 250
+A solution was found after 196 steps of the JFNK method.
+Elapsed time for step: 72.807 secs
+
+Step 98 of 250
+A solution was found after 197 steps of the JFNK method.
+Elapsed time for step: 73.464 secs
+
+Step 99 of 250
+A solution was found after 197 steps of the JFNK method.
+Elapsed time for step: 72.956 secs
+
+Step 100 of 250
+A solution was found after 197 steps of the JFNK method.
+Elapsed time for step: 73.590 secs
+
+Step 101 of 250
+A solution was found after 198 steps of the JFNK method.
+Elapsed time for step: 73.415 secs
+
+Step 102 of 250
+A solution was found after 197 steps of the JFNK method.
+Elapsed time for step: 73.246 secs
+
+Step 103 of 250
+A solution was found after 198 steps of the JFNK method.
+Elapsed time for step: 73.438 secs
+
+Step 104 of 250
+A solution was found after 198 steps of the JFNK method.
+Elapsed time for step: 73.619 secs
+
+Step 105 of 250
+A solution was found after 199 steps of the JFNK method.
+Elapsed time for step: 74.068 secs
+
+Step 106 of 250
+A solution was found after 200 steps of the JFNK method.
+Elapsed time for step: 74.442 secs
+
+Step 107 of 250
+A solution was found after 200 steps of the JFNK method.
+Elapsed time for step: 74.301 secs
+
+Step 108 of 250
+A solution was found after 201 steps of the JFNK method.
+Elapsed time for step: 73.081 secs
+
+Step 109 of 250
+A solution was found after 201 steps of the JFNK method.
+Elapsed time for step: 73.055 secs
+
+Step 110 of 250
+A solution was found after 202 steps of the JFNK method.
+Elapsed time for step: 73.682 secs
+
+Step 111 of 250
+A solution was found after 202 steps of the JFNK method.
+Elapsed time for step: 73.606 secs
+
+Step 112 of 250
+A solution was found after 203 steps of the JFNK method.
+Elapsed time for step: 73.430 secs
+
+Step 113 of 250
+A solution was found after 203 steps of the JFNK method.
+Elapsed time for step: 73.819 secs
+
+Step 114 of 250
+A solution was found after 203 steps of the JFNK method.
+Elapsed time for step: 73.849 secs
+
+Step 115 of 250
+A solution was found after 204 steps of the JFNK method.
+Elapsed time for step: 74.805 secs
+
+Step 116 of 250
+A solution was found after 205 steps of the JFNK method.
+Elapsed time for step: 74.582 secs
+
+Step 117 of 250
+A solution was found after 205 steps of the JFNK method.
+Elapsed time for step: 74.794 secs
+
+Step 118 of 250
+A solution was found after 206 steps of the JFNK method.
+Elapsed time for step: 74.865 secs
+
+Step 119 of 250
+A solution was found after 206 steps of the JFNK method.
+Elapsed time for step: 74.792 secs
+
+Step 120 of 250
+A solution was found after 208 steps of the JFNK method.
+Elapsed time for step: 75.874 secs
+
+Step 121 of 250
+A solution was found after 207 steps of the JFNK method.
+Elapsed time for step: 75.169 secs
+
+Step 122 of 250
+A solution was found after 207 steps of the JFNK method.
+Elapsed time for step: 75.660 secs
+
+Step 123 of 250
+A solution was found after 207 steps of the JFNK method.
+Elapsed time for step: 75.342 secs
+
+Step 124 of 250
+A solution was found after 209 steps of the JFNK method.
+Elapsed time for step: 76.330 secs
+
+Step 125 of 250
+A solution was found after 208 steps of the JFNK method.
+Elapsed time for step: 75.700 secs
+
+Step 126 of 250
+A solution was found after 210 steps of the JFNK method.
+Elapsed time for step: 75.894 secs
+
+Step 127 of 250
+A solution was found after 209 steps of the JFNK method.
+Elapsed time for step: 75.579 secs
+
+Step 128 of 250
+A solution was found after 210 steps of the JFNK method.
+Elapsed time for step: 76.875 secs
+
+Step 129 of 250
+A solution was found after 210 steps of the JFNK method.
+Elapsed time for step: 76.633 secs
+
+Step 130 of 250
+A solution was found after 211 steps of the JFNK method.
+Elapsed time for step: 77.041 secs
+
+Step 131 of 250
+A solution was found after 210 steps of the JFNK method.
+Elapsed time for step: 76.217 secs
+
+Step 132 of 250
+A solution was found after 211 steps of the JFNK method.
+Elapsed time for step: 76.710 secs
+
+Step 133 of 250
+A solution was found after 211 steps of the JFNK method.
+Elapsed time for step: 76.563 secs
+
+Step 134 of 250
+A solution was found after 212 steps of the JFNK method.
+Elapsed time for step: 77.242 secs
+
+Step 135 of 250
+A solution was found after 213 steps of the JFNK method.
+Elapsed time for step: 77.227 secs
+
+Step 136 of 250
+A solution was found after 215 steps of the JFNK method.
+Elapsed time for step: 78.253 secs
+
+Step 137 of 250
+A solution was found after 215 steps of the JFNK method.
+Elapsed time for step: 78.099 secs
+
+Step 138 of 250
+A solution was found after 215 steps of the JFNK method.
+Elapsed time for step: 78.334 secs
+
+Step 139 of 250
+A solution was found after 216 steps of the JFNK method.
+Elapsed time for step: 78.768 secs
+
+Step 140 of 250
+A solution was found after 217 steps of the JFNK method.
+Elapsed time for step: 78.306 secs
+
+Step 141 of 250
+A solution was found after 216 steps of the JFNK method.
+Elapsed time for step: 78.676 secs
+
+Step 142 of 250
+A solution was found after 218 steps of the JFNK method.
+Elapsed time for step: 79.325 secs
+
+Step 143 of 250
+A solution was found after 217 steps of the JFNK method.
+Elapsed time for step: 79.308 secs
+
+Step 144 of 250
+A solution was found after 216 steps of the JFNK method.
+Elapsed time for step: 78.460 secs
+
+Step 145 of 250
+A solution was found after 216 steps of the JFNK method.
+Elapsed time for step: 78.481 secs
+
+Step 146 of 250
+A solution was found after 216 steps of the JFNK method.
+Elapsed time for step: 78.579 secs
+
+Step 147 of 250
+A solution was found after 217 steps of the JFNK method.
+Elapsed time for step: 78.949 secs
+
+Step 148 of 250
+A solution was found after 218 steps of the JFNK method.
+Elapsed time for step: 79.344 secs
+
+Step 149 of 250
+A solution was found after 218 steps of the JFNK method.
+Elapsed time for step: 79.217 secs
+
+Step 150 of 250
+A solution was found after 218 steps of the JFNK method.
+Elapsed time for step: 79.415 secs
+
+Step 151 of 250
+A solution was found after 218 steps of the JFNK method.
+Elapsed time for step: 79.349 secs
+
+Step 152 of 250
+A solution was found after 218 steps of the JFNK method.
+Elapsed time for step: 79.368 secs
+
+Step 153 of 250
+A solution was found after 220 steps of the JFNK method.
+Elapsed time for step: 80.064 secs
+
+Step 154 of 250
+A solution was found after 220 steps of the JFNK method.
+Elapsed time for step: 80.080 secs
+
+Step 155 of 250
+A solution was found after 219 steps of the JFNK method.
+Elapsed time for step: 79.667 secs
+
+Step 156 of 250
+A solution was found after 221 steps of the JFNK method.
+Elapsed time for step: 79.738 secs
+
+Step 157 of 250
+A solution was found after 221 steps of the JFNK method.
+Elapsed time for step: 83.227 secs
+
+Step 158 of 250
+A solution was found after 221 steps of the JFNK method.
+Elapsed time for step: 82.968 secs
+
+Step 159 of 250
+A solution was found after 220 steps of the JFNK method.
+Elapsed time for step: 81.429 secs
+
+Step 160 of 250
+A solution was found after 219 steps of the JFNK method.
+Elapsed time for step: 81.217 secs
+
+Step 161 of 250
+A solution was found after 218 steps of the JFNK method.
+Elapsed time for step: 79.829 secs
+
+Step 162 of 250
+A solution was found after 220 steps of the JFNK method.
+Elapsed time for step: 80.680 secs
+
+Step 163 of 250
+A solution was found after 219 steps of the JFNK method.
+Elapsed time for step: 79.556 secs
+
+Step 164 of 250
+A solution was found after 218 steps of the JFNK method.
+Elapsed time for step: 79.377 secs
+
+Step 165 of 250
+A solution was found after 220 steps of the JFNK method.
+Elapsed time for step: 79.966 secs
+
+Step 166 of 250
+A solution was found after 220 steps of the JFNK method.
+Elapsed time for step: 80.135 secs
+
+Step 167 of 250
+A solution was found after 221 steps of the JFNK method.
+Elapsed time for step: 80.682 secs
+
+Step 168 of 250
+A solution was found after 220 steps of the JFNK method.
+Elapsed time for step: 80.294 secs
+
+Step 169 of 250
+A solution was found after 220 steps of the JFNK method.
+Elapsed time for step: 80.070 secs
+
+Step 170 of 250
+A solution was found after 221 steps of the JFNK method.
+Elapsed time for step: 80.646 secs
+
+Step 171 of 250
+A solution was found after 222 steps of the JFNK method.
+Elapsed time for step: 80.812 secs
+
+Step 172 of 250
+A solution was found after 222 steps of the JFNK method.
+Elapsed time for step: 80.875 secs
+
+Step 173 of 250
+A solution was found after 221 steps of the JFNK method.
+Elapsed time for step: 80.929 secs
+
+Step 174 of 250
+A solution was found after 221 steps of the JFNK method.
+Elapsed time for step: 80.384 secs
+
+Step 175 of 250
+A solution was found after 221 steps of the JFNK method.
+Elapsed time for step: 80.654 secs
+
+Step 176 of 250
+A solution was found after 222 steps of the JFNK method.
+Elapsed time for step: 80.568 secs
+
+Step 177 of 250
+A solution was found after 221 steps of the JFNK method.
+Elapsed time for step: 80.797 secs
+
+Step 178 of 250
+A solution was found after 220 steps of the JFNK method.
+Elapsed time for step: 80.137 secs
+
+Step 179 of 250
+A solution was found after 222 steps of the JFNK method.
+Elapsed time for step: 81.034 secs
+
+Step 180 of 250
+A solution was found after 221 steps of the JFNK method.
+Elapsed time for step: 80.626 secs
+
+Step 181 of 250
+A solution was found after 221 steps of the JFNK method.
+Elapsed time for step: 80.610 secs
+
+Step 182 of 250
+A solution was found after 220 steps of the JFNK method.
+Elapsed time for step: 79.502 secs
+
+Step 183 of 250
+A solution was found after 220 steps of the JFNK method.
+Elapsed time for step: 80.849 secs
+
+Step 184 of 250
+A solution was found after 221 steps of the JFNK method.
+Elapsed time for step: 80.162 secs
+
+Step 185 of 250
+A solution was found after 222 steps of the JFNK method.
+Elapsed time for step: 80.919 secs
+
+Step 186 of 250
+A solution was found after 221 steps of the JFNK method.
+Elapsed time for step: 80.632 secs
+
+Step 187 of 250
+A solution was found after 221 steps of the JFNK method.
+Elapsed time for step: 80.602 secs
+
+Step 188 of 250
+A solution was found after 224 steps of the JFNK method.
+Elapsed time for step: 81.988 secs
+
+Step 189 of 250
+A solution was found after 223 steps of the JFNK method.
+Elapsed time for step: 81.282 secs
+
+Step 190 of 250
+A solution was found after 225 steps of the JFNK method.
+Elapsed time for step: 82.037 secs
+
+Step 191 of 250
+A solution was found after 223 steps of the JFNK method.
+Elapsed time for step: 81.292 secs
+
+Step 192 of 250
+A solution was found after 223 steps of the JFNK method.
+Elapsed time for step: 80.519 secs
+
+Step 193 of 250
+A solution was found after 222 steps of the JFNK method.
+Elapsed time for step: 80.845 secs
+
+Step 194 of 250
+A solution was found after 221 steps of the JFNK method.
+Elapsed time for step: 80.340 secs
+
+Step 195 of 250
+A solution was found after 222 steps of the JFNK method.
+Elapsed time for step: 80.693 secs
+
+Step 196 of 250
+A solution was found after 221 steps of the JFNK method.
+Elapsed time for step: 80.546 secs
+
+Step 197 of 250
+A solution was found after 222 steps of the JFNK method.
+Elapsed time for step: 80.909 secs
+
+Step 198 of 250
+A solution was found after 221 steps of the JFNK method.
+Elapsed time for step: 80.674 secs
+
+Step 199 of 250
+A solution was found after 221 steps of the JFNK method.
+Elapsed time for step: 80.351 secs
+
+Step 200 of 250
+A solution was found after 221 steps of the JFNK method.
+Elapsed time for step: 79.811 secs
+
+Step 201 of 250
+A solution was found after 220 steps of the JFNK method.
+Elapsed time for step: 82.360 secs
+
+Step 202 of 250
+A solution was found after 220 steps of the JFNK method.
+Elapsed time for step: 83.210 secs
+
+Step 203 of 250
+A solution was found after 220 steps of the JFNK method.
+Elapsed time for step: 81.886 secs
+
+Step 204 of 250
+A solution was found after 220 steps of the JFNK method.
+Elapsed time for step: 81.702 secs
+
+Step 205 of 250
+A solution was found after 222 steps of the JFNK method.
+Elapsed time for step: 82.618 secs
+
+Step 206 of 250
+A solution was found after 221 steps of the JFNK method.
+Elapsed time for step: 82.737 secs
+
+Step 207 of 250
+A solution was found after 223 steps of the JFNK method.
+Elapsed time for step: 82.920 secs
+
+Step 208 of 250
+A solution was found after 223 steps of the JFNK method.
+Elapsed time for step: 82.264 secs
+
+Step 209 of 250
+A solution was found after 222 steps of the JFNK method.
+Elapsed time for step: 82.467 secs
+
+Step 210 of 250
+A solution was found after 222 steps of the JFNK method.
+Elapsed time for step: 82.699 secs
+
+Step 211 of 250
+A solution was found after 222 steps of the JFNK method.
+Elapsed time for step: 82.674 secs
+
+Step 212 of 250
+A solution was found after 222 steps of the JFNK method.
+Elapsed time for step: 82.771 secs
+
+Step 213 of 250
+A solution was found after 224 steps of the JFNK method.
+Elapsed time for step: 81.639 secs
+
+Step 214 of 250
+A solution was found after 222 steps of the JFNK method.
+Elapsed time for step: 81.125 secs
+
+Step 215 of 250
+A solution was found after 220 steps of the JFNK method.
+Elapsed time for step: 80.312 secs
+
+Step 216 of 250
+A solution was found after 221 steps of the JFNK method.
+Elapsed time for step: 80.529 secs
+
+Step 217 of 250
+A solution was found after 221 steps of the JFNK method.
+Elapsed time for step: 80.420 secs
+
+Step 218 of 250
+A solution was found after 222 steps of the JFNK method.
+Elapsed time for step: 80.837 secs
+
+Step 219 of 250
+A solution was found after 221 steps of the JFNK method.
+Elapsed time for step: 80.301 secs
+
+Step 220 of 250
+A solution was found after 221 steps of the JFNK method.
+Elapsed time for step: 80.341 secs
+
+Step 221 of 250
+A solution was found after 220 steps of the JFNK method.
+Elapsed time for step: 80.983 secs
+
+Step 222 of 250
+A solution was found after 220 steps of the JFNK method.
+Elapsed time for step: 80.292 secs
+
+Step 223 of 250
+A solution was found after 223 steps of the JFNK method.
+Elapsed time for step: 81.096 secs
+
+Step 224 of 250
+A solution was found after 221 steps of the JFNK method.
+Elapsed time for step: 80.579 secs
+
+Step 225 of 250
+A solution was found after 222 steps of the JFNK method.
+Elapsed time for step: 81.080 secs
+
+Step 226 of 250
+A solution was found after 221 steps of the JFNK method.
+Elapsed time for step: 80.292 secs
+
+Step 227 of 250
+A solution was found after 221 steps of the JFNK method.
+Elapsed time for step: 80.208 secs
+
+Step 228 of 250
+A solution was found after 221 steps of the JFNK method.
+Elapsed time for step: 80.353 secs
+
+Step 229 of 250
+A solution was found after 220 steps of the JFNK method.
+Elapsed time for step: 80.427 secs
+
+Step 230 of 250
+A solution was found after 222 steps of the JFNK method.
+Elapsed time for step: 80.830 secs
+
+Step 231 of 250
+A solution was found after 222 steps of the JFNK method.
+Elapsed time for step: 80.877 secs
+
+Step 232 of 250
+A solution was found after 219 steps of the JFNK method.
+Elapsed time for step: 79.963 secs
+
+Step 233 of 250
+A solution was found after 219 steps of the JFNK method.
+Elapsed time for step: 79.855 secs
+
+Step 234 of 250
+A solution was found after 221 steps of the JFNK method.
+Elapsed time for step: 80.539 secs
+
+Step 235 of 250
+A solution was found after 220 steps of the JFNK method.
+Elapsed time for step: 80.224 secs
+
+Step 236 of 250
+A solution was found after 220 steps of the JFNK method.
+Elapsed time for step: 80.367 secs
+
+Step 237 of 250
+A solution was found after 219 steps of the JFNK method.
+Elapsed time for step: 79.719 secs
+
+Step 238 of 250
+A solution was found after 220 steps of the JFNK method.
+Elapsed time for step: 79.961 secs
+
+Step 239 of 250
+A solution was found after 220 steps of the JFNK method.
+Elapsed time for step: 80.068 secs
+
+Step 240 of 250
+A solution was found after 221 steps of the JFNK method.
+Elapsed time for step: 80.513 secs
+
+Step 241 of 250
+A solution was found after 220 steps of the JFNK method.
+Elapsed time for step: 80.105 secs
+
+Step 242 of 250
+A solution was found after 219 steps of the JFNK method.
+Elapsed time for step: 79.655 secs
+
+Step 243 of 250
+A solution was found after 218 steps of the JFNK method.
+Elapsed time for step: 79.242 secs
+
+Step 244 of 250
+A solution was found after 219 steps of the JFNK method.
+Elapsed time for step: 79.605 secs
+
+Step 245 of 250
+A solution was found after 219 steps of the JFNK method.
+Elapsed time for step: 79.694 secs
+
+Step 246 of 250
+A solution was found after 221 steps of the JFNK method.
+Elapsed time for step: 80.299 secs
+
+Step 247 of 250
+A solution was found after 219 steps of the JFNK method.
+Elapsed time for step: 79.616 secs
+
+Step 248 of 250
+A solution was found after 220 steps of the JFNK method.
+Elapsed time for step: 79.902 secs
+
+Step 249 of 250
+A solution was found after 219 steps of the JFNK method.
+Elapsed time for step: 79.597 secs
+
+Step 250 of 250
+A solution was found after 220 steps of the JFNK method.
+Elapsed time for step: 80.290 secs

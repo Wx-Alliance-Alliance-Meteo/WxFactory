@@ -1,3 +1,52 @@
+#!/bin/bash
+
+# Siqi Wei
+# Jan 2023 
+# Script to run the bulle problem using operator splitting 
+
+
+# Save the current directory location
+startingDir=`pwd`
+
+# Bubble location
+bubbleDir=~/Documents/ECCC/gef_pull_april17/gef
+
+# Config file location 
+configDir=$bubbleDir/config
+
+# Time integrator 
+# timeIntegrator=strang_epi2_ros2
+
+# Testoutput location and file
+testoutputDir=$bubbleDir/vicky/testoutput 
+
+# config file name 
+configFile=gaussian_bubble_testOS.ini 
+
+# testing stepsizes 
+stepsize="1.0 0.5 0.25" # 1.0 0.5 0.25 0.1"
+#numofsteps="300.0 350.0 400.0 450.0"
+
+# OS22 parameter
+OS22param="0.0 0.1 0.2 0.3 0.4 0.5"
+
+tf=500
+
+tol=1e-10
+
+for dt in $stepsize
+do
+
+    echo $dt
+    #for os22b in $OS22param
+    #do
+    #    echo $os22b
+        timeIntegrator=euler1
+        #strang_epi6_ex_epi6_im
+        #os22_ros2_epi2[$os22b]
+        testoutputFile=${timeIntegrator}_tol_${tol}_dt_${dt}_tf_${tf}
+        echo $timeIntegrator
+        echo -e "
 [General]
 equations = euler
 
@@ -23,10 +72,10 @@ bubble_rad = 250.
 
 [Time_integration]
 # Time step
-dt = 5
+dt = $dt
 
 # End time of the simulation in sec
-t_end = 5
+t_end = $tf
 
 # Time integration scheme
 # Possible values  = 'epi2', 'epi3', 'epi4', 'epi5', 'epi6'  = multistep exponential propagation iterative
@@ -41,13 +90,13 @@ t_end = 5
 #                    'partrosexp2' = Implicit-Exponential hybrid scheme (implicit first)
 #                    'crank_nicolson' = 2nd order implicit scheme
 #                    'bdf2' = 2nd order implicit multistep
-time_integrator = sdirk
+time_integrator = $timeIntegrator
 
 # Initial size of the Krylov space. Stay constant for phipm, but can be updated dynamically with phipm_iom
 krylov_size = 10
 
 # Solver tolerance
-tolerance = 1e-6
+tolerance = $tol
 
 jacobian_method = FD
 
@@ -93,12 +142,26 @@ filter_cutoff = 0.5
 stat_freq = 1
 
 # Plot solution every "output_freq" steps, 0 to disable.
-output_freq = 0
+output_freq = 50
 
 # Save the state vector to a file at every "save_state_freq" steps. 0 to disable.
-save_state_freq = 0
+save_state_freq = 50
 
 # Store statistics about the solver (iterations, residuals, etc.). 0 to disable.
-store_solver_stats = 0
+store_solver_stats = 1
 
-output_dir = results
+# Set graph and state vector Output directory
+output_dir = ${testoutputDir}/${testoutputFile}
+
+
+        " > $configDir/$configFile
+
+        python ${bubbleDir}/main_gef.py ./config/${configFile} > ${testoutputDir}/${testoutputFile}.txt
+
+#done
+done
+
+
+
+
+
