@@ -9,6 +9,6 @@ methodlen=${#methods[@]}
 
 for ((k=0; k < $methodlen; k++)); do
    for ((j = 0; j < 7; j++)); do
-     mpirun -np 2646 python3 ./main_gef.py config/procs2646/${methods[${k}]}
+     mpirun -np 2646 python3 ./main_gef.py config/test_files/epi4/${methods[${k}]}
    done
 done
