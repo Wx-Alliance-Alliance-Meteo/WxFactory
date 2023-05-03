@@ -4,7 +4,6 @@ from mpi4py import MPI
 import numpy
 import scipy.linalg
 
-@profile
 def kiops(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 2, task1 = False):
    """
       kiops(tstops, A, u; kwargs...) -> (w, stats)
