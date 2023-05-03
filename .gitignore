@@ -3,6 +3,7 @@
 *.swp
 *.swo
 *.code-workspace
+*.lprof
 
 doc/*.pdf
 doc/*.aux

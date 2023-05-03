@@ -24,6 +24,10 @@ from rhs.rhs_selector           import RhsBundle
 def main(argv) -> int:
    """ This function sets up the infrastructure and performs the time loop of the model. """
 
+   # (brl423) TODO: don't do this
+   import rhs.rhs_bubble
+   rhs.rhs_bubble.is_gpu = True
+
    # Read configuration file
    param = Configuration(argv.config, MPI.COMM_WORLD.rank == 0)
 
