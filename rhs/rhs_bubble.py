@@ -73,14 +73,14 @@ def rhs_bubble(Q, geom, mtrx, nbsolpts, nb_elements_x, nb_elements_z):
    # TODO: This could be computed concurrently when running on GPU. It might not make a huge difference on CPU though.
    # Could be a good test case for CUDA streams.
    for elem in range(nb_elements_z):
-      epais = elem * nbsolpts + numpy.arange(nbsolpts)
+      epais = elem * nbsolpts + cupy.arange(nbsolpts)
 
       kfaces_var[:,elem,0,:] = mtrx.extrap_down @ Q[:,epais,:]
       kfaces_var[:,elem,1,:] = mtrx.extrap_up @ Q[:,epais,:]
 
     # TODO: Same comment as above
    for elem in range(nb_elements_x):
-      epais = elem * nbsolpts + numpy.arange(nbsolpts)
+      epais = elem * nbsolpts + cupy.arange(nbsolpts)
 
       ifaces_var[:,elem,:,0] = Q[:,:,epais] @ mtrx.extrap_west
       ifaces_var[:,elem,:,1] = Q[:,:,epais] @ mtrx.extrap_east
@@ -163,13 +163,13 @@ def rhs_bubble(Q, geom, mtrx, nbsolpts, nb_elements_x, nb_elements_z):
    # --- Compute the derivatives
    # TODO: Check carefully if the computation of the derivatives can be done concurrently
    for elem in range(nb_elements_z):
-      epais = elem * nbsolpts + numpy.arange(nbsolpts)
+      epais = elem * nbsolpts + cupy.arange(nbsolpts)
 
       df3_dx3[:,epais,:] = ( mtrx.diff_solpt @ flux_x3[:,epais,:] + mtrx.correction @ kfaces_flux[:,elem,:,:] ) * 2.0/geom.Δx3
 
     # TODO: Same comment as above
    for elem in range(nb_elements_x):
-      epais = elem * nbsolpts + numpy.arange(nbsolpts)
+      epais = elem * nbsolpts + cupy.arange(nbsolpts)
 
       df1_dx1[:,:,epais] = ( flux_x1[:,:,epais] @ mtrx.diff_solpt.T + ifaces_flux[:,elem,:,:] @ mtrx.correction.T ) * 2.0/geom.Δx1
 
