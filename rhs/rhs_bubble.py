@@ -6,7 +6,7 @@ from common.definitions import *
 # This global variable is set to True if running on GPU. It can also be imported by other modules
 is_gpu = False
 
-@profile
+# @profile
 def rhs_bubble(Q, geom, mtrx, nbsolpts, nb_elements_x, nb_elements_z):
 
    datatype = Q.dtype

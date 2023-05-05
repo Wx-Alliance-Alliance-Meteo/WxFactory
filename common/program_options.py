@@ -27,6 +27,10 @@ class Configuration:
       else:
          self.depth_approx = None
 
+      # TODO: support multiple devices
+      self.device = self._get_option('System', 'device', str, 'cpu', ['cpu', 'cuda0'])
+      self.cuda_id = int(self.device[4:]) if self.device.startswith("cuda") else None
+
       ################################
       # Test case
       self.case_number = self._get_option('Test_case', 'case_number', int, -1)

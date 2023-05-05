@@ -188,14 +188,14 @@ def set_df1_dx1(df1_dx1, flux_x1, ifaces_flux, diff_solpt, correction, dx1, nbso
             
             df1_dx1[i, j, start + l] = 2.0 * r / dx1
 
-@profile
+# @profile
 def rhs_bubble_cuda(Q: NDArray[cp.floating], geom: Cartesian2D, mtrx: DFROperators,
     nbsolpts: int, nb_elements_x: int, nb_elements_z: int) -> NDArray[cp.floating]:
 
     # TODO: have Q on GPU
     Q = cp.asarray(Q)
     # TODO: make threads per block a global
-    B = cp.cuda.runtime.getDeviceProperties(cp.cuda.runtime.getDevice())["maxThreadsPerBlock"]
+    B = cp.cuda.runtime.getDeviceProperties(cp.cuda.runtime.getDevice())["maxThreadsPerBlock"] // 16
 
     datatype = Q.dtype
     nb_equations = Q.shape[0] # Number of constituent Euler equations.  Probably 6
@@ -210,7 +210,7 @@ def rhs_bubble_cuda(Q: NDArray[cp.floating], geom: Cartesian2D, mtrx: DFROperato
     df3_dx3 = cp.empty_like(Q, dtype=datatype)
 
     kfaces_flux = cp.empty((nb_equations, nb_elements_z, 2, nbsolpts * nb_elements_x), dtype=datatype)
-    kfaces_var = cp.empty((nb_equations, nb_elements_z, 2, nbsolpts * nb_elements_z), dtype=datatype)
+    kfaces_var = cp.empty((nb_equations, nb_elements_z, 2, nbsolpts * nb_elements_x), dtype=datatype)
 
     ifaces_flux = cp.empty((nb_equations, nb_elements_x, nbsolpts * nb_elements_z, 2), dtype=datatype)
     ifaces_var = cp.empty((nb_equations, nb_elements_x, nbsolpts * nb_elements_z, 2), dtype=datatype)

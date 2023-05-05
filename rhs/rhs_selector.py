@@ -3,6 +3,7 @@ from typing import Optional
 from geometry                  import Cartesian2D, CubedSphere
 from init.initialize           import Topo
 from rhs.rhs_bubble            import rhs_bubble
+from rhs.rhs_bubble_cuda       import rhs_bubble_cuda
 from rhs.rhs_bubble_convective import rhs_bubble as rhs_bubble_convective
 from rhs.rhs_bubble_fv         import rhs_bubble_fv
 from rhs.rhs_bubble_implicit   import rhs_bubble_implicit
@@ -45,8 +46,13 @@ class RhsBundle:
 
       elif param.equations == 'euler' and isinstance(geom, Cartesian2D):
          if param.discretization == 'dg':
-            self.full = lambda q: rhs_bubble(
-               q, geom, operators, param.nbsolpts, param.nb_elements_horizontal, param.nb_elements_vertical)
+            # TODO: support multiple devices
+            if param.cuda_id == 0:
+               self.full = lambda q: rhs_bubble_cuda(
+                  q, geom, operators, param.nbsolpts, param.nb_elements_horizontal, param.nb_elements_vertical)
+            else:
+               self.full = lambda q: rhs_bubble(
+                  q, geom, operators, param.nbsolpts, param.nb_elements_horizontal, param.nb_elements_vertical)
          elif param.discretization == 'fv':
             # If we implement a FV-specific version of rhs_bubble, we should select it here
             self.full = lambda q: rhs_bubble(
