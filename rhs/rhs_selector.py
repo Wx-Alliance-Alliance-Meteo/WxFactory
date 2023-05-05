@@ -61,7 +61,7 @@ class RhsBundle:
          self.viscous = lambda q: self.full(q) - self.convective(q)
 
       elif param.equations == "shallow_water":
-         if param.case_number < 1: # Pure advection
+         if param.case_number <= 1: # Pure advection
             self.full = lambda q: rhs_advection2d(
                q, geom, operators, metric, ptopo, param.nbsolpts, param.nb_elements_horizontal)
          else:
