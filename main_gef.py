@@ -16,7 +16,7 @@ from geometry                   import Cartesian2D, CubedSphere, DFROperators, G
 from init.dcmip                 import dcmip_T11_update_winds, dcmip_T12_update_winds
 from init.init_state_vars       import init_state_vars
 from integrators                import Integrator, Epi, EpiStiff, Euler1, Imex2, PartRosExp2, Ros2, RosExp2, \
-                                       StrangSplitting, Srerk, Tvdrk3, CrankNicolson, BackwardEuler, SDIRKLstable, Bdf2
+                                       StrangSplitting, Srerk, Tvdrk3, BackwardEuler, CrankNicolson, Bdf2
 from output.output_manager      import OutputManager
 from precondition.multigrid     import Multigrid
 from rhs.rhs_selector           import RhsBundle
@@ -177,6 +177,7 @@ def create_time_integrator(param: Configuration,
       -> Integrator:
    """ Create the appropriate time integrator object based on params """
 
+   # --- Exponential time integrators
    if param.time_integrator[:9] == 'epi_stiff' and param.time_integrator[9:].isdigit():
       order = int(param.time_integrator[9:])
       if MPI.COMM_WORLD.rank == 0: print(f'Running with EPI_stiff{order}')
@@ -189,56 +190,47 @@ def create_time_integrator(param: Configuration,
       order = int(param.time_integrator[5:])
       if MPI.COMM_WORLD.rank == 0: print(f'Running with SRERK{order}')
       return Srerk(param, order, rhs.full)
-   if param.time_integrator == 'tvdrk3':
-      return Tvdrk3(param, rhs.full)
+
+   # --- Explicit
    if param.time_integrator == 'euler1':
       if MPI.COMM_WORLD.rank == 0:
          print('WARNING: Running with first-order explicit Euler timestepping.')
          print('         This is UNSTABLE and should be used only for debugging.')
       return Euler1(param, rhs.full)
+   if param.time_integrator == 'tvdrk3':
+      return Tvdrk3(param, rhs.full)
+   
+   # --- Rosenbrock
    if param.time_integrator == 'ros2':
       return Ros2(param, rhs.full, preconditioner=preconditioner)
-   if param.time_integrator == 'imex2':
-      return Imex2(param, rhs.explicit, rhs.implicit)
-   if param.time_integrator == 'strang_epi2_ex_ros2_im':
-      stepper1 = Epi(param, 2, rhs.explicit)
-      stepper2 = Ros2(param, rhs.implicit, preconditioner=preconditioner)
-      return StrangSplitting(param, stepper1, stepper2)
-   if param.time_integrator == 'strang_ros2_im_epi2_ex':
-      stepper1 = Ros2(param, rhs.implicit, preconditioner=preconditioner)
-      stepper2 = Epi(param, 2, rhs.explicit) 
-      return StrangSplitting(param, stepper1, stepper2)
-   if param.time_integrator == 'strang_epi6_im_epi6_ex':
-      stepper1 = Epi(param, 6, rhs.implicit)
-      stepper2 = Epi(param, 6, rhs.explicit)
-      return StrangSplitting(param, stepper1, stepper2)
-   if param.time_integrator == 'strang_epi6_ex_epi6_im':
-      stepper1 = Epi(param, 6, rhs.explicit)
-      stepper2 = Epi(param, 6, rhs.implicit)
-      return StrangSplitting(param, stepper1, stepper2)
-   if param.time_integrator[:20] == 'os22_epi6_im_epi6_ex':
-      os22_param = float(param.time_integrator[21:-1])
-      stepper1 = Epi(param, 6, rhs_implicit)
-      stepper2 = Epi(param, 6, rhs_explicit)
-      return OS22Splitting(stepper1, stepper2, os22_param)
-   if param.time_integrator[:20] == 'os22_epi6_ex_epi6_im':
-      os22_param = float(param.time_integrator[21:-1])
-      stepper1 = Epi(param, 6, rhs_explicit)
-      stepper2 = Epi(param, 6, rhs_implicit)
-      return OS22Splitting(stepper1, stepper2, os22_param)
+
+   # --- Rosenbrock - Exponential
    if param.time_integrator == 'rosexp2':
       return RosExp2(param, rhs.full, rhs.full, preconditioner=preconditioner)
    if param.time_integrator == 'partrosexp2':
       return PartRosExp2(param, rhs.full, rhs.implicit, preconditioner=preconditioner)
-   if param.time_integrator == 'crank_nicolson':
-      return CrankNicolson(param, rhs.full, preconditioner=preconditioner)
+
+   # --- Implicit - Explicit
+   if param.time_integrator == 'imex2':
+      return Imex2(param, rhs.explicit, rhs.implicit)
+
+   # --- Fully implicit
    if param.time_integrator == 'backward_euler':
       return BackwardEuler(param, rhs.full, preconditioner=preconditioner)
-   if param.time_integrator == 'sdirk':
-      return SDIRKLstable(param, rhs.full, preconditioner=preconditioner)
    if param.time_integrator == 'bdf2':
       return Bdf2(param, rhs.full, preconditioner=preconditioner)
+   if param.time_integrator == 'crank_nicolson':
+      return CrankNicolson(param, rhs.full, preconditioner=preconditioner)
 
+   # --- Operator splitting
+   if param.time_integrator == 'strang_epi2_ros2':
+      stepper1 = Epi(param, 2, rhs.explicit)
+      stepper2 = Ros2(param, rhs.implicit, preconditioner=preconditioner)
+      return StrangSplitting(param, stepper1, stepper2)
+   if param.time_integrator == 'strang_ros2_epi2':
+      stepper1 = Ros2(param, rhs.implicit, preconditioner=preconditioner)
+      stepper2 = Epi(param, 2, rhs.explicit)
+      return StrangSplitting(param, stepper1, stepper2)
 
    raise ValueError(f'Time integration method {param.time_integrator} not supported')
 

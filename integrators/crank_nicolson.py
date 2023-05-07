@@ -1,19 +1,13 @@
 import numpy
-import scipy
 from time import time
-from typing import Callable
 
-from mpi4py import MPI
-
-from common.program_options import Configuration
-from .integrator            import Integrator
-from solvers                import fgmres, matvec_rat, SolverInfo, newton_krylov
-
+from .integrator         import Integrator, SolverInfo
+from solvers             import newton_krylov
 
 class CrankNicolson(Integrator):
-   def __init__(self, param: Configuration, rhs_handle: Callable, preconditioner=None) -> None:
+   def __init__(self, param, rhs, preconditioner=None):
       super().__init__(param, preconditioner)
-      self.rhs = rhs_handle
+      self.rhs = rhs
       self.tol = param.tolerance
 
    def CN_system(self, Q_plus, Q, dt, rhs):
@@ -29,11 +23,8 @@ class CrankNicolson(Integrator):
 
       # Update solution
       t0 = time()
-      newQ = scipy.optimize.newton_krylov(CN_fun, Q, f_tol = self.tol)
-      nb_iter = 0 # just set to 0 for running
-      residuals = []  # just set to 0 for running
-         # newQ, nb_iter, residuals = newton_krylov(CN_fun, Q, f_tol=self.tol, fgmres_restart=30,
-         #fgmres_precond=self.preconditioner, verbose=False, maxiter=maxiter)
+      newQ, nb_iter, residuals = newton_krylov(CN_fun, Q, f_tol=self.tol, fgmres_restart=30,
+         fgmres_precond=self.preconditioner, verbose=False, maxiter=maxiter)
       t1 = time()
 
       self.solver_info = SolverInfo(0, t1 - t0, nb_iter, residuals)
