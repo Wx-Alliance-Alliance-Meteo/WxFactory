@@ -4,7 +4,7 @@
 
 #for case 5
 ord_soumet -cpus 294                                    \
-           -w 360                                       \
+           -w 180                                       \
            -jn gef_294_c5                               \
            -mpi                                         \
            -share e                                     \
@@ -13,7 +13,7 @@ ord_soumet -cpus 294                                    \
 
 #for case 6
 ord_soumet -cpus 294                                    \
-           -w 360                                       \
+           -w 180                                       \
            -jn gef_294_c6                               \
            -mpi                                         \
            -share e                                     \
@@ -22,7 +22,7 @@ ord_soumet -cpus 294                                    \
 
 #for case 8
 ord_soumet -cpus 294                                    \
-           -w 360                                       \
+           -w 180                                       \
            -jn gef_294_c8                               \
            -mpi                                         \
            -share e                                     \
@@ -35,7 +35,7 @@ ord_soumet -cpus 294                                    \
 
 #for case 5
 ord_soumet -cpus 4704                                  \
-           -w 360                                      \
+           -w 180                                      \
            -jn gef_4704_c5                             \
            -mpi                                        \
            -share e                                    \
@@ -47,7 +47,7 @@ ord_soumet -cpus 4704                                  \
 
 #for case 6
 ord_soumet -cpus 4704                                  \
-           -w 360                                      \
+           -w 180                                      \
            -jn gef_4704_c6                             \
            -mpi                                        \
            -share e                                    \
@@ -58,7 +58,7 @@ ord_soumet -cpus 4704                                  \
 
 #for case 8
 ord_soumet -cpus 4704                                   \
-           -w 360                                       \
+           -w 180                                       \
            -jn gef_4704_c8                              \
            -mpi                                         \
            -share e                                     \
