@@ -5,6 +5,8 @@ import numpy
 import scipy.linalg
 #import mpi4py.MPI
 
+from time import time
+
 def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 1, mmax = 128, reuse_info = True, task1 = False):
    
    rank = MPI.COMM_WORLD.Get_rank()
@@ -28,7 +30,7 @@ def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 1, mmax = 128, reuse_in
    happy   = False
    j       = 0
    conv    = 0.0
-
+   reg_comm_nrm = 0
    numSteps = len(τ_out)
 
    first_accepted = True
@@ -46,8 +48,8 @@ def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 1, mmax = 128, reuse_in
    mmin = 1
    m = max(mmin, min(m_init, mmax))
 
-   #if rank == 0:
-   #   print("in pmex, m_init = {}, m = {}".format(m_init, m))
+   if rank == 0:
+      print("in pmex, m_init = {}, m = {}".format(m_init, m))
 
    # Preallocate matrix
    V = numpy.zeros((mmax + 1, n + p))
@@ -96,6 +98,15 @@ def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 1, mmax = 128, reuse_in
 
    l = 0
 
+
+   #arrays to hold timing data
+   local_dot1 = [] #local dot product for Vjv values
+   ortho_sum  = [] #for orthogonalizing
+   matvec_t   = [] #part 1 of applying T
+   low_triang = [] #part 2 of applying T
+   gsum_dots  = [] #global sum for dots
+
+
    while τ_now < τ_end:
 
       # Compute necessary starting information
@@ -131,9 +142,14 @@ def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 1, mmax = 128, reuse_in
          V[j, -1     ] = 0.0
 
          #2. compute terms needed for R and T
+         start_localsum1 = time()
          local_vec = V[0:j+1, 0:n] @ V[j-1:j+1, 0:n].T
+         local_dot1.append(time() - start_localsum1)
+
          global_vec = numpy.empty_like(local_vec)
+         start_gsum = time()
          MPI.COMM_WORLD.Allreduce([local_vec, MPI.DOUBLE], [global_vec, MPI.DOUBLE])
+         gsum_dots.append( time() - start_gsum )
          global_vec += V[0:j+1, n:n+p] @ V[j-1:j+1, n:n+p].T
 
          #3. set values for Hessenberg matrix H
@@ -149,13 +165,19 @@ def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 1, mmax = 128, reuse_in
            Minv[j-1, 0:j-1] = -global_vec[0:j-1,0].T @ Minv[0:j-1, 0:j-1]
 
          #4b. part 1: the mat-vec
+         matv_start = time()
          rhs = ( numpy.eye(j) + numpy.matmul(N[0:j, 0:j], Minv[0:j,0:j]) ) @ global_vec[0:j,1]
+         matvec_t.append( time() - matv_start )
 
          #4c. part 2: the lower triangular solve
+         low_start = time()
          sol = scipy.linalg.solve_triangular(M[0:j, 0:j], rhs, unit_diagonal=True, check_finite=False, overwrite_b=True)
+         low_triang.append( time() - low_start )
 
          #5. Orthogonalize
+         start_ortho = time()
          V[j, :] -= sol @ V[0:j, :]
+         ortho_sum.append( time() - start_ortho )
 
          #7. compute norm estimate
          sum_sqrd = sum(global_vec[0:j,1]**2)
@@ -165,6 +187,7 @@ def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 1, mmax = 128, reuse_in
             global_sum_nrm = numpy.empty_like(local_sum)
             MPI.COMM_WORLD.Allreduce([local_sum, MPI.DOUBLE], [global_sum_nrm, MPI.DOUBLE])
             curr_nrm = math.sqrt( global_sum_nrm + V[j,n:n+p] @ V[j, n:n+p] )
+            reg_comm_nrm += 1
          else:
            curr_nrm = numpy.sqrt(global_vec[-1,1] - sum_sqrd)
 
@@ -314,6 +337,15 @@ def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 1, mmax = 128, reuse_in
       for k in range(numSteps):
          w[k, :] = w[k, :] / τ_out[k]
 
-   stats = (step, reject, krystep, exps, conv)
+
+   nn = len(ortho_sum)
+   avg_ortho    = sum(ortho_sum) / nn
+   avg_localsum = sum(local_dot1) / nn
+   avg_matvec   = sum(matvec_t) / nn
+   avg_lowtriag = sum(low_triang) / nn
+   avg_gsum_dots = sum(gsum_dots) / nn
+
+
+   stats = (step, reject, krystep, exps, conv, avg_ortho, avg_localsum, avg_matvec, avg_lowtriag, reg_comm_nrm, avg_gsum_dots)
   
    return w, stats

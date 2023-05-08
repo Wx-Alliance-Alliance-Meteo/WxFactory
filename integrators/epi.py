@@ -17,6 +17,9 @@ class Epi(Integrator):
       self.krylov_size = 1
       self.jacobian_method = param.jacobian_method
       self.exponential_solver = param.exponential_solver
+      self.case_number = param.case_number
+      self.int = param.time_integrator
+
 
       if order == 2:
          self.A = numpy.array([[]])
@@ -97,6 +100,13 @@ class Epi(Integrator):
          phiv, stats = pmex([1.], matvec_handle, vec, tol=self.tol, mmax=64, task1=False)
 
          if (mpirank == 0):
+
+            #print to file stats
+            size      = MPI.COMM_WORLD.Get_size()
+            file_name = "results_tanya/pmexne_stats_" + "n" + str(size) + "_" + str(self.int) + "_c" + str(self.case_number) + ".txt" 
+            with open(file_name, 'a') as gg:
+              gg.write('{} {} {} {} {} {} {} {} {} \n'.format(stats[0], stats[1], stats[2], stats[9], stats[5], stats[6], stats[7], stats[8], stats[10]))
+
             print(f'PMEX NE converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)'
                   f' to a solution with local error {stats[4]:.2e}')
 
@@ -105,6 +115,13 @@ class Epi(Integrator):
          phiv, stats = pmex_1s([1.], matvec_handle, vec, tol=self.tol, mmax=64, task1=False)
 
          if (mpirank == 0):
+
+            #print to file stats
+            size      = MPI.COMM_WORLD.Get_size()
+            file_name = "results_tanya/pmex1s_stats_" + "n" + str(size) + "_" + str(self.int) + "_c" + str(self.case_number) + ".txt" 
+            with open(file_name, 'a') as gg:
+              gg.write('{} {} {} {} {} {} {} {} \n'.format(stats[0], stats[1], stats[2], stats[5], stats[6], stats[7], stats[8], stats[9]))
+
             print(f'PMEX 1s converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)'
                   f' to a solution with local error {stats[4]:.2e}')
 
@@ -205,6 +222,13 @@ class Epi(Integrator):
          self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
 
          if (mpirank == 0):
+
+            #print to file stats
+            size      = MPI.COMM_WORLD.Get_size()
+            file_name = "results_tanya/kiops_stats_" + "n" + str(size) + "_" + str(self.int) + "_c" + str(self.case_number) + ".txt" 
+            with open(file_name, 'a') as gg:
+              gg.write('{} {} {} {} {} {} {} {} \n'.format(stats[0], stats[1], stats[2], stats[6], stats[7], stats[8], stats[9], stats[10]))
+
             print(f'KIOPS converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)'
                   f' to a solution with local error {stats[4]:.2e}')
 
