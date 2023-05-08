@@ -5,7 +5,6 @@ cd /home/vma000/ords/gef_tanya
 #methods=("case5.ini" "case5_cwy1s.ini" "case5_cwyne.ini" "case5_cwyne1s.ini" "case5_icwy1s.ini" "case5_icwyne.ini" "case5_icwyne1s.ini" "case5_icwyiop.ini" "case5_pmex1s.ini" "case5_pmexne.ini" "case5_pmexne1s.ini" "case5_kiopsne.ini")
 methods=("case5.ini" "case5_cwy1s.ini" "case5_cwyne.ini" "case5_cwyne1s.ini" "case5_icwy1s.ini" "case5_icwyne.ini")
 
-#methods=("case5_pmexne.ini" "case5_kiopsne.ini")
 methodlen=${#methods[@]}
 
 #looping through each case and running it 7 times
