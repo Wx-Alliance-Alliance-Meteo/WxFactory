@@ -427,6 +427,8 @@ def rhs_bubble_cuda(Q: NDArray[cp.floating], geom: Cartesian2D, mtrx: DFROperato
     df1_dx1 = save
     """
 
+    breakpoint()
+
     # --- Assemble the right-hand sides
     rhs = -(df1_dx1 + df3_dx3)
     rhs[idx_2d_rho_w, :, :] -= Q[idx_2d_rho, :, :] * gravity
