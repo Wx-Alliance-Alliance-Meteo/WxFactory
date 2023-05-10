@@ -83,7 +83,8 @@ def main(argv) -> int:
 
       if MPI.COMM_WORLD.rank == 0: print(f'\nStep {step} of {nb_steps + starting_step}')
 
-      Q = stepper.step(Q, param.dt)
+      #caseNum = str(param.case_number)
+      Q = stepper.step(Q, param.dt, )
       if (param.expfilter_apply):
          Q = mtrx.apply_filter_3d(Q,geom,metric)
 
@@ -120,8 +121,12 @@ def main(argv) -> int:
       methodOrtho = str(param.exponential_solver)
       caseNum     = str(param.case_number)
       totaltime_name = "results_tanya/runtime_"+ methodOrtho + "_n" +  str(size) + "_" + str(method) + "_c" + caseNum +".txt"
-      with open(totaltime_name, 'a') as gg:
-          gg.write('{} \n'.format(total_time))
+      #print("numpy._lapack_", numpy._lapack_version_)
+      #print("numpy._blas_", numpy._blas_version_)
+      #print("---------------------------------------")
+      #print(numpy.__config__.show())
+      #with open(totaltime_name, 'a') as gg:
+      #    gg.write('{} \n'.format(total_time))
 
    return MPI.COMM_WORLD.rank
 
