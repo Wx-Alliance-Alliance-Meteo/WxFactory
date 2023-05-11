@@ -129,11 +129,13 @@ def icwy_1s(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 
 
    l = 0
 
+   """
    #arrays to hold timing data
    local_dot1 = [] #local dot product for Vjv values
    ortho_sum  = [] #for orthogonalizing
    matvec_t   = [] #applying T
    gsum_dots  = [] #global sum for dots
+   """
 
    while τ_now < τ_end:
 
@@ -170,15 +172,10 @@ def icwy_1s(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 
 
          #1. Compute values for ICWY
          #temp is of size jx2. the second column will be V^{T}*a_{j-1}
-         start_ldot = time()
          local_sum  = V[0:j, :] @ V[j-1:j+1, :].T
-         local_dot1.append( time() - start_ldot)
 
          global_sum = numpy.empty_like(local_sum)
-         start_gsum = time() 
          mpi4py.MPI.COMM_WORLD.Allreduce([local_sum, mpi4py.MPI.DOUBLE], [global_sum, mpi4py.MPI.DOUBLE])
-         gsum_dots.append( time() - start_gsum )
-
          #2. norm of previous vector
          nrm = numpy.sqrt(global_sum[-1,0])
 
@@ -203,13 +200,8 @@ def icwy_1s(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 
             T[j-1, 0:j-1] = -global_sum[0:j-1, 0]  
 
          #5. orthogonalize 
-         start_mvec = time()
          tmp     = T[0:j, 0:j].dot(global_sum[:,1])
-         matvec_t.append(time() - start_mvec)
-
-         start_ortho = time()
          V[j,:] -= tmp @ V[0:j,:]
-         ortho_sum.append( time() - start_ortho )
 
          #6. Happy breakdown
          if nrm < tol:
@@ -380,13 +372,15 @@ def icwy_1s(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 
 
    m_ret=m
 
+   """
    nn = len(ortho_sum)
    avg_ortho    = sum(ortho_sum) / nn
    avg_localsum = sum(local_dot1) / nn
    avg_matvec   = sum(matvec_t) / nn
    avg_gsum_dots = sum(gsum_dots) / nn
+   """
 
-   stats = (step, reject, krystep, exps, conv, m_ret, reg_comm, avg_ortho, avg_localsum, avg_matvec, avg_gsum_dots)
+   stats = (step, reject, krystep, exps, conv, m_ret)
 
    return w, stats
 

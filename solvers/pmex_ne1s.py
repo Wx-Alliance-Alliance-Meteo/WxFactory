@@ -5,8 +5,9 @@ import scipy.linalg
 
 #post modern arnoldi with
 # norm estimate + true 1-sync (i.e. lagged normalization)
-def pmex_ne1s(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 1, mmax = 128, reuse_info = True, task1 = False):
+#def pmex_ne1s(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 1, mmax = 128, reuse_info = True, task1 = False):
    
+def pmex_ne1s(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 10, mmin=10, mmax = 128, reuse_info = False, task1 = False):
 
    rank = mpi4py.MPI.COMM_WORLD.Get_rank()
    ppo, n = u.shape
@@ -33,6 +34,7 @@ def pmex_ne1s(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 1, mmax = 128, reu
 
    first_accepted = True
 
+   """
    if not hasattr(pmex_ne1s, "static_mem") or reuse_info is False:
       pmex_ne1s.static_mem = True
       pmex_ne1s.suggested_step = τ_end 
@@ -41,9 +43,10 @@ def pmex_ne1s(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 1, mmax = 128, reu
       m_opt = 1
    else:
       m_init = pmex_ne1s.suggested_m
+   """
 
    # We only allow m to vary between mmin and mmax
-   mmin = 1
+   #mmin = 1
    m = max(mmin, min(m_init, mmax))
 
    # Preallocate matrix
@@ -76,7 +79,10 @@ def pmex_ne1s(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 1, mmax = 128, reu
    u_flip = nu * numpy.flipud(u[1:, :])
 
    # Compute and initial starting approximation for the step size
-   τ = min(pmex_ne1s.suggested_step, τ_end)
+   #τ = min(pmex_ne1s.suggested_step, τ_end)
+
+   #follow same as kiops
+   τ = τ_end
 
    # Setting the safety factors and tolerance requirements
    if τ_end > 1:
@@ -319,10 +325,12 @@ def pmex_ne1s(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 1, mmax = 128, reu
          reject += ireject
          step   += 1
 
+         """
          if first_accepted:
             pmex_ne1s.suggested_step = min(pmex_ne1s.suggested_step, τ) 
             pmex_ne1s.suggested_m    = min(pmex_ne1s.suggested_m, m_opt)
             first_accepted = False
+         """
 
          # Udate for τ_out in the interval (τ_now, τ_now + τ)
          blownTs = 0
@@ -373,6 +381,8 @@ def pmex_ne1s(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 1, mmax = 128, reu
       for k in range(numSteps):
          w[k, :] = w[k, :] / τ_out[k]
 
-   stats = (step, reject, krystep, exps, conv)
+   m_ret=m
+
+   stats = (step, reject, krystep, exps, conv, m_ret)
   
    return w, stats

@@ -7,7 +7,9 @@ import scipy.linalg
 
 from time import time
 
-def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 1, mmax = 128, reuse_info = True, task1 = False):
+#def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 1, mmax = 128, reuse_info = True, task1 = False):
+
+def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 10, mmin=10, mmax = 128, reuse_info = False, task1 = False):
    
    rank = MPI.COMM_WORLD.Get_rank()
 
@@ -35,6 +37,7 @@ def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 1, mmax = 128, reuse_in
 
    first_accepted = True
 
+   """
    if not hasattr(pmex, "static_mem") or reuse_info is False:
       pmex.static_mem = True
       pmex.suggested_step = τ_end 
@@ -43,9 +46,10 @@ def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 1, mmax = 128, reuse_in
       m_opt  = 1
    else:
       m_init = pmex.suggested_m
+   """
 
    # We only allow m to vary between mmin and mmax
-   mmin = 1
+   #mmin = 1
    m = max(mmin, min(m_init, mmax))
 
    if rank == 0:
@@ -81,7 +85,10 @@ def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 1, mmax = 128, reuse_in
    u_flip = nu * numpy.flipud(u[1:, :])
 
    # Compute and initial starting approximation for the step size
-   τ = min(pmex.suggested_step, τ_end)
+   #τ = min(pmex.suggested_step, τ_end)
+
+   #follow same as kiops
+   τ = τ_end
 
    # Setting the safety factors and tolerance requirements
    if τ_end > 1:
@@ -98,14 +105,14 @@ def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 1, mmax = 128, reuse_in
 
    l = 0
 
-
+   """
    #arrays to hold timing data
    local_dot1 = [] #local dot product for Vjv values
    ortho_sum  = [] #for orthogonalizing
    matvec_t   = [] #part 1 of applying T
    low_triang = [] #part 2 of applying T
    gsum_dots  = [] #global sum for dots
-
+   """
 
    while τ_now < τ_end:
 
@@ -142,14 +149,9 @@ def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 1, mmax = 128, reuse_in
          V[j, -1     ] = 0.0
 
          #2. compute terms needed for R and T
-         start_localsum1 = time()
          local_vec = V[0:j+1, 0:n] @ V[j-1:j+1, 0:n].T
-         local_dot1.append(time() - start_localsum1)
-
          global_vec = numpy.empty_like(local_vec)
-         start_gsum = time()
          MPI.COMM_WORLD.Allreduce([local_vec, MPI.DOUBLE], [global_vec, MPI.DOUBLE])
-         gsum_dots.append( time() - start_gsum )
          global_vec += V[0:j+1, n:n+p] @ V[j-1:j+1, n:n+p].T
 
          #3. set values for Hessenberg matrix H
@@ -165,19 +167,13 @@ def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 1, mmax = 128, reuse_in
            Minv[j-1, 0:j-1] = -global_vec[0:j-1,0].T @ Minv[0:j-1, 0:j-1]
 
          #4b. part 1: the mat-vec
-         matv_start = time()
          rhs = ( numpy.eye(j) + numpy.matmul(N[0:j, 0:j], Minv[0:j,0:j]) ) @ global_vec[0:j,1]
-         matvec_t.append( time() - matv_start )
 
          #4c. part 2: the lower triangular solve
-         low_start = time()
          sol = scipy.linalg.solve_triangular(M[0:j, 0:j], rhs, unit_diagonal=True, check_finite=False, overwrite_b=True)
-         low_triang.append( time() - low_start )
 
          #5. Orthogonalize
-         start_ortho = time()
          V[j, :] -= sol @ V[0:j, :]
-         ortho_sum.append( time() - start_ortho )
 
          #7. compute norm estimate
          sum_sqrd = sum(global_vec[0:j,1]**2)
@@ -285,10 +281,12 @@ def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 1, mmax = 128, reuse_in
          reject += ireject
          step   += 1
 
+         """
          if first_accepted:
             pmex.suggested_step = min(pmex.suggested_step, τ) 
             pmex.suggested_m    = min(pmex.suggested_m, m_opt)
             first_accepted = False
+         """
 
          # Udate for τ_out in the interval (τ_now, τ_now + τ)
          blownTs = 0
@@ -337,15 +335,17 @@ def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 1, mmax = 128, reuse_in
       for k in range(numSteps):
          w[k, :] = w[k, :] / τ_out[k]
 
+   m_ret=m
 
+   """
    nn = len(ortho_sum)
    avg_ortho    = sum(ortho_sum) / nn
    avg_localsum = sum(local_dot1) / nn
    avg_matvec   = sum(matvec_t) / nn
    avg_lowtriag = sum(low_triang) / nn
    avg_gsum_dots = sum(gsum_dots) / nn
+   """
 
-
-   stats = (step, reject, krystep, exps, conv, avg_ortho, avg_localsum, avg_matvec, avg_lowtriag, reg_comm_nrm, avg_gsum_dots)
+   stats = (step, reject, krystep, exps, conv, m_ret)
   
    return w, stats

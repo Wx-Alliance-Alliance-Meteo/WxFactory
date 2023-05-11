@@ -63,8 +63,8 @@ def kiops(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 2,
    # We only allow m to vary between mmin and mmax
    m = max(mmin, min(m_init, mmax))
 
-   if rank == 0:
-      print("in kiops, m_init = {}, m = {}".format(m_init, m))
+   #if rank == 0:
+   #   print("in kiops, m_init = {}, m = {}".format(m_init, m))
 
    # Preallocate matrix
    V = numpy.zeros((mmax + 1, n + p))
@@ -126,12 +126,14 @@ def kiops(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 2,
 
    l = 0
 
+   """
    #arrays for timing info
    local_sum_for_dots  = [] #time for the dot products for H
    ortho_time          = [] #time for the orthogonalization
    norm_time_local_dot = [] #time for local dot product of norm
    gsum_dots           = [] #global communication for dot cgs
    gsum_nrm            = [] #global communication for nrm
+   """
 
    while τ_now < τ_end:
 
@@ -170,30 +172,15 @@ def kiops(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 2,
          # Classical Gram-Schmidt
          ilow = max(0, j - iop)
 
-         start_localsum1 = time()
          local_sum = V[ilow:j, 0:n] @ V[j, 0:n]
-         end_localsum1 = time() - start_localsum1
-         local_sum_for_dots.append(end_localsum1)
-
          global_sum = numpy.empty_like(local_sum)
-         start_gsum_dots = time()
          MPI.COMM_WORLD.Allreduce([local_sum, MPI.DOUBLE], [global_sum, MPI.DOUBLE])
-         gsum_dots.append( time() - start_gsum_dots )
+
          H[ilow:j, j-1] = global_sum + V[ilow:j, n:n+p] @ V[j, n:n+p]
-
-         start_ortho = time()
          V[j, :] = V[j, :] - V[ilow:j,:].T @ H[ilow:j, j-1]
-         end_ortho = time() - start_ortho
-         ortho_time.append(end_ortho)
 
-         start_normdot = time()
          local_sum = V[j, 0:n] @ V[j, 0:n]
-         end_normdot = time() - start_normdot
-         norm_time_local_dot.append(end_normdot)
-
-         start_gsum_nrm = time()
          MPI.COMM_WORLD.Allreduce([local_sum, MPI.DOUBLE], [global_sum_nrm, MPI.DOUBLE])
-         gsum_nrm.append( time() - start_gsum_nrm )
          nrm = numpy.sqrt( global_sum_nrm + V[j, n:n+p] @ V[j, n:n+p] )
 
          # Happy breakdown
@@ -341,20 +328,15 @@ def kiops(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 2,
 
    m_ret=m
 
+   """
    nn = len(ortho_time)
    avg_ortho     = sum(ortho_time) / nn
    avg_dots      = sum(local_sum_for_dots) / nn
    avg_nrm       = sum(norm_time_local_dot) / nn
    avg_gsum_dots = sum(gsum_dots) / nn
    avg_gsum_nrm  = sum(gsum_nrm) / nn
-
-   """
-   if MPI.COMM_WORLD.rank == 0:
-     print("ortho_time = {}".format(avg_ortho))
-     print("local_sum_for_dots = {}".format(avg_dots))
-     print("norm_time_local_dot = {}".format(avg_nrm))
    """
 
-   stats = (step, reject, krystep, exps, conv, m_ret, avg_ortho, avg_dots, avg_nrm, avg_gsum_dots, avg_gsum_nrm)
+   stats = (step, reject, krystep, exps, conv, m_ret)
 
    return w, stats
