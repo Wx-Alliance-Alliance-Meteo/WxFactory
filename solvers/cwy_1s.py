@@ -136,6 +136,12 @@ def cwy_1s(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 2
 
    l = 0
 
+   #arrays to hold timing data
+   local_dot1 = [] #local dot product for Vjv values
+   ortho_sum  = [] #for orthogonalizing
+   matvec_t   = [] #applying T
+   gsum_dots  = [] #global sum for dots
+   formT      = [] #time to matvec to form T
    while τ_now < τ_end:
 
       # Compute necessary starting information
@@ -166,9 +172,14 @@ def cwy_1s(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 2
          V[j, -1     ] = 0.0
 
          #2. V_{j-1}^T * [v_{j-1} , v_j]
+         start_ldot = time()
          local_vec = V[0:j, 0:n] @ V[j-1:j+1, 0:n].T
+         local_dot1.append( time() - start_ldot)
+
          global_vec = numpy.empty_like(local_vec)
+         start_gsum = time() 
          mpi4py.MPI.COMM_WORLD.Allreduce([local_vec, mpi4py.MPI.DOUBLE], [global_vec, mpi4py.MPI.DOUBLE])
+         gsum_dots.append( time() - start_gsum )
          global_vec += V[0:j, n:n+p] @ V[j-1:j+1, n:n+p].T
 
          #3. norm of previous vector
@@ -190,11 +201,18 @@ def cwy_1s(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 2
 
          #6. set T matrix for cwy projection
          if (j > 1) :
+            start_formT = time()
             T[j-1, 0:j-1] = -global_vec[0:j-1,0].T @ T[0:j-1, 0:j-1]
+            formT.append(time() - start_formT )
 
          #7. orthogonalization 
+         start_mvec = time()
          tmp     = T[0:j, 0:j] @ global_vec[:,1] 
+         matvec_t.append(time() - start_mvec)
+
+         start_ortho = time()
          V[j,:] -= tmp @ V[0:j,:]
+         ortho_sum.append( time() - start_ortho )
 
          #8. Happy breakdown
          if nrm < tol:
@@ -365,6 +383,14 @@ def cwy_1s(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 2
 
    m_ret=m
 
-   stats = (step, reject, krystep, exps, conv, m_ret)
+   nn = len(ortho_sum)
+   avg_ortho    = sum(ortho_sum) / nn
+   avg_localsum = sum(local_dot1) / nn
+   avg_matvec   = sum(matvec_t) / nn
+   avg_gsum_dots = sum(gsum_dots) / nn
+   avg_formt    = sum(formT) / nn
+
+
+   stats = (step, reject, krystep, exps, conv, m_ret, avg_ortho, avg_localsum, avg_matvec, avg_formt, avg_gsum_dots)
 
    return w, stats
