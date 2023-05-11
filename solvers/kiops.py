@@ -149,12 +149,12 @@ def kiops(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 2,
          j = j + 1
 
          # Augmented matrix - vector product
-         tic = time.time()
+         """tic = time.time()"""
          V[j, 0:n    ] = A( V[j-1, 0:n] ) + V[j-1, n:n+p] @ u_flip
+         """
          toc = time.time()
          print(f'[{τ_now:.4f}/{τ_end:.1f}] rhs_bubble with j={j} took {toc-tic} seconds.')
-         from rhs.rhs_bubble import rhs_bubble
-         
+         """
          
          V[j, n:n+p-1] = V[j-1, n+1:n+p]
          V[j, -1     ] = 0.0

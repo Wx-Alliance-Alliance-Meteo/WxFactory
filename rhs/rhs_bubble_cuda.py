@@ -1,197 +1,85 @@
-from typing import Union, Callable
-from numpy.typing import NDArray
-
 import cupy as cp
 from cupyx import jit
+from common.cuda_module import CudaModule, DimSpec, Dim, cuda_kernel
 
 from geometry.cartesian_2d_mesh import Cartesian2D
 from geometry.matrices import DFROperators
 from common.definitions import *
 
-# --- Interpolate to the element interface
+from numpy.typing import NDArray
 
-# TODO: could parallelize on idx instead of j
-@jit.rawkernel()
-def extrap_kfaces_var(kfaces_var, extrap_down, extrap_up, Q, nbsolpts, nb_elements_z):
-    """
-    Run with `Q.shape[0]` x `Q.shape[1] // nbsolpts` x `Q.shape[2]` total threads,
-    with block size `(1, ?, 1)`
-    """
-    j = jit.blockIdx.y * jit.blockDim.y + jit.threadIdx.y
-    if j < nb_elements_z:
-        i = jit.blockIdx.x
-        k = jit.blockIdx.z
+def _dim_kfaces_var(kfaces_var: NDArray[cp.float64], Q: NDArray[cp.float64], extrap_up: NDArray[cp.float64], extrap_down: NDArray[cp.float64],
+                    nbsolpts: int, nb_elements_z: int, nb_elements_x: int) \
+                    -> tuple[Dim, Dim]:
+    return DimSpec.groupby_first_x(lambda s: Dim(s[3], s[1], s[0])) \
+        (kfaces_var, Q, extrap_up, extrap_down, nbsolpts, nb_elements_z, nb_elements_x)
 
-        r, s = 0., 0.
-        start = nbsolpts * j
-        for l in jit.range(nbsolpts):
-            idx = start + l
-            r += extrap_down[l] * Q[i, idx, k]
-            s += extrap_up[l] * Q[i, idx, k]
+def _dim_ifaces_var(ifaces_var: NDArray[cp.float64], Q: NDArray[cp.float64], extrap_west: NDArray[cp.float64], extrap_east: NDArray[cp.float64],
+                    nbsolpts: int, nb_elements_z: int, nb_elements_x: int) \
+                    -> tuple[Dim, Dim]:
+    return DimSpec.groupby_first_x(lambda s: Dim(s[2], s[1], s[0])) \
+        (ifaces_var, Q, extrap_west, extrap_east, nbsolpts, nb_elements_z, nb_elements_x)
+
+def _dim_kfaces_flux(kfaces_flux: NDArray[cp.float64], kfaces_pres: NDArray[cp.float64], kfaces_var: NDArray[cp.float64],
+                     nb_equations: int, nbsolpts: int, nb_elements_z: int, nb_elements_x: int) \
+                     -> tuple[Dim, Dim]:
+    return DimSpec.groupby_first_x(lambda s: Dim(s[3], s[1] - 1, 1)) \
+        (kfaces_flux, kfaces_pres, kfaces_var, nb_equations, nbsolpts, nb_elements_z, nb_elements_x)
+
+def _dim_ifaces_flux(ifaces_flux: NDArray[cp.float64], ifaces_pres: NDArray[cp.float64], ifaces_var: NDArray[cp.float64],
+                     nb_equations: int, nbsolpts: int, nb_elements_z: int, nb_elements_x: int, xperiodic: bool) \
+                     -> tuple[Dim, Dim]:
+    return DimSpec.groupby_first_x(lambda s: Dim(s[2], s[1] - 1, 1)) \
+        (ifaces_flux, ifaces_pres, ifaces_var, nb_equations, nbsolpts, nb_elements_z, nb_elements_x, xperiodic)
+
+def _dim_df3_dx3(df3_dx3: NDArray[cp.float64], flux_x3: NDArray[cp.float64], kfaces_flux: NDArray[cp.float64],
+                 diff_solpt: NDArray[cp.float64], correction: NDArray[cp.float64],
+                 dx3: float, nbsolpts: int, nb_elements_z: int, nb_elements_x: int) \
+                 -> tuple[Dim, Dim]:
+    return DimSpec.groupby_first_x(lambda s: Dim(s[2], s[1], s[0])) \
+        (df3_dx3, flux_x3, kfaces_flux, diff_solpt, correction, dx3, nbsolpts, nb_elements_z, nb_elements_x)
+
+def _dim_df1_dx1(df1_dx1: NDArray[cp.float64], flux_x1: NDArray[cp.float64], ifaces_flux: NDArray[cp.float64],
+                 diff_solpt: NDArray[cp.float64], correction: NDArray[cp.float64],
+                 dx1: float, nbsolpts: int, nb_elements_z: int, nb_elements_x: int) \
+                 -> tuple[Dim, Dim]:
+    return DimSpec.groupby_first_x(lambda s: Dim(s[2], s[1], s[0])) \
+        (df1_dx1, flux_x1, ifaces_flux, diff_solpt, correction, dx1, nbsolpts, nb_elements_z, nb_elements_x)
+
+class RHSBubble(CudaModule,
+                path="rhs_bubble.cu",
+                defines=(("heat_capacity_ratio", heat_capacity_ratio),
+                         ("idx_2d_rho", idx_2d_rho),
+                         ("idx_2d_rho_u", idx_2d_rho_u),
+                         ("idx_2d_rho_w", idx_2d_rho_w))):
+
+    @cuda_kernel(_dim_kfaces_var)
+    def set_kfaces_var(kfaces_var: NDArray[cp.float64], Q: NDArray[cp.float64], extrap_up: NDArray[cp.float64], extrap_down: NDArray[cp.float64],
+                       nbsolpts: int, nb_elements_z: int, nb_elements_x: int): ...
     
-        kfaces_var[i, j, 0, k] = r
-        kfaces_var[i, j, 1, k] = s
+    @cuda_kernel(_dim_ifaces_var)
+    def set_ifaces_var(ifaces_var: NDArray[cp.float64], Q: NDArray[cp.float64], extrap_west: NDArray[cp.float64], extrap_east: NDArray[cp.float64],
+                       nbsolpts: int, nb_elements_z: int, nb_elements_x: int): ...
 
-# TODO: could parallelize on idx instead of k
-@jit.rawkernel()
-def extrap_ifaces_var(ifaces_var, extrap_west, extrap_east, Q, nbsolpts, nb_elements_x):
-    """
-    Run with `Q.shape[0]` x `Q.shape[1]` x `Q.shape[2] // nbsolpts` total threads,
-    with block size `(1, 1, ?)`
-    """
-    k = jit.blockIdx.z * jit.blockDim.z + jit.threadIdx.z
-    if k < nb_elements_x:
-        i = jit.blockIdx.x
-        j = jit.blockIdx.y
+    @cuda_kernel(_dim_kfaces_flux)
+    def set_kfaces_flux(kfaces_flux: NDArray[cp.float64], kfaces_pres: NDArray[cp.float64], kfaces_var: NDArray[cp.float64],
+                        nb_equations: int, nbsolpts: int, nb_elements_z: int, nb_elements_x: int): ...
+    
+    @cuda_kernel(_dim_ifaces_flux)
+    def set_ifaces_flux(ifaces_flux: NDArray[cp.float64], ifaces_pres: NDArray[cp.float64], ifaces_var: NDArray[cp.float64],
+                        nb_equations: int, nbsolpts: int, nb_elements_z: int, nb_elements_x: int, xperiodic: bool): ...
 
-        r, s = 0., 0.
-        start = nbsolpts * k
-        for l in jit.range(nbsolpts):
-            idx = start + l
-            r += Q[i, j, idx] * extrap_west[l]
-            s += Q[i, j, idx] * extrap_east[l]
+    @cuda_kernel(_dim_df3_dx3)
+    def set_df3_dx3(df3_dx3: NDArray[cp.float64], flux_x3: NDArray[cp.float64], kfaces_flux: NDArray[cp.float64],
+                    diff_solpt: NDArray[cp.float64], correction: NDArray[cp.float64],
+                    dx3: float, nbsolpts: int, nb_elements_z: int, nb_elements_x: int): ...
+    
+    @cuda_kernel(_dim_df1_dx1)
+    def set_df1_dx1(df1_dx1: NDArray[cp.float64], flux_x1: NDArray[cp.float64], ifaces_flux: NDArray[cp.float64],
+                    diff_solpt: NDArray[cp.float64], correction: NDArray[cp.float64],
+                    dx1: float, nbsolpts: int, nb_elements_z: int, nb_elements_x: int): ...
 
-        ifaces_var[i, k, j, 0] = r
-        ifaces_var[i, k, j, 1] = s
-
-# --- Common AUSM fluxes
-
-@jit.rawkernel()
-def set_kfaces_flux(kfaces_flux, kfaces_pres, kfaces_var, nb_equations, max_j):
-    """
-    Run with `nb_interfaces_z - 2` x `nbsolpts * nb_elements_x` x `1` threads,
-    with block size `(1, ?, 1)`
-    and `max_j = nbsolpts * nb_elements_x`
-    """
-    j = jit.blockIdx.y * jit.blockDim.y + jit.threadIdx.y
-    if j < max_j:
-        i = jit.blockIdx.x
-        left = i
-        right = i + 1
-        hcr, rho, rho_w = heat_capacity_ratio, idx_2d_rho, idx_2d_rho_w
-
-        # Left state
-        a_L = cp.sqrt(hcr * kfaces_pres[left, 1, j] / kfaces_var[rho, left, 1, j])
-        M_L = kfaces_var[rho_w, left, 1, j] / (kfaces_var[rho, left, 1, j] * a_L)
-
-        # Right state
-        a_R = cp.sqrt(hcr * kfaces_pres[right, 0, j] / kfaces_var[rho, right, 0, j])
-        M_R = kfaces_var[rho_w, right, 0, j] / (kfaces_var[rho, right, 0, j] * a_R)
-
-        M = 0.25 * ((M_L + 1.) ** 2 - (M_R - 1.) ** 2)
-        rho_w_extra = 0.5 * ((1. + M_L) * kfaces_pres[left, 1, j] + (1. - M_R) * kfaces_pres[right, 0, j])
-
-        if M > 0:
-            for k in jit.range(nb_equations):
-                r = kfaces_var[k, left, 1, j] * M * a_L
-                if k == rho_w:
-                    r += rho_w_extra
-                kfaces_flux[k, right, 0, j] = r
-                kfaces_flux[k, left, 1, j] = r
-        else:
-            for k in jit.range(nb_equations):
-                r = kfaces_var[k, right, 0, j] * M * a_R
-                if k == rho_w:
-                    r += rho_w_extra
-                kfaces_flux[k, right, 0, j] = r
-                kfaces_flux[k, left, 1, j] = r
-
-@jit.rawkernel()
-def set_ifaces_flux(ifaces_flux, ifaces_pres, ifaces_var, nb_equations, max_j, xperiodic):
-    """
-    Run with `nb_interfaces_x - 2` x `nbsolpts * nb_elements_z` x `1` threads,
-    with block size `(1, ?, 1)`
-    and `max_j = nbsolpts * nb_elements_z`
-    """
-    j = jit.blockIdx.y * jit.blockDim.y + jit.threadIdx.y
-    if j < max_j:
-        i = jit.blockIdx.x
-        left = i
-        right = i + 1
-        hcr, rho, rho_u = heat_capacity_ratio, idx_2d_rho, idx_2d_rho_u
-
-        # Left state
-        if xperiodic and left == 0:
-            left = -1
-        
-        a_L = cp.sqrt(hcr * ifaces_pres[left, j, 1] / ifaces_var[rho, left, j, 1])
-        M_L = ifaces_var[rho_u, left, j, 1] / (ifaces_var[rho, left, j, 1] * a_L)
-
-        # Right state
-        a_R = cp.sqrt(hcr * ifaces_pres[right, j, 0] / ifaces_var[rho, right, j, 0])
-        M_R = ifaces_var[rho_u, right, j, 0] / (ifaces_var[rho, right, j, 0] * a_R)
-
-        M = 0.25 * ((M_L + 1.) ** 2 - (M_R - 1.) ** 2)
-        rho_u_extra = 0.5 * ((1. + M_L) * ifaces_pres[left, j, 1] + (1. - M_R) * ifaces_pres[right, j, 0])
-
-        if M > 0:
-            for k in jit.range(nb_equations):
-                r = ifaces_var[k, left, j, 1] * M * a_L
-                if k == rho_u:
-                    r += rho_u_extra
-                ifaces_flux[k, right, j, 0] = r
-                ifaces_flux[k, left, j, 1] = r
-        else:
-            for k in jit.range(nb_equations):
-                r = ifaces_var[k, right, j, 0] * M * a_R
-                if k == rho_u:
-                    r += rho_u_extra
-                ifaces_flux[k, right, j, 0] = r
-                ifaces_flux[k, left, j, 1] = r
-
-# -- Compute the derivatives
-
-# TODO: could parallelize on idx instead of j
-@jit.rawkernel()
-def set_df3_dx3(df3_dx3, flux_x3, kfaces_flux, diff_solpt, correction, dx3, nbsolpts, nb_elements_z):
-    """
-    Run with `Q.shape[0]` x `Q.shape[1] // nbsolpts` x `Q.shape[2]` total threads,
-    with block size `(1, ?, 1)`
-    """
-    j = jit.blockIdx.y * jit.blockDim.y + jit.threadIdx.y
-    if j < nb_elements_z:
-        i = jit.blockIdx.x
-        k = jit.blockIdx.z
-
-        start = nbsolpts * j
-        for l in jit.range(nbsolpts):
-            r = 0.0
-
-            for m in jit.range(nbsolpts):
-                r += diff_solpt[l, m] * flux_x3[i, start + m, k]
-            for m in jit.range(2):
-                r += correction[l, m] * kfaces_flux[i, j, m, k]
-            
-            df3_dx3[i, start + l, k] = 2.0 * r / dx3
-
-# TODO: could parallelize on idx instead of k
-@jit.rawkernel()
-def set_df1_dx1(df1_dx1, flux_x1, ifaces_flux, diff_solpt, correction, dx1, nbsolpts, nb_elements_x):
-    """
-    Run with `Q.shape[0]` x `Q.shape[1]` x `Q.shape[2] // nbsolpts` total threads,
-    with block size `(1, 1, ?)`
-    note that diff_solpt and correction are automatically transposed
-    """
-    k = jit.blockIdx.z * jit.blockDim.z + jit.threadIdx.z
-    if k < nb_elements_x:
-        i = jit.blockIdx.x
-        j = jit.blockIdx.y
-
-        start = nbsolpts * k
-        for l in jit.range(nbsolpts):
-            r = 0.0
-
-            for m in jit.range(nbsolpts):
-                r += flux_x1[i, j, start + m] * diff_solpt[l, m]
-            for m in jit.range(2):
-                r += ifaces_flux[i, k, j, m] * correction[l, m]
-            
-            df1_dx1[i, j, start + l] = 2.0 * r / dx1
-
-def error_of(A, save):
-    return cp.amax(cp.abs(save - A))
-
-@profile
+# @profile
 def rhs_bubble_cuda(Q: NDArray[cp.floating], geom: Cartesian2D, mtrx: DFROperators,
     nbsolpts: int, nb_elements_x: int, nb_elements_z: int) -> NDArray[cp.floating]:
 
@@ -202,9 +90,6 @@ def rhs_bubble_cuda(Q: NDArray[cp.floating], geom: Cartesian2D, mtrx: DFROperato
 
     datatype = Q.dtype
     nb_equations = Q.shape[0] # Number of constituent Euler equations.  Probably 6
-
-    nb_interfaces_x = nb_elements_x + 1
-    nb_interfaces_z = nb_elements_z + 1
 
     flux_x1 = cp.empty_like(Q, dtype=datatype)
     flux_x3 = cp.empty_like(Q, dtype=datatype)
@@ -244,47 +129,10 @@ def rhs_bubble_cuda(Q: NDArray[cp.floating], geom: Cartesian2D, mtrx: DFROperato
     flux_x3[idx_2d_rho_w, :, :]     = Q[idx_2d_rho_w, :, :] * ww + pressure
     flux_x3[idx_2d_rho_theta, :, :] = Q[idx_2d_rho_theta, :, :] * ww
 
-    """
-    for elem in range(nb_elements_z):
-      epais = elem * nbsolpts + cp.arange(nbsolpts)
+    RHSBubble.set_kfaces_var(kfaces_var, Q, mtrx.extrap_up, mtrx.extrap_down, nbsolpts, nb_elements_z, nb_elements_x)
 
-      kfaces_var[:,elem,0,:] = mtrx.extrap_down @ Q[:,epais,:]
-      kfaces_var[:,elem,1,:] = mtrx.extrap_up @ Q[:,epais,:]
-      
-    save = kfaces_var.copy()
-    """
+    RHSBubble.set_ifaces_var(ifaces_var, Q, mtrx.extrap_west, mtrx.extrap_east, nbsolpts, nb_elements_z, nb_elements_x)
 
-    # --- Interpolate to the element interface
-    blocks, extra = divmod(nb_elements_z, B)
-    gridspec = (Q.shape[0], blocks + (1 if extra else 0), Q.shape[2])
-    blockspec = (1, B, 1)
-    extrap_kfaces_var[gridspec, blockspec](kfaces_var, mtrx.extrap_down, mtrx.extrap_up, Q, nbsolpts, nb_elements_z)
-
-    """
-    print(f"[1]: {error_of(kfaces_var, save)}")
-    kfaces_var = save
-    """
-
-    """
-    for elem in range(nb_elements_x):
-      epais = elem * nbsolpts + cp.arange(nbsolpts)
-
-      ifaces_var[:,elem,:,0] = Q[:,:,epais] @ mtrx.extrap_west
-      ifaces_var[:,elem,:,1] = Q[:,:,epais] @ mtrx.extrap_east
-
-    save = ifaces_var.copy()
-    """
-
-    blocks, extra = divmod(nb_elements_x, B)
-    gridspec = (Q.shape[0], Q.shape[1], blocks + (1 if extra else 0))
-    blockspec = (1, 1, B)
-    extrap_ifaces_var[gridspec, blockspec](ifaces_var, mtrx.extrap_west, mtrx.extrap_east, Q, nbsolpts, nb_elements_x)
-
-    """
-    print(f"[2]: {error_of(ifaces_var, save)}")
-    ifaces_var = save
-    """
-    
     # --- Interface pressure
     ifaces_pres = p0 * (ifaces_var[idx_2d_rho_theta, :, :, :] * Rd / p0) ** (cpd / cvd)
     kfaces_pres = p0 * (kfaces_var[idx_2d_rho_theta, :, :, :] * Rd / p0) ** (cpd / cvd)
@@ -307,128 +155,25 @@ def rhs_bubble_cuda(Q: NDArray[cp.floating], geom: Cartesian2D, mtrx: DFROperato
     ifaces_flux[idx_2d_rho_u, 0, :, 0] = ifaces_pres[0, :, 0] # TODO: pour les cas théoriques seulement...
     ifaces_flux[idx_2d_rho_u, -1, :, 1] = ifaces_pres[-1, :, 1]
 
-    """
-    for itf in range(1, nb_interfaces_z - 1):
-
-      left  = itf - 1
-      right = itf
-
-      # Left state
-      a_L   = cp.sqrt( heat_capacity_ratio * kfaces_pres[left,1,:] / kfaces_var[idx_2d_rho,left,1,:] )
-      M_L   = kfaces_var[idx_2d_rho_w,left,1,:] / ( kfaces_var[idx_2d_rho,left,1,:] * a_L )
-
-      # Right state
-      a_R   = cp.sqrt( heat_capacity_ratio * kfaces_pres[right,0,:] / kfaces_var[idx_2d_rho,right,0,:] )
-      M_R   = kfaces_var[idx_2d_rho_w,right,0,:] / ( kfaces_var[idx_2d_rho,right,0,:] * a_R )
-
-      M = 0.25 * (( M_L + 1.)**2 - (M_R - 1.)**2)
-
-      kfaces_flux[:,right,0,:] = (kfaces_var[:,left,1,:] * cp.maximum(0., M) * a_L) + (kfaces_var[:,right,0,:] * cp.minimum(0., M) * a_R)
-      kfaces_flux[idx_2d_rho_w,right,0,:] += 0.5 * ( (1. + M_L) * kfaces_pres[left,1,:] + (1. - M_R) * kfaces_pres[right,0,:] )
-   
-      kfaces_flux[:,left,1,:] = kfaces_flux[:,right,0,:]
-
-    save = kfaces_flux.copy()
-    """
-
-    # --- Common AUSM fluxes
-    blocks, extra = divmod(nbsolpts * nb_elements_x, B)
-    gridspec = (nb_interfaces_z - 2, blocks + (1 if extra else 0), 1)
-    blockspec = (1, B, 1)
-    set_kfaces_flux[gridspec, blockspec](kfaces_flux, kfaces_pres, kfaces_var, nb_equations, nbsolpts * nb_elements_x)
-
-    """
-    print(f"[3]: {error_of(kfaces_flux, save)}")
-    kfaces_flux = save
-    """
+    RHSBubble.set_kfaces_flux(kfaces_flux, kfaces_pres, kfaces_var, nb_equations, nbsolpts, nb_elements_z, nb_elements_x)
 
     if geom.xperiodic:
         ifaces_var[:, 0, :, :] = ifaces_var[:, -1, :, :]
         ifaces_pres[0, :, :] = ifaces_pres[-1, :, :]
     
-    """
-    for itf in range(1, nb_interfaces_x - 1):
-
-      left  = itf - 1
-      right = itf
-
-      # Left state
-
-      if (geom.xperiodic and left == 0):
-         left = -1
-
-      a_L   = cp.sqrt( heat_capacity_ratio * ifaces_pres[left,:,1] / ifaces_var[idx_2d_rho,left,:,1] )
-      M_L   = ifaces_var[idx_2d_rho_u,left,:,1] / ( ifaces_var[idx_2d_rho,left,:,1] * a_L )
-
-      # Right state
-      a_R   = cp.sqrt( heat_capacity_ratio * ifaces_pres[right,:,0] / ifaces_var[idx_2d_rho,right,:,0] )
-      M_R   = ifaces_var[idx_2d_rho_u,right,:,0] / ( ifaces_var[idx_2d_rho,right,:,0] * a_R )
-
-      M = 0.25 * ((M_L + 1.)**2 - (M_R - 1.)**2)
-
-      ifaces_flux[:,right,:,0] = (ifaces_var[:,left,:,1] * cp.maximum(0., M) * a_L) + (ifaces_var[:,right,:,0] * cp.minimum(0., M) * a_R)
-      ifaces_flux[idx_2d_rho_u,right,:,0] += 0.5 * ( (1. + M_L) * ifaces_pres[left,:,1] + (1. - M_R) * ifaces_pres[right,:,0] )
-
-      ifaces_flux[:,left,:,1] = ifaces_flux[:,right,:,0]
-
-    save = ifaces_flux.copy()
-    """
-
-    blocks, extra = divmod(nbsolpts * nb_elements_z, B)
-    gridspec = (nb_interfaces_x - 2, blocks + (1 if extra else 0), 1)
-    blockspec = (1, B, 1)
-    set_ifaces_flux[gridspec, blockspec](ifaces_flux, ifaces_pres, ifaces_var, nb_equations, nbsolpts * nb_elements_z, geom.xperiodic)
-
-    """
-    print(f"[4]: {error_of(ifaces_flux, save)}")
-    ifaces_flux = save
-    """
-
+    RHSBubble.set_ifaces_flux(ifaces_flux, ifaces_pres, ifaces_var, nb_equations, nbsolpts, nb_elements_z, nb_elements_x, geom.xperiodic)
+    
     if geom.xperiodic:
         ifaces_flux[:, 0, :, :] = ifaces_flux[:, -1, :, :]
 
     # --- Compute the derivatives
     
-    """
-    for elem in range(nb_elements_z):
-      epais = elem * nbsolpts + cp.arange(nbsolpts)
+    RHSBubble.set_df3_dx3(df3_dx3, flux_x3, kfaces_flux, mtrx.diff_solpt, mtrx.correction,
+                          geom.Δx3, nbsolpts, nb_elements_z, nb_elements_x)
 
-      df3_dx3[:,epais,:] = ( mtrx.diff_solpt @ flux_x3[:,epais,:] + mtrx.correction @ kfaces_flux[:,elem,:,:] ) * 2.0/geom.Δx3
-
-    save = df3_dx3.copy()
-    """
-
-    blocks, extra = divmod(nb_elements_z, B)
-    gridspec = (Q.shape[0], blocks + (1 if extra else 0), Q.shape[2])
-    blockspec = (1, B, 1)
-    set_df3_dx3[gridspec, blockspec](df3_dx3, flux_x3, kfaces_flux, mtrx.diff_solpt, mtrx.correction, geom.Δx3, nbsolpts, nb_elements_z)
-
-    """
-    print(f"[5]: {error_of(df3_dx3, save)}")
-    df3_dx3 = save
-    """
-
-    """
-    for elem in range(nb_elements_x):
-      epais = elem * nbsolpts + cp.arange(nbsolpts)
-
-      df1_dx1[:,:,epais] = ( flux_x1[:,:,epais] @ mtrx.diff_solpt.T + ifaces_flux[:,elem,:,:] @ mtrx.correction.T ) * 2.0/geom.Δx1
-
-    save = df1_dx1.copy()
-    """
-
-    blocks, extra = divmod(nb_elements_x, B)
-    gridspec = (Q.shape[0], Q.shape[1], blocks + (1 if extra else 0))
-    blockspec = (1, 1, B)
-    set_df1_dx1(gridspec, blockspec, (df1_dx1, flux_x1, ifaces_flux, mtrx.diff_solpt, mtrx.correction, geom.Δx1, nbsolpts, nb_elements_x))
+    RHSBubble.set_df1_dx1(df1_dx1, flux_x1, ifaces_flux, mtrx.diff_solpt, mtrx.correction,
+                          geom.Δx1, nbsolpts, nb_elements_z, nb_elements_x)
     
-    """
-    print(f"[6]: {error_of(df1_dx1, save)}")
-    df1_dx1 = save
-    """
-
-    breakpoint()
-
     # --- Assemble the right-hand sides
     rhs = -(df1_dx1 + df3_dx3)
     rhs[idx_2d_rho_w, :, :] -= Q[idx_2d_rho, :, :] * gravity

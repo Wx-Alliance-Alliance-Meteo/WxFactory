@@ -26,7 +26,7 @@ def main(argv) -> int:
 
    # (brl423) TODO: don't do this
    import rhs.rhs_bubble
-   rhs.rhs_bubble.is_gpu = True
+   rhs.rhs_bubble.is_gpu = False
 
    # Read configuration file
    param = Configuration(argv.config, MPI.COMM_WORLD.rank == 0)

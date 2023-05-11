@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 import cupy as cp
 
 from os import PathLike
-from typing import Callable, Iterable, Iterator, TypeVarTuple, Generic, Self
+from typing import Callable, Iterable, Iterator, TypeVarTuple, Generic, Self, Any
 
 CUDA_DEVICE_COUNT: int = cp.cuda.runtime.getDeviceCount()
 CUDA_THREAD_LIMIT      = tuple[int, ...](cp.cuda.runtime.getDeviceProperties(i)["maxThreadsPerBlock"] for i in range(CUDA_DEVICE_COUNT))
@@ -51,6 +51,7 @@ class CudaModule(object):
     @classmethod
     def __init_subclass__(cls, /,
                           path: PathLike,
+                          defines: Iterable[tuple[str, Any]] = (),
                           name_expressions: Iterable[str] | None = None,
                           cpp_standard: str | None = None,
                           path_lexically_relative: bool = True,
@@ -58,7 +59,7 @@ class CudaModule(object):
         super().__init_subclass__(**kwargs)
 
         if path_lexically_relative and not os.path.isabs(path):
-            caller = inspect.stack()[0]
+            caller = inspect.stack()[1]
             dirname = os.path.dirname(caller.filename)
             path = os.path.join(dirname, path)
 
@@ -66,6 +67,7 @@ class CudaModule(object):
             code = file.read()
         
         options = (f"-std={cpp_standard}",) if cpp_standard else ()
+        options = options + tuple(f"-D{name}=({value})" for name, value in defines)
 
         cls.module = cp.RawModule(code=code, name_expressions=name_expressions, options=options)
 
