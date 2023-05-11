@@ -125,8 +125,8 @@ def main(argv) -> int:
       #print("numpy._blas_", numpy._blas_version_)
       #print("---------------------------------------")
       #print(numpy.__config__.show())
-      #with open(totaltime_name, 'a') as gg:
-      #    gg.write('{} \n'.format(total_time))
+      with open(totaltime_name, 'a') as gg:
+        gg.write('{} \n'.format(total_time))
 
    return MPI.COMM_WORLD.rank
 
@@ -136,6 +136,9 @@ def adjust_nb_elements(param: Configuration):
       allowed_pe_counts = [i**2 * 6 
                            for i in range(1, param.nb_elements_horizontal // 2 + 1)
                            if (param.nb_elements_horizontal % i) == 0]
+      if MPI.COMM_WORLD.rank == 0:
+         print("allowed pe counts = {}".format(allowed_pe_counts))
+
       if MPI.COMM_WORLD.size not in allowed_pe_counts:
          raise ValueError(f'Invalid number of processors for this particular problem size. '
                           f'Allowed counts are {allowed_pe_counts}')
