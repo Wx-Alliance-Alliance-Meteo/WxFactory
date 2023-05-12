@@ -46,16 +46,13 @@ class RhsBundle:
 
       elif param.equations == 'euler' and isinstance(geom, Cartesian2D):
          if param.discretization == 'dg':
-            # TODO: support multiple devices
-            if param.cuda_id == 0:
-               self.full = lambda q: rhs_bubble_cuda(
-                  q, geom, operators, param.nbsolpts, param.nb_elements_horizontal, param.nb_elements_vertical)
-            else:
-               self.full = lambda q: rhs_bubble(
-                  q, geom, operators, param.nbsolpts, param.nb_elements_horizontal, param.nb_elements_vertical)
+            table = {"cpu": rhs_bubble, "cuda": rhs_bubble_cuda}
+            self.full = lambda q, f=table[param.device]: f(
+               q, geom, operators, param.nbsolpts, param.nb_elements_horizontal, param.nb_elements_vertical)
          elif param.discretization == 'fv':
             # If we implement a FV-specific version of rhs_bubble, we should select it here
-            self.full = lambda q: rhs_bubble(
+            table = {"cpu": rhs_bubble, "cuda": rhs_bubble_cuda}
+            self.full = lambda q, f=table[param.device]: f(
                q, geom, operators, param.nbsolpts, param.nb_elements_horizontal, param.nb_elements_vertical)
 
          self.implicit = lambda q: rhs_bubble_implicit(
