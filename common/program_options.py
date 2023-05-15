@@ -28,8 +28,9 @@ class Configuration:
          self.depth_approx = None
 
       # TODO: support multiple devices
-      self.device = self._get_option('System', 'device', str, 'cpu', ['cpu', 'cuda0'])
-      self.cuda_id = int(self.device[4:]) if self.device.startswith("cuda") else None
+      device = self._get_option('System', 'device', str, 'cpu', ['cpu', 'cuda0'])
+      self.device = "cuda" if device == "cuda0" else "cpu"
+      self.cuda_id = int(device[4:]) if device.startswith("cuda") else None
 
       ################################
       # Test case

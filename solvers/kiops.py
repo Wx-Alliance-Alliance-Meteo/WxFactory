@@ -320,4 +320,7 @@ def kiops(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 2,
 
    stats = (step, reject, krystep, exps, conv, m_ret)
 
+   # from .kiops_cuda import kiops_cuda
+   # wcuda, statscuda = kiops_cuda(τ_out, A, u, tol, m_init, mmin, mmax, iop, task1)
+   # print(f"Kiops error: {numpy.abs(wcuda - w).max()}")
    return w, stats

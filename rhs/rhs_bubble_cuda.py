@@ -8,43 +8,6 @@ from common.definitions import *
 
 from numpy.typing import NDArray
 
-def _dim_kfaces_var(kfaces_var: NDArray[cp.float64], Q: NDArray[cp.float64], extrap_up: NDArray[cp.float64], extrap_down: NDArray[cp.float64],
-                    nbsolpts: int, nb_elements_z: int, nb_elements_x: int) \
-                    -> tuple[Dim, Dim]:
-    return DimSpec.groupby_first_x(lambda s: Dim(s[3], s[1], s[0])) \
-        (kfaces_var, Q, extrap_up, extrap_down, nbsolpts, nb_elements_z, nb_elements_x)
-
-def _dim_ifaces_var(ifaces_var: NDArray[cp.float64], Q: NDArray[cp.float64], extrap_west: NDArray[cp.float64], extrap_east: NDArray[cp.float64],
-                    nbsolpts: int, nb_elements_z: int, nb_elements_x: int) \
-                    -> tuple[Dim, Dim]:
-    return DimSpec.groupby_first_x(lambda s: Dim(s[2], s[1], s[0])) \
-        (ifaces_var, Q, extrap_west, extrap_east, nbsolpts, nb_elements_z, nb_elements_x)
-
-def _dim_kfaces_flux(kfaces_flux: NDArray[cp.float64], kfaces_pres: NDArray[cp.float64], kfaces_var: NDArray[cp.float64],
-                     nb_equations: int, nbsolpts: int, nb_elements_z: int, nb_elements_x: int) \
-                     -> tuple[Dim, Dim]:
-    return DimSpec.groupby_first_x(lambda s: Dim(s[3], s[1] - 1, 1)) \
-        (kfaces_flux, kfaces_pres, kfaces_var, nb_equations, nbsolpts, nb_elements_z, nb_elements_x)
-
-def _dim_ifaces_flux(ifaces_flux: NDArray[cp.float64], ifaces_pres: NDArray[cp.float64], ifaces_var: NDArray[cp.float64],
-                     nb_equations: int, nbsolpts: int, nb_elements_z: int, nb_elements_x: int, xperiodic: bool) \
-                     -> tuple[Dim, Dim]:
-    return DimSpec.groupby_first_x(lambda s: Dim(s[2], s[1] - 1, 1)) \
-        (ifaces_flux, ifaces_pres, ifaces_var, nb_equations, nbsolpts, nb_elements_z, nb_elements_x, xperiodic)
-
-def _dim_df3_dx3(df3_dx3: NDArray[cp.float64], flux_x3: NDArray[cp.float64], kfaces_flux: NDArray[cp.float64],
-                 diff_solpt: NDArray[cp.float64], correction: NDArray[cp.float64],
-                 dx3: float, nbsolpts: int, nb_elements_z: int, nb_elements_x: int) \
-                 -> tuple[Dim, Dim]:
-    return DimSpec.groupby_first_x(lambda s: Dim(s[2], s[1], s[0])) \
-        (df3_dx3, flux_x3, kfaces_flux, diff_solpt, correction, dx3, nbsolpts, nb_elements_z, nb_elements_x)
-
-def _dim_df1_dx1(df1_dx1: NDArray[cp.float64], flux_x1: NDArray[cp.float64], ifaces_flux: NDArray[cp.float64],
-                 diff_solpt: NDArray[cp.float64], correction: NDArray[cp.float64],
-                 dx1: float, nbsolpts: int, nb_elements_z: int, nb_elements_x: int) \
-                 -> tuple[Dim, Dim]:
-    return DimSpec.groupby_first_x(lambda s: Dim(s[2], s[1], s[0])) \
-        (df1_dx1, flux_x1, ifaces_flux, diff_solpt, correction, dx1, nbsolpts, nb_elements_z, nb_elements_x)
 
 class RHSBubble(CudaModule,
                 path="rhs_bubble.cu",
@@ -53,35 +16,36 @@ class RHSBubble(CudaModule,
                          ("idx_2d_rho_u", idx_2d_rho_u),
                          ("idx_2d_rho_w", idx_2d_rho_w))):
 
-    @cuda_kernel(_dim_kfaces_var)
+    @cuda_kernel(DimSpec.groupby_first_x(lambda s: Dim(s[3], s[1], s[0])))
     def set_kfaces_var(kfaces_var: NDArray[cp.float64], Q: NDArray[cp.float64], extrap_up: NDArray[cp.float64], extrap_down: NDArray[cp.float64],
                        nbsolpts: int, nb_elements_z: int, nb_elements_x: int): ...
     
-    @cuda_kernel(_dim_ifaces_var)
+    @cuda_kernel(DimSpec.groupby_first_x(lambda s: Dim(s[2], s[1], s[0])))
     def set_ifaces_var(ifaces_var: NDArray[cp.float64], Q: NDArray[cp.float64], extrap_west: NDArray[cp.float64], extrap_east: NDArray[cp.float64],
                        nbsolpts: int, nb_elements_z: int, nb_elements_x: int): ...
 
-    @cuda_kernel(_dim_kfaces_flux)
+    @cuda_kernel(DimSpec.groupby_first_x(lambda s: Dim(s[3], s[1] - 1, 1)))
     def set_kfaces_flux(kfaces_flux: NDArray[cp.float64], kfaces_pres: NDArray[cp.float64], kfaces_var: NDArray[cp.float64],
                         nb_equations: int, nbsolpts: int, nb_elements_z: int, nb_elements_x: int): ...
     
-    @cuda_kernel(_dim_ifaces_flux)
+    @cuda_kernel(DimSpec.groupby_first_x(lambda s: Dim(s[2], s[1] - 1, 1)))
     def set_ifaces_flux(ifaces_flux: NDArray[cp.float64], ifaces_pres: NDArray[cp.float64], ifaces_var: NDArray[cp.float64],
                         nb_equations: int, nbsolpts: int, nb_elements_z: int, nb_elements_x: int, xperiodic: bool): ...
 
-    @cuda_kernel(_dim_df3_dx3)
+    @cuda_kernel(DimSpec.groupby_first_x(lambda s: Dim(s[2], s[1], s[0])))
     def set_df3_dx3(df3_dx3: NDArray[cp.float64], flux_x3: NDArray[cp.float64], kfaces_flux: NDArray[cp.float64],
                     diff_solpt: NDArray[cp.float64], correction: NDArray[cp.float64],
                     dx3: float, nbsolpts: int, nb_elements_z: int, nb_elements_x: int): ...
     
-    @cuda_kernel(_dim_df1_dx1)
+    @cuda_kernel(DimSpec.groupby_first_x(lambda s: Dim(s[2], s[1], s[0])))
     def set_df1_dx1(df1_dx1: NDArray[cp.float64], flux_x1: NDArray[cp.float64], ifaces_flux: NDArray[cp.float64],
                     diff_solpt: NDArray[cp.float64], correction: NDArray[cp.float64],
                     dx1: float, nbsolpts: int, nb_elements_z: int, nb_elements_x: int): ...
 
+
 # @profile
-def rhs_bubble_cuda(Q: NDArray[cp.floating], geom: Cartesian2D, mtrx: DFROperators,
-    nbsolpts: int, nb_elements_x: int, nb_elements_z: int) -> NDArray[cp.floating]:
+def rhs_bubble_cuda(Q: NDArray[cp.float64], geom: Cartesian2D, mtrx: DFROperators,
+    nbsolpts: int, nb_elements_x: int, nb_elements_z: int) -> NDArray[cp.float64]:
 
     # TODO: have Q on GPU
     Q = cp.asarray(Q)
