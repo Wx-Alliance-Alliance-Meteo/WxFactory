@@ -80,7 +80,7 @@ class CudaKernel(Generic[*KernelArgs]):
 
     def __init__(self: Self,
                  dimspec: DimFun[*KernelArgs],
-                 f: RawKernel | None = None,
+                 f: RawKernel[*KernelArgs] | None = None,
                  name: str | None = None):
         if callable(dimspec):
             self.dims = dimspec
@@ -97,7 +97,7 @@ class CudaKernel(Generic[*KernelArgs]):
             gridspec, blockspec = self.dims(*args)
             self.__wrapped__(gridspec.tuple, blockspec.tuple, args)
         else:
-            warnings.warn(f"")
+            warnings.warn(f"{type(self)} with name {self.name!r} not initialized with kernel")
         
     def __get__(self: Self, instance: CudaModule | None, owner: type[CudaModule] | None = None) -> Self:
         if not self.__wrapped__ and self.name:
@@ -110,6 +110,10 @@ class DimSpec:
 
     x, y, z = 0, 1, 2
     
+    @classmethod
+    def one_thread(cls: type[Self]) -> DimFun[*KernelArgs]:
+        return lambda *_: (Dim(), Dim())
+
     @classmethod
     def groupby(cls: type[Self], dim: int, arg: int = 0, shape: Callable[[tuple[int, ...]], Dim] = lambda x: Dim(*x)) -> DimFun[*KernelArgs]:
         def ret(*args: *KernelArgs) -> tuple[Dim, Dim]:
@@ -131,5 +135,5 @@ class DimSpec:
         return cls.groupby(cls.x, 0, shape)
 
 
-def cuda_kernel(dimspec: DimFun[*KernelArgs]) -> Callable[[RawKernel[*KernelArgs]], CudaKernel[*KernelArgs]]:
+def cuda_kernel(dimspec: DimFun[*KernelArgs]) -> Callable[[Callable[[*KernelArgs], None]], CudaKernel[*KernelArgs]]:
     return lambda _: CudaKernel(dimspec, None)
