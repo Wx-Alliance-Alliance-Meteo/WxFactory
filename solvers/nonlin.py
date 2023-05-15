@@ -2,7 +2,6 @@ import sys
 import numpy
 import math
 import scipy.sparse.linalg
-#import scipy.linalg
 import scipy.optimize
 from time import time
 

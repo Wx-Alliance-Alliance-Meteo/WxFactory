@@ -199,7 +199,7 @@ def create_time_integrator(param: Configuration,
       return Euler1(param, rhs.full)
    if param.time_integrator == 'tvdrk3':
       return Tvdrk3(param, rhs.full)
-   
+
    # --- Rosenbrock
    if param.time_integrator == 'ros2':
       return Ros2(param, rhs.full, preconditioner=preconditioner)
