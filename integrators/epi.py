@@ -139,7 +139,7 @@ class Epi(Integrator):
 
       #----- icwy norm estimate + 1sync-----
       elif self.exponential_solver == 'icwy_ne1s':
-         phiv, stats = icwy_ne1s([1.], matvec_handle, vec, tol=self.tol,m_init=self.krylov_size, mmin=12, mmax=64, task1=False)
+         phiv, stats = icwy_ne1s([1.], matvec_handle, vec, tol=self.tol,m_init=self.krylov_size, mmin=16, mmax=64, task1=False)
          self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
 
          if (mpirank == 0):
@@ -148,7 +148,7 @@ class Epi(Integrator):
 
       #----- icwy norm estimate -----
       elif self.exponential_solver == 'icwy_ne':
-         phiv, stats = icwy_ne([1.], matvec_handle, vec, tol=self.tol, m_init=self.krylov_size, mmin=12, mmax=64, task1=False)
+         phiv, stats = icwy_ne([1.], matvec_handle, vec, tol=self.tol, m_init=self.krylov_size, mmin=16, mmax=64, task1=False)
          self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
 
          if (mpirank == 0):
@@ -157,7 +157,7 @@ class Epi(Integrator):
 
       #----- icwy 1-sync-----
       elif self.exponential_solver == 'icwy_1s':
-         phiv, stats = icwy_1s([1.], matvec_handle, vec, tol=self.tol,m_init=self.krylov_size, mmin=12, mmax=64, task1=False)
+         phiv, stats = icwy_1s([1.], matvec_handle, vec, tol=self.tol,m_init=self.krylov_size, mmin=16, mmax=64, task1=False)
          self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
 
          if (mpirank == 0):
@@ -174,7 +174,7 @@ class Epi(Integrator):
 
       #----- icwy iop+norm estimate-----
       elif self.exponential_solver == 'icwy_neiop':
-         phiv, stats = icwy_neiop([1.], matvec_handle, vec, tol=self.tol,m_init=self.krylov_size, mmin=12, mmax=64, task1=False)
+         phiv, stats = icwy_neiop([1.], matvec_handle, vec, tol=self.tol,m_init=self.krylov_size, mmin=16, mmax=64, task1=False)
          self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
 
          if (mpirank == 0):
@@ -183,7 +183,7 @@ class Epi(Integrator):
 
       #----- cwy norm estimate + 1sync-----
       elif self.exponential_solver == 'cwy_ne1s':
-         phiv, stats = cwy_ne1s([1.], matvec_handle, vec, tol=self.tol,m_init=self.krylov_size, mmin=12, mmax=64, task1=False)
+         phiv, stats = cwy_ne1s([1.], matvec_handle, vec, tol=self.tol,m_init=self.krylov_size, mmin=16, mmax=64, task1=False)
          self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
 
          if (mpirank == 0):
@@ -192,7 +192,7 @@ class Epi(Integrator):
 
       #----- cwy norm estimate -----
       elif self.exponential_solver == 'cwy_ne':
-         phiv, stats = cwy_ne([1.], matvec_handle, vec, tol=self.tol,m_init=self.krylov_size, mmin=12, mmax=64, task1=False)
+         phiv, stats = cwy_ne([1.], matvec_handle, vec, tol=self.tol,m_init=self.krylov_size, mmin=16, mmax=64, task1=False)
          self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
 
          if (mpirank == 0):
@@ -201,7 +201,7 @@ class Epi(Integrator):
 
       #----- cwy 1-sync-----
       elif self.exponential_solver == 'cwy_1s':
-         phiv, stats = cwy_1s([1.], matvec_handle, vec, tol=self.tol, m_init=self.krylov_size, mmin=12, mmax=64, task1=False)
+         phiv, stats = cwy_1s([1.], matvec_handle, vec, tol=self.tol, m_init=self.krylov_size, mmin=16, mmax=64, task1=False)
          self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
 
          if (mpirank == 0):
@@ -239,7 +239,6 @@ class Epi(Integrator):
       else:
 
          phiv, stats = kiops([1], matvec_handle, vec, tol=self.tol, m_init=self.krylov_size, mmin=16, mmax=64, task1=False)
-
          self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
 
          if (mpirank == 0):

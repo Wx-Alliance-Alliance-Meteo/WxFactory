@@ -72,14 +72,16 @@ class Srerk(Integrator):
       #---pmex with norm estimate---
       elif self.exponential_solver == 'pmex':
 
-         z, stats = pmex(self.c[0], matvec_handle, vec, tol=self.tol, mmax=64, task1=False)
+         z, stats = pmex(self.c[0], matvec_handle, vec, tol=self.tol, m_init=self.krylov_size, mmin=16, mmax=64, task1=False)
+         self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
 
          print(f'PMEX converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)'
                f' to a solution with local error {stats[4]:.2e}')
 
       #----pmex with 1-sync-----
       elif self.exponential_solver == 'pmex_1s':
-         z, stats = pmex_1s(self.c[0], matvec_handle, vec, tol=self.tol, mmax=64, task1=False)
+         z, stats = pmex_1s(self.c[0], matvec_handle, vec, tol=self.tol,m_init=self.krylov_size, mmin=16, mmax=64, task1=False)
+         self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
 
          if (mpirank == 0):
             print(f'PMEX 1s converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)'
@@ -87,7 +89,8 @@ class Srerk(Integrator):
 
       #----pmex with norm estimate+1s-----
       elif self.exponential_solver == 'pmex_ne1s':
-         z, stats = pmex_ne1s(self.c[0], matvec_handle, vec, tol=self.tol, mmax=64, task1=False)
+         z, stats = pmex_ne1s(self.c[0], matvec_handle, vec, tol=self.tol, m_init=self.krylov_size, mmin=16, mmax=64, task1=False)
+         self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
 
          if (mpirank == 0):
             print(f'PMEX NE+1s converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)'
@@ -95,7 +98,7 @@ class Srerk(Integrator):
 
       #----- icwy norm estimate + 1sync-----
       elif self.exponential_solver == 'icwy_ne1s':
-         z, stats = icwy_ne1s(self.c[0], matvec_handle, vec, tol=self.tol,m_init=self.krylov_size, mmin=12, mmax=64, task1=False)
+         z, stats = icwy_ne1s(self.c[0], matvec_handle, vec, tol=self.tol,m_init=self.krylov_size, mmin=16, mmax=64, task1=False)
          self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
 
          if (mpirank == 0):
@@ -104,7 +107,7 @@ class Srerk(Integrator):
 
       #----- icwy norm estimate -----
       elif self.exponential_solver == 'icwy_ne':
-         z, stats = icwy_ne(self.c[0], matvec_handle, vec, tol=self.tol, m_init=self.krylov_size, mmin=12, mmax=64, task1=False)
+         z, stats = icwy_ne(self.c[0], matvec_handle, vec, tol=self.tol, m_init=self.krylov_size, mmin=16, mmax=64, task1=False)
          self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
 
          if (mpirank == 0):
@@ -113,7 +116,7 @@ class Srerk(Integrator):
 
       #----- icwy 1-sync-----
       elif self.exponential_solver == 'icwy_1s':
-         z, stats = icwy_1s(self.c[0], matvec_handle, vec, tol=self.tol,m_init=self.krylov_size, mmin=12, mmax=64, task1=False)
+         z, stats = icwy_1s(self.c[0], matvec_handle, vec, tol=self.tol,m_init=self.krylov_size, mmin=16, mmax=64, task1=False)
          self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
 
          if (mpirank == 0):
@@ -122,7 +125,7 @@ class Srerk(Integrator):
 
       #----- icwy iop+norm estimate-----
       elif self.exponential_solver == 'icwy_neiop':
-         z, stats = icwy_neiop(self.c[0], matvec_handle, vec, tol=self.tol,m_init=self.krylov_size, mmin=12, mmax=64, task1=False)
+         z, stats = icwy_neiop(self.c[0], matvec_handle, vec, tol=self.tol,m_init=self.krylov_size, mmin=16, mmax=64, task1=False)
          self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
 
          if (mpirank == 0):
@@ -131,7 +134,7 @@ class Srerk(Integrator):
 
       #----- cwy norm estimate + 1sync-----
       elif self.exponential_solver == 'cwy_ne1s':
-         z, stats = cwy_ne1s(self.c[0], matvec_handle, vec, tol=self.tol,m_init=self.krylov_size, mmin=12, mmax=64, task1=False)
+         z, stats = cwy_ne1s(self.c[0], matvec_handle, vec, tol=self.tol,m_init=self.krylov_size, mmin=16, mmax=64, task1=False)
          self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
 
          if (mpirank == 0):
@@ -140,7 +143,7 @@ class Srerk(Integrator):
 
       #----- cwy norm estimate -----
       elif self.exponential_solver == 'cwy_ne':
-         z, stats = cwy_ne(self.c[0], matvec_handle, vec, tol=self.tol,m_init=self.krylov_size, mmin=12, mmax=64, task1=False)
+         z, stats = cwy_ne(self.c[0], matvec_handle, vec, tol=self.tol,m_init=self.krylov_size, mmin=16, mmax=64, task1=False)
          self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
 
          if (mpirank == 0):
@@ -149,7 +152,7 @@ class Srerk(Integrator):
 
       #----- cwy 1-sync-----
       elif self.exponential_solver == 'cwy_1s':
-         z, stats = cwy_1s(self.c[0], matvec_handle, vec, tol=self.tol, m_init=self.krylov_size, mmin=12, mmax=64, task1=False)
+         z, stats = cwy_1s(self.c[0], matvec_handle, vec, tol=self.tol, m_init=self.krylov_size, mmin=16, mmax=64, task1=False)
          self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
 
          if (mpirank == 0):
@@ -208,14 +211,16 @@ class Srerk(Integrator):
          #---pmex with norm estimate---
          elif self.exponential_solver == 'pmex':
 
-            z, stats = pmex(self.c[i_proj], matvec_handle, vec, tol=self.tol, mmax=64, task1=False)
+            z, stats = pmex(self.c[i_proj], matvec_handle, vec, tol=self.tol, m_init=self.krylov_size, mmin=16, mmax=64, task1=False)
+            self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
 
             print(f'PMEX converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)'
                   f' to a solution with local error {stats[4]:.2e}')
 
          #----pmex with 1-sync-----
          elif self.exponential_solver == 'pmex_1s':
-            z, stats = pmex_1s(self.c[i_proj], matvec_handle, vec, tol=self.tol, mmax=64, task1=False)
+            z, stats = pmex_1s(self.c[i_proj], matvec_handle, vec, tol=self.tol,m_init=self.krylov_size, mmin=16, mmax=64, task1=False)
+            self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
 
             if (mpirank == 0):
                print(f'PMEX 1s converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)'
@@ -223,7 +228,8 @@ class Srerk(Integrator):
 
          #----pmex with norm estimate+1s-----
          elif self.exponential_solver == 'pmex_ne1s':
-            z, stats = pmex_ne1s(self.c[i_proj], matvec_handle, vec, tol=self.tol, mmax=64, task1=False)
+            z, stats = pmex_ne1s(self.c[i_proj], matvec_handle, vec, tol=self.tol,m_init=self.krylov_size, mmin=16, mmax=64, task1=False)
+            self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
 
             if (mpirank == 0):
                print(f'PMEX NE+1s converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)'
@@ -231,7 +237,7 @@ class Srerk(Integrator):
 
          #----- icwy norm estimate + 1sync-----
          elif self.exponential_solver == 'icwy_ne1s':
-            z, stats = icwy_ne1s(self.c[i_proj], matvec_handle, vec, tol=self.tol,m_init=self.krylov_size, mmin=12, mmax=64, task1=False)
+            z, stats = icwy_ne1s(self.c[i_proj], matvec_handle, vec, tol=self.tol,m_init=self.krylov_size, mmin=16, mmax=64, task1=False)
             self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
 
             if (mpirank == 0):
@@ -240,7 +246,7 @@ class Srerk(Integrator):
 
          #----- icwy norm estimate -----
          elif self.exponential_solver == 'icwy_ne':
-            z, stats = icwy_ne(self.c[i_proj], matvec_handle, vec, tol=self.tol, m_init=self.krylov_size, mmin=12, mmax=64, task1=False)
+            z, stats = icwy_ne(self.c[i_proj], matvec_handle, vec, tol=self.tol, m_init=self.krylov_size, mmin=16, mmax=64, task1=False)
             self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
 
             if (mpirank == 0):
@@ -249,7 +255,7 @@ class Srerk(Integrator):
 
          #----- icwy 1-sync-----
          elif self.exponential_solver == 'icwy_1s':
-            z, stats = icwy_1s(self.c[i_proj], matvec_handle, vec, tol=self.tol,m_init=self.krylov_size, mmin=12, mmax=64, task1=False)
+            z, stats = icwy_1s(self.c[i_proj], matvec_handle, vec, tol=self.tol,m_init=self.krylov_size, mmin=16, mmax=64, task1=False)
             self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
 
             if (mpirank == 0):
@@ -258,7 +264,7 @@ class Srerk(Integrator):
 
          #----- icwy iop+norm estimate-----
          elif self.exponential_solver == 'icwy_neiop':
-            z, stats = icwy_neiop(self.c[i_proj], matvec_handle, vec, tol=self.tol,m_init=self.krylov_size, mmin=12, mmax=64, task1=False)
+            z, stats = icwy_neiop(self.c[i_proj], matvec_handle, vec, tol=self.tol,m_init=self.krylov_size, mmin=16, mmax=64, task1=False)
             self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
 
             if (mpirank == 0):
@@ -267,7 +273,7 @@ class Srerk(Integrator):
 
          #----- cwy norm estimate + 1sync-----
          elif self.exponential_solver == 'cwy_ne1s':
-            z, stats = cwy_ne1s(self.c[i_proj], matvec_handle, vec, tol=self.tol,m_init=self.krylov_size, mmin=12, mmax=64, task1=False)
+            z, stats = cwy_ne1s(self.c[i_proj], matvec_handle, vec, tol=self.tol,m_init=self.krylov_size, mmin=16, mmax=64, task1=False)
             self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
 
             if (mpirank == 0):
@@ -276,7 +282,7 @@ class Srerk(Integrator):
 
          #----- cwy norm estimate -----
          elif self.exponential_solver == 'cwy_ne':
-            z, stats = cwy_ne(self.c[i_proj], matvec_handle, vec, tol=self.tol,m_init=self.krylov_size, mmin=12, mmax=64, task1=False)
+            z, stats = cwy_ne(self.c[i_proj], matvec_handle, vec, tol=self.tol,m_init=self.krylov_size, mmin=16, mmax=64, task1=False)
             self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
 
             if (mpirank == 0):
@@ -285,7 +291,7 @@ class Srerk(Integrator):
 
          #----- cwy 1-sync-----
          elif self.exponential_solver == 'cwy_1s':
-            z, stats = cwy_1s(self.c[i_proj], matvec_handle, vec, tol=self.tol, m_init=self.krylov_size, mmin=12, mmax=64, task1=False)
+            z, stats = cwy_1s(self.c[i_proj], matvec_handle, vec, tol=self.tol, m_init=self.krylov_size, mmin=16, mmax=64, task1=False)
             self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
 
             if (mpirank == 0):
