@@ -188,11 +188,7 @@ def kiops_cuda(tau_out: NDArray[cp.float64], A: Callable[[NDArray[cp.float64]], 
         H[j, j - 1] = 0.0
 
         # Compute the exponential of the augmented matrix
-        # TODO: fix bugs in expm
-        # F = cu_utils.linalg.expm(sgn * tau * H[:j + 1, :j + 1])
-        import scipy.linalg
-        F = scipy.linalg.expm((sgn * tau * H[:j + 1, :j + 1]).get())
-        F = cp.asarray(F)
+        F = cu_utils.linalg.expm(sgn * tau * H[:j + 1, :j + 1])
         exps += 1
 
         # Restore the value of H_{m+1,m}

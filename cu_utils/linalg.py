@@ -32,7 +32,7 @@ def expm(A: NDArray[cp.floating]) -> NDArray[cp.floating]:
     theta13 = _expm_theta13
 
     s = cp.ceil(cp.log2(cp.linalg.norm(A, 1) / theta13))
-    A = A / s**2
+    A = A / 2**s
 
     A2 = A @ A
     A4 = A2 @ A2
