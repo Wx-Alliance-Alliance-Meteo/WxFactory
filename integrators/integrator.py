@@ -13,7 +13,21 @@ from output.output_manager  import OutputManager
 from solvers.solver_info    import SolverInfo
 
 class Integrator(ABC):
-   """Describes the time-stepping mechanisme of the simulation"""
+   """Describes the time-stepping mechanism of the simulation.
+
+   Attributes:
+
+      output_manager -- OutputManager object that an Integrator can use. When it is present, the Integrator
+                        can output some of its intermediary data that can be useful for analysing performance.
+                        For now, it must be assigned *after* the Integrator has been initialized.
+      solver_info    -- At each timestep, the content of solver_info is outputted (if output_manager is present)
+                        If a certain (derived type) Integrator wants to log information about its convergence,
+                        performance and other internal data, it should create a SolverInfo object and assign it
+                        to self.solver_info
+      preconditioner -- Optional object that can be used to precondition a problem. It must provide a "prepare"
+                        and a "__call__" method.
+
+   """
    latest_time: float
    output_manager: Optional[OutputManager]
    preconditioner: Optional[Multigrid]
@@ -24,6 +38,7 @@ class Integrator(ABC):
       self.verbose_solver = param.verbose_solver
       self.solver_info    = None
       self.sim_time       = -1.0
+      self.failure_flag   = 0
 
    @abstractmethod
    def __step__(self, Q: numpy.ndarray, dt: float) -> numpy.ndarray:
@@ -36,21 +51,26 @@ class Integrator(ABC):
       if self.preconditioner is not None:
          self.preconditioner.prepare(dt, Q)
 
+      # The stepping itself
       result = self.__step__(Q, dt)
 
       t1 = time()
       self.latest_time = t1 - t0
 
-      if self.solver_info is not None and self.output_manager is not None:
-         self.output_manager.store_solver_stats(t1 - t0, self.sim_time, dt, self.solver_info, self.preconditioner)
-         self.solver_info = None
+      # Output info from completed step (if possible)
+      if self.output_manager is not None:
+         if self.solver_info is not None:
+            self.output_manager.store_solver_stats(t1 - t0, self.sim_time, dt, self.solver_info, self.preconditioner)
+         else:
+            self.output_manager.store_solver_stats(t1 - t0, self.sim_time, dt, SolverInfo(), self.preconditioner)
+      self.solver_info = None
 
       self.sim_time += dt
 
       return result
 
-class scipy_counter(object): # TODO : tempo
-   """Serves as a callback object to linear solvers (from Scipy and others)"""
+class scipy_counter: # TODO : tempo
+   """Callback object for linear solvers (from Scipy and others)."""
    def __init__(self, disp=False):
       self._disp = disp
       self.niter = 0
@@ -65,8 +85,8 @@ class scipy_counter(object): # TODO : tempo
    def nb_iter(self):
       return self.niter
 
-# Computes the coefficients for stiffness resilient exponential methods based on node values c
 def alpha_coeff(c):
+   """Compute the coefficients for stiffness resilient exponential methods based on node values c."""
    m = len(c)
    alpha = numpy.zeros((m, m))
    for i in range(m):

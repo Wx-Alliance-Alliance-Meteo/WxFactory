@@ -103,6 +103,8 @@ def main(argv) -> int:
       output.step(Q, step)
       sys.stdout.flush()
 
+      if stepper.failure_flag != 0: break
+
    output.finalize()
 
    return MPI.COMM_WORLD.rank
@@ -122,7 +124,7 @@ def adjust_nb_elements(param: Configuration):
       if MPI.COMM_WORLD.rank == 0:
          print(f'Adjusting horizontal number of elements from {param.nb_elements_horizontal_total} (total) '
                f'to {param.nb_elements_horizontal} (per PE)')
-         print(f'allowd_pe_counts = {allowed_pe_counts}')
+         print(f'allowed_pe_counts = {allowed_pe_counts}')
 
 def create_geometry(param: Configuration, ptopo: Optional[DistributedWorld]) -> Geometry:
    """ Create the appropriate geometry for the given problem """
