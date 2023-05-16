@@ -33,7 +33,7 @@ case_names = {
 
 class ProblemDesc:
    """Basic information about a problem specification (mostly size)"""
-   def __init__(self, grid_type, equations, case_number, order, hori, vert, dt=0) -> None:
+   def __init__(self, grid_type, equations, case_number, order, hori, vert, dt, num_procs) -> None:
       self.grid_type = grid_type
       self.equations = equations
       self.case_number = case_number
@@ -41,6 +41,7 @@ class ProblemDesc:
       self.hori = hori
       self.vert = vert
       self.dt = dt
+      self.num_procs = num_procs
 
    # def __init__(self, params: Tuple) -> None:
    #    self.grid_type = params[0]
@@ -55,6 +56,7 @@ class ProblemDesc:
 
    def __str__(self):
       result = f'{self.grid_type}, {self.equations}, problem: {case_names[self.case_number]}, {self.hori}x{self.vert}x({self.order})'
+      if self.num_procs > 0: result += f', {self.num_procs} procs'
       if self.dt > 0.0: result += f' - dt {self.dt}'
       return result
 
@@ -73,6 +75,7 @@ class ProblemDesc:
       name = f'{gt}_{eq}'
       if self.case_number > 0: name += f'_{self.case_number}'
       name += f'_{self.hori}x{self.vert}x{self.order}'
+      if self.num_procs > 0: name += f'_{self.num_procs}pe'
       if self.dt > 0.0: name += f'_{int(self.dt)}'
 
       return name
@@ -163,11 +166,12 @@ class FullDataSet:
    Provides functions to plot certain characteristics of that data.
    """
 
-   def __init__(self, prob: ProblemDesc, output_suffix: str = ''):
+   def __init__(self, prob: ProblemDesc, cpu_scaling: bool = False, output_suffix: str = ''):
       """
       Extract the content of the open database into 4 sets: "no precond", "fv precond", "p-MG precond", "FV-MG" precond.
       """
       self.prob = prob
+      self.cpu_scaling = cpu_scaling
       self.output_suffix = output_suffix
 
       time_condition = ''
@@ -175,20 +179,20 @@ class FullDataSet:
       time_condition += f'solver_tol < 10.0 AND '
 
       t0 = time()
-      self.no_precond = []
-      # self.no_precond = self._extract_result_set(
-      #    ['time_integrator', 'solver_tol', 'initial_dt', 'precond'],
-      #    time_condition + 'precond = "none"')
+      # self.no_precond = []
+      self.no_precond = self._extract_result_set(
+         ['time_integrator', 'solver_tol', 'initial_dt', 'precond'],
+         time_condition + 'precond = "none"', debug=True)
 
       # no_precond_time = no_precond[0]['time_avg']
       # print(f'precond avg = {no_precond_time}')
 
       t1 = time()
-      self.fv_ref = []
-      # self.fv_ref = self._extract_result_set(
-      #    ['time_integrator', 'solver_tol', 'precond_tol', 'initial_dt', 'precond'],
-      #    time_condition + f'precond = "fv"',
-      #    num_best=3)
+      # self.fv_ref = []
+      self.fv_ref = self._extract_result_set(
+         ['time_integrator', 'solver_tol', 'precond_tol', 'initial_dt', 'precond'],
+         time_condition + f'precond = "fv"',
+         num_best=3)
 
       t2 = time()
       self.p_mg = self._extract_result_set(
@@ -210,13 +214,13 @@ class FullDataSet:
           'num_pre_smoothe', 'num_post_smoothe', 'mg_smoother', 'initial_dt', 'precond', 'pseudo_cfl',
           'time_integrator'],
          time_condition + f'precond = "fv-mg" AND mg_smoother = "erk3"',
-         num_best=2)
+         num_best=5)
       self.fv_mg += self._extract_result_set(
          ['solver_tol', 'precond_interp', 'num_mg_levels', 'kiops_dt_factor', 'mg_solve_coarsest', #'precond_tol',
           'num_pre_smoothe', 'num_post_smoothe', 'mg_smoother', 'initial_dt', 'precond', 'pseudo_cfl',
           'time_integrator'],
          time_condition + f'precond = "fv-mg" AND mg_smoother = "ark3" AND pseudo_cfl > 0',
-         num_best=8)
+         num_best=5)
       self.fv_mg += self._extract_result_set(
          ['solver_tol', 'precond_interp', 'num_mg_levels', 'kiops_dt_factor', 'mg_solve_coarsest', #'precond_tol',
           'num_pre_smoothe', 'num_post_smoothe', 'mg_smoother', 'initial_dt', 'precond', 'pseudo_cfl',
@@ -358,8 +362,9 @@ class FullDataSet:
             dg_order    = {self.prob.order}        AND
          {f'num_elem_h  = {self.prob.hori}         AND' if self.prob.hori > 0 else ''}
             num_elem_v  = {self.prob.vert}         AND
+         {f'num_procs   = {self.prob.num_procs}    AND' if self.prob.num_procs > 0 else ''}
             solver_flag = 0                        AND
-            {{custom_condition}}
+            {custom_condition}
       '''
 
       # Query to average out some values when a simulation has been run multiple times with the exact same
@@ -367,47 +372,60 @@ class FullDataSet:
       # over the various simulations, then average of all second timesteps, etc.)
       # This is so that we only have 1 value per timestep for each problem configuration
       # This had better give a constant value for the number of iterations...
+      # Each time step is (can be) an agglomeration of multiple runs. If some parameters are omitted from the
+      # input ([columns]), the runs corresponding to the same time step will be merged together
+      group_by_list = ', '.join(columns + ['simulation_time', 'num_elem_h'])
+      order_by_list = ', '.join(['num_elem_h', 'num_mg_levels', 'mg_solve_coarsest', 'kiops_dt_factor',
+                                 '(num_pre_smoothe + num_post_smoothe)', 'step_id'])
+      if self.cpu_scaling:
+         group_by_list += ', num_procs'
+         order_by_list += ', num_procs'
       combine_same_configs_query = f'''
          select *,
-                avg(total_solve_time) as step_time,
-                avg(num_solver_it)    as step_it,
-                avg(dt)               as step_dt
+                avg(total_solve_time) as single_step_time,
+                avg(num_solver_it)    as single_step_it,
+                avg(dt)               as single_step_dt
          from ({base_subtable_query})
-         group by {{columns}}, simulation_time, num_elem_h
-         order by num_elem_h, num_mg_levels, mg_solve_coarsest, kiops_dt_factor, (num_pre_smoothe + num_post_smoothe),
-                  step_id
-      '''.strip().format(columns = ', '.join(columns), custom_condition = custom_condition)
+         group by {group_by_list}
+         order by {order_by_list}
+      '''.strip()
 
       # Query to compute statistics from multiple time steps for each problem configuration that
-      # was found in the subtable (according to the given columns)
+      # was found in the subtable (according to the given columns).
+      # Each time step is (can be) an agglomeration of multiple runs. This is done in the query
+      # above, called by this one
       param_query = f'''
          select 
                 {{columns}},
                 num_elem_h,
-                avg(step_time)     as avg_step_time,
-                stdev(step_time)   as stdev_step_time,
-                avg(step_it)       as avg_step_it,
-                stdev(step_it)     as stdev_step_time,
+                num_procs,
+                avg(single_step_time)     as avg_step_time,
+                stdev(single_step_time)   as stdev_step_time,
+                avg(single_step_it)       as avg_step_it,
+                stdev(single_step_it)     as stdev_step_time,
                 group_concat(simulation_time),
-                group_concat(step_dt),
-                group_concat(step_time),
-                group_concat(step_it)
+                group_concat(single_step_dt),
+                group_concat(single_step_time),
+                group_concat(single_step_it)
          from ({combine_same_configs_query})
-         group by {{columns}}, num_elem_h
+         group by {{group_by_list}}
          order by num_mg_levels, mg_solve_coarsest, kiops_dt_factor, (num_pre_smoothe + num_post_smoothe)
-      '''.strip().format(columns=', '.join(columns), custom_condition=custom_condition)
+      '''.strip().format(columns=', '.join(columns),
+                         group_by_list=', '.join(columns + ['num_elem_h']))
 
-      grid_size_tendencies_query = f'''
+      # Query to 
+      scaling_parameter = 'num_procs' if self.cpu_scaling else 'num_elem_h'
+      scaling_query = f'''
          select {{columns}},
                 min(avg_step_time),
-                group_concat(num_elem_h),
+                group_concat({scaling_parameter}),
                 group_concat(avg_step_time),
                 group_concat(stdev_step_time),
                 group_concat(avg_step_it),
                 group_concat(stdev_step_time)
          from ({param_query})
          group by {{columns}}
-         order by num_elem_h
+         order by {scaling_parameter}
       '''.format(columns=', '.join(columns))
 
       # Query to retrieve and compute the average residual evolution for the selected problem configurations
@@ -427,29 +445,29 @@ class FullDataSet:
       '''.strip()
 
       # Retrieve the desired problem configurations and their stats
-      if self.prob.hori > 0:
+      if self.prob.hori > 0 and not self.cpu_scaling:
          param_sets = db_cursor.execute(param_query).fetchall()
       else:
-         param_sets = db_cursor.execute(grid_size_tendencies_query).fetchall()
+         param_sets = db_cursor.execute(scaling_query).fetchall()
 
       # Print debug info
       if debug:
-         subtable_query = base_subtable_query.format(custom_condition = custom_condition)
+         subtable_query = base_subtable_query
          subtable_result = db_cursor.execute(subtable_query).fetchall()
-         print(f'subtable query: \n{subtable_query}')
+         print(f'subtable query: ({len(subtable_result)} results)\n{subtable_query}')
          print('\n'.join([f'{r}' for r in subtable_result]))
 
          combine_result = db_cursor.execute(combine_same_configs_query).fetchall()
-         print(f'combine same configs query: \n{combine_same_configs_query}')
+         print(f'combine same configs query: ({len(combine_result)} results)\n{combine_same_configs_query}')
          print('\n'.join([f'{r}' for r in combine_result]))
 
          param_result = db_cursor.execute(param_query).fetchall()
-         print(f'param query: \n{param_query}')
+         print(f'param query: ({len(param_result)} results)\n{param_query}')
          print('\n'.join([f'{r}' for r in param_result]))
 
-         grid_size_result = db_cursor.execute(grid_size_tendencies_query).fetchall()
-         print(f'grid size query: \n{grid_size_tendencies_query}')
-         print('\n'.join([f'{r}' for r in grid_size_result]))
+         scaling_result = db_cursor.execute(scaling_query).fetchall()
+         print(f'scaling query: ({len(scaling_result)} results)\n{scaling_query}')
+         print('\n'.join([f'{r}' for r in scaling_result]))
 
       # Store results in a list, with the data as their proper type
       results = []
@@ -457,20 +475,23 @@ class FullDataSet:
          r = {}
          for i, c in enumerate(columns):
             r[c] = subset[i]
-         if self.prob.hori > 0:
+         if self.prob.hori > 0 and not self.cpu_scaling:
             # Each problem size is on its own plot
-            r['time_avg']      = subset[-8]
-            r['time_stdev']    = subset[-7]
-            r['it_avg']        = subset[-6]
-            r['it_stdev']      = subset[-5]
-            r['sim_times']     = np.array([float(x) for x in subset[-4].split(',')])
-            r['step_dts']      = np.array([float(x) for x in subset[-3].split(',')])
-            r['time_per_step'] = np.array([float(x) for x in subset[-2].split(',')])
-            r['it_per_step']   = np.array([float(x) for x in subset[-1].split(',')])
+            r['select_criterion'] = subset[-8] # We use time average as a measure of performance
+            r['time_avg']         = subset[-8]
+            r['time_stdev']       = subset[-7]
+            r['it_avg']           = subset[-6]
+            r['it_stdev']         = subset[-5]
+            r['sim_times']        = np.array([float(x) for x in subset[-4].split(',')])
+            r['step_dts']         = np.array([float(x) for x in subset[-3].split(',')])
+            r['time_per_step']    = np.array([float(x) for x in subset[-2].split(',')])
+            r['it_per_step']      = np.array([float(x) for x in subset[-1].split(',')])
          else:
             # Plot evolution as a function of problem size
-            r['time_avg'] = subset[-6] # We use min time as a measure of performance for a certain problem config
-            r['num_elem_h']       = np.array([int(x) for x in subset[-5].split(',')])
+            r['select_criterion'] = subset[-6] # We use min time as a measure of performance
+            name = 'num_procs' if self.cpu_scaling else 'num_elem_h'
+            r[name]               = np.array([int(x)   for x in subset[-5].split(',')])
+            print(f'r[{name}]: {r[name]}')
             r['step_times']       = np.array([float(x) for x in subset[-4].split(',')])
             r['step_times_stdev'] = np.array([float(x) for x in subset[-3].split(',')])
             r['step_its']         = np.array([float(x) for x in subset[-2].split(',')])
@@ -480,16 +501,16 @@ class FullDataSet:
       # Only select the fastest problem configurations (b/c the following step can be expensive)
       if num_best > 0:
          num_best = min(num_best, len(param_sets))
-         results = sorted(results, key=lambda d: d['time_avg'])[:num_best]
+         results = sorted(results, key=lambda d: d['select_criterion'])[:num_best]
 
-      # Get the residuals from the other table
+      # Get the residuals from the other table (only if we're not extracting scaling data)
       if self.prob.hori > 0:
          for subset in results:
             if debug:
                print(f'subset = \n{subset}')
 
             inner_cond = ' AND '.join([f'{c} = "{subset[c]}"' for c in columns])
-            residual_query = base_residual_query.format(inner_condition=inner_cond, custom_condition=custom_condition)
+            residual_query = base_residual_query.format(inner_condition=inner_cond)
             residuals = db_cursor.execute(residual_query).fetchall()
 
             subset['residuals'] = np.array([r[1] for r in residuals])
@@ -518,6 +539,28 @@ class FullDataSet:
       fig.legend(fontsize=8)
 
       full_filename = self._make_filename('time_per_step')
+      fig.savefig(full_filename)
+      plt.close(fig)
+      print(f'Saving {full_filename}')
+
+   def plot_time_per_cpu(self):
+      """Plot the average step time with respect to number of processors."""
+      fig, ax = plt.subplots(1, 1)
+      for dataset in [self.no_precond, self.fv_ref, self.p_mg, self.fv_mg]:
+         for i, data in enumerate(dataset):
+            ax.errorbar(data['num_procs'], y=data['step_times'], yerr=data['step_times_stdev'],
+                        color=get_color(data, i), linestyle=get_linestyle(data, i), marker=get_marker(data),
+                        label=self._make_label(data))
+
+      ax.yaxis.grid()
+
+      ax.set_xlabel('Time (s/s?)')
+      ax.set_ylabel('Number of processors')
+
+      fig.suptitle(self._make_title('Average step time'), fontsize=11, x=0.12, horizontalalignment='left')
+      fig.legend(fontsize=8)
+
+      full_filename = self._make_filename('time_per_proc')
       fig.savefig(full_filename)
       plt.close(fig)
       print(f'Saving {full_filename}')
@@ -732,55 +775,84 @@ def main(args):
    Extract data and call appropriate plotting functions.
    """
 
-   if args.split_dt:
-      sizes_query = '''
-         select distinct grid_type, equations, case_number, dg_order, num_elem_h, num_elem_v, initial_dt
+   # Basic timing plots
+   if any([args.time, args.error_time, args.time_per_step]):
+      prob_query = f'''
+         select distinct grid_type, equations, case_number, dg_order, num_elem_h, num_elem_v,
+                         num_procs{', initial_dt' if args.split_dt else ''}
          from results_param
       '''
-      probs = [ProblemDesc(p[0], p[1], p[2], p[3], p[4], p[5], p[6])
-               for p in list(db_cursor.execute(sizes_query).fetchall())]
+      probs = []
+      for p in list(db_cursor.execute(prob_query).fetchall()):
+         probs.append(ProblemDesc(grid_type=p[0], equations=p[1], case_number=p[2], order=p[3], hori=p[4], vert=p[5],
+                                  num_procs=p[6],
+                                  dt=(p[7] if args.split_dt else 0)))
 
-   else:
-      sizes_query = '''
+      for prob in probs:
+         print(f'{prob}')
+         prob_data = FullDataSet(prob, output_suffix=args.suffix)
+         if args.time:          prob_data.plot_time()
+         if args.error_time:    prob_data.plot_error_time()
+         if args.time_per_step: prob_data.plot_time_per_step()
+
+   # Basic iteration plots and strong scaling plots
+   if any([args.residual, args.it, args.it_per_step]):
+      prob_query = f'''
          select distinct grid_type, equations, case_number, dg_order, num_elem_h, num_elem_v
          from results_param
       '''
-      probs = [ProblemDesc(p[0], p[1], p[2], p[3], p[4], p[5])
-               for p in list(db_cursor.execute(sizes_query).fetchall())]
-
-   for p in probs: print(f'{p}')
-
-   if any([args.residual, args.time, args.it, args.error_time, args.time_per_step, args.it_per_step]):
+      probs = [ProblemDesc(grid_type=p[0], equations=p[1], case_number=p[2], order=p[3], hori=p[4], vert=p[5],
+                           num_procs=0, dt=0)
+               for p in list(db_cursor.execute(prob_query).fetchall())]
       for prob in probs:
+         print(f'{prob}')
          prob_data = FullDataSet(prob, output_suffix=args.suffix)
-         if args.residual:      prob_data.plot_residual()
-         if args.time:          prob_data.plot_time()
-         if args.it:            prob_data.plot_it()
-         if args.error_time:    prob_data.plot_error_time()
-         if args.time_per_step: prob_data.plot_time_per_step()
-         if args.it_per_step:   prob_data.plot_it_per_step()
+         if args.residual:       prob_data.plot_residual()
+         if args.it:             prob_data.plot_it()
+         if args.it_per_step:    prob_data.plot_it_per_step()
 
+   # Strong scaling plot(s)
+   if args.strong_scaling:
+      prob_query = f'''
+         select distinct grid_type, equations, case_number, dg_order, num_elem_h, num_elem_v
+         from results_param
+      '''
+      probs = [ProblemDesc(grid_type=p[0], equations=p[1], case_number=p[2], order=p[3], hori=p[4], vert=p[5],
+                           num_procs=0, dt=0)
+               for p in list(db_cursor.execute(prob_query).fetchall())]
+      for prob in probs:
+         print(f'{prob}')
+         prob_data = FullDataSet(prob, cpu_scaling=True, output_suffix=args.suffix)
+         prob_data.plot_time_per_cpu()
+
+   # Grid scaling plot(s)
    if args.grid_progression:
-      # Only horizontal progression
+      # Only plotting iterations for now, so independant of proc count
       prob_query = '''
          select distinct grid_type, equations, case_number, dg_order, num_elem_v
          from results_param
       '''
-      probs = [ProblemDesc(p[0], p[1], p[2], p[3], 0, p[4])
+      probs = [ProblemDesc(grid_type=p[0], equations=p[1], case_number=p[2], order=p[3], hori=0, vert=p[4],
+                           num_procs=0, dt=0)
                for p in list(db_cursor.execute(prob_query).fetchall())]
       for p in probs: print(f'{p}')
       for prob in probs:
          prob_data = FullDataSet(prob, output_suffix=args.suffix)
          prob_data.plot_it_per_size()
-         break
-
 
 
 if __name__ == '__main__':
    import argparse
+   from os.path import isfile
+
+   def file_path(string):
+      if isfile(string):
+         return string
+      else:
+         raise FileNotFoundError(string)
 
    parser = argparse.ArgumentParser(description='Plot results from automated preconditioner tests')
-   parser.add_argument('results_file', type=str, help='DB file that contains test results')
+   parser.add_argument('results_file', type=file_path, help='DB file that contains test results')
    parser.add_argument('--residual', action='store_true', help='Plot residual evolution')
    parser.add_argument('--time', action='store_true', help='Plot the time needed to reach target residual')
    parser.add_argument('--it', action='store_true',
@@ -793,7 +865,8 @@ if __name__ == '__main__':
    parser.add_argument('--split-dt', action='store_true',
                        help="Whether to split plots per dt (rather than all dt's on the same plot)")
    parser.add_argument('--suffix', type=str, default='', help='Suffix to add to the base output file name')
-   parser.add_argument('--grid-progression', action='store_true', help='oijiojoij')
+   parser.add_argument('--grid-progression', action='store_true', help='Plot number of iterations per problem size')
+   parser.add_argument('--strong-scaling', action='store_true', help='Plot performance per number of processors')
 
    parsed_args = parser.parse_args()
 
