@@ -8,6 +8,7 @@ import sys
 
 from mpi4py import MPI
 import numpy
+import cupy
 
 from common.definitions         import idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_w
 from common.parallel            import DistributedWorld
@@ -64,7 +65,7 @@ def main(argv) -> int:
    stepper = create_time_integrator(param, rhs, preconditioner)
    stepper.output_manager = output
 
-   output.step(Q, starting_step)
+   output.step(Q.get() if isinstance(Q, cupy.ndarray) else Q, starting_step)
    sys.stdout.flush()
 
    t = param.dt * starting_step
@@ -104,7 +105,8 @@ def main(argv) -> int:
          Q[idx_rho_u2,:,:,:] = Q[idx_rho, :, :, :] * u2_contra
          Q[idx_rho_w,:,:,:]  = Q[idx_rho, :, :, :] * w_wind
 
-      output.step(Q, step)
+      # TODO: This should be handled better
+      output.step(Q.get() if isinstance(Q, cupy.ndarray) else Q, step)
       sys.stdout.flush()
 
    output.finalize()
@@ -153,6 +155,7 @@ def create_preconditioner(param: Configuration, ptopo: Optional[DistributedWorld
 def determine_starting_state(param: Configuration, output: OutputManager, Q: numpy.ndarray):
    """ Try to load the state for the given starting step and, if successful, swap it with the initial state """
    starting_step = param.starting_step
+   xp = cupy.get_array_module(Q)
    if starting_step > 0:
       try:
          starting_state = numpy.load(output.state_file_name(starting_step))
@@ -173,7 +176,7 @@ def determine_starting_state(param: Configuration, output: OutputManager, Q: num
                 ' Will start from 0 instead.')
          starting_step = 0
 
-   return Q, starting_step
+   return xp.asarray(Q), starting_step
 
 def create_time_integrator(param: Configuration,
                            rhs: RhsBundle,

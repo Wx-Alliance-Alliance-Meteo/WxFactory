@@ -3,12 +3,12 @@ import numpy
 from init.initialize          import initialize_cartesian2d, initialize_euler, initialize_sw, Topo
 
 # For type hints
-from typing import Union, Tuple
+from numpy.typing import NDArray
 from common.program_options      import Configuration
 from geometry                    import DFROperators, Geometry, Metric, Metric3DTopo, CubedSphere, Cartesian2D
 
 def init_state_vars(geom: Geometry, operators: DFROperators, param: Configuration) \
-      -> Tuple[numpy.ndarray, Topo, Union[Metric, Metric3DTopo, None]]:
+      -> tuple[NDArray[numpy.float64], Topo | None, Metric | Metric3DTopo | None]:
 
    Q            = None
    topo         = None

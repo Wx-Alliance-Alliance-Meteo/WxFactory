@@ -1,8 +1,14 @@
 import numpy
+import cupy
 
 from common.definitions        import *
 from init.dcmip              import *
 from init.shallow_water_test import *
+
+# typing
+from numpy.typing import NDArray
+from common.program_options import Configuration
+from geometry.cartesian_2d_mesh import Cartesian2D
 
 class Topo:
    def __init__(self, hsurf, dzdx1, dzdx2, hsurf_itf_i, hsurf_itf_j):
@@ -142,17 +148,17 @@ def initialize_sw(geom, metric, mtrx, param):
    # Note : we move the last axis of the first topo array so that both have similiar ordering
    return Q, Topo(hsurf, dzdx1, dzdx2, numpy.moveaxis(hsurf_itf_i, -1, -2), hsurf_itf_j)
 
-def initialize_cartesian2d(geom, param):
+def initialize_cartesian2d(geom: Cartesian2D, param: Configuration) -> NDArray[numpy.float64]:
 
    nb_equations = 4
 
    # Initial state at rest, isentropic, hydrostatic
    nk, ni = geom.X1.shape
-   Q = numpy.zeros((nb_equations, nk, ni))
-   uu    = numpy.zeros_like(geom.X1)
-   ww    = numpy.zeros_like(geom.X1)
-   exner = numpy.zeros_like(geom.X1)
-   θ = numpy.ones_like(geom.X1) * param.bubble_theta
+   Q      = numpy.zeros((nb_equations, nk, ni))
+   uu     = numpy.zeros_like(geom.X1)
+   ww     = numpy.zeros_like(geom.X1)
+   exner  = numpy.zeros_like(geom.X1)
+   θ      = numpy.ones_like(geom.X1) * param.bubble_theta
 
    if param.case_number == 1:
       # Pill
@@ -186,9 +192,9 @@ def initialize_cartesian2d(geom, param):
 
       # Enforce mirror symmetry
       if ni % 2 == 0:
-         middle_col = ni / 2;
+         middle_col = ni / 2
       else:
-         middle_col = ni / 2 + 1;
+         middle_col = ni / 2 + 1
 
       for i in range(int(middle_col)):
          θ[:, ni-i-1] = θ[:, i]
@@ -251,4 +257,5 @@ def initialize_cartesian2d(geom, param):
    Q[idx_2d_rho_w,:,:]     = ρ * ww
    Q[idx_2d_rho_theta,:,:] = ρ * θ
 
-   return Q
+   xp = cupy if param.device == "cuda" else numpy
+   return xp.asarray(Q)

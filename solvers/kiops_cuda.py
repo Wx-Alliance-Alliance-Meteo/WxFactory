@@ -82,7 +82,7 @@ def kiops_cuda(tau_out: NDArray[cp.float64], A: Callable[[NDArray[cp.float64]], 
     exps     = 0
     sgn      = cp.sign(tau_out[-1])
     tau_now  = 0.0
-    tau_end  = abs(tau_out[-1])
+    tau_end  = cp.abs(tau_out[-1])
     happy    = False
     j        = 0
 
@@ -184,11 +184,15 @@ def kiops_cuda(tau_out: NDArray[cp.float64], A: Callable[[NDArray[cp.float64]], 
         H[0, j] = 1.0
 
         # Save h_j+1,j and remove it temporarily to compute the exponential of H
-        nrm = H[j, j - 1]
+        nrm = H[j, j - 1].copy()
         H[j, j - 1] = 0.0
 
         # Compute the exponential of the augmented matrix
-        F = cu_utils.linalg.expm(sgn * tau * H[:j + 1, :j + 1])
+        # TODO: fix bugs in expm
+        # F = cu_utils.linalg.expm(sgn * tau * H[:j + 1, :j + 1])
+        import scipy.linalg
+        F = scipy.linalg.expm((sgn * tau * H[:j + 1, :j + 1]).get())
+        F = cp.asarray(F)
         exps += 1
 
         # Restore the value of H_{m+1,m}
@@ -204,11 +208,12 @@ def kiops_cuda(tau_out: NDArray[cp.float64], A: Callable[[NDArray[cp.float64]], 
 
         else:
             # Local truncation error estimation
-            err = cp.abs(beta * nrm * F[j - 1, j]).get()
+            err = cp.abs(beta * nrm * F[j - 1, j])
 
             # Error for this step
             oldomega = omega
             omega = tau_end * err / (tau * tol)
+            omega = omega.get()
 
             # Estimate order
             if m == oldm and tau != oldtau and ireject >= 1:
@@ -313,4 +318,4 @@ def kiops_cuda(tau_out: NDArray[cp.float64], A: Callable[[NDArray[cp.float64]], 
     m_ret = m
     stats = (step, reject, krystep, exps, conv, m_ret)
 
-    return w.get(), stats
+    return w, stats

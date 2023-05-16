@@ -49,8 +49,6 @@ def rhs_bubble_cuda(Q: NDArray[cp.float64], geom: Cartesian2D, mtrx: DFROperator
 
     # TODO: have Q on GPU
     Q = cp.asarray(Q)
-    # TODO: make threads per block a global
-    B = cp.cuda.runtime.getDeviceProperties(cp.cuda.runtime.getDevice())["maxThreadsPerBlock"] // 16
 
     datatype = Q.dtype
     nb_equations = Q.shape[0] # Number of constituent Euler equations.  Probably 6
@@ -142,4 +140,4 @@ def rhs_bubble_cuda(Q: NDArray[cp.float64], geom: Cartesian2D, mtrx: DFROperator
     rhs = -(df1_dx1 + df3_dx3)
     rhs[idx_2d_rho_w, :, :] -= Q[idx_2d_rho, :, :] * gravity
 
-    return rhs.get()
+    return rhs

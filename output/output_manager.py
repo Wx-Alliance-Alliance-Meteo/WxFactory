@@ -3,6 +3,7 @@ from typing  import Callable, List, Optional, Tuple, Union
 
 from mpi4py import MPI
 import numpy
+import cupy
 
 from common.program_options import Configuration
 from geometry               import Geometry, Metric, Metric3DTopo, DFROperators
