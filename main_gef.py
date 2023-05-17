@@ -2,6 +2,8 @@
 
 """ The GEF model """
 
+print('trying to load main')
+
 import math
 from typing import Callable, Optional
 import sys
@@ -20,6 +22,8 @@ from integrators                import Integrator, Epi, EpiStiff, Euler1, Imex2,
 from output.output_manager      import OutputManager
 from precondition.multigrid     import Multigrid
 from rhs.rhs_selector           import RhsBundle
+
+print('loading main')
 
 def main(argv) -> int:
    """ This function sets up the infrastructure and performs the time loop of the model. """
