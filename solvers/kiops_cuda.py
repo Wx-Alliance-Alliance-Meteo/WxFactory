@@ -244,9 +244,7 @@ def kiops_cuda(tau_out: NDArray[cp.float64], A: Callable[[NDArray[cp.float64]], 
 
             # Estimate order
             if m == oldm and tau != oldtau and ireject >= 1:
-                try:
-                    order = max(1., math.log(omega / oldomega) / cp.log(tau / oldtau).get())
-                except ValueError: breakpoint()
+                order = max(1., math.log(omega / oldomega) / cp.log(tau / oldtau).get())
                 orderold = False
             elif orderold or ireject == 0:
                 orderold = True
