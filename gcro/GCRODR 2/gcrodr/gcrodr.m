@@ -64,16 +64,8 @@ if(nargin < 10 | isempty(reuse_name))
    reuse_name = 'default';
 end
 
-pyenv
-% if count(py.sys.path,'') == 2
-%     insert(py.sys.path,int32(0),'');
-% end
+% pyenv
 
-py.test.test_fun()
-py.test_dir.test2.test_fun2()
-py.test_dir.test_fun2()
-py.integrators.pf3()
-py.integrators.ros2.pf3()
 py.integrators.ros2.make_matvec(x0, dt)
 % initialize solution vector
 x0 = x0.';

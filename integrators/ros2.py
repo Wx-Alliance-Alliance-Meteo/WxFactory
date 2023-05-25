@@ -48,21 +48,22 @@ def ros2matvec_complex(x_r, x_i):
 def make_matvec(Q, dt):
 
    # from mpi4py import MPI
-   from common.parallel        import Distributed_World
+   from common.parallel        import DistributedWorld
    from common.program_options import Configuration
-   from geometry.matrices      import DFR_operators
+   from geometry               import DFROperators
    from init.init_state_vars   import init_state_vars
    from main_gef               import create_geometry
-   from rhs.rhs_selector       import rhs_selector
+   from rhs.rhs_selector       import RhsBundle
 
    numpy.set_printoptions(precision=2)
 
    param = Configuration('config/gaussian_bubble.ini', False)
-   ptopo = Distributed_World() if param.grid_type == 'cubed_sphere' else None
+   ptopo = DistributedWorld() if param.grid_type == 'cubed_sphere' else None
    geom = create_geometry(param, ptopo)
-   mtrx = DFR_operators(geom, param.filter_apply, param.filter_order, param.filter_cutoff)
+   mtrx = DFROperators(geom, param.filter_apply, param.filter_order, param.filter_cutoff)
    Q2, topo, metric = init_state_vars(geom, mtrx, param)
-   rhs_handle, _, _ = rhs_selector(geom, mtrx, metric, topo, ptopo, param)
+   # rhs_handle, _, _ = rhs_selector(geom, mtrx, metric, topo, ptopo, param)
+   rhs_handle = RhsBundle(geom, mtrx, metric, topo, ptopo, param).full
 
    Q = numpy.array(Q).reshape(Q2.shape)
    # print(f'make_matvec: Q = \n{Q}')
@@ -117,7 +118,7 @@ class Ros2(Integrator):
       b_ml = matlab.double(b.tolist())
       x0_ml = matlab.double(Q_flat.tolist())
       t2 = time()
-      gcrodr_sol, residuals, _, num_matvec, _ = ml.gcrodr(0, b_ml, 5000, 100, x0_ml, dt, self.tol, nargout = 5)
+      gcrodr_sol, residuals, _, num_matvec, _ = ml.gcrodr(0, b_ml, 5000, 200, x0_ml, dt, self.tol, nargout = 5)
       t3 = time()
       # print(f'matlab call successful!')
 
