@@ -44,6 +44,17 @@
 %               semilogy(resvec);
 function [x,resvec,r,nmv,relres] = gcrodr(A,b,m,k,x0, dt,tol,M1,M2,reuse_name)
 
+korig = k;
+m;
+if (m-1 ==k)
+    kmax = k;
+else
+    kmax = k+1;
+end
+eta = [];
+keep_e = 0;
+zees = [];
+
 % Initialize optional variables.
 if(nargin < 7 | isempty(tol))
    tol = 1e-6;
@@ -122,12 +133,23 @@ if(isfield(U_persist,reuse_name))
       C = M1 \ C;
    end
 
+   %AB: we have to check whether k was adjusted in the previous call
+   %to the solver.  If so, adjust k
+   new_k = size(U,2);
+   if (new_k ~= k)
+       fprintf('Initial mod of k to %d\n', new_k)
+       k = new_k;
+   end
+   
+   
+   
    % Orthonormalize C and adjust U accordingly so that C = A*U
    [C,R] = qr(C,0);
    U = U / R;
 
    % Set residual norm to be the initial residual norm for this case.
-   x = x + U*(C'*r);
+   ze = U*(C'*r);
+   x = x + ze;
    r = r - C*(C'*r);
    resvec(1) = norm(r);
    %keyboard
@@ -135,9 +157,15 @@ else
    % I have no subspace to recycle from a previous call to the solver
    % So, do one cycle of GMRES to "prime the pump"
 
-   % Perform m GMRES iterations to produce Krylov subspace of dimension m
-   [x,r,V,H,p,resvec_inner] = gmres1(A,x,r,m,M1,M2,tol*bnorm);
+   % Perform m GMRES iterations to produce Krylov subspace of
+   % dimension m (p is number of its actually performed)
 
+   [x,r,V,H,p,resvec_inner] = gmres1(A,x,r,m,M1,M2,tol*bnorm);
+   if (~isreal(x))
+       fprintf('GMRES1 WARNING: x is not real!\n')
+   end
+   
+         
    % Record residual norms and increment matvec count
    resvec(2:p+1) = resvec_inner;
    nmv = nmv + p;
@@ -145,18 +173,23 @@ else
 
    % Find the k smallest harmonic Ritz vectors.
    % Check to be sure GMRES took more than k iterations. Else, I can't compute
-   % k harmonic Ritz vectors
+   % k harmonic Ritz vectors (AB: adjust k if needed)
    if k < p
-       [p k]
-      P = getHarmVecs1(p,k,H);
-
-     % Form U (the subspace to recycle)
+      %[p k]
+      [P, new_k] = getHarmVecs1(p,k,H, kmax);
+      %fprintf('GMRES 1- is P real? %d\n', isreal(P)) 
+      k = new_k;
+      % Form U (the subspace to recycle)
       U = V(:,1:p) * P;
   
       % Form orthonormalized C and adjust U accordingly so that C = A*U
       [C,R] = qr(H*P,0);
       C = V * C;
       U = U / R;
+
+      
+      %fprintf('Init- is C real? %d\n', isreal(C)) 
+
    end
 
    % If p < m, early convergence of GMRES
@@ -182,43 +215,72 @@ end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%  Main Body of Solver  %%%%%%%%%%%%%%%%%%%%%%%%%
 
-min_it = 1;
-num_it = 0;
-while(resvec(nmv) / bnorm > tol || num_it < min_it)
+while(resvec(nmv) / bnorm > tol)
   
-   num_it = num_it + 1;
+   %k  
+    
    % Do m-k steps of Arnoldi
-
+   %disp('stop 1:')
+   %keyboard
+   
    [V,H,B,p,resvec_inner] = gmres2(A,x,r,m-k,M1,M2,C,tol*bnorm);
+   %output p is the num its actually performed
+   %m-k is how many it should perform
+   %B = C'AV(:,1:m-k) - verified
+
    resvec(nmv+1:nmv+p) = resvec_inner;
    nmv = nmv + p;
    disp(sprintf('3: ||r|| = %e\t\tnmv = %d',resvec(nmv)./resvec(1),nmv-1));
 
    % Rescale U; Store inverses of the norms of columns of U in diagonal matrix D
+   d = []; %AB: set to empty in case k changes
    for i = 1:k
       d(i) = norm(U(:,i));
       U(:,i) = U(:,i) / d(i);
    end
    D = diag(1 ./ d);
-
-   % Form large H
+      
+   % Form large H - called H2
    H2 = zeros(p+k+1,p+k);
    H2(1:k,1:k) = D;
    H2(1:k,k+1:p+k) = B;
    H2(k+1:p+k+1,k+1:p+k) = H;
 
    % Calculate solution update
+   % H2 y = [C V]'r
    rhs = [C V]' * r;
-   y = H2 \ rhs; 
-   x = x + [U V(:,1:p)] * y;
+   y = H2 \ (rhs);  
+   
+   ze = [U V(:,1:p)] * y;
+   x = x + ze;
+   
+   %disp('Stop 2')
+   %keyboard
+   
+   %AB make sure gmres didn't exit early if doing Nui approach
+   %if keep_e > 0
+   %    if (size(eta,1) == 0)
+   %        eta = [y];
+   %    elseif size(eta,1)  == size(y,1)
+   %        eta = [eta y];
+   %    end   
+   %end
+   
+   if (~isreal(x))
+       fprintf('GMRES2 WARNING: x is not real!\n')
+   end
 
    % Calculate new residual
-   nr1 = norm(r);
+   r_prev = r;
    r = r - [C V] * (H2 * y);
-
+   
+   %disp('Stop 3')
+   %keyboard
+   
    % If p < m-k, early convergence of GMRES
-   if (p < m-k && num_it >= min_it)
-      % Assign all (unassigned) outgoing values and return
+   if p < m-k
+
+       % Assign all (unassigned) outgoing values and return
       if(existM2)
          x = x0 + M2 \ x;
       else
@@ -231,16 +293,68 @@ while(resvec(nmv) / bnorm > tol || num_it < min_it)
       return
    end
 
-   % Calculate Harmonic Ritz vectors.
-   P = getHarmVecs2(p+k,k,H2,V,U,C);
-
+   % Calculate Harmonic Ritz vectors (AB: adjust k if needed
+   % after).
+   %p+k is dimension (cols) of H2
+   %disp('Calling harmvec2')
+   [P, new_k] = getHarmVecs2(p+k,k,H2,V,U,C,kmax, korig);
+   old_k = k;
+   k = new_k;
+   
+      
+   %AB Nui: Augment P with y ("economical approach")
+   % it looks like they replace the last harm vector so
+   % as to keep the space the same size
+   %if keep_e > 0
+   %rp = size(P,2);
+       %    num = size(eta,2);
+       %disp('Adding ...')
+       %keep_cnt = min(keep_e, num);
+       %P = [P(:,1:rp-keep_cnt) eta(:,num - keep_cnt+1:num)];
+       % end
+   
+   %keyboard
+   %Have this relation: A*[U V(:,1:p)] = [C V]*H2
+   Uprev = U; %temp/
+   
    % Form new U and C.
-   U = [U V(:,1:p)] * P;
-
+   %if k has increased then P has one more col then prev (then R is
+   %1 larger row and cols and Q has one more col => # cols Q = k)
+   U = [U V(:,1:p)] * P; %now U may have an extra col (this is Ym)
+                         %if k increases
+   
+   %keyboard
+      
    % Form orthonormalized C and adjust U accordingly so that C = A*U
-   [Q,R] = qr(H2*P,0);
-   C = [C V] * Q;
-   U = U / R;
+   [Q,R] = qr(H2*P,0); %R is kxk
+   C1 = C; %temp for debugging
+   C = [C V] * Q; %Now C may have extra col
+
+   %test
+   %W = [C V];
+   %[Q,R] = qr(W*H2*P,0);
+   %C = Q;
+   
+   %U = U / R;
+   U1 = U; %temp for debugging
+   U = U*inv(R);
+
+   %disp('Stop 4')
+   %keyboard
+   
+   % if k changed!
+   if (old_k ~= new_k)
+        %keyboard
+   end
+   
+   
+   %are the C's still orthogonal?
+   %Test = C'*C;
+   %fprintf('norm(eye(k)- Test) = %d\n',norm(eye(k)- Test ))
+
+   %Does C = A*U?    
+   %fprintf('norm(C-A*U) = %d\n',norm(C-A*U ))
+   %keyboard
 
 end
 
@@ -255,7 +369,7 @@ else
 end
 
 % Calculate relative residual.
-relres = resvec(nmv) / bnorm;
+relres = resvec(nmv) / bnorm
 
 % Correct matvec count
 nmv = nmv - 1;

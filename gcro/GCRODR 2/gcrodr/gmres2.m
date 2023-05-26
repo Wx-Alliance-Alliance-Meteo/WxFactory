@@ -30,7 +30,7 @@ end
 
 % Initialize V
 
-%alp = sqrt(1e-7);
+%alp = sqrt(0.5);
 V(:,1) = r / norm(r);
 L = eye(m+size(C,2), m+size(C,2));
 L(1:size(C,2), 1:size(C,2)) = tril(C'*C);
@@ -39,8 +39,8 @@ for i=1:size(C,2)
 L(i,i) =1;
 end
 
-min_it = 1;
-num_it = 1;
+wt = 1;
+
 
 for k = 1:m
     % Find w using preconditioning if available.
@@ -72,30 +72,38 @@ for k = 1:m
     
     WW = [C V(:, 1:k)];
     kk = size(C,2)+k;
+
     
     for ii=1:kk
-        col1(ii) = WW(:, ii)'*V(:,k);
-        rv(ii) = WW(:,ii)'*w;
+        col1(ii) = WW(:, ii)'*V(:,k)*wt;
+        rv(ii) = WW(:,ii)'*w*wt;
     end
     if size(col1,2)>size(col1,1)
     col1=col1'; rv = rv';
     end
 
-col1 = WW(:,1:kk)'*V(:,k);
-rv = WW(:, 1:kk)'*w; 
+col1 = WW(:,1:kk)'*V(:,k)*wt;   % r2 = V^Tu - he last row of the L matrix in T = (I + L)^-1
+rv = WW(:, 1:kk)'*w*wt;         % r0 = W^Tw.    
 L(size(C,2)+k, 1:kk) = col1';
 L(kk,kk) = 0; j = size(C,2)+1;
  
- V(:,k+1) = w - WW(:, 1:kk)*(rv);
- %size(V(:,k+1))
- %fprintf('Here\n');
+%V(:,k+1) = w - WW(:, 1:kk)*(rv); %old version
+
  ll(1:j-1) = rv(1:j-1); 
- ll(j:kk) = 1.0e-7 * ( eye(kk-j+1,kk-j+1) + L(j:kk, j:kk) ) \ ( rv(j:kk) - L(j:kk, 1:j-1)*rv(1:j-1) );
+ ll(j:kk) = wt*( eye(kk-j+1,kk-j+1) + L(j:kk, j:kk) ) \ ( rv(j:kk) - L(j:kk, 1:j-1)*rv(1:j-1) );
+ r1 = ll(1:kk)'; %<=====. r1 = T W^T r0 
+ V(:,k+1) = w - WW(:, 1:kk)*(r1); %<==== V = w - W r1. Gauss-Seidel MG
  
- H(1:k, k) = ll(size(C,2)+1:end);
+ r2 = WW(:, 1:kk)'*V(:,k+1)*wt; % second projection. (CGS - Jacobi step)
+ %r3 = ll(1:kk)';
+ %r3(1:j-1) = rv(1:j-1); 
+ %r3(j:kk) = ( eye(kk-j+1,kk-j+1) + L(j:kk, j:kk) ) \ ( r2(j:kk) - L(j:kk, 1:j-1)*r2(1:j-1) );
+ V(:,k+1) = V(:,k+1) - WW(:, 1:kk)*(r2);
+
+ H(1:k, k) = ll(size(C,2)+1:end) + r2(size(C,2)+1:end)'; % update the Hessenberg where r2 is small correction
  B(:,k) = rv(1:size(C,2));
     H(k+1,k) = norm(V(:,k+1));
-    V(:,k+1) = V(:,k+1)/norm(V(:,k+1));
+    V(:,k+1) = V(:,k+1)/(norm(V(:,k+1)));
     %fprintf('V: %g \n', norm(eye(k+1,k+1) - V(:,1:k+1)'*V(:,1:k+1), 'Fro') );
     %fprintf('W: %g \n', norm(eye(kk,kk) - WW(:,1:kk)'*WW(:,1:kk), 'Fro') );
     
@@ -106,23 +114,17 @@ L(kk,kk) = 0; j = size(C,2)+1;
     rhs(1) = norm(r);
     
     % Solve least squares system; Calculate residual norm    
-    y = H \ rhs;  
-    %D = eig(H(1:k,1:k))
-    %figure(3)
-    %semilogy(D,'+','LineWidth',2)
-    %hold on
+    y = (1/wt)*(H \ rhs); 
+    %x = x + V(:,1:k) * y;
+    %tr = norm(b - A*x) / norm(b)
     tr = norm(r);
     res = rhs - H * y;
     resvec(k) = norm(res);
-    
     if resvec(k) < tol
         x = x + V(:,1:k) * y;
+        %tr = norm(b - A*x) / norm(b);
         r = V * res;
-        trueres = norm(r) / tr
-        if (num_it >= min_it)
-            return
-        end
+        %trueres = norm(r) / tr;
+        return
     end
-
-    num_it = num_it + 1;
 end
