@@ -1,0 +1,68 @@
+
+#----------------------2646---------------------------------
+#for all cases with different integrators 
+ord_soumet -cpus 2646                                  \
+           -w 180                                      \
+           -jn gef_2646_epi4                           \
+           -mpi                                        \
+           -share e                                    \
+           -jobfile bat_files/call_p2646_epi4.bat     \
+           -listing $(pwd)/listings
+
+ord_soumet -cpus 2646                                  \
+           -w 180                                      \
+           -jn gef_2646_epi6                            \
+           -mpi                                        \
+           -share e                                    \
+           -jobfile bat_files/call_p2646_epi6.bat     \
+           -listing $(pwd)/listings
+
+ord_soumet -cpus 2646                                  \
+           -w 180                                      \
+           -jn gef_2646_epi2                            \
+           -mpi                                        \
+           -share e                                    \
+           -jobfile bat_files/call_p2646_epi2.bat     \
+           -listing $(pwd)/listings
+
+ord_soumet -cpus 2646                                  \
+           -w 180                                      \
+           -jn gef_2646_srerk3                           \
+           -mpi                                        \
+           -share e                                    \
+           -jobfile bat_files/call_p2646_srerk3.bat     \
+           -listing $(pwd)/listings
+
+ord_soumet -cpus 2646                                  \
+           -w 180                                      \
+           -jn gef_2646_srerk6                            \
+           -mpi                                        \
+           -share e                                    \
+           -jobfile bat_files/call_p2646_srerk6.bat     \
+           -listing $(pwd)/listings
+
+
+
+ord_soumet -cpus 2646                                  \
+           -w 180                                      \
+           -jn gef_2646_epi2                            \
+           -mpi                                        \
+           -share e                                    \
+           -jobfile bat_files/call_p2646_epi2_partB.bat     \
+           -listing $(pwd)/listings
+
+ord_soumet -cpus 2646                                  \
+           -w 180                                      \
+           -jn gef_2646_srerk3                           \
+           -mpi                                        \
+           -share e                                    \
+           -jobfile bat_files/call_p2646_srerk3_partB.bat     \
+           -listing $(pwd)/listings
+
+ord_soumet -cpus 2646                                  \
+           -w 180                                      \
+           -jn gef_2646_srerk6                            \
+           -mpi                                        \
+           -share e                                    \
+           -jobfile bat_files/call_p2646_srerk6_partB.bat     \
+           -listing $(pwd)/listings
