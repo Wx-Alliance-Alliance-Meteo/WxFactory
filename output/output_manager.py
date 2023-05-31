@@ -31,12 +31,22 @@ class OutputManager:
       self.operators = operators
       self.topo      = topo
 
-      os.makedirs(os.path.abspath(param.output_dir), exist_ok=True)
+      if MPI.COMM_WORLD.rank == 0:
+         try:
+            os.makedirs(os.path.abspath(param.output_dir), exist_ok=True)
+         except PermissionError:
+            new_name = 'results'
+            print(f'WARNING: Unable to create directory {param.output_dir} for output. Will use "./{new_name}" instead')
+            param.output_dir = new_name
+            os.makedirs(os.path.abspath(param.output_dir), exist_ok=True)
 
-      self.solver_stats_output = SolverStatsOutput(param)
+      MPI.COMM_WORLD.bcast(param.output_dir, root=0)
 
       self.final_function = lambda x=None: None
       self.blockstat_function = lambda Q, step_id: None
+
+      if self.param.store_solver_stats > 0:
+         self.solver_stats_output = SolverStatsOutput(param)
 
       if param.output_freq > 0:
          if self.geometry.grid_type == 'cubed_sphere':
