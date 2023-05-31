@@ -2,7 +2,7 @@
 cd /home/vma000/ords/gef_tanya
 . ./load_env.sh
 
-methods=("galewsky_cwyne.ini" "galewsky_pmexne1s.ini", "galewsky_kiops.ini" "case5_pmexne1s.ini" "case6_pmexne1s.ini")
+methods=("galewsky_cwyne.ini" "galewsky_pmexne1s.ini" "galewsky_kiops.ini" "case5_pmexne1s.ini" "case6_pmexne1s.ini")
 
 #methods=("galewsky_kiopsne.ini")
 methodlen=${#methods[@]}
