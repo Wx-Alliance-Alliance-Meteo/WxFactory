@@ -118,7 +118,7 @@ class Ros2(Integrator):
       b_ml = matlab.double(b.tolist())
       x0_ml = matlab.double(Q_flat.tolist())
       t2 = time()
-      gcrodr_sol, residuals, _, num_matvec, _ = ml.gcrodr(0, b_ml, 5000, 200, x0_ml, dt, self.tol, nargout = 5)
+      gcrodr_sol, residuals, _, num_matvec, _ = ml.gcrodr(0, b_ml, 3000, 200, x0_ml, dt, self.tol, nargout = 5)
       t3 = time()
       # print(f'matlab call successful!')
 

@@ -11,10 +11,18 @@
 %    GCRODR(A,B,X0,TOL) specifies the tolerance of the method.  If TOL is []
 %    then GCRODR uses the default, 1e-6.
 % 
-%    GCRODR(A,B,X0,TOL,M1,M2) precondition system as inv(M1)*A*inv(M2)
+%    GCRODR(A,B,X0,TOL,M1,M2, opt) precondition system as inv(M1)*A*inv(M2)
 %    If M1 is [] then a left preconditioner is not applied. If M2 is [] then a 
 %    right preconditioner is not applied.
 % 
+
+%         opt      1 = increase k to not split complex pair (GCRODR2_MOD)
+%                  2 = keep k fixed (GCRODR2_MOD_FIXED)
+%                  3 = only let the last evec be complex if it would ...
+%                           be split (keep k fixed) (GCRODR2_MOD_FIXED_IM)
+%                  4 = no modification (whether real or complex)  
+
+
 %    GCRODR(A,B,X0,TOL,M1,M2,NAME) specifies a string associated with the subspace
 %    that will be recycled from this call. A call with 'nopreconditioning' will 
 %    recycle the subspace saved the last time a call was made with the string 
@@ -42,36 +50,37 @@
 %               tol = 1e-10;
 %               [x,resvec,r,nmv,relres] = gcrodr(A,b,10,4,[],tol);
 %               semilogy(resvec);
-function [x,resvec,r,nmv,relres] = gcrodr(A,b,m,k,x0, dt,tol,M1,M2,reuse_name)
+function [x,resvec,r,nmv,relres] = gcrodr(A,b,m,k,x0, dt,tol,M1,M2,opt,reuse_name)
 
-korig = k;
-m;
+
+%determine max value of k
 if (m-1 ==k)
     kmax = k;
 else
     kmax = k+1;
 end
-eta = [];
-keep_e = 0;
-zees = [];
+
 
 % Initialize optional variables.
-if(nargin < 7 | isempty(tol))
+if(nargin < 7 || isempty(tol))
    tol = 1e-6;
 end
-if(nargin < 8 | isempty(M1))
+if(nargin < 8 || isempty(M1))
    existM1 = 0;
    M1 = [];
 else
    existM1 = 1;
 end
-if(nargin < 9 | isempty(M2))
+if(nargin < 9 || isempty(M2))
    existM2 = 0;
    M2 = [];
 else
    existM2 = 1;
 end
-if(nargin < 10 | isempty(reuse_name))
+if(nargin < 10 || isempty(opt))
+   opt = 4;
+end
+if(nargin < 11 || isempty(reuse_name))
    reuse_name = 'default';
 end
 
@@ -96,7 +105,7 @@ end
 % Calculate initial preconditioned residual norm.
 resvec = zeros(2,1);
 resvec(1) = norm(r);
-disp(sprintf('1: ||r|| = %e\t\tnmv = %d',resvec(nmv)./resvec(1),nmv-1));
+fprintf('1: ||r|| = %e\t\tnmv = %d\n',resvec(nmv)./resvec(1),nmv-1);
 
 % Precondition rhs if available.
 if(existM1)
@@ -134,14 +143,12 @@ if(isfield(U_persist,reuse_name))
    end
 
    %AB: we have to check whether k was adjusted in the previous call
-   %to the solver.  If so, adjust k
+   %to the solver for the previous system.  If so, adjust k
    new_k = size(U,2);
    if (new_k ~= k)
        fprintf('Initial mod of k to %d\n', new_k)
        k = new_k;
    end
-   
-   
    
    % Orthonormalize C and adjust U accordingly so that C = A*U
    [C,R] = qr(C,0);
@@ -169,15 +176,13 @@ else
    % Record residual norms and increment matvec count
    resvec(2:p+1) = resvec_inner;
    nmv = nmv + p;
-   disp(sprintf('2: ||r|| = %e\t\tnmv = %d',resvec(nmv)./resvec(1),nmv-1));
+   fprintf('2: ||r|| = %e\t\tnmv = %d\n',resvec(nmv)./resvec(1),nmv-1);
 
    % Find the k smallest harmonic Ritz vectors.
    % Check to be sure GMRES took more than k iterations. Else, I can't compute
    % k harmonic Ritz vectors (AB: adjust k if needed)
    if k < p
-      %[p k]
-      [P, new_k] = getHarmVecs1(p,k,H, kmax);
-      %fprintf('GMRES 1- is P real? %d\n', isreal(P)) 
+      [P, new_k] = getHarmVecs1(p,k,H,kmax,opt);
       k = new_k;
       % Form U (the subspace to recycle)
       U = V(:,1:p) * P;
@@ -187,7 +192,6 @@ else
       C = V * C;
       U = U / R;
 
-      
       %fprintf('Init- is C real? %d\n', isreal(C)) 
 
    end
@@ -217,23 +221,19 @@ end
 
 while(resvec(nmv) / bnorm > tol)
   
-   %k  
-    
    % Do m-k steps of Arnoldi
-   %disp('stop 1:')
-   %keyboard
-   
+      
    [V,H,B,p,resvec_inner] = gmres2(A,x,r,m-k,M1,M2,C,tol*bnorm);
    %output p is the num its actually performed
    %m-k is how many it should perform
-   %B = C'AV(:,1:m-k) - verified
+   %B = C'AV(:,1:m-k) 
 
    resvec(nmv+1:nmv+p) = resvec_inner;
    nmv = nmv + p;
-   disp(sprintf('3: ||r|| = %e\t\tnmv = %d',resvec(nmv)./resvec(1),nmv-1));
+   fprintf('3: ||r|| = %e\t\tnmv = %d\n',resvec(nmv)./resvec(1),nmv-1);
 
    % Rescale U; Store inverses of the norms of columns of U in diagonal matrix D
-   d = []; %AB: set to empty in case k changes
+   d = []; %set to empty in case k changes
    for i = 1:k
       d(i) = norm(U(:,i));
       U(:,i) = U(:,i) / d(i);
@@ -254,18 +254,6 @@ while(resvec(nmv) / bnorm > tol)
    ze = [U V(:,1:p)] * y;
    x = x + ze;
    
-   %disp('Stop 2')
-   %keyboard
-   
-   %AB make sure gmres didn't exit early if doing Nui approach
-   %if keep_e > 0
-   %    if (size(eta,1) == 0)
-   %        eta = [y];
-   %    elseif size(eta,1)  == size(y,1)
-   %        eta = [eta y];
-   %    end   
-   %end
-   
    if (~isreal(x))
        fprintf('GMRES2 WARNING: x is not real!\n')
    end
@@ -273,9 +261,6 @@ while(resvec(nmv) / bnorm > tol)
    % Calculate new residual
    r_prev = r;
    r = r - [C V] * (H2 * y);
-   
-   %disp('Stop 3')
-   %keyboard
    
    % If p < m-k, early convergence of GMRES
    if p < m-k
@@ -296,56 +281,33 @@ while(resvec(nmv) / bnorm > tol)
    % Calculate Harmonic Ritz vectors (AB: adjust k if needed
    % after).
    %p+k is dimension (cols) of H2
-   %disp('Calling harmvec2')
-   [P, new_k] = getHarmVecs2(p+k,k,H2,V,U,C,kmax, korig);
+   [P, new_k] = getHarmVecs2(p+k,k,H2,V,U,C,kmax, opt);
    old_k = k;
    k = new_k;
    
-      
-   %AB Nui: Augment P with y ("economical approach")
-   % it looks like they replace the last harm vector so
-   % as to keep the space the same size
-   %if keep_e > 0
-   %rp = size(P,2);
-       %    num = size(eta,2);
-       %disp('Adding ...')
-       %keep_cnt = min(keep_e, num);
-       %P = [P(:,1:rp-keep_cnt) eta(:,num - keep_cnt+1:num)];
-       % end
-   
-   %keyboard
    %Have this relation: A*[U V(:,1:p)] = [C V]*H2
-   Uprev = U; %temp/
+   %Uprev = U; %temp/
    
    % Form new U and C.
-   %if k has increased then P has one more col then prev (then R is
+   %if k has increased by 1 then P has one more col then prev (then R is
    %1 larger row and cols and Q has one more col => # cols Q = k)
    U = [U V(:,1:p)] * P; %now U may have an extra col (this is Ym)
                          %if k increases
    
-   %keyboard
       
    % Form orthonormalized C and adjust U accordingly so that C = A*U
    [Q,R] = qr(H2*P,0); %R is kxk
-   C1 = C; %temp for debugging
+   %C1 = C; %temp for debugging
    C = [C V] * Q; %Now C may have extra col
 
-   %test
-   %W = [C V];
-   %[Q,R] = qr(W*H2*P,0);
-   %C = Q;
-   
    %U = U / R;
    U1 = U; %temp for debugging
    U = U*inv(R);
 
-   %disp('Stop 4')
-   %keyboard
-   
    % if k changed!
-   if (old_k ~= new_k)
+   %if (old_k ~= new_k)
         %keyboard
-   end
+   %end
    
    
    %are the C's still orthogonal?
