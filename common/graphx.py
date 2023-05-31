@@ -6,7 +6,7 @@ import matplotlib.pyplot
 try:
    import mayavi.mlab
 except ModuleNotFoundError:
-   if MPI.COMM_WORLD.Get_size() > 1:
+   if MPI.COMM_WORLD.Get_size() > 1 and MPI.COMM_WORLD.rank == 0:
       print(f'WARNING: Could not import mayavi module. There will be a crash if you try to plot stuff on the cubed sphere')
 
 from common.definitions import nbfaces

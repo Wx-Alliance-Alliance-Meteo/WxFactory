@@ -64,8 +64,9 @@ class Srerk(Integrator):
       if self.exponential_solver == 'kiops':
          z, stats = kiops(self.c[0], matvec_handle, vec, tol=self.tol, m_init=self.krylov_size, mmin=16, mmax=64, task1=False)
 
-         print(f'KIOPS converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)'
-               f' to a solution with local error {stats[4]:.2e}')
+         if (mpirank == 0):
+            print(f'KIOPS converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)'
+                  f' to a solution with local error {stats[4]:.2e}')
 
          self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
 
@@ -75,8 +76,9 @@ class Srerk(Integrator):
          z, stats = pmex(self.c[0], matvec_handle, vec, tol=self.tol, m_init=self.krylov_size, mmin=16, mmax=64, task1=False)
          self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
 
-         print(f'PMEX converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)'
-               f' to a solution with local error {stats[4]:.2e}')
+         if (mpirank == 0):
+            print(f'PMEX converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)'
+                  f' to a solution with local error {stats[4]:.2e}')
 
       #----pmex with 1-sync-----
       elif self.exponential_solver == 'pmex_1s':
@@ -203,8 +205,9 @@ class Srerk(Integrator):
             z, stats = kiops(self.c[i_proj], matvec_handle, vec, tol=self.tol, m_init=self.krylov_size, mmin=16, mmax=64,
                              task1=False)
 
-            print(f'KIOPS converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)'
-                  f' to a solution with local error {stats[4]:.2e}')
+            if (mpirank == 0):
+               print(f'KIOPS converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)'
+                     f' to a solution with local error {stats[4]:.2e}')
 
             self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
 
@@ -214,8 +217,9 @@ class Srerk(Integrator):
             z, stats = pmex(self.c[i_proj], matvec_handle, vec, tol=self.tol, m_init=self.krylov_size, mmin=16, mmax=64, task1=False)
             self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
 
-            print(f'PMEX converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)'
-                  f' to a solution with local error {stats[4]:.2e}')
+            if (mpirank == 0):
+               print(f'PMEX converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)'
+                     f' to a solution with local error {stats[4]:.2e}')
 
          #----pmex with 1-sync-----
          elif self.exponential_solver == 'pmex_1s':
