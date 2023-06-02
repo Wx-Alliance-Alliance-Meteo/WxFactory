@@ -195,6 +195,8 @@ def kiops_cuda(tau_out: NDArray[cp.float64], A: Callable[[NDArray[cp.float64]], 
 
             # Happy breakdown
             if nrm < tol:
+                with send_stream:
+                    Vg[slot, :n + p].get(out=V_buf[parity, :n + p])
                 happy = True
                 break
 
