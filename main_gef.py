@@ -16,7 +16,7 @@ from geometry                   import Cartesian2D, CubedSphere, DFROperators, G
 from init.dcmip                 import dcmip_T11_update_winds, dcmip_T12_update_winds
 from init.init_state_vars       import init_state_vars
 from integrators                import Integrator, Epi, EpiStiff, Euler1, Imex2, PartRosExp2, Ros2, RosExp2, \
-                                       StrangSplitting, Srerk, Tvdrk3, BackwardEuler, CrankNicolson, Bdf2
+                                       StrangSplitting, Srerk, Tvdrk3, BackwardEuler, CrankNicolson, Bdf2, Lawson
 from output.output_manager      import OutputManager
 from precondition.multigrid     import Multigrid
 from rhs.rhs_selector           import RhsBundle
@@ -211,6 +211,10 @@ def create_time_integrator(param: Configuration,
       return RosExp2(param, rhs.full, rhs.full, preconditioner=preconditioner)
    if param.time_integrator == 'partrosexp2':
       return PartRosExp2(param, rhs.full, rhs.implicit, preconditioner=preconditioner)
+
+   # --- L, Lawsonawson - Exponential
+   if param.time_integrator == 'lawson':
+      return Lawson(param, rhs.full)
 
    # --- Implicit - Explicit
    if param.time_integrator == 'imex2':
