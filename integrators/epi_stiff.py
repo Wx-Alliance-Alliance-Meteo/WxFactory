@@ -7,7 +7,7 @@ from mpi4py       import MPI
 from common.program_options import Configuration
 from .epi            import Epi
 from .integrator     import Integrator, alpha_coeff
-from solvers         import kiops, matvec_fun, pmex
+from solvers         import exode, kiops, matvec_fun, pmex
 
 class EpiStiff(Integrator):
    def __init__(self, param: Configuration, order: int, rhs, init_method=None, init_substeps: int = 1):
@@ -73,7 +73,15 @@ class EpiStiff(Integrator):
             # v_k = Sum_{i=1}^{n_prev} A_{k,i} R(y_{n-i})
             vec[k+3,:] += alpha * r.flatten()
 
-      if self.exponential_solver == 'pmex':
+
+      if self.exponential_solver == 'exode':
+
+         phiv, stats = exode(1., matvec_handle, vec, method=self.exode_method, atol = self.tol, task1 = False, verbose=False)
+
+         if mpirank == 0:
+            print(f'EXODE converged at iteration {stats[0]}')
+
+      elif self.exponential_solver == 'pmex':
 
          phiv, stats = pmex([1.], matvec_handle, vec, tol=self.tol, mmax=64, task1=False)
 

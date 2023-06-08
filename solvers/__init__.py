@@ -1,5 +1,6 @@
 
 # from .bamphi.bamphi     import bamphi
+from .exode             import exode
 from .fgmres            import fgmres
 from .kiops             import kiops
 from .global_operations import global_dotprod, global_inf_norm, global_norm

@@ -48,6 +48,7 @@ class Configuration:
       self.starting_step = self._get_option('Time_integration', 'starting_step', int, 0)
 
       self.exponential_solver = self._get_option('Time_integration', 'exponential_solver', str, 'kiops')
+      self.exode_method       = self._get_option('Time_integration', 'exode_method', str, '')
       self.krylov_size        = self._get_option('Time_integration', 'krylov_size', int, 1)
       self.jacobian_method    = self._get_option('Time_integration', 'jacobian_method', str, 'complex')
 

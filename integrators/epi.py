@@ -7,7 +7,7 @@ import numpy
 
 from common.program_options import Configuration
 from .integrator            import Integrator, SolverInfo
-from solvers                import kiops, matvec_fun, pmex
+from solvers                import exode,kiops, matvec_fun, pmex
 
 class Epi(Integrator):
    def __init__(self, param: Configuration, order: int, rhs: Callable, init_method=None, init_substeps: int = 1):
@@ -17,6 +17,7 @@ class Epi(Integrator):
       self.krylov_size = 1
       self.jacobian_method = param.jacobian_method
       self.exponential_solver = param.exponential_solver
+      self.exode_method = param.exode_method
 
       if order == 2:
          self.A = numpy.array([[]])
@@ -92,13 +93,23 @@ class Epi(Integrator):
             # v_k = Sum_{i=1}^{n_prev} A_{k,i} R(y_{n-i})
             vec[k,:] += alpha * r.flatten()
 
-      if self.exponential_solver == 'pmex':
+      if self.exponential_solver == 'exode':
+
+         phiv, stats = exode(1., matvec_handle, vec, method=self.exode_method, atol = self.tol, task1 = False, verbose=False)
+
+         if mpirank == 0:
+            print(f'EXODE converged at iteration {stats[0]}')
+            
+         self.solver_info = SolverInfo(total_num_it = stats[0])
+
+      elif self.exponential_solver == 'pmex':
          phiv, stats = pmex([1.], matvec_handle, vec, tol=self.tol, mmax=64, task1=False)
 
          if (mpirank == 0):
             print(f'PMEX converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)'
                   f' to a solution with local error {stats[4]:.2e}')
-
+         
+         self.solver_info = SolverInfo(total_num_it = stats[2])
       else:
          phiv, stats = kiops([1], matvec_handle, vec, tol=self.tol, m_init=self.krylov_size, mmin=16, mmax=64, task1=False)
 
@@ -108,7 +119,7 @@ class Epi(Integrator):
             print(f'KIOPS converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)'
                   f' to a solution with local error {stats[4]:.2e}')
 
-      self.solver_info = SolverInfo(total_num_it = stats[2])
+         self.solver_info = SolverInfo(total_num_it = stats[2])
 
       # Save values for the next timestep
       if self.n_prev > 0:
