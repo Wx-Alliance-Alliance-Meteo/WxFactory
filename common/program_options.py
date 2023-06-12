@@ -14,7 +14,7 @@ class Configuration:
 
       self.sections = {}
       self.parser = ConfigParser()
-      self.parser.read(cfg_file)
+      self.parser.read(cfg_file, encoding="utf-8")
 
       if verbose:
          print('\nLoading config: ' + cfg_file)
