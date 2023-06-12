@@ -157,4 +157,4 @@ def exode(τ_out, A, u, method='ARK3(2)4L[2]SA-ERK', rtol=1e-3, atol = 1e-6, tas
 
    exode.first_step = numpy.median(numpy.diff(ts))
 
-   return y, stats
+   return solution, stats
