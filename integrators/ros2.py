@@ -36,7 +36,7 @@ class Ros2(Integrator):
       if self.preconditioner is not None:
          maxiter = 200 // self.gmres_restart
 
-      print('Initial ', numpy.linalg.norm(b - A(Q_flat)))
+      print('Residual when first guess is previous sol:', numpy.linalg.norm(b - A(Q_flat)))
 
       if self.nstep+1 >= 4 and self.X is not None:
          BB = self.B.T
@@ -47,7 +47,7 @@ class Ros2(Integrator):
 
          Q_x0 = approxInvA(b)
          extrap = numpy.linalg.norm(b - A(Q_x0))
-         print('Extrap  ', extrap)
+         print('Residual after ML:', extrap)
 
       else:
          Q_x0 = Q_flat.copy()
