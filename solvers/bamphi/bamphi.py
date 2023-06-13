@@ -1,9 +1,9 @@
 import numpy
 import scipy.special
 
-from Bamphi.bamphi_krylov     import KrylovSystem
-from Bamphi.bamphi_step_state import StepState
-from solvers.linsol            import global_inf_norm
+from .bamphi_krylov      import KrylovSystem
+from .bamphi_step_state  import StepState
+from ..global_operations import global_inf_norm
 
 from numpy.random import default_rng
 bamphi_rng = default_rng()

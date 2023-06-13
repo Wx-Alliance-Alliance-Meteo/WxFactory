@@ -1,32 +1,29 @@
 import math
 import numpy
-import sympy
 import sys
 
-import common.definitions
-from geometry.geometry     import Geometry
-import geometry.sphere         as sphere
-import geometry.quadrature     as quadrature
+from .geometry   import Geometry
+from .sphere     import cart2sph
 
 # For type hints
-from common.parallel          import Distributed_World
+from common.parallel          import DistributedWorld
 from common.program_options   import Configuration
 
 class CubedSphere(Geometry):
    def __init__(self, nb_elements_horizontal:int , nb_elements_vertical: int, nbsolpts: int, 
-                λ0: float, ϕ0: float, α0: float, ztop: float, ptopo: Distributed_World, param: Configuration):
-      '''Initialized the cubed sphere geometry, for an earthlike sphere with no topography.
-      
+                λ0: float, ϕ0: float, α0: float, ztop: float, ptopo: DistributedWorld, param: Configuration):
+      '''Initialize the cubed sphere geometry, for an earthlike sphere with no topography.
+
       This function initializes the basic CubedSphere geometry object, which provides the parameters necessary to define
       the values in numeric (x1, x2, η) coordinates, gnomonic (projected; X, Y, Z) coordinates, spherical (lat, lon, Z),
-      Cartesian (Xc, Yc, Zc) coordinates.  
+      Cartesian (Xc, Yc, Zc) coordinates.
 
       These coordinates respect the DG formulation, but they are themselves indifferent to the mechanics of
       differentiation.
 
       On initialization, the coordinate is defined with respect to a smooth sphere, with geometric height varying between
       0 and ztop.  To impose a topographic mapping, the CubedSphere object must be updated via the update_topo method.
-      
+
       The cubed-sphere panelization is as follows:
       ```
             +---+
@@ -38,10 +35,10 @@ class CubedSphere(Geometry):
             +---+
       ```
       … where each panel has its own local (x1,x2) coordinate axis, representing the angular deviation from
-      the panel center.  With typical parameters, panel 0 contains the intersection of the prime meridian and 
-      equator, the equator runs through panels 3-0-1-2 from west to east, panel 4 contains the north pole, 
+      the panel center.  With typical parameters, panel 0 contains the intersection of the prime meridian and
+      equator, the equator runs through panels 3-0-1-2 from west to east, panel 4 contains the north pole,
       and panel 5 contains the south pole.
-      
+
       Parameters:
       -----------
       nb_elements_horizontal: int
@@ -69,9 +66,9 @@ class CubedSphere(Geometry):
          each panel is a separate MPI process.
       param: Configuration
          Wraps parameters from the configuration pole that are not otherwise specified in this
-         constructor.      
+         constructor.
       '''
-      super().__init__('cubed_sphere')
+      super().__init__(nbsolpts, 'cubed_sphere')
 
       ## Panel / parallel decomposition properties
       self.ptopo = ptopo
@@ -114,39 +111,9 @@ class CubedSphere(Geometry):
       self.nb_elements_x1 = nb_elements_x1
       self.nb_elements_x2 = nb_elements_x2
       self.nb_elements_x3 = nb_elements_x3
-      self.nbsolpts = nbsolpts
-
-      ## Element properties -- solution and extension points
-
-      # Gauss-Legendre solution points
-      solutionPoints_sym, solutionPoints, glweights = quadrature.gauss_legendre(nbsolpts)
-      if (ptopo.rank == 0):
-         print(f'Solution points : {solutionPoints}')
-         print(f'GL weights : {glweights}')
-
-      # Extend the solution points to include -1 and 1
-      extension = numpy.append(numpy.append([-1], solutionPoints), [1])
-      extension_sym = solutionPoints_sym.copy()
-      extension_sym.insert(0, sympy.sympify('-1'))
-      extension_sym.append(sympy.sympify('1'))
-
-      scaled_points = 0.5 * (1.0 + solutionPoints)
-
-      self.solutionPoints = solutionPoints
-      self.solutionPoints_sym = solutionPoints_sym
-      self.glweights = glweights
-      self.extension = extension
-      self.extension_sym = extension_sym
-
-      # Helper variables to normalize the intra-element computational coordinate
-      minComp = min(extension)
-      maxComp = max(extension)
-      Δcomp = maxComp - minComp
-
-      self.Δcomp = Δcomp
 
       ## Element sizes
-      
+
       # Equiangular coordinates
       Δx1 = (domain_x1[1] - domain_x1[0]) / nb_elements_x1
       Δx2 = (domain_x2[1] - domain_x2[0]) / nb_elements_x2
@@ -160,6 +127,11 @@ class CubedSphere(Geometry):
       self.Δx2 = Δx2
       self.Δx3 = Δx3
       self.Δeta = Δeta
+
+      # Helper variables to normalize the intra-element computational coordinate
+      minComp = min(self.extension)
+      maxComp = max(self.extension)
+      Δcomp = maxComp - minComp
 
       # Define the coordinate values at the interfaces between elements
       # interfaces_x1 = numpy.linspace(start = domain_x1[0], stop = domain_x1[1], num = nb_elements_x1 + 1)
@@ -215,25 +187,25 @@ class CubedSphere(Geometry):
       # Then broadcast the coordinate into the variable, using the structure:
       # <minimum> + <delta_element>*<element number> + <delta_inner>*<solutionPoints>
       x1[:] = domain_x1[0] + Δx1*elements_x1[:,numpy.newaxis] + \
-                  Δx1/Δcomp*(-minComp + solutionPoints[numpy.newaxis,:])
+                  Δx1/Δcomp*(-minComp + self.solutionPoints[numpy.newaxis,:])
       # Finally, reshape back to the unified view   
       x1.shape = (ni,)
 
       # Repeat for x2, x3, and eta
       x2.shape = (nb_elements_x2,nbsolpts)
       x2[:] = domain_x2[0] + Δx2*elements_x2[:,numpy.newaxis] + \
-                  Δx2/Δcomp*(-minComp + solutionPoints[numpy.newaxis,:])
+                  Δx2/Δcomp*(-minComp + self.solutionPoints[numpy.newaxis,:])
       x2.shape = (nj,)
 
       if (ztop > 0): # Note that x3 and eta are 3D arrays
          x3.shape = (nb_elements_x3,nbsolpts,nj,ni)
          x3[:] = domain_x3[0] + Δx3*elements_x3[:,numpy.newaxis,numpy.newaxis,numpy.newaxis] + \
-                     Δx3/Δcomp*(-minComp + solutionPoints[numpy.newaxis,:,numpy.newaxis,numpy.newaxis])
+                     Δx3/Δcomp*(-minComp + self.solutionPoints[numpy.newaxis,:,numpy.newaxis,numpy.newaxis])
          x3.shape = self.grid_shape_3d
 
          eta.shape = (nb_elements_x3,nbsolpts,nj,ni)
          eta[:] = domain_eta[0] + Δeta*elements_x3[:,numpy.newaxis,numpy.newaxis,numpy.newaxis] + \
-                     Δeta/Δcomp*(-minComp + solutionPoints[numpy.newaxis,:,numpy.newaxis,numpy.newaxis])
+                     Δeta/Δcomp*(-minComp + self.solutionPoints[numpy.newaxis,:,numpy.newaxis,numpy.newaxis])
          eta.shape = self.grid_shape_3d
       else:
          x3[:] = 0
@@ -406,7 +378,7 @@ class CubedSphere(Geometry):
       # Check for resized planet
       planet_scaling_factor = 1.
       planet_is_rotating = 1.
-      if param.equations == "Euler":
+      if param.equations.lower() == "euler":
          if param.case_number == 31:
             planet_scaling_factor = 125.
             planet_is_rotating = 0.
@@ -417,6 +389,14 @@ class CubedSphere(Geometry):
             # Small planet, no rotation
             planet_scaling_factor = 500
             planet_is_rotating = 0.0
+
+         assert param.depth_approx is not None
+         if param.depth_approx.lower() == "deep":
+            self.deep = True
+         elif param.depth_approx.lower() == "shallow":
+            self.deep = False
+         else:
+            raise AssertionError(f'Invalid Euler atmosphere depth approximation ({param.depth_approx})')
       self.earth_radius   /= planet_scaling_factor
       self.rotation_speed *= planet_is_rotating / planet_scaling_factor
 
@@ -585,7 +565,7 @@ class CubedSphere(Geometry):
       for (latlon, cart, gnom) in zip([coordVec_latlon, coordVec_latlon_itf_i, coordVec_latlon_itf_j, coordVec_latlon_itf_k],
                                       [coordVec_cart, coordVec_cart_itf_i, coordVec_cart_itf_j, coordVec_cart_itf_k],
                                       [coordVec_gnom, coordVec_gnom_itf_i, coordVec_gnom_itf_j, coordVec_gnom_itf_k]):
-         [latlon[0,:], latlon[1,:], _] = sphere.cart2sph(cart[0,:],cart[1,:],cart[2,:])
+         [latlon[0,:], latlon[1,:], _] = cart2sph(cart[0,:],cart[1,:],cart[2,:])
          latlon[2,:] = gnom[2,:]
 
       self.coordVec_gnom = coordVec_gnom
@@ -622,11 +602,17 @@ class CubedSphere(Geometry):
       lon = coordVec_latlon[0,0,:,:]
       lat = coordVec_latlon[1,0,:,:]
 
-      lon_itf_i = coordVec_latlon_itf_i[0,0,:,:]
+      # The _itf_i variables are transposed here compared to the coordVec
+      # order to retain compatibility with the shallow water test cases.
+      # Those cases assume that the 2D interface variables are written
+      # with [interface#,interior#] indexing, and for the _itf_i variables
+      # this is effective the opposite of the geometric [k,j,i] order.
+
+      lon_itf_i = coordVec_latlon_itf_i[0,0,:,:].T
       lon_itf_j = coordVec_latlon_itf_j[0,0,:,:]
       lon_itf_k = coordVec_latlon_itf_k[0,0,:,:]
 
-      lat_itf_i = coordVec_latlon_itf_i[1,0,:,:]
+      lat_itf_i = coordVec_latlon_itf_i[1,0,:,:].T
       lat_itf_j = coordVec_latlon_itf_j[1,0,:,:]
       lat_itf_k = coordVec_latlon_itf_k[1,0,:,:]
 

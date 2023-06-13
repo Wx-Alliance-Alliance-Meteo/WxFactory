@@ -1,6 +1,6 @@
 import numpy
 
-from solvers.linsol import global_norm, global_dotprod
+from ..global_operations import global_norm, global_dotprod
 
 class KrylovSystem:
    def __init__(self, A, A_tilde, f, p, options, info):

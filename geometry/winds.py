@@ -2,12 +2,12 @@ import numpy
 import math
 from typing import Union
 
-from geometry.cubed_sphere  import CubedSphere
-from geometry.metric        import Metric_3d_topo
+from .cubed_sphere  import CubedSphere
+from .metric        import Metric3DTopo
 
 def wind2contra_2d(u : Union[float, numpy.ndarray], v : Union[float, numpy.ndarray], geom : CubedSphere):
    '''Convert wind fields from the spherical basis (zonal, meridional) to panel-appropriate contrvariant winds, in two dimensions
-   
+
    Parameters:
    ----------
    u : float | numpy.ndarray
@@ -17,14 +17,24 @@ def wind2contra_2d(u : Union[float, numpy.ndarray], v : Union[float, numpy.ndarr
    geom : CubedSphere
       Geometry object (CubedSphere), describing the grid configuration and globe paramters.  Required parameters:
       earth_radius, coslat, lat_p, angle_p, X, Y, delta2
-      
+
    Returns:
    -------
    (u1_contra, u2_contra) : tuple
-      Tuple of contravariant winds''' 
+      Tuple of contravariant winds'''
+   
    # Convert winds coords to spherical basis
-   lambda_dot = u / (geom.earth_radius * geom.coslat)
-   phi_dot    = v / geom.earth_radius
+
+   if (geom.nk > 1 and geom.deep):
+      # In 3D code with the deep atmosphere, the conversion to λ and φ
+      # uses the full radial height of the grid point:
+      lambda_dot = u / ((geom.earth_radius + geom.coordVec_gnom[2,:,:,:]) * geom.coslat)
+      phi_dot    = v / (geom.earth_radius + geom.coordVec_gnom[2,:,:,:])
+   else:
+      # Otherwise, the conversion uses just the planetary radius, with no
+      # correction for height above the surface
+      lambda_dot = u / (geom.earth_radius * geom.coslat)
+      phi_dot    = v / geom.earth_radius
 
    denom = numpy.sqrt( (math.cos(geom.lat_p) + geom.X * math.sin(geom.lat_p)*math.sin(geom.angle_p) - geom.Y * math.sin(geom.lat_p)*math.cos(geom.angle_p))**2 + (geom.X * math.cos(geom.angle_p) + geom.Y * math.sin(geom.angle_p))**2 )
 
@@ -44,10 +54,11 @@ def wind2contra_2d(u : Union[float, numpy.ndarray], v : Union[float, numpy.ndarr
 def wind2contra_3d(u : Union[float, numpy.ndarray],
                    v : Union[float, numpy.ndarray],
                    w : Union[float, numpy.ndarray],
-                   geom : CubedSphere,metric : Metric_3d_topo):
+                   geom : CubedSphere,
+                   metric : Metric3DTopo):
    '''Convert wind fields from spherical values (zonal, meridional, vertical) to contravariant winds
    on a terrain-following grid.
-   
+
    Parameters:
    ----------
    u : float | numpy.ndarray
@@ -59,14 +70,14 @@ def wind2contra_3d(u : Union[float, numpy.ndarray],
    geom : CubedSphere
       Geometry object (CubedSphere), describing the grid configuration and globe paramters.  Required parameters:
       earth_radius, coslat, lat_p, angle_p, X, Y, delta2
-   metric : NewMetric2
+   metric : Metric3DTopo
       Metric object containing H_contra and inv_dzdeta parameters
-      
+
    Returns:
    -------
    (u1_contra, u2_contra, u3_contra) : tuple
       Tuple of contravariant winds
-   ''' 
+   '''
 
    # First, re-use wind2contra_2d to get preliminary values for u1_contra and u2_contra.  We will update this with the
    # contribution from vertical velocity in a second step.
@@ -87,11 +98,11 @@ def wind2contra_3d(u : Union[float, numpy.ndarray],
    
    return (u1_contra, u2_contra, u3_contra)
 
-def contra2wind_2d(u1 : Union[float, numpy.ndarray], 
+def contra2wind_2d(u1 : Union[float, numpy.ndarray],
                    u2 : Union[float, numpy.ndarray],
                    geom : CubedSphere):
-   ''' Convert from reference element to "physical winds", in two dimensions 
-   
+   ''' Convert from reference element to "physical winds", in two dimensions
+
    Parameters:
    -----------
    u1 : float | numpy.ndarray
@@ -123,15 +134,24 @@ def contra2wind_2d(u1 : Union[float, numpy.ndarray],
 
    dlatdx2 = ( ((1. + geom.X**2) * math.cos(geom.lat_p) * math.cos(geom.angle_p) + geom.X * geom.Y * math.cos(geom.lat_p) * math.sin(geom.angle_p) - geom.Y * math.sin(geom.lat_p)) * (1. + geom.Y**2) ) / ( geom.delta2 * denom)
 
-   u = ( dlondx1 * u1_contra + dlondx2 * u2_contra ) * geom.coslat * geom.earth_radius
-   v = ( dlatdx1 * u1_contra + dlatdx2 * u2_contra ) * geom.earth_radius
+   if (geom.nk > 1 and geom.deep):
+      # If we are in a 3D geometry with the deep atmosphere, the conversion from
+      # contravariant → spherical → zonal/meridional winds uses the full radial distance
+      # at the last step
+      u = ( dlondx1 * u1_contra + dlondx2 * u2_contra ) * geom.coslat * (geom.earth_radius + geom.coordVec_gnom[2,:,:,:])
+      v = ( dlatdx1 * u1_contra + dlatdx2 * u2_contra ) * (geom.earth_radius + geom.coordVec_gnom[2,:,:,:])
+   else:
+      # Otherwise, the conversion is based on the spherical radius only, with no height correction
+      u = ( dlondx1 * u1_contra + dlondx2 * u2_contra ) * geom.coslat * geom.earth_radius
+      v = ( dlatdx1 * u1_contra + dlatdx2 * u2_contra ) * geom.earth_radius
 
    return u, v
 
-def contra2wind_3d(u1_contra : numpy.ndarray, 
-                   u2_contra : numpy.ndarray, 
-                   u3_contra : numpy.ndarray, 
-                   geom : CubedSphere, metric : Metric_3d_topo):
+def contra2wind_3d(u1_contra : numpy.ndarray,
+                   u2_contra : numpy.ndarray,
+                   u3_contra : numpy.ndarray,
+                   geom : CubedSphere,
+                   metric : Metric3DTopo):
    ''' contra2wind_3d: convert from contravariant wind fields to "physical winds" in three dimensions
    
    This function transforms the contravariant fields u1, u2, and u3 into their physical equivalents, assuming a cubed-sphere-like
@@ -153,7 +173,7 @@ def contra2wind_3d(u1_contra : numpy.ndarray,
    geom: CubedSphere
       geometry object, implementing:
          Δx1, Δx2, lat_p, angle_p, X, Y, coslat, earth_radius
-   metric: Metric_3d_topo
+   metric: Metric3DTopo
       metric object, implementing H_cov (covariant spatial metric) and inv_dzdeta
 
    Retruns:

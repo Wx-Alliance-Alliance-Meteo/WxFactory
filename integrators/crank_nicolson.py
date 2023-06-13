@@ -1,15 +1,14 @@
 import numpy
 from time import time
 
-from Output.solver_stats import write_solver_stats
-from solvers.nonlin      import newton_krylov
-from integrators.stepper     import Stepper
+from .integrator         import Integrator, SolverInfo
+from solvers             import newton_krylov
 
-class CrankNicolson(Stepper):
-   def __init__(self, rhs, tol, preconditioner=None):
-      super().__init__(preconditioner)
+class CrankNicolson(Integrator):
+   def __init__(self, param, rhs, preconditioner=None):
+      super().__init__(param, preconditioner)
       self.rhs = rhs
-      self.tol = tol
+      self.tol = param.tolerance
 
    def CN_system(self, Q_plus, Q, dt, rhs):
       return (Q_plus - Q) / dt - 0.5 * ( rhs(Q_plus) + rhs(Q) )
@@ -28,6 +27,6 @@ class CrankNicolson(Stepper):
          fgmres_precond=self.preconditioner, verbose=False, maxiter=maxiter)
       t1 = time()
 
-      write_solver_stats(nb_iter, t1 - t0, 0, residuals)
+      self.solver_info = SolverInfo(0, t1 - t0, nb_iter, residuals)
 
       return numpy.reshape(newQ, Q.shape)

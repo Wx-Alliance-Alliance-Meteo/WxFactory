@@ -1,15 +1,14 @@
 import numpy
 from time import time
 
-from Output.solver_stats import write_solver_stats
-from solvers.nonlin      import newton_krylov
-from integrators.stepper     import Stepper
+from solvers      import newton_krylov
+from .integrator  import Integrator, SolverInfo
 
-class bdf2(Stepper):
-   def __init__(self, rhs, tol, preconditioner=None, init_substeps=1):
-      super().__init__(preconditioner)
+class Bdf2(Integrator):
+   def __init__(self, param, rhs, preconditioner=None, init_substeps=1):
+      super().__init__(param, preconditioner)
       self.rhs = rhs
-      self.tol = tol
+      self.tol = param.tolerance
       self.init_substeps = init_substeps
       self.Qprev = None
 
@@ -32,7 +31,7 @@ class bdf2(Stepper):
          newQ, nb_iter, residuals = newton_krylov(nonlin_fun, Q, f_tol=self.tol, fgmres_precond=self.preconditioner, verbose=False, maxiter=maxiter)
       t1 = time()
 
-      write_solver_stats(nb_iter, t1 - t0, 0, residuals)
+      self.solver_info = SolverInfo(0, t1 - t0, nb_iter, residuals)
 
       self.Qprev = Q.copy()
 

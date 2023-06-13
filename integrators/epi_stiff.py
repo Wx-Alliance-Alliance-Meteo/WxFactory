@@ -4,20 +4,19 @@ import math
 import numpy
 from mpi4py       import MPI
 
-from solvers.kiops   import kiops
-from solvers.matvec  import matvec_fun
-from solvers.pmex    import pmex
-from integrators.epi     import Epi
-from integrators.stepper import Stepper, alpha_coeff
+from common.program_options import Configuration
+from .epi            import Epi
+from .integrator     import Integrator, alpha_coeff
+from solvers         import kiops, matvec_fun, pmex
 
-class EpiStiff(Stepper):
-   def __init__(self, order: int, rhs, tol: float, exponential_solver, jacobian_method='complex', init_method=None, init_substeps: int = 1):
-      super().__init__()
+class EpiStiff(Integrator):
+   def __init__(self, param: Configuration, order: int, rhs, init_method=None, init_substeps: int = 1):
+      super().__init__(param, preconditioner=None)
       self.rhs = rhs
-      self.tol = tol
+      self.tol = param.tolerance
       self.krylov_size = 1
-      self.jacobian_method = jacobian_method
-      self.exponential_solver = exponential_solver
+      self.jacobian_method = param.jacobian_method
+      self.exponential_solver = param.exponential_solver
 
       if order < 2:
          raise ValueError('Unsupported order for EPI method')
@@ -34,7 +33,7 @@ class EpiStiff(Stepper):
          self.init_method = init_method
       else:
          #self.init_method = Epirk4s3a(rhs, tol, krylov_size)
-         self.init_method = Epi(2, rhs, tol, self.exponential_solver, self.jacobian_method)
+         self.init_method = Epi(param, 2, rhs)
 
       self.init_substeps = init_substeps
 

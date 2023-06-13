@@ -1,22 +1,22 @@
 from collections import deque
 import math
+from typing      import Callable
 
 from mpi4py      import MPI
 import numpy
 
-from solvers.kiops    import kiops
-from solvers.matvec   import matvec_fun
-from solvers.pmex     import pmex
-from integrators.stepper  import Stepper
+from common.program_options import Configuration
+from .integrator            import Integrator, SolverInfo
+from solvers                import kiops, matvec_fun, pmex
 
-class Epi(Stepper):
-   def __init__(self, order: int, rhs, tol: float, exponential_solver, jacobian_method='complex', init_method=None, init_substeps: int = 1):
-      super().__init__()
+class Epi(Integrator):
+   def __init__(self, param: Configuration, order: int, rhs: Callable, init_method=None, init_substeps: int = 1):
+      super().__init__(param, preconditioner=None)
       self.rhs = rhs
-      self.tol = tol
+      self.tol = param.tolerance
       self.krylov_size = 1
-      self.jacobian_method = jacobian_method
-      self.exponential_solver = exponential_solver
+      self.jacobian_method = param.jacobian_method
+      self.exponential_solver = param.exponential_solver
 
       if order == 2:
          self.A = numpy.array([[]])
@@ -53,7 +53,7 @@ class Epi(Stepper):
       if init_method or self.n_prev == 0:
          self.init_method = init_method
       else:
-         self.init_method = Epi(2, rhs, tol, self.exponential_solver, self.jacobian_method)
+         self.init_method = Epi(param, 2, rhs)
 
       self.init_substeps = init_substeps
 
@@ -95,18 +95,21 @@ class Epi(Stepper):
       if self.exponential_solver == 'pmex':
          phiv, stats = pmex([1.], matvec_handle, vec, tol=self.tol, mmax=64, task1=False)
 
-         if (mpirank == 0):
-            print(f'PMEX converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)'
-                  f' to a solution with local error {stats[4]:.2e}')
+         if mpirank == 0:
+            print(f'PMEX converged at iteration {stats[2]} (using {stats[0]} internal substeps and'
+                  f' {stats[1]} rejected expm) to a solution with local error {stats[4]:.2e}')
 
       else:
-         phiv, stats = kiops([1], matvec_handle, vec, tol=self.tol, m_init=self.krylov_size, mmin=16, mmax=64, task1=False)
+         phiv, stats = kiops([1], matvec_handle, vec, tol=self.tol, m_init=self.krylov_size, mmin=16, mmax=64,
+                             task1=False)
 
          self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
 
-         if (mpirank == 0):
-            print(f'KIOPS converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)'
-                  f' to a solution with local error {stats[4]:.2e}')
+         if mpirank == 0:
+            print(f'KIOPS converged at iteration {stats[2]} (using {stats[0]} internal substeps and'
+                  f' {stats[1]} rejected expm) to a solution with local error {stats[4]:.2e}')
+
+      self.solver_info = SolverInfo(total_num_it = stats[2])
 
       # Save values for the next timestep
       if self.n_prev > 0:

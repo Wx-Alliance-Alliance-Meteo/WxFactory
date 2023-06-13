@@ -1,28 +1,35 @@
 import numpy
-from scipy.sparse.linalg import LinearOperator
 from time import time
-
 from typing import Callable
 
-from solvers.linsol      import fgmres
-from solvers.matvec      import matvec_rat
-from integrators.stepper     import Stepper
-from output.solver_stats import write_solver_stats
+from mpi4py import MPI
 
-class Ros2(Stepper):
-   def __init__(self, rhs_handle: Callable, tol: float, preconditioner=None) -> None:
-      super().__init__(preconditioner)
+from common.program_options import Configuration
+from .integrator            import Integrator
+from solvers                import fgmres, matvec_rat, SolverInfo
+
+class Ros2(Integrator):
+   def __init__(self, param: Configuration, rhs_handle: Callable, preconditioner=None) -> None:
+      super().__init__(param, preconditioner)
       self.rhs_handle     = rhs_handle
-      self.tol            = tol
+      self.tol            = param.tolerance
+      self.gmres_restart  = param.gmres_restart
 
    def __step__(self, Q: numpy.ndarray, dt: float):
 
       rhs    = self.rhs_handle(Q)
       Q_flat = Q.flatten()
-      n      = Q_flat.shape[0]
 
-      A = LinearOperator((n,n), matvec=lambda v: matvec_rat(v, dt, Q, rhs, self.rhs_handle))
+      def A(v):
+         return matvec_rat(v, dt, Q, rhs, self.rhs_handle)
+
       b = A(Q_flat) + rhs.flatten() * dt
+
+      maxiter = 20000 // self.gmres_restart
+      if self.preconditioner is not None:
+         # maxiter = 200 // self.gmres_restart
+         maxiter = 420 // self.gmres_restart
+         maxiter = min(2, maxiter)
 
       t0 = time()
 #      Qnew, local_error, num_iter, flag, residuals = fgmres(

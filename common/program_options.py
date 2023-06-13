@@ -1,319 +1,244 @@
 from configparser import ConfigParser, NoSectionError, NoOptionError
 import json
+from typing       import Any, Dict, List, Optional, Type, TypeVar, Union
+
+__all__ = ['Configuration']
+
+OptionType = TypeVar('OptionType', bound=Union[int, float, str, bool, List[int], List[float]])
 
 class Configuration:
-   def __init__(self, cfg_file: str, noisy: bool=True):
+   """All the config options for GEF"""
+   sections: Dict
 
-      parser = ConfigParser()
-      parser.read(cfg_file)
+   def __init__(self, cfg_file: str, verbose: bool=True):
 
-      if noisy:
+      self.sections = {}
+      self.parser = ConfigParser()
+      self.parser.read(cfg_file)
+
+      if verbose:
          print('\nLoading config: ' + cfg_file)
-         print(parser._sections)
+         print(self.parser.sections())
          print(' ')
 
-      try:
-         self.equations = parser.get('General', 'equations').lower()
-      except (NoOptionError,NoSectionError):
-         self.equations = "euler"
+      self.equations = self._get_option('General', 'equations', str, 'euler')
+      if (self.equations == 'euler'):
+         self.depth_approx = self._get_option('General','depth_approx',str,'deep',['deep','shallow'])
+      else:
+         self.depth_approx = None
 
       ################################
       # Test case
-      self.case_number = parser.getint('Test_case', 'case_number')
+      self.case_number = self._get_option('Test_case', 'case_number', int, -1)
 
       if self.case_number == 9:
-         self.matsuno_wave_type = parser.get('Test_case', 'matsuno_wave_type')
-         self.matsuno_amp = parser.getfloat('Test_case', 'matsuno_amp')
+         self.matsuno_wave_type = self._get_option('Test_case', 'matsuno_wave_type', str, None)
+         self.matsuno_amp       = self._get_option('Test_case', 'matsuno_amp', float, None)
 
-      self.bubble_theta = 0.0
-      self.bubble_rad   = 0.0
-      try:
-         self.bubble_theta    = parser.getfloat('Test_case', 'bubble_theta')
-         self.bubble_rad      = parser.getfloat('Test_case', 'bubble_rad')
-      except(NoOptionError,NoSectionError):
-         pass
+      self.bubble_theta = self._get_option('Test_case', 'bubble_theta', float, 0.0)
+      self.bubble_rad   = self._get_option('Test_case', 'bubble_rad', float, 0.0)
 
       ################################
       # Time integration
-      self.dt               = parser.getfloat('Time_integration', 'dt')
-      self.t_end            = parser.getint('Time_integration', 't_end')
-      self.time_integrator  = parser.get('Time_integration', 'time_integrator').lower()
-      self.tolerance        = parser.getfloat('Time_integration', 'tolerance')
+      self.dt              = self._get_option('Time_integration', 'dt', float, None)
+      self.t_end           = self._get_option('Time_integration', 't_end', float, None)
+      self.time_integrator = self._get_option('Time_integration', 'time_integrator', str, None)
+      self.tolerance       = self._get_option('Time_integration', 'tolerance', float, None)
 
-      try:
-         self.starting_step = parser.getint('Time_integration', 'starting_step')
-      except (NoOptionError,NoSectionError):
-         self.starting_step = 0
-      self.starting_step = max(self.starting_step, 0)
+      self.starting_step = self._get_option('Time_integration', 'starting_step', int, 0)
 
-      try:
-         self.exponential_solver = parser.get('Time_integration', 'exponential_solver')
-      except (NoOptionError,NoSectionError):
-         self.exponential_solver = 'kiops'
+      self.exponential_solver = self._get_option('Time_integration', 'exponential_solver', str, 'kiops')
+      self.krylov_size        = self._get_option('Time_integration', 'krylov_size', int, 1)
+      self.jacobian_method    = self._get_option('Time_integration', 'jacobian_method', str, 'complex')
 
-      try:
-         self.krylov_size = parser.getint('Time_integration', 'krylov_size')
-      except (NoOptionError,NoSectionError):
-         self.krylov_size = 1
-
-      try:
-         self.jacobian_method = parser.get('Time_integration', 'jacobian_method')
-      except (NoOptionError,NoSectionError):
-         self.jacobian_method = 'complex'
-
-      try:
-         self.ark_solver_exp = parser.get('Time_integration', 'ark_solver_exp')
-      except (NoOptionError,NoSectionError):
-         self.ark_solver_exp = 'ARK3(2)4L[2]SA-ERK'
-
-      try:
-         self.ark_solver_imp = parser.get('Time_integration', 'ark_solver_imp')
-      except (NoOptionError,NoSectionError):
-         self.ark_solver_imp = 'ARK3(2)4L[2]SA-ESDIRK'
+      self.verbose_solver = self._get_option('Time_integration', 'verbose_solver', int, 0)
+      self.gmres_restart  = self._get_option('Time_integration', 'gmres_restart', int, 20)
 
       ################################
       # Spatial discretization
-      self.nbsolpts               = parser.getint('Spatial_discretization', 'nbsolpts')
-      self.nb_elements_horizontal = parser.getint('Spatial_discretization', 'nb_elements_horizontal')
+      self.nbsolpts               = self._get_option('Spatial_discretization', 'nbsolpts', int, None)
+      self.nb_elements_horizontal = self._get_option('Spatial_discretization', 'nb_elements_horizontal', int, None)
+      self.nb_elements_vertical   = self._get_option('Spatial_discretization', 'nb_elements_vertical', int, 1)
       self.initial_nbsolpts       = self.nbsolpts
+      self.nb_elements_horizontal_total = self.nb_elements_horizontal
 
-      try:
-         self.nb_elements_vertical   = parser.getint('Spatial_discretization', 'nb_elements_vertical')
-      except (NoOptionError, NoSectionError):
-         self.nb_elements_vertical   = 1
+      self.filter_apply  = self._get_option('Spatial_discretization', 'filter_apply', bool, False)
+      self.filter_order  = self._get_option('Spatial_discretization', 'filter_order', int,
+                                             default_value = 16 if self.filter_apply else 0)
+      self.filter_cutoff = self._get_option('Spatial_discretization', 'filter_cutoff', float, 0.0)
 
-      try:
-         self.filter_apply     = parser.getint('Spatial_discretization', 'filter_apply') == 1
-      except (NoOptionError, NoSectionError):
-         self.filter_apply     = False
-      try:
-         self.filter_order     = parser.getint('Spatial_discretization', 'filter_order')
-      except (NoOptionError, NoSectionError):
-         if self.filter_apply:
-            self.filter_order  = 16
-         else:
-            self.filter_order  = 0
-      try:
-         self.filter_cutoff    = parser.getfloat('Spatial_discretization', 'filter_cutoff')
-      except (NoOptionError, NoSectionError):
-         self.filter_cutoff    = 0
+      self.expfilter_apply = self._get_option('Spatial_discretization', 'expfilter_apply', bool, False)
+      self.expfilter_order = self._get_option('Spatial_discretization', 'expfilter_order', int, None if self.expfilter_apply else 0)
+      self.expfilter_strength = self._get_option('Spatial_discretization', 'expfilter_strength', float, None if self.expfilter_apply else 0)
+      self.expfilter_cutoff = self._get_option('Spatial_discretization', 'expfilter_cutoff', float, None if self.expfilter_apply else 0)
+      
 
       ###############################
       # Grid
-      try:
-         self.discretization = parser.get('Grid', 'discretization')
-      except (NoOptionError, NoSectionError):
-         self.discretization = 'dg'
+      possible_grid_types = ['cubed_sphere', 'cartesian2d']
+      self.grid_type      = self._get_option('Grid', 'grid_type', str, 'cubed_sphere', valid_values=possible_grid_types)
+      self.discretization = self._get_option('Grid', 'discretization', str, 'dg', ['dg', 'fv'])
 
       if self.discretization == 'fv':
          if self.nbsolpts != 1:
             raise ValueError(f'The number of solution of solution points ({self.nbsolpts}) in configuration file'
                               ' is inconsistent with a finite volume discretization')
 
-      possible_grid_types = ['cubed_sphere', 'cartesian2d']
-      try:
-         self.grid_type = parser.get('Grid', 'type').lower()
-         if self.grid_type not in possible_grid_types:
-            print(f'Selected grid type "{self.grid_type}" is not valid. Possible values are {possible_grid_types}')
-            raise ValueError
-      except (NoOptionError, NoSectionError):
-         self.grid_type = 'cubed_sphere'
-
-      try:
-         self.λ0 = parser.getfloat('Grid', 'λ0')
-      except (NoOptionError,NoSectionError):
-         self.λ0 = 0.0
-
-      try:
-         self.ϕ0 = parser.getfloat('Grid', 'ϕ0')
-      except (NoOptionError,NoSectionError):
-         self.ϕ0 = 0.0
-
-      try:
-         self.α0 = parser.getfloat('Grid', 'α0')
-      except (NoOptionError,NoSectionError):
-         self.α0 = 0.0
-
-      try:
-         self.ztop = parser.getfloat('Grid', 'ztop')
-      except (NoOptionError,NoSectionError):
-         self.ztop = 0.0
+      # Cubed sphere grid params
+      self.λ0   = self._get_option('Grid', 'λ0', float, 0.0)
+      self.ϕ0   = self._get_option('Grid', 'ϕ0', float, 0.0)
+      self.α0   = self._get_option('Grid', 'α0', float, 0.0)
+      self.ztop = self._get_option('Grid', 'ztop', float, 0.0)
 
       # Cartesian grid bounds
-      self.x0 = 0.0
-      self.x1 = 0.0
-      self.z0 = 0.0
-      self.z1 = 0.0
-      try: 
-         self.x0 = parser.getfloat('Grid', 'x0')
-         self.x1 = parser.getfloat('Grid', 'x1')
-         self.z0 = parser.getfloat('Grid', 'z0')
-         self.z1 = parser.getfloat('Grid', 'z1')
-      except(NoOptionError, NoSectionError):
-         pass
+      self.x0 = self._get_option('Grid', 'x0', float, 0.0)
+      self.x1 = self._get_option('Grid', 'x1', float, 0.0)
+      self.z0 = self._get_option('Grid', 'z0', float, 0.0)
+      self.z1 = self._get_option('Grid', 'z1', float, 0.0)
 
       ###################
       # Preconditioning
       available_preconditioners = ['none', 'fv', 'fv-mg', 'p-mg']
-      try:
-         self.preconditioner = parser.get('Preconditioning', 'preconditioner').lower()
-         if self.preconditioner not in available_preconditioners:
-            print(f'Warning: chosen preconditioner {self.preconditioner} is not within available preconditioners.'
-                  f' Possible values are {available_preconditioners}')
-            self.preconditioner = available_preconditioners[0]
-      except (NoOptionError, NoSectionError):
-         self.preconditioner = available_preconditioners[0]
+      self.preconditioner = self._get_option('Preconditioning', 'preconditioner', str, 'none', valid_values=available_preconditioners)
 
-      try:
-         self.num_mg_levels = max(parser.getint('Preconditioning', 'num_mg_levels'), 1)
-      except (NoOptionError, NoSectionError):
-         self.num_mg_levels = 1
-
+      self.num_mg_levels = self._get_option('Preconditioning', 'num_mg_levels', int, 1, min_value=1)
       if 'mg' not in self.preconditioner: self.num_mg_levels = 1
 
-      try:
-         self.precond_tolerance = parser.getfloat('Preconditioning', 'precond_tolerance')
-      except (NoOptionError, NoSectionError):
-         self.precond_tolerance = 1e-1
+      self.precond_tolerance = self._get_option('Preconditioning', 'precond_tolerance', float, 1e-1)
+      self.num_pre_smoothe   = self._get_option('Preconditioning', 'num_pre_smoothe', int, 1, min_value=0)
+      self.num_post_smoothe  = self._get_option('Preconditioning', 'num_post_smoothe', int, 1, min_value=0)
 
-      try:
-         self.num_pre_smoothe = parser.getint('Preconditioning', 'num_pre_smoothe')
-      except (NoOptionError, NoSectionError):
-         self.num_pre_smoothe = 1
+      self.possible_smoothers = ['exp', 'kiops', 'erk3', 'erk1', 'ark3']
+      self.mg_smoother = self._get_option('Preconditioning', 'mg_smoother', str, 'exp', valid_values=self.possible_smoothers)
 
-      try:
-         self.num_post_smoothe = parser.getint('Preconditioning', 'num_post_smoothe')
-      except (NoOptionError, NoSectionError):
-         self.num_post_smoothe = 1
-
-      self.possible_smoothers = ['exp', 'kiops', 'erk3', 'erk1']
-      try:
-         self.mg_smoother = parser.get('Preconditioning', 'mg_smoother')
-         if self.mg_smoother not in self.possible_smoothers:
-            print(f'Warning: chosen multigrid smoother {self.mg_smoother} is not within available smoothers.'
-                  f' Possible values are {self.possible_smoothers}')
-            self.mg_smoother = self.possible_smoothers[0]
-      except (NoOptionError, NoSectionError):
-         self.mg_smoother = self.possible_smoothers[0]
-
-      try:
-         self.exp_smoothe_spectral_radii = [parser.getfloat('Preconditioning', 'exp_smoothe_spectral_radii')]
-      except ValueError:
-         self.exp_smoothe_spectral_radii = [float(x) for x in \
-            json.loads(parser.get('Preconditioning', 'exp_smoothe_spectral_radii'))]
-      except (NoOptionError, NoSectionError):
-         self.exp_smoothe_spectral_radii = [2.0]
+      self.exp_smoothe_spectral_radii  = self._get_option('Preconditioning', 'exp_smoothe_spectral_radii', List[float], [2.0])
       self.exp_smoothe_spectral_radius = self.exp_smoothe_spectral_radii[0]
+      self.exp_smoothe_nb_iters        = self._get_option('Preconditioning', 'exp_smoothe_nb_iters', List[int], [4])
+      self.exp_smoothe_nb_iter         = self.exp_smoothe_nb_iters[0]
 
-      try:
-         self.exp_smoothe_nb_iters = [parser.getint('Preconditioning', 'exp_smoothe_nb_iters')]
-      except ValueError:
-         self.exp_smoothe_nb_iters = [int(x) for x in json.loads(parser.get('Preconditioning', 'exp_smoothe_nb_iters'))]
-      except (NoOptionError, NoSectionError):
-         self.exp_smoothe_nb_iters = [4]
-      self.exp_smoothe_nb_iter = self.exp_smoothe_nb_iters[0]
+      self.mg_solve_coarsest = self._get_option('Preconditioning', 'mg_solve_coarsest', bool, False)
+      self.kiops_dt_factor   = self._get_option('Preconditioning', 'kiops_dt_factor', float, 1.1)
+      self.verbose_precond   = self._get_option('Preconditioning', 'verbose_precond', int, 0)
 
-      try:
-         self.mg_solve_coarsest = parser.getint('Preconditioning', 'mg_solve_coarsest') >= 1
-      except (NoOptionError, NoSectionError):
-         self.mg_solve_coarsest = False
-
-      try:
-         self.kiops_dt_factor = parser.getfloat('Preconditioning', 'kiops_dt_factor')
-      except (NoOptionError, NoSectionError):
-         self.kiops_dt_factor = 1.1
-
-      try:
-         self.precond_filter_before = parser.getint('Preconditioning', 'precond_filter_before')
-         print(f'Warning: preconditioner filter option  is not properly implemented. Please do not use.')
-      except (NoOptionError, NoSectionError):
-         self.precond_filter_before = 0
-
-      try:
-         self.precond_filter_during = parser.getint('Preconditioning', 'precond_filter_during')
-         print(f'Warning: preconditioner filter option  is not properly implemented. Please do not use.')
-      except (NoOptionError, NoSectionError):
-         self.precond_filter_during = 0
-
-      try:
-         self.precond_filter_after = parser.getint('Preconditioning', 'precond_filter_after')
-         print(f'Warning: preconditioner filter option  is not properly implemented. Please do not use.')
-      except (NoOptionError, NoSectionError):
-         self.precond_filter_after = 0
-
-      try:
-         self.verbose_precond = parser.getint('Preconditioning', 'verbose_precond') >= 1
-      except (NoOptionError, NoSectionError):
-         self.verbose_precond = False
-
-      try:
-         ok_interps = ['l2-norm', 'lagrange']
-         self.dg_to_fv_interp = parser.get('Preconditioning', 'dg_to_fv_interp')
-         if self.dg_to_fv_interp not in ok_interps:
-            print(f'ERROR: invalid interpolation method for DG to FV conversion ({self.dg_to_fv_interp}).'
-                  f' Should pick one of {ok_interps}. Choosing "lagrange" as default.')
-            self.dg_to_fv_interp = 'lagrange'
-      except (NoOptionError, NoSectionError):
-         self.dg_to_fv_interp = 'lagrange'
-
-      try:
-         self.pseudo_cfl = parser.getfloat('Preconditioning', 'pseudo_cfl')
-      except (NoOptionError, NoSectionError):
-         self.pseudo_cfl = 1.0
+      ok_interps = ['l2-norm', 'lagrange']
+      self.dg_to_fv_interp = self._get_option('Preconditioning', 'dg_to_fv_interp', str, 'lagrange', valid_values=ok_interps)
+      self.pseudo_cfl      = self._get_option('Preconditioning', 'pseudo_cfl', float, 1.0)
 
       ###############################
       # Output options
 
-      self.stat_freq   = parser.getint('Output_options', 'stat_freq')
-      self.output_freq = parser.getint('Output_options', 'output_freq')
+      # Frequency in timesteps at which to print block stats
+      self.stat_freq = self._get_option('Output_options', 'stat_freq', int, 0)
+      # Frequency in timesteps at which to store the solution
+      self.output_freq = self._get_option('Output_options', 'output_freq', int, 0)
+      # Frequency in timesteps at which to save the state vector
+      self.save_state_freq = self._get_option('Output_options', 'save_state_freq', int, 0)
+      # Whether to store solver stats (at every timestep)
+      self.store_solver_stats = self._get_option('Output_options', 'store_solver_stats', bool, False)
 
-      # Frequency (in timesteps) at which to save the state vector of the simulation
-      try:
-         self.save_state_freq = parser.getint('Output_options', 'save_state_freq')
-      except (NoOptionError, NoSectionError):
-         self.save_state_freq = 0
+      # Directory where to store all the output
+      self.output_dir = self._get_option('Output_options', 'output_dir', str, 'results')
+      # Name of file where to store the solution
+      self.base_output_file = self._get_option('Output_options', 'base_output_file', str, 'out')
+      self.output_file = f'{self.output_dir}/{self.base_output_file}.nc'
+
+      self.solver_stats_file = self._get_option('Output_options', 'solver_stats_file', str, 'solver_stats.db')
+
+      if verbose: print(f'{self}')
+
+   def _get_opt_from_parser(self, section_name: str, option_name: str, option_type: Type[OptionType]) -> OptionType:
+      value: Optional[OptionType] = None
+      if option_type == float:
+         value = self.parser.getfloat(section_name, option_name)
+      elif option_type == int:
+         value = self.parser.getint(section_name, option_name)
+      elif option_type == str:
+         value = self.parser.get(section_name, option_name).lower()
+      elif option_type == bool:
+         value = (self.parser.getint(section_name, option_name) > 0)
+      elif option_type == List[int]:
+         try:
+            value = [self.parser.getint(section_name, option_name)]
+         except ValueError:
+            value = [int(x) for x in json.loads(self.parser.get(section_name, option_name))]
+      elif option_type == List[float]:
+         try:
+            value = [self.parser.getfloat(section_name, option_name)]
+         except ValueError:
+            value = [float(x) for x in json.loads(self.parser.get(section_name, option_name))]
+      else:
+         raise ValueError(f'Cannot get this option type (not implemented): {option_type}')
+
+      assert (value is not None)
+      return value
+
+   def _validate_option(self,
+                        option_name: str,
+                        value: OptionType,
+                        valid_values: Optional[List[OptionType]],
+                        min_value: Optional[OptionType],
+                        max_value: Optional[OptionType]) -> OptionType:
+
+      if valid_values is not None and value not in valid_values:
+         raise ValueError(
+            f'"{value}" is not considered a valid value for option "{option_name}".'
+            f' Available values are {valid_values}')
+      if min_value is not None:
+         if value < min_value:
+            print(f'WARNING: Adjusting "{option_name}" to min value "{min_value}"')
+            value = min_value
+      if max_value is not None:
+         if value > max_value:
+            print(f'WARNING: Adjusting "{option_name}" to max value "{max_value}"')
+            value = max_value
+
+      return value
+
+   def _get_option(self,
+                   section_name: str,
+                   option_name: str,
+                   option_type: Type[OptionType],
+                   default_value: Optional[OptionType],
+                   valid_values: Optional[List[OptionType]]=None,
+                   min_value: Optional[OptionType]=None,
+                   max_value: Optional[OptionType]=None) -> OptionType:
+      value: Optional[OptionType] = None
 
       try:
-         store_solver_stats_val = parser.getint('Output_options', 'store_solver_stats')
-         self.store_solver_stats = True if store_solver_stats_val > 0 else False
-      except (NoOptionError, NoSectionError):
-         self.store_solver_stats = False
+         value = self._get_opt_from_parser(section_name, option_name, option_type)
+         value = self._validate_option(option_name, value, valid_values, min_value, max_value)
+      except (NoOptionError, NoSectionError) as e:
+         if default_value is None:
+            e.message += f"\nMust specify a value for option '{option_name}'"
+            raise
+         value = default_value
 
-      try:
-         self.output_dir = parser.get('Output_options', 'output_dir')
-      except (NoOptionError, NoSectionError):
-         self.output_dir = 'results'
+      setattr(self, option_name, value)
+      if section_name not in self.sections: self.sections[section_name] = []
+      self.sections[section_name].append(option_name)
 
-      try:
-         self.output_file = f'{self.output_dir}/{parser.get("Output_options", "output_file")}.nc'
-      except (NoOptionError, NoSectionError):
-         self.output_file = f'{self.output_dir}/out.nc'
+      return value
 
    def __str__(self):
-      return \
-         f'Equations: {self.equations}\n' \
-         f'Case number: {self.case_number}\n' \
-         f'dt:          {self.dt}\n' \
-         f't_end:       {self.t_end}\n' \
-         f'Time integrator: {self.time_integrator}\n' \
-         f'Krylov size:     {self.krylov_size}\n' \
-         f'tolerance:       {self.tolerance}\n' \
-         f'ARK solver exp:  {self.ark_solver_exp}\n' \
-         f'ARK solver imp:  {self.ark_solver_imp}\n' \
-         f'Precond:         {self.preconditioner}\n' \
-         f'Precond filter \n  before: {self.precond_filter_before}\n  during: {self.precond_filter_during}\n  after:  {self.precond_filter_after}\n' \
-         f'Discretization:  {self.discretization}\n' \
-         f'λ0: {self.λ0}\n' \
-         f'ϕ0: {self.ϕ0}\n' \
-         f'α0: {self.α0}\n' \
-         f'ztop: {self.ztop}\n' \
-         f'initial nbsolpts: {self.initial_nbsolpts}\n' \
-         f'nbsolpts: {self.nbsolpts}\n' \
-         f'# elem horiz: {self.nb_elements_horizontal}\n' \
-         f'# elem vert:  {self.nb_elements_vertical}\n' \
-         f'apply filter: {self.filter_apply}\n' \
-         f'filer order:  {self.filter_order}\n' \
-         f'filter cutoff: {self.filter_cutoff}\n' \
-         f'stat frequency: {self.stat_freq}\n' \
-         f'output frequency: {self.output_freq}\n' \
-         f'output file:      {self.output_file}\n'
+      out = 'Configuration: \n'
+      for section_name, section_options in self.sections.items():
+         out += '\n'
+         out += f'  {" " + section_name + " ":-^80s}  '
+         long_options = {}
+         i = 0
+         for option in section_options:
+            val = str(getattr(self, option))
+            if len(option) < 28 and len(val) < 12:
+               if i % 2 == 0: out += '\n'
+               out += f' | {option:27s}: {val:11s}'
+               i += 1
+            else:
+               long_options[option] = val
+               # i = 1
+         if i % 2 == 1: out += ' |'
+
+         for name, val in long_options.items():
+            out += f'\n | {name:27s}: {val}'
+         out += '\n'
+
+      return out

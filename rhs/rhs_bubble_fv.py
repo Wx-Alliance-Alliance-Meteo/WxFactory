@@ -13,8 +13,8 @@ def rhs_bubble_fv(Q, geom, mtrx, nbsolpts, nb_elements_x, nb_elements_z):
    # flux_x1 = numpy.empty_like(Q, dtype=datatype)
    # flux_x3 = numpy.empty_like(Q, dtype=datatype)
 
-   df1_dx = numpy.empty_like(Q, dtype=datatype)
-   df3_dz = numpy.empty_like(Q, dtype=datatype)
+   df1_dx1 = numpy.empty_like(Q, dtype=datatype)
+   df3_dx3 = numpy.empty_like(Q, dtype=datatype)
 
    kfaces_flux = numpy.empty((nb_equations, nb_elements_z, 2, nbsolpts*nb_elements_x), dtype=datatype)
    kfaces_var  = numpy.empty((nb_equations, nb_elements_z, 2, nbsolpts*nb_elements_x), dtype=datatype)
@@ -121,16 +121,16 @@ def rhs_bubble_fv(Q, geom, mtrx, nbsolpts, nb_elements_x, nb_elements_z):
       # epais = elem * nbsolpts + numpy.arange(nbsolpts)
 
       # df3_dz[:,epais,:] = ( mtrx.correction @ kfaces_flux[:,elem,:,:] ) * 2.0/geom.Δz
-      df3_dz[:, elem, :] = (kfaces_flux[:, elem, 1, :] - kfaces_flux[:, elem, 0, :]) / geom.Δz
+      df3_dx3[:, elem, :] = (kfaces_flux[:, elem, 1, :] - kfaces_flux[:, elem, 0, :]) / geom.Δx3
 
    for elem in range(nb_elements_x):
       # epais = elem * nbsolpts + numpy.arange(nbsolpts)
 
       # df1_dx[:,:,epais] = ( ifaces_flux[:,elem,:,:] @ mtrx.correction.T ) * 2.0/geom.Δx
-      df1_dx[:,:,elem] = (ifaces_flux[:,elem,:,1] - ifaces_flux[:,elem,:,0]) / geom.Δx
+      df1_dx1[:,:,elem] = (ifaces_flux[:,elem,:,1] - ifaces_flux[:,elem,:,0]) / geom.Δx1
 
    # --- Assemble the right-hand sides
-   rhs = - ( df1_dx + df3_dz )
+   rhs = - ( df1_dx1 + df3_dx3 )
 
    rhs[idx_2d_rho_w,:,:] -= Q[idx_2d_rho,:,:] * gravity
 

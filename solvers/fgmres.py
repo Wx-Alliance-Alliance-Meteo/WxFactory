@@ -1,14 +1,20 @@
 import math
 from time import time
 import sys
-from typing import Callable
+from typing import Callable, List, Optional, Tuple
 
-import mpi4py
+from mpi4py import MPI
 import numpy
 import scipy
 import scipy.sparse.linalg
 
-def ortho_1_sync_igs(Q, R, T, K, j):
+from .global_operations import global_dotprod, global_norm
+
+__all__ = ['fgmres']
+
+MatvecOperator = Callable[[numpy.ndarray], numpy.ndarray]
+
+def _ortho_1_sync_igs(Q, R, T, K, j):
    """Orthonormalization process that only requires a single synchronization step.
 
    This processes row j of matrix Q (starting from 1) so that the first j rows are orthogonal, and the first (j-1)
@@ -26,7 +32,7 @@ def ortho_1_sync_igs(Q, R, T, K, j):
    if j < 2: return -1.0
 
    local_tmp = Q[:j, :] @ Q[j-2:j, :].T     # Q multiplied by its own last 2 rows (up to j)
-   global_tmp = mpi4py.MPI.COMM_WORLD.allreduce(local_tmp) # Expensive step on multi-node execution
+   global_tmp = MPI.COMM_WORLD.allreduce(local_tmp) # Expensive step on multi-node execution
    small_tmp = global_tmp[:j-2, 0]
 
    R[:j-1, j-1]  = global_tmp[:j-1, 1]
@@ -59,9 +65,19 @@ def ortho_1_sync_igs(Q, R, T, K, j):
 
    return norm
 
-def fgmres(A, b, x0 = None, tol = 1e-5, restart = 20, maxiter = None, preconditioner = None, hegedus = False, verbose = False):
+def fgmres(A: MatvecOperator,
+           b: numpy.ndarray,
+           x0: Optional[numpy.ndarray] = None,
+           tol: float = 1e-5,
+           restart: int = 20,
+           maxiter: Optional[int] = None,
+           preconditioner: Optional[MatvecOperator] = None,
+           hegedus: bool = False,
+           verbose: int = 0,
+           prefix: str = '') \
+            -> Tuple[numpy.ndarray, float, float, int, int, List[Tuple[float, float, float]]]:
    """
-   Solve the given linear system (Ax = b) for x, using the FGMRES algorithm. 
+   Solve the given linear system (Ax = b) for x, using the FGMRES algorithm.
 
    Mandatory arguments:
    A              -- System matrix. This may be an operator that when applied to a vector [v] results in A*v
@@ -103,7 +119,7 @@ def fgmres(A, b, x0 = None, tol = 1e-5, restart = 20, maxiter = None, preconditi
    # Check for early stop
    norm_b = global_norm(b)
    if norm_b == 0.0:
-      return numpy.zeros_like(b), 0., 0, 0, [(0.0, time() - t_start, 0)]
+      return numpy.zeros_like(b), 0., 0., 0, 0, [(0.0, time() - t_start, 0.0)]
 
    tol_relative = tol * norm_b
 
@@ -141,7 +157,7 @@ def fgmres(A, b, x0 = None, tol = 1e-5, restart = 20, maxiter = None, preconditi
       V[0, :] = r / norm_r
       Z[0, :] = preconditioner(V[0, :])
       V[1, :] = A(Z[0, :])
-      v_norm = ortho_1_sync_igs(V, R, T, K, 2)
+      v_norm = _ortho_1_sync_igs(V, R, T, K, 2)
 
       # This is the RHS vector for the problem in the Krylov Space
       g = numpy.zeros(num_dofs)
@@ -153,13 +169,13 @@ def fgmres(A, b, x0 = None, tol = 1e-5, restart = 20, maxiter = None, preconditi
          # Modified Gram-Schmidt process (1-sync version, with lagged normalization)
          Z[inner + 1, :] = preconditioner(V[inner + 1])
          V[inner + 2, :] = A(Z[inner + 1, :] / v_norm) * v_norm
-         v_norm = ortho_1_sync_igs(V, R, T, K, inner + 3)
+         v_norm = _ortho_1_sync_igs(V, R, T, K, inner + 3)
          H[inner, :inner + 2] = R[:inner + 2, inner + 1]
          Z[inner + 1, :] /= v_norm
 
          # Apply previous Givens rotations to H
          if inner > 0:
-            apply_givens(Q, H[inner, :], inner)
+            _apply_givens(Q, H[inner, :], inner)
 
          # Calculate and apply next complex-valued Givens Rotation
          # ==> Note that if restart = num_dofs, then this is unnecessary
@@ -184,7 +200,9 @@ def fgmres(A, b, x0 = None, tol = 1e-5, restart = 20, maxiter = None, preconditi
          if inner < restart - 1:
             norm_r = numpy.abs(g[inner+1])
             residuals.append((norm_r / norm_b, time() - t_start, 0.0))
-            # if verbose: print(f'norm_r / b = {residuals[-1][0]:.3e}')
+            if verbose > 1:
+               if MPI.COMM_WORLD.rank == 0: print(f'{prefix}norm_r / b = {residuals[-1][0]:.3e}')
+               sys.stdout.flush()
             if norm_r < tol_relative:
                break
 
@@ -198,8 +216,8 @@ def fgmres(A, b, x0 = None, tol = 1e-5, restart = 20, maxiter = None, preconditi
 
       norm_r = global_norm(r)
       residuals.append((norm_r / norm_b, time() - t_start, 0.0))
-      if verbose:
-         print(f'res: {norm_r/norm_b:.2e} (iter {niter})')
+      if verbose > 0:
+         if MPI.COMM_WORLD.rank == 0: print(f'{prefix}res: {norm_r/norm_b:.2e} (iter {niter})')
          sys.stdout.flush()
 
       # Has GMRES stagnated?
@@ -208,34 +226,19 @@ def fgmres(A, b, x0 = None, tol = 1e-5, restart = 20, maxiter = None, preconditi
          change = numpy.max(numpy.abs(update[indices] / x[indices]))
          if change < 1e-12:
             # No change, halt
-            return x, norm_r, niter, -1, residuals
+            return x, norm_r, norm_b, niter, -1, residuals
 
       # test for convergence
       if norm_r < tol_relative:
-         return x, norm_r, niter, 0, residuals
+         return x, norm_r, norm_b, niter, 0, residuals
 
    # end outer loop
 
    flag = 0
    if norm_r >= tol_relative: flag = -1
-   return x, norm_r, niter, flag, residuals
+   return x, norm_r, norm_b, niter, flag, residuals
 
-def global_norm(vec):
-   """Compute vector norm across all PEs"""
-   local_sum = vec @ vec
-   return math.sqrt( mpi4py.MPI.COMM_WORLD.allreduce(local_sum) )
-
-def global_dotprod(vec1, vec2):
-   """Compute dot product across all PEs"""
-   local_sum = vec1 @ vec2
-   return mpi4py.MPI.COMM_WORLD.allreduce(local_sum)
-
-def global_inf_norm(vec):
-    """Compute infinity norm across all PEs"""
-    local_max = numpy.amax(numpy.abs(vec))
-    return mpi4py.MPI.COMM_WORLD.allreduce(local_max, op=mpi4py.MPI.MAX)
-
-def apply_givens(Q, v, k):
+def _apply_givens(Q, v, k):
    """Apply the first k Givens rotations in Q to v.
 
    Parameters

@@ -147,12 +147,12 @@ def initialize_cartesian2d(geom, param):
    nb_equations = 4
 
    # Initial state at rest, isentropic, hydrostatic
-   nk, ni = geom.X.shape
+   nk, ni = geom.X1.shape
    Q = numpy.zeros((nb_equations, nk, ni))
-   uu    = numpy.zeros_like(geom.X)
-   ww    = numpy.zeros_like(geom.X)
-   exner = numpy.zeros_like(geom.X)
-   θ = numpy.ones_like(geom.X) * param.bubble_theta
+   uu    = numpy.zeros_like(geom.X1)
+   ww    = numpy.zeros_like(geom.X1)
+   exner = numpy.zeros_like(geom.X1)
+   θ = numpy.ones_like(geom.X1) * param.bubble_theta
 
    if param.case_number == 1:
       # Pill
@@ -164,7 +164,7 @@ def initialize_cartesian2d(geom, param):
 
       for k in range(nk):
          for i in range(ni):
-            r = (geom.X[k,i]-xc)**2 + (geom.Z[k,i]-zc)**2
+            r = (geom.X1[k,i]-xc)**2 + (geom.X3[k,i]-zc)**2
             if r < param.bubble_rad**2:
                θ[k,i] += pert
 
@@ -178,7 +178,7 @@ def initialize_cartesian2d(geom, param):
       z0 = 260
       for k in range(nk):
          for i in range(ni):
-            r = math.sqrt( (geom.X[k,i]-x0)**2 + (geom.Z[k,i]-z0)**2 )
+            r = math.sqrt( (geom.X1[k,i]-x0)**2 + (geom.X3[k,i]-z0)**2 )
             if r <= a:
                θ[k,i] += A
             else:
@@ -203,7 +203,7 @@ def initialize_cartesian2d(geom, param):
       z0 = 300
       for k in range(nk):
          for i in range(ni):
-            r = math.sqrt( (geom.X[k,i]-x0)**2 + (geom.Z[k,i]-z0)**2 )
+            r = math.sqrt( (geom.X1[k,i]-x0)**2 + (geom.X3[k,i]-z0)**2 )
             if r <= a:
                θ[k,i] += A
             else:
@@ -216,7 +216,7 @@ def initialize_cartesian2d(geom, param):
       z0 = 640
       for k in range(nk):
          for i in range(ni):
-            r = math.sqrt( (geom.X[k,i]-x0)**2 + (geom.Z[k,i]-z0)**2 )
+            r = math.sqrt( (geom.X1[k,i]-x0)**2 + (geom.X3[k,i]-z0)**2 )
             if r <= a:
                θ[k,i] += A
             else:
@@ -235,14 +235,14 @@ def initialize_cartesian2d(geom, param):
 
       for k in range(nk):
          for i in range(ni):
-            r = math.sqrt( ((geom.X[k,i]-x0)/xr)**2 + ((geom.Z[k,i]-z0)/zr)**2 )
+            r = math.sqrt( ((geom.X1[k,i]-x0)/xr)**2 + ((geom.X3[k,i]-z0)/zr)**2 )
             if r <= 1.:
                θ[k,i] += 0.5 * θc * (1. + math.cos(math.pi * r))
 
 
    for k in range(nk):
       for i in range(ni):
-         exner[k,i] = ( 1.0 - gravity / (cpd * θ[k,i]) * geom.Z[k,i])
+         exner[k,i] = ( 1.0 - gravity / (cpd * θ[k,i]) * geom.X3[k,i])
 
    ρ = p0 / (Rd * θ) * exner**(cvd / Rd)
 

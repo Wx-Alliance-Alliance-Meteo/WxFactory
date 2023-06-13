@@ -1,12 +1,13 @@
-import mpi4py.MPI
-import numpy
 import math
+
+from mpi4py import MPI
+import numpy
 
 from numpy.core.shape_base import block
 
 from common.definitions import *
 
-class Distributed_World:
+class DistributedWorld:
    def __init__(self):
 
       # The numbering of the PEs starts at the bottom right. Pannel ranks increase towards the east in the x1 direction and increases towards the north in the x2 direction:
@@ -32,14 +33,17 @@ class Distributed_World:
       #      | 0 | 1 | 2 | 3 |
       #      +---+---+---+---+
 
-      self.size = mpi4py.MPI.COMM_WORLD.Get_size()
-      self.rank = mpi4py.MPI.COMM_WORLD.Get_rank()
+      self.size = MPI.COMM_WORLD.Get_size()
+      self.rank = MPI.COMM_WORLD.Get_rank()
 
       self.nb_pe_per_panel = int(self.size / 6)
       self.nb_lines_per_panel = int(math.sqrt(self.nb_pe_per_panel))
 
       if self.size < 6 or self.nb_pe_per_panel != self.nb_lines_per_panel**2 or self.nb_pe_per_panel * 6 != self.size:
-         raise Exception(f'Wrong number of PEs ({self.size}). This topology is not allowed')
+         allowed_low = self.nb_lines_per_panel**2 * 6
+         allowed_high = (self.nb_lines_per_panel + 1)**2 * 6
+         raise Exception(f'Wrong number of PEs ({self.size}). '
+                         f'Closest allowed processor counts are {allowed_low} and {allowed_high}')
 
       self.nb_elems_per_line = self.nb_lines_per_panel
 
@@ -192,7 +196,7 @@ class Distributed_World:
       self.sources = [my_north, my_south, my_west, my_east]
       self.destinations = self.sources
 
-      self.comm_dist_graph = mpi4py.MPI.COMM_WORLD.Create_dist_graph_adjacent(self.sources, self.destinations)
+      self.comm_dist_graph = MPI.COMM_WORLD.Create_dist_graph_adjacent(self.sources, self.destinations)
 
       self.get_rows_3d = lambda array, index1, index2: array[:, index1, index2, :] if array is not None else None
       self.get_rows_2d = lambda array, index1, index2: array[index1, index2, :] if array is not None else None
