@@ -76,6 +76,9 @@ void compute_flux_i(
     const unsigned int elem_L = itf;
     const unsigned int elem_R = itf + 1;
 
+    /* out of range */
+    if (itf > nh || idx_j >= nk_nh || idx_k >= nk_nv) return;
+
     /* this thread's index for L- or R-outputs */
     const unsigned int FL_idx = idx_k * F_2 + elem_L * F_3 + idx_j * F_4 + 1;
     const unsigned int FR_idx = idx_k * F_2 + elem_R * F_3 + idx_j * F_4;
@@ -214,6 +217,9 @@ void compute_flux_j(
     const unsigned int elem_L = itf;
     const unsigned int elem_R = itf + 1;
 
+    // out of range
+    if (idx_i >= nk_nh || itf > nh || idx_k >= nk_nv) return;
+
     /* this thread's index for L- or R-elements */
     const unsigned int L_idx = idx_k * F_2 + elem_L * F_3 + F_4 + idx_i;
     const unsigned int R_idx = idx_k * F_2 + elem_R * F_3       + idx_i;
@@ -346,6 +352,9 @@ void compute_flux_k(
     const unsigned int itf = blockIdx.z * blockDim.z + threadIdx.z;
     const unsigned int elem_D = itf;
     const unsigned int elem_U = itf + 1;
+
+    // out of range
+    if (idx_i >= nk_nh || idx_j >= nk_nh || itf > nv) return;
 
     // this thread's idx for D- or U-elements
     const unsigned int D_idx = idx_j * F_2 + elem_D * F_3 + F_4 + idx_i;

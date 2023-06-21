@@ -526,7 +526,7 @@ class Metric3DTopo:
       # (√g h^ab),c = √g (h^ab Γ^d_cd - h^db Γ^a_dc - h^ad Γ^b_cd )
 
       # Switch to use the numerical formulation of the Christoffel symbol
-      numer_christoffel = True
+      numer_christoffel = False
 
       if (numer_christoffel):
          if (True and geom.ptopo.rank == 0):

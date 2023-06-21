@@ -33,7 +33,7 @@ def main(argv) -> int:
    param = Configuration(argv.config, MPI.COMM_WORLD.rank == 0)
 
    # Set up distributed world
-   ptopo = DistributedWorld() if param.grid_type == 'cubed_sphere' else None
+   ptopo = setup_distributed_world(param)
 
    adjust_nb_elements(param)
 
@@ -41,7 +41,7 @@ def main(argv) -> int:
    geom = create_geometry(param, ptopo)
 
    # Build differentiation matrice and boundary correction
-   mtrx = DFROperators(geom, param.filter_apply, param.filter_order, param.filter_cutoff)
+   mtrx = create_operators(geom, param)
 
    # Initialize state variables
    Q, topo, metric = init_state_vars(geom, mtrx, param)
@@ -113,6 +113,12 @@ def main(argv) -> int:
 
    return MPI.COMM_WORLD.rank
 
+def setup_distributed_world(param: Configuration) -> DistributedWorld | None:
+   if param.grid_type == "cubed_sphere":
+      return DistributedWorld()
+   else:
+      return None
+
 def adjust_nb_elements(param: Configuration):
    """ Adjust number of horizontal elements in the parameters so that it corresponds to the number *per processor* """
    if param.grid_type == 'cubed_sphere':
@@ -141,6 +147,9 @@ def create_geometry(param: Configuration, ptopo: Optional[DistributedWorld]) -> 
                          param.nb_elements_vertical, param.nbsolpts)
 
    raise ValueError(f'Invalid grid type: {param.grid_type}')
+
+def create_operators(geom: Geometry, param: Configuration) -> DFROperators:
+   return DFROperators(geom, param.filter_apply, param.filter_order, param.filter_cutoff)
 
 def create_preconditioner(param: Configuration, ptopo: Optional[DistributedWorld]) -> Optional[Multigrid]:
    """ Create the preconditioner required by the given params """

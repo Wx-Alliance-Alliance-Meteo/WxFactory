@@ -1,6 +1,7 @@
 from configparser import ConfigParser, NoSectionError, NoOptionError
 import json
 from typing       import Any, Dict, List, Optional, Type, TypeVar, Union
+from .array_module import ArrayModule
 
 __all__ = ['Configuration']
 
@@ -27,10 +28,19 @@ class Configuration:
       else:
          self.depth_approx = None
 
+      ################################
+      # System
       # TODO: support multiple devices
       device = self._get_option('System', 'device', str, 'cpu', ['cpu', 'cuda0'])
       self.device = "cuda" if device == "cuda0" else "cpu"
       self.cuda_id = int(device[4:]) if device.startswith("cuda") else None
+
+      if self.device == "cuda":
+         import cupy
+         self.array_module: ArrayModule = cupy
+      else:
+         import numpy
+         self.array_module: ArrayModule = numpy
 
       ################################
       # Test case

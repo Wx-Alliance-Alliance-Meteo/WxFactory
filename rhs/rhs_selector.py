@@ -8,6 +8,7 @@ from rhs.rhs_bubble_convective import rhs_bubble as rhs_bubble_convective
 from rhs.rhs_bubble_fv         import rhs_bubble_fv
 from rhs.rhs_bubble_implicit   import rhs_bubble_implicit
 from rhs.rhs_euler             import rhs_euler
+from rhs.rhs_euler_cuda        import rhs_euler_cuda
 from rhs.rhs_euler_convective  import rhs_euler_convective
 from rhs.rhs_euler_fv          import rhs_euler_fv
 from rhs.rhs_sw                import rhs_sw
@@ -30,12 +31,14 @@ class RhsBundle:
 
       if param.equations == "euler" and isinstance(geom, CubedSphere):
          if param.discretization == 'dg':
-            self.full = lambda q: rhs_euler(
+            table = {"cpu": rhs_euler, "cuda": rhs_euler_cuda}
+            self.full = lambda q, f=table[param.device]: f(
                q, geom, operators, metric, ptopo, param.nbsolpts, param.nb_elements_horizontal,
                param.nb_elements_vertical, param.case_number)
          elif param.discretization == 'fv':
             # If we implement a FV-specific version of rhs_euler, we should select it here
-            self.full = lambda q: rhs_euler(
+            table = {"cpu": rhs_euler, "cuda": rhs_euler_cuda}
+            self.full = lambda q, f=table[param.device]: f(
                q, geom, operators, metric, ptopo, param.nbsolpts, param.nb_elements_horizontal,
                param.nb_elements_vertical, param.case_number)
 

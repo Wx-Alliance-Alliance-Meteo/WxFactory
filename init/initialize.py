@@ -89,7 +89,8 @@ def initialize_euler(geom, metric, mtrx, param):
       Q[7, :, :, :] = rho * q3
       Q[8, :, :, :] = rho * q4
    
-   return Q, None
+   xp = cupy if param.device == "cuda" else numpy
+   return xp.asarray(Q), None
 
 def initialize_sw(geom, metric, mtrx, param):
 

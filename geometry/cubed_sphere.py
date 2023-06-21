@@ -68,7 +68,7 @@ class CubedSphere(Geometry):
          Wraps parameters from the configuration pole that are not otherwise specified in this
          constructor.
       '''
-      super().__init__(nbsolpts, 'cubed_sphere')
+      super().__init__(nbsolpts, 'cubed_sphere', param)
 
       ## Panel / parallel decomposition properties
       self.ptopo = ptopo
@@ -164,22 +164,22 @@ class CubedSphere(Geometry):
       self.itf_k_shape_2d = (nj,ni)  
 
       # Assign a token zbot, potentially to be overridden later with supplied topography
-      self.zbot = numpy.zeros(self.grid_shape_2d)
+      self.zbot = param.array_module.zeros(self.grid_shape_2d)
 
       ## Coordinate vectors for the numeric / angular coordinate system
 
       # Define the base coordinate.  x1 and x2 are fundamentally 1D arrays,
       # while x3 and eta are 3D arrays in support of coordinate mapping
 
-      x1 = numpy.empty(ni,dtype=numpy.double)
-      x2 = numpy.empty(nj,dtype=numpy.double)
-      x3 = numpy.empty(self.grid_shape_3d,dtype=numpy.double)
-      eta = numpy.empty(self.grid_shape_3d,dtype=numpy.double)
+      x1 = param.array_module.empty(ni)
+      x2 = param.array_module.empty(nj)
+      x3 = param.array_module.empty(self.grid_shape_3d)
+      eta = param.array_module.empty(self.grid_shape_3d)
 
       # # 1D element-counting arrays, for coordinate assignment
-      elements_x1 = numpy.arange(nb_elements_x1)
-      elements_x2 = numpy.arange(nb_elements_x2)
-      elements_x3 = numpy.arange(nb_elements_x3)
+      elements_x1 = numpy.arange(nb_elements_x1, like=x1)
+      elements_x2 = numpy.arange(nb_elements_x2, like=x2)
+      elements_x3 = numpy.arange(nb_elements_x3, like=x3)
 
       # Assign the coordinates, using numpy's broadcasting
       # First, reshape the coordinate to segregate the element interior into its own dimension
@@ -213,10 +213,10 @@ class CubedSphere(Geometry):
 
 
       # Repeat for the interface values
-      x1_itf_i = numpy.empty(nb_elements_x1+1,dtype=numpy.double) # 1D array
-      x2_itf_i = numpy.empty(nj,dtype=numpy.double) # 1D array
-      x3_itf_i = numpy.empty(self.itf_i_shape_3d,dtype=numpy.double) # 3D array
-      eta_itf_i = numpy.empty(self.itf_i_shape_3d,dtype=numpy.double) # 3D array
+      x1_itf_i = numpy.empty(nb_elements_x1 + 1, like=x1)  # 1D array
+      x2_itf_i = numpy.empty(nj, like=x2)  # 1D array
+      x3_itf_i = numpy.empty(self.itf_i_shape_3d, like=x3)  # 3D array
+      eta_itf_i = numpy.empty(self.itf_i_shape_3d, like=eta) # 3D array
 
       x1_itf_i[:-1] = domain_x1[0] + Δx1*elements_x1[:] # Left edges
       x1_itf_i[-1] = domain_x1[1] # Right edge
@@ -224,10 +224,10 @@ class CubedSphere(Geometry):
       x3_itf_i[:,:,:] = x3[:,:,0:1] # Same for x3
       eta_itf_i[:,:,:] = eta[:,:,0:1]
 
-      x1_itf_j = numpy.empty(ni,dtype=numpy.double) # n.b. 1D array
-      x2_itf_j = numpy.empty(nb_elements_x2+1,dtype=numpy.double) # Also 1D array
-      x3_itf_j = numpy.empty(self.itf_j_shape_3d,dtype=numpy.double) # 3D array
-      eta_itf_j = numpy.empty(self.itf_j_shape_3d,dtype=numpy.double) # 3D array
+      x1_itf_j = numpy.empty(ni, like=x1) # n.b. 1D array
+      x2_itf_j = numpy.empty(nb_elements_x2 + 1, like=x2) # Also 1D array
+      x3_itf_j = numpy.empty(self.itf_j_shape_3d, like=x3) # 3D array
+      eta_itf_j = numpy.empty(self.itf_j_shape_3d, like=eta) # 3D array
 
       x1_itf_j[:] = x1[:]
       x2_itf_j[:-1] = domain_x2[0] + Δx2*elements_x2[:] # South edges
@@ -235,10 +235,10 @@ class CubedSphere(Geometry):
       x3_itf_j[:,:,:] = x3[:,0:1,:]
       eta_itf_j[:,:,:] = eta[:,0:1,:]
 
-      x1_itf_k = numpy.empty(ni,dtype=numpy.double)
-      x2_itf_k = numpy.empty(nj,dtype=numpy.double)
-      x3_itf_k = numpy.empty(self.itf_k_shape_3d,dtype=numpy.double)
-      eta_itf_k = numpy.empty(self.itf_k_shape_3d,dtype=numpy.double)
+      x1_itf_k = numpy.empty(ni, like=x1)
+      x2_itf_k = numpy.empty(nj, like=x2)
+      x3_itf_k = numpy.empty(self.itf_k_shape_3d, like=x3)
+      eta_itf_k = numpy.empty(self.itf_k_shape_3d, like=eta)
 
       x1_itf_k[:] = x1[:]
       x2_itf_k[:] = x2[:]
@@ -268,35 +268,27 @@ class CubedSphere(Geometry):
       self.eta_itf_k = eta_itf_k
 
       ## Construct the combined coordinate vector for the numeric/equiangular coordinate (x1, x2, η)
-
-      coordVec_num = numpy.empty((3,) + grid_shape_3d) # (x1,x2,η)
-      coordVec_num[0,:,:,:] = x1[numpy.newaxis,numpy.newaxis,:]
-      coordVec_num[1,:,:,:] = x2[numpy.newaxis,:,numpy.newaxis]
-      coordVec_num[2,:,:,:] = eta
+      coordVec_num = numpy.stack((x1[None, None, :],
+                                  x2[None, :, None],
+                                  eta))
 
       # coordVec_num_itf_i = numpy.empty((3,) + (nk,nb_elements_x1+1,nj))
       # coordVec_num_itf_j = numpy.empty((3,) + (nk,nb_elements_x2+1,ni))
       # coordVec_num_itf_k = numpy.empty((3,) + (nb_elements_x3+1,nj,ni))
 
-      coordVec_num_itf_i = numpy.empty((3,) + self.itf_i_shape_3d)
-      coordVec_num_itf_j = numpy.empty((3,) + self.itf_j_shape_3d)
-      coordVec_num_itf_k = numpy.empty((3,) + self.itf_k_shape_3d)
-
       # coordVec_num_itf_i[0,:,:,:] = x1_itf_i[numpy.newaxis,:,numpy.newaxis]
       # coordVec_num_itf_i[1,:,:,:] = x2_itf_i[numpy.newaxis,numpy.newaxis,:]
       # coordVec_num_itf_i[2,:,:,:] = eta_itf_i.transpose((0,2,1))
 
-      coordVec_num_itf_i[0,:,:,:] = x1_itf_i[numpy.newaxis,numpy.newaxis,:]
-      coordVec_num_itf_i[1,:,:,:] = x2_itf_i[numpy.newaxis,:,numpy.newaxis]
-      coordVec_num_itf_i[2,:,:,:] = eta_itf_i
-
-      coordVec_num_itf_j[0,:,:,:] = x1_itf_j[numpy.newaxis,numpy.newaxis,:]
-      coordVec_num_itf_j[1,:,:,:] = x2_itf_j[numpy.newaxis,:,numpy.newaxis]
-      coordVec_num_itf_j[2,:,:,:] = eta_itf_j
-
-      coordVec_num_itf_k[0,:,:,:] = x1_itf_k[numpy.newaxis,numpy.newaxis,:]
-      coordVec_num_itf_k[1,:,:,:] = x2_itf_k[numpy.newaxis,:,numpy.newaxis]
-      coordVec_num_itf_k[2,:,:,:] = eta_itf_k
+      coordVec_num_itf_i = numpy.stack((x1_itf_i[None, None, :],
+                                        x2_itf_i[None, :, None],
+                                        eta_itf_i))
+      coordVec_num_itf_j = numpy.stack((x1_itf_j[None, None, :],
+                                        x2_itf_j[None, :, None],
+                                        eta_itf_j))
+      coordVec_num_itf_k = numpy.stack((x1_itf_k[None, None, :],
+                                        x2_itf_k[None, :, None],
+                                        eta_itf_k))
 
       self.coordVec_num = coordVec_num
       self.coordVec_num_itf_i = coordVec_num_itf_i

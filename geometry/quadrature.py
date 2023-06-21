@@ -3,7 +3,11 @@ import numpy
 import scipy.special
 import sympy
 
-def gauss_legendre(n):
+# typing
+from typing import Sequence
+from numpy.typing import NDArray
+
+def gauss_legendre(n: int) -> tuple[list[sympy.Float], NDArray[numpy.float64], NDArray[numpy.float64]]:
    """Computes the Gauss-Legendre quadrature points (symbolic and numerical) and weights.
 
    Gauss-Legendre nodes are roots of the Legendre polynomial
@@ -45,4 +49,4 @@ def gauss_legendre(n):
    else:
       points_sym = [sympy.Float(n, n_digits) for n in points_num]
 
-   return points_sym, points_num, weights
+   return points_sym, points_num, numpy.asarray(weights)

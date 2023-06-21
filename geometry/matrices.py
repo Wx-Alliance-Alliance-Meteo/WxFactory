@@ -3,6 +3,8 @@ import numpy.linalg
 import math
 import sympy
 
+# typing
+from numpy.typing import NDArray
 from .geometry import Geometry
 
 class DFROperators:
@@ -26,9 +28,12 @@ class DFROperators:
          If applied, at what relative wavenumber (0 < cutoff < 1) to begin applying the filter
       '''
 
+      if filter_apply and not isinstance(grd.solutionPoints, numpy.ndarray):
+         raise NotImplementedError("DFROperators cannot be formed with non-numpy arrays")
+
       # Build Vandermonde matrix to transform the modal representation to the (interior)
       # nodal representation
-      V = numpy.polynomial.legendre.legvander(grd.solutionPoints,grd.nbsolpts-1)
+      V = legvander(grd.solutionPoints,grd.nbsolpts-1)
       # Invert the matrix to transform from interior nodes to modes
       invV = numpy.linalg.inv(V)
 
@@ -40,6 +45,10 @@ class DFROperators:
       # treats the two differently.
       extrap_neg = (numpy.polynomial.legendre.legvander([-1],grd.nbsolpts-1) @ invV).reshape((-1,))
       extrap_pos = (numpy.polynomial.legendre.legvander([+1],grd.nbsolpts-1) @ invV).reshape((-1,))
+
+      # coerce to be like other arrays
+      extrap_pos = numpy.asarray(extrap_pos, like=grd.solutionPoints)
+      extrap_neg = numpy.asarray(extrap_neg, like=grd.solutionPoints)
 
       self.extrap_west = extrap_neg
       self.extrap_east = extrap_pos
@@ -59,11 +68,15 @@ class DFROperators:
       # self.extrap_up   = lagrangeEval(grd.solutionPoints_sym,  1)
 
       # Create highest-mode filter
-      V = numpy.polynomial.legendre.legvander(grd.solutionPoints,grd.nbsolpts-1) # Transform mode space to grid space
-      invV = inv(V) # Transform grid space to mode space
-      feye = numpy.eye(grd.nbsolpts) # Suppress high mode
-      feye[-1,-1] = 0
-      self.highfilter = V @ (feye @ invV)
+      # V = numpy.polynomial.legendre.legvander(grd.solutionPoints,grd.nbsolpts-1) # Transform mode space to grid space
+      # invV = inv(V) # Transform grid space to mode space
+      # feye = numpy.eye(grd.nbsolpts) # Suppress high mode
+      # feye[-1,-1] = 0
+      # self.highfilter = numpy.asarray(V @ (feye @ invV), like=grd.solutionPoints)
+
+      V = legvander(grd.solutionPoints, grd.nbsolpts - 1)
+      invV = numpy.linalg.inv(V)
+      feye = numpy.eye(grd.nbsolpts, like=grd.solutionPoints)
 
       if filter_apply:
          self.V = vandermonde(grd.extension)
@@ -73,6 +86,7 @@ class DFROperators:
          self.filter = filter_exponential(N, Nc, filter_order, self.V, self.invV)
 
       diff = diffmat(grd.extension_sym)
+      diff = numpy.asarray(diff, like=grd.solutionPoints)
 
       if filter_apply:
          self.diff_ext = ( self.filter @ diff ).astype(float)
@@ -85,14 +99,15 @@ class DFROperators:
       #    exit(1)
 
       # Force matrices to be in C-contiguous order
-      self.diff_solpt = numpy.ascontiguousarray( self.diff_ext[1:-1, 1:-1] )
-      self.correction = numpy.ascontiguousarray( numpy.column_stack((self.diff_ext[1:-1,0], self.diff_ext[1:-1,-1])) )
+      self.diff_solpt = self.diff_ext[1:-1, 1:-1].copy()
+      self.correction = numpy.column_stack((self.diff_ext[1:-1, 0], self.diff_ext[1:-1, 1]))
 
       self.diff_solpt_tr = self.diff_solpt.T.copy()
       self.correction_tr = self.correction.T.copy()
 
       # Ordinary differentiation matrices (used only in diagnostic calculations)
       self.diff = diffmat(grd.solutionPoints)
+      self.diff = numpy.asarray(self.diff, like=self.diff_solpt)
       self.diff_tr = self.diff.T
 
       self.quad_weights = numpy.outer(grd.glweights, grd.glweights)
@@ -101,7 +116,7 @@ class DFROperators:
       # Build an exponential modal filter as described in Warburton, eqn 5.16
 
       # Scaled mode numbers
-      modes = numpy.arange(geom.nbsolpts) / (geom.nbsolpts-1)
+      modes = numpy.arange(geom.nbsolpts, like=geom.solutionPoints) / (geom.nbsolpts-1)
       Nc = cutoff 
 
       # After applying the filter, each mode is reduced in proportion to the filter order
@@ -113,7 +128,7 @@ class DFROperators:
       # Now, use a Vandermonde matrix to transform this modal filter into a nodal form
 
       # mode-to-node operator
-      vander = numpy.polynomial.legendre.legvander(geom.solutionPoints,geom.nbsolpts-1)
+      vander = legvander(geom.solutionPoints, geom.nbsolpts - 1)
 
       # node-to-mode operator
       ivander = numpy.linalg.inv(vander)
@@ -223,7 +238,7 @@ class DFROperators:
       nbvars = field_interior.size // grid.ni
 
       # Create an array for the output
-      border = numpy.empty((nbvars,) + border_shape, dtype=field_interior.dtype)
+      border = numpy.empty_like(field_interior, shape=(nbvars,) + border_shape)
       # Reshape to the from required for matrix multiplication
       border.shape = (-1,2)
 
@@ -309,7 +324,7 @@ class DFROperators:
       nbvars = field_interior.size // (grid.ni * grid.nj)
 
       # Create an array for the output
-      border = numpy.empty((nbvars,) + border_shape, dtype=field_interior.dtype)
+      border = numpy.empty_like(field_interior, shape=(nbvars,) + border_shape)
       # Reshape to the from required for matrix multiplication
       border.shape = (-1,2,grid.ni)
 
@@ -397,7 +412,7 @@ class DFROperators:
       nbvars = field_interior.size // (grid.ni * grid.nj * grid.nk)
       
       # Output array
-      filtered = numpy.empty( (nbvars*grid.nb_elements_x3,grid.nbsolpts,grid.ni*grid.nj), dtype=field_interior.dtype)
+      filtered = numpy.empty_like(field_interior, shape=(nbvars * grid.nb_elements_x3, grid.nbsolpts, grid.ni * grid.nj))
 
       # Create an array view of the interior, reshaped for matrix multiplication
       field_interior_view = field_interior.view()
@@ -432,7 +447,7 @@ class DFROperators:
       nbvars = field_interior.size // (grid.ni * grid.nj * grid.nk)
 
       # Create an array for the output
-      border = numpy.empty((nbvars,) + border_shape, dtype=field_interior.dtype)
+      border = numpy.empty_like(field_interior, shape=(nbvars,) + border_shape)
       # Reshape to the from required for matrix multiplication
       border.shape = (-1,2,grid.ni*grid.nj)
 
@@ -721,3 +736,20 @@ def row_reduce(A, ncols=None):
          break
 
    return A_rre
+
+def legvander(x: NDArray[numpy.float64], deg: int) -> NDArray[numpy.float64]:
+   """
+   NumPy's legvander, slightly modified to work with any array type.
+
+   See: https://numpy.org/doc/stable/reference/generated/numpy.polynomial.legendre.legvander.html#numpy-polynomial-legendre-legvander
+   """
+
+   dims = (deg + 1,) + x.shape
+   v = numpy.empty_like(x, shape=dims)
+
+   v[0] = 1
+   if deg > 0:
+      v[1] = x
+      for i in range(2, deg + 1):
+         v[i] = (v[i - 1] * x * (2*i - 1) - v[i - 2] * (i - 1)) / i
+   return numpy.moveaxis(v, 0, -1)
