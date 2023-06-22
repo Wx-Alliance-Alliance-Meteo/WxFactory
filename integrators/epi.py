@@ -84,13 +84,13 @@ class Epi(Integrator):
 
       def matvec_handle(v): return matvec_fun(v, dt, Q, rhs, self.rhs, self.jacobian_method)
 
-      vec = xp.zeros((self.max_phi+1, rhs.size))
+      vec = numpy.zeros((self.max_phi+1, rhs.size), like=rhs)
       vec[1,:] = rhs.flatten()
       for i in range(self.n_prev):
          J_deltaQ = matvec_fun(self.previous_Q[i] - Q, 1., Q, rhs, self.rhs, self.jacobian_method)
 
          # R(y_{n-i})
-         r = (self.previous_rhs[i] - rhs) - xp.reshape(J_deltaQ, Q.shape)
+         r = (self.previous_rhs[i] - rhs) - numpy.reshape(J_deltaQ, Q.shape)
 
          for k, alpha in enumerate(self.A[:,i],start=2):
             # v_k = Sum_{i=1}^{n_prev} A_{k,i} R(y_{n-i})
@@ -123,4 +123,4 @@ class Epi(Integrator):
          self.previous_rhs.appendleft(rhs)
 
       # Update solution
-      return Q + xp.reshape(phiv, Q.shape) * dt
+      return Q + numpy.reshape(phiv, Q.shape) * dt

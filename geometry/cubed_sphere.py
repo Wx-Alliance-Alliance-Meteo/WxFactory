@@ -268,8 +268,8 @@ class CubedSphere(Geometry):
       self.eta_itf_k = eta_itf_k
 
       ## Construct the combined coordinate vector for the numeric/equiangular coordinate (x1, x2, η)
-      coordVec_num = numpy.stack((x1[None, None, :],
-                                  x2[None, :, None],
+      coordVec_num = numpy.stack((numpy.broadcast_to(x1[None, None, :], eta.shape),
+                                  numpy.broadcast_to(x2[None, :, None], eta.shape),
                                   eta))
 
       # coordVec_num_itf_i = numpy.empty((3,) + (nk,nb_elements_x1+1,nj))
@@ -280,14 +280,14 @@ class CubedSphere(Geometry):
       # coordVec_num_itf_i[1,:,:,:] = x2_itf_i[numpy.newaxis,numpy.newaxis,:]
       # coordVec_num_itf_i[2,:,:,:] = eta_itf_i.transpose((0,2,1))
 
-      coordVec_num_itf_i = numpy.stack((x1_itf_i[None, None, :],
-                                        x2_itf_i[None, :, None],
+      coordVec_num_itf_i = numpy.stack((numpy.broadcast_to(x1_itf_i[None, None, :], eta_itf_i.shape),
+                                        numpy.broadcast_to(x2_itf_i[None, :, None], eta_itf_i.shape),
                                         eta_itf_i))
-      coordVec_num_itf_j = numpy.stack((x1_itf_j[None, None, :],
-                                        x2_itf_j[None, :, None],
+      coordVec_num_itf_j = numpy.stack((numpy.broadcast_to(x1_itf_j[None, None, :], eta_itf_j.shape),
+                                        numpy.broadcast_to(x2_itf_j[None, :, None], eta_itf_j.shape),
                                         eta_itf_j))
-      coordVec_num_itf_k = numpy.stack((x1_itf_k[None, None, :],
-                                        x2_itf_k[None, :, None],
+      coordVec_num_itf_k = numpy.stack((numpy.broadcast_to(x1_itf_k[None, None, :], eta_itf_k.shape),
+                                        numpy.broadcast_to(x2_itf_k[None, :, None], eta_itf_k.shape),
                                         eta_itf_k))
 
       self.coordVec_num = coordVec_num

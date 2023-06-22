@@ -74,7 +74,7 @@ def initialize_euler(geom, metric, mtrx, param):
       print('Something has gone horribly wrong in initialization. Back away slowly')
       exit(1)
 
-   Q = numpy.zeros((nb_equations, nk, nj, ni))
+   Q = numpy.zeros((nb_equations, nk, nj, ni), like=rho)
 
    Q[idx_rho   , :, :, :]    = rho
    Q[idx_rho_u1, :, :, :]    = rho * u1_contra
@@ -89,8 +89,7 @@ def initialize_euler(geom, metric, mtrx, param):
       Q[7, :, :, :] = rho * q3
       Q[8, :, :, :] = rho * q4
    
-   xp = cupy if param.device == "cuda" else numpy
-   return xp.asarray(Q), None
+   return Q, None
 
 def initialize_sw(geom, metric, mtrx, param):
 

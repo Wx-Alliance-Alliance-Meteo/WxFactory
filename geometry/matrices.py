@@ -4,8 +4,12 @@ import math
 import sympy
 
 # typing
+from typing import Self, TypeVar
 from numpy.typing import NDArray
 from .geometry import Geometry
+from .cubed_sphere import CubedSphere
+
+T = TypeVar("T", bound=numpy.generic)
 
 class DFROperators:
    def __init__(self, grd : Geometry, filter_apply : bool=False, filter_order: int=8, filter_cutoff: float=0.25):
@@ -29,7 +33,7 @@ class DFROperators:
       '''
 
       if filter_apply and not isinstance(grd.solutionPoints, numpy.ndarray):
-         raise NotImplementedError("DFROperators cannot be formed with non-numpy arrays")
+         raise NotImplementedError("DFROperators cannot form a filter with non-numpy arrays")
 
       # Build Vandermonde matrix to transform the modal representation to the (interior)
       # nodal representation
@@ -43,12 +47,8 @@ class DFROperators:
 
       # Note that extrap_neg and extrap_pos should be vectors, not a one-row matrix; numpy
       # treats the two differently.
-      extrap_neg = (numpy.polynomial.legendre.legvander([-1],grd.nbsolpts-1) @ invV).reshape((-1,))
-      extrap_pos = (numpy.polynomial.legendre.legvander([+1],grd.nbsolpts-1) @ invV).reshape((-1,))
-
-      # coerce to be like other arrays
-      extrap_pos = numpy.asarray(extrap_pos, like=grd.solutionPoints)
-      extrap_neg = numpy.asarray(extrap_neg, like=grd.solutionPoints)
+      extrap_neg = (legvander(numpy.array([-1.], like=V), grd.nbsolpts - 1) @ invV).reshape((-1,))
+      extrap_pos = (legvander(numpy.array([+1.], like=V), grd.nbsolpts - 1) @ invV).reshape((-1,))
 
       self.extrap_west = extrap_neg
       self.extrap_east = extrap_pos
@@ -77,6 +77,8 @@ class DFROperators:
       V = legvander(grd.solutionPoints, grd.nbsolpts - 1)
       invV = numpy.linalg.inv(V)
       feye = numpy.eye(grd.nbsolpts, like=grd.solutionPoints)
+      feye[-1, -1] = 0.
+      self.highfilter = V @ (feye @ invV)
 
       if filter_apply:
          self.V = vandermonde(grd.extension)
@@ -169,7 +171,11 @@ class DFROperators:
       return result
 
       
-   def comma_i(self, field_interior : numpy.ndarray, border_i : numpy.ndarray, grid: Geometry) -> numpy.ndarray :
+   def comma_i(self: Self,
+               field_interior: NDArray[T],
+               border_i: NDArray[T],
+               grid: Geometry,
+               out: NDArray[T] | None = None) -> NDArray[T]:
       '''Take a partial derivative along the i-index
       
       This method takes the partial derivative of an input field, potentially consisting of several
@@ -178,19 +184,27 @@ class DFROperators:
 
       Parameters
       ----------
-      field_interior : numpy.ndarray
+      field_interior : NDArray
          The element-interior values of the variable(s) to be differentiated.  This should have
          a shape of `(numvars,npts_z,npts_y,npts_x)`, respecting the prevailing parallel decomposition.
-      border_i : numpy.array
+      border_i : NDArray
          The element-boundary values of the fields to be differentiated, along the i-axis.  This should
          have a shape of `(numvars,npts_z,npts_y,nels_x,2)`, with [:,0] being the leftmost boundary
          (minimal `i`), and [:,1] being the rightmost boundary (maximal `i`)
       grid : Geometry
          Grid-defining class, used here solely to provide the canonical definition of the local
          computational region.
+      out : NDArray | None
+         Destination array for operation. If provided, should be a C-contiguous array with the same shape
+         as `field_interior`.
       '''
-      # Create an empty array for output
-      output = numpy.empty_like(field_interior)
+
+      if out is None:
+         # Create an empty array for output
+         output = numpy.empty_like(field_interior)
+      else:
+         # Create a view of the output so that the shape of the original is not modified
+         output = out.view()
 
       # Create views of the input arrays for reshaping, in order to express the differentiation as
       # a set of matrix multiplications
@@ -202,11 +216,11 @@ class DFROperators:
       # require a memory copy; this implicitly ensures that the input arrays are fully contiguous in
       # memory.
       field_view.shape = (-1, grid.nbsolpts)
-      border_i_view.shape = (-1,2)
+      border_i_view.shape = (-1, 2)
       output.shape = field_view.shape
 
       # Perform the matrix transposition
-      numpy.dot(field_view, self.diff_solpt_tr,out=output)
+      numpy.dot(field_view, self.diff_solpt_tr, out=output)
       #output[:] = field_view @ self.diff_solpt_tr# + border_i_view @ self.correction_tr
       output[:] += border_i_view @ self.correction_tr
       # print(grid.ptopo.rank, field_view[:2,:], '\n', border_i_view[:2,:],'\n',output[:2,:])
@@ -216,7 +230,10 @@ class DFROperators:
 
       return output
 
-   def extrapolate_i(self, field_interior : numpy.ndarray, grid : Geometry) -> numpy.ndarray:
+   def extrapolate_i(self: Self,
+                     field_interior: NDArray[T],
+                     grid: Geometry,
+                     out: NDArray[T] | None = None) -> NDArray[T]:
       '''Compute the i-border values along each element of field_interior
 
       This method extrapolates the variables in `field_interior` to the boundary along
@@ -229,7 +246,11 @@ class DFROperators:
          a shape of `(numvars,npts_z,npts_y,npts_x)`, respecting the prevailing parallel decomposition.
       grid : Geometry
          Grid-defining class, used here solely to provide the canonical definition of the local
-         computational region.'''
+         computational region.
+      out : NDArray | None
+         Destination array for operation. If provided, should be a C-contiguous array
+         with shape (numvars, npts_z, npts_y, nels_x, 2).
+      '''
 
       # Array shape for the i-border of a single variable, based on the grid decomposition
       border_shape = (grid.nb_elements_x1,2)
@@ -237,8 +258,12 @@ class DFROperators:
       #nbvars = numpy.prod(field_interior.shape) // (grid.ni)
       nbvars = field_interior.size // grid.ni
 
-      # Create an array for the output
-      border = numpy.empty_like(field_interior, shape=(nbvars,) + border_shape)
+      if out is None:
+         # Create an array for the output
+         border = numpy.empty((nbvars,) + border_shape, like=field_interior)
+      else:
+         # Create a view of the output so that the shape of the original is not modified
+         border = out.view()
       # Reshape to the from required for matrix multiplication
       border.shape = (-1,2)
 
@@ -253,7 +278,11 @@ class DFROperators:
       border.shape = tuple(field_interior.shape[0:-1]) + border_shape
       return border
 
-   def comma_j(self, field_interior : numpy.ndarray, border_j : numpy.ndarray, grid : Geometry) -> numpy.ndarray:
+   def comma_j(self: Self,
+               field_interior: NDArray[T],
+               border_j: NDArray[T],
+               grid: Geometry,
+               out: NDArray[T] | None = None) -> NDArray[T]:
       '''Take a partial derivative along the j-index
 
       This method takes the partial derivative of an input field, potentially consisting of several
@@ -272,9 +301,17 @@ class DFROperators:
       grid : Geometry
          Grid-defining class, used here solely to provide the canonical definition of the local
          computational region.
+      out : NDArray | None
+         Destination array for operation. If provided, should be a C-contiguous array with the same shape
+         as `field_interior`.
       '''
-      # Create an empty array for output
-      output = numpy.empty_like(field_interior)
+
+      if out is None:
+         # Create an empty array for output
+         output = numpy.empty_like(field_interior)
+      else:
+         # Create a view of the output so that the shape of the original is not modified
+         output = out.view()
       # Compute the number of variables we're differentiating, including number of levels
       #nbvars = numpy.prod(output.shape) // (grid.ni * grid.nj)
       nbvars = output.size // (grid.ni * grid.nj)
@@ -300,7 +337,10 @@ class DFROperators:
 
       return output
 
-   def extrapolate_j(self, field_interior : numpy.ndarray, grid : Geometry) -> numpy.ndarray :
+   def extrapolate_j(self: Self,
+                     field_interior: NDArray[T],
+                     grid: Geometry,
+                     out: NDArray[T] | None = None) -> NDArray[T]:
       '''Compute the j-border values along each element of field_interior
 
       This method extrapolates the variables in `field_interior` to the boundary along
@@ -314,7 +354,11 @@ class DFROperators:
          To allow for differentiation of 2D objects, npts_z can be one.
       grid : Geometry
          Grid-defining class, used here solely to provide the canonical definition of the local
-         computational region.'''
+         computational region.
+      out : NDArray | None
+         Destination array for operation. If provided, should be a C-contiguous array with
+         shape (numvars, npts_z, nels_y, 2, npts_x).
+      '''
 
       # Array shape for the i-border of a single variable, based on the grid decomposition
       border_shape = (grid.nb_elements_x2,2,
@@ -323,8 +367,12 @@ class DFROperators:
       #nbvars = numpy.prod(field_interior.shape) // (grid.ni * grid.nj)
       nbvars = field_interior.size // (grid.ni * grid.nj)
 
-      # Create an array for the output
-      border = numpy.empty_like(field_interior, shape=(nbvars,) + border_shape)
+      if out is None:
+         # Create an array for the output
+         border = numpy.empty((nbvars,) + border_shape, like=field_interior)
+      else:
+         # Create a view of the output so that the shape of the original is not modified
+         border = out.view()
       # Reshape to the from required for matrix multiplication
       border.shape = (-1,2,grid.ni)
 
@@ -342,7 +390,11 @@ class DFROperators:
       border.shape = tuple(field_interior.shape[0:-2]) + border_shape
       return border
 
-   def comma_k(self, field_interior : numpy.ndarray, border_k : numpy.ndarray, grid : Geometry) -> numpy.ndarray:
+   def comma_k(self: Self,
+               field_interior: NDArray[T],
+               border_k: NDArray[T],
+               grid: Geometry,
+               out: NDArray[T] | None = None) -> NDArray[T]:
       '''Take a partial derivative along the k-index
       
       This method takes the partial derivative of an input field, potentially consisting of several
@@ -361,9 +413,17 @@ class DFROperators:
       grid : Geometry
          Grid-defining class, used here solely to provide the canonical definition of the local
          computational region.
+      out : NDArray | None
+         Destination array for operation. If provided, should be a C-contiguous array with the same shape
+         as `field_interior`.
       '''
-      # Create an empty array for output
-      output = numpy.empty_like(field_interior)
+
+      if out is None:
+         # Create an empty array for output
+         output = numpy.empty_like(field_interior)
+      else:
+         # Create a view of the output so that the shape of the original is not modified
+         output = out.view()
       # Compute the number of variables we're differentiating
       #nbvars = numpy.prod(output.shape) // (grid.ni * grid.nj * grid.nk)
       nbvars = output.size // (grid.ni * grid.nj * grid.nk)
@@ -389,7 +449,10 @@ class DFROperators:
 
       return output
 
-   def filter_k(self, field_interior, grid : Geometry) -> numpy.ndarray:
+   def filter_k(self: Self,
+                field_interior: NDArray[T],
+                grid: CubedSphere,
+                out: NDArray[T] | None = None) -> NDArray[T]:
       '''Apply a modal filter to remove the highest mode of fiield_interior along the k-dimension
       
       This method applies the pre-computed 'highfilter' matrix to the field-interior points along
@@ -405,14 +468,23 @@ class DFROperators:
          a shape of `(numvars,npts_z,npts_y,npts_x)`, respecting the prevailing parallel decomposition.
       grid : Geometry
          Grid-defining class, used here solely to provide the canonical definition of the local
-         computational region.'''
+         computational region.
+      out : NDArray | None
+         Destination array for operation. If provided, should be a C-contiguous array with the same shape
+         as `field_interior`.
+      '''
          
       # Number of variables we're extending
       #nbvars = numpy.prod(field_interior.shape) // (grid.ni * grid.nj * grid.nk)
       nbvars = field_interior.size // (grid.ni * grid.nj * grid.nk)
       
-      # Output array
-      filtered = numpy.empty_like(field_interior, shape=(nbvars * grid.nb_elements_x3, grid.nbsolpts, grid.ni * grid.nj))
+      if out is None:
+         # Output array
+         filtered = numpy.empty((nbvars * grid.nb_elements_x3, grid.nbsolpts, grid.ni * grid.nj), like=field_interior)
+      else:
+         # Create a view of the output so that the shape of the original is not modified
+         filtered = out.view()
+         filtered.shape = (nbvars * grid.nb_elements_x3, grid.nbsolpts, grid.ni * grid.nj)
 
       # Create an array view of the interior, reshaped for matrix multiplication
       field_interior_view = field_interior.view()
@@ -423,7 +495,10 @@ class DFROperators:
       
       return filtered
 
-   def extrapolate_k(self, field_interior : numpy.ndarray, grid : Geometry) -> numpy.ndarray:
+   def extrapolate_k(self: Self,
+                     field_interior: NDArray[T],
+                     grid: Geometry,
+                     out: NDArray[T] | None = None) -> NDArray[T]:
       '''Compute the k-border values along each element of field_interior
 
       This method extrapolates the variables in `field_interior` to the boundary along
@@ -436,7 +511,11 @@ class DFROperators:
          a shape of `(numvars,npts_z,npts_y,npts_x)`, respecting the prevailing parallel decomposition.
       grid : Geometry
          Grid-defining class, used here solely to provide the canonical definition of the local
-         computational region.'''
+         computational region.
+      out : NDArray | None
+         Destination array for operation. If provided, should be a C-contiguous array
+         with shape (numvars, nels_z, 2, npts_y, npts_x).
+      '''
 
       # Array shape for the i-border of a single variable, based on the grid decomposition
       border_shape = (grid.nb_elements_x3,2,
@@ -446,8 +525,12 @@ class DFROperators:
       #nbvars = numpy.prod(field_interior.shape) // (grid.ni * grid.nj * grid.nk)
       nbvars = field_interior.size // (grid.ni * grid.nj * grid.nk)
 
-      # Create an array for the output
-      border = numpy.empty_like(field_interior, shape=(nbvars,) + border_shape)
+      if out is None:
+         # Create an array for the output
+         border = numpy.empty((nbvars,) + border_shape, like=field_interior)
+      else:
+         # Create a view of the output so that the shape of the original is not modified
+         border = out.view()
       # Reshape to the from required for matrix multiplication
       border.shape = (-1,2,grid.ni*grid.nj)
 
@@ -466,11 +549,13 @@ class DFROperators:
       return border
 
    # Take the gradient of one or more variables, with output shape [3,nvars,ni,nj,nk]
-   def grad(self, field : numpy.ndarray,
-                  itf_i : numpy.ndarray,
-                  itf_j : numpy.ndarray,
-                  itf_k : numpy.ndarray,
-                  geom : Geometry) -> numpy.ndarray:
+   def grad(self: Self,
+            field: NDArray[T],
+            itf_i: NDArray[T],
+            itf_j: NDArray[T],
+            itf_k: NDArray[T],
+            geom: Geometry,
+            out: NDArray[T] | None = None) -> NDArray[T]:
       ''' Take the gradient of one or more variables, given interface values (not element extensions)
       
       This function takes the gradient (covariant derivative) along i, j, and k of each of the input
@@ -491,6 +576,9 @@ class DFROperators:
          Values along the k-interface
       geom : Geometry
          Geometry object
+      out : NDArray | None
+         Destination array for operation. If provided, should be a C-contiguous array
+         with shape (3, neqs, nk, nj, ni).
       
       Returns:
       -------
@@ -515,23 +603,28 @@ class DFROperators:
       itk = itf_k.view()
       itk.shape = (nvar,nel_k+1,nj,ni)
       
-      ext_i = numpy.zeros((nvar,nk,nj,nel_i,2))
-      ext_j = numpy.zeros((nvar,nk,nel_j,2,ni))
-      ext_k = numpy.zeros((nvar,nel_k,2,nj,ni))
-      
-      ext_i[:,:,:,:,0] = iti[:,:,:,0:-1]
-      ext_i[:,:,:,:,1] = iti[:,:,:,1:]
-      
-      ext_j[:,:,:,0,:] = itj[:,:,0:-1,:]
-      ext_j[:,:,:,1,:] = itj[:,:,1:,:]
-      
-      ext_k[:,:,0,:,:] = itk[:,0:-1,:,:]
-      ext_k[:,:,1,:,:] = itk[:,1:,:,:]
-      
-      output = numpy.zeros((3,nvar,nk,nj,ni))
-      output[0,:,:,:,:] = self.comma_i(ff,ext_i,geom)
-      output[1,:,:,:,:] = self.comma_j(ff,ext_j,geom)
-      output[2,:,:,:,:] = self.comma_k(ff,ext_k,geom)
+      # shape: (nvar, nk, nj, nel_i, 2)
+      ext_i = numpy.stack((iti[:, :, :, :-1],
+                           iti[:, :, :, 1:]),
+                          axis=-1)
+      # shape: (nvar, nk, nel_j, 2, ni)
+      ext_j = numpy.stack((itj[:, :, :-1, :],
+                           itj[:, :, 1:, :]),
+                          axis=-2)
+      # shape: (nvar, nel_k, 2, nj, ni)
+      ext_k = numpy.stack((itk[:, :-1, :, :],
+                           itk[:, 1:, :, :]),
+                          axis=-3)
+
+      if out is None:
+         output = numpy.zeros((3,nvar,nk,nj,ni), like=field)
+      else:
+         output = out.view()
+         output.shape = (3, nvar, nk, nj, ni)
+
+      self.comma_i(ff, ext_i, geom, out=output[0])
+      self.comma_j(ff, ext_j, geom, out=output[1])
+      self.comma_k(ff, ext_k, geom, out=output[2])
       
       output.shape = (3,)+field.shape
       

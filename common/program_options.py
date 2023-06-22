@@ -1,6 +1,7 @@
 from configparser import ConfigParser, NoSectionError, NoOptionError
 import json
-from typing       import Any, Dict, List, Optional, Type, TypeVar, Union
+import copy
+from typing       import Any, Dict, List, Optional, Type, TypeVar, Union, Self
 from .array_module import ArrayModule
 
 __all__ = ['Configuration']
@@ -160,6 +161,14 @@ class Configuration:
       self.solver_stats_file = self._get_option('Output_options', 'solver_stats_file', str, 'solver_stats.db')
 
       if verbose: print(f'{self}')
+
+   def __deepcopy__(self: Self, memo) -> Self:
+      do_not_deepcopy = {"array_module"}
+      other = copy.copy(self)
+      for k, v in vars(self).items():
+         if k not in do_not_deepcopy:
+            setattr(other, k, copy.deepcopy(v, memo))
+      return other
 
    def _get_opt_from_parser(self, section_name: str, option_name: str, option_type: Type[OptionType]) -> OptionType:
       value: Optional[OptionType] = None

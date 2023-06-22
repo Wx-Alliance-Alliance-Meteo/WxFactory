@@ -72,16 +72,18 @@ class Metric3DTopo:
       height_itf_k = geom.coordVec_gnom_itf_k[2,:,:,:]
 
       # Build the boundary-extensions of h, based on the interface boundaries
-      height_ext_i = numpy.zeros((geom.nk, geom.nj, geom.nb_elements_x1, 2))
-      height_ext_j = numpy.zeros((geom.nk, geom.nb_elements_x2, 2, geom.ni))
-      height_ext_k = numpy.zeros((geom.nb_elements_x3, 2, geom.nj, geom.ni))
-
-      height_ext_i[:,:,:,0] = height_itf_i[:,:,:-1] # Assign the left ("west") boundary of each element
-      height_ext_i[:,:,:,1] = height_itf_i[:,:,1:] # Assign the right ("east") boundary of each element
-      height_ext_j[:,:,0,:] = height_itf_j[:,:-1,:] # Downest ("south") boundary of each element
-      height_ext_j[:,:,1,:] = height_itf_j[:,1:,:] # Uppest ("north") boundary of each element
-      height_ext_k[:,0,:,:] = height_itf_k[:-1,:,:] # Bottom boundary of each element
-      height_ext_k[:,1,:,:] = height_itf_k[1:,:,:] # Top boundary of each element
+      # ext_i shape: (nk, nj, nb_elements_x1, 2)
+      height_ext_i = numpy.stack((height_itf_i[:, :, :-1], # west boundaries
+                                  height_itf_i[:, :, 1:]), # east boundaries
+                                 axis=-1)
+      # ext_j shape: (nk, nb_elements_x2, 2, ni)
+      height_ext_j = numpy.stack((height_itf_j[:, :-1, :], # south boundaries
+                                  height_itf_j[:, 1:, :]), # north boundaries
+                                 axis=-2)
+      # ext_k shape: (nb_elements_x3, 2, nj, ni)
+      height_ext_k = numpy.stack((height_itf_k[:-1, :, :], # bottom boundaries
+                                  height_itf_k[1:, :, :]), # top boundaries
+                                 axis=-3)
 
       dRdx1_int = matrix.comma_i(height_int,height_ext_i,geom)*2/Δx
       dRdx2_int = matrix.comma_j(height_int,height_ext_j,geom)*2/Δy
@@ -91,10 +93,10 @@ class Metric3DTopo:
       # exchange code demands contravariant components, and dRd(...) is covariant.  We can perform the conversion
       # by constructing a (temporary) 2D metric in terms of X and Y only at the interfaces:
 
-      metric_2d_contra_itf_i = numpy.zeros((2,2) + geom.itf_i_shape_3d,dtype=numpy.double)
-      metric_2d_contra_itf_j = numpy.zeros((2,2) + geom.itf_j_shape_3d,dtype=numpy.double)
-      metric_2d_cov_itf_i = numpy.zeros((2,2) + geom.itf_i_shape_3d,dtype=numpy.double)
-      metric_2d_cov_itf_j = numpy.zeros((2,2) + geom.itf_j_shape_3d,dtype=numpy.double)
+      metric_2d_contra_itf_i = numpy.zeros((2,2) + geom.itf_i_shape_3d, like=X_itf_i)
+      metric_2d_contra_itf_j = numpy.zeros((2,2) + geom.itf_j_shape_3d, like=X_itf_j)
+      metric_2d_cov_itf_i = numpy.zeros((2,2) + geom.itf_i_shape_3d, like=X_itf_i)
+      metric_2d_cov_itf_j = numpy.zeros((2,2) + geom.itf_j_shape_3d, like=X_itf_j)
 
       for (metric_contra, metric_cov, X, Y) in zip((metric_2d_contra_itf_i, metric_2d_contra_itf_j),
                                                    (metric_2d_cov_itf_i, metric_2d_cov_itf_j),
@@ -114,8 +116,8 @@ class Metric3DTopo:
       # Arrays for boundary info:  arrays for parallel exchange have a different shape than the 'natural' extrapolation,
       # in order for the MPI exchange to occur with contiguous subarrays.
 
-      exch_itf_i = numpy.zeros((3,geom.nk,geom.nb_elements_x1+2,2,geom.nj),dtype=numpy.double)
-      exch_itf_j = numpy.zeros((3,geom.nk,geom.nb_elements_x2+2,2,geom.ni),dtype=numpy.double)
+      exch_itf_i = numpy.zeros((3,geom.nk,geom.nb_elements_x1+2,2,geom.nj), like=X_itf_i)
+      exch_itf_j = numpy.zeros((3,geom.nk,geom.nb_elements_x2+2,2,geom.ni), like=X_itf_j)
 
       # Perform extrapolation.  Extrapolation in i and j will be written to arrays for exchange, but k does not
       # require an exchange; we can average directly and will handle this afterwards
@@ -224,15 +226,15 @@ class Metric3DTopo:
       # Initialize metric arrays
 
       # Covariant space-only metric
-      H_cov = numpy.empty((3,3) + X_int.shape,dtype=numpy.double)
-      H_cov_itf_i = numpy.empty((3,3) + X_itf_i.shape,dtype=numpy.double)
-      H_cov_itf_j = numpy.empty((3,3) + X_itf_j.shape,dtype=numpy.double)
-      H_cov_itf_k = numpy.empty((3,3) + X_itf_k.shape,dtype=numpy.double)
+      H_cov = numpy.empty((3,3) + X_int.shape, like=X_int)
+      H_cov_itf_i = numpy.empty((3,3) + X_itf_i.shape, like=X_itf_i)
+      H_cov_itf_j = numpy.empty((3,3) + X_itf_j.shape, like=X_itf_j)
+      H_cov_itf_k = numpy.empty((3,3) + X_itf_k.shape, like=X_itf_k)
 
-      H_contra = numpy.empty((3,3) + X_int.shape,dtype=numpy.double)
-      H_contra_itf_i = numpy.empty((3,3) + X_itf_i.shape,dtype=numpy.double)
-      H_contra_itf_j = numpy.empty((3,3) + X_itf_j.shape,dtype=numpy.double)
-      H_contra_itf_k = numpy.empty((3,3) + X_itf_k.shape,dtype=numpy.double)
+      H_contra = numpy.empty((3,3) + X_int.shape, like=X_int)
+      H_contra_itf_i = numpy.empty((3,3) + X_itf_i.shape, like=X_itf_i)
+      H_contra_itf_j = numpy.empty((3,3) + X_itf_j.shape, like=X_itf_j)
+      H_contra_itf_k = numpy.empty((3,3) + X_itf_k.shape, like=X_itf_k)
 
       sqrtG = numpy.empty_like(X_int)
       sqrtG_itf_i = numpy.empty_like(X_itf_i)
@@ -398,26 +400,26 @@ class Metric3DTopo:
       # Because we assume the quality of mixed partial derivatives (d^2f/dadb = d^2f/dbda), we need to extend _(i,j,k)
       # for x1, _(j,k) for x2, and only _k for eta.
 
-      dRdx1_ext_i = numpy.zeros((geom.nk, geom.nj, geom.nb_elements_x1, 2))
-      dRdx1_ext_i[:,:,:,0] = dRdx1_itf_i[:,:,:-1] # Assign min-i boundary
-      dRdx1_ext_i[:,:,:,1] = dRdx1_itf_i[:,:,1:]  # Assign max-i boundary
-      dRdx1_ext_j = numpy.zeros((geom.nk, geom.nb_elements_x2, 2, geom.ni))
-      dRdx1_ext_j[:,:,0,:] = dRdx1_itf_j[:,:-1,:] # Assign min-j boundary
-      dRdx1_ext_j[:,:,1,:] = dRdx1_itf_j[:,1:,:]  # Assign max-j boundary
-      dRdx1_ext_k = numpy.zeros((geom.nb_elements_x3, 2, geom.nj, geom.ni))
-      dRdx1_ext_k[:,0,:,:] = dRdx1_itf_k[:-1,:,:] # Assign min-k boundary
-      dRdx1_ext_k[:,1,:,:] = dRdx1_itf_k[1:,:,:]  # Assign max-k boundary
-      
-      dRdx2_ext_j = numpy.zeros((geom.nk, geom.nb_elements_x2, 2, geom.ni))
-      dRdx2_ext_j[:,:,0,:] = dRdx2_itf_j[:,:-1,:] # Assign min-j boundary
-      dRdx2_ext_j[:,:,1,:] = dRdx2_itf_j[:,1:,:]  # Assign max-j boundary
-      dRdx2_ext_k = numpy.zeros((geom.nb_elements_x3, 2, geom.nj, geom.ni))
-      dRdx2_ext_k[:,0,:,:] = dRdx2_itf_k[:-1,:,:] # Assign min-k boundary
-      dRdx2_ext_k[:,1,:,:] = dRdx2_itf_k[1:,:,:]  # Assign max-k boundary
-     
-      dRdeta_ext_k = numpy.zeros((geom.nb_elements_x3, 2, geom.nj, geom.ni))
-      dRdeta_ext_k[:,0,:,:] = dRdeta_itf_k[:-1,:,:] # Assign min-k boundary
-      dRdeta_ext_k[:,1,:,:] = dRdeta_itf_k[1:,:,:]  # Assign max-k boundary
+      dRdx1_ext_i = numpy.stack((dRdx1_itf_i[:, :, :-1], # min-i boundary
+                                 dRdx1_itf_i[:, :, 1:]), # max-i boundary
+                                axis=-1)
+      dRdx1_ext_j = numpy.stack((dRdx1_itf_j[:, :-1, :], # min-j boundary
+                                 dRdx1_itf_j[:, 1:, :]), # max-j boundary
+                                axis=-2)
+      dRdx1_ext_k = numpy.stack((dRdx1_itf_k[:-1, :, :], # min-k boundary
+                                 dRdx1_itf_k[1:, :, :]), # max-k boundary
+                                axis=-3)
+
+      dRdx2_ext_j = numpy.stack((dRdx2_itf_j[:, :-1, :], # min-j boundary
+                                 dRdx2_itf_j[:, 1:, :]), # max-j boundary
+                                axis=-2)
+      dRdx2_ext_k = numpy.stack((dRdx2_itf_k[:-1, :, :], # min-k boundary
+                                 dRdx2_itf_k[1:, :, :]), # max-k boundary
+                                axis=-3)
+
+      dRdeta_ext_k = numpy.stack((dRdeta_itf_k[:-1, :, :], # min-k boundary
+                                  dRdeta_itf_k[1:, :, :]), # max-k boundary
+                                 axis=-3)
 
       # With the extension information, compute the partial derivatives.  We do not need any parallel
       # synchronization here because we only use the Christoffel symbols at element-interior points.
@@ -540,8 +542,8 @@ class Metric3DTopo:
          nj = geom.nj
          nk = geom.nk
 
-         c_rhs = numpy.empty((nk,nj,ni,3,3,3)) # h(i,j,k)^(ab)_(,c)
-         c_lhs = numpy.zeros((nk,nj,ni,3,3,3,3,3,3)) # Γ(i,j,k)^d_{ef} for row (ab,c)
+         c_rhs = numpy.empty((nk,nj,ni,3,3,3), like=sqrtG) # h(i,j,k)^(ab)_(,c)
+         c_lhs = numpy.zeros((nk,nj,ni,3,3,3,3,3,3), like=sqrtG) # Γ(i,j,k)^d_{ef} for row (ab,c)
 
          if (True and geom.ptopo.rank == 0):
             print('Assembling linear operator for Γ')

@@ -253,7 +253,7 @@ class DistributedWorld:
       if u3_n is not None: ndim = 3
 
       flip_dim = ndim - 1
-      sendbuf = numpy.empty((4, ndim) + u1_n.shape, dtype=u1_n.dtype)
+      sendbuf = numpy.empty((4, ndim) + u1_n.shape, dtype=u1_n.dtype, like=u1_n)
 
       sendbuf[0, 0, :], sendbuf[0, 1, :] = self.convert_contra_north(u1_n, u2_n, X)
       sendbuf[1, 0, :], sendbuf[1, 1, :] = self.convert_contra_south(u1_s, u2_s, X)

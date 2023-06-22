@@ -232,7 +232,7 @@ void compute_flux_j(
     const double pres_L = pressure_itf_j[L_idx];
     const double pres_R = pressure_itf_j[R_idx];
 
-    const double H_22 = H_contra_2x_itf_j[H_1 + M_idx];
+    const double H_22 = H_contra_2x_itf_j[M_1 + M_idx];
 
     double eig;
     if (advection_only)

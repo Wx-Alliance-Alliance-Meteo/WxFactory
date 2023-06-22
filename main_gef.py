@@ -114,7 +114,10 @@ def main(argv) -> int:
    return MPI.COMM_WORLD.rank
 
 def setup_distributed_world(param: Configuration) -> DistributedWorld | None:
-   if param.grid_type == "cubed_sphere":
+   if param.grid_type == "cubed_sphere" and param.device == "cuda":
+      from common.cuda_parallel import CudaDistributedWorld
+      return CudaDistributedWorld()
+   elif param.grid_type == "cubed_sphere":
       return DistributedWorld()
    else:
       return None
@@ -164,7 +167,6 @@ def create_preconditioner(param: Configuration, ptopo: Optional[DistributedWorld
 def determine_starting_state(param: Configuration, output: OutputManager, Q: numpy.ndarray):
    """ Try to load the state for the given starting step and, if successful, swap it with the initial state """
    starting_step = param.starting_step
-   xp = cupy.get_array_module(Q)
    if starting_step > 0:
       try:
          starting_state = numpy.load(output.state_file_name(starting_step))
@@ -172,7 +174,7 @@ def determine_starting_state(param: Configuration, output: OutputManager, Q: num
             print(f'ERROR reading state vector from file for step {starting_step}. '
                   f'The shape is wrong! ({starting_state.shape}, should be {Q.shape})')
             raise ValueError
-         Q = starting_state
+         Q = numpy.asarray(starting_state, like=Q)
 
          if MPI.COMM_WORLD.rank == 0:
             print(f'Starting simulation from step {starting_step} (rather than 0)')
@@ -185,7 +187,7 @@ def determine_starting_state(param: Configuration, output: OutputManager, Q: num
                 ' Will start from 0 instead.')
          starting_step = 0
 
-   return xp.asarray(Q), starting_step
+   return Q, starting_step
 
 def create_time_integrator(param: Configuration,
                            rhs: RhsBundle,

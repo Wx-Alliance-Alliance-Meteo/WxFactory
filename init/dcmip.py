@@ -703,9 +703,9 @@ def dcmip_gravity_wave(geom, metric, mtrx, param):
    w = numpy.zeros_like(u)
 
    ## Set a trivial topography
-   zbot = numpy.zeros(geom.coordVec_latlon.shape[2:])
-   zbot_itf_i = numpy.zeros(geom.coordVec_latlon_itf_i.shape[2:])
-   zbot_itf_j = numpy.zeros(geom.coordVec_latlon_itf_j.shape[2:])
+   zbot = numpy.zeros(geom.coordVec_latlon.shape[2:], like=geom.coordVec_latlon)
+   zbot_itf_i = numpy.zeros(geom.coordVec_latlon_itf_i.shape[2:], like=geom.coordVec_latlon_itf_i)
+   zbot_itf_j = numpy.zeros(geom.coordVec_latlon_itf_j.shape[2:], like=geom.coordVec_latlon_itf_j)
    # Update the geometry object with the new bottom topography
    geom.apply_topography(zbot,zbot_itf_i,zbot_itf_j)
    # And regenerate the metric to take this new topography into account

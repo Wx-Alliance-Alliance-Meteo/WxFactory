@@ -14,12 +14,7 @@ def init_state_vars(geom: Geometry, operators: DFROperators, param: Configuratio
    topo         = None
    metric       = None
 
-   if param.equations == "euler" and isinstance(geom, CubedSphere) and param.device == "cuda":
-      from geometry.cuda_metric import CudaMetric3DTopo
-      metric = CudaMetric3DTopo(geom, operators)
-      Q, topo = initialize_euler(geom, metric, operators, param)
-
-   elif param.equations == "euler" and isinstance(geom, CubedSphere):
+   if param.equations == "euler" and isinstance(geom, CubedSphere):
       metric = Metric3DTopo(geom, operators)
       Q, topo = initialize_euler(geom, metric, operators, param)
       # Q: dimensions [5,nk,nj,ni], order ρ, u, v, w, θ

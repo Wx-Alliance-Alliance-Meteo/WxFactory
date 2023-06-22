@@ -55,9 +55,6 @@ def kiops_cuda(tau_out: NDArray[cp.float64], A: Callable[[NDArray[cp.float64]], 
     * Niesen, J. and Wright, W.M., 2012. Algorithm 919: A Krylov subspace algorithm for evaluating the ``φ``-functions appearing in exponential integrators. ACM Transactions on Mathematical Software (TOMS), 38(3), p.22
     """
     
-    if MPI.COMM_WORLD.size != 1:
-        raise NotImplementedError("kiops_cuda does not currently accept multiple MPI processes")
-
     tau_out = cp.asarray(tau_out, dtype=cp.float64)
     u = cp.asarray(u)
     tol = cp.asarray(tol)
@@ -101,9 +98,12 @@ def kiops_cuda(tau_out: NDArray[cp.float64], A: Callable[[NDArray[cp.float64]], 
     w = cp.zeros((numSteps, n))
     w[0, :] = u[0, :]
 
-    # TODO: MPI goes here
     # compute 1-norm of u
-    normU = cp.amax(cp.sum(cp.abs(u[1:, :]), axis=1))
+    local_normU = cp.sum(cp.abs(u[1:, :]), axis=1)
+    global_normU = cp.empty_like(local_normU)
+    cp.cuda.get_current_stream().synchronize()
+    MPI.COMM_WORLD.Allreduce([local_normU, MPI.DOUBLE], [global_normU, MPI.DOUBLE])
+    normU = cp.amax(global_normU)
 
     # Normalization factors
     if ppo > 1 and normU > 0:
@@ -151,9 +151,12 @@ def kiops_cuda(tau_out: NDArray[cp.float64], A: Callable[[NDArray[cp.float64]], 
                 Vg[0, n + k] = (tau_now ** i) / math.factorial(i) * mu
             Vg[0, -1] = mu
 
-            # TODO: MPI goes here
             # Normalize initial vector (this norm is nonzero)
-            beta = cp.sqrt(Vg[0, :] @ Vg[0, :])
+            local_sum = Vg[0, :n] @ Vg[0, :n]
+            global_sum = cp.empty_like(local_sum)
+            cp.cuda.get_current_stream().synchronize()
+            MPI.COMM_WORLD.Allreduce([local_sum, MPI.DOUBLE], [global_sum, MPI.DOUBLE])
+            beta = cp.sqrt(global_sum + Vg[0, n:n + p] @ Vg[0, n:n + p])
 
             # The first Krylov basis vector
             Vg[0, :] /= beta
@@ -180,13 +183,19 @@ def kiops_cuda(tau_out: NDArray[cp.float64], A: Callable[[NDArray[cp.float64]], 
             # Classical Gram-Schmidt
             ilow = max(0, j - iop)
             low_slots = [x % Vg_slots for x in range(ilow, j)]
-            # TODO: MPI goes here
-            H[ilow:j, j - 1] = Vg[low_slots, :n + p] @ Vg[slot, :n + p]
+            local_sum = Vg[low_slots, :n] @ Vg[slot, :n]
+            global_sum = cp.empty_like(local_sum)
+            cp.cuda.get_current_stream().synchronize()
+            MPI.COMM_WORLD.Allreduce([local_sum, MPI.DOUBLE], [global_sum, MPI.DOUBLE])
+            H[ilow:j, j - 1] = global_sum + Vg[low_slots, n:n + p] @ Vg[slot, n:n + p]
 
             Vg[slot, :n + p] = Vg[slot, :n + p] - Vg[low_slots, :n + p].T @ H[ilow:j, j - 1]
 
-            # TODO: MPI goes here
-            nrm = cp.sqrt(Vg[slot, :n + p] @ Vg[slot, :n + p])
+            local_sum = Vg[slot, :n] @ Vg[slot, :n]
+            global_sum = cp.empty_like(local_sum)
+            cp.cuda.get_current_stream().synchronize()
+            MPI.COMM_WORLD.Allreduce([local_sum, MPI.DOUBLE], [global_sum, MPI.DOUBLE])
+            nrm = cp.sqrt(global_sum + Vg[slot, n:n + p] @ Vg[slot, n:n + p])
 
             # host-to-host copy of V_buf (last iteration's vector)
             # profiling indicates that this is a good place to do this

@@ -2,7 +2,7 @@ import cupy as cp
 from mpi4py import MPI
 
 from .definitions import *
-from .parallel import DistributedWorld, EulerExchangeRequest
+from .parallel import DistributedWorld, EulerExchangeRequest, VectorNonBlockingExchangeRequest
 
 # typing
 from typing import Self
@@ -14,6 +14,29 @@ class CudaDistributedWorld(DistributedWorld):
     def __init__(self: Self):
         super().__init__()
 
+    def send_recv_neighbors(self: Self,
+                            north_send: NDArray[cp.float64],
+                            south_send: NDArray[cp.float64],
+                            west_send: NDArray[cp.float64],
+                            east_send: NDArray[cp.float64],
+                            flip_dim: None | int | tuple[int, ...],
+                            sync: bool = True) \
+        -> tuple[MPI.Request, NDArray[cp.float64], NDArray[cp.float64], NDArray[cp.float64], NDArray[cp.float64]]:
+
+        send_buffer = cp.empty((4,) + north_send.shape, dtype=north_send.dtype)
+        for do_flip, data, buffer, in zip((self.flip_north, self.flip_south, self.flip_west, self.flip_east),
+                                          (north_send, south_send, west_send, east_send),
+                                          (send_buffer[0], send_buffer[1], send_buffer[2], send_buffer[3])):
+            buffer[:] = cp.flip(data, flip_dim) if do_flip else data
+        
+        receive_buffer = cp.empty_like(send_buffer)
+        cp.cuda.get_current_stream().synchronize()
+        request = self.comm_dist_graph.Ineighbor_alltoall(send_buffer, receive_buffer)
+
+        if sync:
+            request.Wait()
+        return request, receive_buffer[0], receive_buffer[1], receive_buffer[2], receive_buffer[3]
+    
     def xchange_Euler_interfaces(self: Self,
                                  geom: CubedSphere,
                                  variables_itf_i: NDArray[cp.float64],
