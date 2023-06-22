@@ -136,4 +136,4 @@ class DimSpec:
 
 
 def cuda_kernel(dimspec: DimFun[*KernelArgs]) -> Callable[[Callable[[*KernelArgs], None]], CudaKernel[*KernelArgs]]:
-    return lambda _: CudaKernel(dimspec, None)
+    return lambda _: CudaKernel(dimspec)

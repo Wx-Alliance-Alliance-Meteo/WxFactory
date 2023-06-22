@@ -7,9 +7,7 @@ from init.dcmip import dcmip_schar_damping
 
 # For type hints
 from common.cuda_parallel import CudaDistributedWorld
-from geometry import CubedSphere
-from geometry.cuda_matrices import CudaDFROperators
-from geometry.cuda_metric import CudaMetric3DTopo
+from geometry import CubedSphere, DFROperators, Metric3DTopo
 
 from numpy.typing import NDArray
 
@@ -43,8 +41,8 @@ class RHSEuler(CudaModule,
 
 def rhs_euler_cuda(Q: NDArray[cp.float64],
                    geom: CubedSphere,
-                   mtrx: CudaDFROperators,
-                   metric: CudaMetric3DTopo,
+                   mtrx: DFROperators,
+                   metric: Metric3DTopo,
                    ptopo: CudaDistributedWorld,
                    nbsolpts: int,
                    nb_elements_hori: int,
