@@ -39,13 +39,13 @@ function make_config() {
 }
 
 # Problem size
-nb_elements_horizontal=4
-nb_elements_vertical=20
-RESULT_DIR=${GEF_DIR}/multi_config_results_${nb_elements_horizontal}x${nb_elements_vertical}
+nb_elements_horizontal=80
+nb_elements_vertical=8
+RESULT_DIR=${GEF_DIR}/multi_config_results
 # RESULT_DIR=${GEF_DIR}/multi_config_results
 
 dt=30
-t_end=300
+t_end=180
 time_integrator=epi2
 tolerance=1e-7
 gmres_restart=100
@@ -56,7 +56,7 @@ save_state_freq=0
 store_solver_stats=1
 output_dir=${RESULT_DIR}
 solver_stats_file=solver_stats_7.db
-starting_step=50
+starting_step=0
 
 cp ${ORIG_CONFIG} ${TMP_BASE_CONFIG}
 set_param_strict ${TMP_BASE_CONFIG} dt t_end time_integrator tolerance starting_step gmres_restart          \
@@ -103,12 +103,12 @@ for tolerance in 1e-6; do
         preconditioner=fv-mg
         mg_smoother=erk3
         mg_solve_coarsest=0
-        for num_pre_smoothe in 0 1 2 3 4; do
-        for num_post_smoothe in 0 1 2 3 4; do
+        for num_pre_smoothe in 0 1 2; do
+        for num_post_smoothe in 0 1 2; do
         [ $(($num_pre_smoothe + $num_post_smoothe)) -lt 1 ] && continue
-        [ $(($num_pre_smoothe + $num_post_smoothe)) -gt 6 ] && continue
+        [ $(($num_pre_smoothe + $num_post_smoothe)) -gt 3 ] && continue
         # for pseudo_cfl in 16.5e4 17.0e4 17.5e4 18.0e4 18.5e4 19.0e4 19.5e4 20.0e4; do
-        for pseudo_cfl in $(seq 2000.0 100.0 3000.0); do
+        for pseudo_cfl in $(seq 12 2 16); do
         for precond_tolerance in 1e-1; do
             make_config ${DEST_DIR}/fv-mg_${nb_elements_horizontal}x${nb_elements_vertical}_${tolerance}_${mg_smoother}_${num_pre_smoothe}${num_post_smoothe}${mg_solve_coarsest}_${pseudo_cfl}_${precond_tolerance}.ini \
                 time_integrator preconditioner mg_smoother num_pre_smoothe num_post_smoothe pseudo_cfl precond_tolerance tolerance solver_stats_file mg_solve_coarsest
@@ -123,13 +123,13 @@ for tolerance in 1e-6; do
         preconditioner=fv-mg
         mg_smoother=ark3
         mg_solve_coarsest=0
-        gmres_restart=30
-        for num_pre_smoothe in 0 1 2 3; do
-        for num_post_smoothe in 0 1 2 3; do
+        gmres_restart=100
+        for num_pre_smoothe in 0 1 2; do
+        for num_post_smoothe in 0 1 2; do
         [ $(($num_pre_smoothe + $num_post_smoothe)) -lt 1 ] && continue
-        [ $(($num_pre_smoothe + $num_post_smoothe)) -gt 4 ] && continue
+        [ $(($num_pre_smoothe + $num_post_smoothe)) -gt 3 ] && continue
         # for pseudo_cfl in 16.5e4 17.0e4 17.5e4 18.0e4 18.5e4 19.0e4 19.5e4 20.0e4; do
-        for pseudo_cfl in $(seq 65.0 2.0 75.0); do
+        for pseudo_cfl in $(seq 0.65 0.05 0.85); do
         for precond_tolerance in 1e-1; do
             make_config ${DEST_DIR}/fv-mg_${nb_elements_horizontal}x${nb_elements_vertical}_${tolerance}_${mg_smoother}_${num_pre_smoothe}${num_post_smoothe}${mg_solve_coarsest}_${pseudo_cfl}_${precond_tolerance}.ini \
                 time_integrator preconditioner mg_smoother num_pre_smoothe num_post_smoothe pseudo_cfl precond_tolerance tolerance solver_stats_file mg_solve_coarsest gmres_restart

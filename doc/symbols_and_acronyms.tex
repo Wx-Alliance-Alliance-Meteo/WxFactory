@@ -1,0 +1,67 @@
+
+\input{symbols.tex}
+\usepackage[shortcuts]{glossaries}
+\usepackage{booktabs}
+\makeglossaries
+
+\glsaddkey{math}{}{\acem}{\Acem}{\acm}{\Acm}{\ACm}
+
+\newacronym[math=\vars]{vars}{Vars}{The set of variables in the equations}
+\newacronym[math=\jacobian]{jac}{Jacobian}{Derivative of the RHS w.r.t. variables $\vars$}
+\newacronym[math=\rhs]{rhs}{RHS}{Right-hand side of the equations}
+\newacronym[math=\I]{I}{Identity}{The identity matrix}
+\newacronym[math=\dt]{dt}{dt}{The size of a (real) time step}
+\newacronym[math=\pseudodt]{pseudodt}{pseudo dt}{The size of a pseudo time step}
+\newacronym[math=\systemmat]{sys_mat}{Sys mat}{System to solve to move forward in time}
+\newacronym[math=\unknown]{unknown}{Unknown}{The vector we are trying to solve for with $\systemmat$}
+\newacronym[math=\krylovstart]{krylovstart}{Krylov 1}{Starting vector of a Krylov subspace method}
+\newacronym[math=\gmresprecond]{precond}{precond}{Preconditioner in \fgmres, applies $\gmrespremat^{-1}$ to its imput}
+\newacronym[math=\gmrespremat]{precondmat}{precond mat}{Preconditioner matrix for \fgmres{} ($\gmrespremat\approx\systemmat$)}
+\newacronym[math=\smoother]{smoother}{Smoother}{Smoother used as part of the MG algorithm}
+\newacronym[math=\mgsol]{mgout}{MG out}{Solution of a multigrid iteration}
+\newacronym[math=\mgin]{mgin}{MG in}{Input vector of a MG iteration}
+\newacronym[math=\mgres]{mgres}{MG res}{Residual vector (used in MG)}
+\newacronym[math=\restrict]{restrict}{restrict}{Restriction operator in MG}
+\newacronym[math=\prolong]{prolong}{prolong}{Prolongation operator in MG (inverse of restrict)}
+\newacronym[math=\smvec]{smoothervec}{sm vec}{Variable that the smoother solves for}
+\newacronym[math=\smprecond]{smprecond}{sm precond}{Preconditioner used by the smoother $\smoother$}
+\newacronym[math=\smprecondmat]{smprecmat}{sm pre mat}{Matrix used by the smoother preconditioner $\smprecond$}
+\newacronym[math=\awmat]{awmat}{AW mat}{Matrix that represents the implicit RK system to solve? (Additive-W)}
+\newacronym[math=\uppermat]{upper}{upper}{Upper triangular part of matrix $\awmat$}
+\newacronym[math=\lowermat]{lower}{lower}{Lower triangular part of matrix $\awmat$}
+\newacronym[math=\diag]{diag}{diag}{Diagonal part of matrix $\awmat$}
+\newacronym[math=\resrhs]{resrhs}{res RHS}{RHS of some system for which we want the residual}
+\newacronym[math=\smootherrhs]{smrhs}{sm RHS}{RHS of the smoother pseudo time stepping problem}
+\newacronym[math=\fluxjac]{fluxjac}{flux jac}{$5\times 5$ matrix (in 3D) of the flux jacobian in an element}
+\newacronym[math=\elemjac]{elemjac}{Eq. jacobian}{Flux jacobian analytic expression for an element}
+\newacronym[math=\elemevecr]{elemevecr}{Eq. evec}{Right eigenvectors analytic expression for an element}
+\newacronym[math=\elemevecl]{elemevecl}{Eq. evec}{Left eigenvectors analytic expression for an element}
+\newacronym[math=\elemjac]{eqjac}{Eq. jacobian}{Flux jacobian analytic expression for an element}
+\newacronym[math=\elemeval]{elemeval}{Eq. eval}{Eigenvalues for an element}
+\newacronym[math=c]{soundspeed}{Sound speed}{Speed of sound in m/s}
+\newacronym[math=\eigenval]{eigenval}{eigenvalue}{A single eigenvalue}
+\newacronym[math=\soundfraction]{soundfraction}{sound fraction}{Method parameter. Fraction of the speed of sound to use as smallest value for eigenvalues}
+\newacronym[math=\smprecondsol]{smprecondsol}{sm precond sol}{Variable used as a solution to the smoother preconditioner problem}
+
+\newacronym[]{dg}{DG}{Discontinous Galerkin}
+\newacronym[]{fv}{FV}{Finite volume method/discretization}
+\newacronym[]{mg}{MG}{Multigrid method}
+
+
+\newglossarystyle{my}{%
+  \setglossarystyle{long3colheader}%
+  \renewcommand*{\glossaryheader}{%
+    \toprule
+    Abbr. & Symbol & Description \tabularnewline\midrule\endhead
+    \bottomrule\endfoot
+  }%
+  \renewcommand*{\glsgroupskip}{%
+     & &\tabularnewline}%
+  \setlength\glsdescwidth{.08\textwidth}%
+  \setlength\glspagelistwidth{.7\textwidth}%
+  \renewcommand{\glossentry}[2]{%
+    \glsentryitem{##1}\glstarget{##1}{\glossentryname{##1}} & $\acem{##1}$ & \glossentrydesc{##1}\tabularnewline
+  }%
+}
+
+\setglossarystyle{my}

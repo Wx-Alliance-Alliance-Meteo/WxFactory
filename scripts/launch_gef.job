@@ -1,0 +1,15 @@
+#! /usr/bin/env bash
+
+NUM_PES=1
+EXEC_DIR=/home/vma000/ords/gef
+WORK_DIR=/home/vma000/tmp
+CONFIG_FILE=/home/vma000/ords/gef/config
+
+cd ${WORK_DIR}
+. ./load_env.sh
+
+if [ ${NUM_PES} -gt 1 ]; then
+    mpirun -n ${NUM_PES} python3 ${EXEC_DIR}/main_gef.py ${CONFIG_FILE}
+else
+    python3 ${EXEC_DIR}/main_gef.py ${CONFIG_FILE}
+fi

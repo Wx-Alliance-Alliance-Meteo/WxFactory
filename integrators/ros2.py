@@ -29,6 +29,7 @@ class Ros2(Integrator):
       if self.preconditioner is not None:
          # maxiter = 200 // self.gmres_restart
          maxiter = 420 // self.gmres_restart
+         maxiter = min(2, maxiter)
 
       t0 = time()
       Qnew, norm_r, norm_b, num_iter, flag, residuals = fgmres(
@@ -40,7 +41,9 @@ class Ros2(Integrator):
 
       if MPI.COMM_WORLD.rank == 0:
          result_type = 'convergence' if flag == 0 else 'stagnation/interruption'
-         print(f'FGMRES {result_type} at iteration {num_iter} in {t1 - t0:4.1f} s to a solution with'
+         print(f'FGMRES {result_type} at iteration {num_iter} in {t1 - t0:4.3f} s to a solution with'
                f' relative residual {norm_r/norm_b : .2e}')
+
+      self.failure_flag = flag
 
       return numpy.reshape(Qnew, Q.shape)

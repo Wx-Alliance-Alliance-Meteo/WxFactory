@@ -5,9 +5,7 @@
 *.code-workspace
 
 doc/*.pdf
-doc/*.aux
-doc/*.log
-doc/*.out
+doc/aux/*
 
 jacobian/*
 
@@ -18,6 +16,7 @@ __pycache__/
 
 results/
 test_configs/
+work/
 
 .vscode
 .idea
