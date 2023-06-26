@@ -32,6 +32,9 @@ def main(argv) -> int:
    # Read configuration file
    param = Configuration(argv.config, MPI.COMM_WORLD.rank == 0)
 
+   # set up system (i.e. CUDA device)
+   setup_system(param)
+
    # Set up distributed world
    ptopo = setup_distributed_world(param)
 
@@ -112,6 +115,14 @@ def main(argv) -> int:
    output.finalize()
 
    return MPI.COMM_WORLD.rank
+
+def setup_system(param: Configuration):
+   if param.device == "cuda":
+      rank = MPI.COMM_WORLD.Get_rank()
+      devnum = rank % len(param.cuda_device)
+      cupy.cuda.Device(param.cuda_device[devnum]).use()
+
+      cupy.cuda.set_allocator(cupy.cuda.MemoryPool(cupy.cuda.malloc_managed).malloc)
 
 def setup_distributed_world(param: Configuration) -> DistributedWorld | None:
    if param.grid_type == "cubed_sphere" and param.device == "cuda":

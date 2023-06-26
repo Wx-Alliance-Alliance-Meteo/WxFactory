@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 import cupy as cp
 
 from os import PathLike
-from typing import Callable, Iterable, Iterator, TypeVarTuple, Generic, Self, Any
+from typing import Callable, Iterable, Iterator, Collection, Mapping, TypeVar, TypeVarTuple, Generic, Self, Any
 
 CUDA_DEVICE_COUNT: int = cp.cuda.runtime.getDeviceCount()
 CUDA_THREAD_LIMIT      = tuple[int, ...](cp.cuda.runtime.getDeviceProperties(i)["maxThreadsPerBlock"] for i in range(CUDA_DEVICE_COUNT))
@@ -43,20 +43,21 @@ class Dim:
 
 KernelArgs = TypeVarTuple("KernelArgs")
 DimFun     = Callable[[*KernelArgs], tuple[Dim, Dim]]
-RawKernel  = Callable[[Dim, Dim, *KernelArgs], None]
+RawKernel  = Callable[[Dim, Dim, tuple[*KernelArgs]], None]
 
 
-class CudaModule(object):
+class CudaModule(type):
 
-    @classmethod
-    def __init_subclass__(cls, /,
-                          path: PathLike,
-                          defines: Iterable[tuple[str, Any]] = (),
-                          name_expressions: Iterable[str] | None = None,
-                          cpp_standard: str | None = None,
-                          path_lexically_relative: bool = True,
-                          **kwargs):
-        super().__init_subclass__(**kwargs)
+    def __new__(cls: type[Self],
+                name: str,
+                bases: tuple[type, ...],
+                namespace: Mapping[str, object],
+                *,
+                path: PathLike,
+                defines: Iterable[tuple[str, Any]] = (),
+                cpp_standard: str = "c++11",
+                path_lexically_relative: bool = True):
+        ret = super().__new__(cls, name, bases, namespace)
 
         if path_lexically_relative and not os.path.isabs(path):
             caller = inspect.stack()[1]
@@ -66,44 +67,58 @@ class CudaModule(object):
         with open(path) as file:
             code = file.read()
         
-        options = (f"-std={cpp_standard}",) if cpp_standard else ()
+        options = (f"-std={cpp_standard}",)
         options = options + tuple(f"-D{name}=({value})" for name, value in defines)
 
-        cls.module = cp.RawModule(code=code, name_expressions=name_expressions, options=options)
+        kernels = [k for k in namespace.values() if isinstance(k, CudaKernel)]
+        name_expressions = [x for k in kernels for x in k.get_names()]
 
-    @classmethod
-    def get_function(cls: type[Self], name: str) -> RawKernel:
-        return cls.module.get_function(name)
+        ret.module = cp.RawModule(code=code, name_expressions=name_expressions, options=options)
 
+        for k in kernels:
+            k.set_pfuns(ret)
+
+        return ret
+    
+    def get_function(self: Self, name: str) -> RawKernel:
+        return self.module.get_function(name)
 
 class CudaKernel(Generic[*KernelArgs]):
 
     def __init__(self: Self,
-                 dimspec: DimFun[*KernelArgs],
-                 f: RawKernel[*KernelArgs] | None = None,
-                 name: str | None = None):
+                 dimspec: DimFun[*KernelArgs] | tuple[Dim, Dim],
+                 templates: Iterable[str] | None = None,
+                 templatespec: Callable[[*KernelArgs], str] = lambda *_: ""):
         if callable(dimspec):
             self.dims = dimspec
         else:
             self.dims = lambda *_: dimspec
-        self.__wrapped__ = f
-        self.name = name
+        self.name: str | None = None
+        self.templates = templates
+        self.templatespec = templatespec
+        self.pfuns = dict[str, RawKernel[*KernelArgs]]()
 
     def __set_name__(self, owner: CudaModule, name: str):
         self.name = name
 
-    def __call__(self: Self, *args: *KernelArgs) -> None:
-        if self.__wrapped__:
-            gridspec, blockspec = self.dims(*args)
-            self.__wrapped__(gridspec.tuple, blockspec.tuple, args)
+    def get_names(self: Self) -> Iterable[str]:
+        if self.templates is None:
+            return (self.name,)
         else:
-            warnings.warn(f"{type(self)} with name {self.name!r} not initialized with kernel")
-        
-    def __get__(self: Self, instance: CudaModule | None, owner: type[CudaModule] | None = None) -> Self:
-        if not self.__wrapped__ and self.name:
-            obj = instance if instance else owner
-            self.__wrapped__ = obj.get_function(self.name)
-        return self
+            return (self.name + template for template in self.templates)
+    
+    def set_pfuns(self: Self, owner: type[CudaModule]):
+        if self.templates is None:
+            self.pfuns[""] = owner.get_function(self.name)
+        else:
+            for template in self.templates:
+                self.pfuns[template] = owner.get_function(self.name + template)
+
+    def __call__(self: Self, *args: *KernelArgs) -> None:
+        gridspec, blockspec = self.dims(*args)
+        template = self.templatespec(*args)
+        from mpi4py import MPI
+        self.pfuns[template](gridspec.tuple, blockspec.tuple, args)
 
     
 class DimSpec:
@@ -119,7 +134,7 @@ class DimSpec:
         def ret(*args: *KernelArgs) -> tuple[Dim, Dim]:
             s = shape(args[arg].shape)
             dev: int = cp.cuda.runtime.getDevice()
-            thread_lim = min(CUDA_THREAD_LIMIT[dev], CUDA_BLOCK_SHAPE[dev][dim])
+            thread_lim = min(CUDA_THREAD_LIMIT[dev], CUDA_BLOCK_SHAPE[dev][dim]) // 2
             gridspec, blockspec = list(s), [1] * 3
             blocks = (lambda d: d[0] + (1 if d[1] else 0))(divmod(s[dim], thread_lim))
             gridspec[dim] = blocks
@@ -135,5 +150,76 @@ class DimSpec:
         return cls.groupby(cls.x, 0, shape)
 
 
-def cuda_kernel(dimspec: DimFun[*KernelArgs]) -> Callable[[Callable[[*KernelArgs], None]], CudaKernel[*KernelArgs]]:
-    return lambda _: CudaKernel(dimspec)
+class Requires(object):
+
+    def __init__(self: Self,
+                 generator: Callable[..., Iterable[str]],
+                 t: TypeVar,
+                 *ss: TypeVar):
+        super().__init__()
+
+        self.generator = generator
+        self.t = t
+        self.ss = ss        
+
+    @property
+    def name(self: Self) -> str:
+        return self.t.__name__
+    
+    @property
+    def depends(self: Self) -> Iterable[str]:
+        return (s.__name__ for s in self.ss)
+    
+    @classmethod
+    def DoubleOrComplex(cls: type[Self], t: TypeVar) -> Self:
+        return Requires(lambda: ("double", "complex<double>"), t)
+    
+    @classmethod
+    def ModulusOf(cls: type[Self], t: TypeVar, s: TypeVar) -> Self:
+        lookup = {
+            "float": "float",
+            "double": "double",
+            "complex<float>": "float",
+            "complex<double>": "double"
+        }
+        return Requires(lambda arg: (lookup[arg],) if arg in lookup else (), t, s)
+
+class TemplateSpec:
+
+    numpy_to_cpp = {
+        cp.dtype(cp.float32): "float",
+        cp.dtype(cp.float64): "double",
+        cp.dtype(cp.complex64): "complex<float>",
+        cp.dtype(cp.complex128): "complex<double>"
+    }
+
+    @classmethod
+    def array_dtype(cls: type[Self], *params: int) -> Callable[[*KernelArgs], str]:
+        return lambda *args: '<' + ", ".join(cls.numpy_to_cpp[args[i].dtype] for i in params) + '>'
+
+
+def parse_template(*args: TypeVar | Requires) -> list[str]:
+    typevars = list[str]()
+    requires = list[Requires]()
+    for arg in args:
+        if isinstance(arg, TypeVar):
+            typevars.append(arg.__name__)
+        else:
+            requires.append(arg)
+    requires.sort(key=lambda req: typevars.index(req.name))
+
+    templates: list[tuple[str]] = [()]
+    for req in requires:
+        deps = [typevars.index(d) for d in req.depends]
+        ext = lambda tvars: req.generator(*(tvars[i] for i in deps))
+        templates = [tvars + (v,) for tvars in templates for v in ext(tvars)]
+    return templates
+
+class _CudaKernelDecorator:
+    def __call__(self, dimspec: DimFun[*KernelArgs]) -> Callable[[Callable[[*KernelArgs], None]], CudaKernel[*KernelArgs]]:
+        return lambda _: CudaKernel(dimspec)
+    def __getitem__(self, args) \
+        -> Callable[[DimFun[*KernelArgs]], Callable[[Callable[[*KernelArgs], None]], CudaKernel[*KernelArgs]]]:
+        templates = ['<' + ", ".join(tvars) + '>' for tvars in parse_template(*args)]
+        return lambda dimspec, templatespec: (lambda _: CudaKernel(dimspec, templates, templatespec))
+cuda_kernel = _CudaKernelDecorator()

@@ -9,7 +9,7 @@ from common.definitions import *
 from numpy.typing import NDArray
 
 
-class RHSBubble(CudaModule,
+class RHSBubble(metaclass=CudaModule,
                 path="rhs_bubble.cu",
                 defines=(("heat_capacity_ratio", heat_capacity_ratio),
                          ("idx_2d_rho", idx_2d_rho),

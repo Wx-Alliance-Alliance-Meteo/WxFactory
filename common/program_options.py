@@ -1,5 +1,6 @@
 from configparser import ConfigParser, NoSectionError, NoOptionError
 import json
+import re
 import copy
 from typing       import Any, Dict, List, Optional, Type, TypeVar, Union, Self
 from .array_module import ArrayModule
@@ -32,9 +33,9 @@ class Configuration:
       ################################
       # System
       # TODO: support multiple devices
-      device = self._get_option('System', 'device', str, 'cpu', ['cpu', 'cuda0'])
-      self.device = "cuda" if device == "cuda0" else "cpu"
-      self.cuda_id = int(device[4:]) if device.startswith("cuda") else None
+      device = self._get_option('System', 'device', str, 'cpu')
+      self.device = "cuda" if device.startswith("cuda") else "cpu"
+      self.cuda_device = tuple(int(d) for d in device[4:].split(",")) if device.startswith("cuda") else None
 
       if self.device == "cuda":
          import cupy

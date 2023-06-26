@@ -330,8 +330,8 @@ __global__ void compute_flux_j(
  *
  * run with (nk_nh, nk_nh, nv + 1) threads
  */
-extern "C" __global__
-void compute_flux_k(
+template<typename Number, typename Real>
+__global__ void compute_flux_k(
     Number* const __restrict__ flux_x3_itf_k,
     Number* const __restrict__ wflux_adv_x3_itf_k,
     Number* const __restrict__ wflux_pres_x3_itf_k,

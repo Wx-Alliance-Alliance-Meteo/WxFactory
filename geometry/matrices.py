@@ -102,7 +102,7 @@ class DFROperators:
 
       # Force matrices to be in C-contiguous order
       self.diff_solpt = self.diff_ext[1:-1, 1:-1].copy()
-      self.correction = numpy.column_stack((self.diff_ext[1:-1, 0], self.diff_ext[1:-1, 1]))
+      self.correction = numpy.column_stack((self.diff_ext[1:-1, 0], self.diff_ext[1:-1, -1]))
 
       self.diff_solpt_tr = self.diff_solpt.T.copy()
       self.correction_tr = self.correction.T.copy()
@@ -113,6 +113,20 @@ class DFROperators:
       self.diff_tr = self.diff.T
 
       self.quad_weights = numpy.outer(grd.glweights, grd.glweights)
+
+      from mpi4py import MPI
+      if MPI.COMM_WORLD.Get_rank() == 0:
+         save = locals().copy()
+         import cupy as cp
+         save = {k: v.get() for k, v in save.items() if isinstance(v, cp.ndarray)}
+         import pickle
+         with open("cuda-matrix.pickle", 'wb') as file:
+            pickle.dump(save, file)
+
+         c = str(self.diff_ext)
+         print("diff_ext:\n" + c)
+         c = str(self.correction)
+         print("correction:\n" + c)
 
    def make_filter(self, alpha : float, order : int, cutoff : float, geom : Geometry):
       # Build an exponential modal filter as described in Warburton, eqn 5.16
@@ -260,7 +274,7 @@ class DFROperators:
 
       if out is None:
          # Create an array for the output
-         border = numpy.empty((nbvars,) + border_shape, like=field_interior)
+         border = numpy.empty((nbvars,) + border_shape, dtype=field_interior.dtype, like=field_interior)
       else:
          # Create a view of the output so that the shape of the original is not modified
          border = out.view()
@@ -369,7 +383,7 @@ class DFROperators:
 
       if out is None:
          # Create an array for the output
-         border = numpy.empty((nbvars,) + border_shape, like=field_interior)
+         border = numpy.empty((nbvars,) + border_shape, dtype=field_interior.dtype, like=field_interior)
       else:
          # Create a view of the output so that the shape of the original is not modified
          border = out.view()
@@ -480,7 +494,8 @@ class DFROperators:
       
       if out is None:
          # Output array
-         filtered = numpy.empty((nbvars * grid.nb_elements_x3, grid.nbsolpts, grid.ni * grid.nj), like=field_interior)
+         filtered = numpy.empty((nbvars * grid.nb_elements_x3, grid.nbsolpts, grid.ni * grid.nj),
+                                dtype=field_interior.dtype, like=field_interior)
       else:
          # Create a view of the output so that the shape of the original is not modified
          filtered = out.view()
@@ -527,7 +542,7 @@ class DFROperators:
 
       if out is None:
          # Create an array for the output
-         border = numpy.empty((nbvars,) + border_shape, like=field_interior)
+         border = numpy.empty((nbvars,) + border_shape, dtype=field_interior.dtype, like=field_interior)
       else:
          # Create a view of the output so that the shape of the original is not modified
          border = out.view()
