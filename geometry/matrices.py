@@ -114,19 +114,6 @@ class DFROperators:
 
       self.quad_weights = numpy.outer(grd.glweights, grd.glweights)
 
-      from mpi4py import MPI
-      if MPI.COMM_WORLD.Get_rank() == 0:
-         save = locals().copy()
-         import cupy as cp
-         save = {k: v.get() for k, v in save.items() if isinstance(v, cp.ndarray)}
-         import pickle
-         with open("cuda-matrix.pickle", 'wb') as file:
-            pickle.dump(save, file)
-
-         c = str(self.diff_ext)
-         print("diff_ext:\n" + c)
-         c = str(self.correction)
-         print("correction:\n" + c)
 
    def make_filter(self, alpha : float, order : int, cutoff : float, geom : Geometry):
       # Build an exponential modal filter as described in Warburton, eqn 5.16

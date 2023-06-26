@@ -693,15 +693,6 @@ class Metric3DTopo:
 
       self.inv_dzdeta = 1/dRdeta_int * 2/Δeta
 
-      from mpi4py import MPI
-      if MPI.COMM_WORLD.Get_rank() == 0:
-         save = locals().copy()
-         import cupy as cp
-         save = {k: v.get() for k, v in save.items() if isinstance(v, cp.ndarray)}
-         import pickle
-         with open("cuda-metric.pickle", 'wb') as file:
-            pickle.dump(save, file)
-
 
 class Metric:
    '''Metric for a smooth, three-dimensional earthlike cubed-sphere with the shallow atmosphere approximation'''
