@@ -192,7 +192,7 @@ class Interpolator:
       self.ndim = ndim
 
       # Base interpolation matrix
-      self.elem_interp = None
+      # self.elem_interp = None
       self.reverse_interp = None
       if interp_type == 'lagrange':
          self.elem_interp    = numpy.array([lagrange_eval(origin_points, x) for x in dest_points])
@@ -260,6 +260,8 @@ class Interpolator:
          new_size_vert  = fields.shape[1] * base_interp.shape[0] // base_interp.shape[1]
          new_size_horiz = fields.shape[2] * base_interp.shape[0] // base_interp.shape[1]
          result = numpy.empty((num_fields, new_size_vert, new_size_horiz, new_size_horiz), dtype=fields.dtype)
+      else:
+         raise ValueError(f'We cannot deal with ndim = {self.ndim}')
 
       o_type = self.origin_type if not reverse else self.dest_type
       d_type = self.dest_type   if not reverse else self.origin_type

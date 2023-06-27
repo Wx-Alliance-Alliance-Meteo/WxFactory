@@ -7,5 +7,6 @@ sub makeglo2gls {
 push @generated_exts, 'glo', 'gls', 'glg';
 $clean_ext .= ' %R.ist %R.xdy';
 
-$aux_dir=aux
-
+$aux_dir='aux';
+$pdf_mode=1;
+# push @extra_pdflatex_options, '--shell-escape'
