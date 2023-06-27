@@ -2,18 +2,11 @@
 
 import argparse
 import glob
-from   itertools import product
 import os
 import re
 import sys
 from   time      import time
 from   typing    import Callable, Dict, Optional, Tuple, Union
-
-try:
-   from tqdm import tqdm
-except ModuleNotFoundError:
-   print(f'Module "tqdm" was not found. You need it if you want to see progress bars')
-   def tqdm(a): return a
 
 from   mpi4py              import MPI
 import numpy
@@ -32,9 +25,10 @@ from main_gef import create_geometry, create_preconditioner
 
 from common.program_options import Configuration
 from common.parallel        import DistributedWorld
+from eigenvalue_util        import gen_matrix, tqdm
 from geometry               import DFROperators
 from init.init_state_vars   import init_state_vars
-from rhs.rhs_selector       import rhs_selector
+from rhs.rhs_selector       import RhsBundle
 from solvers                import MatvecOp, MatvecOpRat
 
 
@@ -75,82 +69,21 @@ def get_matvecs(cfg_file: str, state_file: Optional[str] = None, build_imex: boo
    geom = create_geometry(param, ptopo)
    mtrx = DFROperators(geom, param.filter_apply, param.filter_order, param.filter_cutoff)
    Q, topo, metric = init_state_vars(geom, mtrx, param)
-   rhs_handle, rhs_implicit, rhs_explicit = rhs_selector(geom, mtrx, metric, topo, ptopo, param)
+   rhs = RhsBundle(geom, mtrx, metric, topo, ptopo, param)
    preconditioner = create_preconditioner(param, ptopo)
 
    if state_file is not None: Q = load(state_file)
 
    # Create the matvec function(s)
    matvecs = {}
-   if rhs_handle is not None:      matvecs['all'] = MatvecOpRat(param.dt, Q, rhs_handle(Q), rhs_handle)
-   if rhs_implicit and build_imex: matvecs['imp'] = MatvecOpRat(param.dt, Q, rhs_implicit(Q), rhs_implicit)
-   if rhs_explicit and build_imex: matvecs['exp'] = MatvecOpRat(param.dt, Q, rhs_explicit(Q), rhs_explicit)
+   if rhs.full is not None:      matvecs['all'] = MatvecOpRat(param.dt, Q, rhs.full(Q), rhs.full)
+   if rhs.implicit and build_imex: matvecs['imp'] = MatvecOpRat(param.dt, Q, rhs.implicit(Q), rhs.implicit)
+   if rhs.explicit and build_imex: matvecs['exp'] = MatvecOpRat(param.dt, Q, rhs.explicit(Q), rhs.explicit)
    if preconditioner is not None:
       preconditioner.prepare(param.dt, Q, None)
       matvecs['precond'] = preconditioner
 
    return matvecs
-
-def gen_matrix(matvec: MatvecOp, jac_file_name: Optional[str] = None, permute: bool = False) -> Optional[csc_matrix]:
-   """
-   Compute and store the Jacobian matrix. It may be computed either as a full or sparse matrix
-   (faster as full, but it may take a *lot* of memory for large matrices). Always stored as
-   sparse.
-   :param matvec: Operator to compute the action of the jacobian on a vector. Holds vector shape and variable type
-   :param jac_file_name: If present, path to the file where the jacobian will be stored
-   :param permute: Whether to permute matrix rows and columns to groups entries associated with an element into a block
-   """
-
-   print(f'Generating jacobian matrix')
-
-   neq, ni, nj = matvec.shape
-   n_loc = matvec.size
-   compressed = n_loc > 150000
-
-   rank = MPI.COMM_WORLD.Get_rank()
-   size = MPI.COMM_WORLD.Get_size()
-
-   Qid = zeros(matvec.shape, dtype=matvec.dtype)
-   J = csc_matrix((n_loc, size*n_loc), dtype=matvec.dtype) if compressed else zeros((n_loc, size*n_loc))
-
-   def progress(a): return a
-   if rank == 0:
-      progress = tqdm
-
-   # Compute the matrix one column at a time by multiplying by a basis vector
-   idx = 0
-   indices = [i for i in product(range(neq), range(ni), range(nj))]
-   for r in range(size):
-      if rank == 0: print(f'Tile {r+1}/{size}')
-      for (i, j, k) in progress(indices):
-         if rank == r: Qid[i, j, k] = 1.0
-         col = matvec(Qid.flatten())
-         J[:, idx] = csc_matrix(col).transpose() if compressed else col
-         idx += 1
-         Qid[i, j, k] = 0.0
-
-   # If it wasn't already compressed, do it now
-   if not compressed: J = csc_matrix(J)
-
-   # Gather the matrix segments from all PEs and save the matrix to file
-   J_comm   = MPI.COMM_WORLD.gather(J, root=0)
-   if rank == 0:
-      print('')
-
-      glb_J = vstack(J_comm)
-
-      if permute:
-         print(f'Permute was not implemented for cartesian grids and (possibly) 3D problems')
-         # p = permutations()
-         # glb_J = csc_matrix(lil_matrix(glb_J)[p, :][:, p])
-
-      if jac_file_name is not None:
-         print(f'Saving jacobian to {os.path.relpath(jac_file_name)}')
-         save_npz(jac_file_name, glb_J)
-
-      return glb_J
-   else:
-      return None
 
 def compute_eig_from_file(jac_file: str, eig_file_name: Optional[str] = None, max_num_val: int = 0) \
       -> Optional[numpy.ndarray]:

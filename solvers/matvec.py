@@ -40,7 +40,7 @@ class MatvecOpRat(MatvecOp):
          lambda vec: matvec_rat(vec, dt, Q, rhs_vec, rhs_handle),
          Q.dtype, Q.shape)
 
-def matvec_rat(vec: numpy.ndarray, dt: float, Q: numpy.ndarray, rhs: numpy.ndarray, rhs_handle) -> numpy.ndarray:
+def matvec_rat(vec: numpy.ndarray, dt: float, Q: numpy.ndarray, rhs: numpy.ndarray, rhs_handle: Callable) -> numpy.ndarray:
 
    epsilon = math.sqrt(numpy.finfo(numpy.float32).eps)
    Qvec = Q + epsilon * numpy.reshape(vec, Q.shape)

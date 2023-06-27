@@ -5,6 +5,7 @@ from typing import Callable
 from mpi4py import MPI
 
 from common.program_options import Configuration
+from solvers                import fgmres, MatvecOpRat, SolverInfo
 from .integrator            import Integrator
 from solvers                import fgmres, matvec_rat, SolverInfo
 
@@ -20,8 +21,7 @@ class Ros2(Integrator):
       rhs    = self.rhs_handle(Q)
       Q_flat = Q.flatten()
 
-      def A(v):
-         return matvec_rat(v, dt, Q, rhs, self.rhs_handle)
+      A = MatvecOpRat(dt, Q, rhs, self.rhs_handle)
 
       b = A(Q_flat) + rhs.flatten() * dt
 

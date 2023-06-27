@@ -39,6 +39,7 @@ class Integrator(ABC):
       self.solver_info    = None
       self.sim_time       = -1.0
       self.failure_flag   = 0
+      self.num_completed_steps = 0
 
    @abstractmethod
    def __step__(self, Q: numpy.ndarray, dt: float) -> numpy.ndarray:
@@ -66,6 +67,7 @@ class Integrator(ABC):
       self.solver_info = None
 
       self.sim_time += dt
+      self.num_completed_steps += 1
 
       return result
 
