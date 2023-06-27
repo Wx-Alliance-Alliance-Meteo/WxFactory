@@ -124,8 +124,8 @@ class MultigridLevel:
          sound_speed = -1.0
          if isinstance(self.geometry, Cartesian2D):
             delta_min = abs(1.- self.geometry.solutionPoints[-1]) * min_geo
-            speed_x = abs(343. +  field[idx_2d_rho_u] /  field[idx_2d_rho])
-            speed_z = abs(343. +  field[idx_2d_rho_w] /  field[idx_2d_rho])
+            speed_x = 343. +  abs(field[idx_2d_rho_u] /  field[idx_2d_rho]) #TODO Actually compute speed of sound  
+            speed_z = 343. +  abs(field[idx_2d_rho_w] /  field[idx_2d_rho])
             speed_max = numpy.maximum(speed_x, speed_z)
 
          elif isinstance(self.geometry, CubedSphere):
