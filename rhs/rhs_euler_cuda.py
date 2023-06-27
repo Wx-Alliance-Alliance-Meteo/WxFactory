@@ -147,7 +147,7 @@ def rhs_euler_cuda(Q: NDArray[cp.float64],
 
     w_itf_k = variables_itf_k[idx_rho_w] / variables_itf_k[idx_rho]
 
-    w_itf_k[:, 0, 0, :] = 0.
+    w_itf_k[:,  0, 0, :] = 0.
     w_itf_k[:,  0, 1, :] = -w_itf_k[:,  1, 0, :]
     w_itf_k[:, -1, 1, :] = 0.
     w_itf_k[:, -1, 0, :] = -w_itf_k[:, -2, 1, :]

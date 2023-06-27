@@ -92,7 +92,7 @@ class MultigridLevel:
       if target_order > 0:
          interp_method         = 'bilinear' if discretization == 'fv' else 'lagrange'
          self.interpolator     = Interpolator(discretization, source_order, discretization, target_order, interp_method,
-                                              self.param.grid_type, self.ndim, verbose=verbose)
+                                              self.param.grid_type, self.ndim, p, verbose=verbose)
          self.restrict         = lambda vec, op=self.interpolator, sh=field.shape: op(vec.reshape(sh))
          self.restricted_shape = self.restrict(field).shape
          self.prolong          = lambda vec, op=self.interpolator, sh=self.restricted_shape: \
@@ -324,11 +324,11 @@ class Multigrid(MatvecOp):
          if fv_only:
             self.initial_interpolator = Interpolator(                                                                \
                'dg', param.initial_nbsolpts, 'fv', param.initial_nbsolpts, param.dg_to_fv_interp, param.grid_type,   \
-               self.ndim, verbose=self.verbose)
+               self.ndim, param, verbose=self.verbose)
          else:
             self.initial_interpolator = Interpolator(                                                                \
                'dg', param.initial_nbsolpts, 'fv', self.max_num_fv_elems, param.dg_to_fv_interp, param.grid_type,    \
-               self.ndim, verbose=self.verbose)
+               self.ndim, param, verbose=self.verbose)
 
          self.big_shape = self.levels[0].shape
 

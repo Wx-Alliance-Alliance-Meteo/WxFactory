@@ -93,8 +93,8 @@ __global__ void compute_flux_i(
     const unsigned int FL_idx = idx_k * F_2 + elem_L * F_3 + idx_j * F_4 + 1;
     const unsigned int FR_idx = idx_k * F_2 + elem_R * F_3 + idx_j * F_4;
     /* this thread's index for L- or R-inputs */
-    const unsigned int VL_idx = idx_k * F_2 + elem_L * F_3 + F_4 + idx_j;
-    const unsigned int VR_idx = idx_k * F_2 + elem_R * F_3       + idx_j;
+    const unsigned int VL_idx = idx_k * V_2 + elem_L * V_3 + V_4 + idx_j;
+    const unsigned int VR_idx = idx_k * V_2 + elem_R * V_3       + idx_j;
     /* this thread's index for metric elements */
     const unsigned int M_idx = idx_k * M_2 + idx_j * M_3 + itf;
 

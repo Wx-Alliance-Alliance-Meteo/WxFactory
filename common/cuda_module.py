@@ -117,7 +117,6 @@ class CudaKernel(Generic[*KernelArgs]):
     def __call__(self: Self, *args: *KernelArgs) -> None:
         gridspec, blockspec = self.dims(*args)
         template = self.templatespec(*args)
-        from mpi4py import MPI
         self.pfuns[template](gridspec.tuple, blockspec.tuple, args)
 
     

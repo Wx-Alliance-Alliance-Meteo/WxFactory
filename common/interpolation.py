@@ -1,6 +1,7 @@
 import numpy
 
 from common.definitions import idx_u1, idx_u2
+from common.program_options import Configuration
 from geometry           import gauss_legendre, lagrange_eval, remesh_operator
 
 basis_point_sets = {}
@@ -14,14 +15,14 @@ def eval_single_field_2d(field, elem_interp, result=None):
    nz = field.shape[1] // old_num_points
 
    # Interpolate (vertically) on entire rows of elements at once
-   interp_1 = numpy.empty((nx * new_num_points, nz * old_num_points), dtype=field.dtype)
+   interp_1 = numpy.empty_like(field, shape=(nx * new_num_points, nz * old_num_points))
    for i in range(nx):
       interp_1[i * new_num_points:(i + 1) * new_num_points, :] = \
          elem_interp @ field[i * old_num_points:(i + 1) * old_num_points, :]
 
    # Interpolate (horizontally) on columns of interpolated elements
    if result is None:
-      result = numpy.empty((nx * new_num_points, nz * new_num_points), dtype=field.dtype)
+      result = numpy.empty_like(field, shape=(nx * new_num_points, nz * new_num_points))
 
    for i in range(nz):
       result[:, i * new_num_points:(i + 1) * new_num_points] = \
@@ -36,10 +37,10 @@ def eval_single_field_3d(field, elem_interp, result=None):
    num_elem_vert = int(field.shape[0] // old_num_points)
    num_elem_horiz = int(field.shape[1] // old_num_points)
 
-   interp_1 = numpy.empty((num_elem_vert * old_num_points, num_elem_horiz * new_num_points, num_elem_horiz * old_num_points), dtype=field.dtype)
-   interp_2 = numpy.empty((num_elem_vert * old_num_points, num_elem_horiz * new_num_points, num_elem_horiz * new_num_points), dtype=field.dtype)
+   interp_1 = numpy.empty_like(field, shape=(num_elem_vert * old_num_points, num_elem_horiz * new_num_points, num_elem_horiz * old_num_points))
+   interp_2 = numpy.empty_like(field, shape=(num_elem_vert * old_num_points, num_elem_horiz * new_num_points, num_elem_horiz * new_num_points))
    if result is None:
-      result = numpy.empty((num_elem_vert * new_num_points, num_elem_horiz * new_num_points, num_elem_horiz * new_num_points), dtype=field.dtype)
+      result = numpy.empty_like(field, shape=(num_elem_vert * new_num_points, num_elem_horiz * new_num_points, num_elem_horiz * new_num_points))
 
    # Interpolate along second dimension (should be the fastest) (horizontal)
    for j in range(num_elem_horiz):
@@ -181,6 +182,7 @@ class Interpolator:
                 interp_type: str,
                 grid_type: str,
                 ndim: int,
+                param: Configuration,
                 include_boundary: bool = False,
                 verbose: bool = False):
       origin_points = get_basis_points(origin_type, origin_order, include_boundary)
@@ -213,6 +215,9 @@ class Interpolator:
             self.reverse_interp = numpy.linalg.inv(self.elem_interp)
          else:
             self.reverse_interp = numpy.linalg.pinv(self.elem_interp)
+
+      self.elem_interp = param.array_module.asarray(self.elem_interp)
+      self.reverse_interp = param.array_module.asarray(self.reverse_interp)
 
       # Velocity interpolation matrix ([base matrix] * [some factor]), if needed
       self.velocity_ids            = []
@@ -254,12 +259,12 @@ class Interpolator:
          eval_fct = eval_single_field_2d
          new_size_i = fields.shape[1] * base_interp.shape[0] // base_interp.shape[1]
          new_size_j = fields.shape[2] * base_interp.shape[0] // base_interp.shape[1]
-         result = numpy.empty((num_fields, new_size_i, new_size_j), dtype=fields.dtype)
+         result = numpy.empty_like(fields, shape=(num_fields, new_size_i, new_size_j))
       elif self.ndim == 3:
          eval_fct = eval_single_field_3d
          new_size_vert  = fields.shape[1] * base_interp.shape[0] // base_interp.shape[1]
          new_size_horiz = fields.shape[2] * base_interp.shape[0] // base_interp.shape[1]
-         result = numpy.empty((num_fields, new_size_vert, new_size_horiz, new_size_horiz), dtype=fields.dtype)
+         result = numpy.empty_like(fields, shape=(num_fields, new_size_vert, new_size_horiz, new_size_horiz))
 
       o_type = self.origin_type if not reverse else self.dest_type
       d_type = self.dest_type   if not reverse else self.origin_type
