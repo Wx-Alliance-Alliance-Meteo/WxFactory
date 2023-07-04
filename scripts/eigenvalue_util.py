@@ -24,14 +24,16 @@ def gen_matrix(matvec: MatvecOp, jac_file_name: Optional[str] = None, permute: b
    :param permute: Whether to permute matrix rows and columns to groups entries associated with an element into a block
    """
 
-   print(f'Generating jacobian matrix')
 
    neq, ni, nj = matvec.shape
    n_loc = matvec.size
-   compressed = n_loc > 150000
 
    rank = MPI.COMM_WORLD.Get_rank()
    size = MPI.COMM_WORLD.Get_size()
+
+   compressed = n_loc * size > 150000
+
+   print(f'Generating jacobian matrix. Shape {matvec.shape}')
 
    Qid = numpy.zeros(matvec.shape, dtype=matvec.dtype)
    J = scipy.sparse.csc_matrix((n_loc, size*n_loc), dtype=matvec.dtype) if compressed else numpy.zeros((n_loc, size*n_loc))
