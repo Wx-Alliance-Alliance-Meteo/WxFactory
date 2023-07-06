@@ -77,7 +77,7 @@ class MultigridLevel:
       operators = DFROperators(self.geometry, p.filter_apply, p.filter_order, p.filter_cutoff)
 
       field, topo, self.metric = init_state_vars(self.geometry, operators, self.param)
-      self.rhs = RhsBundle(self.geometry, operators, self.metric, topo, ptopo, self.param)
+      self.rhs = RhsBundle(self.geometry, operators, self.metric, topo, ptopo, self.param, field.shape)
       if verbose > 0: print(f'field shape: {field.shape}')
       self.shape = field.shape
       self.dtype = field.dtype

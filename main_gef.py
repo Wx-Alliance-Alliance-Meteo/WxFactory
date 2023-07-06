@@ -53,7 +53,7 @@ def main(argv) -> int:
    Q, starting_step = determine_starting_state(param, output, Q)
 
    # Get handle to the appropriate RHS functions
-   rhs = RhsBundle(geom, mtrx, metric, topo, ptopo, param)
+   rhs = RhsBundle(geom, mtrx, metric, topo, ptopo, param, Q.shape)
    # rhs_handle, rhs_implicit, rhs_explicit = rhs_selector(geom, mtrx, metric, topo, ptopo, param)
 
    # Time stepping
