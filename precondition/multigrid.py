@@ -11,15 +11,13 @@ from common.definitions    import idx_2d_rho, idx_2d_rho_u, idx_2d_rho_w, \
                                   idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_w, idx_rho_theta, \
                                   cpd, cvd, heat_capacity_ratio, p0, Rd
 from common.interpolation  import Interpolator
+from common.parallel        import DistributedWorld
+from common.program_options import Configuration
 from geometry              import Cartesian2D, CubedSphere, DFROperators
 from init.init_state_vars  import init_state_vars
 from precondition.smoother import KiopsSmoother, ExponentialSmoother, RK1Smoother, RK3Smoother, ARK3Smoother
 from rhs.rhs_selector      import RhsBundle
 from solvers               import fgmres, global_norm, KrylovJacobian, matvec_rat, MatvecOp
-
-# For type hints
-from common.parallel        import DistributedWorld
-from common.program_options import Configuration
 
 MatvecOperator = Callable[[numpy.ndarray], numpy.ndarray]
 
@@ -54,7 +52,7 @@ class MultigridLevel:
 
       self.ndim = ndim
 
-      verbose = self.param.verbose_precond and ptopo.rank == 0
+      verbose = self.param.verbose_precond if MPI.COMM_WORLD.rank == 0 else 0
 
       if verbose > 0:
          print(
@@ -105,7 +103,8 @@ class MultigridLevel:
       if param.mg_smoother == 'kiops':
          self.pre_smoothe = KiopsSmoother(param.dt, param.kiops_dt_factor)
       elif param.mg_smoother == 'exp':
-         self.pre_smoothe = ExponentialSmoother(self.param.exp_smoothe_nb_iter, self.param.exp_smoothe_spectral_radius, param.dt)
+         self.pre_smoothe = ExponentialSmoother(self.param.exp_smoothe_nb_iter, self.param.exp_smoothe_spectral_radius,
+                                                param.dt)
          if verbose > 0: print(f'spectral radius for level = {self.param.exp_smoothe_spectral_radius}')
 
       self.post_smoothe = self.pre_smoothe
@@ -145,39 +144,39 @@ class MultigridLevel:
 
             speed_max = numpy.maximum(numpy.maximum(sound_x + speed_x, sound_y + speed_y), sound_z + speed_z)
 
-            tile_shape = (field.shape[0],)
-            for _ in range(field.ndim - 1): tile_shape += (1,)
-            speed_max = numpy.ravel(numpy.tile(speed_max, tile_shape))
-            # speed_max = numpy.amax(speed_max)
-
          else:
             raise ValueError(f'Unrecognized type for Geometry object')
+
+         tile_shape = (field.shape[0],)
+         for _ in range(field.ndim - 1): tile_shape += (1,)
+         speed_max = numpy.ravel(numpy.tile(speed_max, tile_shape))
+         # speed_max = numpy.amax(speed_max)
 
          # self.pseudo_dt = numpy.amin(delta_min * factor / speed_max) * cfl / dt
          self.pseudo_dt = (delta_min * factor / speed_max) * cfl / dt
 
-         if self.verbose > 1 and MPI.COMM_WORLD.rank == 0:
-            sp_z = numpy.mean(speed_z)
-            so_z = numpy.mean(sound_z)
-            sp_z_max = numpy.amax(speed_z)
-            so_z_max = numpy.amax(sound_z)
-            min_dt = numpy.amin(self.pseudo_dt)
-            max_dt = numpy.amax(self.pseudo_dt)
-            avg_dt = numpy.mean(self.pseudo_dt)
-            print(
-                  # f'factor {abs(1.- self.geometry.solutionPoints[-1])},'
-                  f' h_33 {numpy.mean(numpy.sqrt(self.metric.H_contra_33)):.4f}'
-                  f', min {min_geo:.3f}'
-                  f', delta {delta_min:.3f}'
-                  f', pseudo_dt = {avg_dt:.2e} ({min_dt:.2e} - {max_dt:.2e})'
-                  f', speed max = {numpy.amax(speed_max):.2e} (avg {numpy.mean(speed_max):.2e})'
-                  f', sound_speed = {numpy.mean(sound_speed):.2e} ({numpy.max(sound_speed):.2e})'
-                  f', speed_z / sound_z = {sp_z / so_z :.3f} ({sp_z_max / so_z_max :.3f})')
-            sys.stdout.flush()
-            # raise ValueError
+         # if self.verbose > 1:
+         #    sp_z = numpy.mean(speed_z)
+         #    so_z = numpy.mean(sound_z)
+         #    sp_z_max = numpy.amax(speed_z)
+         #    so_z_max = numpy.amax(sound_z)
+         #    min_dt = numpy.amin(self.pseudo_dt)
+         #    max_dt = numpy.amax(self.pseudo_dt)
+         #    avg_dt = numpy.mean(self.pseudo_dt)
+         #    print(
+         #          # f'factor {abs(1.- self.geometry.solutionPoints[-1])},'
+         #          f' h_33 {numpy.mean(numpy.sqrt(self.metric.H_contra_33)):.4f}'
+         #          f', min {min_geo:.3f}'
+         #          f', delta {delta_min:.3f}'
+         #          f', pseudo_dt = {avg_dt:.2e} ({min_dt:.2e} - {max_dt:.2e})'
+         #          f', speed max = {numpy.amax(speed_max):.2e} (avg {numpy.mean(speed_max):.2e})'
+         #          f', sound_speed = {numpy.mean(sound_speed):.2e} ({numpy.max(sound_speed):.2e})'
+         #          f', speed_z / sound_z = {sp_z / so_z :.3f} ({sp_z_max / so_z_max :.3f})')
+         #    sys.stdout.flush()
+         #    # raise ValueError
 
-         if self.verbose > 0:
-            print(f'pseudo_dt = {self.pseudo_dt}')
+         # if self.verbose > 1:
+         #    print(f'pseudo_dt = {self.pseudo_dt}')
 
          if self.param.mg_smoother == 'erk1':
             self.pre_smoothe = RK1Smoother(self.pseudo_dt)
@@ -245,7 +244,7 @@ class Multigrid(MatvecOp):
          param.discretization = 'dg'
 
       self.use_solver = param.mg_solve_coarsest
-      self.verbose = param.verbose_precond and ptopo.rank == 0
+      self.verbose = param.verbose_precond if MPI.COMM_WORLD.rank == 0 else 0
 
       # Determine number of multigrid levels
       if discretization == 'fv':
