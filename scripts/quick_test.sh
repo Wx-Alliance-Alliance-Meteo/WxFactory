@@ -161,11 +161,11 @@ function test_cube_sphere() {
 
         preconditioner=fv-mg
         mg_smoother=erk1
-        pseudo_cfl=2e3
+        pseudo_cfl=15
         run_single_cubesphere time_integrator preconditioner mg_smoother pseudo_cfl || return 1
 
         mg_smoother=erk3
-        pseudo_cfl=2500
+        pseudo_cfl=20
         run_single_cubesphere time_integrator preconditioner mg_smoother pseudo_cfl || return 1
 
         # mg_smoother=exp
