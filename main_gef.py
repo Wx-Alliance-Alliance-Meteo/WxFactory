@@ -68,7 +68,7 @@ def main(argv) -> int:
    stepper = create_time_integrator(param, rhs, preconditioner)
    stepper.output_manager = output
 
-   output.step(Q.get() if isinstance(Q, cupy.ndarray) else Q, starting_step)
+   output.step(Q, starting_step)
    sys.stdout.flush()
 
    t = param.dt * starting_step
@@ -108,8 +108,7 @@ def main(argv) -> int:
          Q[idx_rho_u2,:,:,:] = Q[idx_rho, :, :, :] * u2_contra
          Q[idx_rho_w,:,:,:]  = Q[idx_rho, :, :, :] * w_wind
 
-      # TODO: This should be handled better
-      output.step(Q.get() if isinstance(Q, cupy.ndarray) else Q, step)
+      output.step(Q, step)
       sys.stdout.flush()
 
    output.finalize()

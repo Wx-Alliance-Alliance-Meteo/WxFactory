@@ -8,6 +8,29 @@ from common.definitions import *
 from geometry           import contra2wind_2d, contra2wind_3d
 from output.diagnostic  import relative_vorticity, potential_vorticity
 
+# typing
+from typing import Callable
+from numpy.typing import NDArray
+from common.program_options import Configuration
+
+def prepare_array(param: Configuration) -> Callable[[NDArray], NDArray]:
+   """
+   Curried function to prepare an array for output:
+
+   ```python
+   # To prepare an array x for output:
+   x = prepare_array(param)(x)
+   ```
+
+   If running with cuda configuration, this moves x to host memory.
+   Otherwise, this function is a no-op
+   """
+   if param.device == "cuda":
+      return lambda x: x.get()
+   else:
+      return lambda x: x
+
+
 def output_init(geom, param):
    """ Initialise the netCDF4 file."""
 
@@ -222,26 +245,28 @@ def output_init(geom, param):
          q4.set_collective(True)
 
    rank = MPI.COMM_WORLD.Get_rank()
+   prepare = prepare_array(param)
 
    if rank == 0:
-      xxx[:] = geom.x1[:]
-      yyy[:] = geom.x2[:]
+      xxx[:] = prepare(geom.x1[:])
+      yyy[:] = prepare(geom.x2[:])
       if param.equations == "euler":
          # FIXME: With mapped coordinates, x3/height is a truly 3D coordinate
-         zzz[:] = geom.x3[:,0,0] 
+         zzz[:] = prepare(geom.x3[:,0,0]) 
 
    tile[rank] = rank
-   lon[rank,:,:] = geom.lon * 180/math.pi
-   lat[rank,:,:] = geom.lat * 180/math.pi
+   lon[rank,:,:] = prepare(geom.lon * 180/math.pi)
+   lat[rank,:,:] = prepare(geom.lat * 180/math.pi)
    if param.equations == "euler":
-      elev[rank,:,:,:] = geom.coordVec_latlon[2,:,:,:]
-      topo[rank,:,:] = geom.zbot[:,:]
+      elev[rank,:,:,:] = prepare(geom.coordVec_latlon[2,:,:,:])
+      topo[rank,:,:] = prepare(geom.zbot[:,:])
 
 
 def output_netcdf(Q, geom, metric, mtrx, topo, step, param):
    """ Writes u,v,eta fields on every nth time step """
    rank = MPI.COMM_WORLD.Get_rank()
    idx = len(ncfile["time"])
+   prepare = prepare_array(param)
 
    ncfile['time'][idx] = step * param.dt
 
@@ -249,7 +274,7 @@ def output_netcdf(Q, geom, metric, mtrx, topo, step, param):
 
       # Unpack physical variables
       h = Q[idx_h, :, :] + topo.hsurf
-      ncfile['h'][idx, rank, :, :] = h
+      ncfile['h'][idx, rank, :, :] = prepare(h)
 
       if param.case_number >= 2: # Shallow water
          u1 = Q[idx_hu1,:,:] / h
@@ -258,10 +283,10 @@ def output_netcdf(Q, geom, metric, mtrx, topo, step, param):
          rv = relative_vorticity(u1, u2, geom, metric, mtrx, param)
          pv = potential_vorticity(h, u1, u2, geom, metric, mtrx, param)
 
-         ncfile['U'][idx, rank, :, :]  = u
-         ncfile['V'][idx, rank, :, :]  = v
-         ncfile['RV'][idx, rank, :, :] = rv
-         ncfile['PV'][idx, rank, :, :] = pv
+         ncfile['U'][idx, rank, :, :]  = prepare(u)
+         ncfile['V'][idx, rank, :, :]  = prepare(v)
+         ncfile['RV'][idx, rank, :, :] = prepare(rv)
+         ncfile['PV'][idx, rank, :, :] = prepare(pv)
 
    if param.equations == "euler":
       rho   = Q[idx_rho, :, :, :]
@@ -272,20 +297,20 @@ def output_netcdf(Q, geom, metric, mtrx, topo, step, param):
 
       u, v, w = contra2wind_3d(u1, u2, u3, geom, metric)
 
-      ncfile['rho'][idx, rank, :,:,:]   = rho
-      ncfile['U'][idx, rank, :, :]      = u
-      ncfile['V'][idx, rank, :, :]      = v
-      ncfile['W'][idx, rank, :, :]      = w
-      ncfile['theta'][idx, rank, :,:,:] = theta
-      ncfile['P'][idx, rank, :,:,:] = p0 * (Q[idx_rho_theta] * Rd / p0)**(cpd / cvd)
+      ncfile['rho'][idx, rank, :,:,:]   = prepare(rho)
+      ncfile['U'][idx, rank, :, :]      = prepare(u)
+      ncfile['V'][idx, rank, :, :]      = prepare(v)
+      ncfile['W'][idx, rank, :, :]      = prepare(w)
+      ncfile['theta'][idx, rank, :,:,:] = prepare(theta)
+      ncfile['P'][idx, rank, :,:,:] = prepare(p0 * (Q[idx_rho_theta] * Rd / p0)**(cpd / cvd))
 
       if param.case_number == 11 or param.case_number == 12:
-         ncfile['q1'][idx, rank, :,:,:] = Q[5, :,:,:] / rho
+         ncfile['q1'][idx, rank, :,:,:] = prepare(Q[5, :,:,:] / rho)
 
       if param.case_number == 11:
-         ncfile['q2'][idx, rank, :,:,:] = Q[6, :,:,:] / rho
-         ncfile['q3'][idx, rank, :,:,:] = Q[7, :,:,:] / rho
-         ncfile['q4'][idx, rank, :,:,:] = Q[8, :,:,:] / rho
+         ncfile['q2'][idx, rank, :,:,:] = prepare(Q[6, :,:,:] / rho)
+         ncfile['q3'][idx, rank, :,:,:] = prepare(Q[7, :,:,:] / rho)
+         ncfile['q4'][idx, rank, :,:,:] = prepare(Q[8, :,:,:] / rho)
 
 def output_finalize():
    """ Finalise the output netCDF4 file."""
