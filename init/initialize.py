@@ -1,8 +1,18 @@
+import math
+
 import numpy
 
-from common.definitions        import *
-from init.dcmip              import *
-from init.shallow_water_test import *
+from common.definitions      import idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_w, idx_rho_theta,                 \
+                                    idx_h, idx_u1, idx_u2, idx_hu1, idx_hu2,                                   \
+                                    idx_2d_rho, idx_2d_rho_u, idx_2d_rho_w, idx_2d_rho_theta,                  \
+                                    gravity, cpd, cvd, Rd, p0
+from common.program_options  import Configuration
+from init.dcmip              import dcmip_advection_deformation, dcmip_advection_hadley, dcmip_gravity_wave,   \
+                                    dcmip_schar_waves, dcmip_steady_state_mountain
+from init.shallow_water_test import case_galewsky, case_matsuno, case_unsteady_zonal, circular_vortex,         \
+                                    williamson_case1, williamson_case2, williamson_case5, williamson_case6
+
+from geometry                import Cartesian2D, CubedSphere
 
 class Topo:
    def __init__(self, hsurf, dzdx1, dzdx2, hsurf_itf_i, hsurf_itf_j):
@@ -12,7 +22,7 @@ class Topo:
       self.hsurf_itf_i = hsurf_itf_i
       self.hsurf_itf_j = hsurf_itf_j
 
-def initialize_euler(geom, metric, mtrx, param):
+def initialize_euler(geom: CubedSphere, metric, mtrx, param):
 
    #-------------------------------------------------------------------------|
    # case DCMIP 2012    | Pure advection                                     |
@@ -43,16 +53,15 @@ def initialize_euler(geom, metric, mtrx, param):
    # DCMIP_2012: https://www.earthsystemcog.org/projects/dcmip-2012/         |
    # DCMIP_2016: https://www.earthsystemcog.org/projects/dcmip-2016/         |
    #-------------------------------------------------------------------------|
-   
+
    nk, nj, ni = geom.height.shape
 
    nb_equations = 5
 
-   topo = None
-   
    if param.case_number == 11:
       nb_equations = 9
-      rho, u1_contra, u2_contra, w, potential_temperature, q1, q2, q3, q4 = dcmip_advection_deformation(geom, metric, mtrx, param)
+      rho, u1_contra, u2_contra, w, potential_temperature, q1, q2, q3, q4 = \
+         dcmip_advection_deformation(geom, metric, mtrx, param)
    elif param.case_number == 12:
       nb_equations = 6
       rho, u1_contra, u2_contra, w, potential_temperature, q1 = dcmip_advection_hadley(geom, metric, mtrx, param)
@@ -82,7 +91,7 @@ def initialize_euler(geom, metric, mtrx, param):
       Q[6, :, :, :] = rho * q2
       Q[7, :, :, :] = rho * q3
       Q[8, :, :, :] = rho * q4
-   
+
    return Q, None
 
 def initialize_sw(geom, metric, mtrx, param):
@@ -114,7 +123,8 @@ def initialize_sw(geom, metric, mtrx, param):
       u1_contra, u2_contra, fluid_height = williamson_case2(geom, metric, param)
 
    elif param.case_number == 5:
-      u1_contra, u2_contra, fluid_height, hsurf, dzdx1, dzdx2, hsurf_itf_i, hsurf_itf_j = williamson_case5(geom, metric, mtrx, param)
+      u1_contra, u2_contra, fluid_height, hsurf, dzdx1, dzdx2, hsurf_itf_i, hsurf_itf_j = \
+         williamson_case5(geom, metric, mtrx, param)
 
    elif param.case_number == 6:
       u1_contra, u2_contra, fluid_height = williamson_case6(geom, metric, param)
@@ -126,7 +136,8 @@ def initialize_sw(geom, metric, mtrx, param):
       u1_contra, u2_contra, fluid_height = case_matsuno(geom, metric, param)
 
    elif param.case_number == 10:
-      u1_contra, u2_contra, fluid_height, hsurf, dzdx1, dzdx2, hsurf_itf_i, hsurf_itf_j = case_unsteady_zonal(geom, metric, mtrx, param)
+      u1_contra, u2_contra, fluid_height, hsurf, dzdx1, dzdx2, hsurf_itf_i, hsurf_itf_j = \
+         case_unsteady_zonal(geom, metric, mtrx, param)
 
    Q = numpy.zeros((nb_equations, ni, nj))
    Q[idx_h, :, :] = fluid_height
@@ -142,7 +153,8 @@ def initialize_sw(geom, metric, mtrx, param):
    # Note : we move the last axis of the first topo array so that both have similiar ordering
    return Q, Topo(hsurf, dzdx1, dzdx2, numpy.moveaxis(hsurf_itf_i, -1, -2), hsurf_itf_j)
 
-def initialize_cartesian2d(geom, param):
+def initialize_cartesian2d(geom: Cartesian2D, param: Configuration):
+   '''Initialize a problem on a 2D cartesian grid based on a case number.'''
 
    nb_equations = 4
 
@@ -152,9 +164,71 @@ def initialize_cartesian2d(geom, param):
    uu    = numpy.zeros_like(geom.X1)
    ww    = numpy.zeros_like(geom.X1)
    exner = numpy.zeros_like(geom.X1)
-   θ = numpy.ones_like(geom.X1) * param.bubble_theta
+   θ = numpy.ones_like(geom.X1)
 
-   if param.case_number == 1:
+   if param.case_number != 0:
+      θ *= param.bubble_theta
+
+
+   if param.case_number == 0:
+      # Mountain wave
+
+      h0 = 250.
+      a = 5000.
+      lmbda = 4000.
+
+      x = geom.X1[0,:]
+      h = h0 * numpy.exp( -(x / a)**2 ) * numpy.cos( math.pi * x / lmbda)**2
+
+      # compute normal component
+      #  Note: This will only work for our 2D terrain.
+      def h_func(x):
+         return h0 * numpy.exp( -(x / a)**2 ) * numpy.cos( math.pi * x / lmbda)**2
+
+      delta_x = 1e-8
+
+      ncompx=numpy.zeros(len(x))
+      # ncompx = (h_func(x + delta_x) - h_func(x)) / (delta_x)  # forward differences
+      ncompx = (h_func(x + delta_x) - h_func(x - delta_x)) / (2 * delta_x)  # centered differences
+
+
+      # Create Chi terrain mask
+      for k in range(nk):
+         for i in range(ni):
+            if (geom.X3[k,i] <= h[i]):
+               geom.chiMask.append([k, i])  # Add gridpoint to terrain mask
+
+      # Identify the boundary of the terrain
+      #   Note: This is a silly way to do this but it works for now
+      #chiMaskBoundary=[]
+      for outerindices in geom.chiMask:
+         maxZ = geom.X3[outerindices[0], outerindices[1]]
+         boundaryIndices = []
+         for innerindices in geom.chiMask:
+            if geom.X1[outerindices[0], outerindices[1]] == geom.X1[innerindices[0],innerindices[1]]:
+               if maxZ < geom.X3[innerindices[0], innerindices[1]]:
+                  maxZ = geom.X3[innerindices[0], innerindices[1]]
+                  boundaryIndices = [innerindices[0], innerindices[1]]
+         if len(boundaryIndices) > 0:
+            geom.chiMaskBoundary.append(boundaryIndices)
+
+      # Create terrain normals
+      for indices in geom.chiMask:
+         if indices in geom.chiMaskBoundary:
+            geom.terrainNormalXcmp[indices[0],indices[1]] = ncompx[indices[1]]/((ncompx[indices[1]]**2+1)**(.5))
+
+            geom.terrainNormalZcmp[indices[0],indices[1]] = -1/((ncompx[indices[1]]**2+1)**(.5))
+
+         else:
+            geom.terrainNormalXcmp[indices[0],indices[1]] = 0
+            geom.terrainNormalZcmp[indices[0],indices[1]] = 0
+
+      print(f'Number of Terrain points: {len(geom.chiMask)}, Number of boundary points: {len(geom.chiMaskBoundary)}')
+
+      # Use periodic BC in x-direction
+      geom.xperiodic = True
+
+   elif param.case_number == 1:
       # Pill
 
       xc=500.0
@@ -186,9 +260,9 @@ def initialize_cartesian2d(geom, param):
 
       # Enforce mirror symmetry
       if ni % 2 == 0:
-         middle_col = ni / 2;
+         middle_col = ni / 2
       else:
-         middle_col = ni / 2 + 1;
+         middle_col = ni / 2 + 1
 
       for i in range(int(middle_col)):
          θ[:, ni-i-1] = θ[:, i]
@@ -240,9 +314,25 @@ def initialize_cartesian2d(geom, param):
                θ[k,i] += 0.5 * θc * (1. + math.cos(math.pi * r))
 
 
-   for k in range(nk):
-      for i in range(ni):
-         exner[k,i] = ( 1.0 - gravity / (cpd * θ[k,i]) * geom.X3[k,i])
+   if param.case_number == 0:
+      N_star = 0.01
+      t0 = 288
+
+      a00 = N_star**2 / gravity
+      capc1 = gravity**2 / (N_star**2 * cpd * t0)
+
+      for k in range(nk):
+         for i in range(ni):
+            exner[k,i] = 1.0 - capc1 * (1.0 - math.exp(-a00 * geom.X3[k,i]))
+
+      θ = t0 * numpy.exp(a00 * geom.X3)
+
+      uu[:,:] = 10.
+
+   else:
+      for k in range(nk):
+         for i in range(ni):
+            exner[k,i] = ( 1.0 - gravity / (cpd * θ[k,i]) * geom.X3[k,i])
 
    ρ = p0 / (Rd * θ) * exner**(cvd / Rd)
 

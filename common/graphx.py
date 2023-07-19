@@ -184,14 +184,14 @@ def plot_array(array, filename=None):
 
    MPI.COMM_WORLD.Barrier()
 
-def image_field(geom, field, filename, vmin, vmax, n):
+def image_field(geom, field, filename, vmin, vmax, n, label='K', colormap='jet'):
    fig, ax = matplotlib.pyplot.subplots()
       
-   cmap = matplotlib.pyplot.contourf(geom.X1, geom.X3, field, cmap='jet', levels=numpy.linspace(vmin,vmax,n), extend="both")
+   cmap = matplotlib.pyplot.contourf(geom.X1, geom.X3, field, cmap=colormap, levels=numpy.linspace(vmin,vmax,n), extend="both")
    ax.set_aspect('equal', 'box')
 
    cbar = fig.colorbar(cmap, ax=ax, orientation='vertical', shrink=0.5)
-   cbar.set_label("K",)
+   cbar.set_label(label, )
 
    matplotlib.pyplot.savefig(filename)
    matplotlib.pyplot.close(fig) 

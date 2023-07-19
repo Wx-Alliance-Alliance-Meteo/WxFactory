@@ -9,7 +9,7 @@ import sys
 from mpi4py import MPI
 import numpy
 
-from common.definitions         import idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_w
+from common.definitions         import idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_w, idx_2d_rho_w
 from common.parallel            import DistributedWorld
 from common.program_options     import Configuration
 from geometry                   import Cartesian2D, CubedSphere, DFROperators, Geometry
@@ -41,7 +41,7 @@ def main(argv) -> int:
    # Initialize state variables
    Q, topo, metric = init_state_vars(geom, mtrx, param)
 
-   if (param.expfilter_apply):
+   if param.expfilter_apply:
       mtrx.make_filter(param.expfilter_strength,param.expfilter_order,param.expfilter_cutoff,geom)
 
    # Preconditioning
@@ -63,6 +63,17 @@ def main(argv) -> int:
    output.step(Q, starting_step)
    sys.stdout.flush()
 
+   # Create sponge layer (if desired)
+   if param.sponge != 0:
+      nk, ni = geom.X1.shape
+      zs = param.z1 - param.bc_zscale  # zs is bottom of layer
+      beta= numpy.zeros_like(geom.X1)  # used as our damping profile
+      # Loop over points
+      for k in range(nk):
+         for i in range(ni):
+            if (geom.X3[k,i] >= zs):
+               beta[k,i] = beta[k,i]+(1.0/param.bc_tscale)*(numpy.sin((0.5*numpy.pi)*(geom.X3[k,i] - zs)/(param.z1 - zs)))**2
+
    t = param.dt * starting_step
    stepper.sim_time = t
    nb_steps = math.ceil(param.t_end / param.dt) - starting_step
@@ -80,8 +91,22 @@ def main(argv) -> int:
       if MPI.COMM_WORLD.rank == 0: print(f'\nStep {step} of {nb_steps + starting_step}')
 
       Q = stepper.step(Q, param.dt)
-      if (param.expfilter_apply):
+      if param.expfilter_apply:
          Q = mtrx.apply_filter_3d(Q,geom,metric)
+
+      # Apply Sponge (if desired)
+      if param.sponge != 0:
+         nk, ni = geom.X1.shape
+         # Loop over points
+         for k in range(nk):
+            for i in range(ni):
+               # !!!!!!!!
+               # !!! Important Note:
+               #     TODO: For 3D, we want to rotate radially, apply sponge, rotate back
+               # !!!!!!!!
+               ww = (1/(1+beta[k,i]*param.dt))*Q[idx_2d_rho_w,k,i]
+               Q[idx_2d_rho_w,k,i]=ww
+
 
       if MPI.COMM_WORLD.rank == 0: print(f'Elapsed time for step: {stepper.latest_time:.3f} secs')
 
@@ -129,12 +154,13 @@ def adjust_nb_elements(param: Configuration):
 def create_geometry(param: Configuration, ptopo: Optional[DistributedWorld]) -> Geometry:
    """ Create the appropriate geometry for the given problem """
 
-   if param.grid_type == 'cubed_sphere':
+   if param.grid_type == 'cubed_sphere' and ptopo is not None:
       return CubedSphere(param.nb_elements_horizontal, param.nb_elements_vertical, param.nbsolpts, param.λ0, param.ϕ0,
                          param.α0, param.ztop, ptopo, param)
    if param.grid_type == 'cartesian2d':
       return Cartesian2D((param.x0, param.x1), (param.z0, param.z1), param.nb_elements_horizontal,
-                         param.nb_elements_vertical, param.nbsolpts)
+                         param.nb_elements_vertical, param.nbsolpts, param.nb_elements_vert_layer,
+                         param.vert_layer_height)
 
    raise ValueError(f'Invalid grid type: {param.grid_type}')
 
