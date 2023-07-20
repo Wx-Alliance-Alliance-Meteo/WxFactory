@@ -13,7 +13,7 @@ from scipy.integrate._ivp.base import OdeSolver
 def exode(τ_out, A, u, method='ARK3(2)4L[2]SA-ERK', rtol=1e-3, atol = 1e-6, task1 = False, verbose=False):
 
    if not hasattr(exode, "first_step"):
-      exode.first_step = None
+      exode.first_step = τ_out # TODO : use CFL condition ?
 
    # TODO : implement dense output for output at intermediate values of τ_out
 
