@@ -6,6 +6,7 @@
 
 doc/*.pdf
 doc/aux/*
+doc/svg-inkscape/*
 
 jacobian/*
 
