@@ -177,7 +177,7 @@ class RungeKutta:
             # do FSAL evaluation if needed for error estimate
             self.K[self.n_stages, :] = self.fun(self.t + h, y_new)
 
-         scale = self.atol + self.rtol * numpy.maximum(numpy.abs(y), numpy.abs(y_new))
+         scale = self.atol + self.rtol * 0.5*(numpy.abs(y) + numpy.abs(y_new))
          # exclude K[-1] if not FSAL. It could contain nan or inf
          err_estimate =  h * (self.K[:self.n_stages + self.FSAL].T @ self.E[:self.n_stages + self.FSAL])
          error_norm = global_norm(err_estimate / scale)
