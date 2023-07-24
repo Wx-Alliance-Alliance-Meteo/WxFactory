@@ -105,6 +105,28 @@ class RungeKutta:
       self.y_old = None
       NFS[()] = 0                                # global failed step counter
 
+   def _init_sc_control(self, sc_params):
+      coefs = {"G": (0.7, -0.4, 0, 0.9),
+               "S": (0.6, -0.2, 0, 0.9),
+               "W": (2, -1, -1, 0.8),
+               "standard": (1, 0, 0, 0.9)}
+      # use default controller of method if not specified otherwise
+      sc_params = sc_params or self.sc_params
+      if (isinstance(sc_params, str) and sc_params in coefs):
+         kb1, kb2, a, g = coefs[sc_params]
+      elif isinstance(sc_params, tuple) and len(sc_params) == 4:
+         kb1, kb2, a, g = sc_params
+      else:
+         raise ValueError('sc_params should be a tuple of length 3 or one '
+                          'of the strings "G", "S", "W" or "standard"')
+      # set all parameters
+      self.minbeta1 = kb1 * self.error_exponent
+      self.minbeta2 = kb2 * self.error_exponent
+      self.minalpha = -a
+      self.safety = g
+      self.safety_sc = g ** (kb1 + kb2)
+      self.standard_sc = True                                # for first step
+
    def step(self):
       if self.status != 'running':
          raise RuntimeError("Attempt to step on a failed or finished "
@@ -175,8 +197,10 @@ class RungeKutta:
             else:
                # use second order SC controller
                h_ratio = h / self.h_previous
+
                factor = self.safety_sc * ( error_norm**self.minbeta1 *
                    self.error_norm_old**self.minbeta2 * h_ratio ** self.minalpha)
+
                factor = min(self.max_factor, max(self.min_factor, factor))
 
             if step_rejected:
