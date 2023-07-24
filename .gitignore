@@ -4,6 +4,7 @@
 *.swo
 *.code-workspace
 *.lprof
+*.lprof.txt
 
 doc/*.pdf
 doc/*.aux
