@@ -1,7 +1,7 @@
 from math import sqrt
 import logging
 import numpy
-from solvers.global_operations import global_norm
+from solvers.global_operations import global_inf_norm
 
 MIN_FACTOR = 0.2
 MAX_FACTOR = 4.0
@@ -178,9 +178,12 @@ class RungeKutta:
             self.K[self.n_stages, :] = self.fun(self.t + h, y_new)
 
          scale = self.atol + self.rtol * 0.5*(numpy.abs(y) + numpy.abs(y_new))
+#         scale = self.atol + numpy.maximum(numpy.abs(y), numpy.abs(y_new)) * self.rtol
+            
          # exclude K[-1] if not FSAL. It could contain nan or inf
          err_estimate =  h * (self.K[:self.n_stages + self.FSAL].T @ self.E[:self.n_stages + self.FSAL])
-         error_norm = global_norm(err_estimate / scale)
+         error_norm = global_inf_norm(err_estimate / scale)
+#         print(h, error_norm)
 
          # evaluate error
          if error_norm < 1:
@@ -198,8 +201,7 @@ class RungeKutta:
                # use second order SC controller
                h_ratio = h / self.h_previous
 
-               factor = self.safety_sc * ( error_norm**self.minbeta1 *
-                   self.error_norm_old**self.minbeta2 * h_ratio ** self.minalpha)
+               factor = self.safety_sc * (error_norm**self.minbeta1 * self.error_norm_old**self.minbeta2 * h_ratio**self.minalpha)
 
                factor = min(self.max_factor, max(self.min_factor, factor))
 
