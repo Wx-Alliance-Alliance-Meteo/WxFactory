@@ -70,7 +70,7 @@ class MultigridLevel:
                                      p.ztop, ptopo, p)
       elif p.grid_type == 'cartesian2d':
          self.geometry = Cartesian2D((p.x0, p.x1), (p.z0, p.z1), p.nb_elements_horizontal, p.nb_elements_vertical,
-                                     p.nbsolpts)
+                                     p.nbsolpts, p.nb_elements_vert_layer, p.vert_layer_height)
 
       operators = DFROperators(self.geometry, p.filter_apply, p.filter_order, p.filter_cutoff)
 
