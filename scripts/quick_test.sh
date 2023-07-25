@@ -77,12 +77,13 @@ function test_cart2d() {
     save_state_freq=1
     store_solver_stats=1
     output_dir=${TEST_DIR}
+    filter_apply=1
 
     echo "Original config: ${CART_CONFIG_ORIG}"
     cp ${CART_CONFIG_ORIG} ${CONFIG_BASE}
-    set_param ${CONFIG_BASE} dt t_end time_integrator tolerance starting_step gmres_restart        \
-                             nbsolpts nb_elements_horizontal nb_elements_vertical preconditioner   \
-                             output_freq save_state_freq store_solver_stats output_dir
+    set_param ${CONFIG_BASE} dt t_end time_integrator tolerance starting_step gmres_restart         \
+                             nbsolpts nb_elements_horizontal nb_elements_vertical preconditioner    \
+                             output_freq save_state_freq store_solver_stats output_dir filter_apply
 
 
     if [ $do_non_precond -gt 0 ]; then

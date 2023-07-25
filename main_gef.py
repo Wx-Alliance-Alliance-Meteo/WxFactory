@@ -3,7 +3,7 @@
 """ The GEF model """
 
 import math
-from typing import Callable, Optional
+from typing import Optional
 import sys
 
 from mpi4py import MPI
