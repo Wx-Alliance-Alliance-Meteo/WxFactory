@@ -3,7 +3,7 @@ import numpy
 
 from integrators.butcher import *
 
-def exode(τ_out, A, u, method='ARK3(2)4L[2]SA-ERK', rtol=1e-3, atol = 1e-6, task1 = False, verbose=False):
+def exode(τ_out, A, u, method='ARK3(2)4L[2]SA-ERK', controller="deadbeat", rtol=1e-3, atol = 1e-6, task1 = False, verbose=False):
 
    if not hasattr(exode, "first_step"):
       exode.first_step = τ_out # TODO : use CFL condition ?
@@ -27,7 +27,7 @@ def exode(τ_out, A, u, method='ARK3(2)4L[2]SA-ERK', rtol=1e-3, atol = 1e-6, tas
       return ret
 
    method = method.upper()
-   
+
    if method not in METHODS:
       raise ValueError("`method` must be one of {}." .format(METHODS))
    else:
@@ -35,7 +35,7 @@ def exode(τ_out, A, u, method='ARK3(2)4L[2]SA-ERK', rtol=1e-3, atol = 1e-6, tas
 
    t0, tf = map(float, [0, τ_out])
 
-   solver = method(fun, t0, y0, tf, first_step=exode.first_step, rtol=rtol, atol=atol)
+   solver = method(fun, t0, y0, tf, controller=controller, first_step=exode.first_step, rtol=rtol, atol=atol)
 
    ts = [t0]
 
@@ -58,7 +58,7 @@ def exode(τ_out, A, u, method='ARK3(2)4L[2]SA-ERK', rtol=1e-3, atol = 1e-6, tas
    ts = numpy.array(ts)
 
    solution = solver.y
-   stats = (solver.nfev, 0) # TODO
+   stats = (solver.nfev, solver.failed_steps) # TODO
 
    exode.first_step = numpy.median(numpy.diff(ts))
 

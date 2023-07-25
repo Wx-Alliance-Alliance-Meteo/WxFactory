@@ -20,16 +20,12 @@ class ARK3_2_4L_2_SA_ERK(RungeKutta):
       [1767732205903/2027836641118, 0., 0., 0.], \
       [5535828885825/10492691773637, 788022342437/10882634858940, 0., 0.], \
       [6485989280629/16251701735622, -4246266847089/9704473918619, 10755448449292/10357097424841, 0.]])
-     
+
     # output coefficients (weights)
     B = numpy.array([1471266399579/7840856788654, -4482444167858/7529755066697, 11266239266428/11593286722821, 1767732205903/4055673282236])
-    
+
     # error coefficients (weights Bh - B)
     E = numpy.array([ 0.02709926,  0.11013521, -0.10306493, -0.03416955, 0])
-
-    # Parameters for stepsize control
-    sc_params = "S"
-
 
 class Merson4(RungeKutta):
 
@@ -59,52 +55,6 @@ class Merson4(RungeKutta):
     # error coefficients (weights Bh - B)
     E = numpy.array([1/10, 0, 3/10, 2/5, 1/5, 0])        # B_hat
     E[:-1] -= B
-
-    # Parameters for stepsize control
-    sc_params = "G"
-
-
-class Me4Lin(RungeKutta):
-
-    # effective number of stages
-    n_stages = 5
-
-    # order of the main method
-    order = 4
-
-    # order of the secondary embedded method
-    error_estimator_order = 5 # linear only
-
-    # time fraction coefficients (nodes)
-    C = numpy.array([0, 1/3, 1/3, 1/2, 1])
-
-    # runge kutta coefficient matrix
-    A = numpy.array([
-        [0, 0, 0, 0, 0],
-        [1/3, 0, 0, 0, 0],
-        [1/6, 1/6, 0, 0, 0],
-        [1/8, 0, 3/8, 0, 0],
-        [1/2, 0, -3/2, 2, 0]])
-
-    # output coefficients (weights)
-    B = numpy.array([1/6, 0, 0, 2/3, 1/6])
-
-    # error coefficients (weights Bh - B)
-    E = numpy.array([1/10, 0, 3/10, 2/5, 1/5, 0])        # B_hat
-    E[:-1] -= B
-
-    P = numpy.array([
-        [1, - 3, 11/3, -3/2],
-        [0, 0, 0, 0],
-        [0, 27/4, -27/2,  27/4],
-        [0, -4, 32/3, -6],
-        [0, -13/10, 49/15, -9/5],
-        [0, 31/20, -41/10, 51/20]])
-
-    # Parameters for stepsize control
-    sc_params = "S"
-
-
 
 class RK23(RungeKutta):
 
@@ -136,7 +86,6 @@ class RK45(RungeKutta):
     ])
     B = numpy.array([35/384, 0, 500/1113, 125/192, -2187/6784, 11/84])
     E = numpy.array([-71/57600, 0, 71/16695, -71/1920, 17253/339200, -22/525, 1/40])
-
 
 
 METHODS = {'RK23'              : RK23,

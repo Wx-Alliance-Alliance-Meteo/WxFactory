@@ -18,6 +18,7 @@ class Epi(Integrator):
       self.jacobian_method = param.jacobian_method
       self.exponential_solver = param.exponential_solver
       self.exode_method = param.exode_method
+      self.exode_controller = param.exode_controller
 
       if order == 2:
          self.A = numpy.array([[]])
@@ -95,11 +96,11 @@ class Epi(Integrator):
 
       if self.exponential_solver == 'exode':
 
-         phiv, stats = exode(1., matvec_handle, vec, method=self.exode_method, atol = self.tol, task1 = False, verbose=False)
+         phiv, stats = exode(1., matvec_handle, vec, method=self.exode_method, controller=self.exode_controller, atol = self.tol, task1 = False, verbose=False)
 
          if mpirank == 0:
-            print(f'EXODE converged at iteration {stats[0]}')
-            
+            print(f'EXODE converged at iteration {stats[0]}, with {stats[1]} rejected steps')
+
          self.solver_info = SolverInfo(total_num_it = stats[0])
 
       elif self.exponential_solver == 'pmex':

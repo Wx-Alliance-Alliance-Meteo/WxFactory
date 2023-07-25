@@ -1,12 +1,13 @@
-from math import sqrt
+import math
 import logging
 import numpy
 from solvers.global_operations import global_inf_norm
 
-MIN_FACTOR = 0.2
-MAX_FACTOR = 4.0
-MAX_FACTOR0 = 10
-NFS = numpy.array(0)                                         # failed step counter
+BIG_FACTOR = 4.0
+
+def limiter(u, kappa):
+   # Step-size ratio limiter. Applies an arctangent limiter parametrized by KAPPA to U.
+   return  1 + kappa * math.atan((u - 1) / kappa)
 
 class RungeKutta:
    # effective number of stages
@@ -31,13 +32,10 @@ class RungeKutta:
    E: numpy.ndarray = NotImplemented              # shape: [n_stages + 1]
 
    # Parameters for stepsize control, optional
-   sc_params = "standard"                      # tuple, or str
-
-   max_factor = MAX_FACTOR0                    # initially
-   min_factor = MIN_FACTOR
+   controller = "deadbeat"                      # tuple, or str
 
    def __init__(self, fun, t0, y0, t_bound, max_step=numpy.inf, rtol=1e-3,
-                atol=1e-6, first_step=None, sc_params=None):
+                atol=1e-6, first_step=None, controller="deadbeat"):
 
       self.t_old = None
       self.t = t0
@@ -67,32 +65,12 @@ class RungeKutta:
       self.h_min_a, self.h_min_b = self._init_min_step_parameters()
       self.tiny_err = self.h_min_b
 
-      # Initialize controler
-      coefs = {"G": (0.7, -0.4, 0, 0.9),
-               "S": (0.6, -0.2, 0, 0.9),
-               "W": (2, -1, -1, 0.8),
-               "standard": (1, 0, 0, 0.9)}
-      # use default controller of method if not specified otherwise
-      sc_params = sc_params or self.sc_params
-      if (isinstance(sc_params, str) and sc_params in coefs):
-         kb1, kb2, a, g = coefs[sc_params]
-      elif isinstance(sc_params, tuple) and len(sc_params) == 4:
-         kb1, kb2, a, g = sc_params
-      else:
-         raise ValueError('sc_params should be a tuple of length 3 or one '
-                          'of the strings "G", "S", "W" or "standard"')
-      # set all parameters
-      self.minbeta1 = kb1 * self.error_exponent
-      self.minbeta2 = kb2 * self.error_exponent
-      self.minalpha = -a
-      self.safety = g
-      self.safety_sc = g ** (kb1 + kb2)
-      self.standard_sc = True                                # for first step
+      self._init_control(controller)
 
       # size of first step:
       if first_step is None:
          raise RuntimeError("`first_step` not defined.")
-      
+
       if first_step <= 0:
          raise ValueError("`first_step` must be positive.")
       if first_step > numpy.abs(t_bound - t0):
@@ -103,29 +81,39 @@ class RungeKutta:
       self.FSAL = 1 if self.E[self.n_stages] else 0
       self.h_previous = None
       self.y_old = None
-      NFS[()] = 0                                # global failed step counter
+      self.failed_steps = 0 # failed step counter
 
-   def _init_sc_control(self, sc_params):
-      coefs = {"G": (0.7, -0.4, 0, 0.9),
-               "S": (0.6, -0.2, 0, 0.9),
-               "W": (2, -1, -1, 0.8),
-               "standard": (1, 0, 0, 0.9)}
-      # use default controller of method if not specified otherwise
-      sc_params = sc_params or self.sc_params
-      if (isinstance(sc_params, str) and sc_params in coefs):
-         kb1, kb2, a, g = coefs[sc_params]
-      elif isinstance(sc_params, tuple) and len(sc_params) == 4:
-         kb1, kb2, a, g = sc_params
+   def _init_control(self, controller):
+      coefs = {
+         "deadbeat": (1, 0, 0, 0.9),    # elementary controller (I)
+         "PI3040": (0.7, -0.4, 0, 0.8), # PI controller (Gustafsson)
+         "PI4020": (0.6, -0.2, 0, 0.8), # PI controller for nonstiff methods
+         "H211PI": (1/6, 1/6, 0, 0.8),  # LP filter of PI structure
+         "H110": (1/3, 0, 0, 0.8),      # I controller (convolution filter)
+         "H211D": (1/2, 1/2, 1/2, 0.8), # LP filter with gain = 1/2
+         "H211b": (1/4, 1/4, 1/4, 0.8)  # general purpose LP filter
+      }
+
+      if self.controller == NotImplemented:
+         # use standard controller if not specified otherwise
+         controller = controller or "deadbeat"
       else:
-         raise ValueError('sc_params should be a tuple of length 3 or one '
-                          'of the strings "G", "S", "W" or "standard"')
+         # use default controller of method if not specified otherwise
+         controller = controller or self.controller
+      if (isinstance(controller, str) and controller in coefs):
+         kb1, kb2, a, g = coefs[controller]
+      elif isinstance(controller, tuple) and len(controller) == 4:
+         kb1, kb2, a, g = controller
+      else:
+         raise ValueError('invalid controller')
+
       # set all parameters
       self.minbeta1 = kb1 * self.error_exponent
       self.minbeta2 = kb2 * self.error_exponent
       self.minalpha = -a
       self.safety = g
       self.safety_sc = g ** (kb1 + kb2)
-      self.standard_sc = True                                # for first step
+      self.standard_sc = True # for first step
 
    def step(self):
       if self.status != 'running':
@@ -177,9 +165,8 @@ class RungeKutta:
             # do FSAL evaluation if needed for error estimate
             self.K[self.n_stages, :] = self.fun(self.t + h, y_new)
 
-         scale = self.atol + self.rtol * 0.5*(numpy.abs(y) + numpy.abs(y_new))
-#         scale = self.atol + numpy.maximum(numpy.abs(y), numpy.abs(y_new)) * self.rtol
-            
+         scale = self.atol + numpy.maximum(numpy.abs(y), numpy.abs(y_new)) * self.rtol
+
          # exclude K[-1] if not FSAL. It could contain nan or inf
          err_estimate =  h * (self.K[:self.n_stages + self.FSAL].T @ self.E[:self.n_stages + self.FSAL])
          error_norm = global_inf_norm(err_estimate / scale)
@@ -190,7 +177,7 @@ class RungeKutta:
             step_accepted = True
 
             if error_norm < self.tiny_err:
-               factor = self.max_factor
+               factor = BIG_FACTOR
                self.standard_sc = True
 
             elif self.standard_sc:
@@ -203,22 +190,17 @@ class RungeKutta:
 
                factor = self.safety_sc * (error_norm**self.minbeta1 * self.error_norm_old**self.minbeta2 * h_ratio**self.minalpha)
 
-               factor = min(self.max_factor, max(self.min_factor, factor))
-
             if step_rejected:
                factor = min(1, factor)
 
-            h *= factor
-
-            if factor < MAX_FACTOR:
-               # reduce max_factor when on scale.
-               self.max_factor = MAX_FACTOR
+            h *= limiter(factor, 2)
 
          else:
             step_rejected = True
-            h *= max(self.min_factor, self.safety * error_norm ** self.error_exponent)
 
-            NFS[()] += 1
+            h *= limiter(self.safety * error_norm**self.error_exponent, 2)
+
+            self.failed_steps += 1
 
             if numpy.isnan(error_norm) or numpy.isinf(error_norm):
                return False, "Overflow or underflow encountered."
@@ -264,7 +246,7 @@ class RungeKutta:
       epsneg = numpy.finfo(self.y.dtype).epsneg
       tiny = numpy.finfo(self.y.dtype).tiny
       h_min_a = 10 * epsneg / cdiff
-      h_min_b = sqrt(tiny)
+      h_min_b = math.sqrt(tiny)
       return h_min_a, h_min_b
 
    def _reassess_stepsize(self, t):
