@@ -68,16 +68,17 @@ class Configuration:
       self.filter_apply  = self._get_option('Spatial_discretization', 'filter_apply', bool, False)
       self.filter_order  = self._get_option('Spatial_discretization', 'filter_order', int,
                                              default_value = 16 if self.filter_apply else 0)
-      self.filter_cutoff = self._get_option('Spatial_discretization', 'filter_cutoff', float, 0.0)
+      self.filter_cutoff = self._get_option('Spatial_discretization', 'filter_cutoff', float,
+                                             default_value = 0.25 if self.filter_apply else 0.0)
 
       self.expfilter_apply = self._get_option('Spatial_discretization', 'expfilter_apply', bool, False)
       self.expfilter_order = self._get_option('Spatial_discretization', 'expfilter_order', int, None if self.expfilter_apply else 0)
       self.expfilter_strength = self._get_option('Spatial_discretization', 'expfilter_strength', float, None if self.expfilter_apply else 0)
       self.expfilter_cutoff = self._get_option('Spatial_discretization', 'expfilter_cutoff', float, None if self.expfilter_apply else 0)
       
-      self.sponge = self._get_option('Spatial_discretization', 'sponge', int, 0)
-      self.bc_tscale = self._get_option('Spatial_discretization', 'bc_tscale', float, 1.0)
-      self.bc_zscale = self._get_option('Spatial_discretization', 'bc_zscale', float, 0.0)
+      self.apply_sponge = self._get_option('Spatial_discretization', 'apply_sponge', bool, False)
+      self.sponge_tscale = self._get_option('Spatial_discretization', 'sponge_tscale', float, 1.0)
+      self.sponge_zscale = self._get_option('Spatial_discretization', 'sponge_zscale', float, 0.0)
       
       ###############################
       # Grid

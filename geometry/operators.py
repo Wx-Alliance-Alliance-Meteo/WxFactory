@@ -4,9 +4,11 @@ import math
 import sympy
 from typing import Optional
 
+from common.definitions     import idx_2d_rho_w
 from common.program_options import Configuration
-from .cubed_sphere import CubedSphere
-from .geometry     import Geometry
+from .cartesian_2d_mesh     import Cartesian2D
+from .cubed_sphere          import CubedSphere
+from .geometry              import Geometry
 
 class DFROperators:
    '''Set of operators used for Direct Flux Reconstruction.
@@ -18,8 +20,7 @@ class DFROperators:
       * Correction matrices: `correction`, `correction_tr`.
    '''
 
-
-   def __init__(self, grd : Geometry, filter_apply : bool=False, filter_order: int=8, filter_cutoff: float=0.25):
+   def __init__(self, grd: Geometry, param: Configuration):
       '''Initialize the Direct Flux Reconstruction operators (matrices) based on input grid parameters.
 
       Parameters
@@ -74,20 +75,41 @@ class DFROperators:
       feye[-1,-1] = 0
       self.highfilter = V @ (feye @ invV)
 
-      if filter_apply:
+      diff = diffmat(grd.extension_sym)
+
+      if param.filter_apply:
          self.V = vandermonde(grd.extension)
          self.invV = inv(self.V)
          N = len(grd.extension)-1
-         Nc = math.floor(filter_cutoff * N)
-         self.filter = filter_exponential(N, Nc, filter_order, self.V, self.invV)
-
-      diff = diffmat(grd.extension_sym)
-
-      if filter_apply:
+         Nc = math.floor(param.filter_cutoff * N)
+         self.filter = filter_exponential(N, Nc, param.filter_order, self.V, self.invV)
          self.diff_ext = ( self.filter @ diff ).astype(float)
          self.diff_ext[numpy.abs(self.diff_ext) < 1e-20] = 0.
+
       else:
          self.diff_ext = diff
+
+      self.expfilter_apply = param.expfilter_apply
+      if param.expfilter_apply:
+         if not isinstance(grd, CubedSphere):
+            raise TypeError(f'The 3D filter can only be applied on a CubedSphere geometry')
+         self.expfilter = self.make_filter(param.expfilter_strength, param.expfilter_order, param.expfilter_cutoff,
+                                           grd)
+
+      # Create sponge layer (if desired)
+      self.apply_sponge = param.apply_sponge
+      if param.apply_sponge:
+         if not isinstance(grd, Cartesian2D):
+            raise TypeError(f'The sponge can only be applied on a Cartesian2D geometry')
+         nk, ni = grd.X1.shape
+         zs = param.z1 - param.sponge_zscale  # zs is bottom of layer
+         self.beta= numpy.zeros_like(grd.X1)  # used as our damping profile
+         # Loop over points
+         for k in range(nk):
+            for i in range(ni):
+               if (grd.X3[k,i] >= zs):
+                  self.beta[k,i] = self.beta[k,i] + (1.0 / param.sponge_tscale) * \
+                                   numpy.sin((0.5*numpy.pi) * (grd.X3[k,i] - zs) / (param.z1 - zs))**2
 
       # if check_skewcentrosymmetry(self.diff_ext) is False:
       #    print('Something horribly wrong has happened in the creation of the differentiation matrix')
@@ -106,7 +128,7 @@ class DFROperators:
 
       self.quad_weights = numpy.outer(grd.glweights, grd.glweights)
 
-   def make_filter(self, alpha : float, order : int, cutoff : float, geom : Geometry):
+   def make_filter(self, alpha: float, order: int, cutoff: float, geom: Geometry) -> numpy.ndarray:
       '''Build an exponential modal filter as described in Warburton, eqn 5.16.'''
 
       # Scaled mode numbers
@@ -127,7 +149,28 @@ class DFROperators:
       # node-to-mode operator
       ivander = numpy.linalg.inv(vander)
 
-      self.expfilter = vander @ numpy.diag(residual_modes) @ ivander
+      return vander @ numpy.diag(residual_modes) @ ivander
+
+   def apply_filters(self, Q: numpy.ndarray, geom: Geometry, metric, dt: float):
+      '''Apply the filters that have been activated on the given state vector.'''
+
+      if self.expfilter_apply:
+         Q = self.apply_filter_3d(Q, geom, metric)
+
+      # Apply Sponge (if desired)
+      if self.apply_sponge:
+         nk, ni = geom.X1.shape
+         # Loop over points
+         for k in range(nk):
+            for i in range(ni):
+               # !!!!!!!!
+               # !!! Important Note:
+               #     TODO: For 3D, we want to rotate radially, apply sponge, rotate back
+               # !!!!!!!!
+               ww = (1.0 / (1.0 + self.beta[k,i] * dt)) * Q[idx_2d_rho_w, k, i]
+               Q[idx_2d_rho_w, k, i] = ww
+
+      return Q
 
    def apply_filter_3d(self,Q : numpy.ndarray, geom : CubedSphere, metric):
       '''Apply the exponential filter precomputed in expfilter to input fields \sqrt(g)*Q, and return the

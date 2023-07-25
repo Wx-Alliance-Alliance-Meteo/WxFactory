@@ -34,3 +34,5 @@ geom*.dat
 *.db
 *.npy
 *.npz
+
+*.tmp
