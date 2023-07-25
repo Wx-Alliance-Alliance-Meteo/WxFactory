@@ -72,7 +72,7 @@ class MultigridLevel:
          self.geometry = Cartesian2D((p.x0, p.x1), (p.z0, p.z1), p.nb_elements_horizontal, p.nb_elements_vertical,
                                      p.nbsolpts, p.nb_elements_vert_layer, p.vert_layer_height)
 
-      operators = DFROperators(self.geometry, p.filter_apply, p.filter_order, p.filter_cutoff)
+      operators = DFROperators(self.geometry, p)
 
       field, topo, self.metric = init_state_vars(self.geometry, operators, self.param)
       self.rhs = RhsBundle(self.geometry, operators, self.metric, topo, ptopo, self.param, field.shape)
