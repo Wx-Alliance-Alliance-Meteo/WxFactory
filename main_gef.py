@@ -108,7 +108,7 @@ def main(argv) -> int:
 def adjust_nb_elements(param: Configuration):
    """ Adjust number of horizontal elements in the parameters so that it corresponds to the number *per processor* """
    if param.grid_type == 'cubed_sphere':
-      allowed_pe_counts = [i**2 * 6 
+      allowed_pe_counts = [i**2 * 6
                            for i in range(1, param.nb_elements_horizontal // 2 + 1)
                            if (param.nb_elements_horizontal % i) == 0]
       if MPI.COMM_WORLD.size not in allowed_pe_counts:
@@ -130,8 +130,8 @@ def create_geometry(param: Configuration, ptopo: Optional[DistributedWorld]) -> 
                          param.α0, param.ztop, ptopo, param)
    if param.grid_type == 'cartesian2d':
       return Cartesian2D((param.x0, param.x1), (param.z0, param.z1), param.nb_elements_horizontal,
-                         param.nb_elements_vertical, param.nbsolpts, param.nb_elements_vert_layer,
-                         param.vert_layer_height)
+                         param.nb_elements_vertical, param.nbsolpts, param.nb_elements_bottom_layer,
+                         param.bottom_layer_height)
 
    raise ValueError(f'Invalid grid type: {param.grid_type}')
 

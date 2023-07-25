@@ -62,8 +62,8 @@ class Configuration:
       self.initial_nbsolpts       = self.nbsolpts
       self.nb_elements_horizontal_total = self.nb_elements_horizontal
 
-      self.vert_layer_height      = self._get_option('Spatial_discretization', 'vert_layer_height', int, 0, min_value=0)
-      self.nb_elements_vert_layer = self._get_option('Spatial_discretization', 'nb_elements_vert_layer', int, 0, min_value=0)
+      self.bottom_layer_height      = self._get_option('Spatial_discretization', 'bottom_layer_height', int, 0, min_value=0)
+      self.nb_elements_bottom_layer = self._get_option('Spatial_discretization', 'nb_elements_bottom_layer', int, 0, min_value=0)
 
       self.filter_apply  = self._get_option('Spatial_discretization', 'filter_apply', bool, False)
       self.filter_order  = self._get_option('Spatial_discretization', 'filter_order', int,

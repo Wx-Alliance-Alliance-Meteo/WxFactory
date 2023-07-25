@@ -74,8 +74,7 @@ def initialize_euler(geom: CubedSphere, metric, mtrx, param):
    elif param.case_number == 31:
       rho, u1_contra, u2_contra, w, potential_temperature = dcmip_gravity_wave(geom, metric, mtrx, param)
    else:
-      print('Something has gone horribly wrong in initialization. Back away slowly')
-      exit(1)
+      raise ValueError('Something has gone horribly wrong in initialization. Back away slowly')
 
    Q = numpy.zeros((nb_equations, nk, nj, ni))
 
@@ -173,24 +172,20 @@ def initialize_cartesian2d(geom: Cartesian2D, param: Configuration):
    if param.case_number == 0:
       # Mountain wave
 
-      h0 = 250.
-      a = 5000.
-      lmbda = 4000.
+      h0    = 250.   # Max mountain height
+      a     = 5000.  # Overall mountain width factor
+      lmbda = 4000.  # Mountain ripple width factor
+
+      def h_func(x):
+         return h0 * numpy.exp(-(x / a)**2) * numpy.cos(math.pi * x / lmbda)**2
 
       x = geom.X1[0,:]
-      h = h0 * numpy.exp( -(x / a)**2 ) * numpy.cos( math.pi * x / lmbda)**2
+      h = h_func(x)
 
-      # compute normal component
-      #  Note: This will only work for our 2D terrain.
-      def h_func(x):
-         return h0 * numpy.exp( -(x / a)**2 ) * numpy.cos( math.pi * x / lmbda)**2
-
+      # Compute normal component
+      # Note: This will only work for our 2D terrain.
       delta_x = 1e-8
-
-      ncompx=numpy.zeros(len(x))
-      # ncompx = (h_func(x + delta_x) - h_func(x)) / (delta_x)  # forward differences
       ncompx = (h_func(x + delta_x) - h_func(x - delta_x)) / (2 * delta_x)  # centered differences
-
 
       # Create Chi terrain mask
       for k in range(nk):
@@ -199,8 +194,7 @@ def initialize_cartesian2d(geom: Cartesian2D, param: Configuration):
                geom.chiMask.append([k, i])  # Add gridpoint to terrain mask
 
       # Identify the boundary of the terrain
-      #   Note: This is a silly way to do this but it works for now
-      #chiMaskBoundary=[]
+      # Note: This is a silly way to do this but it works for now
       for outerindices in geom.chiMask:
          maxZ = geom.X3[outerindices[0], outerindices[1]]
          boundaryIndices = []
@@ -215,9 +209,9 @@ def initialize_cartesian2d(geom: Cartesian2D, param: Configuration):
       # Create terrain normals
       for indices in geom.chiMask:
          if indices in geom.chiMaskBoundary:
-            geom.terrainNormalXcmp[indices[0],indices[1]] = ncompx[indices[1]]/((ncompx[indices[1]]**2+1)**(.5))
+            geom.terrainNormalXcmp[indices[0],indices[1]] = ncompx[indices[1]] / numpy.sqrt(ncompx[indices[1]]**2 + 1)
 
-            geom.terrainNormalZcmp[indices[0],indices[1]] = -1/((ncompx[indices[1]]**2+1)**(.5))
+            geom.terrainNormalZcmp[indices[0],indices[1]] = -1.0 / numpy.sqrt(ncompx[indices[1]]**2 + 1)
 
          else:
             geom.terrainNormalXcmp[indices[0],indices[1]] = 0
@@ -305,7 +299,7 @@ def initialize_cartesian2d(geom: Cartesian2D, param: Configuration):
       θc = -15.
 
       # Use periodic BC in x-direction
-#      geom.xperiodic = True      
+      # geom.xperiodic = True
 
       for k in range(nk):
          for i in range(ni):

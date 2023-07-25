@@ -440,7 +440,7 @@ def dcmip_steady_state_mountain(geom: CubedSphere, metric, mtrx, param):
    geom.apply_topography(zbot,zbot_itf_i,zbot_itf_j)
    # And regenerate the metric to take this new topography into account
    metric.build_metric()
-   
+
    #-----------------------------------------------------------------------
    #    PS (surface pressure)
    #-----------------------------------------------------------------------

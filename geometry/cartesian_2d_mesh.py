@@ -11,8 +11,8 @@ class Cartesian2D(Geometry):
                 nb_elements_x: int,
                 nb_elements_z: int,
                 nbsolpts: int,
-                nb_elements_vert_layer: int,
-                vert_layer_height: int):
+                nb_elements_bottom_layer: int,
+                bottom_layer_height: int):
       super().__init__(nbsolpts, 'cartesian2d')
 
       scaled_points = 0.5 * (1.0 + self.solutionPoints)
@@ -29,23 +29,23 @@ class Cartesian2D(Geometry):
       Δx3 = (domain_z[1] - domain_z[0]) / nb_elements_z
       x3 = numpy.zeros(nb_elements_z * len(self.solutionPoints))
 
-      if vert_layer_height > 0:
-         Δvert_layer = (vert_layer_height - domain_z[0]) / nb_elements_vert_layer
+      if bottom_layer_height > 0:
+         Δbottom_layer = (bottom_layer_height - domain_z[0]) / nb_elements_bottom_layer
 
-         Δx3 = (domain_z[1] - vert_layer_height) / (nb_elements_z - nb_elements_vert_layer)
-         print(f'delta z1= {Δvert_layer}')
+         Δx3 = (domain_z[1] - bottom_layer_height) / (nb_elements_z - nb_elements_bottom_layer)
+         print(f'delta z1= {Δbottom_layer}')
          print(f'delta z= {Δx3}')
-         itf_x3 = numpy.linspace(start=vert_layer_height, stop=domain_z[1], num=(nb_elements_z - nb_elements_vert_layer) + 1)
-         itf_vert_layer = numpy.linspace(start=domain_z[0], stop=vert_layer_height, num=nb_elements_vert_layer + 1)
+         itf_x3 = numpy.linspace(start=bottom_layer_height, stop=domain_z[1], num=(nb_elements_z - nb_elements_bottom_layer) + 1)
+         itf_bottom_layer = numpy.linspace(start=domain_z[0], stop=bottom_layer_height, num=nb_elements_bottom_layer + 1)
 
-         z1 = numpy.zeros(nb_elements_vert_layer * len(self.solutionPoints))
-         z2 = numpy.zeros((nb_elements_z-nb_elements_vert_layer) * len(self.solutionPoints))
+         z1 = numpy.zeros(nb_elements_bottom_layer * len(self.solutionPoints))
+         z2 = numpy.zeros((nb_elements_z-nb_elements_bottom_layer) * len(self.solutionPoints))
 
-         for i in range(nb_elements_vert_layer):
+         for i in range(nb_elements_bottom_layer):
             idz = i * nbsolpts
-            z1[idz: idz + nbsolpts] = itf_vert_layer[i] + scaled_points * Δvert_layer
+            z1[idz: idz + nbsolpts] = itf_bottom_layer[i] + scaled_points * Δbottom_layer
 
-         for i in range(nb_elements_z - nb_elements_vert_layer):
+         for i in range(nb_elements_z - nb_elements_bottom_layer):
             idz = i * nbsolpts
             z2[idz: idz + nbsolpts] = itf_x3[i] + scaled_points * Δx3
 
@@ -53,7 +53,7 @@ class Cartesian2D(Geometry):
 
       else:
          Δx3 = (domain_z[1] - domain_z[0]) / nb_elements_z
-         Δvert_layer = 0 # being lazy ...
+         Δbottom_layer = 0 # being lazy ...
          itf_x3 = numpy.linspace(start=domain_z[0], stop=domain_z[1], num=nb_elements_z + 1)
          print(f'domain: {domain_x}, {domain_z}')
          print(f'grid size: {Δx1}, {Δx3}')
@@ -70,8 +70,8 @@ class Cartesian2D(Geometry):
       self.Δx1 = Δx1
       self.Δx2 = Δx1
       self.Δx3 = Δx3
-      self.vert_layer_delta = Δvert_layer
-      self.nb_elements_vert_layer = nb_elements_vert_layer
+      self.bottom_layer_delta = Δbottom_layer
+      self.nb_elements_bottom_layer = nb_elements_bottom_layer
       self.xperiodic = False
 
       # We may want to make a 'terrain' class as this is not ideal spot for this...

@@ -91,9 +91,11 @@ def rhs_bubble(Q, geom, mtrx, nbsolpts, nb_elements_x, nb_elements_z):
 
       M = 0.25 * (( M_L + 1.)**2 - (M_R - 1.)**2)
 
-      kfaces_flux[:,right,0,:] = (kfaces_var[:,left,1,:] * numpy.maximum(0., M) * a_L) + (kfaces_var[:,right,0,:] * numpy.minimum(0., M) * a_R)
-      kfaces_flux[idx_2d_rho_w,right,0,:] += 0.5 * ( (1. + M_L) * kfaces_pres[left,1,:] + (1. - M_R) * kfaces_pres[right,0,:] )
-   
+      kfaces_flux[:,right,0,:] = (kfaces_var[:,left,1,:] * numpy.maximum(0., M) * a_L) + \
+                                 (kfaces_var[:,right,0,:] * numpy.minimum(0., M) * a_R)
+      kfaces_flux[idx_2d_rho_w,right,0,:] += 0.5 * ((1. + M_L) * kfaces_pres[left,1,:] + \
+                                                    (1. - M_R) * kfaces_pres[right,0,:])
+
       kfaces_flux[:,left,1,:] = kfaces_flux[:,right,0,:]
 
    if geom.xperiodic:
@@ -119,8 +121,10 @@ def rhs_bubble(Q, geom, mtrx, nbsolpts, nb_elements_x, nb_elements_z):
 
       M = 0.25 * ((M_L + 1.)**2 - (M_R - 1.)**2)
 
-      ifaces_flux[:,right,:,0] = (ifaces_var[:,left,:,1] * numpy.maximum(0., M) * a_L) + (ifaces_var[:,right,:,0] * numpy.minimum(0., M) * a_R)
-      ifaces_flux[idx_2d_rho_u,right,:,0] += 0.5 * ( (1. + M_L) * ifaces_pres[left,:,1] + (1. - M_R) * ifaces_pres[right,:,0] )
+      ifaces_flux[:,right,:,0] = (ifaces_var[:,left,:,1] * numpy.maximum(0., M) * a_L) + \
+                                 (ifaces_var[:,right,:,0] * numpy.minimum(0., M) * a_R)
+      ifaces_flux[idx_2d_rho_u,right,:,0] += 0.5 * ((1. + M_L) * ifaces_pres[left,:,1] + \
+                                                    (1. - M_R) * ifaces_pres[right,:,0])
 
       ifaces_flux[:,left,:,1] = ifaces_flux[:,right,:,0]
 
@@ -131,19 +135,22 @@ def rhs_bubble(Q, geom, mtrx, nbsolpts, nb_elements_x, nb_elements_z):
    for elem in range(nb_elements_z):
       epais = elem * nbsolpts + numpy.arange(nbsolpts)
 
-      # df3_dx3[:,epais,:] = ( mtrx.diff_solpt @ flux_x3[:,epais,:] + mtrx.correction @ kfaces_flux[:,elem,:,:] ) * 2.0/geom.Δx3
-      if geom.vert_layer_delta > 0:
-         if elem < geom.nb_elements_vert_layer:
-            df3_dx3[:, epais, :] = (mtrx.diff_solpt @ flux_x3[:,epais,:] + mtrx.correction @ kfaces_flux[:,elem,:,:]) * 2.0/geom.vert_layer_delta
+      if geom.bottom_layer_delta > 0:
+         if elem < geom.nb_elements_bottom_layer:
+            df3_dx3[:, epais, :] = (mtrx.diff_solpt @ flux_x3[:,epais,:] + mtrx.correction @ kfaces_flux[:,elem,:,:]) \
+                                   * (2.0 / geom.bottom_layer_delta)
          else:
-            df3_dx3[:, epais, :] = (mtrx.diff_solpt @ flux_x3[:, epais, :] + mtrx.correction @ kfaces_flux[:, elem, :,:]) * 2.0 / geom.Δx3
+            df3_dx3[:, epais, :] = (mtrx.diff_solpt @ flux_x3[:, epais, :] + \
+                                    mtrx.correction @ kfaces_flux[:, elem, :,:]) * 2.0 / geom.Δx3
       else:
-         df3_dx3[:, epais, :] = (mtrx.diff_solpt @ flux_x3[:, epais, :] + mtrx.correction @ kfaces_flux[:, elem, :,:]) * 2.0 / geom.Δx3
+         df3_dx3[:, epais, :] = (mtrx.diff_solpt @ flux_x3[:, epais, :] + mtrx.correction @ kfaces_flux[:, elem, :,:]) \
+                                * 2.0 / geom.Δx3
 
    for elem in range(nb_elements_x):
       epais = elem * nbsolpts + numpy.arange(nbsolpts)
 
-      df1_dx1[:,:,epais] = ( flux_x1[:,:,epais] @ mtrx.diff_solpt.T + ifaces_flux[:,elem,:,:] @ mtrx.correction.T ) * 2.0/geom.Δx1
+      df1_dx1[:,:,epais] = (flux_x1[:,:,epais] @ mtrx.diff_solpt.T + ifaces_flux[:,elem,:,:] @ mtrx.correction.T) * \
+                           2.0/geom.Δx1
 
    # --- Assemble the right-hand sides
    rhs = - ( df1_dx1 + df3_dx3 )
@@ -152,18 +159,14 @@ def rhs_bubble(Q, geom, mtrx, nbsolpts, nb_elements_x, nb_elements_z):
 
    # TODO : Add sources terms for Brikman penalization
    # It may be better to do this elementwise...
-   if (len(geom.chiMask) > 1):
+   if len(geom.chiMask) > 1:
       etac = 1 # 1e-1
       for item in geom.chiMask:
          k=item[0]
          i=item[1]
          if item in geom.chiMaskBoundary:
-            #nrmlu = geom.terrainNormalXcmp[k, i] * df1_dx[RHO_U, k, i] + geom.terrainNormalZcmp[k, i] * df3_dz[RHO_U, k, i]
-            #nrmlw = geom.terrainNormalXcmp[k, i] * df1_dx[RHO_W, k, i] + geom.terrainNormalZcmp[k, i] * df3_dz[RHO_W, k, i]
-            #rhs[RHO_U, k, i] = -(1 / etac) * nrmlu * geom.terrainNormalXcmp[k, i]
-            #rhs[RHO_W, k, i] = -(1 / etac) * nrmlw * geom.terrainNormalZcmp[k, i]
-
-            nrmluw = geom.terrainNormalXcmp[k, i] * df1_dx1[idx_2d_rho_u, k, i] + geom.terrainNormalZcmp[k, i] * df3_dx3[idx_2d_rho_w, k, i]
+            nrmluw = geom.terrainNormalXcmp[k, i] * df1_dx1[idx_2d_rho_u, k, i] + \
+                     geom.terrainNormalZcmp[k, i] * df3_dx3[idx_2d_rho_w, k, i]
             rhs[idx_2d_rho_u, k, i] = -(1 / etac) * nrmluw * geom.terrainNormalXcmp[k, i]
             rhs[idx_2d_rho_w, k, i] = -(1 / etac) * nrmluw * geom.terrainNormalZcmp[k, i]
 
