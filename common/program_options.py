@@ -49,6 +49,7 @@ class Configuration:
 
       self.exponential_solver = self._get_option('Time_integration', 'exponential_solver', str, 'kiops')
       self.exode_method       = self._get_option('Time_integration', 'exode_method', str, '')
+      self.exode_controller   = self._get_option('Time_integration', 'exode_controller', str, '')
       self.krylov_size        = self._get_option('Time_integration', 'krylov_size', int, 1)
       self.jacobian_method    = self._get_option('Time_integration', 'jacobian_method', str, 'complex')
 
@@ -72,7 +73,7 @@ class Configuration:
       self.expfilter_order = self._get_option('Spatial_discretization', 'expfilter_order', int, None if self.expfilter_apply else 0)
       self.expfilter_strength = self._get_option('Spatial_discretization', 'expfilter_strength', float, None if self.expfilter_apply else 0)
       self.expfilter_cutoff = self._get_option('Spatial_discretization', 'expfilter_cutoff', float, None if self.expfilter_apply else 0)
-      
+
 
       ###############################
       # Grid
@@ -154,7 +155,7 @@ class Configuration:
       elif option_type == int:
          value = self.parser.getint(section_name, option_name)
       elif option_type == str:
-         value = self.parser.get(section_name, option_name).lower()
+         value = self.parser.get(section_name, option_name)
       elif option_type == bool:
          value = (self.parser.getint(section_name, option_name) > 0)
       elif option_type == List[int]:
