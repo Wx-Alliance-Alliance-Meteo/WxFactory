@@ -1,6 +1,39 @@
 import numpy
 from .explicit_runge_kutta import RungeKutta
 
+class ERK3_2_3L(RungeKutta):
+    # effective number of stages
+    n_stages = 3
+
+    # order of the main method
+    order = 3
+
+    # order of the secondary embedded method
+    error_estimator_order = 2 #for both linear and non-linear
+
+    # time fraction coefficients (nodes)
+    C = numpy.array([0., 1./2., 1.])
+
+    # runge kutta coefficient matrix
+    A = numpy.array([[0., 0., 0.], \
+      [1/2, 0., 0.], \
+      [-1., 2., 0.]])
+
+    # output coefficients (weights)
+    B = numpy.array([1./6., 2./3., 1./6.])
+
+    # error coefficients (weights Bh - B)
+    E = numpy.array([1./12., -1./6., 1./12.,0])
+
+    # dense output
+    # P = numpy.array([[4655552711362/22874653954995, -18682724506714/9892148508045, 34259539580243/13192909600954, 584795268549/6622622206610],
+    #  [-215264564351/13552729205753, 17870216137069/13817060693119, -28141676662227/17317692491321, 2508943948391/7218656332882]])
+    
+    # Parameters for stepsize control
+    # sc_params = "W"
+
+
+
 class ARK3_2_4L_2_SA_ERK(RungeKutta):
 
     # effective number of stages
@@ -470,4 +503,5 @@ class RK45(RungeKutta):
 METHODS = {'RK23'              : RK23,
            'RK45'              : RK45,
            'MERSON4'           : Merson4,
-           'ARK3(2)4L[2]SA-ERK': ARK3_2_4L_2_SA_ERK}
+           'ARK3(2)4L[2]SA-ERK': ARK3_2_4L_2_SA_ERK,
+           'ERK3(2)3L'         : ERK3_2_3L}
