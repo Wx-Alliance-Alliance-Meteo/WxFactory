@@ -18,6 +18,7 @@ __pycache__/
 results/
 test_configs/
 work/
+scripts/load_env.sh
 
 .vscode
 .idea

@@ -1,5 +1,5 @@
 import os
-from typing  import Callable, List, Optional, Tuple, Union
+from typing  import Callable, Optional, Union
 
 from mpi4py import MPI
 import numpy
@@ -9,6 +9,7 @@ from geometry               import Geometry, Metric, Metric3DTopo, DFROperators
 from init.initialize        import Topo
 from output.blockstats      import blockstats
 from output.solver_stats    import SolverStatsOutput
+from output.state           import save_state
 from precondition.multigrid import Multigrid
 from solvers                import SolverInfo
 
@@ -67,8 +68,7 @@ class OutputManager:
 
    def state_file_name(self, step_id: int) -> str:
       """Return the name of the file where to save the state vector for the current problem, for the given timestep."""
-      base_name = f'state_vector_{MPI.COMM_WORLD.rank:03d}'
-      #base_name = f'state_vector_{self.config_hash:012x}_{MPI.COMM_WORLD.rank:03d}'
+      base_name = f'state_vector_{self.config_hash:012x}_{MPI.COMM_WORLD.rank:03d}'
       return f'{self.param.output_dir}/{base_name}.{step_id:08d}.npy'
 
    def step(self, Q: numpy.ndarray, step_id: int) -> None:
@@ -80,7 +80,7 @@ class OutputManager:
 
       if self.param.save_state_freq > 0:
          if step_id % self.param.save_state_freq == 0:
-            numpy.save(self.state_file_name(step_id), Q)
+            save_state(Q, self.param, self.state_file_name(step_id))
 
       if self.param.stat_freq > 0:
          if step_id % self.param.stat_freq == 0:

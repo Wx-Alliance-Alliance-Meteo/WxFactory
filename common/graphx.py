@@ -3,6 +3,8 @@ import numpy
 import pickle
 import matplotlib.pyplot
 
+from geometry import Cartesian2D
+
 try:
    import mayavi.mlab
 except ModuleNotFoundError:
@@ -184,7 +186,8 @@ def plot_array(array, filename=None):
 
    MPI.COMM_WORLD.Barrier()
 
-def image_field(geom, field, filename, vmin, vmax, n, label='K', colormap='jet'):
+def image_field(geom: Cartesian2D, field: numpy.ndarray, filename: str, vmin: float, vmax: float, n: int, \
+                label: str = 'K', colormap: str = 'jet'):
    fig, ax = matplotlib.pyplot.subplots()
 
    cmap = matplotlib.pyplot.contourf(geom.X1, geom.X3, field, cmap=colormap,

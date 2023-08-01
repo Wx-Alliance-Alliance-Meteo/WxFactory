@@ -18,6 +18,7 @@ from init.init_state_vars       import init_state_vars
 from integrators                import Integrator, Epi, EpiStiff, Euler1, Imex2, PartRosExp2, Ros2, RosExp2, \
                                        StrangSplitting, Srerk, Tvdrk3, BackwardEuler, CrankNicolson, Bdf2
 from output.output_manager      import OutputManager
+from output.state               import load_state
 from precondition.multigrid     import Multigrid
 from rhs.rhs_selector           import RhsBundle
 
@@ -150,7 +151,7 @@ def determine_starting_state(param: Configuration, output: OutputManager, Q: num
    starting_step = param.starting_step
    if starting_step > 0:
       try:
-         starting_state = numpy.load(output.state_file_name(starting_step))
+         starting_state, _ = load_state(output.state_file_name(starting_step))
          if starting_state.shape != Q.shape:
             print(f'ERROR reading state vector from file for step {starting_step}. '
                   f'The shape is wrong! ({starting_state.shape}, should be {Q.shape})')
