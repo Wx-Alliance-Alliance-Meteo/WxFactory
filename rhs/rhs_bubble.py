@@ -98,19 +98,15 @@ def rhs_bubble(Q, geom, mtrx, nbsolpts, nb_elements_x, nb_elements_z):
 
       kfaces_flux[:,left,1,:] = kfaces_flux[:,right,0,:]
 
-   if geom.xperiodic:
-      ifaces_var[:, 0, :, :] = ifaces_var[:, -1, :, :]
-      ifaces_pres[0, :, :] = ifaces_pres[-1, :, :]
 
-   for itf in range(1, nb_interfaces_x - 1):
+   start = 0 if geom.xperiodic else 1
+   for itf in range(start, nb_interfaces_x - 1):
 
       left  = itf - 1
       right = itf
 
       # Left state
 
-      if (geom.xperiodic and left == 0):
-         left = -1
 
       a_L = numpy.sqrt(heat_capacity_ratio * ifaces_pres[left, :, 1] / ifaces_var[idx_2d_rho, left, :, 1])
       M_L = ifaces_var[idx_2d_rho_u, left, :, 1] / (ifaces_var[idx_2d_rho, left, :, 1] * a_L)
@@ -129,7 +125,7 @@ def rhs_bubble(Q, geom, mtrx, nbsolpts, nb_elements_x, nb_elements_z):
       ifaces_flux[:,left,:,1] = ifaces_flux[:,right,:,0]
 
    if geom.xperiodic:
-      ifaces_flux[:, 0, :, :] = ifaces_flux[:, -1, :, :]
+      ifaces_flux[:, 0, :, 0] = ifaces_flux[:, -1, :, 1]
 
    # --- Compute the derivatives
    for elem in range(nb_elements_z):
