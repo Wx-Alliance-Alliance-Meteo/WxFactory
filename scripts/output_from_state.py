@@ -44,11 +44,11 @@ def main(args):
       state, param = load_state(s)
       geom = create_geometry(param, None)
       if isinstance(geom, Cartesian2D):
-         # image_field(geom, state[idx_2d_rho], file_name('rho', i), min_rho, max_rho, 25, 'rho (units=?)')
-         # image_field(geom, state[idx_2d_rho_u] / state[idx_2d_rho], file_name('u', i), min_u, max_u, 25, 'u (m/s)')
+         image_field(geom, state[idx_2d_rho], file_name('rho', i), min_rho, max_rho, 25, 'rho (units=?)')
+         image_field(geom, state[idx_2d_rho_u] / state[idx_2d_rho], file_name('u', i), min_u, max_u, 25, 'u (m/s)')
          image_field(geom, state[idx_2d_rho_w] / state[idx_2d_rho], file_name('w', i), min_w, max_w, 100, 'w (m/s)')
-         # image_field(geom, state[idx_2d_rho_theta] / state[idx_2d_rho], file_name('theta', i), min_theta, max_theta, \
-         #             25, 'theta (units=?)')
+         image_field(geom, state[idx_2d_rho_theta] / state[idx_2d_rho], file_name('theta', i), min_theta, max_theta, \
+                     25, 'theta (K)')
          output_step(state, geom, param, file_name("", i))
 
 if __name__ == '__main__':

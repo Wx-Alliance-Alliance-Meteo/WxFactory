@@ -188,18 +188,33 @@ def plot_array(array, filename=None):
 
 def image_field(geom: Cartesian2D, field: numpy.ndarray, filename: str, vmin: float, vmax: float, n: int, \
                 label: str = 'K', colormap: str = 'jet'):
-   fig, ax = matplotlib.pyplot.subplots()
 
-   cmap = matplotlib.pyplot.contourf(geom.X1, geom.X3, field, cmap=colormap,
-                                     levels=numpy.linspace(vmin,vmax,n), extend="both")
-   ax.set_aspect('auto', 'box')
+   x1_glb = MPI.COMM_WORLD.gather(geom.X1, root=0)
+   x3_glb = MPI.COMM_WORLD.gather(geom.X3, root=0)
+   field_glb = MPI.COMM_WORLD.gather(field, root=0)
 
-   cbar = fig.colorbar(cmap, ax=ax, orientation='vertical', shrink=0.5)
-   cbar.set_label(label, )
+   if MPI.COMM_WORLD.rank == 0:
+      # print(f'x1_glb = \n{x1_glb}')
+      # print(f'x3_glb = \n{x3_glb}')
+      x1_glb = numpy.hstack(x1_glb)
+      x3_glb = numpy.hstack(x3_glb)
+      field_glb = numpy.hstack(field_glb)
 
-   matplotlib.pyplot.savefig(filename)
-   matplotlib.pyplot.close(fig) 
+      # print(f'x1_glb = \n{x1_glb}')
 
+      fig, ax = matplotlib.pyplot.subplots()
+
+      cmap = matplotlib.pyplot.contourf(x1_glb, x3_glb, field_glb, cmap=colormap,
+                                       levels=numpy.linspace(vmin,vmax,n), extend="both")
+      ax.set_aspect('auto', 'box')
+
+      cbar = fig.colorbar(cmap, ax=ax, orientation='vertical', shrink=0.5)
+      cbar.set_label(label, )
+
+      matplotlib.pyplot.savefig(filename)
+      matplotlib.pyplot.close(fig) 
+
+   MPI.COMM_WORLD.Barrier()
    return
 
 def print_residual_per_variable(geom, field, filename = None):

@@ -1,5 +1,6 @@
 from typing import Tuple
 
+from mpi4py import MPI
 import numpy
 
 from .geometry import Geometry
@@ -17,6 +18,13 @@ class Cartesian2D(Geometry):
 
       scaled_points = 0.5 * (1.0 + self.solutionPoints)
 
+      if MPI.COMM_WORLD.size > 1:
+         rank = MPI.COMM_WORLD.rank
+         global_width = domain_x[1] - domain_x[0]
+         local_width = global_width / MPI.COMM_WORLD.size
+         new_domain_x = (rank * local_width + domain_x[0], (rank+1) * local_width + domain_x[0])
+         domain_x = new_domain_x
+
       # --- Horizontal coord
       Δx1 = (domain_x[1] - domain_x[0]) / nb_elements_x
       itf_x1 = numpy.linspace(start = domain_x[0], stop = domain_x[1], num = nb_elements_x + 1)
@@ -29,14 +37,14 @@ class Cartesian2D(Geometry):
       Δx3 = (domain_z[1] - domain_z[0]) / nb_elements_z
       x3 = numpy.zeros(nb_elements_z * len(self.solutionPoints))
 
-      if bottom_layer_height > 0:
+      if nb_elements_bottom_layer > 0:
          Δbottom_layer = (bottom_layer_height - domain_z[0]) / nb_elements_bottom_layer
 
          Δx3 = (domain_z[1] - bottom_layer_height) / (nb_elements_z - nb_elements_bottom_layer)
-         print(f'delta z1= {Δbottom_layer}')
-         print(f'delta z= {Δx3}')
-         itf_x3 = numpy.linspace(start=bottom_layer_height, stop=domain_z[1], num=(nb_elements_z - nb_elements_bottom_layer) + 1)
-         itf_bottom_layer = numpy.linspace(start=domain_z[0], stop=bottom_layer_height, num=nb_elements_bottom_layer + 1)
+         itf_x3 = numpy.linspace(start=bottom_layer_height, stop=domain_z[1],
+                                 num=(nb_elements_z - nb_elements_bottom_layer) + 1)
+         itf_bottom_layer = numpy.linspace(start=domain_z[0], stop=bottom_layer_height,
+                                           num=nb_elements_bottom_layer + 1)
 
          z1 = numpy.zeros(nb_elements_bottom_layer * len(self.solutionPoints))
          z2 = numpy.zeros((nb_elements_z-nb_elements_bottom_layer) * len(self.solutionPoints))

@@ -63,7 +63,7 @@ class OutputManager:
          else:
             print(f'WARNING: Blockstat only implemented for Shallow Water equations')
 
-      state_params = (param.dt, param.nb_elements_horizontal, param.nb_elements_vertical, param.nbsolpts)
+      state_params = (param.dt, param.nb_elements_horizontal, param.nb_elements_vertical, param.nbsolpts, MPI.COMM_WORLD.size)
       self.config_hash = state_params.__hash__() & 0xffffffffffff
 
    def state_file_name(self, step_id: int) -> str:
