@@ -15,9 +15,10 @@ scripts/**/*.pdf
 __pycache__/
 *.py[cod]
 
+bubble_cliff
 results/
 test_configs/
-work/
+work
 scripts/load_env.sh
 
 .vscode

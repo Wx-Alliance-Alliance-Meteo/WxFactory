@@ -24,6 +24,39 @@ def rhs_bubble(Q, geom, mtrx, nbsolpts, nb_elements_x, nb_elements_z):
    ifaces_flux = numpy.empty((nb_equations, nb_elements_x + 2, nbsolpts*nb_elements_z, 2), dtype=datatype)
    ifaces_var  = numpy.ones((nb_equations, nb_elements_x + 2, nbsolpts*nb_elements_z, 2), dtype=datatype)
 
+   # --- Interpolate to the element interface
+   for elem in range(nb_elements_z):
+      epais = elem * nbsolpts + numpy.arange(nbsolpts)
+
+      kfaces_var[:,elem,0,:] = mtrx.extrap_down @ Q[:,epais,:]
+      kfaces_var[:,elem,1,:] = mtrx.extrap_up @ Q[:,epais,:]
+
+   for elem in range(nb_elements_x):
+      epais = elem * nbsolpts + numpy.arange(nbsolpts)
+
+      ifaces_var[:,elem+1,:,0] = Q[:,:,epais] @ mtrx.extrap_west
+      ifaces_var[:,elem+1,:,1] = Q[:,:,epais] @ mtrx.extrap_east
+
+   # Start transmission as soon as possible
+   recv_buffers = [None, None]
+   requests = [None, None]
+   if MPI.COMM_WORLD.size == 1:
+      ifaces_var[:, -1, :, :] = ifaces_var[:,  1, :, :]
+      ifaces_var[:,  0, :, :] = ifaces_var[:, -2, :, :]
+   else:
+      rank = MPI.COMM_WORLD.rank
+      next = (rank + 1) % MPI.COMM_WORLD.size
+      prev = (rank - 1) % MPI.COMM_WORLD.size
+
+      recv_buffers[0] = numpy.empty_like(ifaces_var[:, 0, :, :])
+      recv_buffers[1] = numpy.empty_like(recv_buffers[0])
+
+      MPI.COMM_WORLD.Isend(ifaces_var[:, 1, :, :].copy(), dest=prev)
+      MPI.COMM_WORLD.Isend(ifaces_var[:, -2, :, :].copy(), dest=next)
+
+      requests[0] = MPI.COMM_WORLD.Irecv(recv_buffers[0], source=prev)
+      requests[1] = MPI.COMM_WORLD.Irecv(recv_buffers[1], source=next)
+
    # --- Unpack physical variables
    rho      = Q[idx_2d_rho,:,:]
    uu       = Q[idx_2d_rho_u,:,:] / rho
@@ -41,45 +74,11 @@ def rhs_bubble(Q, geom, mtrx, nbsolpts, nb_elements_x, nb_elements_z):
    flux_x3[idx_2d_rho_w,:,:]     = Q[idx_2d_rho_w,:,:] * ww + pressure
    flux_x3[idx_2d_rho_theta,:,:] = Q[idx_2d_rho_theta,:,:] * ww
 
-   # --- Interpolate to the element interface
-   for elem in range(nb_elements_z):
-      epais = elem * nbsolpts + numpy.arange(nbsolpts)
-
-      kfaces_var[:,elem,0,:] = mtrx.extrap_down @ Q[:,epais,:]
-      kfaces_var[:,elem,1,:] = mtrx.extrap_up @ Q[:,epais,:]
-
-   for elem in range(nb_elements_x):
-      epais = elem * nbsolpts + numpy.arange(nbsolpts)
-
-      ifaces_var[:,elem+1,:,0] = Q[:,:,epais] @ mtrx.extrap_west
-      ifaces_var[:,elem+1,:,1] = Q[:,:,epais] @ mtrx.extrap_east
-
-   if MPI.COMM_WORLD.size == 1:
-      ifaces_var[:, -1, :, :] = ifaces_var[:,  1, :, :]
-      ifaces_var[:,  0, :, :] = ifaces_var[:, -2, :, :]
-   else:
-      rank = MPI.COMM_WORLD.rank
-      next = (rank + 1) % MPI.COMM_WORLD.size
-      prev = (rank - 1) % MPI.COMM_WORLD.size
-
-      buffer = numpy.empty_like(ifaces_var[:, 0, :, :])
-      if rank % 2 == 0:
-         # To/from right
-         buffer[:] = ifaces_var[:, -2, :, :]; MPI.COMM_WORLD.Send(buffer, dest=next, tag=rank)
-         MPI.COMM_WORLD.Recv(buffer, source=next, tag=rank); ifaces_var[:, -1, :, :] = buffer
-
-         # To/from left
-         buffer[:] = ifaces_var[:, 1, :, :]; MPI.COMM_WORLD.Send(buffer, dest=prev, tag=rank)
-         MPI.COMM_WORLD.Recv(buffer, source=prev, tag=rank); ifaces_var[:, 0, :, :] = buffer
-
-      else:
-         # From/to left
-         MPI.COMM_WORLD.Recv(buffer, source=prev, tag=prev); ifaces_var[:, 0, :, :] = buffer
-         buffer[:] = ifaces_var[:, 1, :, :]; MPI.COMM_WORLD.Send(buffer, dest=prev, tag=prev)
-
-         # From/to right
-         MPI.COMM_WORLD.Recv(buffer, source=next, tag=next); ifaces_var[:, -1, :, :] = buffer
-         buffer[:] = ifaces_var[:, -2, :, :]; MPI.COMM_WORLD.Send(buffer, dest=next, tag=next)
+   if MPI.COMM_WORLD.size > 1:
+      requests[0].Wait()
+      ifaces_var[:, 0, :, :] = recv_buffers[0]
+      requests[1].Wait()
+      ifaces_var[:, -1, :, :] = recv_buffers[1]
 
    # --- Interface pressure
    ifaces_pres = p0 * (ifaces_var[idx_2d_rho_theta] * Rd / p0)**(cpd / cvd)
@@ -102,10 +101,11 @@ def rhs_bubble(Q, geom, mtrx, nbsolpts, nb_elements_x, nb_elements_z):
    kfaces_flux[idx_2d_rho_w, 0, 0, :] = kfaces_pres[ 0, 0, :]
    kfaces_flux[idx_2d_rho_w,-1, 1, :] = kfaces_pres[-1, 1, :]
 
-   if MPI.COMM_WORLD.rank == 0:
-      ifaces_flux[idx_2d_rho_u,  1, :, 0] = ifaces_pres[ 1, :, 0]  # TODO : pour les cas théoriques seulement ...
-   if MPI.COMM_WORLD.rank == MPI.COMM_WORLD.size - 1:
-      ifaces_flux[idx_2d_rho_u, -2, :, 1] = ifaces_pres[-2, :, 1]
+   if not geom.xperiodic:
+      if MPI.COMM_WORLD.rank == 0:
+         ifaces_flux[idx_2d_rho_u,  1, :, 0] = ifaces_pres[ 1, :, 0]  # TODO : pour les cas théoriques seulement ...
+      if MPI.COMM_WORLD.rank == MPI.COMM_WORLD.size - 1:
+         ifaces_flux[idx_2d_rho_u, -2, :, 1] = ifaces_pres[-2, :, 1]
 
    # ifaces_flux[idx_2d_rho_u,  0, :, :] = ifaces_flux[idx_2d_rho_u, -2, : , :]
    # ifaces_flux[idx_2d_rho_u, -1, :, :] = ifaces_flux[idx_2d_rho_u,  1, : , :]
@@ -135,9 +135,10 @@ def rhs_bubble(Q, geom, mtrx, nbsolpts, nb_elements_x, nb_elements_z):
 
    # --- Horizontal AUSM fluxes
    start = 1
-   end = nb_interfaces_x + 1
+   end   = start + nb_interfaces_x
    if (not geom.xperiodic) and MPI.COMM_WORLD.rank == MPI.COMM_WORLD.size - 1: end -= 1
    if (not geom.xperiodic) and MPI.COMM_WORLD.rank == 0: start += 1
+   # num iterations = end - start - 1
    for itf in range(start, end):
 
       left  = itf - 1

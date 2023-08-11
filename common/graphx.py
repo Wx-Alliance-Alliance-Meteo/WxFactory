@@ -215,7 +215,22 @@ def image_field(geom: Cartesian2D, field: numpy.ndarray, filename: str, vmin: fl
       matplotlib.pyplot.close(fig) 
 
    MPI.COMM_WORLD.Barrier()
-   return
+
+def image_random_field(field: numpy.ndarray, filename: str):
+   field_glb = MPI.COMM_WORLD.gather(field, root=0)
+   if MPI.COMM_WORLD.rank == 0:
+      field_glb = numpy.vstack(field_glb)
+      fig, ax = matplotlib.pyplot.subplots()
+
+      cmap = matplotlib.pyplot.contourf(field_glb, levels=numpy.linspace(-2.4e-5, 2.4e-5, 200), extend="both")
+      ax.set_aspect('auto', 'box')
+      cbar = fig.colorbar(cmap, ax=ax, orientation='vertical', shrink=0.5)
+      # cbar.set_label(label, )
+
+      matplotlib.pyplot.savefig(filename)
+      matplotlib.pyplot.close(fig) 
+
+   MPI.COMM_WORLD.Barrier()
 
 def print_residual_per_variable(geom, field, filename = None):
 

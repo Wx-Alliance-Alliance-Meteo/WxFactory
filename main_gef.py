@@ -123,12 +123,17 @@ def adjust_nb_elements(param: Configuration):
                f'to {param.nb_elements_horizontal} (per PE)')
          print(f'allowed_pe_counts = {allowed_pe_counts}')
    elif param.grid_type == 'cartesian2d':
+      if MPI.COMM_WORLD.size == 2:
+         raise ValueError(f'There is a bug that manifests when using exactly 2 PEs.'
+                          f' Remove this warning if you still want to risk it.')
+
       allowed_pe_counts = [i
                            for i in range(1, param.nb_elements_horizontal // 2 + 1)
-                           if (param.nb_elements_horizontal % i) == 0 and (i == 1 or i % 2 == 0)]
+                           if (param.nb_elements_horizontal % i) == 0]
       if MPI.COMM_WORLD.size not in allowed_pe_counts:
          raise ValueError(f'Invalid number of processors for this particular problem size. '
                           f'Allowed counts are {allowed_pe_counts}')
+
       param.nb_elements_horizontal = param.nb_elements_horizontal_total // MPI.COMM_WORLD.size
       if MPI.COMM_WORLD.rank == 0:
          print(f'Adjusting horizontal number of elements from {param.nb_elements_horizontal_total} (total) '
