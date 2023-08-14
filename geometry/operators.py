@@ -157,6 +157,9 @@ class DFROperators:
       if self.expfilter_apply:
          Q = self.apply_filter_3d(Q, geom, metric)
 
+      def i_to_part(i):
+         return i // Q.shape[3], i % Q.shape[3]
+
       # Apply Sponge (if desired)
       if self.apply_sponge:
          nk, ni = geom.X1.shape
@@ -167,8 +170,9 @@ class DFROperators:
                # !!! Important Note:
                #     TODO: For 3D, we want to rotate radially, apply sponge, rotate back
                # !!!!!!!!
-               ww = (1.0 / (1.0 + self.beta[k,i] * dt)) * Q[idx_2d_rho_w, k, i]
-               Q[idx_2d_rho_w, k, i] = ww
+               p, l = i_to_part(i)
+               ww = (1.0 / (1.0 + self.beta[k,i] * dt)) * Q[p, idx_2d_rho_w, k, l]
+               Q[p, idx_2d_rho_w, k, l] = ww
 
       return Q
 

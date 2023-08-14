@@ -16,6 +16,8 @@ class Cartesian2D(Geometry):
                 bottom_layer_height: int):
       super().__init__(nbsolpts, 'cartesian2d')
 
+      self.num_partitions = 2
+
       scaled_points = 0.5 * (1.0 + self.solutionPoints)
 
       if MPI.COMM_WORLD.size > 1:

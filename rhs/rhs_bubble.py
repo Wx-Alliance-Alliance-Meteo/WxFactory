@@ -4,10 +4,13 @@ import numpy
 from common.definitions import idx_2d_rho, idx_2d_rho_u, idx_2d_rho_w, idx_2d_rho_theta,  \
                                p0, Rd, cpd, cvd, heat_capacity_ratio, gravity
 
-def rhs_bubble(Q, geom, mtrx, nbsolpts, nb_elements_x, nb_elements_z):
+def rhs_bubble(Q: numpy.ndarray, geom, mtrx, nbsolpts, nb_elements_x, nb_elements_z):
 
    datatype = Q.dtype
-   nb_equations = Q.shape[0] # Number of constituent Euler equations.  Probably 6.
+   nb_equations = Q.shape[1] # Number of constituent Euler equations.  Probably 6.
+
+   num_partitions = Q.shape[0]
+   part_size = nb_elements_x // num_partitions
 
    nb_interfaces_x = nb_elements_x + 1
    nb_interfaces_z = nb_elements_z + 1
@@ -25,17 +28,27 @@ def rhs_bubble(Q, geom, mtrx, nbsolpts, nb_elements_x, nb_elements_z):
    ifaces_var  = numpy.ones((nb_equations, nb_elements_x + 2, nbsolpts*nb_elements_z, 2), dtype=datatype)
 
    # --- Interpolate to the element interface
+   ni = nbsolpts * nb_elements_x
+   pni = ni // num_partitions
    for elem in range(nb_elements_z):
       epais = elem * nbsolpts + numpy.arange(nbsolpts)
 
-      kfaces_var[:,elem,0,:] = mtrx.extrap_down @ Q[:,epais,:]
-      kfaces_var[:,elem,1,:] = mtrx.extrap_up @ Q[:,epais,:]
+      for part in range(num_partitions):
+         pstart = pni * part
+         pend   = pni * (part + 1)
+         kfaces_var[:,elem,0, pstart:pend] = mtrx.extrap_down @ Q[part][:, epais, :]
+         kfaces_var[:,elem,1, pstart:pend] = mtrx.extrap_up @ Q[part][:, epais, :]
 
-   for elem in range(nb_elements_x):
-      epais = elem * nbsolpts + numpy.arange(nbsolpts)
+   for part in range(num_partitions):
+      for local_elem in range(part_size):
+         elem = part * part_size + local_elem
+         epais = local_elem * nbsolpts + numpy.arange(nbsolpts)
 
-      ifaces_var[:,elem+1,:,0] = Q[:,:,epais] @ mtrx.extrap_west
-      ifaces_var[:,elem+1,:,1] = Q[:,:,epais] @ mtrx.extrap_east
+         # print(f'epais: {epais}')
+         # print(f'shape Q = {(Q[part][:, :, epais]).shape} (from {Q.shape}) {Q[:, :, :, epais].shape}')
+         # mul = Q[part, :, :, epais] @ mtrx.extrap_west
+         ifaces_var[:,elem+1,:,0] = Q[part][:,:,epais] @ mtrx.extrap_west
+         ifaces_var[:,elem+1,:,1] = Q[part][:,:,epais] @ mtrx.extrap_east
 
    # Start transmission as soon as possible
    recv_buffers = [None, None]
@@ -58,21 +71,21 @@ def rhs_bubble(Q, geom, mtrx, nbsolpts, nb_elements_x, nb_elements_z):
       requests[1] = MPI.COMM_WORLD.Irecv(recv_buffers[1], source=next)
 
    # --- Unpack physical variables
-   rho      = Q[idx_2d_rho,:,:]
-   uu       = Q[idx_2d_rho_u,:,:] / rho
-   ww       = Q[idx_2d_rho_w,:,:] / rho
-   pressure = p0 * numpy.exp((cpd/cvd) * numpy.log((Rd/p0)*Q[idx_2d_rho_theta, :, :]))
+   rho      = Q[:, idx_2d_rho,:,:]
+   uu       = Q[:, idx_2d_rho_u,:,:] / rho
+   ww       = Q[:, idx_2d_rho_w,:,:] / rho
+   pressure = p0 * numpy.exp((cpd/cvd) * numpy.log((Rd/p0)*Q[:, idx_2d_rho_theta, :, :]))
 
    # --- Compute the fluxes
-   flux_x1[idx_2d_rho,:,:]       = Q[idx_2d_rho_u,:,:]
-   flux_x1[idx_2d_rho_u,:,:]     = Q[idx_2d_rho_u,:,:] * uu + pressure
-   flux_x1[idx_2d_rho_w,:,:]     = Q[idx_2d_rho_u,:,:] * ww
-   flux_x1[idx_2d_rho_theta,:,:] = Q[idx_2d_rho_theta,:,:] * uu
+   flux_x1[:, idx_2d_rho,:,:]       = Q[:, idx_2d_rho_u,:,:]
+   flux_x1[:, idx_2d_rho_u,:,:]     = Q[:, idx_2d_rho_u,:,:] * uu + pressure
+   flux_x1[:, idx_2d_rho_w,:,:]     = Q[:, idx_2d_rho_u,:,:] * ww
+   flux_x1[:, idx_2d_rho_theta,:,:] = Q[:, idx_2d_rho_theta,:,:] * uu
 
-   flux_x3[idx_2d_rho,:,:]       = Q[idx_2d_rho_w,:,:]
-   flux_x3[idx_2d_rho_u,:,:]     = Q[idx_2d_rho_w,:,:] * uu
-   flux_x3[idx_2d_rho_w,:,:]     = Q[idx_2d_rho_w,:,:] * ww + pressure
-   flux_x3[idx_2d_rho_theta,:,:] = Q[idx_2d_rho_theta,:,:] * ww
+   flux_x3[:, idx_2d_rho,:,:]       = Q[:, idx_2d_rho_w,:,:]
+   flux_x3[:, idx_2d_rho_u,:,:]     = Q[:, idx_2d_rho_w,:,:] * uu
+   flux_x3[:, idx_2d_rho_w,:,:]     = Q[:, idx_2d_rho_w,:,:] * ww + pressure
+   flux_x3[:, idx_2d_rho_theta,:,:] = Q[:, idx_2d_rho_theta,:,:] * ww
 
    if MPI.COMM_WORLD.size > 1:
       requests[0].Wait()
@@ -165,27 +178,35 @@ def rhs_bubble(Q, geom, mtrx, nbsolpts, nb_elements_x, nb_elements_z):
    for elem in range(nb_elements_z):
       epais = elem * nbsolpts + numpy.arange(nbsolpts)
 
-      if geom.bottom_layer_delta > 0:
-         if elem < geom.nb_elements_bottom_layer:
-            df3_dx3[:, epais, :] = (mtrx.diff_solpt @ flux_x3[:, epais, :] + \
-                                    mtrx.correction @ kfaces_flux[:, elem, :, :]) * (2.0 / geom.bottom_layer_delta)
+      for part in range(num_partitions):
+         pstart = pni * part
+         pend   = pni * (part + 1)
+         if geom.bottom_layer_delta > 0:
+            if elem < geom.nb_elements_bottom_layer:
+               df3_dx3[part][:, epais, :] = (mtrx.diff_solpt @ flux_x3[part][:, epais, :] + \
+                                       mtrx.correction @ kfaces_flux[:, elem, :, pstart:pend]) * (2.0 / geom.bottom_layer_delta)
+            else:
+               df3_dx3[part][:, epais, :] = (mtrx.diff_solpt @ flux_x3[part][:, epais, :] + \
+                                       mtrx.correction @ kfaces_flux[:, elem, :, pstart:pend]) * (2.0 / geom.Δx3)
          else:
-            df3_dx3[:, epais, :] = (mtrx.diff_solpt @ flux_x3[:, epais, :] + \
-                                    mtrx.correction @ kfaces_flux[:, elem, :, :]) * (2.0 / geom.Δx3)
-      else:
-         df3_dx3[:, epais, :] = (mtrx.diff_solpt @ flux_x3[:, epais, :] + mtrx.correction @ kfaces_flux[:, elem, :,:]) \
-                                * 2.0 / geom.Δx3
+            df3_dx3[part][:, epais, :] = (mtrx.diff_solpt @ flux_x3[part][:, epais, :] + mtrx.correction @ kfaces_flux[:, elem, :, pstart:pend]) \
+                                 * 2.0 / geom.Δx3
 
-   for elem in range(nb_elements_x):
-      epais = elem * nbsolpts + numpy.arange(nbsolpts)
+   for part in range(num_partitions):
+      for local_elem in range(part_size):
+         elem = part * part_size + local_elem
+         epais = local_elem * nbsolpts + numpy.arange(nbsolpts)
 
-      df1_dx1[:,:,epais] = (flux_x1[:,:,epais] @ mtrx.diff_solpt.T + ifaces_flux[:,elem+1,:,:] @ mtrx.correction.T) * \
-                           2.0/geom.Δx1
+         df1_dx1[part][:,:,epais] = (flux_x1[part][:,:,epais] @ mtrx.diff_solpt.T + ifaces_flux[:,elem+1,:,:] @ mtrx.correction.T) * \
+                              2.0/geom.Δx1
 
    # --- Assemble the right-hand sides
    rhs = - ( df1_dx1 + df3_dx3 )
 
-   rhs[idx_2d_rho_w,:,:] -= Q[idx_2d_rho,:,:] * gravity
+   rhs[:, idx_2d_rho_w,:,:] -= Q[:, idx_2d_rho,:,:] * gravity
+
+   def i_to_part(i):
+      return i // (part_size * nbsolpts), i % (part_size * nbsolpts)
 
    # TODO : Add sources terms for Brikman penalization
    # It may be better to do this elementwise...
@@ -194,14 +215,16 @@ def rhs_bubble(Q, geom, mtrx, nbsolpts, nb_elements_x, nb_elements_z):
       for item in geom.chiMask:
          k=item[0]
          i=item[1]
+         p, l = i_to_part(i)
+         # print(f'{i}: {p}, {l} (size {part_size})')
          if item in geom.chiMaskBoundary:
-            nrmluw = geom.terrainNormalXcmp[k, i] * df1_dx1[idx_2d_rho_u, k, i] + \
-                     geom.terrainNormalZcmp[k, i] * df3_dx3[idx_2d_rho_w, k, i]
-            rhs[idx_2d_rho_u, k, i] = -(1 / etac) * nrmluw * geom.terrainNormalXcmp[k, i]
-            rhs[idx_2d_rho_w, k, i] = -(1 / etac) * nrmluw * geom.terrainNormalZcmp[k, i]
+            nrmluw = geom.terrainNormalXcmp[k, i] * df1_dx1[p, idx_2d_rho_u, k, l] + \
+                     geom.terrainNormalZcmp[k, i] * df3_dx3[p, idx_2d_rho_w, k, l]
+            rhs[p, idx_2d_rho_u, k, l] = -(1 / etac) * nrmluw * geom.terrainNormalXcmp[k, i]
+            rhs[p, idx_2d_rho_w, k, l] = -(1 / etac) * nrmluw * geom.terrainNormalZcmp[k, i]
 
          else:
-            rhs[idx_2d_rho_u, k, i] = 0
-            rhs[idx_2d_rho_w, k, i] = 0
+            rhs[p, idx_2d_rho_u, k, l] = 0
+            rhs[p, idx_2d_rho_w, k, l] = 0
 
    return rhs

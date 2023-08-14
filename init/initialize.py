@@ -159,7 +159,7 @@ def initialize_cartesian2d(geom: Cartesian2D, param: Configuration):
 
    # Initial state at rest, isentropic, hydrostatic
    nk, ni = geom.X1.shape
-   Q = numpy.zeros((nb_equations, nk, ni))
+   Q = numpy.zeros((geom.num_partitions, nb_equations, nk, ni // geom.num_partitions))
    uu    = numpy.zeros_like(geom.X1)
    ww    = numpy.zeros_like(geom.X1)
    exner = numpy.zeros_like(geom.X1)
@@ -330,9 +330,12 @@ def initialize_cartesian2d(geom: Cartesian2D, param: Configuration):
 
    ρ = p0 / (Rd * θ) * exner**(cvd / Rd)
 
-   Q[idx_2d_rho,:,:]       = ρ
-   Q[idx_2d_rho_u,:,:]     = ρ * uu
-   Q[idx_2d_rho_w,:,:]     = ρ * ww
-   Q[idx_2d_rho_theta,:,:] = ρ * θ
+   for i in range(geom.num_partitions):
+      pstart = ni // geom.num_partitions * i
+      pend   = ni // geom.num_partitions * (i+1)
+      Q[i, idx_2d_rho,:,:]       = ρ[:, pstart:pend]
+      Q[i, idx_2d_rho_u,:,:]     = ρ[:, pstart:pend] * uu[:, pstart:pend]
+      Q[i, idx_2d_rho_w,:,:]     = ρ[:, pstart:pend] * ww[:, pstart:pend]
+      Q[i, idx_2d_rho_theta,:,:] = ρ[:, pstart:pend] * θ[:, pstart:pend]
 
    return Q
