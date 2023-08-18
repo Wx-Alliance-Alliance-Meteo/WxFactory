@@ -4,11 +4,10 @@ from typing      import Callable
 
 from mpi4py      import MPI
 import numpy
-import cupy
 
 from common.program_options import Configuration
 from .integrator            import Integrator, SolverInfo
-from solvers                import kiops, kiops_cuda, matvec_fun, pmex
+from solvers                import kiops, matvec_fun, pmex
 
 class Epi(Integrator):
    def __init__(self, param: Configuration, order: int, rhs: Callable, init_method=None, init_substeps: int = 1):
@@ -18,6 +17,7 @@ class Epi(Integrator):
       self.krylov_size = 1
       self.jacobian_method = param.jacobian_method
       self.exponential_solver = param.exponential_solver
+      self.device = param.device
 
       if order == 2:
          self.A = numpy.array([[]])
@@ -59,8 +59,6 @@ class Epi(Integrator):
       self.init_substeps = init_substeps
 
    def __step__(self, Q: numpy.ndarray, dt: float):
-
-      xp = cupy.get_array_module(Q)
 
       # If dt changes, discard saved value and redo initialization
       mpirank = MPI.COMM_WORLD.Get_rank()
@@ -104,7 +102,10 @@ class Epi(Integrator):
                   f' to a solution with local error {stats[4]:.2e}')
 
       else:
-         f = kiops_cuda if xp is cupy else kiops
+         if self.device == "cuda":
+            from solvers import kiops_cuda as f
+         else:
+            f = kiops
          phiv, stats = f([1], matvec_handle, vec, tol=self.tol, m_init=self.krylov_size, mmin=16, mmax=64, task1=False)
 
          self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)

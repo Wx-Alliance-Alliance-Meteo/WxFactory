@@ -8,7 +8,6 @@ import sys
 
 from mpi4py import MPI
 import numpy
-import cupy
 
 from common.definitions         import idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_w
 from common.parallel            import DistributedWorld
@@ -24,10 +23,6 @@ from rhs.rhs_selector           import RhsBundle
 
 def main(argv) -> int:
    """ This function sets up the infrastructure and performs the time loop of the model. """
-
-   # (brl423) TODO: don't do this
-   import rhs.rhs_bubble
-   rhs.rhs_bubble.is_gpu = False
 
    # Read configuration file
    param = Configuration(argv.config, MPI.COMM_WORLD.rank == 0)
@@ -117,6 +112,8 @@ def main(argv) -> int:
 
 def setup_system(param: Configuration):
    if param.device == "cuda":
+      import cupy
+
       rank = MPI.COMM_WORLD.Get_rank()
       devnum = rank % len(param.cuda_device)
       cupy.cuda.Device(param.cuda_device[devnum]).use()

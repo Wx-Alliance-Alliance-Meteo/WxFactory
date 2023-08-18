@@ -1,5 +1,4 @@
 import numpy
-import cupy
 
 from common.definitions        import *
 from init.dcmip              import *
@@ -257,5 +256,7 @@ def initialize_cartesian2d(geom: Cartesian2D, param: Configuration) -> NDArray[n
    Q[idx_2d_rho_w,:,:]     = ρ * ww
    Q[idx_2d_rho_theta,:,:] = ρ * θ
 
-   xp = cupy if param.device == "cuda" else numpy
-   return xp.asarray(Q)
+   if param.device == "cuda":
+      import cupy
+      return cupy.asarray(Q)
+   return Q

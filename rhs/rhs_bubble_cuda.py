@@ -1,5 +1,4 @@
 import cupy as cp
-from cupyx import jit
 from common.cuda_module import CudaModule, DimSpec, Dim, cuda_kernel
 
 from geometry.cartesian_2d_mesh import Cartesian2D

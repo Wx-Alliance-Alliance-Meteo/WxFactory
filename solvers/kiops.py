@@ -1,5 +1,5 @@
 import math
-import time
+
 from mpi4py import MPI
 import numpy
 import scipy.linalg
@@ -149,13 +149,7 @@ def kiops(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 2,
          j = j + 1
 
          # Augmented matrix - vector product
-         """tic = time.time()"""
          V[j, 0:n    ] = A( V[j-1, 0:n] ) + V[j-1, n:n+p] @ u_flip
-         """
-         toc = time.time()
-         print(f'[{τ_now:.4f}/{τ_end:.1f}] rhs_bubble with j={j} took {toc-tic} seconds.')
-         """
-         
          V[j, n:n+p-1] = V[j-1, n+1:n+p]
          V[j, -1     ] = 0.0
 
@@ -320,7 +314,4 @@ def kiops(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 2,
 
    stats = (step, reject, krystep, exps, conv, m_ret)
 
-   # from .kiops_cuda import kiops_cuda
-   # wcuda, statscuda = kiops_cuda(τ_out, A, u, tol, m_init, mmin, mmax, iop, task1)
-   # print(f"Kiops error: {numpy.abs(wcuda - w).max()}")
    return w, stats
