@@ -1,15 +1,19 @@
 """
 Provide a smooth interface between .cu files and python code.
+
+See `rhs/rhs_bubble_cuda.py` for a simple example of these utilities,
+and `rhs/rhs_euler_cuda.py` for an example using C++ templates.
+This module tries to emulate C++ syntax in Python for generating template instantiations,
+so seeing how it is used is easier than going through this code.
 """
 
 import os
 import inspect
-import warnings
 from dataclasses import dataclass, field
 import cupy as cp
 
 from os import PathLike
-from typing import Callable, Iterable, Iterator, Collection, Mapping, TypeVar, TypeVarTuple, Generic, Self, Any
+from typing import Callable, Iterable, Iterator, Mapping, TypeVar, TypeVarTuple, Generic, Self, Any
 
 CUDA_DEVICE_COUNT: int = cp.cuda.runtime.getDeviceCount()
 CUDA_THREAD_LIMIT      = tuple[int, ...](cp.cuda.runtime.getDeviceProperties(i)["maxThreadsPerBlock"] for i in range(CUDA_DEVICE_COUNT))
@@ -48,6 +52,24 @@ RawKernel  = Callable[[Dim, Dim, tuple[*KernelArgs]], None]
 
 class CudaModule(type):
 
+    """
+    Initialize this CudaModule by loading the given .cu file
+    and setting up each of the member functions.
+
+    `cls`, `name`, `bases`, and `namespace` are automatically passed to this function.
+
+    `path`: path to .cu source
+
+    `defines`: additional macro definitions
+
+    `cpp_standard`: c++ compiler standard. should not be older than c++11.
+
+    `path_lexically_relative`: if true and `path` is relative,
+    look in the directory of the source file where the new cuda module is defined,
+    i.e., if `SomeModule` is defined in `/path/to/some_module.py`
+    and `path` is `some_module.cu`, the actual path will be `/path/to/some_module.cu`
+    (regardless of the actual current working directory).
+    """
     def __new__(cls: type[Self],
                 name: str,
                 bases: tuple[type, ...],
@@ -124,10 +146,19 @@ class DimSpec:
 
     x, y, z = 0, 1, 2
     
+    """
+    The cuda kernel will have only one CUDA thread.
+    """
     @classmethod
     def one_thread(cls: type[Self]) -> DimFun[*KernelArgs]:
         return lambda *_: (Dim(), Dim())
 
+    """
+    The cuda kernel will look at the shape of argument `arg` (default 0, i.e., first argument),
+    pass that shape through `shape` (if given),
+    and create as many threads as there are elements in the array (implied by the result of `shape`).
+    Those threads are then grouped into CUDA blocks along dimension `dim`.
+    """
     @classmethod
     def groupby(cls: type[Self], dim: int, arg: int = 0, shape: Callable[[tuple[int, ...]], Dim] = lambda x: Dim(*x)) -> DimFun[*KernelArgs]:
         def ret(*args: *KernelArgs) -> tuple[Dim, Dim]:
@@ -149,6 +180,12 @@ class DimSpec:
         return cls.groupby(cls.x, 0, shape)
 
 
+"""
+When loading templated C++ functions,
+you must request which instantiations you want to use.
+A Requires object is a wrapper around a function which
+generates the types for which we want instantiations.
+"""
 class Requires(object):
 
     def __init__(self: Self,
@@ -169,10 +206,17 @@ class Requires(object):
     def depends(self: Self) -> Iterable[str]:
         return (s.__name__ for s in self.ss)
     
+    """
+    Generate double and complex<double> instantiations for the TypeVar t.
+    """
     @classmethod
     def DoubleOrComplex(cls: type[Self], t: TypeVar) -> Self:
         return Requires(lambda: ("double", "complex<double>"), t)
     
+    """
+    If s is a real scalar, generate instantiations for t for that scalar.
+    If s is a complex scalar, generate instantiations for t for that scalar's element type.
+    """
     @classmethod
     def ModulusOf(cls: type[Self], t: TypeVar, s: TypeVar) -> Self:
         lookup = {
@@ -192,11 +236,17 @@ class TemplateSpec:
         cp.dtype(cp.complex128): "complex<double>"
     }
 
+    """
+    For each index i passed,
+    look at argument i to determine what the type of TypeVar i should be,
+    using the `numpy_to_cpp` lookup table.
+    """
     @classmethod
     def array_dtype(cls: type[Self], *params: int) -> Callable[[*KernelArgs], str]:
         return lambda *args: '<' + ", ".join(cls.numpy_to_cpp[args[i].dtype] for i in params) + '>'
 
 
+""" generate all desired template instantiations based on given TypeVars and Requires objects """
 def parse_template(*args: TypeVar | Requires) -> list[str]:
     typevars = list[str]()
     requires = list[Requires]()
@@ -221,4 +271,26 @@ class _CudaKernelDecorator:
         -> Callable[[DimFun[*KernelArgs]], Callable[[Callable[[*KernelArgs], None]], CudaKernel[*KernelArgs]]]:
         templates = ['<' + ", ".join(tvars) + '>' for tvars in parse_template(*args)]
         return lambda dimspec, templatespec: (lambda _: CudaKernel(dimspec, templates, templatespec))
+"""
+Uses:
+
+Non-template functions
+@cuda_kernel(dimspec)
+
+Template functions:
+@cuda_kernel[template args...](dimspec, templatespec)
+
+dimspec should be a function which takes all the arguments of the wrapped function
+and returns a pair of `Dim`s:
+The first `Dim` is the grid shape of the CUDA kernel to be launched,
+and the second is the block shape of the kernel.
+
+templatespec should be a function which takes all arguments of the wrapped function
+and returns a string of an angle bracket-enclosed list of types to use
+(as one would use when calling a templated C++ function without argument deduction).
+
+The actual function wrapped by this decorator is discarded,
+since the internal `CudaKernel` object will receive a function pointer
+from its `CudaModule` once the .cu file has been loaded.
+"""
 cuda_kernel = _CudaKernelDecorator()
