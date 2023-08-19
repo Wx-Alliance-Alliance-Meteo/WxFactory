@@ -8,8 +8,17 @@ import cu_utils.linalg
 from typing import Callable
 from numpy.typing import NDArray
 
+# 
+# In the original kiops function, the array "V" is absolutely massive,
+# usually too large to reside on GPU for any moderately-sized problem.
+# This version of kiops stores the "V" array on the CPU,
+# but stores just the most recently computed rows of "V" on the GPU
+# and manually transfers them to the right place on a separate CUDA stream
+# when profiling has indicated that the GPU is busy.
+# This is sufficient to keep most computations on the GPU,
+# although some must by necessity be done on the CPU.
+# 
 
-# @profile
 def kiops_cuda(tau_out: NDArray[cp.float64], A: Callable[[NDArray[cp.float64]], NDArray[cp.float64]], u: NDArray[cp.float64],
                tol: float = 1e-7, m_init: int = 10, mmin: int = 10, mmax: int = 128,
                iop: int = 2, task1: bool = False) -> tuple[NDArray[np.float64], tuple]:
