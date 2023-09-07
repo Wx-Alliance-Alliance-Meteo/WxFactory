@@ -41,14 +41,15 @@ def rhs_bubble(Q, geom, mtrx, nbsolpts, nb_elements_x, nb_elements_z):
    flux_x3[idx_2d_rho_theta,:,:] = Q[idx_2d_rho_theta,:,:] * ww
 
    # --- Interpolate to the element interface
+   standard_slice = numpy.arange(nbsolpts)
    for elem in range(nb_elements_z):
-      epais = elem * nbsolpts + numpy.arange(nbsolpts)
+      epais = elem * nbsolpts + standard_slice
 
       kfaces_var[:,elem,0,:] = mtrx.extrap_down @ Q[:,epais,:]
       kfaces_var[:,elem,1,:] = mtrx.extrap_up @ Q[:,epais,:]
 
    for elem in range(nb_elements_x):
-      epais = elem * nbsolpts + numpy.arange(nbsolpts)
+      epais = elem * nbsolpts + standard_slice
 
       ifaces_var[:,elem,:,0] = Q[:,:,epais] @ mtrx.extrap_west
       ifaces_var[:,elem,:,1] = Q[:,:,epais] @ mtrx.extrap_east
@@ -127,18 +128,13 @@ def rhs_bubble(Q, geom, mtrx, nbsolpts, nb_elements_x, nb_elements_z):
 
    # --- Compute the derivatives
    for elem in range(nb_elements_z):
-      epais = elem * nbsolpts + numpy.arange(nbsolpts)
+      epais = elem * nbsolpts + standard_slice
+      factor = 2.0 / geom.Δx3
+      if elem < geom.nb_elements_relief_layer:
+         factor = 2.0 / geom.relief_layer_delta
 
-      if geom.bottom_layer_delta > 0:
-         if elem < geom.nb_elements_bottom_layer:
-            df3_dx3[:, epais, :] = (mtrx.diff_solpt @ flux_x3[:,epais,:] + mtrx.correction @ kfaces_flux[:,elem,:,:]) \
-                                   * (2.0 / geom.bottom_layer_delta)
-         else:
-            df3_dx3[:, epais, :] = (mtrx.diff_solpt @ flux_x3[:, epais, :] + \
-                                    mtrx.correction @ kfaces_flux[:, elem, :,:]) * 2.0 / geom.Δx3
-      else:
-         df3_dx3[:, epais, :] = (mtrx.diff_solpt @ flux_x3[:, epais, :] + mtrx.correction @ kfaces_flux[:, elem, :,:]) \
-                                * 2.0 / geom.Δx3
+      df3_dx3[:, epais, :] = \
+         (mtrx.diff_solpt @ flux_x3[:, epais, :] + mtrx.correction @ kfaces_flux[:, elem, :, :]) * factor
 
    for elem in range(nb_elements_x):
       epais = elem * nbsolpts + numpy.arange(nbsolpts)
@@ -153,19 +149,19 @@ def rhs_bubble(Q, geom, mtrx, nbsolpts, nb_elements_x, nb_elements_z):
 
    # TODO : Add sources terms for Brikman penalization
    # It may be better to do this elementwise...
-   if len(geom.chiMask) > 1:
-      etac = 1 # 1e-1
-      for item in geom.chiMask:
-         k=item[0]
-         i=item[1]
-         if item in geom.chiMaskBoundary:
-            nrmluw = geom.terrainNormalXcmp[k, i] * df1_dx1[idx_2d_rho_u, k, i] + \
-                     geom.terrainNormalZcmp[k, i] * df3_dx3[idx_2d_rho_w, k, i]
-            rhs[idx_2d_rho_u, k, i] = -(1 / etac) * nrmluw * geom.terrainNormalXcmp[k, i]
-            rhs[idx_2d_rho_w, k, i] = -(1 / etac) * nrmluw * geom.terrainNormalZcmp[k, i]
+   if geom.nb_elements_relief_layer > 1:
 
-         else:
-            rhs[idx_2d_rho_u, k, i] = 0
-            rhs[idx_2d_rho_w, k, i] = 0
+      end = geom.nb_elements_relief_layer * nbsolpts
+      etac = 1.0 # 1e-1
+
+      normal_flux = numpy.where( \
+            geom.relief_boundary_mask,
+            geom.normals_x * df1_dx1[idx_2d_rho_u, :end, :] + geom.normals_z * df3_dx3[idx_2d_rho_w, :end, :],
+            0.0)
+
+      rhs[idx_2d_rho_u, :end, :] = numpy.where( \
+            geom.relief_mask, -(1.0 / etac) * normal_flux * geom.normals_x, rhs[idx_2d_rho_u, :end, :])
+      rhs[idx_2d_rho_w, :end, :] = numpy.where( \
+            geom.relief_mask, -(1.0 / etac) * normal_flux * geom.normals_z, rhs[idx_2d_rho_w, :end, :])
 
    return rhs

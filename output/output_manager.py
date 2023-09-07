@@ -5,9 +5,9 @@ from mpi4py import MPI
 import numpy
 
 from common.program_options import Configuration
-from geometry               import Geometry, Metric, Metric3DTopo, DFROperators
+from geometry               import Cartesian2D, CubedSphere, Geometry, Metric, Metric3DTopo, DFROperators
 from init.initialize        import Topo
-from output.blockstats      import blockstats
+from output.blockstats      import blockstats_cart, blockstats_cs
 from output.solver_stats    import SolverStatsOutput
 from output.state           import save_state
 from precondition.multigrid import Multigrid
@@ -54,14 +54,17 @@ class OutputManager:
             self.step_function = lambda Q, step_id: \
                output_step(Q, self.geometry, self.param, self.output_file_name(step_id))
 
-      if param.stat_freq > 0 and self.geometry.grid_type == 'cubed_sphere':
-         if self.param.equations == 'shallow_water':
-            if self.topo is None:
-               raise ValueError(f'Need a topo for this!')
-            self.blockstat_function = lambda Q, step_id: \
-               blockstats(Q, self.geometry, self.topo, self.metric, self.operators, self.param, step_id)
-         else:
-            print(f'WARNING: Blockstat only implemented for Shallow Water equations')
+      if param.stat_freq > 0:
+         if isinstance(self.geometry, CubedSphere):
+            if self.param.equations == 'shallow_water':
+               if self.topo is None:
+                  raise ValueError(f'Need a topo for this!')
+               self.blockstat_function = lambda Q, step_id: \
+                  blockstats_cs(Q, self.geometry, self.topo, self.metric, self.operators, self.param, step_id)
+            else:
+               print(f'WARNING: Blockstat only implemented for Shallow Water equations')
+         elif isinstance(self.geometry, Cartesian2D):
+            self.blockstat_function = lambda Q, step_id: blockstats_cart(Q, self.geometry, step_id)
 
       state_params = (param.dt, param.nb_elements_horizontal, param.nb_elements_vertical, param.nbsolpts)
       self.config_hash = state_params.__hash__() & 0xffffffffffff

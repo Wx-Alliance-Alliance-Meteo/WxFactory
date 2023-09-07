@@ -1,5 +1,3 @@
-import math
-
 import numpy
 
 from common.definitions      import idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_w, idx_rho_theta,                 \
@@ -168,56 +166,9 @@ def initialize_cartesian2d(geom: Cartesian2D, param: Configuration):
    if param.case_number != 0:
       θ *= param.bubble_theta
 
-
    if param.case_number == 0:
       # Mountain wave
-
-      h0    = 250.   # Max mountain height
-      a     = 5000.  # Overall mountain width factor
-      lmbda = 4000.  # Mountain ripple width factor
-
-      def h_func(x):
-         return h0 * numpy.exp(-(x / a)**2) * numpy.cos(math.pi * x / lmbda)**2
-
-      x = geom.X1[0,:]
-      h = h_func(x)
-
-      # Compute normal component
-      # Note: This will only work for our 2D terrain.
-      delta_x = 1e-8
-      ncompx = (h_func(x + delta_x) - h_func(x - delta_x)) / (2 * delta_x)  # centered differences
-
-      # Create Chi terrain mask
-      for k in range(nk):
-         for i in range(ni):
-            if (geom.X3[k,i] <= h[i]):
-               geom.chiMask.append([k, i])  # Add gridpoint to terrain mask
-
-      # Identify the boundary of the terrain
-      # Note: This is a silly way to do this but it works for now
-      for outerindices in geom.chiMask:
-         maxZ = geom.X3[outerindices[0], outerindices[1]]
-         boundaryIndices = []
-         for innerindices in geom.chiMask:
-            if geom.X1[outerindices[0], outerindices[1]] == geom.X1[innerindices[0],innerindices[1]]:
-               if maxZ < geom.X3[innerindices[0], innerindices[1]]:
-                  maxZ = geom.X3[innerindices[0], innerindices[1]]
-                  boundaryIndices = [innerindices[0], innerindices[1]]
-         if len(boundaryIndices) > 0:
-            geom.chiMaskBoundary.append(boundaryIndices)
-
-      # Create terrain normals
-      for indices in geom.chiMask:
-         if indices in geom.chiMaskBoundary:
-            geom.terrainNormalXcmp[indices[0],indices[1]] = ncompx[indices[1]] / numpy.sqrt(ncompx[indices[1]]**2 + 1)
-
-            geom.terrainNormalZcmp[indices[0],indices[1]] = -1.0 / numpy.sqrt(ncompx[indices[1]]**2 + 1)
-
-         else:
-            geom.terrainNormalXcmp[indices[0],indices[1]] = 0
-            geom.terrainNormalZcmp[indices[0],indices[1]] = 0
-
-      print(f'Number of Terrain points: {len(geom.chiMask)}, Number of boundary points: {len(geom.chiMaskBoundary)}')
+      geom.make_mountain()
 
       # Use periodic BC in x-direction
       geom.xperiodic = True
@@ -303,10 +254,11 @@ def initialize_cartesian2d(geom: Cartesian2D, param: Configuration):
 
       for k in range(nk):
          for i in range(ni):
-            r = math.sqrt( ((geom.X1[k,i]-x0)/xr)**2 + ((geom.X3[k,i]-z0)/zr)**2 )
+            r = numpy.sqrt( ((geom.X1[k,i]-x0)/xr)**2 + ((geom.X3[k,i]-z0)/zr)**2 )
             if r <= 1.:
-               θ[k,i] += 0.5 * θc * (1. + math.cos(math.pi * r))
+               θ[k,i] += 0.5 * θc * (1. + numpy.cos(numpy.pi * r))
 
+      geom.make_mountain(mountain_type='step')
 
    if param.case_number == 0:
       N_star = 0.01
@@ -315,18 +267,13 @@ def initialize_cartesian2d(geom: Cartesian2D, param: Configuration):
       a00 = N_star**2 / gravity
       capc1 = gravity**2 / (N_star**2 * cpd * t0)
 
-      for k in range(nk):
-         for i in range(ni):
-            exner[k,i] = 1.0 - capc1 * (1.0 - math.exp(-a00 * geom.X3[k,i]))
-
+      exner = 1.0 - capc1 * (1.0 - numpy.exp(-a00 * geom.X3))
       θ = t0 * numpy.exp(a00 * geom.X3)
 
       uu[:,:] = 10.
 
    else:
-      for k in range(nk):
-         for i in range(ni):
-            exner[k,i] = ( 1.0 - gravity / (cpd * θ[k,i]) * geom.X3[k,i])
+      exner = (1.0 - gravity / (cpd * θ) * geom.X3)
 
    ρ = p0 / (Rd * θ) * exner**(cvd / Rd)
 

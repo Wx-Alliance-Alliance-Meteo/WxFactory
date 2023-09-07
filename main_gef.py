@@ -131,8 +131,8 @@ def create_geometry(param: Configuration, ptopo: Optional[DistributedWorld]) -> 
                          param.α0, param.ztop, ptopo, param)
    if param.grid_type == 'cartesian2d':
       return Cartesian2D((param.x0, param.x1), (param.z0, param.z1), param.nb_elements_horizontal,
-                         param.nb_elements_vertical, param.nbsolpts, param.nb_elements_bottom_layer,
-                         param.bottom_layer_height)
+                         param.nb_elements_vertical, param.nbsolpts, param.nb_elements_relief_layer,
+                         param.relief_layer_height)
 
    raise ValueError(f'Invalid grid type: {param.grid_type}')
 
