@@ -195,13 +195,11 @@ def initialize_cartesian2d(geom: Cartesian2D, param: Configuration):
       s = 100
       x0 = 500
       z0 = 260
-      for k in range(nk):
-         for i in range(ni):
-            r = math.sqrt( (geom.X1[k,i]-x0)**2 + (geom.X3[k,i]-z0)**2 )
-            if r <= a:
-               θ[k,i] += A
-            else:
-               θ[k,i] += A * math.exp(-((r-a)/s)**2)
+      r = numpy.sqrt( (geom.X1-x0)**2 + (geom.X3-z0)**2 )
+
+      θ = numpy.where(r <= a,
+                      θ + A,
+                      θ + A * numpy.exp(-((r-a)/s)**2))
 
       # Enforce mirror symmetry
       if ni % 2 == 0:
@@ -222,11 +220,11 @@ def initialize_cartesian2d(geom: Cartesian2D, param: Configuration):
       z0 = 300
       for k in range(nk):
          for i in range(ni):
-            r = math.sqrt( (geom.X1[k,i]-x0)**2 + (geom.X3[k,i]-z0)**2 )
+            r = numpy.sqrt( (geom.X1[k,i]-x0)**2 + (geom.X3[k,i]-z0)**2 )
             if r <= a:
                θ[k,i] += A
             else:
-               θ[k,i] += A * math.exp(-((r-a)/s)**2)
+               θ[k,i] += A * numpy.exp(-((r-a)/s)**2)
 
       A = -0.15
       a = 0
@@ -235,11 +233,11 @@ def initialize_cartesian2d(geom: Cartesian2D, param: Configuration):
       z0 = 640
       for k in range(nk):
          for i in range(ni):
-            r = math.sqrt( (geom.X1[k,i]-x0)**2 + (geom.X3[k,i]-z0)**2 )
+            r = numpy.sqrt( (geom.X1[k,i]-x0)**2 + (geom.X3[k,i]-z0)**2 )
             if r <= a:
                θ[k,i] += A
             else:
-               θ[k,i] += A * math.exp(-((r-a)/s)**2)
+               θ[k,i] += A * numpy.exp(-((r-a)/s)**2)
 
    elif param.case_number == 4:
       # Cold density current
