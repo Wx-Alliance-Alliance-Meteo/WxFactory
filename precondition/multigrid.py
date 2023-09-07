@@ -7,7 +7,7 @@ from typing       import Callable, List, Optional
 from mpi4py import MPI
 import numpy
 
-from common.definitions    import idx_2d_rho, idx_2d_rho_u, idx_2d_rho_w, \
+from common.definitions    import idx_2d_rho, idx_2d_rho_u, idx_2d_rho_w, idx_2d_rho_theta, \
                                   idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_w, idx_rho_theta, \
                                   cpd, cvd, heat_capacity_ratio, p0, Rd
 from common.interpolation  import Interpolator
@@ -120,18 +120,18 @@ class MultigridLevel:
          factor = 1.0 / (2 * (2 * self.param.nbsolpts + 1))
 
          min_geo = min(self.geometry.Δx1, min(self.geometry.Δx2, self.geometry.Δx3))
-         sound_speed = -1.0
          if isinstance(self.geometry, Cartesian2D):
             delta_min = abs(1.- self.geometry.solutionPoints[-1]) * min_geo
-            speed_x = 343. +  abs(field[idx_2d_rho_u] /  field[idx_2d_rho]) #TODO Actually compute speed of sound  
-            speed_z = 343. +  abs(field[idx_2d_rho_w] /  field[idx_2d_rho])
+            pressure = p0 * numpy.exp((cpd/cvd) * numpy.log((Rd/p0)*field[idx_2d_rho_theta]))
+            sound_speed = numpy.sqrt(heat_capacity_ratio * pressure / field[idx_2d_rho])
+
+            speed_x = sound_speed +  abs(field[idx_2d_rho_u] /  field[idx_2d_rho])
+            speed_z = sound_speed +  abs(field[idx_2d_rho_w] /  field[idx_2d_rho])
             speed_max = numpy.maximum(speed_x, speed_z)
 
          elif isinstance(self.geometry, CubedSphere):
             pressure = p0 * numpy.exp((cpd/cvd) * numpy.log((Rd/p0)*field[idx_rho_theta]))
             sound_speed = numpy.sqrt(heat_capacity_ratio * pressure / field[idx_rho])
-            # sound_speed = 330.0
-
             delta_min = abs(1.- self.geometry.solutionPoints[-1])
 
             sound_x =  numpy.sqrt(self.metric.H_contra_11) * sound_speed
