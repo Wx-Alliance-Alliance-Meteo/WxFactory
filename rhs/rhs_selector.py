@@ -53,11 +53,13 @@ class RhsBundle:
          self.viscous = lambda q: self.full(q) - self.convective(q)
 
       elif param.equations == 'euler' and isinstance(geom, Cartesian2D):
-         rhs_fn = rhs_bubble
-         if param.discretization == 'fv': rhs_fn = rhs_bubble      # Fix rhs_bubble_fv to be able to use it here
+         if param.discretization == 'fv':
+            self.full = generate_rhs(
+               rhs_bubble_fv, geom, param.nbsolpts, param.nb_elements_horizontal, param.nb_elements_vertical)
+         else:
+            self.full = generate_rhs(
+               rhs_bubble, geom, operators, param.nbsolpts, param.nb_elements_horizontal, param.nb_elements_vertical)
 
-         self.full = generate_rhs(
-            rhs_fn, geom, operators, param.nbsolpts, param.nb_elements_horizontal, param.nb_elements_vertical)
          self.implicit = generate_rhs(
             rhs_bubble_implicit, geom, operators, param.nbsolpts, param.nb_elements_horizontal,
             param.nb_elements_vertical)

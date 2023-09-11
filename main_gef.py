@@ -52,7 +52,6 @@ def main(argv) -> int:
 
    # Get handle to the appropriate RHS functions
    rhs = RhsBundle(geom, mtrx, metric, topo, ptopo, param, Q.shape)
-   # rhs_handle, rhs_implicit, rhs_explicit = rhs_selector(geom, mtrx, metric, topo, ptopo, param)
 
    # Time stepping
    stepper = create_time_integrator(param, rhs, preconditioner)
@@ -249,12 +248,16 @@ if __name__ == '__main__':
 
    import argparse
    import cProfile
+   import os.path
 
    parser = argparse.ArgumentParser(description='Solve NWP problems with GEF!')
    parser.add_argument('--profile', action='store_true', help='Produce an execution profile when running')
    parser.add_argument('config', type=str, help='File that contains simulation parameters')
 
    args = parser.parse_args()
+
+   if not os.path.exists(args.config):
+      raise ValueError(f'Config file does not seem valid: {args.config}')
 
    # Start profiling
    pr = None
