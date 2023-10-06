@@ -26,6 +26,7 @@ function echo_usage() {
     echo "    -h|--help       Print this message"
     echo "    -c|--cpu        Number of cores you want to use for running"
     echo "    -m|--mach       Name of the machine on which you want to run"
+    echo "    -w|--wtime      Number of minutes"
 }
 
 function validate_config() {
@@ -39,6 +40,7 @@ function validate_config() {
 BASE_CONFIG=""
 NUM_PES=1
 MACH=""
+WTIME=180
 
 test $# -lt 1 && echo_usage && exit
 
@@ -55,6 +57,10 @@ while [ $# -gt 0 ]; do
         ;;
     -m | --mach)
         MACH=${2}
+        shift 1
+        ;;
+    -w | --wtime)
+        WTIME=${2}
         shift 1
         ;;
     *)
@@ -107,7 +113,12 @@ sed \
 
 # cat ${JOB_SCRIPT}
 
-LAUNCH_COMMAND="ord_soumet -cpus ${NUM_PES} -w 180 -jn ${JOB_NAME} -mpi -jobfile ${JOB_SCRIPT} -listing ${WORK_DIR} -cm 2000M -waste 100"
+LAUNCH_NUM_CPU=${NUM_PES}
+if [ ${LAUNCH_NUM_CPU} -lt 80 ]; then
+    LAUNCH_NUM_CPU=80
+fi
+
+LAUNCH_COMMAND="ord_soumet -cpus ${LAUNCH_NUM_CPU} -w ${WTIME} -jn ${JOB_NAME} -mpi -jobfile ${JOB_SCRIPT} -listing ${WORK_DIR} -cm 2000M -waste 100"
 if [ "x" != "x${MACH}" ]; then
     LAUNCH_COMMAND="${LAUNCH_COMMAND} -mach ${MACH}"
 fi

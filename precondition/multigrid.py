@@ -258,7 +258,7 @@ class Multigrid(MatvecOp):
          raise ValueError(f'Unrecognized discretization "{discretization}"')
 
       param.num_mg_levels = min(param.num_mg_levels, self.max_num_levels)
-      print(f'num_mg_levels: {param.num_mg_levels} (max {self.max_num_levels})')
+      if self.verbose: print(f'num_mg_levels: {param.num_mg_levels} (max {self.max_num_levels})')
 
       # Determine level-specific parameters for each level (order, num elements)
       if discretization == 'fv':

@@ -1,9 +1,11 @@
 from typing import Callable, Optional, Tuple
 
+from mpi4py   import MPI
 import numpy
 
 from geometry                  import Cartesian2D, CubedSphere
 from init.initialize           import Topo
+from rhs.fluxes                import ausm_2d_fv, upwind_2d_fv, rusanov_2d_fv
 from rhs.rhs_bubble            import rhs_bubble
 from rhs.rhs_bubble_convective import rhs_bubble as rhs_bubble_convective
 from rhs.rhs_bubble_fv         import rhs_bubble_fv
@@ -35,6 +37,7 @@ class RhsBundle:
       def generate_rhs(rhs_func: Callable, *args, **kwargs) -> Callable[[numpy.ndarray], numpy.ndarray]:
          '''Generate a function that calls the given (RHS) function on a vector. The generated function will
          first reshape the vector, then return a result with the original input vector shape.'''
+         if MPI.COMM_WORLD.rank == 0: print(f'Generating {rhs_func} with shape {self.shape}')
          def actual_rhs(vec: numpy.ndarray):
             old_shape = vec.shape
             result = rhs_func(vec.reshape(self.shape), *args, **kwargs)
@@ -53,9 +56,11 @@ class RhsBundle:
          self.viscous = lambda q: self.full(q) - self.convective(q)
 
       elif param.equations == 'euler' and isinstance(geom, Cartesian2D):
+         flux_functions = {'ausm': ausm_2d_fv, 'upwind': upwind_2d_fv, 'rusanov': rusanov_2d_fv}
          if param.discretization == 'fv':
             self.full = generate_rhs(
-               rhs_bubble_fv, geom, param.nbsolpts, param.nb_elements_horizontal, param.nb_elements_vertical)
+               rhs_bubble_fv, geom, param.nb_elements_horizontal, param.nb_elements_vertical,
+               flux_functions[param.precond_flux])
          else:
             self.full = generate_rhs(
                rhs_bubble, geom, operators, param.nbsolpts, param.nb_elements_horizontal, param.nb_elements_vertical)

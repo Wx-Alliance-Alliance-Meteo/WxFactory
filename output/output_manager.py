@@ -62,11 +62,13 @@ class OutputManager:
                self.blockstat_function = lambda Q, step_id: \
                   blockstats_cs(Q, self.geometry, self.topo, self.metric, self.operators, self.param, step_id)
             else:
-               print(f'WARNING: Blockstat only implemented for Shallow Water equations')
+               if MPI.COMM_WORLD.rank == 0: print(f'WARNING: Blockstat only implemented for Shallow Water equations')
          elif isinstance(self.geometry, Cartesian2D):
             self.blockstat_function = lambda Q, step_id: blockstats_cart(Q, self.geometry, step_id)
 
-      state_params = (param.dt, param.nb_elements_horizontal, param.nb_elements_vertical, param.nbsolpts)
+      # Choose a file name hash based on a certain set of parameters:
+      state_params = (param.dt, param.nb_elements_horizontal, param.nb_elements_vertical, param.nbsolpts,
+                      MPI.COMM_WORLD.size)
       self.config_hash = state_params.__hash__() & 0xffffffffffff
 
    def state_file_name(self, step_id: int) -> str:
@@ -89,7 +91,8 @@ class OutputManager:
          if step_id % self.param.stat_freq == 0:
             self.blockstat_function(Q, step_id)
 
-   def store_solver_stats(self, total_time: float, simulation_time: float, dt: float, solver_info: SolverInfo, precond: Optional[Multigrid]):
+   def store_solver_stats(self, total_time: float, simulation_time: float, dt: float, solver_info: SolverInfo,
+                          precond: Optional[Multigrid]):
       if self.param.store_solver_stats > 0:
          self.solver_stats_output.write_output(
             total_time, simulation_time, dt, solver_info.total_num_it, solver_info.time, solver_info.flag,

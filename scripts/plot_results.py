@@ -105,6 +105,15 @@ class StdevFunc:
          return 0.0
       return np.sqrt(self.S / (self.k-2))
 
+def human_format(num):
+   """Format an integer to a string with 3 significant digits"""
+   units = ['', 'k', 'M', 'G', 'T', 'P']
+   f_num = float(f'{num:.3g}')
+   magnitude = 0
+   while abs(f_num) >= 1000:
+      magnitude += 1
+      f_num /= 1000.0
+   return f'{f"{f_num:f}".rstrip("0").rstrip(".")}{units[magnitude]}'
 
 def mg_color(index):
    """Determine a plot color based on the given index. For the multigrid preconditioner."""
@@ -119,7 +128,9 @@ def ref_color(index):
 
 def get_color(data: DataSet, index: int):
    """Determine a plot color for the given dataset, given a certain index."""
-   if data['precond'] == 'none': return 'black'
+   if data['precond'] == 'none':
+      return f'{0.8 / (max(np.log(data["initial_dt"]), 2) - 1):.2f}'
+      return 'black'
    if data['precond'] == 'fv': return ref_color(index)
    return mg_color(index)
 
@@ -131,7 +142,7 @@ def get_linestyle(data: DataSet, index: int):
 
 def get_marker(data: DataSet) -> Union[str, int, None]:
    """Determine a plot marker based on the given dataset."""
-   if data['precond'] == 'none': return 's'
+   if data['precond'] == 'none': return 'p'   # 's' for a square
    if data['precond'] == 'fv': return '+'
    if data['precond'] == 'fv-mg':
       if data['mg_smoother'] == 'ark3':
@@ -166,7 +177,10 @@ class FullDataSet:
    Provides functions to plot certain characteristics of that data.
    """
 
-   def __init__(self, prob: ProblemDesc, cpu_scaling: bool = False, output_suffix: str = ''):
+   def __init__(self, prob: ProblemDesc,
+                cpu_scaling: bool = False,
+                output_suffix: str = '',
+                pseudo_cfl_cond: Optional[str] = None):
       """
       Extract the content of the open database into 4 sets: "no precond", "fv precond", "p-MG precond", "FV-MG" precond.
       """
@@ -174,15 +188,19 @@ class FullDataSet:
       self.cpu_scaling = cpu_scaling
       self.output_suffix = output_suffix
 
-      time_condition = ''
-      if prob.dt > 0.0: time_condition = f'initial_dt = {prob.dt} AND '
-      time_condition += f'solver_tol < 10.0 AND '
+      time_condition = []
+      if prob.dt > 0.0: time_condition += [f'initial_dt = {prob.dt}']
+      time_condition += [f'solver_tol < 10.0']
+
+      pcfl_condition = []
+      if pseudo_cfl_cond is not None:
+         pcfl_condition = [f'pseudo_cfl {pseudo_cfl_cond}']
 
       t0 = time()
       # self.no_precond = []
       self.no_precond = self._extract_result_set(
          ['time_integrator', 'solver_tol', 'initial_dt', 'precond'],
-         time_condition + 'precond = "none"', debug=True)
+         time_condition + ['precond = "none"'], debug=False)
 
       # no_precond_time = no_precond[0]['time_avg']
       # print(f'precond avg = {no_precond_time}')
@@ -191,14 +209,14 @@ class FullDataSet:
       # self.fv_ref = []
       self.fv_ref = self._extract_result_set(
          ['time_integrator', 'solver_tol', 'precond_tol', 'initial_dt', 'precond'],
-         time_condition + f'precond = "fv"',
+         time_condition + [f'precond = "fv"'],
          num_best=3)
 
       t2 = time()
       self.p_mg = self._extract_result_set(
          ['solver_tol', 'precond_interp', 'num_mg_levels', 'kiops_dt_factor', 'mg_solve_coarsest', 'precond_tol',
          'num_pre_smoothe', 'num_post_smoothe', 'mg_smoother', 'initial_dt', 'precond', 'time_integrator'],
-         time_condition + f'precond = "p-mg"',
+         time_condition + [f'precond = "p-mg"'] + pcfl_condition,
          num_best=10)
 
       t3 = time()
@@ -207,30 +225,31 @@ class FullDataSet:
          ['solver_tol', 'precond_interp', 'num_mg_levels', 'kiops_dt_factor', 'mg_solve_coarsest', #'precond_tol',
           'num_pre_smoothe', 'num_post_smoothe', 'mg_smoother', 'initial_dt', 'precond', 'pseudo_cfl',
           'time_integrator'],
-         time_condition + f'precond = "fv-mg" AND mg_smoother = "erk1"',
+         time_condition + [f'precond = "fv-mg"', 'mg_smoother = "erk1"'] + pcfl_condition,
          num_best=4)
       self.fv_mg += self._extract_result_set(
          ['solver_tol', 'precond_interp', 'num_mg_levels', 'kiops_dt_factor', 'mg_solve_coarsest', #'precond_tol',
           'num_pre_smoothe', 'num_post_smoothe', 'mg_smoother', 'initial_dt', 'precond', 'pseudo_cfl',
           'time_integrator'],
-         time_condition + f'precond = "fv-mg" AND mg_smoother = "erk3"',
-         num_best=5)
+         time_condition + [f'precond = "fv-mg"', 'mg_smoother = "erk3"'] + pcfl_condition,
+         num_best=20)
       self.fv_mg += self._extract_result_set(
          ['solver_tol', 'precond_interp', 'num_mg_levels', 'kiops_dt_factor', 'mg_solve_coarsest', #'precond_tol',
           'num_pre_smoothe', 'num_post_smoothe', 'mg_smoother', 'initial_dt', 'precond', 'pseudo_cfl',
           'time_integrator'],
-         time_condition + f'precond = "fv-mg" AND mg_smoother = "ark3" AND pseudo_cfl > 0',
+         time_condition + [f'precond = "fv-mg"', 'mg_smoother = "ark3"'] + pcfl_condition,
          num_best=5)
       self.fv_mg += self._extract_result_set(
          ['solver_tol', 'precond_interp', 'num_mg_levels', 'kiops_dt_factor', 'mg_solve_coarsest', #'precond_tol',
           'num_pre_smoothe', 'num_post_smoothe', 'mg_smoother', 'initial_dt', 'precond', 'pseudo_cfl',
           'time_integrator', 'exp_radius_0', 'exp_radius_1', 'exp_radius_2'],
-         time_condition + f'precond = "fv-mg" AND mg_smoother = "exp" AND exp_radius_0 > 0 AND mg_solve_coarsest = 1',
-         num_best=1)
+         time_condition + [f'precond = "fv-mg"', 'mg_smoother = "exp"', 'exp_radius_0 > 0', 'mg_solve_coarsest = 1'] +
+           pcfl_condition,
+         num_best=2)
 
       t4 = time()
 
-      print(f'extracted results in {t4 - t0:.2f}s ({t1 - t0:.3f}, {t2 - t1:.3f}, {t3 - t2:.3f}, {t4 - t3:.3f})')
+      # print(f'extracted results in {t4 - t0:.2f}s ({t1 - t0:.3f}, {t2 - t1:.3f}, {t3 - t2:.3f}, {t4 - t3:.3f})')
 
       self.same_tol             = not has_diff([self.no_precond, self.fv_ref, self.p_mg, self.fv_mg], ['solver_tol'])
       self.same_dt              = not has_diff([self.no_precond, self.fv_ref, self.p_mg, self.fv_mg], ['initial_dt'])
@@ -299,15 +318,20 @@ class FullDataSet:
       return ', '.join(elements)
 
    def _make_title(self, base_title: str) -> str:
-      title = f'{base_title}, {self.prob.grid_type}, {self.prob.equations}, {case_names[self.prob.case_number]}\n'
-      if self.prob.hori > 0:
-         title += f'{self.prob.hori}'
-      else:
-         title += '##'
+      title = f'{base_title}, {self.prob.grid_type}, {self.prob.equations}, {case_names[self.prob.case_number]} '
+      if self.prob.hori > 0: title += f'{self.prob.hori}'
+      else:                  title += '*'
       title += f'x{self.prob.vert}x({self.prob.order}) elem'
-      if self.same_dt: title += f', dt = {self.dt}'
-      if self.same_tol: title += f', tol = {self.tol:.0e}'
+      if self.prob.hori > 0:
+         num_dofs = self.prob.hori * self.prob.vert * self.prob.order**2 
+         if self.prob.grid_type == 'cubed_sphere': num_dofs *= self.prob.hori * self.prob.order * 6
+         title += f' ({human_format(num_dofs)} DOFs)'
       title += '\n'
+      items = []
+      if self.same_dt: items += [f'dt = {self.dt}']
+      if self.same_tol: items += [f'tol = {self.tol:.0e}']
+      title += ', '.join(items)
+      title += ' || '
       if self.same_mg_precond:
          title += f'MG precond: {self.mg_precond}'
          if self.same_fv_smoother: title += f', smoother {self.fv_smoother}'
@@ -329,7 +353,7 @@ class FullDataSet:
 
    def _extract_result_set(self,
                            columns: List[str],
-                           custom_condition: str,
+                           conditions: List[str],
                            debug: bool = False,
                            num_best: int = 20) \
                             -> SingleResultSet:
@@ -350,9 +374,12 @@ class FullDataSet:
                           timesteps)
       """
 
+      # ---------------------------------------------------------------------------------------------------
       # Query to select a subtable containing all columns, for only the problems that have the specified
-      # characteristics (size, equations, grid type, etc) and the specified custom condition
-      base_subtable_query = f'''
+      # characteristics (size, equations, grid type, etc) and the specified custom condition. This serves
+      # as a base subset of the entire data from which aggregate data (averages, scaling, etc.) will be
+      # computed
+      base_subtable_query = f'''--sql
          select *
          from results_param
          where
@@ -364,9 +391,11 @@ class FullDataSet:
             num_elem_v  = {self.prob.vert}         AND
          {f'num_procs   = {self.prob.num_procs}    AND' if self.prob.num_procs > 0 else ''}
             solver_flag = 0                        AND
-            {custom_condition}
-      '''
+            {' AND '.join(conditions)}
+            ;
+      '''.strip().strip(';')
 
+      # ---------------------------------------------------------------------------------------------------
       # Query to average out some values when a simulation has been run multiple times with the exact same
       # parameters. The average is done timestep by timestep (so we take the average of all first timesteps
       # over the various simulations, then average of all second timesteps, etc.)
@@ -374,49 +403,76 @@ class FullDataSet:
       # This had better give a constant value for the number of iterations...
       # Each time step is (can be) an agglomeration of multiple runs. If some parameters are omitted from the
       # input ([columns]), the runs corresponding to the same time step will be merged together
-      group_by_list = ', '.join(columns + ['simulation_time', 'num_elem_h'])
-      order_by_list = ', '.join(['num_elem_h', 'num_mg_levels', 'mg_solve_coarsest', 'kiops_dt_factor',
-                                 '(num_pre_smoothe + num_post_smoothe)', 'step_id'])
+
+      # We group by the base columns (of course), because those are the distinct sets we want. We also
+      # group by problem size (num_elem_h) in case there are different sizes present (when doing scaling plots,
+      # for example). We also group by "simulation time", because that's the parameter over which we are
+      # combining results, by averaging them
+      group_by_list = columns + ['simulation_time', 'num_elem_h']
+
+      order_by_list = ['num_elem_h', 'num_mg_levels', 'mg_solve_coarsest', 'kiops_dt_factor',
+                       '(num_pre_smoothe + num_post_smoothe)', 'simulation_time']
+
+      # When doing CPU scaling plots, we also want to group by number of processors. We wouldn't
+      # want to aggregate results from different processor counts
       if self.cpu_scaling:
-         group_by_list += ', num_procs'
-         order_by_list += ', num_procs'
-      combine_same_configs_query = f'''
+         group_by_list += ['num_procs']
+         order_by_list += ['num_procs']
+
+      group_by = ', '.join(group_by_list)
+      order_by = ', '.join(order_by_list)
+
+      combine_same_configs_query = f'''--sql
          select *,
                 avg(total_solve_time) as single_step_time,
                 avg(num_solver_it)    as single_step_it,
-                avg(dt)               as single_step_dt
+                avg(dt)               as single_step_dt        -- these should all be the same
          from ({base_subtable_query})
-         group by {group_by_list}
-         order by {order_by_list}
-      '''.strip()
+         group by {group_by}
+         order by {order_by}
+         ;
+      '''.strip().strip(';')
 
+      # ---------------------------------------------------------------------------------------------------
       # Query to compute statistics from multiple time steps for each problem configuration that
       # was found in the subtable (according to the given columns).
-      # Each time step is (can be) an agglomeration of multiple runs. This is done in the query
-      # above, called by this one
-      param_query = f'''
+      # Each time step is (can be) an agglomeration of multiple runs. This agglomeration is done in the
+      # query above, called by this one.
+      # Overall, each result from this query will become one entry in a plot (for example, evolution of
+      # computation time or iterations with respect to simulation time, or average computation time or
+      # iterations per step). These entries can be further combined to generate scaling plots.
+      param_query = f'''--sql
          select 
                 {{columns}},
                 num_elem_h,
                 num_procs,
-                avg(single_step_time)     as avg_step_time,
-                stdev(single_step_time)   as stdev_step_time,
-                avg(single_step_it)       as avg_step_it,
-                stdev(single_step_it)     as stdev_step_time,
+                avg(x1) - avg(x0)                  as h_size,           -- should all be the same
+                avg(z1) - avg(z0)                  as v_size,           -- should all be the same
+                avg(single_step_time / initial_dt) as time_per_time,
+                avg(single_step_time)              as avg_step_time,
+                stdev(single_step_time)            as stdev_step_time,
+                avg(single_step_it)                as avg_step_it,
+                stdev(single_step_it)              as stdev_step_time,
                 group_concat(simulation_time),
                 group_concat(single_step_dt),
                 group_concat(single_step_time),
                 group_concat(single_step_it)
          from ({combine_same_configs_query})
          group by {{group_by_list}}
-         order by num_mg_levels, mg_solve_coarsest, kiops_dt_factor, (num_pre_smoothe + num_post_smoothe)
-      '''.strip().format(columns=', '.join(columns),
+         order by num_mg_levels, mg_solve_coarsest, kiops_dt_factor, (num_pre_smoothe + num_post_smoothe),
+                  time_per_time -- use 'time_per_time' as criterion for best performance (for the purpose of plotting)
+         ;
+      '''.strip().strip(';').format(columns=', '.join(columns),
                          group_by_list=', '.join(columns + ['num_elem_h']))
 
-      # Query to 
+      # ---------------------------------------------------------------------------------------------------
+      # Query to do stuff
       scaling_parameter = 'num_procs' if self.cpu_scaling else 'num_elem_h'
-      scaling_query = f'''
+      scaling_query = f'''--sql
          select {{columns}},
+                avg(h_size),                    -- They should all have the same h size!
+                avg(v_size),                    -- They should all have the same v size!
+                min(time_per_time),
                 min(avg_step_time),
                 group_concat({scaling_parameter}),
                 group_concat(avg_step_time),
@@ -425,9 +481,12 @@ class FullDataSet:
                 group_concat(stdev_step_time)
          from ({param_query})
          group by {{columns}}
-         order by {scaling_parameter}
+         order by {scaling_parameter},
+                  time_per_time -- use 'time_per_time' as criterion for best performance (for the purpose of plotting)
+         ;
       '''.format(columns=', '.join(columns))
 
+      # ---------------------------------------------------------------------------------------------------
       # Query to retrieve and compute the average residual evolution for the selected problem configurations
       # This computes the average residual after each iteration, averaged over every timestep, for a certain
       # configuration
@@ -448,7 +507,11 @@ class FullDataSet:
       if self.prob.hori > 0 and not self.cpu_scaling:
          param_sets = db_cursor.execute(param_query).fetchall()
       else:
-         param_sets = db_cursor.execute(scaling_query).fetchall()
+         try:
+            param_sets = db_cursor.execute(scaling_query).fetchall()
+         except:
+            print(f'Query: \n{scaling_query}')
+            raise
 
       # Print debug info
       if debug:
@@ -472,12 +535,13 @@ class FullDataSet:
       # Store results in a list, with the data as their proper type
       results = []
       for subset in param_sets:
+         # print(f'subset = \n{subset}')
          r = {}
          for i, c in enumerate(columns):
             r[c] = subset[i]
          if self.prob.hori > 0 and not self.cpu_scaling:
             # Each problem size is on its own plot
-            r['select_criterion'] = subset[-8] # We use time average as a measure of performance
+            r['time_per_time_avg']= subset[-9]
             r['time_avg']         = subset[-8]
             r['time_stdev']       = subset[-7]
             r['it_avg']           = subset[-6]
@@ -488,20 +552,26 @@ class FullDataSet:
             r['it_per_step']      = np.array([float(x) for x in subset[-1].split(',')])
          else:
             # Plot evolution as a function of problem size
-            r['select_criterion'] = subset[-6] # We use min time as a measure of performance
+
+            r['h_size'] = float(subset[-9])
+            r['v_size'] = float(subset[-8])
+
             name = 'num_procs' if self.cpu_scaling else 'num_elem_h'
             r[name]               = np.array([int(x)   for x in subset[-5].split(',')])
-            print(f'r[{name}]: {r[name]}')
+            # print(f'r[{name}]: {r[name]}')
             r['step_times']       = np.array([float(x) for x in subset[-4].split(',')])
             r['step_times_stdev'] = np.array([float(x) for x in subset[-3].split(',')])
             r['step_its']         = np.array([float(x) for x in subset[-2].split(',')])
             r['step_its_stdev']   = np.array([float(x) for x in subset[-1].split(',')])
+            # print(f'{r["time_integrator"]}, {r["precond"]} -> r["step_its_stdev"]: {r["step_its_stdev"]}\n'
+            #       f'                                          r["h_size"]: {r["h_size"]}\n'
+            #       f'                                          r["v_size"]: {r["v_size"]}')
          results.append(r)
 
       # Only select the fastest problem configurations (b/c the following step can be expensive)
       if num_best > 0:
          num_best = min(num_best, len(param_sets))
-         results = sorted(results, key=lambda d: d['select_criterion'])[:num_best]
+         results = results[:num_best]
 
       # Get the residuals from the other table (only if we're not extracting scaling data)
       if self.prob.hori > 0:
@@ -525,17 +595,20 @@ class FullDataSet:
 
       for dataset in [self.no_precond, self.fv_ref, self.p_mg, self.fv_mg]:
          for i, data in enumerate(dataset):
+            # if data['time_per_step'][0] / data['step_dts'][0] > 33: continue
+            # if data['time_per_time_avg'] > 100: continue
             ax.plot(data['sim_times'] + data['step_dts'], data['time_per_step'] / data['step_dts'],
                   color=get_color(data, i), linestyle=get_linestyle(data, i), marker=get_marker(data),
                   label=self._make_label(data))
 
       # ax.set_ylim(bottom=0)
+      # ax.set_yscale('log')
       ax.yaxis.grid()
 
       ax.set_xlabel(f'Problem time (s)')
       ax.set_ylabel('Solve time (s/s)')
 
-      fig.suptitle(self._make_title('Solver time'), fontsize=11, x=0.12, horizontalalignment='left')
+      fig.suptitle(self._make_title('Solver time'), fontsize=9, x=0.04, horizontalalignment='left')
       fig.legend(fontsize=8)
 
       full_filename = self._make_filename('time_per_step')
@@ -557,7 +630,7 @@ class FullDataSet:
       ax.set_xlabel('Time (s/s?)')
       ax.set_ylabel('Number of processors')
 
-      fig.suptitle(self._make_title('Average step time'), fontsize=11, x=0.12, horizontalalignment='left')
+      fig.suptitle(self._make_title('Average step time'), fontsize=9, x=0.04, horizontalalignment='left')
       fig.legend(fontsize=8)
 
       full_filename = self._make_filename('time_per_proc')
@@ -574,12 +647,27 @@ class FullDataSet:
                   color=get_color(data, i), linestyle=get_linestyle(data, i), marker=get_marker(data),
                   label=self._make_label(data))
 
+      # ax.set_yscale('log')
+
       ax.yaxis.grid()
 
       ax.set_xlabel(f'Problem size (num elem horizontally)')
       ax.set_ylabel('Number of iterations')
 
-      fig.suptitle(self._make_title('# Iterations'), fontsize=11, x=0.12, horizontalalignment='left')
+      if self.prob.grid_type == 'cartesian2d' and 'data' in locals():
+         ax_ar = ax.twiny()
+         ax_ar.set_xlim(ax.get_xlim())
+         locations = ax.get_xticks()
+         locations = locations[locations >= 1]
+         print(f'h size: {data["h_size"]}')
+         print(f'v size: {data["v_size"]}')
+         print(f'locations: {locations}')
+         print(f'prob vert: {self.prob.vert}')
+         ratios = [(data['h_size'] / num_h) / (data['v_size'] / self.prob.vert) for num_h in locations]
+         ax_ar.set_xticks(locations)
+         ax_ar.set_xticklabels([f'{r:.2f}' for r in ratios])
+
+      fig.suptitle(self._make_title('# Iterations'), fontsize=9, x=0.03, y=0.99, horizontalalignment='left')
       fig.legend(fontsize=8)
 
       full_filename = self._make_filename('it_per_size')
@@ -599,9 +687,9 @@ class FullDataSet:
                   label=self._make_label(data))
 
       ax.yaxis.grid()
-      ax.set_xlabel('Time step')
+      ax.set_xlabel('Problem time')
       ax.set_ylabel('Number of iterations')
-      # ax.set_yscale('log', base=2)
+      ax.set_yscale('log', base=2)
       ax.tick_params(axis='y', which='minor')
 
       # # Set bounds on y axis
@@ -613,7 +701,7 @@ class FullDataSet:
       #    ymax = 1000
       # ax.set_ylim(bottom=ymin, top=ymax)
 
-      fig.suptitle(self._make_title('Solver iterations'), fontsize=11, x=0.12, horizontalalignment='left')
+      fig.suptitle(self._make_title('Solver iterations'), fontsize=9, x=0.04, horizontalalignment='left')
       fig.legend(fontsize=8)
 
       full_filename = self._make_filename('it_per_step')
@@ -650,7 +738,7 @@ class FullDataSet:
       ax_res.set_ylabel('Residual')
       if max_res > 0.0: ax_res.set_ylim(bottom = max(min_res * 0.8, 5e-8), top = min(2e0, max_res * 1.5))
 
-      fig.suptitle(self._make_title('Residual evolution'), fontsize=11, x=0.12, horizontalalignment='left')
+      fig.suptitle(self._make_title('Residual evolution'), fontsize=9, x=0.04, horizontalalignment='left')
       fig.legend(fontsize=8)
 
       full_filename = self._make_filename('residual')
@@ -761,7 +849,7 @@ class FullDataSet:
          ax_work.set_ylabel('Residual')
          ax_work.set_yscale('log')
 
-      fig.suptitle(self._make_title(f'Time (work) to reach accuracy'), fontsize=11, x=0.12, horizontalalignment='left')
+      fig.suptitle(self._make_title(f'Time (work) to reach accuracy'), fontsize=10, x=0.06, horizontalalignment='left')
       fig.legend(fontsize=8)
 
       full_filename = self._make_filename('error')
@@ -790,7 +878,7 @@ def main(args):
 
       for prob in probs:
          print(f'{prob}')
-         prob_data = FullDataSet(prob, output_suffix=args.suffix)
+         prob_data = FullDataSet(prob, output_suffix=args.suffix, pseudo_cfl_cond=args.pseudo_cfl)
          if args.time:          prob_data.plot_time()
          if args.error_time:    prob_data.plot_error_time()
          if args.time_per_step: prob_data.plot_time_per_step()
@@ -806,7 +894,7 @@ def main(args):
                for p in list(db_cursor.execute(prob_query).fetchall())]
       for prob in probs:
          print(f'{prob}')
-         prob_data = FullDataSet(prob, output_suffix=args.suffix)
+         prob_data = FullDataSet(prob, output_suffix=args.suffix, pseudo_cfl_cond=args.pseudo_cfl)
          if args.residual:       prob_data.plot_residual()
          if args.it:             prob_data.plot_it()
          if args.it_per_step:    prob_data.plot_it_per_step()
@@ -822,7 +910,7 @@ def main(args):
                for p in list(db_cursor.execute(prob_query).fetchall())]
       for prob in probs:
          print(f'{prob}')
-         prob_data = FullDataSet(prob, cpu_scaling=True, output_suffix=args.suffix)
+         prob_data = FullDataSet(prob, cpu_scaling=True, output_suffix=args.suffix, pseudo_cfl_cond=args.pseudo_cfl)
          prob_data.plot_time_per_cpu()
 
    # Grid scaling plot(s)
@@ -837,7 +925,7 @@ def main(args):
                for p in list(db_cursor.execute(prob_query).fetchall())]
       for p in probs: print(f'{p}')
       for prob in probs:
-         prob_data = FullDataSet(prob, output_suffix=args.suffix)
+         prob_data = FullDataSet(prob, output_suffix=args.suffix, pseudo_cfl_cond=args.pseudo_cfl)
          prob_data.plot_it_per_size()
 
 
@@ -867,6 +955,8 @@ if __name__ == '__main__':
    parser.add_argument('--suffix', type=str, default='', help='Suffix to add to the base output file name')
    parser.add_argument('--grid-progression', action='store_true', help='Plot number of iterations per problem size')
    parser.add_argument('--strong-scaling', action='store_true', help='Plot performance per number of processors')
+
+   parser.add_argument('--pseudo-cfl', type=str, help='Additional condition to put on the value of pseudo-CFL we want to include in plots')
 
    parsed_args = parser.parse_args()
 

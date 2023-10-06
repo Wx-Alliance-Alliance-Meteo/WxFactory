@@ -32,11 +32,12 @@ def gen_matrix(matvec: MatvecOp, jac_file_name: Optional[str] = None, permute: b
    size = MPI.COMM_WORLD.Get_size()
 
    compressed = n_loc * size > 150000
+   # compressed = True
 
    print(f'Generating jacobian matrix. Shape {matvec.shape}')
 
    Qid = numpy.zeros(matvec.shape, dtype=matvec.dtype)
-   J = scipy.sparse.csc_matrix((n_loc, size*n_loc), dtype=matvec.dtype) if compressed else numpy.zeros((n_loc, size*n_loc))
+   # J = scipy.sparse.csc_matrix((n_loc, size*n_loc), dtype=matvec.dtype) if compressed else numpy.zeros((n_loc, size*n_loc))
 
    def progress(a): return a
    if rank == 0:
@@ -45,14 +46,19 @@ def gen_matrix(matvec: MatvecOp, jac_file_name: Optional[str] = None, permute: b
    # Compute the matrix one column at a time by multiplying by a basis vector
    idx = 0
    indices = [i for i in product(range(neq), range(ni), range(nj))]
+   columns = [None for _ in range(len(indices))]
    for r in range(size):
       if rank == 0: print(f'Tile {r+1}/{size}')
       for (i, j, k) in progress(indices):
          if rank == r: Qid[i, j, k] = 1.0
          col = matvec(Qid.flatten())
-         J[:, idx] = scipy.sparse.csc_matrix(col).transpose() if compressed else col
+         ccol = scipy.sparse.csc_matrix(col.reshape((col.size, 1))) if compressed else col
+         columns[idx] = ccol
+         # J[:, idx] = ccol
          idx += 1
          Qid[i, j, k] = 0.0
+
+   J = scipy.sparse.hstack(columns)
 
    # If it wasn't already compressed, do it now
    if not compressed: J = scipy.sparse.csc_matrix(J)

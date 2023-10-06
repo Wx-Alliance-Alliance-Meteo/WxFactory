@@ -60,6 +60,19 @@ class ColumnSet:
 
       self.num_procs    = Column('int', MPI.COMM_WORLD.size)
 
+      if param.grid_type == 'cartesian2d':
+         self.x0   = Column('float', param.x0)
+         self.x1   = Column('float', param.x1)
+         self.z0   = Column('float', param.z0)
+         self.z1   = Column('float', param.z1)
+         self.ztop = Column('float', 0)
+      elif param.grid_type == 'cubed_sphere':
+         self.x0   = Column('float', 0)
+         self.x1   = Column('float', 0)
+         self.z0   = Column('float', 0)
+         self.z1   = Column('float', 0)
+         self.ztop = Column('float', param.ztop)
+
 
 class SolverStatsOutput:
    """Contains necessary info to store solver stats into a SQL database"""

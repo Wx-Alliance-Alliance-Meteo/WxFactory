@@ -110,6 +110,9 @@ class Configuration:
       available_preconditioners = ['none', 'fv', 'fv-mg', 'p-mg']
       self.preconditioner = self._get_option('Preconditioning', 'preconditioner', str, 'none', valid_values=available_preconditioners)
 
+      available_fluxes = ['ausm', 'upwind', 'rusanov']
+      self.precond_flux = self._get_option('Preconditioning', 'precond_flux', str, available_fluxes[0], valid_values=available_fluxes)
+
       self.num_mg_levels = self._get_option('Preconditioning', 'num_mg_levels', int, 1, min_value=1)
       if 'mg' not in self.preconditioner: self.num_mg_levels = 1
 

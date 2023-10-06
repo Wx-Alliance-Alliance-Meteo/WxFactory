@@ -8,7 +8,7 @@ doc/*.pdf
 doc/aux/*
 doc/svg-inkscape/*
 
-jacobian/*
+jacobian
 
 scripts/**/*.pdf
 
@@ -16,7 +16,7 @@ __pycache__/
 *.py[cod]
 
 bubble_cliff
-results/
+results
 test_configs/
 work
 scripts/load_env.sh

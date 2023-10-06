@@ -1,44 +1,69 @@
-from typing import Any, Union
+from typing import Any, Callable, Union
 
 import numpy
 
 from common.definitions import idx_2d_rho, idx_2d_rho_u, idx_2d_rho_w, idx_2d_rho_theta,  \
-                               p0, Rd, cpd, cvd, heat_capacity_ratio, gravity
+                               p0, Rd, cpd, cvd, gravity
 from geometry           import Cartesian2D
+from .fluxes            import FluxFunction2D
 
 
+# @profile
 def rhs_bubble_fv(Q: numpy.ndarray[Any, numpy.dtype[Union[numpy.float64,numpy.complex128]]],
                   geom: Cartesian2D,
-                  # mtrx,
-                  nbsolpts: int,
                   nb_elements_x: int,
-                  nb_elements_z: int):
+                  nb_elements_z: int,
+                  compute_flux: FluxFunction2D):
 
-   datatype = Q.dtype
    nb_equations = Q.shape[0] # Number of constituent Euler equations.  Probably 6.
 
-   df1_dx1 = numpy.empty_like(Q, dtype=datatype)
-   df3_dx3 = numpy.empty_like(Q, dtype=datatype)
+   df1_dx1 = numpy.empty_like(Q)
+   df3_dx3 = numpy.empty_like(Q)
 
-   kfaces_flux = numpy.empty((nb_equations, nb_elements_z, 2, nbsolpts*nb_elements_x), dtype=datatype)
-   kfaces_var  = numpy.empty((nb_equations, nb_elements_z, 2, nbsolpts*nb_elements_x), dtype=datatype)
+   kfaces_flux = numpy.empty((nb_equations, nb_elements_z, 2, nb_elements_x))
+   kfaces_var  = numpy.empty((nb_equations, nb_elements_z, 2, nb_elements_x))
 
-   ifaces_flux = numpy.empty((nb_equations, nb_elements_x, nbsolpts*nb_elements_z, 2), dtype=datatype)
-   ifaces_var  = numpy.empty((nb_equations, nb_elements_x, nbsolpts*nb_elements_z, 2), dtype=datatype)
+   ifaces_flux = numpy.empty((nb_equations, nb_elements_x, nb_elements_z, 2))
+   ifaces_var  = numpy.empty((nb_equations, nb_elements_x, nb_elements_z, 2))
+
+   flux_x1 = numpy.empty_like(Q)
+   flux_x3 = numpy.empty_like(Q)
+
+   # --- Unpack physical variables
+   rho      = Q[idx_2d_rho,:,:]
+   uu       = Q[idx_2d_rho_u,:,:] / rho
+   ww       = Q[idx_2d_rho_w,:,:] / rho
+   pressure = p0 * (Q[idx_2d_rho_theta,:,:] * Rd / p0)**(cpd / cvd)
+
+   # --- Compute the fluxes
+   flux_x1[idx_2d_rho,:,:]       = Q[idx_2d_rho_u,:,:]
+   flux_x1[idx_2d_rho_u,:,:]     = Q[idx_2d_rho_u,:,:] * uu + pressure
+   flux_x1[idx_2d_rho_w,:,:]     = Q[idx_2d_rho_u,:,:] * ww
+   flux_x1[idx_2d_rho_theta,:,:] = Q[idx_2d_rho_theta,:,:] * uu
+
+   flux_x3[idx_2d_rho,:,:]       = Q[idx_2d_rho_w,:,:]
+   flux_x3[idx_2d_rho_u,:,:]     = Q[idx_2d_rho_w,:,:] * uu
+   flux_x3[idx_2d_rho_w,:,:]     = Q[idx_2d_rho_w,:,:] * ww + pressure
+   flux_x3[idx_2d_rho_theta,:,:] = Q[idx_2d_rho_theta,:,:] * ww
 
    # --- Interpolate to the element interface
-
    kfaces_var[:,:,0,:] = Q[:,:,:]
-   kfaces_var[:,:,1,:] = kfaces_var[:,:,0,:]
+   kfaces_var[:,:,1,:] = Q[:,:,:]
+
+   kfaces_flux[:,:,0,:] = flux_x3[:,:,:]
+   kfaces_flux[:,:,1,:] = flux_x3[:,:,:]
 
    ifaces_var[:,:,:,0] = Q[:,:,:].transpose((0, 2, 1))
    ifaces_var[:,:,:,1] = ifaces_var[:,:,:,0]
 
-   # --- Interface pressure
-   ifaces_pres = p0 * (ifaces_var[idx_2d_rho_theta] * Rd / p0)**(cpd / cvd)
-   kfaces_pres = p0 * (kfaces_var[idx_2d_rho_theta] * Rd / p0)**(cpd / cvd)
+   ifaces_flux[:,:,:,0] = flux_x1[:,:,:].transpose((0, 2, 1))
+   ifaces_flux[:,:,:,1] = ifaces_flux[:, :, :, 0]
 
-   # --- Bondary treatement
+   # --- Interface pressure
+   ifaces_pres = p0 * numpy.exp((cpd / cvd) * numpy.log((Rd / p0) * ifaces_var[idx_2d_rho_theta]))
+   kfaces_pres = p0 * numpy.exp((cpd / cvd) * numpy.log((Rd / p0) * kfaces_var[idx_2d_rho_theta]))
+
+   # --- Boundary treatement
 
    # zeros flux BCs everywhere ...
    kfaces_flux[:, 0, 0, :] = 0.0
@@ -54,42 +79,8 @@ def rhs_bubble_fv(Q: numpy.ndarray[Any, numpy.dtype[Union[numpy.float64,numpy.co
    ifaces_flux[idx_2d_rho_u, 0, :, 0] = ifaces_pres[ 0, :, 0]  # TODO : pour les cas théoriques seulement ...
    ifaces_flux[idx_2d_rho_u,-1, :, 1] = ifaces_pres[-1, :, 1]
 
-   # --- Common AUSM fluxes --- vertical
-
-   # Left
-   a_L = numpy.sqrt(heat_capacity_ratio * kfaces_pres[:-1, 1, :] / kfaces_var[idx_2d_rho, :-1, 1, :])
-   M_L = kfaces_var[idx_2d_rho_w, :-1, 1, :] / (kfaces_var[idx_2d_rho, :-1, 1, :] * a_L)
-
-   # Right
-   a_R = numpy.sqrt(heat_capacity_ratio * kfaces_pres[1:, 0, :] / kfaces_var[idx_2d_rho, 1:, 0, :])
-   M_R = kfaces_var[idx_2d_rho_w, 1:, 0, :] / (kfaces_var[idx_2d_rho, 1:, 0, :] * a_R)
-
-   # Mid
-   M = 0.25 * (( M_L + 1.)**2 - (M_R - 1.)**2)
-
-   kfaces_flux[:, 1:, 0, :] = \
-      (kfaces_var[:, :-1, 1, :] * numpy.maximum(0., M) * a_L) + (kfaces_var[:, 1: , 0, :] * numpy.minimum(0., M) * a_R)
-   kfaces_flux[idx_2d_rho_w, 1:, 0, :] += \
-      0.5 * ((1. + M_L) * kfaces_pres[:-1,1,:] + (1. - M_R) * kfaces_pres[1:,0,:])
-   kfaces_flux[:, :-1, 1, :] = kfaces_flux[:, 1:, 0, :]
-
-   # --- Common AUSM fluxes --- horizontal
-
-   # Left state
-   a_L = numpy.sqrt(heat_capacity_ratio * ifaces_pres[:-1, :, 1] / ifaces_var[idx_2d_rho, :-1, :, 1])
-   M_L = ifaces_var[idx_2d_rho_u, :-1, :, 1] / (ifaces_var[idx_2d_rho, :-1, :, 1] * a_L)
-
-   # Right state
-   a_R = numpy.sqrt(heat_capacity_ratio * ifaces_pres[1:, :, 0] / ifaces_var[idx_2d_rho, 1:, :, 0])
-   M_R = ifaces_var[idx_2d_rho_u, 1:, :, 0] / ( ifaces_var[idx_2d_rho, 1:, :, 0] * a_R)
-
-   M = 0.25 * ((M_L + 1.)**2 - (M_R - 1.)**2)
-
-   ifaces_flux[:, 1:, :, 0] = \
-      (ifaces_var[:, :-1, :, 1] * numpy.maximum(0., M) * a_L) + (ifaces_var[:, 1:, :, 0] * numpy.minimum(0., M) * a_R)
-   ifaces_flux[idx_2d_rho_u, 1:, :, 0] += \
-      0.5 * ((1. + M_L) * ifaces_pres[:-1, :, 1] + (1. - M_R) * ifaces_pres[1:, :, 0])
-   ifaces_flux[:, :-1, :, 1] = ifaces_flux[:, 1:, :, 0]
+   ifaces_flux, kfaces_flux = compute_flux(Q, ifaces_var, ifaces_pres, ifaces_flux,
+                                           kfaces_var, kfaces_pres, kfaces_flux)
 
    # --- Compute the derivatives
    df3_dx3[:, :, :] = (kfaces_flux[:, :, 1, :] - kfaces_flux[:, :, 0, :]) / geom.Δx3
