@@ -4,7 +4,7 @@ cd /home/vma000/ords/gef_tanya
 
 methods=("case5_kiops.ini" "case5_cwy1s.ini" "case5_cwyne.ini" "case5_icwy1s.ini" "case5_icwyne.ini" "case5_pmex1s.ini" "case5_pmexne.ini" "case6_kiops.ini" "case6_cwy1s.ini" "case6_cwyne.ini" "case6_icwy1s.ini" "case6_icwyne.ini" "case6_pmex1s.ini" "case6_pmexne.ini" "galewsky_kiops.ini" "galewsky_cwy1s.ini" "galewsky_cwyne.ini" "galewsky_icwy1s.ini" "galewsky_icwyne.ini" "galewsky_pmex1s.ini" "galewsky_pmexne.ini")
 
-folders=("epi2" "srerk3")
+folders=("epi2" "srerk3" "epi4" "epi6" "srerk6")
 
 methodlen=${#methods[@]}
 folderlen=${#folders[@]}
