@@ -17,9 +17,8 @@ class Configuration:
       self.parser.read(cfg_file)
 
       if verbose:
-         print('\nLoading config: ' + cfg_file)
-         print(self.parser.sections())
-         print(' ')
+         print(f'\nLoading config: {cfg_file}')
+         print(f'Sections: {self.parser.sections()}\n')
 
       self.equations = self._get_option('General', 'equations', str, None, ['euler', 'shallow_water'])
       if self.equations == 'euler':
@@ -110,7 +109,7 @@ class Configuration:
       available_preconditioners = ['none', 'fv', 'fv-mg', 'p-mg']
       self.preconditioner = self._get_option('Preconditioning', 'preconditioner', str, 'none', valid_values=available_preconditioners)
 
-      available_fluxes = ['ausm', 'upwind', 'rusanov']
+      available_fluxes = ['ausm', 'upwind', 'rusanov', 'roe']
       self.precond_flux = self._get_option('Preconditioning', 'precond_flux', str, available_fluxes[0], valid_values=available_fluxes)
 
       self.num_mg_levels = self._get_option('Preconditioning', 'num_mg_levels', int, 1, min_value=1)

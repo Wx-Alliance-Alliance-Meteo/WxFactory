@@ -5,7 +5,7 @@ import numpy
 
 from geometry                  import Cartesian2D, CubedSphere
 from init.initialize           import Topo
-from rhs.fluxes                import ausm_2d_fv, upwind_2d_fv, rusanov_2d_fv
+from rhs.fluxes                import ausm_2d_fv, upwind_2d_fv, rusanov_2d_fv, roe_2d_fv
 from rhs.rhs_bubble            import rhs_bubble
 from rhs.rhs_bubble_convective import rhs_bubble as rhs_bubble_convective
 from rhs.rhs_bubble_fv         import rhs_bubble_fv
@@ -56,7 +56,7 @@ class RhsBundle:
          self.viscous = lambda q: self.full(q) - self.convective(q)
 
       elif param.equations == 'euler' and isinstance(geom, Cartesian2D):
-         flux_functions = {'ausm': ausm_2d_fv, 'upwind': upwind_2d_fv, 'rusanov': rusanov_2d_fv}
+         flux_functions = {'ausm': ausm_2d_fv, 'upwind': upwind_2d_fv, 'rusanov': rusanov_2d_fv, 'roe': roe_2d_fv}
          if param.discretization == 'fv':
             self.full = generate_rhs(
                rhs_bubble_fv, geom, param.nb_elements_horizontal, param.nb_elements_vertical,
