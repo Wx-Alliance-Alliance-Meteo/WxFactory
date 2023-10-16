@@ -3,10 +3,13 @@ from typing import Callable
 
 import numpy
 from mpi4py import MPI
+import scipy
 
-from common.program_options import Configuration
-from solvers                import fgmres, MatvecOpRat, SolverInfo
-from .integrator            import Integrator
+from common.program_options  import Configuration
+from solvers                 import fgmres, MatvecOpRat, SolverInfo
+from .integrator             import Integrator
+from scripts.eigenvalue_util import gen_matrix
+from solvers                 import fgmres, matvec_rat, SolverInfo
 
 class Ros2(Integrator):
    def __init__(self, param: Configuration, rhs_handle: Callable, preconditioner=None) -> None:
@@ -14,6 +17,8 @@ class Ros2(Integrator):
       self.rhs_handle     = rhs_handle
       self.tol            = param.tolerance
       self.gmres_restart  = param.gmres_restart
+      self.assembled_A = None
+      self.lu = None
 
    def __step__(self, Q: numpy.ndarray, dt: float):
 
@@ -27,12 +32,16 @@ class Ros2(Integrator):
       maxiter = 20000 // self.gmres_restart
       if self.preconditioner is not None:
          # maxiter = 200 // self.gmres_restart
-         maxiter = 420 // self.gmres_restart
-         maxiter = min(2, maxiter)
+      if self.assembled_A is None:
+         self.assembled_A = gen_matrix(A)
+         self.lu = scipy.sparse.linalg.splu(self.assembled_A)
+
+      def custom_precond(v):
+         return self.lu.solve(v)
 
       t0 = time()
       Qnew, norm_r, norm_b, num_iter, flag, residuals = fgmres(
-         A, b, x0=Q_flat, tol=self.tol, restart=self.gmres_restart, maxiter=maxiter, preconditioner=self.preconditioner,
+         A, b, x0=Q_flat, tol=self.tol, restart=self.gmres_restart, maxiter=maxiter, preconditioner=custom_precond,
          verbose=self.verbose_solver)
       t1 = time()
 
