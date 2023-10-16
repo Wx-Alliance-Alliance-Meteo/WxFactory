@@ -1,6 +1,14 @@
 """
- This is the main file for running the Advection-Diffusion-Reaction
- pde. 
+ This is the main file for running the Porous Medium Eqn
+ u_t = alpha(u_x + u_y) + (u^2)_xx + (u^2)_yy
+ x,y in [0,1] with periodic boundary conditions. 
+
+ Integrating from t in [0, tf], with dt = .
+
+ Run with p = [625, 1600, 2500, 6400, 10000] for
+ strong scaling results. 
+
+ Runtime will be saves for each integrator and ortho method.
 
 """
 
@@ -93,8 +101,6 @@ while(step < total_steps):
 
    Q = stepper.step(Q, dt)
  
-   if world.IamRoot: print(time() )
-
 total_time = time() - start_time
 
 #print out stats
