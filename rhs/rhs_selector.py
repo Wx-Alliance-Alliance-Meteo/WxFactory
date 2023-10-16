@@ -22,6 +22,8 @@ from common.program_options import Configuration
 from geometry               import DFROperators, Geometry, Metric
 
 class RhsBundle:
+   '''Set of RHS functions that are associated with a certain geometry and equations
+   '''
    def __init__(self,
                 geom: Geometry,
                 operators: DFROperators,
@@ -37,7 +39,7 @@ class RhsBundle:
       def generate_rhs(rhs_func: Callable, *args, **kwargs) -> Callable[[numpy.ndarray], numpy.ndarray]:
          '''Generate a function that calls the given (RHS) function on a vector. The generated function will
          first reshape the vector, then return a result with the original input vector shape.'''
-         if MPI.COMM_WORLD.rank == 0: print(f'Generating {rhs_func} with shape {self.shape}')
+         # if MPI.COMM_WORLD.rank == 0: print(f'Generating {rhs_func} with shape {self.shape}')
          def actual_rhs(vec: numpy.ndarray):
             old_shape = vec.shape
             result = rhs_func(vec.reshape(self.shape), *args, **kwargs)

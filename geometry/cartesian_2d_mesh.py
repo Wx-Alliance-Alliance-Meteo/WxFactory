@@ -34,8 +34,6 @@ class Cartesian2D(Geometry):
          Δrelief_layer = (relief_layer_height - domain_z[0]) / nb_elements_relief_layer
 
          Δx3 = (domain_z[1] - relief_layer_height) / (nb_elements_z - nb_elements_relief_layer)
-         print(f'delta z1= {Δrelief_layer}')
-         print(f'delta z= {Δx3}')
          itf_x3 = numpy.linspace(start=relief_layer_height, stop=domain_z[1], num=(nb_elements_z - nb_elements_relief_layer) + 1)
          itf_relief_layer = numpy.linspace(start=domain_z[0], stop=relief_layer_height, num=nb_elements_relief_layer + 1)
 
@@ -56,8 +54,6 @@ class Cartesian2D(Geometry):
          Δx3 = (domain_z[1] - domain_z[0]) / nb_elements_z
          Δrelief_layer = 0 # being lazy ...
          itf_x3 = numpy.linspace(start=domain_z[0], stop=domain_z[1], num=nb_elements_z + 1)
-         print(f'domain: {domain_x}, {domain_z}')
-         print(f'grid size: {Δx1}, {Δx3}')
 
          for i in range(nb_elements_z):
             idz = i * nbsolpts
