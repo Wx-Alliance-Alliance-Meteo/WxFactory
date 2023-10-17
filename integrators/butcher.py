@@ -1,6 +1,40 @@
 import numpy
 from .explicit_runge_kutta import RungeKutta
 
+
+class ERK4_3_4L(RungeKutta):
+    # effective number of stages
+    n_stages = 4
+
+    # order of the main method
+    order = 4
+
+    # order of the secondary embedded method
+    error_estimator_order = 3 #for linear
+
+    # time fraction coefficients (nodes)
+    C = numpy.array([0.164369080229636, 0.659366824405395, 0.160017080831843, 1.027623961809870])
+
+    # runge kutta coefficient matrix
+    A = numpy.array([[0., 0., 0., 0.], \
+      [1.445148976278160, 0.,0., 0.], \
+      [-1.024215777567340,0.268022651255128, 0., 0.],\
+      [0.395122557770683,   0.235330434499093,   1.194665021135020, 0.]])
+
+    # output coefficients (weights)
+    B = numpy.array([-0.177238625786377 , 0.525945598518999 , 0.561248257545429 ,  0.090044769721949])
+
+    # error coefficients (weights Bh - B)
+    E = numpy.array([-0.178309513198217,   0.524548710196445,   0.562194906605760,   0.091446814673498, 0])        # B_hat
+    E[:-1] -= B
+
+    # dense output
+    # P = numpy.array([[4655552711362/22874653954995, -18682724506714/9892148508045, 34259539580243/13192909600954, 584795268549/6622622206610],
+    #  [-215264564351/13552729205753, 17870216137069/13817060693119, -28141676662227/17317692491321, 2508943948391/7218656332882]])
+
+    # Parameters for stepsize control
+    # sc_params = "W"
+
 class ERK3_2_3L(RungeKutta):
     # effective number of stages
     n_stages = 3
@@ -11,26 +45,22 @@ class ERK3_2_3L(RungeKutta):
     # order of the secondary embedded method
     error_estimator_order = 2 #for both linear and non-linear
 
+
     # time fraction coefficients (nodes)
     C = numpy.array([0., 1./2., 1.])
 
     # runge kutta coefficient matrix
-    A = numpy.array([[0., 0., 0.], \
-      [1/2, 0., 0.], \
+    A = numpy.array([[0., 0., 0.], 
+      [1/2, 0., 0.], 
       [-1., 2., 0.]])
 
     # output coefficients (weights)
     B = numpy.array([1./6., 2./3., 1./6.])
 
-    # error coefficients (weights Bh - B)
-    E = numpy.array([1./12., -1./6., 1./12.,0])
 
-    # dense output
-    # P = numpy.array([[4655552711362/22874653954995, -18682724506714/9892148508045, 34259539580243/13192909600954, 584795268549/6622622206610],
-    #  [-215264564351/13552729205753, 17870216137069/13817060693119, -28141676662227/17317692491321, 2508943948391/7218656332882]])
-    
-    # Parameters for stepsize control
-    # sc_params = "W"
+    # error coefficients (weights Bh - B)
+    E = numpy.array([1./4., 1./2., 1./4.,0])   # B_hat
+    E[:-1] -= B 
 
 
 
@@ -125,4 +155,5 @@ METHODS = {'RK23'              : RK23,
            'RK45'              : RK45,
            'MERSON4'           : Merson4,
            'ARK3(2)4L[2]SA-ERK': ARK3_2_4L_2_SA_ERK,
-           'ERK3(2)3L'         : ERK3_2_3L}
+           'ERK3(2)3L'         : ERK3_2_3L,
+           'ERK4(3)4L'         : ERK4_3_4L}

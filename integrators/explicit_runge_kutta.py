@@ -1,7 +1,8 @@
 import math
 import logging
 import numpy
-from solvers.global_operations import global_inf_norm
+#from solvers.global_operations import global_inf_norm
+from solvers.global_operations import *   #vicky
 
 BIG_FACTOR = 4.0
 
