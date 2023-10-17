@@ -52,8 +52,8 @@ def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 10, mmin=10, mmax = 128
    #mmin = 1
    m = max(mmin, min(m_init, mmax))
 
-   if rank == 0:
-      print("in pmex, m_init = {}, m = {}".format(m_init, m))
+   #if rank == 0:
+   #   print("in pmex, m_init = {}, m = {}".format(m_init, m))
 
    # Preallocate matrix
    V = numpy.zeros((mmax + 1, n + p))
@@ -149,7 +149,7 @@ def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 10, mmin=10, mmax = 128
          V[j, -1     ] = 0.0
 
          #2. compute terms needed for R and T
-         local_vec = V[0:j+1, 0:n] @ V[j-1:j+1, 0:n].T
+         local_vec  = V[0:j+1, 0:n] @ V[j-1:j+1, 0:n].T
          global_vec = numpy.empty_like(local_vec)
          MPI.COMM_WORLD.Allreduce([local_vec, MPI.DOUBLE], [global_vec, MPI.DOUBLE])
          global_vec += V[0:j+1, n:n+p] @ V[j-1:j+1, n:n+p].T
@@ -175,8 +175,11 @@ def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 10, mmin=10, mmax = 128
          #5. Orthogonalize
          V[j, :] -= sol @ V[0:j, :]
 
-         #7. compute norm estimate
-         sum_sqrd = sum(global_vec[0:j,1]**2)
+         #6. compute norm estimate with quad precision 
+         sum_vec  = numpy.array(global_vec[0:j,1]**2, numpy.float128)
+         sum_sqrd = numpy.array(sum(sum_vec), numpy.float128)
+
+         #sum_sqrd = sum(global_vec[0:j,1]**2)
          if (global_vec[-1,1] < sum_sqrd):
             #use communication to compute norm estimate
             local_sum = V[j, 0:n] @ V[j, 0:n]
@@ -185,7 +188,14 @@ def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 10, mmin=10, mmax = 128
             curr_nrm = math.sqrt( global_sum_nrm + V[j,n:n+p] @ V[j, n:n+p] )
             reg_comm_nrm += 1
          else:
-           curr_nrm = numpy.sqrt(global_vec[-1,1] - sum_sqrd)
+
+           #compute norm estimate in quad precision
+           curr_nrm = numpy.array(numpy.sqrt(global_vec[-1,1] - sum_sqrd), numpy.float128)
+
+           #cast back to double
+           curr_nrm = numpy.array(curr_nrm, numpy.float64)
+
+           #curr_nrm = numpy.sqrt(global_vec[-1,1] - sum_sqrd)
 
          # Happy breakdown
          if curr_nrm < tol:

@@ -175,15 +175,24 @@ def cwy_ne(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 2
          #5. Orthogonalize
          V[j,:] -= tmp2 @ V[0:j,:]
 
-         #6. norm estimate
-         sum_sqrd = sum(global_temp_vec[0:j,1]**2)
+         #6. norm estimate in quad precision
+         sum_vec  = numpy.array(global_temp_vec[0:j,1]**2, numpy.float128)
+         sum_sqrt = numpy.array(sum(sum_vec), numpy.float128)
+ 
+         #sum_sqrd = sum(global_temp_vec[0:j,1]**2)
 
-         if (global_temp_vec[-1,1] < sum_sqrd):
+         if (global_temp_vec[-1,1] < sum_sqrt):
            local_sum = V[j, 0:n] @ V[j, 0:n]
            nrm = numpy.sqrt( mpi4py.MPI.COMM_WORLD.allreduce(local_sum) + V[j, n:n+p] @ V[j, n:n+p])
            reg_comm += 1
          else:
-           nrm = math.sqrt(global_temp_vec[-1,1] - sum_sqrd)
+           #compute norm estimate in quad precision
+           nrm = numpy.array( numpy.sqrt(global_temp_vec[-1,1] - sum_sqrt), numpy.float128)
+
+           #now cast back to double
+           nrm = numpy.array(nrm, numpy.float64)
+
+           #nrm = math.sqrt(global_temp_vec[-1,1] - sum_sqrd)
 
          # Happy breakdown
          if nrm < tol:
