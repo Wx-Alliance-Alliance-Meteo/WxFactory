@@ -3,9 +3,10 @@
  u_t = alpha(u_xx + u_yy) - u + u^3
  x,y in [-1,1] with homogeneous Neumann boundary conditions.
 
- Integrating from t in [0, 0.02] with dt = 0.001
+ Integrating from t in [0, 0.02] with dt = 0.001; only 
+ taking 20 steps. 
 
- Run with p = [100, 400, ] for 
+ Run with p = [100, 400, 625, 1600, 2500, 10k ] for 
  strong scaling results. 
 
  Runtime will be saved for each integrator and ortho method.  
