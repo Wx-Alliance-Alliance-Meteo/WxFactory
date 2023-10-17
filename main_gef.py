@@ -114,7 +114,6 @@ def main(argv) -> int:
 
    output.finalize()
 
-   """
    #print the total times to a file
    if (MPI.COMM_WORLD.rank == 0):
       size = MPI.COMM_WORLD.Get_size()
@@ -124,7 +123,6 @@ def main(argv) -> int:
       totaltime_name = "results_tanya/runtime_"+ methodOrtho + "_n" +  str(size) + "_" + str(method) + "_c" + caseNum +".txt"
       with open(totaltime_name, 'a') as gg:
         gg.write('{} \n'.format(total_time))
-   """
 
    return MPI.COMM_WORLD.rank
 
