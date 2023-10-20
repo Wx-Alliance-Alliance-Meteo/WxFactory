@@ -2,8 +2,7 @@
 cd /home/vma000/ords/gef_tanya
 . ./load_env.sh
 
-methodlen=${#methods[@]}
 #looping through each case and running it 7 times
 for ((j = 0; j < 7; j++)); do
-   mpirun -np 294 python3 ./main_gef.py config/srerk6/case6_pmex1s.ini
+   mpirun -np 294 python3 ./main_gef.py config/test_files/srerk6/case6_pmex1s.ini
 done
