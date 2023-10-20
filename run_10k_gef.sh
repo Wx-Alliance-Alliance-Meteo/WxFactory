@@ -7,7 +7,7 @@ ord_soumet -cpus 10584                                \
            -jn gef_10584                            \
            -mpi                                      \
            -share e                                  \
-           -jobfile bat_files/call_10584_all.bat      \
+           -jobfile bat_files/call_10k_all.bat      \
            -listing $(pwd)/listings
 
 
