@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-cd /home/vma000/ords/gef_tanya
+cd /home/vma000/code/gef_tanya
 . ./load_env.sh
 
 #methods=("galewsky_kiops.ini" "galewsky_cwy1s.ini" "galewsky_cwyne.ini" "galewsky_cwyne1s.ini" "galewsky_icwy1s.ini" "galewsky_icwyne.ini" "galewsky_icwyne1s.ini" "galewsky_icwyiop.ini" "galewsky_pmex1s.ini" "galewsky_pmexne.ini" "galewsky_pmexne1s.ini" "galewsky_kiops_ne.ini")
