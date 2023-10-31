@@ -16,8 +16,12 @@ scripts/**/*.pdf
 __pycache__/
 *.py[cod]
 
-results/
-test_configs/
+results
+results_tanya
+jacobian
+listings
+test_configs
+work
 
 .vscode
 .idea
