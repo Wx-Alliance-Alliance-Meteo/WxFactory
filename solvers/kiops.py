@@ -193,6 +193,8 @@ def kiops(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 2,
 
          krystep += 1
 
+      if rank == 0: print("finished GS")
+
       # To obtain the phi_1 function which is needed for error estimate
       H[0, j] = 1.0
 
@@ -203,6 +205,8 @@ def kiops(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 2,
       # Compute the exponential of the augmented matrix
       F = scipy.linalg.expm(sgn * τ * H[0:j + 1, 0:j + 1])
       exps += 1
+
+      if rank == 0: print("finish computing exp(H)")
 
       # Restore the value of H_{m+1,m}
       H[j, j-1] = nrm
@@ -270,6 +274,8 @@ def kiops(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 2,
             m_new = m_opt
             τ_new = same_τ
 
+      if rank == 0: print("finished adaptivity")
+
       # Check error against target
       if ω <= delta:
 
@@ -306,6 +312,9 @@ def kiops(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 2,
          ireject = 0
 
          conv += err
+         if MPI.COMM_WORLD.Get_rank() == 0:
+            print("---accepted step from kiops---")
+            print("mnew = {}, tau_new = {}".format(m_new, τ_new))
 
       else:
          # Nope, try again
@@ -313,6 +322,10 @@ def kiops(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 2,
 
          # Restore the original matrix
          H[0, j] = 0.0
+  
+         if MPI.COMM_WORLD.Get_rank() == 0:
+            print("---rejected step from kiops---")
+            print("mnew = {}, tau_new = {}".format(m_new, τ_new))
 
 
       oldτ = τ
@@ -320,6 +333,8 @@ def kiops(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 2,
 
       oldm = m
       m    = m_new
+
+      if rank == 0: print("set m/t to new variables")
 
 
    if task1 is True:

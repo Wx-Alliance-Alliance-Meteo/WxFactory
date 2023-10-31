@@ -356,6 +356,6 @@ def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 10, mmin=10, mmax = 128
    avg_gsum_dots = sum(gsum_dots) / nn
    """
 
-   stats = (step, reject, krystep, exps, conv, m_ret)
+   stats = (step, reject, krystep, exps, conv, m_ret, reg_comm_nrm)
   
    return w, stats
