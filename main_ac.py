@@ -19,12 +19,12 @@ import sys
 
 from mpi4py      import MPI
 from stiff_pdes  import JTV, initWorld, rhs_jac_pdefuncs, print_stuff
-from integrators import Integrator, epi_for_others
+from integrators import Integrator, epi_for_others, srerk_for_others
 from time        import time 
 
 #1. initialize world
 comm  = MPI.COMM_WORLD
-world = initWorld.InitWorld(comm, "Neumann", [-1.0, 1.0], 5002)
+world = initWorld.InitWorld(comm, "Neumann", [-1.0, 1.0], 2002)
 
 #2. read in command line arguments
 epi_order    = int(sys.argv[1])
@@ -60,7 +60,11 @@ jtv = rhs_jac_pdefuncs.allencahn_jtv
 #as an argument
 rhs_handle = lambda u: rhs(u, epsilon, world)
 
+#for EPI
 stepper = epi_for_others.Epi_others(epi_order, rhs_handle, jtv, ortho_method, world, [epsilon, alpha, gamma], init_substeps=10)
+
+#for SRERK
+#stepper = srerk_for_others.Srerk_others(epi_order, rhs_handle, jtv, ortho_method, world, [epsilon, alpha, gamma])
 
 #6. set up time integration
 #possitle dt from paper: 0.5, 0.25, 0.1250, 0.0625, 0.03125
@@ -92,7 +96,8 @@ total_time = time() - start_time
 
 #if world.IamRoot:
 #   print("Total runtime = {}".format(total_time))
-   
+ 
+  
 #print out stats
 if world.IamRoot:
    size        = MPI.COMM_WORLD.Get_size()
@@ -100,7 +105,8 @@ if world.IamRoot:
    methodOrtho = str(ortho_method)
    totaltime_name = "results_tanya/runtime_"+ methodOrtho + "_n" +  str(size) + "_e" + str(method) + "_ac.txt"
 
-"""   
+
+"""
 #print final solution 
 print("Gather solution")
 finalSolQ = MPI.COMM_WORLD.gather(Q, root=0)
@@ -108,6 +114,6 @@ finalSolQ = MPI.COMM_WORLD.gather(Q, root=0)
 if world.IamRoot:
 
    #1. gather solin 1 vec and print output file
-   filename = "epi5_ac_ts160.txt"
+   filename = "epi6_pmex1s_ac_testsrerk3.txt"
    totalOutLap = print_stuff.print_sol(finalSolQ, filename, world)
 """
