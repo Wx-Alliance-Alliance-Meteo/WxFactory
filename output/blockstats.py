@@ -113,7 +113,7 @@ def blockstats_cart(Q: numpy.ndarray, geom: Cartesian2D, step_id: int):
       print("==============================================")
       print(f' Blockstats for timestep {step_id}')
       print(f'   Var        Min        Max        Mean')
-      print(f'  rho      {rho_min:9.2e}  {rho_max:9.2e}  {rho_avg:9.2e}   '
+      print(f'  ρ        {rho_min:9.2e}  {rho_max:9.2e}  {rho_avg:9.2e}   '
             # f'({rho_mincoord[0]:7.0f}, {rho_mincoord[1]:7.0f})  '
             # f'({rho_maxcoord[0]:7.0f}, {rho_maxcoord[1]:7.0f})'
             )
@@ -125,7 +125,7 @@ def blockstats_cart(Q: numpy.ndarray, geom: Cartesian2D, step_id: int):
             # f'({w_mincoord[0]:7.0f}, {w_mincoord[1]:7.0f})  '
             # f'({w_maxcoord[0]:7.0f}, {w_maxcoord[1]:7.0f})'
             )
-      print(f'  theta    {theta_min:9.2e}  {theta_max:9.2e}  {theta_avg:9.2e}   '
+      print(f'  θ        {theta_min:9.2e}  {theta_max:9.2e}  {theta_avg:9.2e}   '
             # f'({theta_mincoord[0]:7.0f}, {theta_mincoord[1]:7.0f})  '
             # f'({theta_maxcoord[0]:7.0f}, {theta_maxcoord[1]:7.0f})'
             )
