@@ -4,7 +4,7 @@ ord_soumet -cpus 100                                  \
            -jn ac_100_stats                          \
            -mpi                                        \
            -share e                                    \
-           -jobfile bat_files/ac/call_100_epi2.bat     \
+           -jobfile bat_files/ac/call_100_epi5.bat     \
            -listing $(pwd)/listings
 
 
@@ -30,7 +30,7 @@ ord_soumet -cpus 400                                  \
            -jn ac_400_stats                          \
            -mpi                                        \
            -share e                                    \
-           -jobfile bat_files/ac/call_400_epi2.bat     \
+           -jobfile bat_files/ac/call_400_epi5.bat     \
            -listing $(pwd)/listings
 
 
@@ -56,7 +56,7 @@ ord_soumet -cpus 625                                  \
            -jn ac_625_stats                          \
            -mpi                                        \
            -share e                                    \
-           -jobfile bat_files/ac/call_625_epi2.bat     \
+           -jobfile bat_files/ac/call_625_epi5.bat     \
            -listing $(pwd)/listings
 
 
