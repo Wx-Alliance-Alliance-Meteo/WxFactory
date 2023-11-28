@@ -22,7 +22,7 @@ class Epi_others(Integrator):
       self.preconditioner = None
       self.output_manager = None
       self.solver_info    = None
-      self.sim_time       = 0.0
+      self.sim_time       = -1.0
       #--------------------
       #self.int = time_int                  #was in param file, now input
 
@@ -137,8 +137,6 @@ class Epi_others(Integrator):
 
       #----pmex with 1-sync-----
       elif self.exponential_solver == 'pmex_1s':
-         if (mpirank == 0):
-           print("---calling pmex1s---")
          phiv, stats = pmex_1s([1.], matvec_handle, vec, tol=self.tol, m_init=self.krylov_size, mmin=16, mmax=64, task1=False)
          self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
 
