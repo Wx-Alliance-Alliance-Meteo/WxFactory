@@ -6,14 +6,6 @@ ord_soumet -cpus 1176                                \
            -jn gef_1176                         \
            -mpi                                      \
            -share e                                  \
-           -jobfile bat_files/finalrun/call_e4_1176_1s.bat      \
-           -listing $(pwd)/listings
-
-ord_soumet -cpus 1176                                \
-           -w 180                                    \
-           -jn gef_1176                         \
-           -mpi                                      \
-           -share e                                  \
            -jobfile bat_files/finalrun/call_e4_1176_nev1.bat      \
            -listing $(pwd)/listings
 
@@ -53,14 +45,6 @@ ord_soumet -cpus 1176                                \
 
 
 #----------epi 6---------------------
-ord_soumet -cpus 1176                                \
-           -w 180                                    \
-           -jn gef_1176                         \
-           -mpi                                      \
-           -share e                                  \
-           -jobfile bat_files/finalrun/call_e6_1176_1s.bat      \
-           -listing $(pwd)/listings
-
 ord_soumet -cpus 1176                                \
            -w 180                                    \
            -jn gef_1176                         \

@@ -1,7 +1,7 @@
 
 
 ord_soumet -cpus 10584                                \
-           -w 180                                    \
+           -w 90                                    \
            -jn gef_10584                            \
            -mpi                                      \
            -share e                                  \
