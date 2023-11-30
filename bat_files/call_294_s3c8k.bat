@@ -2,7 +2,7 @@
 cd /home/vma000/code/gef_tanya
 . ./load_env.sh
 
-methods=("case6_pmex1s.ini" "case6_cwy1s.ini")
+methods=("galewsky_kiops.ini" "galewsky_cwy1s.ini")
 
 #looping through each case and running it 7 times
 for ((k=0; k < $methodlen; k++)); do
