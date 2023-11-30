@@ -27,8 +27,11 @@ comm  = MPI.COMM_WORLD
 world = initWorld.InitWorld(comm, "Neumann", [-1.0, 1.0], 2002)
 
 #2. read in command line arguments
-epi_order    = int(sys.argv[1])
-ortho_method = str(sys.argv[2])
+method       = str(sys.argv[1]) #eg epi4 or srerk3
+ortho_method = str(sys.argv[2]) #eg kiops or pmex1s
+
+order    = int(method[-1]) #the order of the method will always be last
+int_type = str(method[:-1]) #check if srerk or epi method
 
 #3. set up initial condition 
 Q = np.zeros(world.oneDsize)
@@ -60,11 +63,15 @@ jtv = rhs_jac_pdefuncs.allencahn_jtv
 #as an argument
 rhs_handle = lambda u: rhs(u, epsilon, world)
 
-#for EPI
-stepper = epi_for_others.Epi_others(epi_order, rhs_handle, jtv, ortho_method, world, [epsilon, alpha, gamma], init_substeps=10)
+#Now set up the 'stepper' function
+#the only two options for this test are EPI and SRERK 
+if int_type == 'srerk':
+   stepper = srerk_for_others.Srerk_others(order, rhs_handle, jtv, ortho_method, world, [epsilon, alpha, gamma])
+   #print("using srerk of order = {}".format( order))
 
-#for SRERK
-#stepper = srerk_for_others.Srerk_others(epi_order, rhs_handle, jtv, ortho_method, world, [epsilon, alpha, gamma])
+else:
+   stepper = epi_for_others.Epi_others(order, rhs_handle, jtv, ortho_method, world, [epsilon, alpha, gamma], init_substeps=10)
+   #print("using epi of order = {}".format(order))
 
 #6. set up time integration
 #possitle dt from paper: 0.5, 0.25, 0.1250, 0.0625, 0.03125
@@ -98,12 +105,13 @@ total_time = time() - start_time
 #   print("Total runtime = {}".format(total_time))
  
   
-#print out stats
+#print out runtime stats
 if world.IamRoot:
-   size        = MPI.COMM_WORLD.Get_size()
-   method      = str(epi_order)
-   methodOrtho = str(ortho_method)
-   totaltime_name = "results_tanya/runtime_"+ methodOrtho + "_n" +  str(size) + "_e" + str(method) + "_ac.txt"
+   size           = MPI.COMM_WORLD.Get_size()
+   totaltime_name = "results_tanya/runtime_"+ ortho_method + "_n" +  str(size) + "_e" + method + "_ac.txt"
+   with open(totaltime_name, 'a') as gg:
+      gg.write('{} \n'.format(total_time))
+
 
 
 """
@@ -114,6 +122,6 @@ finalSolQ = MPI.COMM_WORLD.gather(Q, root=0)
 if world.IamRoot:
 
    #1. gather solin 1 vec and print output file
-   filename = "epi6_pmex1s_ac_testsrerk3.txt"
+   filename = "srerk3_pmex1s_ac_n200_ts500.txt"
    totalOutLap = print_stuff.print_sol(finalSolQ, filename, world)
 """
