@@ -67,7 +67,15 @@ ord_soumet -cpus 2646                              \
            -jn gef_2646                            \
            -mpi                                    \
            -share e                                \
-           -jobfile bat_files/call_2646_nesr6.bat  \
+           -jobfile bat_files/call_2646_nesr6v1.bat  \
+           -listing $(pwd)/listings
+
+ord_soumet -cpus 2646                              \
+           -w 180                                  \
+           -jn gef_2646                            \
+           -mpi                                    \
+           -share e                                \
+           -jobfile bat_files/call_2646_nesr6v2.bat  \
            -listing $(pwd)/listings
 
 ord_soumet -cpus 2646                               \
@@ -91,8 +99,13 @@ ord_soumet -cpus 2646                               \
            -jn gef_2646                             \
            -mpi                                     \
            -share e                                 \
-           -jobfile bat_files/call_2646_s6_1s.bat   \
+           -jobfile bat_files/call_2646_s6_1sv1.bat   \
            -listing $(pwd)/listings
 
-
-
+ord_soumet -cpus 2646                               \
+           -w 180                                   \
+           -jn gef_2646                             \
+           -mpi                                     \
+           -share e                                 \
+           -jobfile bat_files/call_2646_s6_1sv2.bat   \
+           -listing $(pwd)/listings
