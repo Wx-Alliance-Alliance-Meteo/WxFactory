@@ -1,13 +1,12 @@
-import numpy
 from time import time
 from typing import Callable
 
+import numpy
 from mpi4py import MPI
 
 from common.program_options import Configuration
 from solvers                import fgmres, MatvecOpRat, SolverInfo
 from .integrator            import Integrator
-from solvers                import fgmres, matvec_rat, SolverInfo
 
 class Ros2(Integrator):
    def __init__(self, param: Configuration, rhs_handle: Callable, preconditioner=None) -> None:

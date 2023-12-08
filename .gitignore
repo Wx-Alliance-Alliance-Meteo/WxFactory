@@ -8,16 +8,18 @@ doc/*.pdf
 doc/aux/*
 doc/svg-inkscape/*
 
-jacobian/*
+jacobian
 
 scripts/**/*.pdf
 
 __pycache__/
 *.py[cod]
 
-results/
+bubble_cliff
+results
 test_configs/
-work/
+work
+scripts/load_env.sh
 
 .vscode
 .idea
@@ -34,3 +36,5 @@ geom*.dat
 *.db
 *.npy
 *.npz
+
+*.tmp

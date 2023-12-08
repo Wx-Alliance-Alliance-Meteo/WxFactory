@@ -13,10 +13,22 @@ CONFIG_BASE=${TEST_DIR}/config.ini
 do_2d=1
 do_3d=1
 do_non_precond=1
-do_precond=0
+do_precond=1
+
+echo "2D tests:         ${do_2d}"
+echo "3D tests:         ${do_3d}"
+echo "No-precond tests: ${do_non_precond}"
+echo "Precond tests:    ${do_precond}"
 
 mkdir -pv ${TEST_DIR}
 rm -rf ${TEST_DIR}/*
+
+function user_interrupt() {
+    echo -e "\nTest interrupted" && rm -rf ${TEST_DIR}
+    exit 1
+}
+
+trap user_interrupt SIGINT
 
 function set_param() {
     file=${1}
@@ -77,12 +89,15 @@ function test_cart2d() {
     save_state_freq=1
     store_solver_stats=1
     output_dir=${TEST_DIR}
+    filter_apply=1
+    precond_flux=ausm
 
     echo "Original config: ${CART_CONFIG_ORIG}"
     cp ${CART_CONFIG_ORIG} ${CONFIG_BASE}
-    set_param ${CONFIG_BASE} dt t_end time_integrator tolerance starting_step gmres_restart        \
-                             nbsolpts nb_elements_horizontal nb_elements_vertical preconditioner   \
-                             output_freq save_state_freq store_solver_stats output_dir
+    set_param ${CONFIG_BASE} dt t_end time_integrator tolerance starting_step gmres_restart         \
+                             nbsolpts nb_elements_horizontal nb_elements_vertical preconditioner    \
+                             output_freq save_state_freq store_solver_stats output_dir filter_apply \
+                             precond_flux
 
 
     if [ $do_non_precond -gt 0 ]; then
@@ -177,12 +192,12 @@ function test_cube_sphere() {
     return 0
 }
 
-if [ $do_2d -gt 0 ]; then
+if [ ${do_2d} -gt 0 ]; then
     echo "2D Euler"
     test_cart2d || exit -1
 fi
 
-if [ $do_3d -gt 0 ]; then
+if [ ${do_3d} -gt 0 ]; then
     echo "3D Euler (cube sphere)"
     test_cube_sphere ${CUBE_CONFIG1} || exit -1
     test_cube_sphere ${CUBE_CONFIG2} || exit -1

@@ -3,7 +3,7 @@
 """ The GEF model """
 
 import math
-from typing import Callable, Optional
+from typing import Optional
 import sys
 
 from mpi4py import MPI
@@ -18,6 +18,7 @@ from init.init_state_vars       import init_state_vars
 from integrators                import Integrator, Epi, EpiStiff, Euler1, Imex2, PartRosExp2, Ros2, RosExp2, \
                                        StrangSplitting, Srerk, Tvdrk3, BackwardEuler, CrankNicolson, Bdf2
 from output.output_manager      import OutputManager
+from output.state               import load_state
 from precondition.multigrid     import Multigrid
 from rhs.rhs_selector           import RhsBundle
 
@@ -36,13 +37,10 @@ def main(argv) -> int:
    geom = create_geometry(param, ptopo)
 
    # Build differentiation matrice and boundary correction
-   mtrx = DFROperators(geom, param.filter_apply, param.filter_order, param.filter_cutoff)
+   mtrx = DFROperators(geom, param)
 
    # Initialize state variables
    Q, topo, metric = init_state_vars(geom, mtrx, param)
-
-   if (param.expfilter_apply):
-      mtrx.make_filter(param.expfilter_strength,param.expfilter_order,param.expfilter_cutoff,geom)
 
    # Preconditioning
    preconditioner = create_preconditioner(param, ptopo)
@@ -54,7 +52,6 @@ def main(argv) -> int:
 
    # Get handle to the appropriate RHS functions
    rhs = RhsBundle(geom, mtrx, metric, topo, ptopo, param, Q.shape)
-   # rhs_handle, rhs_implicit, rhs_explicit = rhs_selector(geom, mtrx, metric, topo, ptopo, param)
 
    # Time stepping
    stepper = create_time_integrator(param, rhs, preconditioner)
@@ -80,8 +77,7 @@ def main(argv) -> int:
       if MPI.COMM_WORLD.rank == 0: print(f'\nStep {step} of {nb_steps + starting_step}')
 
       Q = stepper.step(Q, param.dt)
-      if (param.expfilter_apply):
-         Q = mtrx.apply_filter_3d(Q,geom,metric)
+      Q = mtrx.apply_filters(Q, geom, metric, param.dt)
 
       if MPI.COMM_WORLD.rank == 0: print(f'Elapsed time for step: {stepper.latest_time:.3f} secs')
 
@@ -112,7 +108,7 @@ def main(argv) -> int:
 def adjust_nb_elements(param: Configuration):
    """ Adjust number of horizontal elements in the parameters so that it corresponds to the number *per processor* """
    if param.grid_type == 'cubed_sphere':
-      allowed_pe_counts = [i**2 * 6 
+      allowed_pe_counts = [i**2 * 6
                            for i in range(1, param.nb_elements_horizontal // 2 + 1)
                            if (param.nb_elements_horizontal % i) == 0]
       if MPI.COMM_WORLD.size not in allowed_pe_counts:
@@ -129,12 +125,13 @@ def adjust_nb_elements(param: Configuration):
 def create_geometry(param: Configuration, ptopo: Optional[DistributedWorld]) -> Geometry:
    """ Create the appropriate geometry for the given problem """
 
-   if param.grid_type == 'cubed_sphere':
+   if param.grid_type == 'cubed_sphere' and ptopo is not None:
       return CubedSphere(param.nb_elements_horizontal, param.nb_elements_vertical, param.nbsolpts, param.λ0, param.ϕ0,
                          param.α0, param.ztop, ptopo, param)
    if param.grid_type == 'cartesian2d':
       return Cartesian2D((param.x0, param.x1), (param.z0, param.z1), param.nb_elements_horizontal,
-                         param.nb_elements_vertical, param.nbsolpts)
+                         param.nb_elements_vertical, param.nbsolpts, param.nb_elements_relief_layer,
+                         param.relief_layer_height)
 
    raise ValueError(f'Invalid grid type: {param.grid_type}')
 
@@ -153,7 +150,7 @@ def determine_starting_state(param: Configuration, output: OutputManager, Q: num
    starting_step = param.starting_step
    if starting_step > 0:
       try:
-         starting_state = numpy.load(output.state_file_name(starting_step))
+         starting_state, _ = load_state(output.state_file_name(starting_step))
          if starting_state.shape != Q.shape:
             print(f'ERROR reading state vector from file for step {starting_step}. '
                   f'The shape is wrong! ({starting_state.shape}, should be {Q.shape})')
@@ -251,12 +248,16 @@ if __name__ == '__main__':
 
    import argparse
    import cProfile
+   import os.path
 
    parser = argparse.ArgumentParser(description='Solve NWP problems with GEF!')
    parser.add_argument('--profile', action='store_true', help='Produce an execution profile when running')
    parser.add_argument('config', type=str, help='File that contains simulation parameters')
 
    args = parser.parse_args()
+
+   if not os.path.exists(args.config):
+      raise ValueError(f'Config file does not seem valid: {args.config}')
 
    # Start profiling
    pr = None

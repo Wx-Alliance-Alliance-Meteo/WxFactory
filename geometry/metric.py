@@ -2,7 +2,7 @@ import numpy
 import math
 
 from .cubed_sphere  import CubedSphere
-from .matrices      import DFROperators
+from .operators     import DFROperators
 
 class Metric3DTopo:
    def __init__(self, geom : CubedSphere, matrix: DFROperators):
