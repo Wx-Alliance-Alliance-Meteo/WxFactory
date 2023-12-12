@@ -77,16 +77,11 @@ class Configuration:
       self.expfilter_order = self._get_option('Spatial_discretization', 'expfilter_order', int, None if self.expfilter_apply else 0)
       self.expfilter_strength = self._get_option('Spatial_discretization', 'expfilter_strength', float, None if self.expfilter_apply else 0)
       self.expfilter_cutoff = self._get_option('Spatial_discretization', 'expfilter_cutoff', float, None if self.expfilter_apply else 0)
-<<<<<<< HEAD
-
-
-=======
       
       self.apply_sponge = self._get_option('Spatial_discretization', 'apply_sponge', bool, False)
       self.sponge_tscale = self._get_option('Spatial_discretization', 'sponge_tscale', float, 1.0)
       self.sponge_zscale = self._get_option('Spatial_discretization', 'sponge_zscale', float, 0.0)
       
->>>>>>> master
       ###############################
       # Grid
       possible_grid_types = ['cubed_sphere', 'cartesian2d']

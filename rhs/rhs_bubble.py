@@ -27,13 +27,7 @@ def rhs_bubble(Q, geom, mtrx, nbsolpts, nb_elements_x, nb_elements_z):
    rho      = Q[idx_2d_rho,:,:]
    uu       = Q[idx_2d_rho_u,:,:] / rho
    ww       = Q[idx_2d_rho_w,:,:] / rho
-<<<<<<< HEAD
-
-   pressure = p0 * (Q[idx_2d_rho_theta,:,:] * Rd / p0)**(cpd / cvd)
- 
-=======
    pressure = p0 * numpy.exp((cpd/cvd) * numpy.log((Rd/p0)*Q[idx_2d_rho_theta, :, :]))
->>>>>>> master
 
    # --- Compute the fluxes
    flux_x1[idx_2d_rho,:,:]       = Q[idx_2d_rho_u,:,:]
