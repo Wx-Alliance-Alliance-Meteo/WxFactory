@@ -167,7 +167,7 @@ class Configuration:
       elif option_type == int:
          value = self.parser.getint(section_name, option_name)
       elif option_type == str:
-         value = self.parser.get(section_name, option_name)
+         value = self.parser.get(section_name, option_name).lower()
       elif option_type == bool:
          value = (self.parser.getint(section_name, option_name) > 0)
       elif option_type == List[int]:
