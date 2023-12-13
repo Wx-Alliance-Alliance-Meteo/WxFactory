@@ -96,7 +96,7 @@ class Configuration:
          self.λ0   = self._get_option('Grid', 'λ0', float, None)
          self.ϕ0   = self._get_option('Grid', 'ϕ0', float, None)
          self.α0   = self._get_option('Grid', 'α0', float, None)
-         self.ztop = self._get_option('Grid', 'ztop', float, None)
+         self.ztop = self._get_option('Grid', 'ztop', float, 0.0)
 
       # Cartesian grid bounds
       if self.grid_type == 'cartesian2d':
