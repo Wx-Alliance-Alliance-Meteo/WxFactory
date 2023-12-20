@@ -251,10 +251,16 @@ if __name__ == '__main__':
    import os.path
    import traceback
 
+   args = None
+
    try:
       parser = argparse.ArgumentParser(description='Solve NWP problems with GEF!')
       parser.add_argument('--profile', action='store_true', help='Produce an execution profile when running')
       parser.add_argument('config', type=str, help='File that contains simulation parameters')
+      parser.add_argument('--show-every-crash', action='store_true',
+                          help='In case of an exception, show output from alllllll PEs')
+      parser.add_argument('--numpy-warn-as-except', action='store_true',
+                          help='Raise an exception if there is a numpy warning')
 
       args = parser.parse_args()
 
@@ -268,6 +274,11 @@ if __name__ == '__main__':
          pr.enable()
 
       numpy.set_printoptions(suppress=True, linewidth=256)
+
+      if args.numpy_warn_as_except:
+         numpy.seterr(all='raise')
+
+      # Run the actual GEF
       rank = main(args)
 
       if args.profile and pr:
@@ -277,6 +288,9 @@ if __name__ == '__main__':
          pr.dump_stats(out_file)
 
    except Exception as e:
-      if MPI.COMM_WORLD.rank == 0:
+
+      if args and args.show_every_crash:
+         traceback.print_exc()
+      elif MPI.COMM_WORLD.rank == 0:
          print(f'There was an error while running GEF. Only rank 0 is printing the traceback.')
          traceback.print_exc()
