@@ -14,7 +14,7 @@ except ModuleNotFoundError:
 
 from solvers                import MatvecOp
 
-def gen_matrix(matvec: MatvecOp, jac_file_name: Optional[str] = None, permute: bool = False) -> Optional[scipy.sparse.csc_matrix]:
+def gen_matrix(matvec: MatvecOp, jac_file_name: Optional[str] = None, compressed: Optional[bool] = None, permute: bool = False) -> Optional[scipy.sparse.csc_matrix]:
    """
    Compute and store the Jacobian matrix. It may be computed either as a full or sparse matrix
    (faster as full, but it may take a *lot* of memory for large matrices). Always stored as
@@ -24,15 +24,14 @@ def gen_matrix(matvec: MatvecOp, jac_file_name: Optional[str] = None, permute: b
    :param permute: Whether to permute matrix rows and columns to groups entries associated with an element into a block
    """
 
-
    neq, ni, nj = matvec.shape
    n_loc = matvec.size
 
    rank = MPI.COMM_WORLD.Get_rank()
    size = MPI.COMM_WORLD.Get_size()
 
-   compressed = n_loc * size > 150000
-   # compressed = True
+   if compressed is None:
+      compressed = n_loc * size > 150000
 
    print(f'Generating jacobian matrix. Shape {matvec.shape}')
 
