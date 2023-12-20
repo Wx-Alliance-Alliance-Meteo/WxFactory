@@ -19,6 +19,7 @@ from integrators                import Integrator, Epi, EpiStiff, Euler1, Imex2,
                                        StrangSplitting, Srerk, Tvdrk3, BackwardEuler, CrankNicolson, Bdf2
 from output.output_manager      import OutputManager
 from output.state               import load_state
+from precondition.factorization import Factorization
 from precondition.multigrid     import Multigrid
 from rhs.rhs_selector           import RhsBundle
 
@@ -43,7 +44,7 @@ def main(argv) -> int:
    Q, topo, metric = init_state_vars(geom, mtrx, param)
 
    # Preconditioning
-   preconditioner = create_preconditioner(param, ptopo)
+   preconditioner = create_preconditioner(param, ptopo, Q)
 
    output = OutputManager(param, geom, metric, mtrx, topo)
 
@@ -135,7 +136,8 @@ def create_geometry(param: Configuration, ptopo: Optional[DistributedWorld]) -> 
 
    raise ValueError(f'Invalid grid type: {param.grid_type}')
 
-def create_preconditioner(param: Configuration, ptopo: Optional[DistributedWorld]) -> Optional[Multigrid]:
+def create_preconditioner(param: Configuration, ptopo: Optional[DistributedWorld],
+                          Q: numpy.ndarray) -> Optional[Multigrid]:
    """ Create the preconditioner required by the given params """
    if param.preconditioner == 'p-mg':
       return Multigrid(param, ptopo, discretization='dg')
@@ -143,6 +145,8 @@ def create_preconditioner(param: Configuration, ptopo: Optional[DistributedWorld
       return Multigrid(param, ptopo, discretization='fv')
    if param.preconditioner == 'fv':
       return Multigrid(param, ptopo, discretization='fv', fv_only=True)
+   if param.preconditioner in ['lu', 'ilu']:
+      return Factorization(Q.dtype, Q.shape, param)
    return None
 
 def determine_starting_state(param: Configuration, output: OutputManager, Q: numpy.ndarray):
