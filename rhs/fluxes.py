@@ -5,7 +5,7 @@ from typing import Callable, Tuple
 
 import numpy
 
-from common.definitions import cpd, cvd, heat_capacity_ratio, p0, Rd, \
+from common.definitions import heat_capacity_ratio, p0, Rd, \
                                idx_2d_rho, idx_2d_rho_u, idx_2d_rho_w, idx_2d_rho_theta
 
 FluxFunction2D = Callable[[numpy.ndarray, numpy.ndarray, numpy.ndarray, numpy.ndarray, numpy.ndarray,
@@ -110,18 +110,31 @@ def roe_2d_fv(Q, ifaces_var, ifaces_pres, ifaces_flux, kfaces_var, kfaces_pres, 
    """L^2-Roe flux function (Osswald et al.)
    """
 
+   #TODO Treat 4th var (theta) like rho
+
    del ifaces_pres, kfaces_pres
+
+   num_var, num_elem_x, num_elem_y = Q.shape       # Only 1 pt per element since we're doing FV
+   i_r, i_u, i_w, i_t = idx_2d_rho, idx_2d_rho_u, idx_2d_rho_w, idx_2d_rho_theta
+
+   if num_var != 4: raise ValueError(f'We\'re supposed to have 4 variables!')
 
    icomm_flux = ifaces_flux.copy()
    kcomm_flux = kfaces_flux.copy()
 
-   density_hori = ifaces_var[idx_2d_rho]
-   u_hori       = ifaces_var[idx_2d_rho_u] / density_hori
-   w_hori       = ifaces_var[idx_2d_rho_w] / density_hori
 
-   pressure_hori    = p0 * (ifaces_var[idx_2d_rho_theta] * Rd / p0) ** heat_capacity_ratio
+   unpacked_var = ifaces_var.copy()
+   unpacked_var[i_u] /= unpacked_var[i_r]
+   unpacked_var[i_w] /= unpacked_var[i_r]
+   #unpacked_var[i_t] /= unpacked_var[i_r]     # Not used
+
+   density_hori = unpacked_var[i_r]
+   u_hori       = unpacked_var[i_u]
+   w_hori       = unpacked_var[i_w]
+
+   pressure_hori    = p0 * (ifaces_var[i_t] * Rd / p0) ** heat_capacity_ratio
    energy_hori      = pressure_hori / (heat_capacity_ratio - 1.0) + (u_hori ** 2 + w_hori ** 2) * density_hori * 0.5
-   enthalpy_hori    = (energy_hori + pressure_hori) / density_hori
+   enthalpy_hori    = (density_hori * energy_hori + pressure_hori) / density_hori
    sound_speed_hori = numpy.sqrt(heat_capacity_ratio * pressure_hori / density_hori)
    mach_hori        = numpy.sqrt(u_hori ** 2 + w_hori ** 2) / sound_speed_hori
 
@@ -136,9 +149,11 @@ def roe_2d_fv(Q, ifaces_var, ifaces_pres, ifaces_flux, kfaces_var, kfaces_pres, 
                           (sqrt_rho_l + sqrt_rho_r)
    sound_speed_roe_hori = numpy.sqrt((heat_capacity_ratio - 1.0) * (enthalpy_roe_hori - 0.5 * v2_roe_hori))
 
-   lambda_density = numpy.abs(u_roe_hori - sound_speed_roe_hori)
-   lambda_u       = numpy.abs(u_roe_hori)
-   lambda_theta   = numpy.abs(u_roe_hori + sound_speed_roe_hori)
+   lam = numpy.empty((4, num_elem_x, num_elem_y))
+   lam[i_r] = numpy.abs(u_roe_hori - sound_speed_roe_hori)
+   lam[i_u] = numpy.abs(u_roe_hori)
+   lam[i_w] = lam[i_u]
+   lam[i_t] = numpy.abs(u_roe_hori + sound_speed_roe_hori)
 
    diff_density  = density_hori[:, 1] - density_hori[:, 0]
    diff_u        = u_hori[:, 1] - u_hori[:, 0]
@@ -150,7 +165,9 @@ def roe_2d_fv(Q, ifaces_var, ifaces_pres, ifaces_flux, kfaces_var, kfaces_pres, 
                                   0.0)
    delta_lambda_2 = numpy.maximum((u_hori[:, 1] + sound_speed_hori[:, 1]) - (u_hori[:, 0] + sound_speed_hori[:, 0]),
                                   0.0)
+   lambda_density = lam[i_r]
    lambda_density[lambda_density < 2*delta_lambda_1] = lambda_density**2 / (4 * delta_lambda_1) + delta_lambda_1
+   lambda_theta = lam[i_t]
    lambda_theta[lambda_theta < 2*delta_lambda_2] = lambda_theta**2 / (4 * delta_lambda_2) + delta_lambda_2
 
    shock_fix = False
@@ -164,54 +181,63 @@ def roe_2d_fv(Q, ifaces_var, ifaces_pres, ifaces_flux, kfaces_var, kfaces_pres, 
       diff_u *= factor
       diff_w *= factor
 
-   alpha_pressure = (diff_pressure / sound_speed_roe_hori - density_roe_h * diff_u) / (2.0 * sound_speed_roe_hori)
-   alpha_u        = diff_density - diff_pressure / (sound_speed_roe_hori ** 2)
-   alpha_w        = density_roe_h * diff_w
-   alpha_theta    = (diff_pressure / sound_speed_roe_hori + density_roe_h * diff_u) * (2.0 * sound_speed_roe_hori)
+   alpha = numpy.empty_like(lam)
+   alpha[i_r] = (diff_pressure / sound_speed_roe_hori - density_roe_h * diff_u) / (2.0 * sound_speed_roe_hori)
+   alpha[i_u] = diff_density - diff_pressure / (sound_speed_roe_hori ** 2)
+   alpha[i_w] = density_roe_h * diff_w
+   alpha[i_t] = (diff_pressure / sound_speed_roe_hori + density_roe_h * diff_u) * (2.0 * sound_speed_roe_hori)
 
-   roe_vec = numpy.empty((4, 4))
-   roe_vec[0, 0] = 1.0
-   roe_vec[0, 1] = u_roe_hori - sound_speed_roe_hori
-   roe_vec[0, 2] = w_roe_hori                           # Perpendicular to boundary
-   roe_vec[0, 3] = enthalpy_roe_hori - sound_speed_roe_hori * u_roe_hori
+   roe_vec = numpy.empty((4, 4, num_elem_x, num_elem_y))
+   roe_vec[i_r, i_r] = 1.0
+   roe_vec[i_r, i_u] = u_roe_hori - sound_speed_roe_hori
+   roe_vec[i_r, i_w] = w_roe_hori                           # Perpendicular to boundary
+   roe_vec[i_r, i_t] = enthalpy_roe_hori - sound_speed_roe_hori * u_roe_hori
 
-   roe_vec[1, 0] = 1.0
-   roe_vec[1, 1] = u_roe_hori
-   roe_vec[1, 2] = w_roe_hori
-   roe_vec[1, 3] = 0.5 * v2_roe_hori
+   roe_vec[i_u, i_r] = 1.0
+   roe_vec[i_u, i_u] = u_roe_hori
+   roe_vec[i_u, i_w] = w_roe_hori
+   roe_vec[i_u, i_t] = 0.5 * v2_roe_hori
 
-   roe_vec[2, 0] = 0.0
-   roe_vec[2, 1] = 0.0
-   roe_vec[2, 2] = 1.0
-   roe_vec[2, 3] = w_roe_hori
+   roe_vec[i_w, i_r] = 0.0
+   roe_vec[i_w, i_u] = 0.0
+   roe_vec[i_w, i_w] = 1.0
+   roe_vec[i_w, i_t] = w_roe_hori
 
-   roe_vec[3, 0] = 1.0
-   roe_vec[3, 1] = u_roe_hori + sound_speed_roe_hori
-   roe_vec[3, 2] = w_roe_hori
-   roe_vec[3, 3] = enthalpy_roe_hori + sound_speed_roe_hori * u_roe_hori
+   roe_vec[3, i_r] = 1.0
+   roe_vec[3, i_u] = u_roe_hori + sound_speed_roe_hori
+   roe_vec[3, i_w] = w_roe_hori
+   roe_vec[3, i_t] = enthalpy_roe_hori + sound_speed_roe_hori * u_roe_hori
 
    factor_left  = u_hori[:, 0]
    factor_right = u_hori[:, 1]
 
+   # Left/right physical fluxes
    flux = numpy.empty_like(icomm_flux[:, :, 0])
-   flux[idx_2d_rho] = factor_left + factor_right
-   flux[idx_2d_rho_u] = factor_left * u_hori[:, 0] + pressure_hori[:, 0]
-   flux[idx_2d_rho_w] = factor_left * w_hori[:, 0]
-   flux[idx_2d_rho_theta]= factor
-   # //left and right physical fluxes
-   # fac = ul[IRHO] * vnl;
-   # f[IRHO]   = fac;
-   # f[IRHOVX] = fac * vnl + pl;
-   # f[IRHOVY] = fac * vtl;
-   # f[IRHOE]  = fac * Hl;
+   flux[i_r] = factor_left
+   flux[i_u] = factor_left * u_hori[:, 0] + pressure_hori[:, 0]
+   flux[i_w] = factor_left * w_hori[:, 0]
+   flux[i_t] = factor_left * enthalpy_hori[:, 0]   # Holds the total energy density E for now (rather than virtual potential temperature)
 
-   # fac = ur[IRHO] * vnr;
-   # f[IRHO]   += fac;
-   # f[IRHOVX] += fac * vnr + pr;
-   # f[IRHOVY] += fac * vtr;
-   # f[IRHOE]  += fac * Hr;
+   flux[i_r] += factor_right
+   flux[i_u] += factor_right * u_hori[:, 1] + pressure_hori
+   flux[i_w] += factor_right * w_hori[:, 1]
+   flux[i_t] += factor_right * enthalpy_hori[:, 1]
 
+   # Numerical diffusion
+   diffusion = numpy.zeros_like(flux)
+   fac = alpha * lam
+   # TODO Matrix-vector multiply instead? Would need to reorder the indices though
+   for i in range(4):
+      for j in range(4):
+         diffusion[j] += fac[i] * roe_vec[i, j]
 
+   flux[i_r] -= diffusion[i_r]
+   u = flux[i_w] - diffusion [i_u] # Should copy i_w entries
+   flux[i_w] = flux[i_u] - diffusion[i_w]
+   flux[i_u] = u
+   flux[i_t] -= diffusion[i_t]
+
+   # Convert energy to virtual potential temperature
 
    # ---------------- vertical -------------------------
 
