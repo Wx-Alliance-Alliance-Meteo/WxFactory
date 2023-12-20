@@ -8,6 +8,7 @@ import sys
 import numpy
 
 from common.program_options import Configuration
+from precondition.factorization import Factorization
 from precondition.multigrid import Multigrid
 from output.output_manager  import OutputManager
 from solvers.solver_info    import SolverInfo
@@ -45,12 +46,24 @@ class Integrator(ABC):
    def __step__(self, Q: numpy.ndarray, dt: float) -> numpy.ndarray:
       pass
 
+   def __prestep__(self, Q: numpy.ndarray, dt: float) -> None:
+      pass
+
    def step(self, Q: numpy.ndarray, dt: float):
       """ Advance the system forward in time """
       t0 = time()
 
+      self.__prestep__(Q, dt)
+
       if self.preconditioner is not None:
-         self.preconditioner.prepare(dt, Q)
+         if isinstance(self.preconditioner, Multigrid):
+            self.preconditioner.prepare(dt, Q)
+         elif isinstance(self.preconditioner, Factorization):
+            if hasattr(self, 'A'):
+               self.preconditioner.prepare(self.A)
+            else:
+               print(f'Trying to use a factorization-based preconditioner, but you didn\'t provide a matrix'
+                     f'(must define it in the __prestep__ method of your integrator)')
 
       # The stepping itself
       result = self.__step__(Q, dt)

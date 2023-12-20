@@ -19,6 +19,7 @@ from integrators                import Integrator, Epi, EpiStiff, Euler1, Imex2,
                                        StrangSplitting, Srerk, Tvdrk3, BackwardEuler, CrankNicolson, Bdf2
 from output.output_manager      import OutputManager
 from output.state               import load_state
+from precondition.factorization import Factorization
 from precondition.multigrid     import Multigrid
 from rhs.rhs_selector           import RhsBundle
 
@@ -43,7 +44,7 @@ def main(argv) -> int:
    Q, topo, metric = init_state_vars(geom, mtrx, param)
 
    # Preconditioning
-   preconditioner = create_preconditioner(param, ptopo)
+   preconditioner = create_preconditioner(param, ptopo, Q)
 
    output = OutputManager(param, geom, metric, mtrx, topo)
 
@@ -135,7 +136,8 @@ def create_geometry(param: Configuration, ptopo: Optional[DistributedWorld]) -> 
 
    raise ValueError(f'Invalid grid type: {param.grid_type}')
 
-def create_preconditioner(param: Configuration, ptopo: Optional[DistributedWorld]) -> Optional[Multigrid]:
+def create_preconditioner(param: Configuration, ptopo: Optional[DistributedWorld],
+                          Q: numpy.ndarray) -> Optional[Multigrid]:
    """ Create the preconditioner required by the given params """
    if param.preconditioner == 'p-mg':
       return Multigrid(param, ptopo, discretization='dg')
@@ -143,6 +145,8 @@ def create_preconditioner(param: Configuration, ptopo: Optional[DistributedWorld
       return Multigrid(param, ptopo, discretization='fv')
    if param.preconditioner == 'fv':
       return Multigrid(param, ptopo, discretization='fv', fv_only=True)
+   if param.preconditioner in ['lu', 'ilu']:
+      return Factorization(Q.dtype, Q.shape, param)
    return None
 
 def determine_starting_state(param: Configuration, output: OutputManager, Q: numpy.ndarray):
@@ -249,27 +253,48 @@ if __name__ == '__main__':
    import argparse
    import cProfile
    import os.path
+   import traceback
 
-   parser = argparse.ArgumentParser(description='Solve NWP problems with GEF!')
-   parser.add_argument('--profile', action='store_true', help='Produce an execution profile when running')
-   parser.add_argument('config', type=str, help='File that contains simulation parameters')
+   args = None
 
-   args = parser.parse_args()
+   try:
+      parser = argparse.ArgumentParser(description='Solve NWP problems with GEF!')
+      parser.add_argument('--profile', action='store_true', help='Produce an execution profile when running')
+      parser.add_argument('config', type=str, help='File that contains simulation parameters')
+      parser.add_argument('--show-every-crash', action='store_true',
+                          help='In case of an exception, show output from alllllll PEs')
+      parser.add_argument('--numpy-warn-as-except', action='store_true',
+                          help='Raise an exception if there is a numpy warning')
 
-   if not os.path.exists(args.config):
-      raise ValueError(f'Config file does not seem valid: {args.config}')
+      args = parser.parse_args()
 
-   # Start profiling
-   pr = None
-   if args.profile:
-      pr = cProfile.Profile()
-      pr.enable()
+      if not os.path.exists(args.config):
+         raise ValueError(f'Config file does not seem valid: {args.config}')
 
-   numpy.set_printoptions(suppress=True, linewidth=256)
-   rank = main(args)
+      # Start profiling
+      pr = None
+      if args.profile:
+         pr = cProfile.Profile()
+         pr.enable()
 
-   if args.profile:
-      pr.disable()
+      numpy.set_printoptions(suppress=True, linewidth=256)
 
-      out_file = f'prof_{rank:04d}.out'
-      pr.dump_stats(out_file)
+      if args.numpy_warn_as_except:
+         numpy.seterr(all='raise')
+
+      # Run the actual GEF
+      rank = main(args)
+
+      if args.profile and pr:
+         pr.disable()
+
+         out_file = f'prof_{rank:04d}.out'
+         pr.dump_stats(out_file)
+
+   except Exception as e:
+
+      if args and args.show_every_crash:
+         traceback.print_exc()
+      elif MPI.COMM_WORLD.rank == 0:
+         print(f'There was an error while running GEF. Only rank 0 is printing the traceback.')
+         traceback.print_exc()

@@ -107,7 +107,7 @@ class Configuration:
 
       ###################
       # Preconditioning
-      available_preconditioners = ['none', 'fv', 'fv-mg', 'p-mg']
+      available_preconditioners = ['none', 'fv', 'fv-mg', 'p-mg', 'lu', 'ilu']
       self.preconditioner = self._get_option('Preconditioning', 'preconditioner', str, 'none', valid_values=available_preconditioners)
 
       available_fluxes = ['ausm', 'upwind', 'rusanov']
