@@ -2,7 +2,7 @@
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 GEF_DIR=${SCRIPT_DIR}/..
-TEST_DIR="${GEF_DIR}/testing_gef.tmp"
+TEST_DIR="${GEF_DIR}/work/testing_gef.tmp"
 LISTING=${TEST_DIR}/listing.txt
 
 CART_CONFIG_ORIG=${GEF_DIR}/config/gaussian_bubble.ini
