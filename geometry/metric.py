@@ -530,8 +530,9 @@ class Metric3DTopo:
       # Switch to use the numerical formulation of the Christoffel symbol
       numer_christoffel = True
 
+      verbose = False
       if (numer_christoffel):
-         if (True and geom.ptopo.rank == 0):
+         if (verbose and geom.ptopo.rank == 0):
             print('Computing (√g h^{ab})_{,c}')
          grad_sqrtG_metric_contra = matrix.grad(H_contra*sqrtG[numpy.newaxis,numpy.newaxis,:,:,:], 
                                        H_contra_itf_i*sqrtG_itf_i[numpy.newaxis,numpy.newaxis,:,:,:], 
@@ -545,7 +546,7 @@ class Metric3DTopo:
          c_rhs = numpy.empty((nk,nj,ni,3,3,3), like=sqrtG) # h(i,j,k)^(ab)_(,c)
          c_lhs = numpy.zeros((nk,nj,ni,3,3,3,3,3,3), like=sqrtG) # Γ(i,j,k)^d_{ef} for row (ab,c)
 
-         if (True and geom.ptopo.rank == 0):
+         if (verbose and geom.ptopo.rank == 0):
             print('Assembling linear operator for Γ')
 
          for a in range(3):
@@ -557,13 +558,13 @@ class Metric3DTopo:
                         c_lhs[:,:,:,a,b,c,a,d,c] -= sqrtG[:,:,:]*H_contra[d,b,:,:,:]
                         c_lhs[:,:,:,a,b,c,b,c,d] -= sqrtG[:,:,:]*H_contra[a,d,:,:,:]
                         
-         if (True and geom.ptopo.rank == 0):
+         if (verbose and geom.ptopo.rank == 0):
             print('Solving linear operator for Γ')
          space_christoffel = numpy.linalg.solve(c_lhs.reshape(nk,nj,ni,27,27),c_rhs.reshape(nk,nj,ni,27))
          space_christoffel.shape = (nk,nj,ni,3,3,3)
          space_christoffel = space_christoffel.transpose((3,4,5,0,1,2))
 
-         if (True and geom.ptopo.rank == 0):
+         if (verbose and geom.ptopo.rank == 0):
             print('Copying Γ to destination arrays')
 
 
@@ -590,7 +591,7 @@ class Metric3DTopo:
          self.christoffel_3_23 = space_christoffel[2,1,2,:,:,:].copy()
          self.christoffel_3_33 = space_christoffel[2,2,2,:,:,:].copy()
 
-         if (True and geom.ptopo.rank == 0):
+         if (verbose and geom.ptopo.rank == 0):
             print('Done assembling Γ')
 
       # Assign H_cov and its elements to the object

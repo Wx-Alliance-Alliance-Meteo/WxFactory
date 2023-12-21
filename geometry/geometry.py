@@ -15,9 +15,11 @@ class Geometry:
    def __init__(self: Self, nbsolpts: int, grid_type: str, param: Configuration) -> None:
       ## Element properties -- solution and extension points
 
+      verbose = False
+
       # Gauss-Legendre solution points
       solutionPoints_sym, solutionPoints, glweights = gauss_legendre(nbsolpts)
-      if MPI.COMM_WORLD.rank == 0:
+      if MPI.COMM_WORLD.rank == 0 and verbose:
          print(f'Solution points : {solutionPoints}')
          print(f'GL weights : {glweights}')
 

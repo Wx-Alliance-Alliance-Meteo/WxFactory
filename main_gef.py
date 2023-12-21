@@ -115,8 +115,8 @@ def setup_system(param: Configuration):
       import cupy
 
       rank = MPI.COMM_WORLD.Get_rank()
-      devnum = rank % len(param.cuda_device)
-      cupy.cuda.Device(param.cuda_device[devnum]).use()
+      devnum = rank % len(param.cuda_devices)
+      cupy.cuda.Device(param.cuda_devices[devnum]).use()
 
       cupy.cuda.set_allocator(cupy.cuda.MemoryPool(cupy.cuda.malloc_managed).malloc)
 
@@ -142,8 +142,9 @@ def adjust_nb_elements(param: Configuration):
       num_pe_per_line = int(numpy.sqrt(num_pe_per_tile))
       param.nb_elements_horizontal = param.nb_elements_horizontal_total // num_pe_per_line
       if MPI.COMM_WORLD.rank == 0:
-         print(f'Adjusting horizontal number of elements from {param.nb_elements_horizontal_total} (total) '
-               f'to {param.nb_elements_horizontal} (per PE)')
+         if param.nb_elements_horizontal_total != param.nb_elements_horizontal:
+            print(f'Adjusting horizontal number of elements from {param.nb_elements_horizontal_total} (total) '
+                  f'to {param.nb_elements_horizontal} (per PE)')
          print(f'allowd_pe_counts = {allowed_pe_counts}')
 
 def create_geometry(param: Configuration, ptopo: Optional[DistributedWorld]) -> Geometry:

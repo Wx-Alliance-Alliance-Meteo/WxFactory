@@ -33,13 +33,18 @@ class Configuration:
       ################################
       # System
       # TODO: support multiple devices
-      device = self._get_option('System', 'device', str, 'cpu')
-      self.device = "cuda" if device.startswith("cuda") else "cpu"
-      self.cuda_device = tuple(int(d) for d in device[4:].split(",")) if device.startswith("cuda") else None
+      self.device = self._get_option('System', 'device', str, 'cpu', ['cpu', 'cuda'])
 
       if self.device == "cuda":
          import cupy
          self.array_module: ArrayModule = cupy
+
+         num_devices = cupy.cuda.runtime.getDeviceCount()
+
+         if num_devices <= 0:
+            raise ValueError(f'No cuda devices found')
+
+         self.cuda_devices = self._get_option('System', 'cuda_devices', List[int], list(range(num_devices)))
       else:
          import numpy
          self.array_module: ArrayModule = numpy
