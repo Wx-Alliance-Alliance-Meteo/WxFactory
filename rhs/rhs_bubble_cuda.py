@@ -2,7 +2,7 @@ import cupy as cp
 from common.cuda_module import CudaModule, DimSpec, Dim, cuda_kernel
 
 from geometry.cartesian_2d_mesh import Cartesian2D
-from geometry.matrices import DFROperators
+from geometry.operators import DFROperators
 from common.definitions import *
 
 from numpy.typing import NDArray

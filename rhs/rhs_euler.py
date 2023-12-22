@@ -195,8 +195,8 @@ def rhs_euler (Q: numpy.ndarray, geom: CubedSphere, mtrx: DFROperators, metric: 
 
    # --- Direction x3
 
-    # Important notice : all the vertical stuff should be done before the synchronization of the horizontal communications.
-    # Since there is no communication step in the vertical, we can compute the boundary correction first
+   # Important notice : all the vertical stuff should be done before the synchronization of the horizontal communications.
+   # Since there is no communication step in the vertical, we can compute the boundary correction first
 
    # Extrapolate to top/bottom for each element
    # for slab in range(nb_pts_hori):
@@ -234,7 +234,7 @@ def rhs_euler (Q: numpy.ndarray, geom: CubedSphere, mtrx: DFROperators, metric: 
    w_itf_k[:, 0, 1, :] = -w_itf_k[:,1,0,:] # Top of bottom element (negative symmetry)
    #w_itf_k[:, 0, 1, :] = 0.0  # Top of bottom element (bottom boundary, 0)
    #w_itf_k[:, 1, 0, :] = 0. # Bottom of lowest interior element (bottom boundary, 0)
-   
+
    w_itf_k[:, -1, 1, :] = 0. # Top of top element (unused)
    w_itf_k[:, -1, 0, :] = -w_itf_k[:,-2,1,:] # Bottom of top boundary element (negative symmetry)
    #w_itf_k[:, -1, 0, :] = 0.0 # Bottom of top boundary element (0)
@@ -321,7 +321,7 @@ def rhs_euler (Q: numpy.ndarray, geom: CubedSphere, mtrx: DFROperators, metric: 
    # Evaluate pressure at the lateral interfaces
    pressure_itf_i = p0 * numpy.exp((cpd/cvd) * numpy.log(variables_itf_i[idx_rho_theta] * (Rd / p0)))
    pressure_itf_j = p0 * numpy.exp((cpd/cvd) * numpy.log(variables_itf_j[idx_rho_theta] * (Rd / p0)))
-   
+
    # Riemann solver
    for itf in range(nb_interfaces_hori):
 
@@ -492,7 +492,7 @@ def rhs_euler (Q: numpy.ndarray, geom: CubedSphere, mtrx: DFROperators, metric: 
          + 2.0 * metric.christoffel_1_13 * (rho * u1 * w  + metric.H_contra_13*pressure) \
          +       metric.christoffel_1_22 * (rho * u2 * u2 + metric.H_contra_22*pressure) \
          + 2.0 * metric.christoffel_1_23 * (rho * u2 * w  + metric.H_contra_23*pressure) \
-         +       metric.christoffel_1_33 * (rho * w * w   + metric.H_contra_33*pressure) 
+         +       metric.christoffel_1_33 * (rho * w * w   + metric.H_contra_33*pressure)
 
    forcing[idx_rho_u2] = 2.0 * (metric.christoffel_2_01 * rho * u1 + metric.christoffel_2_02 * rho * u2 + metric.christoffel_2_03 * rho * w) \
          +       metric.christoffel_2_11 * (rho * u1 * u1 + metric.H_contra_11*pressure) \
@@ -500,7 +500,7 @@ def rhs_euler (Q: numpy.ndarray, geom: CubedSphere, mtrx: DFROperators, metric: 
          + 2.0 * metric.christoffel_2_13 * (rho * u1 * w  + metric.H_contra_13*pressure) \
          +       metric.christoffel_2_22 * (rho * u2 * u2 + metric.H_contra_22*pressure) \
          + 2.0 * metric.christoffel_2_23 * (rho * u2 * w  + metric.H_contra_23*pressure) \
-         +       metric.christoffel_2_33 * (rho * w * w   + metric.H_contra_33*pressure) 
+         +       metric.christoffel_2_33 * (rho * w * w   + metric.H_contra_33*pressure)
 
    forcing[idx_rho_w] = 2.0 * (metric.christoffel_3_01 * rho * u1 + metric.christoffel_3_02 * rho * u2 + metric.christoffel_3_03 * rho * w) \
          +       metric.christoffel_3_11 * (rho * u1 * u1 + metric.H_contra_11*pressure) \
@@ -510,18 +510,18 @@ def rhs_euler (Q: numpy.ndarray, geom: CubedSphere, mtrx: DFROperators, metric: 
          + 2.0 * metric.christoffel_3_23 * (rho * u2 * w  + metric.H_contra_23*pressure) \
          +       metric.christoffel_3_33 * (rho * w * w   + metric.H_contra_33*pressure) \
          + metric.inv_dzdeta * gravity * metric.inv_sqrtG * mtrx.filter_k(metric.sqrtG*rho, geom)
-         #+ (metric.inv_dzdeta * rho * gravity)   
-         #+ metric.inv_dzdeta * gravity * numpy.exp(mtrx.filter_k(logrho, geom))    
-         
-         
+         #+ (metric.inv_dzdeta * rho * gravity)
+         #+ metric.inv_dzdeta * gravity * numpy.exp(mtrx.filter_k(logrho, geom))
+
+
 
    forcing[idx_rho_theta] = 0.0
 
    # DCMIP cases 2-1 and 2-2 involve rayleigh damping
-   if (case_number == 21):
+   if case_number == 21:
       # dcmip_schar_damping modifies the 'forcing' variable to apply the requried Rayleigh damping
       dcmip_schar_damping(forcing, rho, u1, u2, w, metric, geom, shear=False)
-   elif (case_number == 22):
+   elif case_number == 22:
       dcmip_schar_damping(forcing, rho, u1, u2, w, metric, geom, shear=True)
 
 

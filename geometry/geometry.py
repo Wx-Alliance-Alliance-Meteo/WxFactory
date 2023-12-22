@@ -1,3 +1,5 @@
+from typing import Optional
+
 from mpi4py import MPI
 import numpy
 import sympy
@@ -12,14 +14,12 @@ class Geometry:
    """
    Abstract class that groups different geometries
    """
-   def __init__(self: Self, nbsolpts: int, grid_type: str, param: Configuration) -> None:
+   def __init__(self, nbsolpts: int, grid_type: str, param: Configuration, verbose: Optional[bool] = False) -> None:
       ## Element properties -- solution and extension points
-
-      verbose = False
 
       # Gauss-Legendre solution points
       solutionPoints_sym, solutionPoints, glweights = gauss_legendre(nbsolpts)
-      if MPI.COMM_WORLD.rank == 0 and verbose:
+      if verbose and MPI.COMM_WORLD.rank == 0:
          print(f'Solution points : {solutionPoints}')
          print(f'GL weights : {glweights}')
 

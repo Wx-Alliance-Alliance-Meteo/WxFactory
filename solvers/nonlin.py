@@ -2,19 +2,11 @@ import sys
 import numpy
 import math
 import scipy.sparse.linalg
-import scipy.linalg
 import scipy.optimize
 from time import time
 
 from .fgmres import fgmres
-
-def _maxnorm(x):
-   return numpy.absolute(x).max()
-
-def _safe_norm(v):
-   if not numpy.isfinite(v).all():
-      return numpy.array(numpy.inf)
-   return scipy.linalg.norm(v)
+from .global_operations import global_norm, global_inf_norm
 
 def newton_krylov(F, x0, fgmres_restart=30, fgmres_maxiter=1, fgmres_precond=None, verbose=False, maxiter=None, f_tol=None, f_rtol=None, x_tol=None, x_rtol=None, line_search='armijo'):
 
@@ -42,7 +34,7 @@ def newton_krylov(F, x0, fgmres_restart=30, fgmres_maxiter=1, fgmres_precond=Non
 
    dx = numpy.full_like(x, numpy.inf)
    Fx = func(x)
-   Fx_norm = scipy.linalg.norm(Fx)
+   Fx_norm = global_norm(Fx)
 
    jacobian = KrylovJacobian(x.copy(), Fx, func, fgmres_restart=fgmres_restart, fgmres_maxiter=fgmres_maxiter, fgmres_precond=fgmres_precond)
 
@@ -57,9 +49,11 @@ def newton_krylov(F, x0, fgmres_restart=30, fgmres_maxiter=1, fgmres_precond=Non
    for n in range(maxiter):
 
       iteration += 1
-      f_norm = _maxnorm(Fx)
-      x_norm = _maxnorm(x)
-      dx_norm = _maxnorm(dx)
+      f_norm = global_inf_norm(Fx)
+      x_norm = global_inf_norm(x)
+
+
+      dx_norm = global_inf_norm(dx)
 
       residuals.append((f_norm, time() - t_start, 0.0))
 
@@ -84,7 +78,7 @@ def newton_krylov(F, x0, fgmres_restart=30, fgmres_maxiter=1, fgmres_precond=Non
          s = 1.0
          x = x + dx
          Fx = func(x)
-         Fx_norm_new = scipy.linalg.norm(Fx)
+         Fx_norm_new = global_norm(Fx)
 
       jacobian.update(x.copy(), Fx)
 
@@ -99,7 +93,7 @@ def newton_krylov(F, x0, fgmres_restart=30, fgmres_maxiter=1, fgmres_precond=Non
 
       # Print status
       if verbose:
-         sys.stdout.write(f'{n:3d}:  |F(x)| = {_maxnorm(Fx):.3e}; step {s}\n')
+         sys.stdout.write(f'{n:3d}:  |F(x)| = {global_inf_norm(Fx):.3e}; step {s}\n')
          sys.stdout.flush()
    else:
       print('The maximum number of iterations allowed by the JFNK method has been reached.')
@@ -114,15 +108,15 @@ def _nonlin_line_search(func, x, Fx, dx, search_type='armijo', rdiff=1e-8,
                   smin=1e-2):
    tmp_s = [0]
    tmp_Fx = [Fx]
-   tmp_phi = [scipy.linalg.norm(Fx)**2]
-   s_norm = scipy.linalg.norm(x) / scipy.linalg.norm(dx)
+   tmp_phi = [global_norm(Fx)**2]
+   s_norm = global_norm(x) / global_norm(dx)
 
    def phi(s, store=True):
       if s == tmp_s[0]:
          return tmp_phi[0]
       xt = x + s*dx
       v = func(xt)
-      p = _safe_norm(v)**2
+      p = global_norm(v)**2
       if store:
          tmp_s[0] = s
          tmp_phi[0] = p
@@ -133,7 +127,7 @@ def _nonlin_line_search(func, x, Fx, dx, search_type='armijo', rdiff=1e-8,
       ds = (abs(s) + s_norm + 1) * rdiff
       return (phi(s+ds, store=False) - phi(s)) / ds
 
-   if search_type == 'wolfe':
+   if search_type == 'wolfe': # TODO : parallel ?
       s, phi1, phi0 = scipy.optimize.linesearch.scalar_search_wolfe1(phi, derphi, tmp_phi[0], xtol=1e-2, amin=smin)
    elif search_type == 'armijo':
       s, phi1 = scipy.optimize.linesearch.scalar_search_armijo(phi, tmp_phi[0], -tmp_phi[0], amin=smin)
@@ -147,7 +141,7 @@ def _nonlin_line_search(func, x, Fx, dx, search_type='armijo', rdiff=1e-8,
       Fx = tmp_Fx[0]
    else:
       Fx = func(x)
-   Fx_norm = scipy.linalg.norm(Fx)
+   Fx_norm = global_norm(Fx)
 
    return s, x, Fx, Fx_norm
 
@@ -170,12 +164,12 @@ class KrylovJacobian:
       self.op = scipy.sparse.linalg.aslinearoperator(self)
 
    def _update_diff_step(self):
-      mx = _maxnorm(self.x0)
-      mf = _maxnorm(self.f0)
+      mx = global_inf_norm(self.x0)
+      mf = global_inf_norm(self.f0)
       self.omega = self.rdiff * max(1, mx) / max(1, mf)
 
    def matvec(self, v):
-      nv = scipy.linalg.norm(v)
+      nv = global_norm(v)
       if nv == 0:
          return 0*v
       sc = self.omega / nv

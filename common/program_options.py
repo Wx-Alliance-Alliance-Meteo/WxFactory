@@ -24,9 +24,9 @@ class Configuration:
          print(self.parser.sections())
          print(' ')
 
-      self.equations = self._get_option('General', 'equations', str, 'euler')
-      if (self.equations == 'euler'):
-         self.depth_approx = self._get_option('General','depth_approx',str,'deep',['deep','shallow'])
+      self.equations = self._get_option('General', 'equations', str, None, ['euler', 'shallow_water'])
+      if self.equations == 'euler':
+         self.depth_approx = self._get_option('General', 'depth_approx', str, 'deep', ['deep','shallow'])
       else:
          self.depth_approx = None
 
@@ -71,7 +71,7 @@ class Configuration:
 
       self.exponential_solver = self._get_option('Time_integration', 'exponential_solver', str, 'kiops')
       self.krylov_size        = self._get_option('Time_integration', 'krylov_size', int, 1)
-      self.jacobian_method    = self._get_option('Time_integration', 'jacobian_method', str, 'complex')
+      self.jacobian_method    = self._get_option('Time_integration', 'jacobian_method', str, 'complex', ['complex', 'fd'])
 
       self.verbose_solver = self._get_option('Time_integration', 'verbose_solver', int, 0)
       self.gmres_restart  = self._get_option('Time_integration', 'gmres_restart', int, 20)
@@ -84,21 +84,28 @@ class Configuration:
       self.initial_nbsolpts       = self.nbsolpts
       self.nb_elements_horizontal_total = self.nb_elements_horizontal
 
+      self.relief_layer_height      = self._get_option('Spatial_discretization', 'relief_layer_height', int, 0, min_value=0)
+      self.nb_elements_relief_layer = self._get_option('Spatial_discretization', 'nb_elements_relief_layer', int, 0, min_value=0)
+
       self.filter_apply  = self._get_option('Spatial_discretization', 'filter_apply', bool, False)
       self.filter_order  = self._get_option('Spatial_discretization', 'filter_order', int,
                                              default_value = 16 if self.filter_apply else 0)
-      self.filter_cutoff = self._get_option('Spatial_discretization', 'filter_cutoff', float, 0.0)
+      self.filter_cutoff = self._get_option('Spatial_discretization', 'filter_cutoff', float,
+                                             default_value = 0.25 if self.filter_apply else 0.0)
 
       self.expfilter_apply = self._get_option('Spatial_discretization', 'expfilter_apply', bool, False)
       self.expfilter_order = self._get_option('Spatial_discretization', 'expfilter_order', int, None if self.expfilter_apply else 0)
       self.expfilter_strength = self._get_option('Spatial_discretization', 'expfilter_strength', float, None if self.expfilter_apply else 0)
       self.expfilter_cutoff = self._get_option('Spatial_discretization', 'expfilter_cutoff', float, None if self.expfilter_apply else 0)
       
-
+      self.apply_sponge = self._get_option('Spatial_discretization', 'apply_sponge', bool, False)
+      self.sponge_tscale = self._get_option('Spatial_discretization', 'sponge_tscale', float, 1.0)
+      self.sponge_zscale = self._get_option('Spatial_discretization', 'sponge_zscale', float, 0.0)
+      
       ###############################
       # Grid
       possible_grid_types = ['cubed_sphere', 'cartesian2d']
-      self.grid_type      = self._get_option('Grid', 'grid_type', str, 'cubed_sphere', valid_values=possible_grid_types)
+      self.grid_type      = self._get_option('Grid', 'grid_type', str, None, valid_values=possible_grid_types)
       self.discretization = self._get_option('Grid', 'discretization', str, 'dg', ['dg', 'fv'])
 
       if self.discretization == 'fv':
@@ -107,21 +114,26 @@ class Configuration:
                               ' is inconsistent with a finite volume discretization')
 
       # Cubed sphere grid params
-      self.λ0   = self._get_option('Grid', 'λ0', float, 0.0)
-      self.ϕ0   = self._get_option('Grid', 'ϕ0', float, 0.0)
-      self.α0   = self._get_option('Grid', 'α0', float, 0.0)
-      self.ztop = self._get_option('Grid', 'ztop', float, 0.0)
+      if self.grid_type == 'cubed_sphere':
+         self.λ0   = self._get_option('Grid', 'λ0', float, None)
+         self.ϕ0   = self._get_option('Grid', 'ϕ0', float, None)
+         self.α0   = self._get_option('Grid', 'α0', float, None)
+         self.ztop = self._get_option('Grid', 'ztop', float, 0.0)
 
       # Cartesian grid bounds
-      self.x0 = self._get_option('Grid', 'x0', float, 0.0)
-      self.x1 = self._get_option('Grid', 'x1', float, 0.0)
-      self.z0 = self._get_option('Grid', 'z0', float, 0.0)
-      self.z1 = self._get_option('Grid', 'z1', float, 0.0)
+      if self.grid_type == 'cartesian2d':
+         self.x0 = self._get_option('Grid', 'x0', float, None)
+         self.x1 = self._get_option('Grid', 'x1', float, None)
+         self.z0 = self._get_option('Grid', 'z0', float, None)
+         self.z1 = self._get_option('Grid', 'z1', float, None)
 
       ###################
       # Preconditioning
-      available_preconditioners = ['none', 'fv', 'fv-mg', 'p-mg']
+      available_preconditioners = ['none', 'fv', 'fv-mg', 'p-mg', 'lu', 'ilu']
       self.preconditioner = self._get_option('Preconditioning', 'preconditioner', str, 'none', valid_values=available_preconditioners)
+
+      available_fluxes = ['ausm', 'upwind', 'rusanov']
+      self.precond_flux = self._get_option('Preconditioning', 'precond_flux', str, available_fluxes[0], valid_values=available_fluxes)
 
       self.num_mg_levels = self._get_option('Preconditioning', 'num_mg_levels', int, 1, min_value=1)
       if 'mg' not in self.preconditioner: self.num_mg_levels = 1

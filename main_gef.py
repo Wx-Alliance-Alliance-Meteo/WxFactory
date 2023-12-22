@@ -3,7 +3,7 @@
 """ The GEF model """
 
 import math
-from typing import Callable, Optional
+from typing import Optional
 import sys
 
 from mpi4py import MPI
@@ -16,8 +16,10 @@ from geometry                   import Cartesian2D, CubedSphere, DFROperators, G
 from init.dcmip                 import dcmip_T11_update_winds, dcmip_T12_update_winds
 from init.init_state_vars       import init_state_vars
 from integrators                import Integrator, Epi, EpiStiff, Euler1, Imex2, PartRosExp2, Ros2, RosExp2, \
-                                       StrangSplitting, Srerk, Tvdrk3
+                                       StrangSplitting, Srerk, Tvdrk3, BackwardEuler, CrankNicolson, Bdf2
 from output.output_manager      import OutputManager
+from output.state               import load_state
+from precondition.factorization import Factorization
 from precondition.multigrid     import Multigrid
 from rhs.rhs_selector           import RhsBundle
 
@@ -44,11 +46,8 @@ def main(argv) -> int:
    # Initialize state variables
    Q, topo, metric = init_state_vars(geom, mtrx, param)
 
-   if (param.expfilter_apply):
-      mtrx.make_filter(param.expfilter_strength,param.expfilter_order,param.expfilter_cutoff,geom)
-
    # Preconditioning
-   preconditioner = create_preconditioner(param, ptopo)
+   preconditioner = create_preconditioner(param, ptopo, Q)
 
    output = OutputManager(param, geom, metric, mtrx, topo)
 
@@ -56,8 +55,7 @@ def main(argv) -> int:
    Q, starting_step = determine_starting_state(param, output, Q)
 
    # Get handle to the appropriate RHS functions
-   rhs = RhsBundle(geom, mtrx, metric, topo, ptopo, param)
-   # rhs_handle, rhs_implicit, rhs_explicit = rhs_selector(geom, mtrx, metric, topo, ptopo, param)
+   rhs = RhsBundle(geom, mtrx, metric, topo, ptopo, param, Q.shape)
 
    # Time stepping
    stepper = create_time_integrator(param, rhs, preconditioner)
@@ -83,8 +81,7 @@ def main(argv) -> int:
       if MPI.COMM_WORLD.rank == 0: print(f'\nStep {step} of {nb_steps + starting_step}')
 
       Q = stepper.step(Q, param.dt)
-      if (param.expfilter_apply):
-         Q = mtrx.apply_filter_3d(Q,geom,metric)
+      Q = mtrx.apply_filters(Q, geom, metric, param.dt)
 
       if MPI.COMM_WORLD.rank == 0: print(f'Elapsed time for step: {stepper.latest_time:.3f} secs')
 
@@ -105,6 +102,8 @@ def main(argv) -> int:
 
       output.step(Q, step)
       sys.stdout.flush()
+
+      if stepper.failure_flag != 0: break
 
    output.finalize()
 
@@ -132,7 +131,7 @@ def setup_distributed_world(param: Configuration) -> DistributedWorld | None:
 def adjust_nb_elements(param: Configuration):
    """ Adjust number of horizontal elements in the parameters so that it corresponds to the number *per processor* """
    if param.grid_type == 'cubed_sphere':
-      allowed_pe_counts = [i**2 * 6 
+      allowed_pe_counts = [i**2 * 6
                            for i in range(1, param.nb_elements_horizontal // 2 + 1)
                            if (param.nb_elements_horizontal % i) == 0]
       if MPI.COMM_WORLD.size not in allowed_pe_counts:
@@ -145,24 +144,26 @@ def adjust_nb_elements(param: Configuration):
          if param.nb_elements_horizontal_total != param.nb_elements_horizontal:
             print(f'Adjusting horizontal number of elements from {param.nb_elements_horizontal_total} (total) '
                   f'to {param.nb_elements_horizontal} (per PE)')
-         print(f'allowd_pe_counts = {allowed_pe_counts}')
+         print(f'allowed_pe_counts = {allowed_pe_counts}')
 
 def create_geometry(param: Configuration, ptopo: Optional[DistributedWorld]) -> Geometry:
    """ Create the appropriate geometry for the given problem """
 
-   if param.grid_type == 'cubed_sphere':
+   if param.grid_type == 'cubed_sphere' and ptopo is not None:
       return CubedSphere(param.nb_elements_horizontal, param.nb_elements_vertical, param.nbsolpts, param.λ0, param.ϕ0,
                          param.α0, param.ztop, ptopo, param)
    if param.grid_type == 'cartesian2d':
       return Cartesian2D((param.x0, param.x1), (param.z0, param.z1), param.nb_elements_horizontal,
-                         param.nb_elements_vertical, param.nbsolpts)
+                         param.nb_elements_vertical, param.nbsolpts, param.nb_elements_relief_layer,
+                         param.relief_layer_height)
 
    raise ValueError(f'Invalid grid type: {param.grid_type}')
 
 def create_operators(geom: Geometry, param: Configuration) -> DFROperators:
-   return DFROperators(geom, param.filter_apply, param.filter_order, param.filter_cutoff)
+   return DFROperators(geom, param)
 
-def create_preconditioner(param: Configuration, ptopo: Optional[DistributedWorld]) -> Optional[Multigrid]:
+def create_preconditioner(param: Configuration, ptopo: Optional[DistributedWorld],
+                          Q: numpy.ndarray) -> Optional[Multigrid]:
    """ Create the preconditioner required by the given params """
    if param.preconditioner == 'p-mg':
       return Multigrid(param, ptopo, discretization='dg')
@@ -170,6 +171,8 @@ def create_preconditioner(param: Configuration, ptopo: Optional[DistributedWorld
       return Multigrid(param, ptopo, discretization='fv')
    if param.preconditioner == 'fv':
       return Multigrid(param, ptopo, discretization='fv', fv_only=True)
+   if param.preconditioner in ['lu', 'ilu']:
+      return Factorization(Q.dtype, Q.shape, param)
    return None
 
 def determine_starting_state(param: Configuration, output: OutputManager, Q: numpy.ndarray):
@@ -177,7 +180,7 @@ def determine_starting_state(param: Configuration, output: OutputManager, Q: num
    starting_step = param.starting_step
    if starting_step > 0:
       try:
-         starting_state = numpy.load(output.state_file_name(starting_step))
+         starting_state, _ = load_state(output.state_file_name(starting_step))
          if starting_state.shape != Q.shape:
             print(f'ERROR reading state vector from file for step {starting_step}. '
                   f'The shape is wrong! ({starting_state.shape}, should be {Q.shape})')
@@ -203,6 +206,7 @@ def create_time_integrator(param: Configuration,
       -> Integrator:
    """ Create the appropriate time integrator object based on params """
 
+   # --- Exponential time integrators
    if param.time_integrator[:9] == 'epi_stiff' and param.time_integrator[9:].isdigit():
       order = int(param.time_integrator[9:])
       if MPI.COMM_WORLD.rank == 0: print(f'Running with EPI_stiff{order}')
@@ -215,17 +219,39 @@ def create_time_integrator(param: Configuration,
       order = int(param.time_integrator[5:])
       if MPI.COMM_WORLD.rank == 0: print(f'Running with SRERK{order}')
       return Srerk(param, order, rhs.full)
-   if param.time_integrator == 'tvdrk3':
-      return Tvdrk3(param, rhs.full)
+
+   # --- Explicit
    if param.time_integrator == 'euler1':
       if MPI.COMM_WORLD.rank == 0:
          print('WARNING: Running with first-order explicit Euler timestepping.')
          print('         This is UNSTABLE and should be used only for debugging.')
       return Euler1(param, rhs.full)
+   if param.time_integrator == 'tvdrk3':
+      return Tvdrk3(param, rhs.full)
+
+   # --- Rosenbrock
    if param.time_integrator == 'ros2':
       return Ros2(param, rhs.full, preconditioner=preconditioner)
+
+   # --- Rosenbrock - Exponential
+   if param.time_integrator == 'rosexp2':
+      return RosExp2(param, rhs.full, rhs.full, preconditioner=preconditioner)
+   if param.time_integrator == 'partrosexp2':
+      return PartRosExp2(param, rhs.full, rhs.implicit, preconditioner=preconditioner)
+
+   # --- Implicit - Explicit
    if param.time_integrator == 'imex2':
       return Imex2(param, rhs.explicit, rhs.implicit)
+
+   # --- Fully implicit
+   if param.time_integrator == 'backward_euler':
+      return BackwardEuler(param, rhs.full, preconditioner=preconditioner)
+   if param.time_integrator == 'bdf2':
+      return Bdf2(param, rhs.full, preconditioner=preconditioner)
+   if param.time_integrator == 'crank_nicolson':
+      return CrankNicolson(param, rhs.full, preconditioner=preconditioner)
+
+   # --- Operator splitting
    if param.time_integrator == 'strang_epi2_ros2':
       stepper1 = Epi(param, 2, rhs.explicit)
       stepper2 = Ros2(param, rhs.implicit, preconditioner=preconditioner)
@@ -234,10 +260,6 @@ def create_time_integrator(param: Configuration,
       stepper1 = Ros2(param, rhs.implicit, preconditioner=preconditioner)
       stepper2 = Epi(param, 2, rhs.explicit)
       return StrangSplitting(param, stepper1, stepper2)
-   if param.time_integrator == 'rosexp2':
-      return RosExp2(param, rhs.full, rhs.full, preconditioner=preconditioner)
-   if param.time_integrator == 'partrosexp2':
-      return PartRosExp2(param, rhs.full, rhs.implicit, preconditioner=preconditioner)
 
    raise ValueError(f'Time integration method {param.time_integrator} not supported')
 
@@ -256,24 +278,49 @@ if __name__ == '__main__':
 
    import argparse
    import cProfile
+   import os.path
+   import traceback
 
-   parser = argparse.ArgumentParser(description='Solve NWP problems with GEF!')
-   parser.add_argument('--profile', action='store_true', help='Produce an execution profile when running')
-   parser.add_argument('config', type=str, help='File that contains simulation parameters')
+   args = None
 
-   args = parser.parse_args()
+   try:
+      parser = argparse.ArgumentParser(description='Solve NWP problems with GEF!')
+      parser.add_argument('--profile', action='store_true', help='Produce an execution profile when running')
+      parser.add_argument('config', type=str, help='File that contains simulation parameters')
+      parser.add_argument('--show-every-crash', action='store_true',
+                          help='In case of an exception, show output from alllllll PEs')
+      parser.add_argument('--numpy-warn-as-except', action='store_true',
+                          help='Raise an exception if there is a numpy warning')
 
-   # Start profiling
-   pr = None
-   if args.profile:
-      pr = cProfile.Profile()
-      pr.enable()
+      args = parser.parse_args()
 
-   numpy.set_printoptions(suppress=True, linewidth=256)
-   rank = main(args)
+      if not os.path.exists(args.config):
+         raise ValueError(f'Config file does not seem valid: {args.config}')
 
-   if args.profile:
-      pr.disable()
+      # Start profiling
+      pr = None
+      if args.profile:
+         pr = cProfile.Profile()
+         pr.enable()
 
-      out_file = f'prof_{rank:04d}.out'
-      pr.dump_stats(out_file)
+      numpy.set_printoptions(suppress=True, linewidth=256)
+
+      if args.numpy_warn_as_except:
+         numpy.seterr(all='raise')
+
+      # Run the actual GEF
+      rank = main(args)
+
+      if args.profile and pr:
+         pr.disable()
+
+         out_file = f'prof_{rank:04d}.out'
+         pr.dump_stats(out_file)
+
+   except Exception as e:
+
+      if args and args.show_every_crash:
+         traceback.print_exc()
+      elif MPI.COMM_WORLD.rank == 0:
+         print(f'There was an error while running GEF. Only rank 0 is printing the traceback.')
+         traceback.print_exc()

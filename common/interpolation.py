@@ -96,9 +96,7 @@ def get_linear_weights(points, x):
 
 
 def lagrange_poly(index, order):
-   """
-   Compute the Lagrange basis function_[index] for a polynomial of order [order]
-   """
+   """Compute the Lagrange basis function_[index] for a polynomial of order [order]."""
    points, _, _ = gauss_legendre(order)
 
    def L(x):
@@ -156,14 +154,13 @@ def compute_dg_l2_proj(origin_order, dest_order):
    return numpy.linalg.inv(mass_matrix) @ proj_matrix
 
 
-def get_basis_points(type: str, order: int, include_boundary: bool = False):
-   """
-   Get the basis points of a reference element of a certain order. The domain is [-1, 1]
-   """
-   if type == 'dg':
-      points, _, _ = gauss_legendre(order)
+def get_basis_points(basis_type: str, order: int, include_boundary: bool = False) -> numpy.ndarray:
+   """Get the basis points of a reference element of a certain order. The domain is [-1, 1]."""
+   if basis_type == 'dg':
+      points_sym, _, _ = gauss_legendre(order)
+      points = numpy.array([p.evalf() for p in points_sym])
       if include_boundary: points = numpy.append(-1.0, numpy.append(points, 1.0))
-   elif type == 'fv':
+   elif basis_type == 'fv':
       pts = numpy.linspace(-1.0, 1.0, order + 1)
       points = (pts[:-1] + pts[1:]) / 2.0
       if include_boundary: points = numpy.append(-1.0, numpy.append(points, 1.0))
@@ -194,7 +191,7 @@ class Interpolator:
       self.ndim = ndim
 
       # Base interpolation matrix
-      self.elem_interp = None
+      # self.elem_interp = None
       self.reverse_interp = None
       if interp_type == 'lagrange':
          self.elem_interp    = numpy.array([lagrange_eval(origin_points, x) for x in dest_points])
@@ -265,6 +262,8 @@ class Interpolator:
          new_size_vert  = fields.shape[1] * base_interp.shape[0] // base_interp.shape[1]
          new_size_horiz = fields.shape[2] * base_interp.shape[0] // base_interp.shape[1]
          result = numpy.empty_like(fields, shape=(num_fields, new_size_vert, new_size_horiz, new_size_horiz))
+      else:
+         raise ValueError(f'We cannot deal with ndim = {self.ndim}')
 
       o_type = self.origin_type if not reverse else self.dest_type
       d_type = self.dest_type   if not reverse else self.origin_type

@@ -25,7 +25,7 @@ class ColumnSet:
       self.run_id            = Column('int', -1)
       self.step_id           = Column('int', 0)
       self.dg_order          = Column('int', param.nbsolpts)
-      self.num_elem_h        = Column('int', param.nb_elements_horizontal)
+      self.num_elem_h        = Column('int', param.nb_elements_horizontal_total)
       self.num_elem_v        = Column('int', param.nb_elements_vertical)
       self.initial_dt        = Column('int', param.dt)
       self.dt                = Column('int', param.dt)
@@ -57,6 +57,21 @@ class ColumnSet:
       self.exp_radius_2 = Column('float', 0)
       self.exp_radius_3 = Column('float', 0)
       self.exp_radius_4 = Column('float', 0)
+
+      self.num_procs    = Column('int', MPI.COMM_WORLD.size)
+
+      if param.grid_type == 'cartesian2d':
+         self.x0   = Column('float', param.x0)
+         self.x1   = Column('float', param.x1)
+         self.z0   = Column('float', param.z0)
+         self.z1   = Column('float', param.z1)
+         self.ztop = Column('float', 0)
+      elif param.grid_type == 'cubed_sphere':
+         self.x0   = Column('float', 0)
+         self.x1   = Column('float', 0)
+         self.z0   = Column('float', 0)
+         self.z1   = Column('float', 0)
+         self.ztop = Column('float', param.ztop)
 
 
 class SolverStatsOutput:

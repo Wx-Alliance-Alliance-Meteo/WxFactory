@@ -317,17 +317,25 @@ class ARK3Smoother(ARKSmoother):
       def f_v(u):
          return - self.A_visc(u)
 
-      if x is None: x = numpy.zeros_like(b)
-
-      u0 = x
-      f_c0 = f_c(u0)
-      f_v0 = f_v(u0)
-      u1 = x + alpha1 * self.h * (f_c0 + f_v0)
-      f_c1 = f_c(u1)
-      f_v1 = beta2 * f_v(u1) + (1.0 - beta2) * f_v0
-      u2 = x + alpha2 * self.h * (f_c1 + f_v1)
-      f_c2 = f_c(u2)
-      f_v2 = beta3 * f_v(u2) + (1.0 - beta3) * f_v1
-      u3 = x + alpha3 * self.h * (f_c2 + f_v2)
+      if x is None:
+         f_c0 = b
+         u1 = alpha1 * self.h * f_c0
+         f_c1 = f_c(u1)
+         f_v1 = beta2 * f_v(u1)
+         u2 = alpha2 * self.h * (f_c1 + f_v1)
+         f_c2 = f_c(u2)
+         f_v2 = beta3 * f_v(u2) + (1.0 - beta3) * f_v1
+         u3 = alpha3 * self.h * (f_c2 + f_v2)
+      else:
+         u0 = x
+         f_c0 = f_c(u0)
+         f_v0 = f_v(u0)
+         u1 = x + alpha1 * self.h * (f_c0 + f_v0)
+         f_c1 = f_c(u1)
+         f_v1 = beta2 * f_v(u1) + (1.0 - beta2) * f_v0
+         u2 = x + alpha2 * self.h * (f_c1 + f_v1)
+         f_c2 = f_c(u2)
+         f_v2 = beta3 * f_v(u2) + (1.0 - beta3) * f_v1
+         u3 = x + alpha3 * self.h * (f_c2 + f_v2)
 
       return u3

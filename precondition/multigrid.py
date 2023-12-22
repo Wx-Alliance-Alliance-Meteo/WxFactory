@@ -7,19 +7,17 @@ from typing       import Callable, List, Optional
 from mpi4py import MPI
 import numpy
 
-from common.definitions    import idx_2d_rho, idx_2d_rho_u, idx_2d_rho_w, \
+from common.definitions    import idx_2d_rho, idx_2d_rho_u, idx_2d_rho_w, idx_2d_rho_theta, \
                                   idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_w, idx_rho_theta, \
                                   cpd, cvd, heat_capacity_ratio, p0, Rd
 from common.interpolation  import Interpolator
+from common.parallel        import DistributedWorld
+from common.program_options import Configuration
 from geometry              import Cartesian2D, CubedSphere, DFROperators
 from init.init_state_vars  import init_state_vars
 from precondition.smoother import KiopsSmoother, ExponentialSmoother, RK1Smoother, RK3Smoother, ARK3Smoother
 from rhs.rhs_selector      import RhsBundle
 from solvers               import fgmres, global_norm, KrylovJacobian, matvec_rat, MatvecOp
-
-# For type hints
-from common.parallel        import DistributedWorld
-from common.program_options import Configuration
 
 MatvecOperator = Callable[[numpy.ndarray], numpy.ndarray]
 
@@ -54,7 +52,7 @@ class MultigridLevel:
 
       self.ndim = ndim
 
-      verbose = self.param.verbose_precond and ptopo.rank == 0
+      verbose = self.param.verbose_precond if MPI.COMM_WORLD.rank == 0 else 0
 
       if verbose > 0:
          print(
@@ -72,12 +70,12 @@ class MultigridLevel:
                                      p.ztop, ptopo, p)
       elif p.grid_type == 'cartesian2d':
          self.geometry = Cartesian2D((p.x0, p.x1), (p.z0, p.z1), p.nb_elements_horizontal, p.nb_elements_vertical,
-                                     p.nbsolpts)
+                                     p.nbsolpts, p.nb_elements_relief_layer, p.relief_layer_height)
 
-      operators = DFROperators(self.geometry, p.filter_apply, p.filter_order, p.filter_cutoff)
+      operators = DFROperators(self.geometry, p)
 
       field, topo, self.metric = init_state_vars(self.geometry, operators, self.param)
-      self.rhs = RhsBundle(self.geometry, operators, self.metric, topo, ptopo, self.param)
+      self.rhs = RhsBundle(self.geometry, operators, self.metric, topo, ptopo, self.param, field.shape)
       if verbose > 0: print(f'field shape: {field.shape}')
       self.shape = field.shape
       self.dtype = field.dtype
@@ -105,7 +103,8 @@ class MultigridLevel:
       if param.mg_smoother == 'kiops':
          self.pre_smoothe = KiopsSmoother(param.dt, param.kiops_dt_factor)
       elif param.mg_smoother == 'exp':
-         self.pre_smoothe = ExponentialSmoother(self.param.exp_smoothe_nb_iter, self.param.exp_smoothe_spectral_radius, param.dt)
+         self.pre_smoothe = ExponentialSmoother(self.param.exp_smoothe_nb_iter, self.param.exp_smoothe_spectral_radius,
+                                                param.dt)
          if verbose > 0: print(f'spectral radius for level = {self.param.exp_smoothe_spectral_radius}')
 
       self.post_smoothe = self.pre_smoothe
@@ -121,18 +120,18 @@ class MultigridLevel:
          factor = 1.0 / (2 * (2 * self.param.nbsolpts + 1))
 
          min_geo = min(self.geometry.Δx1, min(self.geometry.Δx2, self.geometry.Δx3))
-         sound_speed = -1.0
          if isinstance(self.geometry, Cartesian2D):
             delta_min = abs(1.- self.geometry.solutionPoints[-1]) * min_geo
-            speed_x = abs(343. +  field[idx_2d_rho_u] /  field[idx_2d_rho])
-            speed_z = abs(343. +  field[idx_2d_rho_w] /  field[idx_2d_rho])
+            pressure = p0 * numpy.exp((cpd/cvd) * numpy.log((Rd/p0)*field[idx_2d_rho_theta]))
+            sound_speed = numpy.sqrt(heat_capacity_ratio * pressure / field[idx_2d_rho])
+
+            speed_x = sound_speed +  abs(field[idx_2d_rho_u] /  field[idx_2d_rho])
+            speed_z = sound_speed +  abs(field[idx_2d_rho_w] /  field[idx_2d_rho])
             speed_max = numpy.maximum(speed_x, speed_z)
 
          elif isinstance(self.geometry, CubedSphere):
             pressure = p0 * numpy.exp((cpd/cvd) * numpy.log((Rd/p0)*field[idx_rho_theta]))
             sound_speed = numpy.sqrt(heat_capacity_ratio * pressure / field[idx_rho])
-            # sound_speed = 330.0
-
             delta_min = abs(1.- self.geometry.solutionPoints[-1])
 
             sound_x =  numpy.sqrt(self.metric.H_contra_11) * sound_speed
@@ -145,39 +144,39 @@ class MultigridLevel:
 
             speed_max = numpy.maximum(numpy.maximum(sound_x + speed_x, sound_y + speed_y), sound_z + speed_z)
 
-            tile_shape = (field.shape[0],)
-            for _ in range(field.ndim - 1): tile_shape += (1,)
-            speed_max = numpy.ravel(numpy.tile(speed_max, tile_shape))
-            # speed_max = numpy.amax(speed_max)
-
          else:
             raise ValueError(f'Unrecognized type for Geometry object')
+
+         tile_shape = (field.shape[0],)
+         for _ in range(field.ndim - 1): tile_shape += (1,)
+         speed_max = numpy.ravel(numpy.tile(speed_max, tile_shape))
+         # speed_max = numpy.amax(speed_max)
 
          # self.pseudo_dt = numpy.amin(delta_min * factor / speed_max) * cfl / dt
          self.pseudo_dt = (delta_min * factor / speed_max) * cfl / dt
 
-         if self.verbose > 1 and MPI.COMM_WORLD.rank == 0:
-            sp_z = numpy.mean(speed_z)
-            so_z = numpy.mean(sound_z)
-            sp_z_max = numpy.amax(speed_z)
-            so_z_max = numpy.amax(sound_z)
-            min_dt = numpy.amin(self.pseudo_dt)
-            max_dt = numpy.amax(self.pseudo_dt)
-            avg_dt = numpy.mean(self.pseudo_dt)
-            print(
-                  # f'factor {abs(1.- self.geometry.solutionPoints[-1])},'
-                  f' h_33 {numpy.mean(numpy.sqrt(self.metric.H_contra_33)):.4f}'
-                  f', min {min_geo:.3f}'
-                  f', delta {delta_min:.3f}'
-                  f', pseudo_dt = {avg_dt:.2e} ({min_dt:.2e} - {max_dt:.2e})'
-                  f', speed max = {numpy.amax(speed_max):.2e} (avg {numpy.mean(speed_max):.2e})'
-                  f', sound_speed = {numpy.mean(sound_speed):.2e} ({numpy.max(sound_speed):.2e})'
-                  f', speed_z / sound_z = {sp_z / so_z :.3f} ({sp_z_max / so_z_max :.3f})')
-            sys.stdout.flush()
-            # raise ValueError
+         # if self.verbose > 1:
+         #    sp_z = numpy.mean(speed_z)
+         #    so_z = numpy.mean(sound_z)
+         #    sp_z_max = numpy.amax(speed_z)
+         #    so_z_max = numpy.amax(sound_z)
+         #    min_dt = numpy.amin(self.pseudo_dt)
+         #    max_dt = numpy.amax(self.pseudo_dt)
+         #    avg_dt = numpy.mean(self.pseudo_dt)
+         #    print(
+         #          # f'factor {abs(1.- self.geometry.solutionPoints[-1])},'
+         #          f' h_33 {numpy.mean(numpy.sqrt(self.metric.H_contra_33)):.4f}'
+         #          f', min {min_geo:.3f}'
+         #          f', delta {delta_min:.3f}'
+         #          f', pseudo_dt = {avg_dt:.2e} ({min_dt:.2e} - {max_dt:.2e})'
+         #          f', speed max = {numpy.amax(speed_max):.2e} (avg {numpy.mean(speed_max):.2e})'
+         #          f', sound_speed = {numpy.mean(sound_speed):.2e} ({numpy.max(sound_speed):.2e})'
+         #          f', speed_z / sound_z = {sp_z / so_z :.3f} ({sp_z_max / so_z_max :.3f})')
+         #    sys.stdout.flush()
+         #    # raise ValueError
 
-         if self.verbose > 0:
-            print(f'pseudo_dt = {self.pseudo_dt}')
+         # if self.verbose > 1:
+         #    print(f'pseudo_dt = {self.pseudo_dt}')
 
          if self.param.mg_smoother == 'erk1':
             self.pre_smoothe = RK1Smoother(self.pseudo_dt)
@@ -245,7 +244,7 @@ class Multigrid(MatvecOp):
          param.discretization = 'dg'
 
       self.use_solver = param.mg_solve_coarsest
-      self.verbose = param.verbose_precond and ptopo.rank == 0
+      self.verbose = param.verbose_precond if MPI.COMM_WORLD.rank == 0 else 0
 
       # Determine number of multigrid levels
       if discretization == 'fv':
@@ -259,7 +258,7 @@ class Multigrid(MatvecOp):
          raise ValueError(f'Unrecognized discretization "{discretization}"')
 
       param.num_mg_levels = min(param.num_mg_levels, self.max_num_levels)
-      print(f'num_mg_levels: {param.num_mg_levels} (max {self.max_num_levels})')
+      if self.verbose: print(f'num_mg_levels: {param.num_mg_levels} (max {self.max_num_levels})')
 
       # Determine level-specific parameters for each level (order, num elements)
       if discretization == 'fv':

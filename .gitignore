@@ -7,23 +7,27 @@
 *.lprof.txt
 
 doc/*.pdf
-doc/*.aux
-doc/*.log
-doc/*.out
+doc/aux/*
+doc/svg-inkscape/*
 
-jacobian/*
+jacobian
 
 scripts/**/*.pdf
 
 __pycache__/
 *.py[cod]
 
-results/
+bubble_cliff
+results
+listings
 test_configs/
+work
+scripts/load_env.sh
 
 .vscode
 .idea
 venv
+.env
 
 stdout
 *out.txt
@@ -36,3 +40,5 @@ geom*.dat
 *.db
 *.npy
 *.npz
+
+*.tmp

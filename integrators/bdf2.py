@@ -5,10 +5,10 @@ from solvers      import newton_krylov
 from .integrator  import Integrator, SolverInfo
 
 class Bdf2(Integrator):
-   def __init__(self, rhs, tol, preconditioner=None, init_substeps=1):
-      super().__init__(preconditioner)
+   def __init__(self, param, rhs, preconditioner=None, init_substeps=1):
+      super().__init__(param, preconditioner)
       self.rhs = rhs
-      self.tol = tol
+      self.tol = param.tolerance
       self.init_substeps = init_substeps
       self.Qprev = None
 
