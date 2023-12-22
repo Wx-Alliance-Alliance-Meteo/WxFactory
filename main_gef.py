@@ -319,8 +319,12 @@ if __name__ == '__main__':
 
    except Exception as e:
 
+      sys.stdout.flush()
       if args and args.show_every_crash:
          traceback.print_exc()
-      elif MPI.COMM_WORLD.rank == 0:
-         print(f'There was an error while running GEF. Only rank 0 is printing the traceback.')
-         traceback.print_exc()
+      else:
+         if MPI.COMM_WORLD.rank == 0:
+            traceback.print_exc()
+            print(f'There was an error while running GEF. Only rank 0 is printing the traceback.')
+
+      sys.exit(-1)
