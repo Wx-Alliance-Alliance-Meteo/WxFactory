@@ -9,7 +9,7 @@ import scipy.sparse
 try:
    from tqdm import tqdm
 except ModuleNotFoundError:
-   print(f'Module "tqdm" was not found. You need it if you want to see progress bars')
+   if MPI.COMM_WORLD.rank == 0: print(f'Module "tqdm" was not found. You need it if you want to see progress bars')
    def tqdm(a): return a
 
 from solvers                import MatvecOp

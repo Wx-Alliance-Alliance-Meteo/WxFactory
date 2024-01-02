@@ -1,7 +1,7 @@
 import math
 import numpy
-import sys
 
+from main_gef    import array
 from .geometry   import Geometry
 from .sphere     import cart2sph
 
@@ -68,7 +68,7 @@ class CubedSphere(Geometry):
          Wraps parameters from the configuration pole that are not otherwise specified in this
          constructor.
       '''
-      super().__init__(nbsolpts, 'cubed_sphere', param)
+      super().__init__(nbsolpts, 'cubed_sphere')
 
       ## Panel / parallel decomposition properties
       self.ptopo = ptopo
@@ -164,17 +164,17 @@ class CubedSphere(Geometry):
       self.itf_k_shape_2d = (nj,ni)  
 
       # Assign a token zbot, potentially to be overridden later with supplied topography
-      self.zbot = param.array_module.zeros(self.grid_shape_2d)
+      self.zbot = array.zeros(self.grid_shape_2d)
 
       ## Coordinate vectors for the numeric / angular coordinate system
 
       # Define the base coordinate.  x1 and x2 are fundamentally 1D arrays,
       # while x3 and eta are 3D arrays in support of coordinate mapping
 
-      x1 = param.array_module.empty(ni)
-      x2 = param.array_module.empty(nj)
-      x3 = param.array_module.empty(self.grid_shape_3d)
-      eta = param.array_module.empty(self.grid_shape_3d)
+      x1 = array.empty(ni)
+      x2 = array.empty(nj)
+      x3 = array.empty(self.grid_shape_3d)
+      eta = array.empty(self.grid_shape_3d)
 
       # # 1D element-counting arrays, for coordinate assignment
       elements_x1 = numpy.arange(nb_elements_x1, like=x1)

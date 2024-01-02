@@ -10,11 +10,13 @@ from .quadrature import gauss_legendre
 # typing
 from typing import Self
 
+from main_gef import array
+
 class Geometry:
    """
    Abstract class that groups different geometries
    """
-   def __init__(self, nbsolpts: int, grid_type: str, param: Configuration, verbose: Optional[bool] = False) -> None:
+   def __init__(self, nbsolpts: int, grid_type: str, verbose: Optional[bool] = False) -> None:
       ## Element properties -- solution and extension points
 
       # Gauss-Legendre solution points
@@ -30,10 +32,10 @@ class Geometry:
       extension_sym.append(sympy.sympify('1'))
 
       self.nbsolpts = nbsolpts
-      self.solutionPoints = param.array_module.asarray(solutionPoints)
+      self.solutionPoints = array.asarray(solutionPoints)
       self.solutionPoints_sym = solutionPoints_sym
-      self.glweights = param.array_module.asarray(glweights)
-      self.extension = param.array_module.asarray(extension)
+      self.glweights = array.asarray(glweights)
+      self.extension = array.asarray(extension)
       self.extension_sym = extension_sym
 
       ##

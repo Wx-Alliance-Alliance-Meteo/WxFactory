@@ -103,7 +103,7 @@ class Epi(Integrator):
 
       else:
          if self.device == "cuda":
-            from solvers import kiops_cuda as f
+            from gef_cuda import kiops_cuda as f
          else:
             f = kiops
          phiv, stats = f([1], matvec_handle, vec, tol=self.tol, m_init=self.krylov_size, mmin=16, mmax=64, task1=False)

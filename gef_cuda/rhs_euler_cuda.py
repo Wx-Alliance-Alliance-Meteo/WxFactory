@@ -2,8 +2,9 @@ import numpy as np
 import cupy as cp
 from mpi4py import MPI
 
+from .cuda_module import CudaModule, DimSpec, Dim, Requires, TemplateSpec, cuda_kernel
+
 from common.definitions import idx_rho_u1, idx_rho_u2, idx_rho_w, idx_rho, idx_rho_theta, gravity, p0, Rd, cpd, cvd, heat_capacity_ratio
-from common.cuda_module import CudaModule, DimSpec, Dim, Requires, TemplateSpec, cuda_kernel
 from init.dcmip import dcmip_schar_damping
 
 # For type hints

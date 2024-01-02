@@ -1,11 +1,11 @@
 import cupy as cp
-from common.cuda_module import CudaModule, DimSpec, Dim, cuda_kernel
-
-from geometry.cartesian_2d_mesh import Cartesian2D
-from geometry.operators import DFROperators
-from common.definitions import *
-
 from numpy.typing import NDArray
+
+from .cuda_module import CudaModule, DimSpec, Dim, cuda_kernel
+
+from common.definitions         import *
+from geometry.cartesian_2d_mesh import Cartesian2D
+from geometry.operators         import DFROperators
 
 
 class RHSBubble(metaclass=CudaModule,

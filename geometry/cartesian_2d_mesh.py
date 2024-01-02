@@ -19,7 +19,7 @@ class Cartesian2D(Geometry):
                 nb_elements_relief_layer: int,
                 relief_layer_height: int,
                 param: Configuration):
-      super().__init__(nbsolpts, 'cartesian2d', param)
+      super().__init__(nbsolpts, 'cartesian2d')
 
       scaled_points = 0.5 * (1.0 + self.solutionPoints)
 

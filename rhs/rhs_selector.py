@@ -3,16 +3,16 @@ from typing import Callable, Optional, Tuple
 from mpi4py   import MPI
 import numpy
 
+from gef_cuda                  import rhs_bubble_cuda
+from gef_cuda                  import rhs_euler_cuda
 from geometry                  import Cartesian2D, CubedSphere
 from init.initialize           import Topo
 from rhs.fluxes                import ausm_2d_fv, upwind_2d_fv, rusanov_2d_fv
 from rhs.rhs_bubble            import rhs_bubble
-from rhs.rhs_bubble_cuda       import rhs_bubble_cuda
 from rhs.rhs_bubble_convective import rhs_bubble as rhs_bubble_convective
 from rhs.rhs_bubble_fv         import rhs_bubble_fv
 from rhs.rhs_bubble_implicit   import rhs_bubble_implicit
 from rhs.rhs_euler             import rhs_euler
-from rhs.rhs_euler_cuda        import rhs_euler_cuda
 from rhs.rhs_euler_convective  import rhs_euler_convective
 from rhs.rhs_euler_fv          import rhs_euler_fv
 from rhs.rhs_sw                import rhs_sw

@@ -1,0 +1,14 @@
+#qsub this job in robert to run on robert
+#
+#PBS -l select=2:ncpus=48:mpiprocs=48:vntype=gpu:ngpus=4:ompthreads=1:mem=400gb
+#PBS -N GEF_GPU
+#PBS -l place=scatter
+#PBS -l walltime=0:10:0
+
+mpirun -n 2 hostname
+
+. /home/vma000/launch-scripts/gef/gpu/load_u2_env.sh
+
+cd /home/vma000/code/gef_gpu
+
+./scripts/cupy_basics.py

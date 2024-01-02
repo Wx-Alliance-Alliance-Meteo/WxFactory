@@ -3,7 +3,6 @@ import json
 import re
 import copy
 from typing       import Any, Dict, List, Optional, Type, TypeVar, Union, Self
-from .array_module import ArrayModule
 
 __all__ = ['Configuration']
 
@@ -36,18 +35,14 @@ class Configuration:
       self.device = self._get_option('System', 'device', str, 'cpu', ['cpu', 'cuda'])
 
       if self.device == "cuda":
-         import cupy
-         self.array_module: ArrayModule = cupy
-
-         num_devices = cupy.cuda.runtime.getDeviceCount()
-
-         if num_devices <= 0:
-            raise ValueError(f'No cuda devices found')
-
-         self.cuda_devices = self._get_option('System', 'cuda_devices', List[int], list(range(num_devices)))
-      else:
-         import numpy
-         self.array_module: ArrayModule = numpy
+         from gef_cuda import num_devices
+         if num_devices > 0:
+            self.cuda_devices = self._get_option('System', 'cuda_devices', List[int], list(range(num_devices)))
+         else:
+            if verbose:
+               print(f'WARNING: Config is asking for CUDA, but we\'re unable to find any CUDA device, '
+                     f'so we will revert to CPU')
+            self.device = 'cpu'
 
       ################################
       # Test case

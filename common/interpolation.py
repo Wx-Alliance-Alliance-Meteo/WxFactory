@@ -3,6 +3,7 @@ import numpy
 from common.definitions import idx_u1, idx_u2
 from common.program_options import Configuration
 from geometry           import gauss_legendre, lagrange_eval, remesh_operator
+from main_gef           import array
 
 basis_point_sets = {}
 
@@ -213,8 +214,8 @@ class Interpolator:
          else:
             self.reverse_interp = numpy.linalg.pinv(self.elem_interp)
 
-      self.elem_interp = param.array_module.asarray(self.elem_interp)
-      self.reverse_interp = param.array_module.asarray(self.reverse_interp)
+      self.elem_interp = array.asarray(self.elem_interp)
+      self.reverse_interp = array.asarray(self.reverse_interp)
 
       # Velocity interpolation matrix ([base matrix] * [some factor]), if needed
       self.velocity_ids            = []

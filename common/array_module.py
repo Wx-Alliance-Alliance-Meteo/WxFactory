@@ -11,7 +11,6 @@ T = TypeVar("T", bound=np.generic)
 Contiguity = Literal['C', 'F']
 InheritContiguity = Literal['C', 'F', 'A', 'K']
 
-
 class ArrayModule(ABC):
 
     @abstractmethod
@@ -171,4 +170,3 @@ class ArrayModule(ABC):
                  retstep: Literal[False] = False,
                  dtype: type[T] = np.float64,
                  axis: int = 0) -> NDArray[T]: ...
-    
