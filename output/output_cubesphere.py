@@ -45,7 +45,7 @@ def store_field(field: NDArray, name: str, step_id: int, file: 'netCDF4.Dataset'
          for i, f in enumerate(fields):
             file[name][step_id, i] = f
    else:
-      file[name][step_id, MPI.COMM_WORLD.rank] = f
+      file[name][step_id, MPI.COMM_WORLD.rank] = field
 
 def output_init(geom, param):
    """ Initialise the netCDF4 file."""
