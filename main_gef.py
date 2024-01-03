@@ -3,7 +3,6 @@
 """ The GEF model """
 
 import sys
-import traceback
 
 from mpi4py import MPI
 import numpy
@@ -17,28 +16,43 @@ array: ArrayModule = numpy
 
 if __name__ == '__main__':
 
+   import argparse
+   import os.path
+
+   from common.program_options import Configuration
+
    args = None
    rank = MPI.COMM_WORLD.rank
 
+   parse_error = None
+   if rank == 0:
+      try:
+         parser = argparse.ArgumentParser(description='Solve NWP problems with GEF!')
+         parser.add_argument('--profile', action='store_true', help='Produce an execution profile when running')
+         parser.add_argument('config', type=str, help='File that contains simulation parameters')
+         parser.add_argument('--show-every-crash', action='store_true',
+                              help='In case of an exception, show output from alllllll PEs')
+         parser.add_argument('--numpy-warn-as-except', action='store_true',
+                              help='Raise an exception if there is a numpy warning')
+
+         args = parser.parse_args()
+      except SystemExit as e:
+         parse_error = e
+
+   parse_error = MPI.COMM_WORLD.bcast(parse_error, root=0)
+
+   if parse_error is not None:
+      if rank == 0: raise parse_error
+      sys.exit(-1)
+
+   args = MPI.COMM_WORLD.bcast(args, root=0)
+
+   if not os.path.exists(args.config):
+      if rank == 0: raise ValueError(f'Config file does not seem valid: {args.config}')
+      sys.exit(-1)
+
    try:
-      import argparse
       import cProfile
-      import os.path
-
-      from common.program_options import Configuration
-
-      parser = argparse.ArgumentParser(description='Solve NWP problems with GEF!')
-      parser.add_argument('--profile', action='store_true', help='Produce an execution profile when running')
-      parser.add_argument('config', type=str, help='File that contains simulation parameters')
-      parser.add_argument('--show-every-crash', action='store_true',
-                          help='In case of an exception, show output from alllllll PEs')
-      parser.add_argument('--numpy-warn-as-except', action='store_true',
-                          help='Raise an exception if there is a numpy warning')
-
-      args = parser.parse_args()
-
-      if not os.path.exists(args.config):
-         raise ValueError(f'Config file does not seem valid: {args.config}')
 
       # Start profiling
       pr = None
@@ -66,14 +80,14 @@ if __name__ == '__main__':
          out_file = f'prof_{rank:04d}.out'
          pr.dump_stats(out_file)
 
-   except Exception as e:
+   except Exception:
 
       sys.stdout.flush()
       if args and args.show_every_crash:
-         traceback.print_exc()
-      else:
-         if rank == 0:
-            traceback.print_exc()
-            print(f'There was an error while running GEF. Only rank 0 is printing the traceback.')
+         raise
+
+      if rank == 0:
+         print(f'There was an error while running GEF. Only rank 0 is printing the traceback:')
+         raise
 
       sys.exit(-1)
