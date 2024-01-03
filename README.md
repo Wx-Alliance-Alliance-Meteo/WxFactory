@@ -2,9 +2,10 @@ The name of the project, GEF, is a French acronym which stands for ***G**EM en *
 
 # Requirements
 
-GEF was built for Python3.  It also requires an MPI implementation.
+GEF was built for Python 3.11 (at least).  It also requires an MPI implementation.
 
 ## Python packages
+* Python version at least 3.11
 * `numpy` Scientific tools for Python
 * `scipy` Python-based ecosystem of open-source software for mathematics, science, and engineering
 * `sympy` Python library for symbolic mathematics
@@ -13,7 +14,7 @@ GEF was built for Python3.  It also requires an MPI implementation.
 * `matplotlib` A python plotting library, making publication quality plots
 
 ## Other libraries
-* `netcdf4` Library to handle netCDF files. **Must be an MPI version of it**
+* `netcdf4` Library to handle netCDF files. There is an MPI version of it, if you want parallel output
 * `sqlite` To be able to store solver stats.
 
 ## Optional
@@ -46,21 +47,19 @@ The necessary packages are available from the conda-forge channel, so it should
 be added to the list of default channels for easier use of the various commands
 ```
 conda config --add channels conda-forge
-conda create -n gef "python>=3.8"
+conda create -n gef "python>=3.11"
 conda activate gef
-conda install numpy scipy sympy mpi4py matplotlib
-# NetCDF stuff (in general):
+conda install numpy scipy sympy mpi4py matplotlib netcdf4
+```
+
+To be able to use NetCDF in parallel (for faster writing to disk) [Optional]
+```
 conda install netcdf4=*=mpi*
 ```
 
-To be able to use the system MPI library on Robert/Underhill:
+To be able to use the system MPI library on PPP/Robert/Underhill:
 ```
 conda install netcdf4=*=mpi_mpich_* mpich=3.3.*=external_*
-```
-
-If you want the OpenMPI implementation of MPI (on other systems):
-```
-conda install mpi=*=openmpi
 ```
 
 If you want the visualization capabilities of GEF (and do not mind a bigger

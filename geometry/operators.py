@@ -193,7 +193,7 @@ class DFROperators:
       return Q
 
    def apply_filter_3d(self,Q : numpy.ndarray, geom : CubedSphere, metric):
-      '''Apply the exponential filter precomputed in expfilter to input fields \sqrt(g)*Q, and return the
+      r'''Apply the exponential filter precomputed in expfilter to input fields \sqrt(g)*Q, and return the
       filtered array.'''
 
       if len(Q.shape) > 3:
