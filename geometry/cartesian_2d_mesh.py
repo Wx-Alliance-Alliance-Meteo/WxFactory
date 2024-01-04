@@ -4,6 +4,7 @@ import numpy
 
 from common.graphx   import print_mountain
 from .geometry       import Geometry
+from main_gef        import array
 
 # typing
 from typing import Self
@@ -17,15 +18,14 @@ class Cartesian2D(Geometry):
                 nb_elements_z: int,
                 nbsolpts: int,
                 nb_elements_relief_layer: int,
-                relief_layer_height: int,
-                param: Configuration):
+                relief_layer_height: int):
       super().__init__(nbsolpts, 'cartesian2d')
 
       scaled_points = 0.5 * (1.0 + self.solutionPoints)
 
       # --- Horizontal coord
       Δx1 = (domain_x[1] - domain_x[0]) / nb_elements_x
-      itf_x1 = param.array_module.linspace(start=domain_x[0], stop=domain_x[1], num=nb_elements_x + 1)
+      itf_x1 = array.linspace(start=domain_x[0], stop=domain_x[1], num=nb_elements_x + 1)
       x1 = numpy.zeros(nb_elements_x * len(self.solutionPoints), like=itf_x1)
       for i in range(nb_elements_x):
          idx = i * nbsolpts
@@ -39,8 +39,8 @@ class Cartesian2D(Geometry):
          Δrelief_layer = (relief_layer_height - domain_z[0]) / nb_elements_relief_layer
 
          Δx3 = (domain_z[1] - relief_layer_height) / (nb_elements_z - nb_elements_relief_layer)
-         itf_x3 = param.array_module.linspace(start=relief_layer_height, stop=domain_z[1], num=(nb_elements_z - nb_elements_relief_layer) + 1)
-         itf_relief_layer = param.array_module.linspace(start=domain_z[0], stop=relief_layer_height, num=nb_elements_relief_layer + 1)
+         itf_x3 = array.linspace(start=relief_layer_height, stop=domain_z[1], num=(nb_elements_z - nb_elements_relief_layer) + 1)
+         itf_relief_layer = array.linspace(start=domain_z[0], stop=relief_layer_height, num=nb_elements_relief_layer + 1)
 
          z1 = numpy.zeros(nb_elements_relief_layer * len(self.solutionPoints), like=itf_x3)
          z2 = numpy.zeros((nb_elements_z-nb_elements_relief_layer) * len(self.solutionPoints), like=itf_x3)
@@ -58,7 +58,7 @@ class Cartesian2D(Geometry):
       else:
          Δx3 = (domain_z[1] - domain_z[0]) / nb_elements_z
          Δrelief_layer = 0 # being lazy ...
-         itf_x3 = param.array_module.linspace(start=domain_z[0], stop=domain_z[1], num=nb_elements_z + 1)
+         itf_x3 = array.linspace(start=domain_z[0], stop=domain_z[1], num=nb_elements_z + 1)
 
          for i in range(nb_elements_z):
             idz = i * nbsolpts

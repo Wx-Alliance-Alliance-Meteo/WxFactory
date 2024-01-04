@@ -69,8 +69,8 @@ if __name__ == '__main__':
       config = Configuration(args.config, rank == 0)
 
       # Run the actual GEF
-      # This import has to happen *after* the config is read, so that we have to swap the array
-      # module for cupy if requested by the user (and available)
+      # This import has to happen *after* the config is read, so that we have the opportunity
+      # to swap the array module for cupy if requested by the user (and available)
       import run
       run.run(config)
 
