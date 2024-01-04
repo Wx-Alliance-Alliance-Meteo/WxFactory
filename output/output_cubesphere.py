@@ -296,12 +296,14 @@ def output_init(geom, param):
          topos = MPI.COMM_WORLD.gather(prepare(geom.zbot[:,:]), root=0)
 
       if rank == 0:
-         for my_rank, my_lon, my_lat, my_elev, my_topo in zip(ranks, lons, lats, elevs, topos):
+         for my_rank, my_lon, my_lat in zip(ranks, lons, lats):
             tile[my_rank] = my_rank
             lon[my_rank, :, :] = my_lon
             lat[my_rank, :, :] = my_lat
-            elev[my_rank, :, :, :] = my_elev
-            topo[my_rank, :, :] = my_topo
+         if param.equations == "euler":
+            for my_rank, my_elev, my_topo in zip(ranks, elevs, topos):
+               elev[my_rank, :, :, :] = my_elev
+               topo[my_rank, :, :] = my_topo
 
    else:
       tile[rank] = rank

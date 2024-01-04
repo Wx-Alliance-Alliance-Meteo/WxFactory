@@ -50,16 +50,13 @@ conda config --add channels conda-forge
 conda create -n gef "python>=3.11"
 conda activate gef
 conda install numpy scipy sympy mpi4py matplotlib netcdf4
+# On the Science network, we need to use the already-installed MPI library:
+conda install numpy scipy sympy mpi4py matplotlib netcdf4 mpi=*=mpich
 ```
 
 To be able to use NetCDF in parallel (for faster writing to disk) [Optional]
 ```
 conda install netcdf4=*=mpi*
-```
-
-To be able to use the system MPI library on PPP/Robert/Underhill:
-```
-conda install netcdf4=*=mpi_mpich_* mpich=3.3.*=external_*
 ```
 
 If you want the visualization capabilities of GEF (and do not mind a bigger

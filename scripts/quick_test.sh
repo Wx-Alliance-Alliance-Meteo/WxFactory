@@ -21,12 +21,14 @@ echo "Cartesian grid tests:  ${do_cartesian}"
 echo "Cubesphere tests:      ${do_cubesphere}"
 echo "No-precond tests:      ${do_non_precond}"
 echo "Precond tests:         ${do_precond}"
+echo "NetCDF output:         ${test_netcdf_output}"
 
 mkdir -pv ${TEST_DIR}
 rm -rf ${TEST_DIR}/*
 
 function user_interrupt() {
-    echo -e "\nTest interrupted" && rm -rf ${TEST_DIR}
+    echo -e "\nTest interrupted" && cat ${LISTING}
+    rm -rf ${TEST_DIR}
     exit 1
 }
 

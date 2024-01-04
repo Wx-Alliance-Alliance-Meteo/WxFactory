@@ -50,7 +50,9 @@ class ColumnSet:
       self.num_solver_it     = Column('int')
       self.solver_time       = Column('float')
       self.solver_flag       = Column('int')
-      self.smoother_radii    = Column('varchar(128)', str(param.exp_smoothe_spectral_radii))
+
+      default_radii = '' if not hasattr(param, 'exp_smoothe_spectral_radii') else str(param.exp_smoothe_spectral_radii)
+      self.smoother_radii    = Column('varchar(128)', default_radii)
 
       self.exp_radius_0 = Column('float', 0)
       self.exp_radius_1 = Column('float', 0)
@@ -194,7 +196,9 @@ class SolverStatsOutput:
       self.columns.solver_time.value      = local_time
       self.columns.solver_flag.value      = flag
 
-      if len(self.param.exp_smoothe_spectral_radii) > 0 and precond is not None:
+      if hasattr(self.param, 'exp_smoothe_spectral_radii')  \
+         and len(self.param.exp_smoothe_spectral_radii) > 0 \
+         and precond is not None:
          if len(precond.spectral_radii) > 0: self.columns.exp_radius_0.value = precond.spectral_radii[0]
          if len(precond.spectral_radii) > 1: self.columns.exp_radius_1.value = precond.spectral_radii[1]
          if len(precond.spectral_radii) > 2: self.columns.exp_radius_2.value = precond.spectral_radii[2]

@@ -125,10 +125,12 @@ class Configuration:
       ###################
       # Preconditioning
       available_preconditioners = ['none', 'fv', 'fv-mg', 'p-mg', 'lu', 'ilu']
-      self.preconditioner = self._get_option('Preconditioning', 'preconditioner', str, 'none', valid_values=available_preconditioners)
+      self.preconditioner = self._get_option('Preconditioning', 'preconditioner', str, 'none',
+                                             valid_values=available_preconditioners)
 
       available_fluxes = ['ausm', 'upwind', 'rusanov']
-      self.precond_flux = self._get_option('Preconditioning', 'precond_flux', str, available_fluxes[0], valid_values=available_fluxes)
+      self.precond_flux = self._get_option('Preconditioning', 'precond_flux', str, available_fluxes[0],
+                                           valid_values=available_fluxes)
 
       self.num_mg_levels = self._get_option('Preconditioning', 'num_mg_levels', int, 1, min_value=1)
       if 'mg' not in self.preconditioner: self.num_mg_levels = 1
@@ -138,19 +140,24 @@ class Configuration:
       self.num_post_smoothe  = self._get_option('Preconditioning', 'num_post_smoothe', int, 1, min_value=0)
 
       self.possible_smoothers = ['exp', 'kiops', 'erk3', 'erk1', 'ark3']
-      self.mg_smoother = self._get_option('Preconditioning', 'mg_smoother', str, 'exp', valid_values=self.possible_smoothers)
+      self.mg_smoother = self._get_option('Preconditioning', 'mg_smoother', str, 'exp',
+                                          valid_values=self.possible_smoothers)
 
-      self.exp_smoothe_spectral_radii  = self._get_option('Preconditioning', 'exp_smoothe_spectral_radii', List[float], [2.0])
-      self.exp_smoothe_spectral_radius = self.exp_smoothe_spectral_radii[0]
-      self.exp_smoothe_nb_iters        = self._get_option('Preconditioning', 'exp_smoothe_nb_iters', List[int], [4])
-      self.exp_smoothe_nb_iter         = self.exp_smoothe_nb_iters[0]
+      if self.mg_smoother == 'exp':
+         self.exp_smoothe_spectral_radii  = self._get_option('Preconditioning', 'exp_smoothe_spectral_radii',
+                                                             List[float], [2.0])
+         self.exp_smoothe_spectral_radius = self.exp_smoothe_spectral_radii[0]
+         self.exp_smoothe_nb_iters        = self._get_option('Preconditioning', 'exp_smoothe_nb_iters',
+                                                             List[int], [4])
+         self.exp_smoothe_nb_iter         = self.exp_smoothe_nb_iters[0]
 
       self.mg_solve_coarsest = self._get_option('Preconditioning', 'mg_solve_coarsest', bool, False)
       self.kiops_dt_factor   = self._get_option('Preconditioning', 'kiops_dt_factor', float, 1.1)
       self.verbose_precond   = self._get_option('Preconditioning', 'verbose_precond', int, 0)
 
       ok_interps = ['l2-norm', 'lagrange']
-      self.dg_to_fv_interp = self._get_option('Preconditioning', 'dg_to_fv_interp', str, 'lagrange', valid_values=ok_interps)
+      self.dg_to_fv_interp = self._get_option('Preconditioning', 'dg_to_fv_interp', str, 'lagrange',
+                                              valid_values=ok_interps)
       self.pseudo_cfl      = self._get_option('Preconditioning', 'pseudo_cfl', float, 1.0)
 
       ###############################
@@ -265,9 +272,9 @@ class Configuration:
          i = 0
          for option in section_options:
             val = str(getattr(self, option))
-            if len(option) < 28 and len(val) < 12:
+            if len(option) < 26 and len(val) < 14:
                if i % 2 == 0: out += '\n'
-               out += f' | {option:27s}: {val:11s}'
+               out += f' | {option:25s}: {val:13s}'
                i += 1
             else:
                long_options[option] = val
@@ -275,7 +282,7 @@ class Configuration:
          if i % 2 == 1: out += ' |'
 
          for name, val in long_options.items():
-            out += f'\n | {name:27s}: {val}'
+            out += f'\n | {name:25s}: {val}'
          out += '\n'
 
       return out

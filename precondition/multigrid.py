@@ -55,14 +55,13 @@ class MultigridLevel:
       verbose = self.param.verbose_precond if MPI.COMM_WORLD.rank == 0 else 0
 
       if verbose > 0:
-         print(
-            f'Grid level! nb_elem_horiz = {nb_elem_horiz}, nb_elem_vert = {nb_elem_vert} '
-            f' discr = {discretization}, source order = {source_order},'
-            f' target order = {target_order}, nbsolpts = {p.nbsolpts}'
+         out_str = \
+            f'Grid level! nb_elem_horiz = {nb_elem_horiz}, nb_elem_vert = {nb_elem_vert} ' \
+            f' discr = {discretization}, source order = {source_order},'                   \
+            f' target order = {target_order}, nbsolpts = {p.nbsolpts}'                     \
             f' num_mg_levels: {p.num_mg_levels}'
-            f' exp radius: {p.exp_smoothe_spectral_radius}'
-            # f' work ratio = {self.work_ratio}'
-            )
+         if p.mg_smoother == 'exp': out_str += f' exp radius: {p.exp_smoothe_spectral_radius}'
+         print(out_str)
 
       # Initialize problem for this level
       if p.grid_type == 'cubed_sphere':
@@ -294,10 +293,11 @@ class Multigrid(MatvecOp):
          # new_list.reverse()
          return new_list
 
-      self.spectral_radii = extended_list(param.exp_smoothe_spectral_radii, len(self.orders) - 1)
-      self.exp_nb_iters   = extended_list(param.exp_smoothe_nb_iters, len(self.orders) - 1)
-      if self.verbose:
-         print(f'spectral radii = {self.spectral_radii}, num iterations: {self.exp_nb_iters}')
+      if param.mg_smoother == 'exp':
+         self.spectral_radii = extended_list(param.exp_smoothe_spectral_radii, len(self.orders) - 1)
+         self.exp_nb_iters   = extended_list(param.exp_smoothe_nb_iters, len(self.orders) - 1)
+         if self.verbose:
+            print(f'spectral radii = {self.spectral_radii}, num iterations: {self.exp_nb_iters}')
 
       # Create config set for each level (whether they will be used or not, in case we want to change that at runtime)
       self.levels = {}
@@ -309,8 +309,9 @@ class Multigrid(MatvecOp):
          if self.verbose:
             print(f'Initializing level {i_level}, {discretization}, order {order}->{new_order},'
                   f' elems {nb_elem_hori}x{nb_elem_vert}')
-         param.exp_smoothe_spectral_radius = self.spectral_radii[i_level]
-         param.exp_smoothe_nb_iter = self.exp_nb_iters[i_level]
+         if param.mg_smoother == 'exp':
+            param.exp_smoothe_spectral_radius = self.spectral_radii[i_level]
+            param.exp_smoothe_nb_iter = self.exp_nb_iters[i_level]
          self.levels[i_level] = MultigridLevel(param, ptopo, discretization, nb_elem_hori, nb_elem_vert, order,
                                                new_order, self.ndim)
 

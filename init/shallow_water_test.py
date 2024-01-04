@@ -1,4 +1,6 @@
 import math
+
+from mpi4py import MPI
 import numpy
 
 from common.definitions import day_in_secs, gravity
@@ -34,9 +36,10 @@ def solid_body_rotation(geom, metric, param):
    return u1, u2
 
 def circular_vortex(geom, metric, param):
-   print("--------------------------------------------------------------")
-   print("CASE 0 (Tracer): Circular vortex, Nair and Machenhauer,2002   ")
-   print("--------------------------------------------------------------")
+   if MPI.COMM_WORLD.rank == 0:
+      print("--------------------------------------------------------------")
+      print("CASE 0 (Tracer): Circular vortex, Nair and Machenhauer,2002   ")
+      print("--------------------------------------------------------------")
 
    # Deformational Flow (Nair and Machenhauer, 2002)
    lon_center = math.pi - 0.8
@@ -85,9 +88,10 @@ def height_vortex(geom, metric, param, step):
    return h, Omega
 
 def williamson_case1(geom, metric, param):
-   print("---------------------------------------------------------------")
-   print("WILLIAMSON CASE 1 (Tracer): Cosine Bell, Williamson et al.,1992")
-   print("---------------------------------------------------------------")
+   if MPI.COMM_WORLD.rank == 0:
+      print("---------------------------------------------------------------")
+      print("WILLIAMSON CASE 1 (Tracer): Cosine Bell, Williamson et al.,1992")
+      print("---------------------------------------------------------------")
 
    u1, u2 = solid_body_rotation(geom, metric, param)
 
@@ -116,10 +120,11 @@ def height_case1(geom, metric, param, step):
    return 0.5 * h0 * (1.0 + numpy.cos(math.pi * dist / radius)) * (dist <= radius)
 
 def williamson_case2(geom, metric, param):
-   print("--------------------------------------------")
-   print("WILLIAMSON CASE 2, Williamson et al. (1992) ")
-   print("Steady state nonlinear geostrophic flow     ")
-   print("--------------------------------------------")
+   if MPI.COMM_WORLD.rank == 0:
+      print("--------------------------------------------")
+      print("WILLIAMSON CASE 2, Williamson et al. (1992) ")
+      print("Steady state nonlinear geostrophic flow     ")
+      print("--------------------------------------------")
 
    u1, u2 = solid_body_rotation(geom, metric, param)
 
@@ -136,10 +141,11 @@ def height_case2(geom, metric, param):
 
 
 def williamson_case5(geom, metric, mtrx, param):
-   print('--------------------------------------------')
-   print('WILLIAMSON CASE 5, Williamson et al. (1992) ')
-   print('Zonal Flow over an isolated mountain        ')
-   print('--------------------------------------------')
+   if MPI.COMM_WORLD.rank == 0:
+      print('--------------------------------------------')
+      print('WILLIAMSON CASE 5, Williamson et al. (1992) ')
+      print('Zonal Flow over an isolated mountain        ')
+      print('--------------------------------------------')
 
    u0 = 20.0   # Max wind (m/s)
    h0 = 5960.0 # Mean height (m)
@@ -198,10 +204,11 @@ def williamson_case5(geom, metric, mtrx, param):
 
 
 def williamson_case6(geom, metric, param):
-   print("--------------------------------------------")
-   print("WILLIAMSON CASE 6, Williamson et al. (1992) ")
-   print("Rossby-Haurwitz wave                        ")
-   print("--------------------------------------------")
+   if MPI.COMM_WORLD.rank == 0:
+      print("--------------------------------------------")
+      print("WILLIAMSON CASE 6, Williamson et al. (1992) ")
+      print("Rossby-Haurwitz wave                        ")
+      print("--------------------------------------------")
 
    # Rossby-Haurwitz wave
 
@@ -229,10 +236,11 @@ def williamson_case6(geom, metric, param):
    return u1, u2, h
 
 def case_galewsky(geom, metric, param):
-   print("--------------------------------------------")
-   print("CASE 8, Galewsky et al. (2004)              ")
-   print("Barotropic wave                             ")
-   print("--------------------------------------------")
+   if MPI.COMM_WORLD.rank == 0:
+      print("--------------------------------------------")
+      print("CASE 8, Galewsky et al. (2004)              ")
+      print("Barotropic wave                             ")
+      print("--------------------------------------------")
 
    h0 = 10158.18617045463179
    h_hat = 120.0
@@ -290,17 +298,18 @@ def case_galewsky(geom, metric, param):
    return u1, u2, h
 
 def case_matsuno(geom, metric, param):
-   print("--------------------------------------------")
-   print("CASE 9, Shamir et al.,2019,GMD,12,2181-2193 ")
-
-   if param.matsuno_wave_type == 'Rossby':
-      print("The Matsuno baroclinic wave (Rosby)         ")
-   elif param.matsuno_wave_type == 'EIG':
-      print("The Matsuno baroclinic wave (EIG)           ")
+   if MPI.COMM_WORLD.rank == 0:
       print("--------------------------------------------")
-   elif param.matsuno_wave_type == 'WIG':
-      print("The Matsuno baroclinic wave (WIG)           ")
-   print("--------------------------------------------")
+      print("CASE 9, Shamir et al.,2019,GMD,12,2181-2193 ")
+
+      if param.matsuno_wave_type == 'Rossby':
+         print("The Matsuno baroclinic wave (Rosby)         ")
+      elif param.matsuno_wave_type == 'EIG':
+         print("The Matsuno baroclinic wave (EIG)           ")
+         print("--------------------------------------------")
+      elif param.matsuno_wave_type == 'WIG':
+         print("The Matsuno baroclinic wave (WIG)           ")
+      print("--------------------------------------------")
 
    ni, nj = geom.lon.shape
 
@@ -324,10 +333,11 @@ def case_matsuno(geom, metric, param):
 
 
 def case_unsteady_zonal(geom, metric, mtrx, param):
-   print("--------------------------------------------")
-   print("CASE 10, Läuter et al. (2005)               ")
-   print("Zonal balanced time dependent flow          ")
-   print("--------------------------------------------")
+   if MPI.COMM_WORLD.rank == 0:
+      print("--------------------------------------------")
+      print("CASE 10, Läuter et al. (2005)               ")
+      print("Zonal balanced time dependent flow          ")
+      print("--------------------------------------------")
 
    u0 = 2. * math.pi * geom.earth_radius / (12. * 24. * 3600.)
 
