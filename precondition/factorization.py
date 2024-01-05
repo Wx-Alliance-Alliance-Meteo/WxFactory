@@ -2,6 +2,7 @@ from typing import Callable, Optional, Tuple
 import os
 
 import numpy
+from mpi4py import MPI
 import scipy
 
 from common.program_options  import Configuration
@@ -22,20 +23,23 @@ class Factorization(Preconditioner):
       def str_hash(s):
          return int(hashlib.md5(s.encode()).hexdigest(), 16)
 
-      values = (param.dt, param.case_number,
+      values = (param.dt, param.case_number, MPI.COMM_WORLD.size,
                 str_hash(param.equations), str_hash(param.grid_type), str_hash(param.jacobian_method),
                 param.nbsolpts, param.nb_elements_horizontal, param.nb_elements_vertical)
 
       matrix_hash = values.__hash__() & 0xffffffffffff
       # matrix_hash = int(hash_obj.hexdigest()) & 0xffffffffffff
-      self.matrix_file = os.path.join(param.output_dir, f'mat_{matrix_hash:012x}.npz')
+      self.matrix_file = os.path.join(param.output_dir, f'mat_{matrix_hash:012x}.{MPI.COMM_WORLD.rank}.npz')
 
    def prepare(self, matvec: Callable[[numpy.ndarray], numpy.ndarray]) -> None:
       if self.assembled_mat is None:
          try:
             self.assembled_mat = scipy.sparse.load_npz(self.matrix_file)
-         except OSError:
-            self.assembled_mat = gen_matrix(matvec, self.matrix_file, compressed=True)
+         except (FileNotFoundError, OSError):
+            pass
+
+         if self.assembled_mat is None:
+            self.assembled_mat = gen_matrix(matvec, self.matrix_file, compressed=True, local=True)
 
          if self.type == 'lu':
             self.factorization = scipy.sparse.linalg.splu(self.assembled_mat)
