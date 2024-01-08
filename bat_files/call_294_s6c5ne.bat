@@ -3,7 +3,8 @@ cd /home/vma000/code/gef_tanya
 . ./load_env.sh
 
 
-methods=("case5_pmexne.ini" "case5_cwyne.ini")
+#methods=("case5_pmexne.ini" "case5_cwyne.ini")
+methods=("case5_cwyne.ini")
 
 methodlen=${#methods[@]}
 #looping through each case and running it 7 times

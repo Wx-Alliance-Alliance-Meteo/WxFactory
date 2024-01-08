@@ -2,7 +2,8 @@
 cd /home/vma000/code/gef_tanya
 . ./load_env.sh
 
-methods=("galewsky_kiops.ini" "galewsky_cwy1s.ini")
+#methods=("galewsky_kiops.ini" "galewsky_cwy1s.ini")
+methods=("galewsky_cwy1s.ini")
 
 methodlen=${#methods[@]}
 #looping through each case and running it 7 times
