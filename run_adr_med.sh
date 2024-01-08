@@ -4,7 +4,7 @@ ord_soumet -cpus 1600                                  \
            -jn adr_1600_stats                          \
            -mpi                                        \
            -share e                                    \
-           -jobfile bat_files/adr/call_1600.bat     \
+           -jobfile bat_files/adr/call_1600_epi.bat     \
            -listing $(pwd)/listings
 
 
@@ -13,7 +13,7 @@ ord_soumet -cpus 1600                                  \
            -jn adr_1600_stats                          \
            -mpi                                        \
            -share e                                    \
-           -jobfile bat_files/adr/call_1600.bat     \
+           -jobfile bat_files/adr/call_1600_sr.bat     \
            -listing $(pwd)/listings
 
 
