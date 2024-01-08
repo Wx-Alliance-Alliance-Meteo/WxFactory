@@ -4,16 +4,15 @@ cd /home/vma000/code/gef_tanya
 
 
 methods=("kiops" "pmex_1s" "pmex" "cwy_1s" "cwy_ne" "icwy_1s" "icwy_ne")
-order=(2 4 6)
+integrators=("srerk3" "srerk6")
 
 methodlen=${#methods[@]}
-orderlen=${#order[@]}
-
+intlen=${#integrators[@]}
 #looping through each case and running it 7 times
-for ((n=0; n < $orderlen; n++)); do
+for ((n=0; n < $intlen; n++)); do 
   for ((k=0; k < $methodlen; k++)); do
      for ((j = 0; j < 7; j++)); do
-       mpirun -np 10000 python3 ./main_adr.py ${order[${n}]} ${methods[${k}]}
-     done
+       mpirun -np 1600 python3 ./main_adr.py ${integrators[${n}]} ${methods[${k}]}
+    done
   done
 done
