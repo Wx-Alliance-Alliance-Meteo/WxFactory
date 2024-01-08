@@ -15,11 +15,14 @@ from time        import time
 
 #1. initialize world
 comm  = MPI.COMM_WORLD
-world = initWorld.InitWorld(comm, "Neumann", [0.0, 1.0], 5002)
+world = initWorld.InitWorld(comm, "Neumann", [0.0, 1.0], 2002)
 
 #2. read in command line arguments
-epi_order    = int(sys.argv[1])
-ortho_method = str(sys.argv[2])
+method       = str(sys.argv[1]) #eg epi4 or srerk3
+ortho_method = str(sys.argv[2]) #eg kiops or pmex1s
+
+order    = int(method[-1]) #the order of the method will always be last
+int_type = str(method[:-1]) #check if srerk or epi method
 
 #3. set up initial condition 
 Q = np.zeros(world.oneDsize)
@@ -49,7 +52,15 @@ jtv = rhs_jac_pdefuncs.adr_jtv
 #as an argument
 rhs_handle = lambda u: rhs(u, epsilon, alpha, gamma, world)
 
-stepper = epi_for_others.Epi_others(epi_order, rhs_handle, jtv, ortho_method, world, [epsilon, alpha, gamma], init_substeps=10)
+#Now set up the 'stepper' function
+#the only two options for this test are EPI and SRERK 
+if int_type == 'srerk':
+   stepper = srerk_for_others.Srerk_others(order, rhs_handle, jtv, ortho_method, world, [epsilon, alpha, gamma])
+   #print("using srerk of order = {}".format( order))
+
+else:
+   stepper = epi_for_others.Epi_others(order, rhs_handle, jtv, ortho_method, world, [epsilon, alpha, gamma], init_substeps=10)
+   #print("using epi of order = {}".format(order))
 
 #6. set up time integration
 #possitle dt from paper: 0.01, 0.005, 0.0025, 0.00125, 6.25e-04
@@ -81,10 +92,10 @@ total_time = time() - start_time
 
 if world.IamRoot:
    #print("total_time = {}".format(total_time))
-   size        = MPI.COMM_WORLD.Get_size()
-   method      = str(epi_order)
-   methodOrtho = str(ortho_method)
-   totaltime_name = "results_tanya/runtime_"+ methodOrtho + "_n" +  str(size) + "_e" + str(method) + "_adr.txt"
+   size           = MPI.COMM_WORLD.Get_size()
+   totaltime_name = "results_tanya/runtime_"+ ortho_method + "_n" +  str(size) + "_e" + method + "_adr.txt"
+   with open(totaltime_name, 'a') as gg:
+      gg.write('{} \n'.format(total_time))
  
 """
 #print final solution 
