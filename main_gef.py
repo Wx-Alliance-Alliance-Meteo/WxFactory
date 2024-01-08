@@ -254,24 +254,31 @@ if __name__ == '__main__':
 
    import argparse
    import cProfile
+   import traceback
 
-   parser = argparse.ArgumentParser(description='Solve NWP problems with GEF!')
-   parser.add_argument('--profile', action='store_true', help='Produce an execution profile when running')
-   parser.add_argument('config', type=str, help='File that contains simulation parameters')
+   try:
+      parser = argparse.ArgumentParser(description='Solve NWP problems with GEF!')
+      parser.add_argument('--profile', action='store_true', help='Produce an execution profile when running')
+      parser.add_argument('config', type=str, help='File that contains simulation parameters')
 
-   args = parser.parse_args()
+      args = parser.parse_args()
 
-   # Start profiling
-   pr = None
-   if args.profile:
-      pr = cProfile.Profile()
-      pr.enable()
+      # Start profiling
+      pr = None
+      if args.profile:
+         pr = cProfile.Profile()
+         pr.enable()
 
-   numpy.set_printoptions(suppress=True, linewidth=256)
-   rank = main(args)
+      numpy.set_printoptions(suppress=True, linewidth=256)
+      rank = main(args)
 
-   if args.profile:
-      pr.disable()
+      if args.profile:
+         pr.disable()
 
-      out_file = f'prof_{rank:04d}.out'
-      pr.dump_stats(out_file)
+         out_file = f'prof_{rank:04d}.out'
+         pr.dump_stats(out_file)
+
+   except Exception as e:
+      if MPI.COMM_WORLD.rank == 0:
+         print(f'There was an error while running GEF. Only rank 0 is printing the traceback.')
+         traceback.print_exc()

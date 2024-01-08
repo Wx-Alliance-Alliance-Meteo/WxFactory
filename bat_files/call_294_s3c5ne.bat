@@ -4,6 +4,7 @@ cd /home/vma000/code/gef_tanya
 
 methods=("case5_pmexne.ini" "case5_icwyne.ini" "case5_cwyne.ini")
 
+methodlen=${#methods[@]}
 #looping through each case and running it 7 times
 for ((k=0; k < $methodlen; k++)); do
    for ((j = 0; j < 7; j++)); do
