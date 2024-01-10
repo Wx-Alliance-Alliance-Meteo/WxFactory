@@ -2,21 +2,14 @@
 #remaining epi calls: these are just calls that didnt finish the full 
 #7 runs, so missing a like 1 or 2 runs
 
-ord_soumet -cpus 294                                \
-           -w 120                                    \
-           -jn gef_294                         \
-           -mpi                                      \
-           -share e                                  \
-           -jobfile bat_files/finalrun/call_e5_294_nev1.bat      \
+ord_soumet -cpus 294                               \
+           -w 180                                   \
+           -jn gef_294                             \
+           -mpi                                     \
+           -share e                                 \
+           -jobfile bat_files/finalrun/call_e4_294_k.bat   \
            -listing $(pwd)/listings
 
-ord_soumet -cpus 294                                \
-           -w 120                                    \
-           -jn gef_294                         \
-           -mpi                                      \
-           -share e                                  \
-           -jobfile bat_files/finalrun/call_e5_294_nev2.bat      \
-           -listing $(pwd)/listings
 
 #srerk 6 galewsky pmex ne
 ord_soumet -cpus 294                               \
