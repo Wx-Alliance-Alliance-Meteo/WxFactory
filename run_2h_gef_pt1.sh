@@ -38,32 +38,6 @@ ord_soumet -cpus 294                               \
            -jobfile bat_files/call_294_s6c8nec.bat   \
            -listing $(pwd)/listings
 
-#srerk 6 galwsky cwy 1s (need 3 more runs)
-ord_soumet -cpus 294                               \
-           -w 120                                   \
-           -jn gef_294                             \
-           -mpi                                     \
-           -share e                                 \
-           -jobfile bat_files/call_294_s6c8k.bat   \
-           -listing $(pwd)/listings
-
-#srerk 6 case 6 cwyne (need 1 more)
-ord_soumet -cpus 294                               \
-           -w 120                                   \
-           -jn gef_294                             \
-           -mpi                                     \
-           -share e                                 \
-           -jobfile bat_files/call_294_s6c6nec.bat   \
-           -listing $(pwd)/listings
-
-#srerk 6 case 5 cwyne (need 1 more)
-ord_soumet -cpus 294                               \
-           -w 120                                   \
-           -jn gef_294                             \
-           -mpi                                     \
-           -share e                                 \
-           -jobfile bat_files/call_294_s6c5ne.bat   \
-           -listing $(pwd)/listings
 
 #srerk 3 cwyne case 5 (need 2 more)
 ord_soumet -cpus 294                               \
