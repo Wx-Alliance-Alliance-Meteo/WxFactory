@@ -12,7 +12,7 @@ intlen=${#integrators[@]}
 for ((n=0; n < $intlen; n++)); do 
   for ((k=0; k < $methodlen; k++)); do
      for ((j = 0; j < 7; j++)); do
-       mpirun -np 2500 python3 ./main_adr.py ${integrators[${n}]} ${methods[${k}]}
+       mpirun -np 2500 python3 ./main_ac.py ${integrators[${n}]} ${methods[${k}]}
     done
   done
 done
