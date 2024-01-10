@@ -2,8 +2,7 @@
 cd /home/vma000/code/gef_tanya
 . ./load_env.sh
 
-
-methods=("srerk3/case5_pmex1s.ini" "srerk3/case5_kiops.ini" "srerk3/case5_icwy1s.ini")
+methods=("srerk3/galewsky_cwy1s.ini" "srerk3/case6_cwy1s.ini" "srerk3/case5_cwy1s.ini")
 
 methodlen=${#methods[@]}
 #looping through each case and running it 7 times
