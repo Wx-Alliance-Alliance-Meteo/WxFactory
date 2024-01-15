@@ -39,6 +39,7 @@ def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 1, mmax = 128, reuse_in
       m_opt  = 1
    else:
       m_init = pmex.suggested_m
+      m_opt  = 1
 
    # We only allow m to vary between mmin and mmax
    mmin = 1
