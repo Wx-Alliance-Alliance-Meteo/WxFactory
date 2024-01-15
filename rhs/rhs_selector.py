@@ -16,6 +16,8 @@ from rhs.rhs_euler             import rhs_euler
 from rhs.rhs_euler_convective  import rhs_euler_convective
 from rhs.rhs_euler_fv          import rhs_euler_fv
 from rhs.rhs_sw                import rhs_sw
+from rhs.rhs_sw_stiff          import rhs_sw_stiff
+from rhs.rhs_sw_nonstiff       import rhs_sw_nonstiff
 from rhs.rhs_advection2d       import rhs_advection2d
 
 # For type hints
@@ -90,3 +92,5 @@ class RhsBundle:
          else:
             self.full = generate_rhs(
                rhs_sw, geom, operators, metric, topo, ptopo, param.nbsolpts, param.nb_elements_horizontal)
+            self.implicit = generate_rhs(rhs_sw_stiff, geom, operators, metric, topo, ptopo, param.nbsolpts, param.nb_elements_horizontal)
+            self.explicit = generate_rhs(rhs_sw_nonstiff, geom, operators, metric, topo, ptopo, param.nbsolpts, param.nb_elements_horizontal)
