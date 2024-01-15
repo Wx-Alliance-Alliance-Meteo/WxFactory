@@ -11,17 +11,19 @@ CUBE_CONFIG2=${GEF_DIR}/config/dcmip21.ini
 SW_CONFIG1=${GEF_DIR}/config/case6.ini
 CONFIG_BASE=${TEST_DIR}/config.ini
 
-do_cartesian=1
-do_cubesphere=1
+do_euler_2d=1
+do_euler_3d=1
+do_shallow_water=1
 do_non_precond=1
 do_precond=1
 test_netcdf_output=1
 
-echo "Cartesian grid tests:  ${do_cartesian}"
-echo "Cubesphere tests:      ${do_cubesphere}"
-echo "No-precond tests:      ${do_non_precond}"
-echo "Precond tests:         ${do_precond}"
-echo "NetCDF output:         ${test_netcdf_output}"
+echo "2D Euler tests (cartesian):       ${do_euler_2d}"
+echo "3D Euler tests (cubesphere):      ${do_euler_3d}"
+echo "Shallow Water tests (cubesphere): ${do_shallow_water}"
+echo "No-precond tests:                 ${do_non_precond}"
+echo "Precond tests:                    ${do_precond}"
+echo "NetCDF output:                    ${test_netcdf_output}"
 
 mkdir -pv ${TEST_DIR}
 rm -rf ${TEST_DIR}/*
@@ -175,6 +177,17 @@ function test_shallow_water() {
             run_single_cubesphere time_integrator || return 1
         done
     fi
+
+    if [ $do_precond -gt 0 ]; then
+        time_integrator=ros2
+        preconditioner=fv
+        precond_tolerance=1e-1
+        # run_single_cubesphere time_integrator preconditioner precond_tolerance || return 1
+
+        preconditioner=lu
+        nbsolpts=2
+        run_single_cubesphere time_integrator preconditioner nbsolpts || return 1
+    fi
 }
 
 function test_cube_sphere_euler() {
@@ -228,6 +241,12 @@ function test_cube_sphere_euler() {
         pseudo_cfl=20
         run_single_cubesphere time_integrator preconditioner mg_smoother pseudo_cfl || return 1
 
+        preconditioner=lu
+        nbsolpts=2
+        nb_elements_horizontal=3
+        nb_elements_vertical=3
+        run_single_cubesphere time_integrator preconditioner nbsolpts nb_elements_horizontal nb_elements_vertical || return 1
+
         # mg_smoother=exp
         # exp_smoothe_spectral_radii=2
         # run_single_cubesphere time_integrator preconditioner mg_smoother exp_smoothe_spectral_radii || return 1
@@ -237,15 +256,17 @@ function test_cube_sphere_euler() {
     return 0
 }
 
-if [ ${do_cartesian} -gt 0 ]; then
+if [ ${do_euler_2d} -gt 0 ]; then
     echo "2D Euler"
     test_cart2d || exit -1
 fi
 
-if [ ${do_cubesphere} -gt 0 ]; then
+if [ ${do_shallow_water} -gt 0 ]; then
     echo "Shallow water (cube sphere)"
     test_shallow_water ${SW_CONFIG1} || exit -1
+fi
 
+if [ ${do_euler_3d} -gt 0 ]; then
     echo "3D Euler (cube sphere)"
     test_cube_sphere_euler ${CUBE_CONFIG1} || exit -1
     test_cube_sphere_euler ${CUBE_CONFIG2} || exit -1

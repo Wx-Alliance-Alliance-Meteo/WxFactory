@@ -29,7 +29,7 @@ class Ros2(Integrator):
 
       maxiter = 20000 // self.gmres_restart
       if self.preconditioner is not None:
-         maxiter = 200 // self.gmres_restart
+         maxiter = 400 // self.gmres_restart
 
       t0 = time()
       Qnew, norm_r, norm_b, num_iter, flag, residuals = fgmres(

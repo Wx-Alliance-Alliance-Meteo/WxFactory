@@ -80,7 +80,7 @@ if __name__ == '__main__':
          out_file = f'prof_{rank:04d}.out'
          pr.dump_stats(out_file)
 
-   except Exception:
+   except (Exception, KeyboardInterrupt):
 
       sys.stdout.flush()
       if args and args.show_every_crash:
