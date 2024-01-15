@@ -6,26 +6,25 @@ import os
 import re
 import sys
 from   time      import time
-from   typing    import Callable, Dict, Optional, Tuple, Union
+from   typing    import Dict, Optional, Union
 
 from   mpi4py              import MPI
 import numpy
-from   numpy               import zeros_like, save, load, real, imag, zeros
+from   numpy               import save, load, real, imag
 from   numpy.linalg        import eigvals
 import matplotlib.pyplot as plt
 from   matplotlib.backends.backend_pdf import PdfPages
-from   scipy.sparse        import csc_matrix, save_npz, load_npz, vstack
+from   scipy.sparse        import csc_matrix, load_npz
 import scipy.sparse.linalg
 
 # We assume the script is in a subfolder of the main project
 main_gef_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), '..')
 sys.path.append(main_gef_dir)
 
-from main_gef import create_geometry, create_preconditioner
-
+from eigenvalue_util        import gen_matrix, tqdm
+from run import create_geometry, create_preconditioner
 from common.program_options import Configuration
 from common.parallel        import DistributedWorld
-from eigenvalue_util        import gen_matrix, tqdm
 from geometry               import DFROperators
 from init.init_state_vars   import init_state_vars
 from rhs.rhs_selector       import RhsBundle
@@ -67,18 +66,18 @@ def get_matvecs(cfg_file: str, state_file: Optional[str] = None, build_imex: boo
    param = Configuration(cfg_file, MPI.COMM_WORLD.rank == 0)
    ptopo = DistributedWorld() if param.grid_type == 'cubed_sphere' else None
    geom = create_geometry(param, ptopo)
-   mtrx = DFROperators(geom, param.filter_apply, param.filter_order, param.filter_cutoff)
+   mtrx = DFROperators(geom, param)
    Q, topo, metric = init_state_vars(geom, mtrx, param)
-   rhs = RhsBundle(geom, mtrx, metric, topo, ptopo, param)
-   preconditioner = create_preconditioner(param, ptopo)
+   rhs = RhsBundle(geom, mtrx, metric, topo, ptopo, param, Q.shape)
+   preconditioner = create_preconditioner(param, ptopo, Q)
 
    if state_file is not None: Q = load(state_file)
 
    # Create the matvec function(s)
    matvecs = {}
    if rhs.full is not None:      matvecs['all'] = MatvecOpRat(param.dt, Q, rhs.full(Q), rhs.full)
-   if rhs.implicit and build_imex: matvecs['imp'] = MatvecOpRat(param.dt, Q, rhs.implicit(Q), rhs.implicit)
-   if rhs.explicit and build_imex: matvecs['exp'] = MatvecOpRat(param.dt, Q, rhs.explicit(Q), rhs.explicit)
+   if hasattr(rhs, 'implicit') and build_imex: matvecs['imp'] = MatvecOpRat(param.dt, Q, rhs.implicit(Q), rhs.implicit)
+   if hasattr(rhs, 'explicit') and build_imex: matvecs['exp'] = MatvecOpRat(param.dt, Q, rhs.explicit(Q), rhs.explicit)
    if preconditioner is not None:
       preconditioner.prepare(param.dt, Q, None)
       matvecs['precond'] = preconditioner
@@ -236,7 +235,7 @@ def main(args):
 
       matvecs = get_matvecs(config, state_file=args.from_state_file, build_imex=args.imex)
       for rhs, matvec in matvecs.items():
-         gen_matrix(matvec, jac_file_name=jac_file(name, rhs), permute=args.permute)
+         gen_matrix(matvec, jac_file_name=jac_file(name, rhs))
 
       print(f'Generation done')
 

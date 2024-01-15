@@ -10,8 +10,14 @@ import scipy
 import scipy.sparse.linalg
 from scipy.sparse import load_npz
 
-import pyamg
-import linsol
+try:
+   import pyamg
+   has_pyamg = True
+except ModuleNotFoundError:
+   has_pyamg = False
+   print(f'PyAMG not installed. Won\'t do the associated tests')
+
+from solvers import fgmres
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
 
@@ -78,7 +84,7 @@ def solve_gef_fgmres(jacobian, rhs, precond=None):
    def matvec(vec):
       return jacobian @ vec
 
-   result, solve_time = timed_call(partial(linsol.fgmres, matvec, rhs, restart=20, maxiter=25, tol=tolerance,
+   result, solve_time = timed_call(partial(fgmres, matvec, rhs, restart=20, maxiter=25, tol=tolerance,
                                            preconditioner=precond))
 
    print_result(jacobian, rhs, result[0], result[2], solve_time, prefix='GEF FGMRES')
