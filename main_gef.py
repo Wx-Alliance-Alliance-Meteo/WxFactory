@@ -73,14 +73,16 @@ def main(argv) -> int:
          t += param.dt
 
       step += 1
-
-      if MPI.COMM_WORLD.rank == 0: print(f'\nStep {step} of {nb_steps + starting_step}')
+      
+      # comment out for scaling test 
+      #if MPI.COMM_WORLD.rank == 0: print(f'\nStep {step} of {nb_steps + starting_step}')
 
       Q = stepper.step(Q, param.dt)
       Q = mtrx.apply_filters(Q, geom, metric, param.dt)
 
-      if MPI.COMM_WORLD.rank == 0: print(f'Elapsed time for step: {stepper.latest_time:.3f} secs')
-
+      if MPI.COMM_WORLD.rank == 0: print(f'{stepper.latest_time:.3f}')
+                                #'Elapsed time for step: {stepper.latest_time:.3f} secs')
+                                # comment out for scaling test
       # Check whether there are any NaNs in the solution
       check_for_nan(Q)
 
