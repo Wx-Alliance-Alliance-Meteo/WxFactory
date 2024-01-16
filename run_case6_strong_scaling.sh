@@ -6,8 +6,8 @@
 #SBATCH --ntasks-per-node=64
 #SBATCH --mem=500G
 #SBATCH --time=10:00:00
-#SBATCH --output=vicky/EXODE_testoutput_case6/run_scripts/case6_strong_scaling_%j.out
-#SBATCH --error=vicky/EXODE_testoutput_case6/run_scripts/case6_strong_scaling_%j.err
+#SBATCH --output=/space/hall0/work/eccc/mrd/rpnatm/siw001/gef_data/case6/case6_strong_scaling_%j.out
+#SBATCH --error=/space/hall0/work/eccc/mrd/rpnatm/siw001/gef_data/case6/case6_strong_scaling_%j.err
 
 
 # Siqi Wei
