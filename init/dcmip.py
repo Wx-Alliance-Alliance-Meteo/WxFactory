@@ -1,5 +1,6 @@
 import numpy
 import math
+import pdb
 
 from common.definitions    import cpd, day_in_secs, gravity, p0, Rd
 from geometry              import CubedSphere, DFROperators, Metric3DTopo, wind2contra_2d, wind2contra_3d
@@ -424,20 +425,20 @@ def dcmip_steady_state_mountain(geom: CubedSphere, metric, mtrx, param):
    #-----------------------------------------------------------------------
    #    Set topography
    #-----------------------------------------------------------------------
-   zbot = numpy.zeros(geom.coordVec_latlon.shape[2:])
-   zbot_itf_i = numpy.zeros(geom.coordVec_latlon_itf_i.shape[2:])
-   zbot_itf_j = numpy.zeros(geom.coordVec_latlon_itf_j.shape[2:])
-
-   for (z, coord) in zip([zbot, zbot_itf_i, zbot_itf_j],
-                         [geom.coordVec_latlon, geom.coordVec_latlon_itf_i, geom.coordVec_latlon_itf_j]):
-      lat = coord[1,0,:,:]
-      lon = coord[0,0,:,:]
-      r = numpy.arccos( math.sin(phim) * numpy.sin(lat) + math.cos(phim) * numpy.cos(lat) * numpy.cos(lon - lambdam) )
-      z[r<Rm] = (h0/2.0)*(1.0+numpy.cos(math.pi*r[r<Rm]/Rm))*numpy.cos(math.pi*r[r<Rm]/zetam)**2   # mountain height
-
-
-   # Update the geometry object with the new bottom topography
-   geom.apply_topography(zbot,zbot_itf_i,zbot_itf_j)
+#   zbot = numpy.zeros(geom.coordVec_latlon.shape[2:])
+#   zbot_itf_i = numpy.zeros(geom.coordVec_latlon_itf_i.shape[2:])
+#   zbot_itf_j = numpy.zeros(geom.coordVec_latlon_itf_j.shape[2:])
+#
+#   for (z, coord) in zip([zbot, zbot_itf_i, zbot_itf_j],
+#                         [geom.coordVec_latlon, geom.coordVec_latlon_itf_i, geom.coordVec_latlon_itf_j]):
+#      lat = coord[1,0,:,:]
+#      lon = coord[0,0,:,:]
+#      r = numpy.arccos( math.sin(phim) * numpy.sin(lat) + math.cos(phim) * numpy.cos(lat) * numpy.cos(lon - lambdam) )
+#      z[r<Rm] = (h0/2.0)*(1.0+numpy.cos(math.pi*r[r<Rm]/Rm))*numpy.cos(math.pi*r[r<Rm]/zetam)**2   # mountain height
+#
+#
+#   # Update the geometry object with the new bottom topography
+#   geom.apply_topography(zbot,zbot_itf_i,zbot_itf_j)
    # And regenerate the metric to take this new topography into account
    metric.build_metric()
 
@@ -445,10 +446,12 @@ def dcmip_steady_state_mountain(geom: CubedSphere, metric, mtrx, param):
    #    PS (surface pressure)
    #-----------------------------------------------------------------------
 
-   if gamma == 0.0:
-      ps = p0 * numpy.exp(-gravity * zbot / (Rd*T0))
-   else:
-      ps = p0 * (1.0 - gamma / T0 * zbot)**exponent
+#  if gamma == 0.0:
+#     ps = p0 * numpy.exp(-gravity * zbot / (Rd*T0))
+#   else:
+#      ps = p0 * (1.0 - gamma / T0 * zbot)**exponent
+
+   ps = 100000
 
    #-----------------------------------------------------------------------
    #    PRESSURE
@@ -520,7 +523,7 @@ def dcmip_schar_waves(geom: CubedSphere, metric, mtrx: DFROperators, param, shea
    Dxi     = 4000.0            # Mountain wavelength (meters)
    Ueq     = 20.0              # Reference zonal wind velocity (equator)
    Peq     = 100000.0          # Reference surface pressure (Pa)
-
+   
    if (shear):
       Cs = 2.5e-4              # Wind shear rate (1/m), for shear case
    else:
@@ -624,7 +627,7 @@ def dcmip_schar_damping(forcing : numpy.ndarray, rho : numpy.ndarray,
    Ueq     = 20.0              # Reference zonal wind velocity (equator)
    Zh      = 20000.0           # Threshold level for Rayleigh damping/sponge layer (m)
    tau0    = 25.0              # Time scale of Rayleigh damping (s)
-
+   
    if (shear):
       Cs = 2.5e-4              # Wind shear rate (1/m), for shear case
    else:
