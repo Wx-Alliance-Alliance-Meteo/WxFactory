@@ -77,9 +77,9 @@ class EpiStiff(Integrator):
       if self.exponential_solver == 'exode':
 
          phiv, stats = exode(1., matvec_handle, vec, method=self.exode_method, atol = self.tol, task1 = False, verbose=False)
-
-         if mpirank == 0:
-            print(f'EXODE converged at iteration {stats[0]}')
+         # comment out for scaling output   
+         #if mpirank == 0:
+         #   print(f'EXODE converged at iteration {stats[0]}')
 
       elif self.exponential_solver == 'pmex':
 
@@ -95,9 +95,10 @@ class EpiStiff(Integrator):
 
          self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
 
-         if mpirank == 0:
-            print(f'KIOPS converged at iteration {stats[2]} (using {stats[0]} internal substeps and'
-                  f' {stats[1]} rejected expm) to a solution with local error {stats[4]:.2e}')
+         # comment out for scaling output
+         #if mpirank == 0:
+         #   print(f'KIOPS converged at iteration {stats[2]} (using {stats[0]} internal substeps and'
+         #         f' {stats[1]} rejected expm) to a solution with local error {stats[4]:.2e}')
 
       # Save values for the next timestep
       if self.n_prev > 0:
