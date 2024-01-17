@@ -41,6 +41,21 @@ ord_soumet -cpus 100                                  \
            -jobfile bat_files/ac/call_100_s3_ne.bat     \
            -listing $(pwd)/listings
 
+ord_soumet -cpus 100                                  \
+           -w 180                                      \
+           -jn ac_100_stats                          \
+           -mpi                                        \
+           -share e                                    \
+           -jobfile bat_files/ac/call_100_s6.bat     \
+           -listing $(pwd)/listings
+
+ord_soumet -cpus 100                                  \
+           -w 180                                      \
+           -jn ac_100_stats                          \
+           -mpi                                        \
+           -share e                                    \
+           -jobfile bat_files/ac/call_100_s3.bat     \
+           -listing $(pwd)/listings
 
 
 
@@ -88,6 +103,22 @@ ord_soumet -cpus 400                                  \
            -jobfile bat_files/ac/call_400_s6_ne.bat     \
            -listing $(pwd)/listings
 
+ord_soumet -cpus 400                                  \
+           -w 180                                      \
+           -jn ac_400_stats                          \
+           -mpi                                        \
+           -share e                                    \
+           -jobfile bat_files/ac/call_400_s3.bat     \
+           -listing $(pwd)/listings
+
+
+ord_soumet -cpus 400                                  \
+           -w 180                                      \
+           -jn ac_400_stats                          \
+           -mpi                                        \
+           -share e                                    \
+           -jobfile bat_files/ac/call_400_s6.bat     \
+           -listing $(pwd)/listings
 
 #---------------------------------------------------
 
@@ -107,5 +138,12 @@ ord_soumet -cpus 625                                  \
            -jobfile bat_files/ac/call_625_s_ne.bat     \
            -listing $(pwd)/listings
 
+ord_soumet -cpus 625                                  \
+           -w 180                                      \
+           -jn ac_625_stats                          \
+           -mpi                                        \
+           -share e                                    \
+           -jobfile bat_files/ac/call_625_s_ne1s.bat     \
+           -listing $(pwd)/listings
 
 
