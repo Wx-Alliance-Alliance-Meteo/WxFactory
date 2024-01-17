@@ -9,6 +9,6 @@ methodlen=${#methods[@]}
 #looping through each case and running it 7 times
 for ((k=0; k < $methodlen; k++)); do
    for ((j = 0; j < 7; j++)); do
-     mpirun -np 1600 python3 ./main_burg.py epi6 ${methods[${k}]}
+     mpirun -np 1600 python3 ./main_burg.py srerk6 ${methods[${k}]}
   done
 done
