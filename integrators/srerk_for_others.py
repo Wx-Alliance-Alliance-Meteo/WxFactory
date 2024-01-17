@@ -104,6 +104,14 @@ class Srerk_others(Integrator):
             print(f'PMEX 1s converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)'
                   f' to a solution with local error {stats[4]:.2e}')
 
+      #----pmex with norm estimate+1s-----
+      elif self.exponential_solver == 'pmex_ne1s':
+         z, stats = pmex_ne1s(self.c[0], matvec_handle, vec, tol=self.tol,m_init=self.krylov_size, mmin=16, mmax=64, task1=False)
+         self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
+
+         if (mpirank == 0):
+            print(f'PMEX NE+1s converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)'
+                  f' to a solution with local error {stats[4]:.2e}')
 
       #----- icwy norm estimate -----
       elif self.exponential_solver == 'icwy_ne':
@@ -123,6 +131,15 @@ class Srerk_others(Integrator):
             print(f'ICWY 1S converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)'
                   f' to a solution with local error {stats[4]:.2e}')
 
+      #----- icwy norm estimate + 1sync-----
+      elif self.exponential_solver == 'icwy_ne1s':
+         z, stats = icwy_ne1s(self.c[0], matvec_handle, vec, tol=self.tol,m_init=self.krylov_size, mmin=16, mmax=64, task1=False)
+         self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
+
+         if (mpirank == 0):
+            print(f'ICWY NE+1S converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)'
+                  f' to a solution with local error {stats[4]:.2e}')
+
       #----- cwy norm estimate -----
       elif self.exponential_solver == 'cwy_ne':
          z, stats = cwy_ne(self.c[0], matvec_handle, vec, tol=self.tol,m_init=self.krylov_size, mmin=16, mmax=64, task1=False)
@@ -139,6 +156,15 @@ class Srerk_others(Integrator):
 
          if (mpirank == 0):
             print(f'CWY 1S converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)'
+                  f' to a solution with local error {stats[4]:.2e}')
+
+      #----- cwy norm estimate + 1sync-----
+      elif self.exponential_solver == 'cwy_ne1s':
+         z, stats = cwy_ne1s(self.c[0], matvec_handle, vec, tol=self.tol,m_init=self.krylov_size, mmin=16, mmax=64, task1=False)
+         self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
+
+         if (mpirank == 0):
+            print(f'CWY NE+1S converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)'
                   f' to a solution with local error {stats[4]:.2e}')
 
       #----- dcgs2 -----
@@ -174,8 +200,7 @@ class Srerk_others(Integrator):
 
          #---original kiops---
          if self.exponential_solver == 'kiops':
-            z, stats = kiops(self.c[i_proj], matvec_handle, vec, tol=self.tol, m_init=self.krylov_size, mmin=16, mmax=64,
-                             task1=False)
+            z, stats = kiops(self.c[i_proj], matvec_handle, vec, tol=self.tol, m_init=self.krylov_size, mmin=16, mmax=64, task1=False)
 
             if (mpirank == 0):
                print(f'KIOPS converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)'
@@ -185,7 +210,6 @@ class Srerk_others(Integrator):
 
          #---pmex with norm estimate---
          elif self.exponential_solver == 'pmex':
-
             z, stats = pmex(self.c[i_proj], matvec_handle, vec, tol=self.tol, m_init=self.krylov_size, mmin=16, mmax=64, task1=False)
             self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
 
@@ -200,6 +224,15 @@ class Srerk_others(Integrator):
 
             if (mpirank == 0):
                print(f'PMEX 1s converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)'
+                     f' to a solution with local error {stats[4]:.2e}')
+
+         #----pmex with norm estimate+1s-----
+         elif self.exponential_solver == 'pmex_ne1s':
+            z, stats = pmex_ne1s(self.c[i_proj], matvec_handle, vec, tol=self.tol,m_init=self.krylov_size, mmin=16, mmax=64, task1=False)
+            self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
+
+            if (mpirank == 0):
+               print(f'PMEX NE+1s converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)'
                      f' to a solution with local error {stats[4]:.2e}')
 
          #----- icwy norm estimate -----
@@ -220,6 +253,15 @@ class Srerk_others(Integrator):
                print(f'ICWY 1S converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)'
                      f' to a solution with local error {stats[4]:.2e}')
 
+         #----- icwy norm estimate + 1sync-----
+         elif self.exponential_solver == 'icwy_ne1s':
+            z, stats = icwy_ne1s(self.c[i_proj], matvec_handle, vec, tol=self.tol,m_init=self.krylov_size, mmin=16, mmax=64, task1=False)
+            self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
+
+            if (mpirank == 0):
+               print(f'ICWY NE+1S converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)'
+                     f' to a solution with local error {stats[4]:.2e}')
+
          #----- cwy norm estimate -----
          elif self.exponential_solver == 'cwy_ne':
             z, stats = cwy_ne(self.c[i_proj], matvec_handle, vec, tol=self.tol,m_init=self.krylov_size, mmin=16, mmax=64, task1=False)
@@ -236,6 +278,15 @@ class Srerk_others(Integrator):
 
             if (mpirank == 0):
                print(f'CWY 1S converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)'
+                     f' to a solution with local error {stats[4]:.2e}')
+
+         #----- cwy norm estimate + 1sync-----
+         elif self.exponential_solver == 'cwy_ne1s':
+            z, stats = cwy_ne1s(self.c[i_proj], matvec_handle, vec, tol=self.tol,m_init=self.krylov_size, mmin=16, mmax=64, task1=False)
+            self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
+
+            if (mpirank == 0):
+               print(f'CWY NE+1S converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)'
                      f' to a solution with local error {stats[4]:.2e}')
 
          #----- dcgs2 -----
