@@ -3,8 +3,7 @@ cd /home/vma000/code/gef_tanya
 . ./load_env.sh
 
 
-methods=("kiops" "pmex_1s" "pmex" "cwy_1s")
-
+#methods=("kiops" "pmex_1s" "icwy_1s" "cwy_1s")
 
 methodlen=${#methods[@]}
 #looping through each case and running it 7 times
