@@ -3,7 +3,7 @@ cd /home/vma000/code/gef_tanya
 . ./load_env.sh
 
 
-methods=("kiops" "pmex_1s" "pmex" "cwy_1s" "cwy_ne" "icwy_1s" "icwy_ne")
+methods=("kiops" "pmex_1s" "pmex_ne1s" "icwy_1s" "icwy_ne1s" "cwy_1s" "cwy_ne1s")
 integrators=("srerk3" "srerk6")
 
 methodlen=${#methods[@]}
