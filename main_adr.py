@@ -1,7 +1,21 @@
 """
  This is the main file for running the Advection-Diffusion-Reaction
- pde. 
+ pde
 
+ u_t = epsilon(u_xx + u_yy) - alpha(u_x + u_y) - gamma*u(1-u)
+
+ with x,y in [0,1] with homogeneous Neumann boundary conditions. 
+
+ Integrating from t = [0, 0.02] with dt = 0.001.
+
+ Run with processors p = [100, 400, 625, 1600, 2500] for strong
+ scaling results. 
+
+ Runtime of the total simulation will be saved for each ortho method
+ and integrator combination.
+
+ Integrators tested: epi4, epi5, epi6, srerk3, srerk6
+ Ortho methods: kiops, pmex_{1s,ne1s,ne}, icwy_{1s,ne1s,ne}, cwy_{1s,ne1s,ne} 
 """
 
 import numpy as np
@@ -10,7 +24,7 @@ import math
 
 from mpi4py      import MPI
 from stiff_pdes  import JTV, initWorld, rhs_jac_pdefuncs, print_stuff
-from integrators import Integrator, epi_for_others
+from integrators import Integrator, epi_for_others, srerk_for_others
 from time        import time 
 
 #1. initialize world
