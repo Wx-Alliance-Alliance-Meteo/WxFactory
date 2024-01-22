@@ -77,9 +77,9 @@ def blockstats_cs(Q, geom, topo, metric, mtrx, param, step):
       normalized_energy = ( int_energy - initial_energy ) / initial_energy
       normalized_enstrophy = ( int_enstrophy - initial_enstrophy ) / initial_enstrophy
       if MPI.COMM_WORLD.rank == 0:
-         print(f'normalized integral of mass = {normalized_mass}')
-         print(f'normalized integral of energy = {normalized_energy}')
-         print(f'normalized integral of enstrophy = {normalized_enstrophy}')
+         print(f'normalized error for mass = {normalized_mass}')
+         print(f'normalized error for energy = {normalized_energy}')
+         print(f'normalized error for enstrophy = {normalized_enstrophy}')
 
    if MPI.COMM_WORLD.rank == 0:
       print("================================================================================================")

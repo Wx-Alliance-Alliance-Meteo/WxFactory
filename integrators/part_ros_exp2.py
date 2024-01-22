@@ -13,9 +13,6 @@ class PartRosExp2(Integrator):
    def __init__(self, param: Configuration, rhs_full: Callable, rhs_imp: Callable, preconditioner):
       super().__init__(param, preconditioner)
 
-      if MPI.COMM_WORLD.size > 1:
-         raise ValueError(f'RosExp2 has only been tested with 1 PE. Gotta make sure it works with more than that.')
-
       self.rhs_full = rhs_full
       self.rhs_imp = rhs_imp
       self.tol = param.tolerance

@@ -16,6 +16,8 @@ from rhs.rhs_euler             import rhs_euler
 from rhs.rhs_euler_convective  import rhs_euler_convective
 from rhs.rhs_euler_fv          import rhs_euler_fv
 from rhs.rhs_sw                import rhs_sw
+from rhs.rhs_sw_stiff          import rhs_sw_stiff
+from rhs.rhs_sw_nonstiff       import rhs_sw_nonstiff
 from rhs.rhs_advection2d       import rhs_advection2d
 
 # For type hints
@@ -50,8 +52,8 @@ class RhsBundle:
          return actual_rhs
 
       if param.equations == "euler" and isinstance(geom, CubedSphere):
-         rhs_functions = {'dg': {'cpu': rhs_euler, 'cuda': rhs_euler_cuda},
-                          'fv': {'cpu': rhs_euler, 'cuda': rhs_euler_cuda}} # <- If we had FV-specific RHS functions, we would put them here
+         rhs_functions = {'dg': {'cpu': rhs_euler,    'cuda': rhs_euler_cuda},
+                          'fv': {'cpu': rhs_euler_fv, 'cuda': rhs_euler_cuda}}
 
          self.full = generate_rhs(rhs_functions[param.discretization][param.device],
                                   geom, operators, metric, ptopo, param.nbsolpts, param.nb_elements_horizontal,
@@ -62,7 +64,7 @@ class RhsBundle:
 
       elif param.equations == 'euler' and isinstance(geom, Cartesian2D):
          dg_functions = {'cpu': rhs_bubble,    'cuda': rhs_bubble_cuda}
-         fv_functions = {'cpu': rhs_bubble_fv, 'cuda': rhs_bubble_cuda} # <- If we had a FV-specific RHS CUDA function, we would put it here
+         fv_functions = {'cpu': rhs_bubble_fv, 'cuda': rhs_bubble_cuda}
 
          flux_functions = {'ausm': ausm_2d_fv, 'upwind': upwind_2d_fv, 'rusanov': rusanov_2d_fv}
          if param.discretization == 'fv':
@@ -90,3 +92,7 @@ class RhsBundle:
          else:
             self.full = generate_rhs(
                rhs_sw, geom, operators, metric, topo, ptopo, param.nbsolpts, param.nb_elements_horizontal)
+            self.implicit = generate_rhs(rhs_sw_stiff, geom, operators, metric, topo, ptopo, param.nbsolpts,
+                                         param.nb_elements_horizontal)
+            self.explicit = generate_rhs(rhs_sw_nonstiff, geom, operators, metric, topo, ptopo, param.nbsolpts,
+                                         param.nb_elements_horizontal)
