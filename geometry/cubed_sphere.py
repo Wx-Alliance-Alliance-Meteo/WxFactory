@@ -1,7 +1,6 @@
 import math
 import numpy
 
-from main_gef    import array
 from .geometry   import Geometry
 from .sphere     import cart2sph
 
@@ -68,7 +67,8 @@ class CubedSphere(Geometry):
          Wraps parameters from the configuration pole that are not otherwise specified in this
          constructor.
       '''
-      super().__init__(nbsolpts, 'cubed_sphere')
+      super().__init__(nbsolpts, 'cubed_sphere', param.array_module)
+      xp = self.array_module
 
       ## Panel / parallel decomposition properties
       self.ptopo = ptopo
@@ -164,22 +164,22 @@ class CubedSphere(Geometry):
       self.itf_k_shape_2d = (nj,ni)  
 
       # Assign a token zbot, potentially to be overridden later with supplied topography
-      self.zbot = array.zeros(self.grid_shape_2d)
+      self.zbot = xp.zeros(self.grid_shape_2d)
 
       ## Coordinate vectors for the numeric / angular coordinate system
 
       # Define the base coordinate.  x1 and x2 are fundamentally 1D arrays,
       # while x3 and eta are 3D arrays in support of coordinate mapping
 
-      x1 = array.empty(ni)
-      x2 = array.empty(nj)
-      x3 = array.empty(self.grid_shape_3d)
-      eta = array.empty(self.grid_shape_3d)
+      x1 = xp.empty(ni)
+      x2 = xp.empty(nj)
+      x3 = xp.empty(self.grid_shape_3d)
+      eta = xp.empty(self.grid_shape_3d)
 
       # # 1D element-counting arrays, for coordinate assignment
-      elements_x1 = numpy.arange(nb_elements_x1, like=x1)
-      elements_x2 = numpy.arange(nb_elements_x2, like=x2)
-      elements_x3 = numpy.arange(nb_elements_x3, like=x3)
+      elements_x1 = xp.arange(nb_elements_x1)
+      elements_x2 = xp.arange(nb_elements_x2)
+      elements_x3 = xp.arange(nb_elements_x3)
 
       # Assign the coordinates, using numpy's broadcasting
       # First, reshape the coordinate to segregate the element interior into its own dimension
@@ -213,10 +213,10 @@ class CubedSphere(Geometry):
 
 
       # Repeat for the interface values
-      x1_itf_i = numpy.empty(nb_elements_x1 + 1, like=x1)  # 1D array
-      x2_itf_i = numpy.empty(nj, like=x2)  # 1D array
-      x3_itf_i = numpy.empty(self.itf_i_shape_3d, like=x3)  # 3D array
-      eta_itf_i = numpy.empty(self.itf_i_shape_3d, like=eta) # 3D array
+      x1_itf_i = xp.empty(nb_elements_x1 + 1)  # 1D array
+      x2_itf_i = xp.empty(nj)  # 1D array
+      x3_itf_i = xp.empty(self.itf_i_shape_3d)  # 3D array
+      eta_itf_i = xp.empty(self.itf_i_shape_3d) # 3D array
 
       x1_itf_i[:-1] = domain_x1[0] + Δx1*elements_x1[:] # Left edges
       x1_itf_i[-1] = domain_x1[1] # Right edge
@@ -224,10 +224,10 @@ class CubedSphere(Geometry):
       x3_itf_i[:,:,:] = x3[:,:,0:1] # Same for x3
       eta_itf_i[:,:,:] = eta[:,:,0:1]
 
-      x1_itf_j = numpy.empty(ni, like=x1) # n.b. 1D array
-      x2_itf_j = numpy.empty(nb_elements_x2 + 1, like=x2) # Also 1D array
-      x3_itf_j = numpy.empty(self.itf_j_shape_3d, like=x3) # 3D array
-      eta_itf_j = numpy.empty(self.itf_j_shape_3d, like=eta) # 3D array
+      x1_itf_j = xp.empty(ni) # n.b. 1D array
+      x2_itf_j = xp.empty(nb_elements_x2 + 1) # Also 1D array
+      x3_itf_j = xp.empty(self.itf_j_shape_3d) # 3D array
+      eta_itf_j = xp.empty(self.itf_j_shape_3d) # 3D array
 
       x1_itf_j[:] = x1[:]
       x2_itf_j[:-1] = domain_x2[0] + Δx2*elements_x2[:] # South edges
@@ -235,10 +235,10 @@ class CubedSphere(Geometry):
       x3_itf_j[:,:,:] = x3[:,0:1,:]
       eta_itf_j[:,:,:] = eta[:,0:1,:]
 
-      x1_itf_k = numpy.empty(ni, like=x1)
-      x2_itf_k = numpy.empty(nj, like=x2)
-      x3_itf_k = numpy.empty(self.itf_k_shape_3d, like=x3)
-      eta_itf_k = numpy.empty(self.itf_k_shape_3d, like=eta)
+      x1_itf_k = xp.empty(ni)
+      x2_itf_k = xp.empty(nj)
+      x3_itf_k = xp.empty(self.itf_k_shape_3d)
+      eta_itf_k = xp.empty(self.itf_k_shape_3d)
 
       x1_itf_k[:] = x1[:]
       x2_itf_k[:] = x2[:]

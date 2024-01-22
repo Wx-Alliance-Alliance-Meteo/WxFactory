@@ -5,7 +5,6 @@ __all__ = ['cuda_avail', 'num_devices',
 from mpi4py import MPI
 import numpy
 
-import main_gef
 
 num_devices = 0
 loading_error = None
@@ -37,13 +36,11 @@ if MPI.COMM_WORLD.rank == 0:
    print(f'CUDA is {avail}')
 
 if cuda_avail:
-   main_gef.array = cupy
    # import cuda-related modules
    from .kiops_cuda      import kiops_cuda
    from .rhs_bubble_cuda import rhs_bubble_cuda
    from .rhs_euler_cuda  import rhs_euler_cuda
 else:
-   main_gef.array = numpy
    # define stubs
    def dummy(*args, **kwargs):
       raise ValueError(f'No one should ever call me')

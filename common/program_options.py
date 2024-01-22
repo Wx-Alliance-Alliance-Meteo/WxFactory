@@ -2,6 +2,7 @@ from configparser import ConfigParser, NoSectionError, NoOptionError
 import json
 import re
 import copy
+import sys
 from typing       import Any, Dict, List, Optional, Type, TypeVar, Union, Self
 
 __all__ = ['Configuration']
@@ -23,6 +24,8 @@ class Configuration:
          print(self.parser.sections())
          print(' ')
 
+      self.array_module = 'numpy' # Default value, may change depending on selected options
+
       self.equations = self._get_option('General', 'equations', str, None, ['euler', 'shallow_water'])
       if self.equations == 'euler':
          self.depth_approx = self._get_option('General', 'depth_approx', str, 'deep', ['deep','shallow'])
@@ -38,6 +41,7 @@ class Configuration:
          from gef_cuda import num_devices
          if num_devices > 0:
             self.cuda_devices = self._get_option('System', 'cuda_devices', List[int], list(range(num_devices)))
+            self.array_module = 'cupy'
          else:
             if verbose:
                print(f'WARNING: Config is asking for CUDA, but we\'re unable to find any CUDA device, '
@@ -180,10 +184,12 @@ class Configuration:
 
       self.solver_stats_file = self._get_option('Output_options', 'solver_stats_file', str, 'solver_stats.db')
 
-      if verbose: print(f'{self}')
+      if verbose:
+         print(f'{self}')
+         sys.stdout.flush()
 
    def __deepcopy__(self: Self, memo) -> Self:
-      do_not_deepcopy = {"array_module"}
+      do_not_deepcopy = {}
       other = copy.copy(self)
       for k, v in vars(self).items():
          if k not in do_not_deepcopy:

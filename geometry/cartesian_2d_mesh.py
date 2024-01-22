@@ -1,14 +1,10 @@
-from typing import Tuple
+from typing import Self, Tuple
 
 import numpy
 
 from common.graphx   import print_mountain
-from .geometry       import Geometry
-from main_gef        import array
-
-# typing
-from typing import Self
 from common.program_options import Configuration
+from .geometry       import Geometry
 
 class Cartesian2D(Geometry):
    def __init__(self: Self,
@@ -18,8 +14,10 @@ class Cartesian2D(Geometry):
                 nb_elements_z: int,
                 nbsolpts: int,
                 nb_elements_relief_layer: int,
-                relief_layer_height: int):
-      super().__init__(nbsolpts, 'cartesian2d')
+                relief_layer_height: int,
+                array_module: str):
+      super().__init__(nbsolpts, 'cartesian2d', array_module)
+      xp = self.array_module
 
       scaled_points = 0.5 * (1.0 + self.solutionPoints)
 
@@ -58,7 +56,7 @@ class Cartesian2D(Geometry):
       else:
          Δx3 = (domain_z[1] - domain_z[0]) / nb_elements_z
          Δrelief_layer = 0 # being lazy ...
-         itf_x3 = array.linspace(start=domain_z[0], stop=domain_z[1], num=nb_elements_z + 1)
+         itf_x3 = xp.linspace(start=domain_z[0], stop=domain_z[1], num=nb_elements_z + 1)
 
          for i in range(nb_elements_z):
             idz = i * nbsolpts

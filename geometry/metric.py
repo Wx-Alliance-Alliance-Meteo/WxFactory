@@ -21,6 +21,8 @@ class Metric3DTopo:
       geom = self.geom
       matrix = self.matrix
 
+      xp = geom.array_module
+
       # Whether computing deep or shallow metric
       deep = self.deep
 
@@ -93,10 +95,10 @@ class Metric3DTopo:
       # exchange code demands contravariant components, and dRd(...) is covariant.  We can perform the conversion
       # by constructing a (temporary) 2D metric in terms of X and Y only at the interfaces:
 
-      metric_2d_contra_itf_i = numpy.zeros((2,2) + geom.itf_i_shape_3d, like=X_itf_i)
-      metric_2d_contra_itf_j = numpy.zeros((2,2) + geom.itf_j_shape_3d, like=X_itf_j)
-      metric_2d_cov_itf_i = numpy.zeros((2,2) + geom.itf_i_shape_3d, like=X_itf_i)
-      metric_2d_cov_itf_j = numpy.zeros((2,2) + geom.itf_j_shape_3d, like=X_itf_j)
+      metric_2d_contra_itf_i = xp.zeros((2,2) + geom.itf_i_shape_3d)
+      metric_2d_contra_itf_j = xp.zeros((2,2) + geom.itf_j_shape_3d)
+      metric_2d_cov_itf_i = xp.zeros((2,2) + geom.itf_i_shape_3d)
+      metric_2d_cov_itf_j = xp.zeros((2,2) + geom.itf_j_shape_3d)
 
       for (metric_contra, metric_cov, X, Y) in zip((metric_2d_contra_itf_i, metric_2d_contra_itf_j),
                                                    (metric_2d_cov_itf_i, metric_2d_cov_itf_j),
@@ -116,14 +118,14 @@ class Metric3DTopo:
       # Arrays for boundary info:  arrays for parallel exchange have a different shape than the 'natural' extrapolation,
       # in order for the MPI exchange to occur with contiguous subarrays.
 
-      exch_itf_i = numpy.zeros((3,geom.nk,geom.nb_elements_x1+2,2,geom.nj), like=X_itf_i)
-      exch_itf_j = numpy.zeros((3,geom.nk,geom.nb_elements_x2+2,2,geom.ni), like=X_itf_j)
+      exch_itf_i = xp.zeros((3,geom.nk,geom.nb_elements_x1+2,2,geom.nj))
+      exch_itf_j = xp.zeros((3,geom.nk,geom.nb_elements_x2+2,2,geom.ni))
 
       # Perform extrapolation.  Extrapolation in i and j will be written to arrays for exchange, but k does not
       # require an exchange; we can average directly and will handle this afterwards
-      dRdx1_itf_k = numpy.empty_like(R_itf_k)
-      dRdx2_itf_k = numpy.empty_like(R_itf_k)
-      dRdeta_itf_k = numpy.empty_like(R_itf_k)
+      dRdx1_itf_k = xp.empty_like(R_itf_k)
+      dRdx2_itf_k = xp.empty_like(R_itf_k)
+      dRdeta_itf_k = xp.empty_like(R_itf_k)
 
       # Extrapolate the interior values to each edge
       dRdx1_extrap_i = matrix.extrapolate_i(dRdx1_int, geom) # Output dims: (nk,nj,nel_x,2)
@@ -187,12 +189,12 @@ class Metric3DTopo:
          exch_itf_j[:,:,-1,0,:] = exch_itf_j[:,:,-2,1,:]
 
       # Define the averaged interface values
-      dRdx1_itf_i = numpy.empty_like(R_itf_i)
-      dRdx2_itf_i = numpy.empty_like(R_itf_i)
-      dRdeta_itf_i = numpy.empty_like(R_itf_i)
-      dRdx1_itf_j = numpy.empty_like(R_itf_j)
-      dRdx2_itf_j = numpy.empty_like(R_itf_j)
-      dRdeta_itf_j = numpy.empty_like(R_itf_j)
+      dRdx1_itf_i = xp.empty_like(R_itf_i)
+      dRdx2_itf_i = xp.empty_like(R_itf_i)
+      dRdeta_itf_i = xp.empty_like(R_itf_i)
+      dRdx1_itf_j = xp.empty_like(R_itf_j)
+      dRdx2_itf_j = xp.empty_like(R_itf_j)
+      dRdeta_itf_j = xp.empty_like(R_itf_j)
 
       # i-interface values
       for bdy in range(geom.nb_elements_x1+1):
@@ -226,20 +228,20 @@ class Metric3DTopo:
       # Initialize metric arrays
 
       # Covariant space-only metric
-      H_cov = numpy.empty((3,3) + X_int.shape, like=X_int)
-      H_cov_itf_i = numpy.empty((3,3) + X_itf_i.shape, like=X_itf_i)
-      H_cov_itf_j = numpy.empty((3,3) + X_itf_j.shape, like=X_itf_j)
-      H_cov_itf_k = numpy.empty((3,3) + X_itf_k.shape, like=X_itf_k)
+      H_cov = xp.empty((3,3) + X_int.shape)
+      H_cov_itf_i = xp.empty((3,3) + X_itf_i.shape)
+      H_cov_itf_j = xp.empty((3,3) + X_itf_j.shape)
+      H_cov_itf_k = xp.empty((3,3) + X_itf_k.shape)
 
-      H_contra = numpy.empty((3,3) + X_int.shape, like=X_int)
-      H_contra_itf_i = numpy.empty((3,3) + X_itf_i.shape, like=X_itf_i)
-      H_contra_itf_j = numpy.empty((3,3) + X_itf_j.shape, like=X_itf_j)
-      H_contra_itf_k = numpy.empty((3,3) + X_itf_k.shape, like=X_itf_k)
+      H_contra = xp.empty((3,3) + X_int.shape)
+      H_contra_itf_i = xp.empty((3,3) + X_itf_i.shape)
+      H_contra_itf_j = xp.empty((3,3) + X_itf_j.shape)
+      H_contra_itf_k = xp.empty((3,3) + X_itf_k.shape)
 
-      sqrtG = numpy.empty_like(X_int)
-      sqrtG_itf_i = numpy.empty_like(X_itf_i)
-      sqrtG_itf_j = numpy.empty_like(X_itf_j)
-      sqrtG_itf_k = numpy.empty_like(X_itf_k)
+      sqrtG = xp.empty_like(X_int)
+      sqrtG_itf_i = xp.empty_like(X_itf_i)
+      sqrtG_itf_j = xp.empty_like(X_itf_j)
+      sqrtG_itf_k = xp.empty_like(X_itf_k)
 
       # Loop over the interior and interface variants of the fields, computing the metric terms
       for (Hcov, Hcontra, rootG, X, Y, R, dRdx1, dRdx2, dRdeta) in \
@@ -288,7 +290,7 @@ class Metric3DTopo:
                                           2*dRdx1*dRdx2*X*Y*delsq/(R**2*(1+X**2)*(1+Y**2)) + \
                                           dRdx2**2*delsq/(R**2*(1+Y**2)))/dRdeta**2
 
-            rootG[:] = (Δx/2)*(Δy/2)*(Δeta/2)*R**2*(1+X**2)*(1+Y**2)*numpy.abs(dRdeta)/delsq**(1.5)  
+            rootG[:] = (Δx/2)*(Δy/2)*(Δeta/2)*R**2*(1+X**2)*(1+Y**2)*xp.abs(dRdeta)/delsq**(1.5)  
          else: # Shallow, so all bare R terms become A terms
             Hcov[0,0,:] = (Δx**2/4)*(A**2/del4*(1+X**2)**2*(1+Y**2) + dRdx1**2) # g_11
 
@@ -322,7 +324,7 @@ class Metric3DTopo:
                                           2*dRdx1*dRdx2*X*Y*delsq/(A**2*(1+X**2)*(1+Y**2)) + \
                                           dRdx2**2*delsq/(A**2*(1+Y**2)))/dRdeta**2
 
-            rootG[:] = (Δx/2)*(Δy/2)*(Δeta/2)*A**2*(1+X**2)*(1+Y**2)*numpy.abs(dRdeta)/delsq**(1.5)  
+            rootG[:] = (Δx/2)*(Δy/2)*(Δeta/2)*A**2*(1+X**2)*(1+Y**2)*xp.abs(dRdeta)/delsq**(1.5)  
 
 
       ## Computation of the Christoffel symbols
@@ -400,24 +402,24 @@ class Metric3DTopo:
       # Because we assume the quality of mixed partial derivatives (d^2f/dadb = d^2f/dbda), we need to extend _(i,j,k)
       # for x1, _(j,k) for x2, and only _k for eta.
 
-      dRdx1_ext_i = numpy.stack((dRdx1_itf_i[:, :, :-1], # min-i boundary
+      dRdx1_ext_i = xp.stack((dRdx1_itf_i[:, :, :-1], # min-i boundary
                                  dRdx1_itf_i[:, :, 1:]), # max-i boundary
                                 axis=-1)
-      dRdx1_ext_j = numpy.stack((dRdx1_itf_j[:, :-1, :], # min-j boundary
+      dRdx1_ext_j = xp.stack((dRdx1_itf_j[:, :-1, :], # min-j boundary
                                  dRdx1_itf_j[:, 1:, :]), # max-j boundary
                                 axis=-2)
-      dRdx1_ext_k = numpy.stack((dRdx1_itf_k[:-1, :, :], # min-k boundary
+      dRdx1_ext_k = xp.stack((dRdx1_itf_k[:-1, :, :], # min-k boundary
                                  dRdx1_itf_k[1:, :, :]), # max-k boundary
                                 axis=-3)
 
-      dRdx2_ext_j = numpy.stack((dRdx2_itf_j[:, :-1, :], # min-j boundary
+      dRdx2_ext_j = xp.stack((dRdx2_itf_j[:, :-1, :], # min-j boundary
                                  dRdx2_itf_j[:, 1:, :]), # max-j boundary
                                 axis=-2)
-      dRdx2_ext_k = numpy.stack((dRdx2_itf_k[:-1, :, :], # min-k boundary
+      dRdx2_ext_k = xp.stack((dRdx2_itf_k[:-1, :, :], # min-k boundary
                                  dRdx2_itf_k[1:, :, :]), # max-k boundary
                                 axis=-3)
 
-      dRdeta_ext_k = numpy.stack((dRdeta_itf_k[:-1, :, :], # min-k boundary
+      dRdeta_ext_k = xp.stack((dRdeta_itf_k[:-1, :, :], # min-k boundary
                                   dRdeta_itf_k[1:, :, :]), # max-k boundary
                                  axis=-3)
 
@@ -543,8 +545,8 @@ class Metric3DTopo:
          nj = geom.nj
          nk = geom.nk
 
-         c_rhs = numpy.empty((nk,nj,ni,3,3,3), like=sqrtG) # h(i,j,k)^(ab)_(,c)
-         c_lhs = numpy.zeros((nk,nj,ni,3,3,3,3,3,3), like=sqrtG) # Γ(i,j,k)^d_{ef} for row (ab,c)
+         c_rhs = xp.empty((nk,nj,ni,3,3,3)) # h(i,j,k)^(ab)_(,c)
+         c_lhs = xp.zeros((nk,nj,ni,3,3,3,3,3,3)) # Γ(i,j,k)^d_{ef} for row (ab,c)
 
          if (verbose and geom.ptopo.rank == 0):
             print('Assembling linear operator for Γ')
