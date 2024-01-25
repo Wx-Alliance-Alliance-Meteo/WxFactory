@@ -4,8 +4,7 @@ from mpi4py import MPI
 import numpy
 import scipy.linalg
 
-def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 1, mmax = 128, reuse_info = True, task1 = False):
-   
+def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 10, mmax = 128, reuse_info = True, task1 = False):
 
    ppo, n = u.shape
    p = ppo - 1
@@ -26,16 +25,15 @@ def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 1, mmax = 128, reuse_in
    happy   = False
    j       = 0
    conv    = 0.0
-
+   reg_comm_nrm = 0
    numSteps = len(τ_out)
 
    first_accepted = True
 
    if not hasattr(pmex, "static_mem") or reuse_info is False:
       pmex.static_mem = True
-      pmex.suggested_step = τ_end 
+      pmex.suggested_step = τ_end
       pmex.suggested_m = mmax
-      m_init = 1
       m_opt  = 1
    else:
       m_init = pmex.suggested_m
@@ -127,15 +125,12 @@ def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 1, mmax = 128, reuse_in
          V[j, -1     ] = 0.0
 
          #2. compute terms needed for R and T
-         local_vec = V[0:j+1, 0:n] @ V[j-1:j+1, 0:n].T
+         local_vec  = V[0:j+1, 0:n] @ V[j-1:j+1, 0:n].T
          global_vec = numpy.empty_like(local_vec)
          MPI.COMM_WORLD.Allreduce([local_vec, MPI.DOUBLE], [global_vec, MPI.DOUBLE])
          global_vec += V[0:j+1, n:n+p] @ V[j-1:j+1, n:n+p].T
 
-         #3. set values for Hessenberg matrix H
-         H[0:j, j-1] = global_vec[0:j,1]
-
-         #4. Projection with 2-step Gauss-Seidel to the orthogonal complement
+         #3. Projection with 2-step Gauss-Seidel to the orthogonal complement
          # Note: this is done in two steps. (1) matvec and (2) a lower
          # triangular solve
          # 4a. here we set the values for matrix M, Minv, N
@@ -144,25 +139,31 @@ def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 1, mmax = 128, reuse_in
            N[0:j-1, j-1]    = -global_vec[0:j-1,0]
            Minv[j-1, 0:j-1] = -global_vec[0:j-1,0].T @ Minv[0:j-1, 0:j-1]
 
-         #4b. part 1: the mat-vec
+         #3b. part 1: the mat-vec
          rhs = ( numpy.eye(j) + numpy.matmul(N[0:j, 0:j], Minv[0:j,0:j]) ) @ global_vec[0:j,1]
 
-         #4c. part 2: the lower triangular solve
+         #3c. part 2: the lower triangular solve
          sol = scipy.linalg.solve_triangular(M[0:j, 0:j], rhs, unit_diagonal=True, check_finite=False, overwrite_b=True)
 
-         #5. Orthogonalize
+         #4. Orthogonalize
          V[j, :] -= sol @ V[0:j, :]
 
-         #7. compute norm estimate
-         sum_sqrd = sum(global_vec[0:j,1]**2)
+         #5. compute norm estimate with quad precision
+         sum_vec  = numpy.array(global_vec[0:j,1], numpy.float128)**2
+         sum_sqrd = numpy.sum(sum_vec)
+
+         #sum_sqrd = sum(global_vec[0:j,1]**2)
          if (global_vec[-1,1] < sum_sqrd):
             #use communication to compute norm estimate
             local_sum = V[j, 0:n] @ V[j, 0:n]
             global_sum_nrm = numpy.empty_like(local_sum)
             MPI.COMM_WORLD.Allreduce([local_sum, MPI.DOUBLE], [global_sum_nrm, MPI.DOUBLE])
             curr_nrm = math.sqrt( global_sum_nrm + V[j,n:n+p] @ V[j, n:n+p] )
+            reg_comm_nrm += 1
          else:
-           curr_nrm = numpy.sqrt(global_vec[-1,1] - sum_sqrd)
+
+           #compute norm estimate in quad precision
+           curr_nrm = numpy.array(numpy.sqrt(global_vec[-1,1] - sum_sqrd), numpy.float64)
 
          # Happy breakdown
          if curr_nrm < tol:
@@ -170,8 +171,9 @@ def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 1, mmax = 128, reuse_in
             break
 
          # Normalize vector and set norm to H matrix
-         V[j,:] /= curr_nrm
-         H[j,j-1] = curr_nrm
+         V[j,:]     /= curr_nrm
+         H[j,j-1]    = curr_nrm
+         H[0:j, j-1] = sol
 
          krystep += 1
 
@@ -257,10 +259,12 @@ def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 1, mmax = 128, reuse_in
          reject += ireject
          step   += 1
 
+         """
          if first_accepted:
-            pmex.suggested_step = min(pmex.suggested_step, τ) 
+            pmex.suggested_step = min(pmex.suggested_step, τ)
             pmex.suggested_m    = min(pmex.suggested_m, m_opt)
             first_accepted = False
+         """
 
          # Udate for τ_out in the interval (τ_now, τ_now + τ)
          blownTs = 0
@@ -309,6 +313,8 @@ def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 1, mmax = 128, reuse_in
       for k in range(numSteps):
          w[k, :] = w[k, :] / τ_out[k]
 
-   stats = (step, reject, krystep, exps, conv)
-  
+   m_ret=m
+
+   stats = (step, reject, krystep, exps, conv, m_ret, reg_comm_nrm)
+
    return w, stats
