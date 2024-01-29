@@ -121,7 +121,7 @@ class CubedSphere(Geometry):
       Δeta = (domain_eta[1] - domain_eta[0]) / nb_elements_x3
 
       # Reset Δx3 to a nonzero value if ztop=0, as for shallow water
-      if (Δx3 == 0): Δx3 = 1
+      if Δx3 == 0: Δx3 = 1
 
       self.Δx1 = Δx1
       self.Δx2 = Δx2
@@ -171,81 +171,57 @@ class CubedSphere(Geometry):
       # Define the base coordinate.  x1 and x2 are fundamentally 1D arrays,
       # while x3 and eta are 3D arrays in support of coordinate mapping
 
-      x1 = xp.empty(ni)
-      x2 = xp.empty(nj)
-      x3 = xp.empty(self.grid_shape_3d)
-      eta = xp.empty(self.grid_shape_3d)
 
       # # 1D element-counting arrays, for coordinate assignment
       elements_x1 = xp.arange(nb_elements_x1)
       elements_x2 = xp.arange(nb_elements_x2)
       elements_x3 = xp.arange(nb_elements_x3)
 
-      # Assign the coordinates, using numpy's broadcasting
-      # First, reshape the coordinate to segregate the element interior into its own dimension
-      x1.shape = (nb_elements_x1,nbsolpts)
-      # Then broadcast the coordinate into the variable, using the structure:
-      # <minimum> + <delta_element>*<element number> + <delta_inner>*<solutionPoints>
-      x1[:] = domain_x1[0] + Δx1*elements_x1[:,numpy.newaxis] + \
-                  Δx1/Δcomp*(-minComp + self.solutionPoints[numpy.newaxis,:])
-      # Finally, reshape back to the unified view   
-      x1.shape = (ni,)
+      x1 = xp.array(domain_x1[0] + Δx1 * elements_x1[:, numpy.newaxis] + \
+                    Δx1 / Δcomp * (-minComp + self.solutionPoints[numpy.newaxis, :])).reshape((ni,))
+      x2 = xp.array(domain_x2[0] + Δx2 * elements_x2[:, numpy.newaxis] + \
+                    Δx2 / Δcomp * (-minComp + self.solutionPoints[numpy.newaxis, :])).reshape((nj,))
 
-      # Repeat for x2, x3, and eta
-      x2.shape = (nb_elements_x2,nbsolpts)
-      x2[:] = domain_x2[0] + Δx2*elements_x2[:,numpy.newaxis] + \
-                  Δx2/Δcomp*(-minComp + self.solutionPoints[numpy.newaxis,:])
-      x2.shape = (nj,)
+      if ztop > 0: # Note that x3 and eta are 3D arrays
+         x3 = xp.broadcast_to(xp.array(
+                  domain_x3[0] + Δx3 * elements_x3[:, numpy.newaxis, numpy.newaxis, numpy.newaxis] + \
+                  Δx3/Δcomp*(-minComp + self.solutionPoints[numpy.newaxis, :, numpy.newaxis, numpy.newaxis])),
+              (nb_elements_x3, nbsolpts, nj, ni)) \
+              .reshape(self.grid_shape_3d)
 
-      if (ztop > 0): # Note that x3 and eta are 3D arrays
-         x3.shape = (nb_elements_x3,nbsolpts,nj,ni)
-         x3[:] = domain_x3[0] + Δx3*elements_x3[:,numpy.newaxis,numpy.newaxis,numpy.newaxis] + \
-                     Δx3/Δcomp*(-minComp + self.solutionPoints[numpy.newaxis,:,numpy.newaxis,numpy.newaxis])
-         x3.shape = self.grid_shape_3d
-
-         eta.shape = (nb_elements_x3,nbsolpts,nj,ni)
-         eta[:] = domain_eta[0] + Δeta*elements_x3[:,numpy.newaxis,numpy.newaxis,numpy.newaxis] + \
-                     Δeta/Δcomp*(-minComp + self.solutionPoints[numpy.newaxis,:,numpy.newaxis,numpy.newaxis])
-         eta.shape = self.grid_shape_3d
+         eta = xp.broadcast_to(xp.array(
+                  domain_eta[0] + Δeta*elements_x3[:, numpy.newaxis, numpy.newaxis, numpy.newaxis] + \
+                  Δeta / Δcomp * (-minComp + self.solutionPoints[numpy.newaxis, :, numpy.newaxis, numpy.newaxis])),
+               (nb_elements_x3, nbsolpts, nj, ni)) \
+               .reshape(self.grid_shape_3d)
       else:
-         x3[:] = 0
-         eta[:] = 0
+         x3 = xp.zeros(self.grid_shape_3d, dtype=xp.float64)
+         eta = xp.zeros(self.grid_shape_3d, dtype=xp.float64)
 
 
       # Repeat for the interface values
-      x1_itf_i = xp.empty(nb_elements_x1 + 1)  # 1D array
-      x2_itf_i = xp.empty(nj)  # 1D array
-      x3_itf_i = xp.empty(self.itf_i_shape_3d)  # 3D array
-      eta_itf_i = xp.empty(self.itf_i_shape_3d) # 3D array
+      x1_itf_i  = xp.append(domain_x1[0] + Δx1*elements_x1[:], domain_x1[-1]) # 1D array
+      x2_itf_i  = x2.copy() # 1D array
+      x3_itf_i  = xp.broadcast_to(x3[:,:,0:1], self.itf_i_shape_3d) # 3D array
+      eta_itf_i = xp.broadcast_to(eta[:,:,0:1], self.itf_i_shape_3d) # 3D array
 
-      x1_itf_i[:-1] = domain_x1[0] + Δx1*elements_x1[:] # Left edges
-      x1_itf_i[-1] = domain_x1[1] # Right edge
-      x2_itf_i[:] = x2[:] # Copy over x2, without change because of tensor product structure
-      x3_itf_i[:,:,:] = x3[:,:,0:1] # Same for x3
-      eta_itf_i[:,:,:] = eta[:,:,0:1]
+      # print(f'eta itf i shape = {eta_itf_i.shape}, itf i shape 3d = {self.itf_i_shape_3d}, x1_itf_i shape = {x1_itf_i.shape}')
 
-      x1_itf_j = xp.empty(ni) # n.b. 1D array
-      x2_itf_j = xp.empty(nb_elements_x2 + 1) # Also 1D array
-      x3_itf_j = xp.empty(self.itf_j_shape_3d) # 3D array
-      eta_itf_j = xp.empty(self.itf_j_shape_3d) # 3D array
+      x1_itf_j  = x1.copy()
+      x2_itf_j  = xp.append(domain_x2[0] + Δx2*elements_x2[:], domain_x2[1])
+      x3_itf_j  = xp.broadcast_to(x3[:,0:1,:], self.itf_j_shape_3d)
+      eta_itf_j = xp.broadcast_to(eta[:,0:1,:], self.itf_j_shape_3d)
 
-      x1_itf_j[:] = x1[:]
-      x2_itf_j[:-1] = domain_x2[0] + Δx2*elements_x2[:] # South edges
-      x2_itf_j[-1] = domain_x2[1] # North edge
-      x3_itf_j[:,:,:] = x3[:,0:1,:]
-      eta_itf_j[:,:,:] = eta[:,0:1,:]
-
-      x1_itf_k = xp.empty(ni)
-      x2_itf_k = xp.empty(nj)
-      x3_itf_k = xp.empty(self.itf_k_shape_3d)
-      eta_itf_k = xp.empty(self.itf_k_shape_3d)
-
-      x1_itf_k[:] = x1[:]
-      x2_itf_k[:] = x2[:]
-      x3_itf_k[:-1,:,:] = domain_x3[0] + Δx3*elements_x3[:,numpy.newaxis,numpy.newaxis] # Bottom edges
-      x3_itf_k[-1,:,:] = domain_x3[1]
-      eta_itf_k[:-1,:,:] = domain_eta[0] + Δeta*elements_x3[:,numpy.newaxis,numpy.newaxis]
-      eta_itf_k[-1,:,:] = domain_eta[1]
+      x1_itf_k = x1.copy()
+      x2_itf_k = x2.copy()
+      x3_itf_k = xp.append(xp.broadcast_to(domain_x3[0] + Δx3*elements_x3[:,numpy.newaxis,numpy.newaxis],
+                                           (nb_elements_x3, nj, ni)),
+                           xp.broadcast_to(domain_x3[1], (1, nj, ni)),
+                           axis=0)
+      eta_itf_k = xp.append(xp.broadcast_to(domain_eta[0] + Δeta*elements_x3[:,numpy.newaxis,numpy.newaxis],
+                                            (nb_elements_x3, nj, ni)),
+                            xp.broadcast_to(domain_eta[1], (1, nj, ni)),
+                            axis=0)
 
       self.x1 = x1
       self.x2 = x2
@@ -405,6 +381,8 @@ class CubedSphere(Geometry):
       # interior points, i-boundaries, and j-boundaries.  This function applies a linear mapping,
       # where η=0 corresponds to the given surface and η=1 corresponds to the top.
 
+      xp = self.array_module
+
       # First, preserve the topography
       self.zbot = zbot.copy()
       self.zbot_itf_i = zbot_itf_i.copy()
@@ -414,10 +392,10 @@ class CubedSphere(Geometry):
 
       # To apply the topography, we need to redefine self.x3 and its interfaced versions.
 
-      self.x3[:,:,:] = zbot[numpy.newaxis,:,:] + (ztop - zbot[numpy.newaxis,:,:])*self.eta # shape k, j, i
-      self.x3_itf_i[:,:,:] = zbot_itf_i[numpy.newaxis,:,:] + (ztop - zbot_itf_i[numpy.newaxis,:,:])*self.eta_itf_i # shape k, j, itf_i
-      self.x3_itf_j[:,:,:] = zbot_itf_j[numpy.newaxis,:,:] + (ztop - zbot_itf_j[numpy.newaxis,:,:])*self.eta_itf_j # shape k, itf_j, i
-      self.x3_itf_k[:,:,:] = zbot[numpy.newaxis,:,:] + (ztop - zbot[numpy.newaxis,:,:])*self.eta_itf_k # shape itf_k, j, i
+      self.x3 = zbot[numpy.newaxis,:,:] + (ztop - zbot[numpy.newaxis,:,:])*self.eta # shape k, j, i
+      self.x3_itf_i = zbot_itf_i[numpy.newaxis,:,:] + (ztop - zbot_itf_i[numpy.newaxis,:,:])*self.eta_itf_i # shape k, j, itf_i
+      self.x3_itf_j = zbot_itf_j[numpy.newaxis,:,:] + (ztop - zbot_itf_j[numpy.newaxis,:,:])*self.eta_itf_j # shape k, itf_j, i
+      self.x3_itf_k = zbot[numpy.newaxis,:,:] + (ztop - zbot[numpy.newaxis,:,:])*self.eta_itf_k # shape itf_k, j, i
 
       # Now, rebuild the physical coordinates to re-generate X/Y/Z and the Cartesian coordinates
       self._build_physical_coordinates()

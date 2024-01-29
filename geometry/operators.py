@@ -2,8 +2,8 @@ import numpy
 import numpy.linalg
 import math
 import sympy
-from typing import Optional
-from typing import Self, TypeVar
+from types import ModuleType
+from typing import Optional, Self, TypeVar
 
 from numpy.typing import NDArray
 
@@ -43,14 +43,16 @@ class DFROperators:
          If applied, at what relative wavenumber (0 < cutoff < 1) to begin applying the filter
       '''
 
+      xp = grd.array_module
+
       if param.filter_apply and not isinstance(grd.solutionPoints, numpy.ndarray):
          raise NotImplementedError("DFROperators cannot form a filter with non-numpy arrays")
 
       # Build Vandermonde matrix to transform the modal representation to the (interior)
       # nodal representation
-      V = legvander(grd.solutionPoints,grd.nbsolpts-1)
+      V = legvander(grd.solutionPoints, grd.nbsolpts - 1, xp)
       # Invert the matrix to transform from interior nodes to modes
-      invV = numpy.linalg.inv(V)
+      invV = xp.linalg.inv(V)
 
       # Build the negative and positive-side extrapolation matrices by:
       # *) transforming interior nodes to modes
@@ -58,8 +60,8 @@ class DFROperators:
 
       # Note that extrap_neg and extrap_pos should be vectors, not a one-row matrix; numpy
       # treats the two differently.
-      extrap_neg = (legvander(numpy.array([-1.], like=V), grd.nbsolpts - 1) @ invV).reshape((-1,))
-      extrap_pos = (legvander(numpy.array([+1.], like=V), grd.nbsolpts - 1) @ invV).reshape((-1,))
+      extrap_neg = (legvander(xp.array([-1.]), grd.nbsolpts - 1, xp) @ invV).reshape((-1,))
+      extrap_pos = (legvander(xp.array([+1.]), grd.nbsolpts - 1, xp) @ invV).reshape((-1,))
 
       self.extrap_west = extrap_neg
       self.extrap_east = extrap_pos
@@ -85,18 +87,19 @@ class DFROperators:
       # feye[-1,-1] = 0
       # self.highfilter = numpy.asarray(V @ (feye @ invV), like=grd.solutionPoints)
 
-      V = legvander(grd.solutionPoints, grd.nbsolpts - 1)
-      invV = numpy.linalg.inv(V)
-      feye = numpy.eye(grd.nbsolpts, like=grd.solutionPoints)
-      feye[-1, -1] = 0.
+      V = legvander(grd.solutionPoints, grd.nbsolpts - 1, xp)
+      invV = xp.linalg.inv(V)
+      feye = numpy.eye(grd.nbsolpts)
+      feye[-1, -1] = 0.0
+      feye = xp.array(feye)
       self.highfilter = V @ (feye @ invV)
 
       diff = diffmat(grd.extension_sym)
-      diff = numpy.asarray(diff, like=grd.solutionPoints)
+      diff = xp.asarray(diff)
 
       if param.filter_apply:
          self.V = vandermonde(grd.extension)
-         self.invV = inv(self.V)
+         self.invV = inv(self.V, xp)
          N = len(grd.extension)-1
          Nc = math.floor(param.filter_cutoff * N)
          self.filter = filter_exponential(N, Nc, param.filter_order, self.V, self.invV)
@@ -142,7 +145,7 @@ class DFROperators:
 
       # Ordinary differentiation matrices (used only in diagnostic calculations)
       self.diff = diffmat(grd.solutionPoints)
-      self.diff = numpy.asarray(self.diff, like=self.diff_solpt)
+      self.diff = xp.asarray(self.diff)
       self.diff_tr = self.diff.T
 
       self.quad_weights = numpy.outer(grd.glweights, grd.glweights)
@@ -163,7 +166,7 @@ class DFROperators:
       # Now, use a Vandermonde matrix to transform this modal filter into a nodal form
 
       # mode-to-node operator
-      vander = legvander(geom.solutionPoints, geom.nbsolpts - 1)
+      vander = legvander(geom.solutionPoints, geom.nbsolpts - 1, xp)
 
       # node-to-mode operator
       ivander = numpy.linalg.inv(vander)
@@ -230,8 +233,7 @@ class DFROperators:
    def comma_i(self: Self,
                field_interior: NDArray[T],
                border_i: NDArray[T],
-               grid: CubedSphere,
-               out: NDArray[T] | None = None) -> NDArray[T]:
+               grid: CubedSphere) -> NDArray[T]:
       '''Take a partial derivative along the i-index
 
       This method takes the partial derivative of an input field, potentially consisting of several
@@ -250,41 +252,13 @@ class DFROperators:
       grid : Geometry
          Grid-defining class, used here solely to provide the canonical definition of the local
          computational region.
-      out : NDArray | None
-         Destination array for operation. If provided, should be a C-contiguous array with the same shape
-         as `field_interior`.
       '''
 
-      if out is None:
-         # Create an empty array for output
-         output = numpy.empty_like(field_interior)
-      else:
-         # Create a view of the output so that the shape of the original is not modified
-         output = out.view()
-
-      # Create views of the input arrays for reshaping, in order to express the differentiation as
-      # a set of matrix multiplications
-
-      field_view = field_interior.view()
-      border_i_view = border_i.view()
-
-      # Reshape to a flat view.  Assigning to array.shape will raise an exception if the new shape would
-      # require a memory copy; this implicitly ensures that the input arrays are fully contiguous in
-      # memory.
-      field_view.shape = (-1, grid.nbsolpts)
-      border_i_view.shape = (-1, 2)
-      output.shape = field_view.shape
-
-      # Perform the matrix transposition
-      numpy.dot(field_view, self.diff_solpt_tr, out=output)
-      #output[:] = field_view @ self.diff_solpt_tr# + border_i_view @ self.correction_tr
-      output[:] += border_i_view @ self.correction_tr
-      # print(grid.ptopo.rank, field_view[:2,:], '\n', border_i_view[:2,:],'\n',output[:2,:])
-
-      # Reshape the output array back to its canonical extents
-      output.shape = field_interior.shape
+      output = (numpy.dot(field_interior.reshape((-1, grid.nbsolpts)), self.diff_solpt_tr) + \
+               border_i.reshape((-1, 2)) @ self.correction_tr).reshape(field_interior.shape)
 
       return output
+
 
    def extrapolate_i(self: Self,
                      field_interior: NDArray[T],
@@ -614,8 +588,7 @@ class DFROperators:
             itf_i: NDArray[T],
             itf_j: NDArray[T],
             itf_k: NDArray[T],
-            geom: CubedSphere,
-            out: NDArray[T] | None = None) -> NDArray[T]:
+            geom: CubedSphere) -> NDArray[T]:
       ''' Take the gradient of one or more variables, given interface values (not element extensions)
 
       This function takes the gradient (covariant derivative) along i, j, and k of each of the input
@@ -676,15 +649,11 @@ class DFROperators:
                            itk[:, 1:, :, :]),
                           axis=-3)
 
-      if out is None:
-         output = numpy.zeros((3,nvar,nk,nj,ni), like=field)
-      else:
-         output = out.view()
-         output.shape = (3, nvar, nk, nj, ni)
+      output = numpy.zeros((3,nvar,nk,nj,ni), like=field)
 
-      self.comma_i(ff, ext_i, geom, out=output[0])
-      self.comma_j(ff, ext_j, geom, out=output[1])
-      self.comma_k(ff, ext_k, geom, out=output[2])
+      output[0] = self.comma_i(ff, ext_i, geom)
+      output[1] = self.comma_j(ff, ext_j, geom)
+      output[2] = self.comma_k(ff, ext_k, geom)
       
       output.shape = (3,)+field.shape
 
@@ -839,31 +808,31 @@ def check_skewcentrosymmetry(m: numpy.ndarray) -> bool:
 
 # Borrowed from Galois:
 # https://github.com/mhostetter/galois
-def inv(A: numpy.ndarray) -> numpy.ndarray:
+def inv(A: NDArray, xp: ModuleType) -> numpy.ndarray:
    '''Compute the inverse of a matrix.'''
    if not (A.ndim == 2 and A.shape[0] == A.shape[1]):
-      raise numpy.linalg.LinAlgError(f"Argument `A` must be square, not {A.shape}.")
+      raise xp.linalg.LinAlgError(f"Argument `A` must be square, not {A.shape}.")
    n = A.shape[0]
-   I = numpy.eye(n, dtype=A.dtype)
+   I = xp.eye(n, dtype=A.dtype)
 
    # Concatenate A and I to get the matrix AI = [A | I]
-   AI = numpy.concatenate((A, I), axis=-1)
+   AI = xp.concatenate((A, I), axis=-1)
 
    # Perform Gaussian elimination to get the reduced row echelon form AI_rre = [I | A^-1]
-   AI_rre = row_reduce(AI, ncols=n)
+   AI_rre = row_reduce(AI, ncols=n, xp=xp)
 
    # The rank is the number of non-zero rows of the row reduced echelon form
-   rank = numpy.sum(~numpy.all(AI_rre[:,0:n] == 0, axis=1))
+   rank = xp.sum(~xp.all(AI_rre[:,0:n] == 0, axis=1))
    if not rank == n:
-      raise numpy.linalg.LinAlgError(f"Argument `A` is singular and not invertible because it does not"
-                                     f" have full rank of {n}, but rank of {rank}.")
+      raise xp.linalg.LinAlgError(f"Argument `A` is singular and not invertible because it does not"
+                                  f" have full rank of {n}, but rank of {rank}.")
 
    A_inv = AI_rre[:,-n:]
 
    return A_inv
 
 
-def row_reduce(A: numpy.ndarray, ncols: Optional[int] = None) -> numpy.ndarray:
+def row_reduce(A: NDArray, ncols: Optional[int] = None, xp: ModuleType = numpy) -> NDArray:
    '''Perform Gaussian elimination using row operations.'''
    if not A.ndim == 2:
       raise ValueError(f"Only 2-D matrices can be converted to reduced row echelon form, not {A.ndim}-D.")
@@ -874,7 +843,7 @@ def row_reduce(A: numpy.ndarray, ncols: Optional[int] = None) -> numpy.ndarray:
 
    for j in range(ncols):
       # Find a pivot in column `j` at or below row `p`
-      idxs = numpy.nonzero(A_rre[p:,j])[0]
+      idxs = xp.nonzero(A_rre[p:,j])[0]
       if idxs.size == 0:
          continue
       i = p + idxs[0]  # Row with a pivot
@@ -886,9 +855,9 @@ def row_reduce(A: numpy.ndarray, ncols: Optional[int] = None) -> numpy.ndarray:
       A_rre[p,:] /= A_rre[p,j]
 
       # Force zeros above and below the pivot
-      idxs = numpy.nonzero(A_rre[:,j])[0].tolist()
+      idxs = xp.nonzero(A_rre[:,j])[0].tolist()
       idxs.remove(p)
-      A_rre[idxs,:] -= numpy.multiply.outer(A_rre[idxs,j], A_rre[p,:])
+      A_rre[idxs,:] -= xp.multiply.outer(A_rre[idxs,j], A_rre[p,:])
 
       p += 1
       if p == A_rre.shape[0]:
@@ -896,7 +865,7 @@ def row_reduce(A: numpy.ndarray, ncols: Optional[int] = None) -> numpy.ndarray:
 
    return A_rre
 
-def legvander(x: NDArray[numpy.float64], deg: int) -> NDArray[numpy.float64]:
+def legvander(x: NDArray[numpy.float64], deg: int, xp: ModuleType) -> NDArray[numpy.float64]:
    """
    NumPy's legvander, slightly modified to work with any array type.
 
@@ -911,4 +880,4 @@ def legvander(x: NDArray[numpy.float64], deg: int) -> NDArray[numpy.float64]:
       v[1] = x
       for i in range(2, deg + 1):
          v[i] = (v[i - 1] * x * (2*i - 1) - v[i - 2] * (i - 1)) / i
-   return numpy.moveaxis(v, 0, -1)
+   return xp.moveaxis(v, 0, -1)

@@ -15,6 +15,7 @@ from rhs.rhs_bubble_implicit   import rhs_bubble_implicit
 from rhs.rhs_euler             import rhs_euler
 from rhs.rhs_euler_convective  import rhs_euler_convective
 from rhs.rhs_euler_fv          import rhs_euler_fv
+from rhs.rhs_euler_jax         import rhs_euler_jax
 from rhs.rhs_sw                import rhs_sw
 from rhs.rhs_sw_stiff          import rhs_sw_stiff
 from rhs.rhs_sw_nonstiff       import rhs_sw_nonstiff
@@ -52,10 +53,21 @@ class RhsBundle:
          return actual_rhs
 
       if param.equations == "euler" and isinstance(geom, CubedSphere):
-         rhs_functions = {'dg': {'cpu': rhs_euler,    'cuda': rhs_euler_cuda},
-                          'fv': {'cpu': rhs_euler_fv, 'cuda': rhs_euler_cuda}}
+         # rhs_functions = {'dg': {'cpu': rhs_euler,    'cuda': rhs_euler_cuda},
+         #                  'fv': {'cpu': rhs_euler_fv, 'cuda': rhs_euler_cuda}}
 
-         self.full = generate_rhs(rhs_functions[param.discretization][param.device],
+         if param.device == 'cuda' and param.jacobian_method == 'ad':
+            raise ValueError(f'CUDA device and automatic differentiation (ad) jacobian method are mutually exclusive')
+
+         rhs_fun = rhs_euler
+         if param.device == 'cuda':
+            rhs_fun = rhs_euler_cuda
+         elif param.jacobian_method == 'ad':
+            rhs_fun = rhs_euler_jax
+         elif param.discretization == 'fv':
+            rhs_fun = rhs_euler_fv
+
+         self.full = generate_rhs(rhs_fun,
                                   geom, operators, metric, ptopo, param.nbsolpts, param.nb_elements_horizontal,
                                   param.nb_elements_vertical, param.case_number)
          self.convective = generate_rhs(rhs_euler_convective, geom, operators, metric, ptopo, param.nbsolpts,

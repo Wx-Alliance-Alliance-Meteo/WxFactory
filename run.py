@@ -122,6 +122,9 @@ def setup_distributed_world(param: Configuration) -> DistributedWorld | None:
    if param.grid_type == "cubed_sphere" and param.device == "cuda":
       from common.cuda_parallel import CudaDistributedWorld
       return CudaDistributedWorld()
+   # elif param.grid_type == 'cubed_sphere' and param.array_module == 'jax':
+   #    from common.jax_parallel import JaxDistributedWorld
+   #    return JaxDistributedWorld()
    elif param.grid_type == "cubed_sphere":
       return DistributedWorld()
    else:

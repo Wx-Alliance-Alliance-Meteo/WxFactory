@@ -95,37 +95,30 @@ class Metric3DTopo:
       # exchange code demands contravariant components, and dRd(...) is covariant.  We can perform the conversion
       # by constructing a (temporary) 2D metric in terms of X and Y only at the interfaces:
 
-      metric_2d_contra_itf_i = xp.zeros((2,2) + geom.itf_i_shape_3d)
-      metric_2d_contra_itf_j = xp.zeros((2,2) + geom.itf_j_shape_3d)
-      metric_2d_cov_itf_i = xp.zeros((2,2) + geom.itf_i_shape_3d)
-      metric_2d_cov_itf_j = xp.zeros((2,2) + geom.itf_j_shape_3d)
-
-      for (metric_contra, metric_cov, X, Y) in zip((metric_2d_contra_itf_i, metric_2d_contra_itf_j),
-                                                   (metric_2d_cov_itf_i, metric_2d_cov_itf_j),
-                                                   (X_itf_i, X_itf_j),
-                                                   (Y_itf_i, Y_itf_j)):
+      def make_itf_metric(X, Y):
          delta2 = 1 + X**2 + Y**2
-         metric_contra[0,0,:,:,:] = delta2/(1+X**2)
-         metric_contra[0,1,:,:,:] = delta2*X*Y/((1+X**2) + (1+Y**2))
-         metric_contra[1,0,:,:,:] = metric_contra[0,1,:,:,:]
-         metric_contra[1,1,:,:,:] = delta2/(1+Y**2)
 
-         metric_cov[0,0,:,:,:] = (1+X**2)**2 * (1+Y**2)/delta2**2
-         metric_cov[0,1,:,:,:] = -X*Y*(1+X**2) * (1+Y**2) / delta2**2
-         metric_cov[1,0,:,:,:] = metric_cov[0,1,:,:,:]
-         metric_cov[1,1,:,:,:] = (1+X**2) * (1+Y**2)**2/delta2**2
+         off_contra = xp.array(delta2*X*Y/((1+X**2) + (1+Y**2)))
+         contra = xp.array([[delta2/(1+X**2), off_contra],
+                            [off_contra, delta2/(1+Y**2)]])
+
+         off_cov = -X*Y*(1+X**2) * (1+Y**2) / delta2**2
+         cov = xp.array([[(1+X**2)**2 * (1+Y**2)/delta2**2, off_cov],
+                         [off_cov, (1+X**2) * (1+Y**2)**2/delta2**2]])
+
+         return contra, cov
+
+      metric_2d_contra_itf_i, metric_2d_cov_itf_i = make_itf_metric(X_itf_i, Y_itf_i)
+      metric_2d_contra_itf_j, metric_2d_cov_itf_j = make_itf_metric(X_itf_j, Y_itf_j)
 
       # Arrays for boundary info:  arrays for parallel exchange have a different shape than the 'natural' extrapolation,
       # in order for the MPI exchange to occur with contiguous subarrays.
 
-      exch_itf_i = xp.zeros((3,geom.nk,geom.nb_elements_x1+2,2,geom.nj))
-      exch_itf_j = xp.zeros((3,geom.nk,geom.nb_elements_x2+2,2,geom.ni))
+      exch_itf_i = numpy.zeros((3,geom.nk,geom.nb_elements_x1+2,2,geom.nj))
+      exch_itf_j = numpy.zeros((3,geom.nk,geom.nb_elements_x2+2,2,geom.ni))
 
       # Perform extrapolation.  Extrapolation in i and j will be written to arrays for exchange, but k does not
       # require an exchange; we can average directly and will handle this afterwards
-      dRdx1_itf_k = xp.empty_like(R_itf_k)
-      dRdx2_itf_k = xp.empty_like(R_itf_k)
-      dRdeta_itf_k = xp.empty_like(R_itf_k)
 
       # Extrapolate the interior values to each edge
       dRdx1_extrap_i = matrix.extrapolate_i(dRdx1_int, geom) # Output dims: (nk,nj,nel_x,2)
@@ -155,7 +148,7 @@ class Metric3DTopo:
          exch_itf_i[1,:,el+1,1,:] = metric_2d_contra_itf_i[1,0,:,:,el+1] * dRdx1_extrap_i[:,:,el,1] + \
                                     metric_2d_contra_itf_i[1,1,:,:,el+1] * dRdx2_extrap_i[:,:,el,1]
 
-      for el in range(geom.nb_elements_x2):   
+      for el in range(geom.nb_elements_x2):
          # 'south' boundary of the element
          exch_itf_j[0,:,el+1,0,:] = metric_2d_contra_itf_j[0,0,:,el,:] * dRdx1_extrap_j[:,el,0,:] + \
                                     metric_2d_contra_itf_j[0,1,:,el,:] * dRdx2_extrap_j[:,el,0,:]
@@ -166,7 +159,6 @@ class Metric3DTopo:
                                     metric_2d_contra_itf_j[0,1,:,el+1,:] * dRdx2_extrap_j[:,el,1,:]
          exch_itf_j[1,:,el+1,1,:] = metric_2d_contra_itf_j[1,0,:,el+1,:] * dRdx1_extrap_j[:,el,1,:] + \
                                     metric_2d_contra_itf_j[1,1,:,el+1,:] * dRdx2_extrap_j[:,el,1,:]
-
 
       ## Perform the exchange.  This function requires u1/u2/u3 contravariant vectors, and in that
       # formulation u3 exchanges like a scalar (because there is no orientation change at panel
@@ -188,13 +180,20 @@ class Metric3DTopo:
          # The south boundary of the -1 element is the north boundary of the -2 element
          exch_itf_j[:,:,-1,0,:] = exch_itf_j[:,:,-2,1,:]
 
+      exch_itf_i = xp.array(exch_itf_i)
+      exch_itf_j = xp.array(exch_itf_j)
+
       # Define the averaged interface values
-      dRdx1_itf_i = xp.empty_like(R_itf_i)
-      dRdx2_itf_i = xp.empty_like(R_itf_i)
-      dRdeta_itf_i = xp.empty_like(R_itf_i)
-      dRdx1_itf_j = xp.empty_like(R_itf_j)
-      dRdx2_itf_j = xp.empty_like(R_itf_j)
-      dRdeta_itf_j = xp.empty_like(R_itf_j)
+      dRdx1_itf_i = numpy.empty_like(R_itf_i)
+      dRdx2_itf_i = numpy.empty_like(R_itf_i)
+      dRdeta_itf_i = numpy.empty_like(R_itf_i)
+      dRdx1_itf_j = numpy.empty_like(R_itf_j)
+      dRdx2_itf_j = numpy.empty_like(R_itf_j)
+      dRdeta_itf_j = numpy.empty_like(R_itf_j)
+
+      dRdx1_itf_k = numpy.empty_like(R_itf_k)
+      dRdx2_itf_k = numpy.empty_like(R_itf_k)
+      dRdeta_itf_k = numpy.empty_like(R_itf_k)
 
       # i-interface values
       for bdy in range(geom.nb_elements_x1+1):
@@ -225,23 +224,33 @@ class Metric3DTopo:
          # Assign interior values based on the average of the bordering extrapolations
          d_itf_k[1:-1,:,:] = 0.5*(d_extrap_k[1:,0,:,:] + d_extrap_k[:-1,1,:,:])
 
+      dRdx1_itf_i = xp.array(dRdx1_itf_i)
+      dRdx2_itf_i = xp.array(dRdx2_itf_i)
+      dRdeta_itf_i = xp.array(dRdeta_itf_i)
+      dRdx1_itf_j = xp.array(dRdx1_itf_j)
+      dRdx2_itf_j = xp.array(dRdx2_itf_j)
+      dRdeta_itf_j = xp.array(dRdeta_itf_j)
+      dRdx1_itf_k = xp.array(dRdx1_itf_k)
+      dRdx2_itf_k = xp.array(dRdx2_itf_k)
+      dRdeta_itf_k = xp.array(dRdeta_itf_k)
+
       # Initialize metric arrays
 
       # Covariant space-only metric
-      H_cov = xp.empty((3,3) + X_int.shape)
-      H_cov_itf_i = xp.empty((3,3) + X_itf_i.shape)
-      H_cov_itf_j = xp.empty((3,3) + X_itf_j.shape)
-      H_cov_itf_k = xp.empty((3,3) + X_itf_k.shape)
+      H_cov = numpy.empty((3,3) + X_int.shape)
+      H_cov_itf_i = numpy.empty((3,3) + X_itf_i.shape)
+      H_cov_itf_j = numpy.empty((3,3) + X_itf_j.shape)
+      H_cov_itf_k = numpy.empty((3,3) + X_itf_k.shape)
 
-      H_contra = xp.empty((3,3) + X_int.shape)
-      H_contra_itf_i = xp.empty((3,3) + X_itf_i.shape)
-      H_contra_itf_j = xp.empty((3,3) + X_itf_j.shape)
-      H_contra_itf_k = xp.empty((3,3) + X_itf_k.shape)
+      H_contra = numpy.empty((3,3) + X_int.shape)
+      H_contra_itf_i = numpy.empty((3,3) + X_itf_i.shape)
+      H_contra_itf_j = numpy.empty((3,3) + X_itf_j.shape)
+      H_contra_itf_k = numpy.empty((3,3) + X_itf_k.shape)
 
-      sqrtG = xp.empty_like(X_int)
-      sqrtG_itf_i = xp.empty_like(X_itf_i)
-      sqrtG_itf_j = xp.empty_like(X_itf_j)
-      sqrtG_itf_k = xp.empty_like(X_itf_k)
+      sqrtG = numpy.empty_like(X_int)
+      sqrtG_itf_i = numpy.empty_like(X_itf_i)
+      sqrtG_itf_j = numpy.empty_like(X_itf_j)
+      sqrtG_itf_k = numpy.empty_like(X_itf_k)
 
       # Loop over the interior and interface variants of the fields, computing the metric terms
       for (Hcov, Hcontra, rootG, X, Y, R, dRdx1, dRdx2, dRdeta) in \
@@ -325,6 +334,21 @@ class Metric3DTopo:
                                           dRdx2**2*delsq/(A**2*(1+Y**2)))/dRdeta**2
 
             rootG[:] = (Δx/2)*(Δy/2)*(Δeta/2)*A**2*(1+X**2)*(1+Y**2)*xp.abs(dRdeta)/delsq**(1.5)  
+
+      H_cov = xp.array(H_cov)
+      H_cov_itf_i = xp.array(H_cov_itf_i)
+      H_cov_itf_j = xp.array(H_cov_itf_j)
+      H_cov_itf_k = xp.array(H_cov_itf_k)
+
+      H_contra = xp.array(H_contra)
+      H_contra_itf_i = xp.array(H_contra_itf_i)
+      H_contra_itf_j = xp.array(H_contra_itf_j)
+      H_contra_itf_k = xp.array(H_contra_itf_k)
+
+      sqrtG = xp.array(sqrtG)
+      sqrtG_itf_i = xp.array(sqrtG_itf_i)
+      sqrtG_itf_j = xp.array(sqrtG_itf_j)
+      sqrtG_itf_k = xp.array(sqrtG_itf_k)
 
 
       ## Computation of the Christoffel symbols

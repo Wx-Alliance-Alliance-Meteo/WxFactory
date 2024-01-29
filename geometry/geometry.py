@@ -14,6 +14,7 @@ class Geometry:
    """
    def __init__(self, nbsolpts: int, grid_type: str, array_module: str, verbose: Optional[bool] = False) -> None:
       ## Element properties -- solution and extension points
+      self.array_module_name = array_module
       self.array_module = module_from_name(array_module)
       xp = self.array_module
 
