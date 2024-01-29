@@ -34,7 +34,14 @@ function user_interrupt() {
     exit 1
 }
 
+function timeout_result() {
+    echo -e "\nTest did not finish in a timely manner" && cat ${LISTING}
+    rm -rf ${TEST_DIR}
+    exit 1
+}
+
 trap user_interrupt SIGINT
+trap timeout_result SIGALRM
 
 function set_param() {
     file=${1}
@@ -64,7 +71,10 @@ function run_single_config() {
     echo ${message}
 
     # Run test
-    ${cmd} ${cfg} > ${LISTING} 2>&1 && return 0
+    timeout 30 ${cmd} ${cfg} > ${LISTING} 2>&1 && return 0
+
+    # Check if the timer ran out (return status 124 from the timeout command)
+    [ $? == 124 ] && kill -s SIGALRM $$
 
     # In case of error, stop
     echo "AHHHHHhhhh error"
