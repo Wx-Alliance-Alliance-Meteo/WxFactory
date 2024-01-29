@@ -53,7 +53,7 @@ class RhsBundle:
 
       if param.equations == "euler" and isinstance(geom, CubedSphere):
          rhs_functions = {'dg': {'cpu': rhs_euler,    'cuda': rhs_euler_cuda},
-                          'fv': {'cpu': rhs_euler_fv, 'cuda': rhs_euler_cuda}}
+                          'fv': {'cpu': rhs_euler   , 'cuda': rhs_euler_cuda}}
 
          self.full = generate_rhs(rhs_functions[param.discretization][param.device],
                                   geom, operators, metric, ptopo, param.nbsolpts, param.nb_elements_horizontal,
