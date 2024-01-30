@@ -4,7 +4,7 @@ cd /home/vma000/code/gef_tanya
 
 
 #methods=("cwy_ne1s" "icwy_ne1s" "pmex_ne1s")
-methods=("pmex_ne1s")
+methods=("pmex_ne1s" "cwy_1s")
 
 
 methodlen=${#methods[@]}
