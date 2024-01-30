@@ -3,7 +3,8 @@ cd /home/vma000/code/gef_tanya
 . ./load_env.sh
 
 
-methods=("cwy_ne1s" "icwy_ne1s" "pmex_ne1s")
+#methods=("cwy_ne1s" "icwy_ne1s" "pmex_ne1s")
+methods=("pmex_ne1s")
 
 
 methodlen=${#methods[@]}
