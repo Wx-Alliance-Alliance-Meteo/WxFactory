@@ -99,8 +99,8 @@ class Epi(Integrator):
          phiv, stats = exode(1., matvec_handle, vec, method=self.exode_method, controller=self.exode_controller, atol = self.tol, task1 = False, verbose=False)
         
          # comment out for scaling test 
-         #if mpirank == 0:
-         #   print(f'EXODE converged at iteration {stats[0]}, with {stats[1]} rejected steps')
+         if mpirank == 0:
+             print(f'EXODE converged at iteration {stats[0]}, with {stats[1]} rejected steps with local error {stats[2]}') 
 
          self.solver_info = SolverInfo(total_num_it = stats[0])
 
@@ -118,9 +118,9 @@ class Epi(Integrator):
          self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
 
          # comment out for scaling test 
-         #if mpirank == 0:
-         #   print(f'KIOPS converged at iteration {stats[2]} (using {stats[0]} internal substeps and'
-         #         f' {stats[1]} rejected expm) to a solution with local error {stats[4]:.2e}')
+         if mpirank == 0:
+            print(f'KIOPS converged at iteration {stats[2]} (using {stats[0]} internal substeps and'
+                  f' {stats[1]} rejected expm) to a solution with local error {stats[4]:.2e}')
 
          self.solver_info = SolverInfo(total_num_it = stats[2])
 

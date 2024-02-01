@@ -34,7 +34,7 @@ def exode(τ_out, A, u, method='ARK3(2)4L[2]SA-ERK', controller="deadbeat", rtol
       method = METHODS[method]
 
    t0, tf = map(float, [0, τ_out])
-
+   
    solver = method(fun, t0, y0, tf, controller=controller, first_step=exode.first_step, rtol=rtol, atol=atol)
 
    ts = [t0]
@@ -58,7 +58,7 @@ def exode(τ_out, A, u, method='ARK3(2)4L[2]SA-ERK', controller="deadbeat", rtol
    ts = numpy.array(ts)
 
    solution = solver.y
-   stats = (solver.nfev, solver.failed_steps) # TODO
+   stats = (solver.nfev, solver.failed_steps, solver.error_estimation,solver.error_norm_old) # TODO
 
    exode.first_step = numpy.median(numpy.diff(ts))
 

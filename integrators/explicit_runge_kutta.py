@@ -2,7 +2,8 @@ import math
 import logging
 import numpy
 #from solvers.global_operations import global_inf_norm
-from solvers.global_operations import *   #vicky
+from solvers.global_operations import * 
+from mpi4py      import MPI 
 
 BIG_FACTOR = 4.0
 
@@ -65,6 +66,7 @@ class RungeKutta:
       self.error_norm_old = None
       self.h_min_a, self.h_min_b = self._init_min_step_parameters()
       self.tiny_err = self.h_min_b
+      self.error_estimation = 0
 
       self._init_control(controller)
 
@@ -83,24 +85,25 @@ class RungeKutta:
       self.h_previous = None
       self.y_old = None
       self.failed_steps = 0 # failed step counter
+      self.num_of_steps = 0 # keep track of the total number of steps 
 
    def _init_control(self, controller):
       coefs = {
-         "deadbeat": (1, 0, 0, 0.9),    # elementary controller (I)
+         "DEADBEAT": (1, 0, 0, 0.9),    # elementary controller (I)
          "PI3040": (0.7, -0.4, 0, 0.8), # PI controller (Gustafsson)
          "PI4020": (0.6, -0.2, 0, 0.8), # PI controller for nonstiff methods
          "H211PI": (1/6, 1/6, 0, 0.8),  # LP filter of PI structure
          "H110": (1/3, 0, 0, 0.8),      # I controller (convolution filter)
          "H211D": (1/2, 1/2, 1/2, 0.8), # LP filter with gain = 1/2
-         "H211b": (1/4, 1/4, 1/4, 0.8)  # general purpose LP filter
+         "H211B": (1/4, 1/4, 1/4, 0.8)  # general purpose LP filter
       }
 
       if self.controller == NotImplemented:
          # use standard controller if not specified otherwise
-         controller = controller or "deadbeat"
+         controller = controller or "DEADBEAT"
       else:
          # use default controller of method if not specified otherwise
-         controller = controller or self.controller
+         controller = controller.upper() or self.controller.upper()
       if (isinstance(controller, str) and controller in coefs):
          kb1, kb2, a, g = coefs[controller]
       elif isinstance(controller, tuple) and len(controller) == 4:
@@ -138,6 +141,8 @@ class RungeKutta:
                self.status = 'finished'
 
    def _step_impl(self):
+      mpirank = mpirank = MPI.COMM_WORLD.Get_rank() 
+
       # mostly follows the scipy implementation of scipy's RungeKutta
       t = self.t
       y = self.y
@@ -171,11 +176,13 @@ class RungeKutta:
          # exclude K[-1] if not FSAL. It could contain nan or inf
          err_estimate =  h * (self.K[:self.n_stages + self.FSAL].T @ self.E[:self.n_stages + self.FSAL])
          error_norm = global_inf_norm(err_estimate / scale)
-#         print(h, error_norm)
+         # print(t_new, h, error_norm)
 
          # evaluate error
          if error_norm < 1:
             step_accepted = True
+            #if mpirank == 0:
+            #    print("accepted step ", self.num_of_steps, t_new, h, error_norm)
 
             if error_norm < self.tiny_err:
                factor = BIG_FACTOR
@@ -195,13 +202,18 @@ class RungeKutta:
                factor = min(1, factor)
 
             h *= limiter(factor, 2)
-
+            # keep track of the number of steps 
+            self.num_of_steps += 1
+            
          else:
             step_rejected = True
-
+            #if mpirank == 0:
+            #    print("rejected step ", self.num_of_steps, t_new, h, error_norm)
             h *= limiter(self.safety * error_norm**self.error_exponent, 2)
 
             self.failed_steps += 1
+            # keep track of the number of steps 
+            self.num_of_steps += 1 
 
             if numpy.isnan(error_norm) or numpy.isinf(error_norm):
                return False, "Overflow or underflow encountered."
@@ -216,7 +228,7 @@ class RungeKutta:
       self.h = h
       self.f = self.K[self.n_stages].copy()
       self.error_norm_old = error_norm
-
+      self.error_estimation = global_inf_norm(err_estimate)
       # output
       self.t = t_new
       self.y = y_new

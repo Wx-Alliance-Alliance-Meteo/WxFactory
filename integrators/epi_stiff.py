@@ -78,8 +78,9 @@ class EpiStiff(Integrator):
 
          phiv, stats = exode(1., matvec_handle, vec, method=self.exode_method, atol = self.tol, task1 = False, verbose=False)
          # comment out for scaling output   
-         #if mpirank == 0:
-         #   print(f'EXODE converged at iteration {stats[0]}')
+         if mpirank == 0:
+            print(f'EXODE converged at iteration {stats[0]}, with {stats[1]} rejected steps with local error {stats[2]}')
+      
 
       elif self.exponential_solver == 'pmex':
 
