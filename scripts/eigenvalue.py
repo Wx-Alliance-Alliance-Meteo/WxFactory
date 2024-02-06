@@ -6,7 +6,7 @@ import os
 import re
 import sys
 from   time      import time
-from   typing    import Dict, Optional, Union
+from   typing    import Dict, Optional, Tuple, Union
 
 from   mpi4py              import MPI
 import numpy
@@ -21,14 +21,14 @@ import scipy.sparse.linalg
 main_gef_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), '..')
 sys.path.append(main_gef_dir)
 
-from eigenvalue_util        import gen_matrix, tqdm
+from eigenvalue_util        import gen_matrix, tqdm, store_matrix_set, load_matrix_set
 from run import create_geometry, create_preconditioner
 from common.program_options import Configuration
 from common.parallel        import DistributedWorld
 from geometry               import DFROperators
 from init.init_state_vars   import init_state_vars
 from rhs.rhs_selector       import RhsBundle
-from solvers                import MatvecOp, MatvecOpRat
+from solvers                import MatvecOp, MatvecOpRat, fgmres
 
 
 # num_el = 0
@@ -36,23 +36,29 @@ from solvers                import MatvecOp, MatvecOpRat
 # num_var = 3
 # num_tile = 0
 
-# def permutations():
-#    p = []
-#    for t in range(num_tile):
-#       for e1 in range(num_el):
-#          for e2 in range(num_el):
-#             for o1 in range(order):
-#                for o2 in range(order):
-#                   for v in range(num_var):
-#                      p.append(num_var*order*order*num_el*num_el*t +
-#                            order*order*num_el*num_el*v +
-#                            order*order*num_el*e1 +
-#                            order*num_el*o1 +
-#                            order*e2 + o2)
-#    return p
+def permutations_3d(num_tiles: int, num_elem_h: int, num_elem_v: int, order: int, num_vars: int):
+   p = []
+   for t in range(num_tiles):                            # |
+      for e1 in range(num_elem_h):                       # |
+         for e2 in range(num_elem_h):                    # |
+            for e3 in range(num_elem_v):                 # |   <- The order we want
+               for o1 in range(order):                   # |
+                  for o2 in range(order):                # |
+                     for o3 in range(order):             # |
+                        for v in range(num_vars):        # |
+                           p.append(      \
+                              num_vars*num_elem_v*order*num_elem_h*order*num_elem_h*order * t + # |
+                              num_elem_v*order*num_elem_h*order*num_elem_h*order * v +          # |
+                              order*num_elem_h*order*num_elem_h*order * e3 +                    # |
+                              num_elem_h*order*num_elem_h*order * o3 +                          # | <- The order we have
+                              order*num_elem_h*order * e1 +                                     # |
+                              num_elem_h*order * o1 +                                           # |
+                              order * e2 +                                                      # |
+                              o2)                                                               # |
+   return p
 
 def get_matvecs(cfg_file: str, state_file: Optional[str] = None, build_imex: bool = False) \
-      -> Dict[str, MatvecOp]:
+      -> Dict:
    """
    Return the initial condition and function handle to compute the action of the Jacobian on a vector
    :param cfg_file: path to the configuration file
@@ -75,7 +81,9 @@ def get_matvecs(cfg_file: str, state_file: Optional[str] = None, build_imex: boo
 
    # Create the matvec function(s)
    matvecs = {}
-   if rhs.full is not None:      matvecs['all'] = MatvecOpRat(param.dt, Q, rhs.full(Q), rhs.full)
+   matvecs['param'] = param
+   matvecs['rhs'] = rhs.full(Q)
+   if rhs.full is not None:      matvecs['all'] = MatvecOpRat(param.dt, Q, matvecs['rhs'], rhs.full)
    if hasattr(rhs, 'implicit') and build_imex: matvecs['imp'] = MatvecOpRat(param.dt, Q, rhs.implicit(Q), rhs.implicit)
    if hasattr(rhs, 'explicit') and build_imex: matvecs['exp'] = MatvecOpRat(param.dt, Q, rhs.explicit(Q), rhs.explicit)
    if preconditioner is not None:
@@ -211,16 +219,19 @@ def plot_spy(J, plot_file, prec = 0):
    pdf.savefig(bbox_inches='tight')
    plt.close()
 
-def output_dir(name):
+def output_dir(name: str):
    return os.path.join(main_gef_dir, 'jacobian', name)
 
-def jac_file(name, rhs):
+def jac_file(name: str, rhs: str):
    return os.path.join(output_dir(name), f'J_{rhs}.npz')
 
-def pdf_spy_file(name):
+def rhs_file(name: str, rhs: str):
+   return os.path.join(output_dir(name), f'rhs_{rhs}.npy')
+
+def pdf_spy_file(name: str):
    return os.path.join(output_dir(name), 'spy.pdf')
 
-def pdf_eig_file(name):
+def pdf_eig_file(name: str):
    return os.path.join(output_dir(name), 'eig.pdf')
 
 def main(args):
@@ -234,35 +245,86 @@ def main(args):
       config = args.gen_case
 
       matvecs = get_matvecs(config, state_file=args.from_state_file, build_imex=args.imex)
-      for rhs, matvec in matvecs.items():
-         gen_matrix(matvec, jac_file_name=jac_file(name, rhs))
+      matrix_set = {}
 
-      print(f'Generation done')
+      param = matvecs['param']
+      num_vars = 4
+      if param.equations == 'euler' and param.grid_type == 'cubed_sphere': num_vars = 5
+      p = permutations_3d(MPI.COMM_WORLD.size, param.nb_elements_horizontal, param.nb_elements_vertical,
+                        param.nbsolpts, num_vars)
 
-   if args.plot and MPI.COMM_WORLD.rank == 0:
-      pdf_spy = PdfPages(pdf_spy_file(name))
-      pdf_eig = PdfPages(pdf_eig_file(name))
+      for rhs_name in ['all', 'implicit', 'explicit']:
+         if rhs_name not in matvecs: continue
+         matvec = matvecs[rhs_name]
+         mat = gen_matrix(matvec, jac_file_name=jac_file(name, rhs_name))
+         initial_rhs = MPI.COMM_WORLD.gather(numpy.ravel(matvecs['rhs']))
+
+         if mat is not None:
+            print(f'mat size: {mat.shape}, permutations size: {len(p)}')
+            permuted_mat = csc_matrix((mat[p, :])[:, p])
+            print(f', permuted shape {permuted_mat.shape}')
+
+            scipy.sparse.save_npz(jac_file(name, rhs_name + '.p'), permuted_mat)
+            initial_rhs = numpy.hstack(initial_rhs)
+
+            # print(f'initial rhs = \n{initial_rhs}')
+            with open(rhs_file(name, rhs_name), 'wb') as f:
+               numpy.save(f, initial_rhs)
+            with open(rhs_file(name, rhs_name + '.p'), 'wb') as f:
+               numpy.save(f, initial_rhs[p])
+
+            matrix_set[rhs_name] = {}
+            matrix_set[rhs_name]['rhs'] = initial_rhs
+            matrix_set[rhs_name]['rhs_p'] = initial_rhs[p]
+            matrix_set[rhs_name]['matrix'] = mat
+            matrix_set[rhs_name]['matrix_p'] = permuted_mat
+
+      if 'precond' in matvecs:
+         mat = gen_matrix(matvecs['precond'])
+         if mat is not None:
+            permuted_mat = csc_matrix((mat[p, :])[:, p])
+            matrix_set['precond'] = mat
+            matrix_set['precond_p'] = permuted_mat
+
+      if len(matrix_set) > 0:
+         matrix_set['param'] = param
+         matrix_set['permutation'] = p
+         store_matrix_set(jac_file(name, ''), matrix_set)
+
+      if MPI.COMM_WORLD.rank == 0: print(f'Generation done')
+
+   if (args.plot_all or args.plot_eig or args.plot_spy) and MPI.COMM_WORLD.rank == 0:
 
       j_files = sorted(glob.glob(output_dir(name) + '/J_*'))
 
-      if len(j_files) == 0:
+      if len(j_files) > 0:
+         if args.plot_all or args.plot_eig:
+            pdf_eig = PdfPages(pdf_eig_file(name))
+            j_file_pattern = re.compile(r'/J(_.+)\.npz')
+            for j_file in j_files:
+               e_file = j_file_pattern.sub(r'/eig\1.npy', j_file)
+               compute_eig_from_file(j_file, e_file, max_num_val=args.max_num_eigval)
+               plot_eig_from_file(e_file, pdf_eig)
+            pdf_eig.close()
+
+         if args.plot_all or args.plot_spy:
+            pdf_spy = PdfPages(pdf_spy_file(name))
+            for j_file in j_files:
+               plot_spy_from_file(j_file, pdf_spy)
+            pdf_spy.close()
+
+      else:
          print(f'There does not seem to be a generated matrix for problem "{name}".'
                f' Please generate one with the "--gen-case" option.')
-      j_file_pattern = re.compile(r'/J(_.+)\.npz')
-      for j_file in j_files:
-         e_file = j_file_pattern.sub(r'/eig\1.npy', j_file)
-         compute_eig_from_file(j_file, e_file, max_num_val=args.max_num_eigval)
-         plot_eig_from_file(e_file, pdf_eig)
-         plot_spy_from_file(j_file, pdf_spy)
 
-      pdf_spy.close()
-      pdf_eig.close()
 
 if __name__ == '__main__':
 
    parser = argparse.ArgumentParser(description='''Generate or plot system matrix and eigenvalues''')
    parser.add_argument('--gen-case', type=str, default=None, help='Generate a system matrix from given case file')
-   parser.add_argument('--plot', action='store_true', help='Plot the given system matrix and its eigenvalues')
+   parser.add_argument('--plot-all', action='store_true', help='Plot the given system matrix and its eigenvalues')
+   parser.add_argument('--plot-eig', action='store_true', help='Plot the given system matrix eigenvalues')
+   parser.add_argument('--plot-spy', action='store_true', help='Plot the given system matrix')
    parser.add_argument('--from-state-file', type=str, default=None,
                        help = 'Generate system matrix from a given state vector. (Still have to specify a config file)')
    parser.add_argument('--max-num-eigval', type=int, default=0,

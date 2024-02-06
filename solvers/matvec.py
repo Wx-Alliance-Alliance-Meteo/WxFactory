@@ -4,7 +4,10 @@ from typing import Callable, Tuple
 import numpy
 
 class MatvecOp:
-   def __init__(self, matvec: Callable[[numpy.ndarray], numpy.ndarray], dtype, shape: Tuple) -> None:
+   def __init__(self,
+                matvec: Callable[[numpy.ndarray], numpy.ndarray],
+                dtype,
+                shape: Tuple) -> None:
       self.matvec = matvec
       self.dtype = dtype
       self.shape = shape
@@ -14,9 +17,9 @@ class MatvecOp:
       return self.matvec(vec)
 
 class MatvecOpBasic(MatvecOp):
-   def __init__(self, dt: float, Q: numpy.ndarray, rhs_vec: numpy.ndarray, rhs_handle: Callable) -> None:
+   def __init__(self, dt: float, Q: numpy.ndarray) -> None:
       super().__init__(
-         lambda vec: matvec_fun(vec, dt, Q, rhs_vec, rhs_handle),
+         lambda vec: matvec_fun(vec, dt, Q),
          Q.dtype, Q.shape)
 
 def matvec_fun(vec: numpy.ndarray, dt: float, Q: numpy.ndarray, rhs: numpy.ndarray, rhs_handle, method='complex') \

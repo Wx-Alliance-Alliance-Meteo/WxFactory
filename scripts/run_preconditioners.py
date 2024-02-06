@@ -1,8 +1,9 @@
 #!/usr/bin/env python
 
 import argparse
-import numpy as np
+import numpy
 import os
+import sys
 from time import time
 from functools import partial
 
@@ -17,7 +18,12 @@ except ModuleNotFoundError:
    has_pyamg = False
    print(f'PyAMG not installed. Won\'t do the associated tests')
 
+# We assume the script is in a subfolder of the main project
+main_gef_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), '..')
+sys.path.append(main_gef_dir)
+
 from solvers import fgmres
+from eigenvalue_util import load_matrix_set, ignore_list
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
 
@@ -35,23 +41,26 @@ tolerance = 1e-7
 
 def load_matrix(case_name):
    print(f'Reading matrix for "{case_name}"')
-   case_dir = f'{script_dir}/jacobian/{case_name}'
+   case_dir = f'{main_gef_dir}/jacobian/{case_name}'
    os.makedirs(case_dir, exist_ok=True)
 
-   jacobian_file = f'{case_dir}/J_all.npz'
-   rhs_file = f'{case_dir}/initial_rhs_all.npy'
+   files = []
+   matrices = []
+   for suffix in ['', '.p']:
+      jacobian_file = f'{case_dir}/J_all{suffix}.npz'
+      rhs_file = f'{case_dir}/rhs_all{suffix}.npy'
+      files.append((jacobian_file, rhs_file))
 
-   try:
-      jacobian = load_npz(jacobian_file)
-      initial_rhs = np.load(rhs_file)
-   except FileNotFoundError:
-      print(f'Could not open file(s) for "{case_name}".')
-      raise
+   for j_file, r_file in files:
+      try:
+         print(f'Loading {j_file}')
+         jacobian = load_npz(j_file)
+         initial_rhs = numpy.load(r_file)
+         matrices.append((scipy.sparse.csc_matrix(jacobian), initial_rhs))
+      except FileNotFoundError:
+         print(f'Could not open file(s) for "{case_name}".')
 
-   # print(f'jacobian = {jacobian}')
-   # print(f'initial rhs = {initial_rhs}')
-
-   return scipy.sparse.csc_matrix(jacobian), initial_rhs
+   return matrices
 
 
 def timed_call(function):
@@ -75,20 +84,39 @@ def print_result(jacobian, rhs, sol, num_iter, solve_time, prefix=''):
    elif rel_error > tolerance:
       comment = ' -- not so good'
 
-   print(f'{prefix:15s} -- Relative error: {rel_error:.3e}, absolute: {abs_error:.3e}, '
+   print(f'{prefix:25s} -- Relative error: {rel_error:.3e}, absolute: {abs_error:.3e}, '
          f'time {solve_time:.3f} s, num iterations: {num_iter}'
          f'{comment}')
+
+def time_and_print(f):
+   def wrapper_tnp(jacobian, rhs, *args, **kwargs):
+      t0 = time()
+      sol, num_iter = f(jacobian, rhs, *args, **kwargs)
+      t1 = time()
+      print_result(jacobian, rhs, sol, num_iter, t1 - t0, prefix=f'{f.__name__}')
+
+      return sol
+
+   return wrapper_tnp
 
 def solve_gef_fgmres(jacobian, rhs, precond=None):
 
    def matvec(vec):
       return jacobian @ vec
 
-   result, solve_time = timed_call(partial(fgmres, matvec, rhs, restart=20, maxiter=25, tol=tolerance,
+   result, solve_time = timed_call(partial(fgmres, matvec, rhs, restart=200, maxiter=25, tol=tolerance,
                                            preconditioner=precond))
 
-   print_result(jacobian, rhs, result[0], result[2], solve_time, prefix='GEF FGMRES')
+   print_result(jacobian, rhs, result[0], result[3], solve_time, prefix='GEF FGMRES')
    return result[0]
+
+@time_and_print
+def solve_gef_fgmres_d(jacobian, rhs, precond=None):
+   def matvec(vec):
+      return jacobian @ vec
+
+   sol, _, _, num_it, _, _ = fgmres(matvec, rhs, restart=200, maxiter=25, tol=tolerance, preconditioner=precond)
+   return sol, num_it
 
 def solve_pyamg_gmres(solver, jacobian, rhs, precond=None):
 
@@ -97,7 +125,7 @@ def solve_pyamg_gmres(solver, jacobian, rhs, precond=None):
       increment_iter()
 
    result, solve_time = timed_call(
-      partial(solver, jacobian, rhs, M=precond, restrt=20, maxiter=25, tol=tolerance, callback=gmres_callback))
+      partial(solver, jacobian, rhs, M=precond, restrt=200, maxiter=25, tol=tolerance, callback=gmres_callback))
 
    print_result(jacobian, rhs, result[0], g_num_iter, solve_time, prefix=f'pyAMG {solver.__name__}')
    return result[0]
@@ -107,7 +135,7 @@ def solve_pyamg_krylov(solver, jacobian, rhs, x0=None, precond=None):
    def pyamg_callback(x):
       increment_iter()
 
-   result, t = timed_call(partial(solver, jacobian, rhs, tol=tolerance, x0=x0, maxiter=500, M=precond, callback=pyamg_callback))
+   result, t = timed_call(partial(solver, jacobian, rhs, tol=tolerance, x0=x0, maxiter=5000, M=precond, callback=pyamg_callback))
    print_result(jacobian, rhs, result[0], g_num_iter, t, prefix=f'pyAMG {solver.__name__}')
    return result[0]
 
@@ -117,7 +145,7 @@ def solve_gmres(jacobian, rhs, precond=None):
       increment_iter()
 
    result, solve_time = timed_call(
-      partial(scipy.sparse.linalg.gmres, jacobian, rhs, M=precond, restart=20, tol=tolerance, maxiter=500,
+      partial(scipy.sparse.linalg.gmres, jacobian, rhs, M=precond, restart=200, tol=tolerance, maxiter=5000,
               callback=gmres_callback))
 
    print_result(jacobian, rhs, result[0], g_num_iter, solve_time, prefix='Scipy GMRES')
@@ -129,11 +157,11 @@ def solve_lgmres(jacobian, rhs, precond=None):
    def lgmres_callback(x):
       increment_iter()
 
-   num_inner_it = 20
+   num_inner_it = 200
 
    result, solve_time = timed_call(
       partial(scipy.sparse.linalg.lgmres, jacobian, rhs, M=precond, tol=tolerance, atol=tolerance * 0.1,
-              inner_m=num_inner_it, maxiter=200, callback=lgmres_callback))
+              inner_m=num_inner_it, maxiter=25, callback=lgmres_callback))
 
    print_result(jacobian, rhs, result[0], f'{g_num_iter}*{num_inner_it}', solve_time, prefix='Scipy LGMRES')
    return result[0]
@@ -176,8 +204,8 @@ def get_ilu_inverse(jacobian):
    # inv_approx_lu = scipy.sparse.linalg.splu(jacobian)
 
    n_row = jacobian.shape[0]
-   # Pr = scipy.sparse.csc_matrix((np.ones(n_row), (inv_approx_lu.perm_r, np.arange(n_row))))
-   # Pc = scipy.sparse.csc_matrix((np.ones(n_row), (np.arange(n_row), inv_approx_lu.perm_c)))
+   # Pr = scipy.sparse.csc_matrix((numpy.ones(n_row), (inv_approx_lu.perm_r, numpy.arange(n_row))))
+   # Pc = scipy.sparse.csc_matrix((numpy.ones(n_row), (numpy.arange(n_row), inv_approx_lu.perm_c)))
    # inv_L = scipy.sparse.linalg.inv(inv_approx_lu.L)
    # inv_U = scipy.sparse.linalg.inv(inv_approx_lu.U)
    # inv_approx = Pc @ inv_U @ inv_L @ Pr
@@ -207,7 +235,7 @@ def solve_jacobi(jacobian, rhs):
 
    tol_rel = scipy.linalg.norm(rhs) * tolerance
 
-   x = np.zeros_like(rhs)
+   x = numpy.zeros_like(rhs)
    max_it = 500
    time_0 = time()
    for i in range(max_it):
@@ -221,75 +249,123 @@ def solve_jacobi(jacobian, rhs):
    print_result(jacobian, rhs, x, i, t, prefix='Jacobi')
    return x, t
 
+def run_set(jac, rhs, test_rootnode, test_sas, precond=None):
 
-def main(args):
-   jacobian, initial_rhs = load_matrix(args.case_name)
+   sol_gef    = solve_gef_fgmres(jac, rhs)
+   sol_scipy  = solve_gmres(jac, rhs)
+   # sol_lgmres = solve_lgmres(jac, rhs)
+   sol_gef_2  = solve_gef_fgmres_d(jac, rhs)
 
-   sol_gef    = solve_gef_fgmres(jacobian, initial_rhs)
-   sol_scipy  = solve_gmres(jacobian, initial_rhs)
-   # sol_lgmres = solve_lgmres(jacobian, initial_rhs)
-   sol_amg    = solve_pyamg_gmres(pyamg.krylov.gmres, jacobian, initial_rhs)
-   solve_pyamg_gmres(pyamg.krylov.fgmres, jacobian, initial_rhs)
-   # solve_pyamg_krylov(pyamg.krylov.cg, jacobian, initial_rhs)
-   # solve_pyamg_krylov(pyamg.krylov.bicgstab, jacobian, initial_rhs)
-   # solve_pyamg_krylov(pyamg.krylov.cgne, jacobian, initial_rhs)
+   if precond is not None:
+      solve_gef_fgmres(jac, rhs, precond=precond)
+      solve_gmres(jac, rhs, precond=precond)
 
-   # solve_jacobi(jacobian, initial_rhs)
 
-   # solve_gmres_diag_precond(jacobian, initial_rhs)
-   # solve_gmres_diag_precond(jacobian, initial_rhs, 2)
-   # solve_gmres_diag_precond(jacobian, initial_rhs, 3)
-   # solve_gmres_diag_precond(jacobian, initial_rhs, 4)
-   # solve_gmres_ilu_precond(jacobian, initial_rhs)
+   if has_pyamg:
+      sol_amg    = solve_pyamg_gmres(pyamg.krylov.gmres, jac, rhs)
+      solve_pyamg_gmres(pyamg.krylov.fgmres, jac, rhs)
+      # solve_pyamg_krylov(pyamg.krylov.cg, jac, rhs)
+      # solve_pyamg_krylov(pyamg.krylov.bicgstab, jac, rhs)
+      # solve_pyamg_krylov(pyamg.krylov.cgne, jac, rhs)
 
-   # solve_lgmres_diag_precond(jacobian, initial_rhs)
-   # solve_lgmres_diag_precond(jacobian, initial_rhs, 2)
-   # solve_lgmres_diag_precond(jacobian, initial_rhs, 3)
-   # solve_lgmres_diag_precond(jacobian, initial_rhs, 4)
-   # solve_lgmres_ilu_precond(jacobian, initial_rhs)
+   # solve_jacobi(jac, rhs)
 
-   A = scipy.sparse.csr_matrix(jacobian)
-   # A = pyamg.gallery.poisson((jacobian.shape[0],), format='csr')
-   # print(f'jacobian shape: {jacobian.shape}, A shape: {A.shape}')
+   # solve_gmres_diag_precond(jac, rhs)
+   # solve_gmres_diag_precond(jac, rhs, 2)
+   # solve_gmres_diag_precond(jac, rhs, 3)
+   # solve_gmres_diag_precond(jac, rhs, 4)
+   # solve_gmres_ilu_precond(jac, rhs)
 
-   print('Rootnode preconditioner... ', end='')
-   mg_solver_rootnode = pyamg.rootnode_solver(A, max_levels=2)
-   precond_rootnode   = mg_solver_rootnode.aspreconditioner(cycle='V')
-   print(' initialized.')
+   # solve_lgmres_diag_precond(jac, rhs)
+   # solve_lgmres_diag_precond(jac, rhs, 2)
+   # solve_lgmres_diag_precond(jac, rhs, 3)
+   # solve_lgmres_diag_precond(jac, rhs, 4)
+   # solve_lgmres_ilu_precond(jac, rhs)
 
-   solve_gef_fgmres(A, initial_rhs, precond=precond_rootnode)
-   solve_gmres(A, initial_rhs, precond=precond_rootnode)
-   solve_pyamg_gmres(pyamg.krylov.gmres, A, initial_rhs, precond=precond_rootnode)
-   solve_pyamg_gmres(pyamg.krylov.fgmres, A, initial_rhs, precond=precond_rootnode)
-   # solve_pyamg_krylov(pyamg.krylov.cg, A, initial_rhs, precond=precond_rootnode)
-   # solve_pyamg_krylov(pyamg.krylov.bicgstab, A, initial_rhs, precond=precond_rootnode)
-   # solve_pyamg_krylov(pyamg.krylov.cgne, A, initial_rhs, precond=precond_rootnode)
+   A = scipy.sparse.csr_matrix(jac)
+   # A = pyamg.gallery.poisson((jac.shape[0],), format='csr')
+   # print(f'jac shape: {jac.shape}, A shape: {A.shape}')
 
-   print('Smoothed aggregation preconditioner... ', end='')
-   mg_solver_sas = pyamg.smoothed_aggregation_solver(A, max_levels=2)
-   precond_sas   = mg_solver_sas.aspreconditioner(cycle='V')
-   print(' initialized.')
-   
-   solve_gef_fgmres(A, initial_rhs, precond=precond_sas)
-   solve_gmres(A, initial_rhs, precond=precond_sas)
-   solve_pyamg_gmres(pyamg.krylov.gmres, A, initial_rhs, precond=precond_sas)
-   solve_pyamg_gmres(pyamg.krylov.fgmres, A, initial_rhs, precond=precond_sas)
-   # solve_pyamg_krylov(pyamg.krylov.cg, A, initial_rhs, precond=precond_sas)
-   # solve_pyamg_krylov(pyamg.krylov.bicgstab, A, initial_rhs, precond=precond_sas)
-   # solve_pyamg_krylov(pyamg.krylov.cgne, A, initial_rhs, precond=precond_sas)
+   if has_pyamg:
+      if test_rootnode:
+         print('Rootnode preconditioner... ', end='')
+         mg_solver_rootnode = pyamg.rootnode_solver(A, max_levels=2)
+         precond_rootnode   = mg_solver_rootnode.aspreconditioner(cycle='V')
+         print(' initialized.')
+
+         solve_gef_fgmres(A, rhs, precond=precond_rootnode)
+         solve_gmres(A, rhs, precond=precond_rootnode)
+         solve_pyamg_gmres(pyamg.krylov.gmres, A, rhs, precond=precond_rootnode)
+         solve_pyamg_gmres(pyamg.krylov.fgmres, A, rhs, precond=precond_rootnode)
+         # solve_pyamg_krylov(pyamg.krylov.cg, A, rhs, precond=precond_rootnode)
+         # solve_pyamg_krylov(pyamg.krylov.bicgstab, A, rhs, precond=precond_rootnode)
+         # solve_pyamg_krylov(pyamg.krylov.cgne, A, rhs, precond=precond_rootnode)
+
+      if test_sas:
+         print('Smoothed aggregation preconditioner... ', end='')
+         mg_solver_sas = pyamg.smoothed_aggregation_solver(A, max_levels=2)
+         precond_sas   = mg_solver_sas.aspreconditioner(cycle='V')
+         print(' initialized.')
+      
+         solve_gef_fgmres(A, rhs, precond=precond_sas)
+         solve_gmres(A, rhs, precond=precond_sas)
+         solve_pyamg_gmres(pyamg.krylov.gmres, A, rhs, precond=precond_sas)
+         solve_pyamg_gmres(pyamg.krylov.fgmres, A, rhs, precond=precond_sas)
+         # solve_pyamg_krylov(pyamg.krylov.cg, A, rhs, precond=precond_sas)
+         # solve_pyamg_krylov(pyamg.krylov.bicgstab, A, rhs, precond=precond_sas)
+         # solve_pyamg_krylov(pyamg.krylov.cgne, A, rhs, precond=precond_sas)
 
    gef_sci_diff = sol_scipy - sol_gef
    norm = scipy.linalg.norm(gef_sci_diff)
    print(f'Sci-GEF diff:    {norm:.3e}, rel {norm/scipy.linalg.norm(sol_scipy):.3e}')
-   print(f'Sci-AMG diff:    {scipy.linalg.norm(sol_scipy - sol_amg):.3e}')
+   if has_pyamg:
+      print(f'Sci-AMG diff:    {scipy.linalg.norm(sol_scipy - sol_amg):.3e}')
    # print(f'Sci-Lgmres diff: {scipy.linalg.norm(sol_scipy - sol_lgmres):.3e}')
+
+   return sol_gef
+
+def main(args):
+   # matrices = load_matrix(args.case_name)
+
+   # for jac, rhs in matrices:
+   #    run_set(jac, rhs)
+
+   case_file = f'{main_gef_dir}/jacobian/{args.case_name}/J_.npz'
+   matrix_set = load_matrix_set(case_file)
+
+   print(f'params:\n{matrix_set["param"]}')
+   precond = None
+   precond_p = None
+   if 'precond' in matrix_set:
+      precond = scipy.sparse.linalg.aslinearoperator(matrix_set['precond'])
+      precond_p = scipy.sparse.linalg.aslinearoperator(matrix_set['precond_p'])
+
+   for key, val in matrix_set.items():
+      if key in ignore_list: continue
+      sol = run_set(val['matrix'], val['rhs'], args.rootnode, args.sas, precond=precond)
+      sol_p = run_set(val['matrix_p'], val['rhs_p'], args.rootnode, args.sas, precond=precond_p)
+
+      # print(f'rhs = \n{val["rhs"]}')
+      # print(f'sol = \n{sol}')
+      # print(f'sol_p = \n{sol_p}')
+      diff = sol[matrix_set['permutation']] - sol_p
+      diff_norm = numpy.linalg.norm(diff)
+      rel_diff = diff_norm / numpy.linalg.norm(sol)
+      print(f'Solution difference: {diff_norm:.2e} (rel {rel_diff:.2e})')
+
+      # print(f'sol = \n{sol}')
+      # print(f'sol_p = \n{sol_p}')
+      # print(f'diff = \n{diff}')
+      # print(f'p = \n{matrix_set["permutation"]}')
 
 
 if __name__ == '__main__':
-   np.set_printoptions(precision=2)
+   numpy.set_printoptions(precision=2)
 
    parser = argparse.ArgumentParser(description='''Compute a preconditioner for a given input matrix''')
    parser.add_argument('case_name', help='Name of the .npy file where the matrix is stored')
    parser.add_argument('--config', default=f'{script_dir}/test_case.ini')
+   parser.add_argument('--rootnode', action='store_true', help='Try the rootnode precondition from pyAMG')
+   parser.add_argument('--sas', action='store_true', help='Try the smoothed aggregation solver as preconditioner')
 
    main(parser.parse_args())
