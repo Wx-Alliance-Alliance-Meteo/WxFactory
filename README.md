@@ -18,7 +18,6 @@ GEF was built for Python 3.11 (at least).  It also requires an MPI implementatio
 * `sqlite` To be able to store solver stats.
 
 ## Optional
-* `mayavi` Visualization toolkit
 * `cartopy` A cartographic python library with matplotlib support for visualisation
 * `tqdm`   Progress bar when generating matrices
 * `more-itertools` For using Bamphi solver
@@ -33,12 +32,11 @@ dependencies on Ubuntu 18.04:
 ```
 pip3 install --user mpi4py
 pip3 install --user PyQt5==5.14.0
-pip3 install --user mayavi
 ```
 
 ## ArchLinux
 ```
-sudo pacman -S python-numpy python-scipy python-mpi4py python-netcdf4-openmpi mayavi python-matplotlib 
+sudo pacman -S python-numpy python-scipy python-mpi4py python-netcdf4-openmpi python-matplotlib 
 ```
 The python-cartopy package can be installed from the AUR.
 
@@ -59,10 +57,9 @@ To be able to use NetCDF in parallel (for faster writing to disk) [Optional]
 conda install netcdf4=*=mpi*
 ```
 
-If you want the visualization capabilities of GEF (and do not mind a bigger
-conda environment):
+If you want the visualization capabilities of GEF:
 ```
-conda install mayavi cartopy
+conda install cartopy
 ```
 
 To visualize profiles from python applications, install `snakeviz`:
