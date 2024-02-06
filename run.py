@@ -131,7 +131,7 @@ def adjust_nb_elements(param: Configuration):
    """ Adjust number of horizontal elements in the parameters so that it corresponds to the number *per processor* """
    if param.grid_type == 'cubed_sphere':
       allowed_pe_counts = [i**2 * 6
-                           for i in range(1, param.nb_elements_horizontal // 2 + 1)
+                           for i in range(1, max(param.nb_elements_horizontal // 2 + 1, 2))
                            if (param.nb_elements_horizontal % i) == 0]
       if MPI.COMM_WORLD.size not in allowed_pe_counts:
          raise ValueError(f'Invalid number of processors for this particular problem size. '
