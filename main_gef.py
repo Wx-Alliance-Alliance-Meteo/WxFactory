@@ -2,6 +2,7 @@
 
 """ The GEF model """
 
+import inspect
 import sys
 
 from mpi4py import MPI
@@ -12,7 +13,27 @@ from common.array_module import ArrayModule
 # array is the module used by GEF for managing arrays when the type is only known at runtime.
 # This is so that we can use either CUDA or numpy arrays, depending on what the user has requested
 # and what is available. By default, we use numpy arrays
-array: ArrayModule = numpy
+# array: ArrayModule = numpy
+
+def module_from_name(name):
+   if name == 'jax':
+      import jax.numpy
+      return jax.numpy
+   elif name == 'cupy' or name == 'cuda':
+      import cupy
+      return cupy
+   elif name == 'numpy':
+      return numpy
+
+   return numpy
+
+def get_array_module(array):
+   mod = inspect.getmodule(type(array))
+   if mod is not None:
+      first = mod.__name__.split('.')[0]
+      return module_from_name(first)
+
+   return numpy
 
 if __name__ == '__main__':
 
