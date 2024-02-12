@@ -68,9 +68,14 @@ class Configuration:
 
       self.starting_step = self._get_option('Time_integration', 'starting_step', int, 0)
 
-      self.exponential_solver = self._get_option('Time_integration', 'exponential_solver', str, 'kiops')
+      self.exponential_solver = self._get_option('Time_integration', 'exponential_solver', str, 'pmex', ['pmex', 'kiops'])
       self.krylov_size        = self._get_option('Time_integration', 'krylov_size', int, 1)
-      self.jacobian_method    = self._get_option('Time_integration', 'jacobian_method', str, 'complex', ['complex', 'fd'])
+      self.jacobian_method    = self._get_option('Time_integration', 'jacobian_method', str, 'complex',
+                                                 ['complex', 'fd', 'ad'])
+
+      if self.jacobian_method == 'ad' and self.device == 'cuda':
+         raise ValueError(f'Jacobian method "ad" (automatic differentiation, with JAX) '
+                          f'is not compatible with "cuda" device')
 
       self.verbose_solver = self._get_option('Time_integration', 'verbose_solver', int, 0)
       self.gmres_restart  = self._get_option('Time_integration', 'gmres_restart', int, 20)

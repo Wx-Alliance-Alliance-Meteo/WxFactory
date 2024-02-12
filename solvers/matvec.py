@@ -1,6 +1,7 @@
 import math
 from typing import Callable, Tuple
 
+import jax
 import numpy
 
 class MatvecOp:
@@ -26,11 +27,31 @@ def matvec_fun(vec: numpy.ndarray, dt: float, Q: numpy.ndarray, rhs: numpy.ndarr
       epsilon = math.sqrt(numpy.finfo(float).eps)
       Qvec = Q + 1j * epsilon * numpy.reshape(vec, Q.shape)
       jac = dt * (rhs_handle(Qvec) / epsilon).imag
-   else:
+   elif method == 'fd':
       # Finite difference approximation
       epsilon = math.sqrt(numpy.finfo(numpy.float32).eps)
       Qvec = Q + epsilon * numpy.reshape(vec, Q.shape)
       jac = dt * ( rhs_handle(Qvec) - rhs) / epsilon
+   elif method == 'ad':
+      _, jac_jp = jax.jvp(rhs_handle, (numpy.ravel(Q),), (vec,))
+      jac = numpy.array(jac_jp * 5.0)
+
+      # epsilon = math.sqrt(numpy.finfo(numpy.float32).eps)
+      # Qvec = Q + epsilon * numpy.reshape(vec, Q.shape)
+      # jac_fd = dt * ( rhs_handle(Qvec) - rhs) / epsilon
+
+      # jr = jac.reshape(jac_fd.shape)
+      # diff = jac - numpy.ravel(jac_fd)
+      # # diff = rhs_jp - numpy.ravel(rhs)
+      # diff_norm = numpy.linalg.norm(diff) / numpy.linalg.norm(jac_fd)
+      # print(f'diff norm = {diff_norm:.3e}')
+      # # print(f'diff = \n{diff}')
+      # print(f'jac = \n{jac.reshape(jac_fd.shape)}')
+      # print(f'jac_fd = \n{jac_fd}')
+      # print(f'jac / jac_fd = \n{jr / jac_fd}')
+
+   else:
+      raise ValueError(f'Unknown jacobian method {method}')
 
    return jac.flatten()
 

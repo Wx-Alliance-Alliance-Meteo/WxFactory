@@ -7,6 +7,7 @@ import numpy
 
 from common.program_options import Configuration
 from .integrator            import Integrator, SolverInfo
+from main_gef               import module_from_name
 from solvers                import kiops, matvec_fun, pmex
 
 class Epi(Integrator):
@@ -18,6 +19,7 @@ class Epi(Integrator):
       self.jacobian_method = param.jacobian_method
       self.exponential_solver = param.exponential_solver
       self.device = param.device
+      self.xp = module_from_name(param.array_module)
 
       if order == 2:
          self.A = numpy.array([[]])
@@ -60,6 +62,8 @@ class Epi(Integrator):
 
    def __step__(self, Q: numpy.ndarray, dt: float):
 
+      xp = self.xp
+
       # If dt changes, discard saved value and redo initialization
       mpirank = MPI.COMM_WORLD.Get_rank()
       if self.dt and abs(self.dt - dt) > 1e-10:
@@ -82,13 +86,13 @@ class Epi(Integrator):
 
       def matvec_handle(v): return matvec_fun(v, dt, Q, rhs, self.rhs, self.jacobian_method)
 
-      vec = numpy.zeros((self.max_phi+1, rhs.size), like=rhs)
+      vec = xp.zeros((self.max_phi+1, rhs.size))
       vec[1,:] = rhs.flatten()
       for i in range(self.n_prev):
          J_deltaQ = matvec_fun(self.previous_Q[i] - Q, 1., Q, rhs, self.rhs, self.jacobian_method)
 
          # R(y_{n-i})
-         r = (self.previous_rhs[i] - rhs) - numpy.reshape(J_deltaQ, Q.shape)
+         r = (self.previous_rhs[i] - rhs) - xp.reshape(J_deltaQ, Q.shape)
 
          for k, alpha in enumerate(self.A[:,i],start=2):
             # v_k = Sum_{i=1}^{n_prev} A_{k,i} R(y_{n-i})
@@ -124,4 +128,4 @@ class Epi(Integrator):
          self.previous_rhs.appendleft(rhs)
 
       # Update solution
-      return Q + numpy.reshape(phiv, Q.shape) * dt
+      return Q + xp.reshape(phiv, Q.shape) * dt

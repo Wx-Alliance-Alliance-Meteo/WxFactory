@@ -23,7 +23,7 @@ class Cartesian2D(Geometry):
 
       # --- Horizontal coord
       Δx1 = (domain_x[1] - domain_x[0]) / nb_elements_x
-      itf_x1 = array.linspace(start=domain_x[0], stop=domain_x[1], num=nb_elements_x + 1)
+      itf_x1 = xp.linspace(start=domain_x[0], stop=domain_x[1], num=nb_elements_x + 1)
       x1 = numpy.zeros(nb_elements_x * len(self.solutionPoints), like=itf_x1)
       for i in range(nb_elements_x):
          idx = i * nbsolpts
