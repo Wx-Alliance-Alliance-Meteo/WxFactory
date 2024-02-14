@@ -20,7 +20,7 @@ def gauss_legendre(n: int, xp: ModuleType = numpy) \
 
    # https://en.wikipedia.org/wiki/Gaussian_quadrature#Gauss%E2%80%93Legendre_quadrature
 
-   n_digits = 20
+   n_digits = 34 # equivalent to quadruple precision
    if n <= 5:
       if n == 1:
          points_sym = [sympy.sympify('0')]
