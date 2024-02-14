@@ -76,7 +76,7 @@ def image_field(geom: 'Cartesian2D', field: numpy.ndarray, filename: str, vmin: 
       f  = numpy.append(numpy.append(field[:, -2:], field, axis=1), field[:, :2], axis=1)
       cmap = matplotlib.pyplot.contourf(X1, X3, f, cmap=colormap,
                                        levels=numpy.linspace(vmin,vmax,n), extend="both")
-   ax.set_aspect('auto', 'box')
+   ax.set_aspect('equal', 'box')
 
    cbar = fig.colorbar(cmap, ax=ax, orientation='vertical', shrink=0.5)
    cbar.set_label(label, )
