@@ -1,11 +1,9 @@
 import math
 import numpy
-import mpi4py.MPI
 import scipy.linalg
 
-from time import time 
-
-
+from mpi4py import MPI
+from time   import time 
 
 """
 
@@ -55,6 +53,7 @@ References:
 """
 def cwy_ne(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 2, task1 = False):
 
+   rank = MPI.COMM_WORLD.Get_rank()
    ppo, n = u.shape
    p = ppo - 1
 
@@ -94,7 +93,7 @@ def cwy_ne(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 2
 
    # compute the 1-norm of u
    local_nrmU = numpy.sum(abs(u[1:, :]), axis=1)
-   normU = numpy.amax( mpi4py.MPI.COMM_WORLD.allreduce(local_nrmU) )
+   normU = numpy.amax( MPI.COMM_WORLD.allreduce(local_nrmU) )
 
    # Normalization factors
    if ppo > 1 and normU > 0:
@@ -127,6 +126,11 @@ def cwy_ne(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 2
 
    l = 0
 
+   #local_dot1 = [] #local dot product for Vjv values
+   #ortho_sum  = [] #for orthogonalizing
+   #matvec_t   = [] #part 1 of applying T
+   #apply_t    = [] 
+
    while τ_now < τ_end:
 
       # Compute necessary starting information
@@ -144,7 +148,7 @@ def cwy_ne(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 2
 
          # Normalize initial vector (this norm is nonzero)
          local_sum = V[0, 0:n] @ V[0, 0:n]
-         β = math.sqrt( mpi4py.MPI.COMM_WORLD.allreduce(local_sum) + V[j, n:n+p] @ V[j, n:n+p] )
+         β = math.sqrt( MPI.COMM_WORLD.allreduce(local_sum) + V[j, n:n+p] @ V[j, n:n+p] )
 
          # The first Krylov basis vector
          V[j, :] /= β
@@ -159,38 +163,79 @@ def cwy_ne(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 2
          V[j, n:n+p-1] = V[j-1, n+1:n+p]
          V[j, -1     ] = 0.0
 
-         #2. V_{j}^T * [v_{j-1}, v_j] 
-         temp_vec = V[0:j+1,0:n].dot(numpy.transpose(V[j-1:j+1,0:n]))
-         global_temp_vec = mpi4py.MPI.COMM_WORLD.allreduce(temp_vec)
-         global_temp_vec += V[0:j+1, n:n+p].dot(numpy.transpose(V[j-1:j+1,n:n+p]))
+         #2. V_{j}^T * [v_{j-1}, v_j]
+ 
+         #1. check if arrays are contiguous
+         #2. double check the type, making sure all reduce is not float128 and is double
+         #3. make sure blas is being used as intended
+
+         #---old version---
+         """
+         startV = MPI.Wtime()
+         temp_vec = V[0:j+1,0:n].dot(numpy.transpose(V[j-1:j+1,0:n])) #might revert to old code, not blast versions, slower
+         global_temp_vec  = MPI.COMM_WORLD.allreduce(temp_vec) #<-- slighly slower
+         global_temp_vec += V[0:j+1, n:n+p].dot(numpy.transpose(V[j-1:j+1,n:n+p])) #array may not be contiguous
+
+         endV = MPI.Wtime()
+         local_dot1.append(endV-startV)
+         """
+         #--------------
+
+         #---all other ones-------------
+         temp_vec        = V[0:j+1, 0:n] @ V[j-1:j+1, 0:n].T
+         global_temp_vec = numpy.empty_like(temp_vec)
+         MPI.COMM_WORLD.Allreduce([temp_vec, MPI.DOUBLE], [global_temp_vec, MPI.DOUBLE])
+         global_temp_vec += V[0:j+1, n:n+p] @ V[j-1:j+1, n:n+p].T
+         #--------------------------------
+
+         """
+         if rank == 0:
+            print("global_temp dtype   = ", global_temp_vec.dtype)
+            print("global_temp C cont? = ", global_temp_vec.flags['C_CONTIGUOUS']) 
+            print("global_temp F cont? = ", global_temp_vec.flags['F_CONTIGUOUS']) 
+            print("V^T C cont?         = ", numpy.transpose(V[j-1:j+1,n:n+p]).flags['C_CONTIGUOUS'])
+            print("V^T F cont?         = ", numpy.transpose(V[j-1:j+1,n:n+p]).flags['F_CONTIGUOUS'])
+         """
 
          #3. Form matrix T for the CWY projection
          #this will use the recursive formula in page 4, section 2.1
+         #startT = MPI.Wtime()
          if (j > 1) :
             T[j-1, 0:j-1] = -global_temp_vec[0:j-1,0].T @ T[0:j-1, 0:j-1]
 
-         #4. Projection values in R, R = T^{INV}*V^{T}*v{j-1} 
+         #endT = MPI.Wtime()
+         #matvec_t.append(endT-startT)
+
+         #4. Projection values in R, R = T^{INV}*V^{T}*v{j-1}
+         #startAppT = MPI.Wtime() 
          tmp2 = T[0:j, 0:j] @ global_temp_vec[0:j,1] 
+         #endAppT = MPI.Wtime()
+         #apply_t.append(endAppT - startAppT)
 
          #5. Orthogonalize
+         #startO = MPI.Wtime()
          V[j,:] -= tmp2 @ V[0:j,:]
+         #endO = MPI.Wtime()
+         #ortho_sum.append(endO - startO)
 
          #6. norm estimate in quad precision
-         sum_vec  = numpy.array(global_temp_vec[0:j,1]**2, numpy.float128)
-         sum_sqrt = numpy.array(sum(sum_vec), numpy.float128)
+         sum_vec  = numpy.array(global_temp_vec[0:j,1], numpy.float128)**2
+         sum_sqrt = numpy.sum(sum_vec)
  
          #sum_sqrd = sum(global_temp_vec[0:j,1]**2)
 
          if (global_temp_vec[-1,1] < sum_sqrt):
            local_sum = V[j, 0:n] @ V[j, 0:n]
-           nrm = numpy.sqrt( mpi4py.MPI.COMM_WORLD.allreduce(local_sum) + V[j, n:n+p] @ V[j, n:n+p])
+           global_sum_nrm = numpy.empty_link(local_sum)
+           MPI.COMM_WORLD.Allreduce([local_sum, MPI.DOUBLE], [global_sum_nrm, MPI.DOUBLE])
+           nrm = math.sqrt( gloal_sum_nrm + V[j, n:n+p] @ V[j, n:n+p])
            reg_comm += 1
          else:
            #compute norm estimate in quad precision
-           nrm = numpy.array( numpy.sqrt(global_temp_vec[-1,1] - sum_sqrt), numpy.float128)
+           nrm = numpy.array( numpy.sqrt(global_temp_vec[-1,1] - sum_sqrt), numpy.float64)
 
            #now cast back to double
-           nrm = numpy.array(nrm, numpy.float64)
+           #nrm = numpy.array(nrm, numpy.float64)
 
            #nrm = math.sqrt(global_temp_vec[-1,1] - sum_sqrd)
 
@@ -346,6 +391,13 @@ def cwy_ne(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 2
 
    m_ret=m
 
+   #nn = len(ortho_sum)
+   #avg_ortho    = sum(ortho_sum) / nn
+   #avg_localsum = sum(local_dot1) / nn
+   #avg_matvec   = sum(matvec_t) / nn
+   #avg_appt     = sum(apply_t) / nn
+
    stats = (step, reject, krystep, exps, conv, m_ret, reg_comm)
+   #stats = (step, reject, krystep, exps, conv, m_ret, reg_comm, avg_localsum, avg_matvec, avg_appt, avg_ortho)
 
    return w, stats
