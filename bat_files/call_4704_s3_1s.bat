@@ -8,7 +8,7 @@ methods=("case5_kiops.ini" "case5_pmex1s.ini" "case5_icwy1s.ini" "case5_cwy1s.in
 methodlen=${#methods[@]}
 #looping through each case and running it 7 times
 for ((k=0; k < $methodlen; k++)); do
-   for ((j = 0; j < 7; j++)); do
+   for ((j = 0; j < 5; j++)); do
      mpirun -np 4704 python3 ./main_gef.py config/test_files/srerk3/${methods[${k}]}
   done
 done
