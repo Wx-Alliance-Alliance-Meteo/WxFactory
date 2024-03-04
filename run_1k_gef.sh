@@ -8,7 +8,7 @@ ord_soumet -cpus 1176                                \
            -listing $(pwd)/listings
 
 ord_soumet -cpus 2646                                \
-           -w 60                                    \
+           -w 30                                    \
            -jn gef_2646                         \
            -mpi                                      \
            -share e                                  \
