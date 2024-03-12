@@ -5,6 +5,7 @@
 import math
 from typing import Optional
 import sys
+import pdb
 
 from mpi4py import MPI
 import numpy
@@ -74,6 +75,47 @@ def main(argv) -> int:
          t += param.dt
 
       step += 1
+
+      MF = numpy.linspace(1, 2, num=1)
+
+      if 0 < step < 2 :
+
+         # pdb.set_trace()
+
+         # Create the mesh
+         geom = create_geometry(param, ptopo)
+
+         # Build differentiation matrice and boundary correction
+         mtrx = DFROperators(geom, param)
+         
+         #-----------------------------------------------------------------------
+         #    Set topography
+         #-----------------------------------------------------------------------
+         zbot = numpy.zeros(geom.coordVec_latlon.shape[2:])
+         zbot_itf_i = numpy.zeros(geom.coordVec_latlon_itf_i.shape[2:])
+         zbot_itf_j = numpy.zeros(geom.coordVec_latlon_itf_j.shape[2:])
+
+         # Build topography based on lateral great-circle distance from the mountain center
+         for (z, coord) in zip([zbot, zbot_itf_i, zbot_itf_j],
+                                 [geom.coordVec_latlon, geom.coordVec_latlon_itf_i, geom.coordVec_latlon_itf_j]):
+            lat = coord[1,0,:,:]
+            lon = coord[0,0,:,:]
+            r = geom.earth_radius * numpy.arccos( math.sin(0) * numpy.sin(lat) + math.cos(0) * numpy.cos(lat) * numpy.cos(lon - math.pi/4) )
+            z[:,:] = 250 * numpy.exp(-r**2/5000**2) * numpy.cos(numpy.pi*r/4000)**2
+
+         # Update the geometry object with the new bottom topography
+         geom.apply_topography(MF[step-1]*zbot,MF[step-1]*zbot_itf_i,MF[step-1]*zbot_itf_j)
+         # And regenerate the metric to take this new topography into account
+         metric.build_metric()
+
+         new_rhs = RhsBundle(geom, mtrx, metric, topo, ptopo, param, Q.shape)
+         stepper = create_time_integrator(param, new_rhs, preconditioner)
+         output.geom = geom
+         output.metric = metric
+         output.mtrx = mtrx
+         stepper.output_manager = output
+
+
 
       if MPI.COMM_WORLD.rank == 0: print(f'\nStep {step} of {nb_steps + starting_step}')
 

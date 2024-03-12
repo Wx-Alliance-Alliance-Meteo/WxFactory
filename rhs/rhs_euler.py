@@ -222,23 +222,15 @@ def rhs_euler (Q: numpy.ndarray, geom: CubedSphere, mtrx: DFROperators, metric: 
    variables_itf_k[:, :, -1, 0, :] = variables_itf_k[:, :, -2, 1, :]
    variables_itf_k[:, :, -1, 1, :] = variables_itf_k[:, :, -1, 0, :] # Unused?
 
+   # Enforce no-flow through the top and botttom by imposing odd symmetry on ρw
+   variables_itf_k[idx_rho_w,:,0,1,:] = -variables_itf_k[idx_rho_w,:,1,0,:]
+   variables_itf_k[idx_rho_w,:,-1,0,:] = -variables_itf_k[idx_rho_w,:,-2,1,:]
+
    # Evaluate pressure at the vertical element interfaces based on ρθ.
    pressure_itf_k = p0 * numpy.exp((cpd/cvd)*numpy.log(variables_itf_k[idx_rho_theta] * (Rd / p0)))
 
    # Take w ← (wρ)/ ρ at the vertical interfaces
    w_itf_k = variables_itf_k[idx_rho_w] / variables_itf_k[idx_rho]
-
-   # Surface and top boundary treatement, imposing no flow (w=0) through top and bottom
-   # csubich -- apply odd symmetry to w at boundary so there is no advective _flux_ through boundary
-   w_itf_k[:, 0, 0, :] = 0. # Bottom of bottom element (unused)
-   w_itf_k[:, 0, 1, :] = -w_itf_k[:,1,0,:] # Top of bottom element (negative symmetry)
-   #w_itf_k[:, 0, 1, :] = 0.0  # Top of bottom element (bottom boundary, 0)
-   #w_itf_k[:, 1, 0, :] = 0. # Bottom of lowest interior element (bottom boundary, 0)
-
-   w_itf_k[:, -1, 1, :] = 0. # Top of top element (unused)
-   w_itf_k[:, -1, 0, :] = -w_itf_k[:,-2,1,:] # Bottom of top boundary element (negative symmetry)
-   #w_itf_k[:, -1, 0, :] = 0.0 # Bottom of top boundary element (0)
-   #w_itf_k[:, -2, 1, :] = 0. # Top of top interior element (0)
 
    # Common Rusanov vertical fluxes
    # flux_D_itf_k = numpy.empty((nb_equations, nb_interfaces_vert, geom.nj, geom.ni))
@@ -502,6 +494,12 @@ def rhs_euler (Q: numpy.ndarray, geom: CubedSphere, mtrx: DFROperators, metric: 
          + 2.0 * metric.christoffel_2_23 * (rho * u2 * w  + metric.H_contra_23*pressure) \
          +       metric.christoffel_2_33 * (rho * w * w   + metric.H_contra_33*pressure)
 
+   # Note: the gρ term here is written with filter_k, which removes the highest vertical
+   # wavenumber.  This appears to be required for stability in the absence of a hyperviscosity
+   # filter.  Otherwise, the vertically variable pressure (proportional to exp(-z)) times
+   # a grid-scale oscillation in ρ causes aliasing and instability.  We may need to examine
+   # a more full de-aliasing procedure, or perhaps separate p/ρ into hydrostatic components 
+   # (cancelled analytically) and nonhydrostatic components.
    forcing[idx_rho_w] = 2.0 * (metric.christoffel_3_01 * rho * u1 + metric.christoffel_3_02 * rho * u2 + metric.christoffel_3_03 * rho * w) \
          +       metric.christoffel_3_11 * (rho * u1 * u1 + metric.H_contra_11*pressure) \
          + 2.0 * metric.christoffel_3_12 * (rho * u1 * u2 + metric.H_contra_12*pressure) \
@@ -509,8 +507,9 @@ def rhs_euler (Q: numpy.ndarray, geom: CubedSphere, mtrx: DFROperators, metric: 
          +       metric.christoffel_3_22 * (rho * u2 * u2 + metric.H_contra_22*pressure) \
          + 2.0 * metric.christoffel_3_23 * (rho * u2 * w  + metric.H_contra_23*pressure) \
          +       metric.christoffel_3_33 * (rho * w * w   + metric.H_contra_33*pressure) \
-         + metric.inv_dzdeta * gravity * metric.inv_sqrtG * mtrx.filter_k(metric.sqrtG*rho, geom)
-         #+ (metric.inv_dzdeta * rho * gravity)
+         + metric.inv_dzdeta * gravity * mtrx.filter_k(rho, geom)
+         #+ metric.inv_dzdeta * gravity * metric.inv_sqrtG * mtrx.filter_k(metric.sqrtG*rho, geom)
+         # + (metric.inv_dzdeta * rho * gravity)
          #+ metric.inv_dzdeta * gravity * numpy.exp(mtrx.filter_k(logrho, geom))
 
 

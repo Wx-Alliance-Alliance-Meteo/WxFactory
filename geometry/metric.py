@@ -845,7 +845,7 @@ class Metric:
       # Coriolis parameter
       self.coriolis_f = 2 * geom.rotation_speed / geom.delta * ( math.sin(geom.lat_p) - geom.X * math.cos(geom.lat_p) * math.sin(geom.angle_p) + geom.Y * math.cos(geom.lat_p) * math.cos(geom.angle_p))
 
-      # Now, apply the conversion to the reference element.  In geometric coordinates,
+      # the conversion to the reference element.  In geometric coordinates,
       # x1 and x2 run from -pi/4 to pi/4 and x3 runs from 0 to htop, but inside each elemenet
       # (from the perspective of the differentiation matrices) each coordinate runs from -1 to 1.
 

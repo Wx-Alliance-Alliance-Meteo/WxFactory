@@ -425,20 +425,20 @@ def dcmip_steady_state_mountain(geom: CubedSphere, metric, mtrx, param):
    #-----------------------------------------------------------------------
    #    Set topography
    #-----------------------------------------------------------------------
-#   zbot = numpy.zeros(geom.coordVec_latlon.shape[2:])
-#   zbot_itf_i = numpy.zeros(geom.coordVec_latlon_itf_i.shape[2:])
-#   zbot_itf_j = numpy.zeros(geom.coordVec_latlon_itf_j.shape[2:])
-#
-#   for (z, coord) in zip([zbot, zbot_itf_i, zbot_itf_j],
-#                         [geom.coordVec_latlon, geom.coordVec_latlon_itf_i, geom.coordVec_latlon_itf_j]):
-#      lat = coord[1,0,:,:]
-#      lon = coord[0,0,:,:]
-#      r = numpy.arccos( math.sin(phim) * numpy.sin(lat) + math.cos(phim) * numpy.cos(lat) * numpy.cos(lon - lambdam) )
-#      z[r<Rm] = (h0/2.0)*(1.0+numpy.cos(math.pi*r[r<Rm]/Rm))*numpy.cos(math.pi*r[r<Rm]/zetam)**2   # mountain height
-#
-#
-#   # Update the geometry object with the new bottom topography
-#   geom.apply_topography(zbot,zbot_itf_i,zbot_itf_j)
+   zbot = numpy.zeros(geom.coordVec_latlon.shape[2:])
+   zbot_itf_i = numpy.zeros(geom.coordVec_latlon_itf_i.shape[2:])
+   zbot_itf_j = numpy.zeros(geom.coordVec_latlon_itf_j.shape[2:])
+
+   for (z, coord) in zip([zbot, zbot_itf_i, zbot_itf_j],
+                         [geom.coordVec_latlon, geom.coordVec_latlon_itf_i, geom.coordVec_latlon_itf_j]):
+      lat = coord[1,0,:,:]
+      lon = coord[0,0,:,:]
+      r = numpy.arccos( math.sin(phim) * numpy.sin(lat) + math.cos(phim) * numpy.cos(lat) * numpy.cos(lon - lambdam) )
+      z[r<Rm] = (h0/2.0)*(1.0+numpy.cos(math.pi*r[r<Rm]/Rm))*numpy.cos(math.pi*r[r<Rm]/zetam)**2   # mountain height
+
+
+   # Update the geometry object with the new bottom topography
+   geom.apply_topography(zbot,zbot_itf_i,zbot_itf_j)
    # And regenerate the metric to take this new topography into account
    metric.build_metric()
 
@@ -446,12 +446,12 @@ def dcmip_steady_state_mountain(geom: CubedSphere, metric, mtrx, param):
    #    PS (surface pressure)
    #-----------------------------------------------------------------------
 
-#  if gamma == 0.0:
-#     ps = p0 * numpy.exp(-gravity * zbot / (Rd*T0))
-#   else:
-#      ps = p0 * (1.0 - gamma / T0 * zbot)**exponent
+   if gamma == 0.0:
+     ps = p0 * numpy.exp(-gravity * zbot / (Rd*T0))
+   else:
+     ps = p0 * (1.0 - gamma / T0 * zbot)**exponent
 
-   ps = 100000
+   # ps = 100000
 
    #-----------------------------------------------------------------------
    #    PRESSURE
@@ -506,6 +506,11 @@ def dcmip_steady_state_mountain(geom: CubedSphere, metric, mtrx, param):
 
    theta = (tv * (p0 / p)**(Rd/cpd))
 
+   # Debugging: add a random perturbation to θ to seed any unstable modes
+   # numpy.random.seed(0)
+   # theta += 1e-2*numpy.random.randn(*theta[:,0,0].shape)[:,None,None]
+   # theta += 1e-2*numpy.random.randn(*theta.shape)
+
    return rho, u1_contra, u2_contra, w, theta
 
 
@@ -518,7 +523,7 @@ def dcmip_schar_waves(geom: CubedSphere, metric, mtrx: DFROperators, param, shea
    T0      = 300.0             # temperature (K)
    lambdam = math.pi/4.0       # mountain longitude center point (radians)
    phim    = 0.0               # mountain latitude center point (radians)
-   h0      = 250.0             # peak height of the mountain range (m)
+   h0      = 0 #250.0             # peak height of the mountain range (m)
    Dm      = 5000.0            # mountain radius (meters)
    Dxi     = 4000.0            # Mountain wavelength (meters)
    Ueq     = 20.0              # Reference zonal wind velocity (equator)
