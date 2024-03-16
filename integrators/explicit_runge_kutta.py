@@ -152,6 +152,9 @@ class RungeKutta:
       # loop until the step is accepted
       step_accepted = False
       step_rejected = False
+      # store for next step, interpolation and stepsize control
+      self.h_previous = h
+
       while not step_accepted:
          if h < min_step:
             return False
@@ -177,12 +180,12 @@ class RungeKutta:
          err_estimate =  h * (self.K[:self.n_stages + self.FSAL].T @ self.E[:self.n_stages + self.FSAL])
          error_norm = global_inf_norm(err_estimate / scale)
          # print(t_new, h, error_norm)
-
+         
          # evaluate error
          if error_norm < 1:
             step_accepted = True
             #if mpirank == 0:
-            #    print("accepted step ", self.num_of_steps, t_new, h, error_norm)
+                #print("accepted step ", self.num_of_steps, t_new, h, error_norm)
 
             if error_norm < self.tiny_err:
                factor = BIG_FACTOR
@@ -208,8 +211,12 @@ class RungeKutta:
          else:
             step_rejected = True
             #if mpirank == 0:
-            #    print("rejected step ", self.num_of_steps, t_new, h, error_norm)
+                #print("rejected step ", self.num_of_steps, t_new, h, error_norm)
             h *= limiter(self.safety * error_norm**self.error_exponent, 2)
+            
+            if h < 1e-12: 
+                print("Unable to achieve desired tolerance. EXODE method failed.")
+                break
 
             self.failed_steps += 1
             # keep track of the number of steps 
@@ -217,13 +224,12 @@ class RungeKutta:
 
             if numpy.isnan(error_norm) or numpy.isinf(error_norm):
                return False, "Overflow or underflow encountered."
-
+          
       if not self.FSAL:
          # evaluate ouput point for the next step
          self.K[self.n_stages] = self.fun(t + h, y_new)
 
       # store for next step, interpolation and stepsize control
-      self.h_previous = h
       self.y_old = y
       self.h = h
       self.f = self.K[self.n_stages].copy()

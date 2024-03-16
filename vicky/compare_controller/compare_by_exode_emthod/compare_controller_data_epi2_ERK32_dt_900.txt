@@ -1,0 +1,455 @@
+
+deadbeat
+tolerance = 1e-5
+--------------------------------------------
+EXODE converged at iteration 330, with 31 rejected steps with local error 2.932868793748316e-06
+52.503
+EXODE converged at iteration 603, with 40 rejected steps with local error 2.344341650403795e-06
+95.502
+EXODE converged at iteration 610, with 42 rejected steps with local error 4.7670193221603415e-06
+96.603
+EXODE converged at iteration 617, with 44 rejected steps with local error 1.4412574691907656e-06
+97.575
+EXODE converged at iteration 619, with 45 rejected steps with local error 9.171210428716841e-07
+98.071
+EXODE converged at iteration 604, with 39 rejected steps with local error 9.020884441530755e-06
+95.516
+EXODE converged at iteration 616, with 45 rejected steps with local error 1.0219480609391812e-06
+97.762
+EXODE converged at iteration 604, with 39 rejected steps with local error 8.762306035188871e-07
+95.533
+EXODE converged at iteration 593, with 35 rejected steps with local error 8.623974136452184e-06
+93.897
+EXODE converged at iteration 577, with 27 rejected steps with local error 5.188542169430592e-06
+tolerance = 1e-8
+--------------------------------------------
+EXODE converged at iteration 570, with 49 rejected steps with local error 1.9049676614684286e-09
+90.639
+EXODE converged at iteration 595, with 36 rejected steps with local error 8.434866928842254e-09
+94.389
+EXODE converged at iteration 547, with 12 rejected steps with local error 1.760694697814421e-08
+86.221
+EXODE converged at iteration 585, with 28 rejected steps with local error 4.062203675787431e-08
+92.416
+EXODE converged at iteration 607, with 33 rejected steps with local error 1.3280222013811235e-08
+95.980
+EXODE converged at iteration 598, with 33 rejected steps with local error 3.164524735984431e-09
+94.645
+EXODE converged at iteration 609, with 40 rejected steps with local error 1.360027256417009e-08
+96.355
+EXODE converged at iteration 608, with 44 rejected steps with local error 3.872173353727576e-08
+96.442
+EXODE converged at iteration 662, with 44 rejected steps with local error 8.113101165007165e-09
+104.885
+EXODE converged at iteration 623, with 47 rejected steps with local error 2.414281109504344e-08
+tolerance = 1e-12
+--------------------------------------------
+EXODE converged at iteration 622, with 42 rejected steps with local error 1.3615011396144802e-11
+98.599
+EXODE converged at iteration 675, with 46 rejected steps with local error 7.804903428515629e-11
+107.022
+EXODE converged at iteration 657, with 49 rejected steps with local error 6.043316291782653e-10
+103.958
+EXODE converged at iteration 744, with 55 rejected steps with local error 6.99001246212851e-09
+117.715
+EXODE converged at iteration 792, with 64 rejected steps with local error 7.442715708275513e-09
+125.446
+EXODE converged at iteration 1668, with 67 rejected steps with local error 4.004641007475219e-10
+262.955
+EXODE converged at iteration 1010, with 56 rejected steps with local error 1.8416925370686709e-10
+159.549
+EXODE converged at iteration 637, with 42 rejected steps with local error 6.816249770487982e-09
+100.689
+EXODE converged at iteration 1007, with 83 rejected steps with local error 2.844811288886266e-10
+159.571
+EXODE converged at iteration 857, with 65 rejected steps with local error 9.847845477473684e-10
+
+h110
+tolerance = 1e-5
+--------------------------------------------
+EXODE converged at iteration 282, with 10 rejected steps with local error 2.8739665091534297e-06
+44.780
+EXODE converged at iteration 517, with 0 rejected steps with local error 2.93439892105426e-06
+81.542
+EXODE converged at iteration 520, with 0 rejected steps with local error 1.5174889304361237e-06
+81.922
+EXODE converged at iteration 520, with 0 rejected steps with local error 1.9577571900698472e-06
+81.945
+EXODE converged at iteration 520, with 0 rejected steps with local error 2.5151468165694127e-06
+81.768
+EXODE converged at iteration 520, with 0 rejected steps with local error 3.019955792289862e-06
+81.867
+EXODE converged at iteration 520, with 0 rejected steps with local error 2.5050558428907717e-06
+81.721
+EXODE converged at iteration 520, with 0 rejected steps with local error 1.335187798295031e-06
+81.987
+EXODE converged at iteration 520, with 0 rejected steps with local error 6.944575093482941e-07
+81.781
+EXODE converged at iteration 520, with 0 rejected steps with local error 5.841375705306018e-07
+tolerance = 1e-8
+--------------------------------------------
+EXODE converged at iteration 496, with 12 rejected steps with local error 2.6989165134458855e-09
+78.590
+EXODE converged at iteration 520, with 0 rejected steps with local error 9.7748991997449e-10
+81.944
+EXODE converged at iteration 517, with 0 rejected steps with local error 7.607464572697288e-09
+81.401
+EXODE converged at iteration 522, with 1 rejected steps with local error 1.1228343523297765e-08
+82.224
+EXODE converged at iteration 543, with 1 rejected steps with local error 2.82069245078414e-09
+85.473
+EXODE converged at iteration 525, with 1 rejected steps with local error 7.0966347717705616e-09
+82.503
+EXODE converged at iteration 520, with 0 rejected steps with local error 9.100687363075972e-09
+82.106
+EXODE converged at iteration 511, with 0 rejected steps with local error 1.9751632386652325e-08
+80.536
+EXODE converged at iteration 570, with 1 rejected steps with local error 5.028882567179792e-09
+89.748
+EXODE converged at iteration 525, with 1 rejected steps with local error 2.730531208258993e-08
+tolerance = 1e-12
+--------------------------------------------
+EXODE converged at iteration 592, with 12 rejected steps with local error 1.1194215140799147e-10
+94.202
+EXODE converged at iteration 633, with 13 rejected steps with local error 4.924509834954125e-10
+100.569
+EXODE converged at iteration 575, with 8 rejected steps with local error 2.7051396132402763e-09
+91.123
+EXODE converged at iteration 710, with 17 rejected steps with local error 1.5253352124310513e-09
+112.490
+EXODE converged at iteration 664, with 15 rejected steps with local error 1.9335655536979674e-09
+105.116
+EXODE converged at iteration 1581, with 13 rejected steps with local error 8.110433143074255e-10
+250.052
+EXODE converged at iteration 1011, with 22 rejected steps with local error 5.060087243383872e-10
+160.080
+EXODE converged at iteration 573, with 7 rejected steps with local error 8.149455655880496e-09
+90.632
+EXODE converged at iteration 1099, with 33 rejected steps with local error 1.6842171270193927e-10
+174.020
+EXODE converged at iteration 778, with 27 rejected steps with local error 2.279489799897161e-10
+
+h211b
+tolerance = 1e-5
+--------------------------------------------
+EXODE converged at iteration 282, with 10 rejected steps with local error 1.1036148899204595e-06
+44.734
+EXODE converged at iteration 519, with 1 rejected steps with local error 4.775529238964023e-06
+81.743
+EXODE converged at iteration 520, with 0 rejected steps with local error 1.6627271739607911e-06
+81.741
+EXODE converged at iteration 520, with 0 rejected steps with local error 1.982752538012243e-06
+81.792
+EXODE converged at iteration 520, with 0 rejected steps with local error 2.2317054942903425e-06
+81.685
+EXODE converged at iteration 520, with 0 rejected steps with local error 1.6992042479151615e-06
+81.780
+EXODE converged at iteration 520, with 0 rejected steps with local error 1.6179515320859397e-06
+81.661
+EXODE converged at iteration 520, with 0 rejected steps with local error 1.5853023686851643e-06
+81.865
+EXODE converged at iteration 520, with 0 rejected steps with local error 1.8626617638998847e-06
+81.717
+EXODE converged at iteration 520, with 0 rejected steps with local error 6.095763332912302e-07
+tolerance = 1e-8
+--------------------------------------------
+EXODE converged at iteration 493, with 9 rejected steps with local error 8.796928299468524e-10
+77.755
+EXODE converged at iteration 520, with 0 rejected steps with local error 1.64178875496539e-09
+81.623
+EXODE converged at iteration 517, with 0 rejected steps with local error 1.0546686650887894e-08
+80.994
+EXODE converged at iteration 525, with 1 rejected steps with local error 5.7831161331920136e-09
+82.351
+EXODE converged at iteration 537, with 1 rejected steps with local error 4.988790723254352e-09
+84.195
+EXODE converged at iteration 526, with 0 rejected steps with local error 1.156967054490689e-09
+82.285
+EXODE converged at iteration 523, with 0 rejected steps with local error 1.3256753921158367e-09
+81.951
+EXODE converged at iteration 511, with 0 rejected steps with local error 3.9576535801039057e-08
+79.873
+EXODE converged at iteration 567, with 1 rejected steps with local error 2.0869249873588426e-08
+89.036
+EXODE converged at iteration 522, with 1 rejected steps with local error 9.336334510596083e-08
+tolerance = 1e-12
+--------------------------------------------
+EXODE converged at iteration 587, with 11 rejected steps with local error 2.8910664976091375e-11
+93.004
+EXODE converged at iteration 640, with 12 rejected steps with local error 2.3433659775351543e-10
+101.066
+EXODE converged at iteration 569, with 8 rejected steps with local error 1.1728798014974712e-09
+89.772
+EXODE converged at iteration 708, with 22 rejected steps with local error 3.9064885559728294e-09
+111.871
+EXODE converged at iteration 682, with 18 rejected steps with local error 3.508533882683208e-09
+107.721
+EXODE converged at iteration 1514, with 8 rejected steps with local error 3.0066295326989964e-10
+238.203
+EXODE converged at iteration 1010, with 23 rejected steps with local error 2.238579822164976e-10
+159.382
+EXODE converged at iteration 583, with 12 rejected steps with local error 9.385998159506864e-09
+92.023
+EXODE converged at iteration 986, with 35 rejected steps with local error 1.8920685415343207e-10
+155.636
+EXODE converged at iteration 794, with 29 rejected steps with local error 3.024614020944982e-09
+
+h211d
+tolerance = 1e-5
+--------------------------------------------
+EXODE converged at iteration 286, with 12 rejected steps with local error 2.589585155825046e-06
+45.330
+EXODE converged at iteration 524, with 2 rejected steps with local error 2.0170312839473064e-06
+82.471
+EXODE converged at iteration 526, with 0 rejected steps with local error 7.088945971666152e-07
+82.597
+EXODE converged at iteration 523, with 0 rejected steps with local error 1.7488179948416161e-06
+82.129
+EXODE converged at iteration 523, with 0 rejected steps with local error 3.1451117027517918e-06
+82.047
+EXODE converged at iteration 525, with 1 rejected steps with local error 4.152372195798548e-06
+82.298
+EXODE converged at iteration 526, with 0 rejected steps with local error 6.818540878840266e-07
+82.480
+EXODE converged at iteration 523, with 0 rejected steps with local error 1.8942691047584678e-06
+81.986
+EXODE converged at iteration 523, with 0 rejected steps with local error 3.085917064633583e-06
+81.998
+EXODE converged at iteration 523, with 0 rejected steps with local error 2.743654738256893e-06
+tolerance = 1e-8
+--------------------------------------------
+EXODE converged at iteration 504, with 16 rejected steps with local error 2.7363198396640286e-09
+80.386
+EXODE converged at iteration 523, with 0 rejected steps with local error 2.6667352321901707e-09
+82.845
+EXODE converged at iteration 525, with 1 rejected steps with local error 1.635286465512534e-08
+83.049
+EXODE converged at iteration 528, with 1 rejected steps with local error 7.944473534860558e-09
+83.483
+EXODE converged at iteration 543, with 1 rejected steps with local error 6.407871387374598e-09
+85.731
+EXODE converged at iteration 536, with 2 rejected steps with local error 1.4347981807921094e-09
+84.949
+EXODE converged at iteration 526, with 0 rejected steps with local error 9.876809239926736e-10
+83.337
+EXODE converged at iteration 514, with 0 rejected steps with local error 1.1659635896545935e-07
+81.245
+EXODE converged at iteration 570, with 1 rejected steps with local error 3.099972125590753e-08
+90.336
+EXODE converged at iteration 530, with 2 rejected steps with local error 3.462432445524534e-08
+tolerance = 1e-12
+--------------------------------------------
+EXODE converged at iteration 600, with 19 rejected steps with local error 4.875386316022268e-12
+94.780
+EXODE converged at iteration 613, with 9 rejected steps with local error 9.539565635312766e-11
+96.667
+EXODE converged at iteration 593, with 11 rejected steps with local error 5.939954983691281e-10
+93.307
+EXODE converged at iteration 718, with 24 rejected steps with local error 2.9423093823317995e-09
+113.270
+EXODE converged at iteration 777, with 25 rejected steps with local error 2.577466160458104e-09
+122.277
+EXODE converged at iteration 1437, with 7 rejected steps with local error 5.515418930987449e-10
+225.629
+EXODE converged at iteration 1022, with 32 rejected steps with local error 8.083161553849123e-11
+161.041
+EXODE converged at iteration 575, with 8 rejected steps with local error 8.996487893044523e-09
+90.276
+EXODE converged at iteration 998, with 38 rejected steps with local error 2.1177827021220824e-10
+157.321
+EXODE converged at iteration 809, with 32 rejected steps with local error 6.19649512914368e-10
+
+h211pi
+tolerance = 1e-5
+--------------------------------------------
+EXODE converged at iteration 280, with 9 rejected steps with local error 5.200881913354792e-06
+44.396
+EXODE converged at iteration 519, with 1 rejected steps with local error 2.464099701756951e-06
+82.106
+EXODE converged at iteration 520, with 0 rejected steps with local error 1.4598929286067244e-06
+81.919
+EXODE converged at iteration 520, with 0 rejected steps with local error 1.951535029558655e-06
+82.146
+EXODE converged at iteration 520, with 0 rejected steps with local error 1.4719714708628508e-06
+82.022
+EXODE converged at iteration 520, with 0 rejected steps with local error 1.6151188934226026e-06
+81.925
+EXODE converged at iteration 520, with 0 rejected steps with local error 1.9548016846385795e-06
+81.878
+EXODE converged at iteration 522, with 1 rejected steps with local error 1.1648764744976838e-06
+82.241
+EXODE converged at iteration 520, with 0 rejected steps with local error 5.911073296434554e-07
+82.186
+EXODE converged at iteration 520, with 0 rejected steps with local error 8.077065559093268e-07
+tolerance = 1e-8
+--------------------------------------------
+EXODE converged at iteration 493, with 9 rejected steps with local error 1.6486341245385924e-09
+78.867
+EXODE converged at iteration 517, with 0 rejected steps with local error 5.623169403385573e-09
+82.416
+EXODE converged at iteration 517, with 0 rejected steps with local error 1.1800430931695073e-08
+82.026
+EXODE converged at iteration 520, with 0 rejected steps with local error 1.0218199612098646e-08
+82.643
+EXODE converged at iteration 537, with 1 rejected steps with local error 7.409260014175132e-09
+85.286
+EXODE converged at iteration 528, with 1 rejected steps with local error 6.298512446312487e-09
+83.777
+EXODE converged at iteration 520, with 0 rejected steps with local error 4.3053128513903615e-09
+82.845
+EXODE converged at iteration 511, with 0 rejected steps with local error 1.512788003843205e-08
+81.285
+EXODE converged at iteration 579, with 1 rejected steps with local error 4.956635138298093e-09
+92.030
+EXODE converged at iteration 525, with 1 rejected steps with local error 1.0208650707968388e-08
+tolerance = 1e-12
+--------------------------------------------
+EXODE converged at iteration 593, with 14 rejected steps with local error 3.700139775860763e-11
+94.220
+EXODE converged at iteration 650, with 14 rejected steps with local error 4.6069761794408324e-11
+102.821
+EXODE converged at iteration 579, with 10 rejected steps with local error 1.4783990179144671e-09
+91.439
+EXODE converged at iteration 714, with 19 rejected steps with local error 6.50768421258674e-09
+112.873
+EXODE converged at iteration 695, with 17 rejected steps with local error 1.0347234579943544e-09
+109.848
+EXODE converged at iteration 1432, with 9 rejected steps with local error 1.1618887450152511e-10
+226.067
+EXODE converged at iteration 1031, with 23 rejected steps with local error 2.962731848187007e-10
+163.109
+EXODE converged at iteration 573, with 7 rejected steps with local error 4.848743116225153e-09
+90.397
+EXODE converged at iteration 1178, with 32 rejected steps with local error 1.5829672473271065e-10
+186.124
+EXODE converged at iteration 776, with 26 rejected steps with local error 1.2300239689867012e-09
+
+pi3040
+tolerance = 1e-5
+--------------------------------------------
+EXODE converged at iteration 272, with 5 rejected steps with local error 1.0906245445868177e-06
+43.150
+EXODE converged at iteration 519, with 1 rejected steps with local error 1.7077046784698121e-06
+81.925
+EXODE converged at iteration 523, with 0 rejected steps with local error 7.176804663269814e-06
+82.192
+EXODE converged at iteration 526, with 0 rejected steps with local error 1.7245602370113389e-06
+82.691
+EXODE converged at iteration 523, with 0 rejected steps with local error 1.978524904276944e-06
+82.330
+EXODE converged at iteration 523, with 0 rejected steps with local error 6.8741548235083344e-06
+82.176
+EXODE converged at iteration 523, with 0 rejected steps with local error 5.6616593843283764e-06
+82.581
+EXODE converged at iteration 523, with 0 rejected steps with local error 3.0321826838019203e-06
+82.234
+EXODE converged at iteration 523, with 0 rejected steps with local error 2.6409850767087128e-06
+82.459
+EXODE converged at iteration 523, with 0 rejected steps with local error 1.8403525991352626e-06
+tolerance = 1e-8
+--------------------------------------------
+EXODE converged at iteration 494, with 8 rejected steps with local error 6.877311075624294e-10
+79.125
+EXODE converged at iteration 523, with 0 rejected steps with local error 2.309661225715797e-09
+83.636
+EXODE converged at iteration 523, with 0 rejected steps with local error 1.4105902048522578e-08
+83.015
+EXODE converged at iteration 528, with 1 rejected steps with local error 6.805488740776501e-09
+84.070
+EXODE converged at iteration 546, with 1 rejected steps with local error 6.2763620006030244e-09
+86.850
+EXODE converged at iteration 534, with 1 rejected steps with local error 1.2274180650189818e-09
+85.049
+EXODE converged at iteration 526, with 0 rejected steps with local error 5.113537154448357e-09
+83.849
+EXODE converged at iteration 514, with 0 rejected steps with local error 2.4158719992427196e-08
+81.729
+EXODE converged at iteration 579, with 1 rejected steps with local error 7.332621503769977e-09
+92.304
+EXODE converged at iteration 531, with 1 rejected steps with local error 2.194084226149727e-08
+tolerance = 1e-12
+--------------------------------------------
+EXODE converged at iteration 600, with 13 rejected steps with local error 1.9777588604659908e-11
+95.671
+EXODE converged at iteration 615, with 10 rejected steps with local error 1.903421260615867e-10
+98.307
+EXODE converged at iteration 563, with 5 rejected steps with local error 9.96504400229514e-10
+89.219
+EXODE converged at iteration 693, with 13 rejected steps with local error 6.568494733692363e-09
+110.143
+EXODE converged at iteration 716, with 14 rejected steps with local error 4.979216800179168e-09
+113.684
+EXODE converged at iteration 1494, with 7 rejected steps with local error 3.014799274591272e-10
+237.250
+EXODE converged at iteration 971, with 17 rejected steps with local error 2.0584759392941333e-10
+154.388
+EXODE converged at iteration 569, with 5 rejected steps with local error 2.4295302709539086e-09
+90.325
+EXODE converged at iteration 966, with 22 rejected steps with local error 3.7690123774195265e-10
+153.914
+EXODE converged at iteration 783, with 25 rejected steps with local error 2.242423388013303e-09
+
+pi4020
+tolerance = 1e-5
+--------------------------------------------
+EXODE converged at iteration 284, with 11 rejected steps with local error 1.1705871899847468e-06
+45.677
+EXODE converged at iteration 520, with 0 rejected steps with local error 1.1689470932143427e-06
+82.638
+EXODE converged at iteration 523, with 0 rejected steps with local error 1.8270809852893039e-06
+82.872
+EXODE converged at iteration 523, with 0 rejected steps with local error 1.6480814601035521e-06
+82.924
+EXODE converged at iteration 523, with 0 rejected steps with local error 2.4376381174057773e-06
+83.043
+EXODE converged at iteration 523, with 0 rejected steps with local error 1.2094590306056335e-06
+82.971
+EXODE converged at iteration 523, with 0 rejected steps with local error 7.127076126734466e-07
+83.020
+EXODE converged at iteration 523, with 0 rejected steps with local error 4.948558545594365e-07
+82.803
+EXODE converged at iteration 520, with 0 rejected steps with local error 3.2870176322097385e-06
+82.631
+EXODE converged at iteration 520, with 0 rejected steps with local error 3.052733469694619e-06
+tolerance = 1e-8
+--------------------------------------------
+EXODE converged at iteration 495, with 10 rejected steps with local error 8.230655646430183e-10
+80.627
+EXODE converged at iteration 523, with 0 rejected steps with local error 8.856280192009241e-10
+84.380
+EXODE converged at iteration 520, with 0 rejected steps with local error 5.446814132792609e-09
+83.786
+EXODE converged at iteration 523, with 0 rejected steps with local error 4.455049634935358e-09
+84.213
+EXODE converged at iteration 543, with 1 rejected steps with local error 1.460367909679837e-09
+87.543
+EXODE converged at iteration 531, with 1 rejected steps with local error 2.3666304232835004e-09
+85.686
+EXODE converged at iteration 523, with 0 rejected steps with local error 3.995791437829861e-09
+84.468
+EXODE converged at iteration 511, with 0 rejected steps with local error 5.1648028706463604e-08
+82.435
+EXODE converged at iteration 570, with 1 rejected steps with local error 1.0937455068430981e-08
+92.057
+EXODE converged at iteration 525, with 1 rejected steps with local error 3.7326001914001976e-08
+tolerance = 1e-12
+--------------------------------------------
+EXODE converged at iteration 595, with 15 rejected steps with local error 2.2869519075431377e-11
+95.219
+EXODE converged at iteration 626, with 11 rejected steps with local error 7.218090308723387e-11
+99.896
+EXODE converged at iteration 563, with 5 rejected steps with local error 6.448798231359877e-10
+89.581
+EXODE converged at iteration 701, with 17 rejected steps with local error 2.557514518795553e-09
+111.676
+EXODE converged at iteration 665, with 11 rejected steps with local error 4.262828490507488e-09
+105.827
+EXODE converged at iteration 1518, with 10 rejected steps with local error 5.996390994727117e-11
+241.403
+EXODE converged at iteration 1004, with 20 rejected steps with local error 2.605713909245346e-10
+160.155
+EXODE converged at iteration 578, with 8 rejected steps with local error 1.680047744307277e-09
+92.094
+EXODE converged at iteration 969, with 25 rejected steps with local error 4.746902390318987e-10
+154.641
+EXODE converged at iteration 781, with 24 rejected steps with local error 9.180846192327195e-10

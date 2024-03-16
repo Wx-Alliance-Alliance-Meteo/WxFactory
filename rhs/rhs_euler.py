@@ -538,4 +538,5 @@ def rhs_euler (Q: numpy.ndarray, geom: CubedSphere, mtrx: DFROperators, metric: 
       rhs[idx_rho_u2]    = 0.0
       rhs[idx_rho_w]     = 0.0
       rhs[idx_rho_theta] = 0.0
+   print("rhs = ", rhs) 
    return rhs

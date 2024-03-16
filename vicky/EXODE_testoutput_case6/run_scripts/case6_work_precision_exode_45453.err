@@ -1,0 +1,290 @@
+slurmstepd: error: Unable to create TMPDIR [/tmp/siw001/436271]: No such file or directory
+slurmstepd: error: Setting TMPDIR to /tmp
+Traceback (most recent call last):
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/./main_gef.py", line 271, in <module>
+Traceback (most recent call last):
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/./main_gef.py", line 271, in <module>
+Traceback (most recent call last):
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/./main_gef.py", line 271, in <module>
+Traceback (most recent call last):
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/./main_gef.py", line 271, in <module>
+Traceback (most recent call last):
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/./main_gef.py", line 271, in <module>
+Traceback (most recent call last):
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/./main_gef.py", line 271, in <module>
+Traceback (most recent call last):
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/./main_gef.py", line 271, in <module>
+Traceback (most recent call last):
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/./main_gef.py", line 271, in <module>
+Traceback (most recent call last):
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/./main_gef.py", line 271, in <module>
+Traceback (most recent call last):
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/./main_gef.py", line 271, in <module>
+Traceback (most recent call last):
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/./main_gef.py", line 271, in <module>
+Traceback (most recent call last):
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/./main_gef.py", line 271, in <module>
+Traceback (most recent call last):
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/./main_gef.py", line 271, in <module>
+Traceback (most recent call last):
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/./main_gef.py", line 271, in <module>
+Traceback (most recent call last):
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/./main_gef.py", line 271, in <module>
+Traceback (most recent call last):
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/./main_gef.py", line 271, in <module>
+Traceback (most recent call last):
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/./main_gef.py", line 271, in <module>
+Traceback (most recent call last):
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/./main_gef.py", line 271, in <module>
+Traceback (most recent call last):
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/./main_gef.py", line 271, in <module>
+Traceback (most recent call last):
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/./main_gef.py", line 271, in <module>
+Traceback (most recent call last):
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/./main_gef.py", line 271, in <module>
+Traceback (most recent call last):
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/./main_gef.py", line 271, in <module>
+Traceback (most recent call last):
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/./main_gef.py", line 271, in <module>
+Traceback (most recent call last):
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/./main_gef.py", line 271, in <module>
+    rank = main(args)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/./main_gef.py", line 57, in main
+    rank = main(args)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/./main_gef.py", line 57, in main
+    rank = main(args)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/./main_gef.py", line 57, in main
+    rank = main(args)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/./main_gef.py", line 57, in main
+    stepper = create_time_integrator(param, rhs, preconditioner)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/./main_gef.py", line 185, in create_time_integrator
+    rank = main(args)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/./main_gef.py", line 57, in main
+    rank = main(args)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/./main_gef.py", line 57, in main
+    rank = main(args)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/./main_gef.py", line 57, in main
+    return EpiStiff(param, order, rhs.full, init_substeps=10)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/integrators/epi_stiff.py", line 36, in __init__
+    stepper = create_time_integrator(param, rhs, preconditioner)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/./main_gef.py", line 185, in create_time_integrator
+    rank = main(args)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/./main_gef.py", line 57, in main
+    rank = main(args)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/./main_gef.py", line 57, in main
+    rank = main(args)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/./main_gef.py", line 57, in main
+    rank = main(args)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/./main_gef.py", line 57, in main
+    rank = main(args)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/./main_gef.py", line 57, in main
+    stepper = create_time_integrator(param, rhs, preconditioner)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/./main_gef.py", line 185, in create_time_integrator
+    rank = main(args)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/./main_gef.py", line 57, in main
+    rank = main(args)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/./main_gef.py", line 57, in main
+    return EpiStiff(param, order, rhs.full, init_substeps=10)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/integrators/epi_stiff.py", line 36, in __init__
+    rank = main(args)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/./main_gef.py", line 57, in main
+    rank = main(args)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/./main_gef.py", line 57, in main
+    rank = main(args)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/./main_gef.py", line 57, in main
+    rank = main(args)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/./main_gef.py", line 57, in main
+    stepper = create_time_integrator(param, rhs, preconditioner)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/./main_gef.py", line 185, in create_time_integrator
+    stepper = create_time_integrator(param, rhs, preconditioner)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/./main_gef.py", line 185, in create_time_integrator
+    rank = main(args)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/./main_gef.py", line 57, in main
+    rank = main(args)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/./main_gef.py", line 57, in main
+    return EpiStiff(param, order, rhs.full, init_substeps=10)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/integrators/epi_stiff.py", line 36, in __init__
+    return EpiStiff(param, order, rhs.full, init_substeps=10)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/integrators/epi_stiff.py", line 36, in __init__
+    stepper = create_time_integrator(param, rhs, preconditioner)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/./main_gef.py", line 185, in create_time_integrator
+    stepper = create_time_integrator(param, rhs, preconditioner)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/./main_gef.py", line 185, in create_time_integrator
+    self.init_method = Epi(param, 2, rhs)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/integrators/epi.py", line 61, in __init__
+    self.init_method = Epi(param, 2, rhs)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/integrators/epi.py", line 61, in __init__
+    print("epi uses "+init_substeps + " sub stpes")
+TypeError: can only concatenate str (not "int") to str
+    rank = main(args)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/./main_gef.py", line 57, in main
+    print("epi uses "+init_substeps + " sub stpes")
+TypeError: can only concatenate str (not "int") to str
+    stepper = create_time_integrator(param, rhs, preconditioner)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/./main_gef.py", line 185, in create_time_integrator
+    return EpiStiff(param, order, rhs.full, init_substeps=10)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/integrators/epi_stiff.py", line 36, in __init__
+    self.init_method = Epi(param, 2, rhs)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/integrators/epi.py", line 61, in __init__
+    print("epi uses "+init_substeps + " sub stpes")
+TypeError: can only concatenate str (not "int") to str
+    rank = main(args)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/./main_gef.py", line 57, in main
+    rank = main(args)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/./main_gef.py", line 57, in main
+    stepper = create_time_integrator(param, rhs, preconditioner)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/./main_gef.py", line 185, in create_time_integrator
+    return EpiStiff(param, order, rhs.full, init_substeps=10)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/integrators/epi_stiff.py", line 36, in __init__
+    stepper = create_time_integrator(param, rhs, preconditioner)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/./main_gef.py", line 185, in create_time_integrator
+    stepper = create_time_integrator(param, rhs, preconditioner)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/./main_gef.py", line 185, in create_time_integrator
+    stepper = create_time_integrator(param, rhs, preconditioner)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/./main_gef.py", line 185, in create_time_integrator
+    stepper = create_time_integrator(param, rhs, preconditioner)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/./main_gef.py", line 185, in create_time_integrator
+    rank = main(args)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/./main_gef.py", line 57, in main
+    stepper = create_time_integrator(param, rhs, preconditioner)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/./main_gef.py", line 185, in create_time_integrator
+    stepper = create_time_integrator(param, rhs, preconditioner)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/./main_gef.py", line 185, in create_time_integrator
+    self.init_method = Epi(param, 2, rhs)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/integrators/epi.py", line 61, in __init__
+    stepper = create_time_integrator(param, rhs, preconditioner)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/./main_gef.py", line 185, in create_time_integrator
+    return EpiStiff(param, order, rhs.full, init_substeps=10)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/integrators/epi_stiff.py", line 36, in __init__
+    return EpiStiff(param, order, rhs.full, init_substeps=10)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/integrators/epi_stiff.py", line 36, in __init__
+    stepper = create_time_integrator(param, rhs, preconditioner)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/./main_gef.py", line 185, in create_time_integrator
+    stepper = create_time_integrator(param, rhs, preconditioner)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/./main_gef.py", line 185, in create_time_integrator
+    return EpiStiff(param, order, rhs.full, init_substeps=10)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/integrators/epi_stiff.py", line 36, in __init__
+    stepper = create_time_integrator(param, rhs, preconditioner)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/./main_gef.py", line 185, in create_time_integrator
+    stepper = create_time_integrator(param, rhs, preconditioner)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/./main_gef.py", line 185, in create_time_integrator
+    stepper = create_time_integrator(param, rhs, preconditioner)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/./main_gef.py", line 185, in create_time_integrator
+    stepper = create_time_integrator(param, rhs, preconditioner)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/./main_gef.py", line 185, in create_time_integrator
+    stepper = create_time_integrator(param, rhs, preconditioner)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/./main_gef.py", line 185, in create_time_integrator
+    return EpiStiff(param, order, rhs.full, init_substeps=10)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/integrators/epi_stiff.py", line 36, in __init__
+    self.init_method = Epi(param, 2, rhs)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/integrators/epi.py", line 61, in __init__
+    print("epi uses "+init_substeps + " sub stpes")
+TypeError: can only concatenate str (not "int") to str
+    return EpiStiff(param, order, rhs.full, init_substeps=10)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/integrators/epi_stiff.py", line 36, in __init__
+    self.init_method = Epi(param, 2, rhs)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/integrators/epi.py", line 61, in __init__
+    self.init_method = Epi(param, 2, rhs)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/integrators/epi.py", line 61, in __init__
+    print("epi uses "+init_substeps + " sub stpes")
+TypeError: can only concatenate str (not "int") to str
+    print("epi uses "+init_substeps + " sub stpes")
+TypeError: can only concatenate str (not "int") to str
+    stepper = create_time_integrator(param, rhs, preconditioner)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/./main_gef.py", line 185, in create_time_integrator
+    return EpiStiff(param, order, rhs.full, init_substeps=10)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/integrators/epi_stiff.py", line 36, in __init__
+    self.init_method = Epi(param, 2, rhs)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/integrators/epi.py", line 61, in __init__
+    print("epi uses "+init_substeps + " sub stpes")
+TypeError: can only concatenate str (not "int") to str
+    self.init_method = Epi(param, 2, rhs)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/integrators/epi.py", line 61, in __init__
+    return EpiStiff(param, order, rhs.full, init_substeps=10)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/integrators/epi_stiff.py", line 36, in __init__
+    return EpiStiff(param, order, rhs.full, init_substeps=10)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/integrators/epi_stiff.py", line 36, in __init__
+    return EpiStiff(param, order, rhs.full, init_substeps=10)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/integrators/epi_stiff.py", line 36, in __init__
+    return EpiStiff(param, order, rhs.full, init_substeps=10)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/integrators/epi_stiff.py", line 36, in __init__
+    return EpiStiff(param, order, rhs.full, init_substeps=10)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/integrators/epi_stiff.py", line 36, in __init__
+    print("epi uses "+init_substeps + " sub stpes")
+TypeError: can only concatenate str (not "int") to str
+    self.init_method = Epi(param, 2, rhs)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/integrators/epi.py", line 61, in __init__
+    print("epi uses "+init_substeps + " sub stpes")
+TypeError: can only concatenate str (not "int") to str
+    return EpiStiff(param, order, rhs.full, init_substeps=10)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/integrators/epi_stiff.py", line 36, in __init__
+    return EpiStiff(param, order, rhs.full, init_substeps=10)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/integrators/epi_stiff.py", line 36, in __init__
+    return EpiStiff(param, order, rhs.full, init_substeps=10)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/integrators/epi_stiff.py", line 36, in __init__
+    return EpiStiff(param, order, rhs.full, init_substeps=10)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/integrators/epi_stiff.py", line 36, in __init__
+    self.init_method = Epi(param, 2, rhs)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/integrators/epi.py", line 61, in __init__
+    return EpiStiff(param, order, rhs.full, init_substeps=10)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/integrators/epi_stiff.py", line 36, in __init__
+    self.init_method = Epi(param, 2, rhs)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/integrators/epi.py", line 61, in __init__
+    return EpiStiff(param, order, rhs.full, init_substeps=10)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/integrators/epi_stiff.py", line 36, in __init__
+    self.init_method = Epi(param, 2, rhs)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/integrators/epi.py", line 61, in __init__
+    return EpiStiff(param, order, rhs.full, init_substeps=10)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/integrators/epi_stiff.py", line 36, in __init__
+    print("epi uses "+init_substeps + " sub stpes")
+TypeError: can only concatenate str (not "int") to str
+    print("epi uses "+init_substeps + " sub stpes")
+TypeError: can only concatenate str (not "int") to str
+    self.init_method = Epi(param, 2, rhs)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/integrators/epi.py", line 61, in __init__
+    print("epi uses "+init_substeps + " sub stpes")
+TypeError: can only concatenate str (not "int") to str
+    self.init_method = Epi(param, 2, rhs)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/integrators/epi.py", line 61, in __init__
+    self.init_method = Epi(param, 2, rhs)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/integrators/epi.py", line 61, in __init__
+    self.init_method = Epi(param, 2, rhs)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/integrators/epi.py", line 61, in __init__
+    self.init_method = Epi(param, 2, rhs)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/integrators/epi.py", line 61, in __init__
+    print("epi uses "+init_substeps + " sub stpes")
+TypeError: can only concatenate str (not "int") to str
+    self.init_method = Epi(param, 2, rhs)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/integrators/epi.py", line 61, in __init__
+    self.init_method = Epi(param, 2, rhs)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/integrators/epi.py", line 61, in __init__
+    print("epi uses "+init_substeps + " sub stpes")
+TypeError: can only concatenate str (not "int") to str
+    self.init_method = Epi(param, 2, rhs)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/integrators/epi.py", line 61, in __init__
+    self.init_method = Epi(param, 2, rhs)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/integrators/epi.py", line 61, in __init__
+    print("epi uses "+init_substeps + " sub stpes")
+TypeError: can only concatenate str (not "int") to str
+    print("epi uses "+init_substeps + " sub stpes")
+TypeError: can only concatenate str (not "int") to str
+    self.init_method = Epi(param, 2, rhs)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/integrators/epi.py", line 61, in __init__
+    self.init_method = Epi(param, 2, rhs)
+  File "/fs/hestia_Heccc/rpnatm/siw001/gef/integrators/epi.py", line 61, in __init__
+    print("epi uses "+init_substeps + " sub stpes")
+TypeError: can only concatenate str (not "int") to str
+    print("epi uses "+init_substeps + " sub stpes")
+TypeError: can only concatenate str (not "int") to str
+    print("epi uses "+init_substeps + " sub stpes")
+TypeError: can only concatenate str (not "int") to str
+    print("epi uses "+init_substeps + " sub stpes")
+TypeError: can only concatenate str (not "int") to str
+    print("epi uses "+init_substeps + " sub stpes")
+TypeError: can only concatenate str (not "int") to str
+    print("epi uses "+init_substeps + " sub stpes")
+TypeError: can only concatenate str (not "int") to str
+    print("epi uses "+init_substeps + " sub stpes")
+TypeError: can only concatenate str (not "int") to str
+    print("epi uses "+init_substeps + " sub stpes")
+TypeError: can only concatenate str (not "int") to str

@@ -1,0 +1,5 @@
+slurmstepd: error: Unable to create TMPDIR [/tmp/siw001/874536]: No such file or directory
+slurmstepd: error: Setting TMPDIR to /tmp
+srun: Job step aborted: Waiting up to 32 seconds for job step to finish.
+slurmstepd: error: *** JOB 43664 ON ib18be-057 CANCELLED AT 2024-01-19T06:13:08 ***
+slurmstepd: error: *** STEP 43664.1 ON ib18be-057 CANCELLED AT 2024-01-19T06:13:08 ***

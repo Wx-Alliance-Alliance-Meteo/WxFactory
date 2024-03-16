@@ -15,6 +15,7 @@ from rhs.rhs_euler_convective  import rhs_euler_convective
 from rhs.rhs_euler_fv          import rhs_euler_fv
 from rhs.rhs_sw                import rhs_sw
 from rhs.rhs_advection2d       import rhs_advection2d
+from rhs.rhs_adr_2d            import rhs_adr_2d
 
 # For type hints
 from common.parallel        import DistributedWorld
@@ -83,3 +84,7 @@ class RhsBundle:
          else:
             self.full = generate_rhs(
                rhs_sw, geom, operators, metric, topo, ptopo, param.nbsolpts, param.nb_elements_horizontal)
+
+      elif param.equations == "adr_2d":
+         self.full = generate_rhs(
+               rhs_adr_2d, geom, operators, metric, ptopo, param.nbsolpts, param.nb_elements_horizontal)

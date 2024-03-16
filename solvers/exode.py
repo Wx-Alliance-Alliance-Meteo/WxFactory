@@ -4,7 +4,7 @@ import numpy
 from integrators.butcher import *
 
 def exode(τ_out, A, u, method='ARK3(2)4L[2]SA-ERK', controller="deadbeat", rtol=1e-3, atol = 1e-6, task1 = False, verbose=False):
-
+   
    if not hasattr(exode, "first_step"):
       exode.first_step = τ_out # TODO : use CFL condition ?
 
@@ -33,7 +33,7 @@ def exode(τ_out, A, u, method='ARK3(2)4L[2]SA-ERK', controller="deadbeat", rtol
    else:
       method = METHODS[method]
 
-   t0, tf = map(float, [0, τ_out])
+   t0, tf = map(float, [0, 1.]) # τ_out])
    
    solver = method(fun, t0, y0, tf, controller=controller, first_step=exode.first_step, rtol=rtol, atol=atol)
 
@@ -58,7 +58,9 @@ def exode(τ_out, A, u, method='ARK3(2)4L[2]SA-ERK', controller="deadbeat", rtol
    ts = numpy.array(ts)
 
    solution = solver.y
-   stats = (solver.nfev, solver.failed_steps, solver.error_estimation,solver.error_norm_old) # TODO
+   stats = (solver.nfev, solver.failed_steps, solver.error_estimation,solver.error_norm_old, solver.h_previous, solver.h) # TODO
+   # keep track of h_previous, use as first step for next iteration. 
+   # print("previous step = ", stats[4], "final step = ", stats[5])
 
    exode.first_step = numpy.median(numpy.diff(ts))
 

@@ -1,0 +1,12 @@
+slurmstepd: error: Unable to create TMPDIR [/tmp/siw001/92992]: No such file or directory
+slurmstepd: error: Setting TMPDIR to /tmp
+/var/lib/slurm-llnl/slurmd/job44369/slurm_script: line 34: 
+EPImethod=epi2
+exode_controller="deadbeat h211b pi3040"
+# Testoutput location and file
+testoutputDir=/space/hall0/work/eccc/mrd/rpnatm/siw001/gef_data/case6/compare_controller/${EPImethod}_${exode_controller}
+mkdir -p $testoutputDir
+
+# config file name
+configFile=case6_exode_${exode_controller}.ini
+: No such file or directory

@@ -1,0 +1,2 @@
+slurmstepd: error: Unable to create TMPDIR [/tmp/siw001/76918]: No such file or directory
+slurmstepd: error: Setting TMPDIR to /tmp

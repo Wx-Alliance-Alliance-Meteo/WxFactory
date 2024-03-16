@@ -21,7 +21,7 @@ class Configuration:
          print(self.parser.sections())
          print(' ')
 
-      self.equations = self._get_option('General', 'equations', str, None, ['euler', 'shallow_water'])
+      self.equations = self._get_option('General', 'equations', str, None, ['euler', 'shallow_water', 'adr_2d'])
       if self.equations == 'euler':
          self.depth_approx = self._get_option('General', 'depth_approx', str, 'deep', ['deep','shallow'])
       else:
