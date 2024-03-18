@@ -6,7 +6,7 @@ from .epi_stiff      import EpiStiff
 from .euler1         import Euler1
 from .imex2          import Imex2
 from .integrator     import Integrator
-from .part_ros_exp2  import PartRosExp2
+from .partrosexp2    import PartRosExp2
 from .ros2           import Ros2
 from .rosexp2        import RosExp2
 from .splitting      import StrangSplitting
