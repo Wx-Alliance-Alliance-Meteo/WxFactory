@@ -1,4 +1,4 @@
-The name of the project, GEF, is a French acronym which stands for ***G**EM en **É**léments **F**inis*.  
+WxFactory
 
 # Requirements
 
