@@ -95,3 +95,6 @@ Here is an example of a command to run the model for the André Robert bubble te
 ```
 python3 main_gef.py config/gaussian_bubble.ini
 ```
+
+## If you find this project useful, please cite:
+Gaudreault, S., Charron, M., Dallerit, V., & Tokman, M. (2022). High-order numerical solutions to the shallow-water equations on the rotated cubed-sphere grid. Journal of Computational Physics, 449, 110792. [https://doi.org/10.1016/j.jcp.2021.110792](https://doi.org/10.1016/j.jcp.2021.110792)
