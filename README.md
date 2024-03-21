@@ -1,8 +1,9 @@
-WxFactory
+# WxFactory
+Research numerical weather model. The name is inspired by [Richardson’s Fantastic Forecast Factory](https://www.emetsoc.org/resources/rff/)
 
-# Requirements
+## Requirements
 
-GEF was built for Python 3.11 (at least).  It also requires an MPI implementation.
+WxFactory was built for Python 3.11 (at least).  It also requires an MPI implementation.
 
 ## Python packages
 * Python version at least 3.11
@@ -57,7 +58,7 @@ To be able to use NetCDF in parallel (for faster writing to disk) [Optional]
 conda install netcdf4=*=mpi*
 ```
 
-If you want the visualization capabilities of GEF:
+If you want the visualization capabilities of WxFactory:
 ```
 conda install cartopy
 ```
@@ -67,7 +68,7 @@ To visualize profiles from python applications, install `snakeviz`:
 conda install snakeviz
 ```
 
-## Running GEF
+## Running WxFactory
 
 ```
 # With the cubed sphere as a grid:
@@ -77,9 +78,9 @@ mpirun -n 6 ./main_gef.py config/case6.ini
 ./main_gef.py config/gaussian_bubble.ini
 ```
 
-## Profiling GEF
+## Profiling WxFactory
 
-You can generate an execution profile when running GEF by adding the `--profile` flag to the main command. For example:
+You can generate an execution profile when running WxFactory by adding the `--profile` flag to the main command. For example:
 ```
 mpirun -n 6 python3 ./main_gef.py --profile config/case6.ini
 ```
