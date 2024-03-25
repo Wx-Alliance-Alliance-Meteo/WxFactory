@@ -27,20 +27,6 @@ Python packages can be installed with the package management system of your
 Linux distribution or with `pip`.  A few distribution specific instructions
 are given below.
 
-## Ubuntu 18.04
-Here are the commands that need to be executed in order to install the
-dependencies on Ubuntu 18.04:
-```
-pip3 install --user mpi4py
-pip3 install --user PyQt5==5.14.0
-```
-
-## ArchLinux
-```
-sudo pacman -S python-numpy python-scipy python-mpi4py python-netcdf4-openmpi python-matplotlib 
-```
-The python-cartopy package can be installed from the AUR.
-
 ## Conda
 The necessary packages are available from the conda-forge channel, so it should
 be added to the list of default channels for easier use of the various commands
