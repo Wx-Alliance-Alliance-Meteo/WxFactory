@@ -1,6 +1,7 @@
 
 # from .bamphi.bamphi     import bamphi
 from .fgmres            import fgmres
+from .gcrot             import gcrot
 from .kiops             import kiops
 from .global_operations import global_dotprod, global_inf_norm, global_norm
 from .matvec            import MatvecOp, MatvecOpBasic, MatvecOpRat, matvec_fun, matvec_rat

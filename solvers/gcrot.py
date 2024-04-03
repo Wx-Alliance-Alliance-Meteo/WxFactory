@@ -124,7 +124,6 @@ def _fgmres(matvec, v0, m, tol, lpsolve=None, rpsolve=None, cs=(), outer_v=(),
 
 def gcrot(A, b, x0=None, tol=1e-5, maxiter=1000, M=None, m=20, k=None, discard_C=False, truncate='oldest'):
 
-   A = aslinearoperator(A)
    N = b.shape[0]
 
    niter = 0
@@ -177,7 +176,7 @@ def gcrot(A, b, x0=None, tol=1e-5, maxiter=1000, M=None, m=20, k=None, discard_C
       CU.sort(key=lambda cu: cu[0] is not None)
 
       # Fill-in missing ones
-      C = numpy.empty((A.shape[0], len(CU)), dtype=r.dtype, order='F')
+      C = numpy.empty((CU[0][1].shape[0], len(CU)), dtype=r.dtype, order='F')
       us = []
       j = 0
       while CU:

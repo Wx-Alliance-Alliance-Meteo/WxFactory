@@ -74,6 +74,7 @@ class Configuration:
       self.jacobian_method    = self._get_option('Time_integration', 'jacobian_method', str, 'complex',
                                                  ['complex', 'fd'])
 
+      self.linear_solver  = self._get_option('Time_integration', 'linear_solver', str, 'fgmres', valid_values=['fgmres', 'gcrot'])
       self.verbose_solver = self._get_option('Time_integration', 'verbose_solver', int, 0)
       self.gmres_restart  = self._get_option('Time_integration', 'gmres_restart', int, 20)
 
