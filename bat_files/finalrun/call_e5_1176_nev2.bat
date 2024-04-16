@@ -3,7 +3,7 @@ cd /home/vma000/code/gef_tanya
 . ./load_env.sh
 
 
-methods=("epi5/case6_icwyne.ini" "epi5/galewsky_pmexne.ini" "epi5/galewsky_cwyne.ini" "epi5/galewsky_icwyne.ini")
+methods=("epi5/galewsky_kiops.ini" "epi5/galewsky_pmexne.ini" "epi5/galewsky_cwyne.ini" "epi5/galewsky_icwyne.ini" "epi5/galewsky_case5_kiops.ini" "epi5/case6_kiops.ini")
 
 methodlen=${#methods[@]}
 #looping through each case and running it 7 times

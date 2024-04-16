@@ -3,7 +3,7 @@ cd /home/vma000/code/gef_tanya
 . ./load_env.sh
 
 
-methods=("srerk3/galewsky_pmexne.ini" "srerk3/galewsky_cwyne.ini" "srerk3/galewsky_icwyne.ini")
+methods=("srerk3/galewsky_pmexne.ini" "srerk3/galewsky_cwyne.ini" "srerk3/galewsky_icwyne.ini" "srerk3/galewsky_kiops.ini")
 
 methodlen=${#methods[@]}
 #looping through each case and running it 7 times
