@@ -96,7 +96,7 @@ def pmex_ne1s(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 10, mmin=10, mmax 
    oldm = -1; oldτ = math.nan; ω = math.nan
    kestold = True
    same_τ = None
-   reached_mmax = False #if reached max krylov size, do not normalize final vec
+   reached_mmax    = False #if reached max krylov size, do not normalize final vec
    prev_normalized = False #if previous vector is normalized, skip certain parts
 
    l = 0
@@ -160,18 +160,17 @@ def pmex_ne1s(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 10, mmin=10, mmax 
          if j == 1:
            β = nrm
 
-
          #5. if the previous vector is NOT normalized, then scale for arnoldi
          if (not prev_normalized):
 
             #4a. scale for arnoldi
-            V[j-1:j+1,:] /= nrm 
+            V[j-1:j+1,:]             /= nrm 
             global_vec[:,1]          /= nrm
             global_vec[j-1:j+1,1]    /= nrm #last two elements are scaled twice
             global_vec[0:j-1,0]      /= nrm
 
             #only if j>1 and if the previous vector in not normalized
-            #whichis why it's not included in part 4 with T
+            #whichis why it's not included in part 6a with T
             if j >1:
               H[j-1,j-2]              = nrm
 
@@ -201,7 +200,10 @@ def pmex_ne1s(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 10, mmin=10, mmax 
          #be computed using communication 
          if j < m: 
 
-            sum_sqrd = sum(global_vec[0:j,1]**2)
+            #10. compute norm estimate with quad precision 
+            sum_vec  = numpy.array(global_vec[0:j,1], numpy.float128)**2
+            sum_sqrd = numpy.sum(sum_vec)
+            #sum_sqrd = sum(global_vec[0:j,1]**2)
 
             if (global_vec[-1,1] < sum_sqrd) :
                #compute true norm
@@ -211,15 +213,15 @@ def pmex_ne1s(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 10, mmin=10, mmax 
                curr_nrm = math.sqrt(global_sum)
 
             else:
-               curr_nrm = math.sqrt(global_vec[-1,1] - sum_sqrd)
+               curr_nrm = numpy.array(numpy.sqrt(global_vec[-1,1] - sum_sqrd), numpy.float64)
 
-            #10. Happy breakdown
+            #11. Happy breakdown
             if curr_nrm < tol:
                happy = True
                break
 
-            #11. scale by norm estimate
-            V[j,:] /= curr_nrm
+            #12. scale by norm estimate
+            V[j,:]      /= curr_nrm
             prev_nrm_est = curr_nrm #save nrm estimate to re-scale up at next step
 
          #this flag keeps track if the previous vector is 
@@ -233,10 +235,10 @@ def pmex_ne1s(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 10, mmin=10, mmax 
 
       #normalize final vector
       if (not reached_mmax):
-         local_sum = V[m,:] @ V[m,:]
+         local_sum  = V[m,:] @ V[m,:]
          global_sum = numpy.empty_like(local_sum)
          mpi4py.MPI.COMM_WORLD.Allreduce([local_sum, mpi4py.MPI.DOUBLE], [global_sum, mpi4py.MPI.DOUBLE])
-         finalNrm = numpy.sqrt(global_sum)
+         finalNrm   = numpy.sqrt(global_sum)
 
          V[m,:] /= finalNrm
          H[m,m-1] = finalNrm

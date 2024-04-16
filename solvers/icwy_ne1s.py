@@ -186,7 +186,7 @@ def icwy_ne1s(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop 
          if (not prev_normalized):
 
             #3a. scale for arnoldi
-            V[j-1:j+1,:] /= nrm 
+            V[j-1:j+1,:]             /= nrm 
             global_sum[:,1]          /= nrm
             global_sum[j-1:j+1,1]    /= nrm
             global_sum[0:j-1,0]      /= nrm
@@ -212,7 +212,10 @@ def icwy_ne1s(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop 
          #7. compute norm estimate of current vector
          if j < m: 
 
-            sum_sqrd = sum(global_sum[0:j,1]**2)
+            #10. compute norm estimate with quad precision 
+            sum_vec  = numpy.array(global_sum[0:j,1], numpy.float128)**2
+            sum_sqrd = numpy.sum(sum_vec)
+            #sum_sqrd = sum(global_sum[0:j,1]**2)
 
             if (global_sum[-1,1] < sum_sqrd) :
                #compute true norm
@@ -222,9 +225,9 @@ def icwy_ne1s(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop 
                curr_nrm = math.sqrt(global_sum)
 
             else:
-               curr_nrm = math.sqrt(global_sum[-1,1] - sum_sqrd)
+               curr_nrm = numpy.array(numpy.sqrt(global_sum[-1,1] - sum_sqrd), numpy.float64)
 
-            #6. Happy breakdown
+            #11. Happy breakdown
             if curr_nrm < tol:
                happy = True
                break
