@@ -1,5 +1,4 @@
-
-# from .bamphi.bamphi     import bamphi
+""" Solvers module """
 from .fgmres            import fgmres
 from .gcrot             import gcrot
 from .kiops             import kiops

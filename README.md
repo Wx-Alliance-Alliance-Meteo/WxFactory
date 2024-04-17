@@ -21,7 +21,6 @@ WxFactory was built for Python 3.11 (at least).  It also requires an MPI impleme
 ## Optional
 * `cartopy` A cartographic python library with matplotlib support for visualisation
 * `tqdm`   Progress bar when generating matrices
-* `more-itertools` For using Bamphi solver
 
 Python packages can be installed with the package management system of your
 Linux distribution or with `pip`.  A few distribution specific instructions
