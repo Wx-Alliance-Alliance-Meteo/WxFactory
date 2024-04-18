@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-cd /home/vma000/code/gef_tanya
+cd /home/vma000/code/wx_factory_tanya
 . ./load_env.sh
 
 methods=("srerk6/case6_pmex1s.ini" "srerk6/case6_kiops.ini" "srerk6/case6_cwy1s.ini" "srerk6/case6_icwy1s.ini")
