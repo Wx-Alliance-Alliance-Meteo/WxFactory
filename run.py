@@ -115,6 +115,7 @@ def setup_system(param: Configuration):
       rank = MPI.COMM_WORLD.Get_rank()
       devnum = rank % len(param.cuda_devices)
       cupy.cuda.Device(param.cuda_devices[devnum]).use()
+      # cupy.cuda.Stream(non_blocking=False).use()
 
       cupy.cuda.set_allocator(cupy.cuda.MemoryPool(cupy.cuda.malloc_managed).malloc)
 

@@ -1,13 +1,12 @@
+from typing import Self
+
 import cupy as cp
 from mpi4py import MPI
-
-from .definitions import *
-from .parallel import DistributedWorld, EulerExchangeRequest, VectorNonBlockingExchangeRequest
-
-# typing
-from typing import Self
 from numpy.typing import NDArray
+
 from geometry.cubed_sphere import CubedSphere
+from .definitions import idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_w, idx_rho_theta
+from .parallel import DistributedWorld, EulerExchangeRequest, VectorNonBlockingExchangeRequest
 
 class CudaDistributedWorld(DistributedWorld):
 
@@ -28,7 +27,7 @@ class CudaDistributedWorld(DistributedWorld):
                                        (north_send, south_send, west_send, east_send),
                                        (send_buffer[0], send_buffer[1], send_buffer[2], send_buffer[3])):
          buffer[:] = cp.flip(data, flip_dim) if do_flip else data
-      
+
       receive_buffer = cp.empty_like(send_buffer)
       cp.cuda.get_current_stream().synchronize()
       request = self.comm_dist_graph.Ineighbor_alltoall(send_buffer, receive_buffer)
@@ -36,13 +35,13 @@ class CudaDistributedWorld(DistributedWorld):
       if sync:
          request.Wait()
       return request, receive_buffer[0], receive_buffer[1], receive_buffer[2], receive_buffer[3]
-   
+
    def xchange_Euler_interfaces(self: Self,
                               geom: CubedSphere,
                               variables_itf_i: NDArray[cp.float64],
                               variables_itf_j: NDArray[cp.float64],
                               blocking: bool = True) -> EulerExchangeRequest:
-      
+
       X = cp.asarray(geom.X[0, :])
       Y = cp.asarray(geom.Y[:, 0])
       flip_dim = 1
@@ -67,8 +66,8 @@ class CudaDistributedWorld(DistributedWorld):
          (send_buffer[0], send_buffer[1], send_buffer[2], send_buffer[3])):
 
          for id in (idx_rho, idx_rho_w, idx_rho_theta):
-               buffer[id, :] = cp.flip(var[id], flip_dim) if do_flip else var[id]
-         
+            buffer[id, :] = cp.flip(var[id], flip_dim) if do_flip else var[id]
+
          tmp1, tmp2 = convert(var[idx_rho_u1], var[idx_rho_u2], positions)
          buffer[idx_rho_u1] = cp.flip(tmp1, flip_dim) if do_flip else tmp1
          buffer[idx_rho_u2] = cp.flip(tmp2, flip_dim) if do_flip else tmp2

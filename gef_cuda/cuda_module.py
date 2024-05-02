@@ -23,6 +23,9 @@ CUDA_BLOCK_SHAPE       = tuple[tuple[int, int, int], ...](cp.cuda.runtime.getDev
 CUDA_GRID_SHAPE        = tuple[tuple[int, int, int], ...](cp.cuda.runtime.getDeviceProperties(i)["maxGridSize"] \
                                                           for i in range(CUDA_DEVICE_COUNT))
 
+# print(f'Thread limit: {CUDA_THREAD_LIMIT}\n'
+#       f'Block shape:  {CUDA_BLOCK_SHAPE}\n'
+#       f'Grid shape:   {CUDA_GRID_SHAPE}')
 
 @dataclass(slots=True)
 class Dim:
@@ -163,7 +166,10 @@ class DimSpec:
       return lambda *_: (Dim(), Dim())
 
    @classmethod
-   def groupby(cls: type[Self], dim: int, arg: int = 0, shape: Callable[[tuple[int, ...]], Dim] = lambda x: Dim(*x)) \
+   def groupby(cls: type[Self],
+               dim: int,
+               arg: int = 0,
+               shape: Callable[[tuple[int, ...]], Dim] = lambda x: Dim(*x)) \
          -> DimFun[*KernelArgs]:
       """
       The cuda kernel will look at the shape of argument `arg` (default 0, i.e., first argument),
@@ -186,7 +192,8 @@ class DimSpec:
       return ret
 
    @classmethod
-   def groupby_first_x(cls: type[Self], shape: Callable[[tuple[int, ...]], Dim] = lambda x: Dim(*x)) \
+   def groupby_first_x(cls: type[Self],
+                       shape: Callable[[tuple[int, ...]], Dim] = lambda x: Dim(*x)) \
          -> DimFun[*KernelArgs]:
       return cls.groupby(cls.x, 0, shape)
 
@@ -239,10 +246,10 @@ class Requires(object):
 class TemplateSpec:
 
    numpy_to_cpp = {
-       cp.dtype(cp.float32): "float",
-       cp.dtype(cp.float64): "double",
-       cp.dtype(cp.complex64): "complex<float>",
-       cp.dtype(cp.complex128): "complex<double>"
+      cp.dtype(cp.float32): "float",
+      cp.dtype(cp.float64): "double",
+      cp.dtype(cp.complex64): "complex<float>",
+      cp.dtype(cp.complex128): "complex<double>"
    }
 
    @classmethod

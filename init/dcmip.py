@@ -1,5 +1,7 @@
-import numpy
 import math
+
+from mpi4py import MPI
+import numpy
 
 from common.definitions    import cpd, day_in_secs, gravity, p0, Rd
 from geometry              import CubedSphere, DFROperators, Metric3DTopo, wind2contra_2d, wind2contra_3d
@@ -736,6 +738,12 @@ def dcmip_gravity_wave(geom, metric, mtrx, param):
    t_mean = bigG * (1.0 - numpy.exp(N2 * geom.height / gravity)) + TS * numpy.exp(N2 * geom.height / gravity)
 
    theta_base = t_mean * (p0 / p)**kappa
+
+   theta_b = TS * ((p0 / ps) ** kappa) * numpy.exp(N2 * geom.height / gravity)
+
+   all_theta_b = MPI.COMM_WORLD.gather(theta_b, root=0)
+   if (MPI.COMM_WORLD.rank == 0):
+      print(f'all_theta_b shape = {[b.shape for b in all_theta_b]}')
 
    #-----------------------------------------------------------------------
    #    rho (density), unperturbed using the background temperature t_mean

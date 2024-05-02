@@ -65,6 +65,10 @@ def kiops_cuda(tau_out: NDArray[cp.float64], A: Callable[[NDArray[cp.float64]], 
          appearing in exponential integrators. ACM Transactions on Mathematical Software (TOMS), 38(3), p.22
    """
 
+   current_stream = cp.cuda.get_current_stream()
+   current_stream.synchronize()
+   current_stream.synchronize()
+
    tau_out = cp.asarray(tau_out, dtype=cp.float64)
    u = cp.asarray(u)
    tol = cp.asarray(tol)
@@ -111,7 +115,7 @@ def kiops_cuda(tau_out: NDArray[cp.float64], A: Callable[[NDArray[cp.float64]], 
    # compute 1-norm of u
    local_normU = cp.sum(cp.abs(u[1:, :]), axis=1)
    global_normU = cp.empty_like(local_normU)
-   cp.cuda.get_current_stream().synchronize()
+   current_stream.synchronize()
    MPI.COMM_WORLD.Allreduce([local_normU, MPI.DOUBLE], [global_normU, MPI.DOUBLE])
    normU = cp.amax(global_normU)
 
@@ -146,7 +150,8 @@ def kiops_cuda(tau_out: NDArray[cp.float64], A: Callable[[NDArray[cp.float64]], 
 
    l = 0
 
-   send_stream = cp.cuda.Stream()
+   # send_stream = cp.cuda.Stream(non_blocking=False)
+   send_stream = current_stream
 
    while tau_now < tau_end:
 
@@ -163,17 +168,16 @@ def kiops_cuda(tau_out: NDArray[cp.float64], A: Callable[[NDArray[cp.float64]], 
 
          # Normalize initial vector (this norm is nonzero)
          local_sum = Vg[0, :n] @ Vg[0, :n]
-         global_sum = cp.empty_like(local_sum)
-         cp.cuda.get_current_stream().synchronize()
+         global_sum = np.empty_like(local_sum)
+         current_stream.synchronize()
          MPI.COMM_WORLD.Allreduce([local_sum, MPI.DOUBLE], [global_sum, MPI.DOUBLE])
-         beta = cp.sqrt(global_sum + Vg[0, n:n + p] @ Vg[0, n:n + p])
+         beta = np.sqrt(global_sum + Vg[0, n:n + p] @ Vg[0, n:n + p])
 
          # The first Krylov basis vector
          Vg[0, :] /= beta
 
          # async transfer Vg[0] to host
-         with send_stream:
-            Vg[0, :].get(out=V_buf[0, :n + p])
+         Vg[0, :].get(out=V_buf[0, :n + p], stream=send_stream)
 
       # Incomplete orthogonalization process
       while j < m:
@@ -185,6 +189,7 @@ def kiops_cuda(tau_out: NDArray[cp.float64], A: Callable[[NDArray[cp.float64]], 
          parity = j % 2
 
          # Augmented matrix - vector product
+         current_stream.synchronize() # TODO REMOVE
          Vg[slot, :n] = A(Vg[slot - 1, :n]) + Vg[slot - 1, n:n + p] @ u_flip
 
          Vg[slot, n:n + p - 1] = Vg[slot - 1, n + 1:n + p]
@@ -194,28 +199,30 @@ def kiops_cuda(tau_out: NDArray[cp.float64], A: Callable[[NDArray[cp.float64]], 
          ilow = max(0, j - iop)
          low_slots = [x % Vg_slots for x in range(ilow, j)]
          local_sum = Vg[low_slots, :n] @ Vg[slot, :n]
-         global_sum = cp.empty_like(local_sum)
-         cp.cuda.get_current_stream().synchronize()
+         global_sum = np.empty_like(local_sum)
+         current_stream.synchronize()
+         #### All reduce 1
          MPI.COMM_WORLD.Allreduce([local_sum, MPI.DOUBLE], [global_sum, MPI.DOUBLE])
          H[ilow:j, j - 1] = global_sum + Vg[low_slots, n:n + p] @ Vg[slot, n:n + p]
 
          Vg[slot, :n + p] = Vg[slot, :n + p] - Vg[low_slots, :n + p].T @ H[ilow:j, j - 1]
 
          local_sum = Vg[slot, :n] @ Vg[slot, :n]
-         global_sum = cp.empty_like(local_sum)
-         cp.cuda.get_current_stream().synchronize()
+         small_local = Vg[slot, n:n + p] @ Vg[slot, n:n + p]
+         global_sum = np.empty_like(local_sum)
+         current_stream.synchronize()
+         #### All red 2
          MPI.COMM_WORLD.Allreduce([local_sum, MPI.DOUBLE], [global_sum, MPI.DOUBLE])
-         nrm = cp.sqrt(global_sum + Vg[slot, n:n + p] @ Vg[slot, n:n + p])
+         nrm = np.sqrt(global_sum + small_local)
 
          # host-to-host copy of V_buf (last iteration's vector)
          # profiling indicates that this is a good place to do this
-         send_stream.synchronize()
+         # send_stream.synchronize()
          V[j - 1, :n + p] = V_buf[1 - parity, :n + p]
 
          # Happy breakdown
          if nrm < tol:
-            with send_stream:
-               Vg[slot, :n + p].get(out=V_buf[parity, :n + p])
+            Vg[slot, :n + p].get(out=V_buf[parity, :n + p], stream=send_stream)
             happy = True
             break
 
@@ -223,8 +230,7 @@ def kiops_cuda(tau_out: NDArray[cp.float64], A: Callable[[NDArray[cp.float64]], 
          Vg[slot, :n + p] = Vg[slot, :n + p] / nrm
 
          # dev-to-host copy of most recent V row
-         with send_stream:
-            Vg[slot, :n + p].get(out=V_buf[parity, :n + p])
+         Vg[slot, :n + p].get(out=V_buf[parity, :n + p], stream=send_stream)
 
          krystep += 1
 
@@ -240,7 +246,7 @@ def kiops_cuda(tau_out: NDArray[cp.float64], A: Callable[[NDArray[cp.float64]], 
       exps += 1
 
       # while we're waiting we copy out the last V row
-      send_stream.synchronize()
+      # send_stream.synchronize()
       V[j, :n + p] = V_buf[parity, :n + p]
 
       # Restore the value of H_{m+1,m}
@@ -313,8 +319,7 @@ def kiops_cuda(tau_out: NDArray[cp.float64], A: Callable[[NDArray[cp.float64]], 
       if omega <= delta:
 
          # We're going to need F on the cpu
-         with send_stream:
-            (beta * F[:j, 0]).get(out=V_buf[0, :j])
+         (beta * F[:j, 0]).get(out=V_buf[0, :j], stream=send_stream)
 
          # Yep, got the required tolerance; update
          reject += ireject
@@ -335,19 +340,18 @@ def kiops_cuda(tau_out: NDArray[cp.float64], A: Callable[[NDArray[cp.float64]], 
                tauPhantom = tau_out[l + k] - tau_now
                F2 = cu_utils.linalg.expm(sgn * tauPhantom * H[:j, :j])
                # Too large for gpu, and can't copy out beforehand :(
-               send_stream.synchronize()
+               # send_stream.synchronize()
                np.matmul((beta * F2[:j, 0]).get(out=V_buf[1, :j]), V[:j, :n], out=V_buf[2, :n])
-               with send_stream:
-                  w[l + k, :] = cp.asarray(V_buf[2, :n])
+               w[l + k, :] = cp.asarray(V_buf[2, :n], stream=send_stream)
 
             # Advance l.
             l += blownTs
 
          # Using the standard scheme
-         send_stream.synchronize()
+         # send_stream.synchronize()
          np.matmul(V_buf[0, :j], V[:j, :n], out=V_buf[1, :n])
-         with send_stream:
-            w[l, :] = cp.asarray(V_buf[1, :n])
+         w[l, :] = cp.asarray(V_buf[1, :n])
+         # current_stream.use()
 
          # Update tau_out
          tau_now += tau
@@ -370,7 +374,7 @@ def kiops_cuda(tau_out: NDArray[cp.float64], A: Callable[[NDArray[cp.float64]], 
       oldm = m
       m = m_new
 
-   send_stream.synchronize()
+   # send_stream.synchronize()
    if task1 is True:
       for k in range(numSteps):
          w[k, :] = w[k, :] / tau_out[k]

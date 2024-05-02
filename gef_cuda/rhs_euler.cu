@@ -8,6 +8,8 @@ max(x, y) is x if x.real > y.real,
 */
 #include <cupy/complex.cuh>
 
+// #include <cstdint>
+
 #ifndef heat_capacity_ratio
 #error "Define heat_capacity_ratio"
 #endif
@@ -443,4 +445,183 @@ __global__ void compute_flux_k(
 
     wflux_pres_x3_itf_k[D_idx] = 0.5 * (wflux_pres_D + wflux_pres_U) / pres_D;
     wflux_pres_x3_itf_k[U_idx] = 0.5 * (wflux_pres_D + wflux_pres_U) / pres_U;
+}
+
+template<typename Number, typename Real>
+__global__ void compute_forcing(
+    Number* const __restrict__ forcing_rho,          //!< [num_elem_z * num_sol_pts, num_elem_x * num_sol_pts, num_elem_x * num_sol_pts]
+    Number* const __restrict__ forcing_u1,           //!< [num_elem_z * num_sol_pts, num_elem_x * num_sol_pts, num_elem_x * num_sol_pts]
+    Number* const __restrict__ forcing_u2,           //!< [num_elem_z * num_sol_pts, num_elem_x * num_sol_pts, num_elem_x * num_sol_pts]
+    Number* const __restrict__ forcing_w,            //!< [num_elem_z * num_sol_pts, num_elem_x * num_sol_pts, num_elem_x * num_sol_pts]
+    Number* const __restrict__ forcing_theta,        //!< [num_elem_z * num_sol_pts, num_elem_x * num_sol_pts, num_elem_x * num_sol_pts]
+    const unsigned int rank,
+    const Number* const __restrict__ rho,            //!< [num_elem_z * num_sol_pts, num_elem_x * num_sol_pts, num_elem_x * num_sol_pts]
+    const Number* const __restrict__ u1,             //!< [num_elem_z * num_sol_pts, num_elem_x * num_sol_pts, num_elem_x * num_sol_pts]
+    const Number* const __restrict__ u2,             //!< [num_elem_z * num_sol_pts, num_elem_x * num_sol_pts, num_elem_x * num_sol_pts]
+    const Number* const __restrict__ w,              //!< [num_elem_z * num_sol_pts, num_elem_x * num_sol_pts, num_elem_x * num_sol_pts]
+    const Number* const __restrict__ pressure,       //!< [num_elem_z * num_sol_pts, num_elem_x * num_sol_pts, num_elem_x * num_sol_pts]
+    const Real* const __restrict__ christoffel_1_01, //!< [num_elem_x * num_sol_pts, num_elem_x * num_sol_pts]
+    const Real* const __restrict__ christoffel_1_02, //!< [num_elem_x * num_sol_pts, num_elem_x * num_sol_pts]
+    const Real* const __restrict__ christoffel_1_03, //!< [num_elem_x * num_sol_pts, num_elem_x * num_sol_pts]
+    const Real* const __restrict__ christoffel_1_11, //!< [num_elem_x * num_sol_pts, num_elem_x * num_sol_pts]
+    const Real* const __restrict__ christoffel_1_12, //!< [num_elem_x * num_sol_pts, num_elem_x * num_sol_pts]
+    const Real* const __restrict__ christoffel_1_13, //!< [num_elem_x * num_sol_pts, num_elem_x * num_sol_pts]
+    const Real* const __restrict__ christoffel_1_22, //!< [num_elem_x * num_sol_pts, num_elem_x * num_sol_pts]
+    const Real* const __restrict__ christoffel_1_23, //!< [num_elem_x * num_sol_pts, num_elem_x * num_sol_pts]
+    const Real* const __restrict__ christoffel_1_33, //!< [num_elem_x * num_sol_pts, num_elem_x * num_sol_pts]
+    const Real* const __restrict__ christoffel_2_01, //!< [num_elem_x * num_sol_pts, num_elem_x * num_sol_pts]
+    const Real* const __restrict__ christoffel_2_02, //!< [num_elem_x * num_sol_pts, num_elem_x * num_sol_pts]
+    const Real* const __restrict__ christoffel_2_03, //!< [num_elem_x * num_sol_pts, num_elem_x * num_sol_pts]
+    const Real* const __restrict__ christoffel_2_11, //!< [num_elem_x * num_sol_pts, num_elem_x * num_sol_pts]
+    const Real* const __restrict__ christoffel_2_12, //!< [num_elem_x * num_sol_pts, num_elem_x * num_sol_pts]
+    const Real* const __restrict__ christoffel_2_13, //!< [num_elem_x * num_sol_pts, num_elem_x * num_sol_pts]
+    const Real* const __restrict__ christoffel_2_22, //!< [num_elem_x * num_sol_pts, num_elem_x * num_sol_pts]
+    const Real* const __restrict__ christoffel_2_23, //!< [num_elem_x * num_sol_pts, num_elem_x * num_sol_pts]
+    const Real* const __restrict__ christoffel_2_33, //!< [num_elem_x * num_sol_pts, num_elem_x * num_sol_pts]
+    const Real* const __restrict__ christoffel_3_01, //!< [num_elem_x * num_sol_pts, num_elem_x * num_sol_pts]
+    const Real* const __restrict__ christoffel_3_02, //!< [num_elem_x * num_sol_pts, num_elem_x * num_sol_pts]
+    const Real* const __restrict__ christoffel_3_03, //!< [num_elem_x * num_sol_pts, num_elem_x * num_sol_pts]
+    const Real* const __restrict__ christoffel_3_11, //!< [num_elem_x * num_sol_pts, num_elem_x * num_sol_pts]
+    const Real* const __restrict__ christoffel_3_12, //!< [num_elem_x * num_sol_pts, num_elem_x * num_sol_pts]
+    const Real* const __restrict__ christoffel_3_13, //!< [num_elem_x * num_sol_pts, num_elem_x * num_sol_pts]
+    const Real* const __restrict__ christoffel_3_22, //!< [num_elem_x * num_sol_pts, num_elem_x * num_sol_pts]
+    const Real* const __restrict__ christoffel_3_23, //!< [num_elem_x * num_sol_pts, num_elem_x * num_sol_pts]
+    const Real* const __restrict__ christoffel_3_33, //!< [num_elem_x * num_sol_pts, num_elem_x * num_sol_pts]
+    const Real* const __restrict__ h_contra_11,      //!< [num_elem_x * num_sol_pts, num_elem_x * num_sol_pts]
+    const Real* const __restrict__ h_contra_12,      //!< [num_elem_x * num_sol_pts, num_elem_x * num_sol_pts]
+    const Real* const __restrict__ h_contra_13,      //!< [num_elem_x * num_sol_pts, num_elem_x * num_sol_pts]
+    const Real* const __restrict__ h_contra_22,      //!< [num_elem_x * num_sol_pts, num_elem_x * num_sol_pts]
+    const Real* const __restrict__ h_contra_23,      //!< [num_elem_x * num_sol_pts, num_elem_x * num_sol_pts]
+    const Real* const __restrict__ h_contra_33,      //!< [num_elem_x * num_sol_pts, num_elem_x * num_sol_pts]
+    const unsigned int num_elem_x,
+    const unsigned int num_elem_z,
+    const unsigned int num_sol_pts)
+{
+    const unsigned int block_size = blockDim.x * blockDim.y * blockDim.z;
+    const unsigned int block_id = (blockIdx.z * gridDim.y + blockIdx.y) * gridDim.x + blockIdx.x;
+    const unsigned int thread_in_block = (threadIdx.z * blockDim.y + threadIdx.y) * blockDim.x + threadIdx.x;
+    const unsigned int global_tid = block_size * block_id + thread_in_block;
+
+    // const unsigned int plane_size = num_elem_x * num_elem_x * num_sol_pts * num_sol_pts; // How many items in a horizontal plane
+    // const unsigned int horizontal_id = global_tid % plane_size; // Offset of this thread within a horizontal plane
+
+    if (global_tid >= num_elem_x * num_elem_x * num_elem_z * num_sol_pts * num_sol_pts * num_sol_pts)
+        return;
+
+    // if (global_tid == 0)
+    //     printf("block dim: %d %d %d, grid dim %d %d %d\n", blockDim.x, blockDim.y, blockDim.z, gridDim.x, gridDim.y, gridDim.z);
+    // forcing[global_tid] = rho[global_tid];
+    const Number rho_i = rho[global_tid];
+    const Number u1_i = u1[global_tid];
+    const Number u2_i = u2[global_tid];
+    const Number w_i = w[global_tid];  
+    const Number pressure_i = pressure[global_tid];
+
+    const Real c101 = christoffel_1_01[global_tid];
+    const Real c102 = christoffel_1_02[global_tid];
+    const Real c103 = christoffel_1_03[global_tid];
+
+    Number out_u1 = 0.0;               
+    Number out_u2 = 0.0;
+    Number out_w  = 0.0;
+    Number tmp;
+
+    out_u1 +=  2.0 * rho_i * (c101 * u1_i + c102 * u2_i + c103 * w_i);
+
+    const Real c201 = christoffel_2_01[global_tid];
+    const Real c202 = christoffel_2_02[global_tid];
+    const Real c203 = christoffel_2_03[global_tid];
+
+    out_u2 +=  2.0 * rho_i * (c201 * u1_i + c202 * u2_i + c203 * w_i);
+
+    const Real c301 = christoffel_3_01[global_tid];
+    const Real c302 = christoffel_3_02[global_tid];
+    const Real c303 = christoffel_3_03[global_tid];
+
+    out_w +=  2.0 * rho_i * (c301 * u1_i + c302 * u2_i + c303 * w_i);
+
+    const Real h11  = h_contra_11[global_tid];
+    tmp = rho_i * u1_i * u1_i + h11 * pressure_i;
+
+    const Real c111 = christoffel_1_11[global_tid];
+    const Real c211 = christoffel_2_11[global_tid];
+    const Real c311 = christoffel_3_11[global_tid];
+    out_u1 += c111 * tmp;
+    out_u2 += c211 * tmp;
+    out_w  += c311 * tmp;
+
+    const Real h12  = h_contra_12[global_tid];
+    tmp = rho_i * u1_i * u2_i + h12 * pressure_i;
+
+    const Real c112 = christoffel_1_12[global_tid];
+    const Real c212 = christoffel_2_12[global_tid];
+    const Real c312 = christoffel_3_12[global_tid];
+    out_u1 += 2.0 * c112 * tmp;
+    out_u2 += 2.0 * c212 * tmp;
+    out_w  += 2.0 * c312 * tmp;
+
+    const Real h13  = h_contra_13[global_tid];
+    tmp = rho_i * u1_i * w_i + h13 * pressure_i;
+
+    const Real c113 = christoffel_1_13[global_tid];
+    const Real c213 = christoffel_2_13[global_tid];
+    const Real c313 = christoffel_3_13[global_tid];
+    out_u1 += 2.0 * c113 * tmp;
+    out_u2 += 2.0 * c213 * tmp;
+    out_w  += 2.0 * c313 * tmp;
+
+    const Real h22  = h_contra_22[global_tid];
+    tmp = rho_i * u2_i * u2_i + h22 * pressure_i;
+
+    const Real c122 = christoffel_1_22[global_tid];
+    const Real c222 = christoffel_2_22[global_tid];
+    const Real c322 = christoffel_3_22[global_tid];
+    out_u1 += c122 * tmp;
+    out_u2 += c222 * tmp;
+    out_w  += c322 * tmp;
+
+    const Real h23  = h_contra_23[global_tid];
+    tmp = rho_i * u2_i * w_i + h23 * pressure_i;
+
+    const Real c123 = christoffel_1_23[global_tid];
+    const Real c223 = christoffel_2_23[global_tid];
+    const Real c323 = christoffel_3_23[global_tid];
+    out_u1 += 2.0 * c123 * tmp;
+    out_u2 += 2.0 * c223 * tmp;
+    out_w  += 2.0 * c323 * tmp;
+
+    const Real h33  = h_contra_33[global_tid];
+    tmp = rho_i * w_i * w_i + h33 * pressure_i;
+
+    const Real c133 = christoffel_1_33[global_tid];
+    const Real c233 = christoffel_2_33[global_tid];
+    const Real c333 = christoffel_3_33[global_tid];
+    out_u1 += c133 * tmp;
+    out_u2 += c233 * tmp;
+    out_w  += c333 * tmp;
+
+    forcing_rho[global_tid] = 0.0;
+    forcing_u1[global_tid] = out_u1;
+    // forcing_u2[global_tid] = out_u2;
+    // forcing_w[global_tid] = out_w;
+    forcing_theta[global_tid] = 0.0;
+
+        //    2. * rho * (metric.christoffel_2_01 * u1 + metric.christoffel_2_02 * u2 + metric.christoffel_2_03 * w) \
+        //  +      metric.christoffel_2_11 * (rho * u1 * u1 + metric.H_contra_11 * pressure) \
+        //  + 2. * metric.christoffel_2_12 * (rho * u1 * u2 + metric.H_contra_12 * pressure) \
+        //  + 2. * metric.christoffel_2_13 * (rho * u1 * w  + metric.H_contra_13 * pressure) \
+        //  +      metric.christoffel_2_22 * (rho * u2 * u2 + metric.H_contra_22 * pressure) \
+        //  + 2. * metric.christoffel_2_23 * (rho * u2 * w  + metric.H_contra_23 * pressure) \
+        //  +      metric.christoffel_2_33 * (rho * w  * w  + metric.H_contra_33 * pressure)
+
+    // if (global_tid == 14288 && rank == 0) {
+    //     printf("r:   %17.10e, u1:  %17.10e, u2:  %17.10e, w:   %17.10e, p:   %17.10e\n",
+    //            rho_i, u1_i, u2_i, w_i, pressure_i);
+    //     printf("101: %17.10e, 102: %17.10e, 103: %17.10e, 111: %17.10e, 122: %17.10e, 133: %17.10e\n",
+    //            c101, c102, c103, c111, c122, c133);
+    //     printf("112: %17.10e, 113: %17.10e, 123: %17.10e\n",
+    //            c112, c113, c123);
+    //     printf("h11: %17.10e, h12: %17.10e, h13: %17.10e, h22: %17.10e, h23: %17.10e, h33: %17.10e\n",
+    //            h11, h12, h13, h22, h23, h33);
+    // }
 }

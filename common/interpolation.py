@@ -38,10 +38,13 @@ def eval_single_field_3d(field, elem_interp, xp, result=None):
    num_elem_vert = int(field.shape[0] // old_num_points)
    num_elem_horiz = int(field.shape[1] // old_num_points)
 
-   interp_1 = xp.empty_like(field, shape=(num_elem_vert * old_num_points, num_elem_horiz * new_num_points, num_elem_horiz * old_num_points))
-   interp_2 = xp.empty_like(field, shape=(num_elem_vert * old_num_points, num_elem_horiz * new_num_points, num_elem_horiz * new_num_points))
+   interp_1 = xp.empty_like(field, shape=(num_elem_vert * old_num_points, num_elem_horiz * new_num_points,
+                                          num_elem_horiz * old_num_points))
+   interp_2 = xp.empty_like(field, shape=(num_elem_vert * old_num_points, num_elem_horiz * new_num_points,
+                                          num_elem_horiz * new_num_points))
    if result is None:
-      result = xp.empty_like(field, shape=(num_elem_vert * new_num_points, num_elem_horiz * new_num_points, num_elem_horiz * new_num_points))
+      result = xp.empty_like(field, shape=(num_elem_vert * new_num_points, num_elem_horiz * new_num_points,
+                                           num_elem_horiz * new_num_points))
 
    # Interpolate along second dimension (should be the fastest) (horizontal)
    for j in range(num_elem_horiz):
@@ -59,7 +62,8 @@ def eval_single_field_3d(field, elem_interp, xp, result=None):
       k_end_src   = (k+1) * old_num_points
       interp_2[:, :, k_start_dst:k_end_dst] = interp_1[:, :, k_start_src:k_end_src] @ elem_interp.T
 
-   # Interpolate along 1st dimension (possibly slowest? cause we need to go by hand along one of the other dimensions) (vertical)
+   # Interpolate along 1st dimension (vertical)
+   # (possibly slowest? cause we need to go by hand along one of the other dimensions) 
    for i in range(num_elem_vert):
       for j in range(num_elem_horiz * new_num_points):
          i_start_src =  i    * old_num_points

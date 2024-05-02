@@ -1,16 +1,18 @@
+import math
+from typing import TypeVar
+
 import cupy as cp
 from mpi4py import MPI
+import numpy
+from numpy.typing import NDArray
 
-from .cuda_module import CudaModule, DimSpec, Dim, Requires, TemplateSpec, cuda_kernel
-
-from common.definitions import idx_rho_u1, idx_rho_u2, idx_rho_w, idx_rho, idx_rho_theta, gravity, p0, Rd, cpd, cvd, heat_capacity_ratio
+from common.cuda_parallel import CudaDistributedWorld
+from common.definitions import idx_rho_u1, idx_rho_u2, idx_rho_w, idx_rho, idx_rho_theta, \
+                               gravity, p0, Rd, cpd, cvd, heat_capacity_ratio
+from geometry import CubedSphere, DFROperators, Metric3DTopo
 from init.dcmip import dcmip_schar_damping
 
-# For type hints
-from typing import TypeVar
-from numpy.typing import NDArray
-from common.cuda_parallel import CudaDistributedWorld
-from geometry import CubedSphere, DFROperators, Metric3DTopo
+from .cuda_module import CudaModule, DimSpec, Dim, Requires, TemplateSpec, cuda_kernel
 
 
 class RHSEuler(metaclass=CudaModule,
@@ -48,7 +50,17 @@ class RHSEuler(metaclass=CudaModule,
       sqrtG_itf_k: NDArray[Real], H_contra_3x_itf_k: NDArray[Real],
       nv: int, nk_nh: int, ne: int, advection_only: bool): ...
 
+   @cuda_kernel[Number := TypeVar("Number", bound=cp.generic), Requires.DoubleOrComplex(Number),
+                Real := TypeVar("Real", bound=cp.generic), Requires.ModulusOf(Real, Number)] \
+   (DimSpec.groupby_first_x(lambda s: Dim(math.prod(s), 1, 1)), TemplateSpec.array_dtype(0, 11))
+   def compute_forcing(f0, f1, f2, f3, f4, rank, rho, u1, u2, w, pressure,
+                       c_1_01, c_1_02, c_1_03, c_1_11, c_1_12, c_1_13, c_1_22, c_1_23, c_1_33,
+                       c_2_01, c_2_02, c_2_03, c_2_11, c_2_12, c_2_13, c_2_22, c_2_23, c_2_33,
+                       c_3_01, c_3_02, c_3_03, c_3_11, c_3_12, c_3_13, c_3_22, c_3_23, c_3_33,
+                       h_11, h_12, h_13, h_22, h_23, h_33, nx, nz, ns): ...
 
+
+# @profile
 def rhs_euler_cuda(Q: NDArray[cp.float64],
                    geom: CubedSphere,
                    mtrx: DFROperators,
@@ -64,6 +76,7 @@ def rhs_euler_cuda(Q: NDArray[cp.float64],
    nb_pts_hori = nb_elements_hori * nbsolpts
    nb_vertical_levels = nb_elements_vert * nbsolpts
 
+   cp.cuda.get_current_stream().synchronize()
    forcing = cp.zeros_like(Q, dtype=type_vec)
 
    variables_itf_i = cp.ones( (nb_equations, nb_vertical_levels, nb_elements_hori + 2, 2, nb_pts_hori), dtype=type_vec)
@@ -81,6 +94,7 @@ def rhs_euler_cuda(Q: NDArray[cp.float64],
    wflux_pres_x2_itf_j = cp.zeros_like(flux_x2_itf_j[0])
    wflux_adv_x3_itf_k  = cp.zeros_like(flux_x3_itf_k[0])
    wflux_pres_x3_itf_k = cp.zeros_like(flux_x3_itf_k[0])
+   cp.cuda.get_current_stream().synchronize()
 
    advection_only = case_number < 13
 
@@ -93,11 +107,15 @@ def rhs_euler_cuda(Q: NDArray[cp.float64],
    variables_itf_i[idx_rho, :, 1:-1, :, :] = cp.exp(mtrx.extrapolate_i(logrho, geom)).transpose((0, 2, 3, 1))
    variables_itf_j[idx_rho, :, 1:-1, :, :] = cp.exp(mtrx.extrapolate_j(logrho, geom))
 
+   cp.cuda.get_current_stream().synchronize()
    variables_itf_i[idx_rho_theta, :, 1:-1, :, :] = cp.exp(mtrx.extrapolate_i(logrhotheta, geom)).transpose((0, 2, 3, 1))
+   cp.cuda.get_current_stream().synchronize()
    variables_itf_j[idx_rho_theta, :, 1:-1, :, :] = cp.exp(mtrx.extrapolate_j(logrhotheta, geom))
 
 
+   cp.cuda.get_current_stream().synchronize()
    all_request = ptopo.xchange_Euler_interfaces(geom, variables_itf_i, variables_itf_j, blocking=False)
+   cp.cuda.get_current_stream().synchronize()
 
 
    rho = Q[idx_rho]
@@ -157,6 +175,7 @@ def rhs_euler_cuda(Q: NDArray[cp.float64],
                            metric.sqrtG_itf_k, metric.H_contra_itf_k[2],
                            nb_elements_vert, nb_pts_hori, nb_equations, advection_only)
 
+   cp.cuda.get_current_stream().synchronize()
    all_request.wait()
 
    u1_itf_i = variables_itf_i[idx_rho_u1] / variables_itf_i[idx_rho]
@@ -216,16 +235,18 @@ def rhs_euler_cuda(Q: NDArray[cp.float64],
    w_df3_dx3_presb = mtrx.comma_k(logp_int,      logp_bdy_k,          geom) * pressure * wflux_pres_x3
    w_df3_dx3       = w_df3_dx3_adv + w_df3_dx3_presa + w_df3_dx3_presb
 
-   forcing[idx_rho] = 0.
+   cp.cuda.get_current_stream().synchronize()
+   # forcing[idx_rho] = 0.
 
-   forcing[idx_rho_u1] = \
-           2. * rho * (metric.christoffel_1_01 * u1 + metric.christoffel_1_02 * u2 + metric.christoffel_1_03 * w) \
-         +      metric.christoffel_1_11 * (rho * u1 * u1 + metric.H_contra_11 * pressure) \
-         + 2. * metric.christoffel_1_12 * (rho * u1 * u2 + metric.H_contra_12 * pressure) \
-         + 2. * metric.christoffel_1_13 * (rho * u1 * w  + metric.H_contra_13 * pressure) \
-         +      metric.christoffel_1_22 * (rho * u2 * u2 + metric.H_contra_22 * pressure) \
-         + 2. * metric.christoffel_1_23 * (rho * u2 * w  + metric.H_contra_23 * pressure) \
-         +      metric.christoffel_1_33 * (rho * w  * w  + metric.H_contra_33 * pressure)
+   # forcing[idx_rho_u1] = \
+   #         2. * rho * (metric.christoffel_1_01 * u1 + metric.christoffel_1_02 * u2 + metric.christoffel_1_03 * w) \
+   #       +      metric.christoffel_1_11 * (rho * u1 * u1 + metric.H_contra_11 * pressure) \
+   #       + 2. * metric.christoffel_1_12 * (rho * u1 * u2 + metric.H_contra_12 * pressure) \
+   #       + 2. * metric.christoffel_1_13 * (rho * u1 * w  + metric.H_contra_13 * pressure) \
+   #       +      metric.christoffel_1_22 * (rho * u2 * u2 + metric.H_contra_22 * pressure) \
+   #       + 2. * metric.christoffel_1_23 * (rho * u2 * w  + metric.H_contra_23 * pressure) \
+   #       +      metric.christoffel_1_33 * (rho * w  * w  + metric.H_contra_33 * pressure)
+
 
    forcing[idx_rho_u2] = \
            2. * rho * (metric.christoffel_2_01 * u1 + metric.christoffel_2_02 * u2 + metric.christoffel_2_03 * w) \
@@ -246,7 +267,99 @@ def rhs_euler_cuda(Q: NDArray[cp.float64],
          +      metric.christoffel_3_33 * (rho * w  * w  + metric.H_contra_33 * pressure) \
          + metric.inv_dzdeta * gravity * metric.inv_sqrtG * mtrx.filter_k(metric.sqrtG * rho, geom)
 
-   forcing[idx_rho_theta] = 0.
+   # forcing[idx_rho_theta] = 0.
+
+   RHSEuler.compute_forcing(forcing[idx_rho],
+                            forcing[idx_rho_u1],
+                            forcing[idx_rho_u2],
+                            forcing[idx_rho_w],
+                            forcing[idx_rho_theta],
+                            MPI.COMM_WORLD.rank,
+                            rho, u1, u2, w, pressure,
+                            metric.christoffel_1_01,
+                            metric.christoffel_1_02,
+                            metric.christoffel_1_03,
+                            metric.christoffel_1_11,
+                            metric.christoffel_1_12,
+                            metric.christoffel_1_13,
+                            metric.christoffel_1_22,
+                            metric.christoffel_1_23,
+                            metric.christoffel_1_33,
+                            metric.christoffel_2_01,
+                            metric.christoffel_2_02,
+                            metric.christoffel_2_03,
+                            metric.christoffel_2_11,
+                            metric.christoffel_2_12,
+                            metric.christoffel_2_13,
+                            metric.christoffel_2_22,
+                            metric.christoffel_2_23,
+                            metric.christoffel_2_33,
+                            metric.christoffel_3_01,
+                            metric.christoffel_3_02,
+                            metric.christoffel_3_03,
+                            metric.christoffel_3_11,
+                            metric.christoffel_3_12,
+                            metric.christoffel_3_13,
+                            metric.christoffel_3_22,
+                            metric.christoffel_3_23,
+                            metric.christoffel_3_33,
+                            metric.H_contra_11,
+                            metric.H_contra_12,
+                            metric.H_contra_13,
+                            metric.H_contra_22,
+                            metric.H_contra_23,
+                            metric.H_contra_33,
+                            nb_elements_hori,
+                            nb_elements_vert,
+                            nbsolpts)
+
+   # def compute_diff(a, b):
+   #    d = a - b
+   #    d_n = cp.linalg.norm(d) / cp.linalg.norm(b)
+   #    d_r = d / cp.abs(b)
+   #    return d, d_n, d_r, a, b
+
+   # # print(f'h_contra_11 shape = {metric.H_contra_11.shape}')
+   # # print(f'christoffel shape = {metric.christoffel_1_11.shape}')
+
+   # diff, diff_norm, diff_rel, a, b = compute_diff(f_test, forcing[idx_rho_u1])
+   # # diff, diff_norm, diff_rel, a, b = compute_diff(f_test, metric.christoffel_1_11)
+   # # diff, diff_norm = compute_diff(f_test, metric.christoffel_1_11)
+   # if MPI.COMM_WORLD.rank == 0:
+   #    id = numpy.abs(diff).argmax()
+   #    loc = numpy.unravel_index(id, diff.shape)
+   #    print(f'id = {id} (loc {loc}) shape = {diff.shape} {a.shape} {b.shape}')
+   #    print(f'diff = {diff_norm:.3e}')
+   #    print(f'kernel: {a[loc]}')
+   #    print(f'python: {b[loc]}')
+   #    print(f'r:   {rho[loc]:17.10e}, u1:  {u1[loc]:17.10e}, u2:  {u2[loc]:17.10e}, w:   {w[loc]:17.10e}, p:   {pressure[loc]:17.10e} (python)')
+   #    print(f'101: {metric.christoffel_1_01[loc]:17.10e}, '
+   #          f'102: {metric.christoffel_1_02[loc]:17.10e}, '
+   #          f'103: {metric.christoffel_1_03[loc]:17.10e}, '
+   #          f'111: {metric.christoffel_1_11[loc]:17.10e}, '
+   #          f'122: {metric.christoffel_1_22[loc]:17.10e}, '
+   #          f'133: {numpy.ravel(metric.christoffel_1_33)[id]:17.10e} (python)')
+   #    print(f'112: {metric.christoffel_1_12[loc]:17.10e}, '
+   #          f'113: {metric.christoffel_1_13[loc]:17.10e}, '
+   #          f'123: {metric.christoffel_1_23[loc]:17.10e} (python)')
+   #    print(f'h11: {metric.H_contra_11[loc]:17.10e}, '
+   #          f'h12: {metric.H_contra_12[loc]:17.10e}, '
+   #          f'h13: {metric.H_contra_13[loc]:17.10e}, '
+   #          f'h22: {metric.H_contra_22[loc]:17.10e}, '
+   #          f'h23: {metric.H_contra_23[loc]:17.10e}, '
+   #          f'h33: {metric.H_contra_33[loc]:17.10e} (python)')
+   #    # print(f'{diff}')
+   #    # print(f'{f_test}')
+   #    # print(f'christoffel = \n{metric.christoffel_1_11}')
+   #    with cp.cuda.Device(cp.cuda.runtime.getDevice()) as dev:
+   #       free_mem, total_mem = dev.mem_info
+   #       kb = 1024
+   #       mb = kb * kb
+   #       gb = kb * kb * kb
+   #       print(f'Device {id}: {free_mem / gb :.1f}/{total_mem / gb :.1f} GB available')
+
+   # raise ValueError
+   cp.cuda.get_current_stream().synchronize()
 
    if case_number == 21:
       dcmip_schar_damping(forcing, rho, u1, u2, w, metric, geom, shear=False)
@@ -263,4 +376,5 @@ def rhs_euler_cuda(Q: NDArray[cp.float64],
       rhs[idx_rho_w]     = 0.
       rhs[idx_rho_theta] = 0.
 
+   cp.cuda.get_current_stream().synchronize()
    return rhs

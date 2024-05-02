@@ -158,12 +158,14 @@ def kiops(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 2,
 
          local_sum = V[ilow:j, 0:n] @ V[j, 0:n]
          global_sum = numpy.empty_like(local_sum)
+         #### All reduce 1
          MPI.COMM_WORLD.Allreduce([local_sum, MPI.DOUBLE], [global_sum, MPI.DOUBLE])
          H[ilow:j, j-1] = global_sum + V[ilow:j, n:n+p] @ V[j, n:n+p]
 
          V[j, :] = V[j, :] - V[ilow:j,:].T @ H[ilow:j, j-1]
 
          local_sum = V[j, 0:n] @ V[j, 0:n]
+         #### All red 2
          MPI.COMM_WORLD.Allreduce([local_sum, MPI.DOUBLE], [global_sum_nrm, MPI.DOUBLE])
          nrm = numpy.sqrt( global_sum_nrm + V[j, n:n+p] @ V[j, n:n+p] )
 
