@@ -42,7 +42,7 @@ class OutputManager:
       if param.output_freq > 0:
          if self.geometry.grid_type == 'cubed_sphere':
             from output.output_cubesphere import output_init, output_netcdf, output_finalize
-            output_init(self.geometry, self.param)
+            output_init(self.geometry, self.metric, self.param)
             self.step_function = lambda Q, step_id: \
                output_netcdf(Q, self.geometry, self.metric, self.operators, self.topo, step_id, self.param)
             self.final_function = output_finalize

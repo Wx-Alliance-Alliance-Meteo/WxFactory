@@ -47,7 +47,7 @@ def store_field(field: NDArray, name: str, step_id: int, file: 'netCDF4.Dataset'
    else:
       file[name][step_id, MPI.COMM_WORLD.rank] = field
 
-def output_init(geom, param):
+def output_init(geom, metric, param):
    """ Initialise the netCDF4 file."""
 
    sys.stdout.flush()
@@ -137,6 +137,35 @@ def output_init(geom, param):
       lon.long_name = 'longitude'
       lon.units = 'degrees_east'
 
+      h_contra_11 = ncfile.createVariable('h_contra_11', numpy.dtype('double').char, grid_data)
+      h_contra_12 = ncfile.createVariable('h_contra_12', numpy.dtype('double').char, grid_data)
+      h_contra_21 = ncfile.createVariable('h_contra_21', numpy.dtype('double').char, grid_data)
+      h_contra_22 = ncfile.createVariable('h_contra_22', numpy.dtype('double').char, grid_data)
+      for h_contra in [h_contra_11, h_contra_12, h_contra_21, h_contra_22]:
+         h_contra.long_name = 'Contravariant H tensor'
+         h_contra.units = ''
+         h_contra.coordinates = 'lons lats'
+         h_contra.grid_mapping = 'cubed_sphere'
+         h_contra.set_collective(not netcdf_serial)
+
+      sqrt_g = ncfile.createVariable('sqrt_g', numpy.dtype('double').char, grid_data)
+      sqrt_g.long_name = 'sqrt_g'
+      sqrt_g.units = ''
+      sqrt_g.coordinates = 'lons lats'
+      sqrt_g.grid_mapping = 'cubed_sphere'
+      sqrt_g.set_collective(not netcdf_serial)
+
+      christoffel_names = ['1_01', '1_02', '2_01', '2_02', '1_11', '1_12', '2_12', '2_22']
+      christoffels = []
+      for name in christoffel_names:
+         new_var = ncfile.createVariable(f'christoffel_{name}', numpy.dtype('double').char, grid_data)
+         new_var.long_name = 'Christoffel symbol'
+         new_var.units = ''
+         new_var.coordinates = 'lons lats'
+         new_var.grid_mapping = 'cubed_sphere'
+         new_var.set_collective(not netcdf_serial)
+         christoffels.append(new_var)
+
       if param.equations == "shallow_water":
 
          hhh = ncfile.createVariable('h', numpy.dtype('double').char, ('time', ) + grid_data)
@@ -147,6 +176,21 @@ def output_init(geom, param):
          hhh.set_collective(not netcdf_serial)
 
          if param.case_number >= 2:
+
+            hu1 = ncfile.createVariable('hu1', numpy.dtype('double').char, ('time',) + grid_data)
+            hu1.long_name = 'local horizontal h*u'
+            hu1.units = ''
+            hu1.coordinates = 'lons lats'
+            hu1.grid_mapping = 'cubed_sphere'
+            hu1.set_collective(not netcdf_serial)
+
+            hu2 = ncfile.createVariable('hu2', numpy.dtype('double').char, ('time',) + grid_data)
+            hu2.long_name = 'local vertical h*u'
+            hu2.units = ''
+            hu2.coordinates = 'lons lats'
+            hu2.grid_mapping = 'cubed_sphere'
+            hu2.set_collective(not netcdf_serial)
+
             uuu = ncfile.createVariable('U', numpy.dtype('double').char, ('time', ) + grid_data)
             uuu.long_name = 'eastward_wind'
             uuu.units = 'm s-1'
@@ -291,15 +335,48 @@ def output_init(geom, param):
       ranks = MPI.COMM_WORLD.gather(rank, root=0)
       lons  = MPI.COMM_WORLD.gather(prepare(geom.lon * 180/math.pi), root=0)
       lats  = MPI.COMM_WORLD.gather(prepare(geom.lat * 180/math.pi), root=0)
+
+      h11s = MPI.COMM_WORLD.gather(prepare(metric.H_contra_11), root=0)
+      h12s = MPI.COMM_WORLD.gather(prepare(metric.H_contra_12), root=0)
+      h21s = MPI.COMM_WORLD.gather(prepare(metric.H_contra_21), root=0)
+      h22s = MPI.COMM_WORLD.gather(prepare(metric.H_contra_22), root=0)
+      gs   = MPI.COMM_WORLD.gather(prepare(metric.sqrtG), root=0)
+      c_1_01s = MPI.COMM_WORLD.gather(prepare(metric.christoffel_1_01), root=0)
+      c_1_02s = MPI.COMM_WORLD.gather(prepare(metric.christoffel_1_02), root=0)
+      c_2_01s = MPI.COMM_WORLD.gather(prepare(metric.christoffel_2_01), root=0)
+      c_2_02s = MPI.COMM_WORLD.gather(prepare(metric.christoffel_2_02), root=0)
+      c_1_11s = MPI.COMM_WORLD.gather(prepare(metric.christoffel_1_11), root=0)
+      c_1_12s = MPI.COMM_WORLD.gather(prepare(metric.christoffel_1_12), root=0)
+      c_2_12s = MPI.COMM_WORLD.gather(prepare(metric.christoffel_2_12), root=0)
+      c_2_22s = MPI.COMM_WORLD.gather(prepare(metric.christoffel_2_22), root=0)
+
       if param.equations == "euler":
          elevs = MPI.COMM_WORLD.gather(prepare(geom.coordVec_latlon[2,:,:,:]), root=0)
          topos = MPI.COMM_WORLD.gather(prepare(geom.zbot[:,:]), root=0)
 
       if rank == 0:
-         for my_rank, my_lon, my_lat in zip(ranks, lons, lats):
+         for my_rank, my_lon, my_lat, my_h11, my_h12, my_h21, my_h22, my_g, \
+             my_c101, my_c102, my_c201, my_c202, my_c111, my_c112, my_c212, my_c222 in \
+               zip(ranks, lons, lats, h11s, h12s, h21s, h22s, gs, \
+                   c_1_01s, c_1_02s, c_2_01s, c_2_02s, c_1_11s, c_1_12s, c_2_12s, c_2_22s):
             tile[my_rank] = my_rank
             lon[my_rank, :, :] = my_lon
             lat[my_rank, :, :] = my_lat
+
+            h_contra_11[my_rank, :, :] = my_h11
+            h_contra_12[my_rank, :, :] = my_h12
+            h_contra_21[my_rank, :, :] = my_h21
+            h_contra_22[my_rank, :, :] = my_h22
+            sqrt_g[my_rank, :, :] = my_g
+            christoffels[0][my_rank, :, :] = my_c101
+            christoffels[1][my_rank, :, :] = my_c102
+            christoffels[2][my_rank, :, :] = my_c201
+            christoffels[3][my_rank, :, :] = my_c202
+            christoffels[4][my_rank, :, :] = my_c111
+            christoffels[5][my_rank, :, :] = my_c112
+            christoffels[6][my_rank, :, :] = my_c212
+            christoffels[7][my_rank, :, :] = my_c222
+
          if param.equations == "euler":
             for my_rank, my_elev, my_topo in zip(ranks, elevs, topos):
                elev[my_rank, :, :, :] = my_elev
@@ -338,6 +415,8 @@ def output_netcdf(Q, geom, metric, mtrx, topo, step, param):
          rv = relative_vorticity(u1, u2, geom, metric, mtrx, param)
          pv = potential_vorticity(h, u1, u2, geom, metric, mtrx, param)
 
+         store_field(prepare(Q[idx_hu1]), 'hu1', idx, ncfile)
+         store_field(prepare(Q[idx_hu2]), 'hu2', idx, ncfile)
          store_field(prepare(u), 'U', idx, ncfile)
          store_field(prepare(v), 'V', idx, ncfile)
          store_field(prepare(rv), 'RV', idx, ncfile)
