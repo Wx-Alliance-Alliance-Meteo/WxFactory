@@ -388,7 +388,7 @@ class CubedSphere(Geometry):
             planet_is_rotating = 0.0
          elif param.case_number == 21 or param.case_number == 22:
             # Small planet, no rotation
-            planet_scaling_factor = 500
+            planet_scaling_factor = 166
             planet_is_rotating = 0.0
 
          assert param.depth_approx is not None

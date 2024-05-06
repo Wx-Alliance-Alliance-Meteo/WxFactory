@@ -523,7 +523,7 @@ def dcmip_schar_waves(geom: CubedSphere, metric, mtrx: DFROperators, param, shea
    T0      = 300.0             # temperature (K)
    lambdam = math.pi/4.0       # mountain longitude center point (radians)
    phim    = 0.0               # mountain latitude center point (radians)
-   h0      = 0 #250.0             # peak height of the mountain range (m)
+   h0      = 0.0               # peak height of the mountain range (m)
    Dm      = 5000.0            # mountain radius (meters)
    Dxi     = 4000.0            # Mountain wavelength (meters)
    Ueq     = 20.0              # Reference zonal wind velocity (equator)
@@ -554,6 +554,8 @@ def dcmip_schar_waves(geom: CubedSphere, metric, mtrx: DFROperators, param, shea
    geom.apply_topography(zbot,zbot_itf_i,zbot_itf_j)
    # And regenerate the metric to take this new topography into account
    metric.build_metric()
+   # print('inside dcmip')
+   # print(metric.H_contra_13.max())
    
    ## Coordinate vectors in 3D
 
@@ -626,12 +628,12 @@ def dcmip_schar_damping(forcing : numpy.ndarray, rho : numpy.ndarray,
    
    # Grab forcing index variables from 'definitions', since forcing is modified in-place
    from common.definitions import idx_rho_u1, idx_rho_u2, idx_rho_w
-
+   
    # Case parameters
    T0      = 300.0             # temperature (K)
    Ueq     = 20.0              # Reference zonal wind velocity (equator)
    Zh      = 20000.0           # Threshold level for Rayleigh damping/sponge layer (m)
-   tau0    = 25.0              # Time scale of Rayleigh damping (s)
+   tau0    = 25                # Time scale of Rayleigh damping (s)
    
    if (shear):
       Cs = 2.5e-4              # Wind shear rate (1/m), for shear case

@@ -1,5 +1,6 @@
 import numpy
 import sys
+import pdb
 
 from common.definitions import idx_rho_u1, idx_rho_u2, idx_rho_w, idx_rho, idx_rho_theta, gravity, p0, Rd, cpd, cvd, heat_capacity_ratio
 
@@ -50,7 +51,8 @@ def rhs_euler (Q: numpy.ndarray, geom: CubedSphere, mtrx: DFROperators, metric: 
    rhs : numpy.ndarray
       Output of right-hand-side terms of Euler equations
    '''
-
+   
+   # print(metric.H_contra_13.max())
    type_vec = Q.dtype #  Output/processing type -- may be complex
    nb_equations = Q.shape[0] # Number of constituent Euler equations.  Probably 6.
    nb_interfaces_hori = nb_elements_hori + 1 # Number of element interfaces per horizontal dimension

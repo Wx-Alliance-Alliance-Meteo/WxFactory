@@ -680,6 +680,8 @@ class Metric3DTopo:
       self.H_contra_31_itf_k = H_contra_itf_k[2,0,:,:,:]
       self.H_contra_32_itf_k = H_contra_itf_k[2,1,:,:,:]
       self.H_contra_33_itf_k = H_contra_itf_k[2,2,:,:,:]
+      
+      # print("Inside metric")
 
       self.sqrtG = sqrtG
       self.sqrtG_itf_i = sqrtG_itf_i

@@ -29,7 +29,7 @@ def main(argv) -> int:
 
    # Read configuration file
    param = Configuration(argv.config, MPI.COMM_WORLD.rank == 0)
-
+   
    # Set up distributed world
    ptopo = DistributedWorld() if param.grid_type == 'cubed_sphere' else None
 
@@ -76,11 +76,9 @@ def main(argv) -> int:
 
       step += 1
 
-      MF = numpy.linspace(1, 2, num=1)
+      MF = numpy.linspace(1e-18, 1, num=20000)
 
-      if 0 < step < 2 :
-
-         # pdb.set_trace()
+      if 0 < step < 20000:
 
          # Create the mesh
          geom = create_geometry(param, ptopo)
@@ -88,6 +86,15 @@ def main(argv) -> int:
          # Build differentiation matrice and boundary correction
          mtrx = DFROperators(geom, param)
          
+         T0      = 300.0             # temperature (K)
+         lambdam = math.pi/4.0       # mountain longitude center point (radians)
+         phim    = 0.0               # mountain latitude center point (radians)
+         h0      = 250.0             # peak height of the mountain range (m)
+         Dm      = 5000.0            # mountain radius (meters)
+         Dxi     = 4000.0            # Mountain wavelength (meters)
+         Ueq     = 20.0              # Reference zonal wind velocity (equator)
+         Peq     = 100000.0          # Reference surface pressure (Pa)
+
          #-----------------------------------------------------------------------
          #    Set topography
          #-----------------------------------------------------------------------
@@ -97,15 +104,17 @@ def main(argv) -> int:
 
          # Build topography based on lateral great-circle distance from the mountain center
          for (z, coord) in zip([zbot, zbot_itf_i, zbot_itf_j],
-                                 [geom.coordVec_latlon, geom.coordVec_latlon_itf_i, geom.coordVec_latlon_itf_j]):
+                              [geom.coordVec_latlon, geom.coordVec_latlon_itf_i, geom.coordVec_latlon_itf_j]):
             lat = coord[1,0,:,:]
             lon = coord[0,0,:,:]
-            r = geom.earth_radius * numpy.arccos( math.sin(0) * numpy.sin(lat) + math.cos(0) * numpy.cos(lat) * numpy.cos(lon - math.pi/4) )
-            z[:,:] = 250 * numpy.exp(-r**2/5000**2) * numpy.cos(numpy.pi*r/4000)**2
+            r = geom.earth_radius * numpy.arccos( math.sin(phim) * numpy.sin(lat) + math.cos(phim) * numpy.cos(lat) * numpy.cos(lon - lambdam) )
+            z[:,:] = h0 * numpy.exp(-r**2/Dm**2) * numpy.cos(numpy.pi*r/Dxi)**2
+
 
          # Update the geometry object with the new bottom topography
          geom.apply_topography(MF[step-1]*zbot,MF[step-1]*zbot_itf_i,MF[step-1]*zbot_itf_j)
          # And regenerate the metric to take this new topography into account
+         metric.geom = geom
          metric.build_metric()
 
          new_rhs = RhsBundle(geom, mtrx, metric, topo, ptopo, param, Q.shape)
@@ -114,8 +123,7 @@ def main(argv) -> int:
          output.metric = metric
          output.mtrx = mtrx
          stepper.output_manager = output
-
-
+         # print(metric.H_contra_13.max())
 
       if MPI.COMM_WORLD.rank == 0: print(f'\nStep {step} of {nb_steps + starting_step}')
 
