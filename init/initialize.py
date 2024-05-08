@@ -6,7 +6,7 @@ from common.definitions      import idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_w, 
                                     gravity, cpd, cvd, Rd, p0
 from common.program_options  import Configuration
 from init.dcmip              import dcmip_advection_deformation, dcmip_advection_hadley, dcmip_gravity_wave,   \
-                                    dcmip_schar_waves, dcmip_steady_state_mountain
+                                    dcmip_schar_waves, dcmip_steady_state_mountain, dcmip_baroclinic_instability, acoustic_wave
 from init.shallow_water_test import case_galewsky, case_matsuno, case_unsteady_zonal, circular_vortex,         \
                                     williamson_case1, williamson_case2, williamson_case5, williamson_case6
 
@@ -71,6 +71,10 @@ def initialize_euler(geom: CubedSphere, metric, mtrx, param):
       rho, u1_contra, u2_contra, w, potential_temperature = dcmip_schar_waves(geom, metric, mtrx, param, True)
    elif param.case_number == 31:
       rho, u1_contra, u2_contra, w, potential_temperature = dcmip_gravity_wave(geom, metric, mtrx, param)
+   elif param.case_number == 41:
+      rho, u1_contra, u2_contra, w, potential_temperature = dcmip_baroclinic_instability(geom, metric, mtrx, param)
+   elif param.case_number == 77:
+      rho, u1_contra, u2_contra, w, potential_temperature = acoustic_wave(geom, metric, mtrx, param)
    else:
       raise ValueError('Something has gone horribly wrong in initialization. Back away slowly')
 

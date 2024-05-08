@@ -2,6 +2,7 @@ import numpy
 import math
 import pdb
 
+from mpi4py                import MPI
 from common.definitions    import cpd, day_in_secs, gravity, p0, Rd
 from geometry              import CubedSphere, DFROperators, Metric3DTopo, wind2contra_2d, wind2contra_3d
 
@@ -15,7 +16,7 @@ from geometry              import CubedSphere, DFROperators, Metric3DTopo, wind2
 #  20 - Impact of orography on a steady-state at rest
 #  21 and 22 - Non-Hydrostatic Mountain Waves Over A Schaer-Type Mountain without and with vertical wind shear
 #  31 - Non-Hydrostatic Gravity Waves
-#
+#  41 - Dry Baroclinic Instability
 #=======================================================================
 
 #==========================================================================================
@@ -465,7 +466,7 @@ def dcmip_steady_state_mountain(geom: CubedSphere, metric, mtrx, param):
    #-----------------------------------------------------------------------
    #    THE VELOCITIES ARE ZERO (STATE AT REST)
    #-----------------------------------------------------------------------
-
+   
    # Zonal Velocity
 
    u = 0.0
@@ -602,6 +603,7 @@ def dcmip_schar_waves(geom: CubedSphere, metric, mtrx: DFROperators, param, shea
    #-----------------------------------------------------------------------
 
    theta = (T * (p0 / p)**(Rd/cpd))
+   
 
    return rho, u1_contra, u2_contra, u3_contra, theta
 
@@ -774,5 +776,326 @@ def dcmip_gravity_wave(geom, metric, mtrx, param):
 #   theta_pert = 0. # for debuging
 
    theta = theta_base + theta_pert
+
+   return rho, u1_contra, u2_contra, w, theta
+
+
+
+#==========================================================================================
+# TEST CASE 41 - Dry Baroclinic Insability
+#==========================================================================================
+
+
+def dcmip_baroclinic_instability(geom, metric, mtrx, param):
+   """
+   Test case 41 - BAROCLINIC INSTABILITY
+
+   The baroclinic instability test has been used extensively to test the response of 3D atmospheric models to a controlled, evolving instability.
+   """
+   eta_tropo              = 0.2                       # Tropopause level
+   u0                     = 35.                       # Max amplitude o zonal velocity
+   T0                     = 288.                      # Horizontal mean temperature at surface
+   eta0                   = 0.252                     # Value of eta at a reference level (position of the jet)
+   up                     = 1                         # Maximum amplitude of the zonal wind perturbtion
+   lambdac                = math.pi / 9.              # Lon of zonal wind Pert Center 
+   phic                   = 2*math.pi / 9.            # Lat of zonal wind Pert Center
+   eta_sfc                = 1                         # Value of eta at the surface
+   delta_T                = 4.8E5                     # Empirical temp diff
+   gamma                  = 0.005                     # temperature laps rate
+   p0                     = 1000                      # Reference pressure
+   ps                     = 1000                      # Surface pressure
+   a                      = 6371220.0                 # Mean radius of the earth (m)
+   omega                  = 7.29212e-5                # Angular speed of rotation of the earth (radians/s)
+
+
+   #--------------------------------------------------------------------------
+   # mean geopotential
+   #--------------------------------------------------------------------------
+
+   def horiz_mean_geopotential(eta):
+
+      horiz_mean_geopotential = T0 * gravity / gamma * (1.0 - eta ** (Rd * gamma / gravity))             # Eqn 125
+
+      if eta < eta_tropo:
+         delta_phi = Rd * delta_T * ((numpy.log(eta / eta_tropo) + (137.0 / 60.0)) * eta_tropo ** 5      # Eqn 126
+                                       - 5.0 * eta_tropo ** 4 * eta
+                                       + 5.0 * eta_tropo ** 3 * eta ** 2
+                                       - 10.0 / 3.0 * eta_tropo ** 2 * eta ** 3
+                                       + 5.0 / 4.0 * eta_tropo * eta ** 4
+                                       - 1.0 / 5.0 * eta ** 5)
+
+         horiz_mean_geopotential = horiz_mean_geopotential - delta_phi
+
+      return horiz_mean_geopotential
+
+
+   #--------------------------------------------------------------------------
+   # 3D geopotential
+   #--------------------------------------------------------------------------
+
+   def geopotential(lon, lat, eta):
+
+      pi = numpy.pi
+
+      cos_tmp = u0 * (numpy.cos((eta - eta0) * pi * 0.5)) ** 1.5
+      
+      # Eqn 124
+      geopotential = cos_tmp * ((-2.0 * (numpy.sin(lat)) ** 6 * ((numpy.cos(lat)) ** 2 + (1.0 / 3.0)) + (10.0 / 63.0)) * cos_tmp +
+                     ((8.0 / 5.0) * (numpy.cos(lat)) ** 3 * ((numpy.sin(lat)) ** 2 + (2.0 / 3.0)) - (pi / 4.0)) * a * omega)
+
+      # You need to define the function horiz_mean_geopotential(eta) as it is called within the geopotential function.
+
+      geopotential = geopotential + horiz_mean_geopotential(eta)
+      
+      return geopotential
+
+
+   #--------------------------------------------------------------------
+   # Temperature = mean + perturbation temperature
+   #--------------------------------------------------------------------
+
+   def temperature(lon, lat, eta):
+      
+      factor       = eta * numpy.pi * u0 / Rd
+      phi_vertical = (eta - eta0) * 0.5 * numpy.pi
+      exponent     = Rd*gamma/gravity
+
+      # Eqn 120
+      t_deviation = (3/4) * factor * numpy.sin(phi_vertical) * numpy.cos(phi_vertical)**0.5 * (
+                     (-2 * (numpy.sin(lat))**6 * ((numpy.cos(lat))**2 + 1/3) + 10/63) * 2 * u0 * (numpy.cos(phi_vertical))**1.5 +
+                     (8/5 * (numpy.cos(lat))**3 * ((numpy.sin(lat))**2 + 2/3) - numpy.pi/4) * a * omega)
+
+      if eta >= eta_tropo:
+         t_mean = T0 * eta**exponent                                          # Eqn 121
+      else:
+         t_mean = T0 * eta**exponent + delta_T * (eta_tropo - eta)**5         # Eqn 122
+
+      temperature = t_mean + t_deviation
+
+      return temperature, t_mean
+
+
+   #--------------------------------------------------------------------
+   # Calculate eta from height
+   #--------------------------------------------------------------------
+   def eta_from_z(lon, lat, z):
+      
+      initial_eta = 1.0e-7
+      convergence = 1.0e-13
+
+      # Initialize variables
+      eta_val = initial_eta
+
+      # Iterate up to 25 times
+      for iter in range(26):
+         f = -gravity * z + geopotential(lon, lat, eta_val)
+         temp, _ = temperature(lon, lat, eta_val)
+         df = -Rd / eta_val * temp
+
+         eta_new = eta_val - f / df
+
+         # Check convergence
+         if abs(eta_val - eta_new) < convergence:
+               break
+
+         eta_val = eta_new
+      else:
+         # Convergence not reached
+         print('CONVERGENCE NOT COMPLETED=', abs(eta_val - eta_new), convergence)
+         raise ValueError('Convergence not achieved.')
+
+      return eta_val
+   
+   
+   lat2    = geom.lat
+   lon2    = geom.lon
+   z       = geom.height
+   eta     = numpy.zeros_like(z)
+  
+   # Converting z to eta
+
+   for i in range(z.shape[0]):
+    for j in range(z.shape[1]):
+        for k in range(z.shape[2]):
+            eta[i, j, k] = eta_from_z(lon2[j,k],lat2[j,k],z[i,j,k])   
+   
+   
+   lat = geom.coordVec_latlon[1,:,:,:] # Latitude as 3D field
+   lon = geom.coordVec_latlon[0,:,:,:] # Longitude as 3D field 
+
+
+   #-----------------------------------------------------------------------
+   #    THE VELOCITIES
+   #-----------------------------------------------------------------------
+
+   # Zonal Velocity
+
+   sin_tmp = numpy.sin(phic) * numpy.sin(lat)
+   cos_tmp = numpy.cos(phic) * numpy.cos(lat)
+
+   # Calculate the great circle distance without radius 'a'
+   r = numpy.arccos(sin_tmp + cos_tmp * numpy.cos(lon - lambdac))             # Eqn 119
+
+   # Calculate u_perturb
+   u_perturb = up * numpy.exp(-(r * 10)**2)
+
+   # Calculate phi_vertical
+   phi_vertical = (eta - eta0) * 0.5 * numpy.pi
+
+   # Calculate u_wind
+   u_wind = u0 * (numpy.cos(phi_vertical))**1.5 * (numpy.sin(2*lat))**2
+   
+   u = u_wind + u_perturb                                                     # Eqn 117
+
+   # Full_u_p = MPI.COMM_WORLD.gather(u_perturb, root=0)
+   # if MPI.COMM_WORLD.rank == 0:
+   #    numpy.save('U_perturb.npy', Full_u_p)
+
+   # Meridional Velocity
+
+   v = numpy.zeros_like(u)
+
+
+   # Vertical Velocity = Vertical Pressure Velocity = 0
+
+   w = numpy.zeros_like(u)
+
+   
+   ## Set a trivial topography
+   zbot = numpy.zeros(geom.coordVec_latlon.shape[2:])
+   zbot_itf_i = numpy.zeros(geom.coordVec_latlon_itf_i.shape[2:])
+   zbot_itf_j = numpy.zeros(geom.coordVec_latlon_itf_j.shape[2:])
+   # Update the geometry object with the new bottom topography
+   geom.apply_topography(zbot,zbot_itf_i,zbot_itf_j)
+   # And regenerate the metric to take this new topography into account
+   metric.build_metric()
+
+   u1_contra, u2_contra = wind2contra_2d(u, v, geom)
+
+
+   #-----------------------------------------------------------------------
+   #    PRESSURE
+   #-----------------------------------------------------------------------
+
+   p = p0 * eta
+
+   #-----------------------------------------------------------------------
+   #    rho (density)
+   #-----------------------------------------------------------------------
+   
+   T     = numpy.zeros_like(eta)
+   for i in range(eta.shape[0]):
+    for j in range(eta.shape[1]):
+        for k in range(eta.shape[2]):
+            _, mean = temperature(lon[i,j,k],lat[i,j,k],eta[i,j,k])
+            T[i, j, k] =  mean
+   
+   rho = p / (Rd * T)
+
+   #-----------------------------------------------------------------------
+   #     potential temperature
+   #-----------------------------------------------------------------------
+
+   theta = (T * (p0 / p)**(Rd/cpd))
+
+   return rho, u1_contra, u2_contra, w, theta
+
+
+
+#=========================================================================
+# Test 77:  Acoustic Wave
+#=========================================================================
+
+def acoustic_wave(geom: CubedSphere, metric, mtrx, param):
+   T0      = 300.0               
+   Δp      = 100                  
+   eta_v   = 1
+   re      = 6371000
+   rc      = re/3
+   ztop    = 10000
+
+   #-----------------------------------------------------------------------
+   #    TEMPERATURE IS CONSTANT 300 K
+   #-----------------------------------------------------------------------
+
+   t = T0
+
+   
+
+   #-----------------------------------------------------------------------
+   #    THE VELOCITIES ARE ZERO (STATE AT REST)
+   #-----------------------------------------------------------------------
+   
+   # Zonal Velocity
+
+   u = 0.0
+
+   # Meridional Velocity
+
+   v = 0.0
+
+   # Vertical Velocity
+
+   w = 0.0
+
+   ## Set a trivial topography
+   zbot = numpy.zeros(geom.coordVec_latlon.shape[2:])
+   zbot_itf_i = numpy.zeros(geom.coordVec_latlon_itf_i.shape[2:])
+   zbot_itf_j = numpy.zeros(geom.coordVec_latlon_itf_j.shape[2:])
+   # Update the geometry object with the new bottom topography
+   geom.apply_topography(zbot,zbot_itf_i,zbot_itf_j)
+   # And regenerate the metric to take this new topography into account
+   metric.build_metric()
+
+   u1_contra, u2_contra = wind2contra_2d(u, v, geom)
+
+
+   #-----------------------------------------------------------------------
+   #    Pressure
+   #-----------------------------------------------------------------------
+
+   H      = Rd * T0 / gravity   
+   p_mean = p0 * numpy.exp(-geom.height / H)
+
+
+   lat = geom.coordVec_latlon[1,:,:,:] # Latitude as 3D field
+   lon = geom.coordVec_latlon[0,:,:,:] # Longitude as 3D field 
+   r   = re * numpy.arccos( numpy.cos(lat) * numpy.cos(lon) )
+   p_perturb = numpy.zeros_like(p_mean)
+   g         = numpy.zeros_like(p_mean)
+   f         = numpy.zeros_like(p_mean)
+   
+
+   for i in range(p_mean.shape[0]):
+    for j in range(p_mean.shape[1]):
+        for k in range(p_mean.shape[2]):
+         if r[i,j,k] > rc:
+            f[i,j,k] = 0
+         else:
+            f[i,j,k] = (Δp/2) * ( 1 + numpy.cos((math.pi*r[i,j,k])/rc) )
+         
+         g[i,j,k] = numpy.sin( (eta_v*math.pi*r[i,j,k]) / ztop )
+
+   p_perturb = f * g
+   pressure  = p_mean + p_perturb
+   # pdb.set_trace()
+
+   Full_u_p = MPI.COMM_WORLD.gather(p_mean, root=0)
+   if MPI.COMM_WORLD.rank == 0:
+      numpy.save('p_mean2.npy', Full_u_p)
+
+   #-----------------------------------------------------------------------
+   #    RHO (density)
+   #-----------------------------------------------------------------------
+
+   rho = (pressure / (Rd * t))
+
+
+   #-----------------------------------------------------------------------
+   #     initialize TV (virtual temperature)
+   #-----------------------------------------------------------------------
+
+   theta = (t * (p0 / pressure)**(Rd/cpd))
+
 
    return rho, u1_contra, u2_contra, w, theta

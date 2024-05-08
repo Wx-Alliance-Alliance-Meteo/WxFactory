@@ -76,54 +76,54 @@ def main(argv) -> int:
 
       step += 1
 
-      MF = numpy.linspace(1e-18, 1, num=20000)
+      # MF = numpy.linspace(1e-18, 1, num=20000)
 
-      if 0 < step < 20000:
+      # if 0 < step < 20000:
 
-         # Create the mesh
-         geom = create_geometry(param, ptopo)
+      #    # Create the mesh
+      #    geom = create_geometry(param, ptopo)
 
-         # Build differentiation matrice and boundary correction
-         mtrx = DFROperators(geom, param)
+      #    # Build differentiation matrice and boundary correction
+      #    mtrx = DFROperators(geom, param)
          
-         T0      = 300.0             # temperature (K)
-         lambdam = math.pi/4.0       # mountain longitude center point (radians)
-         phim    = 0.0               # mountain latitude center point (radians)
-         h0      = 250.0             # peak height of the mountain range (m)
-         Dm      = 5000.0            # mountain radius (meters)
-         Dxi     = 4000.0            # Mountain wavelength (meters)
-         Ueq     = 20.0              # Reference zonal wind velocity (equator)
-         Peq     = 100000.0          # Reference surface pressure (Pa)
+      #    T0      = 300.0             # temperature (K)
+      #    lambdam = math.pi/4.0       # mountain longitude center point (radians)
+      #    phim    = 0.0               # mountain latitude center point (radians)
+      #    h0      = 250.0             # peak height of the mountain range (m)
+      #    Dm      = 5000.0            # mountain radius (meters)
+      #    Dxi     = 4000.0            # Mountain wavelength (meters)
+      #    Ueq     = 20.0              # Reference zonal wind velocity (equator)
+      #    Peq     = 100000.0          # Reference surface pressure (Pa)
 
-         #-----------------------------------------------------------------------
-         #    Set topography
-         #-----------------------------------------------------------------------
-         zbot = numpy.zeros(geom.coordVec_latlon.shape[2:])
-         zbot_itf_i = numpy.zeros(geom.coordVec_latlon_itf_i.shape[2:])
-         zbot_itf_j = numpy.zeros(geom.coordVec_latlon_itf_j.shape[2:])
+      #    #-----------------------------------------------------------------------
+      #    #    Set topography
+      #    #-----------------------------------------------------------------------
+      #    zbot = numpy.zeros(geom.coordVec_latlon.shape[2:])
+      #    zbot_itf_i = numpy.zeros(geom.coordVec_latlon_itf_i.shape[2:])
+      #    zbot_itf_j = numpy.zeros(geom.coordVec_latlon_itf_j.shape[2:])
 
-         # Build topography based on lateral great-circle distance from the mountain center
-         for (z, coord) in zip([zbot, zbot_itf_i, zbot_itf_j],
-                              [geom.coordVec_latlon, geom.coordVec_latlon_itf_i, geom.coordVec_latlon_itf_j]):
-            lat = coord[1,0,:,:]
-            lon = coord[0,0,:,:]
-            r = geom.earth_radius * numpy.arccos( math.sin(phim) * numpy.sin(lat) + math.cos(phim) * numpy.cos(lat) * numpy.cos(lon - lambdam) )
-            z[:,:] = h0 * numpy.exp(-r**2/Dm**2) * numpy.cos(numpy.pi*r/Dxi)**2
+      #    # Build topography based on lateral great-circle distance from the mountain center
+      #    for (z, coord) in zip([zbot, zbot_itf_i, zbot_itf_j],
+      #                         [geom.coordVec_latlon, geom.coordVec_latlon_itf_i, geom.coordVec_latlon_itf_j]):
+      #       lat = coord[1,0,:,:]
+      #       lon = coord[0,0,:,:]
+      #       r = geom.earth_radius * numpy.arccos( math.sin(phim) * numpy.sin(lat) + math.cos(phim) * numpy.cos(lat) * numpy.cos(lon - lambdam) )
+      #       z[:,:] = h0 * numpy.exp(-r**2/Dm**2) * numpy.cos(numpy.pi*r/Dxi)**2
 
 
-         # Update the geometry object with the new bottom topography
-         geom.apply_topography(MF[step-1]*zbot,MF[step-1]*zbot_itf_i,MF[step-1]*zbot_itf_j)
-         # And regenerate the metric to take this new topography into account
-         metric.geom = geom
-         metric.build_metric()
+      #    # Update the geometry object with the new bottom topography
+      #    geom.apply_topography(MF[step-1]*zbot,MF[step-1]*zbot_itf_i,MF[step-1]*zbot_itf_j)
+      #    # And regenerate the metric to take this new topography into account
+      #    metric.geom = geom
+      #    metric.build_metric()
 
-         new_rhs = RhsBundle(geom, mtrx, metric, topo, ptopo, param, Q.shape)
-         stepper = create_time_integrator(param, new_rhs, preconditioner)
-         output.geom = geom
-         output.metric = metric
-         output.mtrx = mtrx
-         stepper.output_manager = output
-         # print(metric.H_contra_13.max())
+      #    new_rhs = RhsBundle(geom, mtrx, metric, topo, ptopo, param, Q.shape)
+      #    stepper = create_time_integrator(param, new_rhs, preconditioner)
+      #    output.geom = geom
+      #    output.metric = metric
+      #    output.mtrx = mtrx
+      #    stepper.output_manager = output
+      #    # print(metric.H_contra_13.max())
 
       if MPI.COMM_WORLD.rank == 0: print(f'\nStep {step} of {nb_steps + starting_step}')
 

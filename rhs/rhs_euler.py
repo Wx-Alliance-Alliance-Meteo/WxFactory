@@ -7,7 +7,7 @@ from common.definitions import idx_rho_u1, idx_rho_u2, idx_rho_w, idx_rho, idx_r
 # For type hints
 from common.parallel import DistributedWorld
 from geometry        import CubedSphere, DFROperators, Metric3DTopo
-from init.dcmip      import dcmip_schar_damping
+from init.dcmip      import dcmip_schar_damping  #, dcmip_damping
 
 #@profile
 def rhs_euler (Q: numpy.ndarray, geom: CubedSphere, mtrx: DFROperators, metric: Metric3DTopo, ptopo: DistributedWorld,
@@ -510,7 +510,7 @@ def rhs_euler (Q: numpy.ndarray, geom: CubedSphere, mtrx: DFROperators, metric: 
          + 2.0 * metric.christoffel_3_23 * (rho * u2 * w  + metric.H_contra_23*pressure) \
          +       metric.christoffel_3_33 * (rho * w * w   + metric.H_contra_33*pressure) \
          + metric.inv_dzdeta * gravity * mtrx.filter_k(rho, geom)
-         #+ metric.inv_dzdeta * gravity * metric.inv_sqrtG * mtrx.filter_k(metric.sqrtG*rho, geom)
+         # + metric.inv_dzdeta * gravity * metric.inv_sqrtG * mtrx.filter_k(metric.sqrtG*rho, geom)
          # + (metric.inv_dzdeta * rho * gravity)
          #+ metric.inv_dzdeta * gravity * numpy.exp(mtrx.filter_k(logrho, geom))
 
@@ -524,6 +524,8 @@ def rhs_euler (Q: numpy.ndarray, geom: CubedSphere, mtrx: DFROperators, metric: 
       dcmip_schar_damping(forcing, rho, u1, u2, w, metric, geom, shear=False)
    elif case_number == 22:
       dcmip_schar_damping(forcing, rho, u1, u2, w, metric, geom, shear=True)
+   # elif case_number == 41:
+   #    dcmip_damping(forcing, rho, u1, u2, w, metric, geom, shear=False)
 
 
    # Assemble the right-hand sides

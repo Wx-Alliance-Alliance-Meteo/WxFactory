@@ -373,7 +373,7 @@ class CubedSphere(Geometry):
 
       # --- define planet radius and rotation speed
       self.earth_radius   = 6371220.0      # Mean radius of the earth (m)
-      self.rotation_speed = 7.29212e-5     # Angular speed of rotation of the earth (radians/s)
+      self.rotation_speed = 7.29212e-5 * 1.5    # Angular speed of rotation of the earth (radians/s)
 
       # Check for resized planet
       planet_scaling_factor = 1.
@@ -388,8 +388,12 @@ class CubedSphere(Geometry):
             planet_is_rotating = 0.0
          elif param.case_number == 21 or param.case_number == 22:
             # Small planet, no rotation
-            planet_scaling_factor = 166
+            planet_scaling_factor = 500
             planet_is_rotating = 0.0
+         elif param.case_number == 77:
+            planet_is_rotating = 1
+         # elif param.case_number == 41:
+         #    planet_scaling_factor = 100
 
          assert param.depth_approx is not None
          if param.depth_approx.lower() == "deep":
@@ -400,6 +404,8 @@ class CubedSphere(Geometry):
             raise AssertionError(f'Invalid Euler atmosphere depth approximation ({param.depth_approx})')
       self.earth_radius   /= planet_scaling_factor
       self.rotation_speed *= planet_is_rotating / planet_scaling_factor
+      # self.rotation_speed *= planet_scaling_factor
+      
 
       # Call _build_physical_coordinates() to continue the construction of coordinate vectors
       # for the "physical" coordinates.  These are segregated into another method because they
