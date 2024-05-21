@@ -10,11 +10,16 @@ from numpy.typing import NDArray
 
 from common.definitions     import *
 from common.program_options import Configuration
+from common.graphx          import image_field_coord
 from geometry               import contra2wind_2d, contra2wind_3d
 from output.diagnostic      import relative_vorticity, potential_vorticity
 
 netcdf_serial = False
+grouped = False
+grouped = True
 
+ni_mul = 2
+nj_mul = 4
 
 def prepare_array(param: Configuration) -> Callable[[NDArray], NDArray]:
    """
@@ -33,6 +38,104 @@ def prepare_array(param: Configuration) -> Callable[[NDArray], NDArray]:
    else:
       return lambda x: x
 
+def concatenated_field(field: NDArray) -> NDArray:
+   if not netcdf_serial: return field
+
+   fields: List = MPI.COMM_WORLD.gather(field, root=0)
+   if MPI.COMM_WORLD.rank != 0: return None
+
+   # # tmp = [fields[i] for i in [0, 1, 2, 3]]
+   # tmp = [fields[i] for i in [4, 2]]
+   # return numpy.concatenate(tmp, axis=-1)
+
+
+   base_shape = fields[0].shape
+   ni, nj = base_shape
+   result_shape = (ni * ni_mul, nj * nj_mul)
+   result = numpy.zeros(result_shape)
+
+   half_ni = ni  // 2
+   half_nj = nj  // 2
+
+   def clear_corners(top, bottom):
+      n, m = top.shape
+      if n*2 != m: raise ValueError(f'm = {m}, n = {n}')
+      tl = numpy.zeros(2*(n-1))
+      tr = numpy.zeros(2*(n-1))
+      bl = numpy.zeros(2*(n-1))
+      br = numpy.zeros(2*(n-1))
+      top_left = top[:, :half_nj]
+      tl[1::2] = numpy.diagonal(top_left[1:, 1:])
+      tl[0::2] = (numpy.diagonal(top_left[:-1, :-1]) + tl[1::2]) / 2.0
+
+      top_right = top[:, half_nj:]
+      tr[1::2] = numpy.diagonal(numpy.flip(top_right, 0)[1:, 1:])
+      tr[0::2] = (numpy.diagonal(numpy.flip(top_right, 0)[:-1, :-1]) + tr[1::2]) / 2.0
+
+      bottom_left = bottom[:, :half_nj]
+      bl[1::2] = numpy.diagonal(numpy.flip(bottom_left, 0)[1:, 1:])
+      bl[0::2] = (numpy.diagonal(numpy.flip(bottom_left, 0)[:-1, :-1]) + bl[1::2]) / 2.0
+
+      bottom_right = bottom[:, half_nj:]
+      br[1::2] = numpy.diagonal(bottom_right[1:, 1:])
+      br[0::2] = (numpy.diagonal(bottom_right[:-1, :-1]) + br[1::2]) / 2.0
+      for i in range(n - 1):
+         top[i + 1, :(i+1)]            = top[i+1, i+1]
+         top[i + 1, -(i+1):]           = top[i+1, -(i+2)]
+         bottom[i, :(half_nj - i - 1)] = bottom[i, half_nj - i - 1]
+         bottom[i, (half_nj + i + 1):] = bottom[i, half_nj + i]
+         # top[i + 1, :(i+1)]            = tl[i:2*i+1]
+         # top[i + 1, -(i+1):]           = tr[-(2*(i+1)): -(i+1)]
+         # bottom[i, :(half_nj - i - 1)] = bl[-(i+ half_nj):-(2*i+1)]
+         # bottom[i, (half_nj + i + 1):] = br[2*i:half_nj+i - 1]
+
+
+   # result[:half_ni, :nj] = fields[4][:half_ni, :]
+   # result[half_ni:3*half_ni, :] = fields[0]
+   # result[half_ni:3*half_ni, nj:] = fields[1]
+   # result[3*half_ni:, :nj] = fields[5][half_ni:, :]
+   
+   # result[:ni, :] = fields[0]
+   # result[ni:, :] = fields[5]
+
+   # Panel 0 + half above (4) and half below (5)
+   tmp4 = fields[4][       :half_ni, :]
+   tmp5 = fields[5][half_ni:       , :]
+   clear_corners(tmp4, tmp5)
+
+   result[         :  half_ni, :nj] = tmp5
+   result[  half_ni:3*half_ni, :nj] = fields[0][:, :]
+   result[3*half_ni:         , :nj] = tmp4
+
+   # Panel 1 + half above (4) and half below (5)
+   tmp4 = numpy.rot90(fields[4][:, half_nj:], 1)
+   tmp5 = numpy.rot90(fields[5][:, half_nj:], -1)
+   clear_corners(tmp4, tmp5)
+
+   result[         :  half_ni, 1*nj:2*nj] = tmp5
+   result[  half_ni:3*half_ni, 1*nj:2*nj] = fields[1][:, :]
+   result[3*half_ni:         , 1*nj:2*nj] = tmp4
+
+   # Panel 2 + half above (4) and half below (5)
+   tmp4 = numpy.rot90(fields[4][half_ni:, :], 2)
+   tmp5 = numpy.rot90(fields[5][:half_ni, :], 2)
+   clear_corners(tmp4, tmp5)
+
+   result[         :  half_ni, 2*nj:3*nj] = tmp5
+   result[  half_ni:3*half_ni, 2*nj:3*nj] = fields[2][:, :]
+   result[3*half_ni:         , 2*nj:3*nj] = tmp4
+
+   # Panel 3 + half above (4) and half below (5)
+   tmp4 = numpy.rot90(fields[4][:, :half_nj], -1)
+   tmp5 = numpy.rot90(fields[5][:, :half_nj], 1)
+   clear_corners(tmp4, tmp5)
+
+   result[         :  half_ni, 3*nj:4*nj] = tmp5
+   result[  half_ni:3*half_ni, 3*nj:4*nj] = fields[3][:, :]
+   result[3*half_ni:         , 3*nj:4*nj] = tmp4
+
+   return result
+
 def store_field(field: NDArray, name: str, step_id: int, file: 'netCDF4.Dataset') -> None:
    """Store data in a given file.
    
@@ -40,10 +143,20 @@ def store_field(field: NDArray, name: str, step_id: int, file: 'netCDF4.Dataset'
    only that PE will perform the write operation.
    """
    if netcdf_serial:
-      fields: List = MPI.COMM_WORLD.gather(field, root=0)
-      if MPI.COMM_WORLD.rank == 0:
-         for i, f in enumerate(fields):
-            file[name][step_id, i] = f
+      if grouped:
+         complete_field = concatenated_field(field)
+         if MPI.COMM_WORLD.rank == 0:
+            file[name][step_id] = complete_field
+
+            if name == 'h':
+               print(f'complete field: \n{complete_field}')
+      else:
+         fields: List = MPI.COMM_WORLD.gather(field, root=0)
+         if MPI.COMM_WORLD.rank == 0:
+            for i, f in enumerate(fields):
+               file[name][step_id, i] = f
+               # print(f'field = \n{f}')
+
    else:
       file[name][step_id, MPI.COMM_WORLD.rank] = field
 
@@ -75,14 +188,28 @@ def output_init(geom, param):
    # create dimensions
    if param.equations == "shallow_water":
       ni, nj = geom.lat.shape
-      grid_data = ('npe', 'Xdim', 'Ydim')
+      if grouped:
+         # grid_data = ('AllXdim', 'Ydim')
+         grid_data = ('AllXdim', 'AllYdim')
+      else:
+         grid_data = ('npe', 'Xdim', 'Ydim')
+
    elif param.equations == "euler":
       nk, nj, ni = geom.nk, geom.nj, geom.ni
-      grid_data = ('npe', 'Zdim', 'Xdim', 'Ydim')
+      if grouped:
+         # grid_data = ('Zdim', 'AllXdim', 'Ydim')
+         grid_data = ('Zdim', 'AllXdim', 'AllYdim')
+      else:
+         grid_data = ('npe', 'Zdim', 'Xdim', 'Ydim')
+
    else:
       raise ValueError(f"Unsupported equation type {param.equations}")
 
-   grid_data2D = ('npe', 'Xdim', 'Ydim')
+   if grouped:
+      # grid_data2D = ('AllXdim', 'Ydim')
+      grid_data2D = ('AllXdim', 'AllYdim')
+   else:
+      grid_data2D = ('npe', 'Xdim', 'Ydim')
 
    if ncfile is not None:
       # write general attributes
@@ -92,9 +219,22 @@ def output_init(geom, param):
 
       ncfile.createDimension('time', None) # unlimited
       npe = MPI.COMM_WORLD.Get_size()
-      ncfile.createDimension('npe', npe)
-      ncfile.createDimension('Ydim', ni)
-      ncfile.createDimension('Xdim', nj)
+
+      if grouped:
+         single_ni = ni
+         single_nj = nj
+         ni *= ni_mul
+         nj *= nj_mul
+         # ni *= npe
+         ncfile.createDimension('npe', npe)
+         ncfile.createDimension('AllXdim', ni)
+         ncfile.createDimension('Xdim', single_ni)
+         ncfile.createDimension('AllYdim', nj)
+         ncfile.createDimension('Ydim', single_nj)
+      else:
+         ncfile.createDimension('npe', npe)
+         ncfile.createDimension('Xdim', ni)
+         ncfile.createDimension('Ydim', nj)
 
       # create time axis
       tme = ncfile.createVariable('time', numpy.float64, ('time',))
@@ -288,22 +428,44 @@ def output_init(geom, param):
          zzz[:] = prepare(geom.x3[:,0,0]) 
 
    if netcdf_serial:
-      ranks = MPI.COMM_WORLD.gather(rank, root=0)
-      lons  = MPI.COMM_WORLD.gather(prepare(geom.lon * 180/math.pi), root=0)
-      lats  = MPI.COMM_WORLD.gather(prepare(geom.lat * 180/math.pi), root=0)
-      if param.equations == "euler":
-         elevs = MPI.COMM_WORLD.gather(prepare(geom.coordVec_latlon[2,:,:,:]), root=0)
-         topos = MPI.COMM_WORLD.gather(prepare(geom.zbot[:,:]), root=0)
-
-      if rank == 0:
-         for my_rank, my_lon, my_lat in zip(ranks, lons, lats):
-            tile[my_rank] = my_rank
-            lon[my_rank, :, :] = my_lon
-            lat[my_rank, :, :] = my_lat
+      if grouped:
+         lons  = concatenated_field(prepare(geom.lon * 180/math.pi))
+         lats  = concatenated_field(prepare(geom.lat * 180/math.pi))
          if param.equations == "euler":
-            for my_rank, my_elev, my_topo in zip(ranks, elevs, topos):
-               elev[my_rank, :, :, :] = my_elev
-               topo[my_rank, :, :] = my_topo
+            elevs = concatenated_field(prepare(geom.coordVec_latlon[2,:,:,:]))
+            topos = concatenated_field(prepare(geom.zbot[:,:]))
+
+         if rank == 0:
+            lon[:, :] = lons
+            lat[:, :] = lats
+            if param.equations == "euler":
+               elev[:, :, :] = elevs
+               topo[:, :] = topos
+
+            numpy.set_printoptions(precision = 2)
+            print(f'lat = \n{lat[:]}')
+            print(f'lon = \n{lon[:]}')
+      else:
+         ranks = MPI.COMM_WORLD.gather(rank, root=0)
+         lons  = MPI.COMM_WORLD.gather(prepare(geom.lon * 180/math.pi), root=0)
+         lats  = MPI.COMM_WORLD.gather(prepare(geom.lat * 180/math.pi), root=0)
+         if param.equations == "euler":
+            elevs = MPI.COMM_WORLD.gather(prepare(geom.coordVec_latlon[2,:,:,:]), root=0)
+            topos = MPI.COMM_WORLD.gather(prepare(geom.zbot[:,:]), root=0)
+
+         if rank == 0:
+            for my_rank, my_lon, my_lat in zip(ranks, lons, lats):
+               tile[my_rank] = my_rank
+               lon[my_rank, :, :] = my_lon
+               lat[my_rank, :, :] = my_lat
+            if param.equations == "euler":
+               for my_rank, my_elev, my_topo in zip(ranks, elevs, topos):
+                  elev[my_rank, :, :, :] = my_elev
+                  topo[my_rank, :, :] = my_topo
+
+            print(f'lat = \n{lat[:]}')
+            # print(f'lon = \n{lon[:]}')
+
 
    else:
       tile[rank] = rank
@@ -312,7 +474,6 @@ def output_init(geom, param):
       if param.equations == "euler":
          elev[rank,:,:,:] = prepare(geom.coordVec_latlon[2,:,:,:])
          topo[rank,:,:] = prepare(geom.zbot[:,:])
-
 
 def output_netcdf(Q, geom, metric, mtrx, topo, step, param):
    """ Writes u,v,eta fields on every nth time step """
@@ -343,6 +504,9 @@ def output_netcdf(Q, geom, metric, mtrx, topo, step, param):
          store_field(prepare(rv), 'RV', idx, ncfile)
          store_field(prepare(pv), 'PV', idx, ncfile)
 
+      # if ncfile is not None:
+      #    image_field_coord(ncfile['lons'][:], ncfile['lats'][:], ncfile['h'][idx], filename=f'h{rank:02d}_{idx:05d}.png')
+
    elif param.equations == "euler":
       rho   = Q[idx_rho, :, :, :]
       u1    = Q[idx_rho_u1, :, :, :]  / rho
@@ -368,5 +532,5 @@ def output_netcdf(Q, geom, metric, mtrx, topo, step, param):
 
 def output_finalize():
    """ Finalise the output netCDF4 file."""
-   if MPI.COMM_WORLD.rank == 0:
+   if ncfile is not None:
       ncfile.close()

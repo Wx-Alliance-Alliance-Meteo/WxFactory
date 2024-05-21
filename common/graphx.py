@@ -51,6 +51,31 @@ def plot_array(array, filename=None):
 
    MPI.COMM_WORLD.Barrier()
 
+def image_field_coord(x, y, f, filename = None):
+   fig, ax = matplotlib.pyplot.subplots()
+
+   # ni, nj = y.shape
+   # for i in range(ni - 1):
+   #    for j in range(nj):
+   #       if y[i, j] < 0:
+   #          if y[i, j] > y[i + 1, j]: y[i, j] = -y[i, j] - 180
+
+   # print(f'x = \n{x}')
+   # print(f'y = \n{y}')
+
+   cmap = matplotlib.pyplot.contourf(x, y, f)
+   # ax.set_aspect('equal', 'box')
+
+   cbar = fig.colorbar(cmap, ax=ax, orientation='vertical', shrink=0.5)
+   cbar.set_label('image', )
+
+   if filename is not None:
+      matplotlib.pyplot.savefig(filename)
+   matplotlib.pyplot.close(fig) 
+
+   return
+
+
 def image_field(geom: 'Cartesian2D', field: numpy.ndarray, filename: str, vmin: float, vmax: float, n: int, \
                 label: str = 'K', colormap: str = 'jet'):
    fig, ax = matplotlib.pyplot.subplots()
