@@ -1,5 +1,6 @@
 import netCDF4 as nc
 import matplotlib.pyplot as plt
+import matplotlib.lines as mLines
 import numpy as np
 
 import networkx as nx
@@ -79,11 +80,45 @@ my_east_panel = -1
 
 # Iterate over each grid point
 panels = 6
-x1_max = 30
-x2_max = 30
+x1_max = file.dimensions['Ydim'].size
+x2_max = file.dimensions['Xdim'].size
 
 edges_dataset = torch.zeros((2, 4*x1_max*x2_max*panels))
 node_features_dataset = torch.zeros((1, x1_max*x2_max*panels, 20))
+
+def draw_graph(adjacency):
+    """Draw the given adjacency array as an unwrapped cube."""
+
+    fig, ax = plt.subplots()
+    plt.plot([0], [0])
+
+    def add_line(p1, p2, *args, **kwargs):
+        ax.add_line(mLines.Line2D([p1[0], p2[0]], [p1[1], p2[1]], *args, **kwargs))
+
+    coords = {}
+    coords[0] = [0, 0]
+
+    offsets = [
+        [0, 0],
+        [x1_max, 0],
+        [2*x1_max, 0],
+        [-x1_max, 0],
+        [0, x2_max],
+        [0, -x2_max]
+    ]
+
+    for panel in range(6):
+        for x1 in range(x1_max):
+            for x2 in range(x2_max):
+                id = tuple_to_index(panel, x1, x2)
+                coords[id] = [offsets[panel][0] + x1, offsets[panel][1] + x2]
+    
+    for point, neighbors in adjacency.items():
+        for neighbor in neighbors:
+            add_line(coords[point], coords[neighbor], color = 'red' if point < neighbor else 'green')
+
+    plt.tight_layout()
+    plt.savefig('graph.png')
 
 def tuple_to_index(i, j, k):
     index = x1_max * x2_max * i + x1_max * k + j
@@ -155,7 +190,7 @@ for t in range(0, nf_height.shape[0]):
                     arr = (np.array([nf_height[t, i, j, k], nf_hu1[t, i, j, k], nf_hu2[t, i, j, k], nf_U[t, i, j, k], nf_V[t, i, j, k]
 		    , nf_lats[i, j, k], nf_lons[i, j, k], nf_h_contra_11[i, j, k], nf_h_contra_12[i, j, k], nf_h_contra_21[i, j, k]
 		    , nf_h_contra_22[i, j, k], nf_sqrt_g[i, j, k], nf_christie_1_01[i, j, k], nf_christie_1_02[i, j, k]
-		    , nf_christie_1_11[i, j, k], nf_christie_1_12[i, j, k], nf_christie_2_01[i, j, k], nf_christie_2_02[i, j, k] 
+		    , nf_christie_1_11[i, j, k], nf_christie_1_12[i, j, k], nf_christie_2_01[i, j, k], nf_christie_2_02[i, j, k]
 		    , nf_christie_2_12[i, j, k], nf_christie_2_22[i, j, k]]))
                     adjacency_list_2[tuple_to_index(i, j, k)] = arr
         # panel 1
@@ -214,7 +249,7 @@ for t in range(0, nf_height.shape[0]):
                     if k > 0:
                         neighbors.append(tuple_to_index(i, j, k-1))
                     if k == 0:
-                        neighbors.append(tuple_to_index(my_south_panel, j, 0))
+                        neighbors.append(tuple_to_index(my_south_panel, x1_max - j - 1, 0))
                     # Add north neighbor
                     if k < x2_max - 1:
                         neighbors.append(tuple_to_index(i, j, k+1))
@@ -337,6 +372,8 @@ for t in range(0, nf_height.shape[0]):
 		    , nf_christie_2_12[i, j, k], nf_christie_2_22[i, j, k]]))
                     adjacency_list_2[tuple_to_index(i, j, k)] = arr
     
+    draw_graph(adjacency_list)
+
     # Convert adjacency list to edge indices
     
     edges = []
