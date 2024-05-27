@@ -41,6 +41,7 @@ class Configuration:
          from gef_cuda import num_devices
          if num_devices > 0:
             self.cuda_devices = self._get_option('System', 'cuda_devices', List[int], list(range(num_devices)))
+            self.cuda_devices = [x for x in self.cuda_devices if x < num_devices]
             self.array_module = 'cupy'
          else:
             if verbose:
