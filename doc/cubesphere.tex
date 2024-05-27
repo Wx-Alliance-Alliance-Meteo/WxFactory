@@ -11,6 +11,19 @@
     \titlepage
 \end{frame}
 
+\begin{frame}{WxFactory}{Formerly known as GEF}
+\begin{itemize}
+    \item Atmospheric simulation for numerical weather prediction
+    \item Solves the Euler equations on a cubesphere grid
+    \item Most of computation time ($~95\%$) is spent on time
+         integration (with an exponential integrator)
+    \item Of that, most is spent solving a linear system with KIOPS
+        \begin{itemize}
+        \item \textbf{That's the GPU part}
+        \end{itemize}
+\end{itemize}
+\end{frame}
+
 \begin{frame}{Cube panels}
 \begin{figure}
     \includegraphics[scale=0.5]{img/panel_numbering}
