@@ -10,6 +10,7 @@ num_devices = 0
 loading_error = None
 try:
    import cupy
+   import cupy_backends
 
    num_devices = cupy.cuda.runtime.getDeviceCount()
 
@@ -28,6 +29,11 @@ except ImportError as e:
    loading_error = e
    # if MPI.COMM_WORLD.rank == 0:
    #    print(f'Module cupy is installed, but we were unable to load it, so we will run on CPUs instead')
+
+except cupy_backends.cuda.api.runtime.CUDARuntimeError as e:
+   loading_error = e
+   # if MPI.COMM_WORLD.rank == 0:
+   #    print(f'Module cupy is installed, but we could not find any CUDA device. Will run on CPU instead')
 
 cuda_avail = num_devices > 0
 
