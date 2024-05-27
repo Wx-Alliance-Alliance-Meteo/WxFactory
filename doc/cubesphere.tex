@@ -1,0 +1,52 @@
+\documentclass{beamer}
+
+\usetheme{default}
+
+% Title page
+\title{Cubesphere overview}
+
+\begin{document}
+
+\begin{frame}
+    \titlepage
+\end{frame}
+
+\begin{frame}{Cube panels}
+\begin{figure}
+    \includegraphics[scale=0.5]{img/panel_numbering}
+    \caption{Panel numbering: This shows how the panels (cube faces) are numbered and connected to each other.}
+\end{figure}
+\end{frame}
+
+
+\begin{frame}{Panel orientation}
+\begin{itemize}
+    \item The orientation is local to the tile, not geographical
+    \item Note that the North of tile~2 is connected to the North of tile~4
+\end{itemize}
+\begin{figure}
+    \includegraphics[scale=0.9]{img/tile_orientation}
+\end{figure}
+\end{frame}
+
+\begin{frame}{Partitioning for MPI}
+\begin{itemize}
+    \item The tiles all have identical sizes, horizontally and vertically.
+    \item They are grouped by panel.
+\end{itemize}
+\begin{figure}
+    \includegraphics[scale=0.6]{img/multi_tile_numbering}
+    \caption{Tile numbering: How tiles are assigned to MPI ranks.}
+\end{figure}
+\end{frame}
+
+\begin{frame}{Data storage (single variable)}
+\begin{itemize}
+    \item Data is stored by row \emph{of points}, not elements
+\end{itemize}
+\begin{figure}
+    \includegraphics[scale=0.8]{img/variable_storage}
+\end{figure}
+\end{frame}
+
+\end{document}
