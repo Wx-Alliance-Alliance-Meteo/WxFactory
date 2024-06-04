@@ -9,6 +9,8 @@ import cupy as cp
 import cupyx as cx
 import cu_utils.linalg
 
+from cupy.cuda.nvtx import RangePush, RangePop
+
 # In the original kiops function, the array "V" is absolutely massive,
 # usually too large to reside on GPU for any moderately-sized problem.
 # This version of kiops stores the "V" array on the CPU,
@@ -64,6 +66,8 @@ def kiops_cuda(tau_out: NDArray[cp.float64], A: Callable[[NDArray[cp.float64]], 
    * Niesen, J. and Wright, W.M., 2012. Algorithm 919: A Krylov subspace algorithm for evaluating the ``φ``-functions
          appearing in exponential integrators. ACM Transactions on Mathematical Software (TOMS), 38(3), p.22
    """
+
+   RangePush(f'Kiops')
 
    tau_out = cp.asarray(tau_out, dtype=cp.float64)
    u = cp.asarray(u)
@@ -148,7 +152,11 @@ def kiops_cuda(tau_out: NDArray[cp.float64], A: Callable[[NDArray[cp.float64]], 
 
    send_stream = cp.cuda.Stream()
 
+   it_count = 0
    while tau_now < tau_end:
+
+      it_count += 1
+      RangePush(f'Kiops outer {it_count}')
 
       # Compute necessary starting information
       if j == 0:
@@ -176,8 +184,11 @@ def kiops_cuda(tau_out: NDArray[cp.float64], A: Callable[[NDArray[cp.float64]], 
             Vg[0, :].get(out=V_buf[0, :n + p])
 
       # Incomplete orthogonalization process
+      inner_it = 0
       while j < m:
 
+         inner_it = inner_it + 1
+         RangePush(f'Kiops inner {inner_it}')
          j = j + 1
          # this loop's vector will occupy Vg[slot]
          slot = j % Vg_slots
@@ -217,6 +228,7 @@ def kiops_cuda(tau_out: NDArray[cp.float64], A: Callable[[NDArray[cp.float64]], 
             with send_stream:
                Vg[slot, :n + p].get(out=V_buf[parity, :n + p])
             happy = True
+            RangePop()
             break
 
          H[j, j - 1] = nrm
@@ -227,6 +239,8 @@ def kiops_cuda(tau_out: NDArray[cp.float64], A: Callable[[NDArray[cp.float64]], 
             Vg[slot, :n + p].get(out=V_buf[parity, :n + p])
 
          krystep += 1
+
+         RangePop()
 
       # To obtain the phi_1 function which is needed for error estimate
       H[0, j] = 1.0
@@ -370,6 +384,8 @@ def kiops_cuda(tau_out: NDArray[cp.float64], A: Callable[[NDArray[cp.float64]], 
       oldm = m
       m = m_new
 
+      RangePop()
+
    send_stream.synchronize()
    if task1 is True:
       for k in range(numSteps):
@@ -377,5 +393,7 @@ def kiops_cuda(tau_out: NDArray[cp.float64], A: Callable[[NDArray[cp.float64]], 
 
    m_ret = m
    stats = (step, reject, krystep, exps, conv, m_ret)
+
+   RangePop()
 
    return w, stats

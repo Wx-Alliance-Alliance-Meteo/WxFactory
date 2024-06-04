@@ -1,6 +1,8 @@
 import cupy as cp
 from mpi4py import MPI
 
+from cupy.cuda.nvtx import RangePush, RangePop
+
 from .cuda_module import CudaModule, DimSpec, Dim, Requires, TemplateSpec, cuda_kernel
 
 from common.definitions import idx_rho_u1, idx_rho_u2, idx_rho_w, idx_rho, idx_rho_theta, gravity, p0, Rd, cpd, cvd, heat_capacity_ratio
@@ -59,6 +61,8 @@ def rhs_euler_cuda(Q: NDArray[cp.float64],
                    nb_elements_vert: int,
                    case_number: int) -> NDArray[cp.float64]:
 
+   RangePush(f'rhs_euler_cuda')
+
    type_vec = Q.dtype
    nb_equations = Q.shape[0]
    nb_pts_hori = nb_elements_hori * nbsolpts
@@ -84,8 +88,11 @@ def rhs_euler_cuda(Q: NDArray[cp.float64],
 
    advection_only = case_number < 13
 
+   RangePush(f'Extrapolate')
+
    variables_itf_i[:, :, 1:-1, :, :] = mtrx.extrapolate_i(Q, geom).transpose((0, 1, 3, 4, 2))
    variables_itf_j[:, :, 1:-1, :, :] = mtrx.extrapolate_j(Q, geom)
+
 
    logrho      = cp.log(Q[idx_rho])
    logrhotheta = cp.log(Q[idx_rho_theta])
@@ -97,8 +104,11 @@ def rhs_euler_cuda(Q: NDArray[cp.float64],
    variables_itf_j[idx_rho_theta, :, 1:-1, :, :] = cp.exp(mtrx.extrapolate_j(logrhotheta, geom))
 
 
+   RangePop()
+
    all_request = ptopo.xchange_Euler_interfaces(geom, variables_itf_i, variables_itf_j, blocking=False)
 
+   RangePush('Vertical flux')
 
    rho = Q[idx_rho]
    u1  = Q[idx_rho_u1] / rho
@@ -157,7 +167,11 @@ def rhs_euler_cuda(Q: NDArray[cp.float64],
                            metric.sqrtG_itf_k, metric.H_contra_itf_k[2],
                            nb_elements_vert, nb_pts_hori, nb_equations, advection_only)
 
+   RangePop()
+
    all_request.wait()
+
+   RangePush('Horizontal flux')
 
    u1_itf_i = variables_itf_i[idx_rho_u1] / variables_itf_i[idx_rho]
    u2_itf_j = variables_itf_j[idx_rho_u2] / variables_itf_j[idx_rho]
@@ -165,6 +179,7 @@ def rhs_euler_cuda(Q: NDArray[cp.float64],
    pressure_itf_i = p0 * cp.exp((cpd / cvd) * cp.log(variables_itf_i[idx_rho_theta] * (Rd / p0)))
    pressure_itf_j = p0 * cp.exp((cpd / cvd) * cp.log(variables_itf_j[idx_rho_theta] * (Rd / p0)))
 
+   RangePush('Flux kernels - 2')
    RHSEuler.compute_flux_i(flux_x1_itf_i, wflux_adv_x1_itf_i, wflux_pres_x1_itf_i,
                            variables_itf_i, pressure_itf_i, u1_itf_i,
                            metric.sqrtG_itf_i, metric.H_contra_itf_i[0],
@@ -174,14 +189,22 @@ def rhs_euler_cuda(Q: NDArray[cp.float64],
                            variables_itf_j, pressure_itf_j, u2_itf_j,
                            metric.sqrtG_itf_j, metric.H_contra_itf_j[1],
                            nb_elements_hori, nb_pts_hori, nb_vertical_levels, nb_equations, advection_only)
+   RangePop()
 
    flux_x1_bdy = flux_x1_itf_i.transpose((0, 1, 3, 2, 4))[:, :, :, 1:-1, :].copy()
+   RangePush('Comma i (1)')
    df1_dx1 = mtrx.comma_i(flux_x1, flux_x1_bdy, geom)
+   RangePop()
    flux_x2_bdy = flux_x2_itf_j[:, :, 1:-1, :, :].copy()
+   RangePush('Comma j (1)')
    df2_dx2 = mtrx.comma_j(flux_x2, flux_x2_bdy, geom)
+   RangePop()
    flux_x3_bdy = flux_x3_itf_k[:, :, 1:-1, :, :].transpose(0, 2, 3, 1, 4).copy()
+   RangePush('Comma k (1)')
    df3_dx3 = mtrx.comma_k(flux_x3, flux_x3_bdy, geom)
+   RangePop()
 
+   RangePush('Pressure')
    logp_int = cp.log(pressure)
 
    pressure_bdy_i = pressure_itf_i[:, 1:-1, :, :].transpose((0, 3, 1, 2)).copy()
@@ -191,7 +214,9 @@ def rhs_euler_cuda(Q: NDArray[cp.float64],
    logp_bdy_i = cp.log(pressure_bdy_i)
    logp_bdy_j = cp.log(pressure_bdy_j)
    logp_bdy_k = cp.log(pressure_bdy_k)
+   RangePop()
 
+   RangePush('Adv')
    wflux_adv_x1_bdy_i  =  wflux_adv_x1_itf_i.transpose((0, 2, 1, 3))[:, :, 1:-1, :].copy()
    wflux_pres_x1_bdy_i = wflux_pres_x1_itf_i.transpose((0, 2, 1, 3))[:, :, 1:-1, :].copy()
 
@@ -200,7 +225,9 @@ def rhs_euler_cuda(Q: NDArray[cp.float64],
 
    wflux_adv_x3_bdy_k  =  wflux_adv_x3_itf_k[:, 1:-1, :, :].transpose((1, 2, 0, 3)).copy()
    wflux_pres_x3_bdy_k = wflux_pres_x3_itf_k[:, 1:-1, :, :].transpose((1, 2, 0, 3)).copy()
+   RangePop()
 
+   RangePush('Comma ijk (2)')
    w_df1_dx1_adv   = mtrx.comma_i(wflux_adv_x1,  wflux_adv_x1_bdy_i,  geom)
    w_df1_dx1_presa = mtrx.comma_i(wflux_pres_x1, wflux_pres_x1_bdy_i, geom) * pressure
    w_df1_dx1_presb = mtrx.comma_i(logp_int,      logp_bdy_i,          geom) * pressure * wflux_pres_x1
@@ -215,6 +242,11 @@ def rhs_euler_cuda(Q: NDArray[cp.float64],
    w_df3_dx3_presa = mtrx.comma_k(wflux_pres_x3, wflux_pres_x3_bdy_k, geom) * pressure
    w_df3_dx3_presb = mtrx.comma_k(logp_int,      logp_bdy_k,          geom) * pressure * wflux_pres_x3
    w_df3_dx3       = w_df3_dx3_adv + w_df3_dx3_presa + w_df3_dx3_presb
+   RangePop()
+
+   RangePop()
+
+   RangePush('Forcing')
 
    forcing[idx_rho] = 0.
 
@@ -227,6 +259,7 @@ def rhs_euler_cuda(Q: NDArray[cp.float64],
          + 2. * metric.christoffel_1_23 * (rho * u2 * w  + metric.H_contra_23 * pressure) \
          +      metric.christoffel_1_33 * (rho * w  * w  + metric.H_contra_33 * pressure)
 
+   RangePush('rho_u2')
    forcing[idx_rho_u2] = \
            2. * rho * (metric.christoffel_2_01 * u1 + metric.christoffel_2_02 * u2 + metric.christoffel_2_03 * w) \
          +      metric.christoffel_2_11 * (rho * u1 * u1 + metric.H_contra_11 * pressure) \
@@ -235,7 +268,9 @@ def rhs_euler_cuda(Q: NDArray[cp.float64],
          +      metric.christoffel_2_22 * (rho * u2 * u2 + metric.H_contra_22 * pressure) \
          + 2. * metric.christoffel_2_23 * (rho * u2 * w  + metric.H_contra_23 * pressure) \
          +      metric.christoffel_2_33 * (rho * w  * w  + metric.H_contra_33 * pressure)
+   RangePop()
 
+   RangePush('rho_u3')
    forcing[idx_rho_w]  = \
            2. * rho * (metric.christoffel_3_01 * u1 + metric.christoffel_3_02 * u2 + metric.christoffel_3_03 * w) \
          +      metric.christoffel_3_11 * (rho * u1 * u1 + metric.H_contra_11 * pressure) \
@@ -245,8 +280,10 @@ def rhs_euler_cuda(Q: NDArray[cp.float64],
          + 2. * metric.christoffel_3_23 * (rho * u2 * w  + metric.H_contra_23 * pressure) \
          +      metric.christoffel_3_33 * (rho * w  * w  + metric.H_contra_33 * pressure) \
          + metric.inv_dzdeta * gravity * metric.inv_sqrtG * mtrx.filter_k(metric.sqrtG * rho, geom)
+   RangePop()
 
    forcing[idx_rho_theta] = 0.
+
 
    if case_number == 21:
       dcmip_schar_damping(forcing, rho, u1, u2, w, metric, geom, shear=False)
@@ -262,5 +299,9 @@ def rhs_euler_cuda(Q: NDArray[cp.float64],
       rhs[idx_rho_u2]    = 0.
       rhs[idx_rho_w]     = 0.
       rhs[idx_rho_theta] = 0.
+
+   RangePop()
+
+   RangePop()
 
    return rhs
