@@ -51,6 +51,18 @@ class RHSEuler(metaclass=CudaModule,
       nv: int, nk_nh: int, ne: int, advection_only: bool): ...
 
 
+@cp.fuse(kernel_name='rho_u1')
+def rho_u1(f_, r_, u1_, u2_, w_, p_, c101_, c102_, c103_, c111_, c112_, c113_, c122_, c123_, c133_, \
+           h11_, h12_, h13_, h22_, h23_, h33_):
+   f_ = 2. * r_ * (c101_ * u1_ + c102_ * u2_ + c103_ * w_) \
+         + c111_ * (r_ * u1_ * u1_ + h11_ * p_) \
+         + 2. * c112_ * (r_ * u1_ * u2_ + h12_ * p_) \
+         + 2. * c113_ * (r_ * u1_ * w_  + h13_ * p_) \
+         +      c122_ * (r_ * u2_ * u2_ + h22_ * p_) \
+         + 2. * c123_ * (r_ * u2_ * w_  + h23_ * p_) \
+         +      c133_ * (r_ * w_  * w_  + h33_ * p_)
+
+
 def rhs_euler_cuda(Q: NDArray[cp.float64],
                    geom: CubedSphere,
                    mtrx: DFROperators,
@@ -250,14 +262,14 @@ def rhs_euler_cuda(Q: NDArray[cp.float64],
 
    forcing[idx_rho] = 0.
 
-   forcing[idx_rho_u1] = \
-           2. * rho * (metric.christoffel_1_01 * u1 + metric.christoffel_1_02 * u2 + metric.christoffel_1_03 * w) \
-         +      metric.christoffel_1_11 * (rho * u1 * u1 + metric.H_contra_11 * pressure) \
-         + 2. * metric.christoffel_1_12 * (rho * u1 * u2 + metric.H_contra_12 * pressure) \
-         + 2. * metric.christoffel_1_13 * (rho * u1 * w  + metric.H_contra_13 * pressure) \
-         +      metric.christoffel_1_22 * (rho * u2 * u2 + metric.H_contra_22 * pressure) \
-         + 2. * metric.christoffel_1_23 * (rho * u2 * w  + metric.H_contra_23 * pressure) \
-         +      metric.christoffel_1_33 * (rho * w  * w  + metric.H_contra_33 * pressure)
+   RangePush('rho_u1')
+   rho_u1(forcing[idx_rho_u1], rho, u1, u2, w, pressure, \
+          metric.christoffel_1_01, metric.christoffel_1_02, metric.christoffel_1_03, \
+          metric.christoffel_1_11, metric.christoffel_1_12, metric.christoffel_1_13, \
+          metric.christoffel_1_22, metric.christoffel_1_23, metric.christoffel_1_33, \
+          metric.H_contra_11, metric.H_contra_12, metric.H_contra_13, \
+          metric.H_contra_22, metric.H_contra_23, metric.H_contra_33)
+   RangePop()
 
    RangePush('rho_u2')
    forcing[idx_rho_u2] = \
