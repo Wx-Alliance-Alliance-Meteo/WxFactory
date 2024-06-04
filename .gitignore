@@ -5,6 +5,7 @@
 *.code-workspace
 *.lprof
 *.lprof.txt
+*.nsys-rep
 
 doc/*.pdf
 doc/aux/*
