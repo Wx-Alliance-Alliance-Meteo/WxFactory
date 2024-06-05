@@ -59,10 +59,10 @@ class GCN(nn.Module):
 
         return x
 
-command = "cp out_case6_base.nc nn_out_case6_base.nc"
+command = "cp ../../../Explore_ai/WxFactory/results/out_case6_base.nc nn_out_case6_base_trainUV_correct.nc"
 output = subprocess.run(command, shell=True, capture_output=True, text=True)
 
-file = nc.Dataset('nn_out_case6_base.nc', 'r+')
+file = nc.Dataset('nn_out_case6_base_trainUV_correct.nc', 'r+')
 
 # Print the file format and dimensions
 print("File format:", file.file_format)
@@ -73,21 +73,24 @@ print("Variables:", file.variables.keys())
 
 # Access nf (node features) and attributes
 H = file.variables['h']
-HU1 = file.variables['hu1']
-HU2 = file.variables['hu2']
+#HU1 = file.variables['hu1']
+#HU2 = file.variables['hu2']
 
-# U = file.variables['U']
-# V = file.variables['V']
+U = file.variables['U']
+V = file.variables['V']
 
 # Load the model
-loaded_model = GCN(20, 256, 3, 0.01)
+loaded_model = GCN(18, 256, 3, 0.01)
 loaded_model.load_state_dict(torch.load('NNmodel.pth'))
 
 node_features_testset = torch.load(
-    "node_features_dataset_case6_base_DIM200.6.30.30.pt")
-edges_testset = torch.load("edges_dataset_case6_base_DIM200.6.30.30.pt")
+    "node_features_dataset_case6_base_DIM500.6.30.30.pt")
+edges_testset = torch.load("edges_dataset_case6_base_DIM500.6.30.30.pt")
 
 # node_features_testset = node_features_testset[:, :, :5]
+
+#Train on H, U and V rather than H, hu1 and hu2
+node_features_testset = torch.cat((node_features_testset[:, :, :1],node_features_testset[:, :, 3:]), dim=2)
 
 radius_earth = 6371220.0
 node_features_testset = node_features_testset.contiguous()
@@ -96,11 +99,13 @@ MEAN_1 = torch.mean(node_features_testset, dim=1).contiguous()
 STD_1 = torch.std(node_features_testset, dim=1).contiguous()
 
 shape = node_features_testset.shape
+
 for x in range(0, 5): #shape[0]):
     print(x)
     for y in range(0, shape[1]):
         for z in range(0, shape[2]):
             node_features_testset[x, y, z] = (node_features_testset[x, y, z] - MEAN_1[x, z]) /(STD_1[x, z])
+
 #`shape = node_features_testset.shape
 #`H_mean = torch.mean(node_features_testset[1, :, 0])
 #`H_std = torch.std(node_features_testset[1, :, 0])
@@ -151,7 +156,7 @@ x1_max = 30
 x2_max = 30
 
 #0 has rubbish
-geometry_tensor = node_features_testset[1, :, -17:]
+geometry_tensor = node_features_testset[1, :, -15:]
 next_input = node_features_testset[1, :, :]
 
 for i in range(0, panels):
@@ -159,9 +164,9 @@ for i in range(0, panels):
         for k in range(0, x2_max):
             H[t, i, j, k] = next_input[tuple_to_index(
                 i, j, k), 0] * STD_1[1, 0] + MEAN_1[1, 0]
-            HU1[t, i, j, k] = next_input[tuple_to_index(
+            U[t, i, j, k] = next_input[tuple_to_index(
                 i, j, k), 1]* STD_1[1, 1] + MEAN_1[1, 1]
-            HU2[t, i, j, k] = next_input[tuple_to_index(
+            V[t, i, j, k] = next_input[tuple_to_index(
                 i, j, k), 2]* STD_1[1, 2] + MEAN_1[1, 2]
             # U[t, i, j, k] = next_input[tuple_to_index(i, j, k), 3]
             # V[t, i, j, k] = next_input[tuple_to_index(i, j, k), 4]
@@ -169,7 +174,7 @@ t = t + 1
 # t = 0
 print(next_input.shape)
 with torch.no_grad():
-    for i in range(0, 100):
+    for i in range(0, 200):
         print("t = ", t, "/200")
         outputs = loaded_model(next_input, edges_testset)
         next_input = torch.cat((outputs, geometry_tensor), dim=1)
@@ -179,19 +184,19 @@ with torch.no_grad():
                 for k in range(0, x2_max):
                     H[t, i, j, k] = next_input[tuple_to_index(
                         i, j, k), 0] * STD_1[1, 0] + MEAN_1[1, 0]
-                    HU1[t, i, j, k] = next_input[tuple_to_index(
+                    U[t, i, j, k] = next_input[tuple_to_index(
                         i, j, k), 1]* STD_1[1, 1] + MEAN_1[1, 1]
-                    HU2[t, i, j, k] = next_input[tuple_to_index(
+                    V[t, i, j, k] = next_input[tuple_to_index(
                         i, j, k), 2]* STD_1[1, 2] + MEAN_1[1, 2]
                     # U[t, i, j, k] = outputs[tuple_to_index(i, j, k), 3]
                     # V[t, i, j, k] = outputs[tuple_to_index(i, j, k), 4]
         t = t + 1
 
 file.variables['h'] = H
-file.variables['hu1'] = HU1
-file.variables['hu2'] = HU2
-# file.variables['U'] = U
-# file.variables['V'] = V
+#file.variables['hu1'] = HU1
+#file.variables['hu2'] = HU2
+file.variables['U'] = U
+file.variables['V'] = V
 
 file.close()
 
