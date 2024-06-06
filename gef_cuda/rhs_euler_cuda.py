@@ -54,7 +54,7 @@ class RHSEuler(metaclass=CudaModule,
 @cp.fuse(kernel_name='rho_u1')
 def rho_u1(f_, r_, u1_, u2_, w_, p_, c101_, c102_, c103_, c111_, c112_, c113_, c122_, c123_, c133_, \
            h11_, h12_, h13_, h22_, h23_, h33_):
-   f_ = 2. * r_ * (c101_ * u1_ + c102_ * u2_ + c103_ * w_) \
+   return 2. * r_ * (c101_ * u1_ + c102_ * u2_ + c103_ * w_) \
          + c111_ * (r_ * u1_ * u1_ + h11_ * p_) \
          + 2. * c112_ * (r_ * u1_ * u2_ + h12_ * p_) \
          + 2. * c113_ * (r_ * u1_ * w_  + h13_ * p_) \
@@ -263,7 +263,7 @@ def rhs_euler_cuda(Q: NDArray[cp.float64],
    forcing[idx_rho] = 0.
 
    RangePush('rho_u1')
-   rho_u1(forcing[idx_rho_u1], rho, u1, u2, w, pressure, \
+   forcing[idx_rho_u1] = rho_u1(forcing[idx_rho_u1], rho, u1, u2, w, pressure, \
           metric.christoffel_1_01, metric.christoffel_1_02, metric.christoffel_1_03, \
           metric.christoffel_1_11, metric.christoffel_1_12, metric.christoffel_1_13, \
           metric.christoffel_1_22, metric.christoffel_1_23, metric.christoffel_1_33, \
