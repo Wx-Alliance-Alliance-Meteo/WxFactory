@@ -52,15 +52,28 @@ class RHSEuler(metaclass=CudaModule,
 
 
 @cp.fuse(kernel_name='rho_u1')
-def rho_u1(f_, r_, u1_, u2_, w_, p_, c101_, c102_, c103_, c111_, c112_, c113_, c122_, c123_, c133_, \
+def rho_u1(r_, u1_, u2_, w_, p_, c101_, c102_, c103_, c111_, c112_, c113_, c122_, c123_, c133_, \
            h11_, h12_, h13_, h22_, h23_, h33_):
-   return 2. * r_ * (c101_ * u1_ + c102_ * u2_ + c103_ * w_) \
+   return  \
+      2. * r_ * (c101_ * u1_ + c102_ * u2_ + c103_ * w_) \
          + c111_ * (r_ * u1_ * u1_ + h11_ * p_) \
          + 2. * c112_ * (r_ * u1_ * u2_ + h12_ * p_) \
          + 2. * c113_ * (r_ * u1_ * w_  + h13_ * p_) \
          +      c122_ * (r_ * u2_ * u2_ + h22_ * p_) \
          + 2. * c123_ * (r_ * u2_ * w_  + h23_ * p_) \
          +      c133_ * (r_ * w_  * w_  + h33_ * p_)
+
+@cp.fuse(kernel_name='rho_w')
+def rho_w(r_, u1_, u2_, w_, p_, c101_, c102_, c103_, c111_, c112_, c113_, c122_, c123_, c133_, \
+          h11_, h12_, h13_, h22_, h23_, h33_, inv_dzdeta_, g_, inv_g_, filter_k_):
+   return \
+      rho_u1(r_, u1_, u2_, w_, p_, c101_, c102_, c103_, c111_, c112_, c113_, c122_, c123_, c133_, \
+           h11_, h12_, h13_, h22_, h23_, h33_)  \
+      + inv_dzdeta_ * g_ * inv_g_ * filter_k_
+
+@cp.fuse(kernel_name='rhs_assemble')
+def rhs_assemble(df1_dx1_, df2_dx2_, df3_dx3_, inv_g_, f_):
+   return -inv_g_ * (df1_dx1_ + df2_dx2_ + df3_dx3_) - f_
 
 
 def rhs_euler_cuda(Q: NDArray[cp.float64],
@@ -263,7 +276,7 @@ def rhs_euler_cuda(Q: NDArray[cp.float64],
    forcing[idx_rho] = 0.
 
    RangePush('rho_u1')
-   forcing[idx_rho_u1] = rho_u1(forcing[idx_rho_u1], rho, u1, u2, w, pressure, \
+   forcing[idx_rho_u1] = rho_u1(rho, u1, u2, w, pressure, \
           metric.christoffel_1_01, metric.christoffel_1_02, metric.christoffel_1_03, \
           metric.christoffel_1_11, metric.christoffel_1_12, metric.christoffel_1_13, \
           metric.christoffel_1_22, metric.christoffel_1_23, metric.christoffel_1_33, \
@@ -271,28 +284,71 @@ def rhs_euler_cuda(Q: NDArray[cp.float64],
           metric.H_contra_22, metric.H_contra_23, metric.H_contra_33)
    RangePop()
 
+   ### Verify the result
+   #a = \
+   #        2. * rho * (metric.christoffel_1_01 * u1 + metric.christoffel_1_02 * u2 + metric.christoffel_1_03 * w) \
+   #      +      metric.christoffel_1_11 * (rho * u1 * u1 + metric.H_contra_11 * pressure) \
+   #      + 2. * metric.christoffel_1_12 * (rho * u1 * u2 + metric.H_contra_12 * pressure) \
+   #      + 2. * metric.christoffel_1_13 * (rho * u1 * w  + metric.H_contra_13 * pressure) \
+   #      +      metric.christoffel_1_22 * (rho * u2 * u2 + metric.H_contra_22 * pressure) \
+   #      + 2. * metric.christoffel_1_23 * (rho * u2 * w  + metric.H_contra_23 * pressure) \
+   #      +      metric.christoffel_1_33 * (rho * w  * w  + metric.H_contra_33 * pressure)
+
+   #diff = a - forcing[idx_rho_u1]
+   #diff_norm = cp.linalg.norm(diff) / cp.linalg.norm(a)
+   #if diff_norm > 1e-10:
+   #   print(f'rel diff {diff_norm:.3e}')
+
    RangePush('rho_u2')
    forcing[idx_rho_u2] = \
-           2. * rho * (metric.christoffel_2_01 * u1 + metric.christoffel_2_02 * u2 + metric.christoffel_2_03 * w) \
-         +      metric.christoffel_2_11 * (rho * u1 * u1 + metric.H_contra_11 * pressure) \
-         + 2. * metric.christoffel_2_12 * (rho * u1 * u2 + metric.H_contra_12 * pressure) \
-         + 2. * metric.christoffel_2_13 * (rho * u1 * w  + metric.H_contra_13 * pressure) \
-         +      metric.christoffel_2_22 * (rho * u2 * u2 + metric.H_contra_22 * pressure) \
-         + 2. * metric.christoffel_2_23 * (rho * u2 * w  + metric.H_contra_23 * pressure) \
-         +      metric.christoffel_2_33 * (rho * w  * w  + metric.H_contra_33 * pressure)
+      rho_u1(rho, u1, u2, w, pressure, \
+         metric.christoffel_2_01, metric.christoffel_2_02, metric.christoffel_2_03, \
+         metric.christoffel_2_11, metric.christoffel_2_12, metric.christoffel_2_13, \
+         metric.christoffel_2_22, metric.christoffel_2_23, metric.christoffel_2_33, \
+         metric.H_contra_11, metric.H_contra_12, metric.H_contra_13, \
+         metric.H_contra_22, metric.H_contra_23, metric.H_contra_33)
    RangePop()
+
+   #b = \
+   #        2. * rho * (metric.christoffel_2_01 * u1 + metric.christoffel_2_02 * u2 + metric.christoffel_2_03 * w) \
+   #      +      metric.christoffel_2_11 * (rho * u1 * u1 + metric.H_contra_11 * pressure) \
+   #      + 2. * metric.christoffel_2_12 * (rho * u1 * u2 + metric.H_contra_12 * pressure) \
+   #      + 2. * metric.christoffel_2_13 * (rho * u1 * w  + metric.H_contra_13 * pressure) \
+   #      +      metric.christoffel_2_22 * (rho * u2 * u2 + metric.H_contra_22 * pressure) \
+   #      + 2. * metric.christoffel_2_23 * (rho * u2 * w  + metric.H_contra_23 * pressure) \
+   #      +      metric.christoffel_2_33 * (rho * w  * w  + metric.H_contra_33 * pressure)
+   #diff = b - forcing[idx_rho_u2]
+   #diff_norm = cp.linalg.norm(diff) / cp.linalg.norm(b)
+   #if diff_norm > 1e-10:
+   #   print(f'rel diff {diff_norm:.3e}')
+   #   raise ValueError
 
    RangePush('rho_u3')
    forcing[idx_rho_w]  = \
-           2. * rho * (metric.christoffel_3_01 * u1 + metric.christoffel_3_02 * u2 + metric.christoffel_3_03 * w) \
-         +      metric.christoffel_3_11 * (rho * u1 * u1 + metric.H_contra_11 * pressure) \
-         + 2. * metric.christoffel_3_12 * (rho * u1 * u2 + metric.H_contra_12 * pressure) \
-         + 2. * metric.christoffel_3_13 * (rho * u1 * w  + metric.H_contra_13 * pressure) \
-         +      metric.christoffel_3_22 * (rho * u2 * u2 + metric.H_contra_22 * pressure) \
-         + 2. * metric.christoffel_3_23 * (rho * u2 * w  + metric.H_contra_23 * pressure) \
-         +      metric.christoffel_3_33 * (rho * w  * w  + metric.H_contra_33 * pressure) \
-         + metric.inv_dzdeta * gravity * metric.inv_sqrtG * mtrx.filter_k(metric.sqrtG * rho, geom)
+      rho_w(rho, u1, u2, w, pressure, \
+         metric.christoffel_3_01, metric.christoffel_3_02, metric.christoffel_3_03, \
+         metric.christoffel_3_11, metric.christoffel_3_12, metric.christoffel_3_13, \
+         metric.christoffel_3_22, metric.christoffel_3_23, metric.christoffel_3_33, \
+         metric.H_contra_11, metric.H_contra_12, metric.H_contra_13, \
+         metric.H_contra_22, metric.H_contra_23, metric.H_contra_33, \
+         metric.inv_dzdeta, gravity, metric.inv_sqrtG, mtrx.filter_k(metric.sqrtG * rho, geom))
    RangePop()
+
+   #c = \
+   #        2. * rho * (metric.christoffel_3_01 * u1 + metric.christoffel_3_02 * u2 + metric.christoffel_3_03 * w) \
+   #      +      metric.christoffel_3_11 * (rho * u1 * u1 + metric.H_contra_11 * pressure) \
+   #      + 2. * metric.christoffel_3_12 * (rho * u1 * u2 + metric.H_contra_12 * pressure) \
+   #      + 2. * metric.christoffel_3_13 * (rho * u1 * w  + metric.H_contra_13 * pressure) \
+   #      +      metric.christoffel_3_22 * (rho * u2 * u2 + metric.H_contra_22 * pressure) \
+   #      + 2. * metric.christoffel_3_23 * (rho * u2 * w  + metric.H_contra_23 * pressure) \
+   #      +      metric.christoffel_3_33 * (rho * w  * w  + metric.H_contra_33 * pressure) \
+   #      + metric.inv_dzdeta * gravity * metric.inv_sqrtG * mtrx.filter_k(metric.sqrtG * rho, geom)
+   #diff = c - forcing[idx_rho_w]
+   #diff_norm = cp.linalg.norm(diff) / cp.linalg.norm(c)
+   #if diff_norm > 1e-10:
+   #   print(f'rel diff {diff_norm:.3e}')
+   #   raise ValueError
+
 
    forcing[idx_rho_theta] = 0.
 
@@ -302,8 +358,18 @@ def rhs_euler_cuda(Q: NDArray[cp.float64],
    elif case_number == 22:
       dcmip_schar_damping(forcing, rho, u1, u2, w, metric, geom, shear=True)
 
-   rhs            = -metric.inv_sqrtG * (  df1_dx1 +   df2_dx2 +   df3_dx3) - forcing
-   rhs[idx_rho_w] = -metric.inv_sqrtG * (w_df1_dx1 + w_df2_dx2 + w_df3_dx3) - forcing[idx_rho_w]
+   rhs            = rhs_assemble(df1_dx1, df2_dx2, df3_dx3, metric.inv_sqrtG, forcing)
+   rhs[idx_rho_w] = rhs_assemble(w_df1_dx1, w_df2_dx2, w_df3_dx3, metric.inv_sqrtG, forcing[idx_rho_w])
+
+   #a            = -metric.inv_sqrtG * (  df1_dx1 +   df2_dx2 +   df3_dx3) - forcing
+   #a[idx_rho_w] = -metric.inv_sqrtG * (w_df1_dx1 + w_df2_dx2 + w_df3_dx3) - forcing[idx_rho_w]
+
+   #diff = a - rhs
+   #diff_norm = cp.linalg.norm(diff) / cp.linalg.norm(a)
+   #if diff_norm > 1e-10:
+   #   print(f'rel diff {diff_norm:.3e}')
+   #   raise ValueError
+   
 
    if advection_only:
       rhs[idx_rho]       = 0.
