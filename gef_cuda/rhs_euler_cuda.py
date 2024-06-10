@@ -51,25 +51,31 @@ class RHSEuler(metaclass=CudaModule,
       nv: int, nk_nh: int, ne: int, advection_only: bool): ...
 
 
-@cp.fuse(kernel_name='rho_u1')
-def rho_u1(r_, u1_, u2_, w_, p_, c101_, c102_, c103_, c111_, c112_, c113_, c122_, c123_, c133_, \
+@cp.fuse(kernel_name='forcing_hori')
+def forcing_hori(f_, i_, r_, u1_, u2_, w_, p_, c01_, c02_, c03_, c11_, c12_, c13_, c22_, c23_, c33_, \
            h11_, h12_, h13_, h22_, h23_, h33_):
-   return  \
-      2. * r_ * (c101_ * u1_ + c102_ * u2_ + c103_ * w_) \
-         + c111_ * (r_ * u1_ * u1_ + h11_ * p_) \
-         + 2. * c112_ * (r_ * u1_ * u2_ + h12_ * p_) \
-         + 2. * c113_ * (r_ * u1_ * w_  + h13_ * p_) \
-         +      c122_ * (r_ * u2_ * u2_ + h22_ * p_) \
-         + 2. * c123_ * (r_ * u2_ * w_  + h23_ * p_) \
-         +      c133_ * (r_ * w_  * w_  + h33_ * p_)
+   #return  \
+   f_[:] =  \
+      2. * r_ * (c01_ * u1_ + c02_ * u2_ + c03_ * w_) \
+         + c11_ * (r_ * u1_ * u1_ + h11_ * p_) \
+         + 2. * c12_ * (r_ * u1_ * u2_ + h12_ * p_) \
+         + 2. * c13_ * (r_ * u1_ * w_  + h13_ * p_) \
+         +      c22_ * (r_ * u2_ * u2_ + h22_ * p_) \
+         + 2. * c23_ * (r_ * u2_ * w_  + h23_ * p_) \
+         +      c33_ * (r_ * w_  * w_  + h33_ * p_)
 
 @cp.fuse(kernel_name='rho_w')
-def rho_w(r_, u1_, u2_, w_, p_, c101_, c102_, c103_, c111_, c112_, c113_, c122_, c123_, c133_, \
+def forcing_vert(f_, i_, r_, u1_, u2_, w_, p_, c01_, c02_, c03_, c11_, c12_, c13_, c22_, c23_, c33_, \
           h11_, h12_, h13_, h22_, h23_, h33_, inv_dzdeta_, g_, inv_g_, filter_k_):
-   return \
-      rho_u1(r_, u1_, u2_, w_, p_, c101_, c102_, c103_, c111_, c112_, c113_, c122_, c123_, c133_, \
-           h11_, h12_, h13_, h22_, h23_, h33_)  \
-      + inv_dzdeta_ * g_ * inv_g_ * filter_k_
+   f_[:] =  \
+      2. * r_ * (c01_ * u1_ + c02_ * u2_ + c03_ * w_) \
+         + c11_ * (r_ * u1_ * u1_ + h11_ * p_) \
+         + 2. * c12_ * (r_ * u1_ * u2_ + h12_ * p_) \
+         + 2. * c13_ * (r_ * u1_ * w_  + h13_ * p_) \
+         +      c22_ * (r_ * u2_ * u2_ + h22_ * p_) \
+         + 2. * c23_ * (r_ * u2_ * w_  + h23_ * p_) \
+         +      c33_ * (r_ * w_  * w_  + h33_ * p_) \
+         + inv_dzdeta_ * g_ * inv_g_ * filter_k_
 
 @cp.fuse(kernel_name='rhs_assemble')
 def rhs_assemble(df1_dx1_, df2_dx2_, df3_dx3_, inv_g_, f_):
@@ -273,10 +279,11 @@ def rhs_euler_cuda(Q: NDArray[cp.float64],
 
    RangePush('Forcing')
 
-   forcing[idx_rho] = 0.
+   #forcing[idx_rho] = 0.
 
    RangePush('rho_u1')
-   forcing[idx_rho_u1] = rho_u1(rho, u1, u2, w, pressure, \
+   #forcing[idx_rho_u1] = \
+   forcing_hori(forcing[idx_rho_u1], idx_rho, rho, u1, u2, w, pressure, \
           metric.christoffel_1_01, metric.christoffel_1_02, metric.christoffel_1_03, \
           metric.christoffel_1_11, metric.christoffel_1_12, metric.christoffel_1_13, \
           metric.christoffel_1_22, metric.christoffel_1_23, metric.christoffel_1_33, \
@@ -298,10 +305,11 @@ def rhs_euler_cuda(Q: NDArray[cp.float64],
    #diff_norm = cp.linalg.norm(diff) / cp.linalg.norm(a)
    #if diff_norm > 1e-10:
    #   print(f'rel diff {diff_norm:.3e}')
+   #   raise ValueError
 
    RangePush('rho_u2')
-   forcing[idx_rho_u2] = \
-      rho_u1(rho, u1, u2, w, pressure, \
+   #forcing[idx_rho_u2] = \
+   forcing_hori(forcing[idx_rho_u2], idx_rho_u2, rho, u1, u2, w, pressure, \
          metric.christoffel_2_01, metric.christoffel_2_02, metric.christoffel_2_03, \
          metric.christoffel_2_11, metric.christoffel_2_12, metric.christoffel_2_13, \
          metric.christoffel_2_22, metric.christoffel_2_23, metric.christoffel_2_33, \
@@ -324,8 +332,8 @@ def rhs_euler_cuda(Q: NDArray[cp.float64],
    #   raise ValueError
 
    RangePush('rho_u3')
-   forcing[idx_rho_w]  = \
-      rho_w(rho, u1, u2, w, pressure, \
+   #forcing[idx_rho_w]  = \
+   forcing_vert(forcing[idx_rho_w], idx_rho_w, rho, u1, u2, w, pressure, \
          metric.christoffel_3_01, metric.christoffel_3_02, metric.christoffel_3_03, \
          metric.christoffel_3_11, metric.christoffel_3_12, metric.christoffel_3_13, \
          metric.christoffel_3_22, metric.christoffel_3_23, metric.christoffel_3_33, \
@@ -350,7 +358,7 @@ def rhs_euler_cuda(Q: NDArray[cp.float64],
    #   raise ValueError
 
 
-   forcing[idx_rho_theta] = 0.
+   #forcing[idx_rho_theta] = 0.
 
 
    if case_number == 21:
