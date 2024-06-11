@@ -81,6 +81,19 @@ def forcing_vert(f_, i_, r_, u1_, u2_, w_, p_, c01_, c02_, c03_, c11_, c12_, c13
 def rhs_assemble(df1_dx1_, df2_dx2_, df3_dx3_, inv_g_, f_):
    return -inv_g_ * (df1_dx1_ + df2_dx2_ + df3_dx3_) - f_
 
+@cp.fuse(kernel_name='compute_pressure')
+def compute_pressure(p0, cpd, cvd, Rd, theta):
+   return p0 * cp.exp((cpd / cvd) * cp.log((Rd / p0) * theta))
+
+@cp.fuse(kernel_name='initial_flux')
+def initial_flux(rho_u, rho, q, sqrt_g):
+   return sqrt_g * (rho_u / rho) * q
+
+@cp.fuse(kernel_name='flux_mid')
+def flux_mid(f1, f2, f3, f01, f02, f03, h11, h12, h13, sqrt_g, p):
+   f1[:] = f01 + sqrt_g * h11 * p
+   f2[:] = f02 + sqrt_g * h12 * p
+   f3[:] = f03 + sqrt_g * h13 * p
 
 def rhs_euler_cuda(Q: NDArray[cp.float64],
                    geom: CubedSphere,
@@ -146,31 +159,66 @@ def rhs_euler_cuda(Q: NDArray[cp.float64],
    u2  = Q[idx_rho_u2] / rho
    w   = Q[idx_rho_w]  / rho
 
-   flux_x1 = metric.sqrtG * u1 * Q
-   flux_x2 = metric.sqrtG * u2 * Q
-   flux_x3 = metric.sqrtG * w  * Q
+   flux_x1 = initial_flux(Q[idx_rho_u1], Q[idx_rho], Q, metric.sqrtG)
+   flux_x2 = initial_flux(Q[idx_rho_u2], Q[idx_rho], Q, metric.sqrtG)
+   flux_x3 = initial_flux(Q[idx_rho_w], Q[idx_rho], Q, metric.sqrtG)
+   #f = metric.sqrtG * u1 * Q
+   #diff = f - flux_x1
+   #diff_norm = cp.linalg.norm(diff) / cp.linalg.norm(f)
+   #if diff_norm > 1e-10:
+   #   print(f'rel diff {diff_norm:.3e}')
+   #   raise ValueError
 
    wflux_adv_x1 = metric.sqrtG * u1 * Q[idx_rho_w]
    wflux_adv_x2 = metric.sqrtG * u2 * Q[idx_rho_w]
    wflux_adv_x3 = metric.sqrtG * w  * Q[idx_rho_w]
 
-   pressure = p0 * cp.exp((cpd / cvd) * cp.log((Rd / p0) * Q[idx_rho_theta]))
+   pressure = compute_pressure(p0, cpd, cvd, Rd, Q[idx_rho_theta])
+   #p = p0 * cp.exp((cpd / cvd) * cp.log((Rd / p0) * Q[idx_rho_theta]))
 
-   flux_x1[idx_rho_u1] += metric.sqrtG * metric.H_contra_11 * pressure
-   flux_x1[idx_rho_u2] += metric.sqrtG * metric.H_contra_12 * pressure
-   flux_x1[idx_rho_w]  += metric.sqrtG * metric.H_contra_13 * pressure
+   #diff = p - pressure
+   #diff_norm = cp.linalg.norm(diff) / cp.linalg.norm(p)
+   #if diff_norm > 1e-10:
+   #   print(f'rel diff {diff_norm:.3e}')
+   #   raise ValueError
+
+
+   #flux_x1[idx_rho_u1] += metric.sqrtG * metric.H_contra_11 * pressure
+   #flux_x1[idx_rho_u2] += metric.sqrtG * metric.H_contra_12 * pressure
+   #flux_x1[idx_rho_w]  += metric.sqrtG * metric.H_contra_13 * pressure
+   #f[idx_rho_u1] += metric.sqrtG * metric.H_contra_11 * pressure
+   #f[idx_rho_u2] += metric.sqrtG * metric.H_contra_12 * pressure
+   #f[idx_rho_w]  += metric.sqrtG * metric.H_contra_13 * pressure
+   flux_mid(flux_x1[idx_rho_u1], flux_x1[idx_rho_u2], flux_x1[idx_rho_w], \
+            flux_x1[idx_rho_u1], flux_x1[idx_rho_u2], flux_x1[idx_rho_w], \
+            metric.H_contra_11, metric.H_contra_12, metric.H_contra_13, \
+            metric.sqrtG, pressure)
+
+   #diff = f - flux_x1
+   #diff_norm = cp.linalg.norm(diff) / cp.linalg.norm(f)
+   #if diff_norm > 1e-10:
+   #   print(f'rel diff {diff_norm:.3e}')
+   #   raise ValueError
 
    wflux_pres_x1 = (metric.sqrtG * metric.H_contra_13).astype(type_vec)
 
-   flux_x2[idx_rho_u1] += metric.sqrtG * metric.H_contra_21 * pressure
-   flux_x2[idx_rho_u2] += metric.sqrtG * metric.H_contra_22 * pressure
-   flux_x2[idx_rho_w]  += metric.sqrtG * metric.H_contra_23 * pressure
+   #flux_x2[idx_rho_u1] += metric.sqrtG * metric.H_contra_21 * pressure
+   #flux_x2[idx_rho_u2] += metric.sqrtG * metric.H_contra_22 * pressure
+   #flux_x2[idx_rho_w]  += metric.sqrtG * metric.H_contra_23 * pressure
+   flux_mid(flux_x2[idx_rho_u1], flux_x2[idx_rho_u2], flux_x2[idx_rho_w], \
+            flux_x2[idx_rho_u1], flux_x2[idx_rho_u2], flux_x2[idx_rho_w], \
+            metric.H_contra_21, metric.H_contra_22, metric.H_contra_23, \
+            metric.sqrtG, pressure)
 
    wflux_pres_x2 = (metric.sqrtG * metric.H_contra_23).astype(type_vec)
 
-   flux_x3[idx_rho_u1] += metric.sqrtG * metric.H_contra_31 * pressure
-   flux_x3[idx_rho_u2] += metric.sqrtG * metric.H_contra_32 * pressure
-   flux_x3[idx_rho_w]  += metric.sqrtG * metric.H_contra_33 * pressure
+   #flux_x3[idx_rho_u1] += metric.sqrtG * metric.H_contra_31 * pressure
+   #flux_x3[idx_rho_u2] += metric.sqrtG * metric.H_contra_32 * pressure
+   #flux_x3[idx_rho_w]  += metric.sqrtG * metric.H_contra_33 * pressure
+   flux_mid(flux_x3[idx_rho_u1], flux_x3[idx_rho_u2], flux_x3[idx_rho_w], \
+            flux_x3[idx_rho_u1], flux_x3[idx_rho_u2], flux_x3[idx_rho_w], \
+            metric.H_contra_31, metric.H_contra_32, metric.H_contra_33, \
+            metric.sqrtG, pressure)
 
    wflux_pres_x3 = (metric.sqrtG * metric.H_contra_33).astype(type_vec)
 
@@ -184,7 +232,8 @@ def rhs_euler_cuda(Q: NDArray[cp.float64],
    variables_itf_k[:, :, -1, 0, :] = variables_itf_k[:, :, -2, 1, :]
    variables_itf_k[:, :, -1, 1, :] = variables_itf_k[:, :, -1, 0, :]
 
-   pressure_itf_k = p0 * cp.exp((cpd / cvd) * cp.log(variables_itf_k[idx_rho_theta] * (Rd / p0)))
+   #pressure_itf_k = p0 * cp.exp((cpd / cvd) * cp.log(variables_itf_k[idx_rho_theta] * (Rd / p0)))
+   pressure_itf_k = compute_pressure(p0, cpd, cvd, Rd, variables_itf_k[idx_rho_theta])
 
    w_itf_k = variables_itf_k[idx_rho_w] / variables_itf_k[idx_rho]
 
@@ -238,17 +287,17 @@ def rhs_euler_cuda(Q: NDArray[cp.float64],
    RangePush('Pressure')
    logp_int = cp.log(pressure)
 
-   pressure_bdy_i = pressure_itf_i[:, 1:-1, :, :].transpose((0, 3, 1, 2)).copy()
-   pressure_bdy_j = pressure_itf_j[:, 1:-1, :, :].copy()
-   pressure_bdy_k = pressure_itf_k[:, 1:-1, :, :].transpose((1, 2, 0, 3)).copy()
+   #pressure_bdy_i = pressure_itf_i[:, 1:-1, :, :].transpose((0, 3, 1, 2)).copy()
+   #pressure_bdy_j = pressure_itf_j[:, 1:-1, :, :].copy()
+   #pressure_bdy_k = pressure_itf_k[:, 1:-1, :, :].transpose((1, 2, 0, 3)).copy()
 
-   logp_bdy_i = cp.log(pressure_bdy_i)
-   logp_bdy_j = cp.log(pressure_bdy_j)
-   logp_bdy_k = cp.log(pressure_bdy_k)
+   logp_bdy_i = cp.log(pressure_itf_i[:, 1:-1, :, :].transpose((0, 3, 1, 2)))
+   logp_bdy_j = cp.log(pressure_itf_j[:, 1:-1, :, :])
+   logp_bdy_k = cp.log(pressure_itf_k[:, 1:-1, :, :].transpose((1, 2, 0, 3)))
    RangePop()
 
    RangePush('Adv')
-   wflux_adv_x1_bdy_i  =  wflux_adv_x1_itf_i.transpose((0, 2, 1, 3))[:, :, 1:-1, :].copy()
+   wflux_adv_x1_bdy_i  = wflux_adv_x1_itf_i.transpose((0, 2, 1, 3))[:, :, 1:-1, :].copy()
    wflux_pres_x1_bdy_i = wflux_pres_x1_itf_i.transpose((0, 2, 1, 3))[:, :, 1:-1, :].copy()
 
    wflux_adv_x2_bdy_j  =  wflux_adv_x2_itf_j[:, 1:-1, :, :].copy()
@@ -259,7 +308,15 @@ def rhs_euler_cuda(Q: NDArray[cp.float64],
    RangePop()
 
    RangePush('Comma ijk (2)')
+   #w_df1_dx1_adv   = comma_i(wflux_adv_x1,  wflux_adv_x1_bdy_i, nbsolpts, mtrx.diff_solpt_tr, mtrx.correction_tr)
    w_df1_dx1_adv   = mtrx.comma_i(wflux_adv_x1,  wflux_adv_x1_bdy_i,  geom)
+
+   #diff = a - w_df1_dx1_adv
+   #diff_norm = cp.linalg.norm(diff) / cp.linalg.norm(a)
+   #if diff_norm > 1e-10:
+   #   print(f'rel diff {diff_norm:.3e}')
+   #   raise ValueError
+
    w_df1_dx1_presa = mtrx.comma_i(wflux_pres_x1, wflux_pres_x1_bdy_i, geom) * pressure
    w_df1_dx1_presb = mtrx.comma_i(logp_int,      logp_bdy_i,          geom) * pressure * wflux_pres_x1
    w_df1_dx1       = w_df1_dx1_adv + w_df1_dx1_presa + w_df1_dx1_presb
