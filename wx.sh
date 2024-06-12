@@ -22,7 +22,7 @@ module load nvhpc-pmix/24.3
 . /home/pr-h6bcfd5d/wx_env/bin/activate
 module load nsight-systems/2023.3
 
-cd ~/wx_factory
+cd ~/WxFactory
 
 config_file=config/dcmip31_cuda_small.ini
 [ $# -ge 1 ] && config_file=${1}

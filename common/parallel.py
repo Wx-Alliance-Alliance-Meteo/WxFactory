@@ -2,6 +2,7 @@ import math
 
 from mpi4py import MPI
 import numpy
+import cupy as cp
 
 from numpy.core.shape_base import block
 
@@ -107,35 +108,77 @@ class DistributedWorld:
       self.flip_west  = False
       self.flip_east  = False
 
-      self.convert_contra_north = lambda a1, a2, X: (a1, a2)
+      #self.convert_contra_north = lambda a1, a2, X: (a1, a2)
+      @cp.fuse()
+      def convert_contra_north(a1, a2, X, b1, b2):
+          b1[:] = a1
+          b2[:] = a2
+
+      self.convert_contra_north = convert_contra_north
       self.convert_contra_south = lambda a1, a2, X: (a1, a2)
       self.convert_contra_west  = lambda a1, a2, Y: (a1, a2)
       self.convert_contra_east  = lambda a1, a2, Y: (a1, a2)
+
 
       # North
       my_north = rank_from_location(self.my_panel, (self.my_row + 1), self.my_col)
       if self.my_row == self.nb_lines_per_panel - 1:
          if self.my_panel == 0:
             my_north = rank_from_location(my_north_panel, 0, self.my_col)
-            self.convert_contra_north = lambda a1, a2, X: (a1 - 2.0 * X / (1.0 + X**2) * a2, a2)
+            #self.convert_contra_north = lambda a1, a2, X: (a1 - 2.0 * X / (1.0 + X**2) * a2, a2)
+            @cp.fuse()
+            def convert_contra_north(a1, a2, X, b1, b2):
+                b1[:] = a1 - 2*X / (1 + X**2) * a2
+                b2[:] = a2
+
+            self.convert_contra_north = convert_contra_north
+
          elif self.my_panel == 1:
             my_north = rank_from_location(my_north_panel, self.my_col, self.nb_lines_per_panel - 1)
-            self.convert_contra_north = lambda a1, a2, X: (-a2, a1 - 2.0 * X / (1.0 + X**2) * a2)
+            #self.convert_contra_north = lambda a1, a2, X: (-a2, a1 - 2.0 * X / (1.0 + X**2) * a2)
+            @cp.fuse()
+            def convert_contra_north(a1, a2, X, b1, b2):
+                b1[:] = -a2
+                b2[:] = a1 - 2.0 * X / (1.0 + X**2) * a2
+            self.convert_contra_north=convert_contra_north
+
          elif self.my_panel == 2:
             my_north = rank_from_location(my_north_panel, self.nb_lines_per_panel - 1, self.nb_lines_per_panel - 1 - self.my_col)
-            self.convert_contra_north = lambda a1, a2, X: (-a1 + 2.0 * X / (1.0 + X**2) * a2, -a2)
+            #self.convert_contra_north = lambda a1, a2, X: (-a1 + 2.0 * X / (1.0 + X**2) * a2, -a2)
+            @cp.fuse()
+            def convert_contra_north(a1,a2,X, b1, b2):
+                b1[:] = -a1 + 2.0 * X / (1.0 + X**2) * a2
+                b2[:] = -a2
+            self.convert_contra_north=convert_contra_north
+
             self.flip_north = True
          elif self.my_panel == 3:
             my_north = rank_from_location(my_north_panel, self.nb_lines_per_panel - 1 - self.my_col, 0)
-            self.convert_contra_north = lambda a1, a2, X: (a2 , -a1 + 2.0 * X / (1.0 + X**2) * a2)
+            #self.convert_contra_north = lambda a1, a2, X: (a2 , -a1 + 2.0 * X / (1.0 + X**2) * a2)
+            @cp.fuse()
+            def convert_contra_north(a1,a2,X, b1, b2):
+                b1[:] = a2
+                b2[:] = -a1 + 2.0 * X / (1.0 + X**2) * a2
+            self.convert_contra_north=convert_contra_north
             self.flip_north = True
          elif self.my_panel == 4:
             my_north = rank_from_location(my_north_panel, self.nb_lines_per_panel - 1, self.nb_lines_per_panel - 1 - self.my_col)
-            self.convert_contra_north = lambda a1, a2, X: (-a1 + 2.0 * X / (1.0 + X**2) * a2, -a2)
+             #self.convert_contra_north = lambda a1, a2, X: (-a1 + 2.0 * X / (1.0 + X**2) * a2, -a2)
+            @cp.fuse()
+            def convert_contra_north(a1,a2,X, b1, b2):
+                b1[:] =-a1 + 2.0 * X / (1.0 + X**2) * a2
+                b2[:] =-a2
+            self.convert_contra_north=convert_contra_north
             self.flip_north = True
+
          elif self.my_panel == 5:
             my_north = rank_from_location(my_north_panel, 0, self.my_col)
-            self.convert_contra_north = lambda a1, a2, X: (a1 - 2.0 * X / (1.0 + X**2) * a2, a2)
+            #self.convert_contra_north = lambda a1, a2, X: (a1 - 2.0 * X / (1.0 + X**2) * a2, a2)
+            @cp.fuse()
+            def convert_contra_north(a1,a2,X, b1, b2):
+                b1[:] = a1 - 2.0 * X / (1.0 + X**2) * a2 
+                b2[:] = a2
+            self.convert_contra_north=convert_contra_north
 
       # South
       my_south = rank_from_location(self.my_panel, (self.my_row - 1), self.my_col)
@@ -255,7 +298,7 @@ class DistributedWorld:
       flip_dim = ndim - 1
       sendbuf = numpy.empty((4, ndim) + u1_n.shape, dtype=u1_n.dtype, like=u1_n)
 
-      sendbuf[0, 0, :], sendbuf[0, 1, :] = self.convert_contra_north(u1_n, u2_n, X)
+      self.convert_contra_north(u1_n, u2_n, X,sendbuf[0, 0, :], sendbuf[0, 1, :] )
       sendbuf[1, 0, :], sendbuf[1, 1, :] = self.convert_contra_south(u1_s, u2_s, X)
       sendbuf[2, 0, :], sendbuf[2, 1, :] = self.convert_contra_west(u1_w, u2_w, Y)
       sendbuf[3, 0, :], sendbuf[3, 1, :] = self.convert_contra_east(u1_e, u2_e, Y)

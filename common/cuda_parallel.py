@@ -68,8 +68,13 @@ class CudaDistributedWorld(DistributedWorld):
 
          for id in (idx_rho, idx_rho_w, idx_rho_theta):
                buffer[id, :] = cp.flip(var[id], flip_dim) if do_flip else var[id]
-         
-         tmp1, tmp2 = convert(var[idx_rho_u1], var[idx_rho_u2], positions)
+         if convert == self.convert_contra_north:
+             tmp1 = cp.empty_like(var[idx_rho_u1])
+             tmp2 = cp.empty_like(var[idx_rho_u2])
+             
+             convert(var[idx_rho_u1], var[idx_rho_u2], positions, tmp1, tmp2)
+         else:
+             tmp1, tmp2 = convert(var[idx_rho_u1], var[idx_rho_u2], positions)
          buffer[idx_rho_u1] = cp.flip(tmp1, flip_dim) if do_flip else tmp1
          buffer[idx_rho_u2] = cp.flip(tmp2, flip_dim) if do_flip else tmp2
 
