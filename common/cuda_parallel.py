@@ -66,19 +66,17 @@ class CudaDistributedWorld(DistributedWorld):
          (var_n, var_s, var_w, var_e),
          (send_buffer[0], send_buffer[1], send_buffer[2], send_buffer[3])):
 
-         for id in (idx_rho, idx_rho_w, idx_rho_theta):
-               buffer[id, :] = cp.flip(var[id], flip_dim) if do_flip else var[id]
-         if convert == self.convert_contra_north:
-             tmp1 = cp.empty_like(var[idx_rho_u1])
-             tmp2 = cp.empty_like(var[idx_rho_u2])
-             
-             convert(var[idx_rho_u1], var[idx_rho_u2], positions, tmp1, tmp2)
-         else:
-             tmp1, tmp2 = convert(var[idx_rho_u1], var[idx_rho_u2], positions)
-         buffer[idx_rho_u1] = cp.flip(tmp1, flip_dim) if do_flip else tmp1
-         buffer[idx_rho_u2] = cp.flip(tmp2, flip_dim) if do_flip else tmp2
+         #for id in (idx_rho, idx_rho_w, idx_rho_theta):
+         #      buffer[id, :] = cp.flip(var[id], flip_dim) if do_flip else var[id]
+         buffer[:] =  var
+         convert(var[idx_rho_u1], var[idx_rho_u2], positions, buffer[idx_rho_u1], buffer[idx_rho_u2])
+         if do_flip:
+             buffer[:] = cp.flip(buffer,flip_dim+1)
+ 
+         #buffer[idx_rho_u1] = cp.flip(tmp1, flip_dim) if do_flip else tmp1
+         #buffer[idx_rho_u2] = cp.flip(tmp2, flip_dim) if do_flip else tmp2
 
-         buffer[id_first_tracer:] = cp.flip(var[id_first_tracer:], flip_dim + 1) if do_flip else var[id_first_tracer:]
+         #buffer[id_first_tracer:] = cp.flip(var[id_first_tracer:], flip_dim + 1) if do_flip else var[id_first_tracer:]
 
       # Initiate MPI transfer
       cp.cuda.get_current_stream().synchronize()
