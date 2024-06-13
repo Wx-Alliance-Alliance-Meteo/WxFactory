@@ -27,6 +27,8 @@ from precondition.factorization import Factorization
 from precondition.multigrid     import Multigrid
 from rhs.rhs_selector           import RhsBundle
 
+#cupy_stream = None
+
 def run(param: 'Configuration'):
    """ This function sets up the infrastructure and performs the time loop of the model. """
 
@@ -116,7 +118,10 @@ def setup_system(param: Configuration):
       devnum = rank % len(param.cuda_devices)
       cupy.cuda.Device(param.cuda_devices[devnum]).use()
 
-      cupy.cuda.set_allocator(cupy.cuda.MemoryPool(cupy.cuda.malloc_managed).malloc)
+      #cupy.cuda.set_allocator(cupy.cuda.MemoryPool(cupy.cuda.malloc_managed).malloc)
+      #global cupy_stream
+      #cupy_stream = cupy.cuda.Stream()
+      #cupy_stream.use()
 
 def setup_distributed_world(param: Configuration) -> DistributedWorld | None:
    if param.grid_type == "cubed_sphere" and param.device == "cuda":

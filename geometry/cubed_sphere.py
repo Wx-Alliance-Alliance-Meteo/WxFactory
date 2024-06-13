@@ -8,6 +8,8 @@ from .sphere     import cart2sph
 from common.parallel          import DistributedWorld
 from common.program_options   import Configuration
 
+from mpi4py import MPI
+
 class CubedSphere(Geometry):
    def __init__(self, nb_elements_horizontal:int , nb_elements_vertical: int, nbsolpts: int, 
                 λ0: float, ϕ0: float, α0: float, ztop: float, ptopo: DistributedWorld, param: Configuration):
@@ -561,6 +563,7 @@ class CubedSphere(Geometry):
          [latlon[0,:], latlon[1,:], _] = cart2sph(cart[0,:],cart[1,:],cart[2,:])
          latlon[2,:] = gnom[2,:]
 
+      #if MPI.COMM_WORLD.rank == 0: print(f'{MPI.COMM_WORLD.rank}: coordVec_latlon ({coordVec_latlon.shape}) = \n{coordVec_latlon}')
       self.coordVec_gnom = coordVec_gnom
       self.coordVec_gnom_itf_i = coordVec_gnom_itf_i
       self.coordVec_gnom_itf_j = coordVec_gnom_itf_j
@@ -577,6 +580,7 @@ class CubedSphere(Geometry):
       self.coordVec_latlon_itf_k = coordVec_latlon_itf_k
 
       cartX = coordVec_cart[0,:]
+      #print(f'{MPI.COMM_WORLD.rank}: cartX = \n{cartX}')
       cartY = coordVec_cart[1,:]
       cartZ = coordVec_cart[2,:]
 

@@ -7,6 +7,7 @@ import cupy as cp
 from numpy.core.shape_base import block
 
 from common.definitions import *
+from cupy.cuda.nvtx import RangePush, RangePop
 
 class DistributedWorld:
    def __init__(self):
@@ -1050,7 +1051,9 @@ class EulerExchangeRequest():
 
    def wait(self):
       if not self.is_complete:
+         RangePush('MPI wait')
          self.mpi_request.Wait()
+         RangePop()
          for i in range(self.recv_buffers.shape[0]):
             for j in range(self.recv_buffers.shape[1]):
                self.outputs[i][j][:] = self.recv_buffers[i, j]

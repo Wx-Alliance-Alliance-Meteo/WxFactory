@@ -95,6 +95,22 @@ def flux_mid(f1, f2, f3, f01, f02, f03, h11, h12, h13, sqrt_g, p):
    f2[:] = f02 + sqrt_g * h12 * p
    f3[:] = f03 + sqrt_g * h13 * p
 
+
+def to_new_shape(q, nbsolpts):
+   # Get correct axis sizes
+   n_eq, n_ks, n_is, n_js = q.shape
+   n_k = n_ks // nbsolpts
+   n_i = n_is // nbsolpts
+   n_j = n_js // nbsolpts
+
+   q_reshaped   = q.reshape((n_eq, n_k, nbsolpts, n_i, nbsolpts, n_j, nbsolpts)) # Split axes
+   q_transposed = q_reshaped.transpose((0, 1, 3, 5, 2, 4, 6))                    # Reorganize data
+   q_new = q_transposed.reshape(n_eq, n_k * n_i * n_j, nbsolpts * nbsolpts * nbsolpts) # Merge axes
+
+   return q_new
+
+
+
 def rhs_euler_cuda(Q: NDArray[cp.float64],
                    geom: CubedSphere,
                    mtrx: DFROperators,
@@ -132,6 +148,7 @@ def rhs_euler_cuda(Q: NDArray[cp.float64],
 
    advection_only = case_number < 13
 
+   ####################################################
    RangePush(f'Extrapolate')
 
    variables_itf_i[:, :, 1:-1, :, :] = mtrx.extrapolate_i(Q, geom).transpose((0, 1, 3, 4, 2))
@@ -147,10 +164,19 @@ def rhs_euler_cuda(Q: NDArray[cp.float64],
    variables_itf_i[idx_rho_theta, :, 1:-1, :, :] = cp.exp(mtrx.extrapolate_i(logrhotheta, geom)).transpose((0, 2, 3, 1))
    variables_itf_j[idx_rho_theta, :, 1:-1, :, :] = cp.exp(mtrx.extrapolate_j(logrhotheta, geom))
 
-
    RangePop()
 
+   ############################
+   # New arrangement
+   #q_new = to_new_shape(Q, nbsolpts)
+   #RangePush(f'Extrapolate_new')
+   #
+   #RangePop()
+
+
+   RangePush('Start comm')
    all_request = ptopo.xchange_Euler_interfaces(geom, variables_itf_i, variables_itf_j, blocking=False)
+   RangePop()
 
    RangePush('Vertical flux')
 
@@ -169,9 +195,15 @@ def rhs_euler_cuda(Q: NDArray[cp.float64],
    #   print(f'rel diff {diff_norm:.3e}')
    #   raise ValueError
 
-   wflux_adv_x1 = metric.sqrtG * u1 * Q[idx_rho_w]
-   wflux_adv_x2 = metric.sqrtG * u2 * Q[idx_rho_w]
-   wflux_adv_x3 = metric.sqrtG * w  * Q[idx_rho_w]
+   wflux_adv_x1 = flux_x1[idx_rho_w].copy()
+   wflux_adv_x2 = flux_x2[idx_rho_w].copy()
+   wflux_adv_x3 = flux_x3[idx_rho_w].copy()
+
+   #diff = flux_x1[idx_rho_w] - wflux_adv_x1
+   #diff_norm = cp.linalg.norm(diff) / cp.linalg.norm(wflux_adv_x1)
+   #if diff_norm > 1e-10:
+   #   print(f'rel diff {diff_norm:.3e}')
+   #   raise ValueError
 
    pressure = compute_pressure(p0, cpd, cvd, Rd, Q[idx_rho_theta])
    #p = p0 * cp.exp((cpd / cvd) * cp.log((Rd / p0) * Q[idx_rho_theta]))
@@ -247,9 +279,12 @@ def rhs_euler_cuda(Q: NDArray[cp.float64],
                            metric.sqrtG_itf_k, metric.H_contra_itf_k[2],
                            nb_elements_vert, nb_pts_hori, nb_equations, advection_only)
 
+
    RangePop()
 
+   RangePush('Wait comm')
    all_request.wait()
+   RangePop()
 
    RangePush('Horizontal flux')
 
