@@ -81,10 +81,7 @@ class CudaDistributedWorld(DistributedWorld):
       # Initiate MPI transfer
       cp.cuda.get_current_stream().synchronize()
       mpi_request = self.comm_dist_graph.Ineighbor_alltoall(send_buffer, recv_buffer)
-      mpi_request.Test()
-      mpi_request.Test()
-      mpi_request.Test()
-      mpi_request.Test()
+      #mpi_request.Test()
 
       # Setup request so that data ends up in the right arrays when the wait() function is called
       var_n_dest = variables_itf_j[:, :, -1, 0, :]

@@ -14,6 +14,7 @@ from cupy.cuda.nvtx import RangePush, RangePop
 #from run import cupy_stream
 
 send_stream = None
+send_stream_async = None
 
 # In the original kiops function, the array "V" is absolutely massive,
 # usually too large to reside on GPU for any moderately-sized problem.
@@ -93,10 +94,11 @@ def kiops_cuda(tau_out: NDArray[cp.float64], A: Callable[[NDArray[cp.float64]], 
    m = max(mmin, min(m_init, mmax))
 
    # Preallocate matrix
-   V = np.zeros((mmax + 1, n + p))
+   V = cx.empty_pinned((mmax + 1, n + p))
    # Vg: gpu copy of relevant rows of V
    Vg_slots = iop + 2
-   Vg = cp.empty((Vg_slots, n + p))
+   #Vg = cp.empty((Vg_slots, n + p))
+   Vg = cp.empty_like(V)
    # V_buf is a pagelocked receiver for Vg
    V_buf = cx.empty_pinned((3, max(n + p, m + 1)))
    H = cp.zeros((mmax + 1, mmax + 1))
@@ -168,19 +170,24 @@ def kiops_cuda(tau_out: NDArray[cp.float64], A: Callable[[NDArray[cp.float64]], 
 
    global send_stream
    if send_stream is None:
-      send_stream = cp.cuda.Stream(non_blocking=False)
+      send_stream = cp.cuda.Stream(non_blocking=True)
+
+   global send_stream_async
+   if send_stream_async is None:
+      send_stream_async = cp.cuda.Stream(non_blocking=True)
 
    it_count = 0
    while tau_now < tau_end:
 
       it_count += 1
-      if it_count > 11: raise ValueError('Cutting it short')
+      #if it_count > 11: raise ValueError('Cutting it short')
 
       RangePush(f'Kiops outer {it_count}')
 
       # Compute necessary starting information
       if j == 0:
 
+         send_stream.synchronize()
          Vg[0, :n] = w[l, :]
 
          # Update the last part of w
@@ -198,9 +205,10 @@ def kiops_cuda(tau_out: NDArray[cp.float64], A: Callable[[NDArray[cp.float64]], 
 
          # The first Krylov basis vector
          Vg[0, :] /= beta
+         my_stream.synchronize()
 
          # async transfer Vg[0] to host
-         Vg[0, :].get(out=V_buf[0, :n + p], stream=send_stream, blocking=False)
+         #Vg[0, :].get(out=V[0, :n + p], stream=send_stream, blocking=False)
 
       # Incomplete orthogonalization process
       inner_it = 0
@@ -210,7 +218,8 @@ def kiops_cuda(tau_out: NDArray[cp.float64], A: Callable[[NDArray[cp.float64]], 
          RangePush(f'Kiops inner {inner_it}')
          j = j + 1
          # this loop's vector will occupy Vg[slot]
-         slot = j % Vg_slots
+         #slot = j % Vg_slots
+         slot = j
          # the vector will be moved to cpu in V_buf[parity]
          parity = j % 2
 
@@ -223,16 +232,16 @@ def kiops_cuda(tau_out: NDArray[cp.float64], A: Callable[[NDArray[cp.float64]], 
          # Classical Gram-Schmidt
          RangePush('Get global dotprod (1)')
          ilow = max(0, j - iop)
-         low_slots = [x % Vg_slots for x in range(ilow, j)]
-         local_sum = Vg[low_slots, :n] @ Vg[slot, :n]
+         #low_slots = [x % Vg_slots for x in range(ilow, j)]
+         local_sum = Vg[ilow:j, :n] @ Vg[slot, :n]
          global_sum = cp.empty_like(local_sum)
          cp.cuda.get_current_stream().synchronize()
          MPI.COMM_WORLD.Allreduce([local_sum, MPI.DOUBLE], [global_sum, MPI.DOUBLE])
          RangePop()
 
-         H[ilow:j, j - 1] = global_sum + Vg[low_slots, n:n + p] @ Vg[slot, n:n + p]
+         H[ilow:j, j - 1] = global_sum + Vg[ilow:j, n:n + p] @ Vg[slot, n:n + p]
 
-         Vg[slot, :n + p] = Vg[slot, :n + p] - Vg[low_slots, :n + p].T @ H[ilow:j, j - 1]
+         Vg[slot, :n + p] = Vg[slot, :n + p] - Vg[ilow:j, :n + p].T @ H[ilow:j, j - 1]
 
          RangePush('Get global dotprod (2)')
          local_sum = Vg[slot, :n] @ Vg[slot, :n]
@@ -256,7 +265,7 @@ def kiops_cuda(tau_out: NDArray[cp.float64], A: Callable[[NDArray[cp.float64]], 
          # Happy breakdown
          if nrm < tol:
             RangePush('Happy breakdown')
-            Vg[slot, :n + p].get(out=V_buf[parity, :n + p], stream=send_stream, blocking=False)
+            #Vg[slot, :n + p].get(out=V[j, :n + p], stream=send_stream, blocking=False)
             happy = True
             RangePop()
             RangePop()
@@ -265,12 +274,13 @@ def kiops_cuda(tau_out: NDArray[cp.float64], A: Callable[[NDArray[cp.float64]], 
          RangePush('div nrm')
          H[j, j - 1] = nrm
          Vg[slot, :n + p] = Vg[slot, :n + p] / nrm
+         my_stream.synchronize()
          RangePop()
 
          RangePush('Another copy')
          # dev-to-host copy of most recent V row
          #Vg[slot, :n + p].get(out=V_buf[parity, :n + p], stream=send_stream, blocking=False)
-         Vg[slot, :n + p].get(out=V[j, :n + p], stream=send_stream, blocking=False)
+         #Vg[slot, :n + p].get(out=V[j, :n + p], stream=send_stream, blocking=False)
          RangePop()
 
          RangePush('Increment')
@@ -364,7 +374,7 @@ def kiops_cuda(tau_out: NDArray[cp.float64], A: Callable[[NDArray[cp.float64]], 
       if omega <= delta:
 
          # We're going to need F on the cpu
-         (beta * F[:j, 0]).get(out=V_buf[0, :j], stream=send_stream)
+         #(beta * F[:j, 0]).get(out=V_buf[0, :j], stream=send_stream)
 
          # Yep, got the required tolerance; update
          reject += ireject
@@ -393,12 +403,21 @@ def kiops_cuda(tau_out: NDArray[cp.float64], A: Callable[[NDArray[cp.float64]], 
             l += blownTs
 
          # Using the standard scheme
+         RangePush('Standard scheme')
          send_stream.synchronize()
-         np.matmul(V_buf[0, :j], V[:j, :n], out=V_buf[1, :n])
-         with send_stream:
-            w[l, :] = cp.asarray(V_buf[1, :n])
+         #np.matmul(V_buf[0, :j], V[:j, :n], out=V_buf[1, :n])
+         #with send_stream_async:
+         #   w[l, :] = cp.asarray(V_buf[1, :n])
 
-         my_stream.use()
+
+         #print(f'F[:{j}, 0] shape = {F[:j, 0].shape}, vg[:{j}, :{n}] shape = {Vg[:j, :n].shape}, w[{l}, :] shape = {w[l, :].shape}')
+         cp.matmul((beta * F[:j, 0:1].T), Vg[:j, :n], out=w[l:l+1, :])
+         #w[l, :] = beta * F[:j, 0] @ Vg[:j, :n] 
+
+         RangePop()
+      
+
+         #my_stream.use()
 
          # Update tau_out
          tau_now += tau
