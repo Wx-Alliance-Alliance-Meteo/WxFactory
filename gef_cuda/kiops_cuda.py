@@ -391,20 +391,21 @@ def kiops_cuda(tau_out: NDArray[cp.float64], A: Callable[[NDArray[cp.float64]], 
             # Copy current w to w we continue with
             w[l + blownTs, :] = w[l, :]
 
+            #TODO Check that this stream arrangement is correct (copy vs compute)
             for k in range(blownTs):
                tauPhantom = tau_out[l + k] - tau_now
                F2 = cu_utils.linalg.expm(sgn * tauPhantom * H[:j, :j])
                # Too large for gpu, and can't copy out beforehand :(
-               send_stream.synchronize()
-               np.matmul((beta * F2[:j, 0]).get(out=V_buf[1, :j]), V[:j, :n], out=V_buf[2, :n])
-               w[l + k, :] = cp.asarray(V_buf[2, :n], stream=send_stream)
+               #send_stream.synchronize()
+               cp.matmul((beta * F2[:j, 0:1].T), Vg[:j, :n], out=w[l+k:l+k+1, :])
+               #w[l + k, :] = cp.asarray(V_buf[2, :n], stream=send_stream)
 
             # Advance l.
             l += blownTs
 
          # Using the standard scheme
          RangePush('Standard scheme')
-         send_stream.synchronize()
+         #send_stream.synchronize()
          #np.matmul(V_buf[0, :j], V[:j, :n], out=V_buf[1, :n])
          #with send_stream_async:
          #   w[l, :] = cp.asarray(V_buf[1, :n])
