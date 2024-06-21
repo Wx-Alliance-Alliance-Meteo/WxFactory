@@ -89,6 +89,15 @@ def compute_pressure(p0, cpd, cvd, Rd, theta):
 def initial_flux(rho_u, rho, q, sqrt_g):
    return sqrt_g * (rho_u / rho) * q
 
+@cp.fuse(kernel_name='initial_flux3')
+def initial_flux3(rho_u, rho_v, rho_w, rho, q, q_w, sqrt_g):
+   u = sqrt_g * (rho_u / rho)
+   v = sqrt_g * (rho_v / rho)
+   w = sqrt_g * (rho_w / rho)
+   return (u * q, \
+           v * q, \
+           w * q, u * q_w, v * q_w, w * q_w)
+
 @cp.fuse(kernel_name='flux_mid')
 def flux_mid(f1, f2, f3, f01, f02, f03, h11, h12, h13, sqrt_g, p):
    f1[:] = f01 + sqrt_g * h11 * p
@@ -185,9 +194,19 @@ def rhs_euler_cuda(Q: NDArray[cp.float64],
    u2  = Q[idx_rho_u2] / rho
    w   = Q[idx_rho_w]  / rho
 
-   flux_x1 = initial_flux(Q[idx_rho_u1], Q[idx_rho], Q, metric.sqrtG)
-   flux_x2 = initial_flux(Q[idx_rho_u2], Q[idx_rho], Q, metric.sqrtG)
-   flux_x3 = initial_flux(Q[idx_rho_w], Q[idx_rho], Q, metric.sqrtG)
+   #flux_x1 = initial_flux(Q[idx_rho_u1], Q[idx_rho], Q, metric.sqrtG)
+   #flux_x2 = initial_flux(Q[idx_rho_u2], Q[idx_rho], Q, metric.sqrtG)
+   #flux_x3 = initial_flux(Q[idx_rho_w], Q[idx_rho], Q, metric.sqrtG)
+   flux_x1, flux_x2, flux_x3, wflux_adv_x1, wflux_adv_x2 , wflux_adv_x3 = \
+      initial_flux3(Q[idx_rho_u1], Q[idx_rho_u2], Q[idx_rho_w], Q[idx_rho], Q, Q[idx_rho_w, :], metric.sqrtG)
+
+   #print(f'flux_x1 shape = {flux_x1.shape}, wflux shape = {wflux_adv_x1.shape}')
+
+   # FOr some reason, the cupy.fused function returns the wrong size (entire Q shape)
+   wflux_adv_x1 = wflux_adv_x1[idx_rho_w]
+   wflux_adv_x2 = wflux_adv_x2[idx_rho_w]
+   wflux_adv_x3 = wflux_adv_x3[idx_rho_w]
+
    #f = metric.sqrtG * u1 * Q
    #diff = f - flux_x1
    #diff_norm = cp.linalg.norm(diff) / cp.linalg.norm(f)
@@ -195,10 +214,10 @@ def rhs_euler_cuda(Q: NDArray[cp.float64],
    #   print(f'rel diff {diff_norm:.3e}')
    #   raise ValueError
 
-   wflux_adv_x1 = flux_x1[idx_rho_w].copy()
-   wflux_adv_x2 = flux_x2[idx_rho_w].copy()
-   wflux_adv_x3 = flux_x3[idx_rho_w].copy()
-
+   #wflux_adv_x1 = flux_x1[idx_rho_w].copy()
+   #wflux_adv_x2 = flux_x2[idx_rho_w].copy()
+   #wflux_adv_x3 = flux_x3[idx_rho_w].copy()
+   #wflux_adv_x1, wflux_adv_x2 , wflux_adv_x3 = initial_flux3(Q[idx_rho_u1], Q[idx_rho_u2], Q[idx_rho_w], Q[idx_rho], Q[idx_rho_w], metric.sqrtG)
    #diff = flux_x1[idx_rho_w] - wflux_adv_x1
    #diff_norm = cp.linalg.norm(diff) / cp.linalg.norm(wflux_adv_x1)
    #if diff_norm > 1e-10:
