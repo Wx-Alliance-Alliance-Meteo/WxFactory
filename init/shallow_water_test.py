@@ -7,6 +7,81 @@ from common.definitions import day_in_secs, gravity
 from geometry           import wind2contra_2d
 from init.matsuno       import eval_field
 
+def solid_body_rotation_random(geom, metric, param):
+   if param.case_number == 5:
+      u0 = 20.0
+   else:
+      u0 = 2.0 * math.pi * geom.earth_radius / (12.0 * day_in_secs)
+
+   u = u0 * geom.coslat
+   v = 0.0
+   u_mean = 0.0
+   v_mean = 0.0
+   u_std =  numpy.mean(u)
+   v_std = 0.0
+
+   u_r = numpy.random.normal(u_mean, u_std, (numpy.shape(geom.sinlat)[0], numpy.shape(geom.sinlat)[1]))
+   v_r = numpy.random.normal(v_mean, v_std, (numpy.shape(geom.sinlat)[0], numpy.shape(geom.sinlat)[1]))
+
+   u = u_r
+   v = v_r
+
+   u1, u2 = wind2contra_2d(u, v, geom)
+
+   return u1, u2
+
+def height_case2_random(geom, metric, param):
+   gh0 = 29400.0
+   u0 = 2.0 * math.pi * geom.earth_radius / (12.0 * day_in_secs)
+
+   h = ( gh0 - (geom.earth_radius * geom.rotation_speed * u0 + (0.5 * u0**2)) * geom.sinlat**2 ) / gravity
+
+   # Calculate the Gaussian distribution values
+   h_mean_val = 8000.0
+   h_std_val = h_mean_val*0.1
+
+   h_r = numpy.random.normal(h_mean_val, h_std_val, (numpy.shape(geom.sinlat)[0], numpy.shape(geom.sinlat)[1]))
+
+   mask_1 = geom.coslat < 0.7
+
+   #UNCOMMENT for no perturbations around the poles
+   #h_r[mask_1] = 0
+
+   h = h_r
+
+   # UNCOMMENT for Gaussian perturbations on the Cubed-Sphere
+   #for i in range(0, 1):
+   #   a, b = numpy.random.randint(0, ), numpy.random.randint(0, 45)  # Arbitrary center point
+   #   #a, b = 45, 45
+   #   numpy.random.seed(int(time.time()))   
+   #   # Extract the center values from the arrays
+   #   center_sinlat = geom.sinlat[a, b]
+   #   center_coslat = geom.coslat[a, b]
+   #   center_sinlon = geom.sinlon[a, b]
+   #   center_coslon = geom.coslon[a, b]
+   #   
+   #   # Calculate distances from the center to each point in the grid
+   #   distances = numpy.sqrt((geom.sinlat - center_sinlat)**2 + (geom.coslat - center_coslat)**2 +
+   #                       (geom.sinlon - center_sinlon)**2 + (geom.coslon - center_coslon)**2)
+   #   
+   #   # Define the standard deviation of the Gaussian
+   #   sigma = 0.2
+   #   
+   #   gaussian_values = (h_mean_val)*numpy.exp(-distances**2 / (2 * sigma**2))
+
+   #   mask_2 = gaussian_values < (numpy.mean(gaussian_values)*0.6)
+   #   
+   #   #gaussian_values[mask_1] = 0
+   #   gaussian_values[mask_2] = 0
+
+   #   print("mask shape: ", numpy.shape(h_r))
+   #   print("MIN: gaussian values: ", numpy.min(gaussian_values))
+   #   print("MAX gaussian values: ", numpy.max(gaussian_values))
+   #   
+   #   h = h + (0.2)*gaussian_values
+
+   return h
+
 def eval_u_prime(lat):
    u_max = 80.0
    phi0 = math.pi / 7.0
@@ -126,10 +201,10 @@ def williamson_case2(geom, metric, param):
       print("Steady state nonlinear geostrophic flow     ")
       print("--------------------------------------------")
 
-   u1, u2 = solid_body_rotation(geom, metric, param)
+   u1, u2 = solid_body_rotation_random(geom, metric, param)
 
    # Global Steady State Nonlinear Zonal Geostrophic Flow
-   h = height_case2(geom, metric, param)
+   h = height_case2_random(geom, metric, param)
    return u1, u2, h
 
 def height_case2(geom, metric, param):
