@@ -8,7 +8,8 @@ from common.program_options  import Configuration
 from solvers                 import fgmres, MatvecOpRat, SolverInfo
 from .integrator             import Integrator
 from solvers                 import fgmres, gcrot, matvec_rat, SolverInfo
-from eigenvalue_util         import gen_matrix
+from scripts.eigenvalue_util import gen_matrix
+
 
 class Ros2(Integrator):
    Q_flat: numpy.ndarray
@@ -25,20 +26,20 @@ class Ros2(Integrator):
       rhs = self.rhs_handle(Q)
       self.Q_flat = numpy.ravel(Q)
       self.A = MatvecOpRat(dt, Q, rhs, self.rhs_handle)
-      gen_matrix(A, jac_file_name=f'ros2_A_{self.num_completed_steps}')
+      gen_matrix(self.A, jac_file_name=f'/data/users/jupyter-dam724/DataDump/ros2_A_{self.num_completed_steps}_{0}')
       self.b = self.A(self.Q_flat) + numpy.ravel(rhs) * dt
-      numpy.save('ros2_b'+str(self.num_completed_steps), b)
+      numpy.save(f'/data/users/jupyter-dam724/DataDump/ros2_b_{self.num_completed_steps}_{0}', self.b)
 
    def __step__(self, Q: numpy.ndarray, dt: float):
 
       maxiter = 20000 // self.gmres_restart
       if self.preconditioner is not None:
          maxiter = 400 // self.gmres_restart
-
+        
       if self.linear_solver == 'fgmres':
          t0 = time()
          Qnew, norm_r, norm_b, num_iter, flag, residuals = fgmres(
-            self.A, self.b, x0=self.Q_flat, tol=self.tol, restart=self.gmres_restart, maxiter=maxiter,
+            self.A, self.b, self.num_completed_steps, x0=self.Q_flat, tol=self.tol, restart=self.gmres_restart, maxiter=maxiter,
             preconditioner=self.preconditioner,
             verbose=self.verbose_solver)
          t1 = time()
