@@ -29,6 +29,9 @@ except ImportError as e:
    # if MPI.COMM_WORLD.rank == 0:
    #    print(f'Module cupy is installed, but we were unable to load it, so we will run on CPUs instead')
 
+except Exception as e:
+   loading_error = e
+
 cuda_avail = num_devices > 0
 
 if MPI.COMM_WORLD.rank == 0:

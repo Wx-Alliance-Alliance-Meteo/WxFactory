@@ -43,10 +43,11 @@ if __name__ == '__main__':
 
    from common.program_options import Configuration
 
-   print("Start time : %s" % datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-
    args = None
    rank = MPI.COMM_WORLD.rank
+
+   if rank == 0:
+      print(f'Start time : {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}')
 
    parse_error = None
    if rank == 0:

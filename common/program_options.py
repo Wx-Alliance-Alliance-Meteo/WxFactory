@@ -38,14 +38,15 @@ class Configuration:
       self.device = self._get_option('System', 'device', str, 'cpu', ['cpu', 'cuda'])
 
       if self.device == "cuda":
-         from gef_cuda import num_devices
+         from gef_cuda import num_devices, loading_error
          if num_devices > 0:
             self.cuda_devices = self._get_option('System', 'cuda_devices', List[int], list(range(num_devices)))
             self.array_module = 'cupy'
          else:
             if verbose:
                print(f'WARNING: Config is asking for CUDA, but we\'re unable to find any CUDA device, '
-                     f'so we will revert to CPU')
+                     f'so we will revert to CPU'
+                     f'\n         Error was "{loading_error}"')
             self.device = 'cpu'
 
       ################################
