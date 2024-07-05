@@ -4,12 +4,12 @@ from mpi4py import MPI
 from .cuda_module import CudaModule, DimSpec, Dim, Requires, TemplateSpec, cuda_kernel
 
 from common.definitions import idx_rho_u1, idx_rho_u2, idx_rho_w, idx_rho, idx_rho_theta, gravity, p0, Rd, cpd, cvd, heat_capacity_ratio
+from common.parallel import DistributedWorld
 from init.dcmip import dcmip_schar_damping
 
 # For type hints
 from typing import TypeVar
 from numpy.typing import NDArray
-from common.cuda_parallel import CudaDistributedWorld
 from geometry import CubedSphere, DFROperators, Metric3DTopo
 
 
@@ -53,7 +53,7 @@ def rhs_euler_cuda(Q: NDArray[cp.float64],
                    geom: CubedSphere,
                    mtrx: DFROperators,
                    metric: Metric3DTopo,
-                   ptopo: CudaDistributedWorld,
+                   ptopo: DistributedWorld,
                    nbsolpts: int,
                    nb_elements_hori: int,
                    nb_elements_vert: int,

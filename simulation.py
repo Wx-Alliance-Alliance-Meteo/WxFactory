@@ -28,7 +28,7 @@ class Simulation:
       self.config = Configuration(config_file, self.rank == 0)
       self._adjust_nb_elements()
       self.device = self._make_device()
-      self.processor_topo = self._make_processor_topo()
+      self.processor_topo = DistributedWorld(self.device)
       self.geometry = self._create_geometry()
       self.operators = DFROperators(self.geometry, self.config)
       self.initial_Q, self.topology, self.metric = init_state_vars(self.geometry, self.operators, self.config)
@@ -97,8 +97,7 @@ class Simulation:
 
       self.output.finalize()
 
-   def _make_device(self) -> Optional[Device]:
-      device = None
+   def _make_device(self) -> Device:
       if self.config.device == 'cuda':
          try:
             device = CudaDevice(self.config.cuda_devices)
@@ -111,18 +110,6 @@ class Simulation:
          device = CpuDevice()
 
       return device
-
-   def _make_processor_topo(self) -> Optional[DistributedWorld]:
-      processor_topo = None
-      #TODO unify these 2
-      if self.config.grid_type == "cubed_sphere":
-         if self.config.device == "cuda":
-            from common.cuda_parallel import CudaDistributedWorld
-            processor_topo = CudaDistributedWorld()
-         else:
-            processor_topo = DistributedWorld()
-
-      return processor_topo
 
    def _adjust_nb_elements(self):
       """Adjust number of horizontal elements in the parameters so that it corresponds to the

@@ -38,6 +38,7 @@ if MPI.COMM_WORLD.rank == 0:
    avail = 'available' if cuda_avail else 'not available'
    print(f'CUDA is {avail}')
 
+# TODO remove these
 if cuda_avail:
    # import cuda-related modules
    from .kiops_cuda      import kiops_cuda
