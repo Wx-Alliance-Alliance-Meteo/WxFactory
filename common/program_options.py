@@ -20,9 +20,7 @@ class Configuration:
       self.parser.read(cfg_file, encoding="utf-8")
 
       if verbose:
-         print('\nLoading config: ' + cfg_file)
-         print(self.parser.sections())
-         print(' ')
+         print(f'Loading config: {cfg_file}')
 
       self.array_module = 'numpy' # Default value, may change depending on selected options
 

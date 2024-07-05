@@ -1,19 +1,18 @@
 #!/usr/bin/env python3
 
-""" The GEF model """
+""" The WxFactory model """
 
+import argparse
+import datetime
+import os.path
 import sys
 
 from mpi4py import MPI
 import numpy
 
-if __name__ == '__main__':
+from simulation import Simulation
 
-   import argparse
-   import datetime
-   import os.path
-
-   from common.program_options import Configuration
+def main():
 
    args = None
    rank = MPI.COMM_WORLD.rank
@@ -62,14 +61,11 @@ if __name__ == '__main__':
       if args.numpy_warn_as_except:
          numpy.seterr(all='raise')
 
-      # Read configuration file
-      config = Configuration(args.config, rank == 0)
+      # Read the config + initialize simulation
+      sim = Simulation(args.config)
 
-      # Run the actual GEF
-      # This import has to happen *after* the config is read, so that we have the opportunity
-      # to swap the array module for cupy if requested by the user (and available)
-      import run
-      run.run(config)
+      # This is the actual run
+      sim.run()
 
       if args.profile and pr:
          pr.disable()
@@ -88,3 +84,7 @@ if __name__ == '__main__':
          raise
 
       sys.exit(-1)
+
+
+if __name__ == '__main__':
+   main()

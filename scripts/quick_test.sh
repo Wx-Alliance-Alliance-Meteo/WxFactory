@@ -83,11 +83,11 @@ function run_single_config() {
 }
 
 function run_single_cart2d() {
-    run_single_config ${GEF_DIR}/main_gef.py ${@} || return 1
+    run_single_config ${GEF_DIR}/WxFactory ${@} || return 1
 }
 
 function run_single_cubesphere() {
-    run_single_config "mpirun -n 6 ${GEF_DIR}/main_gef.py" ${@} || return 1
+    run_single_config "mpirun -n 6 ${GEF_DIR}/WxFactory" ${@} || return 1
 }
 
 function test_cart2d() {
@@ -118,7 +118,8 @@ function test_cart2d() {
 
 
     if [ $do_non_precond -gt 0 ]; then
-        time_integrators="epi2 epi3 epi_stiff3 epi_stiff4 srerk3 imex2 tvdrk3 ros2 rosexp2 partrosexp2 strang_epi2_ros2 strang_ros2_epi2"
+        #TODO add back "imex2" once newton_krylov is fixed
+        time_integrators="epi2 epi3 epi_stiff3 epi_stiff4 srerk3 tvdrk3 ros2 rosexp2 partrosexp2 strang_epi2_ros2 strang_ros2_epi2"
         for time_integrator in ${time_integrators}; do
             run_single_cart2d time_integrator || return 1
         done

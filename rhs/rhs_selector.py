@@ -23,7 +23,7 @@ from rhs.rhs_advection2d       import rhs_advection2d
 # For type hints
 from common.parallel        import DistributedWorld
 from common.program_options import Configuration
-from geometry               import DFROperators, Geometry, Metric
+from geometry               import DFROperators, Geometry, Metric, Metric3DTopo
 
 class RhsBundle:
    '''Set of RHS functions that are associated with a certain geometry and equations
@@ -31,8 +31,8 @@ class RhsBundle:
    def __init__(self,
                 geom: Geometry,
                 operators: DFROperators,
-                metric: Metric,
-                topo: Topo,
+                metric: Metric | Metric3DTopo | None,
+                topo: Optional[Topo],
                 ptopo: Optional[DistributedWorld],
                 param: Configuration,
                 fields_shape: Tuple[int, ...]) -> None:
