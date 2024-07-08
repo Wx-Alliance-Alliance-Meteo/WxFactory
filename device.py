@@ -61,10 +61,8 @@ class CudaDevice(Device):
       # Delay imports, to avoid loading CUDA if not asked
 
       import cupy
-      from cu_utils.linalg import expm
+      from gef_cuda import num_devices, expm
       super().__init__(cupy, expm)
-
-      from gef_cuda import num_devices
 
       if num_devices <= 0:
          raise ValueError(f'Unable to create a CudaDevice object, no GPU devices were detected')

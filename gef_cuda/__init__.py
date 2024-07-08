@@ -1,10 +1,8 @@
 
 __all__ = ['cuda_avail', 'num_devices',
-           'kiops_cuda', 'rhs_bubble_cuda', 'rhs_euler_cuda']
+           'rhs_bubble_cuda', 'rhs_euler_cuda', 'expm']
 
 from mpi4py import MPI
-import numpy
-
 
 num_devices = 0
 loading_error = None
@@ -43,10 +41,4 @@ if cuda_avail:
    # import cuda-related modules
    from .rhs_bubble_cuda import rhs_bubble_cuda
    from .rhs_euler_cuda  import rhs_euler_cuda
-else:
-   # define stubs
-   def dummy(*args, **kwargs):
-      raise ValueError(f'No one should ever call me')
-
-   rhs_bubble_cuda = dummy
-   rhs_euler_cuda = dummy
+   from .linalg          import expm

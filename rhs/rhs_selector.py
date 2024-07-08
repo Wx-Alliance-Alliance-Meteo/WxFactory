@@ -3,8 +3,6 @@ from typing import Callable, Optional, Tuple
 from mpi4py   import MPI
 import numpy
 
-from gef_cuda                  import rhs_bubble_cuda
-from gef_cuda                  import rhs_euler_cuda
 from geometry                  import Cartesian2D, CubedSphere
 from init.initialize           import Topo
 from rhs.fluxes                import ausm_2d_fv, upwind_2d_fv, rusanov_2d_fv
@@ -52,6 +50,9 @@ class RhsBundle:
          return actual_rhs
 
       if param.equations == "euler" and isinstance(geom, CubedSphere):
+         rhs_euler_cuda = None
+         if param.device == 'cuda': # Only load that if requested
+            from gef_cuda import rhs_euler_cuda
          rhs_functions = {'dg': {'cpu': rhs_euler,    'cuda': rhs_euler_cuda},
                           'fv': {'cpu': rhs_euler   , 'cuda': rhs_euler_cuda}}
 
@@ -63,6 +64,10 @@ class RhsBundle:
          self.viscous = lambda q: self.full(q) - self.convective(q)
 
       elif param.equations == 'euler' and isinstance(geom, Cartesian2D):
+         rhs_bubble_cuda = None
+         if param.device == 'cuda': # Only load that if requested
+            from gef_cuda import rhs_bubble_cuda
+
          dg_functions = {'cpu': rhs_bubble,    'cuda': rhs_bubble_cuda}
          fv_functions = {'cpu': rhs_bubble_fv, 'cuda': rhs_bubble_cuda}
 
