@@ -10,8 +10,8 @@ from .integrator     import Integrator, alpha_coeff
 from solvers         import kiops, matvec_fun, pmex
 
 class EpiStiff(Integrator):
-   def __init__(self, param: Configuration, order: int, rhs, init_method=None, init_substeps: int = 1):
-      super().__init__(param, preconditioner=None)
+   def __init__(self, param: Configuration, order: int, rhs, init_method=None, init_substeps: int = 1, **kwargs):
+      super().__init__(param, **kwargs)
       self.rhs = rhs
       self.tol = param.tolerance
       self.krylov_size = 1
@@ -33,7 +33,7 @@ class EpiStiff(Integrator):
          self.init_method = init_method
       else:
          #self.init_method = Epirk4s3a(rhs, tol, krylov_size)
-         self.init_method = Epi(param, 2, rhs)
+         self.init_method = Epi(param, 2, rhs, device=self.device)
 
       self.init_substeps = init_substeps
 

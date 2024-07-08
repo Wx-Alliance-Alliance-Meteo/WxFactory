@@ -41,7 +41,6 @@ if MPI.COMM_WORLD.rank == 0:
 # TODO remove these
 if cuda_avail:
    # import cuda-related modules
-   from .kiops_cuda      import kiops_cuda
    from .rhs_bubble_cuda import rhs_bubble_cuda
    from .rhs_euler_cuda  import rhs_euler_cuda
 else:
@@ -49,6 +48,5 @@ else:
    def dummy(*args, **kwargs):
       raise ValueError(f'No one should ever call me')
 
-   kiops_cuda = dummy
    rhs_bubble_cuda = dummy
    rhs_euler_cuda = dummy

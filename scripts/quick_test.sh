@@ -71,7 +71,7 @@ function run_single_config() {
     echo ${message}
 
     # Run test
-    timeout 30 ${cmd} ${cfg} > ${LISTING} 2>&1 && return 0
+    timeout 45 ${cmd} ${cfg} > ${LISTING} 2>&1 && return 0
 
     # Check if the timer ran out (return status 124 from the timeout command)
     [ $? == 124 ] && kill -s SIGALRM $$

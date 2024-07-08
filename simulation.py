@@ -28,7 +28,7 @@ class Simulation:
       self.config = Configuration(config_file, self.rank == 0)
       self._adjust_nb_elements()
       self.device = self._make_device()
-      self.processor_topo = DistributedWorld(self.device)
+      self.processor_topo = DistributedWorld(self.device) if self.config.grid_type == 'cubed_sphere' else None
       self.geometry = self._create_geometry()
       self.operators = DFROperators(self.geometry, self.config)
       self.initial_Q, self.topology, self.metric = init_state_vars(self.geometry, self.operators, self.config)
@@ -39,6 +39,7 @@ class Simulation:
                            self.initial_Q.shape)
       self.integrator = self._create_time_integrator()
       self.integrator.output_manager = self.output
+      self.integrator.device = self.device
 
       self.output.step(self.initial_Q, self.starting_step)
       sys.stdout.flush()
@@ -71,12 +72,12 @@ class Simulation:
 
          # Overwrite winds for some DCMIP tests
          if self.config.case_number == 11:
-            u1_contra, u2_contra, w_wind = dcmip_T11_update_winds(self.geometry, self.metric, self.operators, self.config, time=t)
+            u1_contra, u2_contra, w_wind = dcmip_T11_update_winds(self.geometry, self.metric, self.operators, self.config, time=self.t)
             self.Q[idx_rho_u1,:,:,:] = self.Q[idx_rho, :, :, :] * u1_contra
             self.Q[idx_rho_u2,:,:,:] = self.Q[idx_rho, :, :, :] * u2_contra
             self.Q[idx_rho_w,:,:,:]  = self.Q[idx_rho, :, :, :] * w_wind
          elif self.config.case_number == 12:
-            u1_contra, u2_contra, w_wind = dcmip_T12_update_winds(self.geometry, self.metric, self.operators, self.config, time=t)
+            u1_contra, u2_contra, w_wind = dcmip_T12_update_winds(self.geometry, self.metric, self.operators, self.config, time=self.t)
             self.Q[idx_rho_u1,:,:,:] = self.Q[idx_rho, :, :, :] * u1_contra
             self.Q[idx_rho_u2,:,:,:] = self.Q[idx_rho, :, :, :] * u2_contra
             self.Q[idx_rho_w,:,:,:]  = self.Q[idx_rho, :, :, :] * w_wind
@@ -193,54 +194,54 @@ class Simulation:
       if self.config.time_integrator[:9] == 'epi_stiff' and self.config.time_integrator[9:].isdigit():
          order = int(self.config.time_integrator[9:])
          if MPI.COMM_WORLD.rank == 0: print(f'Running with EPI_stiff{order}')
-         return EpiStiff(self.config, order, self.rhs.full, init_substeps=10)
+         return EpiStiff(self.config, order, self.rhs.full, init_substeps=10, device=self.device)
       if self.config.time_integrator[:3] == 'epi' and self.config.time_integrator[3:].isdigit():
          order = int(self.config.time_integrator[3:])
          if MPI.COMM_WORLD.rank == 0: print(f'Running with EPI{order}')
-         return Epi(self.config, order, self.rhs.full, init_substeps=10)
+         return Epi(self.config, order, self.rhs.full, init_substeps=10, device=self.device)
       if self.config.time_integrator[:5] == 'srerk' and self.config.time_integrator[5:].isdigit():
          order = int(self.config.time_integrator[5:])
          if MPI.COMM_WORLD.rank == 0: print(f'Running with SRERK{order}')
-         return Srerk(self.config, order, self.rhs.full)
+         return Srerk(self.config, order, self.rhs.full, device=self.device)
 
       # --- Explicit
       if self.config.time_integrator == 'euler1':
          if MPI.COMM_WORLD.rank == 0:
             print('WARNING: Running with first-order explicit Euler timestepping.')
             print('         This is UNSTABLE and should be used only for debugging.')
-         return Euler1(self.config, self.rhs.full)
+         return Euler1(self.config, self.rhs.full, device=self.device)
       if self.config.time_integrator == 'tvdrk3':
-         return Tvdrk3(self.config, self.rhs.full)
+         return Tvdrk3(self.config, self.rhs.full, device=self.device)
 
       # --- Rosenbrock
       if self.config.time_integrator == 'ros2':
-         return Ros2(self.config, self.rhs.full, preconditioner=self.preconditioner)
+         return Ros2(self.config, self.rhs.full, preconditioner=self.preconditioner, device=self.device)
 
       # --- Rosenbrock - Exponential
       if self.config.time_integrator == 'rosexp2':
-         return RosExp2(self.config, self.rhs.full, self.rhs.full, preconditioner=self.preconditioner)
+         return RosExp2(self.config, self.rhs.full, self.rhs.full, preconditioner=self.preconditioner, device=self.device)
       if self.config.time_integrator == 'partrosexp2':
-         return PartRosExp2(self.config, self.rhs.full, self.rhs.implicit, preconditioner=self.preconditioner)
+         return PartRosExp2(self.config, self.rhs.full, self.rhs.implicit, preconditioner=self.preconditioner, device=self.device)
 
       # --- Implicit - Explicit
       if self.config.time_integrator == 'imex2':
-         return Imex2(self.config, self.rhs.explicit, self.rhs.implicit)
+         return Imex2(self.config, self.rhs.explicit, self.rhs.implicit, device=self.device)
 
       # --- Fully implicit
       if self.config.time_integrator == 'backward_euler':
-         return BackwardEuler(self.config, self.rhs.full, preconditioner=self.preconditioner)
+         return BackwardEuler(self.config, self.rhs.full, preconditioner=self.preconditioner, device=self.device)
       if self.config.time_integrator == 'bdf2':
-         return Bdf2(self.config, self.rhs.full, preconditioner=self.preconditioner)
+         return Bdf2(self.config, self.rhs.full, preconditioner=self.preconditioner, device=self.device)
       if self.config.time_integrator == 'crank_nicolson':
-         return CrankNicolson(self.config, self.rhs.full, preconditioner=self.preconditioner)
+         return CrankNicolson(self.config, self.rhs.full, preconditioner=self.preconditioner, device=self.device)
 
       # --- Operator splitting
       if self.config.time_integrator == 'strang_epi2_ros2':
-         stepper1 = Epi(self.config, 2, self.rhs.explicit)
-         stepper2 = Ros2(self.config, self.rhs.implicit, preconditioner=self.preconditioner)
+         stepper1 = Epi(self.config, 2, self.rhs.explicit, device=self.device)
+         stepper2 = Ros2(self.config, self.rhs.implicit, preconditioner=self.preconditioner, device=self.device)
          return StrangSplitting(self.config, stepper1, stepper2)
       if self.config.time_integrator == 'strang_ros2_epi2':
-         stepper1 = Ros2(self.config, self.rhs.implicit, preconditioner=self.preconditioner)
+         stepper1 = Ros2(self.config, self.rhs.implicit, preconditioner=self.preconditioner, device=self.device)
          stepper2 = Epi(self.config, 2, self.rhs.explicit)
          return StrangSplitting(self.config, stepper1, stepper2)
 

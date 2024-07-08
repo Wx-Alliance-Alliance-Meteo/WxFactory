@@ -2,8 +2,8 @@ from common.program_options import Configuration
 from .integrator            import Integrator
 
 class Euler1(Integrator):
-   def __init__(self, param: Configuration, rhs):
-      super().__init__(param, preconditioner=None)
+   def __init__(self, param: Configuration, rhs, **kwargs):
+      super().__init__(param, **kwargs)
       self.rhs = rhs
 
    def __step__(self, Q, dt):

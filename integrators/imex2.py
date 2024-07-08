@@ -7,8 +7,8 @@ from .integrator     import Integrator
 from solvers         import newton_krylov
 
 class Imex2(Integrator):
-   def __init__(self, param: Configuration, rhs_exp: Callable, rhs_imp: Callable):
-      super().__init__(param, preconditioner=None)
+   def __init__(self, param: Configuration, rhs_exp: Callable, rhs_imp: Callable, **kwargs):
+      super().__init__(param, **kwargs)
 
       self.rhs_exp = rhs_exp
       self.rhs_imp = rhs_imp

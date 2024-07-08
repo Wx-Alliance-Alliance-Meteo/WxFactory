@@ -1,37 +1,59 @@
 from abc    import ABC, abstractmethod
-from typing import List
+from typing import Any, List
 
 from mpi4py import MPI
 import numpy
 from numpy.typing import NDArray
 
 class Device(ABC):
-   def __init__(self, xp) -> None:
+   def __init__(self, xp, expm) -> None:
       self.xp = xp
+      self.expm = expm
 
    @abstractmethod
-   def __synchronize__(self):
+   def __synchronize__(self, **kwargs):
       pass
 
-   def synchronize(self):
-      self.__synchronize__()
+   def synchronize(self, **kwargs):
+      self.__synchronize__(**kwargs)
 
    @abstractmethod
-   def __array__(self, a: NDArray):
+   def __array__(self, a: NDArray, **kwargs) -> NDArray:
       pass
 
-   def array(self, a: NDArray):
-      return self.__array__(a)
+   def array(self, a: NDArray, *args, **kwargs) -> NDArray:
+      return self.__array__(a, *args, **kwargs)
+
+   @abstractmethod
+   def __pinned__(self, *args, **kwargs) -> NDArray:
+      pass
+
+   def pinned(self, *args, **kwargs) -> NDArray:
+      return self.__pinned__(*args, **kwargs)
+
+   @abstractmethod
+   def __to_host__(self, val, **kwargs):
+      pass
+
+   def to_host(self, val: Any, **kwargs) -> Any:
+      return self.__to_host__(val, **kwargs)
 
 class CpuDevice(Device):
    def __init__(self) -> None:
-      super().__init__(numpy)
+      from scipy.linalg import expm
+      super().__init__(numpy, expm)
    
-   def __synchronize__(self):
+   def __synchronize__(self, **kwargs):
       pass
 
-   def __array__(self, a: NDArray):
+   def __array__(self, a: NDArray, *args, **kwargs) -> NDArray:
       return a
+
+   def __pinned__(self, *args, **kwargs) -> NDArray:
+      return self.xp.empty(*args, **kwargs)
+
+   def __to_host__(self, val, **kwargs):
+      return val
 
 class CudaDevice(Device):
 
@@ -39,13 +61,16 @@ class CudaDevice(Device):
       # Delay imports, to avoid loading CUDA if not asked
 
       import cupy
-      super().__init__(cupy)
+      from cu_utils.linalg import expm
+      super().__init__(cupy, expm)
 
       from gef_cuda import num_devices
 
       if num_devices <= 0:
          raise ValueError(f'Unable to create a CudaDevice object, no GPU devices were detected')
 
+      import cupyx
+      self.cupyx = cupyx
 
       rank = MPI.COMM_WORLD.Get_rank()
       devnum = rank % len(device_list)
@@ -54,8 +79,20 @@ class CudaDevice(Device):
       # TODO don't use managed memory
       cupy.cuda.set_allocator(cupy.cuda.MemoryPool(cupy.cuda.malloc_managed).malloc)
 
-   def __synchronize__(self):
-      self.xp.cuda.get_current_stream().synchronize()
+      self.main_stream = cupy.cuda.get_current_stream()
+      self.copy_stream = cupy.cuda.Stream(non_blocking=True)
 
-   def __array__(self, a: NDArray):
+   def __synchronize__(self, **kwargs):
+      if 'copy_stream' in kwargs and kwargs['copy_stream']:
+         self.copy_stream.synchronize()
+      else:
+         self.main_stream.synchronize()
+
+   def __array__(self, a: NDArray, *args, **kwargs) -> NDArray:
       return self.xp.asarray(a)
+
+   def __pinned__(self, *args, **kwargs) -> NDArray:
+      return self.cupyx.empty_pinned(*args, **kwargs)
+
+   def __to_host__(self, val, **kwargs):
+      return val.get(**kwargs)
