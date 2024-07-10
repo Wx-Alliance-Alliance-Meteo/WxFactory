@@ -5,7 +5,7 @@ from mpi4py import MPI
 import numpy
 from scipy.sparse.linalg import LinearOperator
 
-from common.program_options import Configuration
+from common.configuration import Configuration
 from .integrator            import Integrator, SolverInfo
 from solvers                import fgmres, matvec_fun, pmex
 

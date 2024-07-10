@@ -5,7 +5,7 @@ import numpy
 from mpi4py import MPI
 import scipy
 
-from common.program_options  import Configuration
+from common.configuration  import Configuration
 from scripts.eigenvalue_util import gen_matrix
 from .preconditioner         import Preconditioner
 

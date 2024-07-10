@@ -6,7 +6,7 @@ from typing import Callable
 
 from mpi4py import MPI
 
-from common.program_options import Configuration
+from common.configuration import Configuration
 from .integrator            import Integrator
 from solvers                import fgmres, matvec_rat, SolverInfo, newton_krylov
 

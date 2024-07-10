@@ -5,10 +5,10 @@ from .fluxes import rusanov_3d_vert, rusanov_3d_hori_i, rusanov_3d_hori_j
 from device import CpuDevice, CudaDevice, Device
 
 # For type hints
-from common.parallel import DistributedWorld
-from geometry        import CubedSphere, DFROperators, Metric3DTopo
-from init.dcmip      import dcmip_schar_damping
-from numpy.typing import NDArray
+from common.process_topology import ProcessTopology
+from geometry                import CubedSphere, DFROperators, Metric3DTopo
+from init.dcmip              import dcmip_schar_damping
+from numpy.typing            import NDArray
 
 
 default_rhs_device = CpuDevice()
@@ -19,7 +19,7 @@ def rhs_euler (Q: NDArray,
                geom: CubedSphere,
                mtrx: DFROperators,
                metric: Metric3DTopo,
-               ptopo: DistributedWorld,
+               ptopo: ProcessTopology,
                nbsolpts: int,
                nb_elements_hori: int,
                nb_elements_vert: int,

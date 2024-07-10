@@ -19,10 +19,10 @@ from rhs.rhs_sw_nonstiff       import rhs_sw_nonstiff
 from rhs.rhs_advection2d       import rhs_advection2d
 
 # For type hints
-from common.parallel        import DistributedWorld
-from common.program_options import Configuration
-from geometry               import DFROperators, Geometry, Metric, Metric3DTopo
-from device                 import Device
+from common.process_topology   import ProcessTopology
+from common.configuration      import Configuration
+from geometry                  import DFROperators, Geometry, Metric, Metric3DTopo
+from device                    import Device
 
 class RhsBundle:
    '''Set of RHS functions that are associated with a certain geometry and equations
@@ -32,7 +32,7 @@ class RhsBundle:
                 operators: DFROperators,
                 metric: Metric | Metric3DTopo | None,
                 topo: Optional[Topo],
-                ptopo: Optional[DistributedWorld],
+                ptopo: Optional[ProcessTopology],
                 param: Configuration,
                 fields_shape: Tuple[int, ...],
                 device: Device) -> None:

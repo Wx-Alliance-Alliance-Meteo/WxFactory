@@ -15,6 +15,7 @@ class Configuration:
 
    def __init__(self, cfg_file: str, verbose: bool=True):
 
+      self.cfg_file = cfg_file
       self.sections = {}
       self.parser = ConfigParser()
       self.parser.read(cfg_file, encoding="utf-8")
@@ -261,7 +262,7 @@ class Configuration:
          value = self._validate_option(option_name, value, valid_values, min_value, max_value)
       except (NoOptionError, NoSectionError) as e:
          if default_value is None:
-            e.message += f"\nMust specify a value for option '{option_name}'"
+            e.message += f"\nMust specify a value for option '{option_name}' in file {self.cfg_file}"
             raise
          value = default_value
 

@@ -3,7 +3,7 @@ from typing import Callable, List, Optional
 
 import numpy
 
-from common.program_options import Configuration
+from common.configuration import Configuration
 from .integrator            import Integrator, alpha_coeff
 from solvers                import kiops, matvec_fun, pmex
 

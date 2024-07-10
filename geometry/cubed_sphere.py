@@ -5,12 +5,12 @@ from .geometry   import Geometry
 from .sphere     import cart2sph
 
 # For type hints
-from common.parallel          import DistributedWorld
-from common.program_options   import Configuration
+from common.process_topology import ProcessTopology
+from common.configuration    import Configuration
 
 class CubedSphere(Geometry):
    def __init__(self, nb_elements_horizontal:int , nb_elements_vertical: int, nbsolpts: int, 
-                λ0: float, ϕ0: float, α0: float, ztop: float, ptopo: DistributedWorld, param: Configuration):
+                λ0: float, ϕ0: float, α0: float, ztop: float, ptopo: ProcessTopology, param: Configuration):
       '''Initialize the cubed sphere geometry, for an earthlike sphere with no topography.
 
       This function initializes the basic CubedSphere geometry object, which provides the parameters necessary to define

@@ -1,6 +1,6 @@
 from typing import Callable
 
-from common.program_options import Configuration
+from common.configuration import Configuration
 from .integrator            import Integrator, SolverInfo
 
 class Tvdrk3(Integrator):

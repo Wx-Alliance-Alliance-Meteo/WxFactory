@@ -7,7 +7,7 @@ import sys
 
 import numpy
 
-from common.program_options import Configuration
+from common.configuration import Configuration
 from precondition.factorization import Factorization
 from precondition.multigrid import Multigrid
 from output.output_manager  import OutputManager

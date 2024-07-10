@@ -5,8 +5,8 @@ from   mpi4py import MPI
 import numpy
 
 from common.definitions         import idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_w
-from common.program_options     import Configuration
-from common.parallel            import DistributedWorld
+from common.configuration       import Configuration
+from common.process_topology    import ProcessTopology
 from device                     import Device, CpuDevice, CudaDevice
 from geometry                   import Cartesian2D, CubedSphere, DFROperators, Geometry
 from init.dcmip                 import dcmip_T11_update_winds, dcmip_T12_update_winds
@@ -28,14 +28,14 @@ class Simulation:
       self.config = Configuration(config_file, self.rank == 0)
       self._adjust_nb_elements()
       self.device = self._make_device()
-      self.processor_topo = DistributedWorld(self.device) if self.config.grid_type == 'cubed_sphere' else None
+      self.process_topo = ProcessTopology(self.device) if self.config.grid_type == 'cubed_sphere' else None
       self.geometry = self._create_geometry()
       self.operators = DFROperators(self.geometry, self.config)
       self.initial_Q, self.topology, self.metric = init_state_vars(self.geometry, self.operators, self.config)
       self.preconditioner = self._create_preconditioner(self.initial_Q)
       self.output = OutputManager(self.config, self.geometry, self.metric, self.operators, self.topology)
       self.initial_Q, self.starting_step = self._determine_starting_state()
-      self.rhs = RhsBundle(self.geometry, self.operators, self.metric, self.topology, self.processor_topo, self.config,
+      self.rhs = RhsBundle(self.geometry, self.operators, self.metric, self.topology, self.process_topo, self.config,
                            self.initial_Q.shape, self.device)
       self.integrator = self._create_time_integrator()
       self.integrator.output_manager = self.output
@@ -136,10 +136,10 @@ class Simulation:
    def _create_geometry(self) -> Geometry:
       """ Create the appropriate geometry for the given problem """
 
-      if self.config.grid_type == 'cubed_sphere' and self.processor_topo is not None:
+      if self.config.grid_type == 'cubed_sphere' and self.process_topo is not None:
          return CubedSphere(self.config.nb_elements_horizontal, self.config.nb_elements_vertical, self.config.nbsolpts,
                             self.config.λ0, self.config.ϕ0, self.config.α0, self.config.ztop,
-                            self.processor_topo, self.config)
+                            self.process_topo, self.config)
       if self.config.grid_type == 'cartesian2d':
          #TODO remove array_module reference
          return Cartesian2D((self.config.x0, self.config.x1), (self.config.z0, self.config.z1),
@@ -152,11 +152,11 @@ class Simulation:
    def _create_preconditioner(self, Q: numpy.ndarray) -> Multigrid | Factorization | None:
       """ Create the preconditioner required by the given params """
       if self.config.preconditioner == 'p-mg':
-         return Multigrid(self.config, self.processor_topo, self.device, discretization='dg')
+         return Multigrid(self.config, self.process_topo, self.device, discretization='dg')
       if self.config.preconditioner == 'fv-mg':
-         return Multigrid(self.config, self.processor_topo, self.device, discretization='fv')
+         return Multigrid(self.config, self.process_topo, self.device, discretization='fv')
       if self.config.preconditioner == 'fv':
-         return Multigrid(self.config, self.processor_topo, self.device, discretization='fv', fv_only=True)
+         return Multigrid(self.config, self.process_topo, self.device, discretization='fv', fv_only=True)
       if self.config.preconditioner in ['lu', 'ilu']:
          return Factorization(Q.dtype, Q.shape, self.config)
       return None

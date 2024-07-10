@@ -10,7 +10,7 @@ except ModuleNotFoundError:
    sqlite_available = False
    print(f'No sqlite, won\'t be able to print solver stats')
 
-from common.program_options import Configuration
+from common.configuration import Configuration
 from precondition.multigrid import Multigrid
 
 class Column:

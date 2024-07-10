@@ -4,7 +4,7 @@ from init.initialize          import initialize_cartesian2d, initialize_euler, i
 
 # For type hints
 from numpy.typing import NDArray
-from common.program_options      import Configuration
+from common.configuration      import Configuration
 from geometry                    import DFROperators, Geometry, Metric, Metric3DTopo, CubedSphere, Cartesian2D
 
 def init_state_vars(geom: Geometry, operators: DFROperators, param: Configuration) \

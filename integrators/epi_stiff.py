@@ -4,7 +4,7 @@ import math
 import numpy
 from mpi4py       import MPI
 
-from common.program_options import Configuration
+from common.configuration import Configuration
 from .epi            import Epi
 from .integrator     import Integrator, alpha_coeff
 from solvers         import kiops, matvec_fun, pmex

@@ -9,7 +9,7 @@ from   numpy.typing import NDArray
 from common.definitions import *
 from device import Device
 
-class DistributedWorld:
+class ProcessTopology:
    def __init__(self, device: Device):
 
       # The numbering of the PEs starts at the bottom right. Pannel ranks increase towards the east in the x1 direction and increases towards the north in the x2 direction:

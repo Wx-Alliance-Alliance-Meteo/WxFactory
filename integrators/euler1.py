@@ -1,4 +1,4 @@
-from common.program_options import Configuration
+from common.configuration import Configuration
 from .integrator            import Integrator
 
 class Euler1(Integrator):

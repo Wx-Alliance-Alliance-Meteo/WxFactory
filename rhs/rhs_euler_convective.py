@@ -4,12 +4,12 @@ import sys
 from common.definitions import idx_rho_u1, idx_rho_u2, idx_rho_w, idx_rho, idx_rho_theta, gravity, p0, Rd, cpd, cvd, heat_capacity_ratio
 
 # For type hints
-from common.parallel import DistributedWorld
-from geometry        import CubedSphere, DFROperators, Metric3DTopo
-from init.dcmip      import dcmip_schar_damping
+from common.process_topology import ProcessTopology
+from geometry                import CubedSphere, DFROperators, Metric3DTopo
+from init.dcmip              import dcmip_schar_damping
 
 #@profile
-def rhs_euler_convective (Q: numpy.ndarray, geom: CubedSphere, mtrx: DFROperators, metric: Metric3DTopo, ptopo: DistributedWorld,
+def rhs_euler_convective (Q: numpy.ndarray, geom: CubedSphere, mtrx: DFROperators, metric: Metric3DTopo, ptopo: ProcessTopology,
                           nbsolpts: int, nb_elements_hori: int, nb_elements_vert: int, case_number: int):
    '''Evaluate the right-hand side of the three-dimensional Euler equations.
 

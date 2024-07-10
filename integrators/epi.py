@@ -5,7 +5,7 @@ from typing      import Callable
 from mpi4py      import MPI
 import numpy
 
-from common.program_options import Configuration
+from common.configuration import Configuration
 from .integrator            import Integrator, SolverInfo
 from solvers                import kiops, matvec_fun, pmex
 

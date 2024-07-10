@@ -4,7 +4,7 @@ from typing import Callable
 import numpy
 from mpi4py import MPI
 
-from common.program_options  import Configuration
+from common.configuration  import Configuration
 from solvers                 import fgmres, MatvecOpRat, SolverInfo
 from .integrator             import Integrator
 from solvers                 import fgmres, gcrot, matvec_rat, SolverInfo

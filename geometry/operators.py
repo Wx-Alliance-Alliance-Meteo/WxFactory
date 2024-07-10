@@ -10,7 +10,7 @@ from numpy.typing import NDArray
 from .geometry import Geometry
 from .cubed_sphere import CubedSphere
 from common.definitions     import idx_2d_rho_w
-from common.program_options import Configuration
+from common.configuration import Configuration
 from .cartesian_2d_mesh     import Cartesian2D
 from .cubed_sphere          import CubedSphere
 from .geometry              import Geometry

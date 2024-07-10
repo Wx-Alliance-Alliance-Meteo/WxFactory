@@ -21,11 +21,15 @@ except ModuleNotFoundError:
       return a
 
 from solvers import MatvecOp
+from device import CpuDevice, Device
+
+default_eigval_device = CpuDevice()
 
 def gen_matrix(matvec: MatvecOp,
                jac_file_name: Optional[str] = None,
                compressed: Optional[bool] = None,
-               local: bool = False) \
+               local: bool = False,
+               device: Device = default_eigval_device) \
                   -> Optional[scipy.sparse.csc_matrix]:
    """
    Compute and store the Jacobian matrix. It may be computed either as a full or sparse matrix
@@ -34,6 +38,8 @@ def gen_matrix(matvec: MatvecOp,
    :param matvec: Operator to compute the action of the jacobian on a vector. Holds vector shape and variable type
    :param jac_file_name: If present, path to the file where the jacobian will be stored
    """
+
+   xp = device.xp
 
    # neq, ni, nj = matvec.shape
    n_loc = matvec.size
@@ -50,7 +56,7 @@ def gen_matrix(matvec: MatvecOp,
 
    # Global unit vector we will multiply the matrix with
    # (Section that corresponds to this tile)
-   Qid = numpy.zeros((n_loc), dtype=matvec.dtype)
+   Qid = xp.zeros((n_loc), dtype=matvec.dtype)
 
    def progress(a): return a
    if rank == 0:
@@ -64,7 +70,7 @@ def gen_matrix(matvec: MatvecOp,
       if rank == 0: print(f'Tile {r+1}/{size}')
       for i in progress(indices):
          if rank == r: Qid[i] = 1.0
-         col = matvec(Qid.flatten())
+         col = device.to_host(matvec(Qid.flatten()))
          ccol = csc_matrix(col.reshape((col.size, 1))) if compressed else col
          columns[idx] = ccol
          idx += 1

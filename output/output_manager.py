@@ -4,7 +4,7 @@ from typing  import Callable, Optional, Union
 from mpi4py import MPI
 import numpy
 
-from common.program_options import Configuration
+from common.configuration import Configuration
 from geometry               import Cartesian2D, CubedSphere, Geometry, Metric, Metric3DTopo, DFROperators
 from init.initialize        import Topo
 from output.blockstats      import blockstats_cart, blockstats_cs
