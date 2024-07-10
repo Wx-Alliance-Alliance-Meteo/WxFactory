@@ -225,6 +225,7 @@ def rhs_euler_cuda(Q: NDArray[cp.float64],
    pressure_itf_i = p0 * cp.exp((cpd / cvd) * cp.log(variables_itf_i[idx_rho_theta] * (Rd / p0)))
    pressure_itf_j = p0 * cp.exp((cpd / cvd) * cp.log(variables_itf_j[idx_rho_theta] * (Rd / p0)))
 
+   # Riemann solver
    RHSEuler.compute_flux_i(flux_x1_itf_i, wflux_adv_x1_itf_i, wflux_pres_x1_itf_i,
                            variables_itf_i, pressure_itf_i, u1_itf_i,
                            metric.sqrtG_itf_i, metric.H_contra_itf_i[0],

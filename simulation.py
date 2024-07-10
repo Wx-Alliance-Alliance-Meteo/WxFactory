@@ -36,7 +36,7 @@ class Simulation:
       self.output = OutputManager(self.config, self.geometry, self.metric, self.operators, self.topology)
       self.initial_Q, self.starting_step = self._determine_starting_state()
       self.rhs = RhsBundle(self.geometry, self.operators, self.metric, self.topology, self.processor_topo, self.config,
-                           self.initial_Q.shape)
+                           self.initial_Q.shape, self.device)
       self.integrator = self._create_time_integrator()
       self.integrator.output_manager = self.output
       self.integrator.device = self.device

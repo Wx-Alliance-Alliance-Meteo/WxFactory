@@ -22,6 +22,7 @@ from rhs.rhs_advection2d       import rhs_advection2d
 from common.parallel        import DistributedWorld
 from common.program_options import Configuration
 from geometry               import DFROperators, Geometry, Metric, Metric3DTopo
+from device                 import Device
 
 class RhsBundle:
    '''Set of RHS functions that are associated with a certain geometry and equations
@@ -33,7 +34,8 @@ class RhsBundle:
                 topo: Optional[Topo],
                 ptopo: Optional[DistributedWorld],
                 param: Configuration,
-                fields_shape: Tuple[int, ...]) -> None:
+                fields_shape: Tuple[int, ...],
+                device: Device) -> None:
       '''Determine handles to appropriate RHS functions.'''
 
       self.shape = fields_shape
@@ -50,15 +52,12 @@ class RhsBundle:
          return actual_rhs
 
       if param.equations == "euler" and isinstance(geom, CubedSphere):
-         rhs_euler_cuda = None
-         if param.device == 'cuda': # Only load that if requested
-            from gef_cuda import rhs_euler_cuda
-         rhs_functions = {'dg': {'cpu': rhs_euler,    'cuda': rhs_euler_cuda},
-                          'fv': {'cpu': rhs_euler   , 'cuda': rhs_euler_cuda}}
+         rhs_functions = {'dg': rhs_euler,
+                          'fv': rhs_euler}
 
-         self.full = generate_rhs(rhs_functions[param.discretization][param.device],
+         self.full = generate_rhs(rhs_functions[param.discretization],
                                   geom, operators, metric, ptopo, param.nbsolpts, param.nb_elements_horizontal,
-                                  param.nb_elements_vertical, param.case_number)
+                                  param.nb_elements_vertical, param.case_number, device=device)
          self.convective = generate_rhs(rhs_euler_convective, geom, operators, metric, ptopo, param.nbsolpts,
                                         param.nb_elements_horizontal, param.nb_elements_vertical, param.case_number)
          self.viscous = lambda q: self.full(q) - self.convective(q)

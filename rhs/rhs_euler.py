@@ -1,17 +1,30 @@
-import numpy
 import sys
 
 from common.definitions import idx_rho_u1, idx_rho_u2, idx_rho_w, idx_rho, idx_rho_theta, gravity, p0, Rd, cpd, cvd, heat_capacity_ratio
 from .fluxes import rusanov_3d_vert, rusanov_3d_hori_i, rusanov_3d_hori_j
+from device import CpuDevice, CudaDevice, Device
 
 # For type hints
 from common.parallel import DistributedWorld
 from geometry        import CubedSphere, DFROperators, Metric3DTopo
 from init.dcmip      import dcmip_schar_damping
+from numpy.typing import NDArray
+
+
+default_rhs_device = CpuDevice()
+rhs_euler_kernels = None
 
 #@profile
-def rhs_euler (Q: numpy.ndarray, geom: CubedSphere, mtrx: DFROperators, metric: Metric3DTopo, ptopo: DistributedWorld,
-               nbsolpts: int, nb_elements_hori: int, nb_elements_vert: int, case_number: int):
+def rhs_euler (Q: NDArray,
+               geom: CubedSphere,
+               mtrx: DFROperators,
+               metric: Metric3DTopo,
+               ptopo: DistributedWorld,
+               nbsolpts: int,
+               nb_elements_hori: int,
+               nb_elements_vert: int,
+               case_number: int,
+               device: Device = default_rhs_device) -> NDArray:
    '''Evaluate the right-hand side of the three-dimensional Euler equations.
 
    This function evaluates RHS of the Euler equations using the four-demsional tensor formulation (see Charron 2014), returning
@@ -52,36 +65,41 @@ def rhs_euler (Q: numpy.ndarray, geom: CubedSphere, mtrx: DFROperators, metric: 
       Output of right-hand-side terms of Euler equations
    '''
 
+   global rhs_euler_kernels
+   if isinstance(device, CudaDevice) and rhs_euler_kernels is None:
+      from gef_cuda.rhs_euler_cuda import RHSEuler
+      rhs_euler_kernels = RHSEuler
+
+   xp = device.xp
+
    type_vec = Q.dtype #  Output/processing type -- may be complex
    nb_equations = Q.shape[0] # Number of constituent Euler equations.  Probably 6.
-   nb_interfaces_hori = nb_elements_hori + 1 # Number of element interfaces per horizontal dimension
-   nb_interfaces_vert = nb_elements_vert + 1 # Number of element interfaces in the vertical dimension
    nb_pts_hori = nb_elements_hori * nbsolpts # Total number of solution points per horizontal dimension
    nb_vertical_levels = nb_elements_vert * nbsolpts # Total number of solution points in the vertical dimension
 
    # Array for forcing: Coriolis terms, metric corrections from the curvilinear coordinate, and gravity
-   forcing = numpy.zeros_like(Q, dtype=type_vec)
+   forcing = xp.zeros_like(Q, dtype=type_vec)
 
    # Array to extrapolate variables and fluxes to the boundaries along x (i)
-   variables_itf_i = numpy.ones((nb_equations, nb_vertical_levels, nb_elements_hori + 2, 2, nb_pts_hori), dtype=type_vec) # Initialized to one in the halo to avoid division by zero later
+   variables_itf_i = xp.ones((nb_equations, nb_vertical_levels, nb_elements_hori + 2, 2, nb_pts_hori), dtype=type_vec) # Initialized to one in the halo to avoid division by zero later
    # Note that flux_x1_itf_i has a different shape than variables_itf_i
-   flux_x1_itf_i   = numpy.empty((nb_equations, nb_vertical_levels, nb_elements_hori + 2, nb_pts_hori, 2), dtype=type_vec)
+   flux_x1_itf_i   = xp.empty((nb_equations, nb_vertical_levels, nb_elements_hori + 2, nb_pts_hori, 2), dtype=type_vec)
 
    # Extrapolation arrays along y (j)
-   variables_itf_j = numpy.ones((nb_equations, nb_vertical_levels, nb_elements_hori + 2, 2, nb_pts_hori), dtype=type_vec) # Initialized to one in the halo to avoid division by zero later
-   flux_x2_itf_j   = numpy.empty((nb_equations, nb_vertical_levels, nb_elements_hori + 2, 2, nb_pts_hori), dtype=type_vec)
+   variables_itf_j = xp.ones((nb_equations, nb_vertical_levels, nb_elements_hori + 2, 2, nb_pts_hori), dtype=type_vec) # Initialized to one in the halo to avoid division by zero later
+   flux_x2_itf_j   = xp.empty((nb_equations, nb_vertical_levels, nb_elements_hori + 2, 2, nb_pts_hori), dtype=type_vec)
 
    # Extrapolation arrays along z (k), note dimensions of (6, nj, nk+2, 2, ni)
-   variables_itf_k = numpy.empty((nb_equations, nb_pts_hori, nb_elements_vert + 2, 2, nb_pts_hori), dtype=type_vec)
-   flux_x3_itf_k   = numpy.empty((nb_equations, nb_pts_hori, nb_elements_vert + 2, 2, nb_pts_hori), dtype=type_vec)
+   variables_itf_k = xp.empty((nb_equations, nb_pts_hori, nb_elements_vert + 2, 2, nb_pts_hori), dtype=type_vec)
+   flux_x3_itf_k   = xp.empty((nb_equations, nb_pts_hori, nb_elements_vert + 2, 2, nb_pts_hori), dtype=type_vec)
 
    # Special arrays for calculation of (ρw) flux
-   wflux_adv_x1_itf_i  = numpy.zeros_like(flux_x1_itf_i[0])
-   wflux_pres_x1_itf_i = numpy.zeros_like(flux_x1_itf_i[0])
-   wflux_adv_x2_itf_j  = numpy.zeros_like(flux_x2_itf_j[0])
-   wflux_pres_x2_itf_j = numpy.zeros_like(flux_x2_itf_j[0])
-   wflux_adv_x3_itf_k  = numpy.zeros_like(flux_x3_itf_k[0])
-   wflux_pres_x3_itf_k = numpy.zeros_like(flux_x3_itf_k[0])
+   wflux_adv_x1_itf_i  = xp.zeros_like(flux_x1_itf_i[0])
+   wflux_pres_x1_itf_i = xp.zeros_like(flux_x1_itf_i[0])
+   wflux_adv_x2_itf_j  = xp.zeros_like(flux_x2_itf_j[0])
+   wflux_pres_x2_itf_j = xp.zeros_like(flux_x2_itf_j[0])
+   wflux_adv_x3_itf_k  = xp.zeros_like(flux_x3_itf_k[0])
+   wflux_pres_x3_itf_k = xp.zeros_like(flux_x3_itf_k[0])
 
    # Flag for advection-only processing, with DCMIP test cases 11 and 12
    advection_only = case_number < 13
@@ -90,14 +108,14 @@ def rhs_euler (Q: numpy.ndarray, geom: CubedSphere, mtrx: DFROperators, metric: 
    variables_itf_j[:, :, 1:-1, :, :] = mtrx.extrapolate_j(Q, geom)
 
    # Scaled variables for separate reconstruction
-   logrho      = numpy.log(Q[idx_rho])
-   logrhotheta = numpy.log(Q[idx_rho_theta])
+   logrho      = xp.log(Q[idx_rho])
+   logrhotheta = xp.log(Q[idx_rho_theta])
 
-   variables_itf_i[idx_rho, :, 1:-1, :, :] = numpy.exp(mtrx.extrapolate_i(logrho, geom)).transpose((0, 2, 3, 1))
-   variables_itf_j[idx_rho, :, 1:-1, :, :] = numpy.exp(mtrx.extrapolate_j(logrho, geom))
+   variables_itf_i[idx_rho, :, 1:-1, :, :] = xp.exp(mtrx.extrapolate_i(logrho, geom)).transpose((0, 2, 3, 1))
+   variables_itf_j[idx_rho, :, 1:-1, :, :] = xp.exp(mtrx.extrapolate_j(logrho, geom))
 
-   variables_itf_i[idx_rho_theta, :, 1:-1, :, :] = numpy.exp(mtrx.extrapolate_i(logrhotheta, geom)).transpose((0, 2, 3, 1))
-   variables_itf_j[idx_rho_theta, :, 1:-1, :, :] = numpy.exp(mtrx.extrapolate_j(logrhotheta, geom))
+   variables_itf_i[idx_rho_theta, :, 1:-1, :, :] = xp.exp(mtrx.extrapolate_i(logrhotheta, geom)).transpose((0, 2, 3, 1))
+   variables_itf_j[idx_rho_theta, :, 1:-1, :, :] = xp.exp(mtrx.extrapolate_j(logrhotheta, geom))
 
    # Initiate transfers
    all_request = ptopo.xchange_Euler_interfaces(geom, variables_itf_i, variables_itf_j, blocking=False)
@@ -119,7 +137,7 @@ def rhs_euler (Q: numpy.ndarray, geom: CubedSphere, mtrx: DFROperators, metric: 
 
    # ... and add the pressure component
    # Performance note: exp(log) is measurably faster than ** (pow)
-   pressure = p0 * numpy.exp((cpd/cvd) * numpy.log((Rd/p0)*Q[idx_rho_theta]))
+   pressure = p0 * xp.exp((cpd / cvd) * xp.log((Rd / p0) * Q[idx_rho_theta]))
 
    flux_x1[idx_rho_u1] += metric.sqrtG * metric.H_contra_11 * pressure
    flux_x1[idx_rho_u2] += metric.sqrtG * metric.H_contra_12 * pressure
@@ -141,8 +159,8 @@ def rhs_euler (Q: numpy.ndarray, geom: CubedSphere, mtrx: DFROperators, metric: 
 
    variables_itf_k[:, :, 1:-1, :, :] = mtrx.extrapolate_k(Q, geom).transpose((0, 3, 1, 2, 4))
 
-   variables_itf_k[idx_rho, :, 1:-1, :, :] = numpy.exp(mtrx.extrapolate_k(logrho,geom).transpose((2, 0, 1, 3)))
-   variables_itf_k[idx_rho_theta, :, 1:-1, :, :] = numpy.exp(mtrx.extrapolate_k(logrhotheta,geom).transpose((2, 0, 1, 3)))
+   variables_itf_k[idx_rho, :, 1:-1, :, :] = xp.exp(mtrx.extrapolate_k(logrho,geom).transpose((2, 0, 1, 3)))
+   variables_itf_k[idx_rho_theta, :, 1:-1, :, :] = xp.exp(mtrx.extrapolate_k(logrhotheta,geom).transpose((2, 0, 1, 3)))
 
    # For consistency at the surface and top boundaries, treat the extrapolation as continuous.  That is,
    # the "top" of the ground is equal to the "bottom" of the atmosphere, and the "bottom" of the model top
@@ -153,7 +171,7 @@ def rhs_euler (Q: numpy.ndarray, geom: CubedSphere, mtrx: DFROperators, metric: 
    variables_itf_k[:, :, -1, 1, :] = variables_itf_k[:, :, -1, 0, :]
 
    # Evaluate pressure at the vertical element interfaces based on ρθ.
-   pressure_itf_k = p0 * numpy.exp((cpd / cvd) * numpy.log(variables_itf_k[idx_rho_theta] * (Rd / p0)))
+   pressure_itf_k = p0 * xp.exp((cpd / cvd) * xp.log(variables_itf_k[idx_rho_theta] * (Rd / p0)))
 
    # Take w ← (wρ)/ ρ at the vertical interfaces
    w_itf_k = variables_itf_k[idx_rho_w] / variables_itf_k[idx_rho]
@@ -165,8 +183,16 @@ def rhs_euler (Q: numpy.ndarray, geom: CubedSphere, mtrx: DFROperators, metric: 
    w_itf_k[:, -1, 1, :] = 0. # Top of top element (unused)
    w_itf_k[:, -1, 0, :] = -w_itf_k[:, -2, 1, :] # Bottom of top boundary element (negative symmetry)
 
-   rusanov_3d_vert(variables_itf_k, pressure_itf_k, w_itf_k, metric, nb_interfaces_vert, advection_only,
-                   flux_x3_itf_k, wflux_adv_x3_itf_k, wflux_pres_x3_itf_k)
+   if isinstance(device, CpuDevice):
+      rusanov_3d_vert(variables_itf_k, pressure_itf_k, w_itf_k, metric, nb_elements_vert + 1, advection_only,
+                     flux_x3_itf_k, wflux_adv_x3_itf_k, wflux_pres_x3_itf_k)
+   elif isinstance(device, CudaDevice):
+      rhs_euler_kernels.compute_flux_k(flux_x3_itf_k, wflux_adv_x3_itf_k, wflux_pres_x3_itf_k,
+                                       variables_itf_k, pressure_itf_k, w_itf_k,
+                                       metric.sqrtG_itf_k, metric.H_contra_itf_k[2],
+                                       nb_elements_vert, nb_pts_hori, nb_equations, advection_only)
+   else:
+      raise ValueError(f'Device is not of a recognized type: {device}')
 
    # Finish transfers
    all_request.wait()
@@ -176,14 +202,28 @@ def rhs_euler (Q: numpy.ndarray, geom: CubedSphere, mtrx: DFROperators, metric: 
    u2_itf_j = variables_itf_j[idx_rho_u2] / variables_itf_j[idx_rho]
 
    # Evaluate pressure at the lateral interfaces
-   pressure_itf_i = p0 * numpy.exp((cpd/cvd) * numpy.log(variables_itf_i[idx_rho_theta] * (Rd / p0)))
-   pressure_itf_j = p0 * numpy.exp((cpd/cvd) * numpy.log(variables_itf_j[idx_rho_theta] * (Rd / p0)))
+   pressure_itf_i = p0 * xp.exp((cpd / cvd) * xp.log(variables_itf_i[idx_rho_theta] * (Rd / p0)))
+   pressure_itf_j = p0 * xp.exp((cpd / cvd) * xp.log(variables_itf_j[idx_rho_theta] * (Rd / p0)))
 
    # Riemann solver
-   rusanov_3d_hori_i(u1_itf_i, variables_itf_i, pressure_itf_i, metric, nb_interfaces_hori, advection_only,
-                     flux_x1_itf_i, wflux_adv_x1_itf_i, wflux_pres_x1_itf_i)
-   rusanov_3d_hori_j(u2_itf_j, variables_itf_j, pressure_itf_j, metric, nb_interfaces_hori, advection_only,
-                     flux_x2_itf_j, wflux_adv_x2_itf_j, wflux_pres_x2_itf_j)
+   if isinstance(device, CpuDevice):
+      rusanov_3d_hori_i(u1_itf_i, variables_itf_i, pressure_itf_i, metric, nb_elements_hori + 1, advection_only,
+                        flux_x1_itf_i, wflux_adv_x1_itf_i, wflux_pres_x1_itf_i)
+
+      rusanov_3d_hori_j(u2_itf_j, variables_itf_j, pressure_itf_j, metric, nb_elements_hori + 1, advection_only,
+                        flux_x2_itf_j, wflux_adv_x2_itf_j, wflux_pres_x2_itf_j)
+   elif isinstance(device, CudaDevice):
+      rhs_euler_kernels.compute_flux_i(flux_x1_itf_i, wflux_adv_x1_itf_i, wflux_pres_x1_itf_i,
+                              variables_itf_i, pressure_itf_i, u1_itf_i,
+                              metric.sqrtG_itf_i, metric.H_contra_itf_i[0],
+                              nb_elements_hori, nb_pts_hori, nb_vertical_levels, nb_equations, advection_only)
+
+      rhs_euler_kernels.compute_flux_j(flux_x2_itf_j, wflux_adv_x2_itf_j, wflux_pres_x2_itf_j,
+                              variables_itf_j, pressure_itf_j, u2_itf_j,
+                              metric.sqrtG_itf_j, metric.H_contra_itf_j[1],
+                              nb_elements_hori, nb_pts_hori, nb_vertical_levels, nb_equations, advection_only)
+   else:
+      raise ValueError(f'Device is not of a recognized type: {device}')
 
    # Perform flux derivatives
 
@@ -194,15 +234,15 @@ def rhs_euler (Q: numpy.ndarray, geom: CubedSphere, mtrx: DFROperators, metric: 
    flux_x3_bdy = flux_x3_itf_k[:, :, 1:-1, :, :].transpose(0, 2, 3, 1, 4).copy()
    df3_dx3 = mtrx.comma_k(flux_x3, flux_x3_bdy, geom)
 
-   logp_int = numpy.log(pressure)
+   logp_int = xp.log(pressure)
 
    pressure_bdy_i = pressure_itf_i[:, 1:-1, :, :].transpose((0, 3, 1, 2)).copy()
    pressure_bdy_j = pressure_itf_j[:, 1:-1, :, :].copy()
    pressure_bdy_k = pressure_itf_k[:, 1:-1, :, :].transpose((1, 2, 0, 3)).copy()
 
-   logp_bdy_i = numpy.log(pressure_bdy_i)
-   logp_bdy_j = numpy.log(pressure_bdy_j)
-   logp_bdy_k = numpy.log(pressure_bdy_k)
+   logp_bdy_i = xp.log(pressure_bdy_i)
+   logp_bdy_j = xp.log(pressure_bdy_j)
+   logp_bdy_k = xp.log(pressure_bdy_k)
 
    wflux_adv_x1_bdy_i  =  wflux_adv_x1_itf_i.transpose((0, 2, 1, 3))[:, :, 1:-1, :].copy()
    wflux_pres_x1_bdy_i = wflux_pres_x1_itf_i.transpose((0, 2, 1, 3))[:, :, 1:-1, :].copy()
