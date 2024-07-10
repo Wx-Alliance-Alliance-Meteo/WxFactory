@@ -64,8 +64,8 @@ class Cartesian2D(Geometry):
 
       X1, X3 = numpy.meshgrid(x1, x3)
 
-      self.X1 = X1
-      self.X3 = X3
+      self.X1_cartesian = X1
+      self.X3_cartesian = X3
       self.itf_Z = itf_x3
       self.Δx1 = Δx1
       self.Δx2 = Δx1
@@ -74,6 +74,20 @@ class Cartesian2D(Geometry):
       self.nb_elements_relief_layer = nb_elements_relief_layer
       self.xperiodic = False
 
+      # TODO : hackathon SG
+      self.X1 = numpy.zeros((nb_elements_x*nb_elements_z, nbsolpts**2))
+      self.X3 = numpy.zeros((nb_elements_x*nb_elements_z, nbsolpts**2))
+      idx_elem = 0
+      for ek in range(nb_elements_z):
+         for ei in range(nb_elements_x):
+#            idx_elem = ei + nb_elements_z * ek
+            start_i = ei * nbsolpts 
+            end_i = (ei + 1) * nbsolpts
+            start_k = ek * nbsolpts 
+            end_k = (ek + 1) * nbsolpts
+            self.X1[idx_elem, :] = X1[start_k:end_k, start_i:end_i].flatten()
+            self.X3[idx_elem, :] = X3[start_k:end_k, start_i:end_i].flatten()
+            idx_elem += 1
 
    def make_mountain(self, mountain_type='sine'):
 
