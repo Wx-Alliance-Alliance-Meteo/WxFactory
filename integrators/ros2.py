@@ -4,7 +4,7 @@ from typing import Callable
 import numpy
 from mpi4py import MPI
 
-from common.program_options  import Configuration
+from common.configuration  import Configuration
 from solvers                 import fgmres, MatvecOpRat, SolverInfo
 from .integrator             import Integrator
 from solvers                 import fgmres, gcrot, matvec_rat, SolverInfo
@@ -13,8 +13,8 @@ class Ros2(Integrator):
    Q_flat: numpy.ndarray
    A: MatvecOpRat
    b: numpy.ndarray
-   def __init__(self, param: Configuration, rhs_handle: Callable, preconditioner=None) -> None:
-      super().__init__(param, preconditioner)
+   def __init__(self, param: Configuration, rhs_handle: Callable, **kwargs) -> None:
+      super().__init__(param, **kwargs)
       self.rhs_handle     = rhs_handle
       self.tol            = param.tolerance
       self.gmres_restart  = param.gmres_restart

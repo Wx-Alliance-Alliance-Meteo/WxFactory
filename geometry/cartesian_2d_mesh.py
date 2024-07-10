@@ -3,7 +3,7 @@ from typing import Self, Tuple
 import numpy
 
 from common.graphx   import print_mountain
-from common.program_options import Configuration
+from common.configuration import Configuration
 from .geometry       import Geometry
 
 class Cartesian2D(Geometry):

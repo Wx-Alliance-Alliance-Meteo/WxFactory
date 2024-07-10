@@ -5,19 +5,18 @@ from typing      import Callable
 from mpi4py      import MPI
 import numpy
 
-from common.program_options import Configuration
+from common.configuration import Configuration
 from .integrator            import Integrator, SolverInfo
 from solvers                import kiops, matvec_fun, pmex
 
 class Epi(Integrator):
-   def __init__(self, param: Configuration, order: int, rhs: Callable, init_method=None, init_substeps: int = 1):
-      super().__init__(param, preconditioner=None)
+   def __init__(self, param: Configuration, order: int, rhs: Callable, init_method=None, init_substeps: int = 1, **kwargs):
+      super().__init__(param, preconditioner=None, **kwargs)
       self.rhs = rhs
       self.tol = param.tolerance
       self.krylov_size = 1
       self.jacobian_method = param.jacobian_method
       self.exponential_solver = param.exponential_solver
-      self.device = param.device
 
       if order == 2:
          self.A = numpy.array([[]])
@@ -54,7 +53,7 @@ class Epi(Integrator):
       if init_method or self.n_prev == 0:
          self.init_method = init_method
       else:
-         self.init_method = Epi(param, 2, rhs)
+         self.init_method = Epi(param, 2, rhs, **kwargs)
 
       self.init_substeps = init_substeps
 
@@ -102,11 +101,7 @@ class Epi(Integrator):
                   f' {stats[1]} rejected expm) to a solution with local error {stats[4]:.2e}')
 
       else:
-         if self.device == "cuda":
-            from gef_cuda import kiops_cuda as f
-         else:
-            f = kiops
-         phiv, stats = f([1], matvec_handle, vec, tol=self.tol, m_init=self.krylov_size, mmin=16, mmax=64, task1=False)
+         phiv, stats = kiops([1], matvec_handle, vec, tol=self.tol, m_init=self.krylov_size, mmin=16, mmax=64, task1=False, device=self.device)
 
          self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
 

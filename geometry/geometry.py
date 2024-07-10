@@ -4,7 +4,7 @@ from mpi4py import MPI
 import numpy
 import sympy
 
-from main_gef import module_from_name
+from common.array_module import module_from_name
 from .quadrature import gauss_legendre
 
 

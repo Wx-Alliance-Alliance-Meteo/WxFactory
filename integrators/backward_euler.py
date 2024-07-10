@@ -6,14 +6,14 @@ from typing import Callable
 
 from mpi4py import MPI
 
-from common.program_options import Configuration
+from common.configuration import Configuration
 from .integrator            import Integrator
 from solvers                import fgmres, matvec_rat, SolverInfo, newton_krylov
 
 
 class BackwardEuler(Integrator):
-   def __init__(self, param: Configuration, rhs_handle: Callable, preconditioner=None) -> None:
-      super().__init__(param, preconditioner)
+   def __init__(self, param: Configuration, rhs_handle: Callable, **kwargs) -> None:
+      super().__init__(param, **kwargs)
       self.rhs = rhs_handle
       self.tol = param.tolerance
 

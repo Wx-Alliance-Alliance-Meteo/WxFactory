@@ -3,7 +3,7 @@ from typing import Tuple
 
 import numpy
 
-from common.program_options import Configuration
+from common.configuration import Configuration
 
 def save_state(state: numpy.ndarray, param: Configuration, output_file_name: str) -> None:
    '''Save simulation state into a file, along with its configuration.'''

@@ -4,13 +4,13 @@ from typing  import Callable
 from mpi4py  import MPI
 import numpy
 
-from common.program_options import Configuration
+from common.configuration import Configuration
 from .integrator            import Integrator, SolverInfo
 from solvers                import fgmres, matvec_fun, matvec_rat, pmex
 
 class RosExp2(Integrator):
-   def __init__(self, param: Configuration, rhs_full: Callable, rhs_imp: Callable, preconditioner):
-      super().__init__(param, preconditioner)
+   def __init__(self, param: Configuration, rhs_full: Callable, rhs_imp: Callable, **kwargs):
+      super().__init__(param, **kwargs)
 
       self.rhs_full = rhs_full
       self.rhs_imp = rhs_imp

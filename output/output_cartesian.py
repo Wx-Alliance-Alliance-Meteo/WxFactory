@@ -5,7 +5,7 @@ from common.definitions     import idx_2d_rho       as RHO,           \
                                    idx_2d_rho_w     as RHO_W,         \
                                    idx_2d_rho_theta as RHO_THETA
 from common.graphx          import image_field
-from common.program_options import Configuration
+from common.configuration import Configuration
 from geometry               import Geometry
 
 def output_step(Q: numpy.ndarray, geom: Geometry, param: Configuration, filename: str) -> None:

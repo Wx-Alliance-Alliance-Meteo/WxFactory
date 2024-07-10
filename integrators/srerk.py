@@ -3,7 +3,7 @@ from typing import Callable, List, Optional
 
 import numpy
 
-from common.program_options import Configuration
+from common.configuration import Configuration
 from .integrator            import Integrator, alpha_coeff
 from solvers                import kiops, matvec_fun, pmex
 
@@ -25,13 +25,13 @@ def opt_nodes(order: int):
 
 class Srerk(Integrator):
    """Stiffness resilient exponential Runge-Kutta methods"""
-   def __init__(self, param: Configuration, order: int, rhs: Callable, nodes: Optional[List] = None):
+   def __init__(self, param: Configuration, order: int, rhs: Callable, nodes: Optional[List] = None, **kwargs):
       """
       If the nodes are NOT specified, return the SRERK method of the specified order with min error terms
       If the nodes are specified, return the SRERK method with these nodes and ignore the 'order' parameter
       """
 
-      super().__init__(param, preconditioner=None)
+      super().__init__(param, **kwargs)
       self.rhs = rhs
       self.tol = param.tolerance
       self.krylov_size = 1

@@ -1,9 +1,9 @@
 import numpy
 
-from common.definitions import idx_u1, idx_u2
-from common.program_options import Configuration
-from geometry           import gauss_legendre, lagrange_eval, remesh_operator
-from main_gef           import get_array_module
+from common.array_module    import get_array_module
+from common.definitions     import idx_u1, idx_u2
+from common.configuration import Configuration
+from geometry               import gauss_legendre, lagrange_eval, remesh_operator
 
 basis_point_sets = {}
 

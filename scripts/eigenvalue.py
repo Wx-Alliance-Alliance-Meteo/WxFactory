@@ -21,14 +21,15 @@ import scipy.sparse.linalg
 main_gef_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), '..')
 sys.path.append(main_gef_dir)
 
-from eigenvalue_util        import gen_matrix, tqdm, store_matrix_set, load_matrix_set
-from run import create_geometry, create_preconditioner
-from common.program_options import Configuration
-from common.parallel        import DistributedWorld
-from geometry               import DFROperators
-from init.init_state_vars   import init_state_vars
-from rhs.rhs_selector       import RhsBundle
-from solvers                import MatvecOp, MatvecOpRat, fgmres
+from eigenvalue_util         import gen_matrix, tqdm, store_matrix_set, load_matrix_set
+# from run                     import create_geometry, create_preconditioner
+from common.configuration    import Configuration
+from common.process_topology import ProcessTopology
+from geometry                import DFROperators
+from init.init_state_vars    import init_state_vars
+from rhs.rhs_selector        import RhsBundle
+from solvers                 import MatvecOp, MatvecOpRat, fgmres
+from simulation import Simulation
 
 
 # num_el = 0
@@ -69,26 +70,30 @@ def get_matvecs(cfg_file: str, state_file: Optional[str] = None, build_imex: boo
    """
 
    # Initialize the problem
-   param = Configuration(cfg_file, MPI.COMM_WORLD.rank == 0)
-   ptopo = DistributedWorld() if param.grid_type == 'cubed_sphere' else None
-   geom = create_geometry(param, ptopo)
-   mtrx = DFROperators(geom, param)
-   Q, topo, metric = init_state_vars(geom, mtrx, param)
-   rhs = RhsBundle(geom, mtrx, metric, topo, ptopo, param, Q.shape)
-   preconditioner = create_preconditioner(param, ptopo, Q)
+   sim = Simulation(cfg_file)
+   # param = Configuration(cfg_file, MPI.COMM_WORLD.rank == 0)
+   # ptopo = ProcessTopology() if param.grid_type == 'cubed_sphere' else None
+   # geom = create_geometry(param, ptopo)
+   # mtrx = DFROperators(geom, param)
+   # Q, topo, metric = init_state_vars(geom, mtrx, param)
+   # rhs = RhsBundle(geom, mtrx, metric, topo, ptopo, param, Q.shape)
+   # preconditioner = create_preconditioner(param, ptopo, Q)
 
-   if state_file is not None: Q = load(state_file)
+   if state_file is not None: sim.initial_Q = load(state_file)
+
+   Q = sim.initial_Q
 
    # Create the matvec function(s)
    matvecs = {}
-   matvecs['param'] = param
-   matvecs['rhs'] = rhs.full(Q)
-   if rhs.full is not None:      matvecs['all'] = MatvecOpRat(param.dt, Q, matvecs['rhs'], rhs.full)
-   if hasattr(rhs, 'implicit') and build_imex: matvecs['imp'] = MatvecOpRat(param.dt, Q, rhs.implicit(Q), rhs.implicit)
-   if hasattr(rhs, 'explicit') and build_imex: matvecs['exp'] = MatvecOpRat(param.dt, Q, rhs.explicit(Q), rhs.explicit)
-   if preconditioner is not None:
-      preconditioner.prepare(param.dt, Q, None)
-      matvecs['precond'] = preconditioner
+   matvecs['sim'] = sim
+   matvecs['config'] = sim.config
+   matvecs['rhs'] = sim.rhs.full(Q)
+   if sim.rhs.full is not None:      matvecs['all'] = MatvecOpRat(sim.config.dt, Q, matvecs['rhs'], sim.rhs.full)
+   if hasattr(sim.rhs, 'implicit') and build_imex: matvecs['imp'] = MatvecOpRat(sim.config.dt, Q, sim.rhs.implicit(Q), sim.rhs.implicit)
+   if hasattr(sim.rhs, 'explicit') and build_imex: matvecs['exp'] = MatvecOpRat(sim.config.dt, Q, sim.rhs.explicit(Q), sim.rhs.explicit)
+   if sim.preconditioner is not None:
+      sim.preconditioner.prepare(sim.config.dt, Q, None)
+      matvecs['precond'] = sim.preconditioner
 
    return matvecs
 
@@ -247,7 +252,7 @@ def main(args):
       matvecs = get_matvecs(config, state_file=args.from_state_file, build_imex=args.imex)
       matrix_set = {}
 
-      param = matvecs['param']
+      param = matvecs['config']
       num_vars = 4
       if param.equations == 'euler' and param.grid_type == 'cubed_sphere': num_vars = 5
       p = permutations_3d(MPI.COMM_WORLD.size, param.nb_elements_horizontal, param.nb_elements_vertical,
@@ -256,7 +261,8 @@ def main(args):
       for rhs_name in ['all', 'implicit', 'explicit']:
          if rhs_name not in matvecs: continue
          matvec = matvecs[rhs_name]
-         mat = gen_matrix(matvec, jac_file_name=jac_file(name, rhs_name))
+         device = matvecs['sim'].device
+         mat = gen_matrix(matvec, jac_file_name=jac_file(name, rhs_name), device=device)
          initial_rhs = MPI.COMM_WORLD.gather(numpy.ravel(matvecs['rhs']))
 
          if mat is not None:

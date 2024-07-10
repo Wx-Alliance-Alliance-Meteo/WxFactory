@@ -4,7 +4,7 @@ from common.definitions      import idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_w, 
                                     idx_h, idx_u1, idx_u2, idx_hu1, idx_hu2,                                   \
                                     idx_2d_rho, idx_2d_rho_u, idx_2d_rho_w, idx_2d_rho_theta,                  \
                                     gravity, cpd, cvd, Rd, p0
-from common.program_options  import Configuration
+from common.configuration  import Configuration
 from init.dcmip              import dcmip_advection_deformation, dcmip_advection_hadley, dcmip_gravity_wave,   \
                                     dcmip_schar_waves, dcmip_steady_state_mountain
 from init.shallow_water_test import case_galewsky, case_matsuno, case_unsteady_zonal, circular_vortex,         \
@@ -14,7 +14,6 @@ from geometry                import Cartesian2D, CubedSphere
 
 # typing
 from numpy.typing import NDArray
-from common.program_options import Configuration
 from geometry.cartesian_2d_mesh import Cartesian2D
 
 class Topo:

@@ -3,8 +3,6 @@ from typing import Callable, Optional, Tuple
 from mpi4py   import MPI
 import numpy
 
-from gef_cuda                  import rhs_bubble_cuda
-from gef_cuda                  import rhs_euler_cuda
 from geometry                  import Cartesian2D, CubedSphere
 from init.initialize           import Topo
 from rhs.fluxes                import ausm_2d_fv, upwind_2d_fv, rusanov_2d_fv
@@ -21,9 +19,10 @@ from rhs.rhs_sw_nonstiff       import rhs_sw_nonstiff
 from rhs.rhs_advection2d       import rhs_advection2d
 
 # For type hints
-from common.parallel        import DistributedWorld
-from common.program_options import Configuration
-from geometry               import DFROperators, Geometry, Metric
+from common.process_topology   import ProcessTopology
+from common.configuration      import Configuration
+from geometry                  import DFROperators, Geometry, Metric, Metric3DTopo
+from device                    import Device
 
 class RhsBundle:
    '''Set of RHS functions that are associated with a certain geometry and equations
@@ -31,11 +30,12 @@ class RhsBundle:
    def __init__(self,
                 geom: Geometry,
                 operators: DFROperators,
-                metric: Metric,
-                topo: Topo,
-                ptopo: Optional[DistributedWorld],
+                metric: Metric | Metric3DTopo | None,
+                topo: Optional[Topo],
+                ptopo: Optional[ProcessTopology],
                 param: Configuration,
-                fields_shape: Tuple[int, ...]) -> None:
+                fields_shape: Tuple[int, ...],
+                device: Device) -> None:
       '''Determine handles to appropriate RHS functions.'''
 
       self.shape = fields_shape
@@ -52,17 +52,21 @@ class RhsBundle:
          return actual_rhs
 
       if param.equations == "euler" and isinstance(geom, CubedSphere):
-         rhs_functions = {'dg': {'cpu': rhs_euler,    'cuda': rhs_euler_cuda},
-                          'fv': {'cpu': rhs_euler   , 'cuda': rhs_euler_cuda}}
+         rhs_functions = {'dg': rhs_euler,
+                          'fv': rhs_euler}
 
-         self.full = generate_rhs(rhs_functions[param.discretization][param.device],
+         self.full = generate_rhs(rhs_functions[param.discretization],
                                   geom, operators, metric, ptopo, param.nbsolpts, param.nb_elements_horizontal,
-                                  param.nb_elements_vertical, param.case_number)
+                                  param.nb_elements_vertical, param.case_number, device=device)
          self.convective = generate_rhs(rhs_euler_convective, geom, operators, metric, ptopo, param.nbsolpts,
                                         param.nb_elements_horizontal, param.nb_elements_vertical, param.case_number)
          self.viscous = lambda q: self.full(q) - self.convective(q)
 
       elif param.equations == 'euler' and isinstance(geom, Cartesian2D):
+         rhs_bubble_cuda = None
+         if param.device == 'cuda': # Only load that if requested
+            from wx_cupy import rhs_bubble_cuda
+
          dg_functions = {'cpu': rhs_bubble,    'cuda': rhs_bubble_cuda}
          fv_functions = {'cpu': rhs_bubble_fv, 'cuda': rhs_bubble_cuda}
 

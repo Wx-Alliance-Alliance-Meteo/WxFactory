@@ -7,11 +7,12 @@ import sys
 
 import numpy
 
-from common.program_options import Configuration
+from common.configuration import Configuration
 from precondition.factorization import Factorization
 from precondition.multigrid import Multigrid
 from output.output_manager  import OutputManager
 from solvers.solver_info    import SolverInfo
+from device                 import Device
 
 class Integrator(ABC):
    """Describes the time-stepping mechanism of the simulation.
@@ -31,11 +32,18 @@ class Integrator(ABC):
    """
    latest_time: float
    output_manager: Optional[OutputManager]
+   device: Optional[Device]
    preconditioner: Optional[Multigrid]
    solver_info: Optional[SolverInfo]
-   def __init__(self, param: Configuration, preconditioner: Optional[Multigrid]) -> None:
+   def __init__(self, param: Configuration, **kwargs) -> None:
       self.output_manager = None
-      self.preconditioner = preconditioner
+      self.device         = None
+      self.preconditioner = None
+
+      if 'output_manager' in kwargs: self.output_manager = kwargs['output_manager']
+      if 'device' in kwargs: self.device = kwargs['device']
+      if 'preconditioner' in kwargs: self.preconditioner = kwargs['preconditioner']
+
       self.verbose_solver = param.verbose_solver
       self.solver_info    = None
       self.sim_time       = -1.0

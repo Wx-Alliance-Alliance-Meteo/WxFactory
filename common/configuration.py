@@ -15,14 +15,13 @@ class Configuration:
 
    def __init__(self, cfg_file: str, verbose: bool=True):
 
+      self.cfg_file = cfg_file
       self.sections = {}
       self.parser = ConfigParser()
       self.parser.read(cfg_file, encoding="utf-8")
 
       if verbose:
-         print('\nLoading config: ' + cfg_file)
-         print(self.parser.sections())
-         print(' ')
+         print(f'Loading config: {cfg_file}')
 
       self.array_module = 'numpy' # Default value, may change depending on selected options
 
@@ -38,14 +37,15 @@ class Configuration:
       self.device = self._get_option('System', 'device', str, 'cpu', ['cpu', 'cuda'])
 
       if self.device == "cuda":
-         from gef_cuda import num_devices
+         from wx_cupy import num_devices, loading_error
          if num_devices > 0:
             self.cuda_devices = self._get_option('System', 'cuda_devices', List[int], list(range(num_devices)))
             self.array_module = 'cupy'
          else:
             if verbose:
                print(f'WARNING: Config is asking for CUDA, but we\'re unable to find any CUDA device, '
-                     f'so we will revert to CPU')
+                     f'so we will revert to CPU'
+                     f'\n         Error was "{loading_error}"')
             self.device = 'cpu'
 
       ################################
@@ -262,7 +262,7 @@ class Configuration:
          value = self._validate_option(option_name, value, valid_values, min_value, max_value)
       except (NoOptionError, NoSectionError) as e:
          if default_value is None:
-            e.message += f"\nMust specify a value for option '{option_name}'"
+            e.message += f"\nMust specify a value for option '{option_name}' in file {self.cfg_file}"
             raise
          value = default_value
 

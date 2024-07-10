@@ -9,7 +9,7 @@ import numpy
 from numpy.typing import NDArray
 
 from common.definitions     import *
-from common.program_options import Configuration
+from common.configuration import Configuration
 from geometry               import contra2wind_2d, contra2wind_3d
 from output.diagnostic      import relative_vorticity, potential_vorticity
 
