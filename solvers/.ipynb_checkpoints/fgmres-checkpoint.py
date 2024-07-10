@@ -11,6 +11,8 @@ import scipy.sparse.linalg
 from .global_operations import global_dotprod, global_norm
 
 __all__ = ['fgmres']
+dump_dir = 'DataDump(ShallowWaterBIG)'
+save_inter = False
 
 MatvecOperator = Callable[[numpy.ndarray], numpy.ndarray]
 
@@ -68,6 +70,7 @@ def _ortho_1_sync_igs(Q, R, T, K, j, comm):
 def fgmres(A: MatvecOperator,
            b: numpy.ndarray,
            timestep: int,
+           sys_iter: int,
            x0: Optional[numpy.ndarray] = None,
            tol: float = 1e-5,
            restart: int = 20,
@@ -121,7 +124,6 @@ def fgmres(A: MatvecOperator,
    # Check for early stop
    norm_b = global_norm(b, comm=comm)
    if norm_b == 0.0:
-      numpy.save(f'/data/users/jupyter-dam724/DataDump/ros2_x_{timestep}_{0}.npy', numpy.zeros_like(b))  # x saved to disk
       return numpy.zeros_like(b), 0., 0., 0, 0, [(0.0, time() - t_start, 0.0)]
 
    tol_relative = tol * norm_b
@@ -211,8 +213,14 @@ def fgmres(A: MatvecOperator,
       # end inner loop, back to outer loop
       
       # V/H saved for current gmres iteration | post-arnoldi iteration
-      numpy.save(f'/data/users/jupyter-dam724/DataDump/ros2_V_{timestep}_{outer}_{0}.npy', V)
-      scipy.sparse.save_npz(f'/data/users/jupyter-dam724/DataDump/ros2_H_{timestep}_{outer}_{0}.npz', scipy.sparse.csc_matrix(H))
+      if save_inter:
+         rhs = MPI.COMM_WORLD.gather(V)
+         if MPI.COMM_WORLD.rank == 0:
+            rhs_file = numpy.hstack(rhs)
+            numpy.save(f'/data/users/jupyter-dam724/{dump_dir}/ros2_V_{sys_iter}_{timestep}_{outer}.npy', rhs_file)
+         else:
+            numpy.save(f'/data/users/jupyter-dam724/{dump_dir}/ros2_V_{sys_iter}_{timestep}_{outer}.npy', V)
+         scipy.sparse.save_npz(f'/data/users/jupyter-dam724/{dump_dir}/ros2_H_{sys_iter}_{timestep}_{outer}.npz', scipy.sparse.csc_matrix(H))
 
       # Find best update to x in Krylov Space V.
       y = scipy.linalg.solve_triangular(H[0:inner + 1, 0:inner + 1].T, g[0:inner + 1])
@@ -236,11 +244,9 @@ def fgmres(A: MatvecOperator,
 
       # test for convergence
       if norm_r < tol_relative:
-         numpy.save(f'/data/users/jupyter-dam724/DataDump/ros2_x_{timestep}_{0}.npy', x)    # x saved to disk
          return x, norm_r, norm_b, niter, 0, residuals
 
    # end outer loop
-   numpy.save(f'/data/users/jupyter-dam724/DataDump/ros2_x_{timestep}_{0}.npy', x)           # x saved to disk
 
    flag = 0
    if norm_r >= tol_relative: flag = -1

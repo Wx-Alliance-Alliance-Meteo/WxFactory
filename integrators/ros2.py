@@ -10,6 +10,8 @@ from .integrator             import Integrator
 from solvers                 import fgmres, gcrot, matvec_rat, SolverInfo
 from scripts.eigenvalue_util import gen_matrix
 
+dump_dir = 'DataDump(ShallowWaterBIG)'
+save_Ab = True
 
 class Ros2(Integrator):
    Q_flat: numpy.ndarray
@@ -17,6 +19,7 @@ class Ros2(Integrator):
    b: numpy.ndarray
    def __init__(self, param: Configuration, rhs_handle: Callable, preconditioner=None) -> None:
       super().__init__(param, preconditioner)
+      self.param = param
       self.rhs_handle     = rhs_handle
       self.tol            = param.tolerance
       self.gmres_restart  = param.gmres_restart
@@ -26,9 +29,17 @@ class Ros2(Integrator):
       rhs = self.rhs_handle(Q)
       self.Q_flat = numpy.ravel(Q)
       self.A = MatvecOpRat(dt, Q, rhs, self.rhs_handle)
-      gen_matrix(self.A, jac_file_name=f'/data/users/jupyter-dam724/DataDump/ros2_A_{self.num_completed_steps}_{0}')
       self.b = self.A(self.Q_flat) + numpy.ravel(rhs) * dt
-      numpy.save(f'/data/users/jupyter-dam724/DataDump/ros2_b_{self.num_completed_steps}_{0}', self.b)
+      
+      if save_Ab:
+         gen_matrix(self.A, jac_file_name=f'/data/users/jupyter-dam724/{dump_dir}/ros2_A_{self.param.sys_iter}_{self.num_completed_steps}')
+      
+         rhs = MPI.COMM_WORLD.gather(self.b)
+         if MPI.COMM_WORLD.rank == 0:
+            rhs_file = numpy.hstack(rhs)
+            numpy.save(f'/data/users/jupyter-dam724/{dump_dir}/ros2_b_{self.param.sys_iter}_{self.num_completed_steps}', rhs_file)   
+         else:
+            numpy.save(f'/data/users/jupyter-dam724/{dump_dir}/ros2_b_{self.param.sys_iter}_{self.num_completed_steps}', self.b)  
 
    def __step__(self, Q: numpy.ndarray, dt: float):
 
@@ -39,13 +50,20 @@ class Ros2(Integrator):
       if self.linear_solver == 'fgmres':
          t0 = time()
          Qnew, norm_r, norm_b, num_iter, flag, residuals = fgmres(
-            self.A, self.b, self.num_completed_steps, x0=self.Q_flat, tol=self.tol, restart=self.gmres_restart, maxiter=maxiter,
-            preconditioner=self.preconditioner,
-            verbose=self.verbose_solver)
+            self.A, self.b, self.num_completed_steps, self.param.sys_iter, x0=self.Q_flat, tol=self.tol, 
+            restart=self.gmres_restart, maxiter=maxiter, preconditioner=self.preconditioner, verbose=self.verbose_solver)
          t1 = time()
-
+         
+         if save_Ab:
+            rhs = MPI.COMM_WORLD.gather(Qnew)
+            if MPI.COMM_WORLD.rank == 0:
+               rhs_file = numpy.hstack(rhs)
+               numpy.save(f'/data/users/jupyter-dam724/{dump_dir}/ros2_x_{self.num_completed_steps}.npy', rhs_file)  # x saved to disk
+            else:
+               numpy.save(f'/data/users/jupyter-dam724/{dump_dir}/ros2_x_{self.num_completed_steps}.npy', Qnew)  # x saved to disk
+ 
          self.solver_info = SolverInfo(flag, t1 - t0, num_iter, residuals)
-
+  
          if MPI.COMM_WORLD.rank == 0:
             result_type = 'convergence' if flag == 0 else 'stagnation/interruption'
             print(f'FGMRES {result_type} at iteration {num_iter} in {t1 - t0:4.3f} s to a solution with'
