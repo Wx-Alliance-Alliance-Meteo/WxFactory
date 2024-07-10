@@ -7,17 +7,18 @@ from typing       import Callable, List, Optional
 from mpi4py import MPI
 import numpy
 
-from common.definitions    import idx_2d_rho, idx_2d_rho_u, idx_2d_rho_w, idx_2d_rho_theta, \
-                                  idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_w, idx_rho_theta, \
-                                  cpd, cvd, heat_capacity_ratio, p0, Rd
-from common.interpolation  import Interpolator
+from common.definitions     import idx_2d_rho, idx_2d_rho_u, idx_2d_rho_w, idx_2d_rho_theta, \
+                                   idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_w, idx_rho_theta, \
+                                   cpd, cvd, heat_capacity_ratio, p0, Rd
+from common.interpolation   import Interpolator
 from common.parallel        import DistributedWorld
 from common.program_options import Configuration
-from geometry              import Cartesian2D, CubedSphere, DFROperators
-from init.init_state_vars  import init_state_vars
-from precondition.smoother import KiopsSmoother, ExponentialSmoother, RK1Smoother, RK3Smoother, ARK3Smoother
-from rhs.rhs_selector      import RhsBundle
-from solvers               import fgmres, global_norm, KrylovJacobian, matvec_rat, MatvecOp
+from geometry               import Cartesian2D, CubedSphere, DFROperators
+from init.init_state_vars   import init_state_vars
+from precondition.smoother  import KiopsSmoother, ExponentialSmoother, RK1Smoother, RK3Smoother, ARK3Smoother
+from rhs.rhs_selector       import RhsBundle
+from solvers                import fgmres, global_norm, KrylovJacobian, matvec_rat, MatvecOp
+from device                 import Device
 
 MatvecOperator = Callable[[numpy.ndarray], numpy.ndarray]
 
@@ -35,7 +36,7 @@ class MultigridLevel:
    pseudo_dt:        float
    jacobian:         KrylovJacobian
 
-   def __init__(self, param: Configuration, ptopo: DistributedWorld, discretization: str, nb_elem_horiz: int,
+   def __init__(self, param: Configuration, ptopo: DistributedWorld, device: Device, discretization: str, nb_elem_horiz: int,
                 nb_elem_vert: int, source_order: int, target_order: int, ndim: int):
 
       p = deepcopy(param)
@@ -74,7 +75,7 @@ class MultigridLevel:
       operators = DFROperators(self.geometry, p)
 
       field, topo, self.metric = init_state_vars(self.geometry, operators, self.param)
-      self.rhs = RhsBundle(self.geometry, operators, self.metric, topo, ptopo, self.param, field.shape)
+      self.rhs = RhsBundle(self.geometry, operators, self.metric, topo, ptopo, self.param, field.shape, device)
       if verbose > 0: print(f'field shape: {field.shape}')
       self.shape = field.shape
       self.dtype = field.dtype
@@ -221,7 +222,7 @@ class MultigridLevel:
 class Multigrid(MatvecOp):
    levels: dict[int, MultigridLevel]
    initial_interpolate: Callable[[numpy.ndarray], numpy.ndarray]
-   def __init__(self, param, ptopo, discretization, fv_only=False) -> None:
+   def __init__(self, param: Configuration, ptopo: DistributedWorld, device: Device, discretization: str, fv_only: bool=False) -> None:
 
       param = deepcopy(param)
 
@@ -312,7 +313,7 @@ class Multigrid(MatvecOp):
          if param.mg_smoother == 'exp':
             param.exp_smoothe_spectral_radius = self.spectral_radii[i_level]
             param.exp_smoothe_nb_iter = self.exp_nb_iters[i_level]
-         self.levels[i_level] = MultigridLevel(param, ptopo, discretization, nb_elem_hori, nb_elem_vert, order,
+         self.levels[i_level] = MultigridLevel(param, ptopo, device, discretization, nb_elem_hori, nb_elem_vert, order,
                                                new_order, self.ndim)
 
       super().__init__(self.apply, self.levels[0].dtype, self.levels[0].shape)

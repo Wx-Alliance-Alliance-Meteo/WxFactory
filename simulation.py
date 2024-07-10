@@ -152,11 +152,11 @@ class Simulation:
    def _create_preconditioner(self, Q: numpy.ndarray) -> Multigrid | Factorization | None:
       """ Create the preconditioner required by the given params """
       if self.config.preconditioner == 'p-mg':
-         return Multigrid(self.config, self.processor_topo, discretization='dg')
+         return Multigrid(self.config, self.processor_topo, self.device, discretization='dg')
       if self.config.preconditioner == 'fv-mg':
-         return Multigrid(self.config, self.processor_topo, discretization='fv')
+         return Multigrid(self.config, self.processor_topo, self.device, discretization='fv')
       if self.config.preconditioner == 'fv':
-         return Multigrid(self.config, self.processor_topo, discretization='fv', fv_only=True)
+         return Multigrid(self.config, self.processor_topo, self.device, discretization='fv', fv_only=True)
       if self.config.preconditioner in ['lu', 'ilu']:
          return Factorization(Q.dtype, Q.shape, self.config)
       return None
