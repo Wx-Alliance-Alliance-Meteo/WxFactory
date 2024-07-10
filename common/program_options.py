@@ -36,7 +36,7 @@ class Configuration:
       self.device = self._get_option('System', 'device', str, 'cpu', ['cpu', 'cuda'])
 
       if self.device == "cuda":
-         from gef_cuda import num_devices, loading_error
+         from wx_cupy import num_devices, loading_error
          if num_devices > 0:
             self.cuda_devices = self._get_option('System', 'cuda_devices', List[int], list(range(num_devices)))
             self.array_module = 'cupy'

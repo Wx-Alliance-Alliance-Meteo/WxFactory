@@ -1,6 +1,6 @@
 
 __all__ = ['cuda_avail', 'num_devices',
-           'rhs_bubble_cuda', 'rhs_euler_cuda', 'expm']
+           'rhs_bubble_cuda', 'expm', 'Rusanov']
 
 from mpi4py import MPI
 
@@ -36,9 +36,8 @@ if MPI.COMM_WORLD.rank == 0:
    avail = 'available' if cuda_avail else 'not available'
    print(f'CUDA is {avail}')
 
-# TODO remove these
 if cuda_avail:
    # import cuda-related modules
    from .rhs_bubble_cuda import rhs_bubble_cuda
-   from .rhs_euler_cuda  import rhs_euler_cuda
+   from .rusanov         import Rusanov
    from .linalg          import expm

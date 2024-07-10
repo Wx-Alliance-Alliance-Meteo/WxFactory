@@ -65,7 +65,7 @@ class RhsBundle:
       elif param.equations == 'euler' and isinstance(geom, Cartesian2D):
          rhs_bubble_cuda = None
          if param.device == 'cuda': # Only load that if requested
-            from gef_cuda import rhs_bubble_cuda
+            from wx_cupy import rhs_bubble_cuda
 
          dg_functions = {'cpu': rhs_bubble,    'cuda': rhs_bubble_cuda}
          fv_functions = {'cpu': rhs_bubble_fv, 'cuda': rhs_bubble_cuda}

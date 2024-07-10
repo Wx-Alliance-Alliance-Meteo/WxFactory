@@ -67,8 +67,8 @@ def rhs_euler (Q: NDArray,
 
    global rhs_euler_kernels
    if isinstance(device, CudaDevice) and rhs_euler_kernels is None:
-      from gef_cuda.rhs_euler_cuda import RHSEuler
-      rhs_euler_kernels = RHSEuler
+      from wx_cupy import Rusanov
+      rhs_euler_kernels = Rusanov
 
    xp = device.xp
 

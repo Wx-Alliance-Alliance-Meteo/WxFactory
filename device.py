@@ -61,7 +61,7 @@ class CudaDevice(Device):
       # Delay imports, to avoid loading CUDA if not asked
 
       import cupy
-      from gef_cuda import num_devices, expm
+      from wx_cupy import num_devices, expm
       super().__init__(cupy, expm)
 
       if num_devices <= 0:
