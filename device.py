@@ -69,6 +69,7 @@ class CudaDevice(Device):
 
       import cupyx
       self.cupyx = cupyx
+      self.cupy = cupy
 
       rank = MPI.COMM_WORLD.Get_rank()
       devnum = rank % len(device_list)
