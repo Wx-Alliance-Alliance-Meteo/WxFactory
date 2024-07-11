@@ -95,3 +95,6 @@ class CudaDevice(Device):
 
    def __to_host__(self, val, **kwargs):
       return val.get(**kwargs)
+
+
+default_device = CpuDevice()

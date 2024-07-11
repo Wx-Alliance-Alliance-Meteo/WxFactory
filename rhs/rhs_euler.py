@@ -1,15 +1,13 @@
-from common.definitions import idx_rho_u1, idx_rho_u2, idx_rho_w, idx_rho, idx_rho_theta, gravity, p0, Rd, cpd, cvd, heat_capacity_ratio
-from .fluxes import rusanov_3d_vert, rusanov_3d_hori_i, rusanov_3d_hori_j
-from device import CpuDevice, CudaDevice, Device
-from rhs.rhs                   import RHS
+from numpy.typing import NDArray
 
-# For type hints
+from common.definitions      import idx_rho_u1, idx_rho_u2, idx_rho_w, idx_rho, idx_rho_theta, gravity, p0, Rd, cpd, cvd, heat_capacity_ratio
+from common.device           import CpuDevice, CudaDevice, Device, default_device
 from common.process_topology import ProcessTopology
+from .fluxes                 import rusanov_3d_vert, rusanov_3d_hori_i, rusanov_3d_hori_j
 from geometry                import CubedSphere, DFROperators, Metric3DTopo
 from init.dcmip              import dcmip_schar_damping
-from numpy.typing            import NDArray
+from rhs.rhs                 import RHS
 
-default_rhs_device = CpuDevice()
 rhs_euler_kernels = None
 
 def compute_forcing_1(f, r, u1, u2, w, p, c01, c02, c03, c11, c12, c13, c22, c23, c33, h11, h12, h13, h22, h23, h33):
@@ -51,7 +49,7 @@ class RhsEuler(RHS):
                 nb_elements_hori: int,
                 nb_elements_vert: int,
                 case_number: int,
-                device: Device = default_rhs_device) -> None:
+                device: Device = default_device) -> None:
       super().__init__(shape, geom, mtrx, metric, ptopo, nbsolpts, nb_elements_hori, nb_elements_vert,
                        case_number, device)
 
@@ -70,7 +68,7 @@ class RhsEuler(RHS):
                   nb_elements_hori: int,
                   nb_elements_vert: int,
                   case_number: int,
-                  device: Device = default_rhs_device) -> NDArray:
+                  device: Device) -> NDArray:
       '''Evaluate the right-hand side of the three-dimensional Euler equations.
 
       This function evaluates RHS of the Euler equations using the four-demsional tensor formulation (see Charron 2014), returning

@@ -1,18 +1,18 @@
-from abc       import ABC, abstractmethod
-from itertools import combinations
+from   abc       import ABC, abstractmethod
+from   itertools import combinations
 import math
-from time      import time
-from typing    import Optional
+from   time      import time
+from   typing    import Optional
 import sys
 
 import numpy
 
-from common.configuration import Configuration
+from common.configuration       import Configuration
 from precondition.factorization import Factorization
-from precondition.multigrid import Multigrid
-from output.output_manager  import OutputManager
-from solvers.solver_info    import SolverInfo
-from device                 import Device
+from precondition.multigrid     import Multigrid
+from output.output_manager      import OutputManager
+from solvers.solver_info        import SolverInfo
+from common.device              import Device
 
 class Integrator(ABC):
    """Describes the time-stepping mechanism of the simulation.

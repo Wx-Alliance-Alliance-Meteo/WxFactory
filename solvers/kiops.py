@@ -6,13 +6,11 @@ import numpy
 from   numpy.typing import NDArray
 import scipy.linalg
 
-from device import Device, CpuDevice
-
-default_kiops_device = CpuDevice()
+from common.device import Device, default_device
 
 def kiops(tau_out: NDArray, A: Callable[[NDArray], NDArray], u: NDArray,
           tol: float = 1e-7, m_init: int = 10, mmin: int = 10, mmax: int = 128, iop: int = 2,
-          task1: bool = False, device: Device = default_kiops_device) -> tuple[NDArray, tuple]:
+          task1: bool = False, device: Device = default_device) -> tuple[NDArray, tuple]:
    """ kiops(tstops, A, u; kwargs...) -> (w, stats)
 
    Evaluate a linear combinaton of the ``φ`` functions evaluated at ``tA`` acting on
