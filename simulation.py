@@ -20,7 +20,15 @@ from output.state               import load_state
 from rhs.rhs_selector           import RhsBundle
 
 class Simulation:
-   """Encapsulate parameters and structures needed to run a WxFactory simulation."""
+   """Encapsulate parameters and structures needed to run a WxFactory simulation.
+   
+   An object of this class is instantiated based on the content of a given config file. The
+   config is read and validated, then all required structures are initialized (geometry, metric terms,
+   initial state, etc.)
+
+   Once the object is created, it can be used to step through the given problem one at a time, or to run
+   it entirely.
+   """
 
    def __init__(self, config_file: str) -> None:
       self.rank = MPI.COMM_WORLD.rank
@@ -49,6 +57,7 @@ class Simulation:
       self.nb_steps = int(numpy.ceil(self.config.t_end / self.config.dt)) - self.starting_step
 
    def step(self):
+      """Advance the simulation by one time step."""
       if self.t < self.config.t_end:
          if self.t + self.config.dt > self.config.t_end:
             self.config.dt = self.config.t_end - self.t
@@ -65,12 +74,12 @@ class Simulation:
 
          if MPI.COMM_WORLD.rank == 0: print(f'Elapsed time for step: {self.integrator.latest_time:.3f} secs')
 
-         #TODO The following steps (up to before outputting) should be part of the integrator `step` function
-
          # Check whether there are any NaNs in the solution
+         #TODO put this inside the `step` function of the integrator
          check_for_nan(self.Q)
 
          # Overwrite winds for some DCMIP tests
+         #TODO put this inside the `step` function of the integrator
          if self.config.case_number == 11:
             u1_contra, u2_contra, w_wind = dcmip_T11_update_winds(self.geometry, self.metric, self.operators, self.config, time=self.t)
             self.Q[idx_rho_u1,:,:,:] = self.Q[idx_rho, :, :, :] * u1_contra
@@ -82,7 +91,7 @@ class Simulation:
             self.Q[idx_rho_u2,:,:,:] = self.Q[idx_rho, :, :, :] * u2_contra
             self.Q[idx_rho_w,:,:,:]  = self.Q[idx_rho, :, :, :] * w_wind
 
-         self.output.step(self.Q, self.step_id)
+         self.output.step(self.Q, self.step_id) # Perform any requested output
          sys.stdout.flush()
 
          if self.integrator.failure_flag == 0:
@@ -91,14 +100,17 @@ class Simulation:
       return False
 
    def run(self):
+      """Run the entire simulation step by step"""
       self.step_id = self.starting_step
       self.Q = self.initial_Q
 
       while self.step(): pass # Step until everything is done
 
-      self.output.finalize()
+      self.output.finalize() # Close any open output file
 
    def _make_device(self) -> Device:
+      """Create the device object which will determine on what hardware (CPU/GPU) each part of the simulation will
+      be executed."""
       if self.config.device == 'cuda':
          try:
             device = CudaDevice(self.config.cuda_devices)

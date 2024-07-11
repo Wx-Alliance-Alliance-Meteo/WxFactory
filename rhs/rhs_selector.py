@@ -2,6 +2,7 @@ from typing import Callable, Optional, Tuple
 
 from mpi4py   import MPI
 import numpy
+from numpy.typing import NDArray
 
 from geometry                  import Cartesian2D, CubedSphere
 from init.initialize           import Topo
@@ -10,7 +11,7 @@ from rhs.rhs_bubble            import rhs_bubble
 from rhs.rhs_bubble_convective import rhs_bubble as rhs_bubble_convective
 from rhs.rhs_bubble_fv         import rhs_bubble_fv
 from rhs.rhs_bubble_implicit   import rhs_bubble_implicit
-from rhs.rhs_euler             import rhs_euler
+from rhs.rhs_euler             import RhsEuler
 from rhs.rhs_euler_convective  import rhs_euler_convective
 from rhs.rhs_euler_fv          import rhs_euler_fv
 from rhs.rhs_sw                import rhs_sw
@@ -52,12 +53,14 @@ class RhsBundle:
          return actual_rhs
 
       if param.equations == "euler" and isinstance(geom, CubedSphere):
-         rhs_functions = {'dg': rhs_euler,
-                          'fv': rhs_euler}
+         # rhs_functions = {'dg': rhs_euler,
+         #                  'fv': rhs_euler}
 
-         self.full = generate_rhs(rhs_functions[param.discretization],
-                                  geom, operators, metric, ptopo, param.nbsolpts, param.nb_elements_horizontal,
-                                  param.nb_elements_vertical, param.case_number, device=device)
+         # self.full = generate_rhs(rhs_functions[param.discretization],
+         #                          geom, operators, metric, ptopo, param.nbsolpts, param.nb_elements_horizontal,
+         #                          param.nb_elements_vertical, param.case_number, device=device)
+         self.full = RhsEuler(fields_shape, geom, operators, metric, ptopo, param.nbsolpts, param.nb_elements_horizontal,
+                              param.nb_elements_vertical, param.case_number, device=device)
          self.convective = generate_rhs(rhs_euler_convective, geom, operators, metric, ptopo, param.nbsolpts,
                                         param.nb_elements_horizontal, param.nb_elements_vertical, param.case_number)
          self.viscous = lambda q: self.full(q) - self.convective(q)
