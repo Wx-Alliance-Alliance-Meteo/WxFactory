@@ -139,7 +139,6 @@ def kiops(tau_out: NDArray, A: Callable[[NDArray], NDArray], u: NDArray,
       # Compute necessary starting information
       if j == 0:
 
-         device.synchronize(copy_stream=True)
          V[0, :n] = w[l, :]
 
          # Update the last part of w
@@ -157,7 +156,6 @@ def kiops(tau_out: NDArray, A: Callable[[NDArray], NDArray], u: NDArray,
 
          # The first Krylov basis vector
          V[0, :] /= beta
-         device.synchronize()
 
       # Incomplete orthogonalization process
       while j < m:
@@ -184,7 +182,6 @@ def kiops(tau_out: NDArray, A: Callable[[NDArray], NDArray], u: NDArray,
          global_sum = xp.empty_like(local_sum)
          device.synchronize()
          MPI.COMM_WORLD.Allreduce([local_sum, MPI.DOUBLE], [global_sum, MPI.DOUBLE])
-         device.synchronize()
          nrm = xp.sqrt(global_sum + V[j, n:n + p] @ V[j, n:n + p])
 
          # Happy breakdown
@@ -325,8 +322,6 @@ def kiops(tau_out: NDArray, A: Callable[[NDArray], NDArray], u: NDArray,
       oldm = m
       m    = m_new
 
-
-   device.synchronize(copy_stream=True)
    if task1 is True:
       for k in range(numSteps):
          w[k, :] = w[k, :] / tau_out[k]
