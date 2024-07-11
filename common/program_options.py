@@ -1,4 +1,5 @@
 from configparser import ConfigParser, NoSectionError, NoOptionError
+import numpy as np
 import json
 import re
 import copy
@@ -26,7 +27,13 @@ class Configuration:
 
       self.array_module = 'numpy' # Default value, may change depending on selected options
       
+      # For multiple runs and replication.
       self.sys_iter = self._get_option('General', 'sys_iter', int, None)
+      self.seed = self._get_option('General', 'rand_seed', int, None)
+      if self.seed is not None:
+         self.generator = np.random.default_rng(self.rand_seed)
+        
+      self.dump_dir = self._get_option('General', 'output_dir', str, 'temp')
 
       self.equations = self._get_option('General', 'equations', str, None, ['euler', 'shallow_water'])
       if self.equations == 'euler':
@@ -192,6 +199,13 @@ class Configuration:
       if verbose:
          print(f'{self}')
          sys.stdout.flush()
+         
+   # TODO: Using seeded generator, get ints and floats.
+   def rand_int(self, low: int, high: int):
+      return self.generator.integers(low=low, high=high)
+   
+   def rand_float(self, low: float, high: float):
+      return (high - low) * self.generator.random() + low
 
    def __deepcopy__(self: Self, memo) -> Self:
       do_not_deepcopy = {}

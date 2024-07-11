@@ -11,7 +11,7 @@ import scipy.sparse.linalg
 from .global_operations import global_dotprod, global_norm
 
 __all__ = ['fgmres']
-dump_dir = 'DataDump(ShallowWaterBIG)'
+
 save_inter = False
 
 MatvecOperator = Callable[[numpy.ndarray], numpy.ndarray]
@@ -71,6 +71,7 @@ def fgmres(A: MatvecOperator,
            b: numpy.ndarray,
            timestep: int,
            sys_iter: int,
+           dump_dir: str,
            x0: Optional[numpy.ndarray] = None,
            tol: float = 1e-5,
            restart: int = 20,

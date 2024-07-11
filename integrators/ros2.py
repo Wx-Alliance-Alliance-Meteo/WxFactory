@@ -10,7 +10,6 @@ from .integrator             import Integrator
 from solvers                 import fgmres, gcrot, matvec_rat, SolverInfo
 from scripts.eigenvalue_util import gen_matrix
 
-dump_dir = 'DataDump(ShallowWaterBIG)'
 save_Ab = True
 
 class Ros2(Integrator):
@@ -32,14 +31,14 @@ class Ros2(Integrator):
       self.b = self.A(self.Q_flat) + numpy.ravel(rhs) * dt
       
       if save_Ab:
-         gen_matrix(self.A, jac_file_name=f'/data/users/jupyter-dam724/{dump_dir}/ros2_A_{self.param.sys_iter}_{self.num_completed_steps}')
+         gen_matrix(self.A, jac_file_name=f'/data/users/jupyter-dam724/{self.param.dump_dir}/ros2_A_{self.param.sys_iter}_{self.num_completed_steps}')
       
          rhs = MPI.COMM_WORLD.gather(self.b)
          if MPI.COMM_WORLD.rank == 0:
             rhs_file = numpy.hstack(rhs)
-            numpy.save(f'/data/users/jupyter-dam724/{dump_dir}/ros2_b_{self.param.sys_iter}_{self.num_completed_steps}', rhs_file)   
+            numpy.save(f'/data/users/jupyter-dam724/{self.param.dump_dir}/ros2_b_{self.param.sys_iter}_{self.num_completed_steps}', rhs_file)   
          else:
-            numpy.save(f'/data/users/jupyter-dam724/{dump_dir}/ros2_b_{self.param.sys_iter}_{self.num_completed_steps}', self.b)  
+            numpy.save(f'/data/users/jupyter-dam724/{self.param.dump_dir}/ros2_b_{self.param.sys_iter}_{self.num_completed_steps}', self.b)  
 
    def __step__(self, Q: numpy.ndarray, dt: float):
 
@@ -50,7 +49,7 @@ class Ros2(Integrator):
       if self.linear_solver == 'fgmres':
          t0 = time()
          Qnew, norm_r, norm_b, num_iter, flag, residuals = fgmres(
-            self.A, self.b, self.num_completed_steps, self.param.sys_iter, x0=self.Q_flat, tol=self.tol, 
+            self.A, self.b, self.num_completed_steps, self.param.sys_iter, self.param.dump_dir, x0=self.Q_flat, tol=self.tol, 
             restart=self.gmres_restart, maxiter=maxiter, preconditioner=self.preconditioner, verbose=self.verbose_solver)
          t1 = time()
          
@@ -58,9 +57,9 @@ class Ros2(Integrator):
             rhs = MPI.COMM_WORLD.gather(Qnew)
             if MPI.COMM_WORLD.rank == 0:
                rhs_file = numpy.hstack(rhs)
-               numpy.save(f'/data/users/jupyter-dam724/{dump_dir}/ros2_x_{self.num_completed_steps}.npy', rhs_file)  # x saved to disk
+               numpy.save(f'/data/users/jupyter-dam724/{self.param.dump_dir}/ros2_x_{self.param.sys_iter}_{self.num_completed_steps}.npy', rhs_file)  
             else:
-               numpy.save(f'/data/users/jupyter-dam724/{dump_dir}/ros2_x_{self.num_completed_steps}.npy', Qnew)  # x saved to disk
+               numpy.save(f'/data/users/jupyter-dam724/{self.param.dump_dir}/ros2_x_{self.param.sys_iter}_{self.num_completed_steps}.npy', Qnew)  
  
          self.solver_info = SolverInfo(flag, t1 - t0, num_iter, residuals)
   
