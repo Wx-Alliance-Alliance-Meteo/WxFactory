@@ -1,6 +1,5 @@
 import functools
 from copy         import deepcopy
-import sys
 from time         import time
 from typing       import Callable, List, Optional
 
@@ -10,6 +9,7 @@ import numpy
 from common.definitions      import idx_2d_rho, idx_2d_rho_u, idx_2d_rho_w, idx_2d_rho_theta, \
                                     idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_w, idx_rho_theta, \
                                     cpd, cvd, heat_capacity_ratio, p0, Rd
+from common.device           import Device
 from common.interpolation    import Interpolator
 from common.process_topology import ProcessTopology
 from common.configuration    import Configuration
@@ -18,7 +18,6 @@ from init.init_state_vars    import init_state_vars
 from precondition.smoother   import KiopsSmoother, ExponentialSmoother, RK1Smoother, RK3Smoother, ARK3Smoother
 from rhs.rhs_selector        import RhsBundle
 from solvers                 import fgmres, global_norm, KrylovJacobian, matvec_rat, MatvecOp
-from device                  import Device
 
 MatvecOperator = Callable[[numpy.ndarray], numpy.ndarray]
 

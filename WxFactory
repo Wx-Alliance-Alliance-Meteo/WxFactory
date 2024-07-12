@@ -11,6 +11,9 @@ from mpi4py import MPI
 import numpy
 
 def main():
+   """Execute a WxFactory simulation.
+   
+   This functions drives the program: read and validate command-line options, then create and run a simulation."""
 
    args = None
    rank = MPI.COMM_WORLD.rank
@@ -18,14 +21,16 @@ def main():
    if rank == 0:
       print(f'Start time : {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}')
 
+   # Doing the import here allows to output potential errors from a single PE, making them much easier to deal with.
    try:
-      from simulation import Simulation
-   except ImportError as e:
+      from common.simulation import Simulation
+   except (ImportError, NameError) as e:
       if rank == 0:
          print(e)
          raise
       sys.exit(-1)
 
+   # Only rank 0 parses the arguments
    parse_error = None
    if rank == 0:
       try:
@@ -49,8 +54,9 @@ def main():
 
    args = MPI.COMM_WORLD.bcast(args, root=0)
 
+   # Abort if config file does not exist
    if not os.path.exists(args.config):
-      if rank == 0: raise ValueError(f'Config file does not seem valid: {args.config}')
+      if rank == 0: raise ValueError(f'Config file does not seem to exist: {args.config}')
       sys.exit(-1)
 
    try:
@@ -73,13 +79,14 @@ def main():
       # This is the actual run
       sim.run()
 
+      # Stop profiling and store result to disk
       if args.profile and pr:
          pr.disable()
 
          out_file = f'prof_{rank:04d}.out'
          pr.dump_stats(out_file)
 
-   except (Exception, KeyboardInterrupt):
+   except (Exception, KeyboardInterrupt): # KeyboardInterrupt does not seem to be caught with just "Exception"...
 
       sys.stdout.flush()
       if args and args.show_every_crash:

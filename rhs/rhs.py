@@ -9,6 +9,12 @@ class RHS(ABC):
       self.kwparams = kwparams
 
    def __call__(self, vec: NDArray) -> NDArray:
+      """Compute the value of the right-hand side based on the input state.
+
+      :param vec: Vector containing the input state. It can have any shape, as long as its size is the same as the
+                  one used to create this RHS object
+      :return: Value of the right-hand side, in the same shape as the input
+      """
       old_shape = vec.shape
       result = self.__compute_rhs__(vec.reshape(self.shape), *self.params, **self.kwparams)
       return result.reshape(old_shape)

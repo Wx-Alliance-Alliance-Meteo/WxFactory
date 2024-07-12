@@ -20,16 +20,14 @@ except ModuleNotFoundError:
          tqdm_message_printed = True
       return a
 
+from common.device import Device, default_device
 from solvers import MatvecOp
-from device import CpuDevice, Device
-
-default_eigval_device = CpuDevice()
 
 def gen_matrix(matvec: MatvecOp,
                jac_file_name: Optional[str] = None,
                compressed: Optional[bool] = None,
                local: bool = False,
-               device: Device = default_eigval_device) \
+               device: Device = default_device) \
                   -> Optional[scipy.sparse.csc_matrix]:
    """
    Compute and store the Jacobian matrix. It may be computed either as a full or sparse matrix

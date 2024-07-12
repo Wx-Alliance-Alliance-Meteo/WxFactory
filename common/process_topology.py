@@ -3,11 +3,10 @@ from   typing import Optional
 
 from   mpi4py import MPI
 import numpy
-from   numpy.core.shape_base import block
 from   numpy.typing import NDArray
 
-from common.definitions import *
-from device import Device
+from .definitions import *
+from .device import Device
 
 class ProcessTopology:
    def __init__(self, device: Device):

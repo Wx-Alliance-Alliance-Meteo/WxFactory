@@ -4,7 +4,11 @@ from mpi4py   import MPI
 import numpy
 from numpy.typing import NDArray
 
-from geometry                  import Cartesian2D, CubedSphere
+from common.device             import Device
+from common.configuration      import Configuration
+from common.process_topology   import ProcessTopology
+from geometry                  import Cartesian2D, CubedSphere, DFROperators, Geometry, Metric, \
+                                      Metric3DTopo
 from init.initialize           import Topo
 from rhs.fluxes                import ausm_2d_fv, upwind_2d_fv, rusanov_2d_fv
 from rhs.rhs_bubble            import rhs_bubble
@@ -18,12 +22,6 @@ from rhs.rhs_sw                import rhs_sw
 from rhs.rhs_sw_stiff          import rhs_sw_stiff
 from rhs.rhs_sw_nonstiff       import rhs_sw_nonstiff
 from rhs.rhs_advection2d       import rhs_advection2d
-
-# For type hints
-from common.process_topology   import ProcessTopology
-from common.configuration      import Configuration
-from geometry                  import DFROperators, Geometry, Metric, Metric3DTopo
-from device                    import Device
 
 class RhsBundle:
    '''Set of RHS functions that are associated with a certain geometry and equations

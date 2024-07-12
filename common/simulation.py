@@ -4,10 +4,10 @@ from   typing import Optional
 from   mpi4py import MPI
 import numpy
 
-from common.definitions         import idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_w
-from common.configuration       import Configuration
-from common.process_topology    import ProcessTopology
-from device                     import Device, CpuDevice, CudaDevice
+from .definitions               import idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_w
+from .configuration             import Configuration
+from .process_topology          import ProcessTopology
+from .device                    import Device, CpuDevice, CudaDevice
 from geometry                   import Cartesian2D, CubedSphere, DFROperators, Geometry
 from init.dcmip                 import dcmip_T11_update_winds, dcmip_T12_update_winds
 from init.init_state_vars       import init_state_vars
