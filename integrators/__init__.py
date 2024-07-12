@@ -1,3 +1,6 @@
+"""Different methods to step forward in time."""
+
+
 from .backward_euler import BackwardEuler
 from .bdf2           import Bdf2
 from .crank_nicolson import CrankNicolson

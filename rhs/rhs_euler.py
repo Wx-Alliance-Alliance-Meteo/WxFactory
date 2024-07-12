@@ -79,33 +79,29 @@ class RhsEuler(RHS):
 
       Note that this function includes MPI communication for inter-process boundary interactions, so it must be called collectively.
 
-      Parameters
-      ----------
-      Q : numpy.ndarray
+      :param Q: numpy.ndarray
          Input array of the current model state, indexed as (var,k,j,i)
-      geom : CubedSphere
+      :param geom: CubedSphere
          Geometry definition, containing parameters relating to the spherical coordinate system
-      mtrx : DFR_operators
+      :param mtrx: DFR_operators
          Contains matrix operators for the DFR discretization, notably boundary extrapolation and
          local (partial) derivatives
-      metric : Metric
+      :param metric: Metric
          Contains the various metric terms associated with the tensor formulation, notably including the
          scalar √g, the spatial metric h, and the Christoffel symbols
-      ptopo : Distributed_World
+      :param ptopo: :py:class:`~process_topology.ProcessTopology`
          Wraps the information and communication functions necessary for MPI distribution
-      nbsolpts : int
+      :param nbsolpts: int
          Number of interior nodal points per element.  A 3D element will contain nbsolpts**3 internal points.
-      nb_elements_hori : int
+      :param nb_elements_hori: int
          Number of elements in x/y on each panel of the cubed sphere
-      nb_elements_vert : int
+      :param nb_elements_vert: int
          Number of elements in the vertical
-      case_number : int
+      :param case_number: int
          DCMIP case number, used to selectively enable or disable parts of the Euler equations to accomplish
          specialized tests like advection-only
 
-      Returns:
-      --------
-      rhs : numpy.ndarray
+      :return: numpy.ndarray
          Output of right-hand-side terms of Euler equations
       '''
 

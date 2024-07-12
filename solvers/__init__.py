@@ -1,4 +1,4 @@
-""" Solvers module """
+"""Different methods to solve a system of equations."""
 from .fgmres            import fgmres
 from .gcrot             import gcrot
 from .kiops             import kiops

@@ -12,7 +12,7 @@ from precondition.factorization import Factorization
 from precondition.multigrid     import Multigrid
 from output.output_manager      import OutputManager
 from solvers.solver_info        import SolverInfo
-from common.device              import Device
+from common.device              import Device, default_device
 
 class Integrator(ABC):
    """Describes the time-stepping mechanism of the simulation.
@@ -28,16 +28,17 @@ class Integrator(ABC):
                         to self.solver_info
       preconditioner -- Optional object that can be used to precondition a problem. It must provide a "prepare"
                         and a "__call__" method.
+      device         -- Object that describes on what hardware (CPU/GPU) the code will run
 
    """
    latest_time: float
    output_manager: Optional[OutputManager]
-   device: Optional[Device]
+   device: Device
    preconditioner: Optional[Multigrid]
    solver_info: Optional[SolverInfo]
    def __init__(self, param: Configuration, **kwargs) -> None:
       self.output_manager = None
-      self.device         = None
+      self.device         = default_device
       self.preconditioner = None
 
       if 'output_manager' in kwargs: self.output_manager = kwargs['output_manager']

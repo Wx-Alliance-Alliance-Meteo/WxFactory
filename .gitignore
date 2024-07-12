@@ -11,6 +11,8 @@ doc/aux/*
 doc/svg-inkscape/*
 doc/**/*-eps-converted-to.pdf
 doc/**/*.eps
+doc/**/build
+doc/sphinx/source/_autosummary
 
 jacobian
 
