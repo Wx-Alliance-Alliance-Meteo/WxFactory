@@ -5,7 +5,7 @@ Research numerical weather model. The name is inspired by [Richardson’s Fantas
 
 WxFactory was built for Python 3.11 (at least).  It also requires an MPI implementation.
 
-## Python packages
+### Python packages
 * Python version at least 3.11
 * `numpy` Scientific tools for Python
 * `scipy` Python-based ecosystem of open-source software for mathematics, science, and engineering
@@ -14,19 +14,20 @@ WxFactory was built for Python 3.11 (at least).  It also requires an MPI impleme
 * `netcdf4` Python/NumPy interface to the netCDF C library (MPI version)
 * `matplotlib` A python plotting library, making publication quality plots
 
-## Other libraries
+### Other libraries
 * `netcdf4` Library to handle netCDF files. There is an MPI version of it, if you want parallel output
 * `sqlite` To be able to store solver stats.
 
-## Optional
-* `cartopy` A cartographic python library with matplotlib support for visualisation
-* `tqdm`   Progress bar when generating matrices
+### Optional
+* `cartopy`  A cartographic python library with matplotlib support for visualisation
+* `tqdm`     Progress bar when generating matrices
+* `snakeviz` A tool for visualizing profiling output
 
 Python packages can be installed with the package management system of your
 Linux distribution or with `pip`.  A few distribution specific instructions
 are given below.
 
-## Conda
+### Conda
 The necessary packages are available from the conda-forge channel, so it should
 be added to the list of default channels for easier use of the various commands
 ```
@@ -57,28 +58,22 @@ conda install snakeviz
 
 ```
 # With the cubed sphere as a grid:
-mpirun -n 6 ./main_gef.py config/case6.ini
+mpirun -n 6 ./WxFactory config/case6.ini
 
 # With the 2D cartesian grid:
-./main_gef.py config/gaussian_bubble.ini
+./WxFactory config/gaussian_bubble.ini
 ```
 
 ## Profiling WxFactory
 
 You can generate an execution profile when running WxFactory by adding the `--profile` flag to the main command. For example:
 ```
-mpirun -n 6 python3 ./main_gef.py --profile config/case6.ini
+mpirun -n 6 python3 ./WxFactory --profile config/case6.ini
 ```
 
 This will generate a set of `profile_####.out` files, one for each launched process, that can be viewed with `snakeviz`. _You need to be able to open a browser window from the terminal to use this command_:
 ```
 snakeviz ./profile_0000.out
-```
-
-## 2D test cases
-Here is an example of a command to run the model for the André Robert bubble test case:
-```
-python3 main_gef.py config/gaussian_bubble.ini
 ```
 
 ## If you find this project useful, please cite:
