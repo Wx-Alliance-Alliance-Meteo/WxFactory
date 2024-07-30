@@ -147,56 +147,25 @@ class DFROperators:
 
       self.quad_weights = numpy.outer(grd.glweights, grd.glweights)
 
-      # TODO : hackathon SG
       ident = numpy.identity(grd.nbsolpts)
-      self.extrap = numpy.vstack(( numpy.kron(self.extrap_down, ident),
-                                   numpy.kron(self.extrap_up,   ident), 
-                                   numpy.kron(ident, self.extrap_west),
-                                   numpy.kron(ident, self.extrap_east) )).T
+      self.extrap_x = numpy.vstack(( numpy.kron(ident, self.extrap_west),
+                                     numpy.kron(ident, self.extrap_east) )).T
+      self.extrap_z = numpy.vstack(( numpy.kron(self.extrap_down, ident),
+                                     numpy.kron(self.extrap_up,   ident) )).T
 
       self.derivative_x = numpy.kron(ident, self.diff_solpt).T
       self.derivative_z = numpy.kron(self.diff_solpt, ident).T
-      print(f'deriv base ({self.diff_solpt.shape}) = {self.diff_solpt}')
-
-      zeros_col = numpy.zeros_like(self.diff_ext[1:-1, 0])
 
       corr_down = self.diff_ext[1:-1, 0]
       corr_up   = self.diff_ext[1:-1, -1]
-      corr_west = zeros_col
-      corr_east = zeros_col
-
       self.correction_DU = numpy.vstack((numpy.kron(corr_down, numpy.identity(grd.nbsolpts)),
-                                         numpy.kron(corr_up,   numpy.identity(grd.nbsolpts)), 
-                                         numpy.kron(corr_west, numpy.identity(grd.nbsolpts)),
-                                         numpy.kron(corr_east, numpy.identity(grd.nbsolpts)) ))
+                                         numpy.kron(corr_up,   numpy.identity(grd.nbsolpts)) ))
 
-      corr_down = zeros_col
-      corr_up   = zeros_col
       corr_west = self.diff_ext[1:-1, 0]
       corr_east = self.diff_ext[1:-1, -1]
-
-      print(f'corr west ({corr_west.shape})= {corr_west}')
-      print(f'corr east ({corr_east.shape})= {corr_east}')
-      print(f'kron(west, I) = \n{numpy.kron(corr_west, numpy.identity(grd.nbsolpts))}')
-
-      self.correction_WE = numpy.vstack((numpy.kron(corr_down, numpy.identity(grd.nbsolpts)),
-                                         numpy.kron(corr_up,   numpy.identity(grd.nbsolpts)), 
-                                         numpy.kron(numpy.identity(grd.nbsolpts), corr_west),
+      self.correction_WE = numpy.vstack((numpy.kron(numpy.identity(grd.nbsolpts), corr_west),
                                          numpy.kron(numpy.identity(grd.nbsolpts), corr_east) ))
 
-      print(f'correction WE: \n{self.correction_WE}')
-
-      # # This flip is necessary to recover the same ordering of solution points than in the state vector
-      # # It converts from [elem boundary ordering] to [state vector ordering]
-      # tmp = self.correction_WE.copy()
-      # self.correction_WE[:, 1] = tmp[:, 2]
-      # self.correction_WE[:, 2] = tmp[:, 1]
-
-#      corr_elem = numpy.column_stack((self.diff_ext[1:-1, 0], self.diff_ext[1:-1, -1], zeros_col, zeros_col))
-#      self.correction_UD = numpy.tile(corr_elem, (4,1))
-
-#      corr_elem = numpy.column_stack((zeros_col, zeros_col, self.diff_ext[1:-1, 0], self.diff_ext[1:-1, -1]))
-#      self.correction_WE = numpy.tile(corr_elem, (4,1))
 
    def make_filter(self, alpha: float, order: int, cutoff: float, geom: Geometry):
       '''Build an exponential modal filter as described in Warburton, eqn 5.16.'''
