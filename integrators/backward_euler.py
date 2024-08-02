@@ -17,11 +17,9 @@ class BackwardEuler(Integrator):
       self.rhs = rhs_handle
       self.tol = param.tolerance
 
-   def BE_system(self, Q_plus, Q, dt, rhs):
-      return (Q_plus - Q) / dt - rhs(Q_plus)
-
    def __step__(self, Q, dt):
-      def BE_fun(Q_plus): return self.BE_system(Q_plus, Q, dt, self.rhs)
+      def BE_fun(Q_plus):
+         return (Q_plus - Q) / dt - self.rhs(Q_plus)
 
       maxiter = None
       if self.preconditioner is not None:
