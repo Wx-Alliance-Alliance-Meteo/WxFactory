@@ -13,7 +13,7 @@ import numpy
 def main():
    """Execute a WxFactory simulation.
    
-   This functions drives the program: read and validate command-line options, then create and run a simulation."""
+   This function drives the program: read and validate command-line options, then create and run a simulation."""
 
    args = None
    rank = MPI.COMM_WORLD.rank

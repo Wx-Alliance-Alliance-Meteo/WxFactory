@@ -8,6 +8,7 @@ num_devices = 0
 loading_error = None
 try:
    import cupy
+   import cupy_backends
 
    num_devices = cupy.cuda.runtime.getDeviceCount()
 
@@ -17,15 +18,21 @@ try:
 
 except ModuleNotFoundError as e:
    loading_error = e
-   # if MPI.COMM_WORLD.rank == 0:
-   #    print(f'cupy does not seem to be installed. '
-   #          f'You need it (and GPUs) to be able run GEF with device=cuda.\n'
-   #          f'We will run on CPU instead')
+   if MPI.COMM_WORLD.rank == 0:
+      print(f'cupy does not seem to be installed. '
+            f'You need it (and GPUs) to be able run GEF with device=cuda.\n'
+            f'We will run on CPU instead')
 
 except ImportError as e:
    loading_error = e
-   # if MPI.COMM_WORLD.rank == 0:
-   #    print(f'Module cupy is installed, but we were unable to load it, so we will run on CPUs instead')
+   if MPI.COMM_WORLD.rank == 0:
+      print(f'Module cupy is installed, but we were unable to load it, so we will run on CPUs instead')
+
+except cupy_backends.cuda.api.runtime.CUDARuntimeError as e:
+   loading_error = e
+   if MPI.COMM_WORLD.rank == 0:
+      print(f'{e}')
+      print(f'Module cupy is installed, but we could not find any CUDA device. Will run on CPU instead')
 
 except Exception as e:
    loading_error = e

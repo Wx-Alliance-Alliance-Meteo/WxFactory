@@ -160,8 +160,9 @@ def initialize_cartesian2d(geom: Cartesian2D, param: Configuration) -> NDArray[n
    nb_equations = 4
 
    # Initial state at rest, isentropic, hydrostatic
-   nk, ni = geom.X1.shape
-   Q      = numpy.zeros((nb_equations, nk, ni))    #TODO Should it not be like the arrays in Geometry (gpu vs cpu)?
+#   nk, ni = geom.X1.shape
+#   Q      = numpy.zeros((nb_equations, nk, ni))    #TODO Should it not be like the arrays in Geometry (gpu vs cpu)?
+   Q      = numpy.zeros((nb_equations, param.nb_elements_horizontal*param.nb_elements_vertical, geom.nbsolpts**2))
    uu     = numpy.zeros_like(geom.X1)
    ww     = numpy.zeros_like(geom.X1)
    exner  = numpy.zeros_like(geom.X1)
@@ -205,14 +206,17 @@ def initialize_cartesian2d(geom: Cartesian2D, param: Configuration) -> NDArray[n
                       θ + A,
                       θ + A * numpy.exp(-((r-a)/s)**2))
 
-      # Enforce mirror symmetry
-      if ni % 2 == 0:
-         middle_col = ni / 2
-      else:
-         middle_col = ni / 2 + 1
+      # TODO : hackathon SG
+      # TODO : refaire
 
-      for i in range(int(middle_col)):
-         θ[:, ni-i-1] = θ[:, i]
+      # Enforce mirror symmetry
+#      if ni % 2 == 0:
+#         middle_col = ni / 2
+#      else:
+#         middle_col = ni / 2 + 1
+#
+#      for i in range(int(middle_col)):
+#         θ[:, ni-i-1] = θ[:, i]
 
    elif param.case_number == 3:
       # Colliding bubbles

@@ -129,9 +129,9 @@ class DFROperators:
                   self.beta[k,i] = self.beta[k,i] + (1.0 / param.sponge_tscale) * \
                                    numpy.sin((0.5*numpy.pi) * (grd.X3[k,i] - zs) / (param.z1 - zs))**2
 
-      # if check_skewcentrosymmetry(self.diff_ext) is False:
-      #    print('Something horribly wrong has happened in the creation of the differentiation matrix')
-      #    exit(1)
+      if check_skewcentrosymmetry(self.diff_ext) is False:
+         print('Something horribly wrong has happened in the creation of the differentiation matrix')
+         exit(1)
 
       # Force matrices to be in C-contiguous order
       self.diff_solpt = self.diff_ext[1:-1, 1:-1].copy()
@@ -146,6 +146,26 @@ class DFROperators:
       self.diff_tr = self.diff.T
 
       self.quad_weights = numpy.outer(grd.glweights, grd.glweights)
+
+      ident = numpy.identity(grd.nbsolpts)
+      self.extrap_x = numpy.vstack(( numpy.kron(ident, self.extrap_west),
+                                     numpy.kron(ident, self.extrap_east) )).T
+      self.extrap_z = numpy.vstack(( numpy.kron(self.extrap_down, ident),
+                                     numpy.kron(self.extrap_up,   ident) )).T
+
+      self.derivative_x = numpy.kron(ident, self.diff_solpt).T
+      self.derivative_z = numpy.kron(self.diff_solpt, ident).T
+
+      corr_down = self.diff_ext[1:-1, 0]
+      corr_up   = self.diff_ext[1:-1, -1]
+      self.correction_DU = numpy.vstack((numpy.kron(corr_down, numpy.identity(grd.nbsolpts)),
+                                         numpy.kron(corr_up,   numpy.identity(grd.nbsolpts)) ))
+
+      corr_west = self.diff_ext[1:-1, 0]
+      corr_east = self.diff_ext[1:-1, -1]
+      self.correction_WE = numpy.vstack((numpy.kron(numpy.identity(grd.nbsolpts), corr_west),
+                                         numpy.kron(numpy.identity(grd.nbsolpts), corr_east) ))
+
 
    def make_filter(self, alpha: float, order: int, cutoff: float, geom: Geometry):
       '''Build an exponential modal filter as described in Warburton, eqn 5.16.'''

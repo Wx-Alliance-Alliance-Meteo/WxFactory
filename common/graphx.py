@@ -55,27 +55,27 @@ def image_field(geom: 'Cartesian2D', field: numpy.ndarray, filename: str, vmin: 
                 label: str = 'K', colormap: str = 'jet'):
    fig, ax = matplotlib.pyplot.subplots()
 
-   if not geom.xperiodic:
-      cmap = matplotlib.pyplot.contourf(geom.X1, geom.X3, field, cmap=colormap,
+#   if not geom.xperiodic:
+   cmap = matplotlib.pyplot.contourf(geom.X1_cartesian, geom.X3_cartesian, field, cmap=colormap,
                                        levels=numpy.linspace(vmin,vmax,n), extend="both")
-   else:
+#   else:
       # X1 = numpy.append(geom.X1[:, -1:], geom.X1, axis=1)
       # print(f'geom x1: \n{geom.X1[:, :2]}')
       # print(f'x1: {X1[:, :3]}')
       # raise ValueError
-      X1 = numpy.append(numpy.append(geom.X1[:, -2:], geom.X1, axis=1), geom.X1[:, :2], axis=1)
-      X1[:,  1] = 2*X1[:,  2] - X1[:,  3]
-      X1[:,  0] = 2*X1[:,  1] - X1[:,  2]
-      X1[:, -2] = 2*X1[:, -3] - X1[:, -4]
-      X1[:, -1] = 2*X1[:, -2] - X1[:, -3]
-      X3 = numpy.append(numpy.append(geom.X3[:, -2:], geom.X3, axis=1), geom.X3[:, :2], axis=1)
-      X3[:,  1] = 2*X3[:,  2] - X3[:,  3]
-      X3[:,  0] = 2*X3[:,  1] - X3[:,  2]
-      X3[:, -2] = 2*X3[:, -3] - X3[:, -4]
-      X3[:, -1] = 2*X3[:, -2] - X3[:, -3]
-      f  = numpy.append(numpy.append(field[:, -2:], field, axis=1), field[:, :2], axis=1)
-      cmap = matplotlib.pyplot.contourf(X1, X3, f, cmap=colormap,
-                                       levels=numpy.linspace(vmin,vmax,n), extend="both")
+#      X1 = numpy.append(numpy.append(geom.X1[:, -2:], geom.X1, axis=1), geom.X1[:, :2], axis=1)
+#      X1[:,  1] = 2*X1[:,  2] - X1[:,  3]
+#      X1[:,  0] = 2*X1[:,  1] - X1[:,  2]
+#      X1[:, -2] = 2*X1[:, -3] - X1[:, -4]
+#      X1[:, -1] = 2*X1[:, -2] - X1[:, -3]
+#      X3 = numpy.append(numpy.append(geom.X3[:, -2:], geom.X3, axis=1), geom.X3[:, :2], axis=1)
+#      X3[:,  1] = 2*X3[:,  2] - X3[:,  3]
+#      X3[:,  0] = 2*X3[:,  1] - X3[:,  2]
+#      X3[:, -2] = 2*X3[:, -3] - X3[:, -4]
+#      X3[:, -1] = 2*X3[:, -2] - X3[:, -3]
+#      f  = numpy.append(numpy.append(field[:, -2:], field, axis=1), field[:, :2], axis=1)
+#      cmap = matplotlib.pyplot.contourf(X1, X3, f, cmap=colormap,
+#                                       levels=numpy.linspace(vmin,vmax,n), extend="both")
    ax.set_aspect('equal', 'box')
 
    cbar = fig.colorbar(cmap, ax=ax, orientation='vertical', shrink=0.5)
