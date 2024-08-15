@@ -1,5 +1,5 @@
 import math
-from   typing import Optional
+from   typing import Callable, List, Optional, Tuple, TypeVar
 
 from   mpi4py import MPI
 import numpy
@@ -8,36 +8,51 @@ from   numpy.typing import NDArray
 from .definitions import *
 from .device import Device
 
-class ProcessTopology:
-   def __init__(self, device: Device):
+ExchangedVector = Tuple[NDArray, NDArray] | Tuple[NDArray, NDArray, NDArray] | List[NDArray] | NDArray
 
-      # The numbering of the PEs starts at the bottom right. Pannel ranks increase towards the east in the x1 direction and increases towards the north in the x2 direction:
-      #
-      #            0 1 2 3 4
-      #         +-----------+
-      #       4 |           |
-      #       3 |  x_2      |
-      #       2 |  ^        |
-      #       1 |  |        |
-      #       0 |  + -->x_1 |
-      #         +-----------+
-      #
-      # For instance, with n=96 the panel 0 will be endowed with a 4x4 topology like this
-      #
-      #      +---+---+---+---+
-      #      | 12| 13| 14| 15|
-      #      |---+---+---+---|
-      #      | 8 | 9 | 10| 11|
-      #      |---+---+---+---|
-      #      | 4 | 5 | 6 | 7 |
-      #      |---+---+---+---|
-      #      | 0 | 1 | 2 | 3 |
-      #      +---+---+---+---+
+SOUTH = 0
+NORTH = 1
+WEST  = 2
+EAST  = 3
+
+class ProcessTopology:
+
+   def __init__(self, device: Device, rank: Optional[int]=None):
+      """Create a cube-sphere process topology.
+
+      Args:
+         :param device (Device): Device on which MPI exchanges are to be made, like a CPU or a GPU.
+         :param rank: [Optional] Rank of the tile the topology will manage. This is useful for creating a tile with a rank
+                      different from the process rank, for debugging purposes.
+
+      The numbering of the PEs starts at the bottom right. Panel ranks increase towards the east in the x1 direction and increases towards the north in the x2 direction:
+      
+                 0 1 2 3 4
+              +-----------+
+            4 |           |
+            3 |  x_2      |
+            2 |  ^        |
+            1 |  |        |
+            0 |  + -->x_1 |
+              +-----------+
+      
+      For instance, with n=96 the panel 0 will be endowed with a 4x4 topology like this
+      
+           +---+---+---+---+
+           | 12| 13| 14| 15|
+           |---+---+---+---|
+           | 8 | 9 | 10| 11|
+           |---+---+---+---|
+           | 4 | 5 | 6 | 7 |
+           |---+---+---+---|
+           | 0 | 1 | 2 | 3 |
+           +---+---+---+---+
+      """
 
       self.device = device
 
       self.size = MPI.COMM_WORLD.Get_size()
-      self.rank = MPI.COMM_WORLD.Get_rank()
+      self.rank = MPI.COMM_WORLD.Get_rank() if rank is None else rank
 
       self.nb_pe_per_panel = int(self.size / 6)
       self.nb_lines_per_panel = int(math.sqrt(self.nb_pe_per_panel))
@@ -67,136 +82,109 @@ class ProcessTopology:
       #      | 5 |
       #      +---+
 
-      my_north_panel = -1
-      my_south_panel = -1
-      my_west_panel = -1
-      my_east_panel = -1
+      all_neighbors = [
+      #   S  N  W  E
+         [5, 4, 3, 1],  # Panel 0
+         [5, 4, 0, 2],  # Panel 1
+         [5, 4, 1, 3],  # Panel 2
+         [5, 4, 2, 0],  # Panel 3
+         [0, 2, 3, 1],  # Panel 4
+         [2, 0, 3, 1],  # Panel 5
+      ]
 
-      if self.my_panel == 0:
-         my_north_panel = 4
-         my_south_panel = 5
-         my_west_panel = 3
-         my_east_panel = 1
-      elif self.my_panel == 1:
-         my_north_panel = 4
-         my_south_panel = 5
-         my_west_panel = 0
-         my_east_panel = 2
-      elif self.my_panel == 2:
-         my_north_panel = 4
-         my_south_panel = 5
-         my_west_panel = 1
-         my_east_panel = 3
-      elif self.my_panel == 3:
-         my_north_panel = 4
-         my_south_panel = 5
-         my_west_panel = 2
-         my_east_panel = 0
-      elif self.my_panel == 4:
-         my_north_panel = 2
-         my_south_panel = 0
-         my_west_panel = 3
-         my_east_panel = 1
-      elif self.my_panel == 5:
-         my_north_panel = 0
-         my_south_panel = 2
-         my_west_panel = 3
-         my_east_panel = 1
+      neighbor_panels = all_neighbors[self.my_panel]
 
       # --- List of PE neighbours for my PE
 
-      self.flip_north = False
-      self.flip_south = False
-      self.flip_west  = False
-      self.flip_east  = False
+      self.flip = [False, False, False, False]
 
-      self.convert_contra_north = lambda a1, a2, X: (a1, a2)
-      self.convert_contra_south = lambda a1, a2, X: (a1, a2)
-      self.convert_contra_west  = lambda a1, a2, Y: (a1, a2)
-      self.convert_contra_east  = lambda a1, a2, Y: (a1, a2)
+      def convert_contra(a1, a2, coord):
+         return (a1, a2)
+
+      self.convert_contra = [convert_contra, convert_contra, convert_contra, convert_contra]
 
       # North
       my_north = rank_from_location(self.my_panel, (self.my_row + 1), self.my_col)
       if self.my_row == self.nb_lines_per_panel - 1:
          if self.my_panel == 0:
-            my_north = rank_from_location(my_north_panel, 0, self.my_col)
-            self.convert_contra_north = lambda a1, a2, X: (a1 - 2.0 * X / (1.0 + X**2) * a2, a2)
+            my_north = rank_from_location(neighbor_panels[NORTH], 0, self.my_col)
+            self.convert_contra[NORTH] = lambda a1, a2, coord: (a1 - 2.0 * coord / (1.0 + coord**2) * a2, a2)
          elif self.my_panel == 1:
-            my_north = rank_from_location(my_north_panel, self.my_col, self.nb_lines_per_panel - 1)
-            self.convert_contra_north = lambda a1, a2, X: (-a2, a1 - 2.0 * X / (1.0 + X**2) * a2)
+            my_north = rank_from_location(neighbor_panels[NORTH], self.my_col, self.nb_lines_per_panel - 1)
+            self.convert_contra[NORTH] = lambda a1, a2, coord: (-a2, a1 - 2.0 * coord / (1.0 + coord**2) * a2)
          elif self.my_panel == 2:
-            my_north = rank_from_location(my_north_panel, self.nb_lines_per_panel - 1, self.nb_lines_per_panel - 1 - self.my_col)
-            self.convert_contra_north = lambda a1, a2, X: (-a1 + 2.0 * X / (1.0 + X**2) * a2, -a2)
-            self.flip_north = True
+            my_north = rank_from_location(neighbor_panels[NORTH], self.nb_lines_per_panel - 1, self.nb_lines_per_panel - 1 - self.my_col)
+            self.convert_contra[NORTH] = lambda a1, a2, coord: (-a1 + 2.0 * coord / (1.0 + coord**2) * a2, -a2)
+            self.flip[NORTH] = True
          elif self.my_panel == 3:
-            my_north = rank_from_location(my_north_panel, self.nb_lines_per_panel - 1 - self.my_col, 0)
-            self.convert_contra_north = lambda a1, a2, X: (a2 , -a1 + 2.0 * X / (1.0 + X**2) * a2)
-            self.flip_north = True
+            my_north = rank_from_location(neighbor_panels[NORTH], self.nb_lines_per_panel - 1 - self.my_col, 0)
+            self.convert_contra[NORTH] = lambda a1, a2, coord: (a2 , -a1 + 2.0 * coord / (1.0 + coord**2) * a2)
+            self.flip[NORTH] = True
          elif self.my_panel == 4:
-            my_north = rank_from_location(my_north_panel, self.nb_lines_per_panel - 1, self.nb_lines_per_panel - 1 - self.my_col)
-            self.convert_contra_north = lambda a1, a2, X: (-a1 + 2.0 * X / (1.0 + X**2) * a2, -a2)
-            self.flip_north = True
+            my_north = rank_from_location(neighbor_panels[NORTH], self.nb_lines_per_panel - 1, self.nb_lines_per_panel - 1 - self.my_col)
+            self.convert_contra[NORTH] = lambda a1, a2, coord: (-a1 + 2.0 * coord / (1.0 + coord**2) * a2, -a2)
+            self.flip[NORTH] = True
          elif self.my_panel == 5:
-            my_north = rank_from_location(my_north_panel, 0, self.my_col)
-            self.convert_contra_north = lambda a1, a2, X: (a1 - 2.0 * X / (1.0 + X**2) * a2, a2)
+            my_north = rank_from_location(neighbor_panels[NORTH], 0, self.my_col)
+            self.convert_contra[NORTH] = lambda a1, a2, coord: (a1 - 2.0 * coord / (1.0 + coord**2) * a2, a2)
 
       # South
       my_south = rank_from_location(self.my_panel, (self.my_row - 1), self.my_col)
       if self.my_row == 0:
          if self.my_panel == 0:
-            my_south = rank_from_location(my_south_panel, self.nb_elems_per_line-1, self.my_col)
-            self.convert_contra_south = lambda a1, a2, X: (a1 + 2.0 * X / (1.0 + X**2) * a2, a2)
+            my_south = rank_from_location(neighbor_panels[SOUTH], self.nb_elems_per_line-1, self.my_col)
+            self.convert_contra[SOUTH] = lambda a1, a2, coord: (a1 + 2.0 * coord / (1.0 + coord**2) * a2, a2)
          elif self.my_panel == 1:
-            my_south = rank_from_location(my_south_panel, self.nb_elems_per_line - 1 - self.my_col, self.nb_lines_per_panel-1)
-            self.convert_contra_south = lambda a1, a2, X: (a2, -a1 - 2.0 * X / (1.0 + X**2) * a2)
-            self.flip_south = True
+            my_south = rank_from_location(neighbor_panels[SOUTH], self.nb_elems_per_line - 1 - self.my_col, self.nb_lines_per_panel-1)
+            self.convert_contra[SOUTH] = lambda a1, a2, coord: (a2, -a1 - 2.0 * coord / (1.0 + coord**2) * a2)
+            self.flip[SOUTH] = True
          elif self.my_panel == 2:
-            my_south = rank_from_location(my_south_panel, 0, self.nb_lines_per_panel - 1 - self.my_col)
-            self.convert_contra_south = lambda a1, a2, X: (-a1 - 2.0 * X / (1.0 + X**2) * a2, -a2)
-            self.flip_south = True
+            my_south = rank_from_location(neighbor_panels[SOUTH], 0, self.nb_lines_per_panel - 1 - self.my_col)
+            self.convert_contra[SOUTH] = lambda a1, a2, coord: (-a1 - 2.0 * coord / (1.0 + coord**2) * a2, -a2)
+            self.flip[SOUTH] = True
          elif self.my_panel == 3:
-            my_south = rank_from_location(my_south_panel, self.my_col, 0)
-            self.convert_contra_south = lambda a1, a2, X: (-a2, a1 + 2.0 * X / (1.0 + X**2) * a2)
+            my_south = rank_from_location(neighbor_panels[SOUTH], self.my_col, 0)
+            self.convert_contra[SOUTH] = lambda a1, a2, coord: (-a2, a1 + 2.0 * coord / (1.0 + coord**2) * a2)
          elif self.my_panel == 4:
-            my_south = rank_from_location(my_south_panel, self.nb_elems_per_line-1, self.my_col)
-            self.convert_contra_south = lambda a1, a2, X: (a1 + 2.0 * X / (1.0 + X**2) * a2, a2)
+            my_south = rank_from_location(neighbor_panels[SOUTH], self.nb_elems_per_line-1, self.my_col)
+            self.convert_contra[SOUTH] = lambda a1, a2, coord: (a1 + 2.0 * coord / (1.0 + coord**2) * a2, a2)
          elif self.my_panel == 5:
-            my_south = rank_from_location(my_south_panel, 0, self.nb_elems_per_line - 1 - self.my_col)
-            self.convert_contra_south = lambda a1, a2, X: (-a1 - 2.0 * X / (1.0 + X**2) * a2, -a2)
-            self.flip_south = True
+            my_south = rank_from_location(neighbor_panels[SOUTH], 0, self.nb_elems_per_line - 1 - self.my_col)
+            self.convert_contra[SOUTH] = lambda a1, a2, coord: (-a1 - 2.0 * coord / (1.0 + coord**2) * a2, -a2)
+            self.flip[SOUTH] = True
 
       # West
       if self.my_col == 0:
          if self.my_panel == 4:
-            my_west = rank_from_location(my_west_panel, self.nb_lines_per_panel-1, self.nb_lines_per_panel - 1 - self.my_row)
-            self.flip_west = True
-            self.convert_contra_west = lambda a1, a2, Y: (-2. * Y / ( 1. + Y**2 ) * a1 - a2, a1)
+            my_west = rank_from_location(neighbor_panels[WEST], self.nb_lines_per_panel-1, self.nb_lines_per_panel - 1 - self.my_row)
+            self.flip[WEST] = True
+            self.convert_contra[WEST] = lambda a1, a2, coord: (-2. * coord / ( 1. + coord**2 ) * a1 - a2, a1)
          elif self.my_panel == 5:
-            my_west = rank_from_location(my_west_panel, 0, self.my_row)
-            self.convert_contra_west = lambda a1, a2, Y: (2. * Y / ( 1. + Y**2 ) * a1 + a2, -a1)
+            my_west = rank_from_location(neighbor_panels[WEST], 0, self.my_row)
+            self.convert_contra[WEST] = lambda a1, a2, coord: (2. * coord / ( 1. + coord**2 ) * a1 + a2, -a1)
          else:
-            my_west = rank_from_location(my_west_panel, self.my_row, self.nb_lines_per_panel-1)
-            self.convert_contra_west = lambda a1, a2, Y: (a1, 2. * Y / ( 1. + Y**2 ) * a1 + a2)
+            my_west = rank_from_location(neighbor_panels[WEST], self.my_row, self.nb_lines_per_panel-1)
+            self.convert_contra[WEST] = lambda a1, a2, coord: (a1, 2. * coord / ( 1. + coord**2 ) * a1 + a2)
       else:
          my_west = rank_from_location(self.my_panel, self.my_row, (self.my_col-1))
 
       # East
       if self.my_col == self.nb_elems_per_line-1:
          if self.my_panel == 4:
-            my_east = rank_from_location(my_east_panel, self.nb_lines_per_panel-1, self.my_row)
-            self.convert_contra_east = lambda a1, a2, Y: (-2. * Y / ( 1. + Y**2) * a1 + a2, -a1)
+            my_east = rank_from_location(neighbor_panels[EAST], self.nb_lines_per_panel-1, self.my_row)
+            self.convert_contra[EAST] = lambda a1, a2, coord: (-2. * coord / ( 1. + coord**2) * a1 + a2, -a1)
          elif self.my_panel == 5:
-            my_east = rank_from_location(my_east_panel, 0, self.nb_lines_per_panel - 1 - self.my_row)
-            self.flip_east = True
-            self.convert_contra_east = lambda a1, a2, Y: (2. * Y / ( 1. + Y**2 ) * a1 - a2, a1)
+            my_east = rank_from_location(neighbor_panels[EAST], 0, self.nb_lines_per_panel - 1 - self.my_row)
+            self.flip[EAST] = True
+            self.convert_contra[EAST] = lambda a1, a2, coord: (2. * coord / ( 1. + coord**2 ) * a1 - a2, a1)
          else:
-            my_east = rank_from_location(my_east_panel, self.my_row, 0)
-            self.convert_contra_east = lambda a1, a2, Y: (a1, -2. * Y / (1. + Y**2 ) * a1 + a2)
+            my_east = rank_from_location(neighbor_panels[EAST], self.my_row, 0)
+            self.convert_contra[EAST] = lambda a1, a2, coord: (a1, -2. * coord / (1. + coord**2 ) * a1 + a2)
       else:
          my_east = rank_from_location(self.my_panel, self.my_row, self.my_col+1)
 
       # Distributed Graph
-      self.sources = [my_north, my_south, my_west, my_east]
+      self.sources = [my_south, my_north, my_west, my_east] # Must correspond to values of SOUTH, NORTH, WEST, EAST
       self.destinations = self.sources
 
       self.comm_dist_graph = MPI.COMM_WORLD.Create_dist_graph_adjacent(self.sources, self.destinations)
@@ -206,8 +194,8 @@ class ProcessTopology:
 
 
    def send_recv_neighbors(self,
-                           north_send: NDArray,
                            south_send: NDArray,
+                           north_send: NDArray,
                            west_send: NDArray,
                            east_send: NDArray,
                            flip_dim: int,
@@ -215,8 +203,8 @@ class ProcessTopology:
 
       xp = self.device.xp
       send_buffer = xp.empty(((4,) + north_send.shape), dtype=north_send.dtype)
-      for do_flip, data, buffer in zip([self.flip_north, self.flip_south, self.flip_west, self.flip_east],
-                                       [north_send, south_send, west_send, east_send],
+      for do_flip, data, buffer in zip(self.flip,
+                                       [south_send, north_send, west_send, east_send],
                                        [send_buffer[0], send_buffer[1], send_buffer[2], send_buffer[3]]):
          buffer[:] = xp.flip(data, flip_dim) if do_flip else data
 
@@ -249,7 +237,7 @@ class ProcessTopology:
       w_recv = get_rows(field_itf_i, 0, 1)
       e_recv = get_rows(field_itf_i, -1, 0)
 
-      request, n_recv_buf, s_recv_buf, w_recv_buf, e_recv_buf = self.send_recv_neighbors(n_send, s_send, w_send, e_send, flip_dim, sync=False)
+      request, n_recv_buf, s_recv_buf, w_recv_buf, e_recv_buf = self.send_recv_neighbors(s_send, n_send, w_send, e_send, flip_dim, sync=False)
       request = ScalarNonBlockingExchangeRequest((n_recv_buf, s_recv_buf, w_recv_buf, e_recv_buf), (n_recv, s_recv, w_recv, e_recv), request)
 
       if blocking:
@@ -266,10 +254,10 @@ class ProcessTopology:
       flip_dim = ndim - 1
       sendbuf = numpy.empty((4, ndim) + u1_n.shape, dtype=u1_n.dtype, like=u1_n)
 
-      sendbuf[0, 0, :], sendbuf[0, 1, :] = self.convert_contra_north(u1_n, u2_n, X)
-      sendbuf[1, 0, :], sendbuf[1, 1, :] = self.convert_contra_south(u1_s, u2_s, X)
-      sendbuf[2, 0, :], sendbuf[2, 1, :] = self.convert_contra_west(u1_w, u2_w, Y)
-      sendbuf[3, 0, :], sendbuf[3, 1, :] = self.convert_contra_east(u1_e, u2_e, Y)
+      sendbuf[0, 0, :], sendbuf[0, 1, :] = self.convert_contra[NORTH](u1_n, u2_n, X)
+      sendbuf[1, 0, :], sendbuf[1, 1, :] = self.convert_contra[SOUTH](u1_s, u2_s, X)
+      sendbuf[2, 0, :], sendbuf[2, 1, :] = self.convert_contra[WEST](u1_w, u2_w, Y)
+      sendbuf[3, 0, :], sendbuf[3, 1, :] = self.convert_contra[EAST](u1_e, u2_e, Y)
 
       if u3_n is not None:
          sendbuf[0, 2, :] = u3_n
@@ -277,7 +265,7 @@ class ProcessTopology:
          sendbuf[2, 2, :] = u3_w
          sendbuf[3, 2, :] = u3_e
 
-      return self.send_recv_neighbors(sendbuf[0], sendbuf[1], sendbuf[2], sendbuf[3], flip_dim, sync=sync)
+      return self.send_recv_neighbors(sendbuf[1], sendbuf[0], sendbuf[2], sendbuf[3], flip_dim, sync=sync)
 
 
    def xchange_halo(self, f, halo_size=1):
@@ -287,7 +275,7 @@ class ProcessTopology:
       f_ext[h:-h, h:-h] = f[:, :]
 
       request, f_ext[-1, h:-h], f_ext[0, h:-h], f_ext[h:-h, 0], f_ext[h:-h, -1] = self.send_recv_neighbors(
-         f[-1, :], f[0, :], f[:, 0], f[:, -1], 0)
+         f[0, :], f[-1, :], f[:, 0], f[:, -1], 0)
 
       return request, f_ext
 
@@ -321,52 +309,6 @@ class ProcessTopology:
       return request, f_x1_ext, f_x2_ext
 
 
-   def xchange_sw_interfaces(self, geom, h_i, h_j, u1_i, u2_i, u1_j, u2_j, blocking=True):
-      get_rows = self.get_rows_2d
-      X = geom.X[0, :]
-      Y = geom.Y[:, 0]
-      flip_dim = 0
-
-      # Get the right origin vectors
-      h_n, u1_n, u2_n = (get_rows(h_j, -2, 1), get_rows(u1_j, -2, 1), get_rows(u2_j, -2, 1))
-      h_s, u1_s, u2_s = (get_rows(h_j,  1, 0), get_rows(u1_j,  1, 0), get_rows(u2_j,  1, 0))
-      h_w, u1_w, u2_w = (get_rows(h_i,  1, 0), get_rows(u1_i,  1, 0), get_rows(u2_i,  1, 0))
-      h_e, u1_e, u2_e = (get_rows(h_i, -2, 1), get_rows(u1_i, -2, 1), get_rows(u2_i, -2, 1))
-
-      send_buffer    = numpy.empty((4, 3) + h_n.shape, dtype=h_n.dtype)
-      receive_buffer = numpy.empty_like(send_buffer)
-
-      # Flip data (if needed), convert u vectors to neighbor coordinate system, and put all that into send buffer
-      for do_flip, convert, positions, h, (u1, u2), buffer in zip(
-            [self.flip_north, self.flip_south, self.flip_west, self.flip_east],
-            [self.convert_contra_north, self.convert_contra_south, self.convert_contra_west, self.convert_contra_east],
-            [X, X, Y, Y],
-            [h_n, h_s, h_w, h_e], [(u1_n, u2_n), (u1_s, u2_s), (u1_w, u2_w), (u1_e, u2_e)],
-            [send_buffer[0], send_buffer[1], send_buffer[2], send_buffer[3]]):
-         buffer[0, :] = numpy.flip(h) if do_flip else h
-         tmp1, tmp2 = convert(u1, u2, positions)
-         buffer[1, :] = numpy.flip(tmp1, flip_dim) if do_flip else tmp1
-         buffer[2, :] = numpy.flip(tmp2, flip_dim) if do_flip else tmp2
-
-      # Initiate data transfer
-      mpi_request = self.comm_dist_graph.Ineighbor_alltoall(send_buffer, receive_buffer)
-
-      # Destination vectors
-      h_n_dest, u1_n_dest, u2_n_dest = (get_rows(h_j, -1, 0), get_rows(u1_j, -1, 0), get_rows(u2_j, -1, 0))
-      h_s_dest, u1_s_dest, u2_s_dest = (get_rows(h_j,  0, 1), get_rows(u1_j,  0, 1), get_rows(u2_j,  0, 1))
-      h_w_dest, u1_w_dest, u2_w_dest = (get_rows(h_i,  0, 1), get_rows(u1_i,  0, 1), get_rows(u2_i,  0, 1))
-      h_e_dest, u1_e_dest, u2_e_dest = (get_rows(h_i, -1, 0), get_rows(u1_i, -1, 0), get_rows(u2_i, -1, 0))
-      request = ShallowWaterExchangeRequest(
-         receive_buffer,
-         ((h_n_dest, u1_n_dest, u2_n_dest), (h_s_dest, u1_s_dest, u2_s_dest),
-          (h_w_dest, u1_w_dest, u2_w_dest), (h_e_dest, u1_e_dest, u2_e_dest)),
-         mpi_request)
-
-      if blocking:
-         request.wait()
-
-      return request
-
    def xchange_Euler_interfaces(self,
                                 geom: 'CubedSphere',
                                 variables_itf_i: NDArray,
@@ -392,10 +334,10 @@ class ProcessTopology:
 
       # Fill the send buffer, flipping when necessary and converting vector values
       for do_flip, convert, positions, var, buffer in zip(
-         [self.flip_north, self.flip_south, self.flip_west, self.flip_east],
-         [self.convert_contra_north, self.convert_contra_south, self.convert_contra_west, self.convert_contra_east],
+         self.flip,
+         self.convert_contra,
          [X, X, Y, Y],
-         [var_n, var_s, var_w, var_e],
+         [var_s, var_n, var_w, var_e],
          [send_buffer[0], send_buffer[1], send_buffer[2], send_buffer[3]]):
 
          for id in [idx_rho, idx_rho_w, idx_rho_theta]:
@@ -417,12 +359,88 @@ class ProcessTopology:
       var_w_dest = variables_itf_i[:, :, 0, 1, :]
       var_e_dest = variables_itf_i[:, :, -1, 0, :]
 
-      request = EulerExchangeRequest(recv_buffer, (var_n_dest, var_s_dest, var_w_dest, var_e_dest), mpi_request)
+      request = EulerExchangeRequest(recv_buffer, (var_s_dest, var_n_dest, var_w_dest, var_e_dest), mpi_request)
 
       if blocking:
          request.wait()
 
       return request
+
+   
+   def start_exchange_scalars(self,
+                              south: ExchangedVector,
+                              north: ExchangedVector,
+                              west: ExchangedVector,
+                              east: ExchangedVector):
+      """Create a request for exchanging scalar data with neighboring tiles. The 4 input arrays or lists must have the same shape and size.
+      
+      Args:
+         :param south: Array (or tuple/list of arrays) of values for the south boundary (one array-like for each component, so there should be 2 or 3 arrays in the tuple)
+         :param north: Array (or tuple/list of arrays) of values for the north boundary (one array-like for each component, so there should be 2 or 3 arrays in the tuple)
+         :param west:  Array (or tuple/list of arrays) of values for the west boundary (one array-like for each component, so there should be 2 or 3 arrays in the tuple)
+         :param east:  Array (or tuple/list of arrays) of values for the east boundary (one array-like for each component, so there should be 2 or 3 arrays in the tuple)
+
+      Returns:
+         A request (MPI-like) for the transfer of the scalar values. Waiting on the request will return the resulting arrays in the same way as the input.
+      """
+      xp = self.device.xp
+
+      if isinstance(south, list) or isinstance(south, tuple):
+         base_shape = (4, len(south)) + south[0].shape
+         flip_dim = south[0].ndim - 2
+      else:
+         base_shape = (4,) + south.shape
+         flip_dim = south.ndim - 2
+
+      send_buffer = xp.empty(base_shape, dtype=south[0].dtype)
+      # print(f'send buffer shape = {send_buffer.shape}')
+      input = [south, north, west, east]
+      for i in range(4):
+         send_buffer[i] = xp.flip(input[i], flip_dim) if self.flip[i] else input[i]
+
+      recv_buffer = xp.empty_like(send_buffer)
+      self.device.synchronize() # When using GPU
+
+      # Initiate MPI transfer
+      mpi_request = self.comm_dist_graph.Ineighbor_alltoall(send_buffer, recv_buffer)
+
+      return ExchangeRequest(recv_buffer, mpi_request, is_vector=False)
+
+   def start_exchange_vectors(self, south, north, west, east, boundary_sn, boundary_we):
+      """Create a request for exchanging vectors with neighboring tiles. The 4 input vectors must have the same shape and size.
+      
+      Args:
+         :param south: Tuple/List of vector components for the south boundary (one array-like for each component, so there should be 2 or 3 arrays in the tuple)
+         :param north: Tuple/List of vector components for the north boundary (one array-like for each component, so there should be 2 or 3 arrays in the tuple)
+         :param west:  Tuple/List of vector components for the west boundary (one array-like for each component, so there should be 2 or 3 arrays in the tuple)
+         :param east:  Tuple/List of vector components for the east boundary (one array-like for each component, so there should be 2 or 3 arrays in the tuple)
+         :param boundary_sn: Coordinates along the west-east axis at the south and north boundaries
+         :param boundary_we: Coordinates along the south-north axis at the west and east boundaries
+
+      Returns:
+         A request (MPI-like) for the transfer of the arrays. Waiting on the request will return the resulting arrays in the same way as the input.
+      """
+      xp = self.device.xp
+
+      flip_dim = south[0].ndim - 2
+
+      base_shape = (4, len(south)) + south[0].shape
+      send_buffer = xp.empty(base_shape, dtype=south[0].dtype)
+
+      input = [south, north, west, east]
+      boundaries = [boundary_sn, boundary_sn, boundary_we, boundary_we]
+      for i in range(4):
+         send_buffer[i, 0], send_buffer[i, 1] = self.convert_contra[i](input[i][0], input[i][1], boundaries[i])
+         if len(input[i]) == 3: send_buffer[i, 2] = input[i][2]               # 3rd dimension if present
+         if self.flip[i]: send_buffer[i] = xp.flip(send_buffer[i], flip_dim)  # Flip arrays, if needed
+
+      recv_buffer = xp.empty_like(send_buffer)
+      self.device.synchronize() # When using GPU
+
+      # Initiate MPI transfer
+      mpi_request = self.comm_dist_graph.Ineighbor_alltoall(send_buffer, recv_buffer)
+
+      return ExchangeRequest(recv_buffer, mpi_request, is_vector=True)
 
    def xchange_vectors(self, geom, u1_itf_i, u2_itf_i, u1_itf_j, u2_itf_j, u3_itf_i=None, u3_itf_j=None, blocking=True):
 
@@ -476,413 +494,6 @@ class ProcessTopology:
       return request
 
 
-   def xchange_covectors(self, geom, u1_itf_i, u2_itf_i, u1_itf_j, u2_itf_j):
-
-      #      +---+
-      #      | 4 |
-      #  +---+---+---+---+
-      #  | 3 | 0 | 1 | 2 |
-      #  +---+---+---+---+
-      #      | 5 |
-      #      +---+
-
-      data_type = u1_itf_i.dtype
-      sendbuf_u1 = numpy.zeros((4, len(u1_itf_i[0, 0, :])), dtype=data_type)
-      sendbuf_u2 = numpy.zeros_like(sendbuf_u1)
-
-      X = geom.X[0,:]
-      Y = geom.Y[:,0]
-
-      # --- Send to northern neighbours
-
-      if self.my_row == self.nb_lines_per_panel - 1:
-
-         if self.my_panel == 0:
-
-            sendbuf_u1[0,:] = u1_itf_j[-2, 1, :]
-            sendbuf_u2[0,:] = u2_itf_j[-2, 1, :] + 2. * X / ( 1. + X**2) * u1_itf_j[-2, 1, :]
-
-         elif self.my_panel == 1:
-
-            sendbuf_u1[0,:] = -u2_itf_j[-2, 1, :] - 2. * X / ( 1. + X**2 ) * u1_itf_j[-2, 1, :]
-            sendbuf_u2[0,:] = u1_itf_j[-2, 1, :]
-
-         elif self.my_panel == 2:
-
-            sendbuf_u1[0,:] = numpy.flipud( -u1_itf_j[-2, 1, :] )
-            sendbuf_u2[0,:] = numpy.flipud( -u2_itf_j[-2, 1, :] - 2. * X / ( 1. + X**2 ) * u1_itf_j[-2, 1, :] )
-
-         elif self.my_panel == 3:
-
-            sendbuf_u1[0,:] = numpy.flipud( u2_itf_j[-2, 1, :] + 2. * X / ( 1. + X**2 ) * u1_itf_j[-2, 1, :] )
-            sendbuf_u2[0,:] = numpy.flipud(-u1_itf_j[-2, 1, :] )
-
-         elif self.my_panel == 4:
-
-            sendbuf_u1[0,:] = numpy.flipud( -u1_itf_j[-2, 1, :] )
-            sendbuf_u2[0,:] = numpy.flipud( -u2_itf_j[-2, 1, :] - 2. * X / ( 1. + X**2 ) * u1_itf_j[-2, 1, :] )
-
-         elif self.my_panel == 5:
-
-            sendbuf_u1[0,:] = u1_itf_j[-2, 1, :]
-            sendbuf_u2[0,:] = u2_itf_j[-2, 1, :] + 2. * X / ( 1. + X**2) * u1_itf_j[-2, 1, :]
-
-      else:
-
-         sendbuf_u1[0,:] = u1_itf_j[-2, 1, :]
-         sendbuf_u2[0,:] = u2_itf_j[-2, 1, :]
-
-      # --- Send to southern neighbours
-
-      if self.my_row == 0:
-
-         if self.my_panel == 0:
-
-            sendbuf_u1[1,:] = u1_itf_j[1, 0, :]
-            sendbuf_u2[1,:] = u2_itf_j[1, 0, :] - 2. * X / ( 1. + X**2 ) * u1_itf_j[1, 0, :]
-
-         elif self.my_panel == 1:
-
-            sendbuf_u1[1,:] = numpy.flipud( u2_itf_j[1, 0, :] - 2. * X / ( 1. + X**2 ) * u1_itf_j[1, 0, :] )
-            sendbuf_u2[1,:] = numpy.flipud( -u1_itf_j[1, 0, :] )
-
-         elif self.my_panel == 2:
-
-            sendbuf_u1[1,:] = numpy.flipud( -u2_itf_j[1, 0, :] )
-            sendbuf_u2[1,:] = numpy.flipud( -u2_itf_j[1, 0, :] + 2. * X / ( 1. + X**2 ) * u1_itf_j[1, 0, :] )
-
-         elif self.my_panel == 3:
-
-            sendbuf_u1[1,:] =-u2_itf_j[1, 0, :] + 2. * X / ( 1. + X**2 ) * u1_itf_j[1, 0, :]
-            sendbuf_u2[1,:] = u1_itf_j[1, 0, :]
-
-         elif self.my_panel == 4:
-
-            sendbuf_u1[1,:] = u1_itf_j[1, 0, :]
-            sendbuf_u2[1,:] = u2_itf_j[1, 0, :] - 2. * X / ( 1. + X**2) * u1_itf_j[1, 0, :]
-
-         elif self.my_panel == 5:
-
-            sendbuf_u1[1,:] = numpy.flipud( -u1_itf_j[1, 0, :] )
-            sendbuf_u2[1,:] = numpy.flipud( -u2_itf_j[1, 0, :] + 2. * X / ( 1. + X**2 ) * u1_itf_j[1, 0, :] )
-
-      else:
-
-         sendbuf_u1[1,:] = u1_itf_j[1, 0, :]
-         sendbuf_u2[1,:] = u2_itf_j[1, 0, :]
-
-      # --- Send to western neighbours
-
-      if self.my_col == 0:
-
-         if self.my_panel <= 3:
-
-            sendbuf_u1[2,:] = -2. * Y / ( 1. + Y**2 ) * u2_itf_i[1, 0, :] + u1_itf_i[1, 0, :]
-            sendbuf_u2[2,:] = u2_itf_i[1, 0, :]
-
-
-         elif self.my_panel == 4:
-
-            sendbuf_u1[2,:] = numpy.flipud(-u2_itf_i[1, 0, :] )
-            sendbuf_u2[2,:] = numpy.flipud( -2. * Y / ( 1. + Y**2 ) * u2_itf_i[1, 0, :] + u1_itf_i[1, 0, :] )
-
-         elif self.my_panel == 5:
-
-            sendbuf_u1[2,:] = u2_itf_i[1, 0, :]
-            sendbuf_u2[2,:] = 2. * Y / ( 1. + Y**2 ) * u2_itf_i[1, 0, :] - u1_itf_i[1, 0, :]
-
-      else:
-
-         sendbuf_u1[2,:] = u1_itf_i[1, 0, :]
-         sendbuf_u2[2,:] = u2_itf_i[1, 0, :]
-
-      # --- Send to eastern neighbours
-
-      if self.my_col == self.nb_elems_per_line-1:
-
-         if self.my_panel <= 3:
-
-            sendbuf_u1[3,:] = 2. * Y / (1. + Y**2 ) * u2_itf_i[-2, 1, :] + u1_itf_i[-2, 1, :]
-            sendbuf_u2[3,:] = u2_itf_i[-2, 1, :]
-
-         elif self.my_panel == 4:
-
-            sendbuf_u1[3,:] = u2_itf_i[-2, 1, :]
-            sendbuf_u2[3,:] = -2. * Y / ( 1. + Y**2) * u2_itf_i[-2, 1, :] - u1_itf_i[-2, 1, :]
-
-
-         elif self.my_panel == 5:
-
-            sendbuf_u1[3,:] = numpy.flipud(-u2_itf_i[-2, 1, :] )
-            sendbuf_u2[3,:] = numpy.flipud( 2. * Y / ( 1. + Y**2 ) * u2_itf_i[-2, 1, :] + u1_itf_i[-2, 1, :] )
-
-      else:
-
-         sendbuf_u1[3,:] = u1_itf_i[-2, 1, :]
-         sendbuf_u2[3,:] = u2_itf_i[-2, 1, :]
-
-      # --- All to all communication
-
-      recvbuf_u1 = self.comm_dist_graph.neighbor_alltoall(sendbuf_u1)
-      recvbuf_u2 = self.comm_dist_graph.neighbor_alltoall(sendbuf_u2)
-
-      # --- Unpack received messages
-
-      u1_itf_j[-1, 0, :] = recvbuf_u1[0]
-      u1_itf_j[0, 1, :]  = recvbuf_u1[1]
-      u1_itf_i[0, 1, :]  = recvbuf_u1[2]
-      u1_itf_i[-1, 0, :] = recvbuf_u1[3]
-
-      u2_itf_j[-1, 0, :] = recvbuf_u2[0]
-      u2_itf_j[0, 1, :]  = recvbuf_u2[1]
-      u2_itf_i[0, 1, :]  = recvbuf_u2[2]
-      u2_itf_i[-1, 0, :] = recvbuf_u2[3]
-
-
-   def xchange_fluxes(self, geom, T01_itf_i, T02_itf_i, T11_itf_i, T12_itf_i, T22_itf_i, T01_itf_j, T02_itf_j, T11_itf_j, T12_itf_j, T22_itf_j):
-
-      #      +---+
-      #      | 4 |
-      #  +---+---+---+---+
-      #  | 3 | 0 | 1 | 2 |
-      #  +---+---+---+---+
-      #      | 5 |
-      #      +---+
-
-      data_type = T11_itf_i.dtype
-      sendbuf_T01 = numpy.zeros((4, len(T01_itf_i[0, 0, :])), dtype=data_type)
-      sendbuf_T02 = numpy.zeros_like(sendbuf_T01)
-      sendbuf_T11 = numpy.zeros_like(sendbuf_T01)
-      sendbuf_T12 = numpy.zeros_like(sendbuf_T01)
-      sendbuf_T22 = numpy.zeros_like(sendbuf_T01)
-
-      X = geom.X[0,:]
-      Y = geom.Y[:,0]
-
-      # --- Send to northern neighbours
-
-      if self.my_row == self.nb_lines_per_panel - 1:
-
-         if self.my_panel == 0:
-
-            sendbuf_T01[0,:] = T01_itf_j[-2, 1, :] - 2. * X / (1. + X**2) * T02_itf_j[-2, 1, :]
-            sendbuf_T02[0,:] = T02_itf_j[-2, 1, :]
-            sendbuf_T11[0,:] = T11_itf_j[-2, 1, :] - 4. * X / ( 1. + X**2) * T12_itf_j[-2, 1, :] + (2. * X/(1. + X**2))**2 * T22_itf_j[-2, 1, :]
-            sendbuf_T12[0,:] = T12_itf_j[-2, 1, :] - 2. * X / (1. + X**2) * T22_itf_j[-2, 1, :]
-            sendbuf_T22[0,:] = T22_itf_j[-2, 1, :]
-
-         elif self.my_panel == 1:
-
-            sendbuf_T01[0,:] = -T02_itf_j[-2, 1, :]
-            sendbuf_T02[0,:] = T01_itf_j[-2, 1, :] - 2. * X / ( 1. + X**2 ) * T02_itf_j[-2, 1, :]
-            sendbuf_T11[0,:] = T22_itf_j[-2, 1, :]
-            sendbuf_T12[0,:] = -T12_itf_j[-2, 1, :] + 2. * X / ( 1. + X**2 ) * T22_itf_j[-2, 1, :]
-            sendbuf_T22[0,:] =  T11_itf_j[-2, 1, :] - 4. * X / ( 1. + X**2 ) * T12_itf_j[-2, 1, :] + (2. * X / ( 1. + X**2 ))**2 * T22_itf_j[-2, 1, :]
-
-         elif self.my_panel == 2:
-
-            sendbuf_T01[0,:] = numpy.flipud( -T01_itf_j[-2, 1, :] + 2. * X / ( 1. + X**2 ) * T02_itf_j[-2, 1, :] )
-            sendbuf_T02[0,:] = numpy.flipud( -T02_itf_j[-2, 1, :] )
-            sendbuf_T11[0,:] = numpy.flipud(  T11_itf_j[-2, 1, :] - 4. * X / ( 1. + X**2 ) * T12_itf_j[-2, 1, :] + (2. * X / ( 1. + X**2 ))**2 * T22_itf_j[-2, 1, :] )
-            sendbuf_T12[0,:] = numpy.flipud( T12_itf_j[-2, 1, :] - 2. * X / ( 1. + X**2 ) * T22_itf_j[-2, 1, :] )
-            sendbuf_T22[0,:] = numpy.flipud( T22_itf_j[-2, 1, :] )
-
-         elif self.my_panel == 3:
-
-            sendbuf_T01[0,:] = numpy.flipud( T02_itf_j[-2, 1, :] )
-            sendbuf_T02[0,:] = numpy.flipud( -T01_itf_j[-2, 1, :] + 2. * X / ( 1. + X**2 ) * T02_itf_j[-2, 1, :] )
-            sendbuf_T11[0,:] = numpy.flipud( T22_itf_j[-2, 1, :] )
-            sendbuf_T12[0,:] = numpy.flipud( -T12_itf_j[-2, 1, :] + 2. * X / ( 1. + X**2 ) * T22_itf_j[-2, 1, :] )
-            sendbuf_T22[0,:] = numpy.flipud( T11_itf_j[-2, 1, :] - 4. * X / ( 1. + X**2 ) * T12_itf_j[-2, 1, :] + (2. * X / ( 1. + X**2 ))**2 * T22_itf_j[-2, 1, :] )
-
-         elif self.my_panel == 4:
-
-            sendbuf_T01[0,:] = numpy.flipud( -T01_itf_j[-2, 1, :] + 2. * X / ( 1. + X**2 ) * T02_itf_j[-2, 1, :] )
-            sendbuf_T02[0,:] = numpy.flipud( -T02_itf_j[-2, 1, :] )
-            sendbuf_T11[0,:] = numpy.flipud( T11_itf_j[-2, 1, :] - 4. * X / ( 1. + X**2 ) * T12_itf_j[-2, 1, :] + (2. * X / ( 1. + X**2 ))**2 * T22_itf_j[-2, 1, :])
-            sendbuf_T12[0,:] = numpy.flipud( T12_itf_j[-2, 1, :] - 2. * X / ( 1. + X**2 ) * T22_itf_j[-2, 1, :] )
-            sendbuf_T22[0,:] = numpy.flipud( T22_itf_j[-2, 1, :] )
-
-         elif self.my_panel == 5:
-
-            sendbuf_T01[0,:] = T01_itf_j[-2, 1, :] - 2. * X / ( 1. + X**2) * T02_itf_j[-2, 1, :]
-            sendbuf_T02[0,:] = T02_itf_j[-2, 1, :]
-            sendbuf_T11[0,:] = T11_itf_j[-2, 1, :] - 4. * X / ( 1. + X**2) * T12_itf_j[-2, 1, :] + (2. * X / ( 1. + X**2))**2 * T22_itf_j[-2, 1, :]
-            sendbuf_T12[0,:] = T12_itf_j[-2, 1, :] - 2. * X / ( 1. + X**2) * T22_itf_j[-2, 1, :]
-            sendbuf_T22[0,:] = T22_itf_j[-2, 1, :]
-
-      else:
-
-         sendbuf_T01[0,:] = T01_itf_j[-2, 1, :]
-         sendbuf_T02[0,:] = T02_itf_j[-2, 1, :]
-         sendbuf_T11[0,:] = T11_itf_j[-2, 1, :]
-         sendbuf_T12[0,:] = T12_itf_j[-2, 1, :]
-         sendbuf_T22[0,:] = T22_itf_j[-2, 1, :]
-
-      # --- Send to southern neighbours
-
-      if self.my_row == 0:
-
-         if self.my_panel == 0:
-
-            sendbuf_T01[1,:] = T01_itf_j[1, 0, :] + 2. * X / ( 1. + X**2 ) * T02_itf_j[1, 0, :]
-            sendbuf_T02[1,:] = T02_itf_j[1, 0, :]
-            sendbuf_T11[1,:] = T11_itf_j[1, 0, :] + 4. * X / ( 1. + X**2 ) * T12_itf_j[1, 0, :] + (2. * X / ( 1. + X**2 ))**2 * T22_itf_j[1, 0, :]
-            sendbuf_T12[1,:] = T12_itf_j[1, 0, :] + 2. * X / ( 1. + X**2 ) * T22_itf_j[1, 0, :]
-            sendbuf_T22[1,:] = T22_itf_j[1, 0, :]
-
-         elif self.my_panel == 1:
-
-            sendbuf_T01[1,:] = numpy.flipud( T02_itf_j[1, 0, :] )
-            sendbuf_T02[1,:] = numpy.flipud( -T01_itf_j[1, 0, :] -2 * X / ( 1 + X**2 ) * T02_itf_j[1, 0, :] )
-            sendbuf_T11[1,:] = numpy.flipud( T22_itf_j[1, 0, :] )
-            sendbuf_T12[1,:] = numpy.flipud( -T12_itf_j[1, 0, :] -2 * X / ( 1 + X**2 ) * T22_itf_j[1, 0, :] )
-            sendbuf_T22[1,:] = numpy.flipud( T11_itf_j[1, 0, :] + 4 * X / ( 1 + X**2 ) * T12_itf_j[1, 0, :] + (2 * X / ( 1 + X**2 ))**2 * T22_itf_j[1, 0, :])
-
-         elif self.my_panel == 2:
-
-            sendbuf_T01[1,:] = numpy.flipud( -T01_itf_j[1, 0, :] - 2. * X / ( 1. + X**2 ) * T02_itf_j[1, 0, :] )
-            sendbuf_T02[1,:] = numpy.flipud( -T02_itf_j[1, 0, :] )
-            sendbuf_T11[1,:] = numpy.flipud( T11_itf_j[1, 0, :] + 4. * X / ( 1. + X**2 ) * T12_itf_j[1, 0, :] + (2. * X / ( 1. + X**2 ))**2 * T22_itf_j[1, 0, :])
-            sendbuf_T12[1,:] = numpy.flipud( T12_itf_j[1, 0, :] + 2. * X / ( 1. + X**2 ) * T22_itf_j[1, 0, :] )
-            sendbuf_T22[1,:] = numpy.flipud( T22_itf_j[1, 0, :] )
-
-         elif self.my_panel == 3:
-
-            sendbuf_T01[1,:] = -T02_itf_j[1, 0, :]
-            sendbuf_T02[1,:] = T01_itf_j[1, 0, :] + 2. * X / ( 1. + X**2 ) * T02_itf_j[1, 0, :]
-            sendbuf_T11[1,:] = T22_itf_j[1, 0, :]
-            sendbuf_T12[1,:] = -T12_itf_j[1, 0, :] - 2. * X / ( 1. + X**2 ) * T22_itf_j[1, 0, :]
-            sendbuf_T22[1,:] = T11_itf_j[1, 0, :] + 4. * X / ( 1. + X**2 ) * T12_itf_j[1, 0, :] + (2. * X / ( 1. + X**2 ))**2 * T22_itf_j[1, 0, :]
-
-         elif self.my_panel == 4:
-
-            sendbuf_T01[1,:] = T01_itf_j[1, 0, :] + 2. * X / ( 1. + X**2) * T02_itf_j[1, 0, :]
-            sendbuf_T02[1,:] = T02_itf_j[1, 0, :]
-            sendbuf_T11[1,:] = T11_itf_j[1, 0, :] + 4. * X / ( 1. + X**2) * T12_itf_j[1, 0, :] + (2. * X / (1. + X**2))**2 * T22_itf_j[1, 0, :]
-            sendbuf_T12[1,:] = T12_itf_j[1, 0, :] + 2. * X / ( 1. + X**2) * T22_itf_j[1, 0, :]
-            sendbuf_T22[1,:] = T22_itf_j[1, 0, :]
-
-         elif self.my_panel == 5:
-
-            sendbuf_T01[1,:] = numpy.flipud( -T01_itf_j[1, 0, :] - 2. * X / ( 1. + X**2 ) * T02_itf_j[1, 0, :] )
-            sendbuf_T02[1,:] = numpy.flipud( -T02_itf_j[1, 0, :] )
-            sendbuf_T11[1,:] = numpy.flipud( T11_itf_j[1, 0, :] + 4. * X / ( 1. + X**2 ) * T12_itf_j[1, 0, :] + (2. * X / ( 1. + X**2 ))**2 * T22_itf_j[1, 0, :])
-            sendbuf_T12[1,:] = numpy.flipud( T12_itf_j[1, 0, :] + 2. * X / ( 1. + X**2 ) * T22_itf_j[1, 0, :] )
-            sendbuf_T22[1,:] = numpy.flipud( T22_itf_j[1, 0, :] )
-      else:
-
-         sendbuf_T01[1,:] = T01_itf_j[1, 0, :]
-         sendbuf_T02[1,:] = T02_itf_j[1, 0, :]
-         sendbuf_T11[1,:] = T11_itf_j[1, 0, :]
-         sendbuf_T12[1,:] = T12_itf_j[1, 0, :]
-         sendbuf_T22[1,:] = T22_itf_j[1, 0, :]
-
-      # --- Send to western neighbours
-
-      if self.my_col == 0:
-
-         if self.my_panel <= 3:
-
-            sendbuf_T01[2,:] = T01_itf_i[1, 0, :]
-            sendbuf_T02[2,:] = 2. * Y / ( 1 + Y**2 ) * T01_itf_i[1, 0, :] + T02_itf_i[1, 0, :]
-            sendbuf_T11[2,:] = T11_itf_i[1, 0, :]
-            sendbuf_T12[2,:] = 2. * Y / ( 1 + Y**2 ) * T11_itf_i[1, 0, :] + T12_itf_i[1, 0, :]
-            sendbuf_T22[2,:] = (2. * Y / ( 1 + Y**2 ))**2 * T11_itf_i[1, 0, :] + 4. * Y / (1. + Y**2) * T12_itf_i[1, 0, :] + T22_itf_i[1, 0, :]
-
-         elif self.my_panel == 4:
-
-            sendbuf_T01[2,:] = numpy.flipud( -2. * Y / ( 1. + Y**2 ) * T01_itf_i[1, 0, :] - T02_itf_i[1, 0, :] )
-            sendbuf_T02[2,:] = numpy.flipud( T01_itf_i[1, 0, :] )
-            sendbuf_T11[2,:] = numpy.flipud( (2. * Y / ( 1. + Y**2 ))**2 * T11_itf_i[1, 0, :] + 4. * Y / ( 1. + Y**2 ) * T12_itf_i[1, 0, :] + T22_itf_i[1, 0, :] )
-            sendbuf_T12[2,:] = numpy.flipud( -2. * Y / ( 1. + Y**2 ) * T11_itf_i[1, 0, :] - T12_itf_i[1, 0, :] )
-            sendbuf_T22[2,:] = numpy.flipud( T11_itf_i[1, 0, :] )
-
-         elif self.my_panel == 5:
-
-            sendbuf_T01[2,:] = 2. * Y / ( 1. + Y**2 ) * T01_itf_i[1, 0, :] + T02_itf_i[1, 0, :]
-            sendbuf_T02[2,:] = -T01_itf_i[1, 0, :]
-            sendbuf_T11[2,:] = (2. * Y / ( 1. + Y**2 ))**2 * T11_itf_i[1, 0, :] + 4. * Y / ( 1. + Y**2 ) * T12_itf_i[1, 0, :] + T22_itf_i[1, 0, :]
-            sendbuf_T12[2,:] = -2. * Y / ( 1. + Y**2 ) * T11_itf_i[1, 0, :] - T12_itf_i[1, 0, :]
-            sendbuf_T22[2,:] = T11_itf_i[1, 0, :]
-      else:
-
-         sendbuf_T01[2,:] = T01_itf_i[1, 0, :]
-         sendbuf_T02[2,:] = T02_itf_i[1, 0, :]
-         sendbuf_T11[2,:] = T11_itf_i[1, 0, :]
-         sendbuf_T12[2,:] = T12_itf_i[1, 0, :]
-         sendbuf_T22[2,:] = T22_itf_i[1, 0, :]
-
-      # --- Send to eastern neighbours
-
-      if self.my_col == self.nb_elems_per_line-1:
-
-         if self.my_panel <= 3:
-
-            sendbuf_T01[3,:] = T01_itf_i[-2, 1, :]
-            sendbuf_T02[3,:] = -2 * Y / ( 1 + Y**2 ) * T01_itf_i[-2, 1, :] + T02_itf_i[-2, 1, :]
-            sendbuf_T11[3,:] = T11_itf_i[-2, 1, :]
-            sendbuf_T12[3,:] = -2 * Y / ( 1 + Y**2 ) * T11_itf_i[-2, 1, :] + T12_itf_i[-2, 1, :]
-            sendbuf_T22[3,:] = (2 * Y / ( 1 + Y**2 ))**2 * T11_itf_i[-2, 1, :] - 4. * Y/(1. + Y**2) * T12_itf_i[-2, 1, :] + T22_itf_i[-2, 1, :]
-
-         elif self.my_panel == 4:
-
-            sendbuf_T01[3,:] = -2 * Y / ( 1 + Y**2) * T01_itf_i[-2, 1, :] + T02_itf_i[-2, 1, :]
-            sendbuf_T02[3,:] = -T01_itf_i[-2, 1, :]
-            sendbuf_T11[3,:] = (2. * Y / ( 1. + Y**2))**2 * T11_itf_i[-2, 1, :] - 4. * Y / ( 1. + Y**2) * T12_itf_i[-2, 1, :] + T22_itf_i[-2, 1, :]
-            sendbuf_T12[3,:] = 2 * Y / ( 1 + Y**2) * T11_itf_i[-2, 1, :] - T12_itf_i[-2, 1, :]
-            sendbuf_T22[3,:] = T11_itf_i[-2, 1, :]
-
-         elif self.my_panel == 5:
-
-            sendbuf_T01[3,:] = numpy.flipud( 2. * Y / ( 1. + Y**2 ) * T01_itf_i[-2, 1, :] - T02_itf_i[-2, 1, :] )
-            sendbuf_T02[3,:] = numpy.flipud( T01_itf_i[-2, 1, :] )
-            sendbuf_T11[3,:] = numpy.flipud( (2. * Y / ( 1. + Y**2 ))**2 * T11_itf_i[-2, 1, :] - 4. * Y / ( 1. + Y**2 ) * T12_itf_i[-2, 1, :] + T22_itf_i[-2, 1, :] )
-            sendbuf_T12[3,:] = numpy.flipud( 2. * Y / ( 1. + Y**2 ) * T11_itf_i[-2, 1, :] - T12_itf_i[-2, 1, :] )
-            sendbuf_T22[3,:] = numpy.flipud( T11_itf_i[-2, 1, :] )
-      else:
-
-         sendbuf_T01[3,:] = T01_itf_i[-2, 1, :]
-         sendbuf_T02[3,:] = T02_itf_i[-2, 1, :]
-         sendbuf_T11[3,:] = T11_itf_i[-2, 1, :]
-         sendbuf_T12[3,:] = T12_itf_i[-2, 1, :]
-         sendbuf_T22[3,:] = T22_itf_i[-2, 1, :]
-
-      # --- All to all communication
-
-      recvbuf_T01 = self.comm_dist_graph.neighbor_alltoall(sendbuf_T01)
-      recvbuf_T02 = self.comm_dist_graph.neighbor_alltoall(sendbuf_T02)
-      recvbuf_T11 = self.comm_dist_graph.neighbor_alltoall(sendbuf_T11)
-      recvbuf_T12 = self.comm_dist_graph.neighbor_alltoall(sendbuf_T12)
-      recvbuf_T22 = self.comm_dist_graph.neighbor_alltoall(sendbuf_T22)
-
-      # --- Unpack received messages
-      T01_itf_j[-1, 0, :] = recvbuf_T01[0]
-      T01_itf_j[0, 1, :]  = recvbuf_T01[1]
-      T01_itf_i[0, 1, :]  = recvbuf_T01[2]
-      T01_itf_i[-1, 0, :] = recvbuf_T01[3]
-
-      T02_itf_j[-1, 0, :] = recvbuf_T02[0]
-      T02_itf_j[0, 1, :]  = recvbuf_T02[1]
-      T02_itf_i[0, 1, :]  = recvbuf_T02[2]
-      T02_itf_i[-1, 0, :] = recvbuf_T02[3]
-
-      T11_itf_j[-1, 0, :] = recvbuf_T11[0]
-      T11_itf_j[0, 1, :]  = recvbuf_T11[1]
-      T11_itf_i[0, 1, :]  = recvbuf_T11[2]
-      T11_itf_i[-1, 0, :] = recvbuf_T11[3]
-
-      T12_itf_j[-1, 0, :] = recvbuf_T12[0]
-      T12_itf_j[0, 1, :]  = recvbuf_T12[1]
-      T12_itf_i[0, 1, :]  = recvbuf_T12[2]
-      T12_itf_i[-1, 0, :] = recvbuf_T12[3]
-
-      T22_itf_j[-1, 0, :] = recvbuf_T22[0]
-      T22_itf_j[0, 1, :]  = recvbuf_T22[1]
-      T22_itf_i[0, 1, :]  = recvbuf_T22[2]
-      T22_itf_i[-1, 0, :] = recvbuf_T22[3]
-
-
 class ScalarNonBlockingExchangeRequest():
    def __init__(self, recv_buffers, outputs, request) -> None:
       self.recv_buffers = recv_buffers
@@ -899,6 +510,37 @@ class ScalarNonBlockingExchangeRequest():
          self.outputs[2][:] = self.recv_buffers[2]
          self.outputs[3][:] = self.recv_buffers[3]
          self.is_complete = True
+
+
+class ExchangeRequest:
+   def __init__(self, recv_buffer, request, is_vector=False):
+      self.recv_buffer = recv_buffer
+      self.request = request
+      self.is_vector = is_vector
+
+      self.to_tuple: Callable[[ExchangedVector], ExchangedVector] = lambda a: a    # Do nothing by default
+      if self.is_vector:
+         if self.recv_buffer.shape[1] == 2:
+            self.to_tuple = lambda a: (a[0], a[1])
+         elif self.recv_buffer.shape[1] == 3:
+            self.to_tuple = lambda a: (a[0], a[1], a[2])
+         else:
+            raise ValueError(f'Can only handle vectors with 2 or 3 components, not {self.recv_buffer.shape[1]}')
+
+   def wait(self) -> Tuple[ExchangedVector, ExchangedVector, ExchangedVector, ExchangedVector]:
+      """Wait for the exchange started when creating this object to be done.
+      
+      Returns:
+         The received vectors, in the same shape as the vectors that were sent
+      """
+      self.request.Wait()
+      # if MPI.COMM_WORLD.rank == 1:
+      #    print(f'recv buffer = \n{self.recv_buffer}')
+      return (self.to_tuple(self.recv_buffer[SOUTH]),
+              self.to_tuple(self.recv_buffer[NORTH]),
+              self.to_tuple(self.recv_buffer[WEST]),
+              self.to_tuple(self.recv_buffer[EAST]))
+
 
 class VectorNonBlockingExchangeRequest():
    def __init__(self, recv_buffers, outputs, request, is_3d) -> None:
@@ -930,20 +572,6 @@ class VectorNonBlockingExchangeRequest():
 
          self.is_complete = True
 
-class ShallowWaterExchangeRequest():
-   def __init__(self, recv_buffers, outputs, request) -> None:
-      self.recv_buffers = recv_buffers
-      self.outputs = outputs
-      self.request = request
-      self.is_complete = False
-
-   def wait(self):
-      if not self.is_complete:
-         self.request.Wait()
-         for i in range(4):
-            for j in range(3):
-               self.outputs[i][j][:] = self.recv_buffers[i, j]
-         self.is_complete = True
 
 class EulerExchangeRequest():
    def __init__(self, recv_buffers, outputs, mpi_request) -> None:

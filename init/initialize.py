@@ -139,6 +139,9 @@ def initialize_sw(geom, metric, mtrx, param):
    elif param.case_number == 10:
       u1_contra, u2_contra, fluid_height, hsurf, dzdx1, dzdx2, hsurf_itf_i, hsurf_itf_j = \
          case_unsteady_zonal(geom, metric, mtrx, param)
+   
+   else:
+      raise ValueError(f'Unknown case number {param.case_number} for Shallow Water equations')
 
    Q = numpy.zeros((nb_equations, ni, nj))
    Q[idx_h, :, :] = fluid_height

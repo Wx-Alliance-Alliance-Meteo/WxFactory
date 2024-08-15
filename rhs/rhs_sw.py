@@ -1,8 +1,10 @@
+from mpi4py import MPI
 import numpy
 
 from common.definitions import idx_h, idx_hu1, idx_hu2, gravity
+from common.process_topology import ProcessTopology
 
-def rhs_sw (Q: numpy.ndarray, geom, mtrx, metric, topo, ptopo, nbsolpts: int, nb_elements_hori: int):
+def rhs_sw (Q: numpy.ndarray, geom, mtrx, metric, topo, ptopo: ProcessTopology, nbsolpts: int, nb_elements_hori: int):
 
    type_vec = Q.dtype
    nb_equations = Q.shape[0]
@@ -44,7 +46,14 @@ def rhs_sw (Q: numpy.ndarray, geom, mtrx, metric, topo, ptopo, nbsolpts: int, nb
       var_itf_j[1:, pos, 1, :] = mtrx.extrap_north @ Q[1:, epais, :]
 
    # Initiate transfers
-   all_request = ptopo.xchange_sw_interfaces(geom, var_itf_i[idx_h], var_itf_j[idx_h], var_itf_i[idx_hu1], var_itf_i[idx_hu2], var_itf_j[idx_hu1], var_itf_j[idx_hu2], blocking=False)
+   request_u = ptopo.start_exchange_vectors(
+                              (var_itf_j[idx_hu1,  1, 0], var_itf_j[idx_hu2,  1, 0]), # South boundary
+                              (var_itf_j[idx_hu1, -2, 1], var_itf_j[idx_hu2, -2, 1]), # North boundary
+                              (var_itf_i[idx_hu1,  1, 0], var_itf_i[idx_hu2,  1, 0]), # West boundary
+                              (var_itf_i[idx_hu1, -2, 1], var_itf_i[idx_hu2, -2, 1]), # East boundary
+                              geom.X[0, :], geom.Y[:, 0])  # Coordinates at the boundary
+   request_h = ptopo.start_exchange_scalars(
+      var_itf_j[idx_h, 1, 0], var_itf_j[idx_h, -2, 1],var_itf_i[idx_h, 1, 0], var_itf_i[idx_h, -2, 1])
 
    # Compute the fluxes
    flux_x1[idx_h] = metric.sqrtG * Q[idx_hu1]
@@ -68,7 +77,9 @@ def rhs_sw (Q: numpy.ndarray, geom, mtrx, metric, topo, ptopo, nbsolpts: int, nb
       df2_dx2[:,epais,:] = mtrx.diff_solpt @ flux_x2[:,epais,:]
 
    # Finish transfers
-   all_request.wait()
+   (var_itf_j[idx_hu1, 0, 1], var_itf_j[idx_hu2, 0, 1]), (var_itf_j[idx_hu1, -1, 0], var_itf_j[idx_hu2, -1, 0]), \
+   (var_itf_i[idx_hu1, 0, 1], var_itf_i[idx_hu2, 0, 1]), (var_itf_i[idx_hu1, -1, 0], var_itf_i[idx_hu2, -1, 0]) = request_u.wait()
+   var_itf_j[idx_h, 0, 1], var_itf_j[idx_h, -1, 0], var_itf_i[idx_h, 0, 1], var_itf_i[idx_h, -1, 0] = request_h.wait()
 
    # Substract topo after extrapolation
    if topo is not None:

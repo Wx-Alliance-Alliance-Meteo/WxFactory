@@ -68,23 +68,6 @@ class DFROperators:
       self.extrap_down = extrap_neg
       self.extrap_up = extrap_pos
 
-
-      # self.extrap_west = lagrangeEval(grd.solutionPoints_sym, -1)
-      # self.extrap_east = lagrangeEval(grd.solutionPoints_sym,  1)
-
-      # self.extrap_south = lagrangeEval(grd.solutionPoints_sym, -1)
-      # self.extrap_north = lagrangeEval(grd.solutionPoints_sym,  1)
-
-      # self.extrap_down = lagrangeEval(grd.solutionPoints_sym, -1)
-      # self.extrap_up   = lagrangeEval(grd.solutionPoints_sym,  1)
-
-      # Create highest-mode filter
-      # V = numpy.polynomial.legendre.legvander(grd.solutionPoints,grd.nbsolpts-1) # Transform mode space to grid space
-      # invV = inv(V) # Transform grid space to mode space
-      # feye = numpy.eye(grd.nbsolpts) # Suppress high mode
-      # feye[-1,-1] = 0
-      # self.highfilter = numpy.asarray(V @ (feye @ invV), like=grd.solutionPoints)
-
       V = legvander(grd.solutionPoints, grd.nbsolpts - 1)
       invV = numpy.linalg.inv(V)
       feye = numpy.eye(grd.nbsolpts, like=grd.solutionPoints)
@@ -130,8 +113,7 @@ class DFROperators:
                                    numpy.sin((0.5*numpy.pi) * (grd.X3[k,i] - zs) / (param.z1 - zs))**2
 
       if check_skewcentrosymmetry(self.diff_ext) is False:
-         print('Something horribly wrong has happened in the creation of the differentiation matrix')
-         exit(1)
+         raise ValueError('Something horribly wrong has happened in the creation of the differentiation matrix')
 
       # Force matrices to be in C-contiguous order
       self.diff_solpt = self.diff_ext[1:-1, 1:-1].copy()
