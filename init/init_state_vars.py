@@ -10,7 +10,6 @@ from geometry                    import DFROperators, Geometry, Metric, Metric3D
 def init_state_vars(geom: Geometry, operators: DFROperators, param: Configuration) \
       -> tuple[NDArray[numpy.float64], Topo | None, Metric | Metric3DTopo | None]:
 
-   Q            = None
    topo         = None
    metric       = None
 
@@ -25,5 +24,8 @@ def init_state_vars(geom: Geometry, operators: DFROperators, param: Configuratio
    elif param.equations == "shallow_water" and isinstance(geom, CubedSphere):
       metric = Metric(geom)
       Q, topo = initialize_sw(geom, metric, operators, param)
+   
+   else:
+      raise ValueError(f'Unrecognized combination of equations ({param.equations} and geometry ({geom}))')
 
    return Q, topo, metric

@@ -132,10 +132,13 @@ class DFROperators:
       ident = numpy.identity(grd.nbsolpts)
       self.extrap_x = numpy.vstack(( numpy.kron(ident, self.extrap_west),
                                      numpy.kron(ident, self.extrap_east) )).T
+      self.extrap_y = numpy.vstack(( numpy.kron(self.extrap_south,ident),
+                                     numpy.kron(self.extrap_north,ident))).T
       self.extrap_z = numpy.vstack(( numpy.kron(self.extrap_down, ident),
                                      numpy.kron(self.extrap_up,   ident) )).T
 
       self.derivative_x = numpy.kron(ident, self.diff_solpt).T
+      self.derivative_y = numpy.kron(self.diff_solpt, ident).T
       self.derivative_z = numpy.kron(self.diff_solpt, ident).T
 
       corr_down = self.diff_ext[1:-1, 0]

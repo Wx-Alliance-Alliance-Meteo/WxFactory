@@ -937,4 +937,14 @@ class Metric:
       self.christoffel_3_32 *= 0.5 * geom.Δx3
       self.christoffel_3_33 *= 0.5 * geom.Δx3
 
+      self.sqrtG_new = geom._to_new(self.sqrtG)
+      self.H_contra_11_new = geom._to_new(self.H_contra_11)
+      self.H_contra_12_new = geom._to_new(self.H_contra_12)
+      self.H_contra_13_new = self.H_contra_13
+      self.H_contra_21_new = geom._to_new(self.H_contra_21)
+      self.H_contra_22_new = geom._to_new(self.H_contra_22)
+      self.H_contra_23_new = self.H_contra_23
+      self.H_contra_31_new = self.H_contra_31
+      self.H_contra_32_new = self.H_contra_32
+      self.H_contra_33_new = self.H_contra_33
 

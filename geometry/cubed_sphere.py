@@ -1,6 +1,8 @@
 import math
 import numpy
 
+from mpi4py import MPI
+
 from .geometry   import Geometry
 from .sphere     import cart2sph
 
@@ -163,6 +165,18 @@ class CubedSphere(Geometry):
       self.itf_k_shape_3d = (nb_elements_x3+1,nj,ni)  
       self.itf_k_shape_2d = (nj,ni)  
 
+      # The shapes. For a single field (e.g. coordinates of solution points, in the current case), we
+      # have an array of elements, where each element has a total nbsolpts**2 (in 2D) or nbsolpts**3 (in 3D) solution
+      # points.
+      # For the interfaces we have 3 cases:
+      # - In 2D, we have 2 arrays (for west-east and south-north interfaces), with the same shape: an array of all
+      #   elements, each with 2*nbsolpts interface points (nbsolpts for each side of the element along that direction)
+      # - In 3D, horizontally, we also have two arrays (west-east, south-north), but the shape is to be determined
+      # - In 3D vertically, we only have one array, with shape similar to horizontally, TBD
+      self.grid_shape_2d_new = (nb_elements_x1 * nb_elements_x2, nbsolpts * nbsolpts)
+      self.grid_shape_3d_new = (nb_elements_x1 * nb_elements_x2 * nb_elements_x3, nbsolpts * nbsolpts * nbsolpts)
+      self.itf_shape_2d = (nb_elements_x1 * nb_elements_x2, nbsolpts * 2)
+
       # Assign a token zbot, potentially to be overridden later with supplied topography
       self.zbot = xp.zeros(self.grid_shape_2d)
 
@@ -176,7 +190,10 @@ class CubedSphere(Geometry):
       x3 = xp.empty(self.grid_shape_3d)
       eta = xp.empty(self.grid_shape_3d)
 
-      # # 1D element-counting arrays, for coordinate assignment
+      x3_new  = xp.empty(self.grid_shape_3d_new)
+      eta_new = xp.empty(self.grid_shape_3d_new)
+
+      # 1D element-counting arrays, for coordinate assignment
       elements_x1 = xp.arange(nb_elements_x1)
       elements_x2 = xp.arange(nb_elements_x2)
       elements_x3 = xp.arange(nb_elements_x3)
@@ -210,6 +227,8 @@ class CubedSphere(Geometry):
       else:
          x3[:] = 0
          eta[:] = 0
+         x3_new[:] = 0.0
+         eta_new[:] = 0.0
 
 
       # Repeat for the interface values
@@ -268,17 +287,10 @@ class CubedSphere(Geometry):
       self.eta_itf_k = eta_itf_k
 
       ## Construct the combined coordinate vector for the numeric/equiangular coordinate (x1, x2, η)
+      #TODO Why does the shape have an additional dimension of size 1?
       coordVec_num = numpy.stack((numpy.broadcast_to(x1[None, None, :], eta.shape),
                                   numpy.broadcast_to(x2[None, :, None], eta.shape),
                                   eta))
-
-      # coordVec_num_itf_i = numpy.empty((3,) + (nk,nb_elements_x1+1,nj))
-      # coordVec_num_itf_j = numpy.empty((3,) + (nk,nb_elements_x2+1,ni))
-      # coordVec_num_itf_k = numpy.empty((3,) + (nb_elements_x3+1,nj,ni))
-
-      # coordVec_num_itf_i[0,:,:,:] = x1_itf_i[numpy.newaxis,:,numpy.newaxis]
-      # coordVec_num_itf_i[1,:,:,:] = x2_itf_i[numpy.newaxis,numpy.newaxis,:]
-      # coordVec_num_itf_i[2,:,:,:] = eta_itf_i.transpose((0,2,1))
 
       coordVec_num_itf_i = numpy.stack((numpy.broadcast_to(x1_itf_i[None, None, :], eta_itf_i.shape),
                                         numpy.broadcast_to(x2_itf_i[None, :, None], eta_itf_i.shape),
@@ -294,6 +306,10 @@ class CubedSphere(Geometry):
       self.coordVec_num_itf_i = coordVec_num_itf_i
       self.coordVec_num_itf_j = coordVec_num_itf_j
       self.coordVec_num_itf_k = coordVec_num_itf_k
+
+      self.coordVec_num_new = self._to_new(coordVec_num)
+
+      print(f'base shape {coordVec_num.shape}, itf i shape {coordVec_num_itf_i.shape}, itf j shape = {coordVec_num_itf_j.shape}')
 
       # Compute the parameters of the rotated grid
 
@@ -356,8 +372,7 @@ class CubedSphere(Geometry):
             lat_p = -math.asin(c2*c3)
             angle_p = math.atan2(c2*s3, s2)
       else:
-         print(f'Invalid panel number {ptopo.my_panel}')
-         exit(1)
+         raise ValueError(f'Invalid panel number {ptopo.my_panel}')
 
       self.lon_p = lon_p
       self.lat_p = lat_p
@@ -423,8 +438,10 @@ class CubedSphere(Geometry):
       self._build_physical_coordinates()
 
    def _build_physical_coordinates(self):
-      # Build the physical coordinate arrays and vectors (gnomonic plane, lat/lon, Cartesian)
-      # based on the pre-defined equiangular coordinates (x1, x2) and height (x3)
+      """
+      Build the physical coordinate arrays and vectors (gnomonic plane, lat/lon, Cartesian)
+      based on the pre-defined equiangular coordinates (x1, x2) and height (x3)
+      """
 
       # Retrieve the numeric values for use here
       x1 = self.x1
@@ -465,8 +482,19 @@ class CubedSphere(Geometry):
       ## Gnomonic (projected plane) coordinate values
       # X and Y (and their interface variants) are 2D arrays on the ij plane;
       # height is still necessarily a 3D array.
+      # x comes before y in the indices -> Y is the "fast-varying" index
 
       Y, X = numpy.meshgrid(numpy.tan(x2),numpy.tan(x1),indexing='ij')
+
+      Y_new = self._to_new(Y)
+      X_new = self._to_new(X)
+
+      self.boundary_sn = X[0, :] # Coordinates of the south and north boundaries along the X (west-east) axis
+      self.boundary_we = Y[:, 0] # Coordinates of the west and east boundaries along the Y (south-north) axis
+
+      # if MPI.COMM_WORLD.rank == 0:
+      #    print(f'old X = \n{X}')
+      #    print(f'new X = \n{X_new}')
 
       height = x3
 
@@ -479,6 +507,9 @@ class CubedSphere(Geometry):
       X_itf_j = numpy.broadcast_to(numpy.tan(x1_itf_j)[numpy.newaxis,:],(nb_elements_x2+1,ni))
       Y_itf_j = numpy.broadcast_to(numpy.tan(x2_itf_j)[:,numpy.newaxis],(nb_elements_x2+1,ni))
 
+      if MPI.COMM_WORLD.rank == 0:
+         print(f'x itf i (shape {X_itf_i.shape})= \n{X_itf_i}')
+
       delta2 = 1.0 + X**2 + Y**2
       delta  = numpy.sqrt(delta2)
 
@@ -490,6 +521,8 @@ class CubedSphere(Geometry):
 
       self.X = X
       self.Y = Y
+      self.X_new = X_new
+      self.Y_new = Y_new
       self.height = height
       self.delta2 = delta2
       self.delta = delta
@@ -501,18 +534,18 @@ class CubedSphere(Geometry):
       ## Other coordinate vectors:
       # * gnonomic coordinates (X, Y, Z)
 
+      def to_gnomonic(coord_num, z):
+         gnom = numpy.empty_like(coord_num)
+         gnom[0] = numpy.tan(coord_num[0])
+         gnom[1] = numpy.tan(coord_num[1])
+         gnom[2] = z
+
+         return gnom
+
       coordVec_gnom = numpy.empty_like(coordVec_num) # (X,Y,Z)
       coordVec_gnom_itf_i = numpy.empty_like(coordVec_num_itf_i)
       coordVec_gnom_itf_j = numpy.empty_like(coordVec_num_itf_j)
       coordVec_gnom_itf_k = numpy.empty_like(coordVec_num_itf_k)
-
-      # for (coord, x, y, z) in zip([coordVec_gnom, coordVec_gnom_itf_i, coordVec_gnom_itf_j, coordVec_gnom_itf_k],
-      #                             [X, X_itf_i, X_itf_j, X],
-      #                             [Y, Y_itf_i, Y_itf_j, Y],
-      #                             [x3, x3_itf_i.transpose((0,2,1)), x3_itf_j, x3_itf_k]):
-      #    coord[0,:,:,:] = x[numpy.newaxis,:,:]
-      #    coord[1,:,:,:] = y[numpy.newaxis,:,:]
-      #    coord[2,:,:,:] = z  
 
       for (coordgnom, coordnum, z) in zip([coordVec_gnom, coordVec_gnom_itf_i, coordVec_gnom_itf_j, coordVec_gnom_itf_k],
                                           [coordVec_num, coordVec_num_itf_i, coordVec_num_itf_j, coordVec_num_itf_k],
@@ -520,6 +553,11 @@ class CubedSphere(Geometry):
          coordgnom[0,:,:,:] = numpy.tan(coordnum[0,:,:,:])
          coordgnom[1,:,:,:] = numpy.tan(coordnum[1,:,:,:])
          coordgnom[2,:,:,:] = z
+
+      # coordVec_gnom_new       = to_gnomonic(self.coordVec_num_new,       x3)
+      # coordVec_gnom_itf_i_new = to_gnomonic(self.coordVec_num_itf_i_new, x3_itf_i)
+      # coordVec_gnom_itf_j_new = to_gnomonic(self.coordVec_num_itf_j_new, x3_itf_j)
+      # coordVec_gnom_itf_k_new = to_gnomonic(self.coordVec_num_itf_k_new, x3_itf_k)
 
       # * Cartesian coordinates on the deep sphere (Xc, Yc, Zc)
 
@@ -630,3 +668,58 @@ class CubedSphere(Geometry):
       self.sinlon = numpy.sin(lon)
       self.coslat = numpy.cos(lat)
       self.sinlat = numpy.sin(lat)
+
+   def _to_new(self, a):
+      """Convert input array to new memory layout"""
+
+      expected_shape =  (self.nb_elements_x2 * self.nbsolpts, self.nb_elements_x1 * self.nbsolpts)
+      if a.ndim == 2 and a.shape == expected_shape:
+         tmp_shape = (self.nb_elements_x2, self.nbsolpts, self.nb_elements_x1, self.nbsolpts)
+         new_shape = self.grid_shape_2d_new
+         return a.reshape(tmp_shape).transpose(0, 2, 1, 3).reshape(new_shape)
+
+      elif (a.ndim == 3 and a.shape[1:] == expected_shape) or \
+           (a.ndim == 4 and a.shape[2:] == expected_shape and a.shape[1] == 1):
+         tmp_shape = (a.shape[0], self.nb_elements_x2, self.nbsolpts, self.nb_elements_x1, self.nbsolpts)
+         new_shape = (a.shape[0],) + self.grid_shape_2d_new
+         return a.reshape(tmp_shape).transpose(0, 1, 3, 2, 4).reshape(new_shape)
+
+      raise ValueError(f'Unhandled number of dimensions... Shape is {a.shape}')
+
+   # def _to_old(self, a):
+   #    """Convert input array to old memory layout"""
+   #    expected_shape = (self.nb_elements_x1 * self.nb_elements_x2, self.nbsolpts * self.nbsolpts)
+   #    if a.shape == expected_shape:
+   #       tmp_shape = (self.nb_elements_x2, self.nb_elements_x1, self.nbsolpts, self.nbsolpts)
+   #       new_shape = self.grid_shape_2d
+   #       return a.reshape(tmp_shape).transpose(0, 2, 1, 3).reshape(new_shape)
+   #    elif a.ndim == 3 and a.shape[1:] == expected_shape:
+   #       tmp_shape = (a.shape[0], self.nb_elements_x2, self.nb_elements_x1, self.nbsolpts, self.nbsolpts)
+   #       new_shape = (a.shape[0],) + self.grid_shape_2d
+   #       return a.reshape(tmp_shape).transpose(0, 1, 3, 2, 4).reshape(new_shape)
+
+   # def _to_new_itf_i(self, a):
+   #    """Convert input array (west and east interface) to new memory layout"""
+   #    expected_shape = (self.nb_elements_x1 + 1, self.nb_elements_x2 * self.nbsolpts)
+   #    if a.shape == expected_shape:
+   #       tmp_shape = (self.nb_elements_x1 + 1, self.nbsolpts, self.nb_elements_x2)
+   #       new_shape = (self.nb_elements_x2 * (self.nb_elements_x1 + 1), self.nbsolpts
+   #    else:
+   #       raise ValueError(f'Unexpected array shape')
+
+   # def _to_new_itf(self, a):
+   #    """Convert input array (interface) to new memory layout"""
+
+   #    expected_shape_1 = (self.nb_elements_x2 * self.nbsolpts, self.nb_elements_x1 + 1)
+   #    expected_shape_2 = (self.nb_elements_x2 + 1, self.nb_elements_x1 * self.nbsolpts)
+   #    expected_shapes = [expected_shape_1, expected_shape_2]
+
+   #    if a.ndim == 2 and a.shape in expected_shapes:
+   #       new_shape = self.itf_shape_2d
+   #       if a.shape == expected_shape_1:
+   #          tmp_shape = (self.nb_elements_x2, self.nbsolpts, self.nb_elements_x1 + 1)
+   #          return a.reshape(tmp_shape).transpose
+
+   #       elif a.shape == expected_shape_2:
+   #          tmp_shape = (self.nb_elements_x2 + 1, self.nb_elements_x1, self.nbsolpts)
+   #       else: raise ValueError

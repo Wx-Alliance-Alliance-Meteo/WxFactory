@@ -8,7 +8,7 @@ from   numpy.typing import NDArray
 from .definitions import *
 from .device import Device
 
-ExchangedVector = Tuple[NDArray, NDArray] | Tuple[NDArray, NDArray, NDArray] | List[NDArray] | NDArray
+ExchangedVector = Tuple[NDArray, ...] | List[NDArray] | NDArray
 
 SOUTH = 0
 NORTH = 1
@@ -373,6 +373,8 @@ class ProcessTopology:
                               west: ExchangedVector,
                               east: ExchangedVector):
       """Create a request for exchanging scalar data with neighboring tiles. The 4 input arrays or lists must have the same shape and size.
+      Values will be flipped if the neighbor has a flipped coordinate system. This means that when receiving data,
+      it will always be in local coordinates
       
       Args:
          :param south: Array (or tuple/list of arrays) of values for the south boundary (one array-like for each component, so there should be 2 or 3 arrays in the tuple)
@@ -408,14 +410,21 @@ class ProcessTopology:
 
    def start_exchange_vectors(self, south, north, west, east, boundary_sn, boundary_we):
       """Create a request for exchanging vectors with neighboring tiles. The 4 input vectors must have the same shape and size.
+      Vector Values are converted to the neighboring coordinate system before being transmitted through MPI. They will be flipped
+      if the neighbor has a flipped coordinate system. This means that when receiving data, it will always be in local coordinates
       
       Args:
-         :param south: Tuple/List of vector components for the south boundary (one array-like for each component, so there should be 2 or 3 arrays in the tuple)
-         :param north: Tuple/List of vector components for the north boundary (one array-like for each component, so there should be 2 or 3 arrays in the tuple)
-         :param west:  Tuple/List of vector components for the west boundary (one array-like for each component, so there should be 2 or 3 arrays in the tuple)
-         :param east:  Tuple/List of vector components for the east boundary (one array-like for each component, so there should be 2 or 3 arrays in the tuple)
-         :param boundary_sn: Coordinates along the west-east axis at the south and north boundaries
-         :param boundary_we: Coordinates along the south-north axis at the west and east boundaries
+         :param south: Tuple/List of vector components for the south boundary (one array-like for each component,
+                       so there should be 2 or 3 arrays in the tuple)
+         :param north: Tuple/List of vector components for the north boundary (one array-like for each component,
+                       so there should be 2 or 3 arrays in the tuple)
+         :param west:  Tuple/List of vector components for the west boundary (one array-like for each component,
+                       so there should be 2 or 3 arrays in the tuple)
+         :param east:  Tuple/List of vector components for the east boundary (one array-like for each component,
+                       so there should be 2 or 3 arrays in the tuple)
+         :param boundary_sn: Coordinates along the west-east axis at the south and north boundaries.
+                             The entries in that vector *must* match the entries in the input arrays
+         :param boundary_we: Coordinates along the south-north axis at the west and east boundaries. The entries in that vector *must* match the entries in the input arrays
 
       Returns:
          A request (MPI-like) for the transfer of the arrays. Waiting on the request will return the resulting arrays in the same way as the input.

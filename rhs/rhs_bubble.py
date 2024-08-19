@@ -85,7 +85,8 @@ def rhs_bubble(Q, geom, mtrx, nbsolpts, nb_elements_x, nb_elements_z):
                                                     (1. - M_E) * pressure_itf_x[1:, west_itf]).T
    common_flux_x[:, :-1, east_itf] = common_flux_x[:, 1:, west_itf]
 
-   # Boundary conditions
+   # Zero flux BC at left and right boundaries
+   # except for (horizontal) momentum, where we use extrapolated pressure at boundary
    n0 = nb_elements_x - 1
    jump = nb_elements_x
    common_flux_x[:,   ::jump, west_itf] = 0.0
@@ -93,7 +94,7 @@ def rhs_bubble(Q, geom, mtrx, nbsolpts, nb_elements_x, nb_elements_z):
    common_flux_x[idx_2d_rho_u,   ::jump, west_itf] = pressure_itf_x[  ::jump, west_itf].T
    common_flux_x[idx_2d_rho_u, n0::jump, east_itf] = pressure_itf_x[n0::jump, east_itf].T
 
-
+   # --- Compute derivatives, with correction from boundaries
    df1_dx1 = (flux_x1 @ mtrx.derivative_x + common_flux_x @ mtrx.correction_WE) * (2.0 / geom.Δx1) 
    df3_dx3 = (flux_x3 @ mtrx.derivative_z + common_flux_z @ mtrx.correction_DU) * (2.0 / geom.Δx3)
 
