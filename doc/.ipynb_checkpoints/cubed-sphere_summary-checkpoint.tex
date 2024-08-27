@@ -1,0 +1,365 @@
+\documentclass{article}
+
+\usepackage[colorlinks,bookmarksopen,bookmarksnumbered,citecolor=red,urlcolor=red]{hyperref}
+\usepackage{moreverb}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage[margin=1.0in]{geometry}
+\usepackage{times}
+
+\begin{document}
+
+\title{\bf A summary of the eqations of motion on the cubed-sphere and latitude-longitude coordinates under the shallow-atmosphere and spherical geopotential approximations}
+
+\author{Martin Charron and St\'ephane Gaudreault \\
+\\ \vspace{6pt} Recherche en pr\'evision num\'erique atmosph\'erique, 
+\\ Environnement Canada, Dorval, Qc, Canada}
+
+\maketitle
+
+\begin{abstract}
+The governing equations in the cubed-sphere and latitude-longitude horizontal coordinates with a time-independent, but otherwise general, vertical coordinate are written using the four-dimensional tensor formalism. The shallow-atmosphere and non-hydrostatic equations under the spherical geopotential approximation are considered.
+\end{abstract}
+
+\section{Equations of motion}
+\subsection{Euler equations}
+The inviscid horizontal momentum equations are ($i=1,2$):
+\begin{align}
+\left( \sqrt{g}\rho u^\nu u^i\right)_{,\nu} = - \sqrt{g}h^{ij}p_{,j} -2\sqrt{g} \rho \Gamma^i_{j0} u^j - \sqrt{g} \rho \Gamma^i_{jk}u^ju^k,
+\end{align}
+while the inviscid vertical momentum equation with one vertical velocity is
+\begin{align}
+\left( \sqrt{g}\rho u^\nu u^3\right)_{,\nu} = - \sqrt{g} \rho \left(\frac{\partial z}{\partial \eta}\right)^{-1} g_r - \sqrt{g}h^{3j}p_{,j} -2\sqrt{g} \rho \Gamma^3_{j0} u^j - \sqrt{g} \rho \Gamma^3_{jk}u^ju^k.
+\end{align}
+From the identity $(\sqrt{g}h^{\mu\nu})_{,\nu}\equiv -\sqrt{g}h^{\alpha\nu}\Gamma^\mu_{\alpha\nu}$, one may write
+\begin{align}
+\frac{\partial}{\partial t}\left( \sqrt{g}\rho u^i\right) + \frac{\partial}{\partial x^j}\left( \sqrt{g}\left[\rho u^iu^j+h^{ij}p\right]\right) = -2\sqrt{g} \, \Gamma^i_{j0} \rho u^j - \sqrt{g} \, \Gamma^i_{jk}\left(\rho u^ju^k+h^{jk}p\right)
+\end{align}
+($i=1,2$), while the inviscid vertical momentum equation with one vertical velocity becomes
+\begin{align}
+\frac{\partial}{\partial t}\left( \sqrt{g}\rho u^3\right) + \frac{\partial}{\partial x^j}\left( \sqrt{g}\left[\rho u^3 u^j + h^{3j}p\right]\right)= - \sqrt{g} \rho \left(\frac{\partial z}{\partial \eta}\right)^{-1} g_r -2\sqrt{g} \, \Gamma^3_{j0} \rho u^j - \sqrt{g} \, \Gamma^3_{jk}\left(\rho u^ju^k+h^{jk}p\right).
+\end{align}
+
+The independent variable $x^3=\eta$ is a generalized vertical coordinate and $z$ is height above the spherical Earth of radius $a$. Therefore, $u^3=\dot\eta$. The constant $g_r$ is approximately $9.81$ m s$^{-2}$.
+
+If two vertical velocities are chosen instead of one, then $u^3$ is diagnosed from the other vertical velocity ($w=\dot z$):
+\begin{align}
+u^3=\left(\frac{\partial z}{\partial \eta}\right)^{-1}\left[ w - \frac{\partial z}{\partial x^1} u^1 - \frac{\partial z}{\partial x^2} u^2 \right]
+\end{align}
+and the vertical momentum equation is written:
+\begin{align}
+\left(\sqrt{g}\rho u^\nu w\right)_{,\nu}=-\sqrt{g}\rho g_r-\sqrt{g} \left(\frac{\partial z}{\partial \eta}\right)^{-1} \frac{\partial p}{\partial\eta}.
+\end{align}
+
+The continuity equation takes the form
+\begin{align}
+\left( \sqrt{g}\rho u^\nu \right)_{,\nu} = 0.
+\end{align}
+
+The thermodynamics equation can be written in terms of virtual potential temperature $\theta_v$ has
+\begin{align}
+   \left( \sqrt{g}\rho \theta_v u^\nu \right)_{,\nu} = \sqrt{g} \rho \left( \frac{\theta_v}{T_v} \right) \frac{\dot{Q}}{c_{pd}}
+\end{align}
+where $\dot{Q}$ is the rate of heating per unit mass.
+
+Let $q_v$ be the specfic humidity, $q_d$ be the ratio of the mass of the other gases to the total mass, $q_i$ be the ratio of the mass of the various types of hydrometeors to the total mass 
+and $R_d$, $R_v$ be the gas constants for dry air and water vapor.
+
+
+The density of the atmosphere $\rho = \rho_d + \rho_v$ is the sum of the density of the dry air and water vapor. Assuming that both the dry air and the water vapor are ideal gases, the atmos
+pheric pressure $P$ can be written as the sum of the partial pressure of water vapour $P_v$ and the partial pressures of the dry air $P_d$
+\begin{equation}
+   P = P_d + P_v
+\end{equation}
+
+After some manipulations, we can obtain the equation of state for the moist air
+\begin{align}
+   P &= ( \rho_d R_d + \rho_v R_v ) T \\
+   P &= \rho ( q_d R_d + q_v R_v ) T      \\
+   P &= \rho R_d ( q_d + q_v \frac{R_v}{R_d} ) T      \\
+   P &= \rho R_d ( 1 - \sum q_i + q_v \frac{R_v}{R_d} ) T      \\
+   P &= \rho R_d T_v \label{eq:state}
+\end{align}
+where $T_v = T \left( 1 - \sum q_i + q_v \frac{R_v}{R_d} \right)$ is the virtual temperature.
+
+We define the virtual potential temperature as
+\begin{equation}\label{eq:pot_temp}
+\theta_v = T_v  \left( \frac{P_0}{P} \right)^\kappa
+\end{equation}
+where $P_0 = 1000 \text{ hPa}$ and
+\begin{equation}
+   \kappa = \frac{R_d \, q_d + R_v \, q_v}{c_{pd} \, q_d + c_{pv} \, q_{v}}
+\end{equation}
+is the thermal conductivity of the air and $c_{pd}$, $c_{pv}$ are respectively the heat capacity of dry air and water vapor.
+
+The definition of $\kappa$ does not include the humidity and the constant $\kappa \approx \frac{R_d}{c_{pd}}$ is used as an approximation.
+
+\subsection{Shallow-water equations}
+For the shallow-water equations, repeated lower and upper Greek indices run from $0$ to $2$, and repeated lower and upper Latin indices run from $1$ to $2$.
+
+The momentum equations are ($i=1,2$):
+\begin{align}
+\frac{\partial}{\partial t} \left( \sqrt{g}Hu^i \right)+\frac{\partial}{\partial x^j} \left( \sqrt{g}\left[Hu^i u^j +\frac{1}{2}g_rh^{ij}H^2\right]\right) =- 2\sqrt{g}\,\Gamma^i_{j0}Hu^j \nonumber \\
+-\sqrt{g}\,\Gamma^i_{jk} \left( Hu^ju^k +\frac{1}{2}g_rh^{jk}H^2  \right) -\sqrt{g}Hg_rh^{ij}\frac{\partial h_B}{\partial x^j},
+\end{align}
+where $H$ denotes the fluid thickness and $h_B$ the bottom topography.
+
+The continuity equation takes the form
+\begin{align}
+\left( \sqrt{g} H u^\nu \right)_{,\nu} = 0.
+\end{align}
+
+\section{Metric terms}
+\subsection{Unrotated cubed-sphere coordinates}
+Define $X=\tan x^1$, $Y=\tan x^2$, and $\delta^2=1+X^2+Y^2$ on all six panels. The non-zero components of the tensor $h^{\mu \nu}$ are
+\begin{align}
+h^{11}&=\frac{\delta^2}{a^2(1+X^2)}, \\
+h^{12}&=\frac{XY\delta^2}{a^2(1+X^2)(1+Y^2)}=h^{21}, \\
+h^{13}&=-\left( \frac{\partial z}{\partial \eta} \right)^{-1} \left( \frac{\partial z}{\partial x^1} h^{11} + \frac{\partial z}{\partial x^2} h^{12} \right)=h^{31}, \\
+h^{22}&=\frac{\delta^2}{a^2(1+Y^2)}, \\
+h^{23}&=-\left( \frac{\partial z}{\partial \eta} \right)^{-1} \left( \frac{\partial z}{\partial x^1} h^{12} + \frac{\partial z}{\partial x^2} h^{22} \right)=h^{32}, \\
+h^{33}&=\left( \frac{\partial z}{\partial \eta} \right)^{-2} \left[ 1 + \left( \frac{\partial z}{\partial x^1} \right)^2 h^{11} + \left( \frac{\partial z}{\partial x^2} \right)^2 h^{22} +2\frac{\partial z}{\partial x^1} \frac{\partial z}{\partial x^2} h^{12}\right].
+\end{align}
+One may then find
+\begin{align}
+\sqrt{g}=\frac{a^2 (1+X^2)(1+Y^2)}{\delta^3}\left|\frac{\partial z}{\partial\eta}\right|. \label{rgt}
+\end{align}
+The tensor $h^{\mu\nu}$ and the quantity $\sqrt{g}$ have the same form on all six panels.
+
+On panels $p=0,1,2,3$,
+\begin{align}
+X&=\tan x^1 = \tan \left( \lambda -p\frac{\pi}{2} \right), \\
+Y&=\tan x^2 = \frac{\tan \phi}{\cos \left( \lambda -p\frac{\pi}{2}\right)}.
+\end{align}
+
+The panel covering the Arctic region is called panel $4$. On panel $4$,
+\begin{align}
+X=\tan x^1&= \frac{\sin \lambda}{\tan \phi}, \\
+Y=\tan x^2&=- \frac{\cos \lambda}{\tan \phi}.
+\end{align}
+
+The panel covering Antarctica is called panel $5$. On panel $5$,
+\begin{align}
+X=\tan x^1&=- \frac{\sin \lambda}{\tan \phi}, \\
+Y=\tan x^2&=- \frac{\cos \lambda}{\tan \phi}.
+\end{align}
+
+For all 6 panels, the Christoffel symbols of the second kind with components $i$ and $j$ are
+\begin{align}
+\Gamma^1_{11}&=\frac{2 X Y^2 }{ \delta^2 }, \\
+\Gamma^1_{12}&=-\frac{ Y(1 + Y^2) }{ \delta^2 }=\Gamma^1_{21}, \\
+\Gamma^1_{13}&=0=\Gamma^1_{31}, \\
+\Gamma^1_{22}&=0, \\
+\Gamma^1_{23}&=0=\Gamma^1_{32}, \\
+\Gamma^1_{33}&=0,
+\end{align}
+\begin{align}
+\Gamma^2_{11}&=0, \\
+\Gamma^2_{12}&=-\frac{X(1+X^2)}{\delta^2}=\Gamma^2_{21}, \\
+\Gamma^2_{13}&=0=\Gamma^2_{31}, \\
+\Gamma^2_{22}&=\frac{2X^2Y}{\delta^2}, \\
+\Gamma^2_{23}&=0=\Gamma^2_{32}, \\
+\Gamma^2_{33}&=0,
+\end{align}
+\begin{align}
+\Gamma^3_{11}&=\left(\frac{\partial z}{\partial \eta}\right)^{-1}\left[ \frac{\partial^2 z}{\partial x^1 \partial x^1} - \frac{2 X Y^2 }{ \delta^2 } \frac{\partial z}{\partial x^1}\right], \\
+\Gamma^3_{12}&=\left(\frac{\partial z}{\partial \eta}\right)^{-1}\left[ \frac{\partial^2 z}{\partial x^1 \partial x^2} + \frac{ Y(1 + Y^2) }{ \delta^2 } \frac{\partial z}{\partial x^1} + \frac{X(1+X^2)}{\delta^2} \frac{\partial z}{\partial x^2}   \right]=\Gamma^3_{21}, \\
+\Gamma^3_{13}&=\left(\frac{\partial z}{\partial \eta}\right)^{-1} \frac{\partial^2 z}{\partial x^1 \partial \eta}=\Gamma^3_{31}, \\
+\Gamma^3_{22}&=\left(\frac{\partial z}{\partial \eta}\right)^{-1}\left[ \frac{\partial^2 z}{\partial x^2 \partial x^2} - \frac{2 X^2 Y }{ \delta^2 } \frac{\partial z}{\partial x^2}\right], \\
+\Gamma^3_{23}&=\left(\frac{\partial z}{\partial \eta}\right)^{-1} \frac{\partial^2 z}{\partial x^2 \partial \eta}=\Gamma^3_{32}, \\
+\Gamma^3_{33}&=\left(\frac{\partial z}{\partial \eta}\right)^{-1} \frac{\partial^2 z}{\partial \eta^2}.
+\end{align}
+
+For panels $0$ to $3$, one calculates
+\begin{align}
+\Gamma^1_{01}&=\frac{\Omega XY^2}{\delta^2}=\Gamma^1_{10}, \\
+\Gamma^1_{02}&=-\frac{\Omega Y(1+Y^2)}{\delta^2}=\Gamma^1_{20}, \\
+\Gamma^1_{03}&=0=\Gamma^1_{30}, \\
+\Gamma^2_{01}&=\frac{\Omega Y(1+X^2)}{\delta^2}=\Gamma^2_{10}, \\
+\Gamma^2_{02}&=-\frac{\Omega XY^2}{\delta^2}=\Gamma^2_{20}, \\
+\Gamma^2_{03}&=0=\Gamma^2_{30}, \\
+\Gamma^3_{01}&=-\left(\frac{\partial z}{\partial \eta}\right)^{-1}\left[ \frac{\Omega XY^2}{\delta^2} \frac{\partial z}{\partial x^1}+ \frac{\Omega Y(1+X^2)}{\delta^2} \frac{\partial z}{\partial x^2}  \right]=\Gamma^3_{10}, \\
+\Gamma^3_{02}&=\left(\frac{\partial z}{\partial \eta}\right)^{-1}\left[ \frac{\Omega Y(1+Y^2)}{\delta^2} \frac{\partial z}{\partial x^1}+\frac{\Omega XY^2}{\delta^2}\frac{\partial z}{\partial x^2}  \right]=\Gamma^3_{20}, \\
+\Gamma^3_{03}&=0=\Gamma^3_{30}.
+\end{align}
+For panel $4$, one calculates
+\begin{align}
+\Gamma^1_{01}&=\frac{\Omega XY}{\delta^2}=\Gamma^1_{10}, \\
+\Gamma^1_{02}&=-\frac{\Omega (1+Y^2)}{\delta^2}=\Gamma^1_{20}, \\
+\Gamma^1_{03}&=0=\Gamma^1_{30}, \\
+\Gamma^2_{01}&=\frac{\Omega (1+X^2)}{\delta^2}=\Gamma^2_{10}, \\
+\Gamma^2_{02}&=-\frac{\Omega XY}{\delta^2}=\Gamma^2_{20}, \\
+\Gamma^2_{03}&=0=\Gamma^2_{30}, \\
+\Gamma^3_{01}&=-\left(\frac{\partial z}{\partial \eta}\right)^{-1}\left[ \frac{\Omega XY}{\delta^2} \frac{\partial z}{\partial x^1}+ \frac{\Omega (1+X^2)}{\delta^2} \frac{\partial z}{\partial x^2}  \right]=\Gamma^3_{10}, \\
+\Gamma^3_{02}&=\left(\frac{\partial z}{\partial \eta}\right)^{-1}\left[ \frac{\Omega (1+Y^2)}{\delta^2} \frac{\partial z}{\partial x^1}+\frac{\Omega XY}{\delta^2}\frac{\partial z}{\partial x^2}  \right]=\Gamma^3_{20}, \\
+\Gamma^3_{03}&=0=\Gamma^3_{30}.
+\end{align}
+For panel $5$, one calculates
+\begin{align}
+\Gamma^1_{01}&=-\frac{\Omega XY}{\delta^2}=\Gamma^1_{10}, \\
+\Gamma^1_{02}&=\frac{\Omega (1+Y^2)}{\delta^2}=\Gamma^1_{20}, \\
+\Gamma^1_{03}&=0=\Gamma^1_{30}, \\
+\Gamma^2_{01}&=-\frac{\Omega (1+X^2)}{\delta^2}=\Gamma^2_{10}, \\
+\Gamma^2_{02}&=\frac{\Omega XY}{\delta^2}=\Gamma^2_{20}, \\
+\Gamma^2_{03}&=0=\Gamma^2_{30}, \\
+\Gamma^3_{01}&=\left(\frac{\partial z}{\partial \eta}\right)^{-1}\left[ \frac{\Omega XY}{\delta^2} \frac{\partial z}{\partial x^1}+ \frac{\Omega (1+X^2)}{\delta^2} \frac{\partial z}{\partial x^2}  \right]=\Gamma^3_{10}, \\
+\Gamma^3_{02}&=-\left(\frac{\partial z}{\partial \eta}\right)^{-1}\left[ \frac{\Omega (1+Y^2)}{\delta^2} \frac{\partial z}{\partial x^1}+\frac{\Omega XY}{\delta^2}\frac{\partial z}{\partial x^2}  \right]=\Gamma^3_{20}, \\
+\Gamma^3_{03}&=0=\Gamma^3_{30}.
+\end{align}
+\subsection{Rotated cubed-sphere coordinates}
+Useful formulas when dealing with the rotated cubed-sphere grid are provided below. The convention is as follows: the centre of panel $0$ is located at geographical longitude $\lambda_0$ and geographical latitude $\phi_0$, and the line $x^1=0$ is rotated clockwise by an angle $\alpha_0$ when looking at the panel from above. The angles $\lambda$ and $\phi$ are geographical longitude and latitude, respectively.
+
+For a global grid with six panels, inverse trigonometric functions are necessary to establish the rotation angles $\lambda_p$, $\phi_p$ and $\alpha_p$ of panels $p=1,...,5$.
+
+On panel 1:
+\begin{align}
+\lambda_1&=\tan^{-1}\left(\frac{\cos\lambda_0\cos\alpha_0+\sin\lambda_0\sin\phi_0\sin\alpha_0}{\cos\lambda_0\sin\phi_0\sin\alpha_0-\sin\lambda_0\cos\alpha_0}\right), \\
+\phi_1&=-\sin^{-1}\left(\cos\phi_0\sin\alpha_0\right), \\
+\alpha_1&=\tan^{-1}\left(\frac{\sin\phi_0}{\cos\phi_0\cos\alpha_0}\right).
+\end{align}
+On panel 2:
+\begin{align}
+\lambda_2&=\tan^{-1}\left(\frac{-\sin\lambda_0}{-\cos\lambda_0}\right), \\
+\phi_2&=-\phi_0, \\
+\alpha_2&=-\tan^{-1}\left(\frac{\sin\alpha_0}{\cos\alpha_0}\right).
+\end{align}
+On panel 3:
+\begin{align}
+\lambda_3&=\tan^{-1}\left(\frac{-\cos\lambda_0\cos\alpha_0-\sin\lambda_0\sin\phi_0\sin\alpha_0}{-\cos\lambda_0\sin\phi_0\sin\alpha_0+\sin\lambda_0\cos\alpha_0}\right), \\
+\phi_3&=\sin^{-1}\left(\cos\phi_0\sin\alpha_0\right), \\
+\alpha_3&=-\tan^{-1}\left(\frac{\sin\phi_0}{\cos\phi_0\cos\alpha_0}\right).
+\end{align}
+On panel 4:
+\begin{align}
+\lambda_4&=\tan^{-1}\left(\frac{-\sin\lambda_0\sin\phi_0\cos\alpha_0+\cos\lambda_0\sin\alpha_0}{-\cos\lambda_0\sin\phi_0\cos\alpha_0-\sin\lambda_0\sin\alpha_0}\right), \\
+\phi_4&=\sin^{-1}\left(\cos\phi_0\cos\alpha_0\right), \\
+\alpha_4&=\tan^{-1}\left(\frac{\cos\phi_0\sin\alpha_0}{-\sin\phi_0}\right).
+\end{align}
+On panel 5:
+\begin{align}
+\lambda_5&=\tan^{-1}\left(\frac{\sin\lambda_0\sin\phi_0\cos\alpha_0-\cos\lambda_0\sin\alpha_0}{\cos\lambda_0\sin\phi_0\cos\alpha_0+\sin\lambda_0\sin\alpha_0}\right), \\
+\phi_5&=-\sin^{-1}\left(\cos\phi_0\cos\alpha_0\right), \\
+\alpha_5&=\tan^{-1}\left(\frac{\cos\phi_0\sin\alpha_0}{\sin\phi_0}\right).
+\end{align}
+
+On panel $p$:
+\begin{align}
+X&=\frac{ \cos\phi\sin(\lambda-\lambda_p)\cos\alpha_p + \cos\phi\sin\phi_p\cos(\lambda-\lambda_p)\sin\alpha_p - \sin\phi\cos\phi_p\sin\alpha_p }   {\cos\phi\cos\phi_p\cos(\lambda-\lambda_p)+\sin\phi\sin\phi_p}, \\
+Y&=\frac{ - \cos\phi\sin\phi_p\cos(\lambda-\lambda_p)\cos\alpha_p + \cos\phi\sin(\lambda-\lambda_p)\sin\alpha_p + \sin\phi\cos\phi_p\cos\alpha_p  }  {\cos\phi\cos\phi_p\cos(\lambda-\lambda_p)+\sin\phi\sin\phi_p}.
+\end{align}
+The independent variables $X=\tan x^1$ and $Y=\tan x^2$ are defined on panel $p$.
+
+The Christoffel symbols $\Gamma^i_{jk}$ on a rotated grid are the same as those for an unrotated grid due to spherical symmetry. The Christoffel symbols associated with the Coriolis parameters are:
+\begin{align}
+\Gamma^1_{01}&=\frac{\Omega XY}{\delta^2}\left( \sin\phi_p -X\cos\phi_p\sin\alpha_p+Y\cos\phi_p\cos\alpha_p \right)=\Gamma^1_{10}, \label{g101}\\
+\Gamma^1_{02}&=-\frac{\Omega}{\delta^2}(1+Y^2)(\sin\phi_p-X\cos\phi_p\sin\alpha_p+Y\cos\phi_p\cos\alpha_p)=\Gamma^1_{20}, \label{g102} \\
+\Gamma^1_{03}&=0=\Gamma^1_{30}, \\
+\Gamma^2_{01}&=\frac{\Omega}{\delta^2}(1+X^2)(\sin\phi_p-X\cos\phi_p\sin\alpha_p+Y\cos\phi_p\cos\alpha_p)=\Gamma^2_{10}, \label{g201} \\
+\Gamma^2_{02}&=-\frac{\Omega XY}{\delta^2} \left( \sin\phi_p-X\cos\phi_p\sin\alpha_p+Y\cos\phi_p\cos\alpha_p \right)=\Gamma^2_{20}, \label{g202} \\
+\Gamma^2_{03}&=0=\Gamma^2_{30}, \\
+\Gamma^3_{01}&=-\left( \frac{\partial z}{\partial \eta} \right)^{-1} \left( \Gamma^1_{01}\frac{\partial z}{\partial x^1} + \Gamma^2_{01}\frac{\partial z}{\partial x^2} \right)=\Gamma^3_{10}, \label{g301} \\
+\Gamma^3_{02}&=-\left( \frac{\partial z}{\partial \eta} \right)^{-1} \left( \Gamma^1_{02}\frac{\partial z}{\partial x^1} + \Gamma^2_{02}\frac{\partial z}{\partial x^2} \right)=\Gamma^3_{20}, \label{g302} \\
+\Gamma^3_{03}&=0=\Gamma^3_{30}.
+\end{align}
+In \eqref{g301} and \eqref{g302}, the Christoffel symbols $\Gamma^1_{01}$, $\Gamma^2_{01}$, $\Gamma^1_{02}$ and $\Gamma^2_{02}$ are provided by \eqref{g101}, \eqref{g201}, \eqref{g102} and \eqref{g202}, respectively.
+
+The transformation operators from an unrotated ($\lambda$,$\phi$,$\eta$) lat-lon coordinate system to a rotated ($x^1$,$x^2$,$x^3=\eta$) cubed-sphere coordinate system are:
+\begin{align}
+\frac{\partial x^1}{\partial\lambda}&=\cos\phi_p\cos\alpha_p+\frac{XY\cos\phi_p\sin\alpha_p-Y\sin\phi_p }{1+X^2}, \\
+\frac{\partial x^2}{\partial\lambda}&=\frac{XY\cos\phi_p\cos\alpha_p+X\sin\phi_p}{1+Y^2} + \cos\phi_p\sin\alpha_p, \\
+\frac{\partial x^3}{\partial\lambda}&=0, \\
+\frac{\partial x^1}{\partial\phi}&=-\delta^2\frac{( \cos\phi_p\sin\alpha_p +X\sin\phi_p) (1+X^2)^{-1}}{[(\cos\phi_p+X\sin\phi_p\sin\alpha_p-Y\sin\phi_p\cos\alpha_p)^2+(X\cos\alpha_p+Y\sin\alpha_p)^2]^{1/2}}, \\
+\frac{\partial x^2}{\partial\phi}&=\delta^2\frac{( \cos\phi_p\cos\alpha_p  -Y\sin\phi_p ) (1+Y^2)^{-1}}{[(\cos\phi_p+X\sin\phi_p\sin\alpha_p-Y\sin\phi_p\cos\alpha_p)^2+(X\cos\alpha_p+Y\sin\alpha_p)^2]^{1/2}}, \\
+\frac{\partial x^3}{\partial\phi}&=0, \\
+\frac{\partial x^1}{\partial\eta}&=0, \\
+\frac{\partial x^2}{\partial\eta}&=0, \\
+\frac{\partial x^3}{\partial\eta}&=1,
+\end{align}
+\begin{align}
+\frac{\partial\lambda}{\partial x^1}&=\frac{( \cos\phi_p\cos\alpha_p  -Y\sin\phi_p ) (1+X^2)}{(\cos\phi_p+X\sin\phi_p\sin\alpha_p-Y\sin\phi_p\cos\alpha_p)^2+(X\cos\alpha_p+Y\sin\alpha_p)^2}, \\
+\frac{\partial\lambda}{\partial x^2}&=\frac{( \cos\phi_p\sin\alpha_p +X\sin\phi_p) (1+Y^2)}{(\cos\phi_p+X\sin\phi_p\sin\alpha_p-Y\sin\phi_p\cos\alpha_p)^2+(X\cos\alpha_p+Y\sin\alpha_p)^2}, \\
+\frac{\partial\lambda}{\partial x^3}&=0, \\
+\frac{\partial\phi}{\partial x^1}&=-\delta^{-2} \frac{(XY\cos\phi_p\cos\alpha_p+X\sin\phi_p+[1+Y^2]\cos\phi_p\sin\alpha_p)(1+X^2)}{[(\cos\phi_p+X\sin\phi_p\sin\alpha_p-Y\sin\phi_p\cos\alpha_p)^2+(X\cos\alpha_p+Y\sin\alpha_p)^2]^{1/2}}, \\
+\frac{\partial\phi}{\partial x^2}&=\delta^{-2}\frac{([1+X^2]\cos\phi_p\cos\alpha_p+XY\cos\phi_p\sin\alpha_p-Y\sin\phi_p) (1+Y^2)}{[(\cos\phi_p+X\sin\phi_p\sin\alpha_p-Y\sin\phi_p\cos\alpha_p)^2+(X\cos\alpha_p+Y\sin\alpha_p)^2]^{1/2}}, \\
+\frac{\partial\phi}{\partial x^3}&=0, \\
+\frac{\partial\eta}{\partial x^1}&=0, \\
+\frac{\partial\eta}{\partial x^2}&=0, \\
+\frac{\partial\eta}{\partial x^3}&=1.
+\end{align}
+
+\subsection{Rotated latitude-longitude coordinates}
+Useful formulas when dealing with the rotated latitude-longitude grid are provided below. The convention is as follows: the centre of grid $(x^1=0,x^2=0)$ is located at geographical longitude $\lambda_0$ and geographical latitude $\phi_0$, and the line $x^1=0$ is rotated clockwise by an angle $\alpha_0$ when looking at the panel from above. The angles $x^1$ and $x^2$ are the rotated coordinates' longitude and latitude, respectively.
+
+The spatial metric tensor is
+\begin{align}
+h^{\mu \nu}&=\left( \begin{array}{cccc}
+0 & 0 & 0 & 0 \\
+0 & (a\cos x^2)^{-2} & 0 & -(a\cos x^2)^{-2} \left( \frac{\partial z}{\partial \eta} \right)^{-1} \frac{\partial z}{\partial x^1}\\
+0 & 0 & a^{-2} & -a^{-2} \left( \frac{\partial z}{\partial \eta} \right)^{-1} \frac{\partial z}{\partial x^2} \\
+0 & -(a\cos x^2)^{-2} \left( \frac{\partial z}{\partial \eta} \right)^{-1} \frac{\partial z}{\partial x^1} & -a^{-2} \left( \frac{\partial z}{\partial \eta} \right)^{-1} \frac{\partial z}{\partial x^2} & \left( \frac{\partial z}{\partial \eta} \right)^{-2} \left[ \left( \frac{1}{a\cos x^2} \frac{\partial z}{\partial x^1} \right)^2+\left( \frac{1}{a} \frac{\partial z}{\partial x^2} \right)^2+1  \right]  \end{array} \right).
+\end{align}
+The Christoffel symbols take the form
+\begin{align}
+\Gamma^1_{01}&=0=\Gamma^1_{10}, \\
+\Gamma^1_{02}&=-\Omega \left( \tan x^2\cos\phi_0\cos\alpha_0+\cos x^1\sin\phi_0-\sin x^1\cos\phi_0\sin\alpha_0 \right)=\Gamma^1_{20}, \\
+\Gamma^1_{03}&=0=\Gamma^1_{30}, \\
+\Gamma^2_{01}&=\Omega \cos x^2 \left( \sin x^2\cos\phi_0\cos\alpha_0 + \cos x^1\cos x^2\sin\phi_0-\sin x^1\cos x^2\cos\phi_0\sin\alpha_0 \right)=\Gamma^2_{10}, \\
+\Gamma^2_{02}&=0=\Gamma^2_{20}, \\
+\Gamma^2_{03}&=0=\Gamma^2_{30}, \\
+\Gamma^3_{01}&=-\left( \frac{\partial z}{\partial \eta} \right)^{-1} \left( \Gamma^1_{01}\frac{\partial z}{\partial x^1} + \Gamma^2_{01}\frac{\partial z}{\partial x^2} \right)=\Gamma^3_{10}, \label{llg301} \\
+\Gamma^3_{02}&=-\left( \frac{\partial z}{\partial \eta} \right)^{-1} \left( \Gamma^1_{02}\frac{\partial z}{\partial x^1} + \Gamma^2_{02}\frac{\partial z}{\partial x^2} \right)=\Gamma^3_{20}, \label{llg302} \\
+\Gamma^3_{03}&=0.
+\end{align}
+\begin{align}
+\Gamma^1_{11}&=0, \\
+\Gamma^1_{12}&=-\tan x^2=\Gamma^1_{21}, \\
+\Gamma^1_{13}&=0=\Gamma^1_{31}, \\
+\Gamma^1_{22}&=0, \\
+\Gamma^1_{23}&=0=\Gamma^1_{32}, \\
+\Gamma^1_{33}&=0, \\
+\end{align}
+\begin{align}
+\Gamma^2_{11}&=\cos x^2 \sin x^2, \\
+\Gamma^2_{12}&=0=\Gamma^2_{21}, \\
+\Gamma^2_{13}&=0=\Gamma^2_{31}, \\
+\Gamma^2_{22}&=0, \\
+\Gamma^2_{23}&=0=\Gamma^2_{32}, \\
+\Gamma^2_{33}&=0, \\
+\end{align}
+\begin{align}
+\Gamma^3_{11}&=\left( \frac{\partial z}{\partial \eta} \right)^{-1} \left[ \frac{\partial^2 z}{\partial (x^1)^2} - \sin x^2\cos x^2 \frac{\partial z}{\partial x^2} \right], \\
+\Gamma^3_{12}&=\left( \frac{\partial z}{\partial \eta} \right)^{-1} \left[ \frac{\partial^2 z}{\partial x^1 \partial x^2} + \tan x^2 \frac{\partial z}{\partial x^1} \right]=\Gamma^3_{21}, \\
+\Gamma^3_{13}&=\left( \frac{\partial z}{\partial \eta} \right)^{-1} \left[ \frac{\partial^2 z}{\partial \eta \partial x^1} \right]=\Gamma^3_{31}, \\
+\Gamma^3_{22}&=\left( \frac{\partial z}{\partial \eta} \right)^{-1} \left[ \frac{\partial^2 z}{\partial (x^2)^2} \right], \\
+\Gamma^3_{23}&=\left( \frac{\partial z}{\partial \eta} \right)^{-1} \left[ \frac{\partial^2 z}{\partial \eta \partial x^2} \right]=\Gamma^3_{32}, \\
+\Gamma^3_{33}&=\left( \frac{\partial z}{\partial \eta} \right)^{-1} \left[ \frac{\partial^2 z}{\partial \eta^2} \right].
+\end{align}
+The coordinate transformations between the rotated latitude-longitude coordinates and the non-rotated ones are
+\begin{align}
+\frac{\partial x^1}{\partial\lambda}&=\cos\phi_0\cos\alpha_0 - \cos x^1 \tan x^2 \sin\phi_0 + \sin x^1 \tan x^2 \cos\phi_0\sin\alpha_0, \\
+\frac{\partial x^2}{\partial\lambda}&=\cos x^1 \cos\phi_0\sin\alpha_0+\sin x^1 \sin\phi_0, \\
+\frac{\partial x^3}{\partial\lambda}&=0, \\
+\frac{\partial x^1}{\partial\phi}&=-\frac{\left( \cos x^1\cos\phi_0\sin\alpha_0 +\sin x^1\sin\phi_0 \right)}{\cos x^2\cos\phi}, \\
+\frac{\partial x^2}{\partial\phi}&=\frac{\left( \cos x^2\cos\phi_0\cos\alpha_0 -\cos x^1\sin x^2\sin\phi_0 +\sin x^1\sin x^2\cos\phi_0\sin\alpha_0 \right)}{\cos\phi}, \\
+\frac{\partial x^3}{\partial\phi}&=0, \\
+\frac{\partial x^1}{\partial\eta}&=0, \\
+\frac{\partial x^2}{\partial\eta}&=0, \\
+\frac{\partial x^3}{\partial\eta}&=1,
+\end{align}
+\begin{align}
+\frac{\partial\lambda}{\partial x^1}&=\frac{\cos x^2\left( \cos x^2\cos\phi_0\cos\alpha_0 -\cos x^1\sin x^2\sin\phi_0 +\sin x^1\sin x^2\cos\phi_0\sin\alpha_0 \right)}{\cos^2\phi}, \\
+\frac{\partial\lambda}{\partial x^2}&=\frac{\left( \cos x^1\cos\phi_0\sin\alpha_0 +\sin x^1\sin\phi_0 \right)}{\cos^2\phi}, \\
+\frac{\partial\lambda}{\partial x^3}&=0, \\
+\frac{\partial\phi}{\partial x^1}&=-\frac{\cos x^2\left( \cos x^1 \cos\phi_0\sin\alpha_0+\sin x^1 \sin\phi_0 \right)}{\cos\phi}, \\
+\frac{\partial\phi}{\partial x^2}&=\frac{\left( \cos x^2\cos\phi_0\cos\alpha_0 - \cos x^1 \sin x^2 \sin\phi_0 + \sin x^1 \sin x^2 \cos\phi_0\sin\alpha_0 \right)}{\cos\phi}, \\
+\frac{\partial\phi}{\partial x^3}&=0, \\
+\frac{\partial\eta}{\partial x^1}&=0, \\
+\frac{\partial\eta}{\partial x^2}&=0, \\
+\frac{\partial\eta}{\partial x^3}&=1,
+\end{align}
+where
+\begin{align}
+\cos\phi=\sqrt{(\cos x^1\cos x^2\cos\phi_0+\sin x^1\cos x^2\sin\phi_0\sin\alpha_0-\sin x^2\sin\phi_0\cos\alpha_0)^2+(\sin x^1\cos x^2\cos\alpha_0+\sin x^2\sin\alpha_0)^2}.
+\end{align}
+
+\end{document}

@@ -1,14 +1,22 @@
 #!/bin/bash
 
-config_file="config/cold_bubble.ini"
+# Check if the correct number of arguments are provided
+if [ $# -lt 2 ]; then
+    echo "Usage: $0 config_file num_runs"
+    exit 1
+fi
+
+config_file=$1
+num_runs=$2  # Number of times to run the program
+
 n_processes=6
 section="General"
 key1="sys_iter"
 key2="rand_seed"
-num_runs=5  # Number of times to run the program
 min_seed=1000  # Minimum seed value
 max_seed=999999  # Maximum seed value
-log_file="random_seed_log.txt"
+
+log_file="./random_logs.txt"
 
 # Function to read the current value of a key
 read_key_value() {
@@ -28,9 +36,6 @@ if ! grep -q "\[$section\]" "$config_file"; then
     echo "Error: The section [$section] is not found in the configuration file."
     exit 1
 fi
-
-# Clear the log file
-> "$log_file"
 
 # Loop to run the program multiple times
 for ((i = 1; i <= num_runs; i++)); do
@@ -58,7 +63,7 @@ for ((i = 1; i <= num_runs; i++)); do
     update_key_value "$key2" "$rand_seed"
     
     # Log the new random seed to the log file
-    echo "Run $i: $rand_seed" >> "$log_file"
+    echo "Run $sys_iter: $rand_seed" >> "$log_file"
     
     # Run the program using the Python interpreter
     ./main_gef.py "$config_file"
@@ -68,3 +73,4 @@ for ((i = 1; i <= num_runs; i++)); do
 done
 
 echo "All runs completed successfully"
+

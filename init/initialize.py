@@ -217,41 +217,39 @@ def initialize_cartesian2d(geom: Cartesian2D, param: Configuration) -> NDArray[n
 
    elif param.case_number == 3:
       # Colliding bubbles
-      print(param.rand_float(8, 10))
-      print(param.rand_int(10, 100))
      
-      # Bubble 1
-
-      A = 0.5   # makes center bigger/darker ??
-      a = 150   # size of bubble ??
-      s = 50    # makes outside smaller ??
-      x0 = 300  # x axis center
-      z0 = 300  # z axis center
-      for k in range(nk):
-         for i in range(ni):
-            r = numpy.sqrt( (geom.X1[k,i]-x0)**2 + (geom.X3[k,i]-z0)**2 )
-            if r <= a:
-               θ[k,i] += A
-            else:
-               θ[k,i] += A * numpy.exp(-((r-a)/s)**2)
-
-      # Bubble 2        
+      # Hot [1, 2], Cold [0, 1, 2]
       
-      A = -0.15
-      a = 0
-      s = 50
-      x0 = 560
-      z0 = 640
-      for k in range(nk):
-         for i in range(ni):
-            r = numpy.sqrt( (geom.X1[k,i]-x0)**2 + (geom.X3[k,i]-z0)**2 )
-            if r <= a:
-               θ[k,i] += A
-            else:
-               θ[k,i] += A * numpy.exp(-((r-a)/s)**2)
+      # Hot bubble generation. Spawn lower in frame.
+      for bubble in range(param.rand_int(1, 2+1)):
+         A = param.rand_float(0.3, 0.6)
+         z0 = param.rand_int(50, 300)     # z axis center
+         a = param.rand_int(10, 80)       # radius of bubble
+         s = 50                         
+         x0 = param.rand_int(300, 700)    # x axis center
+         for k in range(nk):
+            for i in range(ni):
+               r = numpy.sqrt( (geom.X1[k,i]-x0)**2 + (geom.X3[k,i]-z0)**2 )
+               if r <= a:
+                  θ[k,i] += A
+               else:
+                  θ[k,i] += A * numpy.exp(-((r-a)/s)**2)
+                 
+      # Cold bubble generation. Spawn higher in frame.
+      for bubble in range(param.rand_int(0, 2+1)):
+         A = param.rand_float(-0.2, -0.05)            
+         z0 = param.rand_int(100, 750)    # z axis center
+         a = param.rand_int(10, 80)       # radius of bubble
+         s = 50                         
+         x0 = param.rand_int(200, 800)    # x axis center
+         for k in range(nk):
+            for i in range(ni):
+               r = numpy.sqrt( (geom.X1[k,i]-x0)**2 + (geom.X3[k,i]-z0)**2 )
+               if r <= a:
+                  θ[k,i] += A
+               else:
+                  θ[k,i] += A * numpy.exp(-((r-a)/s)**2)
               
-    # TODO: Make random amount of bubbles [2, 3, 4]
-
    elif param.case_number == 4:
       # Cold density current
       x0 = 0.
@@ -288,12 +286,14 @@ def initialize_cartesian2d(geom: Cartesian2D, param: Configuration) -> NDArray[n
 
    ρ = p0 / (Rd * θ) * exner**(cvd / Rd)
 
-   Q[idx_2d_rho,:,:]       = ρ
-   Q[idx_2d_rho_u,:,:]     = ρ * uu
-   Q[idx_2d_rho_w,:,:]     = ρ * ww
-   Q[idx_2d_rho_theta,:,:] = ρ * θ
+   Q[idx_2d_rho,:,:]       = ρ.get()
+   Q[idx_2d_rho_u,:,:]     = ρ.get() * uu.get()
+   Q[idx_2d_rho_w,:,:]     = ρ.get() * ww.get()
+   Q[idx_2d_rho_theta,:,:] = ρ.get() * θ.get()
 
    if param.device == "cuda":
       import cupy
+      # TODO: Select ith device
+      cupy.cuda.Device(param.device_i).use()
       return cupy.asarray(Q)
    return Q

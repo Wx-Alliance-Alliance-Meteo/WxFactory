@@ -201,10 +201,10 @@ def williamson_case2(geom, metric, param):
       print("Steady state nonlinear geostrophic flow     ")
       print("--------------------------------------------")
 
-   u1, u2 = solid_body_rotation_random(geom, metric, param)
+   u1, u2 = solid_body_rotation(geom, metric, param)
 
    # Global Steady State Nonlinear Zonal Geostrophic Flow
-   h = height_case2_random(geom, metric, param)
+   h = height_case2(geom, metric, param)
    return u1, u2, h
 
 def height_case2(geom, metric, param):

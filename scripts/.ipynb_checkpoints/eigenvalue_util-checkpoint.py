@@ -8,6 +8,7 @@ import numpy
 from numpy.typing import NDArray
 import scipy.sparse
 from scipy.sparse import csc_matrix
+import cupy as cp
 
 try:
    from tqdm import tqdm
@@ -65,6 +66,10 @@ def gen_matrix(matvec: MatvecOp,
       for i in progress(indices):
          if rank == r: Qid[i] = 1.0
          col = matvec(Qid.flatten())
+         
+         if isinstance(col, cp.ndarray):
+            col = col.get()
+         
          ccol = csc_matrix(col.reshape((col.size, 1))) if compressed else col
          columns[idx] = ccol
          idx += 1

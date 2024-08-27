@@ -11,6 +11,7 @@ from solvers                 import fgmres, gcrot, matvec_rat, SolverInfo
 from scripts.eigenvalue_util import gen_matrix
 
 save_Ab = True
+save_x = True
 
 class Ros2(Integrator):
    Q_flat: numpy.ndarray
@@ -33,10 +34,13 @@ class Ros2(Integrator):
       if save_Ab:
          gen_matrix(self.A, jac_file_name=f'/data/users/jupyter-dam724/{self.param.dump_dir}/ros2_A_{self.param.sys_iter}_{self.num_completed_steps}')
       
-         rhs = MPI.COMM_WORLD.gather(self.b)
+         rhs = MPI.COMM_WORLD.gather(self.b, root = 0)
          if MPI.COMM_WORLD.rank == 0:
             rhs_file = numpy.hstack(rhs)
-            numpy.save(f'/data/users/jupyter-dam724/{self.param.dump_dir}/ros2_b_{self.param.sys_iter}_{self.num_completed_steps}', rhs_file)   
+            print(f'Saving b. {rhs_file.shape}')
+            with open(f'/data/users/jupyter-dam724/{self.param.dump_dir}/ros2_b_{self.param.sys_iter}_{self.num_completed_steps}.npy', 'wb') as f:
+               numpy.save(f, rhs_file[:-1])   
+
          else:
             numpy.save(f'/data/users/jupyter-dam724/{self.param.dump_dir}/ros2_b_{self.param.sys_iter}_{self.num_completed_steps}', self.b)  
 
@@ -53,11 +57,14 @@ class Ros2(Integrator):
             restart=self.gmres_restart, maxiter=maxiter, preconditioner=self.preconditioner, verbose=self.verbose_solver)
          t1 = time()
          
-         if save_Ab:
-            rhs = MPI.COMM_WORLD.gather(Qnew)
+         if save_x:
+            rhs = MPI.COMM_WORLD.gather(Qnew, root = 0)
             if MPI.COMM_WORLD.rank == 0:
                rhs_file = numpy.hstack(rhs)
-               numpy.save(f'/data/users/jupyter-dam724/{self.param.dump_dir}/ros2_x_{self.param.sys_iter}_{self.num_completed_steps}.npy', rhs_file)  
+               print(f'Saving x. {rhs_file.shape}')
+               with open(f'/data/users/jupyter-dam724/{self.param.dump_dir}/ros2_x_{self.param.sys_iter}_{self.num_completed_steps}.npy', 'wb') as f:
+                  numpy.save(f, rhs_file) 
+
             else:
                numpy.save(f'/data/users/jupyter-dam724/{self.param.dump_dir}/ros2_x_{self.param.sys_iter}_{self.num_completed_steps}.npy', Qnew)  
  
@@ -67,6 +74,10 @@ class Ros2(Integrator):
             result_type = 'convergence' if flag == 0 else 'stagnation/interruption'
             print(f'FGMRES {result_type} at iteration {num_iter} in {t1 - t0:4.3f} s to a solution with'
                   f' relative residual {norm_r/norm_b : .2e}')
+      
+            if result_type == 'stagnation/interruption':
+               with open('/data/users/jupyter-dam724/WxFactory/errors.txt', 'a') as error_file:
+                  error_file.write(f'Error on sys_iter: {self.param.sys_iter}, step_num: {self.num_completed_steps}, rand_seed: {self.param.seed}\n')
       else:
          t0 = time()
          Qnew, local_error, num_iter, flag, residuals = gcrot(self.A, self.b, x0=self.Q_flat, tol=self.tol)

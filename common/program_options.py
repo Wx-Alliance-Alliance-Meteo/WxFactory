@@ -45,9 +45,12 @@ class Configuration:
       # System
       # TODO: support multiple devices
       self.device = self._get_option('System', 'device', str, 'cpu', ['cpu', 'cuda'])
+      # TODO: Allow the ability to select device.
+      self.device_i = self._get_option('System', 'device_i', int, None)
 
       if self.device == "cuda":
          from gef_cuda import num_devices
+         print(num_devices)
          if num_devices > 0:
             self.cuda_devices = self._get_option('System', 'cuda_devices', List[int], list(range(num_devices)))
             self.array_module = 'cupy'

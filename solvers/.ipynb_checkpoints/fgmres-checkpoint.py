@@ -7,6 +7,8 @@ from mpi4py import MPI
 import numpy
 import scipy
 import scipy.sparse.linalg
+import cupyx.scipy.linalg as cpla
+import cupy as cp
 
 from .global_operations import global_dotprod, global_norm
 
@@ -48,9 +50,14 @@ def _ortho_1_sync_igs(Q, R, T, K, j, comm):
    T[:j-2, j-2]  = small_tmp / norm
 
    if j > 2:
-      L = numpy.tril(T[:j-2, :j-2].T, -1)
-      L_plus = L + numpy.eye(j-2)
-      r3 = numpy.linalg.solve(L_plus, small_tmp)
+      if isinstance(Q, cp.ndarray):
+         L = cp.tril(T[:j-2, :j-2].T, -1)
+         L_plus = L + cp.eye(j-2)
+         r3 = cp.linalg.solve(L_plus, small_tmp)
+      else:
+         L = numpy.tril(T[:j-2, :j-2].T, -1)
+         L_plus = L + numpy.eye(j-2)
+         r3 = numpy.linalg.solve(L_plus, small_tmp)
 
       R[:j-2, j-2] = K[:j-2, j-3] + r3
       K[:j-1, j-2] = (R[:j-1, j-1] - (R[:j-1, 1:j-1] @ r3)) / norm
@@ -66,6 +73,26 @@ def _ortho_1_sync_igs(Q, R, T, K, j, comm):
    Q[j-1, :] /= norm
 
    return norm
+  
+def lartg_n(f, g):
+    # Ensure f and g are CuPy arrays/scalars
+    f = cp.asarray(f)
+    g = cp.asarray(g)
+
+    # Compute the norm (rho)
+    rho = cp.sqrt(f**2 + g**2)
+
+    # Handle the case where rho is zero to avoid division by zero
+    if rho == 0:
+        c = 1.0
+        s = 0.0
+        r = f  # or g, both are zero if rho is zero
+    else:
+        c = f / rho
+        s = g / rho
+        r = cp.sign(f) * rho
+
+    return c, s, r
 
 def fgmres(A: MatvecOperator,
            b: numpy.ndarray,
@@ -121,14 +148,14 @@ def fgmres(A: MatvecOperator,
       x = numpy.zeros_like(b)
    else:
       x = x0.copy()
-
+     
    # Check for early stop
    norm_b = global_norm(b, comm=comm)
    if norm_b == 0.0:
       return numpy.zeros_like(b), 0., 0., 0, 0, [(0.0, time() - t_start, 0.0)]
 
    tol_relative = tol * norm_b
-
+   
    Ax0 = A(x)
    residuals = []
 
@@ -144,19 +171,27 @@ def fgmres(A: MatvecOperator,
    norm_r = global_norm(r, comm=comm)
 
    residuals.append((norm_r / norm_b, time() - t_start, 0.0))
-
+   if not isinstance(x, cp.ndarray):
    # Get fast access to underlying BLAS routines
-   [lartg] = scipy.linalg.get_lapack_funcs(['lartg'], [x])
-   [dotu, scal] = scipy.linalg.get_blas_funcs(['dotu', 'scal'], [x])
+      [lartg] = scipy.linalg.get_lapack_funcs(['lartg'], [x])
+      [dotu, scal] = scipy.linalg.get_blas_funcs(['dotu', 'scal'], [x])
 
    for outer in range(maxiter):
       # NOTE: We are dealing with row-major matrices, but we store the transpose of H and V.
-      H = numpy.zeros((restart+2, restart+2))
-      R = numpy.zeros((restart+2, restart+2)) # rhs of the MGS factorization (should be H.transposed?)
-      T = numpy.zeros((restart+2, restart+2))
-      K = numpy.zeros((restart+2, restart+2))
-      V = numpy.zeros((restart+2, num_dofs))  # row-major ordering
-      Z = numpy.zeros((restart+1, num_dofs))  # row-major ordering
+      if not isinstance(x, cp.ndarray):
+         H = numpy.zeros((restart+2, restart+2))
+         R = numpy.zeros((restart+2, restart+2)) # rhs of the MGS factorization (should be H.transposed?)
+         T = numpy.zeros((restart+2, restart+2))
+         K = numpy.zeros((restart+2, restart+2))
+         V = numpy.zeros((restart+2, num_dofs))  # row-major ordering
+         Z = numpy.zeros((restart+1, num_dofs))  # row-major ordering
+      else:
+         H = cp.zeros((restart+2, restart+2))
+         R = cp.zeros((restart+2, restart+2)) # rhs of the MGS factorization (should be H.transposed?)
+         T = cp.zeros((restart+2, restart+2))
+         K = cp.zeros((restart+2, restart+2))
+         V = cp.zeros((restart+2, num_dofs))  # row-major ordering
+         Z = cp.zeros((restart+1, num_dofs))  # row-major ordering
       Q = []  # Givens Rotations
 
       V[0, :] = r / norm_r
@@ -165,7 +200,7 @@ def fgmres(A: MatvecOperator,
       v_norm = _ortho_1_sync_igs(V, R, T, K, 2, comm)
 
       # This is the RHS vector for the problem in the Krylov Space
-      g = numpy.zeros(num_dofs)
+      g = numpy.zeros(num_dofs) if not isinstance(x, cp.ndarray) else cp.zeros(num_dofs)
       g[0] = norm_r
       for inner in range(restart):
 
@@ -188,8 +223,12 @@ def fgmres(A: MatvecOperator,
          #    iteration, when inner = num_dofs-1.
          if inner != num_dofs - 1:
             if H[inner, inner + 1] != 0:
-               [c, s, r] = lartg(H[inner, inner], H[inner, inner + 1])
-               Qblock = numpy.array([[c, s], [-numpy.conjugate(s), c]])
+               if isinstance(x, cp.ndarray):
+                  [c, s, r] = lartg_n(H[inner, inner], H[inner, inner + 1])
+                  Qblock = cp.asarray([[c, s], [-cp.conj(s), c]])
+               else:
+                  [c, s, r] = lartg(H[inner, inner], H[inner, inner + 1])
+                  Qblock = numpy.array([[c, s], [-numpy.conjugate(s), c]])
                Q.append(Qblock)
 
                # Apply Givens Rotation to g,
@@ -197,13 +236,16 @@ def fgmres(A: MatvecOperator,
                g[inner:inner + 2] = Qblock @ g[inner:inner + 2]
 
                # Apply effect of Givens Rotation to H
-               H[inner, inner] = dotu(Qblock[0, :], H[inner, inner:inner + 2])
+               if isinstance(x, cp.ndarray):
+                  H[inner, inner] = cp.dot(Qblock[0, :], H[inner, inner:inner + 2])
+               else:
+                  H[inner, inner] = dotu(Qblock[0, :], H[inner, inner:inner + 2])
                H[inner, inner + 1] = 0.0
 
          # Don't update norm_r if last inner iteration, because
          # norm_r is calculated directly after this loop ends.
          if inner < restart - 1:
-            norm_r = numpy.abs(g[inner+1])
+            norm_r = numpy.abs(g[inner+1]) if not isinstance(x, cp.ndarray) else cp.abs(g[inner+1])
             residuals.append((norm_r / norm_b, time() - t_start, 0.0))
             if verbose > 1:
                if comm.rank == 0: print(f'{prefix}norm_r / b = {residuals[-1][0]:.3e}')
@@ -224,8 +266,13 @@ def fgmres(A: MatvecOperator,
          scipy.sparse.save_npz(f'/data/users/jupyter-dam724/{dump_dir}/ros2_H_{sys_iter}_{timestep}_{outer}.npz', scipy.sparse.csc_matrix(H))
 
       # Find best update to x in Krylov Space V.
-      y = scipy.linalg.solve_triangular(H[0:inner + 1, 0:inner + 1].T, g[0:inner + 1])
-      update = numpy.ravel(Z[:inner+1, :].T @ y.reshape(-1, 1))
+      if not isinstance(x, cp.ndarray):
+         y = scipy.linalg.solve_triangular(H[0:inner + 1, 0:inner + 1].T, g[0:inner + 1])
+         update = numpy.ravel(Z[:inner+1, :].T @ y.reshape(-1, 1))
+      else:
+         y = cpla.solve_triangular(H[0:inner + 1, 0:inner + 1].T, g[0:inner + 1])
+         update = cp.ravel(Z[:inner+1, :].T @ y.reshape(-1, 1))
+       
       x = x + update
       r = b - A(x)
 
@@ -238,7 +285,11 @@ def fgmres(A: MatvecOperator,
       # Has GMRES stagnated?
       indices = (x != 0)
       if indices.any():
-         change = numpy.max(numpy.abs(update[indices] / x[indices]))
+         if not isinstance(x, cp.ndarray):
+            change = numpy.max(numpy.abs(update[indices] / x[indices])) 
+         else:
+            change = cp.max(cp.abs(update[indices] / x[indices]))
+           
          if change < 1e-12:
             # No change, halt
             return x, norm_r, norm_b, niter, -1, residuals
