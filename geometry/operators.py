@@ -146,6 +146,9 @@ class DFROperators:
       self.correction_DU = numpy.vstack((numpy.kron(corr_down, numpy.identity(grd.nbsolpts)),
                                          numpy.kron(corr_up,   numpy.identity(grd.nbsolpts)) ))
 
+      self.correction_SN = numpy.vstack((numpy.kron(corr_down, numpy.identity(grd.nbsolpts)),
+                                         numpy.kron(corr_up,   numpy.identity(grd.nbsolpts)) ))
+
       corr_west = self.diff_ext[1:-1, 0]
       corr_east = self.diff_ext[1:-1, -1]
       self.correction_WE = numpy.vstack((numpy.kron(numpy.identity(grd.nbsolpts), corr_west),

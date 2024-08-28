@@ -148,7 +148,9 @@ class CubedSphere(Geometry):
       else:
          nk = 1
 
-      ## Save array size properties
+      # Save array size properties
+      # NOTE: ni is the number of "columns" and nj is the number of "rows" in a 2D matrix storing solution points
+      # Since this is python, matrices are stored in row-major order (columns are the fast-varying index) 
       self.ni = ni
       self.nj = nj
       self.nk = nk
@@ -156,14 +158,14 @@ class CubedSphere(Geometry):
       # Define the shape of the coordinate grid on this process
       grid_shape_3d = (nk, nj, ni)
       self.grid_shape_3d = grid_shape_3d
-      self.grid_shape_2d = (nj,ni)
+      self.grid_shape_2d = (nj, ni)
       # And the shape of arrays corresponding to each of the three interfaces
-      self.itf_i_shape_3d = (nk,nj,nb_elements_x1+1)
-      self.itf_i_shape_2d = (nj,nb_elements_x1+1)
-      self.itf_j_shape_3d = (nk,nb_elements_x2+1,ni)  
-      self.itf_j_shape_2d = (nb_elements_x2+1,ni)  
-      self.itf_k_shape_3d = (nb_elements_x3+1,nj,ni)  
-      self.itf_k_shape_2d = (nj,ni)  
+      self.itf_i_shape_3d = (nk, nj, nb_elements_x1+1)
+      self.itf_i_shape_2d = (nj, nb_elements_x1+1)
+      self.itf_j_shape_3d = (nk, nb_elements_x2+1, ni)  
+      self.itf_j_shape_2d = (nb_elements_x2+1, ni)  
+      self.itf_k_shape_3d = (nb_elements_x3+1, nj, ni)  
+      self.itf_k_shape_2d = (nj, ni)  
 
       # The shapes. For a single field (e.g. coordinates of solution points, in the current case), we
       # have an array of elements, where each element has a total nbsolpts**2 (in 2D) or nbsolpts**3 (in 3D) solution
@@ -291,6 +293,9 @@ class CubedSphere(Geometry):
       coordVec_num = numpy.stack((numpy.broadcast_to(x1[None, None, :], eta.shape),
                                   numpy.broadcast_to(x2[None, :, None], eta.shape),
                                   eta))
+
+      if MPI.COMM_WORLD.rank == 0:
+         print(f'eta itf i shape = {eta_itf_i.shape}')
 
       coordVec_num_itf_i = numpy.stack((numpy.broadcast_to(x1_itf_i[None, None, :], eta_itf_i.shape),
                                         numpy.broadcast_to(x2_itf_i[None, :, None], eta_itf_i.shape),
@@ -492,9 +497,9 @@ class CubedSphere(Geometry):
       self.boundary_sn = X[0, :] # Coordinates of the south and north boundaries along the X (west-east) axis
       self.boundary_we = Y[:, 0] # Coordinates of the west and east boundaries along the Y (south-north) axis
 
-      # if MPI.COMM_WORLD.rank == 0:
-      #    print(f'old X = \n{X}')
-      #    print(f'new X = \n{X_new}')
+      if MPI.COMM_WORLD.rank == 0:
+         print(f'old X = \n{X}')
+         print(f'new X = \n{X_new}')
 
       height = x3
 
@@ -698,14 +703,47 @@ class CubedSphere(Geometry):
    #       new_shape = (a.shape[0],) + self.grid_shape_2d
    #       return a.reshape(tmp_shape).transpose(0, 1, 3, 2, 4).reshape(new_shape)
 
-   # def _to_new_itf_i(self, a):
-   #    """Convert input array (west and east interface) to new memory layout"""
-   #    expected_shape = (self.nb_elements_x1 + 1, self.nb_elements_x2 * self.nbsolpts)
-   #    if a.shape == expected_shape:
-   #       tmp_shape = (self.nb_elements_x1 + 1, self.nbsolpts, self.nb_elements_x2)
-   #       new_shape = (self.nb_elements_x2 * (self.nb_elements_x1 + 1), self.nbsolpts
-   #    else:
-   #       raise ValueError(f'Unexpected array shape')
+   def _to_new_itf_i(self, a):
+      """Convert input array (west and east interface) to new memory layout"""
+      # expected_shape = (self.nb_elements_x2 * self.nbsolpts, self.nb_elements_x1 + 1)
+      expected_shape = (self.nb_elements_x1 + 1, self.nb_elements_x2 * self.nbsolpts)
+      if a.shape[-2:] == expected_shape:
+         plane_shape = (self.nb_elements_x2, self.nb_elements_x1 + 2, self.nbsolpts * 2)
+         new = numpy.zeros(a.shape[:-2] + plane_shape, dtype=a.dtype)
+         west_itf  = numpy.arange(self.nbsolpts)
+         east_itf = numpy.arange(self.nbsolpts, 2*self.nbsolpts)
+
+         tmp_shape = a.shape[:-2] + (self.nb_elements_x1 + 1, self.nb_elements_x2, self.nbsolpts)
+         offset = len(a.shape) - 2
+         transp = tuple([i for i in range(offset)]) + (1 + offset, 0 + offset, 2 + offset)
+
+         tmp_array = a.reshape(tmp_shape).transpose(transp)
+         new[..., :-1, east_itf] = tmp_array
+         new[..., 1:,  west_itf] = tmp_array
+
+         new_shape = a.shape[:-2] + (self.nb_elements_x2 * (self.nb_elements_x1 + 2), self.nbsolpts * 2)
+         return new.reshape(new_shape)
+      else:
+         raise ValueError(f'Unexpected array shape {a.shape} (expected {expected_shape})')
+
+   def _to_new_itf_j(self, a):
+      """Convert input array (south and north interface) to new memory layout"""
+      expected_shape = (self.nb_elements_x2 + 1, self.nb_elements_x1 * self.nbsolpts)
+      if a.shape[-2:] == expected_shape:
+         plane_shape = (self.nb_elements_x2 + 2, self.nb_elements_x1, self.nbsolpts * 2)
+         new = numpy.zeros(a.shape[:-2] + plane_shape, dtype=a.dtype)
+         south = numpy.s_[..., 1:,  :, :self.nbsolpts]
+         north = numpy.s_[..., :-1, :, self.nbsolpts:]
+
+         tmp_shape = a.shape[:-2] + (self.nb_elements_x2 + 1, self.nb_elements_x1, self.nbsolpts)
+         tmp_array = a.reshape(tmp_shape)
+         new[north] = tmp_array
+         new[south] = tmp_array
+
+         new_shape = a.shape[:-2] + ((self.nb_elements_x2 + 2) * self.nb_elements_x1, self.nbsolpts * 2)
+         return new.reshape(new_shape)
+      else:
+         raise ValueError(f'Unexpected array shape {a.shape} (expected {expected_shape})')
 
    # def _to_new_itf(self, a):
    #    """Convert input array (interface) to new memory layout"""

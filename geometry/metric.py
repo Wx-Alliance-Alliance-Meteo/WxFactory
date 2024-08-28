@@ -1,6 +1,8 @@
 import numpy
 import math
 
+from mpi4py import MPI
+
 from .cubed_sphere  import CubedSphere
 from .operators     import DFROperators
 
@@ -37,6 +39,8 @@ class Metric3DTopo:
 
       # Gnomonic coordinates at i-interface
       X_itf_i = geom.coordVec_gnom_itf_i[0,:,:,:]
+      if MPI.COMM_WORLD.rank == 0:
+         print(f'x itf i shape = {X_itf_i.shape}')
       Y_itf_i = geom.coordVec_gnom_itf_i[1,:,:,:]
       R_itf_i = geom.coordVec_gnom_itf_i[2,:,:,:] + geom.earth_radius
 
@@ -708,6 +712,8 @@ class Metric:
       self.sqrtG_itf_i = geom.earth_radius**2 * (1.0 + geom.X_itf_i**2) * (1.0 + geom.Y_itf_i**2) / ( geom.delta2_itf_i * geom.delta_itf_i )
       self.sqrtG_itf_j = geom.earth_radius**2 * (1.0 + geom.X_itf_j**2) * (1.0 + geom.Y_itf_j**2) / ( geom.delta2_itf_j * geom.delta_itf_j )
 
+      if MPI.COMM_WORLD.rank == 0:
+         print(f'sqrt G itf shape = {self.sqrtG_itf_i.shape}')
       self.inv_sqrtG   = 1.0 / self.sqrtG
 
       # 3D contravariant metric
@@ -938,6 +944,15 @@ class Metric:
       self.christoffel_3_33 *= 0.5 * geom.Δx3
 
       self.sqrtG_new = geom._to_new(self.sqrtG)
+      self.inv_sqrtG_new = geom._to_new(self.inv_sqrtG)
+      self.sqrtG_itf_i_new = geom._to_new_itf_i(self.sqrtG_itf_i)
+
+      # if MPI.COMM_WORLD.rank == 0:
+      #    print(f'old sqrtG itf i (shape {self.sqrtG_itf_i.shape}) = \n{self.sqrtG_itf_i}')
+      #    print(f'new sqrtG itf i (shape {self.sqrtG_itf_i_new.shape}) = \n{self.sqrtG_itf_i_new}')
+
+      self.sqrtG_itf_j_new = geom._to_new_itf_j(self.sqrtG_itf_j)
+
       self.H_contra_11_new = geom._to_new(self.H_contra_11)
       self.H_contra_12_new = geom._to_new(self.H_contra_12)
       self.H_contra_13_new = self.H_contra_13
@@ -947,4 +962,37 @@ class Metric:
       self.H_contra_31_new = self.H_contra_31
       self.H_contra_32_new = self.H_contra_32
       self.H_contra_33_new = self.H_contra_33
+
+      self.christoffel_1_01_new = geom._to_new(self.christoffel_1_01)
+      self.christoffel_1_02_new = geom._to_new(self.christoffel_1_02)
+      self.christoffel_1_11_new = geom._to_new(self.christoffel_1_11)
+      self.christoffel_1_12_new = geom._to_new(self.christoffel_1_12)
+      self.christoffel_2_01_new = geom._to_new(self.christoffel_2_01)
+      self.christoffel_2_02_new = geom._to_new(self.christoffel_2_02)
+      self.christoffel_2_12_new = geom._to_new(self.christoffel_2_12)
+      self.christoffel_2_22_new = geom._to_new(self.christoffel_2_22)
+
+      self.H_contra_11_itf_i_new = geom._to_new_itf_i(self.H_contra_11_itf_i)
+      self.H_contra_12_itf_i_new = geom._to_new_itf_i(self.H_contra_12_itf_i)
+      self.H_contra_13_itf_i_new = geom._to_new_itf_i(self.H_contra_13_itf_i)
+      
+      self.H_contra_21_itf_i_new = geom._to_new_itf_i(self.H_contra_21_itf_i)
+      self.H_contra_22_itf_i_new = geom._to_new_itf_i(self.H_contra_22_itf_i)
+      self.H_contra_23_itf_i_new = geom._to_new_itf_i(self.H_contra_23_itf_i)
+      
+      self.H_contra_31_itf_i_new = geom._to_new_itf_i(self.H_contra_31_itf_i)
+      self.H_contra_32_itf_i_new = geom._to_new_itf_i(self.H_contra_32_itf_i)
+      self.H_contra_33_itf_i_new = geom._to_new_itf_i(self.H_contra_33_itf_i)
+
+      self.H_contra_11_itf_j_new = geom._to_new_itf_j(self.H_contra_11_itf_j)
+      self.H_contra_12_itf_j_new = geom._to_new_itf_j(self.H_contra_12_itf_j)
+      self.H_contra_13_itf_j_new = geom._to_new_itf_j(self.H_contra_13_itf_j)
+      
+      self.H_contra_21_itf_j_new = geom._to_new_itf_j(self.H_contra_21_itf_j)
+      self.H_contra_22_itf_j_new = geom._to_new_itf_j(self.H_contra_22_itf_j)
+      self.H_contra_23_itf_j_new = geom._to_new_itf_j(self.H_contra_23_itf_j)
+      
+      self.H_contra_31_itf_j_new = geom._to_new_itf_j(self.H_contra_31_itf_j)
+      self.H_contra_32_itf_j_new = geom._to_new_itf_j(self.H_contra_32_itf_j)
+      self.H_contra_33_itf_j_new = geom._to_new_itf_j(self.H_contra_33_itf_j)
 
