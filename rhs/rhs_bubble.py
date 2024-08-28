@@ -41,8 +41,10 @@ def rhs_bubble(Q, geom, mtrx, nbsolpts, nb_elements_x, nb_elements_z):
    # --- Common AUSM fluxes
    common_flux_z = numpy.empty_like(var_itf_z)
 
-   bot_itf  = numpy.arange(nbsolpts)
-   top_itf = numpy.arange(nbsolpts, 2*nbsolpts)
+   # bot_itf  = numpy.arange(nbsolpts)
+   # top_itf = numpy.arange(nbsolpts, 2*nbsolpts)
+   bot_itf = slice(0, nbsolpts)
+   top_itf = slice(nbsolpts, nbsolpts * 2)
 
    # ------ Vertical
    a_T = sound_itf_z[nb_elements_x:, bot_itf]
@@ -56,15 +58,15 @@ def rhs_bubble(Q, geom, mtrx, nbsolpts, nb_elements_x, nb_elements_z):
    common_flux_z[:, nb_elements_x:, bot_itf] = (var_itf_z[:, :-nb_elements_x, top_itf] * numpy.maximum(0., M) * a_B) + \
                                              (var_itf_z[:, nb_elements_x:, bot_itf] * numpy.minimum(0., M) * a_T)
    common_flux_z[idx_2d_rho_w, nb_elements_x:, bot_itf] = 0.5 * ((1. + M_B) * pressure_itf_z[:-nb_elements_x, top_itf] + \
-                                                               (1. - M_T) * pressure_itf_z[nb_elements_x:, bot_itf]).T
+                                                               (1. - M_T) * pressure_itf_z[nb_elements_x:, bot_itf])
    common_flux_z[:, :-nb_elements_x, top_itf] = common_flux_z[:, nb_elements_x:, bot_itf]
 
    # Zero flux BC at bottom and top boundaries
    # except for (vertical) momentum, where we use extrapolated pressure at boundary
    common_flux_z[:,  :nb_elements_x, bot_itf] = 0.0
    common_flux_z[:, -nb_elements_x:, top_itf] = 0.0
-   common_flux_z[idx_2d_rho_w,  :nb_elements_x, bot_itf] = pressure_itf_z[ :nb_elements_x, bot_itf].T
-   common_flux_z[idx_2d_rho_w, -nb_elements_x:, top_itf] = pressure_itf_z[-nb_elements_x:, top_itf].T
+   common_flux_z[idx_2d_rho_w,  :nb_elements_x, bot_itf] = pressure_itf_z[ :nb_elements_x, bot_itf]
+   common_flux_z[idx_2d_rho_w, -nb_elements_x:, top_itf] = pressure_itf_z[-nb_elements_x:, top_itf]
 
    # ------ Horizontal
    common_flux_x = numpy.empty_like(var_itf_x)
@@ -82,7 +84,7 @@ def rhs_bubble(Q, geom, mtrx, nbsolpts, nb_elements_x, nb_elements_z):
    common_flux_x[:, 1:, west_itf] = (var_itf_x[:, :-1, east_itf] * numpy.maximum(0., M) * a_W) + \
                                   (var_itf_x[:, 1:, west_itf] * numpy.minimum(0., M) * a_E)
    common_flux_x[idx_2d_rho_u, 1:, west_itf] = 0.5 * ((1. + M_W) * pressure_itf_x[:-1, east_itf] + \
-                                                    (1. - M_E) * pressure_itf_x[1:, west_itf]).T
+                                                    (1. - M_E) * pressure_itf_x[1:, west_itf])
    common_flux_x[:, :-1, east_itf] = common_flux_x[:, 1:, west_itf]
 
    # Zero flux BC at left and right boundaries
@@ -91,8 +93,8 @@ def rhs_bubble(Q, geom, mtrx, nbsolpts, nb_elements_x, nb_elements_z):
    jump = nb_elements_x
    common_flux_x[:,   ::jump, west_itf] = 0.0
    common_flux_x[:, n0::jump, east_itf] = 0.0
-   common_flux_x[idx_2d_rho_u,   ::jump, west_itf] = pressure_itf_x[  ::jump, west_itf].T
-   common_flux_x[idx_2d_rho_u, n0::jump, east_itf] = pressure_itf_x[n0::jump, east_itf].T
+   common_flux_x[idx_2d_rho_u,   ::jump, west_itf] = pressure_itf_x[  ::jump, west_itf]
+   common_flux_x[idx_2d_rho_u, n0::jump, east_itf] = pressure_itf_x[n0::jump, east_itf]
 
    # --- Compute derivatives, with correction from boundaries
    df1_dx1 = (flux_x1 @ mtrx.derivative_x + common_flux_x @ mtrx.correction_WE) * (2.0 / geom.Δx1) 
