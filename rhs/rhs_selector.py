@@ -18,7 +18,7 @@ from rhs.rhs_bubble_implicit   import rhs_bubble_implicit
 from rhs.rhs_euler             import RhsEuler
 from rhs.rhs_euler_convective  import rhs_euler_convective
 from rhs.rhs_euler_fv          import rhs_euler_fv
-from rhs.rhs_sw                import rhs_sw
+from rhs.rhs_sw                import RhsShallowWater
 from rhs.rhs_sw_stiff          import rhs_sw_stiff
 from rhs.rhs_sw_nonstiff       import rhs_sw_nonstiff
 from rhs.rhs_advection2d       import rhs_advection2d
@@ -95,8 +95,14 @@ class RhsBundle:
             self.full = generate_rhs(
                rhs_advection2d, geom, operators, metric, ptopo, param.nbsolpts, param.nb_elements_horizontal)
          else:
-            self.full = generate_rhs(
-               rhs_sw, geom, operators, metric, topo, ptopo, param.nbsolpts, param.nb_elements_horizontal)
+            # self.full = generate_rhs(
+            #    rhs_sw, geom, operators, metric, topo, ptopo, param.nbsolpts, param.nb_elements_horizontal)
+            self.full = RhsShallowWater(fields_shape,
+                                        geom, operators, metric, topo, ptopo,
+                                        param.nbsolpts, param.nb_elements_horizontal,
+                                        device)
+            
+
             self.implicit = generate_rhs(rhs_sw_stiff, geom, operators, metric, topo, ptopo, param.nbsolpts,
                                          param.nb_elements_horizontal)
             self.explicit = generate_rhs(rhs_sw_nonstiff, geom, operators, metric, topo, ptopo, param.nbsolpts,
