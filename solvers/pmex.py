@@ -1,10 +1,9 @@
 import math
 
 from mpi4py import MPI
-import numpy
-import scipy.linalg
+from common.device import Device,default_device
 
-def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 10, mmax = 128, reuse_info = True, task1 = False):
+def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 10, mmax = 128, reuse_info = True, task1 = False, device: Device=default_device):
 
    ppo, n = u.shape
    p = ppo - 1
@@ -12,14 +11,14 @@ def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 10, mmax = 128, reuse_i
    if p == 0:
       p = 1
       # Add extra column of zeros
-      u = numpy.row_stack((u, numpy.zeros(len(u))))
+      u = device.xp.row_stack((u, device.xp.zeros(len(u))))
 
    step    = 0
    krystep = 0
    ireject = 0
    reject  = 0
    exps    = 0
-   sgn     = numpy.sign(τ_out[-1])
+   sgn     = device.xp.sign(τ_out[-1])
    τ_now   = 0.0
    τ_end   = abs(τ_out[-1])
    happy   = False
@@ -44,21 +43,21 @@ def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 10, mmax = 128, reuse_i
    m = max(mmin, min(m_init, mmax))
 
    # Preallocate matrix
-   V = numpy.zeros((mmax + 1, n + p))
-   H = numpy.zeros((mmax + 1, mmax + 1))
-   Minv = numpy.eye(mmax)
-   M = numpy.eye(mmax)
-   N = numpy.zeros([mmax,mmax])
+   V = device.xp.zeros((mmax + 1, n + p))
+   H = device.xp.zeros((mmax + 1, mmax + 1))
+   Minv = device.xp.eye(mmax)
+   M = device.xp.eye(mmax)
+   N = device.xp.zeros([mmax,mmax])
 
    # Initial condition
-   w = numpy.zeros((numSteps, n))
+   w = device.xp.zeros((numSteps, n))
    w[0, :] = u[0, :].copy()
 
    # compute the 1-norm of u
-   local_nrmU = numpy.sum(abs(u[1:, :]), axis=1)
-   global_normU = numpy.empty_like(local_nrmU)
+   local_nrmU = device.xp.sum(abs(u[1:, :]), axis=1)
+   global_normU = device.xp.empty_like(local_nrmU)
    MPI.COMM_WORLD.Allreduce([local_nrmU, MPI.DOUBLE], [global_normU, MPI.DOUBLE])
-   normU = numpy.amax(global_normU)
+   normU = device.xp.amax(global_normU)
 
    # Normalization factors
    if ppo > 1 and normU > 0:
@@ -70,7 +69,7 @@ def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 10, mmax = 128, reuse_i
       mu = 1.0
 
    # Flip the rest of the u matrix
-   u_flip = nu * numpy.flipud(u[1:, :])
+   u_flip = nu * device.xp.flipud(u[1:, :])
 
    # Compute and initial starting approximation for the step size
    τ = min(pmex.suggested_step, τ_end)
@@ -107,9 +106,10 @@ def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 10, mmax = 128, reuse_i
 
          # Normalize initial vector (this norm is nonzero)
          local_sum = V[0, 0:n] @ V[0, 0:n]
-         global_sum_nrm = numpy.empty_like(local_sum)
+         global_sum_nrm = device.xp.empty_like(local_sum)
          MPI.COMM_WORLD.Allreduce([local_sum, MPI.DOUBLE], [global_sum_nrm, MPI.DOUBLE])
-         β = math.sqrt( global_sum_nrm + V[j, n:n+p] @ V[j, n:n+p] )
+         print(f'value is {type(local_sum)}')
+         β = math.sqrt( global_sum_nrm + V[j, n:n+p] @ V[j, n:n+p] ) 
 
          # The first Krylov basis vector
          V[j, :] /= β
@@ -126,7 +126,7 @@ def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 10, mmax = 128, reuse_i
 
          #2. compute terms needed for R and T
          local_vec  = V[0:j+1, 0:n] @ V[j-1:j+1, 0:n].T
-         global_vec = numpy.empty_like(local_vec)
+         global_vec = device.xp.empty_like(local_vec)
          MPI.COMM_WORLD.Allreduce([local_vec, MPI.DOUBLE], [global_vec, MPI.DOUBLE])
          global_vec += V[0:j+1, n:n+p] @ V[j-1:j+1, n:n+p].T
 
@@ -140,30 +140,30 @@ def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 10, mmax = 128, reuse_i
            Minv[j-1, 0:j-1] = -global_vec[0:j-1,0].T @ Minv[0:j-1, 0:j-1]
 
          #3b. part 1: the mat-vec
-         rhs = ( numpy.eye(j) + numpy.matmul(N[0:j, 0:j], Minv[0:j,0:j]) ) @ global_vec[0:j,1]
+         rhs = ( device.xp.eye(j) + device.xp.matmul(N[0:j, 0:j], Minv[0:j,0:j]) ) @ global_vec[0:j,1]
 
          #3c. part 2: the lower triangular solve
-         sol = scipy.linalg.solve_triangular(M[0:j, 0:j], rhs, unit_diagonal=True, check_finite=False, overwrite_b=True)
+         sol = device.xalg.linalg.solve_triangular(M[0:j, 0:j], rhs, unit_diagonal=True, check_finite=False, overwrite_b=True)
 
          #4. Orthogonalize
          V[j, :] -= sol @ V[0:j, :]
 
          #5. compute norm estimate with quad precision
-         sum_vec  = numpy.array(global_vec[0:j,1], numpy.float128)**2
-         sum_sqrd = numpy.sum(sum_vec)
+         sum_vec  = device.xp.array(global_vec[0:j,1], device.xp.float128)**2
+         sum_sqrd = device.xp.sum(sum_vec)
 
          #sum_sqrd = sum(global_vec[0:j,1]**2)
          if (global_vec[-1,1] < sum_sqrd):
             #use communication to compute norm estimate
             local_sum = V[j, 0:n] @ V[j, 0:n]
-            global_sum_nrm = numpy.empty_like(local_sum)
+            global_sum_nrm = device.xp.empty_like(local_sum)
             MPI.COMM_WORLD.Allreduce([local_sum, MPI.DOUBLE], [global_sum_nrm, MPI.DOUBLE])
             curr_nrm = math.sqrt( global_sum_nrm + V[j,n:n+p] @ V[j, n:n+p] )
             reg_comm_nrm += 1
          else:
 
            #compute norm estimate in quad precision
-           curr_nrm = numpy.array(numpy.sqrt(global_vec[-1,1] - sum_sqrd), numpy.float64)
+           curr_nrm = device.xp.array(device.xp.sqrt(global_vec[-1,1] - sum_sqrd), device.xp.float64)
 
          # Happy breakdown
          if curr_nrm < tol:
@@ -185,7 +185,7 @@ def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 10, mmax = 128, reuse_i
       H[j, j-1] = 0.0
 
       # Compute the exponential of the augmented matrix
-      F_half = scipy.linalg.expm(sgn * 0.5 * τ * H[0:j + 1, 0:j + 1])
+      F_half = device.xalg.linalg.expm(sgn * 0.5 * τ * H[0:j + 1, 0:j + 1])
       F = F_half @ F_half
 
       exps += 1
@@ -279,7 +279,7 @@ def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 10, mmax = 128, reuse_i
 
             for k in range(blownTs):
                τPhantom = τ_out[l+k] - τ_now
-               F2 = scipy.linalg.expm(sgn * τPhantom * H[0:j, :j])
+               F2 = device.xalg.linalg.expm(sgn * τPhantom * H[0:j, :j])
                w[l+k, :] = β * F2[:j, 0] @ V[:j, :n]
 
             # Advance l.

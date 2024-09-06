@@ -30,6 +30,8 @@ class Simulation:
    it entirely.
    """
 
+   device: Device
+
    def __init__(self, config_file: str) -> None:
       self.rank = MPI.COMM_WORLD.rank
 
@@ -38,8 +40,8 @@ class Simulation:
       self.device = self._make_device()
       self.process_topo = ProcessTopology(self.device) if self.config.grid_type == 'cubed_sphere' else None
       self.geometry = self._create_geometry()
-      self.operators = DFROperators(self.geometry, self.config)
-      self.initial_Q, self.topology, self.metric = init_state_vars(self.geometry, self.operators, self.config)
+      self.operators = DFROperators(self.geometry, self.config, self.device)
+      self.initial_Q, self.topology, self.metric = init_state_vars(self.geometry, self.operators, self.config, self.device)
       self.preconditioner = self._create_preconditioner(self.initial_Q)
       self.output = OutputManager(self.config, self.geometry, self.metric, self.operators, self.topology)
       self.initial_Q, self.starting_step = self._determine_starting_state()
@@ -179,17 +181,17 @@ class Simulation:
       Q = self.initial_Q
       if starting_step > 0:
          try:
-            starting_state, _ = load_state(self.output.state_file_name(starting_step))
+            starting_state, _ = load_state(self.output.state_file_name(starting_step), self.device)
             if starting_state.shape != Q.shape:
                raise ValueError(f'ERROR reading state vector from file for step {starting_step}. '
                                 f'The shape is wrong! ({starting_state.shape}, should be {Q.shape})')
-            Q = numpy.asarray(starting_state, like=Q)
+            Q = self.device.xp.asarray(starting_state, like=Q)
 
             if MPI.COMM_WORLD.rank == 0:
                print(f'Starting simulation from step {starting_step} (rather than 0)')
                if starting_step * self.config.dt >= self.config.t_end:
                   print(f'WARNING: Won\'t run any steps, since we will stop at step '
-                        f'{int(numpy.ceil(self.config.t_end / self.config.dt))}')
+                        f'{int(self.device.xp.ceil(self.config.t_end / self.config.dt))}')
 
          except (FileNotFoundError, ValueError):
             if self.rank == 0:

@@ -19,21 +19,21 @@ class Epi(Integrator):
       self.exponential_solver = param.exponential_solver
 
       if order == 2:
-         self.A = numpy.array([[]])
+         self.A = self.device.xp.array([[]])
       elif order == 3:
-         self.A = numpy.array([[2/3]])
+         self.A = self.device.xp.array([[2/3]])
       elif order == 4:
-         self.A = numpy.array([
+         self.A = self.device.xp.array([
             [-3/10, 3/40], [32/5, -11/10]
          ])
       elif order == 5:
-         self.A = numpy.array([
+         self.A = self.device.xp.array([
             [-4/5, 2/5, -4/45],
             [12, -9/2, 8/9],
             [3, 0, -1/3]
          ])
       elif order == 6:
-         self.A = numpy.array([
+         self.A = self.device.xp.array([
             [-49/60, 351/560, -359/1260, 367/6720],
             [92/7, -99/14, 176/63, -1/2],
             [485 / 21, -151 / 14, 23 / 9, -31 / 168]
@@ -79,22 +79,22 @@ class Epi(Integrator):
       # Regular EPI step
       rhs = self.rhs(Q)
 
-      def matvec_handle(v): return matvec_fun(v, dt, Q, rhs, self.rhs, self.jacobian_method)
+      def matvec_handle(v): return matvec_fun(v, dt, Q, rhs, self.rhs, self.jacobian_method, self.device)
 
-      vec = numpy.zeros((self.max_phi+1, rhs.size), like=rhs)
+      vec = self.device.xp.zeros((self.max_phi+1, rhs.size))
       vec[1,:] = rhs.flatten()
       for i in range(self.n_prev):
-         J_deltaQ = matvec_fun(self.previous_Q[i] - Q, 1., Q, rhs, self.rhs, self.jacobian_method)
+         J_deltaQ = matvec_fun(self.previous_Q[i] - Q, 1., Q, rhs, self.rhs, self.jacobian_method, self.device)
 
          # R(y_{n-i})
-         r = (self.previous_rhs[i] - rhs) - numpy.reshape(J_deltaQ, Q.shape)
+         r = (self.previous_rhs[i] - rhs) - self.device.xp.reshape(J_deltaQ, Q.shape)
 
          for k, alpha in enumerate(self.A[:,i],start=2):
             # v_k = Sum_{i=1}^{n_prev} A_{k,i} R(y_{n-i})
             vec[k,:] += alpha * r.flatten()
 
       if self.exponential_solver == 'pmex':
-         phiv, stats = pmex([1.], matvec_handle, vec, tol=self.tol, mmax=64, task1=False)
+         phiv, stats = pmex([1.], matvec_handle, vec, tol=self.tol, mmax=64, task1=False, device=self.device)
 
          if mpirank == 0:
             print(f'PMEX converged at iteration {stats[2]} (using {stats[0]} internal substeps and'
@@ -119,4 +119,4 @@ class Epi(Integrator):
          self.previous_rhs.appendleft(rhs)
 
       # Update solution
-      return Q + numpy.reshape(phiv, Q.shape) * dt
+      return Q + self.device.xp.reshape(phiv, Q.shape) * dt

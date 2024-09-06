@@ -5,6 +5,7 @@ from common.definitions      import idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_w, 
                                     idx_2d_rho, idx_2d_rho_u, idx_2d_rho_w, idx_2d_rho_theta,                  \
                                     gravity, cpd, cvd, Rd, p0
 from common.configuration  import Configuration
+from common.device import Device, default_device
 from init.dcmip              import dcmip_advection_deformation, dcmip_advection_hadley, dcmip_gravity_wave,   \
                                     dcmip_schar_waves, dcmip_steady_state_mountain
 from init.shallow_water_test import case_galewsky, case_matsuno, case_unsteady_zonal, circular_vortex,         \
@@ -95,17 +96,17 @@ def initialize_euler(geom: CubedSphere, metric, mtrx, param):
 
    return Q, None
 
-def initialize_sw(geom, metric, mtrx, param):
+def initialize_sw(geom, metric, mtrx, param, device: Device=default_device):
 
    ni, nj = geom.lon.shape
    nb_equations = 3
 
    if param.case_number != 5:
-      hsurf = numpy.zeros((ni, nj))
-      dzdx1 = numpy.zeros((ni, nj))
-      dzdx2 = numpy.zeros((ni, nj))
-      hsurf_itf_i = numpy.zeros((param.nb_elements_horizontal+2, param.nbsolpts*param.nb_elements_horizontal, 2))
-      hsurf_itf_j = numpy.zeros((param.nb_elements_horizontal+2, 2, param.nbsolpts*param.nb_elements_horizontal))
+      hsurf = device.xp.zeros((ni, nj))
+      dzdx1 = device.xp.zeros((ni, nj))
+      dzdx2 = device.xp.zeros((ni, nj))
+      hsurf_itf_i = device.xp.zeros((param.nb_elements_horizontal+2, param.nbsolpts*param.nb_elements_horizontal, 2))
+      hsurf_itf_j = device.xp.zeros((param.nb_elements_horizontal+2, 2, param.nbsolpts*param.nb_elements_horizontal))
 
    # --- Shallow water
    #   0 : deformation flow (passive advection only)
@@ -143,7 +144,7 @@ def initialize_sw(geom, metric, mtrx, param):
    else:
       raise ValueError(f'Unknown case number {param.case_number} for Shallow Water equations')
 
-   Q = numpy.zeros((nb_equations, ni, nj))
+   Q = device.xp.zeros((nb_equations, ni, nj))
    Q[idx_h, :, :] = fluid_height
 
    if param.case_number <= 1:
@@ -155,7 +156,7 @@ def initialize_sw(geom, metric, mtrx, param):
       Q[idx_hu2, :, :] = fluid_height * u2_contra
 
    # Note : we move the last axis of the first topo array so that both have similiar ordering
-   return Q, Topo(hsurf, dzdx1, dzdx2, numpy.moveaxis(hsurf_itf_i, -1, -2), hsurf_itf_j)
+   return Q, Topo(hsurf, dzdx1, dzdx2, device.xp.moveaxis(hsurf_itf_i, -1, -2), hsurf_itf_j)
 
 def initialize_cartesian2d(geom: Cartesian2D, param: Configuration) -> NDArray[numpy.float64]:
    '''Initialize a problem on a 2D cartesian grid based on a case number.'''
