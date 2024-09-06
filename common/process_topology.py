@@ -6,7 +6,7 @@ import numpy
 from   numpy.typing import NDArray
 
 from .definitions import *
-from .device import Device
+from .device import Device,default_device
 
 class ProcessTopology:
    def __init__(self, device: Device):
@@ -321,7 +321,7 @@ class ProcessTopology:
       return request, f_x1_ext, f_x2_ext
 
 
-   def xchange_sw_interfaces(self, geom, h_i, h_j, u1_i, u2_i, u1_j, u2_j, blocking=True):
+   def xchange_sw_interfaces(self, geom, h_i, h_j, u1_i, u2_i, u1_j, u2_j, blocking=True, device: Device=default_device):
       get_rows = self.get_rows_2d
       X = geom.X[0, :]
       Y = geom.Y[:, 0]
@@ -333,8 +333,8 @@ class ProcessTopology:
       h_w, u1_w, u2_w = (get_rows(h_i,  1, 0), get_rows(u1_i,  1, 0), get_rows(u2_i,  1, 0))
       h_e, u1_e, u2_e = (get_rows(h_i, -2, 1), get_rows(u1_i, -2, 1), get_rows(u2_i, -2, 1))
 
-      send_buffer    = numpy.empty((4, 3) + h_n.shape, dtype=h_n.dtype)
-      receive_buffer = numpy.empty_like(send_buffer)
+      send_buffer    = device.xp.empty((4, 3) + h_n.shape, dtype=h_n.dtype)
+      receive_buffer = device.xp.empty_like(send_buffer)
 
       # Flip data (if needed), convert u vectors to neighbor coordinate system, and put all that into send buffer
       for do_flip, convert, positions, h, (u1, u2), buffer in zip(
@@ -343,10 +343,10 @@ class ProcessTopology:
             [X, X, Y, Y],
             [h_n, h_s, h_w, h_e], [(u1_n, u2_n), (u1_s, u2_s), (u1_w, u2_w), (u1_e, u2_e)],
             [send_buffer[0], send_buffer[1], send_buffer[2], send_buffer[3]]):
-         buffer[0, :] = numpy.flip(h) if do_flip else h
+         buffer[0, :] = device.xp.flip(h) if do_flip else h
          tmp1, tmp2 = convert(u1, u2, positions)
-         buffer[1, :] = numpy.flip(tmp1, flip_dim) if do_flip else tmp1
-         buffer[2, :] = numpy.flip(tmp2, flip_dim) if do_flip else tmp2
+         buffer[1, :] = device.xp.flip(tmp1, flip_dim) if do_flip else tmp1
+         buffer[2, :] = device.xp.flip(tmp2, flip_dim) if do_flip else tmp2
 
       # Initiate data transfer
       mpi_request = self.comm_dist_graph.Ineighbor_alltoall(send_buffer, receive_buffer)

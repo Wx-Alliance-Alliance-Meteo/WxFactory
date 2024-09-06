@@ -1,18 +1,15 @@
-import numpy
 from numpy.typing import NDArray
 from typing import Optional, Tuple
 
 from init.initialize import Topo
 from common.definitions import idx_h, idx_hu1, idx_hu2, gravity
-from common.device import CpuDevice, CudaDevice, Device, default_device
+from common.device import CudaDevice, Device, default_device
 from common.process_topology import ProcessTopology
 from geometry import CubedSphere, DFROperators, Metric3DTopo
 from rhs.rhs import RHS
 
-rhs_shallow_water_kernels = None
-
 class RhsShallowWater(RHS):
-   def __init__(self, shape: tuple[int, ...],
+   def __init__(self, shape: Tuple[int, ...],
                 geom: CubedSphere,
                 mtrx: DFROperators,
                 metric: Metric3DTopo,
@@ -41,24 +38,18 @@ class RhsShallowWater(RHS):
 
       '''
       
-      # Load CUDA kernels
-      global rhs_shallow_water_kernels
-      if isinstance(device, CudaDevice) and rhs_shallow_water_kernels is None:
-         from wx_cupy import Rusanov
-         rhs_shallow_water_kernels = Rusanov
-      
       xp = device.xp
 
       type_vec = Q.dtype
       nb_equations = Q.shape[0]
       nb_interfaces_hori = nb_elements_hori + 1
 
-      df1_dx1, df2_dx2, flux_x1, flux_x2 = [numpy.empty_like(Q, dtype=type_vec) for _ in range(4)]
+      df1_dx1, df2_dx2, flux_x1, flux_x2 = [xp.empty_like(Q, dtype=type_vec) for _ in range(4)]
 
-      flux_x1_itf_i = numpy.empty((nb_equations, nb_elements_hori+2, nbsolpts*nb_elements_hori, 2), dtype=type_vec)
-      flux_x2_itf_j, var_itf_i, var_itf_j= [numpy.empty((nb_equations, nb_elements_hori+2, 2, nbsolpts*nb_elements_hori), dtype=type_vec) for _ in range(3)]
+      flux_x1_itf_i = xp.empty((nb_equations, nb_elements_hori+2, nbsolpts*nb_elements_hori, 2), dtype=type_vec)
+      flux_x2_itf_j, var_itf_i, var_itf_j= [xp.empty((nb_equations, nb_elements_hori+2, 2, nbsolpts*nb_elements_hori), dtype=type_vec) for _ in range(3)]
 
-      forcing = numpy.zeros_like(Q, dtype=type_vec)
+      forcing = xp.zeros_like(Q, dtype=type_vec)
 
       # Offset due to the halo
       offset = 1
@@ -70,7 +61,7 @@ class RhsShallowWater(RHS):
 
       # Interpolate to the element interface
       for elem in range(nb_elements_hori):
-         epais = elem * nbsolpts + numpy.arange(nbsolpts)
+         epais = elem * nbsolpts + xp.arange(nbsolpts)
          pos   = elem + offset
 
          # --- Direction x1
@@ -89,7 +80,7 @@ class RhsShallowWater(RHS):
          var_itf_j[1:, pos, 1, :] = mtrx.extrap_north @ Q[1:, epais, :]
 
       # Initiate transfers
-      all_request = ptopo.xchange_sw_interfaces(geom, var_itf_i[idx_h], var_itf_j[idx_h], var_itf_i[idx_hu1], var_itf_i[idx_hu2], var_itf_j[idx_hu1], var_itf_j[idx_hu2], blocking=False)
+      all_request = ptopo.xchange_sw_interfaces(geom, var_itf_i[idx_h], var_itf_j[idx_h], var_itf_i[idx_hu1], var_itf_i[idx_hu2], var_itf_j[idx_hu1], var_itf_j[idx_hu2], blocking=False, device=device)
 
       # Compute the fluxes
       flux_x1[idx_h] = metric.sqrtG * Q[idx_hu1]
@@ -104,7 +95,7 @@ class RhsShallowWater(RHS):
 
       # Interior contribution to the derivatives, corrections for the boundaries will be added later
       for elem in range(nb_elements_hori):
-         epais = elem * nbsolpts + numpy.arange(nbsolpts)
+         epais = elem * nbsolpts + xp.arange(nbsolpts)
 
          # --- Direction x1
          df1_dx1[:,:,epais] = flux_x1[:,:,epais] @ mtrx.diff_solpt_tr
@@ -133,20 +124,20 @@ class RhsShallowWater(RHS):
          # Left state
          p11_L = metric.sqrtG_itf_i[itf, :] * 0.5 * gravity * metric.H_contra_11_itf_i[itf, :] * var_itf_i[idx_h, elem_L, 1, :]**2
          p21_L = metric.sqrtG_itf_i[itf, :] * 0.5 * gravity * metric.H_contra_21_itf_i[itf, :] * var_itf_i[idx_h, elem_L, 1, :]**2
-         aL = numpy.sqrt( gravity * var_itf_i[idx_h, elem_L, 1, :] * metric.H_contra_11_itf_i[itf, :] )
+         aL = xp.sqrt( gravity * var_itf_i[idx_h, elem_L, 1, :] * metric.H_contra_11_itf_i[itf, :] )
          mL = var_itf_i[idx_hu1, elem_L, 1, :] / (var_itf_i[idx_h, elem_L, 1, :] * aL)
 
          # Right state
          p11_R = metric.sqrtG_itf_i[itf, :] * 0.5 * gravity * metric.H_contra_11_itf_i[itf, :] * var_itf_i[idx_h, elem_R, 0, :]**2
          p21_R = metric.sqrtG_itf_i[itf, :] * 0.5 * gravity * metric.H_contra_21_itf_i[itf, :] * var_itf_i[idx_h, elem_R, 0, :]**2
-         aR = numpy.sqrt( gravity * var_itf_i[idx_h, elem_R, 0, :] * metric.H_contra_11_itf_i[itf, :] )
+         aR = xp.sqrt( gravity * var_itf_i[idx_h, elem_R, 0, :] * metric.H_contra_11_itf_i[itf, :] )
          mR = var_itf_i[idx_hu1, elem_R, 0, :] / (var_itf_i[idx_h, elem_R, 0, :] * aR)
 
          M = 0.25 * ( (mL + 1.)**2 - (mR - 1.)**2 )
 
          # --- Advection part
 
-         flux_x1_itf_i[:, elem_L, :, 1] = metric.sqrtG_itf_i[itf, :] * ( numpy.maximum(0., M) * aL * var_itf_i[:, elem_L, 1, :] +  numpy.minimum(0., M) * aR * var_itf_i[:, elem_R, 0, :] )
+         flux_x1_itf_i[:, elem_L, :, 1] = metric.sqrtG_itf_i[itf, :] * ( xp.maximum(0., M) * aL * var_itf_i[:, elem_L, 1, :] +  xp.minimum(0., M) * aR * var_itf_i[:, elem_R, 0, :] )
 
          # --- Pressure part
 
@@ -162,20 +153,20 @@ class RhsShallowWater(RHS):
          # Left state
          p12_L = metric.sqrtG_itf_j[itf, :] * 0.5 * gravity * metric.H_contra_12_itf_j[itf, :] * var_itf_j[idx_h, elem_L, 1, :]**2
          p22_L = metric.sqrtG_itf_j[itf, :] * 0.5 * gravity * metric.H_contra_22_itf_j[itf, :] * var_itf_j[idx_h, elem_L, 1, :]**2
-         aL = numpy.sqrt( gravity * var_itf_j[idx_h, elem_L, 1, :] * metric.H_contra_22_itf_j[itf, :] )
+         aL = xp.sqrt( gravity * var_itf_j[idx_h, elem_L, 1, :] * metric.H_contra_22_itf_j[itf, :] )
          mL = var_itf_j[idx_hu2, elem_L, 1, :] / (var_itf_j[idx_h, elem_L, 1, :] * aL)
 
          # Right state
          p12_R = metric.sqrtG_itf_j[itf, :] * 0.5 * gravity * metric.H_contra_12_itf_j[itf, :] * var_itf_j[idx_h, elem_R, 0, :]**2
          p22_R = metric.sqrtG_itf_j[itf, :] * 0.5 * gravity * metric.H_contra_22_itf_j[itf, :] * var_itf_j[idx_h, elem_R, 0, :]**2
-         aR = numpy.sqrt( gravity * var_itf_j[idx_h, elem_R, 0, :] * metric.H_contra_22_itf_j[itf, :] )
+         aR = xp.sqrt( gravity * var_itf_j[idx_h, elem_R, 0, :] * metric.H_contra_22_itf_j[itf, :] )
          mR = var_itf_j[idx_hu2, elem_R, 0, :] / (var_itf_j[idx_h, elem_R, 0, :] * aR)
 
          M = 0.25 * ( (mL + 1.)**2 - (mR - 1.)**2 )
 
          # --- Advection part
 
-         flux_x2_itf_j[:, elem_L, 1, :] = metric.sqrtG_itf_j[itf, :] * ( numpy.maximum(0., M) * aL * var_itf_j[:, elem_L, 1, :] + numpy.minimum(0., M) * aR * var_itf_j[:, elem_R, 0, :] )
+         flux_x2_itf_j[:, elem_L, 1, :] = metric.sqrtG_itf_j[itf, :] * ( xp.maximum(0., M) * aL * var_itf_j[:, elem_L, 1, :] + xp.minimum(0., M) * aR * var_itf_j[:, elem_R, 0, :] )
 
          # --- Pressure part
 
@@ -186,7 +177,7 @@ class RhsShallowWater(RHS):
 
       # Compute the derivatives
       for elem in range(nb_elements_hori):
-         epais = elem * nbsolpts + numpy.arange(nbsolpts)
+         epais = elem * nbsolpts + xp.arange(nbsolpts)
 
          # --- Direction x1
 
@@ -197,8 +188,8 @@ class RhsShallowWater(RHS):
          df2_dx2[:,epais,:] += mtrx.correction @ flux_x2_itf_j[:, elem+offset,:,:]
 
       if topo is None:
-         topo_dzdx1 = numpy.zeros_like(metric.H_contra_11)
-         topo_dzdx2 = numpy.zeros_like(metric.H_contra_11)
+         topo_dzdx1 = xp.zeros_like(metric.H_contra_11)
+         topo_dzdx2 = xp.zeros_like(metric.H_contra_11)
       else:
          topo_dzdx1 = topo.dzdx1
          topo_dzdx2 = topo.dzdx2
