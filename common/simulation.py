@@ -8,7 +8,7 @@ from .definitions               import idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_
 from .configuration             import Configuration
 from .process_topology          import ProcessTopology
 from .device                    import Device, CpuDevice, CudaDevice
-from geometry                   import Cartesian2D, CubedSphere, DFROperators, Geometry
+from geometry                   import Cartesian2D, CubedSphere, CubedSphere2D, DFROperators, Geometry
 from init.dcmip                 import dcmip_T11_update_winds, dcmip_T12_update_winds
 from init.init_state_vars       import init_state_vars
 from integrators                import Integrator, Epi, EpiStiff, Euler1, Imex2, PartRosExp2, Ros2, RosExp2, \
@@ -149,9 +149,15 @@ class Simulation:
       """ Create the appropriate geometry for the given problem """
 
       if self.config.grid_type == 'cubed_sphere' and self.process_topo is not None:
+         if self.config.equations == 'shallow_water':
+            return CubedSphere2D(self.config.nb_elements_horizontal, self.config.nb_elements_vertical,
+                                 self.config.nbsolpts,
+                            self.config.λ0, self.config.ϕ0, self.config.α0, self.config.ztop,
+                            self.process_topo, self.config)
          return CubedSphere(self.config.nb_elements_horizontal, self.config.nb_elements_vertical, self.config.nbsolpts,
                             self.config.λ0, self.config.ϕ0, self.config.α0, self.config.ztop,
                             self.process_topo, self.config)
+
       if self.config.grid_type == 'cartesian2d':
          #TODO remove array_module reference
          return Cartesian2D((self.config.x0, self.config.x1), (self.config.z0, self.config.z1),

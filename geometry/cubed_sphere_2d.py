@@ -10,7 +10,7 @@ from .sphere     import cart2sph
 from common.process_topology import ProcessTopology
 from common.configuration    import Configuration
 
-class CubedSphere(Geometry):
+class CubedSphere2D(Geometry):
    def __init__(self, nb_elements_horizontal:int , nb_elements_vertical: int, nbsolpts: int, 
                 λ0: float, ϕ0: float, α0: float, ztop: float, ptopo: ProcessTopology, param: Configuration):
       '''Initialize the cubed sphere geometry, for an earthlike sphere with no topography.
@@ -512,17 +512,25 @@ class CubedSphere(Geometry):
       X_itf_j = numpy.broadcast_to(numpy.tan(x1_itf_j)[numpy.newaxis,:],(nb_elements_x2+1,ni))
       Y_itf_j = numpy.broadcast_to(numpy.tan(x2_itf_j)[:,numpy.newaxis],(nb_elements_x2+1,ni))
 
+      X_itf_i_new = self._to_new_itf_i(X_itf_i)
+      Y_itf_i_new = self._to_new_itf_i(Y_itf_i)
+      X_itf_j_new = self._to_new_itf_j(X_itf_j)
+      Y_itf_j_new = self._to_new_itf_j(Y_itf_j)
+
       if MPI.COMM_WORLD.rank == 0:
          print(f'x itf i (shape {X_itf_i.shape})= \n{X_itf_i}')
 
       delta2 = 1.0 + X**2 + Y**2
       delta  = numpy.sqrt(delta2)
 
-      delta2_itf_i = 1.0 + X_itf_i**2 + Y_itf_i**2
-      delta_itf_i  = numpy.sqrt(delta2_itf_i)
+      delta2_new = 1.0 + X_new**2 + Y_new**2
+      delta_new  = numpy.sqrt(delta2_new)
 
-      delta2_itf_j = 1.0 + X_itf_j**2 + Y_itf_j**2
-      delta_itf_j  = numpy.sqrt(delta2_itf_j)
+      delta2_itf_i_new = 1.0 + X_itf_i_new**2 + Y_itf_i_new**2
+      delta_itf_i_new  = numpy.sqrt(delta2_itf_i_new)
+
+      delta2_itf_j_new = 1.0 + X_itf_j_new**2 + Y_itf_j_new**2
+      delta_itf_j_new  = numpy.sqrt(delta2_itf_j_new)
 
       self.X = X
       self.Y = Y
@@ -531,10 +539,12 @@ class CubedSphere(Geometry):
       self.height = height
       self.delta2 = delta2
       self.delta = delta
-      self.delta2_itf_i = delta2_itf_i
-      self.delta_itf_i  = delta_itf_i
-      self.delta2_itf_j = delta2_itf_j
-      self.delta_itf_j  = delta_itf_j
+      self.delta2_new = delta2_new
+      self.delta_new = delta_new
+      self.delta2_itf_i_new = delta2_itf_i_new
+      self.delta_itf_i_new  = delta_itf_i_new
+      self.delta2_itf_j_new = delta2_itf_j_new
+      self.delta_itf_j_new  = delta_itf_j_new
 
       ## Other coordinate vectors:
       # * gnonomic coordinates (X, Y, Z)
@@ -619,21 +629,9 @@ class CubedSphere(Geometry):
       self.coordVec_latlon_itf_j = coordVec_latlon_itf_j
       self.coordVec_latlon_itf_k = coordVec_latlon_itf_k
 
-      cartX = coordVec_cart[0,:]
-      cartY = coordVec_cart[1,:]
-      cartZ = coordVec_cart[2,:]
-
-      cartX_itf_i = coordVec_cart_itf_i[0,:]
-      cartX_itf_j = coordVec_cart_itf_j[0,:]
-      cartX_itf_k = coordVec_cart_itf_k[0,:]
-      
-      cartY_itf_i = coordVec_cart_itf_i[1,:]
-      cartY_itf_j = coordVec_cart_itf_j[1,:]
-      cartY_itf_k = coordVec_cart_itf_k[1,:]
-
-      cartZ_itf_i = coordVec_cart_itf_i[2,:]
-      cartZ_itf_j = coordVec_cart_itf_j[2,:]
-      cartZ_itf_k = coordVec_cart_itf_k[2,:]
+      # cartX = coordVec_cart[0,:]
+      # cartY = coordVec_cart[1,:]
+      # cartZ = coordVec_cart[2,:]
 
       lon = coordVec_latlon[0,0,:,:]
       lat = coordVec_latlon[1,0,:,:]
@@ -655,15 +653,12 @@ class CubedSphere(Geometry):
       # Map to the interval [0, 2 pi]
       #lon_itf_j[lon_itf_j<0.0] = lon_itf_j[lon_itf_j<0.0] + (2.0 * math.pi)
 
-      self.cartX = cartX
-      self.cartY = cartY
-      self.cartZ = cartZ
       self.lon = lon
       self.lat = lat
-      self.X_itf_i = X_itf_i
-      self.Y_itf_i = Y_itf_i
-      self.X_itf_j = X_itf_j
-      self.Y_itf_j = Y_itf_j
+      self.X_itf_i_new = X_itf_i_new
+      self.Y_itf_i_new = Y_itf_i_new
+      self.X_itf_j_new = X_itf_j_new
+      self.Y_itf_j_new = Y_itf_j_new
       self.lon_itf_i = lon_itf_i
       self.lat_itf_i = lat_itf_i
       self.lon_itf_j = lon_itf_j
@@ -745,19 +740,3 @@ class CubedSphere(Geometry):
       else:
          raise ValueError(f'Unexpected array shape {a.shape} (expected {expected_shape})')
 
-   # def _to_new_itf(self, a):
-   #    """Convert input array (interface) to new memory layout"""
-
-   #    expected_shape_1 = (self.nb_elements_x2 * self.nbsolpts, self.nb_elements_x1 + 1)
-   #    expected_shape_2 = (self.nb_elements_x2 + 1, self.nb_elements_x1 * self.nbsolpts)
-   #    expected_shapes = [expected_shape_1, expected_shape_2]
-
-   #    if a.ndim == 2 and a.shape in expected_shapes:
-   #       new_shape = self.itf_shape_2d
-   #       if a.shape == expected_shape_1:
-   #          tmp_shape = (self.nb_elements_x2, self.nbsolpts, self.nb_elements_x1 + 1)
-   #          return a.reshape(tmp_shape).transpose
-
-   #       elif a.shape == expected_shape_2:
-   #          tmp_shape = (self.nb_elements_x2 + 1, self.nb_elements_x1, self.nbsolpts)
-   #       else: raise ValueError
