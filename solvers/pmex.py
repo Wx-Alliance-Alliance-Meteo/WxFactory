@@ -56,7 +56,10 @@ def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 10, mmax = 128, reuse_i
    # compute the 1-norm of u
    local_nrmU = device.xp.sum(abs(u[1:, :]), axis=1)
    global_normU = device.xp.empty_like(local_nrmU)
-   MPI.COMM_WORLD.Allreduce([local_nrmU, MPI.DOUBLE], [global_normU, MPI.DOUBLE])
+
+   device.synchronize()
+   MPI.COMM_WORLD.Allreduce([local_nrmU, MPI.DOUBLE], [global_normU, MPI.DOUBLE]) # TODO : Data lost here. To investigate
+
    normU = device.xp.amax(global_normU)
 
    # Normalization factors
@@ -107,8 +110,8 @@ def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 10, mmax = 128, reuse_i
          # Normalize initial vector (this norm is nonzero)
          local_sum = V[0, 0:n] @ V[0, 0:n]
          global_sum_nrm = device.xp.empty_like(local_sum)
+         device.synchronize()
          MPI.COMM_WORLD.Allreduce([local_sum, MPI.DOUBLE], [global_sum_nrm, MPI.DOUBLE])
-         print(f'value is {type(local_sum)}')
          β = math.sqrt( global_sum_nrm + V[j, n:n+p] @ V[j, n:n+p] ) 
 
          # The first Krylov basis vector
@@ -119,7 +122,7 @@ def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 10, mmax = 128, reuse_i
 
          j = j + 1
 
-         # Augmented matrix - vector product
+         #1. Augmented matrix - vector product
          V[j, 0:n    ] = A( V[j-1, 0:n] ) + V[j-1, n:n+p] @ u_flip
          V[j, n:n+p-1] = V[j-1, n+1:n+p]
          V[j, -1     ] = 0.0
@@ -127,17 +130,20 @@ def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 10, mmax = 128, reuse_i
          #2. compute terms needed for R and T
          local_vec  = V[0:j+1, 0:n] @ V[j-1:j+1, 0:n].T
          global_vec = device.xp.empty_like(local_vec)
-         MPI.COMM_WORLD.Allreduce([local_vec, MPI.DOUBLE], [global_vec, MPI.DOUBLE])
+
+         device.synchronize()
+         MPI.COMM_WORLD.Allreduce([local_vec, MPI.DOUBLE], [global_vec, MPI.DOUBLE]) # TODO : Data lost here. To investigate
+         
          global_vec += V[0:j+1, n:n+p] @ V[j-1:j+1, n:n+p].T
 
          #3. Projection with 2-step Gauss-Seidel to the orthogonal complement
          # Note: this is done in two steps. (1) matvec and (2) a lower
          # triangular solve
-         # 4a. here we set the values for matrix M, Minv, N
+         # 3a. here we set the values for matrix M, Minv, N
          if (j > 1):
-           M[j-1, 0:j-1]    =  global_vec[0:j-1,0]
-           N[0:j-1, j-1]    = -global_vec[0:j-1,0]
-           Minv[j-1, 0:j-1] = -global_vec[0:j-1,0].T @ Minv[0:j-1, 0:j-1]
+            M[j-1, 0:j-1]    =  global_vec[0:j-1,0]
+            N[0:j-1, j-1]    = -global_vec[0:j-1,0]
+            Minv[j-1, 0:j-1] = -global_vec[0:j-1,0].T @ Minv[0:j-1, 0:j-1]
 
          #3b. part 1: the mat-vec
          rhs = ( device.xp.eye(j) + device.xp.matmul(N[0:j, 0:j], Minv[0:j,0:j]) ) @ global_vec[0:j,1]
@@ -149,14 +155,21 @@ def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 10, mmax = 128, reuse_i
          V[j, :] -= sol @ V[0:j, :]
 
          #5. compute norm estimate with quad precision
-         sum_vec  = device.xp.array(global_vec[0:j,1], device.xp.float128)**2
-         sum_sqrd = device.xp.sum(sum_vec)
+         if device.has_128_bits_float() is True:
+            sum_vec  = device.xp.array(global_vec[0:j,1], device.xp.float128)**2
+            sum_sqrd = device.xp.sum(sum_vec)
+         else:
+            device.synchronize()
+            sum_vec = default_device.xp.array(global_vec[0:j,1].get(), default_device.xp.float128)**2
+            sum_sqrd = device.array(default_device.xp.asarray(default_device.xp.sum(sum_vec), dtype=default_device.xp.float64))
+         
 
          #sum_sqrd = sum(global_vec[0:j,1]**2)
          if (global_vec[-1,1] < sum_sqrd):
             #use communication to compute norm estimate
             local_sum = V[j, 0:n] @ V[j, 0:n]
             global_sum_nrm = device.xp.empty_like(local_sum)
+            device.synchronize()
             MPI.COMM_WORLD.Allreduce([local_sum, MPI.DOUBLE], [global_sum_nrm, MPI.DOUBLE])
             curr_nrm = math.sqrt( global_sum_nrm + V[j,n:n+p] @ V[j, n:n+p] )
             reg_comm_nrm += 1

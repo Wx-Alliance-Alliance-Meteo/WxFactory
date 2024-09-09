@@ -47,6 +47,10 @@ class Device(ABC):
    def to_host(self, val: Any, **kwargs) -> Any:
       """Copy the given array to the host (if it's not there already)."""
       return self.__to_host__(val, **kwargs)
+   
+   def has_128_bits_float(self) -> bool:
+      """Not all devices can perform 128 bits floating point operation"""
+      return hasattr(self.xp, 'float128')
 
 class CpuDevice(Device):
    def __init__(self) -> None:
@@ -77,7 +81,8 @@ class CudaDevice(Device):
 
       import cupy
       import cupyx
-      
+      import cupyx.scipy.linalg
+
       from wx_cupy import num_devices
 
       super().__init__(cupy, cupyx.scipy)
