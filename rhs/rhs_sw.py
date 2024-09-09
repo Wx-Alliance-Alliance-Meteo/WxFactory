@@ -3,7 +3,7 @@ from typing import Optional, Tuple
 
 from init.initialize import Topo
 from common.definitions import idx_h, idx_hu1, idx_hu2, gravity
-from common.device import CudaDevice, Device, default_device
+from common.device import Device, default_device
 from common.process_topology import ProcessTopology
 from geometry import CubedSphere, DFROperators, Metric3DTopo
 from rhs.rhs import RHS
@@ -37,7 +37,7 @@ class RhsShallowWater(RHS):
       '''Evaluate the right-hand side of the two dimensional Shallow Water equations
 
       '''
-      
+
       xp = device.xp
 
       type_vec = Q.dtype
@@ -78,6 +78,7 @@ class RhsShallowWater(RHS):
 
          var_itf_j[1:, pos, 0, :] = mtrx.extrap_south @ Q[1:, epais, :]
          var_itf_j[1:, pos, 1, :] = mtrx.extrap_north @ Q[1:, epais, :]
+
 
       # Initiate transfers
       all_request = ptopo.xchange_sw_interfaces(geom, var_itf_i[idx_h], var_itf_j[idx_h], var_itf_i[idx_hu1], var_itf_i[idx_hu2], var_itf_j[idx_hu1], var_itf_j[idx_hu2], blocking=False, device=device)
