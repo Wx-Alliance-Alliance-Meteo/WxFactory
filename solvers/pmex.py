@@ -132,8 +132,8 @@ def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 10, mmax = 128, reuse_i
          global_vec = device.xp.empty_like(local_vec)
 
          device.synchronize()
-         MPI.COMM_WORLD.Allreduce([local_vec, MPI.DOUBLE], [global_vec, MPI.DOUBLE]) # TODO : Data lost here. To investigate
-         
+         MPI.COMM_WORLD.Allreduce([local_vec, MPI.DOUBLE], [global_vec, MPI.DOUBLE])
+
          global_vec += V[0:j+1, n:n+p] @ V[j-1:j+1, n:n+p].T
 
          #3. Projection with 2-step Gauss-Seidel to the orthogonal complement
@@ -174,9 +174,9 @@ def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 10, mmax = 128, reuse_i
             curr_nrm = math.sqrt( global_sum_nrm + V[j,n:n+p] @ V[j, n:n+p] )
             reg_comm_nrm += 1
          else:
-
            #compute norm estimate in quad precision
            curr_nrm = device.xp.array(device.xp.sqrt(global_vec[-1,1] - sum_sqrd), device.xp.float64)
+           
 
          # Happy breakdown
          if curr_nrm < tol:
