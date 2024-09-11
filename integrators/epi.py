@@ -76,7 +76,6 @@ class Epi(Integrator):
          dt /= self.init_substeps
          for i in range(self.init_substeps):
             Q = self.init_method.step(Q, dt)
-            exit(-1)
          return Q
 
       # Regular EPI step
