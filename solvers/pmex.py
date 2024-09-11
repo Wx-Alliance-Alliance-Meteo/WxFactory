@@ -58,7 +58,7 @@ def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 10, mmax = 128, reuse_i
    global_normU = device.xp.empty_like(local_nrmU)
 
    device.synchronize()
-   MPI.COMM_WORLD.Allreduce([local_nrmU, MPI.DOUBLE], [global_normU, MPI.DOUBLE]) # TODO : Data lost here. To investigate
+   MPI.COMM_WORLD.Allreduce([local_nrmU, MPI.DOUBLE], [global_normU, MPI.DOUBLE])
 
    normU = device.xp.amax(global_normU)
 
@@ -194,7 +194,7 @@ def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 10, mmax = 128, reuse_i
       H[0, j] = 1.0
 
       # Save h_j+1,j and remove it temporarily to compute the exponential of H
-      nrm = H[j, j-1]
+      nrm = H[j, j-1].copy()
       H[j, j-1] = 0.0
 
       # Compute the exponential of the augmented matrix
