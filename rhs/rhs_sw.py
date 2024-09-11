@@ -79,7 +79,6 @@ class RhsShallowWater(RHS):
          var_itf_j[1:, pos, 0, :] = mtrx.extrap_south @ Q[1:, epais, :]
          var_itf_j[1:, pos, 1, :] = mtrx.extrap_north @ Q[1:, epais, :]
 
-
       # Initiate transfers
       all_request = ptopo.xchange_sw_interfaces(geom, var_itf_i[idx_h], var_itf_j[idx_h], var_itf_i[idx_hu1], var_itf_i[idx_hu2], var_itf_j[idx_hu1], var_itf_j[idx_hu2], blocking=False, device=device)
 

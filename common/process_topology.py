@@ -349,6 +349,7 @@ class ProcessTopology:
          buffer[2, :] = device.xp.flip(tmp2, flip_dim) if do_flip else tmp2
 
       # Initiate data transfer
+      device.synchronize()
       mpi_request = self.comm_dist_graph.Ineighbor_alltoall(send_buffer, receive_buffer)
 
       # Destination vectors

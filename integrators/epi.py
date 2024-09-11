@@ -76,20 +76,13 @@ class Epi(Integrator):
          dt /= self.init_substeps
          for i in range(self.init_substeps):
             Q = self.init_method.step(Q, dt)
+            exit(-1)
          return Q
 
       # Regular EPI step
       self.rhs.debug = True
       rhs = self.rhs(Q)
       self.rhs.debug = False
-
-      nb_nan = 0
-      for it1 in range(rhs.shape[0]):
-            for it2 in range(rhs.shape[1]):
-               for it3 in range(rhs.shape[2]):
-                  if math.isnan(rhs[it1, it2, it3]):
-                     nb_nan += 1
-      print(f'{nb_nan} found on {rhs.shape[0] * rhs.shape[1] * rhs.shape[2]}')
 
 
       def matvec_handle(v): return matvec_fun(v, dt, Q, rhs, self.rhs, self.jacobian_method, self.device)
