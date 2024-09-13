@@ -56,7 +56,6 @@ class Epi(Integrator):
          self.init_method = Epi(param, 2, rhs, **kwargs)
 
       self.init_substeps = init_substeps
-      self.rhs.debug = False
 
    def __step__(self, Q: numpy.ndarray, dt: float):
 
@@ -72,17 +71,14 @@ class Epi(Integrator):
          self.previous_Q.appendleft(Q)
          self.previous_rhs.appendleft(self.rhs(Q))
 
-         
          dt /= self.init_substeps
          for i in range(self.init_substeps):
             Q = self.init_method.step(Q, dt)
+         
          return Q
 
       # Regular EPI step
-      self.rhs.debug = True
       rhs = self.rhs(Q)
-      self.rhs.debug = False
-
 
       def matvec_handle(v): return matvec_fun(v, dt, Q, rhs, self.rhs, self.jacobian_method, self.device)
 

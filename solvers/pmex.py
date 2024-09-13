@@ -4,6 +4,19 @@ from mpi4py import MPI
 from common.device import Device,default_device
 
 def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 10, mmax = 128, reuse_info = True, task1 = False, device: Device=default_device):
+   '''
+   τ_out       : 
+   A           : 
+   u           : 
+   tol         : Tolerance
+   delta       : 
+   m_init      : 
+   mmax        : 
+   reuse_info  : 
+   task1       :  
+   device      : Device to use for the computing
+   '''
+
 
    ppo, n = u.shape
    p = ppo - 1
@@ -52,6 +65,7 @@ def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 10, mmax = 128, reuse_i
    # Initial condition
    w = device.xp.zeros((numSteps, n))
    w[0, :] = u[0, :].copy()
+
 
    # compute the 1-norm of u
    local_nrmU = device.xp.sum(abs(u[1:, :]), axis=1)
