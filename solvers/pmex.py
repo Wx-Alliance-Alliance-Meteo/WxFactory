@@ -5,15 +5,15 @@ from common.device import Device,default_device
 
 def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 10, mmax = 128, reuse_info = True, task1 = False, device: Device=default_device):
    '''
-   τ_out       : 
-   A           : 
-   u           : 
+   τ_out       : ?
+   A           : Function that compute a matrix * vector product
+   u           : ? 2 dimension tensor
    tol         : Tolerance
-   delta       : 
-   m_init      : 
-   mmax        : 
-   reuse_info  : 
-   task1       :  
+   delta       : ?
+   m_init      : ?
+   mmax        : Max number of iteration
+   reuse_info  : ?
+   task1       : ?
    device      : Device to use for the computing
    '''
 
