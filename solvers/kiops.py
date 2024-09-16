@@ -92,7 +92,7 @@ def kiops(tau_out: NDArray, A: Callable[[NDArray], NDArray], u: NDArray,
 
    # Initial condition
    w = xp.zeros((numSteps, n))
-   w[0, :] = u[0, :]
+   w[0, :] = u[0, :].copy()
 
    # compute 1-norm of u
    local_normU = xp.sum(xp.abs(u[1:, :]), axis=1)
