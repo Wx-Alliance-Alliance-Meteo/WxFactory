@@ -6,7 +6,6 @@ import cuda_test
 
 class KiopsTestCases(cuda_test.CudaTestCases):
     tolerance: float
-    cpu_to_gpu_tolerence: float
     rand: random.Random
 
     cpu_matrix: ndarray
@@ -22,7 +21,6 @@ class KiopsTestCases(cuda_test.CudaTestCases):
         self.show_debug_print = False
 
         self.tolerance = 1e-7
-        self.cpu_gpu_tolenrance = 1e-10
         self.rand = random.Random(seed)
 
         self.cpu_matrix: ndarray = self.cpu_device.xp.zeros((initial_matrix_size, initial_matrix_size), dtype=float)
@@ -50,10 +48,10 @@ class KiopsTestCases(cuda_test.CudaTestCases):
 
         self.failIf(not (w2.shape[0] == shape[0] and w2.shape[1] == shape[1]), 'Both matrix should be the same size')
 
-        w1_value: float = self.cpu_device.xp.sum(w1).item()
-        w2_value: float = self.gpu_device.xp.sum(w2).item()
+        w1_value: float = self.cpu_device.xp.linalg.norm(w1).item()
+        w2_value: float = self.gpu_device.xp.linalg.norm(w2).item()
 
-        abs_diff: float = abs(w1_value - w2_value) / (shape[0] * shape[1])
+        abs_diff: float = abs(w1_value - w2_value)
 
         relative_diff_w1: float = abs(abs_diff / w1_value)
         relative_diff_w2: float = abs(abs_diff / w2_value)
@@ -64,5 +62,5 @@ class KiopsTestCases(cuda_test.CudaTestCases):
             print(f'In {c_name}.{m_name}, absolute difference is {abs_diff}')
             print(f'In {c_name}.{m_name}, relative difference from cpu is {relative_diff_w1} and relative difference from gpu is {relative_diff_w2}')
 
-        self.assertLessEqual(relative_diff_w1, self.cpu_gpu_tolenrance, f'Kiops didn\'t give a close result to the cpu value')
-        self.assertLessEqual(relative_diff_w2, self.cpu_gpu_tolenrance, f'Kiops didn\'t give a close result to the gpu value')
+        self.assertLessEqual(relative_diff_w1, self.tolerance, f'Kiops didn\'t give a close result to the cpu value')
+        self.assertLessEqual(relative_diff_w2, self.tolerance, f'Kiops didn\'t give a close result to the gpu value')

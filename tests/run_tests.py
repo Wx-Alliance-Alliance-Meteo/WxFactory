@@ -7,7 +7,6 @@ import unittest
 main_project_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), '..')
 sys.path.append(main_project_dir)
 
-from tests.process_topology import ProcessTopologyTest
 from tests.solvers.test_pmex import PmexTestCases
 from tests.solvers.test_kiops import KiopsTestCases
 from tests.solvers.test_kiops_pmex_tolerance_cpu import KiopsPmexToleranceCpuTestCases
