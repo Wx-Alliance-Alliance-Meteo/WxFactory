@@ -9,10 +9,11 @@ from .sphere     import cart2sph
 # For type hints
 from common.process_topology import ProcessTopology
 from common.configuration    import Configuration
+from common.device import Device, default_device
 
 class CubedSphere(Geometry):
    def __init__(self, nb_elements_horizontal:int , nb_elements_vertical: int, nbsolpts: int, 
-                λ0: float, ϕ0: float, α0: float, ztop: float, ptopo: ProcessTopology, param: Configuration):
+                λ0: float, ϕ0: float, α0: float, ztop: float, ptopo: ProcessTopology, param: Configuration, device: Device = default_device):
       '''Initialize the cubed sphere geometry, for an earthlike sphere with no topography.
 
       This function initializes the basic CubedSphere geometry object, which provides the parameters necessary to define
@@ -70,7 +71,8 @@ class CubedSphere(Geometry):
          constructor.
       '''
       super().__init__(nbsolpts, 'cubed_sphere', param.array_module)
-      xp = self.array_module
+      xp = device.xp
+      self.device = device
 
       ## Panel / parallel decomposition properties
       self.ptopo = ptopo
@@ -205,26 +207,26 @@ class CubedSphere(Geometry):
       x1.shape = (nb_elements_x1,nbsolpts)
       # Then broadcast the coordinate into the variable, using the structure:
       # <minimum> + <delta_element>*<element number> + <delta_inner>*<solutionPoints>
-      x1[:] = domain_x1[0] + Δx1*elements_x1[:,numpy.newaxis] + \
-                  Δx1/Δcomp*(-minComp + self.solutionPoints[numpy.newaxis,:])
+      x1[:] = domain_x1[0] + Δx1*elements_x1[:,xp.newaxis] + \
+                  Δx1/Δcomp*(-minComp + self.solutionPoints[xp.newaxis,:])
       # Finally, reshape back to the unified view   
       x1.shape = (ni,)
 
       # Repeat for x2, x3, and eta
       x2.shape = (nb_elements_x2,nbsolpts)
-      x2[:] = domain_x2[0] + Δx2*elements_x2[:,numpy.newaxis] + \
-                  Δx2/Δcomp*(-minComp + self.solutionPoints[numpy.newaxis,:])
+      x2[:] = domain_x2[0] + Δx2*elements_x2[:,xp.newaxis] + \
+                  Δx2/Δcomp*(-minComp + self.solutionPoints[xp.newaxis,:])
       x2.shape = (nj,)
 
       if (ztop > 0): # Note that x3 and eta are 3D arrays
          x3.shape = (nb_elements_x3,nbsolpts,nj,ni)
-         x3[:] = domain_x3[0] + Δx3*elements_x3[:,numpy.newaxis,numpy.newaxis,numpy.newaxis] + \
-                     Δx3/Δcomp*(-minComp + self.solutionPoints[numpy.newaxis,:,numpy.newaxis,numpy.newaxis])
+         x3[:] = domain_x3[0] + Δx3*elements_x3[:,xp.newaxis,xp.newaxis,xp.newaxis] + \
+                     Δx3/Δcomp*(-minComp + self.solutionPoints[xp.newaxis,:,xp.newaxis,xp.newaxis])
          x3.shape = self.grid_shape_3d
 
          eta.shape = (nb_elements_x3,nbsolpts,nj,ni)
-         eta[:] = domain_eta[0] + Δeta*elements_x3[:,numpy.newaxis,numpy.newaxis,numpy.newaxis] + \
-                     Δeta/Δcomp*(-minComp + self.solutionPoints[numpy.newaxis,:,numpy.newaxis,numpy.newaxis])
+         eta[:] = domain_eta[0] + Δeta*elements_x3[:,xp.newaxis,xp.newaxis,xp.newaxis] + \
+                     Δeta/Δcomp*(-minComp + self.solutionPoints[xp.newaxis,:,xp.newaxis,xp.newaxis])
          eta.shape = self.grid_shape_3d
       else:
          x3[:] = 0
@@ -263,9 +265,9 @@ class CubedSphere(Geometry):
 
       x1_itf_k[:] = x1[:]
       x2_itf_k[:] = x2[:]
-      x3_itf_k[:-1,:,:] = domain_x3[0] + Δx3*elements_x3[:,numpy.newaxis,numpy.newaxis] # Bottom edges
+      x3_itf_k[:-1,:,:] = domain_x3[0] + Δx3*elements_x3[:,xp.newaxis,xp.newaxis] # Bottom edges
       x3_itf_k[-1,:,:] = domain_x3[1]
-      eta_itf_k[:-1,:,:] = domain_eta[0] + Δeta*elements_x3[:,numpy.newaxis,numpy.newaxis]
+      eta_itf_k[:-1,:,:] = domain_eta[0] + Δeta*elements_x3[:,xp.newaxis,xp.newaxis]
       eta_itf_k[-1,:,:] = domain_eta[1]
 
       self.x1 = x1
@@ -290,22 +292,22 @@ class CubedSphere(Geometry):
 
       ## Construct the combined coordinate vector for the numeric/equiangular coordinate (x1, x2, η)
       #TODO Why does the shape have an additional dimension of size 1?
-      coordVec_num = numpy.stack((numpy.broadcast_to(x1[None, None, :], eta.shape),
-                                  numpy.broadcast_to(x2[None, :, None], eta.shape),
+      coordVec_num = xp.stack((xp.broadcast_to(x1[None, None, :], eta.shape),
+                               xp.broadcast_to(x2[None, :, None], eta.shape),
                                   eta))
 
       if MPI.COMM_WORLD.rank == 0:
          print(f'eta itf i shape = {eta_itf_i.shape}')
 
-      coordVec_num_itf_i = numpy.stack((numpy.broadcast_to(x1_itf_i[None, None, :], eta_itf_i.shape),
-                                        numpy.broadcast_to(x2_itf_i[None, :, None], eta_itf_i.shape),
-                                        eta_itf_i))
-      coordVec_num_itf_j = numpy.stack((numpy.broadcast_to(x1_itf_j[None, None, :], eta_itf_j.shape),
-                                        numpy.broadcast_to(x2_itf_j[None, :, None], eta_itf_j.shape),
-                                        eta_itf_j))
-      coordVec_num_itf_k = numpy.stack((numpy.broadcast_to(x1_itf_k[None, None, :], eta_itf_k.shape),
-                                        numpy.broadcast_to(x2_itf_k[None, :, None], eta_itf_k.shape),
-                                        eta_itf_k))
+      coordVec_num_itf_i = xp.stack((xp.broadcast_to(x1_itf_i[None, None, :], eta_itf_i.shape),
+                                     xp.broadcast_to(x2_itf_i[None, :, None], eta_itf_i.shape),
+                                     eta_itf_i))
+      coordVec_num_itf_j = xp.stack((xp.broadcast_to(x1_itf_j[None, None, :], eta_itf_j.shape),
+                                     xp.broadcast_to(x2_itf_j[None, :, None], eta_itf_j.shape),
+                                     eta_itf_j))
+      coordVec_num_itf_k = xp.stack((xp.broadcast_to(x1_itf_k[None, None, :], eta_itf_k.shape),
+                                     xp.broadcast_to(x2_itf_k[None, :, None], eta_itf_k.shape),
+                                     eta_itf_k))
 
       self.coordVec_num = coordVec_num
       self.coordVec_num_itf_i = coordVec_num_itf_i
@@ -425,6 +427,8 @@ class CubedSphere(Geometry):
       # interior points, i-boundaries, and j-boundaries.  This function applies a linear mapping,
       # where η=0 corresponds to the given surface and η=1 corresponds to the top.
 
+      xp = self.device.xp
+
       # First, preserve the topography
       self.zbot = zbot.copy()
       self.zbot_itf_i = zbot_itf_i.copy()
@@ -434,10 +438,10 @@ class CubedSphere(Geometry):
 
       # To apply the topography, we need to redefine self.x3 and its interfaced versions.
 
-      self.x3[:,:,:] = zbot[numpy.newaxis,:,:] + (ztop - zbot[numpy.newaxis,:,:])*self.eta # shape k, j, i
-      self.x3_itf_i[:,:,:] = zbot_itf_i[numpy.newaxis,:,:] + (ztop - zbot_itf_i[numpy.newaxis,:,:])*self.eta_itf_i # shape k, j, itf_i
-      self.x3_itf_j[:,:,:] = zbot_itf_j[numpy.newaxis,:,:] + (ztop - zbot_itf_j[numpy.newaxis,:,:])*self.eta_itf_j # shape k, itf_j, i
-      self.x3_itf_k[:,:,:] = zbot[numpy.newaxis,:,:] + (ztop - zbot[numpy.newaxis,:,:])*self.eta_itf_k # shape itf_k, j, i
+      self.x3[:,:,:] = zbot[xp.newaxis,:,:] + (ztop - zbot[xp.newaxis,:,:])*self.eta # shape k, j, i
+      self.x3_itf_i[:,:,:] = zbot_itf_i[xp.newaxis,:,:] + (ztop - zbot_itf_i[xp.newaxis,:,:])*self.eta_itf_i # shape k, j, itf_i
+      self.x3_itf_j[:,:,:] = zbot_itf_j[xp.newaxis,:,:] + (ztop - zbot_itf_j[xp.newaxis,:,:])*self.eta_itf_j # shape k, itf_j, i
+      self.x3_itf_k[:,:,:] = zbot[xp.newaxis,:,:] + (ztop - zbot[xp.newaxis,:,:])*self.eta_itf_k # shape itf_k, j, i
 
       # Now, rebuild the physical coordinates to re-generate X/Y/Z and the Cartesian coordinates
       self._build_physical_coordinates()
@@ -447,6 +451,7 @@ class CubedSphere(Geometry):
       Build the physical coordinate arrays and vectors (gnomonic plane, lat/lon, Cartesian)
       based on the pre-defined equiangular coordinates (x1, x2) and height (x3)
       """
+      xp = self.device.xp
 
       # Retrieve the numeric values for use here
       x1 = self.x1
@@ -489,7 +494,7 @@ class CubedSphere(Geometry):
       # height is still necessarily a 3D array.
       # x comes before y in the indices -> Y is the "fast-varying" index
 
-      Y, X = numpy.meshgrid(numpy.tan(x2),numpy.tan(x1),indexing='ij')
+      Y, X = xp.meshgrid(xp.tan(x2),xp.tan(x1),indexing='ij')
 
       Y_new = self._to_new(Y)
       X_new = self._to_new(X)
@@ -507,22 +512,22 @@ class CubedSphere(Geometry):
       # are expected to be of size (#interface, #pts).  Compared to the usual (j,i) ordering,
       # this means that the i-interface variable should be transposed
 
-      X_itf_i = numpy.broadcast_to(numpy.tan(x1_itf_i)[numpy.newaxis,:],(nj,nb_elements_x1+1)).T
-      Y_itf_i = numpy.broadcast_to(numpy.tan(x2_itf_i)[:,numpy.newaxis],(nj,nb_elements_x1+1)).T
-      X_itf_j = numpy.broadcast_to(numpy.tan(x1_itf_j)[numpy.newaxis,:],(nb_elements_x2+1,ni))
-      Y_itf_j = numpy.broadcast_to(numpy.tan(x2_itf_j)[:,numpy.newaxis],(nb_elements_x2+1,ni))
+      X_itf_i = xp.broadcast_to(xp.tan(x1_itf_i)[xp.newaxis,:],(nj,nb_elements_x1+1)).T
+      Y_itf_i = xp.broadcast_to(xp.tan(x2_itf_i)[:,xp.newaxis],(nj,nb_elements_x1+1)).T
+      X_itf_j = xp.broadcast_to(xp.tan(x1_itf_j)[xp.newaxis,:],(nb_elements_x2+1,ni))
+      Y_itf_j = xp.broadcast_to(xp.tan(x2_itf_j)[:,xp.newaxis],(nb_elements_x2+1,ni))
 
       if MPI.COMM_WORLD.rank == 0:
          print(f'x itf i (shape {X_itf_i.shape})= \n{X_itf_i}')
 
       delta2 = 1.0 + X**2 + Y**2
-      delta  = numpy.sqrt(delta2)
+      delta  = xp.sqrt(delta2)
 
       delta2_itf_i = 1.0 + X_itf_i**2 + Y_itf_i**2
-      delta_itf_i  = numpy.sqrt(delta2_itf_i)
+      delta_itf_i  = xp.sqrt(delta2_itf_i)
 
       delta2_itf_j = 1.0 + X_itf_j**2 + Y_itf_j**2
-      delta_itf_j  = numpy.sqrt(delta2_itf_j)
+      delta_itf_j  = xp.sqrt(delta2_itf_j)
 
       self.X = X
       self.Y = Y
@@ -540,23 +545,23 @@ class CubedSphere(Geometry):
       # * gnonomic coordinates (X, Y, Z)
 
       def to_gnomonic(coord_num, z):
-         gnom = numpy.empty_like(coord_num)
-         gnom[0] = numpy.tan(coord_num[0])
-         gnom[1] = numpy.tan(coord_num[1])
+         gnom = xp.empty_like(coord_num)
+         gnom[0] = xp.tan(coord_num[0])
+         gnom[1] = xp.tan(coord_num[1])
          gnom[2] = z
 
          return gnom
 
-      coordVec_gnom = numpy.empty_like(coordVec_num) # (X,Y,Z)
-      coordVec_gnom_itf_i = numpy.empty_like(coordVec_num_itf_i)
-      coordVec_gnom_itf_j = numpy.empty_like(coordVec_num_itf_j)
-      coordVec_gnom_itf_k = numpy.empty_like(coordVec_num_itf_k)
+      coordVec_gnom = xp.empty_like(coordVec_num) # (X,Y,Z)
+      coordVec_gnom_itf_i = xp.empty_like(coordVec_num_itf_i)
+      coordVec_gnom_itf_j = xp.empty_like(coordVec_num_itf_j)
+      coordVec_gnom_itf_k = xp.empty_like(coordVec_num_itf_k)
 
       for (coordgnom, coordnum, z) in zip([coordVec_gnom, coordVec_gnom_itf_i, coordVec_gnom_itf_j, coordVec_gnom_itf_k],
                                           [coordVec_num, coordVec_num_itf_i, coordVec_num_itf_j, coordVec_num_itf_k],
                                           [x3, x3_itf_i, x3_itf_j, x3_itf_k]):
-         coordgnom[0,:,:,:] = numpy.tan(coordnum[0,:,:,:])
-         coordgnom[1,:,:,:] = numpy.tan(coordnum[1,:,:,:])
+         coordgnom[0,:,:,:] = xp.tan(coordnum[0,:,:,:])
+         coordgnom[1,:,:,:] = xp.tan(coordnum[1,:,:,:])
          coordgnom[2,:,:,:] = z
 
       # coordVec_gnom_new       = to_gnomonic(self.coordVec_num_new,       x3)
@@ -566,10 +571,10 @@ class CubedSphere(Geometry):
 
       # * Cartesian coordinates on the deep sphere (Xc, Yc, Zc)
 
-      coordVec_cart = numpy.empty_like(coordVec_num) # (Xc,Yc,Zc)
-      coordVec_cart_itf_i = numpy.empty_like(coordVec_num_itf_i)
-      coordVec_cart_itf_j = numpy.empty_like(coordVec_num_itf_j)
-      coordVec_cart_itf_k = numpy.empty_like(coordVec_num_itf_k)
+      coordVec_cart = xp.empty_like(coordVec_num) # (Xc,Yc,Zc)
+      coordVec_cart_itf_i = xp.empty_like(coordVec_num_itf_i)
+      coordVec_cart_itf_j = xp.empty_like(coordVec_num_itf_j)
+      coordVec_cart_itf_k = xp.empty_like(coordVec_num_itf_k)
 
       # Built the Cartesian coordinates, by inverting the gnomonic projection.  At the north pole without grid
       # rotation, the formulas are:
@@ -578,7 +583,7 @@ class CubedSphere(Geometry):
       # Zc = (r+Z)/sqrt(1+X^2+Y^2)
       for (coord_cart, coord_gnom) in zip([coordVec_cart, coordVec_cart_itf_i, coordVec_cart_itf_j, coordVec_cart_itf_k],
                                              [coordVec_gnom, coordVec_gnom_itf_i, coordVec_gnom_itf_j, coordVec_gnom_itf_k]):
-         delt = numpy.sqrt(1.0 + coord_gnom[0,:,:,:]**2 + coord_gnom[1,:,:,:]**2)
+         delt = xp.sqrt(1.0 + coord_gnom[0,:,:,:]**2 + coord_gnom[1,:,:,:]**2)
          coord_cart[0,:] = (self.earth_radius + coord_gnom[2,:]) / delt * ( math.cos(lon_p) * math.cos(lat_p) \
                + coord_gnom[0,:] * ( math.cos(lon_p) * math.sin(lat_p) * math.sin(angle_p) - math.sin(lon_p) * math.cos(angle_p) ) \
                - coord_gnom[1,:] * ( math.cos(lon_p) * math.sin(lat_p) * math.cos(angle_p) + math.sin(lon_p) * math.sin(angle_p) ) )
@@ -591,10 +596,10 @@ class CubedSphere(Geometry):
                - coord_gnom[0,:] * math.cos(lat_p) * math.sin(angle_p) \
                + coord_gnom[1,:] * math.cos(lat_p) * math.cos(angle_p) )
 
-      coordVec_latlon = numpy.empty_like(coordVec_num) # (lat, lon, Z)
-      coordVec_latlon_itf_i = numpy.empty_like(coordVec_num_itf_i)
-      coordVec_latlon_itf_j = numpy.empty_like(coordVec_num_itf_j)
-      coordVec_latlon_itf_k = numpy.empty_like(coordVec_num_itf_k)
+      coordVec_latlon = xp.empty_like(coordVec_num) # (lat, lon, Z)
+      coordVec_latlon_itf_i = xp.empty_like(coordVec_num_itf_i)
+      coordVec_latlon_itf_j = xp.empty_like(coordVec_num_itf_j)
+      coordVec_latlon_itf_k = xp.empty_like(coordVec_num_itf_k)
 
       # * Polar coordinates (lat, lon, Z)
 
@@ -669,10 +674,10 @@ class CubedSphere(Geometry):
       self.lon_itf_j = lon_itf_j
       self.lat_itf_j = lat_itf_j
 
-      self.coslon = numpy.cos(lon)
-      self.sinlon = numpy.sin(lon)
-      self.coslat = numpy.cos(lat)
-      self.sinlat = numpy.sin(lat)
+      self.coslon = xp.cos(lon)
+      self.sinlon = xp.sin(lon)
+      self.coslat = xp.cos(lat)
+      self.sinlat = xp.sin(lat)
 
    def _to_new(self, a):
       """Convert input array to new memory layout"""
@@ -705,13 +710,16 @@ class CubedSphere(Geometry):
 
    def _to_new_itf_i(self, a):
       """Convert input array (west and east interface) to new memory layout"""
+
+      xp = self.device.xp
+
       # expected_shape = (self.nb_elements_x2 * self.nbsolpts, self.nb_elements_x1 + 1)
       expected_shape = (self.nb_elements_x1 + 1, self.nb_elements_x2 * self.nbsolpts)
       if a.shape[-2:] == expected_shape:
          plane_shape = (self.nb_elements_x2, self.nb_elements_x1 + 2, self.nbsolpts * 2)
-         new = numpy.zeros(a.shape[:-2] + plane_shape, dtype=a.dtype)
-         west_itf  = numpy.arange(self.nbsolpts)
-         east_itf = numpy.arange(self.nbsolpts, 2*self.nbsolpts)
+         new = xp.zeros(a.shape[:-2] + plane_shape, dtype=a.dtype)
+         west_itf = xp.arange(self.nbsolpts)
+         east_itf = xp.arange(self.nbsolpts, 2*self.nbsolpts)
 
          tmp_shape = a.shape[:-2] + (self.nb_elements_x1 + 1, self.nb_elements_x2, self.nbsolpts)
          offset = len(a.shape) - 2
@@ -728,12 +736,14 @@ class CubedSphere(Geometry):
 
    def _to_new_itf_j(self, a):
       """Convert input array (south and north interface) to new memory layout"""
+      xp = self.device.xp
+      
       expected_shape = (self.nb_elements_x2 + 1, self.nb_elements_x1 * self.nbsolpts)
       if a.shape[-2:] == expected_shape:
          plane_shape = (self.nb_elements_x2 + 2, self.nb_elements_x1, self.nbsolpts * 2)
-         new = numpy.zeros(a.shape[:-2] + plane_shape, dtype=a.dtype)
-         south = numpy.s_[..., 1:,  :, :self.nbsolpts]
-         north = numpy.s_[..., :-1, :, self.nbsolpts:]
+         new = xp.zeros(a.shape[:-2] + plane_shape, dtype=a.dtype)
+         south = xp.s_[..., 1:,  :, :self.nbsolpts]
+         north = xp.s_[..., :-1, :, self.nbsolpts:]
 
          tmp_shape = a.shape[:-2] + (self.nb_elements_x2 + 1, self.nb_elements_x1, self.nbsolpts)
          tmp_array = a.reshape(tmp_shape)

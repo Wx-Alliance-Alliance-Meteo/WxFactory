@@ -5,6 +5,7 @@ from mpi4py import MPI
 
 from .cubed_sphere  import CubedSphere
 from .operators     import DFROperators
+from common.device import Device, default_device
 
 class Metric3DTopo:
    def __init__(self, geom : CubedSphere, matrix: DFROperators):
@@ -703,10 +704,12 @@ class Metric3DTopo:
 
 class Metric:
    '''Metric for a smooth, three-dimensional earthlike cubed-sphere with the shallow atmosphere approximation'''
-   def __init__(self, geom : CubedSphere):
+   def __init__(self, geom : CubedSphere, device: Device = default_device):
       # 3D Jacobian, for the cubed-sphere mapping
       # Note that with no topography, ∂z/∂η=1; the model top is included
       # inside the geometry definition, and η=x3
+
+      xp = device.xp
 
       self.sqrtG       = geom.earth_radius**2 * (1.0 + geom.X**2) * (1.0 + geom.Y**2) / ( geom.delta2 * geom.delta )
       self.sqrtG_itf_i = geom.earth_radius**2 * (1.0 + geom.X_itf_i**2) * (1.0 + geom.Y_itf_i**2) / ( geom.delta2_itf_i * geom.delta_itf_i )
@@ -730,10 +733,10 @@ class Metric:
       self.H_contra_32 = 0
       self.H_contra_33 = 1
 
-      zero_itf_i = numpy.zeros(geom.delta2_itf_i.shape)
-      one_itf_i  = numpy.ones(geom.delta2_itf_i.shape)
-      zero_itf_j = numpy.zeros(geom.delta2_itf_j.shape)
-      one_itf_j  = numpy.ones(geom.delta2_itf_j.shape)
+      zero_itf_i = xp.zeros(geom.delta2_itf_i.shape)
+      one_itf_i  = xp.ones(geom.delta2_itf_i.shape)
+      zero_itf_j = xp.zeros(geom.delta2_itf_j.shape)
+      one_itf_j  = xp.ones(geom.delta2_itf_j.shape)
 
       # Metric at interfaces
       self.H_contra_11_itf_i = geom.delta2_itf_i / ( geom.earth_radius**2 * (1.0 + geom.X_itf_i**2) )

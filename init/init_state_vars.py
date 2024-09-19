@@ -23,7 +23,7 @@ def init_state_vars(geom: Geometry, operators: DFROperators, param: Configuratio
       Q = initialize_cartesian2d(geom, param)
 
    elif param.equations == "shallow_water" and isinstance(geom, CubedSphere):
-      metric = Metric(geom)
+      metric = Metric(geom, device)
       Q, topo = initialize_sw(geom, metric, operators, param, device)
    
    else:

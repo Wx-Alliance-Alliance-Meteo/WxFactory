@@ -95,7 +95,7 @@ class DFROperators:
          if not isinstance(grd, CubedSphere):
             raise TypeError(f'The 3D filter can only be applied on a CubedSphere geometry')
          self.expfilter = self.make_filter(param.expfilter_strength, param.expfilter_order, param.expfilter_cutoff,
-                                           grd)
+                                           grd, device)
 
       # Create sponge layer (if desired)
       self.apply_sponge = param.apply_sponge
@@ -130,44 +130,44 @@ class DFROperators:
 
       self.quad_weights = device.xp.outer(grd.glweights, grd.glweights)
 
-      ident = numpy.identity(grd.nbsolpts)
-      self.extrap_x = numpy.vstack(( numpy.kron(ident, self.extrap_west),
-                                     numpy.kron(ident, self.extrap_east) )).T
-      self.extrap_y = numpy.vstack(( numpy.kron(self.extrap_south,ident),
-                                     numpy.kron(self.extrap_north,ident))).T
-      self.extrap_z = numpy.vstack(( numpy.kron(self.extrap_down, ident),
-                                     numpy.kron(self.extrap_up,   ident) )).T
+      ident = device.xp.identity(grd.nbsolpts)
+      self.extrap_x = device.xp.vstack(( device.xp.kron(ident, self.extrap_west),
+                                         device.xp.kron(ident, self.extrap_east) )).T
+      self.extrap_y = device.xp.vstack(( device.xp.kron(self.extrap_south,ident),
+                                         device.xp.kron(self.extrap_north,ident))).T
+      self.extrap_z = device.xp.vstack(( device.xp.kron(self.extrap_down, ident),
+                                         device.xp.kron(self.extrap_up,   ident) )).T
 
-      self.derivative_x = numpy.kron(ident, self.diff_solpt).T
-      self.derivative_y = numpy.kron(self.diff_solpt, ident).T
-      self.derivative_z = numpy.kron(self.diff_solpt, ident).T
+      self.derivative_x = device.xp.kron(ident, self.diff_solpt).T
+      self.derivative_y = device.xp.kron(self.diff_solpt, ident).T
+      self.derivative_z = device.xp.kron(self.diff_solpt, ident).T
 
       corr_down = self.diff_ext[1:-1, 0]
       corr_up   = self.diff_ext[1:-1, -1]
-      self.correction_DU = numpy.vstack((numpy.kron(corr_down, numpy.identity(grd.nbsolpts)),
-                                         numpy.kron(corr_up,   numpy.identity(grd.nbsolpts)) ))
+      self.correction_DU = device.xp.vstack((device.xp.kron(corr_down, device.xp.identity(grd.nbsolpts)),
+                                             device.xp.kron(corr_up,   device.xp.identity(grd.nbsolpts)) ))
 
-      self.correction_SN = numpy.vstack((numpy.kron(corr_down, numpy.identity(grd.nbsolpts)),
-                                         numpy.kron(corr_up,   numpy.identity(grd.nbsolpts)) ))
+      self.correction_SN = device.xp.vstack((device.xp.kron(corr_down, device.xp.identity(grd.nbsolpts)),
+                                             device.xp.kron(corr_up,   device.xp.identity(grd.nbsolpts)) ))
 
       corr_west = self.diff_ext[1:-1, 0]
       corr_east = self.diff_ext[1:-1, -1]
-      self.correction_WE = numpy.vstack((numpy.kron(numpy.identity(grd.nbsolpts), corr_west),
-                                         numpy.kron(numpy.identity(grd.nbsolpts), corr_east) ))
+      self.correction_WE = device.xp.vstack((device.xp.kron(device.xp.identity(grd.nbsolpts), corr_west),
+                                             device.xp.kron(device.xp.identity(grd.nbsolpts), corr_east) ))
 
 
-   def make_filter(self, alpha: float, order: int, cutoff: float, geom: Geometry):
+   def make_filter(self, alpha: float, order: int, cutoff: float, geom: Geometry, device: Device = default_device):
       '''Build an exponential modal filter as described in Warburton, eqn 5.16.'''
 
       # Scaled mode numbers
-      modes = numpy.arange(geom.nbsolpts, like=geom.solutionPoints) / (geom.nbsolpts-1)
+      modes = device.xp.arange(geom.nbsolpts, like=geom.solutionPoints) / (geom.nbsolpts-1)
       Nc = cutoff
 
       # After applying the filter, each mode is reduced in proportion to the filter order
       # and the mode number relative to nbsolpts, with modes below the cutoff limit untouched
 
-      residual_modes = numpy.ones_like(modes)
-      residual_modes[modes > Nc] = numpy.exp(-alpha*((modes[modes > Nc] - cutoff)/(1 - cutoff))**order)
+      residual_modes = device.xp.ones_like(modes)
+      residual_modes[modes > Nc] = device.xp.exp(-alpha*((modes[modes > Nc] - cutoff)/(1 - cutoff))**order)
 
       # Now, use a Vandermonde matrix to transform this modal filter into a nodal form
 
@@ -175,9 +175,9 @@ class DFROperators:
       vander = legvander(geom.solutionPoints, geom.nbsolpts - 1)
 
       # node-to-mode operator
-      ivander = numpy.linalg.inv(vander)
+      ivander = device.xp.linalg.inv(vander)
 
-      return vander @ numpy.diag(residual_modes) @ ivander
+      return vander @ device.xp.diag(residual_modes) @ ivander
 
    def apply_filters(self, Q: numpy.ndarray, geom: Geometry, metric, dt: float):
       '''Apply the filters that have been activated on the given state vector.'''

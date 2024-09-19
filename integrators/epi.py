@@ -70,7 +70,6 @@ class Epi(Integrator):
       if len(self.previous_Q) < self.n_prev:
          self.previous_Q.appendleft(Q)
          self.previous_rhs.appendleft(self.rhs(Q))
-
          dt /= self.init_substeps
          for i in range(self.init_substeps):
             Q = self.init_method.step(Q, dt)
