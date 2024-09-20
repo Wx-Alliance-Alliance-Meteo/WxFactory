@@ -20,7 +20,7 @@ def init_state_vars(geom: Geometry, operators: DFROperators, param: Configuratio
       # Q: dimensions [5,nk,nj,ni], order ρ, u, v, w, θ
 
    elif param.equations == 'euler' and isinstance(geom, Cartesian2D):
-      Q = initialize_cartesian2d(geom, param)
+      Q = initialize_cartesian2d(geom, param, device)
 
    elif param.equations == "shallow_water" and isinstance(geom, CubedSphere):
       metric = Metric(geom, device)

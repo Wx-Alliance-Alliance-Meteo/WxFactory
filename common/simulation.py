@@ -43,7 +43,7 @@ class Simulation:
       self.operators = DFROperators(self.geometry, self.config, self.device)
       self.initial_Q, self.topology, self.metric = init_state_vars(self.geometry, self.operators, self.config, self.device)
       self.preconditioner = self._create_preconditioner(self.initial_Q)
-      self.output = OutputManager(self.config, self.geometry, self.metric, self.operators, self.topology)
+      self.output = OutputManager(self.config, self.geometry, self.metric, self.operators, self.topology, self.device)
       self.initial_Q, self.starting_step = self._determine_starting_state()
       self.rhs = RhsBundle(self.geometry, self.operators, self.metric, self.topology, self.process_topo, self.config,
                            self.initial_Q.shape, self.device)
@@ -159,7 +159,7 @@ class Simulation:
          return Cartesian2D((self.config.x0, self.config.x1), (self.config.z0, self.config.z1),
                             self.config.nb_elements_horizontal, self.config.nb_elements_vertical, self.config.nbsolpts,
                             self.config.nb_elements_relief_layer, self.config.relief_layer_height,
-                            self.config.array_module)
+                            self.config.array_module, self.device)
 
       raise ValueError(f'Invalid grid type: {self.config.grid_type}')
 

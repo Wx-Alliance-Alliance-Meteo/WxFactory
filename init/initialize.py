@@ -158,19 +158,20 @@ def initialize_sw(geom, metric, mtrx, param, device: Device=default_device):
    # Note : we move the last axis of the first topo array so that both have similiar ordering
    return Q, Topo(hsurf, dzdx1, dzdx2, device.xp.moveaxis(hsurf_itf_i, -1, -2), hsurf_itf_j)
 
-def initialize_cartesian2d(geom: Cartesian2D, param: Configuration) -> NDArray[numpy.float64]:
+def initialize_cartesian2d(geom: Cartesian2D, param: Configuration, device: Device = default_device) -> NDArray[numpy.float64]:
    '''Initialize a problem on a 2D cartesian grid based on a case number.'''
 
    nb_equations = 4
+   xp = device.xp
 
    # Initial state at rest, isentropic, hydrostatic
 #   nk, ni = geom.X1.shape
 #   Q      = numpy.zeros((nb_equations, nk, ni))    #TODO Should it not be like the arrays in Geometry (gpu vs cpu)?
-   Q      = numpy.zeros((nb_equations, param.nb_elements_horizontal*param.nb_elements_vertical, geom.nbsolpts**2))
-   uu     = numpy.zeros_like(geom.X1)
-   ww     = numpy.zeros_like(geom.X1)
-   exner  = numpy.zeros_like(geom.X1)
-   θ      = numpy.ones_like(geom.X1)
+   Q      = xp.zeros((nb_equations, param.nb_elements_horizontal*param.nb_elements_vertical, geom.nbsolpts**2))
+   uu     = xp.zeros_like(geom.X1)
+   ww     = xp.zeros_like(geom.X1)
+   exner  = xp.zeros_like(geom.X1)
+   θ      = xp.ones_like(geom.X1)
 
    if param.case_number != 0:
       θ *= param.bubble_theta
@@ -204,11 +205,11 @@ def initialize_cartesian2d(geom: Cartesian2D, param: Configuration) -> NDArray[n
       s = 100
       x0 = 500
       z0 = 260
-      r = numpy.sqrt( (geom.X1-x0)**2 + (geom.X3-z0)**2 )
+      r = xp.sqrt( (geom.X1-x0)**2 + (geom.X3-z0)**2 )
 
-      θ = numpy.where(r <= a,
+      θ = xp.where(r <= a,
                       θ + A,
-                      θ + A * numpy.exp(-((r-a)/s)**2))
+                      θ + A * xp.exp(-((r-a)/s)**2))
 
       # TODO : hackathon SG
       # TODO : refaire
@@ -232,11 +233,11 @@ def initialize_cartesian2d(geom: Cartesian2D, param: Configuration) -> NDArray[n
       z0 = 300
       for k in range(nk):
          for i in range(ni):
-            r = numpy.sqrt( (geom.X1[k,i]-x0)**2 + (geom.X3[k,i]-z0)**2 )
+            r = xp.sqrt( (geom.X1[k,i]-x0)**2 + (geom.X3[k,i]-z0)**2 )
             if r <= a:
                θ[k,i] += A
             else:
-               θ[k,i] += A * numpy.exp(-((r-a)/s)**2)
+               θ[k,i] += A * xp.exp(-((r-a)/s)**2)
 
       A = -0.15
       a = 0
@@ -245,11 +246,11 @@ def initialize_cartesian2d(geom: Cartesian2D, param: Configuration) -> NDArray[n
       z0 = 640
       for k in range(nk):
          for i in range(ni):
-            r = numpy.sqrt( (geom.X1[k,i]-x0)**2 + (geom.X3[k,i]-z0)**2 )
+            r = xp.sqrt( (geom.X1[k,i]-x0)**2 + (geom.X3[k,i]-z0)**2 )
             if r <= a:
                θ[k,i] += A
             else:
-               θ[k,i] += A * numpy.exp(-((r-a)/s)**2)
+               θ[k,i] += A * xp.exp(-((r-a)/s)**2)
 
    elif param.case_number == 4:
       # Cold density current
@@ -264,9 +265,9 @@ def initialize_cartesian2d(geom: Cartesian2D, param: Configuration) -> NDArray[n
 
       for k in range(nk):
          for i in range(ni):
-            r = numpy.sqrt( ((geom.X1[k,i]-x0)/xr)**2 + ((geom.X3[k,i]-z0)/zr)**2 )
+            r = xp.sqrt( ((geom.X1[k,i]-x0)/xr)**2 + ((geom.X3[k,i]-z0)/zr)**2 )
             if r <= 1.:
-               θ[k,i] += 0.5 * θc * (1. + numpy.cos(numpy.pi * r))
+               θ[k,i] += 0.5 * θc * (1. + xp.cos(xp.pi * r))
 
       geom.make_mountain(mountain_type='step')
 
@@ -277,8 +278,8 @@ def initialize_cartesian2d(geom: Cartesian2D, param: Configuration) -> NDArray[n
       a00 = N_star**2 / gravity
       capc1 = gravity**2 / (N_star**2 * cpd * t0)
 
-      exner = 1.0 - capc1 * (1.0 - numpy.exp(-a00 * geom.X3))
-      θ = t0 * numpy.exp(a00 * geom.X3)
+      exner = 1.0 - capc1 * (1.0 - xp.exp(-a00 * geom.X3))
+      θ = t0 * xp.exp(a00 * geom.X3)
 
       uu[:,:] = 10.
 
@@ -292,7 +293,4 @@ def initialize_cartesian2d(geom: Cartesian2D, param: Configuration) -> NDArray[n
    Q[idx_2d_rho_w,:,:]     = ρ * ww
    Q[idx_2d_rho_theta,:,:] = ρ * θ
 
-   if param.device == "cuda":
-      import cupy
-      return cupy.asarray(Q)
    return Q

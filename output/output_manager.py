@@ -5,6 +5,7 @@ from mpi4py import MPI
 import numpy
 
 from common.configuration import Configuration
+from common.device import Device, default_device
 from geometry               import Cartesian2D, CubedSphere, Geometry, Metric, Metric3DTopo, DFROperators
 from init.initialize        import Topo
 from output.blockstats      import blockstats_cart, blockstats_cs
@@ -24,13 +25,15 @@ class OutputManager:
                 geometry: Geometry,
                 metric: Optional[Union[Metric, Metric3DTopo]] = None,
                 operators: Optional[DFROperators] = None,
-                topo: Optional[Topo] = None) -> None:
+                topo: Optional[Topo] = None,
+                device: Device = default_device) -> None:
 
       self.param     = param
       self.geometry  = geometry
       self.metric    = metric
       self.operators = operators
       self.topo      = topo
+      self.device = device
 
       os.makedirs(os.path.abspath(param.output_dir), exist_ok=True)
 
@@ -52,7 +55,7 @@ class OutputManager:
             self.output_file_name = lambda step_id: \
                f'{self.param.output_dir}/bubble_{self.param.case_number}_{step_id:08d}'
             self.step_function = lambda Q, step_id: \
-               output_step(Q, self.geometry, self.param, self.output_file_name(step_id))
+               output_step(Q, self.geometry, self.param, self.output_file_name(step_id), device)
 
       if param.stat_freq > 0:
          if isinstance(self.geometry, CubedSphere):
