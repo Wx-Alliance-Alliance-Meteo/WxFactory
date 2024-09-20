@@ -1,14 +1,16 @@
+from   abc       import ABC, abstractmethod
 from typing import Optional
 
 from mpi4py import MPI
 import numpy
+from   numpy.typing import NDArray
 import sympy
 
 from common.array_module import module_from_name
 from .quadrature import gauss_legendre
 
 
-class Geometry:
+class Geometry(ABC):
    """
    Abstract class that groups different geometries
    """
@@ -38,3 +40,9 @@ class Geometry:
 
       ##
       self.grid_type = grid_type
+
+
+   @abstractmethod
+   def to_single_block(self, a: NDArray) -> NDArray:
+      """Convert an array of values over this grid (which be may organized as a list of elements)
+      into a single block of data (2D or 3D)."""

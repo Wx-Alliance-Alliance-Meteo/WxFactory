@@ -1,10 +1,11 @@
 import math
+import sys
 
 from mpi4py import MPI
 import numpy
 
 from common.definitions import day_in_secs, gravity
-from geometry           import wind2contra_2d
+from geometry           import wind2contra_2d, CubedSphere2D, DFROperators
 from init.matsuno       import eval_field
 
 def eval_u_prime(lat):
@@ -23,15 +24,15 @@ def eval_u_prime(lat):
 
    return u_max / e_n * u_p
 
-def solid_body_rotation(geom, metric, param):
+def solid_body_rotation(geom: CubedSphere2D, metric, param):
    if param.case_number == 5:
       u0 = 20.0
    else:
       u0 = 2.0 * math.pi * geom.earth_radius / (12.0 * day_in_secs)
 
-   u = u0 * geom.coslat
+   u = u0 * geom.coslat_new
    v = 0.0
-   u1, u2 = wind2contra_2d(u, v, geom)
+   u1, u2 = geom.wind2contra(u, v)
 
    return u1, u2
 
@@ -140,19 +141,20 @@ def height_case2(geom, metric, param):
    return h
 
 
-def williamson_case5(geom, metric, mtrx, param):
+def williamson_case5(geom: CubedSphere2D, metric, mtrx: DFROperators, param):
    if MPI.COMM_WORLD.rank == 0:
-      print('--------------------------------------------')
-      print('WILLIAMSON CASE 5, Williamson et al. (1992) ')
-      print('Zonal Flow over an isolated mountain        ')
-      print('--------------------------------------------')
+      print('--------------------------------------------\n'
+            'WILLIAMSON CASE 5, Williamson et al. (1992) \n'
+            'Zonal Flow over an isolated mountain        \n'
+            '--------------------------------------------')
 
    u0 = 20.0   # Max wind (m/s)
    h0 = 5960.0 # Mean height (m)
 
    u1, u2 = solid_body_rotation(geom, metric, param)
 
-   h_star = (gravity*h0 - (geom.earth_radius * geom.rotation_speed * u0 + 0.5*u0**2)*(geom.sinlat)**2) / gravity
+   h_star = (gravity*h0 - (geom.earth_radius * geom.rotation_speed * u0 + 0.5*u0**2)*(geom.sinlat_new)**2) / gravity
+   # h_star = geom.to_single_block(h_star)
 
    # Isolated mountain
    hs0 = 2000.0
@@ -162,44 +164,81 @@ def williamson_case5(geom, metric, mtrx, param):
    lon_mountain = 3.0 * math.pi / 2.0
    lat_mountain = math.pi / 6.0
 
-   r = numpy.sqrt(numpy.minimum(rr**2,(geom.lon-lon_mountain)**2 + (geom.lat-lat_mountain)**2))
+   r = numpy.sqrt(numpy.minimum(rr**2, (geom.lon_new - lon_mountain)**2 + (geom.lat_new - lat_mountain)**2))
 
-   r_itf_i = numpy.sqrt(numpy.minimum(rr**2,(geom.lon_itf_i-lon_mountain)**2 + (geom.lat_itf_i-lat_mountain)**2))
-   r_itf_j = numpy.sqrt(numpy.minimum(rr**2,(geom.lon_itf_j-lon_mountain)**2 + (geom.lat_itf_j-lat_mountain)**2))
+   # r_itf_i = numpy.sqrt(numpy.minimum(rr**2, (geom.lon_itf_i - lon_mountain)**2 + (geom.lat_itf_i - lat_mountain)**2))
+   # r_itf_j = numpy.sqrt(numpy.minimum(rr**2, (geom.lon_itf_j - lon_mountain)**2 + (geom.lat_itf_j - lat_mountain)**2))
 
-   hsurf = hs0 * (1 - r / rr)
+   r_itf_i_new = numpy.sqrt(numpy.minimum(rr**2, (geom.lon_itf_i_new - lon_mountain)**2 + (geom.lat_itf_i_new - lat_mountain)**2))
+   r_itf_j_new = numpy.sqrt(numpy.minimum(rr**2, (geom.lon_itf_j_new - lon_mountain)**2 + (geom.lat_itf_j_new - lat_mountain)**2))
 
-   nb_interfaces_horiz = param.nb_elements_horizontal + 1
-   hsurf_itf_i = numpy.zeros((param.nb_elements_horizontal+2, param.nbsolpts*param.nb_elements_horizontal, 2))
-   hsurf_itf_j = numpy.zeros((param.nb_elements_horizontal+2, 2, param.nbsolpts*param.nb_elements_horizontal))
+   # print(f'lon itf shape = {geom.lon_itf_i_new.shape}')
 
-   for itf in range(nb_interfaces_horiz):
-      elem_L = itf
-      elem_R = itf + 1
+   r_itf_i_new[geom.west_edge] = 0.0
+   r_itf_i_new[geom.east_edge] = 0.0
+   r_itf_j_new[geom.south_edge] = 0.0
+   r_itf_j_new[geom.north_edge] = 0.0
 
-      hsurf_itf_i[elem_L, :, 1] = hs0 * (1. - r_itf_i[itf, :] / rr)
-      hsurf_itf_i[elem_R, :, 0] = hsurf_itf_i[elem_L, :, 1]
+   # diff_i = r_itf_i_new - geom._to_new_itf_i(r_itf_i)
+   # diff_i_norm = numpy.linalg.norm(diff_i) / numpy.linalg.norm(r_itf_i)
 
-      hsurf_itf_j[elem_L, 1, :] = hs0 * (1. - r_itf_j[itf, :] / rr)
-      hsurf_itf_j[elem_R, 0, :] = hsurf_itf_j[elem_L, 1, :]
+   # diff_j = r_itf_j_new - geom._to_new_itf_j(r_itf_j)
+   # diff_j_norm = numpy.linalg.norm(diff_j) / numpy.linalg.norm(r_itf_j)
 
-   ni, nj = geom.lon.shape
-   dzdx1 = numpy.zeros((ni, nj))
-   dzdx2 = numpy.zeros((ni, nj))
+   # if diff_i_norm > 1e-10 or diff_j_norm > 1e-10:
+   #    print(f'lon itf j = \n{geom.lon_itf_j_new}\nlat itf j = \n{geom.lat_itf_j_new}')
+   #    print(f'rank {MPI.COMM_WORLD.rank}, old r itf i = \n{r_itf_i}, \n'
+   #          f'new r itf i = \n{r_itf_i_new}, \ndiff = \n{diff_i}')
+   #    raise ValueError(f'Large diff! {diff_i_norm:.2e}, {diff_j_norm:.2e}')
 
-   offset = 1 # Offset due to the halo
-   for elem in range(param.nb_elements_horizontal):
-      epais = elem * param.nbsolpts + numpy.arange(param.nbsolpts)
+   # r_old = numpy.sqrt(numpy.minimum(rr**2, (geom.lon - lon_mountain)**2 + (geom.lat - lat_mountain)**2))
+   # hsurf = hs0 * (1 - r_old / rr)
+   hsurf_new = hs0 * (1 - r / rr)
 
-      # --- Direction x1
-      dzdx1[:, epais] = hsurf[:,epais] @ mtrx.diff_solpt_tr + hsurf_itf_i[elem+offset,:,:] @ mtrx.correction_tr
+   # nb_interfaces_horiz = param.nb_elements_horizontal + 1
+   # hsurf_itf_i = numpy.zeros((param.nb_elements_horizontal+2, param.nbsolpts*param.nb_elements_horizontal, 2))
+   # hsurf_itf_j = numpy.zeros((param.nb_elements_horizontal+2, 2, param.nbsolpts*param.nb_elements_horizontal))
 
-      # --- Direction x2
-      dzdx2[epais,:] = mtrx.diff_solpt @ hsurf[epais,:] + mtrx.correction @ hsurf_itf_j[elem+offset,:,:]
+   hsurf_itf_i_new = hs0 * (1. - r_itf_i_new / rr)
+   hsurf_itf_j_new = hs0 * (1. - r_itf_j_new / rr)
 
-   h = h_star - hsurf
+   hsurf_itf_i_new[geom.west_edge] = 0.0
+   hsurf_itf_i_new[geom.east_edge] = 0.0
+   hsurf_itf_j_new[geom.south_edge] = 0.0
+   hsurf_itf_j_new[geom.north_edge] = 0.0
 
-   return u1, u2, h, hsurf, dzdx1, dzdx2, hsurf_itf_i, hsurf_itf_j
+   # for itf in range(nb_interfaces_horiz):
+   #    elem_L = itf
+   #    elem_R = itf + 1
+
+   #    hsurf_itf_i[elem_L, :, 1] = hs0 * (1. - r_itf_i[itf, :] / rr)
+   #    hsurf_itf_i[elem_R, :, 0] = hsurf_itf_i[elem_L, :, 1]
+
+   #    hsurf_itf_j[elem_L, 1, :] = hs0 * (1. - r_itf_j[itf, :] / rr)
+   #    hsurf_itf_j[elem_R, 0, :] = hsurf_itf_j[elem_L, 1, :]
+
+   dzdx1_new = hsurf_new @ mtrx.derivative_x + geom.middle_itf_i(hsurf_itf_i_new) @ mtrx.correction_WE
+   dzdx2_new = hsurf_new @ mtrx.derivative_y + geom.middle_itf_j(hsurf_itf_j_new) @ mtrx.correction_SN
+
+   # ni, nj = geom.lon.shape
+   # dzdx1 = numpy.zeros((ni, nj))
+   # dzdx2 = numpy.zeros((ni, nj))
+
+   # offset = 1 # Offset due to the halo
+   # for elem in range(param.nb_elements_horizontal):
+   #    epais = elem * param.nbsolpts + numpy.arange(param.nbsolpts)
+
+   #    # --- Direction x1
+   #    dzdx1[:, epais] = hsurf[:,epais] @ mtrx.diff_solpt_tr + hsurf_itf_i[elem+offset,:,:] @ mtrx.correction_tr
+
+   #    # --- Direction x2
+   #    dzdx2[epais,:] = mtrx.diff_solpt @ hsurf[epais,:] + mtrx.correction @ hsurf_itf_j[elem+offset,:,:]
+
+   # h = geom.to_single_block(h_star) - hsurf
+   h_new = h_star - hsurf_new
+
+   # return u1, u2, h, hsurf, dzdx1, dzdx2, hsurf_itf_i, hsurf_itf_j
+   return u1, u2, h_new, hsurf_new, dzdx1_new, dzdx2_new, hsurf_itf_i_new, hsurf_itf_j_new
 
 
 

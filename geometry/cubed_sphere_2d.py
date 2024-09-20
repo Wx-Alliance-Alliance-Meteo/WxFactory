@@ -1,5 +1,6 @@
 import math
 import numpy
+from   numpy.typing import NDArray
 
 from mpi4py import MPI
 
@@ -11,8 +12,8 @@ from common.process_topology import ProcessTopology
 from common.configuration    import Configuration
 
 class CubedSphere2D(Geometry):
-   def __init__(self, nb_elements_horizontal:int , nb_elements_vertical: int, nbsolpts: int, 
-                λ0: float, ϕ0: float, α0: float, ztop: float, ptopo: ProcessTopology, param: Configuration):
+   def __init__(self, nb_elements_horizontal:int , nbsolpts: int,
+                λ0: float, ϕ0: float, α0: float, ptopo: ProcessTopology, param: Configuration):
       '''Initialize the cubed sphere geometry, for an earthlike sphere with no topography.
 
       This function initializes the basic CubedSphere geometry object, which provides the parameters necessary to define
@@ -44,8 +45,6 @@ class CubedSphere2D(Geometry):
       -----------
       nb_elements_horizontal: int
          Number of elements in the (x1,x2) directions, per panel
-      nb_elements_vertical: int
-         Number of elements in the vertical, between 0 and ztop
       nbsolpts: int
          Number of nodal points in each of the (x1,x2,x3) dimensions inside the element
       λ0: float
@@ -69,66 +68,46 @@ class CubedSphere2D(Geometry):
          Wraps parameters from the configuration pole that are not otherwise specified in this
          constructor.
       '''
+      rank = MPI.COMM_WORLD.rank
+
       super().__init__(nbsolpts, 'cubed_sphere', param.array_module)
       xp = self.array_module
 
       ## Panel / parallel decomposition properties
       self.ptopo = ptopo
 
-      # Full extent of the cubed-sphere panel
+      # Full extent of the cubed-sphere panel, in radians
       panel_domain_x1 = (-math.pi/4, math.pi/4)
       panel_domain_x2 = (-math.pi/4, math.pi/4)
 
-      # Find the extent covered by this particular processor
-      Δx1_PE = (panel_domain_x1[1] - panel_domain_x1[0]) / ptopo.nb_lines_per_panel
-      Δx2_PE = (panel_domain_x2[1] - panel_domain_x2[0]) / ptopo.nb_lines_per_panel
+      # Find the extent covered by this particular processor (a tile), in radians
+      delta_x1_panel = (panel_domain_x1[1] - panel_domain_x1[0]) / ptopo.nb_lines_per_panel
+      delta_x2_panel = (panel_domain_x2[1] - panel_domain_x2[0]) / ptopo.nb_lines_per_panel
 
       # Find the lower and upper bounds of x1, x2 for this processor
-      PE_start_x1 = -math.pi/4 + ptopo.my_col * Δx1_PE
-      PE_end_x1 = PE_start_x1 + Δx1_PE
+      start_x1_tile = -math.pi/4 + ptopo.my_col * delta_x1_panel
+      end_x1_tile = start_x1_tile + delta_x1_panel
 
-      PE_start_x2 = -math.pi/4 + ptopo.my_row * Δx2_PE
-      PE_end_x2 = PE_start_x2 + Δx2_PE
+      start_x2_tile = -math.pi/4 + ptopo.my_row * delta_x2_panel
+      end_x2_tile = start_x2_tile + delta_x2_panel
 
-      PE_start_x3 = 0.
-      PE_end_x3 = ztop
-
-      self.ztop = ztop
-
-      # Define the computational η coordinate
-      PE_start_eta = 0.
-      PE_end_eta = 1.
-
-      domain_x1 = (PE_start_x1, PE_end_x1)
-      domain_x2 = (PE_start_x2, PE_end_x2)
-      domain_x3 = (PE_start_x3, PE_end_x3)
-      domain_eta = (PE_start_eta, PE_end_eta)
-
-      nb_elements_x1 = nb_elements_horizontal
-      nb_elements_x2 = nb_elements_horizontal
-      nb_elements_x3 = nb_elements_vertical
+      domain_x1 = (start_x1_tile, end_x1_tile) # in radians
+      domain_x2 = (start_x2_tile, end_x2_tile) # in radians
 
       # Assign the number of elements and solution points to the CubedSphere
       # object, in order to generate compatible grids and loops elsewhere
+      nb_elements_x1 = nb_elements_horizontal
+      nb_elements_x2 = nb_elements_horizontal
       self.nb_elements_x1 = nb_elements_x1
       self.nb_elements_x2 = nb_elements_x2
-      self.nb_elements_x3 = nb_elements_x3
 
       ## Element sizes
 
       # Equiangular coordinates
-      Δx1 = (domain_x1[1] - domain_x1[0]) / nb_elements_x1
-      Δx2 = (domain_x2[1] - domain_x2[0]) / nb_elements_x2
-      Δx3 = (domain_x3[1] - domain_x3[0]) / nb_elements_x3
-      Δeta = (domain_eta[1] - domain_eta[0]) / nb_elements_x3
-
-      # Reset Δx3 to a nonzero value if ztop=0, as for shallow water
-      if (Δx3 == 0): Δx3 = 1
-
-      self.Δx1 = Δx1
-      self.Δx2 = Δx2
-      self.Δx3 = Δx3
-      self.Δeta = Δeta
+      self.delta_x1 = (domain_x1[1] - domain_x1[0]) / nb_elements_x1 # west-east grid spacing in radians
+      self.delta_x2 = (domain_x2[1] - domain_x2[0]) / nb_elements_x2 # south-north grid spacing in radians
+      delta_x1 = self.delta_x1
+      delta_x2 = self.delta_x2
 
       # Helper variables to normalize the intra-element computational coordinate
       minComp = min(self.extension)
@@ -143,10 +122,7 @@ class CubedSphere2D(Geometry):
 
       ni = nb_elements_x1*nbsolpts
       nj = nb_elements_x2*nbsolpts
-      if (ztop > 0):
-         nk = nb_elements_x3*nbsolpts
-      else:
-         nk = 1
+      nk = 1
 
       # Save array size properties
       # NOTE: ni is the number of "columns" and nj is the number of "rows" in a 2D matrix storing solution points
@@ -156,16 +132,11 @@ class CubedSphere2D(Geometry):
       self.nk = nk
 
       # Define the shape of the coordinate grid on this process
-      grid_shape_3d = (nk, nj, ni)
-      self.grid_shape_3d = grid_shape_3d
       self.grid_shape_2d = (nj, ni)
+      self.block_shape = (nj, ni)
       # And the shape of arrays corresponding to each of the three interfaces
-      self.itf_i_shape_3d = (nk, nj, nb_elements_x1+1)
       self.itf_i_shape_2d = (nj, nb_elements_x1+1)
-      self.itf_j_shape_3d = (nk, nb_elements_x2+1, ni)  
-      self.itf_j_shape_2d = (nb_elements_x2+1, ni)  
-      self.itf_k_shape_3d = (nb_elements_x3+1, nj, ni)  
-      self.itf_k_shape_2d = (nj, ni)  
+      self.itf_j_shape_2d = (nb_elements_x2+1, ni)
 
       # The shapes. For a single field (e.g. coordinates of solution points, in the current case), we
       # have an array of elements, where each element has a total nbsolpts**2 (in 2D) or nbsolpts**3 (in 3D) solution
@@ -175,146 +146,44 @@ class CubedSphere2D(Geometry):
       #   elements, each with 2*nbsolpts interface points (nbsolpts for each side of the element along that direction)
       # - In 3D, horizontally, we also have two arrays (west-east, south-north), but the shape is to be determined
       # - In 3D vertically, we only have one array, with shape similar to horizontally, TBD
-      self.grid_shape_2d_new = (nb_elements_x1 * nb_elements_x2, nbsolpts * nbsolpts)
-      self.grid_shape_3d_new = (nb_elements_x1 * nb_elements_x2 * nb_elements_x3, nbsolpts * nbsolpts * nbsolpts)
-      self.itf_shape_2d = (nb_elements_x1 * nb_elements_x2, nbsolpts * 2)
+      self.grid_shape = (nb_elements_x1 * nb_elements_x2, nbsolpts * nbsolpts)
+      # self.grid_shape_3d_new = (nb_elements_x1 * nb_elements_x2 * nb_elements_x3, nbsolpts * nbsolpts * nbsolpts)
+      self.itf_shape = (nb_elements_x1 * (nb_elements_x2 + 2), nbsolpts * 2)   # Same for i and j interfaces, because same size
 
-      # Assign a token zbot, potentially to be overridden later with supplied topography
-      self.zbot = xp.zeros(self.grid_shape_2d)
+      self.west_edge = numpy.s_[..., ::nb_elements_x1 + 2, :nbsolpts]    # West boundary of the western halo elements
+      self.east_edge = numpy.s_[..., (nb_elements_x1 + 1)::nb_elements_x1 + 2, nbsolpts:] # East boundary of the eastern halo elements
+      self.south_edge = numpy.s_[..., :nb_elements_x1, :nbsolpts] # South boundary of the southern halo elements
+      self.north_edge = numpy.s_[..., -nb_elements_x1:, nbsolpts:] # North boundary of the northern halo elements
 
       ## Coordinate vectors for the numeric / angular coordinate system
 
-      # Define the base coordinate.  x1 and x2 are fundamentally 1D arrays,
-      # while x3 and eta are 3D arrays in support of coordinate mapping
+      # --- 1D element-counting arrays, for coordinate assignment
 
-      x1 = xp.empty(ni)
-      x2 = xp.empty(nj)
-      x3 = xp.empty(self.grid_shape_3d)
-      eta = xp.empty(self.grid_shape_3d)
+      # Element interior
+      offsets_x1 = domain_x1[0] + delta_x1 * xp.arange(nb_elements_x1)
+      ref_solpts_x1 = delta_x1 / Δcomp * (-minComp + self.solutionPoints)
+      self.x1 = numpy.repeat(offsets_x1, nbsolpts) + numpy.tile(ref_solpts_x1, nb_elements_x1)
 
-      x3_new  = xp.empty(self.grid_shape_3d_new)
-      eta_new = xp.empty(self.grid_shape_3d_new)
+      offsets_x2 = domain_x2[0] + delta_x2 * xp.arange(nb_elements_x2)
+      ref_solpts_x2 = delta_x2 / Δcomp * (-minComp + self.solutionPoints)
+      self.x2 = numpy.repeat(offsets_x2, nbsolpts) + numpy.tile(ref_solpts_x2, nb_elements_x2)
 
-      # 1D element-counting arrays, for coordinate assignment
-      elements_x1 = xp.arange(nb_elements_x1)
-      elements_x2 = xp.arange(nb_elements_x2)
-      elements_x3 = xp.arange(nb_elements_x3)
+      # Element interfaces
+      self.x1_itf_i = numpy.linspace(domain_x1[0], domain_x1[1], nb_elements_x1 + 1) # At every boundary between elements
+      self.x2_itf_i = self.x2.copy() # Copy over x2, without change because of tensor product structure
 
-      # Assign the coordinates, using numpy's broadcasting
-      # First, reshape the coordinate to segregate the element interior into its own dimension
-      x1.shape = (nb_elements_x1,nbsolpts)
-      # Then broadcast the coordinate into the variable, using the structure:
-      # <minimum> + <delta_element>*<element number> + <delta_inner>*<solutionPoints>
-      x1[:] = domain_x1[0] + Δx1*elements_x1[:,numpy.newaxis] + \
-                  Δx1/Δcomp*(-minComp + self.solutionPoints[numpy.newaxis,:])
-      # Finally, reshape back to the unified view   
-      x1.shape = (ni,)
+      self.x1_itf_j = self.x1.copy()
+      self.x2_itf_j = numpy.linspace(domain_x2[0], domain_x2[1], nb_elements_x2 + 1)
 
-      # Repeat for x2, x3, and eta
-      x2.shape = (nb_elements_x2,nbsolpts)
-      x2[:] = domain_x2[0] + Δx2*elements_x2[:,numpy.newaxis] + \
-                  Δx2/Δcomp*(-minComp + self.solutionPoints[numpy.newaxis,:])
-      x2.shape = (nj,)
+      ## Construct the combined coordinate vector for the numeric/equiangular coordinate (x1, x2)
+      self.block_radians_x1, self.block_radians_x2 = numpy.meshgrid(self.x1, self.x2)
+      i_x1, i_x2 = numpy.meshgrid(self.x1_itf_i, self.x2_itf_i, indexing='ij')
+      j_x1, j_x2 = numpy.meshgrid(self.x1_itf_j, self.x2_itf_j)
 
-      if (ztop > 0): # Note that x3 and eta are 3D arrays
-         x3.shape = (nb_elements_x3,nbsolpts,nj,ni)
-         x3[:] = domain_x3[0] + Δx3*elements_x3[:,numpy.newaxis,numpy.newaxis,numpy.newaxis] + \
-                     Δx3/Δcomp*(-minComp + self.solutionPoints[numpy.newaxis,:,numpy.newaxis,numpy.newaxis])
-         x3.shape = self.grid_shape_3d
+      self.radians = self._to_new(numpy.array([self.block_radians_x1, self.block_radians_x2]))
+      self.coordVec_itf_i = self._to_new_itf_i(numpy.array([i_x1, i_x2]))
+      self.coordVec_itf_j = self._to_new_itf_j(numpy.array([j_x1, j_x2]))
 
-         eta.shape = (nb_elements_x3,nbsolpts,nj,ni)
-         eta[:] = domain_eta[0] + Δeta*elements_x3[:,numpy.newaxis,numpy.newaxis,numpy.newaxis] + \
-                     Δeta/Δcomp*(-minComp + self.solutionPoints[numpy.newaxis,:,numpy.newaxis,numpy.newaxis])
-         eta.shape = self.grid_shape_3d
-      else:
-         x3[:] = 0
-         eta[:] = 0
-         x3_new[:] = 0.0
-         eta_new[:] = 0.0
-
-
-      # Repeat for the interface values
-      x1_itf_i = xp.empty(nb_elements_x1 + 1)  # 1D array
-      x2_itf_i = xp.empty(nj)  # 1D array
-      x3_itf_i = xp.empty(self.itf_i_shape_3d)  # 3D array
-      eta_itf_i = xp.empty(self.itf_i_shape_3d) # 3D array
-
-      x1_itf_i[:-1] = domain_x1[0] + Δx1*elements_x1[:] # Left edges
-      x1_itf_i[-1] = domain_x1[1] # Right edge
-      x2_itf_i[:] = x2[:] # Copy over x2, without change because of tensor product structure
-      x3_itf_i[:,:,:] = x3[:,:,0:1] # Same for x3
-      eta_itf_i[:,:,:] = eta[:,:,0:1]
-
-      x1_itf_j = xp.empty(ni) # n.b. 1D array
-      x2_itf_j = xp.empty(nb_elements_x2 + 1) # Also 1D array
-      x3_itf_j = xp.empty(self.itf_j_shape_3d) # 3D array
-      eta_itf_j = xp.empty(self.itf_j_shape_3d) # 3D array
-
-      x1_itf_j[:] = x1[:]
-      x2_itf_j[:-1] = domain_x2[0] + Δx2*elements_x2[:] # South edges
-      x2_itf_j[-1] = domain_x2[1] # North edge
-      x3_itf_j[:,:,:] = x3[:,0:1,:]
-      eta_itf_j[:,:,:] = eta[:,0:1,:]
-
-      x1_itf_k = xp.empty(ni)
-      x2_itf_k = xp.empty(nj)
-      x3_itf_k = xp.empty(self.itf_k_shape_3d)
-      eta_itf_k = xp.empty(self.itf_k_shape_3d)
-
-      x1_itf_k[:] = x1[:]
-      x2_itf_k[:] = x2[:]
-      x3_itf_k[:-1,:,:] = domain_x3[0] + Δx3*elements_x3[:,numpy.newaxis,numpy.newaxis] # Bottom edges
-      x3_itf_k[-1,:,:] = domain_x3[1]
-      eta_itf_k[:-1,:,:] = domain_eta[0] + Δeta*elements_x3[:,numpy.newaxis,numpy.newaxis]
-      eta_itf_k[-1,:,:] = domain_eta[1]
-
-      self.x1 = x1
-      self.x2 = x2
-      self.eta = eta
-      self.x3 = x3
-
-      self.x1_itf_i = x1_itf_i
-      self.x2_itf_i = x2_itf_i
-      self.x3_itf_i = x3_itf_i
-      self.eta_itf_i = eta_itf_i
-
-      self.x1_itf_j = x1_itf_j
-      self.x2_itf_j = x2_itf_j
-      self.x3_itf_j = x3_itf_j
-      self.eta_itf_j = eta_itf_j
-
-      self.x1_itf_k = x1_itf_k
-      self.x2_itf_k = x2_itf_k
-      self.x3_itf_k = x3_itf_k
-      self.eta_itf_k = eta_itf_k
-
-      ## Construct the combined coordinate vector for the numeric/equiangular coordinate (x1, x2, η)
-      #TODO Why does the shape have an additional dimension of size 1?
-      coordVec_num = numpy.stack((numpy.broadcast_to(x1[None, None, :], eta.shape),
-                                  numpy.broadcast_to(x2[None, :, None], eta.shape),
-                                  eta))
-
-      if MPI.COMM_WORLD.rank == 0:
-         print(f'eta itf i shape = {eta_itf_i.shape}')
-
-      coordVec_num_itf_i = numpy.stack((numpy.broadcast_to(x1_itf_i[None, None, :], eta_itf_i.shape),
-                                        numpy.broadcast_to(x2_itf_i[None, :, None], eta_itf_i.shape),
-                                        eta_itf_i))
-      coordVec_num_itf_j = numpy.stack((numpy.broadcast_to(x1_itf_j[None, None, :], eta_itf_j.shape),
-                                        numpy.broadcast_to(x2_itf_j[None, :, None], eta_itf_j.shape),
-                                        eta_itf_j))
-      coordVec_num_itf_k = numpy.stack((numpy.broadcast_to(x1_itf_k[None, None, :], eta_itf_k.shape),
-                                        numpy.broadcast_to(x2_itf_k[None, :, None], eta_itf_k.shape),
-                                        eta_itf_k))
-
-      self.coordVec_num = coordVec_num
-      self.coordVec_num_itf_i = coordVec_num_itf_i
-      self.coordVec_num_itf_j = coordVec_num_itf_j
-      self.coordVec_num_itf_k = coordVec_num_itf_k
-
-      self.coordVec_num_new = self._to_new(coordVec_num)
-
-      print(f'base shape {coordVec_num.shape}, itf i shape {coordVec_num_itf_i.shape}, itf j shape = {coordVec_num_itf_j.shape}')
 
       # Compute the parameters of the rotated grid
 
@@ -420,73 +289,37 @@ class CubedSphere2D(Geometry):
 
       self._build_physical_coordinates()
 
-   def apply_topography(self, zbot, zbot_itf_i, zbot_itf_j):
-      # Apply a topography field, given by heights (above the 0 reference sphere) specified at
-      # interior points, i-boundaries, and j-boundaries.  This function applies a linear mapping,
-      # where η=0 corresponds to the given surface and η=1 corresponds to the top.
-
-      # First, preserve the topography
-      self.zbot = zbot.copy()
-      self.zbot_itf_i = zbot_itf_i.copy()
-      self.zbot_itf_j = zbot_itf_j.copy()
-
-      ztop = self.ztop
-
-      # To apply the topography, we need to redefine self.x3 and its interfaced versions.
-
-      self.x3[:,:,:] = zbot[numpy.newaxis,:,:] + (ztop - zbot[numpy.newaxis,:,:])*self.eta # shape k, j, i
-      self.x3_itf_i[:,:,:] = zbot_itf_i[numpy.newaxis,:,:] + (ztop - zbot_itf_i[numpy.newaxis,:,:])*self.eta_itf_i # shape k, j, itf_i
-      self.x3_itf_j[:,:,:] = zbot_itf_j[numpy.newaxis,:,:] + (ztop - zbot_itf_j[numpy.newaxis,:,:])*self.eta_itf_j # shape k, itf_j, i
-      self.x3_itf_k[:,:,:] = zbot[numpy.newaxis,:,:] + (ztop - zbot[numpy.newaxis,:,:])*self.eta_itf_k # shape itf_k, j, i
-
-      # Now, rebuild the physical coordinates to re-generate X/Y/Z and the Cartesian coordinates
-      self._build_physical_coordinates()
-
    def _build_physical_coordinates(self):
       """
       Build the physical coordinate arrays and vectors (gnomonic plane, lat/lon, Cartesian)
       based on the pre-defined equiangular coordinates (x1, x2) and height (x3)
       """
 
+      rank = MPI.COMM_WORLD.rank
+
       # Retrieve the numeric values for use here
       x1 = self.x1
       x2 = self.x2
-      x3 = self.x3
-      eta = self.eta
 
       x1_itf_i = self.x1_itf_i
       x2_itf_i = self.x2_itf_i
-      x3_itf_i = self.x3_itf_i
 
       x1_itf_j = self.x1_itf_j
       x2_itf_j = self.x2_itf_j
-      x3_itf_j = self.x3_itf_j
 
-      x3_itf_k = self.x3_itf_k
-
-      coordVec_num = self.coordVec_num
-      coordVec_num_itf_i = self.coordVec_num_itf_i
-      coordVec_num_itf_j = self.coordVec_num_itf_j
-      coordVec_num_itf_k = self.coordVec_num_itf_k
 
       ni = self.ni
       nj = self.nj
-      nk = self.nk
 
       nb_elements_x1 = self.nb_elements_x1
       nb_elements_x2 = self.nb_elements_x2
-      nb_elements_x3 = self.nb_elements_x3
 
       lon_p = self.lon_p
       lat_p = self.lat_p
       angle_p = self.angle_p
 
-      earth_radius = self.earth_radius
-      rotation_speed = self.rotation_speed
-
       ## Gnomonic (projected plane) coordinate values
       # X and Y (and their interface variants) are 2D arrays on the ij plane;
-      # height is still necessarily a 3D array.
       # x comes before y in the indices -> Y is the "fast-varying" index
 
       Y, X = numpy.meshgrid(numpy.tan(x2),numpy.tan(x1),indexing='ij')
@@ -496,12 +329,6 @@ class CubedSphere2D(Geometry):
 
       self.boundary_sn = X[0, :] # Coordinates of the south and north boundaries along the X (west-east) axis
       self.boundary_we = Y[:, 0] # Coordinates of the west and east boundaries along the Y (south-north) axis
-
-      if MPI.COMM_WORLD.rank == 0:
-         print(f'old X = \n{X}')
-         print(f'new X = \n{X_new}')
-
-      height = x3
 
       # Because of conventions used in the parallel exchanges, both i and j interface variables
       # are expected to be of size (#interface, #pts).  Compared to the usual (j,i) ordering,
@@ -517,12 +344,6 @@ class CubedSphere2D(Geometry):
       X_itf_j_new = self._to_new_itf_j(X_itf_j)
       Y_itf_j_new = self._to_new_itf_j(Y_itf_j)
 
-      if MPI.COMM_WORLD.rank == 0:
-         print(f'x itf i (shape {X_itf_i.shape})= \n{X_itf_i}')
-
-      delta2 = 1.0 + X**2 + Y**2
-      delta  = numpy.sqrt(delta2)
-
       delta2_new = 1.0 + X_new**2 + Y_new**2
       delta_new  = numpy.sqrt(delta2_new)
 
@@ -536,9 +357,6 @@ class CubedSphere2D(Geometry):
       self.Y = Y
       self.X_new = X_new
       self.Y_new = Y_new
-      self.height = height
-      self.delta2 = delta2
-      self.delta = delta
       self.delta2_new = delta2_new
       self.delta_new = delta_new
       self.delta2_itf_i_new = delta2_itf_i_new
@@ -549,145 +367,121 @@ class CubedSphere2D(Geometry):
       ## Other coordinate vectors:
       # * gnonomic coordinates (X, Y, Z)
 
-      def to_gnomonic(coord_num, z):
+      def to_gnomonic(coord_num, z=None):
          gnom = numpy.empty_like(coord_num)
-         gnom[0] = numpy.tan(coord_num[0])
-         gnom[1] = numpy.tan(coord_num[1])
-         gnom[2] = z
+         gnom[0, ...] = numpy.tan(coord_num[0])
+         gnom[1, ...] = numpy.tan(coord_num[1])
+         if z is not None: gnom[2, ...] = z
 
          return gnom
 
-      coordVec_gnom = numpy.empty_like(coordVec_num) # (X,Y,Z)
-      coordVec_gnom_itf_i = numpy.empty_like(coordVec_num_itf_i)
-      coordVec_gnom_itf_j = numpy.empty_like(coordVec_num_itf_j)
-      coordVec_gnom_itf_k = numpy.empty_like(coordVec_num_itf_k)
-
-      for (coordgnom, coordnum, z) in zip([coordVec_gnom, coordVec_gnom_itf_i, coordVec_gnom_itf_j, coordVec_gnom_itf_k],
-                                          [coordVec_num, coordVec_num_itf_i, coordVec_num_itf_j, coordVec_num_itf_k],
-                                          [x3, x3_itf_i, x3_itf_j, x3_itf_k]):
-         coordgnom[0,:,:,:] = numpy.tan(coordnum[0,:,:,:])
-         coordgnom[1,:,:,:] = numpy.tan(coordnum[1,:,:,:])
-         coordgnom[2,:,:,:] = z
-
-      # coordVec_gnom_new       = to_gnomonic(self.coordVec_num_new,       x3)
-      # coordVec_gnom_itf_i_new = to_gnomonic(self.coordVec_num_itf_i_new, x3_itf_i)
-      # coordVec_gnom_itf_j_new = to_gnomonic(self.coordVec_num_itf_j_new, x3_itf_j)
-      # coordVec_gnom_itf_k_new = to_gnomonic(self.coordVec_num_itf_k_new, x3_itf_k)
+      self.coordVec_gnom_new = to_gnomonic(self.radians)
+      self.gnom_itf_i_new    = to_gnomonic(self.coordVec_itf_i)
+      self.gnom_itf_j_new    = to_gnomonic(self.coordVec_itf_j)
 
       # * Cartesian coordinates on the deep sphere (Xc, Yc, Zc)
 
-      coordVec_cart = numpy.empty_like(coordVec_num) # (Xc,Yc,Zc)
-      coordVec_cart_itf_i = numpy.empty_like(coordVec_num_itf_i)
-      coordVec_cart_itf_j = numpy.empty_like(coordVec_num_itf_j)
-      coordVec_cart_itf_k = numpy.empty_like(coordVec_num_itf_k)
+      def to_cartesian(gnom):
+         ''' Built the Cartesian coordinates, by inverting the gnomonic projection.  At the north pole without grid
+         rotation, the formulas are:
+         Xc = (r+Z) * X / sqrt(1+X^2+Y^2)
+         Yc = (r+Z) * Y / sqrt(1+X^2+Y^2)
+         Zc = (r+Z) / sqrt(1+X^2+Y^2)
+         '''
+         base_shape = gnom.shape[1:]
+         cart = numpy.empty((3,) + base_shape, dtype=gnom.dtype)
+         delt = numpy.sqrt(1.0 + gnom[0, ...]**2 + gnom[1, ...]**2)
+         r = self.earth_radius + (0. if gnom.shape[0] < 3 else gnom[2, ...])
+         cart[0,:] = r / delt * ( math.cos(lon_p) * math.cos(lat_p) \
+               + gnom[0, ...] * (math.cos(lon_p) * math.sin(lat_p) * math.sin(angle_p) - \
+                                 math.sin(lon_p) * math.cos(angle_p)) \
+               - gnom[1, ...] * (math.cos(lon_p) * math.sin(lat_p) * math.cos(angle_p) + \
+                                 math.sin(lon_p) * math.sin(angle_p)) )
 
-      # Built the Cartesian coordinates, by inverting the gnomonic projection.  At the north pole without grid
-      # rotation, the formulas are:
-      # Xc = (r+Z)*X/sqrt(1+X^2+Y^2)
-      # Yc = (r+Z)*Y/sqrt(1+X^2+Y^2)
-      # Zc = (r+Z)/sqrt(1+X^2+Y^2)
-      for (coord_cart, coord_gnom) in zip([coordVec_cart, coordVec_cart_itf_i, coordVec_cart_itf_j, coordVec_cart_itf_k],
-                                             [coordVec_gnom, coordVec_gnom_itf_i, coordVec_gnom_itf_j, coordVec_gnom_itf_k]):
-         delt = numpy.sqrt(1.0 + coord_gnom[0,:,:,:]**2 + coord_gnom[1,:,:,:]**2)
-         coord_cart[0,:] = (self.earth_radius + coord_gnom[2,:]) / delt * ( math.cos(lon_p) * math.cos(lat_p) \
-               + coord_gnom[0,:] * ( math.cos(lon_p) * math.sin(lat_p) * math.sin(angle_p) - math.sin(lon_p) * math.cos(angle_p) ) \
-               - coord_gnom[1,:] * ( math.cos(lon_p) * math.sin(lat_p) * math.cos(angle_p) + math.sin(lon_p) * math.sin(angle_p) ) )
+         cart[1,:] = r / delt * ( math.sin(lon_p) * math.cos(lat_p) \
+               + gnom[0, ...] * (math.sin(lon_p) * math.sin(lat_p) * math.sin(angle_p) + \
+                                 math.cos(lon_p) * math.cos(angle_p)) \
+               - gnom[1, ...] * (math.sin(lon_p) * math.sin(lat_p) * math.cos(angle_p) - \
+                                 math.cos(lon_p) * math.sin(angle_p)) )
 
-         coord_cart[1,:] = (self.earth_radius + coord_gnom[2,:]) / delt * ( math.sin(lon_p) * math.cos(lat_p) \
-               + coord_gnom[0,:] * ( math.sin(lon_p) * math.sin(lat_p) * math.sin(angle_p) + math.cos(lon_p) * math.cos(angle_p) ) \
-               - coord_gnom[1,:] * ( math.sin(lon_p) * math.sin(lat_p) * math.cos(angle_p) - math.cos(lon_p) * math.sin(angle_p) ) )
+         cart[2,:] = r / delt * ( math.sin(lat_p) \
+               - gnom[0, ...] * math.cos(lat_p) * math.sin(angle_p) \
+               + gnom[1, ...] * math.cos(lat_p) * math.cos(angle_p) )
 
-         coord_cart[2,:] = (self.earth_radius + coord_gnom[2,:]) / delt * ( math.sin(lat_p) \
-               - coord_gnom[0,:] * math.cos(lat_p) * math.sin(angle_p) \
-               + coord_gnom[1,:] * math.cos(lat_p) * math.cos(angle_p) )
 
-      coordVec_latlon = numpy.empty_like(coordVec_num) # (lat, lon, Z)
-      coordVec_latlon_itf_i = numpy.empty_like(coordVec_num_itf_i)
-      coordVec_latlon_itf_j = numpy.empty_like(coordVec_num_itf_j)
-      coordVec_latlon_itf_k = numpy.empty_like(coordVec_num_itf_k)
+         return cart
+
+
+      self.cart_new = to_cartesian(self.coordVec_gnom_new)
+      self.cart_itf_i = to_cartesian(self.gnom_itf_i_new)
+      self.cart_itf_j = to_cartesian(self.gnom_itf_j_new)
+
 
       # * Polar coordinates (lat, lon, Z)
+      def to_polar(cart, z=None):
+         if z is not None:
+            polar = numpy.empty_like(cart)
+            polar[2, ...] = z
+         else:
+            base_shape = cart.shape[1:]
+            polar = numpy.empty((2,) + base_shape, dtype=cart.dtype)
 
-      for (latlon, cart, gnom) in zip([coordVec_latlon, coordVec_latlon_itf_i, coordVec_latlon_itf_j, coordVec_latlon_itf_k],
-                                      [coordVec_cart, coordVec_cart_itf_i, coordVec_cart_itf_j, coordVec_cart_itf_k],
-                                      [coordVec_gnom, coordVec_gnom_itf_i, coordVec_gnom_itf_j, coordVec_gnom_itf_k]):
-         [latlon[0,:], latlon[1,:], _] = cart2sph(cart[0,:],cart[1,:],cart[2,:])
-         latlon[2,:] = gnom[2,:]
+         polar[0, ...], polar[1, ...], _ = cart2sph(cart[0, ...], cart[1, ...], cart[2, ...])
 
-      self.coordVec_gnom = coordVec_gnom
-      self.coordVec_gnom_itf_i = coordVec_gnom_itf_i
-      self.coordVec_gnom_itf_j = coordVec_gnom_itf_j
-      self.coordVec_gnom_itf_k = coordVec_gnom_itf_k
+         return polar
 
-      self.coordVec_cart = coordVec_cart
-      self.coordVec_cart_itf_i = coordVec_cart_itf_i
-      self.coordVec_cart_itf_j = coordVec_cart_itf_j
-      self.coordVec_cart_itf_k = coordVec_cart_itf_k
 
-      self.coordVec_latlon = coordVec_latlon
-      self.coordVec_latlon_itf_i = coordVec_latlon_itf_i
-      self.coordVec_latlon_itf_j = coordVec_latlon_itf_j
-      self.coordVec_latlon_itf_k = coordVec_latlon_itf_k
+      self.polar_new = to_polar(self.cart_new)
+      self.polar_itf_i = to_polar(self.cart_itf_i)
+      self.polar_itf_j = to_polar(self.cart_itf_j)
 
-      # cartX = coordVec_cart[0,:]
-      # cartY = coordVec_cart[1,:]
-      # cartZ = coordVec_cart[2,:]
+      self.polar_itf_i[self.west_edge]  = 0.0
+      self.polar_itf_i[self.east_edge]  = 0.0
+      self.polar_itf_j[self.south_edge] = 0.0
+      self.polar_itf_j[self.north_edge] = 0.0
 
-      lon = coordVec_latlon[0,0,:,:]
-      lat = coordVec_latlon[1,0,:,:]
+      self.lon_new = self.polar_new[0, ...]
+      self.lat_new = self.polar_new[1, ...]
+      self.coslon_new = numpy.cos(self.lon_new)
+      self.coslat_new = numpy.cos(self.lat_new)
+      self.sinlon_new = numpy.sin(self.lon_new)
+      self.sinlat_new = numpy.sin(self.lat_new)
 
-      # The _itf_i variables are transposed here compared to the coordVec
-      # order to retain compatibility with the shallow water test cases.
-      # Those cases assume that the 2D interface variables are written
-      # with [interface#,interior#] indexing, and for the _itf_i variables
-      # this is effective the opposite of the geometric [k,j,i] order.
+      self.block_lon = self.to_single_block(self.lon_new)
+      self.block_lat = self.to_single_block(self.lat_new)
 
-      lon_itf_i = coordVec_latlon_itf_i[0,0,:,:].T
-      lon_itf_j = coordVec_latlon_itf_j[0,0,:,:]
-      lon_itf_k = coordVec_latlon_itf_k[0,0,:,:]
-
-      lat_itf_i = coordVec_latlon_itf_i[1,0,:,:].T
-      lat_itf_j = coordVec_latlon_itf_j[1,0,:,:]
-      lat_itf_k = coordVec_latlon_itf_k[1,0,:,:]
-
-      # Map to the interval [0, 2 pi]
-      #lon_itf_j[lon_itf_j<0.0] = lon_itf_j[lon_itf_j<0.0] + (2.0 * math.pi)
-
-      self.lon = lon
-      self.lat = lat
       self.X_itf_i_new = X_itf_i_new
       self.Y_itf_i_new = Y_itf_i_new
       self.X_itf_j_new = X_itf_j_new
       self.Y_itf_j_new = Y_itf_j_new
-      self.lon_itf_i = lon_itf_i
-      self.lat_itf_i = lat_itf_i
-      self.lon_itf_j = lon_itf_j
-      self.lat_itf_j = lat_itf_j
 
-      self.coslon = numpy.cos(lon)
-      self.sinlon = numpy.sin(lon)
-      self.coslat = numpy.cos(lat)
-      self.sinlat = numpy.sin(lat)
+      self.lon_itf_i_new = self.polar_itf_i[0, ...]
+      self.lat_itf_i_new = self.polar_itf_i[1, ...]
+      self.lon_itf_j_new = self.polar_itf_j[0, ...]
+      self.lat_itf_j_new = self.polar_itf_j[1, ...]
 
-   def _to_new(self, a):
+
+   def _to_new(self, a: NDArray) -> NDArray:
       """Convert input array to new memory layout"""
+
+      if isinstance(a, float): return a
 
       expected_shape =  (self.nb_elements_x2 * self.nbsolpts, self.nb_elements_x1 * self.nbsolpts)
       if a.ndim == 2 and a.shape == expected_shape:
          tmp_shape = (self.nb_elements_x2, self.nbsolpts, self.nb_elements_x1, self.nbsolpts)
-         new_shape = self.grid_shape_2d_new
+         new_shape = self.grid_shape
          return a.reshape(tmp_shape).transpose(0, 2, 1, 3).reshape(new_shape)
 
       elif (a.ndim == 3 and a.shape[1:] == expected_shape) or \
            (a.ndim == 4 and a.shape[2:] == expected_shape and a.shape[1] == 1):
          tmp_shape = (a.shape[0], self.nb_elements_x2, self.nbsolpts, self.nb_elements_x1, self.nbsolpts)
-         new_shape = (a.shape[0],) + self.grid_shape_2d_new
+         new_shape = (a.shape[0],) + self.grid_shape
          return a.reshape(tmp_shape).transpose(0, 1, 3, 2, 4).reshape(new_shape)
 
       raise ValueError(f'Unhandled number of dimensions... Shape is {a.shape}')
 
-   def _to_old(self, a):
-      """Convert input array to old memory layout"""
+   def to_single_block(self, a: NDArray) -> NDArray:
+      """Convert input array from a list of elements to a single block of points layout."""
       expected_shape = (self.nb_elements_x1 * self.nb_elements_x2, self.nbsolpts * self.nbsolpts)
       if a.shape == expected_shape:
          tmp_shape = (self.nb_elements_x2, self.nb_elements_x1, self.nbsolpts, self.nbsolpts)
@@ -697,6 +491,20 @@ class CubedSphere2D(Geometry):
          tmp_shape = (a.shape[0], self.nb_elements_x2, self.nb_elements_x1, self.nbsolpts, self.nbsolpts)
          new_shape = (a.shape[0],) + self.grid_shape_2d
          return a.reshape(tmp_shape).transpose(0, 1, 3, 2, 4).reshape(new_shape)
+      else:
+         raise ValueError(f'Unexpected shape {a.shape} (expected {expected_shape})')
+
+   def middle_itf_i(self, a):
+      '''Extract the non-halo part of the given west-east interface array'''
+      tmp_shape = a.shape[:-2] + (self.nb_elements_x2, self.nb_elements_x1 + 2, self.nbsolpts * 2)
+      new_shape = a.shape[:-2] + (self.nb_elements_x2 * self.nb_elements_x1, self.nbsolpts * 2)
+      return a.reshape(tmp_shape)[..., 1:-1, :].reshape(new_shape)
+
+   def middle_itf_j(self, a):
+      '''Extract the non-halo part of the given south-north interface array'''
+      tmp_shape = a.shape[:-2] + (self.nb_elements_x2 + 2, self.nb_elements_x1, self.nbsolpts * 2)
+      new_shape = a.shape[:-2] + (self.nb_elements_x2 * self.nb_elements_x2, self.nbsolpts * 2)
+      return a.reshape(tmp_shape)[..., 1:-1, :, :].reshape(new_shape)
 
    def _to_new_itf_i(self, a):
       """Convert input array (west and east interface) to new memory layout"""
@@ -704,7 +512,7 @@ class CubedSphere2D(Geometry):
       expected_shape = (self.nb_elements_x1 + 1, self.nb_elements_x2 * self.nbsolpts)
       if a.shape[-2:] == expected_shape:
          plane_shape = (self.nb_elements_x2, self.nb_elements_x1 + 2, self.nbsolpts * 2)
-         new = numpy.zeros(a.shape[:-2] + plane_shape, dtype=a.dtype)
+         new = numpy.empty(a.shape[:-2] + plane_shape, dtype=a.dtype)
          west_itf  = numpy.arange(self.nbsolpts)
          east_itf = numpy.arange(self.nbsolpts, 2*self.nbsolpts)
 
@@ -717,7 +525,11 @@ class CubedSphere2D(Geometry):
          new[..., 1:,  west_itf] = tmp_array
 
          new_shape = a.shape[:-2] + (self.nb_elements_x2 * (self.nb_elements_x1 + 2), self.nbsolpts * 2)
-         return new.reshape(new_shape)
+         new = new.reshape(new_shape)
+         new[self.east_edge] = 0.0
+         new[self.west_edge] = 0.0
+
+         return numpy.squeeze(new)
       else:
          raise ValueError(f'Unexpected array shape {a.shape} (expected {expected_shape})')
 
@@ -726,17 +538,125 @@ class CubedSphere2D(Geometry):
       expected_shape = (self.nb_elements_x2 + 1, self.nb_elements_x1 * self.nbsolpts)
       if a.shape[-2:] == expected_shape:
          plane_shape = (self.nb_elements_x2 + 2, self.nb_elements_x1, self.nbsolpts * 2)
-         new = numpy.zeros(a.shape[:-2] + plane_shape, dtype=a.dtype)
-         south = numpy.s_[..., 1:,  :, :self.nbsolpts]
-         north = numpy.s_[..., :-1, :, self.nbsolpts:]
+         new_tmp = numpy.empty(a.shape[:-2] + plane_shape, dtype=a.dtype)
+         # new_tmp[...] = 1000.0
+         south = numpy.s_[..., 1:,  :, :self.nbsolpts]  # South boundary of elements, including northern halo
+         north = numpy.s_[..., :-1, :, self.nbsolpts:]  # North boundary of elements, including southern halo
 
          tmp_shape = a.shape[:-2] + (self.nb_elements_x2 + 1, self.nb_elements_x1, self.nbsolpts)
          tmp_array = a.reshape(tmp_shape)
-         new[north] = tmp_array
-         new[south] = tmp_array
+         new_tmp[north] = tmp_array
+         new_tmp[south] = tmp_array
 
          new_shape = a.shape[:-2] + ((self.nb_elements_x2 + 2) * self.nb_elements_x1, self.nbsolpts * 2)
-         return new.reshape(new_shape)
+         new = new_tmp.reshape(new_shape)
+         new[self.south_edge] = 0.0
+         new[self.north_edge] = 0.0
+
+         # raise ValueError(f'a = \n{a[0]}\nnew_tmp = \n{new_tmp[0]}\nnew = \n{new[0]}')
+
+         return numpy.squeeze(new)
       else:
          raise ValueError(f'Unexpected array shape {a.shape} (expected {expected_shape})')
 
+
+   def wind2contra(self, u: float | numpy.ndarray, v: float | numpy.ndarray):
+      '''Convert wind fields from the spherical basis (zonal, meridional) to panel-appropriate contravariant winds, in two dimensions
+
+      Parameters:
+      ----------
+      u : float | numpy.ndarray
+         Input zonal winds, in meters per second
+      v : float | numpy.ndarray
+         Input meridional winds, in meters per second
+
+      Returns:
+      -------
+      (u1_contra, u2_contra) : tuple
+         Tuple of contravariant winds'''
+
+      # Convert winds coords to spherical basis
+
+      if (self.nk > 1 and self.deep):
+         # In 3D code with the deep atmosphere, the conversion to λ and φ
+         # uses the full radial height of the grid point:
+         lambda_dot = u / ((self.earth_radius + self.coordVec_gnom_new[2, ...]) * self.coslat)
+         phi_dot    = v / (self.earth_radius + self.coordVec_gnom_new[2, ...])
+      else:
+         # Otherwise, the conversion uses just the planetary radius, with no
+         # correction for height above the surface
+         lambda_dot = u / (self.earth_radius * self.coslat_new)
+         phi_dot    = v / self.earth_radius
+
+      denom = numpy.sqrt( (math.cos(self.lat_p) + \
+                           self.X_new * math.sin(self.lat_p) * math.sin(self.angle_p) - \
+                           self.Y_new * math.sin(self.lat_p) * math.cos(self.angle_p))**2 + \
+                          (self.X_new * math.cos(self.angle_p) + self.Y_new * math.sin(self.angle_p))**2 )
+
+      dx1dlon = math.cos(self.lat_p) * math.cos(self.angle_p) + \
+                ( self.X_new * self.Y_new * math.cos(self.lat_p) * math.sin(self.angle_p) - \
+                  self.Y_new * math.sin(self.lat_p) ) / (1. + self.X_new**2)
+      dx2dlon = ( self.X_new * self.Y_new * math.cos(self.lat_p) * math.cos(self.angle_p) + self.X_new * math.sin(self.lat_p) ) / (1. + self.Y_new**2) + \
+                math.cos(self.lat_p) * math.sin(self.angle_p)
+
+      dx1dlat = -self.delta2_new * ( (math.cos(self.lat_p)*math.sin(self.angle_p) + self.X_new * math.sin(self.lat_p))/(1. + self.X_new**2) ) / denom
+      dx2dlat = self.delta2_new * ( (math.cos(self.lat_p)*math.cos(self.angle_p) - self.Y_new * math.sin(self.lat_p))/(1. + self.Y_new**2) ) / denom
+      
+      # transform to the reference element
+
+      u1_contra = ( dx1dlon * lambda_dot + dx1dlat * phi_dot ) * 2. / self.delta_x1
+      u2_contra = ( dx2dlon * lambda_dot + dx2dlat * phi_dot ) * 2. / self.delta_x2
+
+      return u1_contra, u2_contra
+
+   def contra2wind(self, u1 : float | NDArray, u2 : float | NDArray) -> tuple[NDArray, NDArray]:
+      ''' Convert from reference element to "physical winds", in two dimensions
+
+      Parameters:
+      -----------
+      u1 : float | numpy.ndarray
+         Contravariant winds along first component (X)
+      u2 : float | numpy.ndarray
+         Contravariant winds along second component (Y)
+
+      Returns:
+      --------
+      (u, v) : tuple
+         Zonal/meridional winds, in m/s
+      '''
+
+      u1_contra = u1 * self.delta_x1/2.
+      u2_contra = u2 * self.delta_x2/2.
+
+      denom = (math.cos(self.lat_p) + \
+               self.X_new * math.sin(self.lat_p) * math.sin(self.angle_p) - \
+               self.Y_new * math.sin(self.lat_p) * math.cos(self.angle_p))**2 + \
+              (self.X_new * math.cos(self.angle_p) + \
+               self.Y_new * math.sin(self.angle_p))**2
+
+      dlondx1 = (math.cos(self.lat_p) * math.cos(self.angle_p) - self.Y_new * math.sin(self.lat_p)) * \
+                (1. + self.X_new**2) / denom
+
+      dlondx2 = (math.cos(self.lat_p) * math.sin(self.angle_p) + self.X_new * math.sin(self.lat_p)) * \
+                (1. + self.Y_new**2) / denom
+
+      denom[...] = numpy.sqrt( (math.cos(self.lat_p) + \
+                                self.X_new * math.sin(self.lat_p)*math.sin(self.angle_p) - \
+                                self.Y_new * math.sin(self.lat_p)*math.cos(self.angle_p))**2 + \
+                               (self.X_new * math.cos(self.angle_p) + \
+                                self.Y_new * math.sin(self.angle_p))**2 )
+
+      dlatdx1 = - ( (self.X_new * self.Y_new * math.cos(self.lat_p) * math.cos(self.angle_p) + \
+                     self.X_new * math.sin(self.lat_p) + \
+                     (1. + self.Y_new**2) * math.cos(self.lat_p) * math.sin(self.angle_p)) * 
+                    (1. + self.X_new**2) ) / ( self.delta2_new * denom)
+
+      dlatdx2 = ( ((1. + self.X_new**2) * math.cos(self.lat_p) * math.cos(self.angle_p) + \
+                   self.X_new * self.Y_new * math.cos(self.lat_p) * math.sin(self.angle_p) - \
+                   self.Y_new * math.sin(self.lat_p)) * \
+                  (1. + self.Y_new**2) ) / ( self.delta2_new * denom)
+
+      u = ( dlondx1 * u1_contra + dlondx2 * u2_contra ) * self.coslat_new * self.earth_radius
+      v = ( dlatdx1 * u1_contra + dlatdx2 * u2_contra ) * self.earth_radius
+
+      return u, v

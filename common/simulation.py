@@ -150,10 +150,9 @@ class Simulation:
 
       if self.config.grid_type == 'cubed_sphere' and self.process_topo is not None:
          if self.config.equations == 'shallow_water':
-            return CubedSphere2D(self.config.nb_elements_horizontal, self.config.nb_elements_vertical,
-                                 self.config.nbsolpts,
-                            self.config.λ0, self.config.ϕ0, self.config.α0, self.config.ztop,
-                            self.process_topo, self.config)
+            return CubedSphere2D(self.config.nb_elements_horizontal, self.config.nbsolpts,
+                                 self.config.λ0, self.config.ϕ0, self.config.α0,
+                                 self.process_topo, self.config)
          return CubedSphere(self.config.nb_elements_horizontal, self.config.nb_elements_vertical, self.config.nbsolpts,
                             self.config.λ0, self.config.ϕ0, self.config.α0, self.config.ztop,
                             self.process_topo, self.config)

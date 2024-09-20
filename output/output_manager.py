@@ -85,7 +85,7 @@ class OutputManager:
 
       if self.param.save_state_freq > 0:
          if step_id % self.param.save_state_freq == 0:
-            save_state(Q, self.param, self.state_file_name(step_id))
+            save_state(self.geometry.to_single_block(Q), self.param, self.state_file_name(step_id))
 
       if self.param.stat_freq > 0:
          if step_id % self.param.stat_freq == 0:
