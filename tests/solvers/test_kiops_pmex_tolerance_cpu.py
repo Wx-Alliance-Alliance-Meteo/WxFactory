@@ -20,7 +20,7 @@ class KiopsPmexToleranceCpuTestCases(cpu_test.CpuTestCases):
         rand_min: float = -1000.0
         rand_max: float = 1000.0
 
-        self.show_debug_print = True
+        self.show_debug_print = False
 
         self.tolerance = 1e-7
         self.rand = random.Random(seed)
