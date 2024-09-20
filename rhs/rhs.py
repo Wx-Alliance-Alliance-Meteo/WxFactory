@@ -1,6 +1,6 @@
 from abc    import ABC, abstractmethod
 
-from numpy.typing import NDArray
+from numpy import ndarray
 
 class RHS(ABC):
    def __init__(self, shape: tuple[int, ...],  *params, **kwparams) -> None:
@@ -8,7 +8,7 @@ class RHS(ABC):
       self.params = params
       self.kwparams = kwparams
 
-   def __call__(self, vec: NDArray) -> NDArray:
+   def __call__(self, vec: ndarray) -> ndarray:
       """Compute the value of the right-hand side based on the input state.
 
       :param vec: Vector containing the input state. It can have any shape, as long as its size is the same as the
@@ -20,5 +20,5 @@ class RHS(ABC):
       return result.reshape(old_shape)
 
    @abstractmethod
-   def __compute_rhs__(self, vec: NDArray, *params, **kwparams) -> NDArray:
+   def __compute_rhs__(self, vec: ndarray, *params, **kwparams) -> ndarray:
       pass

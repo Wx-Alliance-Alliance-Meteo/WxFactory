@@ -1,7 +1,7 @@
 from typing import Callable, Optional, Tuple
 
 from mpi4py   import MPI
-import numpy
+from numpy import ndarray
 from numpy.typing import NDArray
 
 from common.device             import Device
@@ -38,11 +38,11 @@ class RhsBundle:
 
       self.shape = fields_shape
 
-      def generate_rhs(rhs_func: Callable, *args, **kwargs) -> Callable[[numpy.ndarray], numpy.ndarray]:
+      def generate_rhs(rhs_func: Callable, *args, **kwargs) -> Callable[[ndarray], ndarray]:
          '''Generate a function that calls the given (RHS) function on a vector. The generated function will
          first reshape the vector, then return a result with the original input vector shape.'''
          # if MPI.COMM_WORLD.rank == 0: print(f'Generating {rhs_func} with shape {self.shape}')
-         def actual_rhs(vec: numpy.ndarray):
+         def actual_rhs(vec: ndarray) -> ndarray:
             old_shape = vec.shape
             result = rhs_func(vec.reshape(self.shape), *args, **kwargs)
             return result.reshape(old_shape)

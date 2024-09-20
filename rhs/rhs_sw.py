@@ -1,5 +1,5 @@
 from mpi4py import MPI
-import numpy
+from numpy import ndarray
 from typing import Optional
 
 from init.initialize import Topo
@@ -24,7 +24,7 @@ class RhsShallowWater(RHS):
       super().__init__(shape, geom, mtrx, metric, topo, ptopo, nbsolpts, nb_elements_hori, device)
 
    def __compute_rhs__(self,
-                       Q: numpy.ndarray,
+                       Q: ndarray,
                        geom: CubedSphere,
                        mtrx: DFROperators,
                        metric: Metric3DTopo,
@@ -32,7 +32,7 @@ class RhsShallowWater(RHS):
                        ptopo: Optional[ProcessTopology],
                        nbsolpts: int,
                        nb_elements_hori: int,
-                       device: Device = default_device):
+                       device: Device = default_device) -> ndarray:
       rank = MPI.COMM_WORLD.rank
 
       xp = device.xp
