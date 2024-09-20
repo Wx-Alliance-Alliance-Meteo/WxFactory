@@ -11,9 +11,8 @@ from geometry                  import Cartesian2D, CubedSphere, DFROperators, Ge
                                       Metric3DTopo
 from init.initialize           import Topo
 from rhs.fluxes                import ausm_2d_fv, upwind_2d_fv, rusanov_2d_fv
-from rhs.rhs_bubble            import rhs_bubble
+from rhs.rhs_bubble            import RhsBubble
 from rhs.rhs_bubble_convective import rhs_bubble as rhs_bubble_convective
-from rhs.rhs_bubble_fv         import rhs_bubble_fv
 from rhs.rhs_bubble_implicit   import rhs_bubble_implicit
 from rhs.rhs_euler             import RhsEuler
 from rhs.rhs_euler_convective  import rhs_euler_convective
@@ -64,15 +63,14 @@ class RhsBundle:
          self.viscous = lambda q: self.full(q) - self.convective(q)
 
       elif param.equations == 'euler' and isinstance(geom, Cartesian2D):
-         self.full = generate_rhs(
-               rhs_bubble, geom, operators, param.nbsolpts, param.nb_elements_horizontal,
-               param.nb_elements_vertical)
+         self.full = RhsBubble(fields_shape, geom, operators, param.nbsolpts, param.nb_elements_horizontal,
+               param.nb_elements_vertical, device)
          
          self.implicit = generate_rhs(
             rhs_bubble_implicit, geom, operators, param.nbsolpts, param.nb_elements_horizontal,
             param.nb_elements_vertical)
          self.explicit = lambda q: self.full(q) - self.implicit(q)
-         
+
          self.convective = generate_rhs(
             rhs_bubble_convective, geom, operators, param.nbsolpts, param.nb_elements_horizontal,
             param.nb_elements_vertical)
