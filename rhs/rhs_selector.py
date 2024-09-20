@@ -64,27 +64,15 @@ class RhsBundle:
          self.viscous = lambda q: self.full(q) - self.convective(q)
 
       elif param.equations == 'euler' and isinstance(geom, Cartesian2D):
-         rhs_bubble_cuda = None
-         if param.device == 'cuda': # Only load that if requested
-            from wx_cupy import rhs_bubble_cuda
-
-         dg_functions = {'cpu': rhs_bubble,    'cuda': rhs_bubble_cuda}
-         fv_functions = {'cpu': rhs_bubble_fv, 'cuda': rhs_bubble_cuda}
-
-         flux_functions = {'ausm': ausm_2d_fv, 'upwind': upwind_2d_fv, 'rusanov': rusanov_2d_fv}
-         if param.discretization == 'fv':
-            self.full = generate_rhs(
-               fv_functions[param.device], geom, param.nb_elements_horizontal, param.nb_elements_vertical,
-               flux_functions[param.precond_flux])
-         else:
-            self.full = generate_rhs(
-               dg_functions[param.device], geom, operators, param.nbsolpts, param.nb_elements_horizontal,
+         self.full = generate_rhs(
+               rhs_bubble, geom, operators, param.nbsolpts, param.nb_elements_horizontal,
                param.nb_elements_vertical)
-
+         
          self.implicit = generate_rhs(
             rhs_bubble_implicit, geom, operators, param.nbsolpts, param.nb_elements_horizontal,
             param.nb_elements_vertical)
          self.explicit = lambda q: self.full(q) - self.implicit(q)
+         
          self.convective = generate_rhs(
             rhs_bubble_convective, geom, operators, param.nbsolpts, param.nb_elements_horizontal,
             param.nb_elements_vertical)
