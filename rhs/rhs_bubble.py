@@ -1,4 +1,5 @@
 import numpy
+import pdb
 
 from common.definitions import idx_2d_rho, idx_2d_rho_u, idx_2d_rho_w, idx_2d_rho_theta,  \
                                p0, Rd, cpd, cvd, heat_capacity_ratio, gravity
@@ -19,9 +20,11 @@ def rhs_bubble(Q, geom, mtrx, nbsolpts, nb_elements_x, nb_elements_z):
 
    kfaces_flux = numpy.empty((nb_equations, nb_elements_z, 2, nbsolpts*nb_elements_x), dtype=datatype)
    kfaces_var  = numpy.empty((nb_equations, nb_elements_z, 2, nbsolpts*nb_elements_x), dtype=datatype)
+   # interfaceFlux_k = numpy.empty((nb_equations, nb_elements_z, 2, nbsolpts*nb_elements_x), dtype=datatype)
 
    ifaces_flux = numpy.empty((nb_equations, nb_elements_x, nbsolpts*nb_elements_z, 2), dtype=datatype)
    ifaces_var  = numpy.empty((nb_equations, nb_elements_x, nbsolpts*nb_elements_z, 2), dtype=datatype)
+   interfaceFlux_i = numpy.empty((nb_equations, nb_elements_x, nbsolpts*nb_elements_z, 2), dtype=datatype)
 
    # --- Unpack physical variables
    rho      = Q[idx_2d_rho,:,:]
@@ -53,6 +56,8 @@ def rhs_bubble(Q, geom, mtrx, nbsolpts, nb_elements_x, nb_elements_z):
 
       ifaces_var[:,elem,:,0] = Q[:,:,epais] @ mtrx.extrap_west
       ifaces_var[:,elem,:,1] = Q[:,:,epais] @ mtrx.extrap_east
+      interfaceFlux_i[:,elem,:,0] = Q[:,:,epais] @ mtrx.extrap_west
+      interfaceFlux_i[:,elem,:,1] = Q[:,:,epais] @ mtrx.extrap_east
 
    # --- Interface pressure
    ifaces_pres = p0 * (ifaces_var[idx_2d_rho_theta] * Rd / p0)**(cpd / cvd)
@@ -101,6 +106,7 @@ def rhs_bubble(Q, geom, mtrx, nbsolpts, nb_elements_x, nb_elements_z):
 
 
    start = 0 if geom.xperiodic else 1
+
    for itf in range(start, nb_interfaces_x - 1):
 
       left  = itf - 1
@@ -108,21 +114,63 @@ def rhs_bubble(Q, geom, mtrx, nbsolpts, nb_elements_x, nb_elements_z):
 
       # Left state
       a_L = numpy.sqrt(heat_capacity_ratio * ifaces_pres[left, :, 1] / ifaces_var[idx_2d_rho, left, :, 1])
-      M_L = ifaces_var[idx_2d_rho_u, left, :, 1] / (ifaces_var[idx_2d_rho, left, :, 1] * a_L)
 
       # Right state
       a_R = numpy.sqrt(heat_capacity_ratio * ifaces_pres[right, :, 0] / ifaces_var[idx_2d_rho, right, :, 0])
-      M_R = ifaces_var[idx_2d_rho_u, right, :, 0] / ( ifaces_var[idx_2d_rho, right, :, 0] * a_R)
+   
+      # Roe-averaged Quantities
+      ifaces_u     = ifaces_var[idx_2d_rho_u] / ifaces_var[idx_2d_rho]
+      ifaces_w     = ifaces_var[idx_2d_rho_w] / ifaces_var[idx_2d_rho]
+      ifaces_theta = ifaces_var[idx_2d_rho_theta] / ifaces_var[idx_2d_rho]
+      RT           = numpy.sqrt(ifaces_var[idx_2d_rho, right, :, 0] / ifaces_var[idx_2d_rho, left, :, 1])
+      u_hat        = (ifaces_u[left,:,1] + RT * ifaces_u[right,:,0]) / (1+RT)
+      w_hat        = (ifaces_w[left,:,1] + RT * ifaces_w[right,:,0]) / (1+RT)
+      theta_hat    = (ifaces_theta[left,:,1] + RT * ifaces_theta[right,:,0]) / (1+RT)
+      a_hat        = (a_L + RT * a_R) / (1+RT)
 
-      M = 0.25 * ((M_L + 1.)**2 - (M_R - 1.)**2)
 
-      ifaces_flux[:,right,:,0] = (ifaces_var[:,left,:,1] * numpy.maximum(0., M) * a_L) + \
-                                 (ifaces_var[:,right,:,0] * numpy.minimum(0., M) * a_R)
-      ifaces_flux[idx_2d_rho_u,right,:,0] += 0.5 * ((1. + M_L) * ifaces_pres[left,:,1] + \
-                                                    (1. - M_R) * ifaces_pres[right,:,0])
+      # Difference in conserved variables
+      drho         = ifaces_var[idx_2d_rho, right, :, 0] - ifaces_var[idx_2d_rho, left, :, 1]
+      drhou        = ifaces_var[idx_2d_rho_u, right, :, 0] - ifaces_var[idx_2d_rho_u, left, :, 1]
+      drhow        = ifaces_var[idx_2d_rho_w, right, :, 0] - ifaces_var[idx_2d_rho_w, left, :, 1]
+      drhotheta    = ifaces_var[idx_2d_rho_theta, right, :, 0] - ifaces_var[idx_2d_rho_theta, left, :, 1]
 
+      # Wave strength (Characteristic Variables)
+      dV           = numpy.zeros((4,nbsolpts*nb_elements_z))
+      dV[0]        = drho - (drhotheta/theta_hat)
+      dV[1]        = drhow - (w_hat*drhotheta)/theta_hat
+      dV[2]        = drhotheta/2 + (theta_hat*drhou)/(2*a_hat) - (u_hat*theta_hat*drho)/(2*a_hat) 
+      dV[3]        = drhotheta/2 - (theta_hat*drhou)/(2*a_hat) + (u_hat*theta_hat*drho)/(2*a_hat)
+
+      # Absolute values of the wave speeds (Eigenvalues)
+      ws           = numpy.zeros((4,nbsolpts*nb_elements_z))
+      ws[0]        = numpy.abs(u_hat)
+      ws[1]        = numpy.abs(u_hat)
+      ws[2]        = numpy.abs(u_hat + a_hat)
+      ws[3]        = numpy.abs(u_hat - a_hat)
+
+      # Right Eigenvectors
+      R        = numpy.zeros((4,4,nbsolpts*nb_elements_z))
+      R[0,0,:] = 1; R[1,0,:] = u_hat; R[2,0,:] = 0; R[3,0,:] = 0
+      R[0,1,:] = 0; R[1,1,:] = 0; R[2,1,:] = 1; R[3,1,:] = 0
+      R[0,2,:] = 1/theta_hat; R[1,2,:] = (u_hat+a_hat) / theta_hat; R[2,2,:] = w_hat/theta_hat; R[3,2,:] = 1
+      R[0,3,:] = 1/theta_hat; R[1,3,:] = (u_hat-a_hat) / theta_hat; R[2,3,:] = w_hat/theta_hat; R[3,3,:] = 1
+
+      # Compute the average flux 
+      Roe = numpy.zeros((4,nbsolpts*nb_elements_z))
+      Roe = 0.5 * ( interfaceFlux_i[:, left, :, 1] + interfaceFlux_i[:, right, :, 0] )
+      
+      # Add the matrix dissipation term to complete the Roe flux.
+      for j in range(4):
+         for k in range(4):
+            print((0.5 * ws[k] * dV[k] * R[j, k,:]).max())
+            Roe[j] -= 0.5 * ws[k] * dV[k] * R[j, k,:]
+
+      
+      ifaces_flux[:,right,:,0] = Roe
       ifaces_flux[:,left,:,1] = ifaces_flux[:,right,:,0]
-
+      
+   
    if geom.xperiodic:
       ifaces_flux[:, 0, :, 0] = ifaces_flux[:, -1, :, 1]
 
@@ -164,4 +212,5 @@ def rhs_bubble(Q, geom, mtrx, nbsolpts, nb_elements_x, nb_elements_z):
       rhs[idx_2d_rho_w, :end, :] = numpy.where( \
             geom.relief_mask, -(1.0 / etac) * normal_flux * geom.normals_z, rhs[idx_2d_rho_w, :end, :])
 
+   pdb.set_trace()
    return rhs

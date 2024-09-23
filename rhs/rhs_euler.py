@@ -1,4 +1,5 @@
 from numpy.typing import NDArray
+import pdb
 
 from common.definitions      import idx_rho_u1, idx_rho_u2, idx_rho_w, idx_rho, idx_rho_theta, gravity, p0, Rd, cpd, cvd, heat_capacity_ratio
 from common.device           import CpuDevice, CudaDevice, Device, default_device
@@ -104,6 +105,7 @@ class RhsEuler(RHS):
       :return: numpy.ndarray
          Output of right-hand-side terms of Euler equations
       '''
+
 
       # Load CUDA kernels if needed (and not done already)
       global rhs_euler_kernels

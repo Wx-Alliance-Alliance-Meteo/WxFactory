@@ -1,5 +1,7 @@
 from mpi4py import MPI
 import numpy
+import pdb
+
 
 from common.definitions import gravity
 
@@ -62,6 +64,44 @@ def global_integral(field, mtrx, metric, nbsolpts, nb_elements_horiz):
       for column in range(nb_elements_horiz):
          min_col, max_col = column * nbsolpts + numpy.array([0, nbsolpts])
          local_sum += numpy.sum( field[min_lin:max_lin,min_col:max_col] * metric.sqrtG[min_lin:max_lin,min_col:max_col] * mtrx.quad_weights )
-
    return MPI.COMM_WORLD.allreduce(local_sum)
+
+
+def global_integral_3d(field, geom, mtrx, metric, nbsolpts, nb_elements_horiz, nb_elements_vert):
+    local_sum_z = 0.0
+
+    for layer in range(nb_elements_vert):
+        min_layer, max_layer = layer * nbsolpts + numpy.array([0, nbsolpts])
+        counter = numpy.zeros((nbsolpts))
+        for r in range(nbsolpts):
+            local_sum = 0
+            for line in range(nb_elements_horiz):
+                  min_lin, max_lin = line * nbsolpts + numpy.array([0, nbsolpts])
+                  for column in range(nb_elements_horiz):
+                     min_col, max_col = column * nbsolpts + numpy.array([0, nbsolpts])
+                     element_field = field[min_layer:max_layer,min_lin:max_lin,min_col:max_col]
+                     element_sqrtG = metric.sqrtG[min_layer:max_layer,min_lin:max_lin,min_col:max_col]
+                     local_sum += numpy.sum( element_field[r] * element_sqrtG[r] * mtrx.quad_weights )
+            counter[r] = local_sum
+        local_sum_z += numpy.sum( counter * geom.glweights )
+    # Reduce the result across all MPI processes
+    return MPI.COMM_WORLD.allreduce(local_sum_z)
+
+def global_integral_3d_alt(field, geom, mtrx, metric, nbsolpts, nb_elements_horiz, nb_elements_vert):
+   local_sum = 0.
+   # Create the 3D weight matrix with shape (z, x, y)
+   W_xyz = numpy.zeros((nbsolpts, nbsolpts, nbsolpts))
+
+   for idx in range(nbsolpts):
+      W_xyz[idx, :, :] = mtrx.quad_weights * geom.glweights[idx]
+
+   for layer in range(nb_elements_vert):
+      min_layer, max_layer = layer * nbsolpts + numpy.array([0, nbsolpts])
+      for line in range(nb_elements_horiz):
+         min_lin, max_lin = line * nbsolpts + numpy.array([0, nbsolpts])
+         for column in range(nb_elements_horiz):
+            min_col, max_col = column * nbsolpts + numpy.array([0, nbsolpts])
+            local_sum += numpy.sum( field[min_layer:max_layer,min_lin:max_lin,min_col:max_col] * metric.sqrtG[min_layer:max_layer,min_lin:max_lin,min_col:max_col] * W_xyz )
+   return MPI.COMM_WORLD.allreduce(local_sum)
+
 

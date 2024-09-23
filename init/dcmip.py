@@ -450,6 +450,7 @@ def dcmip_steady_state_mountain(geom: CubedSphere, metric, mtrx, param):
    else:
       ps = p0 * (1.0 - gamma / T0 * zbot)**exponent
 
+
    #-----------------------------------------------------------------------
    #    PRESSURE
    #-----------------------------------------------------------------------
@@ -751,18 +752,18 @@ def dcmip_gravity_wave(geom, metric, mtrx, param):
    #    to the background theta field (not included here)
    #-----------------------------------------------------------------------
 
-   sin_tmp = numpy.sin(geom.lat) * math.sin(phic)
-   cos_tmp = numpy.cos(geom.lat) * math.cos(phic)
+   # sin_tmp = numpy.sin(geom.lat) * math.sin(phic)
+   # cos_tmp = numpy.cos(geom.lat) * math.cos(phic)
 
-   # great circle distance with 'a/X'
+   # # great circle distance with 'a/X'
 
-   r  = geom.earth_radius * numpy.arccos(sin_tmp + cos_tmp * numpy.cos(geom.lon - lambdac))
+   # r  = geom.earth_radius * numpy.arccos(sin_tmp + cos_tmp * numpy.cos(geom.lon - lambdac))
 
-   s = (d**2) / (d**2 + r**2)
+   # s = (d**2) / (d**2 + r**2)
 
-   theta_pert = delta_theta * s * numpy.sin(2.0 * math.pi * geom.height / Lz)
+   # theta_pert = delta_theta * s * numpy.sin(2.0 * math.pi * geom.height / Lz)
 #   theta_pert = 0. # for debuging
 
-   theta = theta_base + theta_pert
+   theta = theta_base #+ theta_pert
 
    return rho, u1_contra, u2_contra, w, theta

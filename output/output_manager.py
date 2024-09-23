@@ -1,6 +1,8 @@
 import os
 from typing  import Callable, Optional, Union
 
+import pdb
+
 from mpi4py import MPI
 import numpy
 
@@ -12,6 +14,7 @@ from output.solver_stats    import SolverStatsOutput
 from output.state           import save_state
 from precondition.multigrid import Multigrid
 from solvers                import SolverInfo
+from init.init_state_vars   import init_state_vars
 
 class OutputManager:
    """
@@ -35,10 +38,11 @@ class OutputManager:
       os.makedirs(os.path.abspath(param.output_dir), exist_ok=True)
 
       self.solver_stats_output = SolverStatsOutput(param)
+      self.initial_Q, _, _ = init_state_vars(self.geometry, self.operators, self.param)
 
       self.final_function = lambda x=None: None
       self.blockstat_function = lambda Q, step_id: None
-
+      
       if param.output_freq > 0:
          if self.geometry.grid_type == 'cubed_sphere':
             from output.output_cubesphere import output_init, output_netcdf, output_finalize
@@ -54,13 +58,17 @@ class OutputManager:
             self.step_function = lambda Q, step_id: \
                output_step(Q, self.geometry, self.param, self.output_file_name(step_id))
 
+      
       if param.stat_freq > 0:
          if isinstance(self.geometry, CubedSphere):
             if self.param.equations == 'shallow_water':
                if self.topo is None:
                   raise ValueError(f'Need a topo for this!')
                self.blockstat_function = lambda Q, step_id: \
-                  blockstats_cs(Q, self.geometry, self.topo, self.metric, self.operators, self.param, step_id)
+                  blockstats_cs(Q, self.geometry, self.topo, self.initial_Q, self.metric, self.operators, self.param, step_id)
+            if self.param.equations == 'euler':
+               self.blockstat_function = lambda Q, step_id: \
+                  blockstats_cs(Q, self.geometry, self.topo, self.initial_Q, self.metric, self.operators, self.param, step_id)
             else:
                if MPI.COMM_WORLD.rank == 0: print(f'WARNING: Blockstat only implemented for Shallow Water equations')
          elif isinstance(self.geometry, Cartesian2D):

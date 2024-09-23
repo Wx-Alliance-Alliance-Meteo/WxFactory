@@ -1,5 +1,6 @@
 import math
 import numpy
+import pdb
 import scipy.special
 import sympy
 from types import ModuleType
@@ -57,7 +58,7 @@ def gauss_legendre(n: int, xp: ModuleType = numpy) \
 
       points_num = xp.array([a.evalf(n_digits, chop=True) for a in points_sym], dtype=float)
    else:
-      points_num, weights = scipy.special.roots_legendre(n)
+      points_num, weights = scipy.special.roots_legendre(n)      
       points_sym = [sympy.Float(n, n_digits) for n in points_num]
 
    return points_sym, points_num, xp.asarray(weights)
