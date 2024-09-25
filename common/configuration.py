@@ -90,6 +90,15 @@ class Configuration:
       self.relief_layer_height      = self._get_option('Spatial_discretization', 'relief_layer_height', int, 0, min_value=0)
       self.nb_elements_relief_layer = self._get_option('Spatial_discretization', 'nb_elements_relief_layer', int, 0, min_value=0)
 
+      if self.relief_layer_height > 0:
+         self.num_dim = 3
+      else:
+         self.num_dim = 2
+
+      if self.equations == 'euler':
+         self.nb_var = self.num_dim + 2
+
+
       self.filter_apply  = self._get_option('Spatial_discretization', 'filter_apply', bool, False)
       self.filter_order  = self._get_option('Spatial_discretization', 'filter_order', int,
                                              default_value = 16 if self.filter_apply else 0)

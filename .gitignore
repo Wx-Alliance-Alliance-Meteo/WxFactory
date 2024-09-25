@@ -6,6 +6,7 @@
 *.lprof
 *.lprof.txt
 *.nsys-rep
+*.so
 
 doc/*.pdf
 doc/aux/*
