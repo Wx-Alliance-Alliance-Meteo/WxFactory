@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from numpy.typing import NDArray
+from numpy import ndarray
 
 from common.array_module import get_array_module
 from pde.pde import get_pde
@@ -10,7 +10,7 @@ from pde.pde import get_pde
 #         self.params = params
 #         self.kwparams = kwparams
 
-#     def __call__(self, vec: NDArray) -> NDArray:
+#     def __call__(self, vec: ndarray) -> ndarray:
 #         """Compute the value of the right-hand side based on the input state.
 
 #         :param vec: Vector containing the input state. It can have any shape, as long as its size is the same as the
@@ -23,7 +23,7 @@ from pde.pde import get_pde
 #         return result.reshape(old_shape)
 
 #     @abstractmethod
-#     def __compute_rhs__(self, vec: NDArray, *params, **kwparams) -> NDArray:
+#     def __compute_rhs__(self, vec: ndarray, *params, **kwparams) -> ndarray:
 #         pass
 
 
@@ -50,7 +50,7 @@ class RHS(ABC):
         xp = device.xp
 
         # Make sure the right CPU/GPU module is used
-        self.pde = get_pde(pde_name)(config)
+        self.pde = get_pde(pde_name)(config, device)
 
         # Initialize arrays that will be used in this RHS
         nb_solpts = operators.extrap_x.shape[0]
@@ -92,7 +92,7 @@ class RHS(ABC):
         # Initialize rhs matrix
         self.rhs = xp.empty_like(self.f_x1)
 
-    def __call__(self, q: NDArray) -> NDArray:
+    def __call__(self, q: ndarray) -> ndarray:
         # 1. Extrapolate the solution to the boundaries of the element
         self.solution_extrapolation(q)
 
@@ -114,11 +114,11 @@ class RHS(ABC):
         return self.rhs
 
     @abstractmethod
-    def solution_extrapolation(self, q: NDArray) -> None:
+    def solution_extrapolation(self, q: ndarray) -> None:
         pass
 
     @abstractmethod
-    def pointwise_fluxes(self, q: NDArray) -> None:
+    def pointwise_fluxes(self, q: ndarray) -> None:
         pass
 
     def riemann_fluxes(self) -> None:
@@ -133,5 +133,5 @@ class RHS(ABC):
     def flux_correction(self) -> None:
         pass
 
-    def forcing_terms(self, q: NDArray) -> None:
+    def forcing_terms(self, q: ndarray) -> None:
         self.pde.forcing_terms(self.rhs, q)
