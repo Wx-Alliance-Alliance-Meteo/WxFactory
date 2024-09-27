@@ -100,9 +100,9 @@ def initialize_sw(geom: CubedSphere2D, metric, mtrx, param):
    # ni, nj = geom.lon.shape
    nb_equations = 3
 
-   base_shape = geom.lon_new.shape
-   itf_i_shape = geom.lon_itf_i_new.shape
-   itf_j_shape = geom.lon_itf_j_new.shape
+   base_shape = geom.lon.shape
+   itf_i_shape = geom.lon_itf_i.shape
+   itf_j_shape = geom.lon_itf_j.shape
 
    hsurf = numpy.zeros(base_shape)
    dzdx1 = numpy.zeros(base_shape)

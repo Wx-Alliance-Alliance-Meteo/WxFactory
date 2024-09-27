@@ -322,47 +322,47 @@ class CubedSphere2D(Geometry):
       # X and Y (and their interface variants) are 2D arrays on the ij plane;
       # x comes before y in the indices -> Y is the "fast-varying" index
 
-      Y, X = numpy.meshgrid(numpy.tan(x2),numpy.tan(x1),indexing='ij')
+      Y_block, X_block = numpy.meshgrid(numpy.tan(x2),numpy.tan(x1),indexing='ij')
 
-      Y_new = self._to_new(Y)
-      X_new = self._to_new(X)
+      Y = self._to_new(Y_block)
+      X = self._to_new(X_block)
 
-      self.boundary_sn = X[0, :] # Coordinates of the south and north boundaries along the X (west-east) axis
-      self.boundary_we = Y[:, 0] # Coordinates of the west and east boundaries along the Y (south-north) axis
+      self.boundary_sn = X_block[0, :] # Coordinates of the south and north boundaries along the X (west-east) axis
+      self.boundary_we = Y_block[:, 0] # Coordinates of the west and east boundaries along the Y (south-north) axis
 
       # Because of conventions used in the parallel exchanges, both i and j interface variables
       # are expected to be of size (#interface, #pts).  Compared to the usual (j,i) ordering,
       # this means that the i-interface variable should be transposed
 
-      X_itf_i = numpy.broadcast_to(numpy.tan(x1_itf_i)[numpy.newaxis,:],(nj,nb_elements_x1+1)).T
-      Y_itf_i = numpy.broadcast_to(numpy.tan(x2_itf_i)[:,numpy.newaxis],(nj,nb_elements_x1+1)).T
-      X_itf_j = numpy.broadcast_to(numpy.tan(x1_itf_j)[numpy.newaxis,:],(nb_elements_x2+1,ni))
-      Y_itf_j = numpy.broadcast_to(numpy.tan(x2_itf_j)[:,numpy.newaxis],(nb_elements_x2+1,ni))
+      X_block_itf_i = numpy.broadcast_to(numpy.tan(x1_itf_i)[numpy.newaxis,:],(nj,nb_elements_x1+1)).T
+      Y_block_itf_i = numpy.broadcast_to(numpy.tan(x2_itf_i)[:,numpy.newaxis],(nj,nb_elements_x1+1)).T
+      X_block_itf_j = numpy.broadcast_to(numpy.tan(x1_itf_j)[numpy.newaxis,:],(nb_elements_x2+1,ni))
+      Y_block_itf_j = numpy.broadcast_to(numpy.tan(x2_itf_j)[:,numpy.newaxis],(nb_elements_x2+1,ni))
 
-      X_itf_i_new = self._to_new_itf_i(X_itf_i)
-      Y_itf_i_new = self._to_new_itf_i(Y_itf_i)
-      X_itf_j_new = self._to_new_itf_j(X_itf_j)
-      Y_itf_j_new = self._to_new_itf_j(Y_itf_j)
+      X_itf_i = self._to_new_itf_i(X_block_itf_i)
+      Y_itf_i = self._to_new_itf_i(Y_block_itf_i)
+      X_itf_j = self._to_new_itf_j(X_block_itf_j)
+      Y_itf_j = self._to_new_itf_j(Y_block_itf_j)
 
-      delta2_new = 1.0 + X_new**2 + Y_new**2
-      delta_new  = numpy.sqrt(delta2_new)
+      delta2 = 1.0 + X**2 + Y**2
+      delta  = numpy.sqrt(delta2)
 
-      delta2_itf_i_new = 1.0 + X_itf_i_new**2 + Y_itf_i_new**2
-      delta_itf_i_new  = numpy.sqrt(delta2_itf_i_new)
+      delta2_itf_i = 1.0 + X_itf_i**2 + Y_itf_i**2
+      delta_itf_i  = numpy.sqrt(delta2_itf_i)
 
-      delta2_itf_j_new = 1.0 + X_itf_j_new**2 + Y_itf_j_new**2
-      delta_itf_j_new  = numpy.sqrt(delta2_itf_j_new)
+      delta2_itf_j = 1.0 + X_itf_j**2 + Y_itf_j**2
+      delta_itf_j  = numpy.sqrt(delta2_itf_j)
 
+      self.X_block = X_block
+      self.Y_block = Y_block
       self.X = X
       self.Y = Y
-      self.X_new = X_new
-      self.Y_new = Y_new
-      self.delta2_new = delta2_new
-      self.delta_new = delta_new
-      self.delta2_itf_i_new = delta2_itf_i_new
-      self.delta_itf_i_new  = delta_itf_i_new
-      self.delta2_itf_j_new = delta2_itf_j_new
-      self.delta_itf_j_new  = delta_itf_j_new
+      self.delta2 = delta2
+      self.delta = delta
+      self.delta2_itf_i = delta2_itf_i
+      self.delta_itf_i  = delta_itf_i
+      self.delta2_itf_j = delta2_itf_j
+      self.delta_itf_j  = delta_itf_j
 
       ## Other coordinate vectors:
       # * gnonomic coordinates (X, Y, Z)
@@ -375,9 +375,9 @@ class CubedSphere2D(Geometry):
 
          return gnom
 
-      self.coordVec_gnom_new = to_gnomonic(self.radians)
-      self.gnom_itf_i_new    = to_gnomonic(self.coordVec_itf_i)
-      self.gnom_itf_j_new    = to_gnomonic(self.coordVec_itf_j)
+      self.coordVec_gnom = to_gnomonic(self.radians)
+      self.gnom_itf_i    = to_gnomonic(self.coordVec_itf_i)
+      self.gnom_itf_j    = to_gnomonic(self.coordVec_itf_j)
 
       # * Cartesian coordinates on the deep sphere (Xc, Yc, Zc)
 
@@ -412,9 +412,9 @@ class CubedSphere2D(Geometry):
          return cart
 
 
-      self.cart_new = to_cartesian(self.coordVec_gnom_new)
-      self.cart_itf_i = to_cartesian(self.gnom_itf_i_new)
-      self.cart_itf_j = to_cartesian(self.gnom_itf_j_new)
+      self.cart = to_cartesian(self.coordVec_gnom)
+      self.cart_itf_i = to_cartesian(self.gnom_itf_i)
+      self.cart_itf_j = to_cartesian(self.gnom_itf_j)
 
 
       # * Polar coordinates (lat, lon, Z)
@@ -431,7 +431,7 @@ class CubedSphere2D(Geometry):
          return polar
 
 
-      self.polar_new = to_polar(self.cart_new)
+      self.polar = to_polar(self.cart)
       self.polar_itf_i = to_polar(self.cart_itf_i)
       self.polar_itf_j = to_polar(self.cart_itf_j)
 
@@ -440,25 +440,25 @@ class CubedSphere2D(Geometry):
       self.polar_itf_j[self.south_edge] = 0.0
       self.polar_itf_j[self.north_edge] = 0.0
 
-      self.lon_new = self.polar_new[0, ...]
-      self.lat_new = self.polar_new[1, ...]
-      self.coslon_new = numpy.cos(self.lon_new)
-      self.coslat_new = numpy.cos(self.lat_new)
-      self.sinlon_new = numpy.sin(self.lon_new)
-      self.sinlat_new = numpy.sin(self.lat_new)
+      self.lon = self.polar[0, ...]
+      self.lat = self.polar[1, ...]
+      self.coslon = numpy.cos(self.lon)
+      self.coslat = numpy.cos(self.lat)
+      self.sinlon = numpy.sin(self.lon)
+      self.sinlat = numpy.sin(self.lat)
 
-      self.block_lon = self.to_single_block(self.lon_new)
-      self.block_lat = self.to_single_block(self.lat_new)
+      self.block_lon = self.to_single_block(self.lon)
+      self.block_lat = self.to_single_block(self.lat)
 
-      self.X_itf_i_new = X_itf_i_new
-      self.Y_itf_i_new = Y_itf_i_new
-      self.X_itf_j_new = X_itf_j_new
-      self.Y_itf_j_new = Y_itf_j_new
+      self.X_itf_i = X_itf_i
+      self.Y_itf_i = Y_itf_i
+      self.X_itf_j = X_itf_j
+      self.Y_itf_j = Y_itf_j
 
-      self.lon_itf_i_new = self.polar_itf_i[0, ...]
-      self.lat_itf_i_new = self.polar_itf_i[1, ...]
-      self.lon_itf_j_new = self.polar_itf_j[0, ...]
-      self.lat_itf_j_new = self.polar_itf_j[1, ...]
+      self.lon_itf_i = self.polar_itf_i[0, ...]
+      self.lat_itf_i = self.polar_itf_i[1, ...]
+      self.lon_itf_j = self.polar_itf_j[0, ...]
+      self.lat_itf_j = self.polar_itf_j[1, ...]
 
 
    def _to_new(self, a: NDArray) -> NDArray:
@@ -561,7 +561,7 @@ class CubedSphere2D(Geometry):
 
 
    def wind2contra(self, u: float | numpy.ndarray, v: float | numpy.ndarray):
-      '''Convert wind fields from the spherical basis (zonal, meridional) to panel-appropriate contravariant winds, in two dimensions
+      '''Convert wind fields from the spherical basis (zonal, meridional) to panel-appropriate contravariant winds
 
       Parameters:
       ----------
@@ -580,27 +580,27 @@ class CubedSphere2D(Geometry):
       if (self.nk > 1 and self.deep):
          # In 3D code with the deep atmosphere, the conversion to λ and φ
          # uses the full radial height of the grid point:
-         lambda_dot = u / ((self.earth_radius + self.coordVec_gnom_new[2, ...]) * self.coslat)
-         phi_dot    = v / (self.earth_radius + self.coordVec_gnom_new[2, ...])
+         lambda_dot = u / ((self.earth_radius + self.coordVec_gnom[2, ...]) * self.coslat)
+         phi_dot    = v / (self.earth_radius + self.coordVec_gnom[2, ...])
       else:
          # Otherwise, the conversion uses just the planetary radius, with no
          # correction for height above the surface
-         lambda_dot = u / (self.earth_radius * self.coslat_new)
+         lambda_dot = u / (self.earth_radius * self.coslat)
          phi_dot    = v / self.earth_radius
 
       denom = numpy.sqrt( (math.cos(self.lat_p) + \
-                           self.X_new * math.sin(self.lat_p) * math.sin(self.angle_p) - \
-                           self.Y_new * math.sin(self.lat_p) * math.cos(self.angle_p))**2 + \
-                          (self.X_new * math.cos(self.angle_p) + self.Y_new * math.sin(self.angle_p))**2 )
+                           self.X * math.sin(self.lat_p) * math.sin(self.angle_p) - \
+                           self.Y * math.sin(self.lat_p) * math.cos(self.angle_p))**2 + \
+                          (self.X * math.cos(self.angle_p) + self.Y * math.sin(self.angle_p))**2 )
 
       dx1dlon = math.cos(self.lat_p) * math.cos(self.angle_p) + \
-                ( self.X_new * self.Y_new * math.cos(self.lat_p) * math.sin(self.angle_p) - \
-                  self.Y_new * math.sin(self.lat_p) ) / (1. + self.X_new**2)
-      dx2dlon = ( self.X_new * self.Y_new * math.cos(self.lat_p) * math.cos(self.angle_p) + self.X_new * math.sin(self.lat_p) ) / (1. + self.Y_new**2) + \
+                ( self.X * self.Y * math.cos(self.lat_p) * math.sin(self.angle_p) - \
+                  self.Y * math.sin(self.lat_p) ) / (1. + self.X**2)
+      dx2dlon = ( self.X * self.Y * math.cos(self.lat_p) * math.cos(self.angle_p) + self.X * math.sin(self.lat_p) ) / (1. + self.Y**2) + \
                 math.cos(self.lat_p) * math.sin(self.angle_p)
 
-      dx1dlat = -self.delta2_new * ( (math.cos(self.lat_p)*math.sin(self.angle_p) + self.X_new * math.sin(self.lat_p))/(1. + self.X_new**2) ) / denom
-      dx2dlat = self.delta2_new * ( (math.cos(self.lat_p)*math.cos(self.angle_p) - self.Y_new * math.sin(self.lat_p))/(1. + self.Y_new**2) ) / denom
+      dx1dlat = -self.delta2 * ( (math.cos(self.lat_p)*math.sin(self.angle_p) + self.X * math.sin(self.lat_p))/(1. + self.X**2) ) / denom
+      dx2dlat = self.delta2 * ( (math.cos(self.lat_p)*math.cos(self.angle_p) - self.Y * math.sin(self.lat_p))/(1. + self.Y**2) ) / denom
       
       # transform to the reference element
 
@@ -629,34 +629,34 @@ class CubedSphere2D(Geometry):
       u2_contra = u2 * self.delta_x2/2.
 
       denom = (math.cos(self.lat_p) + \
-               self.X_new * math.sin(self.lat_p) * math.sin(self.angle_p) - \
-               self.Y_new * math.sin(self.lat_p) * math.cos(self.angle_p))**2 + \
-              (self.X_new * math.cos(self.angle_p) + \
-               self.Y_new * math.sin(self.angle_p))**2
+               self.X * math.sin(self.lat_p) * math.sin(self.angle_p) - \
+               self.Y * math.sin(self.lat_p) * math.cos(self.angle_p))**2 + \
+              (self.X * math.cos(self.angle_p) + \
+               self.Y * math.sin(self.angle_p))**2
 
-      dlondx1 = (math.cos(self.lat_p) * math.cos(self.angle_p) - self.Y_new * math.sin(self.lat_p)) * \
-                (1. + self.X_new**2) / denom
+      dlondx1 = (math.cos(self.lat_p) * math.cos(self.angle_p) - self.Y * math.sin(self.lat_p)) * \
+                (1. + self.X**2) / denom
 
-      dlondx2 = (math.cos(self.lat_p) * math.sin(self.angle_p) + self.X_new * math.sin(self.lat_p)) * \
-                (1. + self.Y_new**2) / denom
+      dlondx2 = (math.cos(self.lat_p) * math.sin(self.angle_p) + self.X * math.sin(self.lat_p)) * \
+                (1. + self.Y**2) / denom
 
       denom[...] = numpy.sqrt( (math.cos(self.lat_p) + \
-                                self.X_new * math.sin(self.lat_p)*math.sin(self.angle_p) - \
-                                self.Y_new * math.sin(self.lat_p)*math.cos(self.angle_p))**2 + \
-                               (self.X_new * math.cos(self.angle_p) + \
-                                self.Y_new * math.sin(self.angle_p))**2 )
+                                self.X * math.sin(self.lat_p)*math.sin(self.angle_p) - \
+                                self.Y * math.sin(self.lat_p)*math.cos(self.angle_p))**2 + \
+                               (self.X * math.cos(self.angle_p) + \
+                                self.Y * math.sin(self.angle_p))**2 )
 
-      dlatdx1 = - ( (self.X_new * self.Y_new * math.cos(self.lat_p) * math.cos(self.angle_p) + \
-                     self.X_new * math.sin(self.lat_p) + \
-                     (1. + self.Y_new**2) * math.cos(self.lat_p) * math.sin(self.angle_p)) * 
-                    (1. + self.X_new**2) ) / ( self.delta2_new * denom)
+      dlatdx1 = - ( (self.X * self.Y * math.cos(self.lat_p) * math.cos(self.angle_p) + \
+                     self.X * math.sin(self.lat_p) + \
+                     (1. + self.Y**2) * math.cos(self.lat_p) * math.sin(self.angle_p)) * 
+                    (1. + self.X**2) ) / ( self.delta2 * denom)
 
-      dlatdx2 = ( ((1. + self.X_new**2) * math.cos(self.lat_p) * math.cos(self.angle_p) + \
-                   self.X_new * self.Y_new * math.cos(self.lat_p) * math.sin(self.angle_p) - \
-                   self.Y_new * math.sin(self.lat_p)) * \
-                  (1. + self.Y_new**2) ) / ( self.delta2_new * denom)
+      dlatdx2 = ( ((1. + self.X**2) * math.cos(self.lat_p) * math.cos(self.angle_p) + \
+                   self.X * self.Y * math.cos(self.lat_p) * math.sin(self.angle_p) - \
+                   self.Y * math.sin(self.lat_p)) * \
+                  (1. + self.Y**2) ) / ( self.delta2 * denom)
 
-      u = ( dlondx1 * u1_contra + dlondx2 * u2_contra ) * self.coslat_new * self.earth_radius
+      u = ( dlondx1 * u1_contra + dlondx2 * u2_contra ) * self.coslat * self.earth_radius
       v = ( dlatdx1 * u1_contra + dlatdx2 * u2_contra ) * self.earth_radius
 
       return u, v

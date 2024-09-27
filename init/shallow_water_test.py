@@ -30,7 +30,7 @@ def solid_body_rotation(geom: CubedSphere2D, metric, param):
    else:
       u0 = 2.0 * math.pi * geom.earth_radius / (12.0 * day_in_secs)
 
-   u = u0 * geom.coslat_new
+   u = u0 * geom.coslat
    v = 0.0
    u1, u2 = geom.wind2contra(u, v)
 
@@ -90,9 +90,9 @@ def height_vortex(geom, metric, param, step):
 
 def williamson_case1(geom, metric, param):
    if MPI.COMM_WORLD.rank == 0:
-      print("---------------------------------------------------------------")
-      print("WILLIAMSON CASE 1 (Tracer): Cosine Bell, Williamson et al.,1992")
-      print("---------------------------------------------------------------")
+      print('---------------------------------------------------------------\n'
+            'WILLIAMSON CASE 1 (Tracer): Cosine Bell, Williamson et al.,1992\n'
+            '---------------------------------------------------------------')
 
    u1, u2 = solid_body_rotation(geom, metric, param)
 
@@ -100,7 +100,7 @@ def williamson_case1(geom, metric, param):
 
    return u1, u2, h
 
-def height_case1(geom, metric, param, step):
+def height_case1(geom: CubedSphere2D, metric, param, step):
    # Initialize gaussian bell
    step_time = step * param.dt
 
@@ -116,7 +116,8 @@ def height_case1(geom, metric, param, step):
 
    radius = 1.0 / 3.0
 
-   dist = numpy.arccos(math.sin(lat_center) * geom.sinlat + math.cos(lat_center) * geom.coslat * numpy.cos(geom.lon - lon_center))
+   dist = numpy.arccos(math.sin(lat_center) * geom.sinlat + \
+                       math.cos(lat_center) * geom.coslat * numpy.cos(geom.lon - lon_center))
 
    return 0.5 * h0 * (1.0 + numpy.cos(math.pi * dist / radius)) * (dist <= radius)
 
@@ -153,7 +154,7 @@ def williamson_case5(geom: CubedSphere2D, metric, mtrx: DFROperators, param):
 
    u1, u2 = solid_body_rotation(geom, metric, param)
 
-   h_star = (gravity*h0 - (geom.earth_radius * geom.rotation_speed * u0 + 0.5*u0**2)*(geom.sinlat_new)**2) / gravity
+   h_star = (gravity*h0 - (geom.earth_radius * geom.rotation_speed * u0 + 0.5*u0**2)*(geom.sinlat)**2) / gravity
    # h_star = geom.to_single_block(h_star)
 
    # Isolated mountain
@@ -164,90 +165,42 @@ def williamson_case5(geom: CubedSphere2D, metric, mtrx: DFROperators, param):
    lon_mountain = 3.0 * math.pi / 2.0
    lat_mountain = math.pi / 6.0
 
-   r = numpy.sqrt(numpy.minimum(rr**2, (geom.lon_new - lon_mountain)**2 + (geom.lat_new - lat_mountain)**2))
+   r = numpy.sqrt(numpy.minimum(rr**2, (geom.lon - lon_mountain)**2 + (geom.lat - lat_mountain)**2))
 
-   # r_itf_i = numpy.sqrt(numpy.minimum(rr**2, (geom.lon_itf_i - lon_mountain)**2 + (geom.lat_itf_i - lat_mountain)**2))
-   # r_itf_j = numpy.sqrt(numpy.minimum(rr**2, (geom.lon_itf_j - lon_mountain)**2 + (geom.lat_itf_j - lat_mountain)**2))
+   r_itf_i = numpy.sqrt(numpy.minimum(rr**2, (geom.lon_itf_i - lon_mountain)**2 + (geom.lat_itf_i - lat_mountain)**2))
+   r_itf_j = numpy.sqrt(numpy.minimum(rr**2, (geom.lon_itf_j - lon_mountain)**2 + (geom.lat_itf_j - lat_mountain)**2))
 
-   r_itf_i_new = numpy.sqrt(numpy.minimum(rr**2, (geom.lon_itf_i_new - lon_mountain)**2 + (geom.lat_itf_i_new - lat_mountain)**2))
-   r_itf_j_new = numpy.sqrt(numpy.minimum(rr**2, (geom.lon_itf_j_new - lon_mountain)**2 + (geom.lat_itf_j_new - lat_mountain)**2))
+   r_itf_i[geom.west_edge] = 0.0
+   r_itf_i[geom.east_edge] = 0.0
+   r_itf_j[geom.south_edge] = 0.0
+   r_itf_j[geom.north_edge] = 0.0
 
-   # print(f'lon itf shape = {geom.lon_itf_i_new.shape}')
+   hsurf = hs0 * (1 - r / rr)
 
-   r_itf_i_new[geom.west_edge] = 0.0
-   r_itf_i_new[geom.east_edge] = 0.0
-   r_itf_j_new[geom.south_edge] = 0.0
-   r_itf_j_new[geom.north_edge] = 0.0
+   hsurf_itf_i = hs0 * (1. - r_itf_i / rr)
+   hsurf_itf_j = hs0 * (1. - r_itf_j / rr)
 
-   # diff_i = r_itf_i_new - geom._to_new_itf_i(r_itf_i)
-   # diff_i_norm = numpy.linalg.norm(diff_i) / numpy.linalg.norm(r_itf_i)
-
-   # diff_j = r_itf_j_new - geom._to_new_itf_j(r_itf_j)
-   # diff_j_norm = numpy.linalg.norm(diff_j) / numpy.linalg.norm(r_itf_j)
-
-   # if diff_i_norm > 1e-10 or diff_j_norm > 1e-10:
-   #    print(f'lon itf j = \n{geom.lon_itf_j_new}\nlat itf j = \n{geom.lat_itf_j_new}')
-   #    print(f'rank {MPI.COMM_WORLD.rank}, old r itf i = \n{r_itf_i}, \n'
-   #          f'new r itf i = \n{r_itf_i_new}, \ndiff = \n{diff_i}')
-   #    raise ValueError(f'Large diff! {diff_i_norm:.2e}, {diff_j_norm:.2e}')
-
-   # r_old = numpy.sqrt(numpy.minimum(rr**2, (geom.lon - lon_mountain)**2 + (geom.lat - lat_mountain)**2))
-   # hsurf = hs0 * (1 - r_old / rr)
-   hsurf_new = hs0 * (1 - r / rr)
-
-   # nb_interfaces_horiz = param.nb_elements_horizontal + 1
-   # hsurf_itf_i = numpy.zeros((param.nb_elements_horizontal+2, param.nbsolpts*param.nb_elements_horizontal, 2))
-   # hsurf_itf_j = numpy.zeros((param.nb_elements_horizontal+2, 2, param.nbsolpts*param.nb_elements_horizontal))
-
-   hsurf_itf_i_new = hs0 * (1. - r_itf_i_new / rr)
-   hsurf_itf_j_new = hs0 * (1. - r_itf_j_new / rr)
-
-   hsurf_itf_i_new[geom.west_edge] = 0.0
-   hsurf_itf_i_new[geom.east_edge] = 0.0
-   hsurf_itf_j_new[geom.south_edge] = 0.0
-   hsurf_itf_j_new[geom.north_edge] = 0.0
-
-   # for itf in range(nb_interfaces_horiz):
-   #    elem_L = itf
-   #    elem_R = itf + 1
-
-   #    hsurf_itf_i[elem_L, :, 1] = hs0 * (1. - r_itf_i[itf, :] / rr)
-   #    hsurf_itf_i[elem_R, :, 0] = hsurf_itf_i[elem_L, :, 1]
-
-   #    hsurf_itf_j[elem_L, 1, :] = hs0 * (1. - r_itf_j[itf, :] / rr)
-   #    hsurf_itf_j[elem_R, 0, :] = hsurf_itf_j[elem_L, 1, :]
-
-   dzdx1_new = hsurf_new @ mtrx.derivative_x + geom.middle_itf_i(hsurf_itf_i_new) @ mtrx.correction_WE
-   dzdx2_new = hsurf_new @ mtrx.derivative_y + geom.middle_itf_j(hsurf_itf_j_new) @ mtrx.correction_SN
-
-   # ni, nj = geom.lon.shape
-   # dzdx1 = numpy.zeros((ni, nj))
-   # dzdx2 = numpy.zeros((ni, nj))
-
-   # offset = 1 # Offset due to the halo
-   # for elem in range(param.nb_elements_horizontal):
-   #    epais = elem * param.nbsolpts + numpy.arange(param.nbsolpts)
-
-   #    # --- Direction x1
-   #    dzdx1[:, epais] = hsurf[:,epais] @ mtrx.diff_solpt_tr + hsurf_itf_i[elem+offset,:,:] @ mtrx.correction_tr
-
-   #    # --- Direction x2
-   #    dzdx2[epais,:] = mtrx.diff_solpt @ hsurf[epais,:] + mtrx.correction @ hsurf_itf_j[elem+offset,:,:]
-
-   # h = geom.to_single_block(h_star) - hsurf
-   h_new = h_star - hsurf_new
-
-   # return u1, u2, h, hsurf, dzdx1, dzdx2, hsurf_itf_i, hsurf_itf_j
-   return u1, u2, h_new, hsurf_new, dzdx1_new, dzdx2_new, hsurf_itf_i_new, hsurf_itf_j_new
+   hsurf_itf_i[geom.west_edge] = 0.0
+   hsurf_itf_i[geom.east_edge] = 0.0
+   hsurf_itf_j[geom.south_edge] = 0.0
+   hsurf_itf_j[geom.north_edge] = 0.0
 
 
+   dzdx1 = hsurf @ mtrx.derivative_x + geom.middle_itf_i(hsurf_itf_i) @ mtrx.correction_WE
+   dzdx2 = hsurf @ mtrx.derivative_y + geom.middle_itf_j(hsurf_itf_j) @ mtrx.correction_SN
 
-def williamson_case6(geom, metric, param):
+
+   h = h_star - hsurf
+
+   return u1, u2, h, hsurf, dzdx1, dzdx2, hsurf_itf_i, hsurf_itf_j
+
+
+def williamson_case6(geom: CubedSphere2D, metric, param):
    if MPI.COMM_WORLD.rank == 0:
-      print("--------------------------------------------")
-      print("WILLIAMSON CASE 6, Williamson et al. (1992) ")
-      print("Rossby-Haurwitz wave                        ")
-      print("--------------------------------------------")
+      print(f'--------------------------------------------\n'
+            f'WILLIAMSON CASE 6, Williamson et al. (1992) \n'
+            f'Rossby-Haurwitz wave                        \n'
+            f'--------------------------------------------')
 
    # Rossby-Haurwitz wave
 
@@ -260,17 +213,20 @@ def williamson_case6(geom, metric, param):
    A = omega/2.0 * (2.0 * geom.rotation_speed + omega) * geom.coslat**2 + (K**2) / 4.0 * geom.coslat**(2*R) \
       * ( (R+1) * geom.coslat**2 + (2.0 * R**2 - R - 2.0) - 2.0 * (R**2) * geom.coslat**(-2) )
 
-   B = 2.0 * (geom.rotation_speed+omega) * K / ((R + 1) * (R + 2)) * geom.coslat**R * ( (R**2 + 2 * R + 2) - (R + 1)**2 * geom.coslat**2 )
+   B = 2.0 * (geom.rotation_speed+omega) * K / ((R + 1) * (R + 2)) * \
+      geom.coslat**R * ( (R**2 + 2 * R + 2) - (R + 1)**2 * geom.coslat**2 )
 
    C = (K**2) / 4.0 * geom.coslat**(2*R) * ( (R + 1) * (geom.coslat**2) - (R + 2.0) )
 
-   h = h0 + ( geom.earth_radius**2 * A + geom.earth_radius**2*B*numpy.cos(R * geom.lon) + geom.earth_radius**2 * C * numpy.cos(2.0 * R * geom.lon) ) / gravity
+   h = h0 + ( geom.earth_radius**2 * A + geom.earth_radius**2*B*numpy.cos(R * geom.lon) + \
+              geom.earth_radius**2 * C * numpy.cos(2.0 * R * geom.lon) ) / gravity
 
    u = geom.earth_radius * omega * geom.coslat + geom.earth_radius * K * geom.coslat**(R-1) * \
          ( R*geom.sinlat**2 - geom.coslat**2 ) * numpy.cos(R*geom.lon)
    v = -geom.earth_radius * K * R * geom.coslat**(R-1) * geom.sinlat * numpy.sin(R*geom.lon)
 
-   u1, u2 = wind2contra_2d(u, v, geom)
+   # u1, u2 = wind2contra_2d(u, v, geom)
+   u1, u2 = geom.wind2contra(u, v)
 
    return u1, u2, h
 
