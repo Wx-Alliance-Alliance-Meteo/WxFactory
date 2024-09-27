@@ -5,7 +5,7 @@ from .cubed_sphere_2d import CubedSphere2D
 
 class Metric:
    '''Metric for a smooth, three-dimensional earthlike cubed-sphere with the shallow atmosphere approximation'''
-   def __init__(self, geom : CubedSphere2D):
+   def __init__(self, geom: CubedSphere2D):
       # 3D Jacobian, for the cubed-sphere mapping
       # Note that with no topography, ∂z/∂η=1; the model top is included
       # inside the geometry definition, and η=x3

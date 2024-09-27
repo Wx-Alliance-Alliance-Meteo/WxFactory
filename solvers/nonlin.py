@@ -127,10 +127,17 @@ def _nonlin_line_search(func, x, Fx, dx, search_type='armijo', rdiff=1e-8,
       ds = (abs(s) + s_norm + 1) * rdiff
       return (phi(s+ds, store=False) - phi(s)) / ds
 
-   if search_type == 'wolfe': # TODO : parallel ?
-      s, phi1, phi0 = scipy.optimize.linesearch.scalar_search_wolfe1(phi, derphi, tmp_phi[0], xtol=1e-2, amin=smin)
+   # linesearch has moved in Scipy 1.14.0
+   from packaging import version
+   if version.parse(scipy.__version__) >= version.parse('1.14.0'):
+      linesearch_module = scipy.optimize._linesearch
+   else:
+      linesearch_module = scipy.optimize.linesearch
+
+   if search_type == 'wolfe':
+      s, phi1, phi0 = linesearch_module.scalar_search_wolfe1(phi, derphi, tmp_phi[0], xtol=1e-2, amin=smin)
    elif search_type == 'armijo':
-      s, phi1 = scipy.optimize.linesearch.scalar_search_armijo(phi, tmp_phi[0], -tmp_phi[0], amin=smin)
+      s, phi1 = linesearch_module.scalar_search_armijo(phi, tmp_phi[0], -tmp_phi[0], amin=smin)
 
    if s is None:
       # No suitable step length found. Take the full Newton step, and hope for the best.

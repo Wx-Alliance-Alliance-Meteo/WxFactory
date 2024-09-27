@@ -6,7 +6,7 @@ import numpy
 from   numpy.typing import NDArray
 
 from .definitions import *
-from .device import Device
+from .device import Device,default_device
 
 ExchangedVector = Tuple[NDArray, ...] | List[NDArray] | NDArray
 

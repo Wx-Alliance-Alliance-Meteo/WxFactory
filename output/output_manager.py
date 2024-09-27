@@ -5,6 +5,7 @@ from mpi4py import MPI
 import numpy
 
 from common.configuration import Configuration
+from common.device import Device, default_device
 from geometry               import Cartesian2D, CubedSphere, Geometry, Metric, Metric3DTopo, DFROperators
 from init.initialize        import Topo
 from output.blockstats      import blockstats_cart, blockstats_cs
@@ -24,13 +25,15 @@ class OutputManager:
                 geometry: Geometry,
                 metric: Optional[Union[Metric, Metric3DTopo]] = None,
                 operators: Optional[DFROperators] = None,
-                topo: Optional[Topo] = None) -> None:
+                topo: Optional[Topo] = None,
+                device: Device = default_device) -> None:
 
       self.param     = param
       self.geometry  = geometry
       self.metric    = metric
       self.operators = operators
       self.topo      = topo
+      self.device = device
 
       os.makedirs(os.path.abspath(param.output_dir), exist_ok=True)
 

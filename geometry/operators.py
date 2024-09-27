@@ -11,6 +11,7 @@ from .geometry import Geometry
 from .cubed_sphere import CubedSphere
 from common.definitions     import idx_2d_rho_w
 from common.configuration import Configuration
+from common.device import Device, default_device
 from .cartesian_2d_mesh     import Cartesian2D
 from .cubed_sphere          import CubedSphere
 from .geometry              import Geometry
@@ -27,7 +28,7 @@ class DFROperators:
       * Correction matrices: `correction`, `correction_tr`.
    '''
 
-   def __init__(self, grd: Geometry, param: Configuration):
+   def __init__(self, grd: Geometry, param: Configuration, device: Device=default_device):
       '''Initialize the Direct Flux Reconstruction operators (matrices) based on input grid parameters.
 
       Parameters
@@ -43,14 +44,14 @@ class DFROperators:
          If applied, at what relative wavenumber (0 < cutoff < 1) to begin applying the filter
       '''
 
-      if param.filter_apply and not isinstance(grd.solutionPoints, numpy.ndarray):
+      if param.filter_apply and not isinstance(grd.solutionPoints, device.xp.ndarray):
          raise NotImplementedError("DFROperators cannot form a filter with non-numpy arrays")
 
       # Build Vandermonde matrix to transform the modal representation to the (interior)
       # nodal representation
       V = legvander(grd.solutionPoints,grd.nbsolpts-1)
       # Invert the matrix to transform from interior nodes to modes
-      invV = numpy.linalg.inv(V)
+      invV = device.xp.linalg.inv(V)
 
       # Build the negative and positive-side extrapolation matrices by:
       # *) transforming interior nodes to modes
@@ -58,8 +59,8 @@ class DFROperators:
 
       # Note that extrap_neg and extrap_pos should be vectors, not a one-row matrix; numpy
       # treats the two differently.
-      extrap_neg = (legvander(numpy.array([-1.], like=V), grd.nbsolpts - 1) @ invV).reshape((-1,))
-      extrap_pos = (legvander(numpy.array([+1.], like=V), grd.nbsolpts - 1) @ invV).reshape((-1,))
+      extrap_neg = (legvander(device.xp.array([-1.]), grd.nbsolpts - 1) @ invV).reshape((-1,))
+      extrap_pos = (legvander(device.xp.array([+1.]), grd.nbsolpts - 1) @ invV).reshape((-1,))
 
       self.extrap_west = extrap_neg
       self.extrap_east = extrap_pos
@@ -69,13 +70,13 @@ class DFROperators:
       self.extrap_up = extrap_pos
 
       V = legvander(grd.solutionPoints, grd.nbsolpts - 1)
-      invV = numpy.linalg.inv(V)
-      feye = numpy.eye(grd.nbsolpts, like=grd.solutionPoints)
+      invV = device.xp.linalg.inv(V)
+      feye = device.xp.eye(grd.nbsolpts)
       feye[-1, -1] = 0.
       self.highfilter = V @ (feye @ invV)
 
       diff = diffmat(grd.extension_sym)
-      diff = numpy.asarray(diff, like=grd.solutionPoints)
+      diff = device.xp.asarray(diff)
 
       if param.filter_apply:
          self.V = vandermonde(grd.extension)
@@ -84,7 +85,7 @@ class DFROperators:
          Nc = math.floor(param.filter_cutoff * N)
          self.filter = filter_exponential(N, Nc, param.filter_order, self.V, self.invV)
          self.diff_ext = ( self.filter @ diff ).astype(float)
-         self.diff_ext[numpy.abs(self.diff_ext) < 1e-20] = 0.
+         self.diff_ext[device.xp.abs(self.diff_ext) < 1e-20] = 0.
 
       else:
          self.diff_ext = diff
@@ -94,7 +95,7 @@ class DFROperators:
          if not isinstance(grd, CubedSphere):
             raise TypeError(f'The 3D filter can only be applied on a CubedSphere geometry')
          self.expfilter = self.make_filter(param.expfilter_strength, param.expfilter_order, param.expfilter_cutoff,
-                                           grd)
+                                           grd, device)
 
       # Create sponge layer (if desired)
       self.apply_sponge = param.apply_sponge
@@ -103,70 +104,70 @@ class DFROperators:
             raise TypeError(f'The sponge can only be applied on a Cartesian2D geometry')
          nk, ni = grd.X1.shape
          zs = param.z1 - param.sponge_zscale  # zs is bottom of layer
-         self.beta= numpy.zeros_like(grd.X1)  # used as our damping profile
+         self.beta= device.xp.zeros_like(grd.X1)  # used as our damping profile
          # Loop over points
          # TODO use implicit loop (will also work with CUDA)
          for k in range(nk):
             for i in range(ni):
                if (grd.X3[k,i] >= zs):
                   self.beta[k,i] = self.beta[k,i] + (1.0 / param.sponge_tscale) * \
-                                   numpy.sin((0.5*numpy.pi) * (grd.X3[k,i] - zs) / (param.z1 - zs))**2
+                                   device.xp.sin((0.5*device.xp.pi) * (grd.X3[k,i] - zs) / (param.z1 - zs))**2
 
       if check_skewcentrosymmetry(self.diff_ext) is False:
          raise ValueError('Something horribly wrong has happened in the creation of the differentiation matrix')
 
       # Force matrices to be in C-contiguous order
       self.diff_solpt = self.diff_ext[1:-1, 1:-1].copy()
-      self.correction = numpy.column_stack((self.diff_ext[1:-1, 0], self.diff_ext[1:-1, -1]))
+      self.correction = device.xp.column_stack((self.diff_ext[1:-1, 0], self.diff_ext[1:-1, -1]))
 
       self.diff_solpt_tr = self.diff_solpt.T.copy()
       self.correction_tr = self.correction.T.copy()
 
       # Ordinary differentiation matrices (used only in diagnostic calculations)
       self.diff = diffmat(grd.solutionPoints)
-      self.diff = numpy.asarray(self.diff, like=self.diff_solpt)
+      self.diff = device.xp.asarray(self.diff)
       self.diff_tr = self.diff.T
 
-      self.quad_weights = numpy.outer(grd.glweights, grd.glweights)
+      self.quad_weights = device.xp.outer(grd.glweights, grd.glweights)
 
-      ident = numpy.identity(grd.nbsolpts)
-      self.extrap_x = numpy.vstack(( numpy.kron(ident, self.extrap_west),
-                                     numpy.kron(ident, self.extrap_east) )).T
-      self.extrap_y = numpy.vstack(( numpy.kron(self.extrap_south,ident),
-                                     numpy.kron(self.extrap_north,ident))).T
-      self.extrap_z = numpy.vstack(( numpy.kron(self.extrap_down, ident),
-                                     numpy.kron(self.extrap_up,   ident) )).T
+      ident = device.xp.identity(grd.nbsolpts)
+      self.extrap_x = device.xp.vstack(( device.xp.kron(ident, self.extrap_west),
+                                         device.xp.kron(ident, self.extrap_east) )).T
+      self.extrap_y = device.xp.vstack(( device.xp.kron(self.extrap_south,ident),
+                                         device.xp.kron(self.extrap_north,ident))).T
+      self.extrap_z = device.xp.vstack(( device.xp.kron(self.extrap_down, ident),
+                                         device.xp.kron(self.extrap_up,   ident) )).T
 
-      self.derivative_x = numpy.kron(ident, self.diff_solpt).T
-      self.derivative_y = numpy.kron(self.diff_solpt, ident).T
-      self.derivative_z = numpy.kron(self.diff_solpt, ident).T
+      self.derivative_x = device.xp.kron(ident, self.diff_solpt).T
+      self.derivative_y = device.xp.kron(self.diff_solpt, ident).T
+      self.derivative_z = device.xp.kron(self.diff_solpt, ident).T
 
       corr_down = self.diff_ext[1:-1, 0]
       corr_up   = self.diff_ext[1:-1, -1]
-      self.correction_DU = numpy.vstack((numpy.kron(corr_down, numpy.identity(grd.nbsolpts)),
-                                         numpy.kron(corr_up,   numpy.identity(grd.nbsolpts)) ))
+      self.correction_DU = device.xp.vstack((device.xp.kron(corr_down, device.xp.identity(grd.nbsolpts)),
+                                             device.xp.kron(corr_up,   device.xp.identity(grd.nbsolpts)) ))
 
-      self.correction_SN = numpy.vstack((numpy.kron(corr_down, numpy.identity(grd.nbsolpts)),
-                                         numpy.kron(corr_up,   numpy.identity(grd.nbsolpts)) ))
+      self.correction_SN = device.xp.vstack((device.xp.kron(corr_down, device.xp.identity(grd.nbsolpts)),
+                                             device.xp.kron(corr_up,   device.xp.identity(grd.nbsolpts)) ))
 
       corr_west = self.diff_ext[1:-1, 0]
       corr_east = self.diff_ext[1:-1, -1]
-      self.correction_WE = numpy.vstack((numpy.kron(numpy.identity(grd.nbsolpts), corr_west),
-                                         numpy.kron(numpy.identity(grd.nbsolpts), corr_east) ))
+      self.correction_WE = device.xp.vstack((device.xp.kron(device.xp.identity(grd.nbsolpts), corr_west),
+                                             device.xp.kron(device.xp.identity(grd.nbsolpts), corr_east) ))
 
 
-   def make_filter(self, alpha: float, order: int, cutoff: float, geom: Geometry):
+   def make_filter(self, alpha: float, order: int, cutoff: float, geom: Geometry, device: Device = default_device):
       '''Build an exponential modal filter as described in Warburton, eqn 5.16.'''
 
       # Scaled mode numbers
-      modes = numpy.arange(geom.nbsolpts, like=geom.solutionPoints) / (geom.nbsolpts-1)
+      modes = device.xp.arange(geom.nbsolpts, like=geom.solutionPoints) / (geom.nbsolpts-1)
       Nc = cutoff
 
       # After applying the filter, each mode is reduced in proportion to the filter order
       # and the mode number relative to nbsolpts, with modes below the cutoff limit untouched
 
-      residual_modes = numpy.ones_like(modes)
-      residual_modes[modes > Nc] = numpy.exp(-alpha*((modes[modes > Nc] - cutoff)/(1 - cutoff))**order)
+      residual_modes = device.xp.ones_like(modes)
+      residual_modes[modes > Nc] = device.xp.exp(-alpha*((modes[modes > Nc] - cutoff)/(1 - cutoff))**order)
 
       # Now, use a Vandermonde matrix to transform this modal filter into a nodal form
 
@@ -174,9 +175,9 @@ class DFROperators:
       vander = legvander(geom.solutionPoints, geom.nbsolpts - 1)
 
       # node-to-mode operator
-      ivander = numpy.linalg.inv(vander)
+      ivander = device.xp.linalg.inv(vander)
 
-      return vander @ numpy.diag(residual_modes) @ ivander
+      return vander @ device.xp.diag(residual_modes) @ ivander
 
    def apply_filters(self, Q: numpy.ndarray, geom: Geometry, metric, dt: float):
       '''Apply the filters that have been activated on the given state vector.'''

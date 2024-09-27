@@ -30,6 +30,8 @@ class Simulation:
    it entirely.
    """
 
+   device: Device
+
    def __init__(self, config_file: str) -> None:
       self.rank = MPI.COMM_WORLD.rank
 
@@ -38,10 +40,10 @@ class Simulation:
       self.device = self._make_device()
       self.process_topo = ProcessTopology(self.device) if self.config.grid_type == 'cubed_sphere' else None
       self.geometry = self._create_geometry()
-      self.operators = DFROperators(self.geometry, self.config)
+      self.operators = DFROperators(self.geometry, self.config, self.device)
       self.initial_Q, self.topology, self.metric = init_state_vars(self.geometry, self.operators, self.config)
       self.preconditioner = self._create_preconditioner(self.initial_Q)
-      self.output = OutputManager(self.config, self.geometry, self.metric, self.operators, self.topology)
+      self.output = OutputManager(self.config, self.geometry, self.metric, self.operators, self.topology, self.device)
       self.initial_Q, self.starting_step = self._determine_starting_state()
       self.rhs = RhsBundle(self.geometry, self.operators, self.metric, self.topology, self.process_topo, self.config,
                            self.initial_Q.shape, self.device)
@@ -152,17 +154,17 @@ class Simulation:
          if self.config.equations == 'shallow_water':
             return CubedSphere2D(self.config.nb_elements_horizontal, self.config.nbsolpts,
                                  self.config.λ0, self.config.ϕ0, self.config.α0,
-                                 self.process_topo, self.config)
+                                 self.process_topo, self.config, self.device)
          return CubedSphere(self.config.nb_elements_horizontal, self.config.nb_elements_vertical, self.config.nbsolpts,
                             self.config.λ0, self.config.ϕ0, self.config.α0, self.config.ztop,
-                            self.process_topo, self.config)
+                            self.process_topo, self.config, self.device)
 
       if self.config.grid_type == 'cartesian2d':
          #TODO remove array_module reference
          return Cartesian2D((self.config.x0, self.config.x1), (self.config.z0, self.config.z1),
                             self.config.nb_elements_horizontal, self.config.nb_elements_vertical, self.config.nbsolpts,
                             self.config.nb_elements_relief_layer, self.config.relief_layer_height,
-                            self.config.array_module)
+                            self.config.array_module, self.device)
 
       raise ValueError(f'Invalid grid type: {self.config.grid_type}')
 
@@ -184,17 +186,17 @@ class Simulation:
       Q = self.initial_Q
       if starting_step > 0:
          try:
-            starting_state, _ = load_state(self.output.state_file_name(starting_step))
+            starting_state, _ = load_state(self.output.state_file_name(starting_step), self.device)
             if starting_state.shape != Q.shape:
                raise ValueError(f'ERROR reading state vector from file for step {starting_step}. '
                                 f'The shape is wrong! ({starting_state.shape}, should be {Q.shape})')
-            Q = numpy.asarray(starting_state, like=Q)
+            Q = self.device.xp.asarray(starting_state, like=Q)
 
             if MPI.COMM_WORLD.rank == 0:
                print(f'Starting simulation from step {starting_step} (rather than 0)')
                if starting_step * self.config.dt >= self.config.t_end:
                   print(f'WARNING: Won\'t run any steps, since we will stop at step '
-                        f'{int(numpy.ceil(self.config.t_end / self.config.dt))}')
+                        f'{int(self.device.xp.ceil(self.config.t_end / self.config.dt))}')
 
          except (FileNotFoundError, ValueError):
             if self.rank == 0:

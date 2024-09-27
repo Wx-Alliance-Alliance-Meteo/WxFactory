@@ -2,6 +2,7 @@ import math
 from typing import Callable, Tuple
 
 import numpy
+from common.device import Device, default_device
 
 class MatvecOp:
    def __init__(self,
@@ -22,17 +23,17 @@ class MatvecOpBasic(MatvecOp):
          lambda vec: matvec_fun(vec, dt, Q),
          Q.dtype, Q.shape)
 
-def matvec_fun(vec: numpy.ndarray, dt: float, Q: numpy.ndarray, rhs: numpy.ndarray, rhs_handle, method='complex') \
+def matvec_fun(vec: numpy.ndarray, dt: float, Q: numpy.ndarray, rhs: numpy.ndarray, rhs_handle, method='complex', device: Device=default_device) \
    -> numpy.ndarray:
    if method == 'complex':
       # Complex-step approximation
-      epsilon = math.sqrt(numpy.finfo(float).eps)
-      Qvec = Q + 1j * epsilon * numpy.reshape(vec, Q.shape)
+      epsilon = math.sqrt(device.xp.finfo(float).eps)
+      Qvec = Q + 1j * epsilon * device.xp.reshape(vec, Q.shape)
       jac = dt * (rhs_handle(Qvec) / epsilon).imag
    else:
       # Finite difference approximation
-      epsilon = math.sqrt(numpy.finfo(numpy.float32).eps)
-      Qvec = Q + epsilon * numpy.reshape(vec, Q.shape)
+      epsilon = math.sqrt(device.xp.finfo(device.xp.float32).eps)
+      Qvec = Q + epsilon * device.xp.reshape(vec, Q.shape)
       jac = dt * ( rhs_handle(Qvec) - rhs) / epsilon
 
    return jac.flatten()

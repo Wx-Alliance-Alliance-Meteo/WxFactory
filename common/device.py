@@ -2,7 +2,6 @@ from abc    import ABC, abstractmethod
 from typing import Any, List
 
 from mpi4py import MPI
-import numpy
 from numpy.typing import NDArray
 
 class Device(ABC):
@@ -12,10 +11,10 @@ class Device(ABC):
    a case, most operations do nothing
    """
 
-   def __init__(self, xp, expm) -> None:
+   def __init__(self, xp, xalg) -> None:
       """Set a few modules and functions to have the same name, so that callers can use a single name."""
       self.xp = xp
-      self.expm = expm
+      self.xalg = xalg
 
    @abstractmethod
    def __synchronize__(self, **kwargs):
@@ -48,11 +47,16 @@ class Device(ABC):
    def to_host(self, val: Any, **kwargs) -> Any:
       """Copy the given array to the host (if it's not there already)."""
       return self.__to_host__(val, **kwargs)
+   
+   def has_128_bits_float(self) -> bool:
+      """Not all devices can perform 128 bits floating point operation"""
+      return hasattr(self.xp, 'float128')
 
 class CpuDevice(Device):
    def __init__(self) -> None:
-      from scipy.linalg import expm
-      super().__init__(numpy, expm)
+      import numpy
+      import scipy
+      super().__init__(numpy, scipy)
    
    def __synchronize__(self, **kwargs):
       """Don't do anything. This is to allow writing generic code when device is not the same as the host."""
@@ -76,13 +80,16 @@ class CudaDevice(Device):
       # Delay imports, to avoid loading CUDA if not asked
 
       import cupy
-      from wx_cupy import num_devices, expm
-      super().__init__(cupy, expm)
+      import cupyx
+      import cupyx.scipy.linalg
+
+      from wx_cupy import num_devices
+
+      super().__init__(cupy, cupyx.scipy)
 
       if num_devices <= 0:
          raise ValueError(f'Unable to create a CudaDevice object, no GPU devices were detected')
 
-      import cupyx
       self.cupyx = cupyx
       self.cupy = cupy
 

@@ -1,10 +1,22 @@
 import math
 
 from mpi4py import MPI
-import numpy
-import scipy.linalg
+from common.device import Device,default_device
 
-def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 10, mmax = 128, reuse_info = True, task1 = False):
+def pmex(tau_out, A, u, tol = 1e-7, delta = 1.2, m_init = 10, mmax = 128, reuse_info = True, task1 = False, device: Device=default_device):
+   '''
+   tau_out     : Vector of tau_out
+   A           : The matrix argument of the ``φ`` functions
+   u           : The matrix with rows representing the vectors to be multiplied by the ``φ`` functions
+   tol         : Tolerance of the computation
+   delta       : ?
+   m_init      : ?
+   mmax        : Max size of the krylov space
+   reuse_info  : ?
+   task1       : If true, divide the result by 1/tau_out
+   device      : Device to use for the computing
+   '''
+
 
    ppo, n = u.shape
    p = ppo - 1
@@ -12,27 +24,27 @@ def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 10, mmax = 128, reuse_i
    if p == 0:
       p = 1
       # Add extra column of zeros
-      u = numpy.row_stack((u, numpy.zeros(len(u))))
+      u = device.xp.row_stack((u, device.xp.zeros(len(u))))
 
    step    = 0
    krystep = 0
    ireject = 0
    reject  = 0
    exps    = 0
-   sgn     = numpy.sign(τ_out[-1])
-   τ_now   = 0.0
-   τ_end   = abs(τ_out[-1])
+   sgn     = device.xp.sign(tau_out[-1])
+   tau_now   = 0.0
+   tau_end   = abs(tau_out[-1])
    happy   = False
    j       = 0
    conv    = 0.0
    reg_comm_nrm = 0
-   numSteps = len(τ_out)
+   numSteps = len(tau_out)
 
    first_accepted = True
 
    if not hasattr(pmex, "static_mem") or reuse_info is False:
       pmex.static_mem = True
-      pmex.suggested_step = τ_end
+      pmex.suggested_step = tau_end
       pmex.suggested_m = mmax
       m_opt  = 1
    else:
@@ -44,21 +56,25 @@ def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 10, mmax = 128, reuse_i
    m = max(mmin, min(m_init, mmax))
 
    # Preallocate matrix
-   V = numpy.zeros((mmax + 1, n + p))
-   H = numpy.zeros((mmax + 1, mmax + 1))
-   Minv = numpy.eye(mmax)
-   M = numpy.eye(mmax)
-   N = numpy.zeros([mmax,mmax])
+   V = device.xp.zeros((mmax + 1, n + p))
+   H = device.xp.zeros((mmax + 1, mmax + 1))
+   Minv = device.xp.eye(mmax)
+   M = device.xp.eye(mmax)
+   N = device.xp.zeros([mmax,mmax])
 
    # Initial condition
-   w = numpy.zeros((numSteps, n))
+   w = device.xp.zeros((numSteps, n))
    w[0, :] = u[0, :].copy()
 
+
    # compute the 1-norm of u
-   local_nrmU = numpy.sum(abs(u[1:, :]), axis=1)
-   global_normU = numpy.empty_like(local_nrmU)
+   local_nrmU = device.xp.sum(abs(u[1:, :]), axis=1)
+   global_normU = device.xp.empty_like(local_nrmU)
+
+   device.synchronize()
    MPI.COMM_WORLD.Allreduce([local_nrmU, MPI.DOUBLE], [global_normU, MPI.DOUBLE])
-   normU = numpy.amax(global_normU)
+
+   normU = device.xp.amax(global_normU)
 
    # Normalization factors
    if ppo > 1 and normU > 0:
@@ -70,27 +86,27 @@ def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 10, mmax = 128, reuse_i
       mu = 1.0
 
    # Flip the rest of the u matrix
-   u_flip = nu * numpy.flipud(u[1:, :])
+   u_flip = nu * device.xp.flipud(u[1:, :])
 
    # Compute and initial starting approximation for the step size
-   τ = min(pmex.suggested_step, τ_end)
+   tau = min(pmex.suggested_step, tau_end)
 
    # Setting the safety factors and tolerance requirements
-   if τ_end > 1:
-      γ = 0.2
-      γ_mmax = 0.1
+   if tau_end > 1:
+      gamma = 0.2
+      gamma_mmax = 0.1
    else:
-      γ = 0.9
-      γ_mmax = 0.6
+      gamma = 0.9
+      gamma_mmax = 0.6
 
    # Used in the adaptive selection
-   oldm = -1; oldτ = math.nan; ω = math.nan
+   old_m = -1; old_tau = math.nan; ohm = math.nan
    kestold = True
-   same_τ = None
+   same_tau = None
 
    l = 0
 
-   while τ_now < τ_end:
+   while tau_now < tau_end:
 
       # Compute necessary starting information
       if j == 0:
@@ -102,68 +118,79 @@ def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 10, mmax = 128, reuse_i
          # Update the last part of w
          for k in range(p-1):
             i = p - k + 1
-            V[j, n+k] = (τ_now**i) / math.factorial(i) * mu
+            V[j, n+k] = (tau_now**i) / math.factorial(i) * mu
          V[j, n+p-1] = mu
 
          # Normalize initial vector (this norm is nonzero)
          local_sum = V[0, 0:n] @ V[0, 0:n]
-         global_sum_nrm = numpy.empty_like(local_sum)
+         global_sum_nrm = device.xp.empty_like(local_sum)
+         device.synchronize()
          MPI.COMM_WORLD.Allreduce([local_sum, MPI.DOUBLE], [global_sum_nrm, MPI.DOUBLE])
-         β = math.sqrt( global_sum_nrm + V[j, n:n+p] @ V[j, n:n+p] )
+         beta = math.sqrt( global_sum_nrm + V[j, n:n+p] @ V[j, n:n+p] ) 
 
          # The first Krylov basis vector
-         V[j, :] /= β
+         V[j, :] /= beta
 
       # Incomplete orthogonalization process
       while j < m:
 
          j = j + 1
 
-         # Augmented matrix - vector product
+         #1. Augmented matrix - vector product
          V[j, 0:n    ] = A( V[j-1, 0:n] ) + V[j-1, n:n+p] @ u_flip
          V[j, n:n+p-1] = V[j-1, n+1:n+p]
          V[j, -1     ] = 0.0
 
          #2. compute terms needed for R and T
          local_vec  = V[0:j+1, 0:n] @ V[j-1:j+1, 0:n].T
-         global_vec = numpy.empty_like(local_vec)
+         global_vec = device.xp.empty_like(local_vec)
+
+         device.synchronize()
          MPI.COMM_WORLD.Allreduce([local_vec, MPI.DOUBLE], [global_vec, MPI.DOUBLE])
+
          global_vec += V[0:j+1, n:n+p] @ V[j-1:j+1, n:n+p].T
 
          #3. Projection with 2-step Gauss-Seidel to the orthogonal complement
          # Note: this is done in two steps. (1) matvec and (2) a lower
          # triangular solve
-         # 4a. here we set the values for matrix M, Minv, N
+         # 3a. here we set the values for matrix M, Minv, N
          if (j > 1):
-           M[j-1, 0:j-1]    =  global_vec[0:j-1,0]
-           N[0:j-1, j-1]    = -global_vec[0:j-1,0]
-           Minv[j-1, 0:j-1] = -global_vec[0:j-1,0].T @ Minv[0:j-1, 0:j-1]
+            M[j-1, 0:j-1]    =  global_vec[0:j-1,0]
+            N[0:j-1, j-1]    = -global_vec[0:j-1,0]
+            Minv[j-1, 0:j-1] = -global_vec[0:j-1,0].T @ Minv[0:j-1, 0:j-1]
 
          #3b. part 1: the mat-vec
-         rhs = ( numpy.eye(j) + numpy.matmul(N[0:j, 0:j], Minv[0:j,0:j]) ) @ global_vec[0:j,1]
+         rhs = ( device.xp.eye(j) + device.xp.matmul(N[0:j, 0:j], Minv[0:j,0:j]) ) @ global_vec[0:j,1]
 
          #3c. part 2: the lower triangular solve
-         sol = scipy.linalg.solve_triangular(M[0:j, 0:j], rhs, unit_diagonal=True, check_finite=False, overwrite_b=True)
+         sol = device.xalg.linalg.solve_triangular(M[0:j, 0:j], rhs, unit_diagonal=True, check_finite=False, overwrite_b=True)
 
          #4. Orthogonalize
          V[j, :] -= sol @ V[0:j, :]
 
          #5. compute norm estimate with quad precision
-         sum_vec  = numpy.array(global_vec[0:j,1], numpy.float128)**2
-         sum_sqrd = numpy.sum(sum_vec)
+         if device.has_128_bits_float() is True:
+            sum_vec  = device.xp.array(global_vec[0:j,1], device.xp.float128)**2
+            sum_sqrd = device.xp.sum(sum_vec)
+         else:
+            device.synchronize()
+            sum_vec = default_device.xp.array(global_vec[0:j,1].get(), default_device.xp.float128)**2
+            sum_sqrd = device.array(default_device.xp.asarray(default_device.xp.sum(sum_vec), dtype=default_device.xp.float64))
+         
 
          #sum_sqrd = sum(global_vec[0:j,1]**2)
          if (global_vec[-1,1] < sum_sqrd):
             #use communication to compute norm estimate
             local_sum = V[j, 0:n] @ V[j, 0:n]
-            global_sum_nrm = numpy.empty_like(local_sum)
+            global_sum_nrm = device.xp.empty_like(local_sum)
+            device.synchronize()
             MPI.COMM_WORLD.Allreduce([local_sum, MPI.DOUBLE], [global_sum_nrm, MPI.DOUBLE])
             curr_nrm = math.sqrt( global_sum_nrm + V[j,n:n+p] @ V[j, n:n+p] )
             reg_comm_nrm += 1
          else:
-
            #compute norm estimate in quad precision
-           curr_nrm = numpy.array(numpy.sqrt(global_vec[-1,1] - sum_sqrd), numpy.float64)
+           curr_nrm = device.xp.array(device.xp.sqrt(global_vec[-1,1] - sum_sqrd), device.xp.float64)
+           
 
          # Happy breakdown
          if curr_nrm < tol:
@@ -181,11 +208,11 @@ def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 10, mmax = 128, reuse_i
       H[0, j] = 1.0
 
       # Save h_j+1,j and remove it temporarily to compute the exponential of H
-      nrm = H[j, j-1]
+      nrm = H[j, j-1].copy()
       H[j, j-1] = 0.0
 
       # Compute the exponential of the augmented matrix
-      F_half = scipy.linalg.expm(sgn * 0.5 * τ * H[0:j + 1, 0:j + 1])
+      F_half = device.xalg.linalg.expm(sgn * 0.5 * tau * H[0:j + 1, 0:j + 1])
       F = F_half @ F_half
 
       exps += 1
@@ -195,28 +222,28 @@ def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 10, mmax = 128, reuse_i
 
       if happy is True:
          # Happy breakdown wrap up
-         ω     = 0.
+         ohm     = 0.
          err   = 0.
-         τ_new = min(τ_end - (τ_now + τ), τ)
+         tau_new = min(tau_end - (tau_now + tau), tau)
          m_new = m
          happy = False
 
       else:
 
          # Local truncation error estimation
-         err_half = abs(β * nrm * F_half[j-1, j])
-         err      = abs(β * nrm * F[j-1, j])
+         err_half = abs(beta * nrm * F_half[j-1, j])
+         err      = abs(beta * nrm * F[j-1, j])
 
          # Error for this step
-         oldω = ω
-         ω = τ_end * err / (τ * tol)
+         old_ohm = ohm
+         ohm = tau_end * err / (tau * tol)
 
          # Estimate order
          order = math.log(err / err_half) / math.log(2)
 
          # Estimate k
-         if m != oldm and τ == oldτ and ireject >= 1:
-            kest = max(1.1, (ω/oldω)**(1/(oldm-m)))
+         if m != old_m and tau == old_tau and ireject >= 1:
+            kest = max(1.1, (ohm/old_ohm)**(1/(old_m-m)))
             kestold = False
          elif kestold is True or ireject == 0:
             kest = 2
@@ -224,53 +251,53 @@ def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 10, mmax = 128, reuse_i
          else:
             kestold = True
 
-         if ω > delta:
-            remaining_time = τ_end - τ_now
+         if ohm > delta:
+            remaining_time = tau_end - tau_now
          else:
-            remaining_time = τ_end - (τ_now + τ)
+            remaining_time = tau_end - (tau_now + tau)
 
          # Krylov adaptivity
-         same_τ = min(remaining_time, τ)
+         same_tau = min(remaining_time, tau)
 
-         τ_opt  = τ * (γ / ω)**(1 / order)
-         τ_opt  = min(remaining_time, max(τ/5, min(5*τ, τ_opt)))
+         tau_opt  = tau * (gamma / ohm)**(1 / order)
+         tau_opt  = min(remaining_time, max(tau/5, min(5*tau, tau_opt)))
 
-         m_opt = math.ceil(j + math.log(ω / γ) / math.log(kest))
+         m_opt = math.ceil(j + math.log(ohm / gamma) / math.log(kest))
          m_opt = max(mmin, min(mmax, max(math.floor(3/4*m), min(m_opt, math.ceil(4/3*m)))))
 
          if j == mmax:
-            if ω > delta:
+            if ohm > delta:
                m_new = j
-               τ_new = τ * (γ_mmax / ω)**(1 / order)
-               τ_new = min(τ_end - τ_now, max(τ/5, τ_new))
+               tau_new = tau * (gamma_mmax / ohm)**(1 / order)
+               tau_new = min(tau_end - tau_now, max(tau/5, tau_new))
             else:
-               τ_new = τ_opt
+               tau_new = tau_opt
                m_new = m
          else:
-            if same_τ < τ:
+            if same_tau < tau:
                m_new = m # We reduced tau to avoid small step size. Then keep m constant.
             else:
                m_new = m_opt
-            τ_new = same_τ
+            tau_new = same_tau
 
       # Check error against target
-      if ω <= delta:
+      if ohm <= delta:
          # Yep, got the required tolerance; update
          reject += ireject
          step   += 1
 
          """
          if first_accepted:
-            pmex.suggested_step = min(pmex.suggested_step, τ)
+            pmex.suggested_step = min(pmex.suggested_step, tau)
             pmex.suggested_m    = min(pmex.suggested_m, m_opt)
             first_accepted = False
          """
 
-         # Udate for τ_out in the interval (τ_now, τ_now + τ)
+         # Udate for tau_out in the interval (tau_now, tau_now + tau)
          blownTs = 0
-         nextT = τ_now + τ
+         nextT = tau_now + tau
          for k in range(l, numSteps):
-            if abs(τ_out[k]) < abs(nextT):
+            if abs(tau_out[k]) < abs(nextT):
                blownTs += 1
 
          if blownTs != 0:
@@ -278,18 +305,18 @@ def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 10, mmax = 128, reuse_i
             w[l+blownTs, :] = w[l, :].copy()
 
             for k in range(blownTs):
-               τPhantom = τ_out[l+k] - τ_now
-               F2 = scipy.linalg.expm(sgn * τPhantom * H[0:j, :j])
-               w[l+k, :] = β * F2[:j, 0] @ V[:j, :n]
+               tau_phantom = tau_out[l+k] - tau_now
+               F2 = device.xalg.linalg.expm(sgn * tau_phantom * H[0:j, :j])
+               w[l+k, :] = beta * F2[:j, 0] @ V[:j, :n]
 
             # Advance l.
             l += blownTs
 
          # Using the standard scheme
-         w[l, :] = β * F[:j, 0] @ V[:j, :n]
+         w[l, :] = beta * F[:j, 0] @ V[:j, :n]
 
-         # Update τ_out
-         τ_now += τ
+         # Update tau_out
+         tau_now += tau
 
          j = 0
          ireject = 0
@@ -303,15 +330,15 @@ def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 10, mmax = 128, reuse_i
          # Restore the original matrix
          H[0, j] = 0.0
 
-      oldτ = τ
-      τ    = τ_new
+      old_tau = tau
+      tau    = tau_new
 
-      oldm = m
+      old_m = m
       m    = m_new
 
    if task1 is True:
       for k in range(numSteps):
-         w[k, :] = w[k, :] / τ_out[k]
+         w[k, :] = w[k, :] / tau_out[k]
 
    m_ret=m
 

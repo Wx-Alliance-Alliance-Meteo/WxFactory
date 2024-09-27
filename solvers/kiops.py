@@ -2,9 +2,7 @@ import math
 from   typing import Callable
 
 from mpi4py import MPI
-import numpy
-from   numpy.typing import NDArray
-import scipy.linalg
+from numpy.typing import NDArray
 
 from common.device import Device, default_device
 
@@ -94,7 +92,7 @@ def kiops(tau_out: NDArray, A: Callable[[NDArray], NDArray], u: NDArray,
 
    # Initial condition
    w = xp.zeros((numSteps, n))
-   w[0, :] = u[0, :]
+   w[0, :] = u[0, :].copy()
 
    # compute 1-norm of u
    local_normU = xp.sum(xp.abs(u[1:, :]), axis=1)
@@ -203,7 +201,7 @@ def kiops(tau_out: NDArray, A: Callable[[NDArray], NDArray], u: NDArray,
       H[j, j - 1] = 0.0
 
       # Compute the exponential of the augmented matrix
-      F = device.expm(sgn * tau * H[:j + 1, :j + 1])
+      F = device.xalg.linalg.expm(sgn * tau * H[:j + 1, :j + 1])
       exps += 1
 
       # Restore the value of H_{m+1,m}
@@ -292,7 +290,7 @@ def kiops(tau_out: NDArray, A: Callable[[NDArray], NDArray], u: NDArray,
 
             for k in range(blownTs):
                tauPhantom = tau_out[l + k] - tau_now
-               F2 = device.expm(sgn * tauPhantom * H[:j, :j])
+               F2 = device.xalg.linalg.expm(sgn * tauPhantom * H[:j, :j])
                w[l+k, :] = beta * F2[:j, 0] @ V[:j, :n]
 
             # Advance l.

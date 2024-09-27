@@ -53,10 +53,11 @@ def plot_array(array, filename=None):
 
 def image_field(geom: 'Cartesian2D', field: numpy.ndarray, filename: str, vmin: float, vmax: float, n: int, \
                 label: str = 'K', colormap: str = 'jet'):
+   device = geom.device
    fig, ax = matplotlib.pyplot.subplots()
 
 #   if not geom.xperiodic:
-   cmap = matplotlib.pyplot.contourf(geom.X1_cartesian, geom.X3_cartesian, field, cmap=colormap,
+   cmap = matplotlib.pyplot.contourf(device.to_host(geom.X1_cartesian), device.to_host(geom.X3_cartesian), device.to_host(field), cmap=colormap,
                                        levels=numpy.linspace(vmin,vmax,n), extend="both")
 #   else:
       # X1 = numpy.append(geom.X1[:, -1:], geom.X1, axis=1)

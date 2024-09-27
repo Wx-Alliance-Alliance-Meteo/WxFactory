@@ -8,12 +8,14 @@ from .geometry   import Geometry
 from .sphere     import cart2sph
 
 # For type hints
-from common.process_topology import ProcessTopology
 from common.configuration    import Configuration
+from common.device           import Device, default_device
+from common.process_topology import ProcessTopology
 
 class CubedSphere2D(Geometry):
    def __init__(self, nb_elements_horizontal:int , nbsolpts: int,
-                λ0: float, ϕ0: float, α0: float, ptopo: ProcessTopology, param: Configuration):
+                λ0: float, ϕ0: float, α0: float, ptopo: ProcessTopology, param: Configuration,
+                device: Device = default_device):
       '''Initialize the cubed sphere geometry, for an earthlike sphere with no topography.
 
       This function initializes the basic CubedSphere geometry object, which provides the parameters necessary to define
@@ -70,8 +72,8 @@ class CubedSphere2D(Geometry):
       '''
       rank = MPI.COMM_WORLD.rank
 
-      super().__init__(nbsolpts, 'cubed_sphere', param.array_module)
-      xp = self.array_module
+      super().__init__(nbsolpts, 'cubed_sphere', device)
+      xp = self.device.xp
 
       ## Panel / parallel decomposition properties
       self.ptopo = ptopo
