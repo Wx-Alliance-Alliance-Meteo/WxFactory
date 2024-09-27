@@ -7,31 +7,6 @@ from geometry               import gauss_legendre, lagrange_eval, remesh_operato
 
 basis_point_sets = {}
 
-def eval_single_field_2d(field, elem_interp, xp, result=None):
-
-   new_num_points = elem_interp.shape[0]
-   old_num_points = elem_interp.shape[1]
-
-   nx = field.shape[0] // old_num_points
-   nz = field.shape[1] // old_num_points
-
-   # Interpolate (vertically) on entire rows of elements at once
-   interp_1 = xp.empty_like(field, shape=(nx * new_num_points, nz * old_num_points))
-   for i in range(nx):
-      interp_1[i * new_num_points:(i + 1) * new_num_points, :] = \
-         elem_interp @ field[i * old_num_points:(i + 1) * old_num_points, :]
-
-   # Interpolate (horizontally) on columns of interpolated elements
-   if result is None:
-      result = xp.empty_like(field, shape=(nx * new_num_points, nz * new_num_points))
-
-   for i in range(nz):
-      result[:, i * new_num_points:(i + 1) * new_num_points] = \
-         interp_1[:, i * old_num_points:(i + 1) * old_num_points] @ elem_interp.T
-
-   return result
-
-
 def eval_single_field_3d(field, elem_interp, xp, result=None):
    new_num_points = elem_interp.shape[0]
    old_num_points = elem_interp.shape[1]
@@ -171,6 +146,7 @@ def get_basis_points(basis_type: str, order: int, include_boundary: bool = False
 
 
 class Interpolator:
+   """This class is used to perform DG/FV interpolation in multigrid"""
    elem_interp: numpy.ndarray
    def __init__(self,
                 origin_type: str,
@@ -183,6 +159,7 @@ class Interpolator:
                 param: Configuration,
                 include_boundary: bool = False,
                 verbose: bool = False):
+
       origin_points = get_basis_points(origin_type, origin_order, include_boundary)
       dest_points = get_basis_points(dest_type, dest_order, include_boundary)
 
@@ -191,19 +168,41 @@ class Interpolator:
       self.grid_type = grid_type
       self.ndim = ndim
 
+      # Make sure the right CPU/GPU module is used
       self.xp = get_array_module(param.array_module)
       xp = self.xp
 
       # Base interpolation matrix
-      # self.elem_interp = None
       self.reverse_interp = None
       if interp_type == 'lagrange':
-         self.elem_interp    = xp.array([lagrange_eval(origin_points, x) for x in dest_points])
-         self.reverse_interp = xp.array([lagrange_eval(dest_points, x) for x in origin_points])
+         # Get the one-dimensional interpolation operators
+         elem_interp   = xp.array([lagrange_eval(origin_points, x) for x in dest_points])
+         elem_interp_r = xp.array([lagrange_eval(dest_points, x) for x in origin_points])
+
+         # The two dimensional operator is the Kronecker product (or tensor
+         # product) of two one-dimensional array
+         self.elem_interp = xp.kron(elem_interp, elem_interp)
+         self.reverse_interp = xp.kron(elem_interp_r, elem_interp_r)
+
+         # The three-dimensional operator is the Kronecker product (or tensor
+         # product) of the one and two dimensional interpolators
+         if ndim == 3:
+            self.elem_interp = xp.kron(self.elem_interp, elem_interp)
+            self.reverse_interp = xp.kron(self.reverse_interp, elem_interp_r)
+
       elif interp_type == 'l2-norm':
          self.elem_interp = compute_dg_to_fv_small_projection(origin_order, dest_order, quad_order=3)
       elif interp_type in ['bilinear', 'trilinear']:
-         self.elem_interp = xp.array([get_linear_weights(origin_points, x) for x in dest_points])
+         # The two dimensional operator is the Kronecker product (or tensor
+         # product) of two one-dimensional array
+         elem_interp = xp.array([get_linear_weights(origin_points, x) for x in dest_points])
+
+         self.elem_interp = xp.kron(elem_interp, elem_interp)
+
+         # Apply the third-dimension tensor product
+         if ndim == 3:
+            self.elem_interp = xp.kron(self.elem_interp, elem_interp)
+
       elif interp_type == 'modal':
          self.elem_interp    = remesh_operator(origin_points, dest_points)
          self.reverse_interp = remesh_operator(dest_points, origin_points)
@@ -244,7 +243,6 @@ class Interpolator:
          print(f'vel reverse interp:\n{self.velocity_reverse_interp}')
 
    def __call__(self, fields: numpy.ndarray, reverse: bool = False):
-
       xp = self.xp
       num_fields = fields.shape[0]
 
@@ -255,10 +253,8 @@ class Interpolator:
 
       # Select interpolation method (based on problem dimension) and create result array
       if self.ndim == 2:
-         eval_fct = eval_single_field_2d
-         new_size_i = fields.shape[1] * base_interp.shape[0] // base_interp.shape[1]
-         new_size_j = fields.shape[2] * base_interp.shape[0] // base_interp.shape[1]
-         result = xp.empty_like(fields, shape=(num_fields, new_size_i, new_size_j))
+         # DG interpolation is now dimension-independent
+         pass
       elif self.ndim == 3:
          eval_fct = eval_single_field_3d
          new_size_vert  = fields.shape[1] * base_interp.shape[0] // base_interp.shape[1]
@@ -267,12 +263,17 @@ class Interpolator:
       else:
          raise ValueError(f'We cannot deal with ndim = {self.ndim}')
 
-      o_type = self.origin_type if not reverse else self.dest_type
-      d_type = self.dest_type   if not reverse else self.origin_type
+      # o_type = self.origin_type if not reverse else self.dest_type
+      # d_type = self.dest_type   if not reverse else self.origin_type
       # print(f'ndim: {self.ndim}, shape: {o_type} {fields.shape} -> {d_type} {result.shape} (interp shape: {base_interp.T.shape})')
 
       # Perform the interpolation for each field
+      if reverse:
+         # Reorganize the finite volume arrays into DG elements
+         fields = fields.reshape(num_fields, -1, interp_ops[0].shape[1])
+
+      result = xp.empty((num_fields, fields.shape[1], interp_ops[0].shape[0]))
       for i in range(num_fields):
-         eval_fct(fields[i], interp_ops[i], self.xp, result[i])
+         xp.matmul(interp_ops[i], fields[i].T, out=result[i].T)
 
       return result

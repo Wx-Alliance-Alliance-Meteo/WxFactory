@@ -18,6 +18,7 @@ from init.init_state_vars    import init_state_vars
 from precondition.smoother   import KiopsSmoother, ExponentialSmoother, RK1Smoother, RK3Smoother, ARK3Smoother
 from rhs.rhs_selector        import RhsBundle
 from solvers                 import fgmres, global_norm, KrylovJacobian, matvec_rat, MatvecOp
+from rhs.rhs                 import get_rhs
 
 MatvecOperator = Callable[[numpy.ndarray], numpy.ndarray]
 
@@ -74,7 +75,11 @@ class MultigridLevel:
       operators = DFROperators(self.geometry, p)
 
       field, topo, self.metric = init_state_vars(self.geometry, operators, self.param)
-      self.rhs = RhsBundle(self.geometry, operators, self.metric, topo, ptopo, self.param, field.shape, device)
+      # self.rhs = RhsBundle(self.geometry, operators, self.metric, topo, ptopo, self.param, field.shape, device)
+
+      rhs_class = get_rhs("dfr")
+      self.rhs = rhs_class("euler-cartesian", self.geometry, operators, self.metric, topo, ptopo, self.param,
+                      device)
       if verbose > 0: print(f'field shape: {field.shape}')
       self.shape = field.shape
       self.dtype = field.dtype

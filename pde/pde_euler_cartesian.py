@@ -14,14 +14,12 @@ class PDEEulerCartesian(PDE):
 
         super().__init__(config, device)
 
-        print("entering here", self.num_dim)
         if self.num_dim == 2:
             self.nb_elements = self.config.nb_elements_horizontal \
                 * self.config.nb_elements_vertical
 
         self.nb_var = config.nb_var
 
-        print(self.config.device)
         if self.config.device == 'cuda':
             self.pointwise_fluxes = self.pointwise_fluxes_cuda
             self.riemann_fluxes = self.riemann_fluxes_cuda

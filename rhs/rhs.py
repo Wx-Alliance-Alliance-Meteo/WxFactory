@@ -28,9 +28,12 @@ from pde.pde import get_pde
 
 
 def get_rhs(name):
-    if name == "DFR":
+    if name == "dfr" or name == "dg":
         from rhs.rhs_dfr import RHS_DFR
         return RHS_DFR
+    if name == "fv":
+        from rhs.rhs_fv import RHS_FV
+        return RHS_FV
 
 
 class RHS(ABC):
@@ -44,55 +47,16 @@ class RHS(ABC):
         self.ptopo = process_topo
         self.config = config
         self.device = device
-        self.num_dim = num_dim = config.num_dim
+        self.num_dim = config.num_dim
 
-        # Extract the appropriate array module
-        xp = device.xp
-
-        # Make sure the right CPU/GPU module is used
+        # Instantiate appropriate PDE object
         self.pde = get_pde(pde_name)(config, device)
 
-        # Initialize arrays that will be used in this RHS
-        nb_solpts = operators.extrap_x.shape[0]
-        nb_var = config.nb_var
-        nb_elems = config.nb_elements_horizontal * config.nb_elements_vertical
-
-        nb_itf_solpts_x1 = operators.extrap_x.shape[1]
-        nb_itf_solpts_x3 = operators.extrap_z.shape[1]
-
-        if num_dim == 3:
-            nb_solpts *= operators.extrap_y.shape[0]
-            nb_elems *= config.nb_elements_relief_layer
-            nb_itf_solpts_x2 = operators.extrap_y.shape[1]
-
-        # Assume two-dimensions first
-        self.f_x1 = xp.empty((nb_var, nb_elems, nb_solpts))
-        self.f_x2 = None
-        self.f_x3 = xp.empty((nb_var, nb_elems, nb_solpts))
-
-        self.q_itf_x1 = xp.empty((nb_var, nb_elems, nb_itf_solpts_x1))
-        self.q_itf_x2 = None
-        self.q_itf_x3 = xp.empty((nb_var, nb_elems, nb_itf_solpts_x3))
-
-        self.f_itf_x1 = xp.empty_like(self.q_itf_x1)
-        self.f_itf_x2 = None
-        self.f_itf_x3 = xp.empty_like(self.q_itf_x3)
-
-        self.df1_dx1 = xp.empty_like(self.f_x1)
-        self.df2_dx2 = None
-        self.df3_dx3 = xp.empty_like(self.f_x1)
-
-        # Add third-dimension arrays if needed
-        if num_dim == 3:
-            self.f_x2 = xp.empty((nb_var, nb_elems, nb_solpts))
-            self.q_itf_x2 = xp.empty((nb_var, nb_elems, nb_itf_solpts_x2))
-            self.f_itf_x2 = xp.empty_like(self.q_itf_x2)
-            self.df2_dx2 = xp.empty_like(self.f_x2)
-
-        # Initialize rhs matrix
-        self.rhs = xp.empty_like(self.f_x1)
+        # Must be allocated at every child class
+        self.rhs = None
 
     def __call__(self, q: ndarray) -> ndarray:
+
         # 1. Extrapolate the solution to the boundaries of the element
         self.solution_extrapolation(q)
 
@@ -105,13 +69,18 @@ class RHS(ABC):
         # 4. Compute the Riemann fluxes
         self.riemann_fluxes()
 
-        # 5. Add the correction term to the divergence
-        self.flux_correction()
+        # 5. Complete the divergence operation
+        self.flux_divergence()
 
         # 6. Add forcing terms
         self.forcing_terms(q)
 
-        return self.rhs
+        # At this moment, a deep copy needs to be returned
+        # otherwise issues are encountered after. This needs to be fixed
+        return 1.0*self.rhs
+
+    def full(self, q: ndarray) -> ndarray:
+        return self.__call__(q)
 
     @abstractmethod
     def solution_extrapolation(self, q: ndarray) -> None:
@@ -130,7 +99,7 @@ class RHS(ABC):
         pass
 
     @abstractmethod
-    def flux_correction(self) -> None:
+    def flux_divergence(self) -> None:
         pass
 
     def forcing_terms(self, q: ndarray) -> None:
