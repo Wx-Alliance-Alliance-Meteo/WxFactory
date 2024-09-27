@@ -10,6 +10,20 @@ import sys
 import warnings
 import time
 
+def run_test_on_x_process(test: unittest.TestCase, x: int = 0) -> MPI.Comm:
+    if x == 0:
+        return MPI.COMM_WORLD
+    
+    is_needed: bool = MPI.COMM_WORLD.rank < x
+    comm: MPI.Comm = MPI.COMM_WORLD.Split(0 if is_needed else 1)
+    if not is_needed:
+        comm.Disconnect()
+        test.skipTest('This process is not needed for this test')
+    
+    return comm
+    
+
+
 class _WritelnDecorator(object):
     """Used to decorate file-like objects with a handy 'writeln' method"""
     def __init__(self, stream):
