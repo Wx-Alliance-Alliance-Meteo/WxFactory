@@ -58,7 +58,7 @@ class RHS_FV(RHS):
 
         # The interface solution are the cell centered values
         self.q_itf_x1[:, :, 0] = q.squeeze()
-        self.q_itf_x3[:, :, 0] = q.squeeze()
+        self.q_itf_x3[:, :, 1] = q.squeeze()
 
         self.q_itf_x3 = self.q_itf_x1
         self.q_itf_x2 = self.q_itf_x1
