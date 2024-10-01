@@ -104,8 +104,7 @@ class RhsBundle:
       #       #    rhs_sw, geom, operators, metric, topo, ptopo, param.nbsolpts, param.nb_elements_horizontal)
       #       self.full = RhsShallowWater(fields_shape,
       #                                   geom, operators, metric, topo, ptopo,
-      #                                   param.nbsolpts, param.nb_elements_horizontal,
-      #                                   device)
+      #                                   param.nbsolpts, param.nb_elements_horizontal)
             
 
       #       self.implicit = generate_rhs(rhs_sw_stiff, geom, operators, metric, topo, ptopo, param.nbsolpts,

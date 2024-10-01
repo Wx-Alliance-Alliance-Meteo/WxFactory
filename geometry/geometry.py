@@ -1,22 +1,25 @@
+from   abc       import ABC, abstractmethod
 from typing import Optional
 
 from mpi4py import MPI
 import numpy
+from   numpy.typing import NDArray
 import sympy
 
 from common.array_module import module_from_name
+from common.device import Device
 from .quadrature import gauss_legendre
 
 
-class Geometry:
+class Geometry(ABC):
    """
    Abstract class that groups different geometries
    """
-   def __init__(self, nbsolpts: int, grid_type: str, array_module: str, verbose: Optional[bool] = False) -> None:
-      ## Element properties -- solution and extension points
-      self.array_module = module_from_name(array_module)
-      xp = self.array_module
+   def __init__(self, nbsolpts: int, grid_type: str, device: Device, verbose: Optional[bool] = False) -> None:
+      self.device = device
+      xp = self.device.xp
 
+      ## Element properties -- solution and extension points
       # Gauss-Legendre solution points
       solutionPoints_sym, solutionPoints, glweights = gauss_legendre(nbsolpts, xp)
       if verbose and MPI.COMM_WORLD.rank == 0:
@@ -38,3 +41,9 @@ class Geometry:
 
       ##
       self.grid_type = grid_type
+
+
+   @abstractmethod
+   def to_single_block(self, a: NDArray) -> NDArray:
+      """Convert an array of values over this grid (which be may organized as a list of elements)
+      into a single block of data (2D or 3D)."""

@@ -70,9 +70,8 @@ class CubedSphere(Geometry):
          Wraps parameters from the configuration pole that are not otherwise specified in this
          constructor.
       '''
-      super().__init__(nbsolpts, 'cubed_sphere', param.array_module)
+      super().__init__(nbsolpts, 'cubed_sphere', device)
       xp = device.xp
-      self.device = device
 
       ## Panel / parallel decomposition properties
       self.ptopo = ptopo
@@ -194,8 +193,8 @@ class CubedSphere(Geometry):
       x3 = xp.empty(self.grid_shape_3d)
       eta = xp.empty(self.grid_shape_3d)
 
-      x3_new  = xp.empty(self.grid_shape_3d_new)
-      eta_new = xp.empty(self.grid_shape_3d_new)
+      # x3_new  = xp.empty(self.grid_shape_3d_new)
+      # eta_new = xp.empty(self.grid_shape_3d_new)
 
       # 1D element-counting arrays, for coordinate assignment
       elements_x1 = xp.arange(nb_elements_x1)
@@ -231,8 +230,8 @@ class CubedSphere(Geometry):
       else:
          x3[:] = 0
          eta[:] = 0
-         x3_new[:] = 0.0
-         eta_new[:] = 0.0
+         # x3_new[:] = 0.0
+         # eta_new[:] = 0.0
 
 
       # Repeat for the interface values
@@ -314,7 +313,7 @@ class CubedSphere(Geometry):
       self.coordVec_num_itf_j = coordVec_num_itf_j
       self.coordVec_num_itf_k = coordVec_num_itf_k
 
-      self.coordVec_num_new = self._to_new(coordVec_num)
+      # self.coordVec_num_new = self._to_new(coordVec_num)
 
       print(f'base shape {coordVec_num.shape}, itf i shape {coordVec_num_itf_i.shape}, itf j shape = {coordVec_num_itf_j.shape}')
 
@@ -496,15 +495,15 @@ class CubedSphere(Geometry):
 
       Y, X = xp.meshgrid(xp.tan(x2),xp.tan(x1),indexing='ij')
 
-      Y_new = self._to_new(Y)
-      X_new = self._to_new(X)
+      # Y_new = self._to_new(Y)
+      # X_new = self._to_new(X)
 
       self.boundary_sn = X[0, :] # Coordinates of the south and north boundaries along the X (west-east) axis
       self.boundary_we = Y[:, 0] # Coordinates of the west and east boundaries along the Y (south-north) axis
 
-      if MPI.COMM_WORLD.rank == 0:
-         print(f'old X = \n{X}')
-         print(f'new X = \n{X_new}')
+      # if MPI.COMM_WORLD.rank == 0:
+      #    print(f'old X = \n{X}')
+      #    print(f'new X = \n{X_new}')
 
       height = x3
 
@@ -531,8 +530,8 @@ class CubedSphere(Geometry):
 
       self.X = X
       self.Y = Y
-      self.X_new = X_new
-      self.Y_new = Y_new
+      # self.X_new = X_new
+      # self.Y_new = Y_new
       self.height = height
       self.delta2 = delta2
       self.delta = delta
@@ -665,6 +664,8 @@ class CubedSphere(Geometry):
       self.cartZ = cartZ
       self.lon = lon
       self.lat = lat
+      self.block_lon = lon
+      self.block_lat = lat
       self.X_itf_i = X_itf_i
       self.Y_itf_i = Y_itf_i
       self.X_itf_j = X_itf_j
@@ -696,17 +697,17 @@ class CubedSphere(Geometry):
 
       raise ValueError(f'Unhandled number of dimensions... Shape is {a.shape}')
 
-   # def _to_old(self, a):
-   #    """Convert input array to old memory layout"""
-   #    expected_shape = (self.nb_elements_x1 * self.nb_elements_x2, self.nbsolpts * self.nbsolpts)
-   #    if a.shape == expected_shape:
-   #       tmp_shape = (self.nb_elements_x2, self.nb_elements_x1, self.nbsolpts, self.nbsolpts)
-   #       new_shape = self.grid_shape_2d
-   #       return a.reshape(tmp_shape).transpose(0, 2, 1, 3).reshape(new_shape)
-   #    elif a.ndim == 3 and a.shape[1:] == expected_shape:
-   #       tmp_shape = (a.shape[0], self.nb_elements_x2, self.nb_elements_x1, self.nbsolpts, self.nbsolpts)
-   #       new_shape = (a.shape[0],) + self.grid_shape_2d
-   #       return a.reshape(tmp_shape).transpose(0, 1, 3, 2, 4).reshape(new_shape)
+   def _to_old(self, a):
+      """Convert input array to old memory layout"""
+      expected_shape = (self.nb_elements_x1 * self.nb_elements_x2, self.nbsolpts * self.nbsolpts)
+      if a.shape == expected_shape:
+         tmp_shape = (self.nb_elements_x2, self.nb_elements_x1, self.nbsolpts, self.nbsolpts)
+         new_shape = self.grid_shape_2d
+         return a.reshape(tmp_shape).transpose(0, 2, 1, 3).reshape(new_shape)
+      elif a.ndim == 3 and a.shape[1:] == expected_shape:
+         tmp_shape = (a.shape[0], self.nb_elements_x2, self.nb_elements_x1, self.nbsolpts, self.nbsolpts)
+         new_shape = (a.shape[0],) + self.grid_shape_2d
+         return a.reshape(tmp_shape).transpose(0, 1, 3, 2, 4).reshape(new_shape)
 
    def _to_new_itf_i(self, a):
       """Convert input array (west and east interface) to new memory layout"""
@@ -771,3 +772,6 @@ class CubedSphere(Geometry):
    #       elif a.shape == expected_shape_2:
    #          tmp_shape = (self.nb_elements_x2 + 1, self.nb_elements_x1, self.nbsolpts)
    #       else: raise ValueError
+
+   def to_single_block(self, a):
+      return a

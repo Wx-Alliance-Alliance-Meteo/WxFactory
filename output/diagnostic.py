@@ -1,40 +1,31 @@
 from mpi4py import MPI
 import numpy
+from   numpy.typing import NDArray
 
 from common.definitions import gravity
+from geometry import DFROperators, Metric
 
-def relative_vorticity(u1_contra, u2_contra, geom, metric, mtrx, param):
+def relative_vorticity(u1_contra: NDArray, u2_contra: NDArray, metric: Metric, mtrx: DFROperators) -> NDArray:
 
    u1_dual = metric.H_cov_11 * u1_contra + metric.H_cov_12 * u2_contra
    u2_dual = metric.H_cov_21 * u1_contra + metric.H_cov_22 * u2_contra
 
-   du1dx2 = numpy.zeros_like(u1_contra)
-   du2dx1 = numpy.zeros_like(u2_contra)
-
-   for elem in range(param.nb_elements_horizontal):
-      epais = elem * param.nbsolpts + numpy.arange(param.nbsolpts)
-
-      # --- Direction x1
-
-      du2dx1[:,epais] = u2_dual[:,epais] @ mtrx.diff_tr
-
-      # --- Direction x2
-
-      du1dx2[epais,:] = mtrx.diff @ u1_dual[epais,:]
+   du1dx2 = u2_dual @ mtrx.derivative_y
+   du2dx1 = u1_dual @ mtrx.derivative_x
 
    vort = metric.inv_sqrtG * ( du2dx1 - du1dx2 )
 
    return vort
 
-def potential_vorticity(h, u1_contra, u2_contra, geom, metric, mtrx, param):
+def potential_vorticity(h: NDArray, u1_contra: NDArray, u2_contra: NDArray, metric: Metric, mtrx: DFROperators) -> NDArray:
 
-   rv = relative_vorticity(u1_contra, u2_contra, geom, metric, mtrx, param)
+   rv = relative_vorticity(u1_contra, u2_contra, metric, mtrx)
 
    return ( rv + metric.coriolis_f ) / h
 
-def absolute_vorticity(u1_contra, u2_contra, geom, metric, mtrx, param):
+def absolute_vorticity(u1_contra: NDArray, u2_contra: NDArray, metric: Metric, mtrx: DFROperators):
 
-   rv = relative_vorticity(u1_contra, u2_contra, geom, metric, mtrx, param)
+   rv = relative_vorticity(u1_contra, u2_contra, metric, mtrx)
 
    return rv + metric.coriolis_f
 

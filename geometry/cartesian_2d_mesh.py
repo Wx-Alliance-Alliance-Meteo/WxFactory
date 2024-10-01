@@ -18,8 +18,7 @@ class Cartesian2D(Geometry):
                 relief_layer_height: int,
                 array_module: str,
                 device: Device = default_device):
-      super().__init__(nbsolpts, 'cartesian2d', array_module)
-      self.device = device
+      super().__init__(nbsolpts, 'cartesian2d', device)
       xp = device.xp
 
       scaled_points = 0.5 * (1.0 + self.solutionPoints)
@@ -67,6 +66,8 @@ class Cartesian2D(Geometry):
 
       X1, X3 = xp.meshgrid(x1, x3)
 
+      self.nb_elements_x = nb_elements_x
+      self.nb_elements_z = nb_elements_z
       self.X1_cartesian = X1
       self.X3_cartesian = X3
       self.itf_Z = itf_x3
@@ -84,9 +85,9 @@ class Cartesian2D(Geometry):
       for ek in range(nb_elements_z):
          for ei in range(nb_elements_x):
 #            idx_elem = ei + nb_elements_z * ek
-            start_i = ei * nbsolpts 
+            start_i = ei * nbsolpts
             end_i = (ei + 1) * nbsolpts
-            start_k = ek * nbsolpts 
+            start_k = ek * nbsolpts
             end_k = (ek + 1) * nbsolpts
             self.X1[idx_elem, :] = X1[start_k:end_k, start_i:end_i].flatten()
             self.X3[idx_elem, :] = X3[start_k:end_k, start_i:end_i].flatten()
@@ -178,3 +179,13 @@ class Cartesian2D(Geometry):
       self.relief_mask = relief_mask
       self.relief_boundary_mask = relief_boundary_mask
       self.side_boundary_mask = side_boundary_mask
+
+   def to_single_block(self, a):
+      """Convert an array of values over this grid (which be may organized as a list of elements)
+      into a single block of data (2D or 3D)."""
+
+      tmp_shape = a.shape[:-2] + (self.nb_elements_z, self.nb_elements_x, self.nbsolpts, self.nbsolpts)
+      new_shape = a.shape[:-2] + (self.nb_elements_z * self.nbsolpts, self.nb_elements_x * self.nbsolpts)
+      a_new = numpy.swapaxes(a.reshape(tmp_shape), -2, -3).reshape(new_shape)
+
+      return a_new

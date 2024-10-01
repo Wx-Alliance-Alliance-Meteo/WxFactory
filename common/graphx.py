@@ -2,7 +2,6 @@ from mpi4py import MPI
 import numpy
 import pickle
 import matplotlib.pyplot
-from common.device import Device, default_device
 
 plot_index = 0
 
@@ -53,7 +52,8 @@ def plot_array(array, filename=None):
    MPI.COMM_WORLD.Barrier()
 
 def image_field(geom: 'Cartesian2D', field: numpy.ndarray, filename: str, vmin: float, vmax: float, n: int, \
-                label: str = 'K', colormap: str = 'jet', device: Device = default_device):
+                label: str = 'K', colormap: str = 'jet'):
+   device = geom.device
    fig, ax = matplotlib.pyplot.subplots()
 
 #   if not geom.xperiodic:

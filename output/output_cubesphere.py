@@ -10,7 +10,7 @@ from numpy.typing import NDArray
 
 from common.definitions     import *
 from common.configuration import Configuration
-from geometry               import contra2wind_2d, contra2wind_3d
+from geometry               import Geometry, contra2wind_2d, contra2wind_3d, Metric, DFROperators
 from output.diagnostic      import relative_vorticity, potential_vorticity
 
 netcdf_serial = False
@@ -74,7 +74,7 @@ def output_init(geom, param):
 
    # create dimensions
    if param.equations == "shallow_water":
-      ni, nj = geom.lat.shape
+      ni, nj = geom.block_shape
       grid_data = ('npe', 'Xdim', 'Ydim')
    elif param.equations == "euler":
       nk, nj, ni = geom.nk, geom.nj, geom.ni
@@ -289,8 +289,8 @@ def output_init(geom, param):
 
    if netcdf_serial:
       ranks = MPI.COMM_WORLD.gather(rank, root=0)
-      lons  = MPI.COMM_WORLD.gather(prepare(geom.lon * 180/math.pi), root=0)
-      lats  = MPI.COMM_WORLD.gather(prepare(geom.lat * 180/math.pi), root=0)
+      lons  = MPI.COMM_WORLD.gather(prepare(geom.block_lon * 180/math.pi), root=0)
+      lats  = MPI.COMM_WORLD.gather(prepare(geom.block_lat * 180/math.pi), root=0)
       if param.equations == "euler":
          elevs = MPI.COMM_WORLD.gather(prepare(geom.coordVec_latlon[2,:,:,:]), root=0)
          topos = MPI.COMM_WORLD.gather(prepare(geom.zbot[:,:]), root=0)
@@ -314,7 +314,7 @@ def output_init(geom, param):
          topo[rank,:,:] = prepare(geom.zbot[:,:])
 
 
-def output_netcdf(Q, geom, metric, mtrx, topo, step, param):
+def output_netcdf(Q, geom: Geometry, metric: Metric, mtrx: DFROperators, topo, step: int, param: Configuration):
    """ Writes u,v,eta fields on every nth time step """
    rank = MPI.COMM_WORLD.rank
 
@@ -329,19 +329,19 @@ def output_netcdf(Q, geom, metric, mtrx, topo, step, param):
 
       # Unpack physical variables
       h = Q[idx_h, :, :] + topo.hsurf
-      store_field(prepare(h), 'h', idx, ncfile)
+      store_field(geom.to_single_block(prepare(h)), 'h', idx, ncfile)
 
       if param.case_number >= 2: # Shallow water
          u1 = Q[idx_hu1,:,:] / h
          u2 = Q[idx_hu2,:,:] / h
-         u, v = contra2wind_2d(u1, u2, geom)
-         rv = relative_vorticity(u1, u2, geom, metric, mtrx, param)
-         pv = potential_vorticity(h, u1, u2, geom, metric, mtrx, param)
+         u, v = geom.contra2wind(u1, u2)
+         rv = relative_vorticity(u1, u2, metric, mtrx)
+         pv = potential_vorticity(h, u1, u2, metric, mtrx)
 
-         store_field(prepare(u), 'U', idx, ncfile)
-         store_field(prepare(v), 'V', idx, ncfile)
-         store_field(prepare(rv), 'RV', idx, ncfile)
-         store_field(prepare(pv), 'PV', idx, ncfile)
+         store_field(prepare(geom.to_single_block(u)), 'U', idx, ncfile)
+         store_field(prepare(geom.to_single_block(v)), 'V', idx, ncfile)
+         store_field(prepare(geom.to_single_block(rv)), 'RV', idx, ncfile)
+         store_field(prepare(geom.to_single_block(pv)), 'PV', idx, ncfile)
 
    elif param.equations == "euler":
       rho   = Q[idx_rho, :, :, :]
