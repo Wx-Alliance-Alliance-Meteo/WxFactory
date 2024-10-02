@@ -1,9 +1,10 @@
 import numpy
+import pdb
 
 from common.definitions      import idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_w, idx_rho_theta,                 \
                                     idx_h, idx_u1, idx_u2, idx_hu1, idx_hu2,                                   \
                                     idx_2d_rho, idx_2d_rho_u, idx_2d_rho_w, idx_2d_rho_theta,                  \
-                                    gravity, cpd, cvd, Rd, p0
+                                    gravity, cpd, cvd, Rd, p0,  heat_capacity_ratio
 from common.configuration  import Configuration
 from init.dcmip              import dcmip_advection_deformation, dcmip_advection_hadley, dcmip_gravity_wave,   \
                                     dcmip_schar_waves, dcmip_steady_state_mountain
@@ -214,6 +215,29 @@ def initialize_cartesian2d(geom: Cartesian2D, param: Configuration) -> NDArray[n
       for i in range(int(middle_col)):
          θ[:, ni-i-1] = θ[:, i]
 
+   elif param.case_number == 555:
+      # Euler Vortex
+      vortex_rad = 0.005 # m
+      m_inf = 0.05        # Free stream Mach number
+      beta  = 0.2
+      x0    = 0.05       # m
+      z0    = 0.05       # m
+      θ_inf = 300        # k
+      P_inf = 105        # N/m^2
+      U_inf = m_inf * numpy.sqrt(heat_capacity_ratio * Rd * θ_inf)
+      ρ_inf = P_inf / (Rd * θ_inf)
+
+      r = numpy.sqrt( (geom.X1-x0)**2 + (geom.X3-z0)**2 ) / vortex_rad
+
+      u = U_inf + (-(U_inf * beta) * ((geom.X3-z0) / vortex_rad) * numpy.exp(-0.5*r**2) )
+      w = (U_inf * beta) * ((geom.X1-x0) / vortex_rad) * numpy.exp(-0.5*r**2)
+      θ = θ_inf - ( (0.5/cpd) * (U_inf*beta)**2 * numpy.exp(-r**2) )
+      ρ = ρ_inf * (θ/θ_inf)**(1/(heat_capacity_ratio-1))
+
+      uu = u*u
+      ww = w*w
+
+
    elif param.case_number == 3:
       # Colliding bubbles
 
@@ -277,12 +301,13 @@ def initialize_cartesian2d(geom: Cartesian2D, param: Configuration) -> NDArray[n
    else:
       exner = (1.0 - gravity / (cpd * θ) * geom.X3)
 
-   ρ = p0 / (Rd * θ) * exner**(cvd / Rd)
+   # ρ = p0 / (Rd * θ) * exner**(cvd / Rd)
 
    Q[idx_2d_rho,:,:]       = ρ
    Q[idx_2d_rho_u,:,:]     = ρ * uu
    Q[idx_2d_rho_w,:,:]     = ρ * ww
    Q[idx_2d_rho_theta,:,:] = ρ * θ
+
 
    if param.device == "cuda":
       import cupy

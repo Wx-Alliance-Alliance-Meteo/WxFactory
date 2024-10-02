@@ -2,7 +2,7 @@ nbfaces     = 6
 
 day_in_secs  = 24.0 * 3600.0    # Days in seconds
 
-gravity      = 9.80616        # Gravitational acceleration (m s^-2)
+gravity      = 0        # Gravitational acceleration (m s^-2)
 
 p0  = 100000.     # reference pressure (Pa)
 Rd  = 287.05  # J K-1 kg-1 ! gas constant for dry air

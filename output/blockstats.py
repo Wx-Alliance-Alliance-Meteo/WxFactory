@@ -71,6 +71,46 @@ def blockstats_cs(Q, geom, topo, initial_Q, metric, mtrx, param, step):
       
       if MPI.COMM_WORLD.rank == 0: print(f'l1 = {l1} \t l2 = {l2} \t linf = {linf}')
 
+   if param.case_number == 31:
+      absol_err = global_integral_3d_alt(abs(Q[0]-initial_Q[0]), geom, mtrx, metric, param.nbsolpts, param.nb_elements_horizontal, param.nb_elements_vertical) 
+      absol_err_1 = global_integral_3d_alt(abs(Q[1]-initial_Q[1]), geom, mtrx, metric, param.nbsolpts, param.nb_elements_horizontal, param.nb_elements_vertical) 
+      absol_err_2 = global_integral_3d_alt(abs(Q[4]-initial_Q[4]), geom, mtrx, metric, param.nbsolpts, param.nb_elements_horizontal, param.nb_elements_vertical) 
+      int_Q_1  = global_integral_3d_alt(abs(initial_Q[0]), geom, mtrx, metric, param.nbsolpts, param.nb_elements_horizontal, param.nb_elements_vertical)
+      int_Q_1_1  = global_integral_3d_alt(abs(initial_Q[1]), geom, mtrx, metric, param.nbsolpts, param.nb_elements_horizontal, param.nb_elements_vertical)
+      int_Q_1_2  = global_integral_3d_alt(abs(initial_Q[4]), geom, mtrx, metric, param.nbsolpts, param.nb_elements_horizontal, param.nb_elements_vertical)
+      
+      absol_err2 = global_integral_3d_alt(abs(Q[0]-initial_Q[0])**2, geom, mtrx, metric, param.nbsolpts, param.nb_elements_horizontal, param.nb_elements_vertical) 
+      absol_err2_1 = global_integral_3d_alt(abs(Q[1]-initial_Q[1])**2, geom, mtrx, metric, param.nbsolpts, param.nb_elements_horizontal, param.nb_elements_vertical) 
+      absol_err2_2 = global_integral_3d_alt(abs(Q[4]-initial_Q[4])**2, geom, mtrx, metric, param.nbsolpts, param.nb_elements_horizontal, param.nb_elements_vertical) 
+      int_Q_2 = global_integral_3d_alt(abs(initial_Q[0])**2, geom, mtrx, metric, param.nbsolpts, param.nb_elements_horizontal, param.nb_elements_vertical)
+      int_Q_2_1 = global_integral_3d_alt(abs(initial_Q[1])**2, geom, mtrx, metric, param.nbsolpts, param.nb_elements_horizontal, param.nb_elements_vertical)  
+      int_Q_2_2 = global_integral_3d_alt(abs(initial_Q[4])**2, geom, mtrx, metric, param.nbsolpts, param.nb_elements_horizontal, param.nb_elements_vertical) 
+
+      max_absol_err = MPI.COMM_WORLD.allreduce(numpy.max(abs(Q[0] - initial_Q[0])), op=MPI.MAX)
+      max_absol_err_1 = MPI.COMM_WORLD.allreduce(numpy.max(abs(Q[1] - initial_Q[1])), op=MPI.MAX)
+      max_absol_err_2 = MPI.COMM_WORLD.allreduce(numpy.max(abs(Q[4] - initial_Q[4])), op=MPI.MAX)
+      max_Q_anal = MPI.COMM_WORLD.allreduce(numpy.max(initial_Q[0]), op=MPI.MAX)
+      max_Q_anal_1 = MPI.COMM_WORLD.allreduce(numpy.max(initial_Q[1]), op=MPI.MAX)
+      max_Q_anal_2 = MPI.COMM_WORLD.allreduce(numpy.max(initial_Q[4]), op=MPI.MAX)
+
+      l1 = absol_err / int_Q_1
+      l2 = math.sqrt( absol_err2 / int_Q_2 )
+      linf = max_absol_err / max_Q_anal
+
+      l1_1 = absol_err_1 / int_Q_1_1
+      l2_1 = math.sqrt( absol_err2_1 / int_Q_2_1 )
+      linf_1 = max_absol_err_1 / max_Q_anal_1
+
+      l1_2 = absol_err_2 / int_Q_1_2
+      l2_2 = math.sqrt( absol_err2_2 / int_Q_2_2 )
+      linf_2 = max_absol_err_2 / max_Q_anal_2
+      
+      if MPI.COMM_WORLD.rank == 0: 
+            print(f'l1 = {l1} \t l2 = {l2} \t linf = {linf}')
+            print(f'l1_1 = {l1_1} \t l2_1 = {l2_1} \t linf_1 = {linf_1}')
+            print(f'l1_2 = {l1_2} \t l2_2 = {l2_2} \t linf_2 = {linf_2}')
+
+
 
 #    if param.case_number <= 2 or param.case_number == 10:
 #       absol_err = global_integral(abs(h - h_anal), mtrx, metric, param.nbsolpts, param.nb_elements_horizontal) 

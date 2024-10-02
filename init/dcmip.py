@@ -409,7 +409,7 @@ def dcmip_steady_state_mountain(geom: CubedSphere, metric, mtrx, param):
    gamma   = 0.00650                    # temperature lapse rate (K/m)
    lambdam = 3.0*math.pi/2.0            # mountain longitude center point (radians)
    phim    = 0.0                        # mountain latitude center point (radians)
-   h0      = 2000.0                     # peak height of the mountain range (m)
+   h0      = 0 #2000.0                     # peak height of the mountain range (m)
    Rm      = 3.0*math.pi/4.0            # mountain radius (radians)
    zetam   = math.pi/16.0               # mountain oscillation half-width (radians)
 
@@ -752,16 +752,16 @@ def dcmip_gravity_wave(geom, metric, mtrx, param):
    #    to the background theta field (not included here)
    #-----------------------------------------------------------------------
 
-   # sin_tmp = numpy.sin(geom.lat) * math.sin(phic)
-   # cos_tmp = numpy.cos(geom.lat) * math.cos(phic)
+   sin_tmp = numpy.sin(geom.lat) * math.sin(phic)
+   cos_tmp = numpy.cos(geom.lat) * math.cos(phic)
 
-   # # great circle distance with 'a/X'
+   # great circle distance with 'a/X'
 
-   # r  = geom.earth_radius * numpy.arccos(sin_tmp + cos_tmp * numpy.cos(geom.lon - lambdac))
+   r  = geom.earth_radius * numpy.arccos(sin_tmp + cos_tmp * numpy.cos(geom.lon - lambdac))
 
-   # s = (d**2) / (d**2 + r**2)
+   s = (d**2) / (d**2 + r**2)
 
-   # theta_pert = delta_theta * s * numpy.sin(2.0 * math.pi * geom.height / Lz)
+   theta_pert = delta_theta * s * numpy.sin(2.0 * math.pi * geom.height / Lz)
 #   theta_pert = 0. # for debuging
 
    theta = theta_base #+ theta_pert
