@@ -219,7 +219,7 @@ def initialize_cartesian2d(geom: Cartesian2D, param: Configuration) -> NDArray[n
       # Euler Vortex
       vortex_rad = 0.005 # m
       m_inf = 0.05        # Free stream Mach number
-      beta  = 0.2
+      beta  = 0.02
       x0    = 0.05       # m
       z0    = 0.05       # m
       θ_inf = 300        # k
@@ -234,6 +234,7 @@ def initialize_cartesian2d(geom: Cartesian2D, param: Configuration) -> NDArray[n
       θ = θ_inf - ( (0.5/cpd) * (U_inf*beta)**2 * numpy.exp(-r**2) )
       ρ = ρ_inf * (θ/θ_inf)**(1/(heat_capacity_ratio-1))
 
+      
       uu = u*u
       ww = w*w
 

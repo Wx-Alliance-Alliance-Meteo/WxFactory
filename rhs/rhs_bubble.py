@@ -30,6 +30,7 @@ def rhs_bubble(Q, geom, mtrx, nbsolpts, nb_elements_x, nb_elements_z):
    ww       = Q[idx_2d_rho_w,:,:] / rho
    # pressure = p0 * numpy.exp((cpd/cvd) * numpy.log((Rd/p0)*Q[idx_2d_rho_theta, :, :]))
    pressure = Rd * Q[idx_2d_rho_theta, :, :]
+   
 
    # --- Compute the fluxes
    flux_x1[idx_2d_rho,:,:]       = Q[idx_2d_rho_u,:,:]
@@ -79,7 +80,8 @@ def rhs_bubble(Q, geom, mtrx, nbsolpts, nb_elements_x, nb_elements_z):
    ifaces_flux[idx_2d_rho_u,-1,:,1] = ifaces_pres[-1,:,1]
 
    # --- Common AUSM fluxes
-   for itf in range(1, nb_interfaces_z - 1):
+   start = 0 if geom.zperiodic else 1
+   for itf in range(start, nb_interfaces_z - 1):
 
       left  = itf - 1
       right = itf
@@ -100,6 +102,9 @@ def rhs_bubble(Q, geom, mtrx, nbsolpts, nb_elements_x, nb_elements_z):
                                                     (1. - M_R) * kfaces_pres[right,0,:])
 
       kfaces_flux[:,left,1,:] = kfaces_flux[:,right,0,:]
+
+   if geom.zperiodic:
+      kfaces_flux[:, 0, 0, :] = kfaces_flux[:, -1, 1, :]
 
 
    start = 0 if geom.xperiodic else 1
@@ -166,5 +171,5 @@ def rhs_bubble(Q, geom, mtrx, nbsolpts, nb_elements_x, nb_elements_z):
       rhs[idx_2d_rho_w, :end, :] = numpy.where( \
             geom.relief_mask, -(1.0 / etac) * normal_flux * geom.normals_z, rhs[idx_2d_rho_w, :end, :])
 
-
+   pdb.set_trace()
    return rhs
