@@ -1,22 +1,59 @@
 from abc import ABC, abstractmethod
 from numpy import ndarray
-
+from geometry                  import CubedSphere, CubedSphere2D
 
 def get_pde(name):
-    if name == "euler-cartesian":
-        from pde.pde_euler_cartesian import PDEEulerCartesian
-        return PDEEulerCartesian
-
-    elif name == "euler-cubesphere":
-        from pde.pde_euler_cubedsphere import PDEEulerCubedSphere
-        return PDEEulerCubedSphere
+    if "euler" in name:
+        from pde.pde_euler import PDEEuler
+        return PDEEuler
+    elif "shallow_water" in name:
+        from pde.pde_shallow_water import PDEShallowWater
+        return PDEShallowWater
 
 
 class PDE(ABC):
-    def __init__(self, config, device):
+    def __init__(self, config, device, geom, metric):
         self.config = config
         self.device = device
         self.num_dim = config.num_dim
+        self.geom = geom
+        nb_solpts = config.nbsolpts**2
+        
+        if isinstance(geom, (CubedSphere, CubedSphere2D)):
+            nb_elems = config.nb_elements_horizontal**2
+        else:
+            nb_elems = config.nb_elements_horizontal * config.nb_elements_vertical
+
+        if config.num_dim == 3:
+            nb_solpts *= config.nbsolpts
+            nb_elems *= config.nb_elements_relief_layer
+
+        self.nb_elems_tot = nb_elems
+
+        # Store the metric terms 
+        self.metrics = device.xp.ones((config.num_dim**2, nb_elems, nb_solpts))
+        self.sqrt_g = device.xp.ones((nb_elems, nb_solpts))
+
+        # Store the cubed-sphere metrics if needed
+        if isinstance(geom, (CubedSphere, CubedSphere2D)):
+            if config.num_dim == 2: 
+                self.metrics[0] = metric.H_contra_11
+                self.metrics[1] = metric.H_contra_12
+                self.metrics[2] = metric.H_contra_21
+                self.metrics[3] = metric.H_contra_22
+
+            if config.num_dim == 3:
+                self.metrics[0] = metric.H_contra_11
+                self.metrics[1] = metric.H_contra_12
+                self.metrics[2] = metric.H_contra_13
+                self.metrics[3] = metric.H_contra_21
+                self.metrics[4] = metric.H_contra_22
+                self.metrics[5] = metric.H_contra_23
+                self.metrics[6] = metric.H_contra_31
+                self.metrics[7] = metric.H_contra_32
+                self.metrics[8] = metric.H_contra_33
+
+            self.sqrt_g[:] = metric.sqrtG
 
         # Set the CUDA indices to None
         if self.config.device == 'cuda':
@@ -32,9 +69,8 @@ class PDE(ABC):
 
             # Written for only 2D for now
             self.get_riemann_indices(config.nb_elements_horizontal,
-                                     config.nb_elements_vertical,
-                                     config.nbsolpts)
-
+                                    config.nb_elements_vertical,
+                                    config.nbsolpts)
 
     @abstractmethod
     def pointwise_fluxes_cpu(self, q, fluxes):

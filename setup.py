@@ -5,7 +5,7 @@ import numpy
 extensions = [
     Extension(
         name = "pde.kernels.interface",
-        sources = ["pde/kernels/interface.pyx", "pde/kernels/euler_cartesian.cpp"],
+        sources = ["pde/kernels/interface.pyx", "pde/kernels/euler.cpp", "pde/kernels/shallow_water.cpp"],
         language = "c++",
         extra_compile_args = [
             "-std=c++11",               # Use C++11 standard

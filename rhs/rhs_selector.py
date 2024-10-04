@@ -10,7 +10,7 @@ from common.process_topology   import ProcessTopology
 from geometry                  import Cartesian2D, CubedSphere, DFROperators, Geometry, Metric, \
                                       Metric3DTopo
 from init.initialize           import Topo
-from rhs.fluxes                import ausm_2d_fv, upwind_2d_fv, rusanov_2d_fv
+# from rhs.fluxes                import ausm_2d_fv, upwind_2d_fv, rusanov_2d_fv
 # from rhs.rhs_bubble            import RhsBubble
 # from rhs.rhs_bubble_convective import rhs_bubble as rhs_bubble_convective
 # from rhs.rhs_bubble_implicit   import rhs_bubble_implicit
@@ -54,10 +54,17 @@ class RhsBundle:
       # Determine whether the RHS will be of DFR or FV type
       rhs_class = get_rhs(param.discretization)
 
-      rhs_obj = rhs_class(param.equations + '-' + 'cartesian', geom, 
-         operators, metric, topo, ptopo, param, device)
+      # Instantiate with the appropriate PDE
+      rhs_obj = rhs_class(param.equations, geom, 
+            operators, metric, topo, ptopo, param, device)
       
+      # Store function
       self.full = generate_rhs(rhs_obj)
+
+
+      # self.full = RhsShallowWater(fields_shape,
+      #                         geom, operators, metric, topo, ptopo,
+      #                         param.nbsolpts, param.nb_elements_horizontal)
       
       # self.explicit = generate_rhs(
       #    rhs_class, param.equations + '-' + 'cartesian', geom, 

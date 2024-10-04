@@ -28,19 +28,19 @@ class RHS_DFR(RHS):
 
         # Assume two-dimensions first
         self.f_x1 = xp.empty((nb_var, nb_elems, nb_solpts))
-        self.f_x2 = None
+        self.f_x2 = xp.empty((1, 1, 1))
         self.f_x3 = xp.empty((nb_var, nb_elems, nb_solpts))
 
         self.q_itf_x1 = xp.empty((nb_var, nb_elems, nb_itf_solpts_x1))
-        self.q_itf_x2 = None
+        self.q_itf_x2 = xp.empty((1, 1, 1))
         self.q_itf_x3 = xp.empty((nb_var, nb_elems, nb_itf_solpts_x3))
 
         self.f_itf_x1 = xp.empty_like(self.q_itf_x1)
-        self.f_itf_x2 = None
+        self.f_itf_x2 = xp.empty((1, 1, 1))
         self.f_itf_x3 = xp.empty_like(self.q_itf_x3)
 
         self.df1_dx1 = xp.empty_like(self.f_x1)
-        self.df2_dx2 = None
+        self.df2_dx2 = xp.empty((1, 1, 1))
         self.df3_dx3 = xp.empty_like(self.f_x1)
 
         # Add third-dimension arrays if needed

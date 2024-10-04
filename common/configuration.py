@@ -97,6 +97,8 @@ class Configuration:
 
       if self.equations == 'euler':
          self.nb_var = self.num_dim + 2
+      elif self.equations == 'shallow_water':
+         self.nb_var = self.num_dim + 1
 
 
       self.filter_apply  = self._get_option('Spatial_discretization', 'filter_apply', bool, False)

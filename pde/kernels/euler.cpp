@@ -1,7 +1,7 @@
 #include <cmath>
 #include <iostream>
 
-extern "C" void pointwise_euler_flux(double *Q, double *flux_x, double *flux_z, const int stride)
+extern "C" void pointwise_flux_euler(double *q, double *flux_x, double *flux_y, double *flux_z, const double sqrt_g, const double *metrics, const int stride, const int num_dim)
 {
   // These declarations are temporary and must be done globally
   double p0 = 100000.;
@@ -22,10 +22,10 @@ extern "C" void pointwise_euler_flux(double *Q, double *flux_x, double *flux_z, 
   const int idx_rhow = 2 * stride;
   const int idx_rhot = 3 * stride;
 
-  rho = Q[idx_rho];
-  rhou = Q[idx_rhou];
-  rhow = Q[idx_rhow];
-  rho_theta = Q[idx_rhot];
+  rho = q[idx_rho];
+  rhou = q[idx_rhou];
+  rhow = q[idx_rhow];
+  rho_theta = q[idx_rhot];
 
   invrho = 1.0 / rho;
 
@@ -45,9 +45,9 @@ extern "C" void pointwise_euler_flux(double *Q, double *flux_x, double *flux_z, 
   flux_z[idx_rhot] = rho_theta * w;
 }
 
-extern "C" void ausm_solver(double *Ql, double *Qr, double *fl, double *fr,
-                            const int nvars, const int direction,
-                            const int stride)
+extern "C" void riemann_ausm_euler(double *ql, double *qr, double *fl, double *fr,
+                                   const int nvars, const int direction,
+                                   const int stride)
 {
   // These declarations are temporary and must be done globally
   double p0 = 100000.;
@@ -71,15 +71,15 @@ extern "C" void ausm_solver(double *Ql, double *Qr, double *fl, double *fr,
   const int idx_rhot = 3 * stride;
 
   // Get the left and right variables
-  rhol = Ql[idx_rho];
-  rhoul = Ql[idx_rhou];
-  rhowl = Ql[idx_rhow];
-  rho_thetal = Ql[idx_rhot];
+  rhol = ql[idx_rho];
+  rhoul = ql[idx_rhou];
+  rhowl = ql[idx_rhow];
+  rho_thetal = ql[idx_rhot];
 
-  rhor = Qr[idx_rho];
-  rhour = Qr[idx_rhou];
-  rhowr = Qr[idx_rhow];
-  rho_thetar = Qr[idx_rhot];
+  rhor = qr[idx_rho];
+  rhour = qr[idx_rhou];
+  rhowr = qr[idx_rhow];
+  rho_thetar = qr[idx_rhot];
 
   invrhol = 1.0 / rhol;
   ul = rhoul * invrhol;
@@ -136,7 +136,7 @@ extern "C" void ausm_solver(double *Ql, double *Qr, double *fl, double *fr,
     fr[i * stride] = fl[i * stride];
 }
 
-extern "C" void boundary_flux(double *Q, double *flux, const int direction, const int stride)
+extern "C" void boundary_flux_euler(double *q, double *flux, const int direction, const int stride)
 {
   // These declarations are temporary and must be done globally
   double p0 = 100000.;
@@ -158,7 +158,7 @@ extern "C" void boundary_flux(double *Q, double *flux, const int direction, cons
 
   if (direction == 0)
   {
-    rho_theta = Q[idx_rhot];
+    rho_theta = q[idx_rhot];
     flux[idx_rho] = 0.0;
     flux[idx_rhou] = p0 * pow(rho_theta * Rd * inp0, heat_capacity_ratio);
     flux[idx_rhow] = 0.0;
@@ -167,7 +167,7 @@ extern "C" void boundary_flux(double *Q, double *flux, const int direction, cons
 
   if (direction == 1)
   {
-    rho_theta = Q[idx_rhot];
+    rho_theta = q[idx_rhot];
     flux[idx_rho] = 0.0;
     flux[idx_rhou] = 0.0;
     flux[idx_rhow] = p0 * pow(rho_theta * Rd * inp0, heat_capacity_ratio);

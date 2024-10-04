@@ -6,13 +6,13 @@ from numpy import ndarray
 from common.definitions import idx_2d_rho, idx_2d_rho_u, idx_2d_rho_w, idx_2d_rho_theta, gravity
 
 
-class PDEEulerCartesian(PDE):
+class PDEEuler(PDE):
 
     cu_file_name = 'kernels/euler_cartesian.cu'
 
-    def __init__(self, config, device):
+    def __init__(self, config, device, geom, metric):
 
-        super().__init__(config, device)
+        super().__init__(config, device, geom, metric)
 
         if self.num_dim == 2:
             self.nb_elements = self.config.nb_elements_horizontal \
@@ -88,7 +88,8 @@ class PDEEulerCartesian(PDE):
         nb_solpts = self.config.nbsolpts
 
         # Call CPU kernel
-        pointwise_fluxes(q, flux_x1, flux_x3, nb_elements, nb_solpts)
+        pointwise_fluxes(q, flux_x1, flux_x2, flux_x3, self.metrics, self.sqrt_g,  nb_elements, nb_solpts, self.num_dim)
+
 
     def riemann_fluxes_cuda(self, q_itf_x1: ndarray, q_itf_x2: ndarray, q_itf_x3: ndarray,
                             fluxes_itf_x1: ndarray, flux_itf_x2: ndarray, fluxes_itf_x3: ndarray) -> None:
