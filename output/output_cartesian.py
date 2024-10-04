@@ -18,4 +18,4 @@ def output_step(Q: numpy.ndarray, geom: Geometry, param: Configuration, filename
    elif param.case_number == 4:
       image_field(geom, (Q[RHO_THETA,:,:] / Q[RHO,:,:]), filename, 290., 300., 10)
    elif param.case_number == 555:
-      image_field(geom, Q[RHO,:,:], filename, 0.0012192991648759964, 0.0012192997735586135, 10)
+      image_field(geom, Q[RHO,:,:], filename, 0, 1.0, 10)

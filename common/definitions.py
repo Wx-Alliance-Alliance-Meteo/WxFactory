@@ -11,6 +11,11 @@ cvd = (cpd - Rd)  # chal. spec. air sec (volume constant) [J kg-1 K-1]
 kappa = Rd / cpd
 heat_capacity_ratio = cpd / cvd
 
+
+Rd = 1.0;
+heat_capacity_ratio = 1.4
+gravity = 0;
+
 # Indices for the shallow water model variables
 idx_h   = 0
 idx_hu1 = 1

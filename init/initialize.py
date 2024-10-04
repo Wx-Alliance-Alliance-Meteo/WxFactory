@@ -217,23 +217,22 @@ def initialize_cartesian2d(geom: Cartesian2D, param: Configuration) -> NDArray[n
 
    elif param.case_number == 555:
       # Euler Vortex
-      vortex_rad = 0.005 # m
-      m_inf = 0.05        # Free stream Mach number
-      beta  = 0.02
-      x0    = 0.05       # m
-      z0    = 0.05       # m
-      θ_inf = 300        # k
-      P_inf = 105        # N/m^2
-      U_inf = m_inf * numpy.sqrt(heat_capacity_ratio * Rd * θ_inf)
-      ρ_inf = P_inf / (Rd * θ_inf)
+      mach = 0.4       
+      x0 = 10      
+      z0 = 10      
 
-      r = numpy.sqrt( (geom.X1-x0)**2 + (geom.X3-z0)**2 ) / vortex_rad
+      xt = geom.X1 - x0
+      zt = geom.X3 - z0
 
-      u = U_inf + (-(U_inf * beta) * ((geom.X3-z0) / vortex_rad) * numpy.exp(-0.5*r**2) )
-      w = (U_inf * beta) * ((geom.X1-x0) / vortex_rad) * numpy.exp(-0.5*r**2)
-      θ = θ_inf - ( (0.5/cpd) * (U_inf*beta)**2 * numpy.exp(-r**2) )
-      ρ = ρ_inf * (θ/θ_inf)**(1/(heat_capacity_ratio-1))
-
+      gamma = 1.4
+      R = 1.5
+      S  = 13.5
+      f = (1 - xt*xt - zt*zt)/(2*R*R)
+      ρ = (1-(S*S*mach*mach*(gamma-1)*numpy.exp(2*f))/(8*numpy.pi*numpy.pi))**(1.0/(gamma-1))
+      uu = (S*zt*numpy.exp(f))/(2*numpy.pi*R)
+      ww = 1.0 - (S*xt*numpy.exp(f))/(2*numpy.pi*R)
+      p = (ρ**gamma)/(gamma*mach*mach)
+      θ = p/(Rd*ρ)
 
    elif param.case_number == 3:
       # Colliding bubbles
@@ -299,7 +298,7 @@ def initialize_cartesian2d(geom: Cartesian2D, param: Configuration) -> NDArray[n
       exner = (1.0 - gravity / (cpd * θ) * geom.X3)
 
    # ρ = p0 / (Rd * θ) * exner**(cvd / Rd)
-
+   
    Q[idx_2d_rho,:,:]       = ρ
    Q[idx_2d_rho_u,:,:]     = ρ * uu
    Q[idx_2d_rho_w,:,:]     = ρ * ww
