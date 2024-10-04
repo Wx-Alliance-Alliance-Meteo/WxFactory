@@ -93,18 +93,18 @@ extern "C" __global__ void ausm_solver(double *Q,
 
     // Set the interface fluxes
     fl[idx_rho] = rhol * Mmax + rhor * Mmin;
+    fl[idx_rhou] = rhoul * Mmax + rhour * Mmin;
+    fl[idx_rhow] = rhowl * Mmax + rhowr * Mmin;
+    fl[idx_rhot] = rho_thetal * Mmax + rho_thetar * Mmin;
+
     if (direction == 0)
     {
-      fl[idx_rhou] = 0.5 * (Ml * pl - Mr * pr);
-      fl[idx_rhow] = rhowl * Mmax + rhowr * Mmin;
+      fl[idx_rhou] += 0.5 * (Ml * pl - Mr * pr);
     }
-
     if (direction == 1)
     {
-      fl[idx_rhou] = rhoul * Mmax + rhour * Mmin;
-      fl[idx_rhow] = 0.5 * (Ml * pl - Mr * pr);
+      fl[idx_rhow] += 0.5 * (Ml * pl - Mr * pr);
     }
-    fl[idx_rhot] = rho_thetal * Mmax + rho_thetar * Mmin;
 
     for (int i = 0; i < nvars; i++)
     {
