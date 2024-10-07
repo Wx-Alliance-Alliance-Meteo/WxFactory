@@ -161,9 +161,8 @@ def fgmres(A: MatvecOperator,
    r      = b - Ax0
    norm_r = global_norm(r, comm=comm)
 
-   residuals.append((norm_r / norm_b, time() - t_start, 0.0))
-      
-
+   residuals.append(((norm_r / norm_b).item(), time() - t_start, 0.0))
+   
    for outer in range(maxiter):
       # NOTE: We are dealing with row-major matrices, but we store the transpose of H and V.
       H = xp.zeros((restart+2, restart+2))
@@ -221,7 +220,7 @@ def fgmres(A: MatvecOperator,
          # norm_r is calculated directly after this loop ends.
          if inner < restart - 1:
             norm_r = xp.abs(g[inner+1])
-            residuals.append((norm_r / norm_b, time() - t_start, 0.0))
+            residuals.append(((norm_r / norm_b).item(), time() - t_start, 0.0))
             if verbose > 1:
                if comm.rank == 0: print(f'{prefix}norm_r / b = {residuals[-1][0]:.3e}')
                sys.stdout.flush()
@@ -237,7 +236,8 @@ def fgmres(A: MatvecOperator,
       r = b - A(x)
 
       norm_r = global_norm(r, comm=comm)
-      residuals.append((norm_r / norm_b, time() - t_start, 0.0))
+      
+      residuals.append(((norm_r / norm_b).item(), time() - t_start, 0.0))
       if verbose > 0:
          if comm.rank == 0: print(f'{prefix}res: {norm_r/norm_b:.2e} (iter {niter})')
          sys.stdout.flush()
