@@ -45,8 +45,14 @@ def rhs_bubble(Q, geom, mtrx, nbsolpts, nb_elements_x, nb_elements_z):
    for elem in range(nb_elements_z):
       epais = elem * nbsolpts + standard_slice
 
-      kfaces_var[:,elem,0,:] = mtrx.extrap_down @ Q[:,epais,:]
-      kfaces_var[:,elem,1,:] = mtrx.extrap_up @ Q[:,epais,:]
+      kfaces_var[idx_2d_rho,elem,0,:] = numpy.exp(mtrx.extrap_down @ numpy.log(Q[idx_2d_rho,epais,:]))
+      kfaces_var[idx_2d_rho,elem,1,:] = numpy.exp(mtrx.extrap_up @ numpy.log(Q[idx_2d_rho,epais,:]))
+
+      kfaces_var[1:-1,elem,0,:] = mtrx.extrap_down @ Q[1:-1,epais,:]
+      kfaces_var[1:-1,elem,1,:] = mtrx.extrap_up @ Q[1:-1,epais,:]
+
+      kfaces_var[idx_2d_rho_theta,elem,0,:] = numpy.exp(mtrx.extrap_down @ numpy.log(Q[idx_2d_rho_theta,epais,:]))
+      kfaces_var[idx_2d_rho_theta,elem,1,:] = numpy.exp(mtrx.extrap_up @ numpy.log(Q[idx_2d_rho_theta,epais,:]))
 
    for elem in range(nb_elements_x):
       epais = elem * nbsolpts + standard_slice
@@ -84,18 +90,20 @@ def rhs_bubble(Q, geom, mtrx, nbsolpts, nb_elements_x, nb_elements_z):
 
       # Left state
       a_L = numpy.sqrt(heat_capacity_ratio * kfaces_pres[left, 1, :] / kfaces_var[idx_2d_rho, left, 1, :])
-      M_L = kfaces_var[idx_2d_rho_w, left, 1, :] / (kfaces_var[idx_2d_rho, left, 1, :] * a_L)
+      ww_L = kfaces_var[idx_2d_rho_w, left, 1, :] / kfaces_var[idx_2d_rho, left, 1, :]
+      eig_L = numpy.abs(ww_L) + a_L
 
       # Right state
       a_R = numpy.sqrt(heat_capacity_ratio * kfaces_pres[right, 0, :] / kfaces_var[idx_2d_rho, right, 0, :])
-      M_R = kfaces_var[idx_2d_rho_w, right, 0, :] / (kfaces_var[idx_2d_rho, right, 0, :] * a_R)
+      ww_R = kfaces_var[idx_2d_rho_w, right, 0, :] / kfaces_var[idx_2d_rho, right, 0, :]
+      eig_R = numpy.abs(ww_R) + a_R
 
-      M = 0.25 * (( M_L + 1.)**2 - (M_R - 1.)**2)
+      c = numpy.maximum(eig_L, eig_R)
 
-      kfaces_flux[:,right,0,:] = (kfaces_var[:,left,1,:] * numpy.maximum(0., M) * a_L) + \
-                                 (kfaces_var[:,right,0,:] * numpy.minimum(0., M) * a_R)
-      kfaces_flux[idx_2d_rho_w,right,0,:] += 0.5 * ((1. + M_L) * kfaces_pres[left,1,:] + \
-                                                    (1. - M_R) * kfaces_pres[right,0,:])
+      kfaces_flux[:,right,0,:] = 0.5 * (kfaces_var[:,left,1,:] * ww_L + kfaces_var[:,right,0,:] * ww_R)
+      kfaces_flux[idx_2d_rho_w,right,0,:] += 0.5 * (kfaces_pres[left,1,:] + kfaces_pres[right,0,:])
+
+      kfaces_flux[:,right,0,:] += 0.5 * c * (kfaces_var[:,left,1,:] - kfaces_var[:,right,0,:])
 
       kfaces_flux[:,left,1,:] = kfaces_flux[:,right,0,:]
 
@@ -108,18 +116,20 @@ def rhs_bubble(Q, geom, mtrx, nbsolpts, nb_elements_x, nb_elements_z):
 
       # Left state
       a_L = numpy.sqrt(heat_capacity_ratio * ifaces_pres[left, :, 1] / ifaces_var[idx_2d_rho, left, :, 1])
-      M_L = ifaces_var[idx_2d_rho_u, left, :, 1] / (ifaces_var[idx_2d_rho, left, :, 1] * a_L)
+      uu_L = ifaces_var[idx_2d_rho_u,left,:,1]  / ifaces_var[idx_2d_rho,left,:,1]
+      eig_L = numpy.abs(uu_L) + a_L
 
       # Right state
       a_R = numpy.sqrt(heat_capacity_ratio * ifaces_pres[right, :, 0] / ifaces_var[idx_2d_rho, right, :, 0])
-      M_R = ifaces_var[idx_2d_rho_u, right, :, 0] / ( ifaces_var[idx_2d_rho, right, :, 0] * a_R)
+      uu_R = ifaces_var[idx_2d_rho_u,right,:,0]  / ifaces_var[idx_2d_rho,right,:,0]
+      eig_R = numpy.abs(uu_R) + a_R
 
-      M = 0.25 * ((M_L + 1.)**2 - (M_R - 1.)**2)
+      c = numpy.maximum(eig_L, eig_R)
 
-      ifaces_flux[:,right,:,0] = (ifaces_var[:,left,:,1] * numpy.maximum(0., M) * a_L) + \
-                                 (ifaces_var[:,right,:,0] * numpy.minimum(0., M) * a_R)
-      ifaces_flux[idx_2d_rho_u,right,:,0] += 0.5 * ((1. + M_L) * ifaces_pres[left,:,1] + \
-                                                    (1. - M_R) * ifaces_pres[right,:,0])
+      ifaces_flux[:,right,:,0] = 0.5 * (ifaces_var[:,left,:,1] * uu_L + ifaces_var[:,right,:,0] * uu_R)
+      ifaces_flux[idx_2d_rho_u,right,:,0] += 0.5 * (ifaces_pres[left,:,1] + ifaces_pres[right,:,0])
+      
+      ifaces_flux[:,right,:,0] += 0.5 * c * (ifaces_var[:,left,:,1] - ifaces_var[:,right,:,0])
 
       ifaces_flux[:,left,:,1] = ifaces_flux[:,right,:,0]
 
