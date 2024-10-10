@@ -8,6 +8,8 @@
 *.nsys-rep
 *.so
 
+pde/kernels/interface.cpp
+
 doc/*.pdf
 doc/aux/*
 doc/svg-inkscape/*
