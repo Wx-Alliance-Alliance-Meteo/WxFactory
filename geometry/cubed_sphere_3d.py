@@ -12,6 +12,7 @@ from common.configuration    import Configuration
 from common.device import Device, default_device
 
 class CubedSphere3D(CubedSphere):
+
     def __init__(self, nb_elements_horizontal:int , nb_elements_vertical: int, nbsolpts: int,
                     λ0: float, ϕ0: float, α0: float, ztop: float, ptopo: ProcessTopology, param: Configuration,
                     device: Device = default_device):
@@ -74,6 +75,8 @@ class CubedSphere3D(CubedSphere):
         super().__init__(nbsolpts, device)
         xp = device.xp
 
+        rank = MPI.COMM_WORLD.rank
+
         ## Panel / parallel decomposition properties
         self.ptopo = ptopo
 
@@ -115,6 +118,7 @@ class CubedSphere3D(CubedSphere):
         self.nb_elements_x1 = nb_elements_x1
         self.nb_elements_x2 = nb_elements_x2
         self.nb_elements_x3 = nb_elements_x3
+        self.nb_elements = nb_elements_x1 * nb_elements_x2 * nb_elements_x3
 
         ## Element sizes
 
@@ -123,9 +127,6 @@ class CubedSphere3D(CubedSphere):
         delta_x2 = (domain_x2[1] - domain_x2[0]) / nb_elements_x2
         delta_x3 = (domain_x3[1] - domain_x3[0]) / nb_elements_x3
         delta_eta = (domain_eta[1] - domain_eta[0]) / nb_elements_x3
-
-        # Reset delta_x3 to a nonzero value if ztop=0, as for shallow water
-        if (delta_x3 == 0): delta_x3 = 1
 
         self.delta_x1 = delta_x1
         self.delta_x2 = delta_x2
@@ -160,11 +161,8 @@ class CubedSphere3D(CubedSphere):
         self.grid_shape_2d = (nj, ni)
         # And the shape of arrays corresponding to each of the three interfaces
         self.itf_i_shape_3d = (nk, nj, nb_elements_x1+1)
-        self.itf_i_shape_2d = (nj, nb_elements_x1+1)
         self.itf_j_shape_3d = (nk, nb_elements_x2+1, ni)
-        self.itf_j_shape_2d = (nb_elements_x2+1, ni)
         self.itf_k_shape_3d = (nb_elements_x3+1, nj, ni)
-        self.itf_k_shape_2d = (nj, ni)
 
         # The shapes. For a single field (e.g. coordinates of solution points, in the current case), we
         # have an array of elements, where each element has a total nbsolpts**2 (in 2D) or nbsolpts**3 (in 3D) solution
@@ -174,9 +172,13 @@ class CubedSphere3D(CubedSphere):
         #   elements, each with 2*nbsolpts interface points (nbsolpts for each side of the element along that direction)
         # - In 3D, horizontally, we also have two arrays (west-east, south-north), but the shape is to be determined
         # - In 3D vertically, we only have one array, with shape similar to horizontally, TBD
-        self.grid_shape_2d_new = (nb_elements_x1 * nb_elements_x2, nbsolpts * nbsolpts)
-        self.grid_shape_3d_new = (nb_elements_x1 * nb_elements_x2 * nb_elements_x3, nbsolpts * nbsolpts * nbsolpts)
-        self.itf_shape_2d = (nb_elements_x1 * nb_elements_x2, nbsolpts * 2)
+        self.block_shape = (nk, nj, ni)
+        self.grid_shape_3d_new = (self.nb_elements, nbsolpts ** 3)
+
+        # Interface shapes include a halo of one element along the direction of the interface
+        self.itf_i_shape = (self.nb_elements_x3 * self.nb_elements_x2 * (self.nb_elements_x1 + 2), (nbsolpts**2) * 2)
+        self.itf_j_shape = (self.nb_elements_x3 * (self.nb_elements_x2 + 2) * self.nb_elements_x1, (nbsolpts**2) * 2)
+        self.itf_k_shape = ((self.nb_elements_x3 + 2) * self.nb_elements_x2 * self.nb_elements_x1, (nbsolpts**2) * 2)
 
         # Assign a token zbot, potentially to be overridden later with supplied topography
         self.zbot = xp.zeros(self.grid_shape_2d)
@@ -185,130 +187,96 @@ class CubedSphere3D(CubedSphere):
 
         # Define the base coordinate.  x1 and x2 are fundamentally 1D arrays,
         # while x3 and eta are 3D arrays in support of coordinate mapping
+        offsets_x1 = domain_x1[0] + delta_x1 * xp.arange(nb_elements_x1)
+        ref_solpts_x1 = delta_x1 / delta_comp * (-minComp + self.solutionPoints)
+        x1 = xp.repeat(offsets_x1, nbsolpts) + xp.tile(ref_solpts_x1, nb_elements_x1)
 
-        x1 = xp.empty(ni)
-        x2 = xp.empty(nj)
-        x3 = xp.empty(self.grid_shape_3d)
-        eta = xp.empty(self.grid_shape_3d)
+        offsets_x2 = domain_x2[0] + delta_x2 * xp.arange(nb_elements_x2)
+        ref_solpts_x2 = delta_x2 / delta_comp * (-minComp + self.solutionPoints)
+        x2 = xp.repeat(offsets_x2, nbsolpts) + xp.tile(ref_solpts_x2, nb_elements_x2)
 
-        # x3_new  = xp.empty(self.grid_shape_3d_new)
-        # eta_new = xp.empty(self.grid_shape_3d_new)
+        offsets_x3 = domain_x3[0] + delta_x3 * xp.arange(nb_elements_x3)
+        ref_solpts_x3 = delta_x3 / delta_comp * (-minComp + self.solutionPoints)
+        x3_linear = xp.repeat(offsets_x3, nbsolpts) + xp.tile(ref_solpts_x3, nb_elements_x3)
+        x3 = xp.repeat(x3_linear, ni * nj).reshape(self.grid_shape_3d)
 
-        # 1D element-counting arrays, for coordinate assignment
-        elements_x1 = xp.arange(nb_elements_x1)
-        elements_x2 = xp.arange(nb_elements_x2)
-        elements_x3 = xp.arange(nb_elements_x3)
-
-        # Assign the coordinates, using numpy's broadcasting
-        # First, reshape the coordinate to segregate the element interior into its own dimension
-        x1.shape = (nb_elements_x1,nbsolpts)
-        # Then broadcast the coordinate into the variable, using the structure:
-        # <minimum> + <delta_element>*<element number> + <delta_inner>*<solutionPoints>
-        x1[:] = domain_x1[0] + delta_x1*elements_x1[:,xp.newaxis] + \
-                    delta_x1/delta_comp*(-minComp + self.solutionPoints[xp.newaxis,:])
-        # Finally, reshape back to the unified view   
-        x1.shape = (ni,)
-
-        # Repeat for x2, x3, and eta
-        x2.shape = (nb_elements_x2,nbsolpts)
-        x2[:] = domain_x2[0] + delta_x2*elements_x2[:,xp.newaxis] + \
-                    delta_x2/delta_comp*(-minComp + self.solutionPoints[xp.newaxis,:])
-        x2.shape = (nj,)
-
-        # x3 and eta are 3D arrays
-        x3.shape = (nb_elements_x3,nbsolpts,nj,ni)
-        x3[:] = domain_x3[0] + delta_x3*elements_x3[:,xp.newaxis,xp.newaxis,xp.newaxis] + \
-                    delta_x3/delta_comp*(-minComp + self.solutionPoints[xp.newaxis,:,xp.newaxis,xp.newaxis])
-        x3.shape = self.grid_shape_3d
-
-        eta.shape = (nb_elements_x3,nbsolpts,nj,ni)
-        eta[:] = domain_eta[0] + delta_eta*elements_x3[:,xp.newaxis,xp.newaxis,xp.newaxis] + \
-                    delta_eta/delta_comp*(-minComp + self.solutionPoints[xp.newaxis,:,xp.newaxis,xp.newaxis])
-        eta.shape = self.grid_shape_3d
+        offsets_eta = domain_eta[0] + delta_eta * xp.arange(nb_elements_x3)
+        ref_solpts_eta = delta_eta / delta_comp * (-minComp + self.solutionPoints)
+        eta_linear = xp.repeat(offsets_eta, nbsolpts) + xp.tile(ref_solpts_eta, nb_elements_x3)
+        eta = xp.repeat(eta_linear, ni * nj).reshape(self.grid_shape_3d)
 
 
         # Repeat for the interface values
-        x1_itf_i = xp.empty(nb_elements_x1 + 1)  # 1D array
-        x2_itf_i = xp.empty(nj)  # 1D array
-        x3_itf_i = xp.empty(self.itf_i_shape_3d)  # 3D array
-        eta_itf_i = xp.empty(self.itf_i_shape_3d) # 3D array
+        x1_itf_i  = xp.linspace(domain_x1[0], domain_x1[1], nb_elements_x1 + 1) # At every boundary between elements
+        x2_itf_i  = x2.copy()
+        x3_itf_i  = xp.repeat(x3[:, :, 0], nb_elements_x1 + 1).reshape(self.itf_i_shape_3d) # Repeat zy plane
+        eta_itf_i = xp.repeat(eta[:, :, 0], nb_elements_x1 + 1).reshape(self.itf_i_shape_3d)
 
-        x1_itf_i[:-1] = domain_x1[0] + delta_x1*elements_x1[:] # Left edges
-        x1_itf_i[-1] = domain_x1[1] # Right edge
-        x2_itf_i[:] = x2[:] # Copy over x2, without change because of tensor product structure
-        x3_itf_i[:,:,:] = x3[:,:,0:1] # Same for x3
-        eta_itf_i[:,:,:] = eta[:,:,0:1]
+        x1_itf_j  = x1.copy()
+        x2_itf_j  = xp.linspace(domain_x2[0], domain_x2[1], nb_elements_x2 + 1)
+        x3_itf_j  = xp.repeat(x3[:, 0, :], nb_elements_x2 + 1).reshape(self.itf_j_shape_3d)
+        eta_itf_j = xp.repeat(eta[:, 0, :], nb_elements_x2 + 1).reshape(self.itf_j_shape_3d)
 
-        x1_itf_j = xp.empty(ni) # n.b. 1D array
-        x2_itf_j = xp.empty(nb_elements_x2 + 1) # Also 1D array
-        x3_itf_j = xp.empty(self.itf_j_shape_3d) # 3D array
-        eta_itf_j = xp.empty(self.itf_j_shape_3d) # 3D array
+        x1_itf_k = x1.copy()
+        x2_itf_k = x2.copy()
+        x3_itf_k_linear = xp.linspace(domain_x3[0], domain_x3[1], nb_elements_x3 + 1)
+        x3_itf_k = xp.repeat(x3_itf_k_linear, ni * nj).reshape(self.itf_k_shape_3d)
+        eta_itf_k_linear = xp.linspace(domain_eta[0], domain_eta[1], nb_elements_x3 + 1)
+        eta_itf_k = xp.repeat(eta_itf_k_linear, ni * nj).reshape(self.itf_k_shape_3d)
 
-        x1_itf_j[:] = x1[:]
-        x2_itf_j[:-1] = domain_x2[0] + delta_x2*elements_x2[:] # South edges
-        x2_itf_j[-1] = domain_x2[1] # North edge
-        x3_itf_j[:,:,:] = x3[:,0:1,:]
-        eta_itf_j[:,:,:] = eta[:,0:1,:]
-
-        x1_itf_k = xp.empty(ni)
-        x2_itf_k = xp.empty(nj)
-        x3_itf_k = xp.empty(self.itf_k_shape_3d)
-        eta_itf_k = xp.empty(self.itf_k_shape_3d)
-
-        x1_itf_k[:] = x1[:]
-        x2_itf_k[:] = x2[:]
-        x3_itf_k[:-1,:,:] = domain_x3[0] + delta_x3*elements_x3[:,xp.newaxis,xp.newaxis] # Bottom edges
-        x3_itf_k[-1,:,:] = domain_x3[1]
-        eta_itf_k[:-1,:,:] = domain_eta[0] + delta_eta*elements_x3[:,xp.newaxis,xp.newaxis]
-        eta_itf_k[-1,:,:] = domain_eta[1]
-
+        # x1, x2, x3 and eta coordinates of interior grid points
         self.x1 = x1
         self.x2 = x2
         self.eta = eta
         self.x3 = x3
 
+        # x1, x2, x3 and eta coordinates of west-east interface points
         self.x1_itf_i = x1_itf_i
         self.x2_itf_i = x2_itf_i
         self.x3_itf_i = x3_itf_i
         self.eta_itf_i = eta_itf_i
 
+        # x1, x2, x3 and eta coordinates of south-north interface points
         self.x1_itf_j = x1_itf_j
         self.x2_itf_j = x2_itf_j
         self.x3_itf_j = x3_itf_j
         self.eta_itf_j = eta_itf_j
 
+        # x1, x2, x3 and eta coordinates of bottom-top interface points
         self.x1_itf_k = x1_itf_k
         self.x2_itf_k = x2_itf_k
         self.x3_itf_k = x3_itf_k
         self.eta_itf_k = eta_itf_k
 
         ## Construct the combined coordinate vector for the numeric/equiangular coordinate (x1, x2, η)
-        #TODO Why does the shape have an additional dimension of size 1?
+        ## This is the numeric coordinate at every grid (and interface) point
         coordVec_num = xp.stack((xp.broadcast_to(x1[None, None, :], eta.shape),
-                                xp.broadcast_to(x2[None, :, None], eta.shape),
-                                    eta))
-
-        if MPI.COMM_WORLD.rank == 0:
-            print(f'eta itf i shape = {eta_itf_i.shape}')
+                                 xp.broadcast_to(x2[None, :, None], eta.shape),
+                                 eta))
 
         coordVec_num_itf_i = xp.stack((xp.broadcast_to(x1_itf_i[None, None, :], eta_itf_i.shape),
-                                        xp.broadcast_to(x2_itf_i[None, :, None], eta_itf_i.shape),
-                                        eta_itf_i))
+                                       xp.broadcast_to(x2_itf_i[None, :, None], eta_itf_i.shape),
+                                       eta_itf_i))
         coordVec_num_itf_j = xp.stack((xp.broadcast_to(x1_itf_j[None, None, :], eta_itf_j.shape),
-                                        xp.broadcast_to(x2_itf_j[None, :, None], eta_itf_j.shape),
-                                        eta_itf_j))
+                                       xp.broadcast_to(x2_itf_j[None, :, None], eta_itf_j.shape),
+                                       eta_itf_j))
         coordVec_num_itf_k = xp.stack((xp.broadcast_to(x1_itf_k[None, None, :], eta_itf_k.shape),
-                                        xp.broadcast_to(x2_itf_k[None, :, None], eta_itf_k.shape),
-                                        eta_itf_k))
+                                       xp.broadcast_to(x2_itf_k[None, :, None], eta_itf_k.shape),
+                                       eta_itf_k))
 
         self.coordVec_num = coordVec_num
         self.coordVec_num_itf_i = coordVec_num_itf_i
         self.coordVec_num_itf_j = coordVec_num_itf_j
         self.coordVec_num_itf_k = coordVec_num_itf_k
 
-        # self.coordVec_num_new = self._to_new(coordVec_num)
+        self.numeric = self._to_new(coordVec_num)
+        self.numeric_itf_i = self._to_new_itf_i(coordVec_num_itf_i)
+        self.numeric_itf_j = self._to_new_itf_j(coordVec_num_itf_j)
+        self.numeric_itf_k = self._to_new_itf_k(coordVec_num_itf_k)
 
-        print(f'base shape {coordVec_num.shape}, itf i shape {coordVec_num_itf_i.shape}, itf j shape = {coordVec_num_itf_j.shape}')
+        if rank == 0:
+            print(f'old: \n{coordVec_num_itf_k[2]}')
+            print(f'new: \n{self.numeric_itf_k[2]}')
 
         # Compute the parameters of the rotated grid
 
@@ -509,8 +477,8 @@ class CubedSphere3D(CubedSphere):
         X_itf_j = xp.broadcast_to(xp.tan(x1_itf_j)[xp.newaxis,:],(nb_elements_x2+1,ni))
         Y_itf_j = xp.broadcast_to(xp.tan(x2_itf_j)[:,xp.newaxis],(nb_elements_x2+1,ni))
 
-        if MPI.COMM_WORLD.rank == 0:
-            print(f'x itf i (shape {X_itf_i.shape})= \n{X_itf_i}')
+        # if MPI.COMM_WORLD.rank == 0:
+        #     print(f'x itf i (shape {X_itf_i.shape})= \n{X_itf_i}')
 
         delta2 = 1.0 + X**2 + Y**2
         delta  = xp.sqrt(delta2)
@@ -675,75 +643,101 @@ class CubedSphere3D(CubedSphere):
 
     def _to_new(self, a):
         """Convert input array to new memory layout"""
+        if a.shape[-3:] != self.block_shape:
+            raise ValueError(f'Unhandled shape {a.shape}')
 
-        expected_shape =  (self.nb_elements_x3 * self.nbsolpts, self.nb_elements_x2 * self.nbsolpts,
-                            self.nb_elements_x1 * self.nbsolpts)
-        if a.shape[-3:] == expected_shape:
-            tmp_shape = a.shape[:-3] + (self.nb_elements_x3, self.nbsolpts, self.nb_elements_x2, self.nbsolpts,
-                        self.nb_elements_x1, self.nbsolpts)
-            new_shape = a.shape[:-3] + self.grid_shape_3d
-            return numpy.moveaxis(a.reshape(tmp_shape), (-5, -3), (-3, -2)).reshape(new_shape)
+        tmp_shape = a.shape[:-3] + (self.nb_elements_x3, self.nbsolpts, self.nb_elements_x2, self.nbsolpts,
+                    self.nb_elements_x1, self.nbsolpts)
+        new_shape = a.shape[:-3] + self.grid_shape_3d_new
+        xp = self.device.xp
 
-        raise ValueError(f'Unhandled number of dimensions... Shape is {a.shape}')
+        return xp.moveaxis(a.reshape(tmp_shape), (-5, -3), (-3, -2)).reshape(new_shape)
 
-    def _to_old(self, a):
+    def to_single_block(self, a):
         """Convert input array to old memory layout"""
-        expected_shape = (self.nb_elements_x1 * self.nb_elements_x2, self.nbsolpts * self.nbsolpts)
-        if a.shape == expected_shape:
-            tmp_shape = (self.nb_elements_x2, self.nb_elements_x1, self.nbsolpts, self.nbsolpts)
-            new_shape = self.grid_shape_2d
-            return a.reshape(tmp_shape).transpose(0, 2, 1, 3).reshape(new_shape)
-        elif a.ndim == 3 and a.shape[1:] == expected_shape:
-            tmp_shape = (a.shape[0], self.nb_elements_x2, self.nb_elements_x1, self.nbsolpts, self.nbsolpts)
-            new_shape = (a.shape[0],) + self.grid_shape_2d
-            return a.reshape(tmp_shape).transpose(0, 1, 3, 2, 4).reshape(new_shape)
+        if a.shape[-3:] != self.grid_shape_3d_new:
+            raise ValueError(f'Unhandled shape {a.shape}')
+
+        tmp_shape = a.shape[:-3] + (self.nb_elements_x3, self.nb_elements_x2, self.nb_elements_x1,
+                        self.nbsolpts, self.nbsolpts, self.nbsolpts)
+        new_shape = a.shape[:-3] + self.block_shape
+        xp = self.device.xp
+
+        return xp.moveaxis(a.reshape(tmp_shape), (-3, -2), (-5, -3)).reshape(new_shape)
+
 
     def _to_new_itf_i(self, a):
         """Convert input array (west and east interface) to new memory layout"""
 
+        if a.shape[-3:] != self.itf_i_shape_3d:
+            raise ValueError(f'Unexpected array shape {a.shape}, expected (...,) {self.itf_i_shape_3d})')
+
         xp = self.device.xp
 
-        # expected_shape = (self.nb_elements_x2 * self.nbsolpts, self.nb_elements_x1 + 1)
-        expected_shape = (self.nb_elements_x1 + 1, self.nb_elements_x2 * self.nbsolpts)
-        if a.shape[-2:] == expected_shape:
-            plane_shape = (self.nb_elements_x2, self.nb_elements_x1 + 2, self.nbsolpts * 2)
-            new = xp.zeros(a.shape[:-2] + plane_shape, dtype=a.dtype)
-            west_itf = xp.arange(self.nbsolpts)
-            east_itf = xp.arange(self.nbsolpts, 2*self.nbsolpts)
+        plane_shape = (self.nb_elements_x3, self.nb_elements_x2, self.nb_elements_x1 + 2, (self.nbsolpts**2) * 2)
+        new = xp.zeros(a.shape[:-3] + plane_shape, dtype=a.dtype)
 
-            tmp_shape = a.shape[:-2] + (self.nb_elements_x1 + 1, self.nb_elements_x2, self.nbsolpts)
-            offset = len(a.shape) - 2
-            transp = tuple([i for i in range(offset)]) + (1 + offset, 0 + offset, 2 + offset)
+        tmp_shape1 = a.shape[:-3] + (self.nb_elements_x3, self.nbsolpts,
+                                     self.nb_elements_x2, self.nbsolpts,
+                                     self.nb_elements_x1 + 1)
+        tmp_shape2 = a.shape[:-3] + (self.nb_elements_x3, self.nb_elements_x2, self.nb_elements_x1 + 1,
+                                     self.nbsolpts**2)
+        tmp_array = xp.moveaxis(a.reshape(tmp_shape1), (-4, -2), (-2, -1)).reshape(tmp_shape2)
 
-            tmp_array = a.reshape(tmp_shape).transpose(transp)
-            new[..., :-1, east_itf] = tmp_array
-            new[..., 1:,  west_itf] = tmp_array
+        west = numpy.s_[..., 1:, :self.nbsolpts**2]
+        east = numpy.s_[..., :-1, self.nbsolpts**2:]
+        new[west] = tmp_array
+        new[east] = tmp_array
 
-            new_shape = a.shape[:-2] + (self.nb_elements_x2 * (self.nb_elements_x1 + 2), self.nbsolpts * 2)
-            return new.reshape(new_shape)
-        else:
-            raise ValueError(f'Unexpected array shape {a.shape} (expected {expected_shape})')
+        return new.reshape(a.shape[:-3] + self.itf_i_shape)
 
     def _to_new_itf_j(self, a):
         """Convert input array (south and north interface) to new memory layout"""
         xp = self.device.xp
-        
-        expected_shape = (self.nb_elements_x2 + 1, self.nb_elements_x1 * self.nbsolpts)
-        if a.shape[-2:] == expected_shape:
-            plane_shape = (self.nb_elements_x2 + 2, self.nb_elements_x1, self.nbsolpts * 2)
-            new = xp.zeros(a.shape[:-2] + plane_shape, dtype=a.dtype)
-            south = xp.s_[..., 1:,  :, :self.nbsolpts]
-            north = xp.s_[..., :-1, :, self.nbsolpts:]
 
-            tmp_shape = a.shape[:-2] + (self.nb_elements_x2 + 1, self.nb_elements_x1, self.nbsolpts)
-            tmp_array = a.reshape(tmp_shape)
-            new[north] = tmp_array
-            new[south] = tmp_array
+        if a.shape[-3:] != self.itf_j_shape_3d:
+            raise ValueError(f'Unexpected array shape {a.shape}, expected (...,) {self.itf_j_shape_3d})')
 
-            new_shape = a.shape[:-2] + ((self.nb_elements_x2 + 2) * self.nb_elements_x1, self.nbsolpts * 2)
-            return new.reshape(new_shape)
-        else:
-            raise ValueError(f'Unexpected array shape {a.shape} (expected {expected_shape})')
+        plane_shape = (self.nb_elements_x3, self.nb_elements_x2 + 2, self.nb_elements_x1, (self.nbsolpts**2) * 2)
+        new = xp.zeros(a.shape[:-3] + plane_shape, dtype=a.dtype)
+
+        tmp_shape1 = a.shape[:-3] + (self.nb_elements_x3, self.nbsolpts,
+                                     self.nb_elements_x2 + 1,
+                                     self.nb_elements_x1, self.nbsolpts)
+        tmp_shape2 = a.shape[:-3] + (self.nb_elements_x3, self.nb_elements_x2 + 1, self.nb_elements_x1,
+                                     self.nbsolpts**2)
+        tmp_array = xp.moveaxis(a.reshape(tmp_shape1), -4, -2).reshape(tmp_shape2)
+
+        south = xp.s_[..., 1:,  :, :self.nbsolpts**2]
+        north = xp.s_[..., :-1, :, self.nbsolpts**2:]
+        new[south] = tmp_array
+        new[north] = tmp_array
+
+        return new.reshape(a.shape[:-3] + self.itf_j_shape)
+
+    def _to_new_itf_k(self, a):
+        """Convert input array (bottom and top interface) to new memory layout"""
+        xp = self.device.xp
+
+        if a.shape[-3:] != self.itf_k_shape_3d:
+            raise ValueError(f'Unexpected array shape {a.shape}, expected (...,) {self.itf_k_shape_3d})')
+
+        plane_shape = (self.nb_elements_x3 + 2, self.nb_elements_x2, self.nb_elements_x1, (self.nbsolpts**2) * 2)
+        new = xp.zeros(a.shape[:-3] + plane_shape, dtype=a.dtype)
+
+        tmp_shape1 = a.shape[:-3] + (self.nb_elements_x3 + 1,
+                                     self.nb_elements_x2, self.nbsolpts,
+                                     self.nb_elements_x1, self.nbsolpts)
+        tmp_shape2 = a.shape[:-3] + (self.nb_elements_x3 + 1, self.nb_elements_x2, self.nb_elements_x1,
+                                     self.nbsolpts**2)
+        tmp_array = xp.swapaxes(a.reshape(tmp_shape1), -3, -2).reshape(tmp_shape2)
+
+        bottom = xp.s_[..., 1:, :, :, :self.nbsolpts**2]
+        top    = xp.s_[..., :-1, :, :, self.nbsolpts**2:]
+        new[bottom] = tmp_array
+        new[top]    = tmp_array
+
+        return new.reshape(a.shape[:-3] + self.itf_k_shape)
 
     # def _to_new_itf(self, a):
     #    """Convert input array (interface) to new memory layout"""
@@ -761,6 +755,3 @@ class CubedSphere3D(CubedSphere):
     #       elif a.shape == expected_shape_2:
     #          tmp_shape = (self.nb_elements_x2 + 1, self.nb_elements_x1, self.nbsolpts)
     #       else: raise ValueError
-
-    def to_single_block(self, a):
-        return a
