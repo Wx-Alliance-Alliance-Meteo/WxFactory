@@ -5,7 +5,7 @@ from typing import Union
 from .cubed_sphere    import CubedSphere
 from .cubed_sphere_2d import CubedSphere2D
 from .cubed_sphere_3d import CubedSphere3D
-from .metric          import Metric3DTopo
+from .metric3d        import Metric3DTopo
 
 def wind2contra_2d(u : Union[float, numpy.ndarray], v : Union[float, numpy.ndarray], geom : CubedSphere):
    '''Convert wind fields from the spherical basis (zonal, meridional) to panel-appropriate contrvariant winds, in two dimensions

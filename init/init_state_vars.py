@@ -3,12 +3,12 @@ from numpy.typing import NDArray
 
 
 from common.configuration      import Configuration
-from geometry                  import DFROperators, Geometry, Metric, Metric3DTopo, Cartesian2D, CubedSphere2D, \
+from geometry                  import DFROperators, Geometry, Metric2D, Metric3DTopo, Cartesian2D, CubedSphere2D, \
                                       CubedSphere3D
 from init.initialize           import initialize_cartesian2d, initialize_euler, initialize_sw, Topo
 
 def init_state_vars(geom: Geometry, operators: DFROperators, param: Configuration) \
-    -> tuple[NDArray[numpy.float64], Topo | None, Metric | Metric3DTopo | None]:
+    -> tuple[NDArray[numpy.float64], Topo | None, Metric2D | Metric3DTopo | None]:
     '''Get intial value for state variables as well at topography information, based on the test case.'''
 
     topo         = None
@@ -23,7 +23,7 @@ def init_state_vars(geom: Geometry, operators: DFROperators, param: Configuratio
         Q = initialize_cartesian2d(geom, param)
 
     elif param.equations == "shallow_water" and isinstance(geom, CubedSphere2D):
-        metric = Metric(geom)
+        metric = Metric2D(geom)
         Q, topo = initialize_sw(geom, metric, operators, param)
 
     else:

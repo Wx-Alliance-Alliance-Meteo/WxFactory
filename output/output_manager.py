@@ -7,7 +7,7 @@ import numpy
 from common.configuration import Configuration
 from common.device import Device, default_device
 from geometry               import Cartesian2D, CubedSphere, CubedSphere2D, CubedSphere3D, Geometry, \
-                                   Metric, Metric3DTopo, DFROperators
+                                   Metric2D, Metric3DTopo, DFROperators
 from init.initialize        import Topo
 from output.blockstats      import blockstats_cart, blockstats_cs
 from output.solver_stats    import SolverStatsOutput
@@ -24,7 +24,7 @@ class OutputManager:
    def __init__(self,
                 param: Configuration,
                 geometry: Geometry,
-                metric: Optional[Union[Metric, Metric3DTopo]] = None,
+                metric: Optional[Union[Metric2D, Metric3DTopo]] = None,
                 operators: Optional[DFROperators] = None,
                 topo: Optional[Topo] = None,
                 device: Device = default_device) -> None:

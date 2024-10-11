@@ -7,7 +7,7 @@ from numpy.typing import NDArray
 from common.device             import Device
 from common.configuration      import Configuration
 from common.process_topology   import ProcessTopology
-from geometry                  import Cartesian2D, CubedSphere3D, DFROperators, Geometry, Metric, \
+from geometry                  import Cartesian2D, CubedSphere3D, DFROperators, Geometry, Metric2D, \
                                       Metric3DTopo
 from init.initialize           import Topo
 from rhs.fluxes                import ausm_2d_fv, upwind_2d_fv, rusanov_2d_fv
@@ -29,7 +29,7 @@ class RhsBundle:
    def __init__(self,
                 geom: Geometry,
                 operators: DFROperators,
-                metric: Metric | Metric3DTopo | None,
+                metric: Metric2D | Metric3DTopo | None,
                 topo: Optional[Topo],
                 ptopo: Optional[ProcessTopology],
                 param: Configuration,
