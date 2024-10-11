@@ -4,15 +4,15 @@ from   numpy.typing import NDArray
 
 from mpi4py import MPI
 
-from .geometry   import Geometry
-from .sphere     import cart2sph
+from .cubed_sphere import CubedSphere
+from .sphere       import cart2sph
 
 # For type hints
 from common.configuration    import Configuration
 from common.device           import Device, default_device
 from common.process_topology import ProcessTopology
 
-class CubedSphere2D(Geometry):
+class CubedSphere2D(CubedSphere):
    def __init__(self, nb_elements_horizontal:int , nbsolpts: int,
                 λ0: float, ϕ0: float, α0: float, ptopo: ProcessTopology, param: Configuration,
                 device: Device = default_device):
@@ -72,7 +72,7 @@ class CubedSphere2D(Geometry):
       '''
       rank = MPI.COMM_WORLD.rank
 
-      super().__init__(nbsolpts, 'cubed_sphere', device)
+      super().__init__(nbsolpts, device)
       xp = self.device.xp
 
       ## Panel / parallel decomposition properties

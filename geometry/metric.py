@@ -3,12 +3,13 @@ import math
 
 from mpi4py import MPI
 
-from .cubed_sphere  import CubedSphere
-from .operators     import DFROperators
 from common.device  import Device, default_device
 
+from .cubed_sphere_3d  import CubedSphere3D
+from .operators     import DFROperators
+
 class Metric3DTopo:
-   def __init__(self, geom: CubedSphere, matrix: DFROperators):
+   def __init__(self, geom: CubedSphere3D, matrix: DFROperators):
       # Token initialization: store geometry and matrix objects.  Defer construction of the metric itself,
       # so that initialization can take place after topography is defined inside the 'geom' object
 

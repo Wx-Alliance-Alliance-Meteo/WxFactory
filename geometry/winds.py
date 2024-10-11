@@ -2,8 +2,10 @@ import numpy
 import math
 from typing import Union
 
-from .cubed_sphere  import CubedSphere
-from .metric        import Metric3DTopo
+from .cubed_sphere    import CubedSphere
+from .cubed_sphere_2d import CubedSphere2D
+from .cubed_sphere_3d import CubedSphere3D
+from .metric          import Metric3DTopo
 
 def wind2contra_2d(u : Union[float, numpy.ndarray], v : Union[float, numpy.ndarray], geom : CubedSphere):
    '''Convert wind fields from the spherical basis (zonal, meridional) to panel-appropriate contrvariant winds, in two dimensions
@@ -54,7 +56,7 @@ def wind2contra_2d(u : Union[float, numpy.ndarray], v : Union[float, numpy.ndarr
 def wind2contra_3d(u : Union[float, numpy.ndarray],
                    v : Union[float, numpy.ndarray],
                    w : Union[float, numpy.ndarray],
-                   geom : CubedSphere,
+                   geom : CubedSphere3D,
                    metric : Metric3DTopo):
    '''Convert wind fields from spherical values (zonal, meridional, vertical) to contravariant winds
    on a terrain-following grid.
@@ -67,8 +69,8 @@ def wind2contra_3d(u : Union[float, numpy.ndarray],
       Input meridional winds, in meters per second
    w : float | numpy.ndarray
       Input vertical winds, in meters per second
-   geom : CubedSphere
-      Geometry object (CubedSphere), describing the grid configuration and globe paramters.  Required parameters:
+   geom : CubedSphere3D
+      Geometry object (CubedSphere3D), describing the grid configuration and globe paramters.  Required parameters:
       earth_radius, coslat, lat_p, angle_p, X, Y, delta2
    metric : Metric3DTopo
       Metric object containing H_contra and inv_dzdeta parameters
@@ -150,7 +152,7 @@ def contra2wind_2d(u1 : Union[float, numpy.ndarray],
 def contra2wind_3d(u1_contra : numpy.ndarray,
                    u2_contra : numpy.ndarray,
                    u3_contra : numpy.ndarray,
-                   geom : CubedSphere,
+                   geom : CubedSphere3D,
                    metric : Metric3DTopo):
    ''' contra2wind_3d: convert from contravariant wind fields to "physical winds" in three dimensions
    

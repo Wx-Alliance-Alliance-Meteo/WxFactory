@@ -6,7 +6,8 @@ import numpy
 
 from common.configuration import Configuration
 from common.device import Device, default_device
-from geometry               import Cartesian2D, CubedSphere, Geometry, Metric, Metric3DTopo, DFROperators
+from geometry               import Cartesian2D, CubedSphere, CubedSphere2D, CubedSphere3D, Geometry, \
+                                   Metric, Metric3DTopo, DFROperators
 from init.initialize        import Topo
 from output.blockstats      import blockstats_cart, blockstats_cs
 from output.solver_stats    import SolverStatsOutput
@@ -43,13 +44,13 @@ class OutputManager:
       self.blockstat_function = lambda Q, step_id: None
 
       if param.output_freq > 0:
-         if self.geometry.grid_type == 'cubed_sphere':
+         if isinstance(self.geometry, CubedSphere):
             from output.output_cubesphere import output_init, output_netcdf, output_finalize
             output_init(self.geometry, self.param)
             self.step_function = lambda Q, step_id: \
                output_netcdf(Q, self.geometry, self.metric, self.operators, self.topo, step_id, self.param)
             self.final_function = output_finalize
-         elif self.geometry.grid_type == 'cartesian2d':
+         elif isinstance(self.geometry, Cartesian2D):
             from output.output_cartesian import output_step
 
             self.output_file_name = lambda step_id: \
@@ -58,16 +59,15 @@ class OutputManager:
                output_step(Q, self.geometry, self.param, self.output_file_name(step_id))
 
       if param.stat_freq > 0:
-         if isinstance(self.geometry, CubedSphere):
-            if self.param.equations == 'shallow_water':
-               if self.topo is None:
-                  raise ValueError(f'Need a topo for this!')
-               self.blockstat_function = lambda Q, step_id: \
-                  blockstats_cs(Q, self.geometry, self.topo, self.metric, self.operators, self.param, step_id)
-            else:
-               if MPI.COMM_WORLD.rank == 0: print(f'WARNING: Blockstat only implemented for Shallow Water equations')
+         if isinstance(self.geometry, CubedSphere2D):
+            if self.topo is None:
+               raise ValueError(f'Need a topo for this!')
+            self.blockstat_function = lambda Q, step_id: \
+               blockstats_cs(Q, self.geometry, self.topo, self.metric, self.operators, self.param, step_id)
          elif isinstance(self.geometry, Cartesian2D):
             self.blockstat_function = lambda Q, step_id: blockstats_cart(Q, self.geometry, step_id)
+         else:
+            if MPI.COMM_WORLD.rank == 0: print(f'WARNING: Blockstat is not implemented for Euler equations on the Cubed Sphere')
 
       # Choose a file name hash based on a certain set of parameters:
       state_params = (param.dt, param.nb_elements_horizontal, param.nb_elements_vertical, param.nbsolpts,

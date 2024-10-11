@@ -13,7 +13,7 @@ from common.device           import Device
 from common.interpolation    import Interpolator
 from common.process_topology import ProcessTopology
 from common.configuration    import Configuration
-from geometry                import Cartesian2D, CubedSphere, DFROperators
+from geometry                import Cartesian2D, CubedSphere3D, DFROperators
 from init.init_state_vars    import init_state_vars
 from precondition.smoother   import KiopsSmoother, ExponentialSmoother, RK1Smoother, RK3Smoother, ARK3Smoother
 from rhs.rhs_selector        import RhsBundle
@@ -66,7 +66,7 @@ class MultigridLevel:
 
       # Initialize problem for this level
       if p.grid_type == 'cubed_sphere':
-         self.geometry = CubedSphere(p.nb_elements_horizontal, p.nb_elements_vertical, p.nbsolpts, p.λ0, p.ϕ0, p.α0,
+         self.geometry = CubedSphere3D(p.nb_elements_horizontal, p.nb_elements_vertical, p.nbsolpts, p.λ0, p.ϕ0, p.α0,
                                      p.ztop, ptopo, p)
       elif p.grid_type == 'cartesian2d':
          self.geometry = Cartesian2D((p.x0, p.x1), (p.z0, p.z1), p.nb_elements_horizontal, p.nb_elements_vertical,

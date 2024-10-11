@@ -4,7 +4,7 @@ from mpi4py import MPI
 import numpy
 
 from common.definitions      import idx_2d_rho, idx_2d_rho_u, idx_2d_rho_w, idx_2d_rho_theta
-from geometry                import Cartesian2D, CubedSphere
+from geometry                import Cartesian2D
 from init.shallow_water_test import height_vortex, height_case1, height_case2, height_unsteady_zonal
 from output.diagnostic       import total_energy, potential_enstrophy, global_integral
 

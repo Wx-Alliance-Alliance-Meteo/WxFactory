@@ -1,14 +1,9 @@
 import sys
-from   typing import Optional
 
 from   mpi4py import MPI
 import numpy
 
-from .definitions               import idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_w
-from .configuration             import Configuration
-from .process_topology          import ProcessTopology
-from .device                    import Device, CpuDevice, CudaDevice
-from geometry                   import Cartesian2D, CubedSphere, CubedSphere2D, DFROperators, Geometry
+from geometry                   import Cartesian2D, CubedSphere3D, CubedSphere2D, DFROperators, Geometry
 from init.dcmip                 import dcmip_T11_update_winds, dcmip_T12_update_winds
 from init.init_state_vars       import init_state_vars
 from integrators                import Integrator, Epi, EpiStiff, Euler1, Imex2, PartRosExp2, Ros2, RosExp2, \
@@ -18,6 +13,11 @@ from precondition.multigrid     import Multigrid
 from output.output_manager      import OutputManager
 from output.state               import load_state
 from rhs.rhs_selector           import RhsBundle
+
+from .definitions               import idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_w
+from .configuration             import Configuration
+from .process_topology          import ProcessTopology
+from .device                    import Device, CpuDevice, CudaDevice
 
 class Simulation:
    """Encapsulate parameters and structures needed to run a WxFactory simulation.
@@ -155,7 +155,7 @@ class Simulation:
             return CubedSphere2D(self.config.nb_elements_horizontal, self.config.nbsolpts,
                                  self.config.λ0, self.config.ϕ0, self.config.α0,
                                  self.process_topo, self.config, self.device)
-         return CubedSphere(self.config.nb_elements_horizontal, self.config.nb_elements_vertical, self.config.nbsolpts,
+         return CubedSphere3D(self.config.nb_elements_horizontal, self.config.nb_elements_vertical, self.config.nbsolpts,
                             self.config.λ0, self.config.ϕ0, self.config.α0, self.config.ztop,
                             self.process_topo, self.config, self.device)
 
