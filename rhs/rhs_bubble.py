@@ -64,10 +64,12 @@ def rhs_bubble(Q, geom, mtrx, nbsolpts, nb_elements_x, nb_elements_z):
    # --- Bondary treatement
 
    # zeros flux BCs everywhere ...
-   kfaces_flux[:,0,0,:]  = 0.0
-   kfaces_flux[:,-1,1,:] = 0.0
 
    # Skip periodic faces
+   if not geom.zperiodic:
+      kfaces_flux[:,0,0,:]  = 0.0
+      kfaces_flux[:,-1,1,:] = 0.0
+
    if not geom.xperiodic:
       ifaces_flux[:, 0,:,0] = 0.0
       ifaces_flux[:,-1,:,1] = 0.0

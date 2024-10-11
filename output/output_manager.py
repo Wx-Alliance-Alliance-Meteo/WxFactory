@@ -55,6 +55,7 @@ class OutputManager:
 
             self.output_file_name = lambda step_id: \
                f'{self.param.output_dir}/bubble_{self.param.case_number}_{step_id:08d}'
+            
             self.step_function = lambda Q, step_id: \
                output_step(Q, self.geometry, self.param, self.output_file_name(step_id))
 

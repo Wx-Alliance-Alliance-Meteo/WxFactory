@@ -2,6 +2,7 @@ from mpi4py import MPI
 import numpy
 import pickle
 import matplotlib.pyplot
+from matplotlib.ticker import FormatStrFormatter
 
 plot_index = 0
 
@@ -78,9 +79,13 @@ def image_field(geom: 'Cartesian2D', field: numpy.ndarray, filename: str, vmin: 
                                        levels=numpy.linspace(vmin,vmax,n), extend="both")
    ax.set_aspect('equal', 'box')
 
-   cbar = fig.colorbar(cmap, ax=ax, orientation='vertical', shrink=0.5)
-   cbar.set_label(label, )
-
+   cbar = fig.colorbar(cmap, ax=ax, orientation='vertical')
+   cbar.set_label(label, fontsize = 14 )
+   cbar.ax.yaxis.set_major_formatter(FormatStrFormatter('%.2f'))
+   matplotlib.pyplot.xlabel('x', fontsize=14)
+   matplotlib.pyplot.ylabel('y', fontsize=14)
+   matplotlib.pyplot.gca().set_xticks([0,5,10,15,20])
+   matplotlib.pyplot.gca().set_yticks([0,5,10,15,20])
    matplotlib.pyplot.savefig(filename)
    matplotlib.pyplot.close(fig) 
 

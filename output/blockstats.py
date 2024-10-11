@@ -147,6 +147,9 @@ def blockstats_cs(Q, geom, topo, initial_Q, metric, mtrx, param, step):
 
 def blockstats_cart(Q: numpy.ndarray, geom: Cartesian2D, step_id: int):
 
+   if step_id == 200:
+      numpy.save('Q_final.npy',Q)
+
    def get_stats(field, geom):
       f_minloc = numpy.unravel_index(field.argmin(), field.shape)
       f_maxloc = numpy.unravel_index(field.argmax(), field.shape)

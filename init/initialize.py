@@ -304,6 +304,8 @@ def initialize_cartesian2d(geom: Cartesian2D, param: Configuration) -> NDArray[n
    Q[idx_2d_rho_w,:,:]     = ρ * ww
    Q[idx_2d_rho_theta,:,:] = ρ * θ
 
+   
+   numpy.save('initial_Q.npy', Q)
 
    if param.device == "cuda":
       import cupy
