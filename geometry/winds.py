@@ -48,8 +48,8 @@ def wind2contra_2d(u : Union[float, numpy.ndarray], v : Union[float, numpy.ndarr
    
    # transform to the reference element
 
-   u1_contra = ( dx1dlon * lambda_dot + dx1dlat * phi_dot ) * 2. / geom.Δx1
-   u2_contra = ( dx2dlon * lambda_dot + dx2dlat * phi_dot ) * 2. / geom.Δx2
+   u1_contra = ( dx1dlon * lambda_dot + dx1dlat * phi_dot ) * 2. / geom.delta_x1
+   u2_contra = ( dx2dlon * lambda_dot + dx2dlat * phi_dot ) * 2. / geom.delta_x2
 
    return u1_contra, u2_contra
 
@@ -113,7 +113,7 @@ def contra2wind_2d(u1 : Union[float, numpy.ndarray],
       Contravariant winds along second component (Y)
    geom : CubedSphere
       Geometry object, containing:
-         Δx1, Δx2, lat_p, angle_p, X, Y, coslat, earth_radius
+         delta_x1, delta_x2, lat_p, angle_p, X, Y, coslat, earth_radius
 
    Returns:
    --------
@@ -121,8 +121,8 @@ def contra2wind_2d(u1 : Union[float, numpy.ndarray],
       Zonal/meridional winds, in m/s
    '''
 
-   u1_contra = u1*geom.Δx1/2.
-   u2_contra = u2*geom.Δx2/2.
+   u1_contra = u1*geom.delta_x1/2.
+   u2_contra = u2*geom.delta_x2/2.
 
    denom = (math.cos(geom.lat_p) + geom.X * math.sin(geom.lat_p) * math.sin(geom.angle_p) - geom.Y * math.sin(geom.lat_p) * math.cos(geom.angle_p))**2 + (geom.X * math.cos(geom.angle_p) + geom.Y * math.sin(geom.angle_p))**2
 
@@ -174,7 +174,7 @@ def contra2wind_3d(u1_contra : numpy.ndarray,
       contravariant wind, u3 component
    geom: CubedSphere
       geometry object, implementing:
-         Δx1, Δx2, lat_p, angle_p, X, Y, coslat, earth_radius
+         delta_x1, delta_x2, lat_p, angle_p, X, Y, coslat, earth_radius
    metric: Metric3DTopo
       metric object, implementing H_cov (covariant spatial metric) and inv_dzdeta
 

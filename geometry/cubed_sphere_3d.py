@@ -82,15 +82,15 @@ class CubedSphere3D(CubedSphere):
       panel_domain_x2 = (-math.pi/4, math.pi/4)
 
       # Find the extent covered by this particular processor
-      Δx1_PE = (panel_domain_x1[1] - panel_domain_x1[0]) / ptopo.nb_lines_per_panel
-      Δx2_PE = (panel_domain_x2[1] - panel_domain_x2[0]) / ptopo.nb_lines_per_panel
+      delta_x1_PE = (panel_domain_x1[1] - panel_domain_x1[0]) / ptopo.nb_lines_per_panel
+      delta_x2_PE = (panel_domain_x2[1] - panel_domain_x2[0]) / ptopo.nb_lines_per_panel
 
       # Find the lower and upper bounds of x1, x2 for this processor
-      PE_start_x1 = -math.pi/4 + ptopo.my_col * Δx1_PE
-      PE_end_x1 = PE_start_x1 + Δx1_PE
+      PE_start_x1 = -math.pi/4 + ptopo.my_col * delta_x1_PE
+      PE_end_x1 = PE_start_x1 + delta_x1_PE
 
-      PE_start_x2 = -math.pi/4 + ptopo.my_row * Δx2_PE
-      PE_end_x2 = PE_start_x2 + Δx2_PE
+      PE_start_x2 = -math.pi/4 + ptopo.my_row * delta_x2_PE
+      PE_end_x2 = PE_start_x2 + delta_x2_PE
 
       PE_start_x3 = 0.
       PE_end_x3 = ztop
@@ -119,23 +119,23 @@ class CubedSphere3D(CubedSphere):
       ## Element sizes
 
       # Equiangular coordinates
-      Δx1 = (domain_x1[1] - domain_x1[0]) / nb_elements_x1
-      Δx2 = (domain_x2[1] - domain_x2[0]) / nb_elements_x2
-      Δx3 = (domain_x3[1] - domain_x3[0]) / nb_elements_x3
-      Δeta = (domain_eta[1] - domain_eta[0]) / nb_elements_x3
+      delta_x1 = (domain_x1[1] - domain_x1[0]) / nb_elements_x1
+      delta_x2 = (domain_x2[1] - domain_x2[0]) / nb_elements_x2
+      delta_x3 = (domain_x3[1] - domain_x3[0]) / nb_elements_x3
+      delta_eta = (domain_eta[1] - domain_eta[0]) / nb_elements_x3
 
-      # Reset Δx3 to a nonzero value if ztop=0, as for shallow water
-      if (Δx3 == 0): Δx3 = 1
+      # Reset delta_x3 to a nonzero value if ztop=0, as for shallow water
+      if (delta_x3 == 0): delta_x3 = 1
 
-      self.Δx1 = Δx1
-      self.Δx2 = Δx2
-      self.Δx3 = Δx3
-      self.Δeta = Δeta
+      self.delta_x1 = delta_x1
+      self.delta_x2 = delta_x2
+      self.delta_x3 = delta_x3
+      self.delta_eta = delta_eta
 
       # Helper variables to normalize the intra-element computational coordinate
       minComp = min(self.extension)
       maxComp = max(self.extension)
-      Δcomp = maxComp - minComp
+      delta_comp = maxComp - minComp
 
       # Define the coordinate values at the interfaces between elements
       # interfaces_x1 = numpy.linspace(start = domain_x1[0], stop = domain_x1[1], num = nb_elements_x1 + 1)
@@ -207,26 +207,26 @@ class CubedSphere3D(CubedSphere):
       x1.shape = (nb_elements_x1,nbsolpts)
       # Then broadcast the coordinate into the variable, using the structure:
       # <minimum> + <delta_element>*<element number> + <delta_inner>*<solutionPoints>
-      x1[:] = domain_x1[0] + Δx1*elements_x1[:,xp.newaxis] + \
-                  Δx1/Δcomp*(-minComp + self.solutionPoints[xp.newaxis,:])
+      x1[:] = domain_x1[0] + delta_x1*elements_x1[:,xp.newaxis] + \
+                  delta_x1/delta_comp*(-minComp + self.solutionPoints[xp.newaxis,:])
       # Finally, reshape back to the unified view   
       x1.shape = (ni,)
 
       # Repeat for x2, x3, and eta
       x2.shape = (nb_elements_x2,nbsolpts)
-      x2[:] = domain_x2[0] + Δx2*elements_x2[:,xp.newaxis] + \
-                  Δx2/Δcomp*(-minComp + self.solutionPoints[xp.newaxis,:])
+      x2[:] = domain_x2[0] + delta_x2*elements_x2[:,xp.newaxis] + \
+                  delta_x2/delta_comp*(-minComp + self.solutionPoints[xp.newaxis,:])
       x2.shape = (nj,)
 
       if (ztop > 0): # Note that x3 and eta are 3D arrays
          x3.shape = (nb_elements_x3,nbsolpts,nj,ni)
-         x3[:] = domain_x3[0] + Δx3*elements_x3[:,xp.newaxis,xp.newaxis,xp.newaxis] + \
-                     Δx3/Δcomp*(-minComp + self.solutionPoints[xp.newaxis,:,xp.newaxis,xp.newaxis])
+         x3[:] = domain_x3[0] + delta_x3*elements_x3[:,xp.newaxis,xp.newaxis,xp.newaxis] + \
+                     delta_x3/delta_comp*(-minComp + self.solutionPoints[xp.newaxis,:,xp.newaxis,xp.newaxis])
          x3.shape = self.grid_shape_3d
 
          eta.shape = (nb_elements_x3,nbsolpts,nj,ni)
-         eta[:] = domain_eta[0] + Δeta*elements_x3[:,xp.newaxis,xp.newaxis,xp.newaxis] + \
-                     Δeta/Δcomp*(-minComp + self.solutionPoints[xp.newaxis,:,xp.newaxis,xp.newaxis])
+         eta[:] = domain_eta[0] + delta_eta*elements_x3[:,xp.newaxis,xp.newaxis,xp.newaxis] + \
+                     delta_eta/delta_comp*(-minComp + self.solutionPoints[xp.newaxis,:,xp.newaxis,xp.newaxis])
          eta.shape = self.grid_shape_3d
       else:
          x3[:] = 0
@@ -241,7 +241,7 @@ class CubedSphere3D(CubedSphere):
       x3_itf_i = xp.empty(self.itf_i_shape_3d)  # 3D array
       eta_itf_i = xp.empty(self.itf_i_shape_3d) # 3D array
 
-      x1_itf_i[:-1] = domain_x1[0] + Δx1*elements_x1[:] # Left edges
+      x1_itf_i[:-1] = domain_x1[0] + delta_x1*elements_x1[:] # Left edges
       x1_itf_i[-1] = domain_x1[1] # Right edge
       x2_itf_i[:] = x2[:] # Copy over x2, without change because of tensor product structure
       x3_itf_i[:,:,:] = x3[:,:,0:1] # Same for x3
@@ -253,7 +253,7 @@ class CubedSphere3D(CubedSphere):
       eta_itf_j = xp.empty(self.itf_j_shape_3d) # 3D array
 
       x1_itf_j[:] = x1[:]
-      x2_itf_j[:-1] = domain_x2[0] + Δx2*elements_x2[:] # South edges
+      x2_itf_j[:-1] = domain_x2[0] + delta_x2*elements_x2[:] # South edges
       x2_itf_j[-1] = domain_x2[1] # North edge
       x3_itf_j[:,:,:] = x3[:,0:1,:]
       eta_itf_j[:,:,:] = eta[:,0:1,:]
@@ -265,9 +265,9 @@ class CubedSphere3D(CubedSphere):
 
       x1_itf_k[:] = x1[:]
       x2_itf_k[:] = x2[:]
-      x3_itf_k[:-1,:,:] = domain_x3[0] + Δx3*elements_x3[:,xp.newaxis,xp.newaxis] # Bottom edges
+      x3_itf_k[:-1,:,:] = domain_x3[0] + delta_x3*elements_x3[:,xp.newaxis,xp.newaxis] # Bottom edges
       x3_itf_k[-1,:,:] = domain_x3[1]
-      eta_itf_k[:-1,:,:] = domain_eta[0] + Δeta*elements_x3[:,xp.newaxis,xp.newaxis]
+      eta_itf_k[:-1,:,:] = domain_eta[0] + delta_eta*elements_x3[:,xp.newaxis,xp.newaxis]
       eta_itf_k[-1,:,:] = domain_eta[1]
 
       self.x1 = x1

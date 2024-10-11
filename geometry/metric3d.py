@@ -58,9 +58,9 @@ class Metric3DTopo:
 
       # Grid scaling factors, necessary to define the metric and Christoffel symbols
       # with respect to the standard element
-      Δx = geom.Δx1
-      Δy = geom.Δx2
-      Δeta = geom.Δeta
+      delta_x = geom.delta_x1
+      delta_y = geom.delta_x2
+      delta_eta = geom.delta_eta
 
       # Grid rotation terms
       alpha = geom.angle_p # Clockwise rotation about the Z axis
@@ -93,9 +93,9 @@ class Metric3DTopo:
                                   height_itf_k[1:, :, :]), # top boundaries
                                  axis=-3)
 
-      dRdx1_int = matrix.comma_i(height_int,height_ext_i,geom)*2/Δx
-      dRdx2_int = matrix.comma_j(height_int,height_ext_j,geom)*2/Δy
-      dRdeta_int = matrix.comma_k(height_int,height_ext_k,geom)*2/Δeta
+      dRdx1_int = matrix.comma_i(height_int,height_ext_i,geom)*2/delta_x
+      dRdx2_int = matrix.comma_j(height_int,height_ext_j,geom)*2/delta_y
+      dRdeta_int = matrix.comma_k(height_int,height_ext_k,geom)*2/delta_eta
 
       # The i/j interface values now need to be "fixed up" with a boundary exchange.  However, the existing vector
       # exchange code demands contravariant components, and dRd(...) is covariant.  We can perform the conversion
@@ -264,73 +264,73 @@ class Metric3DTopo:
          del4 = delsq**2
 
          if (deep):
-            Hcov[0,0,:] = (Δx**2/4)*(R**2/del4*(1+X**2)**2*(1+Y**2) + dRdx1**2) # g_11
+            Hcov[0,0,:] = (delta_x**2/4)*(R**2/del4*(1+X**2)**2*(1+Y**2) + dRdx1**2) # g_11
 
-            Hcov[0,1,:] = (Δx*Δy/4)*(-R**2/del4*X*Y*(1+X**2)*(1+Y**2) + dRdx1*dRdx2) # g_12
+            Hcov[0,1,:] = (delta_x*delta_y/4)*(-R**2/del4*X*Y*(1+X**2)*(1+Y**2) + dRdx1*dRdx2) # g_12
             Hcov[1,0,:] = Hcov[0,1,:] # g_21 (by symmetry)
 
-            Hcov[0,2,:] = Δeta*Δx/4*dRdx1*dRdeta # g_13
+            Hcov[0,2,:] = delta_eta*delta_x/4*dRdx1*dRdeta # g_13
             Hcov[2,0,:] = Hcov[0,2,:] # g_31 by symmetry
 
-            Hcov[1,1,:] = Δy**2/4*(R**2/del4*(1+X**2)*(1+Y**2)**2 + dRdx2**2) # g_22
+            Hcov[1,1,:] = delta_y**2/4*(R**2/del4*(1+X**2)*(1+Y**2)**2 + dRdx2**2) # g_22
 
-            Hcov[1,2,:] = Δeta*Δy/4*dRdx2*dRdeta # g_23
+            Hcov[1,2,:] = delta_eta*delta_y/4*dRdx2*dRdeta # g_23
             Hcov[2,1,:] = Hcov[1,2,:] # g_32 by symmetry
 
-            Hcov[2,2,:] = (Δeta**2/4)*dRdeta**2 # g_33
+            Hcov[2,2,:] = (delta_eta**2/4)*dRdeta**2 # g_33
 
-            Hcontra[0,0,:] = (4/Δx**2)*(delsq/(R**2*(1+X**2))) # h^11
+            Hcontra[0,0,:] = (4/delta_x**2)*(delsq/(R**2*(1+X**2))) # h^11
 
-            Hcontra[0,1,:] = (4/Δx/Δy)*(X*Y*delsq/(R**2*(1+X**2)*(1+Y**2))) # h^12
+            Hcontra[0,1,:] = (4/delta_x/delta_y)*(X*Y*delsq/(R**2*(1+X**2)*(1+Y**2))) # h^12
             Hcontra[1,0,:] = Hcontra[0,1,:] # h^21 by symmetry
 
-            Hcontra[0,2,:] = (4/Δx/Δeta)*(-(dRdx1*delsq/(R**2*(1+X**2)) + dRdx2*delsq*X*Y/(R**2*(1+X**2)*(1+Y**2)))/(dRdeta)) # h^13
+            Hcontra[0,2,:] = (4/delta_x/delta_eta)*(-(dRdx1*delsq/(R**2*(1+X**2)) + dRdx2*delsq*X*Y/(R**2*(1+X**2)*(1+Y**2)))/(dRdeta)) # h^13
             Hcontra[2,0,:] = Hcontra[0,2,:] # h^31 by symmetry
 
-            Hcontra[1,1,:] = (4/Δy**2)*(delsq/(R**2*(1+Y**2))) # h^22
+            Hcontra[1,1,:] = (4/delta_y**2)*(delsq/(R**2*(1+Y**2))) # h^22
 
-            Hcontra[1,2,:] = (4/Δy/Δeta)*(-(dRdx1*X*Y*delsq/(R**2*(1+X**2)*(1+Y**2)) + dRdx2*delsq/(R**2*(1+Y**2)))/dRdeta) # h^23
+            Hcontra[1,2,:] = (4/delta_y/delta_eta)*(-(dRdx1*X*Y*delsq/(R**2*(1+X**2)*(1+Y**2)) + dRdx2*delsq/(R**2*(1+Y**2)))/dRdeta) # h^23
             Hcontra[2,1,:] = Hcontra[1,2,:] # h^32 by symmetry
 
-            Hcontra[2,2,:] = (4/Δeta**2)*(1 + dRdx1**2*delsq/(R**2*(1+X**2)) + \
+            Hcontra[2,2,:] = (4/delta_eta**2)*(1 + dRdx1**2*delsq/(R**2*(1+X**2)) + \
                                           2*dRdx1*dRdx2*X*Y*delsq/(R**2*(1+X**2)*(1+Y**2)) + \
                                           dRdx2**2*delsq/(R**2*(1+Y**2)))/dRdeta**2
 
-            rootG[:] = (Δx/2)*(Δy/2)*(Δeta/2)*R**2*(1+X**2)*(1+Y**2)*xp.abs(dRdeta)/delsq**(1.5)  
+            rootG[:] = (delta_x/2)*(delta_y/2)*(delta_eta/2)*R**2*(1+X**2)*(1+Y**2)*xp.abs(dRdeta)/delsq**(1.5)  
          else: # Shallow, so all bare R terms become A terms
-            Hcov[0,0,:] = (Δx**2/4)*(A**2/del4*(1+X**2)**2*(1+Y**2) + dRdx1**2) # g_11
+            Hcov[0,0,:] = (delta_x**2/4)*(A**2/del4*(1+X**2)**2*(1+Y**2) + dRdx1**2) # g_11
 
-            Hcov[0,1,:] = (Δx*Δy/4)*(-A**2/del4*X*Y*(1+X**2)*(1+Y**2) + dRdx1*dRdx2) # g_12
+            Hcov[0,1,:] = (delta_x*delta_y/4)*(-A**2/del4*X*Y*(1+X**2)*(1+Y**2) + dRdx1*dRdx2) # g_12
             Hcov[1,0,:] = Hcov[0,1,:] # g_21 (by symmetry)
 
-            Hcov[0,2,:] = Δeta*Δx/4*dRdx1*dRdeta # g_13
+            Hcov[0,2,:] = delta_eta*delta_x/4*dRdx1*dRdeta # g_13
             Hcov[2,0,:] = Hcov[0,2,:] # g_31 by symmetry
 
-            Hcov[1,1,:] = Δy**2/4*(A**2/del4*(1+X**2)*(1+Y**2)**2 + dRdx2**2) # g_22
+            Hcov[1,1,:] = delta_y**2/4*(A**2/del4*(1+X**2)*(1+Y**2)**2 + dRdx2**2) # g_22
 
-            Hcov[1,2,:] = Δeta*Δy/4*dRdx2*dRdeta # g_23
+            Hcov[1,2,:] = delta_eta*delta_y/4*dRdx2*dRdeta # g_23
             Hcov[2,1,:] = Hcov[1,2,:] # g_32 by symmetry
 
-            Hcov[2,2,:] = (Δeta**2/4)*dRdeta**2 # g_33
+            Hcov[2,2,:] = (delta_eta**2/4)*dRdeta**2 # g_33
 
-            Hcontra[0,0,:] = (4/Δx**2)*(delsq/(A**2*(1+X**2))) # h^11
+            Hcontra[0,0,:] = (4/delta_x**2)*(delsq/(A**2*(1+X**2))) # h^11
 
-            Hcontra[0,1,:] = (4/Δx/Δy)*(X*Y*delsq/(A**2*(1+X**2)*(1+Y**2))) # h^12
+            Hcontra[0,1,:] = (4/delta_x/delta_y)*(X*Y*delsq/(A**2*(1+X**2)*(1+Y**2))) # h^12
             Hcontra[1,0,:] = Hcontra[0,1,:] # h^21 by symmetry
 
-            Hcontra[0,2,:] = (4/Δx/Δeta)*(-(dRdx1*delsq/(A**2*(1+X**2)) + dRdx2*delsq*X*Y/(A**2*(1+X**2)*(1+Y**2)))/(dRdeta)) # h^13
+            Hcontra[0,2,:] = (4/delta_x/delta_eta)*(-(dRdx1*delsq/(A**2*(1+X**2)) + dRdx2*delsq*X*Y/(A**2*(1+X**2)*(1+Y**2)))/(dRdeta)) # h^13
             Hcontra[2,0,:] = Hcontra[0,2,:] # h^31 by symmetry
 
-            Hcontra[1,1,:] = (4/Δy**2)*(delsq/(A**2*(1+Y**2))) # h^22
+            Hcontra[1,1,:] = (4/delta_y**2)*(delsq/(A**2*(1+Y**2))) # h^22
 
-            Hcontra[1,2,:] = (4/Δy/Δeta)*(-(dRdx1*X*Y*delsq/(A**2*(1+X**2)*(1+Y**2)) + dRdx2*delsq/(A**2*(1+Y**2)))/dRdeta) # h^23
+            Hcontra[1,2,:] = (4/delta_y/delta_eta)*(-(dRdx1*X*Y*delsq/(A**2*(1+X**2)*(1+Y**2)) + dRdx2*delsq/(A**2*(1+Y**2)))/dRdeta) # h^23
             Hcontra[2,1,:] = Hcontra[1,2,:] # h^32 by symmetry
 
-            Hcontra[2,2,:] = (4/Δeta**2)*(1 + dRdx1**2*delsq/(A**2*(1+X**2)) + \
+            Hcontra[2,2,:] = (4/delta_eta**2)*(1 + dRdx1**2*delsq/(A**2*(1+X**2)) + \
                                           2*dRdx1*dRdx2*X*Y*delsq/(A**2*(1+X**2)*(1+Y**2)) + \
                                           dRdx2**2*delsq/(A**2*(1+Y**2)))/dRdeta**2
 
-            rootG[:] = (Δx/2)*(Δy/2)*(Δeta/2)*A**2*(1+X**2)*(1+Y**2)*xp.abs(dRdeta)/delsq**(1.5)  
+            rootG[:] = (delta_x/2)*(delta_y/2)*(delta_eta/2)*A**2*(1+X**2)*(1+Y**2)*xp.abs(dRdeta)/delsq**(1.5)  
 
 
       ## Computation of the Christoffel symbols
@@ -431,14 +431,14 @@ class Metric3DTopo:
 
       # With the extension information, compute the partial derivatives.  We do not need any parallel
       # synchronization here because we only use the Christoffel symbols at element-interior points.
-      d2Rdx1x1 = matrix.comma_i(dRdx1_int,dRdx1_ext_i,geom)*2/Δx
-      d2Rdx1x2 = matrix.comma_j(dRdx1_int,dRdx1_ext_j,geom)*2/Δy
-      d2Rdx1eta = matrix.comma_k(dRdx1_int,dRdx1_ext_k,geom)*2/Δeta
+      d2Rdx1x1 = matrix.comma_i(dRdx1_int,dRdx1_ext_i,geom)*2/delta_x
+      d2Rdx1x2 = matrix.comma_j(dRdx1_int,dRdx1_ext_j,geom)*2/delta_y
+      d2Rdx1eta = matrix.comma_k(dRdx1_int,dRdx1_ext_k,geom)*2/delta_eta
 
-      d2Rdx2x2 = matrix.comma_j(dRdx2_int,dRdx2_ext_j,geom)*2/Δy
-      d2Rdx2eta = matrix.comma_k(dRdx2_int,dRdx2_ext_k,geom)*2/Δeta
+      d2Rdx2x2 = matrix.comma_j(dRdx2_int,dRdx2_ext_j,geom)*2/delta_y
+      d2Rdx2eta = matrix.comma_k(dRdx2_int,dRdx2_ext_k,geom)*2/delta_eta
 
-      d2Rdetaeta = matrix.comma_k(dRdeta_int,dRdeta_ext_k,geom)*2/Δeta
+      d2Rdetaeta = matrix.comma_k(dRdeta_int,dRdeta_ext_k,geom)*2/delta_eta
 
       if deep:
          Christoffel_3_01 = -(dRdeta_int**-1)*(dRdx1_int*Christoffel_1_01 + dRdx2_int*Christoffel_2_01 + \
@@ -475,49 +475,49 @@ class Metric3DTopo:
 
       # Now, normalize the Christoffel symbols by the appropriate grid scaling factor.  To this point, the symbols have
       # been defined in terms of x1, x2, and η, but for compatibility with the numerical differentiation we need to define
-      # these symbols in terms of i, j, and k by applying the scaling factors Δx/2, Δy/2, and Δeta/2 respectively.
+      # these symbols in terms of i, j, and k by applying the scaling factors delta_x/2, delta_y/2, and delta_eta/2 respectively.
 
-      # The Christoffel symbol is definitionally Γ^a_bc = (∂e_b/δx^c) · ẽ^a, so we apply the scaling factor for the b and c
+      # The Christoffel symbol is definitionally Γ^a_bc = (∂e_b/delta_x^c) · ẽ^a, so we apply the scaling factor for the b and c
       # indices and the inverse scaling factor for the a index.
 
-      Christoffel_1_01 *=   (2/Δx) *      (1) *   (Δx/2); self.christoffel_1_01 = Christoffel_1_01
-      Christoffel_1_02 *=   (2/Δx) *      (1) *   (Δy/2); self.christoffel_1_02 = Christoffel_1_02
-      Christoffel_1_03 *=   (2/Δx) *      (1) * (Δeta/2); self.christoffel_1_03 = Christoffel_1_03
+      Christoffel_1_01 *=   (2/delta_x) *      (1) *   (delta_x/2); self.christoffel_1_01 = Christoffel_1_01
+      Christoffel_1_02 *=   (2/delta_x) *      (1) *   (delta_y/2); self.christoffel_1_02 = Christoffel_1_02
+      Christoffel_1_03 *=   (2/delta_x) *      (1) * (delta_eta/2); self.christoffel_1_03 = Christoffel_1_03
 
-      Christoffel_1_11 *=   (2/Δx) *   (Δx/2) *   (Δx/2); self.christoffel_1_11 = Christoffel_1_11
-      Christoffel_1_12 *=   (2/Δx) *   (Δx/2) *   (Δy/2); self.christoffel_1_12 = Christoffel_1_12
-      Christoffel_1_13 *=   (2/Δx) *   (Δx/2) * (Δeta/2); self.christoffel_1_13 = Christoffel_1_13
+      Christoffel_1_11 *=   (2/delta_x) *   (delta_x/2) *   (delta_x/2); self.christoffel_1_11 = Christoffel_1_11
+      Christoffel_1_12 *=   (2/delta_x) *   (delta_x/2) *   (delta_y/2); self.christoffel_1_12 = Christoffel_1_12
+      Christoffel_1_13 *=   (2/delta_x) *   (delta_x/2) * (delta_eta/2); self.christoffel_1_13 = Christoffel_1_13
 
-      Christoffel_1_22 *=   (2/Δx) *   (Δy/2) *   (Δy/2); self.christoffel_1_22 = Christoffel_1_22
-      Christoffel_1_23 *=   (2/Δx) *   (Δy/2) * (Δeta/2); self.christoffel_1_23 = Christoffel_1_23
+      Christoffel_1_22 *=   (2/delta_x) *   (delta_y/2) *   (delta_y/2); self.christoffel_1_22 = Christoffel_1_22
+      Christoffel_1_23 *=   (2/delta_x) *   (delta_y/2) * (delta_eta/2); self.christoffel_1_23 = Christoffel_1_23
 
-      Christoffel_1_33 *=   (2/Δx) * (Δeta/2) * (Δeta/2); self.christoffel_1_33 = Christoffel_1_33
+      Christoffel_1_33 *=   (2/delta_x) * (delta_eta/2) * (delta_eta/2); self.christoffel_1_33 = Christoffel_1_33
 
-      Christoffel_2_01 *=   (2/Δy) *      (1) *   (Δx/2); self.christoffel_2_01 = Christoffel_2_01
-      Christoffel_2_02 *=   (2/Δy) *      (1) *   (Δy/2); self.christoffel_2_02 = Christoffel_2_02
-      Christoffel_2_03 *=   (2/Δy) *      (1) * (Δeta/2); self.christoffel_2_03 = Christoffel_2_03
+      Christoffel_2_01 *=   (2/delta_y) *      (1) *   (delta_x/2); self.christoffel_2_01 = Christoffel_2_01
+      Christoffel_2_02 *=   (2/delta_y) *      (1) *   (delta_y/2); self.christoffel_2_02 = Christoffel_2_02
+      Christoffel_2_03 *=   (2/delta_y) *      (1) * (delta_eta/2); self.christoffel_2_03 = Christoffel_2_03
 
-      Christoffel_2_11 *=   (2/Δy) *   (Δx/2) *   (Δx/2); self.christoffel_2_11 = Christoffel_2_11
-      Christoffel_2_12 *=   (2/Δy) *   (Δx/2) *   (Δy/2); self.christoffel_2_12 = Christoffel_2_12
-      Christoffel_2_13 *=   (2/Δy) *   (Δx/2) * (Δeta/2); self.christoffel_2_13 = Christoffel_2_13
+      Christoffel_2_11 *=   (2/delta_y) *   (delta_x/2) *   (delta_x/2); self.christoffel_2_11 = Christoffel_2_11
+      Christoffel_2_12 *=   (2/delta_y) *   (delta_x/2) *   (delta_y/2); self.christoffel_2_12 = Christoffel_2_12
+      Christoffel_2_13 *=   (2/delta_y) *   (delta_x/2) * (delta_eta/2); self.christoffel_2_13 = Christoffel_2_13
 
-      Christoffel_2_22 *=   (2/Δy) *   (Δy/2) *   (Δy/2); self.christoffel_2_22 = Christoffel_2_22
-      Christoffel_2_23 *=   (2/Δy) *   (Δy/2) * (Δeta/2); self.christoffel_2_23 = Christoffel_2_23
+      Christoffel_2_22 *=   (2/delta_y) *   (delta_y/2) *   (delta_y/2); self.christoffel_2_22 = Christoffel_2_22
+      Christoffel_2_23 *=   (2/delta_y) *   (delta_y/2) * (delta_eta/2); self.christoffel_2_23 = Christoffel_2_23
 
-      Christoffel_2_33 *=   (2/Δy) * (Δeta/2) * (Δeta/2); self.christoffel_2_33 = Christoffel_2_33
+      Christoffel_2_33 *=   (2/delta_y) * (delta_eta/2) * (delta_eta/2); self.christoffel_2_33 = Christoffel_2_33
 
-      Christoffel_3_01 *= (2/Δeta) *      (1) *   (Δx/2); self.christoffel_3_01 = Christoffel_3_01
-      Christoffel_3_02 *= (2/Δeta) *      (1) *   (Δy/2); self.christoffel_3_02 = Christoffel_3_02
-      Christoffel_3_03 *= (2/Δeta) *      (1) * (Δeta/2); self.christoffel_3_03 = Christoffel_3_03
+      Christoffel_3_01 *= (2/delta_eta) *      (1) *   (delta_x/2); self.christoffel_3_01 = Christoffel_3_01
+      Christoffel_3_02 *= (2/delta_eta) *      (1) *   (delta_y/2); self.christoffel_3_02 = Christoffel_3_02
+      Christoffel_3_03 *= (2/delta_eta) *      (1) * (delta_eta/2); self.christoffel_3_03 = Christoffel_3_03
 
-      Christoffel_3_11 *= (2/Δeta) *   (Δx/2) *   (Δx/2); self.christoffel_3_11 = Christoffel_3_11
-      Christoffel_3_12 *= (2/Δeta) *   (Δx/2) *   (Δy/2); self.christoffel_3_12 = Christoffel_3_12
-      Christoffel_3_13 *= (2/Δeta) *   (Δx/2) * (Δeta/2); self.christoffel_3_13 = Christoffel_3_13
+      Christoffel_3_11 *= (2/delta_eta) *   (delta_x/2) *   (delta_x/2); self.christoffel_3_11 = Christoffel_3_11
+      Christoffel_3_12 *= (2/delta_eta) *   (delta_x/2) *   (delta_y/2); self.christoffel_3_12 = Christoffel_3_12
+      Christoffel_3_13 *= (2/delta_eta) *   (delta_x/2) * (delta_eta/2); self.christoffel_3_13 = Christoffel_3_13
 
-      Christoffel_3_22 *= (2/Δeta) *   (Δy/2) *   (Δy/2); self.christoffel_3_22 = Christoffel_3_22
-      Christoffel_3_23 *= (2/Δeta) *   (Δy/2) * (Δeta/2); self.christoffel_3_23 = Christoffel_3_23
+      Christoffel_3_22 *= (2/delta_eta) *   (delta_y/2) *   (delta_y/2); self.christoffel_3_22 = Christoffel_3_22
+      Christoffel_3_23 *= (2/delta_eta) *   (delta_y/2) * (delta_eta/2); self.christoffel_3_23 = Christoffel_3_23
 
-      Christoffel_3_33 *= (2/Δeta) * (Δeta/2) * (Δeta/2); self.christoffel_3_33 = Christoffel_3_33
+      Christoffel_3_33 *= (2/delta_eta) * (delta_eta/2) * (delta_eta/2); self.christoffel_3_33 = Christoffel_3_33
 
       ## Part 2: Christoffel symbols computed numerically
 
@@ -700,4 +700,4 @@ class Metric3DTopo:
 
       self.coriolis_f = 2 * geom.rotation_speed / geom.delta * ( math.sin(geom.lat_p) - geom.X * math.cos(geom.lat_p) * math.sin(geom.angle_p) + geom.Y * math.cos(geom.lat_p) * math.cos(geom.angle_p))
 
-      self.inv_dzdeta = 1/dRdeta_int * 2/Δeta
+      self.inv_dzdeta = 1/dRdeta_int * 2/delta_eta
