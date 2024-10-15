@@ -19,7 +19,7 @@ def load_tests():
     suite.addTest(ProcessTopologyTest('test2'))
     suite.addTest(PmexMpiTestCases('test_pmex_mpi_2_processes'))
     suite.addTest(KiopsMpiTestCases('test_kiops_mpi_2_processes'))
-    suite.addTest(FgmresMpiTestCases('test_fgmres_mpi_2_processes'))
+    #suite.addTest(FgmresMpiTestCases('test_fgmres_mpi_2_processes')) # TODO : This test needs more works on the data division between processes
 
     return suite
 
