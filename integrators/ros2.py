@@ -41,6 +41,8 @@ class Ros2(Integrator):
             self.A, self.b, x0=self.Q_flat, tol=self.tol, restart=self.gmres_restart, maxiter=maxiter,
             preconditioner=self.preconditioner,
             verbose=self.verbose_solver, device=self.device)
+         if MPI.WORLD_COMM.rank == 0:
+            print(self.b.shape, Qnew.shape)
          t1 = time()
 
          self.solver_info = SolverInfo(flag, t1 - t0, num_iter, residuals)

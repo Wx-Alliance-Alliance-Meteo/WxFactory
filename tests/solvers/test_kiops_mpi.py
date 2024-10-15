@@ -1,10 +1,10 @@
-import cuda_test
-from solvers.pmex import pmex
+import cpu_test
+from solvers.kiops import kiops
 from mpi_test import run_test_on_x_process
 from numpy import ndarray
 
 
-class PmexMpiGpuTestCases(cuda_test.CudaTestCases):
+class KiopsMpiTestCases(cpu_test.CpuTestCases):
     tolerance: float
     matrix_size_multiplier: int
 
@@ -13,7 +13,7 @@ class PmexMpiGpuTestCases(cuda_test.CudaTestCases):
         self.tolerance = 1e-7
         self.matrix_size_multiplier = 20
 
-    def test_pmex_mpi_2_processes(self):
+    def test_kiops_mpi_2_processes(self):
         comm = run_test_on_x_process(self, 2)
         comm2 = comm.Split(comm.rank)
 
@@ -21,7 +21,7 @@ class PmexMpiGpuTestCases(cuda_test.CudaTestCases):
 
         size: int = comm.size * self.matrix_size_multiplier
 
-        full_matrix: ndarray = self.gpu_device.xp.empty((size, size), dtype=float)
+        full_matrix: ndarray = self.cpu_device.xp.empty((size, size), dtype=float)
 
         for i in range(size):
             for j in range(size):
@@ -34,12 +34,12 @@ class PmexMpiGpuTestCases(cuda_test.CudaTestCases):
         w1: ndarray
         w2: ndarray 
 
-        w1, _ = pmex([1.0], matvec_handle, matrix, self.tolerance, device=self.gpu_device, comm=comm)
-        w2, _ = pmex([1.0], matvec_handle, full_matrix, self.tolerance, device=self.gpu_device, comm=comm2)
+        w1, _ = kiops([1.0], matvec_handle, matrix, self.tolerance, device=self.cpu_device, comm=comm)
+        w2, _ = kiops([1.0], matvec_handle, full_matrix, self.tolerance, device=self.cpu_device, comm=comm2)
 
-        diff: float = self.gpu_device.xp.linalg.norm(w1 - w2[0, from_index:to_index]).item()
+        diff: float = self.cpu_device.xp.linalg.norm(w1 - w2[0, from_index:to_index]).item()
 
-        norm: float = self.gpu_device.xp.linalg.norm(w1).item()
+        norm: float = self.cpu_device.xp.linalg.norm(w1).item()
 
         abs_diff = abs(diff)
 

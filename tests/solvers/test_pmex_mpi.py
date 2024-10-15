@@ -1,10 +1,10 @@
 import cpu_test
-from solvers.kiops import kiops
+from solvers.pmex import pmex
 from mpi_test import run_test_on_x_process
 from numpy import ndarray
 
 
-class KiopsMpiCpuTestCases(cpu_test.CpuTestCases):
+class PmexMpiTestCases(cpu_test.CpuTestCases):
     tolerance: float
     matrix_size_multiplier: int
 
@@ -34,8 +34,8 @@ class KiopsMpiCpuTestCases(cpu_test.CpuTestCases):
         w1: ndarray
         w2: ndarray 
 
-        w1, _ = kiops([1.0], matvec_handle, matrix, self.tolerance, device=self.cpu_device, comm=comm)
-        w2, _ = kiops([1.0], matvec_handle, full_matrix, self.tolerance, device=self.cpu_device, comm=comm2)
+        w1, _ = pmex([1.0], matvec_handle, matrix, self.tolerance, device=self.cpu_device, comm=comm)
+        w2, _ = pmex([1.0], matvec_handle, full_matrix, self.tolerance, device=self.cpu_device, comm=comm2)
 
         diff: float = self.cpu_device.xp.linalg.norm(w1 - w2[0, from_index:to_index]).item()
 
