@@ -37,12 +37,13 @@ class KiopsMpiGpuTestCases(cuda_test.CudaTestCases):
         w1, _ = kiops([1.0], matvec_handle, matrix, self.tolerance, device=self.gpu_device, comm=comm)
         w2, _ = kiops([1.0], matvec_handle, full_matrix, self.tolerance, device=self.gpu_device, comm=comm2)
 
-        norm1: float = self.gpu_device.xp.linalg.norm(w1).item()
-        norm2: float = self.gpu_device.xp.linalg.norm(w2[0, from_index:to_index]).item()
+        diff: float = self.gpu_device.xp.linalg.norm(w1 - w2[0, from_index:to_index]).item()
 
-        abs_diff = abs(norm2 - norm1)
+        norm: float = self.gpu_device.xp.linalg.norm(w1).item()
 
-        relative_diff = abs_diff / norm2
+        abs_diff = abs(diff)
+
+        relative_diff = abs_diff / norm
         
         self.assertLessEqual(relative_diff, self.tolerance, 'The MPI implementation didn\' gave a result close to the non MPI implementation')
 

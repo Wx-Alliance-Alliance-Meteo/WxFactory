@@ -32,6 +32,7 @@ def _ortho_1_sync_igs(Q, R, T, K, j, comm, device: Device = default_device):
    xp = device.xp
 
    local_tmp = Q[:j, :] @ Q[j-2:j, :].T     # Q multiplied by its own last 2 rows (up to j)
+
    device.synchronize()
    global_tmp = comm.allreduce(local_tmp) # Expensive step on multi-node execution
    small_tmp = global_tmp[:j-2, 0]
@@ -102,8 +103,8 @@ def fgmres(A: MatvecOperator,
    Solve the given linear system (Ax = b) for x, using the FGMRES algorithm.
 
    Mandatory arguments:
-   A              -- System matrix. This may be an operator that when applied to a vector [v] results in A*v
-   b              -- The right-hand side of the system to solve.
+   A              -- System matrix. This may be an operator that when applied to a vector [v] results in A*v. A should not be identity (or a multiplication of identity) when the preconditionner is none or identity
+   b              -- The right-hand side of the system to solve. Must be a vector
 
    Optional arguments:
    x0             -- Initial guess for the solution. The zero vector if absent.
@@ -113,6 +114,8 @@ def fgmres(A: MatvecOperator,
    preconditioner -- Operator [M^-1] that preconditions a given vector [v]. Computes the product (M^-1)*v
    hegedus        -- Whether to apply the Hegedüs trick (whatever that is)
 
+   len(b) should be greater than restart
+
    Returns:
    1. The result [x]
    2. The relative residual |b - Ax| / |b|
@@ -120,6 +123,8 @@ def fgmres(A: MatvecOperator,
    4. A flag that indicates the convergence status (0 if converged, -1 if not)
    5. The list of residuals at every iteration
    """
+   if len(b) <= restart:
+      raise ValueError('The b vector should be longer than the number of restart')
 
    xp = device.xp
    xalg = device.xalg
@@ -187,6 +192,7 @@ def fgmres(A: MatvecOperator,
 
          # Modified Gram-Schmidt process (1-sync version, with lagged normalization)
          Z[inner + 1, :] = preconditioner(V[inner + 1])
+
          V[inner + 2, :] = A(Z[inner + 1, :] / v_norm) * v_norm
          v_norm = _ortho_1_sync_igs(V, R, T, K, inner + 3, comm, device)
          H[inner, :inner + 2] = R[:inner + 2, inner + 1]
@@ -263,6 +269,7 @@ def fgmres(A: MatvecOperator,
    return x, norm_r, norm_b, niter, flag, residuals
 
 def _apply_givens(Q, v, k):
+
    """Apply the first k Givens rotations in Q to v.
 
    Parameters
