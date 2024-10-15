@@ -1,7 +1,9 @@
 import math
 import numpy
+import sys
 
 from integrators.butcher import *
+from scipy.sparse.linalg import eigs
 
 def exode(τ_out, A, u, method='ARK3(2)4L[2]SA-ERK', controller="deadbeat", rtol=1e-3, atol = 1e-6, task1 = False, verbose=False):
    
@@ -12,7 +14,7 @@ def exode(τ_out, A, u, method='ARK3(2)4L[2]SA-ERK', controller="deadbeat", rtol
 
    ppo, n = u.shape
    p = ppo - 1
-
+   
    if p == 0:
       p = 1
       # Add extra column of zeros
@@ -45,6 +47,44 @@ def exode(τ_out, A, u, method='ARK3(2)4L[2]SA-ERK', controller="deadbeat", rtol
 
       if solver.status == 'finished':
          status = 0
+         
+         ''' TODO: put this in a better location. Computing eigenvalues will significantly delay the 
+         computation process. Only here for now to test eigenvalue of the 2D ADR problem. 
+
+         # Compute eigenvalues
+         matrix_size = y0.shape[0] 
+         MATRIX = numpy.zeros((matrix_size,matrix_size)) #numpy.empty([matrix_size,matrix_size])
+         for i in range(matrix_size):
+             vec = numpy.zeros(matrix_size) 
+             vec[i] = 1.
+             new_col = A(vec)
+             MATRIX[:,i] = new_col 
+         
+         # Compute eigenvalues
+         eigenvalues, eigenvectors = numpy.linalg.eig(MATRIX) #eigs(MATRIX, k=1)
+         eigenvalues_real = eigenvalues.real
+         eigenvalues_imag = eigenvalues.imag
+         
+         eig_file = "/home/siw001/gef/vicky/ADR_2D/eigenvalues/ADR_2D_eigenvalues_Nx_401_Nstep_50.csv"
+         with open(eig_file, "ab") as foutput:
+             foutput.write(b"\n")
+             numpy.savetxt(foutput, eigenvalues_real, delimiter=",")
+             numpy.savetxt(foutput, eigenvalues_imag, delimiter=",") 
+         
+         # Calculuate and save the eigenvalues to file. TODO: need better ways
+         #for i in range(matrix_size):
+            #sys.stdout.write(str(eigenvalues[i].real) + " " )
+         #sys.stdout.write("\n")
+
+         #for i in range(matrix_siz):
+            #sys.stdout.write(str(eigenvalues[i].imag) + " " )
+         #sys.stdout.write("\n")
+         
+         #print("eigenvalues = ", eigenvalues) 
+         #numpy.savetxt('/home/siw001/gef/vicky/ADR_2D/testoutput/grid_size_160000/eigenvalues/ADR_2D_real_eig.csv', eigenvalues_real, delimiter=',')
+         #numpy.savetxt('/home/siw001/gef/vicky/ADR_2D/testoutput/grid_size_160000/eigenvalues/ADR_2D_real_eig.csv', eigenvalues_imag, delimiter=',')
+         '''
+
       elif solver.status == 'failed':
          status = -1
          break
