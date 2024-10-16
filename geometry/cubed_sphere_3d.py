@@ -274,10 +274,6 @@ class CubedSphere3D(CubedSphere):
         self.numeric_itf_j = self._to_new_itf_j(coordVec_num_itf_j)
         self.numeric_itf_k = self._to_new_itf_k(coordVec_num_itf_k)
 
-        if rank == 0:
-            print(f'old: \n{coordVec_num_itf_k[2]}')
-            print(f'new: \n{self.numeric_itf_k[2]}')
-
         # Compute the parameters of the rotated grid
 
         # if (λ0 > 0.) or (λ0 <= -math.pi / 2.):
@@ -379,13 +375,14 @@ class CubedSphere3D(CubedSphere):
         # for the "physical" coordinates.  These are segregated into another method because they
         # will be redefined if this case involves topography mapping – x1/x2/η will remain the same,
         # as will the DG structures.
-
         self._build_physical_coordinates()
 
     def apply_topography(self, zbot, zbot_itf_i, zbot_itf_j):
-        # Apply a topography field, given by heights (above the 0 reference sphere) specified at
-        # interior points, i-boundaries, and j-boundaries.  This function applies a linear mapping,
-        # where η=0 corresponds to the given surface and η=1 corresponds to the top.
+        """
+        Apply a topography field, given by heights (above the 0 reference sphere) specified at
+        interior points, i-boundaries, and j-boundaries.  This function applies a linear mapping,
+        where η=0 corresponds to the given surface and η=1 corresponds to the top.
+        """
 
         xp = self.device.xp
 
@@ -454,16 +451,16 @@ class CubedSphere3D(CubedSphere):
         # height is still necessarily a 3D array.
         # x comes before y in the indices -> Y is the "fast-varying" index
 
-        Y, X = xp.meshgrid(xp.tan(x2),xp.tan(x1),indexing='ij')
+        Y_block, X_block = xp.meshgrid(xp.tan(x2), xp.tan(x1), indexing='ij')
 
         # Y_new = self._to_new(Y)
         # X_new = self._to_new(X)
 
-        self.boundary_sn = X[0, :] # Coordinates of the south and north boundaries along the X (west-east) axis
-        self.boundary_we = Y[:, 0] # Coordinates of the west and east boundaries along the Y (south-north) axis
+        self.boundary_sn = X_block[0, :] # Coordinates of the south and north boundaries along the X (west-east) axis
+        self.boundary_we = Y_block[:, 0] # Coordinates of the west and east boundaries along the Y (south-north) axis
 
         # if MPI.COMM_WORLD.rank == 0:
-        #    print(f'old X = \n{X}')
+        #    print(f'old X = \n{X_block}')
         #    print(f'new X = \n{X_new}')
 
         height = x3
@@ -480,7 +477,7 @@ class CubedSphere3D(CubedSphere):
         # if MPI.COMM_WORLD.rank == 0:
         #     print(f'x itf i (shape {X_itf_i.shape})= \n{X_itf_i}')
 
-        delta2 = 1.0 + X**2 + Y**2
+        delta2 = 1.0 + X_block**2 + Y_block**2
         delta  = xp.sqrt(delta2)
 
         delta2_itf_i = 1.0 + X_itf_i**2 + Y_itf_i**2
@@ -489,8 +486,8 @@ class CubedSphere3D(CubedSphere):
         delta2_itf_j = 1.0 + X_itf_j**2 + Y_itf_j**2
         delta_itf_j  = xp.sqrt(delta2_itf_j)
 
-        self.X = X
-        self.Y = Y
+        self.X_block = X_block
+        self.Y_block = Y_block
         # self.X_new = X_new
         # self.Y_new = Y_new
         self.height = height
@@ -542,7 +539,7 @@ class CubedSphere3D(CubedSphere):
         # Yc = (r+Z)*Y/sqrt(1+X^2+Y^2)
         # Zc = (r+Z)/sqrt(1+X^2+Y^2)
         for (coord_cart, coord_gnom) in zip([coordVec_cart, coordVec_cart_itf_i, coordVec_cart_itf_j, coordVec_cart_itf_k],
-                                                [coordVec_gnom, coordVec_gnom_itf_i, coordVec_gnom_itf_j, coordVec_gnom_itf_k]):
+                                            [coordVec_gnom, coordVec_gnom_itf_i, coordVec_gnom_itf_j, coordVec_gnom_itf_k]):
             delt = xp.sqrt(1.0 + coord_gnom[0,:,:,:]**2 + coord_gnom[1,:,:,:]**2)
             coord_cart[0,:] = (self.earth_radius + coord_gnom[2,:]) / delt * ( math.cos(lon_p) * math.cos(lat_p) \
                 + coord_gnom[0,:] * ( math.cos(lon_p) * math.sin(lat_p) * math.sin(angle_p) - math.sin(lon_p) * math.cos(angle_p) ) \

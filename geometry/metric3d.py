@@ -21,10 +21,9 @@ class Metric3DTopo:
         """Construct the metric terms, with the assurance that topography is now defined.  This defines full, 3D arrays
         for the metric and Christoffel symbols."""
 
-        # Retrieve geometry and matrix objects
+        # Retrieve objects for easier access
         geom = self.geom
         matrix = self.matrix
-
         xp = geom.device.xp
 
         # Whether computing deep or shallow metric
@@ -698,6 +697,6 @@ class Metric3DTopo:
         self.sqrtG_itf_k = sqrtG_itf_k
         self.inv_sqrtG = 1/sqrtG
 
-        self.coriolis_f = 2 * geom.rotation_speed / geom.delta * ( math.sin(geom.lat_p) - geom.X * math.cos(geom.lat_p) * math.sin(geom.angle_p) + geom.Y * math.cos(geom.lat_p) * math.cos(geom.angle_p))
+        self.coriolis_f = 2 * geom.rotation_speed / geom.delta * ( math.sin(geom.lat_p) - geom.X_block * math.cos(geom.lat_p) * math.sin(geom.angle_p) + geom.Y_block * math.cos(geom.lat_p) * math.cos(geom.angle_p))
 
         self.inv_dzdeta = 1/dRdeta_int * 2/delta_eta
