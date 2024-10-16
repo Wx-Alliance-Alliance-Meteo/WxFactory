@@ -40,8 +40,6 @@ class Metric3DTopo:
 
         # Gnomonic coordinates at i-interface
         X_itf_i = geom.coordVec_gnom_itf_i[0,:,:,:]
-        if MPI.COMM_WORLD.rank == 0:
-            print(f'x itf i shape = {X_itf_i.shape}')
         Y_itf_i = geom.coordVec_gnom_itf_i[1,:,:,:]
         R_itf_i = geom.coordVec_gnom_itf_i[2,:,:,:] + geom.earth_radius
 
@@ -697,6 +695,6 @@ class Metric3DTopo:
         self.sqrtG_itf_k = sqrtG_itf_k
         self.inv_sqrtG = 1/sqrtG
 
-        self.coriolis_f = 2 * geom.rotation_speed / geom.delta * ( math.sin(geom.lat_p) - geom.X_block * math.cos(geom.lat_p) * math.sin(geom.angle_p) + geom.Y_block * math.cos(geom.lat_p) * math.cos(geom.angle_p))
+        self.coriolis_f = 2 * geom.rotation_speed / geom.delta_block * ( math.sin(geom.lat_p) - geom.X_block * math.cos(geom.lat_p) * math.sin(geom.angle_p) + geom.Y_block * math.cos(geom.lat_p) * math.cos(geom.angle_p))
 
         self.inv_dzdeta = 1/dRdeta_int * 2/delta_eta

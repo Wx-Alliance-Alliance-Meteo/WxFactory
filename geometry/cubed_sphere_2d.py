@@ -262,25 +262,6 @@ class CubedSphere2D(CubedSphere):
       planet_scaling_factor = 1.
       planet_is_rotating = 1.
       self.deep = False
-      if param.equations.lower() == "euler":
-         if param.case_number == 31:
-            planet_scaling_factor = 125.
-            planet_is_rotating = 0.
-         elif param.case_number == 20:
-            # Normal planet, but no rotation
-            planet_is_rotating = 0.0
-         elif param.case_number == 21 or param.case_number == 22:
-            # Small planet, no rotation
-            planet_scaling_factor = 500
-            planet_is_rotating = 0.0
-
-         assert param.depth_approx is not None
-         if param.depth_approx.lower() == "deep":
-            self.deep = True
-         elif param.depth_approx.lower() == "shallow":
-            self.deep = False
-         else:
-            raise AssertionError(f'Invalid Euler atmosphere depth approximation ({param.depth_approx})')
       self.earth_radius   /= planet_scaling_factor
       self.rotation_speed *= planet_is_rotating / planet_scaling_factor
 

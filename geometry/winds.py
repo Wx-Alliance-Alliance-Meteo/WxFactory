@@ -43,8 +43,8 @@ def wind2contra_2d(u : Union[float, numpy.ndarray], v : Union[float, numpy.ndarr
    dx1dlon = math.cos(geom.lat_p) * math.cos(geom.angle_p) + ( geom.X_block * geom.Y_block * math.cos(geom.lat_p) * math.sin(geom.angle_p) - geom.Y_block * math.sin(geom.lat_p) ) / (1. + geom.X_block**2)
    dx2dlon = ( geom.X_block * geom.Y_block * math.cos(geom.lat_p) * math.cos(geom.angle_p) + geom.X_block * math.sin(geom.lat_p) ) / (1. + geom.Y_block**2) + math.cos(geom.lat_p) * math.sin(geom.angle_p)
 
-   dx1dlat = -geom.delta2 * ( (math.cos(geom.lat_p)*math.sin(geom.angle_p) + geom.X_block * math.sin(geom.lat_p))/(1. + geom.X_block**2) ) / denom
-   dx2dlat = geom.delta2 * ( (math.cos(geom.lat_p)*math.cos(geom.angle_p) - geom.Y_block * math.sin(geom.lat_p))/(1. + geom.Y_block**2) ) / denom
+   dx1dlat = -geom.delta2_block * ( (math.cos(geom.lat_p)*math.sin(geom.angle_p) + geom.X_block * math.sin(geom.lat_p))/(1. + geom.X_block**2) ) / denom
+   dx2dlat = geom.delta2_block * ( (math.cos(geom.lat_p)*math.cos(geom.angle_p) - geom.Y_block * math.sin(geom.lat_p))/(1. + geom.Y_block**2) ) / denom
    
    # transform to the reference element
 
@@ -132,9 +132,10 @@ def contra2wind_2d(u1 : Union[float, numpy.ndarray],
 
    denom[:,:] = numpy.sqrt( (math.cos(geom.lat_p) + geom.X_block * math.sin(geom.lat_p)*math.sin(geom.angle_p) - geom.Y_block * math.sin(geom.lat_p)*math.cos(geom.angle_p))**2 + (geom.X_block * math.cos(geom.angle_p) + geom.Y_block * math.sin(geom.angle_p))**2 )
 
-   dlatdx1 = - ( (geom.X_block * geom.Y_block * math.cos(geom.lat_p) * math.cos(geom.angle_p) + geom.X_block * math.sin(geom.lat_p) + (1. + geom.Y_block**2) * math.cos(geom.lat_p) * math.sin(geom.angle_p)) * (1. + geom.X_block**2) ) / ( geom.delta2 * denom)
+   dlatdx1 = - ( (geom.X_block * geom.Y_block * math.cos(geom.lat_p) * math.cos(geom.angle_p) + geom.X_block * math.sin(geom.lat_p) + \
+                  (1. + geom.Y_block**2) * math.cos(geom.lat_p) * math.sin(geom.angle_p)) * (1. + geom.X_block**2) ) / ( geom.delta2_block * denom)
 
-   dlatdx2 = ( ((1. + geom.X_block**2) * math.cos(geom.lat_p) * math.cos(geom.angle_p) + geom.X_block * geom.Y_block * math.cos(geom.lat_p) * math.sin(geom.angle_p) - geom.Y_block * math.sin(geom.lat_p)) * (1. + geom.Y_block**2) ) / ( geom.delta2 * denom)
+   dlatdx2 = ( ((1. + geom.X_block**2) * math.cos(geom.lat_p) * math.cos(geom.angle_p) + geom.X_block * geom.Y_block * math.cos(geom.lat_p) * math.sin(geom.angle_p) - geom.Y_block * math.sin(geom.lat_p)) * (1. + geom.Y_block**2) ) / ( geom.delta2_block * denom)
 
    if (geom.nk > 1 and geom.deep):
       # If we are in a 3D geometry with the deep atmosphere, the conversion from
