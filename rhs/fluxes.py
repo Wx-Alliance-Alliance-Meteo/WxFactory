@@ -165,7 +165,7 @@ def rusanov_3d_vert(variables_itf_k, pressure_itf_k, w_itf_k, metric, nb_interfa
       wflux_pres_x3_itf_k[:, elem_U, 0, :] = 0.5 * (wflux_pres_D + wflux_pres_U)/pressure_itf_k[:,elem_U,0,:]
 
 
-def rusanov_3d_hori_i(u1_itf_i, variables_itf_i, pressure_itf_i, metric, nb_interfaces_hori, advection_only, \
+def AUSM_3d_hori_i(u1_itf_i, variables_itf_i, pressure_itf_i, metric, nb_interfaces_hori, advection_only, \
                       flux_x1_itf_i, wflux_adv_x1_itf_i, wflux_pres_x1_itf_i):
 
    for itf in range(nb_interfaces_hori):
@@ -173,51 +173,33 @@ def rusanov_3d_hori_i(u1_itf_i, variables_itf_i, pressure_itf_i, metric, nb_inte
       elem_L = itf
       elem_R = itf + 1
 
-      # Direction x1
-      u1_L = u1_itf_i[:, elem_L, 1, :] # u at the right interface of the left element
-      u1_R = u1_itf_i[:, elem_R, 0, :] # u at the left interface of the right element
+      # Left state
+      a_L = numpy.sqrt(metric.H_contra_11_itf_i[:,:,itf] * heat_capacity_ratio * pressure_itf_i[:, elem_L, 1, :] / variables_itf_i[idx_rho, :, elem_L, 1, :])
+      M_L = variables_itf_i[idx_2d_rho_u, elem_L, 1, :] / (variables_itf_i[idx_2d_rho, elem_L, 1, :] * a_L)
 
-      if advection_only: # Advection only, eigenvalues are the velocities alone
-         eig_L = numpy.abs( u1_L )
-         eig_R = numpy.abs( u1_R )
-      else: # Otherwise, maximum eigenvalue is |u| + c_sound
-         eig_L = numpy.abs( u1_L ) + numpy.sqrt(metric.H_contra_11_itf_i[:,:,itf] * heat_capacity_ratio * pressure_itf_i[:, elem_L, 1, :] / variables_itf_i[idx_rho, :, elem_L, 1, :])
-         eig_R = numpy.abs( u1_R ) + numpy.sqrt(metric.H_contra_11_itf_i[:,:,itf] * heat_capacity_ratio * pressure_itf_i[:, elem_R, 0, :] / variables_itf_i[idx_rho, :, elem_R, 0, :])
+      # Right state
+      a_R = numpy.sqrt(metric.H_contra_11_itf_i[:,:,itf] * heat_capacity_ratio * pressure_itf_i[:, elem_R, 0, :] / variables_itf_i[idx_rho, :, elem_R, 0, :])
+      M_R = variables_itf_i[idx_2d_rho_u, elem_R, 0, :] / (variables_itf_i[idx_rho, elem_R, 0, :] * a_R)
 
-      eig = numpy.maximum(eig_L, eig_R)
+      M = 0.25 * (( M_L + 1.)**2 - (M_R - 1.)**2)
 
-      # Advective part of the flux ...
-      flux_L = metric.sqrtG_itf_i[:, :, itf] * u1_L * variables_itf_i[:, :, elem_L, 1, :]
-      flux_R = metric.sqrtG_itf_i[:, :, itf] * u1_R * variables_itf_i[:, :, elem_R, 0, :]
 
-      # rho-w specific advective flux
-      wflux_adv_L = flux_L[idx_rho_w,:].copy()
-      wflux_adv_R = flux_R[idx_rho_w,:].copy()
+      # Common AUSM flux
+      flux_x1_itf_i[:, :, elem_L, :, 1] = (metric.sqrtG_itf_i[:, :, itf] * variables_itf_i[:, :, elem_L, 1, :] * numpy.maximum(0., M) * a_L) + (metric.sqrtG_itf_i[:, :, itf] * variables_itf_i[:, :, elem_R, 0, :] * numpy.minimum(0., M) * a_R)
 
       # ... and now add the pressure contribution
-      flux_L[idx_rho_u1] += metric.sqrtG_itf_i[:, :, itf] * metric.H_contra_11_itf_i[:, :, itf] * pressure_itf_i[:, elem_L, 1, :]
-      flux_L[idx_rho_u2] += metric.sqrtG_itf_i[:, :, itf] * metric.H_contra_12_itf_i[:, :, itf] * pressure_itf_i[:, elem_L, 1, :]
-      flux_L[idx_rho_w]  += metric.sqrtG_itf_i[:, :, itf] * metric.H_contra_13_itf_i[:, :, itf] * pressure_itf_i[:, elem_L, 1, :]
-                                                                                        
-      flux_R[idx_rho_u1] += metric.sqrtG_itf_i[:, :, itf] * metric.H_contra_11_itf_i[:, :, itf] * pressure_itf_i[:, elem_R, 0, :]
-      flux_R[idx_rho_u2] += metric.sqrtG_itf_i[:, :, itf] * metric.H_contra_12_itf_i[:, :, itf] * pressure_itf_i[:, elem_R, 0, :]
-      flux_R[idx_rho_w]  += metric.sqrtG_itf_i[:, :, itf] * metric.H_contra_13_itf_i[:, :, itf] * pressure_itf_i[:, elem_R, 0, :]
+      flux_x1_itf_i[idx_rho_u1, :, elem_L, :, 1] += metric.sqrtG_itf_i[:, :, itf] * metric.H_contra_11_itf_i[:, :, itf] * 0.5 * ( (1 + M_L) * pressure_itf_i[:, elem_L, 1, :] + (1 - M_L) * pressure_itf_i[:, elem_R, 0, :] )
+      flux_x1_itf_i[idx_rho_u2, :, elem_L, :, 1] += metric.sqrtG_itf_i[:, :, itf] * metric.H_contra_12_itf_i[:, :, itf] * 0.5 * ( (1 + M_L) * pressure_itf_i[:, elem_L, 1, :] + (1 - M_L) * pressure_itf_i[:, elem_R, 0, :] )
+      flux_x1_itf_i[idx_rho_w, :, elem_L, :, 1]  += metric.sqrtG_itf_i[:, :, itf] * metric.H_contra_13_itf_i[:, :, itf] * 0.5 * ( (1 + M_L) * pressure_itf_i[:, elem_L, 1, :] + (1 - M_L) * pressure_itf_i[:, elem_R, 0, :] )
 
-      # Pressure contribution specifically for rho-w
-      wflux_pres_L = metric.sqrtG_itf_i[:, :, itf] * metric.H_contra_13_itf_i[:, :, itf] * pressure_itf_i[:, elem_L, 1, :]
-      wflux_pres_R = metric.sqrtG_itf_i[:, :, itf] * metric.H_contra_13_itf_i[:, :, itf] * pressure_itf_i[:, elem_R, 0, :]
-
-      # --- Common Rusanov fluxes
-
-      flux_x1_itf_i[:, :, elem_L, :, 1] = 0.5 * ( flux_L  + flux_R - eig * metric.sqrtG_itf_i[:, :, itf] * ( variables_itf_i[:, :, elem_R, 0, :] - variables_itf_i[:, :, elem_L, 1, :] ) )
       flux_x1_itf_i[:, :, elem_R, :, 0] = flux_x1_itf_i[:, :, elem_L, :, 1]
 
+
       # Separating advective and pressure fluxes for rho-w
-      wflux_adv_x1_itf_i[:,elem_L,:,1] = 0.5*(wflux_adv_L + wflux_adv_R - eig*metric.sqrtG_itf_i[:,:,itf] * \
-                                       ( variables_itf_i[idx_rho_w, :, elem_R, 0, :] - variables_itf_i[idx_rho_w, :, elem_L, 1, :] ))
-      wflux_adv_x1_itf_i[:,elem_R,:,0] = wflux_adv_x1_itf_i[:,elem_L,:,1]
-      wflux_pres_x1_itf_i[:,elem_L,:,1] = 0.5*(wflux_pres_L + wflux_pres_R)/pressure_itf_i[:,elem_L,1,:]
-      wflux_pres_x1_itf_i[:,elem_R,:,0] = 0.5*(wflux_pres_L + wflux_pres_R)/pressure_itf_i[:,elem_R,0,:]
+      wflux_adv_x1_itf_i[:,elem_L,:,1]  = (metric.sqrtG_itf_i[:, :, itf] * variables_itf_i[idx_rho_w, :, elem_L, 1, :] * numpy.maximum(0, M) * a_L  +  metric.sqrtG_itf_i[:, :, itf] * variables_itf_i[idx_rho_w, :, elem_R, 0, :] * numpy.minimum(0., M) * a_R)
+      wflux_adv_x1_itf_i[:,elem_R,:,0]  = wflux_adv_x1_itf_i[:,elem_L,:,1]
+      wflux_pres_x1_itf_i[:,elem_L,:,1] = metric.sqrtG_itf_i[:, :, itf] * metric.H_contra_13_itf_i[:, :, itf] * 0.5 * ( (1 + M_L) * pressure_itf_i[:, elem_L, 1, :] + (1 - M_L) * pressure_itf_i[:, elem_R, 0, :] )
+      wflux_pres_x1_itf_i[:,elem_R,:,0] = wflux_pres_x1_itf_i[:,elem_L,:,1]
 
 
 def rusanov_3d_hori_j(u2_itf_j, variables_itf_j, pressure_itf_j, metric, nb_interfaces_hori, advection_only, \
