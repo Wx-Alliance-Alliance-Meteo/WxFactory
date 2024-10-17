@@ -81,7 +81,7 @@ class PDEEulerCartesian(PDE):
 
     def pointwise_fluxes_cpu(self, q: ndarray,
                              flux_x1: ndarray, flux_x2: ndarray, flux_x3: ndarray):
-        from pde.kernels.interface import pointwise_fluxes
+        from lib.pde.kernels.interface import pointwise_fluxes
 
         # Compute the kernel inputs
         nb_elements = self.config.nb_elements_horizontal * self.config.nb_elements_vertical
@@ -111,7 +111,7 @@ class PDEEulerCartesian(PDE):
     def riemann_fluxes_cpu(self, q_itf_x1: ndarray, q_itf_x2: ndarray, q_itf_x3: ndarray,
                            fluxes_itf_x1: ndarray, flux_itf_x2: ndarray, fluxes_itf_x3: ndarray) -> None:
 
-        from pde.kernels.interface import riemann_solver
+        from lib.pde.kernels.interface import riemann_solver
 
         # Compute the kernel inputs
         nb_elements_x = self.config.nb_elements_horizontal

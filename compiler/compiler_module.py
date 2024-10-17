@@ -85,3 +85,4 @@ def build_librairies(force_build: bool = False):
 
         with open('./lib/hash', 'w') as hash:
             hash.write(final_hash)
+        shutil.copyfile('./pde/kernels/interface.pyx', './lib/pde/kernels/interface.pyx')
