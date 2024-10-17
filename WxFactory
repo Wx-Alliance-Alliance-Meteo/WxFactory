@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+from compiler.compiler_module import build_librairies
+
 """ The WxFactory model """
 
 import argparse
@@ -100,4 +102,7 @@ def main():
 
 
 if __name__ == '__main__':
+   if MPI.COMM_WORLD.rank == 0:
+      build_librairies()
+      MPI.COMM_WORLD.Barrier()
    main()

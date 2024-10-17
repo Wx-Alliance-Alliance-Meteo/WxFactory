@@ -41,7 +41,6 @@ def build_librairies(force_build: bool = False):
     extensions: list[Extension] = [cython_ext]
     
     sources_sha1: str = ''
-    # TODO : Read all sources
     for extension in extensions:
         for source in extension.sources:
             with open(source) as s:
