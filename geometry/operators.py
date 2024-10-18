@@ -5,6 +5,7 @@ import sympy
 from typing import Optional
 from typing import Self, TypeVar
 
+from mpi4py       import MPI
 from numpy.typing import NDArray
 
 from common.definitions     import idx_2d_rho_w
@@ -93,8 +94,13 @@ class DFROperators:
       if param.expfilter_apply:
          if not isinstance(grd, CubedSphere3D):
             raise TypeError(f'The 3D filter can only be applied on a CubedSphere3D geometry')
-         self.expfilter = self.make_filter(param.expfilter_strength, param.expfilter_order, param.expfilter_cutoff,
-                                           grd, device)
+         if grd.nbsolpts < 2:
+            if MPI.COMM_WORLD.rank == 0:
+               print(f'WARNING: 3D filter can only be applied if we have degree > 1')
+            self.expfilter_apply = False
+         else:
+            self.expfilter = self.make_filter(param.expfilter_strength, param.expfilter_order, param.expfilter_cutoff,
+                                              grd, device)
 
       # Create sponge layer (if desired)
       self.apply_sponge = param.apply_sponge
