@@ -3,8 +3,9 @@ import math
 from mpi4py import MPI
 import numpy
 import scipy.linalg
+#import mpi4py.MPI
 
-def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 10, mmax = 128, reuse_info = True, task1 = False):
+def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 10, mmin=10, mmax = 128, reuse_info = False, task1 = False):
 
    ppo, n = u.shape
    p = ppo - 1
@@ -30,18 +31,24 @@ def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 10, mmax = 128, reuse_i
 
    first_accepted = True
 
+   """
    if not hasattr(pmex, "static_mem") or reuse_info is False:
       pmex.static_mem = True
       pmex.suggested_step = τ_end
       pmex.suggested_m = mmax
+      m_init = 12 #changing it to 12 because there were too many rejected steps for first steps
       m_opt  = 1
    else:
       m_init = pmex.suggested_m
       m_opt  = 1
+   """
 
    # We only allow m to vary between mmin and mmax
-   mmin = 1
+   #mmin = 1
    m = max(mmin, min(m_init, mmax))
+
+   #if rank == 0:
+   #   print("in pmex, m_init = {}, m = {}".format(m_init, m))
 
    # Preallocate matrix
    V = numpy.zeros((mmax + 1, n + p))
@@ -73,7 +80,10 @@ def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 10, mmax = 128, reuse_i
    u_flip = nu * numpy.flipud(u[1:, :])
 
    # Compute and initial starting approximation for the step size
-   τ = min(pmex.suggested_step, τ_end)
+   #τ = min(pmex.suggested_step, τ_end)
+
+   #follow same as kiops
+   τ = τ_end
 
    # Setting the safety factors and tolerance requirements
    if τ_end > 1:
@@ -89,6 +99,15 @@ def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 10, mmax = 128, reuse_i
    same_τ = None
 
    l = 0
+
+   """
+   #arrays to hold timing data
+   local_dot1 = [] #local dot product for Vjv values
+   ortho_sum  = [] #for orthogonalizing
+   matvec_t   = [] #part 1 of applying T
+   low_triang = [] #part 2 of applying T
+   gsum_dots  = [] #global sum for dots
+   """
 
    while τ_now < τ_end:
 
@@ -133,7 +152,7 @@ def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 10, mmax = 128, reuse_i
          #3. Projection with 2-step Gauss-Seidel to the orthogonal complement
          # Note: this is done in two steps. (1) matvec and (2) a lower
          # triangular solve
-         # 4a. here we set the values for matrix M, Minv, N
+         # 3a. here we set the values for matrix M, Minv, N
          if (j > 1):
            M[j-1, 0:j-1]    =  global_vec[0:j-1,0]
            N[0:j-1, j-1]    = -global_vec[0:j-1,0]
@@ -315,6 +334,15 @@ def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 10, mmax = 128, reuse_i
 
    m_ret=m
 
-   stats = (step, reject, krystep, exps, conv, m_ret, reg_comm_nrm)
+   """
+   nn = len(ortho_sum)
+   avg_ortho    = sum(ortho_sum) / nn
+   avg_localsum = sum(local_dot1) / nn
+   avg_matvec   = sum(matvec_t) / nn
+   avg_lowtriag = sum(low_triang) / nn
+   avg_gsum_dots = sum(gsum_dots) / nn
+   """
 
+   stats = (step, reject, krystep, exps, conv, m_ret, reg_comm_nrm)
+  
    return w, stats
