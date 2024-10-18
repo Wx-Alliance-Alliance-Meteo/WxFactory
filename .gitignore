@@ -20,8 +20,10 @@ __pycache__/
 *.py[cod]
 
 bubble_cliff
+jacobian
 listings
-results*/
+results
+results_tanya
 work
 
 scripts/load_env.sh
