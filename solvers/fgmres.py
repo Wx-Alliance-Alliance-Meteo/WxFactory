@@ -1,20 +1,18 @@
-import math
 from time import time
 import sys
 from typing import Callable, List, Optional, Tuple
+from common.device import Device, default_device
 
 from mpi4py import MPI
-import numpy
-import scipy
-import scipy.sparse.linalg
+from numpy import ndarray
 
 from .global_operations import global_dotprod, global_norm
 
 __all__ = ['fgmres']
 
-MatvecOperator = Callable[[numpy.ndarray], numpy.ndarray]
+MatvecOperator = Callable[[ndarray], ndarray]
 
-def _ortho_1_sync_igs(Q, R, T, K, j, comm):
+def _ortho_1_sync_igs(Q, R, T, K, j, comm, device: Device = default_device):
    """Orthonormalization process that only requires a single synchronization step.
 
    This processes row j of matrix Q (starting from 1) so that the first j rows are orthogonal, and the first (j-1)
@@ -31,14 +29,18 @@ def _ortho_1_sync_igs(Q, R, T, K, j, comm):
    """
    if j < 2: return -1.0
 
+   xp = device.xp
+
    local_tmp = Q[:j, :] @ Q[j-2:j, :].T     # Q multiplied by its own last 2 rows (up to j)
+
+   device.synchronize()
    global_tmp = comm.allreduce(local_tmp) # Expensive step on multi-node execution
    small_tmp = global_tmp[:j-2, 0]
 
    R[:j-1, j-1]  = global_tmp[:j-1, 1]
 
    norm2         = global_tmp[j-2, 0] - (small_tmp @ small_tmp)
-   norm          = numpy.sqrt(norm2)
+   norm          = xp.sqrt(norm2)
    R[j-2, j-2]   = norm
    R[j-2, j-1]  -= small_tmp @ R[:j-2, j-1]
    R[j-2, j-1]  /= norm
@@ -46,9 +48,9 @@ def _ortho_1_sync_igs(Q, R, T, K, j, comm):
    T[:j-2, j-2]  = small_tmp / norm
 
    if j > 2:
-      L = numpy.tril(T[:j-2, :j-2].T, -1)
-      L_plus = L + numpy.eye(j-2)
-      r3 = numpy.linalg.solve(L_plus, small_tmp)
+      L = xp.tril(T[:j-2, :j-2].T, -1)
+      L_plus = L + xp.eye(j-2)
+      r3 = xp.linalg.solve(L_plus, small_tmp)
 
       R[:j-2, j-2] = K[:j-2, j-3] + r3
       K[:j-1, j-2] = (R[:j-1, j-1] - (R[:j-1, 1:j-1] @ r3)) / norm
@@ -65,9 +67,28 @@ def _ortho_1_sync_igs(Q, R, T, K, j, comm):
 
    return norm
 
+def rotg(a: float, b: float) -> tuple[float, float, float]:
+   anorm = abs(a)
+   bnorm = abs(b)
+   if bnorm == 0:
+      return (1.0, 0.0, a)
+   if anorm == 0:
+      return (0.0, 1.0, b)
+   import math
+   scl = min(anorm, bnorm)
+   sigma: float
+   if (anorm > bnorm):
+      sigma = math.copysign(1.0, a)
+   else: sigma = math.copysign(1.0, b)
+
+   r = sigma * (scl * math.sqrt((a / scl)**2 + (b / scl)**2))
+   c = a / r
+   s = b / r
+   return (c, s, r)
+
 def fgmres(A: MatvecOperator,
-           b: numpy.ndarray,
-           x0: Optional[numpy.ndarray] = None,
+           b: ndarray,
+           x0: Optional[ndarray] = None,
            tol: float = 1e-5,
            restart: int = 20,
            maxiter: Optional[int] = None,
@@ -75,14 +96,15 @@ def fgmres(A: MatvecOperator,
            hegedus: bool = False,
            verbose: int = 0,
            prefix: str = '',
-           comm: MPI.Comm = MPI.COMM_WORLD) \
-            -> Tuple[numpy.ndarray, float, float, int, int, List[Tuple[float, float, float]]]:
+           comm: MPI.Comm = MPI.COMM_WORLD,
+           device: Device = default_device) \
+            -> Tuple[ndarray, float, float, int, int, List[Tuple[float, float, float]]]:
    """
    Solve the given linear system (Ax = b) for x, using the FGMRES algorithm.
 
    Mandatory arguments:
-   A              -- System matrix. This may be an operator that when applied to a vector [v] results in A*v
-   b              -- The right-hand side of the system to solve.
+   A              -- System matrix. This may be an operator that when applied to a vector [v] results in A*v. A should not be identity (or a multiplication of identity) when the preconditionner is none or identity
+   b              -- The right-hand side of the system to solve. Must be a vector
 
    Optional arguments:
    x0             -- Initial guess for the solution. The zero vector if absent.
@@ -92,6 +114,8 @@ def fgmres(A: MatvecOperator,
    preconditioner -- Operator [M^-1] that preconditions a given vector [v]. Computes the product (M^-1)*v
    hegedus        -- Whether to apply the Hegedüs trick (whatever that is)
 
+   len(b) should be greater than restart
+
    Returns:
    1. The result [x]
    2. The relative residual |b - Ax| / |b|
@@ -99,6 +123,11 @@ def fgmres(A: MatvecOperator,
    4. A flag that indicates the convergence status (0 if converged, -1 if not)
    5. The list of residuals at every iteration
    """
+   if len(b) <= restart:
+      raise ValueError('The b vector should be longer than the number of restart')
+
+   xp = device.xp
+   xalg = device.xalg
 
    t_start = time()
    niter = 0
@@ -107,20 +136,19 @@ def fgmres(A: MatvecOperator,
       preconditioner = lambda x: x     # Set up a preconditioner that does nothing
 
    num_dofs = len(b)
-   total_work = 0.0
 
    if maxiter is None:
       maxiter = num_dofs * 10 # Wild guess
 
    if x0 is None:
-      x = numpy.zeros_like(b)
+      x = xp.zeros_like(b)
    else:
       x = x0.copy()
 
    # Check for early stop
    norm_b = global_norm(b, comm=comm)
    if norm_b == 0.0:
-      return numpy.zeros_like(b), 0., 0., 0, 0, [(0.0, time() - t_start, 0.0)]
+      return xp.zeros_like(b), 0., 0., 0, 0, [(0.0, time() - t_start, 0.0)]
 
    tol_relative = tol * norm_b
 
@@ -138,29 +166,25 @@ def fgmres(A: MatvecOperator,
    r      = b - Ax0
    norm_r = global_norm(r, comm=comm)
 
-   residuals.append((norm_r / norm_b, time() - t_start, 0.0))
-
-   # Get fast access to underlying BLAS routines
-   [lartg] = scipy.linalg.get_lapack_funcs(['lartg'], [x])
-   [dotu, scal] = scipy.linalg.get_blas_funcs(['dotu', 'scal'], [x])
-
+   residuals.append(((norm_r / norm_b).item(), time() - t_start, 0.0))
+   
    for outer in range(maxiter):
       # NOTE: We are dealing with row-major matrices, but we store the transpose of H and V.
-      H = numpy.zeros((restart+2, restart+2))
-      R = numpy.zeros((restart+2, restart+2)) # rhs of the MGS factorization (should be H.transposed?)
-      T = numpy.zeros((restart+2, restart+2))
-      K = numpy.zeros((restart+2, restart+2))
-      V = numpy.zeros((restart+2, num_dofs))  # row-major ordering
-      Z = numpy.zeros((restart+1, num_dofs))  # row-major ordering
+      H = xp.zeros((restart+2, restart+2))
+      R = xp.zeros((restart+2, restart+2)) # rhs of the MGS factorization (should be H.transposed?)
+      T = xp.zeros((restart+2, restart+2))
+      K = xp.zeros((restart+2, restart+2))
+      V = xp.zeros((restart+2, num_dofs))  # row-major ordering
+      Z = xp.zeros((restart+1, num_dofs))  # row-major ordering
       Q = []  # Givens Rotations
 
       V[0, :] = r / norm_r
       Z[0, :] = preconditioner(V[0, :])
       V[1, :] = A(Z[0, :])
-      v_norm = _ortho_1_sync_igs(V, R, T, K, 2, comm)
+      v_norm = _ortho_1_sync_igs(V, R, T, K, 2, comm, device)
 
       # This is the RHS vector for the problem in the Krylov Space
-      g = numpy.zeros(num_dofs)
+      g = xp.zeros(num_dofs)
       g[0] = norm_r
       for inner in range(restart):
 
@@ -168,11 +192,13 @@ def fgmres(A: MatvecOperator,
 
          # Modified Gram-Schmidt process (1-sync version, with lagged normalization)
          Z[inner + 1, :] = preconditioner(V[inner + 1])
+
          V[inner + 2, :] = A(Z[inner + 1, :] / v_norm) * v_norm
-         v_norm = _ortho_1_sync_igs(V, R, T, K, inner + 3, comm)
+         v_norm = _ortho_1_sync_igs(V, R, T, K, inner + 3, comm, device)
          H[inner, :inner + 2] = R[:inner + 2, inner + 1]
          Z[inner + 1, :] /= v_norm
 
+         # TODO : Start CPU here
          # Apply previous Givens rotations to H
          if inner > 0:
             _apply_givens(Q, H[inner, :], inner)
@@ -183,8 +209,9 @@ def fgmres(A: MatvecOperator,
          #    iteration, when inner = num_dofs-1.
          if inner != num_dofs - 1:
             if H[inner, inner + 1] != 0:
-               [c, s, r] = lartg(H[inner, inner], H[inner, inner + 1])
-               Qblock = numpy.array([[c, s], [-numpy.conjugate(s), c]])
+               [c, s, r] = rotg(H[inner, inner], H[inner, inner + 1])
+
+               Qblock = xp.array([[c, s], [-xp.conjugate(s), c]])
                Q.append(Qblock)
 
                # Apply Givens Rotation to g,
@@ -192,14 +219,14 @@ def fgmres(A: MatvecOperator,
                g[inner:inner + 2] = Qblock @ g[inner:inner + 2]
 
                # Apply effect of Givens Rotation to H
-               H[inner, inner] = dotu(Qblock[0, :], H[inner, inner:inner + 2])
+               H[inner, inner] = xp.dot(Qblock[0, :], H[inner, inner:inner + 2])
                H[inner, inner + 1] = 0.0
 
          # Don't update norm_r if last inner iteration, because
          # norm_r is calculated directly after this loop ends.
          if inner < restart - 1:
-            norm_r = numpy.abs(g[inner+1])
-            residuals.append((norm_r / norm_b, time() - t_start, 0.0))
+            norm_r = xp.abs(g[inner+1])
+            residuals.append(((norm_r / norm_b).item(), time() - t_start, 0.0))
             if verbose > 1:
                if comm.rank == 0: print(f'{prefix}norm_r / b = {residuals[-1][0]:.3e}')
                sys.stdout.flush()
@@ -209,21 +236,24 @@ def fgmres(A: MatvecOperator,
       # end inner loop, back to outer loop
 
       # Find best update to x in Krylov Space V.
-      y = scipy.linalg.solve_triangular(H[0:inner + 1, 0:inner + 1].T, g[0:inner + 1])
-      update = numpy.ravel(Z[:inner+1, :].T @ y.reshape(-1, 1))
+      y = xalg.linalg.solve_triangular(H[0:inner + 1, 0:inner + 1].T, g[0:inner + 1])
+      update = xp.ravel(Z[:inner+1, :].T @ y.reshape(-1, 1))
       x = x + update
       r = b - A(x)
 
       norm_r = global_norm(r, comm=comm)
-      residuals.append((norm_r / norm_b, time() - t_start, 0.0))
+      
+      residuals.append(((norm_r / norm_b).item(), time() - t_start, 0.0))
       if verbose > 0:
          if comm.rank == 0: print(f'{prefix}res: {norm_r/norm_b:.2e} (iter {niter})')
          sys.stdout.flush()
 
+
+      # TODO : End cpu calculation here
       # Has GMRES stagnated?
       indices = (x != 0)
       if indices.any():
-         change = numpy.max(numpy.abs(update[indices] / x[indices]))
+         change = xp.max(xp.abs(update[indices] / x[indices]))
          if change < 1e-12:
             # No change, halt
             return x, norm_r, norm_b, niter, -1, residuals
@@ -239,6 +269,7 @@ def fgmres(A: MatvecOperator,
    return x, norm_r, norm_b, niter, flag, residuals
 
 def _apply_givens(Q, v, k):
+
    """Apply the first k Givens rotations in Q to v.
 
    Parameters

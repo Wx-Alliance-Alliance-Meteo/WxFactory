@@ -2,13 +2,13 @@ import math
 from   typing import Callable
 
 from mpi4py import MPI
-from numpy.typing import NDArray
+from numpy import ndarray
 
 from common.device import Device, default_device
 
-def kiops(tau_out: NDArray, A: Callable[[NDArray], NDArray], u: NDArray,
+def kiops(tau_out: ndarray, A: Callable[[ndarray], ndarray], u: ndarray,
           tol: float = 1e-7, m_init: int = 10, mmin: int = 10, mmax: int = 128, iop: int = 2,
-          task1: bool = False, device: Device = default_device) -> tuple[NDArray, tuple]:
+          task1: bool = False, device: Device = default_device, comm: MPI.Comm = MPI.COMM_WORLD) -> tuple[ndarray, tuple]:
    """ kiops(tstops, A, u; kwargs...) -> (w, stats)
 
    Evaluate a linear combinaton of the ``φ`` functions evaluated at ``tA`` acting on
@@ -98,7 +98,7 @@ def kiops(tau_out: NDArray, A: Callable[[NDArray], NDArray], u: NDArray,
    local_normU = xp.sum(xp.abs(u[1:, :]), axis=1)
    global_normU = xp.empty_like(local_normU)
    device.synchronize()
-   MPI.COMM_WORLD.Allreduce([local_normU, MPI.DOUBLE], [global_normU, MPI.DOUBLE])
+   comm.Allreduce([local_normU, MPI.DOUBLE], [global_normU, MPI.DOUBLE])
    normU = xp.amax(global_normU)
 
    # Normalization factors
@@ -149,7 +149,7 @@ def kiops(tau_out: NDArray, A: Callable[[NDArray], NDArray], u: NDArray,
          local_sum = V[0, :n] @ V[0, :n]
          global_sum = xp.empty_like(local_sum)
          device.synchronize()
-         MPI.COMM_WORLD.Allreduce([local_sum, MPI.DOUBLE], [global_sum, MPI.DOUBLE])
+         comm.Allreduce([local_sum, MPI.DOUBLE], [global_sum, MPI.DOUBLE])
          beta = xp.sqrt(global_sum + V[0, n:n + p] @ V[0, n:n + p])
 
          # The first Krylov basis vector
@@ -170,7 +170,7 @@ def kiops(tau_out: NDArray, A: Callable[[NDArray], NDArray], u: NDArray,
          local_sum = V[ilow:j, :n] @ V[j, :n]
          global_sum = xp.empty_like(local_sum)
          device.synchronize()
-         MPI.COMM_WORLD.Allreduce([local_sum, MPI.DOUBLE], [global_sum, MPI.DOUBLE])
+         comm.Allreduce([local_sum, MPI.DOUBLE], [global_sum, MPI.DOUBLE])
 
          H[ilow:j, j - 1] = global_sum + V[ilow:j, n:n + p] @ V[j, n:n + p]
 
@@ -179,7 +179,7 @@ def kiops(tau_out: NDArray, A: Callable[[NDArray], NDArray], u: NDArray,
          local_sum = V[j, :n] @ V[j, :n]
          global_sum = xp.empty_like(local_sum)
          device.synchronize()
-         MPI.COMM_WORLD.Allreduce([local_sum, MPI.DOUBLE], [global_sum, MPI.DOUBLE])
+         comm.Allreduce([local_sum, MPI.DOUBLE], [global_sum, MPI.DOUBLE])
          nrm = xp.sqrt(global_sum + V[j, n:n + p] @ V[j, n:n + p])
 
          # Happy breakdown
