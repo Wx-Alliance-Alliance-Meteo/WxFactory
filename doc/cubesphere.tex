@@ -1,0 +1,89 @@
+\documentclass{beamer}
+
+\usetheme{default}
+
+% Title page
+\title{Cubesphere overview}
+
+\begin{document}
+
+\begin{frame}
+    \titlepage
+\end{frame}
+
+\begin{frame}{WxFactory}{Formerly known as GEF}
+\begin{itemize}
+    \item Atmospheric simulation for numerical weather prediction
+    \item Solves the Euler equations on a cubesphere grid
+    \item Most of computation time ($~95\%$) is spent on time
+         integration (with an exponential integrator)
+    \item Of that, most is spent solving a linear system with KIOPS
+        \begin{itemize}
+        \item \textbf{That's the GPU part}
+        \end{itemize}
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Cube panels}
+\begin{figure}
+    \includegraphics[scale=0.5]{img/panel_numbering}
+    \caption{Panel numbering: This shows how the panels (cube faces) are numbered and connected to each other.}
+\end{figure}
+\end{frame}
+
+
+\begin{frame}{Panel orientation}
+\begin{itemize}
+    \item The orientation is local to the tile, not geographical
+    \item Note that the North of tile~2 is connected to the North of tile~4
+\end{itemize}
+\begin{figure}
+    \includegraphics[scale=0.9]{img/tile_orientation}
+\end{figure}
+\end{frame}
+
+\begin{frame}{Partitioning for MPI}
+\begin{itemize}
+    \item The tiles all have identical sizes, horizontally and vertically.
+    \item They are grouped by panel.
+\end{itemize}
+\begin{figure}
+    \includegraphics[scale=0.6]{img/multi_tile_numbering}
+    \caption{Tile numbering: How tiles are assigned to MPI ranks.}
+\end{figure}
+\end{frame}
+
+\begin{frame}{Solution points}{2D}
+\begin{itemize}
+    \item Each tile is composed of $n$ by $n$ 2D elements
+    \item For a variable, each element contains $d$ by $d$ solution points (degrees of freedom),
+        where $d$ is the degree of the polynomial used for DG discretization
+\end{itemize}
+\begin{figure}
+    \includegraphics[scale=1.0]{img/elem_numbering}
+    \caption{Numbering of solution points within a 2D element.}
+\end{figure}
+\end{frame}
+
+\begin{frame}{Data storage}{Single variable, 2D}
+\begin{itemize}
+    \item Data is stored by row \emph{of points}, not elements
+\end{itemize}
+\begin{figure}
+    \includegraphics[scale=0.7]{img/variable_storage}
+    \caption{Each row in the data array is made by concatenating the corresponding row of solution points of
+             each element in a certain row of that tile (along axis $i$). Contiguous rows are for a single variable.}
+\end{figure}
+\end{frame}
+
+\begin{frame}{Data storage}{3D}
+\begin{itemize}
+    \item In 3D, data is stored by horizontal (2D) planes
+    \item Each plane has a "thickness" of one solution point
+\end{itemize}
+\begin{figure}
+    \includegraphics[scale=1.1]{img/3d_storage}
+\end{figure}
+\end{frame}
+
+\end{document}

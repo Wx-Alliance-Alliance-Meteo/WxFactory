@@ -1,0 +1,60 @@
+\documentclass[12pt]{article}
+\usepackage{lineno}
+\usepackage{array}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage{booktabs}
+%\usepackage{subfigure}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{enumitem}
+\usepackage{color}
+\usepackage[title]{appendix}
+
+\title{Flux Jacobian of the Euler equations in tensor form}
+\author{Stéphane Gaudreault}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Flux jacobian are derived.
+\end{abstract}
+
+\section{Results}
+
+The components $(\nu,\alpha)$ of the three flux Jacobian matrices ${\cal J}^\mu$ are defined as
+\begin{align}
+\left( {\cal J}^\mu \right)^\nu_{\;\;\alpha}\equiv \frac{\partial (\sqrt{g}\,T^{\mu\nu})}{\partial q^\alpha}.
+\end{align}
+Note that the left-hand side of the Euler equations may be rewritten with the flux Jacobian matrices as
+\begin{align}
+\frac{\partial}{\partial x^\nu}(\sqrt{g}\,T^{\mu\nu})=\left( {\cal J}^\mu \right)^\nu_{\;\;\alpha} \frac{\partial q^\alpha}{\partial x^\nu}.
+\end{align}
+They are written explicitly as ${\cal J}^0=I_{5\times 5}$ (the identity matrix) and
+\begin{align}
+{\cal J}^1=\left(\begin{array}{ccccc} 0 & 1 & 0 & 0 & 0\\ h^{11} c^2 -u^{1}\,u^{1} & 2\,u^{1} & 0 & 0 & 0\\ h^{21} c^2 -u^{1}\,u^{2} & u^{2} & u^{1} & 0 & 0\\ h^{31} c^2 -u^{1}\,u^{3} & u^{3} & 0 & u^{1} & 0\\ -\theta \,u^{1} & \theta  & 0 & 0 & u^{1} \end{array}\right) \\
+{\cal J}^2=\left(\begin{array}{ccccc} 0 & 0 & 1 & 0 & 0\\ h^{12} c^2-u^{1}\,u^{2} & u^{2} & u^{1} & 0 & 0\\ h^{22} c^2 - u^{2}\,u^{2} & 0 & 2\,u^{2} & 0 & 0\\ h^{32} c^2 - u^{3}\,u^{2} & 0 & u^{3} & u^{2} & 0\\ -\theta \,u^{2} & 0 & \theta  & 0 & u^{2} \end{array}\right)\\
+{\cal J}^3=\left(\begin{array}{ccccc} 0 & 0 & 0 & 1 & 0\\ h^{13} c^2 -u^{1}\,u^{3} & u^{3} & 0 & u^{1} & 0\\ h^{23} c^2 -u^{2}\,u^{3} & 0 & u^{3} & u^{2} & 0\\ h^{33} c^2 - u^{3}\,u^{3} & 0 & 0 & 2\,u^{3} & 0\\ -\theta \,u^{3} & 0 & 0 & \theta  & u^{3} \end{array}\right)
+\end{align}
+where $c = \sqrt{\left(\frac{\partial P}{\partial\rho}\right)_s} = \sqrt{\frac{\gamma P}{\rho}}$ is the speed of sound, $\gamma$ is the heat capacity ratio for dry air and $s$ is the entropy.
+The five eigenvalues of ${\cal J}^0$ correspond to $u^0=1$. The five eigenvalues of ${\cal J}^1$ are
+\begin{equation}\label{eq:eig_flux1}
+u^1, \, u^1, \,u^1, \,u^1 \pm \sqrt{h^{11}} c,
+\end{equation}
+those of ${\cal J}^2$ are
+\begin{equation}\label{eq:eig_flux2}
+u^2, \, u^2, \, u^2, \, u^2 \pm \sqrt{h^{22}} c
+\end{equation}
+and, for ${\cal J}^3$, one obtain
+\begin{equation}\label{eq:eig_flux3}
+u^3, \, u^3, \, u^3, \, u^3 \pm \sqrt{h^{33}} c.
+\end{equation}
+The intrinsic accoustic wave velocities are deduced from these eigenvalues as $a^1 \equiv \sqrt{h^{11}} c$, $a^2 \equiv \sqrt{h^{22}} c$ and $a^3 \equiv \sqrt{h^{33}} c$.
+
+
+\end{document}

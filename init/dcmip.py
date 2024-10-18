@@ -29,7 +29,9 @@ def dcmip_T11_update_winds(geom, metric, mtrx, param, time=float(0)):
    """
    Test 11 - Deformational Advection
 
-   The 3D deformational flow test is based on the deformational flow test of Nair and Lauritzen (JCP 2010), with a prescribed vertical wind velocity which makes the test truly 3D. An unscaled planet (with scale parameter X = 1) is selected.
+   The 3D deformational flow test is based on the deformational flow test of Nair and Lauritzen (JCP 2010),
+   with a prescribed vertical wind velocity which makes the test truly 3D. An unscaled planet
+   (with scale parameter X = 1) is selected.
 
    The velocities are time dependent and therefore must be updated in the dynamical core.
    """
@@ -438,7 +440,7 @@ def dcmip_steady_state_mountain(geom: CubedSphere, metric, mtrx, param):
    geom.apply_topography(zbot,zbot_itf_i,zbot_itf_j)
    # And regenerate the metric to take this new topography into account
    metric.build_metric()
-   
+
    #-----------------------------------------------------------------------
    #    PS (surface pressure)
    #-----------------------------------------------------------------------
@@ -703,9 +705,9 @@ def dcmip_gravity_wave(geom, metric, mtrx, param):
    w = numpy.zeros_like(u)
 
    ## Set a trivial topography
-   zbot = numpy.zeros(geom.coordVec_latlon.shape[2:])
-   zbot_itf_i = numpy.zeros(geom.coordVec_latlon_itf_i.shape[2:])
-   zbot_itf_j = numpy.zeros(geom.coordVec_latlon_itf_j.shape[2:])
+   zbot = numpy.zeros(geom.coordVec_latlon.shape[2:], like=geom.coordVec_latlon)
+   zbot_itf_i = numpy.zeros(geom.coordVec_latlon_itf_i.shape[2:], like=geom.coordVec_latlon_itf_i)
+   zbot_itf_j = numpy.zeros(geom.coordVec_latlon_itf_j.shape[2:], like=geom.coordVec_latlon_itf_j)
    # Update the geometry object with the new bottom topography
    geom.apply_topography(zbot,zbot_itf_i,zbot_itf_j)
    # And regenerate the metric to take this new topography into account

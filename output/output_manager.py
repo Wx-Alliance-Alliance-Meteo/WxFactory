@@ -1,14 +1,15 @@
 import os
-from typing  import Callable, List, Optional, Tuple, Union
+from typing  import Callable, Optional, Union
 
 from mpi4py import MPI
 import numpy
 
-from common.program_options import Configuration
-from geometry               import Geometry, Metric, Metric3DTopo, DFROperators
+from common.configuration import Configuration
+from geometry               import Cartesian2D, CubedSphere, Geometry, Metric, Metric3DTopo, DFROperators
 from init.initialize        import Topo
-from output.blockstats      import blockstats
+from output.blockstats      import blockstats_cart, blockstats_cs
 from output.solver_stats    import SolverStatsOutput
+from output.state           import save_state
 from precondition.multigrid import Multigrid
 from solvers                import SolverInfo
 
@@ -59,26 +60,31 @@ class OutputManager:
             from output.output_cartesian import output_step
 
             self.output_file_name = lambda step_id: \
-               f'{self.param.output_dir}/bubble_{self.param.case_number}_{step_id:05d}'
+               f'{self.param.output_dir}/bubble_{self.param.case_number}_{step_id:08d}'
             self.step_function = lambda Q, step_id: \
                output_step(Q, self.geometry, self.param, self.output_file_name(step_id))
 
-      if param.stat_freq > 0 and self.geometry.grid_type == 'cubed_sphere':
-         if self.param.equations == 'shallow_water':
-            if self.topo is None:
-               raise ValueError(f'Need a topo for this!')
-            self.blockstat_function = lambda Q, step_id: \
-               blockstats(Q, self.geometry, self.topo, self.metric, self.operators, self.param, step_id)
-         else:
-            print(f'WARNING: Blockstat only implemented for Shallow Water equations')
+      if param.stat_freq > 0:
+         if isinstance(self.geometry, CubedSphere):
+            if self.param.equations == 'shallow_water':
+               if self.topo is None:
+                  raise ValueError(f'Need a topo for this!')
+               self.blockstat_function = lambda Q, step_id: \
+                  blockstats_cs(Q, self.geometry, self.topo, self.metric, self.operators, self.param, step_id)
+            else:
+               if MPI.COMM_WORLD.rank == 0: print(f'WARNING: Blockstat only implemented for Shallow Water equations')
+         elif isinstance(self.geometry, Cartesian2D):
+            self.blockstat_function = lambda Q, step_id: blockstats_cart(Q, self.geometry, step_id)
 
-      state_params = (param.dt, param.nb_elements_horizontal, param.nb_elements_vertical, param.nbsolpts)
+      # Choose a file name hash based on a certain set of parameters:
+      state_params = (param.dt, param.nb_elements_horizontal, param.nb_elements_vertical, param.nbsolpts,
+                      MPI.COMM_WORLD.size)
       self.config_hash = state_params.__hash__() & 0xffffffffffff
 
    def state_file_name(self, step_id: int) -> str:
       """Return the name of the file where to save the state vector for the current problem, for the given timestep."""
       base_name = f'state_vector_{self.config_hash:012x}_{MPI.COMM_WORLD.rank:03d}'
-      return f'{self.param.output_dir}/{base_name}.{step_id:05d}.npy'
+      return f'{self.param.output_dir}/{base_name}.{step_id:08d}.npy'
 
    def step(self, Q: numpy.ndarray, step_id: int) -> None:
       """Output the result of the latest timestep."""
@@ -89,13 +95,14 @@ class OutputManager:
 
       if self.param.save_state_freq > 0:
          if step_id % self.param.save_state_freq == 0:
-            numpy.save(self.state_file_name(step_id), Q)
+            save_state(Q, self.param, self.state_file_name(step_id))
 
       if self.param.stat_freq > 0:
          if step_id % self.param.stat_freq == 0:
             self.blockstat_function(Q, step_id)
 
-   def store_solver_stats(self, total_time: float, simulation_time: float, dt: float, solver_info: SolverInfo, precond: Optional[Multigrid]):
+   def store_solver_stats(self, total_time: float, simulation_time: float, dt: float, solver_info: SolverInfo,
+                          precond: Optional[Multigrid]):
       if self.param.store_solver_stats > 0:
          self.solver_stats_output.write_output(
             total_time, simulation_time, dt, solver_info.total_num_it, solver_info.time, solver_info.flag,

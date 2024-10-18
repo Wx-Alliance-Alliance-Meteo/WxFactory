@@ -1,22 +1,23 @@
 import functools
 from copy         import deepcopy
 from time         import time
-from typing       import Callable, Optional, Union
+from typing       import Callable, List, Optional
 
 from mpi4py import MPI
 import numpy
 
-from common.definitions    import idx_2d_rho, idx_2d_rho_u, idx_2d_rho_w
-from common.interpolation  import Interpolator
-from geometry              import Cartesian2D, CubedSphere, DFROperators
-from init.init_state_vars  import init_state_vars
-from precondition.smoother import kiops_smoothe, exponential as exp_smoothe, rk_smoothing, rk1_smoothing
-from rhs.rhs_selector      import rhs_selector
-from solvers               import fgmres, global_norm, KrylovJacobian, matvec_rat, MatvecOp
-
-# For type hints
-from common.parallel        import DistributedWorld
-from common.program_options import Configuration
+from common.definitions      import idx_2d_rho, idx_2d_rho_u, idx_2d_rho_w, idx_2d_rho_theta, \
+                                    idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_w, idx_rho_theta, \
+                                    cpd, cvd, heat_capacity_ratio, p0, Rd
+from common.device           import Device
+from common.interpolation    import Interpolator
+from common.process_topology import ProcessTopology
+from common.configuration    import Configuration
+from geometry                import Cartesian2D, CubedSphere, DFROperators
+from init.init_state_vars    import init_state_vars
+from precondition.smoother   import KiopsSmoother, ExponentialSmoother, RK1Smoother, RK3Smoother, ARK3Smoother
+from rhs.rhs_selector        import RhsBundle
+from solvers                 import fgmres, global_norm, KrylovJacobian, matvec_rat, MatvecOp
 
 MatvecOperator = Callable[[numpy.ndarray], numpy.ndarray]
 
@@ -34,7 +35,7 @@ class MultigridLevel:
    pseudo_dt:        float
    jacobian:         KrylovJacobian
 
-   def __init__(self, param: Configuration, ptopo: DistributedWorld, discretization: str, nb_elem_horiz: int,
+   def __init__(self, param: Configuration, ptopo: ProcessTopology, device: Device, discretization: str, nb_elem_horiz: int,
                 nb_elem_vert: int, source_order: int, target_order: int, ndim: int):
 
       p = deepcopy(param)
@@ -51,17 +52,16 @@ class MultigridLevel:
 
       self.ndim = ndim
 
-      verbose = self.param.verbose_precond and ptopo.rank == 0
+      verbose = self.param.verbose_precond if MPI.COMM_WORLD.rank == 0 else 0
 
       if verbose > 0:
-         print(
-            f'Grid level! nb_elem_horiz = {nb_elem_horiz}, nb_elem_vert = {nb_elem_vert} '
-            f' discr = {discretization}, source order = {source_order},'
-            f' target order = {target_order}, nbsolpts = {p.nbsolpts}'
+         out_str = \
+            f'Grid level! nb_elem_horiz = {nb_elem_horiz}, nb_elem_vert = {nb_elem_vert} ' \
+            f' discr = {discretization}, source order = {source_order},'                   \
+            f' target order = {target_order}, nbsolpts = {p.nbsolpts}'                     \
             f' num_mg_levels: {p.num_mg_levels}'
-            f' exp radius: {p.exp_smoothe_spectral_radius}'
-            # f' work ratio = {self.work_ratio}'
-            )
+         if p.mg_smoother == 'exp': out_str += f' exp radius: {p.exp_smoothe_spectral_radius}'
+         print(out_str)
 
       # Initialize problem for this level
       if p.grid_type == 'cubed_sphere':
@@ -69,12 +69,12 @@ class MultigridLevel:
                                      p.ztop, ptopo, p)
       elif p.grid_type == 'cartesian2d':
          self.geometry = Cartesian2D((p.x0, p.x1), (p.z0, p.z1), p.nb_elements_horizontal, p.nb_elements_vertical,
-                                     p.nbsolpts)
+                                     p.nbsolpts, p.nb_elements_relief_layer, p.relief_layer_height, p.array_module)
 
-      operators = DFROperators(self.geometry, p.filter_apply, p.filter_order, p.filter_cutoff)
+      operators = DFROperators(self.geometry, p)
 
       field, topo, self.metric = init_state_vars(self.geometry, operators, self.param)
-      self.rhs_operator, _, _ = rhs_selector(self.geometry, operators, self.metric, topo, ptopo, self.param)
+      self.rhs = RhsBundle(self.geometry, operators, self.metric, topo, ptopo, self.param, field.shape, device)
       if verbose > 0: print(f'field shape: {field.shape}')
       self.shape = field.shape
       self.dtype = field.dtype
@@ -89,7 +89,7 @@ class MultigridLevel:
       if target_order > 0:
          interp_method         = 'bilinear' if discretization == 'fv' else 'lagrange'
          self.interpolator     = Interpolator(discretization, source_order, discretization, target_order, interp_method,
-                                              self.param.grid_type, self.ndim, verbose=verbose)
+                                              self.param.grid_type, self.ndim, p, verbose=verbose)
          self.restrict         = lambda vec, op=self.interpolator, sh=field.shape: op(vec.reshape(sh))
          self.restricted_shape = self.restrict(field).shape
          self.prolong          = lambda vec, op=self.interpolator, sh=self.restricted_shape: \
@@ -100,13 +100,10 @@ class MultigridLevel:
 
       self.pre_smoothe = lambda A, b, x: x
       if param.mg_smoother == 'kiops':
-         self.pre_smoothe = functools.partial(kiops_smoothe, real_dt=param.dt, dt_factor=param.kiops_dt_factor)
+         self.pre_smoothe = KiopsSmoother(param.dt, param.kiops_dt_factor)
       elif param.mg_smoother == 'exp':
-         # self.smoothe[level] = functools.partial(exp_smoothe, target_spectral_radius=4, global_dt=param.dt, niter=6)
-         self.pre_smoothe = functools.partial(exp_smoothe,
-                                       target_spectral_radius=self.param.exp_smoothe_spectral_radius,
-                                       global_dt=param.dt,
-                                       niter=self.param.exp_smoothe_nb_iter)
+         self.pre_smoothe = ExponentialSmoother(self.param.exp_smoothe_nb_iter, self.param.exp_smoothe_spectral_radius,
+                                                param.dt)
          if verbose > 0: print(f'spectral radius for level = {self.param.exp_smoothe_spectral_radius}')
 
       self.post_smoothe = self.pre_smoothe
@@ -116,36 +113,90 @@ class MultigridLevel:
          -> tuple[numpy.ndarray, Optional[numpy.ndarray]]:
       """ Initialize structures and data that will be used for preconditioning during the ongoing time step """
 
-      if self.param.mg_smoother in ['erk1', 'erk3']:
+      if self.param.mg_smoother in ['erk1', 'erk3', 'ark3']:
          cfl    = self.param.pseudo_cfl
-         factor = 1.0 / (self.ndim * (2 * self.param.nbsolpts + 1))
-         
-         delta_min = abs(1.- self.geometry.solutionPoints[-1])                                                       \
-                     * min(self.geometry.Δx1, min(self.geometry.Δx2, self.geometry.Δx3))
-         speed_max = numpy.maximum( abs( 343. +  field[idx_2d_rho_u,:,:] /  field[idx_2d_rho,:,:] ),
-                                    abs( 343. +  field[idx_2d_rho_w,:,:] /  field[idx_2d_rho,:,:]) )
+         # factor = 1.0 / (self.ndim * (2 * self.param.nbsolpts + 1))
+         factor = 1.0 / (2 * (2 * self.param.nbsolpts + 1))
 
-         self.pseudo_dt = numpy.amin(delta_min * factor / speed_max) * cfl / dt
-         if self.verbose > 0:
-            print(f'pseudo_dt = {self.pseudo_dt}')
+         min_geo = min(self.geometry.Δx1, min(self.geometry.Δx2, self.geometry.Δx3))
+         if isinstance(self.geometry, Cartesian2D):
+            delta_min = abs(1.- self.geometry.solutionPoints[-1]) * min_geo
+            pressure = p0 * numpy.exp((cpd/cvd) * numpy.log((Rd/p0)*field[idx_2d_rho_theta]))
+            sound_speed = numpy.sqrt(heat_capacity_ratio * pressure / field[idx_2d_rho])
+
+            speed_x = sound_speed +  abs(field[idx_2d_rho_u] /  field[idx_2d_rho])
+            speed_z = sound_speed +  abs(field[idx_2d_rho_w] /  field[idx_2d_rho])
+            speed_max = numpy.maximum(speed_x, speed_z)
+
+         elif isinstance(self.geometry, CubedSphere):
+            pressure = p0 * numpy.exp((cpd/cvd) * numpy.log((Rd/p0)*field[idx_rho_theta]))
+            sound_speed = numpy.sqrt(heat_capacity_ratio * pressure / field[idx_rho])
+            delta_min = abs(1.- self.geometry.solutionPoints[-1])
+
+            sound_x =  numpy.sqrt(self.metric.H_contra_11) * sound_speed
+            sound_y =  numpy.sqrt(self.metric.H_contra_22) * sound_speed
+            sound_z =  numpy.sqrt(self.metric.H_contra_33) * sound_speed
+
+            speed_x = abs(field[idx_rho_u1] / field[idx_rho])
+            speed_y = abs(field[idx_rho_u2] / field[idx_rho])
+            speed_z = abs(field[idx_rho_w]  / field[idx_rho])
+
+            speed_max = numpy.maximum(numpy.maximum(sound_x + speed_x, sound_y + speed_y), sound_z + speed_z)
+
+         else:
+            raise ValueError(f'Unrecognized type for Geometry object')
+
+         tile_shape = (field.shape[0],)
+         for _ in range(field.ndim - 1): tile_shape += (1,)
+         speed_max = numpy.ravel(numpy.tile(speed_max, tile_shape))
+         # speed_max = numpy.amax(speed_max)
+
+         # self.pseudo_dt = numpy.amin(delta_min * factor / speed_max) * cfl / dt
+         self.pseudo_dt = (delta_min * factor / speed_max) * cfl / dt
+
+         # if self.verbose > 1:
+         #    sp_z = numpy.mean(speed_z)
+         #    so_z = numpy.mean(sound_z)
+         #    sp_z_max = numpy.amax(speed_z)
+         #    so_z_max = numpy.amax(sound_z)
+         #    min_dt = numpy.amin(self.pseudo_dt)
+         #    max_dt = numpy.amax(self.pseudo_dt)
+         #    avg_dt = numpy.mean(self.pseudo_dt)
+         #    print(
+         #          # f'factor {abs(1.- self.geometry.solutionPoints[-1])},'
+         #          f' h_33 {numpy.mean(numpy.sqrt(self.metric.H_contra_33)):.4f}'
+         #          f', min {min_geo:.3f}'
+         #          f', delta {delta_min:.3f}'
+         #          f', pseudo_dt = {avg_dt:.2e} ({min_dt:.2e} - {max_dt:.2e})'
+         #          f', speed max = {numpy.amax(speed_max):.2e} (avg {numpy.mean(speed_max):.2e})'
+         #          f', sound_speed = {numpy.mean(sound_speed):.2e} ({numpy.max(sound_speed):.2e})'
+         #          f', speed_z / sound_z = {sp_z / so_z :.3f} ({sp_z_max / so_z_max :.3f})')
+         #    sys.stdout.flush()
+         #    # raise ValueError
+
+         # if self.verbose > 1:
+         #    print(f'pseudo_dt = {self.pseudo_dt}')
 
          if self.param.mg_smoother == 'erk1':
-            self.pre_smoothe  = functools.partial(rk1_smoothing, h=self.pseudo_dt)
+            self.pre_smoothe = RK1Smoother(self.pseudo_dt)
          elif self.param.mg_smoother == 'erk3':
-            self.pre_smoothe  = functools.partial(rk_smoothing, h=self.pseudo_dt)
+            self.pre_smoothe = RK3Smoother(self.pseudo_dt)
+         elif self.param.mg_smoother == 'ark3':
+            self.pre_smoothe = ARK3Smoother(self.pseudo_dt, field, dt, self.rhs)
 
          self.post_smoothe = self.pre_smoothe
 
       ##########################################
       # Matvec function of the system to solve
       if self.param.time_integrator in ['ros2', 'rosexp2', 'partrosexp2', 'strang_epi2_ros2', 'strang_ros2_epi2']:
-         self.matrix_operator = functools.partial(matvec_rat, dt=dt, Q=field, rhs=self.rhs_operator(field),
-                                                  rhs_handle=self.rhs_operator)
+         self.matrix_operator = functools.partial(matvec_rat, dt=dt, Q=field, rhs=self.rhs.full(field),
+                                                  rhs_handle=self.rhs.full)
 
       elif self.param.time_integrator == 'crank_nicolson':
-         cn_fun = CrankNicolsonFunFactory(field, dt, self.rhs_operator)
+         cn_fun = CrankNicolsonFunFactory(field, dt, self.rhs.full)
 
-         # self.cn_fun = lambda Q_plus: (Q_plus - self.fv_field) / dt - 0.5 * ( self.fv_rhs_fun(Q_plus) + self.fv_rhs_fun(self.fv_field) )
+         # self.cn_fun = lambda Q_plus: (Q_plus - self.fv_field) / dt - 0.5 * ( self.fv_rhs_fun(Q_plus) + 
+         #                              self.fv_rhs_fun(self.fv_field) )
          # self.cn_fun = cn_fun
          self.jacobian = KrylovJacobian(numpy.ravel(field), numpy.ravel(cn_fun(field)), cn_fun, fgmres_restart=10,
                                         fgmres_maxiter=1, fgmres_precond=None)
@@ -154,7 +205,7 @@ class MultigridLevel:
       elif self.param.time_integrator == 'bdf2':
          if prev_field is None:
             raise ValueError(f'Need to specify Q_prev when using BDF2')
-         nonlin_fun = Bdf2FunFactory(field, prev_field, dt, self.rhs_operator)
+         nonlin_fun = Bdf2FunFactory(field, prev_field, dt, self.rhs.full)
          self.jacobian = KrylovJacobian(numpy.ravel(field), numpy.ravel(nonlin_fun(field)), nonlin_fun,
                fgmres_restart=10, fgmres_maxiter=1, fgmres_precond=None)
          self.matrix_operator = self.jacobian.op
@@ -170,7 +221,7 @@ class MultigridLevel:
 class Multigrid(MatvecOp):
    levels: dict[int, MultigridLevel]
    initial_interpolate: Callable[[numpy.ndarray], numpy.ndarray]
-   def __init__(self, param, ptopo, discretization, fv_only=False) -> None:
+   def __init__(self, param: Configuration, ptopo: ProcessTopology, device: Device, discretization: str, fv_only: bool=False) -> None:
 
       param = deepcopy(param)
 
@@ -192,7 +243,7 @@ class Multigrid(MatvecOp):
          param.discretization = 'dg'
 
       self.use_solver = param.mg_solve_coarsest
-      self.verbose = param.verbose_precond and ptopo.rank == 0
+      self.verbose = param.verbose_precond if MPI.COMM_WORLD.rank == 0 else 0
 
       # Determine number of multigrid levels
       if discretization == 'fv':
@@ -206,7 +257,7 @@ class Multigrid(MatvecOp):
          raise ValueError(f'Unrecognized discretization "{discretization}"')
 
       param.num_mg_levels = min(param.num_mg_levels, self.max_num_levels)
-      print(f'num_mg_levels: {param.num_mg_levels} (max {self.max_num_levels})')
+      if self.verbose: print(f'num_mg_levels: {param.num_mg_levels} (max {self.max_num_levels})')
 
       # Determine level-specific parameters for each level (order, num elements)
       if discretization == 'fv':
@@ -215,7 +266,8 @@ class Multigrid(MatvecOp):
          # if self.extra_fv_step:
          #    print(f'There is an extra FV step, from order {param.initial_nbsolpts} to {self.orders[0]}')
          #    self.orders = [param.initial_nbsolpts] + self.orders
-         self.elem_counts_hori = [param.nb_elements_horizontal * order // param.initial_nbsolpts for order in self.orders]
+         self.elem_counts_hori = [param.nb_elements_horizontal * order // param.initial_nbsolpts 
+                                  for order in self.orders]
          if self.ndim == 3 or param.grid_type == 'cartesian2d':
             self.elem_counts_vert =  [param.nb_elements_vertical * order for order in self.orders]
          else:
@@ -230,21 +282,22 @@ class Multigrid(MatvecOp):
       if self.verbose:
          print(f'orders: {self.orders}, h elem counts: {self.elem_counts_hori}, v elem counts: {self.elem_counts_vert}')
 
-      def extended_list(list, target_len):
-         diff_len = target_len - len(list)
-         new_list = deepcopy(list)
+      def extended_list(old_list: List, target_len: int):
+         diff_len = target_len - len(old_list)
+         new_list = deepcopy(old_list)
          if diff_len > 0:
-            new_list.extend([list[-1] for _ in range(diff_len)])
+            new_list.extend([old_list[-1] for _ in range(diff_len)])
          elif diff_len < 0:
             for _ in range(-diff_len):
                new_list.pop(-1)
          # new_list.reverse()
          return new_list
 
-      self.spectral_radii = extended_list(param.exp_smoothe_spectral_radii, len(self.orders) - 1)
-      self.exp_nb_iters   = extended_list(param.exp_smoothe_nb_iters, len(self.orders) - 1)
-      if self.verbose:
-         print(f'spectral radii = {self.spectral_radii}, num iterations: {self.exp_nb_iters}')
+      if param.mg_smoother == 'exp':
+         self.spectral_radii = extended_list(param.exp_smoothe_spectral_radii, len(self.orders) - 1)
+         self.exp_nb_iters   = extended_list(param.exp_smoothe_nb_iters, len(self.orders) - 1)
+         if self.verbose:
+            print(f'spectral radii = {self.spectral_radii}, num iterations: {self.exp_nb_iters}')
 
       # Create config set for each level (whether they will be used or not, in case we want to change that at runtime)
       self.levels = {}
@@ -256,9 +309,10 @@ class Multigrid(MatvecOp):
          if self.verbose:
             print(f'Initializing level {i_level}, {discretization}, order {order}->{new_order},'
                   f' elems {nb_elem_hori}x{nb_elem_vert}')
-         param.exp_smoothe_spectral_radius = self.spectral_radii[i_level]
-         param.exp_smoothe_nb_iter = self.exp_nb_iters[i_level]
-         self.levels[i_level] = MultigridLevel(param, ptopo, discretization, nb_elem_hori, nb_elem_vert, order,
+         if param.mg_smoother == 'exp':
+            param.exp_smoothe_spectral_radius = self.spectral_radii[i_level]
+            param.exp_smoothe_nb_iter = self.exp_nb_iters[i_level]
+         self.levels[i_level] = MultigridLevel(param, ptopo, device, discretization, nb_elem_hori, nb_elem_vert, order,
                                                new_order, self.ndim)
 
       super().__init__(self.apply, self.levels[0].dtype, self.levels[0].shape)
@@ -270,11 +324,11 @@ class Multigrid(MatvecOp):
          if fv_only:
             self.initial_interpolator = Interpolator(                                                                \
                'dg', param.initial_nbsolpts, 'fv', param.initial_nbsolpts, param.dg_to_fv_interp, param.grid_type,   \
-               self.ndim, verbose=self.verbose)
+               self.ndim, param, verbose=self.verbose)
          else:
             self.initial_interpolator = Interpolator(                                                                \
                'dg', param.initial_nbsolpts, 'fv', self.max_num_fv_elems, param.dg_to_fv_interp, param.grid_type,    \
-               self.ndim, verbose=self.verbose)
+               self.ndim, param, verbose=self.verbose)
 
          self.big_shape = self.levels[0].shape
 
@@ -328,7 +382,14 @@ class Multigrid(MatvecOp):
 
       return abs_res, rel_res
 
-   def iterate(self, b: numpy.ndarray, x0:Optional[numpy.ndarray] = None, level:Optional[int] = None, num_levels:int = 1, gamma: int = 1, verbose:Optional[bool] = None) -> numpy.ndarray:
+   def iterate(self,
+               b: numpy.ndarray,
+               x0: Optional[numpy.ndarray] = None,
+               level: Optional[int] = None,
+               num_levels: int = 1,
+               gamma: int = 1,
+               verbose: Optional[bool] = None) \
+                  -> numpy.ndarray:
       """
       Do one pass of the multigrid algorithm.
 

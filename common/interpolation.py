@@ -1,11 +1,13 @@
 import numpy
 
-from common.definitions import idx_u1, idx_u2
-from geometry           import gauss_legendre, lagrange_eval, remesh_operator
+from common.array_module    import get_array_module
+from common.definitions     import idx_u1, idx_u2
+from common.configuration import Configuration
+from geometry               import gauss_legendre, lagrange_eval, remesh_operator
 
 basis_point_sets = {}
 
-def eval_single_field_2d(field, elem_interp, result=None):
+def eval_single_field_2d(field, elem_interp, xp, result=None):
 
    new_num_points = elem_interp.shape[0]
    old_num_points = elem_interp.shape[1]
@@ -14,14 +16,14 @@ def eval_single_field_2d(field, elem_interp, result=None):
    nz = field.shape[1] // old_num_points
 
    # Interpolate (vertically) on entire rows of elements at once
-   interp_1 = numpy.empty((nx * new_num_points, nz * old_num_points), dtype=field.dtype)
+   interp_1 = xp.empty_like(field, shape=(nx * new_num_points, nz * old_num_points))
    for i in range(nx):
       interp_1[i * new_num_points:(i + 1) * new_num_points, :] = \
          elem_interp @ field[i * old_num_points:(i + 1) * old_num_points, :]
 
    # Interpolate (horizontally) on columns of interpolated elements
    if result is None:
-      result = numpy.empty((nx * new_num_points, nz * new_num_points), dtype=field.dtype)
+      result = xp.empty_like(field, shape=(nx * new_num_points, nz * new_num_points))
 
    for i in range(nz):
       result[:, i * new_num_points:(i + 1) * new_num_points] = \
@@ -30,16 +32,16 @@ def eval_single_field_2d(field, elem_interp, result=None):
    return result
 
 
-def eval_single_field_3d(field, elem_interp, result=None):
+def eval_single_field_3d(field, elem_interp, xp, result=None):
    new_num_points = elem_interp.shape[0]
    old_num_points = elem_interp.shape[1]
    num_elem_vert = int(field.shape[0] // old_num_points)
    num_elem_horiz = int(field.shape[1] // old_num_points)
 
-   interp_1 = numpy.empty((num_elem_vert * old_num_points, num_elem_horiz * new_num_points, num_elem_horiz * old_num_points), dtype=field.dtype)
-   interp_2 = numpy.empty((num_elem_vert * old_num_points, num_elem_horiz * new_num_points, num_elem_horiz * new_num_points), dtype=field.dtype)
+   interp_1 = xp.empty_like(field, shape=(num_elem_vert * old_num_points, num_elem_horiz * new_num_points, num_elem_horiz * old_num_points))
+   interp_2 = xp.empty_like(field, shape=(num_elem_vert * old_num_points, num_elem_horiz * new_num_points, num_elem_horiz * new_num_points))
    if result is None:
-      result = numpy.empty((num_elem_vert * new_num_points, num_elem_horiz * new_num_points, num_elem_horiz * new_num_points), dtype=field.dtype)
+      result = xp.empty_like(field, shape=(num_elem_vert * new_num_points, num_elem_horiz * new_num_points, num_elem_horiz * new_num_points))
 
    # Interpolate along second dimension (should be the fastest) (horizontal)
    for j in range(num_elem_horiz):
@@ -69,7 +71,7 @@ def eval_single_field_3d(field, elem_interp, result=None):
    return result
 
 
-def get_linear_weights(points, x):
+def get_linear_weights(points, x, xp=numpy):
    result = numpy.zeros_like(points)
 
    if len(result) == 1:
@@ -91,13 +93,11 @@ def get_linear_weights(points, x):
    result[ix]   = alpha
    result[ix+1] = 1.0 - alpha
 
-   return result
+   return xp.array(result)
 
 
 def lagrange_poly(index, order):
-   """
-   Compute the Lagrange basis function_[index] for a polynomial of order [order]
-   """
+   """Compute the Lagrange basis function_[index] for a polynomial of order [order]."""
    points, _, _ = gauss_legendre(order)
 
    def L(x):
@@ -155,14 +155,13 @@ def compute_dg_l2_proj(origin_order, dest_order):
    return numpy.linalg.inv(mass_matrix) @ proj_matrix
 
 
-def get_basis_points(type: str, order: int, include_boundary: bool = False):
-   """
-   Get the basis points of a reference element of a certain order. The domain is [-1, 1]
-   """
-   if type == 'dg':
-      points, _, _ = gauss_legendre(order)
+def get_basis_points(basis_type: str, order: int, include_boundary: bool = False) -> numpy.ndarray:
+   """Get the basis points of a reference element of a certain order. The domain is [-1, 1]."""
+   if basis_type == 'dg':
+      points_sym, _, _ = gauss_legendre(order)
+      points = numpy.array([p.evalf() for p in points_sym])
       if include_boundary: points = numpy.append(-1.0, numpy.append(points, 1.0))
-   elif type == 'fv':
+   elif basis_type == 'fv':
       pts = numpy.linspace(-1.0, 1.0, order + 1)
       points = (pts[:-1] + pts[1:]) / 2.0
       if include_boundary: points = numpy.append(-1.0, numpy.append(points, 1.0))
@@ -181,6 +180,7 @@ class Interpolator:
                 interp_type: str,
                 grid_type: str,
                 ndim: int,
+                param: Configuration,
                 include_boundary: bool = False,
                 verbose: bool = False):
       origin_points = get_basis_points(origin_type, origin_order, include_boundary)
@@ -191,16 +191,19 @@ class Interpolator:
       self.grid_type = grid_type
       self.ndim = ndim
 
+      self.xp = get_array_module(param.array_module)
+      xp = self.xp
+
       # Base interpolation matrix
-      self.elem_interp = None
+      # self.elem_interp = None
       self.reverse_interp = None
       if interp_type == 'lagrange':
-         self.elem_interp    = numpy.array([lagrange_eval(origin_points, x) for x in dest_points])
-         self.reverse_interp = numpy.array([lagrange_eval(dest_points, x) for x in origin_points])
+         self.elem_interp    = xp.array([lagrange_eval(origin_points, x) for x in dest_points])
+         self.reverse_interp = xp.array([lagrange_eval(dest_points, x) for x in origin_points])
       elif interp_type == 'l2-norm':
          self.elem_interp = compute_dg_to_fv_small_projection(origin_order, dest_order, quad_order=3)
       elif interp_type in ['bilinear', 'trilinear']:
-         self.elem_interp = numpy.array([get_linear_weights(origin_points, x) for x in dest_points])
+         self.elem_interp = xp.array([get_linear_weights(origin_points, x) for x in dest_points])
       elif interp_type == 'modal':
          self.elem_interp    = remesh_operator(origin_points, dest_points)
          self.reverse_interp = remesh_operator(dest_points, origin_points)
@@ -210,9 +213,9 @@ class Interpolator:
       # Invert interpolation matrix to get the inverse operation (if needed)
       if self.reverse_interp is None:
          if dest_order == origin_order:
-            self.reverse_interp = numpy.linalg.inv(self.elem_interp)
+            self.reverse_interp = xp.linalg.inv(self.elem_interp)
          else:
-            self.reverse_interp = numpy.linalg.pinv(self.elem_interp)
+            self.reverse_interp = xp.linalg.pinv(self.elem_interp)
 
       # Velocity interpolation matrix ([base matrix] * [some factor]), if needed
       self.velocity_ids            = []
@@ -222,16 +225,16 @@ class Interpolator:
          self.velocity_ids = [idx_u1, idx_u2]
          self.velocity_interp = self.elem_interp.copy()
          if origin_type == 'dg' and dest_type == 'fv':
-            # velocity_interp *= numpy.sqrt(origin_order)
+            # velocity_interp *= xp.sqrt(origin_order)
             self.velocity_interp *= origin_order ** (1./ndim)
          elif dest_order < origin_order:
-            # velocity_interp *= numpy.sqrt(dest_order / origin_order)
+            # velocity_interp *= xp.sqrt(dest_order / origin_order)
             self.velocity_interp *= (dest_order / origin_order) ** (1./ndim)
 
          if dest_order == origin_order:
-            self.velocity_reverse_interp = numpy.linalg.inv(self.velocity_interp)
+            self.velocity_reverse_interp = xp.linalg.inv(self.velocity_interp)
          else:
-            self.velocity_reverse_interp = numpy.linalg.pinv(self.velocity_interp)
+            self.velocity_reverse_interp = xp.linalg.pinv(self.velocity_interp)
 
       # print(f'interpolator: origin type/order: {origin_type}/{origin_order}, dest type/order: {dest_type}/{dest_order}')
       if verbose:
@@ -242,6 +245,7 @@ class Interpolator:
 
    def __call__(self, fields: numpy.ndarray, reverse: bool = False):
 
+      xp = self.xp
       num_fields = fields.shape[0]
 
       # Select interpolation operator for each of the fields in the list
@@ -254,12 +258,14 @@ class Interpolator:
          eval_fct = eval_single_field_2d
          new_size_i = fields.shape[1] * base_interp.shape[0] // base_interp.shape[1]
          new_size_j = fields.shape[2] * base_interp.shape[0] // base_interp.shape[1]
-         result = numpy.empty((num_fields, new_size_i, new_size_j), dtype=fields.dtype)
+         result = xp.empty_like(fields, shape=(num_fields, new_size_i, new_size_j))
       elif self.ndim == 3:
          eval_fct = eval_single_field_3d
          new_size_vert  = fields.shape[1] * base_interp.shape[0] // base_interp.shape[1]
          new_size_horiz = fields.shape[2] * base_interp.shape[0] // base_interp.shape[1]
-         result = numpy.empty((num_fields, new_size_vert, new_size_horiz, new_size_horiz), dtype=fields.dtype)
+         result = xp.empty_like(fields, shape=(num_fields, new_size_vert, new_size_horiz, new_size_horiz))
+      else:
+         raise ValueError(f'We cannot deal with ndim = {self.ndim}')
 
       o_type = self.origin_type if not reverse else self.dest_type
       d_type = self.dest_type   if not reverse else self.origin_type
@@ -267,6 +273,6 @@ class Interpolator:
 
       # Perform the interpolation for each field
       for i in range(num_fields):
-         eval_fct(fields[i], interp_ops[i], result[i])
+         eval_fct(fields[i], interp_ops[i], self.xp, result[i])
 
       return result

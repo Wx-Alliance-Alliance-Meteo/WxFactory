@@ -5,13 +5,7 @@ import numpy
 import scipy.linalg
 #import mpi4py.MPI
 
-from time import time
-
-#def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 1, mmax = 128, reuse_info = True, task1 = False):
-
 def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 10, mmin=10, mmax = 128, reuse_info = False, task1 = False):
-   
-   rank = MPI.COMM_WORLD.Get_rank()
 
    ppo, n = u.shape
    p = ppo - 1
@@ -40,12 +34,13 @@ def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 10, mmin=10, mmax = 128
    """
    if not hasattr(pmex, "static_mem") or reuse_info is False:
       pmex.static_mem = True
-      pmex.suggested_step = τ_end 
+      pmex.suggested_step = τ_end
       pmex.suggested_m = mmax
       m_init = 12 #changing it to 12 because there were too many rejected steps for first steps
       m_opt  = 1
    else:
       m_init = pmex.suggested_m
+      m_opt  = 1
    """
 
    # We only allow m to vary between mmin and mmax
@@ -154,30 +149,27 @@ def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 10, mmin=10, mmax = 128
          MPI.COMM_WORLD.Allreduce([local_vec, MPI.DOUBLE], [global_vec, MPI.DOUBLE])
          global_vec += V[0:j+1, n:n+p] @ V[j-1:j+1, n:n+p].T
 
-         #3. set values for Hessenberg matrix H
-         #H[0:j, j-1] = global_vec[0:j,1]
-
-         #4. Projection with 2-step Gauss-Seidel to the orthogonal complement
+         #3. Projection with 2-step Gauss-Seidel to the orthogonal complement
          # Note: this is done in two steps. (1) matvec and (2) a lower
          # triangular solve
-         # 4a. here we set the values for matrix M, Minv, N
+         # 3a. here we set the values for matrix M, Minv, N
          if (j > 1):
            M[j-1, 0:j-1]    =  global_vec[0:j-1,0]
            N[0:j-1, j-1]    = -global_vec[0:j-1,0]
            Minv[j-1, 0:j-1] = -global_vec[0:j-1,0].T @ Minv[0:j-1, 0:j-1]
 
-         #4b. part 1: the mat-vec
+         #3b. part 1: the mat-vec
          rhs = ( numpy.eye(j) + numpy.matmul(N[0:j, 0:j], Minv[0:j,0:j]) ) @ global_vec[0:j,1]
 
-         #4c. part 2: the lower triangular solve
+         #3c. part 2: the lower triangular solve
          sol = scipy.linalg.solve_triangular(M[0:j, 0:j], rhs, unit_diagonal=True, check_finite=False, overwrite_b=True)
 
-         #5. Orthogonalize
+         #4. Orthogonalize
          V[j, :] -= sol @ V[0:j, :]
 
-         #6. compute norm estimate with quad precision 
-         sum_vec  = numpy.array(global_vec[0:j,1]**2, numpy.float128)
-         sum_sqrd = numpy.array(sum(sum_vec), numpy.float128)
+         #5. compute norm estimate with quad precision
+         sum_vec  = numpy.array(global_vec[0:j,1], numpy.float128)**2
+         sum_sqrd = numpy.sum(sum_vec)
 
          #sum_sqrd = sum(global_vec[0:j,1]**2)
          if (global_vec[-1,1] < sum_sqrd):
@@ -190,12 +182,7 @@ def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 10, mmin=10, mmax = 128
          else:
 
            #compute norm estimate in quad precision
-           curr_nrm = numpy.array(numpy.sqrt(global_vec[-1,1] - sum_sqrd), numpy.float128)
-
-           #cast back to double
-           curr_nrm = numpy.array(curr_nrm, numpy.float64)
-
-           #curr_nrm = numpy.sqrt(global_vec[-1,1] - sum_sqrd)
+           curr_nrm = numpy.array(numpy.sqrt(global_vec[-1,1] - sum_sqrd), numpy.float64)
 
          # Happy breakdown
          if curr_nrm < tol:
@@ -293,7 +280,7 @@ def pmex(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 10, mmin=10, mmax = 128
 
          """
          if first_accepted:
-            pmex.suggested_step = min(pmex.suggested_step, τ) 
+            pmex.suggested_step = min(pmex.suggested_step, τ)
             pmex.suggested_m    = min(pmex.suggested_m, m_opt)
             first_accepted = False
          """

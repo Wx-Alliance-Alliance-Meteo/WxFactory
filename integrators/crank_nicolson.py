@@ -5,10 +5,10 @@ from .integrator         import Integrator, SolverInfo
 from solvers             import newton_krylov
 
 class CrankNicolson(Integrator):
-   def __init__(self, rhs, tol, preconditioner=None):
-      super().__init__(preconditioner)
+   def __init__(self, param, rhs, **kwargs):
+      super().__init__(param, **kwargs)
       self.rhs = rhs
-      self.tol = tol
+      self.tol = param.tolerance
 
    def CN_system(self, Q_plus, Q, dt, rhs):
       return (Q_plus - Q) / dt - 0.5 * ( rhs(Q_plus) + rhs(Q) )

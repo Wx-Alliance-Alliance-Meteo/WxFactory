@@ -1,10 +1,12 @@
-The name of the project, GEF, is a French acronym which stands for ***G**EM en **É**léments **F**inis*.  
+# WxFactory
+Research numerical weather model. The name is inspired by [Richardson’s Fantastic Forecast Factory](https://www.emetsoc.org/resources/rff/)
 
-# Requirements
+## Requirements
 
-GEF was built for Python3.  It also requires an MPI implementation.
+WxFactory was built for Python 3.11 (at least).  It also requires an MPI implementation.
 
-## Python packages
+### Python packages
+* Python version at least 3.11
 * `numpy` Scientific tools for Python
 * `scipy` Python-based ecosystem of open-source software for mathematics, science, and engineering
 * `sympy` Python library for symbolic mathematics
@@ -12,61 +14,39 @@ GEF was built for Python3.  It also requires an MPI implementation.
 * `netcdf4` Python/NumPy interface to the netCDF C library (MPI version)
 * `matplotlib` A python plotting library, making publication quality plots
 
-## Other libraries
-* `netcdf4` Library to handle netCDF files. **Must be an MPI version of it**
+### Other libraries
+* `netcdf4` Library to handle netCDF files. There is an MPI version of it, if you want parallel output
 * `sqlite` To be able to store solver stats.
 
-## Optional
-* `mayavi` Visualization toolkit
-* `cartopy` A cartographic python library with matplotlib support for visualisation
-* `tqdm`   Progress bar when generating matrices
-* `more-itertools` For using Bamphi solver
+### Optional
+* `cartopy`  A cartographic python library with matplotlib support for visualisation
+* `tqdm`     Progress bar when generating matrices
+* `snakeviz` A tool for visualizing profiling output
 
 Python packages can be installed with the package management system of your
 Linux distribution or with `pip`.  A few distribution specific instructions
 are given below.
 
-## Ubuntu 18.04
-Here are the commands that need to be executed in order to install the
-dependencies on Ubuntu 18.04:
-```
-pip3 install --user mpi4py
-pip3 install --user PyQt5==5.14.0
-pip3 install --user mayavi
-```
-
-## ArchLinux
-```
-sudo pacman -S python-numpy python-scipy python-mpi4py python-netcdf4-openmpi mayavi python-matplotlib 
-```
-The python-cartopy package can be installed from the AUR.
-
-## Conda
+### Conda
 The necessary packages are available from the conda-forge channel, so it should
 be added to the list of default channels for easier use of the various commands
 ```
 conda config --add channels conda-forge
-conda create -n gef "python>=3.8"
+conda create -n gef "python>=3.11"
 conda activate gef
-conda install numpy scipy sympy mpi4py matplotlib
-# NetCDF stuff (in general):
+conda install numpy scipy sympy mpi4py matplotlib netcdf4
+# On the Science network, we need to use the already-installed MPI library:
+conda install numpy scipy sympy mpi4py matplotlib netcdf4 mpi=*=mpich
+```
+
+To be able to use NetCDF in parallel (for faster writing to disk) [Optional]
+```
 conda install netcdf4=*=mpi*
 ```
 
-To be able to use the system MPI library on Robert/Underhill:
+If you want the visualization capabilities of WxFactory:
 ```
-conda install netcdf4=*=mpi_mpich_* mpich=3.3.*=external_*
-```
-
-If you want the OpenMPI implementation of MPI (on other systems):
-```
-conda install mpi=*=openmpi
-```
-
-If you want the visualization capabilities of GEF (and do not mind a bigger
-conda environment):
-```
-conda install mayavi cartopy
+conda install cartopy
 ```
 
 To visualize profiles from python applications, install `snakeviz`:
@@ -74,21 +54,21 @@ To visualize profiles from python applications, install `snakeviz`:
 conda install snakeviz
 ```
 
-## Running GEF
+## Running WxFactory
 
 ```
 # With the cubed sphere as a grid:
-mpirun -n 6 ./main_gef.py config/case6.ini
+mpirun -n 6 ./WxFactory config/case6.ini
 
 # With the 2D cartesian grid:
-./main_gef.py config/gaussian_bubble.ini
+./WxFactory config/gaussian_bubble.ini
 ```
 
-## Profiling GEF
+## Profiling WxFactory
 
-You can generate an execution profile when running GEF by adding the `--profile` flag to the main command. For example:
+You can generate an execution profile when running WxFactory by adding the `--profile` flag to the main command. For example:
 ```
-mpirun -n 6 python3 ./main_gef.py --profile config/case6.ini
+mpirun -n 6 python3 ./WxFactory --profile config/case6.ini
 ```
 
 This will generate a set of `profile_####.out` files, one for each launched process, that can be viewed with `snakeviz`. _You need to be able to open a browser window from the terminal to use this command_:
@@ -96,8 +76,5 @@ This will generate a set of `profile_####.out` files, one for each launched proc
 snakeviz ./profile_0000.out
 ```
 
-## 2D test cases
-Here is an example of a command to run the model for the André Robert bubble test case:
-```
-python main_bubble.py config/gaussian_bubble.ini
-```
+## If you find this project useful, please cite:
+Gaudreault, S., Charron, M., Dallerit, V., & Tokman, M. (2022). High-order numerical solutions to the shallow-water equations on the rotated cubed-sphere grid. Journal of Computational Physics, 449, 110792. [https://doi.org/10.1016/j.jcp.2021.110792](https://doi.org/10.1016/j.jcp.2021.110792)

@@ -2,7 +2,7 @@ import numpy
 import math
 
 from .cubed_sphere  import CubedSphere
-from .matrices      import DFROperators
+from .operators     import DFROperators
 
 class Metric3DTopo:
    def __init__(self, geom : CubedSphere, matrix: DFROperators):
@@ -20,6 +20,8 @@ class Metric3DTopo:
       # Retrieve geometry and matrix objects
       geom = self.geom
       matrix = self.matrix
+
+      xp = geom.array_module
 
       # Whether computing deep or shallow metric
       deep = self.deep
@@ -72,16 +74,18 @@ class Metric3DTopo:
       height_itf_k = geom.coordVec_gnom_itf_k[2,:,:,:]
 
       # Build the boundary-extensions of h, based on the interface boundaries
-      height_ext_i = numpy.zeros((geom.nk, geom.nj, geom.nb_elements_x1, 2))
-      height_ext_j = numpy.zeros((geom.nk, geom.nb_elements_x2, 2, geom.ni))
-      height_ext_k = numpy.zeros((geom.nb_elements_x3, 2, geom.nj, geom.ni))
-
-      height_ext_i[:,:,:,0] = height_itf_i[:,:,:-1] # Assign the left ("west") boundary of each element
-      height_ext_i[:,:,:,1] = height_itf_i[:,:,1:] # Assign the right ("east") boundary of each element
-      height_ext_j[:,:,0,:] = height_itf_j[:,:-1,:] # Downest ("south") boundary of each element
-      height_ext_j[:,:,1,:] = height_itf_j[:,1:,:] # Uppest ("north") boundary of each element
-      height_ext_k[:,0,:,:] = height_itf_k[:-1,:,:] # Bottom boundary of each element
-      height_ext_k[:,1,:,:] = height_itf_k[1:,:,:] # Top boundary of each element
+      # ext_i shape: (nk, nj, nb_elements_x1, 2)
+      height_ext_i = numpy.stack((height_itf_i[:, :, :-1], # west boundaries
+                                  height_itf_i[:, :, 1:]), # east boundaries
+                                 axis=-1)
+      # ext_j shape: (nk, nb_elements_x2, 2, ni)
+      height_ext_j = numpy.stack((height_itf_j[:, :-1, :], # south boundaries
+                                  height_itf_j[:, 1:, :]), # north boundaries
+                                 axis=-2)
+      # ext_k shape: (nb_elements_x3, 2, nj, ni)
+      height_ext_k = numpy.stack((height_itf_k[:-1, :, :], # bottom boundaries
+                                  height_itf_k[1:, :, :]), # top boundaries
+                                 axis=-3)
 
       dRdx1_int = matrix.comma_i(height_int,height_ext_i,geom)*2/Δx
       dRdx2_int = matrix.comma_j(height_int,height_ext_j,geom)*2/Δy
@@ -91,10 +95,10 @@ class Metric3DTopo:
       # exchange code demands contravariant components, and dRd(...) is covariant.  We can perform the conversion
       # by constructing a (temporary) 2D metric in terms of X and Y only at the interfaces:
 
-      metric_2d_contra_itf_i = numpy.zeros((2,2) + geom.itf_i_shape_3d,dtype=numpy.double)
-      metric_2d_contra_itf_j = numpy.zeros((2,2) + geom.itf_j_shape_3d,dtype=numpy.double)
-      metric_2d_cov_itf_i = numpy.zeros((2,2) + geom.itf_i_shape_3d,dtype=numpy.double)
-      metric_2d_cov_itf_j = numpy.zeros((2,2) + geom.itf_j_shape_3d,dtype=numpy.double)
+      metric_2d_contra_itf_i = xp.zeros((2,2) + geom.itf_i_shape_3d)
+      metric_2d_contra_itf_j = xp.zeros((2,2) + geom.itf_j_shape_3d)
+      metric_2d_cov_itf_i = xp.zeros((2,2) + geom.itf_i_shape_3d)
+      metric_2d_cov_itf_j = xp.zeros((2,2) + geom.itf_j_shape_3d)
 
       for (metric_contra, metric_cov, X, Y) in zip((metric_2d_contra_itf_i, metric_2d_contra_itf_j),
                                                    (metric_2d_cov_itf_i, metric_2d_cov_itf_j),
@@ -114,14 +118,14 @@ class Metric3DTopo:
       # Arrays for boundary info:  arrays for parallel exchange have a different shape than the 'natural' extrapolation,
       # in order for the MPI exchange to occur with contiguous subarrays.
 
-      exch_itf_i = numpy.zeros((3,geom.nk,geom.nb_elements_x1+2,2,geom.nj),dtype=numpy.double)
-      exch_itf_j = numpy.zeros((3,geom.nk,geom.nb_elements_x2+2,2,geom.ni),dtype=numpy.double)
+      exch_itf_i = xp.zeros((3,geom.nk,geom.nb_elements_x1+2,2,geom.nj))
+      exch_itf_j = xp.zeros((3,geom.nk,geom.nb_elements_x2+2,2,geom.ni))
 
       # Perform extrapolation.  Extrapolation in i and j will be written to arrays for exchange, but k does not
       # require an exchange; we can average directly and will handle this afterwards
-      dRdx1_itf_k = numpy.empty_like(R_itf_k)
-      dRdx2_itf_k = numpy.empty_like(R_itf_k)
-      dRdeta_itf_k = numpy.empty_like(R_itf_k)
+      dRdx1_itf_k = xp.empty_like(R_itf_k)
+      dRdx2_itf_k = xp.empty_like(R_itf_k)
+      dRdeta_itf_k = xp.empty_like(R_itf_k)
 
       # Extrapolate the interior values to each edge
       dRdx1_extrap_i = matrix.extrapolate_i(dRdx1_int, geom) # Output dims: (nk,nj,nel_x,2)
@@ -185,12 +189,12 @@ class Metric3DTopo:
          exch_itf_j[:,:,-1,0,:] = exch_itf_j[:,:,-2,1,:]
 
       # Define the averaged interface values
-      dRdx1_itf_i = numpy.empty_like(R_itf_i)
-      dRdx2_itf_i = numpy.empty_like(R_itf_i)
-      dRdeta_itf_i = numpy.empty_like(R_itf_i)
-      dRdx1_itf_j = numpy.empty_like(R_itf_j)
-      dRdx2_itf_j = numpy.empty_like(R_itf_j)
-      dRdeta_itf_j = numpy.empty_like(R_itf_j)
+      dRdx1_itf_i = xp.empty_like(R_itf_i)
+      dRdx2_itf_i = xp.empty_like(R_itf_i)
+      dRdeta_itf_i = xp.empty_like(R_itf_i)
+      dRdx1_itf_j = xp.empty_like(R_itf_j)
+      dRdx2_itf_j = xp.empty_like(R_itf_j)
+      dRdeta_itf_j = xp.empty_like(R_itf_j)
 
       # i-interface values
       for bdy in range(geom.nb_elements_x1+1):
@@ -224,20 +228,20 @@ class Metric3DTopo:
       # Initialize metric arrays
 
       # Covariant space-only metric
-      H_cov = numpy.empty((3,3) + X_int.shape,dtype=numpy.double)
-      H_cov_itf_i = numpy.empty((3,3) + X_itf_i.shape,dtype=numpy.double)
-      H_cov_itf_j = numpy.empty((3,3) + X_itf_j.shape,dtype=numpy.double)
-      H_cov_itf_k = numpy.empty((3,3) + X_itf_k.shape,dtype=numpy.double)
+      H_cov = xp.empty((3,3) + X_int.shape)
+      H_cov_itf_i = xp.empty((3,3) + X_itf_i.shape)
+      H_cov_itf_j = xp.empty((3,3) + X_itf_j.shape)
+      H_cov_itf_k = xp.empty((3,3) + X_itf_k.shape)
 
-      H_contra = numpy.empty((3,3) + X_int.shape,dtype=numpy.double)
-      H_contra_itf_i = numpy.empty((3,3) + X_itf_i.shape,dtype=numpy.double)
-      H_contra_itf_j = numpy.empty((3,3) + X_itf_j.shape,dtype=numpy.double)
-      H_contra_itf_k = numpy.empty((3,3) + X_itf_k.shape,dtype=numpy.double)
+      H_contra = xp.empty((3,3) + X_int.shape)
+      H_contra_itf_i = xp.empty((3,3) + X_itf_i.shape)
+      H_contra_itf_j = xp.empty((3,3) + X_itf_j.shape)
+      H_contra_itf_k = xp.empty((3,3) + X_itf_k.shape)
 
-      sqrtG = numpy.empty_like(X_int)
-      sqrtG_itf_i = numpy.empty_like(X_itf_i)
-      sqrtG_itf_j = numpy.empty_like(X_itf_j)
-      sqrtG_itf_k = numpy.empty_like(X_itf_k)
+      sqrtG = xp.empty_like(X_int)
+      sqrtG_itf_i = xp.empty_like(X_itf_i)
+      sqrtG_itf_j = xp.empty_like(X_itf_j)
+      sqrtG_itf_k = xp.empty_like(X_itf_k)
 
       # Loop over the interior and interface variants of the fields, computing the metric terms
       for (Hcov, Hcontra, rootG, X, Y, R, dRdx1, dRdx2, dRdeta) in \
@@ -255,15 +259,15 @@ class Metric3DTopo:
 
          if (deep):
             Hcov[0,0,:] = (Δx**2/4)*(R**2/del4*(1+X**2)**2*(1+Y**2) + dRdx1**2) # g_11
-            
+
             Hcov[0,1,:] = (Δx*Δy/4)*(-R**2/del4*X*Y*(1+X**2)*(1+Y**2) + dRdx1*dRdx2) # g_12
             Hcov[1,0,:] = Hcov[0,1,:] # g_21 (by symmetry)
-            
+
             Hcov[0,2,:] = Δeta*Δx/4*dRdx1*dRdeta # g_13
             Hcov[2,0,:] = Hcov[0,2,:] # g_31 by symmetry
 
             Hcov[1,1,:] = Δy**2/4*(R**2/del4*(1+X**2)*(1+Y**2)**2 + dRdx2**2) # g_22
-            
+
             Hcov[1,2,:] = Δeta*Δy/4*dRdx2*dRdeta # g_23
             Hcov[2,1,:] = Hcov[1,2,:] # g_32 by symmetry
 
@@ -286,18 +290,18 @@ class Metric3DTopo:
                                           2*dRdx1*dRdx2*X*Y*delsq/(R**2*(1+X**2)*(1+Y**2)) + \
                                           dRdx2**2*delsq/(R**2*(1+Y**2)))/dRdeta**2
 
-            rootG[:] = (Δx/2)*(Δy/2)*(Δeta/2)*R**2*(1+X**2)*(1+Y**2)*numpy.abs(dRdeta)/delsq**(1.5)  
+            rootG[:] = (Δx/2)*(Δy/2)*(Δeta/2)*R**2*(1+X**2)*(1+Y**2)*xp.abs(dRdeta)/delsq**(1.5)  
          else: # Shallow, so all bare R terms become A terms
             Hcov[0,0,:] = (Δx**2/4)*(A**2/del4*(1+X**2)**2*(1+Y**2) + dRdx1**2) # g_11
-            
+
             Hcov[0,1,:] = (Δx*Δy/4)*(-A**2/del4*X*Y*(1+X**2)*(1+Y**2) + dRdx1*dRdx2) # g_12
             Hcov[1,0,:] = Hcov[0,1,:] # g_21 (by symmetry)
-            
+
             Hcov[0,2,:] = Δeta*Δx/4*dRdx1*dRdeta # g_13
             Hcov[2,0,:] = Hcov[0,2,:] # g_31 by symmetry
 
             Hcov[1,1,:] = Δy**2/4*(A**2/del4*(1+X**2)*(1+Y**2)**2 + dRdx2**2) # g_22
-            
+
             Hcov[1,2,:] = Δeta*Δy/4*dRdx2*dRdeta # g_23
             Hcov[2,1,:] = Hcov[1,2,:] # g_32 by symmetry
 
@@ -320,7 +324,7 @@ class Metric3DTopo:
                                           2*dRdx1*dRdx2*X*Y*delsq/(A**2*(1+X**2)*(1+Y**2)) + \
                                           dRdx2**2*delsq/(A**2*(1+Y**2)))/dRdeta**2
 
-            rootG[:] = (Δx/2)*(Δy/2)*(Δeta/2)*A**2*(1+X**2)*(1+Y**2)*numpy.abs(dRdeta)/delsq**(1.5)  
+            rootG[:] = (Δx/2)*(Δy/2)*(Δeta/2)*A**2*(1+X**2)*(1+Y**2)*xp.abs(dRdeta)/delsq**(1.5)  
 
 
       ## Computation of the Christoffel symbols
@@ -398,26 +402,26 @@ class Metric3DTopo:
       # Because we assume the quality of mixed partial derivatives (d^2f/dadb = d^2f/dbda), we need to extend _(i,j,k)
       # for x1, _(j,k) for x2, and only _k for eta.
 
-      dRdx1_ext_i = numpy.zeros((geom.nk, geom.nj, geom.nb_elements_x1, 2))
-      dRdx1_ext_i[:,:,:,0] = dRdx1_itf_i[:,:,:-1] # Assign min-i boundary
-      dRdx1_ext_i[:,:,:,1] = dRdx1_itf_i[:,:,1:]  # Assign max-i boundary
-      dRdx1_ext_j = numpy.zeros((geom.nk, geom.nb_elements_x2, 2, geom.ni))
-      dRdx1_ext_j[:,:,0,:] = dRdx1_itf_j[:,:-1,:] # Assign min-j boundary
-      dRdx1_ext_j[:,:,1,:] = dRdx1_itf_j[:,1:,:]  # Assign max-j boundary
-      dRdx1_ext_k = numpy.zeros((geom.nb_elements_x3, 2, geom.nj, geom.ni))
-      dRdx1_ext_k[:,0,:,:] = dRdx1_itf_k[:-1,:,:] # Assign min-k boundary
-      dRdx1_ext_k[:,1,:,:] = dRdx1_itf_k[1:,:,:]  # Assign max-k boundary
-      
-      dRdx2_ext_j = numpy.zeros((geom.nk, geom.nb_elements_x2, 2, geom.ni))
-      dRdx2_ext_j[:,:,0,:] = dRdx2_itf_j[:,:-1,:] # Assign min-j boundary
-      dRdx2_ext_j[:,:,1,:] = dRdx2_itf_j[:,1:,:]  # Assign max-j boundary
-      dRdx2_ext_k = numpy.zeros((geom.nb_elements_x3, 2, geom.nj, geom.ni))
-      dRdx2_ext_k[:,0,:,:] = dRdx2_itf_k[:-1,:,:] # Assign min-k boundary
-      dRdx2_ext_k[:,1,:,:] = dRdx2_itf_k[1:,:,:]  # Assign max-k boundary
-     
-      dRdeta_ext_k = numpy.zeros((geom.nb_elements_x3, 2, geom.nj, geom.ni))
-      dRdeta_ext_k[:,0,:,:] = dRdeta_itf_k[:-1,:,:] # Assign min-k boundary
-      dRdeta_ext_k[:,1,:,:] = dRdeta_itf_k[1:,:,:]  # Assign max-k boundary
+      dRdx1_ext_i = xp.stack((dRdx1_itf_i[:, :, :-1], # min-i boundary
+                                 dRdx1_itf_i[:, :, 1:]), # max-i boundary
+                                axis=-1)
+      dRdx1_ext_j = xp.stack((dRdx1_itf_j[:, :-1, :], # min-j boundary
+                                 dRdx1_itf_j[:, 1:, :]), # max-j boundary
+                                axis=-2)
+      dRdx1_ext_k = xp.stack((dRdx1_itf_k[:-1, :, :], # min-k boundary
+                                 dRdx1_itf_k[1:, :, :]), # max-k boundary
+                                axis=-3)
+
+      dRdx2_ext_j = xp.stack((dRdx2_itf_j[:, :-1, :], # min-j boundary
+                                 dRdx2_itf_j[:, 1:, :]), # max-j boundary
+                                axis=-2)
+      dRdx2_ext_k = xp.stack((dRdx2_itf_k[:-1, :, :], # min-k boundary
+                                 dRdx2_itf_k[1:, :, :]), # max-k boundary
+                                axis=-3)
+
+      dRdeta_ext_k = xp.stack((dRdeta_itf_k[:-1, :, :], # min-k boundary
+                                  dRdeta_itf_k[1:, :, :]), # max-k boundary
+                                 axis=-3)
 
       # With the extension information, compute the partial derivatives.  We do not need any parallel
       # synchronization here because we only use the Christoffel symbols at element-interior points.
@@ -528,8 +532,9 @@ class Metric3DTopo:
       # Switch to use the numerical formulation of the Christoffel symbol
       numer_christoffel = True
 
+      verbose = False
       if (numer_christoffel):
-         if (True and geom.ptopo.rank == 0):
+         if (verbose and geom.ptopo.rank == 0):
             print('Computing (√g h^{ab})_{,c}')
          grad_sqrtG_metric_contra = matrix.grad(H_contra*sqrtG[numpy.newaxis,numpy.newaxis,:,:,:], 
                                        H_contra_itf_i*sqrtG_itf_i[numpy.newaxis,numpy.newaxis,:,:,:], 
@@ -540,10 +545,10 @@ class Metric3DTopo:
          nj = geom.nj
          nk = geom.nk
 
-         c_rhs = numpy.empty((nk,nj,ni,3,3,3)) # h(i,j,k)^(ab)_(,c)
-         c_lhs = numpy.zeros((nk,nj,ni,3,3,3,3,3,3)) # Γ(i,j,k)^d_{ef} for row (ab,c)
+         c_rhs = xp.empty((nk,nj,ni,3,3,3)) # h(i,j,k)^(ab)_(,c)
+         c_lhs = xp.zeros((nk,nj,ni,3,3,3,3,3,3)) # Γ(i,j,k)^d_{ef} for row (ab,c)
 
-         if (True and geom.ptopo.rank == 0):
+         if (verbose and geom.ptopo.rank == 0):
             print('Assembling linear operator for Γ')
 
          for a in range(3):
@@ -555,13 +560,13 @@ class Metric3DTopo:
                         c_lhs[:,:,:,a,b,c,a,d,c] -= sqrtG[:,:,:]*H_contra[d,b,:,:,:]
                         c_lhs[:,:,:,a,b,c,b,c,d] -= sqrtG[:,:,:]*H_contra[a,d,:,:,:]
                         
-         if (True and geom.ptopo.rank == 0):
+         if (verbose and geom.ptopo.rank == 0):
             print('Solving linear operator for Γ')
          space_christoffel = numpy.linalg.solve(c_lhs.reshape(nk,nj,ni,27,27),c_rhs.reshape(nk,nj,ni,27))
          space_christoffel.shape = (nk,nj,ni,3,3,3)
          space_christoffel = space_christoffel.transpose((3,4,5,0,1,2))
 
-         if (True and geom.ptopo.rank == 0):
+         if (verbose and geom.ptopo.rank == 0):
             print('Copying Γ to destination arrays')
 
 
@@ -588,7 +593,7 @@ class Metric3DTopo:
          self.christoffel_3_23 = space_christoffel[2,1,2,:,:,:].copy()
          self.christoffel_3_33 = space_christoffel[2,2,2,:,:,:].copy()
 
-         if (True and geom.ptopo.rank == 0):
+         if (verbose and geom.ptopo.rank == 0):
             print('Done assembling Γ')
 
       # Assign H_cov and its elements to the object

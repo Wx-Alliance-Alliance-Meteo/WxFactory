@@ -5,13 +5,13 @@ from typing      import Callable
 from mpi4py      import MPI
 import numpy
 
-from common.program_options import Configuration
+from common.configuration import Configuration
 from .integrator            import Integrator, SolverInfo
 from solvers                import kiops, matvec_fun, pmex, pmex_1s, pmex_ne1s, cwy_ne, cwy_1s, cwy_ne1s, icwy_1s, icwy_ne, icwy_ne1s, icwy_neiop, kiops_nest, dcgs2, kiops_nest
 
 class Epi(Integrator):
-   def __init__(self, param: Configuration, order: int, rhs: Callable, init_method=None, init_substeps: int = 1):
-      super().__init__(param, preconditioner=None)
+   def __init__(self, param: Configuration, order: int, rhs: Callable, init_method=None, init_substeps: int = 1, **kwargs):
+      super().__init__(param, preconditioner=None, **kwargs)
       self.rhs = rhs
       self.tol = param.tolerance
       self.krylov_size = 1
@@ -56,11 +56,12 @@ class Epi(Integrator):
       if init_method or self.n_prev == 0:
          self.init_method = init_method
       else:
-         self.init_method = Epi(param, 2, rhs)
+         self.init_method = Epi(param, 2, rhs, **kwargs)
 
       self.init_substeps = init_substeps
 
    def __step__(self, Q: numpy.ndarray, dt: float):
+
       # If dt changes, discard saved value and redo initialization
       mpirank = MPI.COMM_WORLD.Get_rank()
       if self.dt and abs(self.dt - dt) > 1e-10:
@@ -83,7 +84,7 @@ class Epi(Integrator):
 
       def matvec_handle(v): return matvec_fun(v, dt, Q, rhs, self.rhs, self.jacobian_method)
 
-      vec = numpy.zeros((self.max_phi+1, rhs.size))
+      vec = numpy.zeros((self.max_phi+1, rhs.size), like=rhs)
       vec[1,:] = rhs.flatten()
       for i in range(self.n_prev):
          J_deltaQ = matvec_fun(self.previous_Q[i] - Q, 1., Q, rhs, self.rhs, self.jacobian_method)
@@ -209,15 +210,14 @@ class Epi(Integrator):
             print(f'KIOPS NE converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)'
                   f' to a solution with local error {stats[4]:.2e}')
 
-     #----------default: kiops-----------
+      #----------default: kiops-----------
       else:
-
-         phiv, stats = kiops([1], matvec_handle, vec, tol=self.tol, m_init=self.krylov_size, mmin=16, mmax=64, task1=False)
+         phiv, stats = kiops([1], matvec_handle, vec, tol=self.tol, m_init=self.krylov_size, mmin=16, mmax=64, task1=False, device=self.device)
          self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
 
-         if (mpirank == 0):
-            print(f'KIOPS converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)'
-                  f' to a solution with local error {stats[4]:.2e}')
+         if mpirank == 0:
+            print(f'KIOPS converged at iteration {stats[2]} (using {stats[0]} internal substeps and'
+                  f' {stats[1]} rejected expm) to a solution with local error {stats[4]:.2e}')
 
       self.solver_info = SolverInfo(total_num_it = stats[2])
 

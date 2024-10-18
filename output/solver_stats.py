@@ -10,7 +10,7 @@ except ModuleNotFoundError:
    sqlite_available = False
    print(f'No sqlite, won\'t be able to print solver stats')
 
-from common.program_options import Configuration
+from common.configuration import Configuration
 from precondition.multigrid import Multigrid
 
 class Column:
@@ -25,12 +25,13 @@ class ColumnSet:
       self.run_id            = Column('int', -1)
       self.step_id           = Column('int', 0)
       self.dg_order          = Column('int', param.nbsolpts)
-      self.num_elem_h        = Column('int', param.nb_elements_horizontal)
+      self.num_elem_h        = Column('int', param.nb_elements_horizontal_total)
       self.num_elem_v        = Column('int', param.nb_elements_vertical)
       self.initial_dt        = Column('int', param.dt)
       self.dt                = Column('int', param.dt)
-      self.grid_type         = Column('varchar(64)', param.grid_type)
       self.equations         = Column('varchar(64)', param.equations)
+      self.case_number       = Column('int', param.case_number)
+      self.grid_type         = Column('varchar(64)', param.grid_type)
       self.time_integrator   = Column('varchar(64)', param.time_integrator)
       self.solver_tol        = Column('float', param.tolerance)
       self.gmres_restart     = Column('int', param.gmres_restart)
@@ -49,13 +50,30 @@ class ColumnSet:
       self.num_solver_it     = Column('int')
       self.solver_time       = Column('float')
       self.solver_flag       = Column('int')
-      self.smoother_radii    = Column('varchar(128)', str(param.exp_smoothe_spectral_radii))
+
+      default_radii = '' if not hasattr(param, 'exp_smoothe_spectral_radii') else str(param.exp_smoothe_spectral_radii)
+      self.smoother_radii    = Column('varchar(128)', default_radii)
 
       self.exp_radius_0 = Column('float', 0)
       self.exp_radius_1 = Column('float', 0)
       self.exp_radius_2 = Column('float', 0)
       self.exp_radius_3 = Column('float', 0)
       self.exp_radius_4 = Column('float', 0)
+
+      self.num_procs    = Column('int', MPI.COMM_WORLD.size)
+
+      if param.grid_type == 'cartesian2d':
+         self.x0   = Column('float', param.x0)
+         self.x1   = Column('float', param.x1)
+         self.z0   = Column('float', param.z0)
+         self.z1   = Column('float', param.z1)
+         self.ztop = Column('float', 0)
+      elif param.grid_type == 'cubed_sphere':
+         self.x0   = Column('float', 0)
+         self.x1   = Column('float', 0)
+         self.z0   = Column('float', 0)
+         self.z1   = Column('float', 0)
+         self.ztop = Column('float', param.ztop)
 
 
 class SolverStatsOutput:
@@ -178,7 +196,9 @@ class SolverStatsOutput:
       self.columns.solver_time.value      = local_time
       self.columns.solver_flag.value      = flag
 
-      if len(self.param.exp_smoothe_spectral_radii) > 0:
+      if hasattr(self.param, 'exp_smoothe_spectral_radii')  \
+         and len(self.param.exp_smoothe_spectral_radii) > 0 \
+         and precond is not None:
          if len(precond.spectral_radii) > 0: self.columns.exp_radius_0.value = precond.spectral_radii[0]
          if len(precond.spectral_radii) > 1: self.columns.exp_radius_1.value = precond.spectral_radii[1]
          if len(precond.spectral_radii) > 2: self.columns.exp_radius_2.value = precond.spectral_radii[2]
@@ -226,11 +246,11 @@ def _sanitize_params(params: Configuration) -> Configuration:
       new_p.exp_smoothe_spectral_radii = []
       new_p.exp_smoothe_nb_iters = []
    elif new_p.preconditioner in ['p-mg', 'fv-mg']:
-      if new_p.mg_smoother not in ['erk1', 'erk3']:
+      if new_p.mg_smoother in ['kiops', 'exp']:
          new_p.pseudo_cfl = 0.0
-      if new_p.mg_smoother not in ['kiops']:
+      if new_p.mg_smoother in ['erk1', 'erk3', 'ark1', 'exp']:
          new_p.kiops_dt_factor = 0.0
-      if new_p.mg_smoother not in ['exp']:
+      if new_p.mg_smoother in ['erk1', 'erk3', 'ark1', 'kiops']:
          new_p.exp_smoothe_spectral_radii = []
          new_p.exp_smoothe_nb_iters = []
 

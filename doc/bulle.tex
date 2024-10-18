@@ -1,0 +1,405 @@
+\documentclass{article}
+
+\usepackage{algorithm}
+\usepackage{algpseudocodex}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{mathalpha}
+\usepackage{tcolorbox}
+\usepackage{xcolor}
+
+\newcommand{\todo}[1]{\textcolor{blue}{#1}}
+
+\input{symbols_and_acronyms.tex}
+
+\title{GEF RAT-2 time stepping}
+
+\begin{document}
+\maketitle
+
+\section{The Goal}
+
+What we are trying to do is advance the system in time with the following formula:
+\begin{equation}\label{eq:rat2_time_step}
+    \vars_{n+1} = \vars_n + \systemmatlong{n}^{-1} \dt \rhssub{n}
+    \text{,}
+\end{equation}
+where
+\begin{equation}
+    \jacobian_n = \left. \dfrac{\partial\rhs}{\partial\vars} \right|_{\vars_n}
+\end{equation}
+
+From eq.~\ref{eq:rat2_time_step}, we define the system matrix $\systemmat$ as
+\begin{equation}\label{eq:system_mat}
+    \systemmat_n := \systemmatlong{n}
+\end{equation}
+
+In order to do that, we need to solve a linear system
+\begin{equation}\label{eq:system_to_solve}
+    \systemmat_n \unknown_n = \rhssub{n}
+\end{equation}
+\emph{That's what we want to do!}
+
+After that we can simply update the new state with
+\begin{equation}
+    \vars_{n+1} = \vars_n + \dt\unknown_n
+\end{equation}
+
+An outline of the steps we take to solve that problem of eq.~\ref{eq:system_to_solve}:
+\begin{enumerate}
+    \item Use \fgmres{} as an algorithm to solve the problem (with preconditioner) (sec.~\ref{sec:fgmres})
+    \item Within \fgmres, call the preconditioner on every vector in the Krylov space 
+    \item In the preconditioner, convert the discretization to FV (sec.~\ref{sec:finite_volume})
+    \item Call the MG algorithm on the FV vector (sec.~\ref{sec:multigrid})
+    \item Within MG, use a smoother on the input of each level. The smoother solves a pseudo time stepping problem (sec.~\ref{sec:smoother})
+    \item Within the smoother, use a preconditioner on the pseudo time stepping problem
+\end{enumerate}
+
+
+\section{\fgmres}\label{sec:fgmres}
+
+Soving for $x_n$ in Eq.~\ref{eq:system_to_solve} is complicated, so we use an iterative solver, \texttt{FGMRES}.
+For that, we compute the basis of a Krylov space
+$$K_{basis} = \left[\begin{matrix} \krylovstart & \systemmat_n\krylovstart & \systemmat_n^2 \krylovstart & \cdots \end{matrix}\right],$$
+ starting with $\krylovstart$ as the residual given by our first guess
+$\krylovstart = \rhssub{n} - \systemmat_n \vars_{n+1}^{guess}$, where the guess can be just $\bm{0}$.
+
+Since the solver converges slowly with that particular set of vector, we precondition each of them
+with $\gmrespremat^{-1}$, where $\gmrespremat\approx\systemmat$.
+So we get 
+\begin{equation}
+\tilde{K}_{basis} = \left[\begin{matrix}
+    \krylovstart_0 &
+    \systemmat_n\gmrespremat^{-1}\krylovstart_0 &
+    \systemmat_n\gmrespremat^{-1}\krylovstart_1 & \cdots \end{matrix}\right].
+    \text{.}
+\end{equation}
+
+
+\section{Conversion to finite volume}\label{sec:finite_volume}
+
+The \fgmres{} preconditioner starts by converting the input vector into a finite volume discretization. \emph{To be completed later.}
+
+Once converted, we use the multigrid method on the resulting FV vector.
+
+\textbf{Note:} We are using the weak form of the discontinous Galerkin method,
+which at order 1 is equivalent to a FV method, using a Rusanov solver to reconstruct interface fluxes.
+
+
+\section{Multigrid}\label{sec:multigrid}
+
+\begin{algorithm}
+    \caption{Multigrid}\label{alg:multigrid}
+    \begin{algorithmic}[l]
+        \State $L \gets $ number of grid levels
+        \State  $\mgsol_L^0 \gets \bm{0}$ \Comment{Initial guess for $\mgsol_L$}
+        \Procedure{MG}{$\mgin, \mgsol_l^0, l$} \Comment{On first call, $l = L$}
+            \State $ \mgsol_l \gets \smoother(\systemmat_l, \mgin, \mgsol_l^0, \pseudodt_l) $
+                    \Comment {Smoothe}
+            \If{$l > 0$}
+                \State $ \mgres_l \gets \restrict_l (\mgin_l - \systemmat_l\mgsol_l ) $
+                        \Comment{Restrict residual}
+                \State $ \mgsol_{l-1} \gets \bm{0} $ \Comment{Init lower level MG}
+                \For{$i = 1..\gamma$}   \Comment{Using $\gamma = 1$ all the time}
+                    \State $ \mgsol_{l-1} \gets MG(\mgres_l, \mgsol_{l-1}, l - 1) $ \Comment{$\mgres_l$ = ``$\mgin$'' for next grid level}
+                \EndFor
+                \State $ \mgsol_l \gets \mgsol_l + \prolong_l(\mgsol_{l-1}) $ \Comment{Prolong + apply correction}
+            \EndIf
+        \EndProcedure
+    \end{algorithmic}
+\end{algorithm}
+
+\emph{For now when testing, we only perform these steps on the first level, so instead of multigrid, we're basically using the smoother $\smoother$ as a preconditioner}
+
+\section{Smoother}\label{sec:smoother}
+
+\subsection{Smoother problem}
+
+The smoother solves a pseudo time stepping problem 
+\begin{equation}\label{eq:smoother_pseudo_time_step}
+    \dfrac{\partial\smvec}{\partial t^*} = \smootherrhs(\smvec)
+    \text{.}
+\end{equation}
+We use
+\begin{equation}
+    \smootherrhs(\smvec) = \resrhs - \systemmat\smvec
+    \text{,}
+\end{equation}
+where $\resrhs$ is the vector to which we are applying the MG preconditioner (when at the finest MG grid level) and $\smvec$ is the one we are smoothing.
+
+\subsection{Implicit Runge-Kutta}
+
+We do that by using a 3-stage implicit Runge-Kutta scheme:
+\begin{subequations}
+\begin{align}
+    \smvec^{(0)}        &= \smvec_{n} \\
+    \smvec^{(i)}        &= \smvec_{n} + \alpha_i\pseudodt\smprecondmat^{-1}\smootherrhs^{(i-1)}
+            \label{eq:smoother_with_precond} \\
+    \smvec_{n+1}        &= \smvec^{(3)} & \leftarrow \text{ the output}\\
+    \smootherrhs^{(0)}  &= \smootherrhs(\smvec^{(0)}) \\
+    \smootherrhs^{(i)}  &= \beta_i\smootherrhs(\smvec^{(i)}) + (1-\beta_i)\smootherrhs^{(i-1)}
+\end{align}
+\end{subequations}
+where $\smprecondmat$ approximates the approximation $\awmat$ of the jacobian of the implicit system
+\todo{that we should detail at eq.~\ref{eq:smoother_pseudo_time_step}}.
+
+\begin{align}
+    \smprecondmat &\approx \awmat
+\end{align}
+and
+\begin{align}
+    \awmat        &\approx \I + \eta\pseudodt\systemmat
+\end{align}
+where $\eta$ is a parameter.
+
+\subsection{Smoother preconditioner}
+
+We want to apply a preconditioner $\smprecondmat^{-1}$ to $\smootherrhs$
+in eq.~\ref{eq:smoother_with_precond}. This gives rise to a problem
+\begin{equation}
+    \smprecondmat \smprecondsol = \smootherrhs \label{eq:precond_system}
+\end{equation}
+
+We define $\smprecondmat$ as one iteration of the symmetric Gauss-Seidel method:
+\begin{align}
+    \smprecondmat       &= (\diag + \uppermat) \diag^{-1} (\diag + \lowermat) \\
+    \smprecondmat^{-1}  &= (\diag + \lowermat)^{-1} \diag (\diag + \uppermat)^{-1}
+\end{align}
+where $\lowermat$, $\diag$ and $\uppermat$ are respectively the lower triangular,
+diagonal and upper triangular components of $\awmat$:
+\begin{equation}
+    \awmat = \lowermat + \diag + \uppermat
+    \text{.}
+\end{equation}
+On a 2-dimensional structured grid, they are formed of $4 \times 4$ blocks:
+\begin{subequations}\label{eq:lower_upper_diag_blocks}
+\begin{align}
+    \lowermat_{ij}^{(4\times4)} &= + \dfrac{\eta\pseudodt\dt}{2\Delta x^{ij}} \fluxjac^+_{n_{ij}} \label{eq:Lij} 
+    = - \dfrac{\eta\pseudodt\dt}{2\Delta x^{ij}} \fluxjac^+_{n_{ji}}
+    \\
+    \uppermat_{ij}^{(4\times4)} &= + \dfrac{\eta\pseudodt\dt}{2\Delta x^{ij}} \fluxjac^-_{n_{ij}} \\
+    \diag_{ij}^{(4\times4)} &= \I + \eta\pseudodt\I +
+                    \dfrac{\eta\pseudodt\dt}{2}
+                     \left[ \sum_{j \in N_i^+} \dfrac{\fluxjac^+_{n_i}}{\Delta x^{ij}}
+                    - \sum_{j \in N_i^-} \dfrac{\fluxjac^-_{n_i}}{\Delta x^{ij}} \right] \label{eq:Dij}
+                   \text{,}
+\end{align}
+\end{subequations}
+where $\Delta x^{ij}$ is the width of an element along the axis from $i$ to $j$ and $\fluxjac_{n_{ij}}^+$ is the (positive) flux jacobian between these elements.
+
+\subsubsection{Flux jacobian calculation}
+For a certain element, we use
+\begin{align}
+    \fluxjac^+ &= \elemevecr \elemeval^+ \elemevecl \\
+    \fluxjac^- &= \elemevecr \elemeval^- \elemevecl 
+    \text{,}
+\end{align}
+where
+\begin{equation}
+    \elemjac = \elemevecr\elemeval\elemevecl
+\end{equation}
+(see appendix~\ref{app:flux_jacobian}).
+The indices for the direction (either $x^1$ or $x^3$) of the flux are omitted here.
+We define $\elemeval^+$ to be $\elemeval$ with all negative values set to $0$, and
+$\elemeval^-$ to be $\elemeval$ with all positive values set to $0$. We also clamp each eigenvalue $\eigenval$ so that it's not too close to zero:
+\begin{equation}
+    |\eigenval| = \dfrac{1}{2}\left(\soundfraction\soundspeed + \dfrac{|\eigenval|^2}{\soundfraction\soundspeed}\right), |\eigenval| \le \soundfraction\soundspeed
+\end{equation}
+where $\soundspeed$ is the speed of sound and $\soundfraction$ is a fraction between $0$ and $1$
+ \todo{(we set it to $0.5$ during tests)}.
+
+For the flux between two elements $i$ and $j$, we use
+\begin{equation}
+    \fluxjac^+_{n_{ij}} = \dfrac{1}{2}\left(\fluxjac^+_{i,n_{ij}} + \fluxjac^+_{j,n_{ij}}\right)
+    \text{,}
+\end{equation}
+where $\fluxjac^+_{i,n_{ij}}$ is the (positive) flux jacobian matrix for element $i$ along the $n_{ij}$ vector, which itself lies along either $x^1$ or $x^3$. So if $i$ and $j$ are neighbors along $x^1$ and $i$ comes before $j$ on that axis, we get
+\begin{equation}
+    \fluxjac^+_{n_{ij}} = \dfrac{1}{2}\left(\fluxjac^+_{i,(1)} + \fluxjac^+_{j,(1)}\right)
+    \text{.}
+\end{equation}
+If, instead, $j$ comes before $i$ on that axis, we get
+\begin{align}
+    \fluxjac^+_{n_{ij}} &= -\dfrac{1}{2}\left(\fluxjac^+_{i,(1)} + \fluxjac^+_{j,(1)}\right) \\
+                        &= -\fluxjac^+_{n_{ji}} \\
+    \text{.}
+\end{align}
+
+\subsubsection{Solving the preconditioner system}
+
+We can solve the preconditioner system of eq.~\ref{eq:precond_system} with a series of 
+substitutions:
+\begin{align}
+    \smprecondmat \smprecondsol &= \smootherrhs \\
+    (\diag + \uppermat) \diag^{-1} (\diag + \lowermat) \smprecondsol &= \smootherrhs
+\end{align}
+
+\begin{enumerate}
+    \item $(\diag + \uppermat) \smprecondsol^{(a)} = \smootherrhs$ with backward substitution:
+        \begin{equation}
+            \smprecondsol^{(a)}_i =
+             \diag^{-1}_{ii} \left(\smootherrhs_i - \sum_{j=i+1}^n \uppermat_{ij}\smprecondsol^{(a)}_j \right) \label{eq:backward_step}
+        \end{equation}
+    \item $\diag^{-1} \smprecondsol^{(b)} = \smprecondsol^{(a)}$ directly:
+        \begin{equation}
+            \smprecondsol^{(b)}_i = \diag_{ii}\smprecondsol^{(a)}_i
+        \end{equation}
+    \item $(\diag + \lowermat) \smprecondsol = \smprecondsol^{(b)}$ with forward substitution:
+        \begin{equation}
+            \smprecondsol_i = \diag^{-1}_{ii} \left(
+                \smprecondsol^{(b)}_i - \sum_{j=0}^{i-1} \lowermat_{ij} \smprecondsol_j
+                \right)
+        \end{equation}
+\end{enumerate}
+
+Since $\lowermat_{ij}$ is only non-zero when elements $i$ and $j$ are neighbors,
+eq.~\ref{eq:backward_step} can be reduced to
+\begin{equation}
+    \smprecondsol^{(a)}_i = \diag_{ii}^{-1} \left(
+        \smootherrhs_i - \sum_{j\in N_i^+} \uppermat_{ij} \smprecondsol^{(a)}_j \right)
+    \text{,}
+\end{equation}
+where $N_i^+$ is the set of neighbors of $i$ that are in the positive direction along each of the 2 axes (there are only 2 of them!).
+
+\appendix
+
+\section{Euler equations for the bubble}
+
+\todo{To be completed}
+
+Thermodynamics equation, for potential temperature $\theta$:
+\begin{equation}
+    \dfrac{ \partial \rho \theta}{\partial t } + \dfrac{ \rho \theta u }{\partial x } +  \dfrac{ \rho \theta w }{\partial z } = 0
+\end{equation}
+
+
+According to flux\_jacobian.pdf (from what I understand), we have a variable
+$\vars = \left[\begin{matrix}
+    \rho & \rho u^1 & \rho u^3 & \rho \theta
+\end{matrix}\right]$
+with the following equilibrium equations:
+\begin{align}
+    \dfrac{\partial \rho}{\partial t} + \dfrac{\partial \rho u^1}{\partial x^1} +
+        \dfrac{\partial \rho u^3}{\partial x^3} &= 0 \\
+    \dfrac{\partial \rho u^1}{\partial t} + \dfrac{\partial(\rho u^1u^1 + p)}{\partial x^1}
+        + \dfrac{\partial \rho u^1u^3}{\partial x^3} &= 0 \\
+    \dfrac{\partial \rho u^3}{\partial t} + \dfrac{\partial\rho u^1u^3}{\partial x^1}
+        + \dfrac{\partial (\rho u^3u^3 + p)}{\partial x^3} &= \text{gravity stuff} \\
+    \dfrac{\partial \rho \theta}{\partial t} +
+        \dfrac{\partial \rho u^1 \theta}{\partial x^1} +
+        \dfrac{\partial \rho u^3 \theta}{\partial x^3} &= \text{heat stuff}
+\end{align}
+
+In a more suitable form (for isolating the Jacobian):
+\begin{align}
+    \begin{matrix}
+    \dfrac{\partial \rho}{\partial t} &=
+        & - \dfrac{\partial \rho u^1}{\partial x^1}
+        & - \dfrac{\partial \rho u^3}{\partial x^3} \\
+    \dfrac{\partial \rho u^1}{\partial t} &=
+        & - \dfrac{\partial(\rho u^1u^1 + p)}{\partial x^1}
+        & - \dfrac{\partial \rho u^1u^3}{\partial x^3} \\
+    \dfrac{\partial \rho u^3}{\partial t} &=
+        & - \dfrac{\partial\rho u^1u^3}{\partial x^1}
+        & - \dfrac{\partial(\rho u^3u^3 + p)}{\partial x^3} 
+        & + \cdots \\
+    \dfrac{\partial \rho \theta}{\partial t} &=
+        & - \dfrac{\partial \rho u^1 \theta}{\partial x^1}
+        & - \dfrac{\partial \rho u^3 \theta}{\partial x^3}
+        & + \cdots
+    \end{matrix}
+\end{align}
+
+\todo{Big question: It looks like the Jacobian for the $x^1$ direction would look like}
+\begin{equation}
+    \left( \begin{matrix}
+        u^1 & 1 & 0 & 0 \\
+        \soundspeed^2 - u^1u^1 & u^1 & 0 & 0 \\ 
+        -u^1 u^3 & u^3 & u^1 & 0 \\
+        -\theta u^1 & \theta & 0 & u^1
+    \end{matrix} \right)
+\end{equation}
+rather than eq.~\ref{eq:elem_jac_1}. Also, not sure how to get a positive sign for $c^2$ (given that $p = \frac{\rho c^2}{\gamma}$ \todo{?})
+
+
+\section{Flux jacobian for bubble equation}\label{app:flux_jacobian}
+
+Variables are $\rho$, $u^1$ (horizontal velocity), $u^3$ (vertical velocity, axis where gravity is applied), $\theta$.
+
+Along $x^1$:
+\begin{align}
+    \elemjac_{(1)} &= \left(
+        \begin{matrix}
+            0 & 1 & 0 & 0 \\
+            \soundspeed^2 - u^1u^1 & 2u^1 & 0 & 0 \\ 
+            -u^1 u^3 & u^3 & u^1 & 0 \\
+            -\theta u^1 & \theta & 0 & u^1
+        \end{matrix}
+        \right) \label{eq:elem_jac_1}\\
+    \elemeval_{(1)} &= \left(
+        \begin{matrix}
+            u^1 & 0 & 0 & 0 \\
+            0 & u^1 & 0 & 0 \\
+            0 & 0 & u^1 + \soundspeed & 0 \\
+            0 & 0 & 0 & u^1 - \soundspeed
+        \end{matrix}
+        \right) \\
+    \elemevecr_{(1)} &= \left(
+        \begin{matrix}
+            0 & 0 & \dfrac{1}{\theta} & \dfrac{1}{\theta} \\
+            0 & 0 & \dfrac{u^1 + \soundspeed}{\theta} & \dfrac{u^1 - \soundspeed}{\theta} \\
+            1 & 0 & \dfrac{u^3}{\theta} & \dfrac{u^3}{\theta} \\
+            0 & 1 & 1 & 1
+        \end{matrix}
+        \right) \\
+    \elemevecl_{(1)} &= \left(
+        \begin{matrix}
+            -u^3 & 0 & 1 & 0 \\
+            -\theta & 0 & 0 & 1 \\
+            -\dfrac{\theta(u^1 - \soundspeed)}{2\soundspeed} & \dfrac{\theta}{2\soundspeed} & 0 & 0 \\
+            \dfrac{\theta(u^1 + \soundspeed)}{2\soundspeed} & -\dfrac{\theta}{2\soundspeed} & 0 & 0 
+        \end{matrix}
+        \right)
+\end{align}
+
+Along $x^3$:
+\begin{align}
+    \elemjac_{(3)} &= \left(
+        \begin{matrix}
+            0 & 0 & 1 & 0 \\
+            -u^3u^1 & u^3 & u^1 & 0 \\ 
+            \soundspeed^2 -u^3 u^3 & 0 & 2u^3 & 0 \\
+            -\theta u^3 & 0 & \theta & u^3
+        \end{matrix}
+        \right) \\
+    \elemeval_{(3)} &= \left(
+        \begin{matrix}
+            u^3 & 0 & 0 & 0 \\
+            0 & u^3 & 0 & 0 \\
+            0 & 0 & u^3 + \soundspeed & 0 \\
+            0 & 0 & 0 & u^3 - \soundspeed
+        \end{matrix}
+        \right) \\
+    \elemevecr_{(3)} &= \left(
+        \begin{matrix}
+            0 & 0 & \dfrac{1}{\theta} & \dfrac{1}{\theta} \\
+            1 & 0 & \dfrac{u^1}{\theta} & \dfrac{u^1}{\theta} \\
+            1 & 0 & \dfrac{u^3+\soundspeed}{\theta} & \dfrac{u^3-\soundspeed}{\theta} \\
+            0 & 1 & 1 & 1
+        \end{matrix}
+        \right) \\
+    \elemevecl_{(3)} &= \left(
+        \begin{matrix}
+            -u^1 & 1 & 0 & 0 \\
+            -\theta & 0 & 0 & 1 \\
+            -\dfrac{\theta(u^3 - \soundspeed)}{2\soundspeed} & 0 & \dfrac{\theta}{2\soundspeed} & 0 \\
+            \dfrac{\theta(u^3 + \soundspeed)}{2\soundspeed} & 0 & -\dfrac{\theta}{2\soundspeed} & 0
+        \end{matrix}
+        \right)
+\end{align}
+
+\glsaddallunused
+\printglossaries
+\end{document}

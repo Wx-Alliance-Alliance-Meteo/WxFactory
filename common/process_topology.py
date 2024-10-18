@@ -1,14 +1,15 @@
 import math
+from   typing import Optional
 
-from mpi4py import MPI
+from   mpi4py import MPI
 import numpy
+from   numpy.typing import NDArray
 
-from numpy.core.shape_base import block
+from .definitions import *
+from .device import Device
 
-from common.definitions import *
-
-class DistributedWorld:
-   def __init__(self):
+class ProcessTopology:
+   def __init__(self, device: Device):
 
       # The numbering of the PEs starts at the bottom right. Pannel ranks increase towards the east in the x1 direction and increases towards the north in the x2 direction:
       #
@@ -32,6 +33,8 @@ class DistributedWorld:
       #      |---+---+---+---|
       #      | 0 | 1 | 2 | 3 |
       #      +---+---+---+---+
+
+      self.device = device
 
       self.size = MPI.COMM_WORLD.Get_size()
       self.rank = MPI.COMM_WORLD.Get_rank()
@@ -202,17 +205,25 @@ class DistributedWorld:
       self.get_rows_2d = lambda array, index1, index2: array[index1, index2, :] if array is not None else None
 
 
-   def send_recv_neighbors(self, north_send, south_send, west_send, east_send, flip_dim, sync=True):
+   def send_recv_neighbors(self,
+                           north_send: NDArray,
+                           south_send: NDArray,
+                           west_send: NDArray,
+                           east_send: NDArray,
+                           flip_dim: int,
+                           sync: Optional[bool]=True):
 
-      send_buffer = numpy.empty(((4,) + north_send.shape), dtype=north_send.dtype)
+      xp = self.device.xp
+      send_buffer = xp.empty(((4,) + north_send.shape), dtype=north_send.dtype)
       for do_flip, data, buffer in zip([self.flip_north, self.flip_south, self.flip_west, self.flip_east],
                                        [north_send, south_send, west_send, east_send],
                                        [send_buffer[0], send_buffer[1], send_buffer[2], send_buffer[3]]):
-         buffer[:] = numpy.flip(data, flip_dim) if do_flip else data
+         buffer[:] = xp.flip(data, flip_dim) if do_flip else data
 
-      # receive_buffer = self.comm_dist_graph.neighbor_alltoall(send_buffer)
-      receive_buffer = numpy.empty_like(send_buffer)
+      receive_buffer = xp.empty_like(send_buffer)
+      self.device.synchronize()
       request = self.comm_dist_graph.Ineighbor_alltoall(send_buffer, receive_buffer)
+
       if sync:
          request.Wait()
       return request, receive_buffer[0], receive_buffer[1], receive_buffer[2], receive_buffer[3]
@@ -253,7 +264,7 @@ class DistributedWorld:
       if u3_n is not None: ndim = 3
 
       flip_dim = ndim - 1
-      sendbuf = numpy.empty((4, ndim) + u1_n.shape, dtype=u1_n.dtype)
+      sendbuf = numpy.empty((4, ndim) + u1_n.shape, dtype=u1_n.dtype, like=u1_n)
 
       sendbuf[0, 0, :], sendbuf[0, 1, :] = self.convert_contra_north(u1_n, u2_n, X)
       sendbuf[1, 0, :], sendbuf[1, 1, :] = self.convert_contra_south(u1_s, u2_s, X)
@@ -356,16 +367,23 @@ class DistributedWorld:
 
       return request
 
-   def xchange_Euler_interfaces(self, geom, variables_itf_i, variables_itf_j, blocking=True):
+   def xchange_Euler_interfaces(self,
+                                geom: 'CubedSphere',
+                                variables_itf_i: NDArray,
+                                variables_itf_j: NDArray,
+                                blocking: Optional[bool]=True):
 
-      X = geom.X[0, :]
-      Y = geom.Y[:, 0]
+      xp = self.device.xp
+
+      X = self.device.array(geom.X[0, :]) # TODO these should not be necessary (should already have device arrays in geometry)
+      Y = self.device.array(geom.Y[:, 0])
       flip_dim = 1
       id_first_tracer = 5
 
       init_shape = variables_itf_i.shape
-      send_buffer = numpy.empty((4, init_shape[0], init_shape[1], init_shape[4]), dtype=variables_itf_i.dtype)
-      recv_buffer = numpy.empty_like(send_buffer)
+      dtype = variables_itf_i.dtype
+      send_buffer = xp.empty((4, init_shape[0], init_shape[1], init_shape[4]), dtype=dtype)
+      recv_buffer = xp.empty_like(send_buffer)
 
       var_n = variables_itf_j[:, :, -2, 1, :]
       var_s = variables_itf_j[:, :, 1, 0, :]
@@ -381,15 +399,16 @@ class DistributedWorld:
          [send_buffer[0], send_buffer[1], send_buffer[2], send_buffer[3]]):
 
          for id in [idx_rho, idx_rho_w, idx_rho_theta]:
-            buffer[id, :] = numpy.flip(var[id], flip_dim) if do_flip else var[id]
+            buffer[id, :] = xp.flip(var[id], flip_dim) if do_flip else var[id]
 
          tmp1, tmp2 = convert(var[idx_rho_u1], var[idx_rho_u2], positions)
-         buffer[idx_rho_u1] = numpy.flip(tmp1, flip_dim) if do_flip else tmp1
-         buffer[idx_rho_u2] = numpy.flip(tmp2, flip_dim) if do_flip else tmp2
+         buffer[idx_rho_u1] = xp.flip(tmp1, flip_dim) if do_flip else tmp1
+         buffer[idx_rho_u2] = xp.flip(tmp2, flip_dim) if do_flip else tmp2
 
-         buffer[id_first_tracer:] = numpy.flip(var[id_first_tracer:], flip_dim + 1) if do_flip else var[id_first_tracer:]
+         buffer[id_first_tracer:] = xp.flip(var[id_first_tracer:], flip_dim + 1) if do_flip else var[id_first_tracer:]
 
       # Initiate MPI transfer
+      self.device.synchronize()
       mpi_request = self.comm_dist_graph.Ineighbor_alltoall(send_buffer, recv_buffer)
 
       # Setup request to that data ends up in the right arrays when the wait() function is called

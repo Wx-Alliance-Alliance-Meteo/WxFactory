@@ -1,11 +1,11 @@
 from typing import Callable
 
-from common.program_options import Configuration
+from common.configuration import Configuration
 from .integrator            import Integrator, SolverInfo
 
 class Tvdrk3(Integrator):
-   def __init__(self, param: Configuration, rhs: Callable):
-      super().__init__(param, preconditioner=None)
+   def __init__(self, param: Configuration, rhs: Callable, **kwargs):
+      super().__init__(param, **kwargs)
       self.rhs = rhs
 
    def __step__(self, Q, dt):

@@ -36,7 +36,6 @@ def solid_body_rotation(geom, metric, param):
    return u1, u2
 
 def circular_vortex(geom, metric, param):
-
    if MPI.COMM_WORLD.rank == 0:
       print("--------------------------------------------------------------")
       print("CASE 0 (Tracer): Circular vortex, Nair and Machenhauer,2002   ")

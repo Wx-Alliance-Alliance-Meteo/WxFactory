@@ -3,29 +3,33 @@
 *.swp
 *.swo
 *.code-workspace
+*.lprof
+*.lprof.txt
 
 doc/*.pdf
-doc/*.aux
-doc/*.log
-doc/*.out
-
-jacobian/*
+doc/aux/*
+doc/svg-inkscape/*
+doc/**/*-eps-converted-to.pdf
+doc/**/*.eps
+doc/**/build
+doc/sphinx/source/_autosummary
 
 scripts/**/*.pdf
 
 __pycache__/
 *.py[cod]
 
-results
-results_tanya
-jacobian
+bubble_cliff
 listings
-test_configs
+results*/
 work
+
+scripts/load_env.sh
 
 .vscode
 .idea
 venv
+.env
 
 stdout
 *out.txt
@@ -38,3 +42,5 @@ geom*.dat
 *.db
 *.npy
 *.npz
+
+*.tmp

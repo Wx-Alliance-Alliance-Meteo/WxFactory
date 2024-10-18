@@ -1,6 +1,6 @@
-
-# from .bamphi.bamphi     import bamphi
+"""Different methods to solve a system of equations."""
 from .fgmres            import fgmres
+from .gcrot             import gcrot
 from .kiops             import kiops
 from .kiops_nest        import kiops_nest
 from .global_operations import global_dotprod, global_inf_norm, global_norm

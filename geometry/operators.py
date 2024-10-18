@@ -2,16 +2,33 @@ import numpy
 import numpy.linalg
 import math
 import sympy
+from typing import Optional
+from typing import Self, TypeVar
+
+from numpy.typing import NDArray
 
 from .geometry import Geometry
+from .cubed_sphere import CubedSphere
+from common.definitions     import idx_2d_rho_w
+from common.configuration import Configuration
+from .cartesian_2d_mesh     import Cartesian2D
+from .cubed_sphere          import CubedSphere
+from .geometry              import Geometry
+
+T = TypeVar("T", bound=numpy.generic)
 
 class DFROperators:
-   def __init__(self, grd : Geometry, filter_apply : bool=False, filter_order: int=8, filter_cutoff: float=0.25):
-      '''Initialize the Direct Flux Reconstruction operators
+   '''Set of operators used for Direct Flux Reconstruction.
 
-      This initializes the DFR operators (matrices) based on input grid parameters.  The relevant internal matrices are:
-         * The extrapolation matrices, `extrap_west`, `extrap_east`, `extrap_south`, `extrap_north`, `extrap_down`, and
-           `extrap_up`.
+   The relevant internal matrices are:
+      * The extrapolation matrices, `extrap_west`, `extrap_east`, `extrap_south`, `extrap_north`, `extrap_down`, and
+        `extrap_up`. They are used to compute values at the boundaries of an element.
+      * Differentiation matrices: `diff`, `diff_ext`, `diff_tr`, `diff_solpt`, `diff_solpt_tr`
+      * Correction matrices: `correction`, `correction_tr`.
+   '''
+
+   def __init__(self, grd: Geometry, param: Configuration):
+      '''Initialize the Direct Flux Reconstruction operators (matrices) based on input grid parameters.
 
       Parameters
       ----------
@@ -26,9 +43,12 @@ class DFROperators:
          If applied, at what relative wavenumber (0 < cutoff < 1) to begin applying the filter
       '''
 
+      if param.filter_apply and not isinstance(grd.solutionPoints, numpy.ndarray):
+         raise NotImplementedError("DFROperators cannot form a filter with non-numpy arrays")
+
       # Build Vandermonde matrix to transform the modal representation to the (interior)
       # nodal representation
-      V = numpy.polynomial.legendre.legvander(grd.solutionPoints,grd.nbsolpts-1)
+      V = legvander(grd.solutionPoints,grd.nbsolpts-1)
       # Invert the matrix to transform from interior nodes to modes
       invV = numpy.linalg.inv(V)
 
@@ -38,8 +58,8 @@ class DFROperators:
 
       # Note that extrap_neg and extrap_pos should be vectors, not a one-row matrix; numpy
       # treats the two differently.
-      extrap_neg = (numpy.polynomial.legendre.legvander([-1],grd.nbsolpts-1) @ invV).reshape((-1,))
-      extrap_pos = (numpy.polynomial.legendre.legvander([+1],grd.nbsolpts-1) @ invV).reshape((-1,))
+      extrap_neg = (legvander(numpy.array([-1.], like=V), grd.nbsolpts - 1) @ invV).reshape((-1,))
+      extrap_pos = (legvander(numpy.array([+1.], like=V), grd.nbsolpts - 1) @ invV).reshape((-1,))
 
       self.extrap_west = extrap_neg
       self.extrap_east = extrap_pos
@@ -59,50 +79,80 @@ class DFROperators:
       # self.extrap_up   = lagrangeEval(grd.solutionPoints_sym,  1)
 
       # Create highest-mode filter
-      V = numpy.polynomial.legendre.legvander(grd.solutionPoints,grd.nbsolpts-1) # Transform mode space to grid space
-      invV = inv(V) # Transform grid space to mode space
-      feye = numpy.eye(grd.nbsolpts) # Suppress high mode
-      feye[-1,-1] = 0
+      # V = numpy.polynomial.legendre.legvander(grd.solutionPoints,grd.nbsolpts-1) # Transform mode space to grid space
+      # invV = inv(V) # Transform grid space to mode space
+      # feye = numpy.eye(grd.nbsolpts) # Suppress high mode
+      # feye[-1,-1] = 0
+      # self.highfilter = numpy.asarray(V @ (feye @ invV), like=grd.solutionPoints)
+
+      V = legvander(grd.solutionPoints, grd.nbsolpts - 1)
+      invV = numpy.linalg.inv(V)
+      feye = numpy.eye(grd.nbsolpts, like=grd.solutionPoints)
+      feye[-1, -1] = 0.
       self.highfilter = V @ (feye @ invV)
 
-      if filter_apply:
+      diff = diffmat(grd.extension_sym)
+      diff = numpy.asarray(diff, like=grd.solutionPoints)
+
+      if param.filter_apply:
          self.V = vandermonde(grd.extension)
          self.invV = inv(self.V)
          N = len(grd.extension)-1
-         Nc = math.floor(filter_cutoff * N)
-         self.filter = filter_exponential(N, Nc, filter_order, self.V, self.invV)
-
-      diff = diffmat(grd.extension_sym)
-
-      if filter_apply:
+         Nc = math.floor(param.filter_cutoff * N)
+         self.filter = filter_exponential(N, Nc, param.filter_order, self.V, self.invV)
          self.diff_ext = ( self.filter @ diff ).astype(float)
          self.diff_ext[numpy.abs(self.diff_ext) < 1e-20] = 0.
+
       else:
          self.diff_ext = diff
+
+      self.expfilter_apply = param.expfilter_apply
+      if param.expfilter_apply:
+         if not isinstance(grd, CubedSphere):
+            raise TypeError(f'The 3D filter can only be applied on a CubedSphere geometry')
+         self.expfilter = self.make_filter(param.expfilter_strength, param.expfilter_order, param.expfilter_cutoff,
+                                           grd)
+
+      # Create sponge layer (if desired)
+      self.apply_sponge = param.apply_sponge
+      if param.apply_sponge:
+         if not isinstance(grd, Cartesian2D):
+            raise TypeError(f'The sponge can only be applied on a Cartesian2D geometry')
+         nk, ni = grd.X1.shape
+         zs = param.z1 - param.sponge_zscale  # zs is bottom of layer
+         self.beta= numpy.zeros_like(grd.X1)  # used as our damping profile
+         # Loop over points
+         # TODO use implicit loop (will also work with CUDA)
+         for k in range(nk):
+            for i in range(ni):
+               if (grd.X3[k,i] >= zs):
+                  self.beta[k,i] = self.beta[k,i] + (1.0 / param.sponge_tscale) * \
+                                   numpy.sin((0.5*numpy.pi) * (grd.X3[k,i] - zs) / (param.z1 - zs))**2
 
       # if check_skewcentrosymmetry(self.diff_ext) is False:
       #    print('Something horribly wrong has happened in the creation of the differentiation matrix')
       #    exit(1)
 
       # Force matrices to be in C-contiguous order
-      self.diff_solpt = numpy.ascontiguousarray( self.diff_ext[1:-1, 1:-1] )
-      self.correction = numpy.ascontiguousarray( numpy.column_stack((self.diff_ext[1:-1,0], self.diff_ext[1:-1,-1])) )
+      self.diff_solpt = self.diff_ext[1:-1, 1:-1].copy()
+      self.correction = numpy.column_stack((self.diff_ext[1:-1, 0], self.diff_ext[1:-1, -1]))
 
       self.diff_solpt_tr = self.diff_solpt.T.copy()
       self.correction_tr = self.correction.T.copy()
 
       # Ordinary differentiation matrices (used only in diagnostic calculations)
       self.diff = diffmat(grd.solutionPoints)
+      self.diff = numpy.asarray(self.diff, like=self.diff_solpt)
       self.diff_tr = self.diff.T
 
       self.quad_weights = numpy.outer(grd.glweights, grd.glweights)
 
-   def make_filter(self, alpha : float, order : int, cutoff : float, geom : Geometry):
-      # Build an exponential modal filter as described in Warburton, eqn 5.16
+   def make_filter(self, alpha: float, order: int, cutoff: float, geom: Geometry):
+      '''Build an exponential modal filter as described in Warburton, eqn 5.16.'''
 
       # Scaled mode numbers
-      modes = numpy.arange(geom.nbsolpts) / (geom.nbsolpts-1)
-      Nc = cutoff 
+      modes = numpy.arange(geom.nbsolpts, like=geom.solutionPoints) / (geom.nbsolpts-1)
+      Nc = cutoff
 
       # After applying the filter, each mode is reduced in proportion to the filter order
       # and the mode number relative to nbsolpts, with modes below the cutoff limit untouched
@@ -113,15 +163,38 @@ class DFROperators:
       # Now, use a Vandermonde matrix to transform this modal filter into a nodal form
 
       # mode-to-node operator
-      vander = numpy.polynomial.legendre.legvander(geom.solutionPoints,geom.nbsolpts-1)
+      vander = legvander(geom.solutionPoints, geom.nbsolpts - 1)
 
       # node-to-mode operator
       ivander = numpy.linalg.inv(vander)
 
-      self.expfilter = vander @ numpy.diag(residual_modes) @ ivander
+      return vander @ numpy.diag(residual_modes) @ ivander
 
-   def apply_filter_3d(self,Q : numpy.ndarray, geom : Geometry, metric):
-      # Apply the exponential filter precomputed in expfilter to input fields \sqrt(g)*Q, and return the filtered array
+   def apply_filters(self, Q: numpy.ndarray, geom: Geometry, metric, dt: float):
+      '''Apply the filters that have been activated on the given state vector.'''
+
+      if self.expfilter_apply:
+         Q = self.apply_filter_3d(Q, geom, metric)
+
+      # Apply Sponge (if desired)
+      if self.apply_sponge:
+         nk, ni = geom.X1.shape
+         # Loop over points
+         # TODO use implicit loop (will also work with CUDA)
+         for k in range(nk):
+            for i in range(ni):
+               # !!!!!!!!
+               # !!! Important Note:
+               #     TODO: For 3D, we want to rotate radially, apply sponge, rotate back
+               # !!!!!!!!
+               ww = (1.0 / (1.0 + self.beta[k,i] * dt)) * Q[idx_2d_rho_w, k, i]
+               Q[idx_2d_rho_w, k, i] = ww
+
+      return Q
+
+   def apply_filter_3d(self,Q : numpy.ndarray, geom : CubedSphere, metric):
+      r'''Apply the exponential filter precomputed in expfilter to input fields \sqrt(g)*Q, and return the
+      filtered array.'''
 
       if len(Q.shape) > 3:
          nbvars = Q.shape[0]
@@ -154,28 +227,40 @@ class DFROperators:
       return result
 
       
-   def comma_i(self, field_interior : numpy.ndarray, border_i : numpy.ndarray, grid: Geometry) -> numpy.ndarray :
+   def comma_i(self: Self,
+               field_interior: NDArray[T],
+               border_i: NDArray[T],
+               grid: CubedSphere,
+               out: NDArray[T] | None = None) -> NDArray[T]:
       '''Take a partial derivative along the i-index
-      
+
       This method takes the partial derivative of an input field, potentially consisting of several
       variables, along the `i` index.  This derivative is performed with respect to the canonical element,
       so it contains no corrections for the problem geometry.
 
       Parameters
       ----------
-      field_interior : numpy.ndarray
+      field_interior : NDArray
          The element-interior values of the variable(s) to be differentiated.  This should have
          a shape of `(numvars,npts_z,npts_y,npts_x)`, respecting the prevailing parallel decomposition.
-      border_i : numpy.array
+      border_i : NDArray
          The element-boundary values of the fields to be differentiated, along the i-axis.  This should
          have a shape of `(numvars,npts_z,npts_y,nels_x,2)`, with [:,0] being the leftmost boundary
          (minimal `i`), and [:,1] being the rightmost boundary (maximal `i`)
       grid : Geometry
          Grid-defining class, used here solely to provide the canonical definition of the local
          computational region.
+      out : NDArray | None
+         Destination array for operation. If provided, should be a C-contiguous array with the same shape
+         as `field_interior`.
       '''
-      # Create an empty array for output
-      output = numpy.empty_like(field_interior)
+
+      if out is None:
+         # Create an empty array for output
+         output = numpy.empty_like(field_interior)
+      else:
+         # Create a view of the output so that the shape of the original is not modified
+         output = out.view()
 
       # Create views of the input arrays for reshaping, in order to express the differentiation as
       # a set of matrix multiplications
@@ -187,11 +272,11 @@ class DFROperators:
       # require a memory copy; this implicitly ensures that the input arrays are fully contiguous in
       # memory.
       field_view.shape = (-1, grid.nbsolpts)
-      border_i_view.shape = (-1,2)
+      border_i_view.shape = (-1, 2)
       output.shape = field_view.shape
 
       # Perform the matrix transposition
-      numpy.dot(field_view, self.diff_solpt_tr,out=output)
+      numpy.dot(field_view, self.diff_solpt_tr, out=output)
       #output[:] = field_view @ self.diff_solpt_tr# + border_i_view @ self.correction_tr
       output[:] += border_i_view @ self.correction_tr
       # print(grid.ptopo.rank, field_view[:2,:], '\n', border_i_view[:2,:],'\n',output[:2,:])
@@ -201,7 +286,10 @@ class DFROperators:
 
       return output
 
-   def extrapolate_i(self, field_interior : numpy.ndarray, grid : Geometry) -> numpy.ndarray:
+   def extrapolate_i(self: Self,
+                     field_interior: NDArray[T],
+                     grid: CubedSphere,
+                     out: NDArray[T] | None = None) -> NDArray[T]:
       '''Compute the i-border values along each element of field_interior
 
       This method extrapolates the variables in `field_interior` to the boundary along
@@ -214,7 +302,11 @@ class DFROperators:
          a shape of `(numvars,npts_z,npts_y,npts_x)`, respecting the prevailing parallel decomposition.
       grid : Geometry
          Grid-defining class, used here solely to provide the canonical definition of the local
-         computational region.'''
+         computational region.
+      out : NDArray | None
+         Destination array for operation. If provided, should be a C-contiguous array
+         with shape (numvars, npts_z, npts_y, nels_x, 2).
+      '''
 
       # Array shape for the i-border of a single variable, based on the grid decomposition
       border_shape = (grid.nb_elements_x1,2)
@@ -222,8 +314,13 @@ class DFROperators:
       #nbvars = numpy.prod(field_interior.shape) // (grid.ni)
       nbvars = field_interior.size // grid.ni
 
-      # Create an array for the output
-      border = numpy.empty((nbvars,) + border_shape, dtype=field_interior.dtype)
+      if out is None:
+         # Create an array for the output
+         border = numpy.empty((nbvars,) + border_shape, dtype=field_interior.dtype, like=field_interior)
+      else:
+         # Create a view of the output so that the shape of the original is not modified
+         border = out.view()
+
       # Reshape to the from required for matrix multiplication
       border.shape = (-1,2)
 
@@ -238,7 +335,11 @@ class DFROperators:
       border.shape = tuple(field_interior.shape[0:-1]) + border_shape
       return border
 
-   def comma_j(self, field_interior : numpy.ndarray, border_j : numpy.ndarray, grid : Geometry) -> numpy.ndarray:
+   def comma_j(self: Self,
+               field_interior: NDArray[T],
+               border_j: NDArray[T],
+               grid: CubedSphere,
+               out: NDArray[T] | None = None) -> NDArray[T]:
       '''Take a partial derivative along the j-index
 
       This method takes the partial derivative of an input field, potentially consisting of several
@@ -257,9 +358,18 @@ class DFROperators:
       grid : Geometry
          Grid-defining class, used here solely to provide the canonical definition of the local
          computational region.
+      out : NDArray | None
+         Destination array for operation. If provided, should be a C-contiguous array with the same shape
+         as `field_interior`.
       '''
-      # Create an empty array for output
-      output = numpy.empty_like(field_interior)
+
+      if out is None:
+         # Create an empty array for output
+         output = numpy.empty_like(field_interior)
+      else:
+         # Create a view of the output so that the shape of the original is not modified
+         output = out.view()
+
       # Compute the number of variables we're differentiating, including number of levels
       #nbvars = numpy.prod(output.shape) // (grid.ni * grid.nj)
       nbvars = output.size // (grid.ni * grid.nj)
@@ -285,7 +395,10 @@ class DFROperators:
 
       return output
 
-   def extrapolate_j(self, field_interior : numpy.ndarray, grid : Geometry) -> numpy.ndarray :
+   def extrapolate_j(self: Self,
+                     field_interior: NDArray[T],
+                     grid: CubedSphere,
+                     out: NDArray[T] | None = None) -> NDArray[T]:
       '''Compute the j-border values along each element of field_interior
 
       This method extrapolates the variables in `field_interior` to the boundary along
@@ -299,7 +412,11 @@ class DFROperators:
          To allow for differentiation of 2D objects, npts_z can be one.
       grid : Geometry
          Grid-defining class, used here solely to provide the canonical definition of the local
-         computational region.'''
+         computational region.
+      out : NDArray | None
+         Destination array for operation. If provided, should be a C-contiguous array with
+         shape (numvars, npts_z, nels_y, 2, npts_x).
+      '''
 
       # Array shape for the i-border of a single variable, based on the grid decomposition
       border_shape = (grid.nb_elements_x2,2,
@@ -308,8 +425,12 @@ class DFROperators:
       #nbvars = numpy.prod(field_interior.shape) // (grid.ni * grid.nj)
       nbvars = field_interior.size // (grid.ni * grid.nj)
 
-      # Create an array for the output
-      border = numpy.empty((nbvars,) + border_shape, dtype=field_interior.dtype)
+      if out is None:
+         # Create an array for the output
+         border = numpy.empty((nbvars,) + border_shape, dtype=field_interior.dtype, like=field_interior)
+      else:
+         # Create a view of the output so that the shape of the original is not modified
+         border = out.view()
       # Reshape to the from required for matrix multiplication
       border.shape = (-1,2,grid.ni)
 
@@ -327,9 +448,13 @@ class DFROperators:
       border.shape = tuple(field_interior.shape[0:-2]) + border_shape
       return border
 
-   def comma_k(self, field_interior : numpy.ndarray, border_k : numpy.ndarray, grid : Geometry) -> numpy.ndarray:
+   def comma_k(self: Self,
+               field_interior: NDArray[T],
+               border_k: NDArray[T],
+               grid: CubedSphere,
+               out: NDArray[T] | None = None) -> NDArray[T]:
       '''Take a partial derivative along the k-index
-      
+
       This method takes the partial derivative of an input field, potentially consisting of several
       variables, along the `k` index.  This derivative is performed with respect to the canonical element,
       so it contains no corrections for the problem geometry.
@@ -346,9 +471,18 @@ class DFROperators:
       grid : Geometry
          Grid-defining class, used here solely to provide the canonical definition of the local
          computational region.
+      out : NDArray | None
+         Destination array for operation. If provided, should be a C-contiguous array with the same shape
+         as `field_interior`.
       '''
-      # Create an empty array for output
-      output = numpy.empty_like(field_interior)
+
+      if out is None:
+         # Create an empty array for output
+         output = numpy.empty_like(field_interior)
+      else:
+         # Create a view of the output so that the shape of the original is not modified
+         output = out.view()
+
       # Compute the number of variables we're differentiating
       #nbvars = numpy.prod(output.shape) // (grid.ni * grid.nj * grid.nk)
       nbvars = output.size // (grid.ni * grid.nj * grid.nk)
@@ -374,30 +508,43 @@ class DFROperators:
 
       return output
 
-   def filter_k(self, field_interior, grid : Geometry) -> numpy.ndarray:
+   def filter_k(self: Self,
+                field_interior: NDArray[T],
+                grid: CubedSphere,
+                out: NDArray[T] | None = None) -> NDArray[T]:
       '''Apply a modal filter to remove the highest mode of fiield_interior along the k-dimension
-      
+
       This method applies the pre-computed 'highfilter' matrix to the field-interior points along
       the vertical (k) dimension, independently of other directions.  The typical use case is to
       filter out the highest element mode to avoid an inconsistency in the gravity term of the
-      vertical-only Euler equations, where w_t is proportional to rho*g but rho_t is proportional 
+      vertical-only Euler equations, where w_t is proportional to rho*g but rho_t is proportional
       to w_x.
-      
+
       Parameters:
       -----------
-      field_interior : numpy.ndarray 
+      field_interior : numpy.ndarray
          The element-interior values of the variable(s) to be differentiated.  This should have
          a shape of `(numvars,npts_z,npts_y,npts_x)`, respecting the prevailing parallel decomposition.
       grid : Geometry
          Grid-defining class, used here solely to provide the canonical definition of the local
-         computational region.'''
-         
+         computational region.
+      out : NDArray | None
+         Destination array for operation. If provided, should be a C-contiguous array with the same shape
+         as `field_interior`.
+      '''
+
       # Number of variables we're extending
       #nbvars = numpy.prod(field_interior.shape) // (grid.ni * grid.nj * grid.nk)
       nbvars = field_interior.size // (grid.ni * grid.nj * grid.nk)
       
-      # Output array
-      filtered = numpy.empty( (nbvars*grid.nb_elements_x3,grid.nbsolpts,grid.ni*grid.nj), dtype=field_interior.dtype)
+      if out is None:
+         # Output array
+         filtered = numpy.empty((nbvars * grid.nb_elements_x3, grid.nbsolpts, grid.ni * grid.nj),
+                                dtype=field_interior.dtype, like=field_interior)
+      else:
+         # Create a view of the output so that the shape of the original is not modified
+         filtered = out.view()
+         filtered.shape = (nbvars * grid.nb_elements_x3, grid.nbsolpts, grid.ni * grid.nj)
 
       # Create an array view of the interior, reshaped for matrix multiplication
       field_interior_view = field_interior.view()
@@ -405,10 +552,13 @@ class DFROperators:
 
       filtered[:] = self.highfilter @ field_interior_view
       filtered.shape = field_interior.shape
-      
+
       return filtered
 
-   def extrapolate_k(self, field_interior : numpy.ndarray, grid : Geometry) -> numpy.ndarray:
+   def extrapolate_k(self: Self,
+                     field_interior: NDArray[T],
+                     grid: CubedSphere,
+                     out: NDArray[T] | None = None) -> NDArray[T]:
       '''Compute the k-border values along each element of field_interior
 
       This method extrapolates the variables in `field_interior` to the boundary along
@@ -421,7 +571,11 @@ class DFROperators:
          a shape of `(numvars,npts_z,npts_y,npts_x)`, respecting the prevailing parallel decomposition.
       grid : Geometry
          Grid-defining class, used here solely to provide the canonical definition of the local
-         computational region.'''
+         computational region.
+      out : NDArray | None
+         Destination array for operation. If provided, should be a C-contiguous array
+         with shape (numvars, nels_z, 2, npts_y, npts_x).
+      '''
 
       # Array shape for the i-border of a single variable, based on the grid decomposition
       border_shape = (grid.nb_elements_x3,2,
@@ -431,8 +585,12 @@ class DFROperators:
       #nbvars = numpy.prod(field_interior.shape) // (grid.ni * grid.nj * grid.nk)
       nbvars = field_interior.size // (grid.ni * grid.nj * grid.nk)
 
-      # Create an array for the output
-      border = numpy.empty((nbvars,) + border_shape, dtype=field_interior.dtype)
+      if out is None:
+         # Create an array for the output
+         border = numpy.empty((nbvars,) + border_shape, dtype=field_interior.dtype, like=field_interior)
+      else:
+         # Create a view of the output so that the shape of the original is not modified
+         border = out.view()
       # Reshape to the from required for matrix multiplication
       border.shape = (-1,2,grid.ni*grid.nj)
 
@@ -444,25 +602,27 @@ class DFROperators:
       border[:,0,:] = (self.extrap_down @ field_interior_view)
       border[:,1,:] = (self.extrap_up @ field_interior_view)
 
-      if (nbvars > 1):
+      if nbvars > 1:
          border.shape = (nbvars,) + border_shape
       else:
-         border.shape = border_shape   
+         border.shape = border_shape
       return border
 
    # Take the gradient of one or more variables, with output shape [3,nvars,ni,nj,nk]
-   def grad(self, field : numpy.ndarray,
-                  itf_i : numpy.ndarray,
-                  itf_j : numpy.ndarray,
-                  itf_k : numpy.ndarray,
-                  geom : Geometry) -> numpy.ndarray:
+   def grad(self: Self,
+            field: NDArray[T],
+            itf_i: NDArray[T],
+            itf_j: NDArray[T],
+            itf_k: NDArray[T],
+            geom: CubedSphere,
+            out: NDArray[T] | None = None) -> NDArray[T]:
       ''' Take the gradient of one or more variables, given interface values (not element extensions)
-      
+
       This function takes the gradient (covariant derivative) along i, j, and k of each of the input
       variables.  Unlike comma_{i,j,k}, this function builds the extended element view internally
       based on the provided interface arrays, making the implicit assumption that the field is
       continuous.
-      
+
       Parameters:
       -----------
       field: numpy.ndarray (shape [neqs,nk,nj,ni] or [nk,nj,ni])
@@ -476,6 +636,9 @@ class DFROperators:
          Values along the k-interface
       geom : Geometry
          Geometry object
+      out : NDArray | None
+         Destination array for operation. If provided, should be a C-contiguous array
+         with shape (3, neqs, nk, nj, ni).
       
       Returns:
       -------
@@ -485,58 +648,62 @@ class DFROperators:
       (nk, nj, ni) = field.shape[-3:]
       ff = field.view()
       ff.shape = (-1,nk,nj,ni)
-      
+
       nvar = ff.shape[0]
       nel_i = itf_i.shape[-1]-1
       nel_j = itf_j.shape[-2]-1
       nel_k = itf_k.shape[-3]-1
-      
+
       iti = itf_i.view()
       iti.shape = (nvar,nk,nj,nel_i+1)
-      
+
       itj = itf_j.view()
       itj.shape = (nvar,nk,nel_j+1,ni)
-      
+
       itk = itf_k.view()
       itk.shape = (nvar,nel_k+1,nj,ni)
       
-      ext_i = numpy.zeros((nvar,nk,nj,nel_i,2))
-      ext_j = numpy.zeros((nvar,nk,nel_j,2,ni))
-      ext_k = numpy.zeros((nvar,nel_k,2,nj,ni))
-      
-      ext_i[:,:,:,:,0] = iti[:,:,:,0:-1]
-      ext_i[:,:,:,:,1] = iti[:,:,:,1:]
-      
-      ext_j[:,:,:,0,:] = itj[:,:,0:-1,:]
-      ext_j[:,:,:,1,:] = itj[:,:,1:,:]
-      
-      ext_k[:,:,0,:,:] = itk[:,0:-1,:,:]
-      ext_k[:,:,1,:,:] = itk[:,1:,:,:]
-      
-      output = numpy.zeros((3,nvar,nk,nj,ni))
-      output[0,:,:,:,:] = self.comma_i(ff,ext_i,geom)
-      output[1,:,:,:,:] = self.comma_j(ff,ext_j,geom)
-      output[2,:,:,:,:] = self.comma_k(ff,ext_k,geom)
+      # shape: (nvar, nk, nj, nel_i, 2)
+      ext_i = numpy.stack((iti[:, :, :, :-1],
+                           iti[:, :, :, 1:]),
+                          axis=-1)
+      # shape: (nvar, nk, nel_j, 2, ni)
+      ext_j = numpy.stack((itj[:, :, :-1, :],
+                           itj[:, :, 1:, :]),
+                          axis=-2)
+      # shape: (nvar, nel_k, 2, nj, ni)
+      ext_k = numpy.stack((itk[:, :-1, :, :],
+                           itk[:, 1:, :, :]),
+                          axis=-3)
+
+      if out is None:
+         output = numpy.zeros((3,nvar,nk,nj,ni), like=field)
+      else:
+         output = out.view()
+         output.shape = (3, nvar, nk, nj, ni)
+
+      self.comma_i(ff, ext_i, geom, out=output[0])
+      self.comma_j(ff, ext_j, geom, out=output[1])
+      self.comma_k(ff, ext_k, geom, out=output[2])
       
       output.shape = (3,)+field.shape
-      
+
       return output
 
-
-
 def lagrange_eval(points, newPt):
+   '''Evaluate the Lagrange polynomial of a set of points at a specific point.'''
    M = len(points)
    x = sympy.symbols('x')
    l = numpy.zeros_like(points)
-   if M == 1: 
+   if M == 1:
       l[0] = 1 # Constant
    else:
       for i in range(M):
          l[i] = lagrange_poly(x, M-1, i, points).evalf(subs={x: newPt}, n=20)
    return l.astype(float)
 
-
-def diffmat(points):
+def diffmat(points) -> numpy.ndarray:
+   '''Create a 2D differentiation matrix for the given set of points.'''
    M = len(points)
    D = numpy.zeros((M,M))
 
@@ -550,13 +717,14 @@ def diffmat(points):
 
    return D
 
-
-def lagrange_poly(x,order,i,xi):
+def lagrange_poly(x: sympy.Symbol, order: int, i: int, xi):
+   '''Create a symbolic Lagrange polynomial basis function.'''
    index = list(range(order+1))
    index.pop(i)
    return sympy.prod([(x-xi[j])/(xi[i]-xi[j]) for j in index])
 
 def lebesgue(points):
+   '''Symbolically compute the integral of the Lagrange polynomial that corresponds to the given points.'''
    M = len(points)
    eval_set = numpy.linspace(-1,1,M)
    x = sympy.symbols('x')
@@ -565,10 +733,8 @@ def lebesgue(points):
       l = l + sympy.Abs( lagrange_poly(x,M-1,i,points) )
    return [l.subs(x, eval_set[i]) for i in range(M)]
 
-def vandermonde(x):
-   """
-   Initialize the 1D Vandermonde matrix, \(\mathcal{V}_{ij}=P_j(x_i)\)
-   """
+def vandermonde(x: numpy.ndarray):
+   r"""Initialize the 1D Vandermonde matrix, \(\mathcal{V}_{ij}=P_j(x_i)\)."""
    N = len(x)
 
    V = numpy.zeros((N, N), dtype=object)
@@ -580,19 +746,20 @@ def vandermonde(x):
    return V
 
 
-def remesh_operator(src_points, target_points):
+def remesh_operator(src_points: numpy.ndarray, target_points: numpy.ndarray) -> numpy.ndarray:
+   '''Create an element operator to reduce/prolong a grid.'''
    src_nbsolpts = len(src_points)
    target_nbsolpts = len(target_points)
 
    # Projection
    inv_V_src = inv(vandermonde(src_points))
    V_target = vandermonde(target_points)
-   
+
    modes = numpy.zeros((target_nbsolpts, src_nbsolpts))
    for i in range(min(src_nbsolpts,target_nbsolpts)):
-      modes[i,i] = 1. 
+      modes[i,i] = 1.
    modes[i,i] = 0.5  # damp the highest mode
-   
+
    return ( V_target @ modes @ inv_V_src ).astype(float)
 
 
@@ -642,8 +809,12 @@ def filter_exponential(N, Nc, s, V, invV):
    return F
 
 
-def check_skewcentrosymmetry(m):
-   n,n = m.shape
+def check_skewcentrosymmetry(m: numpy.ndarray) -> bool:
+   '''Verify that the given matrix is skew-centrosymmetric'''
+   if m.ndim != 2:
+      raise numpy.linalg.LinAlgError(f'Input matrix is not 2-dimensional!')
+
+   n, _ = m.shape
    middle_row = 0
 
    if n % 2 == 0:
@@ -653,7 +824,8 @@ def check_skewcentrosymmetry(m):
 
       if m[middle_row-1, middle_row-1] != 0.:
          print()
-         print('When the order is odd, the central entry of a skew-centrosymmetric matrix must be zero.\nActual value is', m[middle_row-1, middle_row-1])
+         print(f'When the order is odd, the central entry of a skew-centrosymmetric matrix must be zero.\n'
+               f'Actual value is {m[middle_row-1, middle_row-1]}')
          return False
 
    for i in range(middle_row):
@@ -667,10 +839,10 @@ def check_skewcentrosymmetry(m):
 
 # Borrowed from Galois:
 # https://github.com/mhostetter/galois
-def inv(A):
+def inv(A: numpy.ndarray) -> numpy.ndarray:
+   '''Compute the inverse of a matrix.'''
    if not (A.ndim == 2 and A.shape[0] == A.shape[1]):
       raise numpy.linalg.LinAlgError(f"Argument `A` must be square, not {A.shape}.")
-   field = type(A)
    n = A.shape[0]
    I = numpy.eye(n, dtype=A.dtype)
 
@@ -683,14 +855,16 @@ def inv(A):
    # The rank is the number of non-zero rows of the row reduced echelon form
    rank = numpy.sum(~numpy.all(AI_rre[:,0:n] == 0, axis=1))
    if not rank == n:
-      raise numpy.linalg.LinAlgError(f"Argument `A` is singular and not invertible because it does not have full rank of {n}, but rank of {rank}.")
+      raise numpy.linalg.LinAlgError(f"Argument `A` is singular and not invertible because it does not"
+                                     f" have full rank of {n}, but rank of {rank}.")
 
    A_inv = AI_rre[:,-n:]
 
    return A_inv
 
 
-def row_reduce(A, ncols=None):
+def row_reduce(A: numpy.ndarray, ncols: Optional[int] = None) -> numpy.ndarray:
+   '''Perform Gaussian elimination using row operations.'''
    if not A.ndim == 2:
       raise ValueError(f"Only 2-D matrices can be converted to reduced row echelon form, not {A.ndim}-D.")
 
@@ -721,3 +895,20 @@ def row_reduce(A, ncols=None):
          break
 
    return A_rre
+
+def legvander(x: NDArray[numpy.float64], deg: int) -> NDArray[numpy.float64]:
+   """
+   NumPy's legvander, slightly modified to work with any array type.
+
+   See: https://numpy.org/doc/stable/reference/generated/numpy.polynomial.legendre.legvander.html#numpy-polynomial-legendre-legvander
+   """
+
+   dims = (deg + 1,) + x.shape
+   v = numpy.empty_like(x, shape=dims)
+
+   v[0] = 1
+   if deg > 0:
+      v[1] = x
+      for i in range(2, deg + 1):
+         v[i] = (v[i - 1] * x * (2*i - 1) - v[i - 2] * (i - 1)) / i
+   return numpy.moveaxis(v, 0, -1)
