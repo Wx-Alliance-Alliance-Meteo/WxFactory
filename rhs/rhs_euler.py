@@ -3,11 +3,11 @@ from numpy.typing import NDArray
 from common.definitions      import idx_rho_u1, idx_rho_u2, idx_rho_w, idx_rho, idx_rho_theta, gravity, p0, Rd, cpd, cvd, heat_capacity_ratio
 from common.device           import CpuDevice, CudaDevice, Device, default_device
 from common.process_topology import ProcessTopology
-from .fluxes                 import rusanov_3d_vert, rusanov_3d_hori_i, rusanov_3d_hori_j
+from .fluxes                 import AUSM_3d_vert, AUSM_3d_hori_i, AUSM_3d_hori_j
 from geometry                import CubedSphere, DFROperators, Metric3DTopo
 from init.dcmip              import dcmip_schar_damping
 from rhs.rhs                 import RHS
-
+import pdb
 rhs_euler_kernels = None
 
 def compute_forcing_1(f, r, u1, u2, w, p, c01, c02, c03, c11, c12, c13, c22, c23, c33, h11, h12, h13, h22, h23, h33):
@@ -223,9 +223,9 @@ class RhsEuler(RHS):
       w_itf_k[:,  0, 1, :] = -w_itf_k[:, 1, 0, :] # Top of bottom element (negative symmetry)
       w_itf_k[:, -1, 1, :] = 0. # Top of top element (unused)
       w_itf_k[:, -1, 0, :] = -w_itf_k[:, -2, 1, :] # Bottom of top boundary element (negative symmetry)
-
+      
       if isinstance(device, CpuDevice):
-         rusanov_3d_vert(variables_itf_k, pressure_itf_k, w_itf_k, metric, nb_elements_vert + 1, advection_only,
+         AUSM_3d_vert(variables_itf_k, pressure_itf_k, w_itf_k, metric, nb_elements_vert + 1, advection_only,
                         flux_x3_itf_k, wflux_adv_x3_itf_k, wflux_pres_x3_itf_k)
       elif isinstance(device, CudaDevice):
          rhs_euler_kernels.compute_flux_k(flux_x3_itf_k, wflux_adv_x3_itf_k, wflux_pres_x3_itf_k,
@@ -248,10 +248,10 @@ class RhsEuler(RHS):
 
       # Riemann solver
       if isinstance(device, CpuDevice):
-         rusanov_3d_hori_i(u1_itf_i, variables_itf_i, pressure_itf_i, metric, nb_elements_hori + 1, advection_only,
+         AUSM_3d_hori_i(u1_itf_i, variables_itf_i, pressure_itf_i, metric, nb_elements_hori + 1, advection_only,
                            flux_x1_itf_i, wflux_adv_x1_itf_i, wflux_pres_x1_itf_i)
 
-         rusanov_3d_hori_j(u2_itf_j, variables_itf_j, pressure_itf_j, metric, nb_elements_hori + 1, advection_only,
+         AUSM_3d_hori_j(u2_itf_j, variables_itf_j, pressure_itf_j, metric, nb_elements_hori + 1, advection_only,
                            flux_x2_itf_j, wflux_adv_x2_itf_j, wflux_pres_x2_itf_j)
       elif isinstance(device, CudaDevice):
          rhs_euler_kernels.compute_flux_i(flux_x1_itf_i, wflux_adv_x1_itf_i, wflux_pres_x1_itf_i,
