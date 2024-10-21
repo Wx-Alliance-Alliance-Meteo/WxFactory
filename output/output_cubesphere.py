@@ -10,7 +10,7 @@ from numpy.typing import NDArray
 
 from common.definitions     import *
 from common.configuration import Configuration
-from geometry               import Geometry, contra2wind_2d, contra2wind_3d, Metric, DFROperators
+from geometry               import Geometry, contra2wind_2d, contra2wind_3d, Metric2D, Metric3DTopo, DFROperators
 from output.diagnostic      import relative_vorticity, potential_vorticity
 
 netcdf_serial = False
@@ -314,7 +314,7 @@ def output_init(geom, param):
          topo[rank,:,:] = prepare(geom.zbot[:,:])
 
 
-def output_netcdf(Q, geom: Geometry, metric: Metric, mtrx: DFROperators, topo, step: int, param: Configuration):
+def output_netcdf(Q, geom: Geometry, metric: Metric2D | Metric3DTopo, mtrx: DFROperators, topo, step: int, param: Configuration):
    """ Writes u,v,eta fields on every nth time step """
    rank = MPI.COMM_WORLD.rank
 

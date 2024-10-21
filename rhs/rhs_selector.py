@@ -7,14 +7,14 @@ from numpy.typing import NDArray
 from common.device             import Device
 from common.configuration      import Configuration
 from common.process_topology   import ProcessTopology
-from geometry                  import Cartesian2D, CubedSphere, DFROperators, Geometry, Metric, \
+from geometry                  import Cartesian2D, CubedSphere3D, DFROperators, Geometry, Metric2D, \
                                       Metric3DTopo
 from init.initialize           import Topo
 from rhs.fluxes                import ausm_2d_fv, upwind_2d_fv, rusanov_2d_fv
 # from rhs.rhs_bubble            import RhsBubble
 # from rhs.rhs_bubble_convective import rhs_bubble as rhs_bubble_convective
 # from rhs.rhs_bubble_implicit   import rhs_bubble_implicit
-# from rhs.rhs_euler             import RhsEuler
+from rhs.rhs_euler             import RhsEuler
 # from rhs.rhs_euler_convective  import rhs_euler_convective
 # from rhs.rhs_euler_fv          import rhs_euler_fv
 # from rhs.rhs_sw                import RhsShallowWater
@@ -29,7 +29,7 @@ class RhsBundle:
    def __init__(self,
                 geom: Geometry,
                 operators: DFROperators,
-                metric: Metric | Metric3DTopo | None,
+                metric: Metric2D | Metric3DTopo | None,
                 topo: Optional[Topo],
                 ptopo: Optional[ProcessTopology],
                 param: Configuration,
@@ -51,13 +51,24 @@ class RhsBundle:
 
          return actual_rhs
 
-      # Determine whether the RHS will be of DFR or FV type
-      rhs_class = get_rhs(param.discretization)
+      if param.equations == "euler" and isinstance(geom, CubedSphere3D):
+         # rhs_functions = {'dg': rhs_euler,
+         #                  'fv': rhs_euler}
 
-      rhs_obj = rhs_class(param.equations + '-' + 'cartesian', geom, 
-         operators, metric, topo, ptopo, param, device)
-      
-      self.full = generate_rhs(rhs_obj)
+         # self.full = generate_rhs(rhs_functions[param.discretization],
+         #                          geom, operators, metric, ptopo, param.nbsolpts, param.nb_elements_horizontal,
+         #                          param.nb_elements_vertical, param.case_number, device=device)
+         self.full = RhsEuler(fields_shape, geom, operators, metric, ptopo, param.nbsolpts, param.nb_elements_horizontal,
+                              param.nb_elements_vertical, param.case_number, device=device)
+
+      else:
+         # Determine whether the RHS will be of DFR or FV type
+         rhs_class = get_rhs(param.discretization)
+
+         rhs_obj = rhs_class(param.equations + '-' + 'cartesian', geom, 
+            operators, metric, topo, ptopo, param, device)
+         
+         self.full = generate_rhs(rhs_obj)
       
       # self.explicit = generate_rhs(
       #    rhs_class, param.equations + '-' + 'cartesian', geom, 
@@ -68,15 +79,6 @@ class RhsBundle:
       #    operators, metric, topo, ptopo, param, device)
 
 
-      # if param.equations == "euler" and isinstance(geom, CubedSphere):
-      #    # rhs_functions = {'dg': rhs_euler,
-      #    #                  'fv': rhs_euler}
-
-      #    # self.full = generate_rhs(rhs_functions[param.discretization],
-      #    #                          geom, operators, metric, ptopo, param.nbsolpts, param.nb_elements_horizontal,
-      #    #                          param.nb_elements_vertical, param.case_number, device=device)
-      #    self.full = RhsEuler(fields_shape, geom, operators, metric, ptopo, param.nbsolpts, param.nb_elements_horizontal,
-      #                         param.nb_elements_vertical, param.case_number, device=device)
       #    self.convective = generate_rhs(rhs_euler_convective, geom, operators, metric, ptopo, param.nbsolpts,
       #                                   param.nb_elements_horizontal, param.nb_elements_vertical, param.case_number)
       #    self.viscous = lambda q: self.full(q) - self.convective(q)

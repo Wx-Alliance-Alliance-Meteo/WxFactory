@@ -290,8 +290,8 @@ class ProcessTopology:
       f_x1_ext[h:-h, h:-h] = f_x1[:, :]
       f_x2_ext[h:-h, h:-h] = f_x2[:, :]
 
-      X = geom.X[0, :]
-      Y = geom.Y[:, 0]
+      X = geom.X_block[0, :]
+      Y = geom.Y_block[:, 0]
 
       request, f_n, f_s, f_w, f_e = self.xchange_simple_vectors(
          X, Y, f_x1[-1, :], f_x2[-1, :], f_x1[0, :], f_x2[0, :], f_x1[:, 0], f_x2[:, 0], f_x1[:, -1], f_x2[:, -1])
@@ -317,8 +317,8 @@ class ProcessTopology:
 
       xp = self.device.xp
 
-      X = self.device.array(geom.X[0, :]) # TODO these should not be necessary (should already have device arrays in geometry)
-      Y = self.device.array(geom.Y[:, 0])
+      X = self.device.array(geom.X_block[0, :]) # TODO these should not be necessary (should already have device arrays in geometry)
+      Y = self.device.array(geom.Y_block[:, 0])
       flip_dim = 1
       id_first_tracer = 5
 
@@ -463,8 +463,8 @@ class ProcessTopology:
             raise ValueError
 
          get_rows = self.get_rows_3d
-         X = geom.X[0, :] # TODO : debug avec niveau 0
-         Y = geom.Y[:, 0]
+         X = geom.X_block[0, :] # TODO : debug avec niveau 0
+         Y = geom.Y_block[:, 0]
 
       else:
          if u3_itf_i is not None:
@@ -472,8 +472,8 @@ class ProcessTopology:
                   f'but you also provide a 3rd component! We will just ignore it.')
 
          get_rows = self.get_rows_2d
-         X = geom.X[0, :]
-         Y = geom.Y[:, 0]
+         X = geom.X_block[0, :]
+         Y = geom.Y_block[:, 0]
 
       # --- Get the right vectors
 

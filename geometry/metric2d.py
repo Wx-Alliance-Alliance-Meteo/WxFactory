@@ -3,7 +3,7 @@ from   mpi4py import MPI
 
 from .cubed_sphere_2d import CubedSphere2D
 
-class Metric:
+class Metric2D:
    '''Metric for a smooth, three-dimensional earthlike cubed-sphere with the shallow atmosphere approximation'''
    def __init__(self, geom: CubedSphere2D):
       # 3D Jacobian, for the cubed-sphere mapping

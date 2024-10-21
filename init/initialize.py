@@ -11,7 +11,7 @@ from init.dcmip              import dcmip_advection_deformation, dcmip_advection
 from init.shallow_water_test import case_galewsky, case_matsuno, case_unsteady_zonal, circular_vortex,         \
                                     williamson_case1, williamson_case2, williamson_case5, williamson_case6
 
-from geometry                import Cartesian2D, CubedSphere, CubedSphere2D
+from geometry                import Cartesian2D, CubedSphere3D, CubedSphere2D
 
 # typing
 from numpy.typing import NDArray
@@ -25,7 +25,7 @@ class Topo:
       self.hsurf_itf_i = hsurf_itf_i
       self.hsurf_itf_j = hsurf_itf_j
 
-def initialize_euler(geom: CubedSphere, metric, mtrx, param):
+def initialize_euler(geom: CubedSphere3D, metric, mtrx, param):
 
    #-------------------------------------------------------------------------|
    # case DCMIP 2012    | Pure advection                                     |

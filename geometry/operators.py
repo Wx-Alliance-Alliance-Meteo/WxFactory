@@ -5,15 +5,15 @@ import sympy
 from typing import Optional
 from typing import Self, TypeVar
 
+from mpi4py       import MPI
 from numpy.typing import NDArray
 
-from .geometry import Geometry
-from .cubed_sphere import CubedSphere
 from common.definitions     import idx_2d_rho_w
 from common.configuration import Configuration
 from common.device import Device, default_device
+
 from .cartesian_2d_mesh     import Cartesian2D
-from .cubed_sphere          import CubedSphere
+from .cubed_sphere_3d       import CubedSphere3D
 from .geometry              import Geometry
 
 T = TypeVar("T", bound=numpy.generic)
@@ -92,10 +92,15 @@ class DFROperators:
 
       self.expfilter_apply = param.expfilter_apply
       if param.expfilter_apply:
-         if not isinstance(grd, CubedSphere):
-            raise TypeError(f'The 3D filter can only be applied on a CubedSphere geometry')
-         self.expfilter = self.make_filter(param.expfilter_strength, param.expfilter_order, param.expfilter_cutoff,
-                                           grd, device)
+         if not isinstance(grd, CubedSphere3D):
+            raise TypeError(f'The 3D filter can only be applied on a CubedSphere3D geometry')
+         if grd.nbsolpts < 2:
+            if MPI.COMM_WORLD.rank == 0:
+               print(f'WARNING: 3D filter can only be applied if we have degree > 1')
+            self.expfilter_apply = False
+         else:
+            self.expfilter = self.make_filter(param.expfilter_strength, param.expfilter_order, param.expfilter_cutoff,
+                                              grd, device)
 
       # Create sponge layer (if desired)
       self.apply_sponge = param.apply_sponge
@@ -201,7 +206,7 @@ class DFROperators:
 
       return Q
 
-   def apply_filter_3d(self,Q : numpy.ndarray, geom : CubedSphere, metric):
+   def apply_filter_3d(self,Q : numpy.ndarray, geom : CubedSphere3D, metric):
       r'''Apply the exponential filter precomputed in expfilter to input fields \sqrt(g)*Q, and return the
       filtered array.'''
 
@@ -239,7 +244,7 @@ class DFROperators:
    def comma_i(self: Self,
                field_interior: NDArray[T],
                border_i: NDArray[T],
-               grid: CubedSphere,
+               grid: CubedSphere3D,
                out: NDArray[T] | None = None) -> NDArray[T]:
       '''Take a partial derivative along the i-index
 
@@ -297,7 +302,7 @@ class DFROperators:
 
    def extrapolate_i(self: Self,
                      field_interior: NDArray[T],
-                     grid: CubedSphere,
+                     grid: CubedSphere3D,
                      out: NDArray[T] | None = None) -> NDArray[T]:
       '''Compute the i-border values along each element of field_interior
 
@@ -347,7 +352,7 @@ class DFROperators:
    def comma_j(self: Self,
                field_interior: NDArray[T],
                border_j: NDArray[T],
-               grid: CubedSphere,
+               grid: CubedSphere3D,
                out: NDArray[T] | None = None) -> NDArray[T]:
       '''Take a partial derivative along the j-index
 
@@ -406,7 +411,7 @@ class DFROperators:
 
    def extrapolate_j(self: Self,
                      field_interior: NDArray[T],
-                     grid: CubedSphere,
+                     grid: CubedSphere3D,
                      out: NDArray[T] | None = None) -> NDArray[T]:
       '''Compute the j-border values along each element of field_interior
 
@@ -460,7 +465,7 @@ class DFROperators:
    def comma_k(self: Self,
                field_interior: NDArray[T],
                border_k: NDArray[T],
-               grid: CubedSphere,
+               grid: CubedSphere3D,
                out: NDArray[T] | None = None) -> NDArray[T]:
       '''Take a partial derivative along the k-index
 
@@ -519,7 +524,7 @@ class DFROperators:
 
    def filter_k(self: Self,
                 field_interior: NDArray[T],
-                grid: CubedSphere,
+                grid: CubedSphere3D,
                 out: NDArray[T] | None = None) -> NDArray[T]:
       '''Apply a modal filter to remove the highest mode of fiield_interior along the k-dimension
 
@@ -566,7 +571,7 @@ class DFROperators:
 
    def extrapolate_k(self: Self,
                      field_interior: NDArray[T],
-                     grid: CubedSphere,
+                     grid: CubedSphere3D,
                      out: NDArray[T] | None = None) -> NDArray[T]:
       '''Compute the k-border values along each element of field_interior
 
@@ -623,7 +628,7 @@ class DFROperators:
             itf_i: NDArray[T],
             itf_j: NDArray[T],
             itf_k: NDArray[T],
-            geom: CubedSphere,
+            geom: CubedSphere3D,
             out: NDArray[T] | None = None) -> NDArray[T]:
       ''' Take the gradient of one or more variables, given interface values (not element extensions)
 

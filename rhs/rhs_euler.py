@@ -4,7 +4,7 @@ from common.definitions      import idx_rho_u1, idx_rho_u2, idx_rho_w, idx_rho, 
 from common.device           import CpuDevice, CudaDevice, Device, default_device
 from common.process_topology import ProcessTopology
 from .fluxes                 import rusanov_3d_vert, rusanov_3d_hori_i, rusanov_3d_hori_j
-from geometry                import CubedSphere, DFROperators, Metric3DTopo
+from geometry                import CubedSphere3D, DFROperators, Metric3DTopo
 from init.dcmip              import dcmip_schar_damping
 from rhs.rhs                 import RHS
 
@@ -39,10 +39,10 @@ def compute_forcings(
    compute_forcing_1(f4, r, u1, u2, w, p, c301, c302, c303, c311, c312, c313, c322, c323, c333, h11, h12, h13, h22, h23, h33)
 
 
-class RhsEuler(RHS):
+class RhsEuler:
    def __init__(self, shape: tuple[int, ...],
-                geom: CubedSphere,
-                mtrx: DFROperators,
+                geom: CubedSphere3D,
+                operators: DFROperators,
                 metric: Metric3DTopo,
                 ptopo: ProcessTopology,
                 nbsolpts: int,
@@ -50,17 +50,39 @@ class RhsEuler(RHS):
                 nb_elements_vert: int,
                 case_number: int,
                 device: Device = default_device) -> None:
-      super().__init__(shape, geom, mtrx, metric, ptopo, nbsolpts, nb_elements_hori, nb_elements_vert,
-                       case_number, device)
+      # super().__init__(shape, geom, mtrx, metric, ptopo, nbsolpts, nb_elements_hori, nb_elements_vert,
+      #                  case_number, device)
+      self.shape = shape
+      self.geom = geom
+      self.operators = operators
+      self.metric = metric
+      self.ptopo = ptopo
+      self.nbsolpts = nbsolpts
+      self.nb_elements_hori = nb_elements_hori
+      self.nb_elements_vert = nb_elements_vert
+      self.case_number = case_number
+      self.device = device
 
       self.compute_forcings = compute_forcings
       if isinstance(device, CudaDevice):
          self.compute_forcings = device.cupy.fuse(self.compute_forcings)
 
+   def __call__(self, vec: NDArray) -> NDArray:
+      """Compute the value of the right-hand side based on the input state.
+
+      :param vec: Vector containing the input state. It can have any shape, as long as its size is the same as the
+                  one used to create this RHS object
+      :return: Value of the right-hand side, in the same shape as the input
+      """
+      old_shape = vec.shape
+      result = self.__compute_rhs__(vec.reshape(self.shape), self.geom, self.operators, self.metric, self.ptopo,
+                                    self.nbsolpts, self.nb_elements_hori, self.nb_elements_vert, self.case_number,
+                                    self.device)
+      return result.reshape(old_shape)
 
    def __compute_rhs__ (self,
                   Q: NDArray,
-                  geom: CubedSphere,
+                  geom: CubedSphere3D,
                   mtrx: DFROperators,
                   metric: Metric3DTopo,
                   ptopo: ProcessTopology,
