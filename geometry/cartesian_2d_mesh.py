@@ -16,9 +16,8 @@ class Cartesian2D(Geometry):
                 nbsolpts: int,
                 nb_elements_relief_layer: int,
                 relief_layer_height: int,
-                array_module: str,
                 device: Device = default_device):
-      super().__init__(nbsolpts, 'cartesian2d', device)
+      super().__init__(nbsolpts, device)
       xp = device.xp
 
       scaled_points = 0.5 * (1.0 + self.solutionPoints)
