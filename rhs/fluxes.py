@@ -142,10 +142,9 @@ def AUSM_3d_vert(variables_itf_k, pressure_itf_k, w_itf_k, metric, nb_interfaces
       # Separating advective and pressure fluxes for rho-w
       wflux_adv_x3_itf_k[:,elem_D,1,:]  = (metric.sqrtG_itf_k[itf,:, :] * variables_itf_k[idx_rho_w, :, elem_D, 1, :] * numpy.maximum(0, M) * a_D  +  metric.sqrtG_itf_k[itf,:, :] * variables_itf_k[idx_rho_w, :, elem_U, 0, :] * numpy.minimum(0., M) * a_U)
       wflux_adv_x3_itf_k[:,elem_U,0,:]  = wflux_adv_x3_itf_k[:,elem_D,1,:]
-      wflux_pres_x3_itf_k[:,elem_D,1,:] = metric.sqrtG_itf_k[itf, :, :] * metric.H_contra_33_itf_k[itf, :, :] * 0.5 * ( (1 + M_D) * pressure_itf_k[:, elem_D, 1, :] + (1 - M_D) * pressure_itf_k[:, elem_U, 0, :] )
-      wflux_pres_x3_itf_k[:,elem_U,0,:] = wflux_pres_x3_itf_k[:,elem_D,1,:]
+      wflux_pres_x3_itf_k[:,elem_D,1,:] = metric.sqrtG_itf_k[itf, :, :] * metric.H_contra_33_itf_k[itf, :, :] * 0.5 * ( (1 + M_D) * pressure_itf_k[:, elem_D, 1, :] + (1 - M_D) * pressure_itf_k[:, elem_U, 0, :] ) / pressure_itf_k[:,elem_D,1,:]
+      wflux_pres_x3_itf_k[:,elem_U,0,:] = metric.sqrtG_itf_k[itf, :, :] * metric.H_contra_33_itf_k[itf, :, :] * 0.5 * ( (1 + M_D) * pressure_itf_k[:, elem_D, 1, :] + (1 - M_D) * pressure_itf_k[:, elem_U, 0, :] ) / pressure_itf_k[:,elem_U,0,:]
 
-      pdb.set_trace()
 
 
 
@@ -184,8 +183,8 @@ def AUSM_3d_hori_i(u1_itf_i, variables_itf_i, pressure_itf_i, metric, nb_interfa
       # Separating advective and pressure fluxes for rho-w
       wflux_adv_x1_itf_i[:,elem_L,:,1]  = (metric.sqrtG_itf_i[:, :, itf] * variables_itf_i[idx_rho_w, :, elem_L, 1, :] * numpy.maximum(0, M) * a_L  +  metric.sqrtG_itf_i[:, :, itf] * variables_itf_i[idx_rho_w, :, elem_R, 0, :] * numpy.minimum(0., M) * a_R)
       wflux_adv_x1_itf_i[:,elem_R,:,0]  = wflux_adv_x1_itf_i[:,elem_L,:,1]
-      wflux_pres_x1_itf_i[:,elem_L,:,1] = metric.sqrtG_itf_i[:, :, itf] * metric.H_contra_13_itf_i[:, :, itf] * 0.5 * ( (1 + M_L) * pressure_itf_i[:, elem_L, 1, :] + (1 - M_L) * pressure_itf_i[:, elem_R, 0, :] )
-      wflux_pres_x1_itf_i[:,elem_R,:,0] = wflux_pres_x1_itf_i[:,elem_L,:,1]
+      wflux_pres_x1_itf_i[:,elem_L,:,1] = metric.sqrtG_itf_i[:, :, itf] * metric.H_contra_13_itf_i[:, :, itf] * 0.5 * ( (1 + M_L) * pressure_itf_i[:, elem_L, 1, :] + (1 - M_L) * pressure_itf_i[:, elem_R, 0, :] ) / pressure_itf_i[:,elem_L,1,:]
+      wflux_pres_x1_itf_i[:,elem_R,:,0] = metric.sqrtG_itf_i[:, :, itf] * metric.H_contra_13_itf_i[:, :, itf] * 0.5 * ( (1 + M_L) * pressure_itf_i[:, elem_L, 1, :] + (1 - M_L) * pressure_itf_i[:, elem_R, 0, :] ) / pressure_itf_i[:,elem_R,0,:]
 
 
 def AUSM_3d_hori_j(u2_itf_j, variables_itf_j, pressure_itf_j, metric, nb_interfaces_hori, advection_only, \
@@ -220,6 +219,6 @@ def AUSM_3d_hori_j(u2_itf_j, variables_itf_j, pressure_itf_j, metric, nb_interfa
       # Separating advective and pressure fluxes for rho-w
       wflux_adv_x2_itf_j[:,elem_L,1,:]  = (metric.sqrtG_itf_j[:, itf, :] * variables_itf_j[idx_rho_w, :, elem_L, 1, :] * numpy.maximum(0, M) * a_L  +  metric.sqrtG_itf_j[:, itf, :] * variables_itf_j[idx_rho_w, :, elem_R, 0, :] * numpy.minimum(0., M) * a_R)
       wflux_adv_x2_itf_j[:,elem_R,0,:]  = wflux_adv_x2_itf_j[:,elem_L,1,:]
-      wflux_pres_x2_itf_j[:,elem_L,1,:] = metric.sqrtG_itf_j[:, itf, :] * metric.H_contra_23_itf_j[:, itf, :] * 0.5 * ( (1 + M_L) * pressure_itf_j[:, elem_L, 1, :] + (1 - M_L) * pressure_itf_j[:, elem_R, 0, :] )
-      wflux_pres_x2_itf_j[:,elem_R,0,:] = wflux_pres_x2_itf_j[:,elem_L,1,:]
+      wflux_pres_x2_itf_j[:,elem_L,1,:] = metric.sqrtG_itf_j[:, itf, :] * metric.H_contra_23_itf_j[:, itf, :] * 0.5 * ( (1 + M_L) * pressure_itf_j[:, elem_L, 1, :] + (1 - M_L) * pressure_itf_j[:, elem_R, 0, :] ) / pressure_itf_j[:,elem_L,1,:]
+      wflux_pres_x2_itf_j[:,elem_R,0,:] = metric.sqrtG_itf_j[:, itf, :] * metric.H_contra_23_itf_j[:, itf, :] * 0.5 * ( (1 + M_L) * pressure_itf_j[:, elem_L, 1, :] + (1 - M_L) * pressure_itf_j[:, elem_R, 0, :] ) / pressure_itf_j[:,elem_R,0,:]
 
