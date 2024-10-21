@@ -4,6 +4,7 @@ import random
 from numpy import ndarray
 
 import cpu_test
+import ndarray_generator
 
 class KiopsPmexToleranceCpuTestCases(cpu_test.CpuTestCases):
     tolerance: float
@@ -25,14 +26,10 @@ class KiopsPmexToleranceCpuTestCases(cpu_test.CpuTestCases):
         self.tolerance = 1e-7
         self.rand = random.Random(seed)
 
-        self.kiops_matrix: ndarray = self.cpu_device.xp.zeros((initial_matrix_size, initial_matrix_size), dtype=float)
-        self.pmex_matrix: ndarray = self.cpu_device.xp.zeros((initial_matrix_size, initial_matrix_size), dtype=float)
-
-        for it1 in range(initial_matrix_size):
-            for it2 in range(initial_matrix_size):
-                nb: float = self.rand.uniform(rand_min, rand_max)
-                self.kiops_matrix[it1, it2] = nb
-                self.pmex_matrix[it1, it2] = nb
+        [self.kiops_matrix, self.pmex_matrix] = ndarray_generator.generate_matrixes(
+            (initial_matrix_size, initial_matrix_size), self.rand, rand_min, rand_max,
+            [self.cpu_device, self.cpu_device]
+        )
     
     def test_compare_kiops_pmex(self):
         def matvec_handle(v: ndarray) -> ndarray: return v
@@ -50,19 +47,15 @@ class KiopsPmexToleranceCpuTestCases(cpu_test.CpuTestCases):
 
         self.failIf(not (w2.shape[0] == shape[0] and w2.shape[1] == shape[1]), 'Both matrix should be the same size')
 
+        diff: float = self.cpu_device.xp.linalg.norm(w1 - w2).item()
+
         w1_value: float = self.cpu_device.xp.linalg.norm(w1).item()
         w2_value: float = self.cpu_device.xp.linalg.norm(w2).item()
 
-        abs_diff: float = abs(w1_value - w2_value)
+        abs_diff: float = abs(diff)
 
         relative_diff_w1: float = abs(abs_diff / w1_value)
         relative_diff_w2: float = abs(abs_diff / w2_value)
-
-        if self.show_debug_print:
-            c_name = 'KiopsPmexToleranceCpuTestCases'
-            m_name = 'test_compare_kiops_pmex'
-            print(f'In {c_name}.{m_name}, absolute difference is {abs_diff}')
-            print(f'In {c_name}.{m_name}, relative difference from cpu is {relative_diff_w1} and relative difference from gpu is {relative_diff_w2}')
 
         self.assertLessEqual(relative_diff_w1, self.tolerance, f'Kiops didn\'t give a close result')
         self.assertLessEqual(relative_diff_w2, self.tolerance, f'Pmex didn\'t give a close result')

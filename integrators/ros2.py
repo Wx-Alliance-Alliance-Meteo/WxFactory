@@ -21,12 +21,15 @@ class Ros2(Integrator):
       self.linear_solver  = param.linear_solver
 
    def __prestep__(self, Q: numpy.ndarray, dt: float) -> None:
+      xp = self.device.xp
+
       rhs = self.rhs_handle(Q)
-      self.Q_flat = numpy.ravel(Q)
-      self.A = MatvecOpRat(dt, Q, rhs, self.rhs_handle)
-      self.b = self.A(self.Q_flat) + numpy.ravel(rhs) * dt
+      self.Q_flat = xp.ravel(Q)
+      self.A = MatvecOpRat(dt, Q, rhs, self.rhs_handle, self.device)
+      self.b = self.A(self.Q_flat) + xp.ravel(rhs) * dt
 
    def __step__(self, Q: numpy.ndarray, dt: float):
+      xp = self.device.xp
 
       maxiter = 20000 // self.gmres_restart
       if self.preconditioner is not None:
@@ -37,7 +40,7 @@ class Ros2(Integrator):
          Qnew, norm_r, norm_b, num_iter, flag, residuals = fgmres(
             self.A, self.b, x0=self.Q_flat, tol=self.tol, restart=self.gmres_restart, maxiter=maxiter,
             preconditioner=self.preconditioner,
-            verbose=self.verbose_solver)
+            verbose=self.verbose_solver, device=self.device)
          t1 = time()
 
          self.solver_info = SolverInfo(flag, t1 - t0, num_iter, residuals)
@@ -50,7 +53,7 @@ class Ros2(Integrator):
          t0 = time()
          Qnew, local_error, num_iter, flag, residuals = gcrot(self.A, self.b, x0=self.Q_flat, tol=self.tol)
          t1 = time()
-         local_error = numpy.linalg.norm(self.b - self.A(Qnew))/numpy.linalg.norm(self.b)
+         local_error = xp.linalg.norm(self.b - self.A(Qnew)) / xp.linalg.norm(self.b)
 
          if flag == 0:
             print(f'GCROT converged at iteration {num_iter} in {t1 - t0:4.1f} s to a solution with'
@@ -62,4 +65,4 @@ class Ros2(Integrator):
 
       self.failure_flag = flag
 
-      return numpy.reshape(Qnew, Q.shape)
+      return xp.reshape(Qnew, Q.shape)

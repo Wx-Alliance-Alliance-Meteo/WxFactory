@@ -3,7 +3,7 @@ import math
 from mpi4py import MPI
 from common.device import Device,default_device
 
-def pmex(tau_out, A, u, tol = 1e-7, delta = 1.2, m_init = 10, mmax = 128, reuse_info = True, task1 = False, device: Device=default_device):
+def pmex(tau_out, A, u, tol = 1e-7, delta = 1.2, m_init = 10, mmax = 128, reuse_info = True, task1 = False, device: Device=default_device, comm: MPI.Comm = MPI.COMM_WORLD):
    '''
    tau_out     : Vector of tau_out
    A           : The matrix argument of the ``φ`` functions
@@ -15,6 +15,7 @@ def pmex(tau_out, A, u, tol = 1e-7, delta = 1.2, m_init = 10, mmax = 128, reuse_
    reuse_info  : ?
    task1       : If true, divide the result by 1/tau_out
    device      : Device to use for the computing
+   comm        : Communicator to use for MPI (only relevant for testing)
    '''
 
 
@@ -72,7 +73,7 @@ def pmex(tau_out, A, u, tol = 1e-7, delta = 1.2, m_init = 10, mmax = 128, reuse_
    global_normU = device.xp.empty_like(local_nrmU)
 
    device.synchronize()
-   MPI.COMM_WORLD.Allreduce([local_nrmU, MPI.DOUBLE], [global_normU, MPI.DOUBLE])
+   comm.Allreduce([local_nrmU, MPI.DOUBLE], [global_normU, MPI.DOUBLE])
 
    normU = device.xp.amax(global_normU)
 
@@ -125,7 +126,7 @@ def pmex(tau_out, A, u, tol = 1e-7, delta = 1.2, m_init = 10, mmax = 128, reuse_
          local_sum = V[0, 0:n] @ V[0, 0:n]
          global_sum_nrm = device.xp.empty_like(local_sum)
          device.synchronize()
-         MPI.COMM_WORLD.Allreduce([local_sum, MPI.DOUBLE], [global_sum_nrm, MPI.DOUBLE])
+         comm.Allreduce([local_sum, MPI.DOUBLE], [global_sum_nrm, MPI.DOUBLE])
          beta = math.sqrt( global_sum_nrm + V[j, n:n+p] @ V[j, n:n+p] ) 
 
          # The first Krylov basis vector
@@ -146,7 +147,7 @@ def pmex(tau_out, A, u, tol = 1e-7, delta = 1.2, m_init = 10, mmax = 128, reuse_
          global_vec = device.xp.empty_like(local_vec)
 
          device.synchronize()
-         MPI.COMM_WORLD.Allreduce([local_vec, MPI.DOUBLE], [global_vec, MPI.DOUBLE])
+         comm.Allreduce([local_vec, MPI.DOUBLE], [global_vec, MPI.DOUBLE])
 
          global_vec += V[0:j+1, n:n+p] @ V[j-1:j+1, n:n+p].T
 
@@ -184,7 +185,7 @@ def pmex(tau_out, A, u, tol = 1e-7, delta = 1.2, m_init = 10, mmax = 128, reuse_
             local_sum = V[j, 0:n] @ V[j, 0:n]
             global_sum_nrm = device.xp.empty_like(local_sum)
             device.synchronize()
-            MPI.COMM_WORLD.Allreduce([local_sum, MPI.DOUBLE], [global_sum_nrm, MPI.DOUBLE])
+            comm.Allreduce([local_sum, MPI.DOUBLE], [global_sum_nrm, MPI.DOUBLE])
             curr_nrm = math.sqrt( global_sum_nrm + V[j,n:n+p] @ V[j, n:n+p] )
             reg_comm_nrm += 1
          else:

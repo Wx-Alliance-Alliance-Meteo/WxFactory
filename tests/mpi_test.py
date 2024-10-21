@@ -3,12 +3,33 @@ from typing import Tuple
 import unittest
 from unittest.result import TestResult
 from unittest.signals import registerResult
-from typing import Dict, List
+from typing import List
 from mpi4py import MPI
 import numpy
 import sys
 import warnings
 import time
+
+test_tag: int = 0
+
+def run_test_on_x_process(test: unittest.TestCase, x: int = 0) -> MPI.Comm:
+    if x == 0:
+        return MPI.COMM_WORLD
+    
+    if x > MPI.COMM_WORLD.size:
+        test.skipTest('Not enough process to run this test')
+    
+    global test_tag
+    is_needed: bool = MPI.COMM_WORLD.rank < x
+    comm: MPI.Comm = MPI.COMM_WORLD.Split(0 if is_needed else 1, test_tag)
+    test_tag += 1 # Test_tag is needed two tests don't interfer between each other
+    if not is_needed:
+        comm.Disconnect()
+        test.skipTest('This process is not needed for this test')
+    
+    return comm
+    
+
 
 class _WritelnDecorator(object):
     """Used to decorate file-like objects with a handy 'writeln' method"""

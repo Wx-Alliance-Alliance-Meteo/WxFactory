@@ -190,7 +190,7 @@ class Configuration:
       self.store_solver_stats = self._get_option('Output_options', 'store_solver_stats', bool, False)
 
       # Directory where to store all the output
-      self.output_dir = self._get_option('Output_options', 'output_dir', str, 'results')
+      self.output_dir = self._get_option('Output_options', 'output_dir', 'case-sensitive-str', 'results')
       # Name of file where to store the solution
       self.base_output_file = self._get_option('Output_options', 'base_output_file', str, 'out')
       self.output_file = f'{self.output_dir}/{self.base_output_file}.nc'
@@ -217,6 +217,8 @@ class Configuration:
          value = self.parser.getint(section_name, option_name)
       elif option_type == str:
          value = self.parser.get(section_name, option_name).lower()
+      elif option_type == 'case-sensitive-str':
+         value = self.parser.get(section_name, option_name)
       elif option_type == bool:
          value = (self.parser.getint(section_name, option_name) > 0)
       elif option_type == List[int]:

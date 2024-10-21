@@ -2,13 +2,16 @@
 
 from mpi4py import MPI
 import numpy
+from common.device import Device, default_device
 
 __all__ = ['global_norm', 'global_dotprod', 'global_inf_norm']
 
-def global_norm(vec, comm=MPI.COMM_WORLD):
+def global_norm(vec, comm=MPI.COMM_WORLD, device: Device = default_device):
    """Compute vector norm across all PEs"""
+   if len(vec.shape) != 1:
+      raise ValueError('This function only accept a vector (1 dimension tensor)')
    local_sum = vec @ vec
-   return numpy.sqrt( comm.allreduce(local_sum) )
+   return device.xp.sqrt( comm.allreduce(local_sum) )
 
 def global_dotprod(vec1, vec2, comm=MPI.COMM_WORLD):
    """Compute dot product across all PEs"""
