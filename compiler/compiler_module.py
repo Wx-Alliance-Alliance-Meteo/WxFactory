@@ -92,21 +92,23 @@ def build_librairies(force_build: bool = False):
         if not os.path.exists(library_directory):
             os.makedirs(library_directory)
 
-        setuplog = open(log_file_location, 'w')
+        try:
+            setuplog = open(log_file_location, 'w')
 
-        sys.stdout = setuplog
+            sys.stdout = setuplog
 
-        args: list[str] = sys.argv
-        sys.argv = [args[0], 'build_ext']
-        setup(
-            name="WxFactory",
-            ext_modules=cythonize(extensions, compiler_directives=compiler_directives),
-            zip_safe=False,
-            cmdclass={'build': Build}
-        )
-        sys.argv = args
-        sys.stdout = sys.__stdout__
-        setuplog.close()
+            args: list[str] = sys.argv
+            sys.argv = [args[0], 'build_ext']
+            setup(
+                name="WxFactory",
+                ext_modules=cythonize(extensions, compiler_directives=compiler_directives),
+                zip_safe=False,
+                cmdclass={'build': Build}
+            )
+        finally:
+            sys.argv = args
+            sys.stdout = sys.__stdout__
+            setuplog.close()
 
         shutil.rmtree(build_directory)
         for file_to_remove in generated_files_to_remove:

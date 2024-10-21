@@ -21,15 +21,16 @@ def main():
    rank = MPI.COMM_WORLD.rank
 
    build_error = False
-   if MPI.COMM_WORLD.rank == 0:
+   if rank == 0:
       try:
          build_librairies()
-      except:
-         # TODO : Return a true exception
-         build_error = True
+      except e:
+         build_error = e
    
    MPI.COMM_WORLD.bcast(build_error, root=0)
    if build_error:
+      if rank == 0:
+         raise build_error
       sys.exit(-1)
 
    if rank == 0:
