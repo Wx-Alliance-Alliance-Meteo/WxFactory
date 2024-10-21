@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 cd ${WX_FACTORY_DIR}
-. ./load_env.sh
+. ./scripts/load_env.sh
 
 #looping through each case and running it 7 times
 for ((j = 0; j < 7; j++)); do

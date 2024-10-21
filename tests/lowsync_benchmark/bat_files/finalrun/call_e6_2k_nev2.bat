@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 cd ${WX_FACTORY_DIR}
-. ./load_env.sh
+. ./scripts/load_env.sh
 
 
 methods=("epi6/case6_icwyne.ini" "epi6/galewsky_pmexne.ini" "epi6/galewsky_cwyne.ini" "epi6/galewsky_icwyne.ini")

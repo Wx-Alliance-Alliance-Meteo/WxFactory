@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 cd ${WX_FACTORY_DIR}
-. ./load_env.sh
+. ./scripts/load_env.sh
 
 
 methods=("epi6/case5_cwy1s.ini" "epi6/case5_pmex1s.ini" "epi6/case5_icwy1s.ini" "epi6/case5_kiops.ini" "epi6/case6_kiops.ini" )

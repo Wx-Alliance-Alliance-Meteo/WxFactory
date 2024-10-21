@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 cd ${WX_FACTORY_DIR}
-. ./load_env.sh
+. ./scripts/load_env.sh
 
 methods=("galewsky_cwyne.ini" "galewsky_pmexne1s.ini" "galewsky_kiops.ini" "case5_pmexne1s.ini" "case6_pmexne1s.ini")
 

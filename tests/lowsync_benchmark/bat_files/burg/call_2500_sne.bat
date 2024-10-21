@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 cd ${WX_FACTORY_DIR}
-. ./load_env.sh
+. ./scripts/load_env.sh
 
 
 methods=("kiops" "pmex_1s" "icwy_1s" "cwy_1s" "pmex_ne1s" "icwy_ne1s" "cwy_ne1s" "pmex" "cwy_ne" "icwy_ne")
