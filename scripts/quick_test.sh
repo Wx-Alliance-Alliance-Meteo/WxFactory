@@ -189,6 +189,12 @@ function test_shallow_water() {
         for time_integrator in ${time_integrators}; do
             run_single_cubesphere time_integrator || return 1
         done
+
+        time_integrator=epi6
+        solvers="kiops pmex cwy_1s cwy_ne cwy_ne1s dcgs2 icwy_1s icwy_neiop icwy_ne icwy_ne1s kiops_ne pmex_1s pmex_ne1s"
+        for exponential_solver in ${solvers}; do
+            run_single_cubesphere time_integrator exponential_solver || return 1
+        done
     fi
 
     if [ $do_precond -gt 0 ]; then
