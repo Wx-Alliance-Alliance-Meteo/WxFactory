@@ -50,3 +50,5 @@ geom*.dat
 *.npz
 
 *.tmp
+
+lib

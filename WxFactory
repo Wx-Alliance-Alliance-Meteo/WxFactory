@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+from compiler.compiler_module import build_librairies
+
 """ The WxFactory model """
 
 import argparse
@@ -17,6 +19,19 @@ def main():
 
     args = None
     rank = MPI.COMM_WORLD.rank
+
+    build_error = False
+    if rank == 0:
+        try:
+            build_librairies()
+        except e:
+            build_error = e
+   
+    MPI.COMM_WORLD.bcast(build_error, root=0)
+    if build_error:
+        if rank == 0:
+            raise build_error
+        sys.exit(-1)
 
     if rank == 0:
         print(f'Start time : {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}')
