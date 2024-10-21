@@ -178,6 +178,8 @@ class Configuration:
       self.save_state_freq = self._get_option('Output_options', 'save_state_freq', int, 0)
       # Whether to store solver stats (at every timestep)
       self.store_solver_stats = self._get_option('Output_options', 'store_solver_stats', bool, False)
+      # Whether to store the total simulation wallclock time in a file
+      self.store_total_time = self._get_option('Output_options', 'store_total_time', bool, False)
 
       # Directory where to store all the output
       self.output_dir = self._get_option('Output_options', 'output_dir', str, 'results')

@@ -109,20 +109,7 @@ class Simulation:
 
       while self.step(): pass # Step until everything is done
 
-      total_time = time() - start_time
-
-      self.output.finalize() # Close any open output file
-
-      #print the total times to a file
-      if MPI.COMM_WORLD.rank == 0:
-         size = MPI.COMM_WORLD.Get_size()
-         method      = str(self.config.time_integrator)
-         methodOrtho = str(self.config.exponential_solver)
-         caseNum     = str(self.config.case_number)
-         totaltime_name = "results_tanya/runtime_"+ methodOrtho + "_n" +  str(size) + "_" + str(method) + "_c" + caseNum +".txt"
-         with open(totaltime_name, 'a') as gg:
-            gg.write('{} \n'.format(total_time))
-
+      self.output.finalize(time() - start_time) # Close any open output file
 
    def _make_device(self) -> Device:
       """Create the device object which will determine on what hardware (CPU/GPU) each part of the simulation will
