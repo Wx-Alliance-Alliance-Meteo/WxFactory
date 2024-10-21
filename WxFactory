@@ -20,6 +20,18 @@ def main():
    args = None
    rank = MPI.COMM_WORLD.rank
 
+   build_error = False
+   if MPI.COMM_WORLD.rank == 0:
+      try:
+         build_librairies()
+      except:
+         # TODO : Return a true exception
+         build_error = True
+   
+   MPI.COMM_WORLD.bcast(build_error, root=0)
+   if build_error:
+      sys.exit(-1)
+
    if rank == 0:
       print(f'Start time : {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}')
 
@@ -102,7 +114,4 @@ def main():
 
 
 if __name__ == '__main__':
-   if MPI.COMM_WORLD.rank == 0:
-      build_librairies()
-      MPI.COMM_WORLD.Barrier()
    main()

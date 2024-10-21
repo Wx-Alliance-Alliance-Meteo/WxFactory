@@ -8,6 +8,13 @@ from distutils.command.build import build
 import shutil
 import os
 
+cpu_info_filename: str = '/proc/cpuinfo'
+cpu_info_field: str = 'model name'
+build_directory: str = './build'
+library_directory: str = './lib'
+hash_file_location: str = os.path.join(library_directory, 'hash')
+log_file_location: str = os.path.join(library_directory, 'log')
+
 compiler_directives: dict[str, bool] = {
     "boundscheck": False,                 # Disable bounds checking for array access
     "wraparound": False,                  # Disable negative index checking
@@ -20,26 +27,47 @@ compiler_directives: dict[str, bool] = {
 }
 
 class Build(build):
+    """
+    Class to change some build parameter such as the build directory and the final library directory
+    """
     def initialize_options(self):
         super().initialize_options()
-        self.build_base = 'build'
-        self.build_lib = 'lib'
+        self.build_base = build_directory
+        self.build_lib = library_directory
 
-def get_processor_name() -> str:
-    with open('/proc/cpuinfo') as cpu_info:
+def get_processor_name() -> str|None:
+    """
+    Get the name of the curent processor
+
+    :return: The name of the processor or None if the name cannot be found
+    """
+    if not os.path.exists(cpu_info_filename):
+        return None
+    with open(cpu_info_filename) as cpu_info:
         while True:
             line: str = cpu_info.readline()
-            if line.startswith('model name'):
+            if line.startswith(cpu_info_field):
                 return line.split(': ')[1]
+            if line == '':
+                return None
 
 def build_librairies(force_build: bool = False):
     '''
-    :param force_build : force the build even when the hash remains the same
+    Build the acceleration library that Weather Factory requires to run
+
+    :param force_build: force the build even when the hash remains the same
     '''
+    
+    generated_files_to_remove: list[str] = []
+    interfaces_to_copy_for_intellisense: list[str] = []
+    
     directives: str = json.dumps(compiler_directives, sort_keys=True)
-    cython_ext, cython_sha1 = make_cython_extension()
+    cython_ext, cython_sha1, cython_files_to_remove, cython_interfces = make_cython_extension()
     extensions: list[Extension] = [cython_ext]
     
+    generated_files_to_remove += cython_files_to_remove
+    interfaces_to_copy_for_intellisense += cython_interfces
+
     sources_sha1: str = ''
     for extension in extensions:
         for source in extension.sources:
@@ -48,23 +76,23 @@ def build_librairies(force_build: bool = False):
                 sources_sha1 += hashlib.sha1(bytes(code, 'utf-8'), usedforsecurity=False).hexdigest()
 
     processor_name: str = get_processor_name()
-    hash_content: bytes = bytes(directives + processor_name, 'utf-8')
+    hash_content: bytes = bytes(directives + (processor_name or ''), 'utf-8')
     processor_sha1: str = hashlib.sha1(hash_content, usedforsecurity=False).hexdigest()
 
     final_hash: str = cython_sha1 + sources_sha1 + processor_sha1
 
-    same: bool = not force_build
-    hash_exist: bool = os.path.exists('./lib/hash')
-    same = same and hash_exist
+    hash_exist: bool = os.path.exists(hash_file_location)
+    same_hash: bool = not force_build and processor_name is not None and hash_exist
 
     if hash_exist:
-        with open('./lib/hash') as h:
-            same = same and final_hash == h.readline()
+        with open(hash_file_location) as h:
+            same_hash = same_hash and final_hash == h.readline()
 
-    if not same:
-        if not os.path.exists('./lib'):
-            os.makedirs('./lib')
-        setuplog = open('./lib/log', 'w')
+    if not same_hash:
+        if not os.path.exists(library_directory):
+            os.makedirs(library_directory)
+
+        setuplog = open(log_file_location, 'w')
 
         sys.stdout = setuplog
 
@@ -80,9 +108,12 @@ def build_librairies(force_build: bool = False):
         sys.stdout = sys.__stdout__
         setuplog.close()
 
-        shutil.rmtree('./build')
-        os.remove('./pde/kernels/interface.cpp')
+        shutil.rmtree(build_directory)
+        for file_to_remove in generated_files_to_remove:
+            os.remove(file_to_remove)
 
-        with open('./lib/hash', 'w') as hash:
+        with open(hash_file_location, 'w') as hash:
             hash.write(final_hash)
-        shutil.copyfile('./pde/kernels/interface.pyx', './lib/pde/kernels/interface.pyx')
+
+        for interface_to_copy in interfaces_to_copy_for_intellisense:
+            shutil.copyfile(interface_to_copy, os.path.join(library_directory, interface_to_copy))
