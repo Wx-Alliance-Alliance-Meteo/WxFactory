@@ -1,7 +1,7 @@
 import math
 from   typing import Callable
 
-from mpi4py import MPI
+from  mpi4py import MPI
 import numpy
 from   numpy.typing import NDArray
 import scipy.linalg
@@ -72,6 +72,9 @@ def kiops(tau_out: NDArray, A: Callable[[NDArray], NDArray], u: NDArray,
 
    # We only allow m to vary between mmin and mmax
    m = max(mmin, min(m_init, mmax))
+
+   #if rank == 0:
+   #   print("in kiops, m_init = {}, m = {}".format(m_init, m))
 
    # Preallocate matrix
    V = xp.zeros((mmax + 1, n + p))
@@ -272,6 +275,7 @@ def kiops(tau_out: NDArray, A: Callable[[NDArray], NDArray], u: NDArray,
             m_new = m_opt
             tau_new = same_tau
 
+
       # Check error against target
       if omega <= delta:
 
@@ -308,7 +312,6 @@ def kiops(tau_out: NDArray, A: Callable[[NDArray], NDArray], u: NDArray,
          ireject = 0
 
          conv += err
-
       else:
          # Nope, try again
          ireject += 1

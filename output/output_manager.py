@@ -32,12 +32,22 @@ class OutputManager:
       self.operators = operators
       self.topo      = topo
 
-      os.makedirs(os.path.abspath(param.output_dir), exist_ok=True)
+      if MPI.COMM_WORLD.rank == 0:
+         try:
+            os.makedirs(os.path.abspath(param.output_dir), exist_ok=True)
+         except PermissionError:
+            new_name = 'results'
+            print(f'WARNING: Unable to create directory {param.output_dir} for output. Will use "./{new_name}" instead')
+            param.output_dir = new_name
+            os.makedirs(os.path.abspath(param.output_dir), exist_ok=True)
 
-      self.solver_stats_output = SolverStatsOutput(param)
+      MPI.COMM_WORLD.bcast(param.output_dir, root=0)
 
       self.final_function = lambda x=None: None
       self.blockstat_function = lambda Q, step_id: None
+
+      if self.param.store_solver_stats > 0:
+         self.solver_stats_output = SolverStatsOutput(param)
 
       if param.output_freq > 0:
          if self.geometry.grid_type == 'cubed_sphere':
@@ -98,9 +108,20 @@ class OutputManager:
             total_time, simulation_time, dt, solver_info.total_num_it, solver_info.time, solver_info.flag,
             solver_info.iterations, precond)
 
-   def finalize(self) -> None:
+   def finalize(self, total_time: float) -> None:
       """
       Perform any necessary operation to properly finish outputting
       """
+      if self.param.store_total_time:
+         if MPI.COMM_WORLD.rank == 0:
+            size = MPI.COMM_WORLD.size
+            method      = str(self.param.time_integrator)
+            methodOrtho = str(self.param.exponential_solver)
+            caseNum     = str(self.param.case_number)
+            totaltime_name = f'{self.param.output_dir}/runtime_{methodOrtho}_n{size}_{method}_c{caseNum}.txt'
+            with open(totaltime_name, 'a') as gg:
+               gg.write(f'{total_time}\n')
+
+
       if self.param.output_freq > 0:
          self.final_function()
