@@ -163,8 +163,7 @@ class Simulation:
          #TODO remove array_module reference
          return Cartesian2D((self.config.x0, self.config.x1), (self.config.z0, self.config.z1),
                             self.config.nb_elements_horizontal, self.config.nb_elements_vertical, self.config.nbsolpts,
-                            self.config.nb_elements_relief_layer, self.config.relief_layer_height,
-                            self.config.array_module, self.device)
+                            self.config.nb_elements_relief_layer, self.config.relief_layer_height, self.device)
 
       raise ValueError(f'Invalid grid type: {self.config.grid_type}')
 

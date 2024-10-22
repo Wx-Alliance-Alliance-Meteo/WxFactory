@@ -16,14 +16,16 @@ include_dirs: list[str] = [
 ]
 
 interfaces: list[str] = [
-    'pde/kernels/interface.pyx'
+    'pde/pde_interface.pyx'
 ]
 
 sources: list[str] = interfaces + [
-    "pde/kernels/euler_cartesian.cpp"
+    "pde/kernels/pointwise_flux.cpp",
+    "pde/kernels/riemann_flux.cpp",
+    "pde/kernels/boundary_flux.cpp"
 ]
 
-generated_files_to_removes: list[str] = ['./pde/kernels/interface.cpp']
+generated_files_to_removes: list[str] = []
 
 def make_cython_extension() -> tuple[Extension, str, list[str], list[str]]:
     """
@@ -35,7 +37,7 @@ def make_cython_extension() -> tuple[Extension, str, list[str], list[str]]:
     sha1: str = hashlib.sha1(hash_content, usedforsecurity=False).hexdigest()
     return (
         Extension(
-            name='pde.kernels.interface',
+            name='pde.kernels.libkernels',
             sources=sources,
             language='c++',
             extra_compile_args=c_compiler_options,

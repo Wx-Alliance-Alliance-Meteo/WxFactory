@@ -18,7 +18,7 @@ class Cartesian2D(Geometry):
                 relief_layer_height: int,
                 array_module: str,
                 device: Device = default_device):
-      super().__init__(nbsolpts, 'cartesian2d', device)
+      super().__init__(nbsolpts, device)
       xp = device.xp
 
       scaled_points = 0.5 * (1.0 + self.solutionPoints)
@@ -92,6 +92,9 @@ class Cartesian2D(Geometry):
             self.X1[idx_elem, :] = X1[start_k:end_k, start_i:end_i].flatten()
             self.X3[idx_elem, :] = X3[start_k:end_k, start_i:end_i].flatten()
             idx_elem += 1
+
+      self.X1 = self.X1.reshape(nb_elements_z, nb_elements_x, -1, order='f')
+      self.X3 = self.X3.reshape(nb_elements_z, nb_elements_x, -1, order='f')
 
    def make_mountain(self, mountain_type='sine'):
       xp = self.device
@@ -184,8 +187,8 @@ class Cartesian2D(Geometry):
       """Convert an array of values over this grid (which be may organized as a list of elements)
       into a single block of data (2D or 3D)."""
 
-      tmp_shape = a.shape[:-2] + (self.nb_elements_z, self.nb_elements_x, self.nbsolpts, self.nbsolpts)
-      new_shape = a.shape[:-2] + (self.nb_elements_z * self.nbsolpts, self.nb_elements_x * self.nbsolpts)
-      a_new = numpy.swapaxes(a.reshape(tmp_shape), -2, -3).reshape(new_shape)
+      tmp_shape = a.shape[:-3] + (self.nb_elements_z, self.nb_elements_x, self.nbsolpts, self.nbsolpts)
+      new_shape = a.shape[:-3] + (self.nb_elements_z * self.nbsolpts, self.nb_elements_x * self.nbsolpts)
+      a_new = numpy.swapaxes(a.reshape(tmp_shape), -3, -4).reshape(new_shape)
 
       return a_new

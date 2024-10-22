@@ -10,17 +10,7 @@ from common.process_topology   import ProcessTopology
 from geometry                  import Cartesian2D, CubedSphere3D, DFROperators, Geometry, Metric2D, \
                                       Metric3DTopo
 from init.initialize           import Topo
-from rhs.fluxes                import ausm_2d_fv, upwind_2d_fv, rusanov_2d_fv
-# from rhs.rhs_bubble            import RhsBubble
-# from rhs.rhs_bubble_convective import rhs_bubble as rhs_bubble_convective
-# from rhs.rhs_bubble_implicit   import rhs_bubble_implicit
 from rhs.rhs_euler             import RhsEuler
-# from rhs.rhs_euler_convective  import rhs_euler_convective
-# from rhs.rhs_euler_fv          import rhs_euler_fv
-# from rhs.rhs_sw                import RhsShallowWater
-# from rhs.rhs_sw_stiff          import rhs_sw_stiff
-# from rhs.rhs_sw_nonstiff       import rhs_sw_nonstiff
-# from rhs.rhs_advection2d       import rhs_advection2d
 from rhs.rhs                   import get_rhs
 
 class RhsBundle:
@@ -70,6 +60,7 @@ class RhsBundle:
          
          self.full = generate_rhs(rhs_obj)
       
+
       # self.explicit = generate_rhs(
       #    rhs_class, param.equations + '-' + 'cartesian', geom, 
       #    operators, metric, topo, ptopo, param, device)

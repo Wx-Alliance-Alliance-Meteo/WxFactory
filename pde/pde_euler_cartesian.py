@@ -32,7 +32,6 @@ class PDEEulerCartesian(PDE):
 
             self.module = device.xp.RawModule(code=kernel_code)
 
-            print("loaded self.module")
             # Compile speficic kernels
             self.flux_func = self.module.get_function('euler_flux')
             self.riemm_func = self.module.get_function('ausm_solver')
@@ -81,14 +80,15 @@ class PDEEulerCartesian(PDE):
 
     def pointwise_fluxes_cpu(self, q: ndarray,
                              flux_x1: ndarray, flux_x2: ndarray, flux_x3: ndarray):
-        from lib.pde.kernels.interface import pointwise_fluxes
+        from lib.pde.kernels.libkernels import pointwise_eulercartesian_2d_wrapper
 
         # Compute the kernel inputs
-        nb_elements = self.config.nb_elements_horizontal * self.config.nb_elements_vertical
-        nb_solpts = self.config.nbsolpts
+        nb_elements_x1 = self.config.nb_elements_horizontal
+        nb_elements_x3 = self.config.nb_elements_vertical
+        nb_solpts = self.config.nbsolpts ** 2
 
         # Call CPU kernel
-        pointwise_fluxes(q, flux_x1, flux_x3, nb_elements, nb_solpts)
+        pointwise_eulercartesian_2d_wrapper(q, flux_x1, flux_x3, nb_elements_x1, nb_elements_x3, nb_solpts)
 
     def riemann_fluxes_cuda(self, q_itf_x1: ndarray, q_itf_x2: ndarray, q_itf_x3: ndarray,
                             fluxes_itf_x1: ndarray, flux_itf_x2: ndarray, fluxes_itf_x3: ndarray) -> None:
@@ -111,15 +111,38 @@ class PDEEulerCartesian(PDE):
     def riemann_fluxes_cpu(self, q_itf_x1: ndarray, q_itf_x2: ndarray, q_itf_x3: ndarray,
                            fluxes_itf_x1: ndarray, flux_itf_x2: ndarray, fluxes_itf_x3: ndarray) -> None:
 
-        from lib.pde.kernels.interface import riemann_solver
+        from lib.pde.kernels.libkernels import riemann_eulercartesian_ausm_2d_wrapper
+        from lib.pde.kernels.libkernels import boundary_eulercartesian_2d_wrapper
 
         # Compute the kernel inputs
         nb_elements_x = self.config.nb_elements_horizontal
         nb_elements_z = self.config.nb_elements_vertical
         nb_solpts = self.config.nbsolpts
+        nvar = q_itf_x1.shape[0]
+        stride = q_itf_x1[0].size
 
-        riemann_solver(q_itf_x1, q_itf_x3, fluxes_itf_x1,
-                       fluxes_itf_x3, nb_elements_x, nb_elements_z, nb_solpts)
+        riemann_eulercartesian_ausm_2d_wrapper(q_itf_x1, 
+                                               q_itf_x3, 
+                                               fluxes_itf_x1,
+                                               fluxes_itf_x3, 
+                                               nb_elements_x, 
+                                               nb_elements_z, 
+                                               nb_solpts,
+                                               nvar,
+                                               stride)
+        
+
+        # Update the boundary flux
+        boundary_eulercartesian_2d_wrapper(q_itf_x1, 
+                                           q_itf_x3, 
+                                           fluxes_itf_x1,
+                                           fluxes_itf_x3, 
+                                           nb_elements_x, 
+                                           nb_elements_z, 
+                                           nb_solpts,
+                                           nvar,
+                                           stride)
 
     def forcing_terms(self, rhs, q):
         rhs[idx_2d_rho_w, :, :] -= q[idx_2d_rho, :, :] * gravity
+

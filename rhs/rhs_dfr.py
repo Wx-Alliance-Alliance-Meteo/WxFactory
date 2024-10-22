@@ -16,39 +16,30 @@ class RHS_DFR(RHS):
         # Initialize arrays that will be used in this RHS
         nb_solpts = operators.extrap_x.shape[0]
         nb_var = config.nb_var
-        nb_elems = config.nb_elements_horizontal * config.nb_elements_vertical
+
+        nb_elems_x1 = config.nb_elements_horizontal 
+        nb_elems_x2 = config.nb_elements_vertical
 
         nb_itf_solpts_x1 = operators.extrap_x.shape[1]
         nb_itf_solpts_x3 = operators.extrap_z.shape[1]
 
-        if num_dim == 3:
-            nb_solpts *= operators.extrap_y.shape[0]
-            nb_elems *= config.nb_elements_relief_layer
-            nb_itf_solpts_x2 = operators.extrap_y.shape[1]
-
         # Assume two-dimensions first
-        self.f_x1 = xp.empty((nb_var, nb_elems, nb_solpts))
-        self.f_x2 = None
-        self.f_x3 = xp.empty((nb_var, nb_elems, nb_solpts))
+        self.f_x1 = xp.empty((nb_var, nb_elems_x2, nb_elems_x1, nb_solpts))
+        self.f_x3 = xp.empty((nb_var,  nb_elems_x2, nb_elems_x1, nb_solpts))
 
-        self.q_itf_x1 = xp.empty((nb_var, nb_elems, nb_itf_solpts_x1))
-        self.q_itf_x2 = None
-        self.q_itf_x3 = xp.empty((nb_var, nb_elems, nb_itf_solpts_x3))
+        self.q_itf_x1 = xp.empty((nb_var, nb_elems_x2, nb_elems_x1, nb_itf_solpts_x1))
+        self.q_itf_x3 = xp.empty((nb_var, nb_elems_x2, nb_elems_x1, nb_itf_solpts_x3))
 
         self.f_itf_x1 = xp.empty_like(self.q_itf_x1)
-        self.f_itf_x2 = None
         self.f_itf_x3 = xp.empty_like(self.q_itf_x3)
 
         self.df1_dx1 = xp.empty_like(self.f_x1)
-        self.df2_dx2 = None
-        self.df3_dx3 = xp.empty_like(self.f_x1)
+        self.df3_dx3 = xp.empty_like(self.f_x3)
 
-        # Add third-dimension arrays if needed
-        if num_dim == 3:
-            self.f_x2 = xp.empty((nb_var, nb_elems, nb_solpts))
-            self.q_itf_x2 = xp.empty((nb_var, nb_elems, nb_itf_solpts_x2))
-            self.f_itf_x2 = xp.empty_like(self.q_itf_x2)
-            self.df2_dx2 = xp.empty_like(self.f_x2)
+        self.f_x2 = None
+        self.q_itf_x2 = None
+        self.f_itf_x2 = None
+        self.df2_dx2 = None
 
         # Initialize rhs matrix
         self.rhs = xp.empty_like(self.f_x1)
