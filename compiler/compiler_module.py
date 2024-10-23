@@ -119,3 +119,21 @@ def build_librairies(force_build: bool = False):
 
         for interface_to_copy in interfaces_to_copy_for_intellisense:
             shutil.copyfile(interface_to_copy, os.path.join(library_directory, interface_to_copy))
+
+def build_librairies_mpi():
+    from mpi4py import MPI
+
+    rank = MPI.COMM_WORLD.rank
+    
+    build_error = False
+    if rank == 0:
+        try:
+            build_librairies()
+        except Exception as e:
+            build_error = e
+   
+    MPI.COMM_WORLD.bcast(build_error, root=0)
+    if build_error:
+        if rank == 0:
+            raise build_error
+        sys.exit(-1)

@@ -119,9 +119,16 @@ class Simulation:
          except ValueError:
             if self.rank == 0:
                print(f'Unable to create a CudaDevice, will revert to CPU')
+               
+            from compiler.compiler_module import build_librairies_mpi
+            build_librairies_mpi()
+
             device = CpuDevice()
 
       else:
+         from compiler.compiler_module import build_librairies_mpi
+         build_librairies_mpi()
+         
          device = CpuDevice()
 
       return device
