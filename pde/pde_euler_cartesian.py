@@ -121,6 +121,7 @@ class PDEEulerCartesian(PDE):
         nvar = q_itf_x1.shape[0]
         stride = q_itf_x1[0].size
 
+        # Compute the Riemann fluxes 
         riemann_eulercartesian_ausm_2d_wrapper(q_itf_x1, 
                                                q_itf_x3, 
                                                fluxes_itf_x1,
@@ -132,7 +133,7 @@ class PDEEulerCartesian(PDE):
                                                stride)
         
 
-        # Update the boundary flux
+        # Update the boundary fluxes
         boundary_eulercartesian_2d_wrapper(q_itf_x1, 
                                            q_itf_x3, 
                                            fluxes_itf_x1,
