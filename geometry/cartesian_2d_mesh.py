@@ -16,7 +16,6 @@ class Cartesian2D(Geometry):
                 nbsolpts: int,
                 nb_elements_relief_layer: int,
                 relief_layer_height: int,
-                array_module: str,
                 device: Device = default_device):
       super().__init__(nbsolpts, device)
       xp = device.xp
