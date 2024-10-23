@@ -1,86 +1,38 @@
 import os
 
-from pde.pde import PDE
 from numpy import ndarray
 
+from pde.pde import PDE
 from common.definitions import idx_2d_rho, idx_2d_rho_u, idx_2d_rho_w, idx_2d_rho_theta, gravity
-
+from common.device import CudaDevice
 
 class PDEEulerCartesian(PDE):
 
-    cu_file_name = 'kernels/euler_cartesian.cu'
+    def _setup_cpu_kernels(self):
+        # Define here the kernels that will be used based on dimension, geometry and riemann solver choice
 
-    def __init__(self, config, device):
+        from lib.pde.kernels.libkernels import pointwise_eulercartesian_2d_wrapper, \
+            riemann_eulercartesian_ausm_2d_wrapper, boundary_eulercartesian_2d_wrapper
 
-        super().__init__(config, device)
+        self.pointwise_func = pointwise_eulercartesian_2d_wrapper
+        self.riemann_func = riemann_eulercartesian_ausm_2d_wrapper
+        self.boundary_func = boundary_eulercartesian_2d_wrapper
 
-        if self.num_dim == 2:
-            self.nb_elements = self.config.nb_elements_horizontal \
-                * self.config.nb_elements_vertical
 
-        self.nb_var = config.nb_var
-
-        if self.config.device == 'cuda':
-            self.pointwise_fluxes = self.pointwise_fluxes_cuda
-            self.riemann_fluxes = self.riemann_fluxes_cuda
-
-            kernel_file = os.path.join(
-                os.path.dirname(__file__), self.cu_file_name)
-
-            with open(kernel_file, 'r') as f:
-                kernel_code = f.read()
-
-            self.module = device.xp.RawModule(code=kernel_code)
-
-            # Compile speficic kernels
-            self.flux_func = self.module.get_function('euler_flux')
-            self.riemm_func = self.module.get_function('ausm_solver')
-            self.bound_func = self.module.get_function('boundary_flux')
-
-            # Specify the number of threads needed for pointwise and riemann fluxes
-            self.nt_flux = self.nb_elements * self.config.nbsolpts * self.config.nbsolpts
-            self.nt_riem_x1 = len(self.indxl)
-            self.nt_riem_x3 = len(self.indzl)
-            self.nt_fbound_x1 = len(self.indbx)
-            self.nt_fbound_x3 = len(self.indbz)
-
-            # Compute the number of launch blocks
-            self.threads_per_block = 256
-            self.blocks_flux = (self.nt_flux + self.threads_per_block - 1) \
-                // self.threads_per_block
-
-            self.blocks_riem_x1 = (self.nt_riem_x1 + self.threads_per_block - 1) \
-                // self.threads_per_block
-            self.blocks_riem_x3 = (self.nt_riem_x3 + self.threads_per_block - 1) \
-                // self.threads_per_block
-            self.blocks_riemb_x1 = (self.nt_fbound_x1 + self.threads_per_block - 1) \
-                // self.threads_per_block
-            self.blocks_riemb_x3 = (self.nt_fbound_x3 + self.threads_per_block - 1) \
-                // self.threads_per_block
-
-            if self.num_dim == 3:
-                self.nt_riem_x2 = len(self.indyl)
-                self.nt_fbound_x2 = len(self.indby)
-                self.blocks_riem_x2 = (self.nt_riem_x2 + self.threads_per_block - 1) \
-                    // self.threads_per_block
-                self.blocks_riemb_x2 = (self.nt_fbound_x2 + self.threads_per_block - 1) \
-                    // self.threads_per_block
-
-            self.stride = self.nb_elements * self.config.nbsolpts * 2
-        else:
-            self.pointwise_fluxes = self.pointwise_fluxes_cpu
-            self.riemann_fluxes = self.riemann_fluxes_cpu
-
-    def pointwise_fluxes_cuda(self, q: ndarray,
-                              flux_x1: ndarray, flux_x2: ndarray, flux_x3: ndarray):
+    def _setup_cuda_kernels(self):
+        # Compile speficic kernels
+        self.pointwise_func = self.pointwise_module.get_function('euler_flux')
+        self.riemann_func = self.riemann_module.get_function('ausm_solver')
+        self.boundary_func = self.boundary_module.get_function('boundary_flux')
+        
+    def pointwise_fluxes_cuda(self, q: ndarray, flux_x1: ndarray, flux_x2: ndarray, flux_x3: ndarray) -> None:
 
         if self.num_dim == 2:
-            self.flux_func((self.blocks_flux,), (self.threads_per_block,),
-                           (q, flux_x1, flux_x3, self.nt_flux))
+            self._kernel_call(self.pointwise_func, 
+                              self.blocks_pointwise, 
+                              q, flux_x1, flux_x3, self.nthread_pointwise)
 
-    def pointwise_fluxes_cpu(self, q: ndarray,
-                             flux_x1: ndarray, flux_x2: ndarray, flux_x3: ndarray):
-        from lib.pde.kernels.libkernels import pointwise_eulercartesian_2d_wrapper
+    def pointwise_fluxes_cpu(self, q: ndarray, flux_x1: ndarray, flux_x2: ndarray, flux_x3: ndarray) -> None:
 
         # Compute the kernel inputs
         nb_elements_x1 = self.config.nb_elements_horizontal
@@ -88,31 +40,50 @@ class PDEEulerCartesian(PDE):
         nb_solpts = self.config.nbsolpts ** 2
 
         # Call CPU kernel
-        pointwise_eulercartesian_2d_wrapper(q, flux_x1, flux_x3, nb_elements_x1, nb_elements_x3, nb_solpts)
+        self.pointwise_func(q, flux_x1, flux_x3, nb_elements_x1, nb_elements_x3, nb_solpts)
 
     def riemann_fluxes_cuda(self, q_itf_x1: ndarray, q_itf_x2: ndarray, q_itf_x3: ndarray,
                             fluxes_itf_x1: ndarray, flux_itf_x2: ndarray, fluxes_itf_x3: ndarray) -> None:
+        
+        stride = self.riem_stride
+        nb_var = self.nb_var
 
-        self.riemm_func((self.blocks_riem_x1,), (self.threads_per_block,),
-                        (q_itf_x1, fluxes_itf_x1, self.nb_var, 0, self.indxl,
-                         self.indxr, self.stride, self.nt_riem_x1))
+ 
+        if self.num_dim == 2:
+            args_riem_x1 = (q_itf_x1, fluxes_itf_x1, nb_var, 0, 
+                            self.indxl, self.indxr, stride, self.nthread_riem_x1) 
 
-        self.riemm_func((self.blocks_riem_x3,), (self.threads_per_block,),
-                        (q_itf_x3, fluxes_itf_x3, self.nb_var, 1, self.indzl,
-                         self.indzr, self.stride, self.nt_riem_x3))
 
-        # Set the boundary fluxes
-        self.bound_func((self.blocks_riemb_x1,), (self.threads_per_block,),
-                        (q_itf_x1, fluxes_itf_x1, self.indbx, 0,  self.stride, self.nt_fbound_x1))
+            self._kernel_call(self.riemann_func, 
+                            self.blocks_riem_x1, 
+                            *args_riem_x1)
 
-        self.bound_func((self.blocks_riemb_x3,), (self.threads_per_block,),
-                        (q_itf_x3, fluxes_itf_x3, self.indbz, 1,  self.stride, self.nt_fbound_x3))
+            args_riem_x3 = (q_itf_x3, fluxes_itf_x3, nb_var, 1, 
+                            self.indzl, self.indzr, stride, self.nthread_riem_x3)
+            
+            self._kernel_call(self.riemann_func, 
+                            self.blocks_riem_x3, 
+                            *args_riem_x3)
+
+            args_bound_x1 = (q_itf_x1, fluxes_itf_x1, self.indbx, 0, 
+                             stride, self.nthread_bound_x1)
+
+            self._kernel_call(self.boundary_func, 
+                              self.blocks_bound_x1, 
+                              *args_bound_x1)
+
+            args_bound_x3 = (q_itf_x3, fluxes_itf_x3, self.indbz, 1, 
+                             stride, self.nthread_bound_x3)
+
+            self._kernel_call(self.boundary_func, 
+                              self.blocks_bound_x3, 
+                              *args_bound_x3)
+    
 
     def riemann_fluxes_cpu(self, q_itf_x1: ndarray, q_itf_x2: ndarray, q_itf_x3: ndarray,
                            fluxes_itf_x1: ndarray, flux_itf_x2: ndarray, fluxes_itf_x3: ndarray) -> None:
 
-        from lib.pde.kernels.libkernels import riemann_eulercartesian_ausm_2d_wrapper
-        from lib.pde.kernels.libkernels import boundary_eulercartesian_2d_wrapper
+
 
         # Compute the kernel inputs
         nb_elements_x = self.config.nb_elements_horizontal
@@ -122,27 +93,14 @@ class PDEEulerCartesian(PDE):
         stride = q_itf_x1[0].size
 
         # Compute the Riemann fluxes 
-        riemann_eulercartesian_ausm_2d_wrapper(q_itf_x1, 
-                                               q_itf_x3, 
-                                               fluxes_itf_x1,
-                                               fluxes_itf_x3, 
-                                               nb_elements_x, 
-                                               nb_elements_z, 
-                                               nb_solpts,
-                                               nvar,
-                                               stride)
-        
+        self.riemann_func(q_itf_x1, q_itf_x3, fluxes_itf_x1, fluxes_itf_x3, 
+                          nb_elements_x, nb_elements_z, nb_solpts,
+                          nvar, stride)
 
         # Update the boundary fluxes
-        boundary_eulercartesian_2d_wrapper(q_itf_x1, 
-                                           q_itf_x3, 
-                                           fluxes_itf_x1,
-                                           fluxes_itf_x3, 
-                                           nb_elements_x, 
-                                           nb_elements_z, 
-                                           nb_solpts,
-                                           nvar,
-                                           stride)
+        self.boundary_func(q_itf_x1, q_itf_x3,  fluxes_itf_x1, fluxes_itf_x3, 
+                           nb_elements_x, nb_elements_z, nb_solpts,
+                           nvar, stride)
 
     def forcing_terms(self, rhs, q):
         rhs[idx_2d_rho_w, :, :] -= q[idx_2d_rho, :, :] * gravity

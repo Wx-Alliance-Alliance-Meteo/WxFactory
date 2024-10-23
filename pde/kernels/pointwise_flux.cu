@@ -1,4 +1,4 @@
-extern "C" __global__ void euler_flux(const double *Q, double *flux_x, double *flux_z, const int stride)
+extern "C" __global__ void euler_flux(const double *q, double *flux_x, double *flux_z, const int stride)
 {
   // These constants are here just temporarily
   double p0 = 100000.;
@@ -23,10 +23,10 @@ extern "C" __global__ void euler_flux(const double *Q, double *flux_x, double *f
     idx_rhow = idt + 2 * stride;
     idx_rhot = idt + 3 * stride;
 
-    rho = Q[idx_rho];
-    rhou = Q[idx_rhou];
-    rhow = Q[idx_rhow];
-    rho_theta = Q[idx_rhot];
+    rho = q[idx_rho];
+    rhou = q[idx_rhou];
+    rhow = q[idx_rhow];
+    rho_theta = q[idx_rhot];
 
     invrho = 1.0 / rho;
 

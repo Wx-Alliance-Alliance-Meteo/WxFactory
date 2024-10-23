@@ -50,7 +50,7 @@ class RHS(ABC):
         self.num_dim = config.num_dim
 
         # Instantiate appropriate PDE object
-        self.pde = get_pde(pde_name)(config, device)
+        self.pde = get_pde(pde_name)(geometry, config, device)
 
         # Must be allocated at every child class
         self.rhs = None
@@ -77,6 +77,7 @@ class RHS(ABC):
 
         # At this moment, a deep copy needs to be returned
         # otherwise issues are encountered after. This needs to be fixed
+
         return 1.0*self.rhs
 
     def full(self, q: ndarray) -> ndarray:

@@ -1,5 +1,5 @@
 
-extern "C" __global__ void boundary_flux(double *Q, double *f, const int *indb, const int direction, const int stride, const int nmax)
+extern "C" __global__ void boundary_flux(double *q, double *f, const int *indb, const int direction, const int stride, const int nmax)
 {
   // These constants are here just temporarily
   double p0 = 100000.;
@@ -14,10 +14,10 @@ extern "C" __global__ void boundary_flux(double *Q, double *f, const int *indb, 
 
   if (idt < nmax)
   {
-    double *Qb, *fb, rho_theta;
+    double *qb, *fb, rho_theta;
     int idx_rho, idx_rhou, idx_rhow, idx_rhot;
 
-    Qb = &Q[indb[idt]];
+    qb = &q[indb[idt]];
     fb = &f[indb[idt]];
 
     // Compute variable stride
@@ -26,7 +26,7 @@ extern "C" __global__ void boundary_flux(double *Q, double *f, const int *indb, 
     idx_rhow = 2 * stride;
     idx_rhot = 3 * stride;
 
-    rho_theta = Qb[idx_rhot];
+    rho_theta = qb[idx_rhot];
 
     fb[idx_rho] = 0.0;
     if (direction == 0)

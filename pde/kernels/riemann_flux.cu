@@ -1,4 +1,4 @@
-extern "C" __global__ void ausm_solver(double *Q,
+extern "C" __global__ void ausm_solver(double *q,
                                        double *f,
                                        const int nvars,
                                        const int direction,
@@ -27,13 +27,13 @@ extern "C" __global__ void ausm_solver(double *Q,
     double pl, pr, al, ar, vnl, vnr, M, Ml, Mr, Mmax, Mmin;
     int idx_rho, idx_rhou, idx_rhow, idx_rhot;
     int indl, indr;
-    double *Ql, *Qr, *fl, *fr;
+    double *ql, *qr, *fl, *fr;
 
     indl = indlv[idt];
     indr = indrv[idt];
 
-    Ql = &Q[indl];
-    Qr = &Q[indr];
+    ql = &q[indl];
+    qr = &q[indr];
 
     fl = &f[indl];
     fr = &f[indr];
@@ -44,15 +44,15 @@ extern "C" __global__ void ausm_solver(double *Q,
     idx_rhow = 2 * stride;
     idx_rhot = 3 * stride;
 
-    rhol = Ql[idx_rho];
-    rhoul = Ql[idx_rhou];
-    rhowl = Ql[idx_rhow];
-    rho_thetal = Ql[idx_rhot];
+    rhol = ql[idx_rho];
+    rhoul = ql[idx_rhou];
+    rhowl = ql[idx_rhow];
+    rho_thetal = ql[idx_rhot];
 
-    rhor = Qr[idx_rho];
-    rhour = Qr[idx_rhou];
-    rhowr = Qr[idx_rhow];
-    rho_thetar = Qr[idx_rhot];
+    rhor = qr[idx_rho];
+    rhour = qr[idx_rhou];
+    rhowr = qr[idx_rhow];
+    rho_thetar = qr[idx_rhot];
 
     invrhol = 1.0 / rhol;
     ul = rhoul * invrhol;

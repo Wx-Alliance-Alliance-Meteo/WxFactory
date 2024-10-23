@@ -92,12 +92,13 @@ class Configuration:
 
       if self.relief_layer_height > 0:
          self.num_dim = 3
+         self.nbsolpts_elem = self.nbsolpts ** 3
       else:
          self.num_dim = 2
+         self.nbsolpts_elem = self.nbsolpts ** 2
 
       if self.equations == 'euler':
          self.nb_var = self.num_dim + 2
-
 
       self.filter_apply  = self._get_option('Spatial_discretization', 'filter_apply', bool, False)
       self.filter_order  = self._get_option('Spatial_discretization', 'filter_order', int,
@@ -131,6 +132,9 @@ class Configuration:
          self.ϕ0   = self._get_option('Grid', 'ϕ0', float, None)
          self.α0   = self._get_option('Grid', 'α0', float, None)
          self.ztop = self._get_option('Grid', 'ztop', float, 0.0)
+         self.nb_elements_total = self.nb_elements_horizontal * self.nb_elements_horizontal
+         if self.num_dim == 3:
+            self.nb_elements_total *= self.nb_elements_relief_layer
 
       # Cartesian grid bounds
       if self.grid_type == 'cartesian2d':
@@ -138,6 +142,7 @@ class Configuration:
          self.x1 = self._get_option('Grid', 'x1', float, None)
          self.z0 = self._get_option('Grid', 'z0', float, None)
          self.z1 = self._get_option('Grid', 'z1', float, None)
+         self.nb_elements_total = self.nb_elements_horizontal * self.nb_elements_vertical
 
       ###################
       # Preconditioning
