@@ -2,6 +2,7 @@ from numpy import ndarray
 import random
 from common.device import Device
 
+
 def generate_vectors(size: int, random: random.Random, min: float, max: float, devices: list[Device]) -> list[ndarray]:
     arrs: list[ndarray] = [device.xp.empty(size, dtype=float) for device in devices]
 
@@ -13,7 +14,10 @@ def generate_vectors(size: int, random: random.Random, min: float, max: float, d
 
     return arrs
 
-def generate_matrixes(size: tuple[int, int], random: random.Random, min: float, max: float, devices: list[Device]) -> list[ndarray]:
+
+def generate_matrixes(
+    size: tuple[int, int], random: random.Random, min: float, max: float, devices: list[Device]
+) -> list[ndarray]:
     arrs: list[ndarray] = [device.xp.empty(size, dtype=float) for device in devices]
 
     for it1 in range(size[0]):
@@ -22,5 +26,5 @@ def generate_matrixes(size: tuple[int, int], random: random.Random, min: float, 
 
             for arr_it in arrs:
                 arr_it[it1, it2] = nb
-    
+
     return arrs

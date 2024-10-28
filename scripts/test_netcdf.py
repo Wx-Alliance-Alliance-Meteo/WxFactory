@@ -2,5 +2,4 @@
 
 import netCDF4
 
-ncfile = netCDF4.Dataset('test.nc', 'w', format='NETCDF4', parallel = True)
-
+ncfile = netCDF4.Dataset("test.nc", "w", format="NETCDF4", parallel=True)

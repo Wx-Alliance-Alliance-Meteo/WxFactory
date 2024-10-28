@@ -3,23 +3,25 @@ from numpy import ndarray
 from common.device import CudaDevice
 from geometry import Cartesian2D
 
+
 def get_pde(name):
     if name == "euler-cartesian":
         from pde.pde_euler_cartesian import PDEEulerCartesian
+
         return PDEEulerCartesian
 
     elif name == "euler-cubesphere":
         from pde.pde_euler_cubedsphere import PDEEulerCubedSphere
+
         return PDEEulerCubedSphere
 
 
 def load_cuda_module(filename, device):
     import os
 
-    kernel_file = os.path.join(
-        os.path.dirname(__file__), "kernels", filename)
+    kernel_file = os.path.join(os.path.dirname(__file__), "kernels", filename)
 
-    with open(kernel_file, 'r') as f:
+    with open(kernel_file, "r") as f:
         kernel_code = f.read()
 
     return device.xp.RawModule(code=kernel_code)
@@ -49,24 +51,24 @@ class PDE(ABC):
     def _setup_cuda(self):
         self.pointwise_fluxes = self.pointwise_fluxes_cuda
         self.riemann_fluxes = self.riemann_fluxes_cuda
-        
+
         # Load the CUDA raw modules where kernels are located
         self.boundary_module = load_cuda_module("boundary_flux.cu", self.device)
         self.pointwise_module = load_cuda_module("pointwise_flux.cu", self.device)
         self.riemann_module = load_cuda_module("riemann_flux.cu", self.device)
-        
+
         self._setup_cuda_indices()
         self._setup_cuda_sizes()
         self._setup_cuda_kernels()
 
     def _setup_cuda_sizes(self):
         self._setup_cuda_num_threads()
-        
-        self.nthread_per_block = (256, )
+
+        self.nthread_per_block = (256,)
 
         def compute_blocks(num_threads):
             tpb = self.nthread_per_block[0]
-            return ((num_threads + tpb - 1) // tpb, )
+            return ((num_threads + tpb - 1) // tpb,)
 
         self.blocks_pointwise = compute_blocks(self.nthread_pointwise)
 
@@ -79,7 +81,6 @@ class PDE(ABC):
         self.blocks_bound_x3 = compute_blocks(self.nthread_bound_x3)
 
         self.riem_stride = self.nb_elements * self.config.nbsolpts * 2
-    
 
     def _setup_cuda_num_threads(self):
         """Specify the number of threads needed for each kernel call"""
@@ -96,7 +97,6 @@ class PDE(ABC):
         self.nthread_bound_x2 = len(self.indby)
         self.nthread_bound_x3 = len(self.indbz)
 
-
     @abstractmethod
     def _setup_cuda_kernels(self):
         """Determine the spefic kernels to run on the GPU"""
@@ -107,7 +107,7 @@ class PDE(ABC):
         """Determine the specific kernels to run on the CPU"""
         pass
 
-    def _kernel_call(self, kernel, num_blocks, *args):  
+    def _kernel_call(self, kernel, num_blocks, *args):
         return kernel(num_blocks, self.nthread_per_block, args)
 
     @abstractmethod
@@ -119,13 +119,27 @@ class PDE(ABC):
         pass
 
     @abstractmethod
-    def riemann_fluxes_cpu(self, q_itf_x1: ndarray, q_itf_x2: ndarray, q_itf_x3: ndarray,
-                           fluxes_itf_x1: ndarray, flux_itf_x2: ndarray, fluxes_itf_x3: ndarray) -> ndarray:
+    def riemann_fluxes_cpu(
+        self,
+        q_itf_x1: ndarray,
+        q_itf_x2: ndarray,
+        q_itf_x3: ndarray,
+        fluxes_itf_x1: ndarray,
+        flux_itf_x2: ndarray,
+        fluxes_itf_x3: ndarray,
+    ) -> ndarray:
         pass
 
     @abstractmethod
-    def riemann_fluxes_cuda(self, q_itf_x1: ndarray, q_itf_x2: ndarray, q_itf_x3: ndarray,
-                            fluxes_itf_x1: ndarray, flux_itf_x2: ndarray, fluxes_itf_x3: ndarray) -> ndarray:
+    def riemann_fluxes_cuda(
+        self,
+        q_itf_x1: ndarray,
+        q_itf_x2: ndarray,
+        q_itf_x3: ndarray,
+        fluxes_itf_x1: ndarray,
+        flux_itf_x2: ndarray,
+        fluxes_itf_x3: ndarray,
+    ) -> ndarray:
         pass
 
     @abstractmethod
@@ -139,7 +153,7 @@ class PDE(ABC):
 
             if isinstance(self.geom, Cartesian2D):
                 nb_elements_x = self.config.nb_elements_horizontal
-                nb_elements_z = self.config.nb_elements_vertical 
+                nb_elements_z = self.config.nb_elements_vertical
             else:
                 nb_elements_x = self.config.nb_elements_horizontal
                 nb_elements_z = self.config.nb_elements_horizontal
@@ -149,7 +163,7 @@ class PDE(ABC):
             indzl, indzr = [], []
 
             ix, iz = 0, 0
-            cols = 2*nbsolpts
+            cols = 2 * nbsolpts
             nb_elements = nb_elements_x * nb_elements_z
             for i in range(nb_elements_z):
                 for j in range(nb_elements_x):
@@ -175,24 +189,24 @@ class PDE(ABC):
 
             # Get boundary indices
             indbz, indbx = [], []
-            count = nb_elements_x*(nb_elements_z-1)
+            count = nb_elements_x * (nb_elements_z - 1)
 
             # Bottom boundary
             for j in range(nb_elements_x):
                 for k in range(nbsolpts):
-                    indbz.append(j*cols + k)
+                    indbz.append(j * cols + k)
 
             # Top boundary
             for j in range(nb_elements_x):
                 for k in range(nbsolpts):
-                    indbz.append((j+count)*cols + nbsolpts + k)
+                    indbz.append((j + count) * cols + nbsolpts + k)
 
             # Left boundary
             count = 0
             for j in range(nb_elements_z):
                 countr = count + nb_elements_x - 1
                 for k in range(nbsolpts):
-                    indbx.append(count*cols + k)
+                    indbx.append(count * cols + k)
                 count += nb_elements_x
 
             # Right boundary
@@ -200,7 +214,7 @@ class PDE(ABC):
             for j in range(nb_elements_z):
                 countr = count + nb_elements_x - 1
                 for k in range(nbsolpts):
-                    indbx.append(countr*cols + nbsolpts + k)
+                    indbx.append(countr * cols + nbsolpts + k)
                 count += nb_elements_x
 
             xp = self.device.xp

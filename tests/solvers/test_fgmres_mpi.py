@@ -3,6 +3,7 @@ from solvers.fgmres import fgmres
 from mpi_test import run_test_on_x_process
 from numpy import ndarray
 
+
 class FgmresMpiTestCases(cpu_test.CpuTestCases):
     tolerance: float
     matrix_size_multiplier: int
@@ -31,12 +32,14 @@ class FgmresMpiTestCases(cpu_test.CpuTestCases):
         matrix: ndarray = full_matrix[:, from_index:to_index].copy()
         vector: ndarray = full_vector[from_index:to_index].copy()
 
-        def full_matvec_handle(v: ndarray) -> ndarray: return full_matrix @ v
+        def full_matvec_handle(v: ndarray) -> ndarray:
+            return full_matrix @ v
 
-        def partial_matvec_handle(v: ndarray) -> ndarray: return matrix @ v
+        def partial_matvec_handle(v: ndarray) -> ndarray:
+            return matrix @ v
 
         x1: ndarray
-        x2: ndarray 
+        x2: ndarray
 
         x1, _ = fgmres(partial_matvec_handle, vector, tol=self.tolerance, device=self.cpu_device, comm=comm)
         x2, _ = fgmres(full_matvec_handle, full_vector, tol=self.tolerance, device=self.cpu_device, comm=comm2)

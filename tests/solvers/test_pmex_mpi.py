@@ -17,7 +17,8 @@ class PmexMpiTestCases(cpu_test.CpuTestCases):
         comm = run_test_on_x_process(self, 2)
         comm2 = comm.Split(comm.rank)
 
-        def matvec_handle(v: ndarray) -> ndarray: return v
+        def matvec_handle(v: ndarray) -> ndarray:
+            return v
 
         size: int = comm.size * self.matrix_size_multiplier
 
@@ -32,7 +33,7 @@ class PmexMpiTestCases(cpu_test.CpuTestCases):
         matrix: ndarray = full_matrix[:, from_index:to_index].copy()
 
         w1: ndarray
-        w2: ndarray 
+        w2: ndarray
 
         w1, _ = pmex([1.0], matvec_handle, matrix, self.tolerance, device=self.cpu_device, comm=comm)
         w2, _ = pmex([1.0], matvec_handle, full_matrix, self.tolerance, device=self.cpu_device, comm=comm2)
@@ -44,10 +45,12 @@ class PmexMpiTestCases(cpu_test.CpuTestCases):
         abs_diff = abs(diff)
 
         relative_diff = abs_diff / norm
-        
-        self.assertLessEqual(relative_diff, self.tolerance, 'The MPI implementation didn\' gave a result close to the non MPI implementation')
+
+        self.assertLessEqual(
+            relative_diff,
+            self.tolerance,
+            "The MPI implementation didn' gave a result close to the non MPI implementation",
+        )
 
         comm2.Disconnect()
         comm.Disconnect()
-
-
