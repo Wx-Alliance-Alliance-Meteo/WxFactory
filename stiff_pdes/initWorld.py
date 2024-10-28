@@ -74,132 +74,128 @@
 
 """
 
-import numpy as np 
-import math 
+import numpy as np
+import math
 import scipy.linalg
-import sys 
+import sys
 
-from mpi4py	import MPI
+from mpi4py import MPI
+
 
 class InitWorld:
 
-	#constructor
-	def __init__(yo, comm, BCType, domain, numPoints):
+    # constructor
+    def __init__(yo, comm, BCType, domain, numPoints):
 
-		yo.rank = comm.Get_rank()
-		yo.size = comm.Get_size()
+        yo.rank = comm.Get_rank()
+        yo.size = comm.Get_size()
 
-		yo.BCType = BCType
-		
-		if (comm.Get_rank() == 0):
-			yo.IamRoot = True
-		else:
-			yo.IamRoot = False	
+        yo.BCType = BCType
 
+        if comm.Get_rank() == 0:
+            yo.IamRoot = True
+        else:
+            yo.IamRoot = False
 
-		yo.procs_per_xaxis = int(np.sqrt(yo.size))
+        yo.procs_per_xaxis = int(np.sqrt(yo.size))
 
-		#if not square, then exit
-		if yo.procs_per_xaxis**2 != yo.size:
-			print("Wrong number of processors, must be square!")
-			exit()	
+        # if not square, then exit
+        if yo.procs_per_xaxis**2 != yo.size:
+            print("Wrong number of processors, must be square!")
+            exit()
 
-		#else, should be divided evenly 
-		else:
-			#split up domain into squares 
-			yo.procs_per_yaxis = yo.procs_per_xaxis
-			yo.procEvenSplit   = True
+        # else, should be divided evenly
+        else:
+            # split up domain into squares
+            yo.procs_per_yaxis = yo.procs_per_xaxis
+            yo.procEvenSplit = True
 
-		#rank to grid ID, for organizing domain
-		yo.procYID = int (yo.rank / yo.procs_per_yaxis)
-		yo.procXID = int (yo.rank % yo.procs_per_xaxis)
+        # rank to grid ID, for organizing domain
+        yo.procYID = int(yo.rank / yo.procs_per_yaxis)
+        yo.procXID = int(yo.rank % yo.procs_per_xaxis)
 
-		#set up the arrays for local mat-vec communication
+        # set up the arrays for local mat-vec communication
 
-		#set id's of bottom neighboors
-		#this is the global rank of the processors
-		if yo.procYID == 0: #there are no bottom neighboors
-			if yo.BCType == "periodic":
-				yo.BottomNeighRank = yo.procs_per_xaxis*(yo.procs_per_yaxis-1) + yo.procXID
-			else:
-				yo.BottomNeighRank = None
+        # set id's of bottom neighboors
+        # this is the global rank of the processors
+        if yo.procYID == 0:  # there are no bottom neighboors
+            if yo.BCType == "periodic":
+                yo.BottomNeighRank = yo.procs_per_xaxis * (yo.procs_per_yaxis - 1) + yo.procXID
+            else:
+                yo.BottomNeighRank = None
 
-		else: #get rank of processor below
-			yo.BottomNeighRank = (yo.procYID-1)*yo.procs_per_xaxis + yo.procXID
+        else:  # get rank of processor below
+            yo.BottomNeighRank = (yo.procYID - 1) * yo.procs_per_xaxis + yo.procXID
 
-		#set id's of top neighboors
-		#this is the global rank of the processors
-		if yo.procYID == yo.procs_per_yaxis -1: #last processor has no top neighboor
-			if yo.BCType == "periodic":
-				yo.TopNeighRank =  yo.rank - yo.procs_per_xaxis*(yo.procs_per_yaxis-1)
-			else:
-				yo.TopNeighRank = None
+        # set id's of top neighboors
+        # this is the global rank of the processors
+        if yo.procYID == yo.procs_per_yaxis - 1:  # last processor has no top neighboor
+            if yo.BCType == "periodic":
+                yo.TopNeighRank = yo.rank - yo.procs_per_xaxis * (yo.procs_per_yaxis - 1)
+            else:
+                yo.TopNeighRank = None
 
-		else: #get rank of processor above 
-			yo.TopNeighRank = (yo.procYID +1)*yo.procs_per_xaxis + yo.procXID
+        else:  # get rank of processor above
+            yo.TopNeighRank = (yo.procYID + 1) * yo.procs_per_xaxis + yo.procXID
 
-		#set rank of left neighboor
-		#this saves the global rank of the processor for communication
-		if yo.procXID == 0: #there is no left neighboor
-			if yo.BCType == "periodic":
-				yo.LeftNeighRank = yo.rank + (yo.procs_per_xaxis-1) #periodic bc's
-			else:
-				yo.LeftNeighRank = None 
+        # set rank of left neighboor
+        # this saves the global rank of the processor for communication
+        if yo.procXID == 0:  # there is no left neighboor
+            if yo.BCType == "periodic":
+                yo.LeftNeighRank = yo.rank + (yo.procs_per_xaxis - 1)  # periodic bc's
+            else:
+                yo.LeftNeighRank = None
 
-		else: #get rank of left processor
-			yo.LeftNeighRank = yo.rank - 1
+        else:  # get rank of left processor
+            yo.LeftNeighRank = yo.rank - 1
 
-		#set rank of right neighboor
-		#note for the edge cases assume periodic bc
-		#this saves global rank of proc. for communication
-		if yo.procXID == yo.procs_per_xaxis -1:
-			if yo.BCType == "periodic":
-				yo.RightNeighRank = yo.rank - (yo.procs_per_xaxis-1) #periodic bc's
-			else:
-				yo.RightNeighRank = None
+        # set rank of right neighboor
+        # note for the edge cases assume periodic bc
+        # this saves global rank of proc. for communication
+        if yo.procXID == yo.procs_per_xaxis - 1:
+            if yo.BCType == "periodic":
+                yo.RightNeighRank = yo.rank - (yo.procs_per_xaxis - 1)  # periodic bc's
+            else:
+                yo.RightNeighRank = None
 
-		else: #get rank of right processor
-			yo.RightNeighRank = yo.rank + 1
+        else:  # get rank of right processor
+            yo.RightNeighRank = yo.rank + 1
 
-		#Now set up the computational domain 
-		#total number of points for axis
-		yo.xL               = domain[0]
-		yo.xR               = domain[1]
-		yo.numPointswBound  = numPoints #total points including the boundary domain
+        # Now set up the computational domain
+        # total number of points for axis
+        yo.xL = domain[0]
+        yo.xR = domain[1]
+        yo.numPointswBound = numPoints  # total points including the boundary domain
 
-		if BCType == "periodic":
-			yo.numPointsPerAxis = yo.numPointswBound - 1 #remove only one end pt
-		else:
-			yo.numPointsPerAxis = yo.numPointswBound - 2 #remove both end points
+        if BCType == "periodic":
+            yo.numPointsPerAxis = yo.numPointswBound - 1  # remove only one end pt
+        else:
+            yo.numPointsPerAxis = yo.numPointswBound - 2  # remove both end points
 
+        yo.totalPoints = (yo.numPointsPerAxis) ** 2  # points in total domain, not per processor
+        yo.numPointsX = int(yo.numPointsPerAxis / yo.procs_per_xaxis)  # points / processors
 
-		yo.totalPoints      = (yo.numPointsPerAxis)**2 #points in total domain, not per processor
-		yo.numPointsX       = int(yo.numPointsPerAxis / yo.procs_per_xaxis) #points / processors
+        # number of rows and columns per processor
+        # if even, there will be an even chunk of the domain between each processor
+        if yo.procEvenSplit:
+            yo.numPointsY = yo.numPointsX
 
-		#number of rows and columns per processor
-		#if even, there will be an even chunk of the domain between each processor
-		if yo.procEvenSplit :
-			yo.numPointsY    = yo.numPointsX
+        # this is for that special 8192 case
+        else:
+            yo.numPointsY = int(yo.numPointsPerAxis / yo.procs_per_yaxis)
 
-		#this is for that special 8192 case 
-		else: 
-			yo.numPointsY = int(yo.numPointsPerAxis / yo.procs_per_yaxis)
-			
-		#total size when unrolled into a 1D array for each processor
-		yo.oneDsize = yo.numPointsX*yo.numPointsY
+        # total size when unrolled into a 1D array for each processor
+        yo.oneDsize = yo.numPointsX * yo.numPointsY
 
-		#dx
-		yo.dx = (yo.xR - yo.xL) / (yo.numPointswBound -1)
+        # dx
+        yo.dx = (yo.xR - yo.xL) / (yo.numPointswBound - 1)
 
-		if BCType == "periodic":
-			#start at the left boundary
-			#here we remove the right point
-			yo.startX = (yo.xL + (yo.dx * yo.procXID * yo.numPointsX))  
-			yo.startY = (yo.xL + (yo.dx * yo.procYID * yo.numPointsY))
-		else:
-			#startX and startY grid point of each processor
-			yo.startX = yo.xL + (yo.dx * yo.procXID * yo.numPointsX) + yo.dx
-			yo.startY = yo.xL + (yo.dx * yo.procYID * yo.numPointsY) + yo.dx
-
-
-
+        if BCType == "periodic":
+            # start at the left boundary
+            # here we remove the right point
+            yo.startX = yo.xL + (yo.dx * yo.procXID * yo.numPointsX)
+            yo.startY = yo.xL + (yo.dx * yo.procYID * yo.numPointsY)
+        else:
+            # startX and startY grid point of each processor
+            yo.startX = yo.xL + (yo.dx * yo.procXID * yo.numPointsX) + yo.dx
+            yo.startY = yo.xL + (yo.dx * yo.procYID * yo.numPointsY) + yo.dx

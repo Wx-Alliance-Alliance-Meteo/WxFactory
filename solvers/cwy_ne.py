@@ -3,7 +3,7 @@ import numpy
 import scipy.linalg
 
 from mpi4py import MPI
-from time   import time 
+from time import time
 
 """
 
@@ -51,126 +51,131 @@ References:
 * Niesen, J. and Wright, W.M., 2011. A Krylov subspace method for option pricing. SSRN 1799124
 * Niesen, J. and Wright, W.M., 2012. Algorithm 919: A Krylov subspace algorithm for evaluating the ``φ``-functions appearing in exponential integrators. ACM Transactions on Mathematical Software (TOMS), 38(3), p.22
 """
-def cwy_ne(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 2, task1 = False):
 
-   rank = MPI.COMM_WORLD.Get_rank()
-   ppo, n = u.shape
-   p = ppo - 1
 
-   if p == 0:
-      p = 1
-      # Add extra column of zeros
-      u = numpy.row_stack((u, numpy.zeros(len(u))))
+def cwy_ne(τ_out, A, u, tol=1e-7, m_init=10, mmin=10, mmax=128, iop=2, task1=False):
 
-   # We only allow m to vary between mmin and mmax
-   m = max(mmin, min(m_init, mmax))
+    rank = MPI.COMM_WORLD.Get_rank()
+    ppo, n = u.shape
+    p = ppo - 1
 
-   # Preallocate matrix
-   V = numpy.zeros((mmax + 1, n + p))
-   H = numpy.zeros((mmax + 1, mmax + 1))
+    if p == 0:
+        p = 1
+        # Add extra column of zeros
+        u = numpy.row_stack((u, numpy.zeros(len(u))))
 
-   #matrices for CWY
-   T = numpy.eye(mmax)
+    # We only allow m to vary between mmin and mmax
+    m = max(mmin, min(m_init, mmax))
 
-   step    = 0
-   krystep = 0
-   ireject = 0
-   reject  = 0
-   exps    = 0
-   sgn     = numpy.sign(τ_out[-1])
-   τ_now   = 0.0
-   τ_end   = abs(τ_out[-1])
-   happy   = False
-   j       = 0
+    # Preallocate matrix
+    V = numpy.zeros((mmax + 1, n + p))
+    H = numpy.zeros((mmax + 1, mmax + 1))
 
-   conv    = 0.0
-   numSteps = len(τ_out)
-   reg_comm = 0
+    # matrices for CWY
+    T = numpy.eye(mmax)
 
-   # Initial condition
-   w = numpy.zeros((numSteps, n))
-   w[0, :] = u[0, :].copy()
+    step = 0
+    krystep = 0
+    ireject = 0
+    reject = 0
+    exps = 0
+    sgn = numpy.sign(τ_out[-1])
+    τ_now = 0.0
+    τ_end = abs(τ_out[-1])
+    happy = False
+    j = 0
 
-   # compute the 1-norm of u
-   local_nrmU = numpy.sum(abs(u[1:, :]), axis=1)
-   normU = numpy.amax( MPI.COMM_WORLD.allreduce(local_nrmU) )
+    conv = 0.0
+    numSteps = len(τ_out)
+    reg_comm = 0
 
-   # Normalization factors
-   if ppo > 1 and normU > 0:
-      ex = math.ceil(math.log2(normU))
-      nu = 2**(-ex)
-      mu = 2**(ex)
-   else:
-      nu = 1.0
-      mu = 1.0
+    # Initial condition
+    w = numpy.zeros((numSteps, n))
+    w[0, :] = u[0, :].copy()
 
-   # Flip the rest of the u matrix
-   u_flip = nu * numpy.flipud(u[1:, :])
+    # compute the 1-norm of u
+    local_nrmU = numpy.sum(abs(u[1:, :]), axis=1)
+    normU = numpy.amax(MPI.COMM_WORLD.allreduce(local_nrmU))
 
-   # Compute and initial starting approximation for the step size
-   τ = τ_end
+    # Normalization factors
+    if ppo > 1 and normU > 0:
+        ex = math.ceil(math.log2(normU))
+        nu = 2 ** (-ex)
+        mu = 2 ** (ex)
+    else:
+        nu = 1.0
+        mu = 1.0
 
-   # Setting the safety factors and tolerance requirements
-   if τ_end > 1:
-      γ = 0.2
-      γ_mmax = 0.1
-   else:
-      γ = 0.9
-      γ_mmax = 0.6
+    # Flip the rest of the u matrix
+    u_flip = nu * numpy.flipud(u[1:, :])
 
-   delta = 1.4
+    # Compute and initial starting approximation for the step size
+    τ = τ_end
 
-   # Used in the adaptive selection
-   oldm = -1; oldτ = math.nan; ω = math.nan
-   orderold = True; kestold = True
+    # Setting the safety factors and tolerance requirements
+    if τ_end > 1:
+        γ = 0.2
+        γ_mmax = 0.1
+    else:
+        γ = 0.9
+        γ_mmax = 0.6
 
-   l = 0
+    delta = 1.4
 
-   #local_dot1 = [] #local dot product for Vjv values
-   #ortho_sum  = [] #for orthogonalizing
-   #matvec_t   = [] #part 1 of applying T
-   #apply_t    = [] 
+    # Used in the adaptive selection
+    oldm = -1
+    oldτ = math.nan
+    ω = math.nan
+    orderold = True
+    kestold = True
 
-   while τ_now < τ_end:
+    l = 0
 
-      # Compute necessary starting information
-      if j == 0:
+    # local_dot1 = [] #local dot product for Vjv values
+    # ortho_sum  = [] #for orthogonalizing
+    # matvec_t   = [] #part 1 of applying T
+    # apply_t    = []
 
-         H[:,:] = 0.0
+    while τ_now < τ_end:
 
-         V[0, 0:n] = w[l, :]
+        # Compute necessary starting information
+        if j == 0:
 
-         # Update the last part of w
-         for k in range(p-1):
-            i = p - k + 1
-            V[j, n+k] = (τ_now**i) / math.factorial(i) * mu
-         V[j, n+p-1] = mu
+            H[:, :] = 0.0
 
-         # Normalize initial vector (this norm is nonzero)
-         local_sum = V[0, 0:n] @ V[0, 0:n]
-         β = math.sqrt( MPI.COMM_WORLD.allreduce(local_sum) + V[j, n:n+p] @ V[j, n:n+p] )
+            V[0, 0:n] = w[l, :]
 
-         # The first Krylov basis vector
-         V[j, :] /= β
+            # Update the last part of w
+            for k in range(p - 1):
+                i = p - k + 1
+                V[j, n + k] = (τ_now**i) / math.factorial(i) * mu
+            V[j, n + p - 1] = mu
 
-      # full cwy orthogonalization process
-      while j < m:
+            # Normalize initial vector (this norm is nonzero)
+            local_sum = V[0, 0:n] @ V[0, 0:n]
+            β = math.sqrt(MPI.COMM_WORLD.allreduce(local_sum) + V[j, n : n + p] @ V[j, n : n + p])
 
-         j = j + 1
+            # The first Krylov basis vector
+            V[j, :] /= β
 
-         # Augmented matrix - vector product
-         V[j, 0:n    ] = A( V[j-1, 0:n] ) + V[j-1, n:n+p] @ u_flip
-         V[j, n:n+p-1] = V[j-1, n+1:n+p]
-         V[j, -1     ] = 0.0
+        # full cwy orthogonalization process
+        while j < m:
 
-         #2. V_{j}^T * [v_{j-1}, v_j]
- 
-         #1. check if arrays are contiguous
-         #2. double check the type, making sure all reduce is not float128 and is double
-         #3. make sure blas is being used as intended
+            j = j + 1
 
-         #---old version---
-         """
+            # Augmented matrix - vector product
+            V[j, 0:n] = A(V[j - 1, 0:n]) + V[j - 1, n : n + p] @ u_flip
+            V[j, n : n + p - 1] = V[j - 1, n + 1 : n + p]
+            V[j, -1] = 0.0
+
+            # 2. V_{j}^T * [v_{j-1}, v_j]
+
+            # 1. check if arrays are contiguous
+            # 2. double check the type, making sure all reduce is not float128 and is double
+            # 3. make sure blas is being used as intended
+
+            # ---old version---
+            """
          startV = MPI.Wtime()
          temp_vec = V[0:j+1,0:n].dot(numpy.transpose(V[j-1:j+1,0:n])) #might revert to old code, not blast versions, slower
          global_temp_vec  = MPI.COMM_WORLD.allreduce(temp_vec) #<-- slighly slower
@@ -179,16 +184,16 @@ def cwy_ne(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 2
          endV = MPI.Wtime()
          local_dot1.append(endV-startV)
          """
-         #--------------
+            # --------------
 
-         #---all other ones-------------
-         temp_vec        = V[0:j+1, 0:n] @ V[j-1:j+1, 0:n].T
-         global_temp_vec = numpy.empty_like(temp_vec)
-         MPI.COMM_WORLD.Allreduce([temp_vec, MPI.DOUBLE], [global_temp_vec, MPI.DOUBLE])
-         global_temp_vec += V[0:j+1, n:n+p] @ V[j-1:j+1, n:n+p].T
-         #--------------------------------
+            # ---all other ones-------------
+            temp_vec = V[0 : j + 1, 0:n] @ V[j - 1 : j + 1, 0:n].T
+            global_temp_vec = numpy.empty_like(temp_vec)
+            MPI.COMM_WORLD.Allreduce([temp_vec, MPI.DOUBLE], [global_temp_vec, MPI.DOUBLE])
+            global_temp_vec += V[0 : j + 1, n : n + p] @ V[j - 1 : j + 1, n : n + p].T
+            # --------------------------------
 
-         """
+            """
          if rank == 0:
             print("global_temp dtype   = ", global_temp_vec.dtype)
             print("global_temp C cont? = ", global_temp_vec.flags['C_CONTIGUOUS']) 
@@ -197,207 +202,205 @@ def cwy_ne(τ_out, A, u, tol = 1e-7, m_init = 10, mmin = 10, mmax = 128, iop = 2
             print("V^T F cont?         = ", numpy.transpose(V[j-1:j+1,n:n+p]).flags['F_CONTIGUOUS'])
          """
 
-         #3. Form matrix T for the CWY projection
-         #this will use the recursive formula in page 4, section 2.1
-         #startT = MPI.Wtime()
-         if (j > 1) :
-            T[j-1, 0:j-1] = -global_temp_vec[0:j-1,0].T @ T[0:j-1, 0:j-1]
+            # 3. Form matrix T for the CWY projection
+            # this will use the recursive formula in page 4, section 2.1
+            # startT = MPI.Wtime()
+            if j > 1:
+                T[j - 1, 0 : j - 1] = -global_temp_vec[0 : j - 1, 0].T @ T[0 : j - 1, 0 : j - 1]
 
-         #endT = MPI.Wtime()
-         #matvec_t.append(endT-startT)
+            # endT = MPI.Wtime()
+            # matvec_t.append(endT-startT)
 
-         #4. Projection values in R, R = T^{INV}*V^{T}*v{j-1}
-         #startAppT = MPI.Wtime() 
-         tmp2 = T[0:j, 0:j] @ global_temp_vec[0:j,1] 
-         #endAppT = MPI.Wtime()
-         #apply_t.append(endAppT - startAppT)
+            # 4. Projection values in R, R = T^{INV}*V^{T}*v{j-1}
+            # startAppT = MPI.Wtime()
+            tmp2 = T[0:j, 0:j] @ global_temp_vec[0:j, 1]
+            # endAppT = MPI.Wtime()
+            # apply_t.append(endAppT - startAppT)
 
-         #5. Orthogonalize
-         #startO = MPI.Wtime()
-         V[j,:] -= tmp2 @ V[0:j,:]
-         #endO = MPI.Wtime()
-         #ortho_sum.append(endO - startO)
+            # 5. Orthogonalize
+            # startO = MPI.Wtime()
+            V[j, :] -= tmp2 @ V[0:j, :]
+            # endO = MPI.Wtime()
+            # ortho_sum.append(endO - startO)
 
-         #6. norm estimate in quad precision
-         sum_vec  = numpy.array(global_temp_vec[0:j,1], numpy.float128)**2
-         sum_sqrt = numpy.sum(sum_vec)
- 
-         #sum_sqrd = sum(global_temp_vec[0:j,1]**2)
+            # 6. norm estimate in quad precision
+            sum_vec = numpy.array(global_temp_vec[0:j, 1], numpy.float128) ** 2
+            sum_sqrt = numpy.sum(sum_vec)
 
-         if (global_temp_vec[-1,1] < sum_sqrt):
-           local_sum = V[j, 0:n] @ V[j, 0:n]
-           global_sum_nrm = numpy.empty_link(local_sum)
-           MPI.COMM_WORLD.Allreduce([local_sum, MPI.DOUBLE], [global_sum_nrm, MPI.DOUBLE])
-           nrm = math.sqrt( gloal_sum_nrm + V[j, n:n+p] @ V[j, n:n+p])
-           reg_comm += 1
-         else:
-           #compute norm estimate in quad precision
-           nrm = numpy.array( numpy.sqrt(global_temp_vec[-1,1] - sum_sqrt), numpy.float64)
+            # sum_sqrd = sum(global_temp_vec[0:j,1]**2)
 
-           #now cast back to double
-           #nrm = numpy.array(nrm, numpy.float64)
-
-           #nrm = math.sqrt(global_temp_vec[-1,1] - sum_sqrd)
-
-         # Happy breakdown
-         if nrm < tol:
-            happy = True
-            break
-
-         #7. Normalize
-         H[j, j-1]  = nrm
-         H[0:j,j-1] = tmp2
-         V[j, :]   /= nrm
-
-         krystep += 1
-
-      # To obtain the phi_1 function which is needed for error estimate
-      H[0, j] = 1.0
-
-      # Save h_j+1,j and remove it temporarily to compute the exponential of H
-      nrm = H[j, j-1]
-      H[j, j-1] = 0.0
-
-      # Compute the exponential of the augmented matrix
-      F = scipy.linalg.expm(sgn * τ * H[0:j + 1, 0:j + 1])
-      exps += 1
-
-      # Restore the value of H_{m+1,m}
-      H[j, j-1] = nrm
-
-      if happy is True:
-         # Happy breakdown wrap up
-         ω     = 0.
-         err   = 0.
-         τ_new = min(τ_end - (τ_now + τ), τ)
-         m_new = m
-         happy = False
-
-      else:
-
-         # Local truncation error estimation
-         err = abs(β * nrm * F[j-1, j])
-
-         # residual norm estimate
-         #temp_err = abs(β * nrm * F[j-2, 0] * V[j,0:n])
-         #local_temp_err = temp_err @ temp_err
-         #err = numpy.sqrt( mpi4py.MPI.COMM_WORLD.allreduce(local_temp_err) )
-
-
-         # Error for this step
-         oldω = ω
-         ω = τ_end * err / (τ * tol)
-
-         # Estimate order
-         if m == oldm and τ != oldτ and ireject >= 1:
-            order = max(1, math.log(ω/oldω) / math.log(τ/oldτ))
-            orderold = False
-         elif orderold is True or ireject == 0:
-            orderold = True
-            order = j/4
-         else:
-            orderold = True
-
-         # Estimate k
-         if m != oldm and τ == oldτ and ireject >= 1:
-            kest = max(1.1, (ω/oldω)**(1/(oldm-m)))
-            kestold = False
-         elif kestold is True or ireject == 0:
-            kestold = True
-            kest = 2
-         else:
-            kestold = True
-
-         if ω > delta:
-            remaining_time = τ_end - τ_now
-         else:
-            remaining_time = τ_end - (τ_now + τ)
-
-         # Krylov adaptivity
-
-         same_τ = min(remaining_time, τ)
-         τ_opt  = τ * (γ / ω)**(1 / order)
-         τ_opt  = min(remaining_time, max(τ/5, min(5*τ, τ_opt)))
-
-         m_opt = math.ceil(j + math.log(ω / γ) / math.log(kest))
-         m_opt = max(mmin, min(mmax, max(math.floor(3/4*m), min(m_opt, math.ceil(4/3*m)))))
-
-         if j == mmax:
-            if ω > delta:
-               m_new = j
-               τ_new = τ * (γ_mmax / ω)**(1 / order)
-               τ_new = min(τ_end - τ_now, max(τ/5, τ_new))
+            if global_temp_vec[-1, 1] < sum_sqrt:
+                local_sum = V[j, 0:n] @ V[j, 0:n]
+                global_sum_nrm = numpy.empty_link(local_sum)
+                MPI.COMM_WORLD.Allreduce([local_sum, MPI.DOUBLE], [global_sum_nrm, MPI.DOUBLE])
+                nrm = math.sqrt(gloal_sum_nrm + V[j, n : n + p] @ V[j, n : n + p])
+                reg_comm += 1
             else:
-               τ_new = τ_opt
-               m_new = m
-         else:
-            m_new = m_opt
-            τ_new = same_τ
+                # compute norm estimate in quad precision
+                nrm = numpy.array(numpy.sqrt(global_temp_vec[-1, 1] - sum_sqrt), numpy.float64)
 
-      # Check error against target
-      if ω <= delta:
+                # now cast back to double
+                # nrm = numpy.array(nrm, numpy.float64)
 
-         # Yep, got the required tolerance; update
-         reject += ireject
-         step   += 1
+                # nrm = math.sqrt(global_temp_vec[-1,1] - sum_sqrd)
 
-         # Udate for τ_out in the interval (τ_now, τ_now + τ)
-         blownTs = 0
-         nextT = τ_now + τ
-         for k in range(l, numSteps):
-            if abs(τ_out[k]) < abs(nextT):
-               blownTs += 1
+            # Happy breakdown
+            if nrm < tol:
+                happy = True
+                break
 
-         if blownTs != 0:
-            # Copy current w to w we continue with.
-            w[l+blownTs, :] = w[l, :].copy()
+            # 7. Normalize
+            H[j, j - 1] = nrm
+            H[0:j, j - 1] = tmp2
+            V[j, :] /= nrm
 
-            for k in range(blownTs):
-               τPhantom = τ_out[l+k] - τ_now
-               F2 = scipy.linalg.expm(sgn * τPhantom * H[0:j, :j])
-               w[l+k, :] = β * F2[:j, 0] @ V[:j, :n]
+            krystep += 1
 
-            # Advance l.
-            l += blownTs
+        # To obtain the phi_1 function which is needed for error estimate
+        H[0, j] = 1.0
 
-         # Using the standard scheme
-         w[l, :] = β * F[:j, 0] @ V[:j, :n]
+        # Save h_j+1,j and remove it temporarily to compute the exponential of H
+        nrm = H[j, j - 1]
+        H[j, j - 1] = 0.0
 
-         # Update τ_out
-         τ_now += τ
+        # Compute the exponential of the augmented matrix
+        F = scipy.linalg.expm(sgn * τ * H[0 : j + 1, 0 : j + 1])
+        exps += 1
 
-         j = 0
-         ireject = 0
+        # Restore the value of H_{m+1,m}
+        H[j, j - 1] = nrm
 
-         conv += err
+        if happy is True:
+            # Happy breakdown wrap up
+            ω = 0.0
+            err = 0.0
+            τ_new = min(τ_end - (τ_now + τ), τ)
+            m_new = m
+            happy = False
 
-      else:
-         # Nope, try again
-         ireject += 1
+        else:
 
-         # Restore the original matrix
-         H[0, j] = 0.0
+            # Local truncation error estimation
+            err = abs(β * nrm * F[j - 1, j])
 
-      oldτ = τ
-      τ    = τ_new
+            # residual norm estimate
+            # temp_err = abs(β * nrm * F[j-2, 0] * V[j,0:n])
+            # local_temp_err = temp_err @ temp_err
+            # err = numpy.sqrt( mpi4py.MPI.COMM_WORLD.allreduce(local_temp_err) )
 
-      oldm = m
-      m    = m_new
+            # Error for this step
+            oldω = ω
+            ω = τ_end * err / (τ * tol)
 
+            # Estimate order
+            if m == oldm and τ != oldτ and ireject >= 1:
+                order = max(1, math.log(ω / oldω) / math.log(τ / oldτ))
+                orderold = False
+            elif orderold is True or ireject == 0:
+                orderold = True
+                order = j / 4
+            else:
+                orderold = True
 
-   if task1 is True:
-      for k in range(numSteps):
-         w[k, :] = w[k, :] / τ_out[k]
+            # Estimate k
+            if m != oldm and τ == oldτ and ireject >= 1:
+                kest = max(1.1, (ω / oldω) ** (1 / (oldm - m)))
+                kestold = False
+            elif kestold is True or ireject == 0:
+                kestold = True
+                kest = 2
+            else:
+                kestold = True
 
-   m_ret=m
+            if ω > delta:
+                remaining_time = τ_end - τ_now
+            else:
+                remaining_time = τ_end - (τ_now + τ)
 
-   #nn = len(ortho_sum)
-   #avg_ortho    = sum(ortho_sum) / nn
-   #avg_localsum = sum(local_dot1) / nn
-   #avg_matvec   = sum(matvec_t) / nn
-   #avg_appt     = sum(apply_t) / nn
+            # Krylov adaptivity
 
-   stats = (step, reject, krystep, exps, conv, m_ret, reg_comm)
-   #stats = (step, reject, krystep, exps, conv, m_ret, reg_comm, avg_localsum, avg_matvec, avg_appt, avg_ortho)
+            same_τ = min(remaining_time, τ)
+            τ_opt = τ * (γ / ω) ** (1 / order)
+            τ_opt = min(remaining_time, max(τ / 5, min(5 * τ, τ_opt)))
 
-   return w, stats
+            m_opt = math.ceil(j + math.log(ω / γ) / math.log(kest))
+            m_opt = max(mmin, min(mmax, max(math.floor(3 / 4 * m), min(m_opt, math.ceil(4 / 3 * m)))))
+
+            if j == mmax:
+                if ω > delta:
+                    m_new = j
+                    τ_new = τ * (γ_mmax / ω) ** (1 / order)
+                    τ_new = min(τ_end - τ_now, max(τ / 5, τ_new))
+                else:
+                    τ_new = τ_opt
+                    m_new = m
+            else:
+                m_new = m_opt
+                τ_new = same_τ
+
+        # Check error against target
+        if ω <= delta:
+
+            # Yep, got the required tolerance; update
+            reject += ireject
+            step += 1
+
+            # Udate for τ_out in the interval (τ_now, τ_now + τ)
+            blownTs = 0
+            nextT = τ_now + τ
+            for k in range(l, numSteps):
+                if abs(τ_out[k]) < abs(nextT):
+                    blownTs += 1
+
+            if blownTs != 0:
+                # Copy current w to w we continue with.
+                w[l + blownTs, :] = w[l, :].copy()
+
+                for k in range(blownTs):
+                    τPhantom = τ_out[l + k] - τ_now
+                    F2 = scipy.linalg.expm(sgn * τPhantom * H[0:j, :j])
+                    w[l + k, :] = β * F2[:j, 0] @ V[:j, :n]
+
+                # Advance l.
+                l += blownTs
+
+            # Using the standard scheme
+            w[l, :] = β * F[:j, 0] @ V[:j, :n]
+
+            # Update τ_out
+            τ_now += τ
+
+            j = 0
+            ireject = 0
+
+            conv += err
+
+        else:
+            # Nope, try again
+            ireject += 1
+
+            # Restore the original matrix
+            H[0, j] = 0.0
+
+        oldτ = τ
+        τ = τ_new
+
+        oldm = m
+        m = m_new
+
+    if task1 is True:
+        for k in range(numSteps):
+            w[k, :] = w[k, :] / τ_out[k]
+
+    m_ret = m
+
+    # nn = len(ortho_sum)
+    # avg_ortho    = sum(ortho_sum) / nn
+    # avg_localsum = sum(local_dot1) / nn
+    # avg_matvec   = sum(matvec_t) / nn
+    # avg_appt     = sum(apply_t) / nn
+
+    stats = (step, reject, krystep, exps, conv, m_ret, reg_comm)
+    # stats = (step, reject, krystep, exps, conv, m_ret, reg_comm, avg_localsum, avg_matvec, avg_appt, avg_ortho)
+
+    return w, stats

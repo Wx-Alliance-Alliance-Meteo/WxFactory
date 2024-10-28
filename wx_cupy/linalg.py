@@ -3,14 +3,20 @@ import numpy as np
 import cupy as cp
 from numpy.typing import NDArray
 
+
 @fct.cache
 def _fact(k: int) -> int:
     return k * _fact(k - 1) if k > 1 else 1
+
+
 _m = 13
-_expm_b: NDArray[cp.floating] = np.array([_fact(2*_m - k) * _fact(_m) / _fact(2*_m) / _fact(_m - k) / _fact(k) for k in range(_m + 1)])
+_expm_b: NDArray[cp.floating] = np.array(
+    [_fact(2 * _m - k) * _fact(_m) / _fact(2 * _m) / _fact(_m - k) / _fact(k) for k in range(_m + 1)]
+)
 del _fact, _m
 
 _expm_theta13: float = 5.371920351148152
+
 
 def expm(A: NDArray[cp.floating]) -> NDArray[cp.floating]:
     """

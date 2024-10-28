@@ -1,335 +1,347 @@
 import math
-from   typing import Callable
+from typing import Callable
 
-from  mpi4py import MPI
+from mpi4py import MPI
 import numpy
-from   numpy.typing import NDArray
+from numpy.typing import NDArray
 import scipy.linalg
 
 from common.device import Device, default_device
 
-def kiops(tau_out: NDArray, A: Callable[[NDArray], NDArray], u: NDArray,
-          tol: float = 1e-7, m_init: int = 10, mmin: int = 10, mmax: int = 128, iop: int = 2,
-          task1: bool = False, device: Device = default_device) -> tuple[NDArray, tuple]:
-   """ kiops(tstops, A, u; kwargs...) -> (w, stats)
 
-   Evaluate a linear combinaton of the ``φ`` functions evaluated at ``tA`` acting on
-   vectors from ``u``, that is
+def kiops(
+    tau_out: NDArray,
+    A: Callable[[NDArray], NDArray],
+    u: NDArray,
+    tol: float = 1e-7,
+    m_init: int = 10,
+    mmin: int = 10,
+    mmax: int = 128,
+    iop: int = 2,
+    task1: bool = False,
+    device: Device = default_device,
+) -> tuple[NDArray, tuple]:
+    """kiops(tstops, A, u; kwargs...) -> (w, stats)
 
-   ```math
-   w(i) = φ_0(t[i] A) u[0, :] + φ_1(t[i] A) u[1, :] + φ_2(t[i] A) u[2, :] + ...
-   ```
+    Evaluate a linear combinaton of the ``φ`` functions evaluated at ``tA`` acting on
+    vectors from ``u``, that is
 
-   The size of the Krylov subspace is changed dynamically during the integration.
-   The Krylov subspace is computed using the incomplete orthogonalization method.
+    ```math
+    w(i) = φ_0(t[i] A) u[0, :] + φ_1(t[i] A) u[1, :] + φ_2(t[i] A) u[2, :] + ...
+    ```
 
-   Arguments:
-   - `tau_out`    - Array of `tau_out`
-   - `A`        - the matrix argument of the ``φ`` functions
-   - `u`        - the matrix with rows representing the vectors to be multiplied by the ``φ`` functions
+    The size of the Krylov subspace is changed dynamically during the integration.
+    The Krylov subspace is computed using the incomplete orthogonalization method.
 
-   Optional arguments:
-   - `tol`      - the convergence tolerance required (default: 1e-7)
-   - `mmin`, `mmax` - let the Krylov size vary between mmin and mmax (default: 10, 128)
-   - `m`        - an estimate of the appropriate Krylov size (default: mmin)
-   - `iop`      - length of incomplete orthogonalization procedure (default: 2)
-   - `task1`     - if true, divide the result by 1/T**p
+    Arguments:
+    - `tau_out`    - Array of `tau_out`
+    - `A`        - the matrix argument of the ``φ`` functions
+    - `u`        - the matrix with rows representing the vectors to be multiplied by the ``φ`` functions
 
-   Returns:
-   - `w`      - the linear combination of the ``φ`` functions evaluated at ``tA`` acting on the vectors from ``u``
-   - `stats[0]` - number of substeps
-   - `stats[1]` - number of rejected steps
-   - `stats[2]` - number of Krylov steps
-   - `stats[3]` - number of matrix exponentials
-   - `stats[4]` - Error estimate
-   - `stats[5]` - the Krylov size of the last substep
+    Optional arguments:
+    - `tol`      - the convergence tolerance required (default: 1e-7)
+    - `mmin`, `mmax` - let the Krylov size vary between mmin and mmax (default: 10, 128)
+    - `m`        - an estimate of the appropriate Krylov size (default: mmin)
+    - `iop`      - length of incomplete orthogonalization procedure (default: 2)
+    - `task1`     - if true, divide the result by 1/T**p
 
-   `n` is the size of the original problem
-   `p` is the highest index of the ``φ`` functions
+    Returns:
+    - `w`      - the linear combination of the ``φ`` functions evaluated at ``tA`` acting on the vectors from ``u``
+    - `stats[0]` - number of substeps
+    - `stats[1]` - number of rejected steps
+    - `stats[2]` - number of Krylov steps
+    - `stats[3]` - number of matrix exponentials
+    - `stats[4]` - Error estimate
+    - `stats[5]` - the Krylov size of the last substep
 
-   References:
-   * Gaudreault, S., Rainwater, G. and Tokman, M., 2018. KIOPS: A fast adaptive Krylov subspace solver for exponential
-     integrators. Journal of Computational Physics. Based on the PHIPM and EXPMVP codes 
-     (http://www1.maths.leeds.ac.uk/~jitse/software.html). https://gitlab.com/stephane.gaudreault/kiops.
-   * Niesen, J. and Wright, W.M., 2011. A Krylov subspace method for option pricing. SSRN 1799124
-   * Niesen, J. and Wright, W.M., 2012. Algorithm 919: A Krylov subspace algorithm for evaluating the ``φ``-functions
-     appearing in exponential integrators. ACM Transactions on Mathematical Software (TOMS), 38(3), p.22
-   """
+    `n` is the size of the original problem
+    `p` is the highest index of the ``φ`` functions
 
-   xp = device.xp
+    References:
+    * Gaudreault, S., Rainwater, G. and Tokman, M., 2018. KIOPS: A fast adaptive Krylov subspace solver for exponential
+      integrators. Journal of Computational Physics. Based on the PHIPM and EXPMVP codes
+      (http://www1.maths.leeds.ac.uk/~jitse/software.html). https://gitlab.com/stephane.gaudreault/kiops.
+    * Niesen, J. and Wright, W.M., 2011. A Krylov subspace method for option pricing. SSRN 1799124
+    * Niesen, J. and Wright, W.M., 2012. Algorithm 919: A Krylov subspace algorithm for evaluating the ``φ``-functions
+      appearing in exponential integrators. ACM Transactions on Mathematical Software (TOMS), 38(3), p.22
+    """
 
-   tau_out = device.array(tau_out)
-   u       = device.array(u)
-   # tol     = device.array(tol)     # That's not an array...
+    xp = device.xp
 
-   ppo, n = u.shape
-   p = ppo - 1
+    tau_out = device.array(tau_out)
+    u = device.array(u)
+    # tol     = device.array(tol)     # That's not an array...
 
-   if p == 0:
-      p = 1
-      # Add extra column of zeros
-      u = xp.row_stack((u, xp.zeros(len(u))))
+    ppo, n = u.shape
+    p = ppo - 1
 
-   # We only allow m to vary between mmin and mmax
-   m = max(mmin, min(m_init, mmax))
+    if p == 0:
+        p = 1
+        # Add extra column of zeros
+        u = xp.row_stack((u, xp.zeros(len(u))))
 
-   #if rank == 0:
-   #   print("in kiops, m_init = {}, m = {}".format(m_init, m))
+    # We only allow m to vary between mmin and mmax
+    m = max(mmin, min(m_init, mmax))
 
-   # Preallocate matrix
-   V = xp.zeros((mmax + 1, n + p))
-   H = xp.zeros((mmax + 1, mmax + 1))
+    # if rank == 0:
+    #   print("in kiops, m_init = {}, m = {}".format(m_init, m))
 
-   step     = 0
-   krystep  = 0
-   ireject  = 0
-   reject   = 0
-   exps     = 0
-   sgn      = xp.sign(tau_out[-1])
-   tau_now  = 0.0
-   tau_end  = xp.abs(tau_out[-1])
-   happy    = False
-   j        = 0
+    # Preallocate matrix
+    V = xp.zeros((mmax + 1, n + p))
+    H = xp.zeros((mmax + 1, mmax + 1))
 
-   conv     = 0.0
+    step = 0
+    krystep = 0
+    ireject = 0
+    reject = 0
+    exps = 0
+    sgn = xp.sign(tau_out[-1])
+    tau_now = 0.0
+    tau_end = xp.abs(tau_out[-1])
+    happy = False
+    j = 0
 
-   numSteps = len(tau_out)
+    conv = 0.0
 
-   # Initial condition
-   w = xp.zeros((numSteps, n))
-   w[0, :] = u[0, :]
+    numSteps = len(tau_out)
 
-   # compute 1-norm of u
-   local_normU = xp.sum(xp.abs(u[1:, :]), axis=1)
-   global_normU = xp.empty_like(local_normU)
-   device.synchronize()
-   MPI.COMM_WORLD.Allreduce([local_normU, MPI.DOUBLE], [global_normU, MPI.DOUBLE])
-   normU = xp.amax(global_normU)
+    # Initial condition
+    w = xp.zeros((numSteps, n))
+    w[0, :] = u[0, :]
 
-   # Normalization factors
-   if ppo > 1 and normU > 0:
-      ex = xp.ceil(xp.log2(normU))
-      nu = 2 ** (-ex)
-      mu = 2 ** ex
-   else:
-      nu = 1.0
-      mu = 1.0
+    # compute 1-norm of u
+    local_normU = xp.sum(xp.abs(u[1:, :]), axis=1)
+    global_normU = xp.empty_like(local_normU)
+    device.synchronize()
+    MPI.COMM_WORLD.Allreduce([local_normU, MPI.DOUBLE], [global_normU, MPI.DOUBLE])
+    normU = xp.amax(global_normU)
 
-   # Flip the rest of the u matrix
-   u_flip = nu * xp.flipud(u[1:, :])
+    # Normalization factors
+    if ppo > 1 and normU > 0:
+        ex = xp.ceil(xp.log2(normU))
+        nu = 2 ** (-ex)
+        mu = 2**ex
+    else:
+        nu = 1.0
+        mu = 1.0
 
-   # Compute an initial starting approximation for the step size
-   tau = tau_end
+    # Flip the rest of the u matrix
+    u_flip = nu * xp.flipud(u[1:, :])
 
-   # Setting the safety factors and tolerance requirements
-   if tau_end > 1:
-      gamma = 0.2
-      gamma_mmax = 0.1
-   else:
-      gamma = 0.9
-      gamma_mmax = 0.6
+    # Compute an initial starting approximation for the step size
+    tau = tau_end
 
-   delta = 1.4
+    # Setting the safety factors and tolerance requirements
+    if tau_end > 1:
+        gamma = 0.2
+        gamma_mmax = 0.1
+    else:
+        gamma = 0.9
+        gamma_mmax = 0.6
 
-   # Used in the adaptive selection
-   oldm = -1; oldtau = math.nan; omega = math.nan
-   orderold = True; kestold = True
+    delta = 1.4
 
-   l = 0
+    # Used in the adaptive selection
+    oldm = -1
+    oldtau = math.nan
+    omega = math.nan
+    orderold = True
+    kestold = True
 
-   while tau_now < tau_end:
+    l = 0
 
-      # Compute necessary starting information
-      if j == 0:
+    while tau_now < tau_end:
 
-         V[0, :n] = w[l, :]
+        # Compute necessary starting information
+        if j == 0:
 
-         # Update the last part of w
-         for k in range(p - 1):
-            i = p - k + 1
-            V[0, n + k] = (tau_now ** i) / math.factorial(i) * mu
-         V[0, n + p - 1] = mu
+            V[0, :n] = w[l, :]
 
-         # Normalize initial vector (this norm is nonzero)
-         local_sum = V[0, :n] @ V[0, :n]
-         global_sum = xp.empty_like(local_sum)
-         device.synchronize()
-         MPI.COMM_WORLD.Allreduce([local_sum, MPI.DOUBLE], [global_sum, MPI.DOUBLE])
-         beta = xp.sqrt(global_sum + V[0, n:n + p] @ V[0, n:n + p])
+            # Update the last part of w
+            for k in range(p - 1):
+                i = p - k + 1
+                V[0, n + k] = (tau_now**i) / math.factorial(i) * mu
+            V[0, n + p - 1] = mu
 
-         # The first Krylov basis vector
-         V[0, :] /= beta
+            # Normalize initial vector (this norm is nonzero)
+            local_sum = V[0, :n] @ V[0, :n]
+            global_sum = xp.empty_like(local_sum)
+            device.synchronize()
+            MPI.COMM_WORLD.Allreduce([local_sum, MPI.DOUBLE], [global_sum, MPI.DOUBLE])
+            beta = xp.sqrt(global_sum + V[0, n : n + p] @ V[0, n : n + p])
 
-      # Incomplete orthogonalization process
-      while j < m:
+            # The first Krylov basis vector
+            V[0, :] /= beta
 
-         j = j + 1
+        # Incomplete orthogonalization process
+        while j < m:
 
-         # Augmented matrix - vector product
-         V[j, :n] = A(V[j - 1, :n]) + V[j - 1, n:n + p] @ u_flip
-         V[j, n:n + p - 1] = V[j - 1, n + 1:n + p]
-         V[j, n + p - 1] = 0.0
+            j = j + 1
 
-         # Classical Gram-Schmidt
-         ilow = max(0, j - iop)
-         local_sum = V[ilow:j, :n] @ V[j, :n]
-         global_sum = xp.empty_like(local_sum)
-         device.synchronize()
-         MPI.COMM_WORLD.Allreduce([local_sum, MPI.DOUBLE], [global_sum, MPI.DOUBLE])
+            # Augmented matrix - vector product
+            V[j, :n] = A(V[j - 1, :n]) + V[j - 1, n : n + p] @ u_flip
+            V[j, n : n + p - 1] = V[j - 1, n + 1 : n + p]
+            V[j, n + p - 1] = 0.0
 
-         H[ilow:j, j - 1] = global_sum + V[ilow:j, n:n + p] @ V[j, n:n + p]
+            # Classical Gram-Schmidt
+            ilow = max(0, j - iop)
+            local_sum = V[ilow:j, :n] @ V[j, :n]
+            global_sum = xp.empty_like(local_sum)
+            device.synchronize()
+            MPI.COMM_WORLD.Allreduce([local_sum, MPI.DOUBLE], [global_sum, MPI.DOUBLE])
 
-         V[j, :] = V[j, :] - V[ilow:j,:].T @ H[ilow:j, j - 1]
+            H[ilow:j, j - 1] = global_sum + V[ilow:j, n : n + p] @ V[j, n : n + p]
 
-         local_sum = V[j, :n] @ V[j, :n]
-         global_sum = xp.empty_like(local_sum)
-         device.synchronize()
-         MPI.COMM_WORLD.Allreduce([local_sum, MPI.DOUBLE], [global_sum, MPI.DOUBLE])
-         nrm = xp.sqrt(global_sum + V[j, n:n + p] @ V[j, n:n + p])
+            V[j, :] = V[j, :] - V[ilow:j, :].T @ H[ilow:j, j - 1]
 
-         # Happy breakdown
-         if nrm < tol:
-            happy = True
-            break
+            local_sum = V[j, :n] @ V[j, :n]
+            global_sum = xp.empty_like(local_sum)
+            device.synchronize()
+            MPI.COMM_WORLD.Allreduce([local_sum, MPI.DOUBLE], [global_sum, MPI.DOUBLE])
+            nrm = xp.sqrt(global_sum + V[j, n : n + p] @ V[j, n : n + p])
 
-         H[j, j - 1] = nrm
-         V[j, :]   = V[j, :] / nrm
-         device.synchronize()
+            # Happy breakdown
+            if nrm < tol:
+                happy = True
+                break
 
-         krystep += 1
+            H[j, j - 1] = nrm
+            V[j, :] = V[j, :] / nrm
+            device.synchronize()
 
-      # To obtain the phi_1 function which is needed for error estimate
-      H[0, j] = 1.0
+            krystep += 1
 
-      # Save h_j+1,j and remove it temporarily to compute the exponential of H
-      nrm = H[j, j - 1].copy()
-      H[j, j - 1] = 0.0
+        # To obtain the phi_1 function which is needed for error estimate
+        H[0, j] = 1.0
 
-      # Compute the exponential of the augmented matrix
-      F = device.expm(sgn * tau * H[:j + 1, :j + 1])
-      exps += 1
+        # Save h_j+1,j and remove it temporarily to compute the exponential of H
+        nrm = H[j, j - 1].copy()
+        H[j, j - 1] = 0.0
 
-      # Restore the value of H_{m+1,m}
-      H[j, j - 1] = nrm
+        # Compute the exponential of the augmented matrix
+        F = device.expm(sgn * tau * H[: j + 1, : j + 1])
+        exps += 1
 
-      if happy:
-         # Happy breakdown wrap up
-         omega = 0.
-         err   = 0.
-         tau_new = min(tau_end - (tau_now + tau), tau)
-         m_new = m
-         happy = False
+        # Restore the value of H_{m+1,m}
+        H[j, j - 1] = nrm
 
-      else:
-         # Local truncation error estimation
-         err = xp.abs(beta * nrm * F[j - 1, j])
+        if happy:
+            # Happy breakdown wrap up
+            omega = 0.0
+            err = 0.0
+            tau_new = min(tau_end - (tau_now + tau), tau)
+            m_new = m
+            happy = False
 
-         # Error for this step
-         oldomega = omega
-         omega = tau_end * err / (tau * tol)
-         omega = device.to_host(omega)
+        else:
+            # Local truncation error estimation
+            err = xp.abs(beta * nrm * F[j - 1, j])
 
-         # Estimate order
-         if m == oldm and tau != oldtau and ireject >= 1:
-            order = max(1., math.log(omega / oldomega) / device.to_host(xp.log(tau / oldtau)))
-            orderold = False
-         elif orderold or ireject == 0:
-            orderold = True
-            order = j/4
-         else:
-            orderold = True
+            # Error for this step
+            oldomega = omega
+            omega = tau_end * err / (tau * tol)
+            omega = device.to_host(omega)
 
-         # Estimate k
-         if m != oldm and tau == oldtau and ireject >= 1:
-            kest = max(1.1, (omega / oldomega) ** (1 / (oldm - m)))
-            kestold = False
-         elif kestold or ireject == 0:
-            kestold = True
-            kest = 2
-         else:
-            kestold = True
-
-         if omega > delta:
-            remaining_time = tau_end - tau_now
-         else:
-            remaining_time = tau_end - (tau_now + tau)
-
-         # Krylov adaptivity
-
-         same_tau = min(remaining_time, tau)
-         tau_opt = tau * (gamma / omega) ** (1 / order)
-         tau_opt = min(remaining_time, max(tau / 5, min(5 * tau, tau_opt)))
-
-         m_opt = xp.ceil(j + xp.log(omega / gamma) / xp.log(kest))
-         m_opt = max(mmin, min(mmax, max(xp.floor(3/4 * m), min(m_opt, xp.ceil(4/3 * m)))))
-
-         if j == mmax:
-            if omega > delta:
-               m_new = j
-               tau_new = tau * (gamma_mmax / omega) ** (1 / order)
-               tau_new = min(tau_end - tau_now, max(tau / 5, tau_new))
+            # Estimate order
+            if m == oldm and tau != oldtau and ireject >= 1:
+                order = max(1.0, math.log(omega / oldomega) / device.to_host(xp.log(tau / oldtau)))
+                orderold = False
+            elif orderold or ireject == 0:
+                orderold = True
+                order = j / 4
             else:
-               tau_new = tau_opt
-               m_new = m
-         else:
-            m_new = m_opt
-            tau_new = same_tau
+                orderold = True
 
+            # Estimate k
+            if m != oldm and tau == oldtau and ireject >= 1:
+                kest = max(1.1, (omega / oldomega) ** (1 / (oldm - m)))
+                kestold = False
+            elif kestold or ireject == 0:
+                kestold = True
+                kest = 2
+            else:
+                kestold = True
 
-      # Check error against target
-      if omega <= delta:
+            if omega > delta:
+                remaining_time = tau_end - tau_now
+            else:
+                remaining_time = tau_end - (tau_now + tau)
 
-         # Yep, got the required tolerance; update
-         reject += ireject
-         step += 1
+            # Krylov adaptivity
 
-         # Update for tau_out in the interval (tau_now, tau_now + tau)
-         blownTs = 0
-         nextT = tau_now + tau
-         for k in range(l, numSteps):
-            if xp.abs(tau_out[k]) < xp.abs(nextT):
-               blownTs += 1
+            same_tau = min(remaining_time, tau)
+            tau_opt = tau * (gamma / omega) ** (1 / order)
+            tau_opt = min(remaining_time, max(tau / 5, min(5 * tau, tau_opt)))
 
-         if blownTs != 0:
-            # Copy current w to w we continue with
-            w[l + blownTs, :] = w[l, :]
+            m_opt = xp.ceil(j + xp.log(omega / gamma) / xp.log(kest))
+            m_opt = max(mmin, min(mmax, max(xp.floor(3 / 4 * m), min(m_opt, xp.ceil(4 / 3 * m)))))
 
-            for k in range(blownTs):
-               tauPhantom = tau_out[l + k] - tau_now
-               F2 = device.expm(sgn * tauPhantom * H[:j, :j])
-               w[l+k, :] = beta * F2[:j, 0] @ V[:j, :n]
+            if j == mmax:
+                if omega > delta:
+                    m_new = j
+                    tau_new = tau * (gamma_mmax / omega) ** (1 / order)
+                    tau_new = min(tau_end - tau_now, max(tau / 5, tau_new))
+                else:
+                    tau_new = tau_opt
+                    m_new = m
+            else:
+                m_new = m_opt
+                tau_new = same_tau
 
-            # Advance l.
-            l += blownTs
+        # Check error against target
+        if omega <= delta:
 
-         # Using the standard scheme
-         w[l, :] = beta * F[:j, 0] @ V[:j, :n]
+            # Yep, got the required tolerance; update
+            reject += ireject
+            step += 1
 
-         # Update tau_out
-         tau_now += tau
+            # Update for tau_out in the interval (tau_now, tau_now + tau)
+            blownTs = 0
+            nextT = tau_now + tau
+            for k in range(l, numSteps):
+                if xp.abs(tau_out[k]) < xp.abs(nextT):
+                    blownTs += 1
 
-         j = 0
-         ireject = 0
+            if blownTs != 0:
+                # Copy current w to w we continue with
+                w[l + blownTs, :] = w[l, :]
 
-         conv += err
-      else:
-         # Nope, try again
-         ireject += 1
+                for k in range(blownTs):
+                    tauPhantom = tau_out[l + k] - tau_now
+                    F2 = device.expm(sgn * tauPhantom * H[:j, :j])
+                    w[l + k, :] = beta * F2[:j, 0] @ V[:j, :n]
 
-         # Restore the original matrix
-         H[0, j] = 0.0
+                # Advance l.
+                l += blownTs
 
-      oldtau = tau
-      tau    = tau_new
+            # Using the standard scheme
+            w[l, :] = beta * F[:j, 0] @ V[:j, :n]
 
-      oldm = m
-      m    = m_new
+            # Update tau_out
+            tau_now += tau
 
-   if task1 is True:
-      for k in range(numSteps):
-         w[k, :] = w[k, :] / tau_out[k]
+            j = 0
+            ireject = 0
 
-   m_ret = m
-   stats = (step, reject, krystep, exps, conv, m_ret)
+            conv += err
+        else:
+            # Nope, try again
+            ireject += 1
 
-   return w, stats
+            # Restore the original matrix
+            H[0, j] = 0.0
+
+        oldtau = tau
+        tau = tau_new
+
+        oldm = m
+        m = m_new
+
+    if task1 is True:
+        for k in range(numSteps):
+            w[k, :] = w[k, :] / tau_out[k]
+
+    m_ret = m
+    stats = (step, reject, krystep, exps, conv, m_ret)
+
+    return w, stats
