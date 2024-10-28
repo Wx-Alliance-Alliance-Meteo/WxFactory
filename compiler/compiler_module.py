@@ -96,6 +96,8 @@ def build_librairies(force_build: bool = False):
         if not os.path.exists(library_directory):
             os.makedirs(library_directory)
 
+        print(f"Rebuilding extensions")
+        sys.stdout.flush()
         try:
             setuplog = open(log_file_location, "w")
 
