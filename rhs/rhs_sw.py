@@ -1,48 +1,76 @@
 from typing import Optional
 
 from mpi4py import MPI
-from numpy import ndarray
+from numpy.typing import NDArray
 
 from init.initialize import Topo
 from common.definitions import idx_h, idx_hu1, idx_hu2, gravity
 from common.process_topology import ProcessTopology
-from geometry import CubedSphere2D, DFROperators, Metric
+from geometry import CubedSphere2D, DFROperators, Metric2D
 from .rhs import RHS
 
 
-class RhsShallowWater(RHS):
+class RhsShallowWater:
 
     def __init__(
         self,
         shape: tuple[int, ...],
         geom: CubedSphere2D,
-        mtrx: DFROperators,
-        metric: Metric,
+        operators: DFROperators,
+        metric: Metric2D,
         topo: Optional[Topo],
         ptopo: ProcessTopology,
         nbsolpts: int,
         nb_elements_hori: int,
     ):
-        super().__init__(shape, geom, mtrx, metric, topo, ptopo, nbsolpts, nb_elements_hori)
+        self.shape = shape
+        self.geom = geom
+        self.operators = operators
+        self.metric = metric
+        self.topo = topo
+        self.ptopo = ptopo
+        self.nbsolpts = nbsolpts
+        self.nb_elements_hori = nb_elements_hori
+
+    def __call__(self, vec: NDArray) -> NDArray:
+        """Compute the value of the right-hand side based on the input state.
+
+        :param vec: Vector containing the input state. It can have any shape, as long as its size is the same as the
+                    one used to create this RHS object
+        :return: Value of the right-hand side, in the same shape as the input
+        """
+        old_shape = vec.shape
+        result = self.__compute_rhs__(
+            vec.reshape(self.shape),
+            self.geom,
+            self.operators,
+            self.metric,
+            self.topo,
+            self.ptopo,
+            self.nbsolpts,
+            self.nb_elements_hori,
+        )
+        return result.reshape(old_shape)
 
     def __compute_rhs__(
         self,
-        Q: ndarray,
+        Q: NDArray,
         geom: CubedSphere2D,
         mtrx: DFROperators,
-        metric: Metric,
+        metric: Metric2D,
         topo: Optional[Topo],
         ptopo: ProcessTopology,
         nbsolpts: int,
         nb_elements_hori: int,
-    ) -> ndarray:
+    ) -> NDArray:
 
         rank = MPI.COMM_WORLD.rank
         xp = geom.device.xp
 
         nb_equations = Q.shape[0]
 
-        itf_shape = (nb_equations, nb_elements_hori * (nb_elements_hori + 2), 2 * nbsolpts)
+        itf_i_shape = (nb_equations, nb_elements_hori, nb_elements_hori + 2, 2 * nbsolpts)
+        itf_j_shape = (nb_equations, nb_elements_hori + 2, nb_elements_hori, 2 * nbsolpts)
 
         Q_new = Q
 
@@ -52,15 +80,13 @@ class RhsShallowWater(RHS):
             Q_new_unpacked[idx_h] += topo.hsurf
 
         # Interpolate to the element interface
-        var_itf_i_new = xp.zeros(itf_shape, dtype=Q.dtype)
-        vi = var_itf_i_new.reshape((nb_equations, nb_elements_hori, nb_elements_hori + 2, nbsolpts * 2))
-        vi[:, :, 1:-1, :] = (Q_new_unpacked @ mtrx.extrap_x).reshape(
+        var_itf_i_new = xp.zeros(itf_i_shape, dtype=Q.dtype)
+        var_itf_i_new[:, :, 1:-1, :] = (Q_new_unpacked @ mtrx.extrap_x).reshape(
             (nb_equations, nb_elements_hori, nb_elements_hori, nbsolpts * 2)
         )
 
-        var_itf_j_new = xp.zeros(itf_shape, dtype=Q.dtype)
-        vj = var_itf_j_new.reshape((nb_equations, nb_elements_hori + 2, nb_elements_hori, nbsolpts * 2))
-        vj[:, 1:-1, :, :] = (Q_new_unpacked @ mtrx.extrap_y).reshape(
+        var_itf_j_new = xp.zeros(itf_j_shape, dtype=Q.dtype)
+        var_itf_j_new[:, 1:-1, :, :] = (Q_new_unpacked @ mtrx.extrap_y).reshape(
             (nb_equations, nb_elements_hori, nb_elements_hori, nbsolpts * 2)
         )
 
@@ -71,21 +97,31 @@ class RhsShallowWater(RHS):
         u2_new = Q_new_unpacked[idx_hu2]
 
         # Initiate transfers
-        vj_tmp = var_itf_j_new.reshape((nb_equations, nb_elements_hori + 2, nb_elements_hori, 2, nbsolpts))
-        vi_tmp = var_itf_i_new.reshape((nb_equations, nb_elements_hori, nb_elements_hori + 2, 2, nbsolpts))
         request_u_new = ptopo.start_exchange_vectors(
-            (xp.ravel(vj_tmp[idx_hu1, 1, :, 0, :]), xp.ravel(vj_tmp[idx_hu2, 1, :, 0, :])),  # South boundary
-            (xp.ravel(vj_tmp[idx_hu1, -2, :, 1, :]), xp.ravel(vj_tmp[idx_hu2, -2, :, 1, :])),  # North boundary
-            (xp.ravel(vi_tmp[idx_hu1, :, 1, 0, :]), xp.ravel(vi_tmp[idx_hu2, :, 1, 0, :])),  # West boundary
-            (xp.ravel(vi_tmp[idx_hu1, :, -2, 1, :]), xp.ravel(vi_tmp[idx_hu2, :, -2, 1, :])),  # East boundary
+            (
+                xp.ravel(var_itf_j_new[idx_hu1, 1, :, :nbsolpts]),
+                xp.ravel(var_itf_j_new[idx_hu2, 1, :, :nbsolpts]),
+            ),  # South boundary
+            (
+                xp.ravel(var_itf_j_new[idx_hu1, -2, :, nbsolpts:]),
+                xp.ravel(var_itf_j_new[idx_hu2, -2, :, nbsolpts:]),
+            ),  # North boundary
+            (
+                xp.ravel(var_itf_i_new[idx_hu1, :, 1, :nbsolpts]),
+                xp.ravel(var_itf_i_new[idx_hu2, :, 1, :nbsolpts]),
+            ),  # West boundary
+            (
+                xp.ravel(var_itf_i_new[idx_hu1, :, -2, nbsolpts:]),
+                xp.ravel(var_itf_i_new[idx_hu2, :, -2, nbsolpts:]),
+            ),  # East boundary
             geom.boundary_sn,
             geom.boundary_we,
         )
         request_h_new = ptopo.start_exchange_scalars(
-            xp.ravel(vj_tmp[idx_h, 1, :, 0, :]),
-            xp.ravel(vj_tmp[idx_h, -2, :, 1, :]),
-            xp.ravel(vi_tmp[idx_h, :, 1, 0, :]),
-            xp.ravel(vi_tmp[idx_h, :, -2, 1, :]),
+            xp.ravel(var_itf_j_new[idx_h, 1, :, :nbsolpts]),
+            xp.ravel(var_itf_j_new[idx_h, -2, :, nbsolpts:]),
+            xp.ravel(var_itf_i_new[idx_h, :, 1, :nbsolpts]),
+            xp.ravel(var_itf_i_new[idx_h, :, -2, nbsolpts:]),
         )
 
         # Compute the fluxes
@@ -110,20 +146,20 @@ class RhsShallowWater(RHS):
 
         # TODO make this simpler
         (s1, s2), (n1, n2), (w1, w2), (e1, e2) = request_u_new.wait()
-        vj_tmp[idx_hu1, 0, :, 1, :] = s1.reshape(nb_elements_hori, nbsolpts)
-        vj_tmp[idx_hu2, 0, :, 1, :] = s2.reshape(nb_elements_hori, nbsolpts)
-        vj_tmp[idx_hu1, -1, :, 0, :] = n1.reshape(nb_elements_hori, nbsolpts)
-        vj_tmp[idx_hu2, -1, :, 0, :] = n2.reshape(nb_elements_hori, nbsolpts)
-        vi_tmp[idx_hu1, :, 0, 1, :] = w1.reshape(nb_elements_hori, nbsolpts)
-        vi_tmp[idx_hu2, :, 0, 1, :] = w2.reshape(nb_elements_hori, nbsolpts)
-        vi_tmp[idx_hu1, :, -1, 0, :] = e1.reshape(nb_elements_hori, nbsolpts)
-        vi_tmp[idx_hu2, :, -1, 0, :] = e2.reshape(nb_elements_hori, nbsolpts)
+        var_itf_j_new[idx_hu1, 0, :, nbsolpts:] = s1.reshape(nb_elements_hori, nbsolpts)
+        var_itf_j_new[idx_hu2, 0, :, nbsolpts:] = s2.reshape(nb_elements_hori, nbsolpts)
+        var_itf_j_new[idx_hu1, -1, :, :nbsolpts] = n1.reshape(nb_elements_hori, nbsolpts)
+        var_itf_j_new[idx_hu2, -1, :, :nbsolpts] = n2.reshape(nb_elements_hori, nbsolpts)
+        var_itf_i_new[idx_hu1, :, 0, nbsolpts:] = w1.reshape(nb_elements_hori, nbsolpts)
+        var_itf_i_new[idx_hu2, :, 0, nbsolpts:] = w2.reshape(nb_elements_hori, nbsolpts)
+        var_itf_i_new[idx_hu1, :, -1, :nbsolpts] = e1.reshape(nb_elements_hori, nbsolpts)
+        var_itf_i_new[idx_hu2, :, -1, :nbsolpts] = e2.reshape(nb_elements_hori, nbsolpts)
 
         s, n, w, e = request_h_new.wait()
-        vj_tmp[idx_h, 0, :, 1, :] = s.reshape(nb_elements_hori, nbsolpts)
-        vj_tmp[idx_h, -1, :, 0, :] = n.reshape(nb_elements_hori, nbsolpts)
-        vi_tmp[idx_h, :, 0, 1, :] = w.reshape(nb_elements_hori, nbsolpts)
-        vi_tmp[idx_h, :, -1, 0, :] = e.reshape(nb_elements_hori, nbsolpts)
+        var_itf_j_new[idx_h, 0, :, nbsolpts:] = s.reshape(nb_elements_hori, nbsolpts)
+        var_itf_j_new[idx_h, -1, :, :nbsolpts] = n.reshape(nb_elements_hori, nbsolpts)
+        var_itf_i_new[idx_h, :, 0, nbsolpts:] = w.reshape(nb_elements_hori, nbsolpts)
+        var_itf_i_new[idx_h, :, -1, :nbsolpts] = e.reshape(nb_elements_hori, nbsolpts)
 
         # Substract topo after extrapolation
         if topo is not None:
@@ -140,8 +176,8 @@ class RhsShallowWater(RHS):
         #                   |
         west = xp.s_[..., 1:, :nbsolpts]
         east = xp.s_[..., :-1, nbsolpts:]
-        south = xp.s_[..., nb_elements_hori:, :nbsolpts]
-        north = xp.s_[..., :-nb_elements_hori, nbsolpts:]
+        south = xp.s_[..., 1:, :, :nbsolpts]
+        north = xp.s_[..., :-1, :, nbsolpts:]
 
         a = xp.sqrt(gravity * var_itf_i_new[idx_h] * metric.H_contra_11_itf_i)
         tmp = var_itf_i_new[idx_h] * a

@@ -7,9 +7,10 @@ from numpy.typing import NDArray
 from common.device import Device
 from common.configuration import Configuration
 from common.process_topology import ProcessTopology
-from geometry import Cartesian2D, CubedSphere3D, DFROperators, Geometry, Metric2D, Metric3DTopo
+from geometry import Cartesian2D, CubedSphere2D, CubedSphere3D, DFROperators, Geometry, Metric2D, Metric3DTopo
 from init.initialize import Topo
 from rhs.rhs_euler import RhsEuler
+from rhs.rhs_sw import RhsShallowWater
 from rhs.rhs import get_rhs
 
 
@@ -62,6 +63,11 @@ class RhsBundle:
                 param.nb_elements_vertical,
                 param.case_number,
                 device=device,
+            )
+
+        elif param.equations == "shallow_water" and isinstance(geom, CubedSphere2D):
+            self.full = RhsShallowWater(
+                fields_shape, geom, operators, metric, topo, ptopo, param.nbsolpts, param.nb_elements_horizontal
             )
 
         else:
