@@ -1,7 +1,8 @@
 import math
-import numpy
 
 from mpi4py import MPI
+import numpy
+from numpy.typing import NDArray
 
 from .cubed_sphere import CubedSphere
 from .sphere import cart2sph
@@ -85,6 +86,7 @@ class CubedSphere3D(CubedSphere):
         """
         super().__init__(nbsolpts, device)
         xp = device.xp
+        self.dtype = numpy.dtype(numpy.float64)
 
         rank = MPI.COMM_WORLD.rank
 
@@ -185,11 +187,14 @@ class CubedSphere3D(CubedSphere):
         # - In 3D vertically, we only have one array, with shape similar to horizontally, TBD
         self.block_shape = (nk, nj, ni)
         self.grid_shape_3d_new = (self.nb_elements_x3, self.nb_elements_x2, self.nb_elements_x1, nbsolpts**3)
+        self.floor_shape = (self.nb_elements_x2, self.nb_elements_x1, nbsolpts**2)
 
         # Interface shapes include a halo of one element along the direction of the interface
         self.itf_i_shape = (self.nb_elements_x3, self.nb_elements_x2, self.nb_elements_x1 + 2, (nbsolpts**2) * 2)
         self.itf_j_shape = (self.nb_elements_x3, self.nb_elements_x2 + 2, self.nb_elements_x1, (nbsolpts**2) * 2)
         self.itf_k_shape = (self.nb_elements_x3 + 2, self.nb_elements_x2, self.nb_elements_x1, (nbsolpts**2) * 2)
+        self.itf_i_floor_shape = (self.nb_elements_x2, self.nb_elements_x1 + 2, nbsolpts * 2)
+        self.itf_j_floor_shape = (self.nb_elements_x2 + 2, self.nb_elements_x1, nbsolpts * 2)
 
         # Interface array edges
         self.west_edge = numpy.s_[..., 0, : nbsolpts**2]  # West boundary of the western halo elements
@@ -198,6 +203,11 @@ class CubedSphere3D(CubedSphere):
         self.north_edge = numpy.s_[..., -1, :, nbsolpts**2 :]  # North boundary of the northern halo elements
         self.bottom_edge = numpy.s_[..., 0, :, :, : nbsolpts**2]  # Bottom boundary of bottom halo elements
         self.top_edge = numpy.s_[..., -1, :, :, nbsolpts**2 :]  # Top boundary of top halo elements
+
+        self.floor_west_edge = numpy.s_[..., 0, :nbsolpts]
+        self.floor_east_edge = numpy.s_[..., -1, nbsolpts:]
+        self.floor_south_edge = numpy.s_[..., 0, :, :nbsolpts]
+        self.floor_north_edge = numpy.s_[..., -1, :, nbsolpts:]
 
         # Assign a token zbot, potentially to be overridden later with supplied topography
         self.zbot = xp.zeros(self.grid_shape_2d)
@@ -379,25 +389,25 @@ class CubedSphere3D(CubedSphere):
         planet_scaling_factor = 1.0
         planet_is_rotating = 1.0
         self.deep = False
-        if param.equations.lower() == "euler":
-            if param.case_number == 31:
-                planet_scaling_factor = 125.0
-                planet_is_rotating = 0.0
-            elif param.case_number == 20:
-                # Normal planet, but no rotation
-                planet_is_rotating = 0.0
-            elif param.case_number == 21 or param.case_number == 22:
-                # Small planet, no rotation
-                planet_scaling_factor = 500
-                planet_is_rotating = 0.0
 
-            assert param.depth_approx is not None
-            if param.depth_approx.lower() == "deep":
-                self.deep = True
-            elif param.depth_approx.lower() == "shallow":
-                self.deep = False
-            else:
-                raise AssertionError(f"Invalid Euler atmosphere depth approximation ({param.depth_approx})")
+        if param.case_number == 31:
+            planet_scaling_factor = 125.0
+            planet_is_rotating = 0.0
+        elif param.case_number == 20:
+            # Normal planet, but no rotation
+            planet_is_rotating = 0.0
+        elif param.case_number == 21 or param.case_number == 22:
+            # Small planet, no rotation
+            planet_scaling_factor = 500
+            planet_is_rotating = 0.0
+
+        assert param.depth_approx is not None
+        if param.depth_approx.lower() == "deep":
+            self.deep = True
+        elif param.depth_approx.lower() == "shallow":
+            self.deep = False
+        else:
+            raise AssertionError(f"Invalid Euler atmosphere depth approximation ({param.depth_approx})")
         self.earth_radius /= planet_scaling_factor
         self.rotation_speed *= planet_is_rotating / planet_scaling_factor
 
@@ -407,7 +417,7 @@ class CubedSphere3D(CubedSphere):
         # as will the DG structures.
         self._build_physical_coordinates()
 
-    def apply_topography(self, zbot, zbot_itf_i, zbot_itf_j):
+    def apply_topography(self, zbot, zbot_itf_i, zbot_itf_j, zbot_new, zbot_itf_i_new, zbot_itf_j_new):
         """
         Apply a topography field, given by heights (above the 0 reference sphere) specified at
         interior points, i-boundaries, and j-boundaries.  This function applies a linear mapping,
@@ -690,7 +700,7 @@ class CubedSphere3D(CubedSphere):
 
     def to_single_block(self, a):
         """Convert input array to old memory layout"""
-        if a.shape[-3:] != self.grid_shape_3d_new:
+        if a.shape[-4:] != self.grid_shape_3d_new:
             raise ValueError(f"Unhandled shape {a.shape}")
 
         tmp_shape = a.shape[:-3] + (
@@ -807,6 +817,85 @@ class CubedSphere3D(CubedSphere):
 
         new[self.bottom_edge] = 0.0
         new[self.top_edge] = 0.0
+
+        return new
+
+    def get_floor(self, a):
+        """Retrieve slice of 'a' that's on the bottom (floor)"""
+        if a.shape[-4:] != self.grid_shape_3d_new:
+            raise ValueError(f"Unhandled shape {a.shape}, expected ... + {self.grid_shape_3d_new}")
+
+        tmp_shape1 = a.shape[:-1] + (self.nbsolpts, self.nbsolpts, self.nbsolpts)
+        tmp_shape2 = a.shape[:-4] + self.floor_shape
+        floor = numpy.s_[..., 0, :, :, 0, :, :]
+        return a.reshape(tmp_shape1)[floor].reshape(tmp_shape2)
+
+    def get_itf_i_floor(self, a):
+        """Retrieve slice of interface-i array 'a' that's on the floor"""
+        if a.shape[-4:] != self.itf_i_shape:
+            raise ValueError(f"Unhandled shape {a.shape}, expected ... + {self.itf_i_shape}")
+
+        tmp_shape1 = a.shape[:-1] + (2, self.nbsolpts, self.nbsolpts)
+        tmp_shape2 = a.shape[:-4] + self.itf_i_floor_shape
+        floor = numpy.s_[..., 0, :, :, :, 0, :]
+        return a.reshape(tmp_shape1)[floor].reshape(tmp_shape2)
+
+    def get_itf_j_floor(self, a):
+        """Retrieve slice of interface-j array 'a' that's on the floor"""
+        if a.shape[-4:] != self.itf_j_shape:
+            raise ValueError(f"Unhandled shape {a.shape}, expected ... + {self.itf_j_shape}")
+
+        tmp_shape1 = a.shape[:-1] + (2, self.nbsolpts, self.nbsolpts)
+        tmp_shape2 = a.shape[:-4] + self.itf_j_floor_shape
+        floor = numpy.s_[..., 0, :, :, :, 0, :]
+        return a.reshape(tmp_shape1)[floor].reshape(tmp_shape2)
+
+    def to_new_floor(self, a: NDArray) -> NDArray:
+        """Convert floor array from old to new layout"""
+        if a.shape[-2:] != self.grid_shape_2d:
+            raise ValueError(f"Unhandled shape {a.shape}, expected ... + {self.grid_shape_2d}")
+
+        tmp_shape1 = a.shape[:-2] + (self.nb_elements_x2, self.nbsolpts, self.nb_elements_x1, self.nbsolpts)
+        end_shape = a.shape[:-2] + self.floor_shape
+
+        return numpy.swapaxes(a.reshape(tmp_shape1), -3, -2).reshape(end_shape)
+
+    def to_new_itf_i_floor(self, a: NDArray) -> NDArray:
+        """Convert itf-i array from old to new layout"""
+        expected_shape = self.itf_i_shape_3d[1:]
+        if a.shape[-2:] != expected_shape:
+            raise ValueError(f"Unhandled shape {a.shape}, expected ... + {expected_shape}")
+
+        xp = self.device.xp
+
+        new = xp.zeros(a.shape[:-2] + self.itf_i_floor_shape, dtype=a.dtype)
+        tmp_shape1 = a.shape[:-2] + (self.nb_elements_x2, self.nbsolpts, self.nb_elements_x1 + 1)
+
+        tmp_array = numpy.moveaxis(a.reshape(tmp_shape1), -2, -1)
+
+        west = numpy.s_[..., 1:, : self.nbsolpts]
+        east = numpy.s_[..., :-1, self.nbsolpts :]
+        new[west] = tmp_array
+        new[east] = tmp_array
+
+        return new
+
+    def to_new_itf_j_floor(self, a: NDArray) -> NDArray:
+        """Convert itf-j array from old to new layout"""
+        expected_shape = self.itf_j_shape_3d[1:]
+        if a.shape[-2:] != expected_shape:
+            raise ValueError(f"Unhandled shape {a.shape}, expected ... + {expected_shape}")
+
+        xp = self.device.xp
+
+        new = xp.zeros(a.shape[:-2] + self.itf_j_floor_shape, dtype=a.dtype)
+        tmp_shape1 = a.shape[:-2] + (self.nb_elements_x2 + 1, self.nb_elements_x1, self.nbsolpts)
+        tmp_array = a.reshape(tmp_shape1)
+
+        south = numpy.s_[..., 1:, :, : self.nbsolpts]
+        north = numpy.s_[..., :-1, :, self.nbsolpts :]
+        new[south] = tmp_array
+        new[north] = tmp_array
 
         return new
 

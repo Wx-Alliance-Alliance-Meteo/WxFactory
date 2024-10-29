@@ -1,5 +1,6 @@
-import numpy
 import math
+
+import numpy
 
 from common.definitions import cpd, day_in_secs, gravity, p0, Rd
 from geometry import CubedSphere3D, DFROperators, Metric3DTopo, wind2contra_2d, wind2contra_3d
@@ -546,12 +547,10 @@ def dcmip_steady_state_mountain(geom: CubedSphere3D, metric, mtrx, param):
     return rho, u1_contra, u2_contra, w, theta
 
 
-# =====================================================================================
-# Tests 2-1 and 2-2:  Non-hydrostatic Mountain Waves over a Schaer-type Mountain
-# =====================================================================================
-
-
 def dcmip_schar_waves(geom: CubedSphere3D, metric, mtrx: DFROperators, param, shear=False):
+    """
+    Tests 2-1 and 2-2:  Non-hydrostatic Mountain Waves over a Schaer-type Mountain
+    """
     T0 = 300.0  # temperature (K)
     lambdam = math.pi / 4.0  # mountain longitude center point (radians)
     phim = 0.0  # mountain latitude center point (radians)
@@ -573,7 +572,29 @@ def dcmip_schar_waves(geom: CubedSphere3D, metric, mtrx: DFROperators, param, sh
     zbot_itf_i = numpy.zeros(geom.coordVec_latlon_itf_i.shape[2:])
     zbot_itf_j = numpy.zeros(geom.coordVec_latlon_itf_j.shape[2:])
 
+    zbot_itf_i_new = numpy.zeros(geom.itf_i_floor_shape, dtype=geom.dtype)
+    zbot_itf_j_new = numpy.zeros(geom.itf_j_floor_shape, dtype=geom.dtype)
+
     # Build topography based on lateral great-circle distance from the mountain center
+    def build_topo_old(z, latlon):
+        lat = latlon[1, 0, :, :]
+        lon = latlon[0, 0, :, :]
+        r = geom.earth_radius * numpy.arccos(
+            math.sin(phim) * numpy.sin(lat) + math.cos(phim) * numpy.cos(lat) * numpy.cos(lon - lambdam)
+        )
+        z[:, :] = h0 * numpy.exp(-(r**2) / Dm**2) * numpy.cos(numpy.pi * r / Dxi) ** 2
+        return z
+
+    def build_topo(latlon):
+        lat = latlon[1]
+        lon = latlon[0]
+        r = geom.earth_radius * numpy.arccos(
+            math.sin(phim) * numpy.sin(lat) + math.cos(phim) * numpy.cos(lat) * numpy.cos(lon - lambdam)
+        )
+        print(f"r shape = {r.shape}")
+
+        return h0 * numpy.exp(-(r**2) / Dm**2) * numpy.cos(numpy.pi * r / Dxi) ** 2
+
     for z, coord in zip(
         [zbot, zbot_itf_i, zbot_itf_j], [geom.coordVec_latlon, geom.coordVec_latlon_itf_i, geom.coordVec_latlon_itf_j]
     ):
@@ -584,8 +605,28 @@ def dcmip_schar_waves(geom: CubedSphere3D, metric, mtrx: DFROperators, param, sh
         )
         z[:, :] = h0 * numpy.exp(-(r**2) / Dm**2) * numpy.cos(numpy.pi * r / Dxi) ** 2
 
+    zbot_new = build_topo(geom.get_floor(geom.polar))
+    zbot_itf_i_new = build_topo(geom.get_itf_i_floor(geom.polar_itf_i))
+    zbot_itf_j_new = build_topo(geom.get_itf_j_floor(geom.polar_itf_j))
+    zbot_itf_i_new[geom.floor_west_edge] = 0.0
+    zbot_itf_i_new[geom.floor_east_edge] = 0.0
+    zbot_itf_j_new[geom.floor_south_edge] = 0.0
+    zbot_itf_j_new[geom.floor_north_edge] = 0.0
+
+    diff = zbot_new - geom.to_new_floor(zbot)
+    diffn = numpy.linalg.norm(diff)
+
+    diffi = zbot_itf_i_new - geom.to_new_itf_i_floor(zbot_itf_i)
+    diffin = numpy.linalg.norm(diffi)
+
+    diffj = zbot_itf_j_new - geom.to_new_itf_j_floor(zbot_itf_j)
+    diffjn = numpy.linalg.norm(diffj)
+
+    if diffn > 0.0 or diffin > 0.0 or diffjn > 0.0:
+        raise ValueError
+
     # Update the geometry object with the new bottom topography
-    geom.apply_topography(zbot, zbot_itf_i, zbot_itf_j)
+    geom.apply_topography(zbot, zbot_itf_i, zbot_itf_j, zbot_new, zbot_itf_i_new, zbot_itf_j_new)
     # And regenerate the metric to take this new topography into account
     metric.build_metric()
 
