@@ -55,7 +55,7 @@ def get_processor_name() -> str | None:
                 return None
 
 
-def build_librairies(force_build: bool = False):
+def build_libraries(force_build: bool = False):
     """
     Build the acceleration library that Weather Factory requires to run
 
@@ -116,7 +116,9 @@ def build_librairies(force_build: bool = False):
             sys.stdout = sys.__stdout__
             setuplog.close()
 
-        shutil.rmtree(build_directory)
+        if os.path.exists(build_directory):
+            shutil.rmtree(build_directory)
+            
         for file_to_remove in generated_files_to_remove:
             os.remove(file_to_remove)
 
