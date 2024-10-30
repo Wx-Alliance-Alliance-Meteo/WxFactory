@@ -21,7 +21,7 @@ sources: list[str] = interfaces + [
     "pde/kernels/boundary_flux.cpp",
 ]
 
-generated_files_to_removes: list[str] = []
+generated_files_to_removes: list[str] = ["pde/pde_interface.cpp"]
 
 
 def make_cython_extension() -> tuple[Extension, str, list[str], list[str]]:
