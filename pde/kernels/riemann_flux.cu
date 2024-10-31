@@ -1,11 +1,6 @@
-extern "C" __global__ void ausm_solver(double *q,
-                                       double *f,
-                                       const int nvars,
-                                       const int direction,
-                                       const int *indlv,
-                                       const int *indrv,
-                                       const int stride,
-                                       const int nmax)
+extern "C" __global__ void riemann_eulercartesian_ausm_2d(const double *q,
+  double *f, const int nvars, const int direction, const int *indlv,
+  const int *indrv, const int stride, const int nmax)
 {
   // These constants are here just temporarily
   double p0 = 100000.;
@@ -17,59 +12,51 @@ extern "C" __global__ void ausm_solver(double *q,
   double inp0 = 1.0 / p0;
   double Rdinp0 = Rd * inp0;
 
-  int idt = blockIdx.x * blockDim.x + threadIdx.x;
+  const int idt = blockIdx.x * blockDim.x + threadIdx.x;
 
   if (idt < nmax)
   {
-    double rhol, rhor, rho_thetal, rho_thetar;
-    double rhoul, rhour, rhowl, rhowr;
-    double ul, ur, wl, wr, invrhol, invrhor;
-    double pl, pr, al, ar, vnl, vnr, M, Ml, Mr, Mmax, Mmin;
-    int idx_rho, idx_rhou, idx_rhow, idx_rhot;
-    int indl, indr;
-    double *ql, *qr, *fl, *fr;
+    const int indl = indlv[idt];
+    const int indr = indrv[idt];
 
-    indl = indlv[idt];
-    indr = indrv[idt];
+    const double *ql = &q[indl];
+    const double *qr = &q[indr];
 
-    ql = &q[indl];
-    qr = &q[indr];
-
-    fl = &f[indl];
-    fr = &f[indr];
+    double *fl = &f[indl];
+    double *fr = &f[indr];
 
     // Compute variable stride
-    idx_rho = 0;
-    idx_rhou = stride;
-    idx_rhow = 2 * stride;
-    idx_rhot = 3 * stride;
+    const int idx_rho = 0;
+    const int idx_rhou = stride;
+    const int idx_rhow = 2 * stride;
+    const int idx_rhot = 3 * stride;
 
-    rhol = ql[idx_rho];
-    rhoul = ql[idx_rhou];
-    rhowl = ql[idx_rhow];
-    rho_thetal = ql[idx_rhot];
+    const double rhol = ql[idx_rho];
+    const double rhoul = ql[idx_rhou];
+    const double rhowl = ql[idx_rhow];
+    const double rho_thetal = ql[idx_rhot];
 
-    rhor = qr[idx_rho];
-    rhour = qr[idx_rhou];
-    rhowr = qr[idx_rhow];
-    rho_thetar = qr[idx_rhot];
+    const double rhor = qr[idx_rho];
+    const double rhour = qr[idx_rhou];
+    const double rhowr = qr[idx_rhow];
+    const double rho_thetar = qr[idx_rhot];
 
-    invrhol = 1.0 / rhol;
-    ul = rhoul * invrhol;
-    wl = rhowl * invrhol;
+    const double invrhol = 1.0 / rhol;
+    const double ul = rhoul * invrhol;
+    const double wl = rhowl * invrhol;
 
-    invrhor = 1.0 / rhor;
-    ur = rhour * invrhor;
-    wr = rhowr * invrhor;
+    const double invrhor = 1.0 / rhor;
+    const double ur = rhour * invrhor;
+    const double wr = rhowr * invrhor;
 
-    pl = p0 * pow(rho_thetal * Rd * inp0, heat_capacity_ratio);
-    pr = p0 * pow(rho_thetar * Rd * inp0, heat_capacity_ratio);
+    const double pl = p0 * pow(rho_thetal * Rd * inp0, heat_capacity_ratio);
+    const double pr = p0 * pow(rho_thetar * Rd * inp0, heat_capacity_ratio);
 
-    al = sqrt(heat_capacity_ratio * pl * invrhol);
-    ar = sqrt(heat_capacity_ratio * pr * invrhor);
+    const double al = sqrt(heat_capacity_ratio * pl * invrhol);
+    const double ar = sqrt(heat_capacity_ratio * pr * invrhor);
 
-    vnr = 0.0;
-    vnl = 0.0;
+    double vnr = 0.0;
+    double vnl = 0.0;
 
     // Fx faces
     if (direction == 0)
@@ -84,12 +71,12 @@ extern "C" __global__ void ausm_solver(double *q,
       vnr = wr;
     }
 
-    Ml = vnl / al + 1.0;
-    Mr = vnr / ar - 1.0;
+    const double Ml = vnl / al + 1.0;
+    const double Mr = vnr / ar - 1.0;
 
-    M = 0.25 * (Ml * Ml - Mr * Mr);
-    Mmax = max(0.0, M) * al;
-    Mmin = min(0.0, M) * ar;
+    const double M = 0.25 * (Ml * Ml - Mr * Mr);
+    const double Mmax = max(0.0, M) * al;
+    const double Mmin = min(0.0, M) * ar;
 
     // Set the interface fluxes
     fl[idx_rho] = rhol * Mmax + rhor * Mmin;

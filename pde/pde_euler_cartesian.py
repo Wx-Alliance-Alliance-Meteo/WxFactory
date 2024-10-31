@@ -3,17 +3,15 @@ import os
 from numpy import ndarray
 
 from pde.pde import PDE
-from common.definitions import idx_2d_rho, idx_2d_rho_u, idx_2d_rho_w, idx_2d_rho_theta, gravity
-from common.device import CudaDevice
+from common.definitions import idx_2d_rho, idx_2d_rho_w, gravity
 
 class PDEEulerCartesian(PDE):
 
     def _setup_cpu_kernels(self):
-        # Define here the kernels that will be used based on dimension, geometry and riemann solver choice
-
         from lib.pde.kernels.libkernels import pointwise_eulercartesian_2d_wrapper, \
             riemann_eulercartesian_ausm_2d_wrapper, boundary_eulercartesian_2d_wrapper
-
+        
+        # Define here the kernels that will be used based on dimension, geometry and riemann solver choice
         self.pointwise_func = pointwise_eulercartesian_2d_wrapper
         self.riemann_func = riemann_eulercartesian_ausm_2d_wrapper
         self.boundary_func = boundary_eulercartesian_2d_wrapper
@@ -21,9 +19,9 @@ class PDEEulerCartesian(PDE):
 
     def _setup_cuda_kernels(self):
         # Compile speficic kernels
-        self.pointwise_func = self.pointwise_module.get_function('euler_flux')
-        self.riemann_func = self.riemann_module.get_function('ausm_solver')
-        self.boundary_func = self.boundary_module.get_function('boundary_flux')
+        self.pointwise_func = self.pointwise_module.get_function('pointwise_eulercartesian_2d')
+        self.riemann_func = self.riemann_module.get_function('riemann_eulercartesian_ausm_2d')
+        self.boundary_func = self.boundary_module.get_function('boundary_eulercartesian_2d')
         
     def pointwise_fluxes_cuda(self, q: ndarray, flux_x1: ndarray, flux_x2: ndarray, flux_x3: ndarray) -> None:
 

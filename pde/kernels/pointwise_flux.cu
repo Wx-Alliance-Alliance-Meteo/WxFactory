@@ -1,4 +1,4 @@
-extern "C" __global__ void euler_flux(const double *q, double *flux_x, double *flux_z, const int stride)
+extern "C" __global__ void pointwise_eulercartesian_2d(const double *q, double *flux_x, double *flux_z, const int stride)
 {
   // These constants are here just temporarily
   double p0 = 100000.;
@@ -9,31 +9,27 @@ extern "C" __global__ void euler_flux(const double *q, double *flux_x, double *f
   double heat_capacity_ratio = cpd / cvd;
   double inp0 = 1.0 / p0;
   double Rdinp0 = Rd * inp0;
-  int idt = blockIdx.x * blockDim.x + threadIdx.x;
+  const int idt = blockIdx.x * blockDim.x + threadIdx.x;
 
   if (idt < stride)
   {
-    int idx_rho, idx_rhou, idx_rhow, idx_rhot;
-    double rho, invrho, rhou, rhow, rho_theta;
-    double u, w, p;
-
     // Compute the strides to access state variables
-    idx_rho = idt + 0;
-    idx_rhou = idt + stride;
-    idx_rhow = idt + 2 * stride;
-    idx_rhot = idt + 3 * stride;
+    const int  idx_rho = idt + 0;
+    const int idx_rhou = idt + stride;
+    const int idx_rhow = idt + 2 * stride;
+    const int idx_rhot = idt + 3 * stride;
 
-    rho = q[idx_rho];
-    rhou = q[idx_rhou];
-    rhow = q[idx_rhow];
-    rho_theta = q[idx_rhot];
+    const double rho = q[idx_rho];
+    const double rhou = q[idx_rhou];
+    const double rhow = q[idx_rhow];
+    const double rho_theta = q[idx_rhot];
 
-    invrho = 1.0 / rho;
+    const double invrho = 1.0 / rho;
 
-    u = rhou * invrho;
-    w = rhow * invrho;
+    const double u = rhou * invrho;
+    const double w = rhow * invrho;
 
-    p = p0 * exp(heat_capacity_ratio * log(Rdinp0 * rho_theta));
+    const double p = p0 * exp(heat_capacity_ratio * log(Rdinp0 * rho_theta));
 
     flux_x[idx_rho] = rhou;
     flux_x[idx_rhou] = rhou * u + p;

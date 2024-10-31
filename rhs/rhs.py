@@ -50,7 +50,7 @@ class RHS(ABC):
         self.num_dim = config.num_dim
 
         # Instantiate appropriate PDE object
-        self.pde = get_pde(pde_name)(geometry, config, device)
+        self.pde = get_pde(pde_name)(geometry, config, device, metric)
 
         # Must be allocated at every child class
         self.rhs = None

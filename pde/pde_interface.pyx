@@ -1,27 +1,26 @@
 cimport cython
 
-ctypedef fused num_t:
+ctypedef fused pynum_t:
     float
     double
 
 cdef extern from "kernels/pointwise_flux.h":
-    void pointwise_eulercartesian_2d[T](T *q, T *flux_x1, T *flux_x2, const int stride)
-    void pointwise_swcubedsphere_2d[T](T *q, T *flux_x, T *flux_y, T *flux_z, const double sqrt_g, const double *metrics, const int stride)
+    void pointwise_eulercartesian_2d[num_t](const num_t *q, num_t *flux_x1, num_t *flux_x2, const int stride)
+    void pointwise_swcubedsphere_2d[num_t](const num_t *q, num_t *flux_x, num_t *flux_y, num_t *flux_z, const double sqrt_g, const double *metrics, const int stride)
 
 cdef extern from "kernels/riemann_flux.h":
-    void riemann_eulercartesian_ausm_2d[T](T *ql, T *qr, T *fl, T* fr, const int nvar, const int direction, const int stride)
+    void riemann_eulercartesian_ausm_2d[num_t](const num_t *ql, const num_t *qr, num_t *fl, num_t* fr, const int nvar, const int direction, const int stride)
 
 cdef extern from "kernels/boundary_flux.h":
-    void boundary_eulercartesian_2d[T](T* q, T*flux, const int direction, const int stride)
-
+    void boundary_eulercartesian_2d[num_t](const num_t* q, num_t*flux, const int direction, const int stride)
 
 # -------------------------------------
 # Pointwise flux wrappers
 # -------------------------------------
   
-cpdef pointwise_eulercartesian_2d_wrapper(num_t[:, :, :, :] q, 
-                                          num_t[:, :, :, :] flux_x1,
-                                          num_t[:, :, :, :] flux_x2,
+cpdef pointwise_eulercartesian_2d_wrapper(pynum_t[:, :, :, :] q, 
+                                          pynum_t[:, :, :, :] flux_x1,
+                                          pynum_t[:, :, :, :] flux_x2,
                                           int nb_elements_x1,
                                           int nb_elements_x2,
                                           int nb_solpts_total):
@@ -48,10 +47,10 @@ cpdef pointwise_eulercartesian_2d_wrapper(num_t[:, :, :, :] q,
 # Riemann flux wrappers
 # -------------------------------------
 
-cpdef riemann_eulercartesian_ausm_2d_wrapper(num_t[:, :, :, :] q_itf_x1,
-                                             num_t[:, :, :, :] q_itf_x2,
-                                             num_t[:, :, :, :] common_flux_x1,
-                                             num_t[:, :, :, :] common_flux_x2,
+cpdef riemann_eulercartesian_ausm_2d_wrapper(pynum_t[:, :, :, :] q_itf_x1,
+                                             pynum_t[:, :, :, :] q_itf_x2,
+                                             pynum_t[:, :, :, :] common_flux_x1,
+                                             pynum_t[:, :, :, :] common_flux_x2,
                                              const int nb_elements_x1,
                                              const int nb_elements_x2,
                                              const int nbsolpts,
@@ -96,10 +95,10 @@ cpdef riemann_eulercartesian_ausm_2d_wrapper(num_t[:, :, :, :] q_itf_x1,
 # Boundary flux wrappers
 # -------------------------------------
 
-cpdef boundary_eulercartesian_2d_wrapper(num_t[:, :, :, :] q_itf_x1,
-                                         num_t[:, :, :, :] q_itf_x2,
-                                         num_t[:, :, :, :] common_flux_x1,
-                                         num_t[:, :, :, :] common_flux_x2,
+cpdef boundary_eulercartesian_2d_wrapper(pynum_t[:, :, :, :] q_itf_x1,
+                                         pynum_t[:, :, :, :] q_itf_x2,
+                                         pynum_t[:, :, :, :] common_flux_x1,
+                                         pynum_t[:, :, :, :] common_flux_x2,
                                          const int nb_elements_x1,
                                          const int nb_elements_x2,
                                          const int nbsolpts,

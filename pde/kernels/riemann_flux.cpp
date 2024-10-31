@@ -1,16 +1,10 @@
 #include <cmath>
 #include "definitions.h"
 
-template<typename T>
-void riemann_eulercartesian_ausm_2d(T *ql, T *qr, T *fl, T *fr,
-                            const int nvars, const int direction,
-                            const int stride)
+template<typename num_t>
+void riemann_eulercartesian_ausm_2d(const num_t *ql, const num_t *qr, 
+    num_t *fl, num_t *fr, const int nvars, const int direction, const int stride)
 {
-  T rhol, rhor, rho_thetal, rho_thetar;
-  T rhoul, rhour, rhowl, rhowr;
-  T ul, ur, wl, wr, invrhol, invrhor;
-  T pl, pr, al, ar, vnl, vnr, M, Ml, Mr, Mmax, Mmin;
-
   // Compute the strides to access state variables
   const int idx_rho = 0;
   const int idx_rhou = stride;
@@ -18,50 +12,51 @@ void riemann_eulercartesian_ausm_2d(T *ql, T *qr, T *fl, T *fr,
   const int idx_rhot = 3 * stride;
 
   // Get the left and right variables
-  rhol = ql[idx_rho];
-  rhoul = ql[idx_rhou];
-  rhowl = ql[idx_rhow];
-  rho_thetal = ql[idx_rhot];
+  const double rhol = ql[idx_rho];
+  const double rhoul = ql[idx_rhou];
+  const double rhowl = ql[idx_rhow];
+  const double rho_thetal = ql[idx_rhot];
 
-  rhor = qr[idx_rho];
-  rhour = qr[idx_rhou];
-  rhowr = qr[idx_rhow];
-  rho_thetar = qr[idx_rhot];
+  const double rhor = qr[idx_rho];
+  const double rhour = qr[idx_rhou];
+  const double rhowr = qr[idx_rhow];
+  const double rho_thetar = qr[idx_rhot];
 
-  invrhol = 1.0 / rhol;
-  ul = rhoul * invrhol;
-  wl = rhowl * invrhol;
+  const num_t invrhol = 1.0 / rhol;
+  const num_t ul = rhoul * invrhol;
+  const num_t wl = rhowl * invrhol;
 
-  invrhor = 1.0 / rhor;
-  ur = rhour * invrhor;
-  wr = rhowr * invrhor;
+  const num_t invrhor = 1.0 / rhor;
+  const num_t ur = rhour * invrhor;
+  const num_t wr = rhowr * invrhor;
 
   // Compute the pressure and speed of sound
-  pl = p0 * pow(rho_thetal * Rd * inp0, heat_capacity_ratio);
-  pr = p0 * pow(rho_thetar * Rd * inp0, heat_capacity_ratio);
+  const num_t pl = p0 * pow(rho_thetal * Rd * inp0, heat_capacity_ratio);
+  const num_t pr = p0 * pow(rho_thetar * Rd * inp0, heat_capacity_ratio);
 
-  al = sqrt(heat_capacity_ratio * pl * invrhol);
-  ar = sqrt(heat_capacity_ratio * pr * invrhor);
+  const num_t al = sqrt(heat_capacity_ratio * pl * invrhol);
+  const num_t ar = sqrt(heat_capacity_ratio * pr * invrhor);
 
-  // Vertical faces
+  num_t vnr = 0.0;
+  num_t vnl = 0.0;
   if (direction == 0)
   {
     vnl = ul;
     vnr = ur;
   }
-  if (direction == 1)
+  else if (direction == 1)
   {
     vnl = wl;
     vnr = wr;
   }
 
   // Compute the modified mach number
-  Ml = vnl / al + 1.0;
-  Mr = vnr / ar - 1.0;
+  const num_t Ml = vnl / al + 1.0;
+  const num_t Mr = vnr / ar - 1.0;
 
-  M = 0.25 * (Ml * Ml - Mr * Mr);
-  Mmax = std::fmax(0.0, M) * al;
-  Mmin = std::fmin(0.0, M) * ar;
+  const num_t M = 0.25 * (Ml * Ml - Mr * Mr);
+  const num_t Mmax = std::fmax(0.0, M) * al;
+  const num_t Mmin = std::fmin(0.0, M) * ar;
 
   // Set the interface fluxes
   fl[idx_rho] = rhol * Mmax + rhor * Mmin;
@@ -69,8 +64,7 @@ void riemann_eulercartesian_ausm_2d(T *ql, T *qr, T *fl, T *fr,
   {
     fl[idx_rhou] = 0.5 * (Ml * pl - Mr * pr);
     fl[idx_rhow] = rhowl * Mmax + rhowr * Mmin;
-  }
-  if (direction == 1)
+  } else if (direction == 1)
   {
     fl[idx_rhou] = rhoul * Mmax + rhour * Mmin;
     fl[idx_rhow] = 0.5 * (Ml * pl - Mr * pr);
@@ -79,10 +73,12 @@ void riemann_eulercartesian_ausm_2d(T *ql, T *qr, T *fl, T *fr,
 
   // Set the right fluxes
   for (int i = 0; i < nvars; i++)
+  {
     fr[i * stride] = fl[i * stride];
+  }
 }
 
-template void riemann_eulercartesian_ausm_2d<double> (double *ql, double *qr, double *fl, double *fr, const int nvars, const int direction, const int stride);
-template void riemann_eulercartesian_ausm_2d<float>(float *ql, float *qr, float *fl, float *fr, const int nvars, const int direction, const int stride);
+template void riemann_eulercartesian_ausm_2d<double> (const double *ql, const double *qr, double *fl, double *fr, const int nvars, const int direction, const int stride);
+template void riemann_eulercartesian_ausm_2d<float>(const float *ql, const float *qr, float *fl, float *fr, const int nvars, const int direction, const int stride);
 // template void riemann_eulercartesian_ausm<complex>(complex *ql, complex *qr, complex *fl, complex *fr, const int nvars, const int direction, const int stride);
 
