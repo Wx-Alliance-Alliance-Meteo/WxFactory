@@ -36,4 +36,3 @@ API
    precondition
    rhs
    solvers
-   wx_cupy
