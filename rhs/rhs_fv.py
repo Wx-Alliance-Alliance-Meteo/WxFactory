@@ -5,10 +5,8 @@ from rhs.rhs import RHS
 
 class RHS_FV(RHS):
 
-    def __init__(self, pde_name, geometry, operators, metric,
-                 topology, process_topo, config, device):
-        super().__init__(pde_name, geometry, operators, metric,
-                 topology, process_topo, config, device)
+    def __init__(self, pde_name, geometry, operators, metric, topology, process_topo, config, device):
+        super().__init__(pde_name, geometry, operators, metric, topology, process_topo, config, device)
 
         xp = device.xp
         num_dim = config.num_dim
@@ -52,7 +50,7 @@ class RHS_FV(RHS):
             self.df2_dx2 = xp.empty_like(self.f_x2)
 
         # Initialize rhs matrix
-        self.rhs =  xp.empty((nb_var, nb_elems, nb_solpts))
+        self.rhs = xp.empty((nb_var, nb_elems, nb_solpts))
 
     def solution_extrapolation(self, q: ndarray) -> None:
 
@@ -63,7 +61,6 @@ class RHS_FV(RHS):
         self.q_itf_x3 = self.q_itf_x1
         self.q_itf_x2 = self.q_itf_x1
 
-
     def pointwise_fluxes(self, q: ndarray) -> None:
         # Not applicable in finite volume
         pass
@@ -71,7 +68,7 @@ class RHS_FV(RHS):
     def flux_divergence_partial(self) -> ndarray:
         # Not applicable in finite volume
         pass
-        
+
     def flux_divergence(self):
         xp = self.device.xp
 
@@ -83,4 +80,3 @@ class RHS_FV(RHS):
             raise Exception("3D not implemented yet!")
 
         xp.add(self.df1_dx1, self.df3_dx3, out=self.rhs)
-

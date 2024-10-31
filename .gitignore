@@ -8,7 +8,7 @@
 *.nsys-rep
 *.so
 
-pde/kernels/interface.cpp
+pde/pde_interface.cpp
 
 doc/*.pdf
 doc/aux/*

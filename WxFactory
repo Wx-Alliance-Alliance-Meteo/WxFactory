@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
 
-from compiler.compiler_module import build_librairies
-
 """ The WxFactory model """
 
 import argparse
@@ -12,26 +10,14 @@ import sys
 from mpi4py import MPI
 import numpy
 
+
 def main():
     """Execute a WxFactory simulation.
-    
+
     This function drives the program: read and validate command-line options, then create and run a simulation."""
 
     args = None
     rank = MPI.COMM_WORLD.rank
-
-    build_error = False
-    if rank == 0:
-        try:
-            build_librairies()
-        except e:
-            build_error = e
-   
-    MPI.COMM_WORLD.bcast(build_error, root=0)
-    if build_error:
-        if rank == 0:
-            raise build_error
-        sys.exit(-1)
 
     if rank == 0:
         print(f'Start time : {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}')
@@ -49,13 +35,15 @@ def main():
     parse_error = None
     if rank == 0:
         try:
-            parser = argparse.ArgumentParser(description='Solve NWP problems with GEF!')
-            parser.add_argument('--profile', action='store_true', help='Produce an execution profile when running')
-            parser.add_argument('config', type=str, help='File that contains simulation parameters')
-            parser.add_argument('--show-every-crash', action='store_true',
-                                help='In case of an exception, show output from alllllll PEs')
-            parser.add_argument('--numpy-warn-as-except', action='store_true',
-                                help='Raise an exception if there is a numpy warning')
+            parser = argparse.ArgumentParser(description="Solve NWP problems with GEF!")
+            parser.add_argument("--profile", action="store_true", help="Produce an execution profile when running")
+            parser.add_argument("config", type=str, help="File that contains simulation parameters")
+            parser.add_argument(
+                "--show-every-crash", action="store_true", help="In case of an exception, show output from alllllll PEs"
+            )
+            parser.add_argument(
+                "--numpy-warn-as-except", action="store_true", help="Raise an exception if there is a numpy warning"
+            )
 
             args = parser.parse_args()
         except SystemExit as e:
@@ -64,14 +52,16 @@ def main():
     parse_error = MPI.COMM_WORLD.bcast(parse_error, root=0)
 
     if parse_error is not None:
-        if rank == 0: raise parse_error
+        if rank == 0:
+            raise parse_error
         sys.exit(-1)
 
     args = MPI.COMM_WORLD.bcast(args, root=0)
 
     # Abort if config file does not exist
     if not os.path.exists(args.config):
-        if rank == 0: raise ValueError(f'Config file does not seem to exist: {args.config}')
+        if rank == 0:
+            raise ValueError(f"Config file does not seem to exist: {args.config}")
         sys.exit(-1)
 
     try:
@@ -86,7 +76,7 @@ def main():
         numpy.set_printoptions(suppress=True, linewidth=256)
 
         if args.numpy_warn_as_except:
-            numpy.seterr(all='raise')
+            numpy.seterr(all="raise")
 
         # Read the config + initialize simulation
         sim = Simulation(args.config)
@@ -98,21 +88,21 @@ def main():
         if args.profile and pr:
             pr.disable()
 
-            out_file = f'prof_{rank:04d}.out'
+            out_file = f"prof_{rank:04d}.out"
             pr.dump_stats(out_file)
 
-    except (Exception, KeyboardInterrupt): # KeyboardInterrupt does not seem to be caught with just "Exception"...
+    except (Exception, KeyboardInterrupt):  # KeyboardInterrupt does not seem to be caught with just "Exception"...
 
         sys.stdout.flush()
         if args and args.show_every_crash:
             raise
 
         if rank == 0:
-            print(f'There was an error while running GEF. Only rank 0 is printing the traceback:')
+            print(f"There was an error while running GEF. Only rank 0 is printing the traceback:")
             raise
 
         sys.exit(-1)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

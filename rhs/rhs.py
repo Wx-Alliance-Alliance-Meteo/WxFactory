@@ -30,15 +30,16 @@ from pde.pde import get_pde
 def get_rhs(name):
     if name == "dfr" or name == "dg":
         from rhs.rhs_dfr import RHS_DFR
+
         return RHS_DFR
     if name == "fv":
         from rhs.rhs_fv import RHS_FV
+
         return RHS_FV
 
 
 class RHS(ABC):
-    def __init__(self, pde_name, geometry, operators, metric,
-                 topology, process_topo, config, device) -> None:
+    def __init__(self, pde_name, geometry, operators, metric, topology, process_topo, config, device) -> None:
         self.pde_name = pde_name
         self.geom = geometry
         self.ops = operators
@@ -78,7 +79,7 @@ class RHS(ABC):
         # At this moment, a deep copy needs to be returned
         # otherwise issues are encountered after. This needs to be fixed
 
-        return 1.0*self.rhs
+        return 1.0 * self.rhs
 
     def full(self, q: ndarray) -> ndarray:
         return self.__call__(q)
@@ -92,8 +93,9 @@ class RHS(ABC):
         pass
 
     def riemann_fluxes(self) -> None:
-        self.pde.riemann_fluxes(self.q_itf_x1, self.q_itf_x2, self.q_itf_x3,
-                                self.f_itf_x1, self.f_itf_x2, self.f_itf_x3)
+        self.pde.riemann_fluxes(
+            self.q_itf_x1, self.q_itf_x2, self.q_itf_x3, self.f_itf_x1, self.f_itf_x2, self.f_itf_x3
+        )
 
     @abstractmethod
     def flux_divergence_partial(self) -> None:
