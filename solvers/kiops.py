@@ -32,27 +32,6 @@ def kiops(
     The size of the Krylov subspace is changed dynamically during the integration.
     The Krylov subspace is computed using the incomplete orthogonalization method.
 
-    Arguments:
-    - `tau_out`    - Array of `tau_out`
-    - `A`        - the matrix argument of the ``φ`` functions
-    - `u`        - the matrix with rows representing the vectors to be multiplied by the ``φ`` functions
-
-    Optional arguments:
-    - `tol`      - the convergence tolerance required (default: 1e-7)
-    - `mmin`, `mmax` - let the Krylov size vary between mmin and mmax (default: 10, 128)
-    - `m`        - an estimate of the appropriate Krylov size (default: mmin)
-    - `iop`      - length of incomplete orthogonalization procedure (default: 2)
-    - `task1`     - if true, divide the result by 1/T**p
-
-    Returns:
-    - `w`      - the linear combination of the ``φ`` functions evaluated at ``tA`` acting on the vectors from ``u``
-    - `stats[0]` - number of substeps
-    - `stats[1]` - number of rejected steps
-    - `stats[2]` - number of Krylov steps
-    - `stats[3]` - number of matrix exponentials
-    - `stats[4]` - Error estimate
-    - `stats[5]` - the Krylov size of the last substep
-
     `n` is the size of the original problem
     `p` is the highest index of the ``φ`` functions
 
@@ -63,6 +42,28 @@ def kiops(
     * Niesen, J. and Wright, W.M., 2011. A Krylov subspace method for option pricing. SSRN 1799124
     * Niesen, J. and Wright, W.M., 2012. Algorithm 919: A Krylov subspace algorithm for evaluating the ``φ``-functions
       appearing in exponential integrators. ACM Transactions on Mathematical Software (TOMS), 38(3), p.22
+    
+    :param tau_out: Array of `tau_out`
+    :param A: the matrix argument of the ``φ`` functions
+    :param u: the matrix with rows representing the vectors to be multiplied by the ``φ`` functions
+
+    :param tol: the convergence tolerance required (default: 1e-7). Optional
+    :param mmin: let the Krylov size vary between mmin and mmax (default: 10, 128). Optional
+    :param mmax: let the Krylov size vary between mmin and mmax (default: 10, 128). Optional
+    :param m: an estimate of the appropriate Krylov size (default: mmin). Optional
+    :param iop: length of incomplete orthogonalization procedure (default: 2). Optional
+    :param task1: if true, divide the result by 1/T**p. Optional
+
+    :param device: Device to use for the computing
+    :param comm: Communicator to use for MPI (only relevant for testing)
+
+    :return: `w` - the linear combination of the ``φ`` functions evaluated at ``tA`` acting on the vectors from ``u``
+    :return: `stats[0]` - number of substeps
+    :return: `stats[1]` - number of rejected steps
+    :return: `stats[2]` - number of Krylov steps
+    :return: `stats[3]` - number of matrix exponentials
+    :return: `stats[4]` - Error estimate
+    :return: `stats[5]` - the Krylov size of the last substep
     """
 
     xp = device.xp

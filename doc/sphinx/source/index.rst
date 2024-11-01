@@ -29,6 +29,7 @@ API
    :recursive:
 
    common
+   compiler
    geometry
    init
    integrators
