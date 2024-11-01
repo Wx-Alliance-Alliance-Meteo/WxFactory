@@ -37,3 +37,4 @@ API
    precondition
    rhs
    solvers
+   tests

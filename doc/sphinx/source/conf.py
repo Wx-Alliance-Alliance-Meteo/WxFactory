@@ -48,7 +48,7 @@ exclude_patterns = []
 def skip(app, what, name, obj, would_skip, options):
     if name in ["__call__", "__init__", "__compute_rhs__"]:
         return False
-    elif name[:2] == "__":
+    elif name[:2] == "__" or name[:1] == "_":
         return True
     return would_skip
 
