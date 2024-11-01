@@ -18,17 +18,28 @@ def pmex(
     comm: MPI.Comm = MPI.COMM_WORLD,
 ):
     """
-    tau_out     : Vector of tau_out
-    A           : The matrix argument of the ``φ`` functions
-    u           : The matrix with rows representing the vectors to be multiplied by the ``φ`` functions
-    tol         : Tolerance of the computation
-    delta       : ?
-    m_init      : ?
-    mmax        : Max size of the krylov space
-    reuse_info  : ?
-    task1       : If true, divide the result by 1/tau_out
-    device      : Device to use for the computing
-    comm        : Communicator to use for MPI (only relevant for testing)
+    :param tau_out: Vector of `tau_out`
+    :param A: The matrix argument of the ``φ`` functions
+    :param u: The matrix with rows representing the vectors to be multiplied by the ``φ`` functions
+    
+    :param tol: Tolerance of the computation. Optional
+    :param delta: ?. Optional
+    :param m_init: ?. Optional
+    :param mmax: Max size of the krylov space. Optional
+    :param reuse_info: ?. Optional
+    :param task1: If true, divide the result by 1/tau_out. Optional
+    
+    :param device: Device to use for the computing
+    :param comm: Communicator to use for MPI (only relevant for testing)
+
+    :return: `w` - the linear combination of the ``φ`` functions evaluated at ``tA`` acting on the vectors from ``u``
+    :return: `stats[0]` - number of substeps
+    :return: `stats[1]` - number of rejected steps
+    :return: `stats[2]` - number of Krylov steps
+    :return: `stats[3]` - number of matrix exponentials
+    :return: `stats[4]` - Error estimate
+    :return: `stats[5]` - the Krylov size of the last substep
+    :return: `stats[6]` = ?
     """
 
     ppo, n = u.shape

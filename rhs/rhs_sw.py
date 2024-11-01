@@ -6,18 +6,21 @@ from numpy import ndarray
 from init.initialize import Topo
 from common.definitions import idx_h, idx_hu1, idx_hu2, gravity
 from common.process_topology import ProcessTopology
-from geometry import CubedSphere2D, DFROperators, Metric
+from geometry import CubedSphere2D, DFROperators, Metric2D, Metric3DTopo
 from .rhs import RHS
 
 
 class RhsShallowWater(RHS):
+    """
+    RHS for the shallow water equation
+    """
 
     def __init__(
         self,
         shape: tuple[int, ...],
         geom: CubedSphere2D,
         mtrx: DFROperators,
-        metric: Metric,
+        metric: Metric2D | Metric3DTopo,
         topo: Optional[Topo],
         ptopo: ProcessTopology,
         nbsolpts: int,
@@ -30,12 +33,15 @@ class RhsShallowWater(RHS):
         Q: ndarray,
         geom: CubedSphere2D,
         mtrx: DFROperators,
-        metric: Metric,
+        metric: Metric2D | Metric3DTopo,
         topo: Optional[Topo],
         ptopo: ProcessTopology,
         nbsolpts: int,
         nb_elements_hori: int,
     ) -> ndarray:
+        """
+        Compute the RHS
+        """
 
         rank = MPI.COMM_WORLD.rank
         xp = geom.device.xp
