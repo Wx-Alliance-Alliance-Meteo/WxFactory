@@ -3,6 +3,11 @@ from common.device import Device, CudaDevice
 
 
 class CudaTestCases(cpu_test.CpuTestCases):
+    """
+    Base test case for a test case that requires a Cuda device
+
+    There is also a CPU device for comparaison tests
+    """
     gpu_device: Device
 
     def setUp(self) -> None:
