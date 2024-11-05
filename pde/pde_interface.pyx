@@ -3,6 +3,7 @@ cimport cython
 ctypedef fused pynum_t:
     float
     double
+    complex
 
 cdef extern from "kernels/pointwise_flux.h":
     void pointwise_eulercartesian_2d[num_t](const num_t *q, num_t *flux_x1, num_t *flux_x2, const int stride)
@@ -12,7 +13,7 @@ cdef extern from "kernels/riemann_flux.h":
     void riemann_eulercartesian_ausm_2d[num_t](const num_t *ql, const num_t *qr, num_t *fl, num_t* fr, const int nvar, const int direction, const int stride)
 
 cdef extern from "kernels/boundary_flux.h":
-    void boundary_eulercartesian_2d[num_t](const num_t* q, num_t*flux, const int direction, const int stride)
+    void boundary_eulercartesian_2d[num_t](const num_t* q, num_t *flux, const int direction, const int stride)
 
 # -------------------------------------
 # Pointwise flux wrappers
@@ -108,9 +109,10 @@ cpdef boundary_eulercartesian_2d_wrapper(pynum_t[:, :, :, :] q_itf_x1,
     # Normal fluxes are set to zero, except for the normal momentum
     # which is set to an extrapolated value of the neighbouring pressure
 
-    cdef int j, k
+    cdef int j, k, end
 
     # Set the boundary flux states
+    end = nb_elements_x2 - 1
     for j in range(nb_elements_x1):
         for k in range(nbsolpts):
 
@@ -119,10 +121,10 @@ cpdef boundary_eulercartesian_2d_wrapper(pynum_t[:, :, :, :] q_itf_x1,
                                        &common_flux_x2[0, 0, j, k], 1, stride)
 
             # Top boundary
-            boundary_eulercartesian_2d(&q_itf_x2[0, -1, j, nbsolpts+k],
-                                       &common_flux_x2[0, -1, j, nbsolpts+k], 1, stride)
+            boundary_eulercartesian_2d(&q_itf_x2[0, end, j, nbsolpts+k],
+                                       &common_flux_x2[0, end, j, nbsolpts+k], 1, stride)
 
-
+    end = nb_elements_x1 - 1
     for j in range(nb_elements_x2):
         for k in range(nbsolpts):
 
@@ -131,5 +133,5 @@ cpdef boundary_eulercartesian_2d_wrapper(pynum_t[:, :, :, :] q_itf_x1,
                                        &common_flux_x1[0, j, 0, k], 0, stride)
 
             # Right boundary
-            boundary_eulercartesian_2d(&q_itf_x1[0, j, -1, k+nbsolpts],
-                                       &common_flux_x1[0, j, -1, k+nbsolpts], 0, stride)
+            boundary_eulercartesian_2d(&q_itf_x1[0, j, end, k+nbsolpts],
+                                       &common_flux_x1[0, j, end, k+nbsolpts], 0, stride)

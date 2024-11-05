@@ -1,4 +1,3 @@
-#include <cmath>
 #include "definitions.h"
 
 template<typename num_t>
@@ -33,7 +32,7 @@ void pointwise_eulercartesian_2d(const num_t *q, num_t *flux_x1, num_t *flux_x2,
 }
 template void pointwise_eulercartesian_2d<double>(const double *q, double *flux_x1, double *flux_x2, const int stride);
 template void pointwise_eulercartesian_2d<float>(const float *q, float *flux_x1, float *flux_x2, const int stride);
-// template void pointwise_eulercartesian_2<complex>(const complex *q, complex *flux_x1, complex *flux_x2, const int stride)
+template void pointwise_eulercartesian_2d<std::complex<double>>(const std::complex<double> *q, std::complex<double> *flux_x1, std::complex<double> *flux_x2, const int stride);
 
 
 template<typename num_t>
@@ -68,4 +67,4 @@ void pointwise_swcubedsphere_2d(const num_t *q, num_t *flux_x1, num_t *flux_x2, 
 }
 
 template void pointwise_swcubedsphere_2d<double>(const double *q, double *flux_x1, double *flux_x2, const double sqrt_g, const double *metrics, const int stride);template void pointwise_swcubedsphere_2d<float>(const float *q, float *flux_x1, float *flux_x2, const double sqrt_g, const double *metrics, const int stride);
-// // template<complex> void pointwise_swcubedsphere_2d(const complex *q, complex *flux_x1, complex *flux_x2, const double sqrt_g, const double *metrics, const int stride);
+template void pointwise_swcubedsphere_2d<std::complex<double>>(const std::complex<double> *q, std::complex<double> *flux_x1, std::complex<double> *flux_x2, const double sqrt_g, const double *metrics, const int stride);

@@ -1,4 +1,3 @@
-#include <cmath>
 #include "definitions.h"
 
 template<typename num_t>
@@ -12,15 +11,15 @@ void riemann_eulercartesian_ausm_2d(const num_t *ql, const num_t *qr,
   const int idx_rhot = 3 * stride;
 
   // Get the left and right variables
-  const double rhol = ql[idx_rho];
-  const double rhoul = ql[idx_rhou];
-  const double rhowl = ql[idx_rhow];
-  const double rho_thetal = ql[idx_rhot];
+  const num_t rhol = ql[idx_rho];
+  const num_t rhoul = ql[idx_rhou];
+  const num_t rhowl = ql[idx_rhow];
+  const num_t rho_thetal = ql[idx_rhot];
 
-  const double rhor = qr[idx_rho];
-  const double rhour = qr[idx_rhou];
-  const double rhowr = qr[idx_rhow];
-  const double rho_thetar = qr[idx_rhot];
+  const num_t rhor = qr[idx_rho];
+  const num_t rhour = qr[idx_rhou];
+  const num_t rhowr = qr[idx_rhow];
+  const num_t rho_thetar = qr[idx_rhot];
 
   const num_t invrhol = 1.0 / rhol;
   const num_t ul = rhoul * invrhol;
@@ -55,8 +54,10 @@ void riemann_eulercartesian_ausm_2d(const num_t *ql, const num_t *qr,
   const num_t Mr = vnr / ar - 1.0;
 
   const num_t M = 0.25 * (Ml * Ml - Mr * Mr);
-  const num_t Mmax = std::fmax(0.0, M) * al;
-  const num_t Mmin = std::fmin(0.0, M) * ar;
+
+  const num_t dummy = 0.0;
+  const num_t Mmax = fmax(dummy, M) * al;
+  const num_t Mmin = fmin(dummy, M) * ar;
 
   // Set the interface fluxes
   fl[idx_rho] = rhol * Mmax + rhor * Mmin;
@@ -80,5 +81,6 @@ void riemann_eulercartesian_ausm_2d(const num_t *ql, const num_t *qr,
 
 template void riemann_eulercartesian_ausm_2d<double> (const double *ql, const double *qr, double *fl, double *fr, const int nvars, const int direction, const int stride);
 template void riemann_eulercartesian_ausm_2d<float>(const float *ql, const float *qr, float *fl, float *fr, const int nvars, const int direction, const int stride);
-// template void riemann_eulercartesian_ausm<complex>(complex *ql, complex *qr, complex *fl, complex *fr, const int nvars, const int direction, const int stride);
+template void riemann_eulercartesian_ausm_2d<std::complex<double>>(const std::complex<double> *ql, const std::complex<double> *qr, std::complex<double> *fl, std::complex<double> *fr, const int nvars, const int direction, const int stride);
+
 

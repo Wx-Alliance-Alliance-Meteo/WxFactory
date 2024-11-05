@@ -1,4 +1,3 @@
-#include <cmath>
 #include "definitions.h"
 
 template<typename num_t> 
@@ -31,4 +30,4 @@ void boundary_eulercartesian_2d(const num_t *q, num_t *flux, const int direction
 
 template void boundary_eulercartesian_2d<double>(const double *q, double *flux, const int direction, const int stride);
 template void boundary_eulercartesian_2d<float>(const float *q, float *flux, const int direction, const int stride);
-// template void boundary_eulercartesian<complex>(complex *q, complex *flux, const int direction, const int stride);
+template void boundary_eulercartesian_2d<std::complex<double>>(const std::complex<double> *q, std::complex<double> *flux, const int direction, const int stride);
