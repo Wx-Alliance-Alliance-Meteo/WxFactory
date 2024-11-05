@@ -1,12 +1,15 @@
-from compiler.cython_compile import make_cython_extension
 import json
 import hashlib
-from setuptools import setup, Extension
-from Cython.Build import cythonize
-import sys
-from distutils.command.build import build
-import shutil
 import os
+import shutil
+import sys
+
+from Cython.Build import cythonize
+from mpi4py import MPI
+from setuptools import setup, Extension
+from setuptools.command.build import build
+
+from compiler.cython_compile import make_cython_extension
 
 cpu_info_filename: str = "/proc/cpuinfo"
 cpu_info_field: str = "model name"
@@ -118,7 +121,7 @@ def build_libraries(force_build: bool = False):
 
         if os.path.exists(build_directory):
             shutil.rmtree(build_directory)
-            
+
         for file_to_remove in generated_files_to_remove:
             os.remove(file_to_remove)
 
@@ -130,19 +133,17 @@ def build_libraries(force_build: bool = False):
 
 
 def build_librairies_mpi():
-    from mpi4py import MPI
 
-    rank = MPI.COMM_WORLD.rank
+    build_error = None
 
-    build_error = False
-    if rank == 0:
+    # Only 1 PE does the building
+    if MPI.COMM_WORLD.rank == 0:
         try:
-            build_librairies()
+            build_libraries()
         except Exception as e:
             build_error = e
 
-    MPI.COMM_WORLD.bcast(build_error, root=0)
+    # Everyone raises the error (will be caught higher)
+    build_error = MPI.COMM_WORLD.bcast(build_error, root=0)
     if build_error:
-        if rank == 0:
-            raise build_error
-        sys.exit(-1)
+        raise build_error
