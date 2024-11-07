@@ -64,107 +64,89 @@ class RhsShallowWater:
         nb_elements_hori: int,
     ) -> NDArray:
 
-        rank = MPI.COMM_WORLD.rank
         xp = geom.device.xp
 
         nb_equations = Q.shape[0]
 
-        itf_i_shape = (nb_equations, nb_elements_hori, nb_elements_hori + 2, 2 * nbsolpts)
-        itf_j_shape = (nb_equations, nb_elements_hori + 2, nb_elements_hori, 2 * nbsolpts)
+        itf_i_shape = (nb_equations,) + geom.itf_i_shape
+        itf_j_shape = (nb_equations,) + geom.itf_j_shape
 
-        Q_new = Q
+        # Prepare array for unpacked dynamical variables
+        Q_unpacked = Q.copy()
+        if topo is not None:
+            Q_unpacked[idx_h] += topo.hsurf
+
+        # Interpolate to the element interface (middle elements only, halo remains 0)
+        var_itf_i = xp.zeros(itf_i_shape, dtype=Q.dtype)
+        var_itf_i[:, :, 1:-1, :] = Q_unpacked @ mtrx.extrap_x
+
+        var_itf_j = xp.zeros(itf_j_shape, dtype=Q.dtype)
+        var_itf_j[:, 1:-1, :, :] = Q_unpacked @ mtrx.extrap_y
 
         # Unpack dynamical variables
-        Q_new_unpacked = Q_new.copy()
-        if topo is not None:
-            Q_new_unpacked[idx_h] += topo.hsurf
+        Q_unpacked[idx_hu1] /= Q[idx_h]
+        Q_unpacked[idx_hu2] /= Q[idx_h]
 
-        # Interpolate to the element interface
-        var_itf_i_new = xp.zeros(itf_i_shape, dtype=Q.dtype)
-        var_itf_i_new[:, :, 1:-1, :] = (Q_new_unpacked @ mtrx.extrap_x).reshape(
-            (nb_equations, nb_elements_hori, nb_elements_hori, nbsolpts * 2)
+        u1 = Q_unpacked[idx_hu1]
+        u2 = Q_unpacked[idx_hu2]
+
+        # Initiate transfers. The first and last row (column) of elements of each array is part of the halo.
+        # Each PE must thus send the second and second-to-last row (column) of elements.
+        # There is a separate function for sending vector data, since they must potentially be converted to the
+        # neighbor PE's coordinate system
+        request_u = ptopo.start_exchange_vectors(
+            south=((var_itf_j[idx_hu1, 1, :, :nbsolpts]), (var_itf_j[idx_hu2, 1, :, :nbsolpts])),
+            north=((var_itf_j[idx_hu1, -2, :, nbsolpts:]), (var_itf_j[idx_hu2, -2, :, nbsolpts:])),
+            west=((var_itf_i[idx_hu1, :, 1, :nbsolpts]), (var_itf_i[idx_hu2, :, 1, :nbsolpts])),
+            east=((var_itf_i[idx_hu1, :, -2, nbsolpts:]), (var_itf_i[idx_hu2, :, -2, nbsolpts:])),
+            boundary_sn=geom.boundary_sn,
+            boundary_we=geom.boundary_we,
+        )
+        request_h = ptopo.start_exchange_scalars(
+            south=var_itf_j[idx_h, 1, :, :nbsolpts],
+            north=var_itf_j[idx_h, -2, :, nbsolpts:],
+            west=var_itf_i[idx_h, :, 1, :nbsolpts],
+            east=var_itf_i[idx_h, :, -2, nbsolpts:],
+            boundary_length=nb_elements_hori * nbsolpts,
         )
 
-        var_itf_j_new = xp.zeros(itf_j_shape, dtype=Q.dtype)
-        var_itf_j_new[:, 1:-1, :, :] = (Q_new_unpacked @ mtrx.extrap_y).reshape(
-            (nb_equations, nb_elements_hori, nb_elements_hori, nbsolpts * 2)
-        )
+        # Compute fluxes
+        flux_x1 = xp.empty_like(Q)
+        flux_x2 = xp.empty_like(Q)
 
-        Q_new_unpacked[idx_hu1] /= Q_new[idx_h]
-        Q_new_unpacked[idx_hu2] /= Q_new[idx_h]
+        flux_x1[idx_h] = metric.sqrtG * Q[idx_hu1]
+        flux_x2[idx_h] = metric.sqrtG * Q[idx_hu2]
 
-        u1_new = Q_new_unpacked[idx_hu1]
-        u2_new = Q_new_unpacked[idx_hu2]
+        hsquared = Q[idx_h] ** 2
+        flux_x1[idx_hu1] = metric.sqrtG * (Q[idx_hu1] * u1 + 0.5 * gravity * metric.H_contra_11 * hsquared)
+        flux_x2[idx_hu1] = metric.sqrtG * (Q[idx_hu1] * u2 + 0.5 * gravity * metric.H_contra_12 * hsquared)
 
-        # Initiate transfers
-        request_u_new = ptopo.start_exchange_vectors(
-            (
-                xp.ravel(var_itf_j_new[idx_hu1, 1, :, :nbsolpts]),
-                xp.ravel(var_itf_j_new[idx_hu2, 1, :, :nbsolpts]),
-            ),  # South boundary
-            (
-                xp.ravel(var_itf_j_new[idx_hu1, -2, :, nbsolpts:]),
-                xp.ravel(var_itf_j_new[idx_hu2, -2, :, nbsolpts:]),
-            ),  # North boundary
-            (
-                xp.ravel(var_itf_i_new[idx_hu1, :, 1, :nbsolpts]),
-                xp.ravel(var_itf_i_new[idx_hu2, :, 1, :nbsolpts]),
-            ),  # West boundary
-            (
-                xp.ravel(var_itf_i_new[idx_hu1, :, -2, nbsolpts:]),
-                xp.ravel(var_itf_i_new[idx_hu2, :, -2, nbsolpts:]),
-            ),  # East boundary
-            geom.boundary_sn,
-            geom.boundary_we,
-        )
-        request_h_new = ptopo.start_exchange_scalars(
-            xp.ravel(var_itf_j_new[idx_h, 1, :, :nbsolpts]),
-            xp.ravel(var_itf_j_new[idx_h, -2, :, nbsolpts:]),
-            xp.ravel(var_itf_i_new[idx_h, :, 1, :nbsolpts]),
-            xp.ravel(var_itf_i_new[idx_h, :, -2, nbsolpts:]),
-        )
-
-        # Compute the fluxes
-        flux_x1_new = xp.empty_like(Q_new)
-        flux_x2_new = xp.empty_like(Q_new)
-
-        flux_x1_new[idx_h] = metric.sqrtG * Q_new[idx_hu1]
-        flux_x2_new[idx_h] = metric.sqrtG * Q_new[idx_hu2]
-
-        hsquared = Q_new[idx_h] ** 2
-        flux_x1_new[idx_hu1] = metric.sqrtG * (Q_new[idx_hu1] * u1_new + 0.5 * gravity * metric.H_contra_11 * hsquared)
-        flux_x2_new[idx_hu1] = metric.sqrtG * (Q_new[idx_hu1] * u2_new + 0.5 * gravity * metric.H_contra_12 * hsquared)
-
-        flux_x1_new[idx_hu2] = metric.sqrtG * (Q_new[idx_hu2] * u1_new + 0.5 * gravity * metric.H_contra_21 * hsquared)
-        flux_x2_new[idx_hu2] = metric.sqrtG * (Q_new[idx_hu2] * u2_new + 0.5 * gravity * metric.H_contra_22 * hsquared)
+        flux_x1[idx_hu2] = metric.sqrtG * (Q[idx_hu2] * u1 + 0.5 * gravity * metric.H_contra_21 * hsquared)
+        flux_x2[idx_hu2] = metric.sqrtG * (Q[idx_hu2] * u2 + 0.5 * gravity * metric.H_contra_22 * hsquared)
 
         # Interior contribution to the derivatives, corrections for the boundaries will be added later
-        df1_dx1_new = flux_x1_new @ mtrx.derivative_x
-        df2_dx2_new = flux_x2_new @ mtrx.derivative_y
+        df1_dx1 = flux_x1 @ mtrx.derivative_x
+        df2_dx2 = flux_x2 @ mtrx.derivative_y
 
-        # Finish transfers
+        # Finish transfers. We receive the halo, so it is stored in the first and last row/column of each array
+        (
+            (var_itf_j[idx_hu1, 0, :, nbsolpts:], var_itf_j[idx_hu2, 0, :, nbsolpts:]),  # South boundary
+            (var_itf_j[idx_hu1, -1, :, :nbsolpts], var_itf_j[idx_hu2, -1, :, :nbsolpts]),  # North boundary
+            (var_itf_i[idx_hu1, :, 0, nbsolpts:], var_itf_i[idx_hu2, :, 0, nbsolpts:]),  # West boundary
+            (var_itf_i[idx_hu1, :, -1, :nbsolpts], var_itf_i[idx_hu2, :, -1, :nbsolpts]),  # East boundary
+        ) = request_u.wait()
 
-        # TODO make this simpler
-        (s1, s2), (n1, n2), (w1, w2), (e1, e2) = request_u_new.wait()
-        var_itf_j_new[idx_hu1, 0, :, nbsolpts:] = s1.reshape(nb_elements_hori, nbsolpts)
-        var_itf_j_new[idx_hu2, 0, :, nbsolpts:] = s2.reshape(nb_elements_hori, nbsolpts)
-        var_itf_j_new[idx_hu1, -1, :, :nbsolpts] = n1.reshape(nb_elements_hori, nbsolpts)
-        var_itf_j_new[idx_hu2, -1, :, :nbsolpts] = n2.reshape(nb_elements_hori, nbsolpts)
-        var_itf_i_new[idx_hu1, :, 0, nbsolpts:] = w1.reshape(nb_elements_hori, nbsolpts)
-        var_itf_i_new[idx_hu2, :, 0, nbsolpts:] = w2.reshape(nb_elements_hori, nbsolpts)
-        var_itf_i_new[idx_hu1, :, -1, :nbsolpts] = e1.reshape(nb_elements_hori, nbsolpts)
-        var_itf_i_new[idx_hu2, :, -1, :nbsolpts] = e2.reshape(nb_elements_hori, nbsolpts)
-
-        s, n, w, e = request_h_new.wait()
-        var_itf_j_new[idx_h, 0, :, nbsolpts:] = s.reshape(nb_elements_hori, nbsolpts)
-        var_itf_j_new[idx_h, -1, :, :nbsolpts] = n.reshape(nb_elements_hori, nbsolpts)
-        var_itf_i_new[idx_h, :, 0, nbsolpts:] = w.reshape(nb_elements_hori, nbsolpts)
-        var_itf_i_new[idx_h, :, -1, :nbsolpts] = e.reshape(nb_elements_hori, nbsolpts)
+        (
+            var_itf_j[idx_h, 0, :, nbsolpts:],  # South boundary
+            var_itf_j[idx_h, -1, :, :nbsolpts],  # North boundary
+            var_itf_i[idx_h, :, 0, nbsolpts:],  # West boundary
+            var_itf_i[idx_h, :, -1, :nbsolpts],  # East boundary
+        ) = request_h.wait()
 
         # Substract topo after extrapolation
         if topo is not None:
-            var_itf_i_new[idx_h] -= topo.hsurf_itf_i
-            var_itf_j_new[idx_h] -= topo.hsurf_itf_j
+            var_itf_i[idx_h] -= topo.hsurf_itf_i
+            var_itf_j[idx_h] -= topo.hsurf_itf_j
 
         # West and east are defined relative to the elements, *not* to the interface itself.
         # Therefore, a certain interface will be the western interface of its eastern element and vice-versa
@@ -179,76 +161,74 @@ class RhsShallowWater:
         south = xp.s_[..., 1:, :, :nbsolpts]
         north = xp.s_[..., :-1, :, nbsolpts:]
 
-        a = xp.sqrt(gravity * var_itf_i_new[idx_h] * metric.H_contra_11_itf_i)
-        tmp = var_itf_i_new[idx_h] * a
-        m = xp.where(tmp != 0.0, var_itf_i_new[idx_hu1] / tmp, 0.0)
+        a = xp.sqrt(gravity * var_itf_i[idx_h] * metric.H_contra_11_itf_i)
+        tmp = var_itf_i[idx_h] * a
+        m = xp.where(tmp != 0.0, var_itf_i[idx_hu1] / tmp, 0.0)
 
         big_M = 0.25 * ((m[east] + 1.0) ** 2 - (m[west] - 1.0) ** 2)
 
-        flux_x1_itf_new = xp.zeros_like(var_itf_i_new)
+        flux_x1_itf = xp.zeros_like(var_itf_i)
         # ------ Advection part
-        flux_x1_itf_new[east] = metric.sqrtG_itf_i[east] * (
-            xp.maximum(0.0, big_M) * a[east] * var_itf_i_new[east]
-            + xp.minimum(0.0, big_M) * a[west] * var_itf_i_new[west]
+        flux_x1_itf[east] = metric.sqrtG_itf_i[east] * (
+            xp.maximum(0.0, big_M) * a[east] * var_itf_i[east] + xp.minimum(0.0, big_M) * a[west] * var_itf_i[west]
         )
         # ------ Pressure part
-        p11 = metric.sqrtG_itf_i * (0.5 * gravity) * metric.H_contra_11_itf_i * var_itf_i_new[idx_h] ** 2
-        p21 = metric.sqrtG_itf_i * (0.5 * gravity) * metric.H_contra_21_itf_i * var_itf_i_new[idx_h] ** 2
-        flux_x1_itf_new[idx_hu1][east] += 0.5 * ((1.0 + m[east]) * p11[east] + (1.0 - m[west]) * p11[west])
-        flux_x1_itf_new[idx_hu2][east] += 0.5 * ((1.0 + m[east]) * p21[east] + (1.0 - m[west]) * p21[west])
+        p11 = metric.sqrtG_itf_i * (0.5 * gravity) * metric.H_contra_11_itf_i * var_itf_i[idx_h] ** 2
+        p21 = metric.sqrtG_itf_i * (0.5 * gravity) * metric.H_contra_21_itf_i * var_itf_i[idx_h] ** 2
+        flux_x1_itf[idx_hu1][east] += 0.5 * ((1.0 + m[east]) * p11[east] + (1.0 - m[west]) * p11[west])
+        flux_x1_itf[idx_hu2][east] += 0.5 * ((1.0 + m[east]) * p21[east] + (1.0 - m[west]) * p21[west])
 
         # ------ Copy to west interface of eastern element
-        flux_x1_itf_new[west] = flux_x1_itf_new[east]
+        flux_x1_itf[west] = flux_x1_itf[east]
 
         # Common AUSM fluxes
-        a = xp.sqrt(gravity * var_itf_j_new[idx_h] * metric.H_contra_22_itf_j)
-        m = var_itf_j_new[idx_hu2] / (var_itf_j_new[idx_h] * a)
+        a = xp.sqrt(gravity * var_itf_j[idx_h] * metric.H_contra_22_itf_j)
+        m = var_itf_j[idx_hu2] / (var_itf_j[idx_h] * a)
         m[xp.where(xp.isnan(m))] = 0.0
         big_M = 0.25 * ((m[north] + 1.0) ** 2 - (m[south] - 1.0) ** 2)
 
-        flux_x2_itf_new = xp.zeros_like(var_itf_j_new)
+        flux_x2_itf = xp.zeros_like(var_itf_j)
         # ------ Advection part
-        flux_x2_itf_new[north] = metric.sqrtG_itf_j[north] * (
-            xp.maximum(0.0, big_M) * a[north] * var_itf_j_new[north]
-            + xp.minimum(0.0, big_M) * a[south] * var_itf_j_new[south]
+        flux_x2_itf[north] = metric.sqrtG_itf_j[north] * (
+            xp.maximum(0.0, big_M) * a[north] * var_itf_j[north] + xp.minimum(0.0, big_M) * a[south] * var_itf_j[south]
         )
         # ------ Pressure part
-        p12 = metric.sqrtG_itf_j * (0.5 * gravity) * metric.H_contra_12_itf_j * var_itf_j_new[idx_h] ** 2
-        p22 = metric.sqrtG_itf_j * (0.5 * gravity) * metric.H_contra_22_itf_j * var_itf_j_new[idx_h] ** 2
-        flux_x2_itf_new[idx_hu1][north] += 0.5 * ((1.0 + m[north]) * p12[north] + (1.0 - m[south]) * p12[south])
-        flux_x2_itf_new[idx_hu2][north] += 0.5 * ((1.0 + m[north]) * p22[north] + (1.0 - m[south]) * p22[south])
+        p12 = metric.sqrtG_itf_j * (0.5 * gravity) * metric.H_contra_12_itf_j * var_itf_j[idx_h] ** 2
+        p22 = metric.sqrtG_itf_j * (0.5 * gravity) * metric.H_contra_22_itf_j * var_itf_j[idx_h] ** 2
+        flux_x2_itf[idx_hu1][north] += 0.5 * ((1.0 + m[north]) * p12[north] + (1.0 - m[south]) * p12[south])
+        flux_x2_itf[idx_hu2][north] += 0.5 * ((1.0 + m[north]) * p22[north] + (1.0 - m[south]) * p22[south])
         # ------ Copy to south interface of northern element
-        flux_x2_itf_new[south] = flux_x2_itf_new[north]
+        flux_x2_itf[south] = flux_x2_itf[north]
 
         # Compute the derivatives
-        df1_dx1_new[...] += geom.middle_itf_i(flux_x1_itf_new) @ mtrx.correction_WE
-        df2_dx2_new[...] += geom.middle_itf_j(flux_x2_itf_new) @ mtrx.correction_SN
+        df1_dx1[...] += flux_x1_itf[:, :, 1:-1, :] @ mtrx.correction_WE
+        df2_dx2[...] += flux_x2_itf[:, 1:-1, :, :] @ mtrx.correction_SN
 
         if topo is None:
-            topo_dzdx1_new = xp.zeros_like(metric.H_contra_11)
-            topo_dzdx2_new = xp.zeros_like(metric.H_contra_11)
+            topo_dzdx1 = 0.0
+            topo_dzdx2 = 0.0
 
         else:
-            topo_dzdx1_new = topo.dzdx1
-            topo_dzdx2_new = topo.dzdx2
+            topo_dzdx1 = topo.dzdx1
+            topo_dzdx2 = topo.dzdx2
 
         # Add coriolis, metric and terms due to varying bottom topography
         # Note: christoffel_1_22 and metric.christoffel_2_11 are zero
-        forcing_new = xp.zeros_like(Q_new)
-        forcing_new[idx_hu1] = (
-            2.0 * (metric.christoffel_1_01 * Q_new[idx_hu1] + metric.christoffel_1_02 * Q_new[idx_hu2])
-            + metric.christoffel_1_11 * Q_new[idx_hu1] * u1_new
-            + 2.0 * metric.christoffel_1_12 * Q_new[idx_hu1] * u2_new
-            + gravity * Q_new[idx_h] * (metric.H_contra_11 * topo_dzdx1_new + metric.H_contra_12 * topo_dzdx2_new)
+        forcing = xp.zeros_like(Q)
+        forcing[idx_hu1] = (
+            2.0 * (metric.christoffel_1_01 * Q[idx_hu1] + metric.christoffel_1_02 * Q[idx_hu2])
+            + metric.christoffel_1_11 * Q[idx_hu1] * u1
+            + 2.0 * metric.christoffel_1_12 * Q[idx_hu1] * u2
+            + gravity * Q[idx_h] * (metric.H_contra_11 * topo_dzdx1 + metric.H_contra_12 * topo_dzdx2)
         )
-        forcing_new[idx_hu2] = (
-            2.0 * (metric.christoffel_2_01 * Q_new[idx_hu1] + metric.christoffel_2_02 * Q_new[idx_hu2])
-            + 2.0 * metric.christoffel_2_12 * Q_new[idx_hu1] * u2_new
-            + metric.christoffel_2_22 * Q_new[idx_hu2] * u2_new
-            + gravity * Q_new[idx_h] * (metric.H_contra_21 * topo_dzdx1_new + metric.H_contra_22 * topo_dzdx2_new)
+        forcing[idx_hu2] = (
+            2.0 * (metric.christoffel_2_01 * Q[idx_hu1] + metric.christoffel_2_02 * Q[idx_hu2])
+            + 2.0 * metric.christoffel_2_12 * Q[idx_hu1] * u2
+            + metric.christoffel_2_22 * Q[idx_hu2] * u2
+            + gravity * Q[idx_h] * (metric.H_contra_21 * topo_dzdx1 + metric.H_contra_22 * topo_dzdx2)
         )
 
         # Assemble the right-hand sides
-        rhs_new = metric.inv_sqrtG * (-df1_dx1_new - df2_dx2_new) - forcing_new
+        rhs = metric.inv_sqrtG * (-df1_dx1 - df2_dx2) - forcing
 
-        return rhs_new
+        return rhs

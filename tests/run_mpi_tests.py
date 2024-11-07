@@ -16,8 +16,21 @@ from tests.solvers.test_fgmres_mpi import FgmresMpiTestCases
 
 def load_tests():
     suite = unittest.TestSuite()
-    suite.addTest(ProcessTopologyTest("test1"))
-    suite.addTest(ProcessTopologyTest("test2"))
+
+    suite.addTest(ProcessTopologyTest("vector2d_1d_shape1d"))
+    suite.addTest(ProcessTopologyTest("vector2d_1d_shape2d"))
+    suite.addTest(ProcessTopologyTest("vector2d_2d_shape1d"))
+    suite.addTest(ProcessTopologyTest("vector2d_2d_shape3d"))
+    suite.addTest(ProcessTopologyTest("vector3d_1d_shape1d"))
+    suite.addTest(ProcessTopologyTest("vector3d_1d_shape2d"))
+    suite.addTest(ProcessTopologyTest("vector3d_3d_shape1d"))
+    suite.addTest(ProcessTopologyTest("vector3d_4d_shape3d"))
+    suite.addTest(ProcessTopologyTest("scalar_1d_shape1d"))
+    suite.addTest(ProcessTopologyTest("scalar_1d_shape2d"))
+    suite.addTest(ProcessTopologyTest("scalar_1d_shape3d"))
+    suite.addTest(ProcessTopologyTest("scalar_2d_shape1d"))
+    suite.addTest(ProcessTopologyTest("scalar_2d_shape2d"))
+
     suite.addTest(PmexMpiTestCases("test_pmex_mpi_2_processes"))
     suite.addTest(KiopsMpiTestCases("test_kiops_mpi_2_processes"))
     # suite.addTest(FgmresMpiTestCases('test_fgmres_mpi_2_processes')) # TODO : This test needs more works on the data division between processes

@@ -8,7 +8,7 @@ from numpy.typing import NDArray
 from .definitions import *
 from .device import Device, default_device
 
-ExchangedVector = Tuple[NDArray, ...] | List[NDArray] | NDArray
+ExchangedVector = Tuple[NDArray, ...] | NDArray
 
 SOUTH = 0
 NORTH = 1
@@ -402,88 +402,92 @@ class ProcessTopology:
         return request
 
     def start_exchange_scalars(
-        self, south: ExchangedVector, north: ExchangedVector, west: ExchangedVector, east: ExchangedVector
+        self, south: NDArray, north: NDArray, west: NDArray, east: NDArray, boundary_length: int
     ):
-        """Create a request for exchanging scalar data with neighboring tiles. The 4 input arrays or lists must have the same shape and size.
-        Values will be flipped if the neighbor has a flipped coordinate system. This means that when receiving data,
-        it will always be in local coordinates
+        """Create a request for exchanging scalar data with neighboring tiles. The 4 input arrays must have the same
+        shape and size.
+        Input array values are assumed to be ordered so that the last dimension(s) exactly span the
+        boundary (horizontally); that boundary can have any shape, as long as its total size matches `boundary_length`.
+        Values along the boundary will be horizontally flipped if the neighbor has a flipped coordinate system.
+        Received data will always be in local coordinates
 
-        Args:
-           :param south: Array (or tuple/list of arrays) of values for the south boundary (one array-like for each component, so there should be 2 or 3 arrays in the tuple)
-           :param north: Array (or tuple/list of arrays) of values for the north boundary (one array-like for each component, so there should be 2 or 3 arrays in the tuple)
-           :param west:  Array (or tuple/list of arrays) of values for the west boundary (one array-like for each component, so there should be 2 or 3 arrays in the tuple)
-           :param east:  Array (or tuple/list of arrays) of values for the east boundary (one array-like for each component, so there should be 2 or 3 arrays in the tuple)
+        :param south: Array of values for the south boundary
+        :param north: Array of values for the north boundary
+        :param west:  Array of values for the west boundary
+        :param east:  Array of values for the east boundary
+        :param boundary_length: Number of grid points along the boundary (horizontally). This assumes the south and
+         north boundaries have the same length as the east and west ones
 
-        Returns:
-           A request (MPI-like) for the transfer of the scalar values. Waiting on the request will return the resulting arrays in the same way as the input.
+        :return: A request (MPI-like) for the transfer of the scalar values. Waiting on the request will return the
+        resulting arrays in the same way as the input.
         """
         xp = self.device.xp
 
-        if isinstance(south, list) or isinstance(south, tuple):
-            base_shape = (4, len(south)) + south[0].shape
-            flip_dim = south[0].ndim - 2
-        else:
-            base_shape = (4,) + south.shape
-            flip_dim = south.ndim - 2
-
-        send_buffer = xp.empty(base_shape, dtype=south[0].dtype)
-        # print(f'send buffer shape = {send_buffer.shape}')
-        input = [south, north, west, east]
-        for i in range(4):
-            send_buffer[i] = xp.flip(input[i], flip_dim) if self.flip[i] else input[i]
-
+        base_shape = get_base_shape(south.shape, boundary_length)
+        send_buffer = xp.empty((4,) + base_shape, dtype=south[0].dtype)
         recv_buffer = xp.empty_like(send_buffer)
+
+        # Fill send buffer
+        for i, data in enumerate([south, north, west, east]):
+            tmp = data.reshape(base_shape)
+            send_buffer[i] = xp.flip(tmp, axis=-1) if self.flip[i] else tmp
+
         self.device.synchronize()  # When using GPU
 
         # Initiate MPI transfer
         mpi_request = self.comm_dist_graph.Ineighbor_alltoall(send_buffer, recv_buffer)
 
-        return ExchangeRequest(recv_buffer, mpi_request, is_vector=False)
+        return ExchangeRequest(recv_buffer, mpi_request, shape=south.shape, is_vector=False)
 
     def start_exchange_vectors(self, south, north, west, east, boundary_sn, boundary_we):
-        """Create a request for exchanging vectors with neighboring tiles. The 4 input vectors must have the same shape and size.
-        Vector Values are converted to the neighboring coordinate system before being transmitted through MPI. They will be flipped
-        if the neighbor has a flipped coordinate system. This means that when receiving data, it will always be in local coordinates
+        """Create a request for exchanging vectors with neighboring tiles. The 4 input vectors must have the same shape
+        and size.
+        Input array values are assumed to be ordered so that the last dimension(s) exactly span the
+        boundary (horizontally); that boundary can have any shape, as long as its total size matches that of the given
+        boundary points (`boundary_sn` and `boundary_we`)
+        Vector Values are converted to the neighboring coordinate system before being transmitted through MPI.
+        They will be flipped horizontally along the boundary if the neighbor has a flipped coordinate system.
+        When receiving data, it will always be in local coordinates
 
-        Args:
-           :param south: Tuple/List of vector components for the south boundary (one array-like for each component,
-                         so there should be 2 or 3 arrays in the tuple)
-           :param north: Tuple/List of vector components for the north boundary (one array-like for each component,
-                         so there should be 2 or 3 arrays in the tuple)
-           :param west:  Tuple/List of vector components for the west boundary (one array-like for each component,
-                         so there should be 2 or 3 arrays in the tuple)
-           :param east:  Tuple/List of vector components for the east boundary (one array-like for each component,
-                         so there should be 2 or 3 arrays in the tuple)
-           :param boundary_sn: Coordinates along the west-east axis at the south and north boundaries.
-                               The entries in that vector *must* match the entries in the input arrays
-           :param boundary_we: Coordinates along the south-north axis at the west and east boundaries. The entries in that vector *must* match the entries in the input arrays
+        :param south: Tuple/List of vector components for the south boundary (one array-like for each component,
+                        so there should be 2 or 3 arrays in the tuple)
+        :param north: Tuple/List of vector components for the north boundary (one array-like for each component,
+                        so there should be 2 or 3 arrays in the tuple)
+        :param west:  Tuple/List of vector components for the west boundary (one array-like for each component,
+                        so there should be 2 or 3 arrays in the tuple)
+        :param east:  Tuple/List of vector components for the east boundary (one array-like for each component,
+                        so there should be 2 or 3 arrays in the tuple)
+        :param boundary_sn: Coordinates along the west-east axis at the south and north boundaries.
+                            The entries in that vector *must* match the entries in the input arrays
+        :param boundary_we: Coordinates along the south-north axis at the west and east boundaries. The entries in
+                            that vector *must* match the entries in the input arrays
 
-        Returns:
-           A request (MPI-like) for the transfer of the arrays. Waiting on the request will return the resulting arrays in the same way as the input.
+        :return: A request (MPI-like) for the transfer of the arrays. Waiting on the request will return the
+                    resulting arrays in the same way as the input.
         """
         xp = self.device.xp
 
-        flip_dim = south[0].ndim - 2
-
-        base_shape = (4, len(south)) + south[0].shape
-        send_buffer = xp.empty(base_shape, dtype=south[0].dtype)
-
-        input = [south, north, west, east]
-        boundaries = [boundary_sn, boundary_sn, boundary_we, boundary_we]
-        for i in range(4):
-            send_buffer[i, 0], send_buffer[i, 1] = self.convert_contra[i](input[i][0], input[i][1], boundaries[i])
-            if len(input[i]) == 3:
-                send_buffer[i, 2] = input[i][2]  # 3rd dimension if present
-            if self.flip[i]:
-                send_buffer[i] = xp.flip(send_buffer[i], flip_dim)  # Flip arrays, if needed
-
+        base_shape = get_base_shape(south[0].shape, boundary_sn.size)
+        send_buffer = xp.empty((4, len(south)) + base_shape, dtype=south[0].dtype)
         recv_buffer = xp.empty_like(send_buffer)
+
+        inputs = [south, north, west, east]
+        boundaries = [boundary_sn, boundary_sn, boundary_we, boundary_we]
+        for i, (data, bd) in enumerate(zip(inputs, boundaries)):
+            send_buffer[i, 0], send_buffer[i, 1] = self.convert_contra[i](
+                data[0].reshape(base_shape), data[1].reshape(base_shape), bd
+            )
+            if len(data) == 3:
+                send_buffer[i, 2] = data[2].reshape(base_shape)  # 3rd dimension if present
+            if self.flip[i]:
+                send_buffer[i] = xp.flip(send_buffer[i], axis=-1)  # Flip arrays, if needed
+
         self.device.synchronize()  # When using GPU
 
         # Initiate MPI transfer
         mpi_request = self.comm_dist_graph.Ineighbor_alltoall(send_buffer, recv_buffer)
 
-        return ExchangeRequest(recv_buffer, mpi_request, is_vector=True)
+        return ExchangeRequest(recv_buffer, mpi_request, shape=south[0].shape, is_vector=True)
 
     def xchange_vectors(
         self, geom, u1_itf_i, u2_itf_i, u1_itf_j, u2_itf_j, u3_itf_i=None, u3_itf_j=None, blocking=True
@@ -577,30 +581,64 @@ class ScalarNonBlockingExchangeRequest:
             self.is_complete = True
 
 
+def get_base_shape(initial_shape: tuple, length: int):
+    """Determine the base shape of an exchangeable array, from the given `initial_shape`. The last dimension
+    of the resulting shape will horizontally span the boundary, which has size `length`
+
+    :param initial_shape: Original shape of the array we want to transmit
+    :param length: Horizontal size of boundary along which the array will be transmitted, in number of grid points
+
+    :return: Shape of the array that will be passed to the MPI call
+    :raise ValueError: If the given initial shape cannot fit the given boundary length
+    """
+    num_fuse = 1
+    product = initial_shape[-1]
+    while product < length:
+        num_fuse += 1
+        product *= initial_shape[-num_fuse]
+
+    if product != length:
+        raise ValueError(f"Unable to match data array shape ({initial_shape}) with boundary length {length}")
+    return initial_shape[:-num_fuse] + (length,)
+
+
 class ExchangeRequest:
-    def __init__(self, recv_buffer, request, is_vector=False):
+    """Wrapper around an MPI request. Provides a wait function that will wait for MPI transfers to be complete and
+    return the received arrays in the specified shape, split among the 4 directions/neighbors."""
+
+    def __init__(self, recv_buffer: NDArray, request: MPI.Request, shape: tuple, is_vector: bool = False):
+        """Create a request
+
+        :param recv_buffer: Array where all the data will be received
+        :param request: MPI request
+        :param shape: Desired final shape of the data (can be different from the shape of the received data, as long as
+         the total sizes match)
+        :param is_vector: Whether the data are vectors (vectors have an additional dimension compared to scalars, but we
+         can't tell just from the shape of the received data)
+        """
         self.recv_buffer = recv_buffer
         self.request = request
+        self.shape = shape
         self.is_vector = is_vector
 
-        self.to_tuple: Callable[[ExchangedVector], ExchangedVector] = lambda a: a  # Do nothing by default
+        # Scalar data
+        self.to_tuple: Callable[[NDArray], ExchangedVector] = lambda a: a.reshape(self.shape)
+
+        # Vector data
         if self.is_vector:
-            if self.recv_buffer.shape[1] == 2:
-                self.to_tuple = lambda a: (a[0], a[1])
-            elif self.recv_buffer.shape[1] == 3:
-                self.to_tuple = lambda a: (a[0], a[1], a[2])
+            if self.recv_buffer.shape[1] == 2:  # 2D
+                self.to_tuple = lambda a: (a[0].reshape(self.shape), a[1].reshape(self.shape))
+            elif self.recv_buffer.shape[1] == 3:  # 3D
+                self.to_tuple = lambda a: (a[0].reshape(self.shape), a[1].reshape(self.shape), a[2].reshape(self.shape))
             else:
                 raise ValueError(f"Can only handle vectors with 2 or 3 components, not {self.recv_buffer.shape[1]}")
 
     def wait(self) -> Tuple[ExchangedVector, ExchangedVector, ExchangedVector, ExchangedVector]:
         """Wait for the exchange started when creating this object to be done.
 
-        Returns:
-           The received vectors, in the same shape as the vectors that were sent
+        :return: The received data as a tuple of 4, in the same shape as the data that were sent
         """
         self.request.Wait()
-        # if MPI.COMM_WORLD.rank == 1:
-        #    print(f'recv buffer = \n{self.recv_buffer}')
         return (
             self.to_tuple(self.recv_buffer[SOUTH]),
             self.to_tuple(self.recv_buffer[NORTH]),
