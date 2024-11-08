@@ -228,7 +228,7 @@ class ProcessTopology:
 
         if sync:
             request.Wait()
-        return request, receive_buffer[0], receive_buffer[1], receive_buffer[2], receive_buffer[3]
+        return request, receive_buffer[1], receive_buffer[0], receive_buffer[2], receive_buffer[3]
 
     def xchange_scalars(self, geom, field_itf_i, field_itf_j, blocking=True):
 
