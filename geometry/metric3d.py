@@ -1,7 +1,8 @@
-import numpy
 import math
+import sys
 
 from mpi4py import MPI
+import numpy
 
 from common.device import Device, default_device
 
@@ -192,16 +193,30 @@ class Metric3DTopo:
 
         if geom.ptopo.size > 1:
             # Perform exchanges if this is truly a parallel setup.
-            geom.ptopo.xchange_vectors(
-                geom,
-                exch_itf_i[0, :],
-                exch_itf_i[1, :],
-                exch_itf_j[0, :],
-                exch_itf_j[1, :],
-                exch_itf_i[2, :],
-                exch_itf_j[2, :],
-                blocking=True,
-            )
+
+            s_in = xp.s_[..., 1, 0, :]
+            n_in = xp.s_[..., -2, 1, :]
+            w_in = s_in
+            e_in = n_in
+            s_out = xp.s_[..., 0, 1, :]
+            n_out = xp.s_[..., -1, 0, :]
+            w_out = s_out
+            e_out = n_out
+
+            (
+                (exch_itf_j[0][s_out], exch_itf_j[1][s_out], exch_itf_j[2][s_out]),
+                (exch_itf_j[0][n_out], exch_itf_j[1][n_out], exch_itf_j[2][n_out]),
+                (exch_itf_i[0][w_out], exch_itf_i[1][w_out], exch_itf_i[2][w_out]),
+                (exch_itf_i[0][e_out], exch_itf_i[1][e_out], exch_itf_i[2][e_out]),
+            ) = geom.ptopo.start_exchange_vectors(
+                (exch_itf_j[0][s_in], exch_itf_j[1][s_in], exch_itf_j[2][s_in]),
+                (exch_itf_j[0][n_in], exch_itf_j[1][n_in], exch_itf_j[2][n_in]),
+                (exch_itf_i[0][w_in], exch_itf_i[1][w_in], exch_itf_i[2][w_in]),
+                (exch_itf_i[0][e_in], exch_itf_i[1][e_in], exch_itf_i[2][e_in]),
+                geom.boundary_sn,
+                geom.boundary_we,
+            ).wait()
+
         else:
             # Debugging cases might use a serial setup, so supply copied boundary values as a fallback
             # The right boundary of the 0 element is the left boundary of the 1 element

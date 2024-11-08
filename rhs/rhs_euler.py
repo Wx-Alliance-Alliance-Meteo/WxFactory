@@ -262,7 +262,32 @@ class RhsEuler:
         variables_itf_j[idx_rho_theta, :, 1:-1, :, :] = xp.exp(mtrx.extrapolate_j(logrhotheta, geom))
 
         # Initiate transfers
-        all_request = ptopo.xchange_Euler_interfaces(geom, variables_itf_i, variables_itf_j, blocking=False)
+        s_ = xp.s_[..., 1, 0, :]
+        n_ = xp.s_[..., -2, 1, :]
+        w_ = s_
+        e_ = n_
+        req_r = ptopo.start_exchange_scalars(
+            variables_itf_j[idx_rho][s_],
+            variables_itf_j[idx_rho][n_],
+            variables_itf_i[idx_rho][w_],
+            variables_itf_i[idx_rho][e_],
+            nb_pts_hori,
+        )
+        req_u = ptopo.start_exchange_vectors(
+            (variables_itf_j[idx_rho_u1][s_], variables_itf_j[idx_rho_u2][s_], variables_itf_j[idx_rho_w][s_]),
+            (variables_itf_j[idx_rho_u1][n_], variables_itf_j[idx_rho_u2][n_], variables_itf_j[idx_rho_w][n_]),
+            (variables_itf_i[idx_rho_u1][w_], variables_itf_i[idx_rho_u2][w_], variables_itf_i[idx_rho_w][w_]),
+            (variables_itf_i[idx_rho_u1][e_], variables_itf_i[idx_rho_u2][e_], variables_itf_i[idx_rho_w][e_]),
+            geom.boundary_sn,
+            geom.boundary_we,
+        )
+        req_t = ptopo.start_exchange_scalars(
+            variables_itf_j[idx_rho_theta][s_],
+            variables_itf_j[idx_rho_theta][n_],
+            variables_itf_i[idx_rho_theta][w_],
+            variables_itf_i[idx_rho_theta][e_],
+            nb_pts_hori,
+        )
 
         # Unpack dynamical variables, each to arrays of size [nk,nj,ni]
         rho = Q[idx_rho]
@@ -360,7 +385,28 @@ class RhsEuler:
             raise ValueError(f"Device is not of a recognized type: {device}")
 
         # Finish transfers
-        all_request.wait()
+        s_ = xp.s_[..., 0, 1, :]
+        n_ = xp.s_[..., -1, 0, :]
+        w_ = s_
+        e_ = n_
+        (
+            variables_itf_j[idx_rho][s_],
+            variables_itf_j[idx_rho][n_],
+            variables_itf_i[idx_rho][w_],
+            variables_itf_i[idx_rho][e_],
+        ) = req_r.wait()
+        (
+            (variables_itf_j[idx_rho_u1][s_], variables_itf_j[idx_rho_u2][s_], variables_itf_j[idx_rho_w][s_]),
+            (variables_itf_j[idx_rho_u1][n_], variables_itf_j[idx_rho_u2][n_], variables_itf_j[idx_rho_w][n_]),
+            (variables_itf_i[idx_rho_u1][w_], variables_itf_i[idx_rho_u2][w_], variables_itf_i[idx_rho_w][w_]),
+            (variables_itf_i[idx_rho_u1][e_], variables_itf_i[idx_rho_u2][e_], variables_itf_i[idx_rho_w][e_]),
+        ) = req_u.wait()
+        (
+            variables_itf_j[idx_rho_theta][s_],
+            variables_itf_j[idx_rho_theta][n_],
+            variables_itf_i[idx_rho_theta][w_],
+            variables_itf_i[idx_rho_theta][e_],
+        ) = req_t.wait()
 
         # Define u, v at the interface by dividing momentum and density
         u1_itf_i = variables_itf_i[idx_rho_u1] / variables_itf_i[idx_rho]

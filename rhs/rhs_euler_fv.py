@@ -17,14 +17,14 @@ from common.definitions import (
 
 # For type hints
 from common.process_topology import ProcessTopology
-from geometry import CubedSphere, DFROperators, Metric3DTopo
+from geometry import CubedSphere3D, DFROperators, Metric3DTopo
 from init.dcmip import dcmip_schar_damping
 
 
 # @profile
 def rhs_euler_fv(
     Q: numpy.ndarray,
-    geom: CubedSphere,
+    geom: CubedSphere3D,
     mtrx: DFROperators,
     metric: Metric3DTopo,
     ptopo: ProcessTopology,
@@ -143,7 +143,32 @@ def rhs_euler_fv(
     # to the recipient's local coordinate system
 
     # Initiate transfers
-    all_request = ptopo.xchange_Euler_interfaces(geom, variables_itf_i, variables_itf_j, blocking=False)
+    s_ = numpy.s_[..., 1, 0, :]
+    n_ = numpy.s_[..., -2, 1, :]
+    w_ = s_
+    e_ = n_
+    req_r = ptopo.start_exchange_scalars(
+        variables_itf_j[idx_rho][s_],
+        variables_itf_j[idx_rho][n_],
+        variables_itf_i[idx_rho][w_],
+        variables_itf_i[idx_rho][e_],
+        nb_pts_hori,
+    )
+    req_u = ptopo.start_exchange_vectors(
+        (variables_itf_j[idx_rho_u1][s_], variables_itf_j[idx_rho_u2][s_], variables_itf_j[idx_rho_w][s_]),
+        (variables_itf_j[idx_rho_u1][n_], variables_itf_j[idx_rho_u2][n_], variables_itf_j[idx_rho_w][n_]),
+        (variables_itf_i[idx_rho_u1][w_], variables_itf_i[idx_rho_u2][w_], variables_itf_i[idx_rho_w][w_]),
+        (variables_itf_i[idx_rho_u1][e_], variables_itf_i[idx_rho_u2][e_], variables_itf_i[idx_rho_w][e_]),
+        geom.boundary_sn,
+        geom.boundary_we,
+    )
+    req_t = ptopo.start_exchange_scalars(
+        variables_itf_j[idx_rho_theta][s_],
+        variables_itf_j[idx_rho_theta][n_],
+        variables_itf_i[idx_rho_theta][w_],
+        variables_itf_i[idx_rho_theta][e_],
+        nb_pts_hori,
+    )
 
     # Unpack dynamical variables, each to arrays of size [nk,nj,ni]
     rho = Q[idx_rho]
@@ -314,7 +339,28 @@ def rhs_euler_fv(
             ) * 0.5
 
     # Finish transfers
-    all_request.wait()
+    s_ = numpy.s_[..., 0, 1, :]
+    n_ = numpy.s_[..., -1, 0, :]
+    w_ = s_
+    e_ = n_
+    (
+        variables_itf_j[idx_rho][s_],
+        variables_itf_j[idx_rho][n_],
+        variables_itf_i[idx_rho][w_],
+        variables_itf_i[idx_rho][e_],
+    ) = req_r.wait()
+    (
+        (variables_itf_j[idx_rho_u1][s_], variables_itf_j[idx_rho_u2][s_], variables_itf_j[idx_rho_w][s_]),
+        (variables_itf_j[idx_rho_u1][n_], variables_itf_j[idx_rho_u2][n_], variables_itf_j[idx_rho_w][n_]),
+        (variables_itf_i[idx_rho_u1][w_], variables_itf_i[idx_rho_u2][w_], variables_itf_i[idx_rho_w][w_]),
+        (variables_itf_i[idx_rho_u1][e_], variables_itf_i[idx_rho_u2][e_], variables_itf_i[idx_rho_w][e_]),
+    ) = req_u.wait()
+    (
+        variables_itf_j[idx_rho_theta][s_],
+        variables_itf_j[idx_rho_theta][n_],
+        variables_itf_i[idx_rho_theta][w_],
+        variables_itf_i[idx_rho_theta][e_],
+    ) = req_t.wait()
 
     # sys.exit(1)
 
