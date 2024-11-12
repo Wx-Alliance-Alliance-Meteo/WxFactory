@@ -1,32 +1,31 @@
 #include "../definitions.hpp"
 
 template<typename num_t>
-DEVICE_SPACE void pointwise_eulercartesian_2d_kernel(const num_t *q, num_t *flux_x1, num_t *flux_x2, const int stride)
-{
-  // Compute the strides to access state variables
-  const int idx_rho = 0;
-  const int idx_rhou = stride;
-  const int idx_rhow = 2 * stride;
-  const int idx_rhot = 3 * stride;
+DEVICE_SPACE void pointwise_eulercartesian_2d_kernel(kernel_params<num_t, euler_state_2d> params)
+{ 
+  // Extract variables from state pointer
+  const num_t rho = *params.q.rho;
+  const num_t rho_u = *params.q.rho_u;
+  const num_t rho_w = *params.q.rho_w;
+  const num_t rho_theta = *params.q.rho_theta;
 
-  const num_t rho = q[idx_rho];
-  const num_t rhou = q[idx_rhou];
-  const num_t rhow = q[idx_rhow];
-  const num_t rho_theta = q[idx_rhot];
+  // Extract velocity components and compute pressure
+  const num_t inv_rho = 1.0 / rho;
+  const num_t u = rho_u * inv_rho;
+  const num_t w = rho_w * inv_rho;
 
-  const num_t invrho = 1.0 / rho;
-  const num_t u = rhou * invrho;
-  const num_t w = rhow * invrho;
-
+  // Get the pressure
   const num_t p = p0 * exp(heat_capacity_ratio * log(Rdinp0 * rho_theta));
 
-  flux_x1[idx_rho] = rhou;
-  flux_x1[idx_rhou] = rhou * u + p;
-  flux_x1[idx_rhow] = rhou * w;
-  flux_x1[idx_rhot] = rho_theta * u;
+  // Set the values of the fluxes
+  *params.flux[0].rho = rho_u;
+  *params.flux[0].rho_u = rho_u * u + p;
+  *params.flux[0].rho_w = rho_u * w;
+  *params.flux[0].rho_theta = rho_theta * u;
 
-  flux_x2[idx_rho] = rhow;
-  flux_x2[idx_rhou] = rhow * u;
-  flux_x2[idx_rhow] = rhow * w + p;
-  flux_x2[idx_rhot] = rho_theta * w;
+  *params.flux[1].rho = rho_w;
+  *params.flux[1].rho_u = rho_w * u;
+  *params.flux[1].rho_w = rho_w * w + p;
+  *params.flux[1].rho_theta = rho_theta * w;
 }
+

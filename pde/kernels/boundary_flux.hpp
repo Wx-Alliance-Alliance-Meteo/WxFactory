@@ -1,28 +1,22 @@
 #include "../definitions.hpp"
 
 template<typename num_t>
-DEVICE_SPACE void boundary_eulercartesian_2d_kernel(const num_t *q, num_t *flux, const int direction, const int stride)
+DEVICE_SPACE void boundary_eulercartesian_2d_kernel(kernel_params<num_t, euler_state_2d> params, const int dir)
 {
-  // Compute variable stride
-  const int idx_rho = 0;
-  const int idx_rhou = stride;
-  const int idx_rhow = 2 * stride;
-  const int idx_rhot = 3 * stride;
-
-  if (direction == 0)
+  // Set the the boundary fluxes pressure
+  const int rho_theta = *params.q.rho_theta;
+  if (dir == 0)
   {
-      const num_t rho_theta = q[idx_rhot];
-      flux[idx_rho] = 0.0;
-      flux[idx_rhou] = p0 * pow(rho_theta * Rd * inp0, heat_capacity_ratio);
-      flux[idx_rhow] = 0.0;
-      flux[idx_rhot] = 0.0;
+    *params.flux[0].rho = 0.0;
+    *params.flux[0].rho_u = p0 * pow(rho_theta * Rd * inp0, heat_capacity_ratio);
+    *params.flux[0].rho_w = 0.0;
+    *params.flux[0].rho_theta = 0.0;
   }
-  else if (direction == 1)
+  else if (dir == 1)
   {
-      const num_t rho_theta = q[idx_rhot];
-      flux[idx_rho] = 0.0;
-      flux[idx_rhou] = 0.0;
-      flux[idx_rhow] = p0 * pow(rho_theta * Rd * inp0, heat_capacity_ratio);
-      flux[idx_rhot] = 0.0;
+    *params.flux[1].rho = 0.0;
+    *params.flux[1].rho_u = 0.0;
+    *params.flux[1].rho_w = p0 * pow(rho_theta * Rd * inp0, heat_capacity_ratio);
+    *params.flux[1].rho_theta = 0.0;
   }
 }

@@ -1,49 +1,47 @@
 #include "../definitions.hpp"
 
 template<typename num_t>
-DEVICE_SPACE void riemann_eulercartesian_ausm_2d_kernel(const num_t *ql, const num_t *qr, num_t *fl, num_t *fr, const int direction, const int stride)
+DEVICE_SPACE void riemann_eulercartesian_ausm_2d_kernel(kernel_params<num_t, euler_state_2d> params_l, kernel_params<num_t, euler_state_2d> params_r, const int dir)
 {
-  // Compute variable stride
-  const int idx_rho = 0;
-  const int idx_rhou = stride;
-  const int idx_rhow = 2 * stride;
-  const int idx_rhot = 3 * stride;
+  // Unpack variables for improved readability
+  const num_t rhol = *params_l.q.rho; 
+  const num_t rhor = *params_r.q.rho; 
 
-  const num_t rhol = ql[idx_rho];
-  const num_t rhoul = ql[idx_rhou];
-  const num_t rhowl = ql[idx_rhow];
-  const num_t rho_thetal = ql[idx_rhot];
+  const num_t rho_ul = *params_l.q.rho_u; 
+  const num_t rho_ur = *params_r.q.rho_w; 
 
-  const num_t rhor = qr[idx_rho];
-  const num_t rhour = qr[idx_rhou];
-  const num_t rhowr = qr[idx_rhow];
-  const num_t rho_thetar = qr[idx_rhot];
+  const num_t rho_wl = *params_l.q.rho_w; 
+  const num_t rho_wr = *params_r.q.rho_w; 
 
-  const num_t invrhol = 1.0 / rhol;
-  const num_t ul = rhoul * invrhol;
-  const num_t wl = rhowl * invrhol;
+  const num_t rho_thetal = *params_l.q.rho_theta;
+  const num_t rho_thetar = *params_r.q.rho_theta;
 
-  const num_t invrhor = 1.0 / rhor;
-  const num_t ur = rhour * invrhor;
-  const num_t wr = rhowr * invrhor;
+  const num_t inv_rhol = 1.0 / rhol;
+  const num_t ul = rho_ul * inv_rhol;
+  const num_t wl = rho_wl * inv_rhol;
 
+  const num_t inv_rhor = 1.0 / rhor;
+  const num_t ur = rho_ur * inv_rhor;
+  const num_t wr = rho_wr * inv_rhor;
+
+  // Compute the left and right-hand side pressure states
   const num_t pl = p0 * pow(rho_thetal * Rd * inp0, heat_capacity_ratio);
   const num_t pr = p0 * pow(rho_thetar * Rd * inp0, heat_capacity_ratio);
 
-  const num_t al = sqrt(heat_capacity_ratio * pl * invrhol);
-  const num_t ar = sqrt(heat_capacity_ratio * pr * invrhor);
+  // Get the speed of sound on each side
+  const num_t al = sqrt(heat_capacity_ratio * pl * inv_rhol);
+  const num_t ar = sqrt(heat_capacity_ratio * pr * inv_rhor);
 
   num_t vnr = 0.0;
   num_t vnl = 0.0;
 
-  // Fx faces
-  if (direction == 0)
+  if (dir == 0)
   {
     vnl = ul;
     vnr = ur;
   }
 
-  if (direction == 1)
+  if (dir == 1)
   {
     vnl = wl;
     vnr = wr;
@@ -57,23 +55,22 @@ DEVICE_SPACE void riemann_eulercartesian_ausm_2d_kernel(const num_t *ql, const n
   const num_t Mmin = min(0.0, M) * ar;
 
   // Set the interface fluxes
-  fl[idx_rho] = rhol * Mmax + rhor * Mmin;
-  if (direction == 0)
+  *params_l.flux[dir].rho = rhol * Mmax + rhor * Mmin;
+  if(dir==0)
   {
-    fl[idx_rhou] = 0.5 * (Ml * pl - Mr * pr);
-    fl[idx_rhow] = rhowl * Mmax + rhowr * Mmin;
+    *params_l.flux[dir].rho_u = 0.5 * (Ml * pl - Mr * pr);
+    *params_l.flux[dir].rho_w = rho_wl * Mmax + rho_wr * Mmin;
   }
-
-  if (direction == 1)
+  else
   {
-    fl[idx_rhou] = rhoul * Mmax + rhour * Mmin;
-    fl[idx_rhow] = 0.5 * (Ml * pl - Mr * pr);
+    *params_l.flux[dir].rho_u = rho_ul * Mmax + rho_ur * Mmin;
+    *params_l.flux[dir].rho_w = 0.5 * (Ml * pl - Mr * pr);
   }
-  fl[idx_rhot] = rho_thetal * Mmax + rho_thetar * Mmin;
+  *params_l.flux[dir].rho_theta = rho_thetal * Mmax + rho_thetar * Mmin;
 
-  for (int i = 0; i < 4; i++)
-  {
-    fr[i * stride] = fl[i * stride];
-  }
-
+  // Copy values to the right-hand side flux
+  *params_r.flux[dir].rho = *params_l.flux[dir].rho;
+  *params_r.flux[dir].rho_u = *params_l.flux[dir].rho_u;
+  *params_r.flux[dir].rho_w = *params_l.flux[dir].rho_w;
+  *params_r.flux[dir].rho_theta = *params_l.flux[dir].rho_theta;
 }

@@ -5,10 +5,10 @@
 #include <complex>
 
 #ifdef __CUDACC__
-    #define DEVICE_SPACE __device__
-#else
-    #define DEVICE_SPACE
-    using namespace std;
+  #define DEVICE_SPACE __device__
+#else 
+  #define DEVICE_SPACE
+  using namespace std;
 #endif
 
 // These declarations are temporary and must be done globally
