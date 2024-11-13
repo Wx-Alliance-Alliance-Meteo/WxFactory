@@ -12,6 +12,7 @@ from init.initialize import Topo
 from rhs.rhs_euler import RhsEuler
 from rhs.rhs_sw import RhsShallowWater
 from rhs.rhs import get_rhs
+from pde.interface import CtypeInterface
 
 
 class RhsBundle:
@@ -27,6 +28,8 @@ class RhsBundle:
         param: Configuration,
         fields_shape: Tuple[int, ...],
         device: Device,
+        dtype,
+        c_interface: CtypeInterface,
     ) -> None:
         """Determine handles to appropriate RHS functions."""
 
@@ -75,7 +78,7 @@ class RhsBundle:
             rhs_class = get_rhs(param.discretization)
 
             rhs_obj = rhs_class(
-                param.equations + "-" + "cartesian", geom, operators, metric, topo, ptopo, param, device
+                param.equations + "-" + "cartesian", geom, operators, metric, topo, ptopo, param, device, dtype, c_interface,
             )
 
             self.full = generate_rhs(rhs_obj)

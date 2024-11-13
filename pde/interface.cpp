@@ -139,20 +139,26 @@ void boundary_eulercartesian_2d(const num_t *q_itf_x1, const num_t *q_itf_x2, nu
 
 extern "C"
 {
-  void pointwise_euler_cartesian_2d_double(const double *q, double *flux_x1, double *flux_x2, const int nb_elements_x1, const int nb_elements_x2, const int nb_solpts_total)
+  void pointwise_eulercartesian_2d_double(const double *q, double *flux_x1, double *flux_x2, const int nb_elements_x1, const int nb_elements_x2, const int nb_solpts_total)
   {
     pointwise_eulercartesian_2d<double>(q,flux_x1,flux_x2,nb_elements_x1,nb_elements_x2,nb_solpts_total);
   }
 
+  void pointwise_eulercartesian_2d_complex(const complex_t *q, complex_t *flux_x1, complex_t *flux_x2, const int nb_elements_x1, const int nb_elements_x2, const int nb_solpts_total)
+  {
+    pointwise_eulercartesian_2d<complex_t>(q,flux_x1,flux_x2,nb_elements_x1,nb_elements_x2,nb_solpts_total);
+  }
+
+
   void riemann_eulercartesian_ausm_2d_double(const double *q_itf_x1, const double *q_itf_x2, double *f_itf_x1, double *f_itf_x2, const int nb_elem_x1, const int nb_elem_x2, const int nb_solpts)
   {
     riemann_eulercartesian_ausm_2d<double>(q_itf_x1,q_itf_x2,f_itf_x1,f_itf_x2,nb_elem_x1,nb_elem_x2,nb_solpts);
-  }
-
-  void boundary_eulercartesian_2d_double(const double *q_itf_x1, const double *q_itf_x2, double *f_itf_x1, double *f_itf_x2, const int nb_elem_x1, const int nb_elem_x2, const int nb_solpts)
-  {
     boundary_eulercartesian_2d<double>(q_itf_x1,q_itf_x2,f_itf_x1,f_itf_x2,nb_elem_x1,nb_elem_x2,nb_solpts);
   }
-
+  void riemann_eulercartesian_ausm_2d_complex(const complex_t *q_itf_x1, const complex_t *q_itf_x2, complex_t *f_itf_x1, complex_t *f_itf_x2, const int nb_elem_x1, const int nb_elem_x2, const int nb_solpts)
+  {
+    riemann_eulercartesian_ausm_2d<complex_t>(q_itf_x1,q_itf_x2,f_itf_x1,f_itf_x2,nb_elem_x1,nb_elem_x2,nb_solpts);
+    boundary_eulercartesian_2d<complex_t>(q_itf_x1,q_itf_x2,f_itf_x1,f_itf_x2,nb_elem_x1,nb_elem_x2,nb_solpts);
+  }
 }
 

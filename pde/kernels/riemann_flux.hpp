@@ -1,4 +1,5 @@
 #include "../definitions.hpp"
+#include <stdio.h>
 
 template<typename num_t>
 DEVICE_SPACE void riemann_eulercartesian_ausm_2d_kernel(kernel_params<num_t, euler_state_2d> params_l, kernel_params<num_t, euler_state_2d> params_r, const int dir)
@@ -8,7 +9,7 @@ DEVICE_SPACE void riemann_eulercartesian_ausm_2d_kernel(kernel_params<num_t, eul
   const num_t rhor = *params_r.q.rho; 
 
   const num_t rho_ul = *params_l.q.rho_u; 
-  const num_t rho_ur = *params_r.q.rho_w; 
+  const num_t rho_ur = *params_r.q.rho_u; 
 
   const num_t rho_wl = *params_l.q.rho_w; 
   const num_t rho_wr = *params_r.q.rho_w; 
@@ -51,8 +52,8 @@ DEVICE_SPACE void riemann_eulercartesian_ausm_2d_kernel(kernel_params<num_t, eul
   const num_t Mr = vnr / ar - 1.0;
 
   const num_t M = 0.25 * (Ml * Ml - Mr * Mr);
-  const num_t Mmax = max(0.0, M) * al;
-  const num_t Mmin = min(0.0, M) * ar;
+  const num_t Mmax = fmax(0.0, M) * al;
+  const num_t Mmin = fmin(0.0, M) * ar;
 
   // Set the interface fluxes
   *params_l.flux[dir].rho = rhol * Mmax + rhor * Mmin;

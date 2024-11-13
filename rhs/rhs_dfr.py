@@ -5,8 +5,8 @@ from rhs.rhs import RHS
 
 class RHS_DFR(RHS):
 
-    def __init__(self, pde_name, geometry, operators, metric, topology, process_topo, config, device):
-        super().__init__(pde_name, geometry, operators, metric, topology, process_topo, config, device)
+    def __init__(self, *args):
+        super().__init__(*args)
         
         # Initially set all arrays to None, these will be allocated later
         self.f_x1 = None
@@ -41,12 +41,13 @@ class RHS_DFR(RHS):
         self.q_itf_x1 = q @ self.ops.extrap_x
         self.q_itf_x3 = q @ self.ops.extrap_z
 
-        if self.f_itf_x1 is None or self.f_itf_x1.dtype != q.dtype:
-            self.f_itf_x1 = xp.empty_like(self.q_itf_x1)
-            self.f_itf_x3 = xp.empty_like(self.q_itf_x3)
+        if self.f_itf_x1 is None:
+            self.f_itf_x1 = xp.zeros_like(self.q_itf_x1)
+            self.f_itf_x3 = xp.zeros_like(self.q_itf_x3)
+            
 
     def pointwise_fluxes(self, q: ndarray) -> None:
-        if self.f_x1 is None or self.f_x1.dtype != q.dtype:
+        if self.f_x1 is None:
             xp = self.device.xp
             self.f_x1 = xp.zeros_like(q)
             self.f_x2 = xp.zeros_like(q)
@@ -80,7 +81,7 @@ class RHS_DFR(RHS):
         else:
             raise Exception("3D not implemented yet!")
 
-        if self.rhs is None or self.rhs.dtype != self.f_x1.dtype:
+        if self.rhs is None:
             self.rhs = xp.empty_like(self.f_x1)
 
         xp.add(self.df1_dx1, self.df3_dx3, out=self.rhs)
