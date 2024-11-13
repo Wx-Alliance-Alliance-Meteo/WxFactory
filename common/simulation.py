@@ -32,7 +32,6 @@ from .definitions import idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_w
 from .configuration import Configuration
 from .process_topology import ProcessTopology
 from .device import Device, CpuDevice, CudaDevice
-from pde.interface import CtypeInterface
 
 
 class Simulation:
@@ -62,8 +61,6 @@ class Simulation:
         self.output = OutputManager(self.config, self.geometry, self.metric, self.operators, self.topology, self.device)
         self.initial_Q, self.starting_step = self._determine_starting_state()
 
-        # Initialize interface with c/CUDA
-        self.c_interface = CtypeInterface(self.device)
         self.rhs = RhsBundle(
             self.geometry,
             self.operators,
@@ -73,25 +70,7 @@ class Simulation:
             self.config,
             self.initial_Q.shape,
             self.device,
-            self.device.xp.double,
-            self.c_interface,
         )
-
-        # Instantiate a complex RHS if needed
-        self.rhs_complex = None
-        if self.config.preconditioner is not None and self.config.jacobian_method == 'complex':
-            self.rhs_complex = RhsBundle(
-                self.geometry,
-                self.operators,
-                self.metric,
-                self.topology,
-                self.process_topo,
-                self.config,
-                self.initial_Q.shape,
-                self.device,
-                self.device.xp.complex128,
-                self.c_interface,
-            )
 
         self.integrator = self._create_time_integrator()
         self.integrator.output_manager = self.output

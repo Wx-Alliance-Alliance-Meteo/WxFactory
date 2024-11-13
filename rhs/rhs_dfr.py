@@ -31,7 +31,6 @@ class RHS_DFR(RHS):
     def solution_extrapolation(self, q: ndarray) -> None:
 
         xp = self.device.xp
-        
         # Extrapolate the solution to element boundaries
         # if self.num_dim == 2:
         # Investigate why this is slower since no reallocation is needed
@@ -41,13 +40,13 @@ class RHS_DFR(RHS):
         self.q_itf_x1 = q @ self.ops.extrap_x
         self.q_itf_x3 = q @ self.ops.extrap_z
 
-        if self.f_itf_x1 is None:
+        if self.f_itf_x1 is None or self.f_itf_x1.dtype != q.dtype:
             self.f_itf_x1 = xp.zeros_like(self.q_itf_x1)
             self.f_itf_x3 = xp.zeros_like(self.q_itf_x3)
             
 
     def pointwise_fluxes(self, q: ndarray) -> None:
-        if self.f_x1 is None:
+        if self.f_x1 is None or self.f_x1.dtype != q.dtype:
             xp = self.device.xp
             self.f_x1 = xp.zeros_like(q)
             self.f_x2 = xp.zeros_like(q)
@@ -81,7 +80,7 @@ class RHS_DFR(RHS):
         else:
             raise Exception("3D not implemented yet!")
 
-        if self.rhs is None:
+        if self.rhs is None or self.rhs.dtype != self.df1_dx1.dtype:
             self.rhs = xp.empty_like(self.f_x1)
 
         xp.add(self.df1_dx1, self.df3_dx3, out=self.rhs)

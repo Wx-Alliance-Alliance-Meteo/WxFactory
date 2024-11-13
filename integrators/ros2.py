@@ -15,10 +15,9 @@ class Ros2(Integrator):
     A: MatvecOpRat
     b: numpy.ndarray
 
-    def __init__(self, param: Configuration, rhs_handle: Callable, rhs_handle_complex=None, **kwargs) -> None:
+    def __init__(self, param: Configuration, rhs_handle: Callable, **kwargs) -> None:
         super().__init__(param, **kwargs)
         self.rhs_handle = rhs_handle
-        self.rhs_handle_complex = rhs_handle_complex
         self.tol = param.tolerance
         self.gmres_restart = param.gmres_restart
         self.linear_solver = param.linear_solver
@@ -28,10 +27,7 @@ class Ros2(Integrator):
 
         rhs = self.rhs_handle(Q)
         self.Q_flat = xp.ravel(Q)
-        if self.rhs_handle_complex is not None:
-            self.A  = MatvecOpRat(dt, Q, rhs, self.rhs_handle_complex, self.device)
-        else:
-            self.A = MatvecOpRat(dt, Q, rhs, self.rhs_handle, self.device)
+        self.A = MatvecOpRat(dt, Q, rhs, self.rhs_handle, self.device)
         self.b = self.A(self.Q_flat) + xp.ravel(rhs) * dt
 
     def __step__(self, Q: numpy.ndarray, dt: float):

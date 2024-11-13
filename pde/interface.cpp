@@ -1,3 +1,6 @@
+#include <pybind11/pybind11.h>
+#include <pybind11/complex.h>
+#include <pybind11/numpy.h>
 #include "definitions.hpp"
 #include "interface.hpp"
 
@@ -5,13 +8,24 @@
 #include "kernels/pointwise_flux.hpp"
 #include "kernels/riemann_flux.hpp"
 
+namespace py = pybind11;
+
 // -------------------------------------
 // Pointwise fluxes
 // -------------------------------------
 
 template <typename num_t>
-void pointwise_eulercartesian_2d(const num_t *q, num_t *flux_x1, num_t *flux_x2, const int nb_elem_x1, const int nb_elem_x2, const int nb_solpts_tot)
+void pointwise_eulercartesian_2d(const py::array_t<num_t> &q_in, py::array_t<num_t> &flux_x1_in, py::array_t<num_t> &flux_x2_in, const int nb_elem_x1, const int nb_elem_x2, const int nb_solpts_tot)
 {
+  py::buffer_info buf1 = q_in.request();
+  py::buffer_info buf2 = flux_x1_in.request();
+  py::buffer_info buf3 = flux_x2_in.request();
+
+  // Get the pointers
+  num_t* q = static_cast<num_t*>(buf1.ptr);
+  num_t* flux_x1 = static_cast<num_t*>(buf2.ptr);
+  num_t* flux_x2 = static_cast<num_t*>(buf3.ptr);
+
   const int stride = nb_elem_x1 * nb_elem_x2 * nb_solpts_tot;
   const int array_shape[4] = {4, nb_elem_x2, nb_elem_x1, nb_solpts_tot};
 
@@ -38,8 +52,19 @@ void pointwise_eulercartesian_2d(const num_t *q, num_t *flux_x1, num_t *flux_x2,
 // -------------------------------------
 
 template <typename num_t>
-void riemann_eulercartesian_ausm_2d(const num_t *q_itf_x1, const num_t *q_itf_x2, num_t *flux_itf_x1, num_t *flux_itf_x2, const int nb_elem_x1, const int nb_elem_x2, const int nb_solpts)
+void riemann_eulercartesian_ausm_2d(const py::array_t<num_t> &q_itf_x1_in, const py::array_t<num_t> &q_itf_x2_in, py::array_t<num_t> &flux_itf_x1_in, py::array_t<num_t> &flux_itf_x2_in, const int nb_elem_x1, const int nb_elem_x2, const int nb_solpts)
 {
+  py::buffer_info buf1 = q_itf_x1_in.request();
+  py::buffer_info buf2 = q_itf_x2_in.request();
+  py::buffer_info buf3 = flux_itf_x1_in.request();
+  py::buffer_info buf4 = flux_itf_x2_in.request();
+
+  // Get the pointers
+  num_t* q_itf_x1 = static_cast<num_t*>(buf1.ptr);
+  num_t* q_itf_x2 = static_cast<num_t*>(buf2.ptr);
+  num_t* flux_itf_x1 = static_cast<num_t*>(buf3.ptr);
+  num_t* flux_itf_x2 = static_cast<num_t*>(buf4.ptr);
+
   const int nb_solpts_riem = 2 * nb_solpts;
   const int stride = nb_elem_x1 * nb_elem_x2 * nb_solpts_riem;
   const int array_shape[4] = {4, nb_elem_x2, nb_elem_x1, nb_solpts_riem};
@@ -85,18 +110,8 @@ void riemann_eulercartesian_ausm_2d(const num_t *q_itf_x1, const num_t *q_itf_x2
       }
     }
   }
-}
 
-// -------------------------------------
-// Boundary fluxes
-// -------------------------------------
-
-template <typename num_t>
-void boundary_eulercartesian_2d(const num_t *q_itf_x1, const num_t *q_itf_x2, num_t *f_itf_x1, num_t *f_itf_x2, const int nb_elem_x1, const int nb_elem_x2, const int nb_solpts)
-{
-  const int nb_solpts_riem = 2 * nb_solpts;
-  const int stride = nb_elem_x1 * nb_elem_x2 * nb_solpts_riem; 
-  const int array_shape[4] = {4, nb_elem_x2, nb_elem_x1, nb_solpts_riem};
+  // Update boundary conditions
 
   // Set the boundary fluxes along the horizontal direction
   for(int i=0; i<nb_elem_x2; i++)
@@ -105,12 +120,12 @@ void boundary_eulercartesian_2d(const num_t *q_itf_x1, const num_t *q_itf_x2, nu
     { 
       // Set the fluxes on the left boundary
       const int indl = get_c_index(0, i, 0, j, array_shape);
-      kernel_params<num_t,euler_state_2d> params_l(q_itf_x1, f_itf_x1, nullptr, nullptr, indl, stride);
+      kernel_params<num_t,euler_state_2d> params_l(q_itf_x1, flux_itf_x1, nullptr, nullptr, indl, stride);
       boundary_eulercartesian_2d_kernel(params_l, 0);
 
       // Set the fluxes on the right boundary
       const int indr = get_c_index(0, i, nb_elem_x1-1, j + nb_solpts, array_shape);
-      kernel_params<num_t,euler_state_2d> params_r(q_itf_x1, f_itf_x1, nullptr, nullptr, indr, stride);
+      kernel_params<num_t,euler_state_2d> params_r(q_itf_x1, flux_itf_x1, nullptr, nullptr, indr, stride);
       boundary_eulercartesian_2d_kernel(params_r, 0);
     }
   }
@@ -122,43 +137,25 @@ void boundary_eulercartesian_2d(const num_t *q_itf_x1, const num_t *q_itf_x2, nu
     { 
       // Set the fluxes on the bottom boundary
       const int indb = get_c_index(0, 0, i, j, array_shape);
-      kernel_params<num_t,euler_state_2d> params_b(q_itf_x2, nullptr, f_itf_x2, nullptr, indb, stride);
+      kernel_params<num_t,euler_state_2d> params_b(q_itf_x2, nullptr, flux_itf_x2, nullptr, indb, stride);
       boundary_eulercartesian_2d_kernel(params_b, 1);
 
       // Set the fluxes on the top boundary
       const int indt = get_c_index(0, nb_elem_x2-1, i, j + nb_solpts, array_shape);
-      kernel_params<num_t,euler_state_2d> params_t(q_itf_x2, nullptr, f_itf_x2, nullptr, indt, stride);
+      kernel_params<num_t,euler_state_2d> params_t(q_itf_x2, nullptr, flux_itf_x2, nullptr, indt, stride);
       boundary_eulercartesian_2d_kernel(params_t, 1);
     }
   }
 }
 
-// -------------------------------------
-// Template explicit instantiations
-// -------------------------------------
 
-extern "C"
+PYBIND11_MODULE(interface_c, m)
 {
-  void pointwise_eulercartesian_2d_double(const double *q, double *flux_x1, double *flux_x2, const int nb_elements_x1, const int nb_elements_x2, const int nb_solpts_total)
-  {
-    pointwise_eulercartesian_2d<double>(q,flux_x1,flux_x2,nb_elements_x1,nb_elements_x2,nb_solpts_total);
-  }
-
-  void pointwise_eulercartesian_2d_complex(const complex_t *q, complex_t *flux_x1, complex_t *flux_x2, const int nb_elements_x1, const int nb_elements_x2, const int nb_solpts_total)
-  {
-    pointwise_eulercartesian_2d<complex_t>(q,flux_x1,flux_x2,nb_elements_x1,nb_elements_x2,nb_solpts_total);
-  }
-
-
-  void riemann_eulercartesian_ausm_2d_double(const double *q_itf_x1, const double *q_itf_x2, double *f_itf_x1, double *f_itf_x2, const int nb_elem_x1, const int nb_elem_x2, const int nb_solpts)
-  {
-    riemann_eulercartesian_ausm_2d<double>(q_itf_x1,q_itf_x2,f_itf_x1,f_itf_x2,nb_elem_x1,nb_elem_x2,nb_solpts);
-    boundary_eulercartesian_2d<double>(q_itf_x1,q_itf_x2,f_itf_x1,f_itf_x2,nb_elem_x1,nb_elem_x2,nb_solpts);
-  }
-  void riemann_eulercartesian_ausm_2d_complex(const complex_t *q_itf_x1, const complex_t *q_itf_x2, complex_t *f_itf_x1, complex_t *f_itf_x2, const int nb_elem_x1, const int nb_elem_x2, const int nb_solpts)
-  {
-    riemann_eulercartesian_ausm_2d<complex_t>(q_itf_x1,q_itf_x2,f_itf_x1,f_itf_x2,nb_elem_x1,nb_elem_x2,nb_solpts);
-    boundary_eulercartesian_2d<complex_t>(q_itf_x1,q_itf_x2,f_itf_x1,f_itf_x2,nb_elem_x1,nb_elem_x2,nb_solpts);
-  }
+  // Pointwise fluxes
+  m.def("pointwise_eulercartesian_2d", &pointwise_eulercartesian_2d<double>);
+  m.def("pointwise_eulercartesian_2d", &pointwise_eulercartesian_2d<complex_t>);
+  
+  // Riemann fluxes
+  m.def("riemann_eulercartesian_ausm_2d", &riemann_eulercartesian_ausm_2d<double>);
+  m.def("riemann_eulercartesian_ausm_2d", &riemann_eulercartesian_ausm_2d<complex_t>);
 }
-

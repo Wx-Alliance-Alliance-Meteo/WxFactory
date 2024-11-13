@@ -39,7 +39,7 @@ def get_rhs(name):
 
 
 class RHS(ABC):
-    def __init__(self, pde_name, geometry, operators, metric, topology, process_topo, config, device, dtype, c_interface) -> None:
+    def __init__(self, pde_name, geometry, operators, metric, topology, process_topo, config, device) -> None:
         self.pde_name = pde_name
         self.geom = geometry
         self.ops = operators
@@ -49,11 +49,9 @@ class RHS(ABC):
         self.config = config
         self.device = device
         self.num_dim = config.num_dim
-        self.c_interface = c_interface
-        self.dtype = dtype
 
         # Instantiate appropriate PDE object
-        self.pde = get_pde(pde_name)(geometry, config, device, metric, dtype, c_interface)
+        self.pde = get_pde(pde_name)(geometry, config, device, metric)
 
         # Must be allocated at every child class
         self.rhs = None

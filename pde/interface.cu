@@ -1,3 +1,5 @@
+#include <pybind11/pybind11.h>
+#include <pybind11/complex.h>
 #include "definitions.hpp"
 #include "interface.hpp"
 
@@ -105,119 +107,74 @@ __global__ void boundary_eulercartesian_2d(const num_t *q_itf, num_t *flux_itf, 
   }
 }
 
-
-// Explicit instantiations for each argument type (float, double or complex)
-extern "C"
+template<typename num_t>
+void launch_pointwise_eulercartesian_2d(const num_t *q, num_t *flux_x1, num_t *flux_x2, const int nb_elem_x1, const int nb_elem_x2, const int nb_solpts_tot)
 {
-  void pointwise_eulercartesian_2d_double(const double *q, double *flux_x1, double *flux_x2, const int nb_elem_x1, const int nb_elem_x2, const int nb_solpts_tot)
-  {
-    const int num_blocks = (nb_elem_x1 * nb_elem_x2 * nb_solpts_tot + BLOCK_SIZE - 1) / BLOCK_SIZE;
-    pointwise_eulercartesian_2d<double><<<num_blocks,BLOCK_SIZE>>>(q,flux_x1,flux_x2,nb_elem_x1,nb_elem_x2,nb_solpts_tot);
-  }
-  void pointwise_eulercartesian_2d_complex(const cuda::std::complex<double> *q, cuda::std::complex<double>  *flux_x1, cuda::std::complex<double>  *flux_x2, const int nb_elem_x1, const int nb_elem_x2, const int nb_solpts_tot)
-  {
-    const int num_blocks = (nb_elem_x1 * nb_elem_x2 * nb_solpts_tot + BLOCK_SIZE - 1) / BLOCK_SIZE;
-    pointwise_eulercartesian_2d<cuda::std::complex<double>><<<num_blocks,BLOCK_SIZE>>>(q,flux_x1,flux_x2,nb_elem_x1,nb_elem_x2,nb_solpts_tot);
-  }
-
-
-  void riemann_eulercartesian_ausm_2d_double(const double *q_itf_x1, const double *q_itf_x2, double *f_itf_x1, double *f_itf_x2, const int nb_elem_x1, const int nb_elem_x2, const int nb_solpts)
-  {
-    int width, height, depth;
-
-    // Call Riemann solver on the horizontal direction
-    width = nb_elem_x2; 
-    height = nb_elem_x1 - 1;
-    depth = nb_solpts;
-
-    dim3 threads_per_block (8, 8, 8);
-    dim3 num_blocks1 ((width  + threads_per_block.x - 1) / threads_per_block.x,
-                     (height + threads_per_block.y - 1) / threads_per_block.y,
-                     (depth  + threads_per_block.z - 1) / threads_per_block.z);
-
-    riemann_eulercartesian_ausm_2d<double><<<num_blocks1,threads_per_block>>>(q_itf_x1,f_itf_x1,nb_elem_x1,nb_elem_x2,nb_solpts,0,width,height,depth);
-
-
-    // Call Riemann solver on the vertical direction
-    width = nb_elem_x2 - 1; 
-    height = nb_elem_x1;
-    depth = nb_solpts;
-
-    dim3 num_blocks2 ((width  + threads_per_block.x - 1) / threads_per_block.x,
-                      (height + threads_per_block.y - 1) / threads_per_block.y,
-                      (depth  + threads_per_block.z - 1) / threads_per_block.z);
-
-    riemann_eulercartesian_ausm_2d<double><<<num_blocks2,threads_per_block>>>(q_itf_x2,f_itf_x2,nb_elem_x1,nb_elem_x2,nb_solpts,1,width,height,depth);
-
-
-    // Set the boundary fluxes on the horizontal direction
-    dim3 threads_per_block2 (16, 16);
-
-    width = nb_elem_x2;
-    height = nb_solpts;
-
-    dim3 num_blocks3 ((width  + threads_per_block2.x - 1) / threads_per_block2.x,
-                      (height + threads_per_block2.y - 1) / threads_per_block2.y);
-
-    boundary_eulercartesian_2d<double><<<num_blocks3,threads_per_block2>>>(q_itf_x1,f_itf_x1,nb_elem_x1,nb_elem_x2,nb_solpts,0,width,height);
-
-    width = nb_elem_x1;
-    height = nb_solpts;
-
-    dim3 num_blocks4 ((width  + threads_per_block2.x - 1) / threads_per_block2.x,
-                      (height + threads_per_block2.y - 1) / threads_per_block2.y);
-
-    boundary_eulercartesian_2d<double><<<num_blocks4,threads_per_block2>>>(q_itf_x2,f_itf_x2,nb_elem_x1,nb_elem_x2,nb_solpts,1,width,height);
-  }
-
-  void riemann_eulercartesian_ausm_2d_complex(const complex_t *q_itf_x1, const complex_t *q_itf_x2, complex_t *f_itf_x1, complex_t *f_itf_x2, const int nb_elem_x1, const int nb_elem_x2, const int nb_solpts)
-  {
-    int width, height, depth;
-
-    // Call Riemann solver on the horizontal direction
-    width = nb_elem_x2; 
-    height = nb_elem_x1 - 1;
-    depth = nb_solpts;
-
-    dim3 threads_per_block (8, 8, 8);
-    dim3 num_blocks1 ((width  + threads_per_block.x - 1) / threads_per_block.x,
-                     (height + threads_per_block.y - 1) / threads_per_block.y,
-                     (depth  + threads_per_block.z - 1) / threads_per_block.z);
-
-    riemann_eulercartesian_ausm_2d<complex_t><<<num_blocks1,threads_per_block>>>(q_itf_x1,f_itf_x1,nb_elem_x1,nb_elem_x2,nb_solpts,0,width,height,depth);
-
-    // Call Riemann solver on the vertical direction
-    width = nb_elem_x2 - 1; 
-    height = nb_elem_x1;
-    depth = nb_solpts;
-
-    dim3 num_blocks2 ((width  + threads_per_block.x - 1) / threads_per_block.x,
-                      (height + threads_per_block.y - 1) / threads_per_block.y,
-                      (depth  + threads_per_block.z - 1) / threads_per_block.z);
-
-    riemann_eulercartesian_ausm_2d<complex_t><<<num_blocks2,threads_per_block>>>(q_itf_x2,f_itf_x2,nb_elem_x1,nb_elem_x2,nb_solpts,1,width,height,depth);
-
-
-    // Set the boundary fluxes on the horizontal direction
-    dim3 threads_per_block2 (16, 16);
-
-    width = nb_elem_x2;
-    height = nb_solpts;
-
-    dim3 num_blocks3 ((width  + threads_per_block2.x - 1) / threads_per_block2.x,
-                      (height + threads_per_block2.y - 1) / threads_per_block2.y);
-
-    boundary_eulercartesian_2d<complex_t><<<num_blocks3,threads_per_block2>>>(q_itf_x1,f_itf_x1,nb_elem_x1,nb_elem_x2,nb_solpts,0,width,height);
-
-    width = nb_elem_x1;
-    height = nb_solpts;
-
-    dim3 num_blocks4 ((width  + threads_per_block2.x - 1) / threads_per_block2.x,
-                      (height + threads_per_block2.y - 1) / threads_per_block2.y);
-
-    boundary_eulercartesian_2d<complex_t><<<num_blocks4,threads_per_block2>>>(q_itf_x2,f_itf_x2,nb_elem_x1,nb_elem_x2,nb_solpts,1,width,height);
-  }
-
-  
+  const int num_blocks = (nb_elem_x1 * nb_elem_x2 * nb_solpts_tot + BLOCK_SIZE - 1) / BLOCK_SIZE;
+  pointwise_eulercartesian_2d<num_t><<<num_blocks,BLOCK_SIZE>>>(q,flux_x1,flux_x2,nb_elem_x1,nb_elem_x2,nb_solpts_tot);
 }
 
+template<typename num_t>
+void launch_riemann_eulercartesian_ausm_2d(const num_t *q_itf_x1, const num_t *q_itf_x2, num_t *f_itf_x1, num_t *f_itf_x2, const int nb_elem_x1, const int nb_elem_x2, const int nb_solpts)
+{
+  int width, height, depth;
+
+  // Call Riemann solver on the horizontal direction
+  width = nb_elem_x2; 
+  height = nb_elem_x1 - 1;
+  depth = nb_solpts;
+
+  dim3 threads_per_block (8, 8, 8);
+  dim3 num_blocks1 ((width  + threads_per_block.x - 1) / threads_per_block.x,
+                    (height + threads_per_block.y - 1) / threads_per_block.y,
+                    (depth  + threads_per_block.z - 1) / threads_per_block.z);
+
+  riemann_eulercartesian_ausm_2d<num_t><<<num_blocks1,threads_per_block>>>(q_itf_x1,f_itf_x1,nb_elem_x1,nb_elem_x2,nb_solpts,0,width,height,depth);
+
+
+  // Call Riemann solver on the vertical direction
+  width = nb_elem_x2 - 1; 
+  height = nb_elem_x1;
+  depth = nb_solpts;
+
+  dim3 num_blocks2 ((width  + threads_per_block.x - 1) / threads_per_block.x,
+                    (height + threads_per_block.y - 1) / threads_per_block.y,
+                    (depth  + threads_per_block.z - 1) / threads_per_block.z);
+
+  riemann_eulercartesian_ausm_2d<num_t><<<num_blocks2,threads_per_block>>>(q_itf_x2,f_itf_x2,nb_elem_x1,nb_elem_x2,nb_solpts,1,width,height,depth);
+
+
+  // Set the boundary fluxes on the horizontal direction
+  dim3 threads_per_block2 (16, 16);
+
+  width = nb_elem_x2;
+  height = nb_solpts;
+
+  dim3 num_blocks3 ((width  + threads_per_block2.x - 1) / threads_per_block2.x,
+                    (height + threads_per_block2.y - 1) / threads_per_block2.y);
+
+  boundary_eulercartesian_2d<num_t><<<num_blocks3,threads_per_block2>>>(q_itf_x1,f_itf_x1,nb_elem_x1,nb_elem_x2,nb_solpts,0,width,height);
+
+  width = nb_elem_x1;
+  height = nb_solpts;
+
+  dim3 num_blocks4 ((width  + threads_per_block2.x - 1) / threads_per_block2.x,
+                    (height + threads_per_block2.y - 1) / threads_per_block2.y);
+
+  boundary_eulercartesian_2d<num_t><<<num_blocks4,threads_per_block2>>>(q_itf_x2,f_itf_x2,nb_elem_x1,nb_elem_x2,nb_solpts,1,width,height);
+}
+
+PYBIND11_MODULE(interface_cuda, m)
+{
+  // Pointwise fluxes
+  m.def("pointwise_eulercartesian_2d", &launch_pointwise_eulercartesian_2d<double>);
+  m.def("pointwise_eulercartesian_2d", &launch_pointwise_eulercartesian_2d<complex_t>);
+  
+  // Riemann fluxes
+  m.def("riemann_eulercartesian_ausm_2d", &launch_riemann_eulercartesian_ausm_2d<double>);
+  m.def("riemann_eulercartesian_ausm_2d", &launch_riemann_eulercartesian_ausm_2d<complex_t>);
+}
+
+
+
+  
