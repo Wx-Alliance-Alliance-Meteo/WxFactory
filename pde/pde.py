@@ -4,8 +4,8 @@ from numpy import ndarray, ascontiguousarray
 from common.device import CudaDevice
 from geometry import Cartesian2D, CubedSphere2D, CubedSphere3D
 
-import pde.interface_c as pdc
-import pde.interface_cuda as pdcu
+import pde.interface_c as interface_c
+import pde.interface_cuda as interface_cuda
 
 def get_pde(name):
     if name == "euler-cartesian":
@@ -27,6 +27,11 @@ class PDE(ABC):
         self.num_dim = config.num_dim
         self.nb_elements = nb_elems = config.nb_elements_total
         self.nb_var = config.nb_var
+
+        # Predefine variables that will be set later
+        self.libmodule = None
+        self.pointwise_fluxes = None
+        self.riemann_fluxes = None
 
         # Store the metric terms 
         nb_solpts = config.nbsolpts
@@ -53,22 +58,25 @@ class PDE(ABC):
                 self.metrics[8] = metric.H_contra_33
 
             self.sqrt_g[:] = metric.sqrtG
-        self.libmodule = None
-
+        
+        # Determine the cuda/cpu functions to call
         if(isinstance(device, CudaDevice)):
             self._setup_cuda()
         else:
             self._setup_cpu()
 
+        # Determine the appropriate kernels based on the config file
         self._setup_kernels()
 
     def _setup_cpu(self):
-        import pde.interface_c
-        self.libmodule = pdc
+        self.libmodule = interface_c
+        self.pointwise_fluxes = self.pointwise_fluxes_cpu
+        self.riemann_fluxes = self.riemann_fluxes_cpu
 
     def _setup_cuda(self):
-        import pde.interface_cuda
-        self.libmodule = pdcu
+        self.libmodule = interface_cuda
+        self.pointwise_fluxes = self.pointwise_fluxes_cuda
+        self.riemann_fluxes = self.riemann_fluxes_cuda
 
     def _setup_kernels(self):
         # Here, the retrieved functions should depend on the geometry, equations and config settings
@@ -80,3 +88,19 @@ class PDE(ABC):
 
     def _get_riemann_flux_function(self):
         return self.libmodule.riemann_eulercartesian_ausm_2d
+    
+    @abstractmethod
+    def pointwise_fluxes_cuda(self):
+        pass
+
+    @abstractmethod
+    def pointwise_fluxes_cpu(self):
+        pass
+
+    @abstractmethod
+    def riemann_fluxes_cpu(self):
+        pass
+
+    @abstractmethod
+    def riemann_fluxes_cuda(self):
+        pass

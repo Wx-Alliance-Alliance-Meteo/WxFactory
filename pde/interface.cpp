@@ -1,12 +1,7 @@
-#include <pybind11/pybind11.h>
-#include <pybind11/complex.h>
-#include <pybind11/numpy.h>
 #include "definitions.hpp"
 #include "interface.hpp"
 
-#include "kernels/boundary_flux.hpp"
-#include "kernels/pointwise_flux.hpp"
-#include "kernels/riemann_flux.hpp"
+#include "kernels/kernels.h"
 
 namespace py = pybind11;
 

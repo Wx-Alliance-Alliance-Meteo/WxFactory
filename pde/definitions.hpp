@@ -3,6 +3,9 @@
 
 #include <cmath>
 #include <complex>
+#include <pybind11/pybind11.h>
+// #include <pybind11/complex.h>
+#include <pybind11/numpy.h>
 
 #ifdef __CUDACC__
   #define DEVICE_SPACE __device__
