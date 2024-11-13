@@ -7,6 +7,7 @@ from init.initialize import Topo
 from common.definitions import idx_h, idx_hu1, idx_hu2, gravity
 from common.process_topology import ProcessTopology
 from geometry import CubedSphere2D, DFROperators, Metric2D, Metric3DTopo
+from geometry import CubedSphere2D, DFROperators, Metric2D, Metric3DTopo
 from .rhs import RHS
 
 
