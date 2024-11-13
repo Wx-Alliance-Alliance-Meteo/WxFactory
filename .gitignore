@@ -42,3 +42,4 @@ geom*.dat
 *.npz
 
 *.tmp
+key.pub
