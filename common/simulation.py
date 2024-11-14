@@ -143,7 +143,7 @@ class Simulation:
     def _make_device(self) -> Device:
         """Create the device object which will determine on what hardware (CPU/GPU) each part of the simulation will
         be executed."""
-        if self.config.device == "cuda":
+        if self.config.desired_device == "cuda":
             try:
                 device = CudaDevice(self.config.cuda_devices)
             except ValueError:
