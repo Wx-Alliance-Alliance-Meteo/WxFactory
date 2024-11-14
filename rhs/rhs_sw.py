@@ -11,6 +11,9 @@ from .rhs import RHS
 
 
 class RhsShallowWater:
+    """
+    RHS for the shallow water equation
+    """
 
     def __init__(
         self,
@@ -63,6 +66,9 @@ class RhsShallowWater:
         nbsolpts: int,
         nb_elements_hori: int,
     ) -> NDArray:
+        """
+        Compute the RHS
+        """
 
         xp = geom.device.xp
 

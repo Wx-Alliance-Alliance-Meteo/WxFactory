@@ -109,26 +109,21 @@ def fgmres(
     """
     Solve the given linear system (Ax = b) for x, using the FGMRES algorithm.
 
-    Mandatory arguments:
-    A              -- System matrix. This may be an operator that when applied to a vector [v] results in A*v. A should not be identity (or a multiplication of identity) when the preconditionner is none or identity
-    b              -- The right-hand side of the system to solve. Must be a vector
+    :param A: System matrix. This may be an operator that when applied to a vector [v] results in A*v. A should not be identity (or a multiplication of identity) when the preconditionner is none or identity
+    :param B: The right-hand side of the system to solve. Must be a vector
 
-    Optional arguments:
-    x0             -- Initial guess for the solution. The zero vector if absent.
-    tol            -- Maximum residual (|b - Ax| / |b|), below which we consider the system solved
-    restart        -- Number of iterations in the inner loop
-    maxiter        -- Maximum number of *outer loop* iterations. If absent, it's going to be a very large number
-    preconditioner -- Operator [M^-1] that preconditions a given vector [v]. Computes the product (M^-1)*v
-    hegedus        -- Whether to apply the Hegedüs trick (whatever that is)
-
-    len(b) should be greater than restart
-
-    Returns:
-    1. The result [x]
-    2. The relative residual |b - Ax| / |b|
-    3. The number of (inner loop) iterations performed
-    4. A flag that indicates the convergence status (0 if converged, -1 if not)
-    5. The list of residuals at every iteration
+    :param x0: Initial guess for the solution. The zero vector if absent. Optional
+    :param tol: Maximum residual (|b - Ax| / |b|), below which we consider the system solved. Optional
+    :param restart: Number of iterations in the inner loop. Optional
+    :param maxiter: Maximum number of *outer loop* iterations. If absent, it's going to be a very large number. Optional
+    :param preconditioner: Operator [M^-1] that preconditions a given vector [v]. Computes the product (M^-1)*v. Optional
+    :param hegedus: Whether to apply the Hegedüs trick (whatever that is). Optional
+    
+    :return: 1. The result [x]
+    :return: 2. The relative residual |b - Ax| / |b|
+    :return: 3. The number of (inner loop) iterations performed
+    :return: 4. A flag that indicates the convergence status (0 if converged, -1 if not)
+    :return: 5. The list of residuals at every iteration
     """
     if len(b) <= restart:
         raise ValueError("The b vector should be longer than the number of restart")

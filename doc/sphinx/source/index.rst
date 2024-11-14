@@ -29,6 +29,7 @@ API
    :recursive:
 
    common
+   compiler
    geometry
    init
    integrators
@@ -36,4 +37,4 @@ API
    precondition
    rhs
    solvers
-   wx_cupy
+   tests

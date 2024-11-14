@@ -14,6 +14,13 @@ test_tag: int = 0
 
 
 def run_test_on_x_process(test: unittest.TestCase, x: int = 0) -> MPI.Comm:
+    """
+    Make the test run on `x` processes
+
+    :param test: Test that want to restrict the number of processes
+    :param x: Required number of processes, 0 for no restriction
+    :return: The new communicator to be use for the tests
+    """
     if x == 0:
         return MPI.COMM_WORLD
 
@@ -49,6 +56,9 @@ class _WritelnDecorator(object):
 
 
 class MpiTestResult(TestResult):
+    """
+    Result accumulator
+    """
     tests_order: List[unittest.TestCase] = None
     rank: int
     results_as_list: List[int]  # 0=Nothing special, 1=error, 2=fail, 3=skip
@@ -206,31 +216,4 @@ class MpiRunner(object):
             self.stream.writeln("Ran %d test%s in %.3fs" % (run, run != 1 and "s" or "", timeTaken))
             self.stream.writeln()
 
-        try:
-            results = map(len, (result.expectedFailures, result.unexpectedSuccesses, result.skipped))
-        except AttributeError:
-            pass
-        else:
-            expectedFails, unexpectedSuccesses, skipped = results
-
-        """infos = []
-        if not result.wasSuccessful():
-            self.stream.write("FAILED")
-            failed, errored = len(result.failures), len(result.errors)
-            if failed:
-                infos.append("failures=%d" % failed)
-            if errored:
-                infos.append("errors=%d" % errored)
-        else:
-            self.stream.write("OK")
-        if skipped:
-            infos.append("skipped=%d" % skipped)
-        if expectedFails:
-            infos.append("expected failures=%d" % expectedFails)
-        if unexpectedSuccesses:
-            infos.append("unexpected successes=%d" % unexpectedSuccesses)
-        if infos:
-            self.stream.writeln(" (%s)" % (", ".join(infos),))
-        else:
-            self.stream.write("\n")"""
         return result

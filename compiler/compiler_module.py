@@ -65,6 +65,9 @@ def build_libraries(force_build: bool = False):
     :param force_build: force the build even when the hash remains the same
     """
 
+    if force_build and os.path.exists(library_directory):
+        shutil.rmtree(library_directory)
+        
     generated_files_to_remove: list[str] = []
     interfaces_to_copy_for_intellisense: list[str] = []
 
@@ -89,7 +92,7 @@ def build_libraries(force_build: bool = False):
     final_hash: str = cython_sha1 + sources_sha1 + processor_sha1
 
     hash_exist: bool = os.path.exists(hash_file_location)
-    same_hash: bool = not force_build and processor_name is not None and hash_exist
+    same_hash: bool = processor_name is not None and hash_exist
 
     if hash_exist:
         with open(hash_file_location) as h:
