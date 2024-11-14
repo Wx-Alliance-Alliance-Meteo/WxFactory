@@ -1,3 +1,6 @@
+#ifndef INTERFACE_H 
+#define INTERFACE_H
+
 #include "definitions.hpp"
 
 template<typename num_t> 
@@ -78,3 +81,12 @@ DEVICE_SPACE int get_c_index(const int i, const int j, const int k, const int l,
 {
   return i*shape[1]*shape[2]*shape[3] + j*shape[2]*shape[3] + k*shape[3] + l;
 }
+
+// Return the cupy pointer
+uintptr_t get_cupy_pointer(pybind11::object obj)
+{
+  uintptr_t cp_ptr = obj.attr("data").attr("ptr").cast<uintptr_t>();
+  return cp_ptr;
+}
+
+#endif // INTERFACE_H

@@ -30,8 +30,6 @@ class PDE(ABC):
 
         # Predefine variables that will be set later
         self.libmodule = None
-        self.pointwise_fluxes = None
-        self.riemann_fluxes = None
 
         # Store the metric terms 
         nb_solpts = config.nbsolpts
@@ -70,13 +68,9 @@ class PDE(ABC):
 
     def _setup_cpu(self):
         self.libmodule = interface_c
-        self.pointwise_fluxes = self.pointwise_fluxes_cpu
-        self.riemann_fluxes = self.riemann_fluxes_cpu
 
     def _setup_cuda(self):
         self.libmodule = interface_cuda
-        self.pointwise_fluxes = self.pointwise_fluxes_cuda
-        self.riemann_fluxes = self.riemann_fluxes_cuda
 
     def _setup_kernels(self):
         # Here, the retrieved functions should depend on the geometry, equations and config settings
@@ -90,17 +84,10 @@ class PDE(ABC):
         return self.libmodule.riemann_eulercartesian_ausm_2d
     
     @abstractmethod
-    def pointwise_fluxes_cuda(self):
+    def pointwise_fluxes(self):
         pass
 
     @abstractmethod
-    def pointwise_fluxes_cpu(self):
+    def riemann_fluxes(self):
         pass
-
-    @abstractmethod
-    def riemann_fluxes_cpu(self):
-        pass
-
-    @abstractmethod
-    def riemann_fluxes_cuda(self):
-        pass
+    
