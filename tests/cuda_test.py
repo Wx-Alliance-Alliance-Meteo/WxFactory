@@ -7,10 +7,12 @@ class CudaTestCases(cpu_test.CpuTestCases):
 
     def setUp(self) -> None:
         super().setUp()
-        from wx_cupy import num_devices, cuda_avail
+        import wx_cupy
 
-        if not cuda_avail:
+        wx_cupy.init_wx_cupy()
+
+        if not wx_cupy.cuda_avail:
             reason: str = f"Cannot run test case {str(self)}, no cuda device were found to run the test"
             print(reason)
             self.skipTest(reason)
-        self.gpu_device = CudaDevice(list(range(num_devices)))
+        self.gpu_device = CudaDevice(list(range(wx_cupy.num_devices)))

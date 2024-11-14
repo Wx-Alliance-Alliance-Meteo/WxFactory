@@ -60,9 +60,9 @@ class OutputManager:
             if isinstance(self.geometry, CubedSphere):
                 from output.output_cubesphere import output_init, output_netcdf, output_finalize
 
-                output_init(self.geometry, self.param)
+                output_init(self.geometry, self.param, self.device)
                 self.step_function = lambda Q, step_id: output_netcdf(
-                    Q, self.geometry, self.metric, self.operators, self.topo, step_id, self.param
+                    Q, self.geometry, self.metric, self.operators, self.topo, step_id, self.param, self.device
                 )
                 self.final_function = output_finalize
             elif isinstance(self.geometry, Cartesian2D):

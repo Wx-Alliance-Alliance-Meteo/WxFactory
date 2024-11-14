@@ -1,7 +1,6 @@
 from abc import ABC, abstractmethod
 from numpy import ndarray
 
-from common.array_module import get_array_module
 from pde.pde import get_pde
 
 # class RHS_OLD(ABC):

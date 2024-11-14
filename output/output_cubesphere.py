@@ -16,7 +16,7 @@ from output.diagnostic import relative_vorticity, potential_vorticity
 netcdf_serial = False
 
 
-def prepare_array(param: Configuration) -> Callable[[NDArray], NDArray]:
+def prepare_array(device) -> Callable[[NDArray], NDArray]:
     """
     Curried function to prepare an array for output:
 
@@ -28,10 +28,7 @@ def prepare_array(param: Configuration) -> Callable[[NDArray], NDArray]:
     If running with cuda configuration, this moves x to host memory.
     Otherwise, this function is a no-op
     """
-    if param.device == "cuda":
-        return lambda x: x.get()
-    else:
-        return lambda x: x
+    return lambda x: device.to_host(x)
 
 
 def store_field(field: NDArray, name: str, step_id: int, file: "netCDF4.Dataset") -> None:
@@ -49,7 +46,7 @@ def store_field(field: NDArray, name: str, step_id: int, file: "netCDF4.Dataset"
         file[name][step_id, MPI.COMM_WORLD.rank] = field
 
 
-def output_init(geom, param):
+def output_init(geom, param, device):
     """Initialise the netCDF4 file."""
 
     sys.stdout.flush()
@@ -280,7 +277,7 @@ def output_init(geom, param):
                 q4.grid_mapping = "cubed_sphere"
                 q4.set_collective(not netcdf_serial)
 
-    prepare = prepare_array(param)
+    prepare = prepare_array(device)
 
     if rank == 0:
         xxx[:] = prepare(geom.x1[:])
@@ -317,12 +314,12 @@ def output_init(geom, param):
 
 
 def output_netcdf(
-    Q, geom: Geometry, metric: Metric2D | Metric3DTopo, mtrx: DFROperators, topo, step: int, param: Configuration
+    Q, geom: Geometry, metric: Metric2D | Metric3DTopo, mtrx: DFROperators, topo, step: int, param: Configuration, device
 ):
     """Writes u,v,eta fields on every nth time step"""
     rank = MPI.COMM_WORLD.rank
 
-    prepare = prepare_array(param)
+    prepare = prepare_array(device)
 
     idx = 0
     if ncfile is not None:
