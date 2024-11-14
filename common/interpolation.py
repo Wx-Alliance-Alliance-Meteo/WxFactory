@@ -1,6 +1,5 @@
 import numpy
 
-from common.array_module import get_array_module
 from common.definitions import idx_u1, idx_u2
 from common.configuration import Configuration
 from geometry import gauss_legendre, lagrange_eval, remesh_operator
@@ -180,7 +179,7 @@ class Interpolator:
         self.ndim = ndim
 
         # Make sure the right CPU/GPU module is used
-        self.xp = get_array_module(param.array_module)
+        self.xp = numpy #get_array_module(param.array_module) # TODO : Change this to get the xp from the device
         xp = self.xp
 
         # Base interpolation matrix

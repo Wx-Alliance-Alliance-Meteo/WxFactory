@@ -80,19 +80,26 @@ class CpuDevice(Device):
 
 class CudaDevice(Device):
 
-    def __init__(self, device_list: List[int]) -> None:
+    def __init__(self, device_list: List[int] = []) -> None:
         # Delay imports, to avoid loading CUDA if not asked
 
         import cupy
         import cupyx
         import cupyx.scipy.linalg
 
-        from wx_cupy import num_devices
+        import wx_cupy
+
+        wx_cupy.init_wx_cupy()
 
         super().__init__(cupy, cupyx.scipy)
 
-        if num_devices <= 0:
+        if not wx_cupy.cuda_avail:
             raise ValueError(f"Unable to create a CudaDevice object, no GPU devices were detected")
+
+        device_list = [x for x in device_list if x < wx_cupy.num_devices]
+
+        if not len(device_list):
+            device_list = range(wx_cupy.num_devices)
 
         self.cupyx = cupyx
         self.cupy = cupy

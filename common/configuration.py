@@ -39,20 +39,8 @@ class Configuration:
         self.device = self._get_option("System", "device", str, "cpu", ["cpu", "cuda"])
 
         if self.device == "cuda":
-            from wx_cupy import num_devices, loading_error
-
-            if num_devices > 0:
-                self.cuda_devices = self._get_option("System", "cuda_devices", List[int], list(range(num_devices)))
-                self.cuda_devices = [x for x in self.cuda_devices if x < num_devices]
-                self.array_module = "cupy"
-            else:
-                if verbose:
-                    print(
-                        f"WARNING: Config is asking for CUDA, but we're unable to find any CUDA device, "
-                        f"so we will revert to CPU"
-                        f'\n         Error was "{loading_error}"'
-                    )
-                self.device = "cpu"
+            self.cuda_devices = self._get_option("System", "cuda_devices", List[int], [])
+            self.array_module = "cupy"
 
         ################################
         # Test case
