@@ -107,14 +107,14 @@ function test_cart2d() {
     output_dir=${TEST_DIR}
     filter_apply=1
     precond_flux=ausm
-    device=cpu
+    desired_device=cpu
 
     echo "Original config: ${CART_CONFIG_ORIG}"
     cp ${CART_CONFIG_ORIG} ${CONFIG_BASE}
     set_param ${CONFIG_BASE} dt t_end time_integrator tolerance starting_step gmres_restart         \
                              nbsolpts nb_elements_horizontal nb_elements_vertical preconditioner    \
                              output_freq save_state_freq store_solver_stats output_dir filter_apply \
-                             precond_flux device
+                             precond_flux desired_device
 
 
     if [ $do_non_precond -gt 0 ]; then
@@ -173,7 +173,7 @@ function test_shallow_water() {
     save_state_freq=1
     store_solver_stats=1
     output_dir=${TEST_DIR}
-    device=cpu
+    desired_device=cpu
 
     config_orig=${1}
     echo "Original config: ${config_orig}"
@@ -182,7 +182,7 @@ function test_shallow_water() {
     set_param ${CONFIG_BASE} dt t_end time_integrator tolerance starting_step gmres_restart        \
                              nbsolpts nb_elements_horizontal preconditioner                        \
                              output_freq save_state_freq store_solver_stats output_dir             \
-                             num_pre_smoothe num_post_smoothe mg_solve_coarsest device
+                             num_pre_smoothe num_post_smoothe mg_solve_coarsest desired_device
 
     if [ $do_non_precond -gt 0 ]; then
         time_integrators="epi2 epi3 epi_stiff3 epi_stiff4 srerk3 tvdrk3 ros2"
@@ -221,7 +221,7 @@ function test_cube_sphere_euler() {
     save_state_freq=1
     store_solver_stats=1
     output_dir=${TEST_DIR}
-    device=cpu
+    desired_device=cpu
 
     config_orig=${1}
     echo "Original config: ${config_orig}"
@@ -230,7 +230,7 @@ function test_cube_sphere_euler() {
     set_param ${CONFIG_BASE} dt t_end time_integrator tolerance starting_step gmres_restart        \
                              nbsolpts nb_elements_horizontal nb_elements_vertical preconditioner   \
                              output_freq save_state_freq store_solver_stats output_dir             \
-                             num_pre_smoothe num_post_smoothe mg_solve_coarsest device
+                             num_pre_smoothe num_post_smoothe mg_solve_coarsest desired_device
 
     if [ $do_non_precond -gt 0 ]; then
         time_integrators="epi2 epi3 epi_stiff3 epi_stiff4 srerk3 tvdrk3 ros2"

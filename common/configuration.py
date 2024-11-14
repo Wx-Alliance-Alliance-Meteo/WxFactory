@@ -36,9 +36,9 @@ class Configuration:
         ################################
         # System
         # TODO: support multiple devices
-        self.device = self._get_option("System", "device", str, "cpu", ["cpu", "cuda"])
+        self.desired_device = self._get_option("System", "desired_device", str, "cpu", ["cpu", "cuda"])
 
-        if self.device == "cuda":
+        if self.desired_device == "cuda":
             self.cuda_devices = self._get_option("System", "cuda_devices", List[int], [])
             self.array_module = "cupy"
 
