@@ -5,50 +5,70 @@ import sys
 from integrators.butcher import *
 from scipy.sparse.linalg import eigs
 
-def exode(τ_out, A, u, method='ARK3(2)4L[2]SA-ERK', controller="deadbeat", rtol=1e-3, atol = 1e-6, task1 = False, verbose=False):
-   
-   if not hasattr(exode, "first_step"):
-      exode.first_step = τ_out # TODO : use CFL condition ?
 
-   # TODO : implement dense output for output at intermediate values of τ_out
+def exode(
+    τ_out,
+    A,
+    u,
+    method="ARK3(2)4L[2]SA-ERK",
+    controller="deadbeat",
+    rtol=1e-3,
+    atol=1e-6,
+    task1=False,
+    verbose=False,
+):
 
-   ppo, n = u.shape
-   p = ppo - 1
-   
-   if p == 0:
-      p = 1
-      # Add extra column of zeros
-      u = numpy.row_stack((u, numpy.zeros(len(u))))
+    if not hasattr(exode, "first_step"):
+        exode.first_step = τ_out  # TODO : use CFL condition ?
 
-   y0 = u[0].copy()
+    # TODO : implement dense output for output at intermediate values of τ_out
 
-   def fun(t, x):
-      ret = A(x)
-      for j in range(p):
-         ret += t**j/math.factorial(j) * u[j+1]
-      return ret
+    ppo, n = u.shape
+    p = ppo - 1
 
-   method = method.upper()
+    if p == 0:
+        p = 1
+        # Add extra column of zeros
+        u = numpy.row_stack((u, numpy.zeros(len(u))))
 
-   if method not in METHODS:
-      raise ValueError("`method` must be one of {}." .format(METHODS))
-   else:
-      method = METHODS[method]
+    y0 = u[0].copy()
 
-   t0, tf = map(float, [0, 1.]) # τ_out])
-   
-   solver = method(fun, t0, y0, tf, controller=controller, first_step=exode.first_step, rtol=rtol, atol=atol)
+    def fun(t, x):
+        ret = A(x)
+        for j in range(p):
+            ret += t ** j / math.factorial(j) * u[j + 1]
+        return ret
 
-   ts = [t0]
+    method = method.upper()
 
-   status = None
-   while status is None:
-      solver.step()
+    if method not in METHODS:
+        raise ValueError("`method` must be one of {}.".format(METHODS))
+    else:
+        method = METHODS[method]
 
-      if solver.status == 'finished':
-         status = 0
-         
-         ''' TODO: put this in a better location. Computing eigenvalues will significantly delay the 
+    t0, tf = map(float, [0, 1.0])  # τ_out])
+
+    solver = method(
+        fun,
+        t0,
+        y0,
+        tf,
+        controller=controller,
+        first_step=exode.first_step,
+        rtol=rtol,
+        atol=atol,
+    )
+
+    ts = [t0]
+
+    status = None
+    while status is None:
+        solver.step()
+
+        if solver.status == "finished":
+            status = 0
+
+            """ TODO: put this in a better location. Computing eigenvalues will significantly delay the 
          computation process. Only here for now to test eigenvalue of the 2D ADR problem. 
 
          # Compute eigenvalues
@@ -83,25 +103,33 @@ def exode(τ_out, A, u, method='ARK3(2)4L[2]SA-ERK', controller="deadbeat", rtol
          #print("eigenvalues = ", eigenvalues) 
          #numpy.savetxt('/home/siw001/gef/vicky/ADR_2D/testoutput/grid_size_160000/eigenvalues/ADR_2D_real_eig.csv', eigenvalues_real, delimiter=',')
          #numpy.savetxt('/home/siw001/gef/vicky/ADR_2D/testoutput/grid_size_160000/eigenvalues/ADR_2D_real_eig.csv', eigenvalues_imag, delimiter=',')
-         '''
+         """
 
-      elif solver.status == 'failed':
-         status = -1
-         break
+        elif solver.status == "failed":
+            status = -1
+            break
 
-      t_old = solver.t_old
-      t = solver.t
-      y = solver.y
+        t_old = solver.t_old
+        t = solver.t
+        y = solver.y
 
-      ts.append(t)
+        ts.append(t)
 
-   ts = numpy.array(ts)
+    ts = numpy.array(ts)
 
-   solution = solver.y
-   stats = (solver.nfev, solver.failed_steps, solver.error_estimation,solver.error_norm_old, solver.h_previous, solver.h) # TODO
-   # keep track of h_previous, use as first step for next iteration. 
-   # print("previous step = ", stats[4], "final step = ", stats[5])
+    solution = solver.y
+    stats = (
+        solver.nfev,
+        solver.failed_steps,
+        solver.nfev,
+        solver.error_estimation,
+        solver.error_norm_old,
+        solver.h_previous,
+        solver.h,
+    )  # TODO
+    # keep track of h_previous, use as first step for next iteration.
+    # print("previous step = ", stats[4], "final step = ", stats[5])
 
-   exode.first_step = numpy.median(numpy.diff(ts))
+    exode.first_step = numpy.median(numpy.diff(ts))
 
-   return solution, stats
+    return solution, stats
