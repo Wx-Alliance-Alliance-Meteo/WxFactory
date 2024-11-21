@@ -56,7 +56,6 @@ class RHS(ABC):
         self.rhs = None
 
     def __call__(self, q: ndarray) -> ndarray:
-
         # 1. Extrapolate the solution to the boundaries of the element
         self.solution_extrapolation(q)
 

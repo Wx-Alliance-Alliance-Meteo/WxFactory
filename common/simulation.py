@@ -60,6 +60,7 @@ class Simulation:
         self.preconditioner = self._create_preconditioner(self.initial_Q)
         self.output = OutputManager(self.config, self.geometry, self.metric, self.operators, self.topology, self.device)
         self.initial_Q, self.starting_step = self._determine_starting_state()
+
         self.rhs = RhsBundle(
             self.geometry,
             self.operators,
@@ -70,6 +71,7 @@ class Simulation:
             self.initial_Q.shape,
             self.device,
         )
+
         self.integrator = self._create_time_integrator()
         self.integrator.output_manager = self.output
         self.integrator.device = self.device
@@ -144,23 +146,8 @@ class Simulation:
         """Create the device object which will determine on what hardware (CPU/GPU) each part of the simulation will
         be executed."""
         if self.config.desired_device == "cuda":
-            try:
-                device = CudaDevice(self.config.cuda_devices)
-            except ValueError:
-                if self.rank == 0:
-                    print(f"Unable to create a CudaDevice, will revert to CPU")
-
-                from compiler.compiler_module import build_librairies_mpi
-
-                build_librairies_mpi()
-
-                device = CpuDevice()
-
+            device = CudaDevice(self.config.cuda_devices)
         else:
-            from compiler.compiler_module import build_librairies_mpi
-
-            build_librairies_mpi()
-
             device = CpuDevice()
 
         return device

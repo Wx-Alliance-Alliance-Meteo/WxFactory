@@ -75,7 +75,7 @@ class RhsBundle:
             rhs_class = get_rhs(param.discretization)
 
             rhs_obj = rhs_class(
-                param.equations + "-" + "cartesian", geom, operators, metric, topo, ptopo, param, device
+                param.equations + "-" + "cartesian", geom, operators, metric, topo, ptopo, param, device,
             )
 
             self.full = generate_rhs(rhs_obj)
