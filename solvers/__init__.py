@@ -4,6 +4,7 @@ from .fgmres import fgmres
 from .gcrot import gcrot
 from .kiops import kiops
 from .kiops_nest import kiops_nest
+from .exode import exode
 from .global_operations import global_dotprod, global_inf_norm, global_norm
 from .matvec import MatvecOp, MatvecOpBasic, MatvecOpRat, matvec_fun, matvec_rat
 from .nonlin import KrylovJacobian, newton_krylov
@@ -21,11 +22,22 @@ from .dcgs2 import dcgs2
 from .solver_info import SolverInfo
 
 __all__ = [
+    "cwy_1s",
+    "cwy_ne",
+    "cwy_ne1s",
+    "dcgs2",
+    "exode",
     "fgmres",
     "kiops",
+    "gcrot",
     "global_dotprod",
     "global_inf_norm",
     "global_norm",
+    "icwy_ne",
+    "icwy_1s",
+    "icwy_ne1s",
+    "icwy_neiop",
+    "kiops_nest",
     "KrylovJacobian",
     "MatvecOp",
     "MatvecOpBasic",
@@ -34,16 +46,7 @@ __all__ = [
     "matvec_rat",
     "newton_krylov",
     "pmex",
-    "SolverInfo",
-    "icwy_ne",
-    "icwy_1s",
-    "icwy_ne1s",
-    "icwy_neiop",
-    "kiops_nest",
-    "cwy_1s",
-    "cwy_ne",
-    "cwy_ne1s",
-    "dcgs2",
     "pmex_1s",
     "pmex_ne1s",
+    "SolverInfo",
 ]

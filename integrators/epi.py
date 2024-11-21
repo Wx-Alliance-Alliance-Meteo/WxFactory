@@ -23,6 +23,7 @@ from solvers import (
     kiops_nest,
     dcgs2,
     kiops_nest,
+    exode,
 )
 
 
@@ -39,6 +40,8 @@ class Epi(Integrator):
         self.case_number = param.case_number
         self.int = param.time_integrator
         self.elem = param.nb_elements_horizontal
+        self.exode_method = param.exode_method
+        self.exode_controller = param.exode_controller
 
         if order == 2:
             self.A = numpy.array([[]])
@@ -273,7 +276,27 @@ class Epi(Integrator):
                     f"KIOPS NE converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)"
                     f" to a solution with local error {stats[4]:.2e}"
                 )
+        # ----- EXODE ------
+        elif self.exponential_solver == "exode":
+            phiv, stats = exode(
+                1.0,
+                matvec_handle,
+                vec,
+                method=self.exode_method,
+                controller=self.exode_controller,
+                atol=self.tol,
+                task1=False,
+                verbose=False,
+            )
 
+            # comment out for scaling test
+            if mpirank == 0:
+                print(
+                    f"EXODE converged at iteration {stats[0]}, with {stats[1]} rejected steps "
+                    f"with local error {stats[3]}"
+                )
+
+            # self.solver_info = SolverInfo(total_num_it=stats[0])
         # ----------default: kiops-----------
         else:
             phiv, stats = kiops(
