@@ -330,7 +330,9 @@ def output_netcdf(Q, geom, metric, mtrx, topo, step, param):
     if param.equations == "shallow_water":
 
         # Unpack physical variables
-        h = Q[idx_h, :, :] + topo.hsurf
+        h = Q[idx_h, :, :]
+        if topo is not None:
+            h += topo.hsurf
         store_field(prepare(h), "h", idx, ncfile)
 
         if param.case_number >= 2:  # Shallow water

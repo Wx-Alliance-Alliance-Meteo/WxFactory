@@ -134,13 +134,6 @@ def initialize_sw(geom, metric, mtrx, param):
     ni, nj = geom.lon.shape
     nb_equations = 3
 
-    if param.case_number != 5:
-        hsurf = numpy.zeros((ni, nj))
-        dzdx1 = numpy.zeros((ni, nj))
-        dzdx2 = numpy.zeros((ni, nj))
-        hsurf_itf_i = numpy.zeros((param.nb_elements_horizontal + 2, param.nbsolpts * param.nb_elements_horizontal, 2))
-        hsurf_itf_j = numpy.zeros((param.nb_elements_horizontal + 2, 2, param.nbsolpts * param.nb_elements_horizontal))
-
     # --- Shallow water
     #   0 : deformation flow (passive advection only)
     #   1 : cosine hill (passive advection only)
@@ -187,8 +180,12 @@ def initialize_sw(geom, metric, mtrx, param):
         Q[idx_hu1, :, :] = fluid_height * u1_contra
         Q[idx_hu2, :, :] = fluid_height * u2_contra
 
+    topo = None
+    if param.case_number == 5 or param.case_number == 10:
+        topo = Topo(hsurf, dzdx1, dzdx2, numpy.moveaxis(hsurf_itf_i, -1, -2), hsurf_itf_j)
+
     # Note : we move the last axis of the first topo array so that both have similiar ordering
-    return Q, Topo(hsurf, dzdx1, dzdx2, numpy.moveaxis(hsurf_itf_i, -1, -2), hsurf_itf_j)
+    return Q, topo
 
 
 def initialize_cartesian2d(geom: Cartesian2D, param: Configuration) -> NDArray[numpy.float64]:
