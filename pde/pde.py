@@ -1,11 +1,19 @@
-import ctypes
 from abc import ABC, abstractmethod
+
+import ctypes
 from numpy import ndarray, ascontiguousarray
+from mpi4py import MPI
+
 from common.device import CudaDevice
 from geometry import Cartesian2D, CubedSphere2D, CubedSphere3D
 
-import pde.interface_c as interface_c
-import pde.interface_cuda as interface_cuda
+try:
+    import pde.interface_c as interface_c
+except ModuleNotFoundError:
+    if MPI.COMM_WORLD.rank == 0:
+        print(f"Unable to find the interface_c module. You need to compile it")
+    raise
+
 
 def get_pde(name):
     if name == "euler-cartesian":
@@ -17,6 +25,7 @@ def get_pde(name):
         from pde.pde_euler_cubedsphere import PDEEulerCubedSphere
 
         return PDEEulerCubedSphere
+
 
 class PDE(ABC):
     def __init__(self, geometry, config, device, metric):
@@ -31,14 +40,14 @@ class PDE(ABC):
         # Predefine variables that will be set later
         self.libmodule = None
 
-        # Store the metric terms 
+        # Store the metric terms
         nb_solpts = config.nbsolpts
         self.metrics = device.xp.ones((config.num_dim**2, nb_elems, nb_solpts))
         self.sqrt_g = device.xp.ones((nb_elems, nb_solpts))
 
         # Store the cubed-sphere metrics if needed
         if isinstance(geometry, (CubedSphere2D, CubedSphere3D)):
-            if config.num_dim == 2: 
+            if config.num_dim == 2:
                 self.metrics[0] = metric.H_contra_11
                 self.metrics[1] = metric.H_contra_12
                 self.metrics[2] = metric.H_contra_21
@@ -56,9 +65,9 @@ class PDE(ABC):
                 self.metrics[8] = metric.H_contra_33
 
             self.sqrt_g[:] = metric.sqrtG
-        
+
         # Determine the cuda/cpu functions to call
-        if(isinstance(device, CudaDevice)):
+        if isinstance(device, CudaDevice):
             self._setup_cuda()
         else:
             self._setup_cpu()
@@ -70,6 +79,12 @@ class PDE(ABC):
         self.libmodule = interface_c
 
     def _setup_cuda(self):
+        try:
+            import pde.interface_cuda as interface_cuda
+        except ModuleNotFoundError:
+            if MPI.COMM_WORLD.rank == 0:
+                print(f"Unable to load the interface_cuda module, you need to compile it if you want to use the GPU")
+            raise
         self.libmodule = interface_cuda
 
     def _setup_kernels(self):
@@ -82,7 +97,7 @@ class PDE(ABC):
 
     def _get_riemann_flux_function(self):
         return self.libmodule.riemann_eulercartesian_ausm_2d
-    
+
     @abstractmethod
     def pointwise_fluxes(self):
         pass
@@ -90,4 +105,3 @@ class PDE(ABC):
     @abstractmethod
     def riemann_fluxes(self):
         pass
-    

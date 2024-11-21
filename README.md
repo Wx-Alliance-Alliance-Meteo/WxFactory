@@ -11,6 +11,7 @@ WxFactory was built for Python 3.11 (at least).  It also requires an MPI impleme
 * `scipy` Python-based ecosystem of open-source software for mathematics, science, and engineering
 * `sympy` Python library for symbolic mathematics
 * `mpi4py` Python interface for MPI
+* `pybind11` Library to expose C++/Python types to each other
 * `netcdf4` Python/NumPy interface to the netCDF C library (MPI version)
 * `matplotlib` A python plotting library, making publication quality plots
 
