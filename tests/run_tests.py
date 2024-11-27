@@ -12,7 +12,7 @@ from tests.solvers.test_kiops import KiopsComparisonTestCases
 from tests.solvers.test_fgmres import FgmresComparisonTestCases, FgmresScipyTestCases, FgmresEdgeCasesTestCases
 from tests.solvers.test_kiops_pmex_tolerance_cpu import KiopsPmexToleranceCpuTestCases
 from tests.solvers.test_kiops_pmex_tolerance_gpu import KiopsPmexToleranceGpuTestCases
-
+from tests.output.test_state import StateTestCases
 
 def load_tests():
     suite = unittest.TestSuite()
@@ -27,6 +27,8 @@ def load_tests():
 
     suite.addTest(KiopsPmexToleranceCpuTestCases("test_compare_kiops_pmex"))
     suite.addTest(KiopsPmexToleranceGpuTestCases("test_compare_kiops_pmex"))
+
+    suite.addTest(StateTestCases("test_save_load_works"))
 
     return suite
 
