@@ -167,10 +167,10 @@ class Configuration:
             "Preconditioning", "precond_flux", str, available_fluxes[0], valid_values=available_fluxes
         )
 
-        self.num_mg_levels = self._get_option("Preconditioning", "num_mg_levels", int, 1, min_value=1)
-        if "mg" not in self.preconditioner:
-            self.num_mg_levels = 1
-
+        self.num_mg_levels = 1
+        if "mg" in self.preconditioner:
+            self.num_mg_levels = self._get_option("Preconditioning", "num_mg_levels", int, 1, min_value=1)
+        
         self.precond_tolerance = self._get_option("Preconditioning", "precond_tolerance", float, 1e-1)
         self.num_pre_smoothe = self._get_option("Preconditioning", "num_pre_smoothe", int, 1, min_value=0)
         self.num_post_smoothe = self._get_option("Preconditioning", "num_post_smoothe", int, 1, min_value=0)
@@ -306,8 +306,8 @@ class Configuration:
 
         setattr(self, option_name, value)
         if section_name not in self.sections:
-            self.sections[section_name] = []
-        self.sections[section_name].append(option_name)
+            self.sections[section_name] = {}
+        self.sections[section_name][option_name] = value
 
         return value
 
@@ -318,8 +318,7 @@ class Configuration:
             out += f'  {" " + section_name + " ":-^80s}  '
             long_options = {}
             i = 0
-            for option in section_options:
-                val = str(getattr(self, option))
+            for option, val in section_options:
                 if len(option) < 26 and len(val) < 14:
                     if i % 2 == 0:
                         out += "\n"
