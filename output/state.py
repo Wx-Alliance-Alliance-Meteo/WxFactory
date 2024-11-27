@@ -1,5 +1,6 @@
 import pickle
-from typing import Tuple
+import json
+from typing import Tuple, Any
 
 import numpy
 
@@ -13,13 +14,13 @@ def save_state(
     """Save simulation state into a file, along with its configuration."""
     with open(output_file_name, "wb") as output_file:
         device.xp.save(output_file, state)
-        pickle.dump(param, output_file)
+        output_file.write(bytes(json.dumps(param.sections), "utf-8"))
 
 
-def load_state(input_file_name: str, device: Device = default_device) -> Tuple[numpy.ndarray, Configuration]:
+def load_state(input_file_name: str, device: Device = default_device) -> Tuple[numpy.ndarray, dict[str, dict[str, Any]]]:
     """Retrieve simulation state from file, along with its configuration."""
     with open(input_file_name, "rb") as input_file:
         state = device.xp.load(input_file)
-        param = pickle.load(input_file)
+        sections = json.loads("".join([str(line, 'utf-8') for line in input_file.readlines()]))
 
-        return state, param
+        return state, sections
