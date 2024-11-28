@@ -159,13 +159,53 @@ class ProcessTopology:
             ],
         ]
 
+        convert_covs = [
+            [  # Panel 0
+                lambda a1, a2, x: (a1, a2 - 2.0 * x / (1.0 + x**2) * a1),  # South neighbor
+                lambda a1, a2, x: (a1, a2 + 2.0 * x / (1.0 + x**2) * a1),  # North neighbor
+                lambda a1, a2, x: (a1 - 2.0 * x / (1.0 + x**2) * a2, a2),  # West neighbor
+                lambda a1, a2, x: (a1 + 2.0 * x / (1.0 + x**2) * a2, a2),  # East neighbor
+            ],
+            [  # Panel 1
+                lambda a1, a2, x: (a2 - 2.0 * x / (1.0 + x**2) * a1, -a1),  # South neighbor
+                lambda a1, a2, x: (-a2 - 2.0 * x / (1.0 + x**2) * a1, a1),  # North neighbor
+                lambda a1, a2, x: (a1 - 2.0 * x / (1.0 + x**2) * a2, a2),  # West neighbor
+                lambda a1, a2, x: (a1 + 2.0 * x / (1.0 + x**2) * a2, a2),  # East neighbor
+            ],
+            [  # Panel 2
+                lambda a1, a2, x: (-a2, -a2 + 2.0 * x / (1.0 + x**2) * a1),  # South neighbor
+                lambda a1, a2, x: (-a1, -a2 - 2.0 * x / (1.0 + x**2) * a1),  # North neighbor
+                lambda a1, a2, x: (a1 - 2.0 * x / (1.0 + x**2) * a2, a2),  # West neighbor
+                lambda a1, a2, x: (a1 + 2.0 * x / (1.0 + x**2) * a2, a2),  # East neighbor
+            ],
+            [  # Panel 3
+                lambda a1, a2, x: (-a2 + 2.0 * x / (1.0 + x**2) * a1, a1),  # South neighbor
+                lambda a1, a2, x: (a2 + 2.0 * x / (1.0 + x**2) * a1, -a1),  # North neighbor
+                lambda a1, a2, x: (a1 - 2.0 * x / (1.0 + x**2) * a2, a2),  # West neighbor
+                lambda a1, a2, x: (a1 + 2.0 * x / (1.0 + x**2) * a2, a2),  # East neighbor
+            ],
+            [  # Panel 4
+                lambda a1, a2, x: (a1, a2 - 2.0 * x / (1.0 + x**2) * a1),  # South neighbor
+                lambda a1, a2, x: (-a1, -a2 - 2.0 * x / (1.0 + x**2) * a1),  # North neighbor
+                lambda a1, a2, x: (-a2, a1 - 2.0 * x / (1.0 + x**2) * a2),  # West neighbor
+                lambda a1, a2, x: (a2, -a1 - 2.0 * x / (1.0 + x**2) * a2),  # East neighbor
+            ],
+            [  # Panel 5
+                lambda a1, a2, x: (-a1, -a2 + 2.0 * x / (1.0 + x**2) * a1),  # South neighbor
+                lambda a1, a2, x: (a1, a2 + 2.0 * x / (1.0 + x**2) * a1),  # North neighbor
+                lambda a1, a2, x: (a2, -a1 + 2.0 * x / (1.0 + x**2) * a2),  # West neighbor
+                lambda a1, a2, x: (-a2, a1 + 2.0 * x / (1.0 + x**2) * a2),  # East neighbor
+            ],
+        ]
+
         neighbor_panels = all_neighbors[self.my_panel]
 
         # --- Middle panel tile
-        def convert_contra(a1, a2, coord):
+        def convert_default(a1, a2, _):
             return (a1, a2)
 
-        self.convert_contra = [convert_contra, convert_contra, convert_contra, convert_contra]
+        self.convert_contra = [convert_default, convert_default, convert_default, convert_default]
+        self.convert_cov = [convert_default, convert_default, convert_default, convert_default]
         my_south = rank_from_location(self.my_panel, (self.my_row - 1), self.my_col)
         my_north = rank_from_location(self.my_panel, (self.my_row + 1), self.my_col)
         my_west = rank_from_location(self.my_panel, self.my_row, (self.my_col - 1))
@@ -176,24 +216,28 @@ class ProcessTopology:
         if self.my_row == self.nb_lines_per_panel - 1:
             my_north = rank_from_location(neighbor_panels[NORTH], *edge_coords[self.my_panel][NORTH])
             self.convert_contra[NORTH] = convert_contras[self.my_panel][NORTH]
+            self.convert_cov[NORTH] = convert_covs[self.my_panel][NORTH]
             self.flip[NORTH] = flips[self.my_panel][NORTH]
 
         # --- South panel edge
         if self.my_row == 0:
             my_south = rank_from_location(neighbor_panels[SOUTH], *edge_coords[self.my_panel][SOUTH])
             self.convert_contra[SOUTH] = convert_contras[self.my_panel][SOUTH]
+            self.convert_cov[SOUTH] = convert_covs[self.my_panel][SOUTH]
             self.flip[SOUTH] = flips[self.my_panel][SOUTH]
 
         # --- West panel edge
         if self.my_col == 0:
             my_west = rank_from_location(neighbor_panels[WEST], *edge_coords[self.my_panel][WEST])
             self.convert_contra[WEST] = convert_contras[self.my_panel][WEST]
+            self.convert_cov[WEST] = convert_covs[self.my_panel][WEST]
             self.flip[WEST] = flips[self.my_panel][WEST]
 
         # --- East panel edge
         if self.my_col == self.nb_lines_per_panel - 1:
             my_east = rank_from_location(neighbor_panels[EAST], *edge_coords[self.my_panel][EAST])
             self.convert_contra[EAST] = convert_contras[self.my_panel][EAST]
+            self.convert_cov[EAST] = convert_covs[self.my_panel][EAST]
             self.flip[EAST] = flips[self.my_panel][EAST]
 
         # Distributed Graph
@@ -202,7 +246,13 @@ class ProcessTopology:
         self.comm_dist_graph = comm.Create_dist_graph_adjacent(self.sources, self.destinations)
 
     def start_exchange_scalars(
-        self, south: NDArray, north: NDArray, west: NDArray, east: NDArray, boundary_length: int
+        self,
+        south: NDArray,
+        north: NDArray,
+        west: NDArray,
+        east: NDArray,
+        boundary_shape: Tuple[int, ...],
+        flip_dim: int | Tuple[int, ...] = -1,
     ):
         """Create a request for exchanging scalar data with neighboring tiles. The 4 input arrays must have the same
         shape and size.
@@ -223,14 +273,14 @@ class ProcessTopology:
         """
         xp = self.device.xp
 
-        base_shape = get_base_shape(south.shape, boundary_length)
+        base_shape = get_base_shape(south.shape, boundary_shape)
         send_buffer = xp.empty((4,) + base_shape, dtype=south[0].dtype)
         recv_buffer = xp.empty_like(send_buffer)
 
         # Fill send buffer
         for i, data in enumerate([south, north, west, east]):
             tmp = data.reshape(base_shape)
-            send_buffer[i] = xp.flip(tmp, axis=-1) if self.flip[i] else tmp
+            send_buffer[i] = xp.flip(tmp, axis=flip_dim) if self.flip[i] else tmp
 
         self.device.synchronize()  # When using GPU
 
@@ -247,6 +297,8 @@ class ProcessTopology:
         east: ExchangedVector,
         boundary_sn: NDArray,
         boundary_we: NDArray,
+        flip_dim: int | Tuple[int, ...] = -1,
+        covariant: bool = False,
     ):
         """Create a request for exchanging vectors with neighboring tiles. The 4 input vectors must have the same shape
         and size.
@@ -275,20 +327,22 @@ class ProcessTopology:
         """
         xp = self.device.xp
 
-        base_shape = get_base_shape(south[0].shape, boundary_sn.size)
+        convert = self.convert_cov if covariant else self.convert_contra
+
+        base_shape = get_base_shape(south[0].shape, boundary_sn.shape)
         send_buffer = xp.empty((4, len(south)) + base_shape, dtype=south[0].dtype)
         recv_buffer = xp.empty_like(send_buffer)
 
         inputs = [south, north, west, east]
         boundaries = [boundary_sn, boundary_sn, boundary_we, boundary_we]
         for i, (data, bd) in enumerate(zip(inputs, boundaries)):
-            send_buffer[i, 0], send_buffer[i, 1] = self.convert_contra[i](
+            send_buffer[i, 0], send_buffer[i, 1] = convert[i](
                 data[0].reshape(base_shape), data[1].reshape(base_shape), bd
             )
             if len(data) == 3:
                 send_buffer[i, 2] = data[2].reshape(base_shape)  # 3rd dimension if present
             if self.flip[i]:
-                send_buffer[i] = xp.flip(send_buffer[i], axis=-1)  # Flip arrays, if needed
+                send_buffer[i] = xp.flip(send_buffer[i], axis=flip_dim)  # Flip arrays, if needed
 
         self.device.synchronize()  # When using GPU
 
@@ -298,7 +352,7 @@ class ProcessTopology:
         return ExchangeRequest(recv_buffer, mpi_request, shape=south[0].shape, is_vector=True)
 
 
-def get_base_shape(initial_shape: tuple, length: int):
+def get_base_shape(initial_shape: tuple, length_shape: tuple[int, ...]):
     """Determine the base shape of an exchangeable array, from the given `initial_shape`. The last dimension
     of the resulting shape will horizontally span the boundary, which has size `length`
 
@@ -308,6 +362,7 @@ def get_base_shape(initial_shape: tuple, length: int):
     :return: Shape of the array that will be passed to the MPI call
     :raise ValueError: If the given initial shape cannot fit the given boundary length
     """
+    length = math.prod(length_shape)
     num_fuse = 1
     product = initial_shape[-1]
     while product < length:
@@ -316,7 +371,7 @@ def get_base_shape(initial_shape: tuple, length: int):
 
     if product != length:
         raise ValueError(f"Unable to match data array shape ({initial_shape}) with boundary length {length}")
-    return initial_shape[:-num_fuse] + (length,)
+    return initial_shape[:-num_fuse] + length_shape
 
 
 class ExchangeRequest:

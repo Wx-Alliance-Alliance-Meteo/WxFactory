@@ -113,7 +113,7 @@ class RhsShallowWater:
             north=var_itf_j[idx_h, -2, :, nbsolpts:],
             west=var_itf_i[idx_h, :, 1, :nbsolpts],
             east=var_itf_i[idx_h, :, -2, nbsolpts:],
-            boundary_length=nb_elements_hori * nbsolpts,
+            boundary_shape=(nb_elements_hori * nbsolpts,),
         )
 
         # Compute fluxes

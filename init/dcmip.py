@@ -568,20 +568,15 @@ def dcmip_schar_waves(geom: CubedSphere3D, metric, mtrx: DFROperators, param, sh
     # -----------------------------------------------------------------------
     #    Set topography
     # -----------------------------------------------------------------------
-    zbot = numpy.zeros(geom.coordVec_latlon.shape[2:])
-    zbot_itf_i = numpy.zeros(geom.coordVec_latlon_itf_i.shape[2:])
-    zbot_itf_j = numpy.zeros(geom.coordVec_latlon_itf_j.shape[2:])
-
-    zbot_itf_i_new = numpy.zeros(geom.itf_i_floor_shape, dtype=geom.dtype)
-    zbot_itf_j_new = numpy.zeros(geom.itf_j_floor_shape, dtype=geom.dtype)
 
     # Build topography based on lateral great-circle distance from the mountain center
-    def build_topo_old(z, latlon):
+    def build_topo_old(latlon):
         lat = latlon[1, 0, :, :]
         lon = latlon[0, 0, :, :]
         r = geom.earth_radius * numpy.arccos(
             math.sin(phim) * numpy.sin(lat) + math.cos(phim) * numpy.cos(lat) * numpy.cos(lon - lambdam)
         )
+        z = numpy.zeros(lat.shape)
         z[:, :] = h0 * numpy.exp(-(r**2) / Dm**2) * numpy.cos(numpy.pi * r / Dxi) ** 2
         return z
 
@@ -591,19 +586,12 @@ def dcmip_schar_waves(geom: CubedSphere3D, metric, mtrx: DFROperators, param, sh
         r = geom.earth_radius * numpy.arccos(
             math.sin(phim) * numpy.sin(lat) + math.cos(phim) * numpy.cos(lat) * numpy.cos(lon - lambdam)
         )
-        print(f"r shape = {r.shape}")
 
         return h0 * numpy.exp(-(r**2) / Dm**2) * numpy.cos(numpy.pi * r / Dxi) ** 2
 
-    for z, coord in zip(
-        [zbot, zbot_itf_i, zbot_itf_j], [geom.coordVec_latlon, geom.coordVec_latlon_itf_i, geom.coordVec_latlon_itf_j]
-    ):
-        lat = coord[1, 0, :, :]
-        lon = coord[0, 0, :, :]
-        r = geom.earth_radius * numpy.arccos(
-            math.sin(phim) * numpy.sin(lat) + math.cos(phim) * numpy.cos(lat) * numpy.cos(lon - lambdam)
-        )
-        z[:, :] = h0 * numpy.exp(-(r**2) / Dm**2) * numpy.cos(numpy.pi * r / Dxi) ** 2
+    zbot = build_topo_old(geom.coordVec_latlon)
+    zbot_itf_i = build_topo_old(geom.coordVec_latlon_itf_i)
+    zbot_itf_j = build_topo_old(geom.coordVec_latlon_itf_j)
 
     zbot_new = build_topo(geom.get_floor(geom.polar))
     zbot_itf_i_new = build_topo(geom.get_itf_i_floor(geom.polar_itf_i))
@@ -688,6 +676,7 @@ def dcmip_schar_damping(
     metric: Metric3DTopo,
     geom: CubedSphere3D,
     shear: bool,
+    new_layout: bool,
 ):
     """Implements the required Rayleigh damping for DCMIP cases 2-1 and 2-2
 
@@ -709,6 +698,8 @@ def dcmip_schar_damping(
     # Grab forcing index variables from 'definitions', since forcing is modified in-place
     from common.definitions import idx_rho_u1, idx_rho_u2, idx_rho_w
 
+    xp = geom.device.xp
+
     # Case parameters
     T0 = 300.0  # temperature (K)
     Ueq = 20.0  # Reference zonal wind velocity (equator)
@@ -721,28 +712,35 @@ def dcmip_schar_damping(
         Cs = 0.0
 
     # Get coordinates
-    lat = geom.coordVec_latlon[1, :, :, :]  # Latitude as 3D field
-    z_3d = geom.coordVec_latlon[2, :, :, :]  # Retrieve all z-levels
+    if new_layout:
+        lat = geom.polar[1, ...]
+        z_3d = geom.polar[2, ...]
+    else:
+        lat = geom.coordVec_latlon[1, :, :, :]  # Latitude as 3D field
+        z_3d = geom.coordVec_latlon[2, :, :, :]  # Retrieve all z-levels
 
     # Build the damping mask (eqn 79), weighted by ρ and τ0^(-1)
     damping_weight = (
-        rho / tau0 * numpy.sin(numpy.pi / 2 * (z_3d - Zh) / (geom.ztop - Zh)) ** 2
+        rho / tau0 * xp.sin(xp.pi / 2 * (z_3d - Zh) / (geom.ztop - Zh)) ** 2
     )  # z > zh, defined everywhere at first
     # Reset to 0 below the threshold height
     damping_weight[z_3d <= Zh] = 0.0
 
     ## Temperature in 3D
     if Ueq != 0:
-        Tref = T0 * (1 - Cs * Ueq**2 / gravity * numpy.sin(lat) ** 2)
+        Tref = T0 * (1 - Cs * Ueq**2 / gravity * xp.sin(lat) ** 2)
     else:
         Tref = T0
 
     # Get u, v, w reference velocities and convert to contravariant
-    uref = Ueq * numpy.cos(lat) * (2 * T0 / Tref * Cs * z_3d + Tref / T0) ** 0.5
+    uref = Ueq * xp.cos(lat) * (2 * T0 / Tref * Cs * z_3d + Tref / T0) ** 0.5
     vref = 0.0
     wref = 0.0
 
-    u1ref, u2ref, u3ref = wind2contra_3d(uref, vref, wref, geom, metric)
+    if new_layout:
+        u1ref, u2ref, u3ref = geom.wind2contra(uref, vref, wref, metric)
+    else:
+        u1ref, u2ref, u3ref = wind2contra_3d(uref, vref, wref, geom, metric)
 
     # Increment velocity forcing (eqn 78).  Take note that this modification is in-place,
     # and the sign is positive because rhs_euler includes its own negative sign

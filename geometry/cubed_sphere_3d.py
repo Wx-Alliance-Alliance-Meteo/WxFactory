@@ -494,11 +494,24 @@ class CubedSphere3D(CubedSphere):
 
         Y_block, X_block = xp.meshgrid(xp.tan(x2), xp.tan(x1), indexing="ij")
 
-        # Y_new = self._to_new(Y)
-        # X_new = self._to_new(X)
+        # X_new = self.to_new_floor(X_block)
+        # Y_new = self.to_new_floor(Y_block)
+        X_new = self._to_new(xp.tile(X_block, (nb_elements_x3 * self.nbsolpts, 1, 1)))
+        Y_new = self._to_new(xp.tile(Y_block, (nb_elements_x3 * self.nbsolpts, 1, 1)))
 
         self.boundary_sn = X_block[0, :]  # Coordinates of the south and north boundaries along the X (west-east) axis
         self.boundary_we = Y_block[:, 0]  # Coordinates of the west and east boundaries along the Y (south-north) axis
+
+        self.boundary_sn_new = xp.tile(
+            self.boundary_sn.reshape(self.nb_elements_x1, self.nbsolpts), self.nbsolpts
+        ).reshape((self.nb_elements_x1, self.nbsolpts, self.nbsolpts))
+        self.boundary_we_new = xp.tile(
+            self.boundary_we.reshape(self.nb_elements_x2, self.nbsolpts), self.nbsolpts
+        ).reshape((self.nb_elements_x2, self.nbsolpts, self.nbsolpts))
+
+        # if MPI.COMM_WORLD.rank == 0:
+        #     print(f"boundary sn (old): \n{self.boundary_sn}")
+        #     print(f"boundary sn (new): \n{self.boundary_sn_new}")
 
         # if MPI.COMM_WORLD.rank == 0:
         #    print(f'old X = \n{X_block}')
@@ -521,10 +534,13 @@ class CubedSphere3D(CubedSphere):
         self.delta2_block = 1.0 + X_block**2 + Y_block**2
         self.delta_block = xp.sqrt(self.delta2_block)
 
+        self.delta2_new = 1.0 + X_new**2 + Y_new**2
+        self.delta_new = xp.sqrt(self.delta2_new)
+
         self.X_block = X_block
         self.Y_block = Y_block
-        # self.X_new = X_new
-        # self.Y_new = Y_new
+        self.X_new = X_new
+        self.Y_new = Y_new
         self.height = height
 
         ## Other coordinate vectors:
@@ -680,7 +696,10 @@ class CubedSphere3D(CubedSphere):
         self.coslat = xp.cos(lat)
         self.sinlat = xp.sin(lat)
 
-    def _to_new(self, a):
+        self.coslon_new = xp.cos(self.polar[0, ...])
+        self.coslat_new = xp.cos(self.polar[1, ...])
+
+    def _to_new(self, a: NDArray) -> NDArray:
         """Convert input array to new memory layout"""
         if a.shape[-3:] != self.block_shape:
             raise ValueError(f"Unhandled shape {a.shape}")
@@ -915,3 +934,107 @@ class CubedSphere3D(CubedSphere):
     #       elif a.shape == expected_shape_2:
     #          tmp_shape = (self.nb_elements_x2 + 1, self.nb_elements_x1, self.nbsolpts)
     #       else: raise ValueError
+
+    def wind2contra(
+        self,
+        u: float | NDArray,
+        v: float | NDArray,
+        w: float | NDArray,
+        metric: "Metric3DTopo",
+    ):
+        """Convert wind fields from spherical values (zonal, meridional, vertical) to contravariant winds
+        on a terrain-following grid.
+
+        Parameters:
+        ----------
+        u : float | numpy.ndarray
+        Input zonal winds, in meters per second
+        v : float | numpy.ndarray
+        Input meridional winds, in meters per second
+        w : float | numpy.ndarray
+        Input vertical winds, in meters per second
+        geom : CubedSphere3D
+        Geometry object (CubedSphere3D), describing the grid configuration and globe paramters.  Required parameters:
+        earth_radius, coslat, lat_p, angle_p, X, Y, delta2
+        metric : Metric3DTopo
+        Metric object containing H_contra and inv_dzdeta parameters
+
+        Returns:
+        -------
+        (u1_contra, u2_contra, u3_contra) : tuple
+        Tuple of contravariant winds
+        """
+
+        xp = self.device.xp
+
+        # First, re-use wind2contra_2d to get preliminary values for u1_contra and u2_contra.  We will update this with the
+        # contribution from vertical velocity in a second step.
+
+        if self.deep:
+            # In 3D code with the deep atmosphere, the conversion to λ and φ
+            # uses the full radial height of the grid point:
+            lambda_dot = u / ((self.earth_radius + self.gnomonic[2, ...]) * self.coslat_new)
+            phi_dot = v / (self.earth_radius + self.gnomonic[2, ...])
+        else:
+            # Otherwise, the conversion uses just the planetary radius, with no
+            # correction for height above the surface
+            lambda_dot = u / (self.earth_radius * self.coslat_new)
+            phi_dot = v / self.earth_radius
+
+        # if MPI.COMM_WORLD.rank == 0:
+        #     print(f"u shape = {u.shape}, lambda_dot shape = {lambda_dot.shape}")
+        #     print(f"X (new) shape = {self.X_new.shape}")
+
+        denom = xp.sqrt(
+            (
+                math.cos(self.lat_p)
+                + self.X_new * math.sin(self.lat_p) * math.sin(self.angle_p)
+                - self.Y_new * math.sin(self.lat_p) * math.cos(self.angle_p)
+            )
+            ** 2
+            + (self.X_new * math.cos(self.angle_p) + self.Y_new * math.sin(self.angle_p)) ** 2
+        )
+
+        dx1dlon = math.cos(self.lat_p) * math.cos(self.angle_p) + (
+            self.X_new * self.Y_new * math.cos(self.lat_p) * math.sin(self.angle_p) - self.Y_new * math.sin(self.lat_p)
+        ) / (1.0 + self.X_new**2)
+        dx2dlon = (
+            self.X_new * self.Y_new * math.cos(self.lat_p) * math.cos(self.angle_p) + self.X_new * math.sin(self.lat_p)
+        ) / (1.0 + self.Y_new**2) + math.cos(self.lat_p) * math.sin(self.angle_p)
+
+        dx1dlat = (
+            -self.delta2_new
+            * (
+                (math.cos(self.lat_p) * math.sin(self.angle_p) + self.X_new * math.sin(self.lat_p))
+                / (1.0 + self.X_new**2)
+            )
+            / denom
+        )
+        dx2dlat = (
+            self.delta2_new
+            * (
+                (math.cos(self.lat_p) * math.cos(self.angle_p) - self.Y_new * math.sin(self.lat_p))
+                / (1.0 + self.Y_new**2)
+            )
+            / denom
+        )
+
+        # transform to the reference element
+
+        u1_contra = (dx1dlon * lambda_dot + dx1dlat * phi_dot) * 2.0 / self.delta_x1
+        u2_contra = (dx2dlon * lambda_dot + dx2dlat * phi_dot) * 2.0 / self.delta_x2
+
+        # Second, convert w to _covariant_ u3, which points in the vertical direction regardless of topography.
+        # We do this by multiplying by dz/deta, or dividing by metric.inv_dzdeta  (equivalently, taking the dot product
+        # with the e_3 basis vector)
+        u3_cov = w / metric.inv_dzdeta_new
+
+        # Now, convert covariant u3 to contravariant components.  Because topography, u^3 is normal to the
+        # terrain-following x1 and x2 coordinates, implying that u^3 has horizontal components.
+        # To cancel this, we need to adjust u^1 and u^2 accordingly.
+
+        u1_contra += metric.h_contra_new[0, 2, ...] * u3_cov
+        u2_contra += metric.h_contra_new[1, 2, ...] * u3_cov
+        u3_contra = metric.h_contra_new[2, 2, ...] * u3_cov
+
+        return (u1_contra, u2_contra, u3_contra)
