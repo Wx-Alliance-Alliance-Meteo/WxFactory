@@ -108,8 +108,15 @@ class DFROperators:
                 self.expfilter_apply = False
             else:
                 self.expfilter = self.make_filter(
-                    param.expfilter_strength, param.expfilter_order, param.expfilter_cutoff, grd, device
+                    param.expfilter_strength, param.expfilter_order, param.expfilter_cutoff, grd
                 )
+
+                I2 = xp.eye(grd.nbsolpts)
+                I3 = xp.eye(grd.nbsolpts**2)
+                filter_x = xp.kron(I3, self.expfilter).T
+                filter_y = xp.kron(I2, xp.kron(self.expfilter, I2)).T
+                filter_z = xp.kron(self.expfilter, I3).T
+                self.expfilter_new = (filter_x @ filter_y) @ filter_z
 
         # Create sponge layer (if desired)
         self.apply_sponge = param.apply_sponge
@@ -200,18 +207,20 @@ class DFROperators:
             corr_east = self.diff_ext[1:-1, -1]
             self.correction_WE = xp.vstack((xp.kron(ident, corr_west), xp.kron(ident, corr_east)))
 
-    def make_filter(self, alpha: float, order: int, cutoff: float, geom: Geometry, device: Device = default_device):
+    def make_filter(self, alpha: float, order: int, cutoff: float, geom: Geometry):
         """Build an exponential modal filter as described in Warburton, eqn 5.16."""
 
+        xp = geom.device.xp
+
         # Scaled mode numbers
-        modes = device.xp.arange(geom.nbsolpts, like=geom.solutionPoints) / (geom.nbsolpts - 1)
+        modes = xp.arange(geom.nbsolpts, like=geom.solutionPoints) / (geom.nbsolpts - 1)
         Nc = cutoff
 
         # After applying the filter, each mode is reduced in proportion to the filter order
         # and the mode number relative to nbsolpts, with modes below the cutoff limit untouched
 
-        residual_modes = device.xp.ones_like(modes)
-        residual_modes[modes > Nc] = device.xp.exp(-alpha * ((modes[modes > Nc] - cutoff) / (1 - cutoff)) ** order)
+        residual_modes = xp.ones_like(modes)
+        residual_modes[modes > Nc] = xp.exp(-alpha * ((modes[modes > Nc] - cutoff) / (1 - cutoff)) ** order)
 
         # Now, use a Vandermonde matrix to transform this modal filter into a nodal form
 
@@ -219,15 +228,15 @@ class DFROperators:
         vander = legvander(geom.solutionPoints, geom.nbsolpts - 1)
 
         # node-to-mode operator
-        ivander = device.xp.linalg.inv(vander)
+        ivander = xp.linalg.inv(vander)
 
-        return vander @ device.xp.diag(residual_modes) @ ivander
+        return vander @ xp.diag(residual_modes) @ ivander
 
     def apply_filters(self, Q: numpy.ndarray, geom: Geometry, metric, dt: float):
         """Apply the filters that have been activated on the given state vector."""
 
         if self.expfilter_apply:
-            Q = self.apply_filter_3d(Q, geom, metric)
+            Q = self.apply_filter_3d(Q, metric)
 
         # Apply Sponge (if desired)
         if self.apply_sponge:
@@ -245,39 +254,12 @@ class DFROperators:
 
         return Q
 
-    def apply_filter_3d(self, Q: numpy.ndarray, geom: CubedSphere3D, metric):
+    def apply_filter_3d(self, Q: NDArray, metric: "Metric3DTopo"):
         r"""Apply the exponential filter precomputed in expfilter to input fields \sqrt(g)*Q, and return the
         filtered array."""
 
-        if len(Q.shape) > 3:
-            nbvars = Q.shape[0]
-        else:
-            nbvars = 1
+        return ((metric.sqrtG_new * Q) @ self.expfilter_new) * metric.inv_sqrtG_new
 
-        ni = geom.ni
-        nj = geom.nj
-        nk = geom.nk
-        np = geom.nbsolpts
-
-        # Filter in i
-        result = metric.sqrtG * Q
-        result.shape = (nbvars * nk * nj * (ni // np), np)
-        result = result @ self.expfilter.T
-        # result = (self.expfilter @ result.T).T
-        # result = (self.expfilter @ result.transpose((0,2,1))).transpose((0,2,1))
-
-        # Filter in j
-        result.shape = (nbvars * nk * (nj // np), np, ni)
-        result = self.expfilter @ result
-
-        # Filter in k
-        result.shape = (nbvars * (nk // np), np, nj * ni)
-        result = self.expfilter @ result
-
-        result.shape = Q.shape
-        result *= metric.inv_sqrtG
-
-        return result
 
     def comma_i(
         self: Self, field_interior: NDArray[T], border_i: NDArray[T], grid: CubedSphere3D, out: NDArray[T] | None = None

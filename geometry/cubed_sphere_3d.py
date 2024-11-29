@@ -702,7 +702,7 @@ class CubedSphere3D(CubedSphere):
     def _to_new(self, a: NDArray) -> NDArray:
         """Convert input array to new memory layout"""
         if a.shape[-3:] != self.block_shape:
-            raise ValueError(f"Unhandled shape {a.shape}")
+            raise ValueError(f"Unhandled shape {a.shape}, expected (...,) + {self.block_shape}")
 
         tmp_shape = a.shape[:-3] + (
             self.nb_elements_x3,
@@ -720,9 +720,9 @@ class CubedSphere3D(CubedSphere):
     def to_single_block(self, a):
         """Convert input array to old memory layout"""
         if a.shape[-4:] != self.grid_shape_3d_new:
-            raise ValueError(f"Unhandled shape {a.shape}")
+            raise ValueError(f"Unhandled shape {a.shape}, expected (...,) + {self.grid_shape_3d_new}")
 
-        tmp_shape = a.shape[:-3] + (
+        tmp_shape = a.shape[:-4] + (
             self.nb_elements_x3,
             self.nb_elements_x2,
             self.nb_elements_x1,
@@ -730,7 +730,7 @@ class CubedSphere3D(CubedSphere):
             self.nbsolpts,
             self.nbsolpts,
         )
-        new_shape = a.shape[:-3] + self.block_shape
+        new_shape = a.shape[:-4] + self.block_shape
         xp = self.device.xp
 
         return xp.moveaxis(a.reshape(tmp_shape), (-3, -2), (-5, -3)).reshape(new_shape)
@@ -953,11 +953,8 @@ class CubedSphere3D(CubedSphere):
         Input meridional winds, in meters per second
         w : float | numpy.ndarray
         Input vertical winds, in meters per second
-        geom : CubedSphere3D
-        Geometry object (CubedSphere3D), describing the grid configuration and globe paramters.  Required parameters:
-        earth_radius, coslat, lat_p, angle_p, X, Y, delta2
         metric : Metric3DTopo
-        Metric object containing H_contra and inv_dzdeta parameters
+            Metric object containing H_contra and inv_dzdeta parameters
 
         Returns:
         -------
@@ -967,8 +964,8 @@ class CubedSphere3D(CubedSphere):
 
         xp = self.device.xp
 
-        # First, re-use wind2contra_2d to get preliminary values for u1_contra and u2_contra.  We will update this with the
-        # contribution from vertical velocity in a second step.
+        # First, re-use wind2contra_2d to get preliminary values for u1_contra and u2_contra.  We will update this
+        # with the contribution from vertical velocity in a second step.
 
         if self.deep:
             # In 3D code with the deep atmosphere, the conversion to λ and φ
@@ -1038,3 +1035,142 @@ class CubedSphere3D(CubedSphere):
         u3_contra = metric.h_contra_new[2, 2, ...] * u3_cov
 
         return (u1_contra, u2_contra, u3_contra)
+
+    def contra2wind_2d(self, u1: float | NDArray, u2: float | NDArray):
+        """Convert from reference element to "physical winds", in two dimensions
+
+        Parameters:
+        -----------
+        u1 : float | NDArray
+        Contravariant winds along first component (X)
+        u2 : float | NDArray
+        Contravariant winds along second component (Y)
+
+        Returns:
+        --------
+        (u, v) : tuple
+        Zonal/meridional winds, in m/s
+        """
+
+        u1_contra = u1 * self.delta_x1 / 2.0
+        u2_contra = u2 * self.delta_x2 / 2.0
+
+        denom = (
+            math.cos(self.lat_p)
+            + self.X_new * math.sin(self.lat_p) * math.sin(self.angle_p)
+            - self.Y_new * math.sin(self.lat_p) * math.cos(self.angle_p)
+        ) ** 2 + (self.X_new * math.cos(self.angle_p) + self.Y_new * math.sin(self.angle_p)) ** 2
+
+        dlondx1 = (
+            (math.cos(self.lat_p) * math.cos(self.angle_p) - self.Y_new * math.sin(self.lat_p))
+            * (1.0 + self.X_new**2)
+            / denom
+        )
+
+        dlondx2 = (
+            (math.cos(self.lat_p) * math.sin(self.angle_p) + self.X_new * math.sin(self.lat_p))
+            * (1.0 + self.Y_new**2)
+            / denom
+        )
+
+        denom[:, :] = numpy.sqrt(
+            (
+                math.cos(self.lat_p)
+                + self.X_new * math.sin(self.lat_p) * math.sin(self.angle_p)
+                - self.Y_new * math.sin(self.lat_p) * math.cos(self.angle_p)
+            )
+            ** 2
+            + (self.X_new * math.cos(self.angle_p) + self.Y_new * math.sin(self.angle_p)) ** 2
+        )
+
+        dlatdx1 = -(
+            (
+                self.X_new * self.Y_new * math.cos(self.lat_p) * math.cos(self.angle_p)
+                + self.X_new * math.sin(self.lat_p)
+                + (1.0 + self.Y_new**2) * math.cos(self.lat_p) * math.sin(self.angle_p)
+            )
+            * (1.0 + self.X_new**2)
+        ) / (self.delta2_new * denom)
+
+        dlatdx2 = (
+            (
+                (1.0 + self.X_new**2) * math.cos(self.lat_p) * math.cos(self.angle_p)
+                + self.X_new * self.Y_new * math.cos(self.lat_p) * math.sin(self.angle_p)
+                - self.Y_new * math.sin(self.lat_p)
+            )
+            * (1.0 + self.Y_new**2)
+        ) / (self.delta2_new * denom)
+
+        if self.deep:
+            # If we are in a 3D geometry with the deep atmosphere, the conversion from
+            # contravariant → spherical → zonal/meridional winds uses the full radial distance
+            # at the last step
+            u = (
+                (dlondx1 * u1_contra + dlondx2 * u2_contra)
+                * self.coslat_new
+                * (self.earth_radius + self.gnomonic[2, ...])
+            )
+            v = (dlatdx1 * u1_contra + dlatdx2 * u2_contra) * (self.earth_radius + self.gnomonic[2, ...])
+        else:
+            # Otherwise, the conversion is based on the spherical radius only, with no height correction
+            u = (dlondx1 * u1_contra + dlondx2 * u2_contra) * self.coslat_new * self.earth_radius
+            v = (dlatdx1 * u1_contra + dlatdx2 * u2_contra) * self.earth_radius
+
+        return u, v
+
+    def contra2wind_3d(
+        self,
+        u1_contra: NDArray,
+        u2_contra: NDArray,
+        u3_contra: NDArray,
+        metric: "Metric3DTopo",
+    ):
+        """contra2wind_3d: convert from contravariant wind fields to "physical winds" in three dimensions
+
+        This function transforms the contravariant fields u1, u2, and u3 into their physical equivalents, assuming
+        a cubed-sphere-like grid.  In particular, we assume that the vertical coordinate η is the only mapped
+        coordinate, so u3 can be ignored in computing the zonal (u) and meridional (w) wind.
+
+        This function inverts the cubed-sphere latlon/XY coordinate transform to give u and v, taking into account
+        the panel rotation, and it forms a covariant u3 field to derive w, removing any horizontal component that
+        would otherwise be included inside the contravariant u3.
+
+        Parameters:
+        -----------
+        u1_contra: numpy.ndarray
+        contravariant wind, u1 component
+        u2_contra: numpy.ndarray
+        contravariant wind, u2 component
+        u3_contra: numpy.ndarray
+        contravariant wind, u3 component
+        geom: CubedSphere
+        geometry object, implementing:
+            delta_x1, delta_x2, lat_p, angle_p, X, Y, coslat, earth_radius
+        metric: Metric3DTopo
+        metric object, implementing H_cov (covariant spatial metric) and inv_dzdeta
+
+        Retruns:
+        (u, v, w) : tuple
+        zonal, meridional, and vertical winds (m/s)
+        """
+
+        # First, re-use contra2wind_2d to compute outuput u and v.  No need to reinvent the wheel
+        u, v = self.contra2wind_2d(u1_contra, u2_contra)
+
+        # Now, form covariant u3 by taking the appropriate multiplication with the covariant metric to lower the index
+        u3_cov = (
+            u1_contra[...] * metric.h_cov_new[2, 0, ...]
+            + u2_contra[...] * metric.h_cov_new[2, 1, ...]
+            + u3_contra[...] * metric.h_cov_new[2, 2, ...]
+        )
+
+        # Covariant u3 now points straight "up", but it is expressed in η units, implicitly multiplied
+        # by the covariant basis vector.
+        # To convert to physical units, think of dz/dz=1 m/m.  In the covariant expression, however:
+        # dz/dz = 1m/m = (z)_(,3) * e^3
+        # but (z)_(,3) is the definition of dzdeta, which absorbs the (Δη/4) scaling term of the numerical
+        # differentiation.  To cancel this, e^3 = inv_dzeta * (zhat), giving:
+
+        w = u3_cov[...] * metric.inv_dzdeta_new[...]  # Multiply by (dz/dη)^(-1), or e^3
+
+        return (u, v, w)

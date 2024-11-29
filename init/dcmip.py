@@ -551,6 +551,8 @@ def dcmip_schar_waves(geom: CubedSphere3D, metric, mtrx: DFROperators, param, sh
     """
     Tests 2-1 and 2-2:  Non-hydrostatic Mountain Waves over a Schaer-type Mountain
     """
+    xp = geom.device.xp
+
     T0 = 300.0  # temperature (K)
     lambdam = math.pi / 4.0  # mountain longitude center point (radians)
     phim = 0.0  # mountain latitude center point (radians)
@@ -583,11 +585,11 @@ def dcmip_schar_waves(geom: CubedSphere3D, metric, mtrx: DFROperators, param, sh
     def build_topo(latlon):
         lat = latlon[1]
         lon = latlon[0]
-        r = geom.earth_radius * numpy.arccos(
-            math.sin(phim) * numpy.sin(lat) + math.cos(phim) * numpy.cos(lat) * numpy.cos(lon - lambdam)
+        r = geom.earth_radius * xp.arccos(
+            math.sin(phim) * xp.sin(lat) + math.cos(phim) * xp.cos(lat) * xp.cos(lon - lambdam)
         )
 
-        return h0 * numpy.exp(-(r**2) / Dm**2) * numpy.cos(numpy.pi * r / Dxi) ** 2
+        return h0 * xp.exp(-(r**2) / Dm**2) * xp.cos(xp.pi * r / Dxi) ** 2
 
     zbot = build_topo_old(geom.coordVec_latlon)
     zbot_itf_i = build_topo_old(geom.coordVec_latlon_itf_i)
@@ -602,13 +604,13 @@ def dcmip_schar_waves(geom: CubedSphere3D, metric, mtrx: DFROperators, param, sh
     zbot_itf_j_new[geom.floor_north_edge] = 0.0
 
     diff = zbot_new - geom.to_new_floor(zbot)
-    diffn = numpy.linalg.norm(diff)
+    diffn = xp.linalg.norm(diff)
 
     diffi = zbot_itf_i_new - geom.to_new_itf_i_floor(zbot_itf_i)
-    diffin = numpy.linalg.norm(diffi)
+    diffin = xp.linalg.norm(diffi)
 
     diffj = zbot_itf_j_new - geom.to_new_itf_j_floor(zbot_itf_j)
-    diffjn = numpy.linalg.norm(diffj)
+    diffjn = xp.linalg.norm(diffj)
 
     if diffn > 0.0 or diffin > 0.0 or diffjn > 0.0:
         raise ValueError
@@ -620,14 +622,16 @@ def dcmip_schar_waves(geom: CubedSphere3D, metric, mtrx: DFROperators, param, sh
 
     ## Coordinate vectors in 3D
 
-    lat = geom.coordVec_latlon[1, :, :, :]  # Latitude as 3D field
-    z_3d = geom.coordVec_latlon[2, :, :, :]  # Retrieve all z-levels
+    # lat = geom.coordVec_latlon[1, :, :, :]  # Latitude as 3D field
+    # z_3d = geom.coordVec_latlon[2, :, :, :]  # Retrieve all z-levels
+    lat = geom.polar[1, ...]  # Latitude as 3D field
+    z_3d = geom.polar[2, ...]  # Retrieve all z-levels
 
     ## Temperature in 3D
     if Ueq != 0:
-        T = T0 * (1 - Cs * Ueq**2 / gravity * numpy.sin(lat) ** 2)
+        T = T0 * (1 - Cs * Ueq**2 / gravity * xp.sin(lat) ** 2)
     else:
-        T = T0 * numpy.ones_like(lat)
+        T = T0 * xp.ones_like(lat)
 
     ### NOTE: These equations are not in exact balance for the no-hill case.
     ### The DCMIP document assumes a shallow-atmosphere discretization,
@@ -636,21 +640,22 @@ def dcmip_schar_waves(geom: CubedSphere3D, metric, mtrx: DFROperators, param, sh
     ### adjustment.
 
     ## Pressure (eqn 80)
-    p = Peq * numpy.exp(-(Ueq**2) / (2 * Rd * T0) * numpy.sin(lat) ** 2 - gravity * z_3d / (Rd * T))
+    p = Peq * xp.exp(-(Ueq**2) / (2 * Rd * T0) * xp.sin(lat) ** 2 - gravity * z_3d / (Rd * T))
 
     # Zonal Velocity (eqn 82)
 
-    u = Ueq * numpy.cos(lat) * (2 * T0 / T * Cs * z_3d + T / T0) ** 0.5
+    u = Ueq * xp.cos(lat) * (2 * T0 / T * Cs * z_3d + T / T0) ** 0.5
 
     # Meridional Velocity
 
-    v = numpy.zeros_like(lat)
+    v = xp.zeros_like(lat)
 
     # Vertical Velocity
 
-    w = numpy.zeros_like(lat)
+    w = xp.zeros_like(lat)
 
-    u1_contra, u2_contra, u3_contra = wind2contra_3d(u, v, w, geom, metric)
+    # u1_contra, u2_contra, u3_contra = wind2contra_3d(u, v, w, geom, metric)
+    u1_contra, u2_contra, u3_contra = geom.wind2contra(u, v, w, metric)
 
     # -----------------------------------------------------------------------
     #    RHO (density)

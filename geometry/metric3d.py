@@ -1085,6 +1085,11 @@ class Metric3DTopo:
         self.h_contra_itf_j_new = geom._to_new_itf_j(self.H_contra_itf_j)
         self.h_contra_itf_k_new = geom._to_new_itf_k(self.H_contra_itf_k)
 
+        self.h_cov_new = geom._to_new(self.H_cov)
+        self.h_cov_itf_i_new = geom._to_new_itf_i(self.H_cov_itf_i)
+        self.h_cov_itf_j_new = geom._to_new_itf_j(self.H_cov_itf_j)
+        self.h_cov_itf_k_new = geom._to_new_itf_k(self.H_cov_itf_k)
+
         self.sqrtG_new = geom._to_new(self.sqrtG)
         self.sqrtG_itf_i_new = geom._to_new_itf_i(self.sqrtG_itf_i)
         self.sqrtG_itf_j_new = geom._to_new_itf_j(self.sqrtG_itf_j)
