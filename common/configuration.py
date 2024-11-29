@@ -15,15 +15,18 @@ class Configuration:
 
     sections: Dict
 
-    def __init__(self, cfg_file: str, verbose: bool = True):
+    def __init__(self, cfg_file: str, verbose: bool = True, use_content: bool = False):
 
-        self.cfg_file = cfg_file
+        self.cfg_file = "in-memory" if use_content else cfg_file
         self.sections = {}
         self.parser = ConfigParser()
-        self.parser.read(cfg_file, encoding="utf-8")
-        
-        with open(cfg_file) as config_file:
-            self.config_content = '\n'.join(config_file.readlines())
+
+        self.config_content = cfg_file
+        if not use_content:
+            with open(cfg_file) as config_file:
+                self.config_content = '\n'.join(config_file.readlines())
+
+        self.parser.read_string(self.config_content)
 
         if verbose:
             print(f"Loading config: {cfg_file}")

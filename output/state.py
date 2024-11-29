@@ -22,15 +22,6 @@ def load_state(input_file_name: str, device: Device = default_device) -> Tuple[n
     with open(input_file_name, "rb") as input_file:
         state = device.xp.load(input_file)
         config_content = "\n".join([str(line, 'utf-8') for line in input_file.readlines()]).strip()
-
-        temp_file_name = f"temp-{mpi4py.MPI.COMM_WORLD.rank}.ini"
-
-        with open(temp_file_name, "wt") as temp_file:
-            temp_file.write(config_content)
-            temp_file.flush()
-
-
-        conf = Configuration(temp_file_name, False)
-        os.remove(temp_file_name)
+        conf = Configuration(config_content, False, use_content=True)
 
         return state, conf
