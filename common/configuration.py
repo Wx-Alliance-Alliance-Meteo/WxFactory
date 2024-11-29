@@ -28,9 +28,6 @@ class Configuration:
 
         self.parser.read_string(self.config_content)
 
-        if verbose:
-            print(f"Loading config: {cfg_file}")
-
         self.array_module = "numpy"  # Default value, may change depending on selected options
 
         self.equations = self._get_option("General", "equations", str, None, ["euler", "shallow_water"])

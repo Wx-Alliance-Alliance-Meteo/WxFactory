@@ -19,3 +19,20 @@ def receive_string_from(process_index: int, comm: MPI.Comm = MPI.COMM_WORLD):
     data: bytearray = bytearray(length_buffer[0])
     comm.Recv([data, MPI.CHAR], process_index, 1)
     return str(data, "utf-8")
+
+def bcast_string(content: str, comm: MPI.Comm = MPI.COMM_WORLD):
+    data: bytes = bytes(content, "utf-8")
+    length: int = len(data)
+    length_buffer: numpy.ndarray = numpy.empty((1), dtype=int)
+    length_buffer[0] = length
+
+    comm.Bcast([length_buffer, MPI.LONG], comm.rank)
+    comm.Bcast([data, MPI.CHAR], comm.rank)
+
+def rcv_bcast_string(root: int, comm: MPI.Comm = MPI.COMM_WORLD) -> str:
+    length_buffer: numpy.ndarray = numpy.empty((1), dtype=int)
+    comm.Bcast(length_buffer, root)
+
+    data: bytearray = bytearray(length_buffer[0])
+    comm.Bcast([data, MPI.CHAR], root)
+    return str(data, "utf-8")

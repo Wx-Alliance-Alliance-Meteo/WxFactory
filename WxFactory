@@ -25,6 +25,7 @@ def main():
     # Doing the import here allows to output potential errors from a single PE, making them much easier to deal with.
     try:
         from common.simulation import Simulation
+        import common.wx_mpi
     except (ImportError, NameError) as e:
         if rank == 0:
             print(e)
@@ -63,6 +64,14 @@ def main():
         if rank == 0:
             raise ValueError(f"Config file does not seem to exist: {args.config}")
         sys.exit(-1)
+    
+    config_content = ""
+    if rank == 0:
+        with open(args.config) as config_file:
+            config_content = '\n'.join(config_file.readlines())
+        common.wx_mpi.bcast_string(config_content, MPI.COMM_WORLD)
+    else:
+        config_content = common.wx_mpi.rcv_bcast_string(0, MPI.COMM_WORLD)
 
     try:
         import cProfile
@@ -79,7 +88,7 @@ def main():
             numpy.seterr(all="raise")
 
         # Read the config + initialize simulation
-        sim = Simulation(args.config)
+        sim = Simulation(config_content)
 
         # This is the actual run
         sim.run()

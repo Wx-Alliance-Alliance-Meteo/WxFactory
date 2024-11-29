@@ -8,6 +8,7 @@ from common.configuration import Configuration
 import numpy
 from configparser import ConfigParser, NoSectionError, NoOptionError
 import os
+import common.wx_mpi
 
 from typing import Optional, Type, TypeVar, Union
 
@@ -112,8 +113,16 @@ class StateIntegrationTestCases(unittest.TestCase):
 
         config_file: str = f"{self.config_dir_path}/config.ini"
 
+        config_content = ""
+        if MPI.COMM_WORLD.rank == 0:
+            with open(config_file) as config_file:
+                config_content = '\n'.join(config_file.readlines())
+            common.wx_mpi.bcast_string(config_content, MPI.COMM_WORLD)
+        else:
+            config_content = common.wx_mpi.rcv_bcast_string(0, MPI.COMM_WORLD)
+
         try:
-            sim = Simulation(config_file)
+            sim = Simulation(config_content)
             sim.run()
         except SystemExit as e:
             has_exited = True
@@ -123,7 +132,7 @@ class StateIntegrationTestCases(unittest.TestCase):
             print(f"Process {MPI.COMM_WORLD.rank} has exited prematurely")
             exit(exit_code)
 
-        conf = Configuration(config_file, False)
+        conf = Configuration(config_content, False, use_content=True)
 
         state_params = (
             conf.dt,
