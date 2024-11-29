@@ -19,8 +19,10 @@ class StateTestCases(cpu_test.CpuTestCases):
         
         output.state.save_state(arr, conf, output_path, self.cpu_device)
 
-        data, safe_conf = output.state.load_state(output_path, self.cpu_device)
-        
+        data, loaded_conf = output.state.load_state(output_path, self.cpu_device)
+        safe_conf = loaded_conf.pack()
+
+
         self.assertEqual(len(arr.shape), len(data.shape), "The shape of the data has changed between a save and a load")
         self.assertEqual(len(data.shape), 1, "The data is not a vector anymore")
         self.assertEqual(arr.shape[0], data.shape[0], "The lenght of the vector has changed between a save and a load")
@@ -32,9 +34,9 @@ class StateTestCases(cpu_test.CpuTestCases):
         for section, values in safe_conf.items():
             for key, value in values.items():
                 initial_conf_value = getattr(conf, key)
-                if type(list) == type(initial_conf_value):
+                if list == type(initial_conf_value):
                     self.assertListEqual(initial_conf_value, value, f"Configuration value {key} in section {section} has changed")
-                elif type(dict) == type(initial_conf_value):
+                elif dict == type(initial_conf_value):
                     self.assertDictEqual(initial_conf_value, value, f"Configuration value {key} in section {section} has changed")
                 else:
                     self.assertEqual(initial_conf_value, value, f"Configuration value {key} in section {section} has changed")

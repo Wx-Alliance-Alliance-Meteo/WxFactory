@@ -304,12 +304,21 @@ class Configuration:
                 raise
             value = default_value
 
-        setattr(self, option_name, value)
+        #setattr(self, option_name, value)
         if section_name not in self.sections:
-            self.sections[section_name] = {}
-        self.sections[section_name][option_name] = value
+            self.sections[section_name] = []
+        self.sections[section_name].append(option_name)
 
         return value
+    
+    def pack(self):
+        sects = {}
+        for section_name, section_options in self.sections.items():
+            sects[section_name] = {}
+            for option in section_options:
+                val = getattr(self, option)
+                sects[section_name][option] = val
+        return sects
 
     def __str__(self):
         out = "Configuration: \n"
@@ -318,7 +327,9 @@ class Configuration:
             out += f'  {" " + section_name + " ":-^80s}  '
             long_options = {}
             i = 0
-            for option, val in section_options:
+            for option in section_options:
+                val = str(getattr(self, option))
+
                 if len(option) < 26 and len(val) < 14:
                     if i % 2 == 0:
                         out += "\n"
