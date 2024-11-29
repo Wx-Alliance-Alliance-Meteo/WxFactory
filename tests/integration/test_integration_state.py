@@ -132,7 +132,7 @@ class StateIntegrationTestCases(unittest.TestCase):
             print(f"Process {MPI.COMM_WORLD.rank} has exited prematurely")
             exit(exit_code)
 
-        conf = Configuration(config_content, False, use_content=True)
+        conf = Configuration(config_content, use_content=True)
 
         state_params = (
             conf.dt,

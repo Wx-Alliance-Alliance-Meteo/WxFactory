@@ -1,6 +1,5 @@
 from configparser import ConfigParser, NoSectionError, NoOptionError
 import json
-import re
 import copy
 import sys
 from typing import Any, Dict, List, Optional, Type, TypeVar, Union, Self
@@ -15,7 +14,7 @@ class Configuration:
 
     sections: Dict
 
-    def __init__(self, cfg_file: str, verbose: bool = True, use_content: bool = False):
+    def __init__(self, cfg_file: str, use_content: bool = False):
 
         self.cfg_file = "in-memory" if use_content else cfg_file
         self.sections = {}
@@ -220,10 +219,6 @@ class Configuration:
         self.output_file = f"{self.output_dir}/{self.base_output_file}.nc"
 
         self.solver_stats_file = self._get_option("Output_options", "solver_stats_file", str, "solver_stats.db")
-
-        if verbose:
-            print(f"{self}")
-            sys.stdout.flush()
 
     def __deepcopy__(self: Self, memo) -> Self:
         do_not_deepcopy = {}

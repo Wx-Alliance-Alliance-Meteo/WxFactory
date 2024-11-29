@@ -19,6 +19,6 @@ def load_state(input_file_name: str, device: Device = default_device) -> Tuple[n
     with open(input_file_name, "rb") as input_file:
         state = device.xp.load(input_file)
         config_content = "\n".join([str(line, 'utf-8') for line in input_file.readlines()]).strip()
-        conf = Configuration(config_content, False, use_content=True)
+        conf = Configuration(config_content, use_content=True)
 
         return state, conf

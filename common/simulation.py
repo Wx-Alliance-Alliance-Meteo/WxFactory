@@ -50,7 +50,10 @@ class Simulation:
     def __init__(self, config_file: str) -> None:
         self.rank = MPI.COMM_WORLD.rank
 
-        self.config = Configuration(config_file, self.rank == 0, use_content=True)
+        self.config = Configuration(config_file, use_content=True)
+        if (self.rank == 0):
+            print(f"{self.config}", flush=True)
+
         self._adjust_nb_elements()
         self.device = self._make_device()
         self.process_topo = ProcessTopology(self.device) if self.config.grid_type == "cubed_sphere" else None
