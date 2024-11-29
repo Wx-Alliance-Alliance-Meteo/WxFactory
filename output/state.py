@@ -14,7 +14,7 @@ def save_state(
         output_file.write(bytes(param.config_content, "utf-8"))
 
 
-def load_state(input_file_name: str, device: Device = default_device) -> Tuple[numpy.ndarray, dict[str, dict[str, Any]]]:
+def load_state(input_file_name: str, device: Device = default_device) -> Tuple[numpy.ndarray, Configuration]:
     """Retrieve simulation state from file, along with its configuration."""
     with open(input_file_name, "rb") as input_file:
         state = device.xp.load(input_file)
