@@ -142,9 +142,9 @@ class Configuration:
 
         # Cubed sphere grid params
         if self.grid_type == "cubed_sphere":
-            self.λ0 = self._get_option("Grid", "λ0", float, None)
-            self.ϕ0 = self._get_option("Grid", "ϕ0", float, None)
-            self.α0 = self._get_option("Grid", "α0", float, None)
+            self.lambda0 = self._get_option("Grid", "lambda0", float, None)
+            self.phi0 = self._get_option("Grid", "phi0", float, None)
+            self.alpha0 = self._get_option("Grid", "alpha0", float, None)
             self.ztop = self._get_option("Grid", "ztop", float, 0.0)
             self.nb_elements_total = self.nb_elements_horizontal * self.nb_elements_horizontal
             if self.num_dim == 3:
