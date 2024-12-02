@@ -74,7 +74,7 @@ class Configuration:
         self.starting_step = self._get_option("Time_integration", "starting_step", int, 0)
 
         self.exponential_solver = self._get_option(
-            "Time_integration", "exponential_solver", str, "pmex", ["pmex", "kiops"]
+            "Time_integration", "exponential_solver", str, "pmex", ["pmex_ne1s", "pmex_ne1s_timeinit","pmex_ne1s_timeortho", "pmex_ne1s_timeexp", "pmex_ne1s_timeadap", "pmex_ne1s_timesol","pmex_ne1s_timeinsideortho", "pmex_ne1s_notime", "kiops", "kiops_timeinit", "kiops_timeortho", "kiops_timeexp", "kiops_timeadap" ,"kiops_timesol", "kiops_timeinsideortho", "kiops_notime"]
         )
         self.krylov_size = self._get_option("Time_integration", "krylov_size", int, 1)
         self.jacobian_method = self._get_option(

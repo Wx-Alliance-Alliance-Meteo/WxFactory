@@ -139,7 +139,17 @@ class Simulation:
         while self.step():
             pass  # Step until everything is done
 
+        totime = time() - start_time
         self.output.finalize(time() - start_time)  # Close any open output file
+
+        if MPI.COMM_WORLD.Get_rank() == 0:
+          # print to file stats
+          size      = MPI.COMM_WORLD.Get_size()
+          points    = self.config.nbsolpts
+          method    = self.config.exponential_solver
+          file_name = "results_tanya/runtime_"+ str(method) + "_n" + str(size) + "_pts" + str(points) + ".txt"
+          with open(file_name, 'a') as gg:
+             gg.write('{} \n'.format(totime))
 
     def _make_device(self) -> Device:
         """Create the device object which will determine on what hardware (CPU/GPU) each part of the simulation will

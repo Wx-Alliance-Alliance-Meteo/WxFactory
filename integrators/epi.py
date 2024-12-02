@@ -3,16 +3,29 @@ import math
 from typing import Callable
 
 from mpi4py import MPI
+from time import time
 import numpy
 
 from common.configuration import Configuration
 from .integrator import Integrator, SolverInfo
 from solvers import (
     kiops,
+    kiops_timeinit,
+    kiops_timeortho,
+    kiops_timeinsideortho,
+    kiops_timeexp,
+    kiops_timeadap,
+    kiops_timesol,
     matvec_fun,
     pmex,
     pmex_1s,
     pmex_ne1s,
+    pmex_ne1s_timeinit,
+    pmex_ne1s_timeortho,
+    pmex_ne1s_timeinsideortho,
+    pmex_ne1s_timeexp,
+    pmex_ne1s_timeadap,
+    pmex_ne1s_timesol,
     cwy_ne,
     cwy_1s,
     cwy_ne1s,
@@ -140,142 +153,265 @@ class Epi(Integrator):
 
         # ----pmex with norm estimate+1s-----
         elif self.exponential_solver == "pmex_ne1s":
+            start_ogpmx = time()
             phiv, stats = pmex_ne1s(
                 [1.0], matvec_handle, vec, tol=self.tol, m_init=self.krylov_size, mmin=16, mmax=64, task1=False
             )
+            end_ogpmx = time() - start_ogpmx
+
             self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
 
             if mpirank == 0:
+                # print to file stats
+                size      = MPI.COMM_WORLD.Get_size()
+                file_name = "results_tanya/pmex_totaltime_" + "n" + str(size) + ".txt"
+                with open(file_name, 'a') as gg:
+                  gg.write('{} \n'.format(end_ogpmx))
+
                 print(
                     f"PMEX NE+1s converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)"
                     f" to a solution with local error {stats[4]:.2e}"
                 )
 
-        # ----- icwy norm estimate + 1sync-----
-        elif self.exponential_solver == "icwy_ne1s":
-            phiv, stats = icwy_ne1s(
+        #---- TIME INITIALIZATION----
+        # ----pmex with norm estimate+1s-----
+        elif self.exponential_solver == "pmex_ne1s_timeinit":
+            phiv, stats = pmex_ne1s_timeinit(
                 [1.0], matvec_handle, vec, tol=self.tol, m_init=self.krylov_size, mmin=16, mmax=64, task1=False
             )
             self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
 
             if mpirank == 0:
                 print(
-                    f"ICWY NE+1S converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)"
+                    f"PMEX NE+1s (timing initialization) converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)"
                     f" to a solution with local error {stats[4]:.2e}"
                 )
 
-        # ----- icwy norm estimate -----
-        elif self.exponential_solver == "icwy_ne":
-            phiv, stats = icwy_ne(
+        #---- TIME ORTHOGONALIZATION----
+        # ----pmex with norm estimate+1s-----
+        elif self.exponential_solver == "pmex_ne1s_timeortho":
+            phiv, stats = pmex_ne1s_timeortho(
                 [1.0], matvec_handle, vec, tol=self.tol, m_init=self.krylov_size, mmin=16, mmax=64, task1=False
             )
             self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
 
             if mpirank == 0:
                 print(
-                    f"ICWY NE converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)"
+                    f"PMEX NE+1s (timing ortho) converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)"
                     f" to a solution with local error {stats[4]:.2e}"
                 )
 
-        # ----- icwy 1-sync-----
-        elif self.exponential_solver == "icwy_1s":
-            phiv, stats = icwy_1s(
+        #---- TIME exponential----
+        # ----pmex with norm estimate+1s-----
+        elif self.exponential_solver == "pmex_ne1s_timeexp":
+            phiv, stats = pmex_ne1s_timeexp(
                 [1.0], matvec_handle, vec, tol=self.tol, m_init=self.krylov_size, mmin=16, mmax=64, task1=False
             )
             self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
 
             if mpirank == 0:
                 print(
-                    f"ICWY 1S converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)"
+                    f"PMEX NE+1s (timing exponential) converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)"
                     f" to a solution with local error {stats[4]:.2e}"
                 )
 
-        # ----- icwy iop+norm estimate-----
-        elif self.exponential_solver == "icwy_neiop":
-            phiv, stats = icwy_neiop(
+        #---- TIME ADAPTIVITY----
+        # ----pmex with norm estimate+1s-----
+        elif self.exponential_solver == "pmex_ne1s_timeadap":
+            phiv, stats = pmex_ne1s_timeadap(
                 [1.0], matvec_handle, vec, tol=self.tol, m_init=self.krylov_size, mmin=16, mmax=64, task1=False
             )
             self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
 
             if mpirank == 0:
                 print(
-                    f"ICWY NE+IOP converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)"
+                    f"PMEX NE+1s (timing adaptivity) converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)"
                     f" to a solution with local error {stats[4]:.2e}"
                 )
 
-        # ----- cwy norm estimate + 1sync-----
-        elif self.exponential_solver == "cwy_ne1s":
-            phiv, stats = cwy_ne1s(
+        #---- TIME SOLUTION REJECTED/ACCPETED----
+        elif self.exponential_solver == "pmex_ne1s_timesol":
+            phiv, stats = pmex_ne1s_timesol(
                 [1.0], matvec_handle, vec, tol=self.tol, m_init=self.krylov_size, mmin=16, mmax=64, task1=False
             )
             self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
 
             if mpirank == 0:
                 print(
-                    f"CWY NE+1S converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)"
+                    f"PMEX NE+1s (timing sol update/reject) converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)"
                     f" to a solution with local error {stats[4]:.2e}"
                 )
 
-        # ----- cwy norm estimate -----
-        elif self.exponential_solver == "cwy_ne":
-            phiv, stats = cwy_ne(
-                [1.0], matvec_handle, vec, tol=self.tol, m_init=self.krylov_size, mmin=16, mmax=64, task1=False
-            )
+        #--------time inside ortho------------
+        elif self.exponential_solver == "pmex_ne1s_timeinsideortho":
+            phiv, stats = pmex_ne1s_timeinsideortho(
+                [1.0], matvec_handle, vec, tol=self.tol, m_init=self.krylov_size, mmin=16, mmax=64, task1=False)
+            
             self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
 
             if mpirank == 0:
                 # print to file stats
-                # size      = MPI.COMM_WORLD.Get_size()
-                # file_name = "results_tanya/cwyne_try2_stats_" + "n" + str(size) + "_e" + str(self.int) + "_c" + str(self.case_number) + ".txt"
-                # with open(file_name, 'a') as gg:
-                #  gg.write('{} {} {} {} {} {} {} {} {} \n'.format(stats[0], stats[1], stats[2], stats[3], stats[6], stats[7], stats[8], stats[9], stats[10]))
-
+                size      = MPI.COMM_WORLD.Get_size()
+                file_name = "results_tanya/pmex_insideortho_" + "n" + str(size) + ".txt"
+                with open(file_name, 'a') as gg:
+                  gg.write('{} {} {} {} \n'.format(stats[6], stats[7], stats[8],stats[9]))
                 print(
-                    f"CWY NE converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)"
-                    f" to a solution with local error {stats[4]:.2e}"
+                    f"PMEX (inside ortho) converged at iteration {stats[2]} (using {stats[0]} internal substeps and"
+                    f" {stats[1]} rejected expm) to a solution with local error {stats[4]:.2e}"
                 )
 
-        # ----- cwy 1-sync-----
-        elif self.exponential_solver == "cwy_1s":
-            phiv, stats = cwy_1s(
-                [1.0], matvec_handle, vec, tol=self.tol, m_init=self.krylov_size, mmin=16, mmax=64, task1=False
-            )
+        #--------time regular rumtine without print------------
+        elif self.exponential_solver == "pmex_ne1s_notime":
+            phiv, stats = pmex_ne1s(
+                [1.0], matvec_handle, vec, tol=self.tol, m_init=self.krylov_size, mmin=16, mmax=64, task1=False)
+            
             self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
 
             if mpirank == 0:
                 print(
-                    f"CWY 1S converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)"
-                    f" to a solution with local error {stats[4]:.2e}"
+                    f"PMEX (no timings in pmex) converged at iteration {stats[2]} (using {stats[0]} internal substeps and"
+                    f" {stats[1]} rejected expm) to a solution with local error {stats[4]:.2e}"
                 )
 
-        # ----- dcgs2 -----
-        elif self.exponential_solver == "dcgs2":
-            phiv, stats = dcgs2(
-                [1.0], matvec_handle, vec, tol=self.tol, m_init=self.krylov_size, mmin=16, mmax=64, task1=False
+        elif self.exponential_solver == "kiops_timeinit":
+            phiv, stats = kiops_timeinit(
+                [1],
+                matvec_handle,
+                vec,
+                tol=self.tol,
+                m_init=self.krylov_size,
+                mmin=16,
+                mmax=64,
+                task1=False,
+                device=self.device,
             )
+            
             self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
 
             if mpirank == 0:
                 print(
-                    f"DCGS2 converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)"
-                    f" to a solution with local error {stats[4]:.2e}"
+                    f"KIOPS (time init) converged at iteration {stats[2]} (using {stats[0]} internal substeps and"
+                    f" {stats[1]} rejected expm) to a solution with local error {stats[4]:.2e}"
                 )
 
-        # ----- kiops + norm estimate-----
-        elif self.exponential_solver == "kiops_ne":
-            phiv, stats = kiops_nest(
-                [1.0], matvec_handle, vec, tol=self.tol, m_init=self.krylov_size, mmin=16, mmax=64, task1=False
+        #--------time ortho------------
+        elif self.exponential_solver == "kiops_timeortho":
+            phiv, stats = kiops_timeortho(
+                [1],
+                matvec_handle,
+                vec,
+                tol=self.tol,
+                m_init=self.krylov_size,
+                mmin=16,
+                mmax=64,
+                task1=False,
+                device=self.device,
             )
+            
             self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
 
             if mpirank == 0:
                 print(
-                    f"KIOPS NE converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)"
-                    f" to a solution with local error {stats[4]:.2e}"
+                    f"KIOPS (time ortho) converged at iteration {stats[2]} (using {stats[0]} internal substeps and"
+                    f" {stats[1]} rejected expm) to a solution with local error {stats[4]:.2e}"
                 )
 
-        # ----------default: kiops-----------
-        else:
+        #--------time exp------------
+        elif self.exponential_solver == "kiops_timeexp":
+            phiv, stats = kiops_timeexp(
+                [1],
+                matvec_handle,
+                vec,
+                tol=self.tol,
+                m_init=self.krylov_size,
+                mmin=16,
+                mmax=64,
+                task1=False,
+                device=self.device,
+            )
+            
+            self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
+
+            if mpirank == 0:
+                print(
+                    f"KIOPS (time exp) converged at iteration {stats[2]} (using {stats[0]} internal substeps and"
+                    f" {stats[1]} rejected expm) to a solution with local error {stats[4]:.2e}"
+                )
+
+        #--------time adapt------------
+        elif self.exponential_solver == "kiops_timeadap":
+            phiv, stats = kiops_timeadap(
+                [1],
+                matvec_handle,
+                vec,
+                tol=self.tol,
+                m_init=self.krylov_size,
+                mmin=16,
+                mmax=64,
+                task1=False,
+                device=self.device,
+            )
+            
+            self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
+
+            if mpirank == 0:
+                print(
+                    f"KIOPS (time adap) converged at iteration {stats[2]} (using {stats[0]} internal substeps and"
+                    f" {stats[1]} rejected expm) to a solution with local error {stats[4]:.2e}"
+                )
+
+
+        #--------time sol------------
+        elif self.exponential_solver == "kiops_timesol":
+            phiv, stats = kiops_timesol(
+                [1],
+                matvec_handle,
+                vec,
+                tol=self.tol,
+                m_init=self.krylov_size,
+                mmin=16,
+                mmax=64,
+                task1=False,
+                device=self.device,
+            )
+            
+            self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
+
+            if mpirank == 0:
+                print(
+                    f"KIOPS (time sol) converged at iteration {stats[2]} (using {stats[0]} internal substeps and"
+                    f" {stats[1]} rejected expm) to a solution with local error {stats[4]:.2e}"
+                )
+
+        #--------time inside ortho------------
+        elif self.exponential_solver == "kiops_timeinsideortho":
+            phiv, stats = kiops_timeinsideortho(
+                [1],
+                matvec_handle,
+                vec,
+                tol=self.tol,
+                m_init=self.krylov_size,
+                mmin=16,
+                mmax=64,
+                task1=False,
+                device=self.device,
+            )
+            
+            self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
+
+            if mpirank == 0:
+                # print to file stats
+                size      = MPI.COMM_WORLD.Get_size()
+                file_name = "results_tanya/kiops_insideortho_" + "n" + str(size) + ".txt"
+                with open(file_name, 'a') as gg:
+                  gg.write('{} {} {} \n'.format(stats[6], stats[7], stats[8]))
+                print(
+                    f"KIOPS (inside ortho) converged at iteration {stats[2]} (using {stats[0]} internal substeps and"
+                    f" {stats[1]} rejected expm) to a solution with local error {stats[4]:.2e}"
+                )
+
+        #--------time regular rumtine without pring------------
+        elif self.exponential_solver == "kiops_notime":
             phiv, stats = kiops(
                 [1],
                 matvec_handle,
@@ -287,9 +423,43 @@ class Epi(Integrator):
                 task1=False,
                 device=self.device,
             )
+            
             self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
 
             if mpirank == 0:
+                print(
+                    f"KIOPS (no timings) converged at iteration {stats[2]} (using {stats[0]} internal substeps and"
+                    f" {stats[1]} rejected expm) to a solution with local error {stats[4]:.2e}"
+                )
+
+
+
+        # ----------default: kiops-----------
+        else:
+
+            start_kiops = time()
+            phiv, stats = kiops(
+                [1],
+                matvec_handle,
+                vec,
+                tol=self.tol,
+                m_init=self.krylov_size,
+                mmin=16,
+                mmax=64,
+                task1=False,
+                device=self.device,
+            )
+            end_kiops = time() - start_kiops
+            
+            self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
+
+            if mpirank == 0:
+                # print to file stats
+                size      = MPI.COMM_WORLD.Get_size()
+                file_name = "results_tanya/kiops_totaltime_" + "n" + str(size) + ".txt"
+                with open(file_name, 'a') as gg:
+                  gg.write('{} \n'.format(end_kiops))
+
                 print(
                     f"KIOPS converged at iteration {stats[2]} (using {stats[0]} internal substeps and"
                     f" {stats[1]} rejected expm) to a solution with local error {stats[4]:.2e}"
