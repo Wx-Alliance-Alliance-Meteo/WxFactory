@@ -3,7 +3,7 @@ ord_soumet -cpus 1176                                \
            -jn gef_1176                         \
            -mpi                                      \
            -share e                                  \
-           -jobfile bat_files/call_1176_1t.bat      \
+           -jobfile bat_files/call_1k_1t.bat      \
            -listing $(pwd)/listings
 
 ord_soumet -cpus 1176                                \
@@ -11,7 +11,7 @@ ord_soumet -cpus 1176                                \
            -jn gef_1176                         \
            -mpi                                      \
            -share e                                  \
-           -jobfile bat_files/call_1176_as.bat      \
+           -jobfile bat_files/call_1k_as.bat      \
            -listing $(pwd)/listings
 
 
