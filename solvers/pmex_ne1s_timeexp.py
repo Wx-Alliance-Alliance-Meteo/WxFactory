@@ -3,14 +3,18 @@ import numpy
 import mpi4py.MPI
 import scipy.linalg
 
+from time import time
+
 # post modern arnoldi with
 # norm estimate + true 1-sync (i.e. lagged normalization)
 # def pmex_ne1s(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 1, mmax = 128, reuse_info = True, task1 = False):
 
 
-def pmex_ne1s(τ_out, A, u, tol=1e-7, delta=1.2, m_init=10, mmin=10, mmax=128, reuse_info=False, task1=False):
+def pmex_ne1s_timeexp(τ_out, A, u, tol=1e-7, delta=1.2, m_init=10, mmin=10, mmax=128, reuse_info=False, task1=False):
 
     rank = mpi4py.MPI.COMM_WORLD.Get_rank()
+    size = mpi4py.MPI.COMM_WORLD.Get_size()
+
     ppo, n = u.shape
     p = ppo - 1
 
@@ -104,6 +108,8 @@ def pmex_ne1s(τ_out, A, u, tol=1e-7, delta=1.2, m_init=10, mmin=10, mmax=128, r
     prev_normalized = False  # if previous vector is normalized, skip certain parts
 
     l = 0
+
+    exptime = []
 
     while τ_now < τ_end:
 
@@ -245,8 +251,11 @@ def pmex_ne1s(τ_out, A, u, tol=1e-7, delta=1.2, m_init=10, mmin=10, mmax=128, r
         H[j, j - 1] = 0.0
 
         # Compute the exponential of the augmented matrix
+        start_exp = time()
         F_half = scipy.linalg.expm(sgn * 0.5 * τ * H[0 : j + 1, 0 : j + 1])
         F = F_half @ F_half
+        end_exp = time() - start_exp
+        exptime.append(end_exp)
         exps += 1
 
         # Restore the value of H_{m+1,m}
@@ -374,6 +383,20 @@ def pmex_ne1s(τ_out, A, u, tol=1e-7, delta=1.2, m_init=10, mmin=10, mmax=128, r
             w[k, :] = w[k, :] / τ_out[k]
 
     m_ret = m
+
+    #---at the end, print total cost of the mat-exp ---
+    if rank == 0:
+
+      #print("exp time, i.e. each time substep= {}".format(exptime))
+
+      total_time_exp = 0
+      for item in exptime:
+         total_time_exp += item
+
+      file_name = "results_tanya/pmex_timings_exp_n" + str(size) + ".txt"
+      with open(file_name, 'a') as gg:
+        gg.write('{} \n'.format(total_time_exp))
+    #-----------------------------------------------
 
     stats = (step, reject, krystep, exps, conv, m_ret)
 

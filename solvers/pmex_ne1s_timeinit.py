@@ -3,14 +3,20 @@ import numpy
 import mpi4py.MPI
 import scipy.linalg
 
+from time import time
+
 # post modern arnoldi with
 # norm estimate + true 1-sync (i.e. lagged normalization)
 # def pmex_ne1s(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 1, mmax = 128, reuse_info = True, task1 = False):
 
 
-def pmex_ne1s(τ_out, A, u, tol=1e-7, delta=1.2, m_init=10, mmin=10, mmax=128, reuse_info=False, task1=False):
+def pmex_ne1s_timeinit(τ_out, A, u, tol=1e-7, delta=1.2, m_init=10, mmin=10, mmax=128, reuse_info=False, task1=False):
 
     rank = mpi4py.MPI.COMM_WORLD.Get_rank()
+    size = mpi4py.MPI.COMM_WORLD.Get_size()
+
+    start_init = time()
+
     ppo, n = u.shape
     p = ppo - 1
 
@@ -104,6 +110,15 @@ def pmex_ne1s(τ_out, A, u, tol=1e-7, delta=1.2, m_init=10, mmin=10, mmax=128, r
     prev_normalized = False  # if previous vector is normalized, skip certain parts
 
     l = 0
+
+    end_init = time() - start_init
+
+    #---print cost for initialization---
+    if rank == 0:
+      file_name = "results_tanya/pmex_timings_init_n" + str(size) + ".txt"
+      with open(file_name, 'a') as gg:
+        gg.write('{} \n'.format(end_init))
+   #--------------------------------------
 
     while τ_now < τ_end:
 

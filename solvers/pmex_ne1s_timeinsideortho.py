@@ -2,13 +2,13 @@ import math
 import numpy
 import mpi4py.MPI
 import scipy.linalg
-
+from time import time
 # post modern arnoldi with
 # norm estimate + true 1-sync (i.e. lagged normalization)
 # def pmex_ne1s(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 1, mmax = 128, reuse_info = True, task1 = False):
 
 
-def pmex_ne1s(τ_out, A, u, tol=1e-7, delta=1.2, m_init=10, mmin=10, mmax=128, reuse_info=False, task1=False):
+def pmex_ne1s_timeinsideortho(τ_out, A, u, tol=1e-7, delta=1.2, m_init=10, mmin=10, mmax=128, reuse_info=False, task1=False):
 
     rank = mpi4py.MPI.COMM_WORLD.Get_rank()
     ppo, n = u.shape
@@ -105,6 +105,11 @@ def pmex_ne1s(τ_out, A, u, tol=1e-7, delta=1.2, m_init=10, mmin=10, mmax=128, r
 
     l = 0
 
+    matvec_timings = []
+    global_sync = []
+    form_t = []
+    ortho = []   
+
     while τ_now < τ_end:
 
         # Compute necessary starting information
@@ -129,9 +134,12 @@ def pmex_ne1s(τ_out, A, u, tol=1e-7, delta=1.2, m_init=10, mmin=10, mmax=128, r
             j = j + 1
 
             # 1. Augmented matrix - vector product
+            start_mv = time()
             V[j, 0:n] = A(V[j - 1, 0:n]) + V[j - 1, n : n + p] @ u_flip
             V[j, n : n + p - 1] = V[j - 1, n + 1 : n + p]
             V[j, -1] = 0.0
+            end_mv = time() - start_mv
+            matvec_timings.append(end_mv)
 
             # 2. if j>1, then re-scale back up by the norm estimate
             # in order to compute true norm
@@ -141,9 +149,12 @@ def pmex_ne1s(τ_out, A, u, tol=1e-7, delta=1.2, m_init=10, mmin=10, mmax=128, r
                 V[j - 1 : j + 1, :] *= prev_nrm_est
 
             # 3. compute terms needed T matrix
+            start_gs = time()
             local_vec = V[0 : j + 1, :] @ V[j - 1 : j + 1, :].T
             global_vec = numpy.empty_like(local_vec)
             mpi4py.MPI.COMM_WORLD.Allreduce([local_vec, mpi4py.MPI.DOUBLE], [global_vec, mpi4py.MPI.DOUBLE])
+            end_gs = time() - start_gs
+            global_sync.append(end_gs)
 
             # 4. compute norm of previous vector
             nrm = numpy.sqrt(global_vec[j - 1, 0])
@@ -169,6 +180,7 @@ def pmex_ne1s(τ_out, A, u, tol=1e-7, delta=1.2, m_init=10, mmin=10, mmax=128, r
             # Note: this is done in two steps. (1) matvec and (2) a lower
             # triangular solve
             # 6a. here we set the values for matrix M, Minv, N
+            start_ft = time()
             if j > 1:
                 M[j - 1, 0 : j - 1] = global_vec[0 : j - 1, 0]
                 N[0 : j - 1, j - 1] = -global_vec[0 : j - 1, 0]
@@ -181,9 +193,14 @@ def pmex_ne1s(τ_out, A, u, tol=1e-7, delta=1.2, m_init=10, mmin=10, mmax=128, r
             sol = scipy.linalg.solve_triangular(
                 M[0:j, 0:j], rhs, unit_diagonal=True, check_finite=False, overwrite_b=True
             )
+            end_ft = time()- start_ft
+            form_t.append(end_ft)
 
             # 7. Orthogonalize
+            start_o = time()
             V[j, :] -= sol @ V[0:j, :]
+            end_o = time() - start_o
+            ortho.append(end_o)
 
             # 8. set values for Hessenberg matrix
             H[0:j, j - 1] = sol
@@ -375,6 +392,13 @@ def pmex_ne1s(τ_out, A, u, tol=1e-7, delta=1.2, m_init=10, mmin=10, mmax=128, r
 
     m_ret = m
 
-    stats = (step, reject, krystep, exps, conv, m_ret)
+    #compute average 
+    N = len(matvec_timings)
+    avg_matvec = sum(matvec_timings) / N
+    avg_gs     = sum(global_sync) / N
+    avg_ft     = sum(form_t) / N
+    avg_ortho  = sum(ortho) / N
+
+    stats = (step, reject, krystep, exps, conv, m_ret, avg_matvec, avg_gs, avg_ft, avg_ortho)
 
     return w, stats

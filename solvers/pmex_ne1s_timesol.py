@@ -3,14 +3,18 @@ import numpy
 import mpi4py.MPI
 import scipy.linalg
 
+from time import time 
+
 # post modern arnoldi with
 # norm estimate + true 1-sync (i.e. lagged normalization)
 # def pmex_ne1s(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 1, mmax = 128, reuse_info = True, task1 = False):
 
 
-def pmex_ne1s(τ_out, A, u, tol=1e-7, delta=1.2, m_init=10, mmin=10, mmax=128, reuse_info=False, task1=False):
+def pmex_ne1s_timesol(τ_out, A, u, tol=1e-7, delta=1.2, m_init=10, mmin=10, mmax=128, reuse_info=False, task1=False):
 
     rank = mpi4py.MPI.COMM_WORLD.Get_rank()
+    size = mpi4py.MPI.COMM_WORLD.Get_size()
+
     ppo, n = u.shape
     p = ppo - 1
 
@@ -104,6 +108,8 @@ def pmex_ne1s(τ_out, A, u, tol=1e-7, delta=1.2, m_init=10, mmin=10, mmax=128, r
     prev_normalized = False  # if previous vector is normalized, skip certain parts
 
     l = 0
+
+    sol_time = []
 
     while τ_now < τ_end:
 
@@ -314,6 +320,8 @@ def pmex_ne1s(τ_out, A, u, tol=1e-7, delta=1.2, m_init=10, mmin=10, mmax=128, r
                 τ_new = same_τ
 
         # Check error against target
+
+        start_sol = time()
         if ω <= delta:
             # Yep, got the required tolerance; update
             reject += ireject
@@ -363,6 +371,10 @@ def pmex_ne1s(τ_out, A, u, tol=1e-7, delta=1.2, m_init=10, mmin=10, mmax=128, r
             # Restore the original matrix
             H[0, j] = 0.0
 
+        end_sol = time() - start_sol
+        sol_time.append(end_sol)
+        #---end timing the accept/reject---
+
         oldτ = τ
         τ = τ_new
 
@@ -374,6 +386,20 @@ def pmex_ne1s(τ_out, A, u, tol=1e-7, delta=1.2, m_init=10, mmin=10, mmax=128, r
             w[k, :] = w[k, :] / τ_out[k]
 
     m_ret = m
+
+    #---at the end, print total sol cost---
+    if rank == 0:
+
+      #print("soltime, i.e. each substep = {}".format(sol_time))
+
+      total_time_sol = 0
+      for item in sol_time:
+         total_time_sol += item
+
+      file_name = "results_tanya/pmex_timings_sol_n" + str(size) + ".txt"
+      with open(file_name, 'a') as gg:
+        gg.write('{} \n'.format(total_time_sol))
+    #-----------------------------------------------
 
     stats = (step, reject, krystep, exps, conv, m_ret)
 

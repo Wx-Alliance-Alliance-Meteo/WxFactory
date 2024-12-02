@@ -3,14 +3,18 @@ import numpy
 import mpi4py.MPI
 import scipy.linalg
 
+from time import time
+
 # post modern arnoldi with
 # norm estimate + true 1-sync (i.e. lagged normalization)
 # def pmex_ne1s(τ_out, A, u, tol = 1e-7, delta = 1.2, m_init = 1, mmax = 128, reuse_info = True, task1 = False):
 
 
-def pmex_ne1s(τ_out, A, u, tol=1e-7, delta=1.2, m_init=10, mmin=10, mmax=128, reuse_info=False, task1=False):
+def pmex_ne1s_timeortho(τ_out, A, u, tol=1e-7, delta=1.2, m_init=10, mmin=10, mmax=128, reuse_info=False, task1=False):
 
     rank = mpi4py.MPI.COMM_WORLD.Get_rank()
+    size = mpi4py.MPI.COMM_WORLD.Get_size()
+
     ppo, n = u.shape
     p = ppo - 1
 
@@ -105,6 +109,8 @@ def pmex_ne1s(τ_out, A, u, tol=1e-7, delta=1.2, m_init=10, mmin=10, mmax=128, r
 
     l = 0
 
+    orthotime = []
+
     while τ_now < τ_end:
 
         # Compute necessary starting information
@@ -124,6 +130,7 @@ def pmex_ne1s(τ_out, A, u, tol=1e-7, delta=1.2, m_init=10, mmin=10, mmax=128, r
         prev_nrm_est = 0.0
 
         # full orthogonalization process
+        start_ortho = time()
         while j < m:
 
             j = j + 1
@@ -224,6 +231,8 @@ def pmex_ne1s(τ_out, A, u, tol=1e-7, delta=1.2, m_init=10, mmin=10, mmax=128, r
             krystep += 1
 
         # ---end of while loop---
+        end_ortho = time() - start_ortho 
+        orthotime.append(end_ortho)
 
         # normalize final vector
         if not reached_mmax:
@@ -374,6 +383,20 @@ def pmex_ne1s(τ_out, A, u, tol=1e-7, delta=1.2, m_init=10, mmin=10, mmax=128, r
             w[k, :] = w[k, :] / τ_out[k]
 
     m_ret = m
+
+    #---at the end, print total cost of the krylov---
+    if rank == 0:
+
+      #print("orthotime, i.e. each time we called krylov = {}".format(orthotime))
+
+      total_time_ortho = 0
+      for item in orthotime:
+         total_time_ortho += item
+
+      file_name = "results_tanya/pmex_timings_ortho_n" + str(size) + ".txt"
+      with open(file_name, 'a') as gg:
+        gg.write('{} \n'.format(total_time_ortho))
+    #-----------------------------------------------
 
     stats = (step, reject, krystep, exps, conv, m_ret)
 
