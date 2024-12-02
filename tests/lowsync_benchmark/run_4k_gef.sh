@@ -1,18 +1,17 @@
 
-#one time runs
-ord_soumet -cpus 10584                                \
+#--epi---
+ord_soumet -cpus 4704                                \
            -w 180                                    \
-           -jn gef_10584                            \
+           -jn gef_4704                         \
            -mpi                                      \
            -share e                                  \
-           -jobfile bat_files/call_10k_1t.bat      \
+           -jobfile tests/lowsync_benchmark/bat_files/2024_12/call_4k_1t.bat      \
            -listing $(pwd)/listings
 
-#alternative sizes
-ord_soumet -cpus 10584                                \
+ord_soumet -cpus 4704                                \
            -w 180                                    \
-           -jn gef_10584_altsizes                            \
+           -jn gef_4704                         \
            -mpi                                      \
            -share e                                  \
-           -jobfile bat_files/call_10k_as.bat      \
+           -jobfile tests/lowsync_benchmark/bat_files/2024_12/call_4k_as.bat      \
            -listing $(pwd)/listings
