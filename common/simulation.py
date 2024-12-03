@@ -146,8 +146,9 @@ class Simulation:
           # print to file stats
           size      = MPI.COMM_WORLD.Get_size()
           points    = self.config.nbsolpts
+          elem      = self.config.nb_elements_horizontal
           method    = self.config.exponential_solver
-          file_name = "results_tanya/runtime_"+ str(method) + "_n" + str(size) + "_pts" + str(points) + ".txt"
+          file_name = "results/runtime_"+ str(method) + "_n" + str(size) + "_pts" + str(points) + "_el" + str(elem) + ".txt"
           with open(file_name, 'a') as gg:
              gg.write('{} \n'.format(totime))
 
