@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-cd /home/vma000/code/gef_tanya
+cd /home/vma000/code/wx_factory_tanya
 . ./load_env.sh
 
 
@@ -9,6 +9,6 @@ methodlen=${#methods[@]}
 #looping through each case and running it 7 times
 for ((k=0; k < $methodlen; k++)); do
    for ((j = 0; j < 3; j++)); do
-     mpirun -np 10584 python3 ./WxFactory config/time_config/${methods[${k}]}
+     mpirun -np 10584 python3 ./WxFactory tests/lowsync_benchmark/config/2024_12/${methods[${k}]}
   done
 done
