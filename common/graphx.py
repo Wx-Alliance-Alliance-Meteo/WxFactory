@@ -115,8 +115,6 @@ def print_mountain(
     normals_z: numpy.ndarray = None,
     filename: str = None,
 ):
-    # nb_elem = geom.nb_elements_relief_layer * geom.nbsolpts
-
     if not ((normals_x is None) == (normals_z is None)):
         raise ValueError(f"Either provide both normal arrays or none of them")
 
