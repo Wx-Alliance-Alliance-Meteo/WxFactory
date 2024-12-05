@@ -32,7 +32,7 @@ def generate_matrixes(
 ) -> list[ndarray]:
     """
     Generate a list of matrixes
-    
+
     :param size: Size of the matrixes
     :param random: Randomizer to use
     :param min: Minimum of the matrixes, may not be in the results
@@ -41,7 +41,7 @@ def generate_matrixes(
 
     :return: List of matrixes. Each matrix is mapped to its corresponding device in `devices`. Each matrix contains the same data
     """
-    
+
     arrs: list[ndarray] = [device.xp.empty(size, dtype=float) for device in devices]
 
     for it1 in range(size[0]):

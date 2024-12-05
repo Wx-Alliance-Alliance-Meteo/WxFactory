@@ -52,7 +52,7 @@ def matvec_fun(
     :param rhs: Last computed RHS
     :param rhs_handle: Right hand side to compute
     :param method: Method to use for the calculation
-    
+
     :param device: Device to use for the computing
 
     :return: Result of the `A * vec` operation

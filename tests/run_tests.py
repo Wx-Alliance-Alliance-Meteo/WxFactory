@@ -14,6 +14,7 @@ from tests.solvers.test_kiops_pmex_tolerance_cpu import KiopsPmexToleranceCpuTes
 from tests.solvers.test_kiops_pmex_tolerance_gpu import KiopsPmexToleranceGpuTestCases
 from tests.output.test_state import StateTestCases
 
+
 def load_tests():
     suite = unittest.TestSuite()
     suite.addTest(PmexComparisonTestCases("test_compare_cpu_to_gpu"))

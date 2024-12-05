@@ -118,7 +118,7 @@ def fgmres(
     :param maxiter: Maximum number of *outer loop* iterations. If absent, it's going to be a very large number. Optional
     :param preconditioner: Operator [M^-1] that preconditions a given vector [v]. Computes the product (M^-1)*v. Optional
     :param hegedus: Whether to apply the Hegedüs trick (whatever that is). Optional
-    
+
     :return: 1. The result [x]
     :return: 2. The relative residual |b - Ax| / |b|
     :return: 3. The number of (inner loop) iterations performed

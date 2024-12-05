@@ -98,10 +98,12 @@ class StateIntegrationTestCases(unittest.TestCase):
             parser = ConfigParser()
             parser.read(requirement_filename, encoding="utf-8")
 
-            self.num_process_required = _get_option(parser, requirement_filename, "System", "processes", int, 1, min_value=1)
+            self.num_process_required = _get_option(
+                parser, requirement_filename, "System", "processes", int, 1, min_value=1
+            )
         else:
             raise FileNotFoundError()
-    
+
     def setUp(self):
         if MPI.COMM_WORLD.size != self.num_process_required:
             self.fail("You do not have the required number of process")

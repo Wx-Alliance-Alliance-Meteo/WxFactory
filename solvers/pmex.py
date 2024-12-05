@@ -21,14 +21,14 @@ def pmex(
     :param tau_out: Vector of `tau_out`
     :param A: The matrix argument of the ``φ`` functions
     :param u: The matrix with rows representing the vectors to be multiplied by the ``φ`` functions
-    
+
     :param tol: Tolerance of the computation. Optional
     :param delta: ?. Optional
     :param m_init: ?. Optional
     :param mmax: Max size of the krylov space. Optional
     :param reuse_info: ?. Optional
     :param task1: If true, divide the result by 1/tau_out. Optional
-    
+
     :param device: Device to use for the computing
     :param comm: Communicator to use for MPI (only relevant for testing)
 
