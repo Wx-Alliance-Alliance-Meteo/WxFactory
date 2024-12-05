@@ -47,10 +47,10 @@ class RHS(ABC):
         self.ptopo = process_topo
         self.config = config
         self.device = device
-        self.num_dim = config.num_dim
 
         # Instantiate appropriate PDE object
         self.pde = get_pde(pde_name)(geometry, config, device, metric)
+        self.nb_dim = self.pde.nb_dim
 
         # Must be allocated at every child class
         self.rhs = None
