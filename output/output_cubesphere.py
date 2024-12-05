@@ -10,7 +10,7 @@ from numpy.typing import NDArray
 
 from common.definitions import *
 from common.configuration import Configuration
-from geometry import Geometry, contra2wind_2d, contra2wind_3d, Metric2D, Metric3DTopo, DFROperators
+from geometry import CubedSphere, CubedSphere2D, CubedSphere3D, Metric2D, Metric3DTopo, DFROperators
 from output.diagnostic import relative_vorticity, potential_vorticity
 
 netcdf_serial = False
@@ -314,7 +314,14 @@ def output_init(geom, param, device):
 
 
 def output_netcdf(
-    Q, geom: Geometry, metric: Metric2D | Metric3DTopo, mtrx: DFROperators, topo, step: int, param: Configuration, device
+    Q,
+    geom: CubedSphere,
+    metric: Metric2D | Metric3DTopo,
+    mtrx: DFROperators,
+    topo,
+    step: int,
+    param: Configuration,
+    device,
 ):
     """Writes u,v,eta fields on every nth time step"""
     rank = MPI.COMM_WORLD.rank
@@ -326,13 +333,13 @@ def output_netcdf(
         idx = len(ncfile["time"])
         ncfile["time"][idx] = step * param.dt
 
-    if param.equations == "shallow_water":
+    if isinstance(geom, CubedSphere2D):  # Shallow water
 
         # Unpack physical variables
         h = Q[idx_h, :, :] + topo.hsurf
         store_field(geom.to_single_block(prepare(h)), "h", idx, ncfile)
 
-        if param.case_number >= 2:  # Shallow water
+        if param.case_number >= 2:
             u1 = Q[idx_hu1, :, :] / h
             u2 = Q[idx_hu2, :, :] / h
             u, v = geom.contra2wind(u1, u2)
@@ -344,28 +351,31 @@ def output_netcdf(
             store_field(prepare(geom.to_single_block(rv)), "RV", idx, ncfile)
             store_field(prepare(geom.to_single_block(pv)), "PV", idx, ncfile)
 
-    elif param.equations == "euler":
-        rho = Q[idx_rho, :, :, :]
-        u1 = Q[idx_rho_u1, :, :, :] / rho
-        u2 = Q[idx_rho_u2, :, :, :] / rho
-        u3 = Q[idx_rho_w, :, :, :] / rho
-        theta = Q[idx_rho_theta, :, :, :] / rho
+    elif isinstance(geom, CubedSphere3D):  # Euler equations
+        rho = Q[idx_rho, ...]
+        u1 = Q[idx_rho_u1, ...] / rho
+        u2 = Q[idx_rho_u2, ...] / rho
+        u3 = Q[idx_rho_w, ...] / rho
+        theta = Q[idx_rho_theta, ...] / rho
 
-        u, v, w = contra2wind_3d(u1, u2, u3, geom, metric)
+        u, v, w = geom.contra2wind_3d(u1, u2, u3, metric)
 
-        store_field(prepare(rho), "rho", idx, ncfile)
-        store_field(prepare(u), "U", idx, ncfile)
-        store_field(prepare(v), "V", idx, ncfile)
-        store_field(prepare(w), "W", idx, ncfile)
-        store_field(prepare(theta), "theta", idx, ncfile)
-        store_field(prepare(p0 * (Q[idx_rho_theta] * Rd / p0) ** (cpd / cvd)), "P", idx, ncfile)
+        store_field(geom.to_single_block(prepare(rho)), "rho", idx, ncfile)
+        store_field(geom.to_single_block(prepare(u)), "U", idx, ncfile)
+        store_field(geom.to_single_block(prepare(v)), "V", idx, ncfile)
+        store_field(geom.to_single_block(prepare(w)), "W", idx, ncfile)
+        store_field(geom.to_single_block(prepare(theta)), "theta", idx, ncfile)
+        store_field(geom.to_single_block(prepare(p0 * (Q[idx_rho_theta] * Rd / p0) ** (cpd / cvd))), "P", idx, ncfile)
 
         if param.case_number == 11 or param.case_number == 12:
-            store_field(prepare(Q[5, :, :, :] / rho), "q1", idx, ncfile)
+            store_field(geom.to_single_block(prepare(Q[5, ...] / rho)), "q1", idx, ncfile)
 
         if param.case_number == 11:
             for i in [6, 7, 8]:
-                store_field(prepare(Q[i, :, :, :] / rho), f"q{i-4}", idx, ncfile)
+                store_field(geom.to_single_block(prepare(Q[i, ...] / rho)), f"q{i-4}", idx, ncfile)
+
+    else:
+        raise ValueError(f"Unknown class for geom: {geom}")
 
 
 def output_finalize():

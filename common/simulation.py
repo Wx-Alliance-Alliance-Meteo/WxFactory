@@ -215,8 +215,6 @@ class Simulation:
                 self.config.nb_elements_horizontal,
                 self.config.nb_elements_vertical,
                 self.config.nbsolpts,
-                self.config.nb_elements_relief_layer,
-                self.config.relief_layer_height,
                 self.device,
             )
 

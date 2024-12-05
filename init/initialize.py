@@ -89,7 +89,7 @@ def initialize_euler(geom: CubedSphere3D, metric, mtrx, param):
     # DCMIP_2016: https://www.earthsystemcog.org/projects/dcmip-2016/         |
     # -------------------------------------------------------------------------|
 
-    nk, nj, ni = geom.height.shape
+    xp = geom.device.xp
 
     nb_equations = 5
 
@@ -112,20 +112,20 @@ def initialize_euler(geom: CubedSphere3D, metric, mtrx, param):
     else:
         raise ValueError("Something has gone horribly wrong in initialization. Back away slowly")
 
-    Q = numpy.zeros((nb_equations, nk, nj, ni), like=rho)
+    Q = xp.zeros((nb_equations,) + rho.shape, dtype=rho.dtype)
 
-    Q[idx_rho, :, :, :] = rho
-    Q[idx_rho_u1, :, :, :] = rho * u1_contra
-    Q[idx_rho_u2, :, :, :] = rho * u2_contra
-    Q[idx_rho_w, :, :, :] = rho * w
-    Q[idx_rho_theta, :, :, :] = rho * potential_temperature
+    Q[idx_rho, ...] = rho
+    Q[idx_rho_u1, ...] = rho * u1_contra
+    Q[idx_rho_u2, ...] = rho * u2_contra
+    Q[idx_rho_w, ...] = rho * w
+    Q[idx_rho_theta, ...] = rho * potential_temperature
 
     if param.case_number == 11 or param.case_number == 12:
-        Q[5, :, :, :] = rho * q1
+        Q[5, ...] = rho * q1
     if param.case_number == 11:
-        Q[6, :, :, :] = rho * q2
-        Q[7, :, :, :] = rho * q3
-        Q[8, :, :, :] = rho * q4
+        Q[6, ...] = rho * q2
+        Q[7, ...] = rho * q3
+        Q[8, ...] = rho * q4
 
     return Q, None
 

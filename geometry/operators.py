@@ -45,14 +45,16 @@ class DFROperators:
            If applied, at what relative wavenumber (0 < cutoff < 1) to begin applying the filter
         """
 
-        if param.filter_apply and not isinstance(grd.solutionPoints, device.xp.ndarray):
+        xp = device.xp
+
+        if param.filter_apply and not isinstance(grd.solutionPoints, xp.ndarray):
             raise NotImplementedError("DFROperators cannot form a filter with non-numpy arrays")
 
         # Build Vandermonde matrix to transform the modal representation to the (interior)
         # nodal representation
         V = legvander(grd.solutionPoints, grd.nbsolpts - 1)
         # Invert the matrix to transform from interior nodes to modes
-        invV = device.xp.linalg.inv(V)
+        invV = xp.linalg.inv(V)
 
         # Build the negative and positive-side extrapolation matrices by:
         # *) transforming interior nodes to modes
@@ -60,8 +62,8 @@ class DFROperators:
 
         # Note that extrap_neg and extrap_pos should be vectors, not a one-row matrix; numpy
         # treats the two differently.
-        extrap_neg = (legvander(device.xp.array([-1.0]), grd.nbsolpts - 1) @ invV).reshape((-1,))
-        extrap_pos = (legvander(device.xp.array([+1.0]), grd.nbsolpts - 1) @ invV).reshape((-1,))
+        extrap_neg = (legvander(xp.array([-1.0]), grd.nbsolpts - 1) @ invV).reshape((-1,))
+        extrap_pos = (legvander(xp.array([+1.0]), grd.nbsolpts - 1) @ invV).reshape((-1,))
 
         self.extrap_west = extrap_neg
         self.extrap_east = extrap_pos
@@ -71,13 +73,18 @@ class DFROperators:
         self.extrap_up = extrap_pos
 
         V = legvander(grd.solutionPoints, grd.nbsolpts - 1)
-        invV = device.xp.linalg.inv(V)
-        feye = device.xp.eye(grd.nbsolpts)
+        invV = xp.linalg.inv(V)
+        feye = xp.eye(grd.nbsolpts)
         feye[-1, -1] = 0.0
         self.highfilter = V @ (feye @ invV)
+        self.highfilter_k = xp.kron(self.highfilter.T, xp.eye(grd.nbsolpts**2))  # Only valid in 3D (hence the **2)
+
+        # if MPI.COMM_WORLD.rank == 0:
+        #     print(f"high filter = \n{self.highfilter}")
+        #     print(f"high filter k = \n{self.highfilter_k}")
 
         diff = diffmat(grd.extension_sym)
-        diff = device.xp.asarray(diff)
+        diff = xp.asarray(diff)
 
         if param.filter_apply:
             self.V = vandermonde(grd.extension)
@@ -86,7 +93,7 @@ class DFROperators:
             Nc = math.floor(param.filter_cutoff * N)
             self.filter = filter_exponential(N, Nc, param.filter_order, self.V, self.invV)
             self.diff_ext = (self.filter @ diff).astype(float)
-            self.diff_ext[device.xp.abs(self.diff_ext) < 1e-20] = 0.0
+            self.diff_ext[xp.abs(self.diff_ext) < 1e-20] = 0.0
 
         else:
             self.diff_ext = diff
@@ -101,8 +108,15 @@ class DFROperators:
                 self.expfilter_apply = False
             else:
                 self.expfilter = self.make_filter(
-                    param.expfilter_strength, param.expfilter_order, param.expfilter_cutoff, grd, device
+                    param.expfilter_strength, param.expfilter_order, param.expfilter_cutoff, grd
                 )
+
+                I2 = xp.eye(grd.nbsolpts)
+                I3 = xp.eye(grd.nbsolpts**2)
+                filter_x = xp.kron(I3, self.expfilter).T
+                filter_y = xp.kron(I2, xp.kron(self.expfilter, I2)).T
+                filter_z = xp.kron(self.expfilter, I3).T
+                self.expfilter_new = (filter_x @ filter_y) @ filter_z
 
         # Create sponge layer (if desired)
         self.apply_sponge = param.apply_sponge
@@ -111,7 +125,7 @@ class DFROperators:
                 raise TypeError(f"The sponge can only be applied on a Cartesian2D geometry")
             nk, ni = grd.X1.shape
             zs = param.z1 - param.sponge_zscale  # zs is bottom of layer
-            self.beta = device.xp.zeros_like(grd.X1)  # used as our damping profile
+            self.beta = xp.zeros_like(grd.X1)  # used as our damping profile
             # Loop over points
             # TODO use implicit loop (will also work with CUDA)
             for k in range(nk):
@@ -120,7 +134,7 @@ class DFROperators:
                         self.beta[k, i] = (
                             self.beta[k, i]
                             + (1.0 / param.sponge_tscale)
-                            * device.xp.sin((0.5 * device.xp.pi) * (grd.X3[k, i] - zs) / (param.z1 - zs)) ** 2
+                            * xp.sin((0.5 * xp.pi) * (grd.X3[k, i] - zs) / (param.z1 - zs)) ** 2
                         )
 
         if check_skewcentrosymmetry(self.diff_ext) is False:
@@ -128,70 +142,85 @@ class DFROperators:
 
         # Force matrices to be in C-contiguous order
         self.diff_solpt = self.diff_ext[1:-1, 1:-1].copy()
-        self.correction = device.xp.column_stack((self.diff_ext[1:-1, 0], self.diff_ext[1:-1, -1]))
+        self.correction = xp.column_stack((self.diff_ext[1:-1, 0], self.diff_ext[1:-1, -1]))
 
         self.diff_solpt_tr = self.diff_solpt.T.copy()
         self.correction_tr = self.correction.T.copy()
 
         # Ordinary differentiation matrices (used only in diagnostic calculations)
         self.diff = diffmat(grd.solutionPoints)
-        self.diff = device.xp.asarray(self.diff)
+        self.diff = xp.asarray(self.diff)
         self.diff_tr = self.diff.T
 
-        self.quad_weights = device.xp.outer(grd.glweights, grd.glweights)
+        self.quad_weights = xp.outer(grd.glweights, grd.glweights)
 
-        ident = device.xp.identity(grd.nbsolpts)
-        self.extrap_x = device.xp.vstack(
-            (device.xp.kron(ident, self.extrap_west), device.xp.kron(ident, self.extrap_east))
-        ).T
-        self.extrap_y = device.xp.vstack(
-            (device.xp.kron(self.extrap_south, ident), device.xp.kron(self.extrap_north, ident))
-        ).T
-        self.extrap_z = device.xp.vstack(
-            (device.xp.kron(self.extrap_down, ident), device.xp.kron(self.extrap_up, ident))
-        ).T
+        if isinstance(grd, CubedSphere3D):
+            I2 = xp.identity(grd.nbsolpts)
+            I3 = xp.identity(grd.nbsolpts**2)
 
-        self.derivative_x = device.xp.kron(ident, self.diff_solpt).T
-        self.derivative_y = device.xp.kron(self.diff_solpt, ident).T
-        self.derivative_z = device.xp.kron(self.diff_solpt, ident).T
+            self.extrap_x = xp.vstack((xp.kron(I3, self.extrap_west), xp.kron(I3, self.extrap_east))).T
+            self.extrap_y = xp.vstack(
+                (xp.kron(I2, xp.kron(self.extrap_south, I2)), xp.kron(I2, xp.kron(self.extrap_north, I2)))
+            ).T
+            self.extrap_z = xp.vstack((xp.kron(self.extrap_down, I3), xp.kron(self.extrap_up, I3))).T
 
-        corr_down = self.diff_ext[1:-1, 0]
-        corr_up = self.diff_ext[1:-1, -1]
-        self.correction_DU = device.xp.vstack(
-            (
-                device.xp.kron(corr_down, device.xp.identity(grd.nbsolpts)),
-                device.xp.kron(corr_up, device.xp.identity(grd.nbsolpts)),
-            )
-        )
+            self.derivative_x = xp.kron(I3, self.diff_solpt).T
+            self.derivative_y = xp.kron(I2, xp.kron(self.diff_solpt, I2)).T
+            self.derivative_z = xp.kron(self.diff_solpt, I3).T
 
-        self.correction_SN = device.xp.vstack(
-            (
-                device.xp.kron(corr_down, device.xp.identity(grd.nbsolpts)),
-                device.xp.kron(corr_up, device.xp.identity(grd.nbsolpts)),
-            )
-        )
+            # if rank == 0:
+            #     print(f"deriv z = \n{self.derivative_z}")
 
-        corr_west = self.diff_ext[1:-1, 0]
-        corr_east = self.diff_ext[1:-1, -1]
-        self.correction_WE = device.xp.vstack(
-            (
-                device.xp.kron(device.xp.identity(grd.nbsolpts), corr_west),
-                device.xp.kron(device.xp.identity(grd.nbsolpts), corr_east),
-            )
-        )
+            corr_west = self.diff_ext[1:-1, 0]
+            corr_east = self.diff_ext[1:-1, -1]
+            corr_south = corr_west
+            corr_north = corr_east
+            corr_down = corr_west
+            corr_up = corr_east
 
-    def make_filter(self, alpha: float, order: int, cutoff: float, geom: Geometry, device: Device = default_device):
+            self.correction_WE = xp.vstack((xp.kron(I3, corr_west), xp.kron(I3, corr_east)))
+            self.correction_SN = xp.vstack((xp.kron(I2, xp.kron(corr_south, I2)), xp.kron(I2, xp.kron(corr_north, I2))))
+            self.correction_DU = xp.vstack((xp.kron(corr_down, I3), xp.kron(corr_up, I3)))
+
+            # if MPI.COMM_WORLD.rank == 0:
+            #     print(f"3D c x = \n{self.correction_WE}")
+            #     print(f"3D c y = \n{self.correction_SN}")
+            #     print(f"3D c z = \n{self.correction_DU}")
+
+        else:
+            ident = xp.identity(grd.nbsolpts)
+            self.extrap_x = xp.vstack((xp.kron(ident, self.extrap_west), xp.kron(ident, self.extrap_east))).T
+            self.extrap_y = xp.vstack((xp.kron(self.extrap_south, ident), xp.kron(self.extrap_north, ident))).T
+            self.extrap_z = xp.vstack((xp.kron(self.extrap_down, ident), xp.kron(self.extrap_up, ident))).T
+
+            self.derivative_x = xp.kron(ident, self.diff_solpt).T
+            self.derivative_y = xp.kron(self.diff_solpt, ident).T
+            self.derivative_z = xp.kron(self.diff_solpt, ident).T
+
+            corr_down = self.diff_ext[1:-1, 0]
+            corr_up = self.diff_ext[1:-1, -1]
+            self.correction_DU = xp.vstack((xp.kron(corr_down, ident), xp.kron(corr_up, ident)))
+
+            self.correction_SN = xp.vstack((xp.kron(corr_down, ident), xp.kron(corr_up, ident)))
+
+            corr_west = self.diff_ext[1:-1, 0]
+            corr_east = self.diff_ext[1:-1, -1]
+            self.correction_WE = xp.vstack((xp.kron(ident, corr_west), xp.kron(ident, corr_east)))
+
+    def make_filter(self, alpha: float, order: int, cutoff: float, geom: Geometry):
         """Build an exponential modal filter as described in Warburton, eqn 5.16."""
 
+        xp = geom.device.xp
+
         # Scaled mode numbers
-        modes = device.xp.arange(geom.nbsolpts, like=geom.solutionPoints) / (geom.nbsolpts - 1)
+        modes = xp.arange(geom.nbsolpts, like=geom.solutionPoints) / (geom.nbsolpts - 1)
         Nc = cutoff
 
         # After applying the filter, each mode is reduced in proportion to the filter order
         # and the mode number relative to nbsolpts, with modes below the cutoff limit untouched
 
-        residual_modes = device.xp.ones_like(modes)
-        residual_modes[modes > Nc] = device.xp.exp(-alpha * ((modes[modes > Nc] - cutoff) / (1 - cutoff)) ** order)
+        residual_modes = xp.ones_like(modes)
+        residual_modes[modes > Nc] = xp.exp(-alpha * ((modes[modes > Nc] - cutoff) / (1 - cutoff)) ** order)
 
         # Now, use a Vandermonde matrix to transform this modal filter into a nodal form
 
@@ -199,15 +228,15 @@ class DFROperators:
         vander = legvander(geom.solutionPoints, geom.nbsolpts - 1)
 
         # node-to-mode operator
-        ivander = device.xp.linalg.inv(vander)
+        ivander = xp.linalg.inv(vander)
 
-        return vander @ device.xp.diag(residual_modes) @ ivander
+        return vander @ xp.diag(residual_modes) @ ivander
 
     def apply_filters(self, Q: numpy.ndarray, geom: Geometry, metric, dt: float):
         """Apply the filters that have been activated on the given state vector."""
 
         if self.expfilter_apply:
-            Q = self.apply_filter_3d(Q, geom, metric)
+            Q = self.apply_filter_3d(Q, metric)
 
         # Apply Sponge (if desired)
         if self.apply_sponge:
@@ -225,39 +254,12 @@ class DFROperators:
 
         return Q
 
-    def apply_filter_3d(self, Q: numpy.ndarray, geom: CubedSphere3D, metric):
+    def apply_filter_3d(self, Q: NDArray, metric: "Metric3DTopo"):
         r"""Apply the exponential filter precomputed in expfilter to input fields \sqrt(g)*Q, and return the
         filtered array."""
 
-        if len(Q.shape) > 3:
-            nbvars = Q.shape[0]
-        else:
-            nbvars = 1
+        return ((metric.sqrtG_new * Q) @ self.expfilter_new) * metric.inv_sqrtG_new
 
-        ni = geom.ni
-        nj = geom.nj
-        nk = geom.nk
-        np = geom.nbsolpts
-
-        # Filter in i
-        result = metric.sqrtG * Q
-        result.shape = (nbvars * nk * nj * (ni // np), np)
-        result = result @ self.expfilter.T
-        # result = (self.expfilter @ result.T).T
-        # result = (self.expfilter @ result.transpose((0,2,1))).transpose((0,2,1))
-
-        # Filter in j
-        result.shape = (nbvars * nk * (nj // np), np, ni)
-        result = self.expfilter @ result
-
-        # Filter in k
-        result.shape = (nbvars * (nk // np), np, nj * ni)
-        result = self.expfilter @ result
-
-        result.shape = Q.shape
-        result *= metric.inv_sqrtG
-
-        return result
 
     def comma_i(
         self: Self, field_interior: NDArray[T], border_i: NDArray[T], grid: CubedSphere3D, out: NDArray[T] | None = None

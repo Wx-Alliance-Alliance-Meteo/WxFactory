@@ -7,7 +7,7 @@ class RHS_DFR(RHS):
 
     def __init__(self, *args):
         super().__init__(*args)
-        
+
         # Initially set all arrays to None, these will be allocated later
         self.f_x1 = None
         self.f_x2 = None
@@ -32,7 +32,7 @@ class RHS_DFR(RHS):
 
         xp = self.device.xp
         # Extrapolate the solution to element boundaries
-        # if self.num_dim == 2:
+        # if self.nb_dim == 2:
         # Investigate why this is slower since no reallocation is needed
         #     xp.matmul(q, self.ops.extrap_x, out=self.q_itf_x1)
         #     xp.matmul(q, self.ops.extrap_z, out=self.q_itf_x3)
@@ -43,7 +43,6 @@ class RHS_DFR(RHS):
         if self.f_itf_x1 is None or self.f_itf_x1.dtype != q.dtype:
             self.f_itf_x1 = xp.zeros_like(self.q_itf_x1)
             self.f_itf_x3 = xp.zeros_like(self.q_itf_x3)
-            
 
     def pointwise_fluxes(self, q: ndarray) -> None:
         if self.f_x1 is None or self.f_x1.dtype != q.dtype:
@@ -58,7 +57,7 @@ class RHS_DFR(RHS):
         xp = self.device.xp
 
         # Compute derivatives, with correction from boundaries
-        if self.num_dim == 2:
+        if self.nb_dim == 2:
 
             # Investigate why this is slower
             # xp.matmul(self.f_x1, self.ops.derivative_x, out=self.df1_dx1)
@@ -71,7 +70,7 @@ class RHS_DFR(RHS):
     def flux_divergence(self):
         xp = self.device.xp
 
-        if self.num_dim == 2:
+        if self.nb_dim == 2:
             self.df1_dx1 += self.f_itf_x1 @ self.ops.correction_WE
             self.df1_dx1 *= -2.0 / self.geom.Δx1
 

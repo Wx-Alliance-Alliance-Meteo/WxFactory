@@ -102,8 +102,6 @@ class MultigridLevel:
                 p.nb_elements_horizontal,
                 p.nb_elements_vertical,
                 p.nbsolpts,
-                p.nb_elements_relief_layer,
-                p.relief_layer_height,
                 p.array_module,
             )
 

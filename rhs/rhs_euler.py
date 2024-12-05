@@ -1,4 +1,5 @@
 from numpy.typing import NDArray
+from mpi4py import MPI
 
 from common.definitions import (
     idx_rho_u1,
@@ -15,7 +16,14 @@ from common.definitions import (
 )
 from common.device import CpuDevice, CudaDevice, Device, default_device
 from common.process_topology import ProcessTopology
-from .fluxes import rusanov_3d_vert, rusanov_3d_hori_i, rusanov_3d_hori_j
+from .fluxes import (
+    rusanov_3d_vert,
+    rusanov_3d_hori_i,
+    rusanov_3d_hori_j,
+    rusanov_3d_hori_i_new,
+    rusanov_3d_hori_j_new,
+    rusanov_3d_vert_new,
+)
 from geometry import CubedSphere3D, DFROperators, Metric3DTopo
 from init.dcmip import dcmip_schar_damping
 from rhs.rhs import RHS
@@ -109,7 +117,7 @@ class RhsEuler:
         case_number: int,
         device: Device = default_device,
     ) -> None:
-        # super().__init__(shape, geom, mtrx, metric, ptopo, nbsolpts, nb_elements_hori, nb_elements_vert,
+        # super().__init__(shape, geom, operators, metric, ptopo, nbsolpts, nb_elements_hori, nb_elements_vert,
         #                  case_number, device)
         self.shape = shape
         self.geom = geom
@@ -152,7 +160,7 @@ class RhsEuler:
         self,
         Q: NDArray,
         geom: CubedSphere3D,
-        mtrx: DFROperators,
+        operators: DFROperators,
         metric: Metric3DTopo,
         ptopo: ProcessTopology,
         nbsolpts: int,
@@ -163,19 +171,21 @@ class RhsEuler:
     ) -> NDArray:
         """Evaluate the right-hand side of the three-dimensional Euler equations.
 
-        This function evaluates RHS of the Euler equations using the four-demsional tensor formulation (see Charron 2014), returning
-        an array consisting of the time-derivative of the conserved variables (ρ,ρu,ρv,ρw,ρθ).  A "curried" version of this function,
-        with non-Q parameters predefined, should be passed to the time-stepping routine to use as a RHS black-box.  Since some of the
-        time-stepping routines perform a Jacobian evaluation via complex derivative, this function should also be safe with respect to
-        complex-valued inputs inside Q.
+        This function evaluates RHS of the Euler equations using the four-demsional tensor
+        formulation (see Charron 2014), returning an array consisting of the time-derivative of the conserved
+        variables (ρ,ρu,ρv,ρw,ρθ).  A "curried" version of this function, with non-Q parameters predefined,
+        should be passed to the time-stepping routine to use as a RHS black-box. Since some of the
+        time-stepping routines perform a Jacobian evaluation via complex derivative, this function should also
+        be safe with respect to complex-valued inputs inside Q.
 
-        Note that this function includes MPI communication for inter-process boundary interactions, so it must be called collectively.
+        Note that this function includes MPI communication for inter-process boundary interactions, so it must be
+        called collectively.
 
         :param Q: numpy.ndarray
            Input array of the current model state, indexed as (var,k,j,i)
         :param geom: CubedSphere
            Geometry definition, containing parameters relating to the spherical coordinate system
-        :param mtrx: DFR_operators
+        :param operators: DFR_operators
            Contains matrix operators for the DFR discretization, notably boundary extrapolation and
            local (partial) derivatives
         :param metric: Metric
@@ -196,97 +206,67 @@ class RhsEuler:
         :return: numpy.ndarray
            Output of right-hand-side terms of Euler equations
         """
-
-        # Load CUDA kernels if needed (and not done already)
-        global rhs_euler_kernels
-        if isinstance(device, CudaDevice) and rhs_euler_kernels is None:
-            from wx_cupy import Rusanov
-
-            rhs_euler_kernels = Rusanov
-
+        # Shortcuts
+        op = operators
         xp = device.xp
+        mid_i = xp.s_[..., 1:-1, :]
+        mid_j = xp.s_[..., 1:-1, :, :]
+        mid_k = xp.s_[..., 1:-1, :, :, :]
 
-        type_vec = Q.dtype  #  Output/processing type -- may be complex
         nb_equations = Q.shape[0]  # Number of constituent Euler equations.  Probably 6.
-        nb_pts_hori = nb_elements_hori * nbsolpts  # Total number of solution points per horizontal dimension
-        nb_vertical_levels = nb_elements_vert * nbsolpts  # Total number of solution points in the vertical dimension
-
-        # Array for forcing: Coriolis terms, metric corrections from the curvilinear coordinate, and gravity
-        forcing = xp.zeros_like(Q, dtype=type_vec)
-
-        # Array to extrapolate variables and fluxes to the boundaries along x (i)
-        variables_itf_i = xp.ones(
-            (nb_equations, nb_vertical_levels, nb_elements_hori + 2, 2, nb_pts_hori), dtype=type_vec
-        )  # Initialized to one in the halo to avoid division by zero later
-        # Note that flux_x1_itf_i has a different shape than variables_itf_i
-        flux_x1_itf_i = xp.empty(
-            (nb_equations, nb_vertical_levels, nb_elements_hori + 2, nb_pts_hori, 2), dtype=type_vec
-        )
-
-        # Extrapolation arrays along y (j)
-        variables_itf_j = xp.ones(
-            (nb_equations, nb_vertical_levels, nb_elements_hori + 2, 2, nb_pts_hori), dtype=type_vec
-        )  # Initialized to one in the halo to avoid division by zero later
-        flux_x2_itf_j = xp.empty(
-            (nb_equations, nb_vertical_levels, nb_elements_hori + 2, 2, nb_pts_hori), dtype=type_vec
-        )
-
-        # Extrapolation arrays along z (k), note dimensions of (6, nj, nk+2, 2, ni)
-        variables_itf_k = xp.empty((nb_equations, nb_pts_hori, nb_elements_vert + 2, 2, nb_pts_hori), dtype=type_vec)
-        flux_x3_itf_k = xp.empty((nb_equations, nb_pts_hori, nb_elements_vert + 2, 2, nb_pts_hori), dtype=type_vec)
-
-        # Special arrays for calculation of (ρw) flux
-        wflux_adv_x1_itf_i = xp.zeros_like(flux_x1_itf_i[0])
-        wflux_pres_x1_itf_i = xp.zeros_like(flux_x1_itf_i[0])
-        wflux_adv_x2_itf_j = xp.zeros_like(flux_x2_itf_j[0])
-        wflux_pres_x2_itf_j = xp.zeros_like(flux_x2_itf_j[0])
-        wflux_adv_x3_itf_k = xp.zeros_like(flux_x3_itf_k[0])
-        wflux_pres_x3_itf_k = xp.zeros_like(flux_x3_itf_k[0])
 
         # Flag for advection-only processing, with DCMIP test cases 11 and 12
         advection_only = case_number < 13
 
-        variables_itf_i[:, :, 1:-1, :, :] = mtrx.extrapolate_i(Q, geom).transpose((0, 1, 3, 4, 2))
-        variables_itf_j[:, :, 1:-1, :, :] = mtrx.extrapolate_j(Q, geom)
+        itf_i_shape = (nb_equations,) + geom.itf_i_shape
+        itf_j_shape = (nb_equations,) + geom.itf_j_shape
+        itf_k_shape = (nb_equations,) + geom.itf_k_shape
+
+        # Interpolate to the element interface (middle elements only, halo remains 0)
+        var_itf_i = xp.ones(itf_i_shape, dtype=Q.dtype)
+        var_itf_i[mid_i] = Q @ operators.extrap_x
+
+        var_itf_j = xp.ones(itf_j_shape, dtype=Q.dtype)
+        var_itf_j[mid_j] = Q @ operators.extrap_y
 
         # Scaled variables for separate reconstruction
         logrho = xp.log(Q[idx_rho])
         logrhotheta = xp.log(Q[idx_rho_theta])
 
-        variables_itf_i[idx_rho, :, 1:-1, :, :] = xp.exp(mtrx.extrapolate_i(logrho, geom)).transpose((0, 2, 3, 1))
-        variables_itf_j[idx_rho, :, 1:-1, :, :] = xp.exp(mtrx.extrapolate_j(logrho, geom))
-
-        variables_itf_i[idx_rho_theta, :, 1:-1, :, :] = xp.exp(mtrx.extrapolate_i(logrhotheta, geom)).transpose(
-            (0, 2, 3, 1)
-        )
-        variables_itf_j[idx_rho_theta, :, 1:-1, :, :] = xp.exp(mtrx.extrapolate_j(logrhotheta, geom))
+        var_itf_i[idx_rho][mid_i] = xp.exp(logrho @ operators.extrap_x)
+        var_itf_i[idx_rho_theta][mid_i] = xp.exp(logrhotheta @ operators.extrap_x)
+        var_itf_j[idx_rho][mid_j] = xp.exp(logrho @ operators.extrap_y)
+        var_itf_j[idx_rho_theta][mid_j] = xp.exp(logrhotheta @ operators.extrap_y)
 
         # Initiate transfers
-        s_ = xp.s_[..., 1, 0, :]
-        n_ = xp.s_[..., -2, 1, :]
-        w_ = s_
-        e_ = n_
+        s2_ = xp.s_[..., 1, :, : nbsolpts**2]
+        n2_ = xp.s_[..., -2, :, nbsolpts**2 :]
+        w2_ = xp.s_[..., 1, : nbsolpts**2]
+        e2_ = xp.s_[..., -2, nbsolpts**2 :]
         req_r = ptopo.start_exchange_scalars(
-            variables_itf_j[idx_rho][s_],
-            variables_itf_j[idx_rho][n_],
-            variables_itf_i[idx_rho][w_],
-            variables_itf_i[idx_rho][e_],
-            nb_pts_hori,
+            var_itf_j[idx_rho][s2_],
+            var_itf_j[idx_rho][n2_],
+            var_itf_i[idx_rho][w2_],
+            var_itf_i[idx_rho][e2_],
+            boundary_shape=(nb_elements_hori, nbsolpts, nbsolpts),
+            flip_dim=(-3, -1),
         )
         req_u = ptopo.start_exchange_vectors(
-            (variables_itf_j[idx_rho_u1][s_], variables_itf_j[idx_rho_u2][s_], variables_itf_j[idx_rho_w][s_]),
-            (variables_itf_j[idx_rho_u1][n_], variables_itf_j[idx_rho_u2][n_], variables_itf_j[idx_rho_w][n_]),
-            (variables_itf_i[idx_rho_u1][w_], variables_itf_i[idx_rho_u2][w_], variables_itf_i[idx_rho_w][w_]),
-            (variables_itf_i[idx_rho_u1][e_], variables_itf_i[idx_rho_u2][e_], variables_itf_i[idx_rho_w][e_]),
-            geom.boundary_sn,
-            geom.boundary_we,
+            (var_itf_j[idx_rho_u1][s2_], var_itf_j[idx_rho_u2][s2_], var_itf_j[idx_rho_w][s2_]),
+            (var_itf_j[idx_rho_u1][n2_], var_itf_j[idx_rho_u2][n2_], var_itf_j[idx_rho_w][n2_]),
+            (var_itf_i[idx_rho_u1][w2_], var_itf_i[idx_rho_u2][w2_], var_itf_i[idx_rho_w][w2_]),
+            (var_itf_i[idx_rho_u1][e2_], var_itf_i[idx_rho_u2][e2_], var_itf_i[idx_rho_w][e2_]),
+            geom.boundary_sn_new,
+            geom.boundary_we_new,
+            flip_dim=(-3, -1),
         )
         req_t = ptopo.start_exchange_scalars(
-            variables_itf_j[idx_rho_theta][s_],
-            variables_itf_j[idx_rho_theta][n_],
-            variables_itf_i[idx_rho_theta][w_],
-            variables_itf_i[idx_rho_theta][e_],
-            nb_pts_hori,
+            var_itf_j[idx_rho_theta][s2_],
+            var_itf_j[idx_rho_theta][n2_],
+            var_itf_i[idx_rho_theta][w2_],
+            var_itf_i[idx_rho_theta][e2_],
+            boundary_shape=(nb_elements_hori, nbsolpts, nbsolpts),
+            flip_dim=(-3, -1),
         )
 
         # Unpack dynamical variables, each to arrays of size [nk,nj,ni]
@@ -296,234 +276,177 @@ class RhsEuler:
         w = Q[idx_rho_w] / rho
 
         # Compute the advective fluxes ...
-        flux_x1 = metric.sqrtG * u1 * Q
-        flux_x2 = metric.sqrtG * u2 * Q
-        flux_x3 = metric.sqrtG * w * Q
+        flux_x1 = metric.sqrtG_new * u1 * Q
+        flux_x2 = metric.sqrtG_new * u2 * Q
+        flux_x3 = metric.sqrtG_new * w * Q
 
-        wflux_adv_x1 = metric.sqrtG * u1 * Q[idx_rho_w]
-        wflux_adv_x2 = metric.sqrtG * u2 * Q[idx_rho_w]
-        wflux_adv_x3 = metric.sqrtG * w * Q[idx_rho_w]
+        wflux_adv_x1 = metric.sqrtG_new * u1 * Q[idx_rho_w]
+        wflux_adv_x2 = metric.sqrtG_new * u2 * Q[idx_rho_w]
+        wflux_adv_x3 = metric.sqrtG_new * w * Q[idx_rho_w]
 
         # ... and add the pressure component
         # Performance note: exp(log) is measurably faster than ** (pow)
         pressure = p0 * xp.exp((cpd / cvd) * xp.log((Rd / p0) * Q[idx_rho_theta]))
 
-        flux_x1[idx_rho_u1] += metric.sqrtG * metric.H_contra_11 * pressure
-        flux_x1[idx_rho_u2] += metric.sqrtG * metric.H_contra_12 * pressure
-        flux_x1[idx_rho_w] += metric.sqrtG * metric.H_contra_13 * pressure
+        flux_x1[idx_rho_u1] += metric.sqrtG_new * metric.h_contra_new[0, 0] * pressure
+        flux_x1[idx_rho_u2] += metric.sqrtG_new * metric.h_contra_new[0, 1] * pressure
+        flux_x1[idx_rho_w] += metric.sqrtG_new * metric.h_contra_new[0, 2] * pressure
 
-        wflux_pres_x1 = (metric.sqrtG * metric.H_contra_13).astype(type_vec)
+        wflux_pres_x1 = (metric.sqrtG_new * metric.h_contra_new[0, 2]).astype(Q.dtype)
 
-        flux_x2[idx_rho_u1] += metric.sqrtG * metric.H_contra_21 * pressure
-        flux_x2[idx_rho_u2] += metric.sqrtG * metric.H_contra_22 * pressure
-        flux_x2[idx_rho_w] += metric.sqrtG * metric.H_contra_23 * pressure
+        flux_x2[idx_rho_u1] += metric.sqrtG_new * metric.h_contra_new[1, 0] * pressure
+        flux_x2[idx_rho_u2] += metric.sqrtG_new * metric.h_contra_new[1, 1] * pressure
+        flux_x2[idx_rho_w] += metric.sqrtG_new * metric.h_contra_new[1, 2] * pressure
 
-        wflux_pres_x2 = (metric.sqrtG * metric.H_contra_23).astype(type_vec)
+        wflux_pres_x2 = (metric.sqrtG_new * metric.h_contra_new[1, 2]).astype(Q.dtype)
 
-        flux_x3[idx_rho_u1] += metric.sqrtG * metric.H_contra_31 * pressure
-        flux_x3[idx_rho_u2] += metric.sqrtG * metric.H_contra_32 * pressure
-        flux_x3[idx_rho_w] += metric.sqrtG * metric.H_contra_33 * pressure
+        flux_x3[idx_rho_u1] += metric.sqrtG_new * metric.h_contra_new[2, 0] * pressure
+        flux_x3[idx_rho_u2] += metric.sqrtG_new * metric.h_contra_new[2, 1] * pressure
+        flux_x3[idx_rho_w] += metric.sqrtG_new * metric.h_contra_new[2, 2] * pressure
 
-        wflux_pres_x3 = (metric.sqrtG * metric.H_contra_33).astype(type_vec)
+        wflux_pres_x3 = (metric.sqrtG_new * metric.h_contra_new[2, 2]).astype(Q.dtype)
 
-        variables_itf_k[:, :, 1:-1, :, :] = mtrx.extrapolate_k(Q, geom).transpose((0, 3, 1, 2, 4))
+        var_itf_k = xp.empty(itf_k_shape, dtype=Q.dtype)
+        var_itf_k[...] = 0.0
+        var_itf_k[mid_k] = Q @ operators.extrap_z
+        var_itf_k[idx_rho][mid_k] = xp.exp(logrho @ operators.extrap_z)
+        var_itf_k[idx_rho_theta][mid_k] = xp.exp(logrhotheta @ operators.extrap_z)
 
-        variables_itf_k[idx_rho, :, 1:-1, :, :] = xp.exp(mtrx.extrapolate_k(logrho, geom).transpose((2, 0, 1, 3)))
-        variables_itf_k[idx_rho_theta, :, 1:-1, :, :] = xp.exp(
-            mtrx.extrapolate_k(logrhotheta, geom).transpose((2, 0, 1, 3))
-        )
+        south = xp.s_[: nbsolpts**2]
+        north = xp.s_[nbsolpts**2 :]
 
         # For consistency at the surface and top boundaries, treat the extrapolation as continuous.  That is,
         # the "top" of the ground is equal to the "bottom" of the atmosphere, and the "bottom" of the model top
         # is equal to the "top" of the atmosphere.
-        variables_itf_k[:, :, 0, 1, :] = variables_itf_k[:, :, 1, 0, :]
-        variables_itf_k[:, :, 0, 0, :] = variables_itf_k[:, :, 0, 1, :]
-        variables_itf_k[:, :, -1, 0, :] = variables_itf_k[:, :, -2, 1, :]
-        variables_itf_k[:, :, -1, 1, :] = variables_itf_k[:, :, -1, 0, :]
+        var_itf_k[..., 0, :, :, south] = var_itf_k[..., 1, :, :, south]
+        var_itf_k[..., 0, :, :, north] = var_itf_k[..., 0, :, :, south]
+        var_itf_k[..., -1, :, :, north] = var_itf_k[..., -2, :, :, north]
+        var_itf_k[..., -1, :, :, south] = var_itf_k[..., -1, :, :, north]
 
         # Evaluate pressure at the vertical element interfaces based on ρθ.
-        pressure_itf_k = p0 * xp.exp((cpd / cvd) * xp.log(variables_itf_k[idx_rho_theta] * (Rd / p0)))
+        pressure_itf_k = p0 * xp.exp((cpd / cvd) * xp.log(var_itf_k[idx_rho_theta] * (Rd / p0)))
 
         # Take w ← (wρ)/ ρ at the vertical interfaces
-        w_itf_k = variables_itf_k[idx_rho_w] / variables_itf_k[idx_rho]
+        w_itf_k = var_itf_k[idx_rho_w] / var_itf_k[idx_rho]
 
         # Surface and top boundary treatement, imposing no flow (w=0) through top and bottom
         # csubich -- apply odd symmetry to w at boundary so there is no advective _flux_ through boundary
-        w_itf_k[:, 0, 0, :] = 0.0  # Bottom of bottom element (unused)
-        w_itf_k[:, 0, 1, :] = -w_itf_k[:, 1, 0, :]  # Top of bottom element (negative symmetry)
-        w_itf_k[:, -1, 1, :] = 0.0  # Top of top element (unused)
-        w_itf_k[:, -1, 0, :] = -w_itf_k[:, -2, 1, :]  # Bottom of top boundary element (negative symmetry)
+        w_itf_k[0, :, :, south] = 0.0  # Bottom of bottom element (unused)
+        w_itf_k[0, :, :, north] = -w_itf_k[1, :, :, south]  # Top of bottom element (negative symmetry)
+        w_itf_k[-1, :, :, north] = 0.0  # Top of top element (unused)
+        w_itf_k[-1, :, :, south] = -w_itf_k[-2, :, :, north]  # Bottom of top element (negative symmetry)
 
-        if isinstance(device, CpuDevice):
-            rusanov_3d_vert(
-                variables_itf_k,
-                pressure_itf_k,
-                w_itf_k,
-                metric,
-                nb_elements_vert + 1,
-                advection_only,
-                flux_x3_itf_k,
-                wflux_adv_x3_itf_k,
-                wflux_pres_x3_itf_k,
-            )
-        elif isinstance(device, CudaDevice):
-            rhs_euler_kernels.compute_flux_k(
-                flux_x3_itf_k,
-                wflux_adv_x3_itf_k,
-                wflux_pres_x3_itf_k,
-                variables_itf_k,
-                pressure_itf_k,
-                w_itf_k,
-                metric.sqrtG_itf_k,
-                metric.H_contra_itf_k[2],
-                nb_elements_vert,
-                nb_pts_hori,
-                nb_equations,
-                advection_only,
-            )
-        else:
-            raise ValueError(f"Device is not of a recognized type: {device}")
+        flux_x3_itf_k = xp.zeros_like(var_itf_k)
+        wflux_adv_x3_itf_k = xp.zeros_like(flux_x3_itf_k[0])
+        wflux_pres_x3_itf_k = xp.zeros_like(flux_x3_itf_k[0])
+        rusanov_3d_vert_new(
+            var_itf_k,
+            pressure_itf_k,
+            w_itf_k,
+            metric,
+            advection_only,
+            flux_x3_itf_k,
+            wflux_adv_x3_itf_k,
+            wflux_pres_x3_itf_k,
+            xp,
+            nbsolpts,
+        )
 
         # Finish transfers
-        s_ = xp.s_[..., 0, 1, :]
-        n_ = xp.s_[..., -1, 0, :]
-        w_ = s_
-        e_ = n_
+        s3_ = xp.s_[..., 0, :, nbsolpts**2 :]
+        n3_ = xp.s_[..., -1, :, : nbsolpts**2]
+        w3_ = xp.s_[..., 0, nbsolpts**2 :]
+        e3_ = xp.s_[..., -1, : nbsolpts**2]
         (
-            variables_itf_j[idx_rho][s_],
-            variables_itf_j[idx_rho][n_],
-            variables_itf_i[idx_rho][w_],
-            variables_itf_i[idx_rho][e_],
+            var_itf_j[idx_rho][s3_],
+            var_itf_j[idx_rho][n3_],
+            var_itf_i[idx_rho][w3_],
+            var_itf_i[idx_rho][e3_],
         ) = req_r.wait()
         (
-            (variables_itf_j[idx_rho_u1][s_], variables_itf_j[idx_rho_u2][s_], variables_itf_j[idx_rho_w][s_]),
-            (variables_itf_j[idx_rho_u1][n_], variables_itf_j[idx_rho_u2][n_], variables_itf_j[idx_rho_w][n_]),
-            (variables_itf_i[idx_rho_u1][w_], variables_itf_i[idx_rho_u2][w_], variables_itf_i[idx_rho_w][w_]),
-            (variables_itf_i[idx_rho_u1][e_], variables_itf_i[idx_rho_u2][e_], variables_itf_i[idx_rho_w][e_]),
+            (var_itf_j[idx_rho_u1][s3_], var_itf_j[idx_rho_u2][s3_], var_itf_j[idx_rho_w][s3_]),
+            (var_itf_j[idx_rho_u1][n3_], var_itf_j[idx_rho_u2][n3_], var_itf_j[idx_rho_w][n3_]),
+            (var_itf_i[idx_rho_u1][w3_], var_itf_i[idx_rho_u2][w3_], var_itf_i[idx_rho_w][w3_]),
+            (var_itf_i[idx_rho_u1][e3_], var_itf_i[idx_rho_u2][e3_], var_itf_i[idx_rho_w][e3_]),
         ) = req_u.wait()
         (
-            variables_itf_j[idx_rho_theta][s_],
-            variables_itf_j[idx_rho_theta][n_],
-            variables_itf_i[idx_rho_theta][w_],
-            variables_itf_i[idx_rho_theta][e_],
+            var_itf_j[idx_rho_theta][s3_],
+            var_itf_j[idx_rho_theta][n3_],
+            var_itf_i[idx_rho_theta][w3_],
+            var_itf_i[idx_rho_theta][e3_],
         ) = req_t.wait()
 
         # Define u, v at the interface by dividing momentum and density
-        u1_itf_i = variables_itf_i[idx_rho_u1] / variables_itf_i[idx_rho]
-        u2_itf_j = variables_itf_j[idx_rho_u2] / variables_itf_j[idx_rho]
+        u1_itf_i = var_itf_i[idx_rho_u1] / var_itf_i[idx_rho]
+        u2_itf_j = var_itf_j[idx_rho_u2] / var_itf_j[idx_rho]
 
         # Evaluate pressure at the lateral interfaces
-        pressure_itf_i = p0 * xp.exp((cpd / cvd) * xp.log(variables_itf_i[idx_rho_theta] * (Rd / p0)))
-        pressure_itf_j = p0 * xp.exp((cpd / cvd) * xp.log(variables_itf_j[idx_rho_theta] * (Rd / p0)))
+        pressure_itf_i = p0 * xp.exp((cpd / cvd) * xp.log(var_itf_i[idx_rho_theta] * (Rd / p0)))
+        pressure_itf_j = p0 * xp.exp((cpd / cvd) * xp.log(var_itf_j[idx_rho_theta] * (Rd / p0)))
 
         # Riemann solver
-        if isinstance(device, CpuDevice):
-            rusanov_3d_hori_i(
-                u1_itf_i,
-                variables_itf_i,
-                pressure_itf_i,
-                metric,
-                nb_elements_hori + 1,
-                advection_only,
-                flux_x1_itf_i,
-                wflux_adv_x1_itf_i,
-                wflux_pres_x1_itf_i,
-            )
+        flux_x1_itf_i = xp.zeros_like(var_itf_i)
+        wflux_adv_x1_itf_i = xp.zeros_like(flux_x1_itf_i[0])
+        wflux_pres_x1_itf_i = xp.zeros_like(flux_x1_itf_i[0])
+        flux_x2_itf_j = xp.zeros_like(var_itf_j)
+        wflux_adv_x2_itf_j = xp.zeros_like(flux_x2_itf_j[0])
+        wflux_pres_x2_itf_j = xp.zeros_like(flux_x2_itf_j[0])
 
-            rusanov_3d_hori_j(
-                u2_itf_j,
-                variables_itf_j,
-                pressure_itf_j,
-                metric,
-                nb_elements_hori + 1,
-                advection_only,
-                flux_x2_itf_j,
-                wflux_adv_x2_itf_j,
-                wflux_pres_x2_itf_j,
-            )
-        elif isinstance(device, CudaDevice):
-            rhs_euler_kernels.compute_flux_i(
-                flux_x1_itf_i,
-                wflux_adv_x1_itf_i,
-                wflux_pres_x1_itf_i,
-                variables_itf_i,
-                pressure_itf_i,
-                u1_itf_i,
-                metric.sqrtG_itf_i,
-                metric.H_contra_itf_i[0],
-                nb_elements_hori,
-                nb_pts_hori,
-                nb_vertical_levels,
-                nb_equations,
-                advection_only,
-            )
-
-            rhs_euler_kernels.compute_flux_j(
-                flux_x2_itf_j,
-                wflux_adv_x2_itf_j,
-                wflux_pres_x2_itf_j,
-                variables_itf_j,
-                pressure_itf_j,
-                u2_itf_j,
-                metric.sqrtG_itf_j,
-                metric.H_contra_itf_j[1],
-                nb_elements_hori,
-                nb_pts_hori,
-                nb_vertical_levels,
-                nb_equations,
-                advection_only,
-            )
-        else:
-            raise ValueError(f"Device is not of a recognized type: {device}")
+        rusanov_3d_hori_i_new(
+            u1_itf_i,
+            var_itf_i,
+            pressure_itf_i,
+            metric,
+            0,
+            advection_only,
+            flux_x1_itf_i,
+            wflux_adv_x1_itf_i,
+            wflux_pres_x1_itf_i,
+            nbsolpts,
+            xp,
+        )
+        rusanov_3d_hori_j_new(
+            u2_itf_j,
+            var_itf_j,
+            pressure_itf_j,
+            metric,
+            0,
+            advection_only,
+            flux_x2_itf_j,
+            wflux_adv_x2_itf_j,
+            wflux_pres_x2_itf_j,
+            nbsolpts,
+            xp,
+        )
 
         # Perform flux derivatives
-
-        flux_x1_bdy = flux_x1_itf_i.transpose((0, 1, 3, 2, 4))[:, :, :, 1:-1, :].copy()
-        df1_dx1 = mtrx.comma_i(flux_x1, flux_x1_bdy, geom)
-        flux_x2_bdy = flux_x2_itf_j[:, :, 1:-1, :, :].copy()
-        df2_dx2 = mtrx.comma_j(flux_x2, flux_x2_bdy, geom)
-        flux_x3_bdy = flux_x3_itf_k[:, :, 1:-1, :, :].transpose(0, 2, 3, 1, 4).copy()
-        df3_dx3 = mtrx.comma_k(flux_x3, flux_x3_bdy, geom)
+        df1_dx1 = flux_x1 @ operators.derivative_x + flux_x1_itf_i[mid_i] @ operators.correction_WE
+        df2_dx2 = flux_x2 @ operators.derivative_y + flux_x2_itf_j[mid_j] @ operators.correction_SN
+        df3_dx3 = flux_x3 @ operators.derivative_z + flux_x3_itf_k[mid_k] @ operators.correction_DU
 
         logp_int = xp.log(pressure)
 
-        pressure_bdy_i = pressure_itf_i[:, 1:-1, :, :].transpose((0, 3, 1, 2)).copy()
-        pressure_bdy_j = pressure_itf_j[:, 1:-1, :, :].copy()
-        pressure_bdy_k = pressure_itf_k[:, 1:-1, :, :].transpose((1, 2, 0, 3)).copy()
+        logp_bdy_i = xp.log(pressure_itf_i[mid_i])
+        logp_bdy_j = xp.log(pressure_itf_j[mid_j])
+        logp_bdy_k = xp.log(pressure_itf_k[mid_k])
 
-        logp_bdy_i = xp.log(pressure_bdy_i)
-        logp_bdy_j = xp.log(pressure_bdy_j)
-        logp_bdy_k = xp.log(pressure_bdy_k)
-
-        wflux_adv_x1_bdy_i = wflux_adv_x1_itf_i.transpose((0, 2, 1, 3))[:, :, 1:-1, :].copy()
-        wflux_pres_x1_bdy_i = wflux_pres_x1_itf_i.transpose((0, 2, 1, 3))[:, :, 1:-1, :].copy()
-
-        wflux_adv_x2_bdy_j = wflux_adv_x2_itf_j[:, 1:-1, :, :].copy()
-        wflux_pres_x2_bdy_j = wflux_pres_x2_itf_j[:, 1:-1, :, :].copy()
-
-        wflux_adv_x3_bdy_k = wflux_adv_x3_itf_k[:, 1:-1, :, :].transpose((1, 2, 0, 3)).copy()
-        wflux_pres_x3_bdy_k = wflux_pres_x3_itf_k[:, 1:-1, :, :].transpose((1, 2, 0, 3)).copy()
-
-        w_df1_dx1_adv = mtrx.comma_i(wflux_adv_x1, wflux_adv_x1_bdy_i, geom)
-        w_df1_dx1_presa = mtrx.comma_i(wflux_pres_x1, wflux_pres_x1_bdy_i, geom) * pressure
-        w_df1_dx1_presb = mtrx.comma_i(logp_int, logp_bdy_i, geom) * pressure * wflux_pres_x1
+        w_df1_dx1_adv = wflux_adv_x1 @ op.derivative_x + wflux_adv_x1_itf_i[mid_i] @ op.correction_WE
+        w_df1_dx1_presa = (wflux_pres_x1 @ op.derivative_x + wflux_pres_x1_itf_i[mid_i] @ op.correction_WE) * pressure
+        w_df1_dx1_presb = (logp_int @ op.derivative_x + logp_bdy_i @ op.correction_WE) * pressure * wflux_pres_x1
         w_df1_dx1 = w_df1_dx1_adv + w_df1_dx1_presa + w_df1_dx1_presb
 
-        w_df2_dx2_adv = mtrx.comma_j(wflux_adv_x2, wflux_adv_x2_bdy_j, geom)
-        w_df2_dx2_presa = mtrx.comma_j(wflux_pres_x2, wflux_pres_x2_bdy_j, geom) * pressure
-        w_df2_dx2_presb = mtrx.comma_j(logp_int, logp_bdy_j, geom) * pressure * wflux_pres_x2
+        w_df2_dx2_adv = wflux_adv_x2 @ op.derivative_y + wflux_adv_x2_itf_j[mid_j] @ op.correction_SN
+        w_df2_dx2_presa = (wflux_pres_x2 @ op.derivative_y + wflux_pres_x2_itf_j[mid_j] @ op.correction_SN) * pressure
+        w_df2_dx2_presb = (logp_int @ op.derivative_y + logp_bdy_j @ op.correction_SN) * pressure * wflux_pres_x2
         w_df2_dx2 = w_df2_dx2_adv + w_df2_dx2_presa + w_df2_dx2_presb
 
-        w_df3_dx3_adv = mtrx.comma_k(wflux_adv_x3, wflux_adv_x3_bdy_k, geom)
-        w_df3_dx3_presa = mtrx.comma_k(wflux_pres_x3, wflux_pres_x3_bdy_k, geom) * pressure
-        w_df3_dx3_presb = mtrx.comma_k(logp_int, logp_bdy_k, geom) * pressure * wflux_pres_x3
+        w_df3_dx3_adv = wflux_adv_x3 @ op.derivative_z + wflux_adv_x3_itf_k[mid_k] @ op.correction_DU
+        w_df3_dx3_presa = (wflux_pres_x3 @ op.derivative_z + wflux_pres_x3_itf_k[mid_k] @ op.correction_DU) * pressure
+        w_df3_dx3_presb = (logp_int @ op.derivative_z + logp_bdy_k @ op.correction_DU) * pressure * wflux_pres_x3
         w_df3_dx3 = w_df3_dx3_adv + w_df3_dx3_presa + w_df3_dx3_presb
 
         # Add coriolis, metric terms and other forcings
-
-        forcing[idx_rho] = 0.0
-        forcing[idx_rho_theta] = 0.0
-
+        forcing = xp.zeros_like(Q)
         self.compute_forcings(
             forcing[idx_rho_u1],
             forcing[idx_rho_u2],
@@ -533,54 +456,56 @@ class RhsEuler:
             u2,
             w,
             pressure,
-            metric.christoffel_1_01,
-            metric.christoffel_1_02,
-            metric.christoffel_1_03,
-            metric.christoffel_1_11,
-            metric.christoffel_1_12,
-            metric.christoffel_1_13,
-            metric.christoffel_1_22,
-            metric.christoffel_1_23,
-            metric.christoffel_1_33,
-            metric.christoffel_2_01,
-            metric.christoffel_2_02,
-            metric.christoffel_2_03,
-            metric.christoffel_2_11,
-            metric.christoffel_2_12,
-            metric.christoffel_2_13,
-            metric.christoffel_2_22,
-            metric.christoffel_2_23,
-            metric.christoffel_2_33,
-            metric.christoffel_3_01,
-            metric.christoffel_3_02,
-            metric.christoffel_3_03,
-            metric.christoffel_3_11,
-            metric.christoffel_3_12,
-            metric.christoffel_3_13,
-            metric.christoffel_3_22,
-            metric.christoffel_3_23,
-            metric.christoffel_3_33,
-            metric.H_contra_11,
-            metric.H_contra_12,
-            metric.H_contra_13,
-            metric.H_contra_22,
-            metric.H_contra_23,
-            metric.H_contra_33,
+            metric.christoffel[0, 0],
+            metric.christoffel[0, 1],
+            metric.christoffel[0, 2],
+            metric.christoffel[0, 3],
+            metric.christoffel[0, 4],
+            metric.christoffel[0, 5],
+            metric.christoffel[0, 6],
+            metric.christoffel[0, 7],
+            metric.christoffel[0, 8],
+            metric.christoffel[1, 0],
+            metric.christoffel[1, 1],
+            metric.christoffel[1, 2],
+            metric.christoffel[1, 3],
+            metric.christoffel[1, 4],
+            metric.christoffel[1, 5],
+            metric.christoffel[1, 6],
+            metric.christoffel[1, 7],
+            metric.christoffel[1, 8],
+            metric.christoffel[2, 0],
+            metric.christoffel[2, 1],
+            metric.christoffel[2, 2],
+            metric.christoffel[2, 3],
+            metric.christoffel[2, 4],
+            metric.christoffel[2, 5],
+            metric.christoffel[2, 6],
+            metric.christoffel[2, 7],
+            metric.christoffel[2, 8],
+            metric.h_contra_new[0, 0],
+            metric.h_contra_new[0, 1],
+            metric.h_contra_new[0, 2],
+            metric.h_contra_new[1, 1],
+            metric.h_contra_new[1, 2],
+            metric.h_contra_new[2, 2],
         )
 
         # Gravity effect, in vertical direction
-        forcing[idx_rho_w] += metric.inv_dzdeta * gravity * metric.inv_sqrtG * mtrx.filter_k(metric.sqrtG * rho, geom)
+        forcing[idx_rho_w] += (
+            metric.inv_dzdeta_new * gravity * metric.inv_sqrtG_new * ((metric.sqrtG_new * rho) @ op.highfilter_k)
+        )
 
         # DCMIP cases 2-1 and 2-2 involve rayleigh damping
         # dcmip_schar_damping modifies the 'forcing' variable to apply the requried Rayleigh damping
         if case_number == 21:
-            dcmip_schar_damping(forcing, rho, u1, u2, w, metric, geom, shear=False)
+            dcmip_schar_damping(forcing, rho, u1, u2, w, metric, geom, shear=False, new_layout=True)
         elif case_number == 22:
-            dcmip_schar_damping(forcing, rho, u1, u2, w, metric, geom, shear=True)
+            dcmip_schar_damping(forcing, rho, u1, u2, w, metric, geom, shear=True, new_layout=True)
 
         # Assemble the right-hand side
-        rhs = -metric.inv_sqrtG * (df1_dx1 + df2_dx2 + df3_dx3) - forcing
-        rhs[idx_rho_w] = -metric.inv_sqrtG * (w_df1_dx1 + w_df2_dx2 + w_df3_dx3) - forcing[idx_rho_w]
+        rhs = -metric.inv_sqrtG_new * (df1_dx1 + df2_dx2 + df3_dx3) - forcing
+        rhs[idx_rho_w] = -metric.inv_sqrtG_new * (w_df1_dx1 + w_df2_dx2 + w_df3_dx3) - forcing[idx_rho_w]
 
         # For pure advection problems, we do not update the dynamical variables
         if advection_only:
