@@ -236,13 +236,18 @@ class Metric3DTopo:
         # self.itf_i_shape = (self.nb_elements_x3, self.nb_elements_x2, self.nb_elements_x1 + 2, (nbsolpts**2) * 2)
         def to_new_i(a: NDArray):
             exp_shape = (geom.nk, geom.nb_elements_x1 + 2, 2, geom.nj)
-            if a.shape != exp_shape:
-                raise ValueError(f"error, expected shape (...,) + {exp_shape}, not {a.shape}")
+            # exp_shape2 = (geom.nk, geom.nb_elements_x1, 2, geom.nj)
+            exp_shape2 = exp_shape
+            if a.shape not in [exp_shape, exp_shape2]:
+                raise ValueError(
+                    f"error, expected shape (..., {exp_shape[0]}, {exp_shape[1]}[+2], {exp_shape[2]}, {exp_shape[3]}), "
+                    f"not {a.shape}"
+                )
 
             tmp_shape1 = (
                 geom.nb_elements_x3,
                 geom.nbsolpts,
-                geom.nb_elements_x1 + 2,
+                a.shape[1],
                 2,
                 geom.nb_elements_x2,
                 geom.nbsolpts,
@@ -252,8 +257,14 @@ class Metric3DTopo:
             tmp2 = tmp1.transpose(0, 4, 2, 3, 1, 5)
 
             final_shape = geom.itf_i_shape
+            # if a.shape[1] == exp_shape2[1]:
+            #     result = numpy.zeros(final_shape, dtype=a.dtype)
+            #     tmp_shape2 = (geom.itf_i_shape[0], geom.itf_i_shape[1], geom.itf_i_shape[2] - 2, geom.itf_i_shape[3])
+            #     result[..., 1:-1, :] = tmp2.reshape(tmp_shape2)
+            # else:
+            result = tmp2.reshape(final_shape)
 
-            return tmp2.reshape(final_shape)
+            return result
 
         # Perform extrapolation.  Extrapolation in i and j will be written to arrays for exchange, but k does not
         # require an exchange; we can average directly and will handle this afterwards
@@ -273,6 +284,9 @@ class Metric3DTopo:
         dRdeta_extrap_k = matrix.extrapolate_k(dRdeta_int, geom)
 
         dtype = dRdx1_int_new.dtype
+        mid_i = xp.s_[..., 1:-1, :]
+        mid_j = xp.s_[..., 1:-1, :, :]
+        mid_k = xp.s_[..., 1:-1, :, :, :]
         dRdx1_ex_i = xp.zeros(geom.itf_i_shape, dtype=dtype)
         dRdx1_ex_j = xp.zeros(geom.itf_j_shape, dtype=dtype)
         dRdx1_ex_k = xp.zeros(geom.itf_k_shape, dtype=dtype)
@@ -283,19 +297,35 @@ class Metric3DTopo:
         dRdeta_ex_j = xp.zeros(geom.itf_j_shape, dtype=dtype)
         dRdeta_ex_k = xp.zeros(geom.itf_k_shape, dtype=dtype)
 
-        dRdx1_ex_i[..., 1:-1, :] = dRdx1_int_new @ matrix.extrap_x
-        dRdx1_ex_j[..., 1:-1, :, :] = dRdx1_int_new @ matrix.extrap_y
-        dRdx1_ex_k[..., 1:-1, :, :, :] = dRdx1_int_new @ matrix.extrap_z
-        dRdx2_ex_i[..., 1:-1, :] = dRdx2_int_new @ matrix.extrap_x
-        dRdx2_ex_j[..., 1:-1, :, :] = dRdx2_int_new @ matrix.extrap_y
-        dRdx2_ex_k[..., 1:-1, :, :, :] = dRdx2_int_new @ matrix.extrap_z
-        dRdeta_ex_i[..., 1:-1, :] = dRdeta_int_new @ matrix.extrap_x
-        dRdeta_ex_j[..., 1:-1, :, :] = dRdeta_int_new @ matrix.extrap_y
-        dRdeta_ex_k[..., 1:-1, :, :, :] = dRdeta_int_new @ matrix.extrap_z
+        dRdx1_ex_i[mid_i] = dRdx1_int_new @ matrix.extrap_x
+        dRdx1_ex_j[mid_j] = dRdx1_int_new @ matrix.extrap_y
+        dRdx1_ex_k[mid_k] = dRdx1_int_new @ matrix.extrap_z
+        dRdx2_ex_i[mid_i] = dRdx2_int_new @ matrix.extrap_x
+        dRdx2_ex_j[mid_j] = dRdx2_int_new @ matrix.extrap_y
+        dRdx2_ex_k[mid_k] = dRdx2_int_new @ matrix.extrap_z
+        dRdeta_ex_i[mid_i] = dRdeta_int_new @ matrix.extrap_x
+        dRdeta_ex_j[mid_j] = dRdeta_int_new @ matrix.extrap_y
+        dRdeta_ex_k[mid_k] = dRdeta_int_new @ matrix.extrap_z
 
         # _k only needs permutation to assign to the exchange arrays
         exch_itf_i[2, :, 1:-1, :, :] = dRdeta_extrap_i.transpose(0, 2, 3, 1)
         exch_itf_j[2, :, 1:-1, :, :] = dRdeta_extrap_j.transpose(0, 1, 2, 3)
+
+        # tmp = xp.zeros_like(exch_itf_i[0])
+        # tmp[..., 1:-1, :, :]= dRdx1_extrap_i.transpose(0, 2, 3, 1)
+        # ref = tmp
+        # diff_1i = dRdx1_ex_i - to_new_i(ref)
+        # diff_1in = xp.linalg.norm(diff_1i) / xp.linalg.norm(ref)
+        # if diff_1in > 1e-15:
+        #     print(f"{MPI.COMM_WORLD.rank} large diff (extrap): {diff_1in:.2e}")
+        #     if MPI.COMM_WORLD.rank == 0:
+        #         print(
+        #             f"{MPI.COMM_WORLD.rank} \n"
+        #             f"old = \n{to_new_i(ref)}\n"
+        #             f"new = \n{dRdeta_ex_i}\n"
+        #             f"diff = \n{diff_1i}"
+        #         )
+        #     raise ValueError
 
         # _i and _j additionally need conversion to contravariant coordinates
         for el in range(geom.nb_elements_x1):
@@ -403,6 +433,21 @@ class Metric3DTopo:
             # The south boundary of the -1 element is the north boundary of the -2 element
             exch_itf_j[:, :, -1, 0, :] = exch_itf_j[:, :, -2, 1, :]
 
+        # converted_exch_itf_i = xp.zeros_like(exch_itf_i)
+        # for bdy in range(geom.nb_elements_x1 + 1):
+        #     # Iterate from leftmost to rightmost boundary
+        #     converted_exch_itf_i[0, :, bdy + 1, 0, :] = (
+        #         metric_2d_cov_itf_i[0, 0, :, :, bdy] * exch_itf_i[0, :, bdy, 0, :]
+        #         + metric_2d_cov_itf_i[0, 1, :, :, bdy] * exch_itf_i[1, :, bdy, 0, :]
+        #     )
+        #     converted_exch_itf_i[0, :, bdy, 1, :] = (
+        #         metric_2d_cov_itf_i[0, 0, :, :, bdy] * exch_itf_i[0, :, bdy, 1, :]
+        #         + metric_2d_cov_itf_i[0, 1, :, :, bdy] * exch_itf_i[1, :, bdy, 1, :]
+        #     )
+        # diff_conv = converted_exch_itf_i - exch_itf_i
+        # if MPI.COMM_WORLD.rank == 0:
+        #     print(f"diff conv= \n{to_new_i(diff_conv[0])}")
+
         # Define the averaged interface values
         dRdx1_itf_i = xp.empty_like(R_itf_i)
         dRdx2_itf_i = xp.empty_like(R_itf_i)
@@ -411,17 +456,18 @@ class Metric3DTopo:
         dRdx2_itf_j = xp.empty_like(R_itf_j)
         dRdeta_itf_j = xp.empty_like(R_itf_j)
 
-        # diffi1 = dRdx1_ex_i - to_new_i(exch_itf_i[0])
-        # diffi1n = xp.linalg.norm(diffi1) / xp.linalg.norm(exch_itf_i[0])
+        # ref = converted_exch_itf_i[0]
+        # diffi1 = dRdx1_ex_i - to_new_i(ref)
+        # diffi1n = xp.linalg.norm(diffi1) / xp.linalg.norm(ref)
 
         # if diffi1n > 1e-15:
-        #     print(f"diff is so large! {diffi1n:.2e}")
-        #     if MPI.COMM_WORLD.rank == 0:
+        #     print(f"{MPI.COMM_WORLD.rank} diff is so large! {diffi1n:.2e}")
+        #     if MPI.COMM_WORLD.rank == 1:
         #         print(
         #             f"{MPI.COMM_WORLD.rank} diff {diffi1n:.2e}\n"
-        #             f"contra itf i: \n{metric_2d_contra_itf_i}\n"
-        #             f"cov itf i: \n{metric_2d_cov_itf_i}\n"
-        #             f"old = \n{to_new_i(exch_itf_i[0])}\n"
+        #             # f"contra itf i: \n{metric_2d_contra_itf_i}\n"
+        #             # f"cov itf i: \n{metric_2d_cov_itf_i}\n"
+        #             f"old = \n{to_new_i(ref)}\n"
         #             f"new = \n{dRdx1_ex_i}\n"
         #             f"diff = \n{diffi1}"
         #         )

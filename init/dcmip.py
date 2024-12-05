@@ -2,7 +2,8 @@ import math
 
 import numpy
 
-from common.definitions import cpd, day_in_secs, gravity, p0, Rd
+from common.configuration import Configuration
+from common.definitions import cpd, gravity, p0, Rd
 from geometry import CubedSphere3D, DFROperators, Metric3DTopo, wind2contra_2d, wind2contra_3d
 
 # =======================================================================
@@ -759,12 +760,17 @@ def dcmip_schar_damping(
 # ==========================================================================================
 
 
-def dcmip_gravity_wave(geom, metric, mtrx, param):
+def dcmip_gravity_wave(geom: CubedSphere3D, metric: Metric3DTopo, mtrx: DFROperators, param: Configuration):
     """
     Test case 31 - gravity waves
 
-    The non-hydrostatic gravity wave test examines the response of models to short time-scale wavemotion triggered by a localized perturbation. The formulation presented in this document is new, but is based on previous approaches by Skamarock et al. (JAS 1994), Tomita and Satoh (FDR 2004), and Jablonowski et al. (NCAR Tech Report 2008)
+    The non-hydrostatic gravity wave test examines the response of models to short time-scale wavemotion triggered
+    by a localized perturbation. The formulation presented in this document is new, but is based on previous
+    approaches by Skamarock et al. (JAS 1994), Tomita and Satoh (FDR 2004), and
+    Jablonowski et al. (NCAR Tech Report 2008)
     """
+
+    xp = geom.device.xp
 
     u0 = 20.0  # Reference Velocity
     Teq = 300.0  # Temperature at Equator
@@ -787,35 +793,37 @@ def dcmip_gravity_wave(geom, metric, mtrx, param):
 
     # Zonal Velocity
 
-    u = u0 * numpy.cos(geom.lat)
+    u = u0 * xp.cos(geom.lat_new)
 
     # Meridional Velocity
 
-    v = numpy.zeros_like(u)
+    v = xp.zeros_like(u)
 
     # Vertical Velocity = Vertical Pressure Velocity = 0
 
-    w = numpy.zeros_like(u)
+    w = xp.zeros_like(u)
 
     ## Set a trivial topography
-    zbot = numpy.zeros(geom.coordVec_latlon.shape[2:], like=geom.coordVec_latlon)
-    zbot_itf_i = numpy.zeros(geom.coordVec_latlon_itf_i.shape[2:], like=geom.coordVec_latlon_itf_i)
-    zbot_itf_j = numpy.zeros(geom.coordVec_latlon_itf_j.shape[2:], like=geom.coordVec_latlon_itf_j)
+    zbot = xp.zeros(geom.coordVec_latlon.shape[2:], like=geom.coordVec_latlon)
+    zbot_itf_i = xp.zeros(geom.coordVec_latlon_itf_i.shape[2:], like=geom.coordVec_latlon_itf_i)
+    zbot_itf_j = xp.zeros(geom.coordVec_latlon_itf_j.shape[2:], like=geom.coordVec_latlon_itf_j)
+
     # Update the geometry object with the new bottom topography
-    geom.apply_topography(zbot, zbot_itf_i, zbot_itf_j)
+    geom.apply_topography(zbot, zbot_itf_i, zbot_itf_j, None, None, None)
     # And regenerate the metric to take this new topography into account
     metric.build_metric()
 
-    u1_contra, u2_contra = wind2contra_2d(u, v, geom)
+    # u1_contra, u2_contra = wind2contra_2d(u, v, geom)
+    u1_contra, u2_contra = geom.wind2contra_2d(u, v)
 
     # -----------------------------------------------------------------------
     #    SURFACE TEMPERATURE
     # -----------------------------------------------------------------------
 
-    TS = bigG + (Teq - bigG) * numpy.exp(
+    TS = bigG + (Teq - bigG) * xp.exp(
         -(u0 * N2 / (4.0 * gravity**2))
         * (u0 + 2.0 * geom.rotation_speed * geom.earth_radius)
-        * (numpy.cos(2.0 * geom.lat) - 1.0)
+        * (xp.cos(2.0 * geom.lat_new) - 1.0)
     )
 
     # -----------------------------------------------------------------------
@@ -824,10 +832,10 @@ def dcmip_gravity_wave(geom, metric, mtrx, param):
 
     ps = (
         Peq
-        * numpy.exp(
+        * xp.exp(
             (u0 / (4.0 * bigG * Rd))
             * (u0 + 2.0 * geom.rotation_speed * geom.earth_radius)
-            * (numpy.cos(2.0 * geom.lat) - 1.0)
+            * (xp.cos(2.0 * geom.lat_new) - 1.0)
         )
         * (TS / Teq) ** inv_kappa
     )
@@ -836,9 +844,9 @@ def dcmip_gravity_wave(geom, metric, mtrx, param):
     #    HEIGHT AND PRESSURE AND MEAN TEMPERATURE
     # -----------------------------------------------------------------------
 
-    p = ps * ((bigG / TS) * numpy.exp(-N2 * geom.height / gravity) + 1.0 - (bigG / TS)) ** inv_kappa
+    p = ps * ((bigG / TS) * xp.exp(-N2 * geom.height_new / gravity) + 1.0 - (bigG / TS)) ** inv_kappa
 
-    t_mean = bigG * (1.0 - numpy.exp(N2 * geom.height / gravity)) + TS * numpy.exp(N2 * geom.height / gravity)
+    t_mean = bigG * (1.0 - xp.exp(N2 * geom.height_new / gravity)) + TS * xp.exp(N2 * geom.height_new / gravity)
 
     theta_base = t_mean * (p0 / p) ** kappa
 
@@ -856,16 +864,16 @@ def dcmip_gravity_wave(geom, metric, mtrx, param):
     #    to the background theta field (not included here)
     # -----------------------------------------------------------------------
 
-    sin_tmp = numpy.sin(geom.lat) * math.sin(phic)
-    cos_tmp = numpy.cos(geom.lat) * math.cos(phic)
+    sin_tmp = xp.sin(geom.lat_new) * math.sin(phic)
+    cos_tmp = xp.cos(geom.lat_new) * math.cos(phic)
 
     # great circle distance with 'a/X'
 
-    r = geom.earth_radius * numpy.arccos(sin_tmp + cos_tmp * numpy.cos(geom.lon - lambdac))
+    r = geom.earth_radius * xp.arccos(sin_tmp + cos_tmp * xp.cos(geom.lon_new - lambdac))
 
     s = (d**2) / (d**2 + r**2)
 
-    theta_pert = delta_theta * s * numpy.sin(2.0 * math.pi * geom.height / Lz)
+    theta_pert = delta_theta * s * xp.sin(2.0 * math.pi * geom.height_new / Lz)
     #   theta_pert = 0. # for debuging
 
     theta = theta_base + theta_pert

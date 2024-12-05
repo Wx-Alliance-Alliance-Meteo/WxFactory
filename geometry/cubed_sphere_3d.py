@@ -1,4 +1,5 @@
 import math
+from typing import Optional
 
 from mpi4py import MPI
 import numpy
@@ -57,30 +58,30 @@ class CubedSphere3D(CubedSphere):
 
         Parameters:
         -----------
-        nb_elements_horizontal: int
+        nb_elements_horizontal : int
             Number of elements in the (x1,x2) directions, per panel
-        nb_elements_vertical: int
+        nb_elements_vertical : int
             Number of elements in the vertical, between 0 and ztop
-        nbsolpts: int
+        nbsolpts : int
             Number of nodal points in each of the (x1,x2,x3) dimensions inside the element
-        λ0: float
+        λ0 : float
             Grid rotation: physical longitude of the central point of the 0 panel
             Valid range ]-π/2,0]
-        ϕ0: float
+        ϕ0 : float
             Grid rotation: physical latitude of the central point of the 0 panel
             Valid range ]-π/4,π/4]
-        α0: float
+        α0 : float
             Grid rotation: rotation of the central meridian of the 0 panel, relatve to true north
             Valid range ]-π/2,0]
-        ztop: float
+        ztop : float
             Physical height of the model top, in meters.  x3 values will range from 0 to ztop, with
             the center of the planet located at x3=(-radius_earth).  Note that this parameter is
             defined prior to any topography mapping, and this initializer defines the grid on
             a smooth sphere.
-        ptopo: Distributed_World
+        ptopo : Distributed_World
             Wraps the parameters and helper functions necessary for MPI parallelism.  By assumption,
             each panel is a separate MPI process.
-        param: Configuration
+        param : Configuration
             Wraps parameters from the configuration pole that are not otherwise specified in this
             constructor.
         """
@@ -210,47 +211,67 @@ class CubedSphere3D(CubedSphere):
         self.floor_north_edge = numpy.s_[..., -1, :, nbsolpts:]
 
         # Assign a token zbot, potentially to be overridden later with supplied topography
-        self.zbot = xp.zeros(self.grid_shape_2d)
+        # self.zbot = xp.zeros(self.grid_shape_2d)
 
         ## Coordinate vectors for the numeric / angular coordinate system
 
         # Define the base coordinate.  x1 and x2 are fundamentally 1D arrays,
         # while x3 and eta are 3D arrays in support of coordinate mapping
-        offsets_x1 = domain_x1[0] + delta_x1 * xp.arange(nb_elements_x1)
+
+        x1_boundaries = xp.linspace(domain_x1[0], domain_x1[1], nb_elements_x1 + 1)
+        x2_boundaries = xp.linspace(domain_x2[0], domain_x2[1], nb_elements_x2 + 1)
+        x3_boundaries = xp.linspace(domain_x3[0], domain_x3[1], nb_elements_x3 + 1)
+        eta_boundaries = xp.linspace(domain_eta[0], domain_eta[1], nb_elements_x3 + 1)
+
+        offsets_x1 = x1_boundaries[:-1]
         ref_solpts_x1 = delta_x1 / delta_comp * (-minComp + self.solutionPoints)
         x1 = xp.repeat(offsets_x1, nbsolpts) + xp.tile(ref_solpts_x1, nb_elements_x1)
 
-        offsets_x2 = domain_x2[0] + delta_x2 * xp.arange(nb_elements_x2)
+        offsets_x2 = x2_boundaries[:-1]
         ref_solpts_x2 = delta_x2 / delta_comp * (-minComp + self.solutionPoints)
         x2 = xp.repeat(offsets_x2, nbsolpts) + xp.tile(ref_solpts_x2, nb_elements_x2)
 
-        offsets_x3 = domain_x3[0] + delta_x3 * xp.arange(nb_elements_x3)
+        offsets_x3 = x3_boundaries[:-1]
         ref_solpts_x3 = delta_x3 / delta_comp * (-minComp + self.solutionPoints)
         x3_linear = xp.repeat(offsets_x3, nbsolpts) + xp.tile(ref_solpts_x3, nb_elements_x3)
         x3 = xp.repeat(x3_linear, ni * nj).reshape(self.grid_shape_3d)
 
-        offsets_eta = domain_eta[0] + delta_eta * xp.arange(nb_elements_x3)
+        offsets_eta = eta_boundaries[:-1]
         ref_solpts_eta = delta_eta / delta_comp * (-minComp + self.solutionPoints)
         eta_linear = xp.repeat(offsets_eta, nbsolpts) + xp.tile(ref_solpts_eta, nb_elements_x3)
         eta = xp.repeat(eta_linear, ni * nj).reshape(self.grid_shape_3d)
 
+        def linear_to_full_k(a):
+            return xp.repeat(
+                xp.repeat(a.reshape((nb_elements_x3, self.nbsolpts)), self.nbsolpts**2, axis=1),
+                nb_elements_x2 * nb_elements_x1,
+                axis=0,
+            ).reshape(self.grid_shape_3d_new)
+
+        self.x3_new = linear_to_full_k(x3_linear)
+        self.eta_new = linear_to_full_k(eta_linear)
+
         # Repeat for the interface values
-        x1_itf_i = xp.linspace(domain_x1[0], domain_x1[1], nb_elements_x1 + 1)  # At every boundary between elements
+        x1_itf_i = x1_boundaries.copy()
         x2_itf_i = x2.copy()
         x3_itf_i = xp.repeat(x3[:, :, 0], nb_elements_x1 + 1).reshape(self.itf_i_shape_3d)  # Repeat zy plane
         eta_itf_i = xp.repeat(eta[:, :, 0], nb_elements_x1 + 1).reshape(self.itf_i_shape_3d)
+        self.x3_itf_i_new = self._to_new_itf_i(x3_itf_i)
+        self.eta_itf_i_new = self._to_new_itf_i(eta_itf_i)
 
         x1_itf_j = x1.copy()
-        x2_itf_j = xp.linspace(domain_x2[0], domain_x2[1], nb_elements_x2 + 1)
+        x2_itf_j = x2_boundaries.copy()
         x3_itf_j = xp.repeat(x3[:, 0, :], nb_elements_x2 + 1).reshape(self.itf_j_shape_3d)
         eta_itf_j = xp.repeat(eta[:, 0, :], nb_elements_x2 + 1).reshape(self.itf_j_shape_3d)
+        self.x3_itf_j_new = self._to_new_itf_j(x3_itf_j)
+        self.eta_itf_j_new = self._to_new_itf_j(eta_itf_j)
 
         x1_itf_k = x1.copy()
         x2_itf_k = x2.copy()
-        x3_itf_k_linear = xp.linspace(domain_x3[0], domain_x3[1], nb_elements_x3 + 1)
-        x3_itf_k = xp.repeat(x3_itf_k_linear, ni * nj).reshape(self.itf_k_shape_3d)
-        eta_itf_k_linear = xp.linspace(domain_eta[0], domain_eta[1], nb_elements_x3 + 1)
-        eta_itf_k = xp.repeat(eta_itf_k_linear, ni * nj).reshape(self.itf_k_shape_3d)
+        x3_itf_k = xp.repeat(x3_boundaries, ni * nj).reshape(self.itf_k_shape_3d)
+        eta_itf_k = xp.repeat(eta_boundaries, ni * nj).reshape(self.itf_k_shape_3d)
+        self.x3_itf_k_new = self._to_new_itf_k(x3_itf_k)
+        self.eta_itf_k_new = self._to_new_itf_k(eta_itf_k)
 
         # x1, x2, x3 and eta coordinates of interior grid points
         self.x1 = x1
@@ -415,9 +436,18 @@ class CubedSphere3D(CubedSphere):
         # for the "physical" coordinates.  These are segregated into another method because they
         # will be redefined if this case involves topography mapping – x1/x2/η will remain the same,
         # as will the DG structures.
-        self._build_physical_coordinates()
+        self.apply_topography(None, None, None, None, None, None)
+        # self._build_physical_coordinates()
 
-    def apply_topography(self, zbot, zbot_itf_i, zbot_itf_j, zbot_new, zbot_itf_i_new, zbot_itf_j_new):
+    def apply_topography(
+        self,
+        zbot: Optional[NDArray],
+        zbot_itf_i: Optional[NDArray],
+        zbot_itf_j: Optional[NDArray],
+        zbot_new: Optional[NDArray],
+        zbot_itf_i_new: Optional[NDArray],
+        zbot_itf_j_new: Optional[NDArray],
+    ):
         """
         Apply a topography field, given by heights (above the 0 reference sphere) specified at
         interior points, i-boundaries, and j-boundaries.  This function applies a linear mapping,
@@ -426,19 +456,52 @@ class CubedSphere3D(CubedSphere):
 
         xp = self.device.xp
 
-        # First, preserve the topography
-        self.zbot = zbot.copy()
-        self.zbot_itf_i = zbot_itf_i.copy()
-        self.zbot_itf_j = zbot_itf_j.copy()
+        # If no topography was passed, set it to zero
+        if zbot_new is None or zbot_itf_i_new is None or zbot_itf_j_new is None:
+            self.z_floor = xp.zeros(self.floor_shape, dtype=self.dtype)
+            self.z_floor_itf_i = xp.zeros(self.itf_i_floor_shape, dtype=self.dtype)
+            self.z_floor_itf_j = xp.zeros(self.itf_j_floor_shape, dtype=self.dtype)
+        else:
+            self.z_floor = zbot_new.copy()
+            self.z_floor_itf_i = zbot_itf_i_new.copy()
+            self.z_floor_itf_j = zbot_itf_j_new.copy()
+
+        if zbot is None or zbot_itf_i is None or zbot_itf_j is None:
+            self.zbot = xp.zeros(self.grid_shape_2d, dtype=self.dtype)
+            self.zbot_itf_i = xp.zeros_like(self.coordVec_num_itf_i[0, 0, ...])
+            self.zbot_itf_j = xp.zeros_like(self.coordVec_num_itf_j[0, 0, ...])
+        else:
+            self.zbot = zbot.copy()
+            self.zbot_itf_i = zbot_itf_i.copy()
+            self.zbot_itf_j = zbot_itf_j.copy()
 
         ztop = self.ztop
 
         # To apply the topography, we need to redefine self.x3 and its interfaced versions.
 
-        self.x3[:, :, :] = zbot[xp.newaxis, :, :] + (ztop - zbot[xp.newaxis, :, :]) * self.eta
-        self.x3_itf_i[:, :, :] = zbot_itf_i[xp.newaxis, :, :] + (ztop - zbot_itf_i[xp.newaxis, :, :]) * self.eta_itf_i
-        self.x3_itf_j[:, :, :] = zbot_itf_j[xp.newaxis, :, :] + (ztop - zbot_itf_j[xp.newaxis, :, :]) * self.eta_itf_j
-        self.x3_itf_k[:, :, :] = zbot[xp.newaxis, :, :] + (ztop - zbot[xp.newaxis, :, :]) * self.eta_itf_k
+        # if MPI.COMM_WORLD.rank == 0:
+        #     print(f"floor = \n{zbot_new}\n" f"floor to bulk: \n{self.floor_to_bulk(zbot_new)}")
+
+        self.x3[...] = self.zbot[xp.newaxis, :, :] + (ztop - self.zbot[xp.newaxis, :, :]) * self.eta
+        self.x3_itf_i[...] = (
+            self.zbot_itf_i[xp.newaxis, :, :] + (ztop - self.zbot_itf_i[xp.newaxis, :, :]) * self.eta_itf_i
+        )
+        self.x3_itf_j[...] = (
+            self.zbot_itf_j[xp.newaxis, :, :] + (ztop - self.zbot_itf_j[xp.newaxis, :, :]) * self.eta_itf_j
+        )
+        self.x3_itf_k[...] = self.zbot[xp.newaxis, :, :] + (ztop - self.zbot[xp.newaxis, :, :]) * self.eta_itf_k
+
+        zbot_bulk = self.floor_to_bulk(self.z_floor)
+        zbot_i_bulk = self.floor_i_to_bulk(self.z_floor_itf_i)
+        zbot_j_bulk = self.floor_j_to_bulk(self.z_floor_itf_j)
+        zbot_k_bulk = self.floor_to_bulk(self.z_floor, k_itf=True)
+        self.x3_new[...] = zbot_bulk + (ztop - zbot_bulk) * self.eta_new
+        self.x3_itf_i_new[...] = zbot_i_bulk + (ztop - zbot_i_bulk) * self.eta_itf_i_new
+        self.x3_itf_j_new[...] = zbot_j_bulk + (ztop - zbot_j_bulk) * self.eta_itf_j_new
+        self.x3_itf_k_new[...] = zbot_k_bulk + (ztop - zbot_k_bulk) * self.eta_itf_k_new
+
+        self.x3_itf_k_new[self.bottom_edge] = 0.0
+        self.x3_itf_k_new[self.top_edge] = 0.0
 
         # Now, rebuild the physical coordinates to re-generate X/Y/Z and the Cartesian coordinates
         self._build_physical_coordinates()
@@ -542,6 +605,7 @@ class CubedSphere3D(CubedSphere):
         self.X_new = X_new
         self.Y_new = Y_new
         self.height = height
+        self.height_new = self.x3_new
 
         ## Other coordinate vectors:
         # * gnonomic coordinates (X, Y, Z)
@@ -558,10 +622,17 @@ class CubedSphere3D(CubedSphere):
         coordVec_gnom_itf_j = to_gnomonic(coordVec_num_itf_j, x3_itf_j)
         coordVec_gnom_itf_k = to_gnomonic(coordVec_num_itf_k, x3_itf_k)
 
-        self.gnomonic = to_gnomonic(self.radians, self._to_new(x3))
-        self.gnomonic_itf_i = to_gnomonic(self.radians_itf_i, self._to_new_itf_i(x3_itf_i))
-        self.gnomonic_itf_j = to_gnomonic(self.radians_itf_j, self._to_new_itf_j(x3_itf_j))
-        self.gnomonic_itf_k = to_gnomonic(self.radians_itf_k, self._to_new_itf_k(x3_itf_k))
+        self.gnomonic = to_gnomonic(self.radians, self.x3_new)
+        self.gnomonic_itf_i = to_gnomonic(self.radians_itf_i, self.x3_itf_i_new)
+        self.gnomonic_itf_j = to_gnomonic(self.radians_itf_j, self.x3_itf_j_new)
+        self.gnomonic_itf_k = to_gnomonic(self.radians_itf_k, self.x3_itf_k_new)
+
+        ref = coordVec_gnom
+        diff = self.gnomonic - self._to_new(ref)
+        diff_n = xp.linalg.norm(diff) / xp.linalg.norm(ref)
+        if diff_n > 1e-15:
+            print(f"Large diff {diff_n:.2e}")
+            raise ValueError
 
         # * Cartesian coordinates on the deep sphere (Xc, Yc, Zc)
 
@@ -682,6 +753,8 @@ class CubedSphere3D(CubedSphere):
         self.lat = lat
         self.block_lon = lon
         self.block_lat = lat
+        self.lon_new = self.polar[0, ...]
+        self.lat_new = self.polar[1, ...]
         self.X_itf_i = X_itf_i
         self.Y_itf_i = Y_itf_i
         self.X_itf_j = X_itf_j
@@ -839,7 +912,7 @@ class CubedSphere3D(CubedSphere):
 
         return new
 
-    def get_floor(self, a):
+    def get_floor(self, a: NDArray):
         """Retrieve slice of 'a' that's on the bottom (floor)"""
         if a.shape[-4:] != self.grid_shape_3d_new:
             raise ValueError(f"Unhandled shape {a.shape}, expected ... + {self.grid_shape_3d_new}")
@@ -848,6 +921,20 @@ class CubedSphere3D(CubedSphere):
         tmp_shape2 = a.shape[:-4] + self.floor_shape
         floor = numpy.s_[..., 0, :, :, 0, :, :]
         return a.reshape(tmp_shape1)[floor].reshape(tmp_shape2)
+
+    def floor_to_bulk(self, a: NDArray, k_itf: bool = False):
+        """Expand given floor array to occupy all elements"""
+        if a.shape[-3:] != self.floor_shape:
+            raise ValueError(f"Unhandled shape {a.shape}, expected (...,) + {self.floor_shape}")
+
+        xp = self.device.xp
+        axis1 = a.ndim - 2
+        repeat_count = self.nbsolpts if not k_itf else 2
+        tile_count = self.nb_elements_x3
+        if k_itf:
+            tile_count += 2
+        dest_shape = self.grid_shape_3d_new if not k_itf else self.itf_k_shape
+        return xp.tile(xp.repeat(a, repeat_count, axis=axis1), (tile_count, 1, 1)).reshape(dest_shape)
 
     def get_itf_i_floor(self, a):
         """Retrieve slice of interface-i array 'a' that's on the floor"""
@@ -859,6 +946,18 @@ class CubedSphere3D(CubedSphere):
         floor = numpy.s_[..., 0, :, :, :, 0, :]
         return a.reshape(tmp_shape1)[floor].reshape(tmp_shape2)
 
+    def floor_i_to_bulk(self, a: NDArray):
+        if a.shape[-3:] != self.itf_i_floor_shape:
+            raise ValueError(f"Unhandled shape {a.shape}, expected ... + {self.itf_i_floor_shape}")
+
+        xp = self.device.xp
+        tmp_shape1 = a.shape[:-3] + (self.nb_elements_x2, self.nb_elements_x1 + 2, 2, self.nbsolpts)
+        axis1 = a.ndim - 1
+        a_tmp = a.reshape(tmp_shape1)
+        return xp.tile(xp.repeat(a_tmp, self.nbsolpts, axis=axis1), (self.nb_elements_x3, 1, 1, 1)).reshape(
+            self.itf_i_shape
+        )
+
     def get_itf_j_floor(self, a):
         """Retrieve slice of interface-j array 'a' that's on the floor"""
         if a.shape[-4:] != self.itf_j_shape:
@@ -868,6 +967,18 @@ class CubedSphere3D(CubedSphere):
         tmp_shape2 = a.shape[:-4] + self.itf_j_floor_shape
         floor = numpy.s_[..., 0, :, :, :, 0, :]
         return a.reshape(tmp_shape1)[floor].reshape(tmp_shape2)
+
+    def floor_j_to_bulk(self, a: NDArray):
+        if a.shape[-3:] != self.itf_j_floor_shape:
+            raise ValueError(f"Unhandled shape {a.shape}, expected ... + {self.itf_j_floor_shape}")
+
+        xp = self.device.xp
+        tmp_shape1 = a.shape[:-3] + (self.nb_elements_x2 + 2, self.nb_elements_x1, 2, self.nbsolpts)
+        axis1 = a.ndim - 1
+        a_tmp = a.reshape(tmp_shape1)
+        return xp.tile(xp.repeat(a_tmp, self.nbsolpts, axis=axis1), (self.nb_elements_x3, 1, 1, 1)).reshape(
+            self.itf_j_shape
+        )
 
     def to_new_floor(self, a: NDArray) -> NDArray:
         """Convert floor array from old to new layout"""
@@ -935,32 +1046,21 @@ class CubedSphere3D(CubedSphere):
     #          tmp_shape = (self.nb_elements_x2 + 1, self.nb_elements_x1, self.nbsolpts)
     #       else: raise ValueError
 
-    def wind2contra(
-        self,
-        u: float | NDArray,
-        v: float | NDArray,
-        w: float | NDArray,
-        metric: "Metric3DTopo",
-    ):
-        """Convert wind fields from spherical values (zonal, meridional, vertical) to contravariant winds
-        on a terrain-following grid.
+    def wind2contra_2d(self, u: float | NDArray, v: float | NDArray):
+        """Convert wind fields from the spherical basis (zonal, meridional) to panel-appropriate contrvariant winds,
+        in two dimensions
 
         Parameters:
         ----------
-        u : float | numpy.ndarray
-        Input zonal winds, in meters per second
-        v : float | numpy.ndarray
-        Input meridional winds, in meters per second
-        w : float | numpy.ndarray
-        Input vertical winds, in meters per second
-        metric : Metric3DTopo
-            Metric object containing H_contra and inv_dzdeta parameters
+        u : float | NDArray
+            Input zonal winds, in meters per second
+        v : float | NDArray
+            Input meridional winds, in meters per second
 
         Returns:
         -------
-        (u1_contra, u2_contra, u3_contra) : tuple
-        Tuple of contravariant winds
-        """
+        (u1_contra, u2_contra) : tuple
+            Tuple of contravariant winds"""
 
         xp = self.device.xp
 
@@ -1021,6 +1121,37 @@ class CubedSphere3D(CubedSphere):
         u1_contra = (dx1dlon * lambda_dot + dx1dlat * phi_dot) * 2.0 / self.delta_x1
         u2_contra = (dx2dlon * lambda_dot + dx2dlat * phi_dot) * 2.0 / self.delta_x2
 
+        return u1_contra, u2_contra
+
+    def wind2contra(
+        self,
+        u: float | NDArray,
+        v: float | NDArray,
+        w: float | NDArray,
+        metric: "Metric3DTopo",
+    ):
+        """Convert wind fields from spherical values (zonal, meridional, vertical) to contravariant winds
+        on a terrain-following grid.
+
+        Parameters:
+        ----------
+        u : float | numpy.ndarray
+            Input zonal winds, in meters per second
+        v : float | numpy.ndarray
+            Input meridional winds, in meters per second
+        w : float | numpy.ndarray
+            Input vertical winds, in meters per second
+        metric : Metric3DTopo
+            Metric object containing H_contra and inv_dzdeta parameters
+
+        Returns:
+        -------
+        (u1_contra, u2_contra, u3_contra) : tuple
+            Tuple of contravariant winds
+        """
+
+        u1_contra, u2_contra = self.wind2contra_2d(u, v)
+
         # Second, convert w to _covariant_ u3, which points in the vertical direction regardless of topography.
         # We do this by multiplying by dz/deta, or dividing by metric.inv_dzdeta  (equivalently, taking the dot product
         # with the e_3 basis vector)
@@ -1042,14 +1173,14 @@ class CubedSphere3D(CubedSphere):
         Parameters:
         -----------
         u1 : float | NDArray
-        Contravariant winds along first component (X)
+            Contravariant winds along first component (X)
         u2 : float | NDArray
-        Contravariant winds along second component (Y)
+            Contravariant winds along second component (Y)
 
         Returns:
         --------
         (u, v) : tuple
-        Zonal/meridional winds, in m/s
+            Zonal/meridional winds, in m/s
         """
 
         u1_contra = u1 * self.delta_x1 / 2.0
@@ -1125,7 +1256,7 @@ class CubedSphere3D(CubedSphere):
         u3_contra: NDArray,
         metric: "Metric3DTopo",
     ):
-        """contra2wind_3d: convert from contravariant wind fields to "physical winds" in three dimensions
+        """Convert from contravariant wind fields to "physical winds" in three dimensions.
 
         This function transforms the contravariant fields u1, u2, and u3 into their physical equivalents, assuming
         a cubed-sphere-like grid.  In particular, we assume that the vertical coordinate η is the only mapped
@@ -1149,7 +1280,8 @@ class CubedSphere3D(CubedSphere):
         metric: Metric3DTopo
         metric object, implementing H_cov (covariant spatial metric) and inv_dzdeta
 
-        Retruns:
+        Returns:
+        --------
         (u, v, w) : tuple
         zonal, meridional, and vertical winds (m/s)
         """
