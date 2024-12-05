@@ -16,7 +16,7 @@ from common.process_topology import ProcessTopology
 class CubedSphere2D(CubedSphere):
     def __init__(
         self,
-        nb_elements_horizontal: int,
+        num_elements_horizontal: int,
         num_solpts: int,
         λ0: float,
         ϕ0: float,
@@ -54,7 +54,7 @@ class CubedSphere2D(CubedSphere):
 
         Parameters:
         -----------
-        nb_elements_horizontal: int
+        num_elements_horizontal: int
            Number of elements in the (x1,x2) directions, per panel
         num_solpts: int
            Number of nodal points in each of the (x1,x2,x3) dimensions inside the element
@@ -92,8 +92,8 @@ class CubedSphere2D(CubedSphere):
         panel_domain_x2 = (-math.pi / 4, math.pi / 4)
 
         # Find the extent covered by this particular processor (a tile), in radians
-        delta_x1_panel = (panel_domain_x1[1] - panel_domain_x1[0]) / ptopo.nb_lines_per_panel
-        delta_x2_panel = (panel_domain_x2[1] - panel_domain_x2[0]) / ptopo.nb_lines_per_panel
+        delta_x1_panel = (panel_domain_x1[1] - panel_domain_x1[0]) / ptopo.num_lines_per_panel
+        delta_x2_panel = (panel_domain_x2[1] - panel_domain_x2[0]) / ptopo.num_lines_per_panel
 
         # Find the lower and upper bounds of x1, x2 for this processor
         start_x1_tile = -math.pi / 4 + ptopo.my_col * delta_x1_panel
@@ -107,16 +107,16 @@ class CubedSphere2D(CubedSphere):
 
         # Assign the number of elements and solution points to the CubedSphere
         # object, in order to generate compatible grids and loops elsewhere
-        nb_elements_x1 = nb_elements_horizontal
-        nb_elements_x2 = nb_elements_horizontal
-        self.nb_elements_x1 = nb_elements_x1
-        self.nb_elements_x2 = nb_elements_x2
+        num_elements_x1 = num_elements_horizontal
+        num_elements_x2 = num_elements_horizontal
+        self.num_elements_x1 = num_elements_x1
+        self.num_elements_x2 = num_elements_x2
 
         ## Element sizes
 
         # Equiangular coordinates
-        self.delta_x1 = (domain_x1[1] - domain_x1[0]) / nb_elements_x1  # west-east grid spacing in radians
-        self.delta_x2 = (domain_x2[1] - domain_x2[0]) / nb_elements_x2  # south-north grid spacing in radians
+        self.delta_x1 = (domain_x1[1] - domain_x1[0]) / num_elements_x1  # west-east grid spacing in radians
+        self.delta_x2 = (domain_x2[1] - domain_x2[0]) / num_elements_x2  # south-north grid spacing in radians
         delta_x1 = self.delta_x1
         delta_x2 = self.delta_x2
 
@@ -126,13 +126,13 @@ class CubedSphere2D(CubedSphere):
         Δcomp = maxComp - minComp
 
         # Define the coordinate values at the interfaces between elements
-        # interfaces_x1 = numpy.linspace(start = domain_x1[0], stop = domain_x1[1], num = nb_elements_x1 + 1)
-        # interfaces_x2 = numpy.linspace(start = domain_x2[0], stop = domain_x2[1], num = nb_elements_x2 + 1)
-        # interfaces_x3 = numpy.linspace(start = domain_x3[0], stop = domain_x3[1], num = nb_elements_x3 + 1)
-        # interfaces_eta = numpy.linspace(start = domain_eta[0], stop = domain_eta[1], num = nb_elements_x3 + 1)
+        # interfaces_x1 = numpy.linspace(start = domain_x1[0], stop = domain_x1[1], num = num_elements_x1 + 1)
+        # interfaces_x2 = numpy.linspace(start = domain_x2[0], stop = domain_x2[1], num = num_elements_x2 + 1)
+        # interfaces_x3 = numpy.linspace(start = domain_x3[0], stop = domain_x3[1], num = num_elements_x3 + 1)
+        # interfaces_eta = numpy.linspace(start = domain_eta[0], stop = domain_eta[1], num = num_elements_x3 + 1)
 
-        ni = nb_elements_x1 * num_solpts
-        nj = nb_elements_x2 * num_solpts
+        ni = num_elements_x1 * num_solpts
+        nj = num_elements_x2 * num_solpts
         nk = 1
 
         # Save array size properties
@@ -146,8 +146,8 @@ class CubedSphere2D(CubedSphere):
         self.grid_shape_2d = (nj, ni)
         self.block_shape = (nj, ni)
         # And the shape of arrays corresponding to each of the three interfaces
-        self.itf_i_shape_2d = (nj, nb_elements_x1 + 1)
-        self.itf_j_shape_2d = (nb_elements_x2 + 1, ni)
+        self.itf_i_shape_2d = (nj, num_elements_x1 + 1)
+        self.itf_j_shape_2d = (num_elements_x2 + 1, ni)
 
         # The shapes. For a single field (e.g. coordinates of solution points, in the current case), we
         # have an array of elements, where each element has a total num_solpts**2 (in 2D) or num_solpts**3 (in 3D) solution
@@ -157,11 +157,11 @@ class CubedSphere2D(CubedSphere):
         #   elements, each with 2*num_solpts interface points (num_solpts for each side of the element along that direction)
         # - In 3D, horizontally, we also have two arrays (west-east, south-north), but the shape is to be determined
         # - In 3D vertically, we only have one array, with shape similar to horizontally, TBD
-        self.grid_shape = (nb_elements_x1, nb_elements_x2, num_solpts * num_solpts)
-        # self.grid_shape_3d_new = (nb_elements_x1 * nb_elements_x2 * nb_elements_x3, num_solpts * num_solpts * num_solpts)
+        self.grid_shape = (num_elements_x1, num_elements_x2, num_solpts * num_solpts)
+        # self.grid_shape_3d_new = (num_elements_x1 * num_elements_x2 * num_elements_x3, num_solpts * num_solpts * num_solpts)
         # i and j interfaces have same shape (because same number of elements in each direction)
-        self.itf_i_shape = (nb_elements_x2, nb_elements_x1 + 2, num_solpts * 2)
-        self.itf_j_shape = (nb_elements_x2 + 2, nb_elements_x1, num_solpts * 2)
+        self.itf_i_shape = (num_elements_x2, num_elements_x1 + 2, num_solpts * 2)
+        self.itf_j_shape = (num_elements_x2 + 2, num_elements_x1, num_solpts * 2)
 
         self.west_edge = numpy.s_[..., 0, :num_solpts]  # West boundary of the western halo elements
         self.east_edge = numpy.s_[..., -1, num_solpts:]  # East boundary of the eastern halo elements
@@ -173,22 +173,22 @@ class CubedSphere2D(CubedSphere):
         # --- 1D element-counting arrays, for coordinate assignment
 
         # Element interior
-        offsets_x1 = domain_x1[0] + delta_x1 * xp.arange(nb_elements_x1)
+        offsets_x1 = domain_x1[0] + delta_x1 * xp.arange(num_elements_x1)
         ref_solpts_x1 = delta_x1 / Δcomp * (-minComp + self.solutionPoints)
-        self.x1 = numpy.repeat(offsets_x1, num_solpts) + numpy.tile(ref_solpts_x1, nb_elements_x1)
+        self.x1 = numpy.repeat(offsets_x1, num_solpts) + numpy.tile(ref_solpts_x1, num_elements_x1)
 
-        offsets_x2 = domain_x2[0] + delta_x2 * xp.arange(nb_elements_x2)
+        offsets_x2 = domain_x2[0] + delta_x2 * xp.arange(num_elements_x2)
         ref_solpts_x2 = delta_x2 / Δcomp * (-minComp + self.solutionPoints)
-        self.x2 = numpy.repeat(offsets_x2, num_solpts) + numpy.tile(ref_solpts_x2, nb_elements_x2)
+        self.x2 = numpy.repeat(offsets_x2, num_solpts) + numpy.tile(ref_solpts_x2, num_elements_x2)
 
         # Element interfaces
         self.x1_itf_i = numpy.linspace(
-            domain_x1[0], domain_x1[1], nb_elements_x1 + 1
+            domain_x1[0], domain_x1[1], num_elements_x1 + 1
         )  # At every boundary between elements
         self.x2_itf_i = self.x2.copy()  # Copy over x2, without change because of tensor product structure
 
         self.x1_itf_j = self.x1.copy()
-        self.x2_itf_j = numpy.linspace(domain_x2[0], domain_x2[1], nb_elements_x2 + 1)
+        self.x2_itf_j = numpy.linspace(domain_x2[0], domain_x2[1], num_elements_x2 + 1)
 
         ## Construct the combined coordinate vector for the numeric/equiangular coordinate (x1, x2)
         self.block_radians_x1, self.block_radians_x2 = numpy.meshgrid(self.x1, self.x2)
@@ -305,8 +305,8 @@ class CubedSphere2D(CubedSphere):
         ni = self.ni
         nj = self.nj
 
-        nb_elements_x1 = self.nb_elements_x1
-        nb_elements_x2 = self.nb_elements_x2
+        num_elements_x1 = self.num_elements_x1
+        num_elements_x2 = self.num_elements_x2
 
         lon_p = self.lon_p
         lat_p = self.lat_p
@@ -328,10 +328,10 @@ class CubedSphere2D(CubedSphere):
         # are expected to be of size (#interface, #pts).  Compared to the usual (j,i) ordering,
         # this means that the i-interface variable should be transposed
 
-        X_block_itf_i = numpy.broadcast_to(numpy.tan(x1_itf_i)[numpy.newaxis, :], (nj, nb_elements_x1 + 1)).T
-        Y_block_itf_i = numpy.broadcast_to(numpy.tan(x2_itf_i)[:, numpy.newaxis], (nj, nb_elements_x1 + 1)).T
-        X_block_itf_j = numpy.broadcast_to(numpy.tan(x1_itf_j)[numpy.newaxis, :], (nb_elements_x2 + 1, ni))
-        Y_block_itf_j = numpy.broadcast_to(numpy.tan(x2_itf_j)[:, numpy.newaxis], (nb_elements_x2 + 1, ni))
+        X_block_itf_i = numpy.broadcast_to(numpy.tan(x1_itf_i)[numpy.newaxis, :], (nj, num_elements_x1 + 1)).T
+        Y_block_itf_i = numpy.broadcast_to(numpy.tan(x2_itf_i)[:, numpy.newaxis], (nj, num_elements_x1 + 1)).T
+        X_block_itf_j = numpy.broadcast_to(numpy.tan(x1_itf_j)[numpy.newaxis, :], (num_elements_x2 + 1, ni))
+        Y_block_itf_j = numpy.broadcast_to(numpy.tan(x2_itf_j)[:, numpy.newaxis], (num_elements_x2 + 1, ni))
 
         X_itf_i = self._to_new_itf_i(X_block_itf_i)
         Y_itf_i = self._to_new_itf_i(Y_block_itf_i)
@@ -475,16 +475,16 @@ class CubedSphere2D(CubedSphere):
         if isinstance(a, float):
             return a
 
-        expected_shape = (self.nb_elements_x2 * self.num_solpts, self.nb_elements_x1 * self.num_solpts)
+        expected_shape = (self.num_elements_x2 * self.num_solpts, self.num_elements_x1 * self.num_solpts)
         if a.ndim == 2 and a.shape == expected_shape:
-            tmp_shape = (self.nb_elements_x2, self.num_solpts, self.nb_elements_x1, self.num_solpts)
+            tmp_shape = (self.num_elements_x2, self.num_solpts, self.num_elements_x1, self.num_solpts)
             new_shape = self.grid_shape
             return a.reshape(tmp_shape).transpose(0, 2, 1, 3).reshape(new_shape)
 
         elif (a.ndim == 3 and a.shape[1:] == expected_shape) or (
             a.ndim == 4 and a.shape[2:] == expected_shape and a.shape[1] == 1
         ):
-            tmp_shape = (a.shape[0], self.nb_elements_x2, self.num_solpts, self.nb_elements_x1, self.num_solpts)
+            tmp_shape = (a.shape[0], self.num_elements_x2, self.num_solpts, self.num_elements_x1, self.num_solpts)
             new_shape = (a.shape[0],) + self.grid_shape
             return a.reshape(tmp_shape).transpose(0, 1, 3, 2, 4).reshape(new_shape)
 
@@ -492,13 +492,13 @@ class CubedSphere2D(CubedSphere):
 
     def to_single_block(self, a: NDArray) -> NDArray:
         """Convert input array from a list of elements to a single block of points layout."""
-        expected_shape = (self.nb_elements_x2, self.nb_elements_x1, self.num_solpts * self.num_solpts)
+        expected_shape = (self.num_elements_x2, self.num_elements_x1, self.num_solpts * self.num_solpts)
         if a.shape == expected_shape:
-            tmp_shape = (self.nb_elements_x2, self.nb_elements_x1, self.num_solpts, self.num_solpts)
+            tmp_shape = (self.num_elements_x2, self.num_elements_x1, self.num_solpts, self.num_solpts)
             new_shape = self.grid_shape_2d
             return a.reshape(tmp_shape).transpose(0, 2, 1, 3).reshape(new_shape)
         elif a.ndim == 3 and a.shape[1:] == expected_shape:
-            tmp_shape = (a.shape[0], self.nb_elements_x2, self.nb_elements_x1, self.num_solpts, self.num_solpts)
+            tmp_shape = (a.shape[0], self.num_elements_x2, self.num_elements_x1, self.num_solpts, self.num_solpts)
             new_shape = (a.shape[0],) + self.grid_shape_2d
             return a.reshape(tmp_shape).transpose(0, 1, 3, 2, 4).reshape(new_shape)
         else:
@@ -514,15 +514,15 @@ class CubedSphere2D(CubedSphere):
 
     def _to_new_itf_i(self, a):
         """Convert input array (west and east interface) to new memory layout"""
-        # expected_shape = (self.nb_elements_x2 * self.num_solpts, self.nb_elements_x1 + 1)
-        expected_shape = (self.nb_elements_x1 + 1, self.nb_elements_x2 * self.num_solpts)
+        # expected_shape = (self.num_elements_x2 * self.num_solpts, self.num_elements_x1 + 1)
+        expected_shape = (self.num_elements_x1 + 1, self.num_elements_x2 * self.num_solpts)
         if a.shape[-2:] == expected_shape:
-            plane_shape = (self.nb_elements_x2, self.nb_elements_x1 + 2, self.num_solpts * 2)
+            plane_shape = (self.num_elements_x2, self.num_elements_x1 + 2, self.num_solpts * 2)
             new = numpy.empty(a.shape[:-2] + plane_shape, dtype=a.dtype)
             west_itf = numpy.arange(self.num_solpts)
             east_itf = numpy.arange(self.num_solpts, 2 * self.num_solpts)
 
-            tmp_shape = a.shape[:-2] + (self.nb_elements_x1 + 1, self.nb_elements_x2, self.num_solpts)
+            tmp_shape = a.shape[:-2] + (self.num_elements_x1 + 1, self.num_elements_x2, self.num_solpts)
             offset = len(a.shape) - 2
             transp = tuple([i for i in range(offset)]) + (1 + offset, 0 + offset, 2 + offset)
 
@@ -539,15 +539,15 @@ class CubedSphere2D(CubedSphere):
 
     def _to_new_itf_j(self, a):
         """Convert input array (south and north interface) to new memory layout"""
-        expected_shape = (self.nb_elements_x2 + 1, self.nb_elements_x1 * self.num_solpts)
+        expected_shape = (self.num_elements_x2 + 1, self.num_elements_x1 * self.num_solpts)
         if a.shape[-2:] == expected_shape:
-            plane_shape = (self.nb_elements_x2 + 2, self.nb_elements_x1, self.num_solpts * 2)
+            plane_shape = (self.num_elements_x2 + 2, self.num_elements_x1, self.num_solpts * 2)
             new = numpy.empty(a.shape[:-2] + plane_shape, dtype=a.dtype)
             # new[...] = 1000.0
             south = numpy.s_[..., 1:, :, : self.num_solpts]  # South boundary of elements, including northern halo
             north = numpy.s_[..., :-1, :, self.num_solpts :]  # North boundary of elements, including southern halo
 
-            tmp_shape = a.shape[:-2] + (self.nb_elements_x2 + 1, self.nb_elements_x1, self.num_solpts)
+            tmp_shape = a.shape[:-2] + (self.num_elements_x2 + 1, self.num_elements_x1, self.num_solpts)
             tmp_array = a.reshape(tmp_shape)
             new[north] = tmp_array
             new[south] = tmp_array

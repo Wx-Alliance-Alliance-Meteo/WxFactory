@@ -54,7 +54,7 @@ class RHS_FV(RHS):
     def flux_divergence(self) -> None:
         xp = self.device.xp
 
-        if self.nb_dim == 2:
+        if self.num_dim == 2:
             # Compute FD/FV derivative (structured)
             self.df1_dx1 = -(self.f_itf_x1[:, :, 1] - self.f_itf_x1[:, :, 0]) / self.geom.Δx1
             self.df3_dx3 = -(self.f_itf_x3[:, :, 1] - self.f_itf_x3[:, :, 0]) / self.geom.Δx3

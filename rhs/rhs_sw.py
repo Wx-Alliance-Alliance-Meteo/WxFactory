@@ -24,7 +24,7 @@ class RhsShallowWater:
         topo: Optional[Topo],
         ptopo: ProcessTopology,
         num_solpts: int,
-        nb_elements_hori: int,
+        num_elements_hori: int,
     ):
         self.shape = shape
         self.geom = geom
@@ -33,7 +33,7 @@ class RhsShallowWater:
         self.topo = topo
         self.ptopo = ptopo
         self.num_solpts = num_solpts
-        self.nb_elements_hori = nb_elements_hori
+        self.num_elements_hori = num_elements_hori
 
     def __call__(self, vec: NDArray) -> NDArray:
         """Compute the value of the right-hand side based on the input state.
@@ -51,7 +51,7 @@ class RhsShallowWater:
             self.topo,
             self.ptopo,
             self.num_solpts,
-            self.nb_elements_hori,
+            self.num_elements_hori,
         )
         return result.reshape(old_shape)
 
@@ -64,7 +64,7 @@ class RhsShallowWater:
         topo: Optional[Topo],
         ptopo: ProcessTopology,
         num_solpts: int,
-        nb_elements_hori: int,
+        num_elements_hori: int,
     ) -> NDArray:
         """
         Compute the RHS
@@ -72,10 +72,10 @@ class RhsShallowWater:
 
         xp = geom.device.xp
 
-        nb_equations = Q.shape[0]
+        num_equations = Q.shape[0]
 
-        itf_i_shape = (nb_equations,) + geom.itf_i_shape
-        itf_j_shape = (nb_equations,) + geom.itf_j_shape
+        itf_i_shape = (num_equations,) + geom.itf_i_shape
+        itf_j_shape = (num_equations,) + geom.itf_j_shape
 
         # Prepare array for unpacked dynamical variables
         Q_unpacked = Q.copy()
@@ -113,7 +113,7 @@ class RhsShallowWater:
             north=var_itf_j[idx_h, -2, :, num_solpts:],
             west=var_itf_i[idx_h, :, 1, :num_solpts],
             east=var_itf_i[idx_h, :, -2, num_solpts:],
-            boundary_shape=(nb_elements_hori * num_solpts,),
+            boundary_shape=(num_elements_hori * num_solpts,),
         )
 
         # Compute fluxes

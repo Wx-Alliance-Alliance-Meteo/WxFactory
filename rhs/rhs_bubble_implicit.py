@@ -14,13 +14,13 @@ from common.definitions import (
 )
 
 
-def rhs_bubble_implicit(Q, geom, mtrx, num_solpts, nb_elements_x, nb_elements_z):
+def rhs_bubble_implicit(Q, geom, mtrx, num_solpts, num_elements_x, num_elements_z):
 
     datatype = Q.dtype
-    nb_equations = Q.shape[0]  # Number of constituent Euler equations.  Probably 6.
+    num_equations = Q.shape[0]  # Number of constituent Euler equations.  Probably 6.
 
-    nb_interfaces_x = nb_elements_x + 1
-    nb_interfaces_z = nb_elements_z + 1
+    num_interfaces_x = num_elements_x + 1
+    num_interfaces_z = num_elements_z + 1
 
     rhs = numpy.zeros_like(Q, dtype=datatype)
     flux_x1 = numpy.zeros_like(Q, dtype=datatype)
@@ -29,11 +29,11 @@ def rhs_bubble_implicit(Q, geom, mtrx, num_solpts, nb_elements_x, nb_elements_z)
     df1_dx1 = numpy.zeros_like(Q, dtype=datatype)
     df3_dx3 = numpy.zeros_like(Q, dtype=datatype)
 
-    kfaces_flux = numpy.zeros((nb_equations, nb_elements_z, 2, num_solpts * nb_elements_x), dtype=datatype)
-    kfaces_var = numpy.zeros((nb_equations, nb_elements_z, 2, num_solpts * nb_elements_x), dtype=datatype)
+    kfaces_flux = numpy.zeros((num_equations, num_elements_z, 2, num_solpts * num_elements_x), dtype=datatype)
+    kfaces_var = numpy.zeros((num_equations, num_elements_z, 2, num_solpts * num_elements_x), dtype=datatype)
 
-    ifaces_flux = numpy.zeros((nb_equations, nb_elements_x, num_solpts * nb_elements_z, 2), dtype=datatype)
-    ifaces_var = numpy.zeros((nb_equations, nb_elements_x, num_solpts * nb_elements_z, 2), dtype=datatype)
+    ifaces_flux = numpy.zeros((num_equations, num_elements_x, num_solpts * num_elements_z, 2), dtype=datatype)
+    ifaces_var = numpy.zeros((num_equations, num_elements_x, num_solpts * num_elements_z, 2), dtype=datatype)
 
     # --- Unpack physical variables
     rho = Q[idx_2d_rho, :, :]
@@ -50,13 +50,13 @@ def rhs_bubble_implicit(Q, geom, mtrx, num_solpts, nb_elements_x, nb_elements_z)
     flux_x3[idx_2d_rho_w, :, :] = pressure
 
     # --- Interpolate to the element interface
-    for elem in range(nb_elements_z):
+    for elem in range(num_elements_z):
         epais = elem * num_solpts + numpy.arange(num_solpts)
 
         kfaces_var[:, elem, 0, :] = mtrx.extrap_down @ Q[:, epais, :]
         kfaces_var[:, elem, 1, :] = mtrx.extrap_up @ Q[:, epais, :]
 
-    for elem in range(nb_elements_x):
+    for elem in range(num_elements_x):
         epais = elem * num_solpts + numpy.arange(num_solpts)
 
         ifaces_var[:, elem, :, 0] = Q[:, :, epais] @ mtrx.extrap_west
@@ -83,7 +83,7 @@ def rhs_bubble_implicit(Q, geom, mtrx, num_solpts, nb_elements_x, nb_elements_z)
     ifaces_flux[idx_2d_rho_u, -1, :, 1] = ifaces_pres[-1, :, 1]
 
     # --- Common AUSM fluxes
-    for itf in range(1, nb_interfaces_z - 1):
+    for itf in range(1, num_interfaces_z - 1):
 
         left = itf - 1
         right = itf
@@ -107,7 +107,7 @@ def rhs_bubble_implicit(Q, geom, mtrx, num_solpts, nb_elements_x, nb_elements_z)
 
         kfaces_flux[:, left, 1, :] = kfaces_flux[:, right, 0, :]
 
-    for itf in range(1, nb_interfaces_x - 1):
+    for itf in range(1, num_interfaces_x - 1):
 
         left = itf - 1
         right = itf
@@ -132,7 +132,7 @@ def rhs_bubble_implicit(Q, geom, mtrx, num_solpts, nb_elements_x, nb_elements_z)
         ifaces_flux[:, left, :, 1] = ifaces_flux[:, right, :, 0]
 
     # --- Compute the derivatives
-    for elem in range(nb_elements_z):
+    for elem in range(num_elements_z):
         epais = elem * num_solpts + numpy.arange(num_solpts)
 
         df3_dx3[idx_2d_rho, epais, :] = (
@@ -149,7 +149,7 @@ def rhs_bubble_implicit(Q, geom, mtrx, num_solpts, nb_elements_x, nb_elements_z)
             / geom.Δx3
         )
 
-    for elem in range(nb_elements_x):
+    for elem in range(num_elements_x):
         epais = elem * num_solpts + numpy.arange(num_solpts)
 
         df1_dx1[:-2, :, epais] = (

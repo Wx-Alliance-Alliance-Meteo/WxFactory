@@ -50,8 +50,8 @@ class RhsBundle:
             #                  'fv': rhs_euler}
 
             # self.full = generate_rhs(rhs_functions[param.discretization],
-            #                          geom, operators, metric, ptopo, param.num_solpts, param.nb_elements_horizontal,
-            #                          param.nb_elements_vertical, param.case_number, device=device)
+            #                          geom, operators, metric, ptopo, param.num_solpts, param.num_elements_horizontal,
+            #                          param.num_elements_vertical, param.case_number, device=device)
             self.full = RhsEuler(
                 fields_shape,
                 geom,
@@ -59,15 +59,15 @@ class RhsBundle:
                 metric,
                 ptopo,
                 param.num_solpts,
-                param.nb_elements_horizontal,
-                param.nb_elements_vertical,
+                param.num_elements_horizontal,
+                param.num_elements_vertical,
                 param.case_number,
                 device=device,
             )
 
         elif param.equations == "shallow_water" and isinstance(geom, CubedSphere2D):
             self.full = RhsShallowWater(
-                fields_shape, geom, operators, metric, topo, ptopo, param.num_solpts, param.nb_elements_horizontal
+                fields_shape, geom, operators, metric, topo, ptopo, param.num_solpts, param.num_elements_horizontal
             )
 
         else:
@@ -96,35 +96,35 @@ class RhsBundle:
         #    operators, metric, topo, ptopo, param, device)
 
         #    self.convective = generate_rhs(rhs_euler_convective, geom, operators, metric, ptopo, param.num_solpts,
-        #                                   param.nb_elements_horizontal, param.nb_elements_vertical, param.case_number)
+        #                                   param.num_elements_horizontal, param.num_elements_vertical, param.case_number)
         #    self.viscous = lambda q: self.full(q) - self.convective(q)
 
         # elif param.equations == 'euler' and isinstance(geom, Cartesian2D):
-        #    self.full = RhsBubble(fields_shape, geom, operators, param.num_solpts, param.nb_elements_horizontal,
-        #          param.nb_elements_vertical, device)
+        #    self.full = RhsBubble(fields_shape, geom, operators, param.num_solpts, param.num_elements_horizontal,
+        #          param.num_elements_vertical, device)
 
         #    self.implicit = generate_rhs(
-        #       rhs_bubble_implicit, geom, operators, param.num_solpts, param.nb_elements_horizontal,
-        #       param.nb_elements_vertical)
+        #       rhs_bubble_implicit, geom, operators, param.num_solpts, param.num_elements_horizontal,
+        #       param.num_elements_vertical)
         #    self.explicit = lambda q: self.full(q) - self.implicit(q)
 
         #    self.convective = generate_rhs(
-        #       rhs_bubble_convective, geom, operators, param.num_solpts, param.nb_elements_horizontal,
-        #       param.nb_elements_vertical)
+        #       rhs_bubble_convective, geom, operators, param.num_solpts, param.num_elements_horizontal,
+        #       param.num_elements_vertical)
         #    self.viscous = lambda q: self.full(q) - self.convective(q)
 
         # elif param.equations == "shallow_water":
         #    if param.case_number <= 1: # Pure advection
         #       self.full = generate_rhs(
-        #          rhs_advection2d, geom, operators, metric, ptopo, param.num_solpts, param.nb_elements_horizontal)
+        #          rhs_advection2d, geom, operators, metric, ptopo, param.num_solpts, param.num_elements_horizontal)
         #    else:
         #       # self.full = generate_rhs(
-        #       #    rhs_sw, geom, operators, metric, topo, ptopo, param.num_solpts, param.nb_elements_horizontal)
+        #       #    rhs_sw, geom, operators, metric, topo, ptopo, param.num_solpts, param.num_elements_horizontal)
         #       self.full = RhsShallowWater(fields_shape,
         #                                   geom, operators, metric, topo, ptopo,
-        #                                   param.num_solpts, param.nb_elements_horizontal)
+        #                                   param.num_solpts, param.num_elements_horizontal)
 
         #       self.implicit = generate_rhs(rhs_sw_stiff, geom, operators, metric, topo, ptopo, param.num_solpts,
-        #                                    param.nb_elements_horizontal)
+        #                                    param.num_elements_horizontal)
         #       self.explicit = generate_rhs(rhs_sw_nonstiff, geom, operators, metric, topo, ptopo, param.num_solpts,
-        #                                    param.nb_elements_horizontal)
+        #                                    param.num_elements_horizontal)

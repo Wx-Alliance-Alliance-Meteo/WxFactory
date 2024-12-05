@@ -98,8 +98,8 @@ function test_cart2d() {
     starting_step=0
     gmres_restart=30
     num_solpts=4
-    nb_elements_horizontal=5
-    nb_elements_vertical=8
+    num_elements_horizontal=5
+    num_elements_vertical=8
     preconditioner=none
     output_freq=1
     save_state_freq=1
@@ -112,7 +112,7 @@ function test_cart2d() {
     echo "Original config: ${CART_CONFIG_ORIG}"
     cp ${CART_CONFIG_ORIG} ${CONFIG_BASE}
     set_param ${CONFIG_BASE} dt t_end time_integrator tolerance starting_step gmres_restart         \
-                             num_solpts nb_elements_horizontal nb_elements_vertical preconditioner    \
+                             num_solpts num_elements_horizontal num_elements_vertical preconditioner    \
                              output_freq save_state_freq store_solver_stats output_dir filter_apply \
                              precond_flux desired_device
 
@@ -164,7 +164,7 @@ function test_shallow_water() {
     starting_step=0
     gmres_restart=200
     num_solpts=4
-    nb_elements_horizontal=4
+    num_elements_horizontal=4
     preconditioner=none
     num_pre_smoothe=1
     num_post_smoothe=1
@@ -180,7 +180,7 @@ function test_shallow_water() {
 
     cp ${config_orig} ${CONFIG_BASE}
     set_param ${CONFIG_BASE} dt t_end time_integrator tolerance starting_step gmres_restart        \
-                             num_solpts nb_elements_horizontal preconditioner                        \
+                             num_solpts num_elements_horizontal preconditioner                        \
                              output_freq save_state_freq store_solver_stats output_dir             \
                              num_pre_smoothe num_post_smoothe mg_solve_coarsest desired_device
 
@@ -211,8 +211,8 @@ function test_cube_sphere_euler() {
     starting_step=0
     gmres_restart=200
     num_solpts=4
-    nb_elements_horizontal=4
-    nb_elements_vertical=8
+    num_elements_horizontal=4
+    num_elements_vertical=8
     preconditioner=none
     num_pre_smoothe=1
     num_post_smoothe=1
@@ -228,7 +228,7 @@ function test_cube_sphere_euler() {
 
     cp ${config_orig} ${CONFIG_BASE}
     set_param ${CONFIG_BASE} dt t_end time_integrator tolerance starting_step gmres_restart        \
-                             num_solpts nb_elements_horizontal nb_elements_vertical preconditioner   \
+                             num_solpts num_elements_horizontal num_elements_vertical preconditioner   \
                              output_freq save_state_freq store_solver_stats output_dir             \
                              num_pre_smoothe num_post_smoothe mg_solve_coarsest desired_device
 
@@ -257,9 +257,9 @@ function test_cube_sphere_euler() {
 
         preconditioner=lu
         num_solpts=2
-        nb_elements_horizontal=3
-        nb_elements_vertical=3
-        run_single_cubesphere time_integrator preconditioner num_solpts nb_elements_horizontal nb_elements_vertical || return 1
+        num_elements_horizontal=3
+        num_elements_vertical=3
+        run_single_cubesphere time_integrator preconditioner num_solpts num_elements_horizontal num_elements_vertical || return 1
 
         # mg_smoother=exp
         # exp_smoothe_spectral_radii=2

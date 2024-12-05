@@ -28,7 +28,7 @@ class BackwardEuler(Integrator):
 
         # Update solution
         t0 = time()
-        newQ, nb_iter, residuals = newton_krylov(
+        newQ, num_iter, residuals = newton_krylov(
             BE_fun,
             Q,
             f_tol=self.tol,
@@ -39,6 +39,6 @@ class BackwardEuler(Integrator):
         )
         t1 = time()
 
-        self.solver_info = SolverInfo(0, t1 - t0, nb_iter, residuals)
+        self.solver_info = SolverInfo(0, t1 - t0, num_iter, residuals)
 
         return numpy.reshape(newQ, Q.shape)

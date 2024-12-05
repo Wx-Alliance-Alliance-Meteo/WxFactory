@@ -42,9 +42,9 @@ class FV_preconditioner:
         self.param = copy(param)
         self.param.discretization = "fv"
         if origin_field == "dg":
-            self.param.nb_elements_horizontal = self.param.nb_elements_horizontal * self.dest_order
+            self.param.num_elements_horizontal = self.param.num_elements_horizontal * self.dest_order
         else:
-            self.param.nb_elements_horizontal = self.param.nb_elements_horizontal // 2
+            self.param.num_elements_horizontal = self.param.num_elements_horizontal // 2
         self.param.num_solpts = 1
 
         if self.param.equations != "shallow_water":
@@ -55,8 +55,8 @@ class FV_preconditioner:
 
         self.ptopo = ptopo
         self.dest_geom = cubed_sphere(
-            self.param.nb_elements_horizontal,
-            self.param.nb_elements_vertical,
+            self.param.num_elements_horizontal,
+            self.param.num_elements_vertical,
             self.param.num_solpts,
             self.param.λ0,
             self.param.ϕ0,
@@ -129,7 +129,7 @@ class FV_preconditioner:
             self.dest_topo,
             self.ptopo,
             self.param.num_solpts,
-            self.param.nb_elements_horizontal,
+            self.param.num_elements_horizontal,
             self.param.case_number,
             False,
         )

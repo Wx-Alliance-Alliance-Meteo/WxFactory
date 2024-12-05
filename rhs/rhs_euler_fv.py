@@ -29,8 +29,8 @@ def rhs_euler_fv(
     metric: Metric3DTopo,
     ptopo: ProcessTopology,
     num_solpts: int,
-    nb_elements_hori: int,
-    nb_elements_vert: int,
+    num_elements_hori: int,
+    num_elements_vert: int,
     case_number: int,
 ):
     """Evaluate the right-hand side of the three-dimensional Euler equations
@@ -59,9 +59,9 @@ def rhs_euler_fv(
        Wraps the information and communication functions necessary for MPI distribution
     num_solpts : int
        Number of interior nodal points per element.  A 3D element will contain num_solpts**3 internal points.
-    nb_elements_hori : int
+    num_elements_hori : int
        Number of elements in x/y on each panel of the cubed sphere
-    nb_elements_vert : int
+    num_elements_vert : int
        Number of elements in the vertical
     case_number : int
        DCMIP case number, used to selectively enable or disable parts of the Euler equations to accomplish
@@ -74,11 +74,11 @@ def rhs_euler_fv(
     """
 
     type_vec = Q.dtype  #  Output/processing type -- may be complex
-    nb_equations = Q.shape[0]  # Number of constituent Euler equations.  Probably 6.
-    nb_interfaces_hori = nb_elements_hori + 1  # Number of element interfaces per horizontal dimension
-    nb_interfaces_vert = nb_elements_vert + 1  # Number of element interfaces in the vertical dimension
-    nb_pts_hori = nb_elements_hori * num_solpts  # Total number of solution points per horizontal dimension
-    nb_vertical_levels = nb_elements_vert * num_solpts  # Total number of solution points in the vertical dimension
+    num_equations = Q.shape[0]  # Number of constituent Euler equations.  Probably 6.
+    num_interfaces_hori = num_elements_hori + 1  # Number of element interfaces per horizontal dimension
+    num_interfaces_vert = num_elements_vert + 1  # Number of element interfaces in the vertical dimension
+    num_pts_hori = num_elements_hori * num_solpts  # Total number of solution points per horizontal dimension
+    num_vertical_levels = num_elements_vert * num_solpts  # Total number of solution points in the vertical dimension
 
     # Create new arrays for each component of T^μν_:ν, plus one more for the final right hand side
     df1_dx1, df2_dx2, df3_dx3, rhs = [numpy.empty_like(Q, dtype=type_vec) for _ in range(4)]
@@ -88,24 +88,24 @@ def rhs_euler_fv(
 
     # Array to extrapolate variables and fluxes to the boundaries along x (i)
     variables_itf_i = numpy.ones(
-        (nb_equations, nb_vertical_levels, nb_elements_hori + 2, 2, nb_pts_hori), dtype=type_vec
+        (num_equations, num_vertical_levels, num_elements_hori + 2, 2, num_pts_hori), dtype=type_vec
     )  # Initialized to one in the halo to avoid division by zero later
     # Note that flux_x1_itf_i has a different shape than variables_itf_i
     flux_x1_itf_i = numpy.empty(
-        (nb_equations, nb_vertical_levels, nb_elements_hori + 2, nb_pts_hori, 2), dtype=type_vec
+        (num_equations, num_vertical_levels, num_elements_hori + 2, num_pts_hori, 2), dtype=type_vec
     )
 
     # Extrapolation arrays along y (j)
     variables_itf_j = numpy.ones(
-        (nb_equations, nb_vertical_levels, nb_elements_hori + 2, 2, nb_pts_hori), dtype=type_vec
+        (num_equations, num_vertical_levels, num_elements_hori + 2, 2, num_pts_hori), dtype=type_vec
     )  # Initialized to one in the halo to avoid division by zero later
     flux_x2_itf_j = numpy.empty(
-        (nb_equations, nb_vertical_levels, nb_elements_hori + 2, 2, nb_pts_hori), dtype=type_vec
+        (num_equations, num_vertical_levels, num_elements_hori + 2, 2, num_pts_hori), dtype=type_vec
     )
 
     # Extrapolation arrays along z (k), note dimensions of (6, nj, nk+2, 2, ni)
-    variables_itf_k = numpy.empty((nb_equations, nb_pts_hori, nb_elements_vert + 2, 2, nb_pts_hori), dtype=type_vec)
-    flux_x3_itf_k = numpy.empty((nb_equations, nb_pts_hori, nb_elements_vert + 2, 2, nb_pts_hori), dtype=type_vec)
+    variables_itf_k = numpy.empty((num_equations, num_pts_hori, num_elements_vert + 2, 2, num_pts_hori), dtype=type_vec)
+    flux_x3_itf_k = numpy.empty((num_equations, num_pts_hori, num_elements_vert + 2, 2, num_pts_hori), dtype=type_vec)
 
     # Flag for advection-only processing, with DCMIP test cases 11 and 12
     advection_only = case_number < 13
@@ -114,7 +114,7 @@ def rhs_euler_fv(
     offset = 1
 
     # Interpolate to the element interface
-    for elem in range(nb_elements_hori):
+    for elem in range(num_elements_hori):
         # This loop performs extrapolation to element boundaries through the mtrix.extrap_* operator (matrix multiplication).
         # Thanks to numpy's broadcasting, each iteration of this loop extrapolates an entire row/column of elements at once,
         # operating on all variables simultaneously
@@ -123,7 +123,7 @@ def rhs_euler_fv(
         # epais = elem * num_solpts + numpy.arange(num_solpts)
         epais = elem
         # Position in the output interface array for writing.  'pos' 1 corresponds to the west/southmost element, with
-        # 'pos' 0 (and nb_elements_hori+1) reserved for exchanges from neighbouring panels
+        # 'pos' 0 (and num_elements_hori+1) reserved for exchanges from neighbouring panels
         pos = elem + offset
 
         # --- Direction x1
@@ -152,7 +152,7 @@ def rhs_euler_fv(
         variables_itf_j[idx_rho][n_],
         variables_itf_i[idx_rho][w_],
         variables_itf_i[idx_rho][e_],
-        nb_pts_hori,
+        num_pts_hori,
     )
     req_u = ptopo.start_exchange_vectors(
         (variables_itf_j[idx_rho_u1][s_], variables_itf_j[idx_rho_u2][s_], variables_itf_j[idx_rho_w][s_]),
@@ -167,7 +167,7 @@ def rhs_euler_fv(
         variables_itf_j[idx_rho_theta][n_],
         variables_itf_i[idx_rho_theta][w_],
         variables_itf_i[idx_rho_theta][e_],
-        nb_pts_hori,
+        num_pts_hori,
     )
 
     # Unpack dynamical variables, each to arrays of size [nk,nj,ni]
@@ -204,7 +204,7 @@ def rhs_euler_fv(
     # Interior contribution to the derivatives, corrections for the boundaries will be added later
     # The "interior contribution" here is evaluated as if the fluxes at the element boundaries are
     # zero.
-    for elem in range(nb_elements_hori):
+    for elem in range(num_elements_hori):
         # epais = elem * num_solpts + numpy.arange(num_solpts)
         epais = elem
 
@@ -220,8 +220,8 @@ def rhs_euler_fv(
     # Since there is no communication step in the vertical, we can compute the boundary correction first
 
     # Extrapolate to top/bottom for each element
-    for slab in range(nb_pts_hori):
-        for elem in range(nb_elements_vert):
+    for slab in range(num_pts_hori):
+        for elem in range(num_elements_vert):
             # epais = elem * num_solpts + numpy.arange(num_solpts)
             epais = elem
             pos = elem + offset
@@ -252,11 +252,11 @@ def rhs_euler_fv(
     w_itf_k[:, -2, 1, :] = 0.0
 
     # Common Rusanov vertical fluxes
-    # flux_D_itf_k = numpy.empty((nb_equations, nb_interfaces_vert, geom.nj, geom.ni))
-    # flux_U_itf_k = numpy.empty((nb_equations, nb_interfaces_vert, geom.nj, geom.ni))
-    # eig_D_itf_k = numpy.empty((nb_interfaces_vert, geom.nj, geom.ni))
-    # eig_U_itf_k = numpy.empty((nb_interfaces_vert, geom.nj, geom.ni))
-    for itf in range(nb_interfaces_vert):
+    # flux_D_itf_k = numpy.empty((num_equations, num_interfaces_vert, geom.nj, geom.ni))
+    # flux_U_itf_k = numpy.empty((num_equations, num_interfaces_vert, geom.nj, geom.ni))
+    # eig_D_itf_k = numpy.empty((num_interfaces_vert, geom.nj, geom.ni))
+    # eig_U_itf_k = numpy.empty((num_interfaces_vert, geom.nj, geom.ni))
+    for itf in range(num_interfaces_vert):
 
         elem_D = itf
         elem_U = itf + 1
@@ -325,8 +325,8 @@ def rhs_euler_fv(
         )
         flux_x3_itf_k[:, :, elem_U, 0, :] = flux_x3_itf_k[:, :, elem_D, 1, :]
 
-    for slab in range(nb_pts_hori):
-        for elem in range(nb_elements_vert):
+    for slab in range(num_pts_hori):
+        for elem in range(num_elements_vert):
             # epais = elem * num_solpts + numpy.arange(num_solpts)
             epais = elem
             # TODO : inclure la transformation vers l'élément de référence dans la vitesse w.
@@ -373,7 +373,7 @@ def rhs_euler_fv(
     pressure_itf_j = p0 * numpy.exp((cpd / cvd) * numpy.log(variables_itf_j[idx_rho_theta] * (Rd / p0)))
 
     # Riemann solver
-    for itf in range(nb_interfaces_hori):
+    for itf in range(num_interfaces_hori):
 
         elem_L = itf
         elem_R = itf + 1
@@ -498,7 +498,7 @@ def rhs_euler_fv(
         flux_x2_itf_j[:, :, elem_R, 0, :] = flux_x2_itf_j[:, :, elem_L, 1, :]
 
     # Add corrections to the derivatives
-    for elem in range(nb_elements_hori):
+    for elem in range(num_elements_hori):
         # epais = elem * num_solpts + numpy.arange(num_solpts)
         epais = elem
 

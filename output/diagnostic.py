@@ -54,11 +54,11 @@ def potential_enstrophy(h, u1_contra, u2_contra, geom, metric, mtrx, param):
     return (rv + metric.coriolis_f) ** 2 / (2 * h)
 
 
-def global_integral(field, mtrx, metric, num_solpts, nb_elements_horiz):
+def global_integral(field, mtrx, metric, num_solpts, num_elements_horiz):
     local_sum = 0.0
-    for line in range(nb_elements_horiz):
+    for line in range(num_elements_horiz):
         min_lin, max_lin = line * num_solpts + numpy.array([0, num_solpts])
-        for column in range(nb_elements_horiz):
+        for column in range(num_elements_horiz):
             min_col, max_col = column * num_solpts + numpy.array([0, num_solpts])
             local_sum += numpy.sum(
                 field[min_lin:max_lin, min_col:max_col]

@@ -201,7 +201,7 @@ class KrylovJacobian:
         return (self.func(self.x0 + sc * v) - self.f0) / sc
 
     def solve(self, rhs, tol=0):
-        sol, res, norm_b, nb_iter, info, residuals = fgmres(
+        sol, res, norm_b, num_iter, info, residuals = fgmres(
             self.op,
             rhs,
             tol=tol,
@@ -209,7 +209,7 @@ class KrylovJacobian:
             maxiter=self.fgmres_maxiter,
             preconditioner=self.fgmres_precond,
         )
-        # print(f'reached residual {res:.3e} after {nb_iter:3d} iterations')
+        # print(f'reached residual {res:.3e} after {num_iter:3d} iterations')
         return sol
 
     def update(self, x, f):

@@ -29,8 +29,8 @@ class ColumnSet:
         self.run_id = Column("int", -1)
         self.step_id = Column("int", 0)
         self.dg_order = Column("int", param.num_solpts)
-        self.num_elem_h = Column("int", param.nb_elements_horizontal_total)
-        self.num_elem_v = Column("int", param.nb_elements_vertical)
+        self.num_elem_h = Column("int", param.num_elements_horizontal_total)
+        self.num_elem_v = Column("int", param.num_elements_vertical)
         self.initial_dt = Column("int", param.dt)
         self.dt = Column("int", param.dt)
         self.equations = Column("varchar(64)", param.equations)
@@ -273,7 +273,7 @@ def _sanitize_params(params: Configuration) -> Configuration:
         new_p.num_post_smoothe = 0
         new_p.pseudo_cfl = 0.0
         new_p.exp_smoothe_spectral_radii = []
-        new_p.exp_smoothe_nb_iters = []
+        new_p.exp_smoothe_num_iters = []
     elif new_p.preconditioner in ["p-mg", "fv-mg"]:
         if new_p.mg_smoother in ["kiops", "exp"]:
             new_p.pseudo_cfl = 0.0
@@ -281,6 +281,6 @@ def _sanitize_params(params: Configuration) -> Configuration:
             new_p.kiops_dt_factor = 0.0
         if new_p.mg_smoother in ["erk1", "erk3", "ark1", "kiops"]:
             new_p.exp_smoothe_spectral_radii = []
-            new_p.exp_smoothe_nb_iters = []
+            new_p.exp_smoothe_num_iters = []
 
     return new_p

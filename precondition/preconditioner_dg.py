@@ -47,7 +47,7 @@ class DG_preconditioner:
 
         self.big_order = param.num_solpts
         self.small_order = self.big_order - 1
-        self.num_elements = param.nb_elements_horizontal
+        self.num_elements = param.num_elements_horizontal
 
         self.max_iter = 1000
         # if self.small_order == 2:
@@ -68,8 +68,8 @@ class DG_preconditioner:
         self.small_param.filter_order = 8
 
         self.small_geom = cubed_sphere(
-            param.nb_elements_horizontal,
-            param.nb_elements_vertical,
+            param.num_elements_horizontal,
+            param.num_elements_vertical,
             self.small_order,
             param.λ0,
             param.ϕ0,

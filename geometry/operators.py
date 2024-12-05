@@ -339,7 +339,7 @@ class DFROperators:
         """
 
         # Array shape for the i-border of a single variable, based on the grid decomposition
-        border_shape = (grid.nb_elements_x1, 2)
+        border_shape = (grid.num_elements_x1, 2)
         # Number of variables we're extending
         # nbvars = numpy.prod(field_interior.shape) // (grid.ni)
         nbvars = field_interior.size // grid.ni
@@ -411,8 +411,8 @@ class DFROperators:
         # Reshape to a flat view.  Assigning to array.shape will raise an exception if the new shape would
         # require a memory copy; this implicitly ensures that the input arrays are fully contiguous in
         # memory.
-        field_view.shape = (nbvars * grid.nb_elements_x2, grid.num_solpts, grid.ni)
-        border_j_view.shape = (nbvars * grid.nb_elements_x2, 2, grid.ni)
+        field_view.shape = (nbvars * grid.num_elements_x2, grid.num_solpts, grid.ni)
+        border_j_view.shape = (nbvars * grid.num_elements_x2, 2, grid.ni)
         output.shape = field_view.shape
 
         # Perform the matrix transposition
@@ -446,7 +446,7 @@ class DFROperators:
         """
 
         # Array shape for the i-border of a single variable, based on the grid decomposition
-        border_shape = (grid.nb_elements_x2, 2, grid.ni)
+        border_shape = (grid.num_elements_x2, 2, grid.ni)
         # Number of variables times number of vertical levels we're extending
         # nbvars = numpy.prod(field_interior.shape) // (grid.ni * grid.nj)
         nbvars = field_interior.size // (grid.ni * grid.nj)
@@ -520,8 +520,8 @@ class DFROperators:
         # Reshape to a flat view.  Assigning to array.shape will raise an exception if the new shape would
         # require a memory copy; this implicitly ensures that the input arrays are fully contiguous in
         # memory.
-        field_view.shape = (nbvars * grid.nb_elements_x3, grid.num_solpts, grid.ni * grid.nj)
-        border_k_view.shape = (nbvars * grid.nb_elements_x3, 2, grid.ni * grid.nj)
+        field_view.shape = (nbvars * grid.num_elements_x3, grid.num_solpts, grid.ni * grid.nj)
+        border_k_view.shape = (nbvars * grid.num_elements_x3, 2, grid.ni * grid.nj)
         output.shape = field_view.shape
 
         # Perform the matrix transposition
@@ -563,18 +563,18 @@ class DFROperators:
         if out is None:
             # Output array
             filtered = numpy.empty(
-                (nbvars * grid.nb_elements_x3, grid.num_solpts, grid.ni * grid.nj),
+                (nbvars * grid.num_elements_x3, grid.num_solpts, grid.ni * grid.nj),
                 dtype=field_interior.dtype,
                 like=field_interior,
             )
         else:
             # Create a view of the output so that the shape of the original is not modified
             filtered = out.view()
-            filtered.shape = (nbvars * grid.nb_elements_x3, grid.num_solpts, grid.ni * grid.nj)
+            filtered.shape = (nbvars * grid.num_elements_x3, grid.num_solpts, grid.ni * grid.nj)
 
         # Create an array view of the interior, reshaped for matrix multiplication
         field_interior_view = field_interior.view()
-        field_interior_view.shape = (nbvars * grid.nb_elements_x3, grid.num_solpts, grid.ni * grid.nj)
+        field_interior_view.shape = (nbvars * grid.num_elements_x3, grid.num_solpts, grid.ni * grid.nj)
 
         filtered[:] = self.highfilter @ field_interior_view
         filtered.shape = field_interior.shape
@@ -603,7 +603,7 @@ class DFROperators:
         """
 
         # Array shape for the i-border of a single variable, based on the grid decomposition
-        border_shape = (grid.nb_elements_x3, 2, grid.nj, grid.ni)
+        border_shape = (grid.num_elements_x3, 2, grid.nj, grid.ni)
         # Number of variables we're extending
         # nbvars = numpy.prod(field_interior.shape) // (grid.ni * grid.nj * grid.nk)
         nbvars = field_interior.size // (grid.ni * grid.nj * grid.nk)

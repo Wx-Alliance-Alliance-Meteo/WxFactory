@@ -32,8 +32,8 @@ class Factorization(Preconditioner):
             str_hash(param.grid_type),
             str_hash(param.jacobian_method),
             param.num_solpts,
-            param.nb_elements_horizontal,
-            param.nb_elements_vertical,
+            param.num_elements_horizontal,
+            param.num_elements_vertical,
         )
 
         matrix_hash = values.__hash__() & 0xFFFFFFFFFFFF

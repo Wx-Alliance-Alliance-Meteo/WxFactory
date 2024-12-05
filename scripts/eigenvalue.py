@@ -280,7 +280,7 @@ def main(args):
         if param.equations == "euler" and param.grid_type == "cubed_sphere":
             num_vars = 5
         p = permutations_3d(
-            MPI.COMM_WORLD.size, param.nb_elements_horizontal, param.nb_elements_vertical, param.num_solpts, num_vars
+            MPI.COMM_WORLD.size, param.num_elements_horizontal, param.num_elements_vertical, param.num_solpts, num_vars
         )
 
         for rhs_name in ["all", "implicit", "explicit"]:

@@ -3,17 +3,19 @@ import numpy
 from common.definitions import idx_h, idx_hu1, idx_hu2, gravity
 
 
-def rhs_sw_stiff(Q: numpy.ndarray, geom, mtrx, metric, topo, ptopo, num_solpts: int, nb_elements_hori: int):
+def rhs_sw_stiff(Q: numpy.ndarray, geom, mtrx, metric, topo, ptopo, num_solpts: int, num_elements_hori: int):
 
     type_vec = Q.dtype
-    nb_equations = Q.shape[0]
-    nb_interfaces_hori = nb_elements_hori + 1
+    num_equations = Q.shape[0]
+    num_interfaces_hori = num_elements_hori + 1
 
     df1_dx1, df2_dx2, flux_x1, flux_x2 = [numpy.empty_like(Q, dtype=type_vec) for _ in range(4)]
 
-    flux_x1_itf_i = numpy.zeros((nb_equations, nb_elements_hori + 2, num_solpts * nb_elements_hori, 2), dtype=type_vec)
+    flux_x1_itf_i = numpy.zeros(
+        (num_equations, num_elements_hori + 2, num_solpts * num_elements_hori, 2), dtype=type_vec
+    )
     flux_x2_itf_j, var_itf_i, var_itf_j = [
-        numpy.zeros((nb_equations, nb_elements_hori + 2, 2, num_solpts * nb_elements_hori), dtype=type_vec)
+        numpy.zeros((num_equations, num_elements_hori + 2, 2, num_solpts * num_elements_hori), dtype=type_vec)
         for _ in range(3)
     ]
 
@@ -28,7 +30,7 @@ def rhs_sw_stiff(Q: numpy.ndarray, geom, mtrx, metric, topo, ptopo, num_solpts: 
     u2 = Q[idx_hu2] / Q[idx_h]
 
     # Interpolate to the element interface
-    for elem in range(nb_elements_hori):
+    for elem in range(num_elements_hori):
         epais = elem * num_solpts + numpy.arange(num_solpts)
         pos = elem + offset
 
@@ -72,7 +74,7 @@ def rhs_sw_stiff(Q: numpy.ndarray, geom, mtrx, metric, topo, ptopo, num_solpts: 
     flux_x2[idx_hu2] = metric.sqrtG * (0.5 * gravity * metric.H_contra_22 * hsquared)
 
     # Interior contribution to the derivatives, corrections for the boundaries will be added later
-    for elem in range(nb_elements_hori):
+    for elem in range(num_elements_hori):
         epais = elem * num_solpts + numpy.arange(num_solpts)
 
         # --- Direction x1
@@ -96,7 +98,7 @@ def rhs_sw_stiff(Q: numpy.ndarray, geom, mtrx, metric, topo, ptopo, num_solpts: 
         var_itf_j[idx_h] -= topo.hsurf_itf_j
 
     # Common AUSM fluxes
-    for itf in range(nb_interfaces_hori):
+    for itf in range(num_interfaces_hori):
 
         elem_L = itf
         elem_R = itf + 1
@@ -214,7 +216,7 @@ def rhs_sw_stiff(Q: numpy.ndarray, geom, mtrx, metric, topo, ptopo, num_solpts: 
         flux_x2_itf_j[:, elem_R, 0, :] = flux_x2_itf_j[:, elem_L, 1, :]
 
     # Compute the derivatives
-    for elem in range(nb_elements_hori):
+    for elem in range(num_elements_hori):
         epais = elem * num_solpts + numpy.arange(num_solpts)
 
         # --- Direction x1

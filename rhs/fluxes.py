@@ -227,14 +227,14 @@ def rusanov_3d_vert(
     pressure_itf_k,
     w_itf_k,
     metric,
-    nb_interfaces_vert,
+    num_interfaces_vert,
     advection_only,
     flux_x3_itf_k,
     wflux_adv_x3_itf_k,
     wflux_pres_x3_itf_k,
 ):
     """Compute common Rusanov vertical fluxes"""
-    for itf in range(nb_interfaces_vert):
+    for itf in range(num_interfaces_vert):
 
         elem_D = itf
         elem_U = itf + 1
@@ -328,7 +328,7 @@ def rusanov_3d_hori_i_new(
     variables_itf_i,
     pressure_itf_i,
     metric: Metric3DTopo,
-    nb_interfaces_hori,
+    num_interfaces_hori,
     advection_only,
     flux_x1_itf_i,
     wflux_adv_x1_itf_i,
@@ -408,14 +408,14 @@ def rusanov_3d_hori_i(
     variables_itf_i,
     pressure_itf_i,
     metric,
-    nb_interfaces_hori,
+    num_interfaces_hori,
     advection_only,
     flux_x1_itf_i,
     wflux_adv_x1_itf_i,
     wflux_pres_x1_itf_i,
 ):
 
-    for itf in range(nb_interfaces_hori):
+    for itf in range(num_interfaces_hori):
 
         elem_L = itf
         elem_R = itf + 1
@@ -509,7 +509,7 @@ def rusanov_3d_hori_j_new(
     variables_itf_j,
     pressure_itf_j,
     metric: Metric3DTopo,
-    nb_interfaces_hori,
+    num_interfaces_hori,
     advection_only,
     flux_x2_itf_j,
     wflux_adv_x2_itf_j,
@@ -587,13 +587,13 @@ def rusanov_3d_hori_j(
     variables_itf_j,
     pressure_itf_j,
     metric,
-    nb_interfaces_hori,
+    num_interfaces_hori,
     advection_only,
     flux_x2_itf_j,
     wflux_adv_x2_itf_j,
     wflux_pres_x2_itf_j,
 ):
-    for itf in range(nb_interfaces_hori):
+    for itf in range(num_interfaces_hori):
 
         elem_L = itf
         elem_R = itf + 1

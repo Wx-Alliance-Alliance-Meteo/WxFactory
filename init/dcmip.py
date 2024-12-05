@@ -366,15 +366,15 @@ def dcmip_mountain(geom: CubedSphere3D, metric, mtrx, param):
     # Height at every grid and interface point
     h_surf = compute_height_from_dist(distance)
 
-    nb_interfaces_horiz = param.nb_elements_horizontal + 1
-    h_surf_itf_i = numpy.zeros((param.nb_elements_horizontal + 2, param.num_solpts * param.nb_elements_horizontal, 2))
-    h_surf_itf_j = numpy.zeros((param.nb_elements_horizontal + 2, 2, param.num_solpts * param.nb_elements_horizontal))
+    num_interfaces_horiz = param.num_elements_horizontal + 1
+    h_surf_itf_i = numpy.zeros((param.num_elements_horizontal + 2, param.num_solpts * param.num_elements_horizontal, 2))
+    h_surf_itf_j = numpy.zeros((param.num_elements_horizontal + 2, 2, param.num_solpts * param.num_elements_horizontal))
 
-    h_surf_itf_i[0:nb_interfaces_horiz, :, 1] = compute_height_from_dist(distance_itf_i.T)
-    h_surf_itf_i[1 : nb_interfaces_horiz + 1, :, 0] = h_surf_itf_i[0:nb_interfaces_horiz, :, 1]
+    h_surf_itf_i[0:num_interfaces_horiz, :, 1] = compute_height_from_dist(distance_itf_i.T)
+    h_surf_itf_i[1 : num_interfaces_horiz + 1, :, 0] = h_surf_itf_i[0:num_interfaces_horiz, :, 1]
 
-    h_surf_itf_j[0:nb_interfaces_horiz, 1, :] = compute_height_from_dist(distance_itf_j)
-    h_surf_itf_j[1 : nb_interfaces_horiz + 1, 0, :] = h_surf_itf_j[0:nb_interfaces_horiz, 1, :]
+    h_surf_itf_j[0:num_interfaces_horiz, 1, :] = compute_height_from_dist(distance_itf_j)
+    h_surf_itf_j[1 : num_interfaces_horiz + 1, 0, :] = h_surf_itf_j[0:num_interfaces_horiz, 1, :]
 
     # Height derivative along x and y at every grid point
     _, ni, nj = geom.lon.shape
@@ -382,7 +382,7 @@ def dcmip_mountain(geom: CubedSphere3D, metric, mtrx, param):
     dhdx2 = numpy.zeros((ni, nj))
 
     offset = 1  # Offset due to the halo
-    for elem in range(param.nb_elements_horizontal):
+    for elem in range(param.num_elements_horizontal):
         epais = elem * param.num_solpts + numpy.arange(param.num_solpts)
 
         # --- Direction x1

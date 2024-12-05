@@ -91,15 +91,15 @@ def initialize_euler(geom: CubedSphere3D, metric, mtrx, param):
 
     xp = geom.device.xp
 
-    nb_equations = 5
+    num_equations = 5
 
     if param.case_number == 11:
-        nb_equations = 9
+        num_equations = 9
         rho, u1_contra, u2_contra, w, potential_temperature, q1, q2, q3, q4 = dcmip_advection_deformation(
             geom, metric, mtrx, param
         )
     elif param.case_number == 12:
-        nb_equations = 6
+        num_equations = 6
         rho, u1_contra, u2_contra, w, potential_temperature, q1 = dcmip_advection_hadley(geom, metric, mtrx, param)
     elif param.case_number == 20:
         rho, u1_contra, u2_contra, w, potential_temperature = dcmip_steady_state_mountain(geom, metric, mtrx, param)
@@ -112,7 +112,7 @@ def initialize_euler(geom: CubedSphere3D, metric, mtrx, param):
     else:
         raise ValueError("Something has gone horribly wrong in initialization. Back away slowly")
 
-    Q = xp.zeros((nb_equations,) + rho.shape, dtype=rho.dtype)
+    Q = xp.zeros((num_equations,) + rho.shape, dtype=rho.dtype)
 
     Q[idx_rho, ...] = rho
     Q[idx_rho_u1, ...] = rho * u1_contra
@@ -135,7 +135,7 @@ def initialize_sw(geom: CubedSphere2D, metric, mtrx, param):
     xp = geom.device.xp
 
     # ni, nj = geom.lon.shape
-    nb_equations = 3
+    num_equations = 3
 
     base_shape = geom.lon.shape
     itf_i_shape = geom.lon_itf_i.shape
@@ -185,7 +185,7 @@ def initialize_sw(geom: CubedSphere2D, metric, mtrx, param):
     else:
         raise ValueError(f"Unknown case number {param.case_number} for Shallow Water equations")
 
-    Q = xp.zeros((nb_equations,) + base_shape)
+    Q = xp.zeros((num_equations,) + base_shape)
     Q[idx_h, ...] = fluid_height
 
     if param.case_number <= 1:
@@ -203,12 +203,12 @@ def initialize_sw(geom: CubedSphere2D, metric, mtrx, param):
 def initialize_cartesian2d(geom: Cartesian2D, param: Configuration) -> NDArray[numpy.float64]:
     """Initialize a problem on a 2D cartesian grid based on a case number."""
 
-    nb_equations = 4
+    num_equations = 4
     xp = geom.device.xp
 
     # Initial state at rest, isentropic, hydrostatic
     #   nk, ni = geom.X1.shape
-    Q = xp.zeros((nb_equations, param.nb_elements_vertical, param.nb_elements_horizontal, geom.num_solpts**2))
+    Q = xp.zeros((num_equations, param.num_elements_vertical, param.num_elements_horizontal, geom.num_solpts**2))
     uu = xp.zeros_like(geom.X1)
     ww = xp.zeros_like(geom.X1)
     exner = xp.zeros_like(geom.X1)

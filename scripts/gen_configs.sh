@@ -39,8 +39,8 @@ function make_config() {
 }
 
 # Problem size
-nb_elements_horizontal=80
-nb_elements_vertical=8
+num_elements_horizontal=80
+num_elements_vertical=8
 RESULT_DIR=${GEF_DIR}/multi_config_results
 # RESULT_DIR=${GEF_DIR}/multi_config_results
 
@@ -60,7 +60,7 @@ starting_step=0
 
 cp ${ORIG_CONFIG} ${TMP_BASE_CONFIG}
 set_param_strict ${TMP_BASE_CONFIG} dt t_end time_integrator tolerance starting_step gmres_restart          \
-                             num_solpts nb_elements_horizontal nb_elements_vertical preconditioner            \
+                             num_solpts num_elements_horizontal num_elements_vertical preconditioner            \
                              output_freq save_state_freq store_solver_stats output_dir solver_stats_file
 
 do_no_precond=0
@@ -78,11 +78,11 @@ for tolerance in 1e-6; do
     # No precond
     if [ ${do_no_precond} -gt 0 ]; then
         time_integrator=epi2
-        make_config ${DEST_DIR}/epi2_${nb_elements_horizontal}x${nb_elements_vertical}_${tolerance}.ini \
+        make_config ${DEST_DIR}/epi2_${num_elements_horizontal}x${num_elements_vertical}_${tolerance}.ini \
             time_integrator tolerance solver_stats_file
 
         time_integrator=ros2
-        make_config ${DEST_DIR}/ros2_${nb_elements_horizontal}x${nb_elements_vertical}_${tolerance}.ini \
+        make_config ${DEST_DIR}/ros2_${num_elements_horizontal}x${num_elements_vertical}_${tolerance}.ini \
             time_integrator tolerance solver_stats_file
     fi
 
@@ -91,7 +91,7 @@ for tolerance in 1e-6; do
         time_integrator=ros2
         preconditioner=fv
         for precond_tolerance in 6e-1 5e-1 4e-1 3e-1 2e-1 1e-1 5e-2 2e-2; do
-            make_config ${DEST_DIR}/fv_${nb_elements_horizontal}x${nb_elements_vertical}_${tolerance}_${precond_tolerance}.ini \
+            make_config ${DEST_DIR}/fv_${num_elements_horizontal}x${num_elements_vertical}_${tolerance}_${precond_tolerance}.ini \
                 time_integrator precond_tolerance preconditioner tolerance solver_stats_file
         done
     fi
@@ -110,7 +110,7 @@ for tolerance in 1e-6; do
         # for pseudo_cfl in 16.5e4 17.0e4 17.5e4 18.0e4 18.5e4 19.0e4 19.5e4 20.0e4; do
         for pseudo_cfl in $(seq 12 2 16); do
         for precond_tolerance in 1e-1; do
-            make_config ${DEST_DIR}/fv-mg_${nb_elements_horizontal}x${nb_elements_vertical}_${tolerance}_${mg_smoother}_${num_pre_smoothe}${num_post_smoothe}${mg_solve_coarsest}_${pseudo_cfl}_${precond_tolerance}.ini \
+            make_config ${DEST_DIR}/fv-mg_${num_elements_horizontal}x${num_elements_vertical}_${tolerance}_${mg_smoother}_${num_pre_smoothe}${num_post_smoothe}${mg_solve_coarsest}_${pseudo_cfl}_${precond_tolerance}.ini \
                 time_integrator preconditioner mg_smoother num_pre_smoothe num_post_smoothe pseudo_cfl precond_tolerance tolerance solver_stats_file mg_solve_coarsest
         done
         done
@@ -131,7 +131,7 @@ for tolerance in 1e-6; do
         # for pseudo_cfl in 16.5e4 17.0e4 17.5e4 18.0e4 18.5e4 19.0e4 19.5e4 20.0e4; do
         for pseudo_cfl in $(seq 0.65 0.05 0.85); do
         for precond_tolerance in 1e-1; do
-            make_config ${DEST_DIR}/fv-mg_${nb_elements_horizontal}x${nb_elements_vertical}_${tolerance}_${mg_smoother}_${num_pre_smoothe}${num_post_smoothe}${mg_solve_coarsest}_${pseudo_cfl}_${precond_tolerance}.ini \
+            make_config ${DEST_DIR}/fv-mg_${num_elements_horizontal}x${num_elements_vertical}_${tolerance}_${mg_smoother}_${num_pre_smoothe}${num_post_smoothe}${mg_solve_coarsest}_${pseudo_cfl}_${precond_tolerance}.ini \
                 time_integrator preconditioner mg_smoother num_pre_smoothe num_post_smoothe pseudo_cfl precond_tolerance tolerance solver_stats_file mg_solve_coarsest gmres_restart
         done
         done
@@ -152,7 +152,7 @@ for tolerance in 1e-6; do
         # for pseudo_cfl in 7.4e4 7.6e4; do
         for pseudo_cfl in $(seq 4.0 0.5 9.0); do
         for precond_tolerance in 1e-1; do
-            make_config ${DEST_DIR}/fv-mg_${nb_elements_horizontal}x${nb_elements_vertical}_${tolerance}_${mg_smoother}_${num_pre_smoothe}${num_post_smoothe}${mg_solve_coarsest}_${pseudo_cfl}_${precond_tolerance}.ini \
+            make_config ${DEST_DIR}/fv-mg_${num_elements_horizontal}x${num_elements_vertical}_${tolerance}_${mg_smoother}_${num_pre_smoothe}${num_post_smoothe}${mg_solve_coarsest}_${pseudo_cfl}_${precond_tolerance}.ini \
                 time_integrator preconditioner mg_smoother num_pre_smoothe num_post_smoothe pseudo_cfl precond_tolerance tolerance solver_stats_file mg_solve_coarsest
         done
         done
@@ -174,7 +174,7 @@ for tolerance in 1e-6; do
             mg_solve_coarsest=1
             exp_smoothe_spectral_radii="[${lvl0}, ${lvl1}, ${lvl2}]"
             for precond_tolerance in 2.0 1.5 1.0 9e-1; do
-                make_config ${DEST_DIR}/fv-mg_${nb_elements_horizontal}x${nb_elements_vertical}_${tolerance}_${mg_smoother}_${lvl0}-${lvl1}-${lvl2}-${num_pre_smoothe}${num_post_smoothe}${mg_solve_coarsest}_${precond_tolerance}.ini \
+                make_config ${DEST_DIR}/fv-mg_${num_elements_horizontal}x${num_elements_vertical}_${tolerance}_${mg_smoother}_${lvl0}-${lvl1}-${lvl2}-${num_pre_smoothe}${num_post_smoothe}${mg_solve_coarsest}_${precond_tolerance}.ini \
                     time_integrator preconditioner mg_smoother exp_smoothe_spectral_radii precond_tolerance tolerance \
                     solver_stats_file mg_solve_coarsest num_pre_smoothe num_post_smoothe
             done

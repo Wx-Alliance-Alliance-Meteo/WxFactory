@@ -42,9 +42,11 @@ def blockstats_cs(Q, geom, topo, metric, mtrx, param, step):
             if initial_mass is None and MPI.COMM_WORLD.rank == 0:
                 print("Nothing!!!!!")
         except NameError:
-            initial_mass = global_integral(h, mtrx, metric, param.num_solpts, param.nb_elements_horizontal)
-            initial_energy = global_integral(energy, mtrx, metric, param.num_solpts, param.nb_elements_horizontal)
-            initial_enstrophy = global_integral(enstrophy, mtrx, metric, param.num_solpts, param.nb_elements_horizontal)
+            initial_mass = global_integral(h, mtrx, metric, param.num_solpts, param.num_elements_horizontal)
+            initial_energy = global_integral(energy, mtrx, metric, param.num_solpts, param.num_elements_horizontal)
+            initial_enstrophy = global_integral(
+                enstrophy, mtrx, metric, param.num_solpts, param.num_elements_horizontal
+            )
 
             if MPI.COMM_WORLD.rank == 0:
                 print(f"Integral of mass = {initial_mass}")
@@ -55,11 +57,11 @@ def blockstats_cs(Q, geom, topo, metric, mtrx, param, step):
         print("Blockstats for timestep ", step)
 
     if param.case_number <= 2 or param.case_number == 10:
-        absol_err = global_integral(abs(h - h_anal), mtrx, metric, param.num_solpts, param.nb_elements_horizontal)
-        int_h_anal = global_integral(abs(h_anal), mtrx, metric, param.num_solpts, param.nb_elements_horizontal)
+        absol_err = global_integral(abs(h - h_anal), mtrx, metric, param.num_solpts, param.num_elements_horizontal)
+        int_h_anal = global_integral(abs(h_anal), mtrx, metric, param.num_solpts, param.num_elements_horizontal)
 
-        absol_err2 = global_integral((h - h_anal) ** 2, mtrx, metric, param.num_solpts, param.nb_elements_horizontal)
-        int_h_anal2 = global_integral(h_anal**2, mtrx, metric, param.num_solpts, param.nb_elements_horizontal)
+        absol_err2 = global_integral((h - h_anal) ** 2, mtrx, metric, param.num_solpts, param.num_elements_horizontal)
+        int_h_anal2 = global_integral(h_anal**2, mtrx, metric, param.num_solpts, param.num_elements_horizontal)
 
         max_absol_err = MPI.COMM_WORLD.allreduce(numpy.max(abs(h - h_anal)), op=MPI.MAX)
         max_h_anal = MPI.COMM_WORLD.allreduce(numpy.max(h_anal), op=MPI.MAX)
@@ -71,9 +73,9 @@ def blockstats_cs(Q, geom, topo, metric, mtrx, param, step):
             print(f"l1 = {l1} \t l2 = {l2} \t linf = {linf}")
 
     if param.case_number >= 2:
-        int_mass = global_integral(h, mtrx, metric, param.num_solpts, param.nb_elements_horizontal)
-        int_energy = global_integral(energy, mtrx, metric, param.num_solpts, param.nb_elements_horizontal)
-        int_enstrophy = global_integral(enstrophy, mtrx, metric, param.num_solpts, param.nb_elements_horizontal)
+        int_mass = global_integral(h, mtrx, metric, param.num_solpts, param.num_elements_horizontal)
+        int_energy = global_integral(energy, mtrx, metric, param.num_solpts, param.num_elements_horizontal)
+        int_enstrophy = global_integral(enstrophy, mtrx, metric, param.num_solpts, param.num_elements_horizontal)
 
         normalized_mass = (int_mass - initial_mass) / initial_mass
         normalized_energy = (int_energy - initial_energy) / initial_energy

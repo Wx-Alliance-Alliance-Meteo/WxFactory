@@ -36,17 +36,17 @@ class PDE(ABC):
         self.device = device
 
         if isinstance(geometry, Cartesian2D):
-            self.nb_dim = 2
-            self.nb_var = 4
-            self.nb_elements = config.nb_elements_horizontal * config.nb_elements_vertical
+            self.num_dim = 2
+            self.num_var = 4
+            self.num_elements = config.num_elements_horizontal * config.num_elements_vertical
         elif isinstance(geometry, CubedSphere2D):
-            self.nb_dim = 2
-            self.nb_var = 3
-            self.nb_elements = config.nb_elements_horizontal**2
+            self.num_dim = 2
+            self.num_var = 3
+            self.num_elements = config.num_elements_horizontal**2
         elif isinstance(geometry, CubedSphere3D):
-            self.nb_dim = 3
-            self.nb_var = 5
-            self.nb_elements = config.nb_elements_horizontal**2 * config.nb_elements_vertical
+            self.num_dim = 3
+            self.num_var = 5
+            self.num_elements = config.num_elements_horizontal**2 * config.num_elements_vertical
         else:
             raise ValueError(f"Unrecognized geometry {Geometry}")
 
@@ -54,9 +54,9 @@ class PDE(ABC):
         self.libmodule = None
 
         # Store the metric terms
-        nb_solpts = config.num_solpts
-        self.metrics = device.xp.ones((self.nb_dim**2, self.nb_elements, nb_solpts))
-        self.sqrt_g = device.xp.ones((self.nb_elements, nb_solpts))
+        num_solpts = config.num_solpts
+        self.metrics = device.xp.ones((self.num_dim**2, self.num_elements, num_solpts))
+        self.sqrt_g = device.xp.ones((self.num_elements, num_solpts))
 
         # Store the cubed-sphere metrics if needed
         if isinstance(geometry, CubedSphere2D):

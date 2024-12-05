@@ -22,7 +22,7 @@ class Bdf2(Integrator):
                 init_dt = dt / self.init_substeps
                 nonlin_fun = lambda Q_plus: (Q_plus - newQ) / init_dt - 0.5 * self.rhs(Q_plus)
 
-                newQ, nb_iter, residuals = newton_krylov(nonlin_fun, newQ, f_tol=self.tol)
+                newQ, num_iter, residuals = newton_krylov(nonlin_fun, newQ, f_tol=self.tol)
         else:
             maxiter = None
 
@@ -32,12 +32,12 @@ class Bdf2(Integrator):
             if self.preconditioner is not None:
                 self.preconditioner.prepare(dt, Q, self.Qprev)
                 maxiter = 800
-            newQ, nb_iter, residuals = newton_krylov(
+            newQ, num_iter, residuals = newton_krylov(
                 nonlin_fun, Q, f_tol=self.tol, fgmres_precond=self.preconditioner, verbose=False, maxiter=maxiter
             )
         t1 = time()
 
-        self.solver_info = SolverInfo(0, t1 - t0, nb_iter, residuals)
+        self.solver_info = SolverInfo(0, t1 - t0, num_iter, residuals)
 
         self.Qprev = Q.copy()
 

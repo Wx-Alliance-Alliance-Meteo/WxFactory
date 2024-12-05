@@ -112,12 +112,12 @@ class RhsEuler:
         metric: Metric3DTopo,
         ptopo: ProcessTopology,
         num_solpts: int,
-        nb_elements_hori: int,
-        nb_elements_vert: int,
+        num_elements_hori: int,
+        num_elements_vert: int,
         case_number: int,
         device: Device = default_device,
     ) -> None:
-        # super().__init__(shape, geom, operators, metric, ptopo, num_solpts, nb_elements_hori, nb_elements_vert,
+        # super().__init__(shape, geom, operators, metric, ptopo, num_solpts, num_elements_hori, num_elements_vert,
         #                  case_number, device)
         self.shape = shape
         self.geom = geom
@@ -125,8 +125,8 @@ class RhsEuler:
         self.metric = metric
         self.ptopo = ptopo
         self.num_solpts = num_solpts
-        self.nb_elements_hori = nb_elements_hori
-        self.nb_elements_vert = nb_elements_vert
+        self.num_elements_hori = num_elements_hori
+        self.num_elements_vert = num_elements_vert
         self.case_number = case_number
         self.device = device
 
@@ -149,8 +149,8 @@ class RhsEuler:
             self.metric,
             self.ptopo,
             self.num_solpts,
-            self.nb_elements_hori,
-            self.nb_elements_vert,
+            self.num_elements_hori,
+            self.num_elements_vert,
             self.case_number,
             self.device,
         )
@@ -164,8 +164,8 @@ class RhsEuler:
         metric: Metric3DTopo,
         ptopo: ProcessTopology,
         num_solpts: int,
-        nb_elements_hori: int,
-        nb_elements_vert: int,
+        num_elements_hori: int,
+        num_elements_vert: int,
         case_number: int,
         device: Device,
     ) -> NDArray:
@@ -195,9 +195,9 @@ class RhsEuler:
            Wraps the information and communication functions necessary for MPI distribution
         :param num_solpts: int
            Number of interior nodal points per element.  A 3D element will contain num_solpts**3 internal points.
-        :param nb_elements_hori: int
+        :param num_elements_hori: int
            Number of elements in x/y on each panel of the cubed sphere
-        :param nb_elements_vert: int
+        :param num_elements_vert: int
            Number of elements in the vertical
         :param case_number: int
            DCMIP case number, used to selectively enable or disable parts of the Euler equations to accomplish
@@ -213,14 +213,14 @@ class RhsEuler:
         mid_j = xp.s_[..., 1:-1, :, :]
         mid_k = xp.s_[..., 1:-1, :, :, :]
 
-        nb_equations = Q.shape[0]  # Number of constituent Euler equations.  Probably 6.
+        num_equations = Q.shape[0]  # Number of constituent Euler equations.  Probably 6.
 
         # Flag for advection-only processing, with DCMIP test cases 11 and 12
         advection_only = case_number < 13
 
-        itf_i_shape = (nb_equations,) + geom.itf_i_shape
-        itf_j_shape = (nb_equations,) + geom.itf_j_shape
-        itf_k_shape = (nb_equations,) + geom.itf_k_shape
+        itf_i_shape = (num_equations,) + geom.itf_i_shape
+        itf_j_shape = (num_equations,) + geom.itf_j_shape
+        itf_k_shape = (num_equations,) + geom.itf_k_shape
 
         # Interpolate to the element interface (middle elements only, halo remains 0)
         var_itf_i = xp.ones(itf_i_shape, dtype=Q.dtype)
@@ -248,7 +248,7 @@ class RhsEuler:
             var_itf_j[idx_rho][n2_],
             var_itf_i[idx_rho][w2_],
             var_itf_i[idx_rho][e2_],
-            boundary_shape=(nb_elements_hori, num_solpts, num_solpts),
+            boundary_shape=(num_elements_hori, num_solpts, num_solpts),
             flip_dim=(-3, -1),
         )
         req_u = ptopo.start_exchange_vectors(
@@ -265,7 +265,7 @@ class RhsEuler:
             var_itf_j[idx_rho_theta][n2_],
             var_itf_i[idx_rho_theta][w2_],
             var_itf_i[idx_rho_theta][e2_],
-            boundary_shape=(nb_elements_hori, num_solpts, num_solpts),
+            boundary_shape=(num_elements_hori, num_solpts, num_solpts),
             flip_dim=(-3, -1),
         )
 

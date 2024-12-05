@@ -55,12 +55,16 @@ class ProcessTopology:
         self.size = comm.Get_size()
         self.rank = comm.Get_rank() if rank is None else rank
 
-        self.nb_pe_per_panel = int(self.size / 6)
-        self.nb_lines_per_panel = int(math.sqrt(self.nb_pe_per_panel))
+        self.num_pe_per_panel = int(self.size / 6)
+        self.num_lines_per_panel = int(math.sqrt(self.num_pe_per_panel))
 
-        if self.size < 6 or self.nb_pe_per_panel != self.nb_lines_per_panel**2 or self.nb_pe_per_panel * 6 != self.size:
-            allowed_low = self.nb_lines_per_panel**2 * 6
-            allowed_high = (self.nb_lines_per_panel + 1) ** 2 * 6
+        if (
+            self.size < 6
+            or self.num_pe_per_panel != self.num_lines_per_panel**2
+            or self.num_pe_per_panel * 6 != self.size
+        ):
+            allowed_low = self.num_lines_per_panel**2 * 6
+            allowed_high = (self.num_lines_per_panel + 1) ** 2 * 6
             raise ValueError(
                 f"Wrong number of PEs ({self.size}). "
                 f"Closest allowed processor counts are {allowed_low} and {allowed_high}"
@@ -68,15 +72,15 @@ class ProcessTopology:
 
         def rank_from_location(panel, row, col):
             if row < 0:
-                row += self.nb_lines_per_panel
+                row += self.num_lines_per_panel
             if col < 0:
-                col += self.nb_lines_per_panel
-            return panel * self.nb_pe_per_panel + row * self.nb_lines_per_panel + col
+                col += self.num_lines_per_panel
+            return panel * self.num_pe_per_panel + row * self.num_lines_per_panel + col
 
-        self.my_panel = math.floor(self.rank / self.nb_pe_per_panel)
-        self.my_rank_in_panel = self.rank - (self.my_panel * self.nb_pe_per_panel)
-        self.my_row = math.floor(self.my_rank_in_panel / self.nb_lines_per_panel)
-        self.my_col = int(self.my_rank_in_panel % self.nb_lines_per_panel)
+        self.my_panel = math.floor(self.rank / self.num_pe_per_panel)
+        self.my_rank_in_panel = self.rank - (self.my_panel * self.num_pe_per_panel)
+        self.my_row = math.floor(self.my_rank_in_panel / self.num_lines_per_panel)
+        self.my_col = int(self.my_rank_in_panel % self.num_lines_per_panel)
 
         # --- List of panel neighbours for my panel
         #
@@ -213,7 +217,7 @@ class ProcessTopology:
         self.flip = [False, False, False, False]
 
         # --- North panel edge
-        if self.my_row == self.nb_lines_per_panel - 1:
+        if self.my_row == self.num_lines_per_panel - 1:
             my_north = rank_from_location(neighbor_panels[NORTH], *edge_coords[self.my_panel][NORTH])
             self.convert_contra[NORTH] = convert_contras[self.my_panel][NORTH]
             self.convert_cov[NORTH] = convert_covs[self.my_panel][NORTH]
@@ -234,7 +238,7 @@ class ProcessTopology:
             self.flip[WEST] = flips[self.my_panel][WEST]
 
         # --- East panel edge
-        if self.my_col == self.nb_lines_per_panel - 1:
+        if self.my_col == self.num_lines_per_panel - 1:
             my_east = rank_from_location(neighbor_panels[EAST], *edge_coords[self.my_panel][EAST])
             self.convert_contra[EAST] = convert_contras[self.my_panel][EAST]
             self.convert_cov[EAST] = convert_covs[self.my_panel][EAST]

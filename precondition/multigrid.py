@@ -56,16 +56,16 @@ class MultigridLevel:
         ptopo: ProcessTopology,
         device: Device,
         discretization: str,
-        nb_elem_horiz: int,
-        nb_elem_vert: int,
+        num_elem_horiz: int,
+        num_elem_vert: int,
         source_order: int,
         target_order: int,
         ndim: int,
     ):
 
         p = deepcopy(param)
-        p.nb_elements_horizontal = nb_elem_horiz
-        p.nb_elements_vertical = nb_elem_vert
+        p.num_elements_horizontal = num_elem_horiz
+        p.num_elements_vertical = num_elem_vert
         p.num_solpts = source_order if discretization == "dg" else 1
         p.discretization = discretization
 
@@ -81,7 +81,7 @@ class MultigridLevel:
 
         if verbose > 0:
             out_str = (
-                f"Grid level! nb_elem_horiz = {nb_elem_horiz}, nb_elem_vert = {nb_elem_vert} "
+                f"Grid level! num_elem_horiz = {num_elem_horiz}, num_elem_vert = {num_elem_vert} "
                 f" discr = {discretization}, source order = {source_order},"
                 f" target order = {target_order}, num_solpts = {p.num_solpts}"
                 f" num_mg_levels: {p.num_mg_levels}"
@@ -93,14 +93,14 @@ class MultigridLevel:
         # Initialize problem for this level
         if p.grid_type == "cubed_sphere":
             self.geometry = CubedSphere3D(
-                p.nb_elements_horizontal, p.nb_elements_vertical, p.num_solpts, p.λ0, p.ϕ0, p.α0, p.ztop, ptopo, p
+                p.num_elements_horizontal, p.num_elements_vertical, p.num_solpts, p.λ0, p.ϕ0, p.α0, p.ztop, ptopo, p
             )
         elif p.grid_type == "cartesian2d":
             self.geometry = Cartesian2D(
                 (p.x0, p.x1),
                 (p.z0, p.z1),
-                p.nb_elements_horizontal,
-                p.nb_elements_vertical,
+                p.num_elements_horizontal,
+                p.num_elements_vertical,
                 p.num_solpts,
                 p.array_module,
             )
@@ -149,7 +149,7 @@ class MultigridLevel:
             self.pre_smoothe = KiopsSmoother(param.dt, param.kiops_dt_factor)
         elif param.mg_smoother == "exp":
             self.pre_smoothe = ExponentialSmoother(
-                self.param.exp_smoothe_nb_iter, self.param.exp_smoothe_spectral_radius, param.dt
+                self.param.exp_smoothe_num_iter, self.param.exp_smoothe_spectral_radius, param.dt
             )
             if verbose > 0:
                 print(f"spectral radius for level = {self.param.exp_smoothe_spectral_radius}")
@@ -299,7 +299,7 @@ class Multigrid(MatvecOp):
 
         # Adjust some parameters as needed
         if discretization == "fv":
-            param.nb_elements_horizontal *= param.num_solpts
+            param.num_elements_horizontal *= param.num_solpts
             param.num_solpts = 1
             param.discretization = "fv"
             if fv_only:
@@ -337,16 +337,16 @@ class Multigrid(MatvecOp):
             #    print(f'There is an extra FV step, from order {param.initial_num_solpts} to {self.orders[0]}')
             #    self.orders = [param.initial_num_solpts] + self.orders
             self.elem_counts_hori = [
-                param.nb_elements_horizontal * order // param.initial_num_solpts for order in self.orders
+                param.num_elements_horizontal * order // param.initial_num_solpts for order in self.orders
             ]
             if self.ndim == 3 or param.grid_type == "cartesian2d":
-                self.elem_counts_vert = [param.nb_elements_vertical * order for order in self.orders]
+                self.elem_counts_vert = [param.num_elements_vertical * order for order in self.orders]
             else:
-                self.elem_counts_vert = [param.nb_elements_vertical for _ in self.orders]
+                self.elem_counts_vert = [param.num_elements_vertical for _ in self.orders]
         elif discretization == "dg":
             self.orders = [param.initial_num_solpts - i for i in range(self.max_num_levels + 1)]
-            self.elem_counts_hori = [param.nb_elements_horizontal for _ in range(len(self.orders))]
-            self.elem_counts_vert = [param.nb_elements_vertical for _ in range(len(self.orders))]
+            self.elem_counts_hori = [param.num_elements_horizontal for _ in range(len(self.orders))]
+            self.elem_counts_vert = [param.num_elements_vertical for _ in range(len(self.orders))]
         else:
             raise ValueError(f"Unknown discretization: {discretization}")
 
@@ -368,27 +368,27 @@ class Multigrid(MatvecOp):
 
         if param.mg_smoother == "exp":
             self.spectral_radii = extended_list(param.exp_smoothe_spectral_radii, len(self.orders) - 1)
-            self.exp_nb_iters = extended_list(param.exp_smoothe_nb_iters, len(self.orders) - 1)
+            self.exp_num_iters = extended_list(param.exp_smoothe_num_iters, len(self.orders) - 1)
             if self.verbose:
-                print(f"spectral radii = {self.spectral_radii}, num iterations: {self.exp_nb_iters}")
+                print(f"spectral radii = {self.spectral_radii}, num iterations: {self.exp_num_iters}")
 
         # Create config set for each level (whether they will be used or not, in case we want to change that at runtime)
         self.levels = {}
         for i_level in range(self.max_num_levels):
             order = self.orders[i_level]
             new_order = self.orders[i_level + 1]
-            nb_elem_hori = self.elem_counts_hori[i_level]
-            nb_elem_vert = self.elem_counts_vert[i_level]
+            num_elem_hori = self.elem_counts_hori[i_level]
+            num_elem_vert = self.elem_counts_vert[i_level]
             if self.verbose:
                 print(
                     f"Initializing level {i_level}, {discretization}, order {order}->{new_order},"
-                    f" elems {nb_elem_hori}x{nb_elem_vert}"
+                    f" elems {num_elem_hori}x{num_elem_vert}"
                 )
             if param.mg_smoother == "exp":
                 param.exp_smoothe_spectral_radius = self.spectral_radii[i_level]
-                param.exp_smoothe_nb_iter = self.exp_nb_iters[i_level]
+                param.exp_smoothe_num_iter = self.exp_num_iters[i_level]
             self.levels[i_level] = MultigridLevel(
-                param, ptopo, device, discretization, nb_elem_hori, nb_elem_vert, order, new_order, self.ndim
+                param, ptopo, device, discretization, num_elem_hori, num_elem_vert, order, new_order, self.ndim
             )
 
         super().__init__(self.apply, self.levels[0].dtype, self.levels[0].shape)

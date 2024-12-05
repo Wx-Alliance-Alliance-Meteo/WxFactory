@@ -85,10 +85,10 @@ class Configuration:
         ################################
         # Spatial discretization
         self.num_solpts = self._get_option("Spatial_discretization", "num_solpts", int, None)
-        self.nb_elements_horizontal = self._get_option("Spatial_discretization", "nb_elements_horizontal", int, None)
-        self.nb_elements_vertical = self._get_option("Spatial_discretization", "nb_elements_vertical", int, 1)
+        self.num_elements_horizontal = self._get_option("Spatial_discretization", "num_elements_horizontal", int, None)
+        self.num_elements_vertical = self._get_option("Spatial_discretization", "num_elements_vertical", int, 1)
         self.initial_num_solpts = self.num_solpts
-        self.nb_elements_horizontal_total = self.nb_elements_horizontal
+        self.num_elements_horizontal_total = self.num_elements_horizontal
 
         self.filter_apply = self._get_option("Spatial_discretization", "filter_apply", bool, False)
         self.filter_order = self._get_option(
@@ -170,8 +170,8 @@ class Configuration:
                 "Preconditioning", "exp_smoothe_spectral_radii", List[float], [2.0]
             )
             self.exp_smoothe_spectral_radius = self.exp_smoothe_spectral_radii[0]
-            self.exp_smoothe_nb_iters = self._get_option("Preconditioning", "exp_smoothe_nb_iters", List[int], [4])
-            self.exp_smoothe_nb_iter = self.exp_smoothe_nb_iters[0]
+            self.exp_smoothe_num_iters = self._get_option("Preconditioning", "exp_smoothe_num_iters", List[int], [4])
+            self.exp_smoothe_num_iter = self.exp_smoothe_num_iters[0]
 
         self.mg_solve_coarsest = self._get_option("Preconditioning", "mg_solve_coarsest", bool, False)
         self.kiops_dt_factor = self._get_option("Preconditioning", "kiops_dt_factor", float, 1.1)

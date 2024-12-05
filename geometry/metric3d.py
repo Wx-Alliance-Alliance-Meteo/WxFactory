@@ -105,11 +105,11 @@ class Metric3DTopo:
         height_itf_k_new = geom.gnomonic_itf_k[2, ...]
 
         # Build the boundary-extensions of h, based on the interface boundaries
-        # ext_i shape: (nk, nj, nb_elements_x1, 2) - west/east boundaries
+        # ext_i shape: (nk, nj, num_elements_x1, 2) - west/east boundaries
         height_ext_i = numpy.stack((height_itf_i[:, :, :-1], height_itf_i[:, :, 1:]), axis=-1)
-        # ext_j shape: (nk, nb_elements_x2, 2, ni) - south/north boundaries
+        # ext_j shape: (nk, num_elements_x2, 2, ni) - south/north boundaries
         height_ext_j = numpy.stack((height_itf_j[:, :-1, :], height_itf_j[:, 1:, :]), axis=-2)
-        # ext_k shape: (nb_elements_x3, 2, nj, ni) - bottom/top boundaries
+        # ext_k shape: (num_elements_x3, 2, nj, ni) - bottom/top boundaries
         height_ext_k = numpy.stack((height_itf_k[:-1, :, :], height_itf_k[1:, :, :]), axis=-3)
 
         dRdx1_int = matrix.comma_i(height_int, height_ext_i, geom) * 2 / delta_x
@@ -128,26 +128,26 @@ class Metric3DTopo:
 
         # def to_new_itf_j(a):
         #     src_shape = (
-        #         geom.nb_elements_x3 * geom.num_solpts,
-        #         geom.nb_elements_x2,
+        #         geom.num_elements_x3 * geom.num_solpts,
+        #         geom.num_elements_x2,
         #         2,
-        #         geom.nb_elements_x1 * geom.num_solpts,
+        #         geom.num_elements_x1 * geom.num_solpts,
         #     )
         #     if a.shape[-4:] != src_shape:
         #         raise ValueError(f"Wrong shape {a.shape}, expected (...,) + {src_shape}")
 
         #     tmp_shape1 = a.shape[:-4] + (
-        #         geom.nb_elements_x3,
+        #         geom.num_elements_x3,
         #         geom.num_solpts,
-        #         geom.nb_elements_x2,
+        #         geom.num_elements_x2,
         #         2,
-        #         geom.nb_elements_x1,
+        #         geom.num_elements_x1,
         #         geom.num_solpts,
         #     )
         #     tmp_shape2 = a.shape[:-4] + (
-        #         geom.nb_elements_x3,
-        #         geom.nb_elements_x2,
-        #         geom.nb_elements_x1,
+        #         geom.num_elements_x3,
+        #         geom.num_elements_x2,
+        #         geom.num_elements_x1,
         #         geom.num_solpts**2 * 2,
         #     )
 
@@ -230,13 +230,13 @@ class Metric3DTopo:
         # extrapolation,
         # in order for the MPI exchange to occur with contiguous subarrays.
 
-        exch_itf_i = xp.zeros((3, geom.nk, geom.nb_elements_x1 + 2, 2, geom.nj))
-        exch_itf_j = xp.zeros((3, geom.nk, geom.nb_elements_x2 + 2, 2, geom.ni))
+        exch_itf_i = xp.zeros((3, geom.nk, geom.num_elements_x1 + 2, 2, geom.nj))
+        exch_itf_j = xp.zeros((3, geom.nk, geom.num_elements_x2 + 2, 2, geom.ni))
 
-        # self.itf_i_shape = (self.nb_elements_x3, self.nb_elements_x2, self.nb_elements_x1 + 2, (num_solpts**2) * 2)
+        # self.itf_i_shape = (self.num_elements_x3, self.num_elements_x2, self.num_elements_x1 + 2, (num_solpts**2) * 2)
         def to_new_i(a: NDArray):
-            exp_shape = (geom.nk, geom.nb_elements_x1 + 2, 2, geom.nj)
-            # exp_shape2 = (geom.nk, geom.nb_elements_x1, 2, geom.nj)
+            exp_shape = (geom.nk, geom.num_elements_x1 + 2, 2, geom.nj)
+            # exp_shape2 = (geom.nk, geom.num_elements_x1, 2, geom.nj)
             exp_shape2 = exp_shape
             if a.shape not in [exp_shape, exp_shape2]:
                 raise ValueError(
@@ -245,11 +245,11 @@ class Metric3DTopo:
                 )
 
             tmp_shape1 = (
-                geom.nb_elements_x3,
+                geom.num_elements_x3,
                 geom.num_solpts,
                 a.shape[1],
                 2,
-                geom.nb_elements_x2,
+                geom.num_elements_x2,
                 geom.num_solpts,
             )
 
@@ -328,7 +328,7 @@ class Metric3DTopo:
         #     raise ValueError
 
         # _i and _j additionally need conversion to contravariant coordinates
-        for el in range(geom.nb_elements_x1):
+        for el in range(geom.num_elements_x1):
             # Left boundary of the element
             exch_itf_i[0, :, el + 1, 0, :] = (
                 metric_2d_contra_itf_i[0, 0, :, :, el] * dRdx1_extrap_i[:, :, el, 0]
@@ -348,7 +348,7 @@ class Metric3DTopo:
                 + metric_2d_contra_itf_i[1, 1, :, :, el + 1] * dRdx2_extrap_i[:, :, el, 1]
             )
 
-        for el in range(geom.nb_elements_x2):
+        for el in range(geom.num_elements_x2):
             # 'south' boundary of the element
             exch_itf_j[0, :, el + 1, 0, :] = (
                 metric_2d_contra_itf_j[0, 0, :, el, :] * dRdx1_extrap_j[:, el, 0, :]
@@ -434,7 +434,7 @@ class Metric3DTopo:
             exch_itf_j[:, :, -1, 0, :] = exch_itf_j[:, :, -2, 1, :]
 
         # converted_exch_itf_i = xp.zeros_like(exch_itf_i)
-        # for bdy in range(geom.nb_elements_x1 + 1):
+        # for bdy in range(geom.num_elements_x1 + 1):
         #     # Iterate from leftmost to rightmost boundary
         #     converted_exch_itf_i[0, :, bdy + 1, 0, :] = (
         #         metric_2d_cov_itf_i[0, 0, :, :, bdy] * exch_itf_i[0, :, bdy, 0, :]
@@ -474,7 +474,7 @@ class Metric3DTopo:
         #     raise ValueError
 
         # i-interface values
-        for bdy in range(geom.nb_elements_x1 + 1):
+        for bdy in range(geom.num_elements_x1 + 1):
             # Iterate from leftmost to rightmost boundary
             dRdx1_itf_i[:, :, bdy] = metric_2d_cov_itf_i[0, 0, :, :, bdy] * (
                 0.5 * exch_itf_i[0, :, bdy, 1, :] + 0.5 * exch_itf_i[0, :, bdy + 1, 0, :]
@@ -489,7 +489,7 @@ class Metric3DTopo:
             dRdeta_itf_i[:, :, bdy] = 0.5 * exch_itf_i[2, :, bdy, 1, :] + 0.5 * exch_itf_i[2, :, bdy + 1, 0, :]
 
         # j-interface values
-        for bdy in range(geom.nb_elements_x2 + 1):
+        for bdy in range(geom.num_elements_x2 + 1):
             # iterate from 'south'most to 'north'most boundary
             dRdx1_itf_j[:, bdy, :] = metric_2d_cov_itf_j[0, 0, :, bdy, :] * (
                 0.5 * exch_itf_j[0, :, bdy, 1, :] + 0.5 * exch_itf_j[0, :, bdy + 1, 0, :]

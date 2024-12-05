@@ -419,11 +419,11 @@ def case_unsteady_zonal(geom, metric, mtrx, param):
     hs = 0.5 * (geom.earth_radius * geom.rotation_speed * numpy.sin(geom.lat)) ** 2 + k2
     hsurf = hs / gravity
 
-    nb_interfaces_horiz = param.nb_elements_horizontal + 1
-    hsurf_itf_i = numpy.zeros((param.nb_elements_horizontal + 2, param.num_solpts * param.nb_elements_horizontal, 2))
-    hsurf_itf_j = numpy.zeros((param.nb_elements_horizontal + 2, 2, param.num_solpts * param.nb_elements_horizontal))
+    num_interfaces_horiz = param.num_elements_horizontal + 1
+    hsurf_itf_i = numpy.zeros((param.num_elements_horizontal + 2, param.num_solpts * param.num_elements_horizontal, 2))
+    hsurf_itf_j = numpy.zeros((param.num_elements_horizontal + 2, 2, param.num_solpts * param.num_elements_horizontal))
 
-    for itf in range(nb_interfaces_horiz):
+    for itf in range(num_interfaces_horiz):
         elem_L = itf
         elem_R = itf + 1
 
@@ -442,7 +442,7 @@ def case_unsteady_zonal(geom, metric, mtrx, param):
     dzdx2 = numpy.zeros((ni, nj))
 
     offset = 1  # Offset due to the halo
-    for elem in range(param.nb_elements_horizontal):
+    for elem in range(param.num_elements_horizontal):
         epais = elem * param.num_solpts + numpy.arange(param.num_solpts)
 
         # --- Direction x1

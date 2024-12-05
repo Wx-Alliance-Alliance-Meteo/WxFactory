@@ -91,8 +91,8 @@ class OutputManager:
         # Choose a file name hash based on a certain set of parameters:
         state_params = (
             param.dt,
-            param.nb_elements_horizontal,
-            param.nb_elements_vertical,
+            param.num_elements_horizontal,
+            param.num_elements_vertical,
             param.num_solpts,
             MPI.COMM_WORLD.size,
         )

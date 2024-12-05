@@ -86,24 +86,24 @@ def _get_option(
 
 class StateIntegrationTestCases(unittest.TestCase):
     config_dir_path: str
-    nb_process_required: int
+    num_process_required: int
 
     def __init__(self, config_dir_path: str):
         super().__init__("test_state")
         self.config_dir_path = config_dir_path
-        self.nb_process_required = 0
+        self.num_process_required = 0
         requirement_filename = f"{self.config_dir_path}/requirement.ini"
 
         if os.path.exists(requirement_filename):
             parser = ConfigParser()
             parser.read(requirement_filename, encoding="utf-8")
 
-            self.nb_process_required = _get_option(parser, requirement_filename, "System", "processes", int, 1, min_value=1)
+            self.num_process_required = _get_option(parser, requirement_filename, "System", "processes", int, 1, min_value=1)
         else:
             raise FileNotFoundError()
     
     def setUp(self):
-        if MPI.COMM_WORLD.size != self.nb_process_required:
+        if MPI.COMM_WORLD.size != self.num_process_required:
             self.fail("You do not have the required number of process")
 
     def test_state(self):
@@ -127,8 +127,8 @@ class StateIntegrationTestCases(unittest.TestCase):
 
         state_params = (
             conf.dt,
-            conf.nb_elements_horizontal,
-            conf.nb_elements_vertical,
+            conf.num_elements_horizontal,
+            conf.num_elements_vertical,
             conf.num_solpts,
             MPI.COMM_WORLD.size,
         )
