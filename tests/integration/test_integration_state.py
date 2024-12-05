@@ -129,7 +129,7 @@ class StateIntegrationTestCases(unittest.TestCase):
             conf.dt,
             conf.nb_elements_horizontal,
             conf.nb_elements_vertical,
-            conf.nbsolpts,
+            conf.num_solpts,
             MPI.COMM_WORLD.size,
         )
         config_hash = state_params.__hash__() & 0xFFFFFFFFFFFF

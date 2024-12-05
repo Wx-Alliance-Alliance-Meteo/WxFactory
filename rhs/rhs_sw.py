@@ -23,7 +23,7 @@ class RhsShallowWater:
         metric: Metric2D,
         topo: Optional[Topo],
         ptopo: ProcessTopology,
-        nbsolpts: int,
+        num_solpts: int,
         nb_elements_hori: int,
     ):
         self.shape = shape
@@ -32,7 +32,7 @@ class RhsShallowWater:
         self.metric = metric
         self.topo = topo
         self.ptopo = ptopo
-        self.nbsolpts = nbsolpts
+        self.num_solpts = num_solpts
         self.nb_elements_hori = nb_elements_hori
 
     def __call__(self, vec: NDArray) -> NDArray:
@@ -50,7 +50,7 @@ class RhsShallowWater:
             self.metric,
             self.topo,
             self.ptopo,
-            self.nbsolpts,
+            self.num_solpts,
             self.nb_elements_hori,
         )
         return result.reshape(old_shape)
@@ -63,7 +63,7 @@ class RhsShallowWater:
         metric: Metric2D,
         topo: Optional[Topo],
         ptopo: ProcessTopology,
-        nbsolpts: int,
+        num_solpts: int,
         nb_elements_hori: int,
     ) -> NDArray:
         """
@@ -101,19 +101,19 @@ class RhsShallowWater:
         # There is a separate function for sending vector data, since they must potentially be converted to the
         # neighbor PE's coordinate system
         request_u = ptopo.start_exchange_vectors(
-            south=((var_itf_j[idx_hu1, 1, :, :nbsolpts]), (var_itf_j[idx_hu2, 1, :, :nbsolpts])),
-            north=((var_itf_j[idx_hu1, -2, :, nbsolpts:]), (var_itf_j[idx_hu2, -2, :, nbsolpts:])),
-            west=((var_itf_i[idx_hu1, :, 1, :nbsolpts]), (var_itf_i[idx_hu2, :, 1, :nbsolpts])),
-            east=((var_itf_i[idx_hu1, :, -2, nbsolpts:]), (var_itf_i[idx_hu2, :, -2, nbsolpts:])),
+            south=((var_itf_j[idx_hu1, 1, :, :num_solpts]), (var_itf_j[idx_hu2, 1, :, :num_solpts])),
+            north=((var_itf_j[idx_hu1, -2, :, num_solpts:]), (var_itf_j[idx_hu2, -2, :, num_solpts:])),
+            west=((var_itf_i[idx_hu1, :, 1, :num_solpts]), (var_itf_i[idx_hu2, :, 1, :num_solpts])),
+            east=((var_itf_i[idx_hu1, :, -2, num_solpts:]), (var_itf_i[idx_hu2, :, -2, num_solpts:])),
             boundary_sn=geom.boundary_sn,
             boundary_we=geom.boundary_we,
         )
         request_h = ptopo.start_exchange_scalars(
-            south=var_itf_j[idx_h, 1, :, :nbsolpts],
-            north=var_itf_j[idx_h, -2, :, nbsolpts:],
-            west=var_itf_i[idx_h, :, 1, :nbsolpts],
-            east=var_itf_i[idx_h, :, -2, nbsolpts:],
-            boundary_shape=(nb_elements_hori * nbsolpts,),
+            south=var_itf_j[idx_h, 1, :, :num_solpts],
+            north=var_itf_j[idx_h, -2, :, num_solpts:],
+            west=var_itf_i[idx_h, :, 1, :num_solpts],
+            east=var_itf_i[idx_h, :, -2, num_solpts:],
+            boundary_shape=(nb_elements_hori * num_solpts,),
         )
 
         # Compute fluxes
@@ -136,17 +136,17 @@ class RhsShallowWater:
 
         # Finish transfers. We receive the halo, so it is stored in the first and last row/column of each array
         (
-            (var_itf_j[idx_hu1, 0, :, nbsolpts:], var_itf_j[idx_hu2, 0, :, nbsolpts:]),  # South boundary
-            (var_itf_j[idx_hu1, -1, :, :nbsolpts], var_itf_j[idx_hu2, -1, :, :nbsolpts]),  # North boundary
-            (var_itf_i[idx_hu1, :, 0, nbsolpts:], var_itf_i[idx_hu2, :, 0, nbsolpts:]),  # West boundary
-            (var_itf_i[idx_hu1, :, -1, :nbsolpts], var_itf_i[idx_hu2, :, -1, :nbsolpts]),  # East boundary
+            (var_itf_j[idx_hu1, 0, :, num_solpts:], var_itf_j[idx_hu2, 0, :, num_solpts:]),  # South boundary
+            (var_itf_j[idx_hu1, -1, :, :num_solpts], var_itf_j[idx_hu2, -1, :, :num_solpts]),  # North boundary
+            (var_itf_i[idx_hu1, :, 0, num_solpts:], var_itf_i[idx_hu2, :, 0, num_solpts:]),  # West boundary
+            (var_itf_i[idx_hu1, :, -1, :num_solpts], var_itf_i[idx_hu2, :, -1, :num_solpts]),  # East boundary
         ) = request_u.wait()
 
         (
-            var_itf_j[idx_h, 0, :, nbsolpts:],  # South boundary
-            var_itf_j[idx_h, -1, :, :nbsolpts],  # North boundary
-            var_itf_i[idx_h, :, 0, nbsolpts:],  # West boundary
-            var_itf_i[idx_h, :, -1, :nbsolpts],  # East boundary
+            var_itf_j[idx_h, 0, :, num_solpts:],  # South boundary
+            var_itf_j[idx_h, -1, :, :num_solpts],  # North boundary
+            var_itf_i[idx_h, :, 0, num_solpts:],  # West boundary
+            var_itf_i[idx_h, :, -1, :num_solpts],  # East boundary
         ) = request_h.wait()
 
         # Substract topo after extrapolation
@@ -162,10 +162,10 @@ class RhsShallowWater:
         #                   |
         #   west .  east -->|<-- west  .  east -->
         #                   |
-        west = xp.s_[..., 1:, :nbsolpts]
-        east = xp.s_[..., :-1, nbsolpts:]
-        south = xp.s_[..., 1:, :, :nbsolpts]
-        north = xp.s_[..., :-1, :, nbsolpts:]
+        west = xp.s_[..., 1:, :num_solpts]
+        east = xp.s_[..., :-1, num_solpts:]
+        south = xp.s_[..., 1:, :, :num_solpts]
+        north = xp.s_[..., :-1, :, num_solpts:]
 
         a = xp.sqrt(gravity * var_itf_i[idx_h] * metric.H_contra_11_itf_i)
         tmp = var_itf_i[idx_h] * a

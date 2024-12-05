@@ -20,7 +20,7 @@ class CubedSphere3D(CubedSphere):
         self,
         nb_elements_horizontal: int,
         nb_elements_vertical: int,
-        nbsolpts: int,
+        num_solpts: int,
         λ0: float,
         ϕ0: float,
         α0: float,
@@ -62,7 +62,7 @@ class CubedSphere3D(CubedSphere):
             Number of elements in the (x1,x2) directions, per panel
         nb_elements_vertical : int
             Number of elements in the vertical, between 0 and ztop
-        nbsolpts : int
+        num_solpts : int
             Number of nodal points in each of the (x1,x2,x3) dimensions inside the element
         λ0 : float
             Grid rotation: physical longitude of the central point of the 0 panel
@@ -85,7 +85,7 @@ class CubedSphere3D(CubedSphere):
             Wraps parameters from the configuration pole that are not otherwise specified in this
             constructor.
         """
-        super().__init__(nbsolpts, device)
+        super().__init__(num_solpts, device)
         xp = device.xp
         self.dtype = numpy.dtype(numpy.float64)
 
@@ -158,9 +158,9 @@ class CubedSphere3D(CubedSphere):
         # interfaces_x3 = numpy.linspace(start = domain_x3[0], stop = domain_x3[1], num = nb_elements_x3 + 1)
         # interfaces_eta = numpy.linspace(start = domain_eta[0], stop = domain_eta[1], num = nb_elements_x3 + 1)
 
-        ni = nb_elements_x1 * nbsolpts
-        nj = nb_elements_x2 * nbsolpts
-        nk = nb_elements_x3 * nbsolpts
+        ni = nb_elements_x1 * num_solpts
+        nj = nb_elements_x2 * num_solpts
+        nk = nb_elements_x3 * num_solpts
 
         # Save array size properties
         # NOTE: ni is the number of "columns" and nj is the number of "rows" in a 2D matrix storing solution points
@@ -179,36 +179,36 @@ class CubedSphere3D(CubedSphere):
         self.itf_k_shape_3d = (nb_elements_x3 + 1, nj, ni)
 
         # The shapes. For a single field (e.g. coordinates of solution points, in the current case), we
-        # have an array of elements, where each element has a total nbsolpts**2 (in 2D) or nbsolpts**3 (in 3D) solution
+        # have an array of elements, where each element has a total num_solpts**2 (in 2D) or num_solpts**3 (in 3D) solution
         # points.
         # For the interfaces we have 3 cases:
         # - In 2D, we have 2 arrays (for west-east and south-north interfaces), with the same shape: an array of all
-        #   elements, each with 2*nbsolpts interface points (nbsolpts for each side of the element along that direction)
+        #   elements, each with 2*num_solpts interface points (num_solpts for each side of the element along that direction)
         # - In 3D, horizontally, we also have two arrays (west-east, south-north), but the shape is to be determined
         # - In 3D vertically, we only have one array, with shape similar to horizontally, TBD
         self.block_shape = (nk, nj, ni)
-        self.grid_shape_3d_new = (self.nb_elements_x3, self.nb_elements_x2, self.nb_elements_x1, nbsolpts**3)
-        self.floor_shape = (self.nb_elements_x2, self.nb_elements_x1, nbsolpts**2)
+        self.grid_shape_3d_new = (self.nb_elements_x3, self.nb_elements_x2, self.nb_elements_x1, num_solpts**3)
+        self.floor_shape = (self.nb_elements_x2, self.nb_elements_x1, num_solpts**2)
 
         # Interface shapes include a halo of one element along the direction of the interface
-        self.itf_i_shape = (self.nb_elements_x3, self.nb_elements_x2, self.nb_elements_x1 + 2, (nbsolpts**2) * 2)
-        self.itf_j_shape = (self.nb_elements_x3, self.nb_elements_x2 + 2, self.nb_elements_x1, (nbsolpts**2) * 2)
-        self.itf_k_shape = (self.nb_elements_x3 + 2, self.nb_elements_x2, self.nb_elements_x1, (nbsolpts**2) * 2)
-        self.itf_i_floor_shape = (self.nb_elements_x2, self.nb_elements_x1 + 2, nbsolpts * 2)
-        self.itf_j_floor_shape = (self.nb_elements_x2 + 2, self.nb_elements_x1, nbsolpts * 2)
+        self.itf_i_shape = (self.nb_elements_x3, self.nb_elements_x2, self.nb_elements_x1 + 2, (num_solpts**2) * 2)
+        self.itf_j_shape = (self.nb_elements_x3, self.nb_elements_x2 + 2, self.nb_elements_x1, (num_solpts**2) * 2)
+        self.itf_k_shape = (self.nb_elements_x3 + 2, self.nb_elements_x2, self.nb_elements_x1, (num_solpts**2) * 2)
+        self.itf_i_floor_shape = (self.nb_elements_x2, self.nb_elements_x1 + 2, num_solpts * 2)
+        self.itf_j_floor_shape = (self.nb_elements_x2 + 2, self.nb_elements_x1, num_solpts * 2)
 
         # Interface array edges
-        self.west_edge = numpy.s_[..., 0, : nbsolpts**2]  # West boundary of the western halo elements
-        self.east_edge = numpy.s_[..., -1, nbsolpts**2 :]  # East boundary of the eastern halo elements
-        self.south_edge = numpy.s_[..., 0, :, : nbsolpts**2]  # South boundary of the southern halo elements
-        self.north_edge = numpy.s_[..., -1, :, nbsolpts**2 :]  # North boundary of the northern halo elements
-        self.bottom_edge = numpy.s_[..., 0, :, :, : nbsolpts**2]  # Bottom boundary of bottom halo elements
-        self.top_edge = numpy.s_[..., -1, :, :, nbsolpts**2 :]  # Top boundary of top halo elements
+        self.west_edge = numpy.s_[..., 0, : num_solpts**2]  # West boundary of the western halo elements
+        self.east_edge = numpy.s_[..., -1, num_solpts**2 :]  # East boundary of the eastern halo elements
+        self.south_edge = numpy.s_[..., 0, :, : num_solpts**2]  # South boundary of the southern halo elements
+        self.north_edge = numpy.s_[..., -1, :, num_solpts**2 :]  # North boundary of the northern halo elements
+        self.bottom_edge = numpy.s_[..., 0, :, :, : num_solpts**2]  # Bottom boundary of bottom halo elements
+        self.top_edge = numpy.s_[..., -1, :, :, num_solpts**2 :]  # Top boundary of top halo elements
 
-        self.floor_west_edge = numpy.s_[..., 0, :nbsolpts]
-        self.floor_east_edge = numpy.s_[..., -1, nbsolpts:]
-        self.floor_south_edge = numpy.s_[..., 0, :, :nbsolpts]
-        self.floor_north_edge = numpy.s_[..., -1, :, nbsolpts:]
+        self.floor_west_edge = numpy.s_[..., 0, :num_solpts]
+        self.floor_east_edge = numpy.s_[..., -1, num_solpts:]
+        self.floor_south_edge = numpy.s_[..., 0, :, :num_solpts]
+        self.floor_north_edge = numpy.s_[..., -1, :, num_solpts:]
 
         # Assign a token zbot, potentially to be overridden later with supplied topography
         # self.zbot = xp.zeros(self.grid_shape_2d)
@@ -225,25 +225,25 @@ class CubedSphere3D(CubedSphere):
 
         offsets_x1 = x1_boundaries[:-1]
         ref_solpts_x1 = delta_x1 / delta_comp * (-minComp + self.solutionPoints)
-        x1 = xp.repeat(offsets_x1, nbsolpts) + xp.tile(ref_solpts_x1, nb_elements_x1)
+        x1 = xp.repeat(offsets_x1, num_solpts) + xp.tile(ref_solpts_x1, nb_elements_x1)
 
         offsets_x2 = x2_boundaries[:-1]
         ref_solpts_x2 = delta_x2 / delta_comp * (-minComp + self.solutionPoints)
-        x2 = xp.repeat(offsets_x2, nbsolpts) + xp.tile(ref_solpts_x2, nb_elements_x2)
+        x2 = xp.repeat(offsets_x2, num_solpts) + xp.tile(ref_solpts_x2, nb_elements_x2)
 
         offsets_x3 = x3_boundaries[:-1]
         ref_solpts_x3 = delta_x3 / delta_comp * (-minComp + self.solutionPoints)
-        x3_linear = xp.repeat(offsets_x3, nbsolpts) + xp.tile(ref_solpts_x3, nb_elements_x3)
+        x3_linear = xp.repeat(offsets_x3, num_solpts) + xp.tile(ref_solpts_x3, nb_elements_x3)
         x3 = xp.repeat(x3_linear, ni * nj).reshape(self.grid_shape_3d)
 
         offsets_eta = eta_boundaries[:-1]
         ref_solpts_eta = delta_eta / delta_comp * (-minComp + self.solutionPoints)
-        eta_linear = xp.repeat(offsets_eta, nbsolpts) + xp.tile(ref_solpts_eta, nb_elements_x3)
+        eta_linear = xp.repeat(offsets_eta, num_solpts) + xp.tile(ref_solpts_eta, nb_elements_x3)
         eta = xp.repeat(eta_linear, ni * nj).reshape(self.grid_shape_3d)
 
         def linear_to_full_k(a):
             return xp.repeat(
-                xp.repeat(a.reshape((nb_elements_x3, self.nbsolpts)), self.nbsolpts**2, axis=1),
+                xp.repeat(a.reshape((nb_elements_x3, self.num_solpts)), self.num_solpts**2, axis=1),
                 nb_elements_x2 * nb_elements_x1,
                 axis=0,
             ).reshape(self.grid_shape_3d_new)
@@ -559,18 +559,18 @@ class CubedSphere3D(CubedSphere):
 
         # X_new = self.to_new_floor(X_block)
         # Y_new = self.to_new_floor(Y_block)
-        X_new = self._to_new(xp.tile(X_block, (nb_elements_x3 * self.nbsolpts, 1, 1)))
-        Y_new = self._to_new(xp.tile(Y_block, (nb_elements_x3 * self.nbsolpts, 1, 1)))
+        X_new = self._to_new(xp.tile(X_block, (nb_elements_x3 * self.num_solpts, 1, 1)))
+        Y_new = self._to_new(xp.tile(Y_block, (nb_elements_x3 * self.num_solpts, 1, 1)))
 
         self.boundary_sn = X_block[0, :]  # Coordinates of the south and north boundaries along the X (west-east) axis
         self.boundary_we = Y_block[:, 0]  # Coordinates of the west and east boundaries along the Y (south-north) axis
 
         self.boundary_sn_new = xp.tile(
-            self.boundary_sn.reshape(self.nb_elements_x1, self.nbsolpts), self.nbsolpts
-        ).reshape((self.nb_elements_x1, self.nbsolpts, self.nbsolpts))
+            self.boundary_sn.reshape(self.nb_elements_x1, self.num_solpts), self.num_solpts
+        ).reshape((self.nb_elements_x1, self.num_solpts, self.num_solpts))
         self.boundary_we_new = xp.tile(
-            self.boundary_we.reshape(self.nb_elements_x2, self.nbsolpts), self.nbsolpts
-        ).reshape((self.nb_elements_x2, self.nbsolpts, self.nbsolpts))
+            self.boundary_we.reshape(self.nb_elements_x2, self.num_solpts), self.num_solpts
+        ).reshape((self.nb_elements_x2, self.num_solpts, self.num_solpts))
 
         # if MPI.COMM_WORLD.rank == 0:
         #     print(f"boundary sn (old): \n{self.boundary_sn}")
@@ -779,11 +779,11 @@ class CubedSphere3D(CubedSphere):
 
         tmp_shape = a.shape[:-3] + (
             self.nb_elements_x3,
-            self.nbsolpts,
+            self.num_solpts,
             self.nb_elements_x2,
-            self.nbsolpts,
+            self.num_solpts,
             self.nb_elements_x1,
-            self.nbsolpts,
+            self.num_solpts,
         )
         new_shape = a.shape[:-3] + self.grid_shape_3d_new
         xp = self.device.xp
@@ -799,9 +799,9 @@ class CubedSphere3D(CubedSphere):
             self.nb_elements_x3,
             self.nb_elements_x2,
             self.nb_elements_x1,
-            self.nbsolpts,
-            self.nbsolpts,
-            self.nbsolpts,
+            self.num_solpts,
+            self.num_solpts,
+            self.num_solpts,
         )
         new_shape = a.shape[:-4] + self.block_shape
         xp = self.device.xp
@@ -820,21 +820,21 @@ class CubedSphere3D(CubedSphere):
 
         tmp_shape1 = a.shape[:-3] + (
             self.nb_elements_x3,
-            self.nbsolpts,
+            self.num_solpts,
             self.nb_elements_x2,
-            self.nbsolpts,
+            self.num_solpts,
             self.nb_elements_x1 + 1,
         )
         tmp_shape2 = a.shape[:-3] + (
             self.nb_elements_x3,
             self.nb_elements_x2,
             self.nb_elements_x1 + 1,
-            self.nbsolpts**2,
+            self.num_solpts**2,
         )
         tmp_array = xp.moveaxis(a.reshape(tmp_shape1), (-4, -2), (-2, -1)).reshape(tmp_shape2)
 
-        west = numpy.s_[..., 1:, : self.nbsolpts**2]
-        east = numpy.s_[..., :-1, self.nbsolpts**2 :]
+        west = numpy.s_[..., 1:, : self.num_solpts**2]
+        east = numpy.s_[..., :-1, self.num_solpts**2 :]
         new[west] = tmp_array
         new[east] = tmp_array
 
@@ -854,21 +854,21 @@ class CubedSphere3D(CubedSphere):
 
         tmp_shape1 = a.shape[:-3] + (
             self.nb_elements_x3,
-            self.nbsolpts,
+            self.num_solpts,
             self.nb_elements_x2 + 1,
             self.nb_elements_x1,
-            self.nbsolpts,
+            self.num_solpts,
         )
         tmp_shape2 = a.shape[:-3] + (
             self.nb_elements_x3,
             self.nb_elements_x2 + 1,
             self.nb_elements_x1,
-            self.nbsolpts**2,
+            self.num_solpts**2,
         )
         tmp_array = xp.moveaxis(a.reshape(tmp_shape1), -4, -2).reshape(tmp_shape2)
 
-        south = xp.s_[..., 1:, :, : self.nbsolpts**2]
-        north = xp.s_[..., :-1, :, self.nbsolpts**2 :]
+        south = xp.s_[..., 1:, :, : self.num_solpts**2]
+        north = xp.s_[..., :-1, :, self.num_solpts**2 :]
         new[south] = tmp_array
         new[north] = tmp_array
 
@@ -884,26 +884,26 @@ class CubedSphere3D(CubedSphere):
         if a.shape[-3:] != self.itf_k_shape_3d:
             raise ValueError(f"Unexpected array shape {a.shape}, expected (...,) {self.itf_k_shape_3d})")
 
-        # plane_shape = (self.nb_elements_x3 + 2, self.nb_elements_x2, self.nb_elements_x1, (self.nbsolpts**2) * 2)
+        # plane_shape = (self.nb_elements_x3 + 2, self.nb_elements_x2, self.nb_elements_x1, (self.num_solpts**2) * 2)
         new = xp.zeros(a.shape[:-3] + self.itf_k_shape, dtype=a.dtype)
 
         tmp_shape1 = a.shape[:-3] + (
             self.nb_elements_x3 + 1,
             self.nb_elements_x2,
-            self.nbsolpts,
+            self.num_solpts,
             self.nb_elements_x1,
-            self.nbsolpts,
+            self.num_solpts,
         )
         tmp_shape2 = a.shape[:-3] + (
             self.nb_elements_x3 + 1,
             self.nb_elements_x2,
             self.nb_elements_x1,
-            self.nbsolpts**2,
+            self.num_solpts**2,
         )
         tmp_array = xp.swapaxes(a.reshape(tmp_shape1), -3, -2).reshape(tmp_shape2)
 
-        bottom = xp.s_[..., 1:, :, :, : self.nbsolpts**2]
-        top = xp.s_[..., :-1, :, :, self.nbsolpts**2 :]
+        bottom = xp.s_[..., 1:, :, :, : self.num_solpts**2]
+        top = xp.s_[..., :-1, :, :, self.num_solpts**2 :]
         new[bottom] = tmp_array
         new[top] = tmp_array
 
@@ -917,7 +917,7 @@ class CubedSphere3D(CubedSphere):
         if a.shape[-4:] != self.grid_shape_3d_new:
             raise ValueError(f"Unhandled shape {a.shape}, expected ... + {self.grid_shape_3d_new}")
 
-        tmp_shape1 = a.shape[:-1] + (self.nbsolpts, self.nbsolpts, self.nbsolpts)
+        tmp_shape1 = a.shape[:-1] + (self.num_solpts, self.num_solpts, self.num_solpts)
         tmp_shape2 = a.shape[:-4] + self.floor_shape
         floor = numpy.s_[..., 0, :, :, 0, :, :]
         return a.reshape(tmp_shape1)[floor].reshape(tmp_shape2)
@@ -929,7 +929,7 @@ class CubedSphere3D(CubedSphere):
 
         xp = self.device.xp
         axis1 = a.ndim - 2
-        repeat_count = self.nbsolpts if not k_itf else 2
+        repeat_count = self.num_solpts if not k_itf else 2
         tile_count = self.nb_elements_x3
         if k_itf:
             tile_count += 2
@@ -941,7 +941,7 @@ class CubedSphere3D(CubedSphere):
         if a.shape[-4:] != self.itf_i_shape:
             raise ValueError(f"Unhandled shape {a.shape}, expected ... + {self.itf_i_shape}")
 
-        tmp_shape1 = a.shape[:-1] + (2, self.nbsolpts, self.nbsolpts)
+        tmp_shape1 = a.shape[:-1] + (2, self.num_solpts, self.num_solpts)
         tmp_shape2 = a.shape[:-4] + self.itf_i_floor_shape
         floor = numpy.s_[..., 0, :, :, :, 0, :]
         return a.reshape(tmp_shape1)[floor].reshape(tmp_shape2)
@@ -951,10 +951,10 @@ class CubedSphere3D(CubedSphere):
             raise ValueError(f"Unhandled shape {a.shape}, expected ... + {self.itf_i_floor_shape}")
 
         xp = self.device.xp
-        tmp_shape1 = a.shape[:-3] + (self.nb_elements_x2, self.nb_elements_x1 + 2, 2, self.nbsolpts)
+        tmp_shape1 = a.shape[:-3] + (self.nb_elements_x2, self.nb_elements_x1 + 2, 2, self.num_solpts)
         axis1 = a.ndim - 1
         a_tmp = a.reshape(tmp_shape1)
-        return xp.tile(xp.repeat(a_tmp, self.nbsolpts, axis=axis1), (self.nb_elements_x3, 1, 1, 1)).reshape(
+        return xp.tile(xp.repeat(a_tmp, self.num_solpts, axis=axis1), (self.nb_elements_x3, 1, 1, 1)).reshape(
             self.itf_i_shape
         )
 
@@ -963,7 +963,7 @@ class CubedSphere3D(CubedSphere):
         if a.shape[-4:] != self.itf_j_shape:
             raise ValueError(f"Unhandled shape {a.shape}, expected ... + {self.itf_j_shape}")
 
-        tmp_shape1 = a.shape[:-1] + (2, self.nbsolpts, self.nbsolpts)
+        tmp_shape1 = a.shape[:-1] + (2, self.num_solpts, self.num_solpts)
         tmp_shape2 = a.shape[:-4] + self.itf_j_floor_shape
         floor = numpy.s_[..., 0, :, :, :, 0, :]
         return a.reshape(tmp_shape1)[floor].reshape(tmp_shape2)
@@ -973,10 +973,10 @@ class CubedSphere3D(CubedSphere):
             raise ValueError(f"Unhandled shape {a.shape}, expected ... + {self.itf_j_floor_shape}")
 
         xp = self.device.xp
-        tmp_shape1 = a.shape[:-3] + (self.nb_elements_x2 + 2, self.nb_elements_x1, 2, self.nbsolpts)
+        tmp_shape1 = a.shape[:-3] + (self.nb_elements_x2 + 2, self.nb_elements_x1, 2, self.num_solpts)
         axis1 = a.ndim - 1
         a_tmp = a.reshape(tmp_shape1)
-        return xp.tile(xp.repeat(a_tmp, self.nbsolpts, axis=axis1), (self.nb_elements_x3, 1, 1, 1)).reshape(
+        return xp.tile(xp.repeat(a_tmp, self.num_solpts, axis=axis1), (self.nb_elements_x3, 1, 1, 1)).reshape(
             self.itf_j_shape
         )
 
@@ -985,7 +985,7 @@ class CubedSphere3D(CubedSphere):
         if a.shape[-2:] != self.grid_shape_2d:
             raise ValueError(f"Unhandled shape {a.shape}, expected ... + {self.grid_shape_2d}")
 
-        tmp_shape1 = a.shape[:-2] + (self.nb_elements_x2, self.nbsolpts, self.nb_elements_x1, self.nbsolpts)
+        tmp_shape1 = a.shape[:-2] + (self.nb_elements_x2, self.num_solpts, self.nb_elements_x1, self.num_solpts)
         end_shape = a.shape[:-2] + self.floor_shape
 
         return numpy.swapaxes(a.reshape(tmp_shape1), -3, -2).reshape(end_shape)
@@ -999,12 +999,12 @@ class CubedSphere3D(CubedSphere):
         xp = self.device.xp
 
         new = xp.zeros(a.shape[:-2] + self.itf_i_floor_shape, dtype=a.dtype)
-        tmp_shape1 = a.shape[:-2] + (self.nb_elements_x2, self.nbsolpts, self.nb_elements_x1 + 1)
+        tmp_shape1 = a.shape[:-2] + (self.nb_elements_x2, self.num_solpts, self.nb_elements_x1 + 1)
 
         tmp_array = numpy.moveaxis(a.reshape(tmp_shape1), -2, -1)
 
-        west = numpy.s_[..., 1:, : self.nbsolpts]
-        east = numpy.s_[..., :-1, self.nbsolpts :]
+        west = numpy.s_[..., 1:, : self.num_solpts]
+        east = numpy.s_[..., :-1, self.num_solpts :]
         new[west] = tmp_array
         new[east] = tmp_array
 
@@ -1019,11 +1019,11 @@ class CubedSphere3D(CubedSphere):
         xp = self.device.xp
 
         new = xp.zeros(a.shape[:-2] + self.itf_j_floor_shape, dtype=a.dtype)
-        tmp_shape1 = a.shape[:-2] + (self.nb_elements_x2 + 1, self.nb_elements_x1, self.nbsolpts)
+        tmp_shape1 = a.shape[:-2] + (self.nb_elements_x2 + 1, self.nb_elements_x1, self.num_solpts)
         tmp_array = a.reshape(tmp_shape1)
 
-        south = numpy.s_[..., 1:, :, : self.nbsolpts]
-        north = numpy.s_[..., :-1, :, self.nbsolpts :]
+        south = numpy.s_[..., 1:, :, : self.num_solpts]
+        north = numpy.s_[..., :-1, :, self.num_solpts :]
         new[south] = tmp_array
         new[north] = tmp_array
 
@@ -1032,18 +1032,18 @@ class CubedSphere3D(CubedSphere):
     # def _to_new_itf(self, a):
     #    """Convert input array (interface) to new memory layout"""
 
-    #    expected_shape_1 = (self.nb_elements_x2 * self.nbsolpts, self.nb_elements_x1 + 1)
-    #    expected_shape_2 = (self.nb_elements_x2 + 1, self.nb_elements_x1 * self.nbsolpts)
+    #    expected_shape_1 = (self.nb_elements_x2 * self.num_solpts, self.nb_elements_x1 + 1)
+    #    expected_shape_2 = (self.nb_elements_x2 + 1, self.nb_elements_x1 * self.num_solpts)
     #    expected_shapes = [expected_shape_1, expected_shape_2]
 
     #    if a.ndim == 2 and a.shape in expected_shapes:
     #       new_shape = self.itf_shape_2d
     #       if a.shape == expected_shape_1:
-    #          tmp_shape = (self.nb_elements_x2, self.nbsolpts, self.nb_elements_x1 + 1)
+    #          tmp_shape = (self.nb_elements_x2, self.num_solpts, self.nb_elements_x1 + 1)
     #          return a.reshape(tmp_shape).transpose
 
     #       elif a.shape == expected_shape_2:
-    #          tmp_shape = (self.nb_elements_x2 + 1, self.nb_elements_x1, self.nbsolpts)
+    #          tmp_shape = (self.nb_elements_x2 + 1, self.nb_elements_x1, self.num_solpts)
     #       else: raise ValueError
 
     def wind2contra_2d(self, u: float | NDArray, v: float | NDArray):

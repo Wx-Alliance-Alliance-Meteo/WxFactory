@@ -54,7 +54,7 @@ class PDE(ABC):
         self.libmodule = None
 
         # Store the metric terms
-        nb_solpts = config.nbsolpts
+        nb_solpts = config.num_solpts
         self.metrics = device.xp.ones((self.nb_dim**2, self.nb_elements, nb_solpts))
         self.sqrt_g = device.xp.ones((self.nb_elements, nb_solpts))
 

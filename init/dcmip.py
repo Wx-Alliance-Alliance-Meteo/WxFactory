@@ -367,8 +367,8 @@ def dcmip_mountain(geom: CubedSphere3D, metric, mtrx, param):
     h_surf = compute_height_from_dist(distance)
 
     nb_interfaces_horiz = param.nb_elements_horizontal + 1
-    h_surf_itf_i = numpy.zeros((param.nb_elements_horizontal + 2, param.nbsolpts * param.nb_elements_horizontal, 2))
-    h_surf_itf_j = numpy.zeros((param.nb_elements_horizontal + 2, 2, param.nbsolpts * param.nb_elements_horizontal))
+    h_surf_itf_i = numpy.zeros((param.nb_elements_horizontal + 2, param.num_solpts * param.nb_elements_horizontal, 2))
+    h_surf_itf_j = numpy.zeros((param.nb_elements_horizontal + 2, 2, param.num_solpts * param.nb_elements_horizontal))
 
     h_surf_itf_i[0:nb_interfaces_horiz, :, 1] = compute_height_from_dist(distance_itf_i.T)
     h_surf_itf_i[1 : nb_interfaces_horiz + 1, :, 0] = h_surf_itf_i[0:nb_interfaces_horiz, :, 1]
@@ -383,7 +383,7 @@ def dcmip_mountain(geom: CubedSphere3D, metric, mtrx, param):
 
     offset = 1  # Offset due to the halo
     for elem in range(param.nb_elements_horizontal):
-        epais = elem * param.nbsolpts + numpy.arange(param.nbsolpts)
+        epais = elem * param.num_solpts + numpy.arange(param.num_solpts)
 
         # --- Direction x1
         dhdx1[:, epais] = h_surf[:, epais] @ mtrx.diff_solpt_tr + h_surf_itf_i[elem + offset, :, :] @ mtrx.correction_tr

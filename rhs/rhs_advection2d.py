@@ -3,7 +3,7 @@ import numpy
 from common.definitions import idx_h, idx_hu1, idx_hu2, gravity
 
 
-def rhs_advection2d(Q: numpy.ndarray, geom, mtrx, metric, ptopo, nbsolpts: int, nb_elements_hori: int):
+def rhs_advection2d(Q: numpy.ndarray, geom, mtrx, metric, ptopo, num_solpts: int, nb_elements_hori: int):
 
     type_vec = Q.dtype
     nb_equations = Q.shape[0]
@@ -14,9 +14,9 @@ def rhs_advection2d(Q: numpy.ndarray, geom, mtrx, metric, ptopo, nbsolpts: int, 
 
     df1_dx1, df2_dx2, flux_x1, flux_x2 = [numpy.zeros_like(Q, dtype=type_vec) for _ in range(4)]
 
-    flux_x1_itf_i = numpy.zeros((nb_equations, nb_elements_hori + 2, nbsolpts * nb_elements_hori, 2), dtype=type_vec)
+    flux_x1_itf_i = numpy.zeros((nb_equations, nb_elements_hori + 2, num_solpts * nb_elements_hori, 2), dtype=type_vec)
     flux_x2_itf_j, var_itf_i, var_itf_j = [
-        numpy.zeros((nb_equations, nb_elements_hori + 2, 2, nbsolpts * nb_elements_hori), dtype=type_vec)
+        numpy.zeros((nb_equations, nb_elements_hori + 2, 2, num_solpts * nb_elements_hori), dtype=type_vec)
         for _ in range(3)
     ]
 
@@ -25,7 +25,7 @@ def rhs_advection2d(Q: numpy.ndarray, geom, mtrx, metric, ptopo, nbsolpts: int, 
 
     # Interpolate to the element interface
     for elem in range(nb_elements_hori):
-        epais = elem * nbsolpts + numpy.arange(nbsolpts)
+        epais = elem * num_solpts + numpy.arange(num_solpts)
         pos = elem + offset
 
         # --- Direction x1
@@ -55,7 +55,7 @@ def rhs_advection2d(Q: numpy.ndarray, geom, mtrx, metric, ptopo, nbsolpts: int, 
 
     # Interior contribution to the derivatives, corrections for the boundaries will be added later
     for elem in range(nb_elements_hori):
-        epais = elem * nbsolpts + numpy.arange(nbsolpts)
+        epais = elem * num_solpts + numpy.arange(num_solpts)
 
         # --- Direction x1
         df1_dx1[:, :, epais] = flux_x1[:, :, epais] @ mtrx.diff_solpt_tr
@@ -118,7 +118,7 @@ def rhs_advection2d(Q: numpy.ndarray, geom, mtrx, metric, ptopo, nbsolpts: int, 
 
     # Compute the derivatives
     for elem in range(nb_elements_hori):
-        epais = elem * nbsolpts + numpy.arange(nbsolpts)
+        epais = elem * num_solpts + numpy.arange(num_solpts)
 
         # --- Direction x1
 

@@ -186,7 +186,7 @@ class Simulation:
             if self.config.equations == "shallow_water":
                 return CubedSphere2D(
                     self.config.nb_elements_horizontal,
-                    self.config.nbsolpts,
+                    self.config.num_solpts,
                     self.config.λ0,
                     self.config.ϕ0,
                     self.config.α0,
@@ -197,7 +197,7 @@ class Simulation:
             return CubedSphere3D(
                 self.config.nb_elements_horizontal,
                 self.config.nb_elements_vertical,
-                self.config.nbsolpts,
+                self.config.num_solpts,
                 self.config.λ0,
                 self.config.ϕ0,
                 self.config.α0,
@@ -214,7 +214,7 @@ class Simulation:
                 (self.config.z0, self.config.z1),
                 self.config.nb_elements_horizontal,
                 self.config.nb_elements_vertical,
-                self.config.nbsolpts,
+                self.config.num_solpts,
                 self.device,
             )
 

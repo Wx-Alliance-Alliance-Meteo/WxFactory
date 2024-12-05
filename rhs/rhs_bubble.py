@@ -24,19 +24,19 @@ class RhsBubble(RHS):
         shape: tuple[int, ...],
         geom: Cartesian2D,
         mtrx: DFROperators,
-        nbsolpts: int,
+        num_solpts: int,
         nb_elements_x: int,
         nb_elements_z: int,
         device: Device = default_device,
     ):
-        super().__init__(shape, geom, mtrx, nbsolpts, nb_elements_x, nb_elements_z, device)
+        super().__init__(shape, geom, mtrx, num_solpts, nb_elements_x, nb_elements_z, device)
 
     def __compute_rhs__(
         self,
         Q: ndarray,
         geom: Cartesian2D,
         mtrx: DFROperators,
-        nbsolpts: int,
+        num_solpts: int,
         nb_elements_x: int,
         nb_elements_z: int,
         device: Device = default_device,
@@ -79,10 +79,10 @@ class RhsBubble(RHS):
         # --- Common AUSM fluxes
         common_flux_z = xp.empty_like(var_itf_z)
 
-        # bot_itf  = numpy.arange(nbsolpts)
-        # top_itf = numpy.arange(nbsolpts, 2*nbsolpts)
-        bot_itf = slice(0, nbsolpts)
-        top_itf = slice(nbsolpts, nbsolpts * 2)
+        # bot_itf  = numpy.arange(num_solpts)
+        # top_itf = numpy.arange(num_solpts, 2*num_solpts)
+        bot_itf = slice(0, num_solpts)
+        top_itf = slice(num_solpts, num_solpts * 2)
 
         # ------ Vertical
         a_T = sound_itf_z[nb_elements_x:, bot_itf]

@@ -208,7 +208,7 @@ def initialize_cartesian2d(geom: Cartesian2D, param: Configuration) -> NDArray[n
 
     # Initial state at rest, isentropic, hydrostatic
     #   nk, ni = geom.X1.shape
-    Q = xp.zeros((nb_equations, param.nb_elements_vertical, param.nb_elements_horizontal, geom.nbsolpts**2))
+    Q = xp.zeros((nb_equations, param.nb_elements_vertical, param.nb_elements_horizontal, geom.num_solpts**2))
     uu = xp.zeros_like(geom.X1)
     ww = xp.zeros_like(geom.X1)
     exner = xp.zeros_like(geom.X1)

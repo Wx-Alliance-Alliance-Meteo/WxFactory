@@ -111,20 +111,20 @@ class RhsEuler:
         operators: DFROperators,
         metric: Metric3DTopo,
         ptopo: ProcessTopology,
-        nbsolpts: int,
+        num_solpts: int,
         nb_elements_hori: int,
         nb_elements_vert: int,
         case_number: int,
         device: Device = default_device,
     ) -> None:
-        # super().__init__(shape, geom, operators, metric, ptopo, nbsolpts, nb_elements_hori, nb_elements_vert,
+        # super().__init__(shape, geom, operators, metric, ptopo, num_solpts, nb_elements_hori, nb_elements_vert,
         #                  case_number, device)
         self.shape = shape
         self.geom = geom
         self.operators = operators
         self.metric = metric
         self.ptopo = ptopo
-        self.nbsolpts = nbsolpts
+        self.num_solpts = num_solpts
         self.nb_elements_hori = nb_elements_hori
         self.nb_elements_vert = nb_elements_vert
         self.case_number = case_number
@@ -148,7 +148,7 @@ class RhsEuler:
             self.operators,
             self.metric,
             self.ptopo,
-            self.nbsolpts,
+            self.num_solpts,
             self.nb_elements_hori,
             self.nb_elements_vert,
             self.case_number,
@@ -163,7 +163,7 @@ class RhsEuler:
         operators: DFROperators,
         metric: Metric3DTopo,
         ptopo: ProcessTopology,
-        nbsolpts: int,
+        num_solpts: int,
         nb_elements_hori: int,
         nb_elements_vert: int,
         case_number: int,
@@ -193,8 +193,8 @@ class RhsEuler:
            scalar √g, the spatial metric h, and the Christoffel symbols
         :param ptopo: :py:class:`~process_topology.ProcessTopology`
            Wraps the information and communication functions necessary for MPI distribution
-        :param nbsolpts: int
-           Number of interior nodal points per element.  A 3D element will contain nbsolpts**3 internal points.
+        :param num_solpts: int
+           Number of interior nodal points per element.  A 3D element will contain num_solpts**3 internal points.
         :param nb_elements_hori: int
            Number of elements in x/y on each panel of the cubed sphere
         :param nb_elements_vert: int
@@ -239,16 +239,16 @@ class RhsEuler:
         var_itf_j[idx_rho_theta][mid_j] = xp.exp(logrhotheta @ operators.extrap_y)
 
         # Initiate transfers
-        s2_ = xp.s_[..., 1, :, : nbsolpts**2]
-        n2_ = xp.s_[..., -2, :, nbsolpts**2 :]
-        w2_ = xp.s_[..., 1, : nbsolpts**2]
-        e2_ = xp.s_[..., -2, nbsolpts**2 :]
+        s2_ = xp.s_[..., 1, :, : num_solpts**2]
+        n2_ = xp.s_[..., -2, :, num_solpts**2 :]
+        w2_ = xp.s_[..., 1, : num_solpts**2]
+        e2_ = xp.s_[..., -2, num_solpts**2 :]
         req_r = ptopo.start_exchange_scalars(
             var_itf_j[idx_rho][s2_],
             var_itf_j[idx_rho][n2_],
             var_itf_i[idx_rho][w2_],
             var_itf_i[idx_rho][e2_],
-            boundary_shape=(nb_elements_hori, nbsolpts, nbsolpts),
+            boundary_shape=(nb_elements_hori, num_solpts, num_solpts),
             flip_dim=(-3, -1),
         )
         req_u = ptopo.start_exchange_vectors(
@@ -265,7 +265,7 @@ class RhsEuler:
             var_itf_j[idx_rho_theta][n2_],
             var_itf_i[idx_rho_theta][w2_],
             var_itf_i[idx_rho_theta][e2_],
-            boundary_shape=(nb_elements_hori, nbsolpts, nbsolpts),
+            boundary_shape=(nb_elements_hori, num_solpts, num_solpts),
             flip_dim=(-3, -1),
         )
 
@@ -312,8 +312,8 @@ class RhsEuler:
         var_itf_k[idx_rho][mid_k] = xp.exp(logrho @ operators.extrap_z)
         var_itf_k[idx_rho_theta][mid_k] = xp.exp(logrhotheta @ operators.extrap_z)
 
-        south = xp.s_[: nbsolpts**2]
-        north = xp.s_[nbsolpts**2 :]
+        south = xp.s_[: num_solpts**2]
+        north = xp.s_[num_solpts**2 :]
 
         # For consistency at the surface and top boundaries, treat the extrapolation as continuous.  That is,
         # the "top" of the ground is equal to the "bottom" of the atmosphere, and the "bottom" of the model top
@@ -349,14 +349,14 @@ class RhsEuler:
             wflux_adv_x3_itf_k,
             wflux_pres_x3_itf_k,
             xp,
-            nbsolpts,
+            num_solpts,
         )
 
         # Finish transfers
-        s3_ = xp.s_[..., 0, :, nbsolpts**2 :]
-        n3_ = xp.s_[..., -1, :, : nbsolpts**2]
-        w3_ = xp.s_[..., 0, nbsolpts**2 :]
-        e3_ = xp.s_[..., -1, : nbsolpts**2]
+        s3_ = xp.s_[..., 0, :, num_solpts**2 :]
+        n3_ = xp.s_[..., -1, :, : num_solpts**2]
+        w3_ = xp.s_[..., 0, num_solpts**2 :]
+        e3_ = xp.s_[..., -1, : num_solpts**2]
         (
             var_itf_j[idx_rho][s3_],
             var_itf_j[idx_rho][n3_],
@@ -402,7 +402,7 @@ class RhsEuler:
             flux_x1_itf_i,
             wflux_adv_x1_itf_i,
             wflux_pres_x1_itf_i,
-            nbsolpts,
+            num_solpts,
             xp,
         )
         rusanov_3d_hori_j_new(
@@ -415,7 +415,7 @@ class RhsEuler:
             flux_x2_itf_j,
             wflux_adv_x2_itf_j,
             wflux_pres_x2_itf_j,
-            nbsolpts,
+            num_solpts,
             xp,
         )
 

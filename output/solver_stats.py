@@ -28,7 +28,7 @@ class ColumnSet:
     def __init__(self, param: Configuration) -> None:
         self.run_id = Column("int", -1)
         self.step_id = Column("int", 0)
-        self.dg_order = Column("int", param.nbsolpts)
+        self.dg_order = Column("int", param.num_solpts)
         self.num_elem_h = Column("int", param.nb_elements_horizontal_total)
         self.num_elem_v = Column("int", param.nb_elements_vertical)
         self.initial_dt = Column("int", param.dt)

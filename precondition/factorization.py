@@ -31,7 +31,7 @@ class Factorization(Preconditioner):
             str_hash(param.equations),
             str_hash(param.grid_type),
             str_hash(param.jacobian_method),
-            param.nbsolpts,
+            param.num_solpts,
             param.nb_elements_horizontal,
             param.nb_elements_vertical,
         )

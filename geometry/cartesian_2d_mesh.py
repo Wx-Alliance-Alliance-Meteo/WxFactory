@@ -15,10 +15,10 @@ class Cartesian2D(Geometry):
         domain_z: Tuple[float, float],
         nb_elements_x: int,
         nb_elements_z: int,
-        nbsolpts: int,
+        num_solpts: int,
         device: Device = default_device,
     ):
-        super().__init__(nbsolpts, device)
+        super().__init__(num_solpts, device)
         xp = device.xp
 
         scaled_points = 0.5 * (1.0 + self.solutionPoints)
@@ -28,8 +28,8 @@ class Cartesian2D(Geometry):
         itf_x1 = xp.linspace(start=domain_x[0], stop=domain_x[1], num=nb_elements_x + 1)
         x1 = xp.zeros(nb_elements_x * len(self.solutionPoints))
         for i in range(nb_elements_x):
-            idx = i * nbsolpts
-            x1[idx : idx + nbsolpts] = itf_x1[i] + scaled_points * Δx1
+            idx = i * num_solpts
+            x1[idx : idx + num_solpts] = itf_x1[i] + scaled_points * Δx1
 
         # --- Vertical coord
         Δx3 = (domain_z[1] - domain_z[0]) / nb_elements_z
@@ -39,8 +39,8 @@ class Cartesian2D(Geometry):
         itf_x3 = xp.linspace(start=domain_z[0], stop=domain_z[1], num=nb_elements_z + 1)
 
         for i in range(nb_elements_z):
-            idz = i * nbsolpts
-            x3[idz : idz + nbsolpts] = itf_x3[i] + scaled_points * Δx3
+            idz = i * num_solpts
+            x3[idz : idz + num_solpts] = itf_x3[i] + scaled_points * Δx3
 
         X1, X3 = xp.meshgrid(x1, x3)
 
@@ -55,16 +55,16 @@ class Cartesian2D(Geometry):
         self.xperiodic = False
 
         # TODO : hackathon SG
-        self.X1 = xp.zeros((nb_elements_z, nb_elements_x, nbsolpts**2))
-        self.X3 = xp.zeros((nb_elements_z, nb_elements_x, nbsolpts**2))
+        self.X1 = xp.zeros((nb_elements_z, nb_elements_x, num_solpts**2))
+        self.X3 = xp.zeros((nb_elements_z, nb_elements_x, num_solpts**2))
         idx_elem = 0
         for ek in range(nb_elements_z):
             for ei in range(nb_elements_x):
                 #            idx_elem = ei + nb_elements_z * ek
-                start_i = ei * nbsolpts
-                end_i = (ei + 1) * nbsolpts
-                start_k = ek * nbsolpts
-                end_k = (ek + 1) * nbsolpts
+                start_i = ei * num_solpts
+                end_i = (ei + 1) * num_solpts
+                start_k = ek * num_solpts
+                end_k = (ek + 1) * num_solpts
                 self.X1[ek, ei, :] = X1[start_k:end_k, start_i:end_i].flatten()
                 self.X3[ek, ei, :] = X3[start_k:end_k, start_i:end_i].flatten()
                 idx_elem += 1
@@ -77,8 +77,8 @@ class Cartesian2D(Geometry):
         nb_equations = a.shape[:-3]
 
         # Add other dimensions and reshape to a plottable 2D graph
-        tmp_shape = nb_equations + (self.nb_elements_z, self.nb_elements_x, self.nbsolpts, self.nbsolpts)
-        new_shape = nb_equations + (self.nb_elements_z * self.nbsolpts, self.nb_elements_x * self.nbsolpts)
+        tmp_shape = nb_equations + (self.nb_elements_z, self.nb_elements_x, self.num_solpts, self.num_solpts)
+        new_shape = nb_equations + (self.nb_elements_z * self.num_solpts, self.nb_elements_x * self.num_solpts)
         a_new = numpy.swapaxes(a.reshape(tmp_shape), -2, -3).reshape(new_shape)
 
         return a_new

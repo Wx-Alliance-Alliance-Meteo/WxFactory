@@ -157,11 +157,11 @@ def rusanov_3d_vert_new(
     wflux_adv_x3_itf_k,
     wflux_pres_x3_itf_k,
     xp,
-    nbsolpts,
+    num_solpts,
 ):
     # south/north here are relative to an element, *not* an interface
-    south = xp.s_[..., 1:, :, :, : nbsolpts**2]
-    north = xp.s_[..., :-1, :, :, nbsolpts**2 :]
+    south = xp.s_[..., 1:, :, :, : num_solpts**2]
+    north = xp.s_[..., :-1, :, :, num_solpts**2 :]
     w_d = w_itf_k[north]
     w_u = w_itf_k[south]
 
@@ -333,11 +333,11 @@ def rusanov_3d_hori_i_new(
     flux_x1_itf_i,
     wflux_adv_x1_itf_i,
     wflux_pres_x1_itf_i,
-    nbsolpts,
+    num_solpts,
     xp,
 ):
-    west = xp.s_[..., 1:, : nbsolpts**2]
-    east = xp.s_[..., :-1, nbsolpts**2 :]
+    west = xp.s_[..., 1:, : num_solpts**2]
+    east = xp.s_[..., :-1, num_solpts**2 :]
 
     u1_r = u1_itf_i[west]
     u1_l = u1_itf_i[east]
@@ -514,12 +514,12 @@ def rusanov_3d_hori_j_new(
     flux_x2_itf_j,
     wflux_adv_x2_itf_j,
     wflux_pres_x2_itf_j,
-    nbsolpts,
+    num_solpts,
     xp,
 ):
     # South and north are relative to an element (*not* an interface)
-    south = xp.s_[..., 1:, :, : nbsolpts**2]
-    north = xp.s_[..., :-1, :, nbsolpts**2 :]
+    south = xp.s_[..., 1:, :, : num_solpts**2]
+    north = xp.s_[..., :-1, :, num_solpts**2 :]
 
     u2_l = u2_itf_j[north]
     u2_r = u2_itf_j[south]

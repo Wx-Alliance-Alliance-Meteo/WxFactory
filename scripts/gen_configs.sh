@@ -49,7 +49,7 @@ t_end=180
 time_integrator=epi2
 tolerance=1e-7
 gmres_restart=100
-nbsolpts=4
+num_solpts=4
 preconditioner=none
 output_freq=0
 save_state_freq=0
@@ -60,7 +60,7 @@ starting_step=0
 
 cp ${ORIG_CONFIG} ${TMP_BASE_CONFIG}
 set_param_strict ${TMP_BASE_CONFIG} dt t_end time_integrator tolerance starting_step gmres_restart          \
-                             nbsolpts nb_elements_horizontal nb_elements_vertical preconditioner            \
+                             num_solpts nb_elements_horizontal nb_elements_vertical preconditioner            \
                              output_freq save_state_freq store_solver_stats output_dir solver_stats_file
 
 do_no_precond=0

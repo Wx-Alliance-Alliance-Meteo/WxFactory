@@ -93,7 +93,7 @@ class OutputManager:
             param.dt,
             param.nb_elements_horizontal,
             param.nb_elements_vertical,
-            param.nbsolpts,
+            param.num_solpts,
             MPI.COMM_WORLD.size,
         )
         self.config_hash = state_params.__hash__() & 0xFFFFFFFFFFFF

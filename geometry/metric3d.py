@@ -128,27 +128,27 @@ class Metric3DTopo:
 
         # def to_new_itf_j(a):
         #     src_shape = (
-        #         geom.nb_elements_x3 * geom.nbsolpts,
+        #         geom.nb_elements_x3 * geom.num_solpts,
         #         geom.nb_elements_x2,
         #         2,
-        #         geom.nb_elements_x1 * geom.nbsolpts,
+        #         geom.nb_elements_x1 * geom.num_solpts,
         #     )
         #     if a.shape[-4:] != src_shape:
         #         raise ValueError(f"Wrong shape {a.shape}, expected (...,) + {src_shape}")
 
         #     tmp_shape1 = a.shape[:-4] + (
         #         geom.nb_elements_x3,
-        #         geom.nbsolpts,
+        #         geom.num_solpts,
         #         geom.nb_elements_x2,
         #         2,
         #         geom.nb_elements_x1,
-        #         geom.nbsolpts,
+        #         geom.num_solpts,
         #     )
         #     tmp_shape2 = a.shape[:-4] + (
         #         geom.nb_elements_x3,
         #         geom.nb_elements_x2,
         #         geom.nb_elements_x1,
-        #         geom.nbsolpts**2 * 2,
+        #         geom.num_solpts**2 * 2,
         #     )
 
         #     tmp_1 = a.reshape(tmp_shape1)
@@ -233,7 +233,7 @@ class Metric3DTopo:
         exch_itf_i = xp.zeros((3, geom.nk, geom.nb_elements_x1 + 2, 2, geom.nj))
         exch_itf_j = xp.zeros((3, geom.nk, geom.nb_elements_x2 + 2, 2, geom.ni))
 
-        # self.itf_i_shape = (self.nb_elements_x3, self.nb_elements_x2, self.nb_elements_x1 + 2, (nbsolpts**2) * 2)
+        # self.itf_i_shape = (self.nb_elements_x3, self.nb_elements_x2, self.nb_elements_x1 + 2, (num_solpts**2) * 2)
         def to_new_i(a: NDArray):
             exp_shape = (geom.nk, geom.nb_elements_x1 + 2, 2, geom.nj)
             # exp_shape2 = (geom.nk, geom.nb_elements_x1, 2, geom.nj)
@@ -246,11 +246,11 @@ class Metric3DTopo:
 
             tmp_shape1 = (
                 geom.nb_elements_x3,
-                geom.nbsolpts,
+                geom.num_solpts,
                 a.shape[1],
                 2,
                 geom.nb_elements_x2,
-                geom.nbsolpts,
+                geom.num_solpts,
             )
 
             tmp1 = a.reshape(tmp_shape1)
@@ -372,14 +372,14 @@ class Metric3DTopo:
         # formulation u3 exchanges like a scalar (because there is no orientation change at panel
         # boundaries))
 
-        s2_ = xp.s_[..., 1, :, : geom.nbsolpts**2]
-        n2_ = xp.s_[..., -2, :, geom.nbsolpts**2 :]
-        w2_ = xp.s_[..., 1, : geom.nbsolpts**2]
-        e2_ = xp.s_[..., -2, geom.nbsolpts**2 :]
-        s3_ = xp.s_[..., 0, :, geom.nbsolpts**2 :]
-        n3_ = xp.s_[..., -1, :, : geom.nbsolpts**2]
-        w3_ = xp.s_[..., 0, geom.nbsolpts**2 :]
-        e3_ = xp.s_[..., -1, : geom.nbsolpts**2]
+        s2_ = xp.s_[..., 1, :, : geom.num_solpts**2]
+        n2_ = xp.s_[..., -2, :, geom.num_solpts**2 :]
+        w2_ = xp.s_[..., 1, : geom.num_solpts**2]
+        e2_ = xp.s_[..., -2, geom.num_solpts**2 :]
+        s3_ = xp.s_[..., 0, :, geom.num_solpts**2 :]
+        n3_ = xp.s_[..., -1, :, : geom.num_solpts**2]
+        w3_ = xp.s_[..., 0, geom.num_solpts**2 :]
+        e3_ = xp.s_[..., -1, : geom.num_solpts**2]
         (
             (dRdx1_ex_j[s3_], dRdx2_ex_j[s3_], dRdeta_ex_j[s3_]),
             (dRdx1_ex_j[n3_], dRdx2_ex_j[n3_], dRdeta_ex_j[n3_]),

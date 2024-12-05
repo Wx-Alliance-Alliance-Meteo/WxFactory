@@ -84,10 +84,10 @@ class Configuration:
 
         ################################
         # Spatial discretization
-        self.nbsolpts = self._get_option("Spatial_discretization", "nbsolpts", int, None)
+        self.num_solpts = self._get_option("Spatial_discretization", "num_solpts", int, None)
         self.nb_elements_horizontal = self._get_option("Spatial_discretization", "nb_elements_horizontal", int, None)
         self.nb_elements_vertical = self._get_option("Spatial_discretization", "nb_elements_vertical", int, 1)
-        self.initial_nbsolpts = self.nbsolpts
+        self.initial_num_solpts = self.num_solpts
         self.nb_elements_horizontal_total = self.nb_elements_horizontal
 
         self.filter_apply = self._get_option("Spatial_discretization", "filter_apply", bool, False)
@@ -120,9 +120,9 @@ class Configuration:
         self.discretization = self._get_option("Grid", "discretization", str, "dg", ["dg", "fv"])
 
         if self.discretization == "fv":
-            if self.nbsolpts != 1:
+            if self.num_solpts != 1:
                 raise ValueError(
-                    f"The number of solution of solution points ({self.nbsolpts}) in configuration file"
+                    f"The number of solution of solution points ({self.num_solpts}) in configuration file"
                     " is inconsistent with a finite volume discretization"
                 )
 

@@ -28,7 +28,7 @@ def rhs_euler_fv(
     mtrx: DFROperators,
     metric: Metric3DTopo,
     ptopo: ProcessTopology,
-    nbsolpts: int,
+    num_solpts: int,
     nb_elements_hori: int,
     nb_elements_vert: int,
     case_number: int,
@@ -57,8 +57,8 @@ def rhs_euler_fv(
        scalar √g, the spatial metric h, and the Christoffel symbols
     ptopo : Distributed_World
        Wraps the information and communication functions necessary for MPI distribution
-    nbsolpts : int
-       Number of interior nodal points per element.  A 3D element will contain nbsolpts**3 internal points.
+    num_solpts : int
+       Number of interior nodal points per element.  A 3D element will contain num_solpts**3 internal points.
     nb_elements_hori : int
        Number of elements in x/y on each panel of the cubed sphere
     nb_elements_vert : int
@@ -77,8 +77,8 @@ def rhs_euler_fv(
     nb_equations = Q.shape[0]  # Number of constituent Euler equations.  Probably 6.
     nb_interfaces_hori = nb_elements_hori + 1  # Number of element interfaces per horizontal dimension
     nb_interfaces_vert = nb_elements_vert + 1  # Number of element interfaces in the vertical dimension
-    nb_pts_hori = nb_elements_hori * nbsolpts  # Total number of solution points per horizontal dimension
-    nb_vertical_levels = nb_elements_vert * nbsolpts  # Total number of solution points in the vertical dimension
+    nb_pts_hori = nb_elements_hori * num_solpts  # Total number of solution points per horizontal dimension
+    nb_vertical_levels = nb_elements_vert * num_solpts  # Total number of solution points in the vertical dimension
 
     # Create new arrays for each component of T^μν_:ν, plus one more for the final right hand side
     df1_dx1, df2_dx2, df3_dx3, rhs = [numpy.empty_like(Q, dtype=type_vec) for _ in range(4)]
@@ -120,7 +120,7 @@ def rhs_euler_fv(
         # operating on all variables simultaneously
 
         # Index of the 'live' interior elements inside the Q array, to be extrapolated
-        # epais = elem * nbsolpts + numpy.arange(nbsolpts)
+        # epais = elem * num_solpts + numpy.arange(num_solpts)
         epais = elem
         # Position in the output interface array for writing.  'pos' 1 corresponds to the west/southmost element, with
         # 'pos' 0 (and nb_elements_hori+1) reserved for exchanges from neighbouring panels
@@ -205,7 +205,7 @@ def rhs_euler_fv(
     # The "interior contribution" here is evaluated as if the fluxes at the element boundaries are
     # zero.
     for elem in range(nb_elements_hori):
-        # epais = elem * nbsolpts + numpy.arange(nbsolpts)
+        # epais = elem * num_solpts + numpy.arange(num_solpts)
         epais = elem
 
         # --- Direction x1
@@ -222,7 +222,7 @@ def rhs_euler_fv(
     # Extrapolate to top/bottom for each element
     for slab in range(nb_pts_hori):
         for elem in range(nb_elements_vert):
-            # epais = elem * nbsolpts + numpy.arange(nbsolpts)
+            # epais = elem * num_solpts + numpy.arange(num_solpts)
             epais = elem
             pos = elem + offset
 
@@ -327,7 +327,7 @@ def rhs_euler_fv(
 
     for slab in range(nb_pts_hori):
         for elem in range(nb_elements_vert):
-            # epais = elem * nbsolpts + numpy.arange(nbsolpts)
+            # epais = elem * num_solpts + numpy.arange(num_solpts)
             epais = elem
             # TODO : inclure la transformation vers l'élément de référence dans la vitesse w.
             # print(f'mtrx.diff_solpt: {mtrx.diff_solpt}')
@@ -499,7 +499,7 @@ def rhs_euler_fv(
 
     # Add corrections to the derivatives
     for elem in range(nb_elements_hori):
-        # epais = elem * nbsolpts + numpy.arange(nbsolpts)
+        # epais = elem * num_solpts + numpy.arange(num_solpts)
         epais = elem
 
         # --- Direction x1
