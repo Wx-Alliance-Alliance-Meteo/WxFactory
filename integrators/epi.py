@@ -276,8 +276,9 @@ class Epi(Integrator):
                     f"KIOPS NE converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)"
                     f" to a solution with local error {stats[4]:.2e}"
                 )
-        # ----- EXODE ------ 
-        elif self.exponential_solver == "exode": 
+        # ----- EXODE ------
+        elif self.exponential_solver == "exode":
+
             phiv, stats = exode(
                 1.0,
                 matvec_handle,
@@ -289,13 +290,16 @@ class Epi(Integrator):
                 verbose=False,
             )
             
+
             # comment out for scaling test
             if mpirank == 0:
                 print(
-                    f"EXODE converged at iteration {stats[0]}, with {stats[1]} rejected steps with local error {stats[3]}"
+                    f"EXODE converged at iteration {stats[0]}, with {stats[1]} rejected steps "
+                    f"with local error {stats[3]}"
                 )
 
-            #self.solver_info = SolverInfo(total_num_it=stats[0])    
+            # self.solver_info = SolverInfo(total_num_it=stats[0])
+
         # ----------default: kiops-----------
         else:
             phiv, stats = kiops(
@@ -315,7 +319,7 @@ class Epi(Integrator):
                 print(
                     f"KIOPS converged at iteration {stats[2]} (using {stats[0]} internal substeps and"
                     f" {stats[1]} rejected expm) to a solution with local error {stats[4]:.2e}"
-                )
+                    f" KIOPS size for the last step = {stats[5]}")
 
         self.solver_info = SolverInfo(total_num_it=stats[2])
 

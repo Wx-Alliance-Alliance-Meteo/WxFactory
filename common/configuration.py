@@ -74,7 +74,7 @@ class Configuration:
         self.starting_step = self._get_option("Time_integration", "starting_step", int, 0)
 
         self.exponential_solver = self._get_option(
-                "Time_integration", "exponential_solver", str, "pmex", ["pmex", "kiops","exode"]
+            "Time_integration", "exponential_solver", str, "kiops", ["pmex", "kiops", "exode"]
         )
         self.exode_method = self._get_option("Time_integration", "exode_method", str, "")
         self.exode_controller = self._get_option("Time_integration", "exode_controller", str, "")
