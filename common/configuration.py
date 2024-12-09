@@ -1,31 +1,35 @@
 from configparser import ConfigParser, NoSectionError, NoOptionError
 import json
 import copy
-import sys
-from typing import Any, Dict, List, Optional, Type, TypeVar, Union, Self
+from typing import Dict, List, Optional, Type, Self
+from common.configuration_types import OptionType
+from common.configuration_schema import ConfigurationSchema, ConfigurationField
 
 __all__ = ["Configuration"]
-
-OptionType = TypeVar("OptionType", bound=Union[int, float, str, bool, List[int], List[float]])
 
 
 class Configuration:
     """All the config options for GEF"""
 
-    sections: Dict
+    sections: Dict[str, List[str]]
 
-    def __init__(self, cfg_file: str, use_content: bool = False):
+    def __init__(self, cfg_file: str, schema: ConfigurationSchema):
 
-        self.cfg_file = "in-memory" if use_content else cfg_file
+        self.cfg_file = "in-memory"
         self.sections = {}
         self.parser = ConfigParser()
 
         self.config_content = cfg_file
-        if not use_content:
-            with open(cfg_file) as config_file:
-                self.config_content = '\n'.join(config_file.readlines())
 
         self.parser.read_string(self.config_content)
+
+        for field in [field for field in schema.fields if field.dependancy is None]:
+            self._get_option(field)
+        
+        for field in [field for field in schema.fields if field.dependancy is not None]:
+            self._get_option(field)
+
+        """
 
         self.array_module = "numpy"  # Default value, may change depending on selected options
 
@@ -219,6 +223,7 @@ class Configuration:
         self.output_file = f"{self.output_dir}/{self.base_output_file}.nc"
 
         self.solver_stats_file = self._get_option("Output_options", "solver_stats_file", str, "solver_stats.db")
+        """
 
     def __deepcopy__(self: Self, memo) -> Self:
         do_not_deepcopy = {}
@@ -230,13 +235,12 @@ class Configuration:
 
     def _get_opt_from_parser(self, section_name: str, option_name: str, option_type: Type[OptionType]) -> OptionType:
         value: Optional[OptionType] = None
+
         if option_type == float:
             value = self.parser.getfloat(section_name, option_name)
         elif option_type == int:
             value = self.parser.getint(section_name, option_name)
         elif option_type == str:
-            value = self.parser.get(section_name, option_name).lower()
-        elif option_type == "case-sensitive-str":
             value = self.parser.get(section_name, option_name)
         elif option_type == bool:
             value = self.parser.getint(section_name, option_name) > 0
@@ -256,59 +260,34 @@ class Configuration:
         assert value is not None
         return value
 
-    def _validate_option(
-        self,
-        option_name: str,
-        value: OptionType,
-        valid_values: Optional[List[OptionType]],
-        min_value: Optional[OptionType],
-        max_value: Optional[OptionType],
-    ) -> OptionType:
-
-        if valid_values is not None and value not in valid_values:
-            raise ValueError(
-                f'"{value}" is not considered a valid value for option "{option_name}".'
-                f" Available values are {valid_values}"
-            )
-        if min_value is not None:
-            if value < min_value:
-                print(f'WARNING: Adjusting "{option_name}" to min value "{min_value}"')
-                value = min_value
-        if max_value is not None:
-            if value > max_value:
-                print(f'WARNING: Adjusting "{option_name}" to max value "{max_value}"')
-                value = max_value
-
-        return value
-
-    def _get_option(
-        self,
-        section_name: str,
-        option_name: str,
-        option_type: Type[OptionType],
-        default_value: Optional[OptionType],
-        valid_values: Optional[List[OptionType]] = None,
-        min_value: Optional[OptionType] = None,
-        max_value: Optional[OptionType] = None,
-    ) -> OptionType:
+    def _get_option(self, field: ConfigurationField) -> OptionType:
         value: Optional[OptionType] = None
+        if field.dependancy is not None:
+            if not hasattr(self, field.dependancy[0]):
+                raise ValueError(f"Cannot validate depancy {field.dependancy[0]}. Dependancy not found")
+            
+            if not getattr(self, field.dependancy[0]) in field.dependancy[1]:
+                return None
 
         try:
-            value = self._get_opt_from_parser(section_name, option_name, option_type)
-            value = self._validate_option(option_name, value, valid_values, min_value, max_value)
-        except (NoOptionError, NoSectionError) as e:
-            if default_value is None:
-                e.message += f"\nMust specify a value for option '{option_name}' in file {self.cfg_file}"
-                raise
-            value = default_value
+            value = field.transform(self._get_opt_from_parser(field.field_section, field.field_name, field.field_type))
 
-        #setattr(self, option_name, value)
-        if section_name not in self.sections:
-            self.sections[section_name] = []
-        self.sections[section_name].append(option_name)
+            if not field.validate(value):
+                raise ValueError(f"Cannot validate {field.field_name} at section {field.field_section}")
+        except (NoOptionError, NoSectionError) as e:
+            if field.field_default is None:
+                e.message += f"\nMust specify a value for option '{field.field_name}' in file {self.cfg_file}"
+                raise
+            value = field.field_default
+
+        setattr(self, field.field_name, value)
+
+        if field.field_section not in self.sections:
+            self.sections[field.field_section] = []
+        self.sections[field.field_section].append(field.field_name)
 
         return value
-    
+
     def pack(self):
         sects = {}
         for section_name, section_options in self.sections.items():
