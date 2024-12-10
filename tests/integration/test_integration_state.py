@@ -137,6 +137,9 @@ class StateIntegrationTestCases(unittest.TestCase):
         except SystemExit as e:
             has_exited = True
             exit_code = e.code
+        except Exception as e:
+            print(e, flush=True)
+            raise e
 
         if has_exited:
             print(f"Process {MPI.COMM_WORLD.rank} has exited prematurely")
@@ -159,6 +162,7 @@ class StateIntegrationTestCases(unittest.TestCase):
         base_name = f"state_vector_{config_hash:012x}_{MPI.COMM_WORLD.rank:03d}"
         state_vector_file: str = f"{conf.output_dir}/{base_name}.{conf.save_state_freq:08d}.npy"
         true_state_vector_file: str = f"{self.config_dir_path}/{base_name}.{conf.save_state_freq:08d}.npy"
+        
 
         [data, _] = state.load_state(state_vector_file, schema)
         [true_data, _] = state.load_state(true_state_vector_file, schema)

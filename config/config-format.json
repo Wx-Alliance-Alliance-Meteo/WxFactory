@@ -144,7 +144,7 @@
         },
 
         {
-            "name": "nbsolpts",
+            "name": "num_solpts",
             "section": "Spatial_discretization",
             "type": "int",
             "min": 1
