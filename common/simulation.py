@@ -30,6 +30,7 @@ from rhs.rhs_selector import RhsBundle
 
 from .definitions import idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_w
 from .configuration import Configuration
+from .configuration_schema import ConfigurationSchema
 from .process_topology import ProcessTopology
 from .device import Device, CpuDevice, CudaDevice
 
@@ -47,10 +48,11 @@ class Simulation:
 
     device: Device
 
-    def __init__(self, config_file: str) -> None:
+    def __init__(self, config_file: str, config_schema_file: str) -> None:
         self.rank = MPI.COMM_WORLD.rank
 
-        self.config = Configuration(config_file, use_content=True)
+        self.schema = ConfigurationSchema(config_schema_file)
+        self.config = Configuration(config_file, self.schema)
         if (self.rank == 0):
             print(f"{self.config}", flush=True)
 

@@ -1,25 +1,41 @@
 import cpu_test
 import output.state
 import common.configuration
+import common.configuration_schema
 import ndarray_generator
 import random
+import common.configuration_schema
+import os
 
 class StateTestCases(cpu_test.CpuTestCases):
     def setUp(self):
         super().setUp()
+        if not os.path.exists("tests/data/temp"):
+            os.mkdir("tests/data/temp")
     
     def test_save_load_works(self):
+        schema_path = "config/config-format.json"
+        schema_text: str
+        with open(schema_path) as f:
+            schema_text = "\n".join(f.readlines())
+        schema = common.configuration_schema.ConfigurationSchema(schema_text)
+
+        config_path = "tests/data/state_tests/config.ini"
+        config_text: str
+        with open(config_path) as f:
+            config_text = "\n".join(f.readlines())
+
         output_path = "tests/data/temp/test_state_data"
         seed: int = 5646459
         rand = random.Random(seed)
         number_of_data = 5
         [arr] = ndarray_generator.generate_vectors(number_of_data, rand, -10, 10, [self.cpu_device])
         
-        conf = common.configuration.Configuration("tests/data/state_tests/config.ini", False)
+        conf = common.configuration.Configuration(config_text, schema)
         
         output.state.save_state(arr, conf, output_path, self.cpu_device)
 
-        data, loaded_conf = output.state.load_state(output_path, self.cpu_device)
+        data, loaded_conf = output.state.load_state(output_path, schema, self.cpu_device)
         safe_conf = loaded_conf.pack()
 
 

@@ -8,7 +8,6 @@ _T = TypeVar("T", str, dict, list)
 _Numerical = TypeVar("Numerical", bound=Union[int, float])
 _Selectable = TypeVar("Selectable", bound=Union[int, float, str])
 
-
 def _default_validate(_: Any) -> Literal[True]:
     return True
 
@@ -150,14 +149,17 @@ class ConfigurationSchema:
 
         return field_default, return_type, validate
 
-    def __parse_bool_field(self, field: dict, index: int) -> tuple[Optional[bool], bool, Callable[[Any], bool]]:
+    def __parse_bool_field(self, field: dict, index: int) -> tuple[Optional[bool], bool, Callable[[Any], bool], Callable[[int], bool]]:
         field_default = self.__get_field_default(
             field, f'The "default" field at field index {index} is not a bool', bool
         )
         if field_default is not None:
             field_default = field_default > 0
+        
+        def transform(value: int) -> bool:
+            return value != 0
 
-        return field_default, bool, _default_validate
+        return field_default, bool, _default_validate, transform
 
     def __parse_str_field(
         self, field: dict, index: int, case_sensitive: bool
@@ -263,7 +265,7 @@ class ConfigurationSchema:
                 )
 
             case "bool":
-                field_default, field_type, validate = self.__parse_bool_field(field, index)
+                field_default, field_type, validate, transform = self.__parse_bool_field(field, index)
 
             case "case-sensitive-str":
                 field_default, field_type, validate, transform = self.__parse_str_field(field, index, True)
@@ -344,3 +346,11 @@ class ConfigurationSchema:
             )
             field = self.__get_field(field, index)
             self.fields.append(field)
+
+def load_default_schema() -> ConfigurationSchema:
+    schema_path = "config/config-format.json"
+    schema_text: str
+    with open(schema_path) as f:
+        schema_text = "\n".join(f.readlines())
+    schema = ConfigurationSchema(schema_text)
+    return schema

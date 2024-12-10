@@ -64,14 +64,20 @@ def main():
         if rank == 0:
             raise ValueError(f"Config file does not seem to exist: {args.config}")
         sys.exit(-1)
-    
+
     config_content = ""
+    config_schema_file = ""
     if rank == 0:
         with open(args.config) as config_file:
-            config_content = '\n'.join(config_file.readlines())
+            config_content = "\n".join(config_file.readlines())
+        with open("config/config-format.json") as schema_file:
+            config_schema_file = "\n".join(schema_file.readlines())
+
         common.wx_mpi.bcast_string(config_content, MPI.COMM_WORLD)
+        common.wx_mpi.bcast_string(config_schema_file, MPI.COMM_WORLD)
     else:
         config_content = common.wx_mpi.rcv_bcast_string(0, MPI.COMM_WORLD)
+        config_schema_file = common.wx_mpi.rcv_bcast_string(0, MPI.COMM_WORLD)
 
     try:
         import cProfile
@@ -88,7 +94,7 @@ def main():
             numpy.seterr(all="raise")
 
         # Read the config + initialize simulation
-        sim = Simulation(config_content)
+        sim = Simulation(config_content, config_schema_file)
 
         # This is the actual run
         sim.run()

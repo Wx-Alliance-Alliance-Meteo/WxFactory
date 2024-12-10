@@ -29,6 +29,8 @@ class Configuration:
         for field in [field for field in schema.fields if field.dependancy is not None]:
             self._get_option(field)
 
+        self.state_version = schema.version
+
         """
 
         self.array_module = "numpy"  # Default value, may change depending on selected options
