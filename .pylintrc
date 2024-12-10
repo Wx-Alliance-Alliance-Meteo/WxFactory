@@ -249,6 +249,7 @@ check-protected-access-in-special-methods=no
 defining-attr-methods=__init__,
                       __new__,
                       setUp,
+                      apply_topography,
                       build_metric,
                       __post_init__
 

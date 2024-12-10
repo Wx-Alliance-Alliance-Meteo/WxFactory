@@ -7,6 +7,7 @@ import random
 import common.configuration_schema
 import os
 
+
 class StateTestCases(cpu_test.CpuTestCases):
     def setUp(self):
         super().setUp()
@@ -38,11 +39,12 @@ class StateTestCases(cpu_test.CpuTestCases):
         data, loaded_conf = output.state.load_state(output_path, schema, self.cpu_device)
         safe_conf = loaded_conf.pack()
 
-
         self.assertEqual(len(arr.shape), len(data.shape), "The shape of the data has changed between a save and a load")
         self.assertEqual(len(data.shape), 1, "The data is not a vector anymore")
         self.assertEqual(arr.shape[0], data.shape[0], "The lenght of the vector has changed between a save and a load")
-        self.assertEqual(data.shape[0], number_of_data, "The lenght of the vector has changed between a save and a load")
+        self.assertEqual(
+            data.shape[0], number_of_data, "The lenght of the vector has changed between a save and a load"
+        )
 
         for it in range(number_of_data):
             self.assertEqual(arr[it], data[it], f"Data at {it} has changed between a save and a load")
@@ -51,9 +53,14 @@ class StateTestCases(cpu_test.CpuTestCases):
             for key, value in values.items():
                 initial_conf_value = getattr(conf, key)
                 if list == type(initial_conf_value):
-                    self.assertListEqual(initial_conf_value, value, f"Configuration value {key} in section {section} has changed")
+                    self.assertListEqual(
+                        initial_conf_value, value, f"Configuration value {key} in section {section} has changed"
+                    )
                 elif dict == type(initial_conf_value):
-                    self.assertDictEqual(initial_conf_value, value, f"Configuration value {key} in section {section} has changed")
+                    self.assertDictEqual(
+                        initial_conf_value, value, f"Configuration value {key} in section {section} has changed"
+                    )
                 else:
-                    self.assertEqual(initial_conf_value, value, f"Configuration value {key} in section {section} has changed")
-
+                    self.assertEqual(
+                        initial_conf_value, value, f"Configuration value {key} in section {section} has changed"
+                    )

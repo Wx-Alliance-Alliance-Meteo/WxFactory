@@ -59,6 +59,7 @@ class MpiTestResult(TestResult):
     """
     Result accumulator
     """
+
     tests_order: List[unittest.TestCase] = None
     rank: int
     results_as_list: List[int]  # 0=Nothing special, 1=error, 2=fail, 3=skip

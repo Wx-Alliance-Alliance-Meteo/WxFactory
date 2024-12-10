@@ -28,7 +28,7 @@ class RHS_FV(RHS):
         self.rhs = None
 
     def solution_extrapolation(self, q: ndarray) -> None:
-        
+
         if self.q_itf_x1 is None or self.q_itf_x1.dtype != q.dtype:
             xp = self.device.xp
             self.q_itf_x1 = xp.empty((*self.q.shape, 2), dtype=q.dtype)
@@ -60,7 +60,7 @@ class RHS_FV(RHS):
             self.df3_dx3 = -(self.f_itf_x3[:, :, 1] - self.f_itf_x3[:, :, 0]) / self.geom.Δx3
         else:
             raise Exception("3D not implemented yet!")
-        
+
         if self.rhs is None or self.rhs.dtype != self.df1_dx1.dtype:
             self.rhs = xp.empty_like(self.df1_dx1)
 

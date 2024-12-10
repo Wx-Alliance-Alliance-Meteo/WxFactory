@@ -42,7 +42,7 @@ def kiops(
     * Niesen, J. and Wright, W.M., 2011. A Krylov subspace method for option pricing. SSRN 1799124
     * Niesen, J. and Wright, W.M., 2012. Algorithm 919: A Krylov subspace algorithm for evaluating the ``φ``-functions
       appearing in exponential integrators. ACM Transactions on Mathematical Software (TOMS), 38(3), p.22
-    
+
     :param tau_out: Array of `tau_out`
     :param A: the matrix argument of the ``φ`` functions
     :param u: the matrix with rows representing the vectors to be multiplied by the ``φ`` functions

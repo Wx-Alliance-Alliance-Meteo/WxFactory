@@ -24,21 +24,21 @@ class RhsBubble(RHS):
         shape: tuple[int, ...],
         geom: Cartesian2D,
         mtrx: DFROperators,
-        nbsolpts: int,
-        nb_elements_x: int,
-        nb_elements_z: int,
+        num_solpts: int,
+        num_elements_x: int,
+        num_elements_z: int,
         device: Device = default_device,
     ):
-        super().__init__(shape, geom, mtrx, nbsolpts, nb_elements_x, nb_elements_z, device)
+        super().__init__(shape, geom, mtrx, num_solpts, num_elements_x, num_elements_z, device)
 
     def __compute_rhs__(
         self,
         Q: ndarray,
         geom: Cartesian2D,
         mtrx: DFROperators,
-        nbsolpts: int,
-        nb_elements_x: int,
-        nb_elements_z: int,
+        num_solpts: int,
+        num_elements_x: int,
+        num_elements_z: int,
         device: Device = default_device,
     ) -> ndarray:
 
@@ -79,35 +79,35 @@ class RhsBubble(RHS):
         # --- Common AUSM fluxes
         common_flux_z = xp.empty_like(var_itf_z)
 
-        # bot_itf  = numpy.arange(nbsolpts)
-        # top_itf = numpy.arange(nbsolpts, 2*nbsolpts)
-        bot_itf = slice(0, nbsolpts)
-        top_itf = slice(nbsolpts, nbsolpts * 2)
+        # bot_itf  = numpy.arange(num_solpts)
+        # top_itf = numpy.arange(num_solpts, 2*num_solpts)
+        bot_itf = slice(0, num_solpts)
+        top_itf = slice(num_solpts, num_solpts * 2)
 
         # ------ Vertical
-        a_T = sound_itf_z[nb_elements_x:, bot_itf]
-        a_B = sound_itf_z[:-nb_elements_x, top_itf]
+        a_T = sound_itf_z[num_elements_x:, bot_itf]
+        a_B = sound_itf_z[:-num_elements_x, top_itf]
 
-        M_T = mach_itf_z[nb_elements_x:, bot_itf]
-        M_B = mach_itf_z[:-nb_elements_x, top_itf]
+        M_T = mach_itf_z[num_elements_x:, bot_itf]
+        M_B = mach_itf_z[:-num_elements_x, top_itf]
 
         M = 0.25 * ((M_B + 1.0) ** 2 - (M_T - 1.0) ** 2)
 
-        common_flux_z[:, nb_elements_x:, bot_itf] = (
-            var_itf_z[:, :-nb_elements_x, top_itf] * xp.maximum(0.0, M) * a_B
-        ) + (var_itf_z[:, nb_elements_x:, bot_itf] * xp.minimum(0.0, M) * a_T)
-        common_flux_z[idx_2d_rho_w, nb_elements_x:, bot_itf] = 0.5 * (
-            (1.0 + M_B) * pressure_itf_z[:-nb_elements_x, top_itf]
-            + (1.0 - M_T) * pressure_itf_z[nb_elements_x:, bot_itf]
+        common_flux_z[:, num_elements_x:, bot_itf] = (
+            var_itf_z[:, :-num_elements_x, top_itf] * xp.maximum(0.0, M) * a_B
+        ) + (var_itf_z[:, num_elements_x:, bot_itf] * xp.minimum(0.0, M) * a_T)
+        common_flux_z[idx_2d_rho_w, num_elements_x:, bot_itf] = 0.5 * (
+            (1.0 + M_B) * pressure_itf_z[:-num_elements_x, top_itf]
+            + (1.0 - M_T) * pressure_itf_z[num_elements_x:, bot_itf]
         )
-        common_flux_z[:, :-nb_elements_x, top_itf] = common_flux_z[:, nb_elements_x:, bot_itf]
+        common_flux_z[:, :-num_elements_x, top_itf] = common_flux_z[:, num_elements_x:, bot_itf]
 
         # Zero flux BC at bottom and top boundaries
         # except for (vertical) momentum, where we use extrapolated pressure at boundary
-        common_flux_z[:, :nb_elements_x, bot_itf] = 0.0
-        common_flux_z[:, -nb_elements_x:, top_itf] = 0.0
-        common_flux_z[idx_2d_rho_w, :nb_elements_x, bot_itf] = pressure_itf_z[:nb_elements_x, bot_itf]
-        common_flux_z[idx_2d_rho_w, -nb_elements_x:, top_itf] = pressure_itf_z[-nb_elements_x:, top_itf]
+        common_flux_z[:, :num_elements_x, bot_itf] = 0.0
+        common_flux_z[:, -num_elements_x:, top_itf] = 0.0
+        common_flux_z[idx_2d_rho_w, :num_elements_x, bot_itf] = pressure_itf_z[:num_elements_x, bot_itf]
+        common_flux_z[idx_2d_rho_w, -num_elements_x:, top_itf] = pressure_itf_z[-num_elements_x:, top_itf]
 
         # ------ Horizontal
         common_flux_x = xp.empty_like(var_itf_x)
@@ -132,8 +132,8 @@ class RhsBubble(RHS):
 
         # Zero flux BC at left and right boundaries
         # except for (horizontal) momentum, where we use extrapolated pressure at boundary
-        n0 = nb_elements_x - 1
-        jump = nb_elements_x
+        n0 = num_elements_x - 1
+        jump = num_elements_x
         common_flux_x[:, ::jump, west_itf] = 0.0
         common_flux_x[:, n0::jump, east_itf] = 0.0
         common_flux_x[idx_2d_rho_u, ::jump, west_itf] = pressure_itf_x[::jump, west_itf]

@@ -120,7 +120,7 @@ class scipy_counter:  # TODO : tempo
             print(f"iter {self.niter:3d}\trk = {str(rk)}")
             sys.stdout.flush()
 
-    def nb_iter(self):
+    def num_iter(self):
         return self.niter
 
 

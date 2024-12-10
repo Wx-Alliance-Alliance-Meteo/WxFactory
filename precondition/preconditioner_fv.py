@@ -31,7 +31,7 @@ class FV_preconditioner:
 
         # print(f'Params:\n{param}')
 
-        self.origin_order = param.nbsolpts if origin_order is None else origin_order
+        self.origin_order = param.num_solpts if origin_order is None else origin_order
         self.dest_order = select_order(self.origin_order, origin_field)
 
         interpolate_fct = "lagrange" if origin_field == "dg" else "bilinear"
@@ -42,10 +42,10 @@ class FV_preconditioner:
         self.param = copy(param)
         self.param.discretization = "fv"
         if origin_field == "dg":
-            self.param.nb_elements_horizontal = self.param.nb_elements_horizontal * self.dest_order
+            self.param.num_elements_horizontal = self.param.num_elements_horizontal * self.dest_order
         else:
-            self.param.nb_elements_horizontal = self.param.nb_elements_horizontal // 2
-        self.param.nbsolpts = 1
+            self.param.num_elements_horizontal = self.param.num_elements_horizontal // 2
+        self.param.num_solpts = 1
 
         if self.param.equations != "shallow_water":
             raise ValueError(
@@ -55,9 +55,9 @@ class FV_preconditioner:
 
         self.ptopo = ptopo
         self.dest_geom = cubed_sphere(
-            self.param.nb_elements_horizontal,
-            self.param.nb_elements_vertical,
-            self.param.nbsolpts,
+            self.param.num_elements_horizontal,
+            self.param.num_elements_vertical,
+            self.param.num_solpts,
             self.param.λ0,
             self.param.ϕ0,
             self.param.α0,
@@ -128,8 +128,8 @@ class FV_preconditioner:
             self.dest_metric,
             self.dest_topo,
             self.ptopo,
-            self.param.nbsolpts,
-            self.param.nb_elements_horizontal,
+            self.param.num_solpts,
+            self.param.num_elements_horizontal,
             self.param.case_number,
             False,
         )

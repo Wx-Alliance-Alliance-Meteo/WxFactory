@@ -86,28 +86,11 @@ class Configuration:
 
         ################################
         # Spatial discretization
-        self.nbsolpts = self._get_option("Spatial_discretization", "nbsolpts", int, None)
-        self.nb_elements_horizontal = self._get_option("Spatial_discretization", "nb_elements_horizontal", int, None)
-        self.nb_elements_vertical = self._get_option("Spatial_discretization", "nb_elements_vertical", int, 1)
-        self.initial_nbsolpts = self.nbsolpts
-        self.nb_elements_horizontal_total = self.nb_elements_horizontal
-
-        self.relief_layer_height = self._get_option(
-            "Spatial_discretization", "relief_layer_height", int, 0, min_value=0
-        )
-        self.nb_elements_relief_layer = self._get_option(
-            "Spatial_discretization", "nb_elements_relief_layer", int, 0, min_value=0
-        )
-
-        if self.relief_layer_height > 0:
-            self.num_dim = 3
-            self.nbsolpts_elem = self.nbsolpts**3
-        else:
-            self.num_dim = 2
-            self.nbsolpts_elem = self.nbsolpts**2
-
-        if self.equations == "euler":
-            self.nb_var = self.num_dim + 2
+        self.num_solpts = self._get_option("Spatial_discretization", "num_solpts", int, None)
+        self.num_elements_horizontal = self._get_option("Spatial_discretization", "num_elements_horizontal", int, None)
+        self.num_elements_vertical = self._get_option("Spatial_discretization", "num_elements_vertical", int, 1)
+        self.initial_num_solpts = self.num_solpts
+        self.num_elements_horizontal_total = self.num_elements_horizontal
 
         self.filter_apply = self._get_option("Spatial_discretization", "filter_apply", bool, False)
         self.filter_order = self._get_option(
@@ -139,9 +122,9 @@ class Configuration:
         self.discretization = self._get_option("Grid", "discretization", str, "dg", ["dg", "fv"])
 
         if self.discretization == "fv":
-            if self.nbsolpts != 1:
+            if self.num_solpts != 1:
                 raise ValueError(
-                    f"The number of solution of solution points ({self.nbsolpts}) in configuration file"
+                    f"The number of solution of solution points ({self.num_solpts}) in configuration file"
                     " is inconsistent with a finite volume discretization"
                 )
 
@@ -151,9 +134,6 @@ class Configuration:
             self.phi0 = self._get_option("Grid", "phi0", float, None)
             self.alpha0 = self._get_option("Grid", "alpha0", float, None)
             self.ztop = self._get_option("Grid", "ztop", float, 0.0)
-            self.nb_elements_total = self.nb_elements_horizontal * self.nb_elements_horizontal
-            if self.num_dim == 3:
-                self.nb_elements_total *= self.nb_elements_relief_layer
 
         # Cartesian grid bounds
         if self.grid_type == "cartesian2d":
@@ -161,7 +141,6 @@ class Configuration:
             self.x1 = self._get_option("Grid", "x1", float, None)
             self.z0 = self._get_option("Grid", "z0", float, None)
             self.z1 = self._get_option("Grid", "z1", float, None)
-            self.nb_elements_total = self.nb_elements_horizontal * self.nb_elements_vertical
 
         ###################
         # Preconditioning
@@ -178,7 +157,7 @@ class Configuration:
         self.num_mg_levels = 1
         if "mg" in self.preconditioner:
             self.num_mg_levels = self._get_option("Preconditioning", "num_mg_levels", int, 1, min_value=1)
-        
+
         self.precond_tolerance = self._get_option("Preconditioning", "precond_tolerance", float, 1e-1)
         self.num_pre_smoothe = self._get_option("Preconditioning", "num_pre_smoothe", int, 1, min_value=0)
         self.num_post_smoothe = self._get_option("Preconditioning", "num_post_smoothe", int, 1, min_value=0)
@@ -193,8 +172,8 @@ class Configuration:
                 "Preconditioning", "exp_smoothe_spectral_radii", List[float], [2.0]
             )
             self.exp_smoothe_spectral_radius = self.exp_smoothe_spectral_radii[0]
-            self.exp_smoothe_nb_iters = self._get_option("Preconditioning", "exp_smoothe_nb_iters", List[int], [4])
-            self.exp_smoothe_nb_iter = self.exp_smoothe_nb_iters[0]
+            self.exp_smoothe_num_iters = self._get_option("Preconditioning", "exp_smoothe_num_iters", List[int], [4])
+            self.exp_smoothe_num_iter = self.exp_smoothe_num_iters[0]
 
         self.mg_solve_coarsest = self._get_option("Preconditioning", "mg_solve_coarsest", bool, False)
         self.kiops_dt_factor = self._get_option("Preconditioning", "kiops_dt_factor", float, 1.1)

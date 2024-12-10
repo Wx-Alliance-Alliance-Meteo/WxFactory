@@ -179,7 +179,7 @@ class Interpolator:
         self.ndim = ndim
 
         # Make sure the right CPU/GPU module is used
-        self.xp = numpy #get_array_module(param.array_module) # TODO : Change this to get the xp from the device
+        self.xp = numpy  # get_array_module(param.array_module) # TODO : Change this to get the xp from the device
         xp = self.xp
 
         # Base interpolation matrix

@@ -14,13 +14,13 @@ class Geometry(ABC):
     Abstract class that groups different geometries
     """
 
-    def __init__(self, nbsolpts: int, device: Device, verbose: Optional[bool] = False) -> None:
+    def __init__(self, num_solpts: int, device: Device, verbose: Optional[bool] = False) -> None:
         self.device = device
         xp = self.device.xp
 
         ## Element properties -- solution and extension points
         # Gauss-Legendre solution points
-        solutionPoints_sym, solutionPoints, glweights = gauss_legendre(nbsolpts, xp)
+        solutionPoints_sym, solutionPoints, glweights = gauss_legendre(num_solpts, xp)
         if verbose and MPI.COMM_WORLD.rank == 0:
             print(f"Solution points : {solutionPoints}")
             print(f"GL weights : {glweights}")
@@ -31,7 +31,7 @@ class Geometry(ABC):
         extension_sym.insert(0, sympy.sympify("-1"))
         extension_sym.append(sympy.sympify("1"))
 
-        self.nbsolpts = nbsolpts
+        self.num_solpts = num_solpts
         self.solutionPoints = xp.asarray(solutionPoints)
         self.solutionPoints_sym = solutionPoints_sym
         self.glweights = xp.asarray(glweights)

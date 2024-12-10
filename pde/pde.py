@@ -4,8 +4,9 @@ import ctypes
 from numpy import ndarray, ascontiguousarray
 from mpi4py import MPI
 
-from common.device import CudaDevice
-from geometry import Cartesian2D, CubedSphere2D, CubedSphere3D
+from common.configuration import Configuration
+from common.device import Device, CudaDevice
+from geometry import Geometry, Cartesian2D, CubedSphere2D, CubedSphere3D, Metric2D, Metric3DTopo
 
 try:
     import pde.interface_c as interface_c
@@ -28,41 +29,54 @@ def get_pde(name):
 
 
 class PDE(ABC):
-    def __init__(self, geometry, config, device, metric):
+    def __init__(self, geometry: Geometry, config: Configuration, device: Device, metric: Metric2D | Metric3DTopo):
 
         self.geom = geometry
         self.config = config
         self.device = device
-        self.num_dim = config.num_dim
-        self.nb_elements = nb_elems = config.nb_elements_total
-        self.nb_var = config.nb_var
+
+        if isinstance(geometry, Cartesian2D):
+            self.num_dim = 2
+            self.num_var = 4
+            self.num_elements = config.num_elements_horizontal * config.num_elements_vertical
+        elif isinstance(geometry, CubedSphere2D):
+            self.num_dim = 2
+            self.num_var = 3
+            self.num_elements = config.num_elements_horizontal**2
+        elif isinstance(geometry, CubedSphere3D):
+            self.num_dim = 3
+            self.num_var = 5
+            self.num_elements = config.num_elements_horizontal**2 * config.num_elements_vertical
+        else:
+            raise ValueError(f"Unrecognized geometry {Geometry}")
 
         # Predefine variables that will be set later
         self.libmodule = None
 
         # Store the metric terms
-        nb_solpts = config.nbsolpts
-        self.metrics = device.xp.ones((config.num_dim**2, nb_elems, nb_solpts))
-        self.sqrt_g = device.xp.ones((nb_elems, nb_solpts))
+        num_solpts = config.num_solpts
+        self.metrics = device.xp.ones((self.num_dim**2, self.num_elements, num_solpts))
+        self.sqrt_g = device.xp.ones((self.num_elements, num_solpts))
 
         # Store the cubed-sphere metrics if needed
-        if isinstance(geometry, (CubedSphere2D, CubedSphere3D)):
-            if config.num_dim == 2:
-                self.metrics[0] = metric.H_contra_11
-                self.metrics[1] = metric.H_contra_12
-                self.metrics[2] = metric.H_contra_21
-                self.metrics[3] = metric.H_contra_22
+        if isinstance(geometry, CubedSphere2D):
+            self.metrics[0] = metric.H_contra_11
+            self.metrics[1] = metric.H_contra_12
+            self.metrics[2] = metric.H_contra_21
+            self.metrics[3] = metric.H_contra_22
 
-            if config.num_dim == 3:
-                self.metrics[0] = metric.H_contra_11
-                self.metrics[1] = metric.H_contra_12
-                self.metrics[2] = metric.H_contra_13
-                self.metrics[3] = metric.H_contra_21
-                self.metrics[4] = metric.H_contra_22
-                self.metrics[5] = metric.H_contra_23
-                self.metrics[6] = metric.H_contra_31
-                self.metrics[7] = metric.H_contra_32
-                self.metrics[8] = metric.H_contra_33
+            self.sqrt_g[:] = metric.sqrtG
+
+        elif isinstance(geometry, CubedSphere3D):
+            self.metrics[0] = metric.H_contra_11
+            self.metrics[1] = metric.H_contra_12
+            self.metrics[2] = metric.H_contra_13
+            self.metrics[3] = metric.H_contra_21
+            self.metrics[4] = metric.H_contra_22
+            self.metrics[5] = metric.H_contra_23
+            self.metrics[6] = metric.H_contra_31
+            self.metrics[7] = metric.H_contra_32
+            self.metrics[8] = metric.H_contra_33
 
             self.sqrt_g[:] = metric.sqrtG
 

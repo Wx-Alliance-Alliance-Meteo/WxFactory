@@ -56,7 +56,7 @@ class Simulation:
         if (self.rank == 0):
             print(f"{self.config}", flush=True)
 
-        self._adjust_nb_elements()
+        self._adjust_num_elements()
         self.device = self._make_device()
         self.process_topo = ProcessTopology(self.device) if self.config.grid_type == "cubed_sphere" else None
         self.geometry = self._create_geometry()
@@ -86,7 +86,7 @@ class Simulation:
 
         self.t = self.config.dt * self.starting_step
         self.integrator.sim_time = self.t
-        self.nb_steps = int(numpy.ceil(self.config.t_end / self.config.dt)) - self.starting_step
+        self.num_steps = int(numpy.ceil(self.config.t_end / self.config.dt)) - self.starting_step
 
     def step(self):
         """Advance the simulation by one time step."""
@@ -100,7 +100,7 @@ class Simulation:
             self.step_id += 1
 
             if MPI.COMM_WORLD.rank == 0:
-                print(f"\nStep {self.step_id} of {self.nb_steps + self.starting_step}")
+                print(f"\nStep {self.step_id} of {self.num_steps + self.starting_step}")
 
             self.Q = self.integrator.step(self.Q, self.config.dt)
             self.Q = self.operators.apply_filters(self.Q, self.geometry, self.metric, self.config.dt)
@@ -157,15 +157,15 @@ class Simulation:
 
         return device
 
-    def _adjust_nb_elements(self):
+    def _adjust_num_elements(self):
         """Adjust number of horizontal elements in the parameters so that it corresponds to the
         number *per processor*."""
         if self.config.grid_type == "cubed_sphere":
             # Determine what processor counts are allowed: must be equal to 6 * N^2 for some integer N.
             allowed_pe_counts = [
                 i**2 * 6
-                for i in range(1, max(self.config.nb_elements_horizontal // 2 + 1, 2))
-                if (self.config.nb_elements_horizontal % i) == 0
+                for i in range(1, max(self.config.num_elements_horizontal // 2 + 1, 2))
+                if (self.config.num_elements_horizontal % i) == 0
             ]
             if MPI.COMM_WORLD.size not in allowed_pe_counts:
                 raise ValueError(
@@ -175,12 +175,12 @@ class Simulation:
 
             num_pe_per_tile = MPI.COMM_WORLD.size // 6
             num_pe_per_line = int(numpy.sqrt(num_pe_per_tile))
-            self.config.nb_elements_horizontal = self.config.nb_elements_horizontal_total // num_pe_per_line
+            self.config.num_elements_horizontal = self.config.num_elements_horizontal_total // num_pe_per_line
             if MPI.COMM_WORLD.rank == 0:
-                if self.config.nb_elements_horizontal_total != self.config.nb_elements_horizontal:
+                if self.config.num_elements_horizontal_total != self.config.num_elements_horizontal:
                     print(
-                        f"Adjusting horizontal number of elements from {self.config.nb_elements_horizontal_total} (total) "
-                        f"to {self.config.nb_elements_horizontal} (per PE)"
+                        f"Adjusting horizontal number of elements from {self.config.num_elements_horizontal_total} (total) "
+                        f"to {self.config.num_elements_horizontal} (per PE)"
                     )
                 print(f"allowed_pe_counts = {allowed_pe_counts}")
 
@@ -190,8 +190,8 @@ class Simulation:
         if self.config.grid_type == "cubed_sphere" and self.process_topo is not None:
             if self.config.equations == "shallow_water":
                 return CubedSphere2D(
-                    self.config.nb_elements_horizontal,
-                    self.config.nbsolpts,
+                    self.config.num_elements_horizontal,
+                    self.config.num_solpts,
                     self.config.lambda0,
                     self.config.phi0,
                     self.config.alpha0,
@@ -200,9 +200,9 @@ class Simulation:
                     self.device,
                 )
             return CubedSphere3D(
-                self.config.nb_elements_horizontal,
-                self.config.nb_elements_vertical,
-                self.config.nbsolpts,
+                self.config.num_elements_horizontal,
+                self.config.num_elements_vertical,
+                self.config.num_solpts,
                 self.config.lambda0,
                 self.config.phi0,
                 self.config.alpha0,
@@ -217,11 +217,9 @@ class Simulation:
             return Cartesian2D(
                 (self.config.x0, self.config.x1),
                 (self.config.z0, self.config.z1),
-                self.config.nb_elements_horizontal,
-                self.config.nb_elements_vertical,
-                self.config.nbsolpts,
-                self.config.nb_elements_relief_layer,
-                self.config.relief_layer_height,
+                self.config.num_elements_horizontal,
+                self.config.num_elements_vertical,
+                self.config.num_solpts,
                 self.device,
             )
 

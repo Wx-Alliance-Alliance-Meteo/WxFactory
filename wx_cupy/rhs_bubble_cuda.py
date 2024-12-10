@@ -36,9 +36,9 @@ class RHSBubble(
         Q: NDArray[cp.float64],
         extrap_up: NDArray[cp.float64],
         extrap_down: NDArray[cp.float64],
-        nbsolpts: int,
-        nb_elements_z: int,
-        nb_elements_x: int,
+        num_solpts: int,
+        num_elements_z: int,
+        num_elements_x: int,
     ): ...
 
     @cuda_kernel(DimSpec.groupby_first_x(lambda s: Dim(s[2], s[1], s[0])))
@@ -47,9 +47,9 @@ class RHSBubble(
         Q: NDArray[cp.float64],
         extrap_west: NDArray[cp.float64],
         extrap_east: NDArray[cp.float64],
-        nbsolpts: int,
-        nb_elements_z: int,
-        nb_elements_x: int,
+        num_solpts: int,
+        num_elements_z: int,
+        num_elements_x: int,
     ): ...
 
     @cuda_kernel(DimSpec.groupby_first_x(lambda s: Dim(s[3], s[1] - 1, 1)))
@@ -57,10 +57,10 @@ class RHSBubble(
         kfaces_flux: NDArray[cp.float64],
         kfaces_pres: NDArray[cp.float64],
         kfaces_var: NDArray[cp.float64],
-        nb_equations: int,
-        nbsolpts: int,
-        nb_elements_z: int,
-        nb_elements_x: int,
+        num_equations: int,
+        num_solpts: int,
+        num_elements_z: int,
+        num_elements_x: int,
     ): ...
 
     @cuda_kernel(DimSpec.groupby_first_x(lambda s: Dim(s[2], s[1] - 1, 1)))
@@ -68,10 +68,10 @@ class RHSBubble(
         ifaces_flux: NDArray[cp.float64],
         ifaces_pres: NDArray[cp.float64],
         ifaces_var: NDArray[cp.float64],
-        nb_equations: int,
-        nbsolpts: int,
-        nb_elements_z: int,
-        nb_elements_x: int,
+        num_equations: int,
+        num_solpts: int,
+        num_elements_z: int,
+        num_elements_x: int,
         xperiodic: bool,
     ): ...
 
@@ -83,9 +83,9 @@ class RHSBubble(
         diff_solpt: NDArray[cp.float64],
         correction: NDArray[cp.float64],
         dx3: float,
-        nbsolpts: int,
-        nb_elements_z: int,
-        nb_elements_x: int,
+        num_solpts: int,
+        num_elements_z: int,
+        num_elements_x: int,
     ): ...
 
     @cuda_kernel(DimSpec.groupby_first_x(lambda s: Dim(s[2], s[1], s[0])))
@@ -96,22 +96,27 @@ class RHSBubble(
         diff_solpt: NDArray[cp.float64],
         correction: NDArray[cp.float64],
         dx1: float,
-        nbsolpts: int,
-        nb_elements_z: int,
-        nb_elements_x: int,
+        num_solpts: int,
+        num_elements_z: int,
+        num_elements_x: int,
     ): ...
 
 
 # @profile
 def rhs_bubble_cuda(
-    Q: NDArray[cp.float64], geom: Cartesian2D, mtrx: DFROperators, nbsolpts: int, nb_elements_x: int, nb_elements_z: int
+    Q: NDArray[cp.float64],
+    geom: Cartesian2D,
+    mtrx: DFROperators,
+    num_solpts: int,
+    num_elements_x: int,
+    num_elements_z: int,
 ) -> NDArray[cp.float64]:
 
     # TODO: have Q on GPU
     Q = cp.asarray(Q)
 
     datatype = Q.dtype
-    nb_equations = Q.shape[0]  # Number of constituent Euler equations.  Probably 6
+    num_equations = Q.shape[0]  # Number of constituent Euler equations.  Probably 6
 
     flux_x1 = cp.empty_like(Q, dtype=datatype)
     flux_x3 = cp.empty_like(Q, dtype=datatype)
@@ -119,11 +124,11 @@ def rhs_bubble_cuda(
     df1_dx1 = cp.empty_like(Q, dtype=datatype)
     df3_dx3 = cp.empty_like(Q, dtype=datatype)
 
-    kfaces_flux = cp.empty((nb_equations, nb_elements_z, 2, nbsolpts * nb_elements_x), dtype=datatype)
-    kfaces_var = cp.empty((nb_equations, nb_elements_z, 2, nbsolpts * nb_elements_x), dtype=datatype)
+    kfaces_flux = cp.empty((num_equations, num_elements_z, 2, num_solpts * num_elements_x), dtype=datatype)
+    kfaces_var = cp.empty((num_equations, num_elements_z, 2, num_solpts * num_elements_x), dtype=datatype)
 
-    ifaces_flux = cp.empty((nb_equations, nb_elements_x, nbsolpts * nb_elements_z, 2), dtype=datatype)
-    ifaces_var = cp.empty((nb_equations, nb_elements_x, nbsolpts * nb_elements_z, 2), dtype=datatype)
+    ifaces_flux = cp.empty((num_equations, num_elements_x, num_solpts * num_elements_z, 2), dtype=datatype)
+    ifaces_var = cp.empty((num_equations, num_elements_x, num_solpts * num_elements_z, 2), dtype=datatype)
 
     # TODO: have mtrx on GPU
     if type(mtrx.extrap_down) != cp.ndarray:
@@ -151,9 +156,13 @@ def rhs_bubble_cuda(
     flux_x3[idx_2d_rho_w, :, :] = Q[idx_2d_rho_w, :, :] * ww + pressure
     flux_x3[idx_2d_rho_theta, :, :] = Q[idx_2d_rho_theta, :, :] * ww
 
-    RHSBubble.set_kfaces_var(kfaces_var, Q, mtrx.extrap_up, mtrx.extrap_down, nbsolpts, nb_elements_z, nb_elements_x)
+    RHSBubble.set_kfaces_var(
+        kfaces_var, Q, mtrx.extrap_up, mtrx.extrap_down, num_solpts, num_elements_z, num_elements_x
+    )
 
-    RHSBubble.set_ifaces_var(ifaces_var, Q, mtrx.extrap_west, mtrx.extrap_east, nbsolpts, nb_elements_z, nb_elements_x)
+    RHSBubble.set_ifaces_var(
+        ifaces_var, Q, mtrx.extrap_west, mtrx.extrap_east, num_solpts, num_elements_z, num_elements_x
+    )
 
     # --- Interface pressure
     ifaces_pres = p0 * (ifaces_var[idx_2d_rho_theta, :, :, :] * Rd / p0) ** (cpd / cvd)
@@ -178,7 +187,7 @@ def rhs_bubble_cuda(
     ifaces_flux[idx_2d_rho_u, -1, :, 1] = ifaces_pres[-1, :, 1]
 
     RHSBubble.set_kfaces_flux(
-        kfaces_flux, kfaces_pres, kfaces_var, nb_equations, nbsolpts, nb_elements_z, nb_elements_x
+        kfaces_flux, kfaces_pres, kfaces_var, num_equations, num_solpts, num_elements_z, num_elements_x
     )
 
     if geom.xperiodic:
@@ -186,7 +195,7 @@ def rhs_bubble_cuda(
         ifaces_pres[0, :, :] = ifaces_pres[-1, :, :]
 
     RHSBubble.set_ifaces_flux(
-        ifaces_flux, ifaces_pres, ifaces_var, nb_equations, nbsolpts, nb_elements_z, nb_elements_x, geom.xperiodic
+        ifaces_flux, ifaces_pres, ifaces_var, num_equations, num_solpts, num_elements_z, num_elements_x, geom.xperiodic
     )
 
     if geom.xperiodic:
@@ -201,9 +210,9 @@ def rhs_bubble_cuda(
         mtrx.diff_solpt,
         mtrx.correction,
         geom.Δx3,
-        nbsolpts,
-        nb_elements_z,
-        nb_elements_x,
+        num_solpts,
+        num_elements_z,
+        num_elements_x,
     )
 
     RHSBubble.set_df1_dx1(
@@ -213,9 +222,9 @@ def rhs_bubble_cuda(
         mtrx.diff_solpt,
         mtrx.correction,
         geom.Δx1,
-        nbsolpts,
-        nb_elements_z,
-        nb_elements_x,
+        num_solpts,
+        num_elements_z,
+        num_elements_x,
     )
 
     # --- Assemble the right-hand sides

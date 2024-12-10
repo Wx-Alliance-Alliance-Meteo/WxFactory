@@ -36,7 +36,7 @@ class DFROperators:
         ----------
         grd : Geometry
            Underlying grid, which must define `solutionPoints`, `solutionPoints_sym`, `extension`, `extension_sym` and
-           `nbsolpts` as member variables
+           `num_solpts` as member variables
         filter_apply : bool
            Whether to apply an exponential filter in defininng the differential operators
         filter_order : int
@@ -45,14 +45,16 @@ class DFROperators:
            If applied, at what relative wavenumber (0 < cutoff < 1) to begin applying the filter
         """
 
-        if param.filter_apply and not isinstance(grd.solutionPoints, device.xp.ndarray):
+        xp = device.xp
+
+        if param.filter_apply and not isinstance(grd.solutionPoints, xp.ndarray):
             raise NotImplementedError("DFROperators cannot form a filter with non-numpy arrays")
 
         # Build Vandermonde matrix to transform the modal representation to the (interior)
         # nodal representation
-        V = legvander(grd.solutionPoints, grd.nbsolpts - 1)
+        V = legvander(grd.solutionPoints, grd.num_solpts - 1)
         # Invert the matrix to transform from interior nodes to modes
-        invV = device.xp.linalg.inv(V)
+        invV = xp.linalg.inv(V)
 
         # Build the negative and positive-side extrapolation matrices by:
         # *) transforming interior nodes to modes
@@ -60,8 +62,8 @@ class DFROperators:
 
         # Note that extrap_neg and extrap_pos should be vectors, not a one-row matrix; numpy
         # treats the two differently.
-        extrap_neg = (legvander(device.xp.array([-1.0]), grd.nbsolpts - 1) @ invV).reshape((-1,))
-        extrap_pos = (legvander(device.xp.array([+1.0]), grd.nbsolpts - 1) @ invV).reshape((-1,))
+        extrap_neg = (legvander(xp.array([-1.0]), grd.num_solpts - 1) @ invV).reshape((-1,))
+        extrap_pos = (legvander(xp.array([+1.0]), grd.num_solpts - 1) @ invV).reshape((-1,))
 
         self.extrap_west = extrap_neg
         self.extrap_east = extrap_pos
@@ -70,14 +72,19 @@ class DFROperators:
         self.extrap_down = extrap_neg
         self.extrap_up = extrap_pos
 
-        V = legvander(grd.solutionPoints, grd.nbsolpts - 1)
-        invV = device.xp.linalg.inv(V)
-        feye = device.xp.eye(grd.nbsolpts)
+        V = legvander(grd.solutionPoints, grd.num_solpts - 1)
+        invV = xp.linalg.inv(V)
+        feye = xp.eye(grd.num_solpts)
         feye[-1, -1] = 0.0
         self.highfilter = V @ (feye @ invV)
+        self.highfilter_k = xp.kron(self.highfilter.T, xp.eye(grd.num_solpts**2))  # Only valid in 3D (hence the **2)
+
+        # if MPI.COMM_WORLD.rank == 0:
+        #     print(f"high filter = \n{self.highfilter}")
+        #     print(f"high filter k = \n{self.highfilter_k}")
 
         diff = diffmat(grd.extension_sym)
-        diff = device.xp.asarray(diff)
+        diff = xp.asarray(diff)
 
         if param.filter_apply:
             self.V = vandermonde(grd.extension)
@@ -86,7 +93,7 @@ class DFROperators:
             Nc = math.floor(param.filter_cutoff * N)
             self.filter = filter_exponential(N, Nc, param.filter_order, self.V, self.invV)
             self.diff_ext = (self.filter @ diff).astype(float)
-            self.diff_ext[device.xp.abs(self.diff_ext) < 1e-20] = 0.0
+            self.diff_ext[xp.abs(self.diff_ext) < 1e-20] = 0.0
 
         else:
             self.diff_ext = diff
@@ -95,14 +102,21 @@ class DFROperators:
         if param.expfilter_apply:
             if not isinstance(grd, CubedSphere3D):
                 raise TypeError(f"The 3D filter can only be applied on a CubedSphere3D geometry")
-            if grd.nbsolpts < 2:
+            if grd.num_solpts < 2:
                 if MPI.COMM_WORLD.rank == 0:
                     print(f"WARNING: 3D filter can only be applied if we have degree > 1")
                 self.expfilter_apply = False
             else:
                 self.expfilter = self.make_filter(
-                    param.expfilter_strength, param.expfilter_order, param.expfilter_cutoff, grd, device
+                    param.expfilter_strength, param.expfilter_order, param.expfilter_cutoff, grd
                 )
+
+                I2 = xp.eye(grd.num_solpts)
+                I3 = xp.eye(grd.num_solpts**2)
+                filter_x = xp.kron(I3, self.expfilter).T
+                filter_y = xp.kron(I2, xp.kron(self.expfilter, I2)).T
+                filter_z = xp.kron(self.expfilter, I3).T
+                self.expfilter_new = (filter_x @ filter_y) @ filter_z
 
         # Create sponge layer (if desired)
         self.apply_sponge = param.apply_sponge
@@ -111,7 +125,7 @@ class DFROperators:
                 raise TypeError(f"The sponge can only be applied on a Cartesian2D geometry")
             nk, ni = grd.X1.shape
             zs = param.z1 - param.sponge_zscale  # zs is bottom of layer
-            self.beta = device.xp.zeros_like(grd.X1)  # used as our damping profile
+            self.beta = xp.zeros_like(grd.X1)  # used as our damping profile
             # Loop over points
             # TODO use implicit loop (will also work with CUDA)
             for k in range(nk):
@@ -120,7 +134,7 @@ class DFROperators:
                         self.beta[k, i] = (
                             self.beta[k, i]
                             + (1.0 / param.sponge_tscale)
-                            * device.xp.sin((0.5 * device.xp.pi) * (grd.X3[k, i] - zs) / (param.z1 - zs)) ** 2
+                            * xp.sin((0.5 * xp.pi) * (grd.X3[k, i] - zs) / (param.z1 - zs)) ** 2
                         )
 
         if check_skewcentrosymmetry(self.diff_ext) is False:
@@ -128,86 +142,101 @@ class DFROperators:
 
         # Force matrices to be in C-contiguous order
         self.diff_solpt = self.diff_ext[1:-1, 1:-1].copy()
-        self.correction = device.xp.column_stack((self.diff_ext[1:-1, 0], self.diff_ext[1:-1, -1]))
+        self.correction = xp.column_stack((self.diff_ext[1:-1, 0], self.diff_ext[1:-1, -1]))
 
         self.diff_solpt_tr = self.diff_solpt.T.copy()
         self.correction_tr = self.correction.T.copy()
 
         # Ordinary differentiation matrices (used only in diagnostic calculations)
         self.diff = diffmat(grd.solutionPoints)
-        self.diff = device.xp.asarray(self.diff)
+        self.diff = xp.asarray(self.diff)
         self.diff_tr = self.diff.T
 
-        self.quad_weights = device.xp.outer(grd.glweights, grd.glweights)
+        self.quad_weights = xp.outer(grd.glweights, grd.glweights)
 
-        ident = device.xp.identity(grd.nbsolpts)
-        self.extrap_x = device.xp.vstack(
-            (device.xp.kron(ident, self.extrap_west), device.xp.kron(ident, self.extrap_east))
-        ).T
-        self.extrap_y = device.xp.vstack(
-            (device.xp.kron(self.extrap_south, ident), device.xp.kron(self.extrap_north, ident))
-        ).T
-        self.extrap_z = device.xp.vstack(
-            (device.xp.kron(self.extrap_down, ident), device.xp.kron(self.extrap_up, ident))
-        ).T
+        if isinstance(grd, CubedSphere3D):
+            I2 = xp.identity(grd.num_solpts)
+            I3 = xp.identity(grd.num_solpts**2)
 
-        self.derivative_x = device.xp.kron(ident, self.diff_solpt).T
-        self.derivative_y = device.xp.kron(self.diff_solpt, ident).T
-        self.derivative_z = device.xp.kron(self.diff_solpt, ident).T
+            self.extrap_x = xp.vstack((xp.kron(I3, self.extrap_west), xp.kron(I3, self.extrap_east))).T
+            self.extrap_y = xp.vstack(
+                (xp.kron(I2, xp.kron(self.extrap_south, I2)), xp.kron(I2, xp.kron(self.extrap_north, I2)))
+            ).T
+            self.extrap_z = xp.vstack((xp.kron(self.extrap_down, I3), xp.kron(self.extrap_up, I3))).T
 
-        corr_down = self.diff_ext[1:-1, 0]
-        corr_up = self.diff_ext[1:-1, -1]
-        self.correction_DU = device.xp.vstack(
-            (
-                device.xp.kron(corr_down, device.xp.identity(grd.nbsolpts)),
-                device.xp.kron(corr_up, device.xp.identity(grd.nbsolpts)),
-            )
-        )
+            self.derivative_x = xp.kron(I3, self.diff_solpt).T
+            self.derivative_y = xp.kron(I2, xp.kron(self.diff_solpt, I2)).T
+            self.derivative_z = xp.kron(self.diff_solpt, I3).T
 
-        self.correction_SN = device.xp.vstack(
-            (
-                device.xp.kron(corr_down, device.xp.identity(grd.nbsolpts)),
-                device.xp.kron(corr_up, device.xp.identity(grd.nbsolpts)),
-            )
-        )
+            # if rank == 0:
+            #     print(f"deriv z = \n{self.derivative_z}")
 
-        corr_west = self.diff_ext[1:-1, 0]
-        corr_east = self.diff_ext[1:-1, -1]
-        self.correction_WE = device.xp.vstack(
-            (
-                device.xp.kron(device.xp.identity(grd.nbsolpts), corr_west),
-                device.xp.kron(device.xp.identity(grd.nbsolpts), corr_east),
-            )
-        )
+            corr_west = self.diff_ext[1:-1, 0]
+            corr_east = self.diff_ext[1:-1, -1]
+            corr_south = corr_west
+            corr_north = corr_east
+            corr_down = corr_west
+            corr_up = corr_east
 
-    def make_filter(self, alpha: float, order: int, cutoff: float, geom: Geometry, device: Device = default_device):
+            self.correction_WE = xp.vstack((xp.kron(I3, corr_west), xp.kron(I3, corr_east)))
+            self.correction_SN = xp.vstack((xp.kron(I2, xp.kron(corr_south, I2)), xp.kron(I2, xp.kron(corr_north, I2))))
+            self.correction_DU = xp.vstack((xp.kron(corr_down, I3), xp.kron(corr_up, I3)))
+
+            # if MPI.COMM_WORLD.rank == 0:
+            #     print(f"3D c x = \n{self.correction_WE}")
+            #     print(f"3D c y = \n{self.correction_SN}")
+            #     print(f"3D c z = \n{self.correction_DU}")
+
+        else:
+            ident = xp.identity(grd.num_solpts)
+            self.extrap_x = xp.vstack((xp.kron(ident, self.extrap_west), xp.kron(ident, self.extrap_east))).T
+            self.extrap_y = xp.vstack((xp.kron(self.extrap_south, ident), xp.kron(self.extrap_north, ident))).T
+            self.extrap_z = xp.vstack((xp.kron(self.extrap_down, ident), xp.kron(self.extrap_up, ident))).T
+
+            self.derivative_x = xp.kron(ident, self.diff_solpt).T
+            self.derivative_y = xp.kron(self.diff_solpt, ident).T
+            self.derivative_z = xp.kron(self.diff_solpt, ident).T
+
+            corr_down = self.diff_ext[1:-1, 0]
+            corr_up = self.diff_ext[1:-1, -1]
+            self.correction_DU = xp.vstack((xp.kron(corr_down, ident), xp.kron(corr_up, ident)))
+
+            self.correction_SN = xp.vstack((xp.kron(corr_down, ident), xp.kron(corr_up, ident)))
+
+            corr_west = self.diff_ext[1:-1, 0]
+            corr_east = self.diff_ext[1:-1, -1]
+            self.correction_WE = xp.vstack((xp.kron(ident, corr_west), xp.kron(ident, corr_east)))
+
+    def make_filter(self, alpha: float, order: int, cutoff: float, geom: Geometry):
         """Build an exponential modal filter as described in Warburton, eqn 5.16."""
 
+        xp = geom.device.xp
+
         # Scaled mode numbers
-        modes = device.xp.arange(geom.nbsolpts, like=geom.solutionPoints) / (geom.nbsolpts - 1)
+        modes = xp.arange(geom.num_solpts, like=geom.solutionPoints) / (geom.num_solpts - 1)
         Nc = cutoff
 
         # After applying the filter, each mode is reduced in proportion to the filter order
-        # and the mode number relative to nbsolpts, with modes below the cutoff limit untouched
+        # and the mode number relative to num_solpts, with modes below the cutoff limit untouched
 
-        residual_modes = device.xp.ones_like(modes)
-        residual_modes[modes > Nc] = device.xp.exp(-alpha * ((modes[modes > Nc] - cutoff) / (1 - cutoff)) ** order)
+        residual_modes = xp.ones_like(modes)
+        residual_modes[modes > Nc] = xp.exp(-alpha * ((modes[modes > Nc] - cutoff) / (1 - cutoff)) ** order)
 
         # Now, use a Vandermonde matrix to transform this modal filter into a nodal form
 
         # mode-to-node operator
-        vander = legvander(geom.solutionPoints, geom.nbsolpts - 1)
+        vander = legvander(geom.solutionPoints, geom.num_solpts - 1)
 
         # node-to-mode operator
-        ivander = device.xp.linalg.inv(vander)
+        ivander = xp.linalg.inv(vander)
 
-        return vander @ device.xp.diag(residual_modes) @ ivander
+        return vander @ xp.diag(residual_modes) @ ivander
 
     def apply_filters(self, Q: numpy.ndarray, geom: Geometry, metric, dt: float):
         """Apply the filters that have been activated on the given state vector."""
 
         if self.expfilter_apply:
-            Q = self.apply_filter_3d(Q, geom, metric)
+            Q = self.apply_filter_3d(Q, metric)
 
         # Apply Sponge (if desired)
         if self.apply_sponge:
@@ -225,39 +254,11 @@ class DFROperators:
 
         return Q
 
-    def apply_filter_3d(self, Q: numpy.ndarray, geom: CubedSphere3D, metric):
+    def apply_filter_3d(self, Q: NDArray, metric: "Metric3DTopo"):
         r"""Apply the exponential filter precomputed in expfilter to input fields \sqrt(g)*Q, and return the
         filtered array."""
 
-        if len(Q.shape) > 3:
-            nbvars = Q.shape[0]
-        else:
-            nbvars = 1
-
-        ni = geom.ni
-        nj = geom.nj
-        nk = geom.nk
-        np = geom.nbsolpts
-
-        # Filter in i
-        result = metric.sqrtG * Q
-        result.shape = (nbvars * nk * nj * (ni // np), np)
-        result = result @ self.expfilter.T
-        # result = (self.expfilter @ result.T).T
-        # result = (self.expfilter @ result.transpose((0,2,1))).transpose((0,2,1))
-
-        # Filter in j
-        result.shape = (nbvars * nk * (nj // np), np, ni)
-        result = self.expfilter @ result
-
-        # Filter in k
-        result.shape = (nbvars * (nk // np), np, nj * ni)
-        result = self.expfilter @ result
-
-        result.shape = Q.shape
-        result *= metric.inv_sqrtG
-
-        return result
+        return ((metric.sqrtG_new * Q) @ self.expfilter_new) * metric.inv_sqrtG_new
 
     def comma_i(
         self: Self, field_interior: NDArray[T], border_i: NDArray[T], grid: CubedSphere3D, out: NDArray[T] | None = None
@@ -301,7 +302,7 @@ class DFROperators:
         # Reshape to a flat view.  Assigning to array.shape will raise an exception if the new shape would
         # require a memory copy; this implicitly ensures that the input arrays are fully contiguous in
         # memory.
-        field_view.shape = (-1, grid.nbsolpts)
+        field_view.shape = (-1, grid.num_solpts)
         border_i_view.shape = (-1, 2)
         output.shape = field_view.shape
 
@@ -338,7 +339,7 @@ class DFROperators:
         """
 
         # Array shape for the i-border of a single variable, based on the grid decomposition
-        border_shape = (grid.nb_elements_x1, 2)
+        border_shape = (grid.num_elements_x1, 2)
         # Number of variables we're extending
         # nbvars = numpy.prod(field_interior.shape) // (grid.ni)
         nbvars = field_interior.size // grid.ni
@@ -355,7 +356,7 @@ class DFROperators:
 
         # Create an array view of the interior, reshaped for matrix multiplication
         field_interior_view = field_interior.view()
-        field_interior_view.shape = (-1, grid.nbsolpts)
+        field_interior_view.shape = (-1, grid.num_solpts)
 
         # Perform the extrapolations via matrix multiplication
         border[:, 0] = field_interior_view @ self.extrap_west
@@ -410,8 +411,8 @@ class DFROperators:
         # Reshape to a flat view.  Assigning to array.shape will raise an exception if the new shape would
         # require a memory copy; this implicitly ensures that the input arrays are fully contiguous in
         # memory.
-        field_view.shape = (nbvars * grid.nb_elements_x2, grid.nbsolpts, grid.ni)
-        border_j_view.shape = (nbvars * grid.nb_elements_x2, 2, grid.ni)
+        field_view.shape = (nbvars * grid.num_elements_x2, grid.num_solpts, grid.ni)
+        border_j_view.shape = (nbvars * grid.num_elements_x2, 2, grid.ni)
         output.shape = field_view.shape
 
         # Perform the matrix transposition
@@ -445,7 +446,7 @@ class DFROperators:
         """
 
         # Array shape for the i-border of a single variable, based on the grid decomposition
-        border_shape = (grid.nb_elements_x2, 2, grid.ni)
+        border_shape = (grid.num_elements_x2, 2, grid.ni)
         # Number of variables times number of vertical levels we're extending
         # nbvars = numpy.prod(field_interior.shape) // (grid.ni * grid.nj)
         nbvars = field_interior.size // (grid.ni * grid.nj)
@@ -461,7 +462,7 @@ class DFROperators:
 
         # Create an array view of the interior, reshaped for matrix multiplication
         field_interior_view = field_interior.view()
-        field_interior_view.shape = (-1, grid.nbsolpts, grid.ni)
+        field_interior_view.shape = (-1, grid.num_solpts, grid.ni)
 
         # Perform the extrapolations via matrix multiplication
         # print(border[:,0,:].shape, field_interior_view.shape, self.extrap_south.T.shape)
@@ -519,8 +520,8 @@ class DFROperators:
         # Reshape to a flat view.  Assigning to array.shape will raise an exception if the new shape would
         # require a memory copy; this implicitly ensures that the input arrays are fully contiguous in
         # memory.
-        field_view.shape = (nbvars * grid.nb_elements_x3, grid.nbsolpts, grid.ni * grid.nj)
-        border_k_view.shape = (nbvars * grid.nb_elements_x3, 2, grid.ni * grid.nj)
+        field_view.shape = (nbvars * grid.num_elements_x3, grid.num_solpts, grid.ni * grid.nj)
+        border_k_view.shape = (nbvars * grid.num_elements_x3, 2, grid.ni * grid.nj)
         output.shape = field_view.shape
 
         # Perform the matrix transposition
@@ -562,18 +563,18 @@ class DFROperators:
         if out is None:
             # Output array
             filtered = numpy.empty(
-                (nbvars * grid.nb_elements_x3, grid.nbsolpts, grid.ni * grid.nj),
+                (nbvars * grid.num_elements_x3, grid.num_solpts, grid.ni * grid.nj),
                 dtype=field_interior.dtype,
                 like=field_interior,
             )
         else:
             # Create a view of the output so that the shape of the original is not modified
             filtered = out.view()
-            filtered.shape = (nbvars * grid.nb_elements_x3, grid.nbsolpts, grid.ni * grid.nj)
+            filtered.shape = (nbvars * grid.num_elements_x3, grid.num_solpts, grid.ni * grid.nj)
 
         # Create an array view of the interior, reshaped for matrix multiplication
         field_interior_view = field_interior.view()
-        field_interior_view.shape = (nbvars * grid.nb_elements_x3, grid.nbsolpts, grid.ni * grid.nj)
+        field_interior_view.shape = (nbvars * grid.num_elements_x3, grid.num_solpts, grid.ni * grid.nj)
 
         filtered[:] = self.highfilter @ field_interior_view
         filtered.shape = field_interior.shape
@@ -602,7 +603,7 @@ class DFROperators:
         """
 
         # Array shape for the i-border of a single variable, based on the grid decomposition
-        border_shape = (grid.nb_elements_x3, 2, grid.nj, grid.ni)
+        border_shape = (grid.num_elements_x3, 2, grid.nj, grid.ni)
         # Number of variables we're extending
         # nbvars = numpy.prod(field_interior.shape) // (grid.ni * grid.nj * grid.nk)
         nbvars = field_interior.size // (grid.ni * grid.nj * grid.nk)
@@ -618,7 +619,7 @@ class DFROperators:
 
         # Create an array view of the interior, reshaped for matrix multiplication
         field_interior_view = field_interior.view()
-        field_interior_view.shape = (-1, grid.nbsolpts, grid.ni * grid.nj)
+        field_interior_view.shape = (-1, grid.num_solpts, grid.ni * grid.nj)
 
         # Perform the extrapolations via matrix multiplication
         border[:, 0, :] = self.extrap_down @ field_interior_view
@@ -771,15 +772,15 @@ def vandermonde(x: numpy.ndarray):
 
 def remesh_operator(src_points: numpy.ndarray, target_points: numpy.ndarray) -> numpy.ndarray:
     """Create an element operator to reduce/prolong a grid."""
-    src_nbsolpts = len(src_points)
-    target_nbsolpts = len(target_points)
+    src_num_solpts = len(src_points)
+    target_num_solpts = len(target_points)
 
     # Projection
     inv_V_src = inv(vandermonde(src_points))
     V_target = vandermonde(target_points)
 
-    modes = numpy.zeros((target_nbsolpts, src_nbsolpts))
-    for i in range(min(src_nbsolpts, target_nbsolpts)):
+    modes = numpy.zeros((target_num_solpts, src_num_solpts))
+    for i in range(min(src_num_solpts, target_num_solpts)):
         modes[i, i] = 1.0
     modes[i, i] = 0.5  # damp the highest mode
 

@@ -16,6 +16,7 @@ from tests.output.test_state import StateTestCases
 from tests.common.test_configuration import ConfigurationTestCases
 
 
+
 def load_tests():
     suite = unittest.TestSuite()
     suite.addTest(PmexComparisonTestCases("test_compare_cpu_to_gpu"))

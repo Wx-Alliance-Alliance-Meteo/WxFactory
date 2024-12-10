@@ -43,7 +43,7 @@ class SDIRKLstable(Integrator):
 
         # Update solution
         t0 = time()
-        Q1, nb_iter, residuals = newton_krylov(
+        Q1, num_iter, residuals = newton_krylov(
             SDIRK_fun1,
             Q,
             f_tol=self.tol,
@@ -52,7 +52,7 @@ class SDIRKLstable(Integrator):
             verbose=False,
             maxiter=maxiter,
         )
-        Q2, nb_iter, residuals = newton_krylov(
+        Q2, num_iter, residuals = newton_krylov(
             SDIRK_fun2,
             Q,
             f_tol=self.tol,
@@ -64,6 +64,6 @@ class SDIRKLstable(Integrator):
         newQ = Q + dt * (0.5 * self.rhs(Q1) + 0.5 * self.rhs(Q2))
         t1 = time()
 
-        self.solver_info = SolverInfo(0, t1 - t0, nb_iter, residuals)
+        self.solver_info = SolverInfo(0, t1 - t0, num_iter, residuals)
 
         return newQ

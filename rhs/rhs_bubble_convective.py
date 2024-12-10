@@ -3,13 +3,13 @@ import numpy
 from common.definitions import idx_2d_rho, idx_2d_rho_u, idx_2d_rho_w, idx_2d_rho_theta, p0, Rd, cpd, cvd, gravity
 
 
-def rhs_bubble(Q, geom, mtrx, nbsolpts, nb_elements_x, nb_elements_z):
+def rhs_bubble(Q, geom, mtrx, num_solpts, num_elements_x, num_elements_z):
 
     datatype = Q.dtype
-    nb_equations = Q.shape[0]  # Number of constituent Euler equations.  Probably 6.
+    num_equations = Q.shape[0]  # Number of constituent Euler equations.  Probably 6.
 
-    nb_interfaces_x = nb_elements_x + 1
-    nb_interfaces_z = nb_elements_z + 1
+    num_interfaces_x = num_elements_x + 1
+    num_interfaces_z = num_elements_z + 1
 
     flux_x1 = numpy.empty_like(Q, dtype=datatype)
     flux_x3 = numpy.empty_like(Q, dtype=datatype)
@@ -17,11 +17,11 @@ def rhs_bubble(Q, geom, mtrx, nbsolpts, nb_elements_x, nb_elements_z):
     df1_dx1 = numpy.empty_like(Q, dtype=datatype)
     df3_dx3 = numpy.empty_like(Q, dtype=datatype)
 
-    kfaces_flux = numpy.empty((nb_equations, nb_elements_z, 2, nbsolpts * nb_elements_x), dtype=datatype)
-    kfaces_var = numpy.empty((nb_equations, nb_elements_z, 2, nbsolpts * nb_elements_x), dtype=datatype)
+    kfaces_flux = numpy.empty((num_equations, num_elements_z, 2, num_solpts * num_elements_x), dtype=datatype)
+    kfaces_var = numpy.empty((num_equations, num_elements_z, 2, num_solpts * num_elements_x), dtype=datatype)
 
-    ifaces_flux = numpy.empty((nb_equations, nb_elements_x, nbsolpts * nb_elements_z, 2), dtype=datatype)
-    ifaces_var = numpy.empty((nb_equations, nb_elements_x, nbsolpts * nb_elements_z, 2), dtype=datatype)
+    ifaces_flux = numpy.empty((num_equations, num_elements_x, num_solpts * num_elements_z, 2), dtype=datatype)
+    ifaces_var = numpy.empty((num_equations, num_elements_x, num_solpts * num_elements_z, 2), dtype=datatype)
 
     # --- Unpack physical variables
     rho = Q[idx_2d_rho, :, :]
@@ -41,14 +41,14 @@ def rhs_bubble(Q, geom, mtrx, nbsolpts, nb_elements_x, nb_elements_z):
     flux_x3[idx_2d_rho_theta, :, :] = Q[idx_2d_rho_theta, :, :] * ww
 
     # --- Interpolate to the element interface
-    for elem in range(nb_elements_z):
-        epais = elem * nbsolpts + numpy.arange(nbsolpts)
+    for elem in range(num_elements_z):
+        epais = elem * num_solpts + numpy.arange(num_solpts)
 
         kfaces_var[:, elem, 0, :] = mtrx.extrap_down @ Q[:, epais, :]
         kfaces_var[:, elem, 1, :] = mtrx.extrap_up @ Q[:, epais, :]
 
-    for elem in range(nb_elements_x):
-        epais = elem * nbsolpts + numpy.arange(nbsolpts)
+    for elem in range(num_elements_x):
+        epais = elem * num_solpts + numpy.arange(num_solpts)
 
         ifaces_var[:, elem, :, 0] = Q[:, :, epais] @ mtrx.extrap_west
         ifaces_var[:, elem, :, 1] = Q[:, :, epais] @ mtrx.extrap_east
@@ -76,7 +76,7 @@ def rhs_bubble(Q, geom, mtrx, nbsolpts, nb_elements_x, nb_elements_z):
     ifaces_flux[idx_2d_rho_u, -1, :, 1] = ifaces_pres[-1, :, 1]
 
     # --- Common AUSM fluxes
-    for itf in range(1, nb_interfaces_z - 1):
+    for itf in range(1, num_interfaces_z - 1):
 
         left = itf - 1
         right = itf
@@ -96,7 +96,7 @@ def rhs_bubble(Q, geom, mtrx, nbsolpts, nb_elements_x, nb_elements_z):
         ifaces_var[:, 0, :, :] = ifaces_var[:, -1, :, :]
         ifaces_pres[0, :, :] = ifaces_pres[-1, :, :]
 
-    for itf in range(1, nb_interfaces_x - 1):
+    for itf in range(1, num_interfaces_x - 1):
 
         left = itf - 1
         right = itf
@@ -120,15 +120,15 @@ def rhs_bubble(Q, geom, mtrx, nbsolpts, nb_elements_x, nb_elements_z):
         ifaces_flux[:, 0, :, :] = ifaces_flux[:, -1, :, :]
 
     # --- Compute the derivatives
-    for elem in range(nb_elements_z):
-        epais = elem * nbsolpts + numpy.arange(nbsolpts)
+    for elem in range(num_elements_z):
+        epais = elem * num_solpts + numpy.arange(num_solpts)
 
         df3_dx3[:, epais, :] = (
             (mtrx.diff_solpt @ flux_x3[:, epais, :] + mtrx.correction @ kfaces_flux[:, elem, :, :]) * 2.0 / geom.Δx3
         )
 
-    for elem in range(nb_elements_x):
-        epais = elem * nbsolpts + numpy.arange(nbsolpts)
+    for elem in range(num_elements_x):
+        epais = elem * num_solpts + numpy.arange(num_solpts)
 
         df1_dx1[:, :, epais] = (
             (flux_x1[:, :, epais] @ mtrx.diff_solpt.T + ifaces_flux[:, elem, :, :] @ mtrx.correction.T) * 2.0 / geom.Δx1

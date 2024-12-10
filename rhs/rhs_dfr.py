@@ -7,7 +7,7 @@ class RHS_DFR(RHS):
 
     def __init__(self, *args):
         super().__init__(*args)
-        
+
         # Initially set all arrays to None, these will be allocated later
         self.f_x1 = None
         self.f_x2 = None
@@ -43,7 +43,6 @@ class RHS_DFR(RHS):
         if self.f_itf_x1 is None or self.f_itf_x1.dtype != q.dtype:
             self.f_itf_x1 = xp.zeros_like(self.q_itf_x1)
             self.f_itf_x3 = xp.zeros_like(self.q_itf_x3)
-            
 
     def pointwise_fluxes(self, q: ndarray) -> None:
         if self.f_x1 is None or self.f_x1.dtype != q.dtype:

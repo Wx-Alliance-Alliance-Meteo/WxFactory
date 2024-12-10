@@ -2,7 +2,8 @@ import math
 
 import numpy
 
-from common.definitions import cpd, day_in_secs, gravity, p0, Rd
+from common.configuration import Configuration
+from common.definitions import cpd, gravity, p0, Rd
 from geometry import CubedSphere3D, DFROperators, Metric3DTopo, wind2contra_2d, wind2contra_3d
 
 # =======================================================================
@@ -365,15 +366,15 @@ def dcmip_mountain(geom: CubedSphere3D, metric, mtrx, param):
     # Height at every grid and interface point
     h_surf = compute_height_from_dist(distance)
 
-    nb_interfaces_horiz = param.nb_elements_horizontal + 1
-    h_surf_itf_i = numpy.zeros((param.nb_elements_horizontal + 2, param.nbsolpts * param.nb_elements_horizontal, 2))
-    h_surf_itf_j = numpy.zeros((param.nb_elements_horizontal + 2, 2, param.nbsolpts * param.nb_elements_horizontal))
+    num_interfaces_horiz = param.num_elements_horizontal + 1
+    h_surf_itf_i = numpy.zeros((param.num_elements_horizontal + 2, param.num_solpts * param.num_elements_horizontal, 2))
+    h_surf_itf_j = numpy.zeros((param.num_elements_horizontal + 2, 2, param.num_solpts * param.num_elements_horizontal))
 
-    h_surf_itf_i[0:nb_interfaces_horiz, :, 1] = compute_height_from_dist(distance_itf_i.T)
-    h_surf_itf_i[1 : nb_interfaces_horiz + 1, :, 0] = h_surf_itf_i[0:nb_interfaces_horiz, :, 1]
+    h_surf_itf_i[0:num_interfaces_horiz, :, 1] = compute_height_from_dist(distance_itf_i.T)
+    h_surf_itf_i[1 : num_interfaces_horiz + 1, :, 0] = h_surf_itf_i[0:num_interfaces_horiz, :, 1]
 
-    h_surf_itf_j[0:nb_interfaces_horiz, 1, :] = compute_height_from_dist(distance_itf_j)
-    h_surf_itf_j[1 : nb_interfaces_horiz + 1, 0, :] = h_surf_itf_j[0:nb_interfaces_horiz, 1, :]
+    h_surf_itf_j[0:num_interfaces_horiz, 1, :] = compute_height_from_dist(distance_itf_j)
+    h_surf_itf_j[1 : num_interfaces_horiz + 1, 0, :] = h_surf_itf_j[0:num_interfaces_horiz, 1, :]
 
     # Height derivative along x and y at every grid point
     _, ni, nj = geom.lon.shape
@@ -381,8 +382,8 @@ def dcmip_mountain(geom: CubedSphere3D, metric, mtrx, param):
     dhdx2 = numpy.zeros((ni, nj))
 
     offset = 1  # Offset due to the halo
-    for elem in range(param.nb_elements_horizontal):
-        epais = elem * param.nbsolpts + numpy.arange(param.nbsolpts)
+    for elem in range(param.num_elements_horizontal):
+        epais = elem * param.num_solpts + numpy.arange(param.num_solpts)
 
         # --- Direction x1
         dhdx1[:, epais] = h_surf[:, epais] @ mtrx.diff_solpt_tr + h_surf_itf_i[elem + offset, :, :] @ mtrx.correction_tr
@@ -551,6 +552,8 @@ def dcmip_schar_waves(geom: CubedSphere3D, metric, mtrx: DFROperators, param, sh
     """
     Tests 2-1 and 2-2:  Non-hydrostatic Mountain Waves over a Schaer-type Mountain
     """
+    xp = geom.device.xp
+
     T0 = 300.0  # temperature (K)
     lambdam = math.pi / 4.0  # mountain longitude center point (radians)
     phim = 0.0  # mountain latitude center point (radians)
@@ -568,42 +571,30 @@ def dcmip_schar_waves(geom: CubedSphere3D, metric, mtrx: DFROperators, param, sh
     # -----------------------------------------------------------------------
     #    Set topography
     # -----------------------------------------------------------------------
-    zbot = numpy.zeros(geom.coordVec_latlon.shape[2:])
-    zbot_itf_i = numpy.zeros(geom.coordVec_latlon_itf_i.shape[2:])
-    zbot_itf_j = numpy.zeros(geom.coordVec_latlon_itf_j.shape[2:])
-
-    zbot_itf_i_new = numpy.zeros(geom.itf_i_floor_shape, dtype=geom.dtype)
-    zbot_itf_j_new = numpy.zeros(geom.itf_j_floor_shape, dtype=geom.dtype)
 
     # Build topography based on lateral great-circle distance from the mountain center
-    def build_topo_old(z, latlon):
+    def build_topo_old(latlon):
         lat = latlon[1, 0, :, :]
         lon = latlon[0, 0, :, :]
         r = geom.earth_radius * numpy.arccos(
             math.sin(phim) * numpy.sin(lat) + math.cos(phim) * numpy.cos(lat) * numpy.cos(lon - lambdam)
         )
+        z = numpy.zeros(lat.shape)
         z[:, :] = h0 * numpy.exp(-(r**2) / Dm**2) * numpy.cos(numpy.pi * r / Dxi) ** 2
         return z
 
     def build_topo(latlon):
         lat = latlon[1]
         lon = latlon[0]
-        r = geom.earth_radius * numpy.arccos(
-            math.sin(phim) * numpy.sin(lat) + math.cos(phim) * numpy.cos(lat) * numpy.cos(lon - lambdam)
+        r = geom.earth_radius * xp.arccos(
+            math.sin(phim) * xp.sin(lat) + math.cos(phim) * xp.cos(lat) * xp.cos(lon - lambdam)
         )
-        print(f"r shape = {r.shape}")
 
-        return h0 * numpy.exp(-(r**2) / Dm**2) * numpy.cos(numpy.pi * r / Dxi) ** 2
+        return h0 * xp.exp(-(r**2) / Dm**2) * xp.cos(xp.pi * r / Dxi) ** 2
 
-    for z, coord in zip(
-        [zbot, zbot_itf_i, zbot_itf_j], [geom.coordVec_latlon, geom.coordVec_latlon_itf_i, geom.coordVec_latlon_itf_j]
-    ):
-        lat = coord[1, 0, :, :]
-        lon = coord[0, 0, :, :]
-        r = geom.earth_radius * numpy.arccos(
-            math.sin(phim) * numpy.sin(lat) + math.cos(phim) * numpy.cos(lat) * numpy.cos(lon - lambdam)
-        )
-        z[:, :] = h0 * numpy.exp(-(r**2) / Dm**2) * numpy.cos(numpy.pi * r / Dxi) ** 2
+    zbot = build_topo_old(geom.coordVec_latlon)
+    zbot_itf_i = build_topo_old(geom.coordVec_latlon_itf_i)
+    zbot_itf_j = build_topo_old(geom.coordVec_latlon_itf_j)
 
     zbot_new = build_topo(geom.get_floor(geom.polar))
     zbot_itf_i_new = build_topo(geom.get_itf_i_floor(geom.polar_itf_i))
@@ -614,13 +605,13 @@ def dcmip_schar_waves(geom: CubedSphere3D, metric, mtrx: DFROperators, param, sh
     zbot_itf_j_new[geom.floor_north_edge] = 0.0
 
     diff = zbot_new - geom.to_new_floor(zbot)
-    diffn = numpy.linalg.norm(diff)
+    diffn = xp.linalg.norm(diff)
 
     diffi = zbot_itf_i_new - geom.to_new_itf_i_floor(zbot_itf_i)
-    diffin = numpy.linalg.norm(diffi)
+    diffin = xp.linalg.norm(diffi)
 
     diffj = zbot_itf_j_new - geom.to_new_itf_j_floor(zbot_itf_j)
-    diffjn = numpy.linalg.norm(diffj)
+    diffjn = xp.linalg.norm(diffj)
 
     if diffn > 0.0 or diffin > 0.0 or diffjn > 0.0:
         raise ValueError
@@ -632,14 +623,16 @@ def dcmip_schar_waves(geom: CubedSphere3D, metric, mtrx: DFROperators, param, sh
 
     ## Coordinate vectors in 3D
 
-    lat = geom.coordVec_latlon[1, :, :, :]  # Latitude as 3D field
-    z_3d = geom.coordVec_latlon[2, :, :, :]  # Retrieve all z-levels
+    # lat = geom.coordVec_latlon[1, :, :, :]  # Latitude as 3D field
+    # z_3d = geom.coordVec_latlon[2, :, :, :]  # Retrieve all z-levels
+    lat = geom.polar[1, ...]  # Latitude as 3D field
+    z_3d = geom.polar[2, ...]  # Retrieve all z-levels
 
     ## Temperature in 3D
     if Ueq != 0:
-        T = T0 * (1 - Cs * Ueq**2 / gravity * numpy.sin(lat) ** 2)
+        T = T0 * (1 - Cs * Ueq**2 / gravity * xp.sin(lat) ** 2)
     else:
-        T = T0 * numpy.ones_like(lat)
+        T = T0 * xp.ones_like(lat)
 
     ### NOTE: These equations are not in exact balance for the no-hill case.
     ### The DCMIP document assumes a shallow-atmosphere discretization,
@@ -648,21 +641,22 @@ def dcmip_schar_waves(geom: CubedSphere3D, metric, mtrx: DFROperators, param, sh
     ### adjustment.
 
     ## Pressure (eqn 80)
-    p = Peq * numpy.exp(-(Ueq**2) / (2 * Rd * T0) * numpy.sin(lat) ** 2 - gravity * z_3d / (Rd * T))
+    p = Peq * xp.exp(-(Ueq**2) / (2 * Rd * T0) * xp.sin(lat) ** 2 - gravity * z_3d / (Rd * T))
 
     # Zonal Velocity (eqn 82)
 
-    u = Ueq * numpy.cos(lat) * (2 * T0 / T * Cs * z_3d + T / T0) ** 0.5
+    u = Ueq * xp.cos(lat) * (2 * T0 / T * Cs * z_3d + T / T0) ** 0.5
 
     # Meridional Velocity
 
-    v = numpy.zeros_like(lat)
+    v = xp.zeros_like(lat)
 
     # Vertical Velocity
 
-    w = numpy.zeros_like(lat)
+    w = xp.zeros_like(lat)
 
-    u1_contra, u2_contra, u3_contra = wind2contra_3d(u, v, w, geom, metric)
+    # u1_contra, u2_contra, u3_contra = wind2contra_3d(u, v, w, geom, metric)
+    u1_contra, u2_contra, u3_contra = geom.wind2contra(u, v, w, metric)
 
     # -----------------------------------------------------------------------
     #    RHO (density)
@@ -688,6 +682,7 @@ def dcmip_schar_damping(
     metric: Metric3DTopo,
     geom: CubedSphere3D,
     shear: bool,
+    new_layout: bool,
 ):
     """Implements the required Rayleigh damping for DCMIP cases 2-1 and 2-2
 
@@ -709,6 +704,8 @@ def dcmip_schar_damping(
     # Grab forcing index variables from 'definitions', since forcing is modified in-place
     from common.definitions import idx_rho_u1, idx_rho_u2, idx_rho_w
 
+    xp = geom.device.xp
+
     # Case parameters
     T0 = 300.0  # temperature (K)
     Ueq = 20.0  # Reference zonal wind velocity (equator)
@@ -721,28 +718,35 @@ def dcmip_schar_damping(
         Cs = 0.0
 
     # Get coordinates
-    lat = geom.coordVec_latlon[1, :, :, :]  # Latitude as 3D field
-    z_3d = geom.coordVec_latlon[2, :, :, :]  # Retrieve all z-levels
+    if new_layout:
+        lat = geom.polar[1, ...]
+        z_3d = geom.polar[2, ...]
+    else:
+        lat = geom.coordVec_latlon[1, :, :, :]  # Latitude as 3D field
+        z_3d = geom.coordVec_latlon[2, :, :, :]  # Retrieve all z-levels
 
     # Build the damping mask (eqn 79), weighted by ρ and τ0^(-1)
     damping_weight = (
-        rho / tau0 * numpy.sin(numpy.pi / 2 * (z_3d - Zh) / (geom.ztop - Zh)) ** 2
+        rho / tau0 * xp.sin(xp.pi / 2 * (z_3d - Zh) / (geom.ztop - Zh)) ** 2
     )  # z > zh, defined everywhere at first
     # Reset to 0 below the threshold height
     damping_weight[z_3d <= Zh] = 0.0
 
     ## Temperature in 3D
     if Ueq != 0:
-        Tref = T0 * (1 - Cs * Ueq**2 / gravity * numpy.sin(lat) ** 2)
+        Tref = T0 * (1 - Cs * Ueq**2 / gravity * xp.sin(lat) ** 2)
     else:
         Tref = T0
 
     # Get u, v, w reference velocities and convert to contravariant
-    uref = Ueq * numpy.cos(lat) * (2 * T0 / Tref * Cs * z_3d + Tref / T0) ** 0.5
+    uref = Ueq * xp.cos(lat) * (2 * T0 / Tref * Cs * z_3d + Tref / T0) ** 0.5
     vref = 0.0
     wref = 0.0
 
-    u1ref, u2ref, u3ref = wind2contra_3d(uref, vref, wref, geom, metric)
+    if new_layout:
+        u1ref, u2ref, u3ref = geom.wind2contra(uref, vref, wref, metric)
+    else:
+        u1ref, u2ref, u3ref = wind2contra_3d(uref, vref, wref, geom, metric)
 
     # Increment velocity forcing (eqn 78).  Take note that this modification is in-place,
     # and the sign is positive because rhs_euler includes its own negative sign
@@ -756,12 +760,17 @@ def dcmip_schar_damping(
 # ==========================================================================================
 
 
-def dcmip_gravity_wave(geom, metric, mtrx, param):
+def dcmip_gravity_wave(geom: CubedSphere3D, metric: Metric3DTopo, mtrx: DFROperators, param: Configuration):
     """
     Test case 31 - gravity waves
 
-    The non-hydrostatic gravity wave test examines the response of models to short time-scale wavemotion triggered by a localized perturbation. The formulation presented in this document is new, but is based on previous approaches by Skamarock et al. (JAS 1994), Tomita and Satoh (FDR 2004), and Jablonowski et al. (NCAR Tech Report 2008)
+    The non-hydrostatic gravity wave test examines the response of models to short time-scale wavemotion triggered
+    by a localized perturbation. The formulation presented in this document is new, but is based on previous
+    approaches by Skamarock et al. (JAS 1994), Tomita and Satoh (FDR 2004), and
+    Jablonowski et al. (NCAR Tech Report 2008)
     """
+
+    xp = geom.device.xp
 
     u0 = 20.0  # Reference Velocity
     Teq = 300.0  # Temperature at Equator
@@ -784,35 +793,37 @@ def dcmip_gravity_wave(geom, metric, mtrx, param):
 
     # Zonal Velocity
 
-    u = u0 * numpy.cos(geom.lat)
+    u = u0 * xp.cos(geom.lat_new)
 
     # Meridional Velocity
 
-    v = numpy.zeros_like(u)
+    v = xp.zeros_like(u)
 
     # Vertical Velocity = Vertical Pressure Velocity = 0
 
-    w = numpy.zeros_like(u)
+    w = xp.zeros_like(u)
 
     ## Set a trivial topography
-    zbot = numpy.zeros(geom.coordVec_latlon.shape[2:], like=geom.coordVec_latlon)
-    zbot_itf_i = numpy.zeros(geom.coordVec_latlon_itf_i.shape[2:], like=geom.coordVec_latlon_itf_i)
-    zbot_itf_j = numpy.zeros(geom.coordVec_latlon_itf_j.shape[2:], like=geom.coordVec_latlon_itf_j)
+    zbot = xp.zeros(geom.coordVec_latlon.shape[2:], like=geom.coordVec_latlon)
+    zbot_itf_i = xp.zeros(geom.coordVec_latlon_itf_i.shape[2:], like=geom.coordVec_latlon_itf_i)
+    zbot_itf_j = xp.zeros(geom.coordVec_latlon_itf_j.shape[2:], like=geom.coordVec_latlon_itf_j)
+
     # Update the geometry object with the new bottom topography
-    geom.apply_topography(zbot, zbot_itf_i, zbot_itf_j)
+    geom.apply_topography(zbot, zbot_itf_i, zbot_itf_j, None, None, None)
     # And regenerate the metric to take this new topography into account
     metric.build_metric()
 
-    u1_contra, u2_contra = wind2contra_2d(u, v, geom)
+    # u1_contra, u2_contra = wind2contra_2d(u, v, geom)
+    u1_contra, u2_contra = geom.wind2contra_2d(u, v)
 
     # -----------------------------------------------------------------------
     #    SURFACE TEMPERATURE
     # -----------------------------------------------------------------------
 
-    TS = bigG + (Teq - bigG) * numpy.exp(
+    TS = bigG + (Teq - bigG) * xp.exp(
         -(u0 * N2 / (4.0 * gravity**2))
         * (u0 + 2.0 * geom.rotation_speed * geom.earth_radius)
-        * (numpy.cos(2.0 * geom.lat) - 1.0)
+        * (xp.cos(2.0 * geom.lat_new) - 1.0)
     )
 
     # -----------------------------------------------------------------------
@@ -821,10 +832,10 @@ def dcmip_gravity_wave(geom, metric, mtrx, param):
 
     ps = (
         Peq
-        * numpy.exp(
+        * xp.exp(
             (u0 / (4.0 * bigG * Rd))
             * (u0 + 2.0 * geom.rotation_speed * geom.earth_radius)
-            * (numpy.cos(2.0 * geom.lat) - 1.0)
+            * (xp.cos(2.0 * geom.lat_new) - 1.0)
         )
         * (TS / Teq) ** inv_kappa
     )
@@ -833,9 +844,9 @@ def dcmip_gravity_wave(geom, metric, mtrx, param):
     #    HEIGHT AND PRESSURE AND MEAN TEMPERATURE
     # -----------------------------------------------------------------------
 
-    p = ps * ((bigG / TS) * numpy.exp(-N2 * geom.height / gravity) + 1.0 - (bigG / TS)) ** inv_kappa
+    p = ps * ((bigG / TS) * xp.exp(-N2 * geom.height_new / gravity) + 1.0 - (bigG / TS)) ** inv_kappa
 
-    t_mean = bigG * (1.0 - numpy.exp(N2 * geom.height / gravity)) + TS * numpy.exp(N2 * geom.height / gravity)
+    t_mean = bigG * (1.0 - xp.exp(N2 * geom.height_new / gravity)) + TS * xp.exp(N2 * geom.height_new / gravity)
 
     theta_base = t_mean * (p0 / p) ** kappa
 
@@ -853,16 +864,16 @@ def dcmip_gravity_wave(geom, metric, mtrx, param):
     #    to the background theta field (not included here)
     # -----------------------------------------------------------------------
 
-    sin_tmp = numpy.sin(geom.lat) * math.sin(phic)
-    cos_tmp = numpy.cos(geom.lat) * math.cos(phic)
+    sin_tmp = xp.sin(geom.lat_new) * math.sin(phic)
+    cos_tmp = xp.cos(geom.lat_new) * math.cos(phic)
 
     # great circle distance with 'a/X'
 
-    r = geom.earth_radius * numpy.arccos(sin_tmp + cos_tmp * numpy.cos(geom.lon - lambdac))
+    r = geom.earth_radius * xp.arccos(sin_tmp + cos_tmp * xp.cos(geom.lon_new - lambdac))
 
     s = (d**2) / (d**2 + r**2)
 
-    theta_pert = delta_theta * s * numpy.sin(2.0 * math.pi * geom.height / Lz)
+    theta_pert = delta_theta * s * xp.sin(2.0 * math.pi * geom.height_new / Lz)
     #   theta_pert = 0. # for debuging
 
     theta = theta_base + theta_pert

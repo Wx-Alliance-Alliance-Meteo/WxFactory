@@ -115,14 +115,12 @@ def print_mountain(
     normals_z: numpy.ndarray = None,
     filename: str = None,
 ):
-    # nb_elem = geom.nb_elements_relief_layer * geom.nbsolpts
-
     if not ((normals_x is None) == (normals_z is None)):
         raise ValueError(f"Either provide both normal arrays or none of them")
 
     fig, ax_mtn = matplotlib.pyplot.subplots()
-    # cmap = matplotlib.pyplot.contourf(geom.X1[:nb_elem, :], geom.X3[:nb_elem, :], mountain[:nb_elem, :], levels=2)
-    # matplotlib.pyplot.imshow(numpy.flip(mountain[:nb_elem, :], axis=0), interpolation='nearest')
+    # cmap = matplotlib.pyplot.contourf(geom.X1[:num_elem, :], geom.X3[:num_elem, :], mountain[:num_elem, :], levels=2)
+    # matplotlib.pyplot.imshow(numpy.flip(mountain[:num_elem, :], axis=0), interpolation='nearest')
     ax_mtn.scatter(x1, x3, c=mountain, marker="s")
 
     # ax_mtn.arrow(10, 10, 10, 10)

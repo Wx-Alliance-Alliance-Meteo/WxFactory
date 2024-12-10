@@ -11,21 +11,21 @@ from .fluxes import FluxFunction2D
 def rhs_bubble_fv(
     Q: numpy.ndarray[Any, numpy.dtype[Union[numpy.float64, numpy.complex128]]],
     geom: Cartesian2D,
-    nb_elements_x: int,
-    nb_elements_z: int,
+    num_elements_x: int,
+    num_elements_z: int,
     compute_flux: FluxFunction2D,
 ):
 
-    nb_equations = Q.shape[0]  # Number of constituent Euler equations.  Probably 6.
+    num_equations = Q.shape[0]  # Number of constituent Euler equations.  Probably 6.
 
     df1_dx1 = numpy.empty_like(Q)
     df3_dx3 = numpy.empty_like(Q)
 
-    kfaces_flux = numpy.empty((nb_equations, nb_elements_z, 2, nb_elements_x))
-    kfaces_var = numpy.empty((nb_equations, nb_elements_z, 2, nb_elements_x))
+    kfaces_flux = numpy.empty((num_equations, num_elements_z, 2, num_elements_x))
+    kfaces_var = numpy.empty((num_equations, num_elements_z, 2, num_elements_x))
 
-    ifaces_flux = numpy.empty((nb_equations, nb_elements_x, nb_elements_z, 2))
-    ifaces_var = numpy.empty((nb_equations, nb_elements_x, nb_elements_z, 2))
+    ifaces_flux = numpy.empty((num_equations, num_elements_x, num_elements_z, 2))
+    ifaces_var = numpy.empty((num_equations, num_elements_x, num_elements_z, 2))
 
     flux_x1 = numpy.empty_like(Q)
     flux_x3 = numpy.empty_like(Q)

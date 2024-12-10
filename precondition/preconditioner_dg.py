@@ -16,10 +16,10 @@ class DG_preconditioner:
         min_order = 2
         max_depth = 4
 
-        if param.nbsolpts <= min_order:
+        if param.num_solpts <= min_order:
             print(
                 f"Can't make a preconditioner with order less than {min_order}."
-                f" (currently asking for order {param.nbsolpts - 1})"
+                f" (currently asking for order {param.num_solpts - 1})"
             )
             raise ValueError
 
@@ -45,9 +45,9 @@ class DG_preconditioner:
         self.filter_during = True if param.precond_filter_during == 1 else False
         self.filter_after = True if param.precond_filter_after == 1 else False
 
-        self.big_order = param.nbsolpts
+        self.big_order = param.num_solpts
         self.small_order = self.big_order - 1
-        self.num_elements = param.nb_elements_horizontal
+        self.num_elements = param.num_elements_horizontal
 
         self.max_iter = 1000
         # if self.small_order == 2:
@@ -63,13 +63,13 @@ class DG_preconditioner:
         self.big_operators = DFR_operators(geometry, self.big_param)
 
         self.small_param = copy(param)
-        self.small_param.nbsolpts = self.small_order
+        self.small_param.num_solpts = self.small_order
         self.small_param.filter_apply = True
         self.small_param.filter_order = 8
 
         self.small_geom = cubed_sphere(
-            param.nb_elements_horizontal,
-            param.nb_elements_vertical,
+            param.num_elements_horizontal,
+            param.num_elements_vertical,
             self.small_order,
             param.λ0,
             param.ϕ0,
@@ -118,7 +118,7 @@ class DG_preconditioner:
             self.small_metric,
             self.small_topo,
             self.ptopo,
-            self.small_param.nbsolpts,
+            self.small_param.num_solpts,
             self.num_elements,
             self.small_param.case_number,
             self.filter_during,

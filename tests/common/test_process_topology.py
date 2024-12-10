@@ -428,7 +428,7 @@ class ProcessTopologyTest(unittest.TestCase):
         north = self.data[NORTH]
         west = self.data[WEST]
         east = self.data[EAST]
-        request = self.topo.start_exchange_scalars(south, north, west, east, boundary_length=self.NUM_DATA_HORI)
+        request = self.topo.start_exchange_scalars(south, north, west, east, boundary_shape=(self.NUM_DATA_HORI,))
         s, n, w, e = request.wait()
         result = [s, n, w, e]
 
@@ -451,7 +451,7 @@ class ProcessTopologyTest(unittest.TestCase):
         north = self.data[NORTH].reshape(new_shape)
         west = self.data[WEST].reshape(new_shape)
         east = self.data[EAST].reshape(new_shape)
-        request = self.topo.start_exchange_scalars(south, north, west, east, boundary_length=self.NUM_DATA_HORI)
+        request = self.topo.start_exchange_scalars(south, north, west, east, boundary_shape=(self.NUM_DATA_HORI,))
         s, n, w, e = request.wait()
         result = [s, n, w, e]
 
@@ -475,7 +475,7 @@ class ProcessTopologyTest(unittest.TestCase):
         north = self.data[NORTH].reshape(new_shape)
         west = self.data[WEST].reshape(new_shape)
         east = self.data[EAST].reshape(new_shape)
-        request = self.topo.start_exchange_scalars(south, north, west, east, boundary_length=self.NUM_DATA_HORI)
+        request = self.topo.start_exchange_scalars(south, north, west, east, boundary_shape=(self.NUM_DATA_HORI,))
         s, n, w, e = request.wait()
         result = [s, n, w, e]
 
@@ -498,7 +498,7 @@ class ProcessTopologyTest(unittest.TestCase):
         north = numpy.stack([self.data[NORTH], self.data[NORTH] + 1.0])
         west = numpy.stack([self.data[WEST], self.data[WEST] + 1.0])
         east = numpy.stack([self.data[EAST], self.data[EAST] + 1.0])
-        request = self.topo.start_exchange_scalars(south, north, west, east, boundary_length=self.NUM_DATA_HORI)
+        request = self.topo.start_exchange_scalars(south, north, west, east, boundary_shape=(self.NUM_DATA_HORI,))
         s, n, w, e = request.wait()
         result = [s, n, w, e]
 
@@ -523,7 +523,7 @@ class ProcessTopologyTest(unittest.TestCase):
         north = numpy.stack([self.data[NORTH].reshape(new_shape), self.data[NORTH].reshape(new_shape) + 1.0])
         west = numpy.stack([self.data[WEST].reshape(new_shape), self.data[WEST].reshape(new_shape) + 1.0])
         east = numpy.stack([self.data[EAST].reshape(new_shape), self.data[EAST].reshape(new_shape) + 1.0])
-        request = self.topo.start_exchange_scalars(south, north, west, east, boundary_length=self.NUM_DATA_HORI)
+        request = self.topo.start_exchange_scalars(south, north, west, east, boundary_shape=(self.NUM_DATA_HORI,))
         s, n, w, e = request.wait()
         result = [s, n, w, e]
 

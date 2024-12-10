@@ -8,6 +8,7 @@ class CudaTestCases(cpu_test.CpuTestCases):
 
     There is also a CPU device for comparaison tests
     """
+
     gpu_device: Device
 
     def setUp(self) -> None:
