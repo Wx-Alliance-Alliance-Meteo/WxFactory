@@ -14,7 +14,7 @@ class ConfigurationTestCases(unittest.TestCase):
             configuration_str = "\n".join(f.readlines())
 
         schema = common.configuration_schema.ConfigurationSchema(schema_str)
-        conf = common.configuration.Configuration(configuration_str, schema)
+        conf = common.configuration.Configuration(configuration_str, schema, load_post_config=False)
         self.assertEqual(conf.size, 1)
         self.assertEqual(conf.time, 0.0)
         self.assertEqual(conf.end_time, 2.0)
@@ -34,7 +34,7 @@ class ConfigurationTestCases(unittest.TestCase):
             configuration_str = "\n".join(f.readlines())
 
         schema = common.configuration_schema.ConfigurationSchema(schema_str)
-        conf = common.configuration.Configuration(configuration_str, schema)
+        conf = common.configuration.Configuration(configuration_str, schema, load_post_config=False)
         self.assertEqual(conf.numeric1, 0)
         self.assertEqual(conf.numeric2, 0)
         self.assertEqual(conf.numeric3, 2)
@@ -53,14 +53,14 @@ class ConfigurationTestCases(unittest.TestCase):
             configuration_str = "\n".join(f.readlines())
 
         schema = common.configuration_schema.ConfigurationSchema(schema_str)
-        conf = common.configuration.Configuration(configuration_str, schema)
+        conf = common.configuration.Configuration(configuration_str, schema, load_post_config=False)
         self.assertEqual(conf.x, 1)
         self.assertEqual(conf.y, 2)
         
         with open("tests/data/configuration_tests/config-3.2.ini") as f:
             configuration_str = "\n".join(f.readlines())
 
-        conf = common.configuration.Configuration(configuration_str, schema)
+        conf = common.configuration.Configuration(configuration_str, schema, load_post_config=False)
         self.assertEqual(conf.x, 5)
         self.assertFalse(hasattr(conf, "y"))
 
