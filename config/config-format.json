@@ -24,7 +24,8 @@
             "section": "System",
             "type": "str",
             "selectables": ["cpu", "cuda"],
-            "default": "cpu"
+            "default": "cpu",
+            "description": "Physical backend to run the computation on"
         },
         {
             "name": "cuda_device",
@@ -34,7 +35,8 @@
             "dependancy": {
                 "name": "desired_device",
                 "values": ["cuda"]
-            }
+            },
+            "description": "List of Nvidia physical device to use"
         },
 
         {
@@ -485,37 +487,43 @@
             "name": "stat_freq",
             "section": "Output_options",
             "type": "int",
-            "default": 0
+            "default": 0,
+            "description": "Frequency in timesteps at which to print block stats"
         },
         {
             "name": "output_freq",
             "section": "Output_options",
             "type": "int",
-            "default": 0
+            "default": 0,
+            "description": "Frequency in timesteps at which to store the solution"
         },
         {
             "name": "save_state_freq",
             "section": "Output_options",
             "type": "int",
-            "default": 0
+            "default": 0,
+            "description": "Frequency in timesteps at which to save the state vector"
         },
         {
             "name": "store_solver_stats",
             "section": "Output_options",
             "type": "bool",
-            "default": false
+            "default": false,
+            "description": "Whether to store solver stats (at every timestep)"
         },
         {
             "name": "output_dir",
             "section": "Output_options",
             "type": "case-sensitive-str",
-            "default": "results"
+            "default": "results",
+            "description": "Directory where to store all the output"
         },
         {
             "name": "base_output_file",
             "section": "Output_options",
             "type": "case-sensitive-str",
-            "default": "out"
+            "default": "out",
+            "description": "Name of file where to store the solution"
         },
         {
             "name": "solver_stats_file",
