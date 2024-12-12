@@ -348,9 +348,8 @@ class ConfigurationSchema:
             self.fields.append(field)
 
 def load_default_schema() -> ConfigurationSchema:
+    import common.wx_mpi
     schema_path = "config/config-format.json"
-    schema_text: str
-    with open(schema_path) as f:
-        schema_text = "\n".join(f.readlines())
-    schema = ConfigurationSchema(schema_text)
+    schema_content = common.wx_mpi.readfile(schema_path)
+    schema = ConfigurationSchema(schema_content)
     return schema

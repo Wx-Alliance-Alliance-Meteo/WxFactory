@@ -65,16 +65,8 @@ def main():
             raise ValueError(f"Config file does not seem to exist: {args.config}")
         sys.exit(-1)
 
-    config_content = ""
-    config_schema_content = ""
-    if rank == 0:
-        with open(args.config) as config_file:
-            config_content = "\n".join(config_file.readlines())
-        with open("config/config-format.json") as schema_file:
-            config_schema_content = "\n".join(schema_file.readlines())
-
-    config_content = common.wx_mpi.bcast_string(config_content, 0, MPI.COMM_WORLD)
-    config_schema_content = common.wx_mpi.bcast_string(config_schema_content, 0, MPI.COMM_WORLD)
+    config_content = common.wx_mpi.readfile(args.config)
+    config_schema_content = common.wx_mpi.readfile("config/config-format.json")
 
     try:
         import cProfile

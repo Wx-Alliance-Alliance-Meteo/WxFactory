@@ -1,5 +1,6 @@
 from mpi4py import MPI
 import numpy
+import os
 
 
 def send_string_to(string: str, process_index: int, comm: MPI.Comm = MPI.COMM_WORLD):
@@ -20,7 +21,7 @@ def receive_string_from(process_index: int, comm: MPI.Comm = MPI.COMM_WORLD):
     comm.Recv([data, MPI.CHAR], process_index, 1)
     return str(data, "utf-8")
 
-def bcast_string(content: str, root: int, comm: MPI.Comm = MPI.COMM_WORLD) -> str:
+def bcast_string(content: str, root: int = 0, comm: MPI.Comm = MPI.COMM_WORLD) -> str:
     if comm.rank == root:
         data: bytes = bytes(content, "utf-8")
         length: int = len(data)
@@ -37,3 +38,14 @@ def bcast_string(content: str, root: int, comm: MPI.Comm = MPI.COMM_WORLD) -> st
         comm.Bcast([data, MPI.CHAR], root)
         content = str(data, "utf-8")
     return content
+
+def readfile(filename: str, root: int = 0, comm: MPI.Comm = MPI.COMM_WORLD) -> str:
+    if not os.path.exists(filename):
+        raise ValueError(f"File {filename} does not exist")
+    
+    content = ""
+    if comm.rank == root:
+        with open(filename) as f:
+            content = "\n".join(f.readlines())
+    
+    return bcast_string(content, root, comm)
