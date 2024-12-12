@@ -30,6 +30,7 @@ from rhs.rhs_selector import RhsBundle
 
 from .definitions import idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_w
 from .configuration import Configuration
+from .configuration_schema import ConfigurationSchema
 from .process_topology import ProcessTopology
 from .device import Device, CpuDevice, CudaDevice
 
@@ -47,10 +48,14 @@ class Simulation:
 
     device: Device
 
-    def __init__(self, config_file: str) -> None:
+    def __init__(self, config_file: str, config_schema_file: str) -> None:
         self.rank = MPI.COMM_WORLD.rank
 
-        self.config = Configuration(config_file, self.rank == 0)
+        self.schema = ConfigurationSchema(config_schema_file)
+        self.config = Configuration(config_file, self.schema)
+        if (self.rank == 0):
+            print(f"{self.config}", flush=True)
+
         self._adjust_num_elements()
         self.device = self._make_device()
         self.process_topo = ProcessTopology(self.device) if self.config.grid_type == "cubed_sphere" else None
@@ -187,9 +192,9 @@ class Simulation:
                 return CubedSphere2D(
                     self.config.num_elements_horizontal,
                     self.config.num_solpts,
-                    self.config.λ0,
-                    self.config.ϕ0,
-                    self.config.α0,
+                    self.config.lambda0,
+                    self.config.phi0,
+                    self.config.alpha0,
                     self.process_topo,
                     self.config,
                     self.device,
@@ -198,9 +203,9 @@ class Simulation:
                 self.config.num_elements_horizontal,
                 self.config.num_elements_vertical,
                 self.config.num_solpts,
-                self.config.λ0,
-                self.config.ϕ0,
-                self.config.α0,
+                self.config.lambda0,
+                self.config.phi0,
+                self.config.alpha0,
                 self.config.ztop,
                 self.process_topo,
                 self.config,

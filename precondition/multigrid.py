@@ -93,7 +93,7 @@ class MultigridLevel:
         # Initialize problem for this level
         if p.grid_type == "cubed_sphere":
             self.geometry = CubedSphere3D(
-                p.num_elements_horizontal, p.num_elements_vertical, p.num_solpts, p.λ0, p.ϕ0, p.α0, p.ztop, ptopo, p
+                p.num_elements_horizontal, p.num_elements_vertical, p.num_solpts, p.lambda0, p.phi0, p.alpha0, p.ztop, ptopo, p
             )
         elif p.grid_type == "cartesian2d":
             self.geometry = Cartesian2D(

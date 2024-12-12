@@ -1,0 +1,535 @@
+{
+    "version": "0.1",
+    "fields": [
+        {
+            "name": "equations",
+            "section": "General",
+            "type": "str",
+            "selectables": ["euler", "shallow_water"]
+        },
+        {
+            "name": "depth_approx",
+            "section": "General",
+            "type": "str",
+            "selectables": ["deep", "shallow"],
+            "default": "deep",
+            "dependancy": {
+                "name": "equations",
+                "values": ["euler"]
+            }
+        },
+
+        {
+            "name": "desired_device",
+            "section": "System",
+            "type": "str",
+            "selectables": ["cpu", "cuda"],
+            "default": "cpu",
+            "description": "Physical backend to run the computation on"
+        },
+        {
+            "name": "cuda_device",
+            "section": "System",
+            "type": "list-int",
+            "default": [],
+            "dependancy": {
+                "name": "desired_device",
+                "values": ["cuda"]
+            },
+            "description": "List of Nvidia physical device to use"
+        },
+
+        {
+            "name": "case_number",
+            "section": "Test_case",
+            "type": "int",
+            "default": -1
+        },
+        {
+            "name": "matsuno_wave_type",
+            "section": "Test_case",
+            "type": "str",
+            "dependancy": {
+                "name": "case_number",
+                "values": [9]
+            }
+        },
+        {
+            "name": "matsuno_amp",
+            "section": "Test_case",
+            "type": "float",
+            "dependancy": {
+                "name": "case_number",
+                "values": [9]
+            }
+        },
+        {
+            "name": "bubble_theta",
+            "section": "Test_case",
+            "type": "float",
+            "default": 0.0
+        },
+        {
+            "name": "bubble_rad",
+            "section": "Test_case",
+            "type": "float",
+            "default": 0.0
+        },
+
+        {
+            "name": "dt",
+            "section": "Time_integration",
+            "type": "float",
+            "min": 0.0
+        },
+        {
+            "name": "t_end",
+            "section": "Time_integration",
+            "type": "float"
+        },
+        {
+            "name": "time_integrator",
+            "section": "Time_integration",
+            "type": "str"
+        },
+        {
+            "name": "tolerance",
+            "section": "Time_integration",
+            "type": "float"
+        },
+        {
+            "name": "starting_step",
+            "section": "Time_integration",
+            "type": "int",
+            "default": 0
+        },
+        {
+            "name": "exponential_solver",
+            "section": "Time_integration",
+            "type": "str",
+            "default": "pmex",
+            "selectables": ["pmex", "kiops"]
+        },
+        {
+            "name": "krylov_size",
+            "section": "Time_integration",
+            "type": "int",
+            "default": 1,
+            "min": 0
+        },
+        {
+            "name": "jacobian_method",
+            "section": "Time_integration",
+            "type": "str",
+            "default": "complex",
+            "selectables": ["complex", "fd"]
+        },
+        {
+            "name": "linear_solver",
+            "section": "Time_integration",
+            "type": "str",
+            "default": "fgmres",
+            "selectables": ["fgmres", "gcrot"]
+        },
+        {
+            "name": "verbose_solver",
+            "section": "Time_integration",
+            "type": "int",
+            "default": 0
+        },
+        {
+            "name": "gmres_restart",
+            "section": "Time_integration",
+            "type": "int",
+            "default": 20,
+            "min": 1
+        },
+
+        {
+            "name": "num_solpts",
+            "section": "Spatial_discretization",
+            "type": "int",
+            "min": 1
+        },
+        {
+            "name": "num_elements_horizontal",
+            "section": "Spatial_discretization",
+            "type": "int",
+            "min": 1
+        },
+        {
+            "name": "num_elements_vertical",
+            "section": "Spatial_discretization",
+            "type": "int",
+            "min": 1,
+            "default": 1
+        },
+        {
+            "name": "filter_apply",
+            "section": "Spatial_discretization",
+            "type": "bool",
+            "default": false
+        },
+        {
+            "name": "filter_order",
+            "section": "Spatial_discretization",
+            "type": "int",
+            "default": 16,
+            "dependancy": {
+                "name": "filter_apply",
+                "values": [true]
+            }
+        },
+        {
+            "name": "filter_order",
+            "section": "Spatial_discretization",
+            "type": "int",
+            "default": 0,
+            "dependancy": {
+                "name": "filter_apply",
+                "values": [false]
+            }
+        },
+        {
+            "name": "filter_cutoff",
+            "section": "Spatial_discretization",
+            "type": "float",
+            "default": 0.25,
+            "dependancy": {
+                "name": "filter_apply",
+                "values": [true]
+            }
+        },
+        {
+            "name": "filter_cutoff",
+            "section": "Spatial_discretization",
+            "type": "float",
+            "default": 0.0,
+            "dependancy": {
+                "name": "filter_apply",
+                "values": [false]
+            }
+        },
+        {
+            "name": "expfilter_apply",
+            "section": "Spatial_discretization",
+            "type": "bool",
+            "default": false
+        },
+        {
+            "name": "expfilter_order",
+            "section": "Spatial_discretization",
+            "type": "int",
+            "dependancy": {
+                "name": "filter_apply",
+                "values": [true]
+            }
+        },
+        {
+            "name": "expfilter_order",
+            "section": "Spatial_discretization",
+            "type": "int",
+            "default": 0,
+            "dependancy": {
+                "name": "filter_apply",
+                "values": [false]
+            }
+        },
+        {
+            "name": "expfilter_cutoff",
+            "section": "Spatial_discretization",
+            "type": "float",
+            "dependancy": {
+                "name": "filter_apply",
+                "values": [true]
+            }
+        },
+        {
+            "name": "expfilter_cutoff",
+            "section": "Spatial_discretization",
+            "type": "float",
+            "default": 0.0,
+            "dependancy": {
+                "name": "filter_apply",
+                "values": [false]
+            }
+        },
+        {
+            "name": "expfilter_strength",
+            "section": "Spatial_discretization",
+            "type": "float",
+            "dependancy": {
+                "name": "filter_apply",
+                "values": [true]
+            }
+        },
+        {
+            "name": "expfilter_strength",
+            "section": "Spatial_discretization",
+            "type": "float",
+            "default": 0.0,
+            "dependancy": {
+                "name": "filter_apply",
+                "values": [false]
+            }
+        },
+        {
+            "name": "apply_sponge",
+            "section": "Spatial_discretization",
+            "type": "bool",
+            "default": false
+        },
+        {
+            "name": "sponge_tscale",
+            "section": "Spatial_discretization",
+            "type": "float",
+            "default": 1.0
+        },
+        {
+            "name": "sponge_zscale",
+            "section": "Spatial_discretization",
+            "type": "float",
+            "default": 0.0
+        },
+
+        {
+            "name": "grid_type",
+            "section": "Grid",
+            "type": "str",
+            "selectables": ["cubed_sphere", "cartesian2d"]
+        },
+        {
+            "name": "discretization",
+            "section": "Grid",
+            "type": "str",
+            "default": "dg",
+            "selectables": ["dg", "fv"]
+        },
+        {
+            "name": "lambda0",
+            "section": "Grid",
+            "type": "float",
+            "dependancy": {
+                "name": "grid_type",
+                "values": ["cubed_sphere"]
+            }
+        },
+        {
+            "name": "phi0",
+            "section": "Grid",
+            "type": "float",
+            "dependancy": {
+                "name": "grid_type",
+                "values": ["cubed_sphere"]
+            }
+        },
+        {
+            "name": "alpha0",
+            "section": "Grid",
+            "type": "float",
+            "dependancy": {
+                "name": "grid_type",
+                "values": ["cubed_sphere"]
+            }
+        },
+        {
+            "name": "ztop",
+            "section": "Grid",
+            "type": "float",
+            "default": 0.0,
+            "dependancy": {
+                "name": "grid_type",
+                "values": ["cubed_sphere"]
+            }
+        },
+        {
+            "name": "x0",
+            "section": "Grid",
+            "type": "float",
+            "dependancy": {
+                "name": "grid_type",
+                "values": ["cartesian2d"]
+            }
+        },
+        {
+            "name": "x1",
+            "section": "Grid",
+            "type": "float",
+            "dependancy": {
+                "name": "grid_type",
+                "values": ["cartesian2d"]
+            }
+        },
+        {
+            "name": "z0",
+            "section": "Grid",
+            "type": "float",
+            "dependancy": {
+                "name": "grid_type",
+                "values": ["cartesian2d"]
+            }
+        },
+        {
+            "name": "z1",
+            "section": "Grid",
+            "type": "float",
+            "dependancy": {
+                "name": "grid_type",
+                "values": ["cartesian2d"]
+            }
+        },
+
+        {
+            "name": "preconditioner",
+            "section": "Preconditioning",
+            "type": "str",
+            "default": "none",
+            "selectables": ["none", "fv", "fv-mg", "p-mg", "lu", "ilu"]
+        },
+        {
+            "name": "precond_flux",
+            "section": "Preconditioning",
+            "type": "str",
+            "default": "ausm",
+            "selectables": ["ausm", "upwind", "rusanov"]
+        },
+        {
+            "name": "num_mg_levels",
+            "section": "Preconditioning",
+            "type": "int",
+            "default": 1,
+            "min": 1,
+            "dependancy": {
+                "name": "preconditioner",
+                "values": ["fv-mg", "p-mg"]
+            }
+        },
+        {
+            "name": "precond_tolerance",
+            "section": "Preconditioning",
+            "type": "float",
+            "default": 1e-1
+        },
+        {
+            "name": "num_pre_smoothe",
+            "section": "Preconditioning",
+            "type": "int",
+            "default": 1,
+            "min": 0
+        },
+        {
+            "name": "num_post_smoothe",
+            "section": "Preconditioning",
+            "type": "int",
+            "default": 1,
+            "min": 0
+        },
+        {
+            "name": "mg_smoother",
+            "section": "Preconditioning",
+            "type": "str",
+            "default": "exp",
+            "selectables": ["exp", "kiops", "erk3", "erk1", "ark3"]
+        },
+        {
+            "name": "exp_smoothe_spectral_radii",
+            "section": "Preconditioning",
+            "type": "list-float",
+            "default": [2.0],
+            "dependancy": {
+                "name": "mg_smoother",
+                "values": ["exp"]
+            }
+        },
+        {
+            "name": "exp_smoothe_nb_iters",
+            "section": "Preconditioning",
+            "type": "list-int",
+            "default": [4],
+            "dependancy": {
+                "name": "mg_smoother",
+                "values": ["exp"]
+            }
+        },
+        {
+            "name": "mg_solve_coarsest",
+            "section": "Preconditioning",
+            "type": "bool",
+            "default": false
+        },
+        {
+            "name": "kiops_dt_factor",
+            "section": "Preconditioning",
+            "type": "float",
+            "default": 1.1
+        },
+        {
+            "name": "verbose_precond",
+            "section": "Preconditioning",
+            "type": "int",
+            "default": 0
+        },
+        {
+            "name": "dg_to_fv_interp",
+            "section": "Preconditioning",
+            "type": "str",
+            "default": "lagrange",
+            "selectables": ["l2-norm", "lagrange"]
+        },
+        {
+            "name": "pseudo_cfl",
+            "section": "Preconditioning",
+            "type": "float",
+            "default": 1.0
+        },
+
+        {
+            "name": "stat_freq",
+            "section": "Output_options",
+            "type": "int",
+            "default": 0,
+            "description": "Frequency in timesteps at which to print block stats"
+        },
+        {
+            "name": "output_freq",
+            "section": "Output_options",
+            "type": "int",
+            "default": 0,
+            "description": "Frequency in timesteps at which to store the solution"
+        },
+        {
+            "name": "save_state_freq",
+            "section": "Output_options",
+            "type": "int",
+            "default": 0,
+            "description": "Frequency in timesteps at which to save the state vector"
+        },
+        {
+            "name": "store_solver_stats",
+            "section": "Output_options",
+            "type": "bool",
+            "default": false,
+            "description": "Whether to store solver stats (at every timestep)"
+        },
+        {
+            "name": "output_dir",
+            "section": "Output_options",
+            "type": "case-sensitive-str",
+            "default": "results",
+            "description": "Directory where to store all the output"
+        },
+        {
+            "name": "base_output_file",
+            "section": "Output_options",
+            "type": "case-sensitive-str",
+            "default": "out",
+            "description": "Name of file where to store the solution"
+        },
+        {
+            "name": "solver_stats_file",
+            "section": "Output_options",
+            "type": "case-sensitive-str",
+            "default": "solver_stats.db"
+        }
+    ]
+}

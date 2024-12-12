@@ -5,9 +5,11 @@ import sys
 from mpi4py import MPI
 from output import state
 from common.configuration import Configuration
+from common.configuration_schema import load_default_schema
 import numpy
 from configparser import ConfigParser, NoSectionError, NoOptionError
 import os
+import common.wx_mpi
 
 from typing import Optional, Type, TypeVar, Union
 
@@ -114,18 +116,36 @@ class StateIntegrationTestCases(unittest.TestCase):
 
         config_file: str = f"{self.config_dir_path}/config.ini"
 
+        
+        config_content = ""
+        config_schema_content = ""
+        if MPI.COMM_WORLD.rank == 0:
+            with open(config_file) as cf:
+                config_content = "\n".join(cf.readlines())
+            with open("config/config-format.json") as schema_file:
+                config_schema_content = "\n".join(schema_file.readlines())
+
+        config_content = common.wx_mpi.bcast_string(config_content, 0, MPI.COMM_WORLD)
+        config_schema_content = common.wx_mpi.bcast_string(config_schema_content, 0, MPI.COMM_WORLD)
+
         try:
-            sim = Simulation(config_file)
+            sim = Simulation(config_content, config_schema_content)
             sim.run()
         except SystemExit as e:
             has_exited = True
             exit_code = e.code
+        except Exception as e:
+            print(e, flush=True)
+            raise e
 
         if has_exited:
             print(f"Process {MPI.COMM_WORLD.rank} has exited prematurely")
             exit(exit_code)
 
-        conf = Configuration(config_file, False)
+        
+        
+        schema = load_default_schema()
+        conf = Configuration(config_content, schema)
 
         state_params = (
             conf.dt,
@@ -139,9 +159,10 @@ class StateIntegrationTestCases(unittest.TestCase):
         base_name = f"state_vector_{config_hash:012x}_{MPI.COMM_WORLD.rank:03d}"
         state_vector_file: str = f"{conf.output_dir}/{base_name}.{conf.save_state_freq:08d}.npy"
         true_state_vector_file: str = f"{self.config_dir_path}/{base_name}.{conf.save_state_freq:08d}.npy"
+        
 
-        [data, _] = state.load_state(state_vector_file)
-        [true_data, _] = state.load_state(true_state_vector_file)
+        [data, _] = state.load_state(state_vector_file, schema)
+        [true_data, _] = state.load_state(true_state_vector_file, schema)
 
         if len(data.shape) != len(true_data.shape):
             self.fail("The result tuple and solution tuple aren't the same shape")

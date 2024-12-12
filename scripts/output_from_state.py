@@ -39,8 +39,9 @@ def main(args):
         min_theta = min(min_theta, (state[idx_2d_rho_theta] / state[idx_2d_rho]).min())
         max_theta = max(max_theta, (state[idx_2d_rho_theta] / state[idx_2d_rho]).max())
 
-    file_name = lambda var, id: f"{args.output_file}_{safe_param['Test_case']['case_number']}_{var}_{i:08d}"
-
+    file_name = lambda var, id: f"{args.output_file}_{safe_param["Test_case"]["case_number"]}_{var}_{i:08d}"
+    
+    
     for i, s in enumerate(args.input_states):
         state, safe_param = load_state(s)
         # geom = create_geometry(param, None)
