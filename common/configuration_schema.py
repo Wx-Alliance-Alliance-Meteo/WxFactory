@@ -1,9 +1,9 @@
 import json
 from typing import TypeVar, Type, Union, Optional, Callable, Any, Literal, List
-from common.configuration_types import OptionType
 
-__all__ = ["ConfigurationField", "ConfigurationSchema"]
+__all__ = ["ConfigurationField", "ConfigurationSchema", "OptionType"]
 
+OptionType = TypeVar("OptionType", bound=Union[str, int, float, List[int], List[float], bool])
 _T = TypeVar("T", str, dict, list)
 _Numerical = TypeVar("Numerical", bound=Union[int, float])
 _Selectable = TypeVar("Selectable", bound=Union[int, float, str])

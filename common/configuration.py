@@ -2,8 +2,7 @@ from configparser import ConfigParser, NoSectionError, NoOptionError
 import json
 import copy
 from typing import Dict, List, Optional, Type, Self
-from common.configuration_types import OptionType
-from common.configuration_schema import ConfigurationSchema, ConfigurationField
+from common.configuration_schema import ConfigurationSchema, ConfigurationField, OptionType
 
 __all__ = ["Configuration"]
 
