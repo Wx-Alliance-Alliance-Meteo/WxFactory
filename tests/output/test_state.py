@@ -6,6 +6,7 @@ import ndarray_generator
 import random
 import common.configuration_schema
 import os
+import tests.common.config_pack
 
 
 class StateTestCases(cpu_test.CpuTestCases):
@@ -13,7 +14,7 @@ class StateTestCases(cpu_test.CpuTestCases):
         super().setUp()
         if not os.path.exists("tests/data/temp"):
             os.mkdir("tests/data/temp")
-    
+
     def test_save_load_works(self):
         schema_path = "config/config-format.json"
         schema_text: str
@@ -31,13 +32,13 @@ class StateTestCases(cpu_test.CpuTestCases):
         rand = random.Random(seed)
         number_of_data = 5
         [arr] = ndarray_generator.generate_vectors(number_of_data, rand, -10, 10, [self.cpu_device])
-        
+
         conf = common.configuration.Configuration(config_text, schema)
-        
+
         output.state.save_state(arr, conf, output_path, self.cpu_device)
 
         data, loaded_conf = output.state.load_state(output_path, schema, self.cpu_device)
-        safe_conf = loaded_conf.pack()
+        safe_conf = tests.common.config_pack.pack(loaded_conf)
 
         self.assertEqual(len(arr.shape), len(data.shape), "The shape of the data has changed between a save and a load")
         self.assertEqual(len(data.shape), 1, "The data is not a vector anymore")
