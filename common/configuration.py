@@ -114,15 +114,6 @@ class Configuration:
 
         return value
 
-    def pack(self):
-        sects = {}
-        for section_name, section_options in self.sections.items():
-            sects[section_name] = {}
-            for option in section_options:
-                val = getattr(self, option)
-                sects[section_name][option] = val
-        return sects
-
     def __str__(self):
         out = "Configuration: \n"
         for section_name, section_options in self.sections.items():
