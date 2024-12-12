@@ -125,11 +125,8 @@ class StateIntegrationTestCases(unittest.TestCase):
             with open("config/config-format.json") as schema_file:
                 config_schema_content = "\n".join(schema_file.readlines())
 
-            common.wx_mpi.bcast_string(config_content, MPI.COMM_WORLD)
-            common.wx_mpi.bcast_string(config_schema_content, MPI.COMM_WORLD)
-        else:
-            config_content = common.wx_mpi.rcv_bcast_string(0, MPI.COMM_WORLD)
-            config_schema_content = common.wx_mpi.rcv_bcast_string(0, MPI.COMM_WORLD)
+        config_content = common.wx_mpi.bcast_string(config_content, 0, MPI.COMM_WORLD)
+        config_schema_content = common.wx_mpi.bcast_string(config_schema_content, 0, MPI.COMM_WORLD)
 
         try:
             sim = Simulation(config_content, config_schema_content)
