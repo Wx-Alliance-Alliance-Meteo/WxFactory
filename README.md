@@ -1,6 +1,12 @@
 # WxFactory
 Research numerical weather model. The name is inspired by [Richardson’s Fantastic Forecast Factory](https://www.emetsoc.org/resources/rff/)
 
+## Documentation list
+
+- [Testing](./tests/readme.md)
+- [Contributing](./doc/contribute.md)
+- [References](./doc/references.md)
+
 ## Requirements
 
 WxFactory was built for Python 3.11 (at least).  It also requires an MPI implementation.
@@ -25,35 +31,7 @@ WxFactory was built for Python 3.11 (at least).  It also requires an MPI impleme
 * `snakeviz` A tool for visualizing profiling output
 
 Python packages can be installed with the package management system of your
-Linux distribution or with `pip`.  A few distribution specific instructions
-are given below.
-
-### Conda
-The necessary packages are available from the conda-forge channel, so it should
-be added to the list of default channels for easier use of the various commands
-```
-conda config --add channels conda-forge
-conda create -n gef "python>=3.11"
-conda activate gef
-conda install numpy scipy sympy mpi4py matplotlib netcdf4
-# On the Science network, we need to use the already-installed MPI library:
-conda install numpy scipy sympy mpi4py matplotlib netcdf4 mpi=*=mpich
-```
-
-To be able to use NetCDF in parallel (for faster writing to disk) [Optional]
-```
-conda install netcdf4=*=mpi*
-```
-
-If you want the visualization capabilities of WxFactory:
-```
-conda install cartopy
-```
-
-To visualize profiles from python applications, install `snakeviz`:
-```
-conda install snakeviz
-```
+Linux distribution or with `pip`.
 
 ## Running WxFactory
 
