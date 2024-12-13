@@ -102,5 +102,10 @@ def link_documentation():
             os.makedirs(os.path.dirname(mirror_doc), exist_ok=True)
             os.symlink(true_doc, mirror_doc)
 
+def create_mandatory_directory():
+    static = os.path.join(root, "doc", "sphinx", "source", "_static")
+    os.makedirs(static, exist_ok=True)
+
 
 link_documentation()
+create_mandatory_directory()
