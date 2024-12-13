@@ -6,7 +6,8 @@
 .. Welcome to WxFactory's documentation!
 .. =====================================
 
-.. mdinclude:: ../../../README.md
+.. include:: ../../../README.md
+   :parser: myst_parser.sphinx_
 
 .. toctree::
    :maxdepth: 2
