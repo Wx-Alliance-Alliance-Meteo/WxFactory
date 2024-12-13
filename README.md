@@ -30,6 +30,10 @@ WxFactory was built for Python 3.11 (at least).  It also requires an MPI impleme
 * `tqdm`     Progress bar when generating matrices
 * `snakeviz` A tool for visualizing profiling output
 
+### To build documentation
+* `Sphinx`      Library to build the documentation
+* `myst-parser` Library to parse markdown files for documentation
+
 Python packages can be installed with the package management system of your
 Linux distribution or with `pip`.
 
