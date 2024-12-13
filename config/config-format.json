@@ -442,7 +442,7 @@
             }
         },
         {
-            "name": "exp_smoothe_nb_iters",
+            "name": "exp_smoothe_num_iters",
             "section": "Preconditioning",
             "type": "list-int",
             "default": [4],
