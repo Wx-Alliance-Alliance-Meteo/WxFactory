@@ -3,6 +3,7 @@ from typing import Optional
 import hashlib
 import shutil
 import subprocess
+from mpi4py import MPI
 
 cpu_info_filename: str = "/proc/cpuinfo"
 cpu_info_field: str = "model name"
@@ -80,8 +81,9 @@ def clean(kernel_type: str):
     kernel_lib_path = get_kernel_lib_path(kernel_type)
     if os.path.exists(kernel_lib_path):
         shutil.rmtree(kernel_lib_path)
-    
+
     subprocess.run(["make", f"clean-{kernel_type}"])
+
 
 def compile(kernel_type: str, force: bool = False):
     proc_arch = get_processor_name()
@@ -93,3 +95,16 @@ def compile(kernel_type: str, force: bool = False):
         clean(kernel_type)
         subprocess.run(["make", kernel_type])
         save_hash(kernel_type)
+
+def mpi_compile(kernel_type: str, force: bool = False, comm: MPI.Comm = MPI.COMM_WORLD):
+    error: None
+    if comm.rank == 0:
+        try:
+            compile(kernel_type, force=force)
+        except Exception as e:
+            error = e
+    
+    comm.Bcast(error, root=0)
+
+    if error is not None:
+        raise error
