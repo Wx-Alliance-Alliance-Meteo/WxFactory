@@ -11,8 +11,9 @@ NVCCFLAGS += $(INCLUDE)
 # EXT_SUFFIX := $(shell python3-config --extension-suffix)
 EXT_SUFFIX := .so
 
-CPP_OUT := pde/interface_c$(EXT_SUFFIX)
-CUDA_OUT := pde/interface_cuda$(EXT_SUFFIX)
+LIB_DIR := lib/pde
+CPP_OUT := $(LIB_DIR)/interface_c$(EXT_SUFFIX)
+CUDA_OUT := $(LIB_DIR)/interface_cuda$(EXT_SUFFIX)
 
 COMMON_HEADERS := $(wildcard pde/*.hpp) $(wildcard pde/kernels/*.hpp) $(wildcard pde/kernels/*.h)
 
@@ -22,14 +23,17 @@ all: cpp cuda
 cpp: $(CPP_OUT)
 cuda: $(CUDA_OUT)
 
-$(CPP_OUT): pde/interface.cpp $(COMMON_HEADERS)
+$(LIB_DIR):
+	@mkdir -pv $(LIB_DIR)
+
+$(CPP_OUT): pde/interface.cpp $(COMMON_HEADERS) $(LIB_DIR)
 	$(CXX) $(CXXFLAGS) $< -o $@
 
-$(CUDA_OUT): pde/interface.cu $(COMMON_HEADERS)
+$(CUDA_OUT): pde/interface.cu $(COMMON_HEADERS) $(LIB_DIR)
 	$(NVCC) $(NVCCFLAGS) $< -o $@
 
 clean:
-	rm -rf $(CPP_OUT) $(CUDA_OUT) pde/*.so
+	rm -rf $(LIB_DIR)
 
 clean-cpp:
 	rm -rf $(CPP_OUT)
