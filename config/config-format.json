@@ -28,7 +28,7 @@
             "description": "Physical backend to run the computation on"
         },
         {
-            "name": "cuda_device",
+            "name": "cuda_devices",
             "section": "System",
             "type": "list-int",
             "default": [],

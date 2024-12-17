@@ -8,12 +8,13 @@ from common.configuration import Configuration
 from common.device import Device, CudaDevice
 from geometry import Geometry, Cartesian2D, CubedSphere2D, CubedSphere3D, Metric2D, Metric3DTopo
 
-try:
+"""try:
     import pde.interface_c as interface_c
 except ModuleNotFoundError:
     if MPI.COMM_WORLD.rank == 0:
         print(f"Unable to find the interface_c module. You need to compile it")
     raise
+"""
 
 
 def get_pde(name):
@@ -81,15 +82,16 @@ class PDE(ABC):
             self.sqrt_g[:] = metric.sqrtG
 
         # Determine the cuda/cpu functions to call
-        if isinstance(device, CudaDevice):
+        """if isinstance(device, CudaDevice):
             self._setup_cuda()
         else:
-            self._setup_cpu()
+            self._setup_cpu()"""
+        self.libmodule = device.libmodule
 
         # Determine the appropriate kernels based on the config file
         self._setup_kernels()
 
-    def _setup_cpu(self):
+    """def _setup_cpu(self):
         self.libmodule = interface_c
 
     def _setup_cuda(self):
@@ -99,7 +101,7 @@ class PDE(ABC):
             if MPI.COMM_WORLD.rank == 0:
                 print(f"Unable to load the interface_cuda module, you need to compile it if you want to use the GPU")
             raise
-        self.libmodule = interface_cuda
+        self.libmodule = interface_cuda"""
 
     def _setup_kernels(self):
         # Here, the retrieved functions should depend on the geometry, equations and config settings

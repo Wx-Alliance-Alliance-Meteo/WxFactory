@@ -7,7 +7,7 @@ from mpi4py import MPI
 
 cpu_info_filename: str = "/proc/cpuinfo"
 cpu_info_field: str = "model name"
-library_path: str = "lib"
+library_path: str = "lib/pde"
 make_file_path: str = "Makefile"
 
 
@@ -97,14 +97,14 @@ def compile(kernel_type: str, force: bool = False):
         save_hash(kernel_type)
 
 def mpi_compile(kernel_type: str, force: bool = False, comm: MPI.Comm = MPI.COMM_WORLD):
-    error: None
+    compilation_error = None
     if comm.rank == 0:
         try:
             compile(kernel_type, force=force)
         except Exception as e:
-            error = e
+            compilation_error = e
     
-    comm.Bcast(error, root=0)
+    compilation_error = comm.bcast(compilation_error, root=0)
 
-    if error is not None:
-        raise error
+    if compilation_error is not None:
+        raise compilation_error
