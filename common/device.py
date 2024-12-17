@@ -12,10 +12,11 @@ class Device(ABC):
     a case, most operations do nothing
     """
 
-    def __init__(self, xp, xalg) -> None:
+    def __init__(self, xp, xalg, libmodule) -> None:
         """Set a few modules and functions to have the same name, so that callers can use a single name."""
         self.xp = xp
         self.xalg = xalg
+        self.libmodule = libmodule
 
     @abstractmethod
     def __synchronize__(self, **kwargs):
@@ -59,7 +60,14 @@ class CpuDevice(Device):
         import numpy
         import scipy
 
-        super().__init__(numpy, scipy)
+        try:
+            import lib.pde.interface_c as interface_c
+        except ModuleNotFoundError:
+            if MPI.COMM_WORLD.rank == 0:
+                print(f"Unable to find the interface_c module. You need to compile it")
+            raise
+
+        super().__init__(numpy, scipy, interface_c)
 
     def __synchronize__(self, **kwargs):
         """Don't do anything. This is to allow writing generic code when device is not the same as the host."""
@@ -89,9 +97,16 @@ class CudaDevice(Device):
 
         import wx_cupy
 
+        try:
+            import lib.pde.interface_cuda as interface_cuda
+        except ModuleNotFoundError:
+            if MPI.COMM_WORLD.rank == 0:
+                print(f"Unable to load the interface_cuda module, you need to compile it if you want to use the GPU")
+            raise
+
         wx_cupy.init_wx_cupy()
 
-        super().__init__(cupy, cupyx.scipy)
+        super().__init__(cupy, cupyx.scipy, interface_cuda)
 
         if not wx_cupy.cuda_avail:
             raise ValueError(f"Unable to create a CudaDevice object, no GPU devices were detected")
