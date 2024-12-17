@@ -3,6 +3,7 @@ from typing import Any, List
 
 from mpi4py import MPI
 from numpy.typing import NDArray
+from compiler.compile_utils import mpi_compile
 
 
 class Device(ABC):
@@ -61,6 +62,7 @@ class CpuDevice(Device):
         import scipy
 
         try:
+            mpi_compile("cpp", force=False, comm=MPI.COMM_WORLD)
             import lib.pde.interface_c as interface_c
         except ModuleNotFoundError:
             if MPI.COMM_WORLD.rank == 0:
@@ -98,6 +100,7 @@ class CudaDevice(Device):
         import wx_cupy
 
         try:
+            mpi_compile("cuda", force=False, comm=MPI.COMM_WORLD)
             import lib.pde.interface_cuda as interface_cuda
         except ModuleNotFoundError:
             if MPI.COMM_WORLD.rank == 0:
