@@ -14,8 +14,7 @@ from tests.solvers.test_kiops_pmex_tolerance_cpu import KiopsPmexToleranceCpuTes
 from tests.solvers.test_kiops_pmex_tolerance_gpu import KiopsPmexToleranceGpuTestCases
 from tests.output.test_state import StateTestCases
 from tests.common.test_configuration import ConfigurationTestCases
-
-
+from tests.compiler.test_compilation import CompilationTestCases
 
 def load_tests():
     suite = unittest.TestSuite()
@@ -35,6 +34,9 @@ def load_tests():
     suite.addTest(ConfigurationTestCases("test_load_configuration_with_schema_default"))
     suite.addTest(ConfigurationTestCases("test_load_configuration_with_valid_values"))
     suite.addTest(ConfigurationTestCases("test_load_configuration_with_dependancy"))
+
+    suite.addTest(CompilationTestCases("test_cpp_kernels_compilation"))
+    suite.addTest(CompilationTestCases("test_cuda_kernels_compilation"))
     return suite
 
 
