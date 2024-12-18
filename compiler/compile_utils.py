@@ -93,7 +93,9 @@ def compile(kernel_type: str, force: bool = False):
 
     if recompile or force:
         clean(kernel_type)
-        subprocess.run(["make", kernel_type])
+    
+    subprocess.run(["make", kernel_type])
+    if proc_arch is not None:
         save_hash(kernel_type)
 
 def mpi_compile(kernel_type: str, force: bool = False, comm: MPI.Comm = MPI.COMM_WORLD):
