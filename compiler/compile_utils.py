@@ -93,10 +93,12 @@ def compile(kernel_type: str, force: bool = False):
 
     if recompile or force:
         clean(kernel_type)
-    
-    subprocess.run(["make", kernel_type])
+
     if proc_arch is not None:
         save_hash(kernel_type)
+
+    subprocess.run(["make", kernel_type])
+
 
 def mpi_compile(kernel_type: str, force: bool = False, comm: MPI.Comm = MPI.COMM_WORLD):
     compilation_error = None
@@ -105,7 +107,7 @@ def mpi_compile(kernel_type: str, force: bool = False, comm: MPI.Comm = MPI.COMM
             compile(kernel_type, force=force)
         except Exception as e:
             compilation_error = e
-    
+
     compilation_error = comm.bcast(compilation_error, root=0)
 
     if compilation_error is not None:
