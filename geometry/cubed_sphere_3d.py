@@ -191,11 +191,13 @@ class CubedSphere3D(CubedSphere):
         self.floor_shape = (self.num_elements_x2, self.num_elements_x1, num_solpts**2)
 
         # Interface shapes include a halo of one element along the direction of the interface
-        self.itf_i_shape = (self.num_elements_x3, self.num_elements_x2, self.num_elements_x1 + 2, (num_solpts**2) * 2)
-        self.itf_j_shape = (self.num_elements_x3, self.num_elements_x2 + 2, self.num_elements_x1, (num_solpts**2) * 2)
-        self.itf_k_shape = (self.num_elements_x3 + 2, self.num_elements_x2, self.num_elements_x1, (num_solpts**2) * 2)
+        self.itf_size = num_solpts**2
+        self.itf_i_shape = (self.num_elements_x3, self.num_elements_x2, self.num_elements_x1 + 2, self.itf_size * 2)
+        self.itf_j_shape = (self.num_elements_x3, self.num_elements_x2 + 2, self.num_elements_x1, self.itf_size * 2)
+        self.itf_k_shape = (self.num_elements_x3 + 2, self.num_elements_x2, self.num_elements_x1, self.itf_size * 2)
         self.itf_i_floor_shape = (self.num_elements_x2, self.num_elements_x1 + 2, num_solpts * 2)
         self.itf_j_floor_shape = (self.num_elements_x2 + 2, self.num_elements_x1, num_solpts * 2)
+        self.halo_side_shape = (num_elements_horizontal, num_solpts, num_solpts)
 
         # Interface array edges
         self.west_edge = numpy.s_[..., 0, : num_solpts**2]  # West boundary of the western halo elements

@@ -1127,6 +1127,7 @@ class Metric3DTopo:
         self.christoffel[2, 8] = geom._to_new(self.christoffel_3_33)
 
         self.h_contra_new = geom._to_new(self.H_contra)
+        self.h_contra = self.h_contra_new
         self.h_contra_itf_i_new = geom._to_new_itf_i(self.H_contra_itf_i)
         self.h_contra_itf_j_new = geom._to_new_itf_j(self.H_contra_itf_j)
         self.h_contra_itf_k_new = geom._to_new_itf_k(self.H_contra_itf_k)

@@ -53,7 +53,7 @@ class Simulation:
 
         self.schema = ConfigurationSchema(config_schema_file)
         self.config = Configuration(config_file, self.schema)
-        if (self.rank == 0):
+        if self.rank == 0:
             print(f"{self.config}", flush=True)
 
         self._adjust_num_elements()

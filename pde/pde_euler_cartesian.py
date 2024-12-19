@@ -1,12 +1,27 @@
-from numpy import ndarray
+from numpy.typing import NDArray
 
-from pde.pde import PDE
+from .pde import PDE
 from common.definitions import idx_2d_rho, idx_2d_rho_w, gravity
+from geometry import Cartesian2D
 
 
 class PDEEulerCartesian(PDE):
 
-    def pointwise_fluxes(self, q: ndarray, flux_x1: ndarray, flux_x2: ndarray, flux_x3: ndarray) -> None:
+    def __init__(self, geometry: Cartesian2D, config, metric):
+
+        libmodule = geometry.device.libmodule
+        super().__init__(
+            geometry,
+            config,
+            metric,
+            2,
+            4,
+            config.num_elements_horizontal * config.num_elements_vertical,
+            pointwise_func=libmodule.pointwise_eulercartesian_2d,
+            riemann_func=libmodule.riemann_eulercartesian_ausm_2d,
+        )
+
+    def pointwise_fluxes(self, q: NDArray, flux_x1: NDArray, flux_x2: NDArray, flux_x3: NDArray) -> None:
         num_elem_x1 = self.config.num_elements_horizontal
         num_elem_x3 = self.config.num_elements_vertical
         num_solpts_tot = self.config.num_solpts**2
@@ -15,12 +30,12 @@ class PDEEulerCartesian(PDE):
 
     def riemann_fluxes(
         self,
-        q_itf_x1: ndarray,
-        q_itf_x2: ndarray,
-        q_itf_x3: ndarray,
-        flux_itf_x1: ndarray,
-        flux_itf_x2: ndarray,
-        flux_itf_x3: ndarray,
+        q_itf_x1: NDArray,
+        q_itf_x2: NDArray,
+        q_itf_x3: NDArray,
+        flux_itf_x1: NDArray,
+        flux_itf_x2: NDArray,
+        flux_itf_x3: NDArray,
     ) -> None:
 
         num_elem_x1 = self.config.num_elements_horizontal

@@ -31,7 +31,6 @@ from init.init_state_vars import init_state_vars
 from precondition.smoother import KiopsSmoother, ExponentialSmoother, RK1Smoother, RK3Smoother, ARK3Smoother
 from rhs.rhs_selector import RhsBundle
 from solvers import fgmres, global_norm, KrylovJacobian, matvec_rat, MatvecOp
-from rhs.rhs import get_rhs
 
 MatvecOperator = Callable[[numpy.ndarray], numpy.ndarray]
 

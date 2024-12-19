@@ -3,29 +3,11 @@ from numpy import ndarray
 from rhs.rhs import RHS
 
 
-class RHS_FV(RHS):
+class RHSFiniteVolume(RHS):
 
     def __init__(self, *args):
         super().__init__(*args)
 
-        print("here!!!!!")
-        self.f_x1 = None
-        self.f_x2 = None
-        self.f_x3 = None
-
-        self.q_itf_x1 = None
-        self.q_itf_x2 = None
-        self.q_itf_x3 = None
-
-        self.f_itf_x1 = None
-        self.f_itf_x2 = None
-        self.f_itf_x3 = None
-
-        self.df1_dx1 = None
-        self.df2_dx2 = None
-        self.df3_dx3 = None
-
-        self.rhs = None
 
     def solution_extrapolation(self, q: ndarray) -> None:
 

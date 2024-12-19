@@ -12,6 +12,8 @@ class Metric2D:
         # Note that with no topography, ∂z/∂η=1; the model top is included
         # inside the geometry definition, and η=x3
 
+        xp = geom.device.xp
+
         self.sqrtG = geom.earth_radius**2 * (1.0 + geom.X**2) * (1.0 + geom.Y**2) / (geom.delta2 * geom.delta)
         self.sqrtG_itf_i = (
             geom.earth_radius**2
@@ -28,15 +30,20 @@ class Metric2D:
 
         self.inv_sqrtG = 1.0 / self.sqrtG
 
-        # 2D contravariant metric
+        # 2D contravariant metric. Put them in the same array
+        self.h_contra = xp.empty((2, 2) + geom.X.shape, dtype=geom.dtype)
+        self.H_contra_11 = self.h_contra[0, 0]
+        self.H_contra_12 = self.h_contra[0, 1]
+        self.H_contra_21 = self.h_contra[1, 0]
+        self.H_contra_22 = self.h_contra[1, 1]
 
-        self.H_contra_11 = geom.delta2 / (geom.earth_radius**2 * (1.0 + geom.X**2))
-        self.H_contra_12 = (
+        self.H_contra_11[...] = geom.delta2 / (geom.earth_radius**2 * (1.0 + geom.X**2))
+        self.H_contra_12[...] = (
             geom.delta2 * geom.X * geom.Y / (geom.earth_radius**2 * (1.0 + geom.X**2) * (1.0 + geom.Y**2))
         )
 
-        self.H_contra_21 = self.H_contra_12.copy()
-        self.H_contra_22 = geom.delta2 / (geom.earth_radius**2 * (1.0 + geom.Y**2))
+        self.H_contra_21[...] = self.H_contra_12.copy()
+        self.H_contra_22[...] = geom.delta2 / (geom.earth_radius**2 * (1.0 + geom.Y**2))
 
         # Metric at interfaces
         self.H_contra_11_itf_i = geom.delta2_itf_i / (geom.earth_radius**2 * (1.0 + geom.X_itf_i**2))

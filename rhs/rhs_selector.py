@@ -9,9 +9,13 @@ from common.configuration import Configuration
 from common.process_topology import ProcessTopology
 from geometry import Cartesian2D, CubedSphere2D, CubedSphere3D, DFROperators, Geometry, Metric2D, Metric3DTopo
 from init.initialize import Topo
-from rhs.rhs_euler import RhsEuler
-from rhs.rhs_sw import RhsShallowWater
-from rhs.rhs import get_rhs
+from .rhs_euler import RhsEuler
+from .rhs_sw import RhsShallowWater
+from .rhs_dfr import RHSDirecFluxReconstruction, RHSDirecFluxReconstruction_mpi
+from .rhs_fv import RHSFiniteVolume
+
+
+from pde import PDEEulerCartesian, PDEEulerCubesphere
 
 
 class RhsBundle:
@@ -26,7 +30,7 @@ class RhsBundle:
         ptopo: Optional[ProcessTopology],
         param: Configuration,
         fields_shape: Tuple[int, ...],
-        device: Device,
+        debug: bool = False,
     ) -> None:
         """Determine handles to appropriate RHS functions."""
 
@@ -45,25 +49,36 @@ class RhsBundle:
 
             return actual_rhs
 
+        if param.discretization == "dfr" or param.discretization == "dg":
+            rhs_class = RHSDirecFluxReconstruction
+        elif param.discretization == "fv":
+            rhs_class = RHSFiniteVolume
+        else:
+            raise ValueError(f"Unknown discretization {param.discretization}")
+
         if param.equations == "euler" and isinstance(geom, CubedSphere3D):
+            pde = PDEEulerCubesphere(geom, param, metric)
+            self.full = RHSDirecFluxReconstruction_mpi(
+                pde, geom, operators, metric, topo, ptopo, param, fields_shape, debug=debug
+            )
             # rhs_functions = {'dg': rhs_euler,
             #                  'fv': rhs_euler}
 
             # self.full = generate_rhs(rhs_functions[param.discretization],
             #                          geom, operators, metric, ptopo, param.num_solpts, param.num_elements_horizontal,
             #                          param.num_elements_vertical, param.case_number, device=device)
-            self.full = RhsEuler(
-                fields_shape,
-                geom,
-                operators,
-                metric,
-                ptopo,
-                param.num_solpts,
-                param.num_elements_horizontal,
-                param.num_elements_vertical,
-                param.case_number,
-                device=device,
-            )
+            # self.full.extra = RhsEuler(
+            #     fields_shape,
+            #     geom,
+            #     operators,
+            #     metric,
+            #     ptopo,
+            #     param.num_solpts,
+            #     param.num_elements_horizontal,
+            #     param.num_elements_vertical,
+            #     param.case_number,
+            #     device=geom.device,
+            # )
 
         elif param.equations == "shallow_water" and isinstance(geom, CubedSphere2D):
             self.full = RhsShallowWater(
@@ -71,60 +86,5 @@ class RhsBundle:
             )
 
         else:
-            # Determine whether the RHS will be of DFR or FV type
-            rhs_class = get_rhs(param.discretization)
-
-            rhs_obj = rhs_class(
-                param.equations + "-" + "cartesian",
-                geom,
-                operators,
-                metric,
-                topo,
-                ptopo,
-                param,
-                device,
-            )
-
-            self.full = generate_rhs(rhs_obj)
-
-        # self.explicit = generate_rhs(
-        #    rhs_class, param.equations + '-' + 'cartesian', geom,
-        #    operators, metric, topo, ptopo, param, device)
-
-        # self.implicit = generate_rhs(
-        #    rhs_class, param.equations + '-' + 'cartesian', geom,
-        #    operators, metric, topo, ptopo, param, device)
-
-        #    self.convective = generate_rhs(rhs_euler_convective, geom, operators, metric, ptopo, param.num_solpts,
-        #                                   param.num_elements_horizontal, param.num_elements_vertical, param.case_number)
-        #    self.viscous = lambda q: self.full(q) - self.convective(q)
-
-        # elif param.equations == 'euler' and isinstance(geom, Cartesian2D):
-        #    self.full = RhsBubble(fields_shape, geom, operators, param.num_solpts, param.num_elements_horizontal,
-        #          param.num_elements_vertical, device)
-
-        #    self.implicit = generate_rhs(
-        #       rhs_bubble_implicit, geom, operators, param.num_solpts, param.num_elements_horizontal,
-        #       param.num_elements_vertical)
-        #    self.explicit = lambda q: self.full(q) - self.implicit(q)
-
-        #    self.convective = generate_rhs(
-        #       rhs_bubble_convective, geom, operators, param.num_solpts, param.num_elements_horizontal,
-        #       param.num_elements_vertical)
-        #    self.viscous = lambda q: self.full(q) - self.convective(q)
-
-        # elif param.equations == "shallow_water":
-        #    if param.case_number <= 1: # Pure advection
-        #       self.full = generate_rhs(
-        #          rhs_advection2d, geom, operators, metric, ptopo, param.num_solpts, param.num_elements_horizontal)
-        #    else:
-        #       # self.full = generate_rhs(
-        #       #    rhs_sw, geom, operators, metric, topo, ptopo, param.num_solpts, param.num_elements_horizontal)
-        #       self.full = RhsShallowWater(fields_shape,
-        #                                   geom, operators, metric, topo, ptopo,
-        #                                   param.num_solpts, param.num_elements_horizontal)
-
-        #       self.implicit = generate_rhs(rhs_sw_stiff, geom, operators, metric, topo, ptopo, param.num_solpts,
-        #                                    param.num_elements_horizontal)
-        #       self.explicit = generate_rhs(rhs_sw_nonstiff, geom, operators, metric, topo, ptopo, param.num_solpts,
-        #                                    param.num_elements_horizontal)
+            pde = PDEEulerCartesian(geom, param, metric)
+            self.full = rhs_class(pde, geom, operators, metric, topo, ptopo, param, fields_shape)
