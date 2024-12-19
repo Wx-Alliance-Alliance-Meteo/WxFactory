@@ -310,7 +310,7 @@ class Configuration:
                 raise
             value = default_value
 
-        #setattr(self, option_name, value)
+        setattr(self, option_name, value)
         if section_name not in self.sections:
             self.sections[section_name] = []
         self.sections[section_name].append(option_name)

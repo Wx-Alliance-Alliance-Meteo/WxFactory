@@ -417,7 +417,7 @@ class CubedSphere3D(CubedSphere):
         # as will the DG structures.
         self._build_physical_coordinates()
 
-    def apply_topography(self, zbot, zbot_itf_i, zbot_itf_j, zbot_new, zbot_itf_i_new, zbot_itf_j_new):
+    def apply_topography(self, zbot, zbot_itf_i, zbot_itf_j, zbot_new=None, zbot_itf_i_new=None, zbot_itf_j_new=None):
         """
         Apply a topography field, given by heights (above the 0 reference sphere) specified at
         interior points, i-boundaries, and j-boundaries.  This function applies a linear mapping,
