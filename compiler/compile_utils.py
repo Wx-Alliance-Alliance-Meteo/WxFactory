@@ -1,3 +1,7 @@
+"""
+Utilities to use to compile code
+"""
+
 import os
 from typing import Optional
 import hashlib
@@ -33,34 +37,66 @@ def get_processor_name() -> Optional[str]:
                 return None
 
 
-def get_kernel_lib_path(kernel_type: str):
+def get_kernel_lib_path(kernel_type: str) -> str:
+    """
+    Get the kernel library path
+
+    :param kernel_type: Type of kernel
+    :return: Kernel library path
+    """
     return os.path.join(library_path, kernel_type)
 
 
 def hash(value: str) -> str:
+    """
+    Hash a string
+
+    :return: Hashed string
+    """
     return hashlib.sha1(bytes(value, "utf-8"), usedforsecurity=False).hexdigest()
 
 
 def get_version_hash() -> str:
+    """
+    Get the current version hash
+
+    :return: Version hash
+    """
     exe_version = sys.version + version("setuptools")
 
     return hash(exe_version)
 
 
 def generate_hash() -> str:
+    """
+    Generate the current system hash
+
+    :return: System hash
+    """
     return hash(get_processor_name() + get_version_hash())
 
 
-def save_hash(kernel_type: str, path: str):
+def save_hash(kernel_type: str):
+    """
+    Save a hash
+
+    :param kernel_type: Type of kernels to use for saving
+    """
     lib_hash = generate_hash()
     kernel_lib_path = get_kernel_lib_path(kernel_type)
     os.makedirs(kernel_lib_path, exist_ok=True)
 
-    with open(path, "wt") as hash_file:
+    with open(os.path.join(kernel_lib_path, "hash"), "wt") as hash_file:
         hash_file.write(lib_hash)
 
 
 def load_hash(kernel_type: str) -> Optional[str]:
+    """
+    Load a hash
+
+    :param kernel_type: Type of kernels to use for loading
+    :return: Existing hash if any
+    """
     kernel_hash_path = os.path.join(get_kernel_lib_path(kernel_type), "hash")
     if not os.path.exists(kernel_hash_path):
         return None
@@ -73,6 +109,12 @@ def load_hash(kernel_type: str) -> Optional[str]:
 
 
 def compare_hash(previous_hash: str) -> bool:
+    """
+    Compare a hash with the actual hash
+
+    :param previous_hash: Other hash to compare
+    :return: True if both hashes match
+    """
     if get_processor_name() is None:
         return False
 
@@ -80,20 +122,27 @@ def compare_hash(previous_hash: str) -> bool:
     return previous_hash == current_hash
 
 
-def clean_kernel(kernel_type: str):
-    compiler.compile_kernels.clean(kernel_type)
-
-
 def clean(kernel_type: str):
+    """
+    Clean the compilation path
+
+    :param kernel_type: Type of kernels to clean
+    """
     kernel_lib_path = get_kernel_lib_path(kernel_type)
     if os.path.exists(kernel_lib_path):
         shutil.rmtree(kernel_lib_path)
 
-    clean_kernel(kernel_type)
+    compiler.compile_kernels.clean(kernel_type)
     # TODO : Add other cleaning procedure here
 
 
 def compile(kernel_type: str, force: bool = False):
+    """
+    Compile the compilable module
+
+    :param kernel_type: Type of kernels to compile
+    :param force: Force a rebuild of the module
+    """
     proc_arch = get_processor_name()
     hash = load_hash(kernel_type)
 
@@ -104,10 +153,17 @@ def compile(kernel_type: str, force: bool = False):
 
     compiler.compile_kernels.compile(kernel_type)
     if proc_arch is not None:
-        save_hash(kernel_type, os.path.join(get_kernel_lib_path(kernel_type), "hash"))
+        save_hash(kernel_type)
 
 
 def mpi_compile(kernel_type: str, force: bool = False, comm: MPI.Comm = MPI.COMM_WORLD):
+    """
+    Compile the compilable module with MPI (not all PEs should compile)
+
+    :param kernel_type: Type of kernels to compile
+    :param force: Force a rebuild of the module
+    :param comm: Communicator to use to perform the build
+    """
     compilation_error = None
     if comm.rank == 0:
         try:
