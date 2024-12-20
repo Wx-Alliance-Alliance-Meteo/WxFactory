@@ -37,6 +37,7 @@ def load_tests():
 
     suite.addTest(CompilationTestCases("test_cpp_kernels_compilation"))
     suite.addTest(CompilationTestCases("test_cuda_kernels_compilation"))
+    suite.addTest(CompilationTestCases("test_cpp_compilation_twice"))
     return suite
 
 

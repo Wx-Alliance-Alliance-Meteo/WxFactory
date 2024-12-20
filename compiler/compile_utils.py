@@ -2,12 +2,17 @@ import os
 from typing import Optional
 import hashlib
 import shutil
-import subprocess
 from mpi4py import MPI
+import compiler.compile_kernels
+import sys
+from importlib.metadata import version
+
+
+main_project_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..")
 
 cpu_info_filename: str = "/proc/cpuinfo"
 cpu_info_field: str = "model name"
-library_path: str = "lib/pde"
+library_path: str = os.path.join(main_project_dir, "lib")
 make_file_path: str = "Makefile"
 
 
@@ -36,24 +41,22 @@ def hash(value: str) -> str:
     return hashlib.sha1(bytes(value, "utf-8"), usedforsecurity=False).hexdigest()
 
 
-def get_make_file_hash() -> str:
-    if not os.path.exists(make_file_path):
-        raise Exception("No makefile found")
+def get_version_hash() -> str:
+    exe_version = sys.version + version("setuptools")
 
-    make_file_content: str
-    with open(make_file_path, "rt") as make_file:
-        make_file_content = "\n".join(make_file.readlines())
-
-    return hash(make_file_content)
+    return hash(exe_version)
 
 
-def save_hash(kernel_type: str):
+def generate_hash() -> str:
+    return hash(get_processor_name() + get_version_hash())
 
-    lib_hash = hash(get_processor_name() + get_make_file_hash())
+
+def save_hash(kernel_type: str, path: str):
+    lib_hash = generate_hash()
     kernel_lib_path = get_kernel_lib_path(kernel_type)
     os.makedirs(kernel_lib_path, exist_ok=True)
 
-    with open(os.path.join(kernel_lib_path, "hash"), "wt") as hash_file:
+    with open(path, "wt") as hash_file:
         hash_file.write(lib_hash)
 
 
@@ -69,12 +72,16 @@ def load_hash(kernel_type: str) -> Optional[str]:
     return hash_content
 
 
-def compare_hash(previous_hash: str, proc_arch: Optional[str]) -> bool:
-    if proc_arch is None:
+def compare_hash(previous_hash: str) -> bool:
+    if get_processor_name() is None:
         return False
 
-    current_hash = hash(proc_arch + get_make_file_hash())
+    current_hash = generate_hash()
     return previous_hash == current_hash
+
+
+def clean_kernel(kernel_type: str):
+    compiler.compile_kernels.clean(kernel_type)
 
 
 def clean(kernel_type: str):
@@ -82,21 +89,23 @@ def clean(kernel_type: str):
     if os.path.exists(kernel_lib_path):
         shutil.rmtree(kernel_lib_path)
 
-    subprocess.run(["make", f"clean-{kernel_type}"])
+    clean_kernel(kernel_type)
+    # TODO : Add other cleaning procedure here
 
 
 def compile(kernel_type: str, force: bool = False):
     proc_arch = get_processor_name()
     hash = load_hash(kernel_type)
 
-    recompile: bool = hash is None or not compare_hash(hash, proc_arch)
+    recompile: bool = hash is None or not compare_hash(hash)
 
     if recompile or force:
         clean(kernel_type)
-    
-    subprocess.run(["make", kernel_type])
+
+    compiler.compile_kernels.compile(kernel_type)
     if proc_arch is not None:
-        save_hash(kernel_type)
+        save_hash(kernel_type, os.path.join(get_kernel_lib_path(kernel_type), "hash"))
+
 
 def mpi_compile(kernel_type: str, force: bool = False, comm: MPI.Comm = MPI.COMM_WORLD):
     compilation_error = None
@@ -105,7 +114,7 @@ def mpi_compile(kernel_type: str, force: bool = False, comm: MPI.Comm = MPI.COMM
             compile(kernel_type, force=force)
         except Exception as e:
             compilation_error = e
-    
+
     compilation_error = comm.bcast(compilation_error, root=0)
 
     if compilation_error is not None:
