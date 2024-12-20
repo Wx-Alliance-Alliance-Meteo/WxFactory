@@ -28,7 +28,7 @@ class cuda_build_ext(default_build_ext):
     def build_extensions(self):
         self.compiler.src_extensions.append(".cu")
         self.compiler.set_executable("compiler_so", "nvcc")
-        self.compiler.set_executable("compiler_cxx", "nvcc")
+        self.compiler.set_executable("linker_so", "nvcc -shared")
 
         build_ext.build_extensions(self)
 
@@ -52,8 +52,10 @@ cuda = glob("pde/**/*.cu", root_dir=main_project_dir, recursive=True)
 def get_non_mirror_lib_path(prefix: str) -> str:
     return glob(f"./lib/{prefix}*.so", root_dir=main_project_dir)[0]
 
+
 def has_non_mirror_lib(prefix: str) -> bool:
     return len(glob(f"./lib/{prefix}*.so", root_dir=main_project_dir)) == 1
+
 
 def clean(kernel_type: str):
     if has_non_mirror_lib(f"kernels-{kernel_type}"):
@@ -69,12 +71,11 @@ def clean(kernel_type: str):
 
     if os.path.exists(build_directory):
         shutil.rmtree(build_directory)
-    
+
     abs_mirror = os.path.join(main_project_dir, kernel_cuda_mirror)
 
     if os.path.exists(abs_mirror):
         os.remove(abs_mirror)
-
 
 
 def compile(kernel_type: str):
