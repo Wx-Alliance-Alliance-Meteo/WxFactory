@@ -1,5 +1,6 @@
 import unittest
-from common.device import CpuDevice, Device
+
+from device import CpuDevice, Device
 
 
 class CpuTestCases(unittest.TestCase):

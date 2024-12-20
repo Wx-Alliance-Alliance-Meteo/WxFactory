@@ -1,9 +1,10 @@
-from solvers.pmex import pmex
 import random
+
 from numpy import ndarray
 
 import cuda_test
 import ndarray_generator
+from solvers import pmex
 
 
 class PmexComparisonTestCases(cuda_test.CudaTestCases):

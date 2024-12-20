@@ -5,7 +5,9 @@ import sys
 import unittest
 
 main_project_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..")
+main_module_dir = os.path.join(main_project_dir, "wx_factory")
 sys.path.append(main_project_dir)
+sys.path.append(main_module_dir)
 
 from tests.solvers.test_pmex import PmexComparisonTestCases
 from tests.solvers.test_kiops import KiopsComparisonTestCases
@@ -14,7 +16,8 @@ from tests.solvers.test_kiops_pmex_tolerance_cpu import KiopsPmexToleranceCpuTes
 from tests.solvers.test_kiops_pmex_tolerance_gpu import KiopsPmexToleranceGpuTestCases
 from tests.output.test_state import StateTestCases
 from tests.common.test_configuration import ConfigurationTestCases
-from tests.compiler.test_compilation import CompilationTestCases
+from tests.compiler.test_compilation import CompilationTestCases, CompilationGPUTestCases
+
 
 def load_tests():
     suite = unittest.TestSuite()
@@ -36,7 +39,7 @@ def load_tests():
     suite.addTest(ConfigurationTestCases("test_load_configuration_with_dependancy"))
 
     suite.addTest(CompilationTestCases("test_cpp_kernels_compilation"))
-    suite.addTest(CompilationTestCases("test_cuda_kernels_compilation"))
+    suite.addTest(CompilationGPUTestCases("test_cuda_kernels_compilation"))
     suite.addTest(CompilationTestCases("test_cpp_compilation_twice"))
     return suite
 

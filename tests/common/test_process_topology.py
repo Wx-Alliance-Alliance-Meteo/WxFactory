@@ -5,8 +5,8 @@ import sys
 import numpy
 from mpi4py import MPI
 
-from common.process_topology import ProcessTopology, SOUTH, NORTH, WEST, EAST
-from common.device import CpuDevice
+from device import CpuDevice
+from wx_mpi import ProcessTopology, SOUTH, NORTH, WEST, EAST
 
 from tests.mpi_test import run_test_on_x_process
 

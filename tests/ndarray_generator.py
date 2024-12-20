@@ -1,6 +1,8 @@
-from numpy import ndarray
 import random
-from common.device import Device
+
+from numpy import ndarray
+
+from device import Device
 
 
 def generate_vectors(size: int, random: random.Random, min: float, max: float, devices: list[Device]) -> list[ndarray]:

@@ -1,14 +1,15 @@
+import sys
+import time
 from types import TracebackType
-from typing import Tuple
+from typing import List, Tuple
 import unittest
 from unittest.result import TestResult
 from unittest.signals import registerResult
-from typing import List
+import warnings
+
 from mpi4py import MPI
 import numpy
-import sys
-import warnings
-import time
+
 
 test_tag: int = 0
 
@@ -102,7 +103,7 @@ class MpiTestResult(TestResult):
         return str(test)
 
     def printErrors(self):
-        import common.wx_mpi
+        import wx_mpi
 
         error_index: int = 0  # Current position in the error list
         failure_index: int = 0  # Current position in the failure list
@@ -125,7 +126,7 @@ class MpiTestResult(TestResult):
                             else:
                                 errors.append((0, self.failures[failure_index][1]))
                         else:
-                            errors.append((node_index, common.wx_mpi.receive_string_from(node_index, MPI.COMM_WORLD)))
+                            errors.append((node_index, wx_mpi.receive_string_from(node_index, MPI.COMM_WORLD)))
                 if len(errors):
                     self.printErrorList(errors, self.tests_order[test_index])
                 else:
@@ -137,10 +138,10 @@ class MpiTestResult(TestResult):
             else:
                 # Send an error message
                 if to_send[0] == 1:
-                    common.wx_mpi.send_string_to(self.errors[error_index][1], 0, MPI.COMM_WORLD)
+                    wx_mpi.send_string_to(self.errors[error_index][1], 0, MPI.COMM_WORLD)
                     error_index += 1
                 elif to_send[0] == 2:
-                    common.wx_mpi.send_string_to(self.failures[failure_index][1], 0, MPI.COMM_WORLD)
+                    wx_mpi.send_string_to(self.failures[failure_index][1], 0, MPI.COMM_WORLD)
                     failure_index += 1
 
         if len(skipped_tests):

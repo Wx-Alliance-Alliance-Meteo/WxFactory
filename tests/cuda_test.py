@@ -1,5 +1,5 @@
 import cpu_test
-from common.device import Device, CudaDevice
+from device import Device, CudaDevice
 
 
 class CudaTestCases(cpu_test.CpuTestCases):

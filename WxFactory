@@ -16,6 +16,9 @@ def main():
 
     This function drives the program: read and validate command-line options, then create and run a simulation."""
 
+    src_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "wx_factory")
+    sys.path.append(src_dir)
+
     args = None
     rank = MPI.COMM_WORLD.rank
 
@@ -24,8 +27,8 @@ def main():
 
     # Doing the import here allows to output potential errors from a single PE, making them much easier to deal with.
     try:
-        from common.simulation import Simulation
-        import common.wx_mpi
+        from simulation import Simulation
+        import wx_mpi
     except (ImportError, NameError) as e:
         if rank == 0:
             print(e)
@@ -65,8 +68,8 @@ def main():
             raise ValueError(f"Config file does not seem to exist: {args.config}")
         sys.exit(-1)
 
-    config_content = common.wx_mpi.readfile(args.config)
-    config_schema_content = common.wx_mpi.readfile("config/config-format.json")
+    config_content = wx_mpi.readfile(args.config)
+    config_schema_content = wx_mpi.readfile("config/config-format.json")
 
     try:
         import cProfile

@@ -1,17 +1,17 @@
-import unittest
-from typing import Optional
-from common.simulation import Simulation
-import sys
-from mpi4py import MPI
-from output import state
-from common.configuration import Configuration
-from common.configuration_schema import load_default_schema
-import numpy
 from configparser import ConfigParser, NoSectionError, NoOptionError
 import os
-import common.wx_mpi
-
+import sys
 from typing import Optional, Type, TypeVar, Union
+import unittest
+
+from mpi4py import MPI
+import numpy
+
+from common import Configuration, load_default_schema
+from output import state
+from simulation import Simulation
+import wx_mpi
+
 
 OptionType = TypeVar("OptionType", bound=Union[int, float, str, bool])
 
@@ -116,7 +116,6 @@ class StateIntegrationTestCases(unittest.TestCase):
 
         config_file: str = f"{self.config_dir_path}/config.ini"
 
-        
         config_content = ""
         config_schema_content = ""
         if MPI.COMM_WORLD.rank == 0:
@@ -125,8 +124,8 @@ class StateIntegrationTestCases(unittest.TestCase):
             with open("config/config-format.json") as schema_file:
                 config_schema_content = "\n".join(schema_file.readlines())
 
-        config_content = common.wx_mpi.bcast_string(config_content, 0, MPI.COMM_WORLD)
-        config_schema_content = common.wx_mpi.bcast_string(config_schema_content, 0, MPI.COMM_WORLD)
+        config_content = wx_mpi.bcast_string(config_content, 0, MPI.COMM_WORLD)
+        config_schema_content = wx_mpi.bcast_string(config_schema_content, 0, MPI.COMM_WORLD)
 
         try:
             sim = Simulation(config_content, config_schema_content)
@@ -142,8 +141,6 @@ class StateIntegrationTestCases(unittest.TestCase):
             print(f"Process {MPI.COMM_WORLD.rank} has exited prematurely")
             exit(exit_code)
 
-        
-        
         schema = load_default_schema()
         conf = Configuration(config_content, schema)
 
@@ -159,7 +156,6 @@ class StateIntegrationTestCases(unittest.TestCase):
         base_name = f"state_vector_{config_hash:012x}_{MPI.COMM_WORLD.rank:03d}"
         state_vector_file: str = f"{conf.output_dir}/{base_name}.{conf.save_state_freq:08d}.npy"
         true_state_vector_file: str = f"{self.config_dir_path}/{base_name}.{conf.save_state_freq:08d}.npy"
-        
 
         [data, _] = state.load_state(state_vector_file, schema)
         [true_data, _] = state.load_state(true_state_vector_file, schema)
