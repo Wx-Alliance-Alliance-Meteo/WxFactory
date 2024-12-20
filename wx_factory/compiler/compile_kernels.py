@@ -1,11 +1,13 @@
+"""
+Code to compile the kernels
+"""
+
 from setuptools.command.build_ext import build_ext
 from setuptools import setup, Extension
 from glob import glob
 import os
 import pybind11
 import shutil
-
-__all__ = ["compile", "clean"]
 
 from common import main_project_dir
 
@@ -20,6 +22,9 @@ kernel_cuda_mirror = os.path.join(pde_lib_directory, "interface_cuda.so")
 
 
 class default_build_ext(build_ext):
+    """
+    Class to change the build directory
+    """
     def initialize_options(self):
         super().initialize_options()
         self.build_lib = library_directory
@@ -28,18 +33,15 @@ class default_build_ext(build_ext):
 
 
 class cuda_build_ext(default_build_ext):
+    """
+    Class to build cuda code
+    """
     def build_extensions(self):
         self.compiler.src_extensions.append(".cu")
         self.compiler.set_executable("compiler_so", "nvcc")
         self.compiler.set_executable("linker_so", "nvcc -shared")
 
         build_ext.build_extensions(self)
-
-    def initialize_options(self):
-        super().initialize_options()
-        self.build_lib = library_directory
-        self.build_base = build_directory
-        self.build_temp = build_directory
 
 
 extra_compiler_args_cpp = "-shared -std=c++11 -fPIC".split(" ")
@@ -53,14 +55,32 @@ cuda = glob(pde_src_directory + "**/*.cu", root_dir=main_project_dir, recursive=
 
 
 def get_non_mirror_lib_path(prefix: str) -> str:
+    """
+    Get the true path of a library
+
+    :param prefix: library to search
+    :return: Path of the library
+    """
     return glob(f"./lib/{prefix}*.so", root_dir=main_project_dir)[0]
 
 
 def has_non_mirror_lib(prefix: str) -> bool:
+    """
+    Look to see if a library exists
+
+    
+    :param prefix: library to search
+    :return: True if the library exist
+    """
     return len(glob(f"./lib/{prefix}*.so", root_dir=main_project_dir)) == 1
 
 
 def clean(kernel_type: str):
+    """
+    Clean a kernel specific files
+    
+    :param kernel_type: Type of kernels to clean
+    """
     if has_non_mirror_lib(f"kernels-{kernel_type}"):
         os.remove(get_non_mirror_lib_path(f"kernels-{kernel_type}"))
 
@@ -68,20 +88,27 @@ def clean(kernel_type: str):
         case "cpp":
             if os.path.exists(kernel_cpp_mirror):
                 os.remove(kernel_cpp_mirror)
+                
+            abs_mirror = os.path.join(main_project_dir, kernel_cpp_mirror)
         case "cuda":
             if os.path.exists(kernel_cuda_mirror):
                 os.remove(kernel_cuda_mirror)
 
+            abs_mirror = os.path.join(main_project_dir, kernel_cuda_mirror)
+
     if os.path.exists(build_directory):
         shutil.rmtree(build_directory)
-
-    abs_mirror = os.path.join(main_project_dir, kernel_cuda_mirror)
 
     if os.path.exists(abs_mirror):
         os.remove(abs_mirror)
 
 
 def compile(kernel_type: str):
+    """
+    Compile the kernels
+
+    :param kernel_type: Type of kernels to compile
+    """
     os.makedirs(pde_build_directory, exist_ok=True)
 
     prefix = f"kernels-{kernel_type}"
@@ -124,3 +151,6 @@ def compile(kernel_type: str):
                 os.remove(abs_mirror)
 
             os.symlink(os.path.join(main_project_dir, lib), abs_mirror)
+
+
+__all__ = ["compile", "clean"]
