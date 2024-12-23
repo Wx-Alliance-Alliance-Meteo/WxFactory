@@ -25,6 +25,7 @@ class default_build_ext(build_ext):
     """
     Class to change the build directory
     """
+
     def initialize_options(self):
         super().initialize_options()
         self.build_lib = library_directory
@@ -36,6 +37,7 @@ class cuda_build_ext(default_build_ext):
     """
     Class to build cuda code
     """
+
     def build_extensions(self):
         self.compiler.src_extensions.append(".cu")
         self.compiler.set_executable("compiler_so", "nvcc")
@@ -47,11 +49,11 @@ class cuda_build_ext(default_build_ext):
 extra_compiler_args_cpp = "-shared -std=c++11 -fPIC".split(" ")
 extra_compiler_args_cuda = "-shared -std=c++11 -Xcompiler -fPIC".split(" ")
 pybind_include = pybind11.get_include()
-headers = glob(pde_src_directory + "**/*.h", root_dir=main_project_dir, recursive=True) + glob(
-    pde_src_directory + "**/*.hpp", root_dir=main_project_dir, recursive=True
+header_files = glob(pde_src_directory + "/**/*.h", root_dir=main_project_dir, recursive=True) + glob(
+    pde_src_directory + "/**/*.hpp", root_dir=main_project_dir, recursive=True
 )
-cpp = glob(pde_src_directory + "**/*.cpp", root_dir=main_project_dir, recursive=True)
-cuda = glob(pde_src_directory + "**/*.cu", root_dir=main_project_dir, recursive=True)
+cpp_files = glob(pde_src_directory + "/**/*.cpp", root_dir=main_project_dir, recursive=True)
+cuda_files = glob(pde_src_directory + "/**/*.cu", root_dir=main_project_dir, recursive=True)
 
 
 def get_non_mirror_lib_path(prefix: str) -> str:
@@ -68,7 +70,7 @@ def has_non_mirror_lib(prefix: str) -> bool:
     """
     Look to see if a library exists
 
-    
+
     :param prefix: library to search
     :return: True if the library exist
     """
@@ -78,7 +80,7 @@ def has_non_mirror_lib(prefix: str) -> bool:
 def clean(kernel_type: str):
     """
     Clean a kernel specific files
-    
+
     :param kernel_type: Type of kernels to clean
     """
     if has_non_mirror_lib(f"kernels-{kernel_type}"):
@@ -88,7 +90,7 @@ def clean(kernel_type: str):
         case "cpp":
             if os.path.exists(kernel_cpp_mirror):
                 os.remove(kernel_cpp_mirror)
-                
+
             abs_mirror = os.path.join(main_project_dir, kernel_cpp_mirror)
         case "cuda":
             if os.path.exists(kernel_cuda_mirror):
@@ -114,10 +116,15 @@ def compile(kernel_type: str):
     prefix = f"kernels-{kernel_type}"
     match kernel_type:
         case "cpp":
-            ext_cpp = Extension(prefix, cpp, include_dirs=[pybind_include], extra_compile_args=extra_compiler_args_cpp)
+            ext_cpp = Extension(
+                prefix,
+                cpp_files,
+                include_dirs=[pybind_include],
+                extra_compile_args=extra_compiler_args_cpp,
+                depends=header_files,
+            )
             setup(
                 ext_modules=[ext_cpp],
-                headers=headers,
                 script_args=["build_ext"],
                 cmdclass={"build_ext": default_build_ext},
             )
@@ -133,11 +140,14 @@ def compile(kernel_type: str):
             os.symlink(os.path.join(main_project_dir, lib), abs_mirror)
         case "cuda":
             ext_cuda = Extension(
-                prefix, cuda, include_dirs=[pybind_include], extra_compile_args=extra_compiler_args_cuda
+                prefix,
+                cuda_files,
+                include_dirs=[pybind_include],
+                extra_compile_args=extra_compiler_args_cuda,
+                depends=header_files,
             )
             setup(
                 ext_modules=[ext_cuda],
-                headers=headers,
                 script_args=["build_ext"],
                 cmdclass={"build_ext": cuda_build_ext},
             )

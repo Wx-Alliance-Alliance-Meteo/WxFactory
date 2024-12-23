@@ -1,6 +1,7 @@
 """
 Utilities to use to compile code
 """
+
 import hashlib
 from importlib.metadata import version
 import os
@@ -168,6 +169,9 @@ def mpi_compile(kernel_type: str, force: bool = False, comm: MPI.Comm = MPI.COMM
         try:
             compile(kernel_type, force=force)
         except Exception as e:
+            import traceback
+
+            print(traceback.format_exc())
             compilation_error = e
 
     compilation_error = comm.bcast(compilation_error, root=0)
