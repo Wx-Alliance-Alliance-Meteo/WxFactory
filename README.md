@@ -1,3 +1,9 @@
+# Data-Driven Initial Guess Selection for Numerical Weather Prediction Solvers
+*todo*
+
+# Deep Learning for Koopman Operator Estimation in Idealized Atmospheric Dynamics
+*todo*
+
 # WxFactory
 Research numerical weather model. The name is inspired by [Richardson’s Fantastic Forecast Factory](https://www.emetsoc.org/resources/rff/)
 
