@@ -20,6 +20,7 @@ def rhs_bubble(Q, geom, mtrx, nbsolpts, nb_elements_x, nb_elements_z):
 
    kfaces_flux = numpy.empty((nb_equations, nb_elements_z, 2, nbsolpts*nb_elements_x), dtype=datatype)
    kfaces_var  = numpy.empty((nb_equations, nb_elements_z, 2, nbsolpts*nb_elements_x), dtype=datatype)
+   kfaces_new_var  = numpy.empty((2, nb_elements_z, 2, nbsolpts*nb_elements_x), dtype=datatype)
 
    ifaces_flux = numpy.empty((nb_equations, nb_elements_x, nbsolpts*nb_elements_z, 2), dtype=datatype)
    ifaces_var  = numpy.empty((nb_equations, nb_elements_x, nbsolpts*nb_elements_z, 2), dtype=datatype)
@@ -28,8 +29,15 @@ def rhs_bubble(Q, geom, mtrx, nbsolpts, nb_elements_x, nb_elements_z):
    rho      = Q[idx_2d_rho,:,:]
    uu       = Q[idx_2d_rho_u,:,:] / rho
    ww       = Q[idx_2d_rho_w,:,:] / rho
-   # pressure = p0 * numpy.exp((cpd/cvd) * numpy.log((Rd/p0)*Q[idx_2d_rho_theta, :, :]))
-   pressure = Rd * Q[idx_2d_rho_theta, :, :]
+   E        = Q[idx_2d_rho_theta,:,:] / rho
+   # pressure = p0 * numpy.exp((cpd/cvd) * numpy.log((Rd/p0)*Q[idx_2d_rho_theta, :, :])) # in general
+   # pressure = Rd * Q[idx_2d_rho_theta, :, :] # For vortex problem
+   pressure = 0.4 * (Q[idx_2d_rho_theta, :, :] - 0.5*rho*(uu**2 + ww**2))
+   # H        = E + (pressure / rho)
+   rho_H = (1.4/0.4)*pressure + 0.5*rho*(uu**2 + ww**2)
+   pdb.set_trace()
+   Q[idx_2d_rho_theta,:,:] = rho_H
+
    
 
    # --- Compute the fluxes
@@ -37,11 +45,14 @@ def rhs_bubble(Q, geom, mtrx, nbsolpts, nb_elements_x, nb_elements_z):
    flux_x1[idx_2d_rho_u,:,:]     = Q[idx_2d_rho_u,:,:] * uu + pressure
    flux_x1[idx_2d_rho_w,:,:]     = Q[idx_2d_rho_u,:,:] * ww
    flux_x1[idx_2d_rho_theta,:,:] = Q[idx_2d_rho_theta,:,:] * uu
+   
+
 
    flux_x3[idx_2d_rho,:,:]       = Q[idx_2d_rho_w,:,:]
    flux_x3[idx_2d_rho_u,:,:]     = Q[idx_2d_rho_w,:,:] * uu
    flux_x3[idx_2d_rho_w,:,:]     = Q[idx_2d_rho_w,:,:] * ww + pressure
    flux_x3[idx_2d_rho_theta,:,:] = Q[idx_2d_rho_theta,:,:] * ww
+
 
    # --- Interpolate to the element interface
    standard_slice = numpy.arange(nbsolpts)
@@ -58,8 +69,8 @@ def rhs_bubble(Q, geom, mtrx, nbsolpts, nb_elements_x, nb_elements_z):
       ifaces_var[:,elem,:,1] = Q[:,:,epais] @ mtrx.extrap_east
 
    # --- Interface pressure
-   ifaces_pres = ifaces_var[idx_2d_rho_theta] * Rd
-   kfaces_pres = kfaces_var[idx_2d_rho_theta] * Rd
+   ifaces_pres = (0.4/1.4) * (ifaces_var[idx_2d_rho_theta] - (0.5 / ifaces_var[idx_2d_rho])*(ifaces_var[idx_2d_rho_u]**2 + ifaces_var[idx_2d_rho_w]**2))
+   kfaces_pres = (0.4/1.4) * (kfaces_var[idx_2d_rho_theta] - (0.5 / kfaces_var[idx_2d_rho])*(kfaces_var[idx_2d_rho_u]**2 + kfaces_var[idx_2d_rho_w]**2))
 
    # --- Bondary treatement
 
@@ -154,7 +165,7 @@ def rhs_bubble(Q, geom, mtrx, nbsolpts, nb_elements_x, nb_elements_z):
    # --- Assemble the right-hand sides
    rhs = - ( df1_dx1 + df3_dx3 )
 
-   rhs[idx_2d_rho_w,:,:] -= Q[idx_2d_rho,:,:] * gravity
+   # rhs[idx_2d_rho_w,:,:] -= Q[idx_2d_rho,:,:] * gravity
 
    # TODO : Add sources terms for Brikman penalization
    # It may be better to do this elementwise...

@@ -232,7 +232,8 @@ def initialize_cartesian2d(geom: Cartesian2D, param: Configuration) -> NDArray[n
       uu = (S*zt*numpy.exp(f))/(2*numpy.pi*R)
       ww = 1.0 - (S*xt*numpy.exp(f))/(2*numpy.pi*R)
       p = (ρ**gamma)/(gamma*mach*mach)
-      θ = p/(Rd*ρ)
+      # θ = p/(Rd*ρ)
+      θ = 2.5 * (p/ρ) + 0.5*(uu**2 + ww**2)
 
    elif param.case_number == 3:
       # Colliding bubbles
