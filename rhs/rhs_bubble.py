@@ -20,23 +20,21 @@ def rhs_bubble(Q, geom, mtrx, nbsolpts, nb_elements_x, nb_elements_z):
 
    kfaces_flux = numpy.empty((nb_equations, nb_elements_z, 2, nbsolpts*nb_elements_x), dtype=datatype)
    kfaces_var  = numpy.empty((nb_equations, nb_elements_z, 2, nbsolpts*nb_elements_x), dtype=datatype)
-   kfaces_new_var  = numpy.empty((2, nb_elements_z, 2, nbsolpts*nb_elements_x), dtype=datatype)
+   kfaces_pres = numpy.empty((nb_elements_z, 2, nbsolpts*nb_elements_x), dtype=datatype)
 
    ifaces_flux = numpy.empty((nb_equations, nb_elements_x, nbsolpts*nb_elements_z, 2), dtype=datatype)
    ifaces_var  = numpy.empty((nb_equations, nb_elements_x, nbsolpts*nb_elements_z, 2), dtype=datatype)
+   ifaces_pres = numpy.empty((nb_elements_x, nbsolpts*nb_elements_z, 2), dtype=datatype)
 
    # --- Unpack physical variables
    rho      = Q[idx_2d_rho,:,:]
    uu       = Q[idx_2d_rho_u,:,:] / rho
    ww       = Q[idx_2d_rho_w,:,:] / rho
-   E        = Q[idx_2d_rho_theta,:,:] / rho
+   rho_E    = Q[idx_2d_rho_theta,:,:]
    # pressure = p0 * numpy.exp((cpd/cvd) * numpy.log((Rd/p0)*Q[idx_2d_rho_theta, :, :])) # in general
    # pressure = Rd * Q[idx_2d_rho_theta, :, :] # For vortex problem
    pressure = 0.4 * (Q[idx_2d_rho_theta, :, :] - 0.5*rho*(uu**2 + ww**2))
-   # H        = E + (pressure / rho)
-   rho_H = (1.4/0.4)*pressure + 0.5*rho*(uu**2 + ww**2)
-   pdb.set_trace()
-   Q[idx_2d_rho_theta,:,:] = rho_H
+   Q[idx_2d_rho_theta] += pressure
 
    
 
@@ -61,16 +59,21 @@ def rhs_bubble(Q, geom, mtrx, nbsolpts, nb_elements_x, nb_elements_z):
 
       kfaces_var[:,elem,0,:] = mtrx.extrap_down @ Q[:,epais,:]
       kfaces_var[:,elem,1,:] = mtrx.extrap_up @ Q[:,epais,:]
+      kfaces_pres[elem,0,:] = mtrx.extrap_down @ pressure[epais,:]
+      kfaces_pres[elem,1,:] = mtrx.extrap_up @ pressure[epais,:]
+
 
    for elem in range(nb_elements_x):
       epais = elem * nbsolpts + standard_slice
 
       ifaces_var[:,elem,:,0] = Q[:,:,epais] @ mtrx.extrap_west
       ifaces_var[:,elem,:,1] = Q[:,:,epais] @ mtrx.extrap_east
+      ifaces_pres[elem,:,0] = pressure[:,epais] @ mtrx.extrap_west
+      ifaces_pres[elem,:,1] = pressure[:,epais] @ mtrx.extrap_east
 
    # --- Interface pressure
-   ifaces_pres = (0.4/1.4) * (ifaces_var[idx_2d_rho_theta] - (0.5 / ifaces_var[idx_2d_rho])*(ifaces_var[idx_2d_rho_u]**2 + ifaces_var[idx_2d_rho_w]**2))
-   kfaces_pres = (0.4/1.4) * (kfaces_var[idx_2d_rho_theta] - (0.5 / kfaces_var[idx_2d_rho])*(kfaces_var[idx_2d_rho_u]**2 + kfaces_var[idx_2d_rho_w]**2))
+   # ifaces_pres = 0.4 * (ifaces_rho_E - (0.5 / ifaces_var[idx_2d_rho])*(ifaces_var[idx_2d_rho_u]**2 + ifaces_var[idx_2d_rho_w]**2))
+   # kfaces_pres = 0.4 * (kfaces_rho_E - (0.5 / kfaces_var[idx_2d_rho])*(kfaces_var[idx_2d_rho_u]**2 + kfaces_var[idx_2d_rho_w]**2))
 
    # --- Bondary treatement
 
