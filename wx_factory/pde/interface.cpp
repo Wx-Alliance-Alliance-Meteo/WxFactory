@@ -1,5 +1,4 @@
 #include "interface.hpp"
-#include "definitions.hpp"
 
 #include "kernels/kernels.h"
 
@@ -16,8 +15,7 @@ void pointwise_eulercartesian_2d(
     py::array_t<num_t>&       flux_x2_in,
     const int                 num_elem_x1,
     const int                 num_elem_x2,
-    const int                 num_solpts_tot)
-{
+    const int                 num_solpts_tot) {
   py::buffer_info buf1 = q_in.request();
   py::buffer_info buf2 = flux_x1_in.request();
   py::buffer_info buf3 = flux_x2_in.request();
@@ -61,8 +59,7 @@ void riemann_eulercartesian_ausm_2d(
     py::array_t<num_t>&       flux_itf_x2_in,
     const int                 num_elem_x1,
     const int                 num_elem_x2,
-    const int                 num_solpts)
-{
+    const int                 num_solpts) {
   py::buffer_info buf1 = q_itf_x1_in.request();
   py::buffer_info buf2 = q_itf_x2_in.request();
   py::buffer_info buf3 = flux_itf_x1_in.request();
@@ -165,8 +162,48 @@ void riemann_eulercartesian_ausm_2d(
   }
 }
 
-PYBIND11_MODULE(interface_c, m)
-{
+template <typename real_t, typename num_t>
+void forcing_euler_cubesphere_3d(
+    const py::array_t<num_t>&  q_in,
+    const py::array_t<num_t>&  pressure_in,
+    const py::array_t<real_t>& sqrt_g_in,
+    const py::array_t<real_t>& h_in,
+    const py::array_t<real_t>& christoffel_in,
+    py::array_t<num_t>&        forcing_in,
+    const int                  num_elem_x1,
+    const int                  num_elem_x2,
+    const int                  num_elem_x3,
+    const int                  num_solpts,
+    const int                  verbose) {
+
+  const num_t*  q           = get_c_ptr(q_in);
+  const num_t*  pressure    = get_c_ptr(pressure_in);
+  const real_t* sqrt_g      = get_c_ptr(sqrt_g_in);
+  const real_t* h           = get_c_ptr(h_in);
+  const real_t* christoffel = get_c_ptr(christoffel_in);
+  num_t*        forcing     = get_c_ptr(forcing_in);
+
+  const uint64_t stride = num_elem_x3 * num_elem_x2 * num_elem_x1 * num_solpts;
+
+  for (int i = 0; i < num_elem_x3; i++)
+  {
+    for (int j = 0; j < num_elem_x2; j++)
+    {
+      for (int k = 0; k < num_elem_x1; k++)
+      {
+        for (int s = 0; s < num_solpts; s++)
+        {
+          const int index = ((i * num_elem_x2 + j) * num_elem_x1 + k) * num_solpts + s;
+          forcing_params<real_t, num_t>
+              p(q, pressure, sqrt_g, h, christoffel, forcing, index, stride);
+          forcing_euler_cubesphere_3d_kernel(p, verbose);
+        }
+      }
+    }
+  }
+}
+
+PYBIND11_MODULE(interface_c, m) {
   // Pointwise fluxes
   m.def("pointwise_eulercartesian_2d", &pointwise_eulercartesian_2d<double>);
   m.def("pointwise_eulercartesian_2d", &pointwise_eulercartesian_2d<complex_t>);
@@ -174,4 +211,8 @@ PYBIND11_MODULE(interface_c, m)
   // Riemann fluxes
   m.def("riemann_eulercartesian_ausm_2d", &riemann_eulercartesian_ausm_2d<double>);
   m.def("riemann_eulercartesian_ausm_2d", &riemann_eulercartesian_ausm_2d<complex_t>);
+
+  // Forcing functions
+  m.def("forcing_euler_cubesphere_3d", &forcing_euler_cubesphere_3d<double, double>);
+  m.def("forcing_euler_cubesphere_3d", &forcing_euler_cubesphere_3d<double, complex_t>);
 }

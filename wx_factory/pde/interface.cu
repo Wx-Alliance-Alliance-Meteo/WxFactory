@@ -12,8 +12,7 @@ __global__ void pointwise_eulercartesian_2d(
     num_t*       flux_x2,
     const int    num_elem_x1,
     const int    num_elem_x2,
-    const int    num_solpts_tot)
-{
+    const int    num_solpts_tot) {
   const int ind    = threadIdx.x + blockIdx.x * blockDim.x;
   const int nmax   = num_elem_x1 * num_elem_x2 * num_solpts_tot;
   const int stride = nmax;
@@ -38,8 +37,7 @@ __global__ void riemann_eulercartesian_ausm_2d(
     const int    direction,
     const int    nmax_x,
     const int    nmax_y,
-    const int    nmax_z)
-{
+    const int    nmax_z) {
   const int ix = blockIdx.x * blockDim.x + threadIdx.x;
   const int iy = blockIdx.y * blockDim.y + threadIdx.y;
   const int iz = blockIdx.z * blockDim.z + threadIdx.z;
@@ -92,8 +90,7 @@ __global__ void boundary_eulercartesian_2d(
     const int    num_solpts,
     const int    direction,
     const int    nmax_x,
-    const int    nmax_y)
-{
+    const int    nmax_y) {
   const int ix = blockIdx.x * blockDim.x + threadIdx.x;
   const int iy = blockIdx.y * blockDim.y + threadIdx.y;
 
@@ -142,8 +139,7 @@ void launch_pointwise_euler_cartesian_2d(
     py::object flux_x2,
     const int  num_elem_x1,
     const int  num_elem_x2,
-    const int  num_solpts_tot)
-{
+    const int  num_solpts_tot) {
   // Extract CuPy pointers
   uintptr_t cupy_q_ptr       = q.attr("data").attr("ptr").cast<size_t>();
   uintptr_t cupy_flux_x1_ptr = flux_x1.attr("data").attr("ptr").cast<size_t>();
@@ -170,8 +166,7 @@ void select_pointwise_eulercartesian_2d(
     py::object flux_x2,
     const int  num_elem_x1,
     const int  num_elem_x2,
-    const int  num_solpts_tot)
-{
+    const int  num_solpts_tot) {
   // Determine the CuPy array dtype
   std::string dtype = py::str(q.attr("dtype").attr("name"));
 
@@ -206,8 +201,7 @@ void launch_riemann_eulercartesian_ausm_2d(
     py::object flux_itf_x2,
     const int  num_elem_x1,
     const int  num_elem_x2,
-    const int  num_solpts)
-{
+    const int  num_solpts) {
   // Extract CuPy pointers
   uintptr_t cupy_q_x1_ptr    = q_itf_x1.attr("data").attr("ptr").cast<size_t>();
   uintptr_t cupy_q_x2_ptr    = q_itf_x2.attr("data").attr("ptr").cast<size_t>();
@@ -310,8 +304,7 @@ void select_riemann_eulercartesian_ausm_2d(
     py::object flux_itf_x2,
     const int  num_elem_x1,
     const int  num_elem_x2,
-    const int  num_solpts)
-{
+    const int  num_solpts) {
   // Determine the CuPy array dtype
   std::string dtype = py::str(q_itf_x1.attr("dtype").attr("name"));
 
@@ -339,8 +332,7 @@ void select_riemann_eulercartesian_ausm_2d(
   }
 }
 
-PYBIND11_MODULE(interface_cuda, m)
-{
+PYBIND11_MODULE(interface_cuda, m) {
   // Pointwise fluxes
   m.def("pointwise_eulercartesian_2d", &select_pointwise_eulercartesian_2d);
 

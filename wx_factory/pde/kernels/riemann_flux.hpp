@@ -6,8 +6,7 @@ template <typename num_t>
 DEVICE_SPACE void riemann_eulercartesian_ausm_2d_kernel(
     kernel_params<num_t, euler_state_2d> params_l,
     kernel_params<num_t, euler_state_2d> params_r,
-    const int                            dir)
-{
+    const int                            dir) {
   // Unpack variables for improved readability
   const num_t rhol = *params_l.q.rho;
   const num_t rhor = *params_r.q.rho;

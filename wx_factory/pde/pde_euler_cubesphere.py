@@ -1,3 +1,5 @@
+from mpi4py import MPI
+
 from common import Configuration
 from common.definitions import idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_w, idx_rho_theta, p0, cpd, cvd, Rd, gravity
 from geometry import CubedSphere3D, Metric3DTopo
@@ -9,15 +11,33 @@ from init.dcmip import dcmip_schar_damping
 
 def compute_forcing_1(f, r, u1, u2, w, p, c01, c02, c03, c11, c12, c13, c22, c23, c33, h11, h12, h13, h22, h23, h33):
     """Compute forcing for fluid velocity in a single direction based on metric terms and coriolis effect."""
+    # if MPI.COMM_WORLD.rank == 0:
+    #     import numpy
+
+    #     tmp1 = 2.0 * r * (c01 * u1 + c02 * u2 + c03 * w)
+    #     tmp2 = c11 * (r * u1 * u1 + h11 * p)
+    #     tmp3 = 2.0 * c12 * (r * u1 * u2 + h12 * p)
+    #     tmp4 = 2.0 * c13 * (r * u1 * w + h13 * p)
+    #     tmp5 = c22 * (r * u2 * u2 + h22 * p)
+    #     tmp6 = 2.0 * c23 * (r * u2 * w + h23 * p)
+    #     tmp7 = c33 * (r * w * w + h33 * p)
+    #     a = numpy.array(
+    #         [tmp1[..., 0], tmp2[..., 0], tmp3[..., 0], tmp4[..., 0], tmp5[..., 0], tmp6[..., 0], tmp7[..., 0]]
+    #     ).flatten()
+    #     b = numpy.array([c22[..., 0], r[..., 0], u2[..., 0], h22[..., 0], p[..., 0]]).flatten()
+    #     print(f"tmps: {a}\n      {b}")
+
+    # fmt: off
     f[:] = (
-        2.0 * r * (c01 * u1 + c02 * u2 + c03 * w)
-        + c11 * (r * u1 * u1 + h11 * p)
+          2.0 *   r * (c01 * u1 + c02 * u2 + c03 * w)
+        +       c11 * (r * u1 * u1 + h11 * p)
         + 2.0 * c12 * (r * u1 * u2 + h12 * p)
-        + 2.0 * c13 * (r * u1 * w + h13 * p)
-        + c22 * (r * u2 * u2 + h22 * p)
-        + 2.0 * c23 * (r * u2 * w + h23 * p)
-        + c33 * (r * w * w + h33 * p)
+        + 2.0 * c13 * (r * u1 * w  + h13 * p)
+        +       c22 * (r * u2 * u2 + h22 * p)
+        + 2.0 * c23 * (r * u2 * w  + h23 * p)
+        +       c33 * (r * w  * w  + h33 * p)
     )
+    # fmt: on
 
 
 def compute_forcings(
@@ -39,6 +59,10 @@ def compute_forcings(
     compute_forcing_1(
         f2, r, u1, u2, w, p, c101, c102, c103, c111, c112, c113, c122, c123, c133, h11, h12, h13, h22, h23, h33
     )
+
+    # if MPI.COMM_WORLD.rank == 0:
+    #     print(f"f2 = {f2}")
+    # raise ValueError
     compute_forcing_1(
         f3, r, u1, u2, w, p, c201, c202, c203, c211, c212, c213, c222, c223, c233, h11, h12, h13, h22, h23, h33
     )
@@ -197,54 +221,106 @@ class PDEEulerCubesphere(PDE):
     def forcing_terms(self, rhs, q, pressure, metric, ops, forcing):
         # Add coriolis, metric terms and other forcings
 
+        xp = self.device.xp
+
         rho = q[idx_rho]
         u1 = q[idx_rho_u1] / rho
         u2 = q[idx_rho_u2] / rho
         w = q[idx_rho_w] / rho
 
-        compute_forcings(
-            forcing[idx_rho_u1],
-            forcing[idx_rho_u2],
-            forcing[idx_rho_w],
-            rho,
-            u1,
-            u2,
-            w,
+        forcing2 = xp.zeros_like(forcing)
+
+        verbose = 0
+        if MPI.COMM_WORLD.rank == 0:
+            verbose = 1
+
+        # Compiled kernel
+        num_x1 = self.config.num_elements_horizontal
+        num_x2 = num_x1
+        num_x3 = self.config.num_elements_vertical
+        num_solpts = self.config.num_solpts
+        self.device.libmodule.forcing_euler_cubesphere_3d(
+            q,
             pressure,
-            metric.christoffel[0, 0],
-            metric.christoffel[0, 1],
-            metric.christoffel[0, 2],
-            metric.christoffel[0, 3],
-            metric.christoffel[0, 4],
-            metric.christoffel[0, 5],
-            metric.christoffel[0, 6],
-            metric.christoffel[0, 7],
-            metric.christoffel[0, 8],
-            metric.christoffel[1, 0],
-            metric.christoffel[1, 1],
-            metric.christoffel[1, 2],
-            metric.christoffel[1, 3],
-            metric.christoffel[1, 4],
-            metric.christoffel[1, 5],
-            metric.christoffel[1, 6],
-            metric.christoffel[1, 7],
-            metric.christoffel[1, 8],
-            metric.christoffel[2, 0],
-            metric.christoffel[2, 1],
-            metric.christoffel[2, 2],
-            metric.christoffel[2, 3],
-            metric.christoffel[2, 4],
-            metric.christoffel[2, 5],
-            metric.christoffel[2, 6],
-            metric.christoffel[2, 7],
-            metric.christoffel[2, 8],
-            metric.h_contra_new[0, 0],
-            metric.h_contra_new[0, 1],
-            metric.h_contra_new[0, 2],
-            metric.h_contra_new[1, 1],
-            metric.h_contra_new[1, 2],
-            metric.h_contra_new[2, 2],
+            metric.sqrtG_new,
+            metric.h_contra_new,
+            metric.christoffel,
+            forcing,
+            num_x1,
+            num_x2,
+            num_x3,
+            num_solpts**3,
+            verbose,
         )
+
+        # if verbose > 0:
+        #     print(f"r = {rho}\nu = {u1 * 10000}\nv = {u2 * 10000}\nw = {w * 10000}\np = {pressure}")
+        #     print(f"h = \n{metric.h_contra_new[:, :, :, :, :, 0].flatten()}")
+        #     print(f"christoffel = \n{metric.christoffel[0, :, :, :, :, 0].flatten()}")
+
+        # Python only
+        # compute_forcings(
+        #     forcing[idx_rho_u1],
+        #     forcing[idx_rho_u2],
+        #     forcing[idx_rho_w],
+        #     rho,
+        #     u1,
+        #     u2,
+        #     w,
+        #     pressure,
+        #     metric.christoffel[0, 0],
+        #     metric.christoffel[0, 1],
+        #     metric.christoffel[0, 2],
+        #     metric.christoffel[0, 3],
+        #     metric.christoffel[0, 4],
+        #     metric.christoffel[0, 5],
+        #     metric.christoffel[0, 6],
+        #     metric.christoffel[0, 7],
+        #     metric.christoffel[0, 8],
+        #     metric.christoffel[1, 0],
+        #     metric.christoffel[1, 1],
+        #     metric.christoffel[1, 2],
+        #     metric.christoffel[1, 3],
+        #     metric.christoffel[1, 4],
+        #     metric.christoffel[1, 5],
+        #     metric.christoffel[1, 6],
+        #     metric.christoffel[1, 7],
+        #     metric.christoffel[1, 8],
+        #     metric.christoffel[2, 0],
+        #     metric.christoffel[2, 1],
+        #     metric.christoffel[2, 2],
+        #     metric.christoffel[2, 3],
+        #     metric.christoffel[2, 4],
+        #     metric.christoffel[2, 5],
+        #     metric.christoffel[2, 6],
+        #     metric.christoffel[2, 7],
+        #     metric.christoffel[2, 8],
+        #     metric.h_contra_new[0, 0],
+        #     metric.h_contra_new[0, 1],
+        #     metric.h_contra_new[0, 2],
+        #     metric.h_contra_new[1, 1],
+        #     metric.h_contra_new[1, 2],
+        #     metric.h_contra_new[2, 2],
+        # )
+
+        def compute_diff(a, b):
+            diff = b - a
+            diff_n = xp.linalg.norm(diff)
+            denom = xp.linalg.norm(a)
+            if denom > 0.0:
+                diff_n /= denom
+
+            return diff_n, diff, a, b, denom
+
+        # diff_n, diff, a, b, denom = compute_diff(forcing[idx_rho_u1], forcing2[idx_rho_u1])
+        # if diff_n > 1e-15:
+        #     # if verbose > 0:
+        #     # print(f"r = {rho}\nu = {u1 * 10000}\nv = {u2 * 10000}\nw = {w * 10000}\np = {pressure}")
+        #     # print(f"h = \n{metric.h_contra_new[:, :, :, :, :, 0].flatten()}")
+        #     # print(f"christoffel = \n{metric.christoffel[0, :, :, :, :, 0].flatten()}")
+        #     # print(f"Diff! {diff_n:.2e}\n" f"a = \n{a}\n" f"b = \n{b}\n" f"diff = \n{diff}")
+        #     print(f"Diff! {diff_n:.2e} (ref norm = {denom:.2e})", flush=True)
+        #     # raise ValueError
 
         # Gravity effect, in vertical direction
         forcing[idx_rho_w] += (
