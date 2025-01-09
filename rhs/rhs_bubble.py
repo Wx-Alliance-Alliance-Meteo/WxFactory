@@ -30,11 +30,10 @@ def rhs_bubble(Q, geom, mtrx, nbsolpts, nb_elements_x, nb_elements_z):
    rho      = Q[idx_2d_rho,:,:]
    uu       = Q[idx_2d_rho_u,:,:] / rho
    ww       = Q[idx_2d_rho_w,:,:] / rho
-   rho_E    = Q[idx_2d_rho_theta,:,:]
    # pressure = p0 * numpy.exp((cpd/cvd) * numpy.log((Rd/p0)*Q[idx_2d_rho_theta, :, :])) # in general
    # pressure = Rd * Q[idx_2d_rho_theta, :, :] # For vortex problem
    pressure = 0.4 * (Q[idx_2d_rho_theta, :, :] - 0.5*rho*(uu**2 + ww**2))
-   Q[idx_2d_rho_theta] += pressure
+   # Q[idx_2d_rho_theta] += pressure
 
    
 
@@ -42,14 +41,14 @@ def rhs_bubble(Q, geom, mtrx, nbsolpts, nb_elements_x, nb_elements_z):
    flux_x1[idx_2d_rho,:,:]       = Q[idx_2d_rho_u,:,:]
    flux_x1[idx_2d_rho_u,:,:]     = Q[idx_2d_rho_u,:,:] * uu + pressure
    flux_x1[idx_2d_rho_w,:,:]     = Q[idx_2d_rho_u,:,:] * ww
-   flux_x1[idx_2d_rho_theta,:,:] = Q[idx_2d_rho_theta,:,:] * uu
+   flux_x1[idx_2d_rho_theta,:,:] = (Q[idx_2d_rho_theta,:,:] + pressure) * uu 
    
 
 
    flux_x3[idx_2d_rho,:,:]       = Q[idx_2d_rho_w,:,:]
    flux_x3[idx_2d_rho_u,:,:]     = Q[idx_2d_rho_w,:,:] * uu
    flux_x3[idx_2d_rho_w,:,:]     = Q[idx_2d_rho_w,:,:] * ww + pressure
-   flux_x3[idx_2d_rho_theta,:,:] = Q[idx_2d_rho_theta,:,:] * ww
+   flux_x3[idx_2d_rho_theta,:,:] = (Q[idx_2d_rho_theta,:,:] + pressure) * ww
 
 
    # --- Interpolate to the element interface
@@ -112,8 +111,12 @@ def rhs_bubble(Q, geom, mtrx, nbsolpts, nb_elements_x, nb_elements_z):
       
       M = 0.25 * (( M_L + 1.)**2 - (M_R - 1.)**2)
 
-      kfaces_flux[:,right,0,:] = (kfaces_var[:,left,1,:] * numpy.maximum(0., M) * a_L) + \
-                                 (kfaces_var[:,right,0,:] * numpy.minimum(0., M) * a_R)
+      kfaces_flux[0:3,right,0,:] = (kfaces_var[0:3,left,1,:] * numpy.maximum(0., M) * a_L) + \
+                                 (kfaces_var[0:3,right,0,:] * numpy.minimum(0., M) * a_R)
+      kfaces_flux[3,right,0,:] = ((kfaces_var[3,left,1,:] + kfaces_pres[left,1,:]) * numpy.maximum(0., M) * a_L) + \
+                                 ((kfaces_var[3,right,0,:] + kfaces_pres[right,0,:]) * numpy.minimum(0., M) * a_R)
+      
+
       kfaces_flux[idx_2d_rho_w,right,0,:] += 0.5 * ((1. + M_L) * kfaces_pres[left,1,:] + \
                                                     (1. - M_R) * kfaces_pres[right,0,:])
 
@@ -139,8 +142,11 @@ def rhs_bubble(Q, geom, mtrx, nbsolpts, nb_elements_x, nb_elements_z):
 
       M = 0.25 * ((M_L + 1.)**2 - (M_R - 1.)**2)
 
-      ifaces_flux[:,right,:,0] = (ifaces_var[:,left,:,1] * numpy.maximum(0., M) * a_L) + \
-                                 (ifaces_var[:,right,:,0] * numpy.minimum(0., M) * a_R)
+      ifaces_flux[0:3,right,:,0] = (ifaces_var[0:3,left,:,1] * numpy.maximum(0., M) * a_L) + \
+                                 (ifaces_var[0:3,right,:,0] * numpy.minimum(0., M) * a_R)
+      ifaces_flux[3,right,:,0] = ((ifaces_var[3,left,:,1] + ifaces_pres[left,:,1]) * numpy.maximum(0., M) * a_L) + \
+                                 ((ifaces_var[3,right,:,0] + ifaces_pres[right,:,1]) * numpy.minimum(0., M) * a_R)
+
       ifaces_flux[idx_2d_rho_u,right,:,0] += 0.5 * ((1. + M_L) * ifaces_pres[left,:,1] + \
                                                     (1. - M_R) * ifaces_pres[right,:,0])
 
