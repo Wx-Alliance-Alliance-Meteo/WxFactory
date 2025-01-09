@@ -114,18 +114,9 @@ class StateIntegrationTestCases(unittest.TestCase):
         has_exited: bool = False
         exit_code: Optional[sys._ExitCode] = None
 
-        config_file: str = f"{self.config_dir_path}/config.ini"
-
-        config_content = ""
-        config_schema_content = ""
-        if MPI.COMM_WORLD.rank == 0:
-            with open(config_file) as cf:
-                config_content = "\n".join(cf.readlines())
-            with open("config/config-format.json") as schema_file:
-                config_schema_content = "\n".join(schema_file.readlines())
-
-        config_content = wx_mpi.bcast_string(config_content, 0, MPI.COMM_WORLD)
-        config_schema_content = wx_mpi.bcast_string(config_schema_content, 0, MPI.COMM_WORLD)
+        config_file = f"{self.config_dir_path}/config.ini"
+        config_content = wx_mpi.readfile(config_file)
+        config_schema_content = wx_mpi.readfile("config/config-format.json")
 
         try:
             sim = Simulation(config_content, config_schema_content)
@@ -139,33 +130,20 @@ class StateIntegrationTestCases(unittest.TestCase):
 
         if has_exited:
             print(f"Process {MPI.COMM_WORLD.rank} has exited prematurely")
-            exit(exit_code)
+            sys.exit(exit_code)
 
         schema = load_default_schema()
-        conf = Configuration(config_content, schema)
+        conf = sim.config
 
-        state_params = (
-            conf.dt,
-            conf.num_elements_horizontal,
-            conf.num_elements_vertical,
-            conf.num_solpts,
-            MPI.COMM_WORLD.size,
-        )
-        config_hash = state_params.__hash__() & 0xFFFFFFFFFFFF
-
-        base_name = f"state_vector_{config_hash:012x}_{MPI.COMM_WORLD.rank:03d}"
-        state_vector_file: str = f"{conf.output_dir}/{base_name}.{conf.save_state_freq:08d}.npy"
-        true_state_vector_file: str = f"{self.config_dir_path}/{base_name}.{conf.save_state_freq:08d}.npy"
+        state_vector_file = sim.output.state_file_name(conf.save_state_freq)
+        base_name = os.path.split(state_vector_file)[-1]
+        true_state_vector_file: str = f"{self.config_dir_path}/{base_name}"
 
         [data, _] = state.load_state(state_vector_file, schema)
         [true_data, _] = state.load_state(true_state_vector_file, schema)
 
-        if len(data.shape) != len(true_data.shape):
-            self.fail("The result tuple and solution tuple aren't the same shape")
-
-        for it_length in range(len(data.shape)):
-            if data.shape[it_length] != true_data.shape[it_length]:
-                self.fail("The result problem is not the same size as the solution's")
+        if data.shape != true_data.shape:
+            self.fail("The result problem is not the same size as the solution's")
 
         delta = true_data - data
 
