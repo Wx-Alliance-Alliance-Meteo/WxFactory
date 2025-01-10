@@ -94,21 +94,26 @@ class StateIntegrationTestCases(unittest.TestCase):
         super().__init__("test_state")
         self.config_dir_path = config_dir_path
         self.num_process_required = 0
+
+        if not os.path.exists(self.config_dir_path):
+            self.fail(f"Could not find test case {self.config_dir_path}")
+
         requirement_filename = f"{self.config_dir_path}/requirement.ini"
+        if not os.path.exists(requirement_filename):
+            raise FileNotFoundError(requirement_filename)
 
-        if os.path.exists(requirement_filename):
-            parser = ConfigParser()
-            parser.read(requirement_filename, encoding="utf-8")
+        parser = ConfigParser()
+        parser.read(requirement_filename, encoding="utf-8")
 
-            self.num_process_required = _get_option(
-                parser, requirement_filename, "System", "processes", int, 1, min_value=1
-            )
-        else:
-            raise FileNotFoundError()
+        self.num_process_required = _get_option(
+            parser, requirement_filename, "System", "processes", int, 1, min_value=1
+        )
 
     def setUp(self):
         if MPI.COMM_WORLD.size != self.num_process_required:
-            self.fail("You do not have the required number of process")
+            self.fail(
+                f"We are using {MPI.COMM_WORLD.size} process(es), but the test requires {self.num_process_required}"
+            )
 
     def test_state(self):
         has_exited: bool = False

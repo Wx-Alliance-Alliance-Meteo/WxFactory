@@ -16,8 +16,13 @@ from tests.integration.test_integration_state import StateIntegrationTestCases
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("problem", type=str)
+    parser.add_argument("problems", type=str, nargs="+")
     args = parser.parse_args()
 
     runner = mpi_test.MpiRunner()
-    runner.run(StateIntegrationTestCases(os.path.join(main_project_dir, "tests/data", args.problem)))
+    results = []
+    for problem in args.problems:
+        results.append(runner.run(StateIntegrationTestCases(os.path.join(main_project_dir, "tests/data", problem))))
+
+    if not all(r.wasSuccessful() for r in results):
+        sys.exit(-1)

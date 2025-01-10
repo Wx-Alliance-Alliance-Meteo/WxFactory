@@ -43,4 +43,7 @@ def load_tests():
 
 if __name__ == "__main__":
     runner = MpiRunner()
-    runner.run(load_tests())
+    result = runner.run(load_tests())
+
+    if not result.wasSuccessful():
+        sys.exit(-1)

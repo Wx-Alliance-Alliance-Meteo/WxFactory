@@ -21,6 +21,11 @@ from tests.compiler.test_compilation import CompilationTestCases, CompilationGPU
 
 def load_tests():
     suite = unittest.TestSuite()
+
+    suite.addTest(CompilationTestCases("test_cpp_kernels_compilation"))
+    suite.addTest(CompilationGPUTestCases("test_cuda_kernels_compilation"))
+    suite.addTest(CompilationTestCases("test_cpp_compilation_twice"))
+
     suite.addTest(PmexComparisonTestCases("test_compare_cpu_to_gpu"))
     suite.addTest(KiopsComparisonTestCases("test_compare_cpu_to_gpu"))
     suite.addTest(FgmresComparisonTestCases("test_compare_cpu_to_gpu"))
@@ -38,12 +43,11 @@ def load_tests():
     suite.addTest(ConfigurationTestCases("test_load_configuration_with_valid_values"))
     suite.addTest(ConfigurationTestCases("test_load_configuration_with_dependancy"))
 
-    suite.addTest(CompilationTestCases("test_cpp_kernels_compilation"))
-    suite.addTest(CompilationGPUTestCases("test_cuda_kernels_compilation"))
-    suite.addTest(CompilationTestCases("test_cpp_compilation_twice"))
     return suite
 
 
 if __name__ == "__main__":
     runner = unittest.TextTestRunner()
-    runner.run(load_tests())
+    result = runner.run(load_tests())
+    if not result.wasSuccessful():
+        sys.exit(-1)

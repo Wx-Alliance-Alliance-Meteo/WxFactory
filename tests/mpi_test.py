@@ -109,10 +109,10 @@ class MpiTestResult(TestResult):
         failure_index: int = 0  # Current position in the failure list
         skipped_tests: List[int] = []
         success_tests: List[int] = []
-        for test_index in range(len(self.results_as_list)):
-            buffer: numpy.ndarray = numpy.empty((MPI.COMM_WORLD.size))
-            to_send: numpy.ndarray = numpy.empty((1))
-            to_send[0] = self.results_as_list[test_index]
+        for test_index, result in enumerate(self.results_as_list):
+            buffer = numpy.empty((MPI.COMM_WORLD.size))
+            to_send = numpy.empty((1))
+            to_send[0] = result
 
             MPI.COMM_WORLD.Gather([to_send, MPI.LONG], [buffer, MPI.LONG], 0)
             if self.rank == 0:
@@ -127,7 +127,7 @@ class MpiTestResult(TestResult):
                                 errors.append((0, self.failures[failure_index][1]))
                         else:
                             errors.append((node_index, wx_mpi.receive_string_from(node_index, MPI.COMM_WORLD)))
-                if len(errors):
+                if len(errors) > 0:
                     self.printErrorList(errors, self.tests_order[test_index])
                 else:
                     skipped: bool = numpy.count_nonzero(buffer == 0) == 0
@@ -144,12 +144,12 @@ class MpiTestResult(TestResult):
                     wx_mpi.send_string_to(self.failures[failure_index][1], 0, MPI.COMM_WORLD)
                     failure_index += 1
 
-        if len(skipped_tests):
+        if len(skipped_tests) > 0:
             self.stream.writeln("SKIPPED")
             for skipped_index in skipped_tests:
                 self.stream.writeln(self.getDescription(self.tests_order[skipped_index]))
 
-        if len(success_tests):
+        if len(success_tests) > 0:
             self.stream.writeln("SUCCESS")
             for success_index in success_tests:
                 self.stream.writeln(self.getDescription(self.tests_order[success_index]))
@@ -176,8 +176,8 @@ class MpiRunner(object):
         self.tb_locals = False
         self.warnings = None
 
-    def run(self, test: unittest.TestSuite | unittest.TestCase):
-        result: TestResult = MpiTestResult(self.stream, self.descriptions, self.verbosity)
+    def run(self, test: unittest.TestSuite | unittest.TestCase) -> TestResult:
+        result = MpiTestResult(self.stream, self.descriptions, self.verbosity)
         registerResult(result)
         result.failfast = self.failfast
         result.buffer = self.buffer
@@ -206,16 +206,11 @@ class MpiRunner(object):
 
         timeTaken = stopTime - startTime
 
-        final_time: numpy.ndarray[float] = numpy.empty((1), dtype=float)
-        local_time: numpy.ndarray[float] = numpy.empty((1), dtype=float)
-        local_time[0] = timeTaken
-
         result.printErrors()
-        run = result.testsRun
+        num_run = result.testsRun
 
-        MPI.COMM_WORLD.Reduce([local_time, MPI.DOUBLE], [final_time, MPI.DOUBLE], MPI.MAX, 0)
+        final_time = MPI.COMM_WORLD.reduce(timeTaken, MPI.MAX, 0)
         if MPI.COMM_WORLD.rank == 0:
-            self.stream.writeln("Ran %d test%s in %.3fs" % (run, run != 1 and "s" or "", timeTaken))
-            self.stream.writeln()
+            self.stream.writeln(f"Ran {num_run} test{'s' if num_run > 1 else ''} in {final_time:.3f}s\n")
 
         return result
