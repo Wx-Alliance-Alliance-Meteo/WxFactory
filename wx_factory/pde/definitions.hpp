@@ -29,34 +29,45 @@ DEVICE_SPACE const double Rdinp0              = Rd * inp0;
 
 const int BLOCK_SIZE = 256;
 
-// Define non-standard operations for complex numbers
+//!{ \name Define non-standard operations for complex numbers
 DEVICE_SPACE inline complex_t fabs(const complex_t& z) {
   return sqrt(z.real() * z.real() + z.imag() * z.imag());
 }
 
 DEVICE_SPACE inline complex_t fmax(const complex_t& z1, const complex_t& z2) {
-  if (abs(z1) > abs(z2))
+  if (z1.real() > z2.real())
+    return z1;
+  else if (z1.real() < z2.real())
+    return z2;
+  else if (z1.imag() > z2.imag())
     return z1;
   else
     return z2;
 }
 
 DEVICE_SPACE inline complex_t fmin(const complex_t& z1, const complex_t& z2) {
-  if (abs(z1) < abs(z2))
+  if (z1.real() < z2.real())
+    return z1;
+  else if (z1.real() > z2.real())
+    return z2;
+  else if (z1.imag() < z2.imag())
     return z1;
   else
     return z2;
 }
+//!}
 
+// For debugging
 DEVICE_SPACE inline double to_real(const complex_t& x) {
   return x.real();
 }
 
+// For debugging
 DEVICE_SPACE inline double to_real(const double& x) {
   return x;
 }
 
-// Metric array indices
+//!{ \name Metric array indices
 const int h11 = 0;
 const int h12 = 1;
 const int h13 = 2;
@@ -91,5 +102,6 @@ const int c313 = 23;
 const int c322 = 24;
 const int c323 = 25;
 const int c333 = 26;
+//!}
 
 #endif // DEFINITIONS_H
