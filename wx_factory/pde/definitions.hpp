@@ -2,7 +2,9 @@
 #define DEFINITIONS_H
 
 #include <cmath>
+
 #include <pybind11/complex.h>
+#include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
 
 #ifdef __CUDACC__
@@ -14,7 +16,6 @@ using complex_t = cuda::std::complex<double>;
 #define DEVICE_SPACE
 using namespace std;
 using complex_t = std::complex<double>;
-#include <pybind11/numpy.h>
 #endif
 
 // Declarations

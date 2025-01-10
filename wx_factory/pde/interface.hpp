@@ -14,14 +14,15 @@ struct var
   DEVICE_SPACE var(num_t* field, const size_t index) : value(field + index) {}
   DEVICE_SPACE var(num_t* field) : value(field) {}
 
-  operator num_t() const { return *value; }
+  DEVICE_SPACE operator num_t() const { return *value; }
 
-  num_t  operator*() const { return *value; }
-  num_t& operator*() { return *value; }
+  DEVICE_SPACE num_t  operator*() const { return *value; }
+  DEVICE_SPACE num_t& operator*() { return *value; }
 };
 
 template <typename num_t, int size>
-std::array<var<num_t>, size> make_var_sequence(const num_t* offset, const size_t stride) {
+DEVICE_SPACE std::array<var<num_t>, size>
+             make_var_sequence(const num_t* offset, const size_t stride) {
   std::array<var<num_t>, size> result;
   for (int i = 0; i < size; i++)
   {
@@ -35,8 +36,8 @@ struct var_multi
 {
   std::array<var<num_t>, num_var> val;
 
-  num_t  operator[](int i) const { return *val[i]; }
-  num_t& operator[](int i) { return *val[i]; }
+  DEVICE_SPACE num_t  operator[](int i) const { return *val[i]; }
+  DEVICE_SPACE num_t& operator[](int i) { return *val[i]; }
 
   DEVICE_SPACE var_multi(num_t* field, const size_t index, const size_t stride) :
       val{make_var_sequence<num_t, num_var>(field + index, stride)} {}
