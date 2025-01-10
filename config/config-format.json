@@ -221,7 +221,7 @@
             "section": "Spatial_discretization",
             "type": "int",
             "dependancy": {
-                "name": "filter_apply",
+                "name": "expfilter_apply",
                 "values": [true]
             }
         },
@@ -231,7 +231,7 @@
             "type": "int",
             "default": 0,
             "dependancy": {
-                "name": "filter_apply",
+                "name": "expfilter_apply",
                 "values": [false]
             }
         },
@@ -240,7 +240,7 @@
             "section": "Spatial_discretization",
             "type": "float",
             "dependancy": {
-                "name": "filter_apply",
+                "name": "expfilter_apply",
                 "values": [true]
             }
         },
@@ -250,7 +250,7 @@
             "type": "float",
             "default": 0.0,
             "dependancy": {
-                "name": "filter_apply",
+                "name": "expfilter_apply",
                 "values": [false]
             }
         },
@@ -259,7 +259,7 @@
             "section": "Spatial_discretization",
             "type": "float",
             "dependancy": {
-                "name": "filter_apply",
+                "name": "expfilter_apply",
                 "values": [true]
             }
         },
@@ -269,7 +269,7 @@
             "type": "float",
             "default": 0.0,
             "dependancy": {
-                "name": "filter_apply",
+                "name": "expfilter_apply",
                 "values": [false]
             }
         },
