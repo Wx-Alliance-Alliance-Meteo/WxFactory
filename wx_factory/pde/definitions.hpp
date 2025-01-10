@@ -14,7 +14,6 @@
 using complex_t = cuda::std::complex<double>;
 #else
 #define DEVICE_SPACE
-using namespace std;
 using complex_t = std::complex<double>;
 #endif
 
