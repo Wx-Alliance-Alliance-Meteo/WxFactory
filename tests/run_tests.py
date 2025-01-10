@@ -41,7 +41,7 @@ def load_tests():
     suite.addTest(StateTestCases("test_save_load_works"))
     suite.addTest(ConfigurationTestCases("test_load_configuration_with_schema_default"))
     suite.addTest(ConfigurationTestCases("test_load_configuration_with_valid_values"))
-    suite.addTest(ConfigurationTestCases("test_load_configuration_with_dependancy"))
+    suite.addTest(ConfigurationTestCases("test_load_configuration_with_dependency"))
 
     return suite
 

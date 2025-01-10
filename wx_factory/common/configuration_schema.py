@@ -22,7 +22,7 @@ class ConfigurationField:
         field_type: Type[OptionType],
         validate: Callable[[OptionType], bool],
         transform: Callable[[OptionType], OptionType],
-        dependancy: Optional[tuple[str, List[OptionType]]],
+        dependency: Optional[tuple[str, List[OptionType]]],
     ):
         self.field_name = field_name
         self.field_section = field_section
@@ -30,7 +30,7 @@ class ConfigurationField:
         self.field_type = field_type
         self.validate = validate
         self.transform = transform
-        self.dependancy = dependancy
+        self.dependency = dependency
 
 
 class ConfigurationSchema:
@@ -302,32 +302,32 @@ class ConfigurationSchema:
                 raise ValueError(
                     f'The "default" field\'s value at field index {index} is does not respect its own limitation'
                 )
-        field_dependancy: Optional[tuple[str, List[OptionType]]]
+        field_dependency: Optional[tuple[str, List[OptionType]]]
 
         try:
             dep = self.__get_attribute(
-                "dependancy", field, "", f'The "dependancy" field at field index {index} is not an object', dict
+                "dependency", field, "", f'The "dependency" field at field index {index} is not an object', dict
             )
         except ValueError:
-            dependancy = None
+            dependency = None
         else:
             dep_field = self.__get_attribute(
                 "name",
                 dep,
-                f'"Name" field in dependancy at field index {index} is required',
-                f'The "name" field in dependancy at field index {index} is not a string',
+                f'"Name" field in dependency at field index {index} is required',
+                f'The "name" field in dependency at field index {index} is not a string',
                 str,
             )
             dep_values = self.__get_attribute(
                 "values",
                 dep,
-                f'"Values" field in dependancy at field index {index} is required',
-                f'The "values" field in dependancy at field index {index} is not a list',
+                f'"Values" field in dependency at field index {index} is required',
+                f'The "values" field in dependency at field index {index} is not a list',
                 list,
             )
-            dependancy = dep_field, dep_values
+            dependency = dep_field, dep_values
 
-        return ConfigurationField(field_name, field_section, field_default, field_type, validate, transform, dependancy)
+        return ConfigurationField(field_name, field_section, field_default, field_type, validate, transform, dependency)
 
     def __init__(self, json_str: str):
         try:

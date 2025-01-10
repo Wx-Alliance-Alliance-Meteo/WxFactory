@@ -26,10 +26,10 @@ class Configuration:
 
         self.parser.read_string(self.config_content)
 
-        for field in [field for field in schema.fields if field.dependancy is None]:
+        for field in [field for field in schema.fields if field.dependency is None]:
             self._get_option(field)
 
-        for field in [field for field in schema.fields if field.dependancy is not None]:
+        for field in [field for field in schema.fields if field.dependency is not None]:
             self._get_option(field)
 
         self.state_version = schema.version
@@ -88,11 +88,11 @@ class Configuration:
 
     def _get_option(self, field: ConfigurationField) -> OptionType:
         value: Optional[OptionType] = None
-        if field.dependancy is not None:
-            if not hasattr(self, field.dependancy[0]):
-                raise ValueError(f"Cannot validate depancy {field.dependancy[0]}. Dependancy not found")
+        if field.dependency is not None:
+            if not hasattr(self, field.dependency[0]):
+                raise ValueError(f"Cannot validate depancy {field.dependency[0]}. dependency not found")
 
-            if not getattr(self, field.dependancy[0]) in field.dependancy[1]:
+            if not getattr(self, field.dependency[0]) in field.dependency[1]:
                 return None
 
         try:

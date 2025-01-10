@@ -9,7 +9,7 @@ class ConfigurationTestCases(unittest.TestCase):
         configuration_str: str
         with open("tests/data/configuration_tests/config-format-1.json", "rt") as f:
             schema_str = "\n".join(f.readlines())
-        
+
         with open("tests/data/configuration_tests/config-1.ini") as f:
             configuration_str = "\n".join(f.readlines())
 
@@ -29,7 +29,7 @@ class ConfigurationTestCases(unittest.TestCase):
         configuration_str: str
         with open("tests/data/configuration_tests/config-format-2.json", "rt") as f:
             schema_str = "\n".join(f.readlines())
-        
+
         with open("tests/data/configuration_tests/config-2.ini") as f:
             configuration_str = "\n".join(f.readlines())
 
@@ -43,12 +43,12 @@ class ConfigurationTestCases(unittest.TestCase):
         self.assertListEqual(conf.numeric6, [0, 2])
         self.assertEqual(conf.string1, "1")
 
-    def test_load_configuration_with_dependancy(self):
+    def test_load_configuration_with_dependency(self):
         schema_str: str
         configuration_str: str
         with open("tests/data/configuration_tests/config-format-3.json", "rt") as f:
             schema_str = "\n".join(f.readlines())
-        
+
         with open("tests/data/configuration_tests/config-3.1.ini") as f:
             configuration_str = "\n".join(f.readlines())
 
@@ -56,11 +56,10 @@ class ConfigurationTestCases(unittest.TestCase):
         conf = common.configuration.Configuration(configuration_str, schema, load_post_config=False)
         self.assertEqual(conf.x, 1)
         self.assertEqual(conf.y, 2)
-        
+
         with open("tests/data/configuration_tests/config-3.2.ini") as f:
             configuration_str = "\n".join(f.readlines())
 
         conf = common.configuration.Configuration(configuration_str, schema, load_post_config=False)
         self.assertEqual(conf.x, 5)
         self.assertFalse(hasattr(conf, "y"))
-

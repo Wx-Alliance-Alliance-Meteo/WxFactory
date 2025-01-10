@@ -13,7 +13,7 @@
             "type": "str",
             "selectables": ["deep", "shallow"],
             "default": "deep",
-            "dependancy": {
+            "dependency": {
                 "name": "equations",
                 "values": ["euler"]
             }
@@ -32,7 +32,7 @@
             "section": "System",
             "type": "list-int",
             "default": [],
-            "dependancy": {
+            "dependency": {
                 "name": "desired_device",
                 "values": ["cuda"]
             },
@@ -49,7 +49,7 @@
             "name": "matsuno_wave_type",
             "section": "Test_case",
             "type": "str",
-            "dependancy": {
+            "dependency": {
                 "name": "case_number",
                 "values": [9]
             }
@@ -58,7 +58,7 @@
             "name": "matsuno_amp",
             "section": "Test_case",
             "type": "float",
-            "dependancy": {
+            "dependency": {
                 "name": "case_number",
                 "values": [9]
             }
@@ -175,7 +175,7 @@
             "section": "Spatial_discretization",
             "type": "int",
             "default": 16,
-            "dependancy": {
+            "dependency": {
                 "name": "filter_apply",
                 "values": [true]
             }
@@ -185,7 +185,7 @@
             "section": "Spatial_discretization",
             "type": "int",
             "default": 0,
-            "dependancy": {
+            "dependency": {
                 "name": "filter_apply",
                 "values": [false]
             }
@@ -195,7 +195,7 @@
             "section": "Spatial_discretization",
             "type": "float",
             "default": 0.25,
-            "dependancy": {
+            "dependency": {
                 "name": "filter_apply",
                 "values": [true]
             }
@@ -205,7 +205,7 @@
             "section": "Spatial_discretization",
             "type": "float",
             "default": 0.0,
-            "dependancy": {
+            "dependency": {
                 "name": "filter_apply",
                 "values": [false]
             }
@@ -220,7 +220,7 @@
             "name": "expfilter_order",
             "section": "Spatial_discretization",
             "type": "int",
-            "dependancy": {
+            "dependency": {
                 "name": "expfilter_apply",
                 "values": [true]
             }
@@ -230,7 +230,7 @@
             "section": "Spatial_discretization",
             "type": "int",
             "default": 0,
-            "dependancy": {
+            "dependency": {
                 "name": "expfilter_apply",
                 "values": [false]
             }
@@ -239,7 +239,7 @@
             "name": "expfilter_cutoff",
             "section": "Spatial_discretization",
             "type": "float",
-            "dependancy": {
+            "dependency": {
                 "name": "expfilter_apply",
                 "values": [true]
             }
@@ -249,7 +249,7 @@
             "section": "Spatial_discretization",
             "type": "float",
             "default": 0.0,
-            "dependancy": {
+            "dependency": {
                 "name": "expfilter_apply",
                 "values": [false]
             }
@@ -258,7 +258,7 @@
             "name": "expfilter_strength",
             "section": "Spatial_discretization",
             "type": "float",
-            "dependancy": {
+            "dependency": {
                 "name": "expfilter_apply",
                 "values": [true]
             }
@@ -268,7 +268,7 @@
             "section": "Spatial_discretization",
             "type": "float",
             "default": 0.0,
-            "dependancy": {
+            "dependency": {
                 "name": "expfilter_apply",
                 "values": [false]
             }
@@ -309,7 +309,7 @@
             "name": "lambda0",
             "section": "Grid",
             "type": "float",
-            "dependancy": {
+            "dependency": {
                 "name": "grid_type",
                 "values": ["cubed_sphere"]
             }
@@ -318,7 +318,7 @@
             "name": "phi0",
             "section": "Grid",
             "type": "float",
-            "dependancy": {
+            "dependency": {
                 "name": "grid_type",
                 "values": ["cubed_sphere"]
             }
@@ -327,7 +327,7 @@
             "name": "alpha0",
             "section": "Grid",
             "type": "float",
-            "dependancy": {
+            "dependency": {
                 "name": "grid_type",
                 "values": ["cubed_sphere"]
             }
@@ -337,7 +337,7 @@
             "section": "Grid",
             "type": "float",
             "default": 0.0,
-            "dependancy": {
+            "dependency": {
                 "name": "grid_type",
                 "values": ["cubed_sphere"]
             }
@@ -346,7 +346,7 @@
             "name": "x0",
             "section": "Grid",
             "type": "float",
-            "dependancy": {
+            "dependency": {
                 "name": "grid_type",
                 "values": ["cartesian2d"]
             }
@@ -355,7 +355,7 @@
             "name": "x1",
             "section": "Grid",
             "type": "float",
-            "dependancy": {
+            "dependency": {
                 "name": "grid_type",
                 "values": ["cartesian2d"]
             }
@@ -364,7 +364,7 @@
             "name": "z0",
             "section": "Grid",
             "type": "float",
-            "dependancy": {
+            "dependency": {
                 "name": "grid_type",
                 "values": ["cartesian2d"]
             }
@@ -373,7 +373,7 @@
             "name": "z1",
             "section": "Grid",
             "type": "float",
-            "dependancy": {
+            "dependency": {
                 "name": "grid_type",
                 "values": ["cartesian2d"]
             }
@@ -399,7 +399,7 @@
             "type": "int",
             "default": 1,
             "min": 1,
-            "dependancy": {
+            "dependency": {
                 "name": "preconditioner",
                 "values": ["fv-mg", "p-mg"]
             }
@@ -436,7 +436,7 @@
             "section": "Preconditioning",
             "type": "list-float",
             "default": [2.0],
-            "dependancy": {
+            "dependency": {
                 "name": "mg_smoother",
                 "values": ["exp"]
             }
@@ -446,7 +446,7 @@
             "section": "Preconditioning",
             "type": "list-int",
             "default": [4],
-            "dependancy": {
+            "dependency": {
                 "name": "mg_smoother",
                 "values": ["exp"]
             }
