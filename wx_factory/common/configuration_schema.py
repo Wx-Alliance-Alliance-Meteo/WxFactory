@@ -105,7 +105,6 @@ class ConfigurationField:
         field_default: Optional[OptionType],
         field_type: Type[OptionType],
         valid_range: ConfigFieldRange,
-        transform: Callable[[OptionType], OptionType],
         dependency: Optional[tuple[str, List[OptionType]]],
         description: str,
     ):
@@ -344,7 +343,7 @@ class ConfigurationSchema:
         description = self.__get_attribute("description", field, str, optional=True)
 
         return ConfigurationField(
-            field_name, field_section, field_default, field_type, valid_range, transform, dependency, description
+            field_name, field_section, field_default, field_type, valid_range, dependency, description
         )
 
     def to_string(self, markdown: bool = False):
@@ -365,6 +364,9 @@ class ConfigurationSchema:
 
     def __str__(self):
         return self.to_string(markdown=False)
+
+    def type_hints(self):
+        return "\n".join(f"{f.name}: {f.type.__name__}" for f in self.fields)
 
 
 def load_default_schema() -> ConfigurationSchema:
