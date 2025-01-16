@@ -1,4 +1,5 @@
 from configparser import ConfigParser, NoSectionError, NoOptionError
+import glob
 import os
 import sys
 from typing import Optional, Type, TypeVar, Union
@@ -115,46 +116,52 @@ class StateIntegrationTestCases(unittest.TestCase):
                 f"We are using {MPI.COMM_WORLD.size} process(es), but the test requires {self.num_process_required}"
             )
 
+        self.schema = load_default_schema()
+        self.config_files = glob.glob(f"{self.config_dir_path}/config*.ini")
+        print(f"Config files: {self.config_files}")
+
     def test_state(self):
         has_exited: bool = False
         exit_code: Optional[sys._ExitCode] = None
 
-        config_file = f"{self.config_dir_path}/config.ini"
-        config_content = wx_mpi.readfile(config_file)
-        config_schema_content = wx_mpi.readfile("config/config-format.json")
+        for config_file in self.config_files:
+            config_content = wx_mpi.readfile(config_file)
 
-        try:
-            sim = Simulation(config_content, config_schema_content)
-            sim.run()
-        except SystemExit as e:
-            has_exited = True
-            exit_code = e.code
-        except Exception as e:
-            print(e, flush=True)
-            raise e
+            config = Configuration(config_content, self.schema)
 
-        if has_exited:
-            print(f"Process {MPI.COMM_WORLD.rank} has exited prematurely")
-            sys.exit(exit_code)
+            try:
+                sim = Simulation(config)
+                sim.run()
+            except SystemExit as e:
+                has_exited = True
+                exit_code = e.code
+            except Exception as e:
+                print(e, flush=True)
+                raise e
 
-        schema = load_default_schema()
-        conf = sim.config
+            if has_exited:
+                print(f"Process {MPI.COMM_WORLD.rank} has exited prematurely")
+                sys.exit(exit_code)
 
-        state_vector_file = sim.output.state_file_name(conf.save_state_freq)
-        base_name = os.path.split(state_vector_file)[-1]
-        true_state_vector_file: str = f"{self.config_dir_path}/{base_name}"
+            conf = sim.config
 
-        [data, _] = state.load_state(state_vector_file, schema)
-        [true_data, _] = state.load_state(true_state_vector_file, schema)
+            state_vector_file = sim.output.state_file_name(conf.save_state_freq)
+            base_name = os.path.split(state_vector_file)[-1]
+            true_state_vector_file: str = f"{self.config_dir_path}/{base_name}"
 
-        if data.shape != true_data.shape:
-            self.fail("The result problem is not the same size as the solution's")
+            [data, _] = state.load_state(state_vector_file, self.schema)
+            [true_data, _] = state.load_state(true_state_vector_file, self.schema)
 
-        delta = true_data - data
+            if data.shape != true_data.shape:
+                self.fail("The result problem is not the same size as the solution's")
 
-        diff = numpy.linalg.norm(delta).item()
-        true_value = numpy.linalg.norm(true_data).item()
+            delta = true_data - data
 
-        relative_diff = diff / true_value
+            diff = numpy.linalg.norm(delta).item()
+            true_value = numpy.linalg.norm(true_data).item()
 
-        self.assertLessEqual(relative_diff, conf.tolerance, f"The relative difference ({relative_diff:.2e}) is too big")
+            relative_diff = diff / true_value
+
+            self.assertLessEqual(
+                relative_diff, conf.tolerance, f"The relative difference ({relative_diff:.2e}) is too big"
+            )

@@ -89,10 +89,6 @@ def main():
             raise ValueError(f"Config file does not seem to exist: {args.config}")
         sys.exit(-1)
 
-    # Read the config
-    config_content = wx_mpi.readfile(args.config)
-    config_schema_content = wx_mpi.readfile("config/config-format.json")
-
     try:
         import cProfile
 
@@ -108,7 +104,7 @@ def main():
             numpy.seterr(all="raise")
 
         # Initialize simulation
-        sim = Simulation(config_content, config_schema_content)
+        sim = Simulation(args.config)
 
         # This is the actual run
         sim.run()

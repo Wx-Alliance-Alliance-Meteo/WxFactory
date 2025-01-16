@@ -28,10 +28,10 @@ from output.output_manager import OutputManager
 from output.state import load_state
 from rhs.rhs_selector import RhsBundle
 
-from common import Configuration, ConfigurationSchema
+from common import Configuration, load_default_schema
 from common.definitions import idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_w
 from device import Device, CpuDevice, CudaDevice
-from wx_mpi import ProcessTopology
+from wx_mpi import ProcessTopology, readfile
 
 
 class Simulation:
@@ -45,13 +45,26 @@ class Simulation:
     it entirely.
     """
 
-    device: Device
+    def __init__(self, config: Configuration | str) -> None:
+        """Create a Simulation object from a certain configuration.
 
-    def __init__(self, config_file: str, config_schema_file: str) -> None:
+        :type config: Configuration | str
+        :param config: All options relevant to the simulation. Can be an already-initialized Configuration object, or
+                       the name of a file where to find these options.
+        """
         self.rank = MPI.COMM_WORLD.rank
 
-        self.schema = ConfigurationSchema(config_schema_file)
-        self.config = Configuration(config_file, self.schema)
+        if isinstance(config, Configuration):
+            self.config = config
+        elif isinstance(config, str):
+            self.schema = load_default_schema()
+            self.config = Configuration(readfile(config), self.schema)
+        else:
+            raise ValueError(
+                f"Need to provide either a Configuration or a config file name to create a Simulation\n"
+                f"(Gave a {type(config)})"
+            )
+
         if self.rank == 0:
             print(f"{self.config}", flush=True)
 
