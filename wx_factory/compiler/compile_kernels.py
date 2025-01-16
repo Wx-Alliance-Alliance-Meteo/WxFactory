@@ -2,12 +2,14 @@
 Code to compile the kernels
 """
 
-from setuptools.command.build_ext import build_ext
-from setuptools import setup, Extension
 from glob import glob
 import os
-import pybind11
 import shutil
+import sys
+
+import pybind11
+from setuptools.command.build_ext import build_ext
+from setuptools import setup, Extension
 
 from common import main_project_dir
 

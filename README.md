@@ -59,5 +59,10 @@ This will generate a set of `profile_####.out` files, one for each launched proc
 snakeviz ./profile_0000.out
 ```
 
+## Configuration options
+
+The configuration parameters available to put in the file passed as an argument to `WxFactory`
+are listed [here](doc/config_options.md).
+
 ## If you find this project useful, please cite:
 Gaudreault, S., Charron, M., Dallerit, V., & Tokman, M. (2022). High-order numerical solutions to the shallow-water equations on the rotated cubed-sphere grid. Journal of Computational Physics, 449, 110792. [https://doi.org/10.1016/j.jcp.2021.110792](https://doi.org/10.1016/j.jcp.2021.110792)

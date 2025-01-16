@@ -11,6 +11,20 @@ from mpi4py import MPI
 import numpy
 
 
+class ConfigOptionsAction(argparse.Action):
+    def __init__(self, option_strings, dest, **kwargs):
+        super().__init__(option_strings, dest, default=argparse.SUPPRESS, **kwargs)
+
+    def __call__(self, parser, namespace, values, option_string, **kwargs) -> None:
+        from common import load_default_schema
+
+        schema = load_default_schema()
+        if MPI.COMM_WORLD.rank == 0:
+            markdown = values == "md"
+            print(f"Config options:\n{schema.to_string(markdown)}")
+        parser.exit()
+
+
 def main():
     """Execute a WxFactory simulation.
 
@@ -21,9 +35,6 @@ def main():
 
     args = None
     rank = MPI.COMM_WORLD.rank
-
-    if rank == 0:
-        print(f'Start time : {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}')
 
     # Doing the import here allows to output potential errors from a single PE, making them much easier to deal with.
     try:
@@ -48,6 +59,13 @@ def main():
             parser.add_argument(
                 "--numpy-warn-as-except", action="store_true", help="Raise an exception if there is a numpy warning"
             )
+            parser.add_argument(
+                "--config-options",
+                action=ConfigOptionsAction,
+                type=str,
+                nargs="?",
+                help="List all possible configuration options and stop",
+            )
 
             args = parser.parse_args()
         except SystemExit as e:
@@ -60,6 +78,9 @@ def main():
             raise parse_error
         sys.exit(-1)
 
+    if rank == 0:
+        print(f'Start time : {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}')
+
     args = MPI.COMM_WORLD.bcast(args, root=0)
 
     # Abort if config file does not exist
@@ -68,6 +89,7 @@ def main():
             raise ValueError(f"Config file does not seem to exist: {args.config}")
         sys.exit(-1)
 
+    # Read the config
     config_content = wx_mpi.readfile(args.config)
     config_schema_content = wx_mpi.readfile("config/config-format.json")
 
@@ -85,7 +107,7 @@ def main():
         if args.numpy_warn_as_except:
             numpy.seterr(all="raise")
 
-        # Read the config + initialize simulation
+        # Initialize simulation
         sim = Simulation(config_content, config_schema_content)
 
         # This is the actual run

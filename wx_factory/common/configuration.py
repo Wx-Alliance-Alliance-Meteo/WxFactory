@@ -1,7 +1,6 @@
-from configparser import ConfigParser, NoSectionError, NoOptionError
+from configparser import ConfigParser
 import copy
-import json
-from typing import Dict, List, Optional, Type, Self
+from typing import Dict, List, Optional, Self
 
 from .configuration_schema import ConfigurationSchema, ConfigurationField, OptionType
 
@@ -27,10 +26,16 @@ class Configuration:
         self.parser.read_string(self.config_content)
 
         for field in [field for field in schema.fields if field.dependency is None]:
-            self._get_option(field)
+            try:
+                self._get_option(field)
+            except Exception as e:
+                raise ValueError(f"Error reading option {field.name}") from e
 
         for field in [field for field in schema.fields if field.dependency is not None]:
-            self._get_option(field)
+            try:
+                self._get_option(field)
+            except Exception as e:
+                raise ValueError(f"Error reading option {field.name}") from e
 
         self.state_version = schema.version
 
@@ -59,58 +64,21 @@ class Configuration:
                 setattr(other, k, copy.deepcopy(v, memo))
         return other
 
-    def _get_opt_from_parser(self, section_name: str, option_name: str, option_type: Type[OptionType]) -> OptionType:
-        value: Optional[OptionType] = None
-
-        if option_type == float:
-            value = self.parser.getfloat(section_name, option_name)
-        elif option_type == int:
-            value = self.parser.getint(section_name, option_name)
-        elif option_type == str:
-            value = self.parser.get(section_name, option_name)
-        elif option_type == bool:
-            value = self.parser.getint(section_name, option_name) > 0
-        elif option_type == List[int]:
-            try:
-                value = [self.parser.getint(section_name, option_name)]
-            except ValueError:
-                value = [int(x) for x in json.loads(self.parser.get(section_name, option_name))]
-        elif option_type == List[float]:
-            try:
-                value = [self.parser.getfloat(section_name, option_name)]
-            except ValueError:
-                value = [float(x) for x in json.loads(self.parser.get(section_name, option_name))]
-        else:
-            raise ValueError(f"Cannot get this option type (not implemented): {option_type}")
-
-        assert value is not None
-        return value
-
     def _get_option(self, field: ConfigurationField) -> OptionType:
         value: Optional[OptionType] = None
         if field.dependency is not None:
             if not hasattr(self, field.dependency[0]):
-                raise ValueError(f"Cannot validate depancy {field.dependency[0]}. dependency not found")
+                raise ValueError(f"Cannot validate dependency {field.dependency[0]}. dependency not found")
 
             if not getattr(self, field.dependency[0]) in field.dependency[1]:
                 return None
 
-        try:
-            value = field.transform(self._get_opt_from_parser(field.field_section, field.field_name, field.field_type))
+        value = field.read(self.parser)
+        setattr(self, field.name, value)
 
-            if not field.validate(value):
-                raise ValueError(f"Cannot validate {field.field_name} at section {field.field_section}")
-        except (NoOptionError, NoSectionError) as e:
-            if field.field_default is None:
-                e.message += f"\nMust specify a value for option '{field.field_name}' in file {self.cfg_file}"
-                raise
-            value = field.field_default
-
-        setattr(self, field.field_name, value)
-
-        if field.field_section not in self.sections:
-            self.sections[field.field_section] = []
-        self.sections[field.field_section].append(field.field_name)
+        if field.section not in self.sections:
+            self.sections[field.section] = []
+        self.sections[field.section].append(field.name)
 
         return value
 
