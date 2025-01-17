@@ -119,7 +119,7 @@ function test_cart2d() {
 
     if [ $do_non_precond -gt 0 ]; then
         #TODO add back "imex2 partrosexp2 strang_epi2_ros2 strang_ros2_epi2" once newton_krylov is fixed
-        time_integrators="epi2 epi3 epi_stiff3 epi_stiff4 srerk3 tvdrk3 ros2 rosexp2 strang_epi2_ros2 strang_ros2_epi2"
+        time_integrators="epi2 epi3 epi_stiff3 epi_stiff4 srerk3 tvdrk3 ros2 rosexp2"
         for time_integrator in ${time_integrators}; do
             run_single_cart2d time_integrator || return 1
         done

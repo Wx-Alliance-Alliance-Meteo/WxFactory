@@ -239,6 +239,9 @@ class Simulation:
 
     def _create_preconditioner(self, Q: numpy.ndarray) -> Multigrid | Factorization | None:
         """Create the preconditioner required by the given params"""
+        if self.config.preconditioner != "none":
+            raise ValueError(f"Preconditioner is currently unavalable, until it get fixed")
+
         if self.config.preconditioner == "p-mg":
             return Multigrid(self.config, self.process_topo, self.device, discretization="dg")
         if self.config.preconditioner == "fv-mg":
