@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
-GEF_DIR=${SCRIPT_DIR}/..
+GEF_DIR=${SCRIPT_DIR}/../..
 TEST_DIR="${GEF_DIR}/work/testing_gef.tmp"
 LISTING=${TEST_DIR}/listing.txt
 

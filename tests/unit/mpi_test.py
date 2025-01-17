@@ -26,7 +26,7 @@ def run_test_on_x_process(test: unittest.TestCase, x: int = 0) -> MPI.Comm:
         return MPI.COMM_WORLD
 
     if x > MPI.COMM_WORLD.size:
-        test.skipTest("Not enough process to run this test")
+        test.fail("Not enough process to run this test")
 
     global test_tag
     is_needed: bool = MPI.COMM_WORLD.rank < x

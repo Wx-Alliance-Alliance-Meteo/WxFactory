@@ -1,4 +1,3 @@
-from typing import List
 import unittest
 import sys
 
@@ -8,7 +7,7 @@ from mpi4py import MPI
 from device import CpuDevice
 from wx_mpi import ProcessTopology, SOUTH, NORTH, WEST, EAST
 
-from tests.mpi_test import run_test_on_x_process
+from tests.unit.mpi_test import run_test_on_x_process
 
 dev = CpuDevice()
 

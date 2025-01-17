@@ -1,12 +1,13 @@
-import cpu_test
-import output.state
+import os
+import random
+
 import common.configuration
 import common.configuration_schema
-import ndarray_generator
-import random
-import common.configuration_schema
-import os
-import tests.common.config_pack
+import output.state
+
+import tests.unit.cpu_test as cpu_test
+import tests.unit.ndarray_generator as ndarray_generator
+import tests.unit.common.config_pack
 
 
 class StateTestCases(cpu_test.CpuTestCases):
@@ -38,7 +39,7 @@ class StateTestCases(cpu_test.CpuTestCases):
         output.state.save_state(arr, conf, output_path, self.cpu_device)
 
         data, loaded_conf = output.state.load_state(output_path, schema, self.cpu_device)
-        safe_conf = tests.common.config_pack.pack(loaded_conf)
+        safe_conf = tests.unit.common.config_pack.pack(loaded_conf)
 
         self.assertEqual(len(arr.shape), len(data.shape), "The shape of the data has changed between a save and a load")
         self.assertEqual(len(data.shape), 1, "The data is not a vector anymore")

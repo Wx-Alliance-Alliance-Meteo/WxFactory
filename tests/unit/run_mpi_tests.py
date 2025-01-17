@@ -6,15 +6,15 @@ import unittest
 
 from mpi_test import MpiRunner
 
-main_project_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..")
+main_project_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../..")
 main_module_dir = os.path.join(main_project_dir, "wx_factory")
 sys.path.append(main_project_dir)
 sys.path.append(main_module_dir)
 
-from tests.common.test_process_topology import ProcessTopologyTest
-from tests.solvers.test_pmex_mpi import PmexMpiTestCases
-from tests.solvers.test_kiops_mpi import KiopsMpiTestCases
-from tests.solvers.test_fgmres_mpi import FgmresMpiTestCases
+from tests.unit.common.test_process_topology import ProcessTopologyTest
+from tests.unit.solvers.test_pmex_mpi import PmexMpiTestCases
+from tests.unit.solvers.test_kiops_mpi import KiopsMpiTestCases
+from tests.unit.solvers.test_fgmres_mpi import FgmresMpiTestCases
 
 
 def load_tests():
