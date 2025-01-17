@@ -231,8 +231,7 @@ def fgmres(
                 residuals.append(((norm_r / norm_b).item(), time() - t_start, 0.0))
                 if verbose > 1:
                     if comm.rank == 0:
-                        print(f"{prefix}norm_r / b = {residuals[-1][0]:.3e}")
-                    sys.stdout.flush()
+                        print(f"{prefix}norm_r / b = {residuals[-1][0]:.3e}", flush=True)
                 if norm_r < tol_relative:
                     break
 
@@ -249,8 +248,7 @@ def fgmres(
         residuals.append(((norm_r / norm_b).item(), time() - t_start, 0.0))
         if verbose > 0:
             if comm.rank == 0:
-                print(f"{prefix}res: {norm_r/norm_b:.2e} (iter {niter})")
-            sys.stdout.flush()
+                print(f"{prefix}res: {norm_r/norm_b:.2e} (iter {niter})", flush=True)
 
         # TODO : End cpu calculation here
         # Has GMRES stagnated?

@@ -99,7 +99,8 @@ class Epi(Integrator):
             if mpirank == 0:
                 print(
                     f"PMEX converged at iteration {stats[2]} (using {stats[0]} internal substeps and"
-                    f" {stats[1]} rejected expm) to a solution with local error {stats[4]:.2e}"
+                    f" {stats[1]} rejected expm) to a solution with local error {stats[4]:.2e}",
+                    flush=True,
                 )
 
         else:
@@ -120,7 +121,8 @@ class Epi(Integrator):
             if mpirank == 0:
                 print(
                     f"KIOPS converged at iteration {stats[2]} (using {stats[0]} internal substeps and"
-                    f" {stats[1]} rejected expm) to a solution with local error {stats[4]:.2e}"
+                    f" {stats[1]} rejected expm) to a solution with local error {stats[4]:.2e}",
+                    flush=True,
                 )
 
         self.solver_info = SolverInfo(total_num_it=stats[2])

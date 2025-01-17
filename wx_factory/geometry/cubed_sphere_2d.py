@@ -492,16 +492,14 @@ class CubedSphere2D(CubedSphere):
     def to_single_block(self, a: NDArray) -> NDArray:
         """Convert input array from a list of elements to a single block of points layout."""
         expected_shape = (self.num_elements_x2, self.num_elements_x1, self.num_solpts * self.num_solpts)
-        if a.shape == expected_shape:
-            tmp_shape = (self.num_elements_x2, self.num_elements_x1, self.num_solpts, self.num_solpts)
-            new_shape = self.grid_shape_2d
-            return a.reshape(tmp_shape).transpose(0, 2, 1, 3).reshape(new_shape)
-        elif a.ndim == 3 and a.shape[1:] == expected_shape:
-            tmp_shape = (a.shape[0], self.num_elements_x2, self.num_elements_x1, self.num_solpts, self.num_solpts)
-            new_shape = (a.shape[0],) + self.grid_shape_2d
-            return a.reshape(tmp_shape).transpose(0, 1, 3, 2, 4).reshape(new_shape)
-        else:
-            raise ValueError(f"Unexpected shape {a.shape} (expected {expected_shape})")
+        xp = self.device.xp
+
+        if a.shape[-3:] != expected_shape:
+            raise ValueError(f"Unexpected shape {a.shape} (expected (..., ) + {expected_shape})")
+
+        tmp_shape = a.shape[:-3] + (self.num_elements_x2, self.num_elements_x1, self.num_solpts, self.num_solpts)
+        new_shape = a.shape[:-3] + self.grid_shape_2d
+        return xp.moveaxis(a.reshape(tmp_shape), -3, -2).reshape(new_shape)
 
     def middle_itf_i(self, a):
         """Extract the non-halo part of the given west-east interface array"""

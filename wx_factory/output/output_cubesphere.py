@@ -62,13 +62,11 @@ def output_init(geom, param, device):
         global netcdf_serial
         netcdf_serial = True
         if rank == 0:
-            print(f"WARNING: Unable to open a netCDF4 file in parallel mode. Doing it serially instead")
-            sys.stdout.flush()
+            print(f"WARNING: Unable to open a netCDF4 file in parallel mode. Doing it serially instead", flush=True)
             try:
                 ncfile = netCDF4.Dataset(param.output_file, "w", format="NETCDF4")
             except:
-                print(f"unable to create file serially...")
-                sys.stdout.flush()
+                print(f"unable to create file serially...", flush=True)
                 raise
 
     # create dimensions

@@ -112,13 +112,13 @@ class Simulation:
             self.step_id += 1
 
             if MPI.COMM_WORLD.rank == 0:
-                print(f"\nStep {self.step_id} of {self.num_steps + self.starting_step}")
+                print(f"Step {self.step_id} of {self.num_steps + self.starting_step}", flush=True)
 
             self.Q = self.integrator.step(self.Q, self.config.dt)
             self.Q = self.operators.apply_filters(self.Q, self.geometry, self.metric, self.config.dt)
 
             if MPI.COMM_WORLD.rank == 0:
-                print(f"Elapsed time for step: {self.integrator.latest_time:.3f} secs")
+                print(f"Elapsed time for step: {self.integrator.latest_time:.3f} secs", flush=True)
 
             # Check whether there are any NaNs in the solution
             # TODO put this inside the `step` function of the integrator

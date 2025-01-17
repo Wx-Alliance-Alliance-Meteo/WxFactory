@@ -117,8 +117,7 @@ class scipy_counter:  # TODO : tempo
         if rk is not None:
             self.res = float(rk)
         if self._disp:
-            print(f"iter {self.niter:3d}\trk = {str(rk)}")
-            sys.stdout.flush()
+            print(f"iter {self.niter:3d}\trk = {str(rk)}", flush=True)
 
     def num_iter(self):
         return self.niter
