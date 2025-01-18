@@ -92,46 +92,88 @@ def rhs_bubble(Q, geom, mtrx, nbsolpts, nb_elements_x, nb_elements_z):
 
    ifaces_flux[idx_2d_rho_u, 0,:,0] = ifaces_pres[0,:,0]  # TODO : pour les cas théoriques seulement ...
    ifaces_flux[idx_2d_rho_u,-1,:,1] = ifaces_pres[-1,:,1]
+
+
+   # Compute ifaces u and w
+   ifaces_u   = ifaces_var[idx_2d_rho_u] / ifaces_var[idx_2d_rho]
+   ifaces_w   = ifaces_var[idx_2d_rho_w] / ifaces_var[idx_2d_rho] 
+   kfaces_u   = kfaces_var[idx_2d_rho_u] / kfaces_var[idx_2d_rho]
+   kfaces_w   = kfaces_var[idx_2d_rho_w] / kfaces_var[idx_2d_rho]
+
+   # --- Interface total enthalpy
+   ifaces_enthalpy = (heat_capacity_ratio/(heat_capacity_ratio-1))*(ifaces_pres/ifaces_var[idx_2d_rho]) + 0.5*(ifaces_u**2 + ifaces_w**2)
+   kfaces_enthalpy = (heat_capacity_ratio/(heat_capacity_ratio-1))*(kfaces_pres/kfaces_var[idx_2d_rho]) + 0.5*(kfaces_u**2 + kfaces_w**2)
    
-   # --- Common AUSM fluxes
+   # --- Common Roe fluxes
    start = 0 if geom.zperiodic else 1
    for itf in range(start, nb_interfaces_z - 1):
 
       left  = itf - 1
       right = itf
 
-      # Left state
-      a_L = numpy.sqrt(heat_capacity_ratio * kfaces_pres[left, 1, :] / kfaces_var[idx_2d_rho, left, 1, :])
-      M_L = kfaces_var[idx_2d_rho_w, left, 1, :] / (kfaces_var[idx_2d_rho, left, 1, :] * a_L)
+      # Compute left and right flux
+      flux_L  = kfaces_var[:, left, 1, :] * kfaces_w[left, 1, :]
+      flux_L[idx_2d_rho_theta] += kfaces_pres[left, 1, :] * kfaces_w[left, 1, :]
+      flux_R  = kfaces_var[:, right, 0, :] * kfaces_w[right, 0, :]
+      flux_R[idx_2d_rho_theta]  += kfaces_pres[right, 0, :] * kfaces_w[right, 0, :]
+      # Add pressure with rho*u*u
+      flux_L[idx_2d_rho_w] += kfaces_pres[left, 1, :]
+      flux_R[idx_2d_rho_w] += kfaces_pres[right, 0, :]
 
-      # Right state
-      a_R = numpy.sqrt(heat_capacity_ratio * kfaces_pres[right, 0, :] / kfaces_var[idx_2d_rho, right, 0, :])
-      M_R = kfaces_var[idx_2d_rho_w, right, 0, :] / (kfaces_var[idx_2d_rho, right, 0, :] * a_R)
+      # Compute Roe-Averages
+      RT      = numpy.sqrt( kfaces_var[idx_2d_rho, right, 0, :] / kfaces_var[idx_2d_rho, left, 1, :] )
+      rho_avg = RT * kfaces_var[idx_2d_rho, left, 1, :]
+      u_avg   = (RT * kfaces_u[right, 0, :] + kfaces_u[left, 1, :]) / (RT+1)
+      w_avg   = (RT * kfaces_w[right, 0, :] + kfaces_w[left, 1, :]) / (RT+1)
+      H_avg   = (RT * kfaces_enthalpy[right, 0, :] + kfaces_enthalpy[left, 1, :]) / (RT+1)
+      a       = numpy.sqrt((heat_capacity_ratio-1)*(H_avg - 0.5*(u_avg**2 + w_avg**2)))
+
+      # Auxiliary Variables to compute eigenvectors and its inverse
+      alph1   = 0.5*(u_avg**2 + w_avg**2)
+      alph2   = (heat_capacity_ratio-1) / a**2
+      alph3   = 0.5 * (heat_capacity_ratio-1)
+      alph4   = 1 / (heat_capacity_ratio-1)
+
+      # Compute vector ΔU
+      ΔU      = kfaces_var[:, right, 0, :] - kfaces_var[:, left, 1, :]
+
+      # Compute matrix of eigenvector
+      P = numpy.zeros((nbsolpts*nb_elements_x, nb_equations, nb_equations))
+      P[:,0,0] = 1; P[:,0,1] = 0; P[:,0,2] = 1/a**2; P[:,0,3] = 1/a**2
+      P[:,1,0] = u_avg; P[:,1,1] = rho_avg; P[:,1,2] = (u_avg/a**2); P[:,1,3] = (u_avg/a**2)
+      P[:,2,0] = w_avg; P[:,2,1] = 0; P[:,2,2] = (w_avg/a**2)+(1/a); P[:,2,3] = (w_avg/a**2)-(1/a)
+      P[:,3,0] = alph1; P[:,3,1] = rho_avg*u_avg; P[:,3,2] = alph4+(alph1/a**2)+(w_avg/a); P[:,3,3] = alph4+(alph1/a**2)-(w_avg/a)
+
+
+      # Compute matrix of inverse eigenvector
+      Pinv = numpy.zeros((nbsolpts*nb_elements_x, nb_equations, nb_equations))
+      Pinv[:, 0, 0] = 1 - (alph1*alph2); Pinv[:, 0, 1] = u_avg*alph2; Pinv[:, 0, 2] = w_avg*alph2; Pinv[:, 0, 3] = -alph2
+      Pinv[:, 1, 0] = -(u_avg/rho_avg); Pinv[:, 1, 1] = 1/rho_avg; Pinv[:, 1, 2] = 0; Pinv[:, 1, 3] = 0 
+      Pinv[:, 2, 0] = alph1*alph3 - 0.5*a*w_avg; Pinv[:, 2, 1] = -u_avg*alph3 ; Pinv[:, 2, 2] = a/2 - w_avg*alph3 ; Pinv[:, 2, 3] = alph3
+      Pinv[:, 3, 0] = alph1*alph3 + 0.5*a*w_avg; Pinv[:, 3, 1] = -u_avg*alph3; Pinv[:, 3, 2] = -a/2 - w_avg*alph3; Pinv[:, 3, 3] = alph3
       
-      M = 0.25 * (( M_L + 1.)**2 - (M_R - 1.)**2)
 
-      kfaces_flux[0:3,right,0,:] = (kfaces_var[0:3,left,1,:] * numpy.maximum(0., M) * a_L) + \
-                                 (kfaces_var[0:3,right,0,:] * numpy.minimum(0., M) * a_R)
-      kfaces_flux[3,right,0,:] = ((kfaces_var[3,left,1,:] + kfaces_pres[left,1,:]) * numpy.maximum(0., M) * a_L) + \
-                                 ((kfaces_var[3,right,0,:] + kfaces_pres[right,0,:]) * numpy.minimum(0., M) * a_R)
-      
+      # Compute matrix of eigenvalues
+      # Initialize the lamb matrix with shape (30, 4, 4)
+      lamb = numpy.zeros((nbsolpts*nb_elements_x, nb_equations, nb_equations))
+      lamb[:, 0, 0] = numpy.abs(w_avg); lamb[:, 1, 1] = numpy.abs(w_avg); lamb[:, 2, 2] = numpy.abs(w_avg + a); lamb[:, 3, 3] = numpy.abs(w_avg - a)
 
-      kfaces_flux[idx_2d_rho_w,right,0,:] += 0.5 * ((1. + M_L) * kfaces_pres[left,1,:] + \
-                                                    (1. - M_R) * kfaces_pres[right,0,:])
+
+      # Compute Roe matrix
+      A = numpy.array([numpy.dot(P[i], lamb[i]) for i in range(P.shape[0])])
+      B = numpy.array([numpy.dot(A[i], Pinv[i]) for i in range(A.shape[0])])
+
+      # Compute P*|lambda|*Pinv*-w_avg*ΔU
+      phi = numpy.array([numpy.dot(B[i], ΔU[:,i]) for i in range(B.shape[0])])
+
+      # Final common flux
+      kfaces_flux[:,right,0,:] = 0.5*(flux_L + flux_R) - 0.5*phi.T
 
       kfaces_flux[:,left,1,:] = kfaces_flux[:,right,0,:]
 
    if geom.zperiodic:
       kfaces_flux[:, 0, 0, :] = kfaces_flux[:, -1, 1, :]
 
-   # Compute ifaces u and w
-   ifaces_u   = ifaces_var[idx_2d_rho_u] / ifaces_var[idx_2d_rho]
-   ifaces_w   = ifaces_var[idx_2d_rho_w] / ifaces_var[idx_2d_rho] 
-
-   # --- Interface total enthalpy
-   #ifaces_enthalpy = (ifaces_var[idx_2d_rho_theta] + ifaces_pres) / ifaces_var[idx_2d_rho]
-   ifaces_enthalpy = (1.4/0.4)*(ifaces_pres/ifaces_var[idx_2d_rho]) + 0.5*(ifaces_u**2 + ifaces_w**2)
-   kfaces_enthalpy = (kfaces_var[idx_2d_rho_theta] + kfaces_pres) / kfaces_var[idx_2d_rho]
 
 
    # ifaces flux
@@ -146,11 +188,10 @@ def rhs_bubble(Q, geom, mtrx, nbsolpts, nb_elements_x, nb_elements_z):
       flux_L[idx_2d_rho_theta] += ifaces_pres[left, :, 1] * ifaces_u[left, :, 1]
       flux_R  = ifaces_var[:, right, :, 0] * ifaces_u[right, :, 0]
       flux_R[idx_2d_rho_theta]  += ifaces_pres[right, :, 0] * ifaces_u[right, :, 0]
-
-
       # Add pressure with rho*u*u
       flux_L[idx_2d_rho_u] += ifaces_pres[left,:,1]
       flux_R[idx_2d_rho_u] += ifaces_pres[right,:,0]
+
 
       # Compute Roe-Averages
       RT      = numpy.sqrt( ifaces_var[idx_2d_rho, right, :, 0] / ifaces_var[idx_2d_rho, left, :, 1] )
