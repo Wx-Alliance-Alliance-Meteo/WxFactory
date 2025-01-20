@@ -29,7 +29,7 @@ def main(args):
     max_w = -min_w
     max_theta = -min_theta
     for s in args.input_states:
-        state, safe_param = load_state(s)
+        state, param = load_state(s)
         min_rho = min(min_rho, state[idx_2d_rho].min())
         max_rho = max(max_rho, state[idx_2d_rho].max())
         min_u = min(min_u, (state[idx_2d_rho_u] / state[idx_2d_rho]).min())
@@ -39,19 +39,18 @@ def main(args):
         min_theta = min(min_theta, (state[idx_2d_rho_theta] / state[idx_2d_rho]).min())
         max_theta = max(max_theta, (state[idx_2d_rho_theta] / state[idx_2d_rho]).max())
 
-    file_name = lambda var, id: f"{args.output_file}_{safe_param["Test_case"]["case_number"]}_{var}_{i:08d}"
-    
-    
+    file_name = lambda var, id: f"{args.output_file}_{param.case_number}_{var}_{i:08d}"
+
     for i, s in enumerate(args.input_states):
-        state, safe_param = load_state(s)
-        # geom = create_geometry(param, None)
-        # if isinstance(geom, Cartesian2D):
-        # image_field(geom, state[idx_2d_rho], file_name('rho', i), min_rho, max_rho, 25, 'rho (units=?)')
-        # image_field(geom, state[idx_2d_rho_u] / state[idx_2d_rho], file_name('u', i), min_u, max_u, 25, 'u (m/s)')
-        # image_field(geom, state[idx_2d_rho_w] / state[idx_2d_rho], file_name("w", i), min_w, max_w, 100, "w (m/s)")
-        # image_field(geom, state[idx_2d_rho_theta] / state[idx_2d_rho], file_name('theta', i), min_theta, max_theta, \
-        #             25, 'theta (units=?)')
-        # output_step(state, geom, param, file_name("", i))
+        state, param = load_state(s)
+        geom = create_geometry(param, None)
+        if isinstance(geom, Cartesian2D):
+            # image_field(geom, state[idx_2d_rho], file_name('rho', i), min_rho, max_rho, 25, 'rho (units=?)')
+            # image_field(geom, state[idx_2d_rho_u] / state[idx_2d_rho], file_name('u', i), min_u, max_u, 25, 'u (m/s)')
+            image_field(geom, state[idx_2d_rho_w] / state[idx_2d_rho], file_name("w", i), min_w, max_w, 100, "w (m/s)")
+            # image_field(geom, state[idx_2d_rho_theta] / state[idx_2d_rho], file_name('theta', i), min_theta, max_theta, \
+            #             25, 'theta (units=?)')
+            output_step(state, geom, param, file_name("", i))
 
 
 if __name__ == "__main__":

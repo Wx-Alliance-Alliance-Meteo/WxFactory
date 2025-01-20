@@ -12,6 +12,7 @@ def pmex(
     tol=1e-7,
     delta=1.2,
     m_init=10,
+    mmin=10,
     mmax=128,
     reuse_info=True,
     task1=False,
@@ -67,17 +68,8 @@ def pmex(
 
     first_accepted = True
 
-    if not hasattr(pmex, "static_mem") or reuse_info is False:
-        pmex.static_mem = True
-        pmex.suggested_step = tau_end
-        pmex.suggested_m = mmax
-        m_opt = 1
-    else:
-        m_init = pmex.suggested_m
-        m_opt = 1
-
     # We only allow m to vary between mmin and mmax
-    mmin = 1
+    # mmin = 1
     m = max(mmin, min(m_init, mmax))
 
     # Preallocate matrix
@@ -113,7 +105,10 @@ def pmex(
     u_flip = nu * device.xp.flipud(u[1:, :])
 
     # Compute and initial starting approximation for the step size
-    tau = min(pmex.suggested_step, tau_end)
+    # tau = min(pmex.suggested_step, tau_end)
+
+    # follow same as kiops
+    tau = tau_end
 
     # Setting the safety factors and tolerance requirements
     if tau_end > 1:

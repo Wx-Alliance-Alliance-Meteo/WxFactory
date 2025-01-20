@@ -196,8 +196,11 @@ def initialize_sw(geom: CubedSphere2D, metric, mtrx, param):
         Q[idx_hu1, ...] = fluid_height * u1_contra
         Q[idx_hu2, ...] = fluid_height * u2_contra
 
-    # Note : we move the last axis of the first topo array so that both have similiar ordering
-    return Q, Topo(hsurf, dzdx1, dzdx2, hsurf_itf_i, hsurf_itf_j)
+    topo = None
+    if param.case_number == 5 or param.case_number == 10:
+        topo = Topo(hsurf, dzdx1, dzdx2, hsurf_itf_i, hsurf_itf_j)
+
+    return Q, topo
 
 
 def initialize_cartesian2d(geom: Cartesian2D, param: Configuration) -> NDArray[numpy.float64]:

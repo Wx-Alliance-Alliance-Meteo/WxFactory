@@ -154,6 +154,11 @@ class ConfigurationField:
 
             value = self.field_default
 
+        if not self.validate(value):
+            raise ValueError(
+                f"Value '{value}' does not fall in acceptable range for field '{self.name}': {self.valid_range}"
+            )
+
         return value
 
     @staticmethod
@@ -375,4 +380,5 @@ def load_default_schema() -> ConfigurationSchema:
     schema_path = "config/config-format.json"
     schema_content = wx_mpi.readfile(schema_path)
     schema = ConfigurationSchema(schema_content)
+
     return schema

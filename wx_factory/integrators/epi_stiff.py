@@ -5,9 +5,10 @@ import numpy
 from mpi4py import MPI
 
 from common.configuration import Configuration
+from solvers import kiops, matvec_fun, pmex, exode
+
 from .epi import Epi
 from .integrator import Integrator, alpha_coeff
-from solvers import kiops, matvec_fun, pmex
 
 
 class EpiStiff(Integrator):
@@ -18,6 +19,8 @@ class EpiStiff(Integrator):
         self.krylov_size = 1
         self.jacobian_method = param.jacobian_method
         self.exponential_solver = param.exponential_solver
+        self.exode_method = param.exode_method
+        self.exode_controller = param.exode_controller
 
         if order < 2:
             raise ValueError("Unsupported order for EPI method")
@@ -83,6 +86,26 @@ class EpiStiff(Integrator):
                 print(
                     f"PMEX converged at iteration {stats[2]} (using {stats[0]} internal substeps and"
                     f" {stats[1]} rejected expm) to a solution with local error {stats[4]:.2e}"
+                )
+
+        # ----- EXODE ------
+        elif self.exponential_solver == "exode":
+            phiv, stats = exode(
+                1.0,
+                matvec_handle,
+                vec,
+                method=self.exode_method,
+                controller=self.exode_controller,
+                atol=self.tol,
+                task1=False,
+                verbose=False,
+            )
+
+            # comment out for scaling test
+            if mpirank == 0:
+                print(
+                    f"EXODE converged at iteration {stats[0]}, with {stats[1]} rejected steps"
+                    f" with local error {stats[3]}"
                 )
 
         else:

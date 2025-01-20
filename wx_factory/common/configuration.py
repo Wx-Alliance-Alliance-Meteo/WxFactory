@@ -123,6 +123,8 @@ class Configuration:
     discretization: str
     dt: float
     equations: str
+    exode_controller: str
+    exode_method: str
     expfilter_apply: bool
     expfilter_cutoff: float
     expfilter_cutoff: float
@@ -169,6 +171,7 @@ class Configuration:
     starting_step: int
     stat_freq: int
     store_solver_stats: bool
+    store_total_time: bool
     t_end: float
     time_integrator: str
     tolerance: float

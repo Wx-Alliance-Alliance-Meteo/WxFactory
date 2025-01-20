@@ -334,7 +334,9 @@ def output_netcdf(
     if isinstance(geom, CubedSphere2D):  # Shallow water
 
         # Unpack physical variables
-        h = Q[idx_h, :, :] + topo.hsurf
+        h = Q[idx_h, :, :]
+        if topo is not None:
+            h += topo.hsurf
         store_field(geom.to_single_block(prepare(h)), "h", idx, ncfile)
 
         if param.case_number >= 2:

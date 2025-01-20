@@ -19,18 +19,18 @@ doc/**/build
 doc/sphinx/source/_autosummary
 doc/sphinx/**/*.md
 
-jacobian
-
 scripts/**/*.pdf
 
 __pycache__/
 *.py[cod]
 
 bubble_cliff
-results
+jacobian
 listings
-test_configs/
+results
+results_tanya
 work
+
 scripts/load_env.sh
 
 .vscode

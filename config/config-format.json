@@ -108,7 +108,19 @@
                     "name": "exponential_solver",
                     "type": "str",
                     "default": "pmex",
-                    "selectables": ["pmex", "kiops"]
+                    "selectables": ["pmex", "kiops", "exode", "cwy_1s", "cwy_ne", "cwy_ne1s", "dcgs2", "icwy_1s",
+                                    "icwy_neiop", "icwy_ne", "icwy_ne1s", "kiops_ne", "pmex_1s", "pmex_ne1s"]
+                },
+                {
+                    "name": "exode_method",
+                    "type": "str",
+                    "default": "BS3(2)",
+                    "selectables": [ "BS3(2)", "DP5(4)", "M4(3)", "KC3(2)", "EXLRK3(2)", "EXLRK4(3)", "F14(12)", "DP8(7)", "F10(8)" ]
+                },
+                {
+                    "name": "exode_controller",
+                    "type": "str",
+                    "default": ""
                 },
                 {
                     "name": "krylov_size",
@@ -493,6 +505,12 @@
                     "type": "case-sensitive-str",
                     "default": "solver_stats.db",
                     "description": "SQL file where to store statistics for this run"
+                },
+                {
+                    "name": "store_total_time",
+                    "type": "bool",
+                    "default": false,
+                    "description": "Whether to output total runtime in seconds to a file"
                 }
             ]
         }

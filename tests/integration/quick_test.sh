@@ -163,6 +163,7 @@ function test_shallow_water() {
     tolerance=1e-7
     starting_step=0
     gmres_restart=200
+    exponential_solver=pmex
     num_solpts=4
     num_elements_horizontal=4
     preconditioner=none
@@ -180,6 +181,7 @@ function test_shallow_water() {
 
     cp ${config_orig} ${CONFIG_BASE}
     set_param ${CONFIG_BASE} dt t_end time_integrator tolerance starting_step gmres_restart        \
+                             exponential_solver \
                              num_solpts num_elements_horizontal preconditioner                        \
                              output_freq save_state_freq store_solver_stats output_dir             \
                              num_pre_smoothe num_post_smoothe mg_solve_coarsest desired_device
@@ -188,6 +190,14 @@ function test_shallow_water() {
         time_integrators="epi2 epi3 epi_stiff3 epi_stiff4 srerk3 tvdrk3 ros2"
         for time_integrator in ${time_integrators}; do
             run_single_cubesphere time_integrator || return 1
+        done
+
+        # TODO Fix dcgs2 test case
+        # dcgs2
+        time_integrator=epi6
+        solvers="exode kiops pmex cwy_1s cwy_ne cwy_ne1s icwy_1s icwy_neiop icwy_ne icwy_ne1s kiops_ne pmex_1s pmex_ne1s"
+        for exponential_solver in ${solvers}; do
+            run_single_cubesphere time_integrator exponential_solver || return 1
         done
     fi
 

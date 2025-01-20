@@ -1,4 +1,5 @@
 import sys
+from time import time
 
 from mpi4py import MPI
 import numpy
@@ -154,10 +155,12 @@ class Simulation:
         self.step_id = self.starting_step
         self.Q = self.initial_Q
 
+        start_time = time()
+
         while self.step():
             pass  # Step until everything is done
 
-        self.output.finalize()  # Close any open output file
+        self.output.finalize(time() - start_time)  # Close any open output file
 
     def _make_device(self) -> Device:
         """Create the device object which will determine on what hardware (CPU/GPU) each part of the simulation will
