@@ -48,8 +48,8 @@ class cuda_build_ext(default_build_ext):
         build_ext.build_extensions(self)
 
 
-extra_compiler_args_cpp = "-shared -std=c++11 -fPIC".split(" ")
-extra_compiler_args_cuda = "-shared -std=c++11 -Xcompiler -fPIC".split(" ")
+extra_compiler_args_cpp = "-Wall -shared -std=c++11 -fPIC".split(" ")
+extra_compiler_args_cuda = "-O2 -shared -std=c++11 -Xcompiler -fPIC -Xcompiler -Wall".split(" ")
 pybind_include = pybind11.get_include()
 header_files = glob(pde_src_directory + "/**/*.h", root_dir=main_project_dir, recursive=True) + glob(
     pde_src_directory + "/**/*.hpp", root_dir=main_project_dir, recursive=True

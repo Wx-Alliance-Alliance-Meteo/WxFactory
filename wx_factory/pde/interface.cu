@@ -1,6 +1,9 @@
-#include "definitions.hpp"
 #include "interface.hpp"
 
+#include <cstddef>
+#include <iostream>
+
+#include "definitions.hpp"
 #include "kernels/kernels.h"
 
 namespace py = pybind11;
@@ -114,8 +117,7 @@ __global__ void boundary_eulercartesian_2d(
           params_r(q_itf, flux_itf, nullptr, nullptr, indr, stride);
       boundary_eulercartesian_2d_kernel(params_r, 0);
     }
-
-    if (direction == 1)
+    else if (direction == 1)
     {
       // Bottom flux
       const int indb = get_c_index(0, 0, ix, iy, array_shape);
@@ -129,6 +131,20 @@ __global__ void boundary_eulercartesian_2d(
           params_t(q_itf, nullptr, flux_itf, nullptr, indt, stride);
       boundary_eulercartesian_2d_kernel(params_t, 1);
     }
+  }
+}
+
+template <typename real_t, typename num_t>
+__global__ void forcing_euler_cubesphere_3d(
+    forcing_params<real_t, num_t> params,
+    const size_t                  max_num_threads,
+    const bool                    verbose) {
+  const size_t thread_id = threadIdx.x + blockIdx.x * blockDim.x;
+
+  if (thread_id < max_num_threads)
+  {
+    params.set_index(thread_id);
+    forcing_euler_cubesphere_3d_kernel<real_t, num_t>(params, verbose);
   }
 }
 
@@ -305,6 +321,7 @@ void select_riemann_eulercartesian_ausm_2d(
     const int  num_elem_x1,
     const int  num_elem_x2,
     const int  num_solpts) {
+
   // Determine the CuPy array dtype
   std::string dtype = py::str(q_itf_x1.attr("dtype").attr("name"));
 
@@ -332,10 +349,94 @@ void select_riemann_eulercartesian_ausm_2d(
   }
 }
 
+template <typename real_t, typename num_t>
+void launch_forcing_euler_cubesphere_3d(
+    py::object q_in,
+    py::object pressure_in,
+    py::object sqrt_g_in,
+    py::object h_in,
+    py::object christoffel_in,
+    py::object forcing_in,
+    const int  num_elem_x1,
+    const int  num_elem_x2,
+    const int  num_elem_x3,
+    const int  num_solpts,
+    const int  verbose) {
+  const num_t*  q           = get_cupy_pointer<const num_t>(q_in);
+  const num_t*  pressure    = get_cupy_pointer<const num_t>(pressure_in);
+  const real_t* sqrt_g      = get_cupy_pointer<const real_t>(sqrt_g_in);
+  const real_t* h           = get_cupy_pointer<const real_t>(h_in);
+  const real_t* christoffel = get_cupy_pointer<const real_t>(christoffel_in);
+  num_t*        forcing     = get_cupy_pointer<num_t>(forcing_in);
+
+  const size_t stride = num_elem_x1 * num_elem_x2 * num_elem_x3 * num_solpts;
+  forcing_params<real_t, num_t>
+      base_params(q, pressure, sqrt_g, h, christoffel, forcing, 0, stride);
+  std::cout << "Kernel caller!\n";
+
+  // const size_t num_blocks = (stride + BLOCK_SIZE - 1) / BLOCK_SIZE;
+  // forcing_euler_cubesphere_3d<real_t, num_t>
+  //     <<<num_blocks, BLOCK_SIZE>>>(base_params, stride, bool(verbose));
+}
+
+void select_forcing_euler_cubesphere_3d(
+    py::object q_in,
+    py::object pressure_in,
+    py::object sqrt_g_in,
+    py::object h_in,
+    py::object christoffel_in,
+    py::object forcing_in,
+    const int  num_elem_x1,
+    const int  num_elem_x2,
+    const int  num_elem_x3,
+    const int  num_solpts,
+    const int  verbose) {
+
+  // Determine cupy array dtype
+  std::string dtype = py::str(q_in.attr("dtype").attr("name"));
+  if (dtype == "float64")
+  {
+    launch_forcing_euler_cubesphere_3d<double, double>(
+        q_in,
+        pressure_in,
+        sqrt_g_in,
+        h_in,
+        christoffel_in,
+        forcing_in,
+        num_elem_x1,
+        num_elem_x2,
+        num_elem_x3,
+        num_solpts,
+        verbose);
+  }
+  else if (dtype == "complex128")
+  {
+    launch_forcing_euler_cubesphere_3d<double, complex_t>(
+        q_in,
+        pressure_in,
+        sqrt_g_in,
+        h_in,
+        christoffel_in,
+        forcing_in,
+        num_elem_x1,
+        num_elem_x2,
+        num_elem_x3,
+        num_solpts,
+        verbose);
+  }
+  else
+  {
+    std::cerr << __func__ << ": Unrecognized array type " << dtype << "\n";
+  }
+}
+
 PYBIND11_MODULE(interface_cuda, m) {
   // Pointwise fluxes
   m.def("pointwise_eulercartesian_2d", &select_pointwise_eulercartesian_2d);
 
   // Riemann fluxes
   m.def("riemann_eulercartesian_ausm_2d", &select_riemann_eulercartesian_ausm_2d);
+
+  // Forcing
+  m.def("forcing_euler_cubesphere_3d", &select_forcing_euler_cubesphere_3d);
 }

@@ -804,9 +804,9 @@ def dcmip_gravity_wave(geom: CubedSphere3D, metric: Metric3DTopo, mtrx: DFROpera
     w = xp.zeros_like(u)
 
     ## Set a trivial topography
-    zbot = xp.zeros(geom.coordVec_latlon.shape[2:], like=geom.coordVec_latlon)
-    zbot_itf_i = xp.zeros(geom.coordVec_latlon_itf_i.shape[2:], like=geom.coordVec_latlon_itf_i)
-    zbot_itf_j = xp.zeros(geom.coordVec_latlon_itf_j.shape[2:], like=geom.coordVec_latlon_itf_j)
+    zbot = xp.zeros_like(geom.coordVec_latlon[0, 0])
+    zbot_itf_i = xp.zeros_like(geom.coordVec_latlon_itf_i[0, 0])
+    zbot_itf_j = xp.zeros_like(geom.coordVec_latlon_itf_j[0, 0])
 
     # Update the geometry object with the new bottom topography
     geom.apply_topography(zbot, zbot_itf_i, zbot_itf_j, None, None, None)
