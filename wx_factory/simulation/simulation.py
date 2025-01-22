@@ -4,7 +4,7 @@ from time import time
 from mpi4py import MPI
 import numpy
 
-from geometry import Cartesian2D, CubedSphere3D, CubedSphere2D, DFROperators, Geometry
+from geometry import Cartesian2D, CubedSphere, CubedSphere3D, CubedSphere2D, DFROperators, Geometry
 from init.dcmip import dcmip_T11_update_winds, dcmip_T12_update_winds
 from init.init_state_vars import init_state_vars
 from integrators import (
@@ -26,6 +26,8 @@ from integrators import (
 from precondition.factorization import Factorization
 from precondition.multigrid import Multigrid
 from output.output_manager import OutputManager
+from output.output_cartesian import OutputCartesian
+from output.output_cubesphere import OutputCubesphere
 from output.state import load_state
 from rhs.rhs_selector import RhsBundle
 
@@ -74,16 +76,16 @@ class Simulation:
         self.process_topo = ProcessTopology(self.device) if self.config.grid_type == "cubed_sphere" else None
         self.geometry = self._create_geometry()
         self.operators = DFROperators(self.geometry, self.config, self.device)
-        self.initial_Q, self.topology, self.metric = init_state_vars(self.geometry, self.operators, self.config)
+        self.initial_Q, self.topography, self.metric = init_state_vars(self.geometry, self.operators, self.config)
         self.preconditioner = self._create_preconditioner(self.initial_Q)
-        self.output = OutputManager(self.config, self.geometry, self.metric, self.operators, self.topology, self.device)
+        self.output = self._create_output_manager()
         self.initial_Q, self.starting_step = self._determine_starting_state()
 
         self.rhs = RhsBundle(
             self.geometry,
             self.operators,
             self.metric,
-            self.topology,
+            self.topography,
             self.process_topo,
             self.config,
             self.initial_Q.shape,
@@ -254,6 +256,16 @@ class Simulation:
         if self.config.preconditioner in ["lu", "ilu"]:
             return Factorization(Q.dtype, Q.shape, self.config)
         return None
+
+    def _create_output_manager(self) -> OutputManager:
+        if isinstance(self.geometry, Cartesian2D):
+            return OutputCartesian(self.config, self.geometry, self.operators, self.device)
+        elif isinstance(self.geometry, CubedSphere):
+            return OutputCubesphere(
+                self.config, self.geometry, self.operators, self.device, self.metric, self.topography
+            )
+
+        raise ValueError(f"Unrecognized geometry type {type(self.geometry)}")
 
     def _determine_starting_state(self):
         """Try to load the state for the given starting step and, if successful, swap it with the initial state"""

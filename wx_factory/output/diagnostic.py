@@ -35,7 +35,7 @@ def absolute_vorticity(u1_contra: NDArray, u2_contra: NDArray, metric: Metric2D,
     return rv + metric.coriolis_f
 
 
-def total_energy(h, u1_contra, u2_contra, geom, topo, metric):
+def total_energy(h, u1_contra, u2_contra, topo, metric):
     u1_dual = metric.H_cov_11 * u1_contra + metric.H_cov_12 * u2_contra
     u2_dual = metric.H_cov_21 * u1_contra + metric.H_cov_22 * u2_contra
 
@@ -43,27 +43,23 @@ def total_energy(h, u1_contra, u2_contra, geom, topo, metric):
     kinetic = 0.5 * h * (u1_dual * u1_contra + u2_dual * u2_contra)
 
     # Potential energy
-    potential = 0.5 * gravity * ((h + topo.hsurf) ** 2 - topo.hsurf**2)
+    if topo is not None:
+        potential = 0.5 * gravity * ((h + topo.hsurf) ** 2 - topo.hsurf**2)
+    else:
+        potential = 0.5 * gravity * h**2
 
     # "Total" energy
     return kinetic + potential
 
 
 def potential_enstrophy(h, u1_contra, u2_contra, geom, metric, mtrx, param):
-    rv = relative_vorticity(u1_contra, u2_contra, geom, metric, mtrx, param)
+    rv = relative_vorticity(u1_contra, u2_contra, metric, mtrx)
     return (rv + metric.coriolis_f) ** 2 / (2 * h)
 
 
-def global_integral(field, mtrx, metric, num_solpts, num_elements_horiz):
-    local_sum = 0.0
-    for line in range(num_elements_horiz):
-        min_lin, max_lin = line * num_solpts + numpy.array([0, num_solpts])
-        for column in range(num_elements_horiz):
-            min_col, max_col = column * num_solpts + numpy.array([0, num_solpts])
-            local_sum += numpy.sum(
-                field[min_lin:max_lin, min_col:max_col]
-                * metric.sqrtG[min_lin:max_lin, min_col:max_col]
-                * mtrx.quad_weights
-            )
+def global_integral_2d(field: NDArray, mtrx: DFROperators, metric, num_solpts: int):
+
+    ny, nx = field.shape[:2]
+    local_sum = numpy.sum((field * metric.sqrtG).reshape(ny, nx, num_solpts, num_solpts) * mtrx.quad_weights)
 
     return MPI.COMM_WORLD.allreduce(local_sum)
