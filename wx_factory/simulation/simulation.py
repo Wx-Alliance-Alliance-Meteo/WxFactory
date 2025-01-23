@@ -27,7 +27,7 @@ from precondition.factorization import Factorization
 from precondition.multigrid import Multigrid
 from output.output_manager import OutputManager
 from output.output_cartesian import OutputCartesian
-from output.output_cubesphere import OutputCubesphere
+from output.output_cubesphere_netcdf import OutputCubesphereNetcdf
 from output.state import load_state
 from rhs.rhs_selector import RhsBundle
 
@@ -261,7 +261,7 @@ class Simulation:
         if isinstance(self.geometry, Cartesian2D):
             return OutputCartesian(self.config, self.geometry, self.operators, self.device)
         elif isinstance(self.geometry, CubedSphere):
-            return OutputCubesphere(
+            return OutputCubesphereNetcdf(
                 self.config, self.geometry, self.operators, self.device, self.metric, self.topography
             )
 

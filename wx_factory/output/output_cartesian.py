@@ -8,17 +8,11 @@ from common.definitions import (
     idx_2d_rho_theta as RHO_THETA,
 )
 from common.graphx import image_field
-from common import Configuration
-from device import Device
-from geometry import Cartesian2D, DFROperators
 
 from .output_manager import OutputManager
 
 
 class OutputCartesian(OutputManager):
-    def __init__(self, param: Configuration, geometry: Cartesian2D, operators: DFROperators, device: Device):
-        super().__init__(param, geometry, operators, device)
-
     def __write_result__(self, Q, step_id):
         filename = f"{self.output_dir}/euler2D_{self.param.case_number}_{step_id:08d}"
         Q_cartesian = self.geometry.to_single_block(Q)

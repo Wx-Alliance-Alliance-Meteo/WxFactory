@@ -17,7 +17,7 @@ from .diagnostic import relative_vorticity, potential_vorticity, total_energy, p
 from .output_manager import OutputManager
 
 
-class OutputCubesphere(OutputManager):
+class OutputCubesphereNetcdf(OutputManager):
     def __init__(
         self,
         config: Configuration,

@@ -511,6 +511,13 @@
                     "type": "bool",
                     "default": false,
                     "description": "Whether to output total runtime in seconds to a file"
+                },
+                {
+                    "name": "output_format",
+                    "type": "str",
+                    "default": "netcdf",
+                    "selectable": ["netcdf"],
+                    "description": "Desired format to use for storing simulation results."
                 }
             ]
         }

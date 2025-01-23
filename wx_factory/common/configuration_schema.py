@@ -208,8 +208,8 @@ class ConfigurationSchema:
     def __init__(self, json_str: str):
         try:
             format_obj = json.loads(json_str)
-        except json.JSONDecodeError:
-            raise ValueError("The configuration schema file is badly formatted. It must be a valid JSON file") from None
+        except json.JSONDecodeError as e:
+            raise ValueError("The configuration schema file is badly formatted. It must be a valid JSON file") from e
 
         self.version = self.__get_attribute("version", format_obj, str)
         sections = self.__get_attribute("sections", format_obj, list, optional=True)

@@ -158,6 +158,7 @@ class Configuration:
     num_pre_smoothe: int
     num_solpts: int
     output_dir: str
+    output_format: str
     output_freq: int
     phi0: float
     precond_flux: str
