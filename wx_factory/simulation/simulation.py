@@ -28,6 +28,7 @@ from precondition.multigrid import Multigrid
 from output.output_manager import OutputManager
 from output.output_cartesian import OutputCartesian
 from output.output_cubesphere_netcdf import OutputCubesphereNetcdf
+from output.output_cubesphere_fst import OutputCubesphereFst
 from output.state import load_state
 from rhs.rhs_selector import RhsBundle
 
@@ -261,9 +262,26 @@ class Simulation:
         if isinstance(self.geometry, Cartesian2D):
             return OutputCartesian(self.config, self.geometry, self.operators, self.device)
         elif isinstance(self.geometry, CubedSphere):
-            return OutputCubesphereNetcdf(
-                self.config, self.geometry, self.operators, self.device, self.metric, self.topography
-            )
+            if self.config.output_format == "netcdf":
+                return OutputCubesphereNetcdf(
+                    self.config,
+                    self.geometry,
+                    self.operators,
+                    self.device,
+                    self.metric,
+                    self.topography,
+                    self.process_topo,
+                )
+            elif self.config.output_format == "fst":
+                return OutputCubesphereFst(
+                    self.config,
+                    self.geometry,
+                    self.operators,
+                    self.device,
+                    self.metric,
+                    self.topography,
+                    self.process_topo,
+                )
 
         raise ValueError(f"Unrecognized geometry type {type(self.geometry)}")
 

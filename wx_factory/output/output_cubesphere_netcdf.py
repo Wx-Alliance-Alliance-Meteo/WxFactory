@@ -23,6 +23,7 @@ from common.definitions import (
 from common.configuration import Configuration
 from device import Device
 from geometry import CubedSphere, CubedSphere2D, CubedSphere3D, Metric2D, Metric3DTopo, DFROperators
+from wx_mpi import ProcessTopology
 
 from .diagnostic import potential_vorticity, relative_vorticity
 from .output_cubesphere import OutputCubesphere
@@ -37,11 +38,13 @@ class OutputCubesphereNetcdf(OutputCubesphere):
         device: Device,
         metric: Metric2D | Metric3DTopo,
         topo,
+        process_topo: ProcessTopology,
     ):
-        super().__init__(config, geometry, operators, device, metric, topo)
+        super().__init__(config, geometry, operators, device, metric, topo, process_topo)
 
         self.ncfile = None
         self.netcdf_serial = False
+        self.filename = f"{self.output_dir}/{self.param.base_output_file}.nc"
 
         if config.output_freq > 0:
             self._output_init()
@@ -52,27 +55,30 @@ class OutputCubesphereNetcdf(OutputCubesphere):
         # import here, so we don't need the module if not outputting
         import netCDF4
 
-        rank = MPI.COMM_WORLD.rank
-
         # creating the netcdf file(s)
         try:
-            self.ncfile = netCDF4.Dataset(self.param.output_file, "w", format="NETCDF4", parallel=True)
+            self.ncfile = netCDF4.Dataset(self.filename, "w", format="NETCDF4", parallel=True)
         except ValueError:
             self.netcdf_serial = True
-            if rank == 0:
+            if self.rank == 0:
                 print(f"WARNING: Unable to open a netCDF4 file in parallel mode. Doing it serially instead", flush=True)
                 try:
-                    self.ncfile = netCDF4.Dataset(self.param.output_file, "w", format="NETCDF4")
+                    self.ncfile = netCDF4.Dataset(self.filename, "w", format="NETCDF4")
                 except:
                     print(f"unable to create file serially...", flush=True)
                     raise
 
         # create dimensions
+        side = self.process_topology.num_lines_per_panel
         if self.param.equations == "shallow_water":
-            ni, nj = self.geometry.block_shape
+            nj, ni = self.geometry.block_shape
+            ni *= side
+            nj *= side
             grid_data = ("npe", "Xdim", "Ydim")
         elif self.param.equations == "euler":
             nk, nj, ni = self.geometry.nk, self.geometry.nj, self.geometry.ni
+            nj *= side
+            ni *= side
             grid_data = ("npe", "Zdim", "Xdim", "Ydim")
         else:
             raise ValueError(f"Unsupported equation type {self.param.equations}")
@@ -86,7 +92,7 @@ class OutputCubesphereNetcdf(OutputCubesphere):
             self.ncfile.details = "Cubed-sphere coordinates, Gauss-Legendre collocated grid"
 
             self.ncfile.createDimension("time", None)  # unlimited
-            npe = MPI.COMM_WORLD.Get_size()
+            npe = 6
             self.ncfile.createDimension("npe", npe)
             self.ncfile.createDimension("Ydim", ni)
             self.ncfile.createDimension("Xdim", nj)
@@ -275,38 +281,48 @@ class OutputCubesphereNetcdf(OutputCubesphere):
 
         prepare = self.device.to_host
 
-        if rank == 0:
-            xxx[:] = prepare(self.geometry.x1[:])
-            yyy[:] = prepare(self.geometry.x2[:])
+        panel_x = self._gather_panel(prepare(self.geometry.x1[...]))
+        panel_y = self._gather_panel(prepare(self.geometry.x2[...]))
+
+        if self.rank == 0:
+            xxx[:] = panel_x
+            yyy[:] = panel_y
             if self.param.equations == "euler":
+                # No gathering needed for vertical coords
                 # FIXME: With mapped coordinates, x3/height is a truly 3D coordinate
                 zzz[:] = prepare(self.geometry.x3[:, 0, 0])
 
         if self.netcdf_serial:
-            ranks = MPI.COMM_WORLD.gather(rank, root=0)
-            lons = MPI.COMM_WORLD.gather(prepare(self.geometry.block_lon * 180 / math.pi), root=0)
-            lats = MPI.COMM_WORLD.gather(prepare(self.geometry.block_lat * 180 / math.pi), root=0)
+            lons = self._gather_field(prepare(self.geometry.block_lon * 180 / math.pi))
+            lats = self._gather_field(prepare(self.geometry.block_lat * 180 / math.pi))
             if self.param.equations == "euler":
-                elevs = MPI.COMM_WORLD.gather(prepare(self.geometry.coordVec_latlon[2, :, :, :]), root=0)
-                topos = MPI.COMM_WORLD.gather(prepare(self.geometry.zbot[:, :]), root=0)
+                elevs = self._gather_field(prepare(self.geometry.coordVec_latlon[2, :, :, :]))
+                topos = self._gather_field(prepare(self.geometry.zbot[:, :]))
 
-            if rank == 0:
-                for my_rank, my_lon, my_lat in zip(ranks, lons, lats):
-                    tile[my_rank] = my_rank
-                    lon[my_rank, :, :] = my_lon
-                    lat[my_rank, :, :] = my_lat
+            if self.rank == 0:
+                for i in range(6):
+                    tile[i] = i
+                    lon[i, :, :] = lons[i]
+                    lat[i, :, :] = lats[i]
                 if self.param.equations == "euler":
-                    for my_rank, my_elev, my_topo in zip(ranks, elevs, topos):
-                        elev[my_rank, :, :, :] = my_elev
-                        topo[my_rank, :, :] = my_topo
+                    for i in range(6):
+                        elev[i, :, :, :] = elevs[i]
+                        topo[i, :, :] = topos[i]
 
         else:
-            tile[rank] = rank
-            lon[rank, :, :] = prepare(self.geometry.lon * 180 / math.pi)
-            lat[rank, :, :] = prepare(self.geometry.lat * 180 / math.pi)
+            panel_lon = self._gather_panel(prepare(self.geometry.lon * 180 / math.pi))
+            panel_lat = self._gather_panel(prepare(self.geometry.lat * 180 / math.pi))
             if self.param.equations == "euler":
-                elev[rank, :, :, :] = prepare(self.geometry.coordVec_latlon[2, :, :, :])
-                topo[rank, :, :] = prepare(self.geometry.zbot[:, :])
+                panel_elev = self._gather_panel(prepare(self.geometry.coordVec_latlon[2, :, :, :]))
+                panel_topo = self._gather_panel(prepare(self.geometry.zbot[:, :]))
+            if panel_lon is not None:
+                root_rank = self.process_topology.panel_roots_comm.rank
+                tile[root_rank] = root_rank
+                lon[root_rank, :, :] = panel_lon
+                lat[root_rank, :, :] = panel_lat
+                if self.param.equations == "euler":
+                    elev[root_rank, :, :, :] = panel_elev
+                    topo[root_rank, :, :] = panel_topo
 
     def __write_result__(self, Q, step_id):
         prepare = self.device.to_host
@@ -365,7 +381,7 @@ class OutputCubesphereNetcdf(OutputCubesphere):
 
     def __finalize__(self):
         """Finalise the output netCDF4 file."""
-        if MPI.COMM_WORLD.rank == 0 and self.ncfile is not None:
+        if self.rank == 0 and self.ncfile is not None:
             self.ncfile.close()
 
     def store_field(self, field: NDArray, name: str, step_id: int) -> None:
@@ -375,9 +391,12 @@ class OutputCubesphereNetcdf(OutputCubesphere):
         only that PE will perform the write operation.
         """
         if self.netcdf_serial:
-            fields: List = MPI.COMM_WORLD.gather(field, root=0)
-            if MPI.COMM_WORLD.rank == 0:
+            fields = self._gather_field(field)
+            if fields is not None:
                 for i, f in enumerate(fields):
                     self.ncfile[name][step_id, i] = f
         else:
-            self.ncfile[name][step_id, MPI.COMM_WORLD.rank] = field
+            panel_field = self._gather_panel(field)
+            if panel_field is not None:
+                root_rank = self.process_topology.panel_roots_comm.rank
+                self.ncfile[name][step_id, root_rank] = panel_field

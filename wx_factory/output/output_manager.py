@@ -1,20 +1,13 @@
 import os
-from typing import Callable, Optional, Union
+from time import time
+from typing import Callable, Optional
 
 from mpi4py import MPI
 from numpy.typing import NDArray
 
 from common.configuration import Configuration
 from device import Device
-from geometry import (
-    CubedSphere,
-    CubedSphere2D,
-    Geometry,
-    Metric2D,
-    Metric3DTopo,
-    DFROperators,
-)
-from init.initialize import Topo
+from geometry import Geometry, DFROperators
 from precondition.multigrid import Multigrid
 from solvers import SolverInfo
 
@@ -72,6 +65,13 @@ class OutputManager:
         )
         self.config_hash = state_params.__hash__() & 0xFFFFFFFFFFFF
 
+        self.num_writes = 0
+        self.num_save_states = 0
+        self.num_blockstats = 0
+        self.total_write_time = 0.0
+        self.total_save_state_time = 0.0
+        self.total_blockstat_time = 0.0
+
     def state_file_name(self, step_id: int) -> str:
         """Return the name of the file where to save the state vector for the current problem,
         for the given timestep."""
@@ -80,19 +80,28 @@ class OutputManager:
 
     def step(self, Q: NDArray, step_id: int) -> None:
         """Output the result of the latest timestep."""
-        if self.param.output_freq > 0:
-            if step_id % self.param.output_freq == 0:
-                if MPI.COMM_WORLD.rank == 0:
-                    print(f"=> Writing dynamic output for step {step_id}")
-                self.__write_result__(Q, step_id)
+        if self.param.output_freq > 0 and (step_id % self.param.output_freq) == 0:
+            if MPI.COMM_WORLD.rank == 0:
+                print(f"=> Writing dynamic output for step {step_id}")
 
-        if self.param.save_state_freq > 0:
-            if step_id % self.param.save_state_freq == 0:
-                save_state(self.geometry.to_single_block(Q), self.param, self.state_file_name(step_id))
+            t0 = time()
 
-        if self.param.stat_freq > 0:
-            if step_id % self.param.stat_freq == 0:
-                self.__blockstats__(Q, step_id)
+            self.__write_result__(Q, step_id)
+
+            self.total_write_time += time() - t0
+            self.num_writes += 1
+
+        if self.param.save_state_freq > 0 and (step_id % self.param.save_state_freq) == 0:
+            t0 = time()
+            save_state(self.geometry.to_single_block(Q), self.param, self.state_file_name(step_id))
+            self.total_save_state_time += time() - t0
+            self.num_save_states += 1
+
+        if self.param.stat_freq > 0 and (step_id % self.param.stat_freq) == 0:
+            t0 = time()
+            self.__blockstats__(Q, step_id)
+            self.total_blockstat_time += time() - t0
+            self.num_blockstats += 1
 
     def __write_result__(self, Q: NDArray, step_id: int):
         """Class-specific write implementation."""
@@ -139,6 +148,20 @@ class OutputManager:
 
         if self.param.output_freq > 0:
             self.__finalize__()
+
+        if MPI.COMM_WORLD.rank == 0:
+            per_write = self.total_write_time / self.num_writes if self.num_writes > 0 else 0.0
+            per_save = self.total_save_state_time / self.num_save_states if self.num_save_states > 0 else 0.0
+            per_blockstat = self.total_blockstat_time / self.num_blockstats if self.num_blockstats > 0 else 0.0
+            print(
+                f"Output time:\n"
+                f" - Write solution: {self.total_write_time:.3f}s "
+                f"({per_write:.3f} s/step)\n"
+                f" - Save state: {self.total_save_state_time:.3f}s "
+                f"({per_save:.3f} s/step)\n"
+                f" - Blockstats: {self.total_blockstat_time:.3f}s "
+                f"({per_blockstat:.3f} s/step)"
+            )
 
     def __finalize__(self):
         """Class-specific finalization"""
