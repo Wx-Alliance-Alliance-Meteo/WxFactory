@@ -54,8 +54,6 @@ class Configuration:
                 self.exp_smoothe_spectral_radius = self.exp_smoothe_spectral_radii[0]
                 self.exp_smoothe_num_iter = self.exp_smoothe_num_iters[0]
 
-            self.output_file = f"{self.output_dir}/{self.base_output_file}.nc"
-
     def __deepcopy__(self: Self, memo) -> Self:
         do_not_deepcopy = {}
         other = copy.copy(self)
@@ -158,6 +156,7 @@ class Configuration:
     num_pre_smoothe: int
     num_solpts: int
     output_dir: str
+    output_format: str
     output_freq: int
     phi0: float
     precond_flux: str

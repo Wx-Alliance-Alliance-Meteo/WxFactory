@@ -52,6 +52,7 @@ class ProcessTopology:
 
         self.device = device
 
+        self.comm = comm
         self.size = comm.Get_size()
         self.rank = comm.Get_rank() if rank is None else rank
 
@@ -248,6 +249,12 @@ class ProcessTopology:
         self.sources = [my_south, my_north, my_west, my_east]  # Must correspond to values of SOUTH, NORTH, WEST, EAST
         self.destinations = self.sources
         self.comm_dist_graph = comm.Create_dist_graph_adjacent(self.sources, self.destinations)
+
+        # Panel communicators
+        self.panel_comm = self.comm.Split(self.my_panel, self.rank)
+        self.panel_roots_comm = self.comm.Split(self.panel_comm.rank == 0, self.rank)
+        if self.panel_comm.rank != 0:
+            self.panel_roots_comm = MPI.COMM_NULL
 
     def start_exchange_scalars(
         self,
