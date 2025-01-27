@@ -126,45 +126,47 @@ def rhs_bubble(Q, geom, mtrx, nbsolpts, nb_elements_x, nb_elements_z):
       u_avg   = (RT * kfaces_u[right, 0, :] + kfaces_u[left, 1, :]) / (RT+1)
       w_avg   = (RT * kfaces_w[right, 0, :] + kfaces_w[left, 1, :]) / (RT+1)
       H_avg   = (RT * kfaces_enthalpy[right, 0, :] + kfaces_enthalpy[left, 1, :]) / (RT+1)
-      a       = numpy.sqrt((heat_capacity_ratio-1)*(H_avg - 0.5*(u_avg**2 + w_avg**2)))
+      c       = numpy.sqrt((heat_capacity_ratio-1)*(H_avg - 0.5*(u_avg**2 + w_avg**2)))
+
+      # Compute local Mach number M, numrically defined the average of both sides of the interface
+      a_L = numpy.sqrt(heat_capacity_ratio * kfaces_pres[left, 1, :] / kfaces_var[idx_2d_rho, left, 1, :])
+      M_L = numpy.sqrt(kfaces_u[left, 1, :]**2 + kfaces_w[left, 1, :]**2) / a_L #kfaces_w[left, 1, :] / a_L
+      a_R = numpy.sqrt(heat_capacity_ratio * kfaces_pres[right, 0, :] / kfaces_var[idx_2d_rho, right, 0, :])
+      M_R = numpy.sqrt(kfaces_u[right, 0, :]**2 + kfaces_w[right, 0, :]**2) / a_R #kfaces_w[right, 0, :] / a_R
+      M = 0.5 * (M_L + M_R)
+
+      # Compute preconditioning parameter delta 
+      mu       = numpy.minimum(1, numpy.maximum(M, 1E-7))     # Assumed M_cut = 1E-7
+      delta    = 1/mu - 1
 
       # Auxiliary Variables to compute eigenvectors and its inverse
-      alph1   = 0.5*(u_avg**2 + w_avg**2)
-      alph2   = (heat_capacity_ratio-1) / a**2
-      alph3   = 0.5 * (heat_capacity_ratio-1)
-      alph4   = 1 / (heat_capacity_ratio-1)
+      alph1   = 0.5*(u_avg**2 + w_avg**2)         # alpha
+      psi     = heat_capacity_ratio-1
+      omega   = delta / (1 + delta**2)
+      tau     = numpy.sqrt(c**2*(1+delta**2) - delta**2*w_avg**2)
+      lamb3   = w_avg + tau
+      lamb4   = w_avg - tau
+      S1      = -(rho_avg / (2*c*tau)) * ((c + omega*lamb3)*numpy.abs(lamb4) - (c + omega*lamb4)*numpy.abs(lamb3))
+      S2      = - (1 / (2*rho_avg*c*tau)) * ((c - omega*lamb3)*numpy.abs(lamb4) - (c - omega*lamb4)*numpy.abs(lamb3))
+      S3      = (numpy.abs(lamb3)+numpy.abs(lamb4)) / (2*(1+delta**2)) + (omega*delta*u_avg*(numpy.abs(lamb3)-numpy.abs(lamb4))) / (2*tau)
+      zeta1   = (S3 - numpy.abs(w_avg)) / c**2
+      zeta2   = S2*rho_avg + w_avg*zeta1
+      zeta3   = (S3*rho_avg + S1*w_avg) / rho_avg
+      zeta4   = (S3/psi) + alph1*zeta1 + S2*rho_avg*w_avg
+      zeta5   = ( S3*rho_avg*w_avg + ((S1*c**2)/psi) + S1*alph1 ) / rho_avg
 
       # Compute vector ΔU
       ΔU      = kfaces_var[:, right, 0, :] - kfaces_var[:, left, 1, :]
 
-      # Compute matrix of eigenvector
-      P = numpy.zeros((nbsolpts*nb_elements_x, nb_equations, nb_equations))
-      P[:,0,0] = 1; P[:,0,1] = 0; P[:,0,2] = 1/a**2; P[:,0,3] = 1/a**2
-      P[:,1,0] = u_avg; P[:,1,1] = rho_avg; P[:,1,2] = (u_avg/a**2); P[:,1,3] = (u_avg/a**2)
-      P[:,2,0] = w_avg; P[:,2,1] = 0; P[:,2,2] = (w_avg/a**2)+(1/a); P[:,2,3] = (w_avg/a**2)-(1/a)
-      P[:,3,0] = alph1; P[:,3,1] = rho_avg*u_avg; P[:,3,2] = alph4+(alph1/a**2)+(w_avg/a); P[:,3,3] = alph4+(alph1/a**2)-(w_avg/a)
+      # Compute preconditioned dissipation matrix
+      D = numpy.zeros((nbsolpts*nb_elements_z, nb_equations, nb_equations))
+      D[:,0,0] = numpy.abs(w_avg) - ((S1*w_avg)/rho_avg) + alph1*psi*zeta1; D[:,0,1] = -psi*u_avg*zeta1; D[:,0,2] = (S1/rho_avg) - psi*w_avg*zeta1; D[:,0,3] = psi*zeta1
+      D[:,1,0] = alph1*psi*u_avg*zeta1 - (S1*u_avg*w_avg)/rho_avg; D[:,1,1] = numpy.abs(w_avg) - psi*u_avg**2*zeta1; D[:,1,2] = (S1*u_avg)/rho_avg - psi*u_avg*w_avg*zeta1; D[:,1,3] = psi*u_avg*zeta1
+      D[:,2,0] = w_avg*numpy.abs(w_avg) + alph1*psi*zeta2 - w_avg*zeta3; D[:,2,1] = -psi*u_avg*zeta2; D[:,2,2] = -w_avg*psi*zeta2 + zeta3; D[:,2,3] = psi*zeta2
+      D[:,3,0] = alph1*numpy.abs(w_avg) - w_avg*zeta5 - u_avg**2*numpy.abs(w_avg) + alph1*psi*zeta4; D[:,3,1] =u_avg*numpy.abs(w_avg) - psi*u_avg*zeta4; D[:,3,2] =  zeta5 - psi*w_avg*zeta4; D[:,3,3] = psi*zeta4
 
-
-      # Compute matrix of inverse eigenvector
-      Pinv = numpy.zeros((nbsolpts*nb_elements_x, nb_equations, nb_equations))
-      Pinv[:, 0, 0] = 1 - (alph1*alph2); Pinv[:, 0, 1] = u_avg*alph2; Pinv[:, 0, 2] = w_avg*alph2; Pinv[:, 0, 3] = -alph2
-      Pinv[:, 1, 0] = -(u_avg/rho_avg); Pinv[:, 1, 1] = 1/rho_avg; Pinv[:, 1, 2] = 0; Pinv[:, 1, 3] = 0 
-      Pinv[:, 2, 0] = alph1*alph3 - 0.5*a*w_avg; Pinv[:, 2, 1] = -u_avg*alph3 ; Pinv[:, 2, 2] = a/2 - w_avg*alph3 ; Pinv[:, 2, 3] = alph3
-      Pinv[:, 3, 0] = alph1*alph3 + 0.5*a*w_avg; Pinv[:, 3, 1] = -u_avg*alph3; Pinv[:, 3, 2] = -a/2 - w_avg*alph3; Pinv[:, 3, 3] = alph3
-      
-
-      # Compute matrix of eigenvalues
-      # Initialize the lamb matrix with shape (30, 4, 4)
-      lamb = numpy.zeros((nbsolpts*nb_elements_x, nb_equations, nb_equations))
-      lamb[:, 0, 0] = numpy.abs(w_avg); lamb[:, 1, 1] = numpy.abs(w_avg); lamb[:, 2, 2] = numpy.abs(w_avg + a); lamb[:, 3, 3] = numpy.abs(w_avg - a)
-
-
-      # Compute Roe matrix
-      A = numpy.array([numpy.dot(P[i], lamb[i]) for i in range(P.shape[0])])
-      B = numpy.array([numpy.dot(A[i], Pinv[i]) for i in range(A.shape[0])])
-
-      # Compute P*|lambda|*Pinv*-w_avg*ΔU
-      phi = numpy.array([numpy.dot(B[i], ΔU[:,i]) for i in range(B.shape[0])])
+      # Compute P*|lambda|*Pinv*ΔU
+      phi = numpy.array([numpy.dot(D[i], ΔU[:,i]) for i in range(D.shape[0])])
 
       # Final common flux
       kfaces_flux[:,right,0,:] = 0.5*(flux_L + flux_R) - 0.5*phi.T
@@ -199,46 +201,49 @@ def rhs_bubble(Q, geom, mtrx, nbsolpts, nb_elements_x, nb_elements_z):
       u_avg   = (RT * ifaces_u[right, :, 0] + ifaces_u[left, :, 1]) / (RT+1)
       w_avg   = (RT * ifaces_w[right, :, 0] + ifaces_w[left, :, 1]) / (RT+1)
       H_avg   = (RT * ifaces_enthalpy[right, :, 0] + ifaces_enthalpy[left, :, 1]) / (RT+1)
-      a       = numpy.sqrt((heat_capacity_ratio-1)*(H_avg - 0.5*(u_avg**2 + w_avg**2)))
+      c       = numpy.sqrt((heat_capacity_ratio-1)*(H_avg - 0.5*(u_avg**2 + w_avg**2)))  # Speed of sound c
 
-      # Auxiliary Variables to compute eigenvectors and its inverse
+      # Compute local Mach number M, numrically defined the average of both sides of the interface
+      a_L = numpy.sqrt(heat_capacity_ratio * ifaces_pres[left, :, 1] / ifaces_var[idx_2d_rho, left, :, 1])
+      M_L = numpy.sqrt(ifaces_u[left, :, 1]**2 + ifaces_w[left, :, 1]**2) / a_L  #ifaces_u[left, :, 1] / a_L
+      a_R = numpy.sqrt(heat_capacity_ratio * ifaces_pres[right, :, 0] / ifaces_var[idx_2d_rho, right, :, 0])
+      M_R = numpy.sqrt(ifaces_u[right, :, 0]**2 + ifaces_w[right, :, 0]**2) / a_R  #ifaces_u[right, :, 0] / a_R
+      M   = 0.5*(M_L + M_R)
+
+      # Compute preconditioning parameter delta 
+      mu       = numpy.minimum(1, numpy.maximum(M, 1E-7))     # Assumed M_cut = 0
+      delta    = 1/mu -1
+
+      # Auxiliary Variables to compute preconditioned dissipation matrix
       alph1   = 0.5*(u_avg**2 + w_avg**2)
-      alph2   = (heat_capacity_ratio-1) / a**2
-      alph3   = 0.5 * (heat_capacity_ratio-1)
-      alph4   = 1 / (heat_capacity_ratio-1)
+      psi     = heat_capacity_ratio-1
+      omega   = delta / (1 + delta**2)
+      tau     = numpy.sqrt(c**2*(1+delta**2) - delta**2*u_avg**2)
+      lamb3   = u_avg + tau
+      lamb4   = u_avg - tau
+      S1      = -(rho_avg / (2*c*tau)) * ((c + omega*lamb3)*numpy.abs(lamb4) - (c + omega*lamb4)*numpy.abs(lamb3))
+      S2      = - (1 / (2*rho_avg*c*tau)) * ((c - omega*lamb3)*numpy.abs(lamb4) - (c - omega*lamb4)*numpy.abs(lamb3))
+      S3      = (numpy.abs(lamb3)+numpy.abs(lamb4)) / (2*(1+delta**2)) + (omega*delta*u_avg*(numpy.abs(lamb3)-numpy.abs(lamb4))) / (2*tau)
+      zeta1   = (S3 - numpy.abs(u_avg)) / c**2
+      zeta2   = S2*rho_avg + u_avg*zeta1
+      zeta3   = (S3*rho_avg + S1*u_avg) / rho_avg
+      zeta4   = (S3/psi) + alph1*zeta1 + S2*rho_avg*u_avg
+      zeta5   = ( S3*rho_avg*u_avg + ((S1*c**2)/psi) + S1*alph1 ) / rho_avg
+
 
       # Compute vector ΔU
       ΔU      = ifaces_var[:, right, :, 0] - ifaces_var[:, left, :, 1]
 
 
-      # Compute matrix of eigenvector
-      P = numpy.zeros((nbsolpts*nb_elements_z, nb_equations, nb_equations))
-      P[:,0,0] = 1; P[:,0,1] = 0; P[:,0,2] = 1/a**2; P[:,0,3] = 1/a**2
-      P[:,1,0] = u_avg; P[:,1,1] = 0; P[:,1,2] = (u_avg/a**2) + (1/a); P[:,1,3] = (u_avg/a**2) - (1/a)
-      P[:,2,0] = w_avg; P[:,2,1] = rho_avg; P[:,2,2] = w_avg/a**2; P[:,2,3] = w_avg/a**2
-      P[:,3,0] = alph1; P[:,3,1] = rho_avg*w_avg; P[:,3,2] = alph4+(alph1/a**2)+(u_avg/a); P[:,3,3] = alph4+(alph1/a**2)-(u_avg/a)
+      # Compute preconditioned dissipation matrix
+      D = numpy.zeros((nbsolpts*nb_elements_z, nb_equations, nb_equations))
+      D[:,0,0] = numpy.abs(u_avg) - ((S1*u_avg)/rho_avg) + alph1*psi*zeta1; D[:,0,1] = (S1/rho_avg) - psi*u_avg*zeta1; D[:,0,2] = -psi*w_avg*zeta1; D[:,0,3] = psi*zeta1
+      D[:,1,0] = u_avg*numpy.abs(u_avg) + alph1*psi*zeta2 - u_avg*zeta3; D[:,1,1] = -u_avg*psi*zeta2 + zeta3; D[:,1,2] = -psi*w_avg*zeta2; D[:,1,3] = psi*zeta2
+      D[:,2,0] = alph1*psi*w_avg*zeta1 - (S1*u_avg*w_avg)/rho_avg; D[:,2,1] = (S1*w_avg)/rho_avg - psi*u_avg*w_avg*zeta1; D[:,2,2] = numpy.abs(u_avg) - psi*w_avg**2*zeta1; D[:,2,3] = psi*w_avg*zeta1
+      D[:,3,0] = alph1*numpy.abs(u_avg) - u_avg*zeta5 - w_avg**2*numpy.abs(u_avg) + alph1*psi*zeta4; D[:,3,1] = zeta5 - psi*u_avg*zeta4; D[:,3,2] = w_avg*numpy.abs(u_avg) - psi*w_avg*zeta4; D[:,3,3] = psi*zeta4
 
-
-      # Compute matrix of inverse eigenvector
-      Pinv = numpy.zeros((nbsolpts*nb_elements_z, nb_equations, nb_equations))
-      Pinv[:, 0, 0] = 1 - (alph1*alph2); Pinv[:, 0, 1] = u_avg*alph2; Pinv[:, 0, 2] = w_avg*alph2; Pinv[:, 0, 3] = -alph2
-      Pinv[:, 1, 0] = -(w_avg/rho_avg); Pinv[:, 1, 1] = 0; Pinv[:, 1, 2] = 1/rho_avg; Pinv[:, 1, 3] = 0 
-      Pinv[:, 2, 0] = alph1*alph3 - 0.5*a*u_avg; Pinv[:, 2, 1] = a/2 - u_avg*alph3; Pinv[:, 2, 2] = -w_avg*alph3; Pinv[:, 2, 3] = alph3
-      Pinv[:, 3, 0] = alph1*alph3 + 0.5*a*u_avg; Pinv[:, 3, 1] = -a/2 - u_avg*alph3; Pinv[:, 3, 2] = -w_avg*alph3; Pinv[:, 3, 3] = alph3
-      
-
-      # Compute matrix of eigenvalues
-      # Initialize the lamb matrix with shape (30, 4, 4)
-      lamb = numpy.zeros((nbsolpts*nb_elements_z, nb_equations, nb_equations))
-      lamb[:, 0, 0] = numpy.abs(u_avg); lamb[:, 1, 1] = numpy.abs(u_avg); lamb[:, 2, 2] = numpy.abs(u_avg + a); lamb[:, 3, 3] = numpy.abs(u_avg - a)
-
-
-      # Compute Roe matrix
-      A = numpy.array([numpy.dot(P[i], lamb[i]) for i in range(P.shape[0])])
-      B = numpy.array([numpy.dot(A[i], Pinv[i]) for i in range(A.shape[0])])
-
-      # Compute P*|lambda|*Pinv*-w_avg*ΔU
-      phi = numpy.array([numpy.dot(B[i], ΔU[:,i]) for i in range(B.shape[0])])
+      # Compute P*|lambda|*Pinv*ΔU
+      phi = numpy.array([numpy.dot(D[i], ΔU[:,i]) for i in range(D.shape[0])])
 
       # Final common flux
       ifaces_flux[:,right,:,0] = 0.5*(flux_L + flux_R) - 0.5*phi.T

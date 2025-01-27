@@ -84,8 +84,8 @@ def image_field(geom: 'Cartesian2D', field: numpy.ndarray, filename: str, vmin: 
    cbar.ax.yaxis.set_major_formatter(FormatStrFormatter('%.2f'))
    matplotlib.pyplot.xlabel('x', fontsize=14)
    matplotlib.pyplot.ylabel('y', fontsize=14)
-   matplotlib.pyplot.gca().set_xticks([0,5,10,15,20])
-   matplotlib.pyplot.gca().set_yticks([0,5,10,15,20])
+   # matplotlib.pyplot.gca().set_xticks([0,5,10,15,20])
+   # matplotlib.pyplot.gca().set_yticks([0,5,10,15,20])
    matplotlib.pyplot.savefig(filename)
    matplotlib.pyplot.close(fig) 
 
