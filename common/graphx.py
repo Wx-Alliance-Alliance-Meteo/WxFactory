@@ -81,7 +81,7 @@ def image_field(geom: 'Cartesian2D', field: numpy.ndarray, filename: str, vmin: 
 
    cbar = fig.colorbar(cmap, ax=ax, orientation='vertical')
    cbar.set_label(label, fontsize = 14 )
-   cbar.ax.yaxis.set_major_formatter(FormatStrFormatter('%.2f'))
+   cbar.ax.yaxis.set_major_formatter(FormatStrFormatter('%.5f'))
    matplotlib.pyplot.xlabel('x', fontsize=14)
    matplotlib.pyplot.ylabel('y', fontsize=14)
    # matplotlib.pyplot.gca().set_xticks([0,5,10,15,20])
