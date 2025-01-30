@@ -27,15 +27,16 @@ class CubedSphere2D(CubedSphere):
     ):
         """Initialize the cubed sphere geometry, for an earthlike sphere with no topography.
 
-        This function initializes the basic CubedSphere geometry object, which provides the parameters necessary to define
-        the values in numeric (x1, x2, η) coordinates, gnomonic (projected; X, Y, Z) coordinates, spherical (lat, lon, Z),
-        Cartesian (Xc, Yc, Zc) coordinates.
+        This function initializes the basic CubedSphere geometry object, which provides the parameters necessary
+        to define the values in numeric (x1, x2, η) coordinates, gnomonic (projected; X, Y, Z) coordinates,
+        spherical (lat, lon, Z), Cartesian (Xc, Yc, Zc) coordinates.
 
         These coordinates respect the DG formulation, but they are themselves indifferent to the mechanics of
         differentiation.
 
-        On initialization, the coordinate is defined with respect to a smooth sphere, with geometric height varying between
-        0 and ztop.  To impose a topographic mapping, the CubedSphere object must be updated via the update_topo method.
+        On initialization, the coordinate is defined with respect to a smooth sphere, with geometric height
+        varying between 0 and ztop.
+        To impose a topographic mapping, the CubedSphere object must be updated via the update_topo method.
 
         The cubed-sphere panelization is as follows:
         ```
@@ -81,7 +82,7 @@ class CubedSphere2D(CubedSphere):
         """
         rank = MPI.COMM_WORLD.rank
 
-        super().__init__(num_solpts, device)
+        super().__init__(num_solpts, lambda0, phi0, alpha0, device)
         xp = self.device.xp
 
         ## Panel / parallel decomposition properties
@@ -150,11 +151,12 @@ class CubedSphere2D(CubedSphere):
         self.itf_j_shape_2d = (num_elements_x2 + 1, ni)
 
         # The shapes. For a single field (e.g. coordinates of solution points, in the current case), we
-        # have an array of elements, where each element has a total num_solpts**2 (in 2D) or num_solpts**3 (in 3D) solution
-        # points.
+        # have an array of elements, where each element has a total num_solpts**2 (in 2D) or num_solpts**3 (in 3D)
+        # solution points.
         # For the interfaces we have 3 cases:
         # - In 2D, we have 2 arrays (for west-east and south-north interfaces), with the same shape: an array of all
-        #   elements, each with 2*num_solpts interface points (num_solpts for each side of the element along that direction)
+        #   elements, each with 2*num_solpts interface points (num_solpts for each side of the element along that
+        #   direction)
         # - In 3D, horizontally, we also have two arrays (west-east, south-north), but the shape is to be determined
         # - In 3D vertically, we only have one array, with shape similar to horizontally, TBD
         self.grid_shape = (num_elements_x1, num_elements_x2, num_solpts * num_solpts)
