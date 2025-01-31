@@ -93,7 +93,7 @@ class OutputManager:
 
         if self.param.save_state_freq > 0 and (step_id % self.param.save_state_freq) == 0:
             t0 = time()
-            save_state(self.geometry.to_single_block(Q), self.param, self.state_file_name(step_id))
+            save_state(Q, self.param, self.state_file_name(step_id))
             self.total_save_state_time += time() - t0
             self.num_save_states += 1
 

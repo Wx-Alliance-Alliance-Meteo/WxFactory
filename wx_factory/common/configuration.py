@@ -16,6 +16,7 @@ class Configuration:
 
         self.cfg_file = "in-memory"
         self.sections = {}
+        self.schema = schema
         self.parser = ConfigParser()
 
         self.config_content = cfg_file

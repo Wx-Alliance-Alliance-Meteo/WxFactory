@@ -291,13 +291,15 @@ class Simulation:
         Q = self.initial_Q
         if starting_step > 0:
             try:
-                starting_state, _ = load_state(self.output.state_file_name(starting_step), self.device)
+                starting_state, _ = load_state(
+                    self.output.state_file_name(starting_step), schema=self.config.schema, device=self.device
+                )
                 if starting_state.shape != Q.shape:
                     raise ValueError(
                         f"ERROR reading state vector from file for step {starting_step}. "
                         f"The shape is wrong! ({starting_state.shape}, should be {Q.shape})"
                     )
-                Q = self.device.xp.asarray(starting_state, like=Q)
+                Q = self.device.xp.asarray(starting_state)
 
                 if MPI.COMM_WORLD.rank == 0:
                     print(f"Starting simulation from step {starting_step} (rather than 0)")
@@ -307,11 +309,12 @@ class Simulation:
                             f"{int(self.device.xp.ceil(self.config.t_end / self.config.dt))}"
                         )
 
-            except (FileNotFoundError, ValueError):
+            except (FileNotFoundError, ValueError) as e:
                 if self.rank == 0:
                     print(
                         f"WARNING: Tried to start from timestep {starting_step}, but unable to read initial state"
                         " for that step. Will start from 0 instead."
+                        f"\n{e}"
                     )
                 starting_step = 0
 
