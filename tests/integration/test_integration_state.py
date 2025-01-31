@@ -153,7 +153,9 @@ class StateIntegrationTestCases(unittest.TestCase):
             [true_data, _] = state.load_state(true_state_vector_file, self.schema)
 
             if data.shape != true_data.shape:
-                self.fail("The result problem is not the same size as the solution's")
+                self.fail(
+                    f"The result shape {data.shape} is not the same as the reference solution's {true_data.shape}"
+                )
 
             delta = true_data - data
 
