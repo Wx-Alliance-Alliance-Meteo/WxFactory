@@ -214,24 +214,24 @@ class PDEEulerCubesphere(PDE):
         w = q[idx_rho_w] / rho
 
         # Compiled kernel
-        forcing2 = xp.zeros_like(forcing)
-        num_x1 = self.config.num_elements_horizontal
-        num_x2 = num_x1
-        num_x3 = self.config.num_elements_vertical
-        num_solpts = self.config.num_solpts
-        self.device.libmodule.forcing_euler_cubesphere_3d(
-            q,
-            pressure,
-            metric.sqrtG_new,
-            metric.h_contra_new,
-            metric.christoffel,
-            forcing,
-            num_x1,
-            num_x2,
-            num_x3,
-            num_solpts**3,
-            0,  # Verbose flag
-        )
+        # forcing2 = xp.zeros_like(forcing)
+        # num_x1 = self.config.num_elements_horizontal
+        # num_x2 = num_x1
+        # num_x3 = self.config.num_elements_vertical
+        # num_solpts = self.config.num_solpts
+        # self.device.libmodule.forcing_euler_cubesphere_3d(
+        #     q,
+        #     pressure,
+        #     metric.sqrtG_new,
+        #     metric.h_contra_new,
+        #     metric.christoffel,
+        #     forcing,
+        #     num_x1,
+        #     num_x2,
+        #     num_x3,
+        #     num_solpts**3,
+        #     0,  # Verbose flag
+        # )
 
         # Python only
         compute_forcings(

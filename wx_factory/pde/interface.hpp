@@ -8,16 +8,16 @@ struct var
 {
   num_t* value = nullptr;
 
-  DEVICE_SPACE var() {}
-  DEVICE_SPACE var(num_t* field, const size_t index) : value(field + index) {}
-  DEVICE_SPACE var(num_t* field) : value(field) {}
+  HOST_DEVICE_SPACE var() {}
+  HOST_DEVICE_SPACE var(num_t* field, const size_t index) : value(field + index) {}
+  HOST_DEVICE_SPACE var(num_t* field) : value(field) {}
 
-  DEVICE_SPACE operator num_t() const { return *value; }
+  HOST_DEVICE_SPACE operator num_t() const { return *value; }
 
-  DEVICE_SPACE num_t  operator*() const { return *value; }
-  DEVICE_SPACE num_t& operator*() { return *value; }
+  HOST_DEVICE_SPACE num_t  operator*() const { return *value; }
+  HOST_DEVICE_SPACE num_t& operator*() { return *value; }
 
-  DEVICE_SPACE void move_index(const int64_t index_change) { value += index_change; }
+  HOST_DEVICE_SPACE void move_index(const int64_t index_change) { value += index_change; }
 };
 
 template <typename num_t, int size>
@@ -34,18 +34,22 @@ DEVICE_SPACE array<var<num_t>, size>
 template <typename num_t, int num_var>
 struct var_multi
 {
-  array<var<num_t>, num_var> val;
+  var<num_t> val[num_var];
 
-  DEVICE_SPACE num_t  operator[](int i) const { return *val[i]; }
-  DEVICE_SPACE num_t& operator[](int i) { return *val[i]; }
+  HOST_DEVICE_SPACE num_t  operator[](int i) const { return *val[i]; }
+  HOST_DEVICE_SPACE num_t& operator[](int i) { return *val[i]; }
 
-  DEVICE_SPACE var_multi(num_t* field, const size_t index, const size_t stride) :
-      val{make_var_sequence<num_t, num_var>(field + index, stride)} {}
-
-  DEVICE_SPACE void move_index(const int64_t index_change) {
-    for (auto& v : val)
+  HOST_DEVICE_SPACE var_multi(num_t* field, const size_t index, const size_t stride) {
+    for (int i = 0; i < num_var; ++i)
     {
-      v.move_index(index_change);
+      val[i] = field + index + i * stride;
+    }
+  }
+
+  HOST_DEVICE_SPACE void move_index(const int64_t index_change) {
+    for (int i = 0; i < num_var; ++i)
+    {
+      val[i].move_index(index_change);
     }
   }
 };
@@ -179,7 +183,7 @@ struct forcing_params
 
   euler_state_3d<num_t> forcing;
 
-  forcing_params(
+  HOST_DEVICE_SPACE forcing_params(
       const num_t*  q,      //!< Pointer to the various fields (each variable is grouped)
       const num_t*  p,      //!< Pointer to pressure values for all points
       const real_t* sqrt_g, //!< Pointer to sqrt_g values for all points
@@ -197,7 +201,7 @@ struct forcing_params
       christoffel(christoffel, index, stride),
       forcing(forcing, index, stride) {}
 
-  void set_index(const size_t new_index) {
+  DEVICE_SPACE void set_index(const size_t new_index) {
     const size_t  old_index = index;
     const int64_t diff      = static_cast<int64_t>(new_index) - old_index;
     index                   = new_index;

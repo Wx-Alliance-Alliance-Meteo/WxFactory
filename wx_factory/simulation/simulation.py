@@ -169,7 +169,12 @@ class Simulation:
         """Create the device object which will determine on what hardware (CPU/GPU) each part of the simulation will
         be executed."""
         if self.config.desired_device == "cuda":
-            device = CudaDevice(self.config.cuda_devices)
+            try:
+                device = CudaDevice(self.config.cuda_devices)
+            except ValueError:
+                if self.rank == 0:
+                    print("Switching to CPU")
+                device = CpuDevice()
         else:
             device = CpuDevice()
 

@@ -372,11 +372,11 @@ void launch_forcing_euler_cubesphere_3d(
   const size_t stride = num_elem_x1 * num_elem_x2 * num_elem_x3 * num_solpts;
   forcing_params<real_t, num_t>
       base_params(q, pressure, sqrt_g, h, christoffel, forcing, 0, stride);
-  std::cout << "Kernel caller!\n";
 
-  // const size_t num_blocks = (stride + BLOCK_SIZE - 1) / BLOCK_SIZE;
-  // forcing_euler_cubesphere_3d<real_t, num_t>
-  //     <<<num_blocks, BLOCK_SIZE>>>(base_params, stride, bool(verbose));
+  const int    BLOCK_SIZE = 128;
+  const size_t num_blocks = (stride + BLOCK_SIZE - 1) / BLOCK_SIZE;
+  forcing_euler_cubesphere_3d<real_t, num_t>
+      <<<num_blocks, BLOCK_SIZE>>>(base_params, stride, bool(verbose));
 }
 
 void select_forcing_euler_cubesphere_3d(
