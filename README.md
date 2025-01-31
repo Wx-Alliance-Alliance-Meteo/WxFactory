@@ -26,6 +26,7 @@ WxFactory was built for Python 3.11 (at least).  It also requires an MPI impleme
 * `sqlite` To be able to store solver stats.
 
 ### Optional
+* `cupy`     If you want to be able to run on GPU (can install `cupy-cuda11x` or `cupy-cuda12x` for precompiled module)
 * `cartopy`  A cartographic python library with matplotlib support for visualisation
 * `tqdm`     Progress bar when generating matrices
 * `snakeviz` A tool for visualizing profiling output
