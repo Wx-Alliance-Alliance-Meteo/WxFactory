@@ -60,6 +60,9 @@ def main():
                 "--numpy-warn-as-except", action="store_true", help="Raise an exception if there is a numpy warning"
             )
             parser.add_argument(
+                "--ignore-numpy-warnings", action="store_true", help="Suppress runtime warnings from numpy"
+            )
+            parser.add_argument(
                 "--config-options",
                 action=ConfigOptionsAction,
                 type=str,
@@ -99,6 +102,8 @@ def main():
             pr.enable()
 
         numpy.set_printoptions(suppress=True, linewidth=256)
+        if args.ignore_numpy_warnings:
+            numpy.seterr(all="ignore")
 
         if args.numpy_warn_as_except:
             numpy.seterr(all="raise")

@@ -82,6 +82,9 @@ class Simulation:
         self.output = self._create_output_manager()
         self.initial_Q, self.starting_step = self._determine_starting_state()
 
+        self.Q = self.initial_Q
+        self.step_id = self.starting_step
+
         self.rhs = RhsBundle(
             self.geometry,
             self.operators,
@@ -202,8 +205,8 @@ class Simulation:
             if MPI.COMM_WORLD.rank == 0:
                 if self.config.num_elements_horizontal_total != self.config.num_elements_horizontal:
                     print(
-                        f"Adjusting horizontal number of elements from {self.config.num_elements_horizontal_total} (total) "
-                        f"to {self.config.num_elements_horizontal} (per PE)"
+                        f"Adjusting horizontal number of elements from {self.config.num_elements_horizontal_total} "
+                        f"(total) to {self.config.num_elements_horizontal} (per PE)"
                     )
                 print(f"allowed_pe_counts = {allowed_pe_counts}")
 
@@ -236,7 +239,6 @@ class Simulation:
             )
 
         if self.config.grid_type == "cartesian2d":
-            # TODO remove array_module reference
             return Cartesian2D(
                 (self.config.x0, self.config.x1),
                 (self.config.z0, self.config.z1),

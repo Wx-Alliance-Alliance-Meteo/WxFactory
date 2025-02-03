@@ -3,7 +3,6 @@ from itertools import combinations
 import math
 from time import time
 from typing import Optional
-import sys
 
 import numpy
 
