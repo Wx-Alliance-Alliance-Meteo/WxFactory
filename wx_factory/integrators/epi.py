@@ -116,7 +116,7 @@ class Epi(Integrator):
                 vec[k, :] += alpha * r.flatten()
 
         # ----pmex with norm estimate-----
-        if self.exponential_solver == "pmex":
+        if self.exponential_solver == "pmex_ne":
             phiv, stats = pmex(
                 [1.0],
                 matvec_handle,
@@ -316,8 +316,8 @@ class Epi(Integrator):
                     f"with local error {stats[3]}"
                 )
 
-            # self.solver_info = SolverInfo(total_num_it=stats[0])
-            # ----------default: kiops-----------
+        # ----- Regular PMEX ------
+        elif self.exponential_solver == "pmex":
             phiv, stats = pmex([1.0], matvec_handle, vec, tol=self.tol, mmax=64, task1=False, device=self.device)
 
             if mpirank == 0:
@@ -327,7 +327,8 @@ class Epi(Integrator):
                     flush=True,
                 )
 
-        else:
+        # ----- Regular KIOPS ------
+        elif self.exponential_solver == "kiops":
             phiv, stats = kiops(
                 [1],
                 matvec_handle,
@@ -348,6 +349,9 @@ class Epi(Integrator):
                     f" {stats[1]} rejected expm) to a solution with local error {stats[4]:.2e}",
                     flush=True,
                 )
+
+        else:
+            raise ValueError(f"Unrecognized exponential solver {self.exponential_solver}")
 
         self.solver_info = SolverInfo(total_num_it=stats[2])
 

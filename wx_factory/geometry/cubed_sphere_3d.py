@@ -1048,7 +1048,7 @@ class CubedSphere3D(CubedSphere):
     #       else: raise ValueError
 
     def wind2contra_2d(self, u: float | NDArray, v: float | NDArray):
-        """Convert wind fields from the spherical basis (zonal, meridional) to panel-appropriate contrvariant winds,
+        """Convert wind fields from the spherical basis (zonal, meridional) to panel-appropriate contravariant winds,
         in two dimensions
 
         Parameters:
