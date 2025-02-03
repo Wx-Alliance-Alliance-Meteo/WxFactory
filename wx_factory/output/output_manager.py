@@ -15,6 +15,26 @@ from .solver_stats import SolverStatsOutput
 from .state import save_state
 
 
+def _readable_time(seconds):
+    if seconds == 0.0:
+        return "0 s"
+    elif seconds < 1e-6:
+        return f"{seconds * 1e9:.1f} ns"
+    elif seconds < 1e-3:
+        return f"{seconds * 1e6:.1f} us"
+    elif seconds < 1.0:
+        return f"{seconds * 1e3:.1f} ms"
+    elif seconds > 1000:
+        h_s = int(seconds)
+        h = h_s // 3600
+        rem = seconds - h_s
+        m = rem // 60
+        s = rem % 60
+        return f"{h}:{m:02d}:{s:02d}"
+    else:
+        return f"{seconds:.2f}"
+
+
 class OutputManager:
     """
     Class that uniformizes different output methods
@@ -155,12 +175,12 @@ class OutputManager:
             per_blockstat = self.total_blockstat_time / self.num_blockstats if self.num_blockstats > 0 else 0.0
             print(
                 f"Output time:\n"
-                f" - Write solution: {self.total_write_time:.3f}s "
-                f"({per_write:.3f} s/step)\n"
-                f" - Save state: {self.total_save_state_time:.3f}s "
-                f"({per_save:.3f} s/step)\n"
-                f" - Blockstats: {self.total_blockstat_time:.3f}s "
-                f"({per_blockstat:.3f} s/step)"
+                f" - Write solution: {_readable_time(self.total_write_time)} "
+                f"({_readable_time(per_write)}/step)\n"
+                f" - Save state: {_readable_time(self.total_save_state_time)} "
+                f"({_readable_time(per_save)}/step)\n"
+                f" - Blockstats: {_readable_time(self.total_blockstat_time)} "
+                f"({_readable_time(per_blockstat)}/step)"
             )
 
     def __finalize__(self):

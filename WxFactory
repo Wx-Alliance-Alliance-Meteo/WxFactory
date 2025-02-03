@@ -121,17 +121,27 @@ def main():
             out_file = f"prof_{rank:04d}.out"
             pr.dump_stats(out_file)
 
-    except (Exception, KeyboardInterrupt):  # KeyboardInterrupt does not seem to be caught with just "Exception"...
+    except (Exception, KeyboardInterrupt) as e:  # KeyboardInterrupt does not seem to be caught with just "Exception"...
 
-        sys.stdout.flush()
-        if args and args.show_every_crash:
-            raise
+        try:
+            if rank == 0:
+                sim.output.finalize(0.0)
+        finally:
 
-        if rank == 0:
-            print(f"There was an error while running GEF. Only rank 0 is printing the traceback:")
-            raise
+            sys.stdout.flush()
+            if args and args.show_every_crash:
+                raise e
 
-        sys.exit(-1)
+            if isinstance(e, KeyboardInterrupt):
+                if rank == 0:
+                    print(f"{rank:5d} Keyboard interrupt")
+                sys.exit(130)
+
+            if rank == 0:
+                print(f"There was an error while running GEF. Only rank 0 is printing the traceback:")
+                raise e
+
+            sys.exit(-1)
 
 
 if __name__ == "__main__":
