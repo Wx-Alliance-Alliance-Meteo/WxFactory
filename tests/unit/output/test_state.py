@@ -23,7 +23,7 @@ class StateTestCases(cpu_test.CpuTestCases):
             schema_text = "\n".join(f.readlines())
         schema = common.configuration_schema.ConfigurationSchema(schema_text)
 
-        config_path = "tests/data/state_tests/config.ini"
+        config_path = "tests/data/unit/state_tests/config.ini"
         config_text: str
         with open(config_path) as f:
             config_text = "\n".join(f.readlines())

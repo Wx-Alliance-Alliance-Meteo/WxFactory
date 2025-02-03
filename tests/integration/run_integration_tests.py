@@ -12,6 +12,7 @@ sys.path.append(main_module_dir)
 from tests.integration.test_integration_state import StateIntegrationTestCases
 import tests.unit.mpi_test as mpi_test
 
+test_cases_dir = "tests/data/integration"
 
 if __name__ == "__main__":
 
@@ -22,7 +23,9 @@ if __name__ == "__main__":
     runner = mpi_test.MpiRunner()
     results = []
     for problem in args.problems:
-        results.append(runner.run(StateIntegrationTestCases(os.path.join(main_project_dir, "tests/data", problem))))
+        problem_file = os.path.join(main_project_dir, test_cases_dir, problem)
+        result = runner.run(StateIntegrationTestCases(problem_file))
+        results.append(result)
 
     if not all(r.wasSuccessful() for r in results):
         sys.exit(-1)
