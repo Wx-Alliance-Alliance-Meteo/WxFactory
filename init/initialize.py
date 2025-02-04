@@ -202,9 +202,13 @@ def initialize_cartesian2d(geom: Cartesian2D, param: Configuration) -> NDArray[n
       z0 = 260
       r = numpy.sqrt( (geom.X1-x0)**2 + (geom.X3-z0)**2 )
 
-      θ = numpy.where(r <= a,
-                      θ + A,
-                      θ + A * numpy.exp(-((r-a)/s)**2))
+      Temp  = numpy.ones_like(geom.X1)
+      Temp *= param.bubble_theta
+
+
+      Temp = numpy.where(r <= a,
+                      Temp + A,
+                      Temp + A * numpy.exp(-((r-a)/s)**2))
 
       # Enforce mirror symmetry
       if ni % 2 == 0:
@@ -213,7 +217,13 @@ def initialize_cartesian2d(geom: Cartesian2D, param: Configuration) -> NDArray[n
          middle_col = ni / 2 + 1
 
       for i in range(int(middle_col)):
-         θ[:, ni-i-1] = θ[:, i]
+         Temp[:, ni-i-1] = Temp[:, i]
+
+      exner = (1.0 - gravity / (cpd * Temp) * geom.X3)
+      ρ = p0 / (Rd * Temp) * exner**(cvd / Rd)
+    
+      # Here θ is energy
+      θ = cvd*Temp*exner + gravity*geom.X3 # We did not add 0.5*(u^2+w^2) because its zero
 
    elif param.case_number == 555:
       # Euler Vortex
@@ -305,7 +315,6 @@ def initialize_cartesian2d(geom: Cartesian2D, param: Configuration) -> NDArray[n
    Q[idx_2d_rho_w,:,:]     = ρ * ww
    Q[idx_2d_rho_theta,:,:] = ρ * θ
 
-   
    numpy.save('initial_Q.npy', Q)
 
    if param.device == "cuda":
