@@ -8,6 +8,7 @@ import itertools
 root = pathlib.Path(__file__).parents[3].resolve().as_posix()
 
 sys.path.insert(0, root)
+sys.path.append(os.path.join(root, "wx_factory"))
 
 # for dir in ['common', 'geometry', 'init', 'integrators', 'output', 'precondition', 'rhs', 'solvers', 'wx_cupy']:
 #     sys.path.insert(0, os.path.abspath(f'../../../{dir}'))
@@ -49,7 +50,7 @@ exclude_patterns = []
 
 
 def skip(app, what, name, obj, would_skip, options):
-    if name in ["__call__", "__init__", "__compute_rhs__"]:
+    if name in ["__call__", "__init__", "__compute_rhs__", "__enter__", "__exit__"]:
         return False
     elif name[:2] == "__" or name[:1] == "_":
         return True
@@ -101,6 +102,7 @@ def link_documentation():
                 os.remove(mirror_doc)
             os.makedirs(os.path.dirname(mirror_doc), exist_ok=True)
             os.symlink(true_doc, mirror_doc)
+
 
 def create_mandatory_directory():
     static = os.path.join(root, "doc", "sphinx", "source", "_static")

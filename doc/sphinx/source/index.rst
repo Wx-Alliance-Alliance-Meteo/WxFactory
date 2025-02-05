@@ -39,3 +39,4 @@ API
    rhs
    solvers
    tests
+   wx_mpi
