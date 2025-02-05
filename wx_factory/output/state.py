@@ -1,4 +1,4 @@
-from typing import Tuple, Any
+from typing import Optional, Tuple
 import numpy
 
 from common import Configuration
@@ -17,9 +17,11 @@ def save_state(
 
 
 def load_state(
-    input_file_name: str, schema: ConfigurationSchema = load_default_schema(), device: Device = default_device
+    input_file_name: str, schema: Optional[ConfigurationSchema] = None, device: Device = default_device
 ) -> Tuple[numpy.ndarray, Configuration]:
     """Retrieve simulation state from file, along with its configuration."""
+    if schema is None:
+        schema = load_default_schema()
     with open(input_file_name, "rb") as input_file:
         state = device.xp.load(input_file)
         state_version = str(input_file.readline(), "utf-8")

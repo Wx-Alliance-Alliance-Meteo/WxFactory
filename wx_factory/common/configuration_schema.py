@@ -14,6 +14,8 @@ _Numerical = TypeVar("Numerical", bound=Union[int, float])
 _Selectable = TypeVar("Selectable", bound=Union[int, float, str])
 
 
+default_schema_path = "config/config-format.json"
+
 def _default_validate(_: Any) -> Literal[True]:
     return True
 
@@ -375,10 +377,8 @@ class ConfigurationSchema:
 
 
 def load_default_schema() -> ConfigurationSchema:
-    import wx_mpi
 
-    schema_path = "config/config-format.json"
-    schema_content = wx_mpi.readfile(schema_path)
-    schema = ConfigurationSchema(schema_content)
+    with open(default_schema_path) as f:
+        schema_content = "\n".join(f.readlines())
 
-    return schema
+    return ConfigurationSchema(schema_content)

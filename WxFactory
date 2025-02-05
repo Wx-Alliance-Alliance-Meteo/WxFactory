@@ -19,9 +19,11 @@ class ConfigOptionsAction(argparse.Action):
         from common import load_default_schema
 
         schema = load_default_schema()
-        if MPI.COMM_WORLD.rank == 0:
-            markdown = values == "md"
-            print(f"Config options:\n{schema.to_string(markdown)}")
+        if values == "md":
+            print(f"{schema.to_string(True)}")
+        else:
+            print(f"Config options:\n{schema.to_string(False)}")
+
         parser.exit()
 
 
@@ -47,50 +49,33 @@ def main():
         sys.exit(-1)
 
     # Only rank 0 parses the arguments
-    parse_error = None
-    if rank == 0:
-        try:
-            parser = argparse.ArgumentParser(description="Solve NWP problems with GEF!")
-            parser.add_argument("--profile", action="store_true", help="Produce an execution profile when running")
-            parser.add_argument("config", type=str, help="File that contains simulation parameters")
-            parser.add_argument(
-                "--show-every-crash", action="store_true", help="In case of an exception, show output from alllllll PEs"
-            )
-            parser.add_argument(
-                "--numpy-warn-as-except", action="store_true", help="Raise an exception if there is a numpy warning"
-            )
-            parser.add_argument(
-                "--ignore-numpy-warnings", action="store_true", help="Suppress runtime warnings from numpy"
-            )
-            parser.add_argument(
-                "--config-options",
-                action=ConfigOptionsAction,
-                type=str,
-                nargs="?",
-                help="List all possible configuration options and stop",
-            )
+    with wx_mpi.SingleProcess() as s, wx_mpi.Conditional(s):
+        parser = argparse.ArgumentParser(description="Solve NWP problems with GEF!")
+        parser.add_argument("--profile", action="store_true", help="Produce an execution profile when running")
+        parser.add_argument("config", type=str, help="File that contains simulation parameters")
+        parser.add_argument(
+            "--show-every-crash", action="store_true", help="In case of an exception, show output from alllllll PEs"
+        )
+        parser.add_argument(
+            "--numpy-warn-as-except", action="store_true", help="Raise an exception if there is a numpy warning"
+        )
+        parser.add_argument("--ignore-numpy-warnings", action="store_true", help="Suppress runtime warnings from numpy")
+        parser.add_argument(
+            "--config-options",
+            action=ConfigOptionsAction,
+            type=str,
+            nargs="?",
+            help="List all possible configuration options and stop",
+        )
 
-            args = parser.parse_args()
-        except SystemExit as e:
-            parse_error = e
+        args = parser.parse_args()
 
-    parse_error = MPI.COMM_WORLD.bcast(parse_error, root=0)
+        print(f'Start time : {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}', flush=True)
 
-    if parse_error is not None:
-        if rank == 0:
-            raise parse_error
-        sys.exit(-1)
-
-    if rank == 0:
-        print(f'Start time : {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}')
+        if not os.path.exists(args.config):
+            raise ValueError(f"Config file does not seem to exist: {args.config}")
 
     args = MPI.COMM_WORLD.bcast(args, root=0)
-
-    # Abort if config file does not exist
-    if not os.path.exists(args.config):
-        if rank == 0:
-            raise ValueError(f"Config file does not seem to exist: {args.config}")
-        sys.exit(-1)
 
     try:
         import cProfile
@@ -126,6 +111,8 @@ def main():
         try:
             if rank == 0:
                 sim.output.finalize(0.0)
+        except UnboundLocalError:
+            pass
         finally:
 
             sys.stdout.flush()

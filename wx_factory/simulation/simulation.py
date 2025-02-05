@@ -32,10 +32,10 @@ from output.output_cubesphere_fst import OutputCubesphereFst
 from output.state import load_state
 from rhs.rhs_selector import RhsBundle
 
-from common import Configuration, load_default_schema
+from common import Configuration, ConfigurationSchema, default_schema_path, readfile
 from common.definitions import idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_w
 from device import Device, CpuDevice, CudaDevice
-from wx_mpi import ProcessTopology, readfile
+from wx_mpi import ProcessTopology, do_once
 
 
 class Simulation:
@@ -61,8 +61,8 @@ class Simulation:
         if isinstance(config, Configuration):
             self.config = config
         elif isinstance(config, str):
-            self.schema = load_default_schema()
-            self.config = Configuration(readfile(config), self.schema)
+            self.schema = ConfigurationSchema(do_once(readfile, default_schema_path))
+            self.config = Configuration(do_once(readfile, config), self.schema)
         else:
             raise ValueError(
                 f"Need to provide either a Configuration or a config file name to create a Simulation\n"
