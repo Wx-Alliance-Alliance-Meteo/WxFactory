@@ -223,7 +223,7 @@ def initialize_cartesian2d(geom: Cartesian2D, param: Configuration) -> NDArray[n
       ρ = p0 / (Rd * Temp) * exner**(cvd / Rd)
     
       # Here θ is energy
-      θ = cvd*Temp*exner + gravity*geom.X3 # We did not add 0.5*(u^2+w^2) because its zero
+      θ = cvd*Temp*exner #+ gravity*geom.X3 # We did not add 0.5*(u^2+w^2) because its zero
 
    elif param.case_number == 555:
       # Euler Vortex

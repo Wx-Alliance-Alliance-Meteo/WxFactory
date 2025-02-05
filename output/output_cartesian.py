@@ -16,7 +16,12 @@ def output_step(Q: numpy.ndarray, geom: Geometry, param: Configuration, filename
       image_field(geom, (Q[RHO_W,:,:]), filename, -1, 1, 25, label='w (m/s)', colormap='bwr')
    elif param.case_number <= 2:
       e = Q[RHO_THETA,:,:] / Q[RHO,:,:]
-      Theta =  (e/cvd) - (gamma-1)*gravity*geom.X3 / cpd
+      w = Q[RHO_W,:,:] / Q[RHO,:,:]
+      u = Q[idx_2d_rho_u,:,:] / Q[RHO,:,:]
+      rho = Q[RHO]
+      pressure = (gamma-1)*(Q[RHO_THETA] - 0.5*rho*(u**2+w**2))
+      exner = (pressure/p0)**(Rd/cpd)
+      Theta =  1/(cvd*exner)*(e - 0.5*(u**2 + w**2))
       # R =  (Q[RHO_THETA,:,:] / Q[RHO,:,:])
       image_field(geom, Theta, filename, numpy.min(Theta), numpy.max(Theta), 8)
    elif param.case_number == 3:
