@@ -11,7 +11,7 @@ from .sphere import cart2sph
 # For type hints
 from wx_mpi import ProcessTopology
 from common import Configuration
-from device import Device, default_device
+from device import Device
 
 
 class CubedSphere3D(CubedSphere):
@@ -27,7 +27,7 @@ class CubedSphere3D(CubedSphere):
         ztop: float,
         ptopo: ProcessTopology,
         param: Configuration,
-        device: Device = default_device,
+        device: Device,
     ):
         """Initialize the cubed sphere geometry, for an earthlike sphere with no topography.
 

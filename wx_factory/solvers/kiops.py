@@ -1,10 +1,10 @@
 import math
-from typing import Callable
+from typing import Callable, Optional
 
 from mpi4py import MPI
 from numpy import ndarray
 
-from device import Device, default_device
+from device import Device, get_default_device
 
 
 def kiops(
@@ -17,7 +17,7 @@ def kiops(
     mmax: int = 128,
     iop: int = 2,
     task1: bool = False,
-    device: Device = default_device,
+    device: Optional[Device] = None,
     comm: MPI.Comm = MPI.COMM_WORLD,
 ) -> tuple[ndarray, tuple]:
     """kiops(tstops, A, u; kwargs...) -> (w, stats)
@@ -66,6 +66,8 @@ def kiops(
     :return: `stats[5]` - the Krylov size of the last substep
     """
 
+    if device is None:
+        device = get_default_device()
     xp = device.xp
 
     tau_out = device.array(tau_out)

@@ -2,7 +2,7 @@ import math
 
 from mpi4py import MPI
 
-from device import Device, default_device
+from device import Device, get_default_device
 
 
 def pmex(
@@ -16,7 +16,7 @@ def pmex(
     mmax=128,
     reuse_info=True,
     task1=False,
-    device: Device = default_device,
+    device: Device = None,
     comm: MPI.Comm = MPI.COMM_WORLD,
 ):
     """
@@ -43,6 +43,8 @@ def pmex(
     :return: `stats[5]` - the Krylov size of the last substep
     :return: `stats[6]` = ?
     """
+    if device is None:
+        device = get_default_device()
 
     ppo, n = u.shape
     p = ppo - 1

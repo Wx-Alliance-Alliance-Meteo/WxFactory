@@ -10,7 +10,7 @@ from numpy.typing import NDArray
 
 from common.definitions import idx_2d_rho_w
 from common import Configuration
-from device import Device, default_device
+from device import Device
 
 from .cartesian_2d_mesh import Cartesian2D
 from .cubed_sphere_3d import CubedSphere3D
@@ -29,7 +29,7 @@ class DFROperators:
        * Correction matrices: `correction`, `correction_tr`.
     """
 
-    def __init__(self, grd: Geometry, param: Configuration, device: Device = default_device):
+    def __init__(self, grd: Geometry, param: Configuration, device: Device):
         """Initialize the Direct Flux Reconstruction operators (matrices) based on input grid parameters.
 
         Parameters

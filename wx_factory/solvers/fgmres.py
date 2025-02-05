@@ -5,7 +5,7 @@ from typing import Callable, List, Optional, Tuple
 from mpi4py import MPI
 from numpy import ndarray
 
-from device import Device, default_device
+from device import Device, get_default_device
 from .global_operations import global_dotprod, global_norm
 
 __all__ = ["fgmres"]
@@ -13,7 +13,7 @@ __all__ = ["fgmres"]
 MatvecOperator = Callable[[ndarray], ndarray]
 
 
-def _ortho_1_sync_igs(Q, R, T, K, j, comm, device: Device = default_device):
+def _ortho_1_sync_igs(Q, R, T, K, j, comm: MPI.Comm, device: Device):
     """Orthonormalization process that only requires a single synchronization step.
 
     This processes row j of matrix Q (starting from 1) so that the first j rows are orthogonal, and the first (j-1)
@@ -104,7 +104,7 @@ def fgmres(
     verbose: int = 0,
     prefix: str = "",
     comm: MPI.Comm = MPI.COMM_WORLD,
-    device: Device = default_device,
+    device: Optional[Device] = None,
 ) -> Tuple[ndarray, float, float, int, int, List[Tuple[float, float, float]]]:
     """
     Solve the given linear system (Ax = b) for x, using the FGMRES algorithm.
@@ -125,6 +125,9 @@ def fgmres(
     :return: 4. A flag that indicates the convergence status (0 if converged, -1 if not)
     :return: 5. The list of residuals at every iteration
     """
+    if device is None:
+        device = get_default_device()
+
     if len(b) <= restart:
         raise ValueError("The b vector should be longer than the number of restart")
 

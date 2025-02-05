@@ -155,4 +155,12 @@ class CudaDevice(Device):
         return val.get(**kwargs)
 
 
-default_device = CpuDevice()
+_default_device = None
+
+
+def get_default_device():
+    global _default_device
+    if _default_device is None:
+        _default_device = CpuDevice()
+
+    return _default_device

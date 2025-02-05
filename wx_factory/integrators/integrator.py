@@ -7,7 +7,7 @@ from typing import Optional
 import numpy
 
 from common import Configuration
-from device import Device, default_device
+from device import Device, get_default_device
 from precondition.factorization import Factorization
 from precondition.multigrid import Multigrid
 from output.output_manager import OutputManager
@@ -40,13 +40,16 @@ class Integrator(ABC):
 
     def __init__(self, param: Configuration, **kwargs) -> None:
         self.output_manager = None
-        self.device = default_device
         self.preconditioner = None
 
         if "output_manager" in kwargs:
             self.output_manager = kwargs["output_manager"]
+
         if "device" in kwargs:
             self.device = kwargs["device"]
+        else:
+            self.device = get_default_device()
+
         if "preconditioner" in kwargs:
             self.preconditioner = kwargs["preconditioner"]
 

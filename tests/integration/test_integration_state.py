@@ -8,7 +8,7 @@ import unittest
 from mpi4py import MPI
 import numpy
 
-from common import Configuration, load_default_schema
+from common import Configuration, load_default_schema, readfile
 from output import state
 from simulation import Simulation
 import wx_mpi
@@ -125,7 +125,7 @@ class StateIntegrationTestCases(unittest.TestCase):
         exit_code: Optional[sys._ExitCode] = None
 
         for config_file in self.config_files:
-            config_content = wx_mpi.readfile(config_file)
+            config_content = wx_mpi.do_once(readfile, config_file)
 
             config = Configuration(config_content, self.schema)
 

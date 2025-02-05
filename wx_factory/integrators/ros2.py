@@ -5,9 +5,8 @@ import numpy
 from mpi4py import MPI
 
 from common.configuration import Configuration
-from solvers import fgmres, MatvecOpRat, SolverInfo
+from solvers import fgmres, gcrot, MatvecOpRat, SolverInfo
 from .integrator import Integrator
-from solvers import fgmres, gcrot, matvec_rat, SolverInfo
 
 
 class Ros2(Integrator):
@@ -27,7 +26,7 @@ class Ros2(Integrator):
 
         rhs = self.rhs_handle(Q)
         self.Q_flat = xp.ravel(Q)
-        self.A = MatvecOpRat(dt, Q, rhs, self.rhs_handle, self.device)
+        self.A = MatvecOpRat(dt, Q, rhs, self.rhs_handle)
         self.b = self.A(self.Q_flat) + xp.ravel(rhs) * dt
 
     def __step__(self, Q: numpy.ndarray, dt: float):

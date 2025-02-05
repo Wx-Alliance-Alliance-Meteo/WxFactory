@@ -5,8 +5,6 @@ from mpi4py import MPI
 import numpy
 from numpy.typing import NDArray
 
-from device import Device, default_device
-
 from .cubed_sphere_3d import CubedSphere3D
 from .operators import DFROperators
 
