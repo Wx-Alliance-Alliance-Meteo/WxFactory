@@ -14,7 +14,7 @@ from common.definitions import (
     cvd,
     heat_capacity_ratio,
 )
-from device import CpuDevice, CudaDevice, Device, default_device
+from device import CpuDevice, CudaDevice, Device
 from .fluxes import (
     rusanov_3d_vert,
     rusanov_3d_hori_i,
@@ -115,7 +115,6 @@ class RhsEuler:
         num_elements_hori: int,
         num_elements_vert: int,
         case_number: int,
-        device: Device = default_device,
     ) -> None:
         # super().__init__(shape, geom, operators, metric, ptopo, num_solpts, num_elements_hori, num_elements_vert,
         #                  case_number, device)
@@ -128,11 +127,11 @@ class RhsEuler:
         self.num_elements_hori = num_elements_hori
         self.num_elements_vert = num_elements_vert
         self.case_number = case_number
-        self.device = device
+        self.device = geom.device
 
         self.compute_forcings = compute_forcings
-        if isinstance(device, CudaDevice):
-            self.compute_forcings = device.cupy.fuse(self.compute_forcings)
+        if isinstance(self.device, CudaDevice):
+            self.compute_forcings = self.device.cupy.fuse(self.compute_forcings)
 
     def __call__(self, vec: NDArray) -> NDArray:
         """Compute the value of the right-hand side based on the input state.

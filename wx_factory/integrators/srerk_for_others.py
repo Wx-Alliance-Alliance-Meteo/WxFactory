@@ -4,7 +4,7 @@ from typing import Callable, List, Optional
 import numpy
 from mpi4py import MPI
 
-from common.program_options import Configuration
+from common import Configuration
 from .integrator import Integrator, alpha_coeff
 from solvers import (
     kiops,

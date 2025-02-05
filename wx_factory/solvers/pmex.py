@@ -199,6 +199,7 @@ def pmex(
                 sum_sqrd = device.xp.sum(sum_vec)
             else:
                 device.synchronize()
+                default_device = get_default_device()
                 sum_vec = default_device.xp.array(global_vec[0:j, 1].get(), default_device.xp.float128) ** 2
                 sum_sqrd = device.array(
                     default_device.xp.asarray(default_device.xp.sum(sum_vec), dtype=default_device.xp.float64)
