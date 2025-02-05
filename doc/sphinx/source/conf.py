@@ -68,46 +68,9 @@ html_theme = "classic"
 html_static_path = ["_static"]
 
 
-def link_documentation():
-    if not os.path.exists(root) or not os.path.isdir(root):
-        raise ValueError("Something's wrong")
-
-    def recursive_crawl(dirname: str) -> list[str]:
-        if dirname == "doc/sphinx" or dirname == "tests/data" or dirname == ".git":
-            return []
-
-        actual_path = os.path.join(root, dirname)
-
-        dirs = [dir for dir in os.listdir(actual_path) if os.path.isdir(os.path.join(actual_path, dir))]
-        files = [
-            os.path.join(dirname, file)
-            for file in os.listdir(actual_path)
-            if os.path.isfile(os.path.join(actual_path, file)) and os.path.splitext(file)[1] == ".md"
-        ]
-        files += list(
-            itertools.chain.from_iterable([recursive_crawl(os.path.join(dirname, directory)) for directory in dirs])
-        )
-
-        return files
-
-    content = [dir for dir in os.listdir(root) if os.path.isdir(os.path.join(root, dir))]
-    documentation = list(itertools.chain.from_iterable([recursive_crawl(directory) for directory in content]))
-    mirror = os.path.join(root, "doc", "sphinx", "source")
-
-    for doc_file in documentation:
-        mirror_doc = os.path.join(mirror, doc_file)
-        true_doc = os.path.join(root, doc_file)
-        if not (os.path.exists(mirror_doc) and os.path.islink(mirror_doc) and os.readlink(mirror_doc) == true_doc):
-            if os.path.exists(mirror_doc):
-                os.remove(mirror_doc)
-            os.makedirs(os.path.dirname(mirror_doc), exist_ok=True)
-            os.symlink(true_doc, mirror_doc)
-
-
 def create_mandatory_directory():
     static = os.path.join(root, "doc", "sphinx", "source", "_static")
     os.makedirs(static, exist_ok=True)
 
 
-link_documentation()
 create_mandatory_directory()
