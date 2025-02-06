@@ -944,7 +944,6 @@ def acoustic_wave(geom: CubedSphere3D, metric: Metric3DTopo):
     r = re * xp.arccos(xp.cos(lat) * xp.cos(lon))
     f = numpy.where(r > rc, 0.0, (Δp / 2) * (1 + numpy.cos((math.pi * r) / rc)))
     g = numpy.sin((eta_v * math.pi * r) / ztop)
-    print(f"g = {g}")
     p_perturb = f * g
     pressure = p_mean + p_perturb
     # pdb.set_trace()

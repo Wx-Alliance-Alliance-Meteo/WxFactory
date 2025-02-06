@@ -24,13 +24,13 @@ sys.path.append(main_gef_dir)
 from eigenvalue_util import gen_matrix, tqdm, store_matrix_set, load_matrix_set
 
 # from run                     import create_geometry, create_preconditioner
-from common.configuration import Configuration
-from common.process_topology import ProcessTopology
+from common import Configuration
 from geometry import DFROperators
 from init.init_state_vars import init_state_vars
 from rhs.rhs_selector import RhsBundle
 from solvers import MatvecOp, MatvecOpRat, fgmres
 from simulation import Simulation
+from wx_mpi import ProcessTopology
 
 
 # num_el = 0

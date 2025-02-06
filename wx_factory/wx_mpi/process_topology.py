@@ -16,38 +16,48 @@ EAST = 3
 
 
 class ProcessTopology:
+    """Describes a cube-sphere process topology, where each process (tile) is linked to its 4 neighbors.
+
+    Numbering of PEs starts at the bottom left. Panel ranks increase towards the east (right) in the x1 direction
+    and increases towards the north (up) in the x2 direction:
+
+    .. code-block::
+
+               0 1 2 3 4
+            +-----------+
+          4 |           |
+          3 |  x_2      |
+          2 |  ^        |
+          1 |  |        |
+          0 |  + -->x_1 |
+            +-----------+
+
+    For instance, with n=96, panel 0 will be have a topology of 4x4 tiles like this
+
+    .. code-block::
+
+         +---+---+---+---+
+         | 12| 13| 14| 15|
+         |---+---+---+---|
+         | 8 | 9 | 10| 11|
+         |---+---+---+---|
+         | 4 | 5 | 6 | 7 |
+         |---+---+---+---|
+         | 0 | 1 | 2 | 3 |
+         +---+---+---+---+
+    """
 
     def __init__(self, device: Device, rank: Optional[int] = None, comm: MPI.Comm = MPI.COMM_WORLD):
         """Create a cube-sphere process topology.
 
-        Args:
-           :param device (Device): Device on which MPI exchanges are to be made, like a CPU or a GPU.
-           :param rank: [Optional] Rank of the tile the topology will manage. This is useful for creating a tile with a
-                        rank different from the process rank, for debugging purposes.
+        :param device: Device on which MPI exchanges are to be made, like a CPU or a GPU.
+        :type device: Device
+        :param rank: Rank of the tile the topology will manage. This is useful for creating a tile with a
+                    rank different from the process rank, for debugging purposes.
+        :type rank: int, optional
+        :param comm: MPI communicator through which the exchanges will occur. Defaults to COMM_WORLD
+        :type comm: MPI.Comm
 
-        The numbering of the PEs starts at the bottom right. Panel ranks increase towards the east in the x1 direction
-        and increases towards the north in the x2 direction:
-
-                   0 1 2 3 4
-                +-----------+
-              4 |           |
-              3 |  x_2      |
-              2 |  ^        |
-              1 |  |        |
-              0 |  + -->x_1 |
-                +-----------+
-
-        For instance, with n=96 the panel 0 will be endowed with a 4x4 topology like this
-
-             +---+---+---+---+
-             | 12| 13| 14| 15|
-             |---+---+---+---|
-             | 8 | 9 | 10| 11|
-             |---+---+---+---|
-             | 4 | 5 | 6 | 7 |
-             |---+---+---+---|
-             | 0 | 1 | 2 | 3 |
-             +---+---+---+---+
         """
 
         self.device = device
@@ -276,11 +286,20 @@ class ProcessTopology:
         :param north: Array of values for the north boundary
         :param west:  Array of values for the west boundary
         :param east:  Array of values for the east boundary
-        :param boundary_length: Number of grid points along the boundary (horizontally). This assumes the south and
-         north boundaries have the same length as the east and west ones
+        :param boundary_shape: Array shape at the boundary. It may be different (same total size or smaller) from that
+            of the incoming arrays. The MPI exchange occurs with sets of lines along the boundary, but we need to
+            know the shape to be able to properly flip the data between certain pairs of panels.
+        :type boundary_shape: Tuple[int]
+        :param flip_dim: Along which dimension to flip the data, when needed. We may need a custom flip_dim when the
+            boundary shape is not linear. Defaults to -1 (the last dimension of the input array, after the boundary has
+            been reshaped to a line)
+        :type flip_dim: int | Tuple[int]
+
 
         :return: A request (MPI-like) for the transfer of the scalar values. Waiting on the request will return the
-        resulting arrays in the same way as the input.
+            resulting arrays in the same way as the input.
+        :rtype: ExchangeRequest
+
         """
         xp = self.device.xp
 
@@ -332,6 +351,10 @@ class ProcessTopology:
                             The entries in that vector *must* match the entries in the input arrays
         :param boundary_we: Coordinates along the south-north axis at the west and east boundaries. The entries in
                             that vector *must* match the entries in the input arrays
+        :param flip_dim: Along which dimension to flip the data, when needed. We may need a custom flip_dim when the
+            boundary shape is not linear. Defaults to -1 (the last dimension of the input array, after the boundary has
+            been reshaped to a line)
+        :type flip_dim: int | Tuple[int]
 
         :return: A request (MPI-like) for the transfer of the arrays. Waiting on the request will return the
                     resulting arrays in the same way as the input.

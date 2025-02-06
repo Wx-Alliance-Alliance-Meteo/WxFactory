@@ -44,6 +44,7 @@ autodoc_default_options = {
     # "undoc-members": True,
     # "private-members": True
 }
+autodoc_typehints = "description"
 
 templates_path = ["_templates"]
 exclude_patterns = []
@@ -51,7 +52,7 @@ exclude_patterns = []
 
 def skip(app, what, name, obj, would_skip, options):
     if name in ["__call__", "__init__", "__compute_rhs__", "__enter__", "__exit__"]:
-        return False
+        return would_skip
     elif name[:2] == "__" or name[:1] == "_":
         return True
     return would_skip

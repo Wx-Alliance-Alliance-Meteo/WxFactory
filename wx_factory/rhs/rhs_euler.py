@@ -15,7 +15,7 @@ from common.definitions import (
     heat_capacity_ratio,
 )
 from device import CpuDevice, CudaDevice, Device
-from .fluxes import (
+from pde.fluxes import (
     rusanov_3d_vert,
     rusanov_3d_hori_i,
     rusanov_3d_hori_j,

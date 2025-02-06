@@ -13,6 +13,11 @@
    :maxdepth: 2
    :caption: Contents:
 
+   doc/config_options.md
+   doc/contribute.md
+   doc/references.md
+   tests/readme.md
+
 
 Indices and tables
 ==================
