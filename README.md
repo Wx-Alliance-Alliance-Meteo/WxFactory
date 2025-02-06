@@ -3,6 +3,8 @@ Research numerical weather model. The name is inspired by [Richardson’s Fantas
 
 ## Documentation list
 
+Full documentation is [available here](http://hpfx.collab.science.gc.ca/~sdyn001/WxFactory).
+
 - [Testing](./tests/readme.md)
 - [Contributing](./doc/contribute.md)
 - [References](./doc/references.md)

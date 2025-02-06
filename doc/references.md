@@ -1,4 +1,5 @@
 # References
+Charron, M. (2023, May 5). [Next Generation of the Dynamical Core for the Model of the Atmosphere: Theoretical Foundations.](pdf/Seminaire_2023-05-05_Charron.pdf)
 
 Gaudreault, S., Charron, M., Dallerit, V., & Tokman, M. (2022). High-order numerical solutions to the shallow-water equations on the rotated cubed-sphere grid. Journal of Computational Physics, 449, 110792. [https://doi.org/10.1016/j.jcp.2021.110792](https://doi.org/10.1016/j.jcp.2021.110792)
 [(PDF)](pdf/gaudreault2022_high_order_shallow_water_cubed_sphere.pdf)

@@ -10,9 +10,6 @@ root = pathlib.Path(__file__).parents[3].resolve().as_posix()
 sys.path.insert(0, root)
 sys.path.append(os.path.join(root, "wx_factory"))
 
-# for dir in ['common', 'geometry', 'init', 'integrators', 'output', 'precondition', 'rhs', 'solvers', 'wx_cupy']:
-#     sys.path.insert(0, os.path.abspath(f'../../../{dir}'))
-
 # Configuration file for the Sphinx documentation builder.
 #
 # For the full list of built-in configuration values, see the documentation:
@@ -22,7 +19,7 @@ sys.path.append(os.path.join(root, "wx_factory"))
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 project = "WxFactory"
-copyright = "2024, ECCC"
+copyright = "2025, ECCC"
 author = "ECCC"
 release = "0.1"
 
@@ -38,7 +35,12 @@ extensions = [
 ]
 
 autosummary_generate = True
-autosummary_mock_imports = ["wx_cupy", "precondition.preconditioner_dg", "precondition.preconditioner_fv", "rhs.rhs"]
+autosummary_mock_imports = [
+    "wx_cupy",
+    "precondition.preconditioner_dg",
+    "precondition.preconditioner_fv",
+    "rhs.rhs",
+]
 autodoc_default_options = {
     # "members": True,
     # "undoc-members": True,
@@ -65,7 +67,7 @@ def setup(app):
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
-html_theme = "classic"
+html_theme = "sphinx_rtd_theme"
 html_static_path = ["_static"]
 
 

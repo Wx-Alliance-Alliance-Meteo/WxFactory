@@ -40,6 +40,7 @@ API
    init
    integrators
    output
+   pde 
    precondition
    rhs
    solvers
