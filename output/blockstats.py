@@ -11,6 +11,7 @@ from output.diagnostic       import total_energy, potential_enstrophy, global_in
 
 def blockstats_cs(Q, geom, topo, initial_Q, metric, mtrx, param, step):
 
+
 #    h  = Q[0,:,:]
 
 #    if param.case_number == 0:
@@ -53,7 +54,7 @@ def blockstats_cs(Q, geom, topo, initial_Q, metric, mtrx, param, step):
 #             print(f'Integral of enstrophy = {initial_enstrophy}')
 
 #    if MPI.COMM_WORLD.rank == 0: print("Blockstats for timestep ", step)
-   
+
    
    if param.case_number == 20:
       absol_err = global_integral_3d_alt(abs(Q[0]-initial_Q[0]), geom, mtrx, metric, param.nbsolpts, param.nb_elements_horizontal, param.nb_elements_vertical) 
@@ -69,6 +70,21 @@ def blockstats_cs(Q, geom, topo, initial_Q, metric, mtrx, param, step):
       l2 = math.sqrt( absol_err2 / int_Q_2 )
       linf = max_absol_err / max_Q_anal
       
+      if MPI.COMM_WORLD.rank == 0: print(f'l1 = {l1} \t l2 = {l2} \t linf = {linf}')
+
+   if param.case_number == 555:
+      absol_err = global_integral(abs(Q[0] - initial_Q[0]), mtrx, metric, param.nbsolpts, param.nb_elements_horizontal) 
+      int_Q_anal = global_integral(abs(initial_Q[0]), mtrx, metric, param.nbsolpts, param.nb_elements_horizontal) 
+
+      absol_err2 = global_integral((Q[0] - initial_Q[0])**2, mtrx, metric, param.nbsolpts, param.nb_elements_horizontal) 
+      int_Q_anal2 = global_integral(initial_Q[0]**2, mtrx, metric, param.nbsolpts, param.nb_elements_horizontal) 
+
+      max_absol_err = MPI.COMM_WORLD.allreduce(numpy.max(abs(Q[0] - initial_Q[0])), op=MPI.MAX)
+      max_Q_anal = MPI.COMM_WORLD.allreduce(numpy.max(initial_Q[0]), op=MPI.MAX)
+
+      l1 = absol_err / int_Q_anal
+      l2 = math.sqrt( absol_err2 / int_Q_anal2 )
+      linf = max_absol_err / max_Q_anal
       if MPI.COMM_WORLD.rank == 0: print(f'l1 = {l1} \t l2 = {l2} \t linf = {linf}')
 
    if param.case_number == 31:
@@ -145,7 +161,7 @@ def blockstats_cs(Q, geom, topo, initial_Q, metric, mtrx, param, step):
    # if MPI.COMM_WORLD.rank == 0:
    #    print("================================================================================================")
 
-def blockstats_cart(Q: numpy.ndarray, geom: Cartesian2D, step_id: int):
+def blockstats_cart(Q: numpy.ndarray, geom: Cartesian2D, step_id: int, initial_Q, mtrx):
 
    if step_id == 200:
       numpy.save('Q_final.npy',Q)
@@ -160,6 +176,8 @@ def blockstats_cart(Q: numpy.ndarray, geom: Cartesian2D, step_id: int):
       f_avg = field.mean()
 
       return f_mincoord, f_maxcoord, f_min, f_max, f_avg
+
+   print(mtrx.quad_weights)
 
    rho = Q[idx_2d_rho]
    rho_mincoord, rho_maxcoord, rho_min, rho_max, rho_avg = get_stats(rho, geom)

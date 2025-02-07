@@ -3,6 +3,7 @@ from typing import Optional
 from mpi4py import MPI
 import numpy
 import sympy
+import pdb
 
 from common.array_module import module_from_name
 from .quadrature import gauss_legendre

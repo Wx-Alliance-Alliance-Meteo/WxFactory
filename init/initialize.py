@@ -218,8 +218,8 @@ def initialize_cartesian2d(geom: Cartesian2D, param: Configuration) -> NDArray[n
    elif param.case_number == 555:
       # Euler Vortex
       mach = 0.4       
-      x0 = 10      
-      z0 = 10      
+      x0 = 10     
+      z0 = 10     
 
       xt = geom.X1 - x0
       zt = geom.X3 - z0
