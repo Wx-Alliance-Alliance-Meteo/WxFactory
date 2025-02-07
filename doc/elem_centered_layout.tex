@@ -12,6 +12,7 @@
 
 \begin{frame}{Intro}
 \begin{itemize}
+    \item New in WxFactory
     \item Panel-centered layout (old)
     \item Element-centered layout (new)
     \item Performance comparison
@@ -20,7 +21,17 @@
 \end{itemize}
 \end{frame}
 
-\begin{frame}{Panel-centered layout}
+\begin{frame}{New since October}
+\begin{itemize}
+    \item Various exponential solvers (Tanya)
+    \item Exode solver (Vicky)
+    \item Test framework (Linden)
+    \item New RHS structure (Carlos)
+    \item New memory layout (Vincent)
+\end{itemize}
+\end{frame}
+
+\begin{frame}{Panel-centered layout}{The old layout}
 \begin{figure}
     \includegraphics[scale=0.7]{img/variable_storage}
     \caption{Each row in the data array is made by concatenating the corresponding row of solution points of
@@ -87,22 +98,28 @@ Bad for
 \end{frame}
 
 \begin{frame}{Boundary storage}
-\begin{itemize}
-    \item All in one array
-    \begin{itemize}
-        \item Good for extrapolation
-        \item Bad for Riemann
-    \end{itemize}
-    \item All in separate arrays (4 in 2D, 6 in 3D)
-        \begin{itemize} \item Opposite performance implications \end{itemize}
-    \item 1 array per direction
-        \begin{itemize} \item What we are currently doing \end{itemize}
-    \item Layout considerations
+3 options:
+    \begin{enumerate}
+        \item All in one array
+            \begin{itemize}
+                \item Good for extrapolation
+                \item Bad for Riemann
+            \end{itemize}
+        \item All in separate arrays (4 in 2D, 6 in 3D)
+            \begin{itemize}
+                \item Bad for extrapolation
+                \item Good for Riemann
+            \end{itemize}
+        \item 1 array per direction ($X$, $Y$ or $Z$)
+            \begin{itemize} \item What we are currently doing \end{itemize}
+    \end{enumerate}
+
+~\\
+Layout considerations
     \begin{itemize}
         \item Impact on Riemann solve?
         \item What to do in 3D, where element boundaries are 2D
     \end{itemize}
-\end{itemize}
 \end{frame}
 
 \begin{frame}{Next steps}
