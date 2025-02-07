@@ -1,4 +1,4 @@
-__all__ = ["init_wx_cupy", "cuda_avail", "num_devices", "rhs_bubble_cuda", "expm", "Rusanov"]
+__all__ = ["init_wx_cupy", "cuda_avail", "num_devices"]
 
 from mpi4py import MPI
 
@@ -57,11 +57,5 @@ def init_wx_cupy():
     if MPI.COMM_WORLD.rank == 0:
         avail = "available" if cuda_avail else "not available"
         print(f"CUDA is {avail}")
-
-    if cuda_avail:
-        # import cuda-related modules
-        from .rhs_bubble_cuda import rhs_bubble_cuda
-        from .rusanov import Rusanov
-        from .linalg import expm
 
     __initialized = True
