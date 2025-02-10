@@ -61,4 +61,5 @@ def gauss_legendre(n: int, xp: ModuleType = numpy) \
       points_num, weights = scipy.special.roots_legendre(n)      
       points_sym = [sympy.Float(n, n_digits) for n in points_num]
 
+
    return points_sym, points_num, xp.asarray(weights)
