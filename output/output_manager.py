@@ -73,7 +73,7 @@ class OutputManager:
             else:
                if MPI.COMM_WORLD.rank == 0: print(f'WARNING: Blockstat only implemented for Shallow Water equations')
          elif isinstance(self.geometry, Cartesian2D):
-            self.blockstat_function = lambda Q, step_id: blockstats_cart(Q, self.geometry, step_id, self.initial_Q, self.operators)
+            self.blockstat_function = lambda Q, step_id: blockstats_cart(Q, self.geometry, step_id, self.initial_Q, self.operators, self.param)
 
       # Choose a file name hash based on a certain set of parameters:
       state_params = (param.dt, param.nb_elements_horizontal, param.nb_elements_vertical, param.nbsolpts,

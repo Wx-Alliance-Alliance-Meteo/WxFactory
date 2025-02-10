@@ -67,6 +67,16 @@ def global_integral(field, mtrx, metric, nbsolpts, nb_elements_horiz):
    return MPI.COMM_WORLD.allreduce(local_sum)
 
 
+def global_integral_cartesian(field, mtrx, nbsolpts, nb_elements_horizontal, nb_elements_vertical, geom):
+   local_sum = 0.
+   for line in range(nb_elements_vertical):
+      min_lin, max_lin = line * nbsolpts + numpy.array([0, nbsolpts])
+      for column in range(nb_elements_horizontal):
+         min_col, max_col = column * nbsolpts + numpy.array([0, nbsolpts])
+         local_sum += numpy.sum( field[min_lin:max_lin,min_col:max_col] * mtrx.quad_weights * (geom.Δx1/2) * (geom.Δx3/2))
+   return MPI.COMM_WORLD.allreduce(local_sum)
+
+
 def global_integral_3d(field, geom, mtrx, metric, nbsolpts, nb_elements_horiz, nb_elements_vert):
     local_sum_z = 0.0
 
