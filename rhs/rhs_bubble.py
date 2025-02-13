@@ -39,8 +39,8 @@ def rhs_bubble(Q, geom, mtrx, nbsolpts, nb_elements_x, nb_elements_z):
    ee       = Q[idx_2d_rho_theta,:,:] / rho
    height   = geom.X3
 
-   pressure = (heat_capacity_ratio-1) * (Q[idx_2d_rho_theta, :, :] - 0.5*rho*(uu**2 + ww**2))
-   enthalpy = (heat_capacity_ratio/(heat_capacity_ratio-1))*(pressure/rho) + 0.5*(uu**2 + ww**2)
+   pressure = (heat_capacity_ratio-1) * (Q[idx_2d_rho_theta, :, :] - 0.5*rho*(uu**2 + ww**2) - rho*gravity*geom.X3)
+   enthalpy = (heat_capacity_ratio/(heat_capacity_ratio-1))*(pressure/rho) + 0.5*(uu**2 + ww**2) + gravity*geom.X3
 
    # --- Compute the fluxes
    flux_x1[idx_2d_rho,:,:]       = Q[idx_2d_rho_u,:,:]
@@ -138,7 +138,7 @@ def rhs_bubble(Q, geom, mtrx, nbsolpts, nb_elements_x, nb_elements_z):
       w_avg      = (RT * kfaces_w[right, 0, :] + kfaces_w[left, 1, :]) / (RT+1)
       H_avg      = (RT * kfaces_enthalpy[right, 0, :] + kfaces_enthalpy[left, 1, :]) / (RT+1)
       height_avg = 0.5 * (kfaces_height[right, 0, :] + kfaces_height[left, 1, :])
-      c          = numpy.sqrt((heat_capacity_ratio-1)*(H_avg - 0.5*(u_avg**2 + w_avg**2)))
+      c          = numpy.sqrt((heat_capacity_ratio-1)*(H_avg - 0.5*(u_avg**2 + w_avg**2) - gravity*height_avg))
 
       # Compute local Mach number M, numrically defined the average of both sides of the interface
       a_L = numpy.sqrt(heat_capacity_ratio * kfaces_pres[left, 1, :] / kfaces_var[idx_2d_rho, left, 1, :])
@@ -148,9 +148,8 @@ def rhs_bubble(Q, geom, mtrx, nbsolpts, nb_elements_x, nb_elements_z):
       M = 0.5 * (M_L + M_R)
 
       # Compute preconditioning parameter delta 
-      mu       = numpy.minimum(1, numpy.maximum(M, 1E-13))     # Assumed M_cut = 1E-7
+      mu       = numpy.minimum(1, numpy.maximum(M, 1E-3))     # Assumed M_cut = 1E-7
       delta    = 1/mu - 1
-      print(delta.max())
 
       # Auxiliary Variables to compute eigenvectors and its inverse
       alph1   = 0.5*(u_avg**2 + w_avg**2)         # alpha
@@ -172,7 +171,7 @@ def rhs_bubble(Q, geom, mtrx, nbsolpts, nb_elements_x, nb_elements_z):
       ΔU      = kfaces_var[:, right, 0, :] - kfaces_var[:, left, 1, :]
 
       # Compute preconditioned dissipation matrix
-      D = numpy.zeros((nbsolpts*nb_elements_z, nb_equations, nb_equations))
+      D = numpy.zeros((nbsolpts*nb_elements_x, nb_equations, nb_equations))
       D[:,0,0] = numpy.abs(w_avg) - ((S1*w_avg)/rho_avg) + alph1*psi*zeta1; D[:,0,1] = -psi*u_avg*zeta1; D[:,0,2] = (S1/rho_avg) - psi*w_avg*zeta1; D[:,0,3] = psi*zeta1
       D[:,1,0] = alph1*psi*u_avg*zeta1 - (S1*u_avg*w_avg)/rho_avg; D[:,1,1] = numpy.abs(w_avg) - psi*u_avg**2*zeta1; D[:,1,2] = (S1*u_avg)/rho_avg - psi*u_avg*w_avg*zeta1; D[:,1,3] = psi*u_avg*zeta1
       D[:,2,0] = w_avg*numpy.abs(w_avg) + alph1*psi*zeta2 - w_avg*zeta3; D[:,2,1] = -psi*u_avg*zeta2; D[:,2,2] = -w_avg*psi*zeta2 + zeta3; D[:,2,3] = psi*zeta2
@@ -216,7 +215,7 @@ def rhs_bubble(Q, geom, mtrx, nbsolpts, nb_elements_x, nb_elements_z):
       w_avg      = (RT * ifaces_w[right, :, 0] + ifaces_w[left, :, 1]) / (RT+1)
       H_avg      = (RT * ifaces_enthalpy[right, :, 0] + ifaces_enthalpy[left, :, 1]) / (RT+1)
       height_avg = 0.5 * (ifaces_height[right, :, 0] + ifaces_height[left, :, 1])
-      c          = numpy.sqrt((heat_capacity_ratio-1)*(H_avg - 0.5*(u_avg**2 + w_avg**2)))  # Speed of sound c
+      c          = numpy.sqrt((heat_capacity_ratio-1)*(H_avg - 0.5*(u_avg**2 + w_avg**2) - gravity*height_avg))  # Speed of sound c
 
       # Compute local Mach number M, numrically defined the average of both sides of the interface
       a_L = numpy.sqrt(heat_capacity_ratio * ifaces_pres[left, :, 1] / ifaces_var[idx_2d_rho, left, :, 1])
@@ -226,7 +225,7 @@ def rhs_bubble(Q, geom, mtrx, nbsolpts, nb_elements_x, nb_elements_z):
       M   = 0.5*(M_L + M_R)
 
       # Compute preconditioning parameter delta 
-      mu       = numpy.minimum(1, numpy.maximum(M, 1E-13))     # Assumed M_cut = 0
+      mu       = numpy.minimum(1, numpy.maximum(M, 1E-3))     # Assumed M_cut = 0
       delta    = 1/mu -1
    
 

@@ -19,11 +19,18 @@ def output_step(Q: numpy.ndarray, geom: Geometry, param: Configuration, filename
       w = Q[RHO_W,:,:] / Q[RHO,:,:]
       u = Q[idx_2d_rho_u,:,:] / Q[RHO,:,:]
       rho = Q[RHO]
-      pressure = (gamma-1)*(Q[RHO_THETA] - 0.5*rho*(u**2+w**2))
+      pressure = (gamma-1)*(Q[RHO_THETA] - 0.5*rho*(u**2+w**2) - rho*gravity*geom.X3)
       exner = (pressure/p0)**(Rd/cpd)
-      Theta =  1/(cvd*exner)*(e - 0.5*(u**2 + w**2))
-      # R =  (Q[RHO_THETA,:,:] / Q[RHO,:,:])
-      image_field(geom, Theta, filename, numpy.min(Theta), numpy.max(Theta), 8)
+      Theta =  1/(cvd*exner)*(e - 0.5*(u**2 + w**2) - gravity*geom.X3)
+      c = numpy.sqrt(gamma*pressure / rho)
+      M = (numpy.sqrt(u**2+w**2) / c).max()
+      array = numpy.array([f"{M:.5e}"])   
+      # Open the file in append mode and write the new values
+      with open("output4.txt", "a") as file:
+         # Convert array to string and append to the file
+         file.write(" ".join(map(str, array)) + "\n")
+
+      # image_field(geom, Theta, filename, numpy.min(Theta), numpy.max(Theta), 8)
    elif param.case_number == 3:
       image_field(geom, (Q[RHO_THETA,:,:] / Q[RHO,:,:]), filename, 303., 303.7, 8)
    elif param.case_number == 4:

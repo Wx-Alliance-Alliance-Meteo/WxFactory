@@ -75,13 +75,13 @@ def image_field(geom: 'Cartesian2D', field: numpy.ndarray, filename: str, vmin: 
       X3[:, -2] = 2*X3[:, -3] - X3[:, -4]
       X3[:, -1] = 2*X3[:, -2] - X3[:, -3]
       f  = numpy.append(numpy.append(field[:, -2:], field, axis=1), field[:, :2], axis=1)
-      cmap = matplotlib.pyplot.contourf(X1, X3, f, cmap=colormap,
-                                       levels=numpy.linspace(vmin,vmax,n), extend="both")
+      cmap = matplotlib.pyplot.contourf(X1, X3, f, cmap=colormap)
+                                       # levels=numpy.linspace(vmin,vmax,n), extend="both")
    ax.set_aspect('equal', 'box')
 
-   cbar = fig.colorbar(cmap, ax=ax, orientation='vertical')
-   cbar.set_label(label, fontsize = 14 )
-   cbar.ax.yaxis.set_major_formatter(FormatStrFormatter('%.5f'))
+   # cbar = fig.colorbar(cmap, ax=ax, orientation='vertical')
+   # cbar.set_label(label, fontsize = 14 )
+   # cbar.ax.yaxis.set_major_formatter(FormatStrFormatter('%.5f'))
    matplotlib.pyplot.xlabel('x', fontsize=14)
    matplotlib.pyplot.ylabel('y', fontsize=14)
    # matplotlib.pyplot.gca().set_xticks([0,5,10,15,20])

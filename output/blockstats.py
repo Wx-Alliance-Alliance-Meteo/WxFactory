@@ -212,3 +212,9 @@ def blockstats_cart(Q: numpy.ndarray, geom: Cartesian2D, step_id: int, initial_Q
             # f'({theta_maxcoord[0]:7.0f}, {theta_maxcoord[1]:7.0f})'
             )
       print("==============================================")
+      
+      # array = numpy.array([step_id, f"{theta_avg:.5e}"])   
+      # # Open the file in append mode and write the new values
+      # with open("output.txt", "a") as file:
+      #    # Convert array to string and append to the file
+      #    file.write(" ".join(map(str, array)) + "\n")
