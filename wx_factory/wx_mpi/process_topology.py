@@ -4,8 +4,9 @@ from typing import Callable, Optional, Tuple
 from mpi4py import MPI
 from numpy.typing import NDArray
 
-from common.definitions import *
 from device import Device
+
+from .wx_mpi import SingleProcess, Conditional
 
 ExchangedVector = Tuple[NDArray, ...] | NDArray
 
@@ -384,6 +385,159 @@ class ProcessTopology:
         mpi_request = self.comm_dist_graph.Ineighbor_alltoall(send_buffer, recv_buffer)
 
         return ExchangeRequest(recv_buffer, mpi_request, shape=south[0].shape, is_vector=True)
+
+    def gather_tiles_to_panel(self, field: NDArray, num_dim: int) -> Optional[NDArray]:
+        """Send given tile data (`field`) to one PE (the root) on current panel.
+        The root collects all tiles and assembles them into one array. Other PEs on the panel
+        simply return None.
+        Each dimension along the plane of the panel is combined across tiles, like this:
+
+        .. code-block::
+
+            4 tiles:
+
+             ----- -----                     ---------
+            | x x | x x |   gather tiles    | x x x x |
+            | x x | x x |                   | x x x x |
+             ----- -----        ==>         | x x x x |
+            | x x | x x |                   | x x x x |
+            | x x | x x |                    ---------
+             ----- -----
+
+            Where `x` can be of any shape
+
+        The only exception is when `field` is 1-dimensional; in that case, the arrays will be joined
+        end-to-end rather that into a 2D grid.
+
+        This function is a collective call that must be done by every PE within a panel.
+
+        :param field: Tile data we want to send to the panel root (from this current tile)
+        :param axis: Number of data dimensions on the tile (this is different from the number of array dimensions).
+            This corresponds to 2 for a single shallow-water variable,
+            3 for single 3d-euler variable, 4 for a set of 3d-euler variables, etc.
+            This parameter is ignored when the tile is made of 1D data.
+        :type axis: int
+        :return: The assembled panel, as a single NDArray, on root PE; None on every non-root PE.
+        """
+        xp = self.device.xp
+
+        if self.panel_comm.size == 1:
+            return field
+
+        panel_fields = self.panel_comm.gather(field, root=0)
+
+        if panel_fields is None:  # non-root PEs
+            return None
+
+        side = self.num_lines_per_panel
+        if field.ndim == 1:
+            # When gathering a 1D array, put them all end-to-end
+            panel_field = xp.concatenate(panel_fields[:side])
+        else:
+            # When gathering 2D+ array, join the tiles in a square
+            panel_field = xp.concatenate(
+                [xp.concatenate(panel_fields[i * side : (i + 1) * side], axis=num_dim - 1) for i in range(side)],
+                axis=num_dim - 2,
+            )
+
+        return panel_field
+
+    def gather_cube(self, field: NDArray, num_dim: int):
+        """Gather given tile data into a single array on the root of this process topology. The first dimension
+        will necessarily be 6; the rest will depend on the number of dimensions in the data and the number of tiles.
+        This function is a collective call that must be made by every process member of this topology.
+
+        :param field: Tile data
+        :param num_dim: Number of dimensions in the data. For example:
+            for a single shallow-water variable, it should be 2;
+            for a set of shallow-water variables, it should be 3;
+            for a set of 3D-euler variables, it should be 4
+        :return: A single array with the entire cube-sphere data on process with rank 0 (in this topology);
+            None on other processes
+        """
+        panel = self.gather_tiles_to_panel(field, num_dim)
+
+        # Only panel roots can go further
+        if panel is None:
+            return None
+
+        panels = self.panel_roots_comm.gather(panel, root=0)
+
+        # Only the root of the entire cubesphere topology with continue
+        if panels is None:
+            return None
+
+        return self.device.xp.stack(panels)
+
+    def distribute_cube(self, field: Optional[NDArray], num_dim: int):
+        """Split the given single array into its component tiles (according to this topology) and send
+        each tile to its corresponding process.
+
+        :param field: The data we want to split and distribute, if on root; ignored otherwise. *It has to
+            be contiguous in memory, and not have transposed dimensions*.
+        :param num_dim: Number of dimensions in the data. For example:
+            for a single shallow-water variable, it should be 2;
+            for a set of shallow-water variables, it should be 3;
+            for a set of 3D-euler variables, it should be 4
+
+        :return: The tile corresponding to this process within the topology
+        :rtype: NDArray
+        """
+        side = self.num_lines_per_panel
+
+        panel_list = None
+        with SingleProcess(self.comm) as s, Conditional(s):
+
+            # Verifications
+            if field.ndim < num_dim + 1 or field.shape[0] != 6 or field.shape[num_dim - 1] != field.shape[num_dim]:
+                print(f"This is not a cube with square panels {field.shape}, num_dim {num_dim}", flush=True)
+                raise ValueError
+
+            panel_side = field.shape[num_dim - 1]
+            tile_side = panel_side // side
+            if tile_side * side != panel_side:
+                acceptable = [6 * i**2 for i in range(1, panel_side + 1) if panel_side % i == 0]
+                print(
+                    f"The given field shape {field.shape} cannot be distributed to this process topology\n"
+                    f"Acceptable number of processes are {acceptable}",
+                    flush=True,
+                )
+                raise ValueError
+
+            # Group panels into list
+            panel_list = [field[i] for i in range(6)]
+
+        tile_list = None
+        if self.panel_comm.rank == 0:
+            # Send panel list
+            panel = self.panel_roots_comm.scatter(panel_list, root=0)
+
+            # Tile == panel if we only have 1 proc per panel
+            if self.size == 6:
+                return panel
+
+            # A bit of reshaping is needed to avoid having different lines for different numbers of data dimensions
+            # We flatten individual elements of each tile so that they have exactly 1 dimension (even scalars),
+            # then extract the tile from the panel, then give it it's proper shape
+            panel_side = panel.shape[num_dim - 2]
+            tile_side = panel_side // side
+            panel_base_shape = panel.shape[:num_dim]
+            elem_shape = panel.shape[num_dim:]
+
+            lin_panel = panel.reshape(panel_base_shape + (-1,))
+            tile_shape = panel_base_shape[:-2] + (tile_side, tile_side) + elem_shape
+
+            tile_list = [
+                lin_panel[..., i * tile_side : (i + 1) * tile_side, j * tile_side : (j + 1) * tile_side, :].reshape(
+                    tile_shape
+                )
+                for i in range(side)
+                for j in range(side)
+            ]
+
+        tile = self.panel_comm.scatter(tile_list, root=0)
+
+        return tile
 
 
 def get_base_shape(initial_shape: tuple, length_shape: tuple[int, ...]):

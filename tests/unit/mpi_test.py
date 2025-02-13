@@ -14,19 +14,22 @@ import numpy
 test_tag: int = 0
 
 
-def run_test_on_x_process(test: unittest.TestCase, x: int = 0) -> MPI.Comm:
+def run_test_on_x_process(test: unittest.TestCase, x: int = 0, optional: bool = False) -> MPI.Comm:
     """
     Make the test run on `x` processes
 
     :param test: Test that want to restrict the number of processes
     :param x: Required number of processes, 0 for no restriction
-    :return: The new communicator to be use for the tests
+    :return: The new communicator to be used for the tests
     """
     if x == 0:
         return MPI.COMM_WORLD
 
     if x > MPI.COMM_WORLD.size:
-        test.fail("Not enough process to run this test")
+        if MPI.COMM_WORLD.rank == 0 and not optional:
+            test.fail("Not enough process to run this test")
+        else:
+            test.skipTest(f"Not enough processes to run this test [optional={optional}]")
 
     global test_tag
     is_needed: bool = MPI.COMM_WORLD.rank < x
@@ -126,7 +129,7 @@ class MpiTestResult(TestResult):
                             else:
                                 errors.append((0, self.failures[failure_index][1]))
                         else:
-                            errors.append((node_index, wx_mpi.receive_string_from(node_index, MPI.COMM_WORLD)))
+                            errors.append((node_index, MPI.COMM_WORLD.recv(source=node_index)))
                 if len(errors) > 0:
                     self.printErrorList(errors, self.tests_order[test_index])
                 else:
@@ -138,10 +141,10 @@ class MpiTestResult(TestResult):
             else:
                 # Send an error message
                 if to_send[0] == 1:
-                    wx_mpi.send_string_to(self.errors[error_index][1], 0, MPI.COMM_WORLD)
+                    MPI.COMM_WORLD.send(self.errors[error_index][1], dest=0)
                     error_index += 1
                 elif to_send[0] == 2:
-                    wx_mpi.send_string_to(self.failures[failure_index][1], 0, MPI.COMM_WORLD)
+                    MPI.COMM_WORLD.send(self.failures[failure_index][1], dest=0)
                     failure_index += 1
 
         if len(skipped_tests) > 0:

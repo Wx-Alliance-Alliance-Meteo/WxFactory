@@ -5,7 +5,7 @@ import numpy
 from mpi4py import MPI
 
 from device import CpuDevice
-from wx_mpi import ProcessTopology, SOUTH, NORTH, WEST, EAST
+from wx_mpi import ProcessTopology, SOUTH, NORTH, WEST, EAST, SingleProcess, Conditional
 
 from tests.unit.mpi_test import run_test_on_x_process
 
@@ -541,3 +541,139 @@ class ProcessTopologyTest(unittest.TestCase):
                 f"expected\n{other}\n"
                 f"got\n{result[dir]}",
             )
+
+
+class GatherScatterTest(unittest.TestCase):
+    topo: ProcessTopology
+
+    def setUp(self) -> None:
+        super().setUp()
+        # For testing gather/scatter functions
+        self.global_data_1 = numpy.arange(6 * 12 * 12).reshape(6, 12, 12)  # A flat (2D) field
+        # A 2D field of 3x3 elements
+        self.global_data_2 = numpy.arange(6 * 12 * 12 * 3 * 3).reshape(6, 12, 12, 3, 3)
+        # A 3D field of scalars
+        self.global_data_3a = numpy.arange(6 * 4 * 12 * 12).reshape(6, 4, 12, 12)
+        # A 3D field of 3x3 elements
+        self.global_data_3b = numpy.arange(6 * 4 * 12 * 12 * 2 * 2).reshape(6, 4, 12, 12, 2, 2)
+        # A 4D field of 3x3 elements
+        self.global_data_4 = numpy.arange(6 * 3 * 4 * 12 * 12 * 2 * 2).reshape(6, 3, 4, 12, 12, 2, 2)
+
+        self.global_data_fail_1 = numpy.arange(6 * 13 * 13).reshape(6, 13, 13)
+        self.global_data_fail_2 = numpy.arange(6 * 12 * 14).reshape(6, 12, 14)
+        self.global_data_fail_3 = numpy.arange(4 * 12 * 12).reshape(4, 12, 12)
+        self.global_data_fail_4 = numpy.arange(6 * 6).reshape(6, 6)
+
+    def gather_scatter(self, global_data, num_dim):
+        side = self.topo.num_lines_per_panel
+        tile_side = global_data.shape[num_dim - 1] // side
+        my_panel = self.topo.my_panel
+        my_row = self.topo.my_row
+        my_col = self.topo.my_col
+        if num_dim == 2:
+            tile_data_ref = global_data[
+                my_panel, my_row * tile_side : (my_row + 1) * tile_side, my_col * tile_side : (my_col + 1) * tile_side
+            ]
+        elif num_dim == 3:
+            tile_data_ref = global_data[
+                my_panel,
+                :,
+                my_row * tile_side : (my_row + 1) * tile_side,
+                my_col * tile_side : (my_col + 1) * tile_side,
+            ]
+        elif num_dim == 4:
+            tile_data_ref = global_data[
+                my_panel,
+                :,
+                :,
+                my_row * tile_side : (my_row + 1) * tile_side,
+                my_col * tile_side : (my_col + 1) * tile_side,
+            ]
+        else:
+            raise ValueError(f"Unhandled num dims {num_dim}. Fix the test!")
+
+        # if self.comm.rank == 0:
+        #     print(f"tile ({my_panel}, ({my_row}, {my_col})): \n{tile_data_ref}", flush=True)
+
+        cube = self.topo.gather_cube(tile_data_ref.copy(), num_dim)
+        with SingleProcess(self.topo.comm) as s, Conditional(s):
+            # print(f"cube = \n{cube[0]}", flush=True)
+            diff = cube - global_data
+            diff_norm = numpy.linalg.norm(diff)
+            self.assertEqual(diff_norm, 0, f"Gathering failed")
+
+        tile = self.topo.distribute_cube(cube, num_dim)
+        tile_diff = tile_data_ref - tile
+        tile_diff_norm = numpy.linalg.norm(tile_diff)
+        self.assertEqual(tile_diff_norm, 0, f"Distributing failed")
+
+    def gather_scatter_2d(self):
+        self.gather_scatter(self.global_data_1, 2)
+
+    def gather_scatter_elem_2d(self):
+        self.gather_scatter(self.global_data_2, 2)
+
+    def gather_scatter_3d(self):
+        self.gather_scatter(self.global_data_3a, 3)
+
+    def gather_scatter_elem_3d(self):
+        self.gather_scatter(self.global_data_3b, 3)
+
+    def gather_scatter_elem_4d(self):
+        self.gather_scatter(self.global_data_4, 4)
+
+    @unittest.expectedFailure
+    def fail_wrong_num_proc(self):
+        self.topo.distribute_cube(self.global_data_fail_1, num_dim=2)
+
+    @unittest.expectedFailure
+    def fail_not_square(self):
+        self.topo.distribute_cube(self.global_data_fail_2, num_dim=2)
+
+    @unittest.expectedFailure
+    def fail_not_cube(self):
+        self.topo.distribute_cube(self.global_data_fail_3, num_dim=2)
+
+    @unittest.expectedFailure
+    def fail_wrong_num_dim(self):
+        self.topo.distribute_cube(self.global_data_fail_4, num_dim=2)
+
+
+class GatherScatterTest_6(GatherScatterTest):
+    def setUp(self) -> None:
+        super().setUp()
+        self.comm = run_test_on_x_process(self, 6)
+        self.topo = ProcessTopology(dev, comm=self.comm)
+
+
+class GatherScatterTest_24(GatherScatterTest):
+    def setUp(self) -> None:
+        super().setUp()
+        self.comm = run_test_on_x_process(self, 24)
+        self.topo = ProcessTopology(dev, comm=self.comm)
+
+
+class GatherScatterTest_54(GatherScatterTest):
+    def setUp(self) -> None:
+        super().setUp()
+
+
+class GatherScatterTest_6(GatherScatterTest):
+    def setUp(self) -> None:
+        super().setUp()
+        self.comm = run_test_on_x_process(self, 6)
+        self.topo = ProcessTopology(dev, comm=self.comm)
+
+
+class GatherScatterTest_24(GatherScatterTest):
+    def setUp(self) -> None:
+        super().setUp()
+        self.comm = run_test_on_x_process(self, 24)
+        self.topo = ProcessTopology(dev, comm=self.comm)
+
+
+class GatherScatterTest_54(GatherScatterTest):
+    def setUp(self) -> None:
+        super().setUp()
+        self.comm = run_test_on_x_process(self, 54, optional=True)
+        self.topo = ProcessTopology(dev, comm=self.comm)

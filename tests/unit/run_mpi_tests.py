@@ -11,7 +11,12 @@ main_module_dir = os.path.join(main_project_dir, "wx_factory")
 sys.path.append(main_project_dir)
 sys.path.append(main_module_dir)
 
-from tests.unit.common.test_process_topology import ProcessTopologyTest
+from tests.unit.common.test_process_topology import (
+    ProcessTopologyTest,
+    GatherScatterTest_6,
+    GatherScatterTest_24,
+    GatherScatterTest_54,
+)
 from tests.unit.solvers.test_pmex_mpi import PmexMpiTestCases
 from tests.unit.solvers.test_kiops_mpi import KiopsMpiTestCases
 from tests.unit.solvers.test_fgmres_mpi import FgmresMpiTestCases
@@ -19,6 +24,29 @@ from tests.unit.solvers.test_fgmres_mpi import FgmresMpiTestCases
 
 def load_tests():
     suite = unittest.TestSuite()
+
+    suite.addTest(GatherScatterTest_6("gather_scatter_2d"))
+    suite.addTest(GatherScatterTest_6("gather_scatter_elem_2d"))
+    suite.addTest(GatherScatterTest_6("gather_scatter_3d"))
+    suite.addTest(GatherScatterTest_6("gather_scatter_elem_3d"))
+    suite.addTest(GatherScatterTest_6("gather_scatter_elem_4d"))
+
+    suite.addTest(GatherScatterTest_24("gather_scatter_2d"))
+    suite.addTest(GatherScatterTest_24("gather_scatter_elem_2d"))
+    suite.addTest(GatherScatterTest_24("gather_scatter_3d"))
+    suite.addTest(GatherScatterTest_24("gather_scatter_elem_3d"))
+    suite.addTest(GatherScatterTest_24("gather_scatter_elem_4d"))
+
+    suite.addTest(GatherScatterTest_54("gather_scatter_2d"))
+    suite.addTest(GatherScatterTest_54("gather_scatter_elem_2d"))
+    suite.addTest(GatherScatterTest_54("gather_scatter_3d"))
+    suite.addTest(GatherScatterTest_54("gather_scatter_elem_3d"))
+    suite.addTest(GatherScatterTest_54("gather_scatter_elem_4d"))
+
+    suite.addTest(GatherScatterTest_24("fail_wrong_num_proc"))  # This test needs at least 24 procs
+    suite.addTest(GatherScatterTest_6("fail_not_square"))
+    suite.addTest(GatherScatterTest_6("fail_not_cube"))
+    suite.addTest(GatherScatterTest_6("fail_wrong_num_dim"))
 
     suite.addTest(ProcessTopologyTest("vector2d_1d_shape1d"))
     suite.addTest(ProcessTopologyTest("vector2d_1d_shape2d"))
