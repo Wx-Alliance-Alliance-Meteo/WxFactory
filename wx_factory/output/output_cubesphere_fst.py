@@ -24,7 +24,7 @@ class OutputCubesphereFst(OutputCubesphere):
         import rmn
 
         self.rank = MPI.COMM_WORLD.rank
-        self.filename = f"{self.output_dir}/{self.param.base_output_file}.fst"
+        self.filename = f"{self.output_dir}/{self.config.base_output_file}.fst"
         self.file = None
         if self.rank == 0:
             self.file = rmn.fst24_file(self.filename, "RSF+R/W")

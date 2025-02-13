@@ -45,18 +45,18 @@ class OutputManager:
 
     def __init__(
         self,
-        param: Configuration,
+        config: Configuration,
         geometry: Geometry,
         operators: DFROperators,
         device: Device,
     ) -> None:
 
-        self.param = param
+        self.config = config
         self.geometry = geometry
         self.operators = operators
         self.device = device
 
-        self.output_dir = self.param.output_dir
+        self.output_dir = self.config.output_dir
 
         if MPI.COMM_WORLD.rank == 0:
             try:
@@ -72,15 +72,15 @@ class OutputManager:
 
         MPI.COMM_WORLD.bcast(self.output_dir, root=0)
 
-        if self.param.store_solver_stats > 0:
-            self.solver_stats_output = SolverStatsOutput(param)
+        if self.config.store_solver_stats > 0:
+            self.solver_stats_output = SolverStatsOutput(config)
 
         # Choose a file name hash based on a certain set of parameters:
         state_params = (
-            param.dt,
-            param.num_elements_horizontal,
-            param.num_elements_vertical,
-            param.num_solpts,
+            config.dt,
+            config.num_elements_horizontal,
+            config.num_elements_vertical,
+            config.num_solpts,
             MPI.COMM_WORLD.size,
         )
         self.config_hash = state_params.__hash__() & 0xFFFFFFFFFFFF
@@ -100,7 +100,7 @@ class OutputManager:
 
     def step(self, Q: NDArray, step_id: int) -> None:
         """Output the result of the latest timestep."""
-        if self.param.output_freq > 0 and (step_id % self.param.output_freq) == 0:
+        if self.config.output_freq > 0 and (step_id % self.config.output_freq) == 0:
             if MPI.COMM_WORLD.rank == 0:
                 print(f"=> Writing dynamic output for step {step_id}")
 
@@ -111,13 +111,13 @@ class OutputManager:
             self.total_write_time += time() - t0
             self.num_writes += 1
 
-        if self.param.save_state_freq > 0 and (step_id % self.param.save_state_freq) == 0:
+        if self.config.save_state_freq > 0 and (step_id % self.config.save_state_freq) == 0:
             t0 = time()
-            save_state(Q, self.param, self.state_file_name(step_id))
+            save_state(Q, self.config, self.state_file_name(step_id))
             self.total_save_state_time += time() - t0
             self.num_save_states += 1
 
-        if self.param.stat_freq > 0 and (step_id % self.param.stat_freq) == 0:
+        if self.config.stat_freq > 0 and (step_id % self.config.stat_freq) == 0:
             t0 = time()
             self.__blockstats__(Q, step_id)
             self.total_blockstat_time += time() - t0
@@ -140,7 +140,7 @@ class OutputManager:
         precond: Optional[Multigrid],
     ):
         """Store statistics for the current step into a database."""
-        if self.param.store_solver_stats > 0:
+        if self.config.store_solver_stats > 0:
             self.solver_stats_output.write_output(
                 total_time,
                 simulation_time,
@@ -156,17 +156,17 @@ class OutputManager:
         """
         Perform any necessary operation to properly finish outputting.
         """
-        if self.param.store_total_time:
+        if self.config.store_total_time:
             if MPI.COMM_WORLD.rank == 0:
                 size = MPI.COMM_WORLD.size
-                method = str(self.param.time_integrator)
-                methodOrtho = str(self.param.exponential_solver)
-                caseNum = str(self.param.case_number)
+                method = str(self.config.time_integrator)
+                methodOrtho = str(self.config.exponential_solver)
+                caseNum = str(self.config.case_number)
                 totaltime_name = f"{self.output_dir}/runtime_{methodOrtho}_n{size}_{method}_c{caseNum}.txt"
                 with open(totaltime_name, "a") as gg:
                     gg.write(f"{total_time}\n")
 
-        if self.param.output_freq > 0:
+        if self.config.output_freq > 0:
             self.__finalize__()
 
         if MPI.COMM_WORLD.rank == 0:

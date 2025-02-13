@@ -44,7 +44,7 @@ class OutputCubesphereNetcdf(OutputCubesphere):
 
         self.ncfile = None
         self.netcdf_serial = False
-        self.filename = f"{self.output_dir}/{self.param.base_output_file}.nc"
+        self.filename = f"{self.output_dir}/{self.config.base_output_file}.nc"
 
         if config.output_freq > 0:
             self._output_init()
@@ -70,18 +70,18 @@ class OutputCubesphereNetcdf(OutputCubesphere):
 
         # create dimensions
         side = self.process_topology.num_lines_per_panel
-        if self.param.equations == "shallow_water":
+        if self.config.equations == "shallow_water":
             nj, ni = self.geometry.block_shape
             ni *= side
             nj *= side
             grid_data = ("npe", "Xdim", "Ydim")
-        elif self.param.equations == "euler":
+        elif self.config.equations == "euler":
             nk, nj, ni = self.geometry.nk, self.geometry.nj, self.geometry.ni
             nj *= side
             ni *= side
             grid_data = ("npe", "Zdim", "Xdim", "Ydim")
         else:
-            raise ValueError(f"Unsupported equation type {self.param.equations}")
+            raise ValueError(f"Unsupported equation type {self.config.equations}")
 
         grid_data2D = ("npe", "Xdim", "Ydim")
 
@@ -122,7 +122,7 @@ class OutputCubesphereNetcdf(OutputCubesphere):
             xxx.axis = "X"
             xxx.units = "radians_east"
 
-            if self.param.equations == "euler":
+            if self.config.equations == "euler":
                 self.ncfile.createDimension("Zdim", nk)
                 zzz = self.ncfile.createVariable("Zdim", numpy.float64, ("Zdim"))
                 zzz.long_name = "Zdim"
@@ -138,7 +138,7 @@ class OutputCubesphereNetcdf(OutputCubesphere):
             lon.long_name = "longitude"
             lon.units = "degrees_east"
 
-            if self.param.equations == "shallow_water":
+            if self.config.equations == "shallow_water":
 
                 hhh = self.ncfile.createVariable("h", numpy.dtype("double").char, ("time",) + grid_data)
                 hhh.long_name = "fluid height"
@@ -147,7 +147,7 @@ class OutputCubesphereNetcdf(OutputCubesphere):
                 hhh.grid_mapping = "cubed_sphere"
                 hhh.set_collective(not self.netcdf_serial)
 
-                if self.param.case_number >= 2:
+                if self.config.case_number >= 2:
                     uuu = self.ncfile.createVariable("U", numpy.dtype("double").char, ("time",) + grid_data)
                     uuu.long_name = "eastward_wind"
                     uuu.units = "m s-1"
@@ -180,7 +180,7 @@ class OutputCubesphereNetcdf(OutputCubesphere):
                     dpv.grid_mapping = "cubed_sphere"
                     dpv.set_collective(not self.netcdf_serial)
 
-            elif self.param.equations == "euler":
+            elif self.config.equations == "euler":
                 elev = self.ncfile.createVariable("elev", numpy.dtype("double").char, grid_data)
                 elev.long_name = "Elevation"
                 elev.units = "m"
@@ -245,7 +245,7 @@ class OutputCubesphereNetcdf(OutputCubesphere):
                 press.grid_mapping = "cubed_sphere"
                 press.set_collective(not self.netcdf_serial)
 
-                if self.param.case_number == 11 or self.param.case_number == 12:
+                if self.config.case_number == 11 or self.config.case_number == 12:
                     q1 = self.ncfile.createVariable("q1", numpy.dtype("double").char, ("time",) + grid_data)
                     q1.long_name = "q1"
                     q1.units = "kg m-3"
@@ -254,7 +254,7 @@ class OutputCubesphereNetcdf(OutputCubesphere):
                     q1.grid_mapping = "cubed_sphere"
                     q1.set_collective(not self.netcdf_serial)
 
-                if self.param.case_number == 11:
+                if self.config.case_number == 11:
                     q2 = self.ncfile.createVariable("q2", numpy.dtype("double").char, ("time",) + grid_data)
                     q2.long_name = "q2"
                     q2.units = "kg m-3"
@@ -287,7 +287,7 @@ class OutputCubesphereNetcdf(OutputCubesphere):
         if self.rank == 0:
             xxx[:] = panel_x
             yyy[:] = panel_y
-            if self.param.equations == "euler":
+            if self.config.equations == "euler":
                 # No gathering needed for vertical coords
                 # FIXME: With mapped coordinates, x3/height is a truly 3D coordinate
                 zzz[:] = prepare(self.geometry.x3[:, 0, 0])
@@ -295,7 +295,7 @@ class OutputCubesphereNetcdf(OutputCubesphere):
         if self.netcdf_serial:
             lons = self._gather_field(prepare(self.geometry.block_lon * 180 / math.pi))
             lats = self._gather_field(prepare(self.geometry.block_lat * 180 / math.pi))
-            if self.param.equations == "euler":
+            if self.config.equations == "euler":
                 elevs = self._gather_field(prepare(self.geometry.coordVec_latlon[2, :, :, :]))
                 topos = self._gather_field(prepare(self.geometry.zbot[:, :]))
 
@@ -304,7 +304,7 @@ class OutputCubesphereNetcdf(OutputCubesphere):
                     tile[i] = i
                     lon[i, :, :] = lons[i]
                     lat[i, :, :] = lats[i]
-                if self.param.equations == "euler":
+                if self.config.equations == "euler":
                     for i in range(6):
                         elev[i, :, :, :] = elevs[i]
                         topo[i, :, :] = topos[i]
@@ -312,7 +312,7 @@ class OutputCubesphereNetcdf(OutputCubesphere):
         else:
             panel_lon = self._gather_panel(prepare(self.geometry.lon * 180 / math.pi))
             panel_lat = self._gather_panel(prepare(self.geometry.lat * 180 / math.pi))
-            if self.param.equations == "euler":
+            if self.config.equations == "euler":
                 panel_elev = self._gather_panel(prepare(self.geometry.coordVec_latlon[2, :, :, :]))
                 panel_topo = self._gather_panel(prepare(self.geometry.zbot[:, :]))
             if panel_lon is not None:
@@ -320,7 +320,7 @@ class OutputCubesphereNetcdf(OutputCubesphere):
                 tile[root_rank] = root_rank
                 lon[root_rank, :, :] = panel_lon
                 lat[root_rank, :, :] = panel_lat
-                if self.param.equations == "euler":
+                if self.config.equations == "euler":
                     elev[root_rank, :, :, :] = panel_elev
                     topo[root_rank, :, :] = panel_topo
 
@@ -331,7 +331,7 @@ class OutputCubesphereNetcdf(OutputCubesphere):
         idx = 0
         if self.ncfile is not None:
             idx = len(self.ncfile["time"])
-            self.ncfile["time"][idx] = step_id * self.param.dt
+            self.ncfile["time"][idx] = step_id * self.config.dt
 
         if isinstance(geom, CubedSphere2D):  # Shallow water
 
@@ -341,7 +341,7 @@ class OutputCubesphereNetcdf(OutputCubesphere):
                 h += self.topo.hsurf
             self.store_field(geom.to_single_block(prepare(h)), "h", idx)
 
-            if self.param.case_number >= 2:
+            if self.config.case_number >= 2:
                 u1 = Q[idx_hu1, :, :] / h
                 u2 = Q[idx_hu2, :, :] / h
                 u, v = geom.contra2wind(u1, u2)
@@ -369,10 +369,10 @@ class OutputCubesphereNetcdf(OutputCubesphere):
             self.store_field(geom.to_single_block(prepare(theta)), "theta", idx)
             self.store_field(geom.to_single_block(prepare(p0 * (Q[idx_rho_theta] * Rd / p0) ** (cpd / cvd))), "P", idx)
 
-            if self.param.case_number == 11 or self.param.case_number == 12:
+            if self.config.case_number == 11 or self.config.case_number == 12:
                 self.store_field(geom.to_single_block(prepare(Q[5, ...] / rho)), "q1", idx)
 
-            if self.param.case_number == 11:
+            if self.config.case_number == 11:
                 for i in [6, 7, 8]:
                     self.store_field(geom.to_single_block(prepare(Q[i, ...] / rho)), f"q{i-4}", idx)
 
