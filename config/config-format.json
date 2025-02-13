@@ -302,27 +302,30 @@
                 },
                 {
                     "name": "lambda0",
-                    "type": "float",
+                    "type": "angle24",
                     "dependency": {
                         "name": "grid_type",
                         "values": ["cubed_sphere"]
-                    }
+                    },
+                    "description": "Longitude in radians of the central point of panel 0"
                 },
                 {
                     "name": "phi0",
-                    "type": "float",
+                    "type": "angle24",
                     "dependency": {
                         "name": "grid_type",
                         "values": ["cubed_sphere"]
-                    }
+                    },
+                    "description": "Latitude in radians of the central point of panel 0"
                 },
                 {
                     "name": "alpha0",
-                    "type": "float",
+                    "type": "angle24",
                     "dependency": {
                         "name": "grid_type",
                         "values": ["cubed_sphere"]
-                    }
+                    },
+                    "description": "Rotation in radians of the central meridian of panel 0"
                 },
                 {
                     "name": "ztop",

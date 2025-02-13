@@ -3,6 +3,10 @@ import json
 import types
 from typing import TypeVar, Type, Union, Optional, Callable, Any, Literal, List
 
+import numpy
+
+from .angle24 import angle24, TAngle24
+
 __all__ = ["ConfigurationField", "ConfigurationSchema", "OptionType", "load_default_schema"]
 
 
@@ -18,7 +22,6 @@ default_schema_path = "config/config-format.json"
 
 def _default_validate(_: Any) -> Literal[True]:
     return True
-
 
 def make_str(items, markdown: bool = False, header: bool = False):
     result = ""
@@ -127,8 +130,13 @@ class ConfigurationField:
 
     def read(self, parser: ConfigParser) -> OptionType:
         try:
-            if self.type == float:
+            if self.type == float or self.type == numpy.float32:
                 value = parser.getfloat(self.section, self.name)
+            elif self.type == numpy.float32:
+                value = parser.getfloat(self.section, self.name)
+                value = float(numpy.float32(value)) # Truncate to float32 before storing as float64
+            elif self.type == TAngle24:
+                value = angle24(parser.getfloat(self.section, self.name))
             elif self.type == int:
                 value = parser.getint(self.section, self.name)
             elif self.type == str:
@@ -321,8 +329,12 @@ class ConfigurationSchema:
             match field_type_value:
                 case "int":
                     field_default, field_type, valid_range = self.__parse_numerical_field(field, int)
-                case "float":
+                case "float" | "float64":
                     field_default, field_type, valid_range = self.__parse_numerical_field(field, float)
+                case "float32":
+                    field_default, field_type, valid_range = self.__parse_numerical_field(field, numpy.float32)
+                case "angle24":
+                    field_default, field_type, valid_range = self.__parse_numerical_field(field, TAngle24)
                 case "bool":
                     field_default, field_type, transform = self.__parse_bool_field(field)
                     valid_range = ConfigFieldRange()

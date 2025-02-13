@@ -89,7 +89,11 @@ class Configuration:
             long_options = {}
             i = 0
             for option in section_options:
-                val = str(getattr(self, option))
+                numeric = getattr(self, option)
+                if isinstance(numeric, float):
+                    val = f"{numeric:.6g}"
+                else:
+                    val = str(numeric)
 
                 if len(option) < 26 and len(val) < 14:
                     if i % 2 == 0:

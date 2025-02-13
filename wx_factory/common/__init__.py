@@ -1,5 +1,6 @@
 import os
 
+from . import angle24
 from .configuration import Configuration
 from .configuration_schema import ConfigurationSchema, load_default_schema, default_schema_path
 from .readfile import readfile
@@ -9,6 +10,7 @@ main_module_dir = os.path.join(main_project_dir, "wx_factory")
 
 
 __all__ = [
+    "angle24",
     "Configuration",
     "ConfigurationSchema",
     "default_schema_path",
