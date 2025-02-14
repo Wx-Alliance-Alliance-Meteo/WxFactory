@@ -63,7 +63,9 @@ def load_tests():
 
     suite.addTest(PmexMpiTestCases("test_pmex_mpi_2_processes"))
     suite.addTest(KiopsMpiTestCases("test_kiops_mpi_2_processes"))
-    # suite.addTest(FgmresMpiTestCases('test_fgmres_mpi_2_processes')) # TODO : This test needs more works on the data division between processes
+
+    # TODO : This test needs more works on the data division between processes
+    # suite.addTest(FgmresMpiTestCases('test_fgmres_mpi_2_processes'))
 
     return suite
 

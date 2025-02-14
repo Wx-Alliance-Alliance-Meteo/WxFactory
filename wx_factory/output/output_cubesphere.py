@@ -142,17 +142,5 @@ class OutputCubesphere(OutputManager):
 
         return panel_field
 
-    def _gather_field(self, field: NDArray) -> Optional[List[NDArray]]:
-        """Gather the given array to a single process (rank 0)
-        :param field: Array on this PE, to send to root
-
-        :return: A list of 6 arrays (one for each panel)
-        """
-
-        panel_field = self._gather_panel(field)
-
-        fields = None
-        if panel_field is not None:
-            fields = self.process_topology.panel_roots_comm.gather(panel_field, root=0)
-
-        return fields
+    def _gather_field(self, field: NDArray, num_dim: int):
+        return self.process_topology.gather_cube(field, num_dim)

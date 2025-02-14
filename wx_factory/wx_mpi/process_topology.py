@@ -442,7 +442,7 @@ class ProcessTopology:
 
         return panel_field
 
-    def gather_cube(self, field: NDArray, num_dim: int):
+    def gather_cube(self, field: NDArray, num_dim: int) -> Optional[NDArray]:
         """Gather given tile data into a single array on the root of this process topology. The first dimension
         will necessarily be 6; the rest will depend on the number of dimensions in the data and the number of tiles.
         This function is a collective call that must be made by every process member of this topology.

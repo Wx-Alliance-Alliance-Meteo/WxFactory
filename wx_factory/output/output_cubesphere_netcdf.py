@@ -65,11 +65,13 @@ class OutputCubesphereNetcdf(OutputCubesphere):
             ni *= side
             nj *= side
             grid_data = ("npe", "Xdim", "Ydim")
+            self.num_dim = 2
         elif self.config.equations == "euler":
             nk, nj, ni = self.geometry.nk, self.geometry.nj, self.geometry.ni
             nj *= side
             ni *= side
             grid_data = ("npe", "Zdim", "Xdim", "Ydim")
+            self.num_dim = 3
         else:
             raise ValueError(f"Unsupported equation type {self.config.equations}")
 
@@ -282,11 +284,11 @@ class OutputCubesphereNetcdf(OutputCubesphere):
                 # FIXME: With mapped coordinates, x3/height is a truly 3D coordinate
                 zzz[:] = prepare(self.geometry.x3[:, 0, 0])
 
-        lons = self._gather_field(prepare(self.geometry.block_lon * 180 / math.pi))
-        lats = self._gather_field(prepare(self.geometry.block_lat * 180 / math.pi))
+        lons = self._gather_field(prepare(self.geometry.block_lon * 180 / math.pi), 2)
+        lats = self._gather_field(prepare(self.geometry.block_lat * 180 / math.pi), 2)
         if self.config.equations == "euler":
-            elevs = self._gather_field(prepare(self.geometry.coordVec_latlon[2, :, :, :]))
-            topos = self._gather_field(prepare(self.geometry.zbot[:, :]))
+            elevs = self._gather_field(prepare(self.geometry.coordVec_latlon[2, :, :, :]), 3)
+            topos = self._gather_field(prepare(self.geometry.zbot[:, :]), 3)
 
         if self.rank == 0:
             for i in range(6):
@@ -360,7 +362,7 @@ class OutputCubesphereNetcdf(OutputCubesphere):
 
     def store_field(self, field: NDArray, name: str, step_id: int) -> None:
         """Store data in the open netcdf file."""
-        fields = self._gather_field(field)
+        fields = self._gather_field(field, self.num_dim)
         if fields is not None:
             for i, f in enumerate(fields):
                 self.ncfile[name][step_id, i] = f
