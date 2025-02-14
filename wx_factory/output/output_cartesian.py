@@ -55,7 +55,7 @@ class OutputCartesian(OutputManager):
         theta = Q[RHO_THETA] / rho
         theta_mincoord, theta_maxcoord, theta_min, theta_max, theta_avg = get_stats(theta, geom)
 
-        if MPI.COMM_WORLD.rank == 0:
+        if self.comm.rank == 0:
             print("==============================================")
             print(f" Blockstats for timestep {step_id}")
             print(f"   Var        Min        Max        Mean")

@@ -39,8 +39,6 @@ class RHS(ABC):
         self.num_dim = self.pde.num_dim
         self.num_var = self.pde.num_var
 
-        # print(f"{MPI.COMM_WORLD.rank} debug = {self.debug}", flush=True)
-
         # Initially set all arrays to None, these will be allocated later
         self.f_x1 = None
         self.f_x2 = None

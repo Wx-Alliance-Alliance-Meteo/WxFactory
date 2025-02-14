@@ -11,12 +11,14 @@ from device import Device, get_default_device
 __all__ = ["global_norm", "global_dotprod", "global_inf_norm"]
 
 
-def global_norm(vec: NDArray, comm: MPI.Comm = MPI.COMM_WORLD, device: Optional[Device] = None):
-    """Compute vector norm across all PEs in the communicator (default COMM_WORLD)"""
+def global_norm(vec: NDArray, device: Optional[Device] = None):
+    """Compute vector norm across all PEs in the communicator (from given device, default CpuDevice)"""
     if len(vec.shape) != 1:
         raise ValueError("This function only accept a vector (1 dimension tensor)")
     if device is None:
         device = get_default_device()
+
+    comm = device.comm
 
     local_sum = vec @ vec
     return device.xp.sqrt(comm.allreduce(local_sum))

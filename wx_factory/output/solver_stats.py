@@ -25,7 +25,7 @@ class Column:
 
 
 class ColumnSet:
-    def __init__(self, param: Configuration) -> None:
+    def __init__(self, param: Configuration, num_procs: int) -> None:
         self.run_id = Column("int", -1)
         self.step_id = Column("int", 0)
         self.dg_order = Column("int", param.num_solpts)
@@ -66,7 +66,7 @@ class ColumnSet:
         self.exp_radius_3 = Column("float", 0)
         self.exp_radius_4 = Column("float", 0)
 
-        self.num_procs = Column("int", MPI.COMM_WORLD.size)
+        self.num_procs = Column("int", num_procs)
 
         if param.grid_type == "cartesian2d":
             self.x0 = Column("float", param.x0)
@@ -85,18 +85,18 @@ class ColumnSet:
 class SolverStatsOutput:
     """Contains necessary info to store solver stats into a SQL database"""
 
-    def __init__(self, param: Configuration) -> None:
+    def __init__(self, param: Configuration, comm: MPI.Comm = MPI.COMM_WORLD) -> None:
         """Connect to the DB file and create (if necessary) the tables. Only 1 PE will perform DB operations."""
 
         # Only 1 PE will connect to the DB and log solver stats
-        self.is_writer = MPI.COMM_WORLD.rank == 0
+        self.is_writer = comm.rank == 0
         if not (sqlite_available and self.is_writer):
-            if MPI.COMM_WORLD.allreduce(0) != 0:
+            if comm.allreduce(0) != 0:
                 raise ValueError("Seems like init failed on root PE...")
             return
 
         self.param = _sanitize_params(param)
-        self.columns = ColumnSet(self.param)
+        self.columns = ColumnSet(self.param, comm.size)
         self.param_table = "results_param"
 
         self.columns.run_id.value = -1
@@ -109,11 +109,11 @@ class SolverStatsOutput:
             self.db_connection = sqlite3.connect(self.db)
             self.db_cursor = self.db_connection.cursor()
             self.create_results_table()
-            MPI.COMM_WORLD.allreduce(0)
+            comm.allreduce(0)
 
         except sqlite3.OperationalError:
             # Signal failure to the other PEs
-            MPI.COMM_WORLD.allreduce(1)
+            comm.allreduce(1)
             raise
 
     def create_results_table(self):

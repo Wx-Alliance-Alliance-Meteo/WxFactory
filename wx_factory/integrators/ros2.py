@@ -53,7 +53,7 @@ class Ros2(Integrator):
 
             self.solver_info = SolverInfo(flag, t1 - t0, num_iter, residuals)
 
-            if MPI.COMM_WORLD.rank == 0:
+            if self.device.comm.rank == 0:
                 result_type = "convergence" if flag == 0 else "stagnation/interruption"
                 print(
                     f"FGMRES {result_type} at iteration {num_iter} in {t1 - t0:4.3f} s to a solution with"

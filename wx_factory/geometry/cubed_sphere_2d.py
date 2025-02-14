@@ -80,7 +80,6 @@ class CubedSphere2D(CubedSphere):
            Wraps parameters from the configuration pole that are not otherwise specified in this
            constructor.
         """
-        rank = MPI.COMM_WORLD.rank
 
         super().__init__(num_solpts, lambda0, phi0, alpha0, device)
         xp = self.device.xp

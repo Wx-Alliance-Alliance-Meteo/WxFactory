@@ -13,7 +13,7 @@ __all__ = ["fgmres"]
 MatvecOperator = Callable[[ndarray], ndarray]
 
 
-def _ortho_1_sync_igs(Q, R, T, K, j, comm: MPI.Comm, device: Device):
+def _ortho_1_sync_igs(Q, R, T, K, j, device: Device):
     """Orthonormalization process that only requires a single synchronization step.
 
     This processes row j of matrix Q (starting from 1) so that the first j rows are orthogonal, and the first (j-1)
@@ -31,6 +31,7 @@ def _ortho_1_sync_igs(Q, R, T, K, j, comm: MPI.Comm, device: Device):
     if j < 2:
         return -1.0
 
+    comm = device.comm
     xp = device.xp
 
     local_tmp = Q[:j, :] @ Q[j - 2 : j, :].T  # Q multiplied by its own last 2 rows (up to j)
@@ -103,7 +104,6 @@ def fgmres(
     hegedus: bool = False,
     verbose: int = 0,
     prefix: str = "",
-    comm: MPI.Comm = MPI.COMM_WORLD,
     device: Optional[Device] = None,
 ) -> Tuple[ndarray, float, float, int, int, List[Tuple[float, float, float]]]:
     """
@@ -127,6 +127,7 @@ def fgmres(
     """
     if device is None:
         device = get_default_device()
+    comm = device.comm
 
     if len(b) <= restart:
         raise ValueError("The b vector should be longer than the number of restart")
@@ -151,7 +152,7 @@ def fgmres(
         x = x0.copy()
 
     # Check for early stop
-    norm_b = global_norm(b, comm=comm)
+    norm_b = global_norm(b, device=device)
     if norm_b == 0.0:
         return xp.zeros_like(b), 0.0, 0.0, 0, 0, [(0.0, time() - t_start, 0.0)]
 
@@ -169,7 +170,7 @@ def fgmres(
             Ax0 = A(x)
 
     r = b - Ax0
-    norm_r = global_norm(r, comm=comm)
+    norm_r = global_norm(r, device=device)
 
     residuals.append(((norm_r / norm_b).item(), time() - t_start, 0.0))
 
@@ -246,7 +247,7 @@ def fgmres(
         x = x + update
         r = b - A(x)
 
-        norm_r = global_norm(r, comm=comm)
+        norm_r = global_norm(r, device=device)
 
         residuals.append(((norm_r / norm_b).item(), time() - t_start, 0.0))
         if verbose > 0:

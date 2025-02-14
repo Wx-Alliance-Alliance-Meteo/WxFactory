@@ -18,7 +18,6 @@ def kiops(
     iop: int = 2,
     task1: bool = False,
     device: Optional[Device] = None,
-    comm: MPI.Comm = MPI.COMM_WORLD,
 ) -> tuple[ndarray, tuple]:
     """kiops(tstops, A, u; kwargs...) -> (w, stats)
 
@@ -68,6 +67,7 @@ def kiops(
 
     if device is None:
         device = get_default_device()
+    comm = device.comm
     xp = device.xp
 
     tau_out = device.array(tau_out)

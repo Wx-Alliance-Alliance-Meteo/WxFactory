@@ -27,7 +27,6 @@ except ModuleNotFoundError:
     rmn_available = False
 
 
-
 class OutputCubesphereFst(OutputCubesphere):
     def __init__(
         self,
@@ -57,7 +56,7 @@ class OutputCubesphereFst(OutputCubesphere):
         self.ig3 = angle24.encode(geometry.alpha0)
         self.ig4 = geometry.num_solpts
 
-        self.rank = MPI.COMM_WORLD.rank
+        self.rank = self.comm.rank
         self.filename = f"{self.output_dir}/{self.config.base_output_file}.fst"
         self.file = None
         self.georef = None
@@ -71,12 +70,6 @@ class OutputCubesphereFst(OutputCubesphere):
         lat = to_host(self._gather_field(self.geometry.block_lat * 180 / math.pi))
 
         sys.stdout.flush()
-
-        MPI.COMM_WORLD.barrier()
-        print(
-            f"{MPI.COMM_WORLD.rank}: {geometry.lon_p:9.6f}, {geometry.lat_p:9.6f}, {geometry.angle_p:9.6f}", flush=True
-        )
-        MPI.COMM_WORLD.barrier()
 
         with SingleProcess() as s, Conditional(s):
             self.file = rmn.fst24_file(self.filename, "RSF+R/W")

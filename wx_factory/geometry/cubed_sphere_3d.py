@@ -88,8 +88,6 @@ class CubedSphere3D(CubedSphere):
         super().__init__(num_solpts, lambda0, phi0, alpha0, device)
         xp = device.xp
 
-        rank = MPI.COMM_WORLD.rank
-
         ## Panel / parallel decomposition properties
         self.ptopo = ptopo
 
@@ -480,9 +478,6 @@ class CubedSphere3D(CubedSphere):
 
         # To apply the topography, we need to redefine self.x3 and its interfaced versions.
 
-        # if MPI.COMM_WORLD.rank == 0:
-        #     print(f"floor = \n{zbot_new}\n" f"floor to bulk: \n{self.floor_to_bulk(zbot_new)}")
-
         self.x3[...] = self.zbot[xp.newaxis, :, :] + (ztop - self.zbot[xp.newaxis, :, :]) * self.eta
         self.x3_itf_i[...] = (
             self.zbot_itf_i[xp.newaxis, :, :] + (ztop - self.zbot_itf_i[xp.newaxis, :, :]) * self.eta_itf_i
@@ -513,7 +508,6 @@ class CubedSphere3D(CubedSphere):
         based on the pre-defined equiangular coordinates (x1, x2) and height (x3)
         """
         xp = self.device.xp
-        rank = MPI.COMM_WORLD.rank
 
         # Retrieve the numeric values for use here
         x1 = self.x1
@@ -573,14 +567,6 @@ class CubedSphere3D(CubedSphere):
             self.boundary_we.reshape(self.num_elements_x2, self.num_solpts), self.num_solpts
         ).reshape((self.num_elements_x2, self.num_solpts, self.num_solpts))
 
-        # if MPI.COMM_WORLD.rank == 0:
-        #     print(f"boundary sn (old): \n{self.boundary_sn}")
-        #     print(f"boundary sn (new): \n{self.boundary_sn_new}")
-
-        # if MPI.COMM_WORLD.rank == 0:
-        #    print(f'old X = \n{X_block}')
-        #    print(f'new X = \n{X_new}')
-
         height = x3
 
         # Because of conventions used in the parallel exchanges, both i and j interface variables
@@ -591,9 +577,6 @@ class CubedSphere3D(CubedSphere):
         Y_itf_i = xp.broadcast_to(xp.tan(x2_itf_i)[:, xp.newaxis], (nj, num_elements_x1 + 1)).T
         X_itf_j = xp.broadcast_to(xp.tan(x1_itf_j)[xp.newaxis, :], (num_elements_x2 + 1, ni))
         Y_itf_j = xp.broadcast_to(xp.tan(x2_itf_j)[:, xp.newaxis], (num_elements_x2 + 1, ni))
-
-        # if MPI.COMM_WORLD.rank == 0:
-        #     print(f'x itf i (shape {X_itf_i.shape})= \n{X_itf_i}')
 
         self.delta2_block = 1.0 + X_block**2 + Y_block**2
         self.delta_block = xp.sqrt(self.delta2_block)
@@ -1078,10 +1061,6 @@ class CubedSphere3D(CubedSphere):
             # correction for height above the surface
             lambda_dot = u / (self.earth_radius * self.coslat_new)
             phi_dot = v / self.earth_radius
-
-        # if MPI.COMM_WORLD.rank == 0:
-        #     print(f"u shape = {u.shape}, lambda_dot shape = {lambda_dot.shape}")
-        #     print(f"X (new) shape = {self.X_new.shape}")
 
         denom = xp.sqrt(
             (

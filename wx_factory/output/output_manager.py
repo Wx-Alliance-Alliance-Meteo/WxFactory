@@ -10,6 +10,7 @@ from device import Device
 from geometry import Geometry, DFROperators
 from precondition.multigrid import Multigrid
 from solvers import SolverInfo
+from wx_mpi import SingleProcess, Conditional
 
 from .solver_stats import SolverStatsOutput
 from .state import save_state, load_state
@@ -55,25 +56,24 @@ class OutputManager:
         self.geometry = geometry
         self.operators = operators
         self.device = device
+        self.comm = device.comm
 
-        self.output_dir = self.config.output_dir
-
-        if MPI.COMM_WORLD.rank == 0:
+        with SingleProcess(self.device.comm) as s, Conditional(s):
+            output_dir = self.config.output_dir
             try:
-                os.makedirs(os.path.abspath(self.output_dir), exist_ok=True)
+                os.makedirs(os.path.abspath(output_dir), exist_ok=True)
             except PermissionError:
                 new_name = "results"
-                print(
-                    f"WARNING: Unable to create directory {self.output_dir} for output. "
-                    f"Will use './{new_name}' instead"
-                )
-                self.output_dir = new_name
-                os.makedirs(os.path.abspath(self.output_dir), exist_ok=True)
+                print(f"WARNING: Unable to create directory {output_dir} for output. Will use './{new_name}' instead")
+                output_dir = new_name
+                os.makedirs(os.path.abspath(output_dir), exist_ok=True)
 
-        MPI.COMM_WORLD.bcast(self.output_dir, root=0)
+            s.return_value = output_dir
+
+        self.output_dir = s.return_value
 
         if self.config.store_solver_stats > 0:
-            self.solver_stats_output = SolverStatsOutput(config)
+            self.solver_stats_output = SolverStatsOutput(config, self.comm)
 
         # Choose a file name hash based on a certain set of parameters:
         state_params = (
@@ -81,7 +81,7 @@ class OutputManager:
             config.num_elements_horizontal,
             config.num_elements_vertical,
             config.num_solpts,
-            MPI.COMM_WORLD.size,
+            self.comm.size,
         )
         self.config_hash = state_params.__hash__() & 0xFFFFFFFFFFFF
 
@@ -95,7 +95,7 @@ class OutputManager:
     def state_file_name(self, step_id: int) -> str:
         """Return the name of the file where to save the state vector for the current problem,
         for the given timestep."""
-        base_name = f"state_vector_{self.config_hash:012x}_{MPI.COMM_WORLD.rank:06d}"
+        base_name = f"state_vector_{self.config_hash:012x}_{self.comm.rank:06d}"
         return f"{self.output_dir}/{base_name}.{step_id:08d}.npy"
 
     def load_state_from_file(self, step_id, sh):
@@ -107,7 +107,7 @@ class OutputManager:
             )
         Q = self.device.xp.asarray(starting_state)
 
-        if MPI.COMM_WORLD.rank == 0:
+        if self.comm.rank == 0:
             print(f"Starting simulation from step {step_id} (rather than 0)")
             if step_id * self.config.dt >= self.config.t_end:
                 print(
@@ -122,7 +122,7 @@ class OutputManager:
     def step(self, Q: NDArray, step_id: int) -> None:
         """Output the result of the latest timestep."""
         if self.config.output_freq > 0 and (step_id % self.config.output_freq) == 0:
-            if MPI.COMM_WORLD.rank == 0:
+            if self.comm.rank == 0:
                 print(f"=> Writing dynamic output for step {step_id}")
 
             t0 = time()
@@ -134,7 +134,7 @@ class OutputManager:
 
         if self.config.save_state_freq > 0 and (step_id % self.config.save_state_freq) == 0:
             t0 = time()
-            save_state(Q, self.config, self.state_file_name(step_id))
+            save_state(Q, self.config, self.state_file_name(step_id), device=self.device)
             self.total_save_state_time += time() - t0
             self.num_save_states += 1
 
@@ -181,8 +181,8 @@ class OutputManager:
         Perform any necessary operation to properly finish outputting.
         """
         if self.config.store_total_time:
-            if MPI.COMM_WORLD.rank == 0:
-                size = MPI.COMM_WORLD.size
+            if self.comm.rank == 0:
+                size = self.comm.size
                 method = str(self.config.time_integrator)
                 methodOrtho = str(self.config.exponential_solver)
                 caseNum = str(self.config.case_number)
@@ -193,7 +193,7 @@ class OutputManager:
         if self.config.output_freq > 0:
             self.__finalize__()
 
-        if MPI.COMM_WORLD.rank == 0:
+        if self.comm.rank == 0:
             per_write = self.total_write_time / self.num_writes if self.num_writes > 0 else 0.0
             per_save = self.total_save_state_time / self.num_save_states if self.num_save_states > 0 else 0.0
             per_blockstat = self.total_blockstat_time / self.num_blockstats if self.num_blockstats > 0 else 0.0

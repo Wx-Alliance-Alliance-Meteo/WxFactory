@@ -79,7 +79,7 @@ class DFROperators:
         self.highfilter = V @ (feye @ invV)
         self.highfilter_k = xp.kron(self.highfilter.T, xp.eye(grd.num_solpts**2))  # Only valid in 3D (hence the **2)
 
-        # if MPI.COMM_WORLD.rank == 0:
+        # if device.comm.rank == 0:
         #     print(f"high filter = \n{self.highfilter}")
         #     print(f"high filter k = \n{self.highfilter_k}")
 
@@ -103,7 +103,7 @@ class DFROperators:
             if not isinstance(grd, CubedSphere3D):
                 raise TypeError(f"The 3D filter can only be applied on a CubedSphere3D geometry")
             if grd.num_solpts < 2:
-                if MPI.COMM_WORLD.rank == 0:
+                if device.comm.rank == 0:
                     print(f"WARNING: 3D filter can only be applied if we have degree > 1")
                 self.expfilter_apply = False
             else:
@@ -182,7 +182,7 @@ class DFROperators:
             self.correction_SN = xp.vstack((xp.kron(I2, xp.kron(corr_south, I2)), xp.kron(I2, xp.kron(corr_north, I2))))
             self.correction_DU = xp.vstack((xp.kron(corr_down, I3), xp.kron(corr_up, I3)))
 
-            # if MPI.COMM_WORLD.rank == 0:
+            # if device.comm.rank == 0:
             #     print(f"3D c x = \n{self.correction_WE}")
             #     print(f"3D c y = \n{self.correction_SN}")
             #     print(f"3D c z = \n{self.correction_DU}")

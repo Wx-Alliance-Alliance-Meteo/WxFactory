@@ -42,7 +42,7 @@ class EpiStiff(Integrator):
         self.init_substeps = init_substeps
 
     def __step__(self, Q: numpy.ndarray, dt: float):
-        mpirank = MPI.COMM_WORLD.Get_rank()
+        mpirank = self.device.comm.rank
 
         # If dt changes, discard saved value and redo initialization
         if self.dt and abs(self.dt - dt) > 1e-10:
@@ -80,7 +80,7 @@ class EpiStiff(Integrator):
 
         if self.exponential_solver == "pmex":
 
-            phiv, stats = pmex([1.0], matvec_handle, vec, tol=self.tol, mmax=64, task1=False)
+            phiv, stats = pmex([1.0], matvec_handle, vec, tol=self.tol, mmax=64, task1=False, device=self.device)
 
             if mpirank == 0:
                 print(

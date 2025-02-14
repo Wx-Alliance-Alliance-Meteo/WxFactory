@@ -95,7 +95,7 @@ class Epi_others(Integrator):
         # we test different values for adv-diff and ac problem
 
         # If dt changes, discard saved value and redo initialization
-        mpirank = MPI.COMM_WORLD.Get_rank()
+        mpirank = self.device.comm.Get_rank()
         if self.dt and abs(self.dt - dt) > 1e-10:
             self.previous_Q = deque()
             self.previous_rhs = deque()
@@ -148,20 +148,22 @@ class Epi_others(Integrator):
         # ----pmex with norm estimate-----
         if self.exponential_solver == "pmex":
             phiv, stats = pmex(
-                [1.0], matvec_handle, vec, tol=self.tol, m_init=self.krylov_size, mmin=16, mmax=64, task1=False
+                [1.0],
+                matvec_handle,
+                vec,
+                tol=self.tol,
+                m_init=self.krylov_size,
+                mmin=16,
+                mmax=64,
+                task1=False,
+                device=self.device,
             )
             self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
 
             if mpirank == 0:
-                # print to file stats
-                # size      = MPI.COMM_WORLD.Get_size()
-                # file_name = "results_tanya/pmexne_stats_" + "n" + str(size) + "_" + str(self.int) + "_c" + str(self.case_number) + ".txt"
-                # with open(file_name, 'a') as gg:
-                #  gg.write('{} {} {} {} {} {} {} {} {} \n'.format(stats[0], stats[1], stats[2], stats[9], stats[5], stats[6], stats[7], stats[8], stats[10]))
-
                 print(
-                    f"PMEX NE converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)"
-                    f" to a solution with local error {stats[4]:.2e}"
+                    f"PMEX NE converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]}"
+                    f" rejected expm) to a solution with local error {stats[4]:.2e}"
                 )
 
         # ----pmex with 1-sync-----
@@ -172,13 +174,6 @@ class Epi_others(Integrator):
             self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
 
             if mpirank == 0:
-                """
-                #print to file stats
-                size      = MPI.COMM_WORLD.Get_size()
-                file_name = "results_tanya/pmex1s_stats_" + "n" + str(size) + "_" + str(self.int) + "_c" + str(self.case_number) + ".txt"
-                with open(file_name, 'a') as gg:
-                  gg.write('{} {} {} {} {} {} {} {} \n'.format(stats[0], stats[1], stats[2], stats[5], stats[6], stats[7], stats[8], stats[9]))
-                """
                 print(
                     f"PMEX 1s converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)"
                     f" to a solution with local error {stats[4]:.2e}"
@@ -231,14 +226,6 @@ class Epi_others(Integrator):
             self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
 
             if mpirank == 0:
-                """
-                #print stats to file
-                size      = MPI.COMM_WORLD.Get_size()
-                file_name = "results_tanya/icwy1s_stats_" + "n" + str(size) + "_" + str(self.int) + "_c" + str(self.case_number)+ "_e" +str(self.elem) + ".txt"
-                with open(file_name, 'a') as gg:
-                  gg.write('{} {} {} {} {} {} {} {} \n'.format(stats[0], stats[1], stats[2], stats[6], stats[7], stats[8], stats[9], stats[10]))
-                """
-
                 print(
                     f"ICWY 1S converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)"
                     f" to a solution with local error {stats[4]:.2e}"
@@ -291,15 +278,6 @@ class Epi_others(Integrator):
             self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
 
             if mpirank == 0:
-
-                """
-                #print stats to file
-                size      = MPI.COMM_WORLD.Get_size()
-                file_name = "results_tanya/cwy1s_stats_" + "n" + str(size) + "_" + str(self.int) + "_c" + str(self.case_number) + "_e" + str(self.elem) + ".txt"
-                with open(file_name, 'a') as gg:
-                  gg.write('{} {} {} {} {} {} {} {} \n'.format(stats[0], stats[1], stats[2], stats[6], stats[7], stats[8], stats[9], stats[10]))
-                """
-
                 print(
                     f"CWY 1S converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)"
                     f" to a solution with local error {stats[4]:.2e}"
@@ -339,13 +317,6 @@ class Epi_others(Integrator):
             self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
 
             if mpirank == 0:
-                """
-                #print to file stats
-                size      = MPI.COMM_WORLD.Get_size()
-                file_name = "results_tanya/kiops_stats_" + "n" + str(size) + "_" + str(self.int) + "_c" + str(self.case_number) + ".txt"
-                with open(file_name, 'a') as gg:
-                  gg.write('{} {} {} {} {} {} {} {} \n'.format(stats[0], stats[1], stats[2], stats[6], stats[7], stats[8], stats[9], stats[10]))
-                """
 
                 print(
                     f"KIOPS converged at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)"

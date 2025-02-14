@@ -1,5 +1,5 @@
 from .process_topology import ProcessTopology, SOUTH, NORTH, WEST, EAST
-from .wx_mpi import SingleProcess, Conditional, do_once
+from .wx_mpi import SingleProcess, MultipleProcesses, Conditional, do_once
 
 __all__ = [
     "ProcessTopology",
@@ -8,6 +8,7 @@ __all__ = [
     "WEST",
     "EAST",
     "Conditional",
+    "MultipleProcesses",
     "SingleProcess",
     "do_once",
 ]

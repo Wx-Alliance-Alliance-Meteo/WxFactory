@@ -45,9 +45,6 @@ def compute_forcings(
         f2, r, u1, u2, w, p, c101, c102, c103, c111, c112, c113, c122, c123, c133, h11, h12, h13, h22, h23, h33
     )
 
-    # if MPI.COMM_WORLD.rank == 0:
-    #     print(f"f2 = {f2}")
-    # raise ValueError
     compute_forcing_1(
         f3, r, u1, u2, w, p, c201, c202, c203, c211, c212, c213, c222, c223, c233, h11, h12, h13, h22, h23, h33
     )

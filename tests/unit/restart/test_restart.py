@@ -62,7 +62,7 @@ class MultiProcRestartTestCase(MpiTestCase):
 
         self.schema = ConfigurationSchema(do_once(readfile, default_schema_path, comm=self.comm))
         self.base_config = Configuration(do_once(readfile, config_path, comm=self.comm), self.schema)
-        self.base_sim = Simulation(self.base_config)
+        self.base_sim = Simulation(self.base_config, comm=self.comm)
 
     def test_read_restart(self):
         restart_file = self.base_sim.output.state_file_name(1)
@@ -76,7 +76,7 @@ class MultiProcRestartTestCase(MpiTestCase):
         config = copy.deepcopy(self.base_config)
         config.starting_step = 1
 
-        sim = Simulation(config)
+        sim = Simulation(config, comm=self.comm)
         self.assertEqual(sim.starting_step, 1, f"Starting step is not 1! {sim.starting_step}")
 
         diff = sim.initial_Q - self.base_sim.Q

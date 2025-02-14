@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any, List
+from typing import Any, List, Optional
 
 from mpi4py import MPI
 from numpy.typing import NDArray
@@ -14,8 +14,9 @@ class Device(ABC):
     a case, most operations do nothing
     """
 
-    def __init__(self, xp, xalg, libmodule) -> None:
+    def __init__(self, comm: MPI.Comm, xp, xalg, libmodule) -> None:
         """Set a few modules and functions to have the same name, so that callers can use a single name."""
+        self.comm = comm
         self.xp = xp
         self.xalg = xalg
         self.libmodule = libmodule
@@ -70,7 +71,7 @@ class CpuDevice(Device):
                 print(f"Unable to find the interface_c module. You need to compile it")
             raise
 
-        super().__init__(numpy, scipy, interface_c)
+        super().__init__(comm, numpy, scipy, interface_c)
 
     def __synchronize__(self, **kwargs):
         """Don't do anything. This is to allow writing generic code when device is not the same as the host."""
@@ -91,7 +92,7 @@ class CpuDevice(Device):
 
 class CudaDevice(Device):
 
-    def __init__(self, comm: MPI.Comm = MPI.COMM_WORLD, device_list: List[int] = []) -> None:
+    def __init__(self, comm: MPI.Comm = MPI.COMM_WORLD, device_list: Optional[List[int]] = None) -> None:
         # Delay imports, to avoid loading CUDA if not asked
 
         import cupy
@@ -110,21 +111,23 @@ class CudaDevice(Device):
 
         wx_cupy.init_wx_cupy()
 
-        super().__init__(cupy, cupyx.scipy, interface_cuda)
+        super().__init__(comm, cupy, cupyx.scipy, interface_cuda)
 
         if not wx_cupy.cuda_avail:
             raise ValueError(f"Unable to create a CudaDevice object, no GPU devices were detected")
 
+        if device_list is None:
+            device_list = []
         device_list = [x for x in device_list if x < wx_cupy.num_devices]
 
-        if not len(device_list):
+        if len(device_list) == 0:
             device_list = range(wx_cupy.num_devices)
 
         self.cupyx = cupyx
         self.cupy = cupy
 
         # Select the CUDA device on which this PE will execute its kernels
-        rank = MPI.COMM_WORLD.Get_rank()
+        rank = self.comm.Get_rank()
         devnum = rank % len(device_list)
         cupy.cuda.Device(device_list[devnum]).use()
 
@@ -159,6 +162,7 @@ _default_device = None
 
 
 def get_default_device():
+    raise ValueError
     global _default_device
     if _default_device is None:
         _default_device = CpuDevice()

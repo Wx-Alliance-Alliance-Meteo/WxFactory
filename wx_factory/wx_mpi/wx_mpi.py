@@ -19,6 +19,8 @@ class SingleProcess:
     only one of them will execute the body. Optionally, that process can return something that
     will be broadcast to every other process in the context. By default, all processes in MPI.COMM_WORLD
     must participate in the context, but it is possible to pass a communicator when creating the context.
+    In such a case, only the processes members of that communicator must enter the context.
+    *There is a synchronization point when exiting this context.*
 
     .. code-block:: python
         :caption: Basic usage
@@ -70,12 +72,10 @@ class SingleProcess:
         self.rank = self.comm.rank
         self.root_rank = root_rank
         self.return_value = None
+        self.should_skip = self.rank != self.root_rank
 
     def __enter__(self):
-        """Nothing special done here
-
-        :return: self
-        """
+        "Do nothing (but must be implemented)."
         return self
 
     def __exit__(self, exception_type, *_):
@@ -86,12 +86,37 @@ class SingleProcess:
         :return: Whether to ignore the potential exception that was thrown from inside the context
         :rtype: bool
         """
-        is_ok = exception_type is None or self.root_rank != self.rank  # No error, or not a rank that was doing stuff
+        is_ok = exception_type is None or self.should_skip  # No error, or not a rank that was doing stuff
         transmit = self.return_value if is_ok else _SkippableFailure()
         self.return_value = self.comm.bcast(transmit, root=self.root_rank)
 
         ignore_error = self.return_value is None or not isinstance(self.return_value, _SkippableFailure)
         return ignore_error
+
+
+class MultipleProcesses:
+    def __init__(self, comm: MPI.Comm = MPI.COMM_WORLD, num_procs: int = 0):
+        self.comm = comm
+
+        if num_procs > 0:
+            self.should_skip = self.comm.rank >= num_procs
+            self.sub_comm = comm.Split(0 if self.should_skip else 1, self.comm.rank)
+        else:
+            self.should_skip = False
+            self.sub_comm = self.comm
+
+    def __enter__(self):
+        "Do nothing (but must be implemented)."
+        return self
+
+    def __exit__(self, exception_type, *_):
+        num_errors = 0
+        if exception_type is not None and not issubclass(exception_type, _Skip):
+            num_errors = 1
+
+        total_errors = self.comm.allreduce(num_errors)
+
+        return total_errors == 0
 
 
 class Conditional:
@@ -102,12 +127,11 @@ class Conditional:
     def __init__(self, context: SingleProcess):
         """Create a context manager to temporarily disable a set of processes
 
-        :param context: Driver for this context
+        :param context: Driver for this context. It determines whether we should skip execution (i.e. raise
+            a _Skip exception)
         :type context: SingleProcess
         """
-        self.comm = context.comm
-        self.root_rank = context.root_rank
-        self.rank = self.comm.rank
+        self.should_skip = context.should_skip
 
     def __enter__(self):
         """If this process is not supposed to work in the context, raise a :class:`_Skip` exception,
@@ -116,10 +140,10 @@ class Conditional:
         :raises _Skip: To be caught by :class:`SingleProcess`, to disable this process during the context
         :return: self
         """
-        if self.rank == self.root_rank:
-            return self
-        else:
+        if self.should_skip:
             raise _Skip
+
+        return self
 
     def __exit__(self, *_):
         pass

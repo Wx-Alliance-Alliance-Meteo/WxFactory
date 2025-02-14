@@ -17,7 +17,6 @@ def pmex(
     reuse_info=True,
     task1=False,
     device: Device = None,
-    comm: MPI.Comm = MPI.COMM_WORLD,
 ):
     """
     :param tau_out: Vector of `tau_out`
@@ -45,6 +44,8 @@ def pmex(
     """
     if device is None:
         device = get_default_device()
+
+    comm = device.comm
 
     ppo, n = u.shape
     p = ppo - 1

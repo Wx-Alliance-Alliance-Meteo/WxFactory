@@ -21,8 +21,8 @@ from tests.unit.solvers.test_fgmres_mpi import FgmresMpiTestCases
 def load_tests():
     suite = unittest.TestSuite()
 
-    # suite.addTest(ShallowWaterRestartTestCase(6, "test_read_restart"))
-    # suite.addTest(Euler3DRestartTestCase(6, "test_read_restart"))
+    suite.addTest(ShallowWaterRestartTestCase(6, "test_read_restart"))
+    suite.addTest(Euler3DRestartTestCase(6, "test_read_restart"))
 
     suite.addTest(GatherScatterTest(6, "gather_scatter_2d"))
     suite.addTest(GatherScatterTest(6, "gather_scatter_elem_2d"))
