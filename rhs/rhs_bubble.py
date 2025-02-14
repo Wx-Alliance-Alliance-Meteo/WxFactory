@@ -148,7 +148,7 @@ def rhs_bubble(Q, geom, mtrx, nbsolpts, nb_elements_x, nb_elements_z):
       M = 0.5 * (M_L + M_R)
 
       # Compute preconditioning parameter delta 
-      mu       = numpy.minimum(1, numpy.maximum(M, 1E-3))     # Assumed M_cut = 1E-7
+      mu       = numpy.minimum(1, numpy.maximum(M, 1E-7))     # Assumed M_cut = 1E-7
       delta    = 1/mu - 1
 
       # Auxiliary Variables to compute eigenvectors and its inverse
@@ -225,7 +225,7 @@ def rhs_bubble(Q, geom, mtrx, nbsolpts, nb_elements_x, nb_elements_z):
       M   = 0.5*(M_L + M_R)
 
       # Compute preconditioning parameter delta 
-      mu       = numpy.minimum(1, numpy.maximum(M, 1E-3))     # Assumed M_cut = 0
+      mu       = numpy.minimum(1, numpy.maximum(M, 1E-7))     # Assumed M_cut = 0
       delta    = 1/mu -1
    
 

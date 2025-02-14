@@ -204,20 +204,21 @@ def initialize_cartesian2d(geom: Cartesian2D, param: Configuration) -> NDArray[n
 
       Temp  = numpy.ones_like(geom.X1)
       Temp *= param.bubble_theta
+      # Temp = 303.15 - (0.0065*geom.X3)
 
 
-      # Temp = numpy.where(r <= a,
-      #                 Temp + A,
-      #                 Temp + A * numpy.exp(-((r-a)/s)**2))
+      Temp = numpy.where(r <= a,
+                      Temp + A,
+                      Temp + A * numpy.exp(-((r-a)/s)**2))
 
-      # # Enforce mirror symmetry
-      # if ni % 2 == 0:
-      #    middle_col = ni / 2
-      # else:
-      #    middle_col = ni / 2 + 1
+      # Enforce mirror symmetry
+      if ni % 2 == 0:
+         middle_col = ni / 2
+      else:
+         middle_col = ni / 2 + 1
 
-      # for i in range(int(middle_col)):
-      #    Temp[:, ni-i-1] = Temp[:, i]
+      for i in range(int(middle_col)):
+         Temp[:, ni-i-1] = Temp[:, i]
 
       exner = (1.0 - gravity / (cpd * Temp) * geom.X3)
       ρ = p0 / (Rd * Temp) * exner**(cvd / Rd)
