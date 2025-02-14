@@ -85,7 +85,7 @@ class CubedSphere3D(CubedSphere):
             Wraps parameters from the configuration pole that are not otherwise specified in this
             constructor.
         """
-        super().__init__(num_solpts, device)
+        super().__init__(num_solpts, lambda0, phi0, alpha0, device)
         xp = device.xp
 
         rank = MPI.COMM_WORLD.rank

@@ -1,8 +1,8 @@
 import os
+import unittest
 
 import common.configuration
 import common.configuration_schema
-import unittest
 
 
 config_test_dir = "tests/data/unit/configuration_tests"

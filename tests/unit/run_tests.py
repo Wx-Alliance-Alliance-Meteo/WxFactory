@@ -9,17 +9,20 @@ main_module_dir = os.path.join(main_project_dir, "wx_factory")
 sys.path.append(main_project_dir)
 sys.path.append(main_module_dir)
 
+from tests.unit.common.test_configuration import ConfigurationTestCases
+from tests.unit.compiler.test_compilation import CompilationTestCases, CompilationGPUTestCases
+from tests.unit.output.test_state import StateTestCases
+from tests.unit.restart.test_restart import Euler2DRestartTestCase
 from tests.unit.solvers.test_pmex import PmexComparisonTestCases
 from tests.unit.solvers.test_kiops import KiopsComparisonTestCases
 from tests.unit.solvers.test_fgmres import FgmresComparisonTestCases, FgmresScipyTestCases, FgmresEdgeCasesTestCases
 from tests.unit.solvers.test_kiops_pmex_tolerance_cpu import KiopsPmexToleranceCpuTestCases
 from tests.unit.solvers.test_kiops_pmex_tolerance_gpu import KiopsPmexToleranceGpuTestCases
-from tests.unit.output.test_state import StateTestCases
-from tests.unit.common.test_configuration import ConfigurationTestCases
-from tests.unit.compiler.test_compilation import CompilationTestCases, CompilationGPUTestCases
 
 
 def load_tests():
+    """Create a test suite with cases we want to run."""
+
     suite = unittest.TestSuite()
 
     suite.addTest(CompilationTestCases("test_cpp_kernels_compilation"))
@@ -39,6 +42,8 @@ def load_tests():
     suite.addTest(KiopsPmexToleranceGpuTestCases("test_compare_kiops_pmex"))
 
     suite.addTest(StateTestCases("test_save_load_works"))
+    suite.addTest(Euler2DRestartTestCase("test_gen_restart"))
+    suite.addTest(Euler2DRestartTestCase("test_read_restart"))
     suite.addTest(ConfigurationTestCases("test_load_configuration_with_schema_default"))
     suite.addTest(ConfigurationTestCases("test_load_configuration_with_valid_values"))
     suite.addTest(ConfigurationTestCases("test_load_configuration_with_dependency"))
@@ -47,7 +52,7 @@ def load_tests():
 
 
 if __name__ == "__main__":
-    runner = unittest.TextTestRunner()
+    runner = unittest.TextTestRunner(buffer=True, verbosity=2)
     result = runner.run(load_tests())
     if not result.wasSuccessful():
         sys.exit(-1)

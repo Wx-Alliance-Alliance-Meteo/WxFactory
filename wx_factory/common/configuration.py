@@ -4,6 +4,7 @@ from typing import Dict, List, Optional, Self
 
 from .configuration_schema import ConfigurationSchema, ConfigurationField, OptionType
 
+
 __all__ = ["Configuration"]
 
 

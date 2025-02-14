@@ -7,9 +7,7 @@ from mpi4py import MPI
 from device import CpuDevice
 from wx_mpi import ProcessTopology, SOUTH, NORTH, WEST, EAST, SingleProcess, Conditional
 
-from tests.unit.mpi_test import run_test_on_x_process
-
-dev = CpuDevice()
+from tests.unit.mpi_test import run_test_on_x_process, MpiTestCase
 
 
 def gen_data_1(num_processes: int, num_data_hori_per_proc: int):
@@ -39,6 +37,8 @@ class ProcessTopologyTest(unittest.TestCase):
 
         self.size = self.comm.size
         self.rank = self.comm.rank
+
+        dev = CpuDevice(self.comm)
 
         self.topo = ProcessTopology(dev, comm=self.comm)
         self.topos = [ProcessTopology(dev, rank=i, comm=self.comm) for i in range(self.size)]
@@ -543,11 +543,17 @@ class ProcessTopologyTest(unittest.TestCase):
             )
 
 
-class GatherScatterTest(unittest.TestCase):
+class GatherScatterTest(MpiTestCase):
     topo: ProcessTopology
+
+    def __init__(self, num_procs, methodName, optional=False):
+        super().__init__(num_procs, methodName, optional)
 
     def setUp(self) -> None:
         super().setUp()
+
+        dev = CpuDevice(self.comm)
+        self.topo = ProcessTopology(dev, comm=self.comm)
         # For testing gather/scatter functions
         self.global_data_1 = numpy.arange(6 * 12 * 12).reshape(6, 12, 12)  # A flat (2D) field
         # A 2D field of 3x3 elements
@@ -637,43 +643,3 @@ class GatherScatterTest(unittest.TestCase):
     @unittest.expectedFailure
     def fail_wrong_num_dim(self):
         self.topo.distribute_cube(self.global_data_fail_4, num_dim=2)
-
-
-class GatherScatterTest_6(GatherScatterTest):
-    def setUp(self) -> None:
-        super().setUp()
-        self.comm = run_test_on_x_process(self, 6)
-        self.topo = ProcessTopology(dev, comm=self.comm)
-
-
-class GatherScatterTest_24(GatherScatterTest):
-    def setUp(self) -> None:
-        super().setUp()
-        self.comm = run_test_on_x_process(self, 24)
-        self.topo = ProcessTopology(dev, comm=self.comm)
-
-
-class GatherScatterTest_54(GatherScatterTest):
-    def setUp(self) -> None:
-        super().setUp()
-
-
-class GatherScatterTest_6(GatherScatterTest):
-    def setUp(self) -> None:
-        super().setUp()
-        self.comm = run_test_on_x_process(self, 6)
-        self.topo = ProcessTopology(dev, comm=self.comm)
-
-
-class GatherScatterTest_24(GatherScatterTest):
-    def setUp(self) -> None:
-        super().setUp()
-        self.comm = run_test_on_x_process(self, 24)
-        self.topo = ProcessTopology(dev, comm=self.comm)
-
-
-class GatherScatterTest_54(GatherScatterTest):
-    def setUp(self) -> None:
-        super().setUp()
-        self.comm = run_test_on_x_process(self, 54, optional=True)
-        self.topo = ProcessTopology(dev, comm=self.comm)

@@ -59,6 +59,17 @@ class _WritelnDecorator(object):
         self.write("\n")
 
 
+class MpiTestCase(unittest.TestCase):
+    def __init__(self, num_procs: int, methodName="runTest", optional: bool = False):
+        super().__init__(methodName)
+        self.num_procs = num_procs
+        self.optional = optional
+
+    def setUp(self):
+        super().setUp()
+        self.comm = run_test_on_x_process(self, self.num_procs, self.optional)
+
+
 class MpiTestResult(TestResult):
     """
     Result accumulator
@@ -165,19 +176,24 @@ class MpiTestResult(TestResult):
             self.stream.writeln(f"{error[1]}\n")
 
 
-class MpiRunner(object):
+class MpiRunner(unittest.TextTestRunner):
     """
     Partial reimplementation of the default TextTestRunner class of unittest to add MPI support
     """
 
-    def __init__(self):
-        self.stream = _WritelnDecorator(sys.stderr)
-        self.descriptions = True
-        self.verbosity = False
-        self.failfast = False
-        self.buffer = False
-        self.tb_locals = False
-        self.warnings = None
+    def __init__(
+        self,
+        stream=_WritelnDecorator(sys.stderr),
+        descriptions=True,
+        verbosity=1,
+        failfast=False,
+        buffer=False,
+        resultclass=None,
+        warnings=None,
+        *,
+        tb_locals=False,
+    ):
+        super().__init__(stream, descriptions, verbosity, failfast, buffer, resultclass, warnings, tb_locals=tb_locals)
 
     def run(self, test: unittest.TestSuite | unittest.TestCase) -> TestResult:
         result = MpiTestResult(self.stream, self.descriptions, self.verbosity)

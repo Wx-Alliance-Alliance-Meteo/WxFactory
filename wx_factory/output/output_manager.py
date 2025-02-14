@@ -12,7 +12,7 @@ from precondition.multigrid import Multigrid
 from solvers import SolverInfo
 
 from .solver_stats import SolverStatsOutput
-from .state import save_state
+from .state import save_state, load_state
 
 
 def _readable_time(seconds):
@@ -98,6 +98,27 @@ class OutputManager:
         base_name = f"state_vector_{self.config_hash:012x}_{MPI.COMM_WORLD.rank:06d}"
         return f"{self.output_dir}/{base_name}.{step_id:08d}.npy"
 
+    def load_state_from_file(self, step_id, sh):
+        starting_state, _ = load_state(self.state_file_name(step_id), schema=self.config.schema, device=self.device)
+        if starting_state.shape != sh:
+            raise ValueError(
+                f"ERROR reading state vector from file for step {step_id}. "
+                f"The shape is wrong! ({starting_state.shape}, should be {sh})"
+            )
+        Q = self.device.xp.asarray(starting_state)
+
+        if MPI.COMM_WORLD.rank == 0:
+            print(f"Starting simulation from step {step_id} (rather than 0)")
+            if step_id * self.config.dt >= self.config.t_end:
+                print(
+                    f"WARNING: Won't run any steps, since we will stop at step "
+                    f"{int(self.device.xp.ceil(self.config.t_end / self.config.dt))}"
+                )
+
+        return Q, step_id
+
+    # def save_state(self, Q):
+
     def step(self, Q: NDArray, step_id: int) -> None:
         """Output the result of the latest timestep."""
         if self.config.output_freq > 0 and (step_id % self.config.output_freq) == 0:
@@ -122,6 +143,9 @@ class OutputManager:
             self.__blockstats__(Q, step_id)
             self.total_blockstat_time += time() - t0
             self.num_blockstats += 1
+
+    def _gather_field(self, field: NDArray) -> NDArray:
+        return field
 
     def __write_result__(self, Q: NDArray, step_id: int):
         """Class-specific write implementation."""

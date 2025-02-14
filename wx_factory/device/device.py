@@ -58,15 +58,15 @@ class Device(ABC):
 
 
 class CpuDevice(Device):
-    def __init__(self) -> None:
+    def __init__(self, comm: MPI.Comm = MPI.COMM_WORLD) -> None:
         import numpy
         import scipy
 
         try:
-            mpi_compile("cpp", force=False, comm=MPI.COMM_WORLD)
+            mpi_compile("cpp", force=False, comm=comm)
             import lib.pde.interface_c as interface_c
         except ModuleNotFoundError:
-            if MPI.COMM_WORLD.rank == 0:
+            if comm == 0:
                 print(f"Unable to find the interface_c module. You need to compile it")
             raise
 
@@ -91,7 +91,7 @@ class CpuDevice(Device):
 
 class CudaDevice(Device):
 
-    def __init__(self, device_list: List[int] = []) -> None:
+    def __init__(self, comm: MPI.Comm = MPI.COMM_WORLD, device_list: List[int] = []) -> None:
         # Delay imports, to avoid loading CUDA if not asked
 
         import cupy
@@ -101,10 +101,10 @@ class CudaDevice(Device):
         import wx_cupy
 
         try:
-            mpi_compile("cuda", force=False, comm=MPI.COMM_WORLD)
+            mpi_compile("cuda", force=False, comm=comm)
             import lib.pde.interface_cuda as interface_cuda
         except ModuleNotFoundError:
-            if MPI.COMM_WORLD.rank == 0:
+            if comm.rank == 0:
                 print(f"Unable to load the interface_cuda module, you need to compile it if you want to use the GPU")
             raise
 

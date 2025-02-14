@@ -29,7 +29,6 @@ from output.output_manager import OutputManager
 from output.output_cartesian import OutputCartesian
 from output.output_cubesphere_netcdf import OutputCubesphereNetcdf
 from output.output_cubesphere_fst import OutputCubesphereFst
-from output.state import load_state
 from rhs.rhs_selector import RhsBundle
 
 from common import Configuration, ConfigurationSchema, default_schema_path, readfile
@@ -294,38 +293,19 @@ class Simulation:
 
     def _determine_starting_state(self):
         """Try to load the state for the given starting step and, if successful, swap it with the initial state"""
-        starting_step = self.config.starting_step
-        Q = self.initial_Q
-        if starting_step > 0:
+        if self.config.starting_step > 0:
             try:
-                starting_state, _ = load_state(
-                    self.output.state_file_name(starting_step), schema=self.config.schema, device=self.device
-                )
-                if starting_state.shape != Q.shape:
-                    raise ValueError(
-                        f"ERROR reading state vector from file for step {starting_step}. "
-                        f"The shape is wrong! ({starting_state.shape}, should be {Q.shape})"
-                    )
-                Q = self.device.xp.asarray(starting_state)
-
-                if MPI.COMM_WORLD.rank == 0:
-                    print(f"Starting simulation from step {starting_step} (rather than 0)")
-                    if starting_step * self.config.dt >= self.config.t_end:
-                        print(
-                            f"WARNING: Won't run any steps, since we will stop at step "
-                            f"{int(self.device.xp.ceil(self.config.t_end / self.config.dt))}"
-                        )
-
+                Q, starting_step = self.output.load_state_from_file(self.config.starting_step, self.initial_Q.shape)
+                return Q, starting_step
             except (FileNotFoundError, ValueError) as e:
                 if self.rank == 0:
                     print(
-                        f"WARNING: Tried to start from timestep {starting_step}, but unable to read initial state"
-                        " for that step. Will start from 0 instead."
+                        f"WARNING: Tried to start from timestep {self.config.starting_step}, but unable"
+                        " to read initial state for that step. Will start from 0 instead."
                         f"\n{e}"
                     )
-                starting_step = 0
 
-        return Q, starting_step
+        return self.initial_Q, 0
 
     def _create_time_integrator(self) -> Integrator:
         """Create the appropriate time integrator object based on params"""
