@@ -85,7 +85,7 @@ class CubedSphere3D(CubedSphere):
             Wraps parameters from the configuration pole that are not otherwise specified in this
             constructor.
         """
-        super().__init__(num_solpts, lambda0, phi0, alpha0, device)
+        super().__init__(num_elements_horizontal, num_elements_vertical, num_solpts, lambda0, phi0, alpha0, device)
         xp = device.xp
 
         ## Panel / parallel decomposition properties

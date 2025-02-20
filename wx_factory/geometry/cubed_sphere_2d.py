@@ -81,7 +81,7 @@ class CubedSphere2D(CubedSphere):
            constructor.
         """
 
-        super().__init__(num_solpts, lambda0, phi0, alpha0, device)
+        super().__init__(num_elements_horizontal, 1, num_solpts, lambda0, phi0, alpha0, device)
         xp = self.device.xp
 
         ## Panel / parallel decomposition properties
