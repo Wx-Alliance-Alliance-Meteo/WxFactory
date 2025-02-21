@@ -950,7 +950,15 @@ class Metric3DTopo:
 
             if verbose and geom.ptopo.rank == 0:
                 print("Solving linear operator for Γ")
-            space_christoffel = numpy.linalg.solve(c_lhs.reshape(nk, nj, ni, 27, 27), c_rhs.reshape(nk, nj, ni, 27))
+
+            lhs_tmp = c_lhs.reshape(nk, nj, ni, 27, 27)
+            rhs_tmp = c_rhs.reshape(nk, nj, ni, 27)
+            space_christoffel = numpy.empty_like(rhs_tmp)
+            for k in range(nk):
+                for j in range(nj):
+                    for i in range(ni):
+                        space_christoffel[k, j, i, ...] = numpy.linalg.solve(lhs_tmp[k, j, i], rhs_tmp[k, j, i])
+
             space_christoffel.shape = (nk, nj, ni, 3, 3, 3)
             space_christoffel = space_christoffel.transpose((3, 4, 5, 0, 1, 2))
 
