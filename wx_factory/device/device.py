@@ -162,7 +162,6 @@ _default_device = None
 
 
 def get_default_device():
-    raise ValueError
     global _default_device
     if _default_device is None:
         _default_device = CpuDevice()

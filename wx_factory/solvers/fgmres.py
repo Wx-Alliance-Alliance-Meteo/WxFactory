@@ -3,30 +3,31 @@ from time import time
 from typing import Callable, List, Optional, Tuple
 
 from mpi4py import MPI
-from numpy import ndarray
+from numpy.typing import NDArray
 
 from device import Device, get_default_device
 from .global_operations import global_dotprod, global_norm
 
 __all__ = ["fgmres"]
 
-MatvecOperator = Callable[[ndarray], ndarray]
+MatvecOperator = Callable[[NDArray], NDArray]
 
 
-def _ortho_1_sync_igs(Q, R, T, K, j, device: Device):
+def _ortho_1_sync_igs(Q: NDArray, R: NDArray, T: NDArray, K: NDArray, j: int, device: Device):
     """Orthonormalization process that only requires a single synchronization step.
 
     This processes row j of matrix Q (starting from 1) so that the first j rows are orthogonal, and the first (j-1)
     rows are orthonormal.
     It normalizes row j-1 of matrix Q during that process.
 
-    Arguments:
-       Q       -- The matrix to orthogonalize. We assume that the first (j-1) columns (or is it j-2?) of that matrix
-                  are already orthonormal
-       R, T, K -- Data from previous iterations of the orthonormalization process (?)
-       j       -- Current number of vectors in the Kyrlov space. We orthogonalize the j^th vector (starting from 1)
-                  with the previous ones.
-                  _The matrices may be larger than that, so we can't rely on *.shape()_
+    :param Q: The matrix to orthogonalize. We assume that the first (j-1) columns (or is it j-2?) of that matrix
+              are already orthonormal
+    :param R: Data from previous iterations of the orthonormalization process (?)
+    :param T: Data from previous iterations of the orthonormalization process (?)
+    :param K: Data from previous iterations of the orthonormalization process (?)
+    :param j: Current number of vectors in the Kyrlov space. We orthogonalize the j^th vector (starting from 1)
+              with the previous ones.
+              _The matrices may be larger than that, so we can't rely on *.shape_
     """
     if j < 2:
         return -1.0
@@ -95,8 +96,8 @@ def rotg(a: float, b: float) -> tuple[float, float, float]:
 
 def fgmres(
     A: MatvecOperator,
-    b: ndarray,
-    x0: Optional[ndarray] = None,
+    b: NDArray,
+    x0: Optional[NDArray] = None,
     tol: float = 1e-5,
     restart: int = 20,
     maxiter: Optional[int] = None,
@@ -105,7 +106,7 @@ def fgmres(
     verbose: int = 0,
     prefix: str = "",
     device: Optional[Device] = None,
-) -> Tuple[ndarray, float, float, int, int, List[Tuple[float, float, float]]]:
+) -> Tuple[NDArray, float, float, int, int, List[Tuple[float, float, float]]]:
     """
     Solve the given linear system (Ax = b) for x, using the FGMRES algorithm.
 
@@ -187,7 +188,7 @@ def fgmres(
         V[0, :] = r / norm_r
         Z[0, :] = preconditioner(V[0, :])
         V[1, :] = A(Z[0, :])
-        v_norm = _ortho_1_sync_igs(V, R, T, K, 2, comm, device)
+        v_norm = _ortho_1_sync_igs(V, R, T, K, 2, device)
 
         # This is the RHS vector for the problem in the Krylov Space
         g = xp.zeros(num_dofs)
@@ -200,7 +201,7 @@ def fgmres(
             Z[inner + 1, :] = preconditioner(V[inner + 1])
 
             V[inner + 2, :] = A(Z[inner + 1, :] / v_norm) * v_norm
-            v_norm = _ortho_1_sync_igs(V, R, T, K, inner + 3, comm, device)
+            v_norm = _ortho_1_sync_igs(V, R, T, K, inner + 3, device)
             H[inner, : inner + 2] = R[: inner + 2, inner + 1]
             Z[inner + 1, :] /= v_norm
 

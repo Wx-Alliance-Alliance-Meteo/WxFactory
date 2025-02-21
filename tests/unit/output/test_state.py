@@ -1,18 +1,20 @@
 import os
 import random
+import unittest
 
 import common.configuration
 import common.configuration_schema
+from device import CpuDevice
 import output.state
 
-import tests.unit.cpu_test as cpu_test
 import tests.unit.ndarray_generator as ndarray_generator
 import tests.unit.common.config_pack
 
 
-class StateTestCases(cpu_test.CpuTestCases):
+class StateTestCases(unittest.TestCase):
     def setUp(self):
         super().setUp()
+        self.cpu_device = CpuDevice()
         if not os.path.exists("tests/data/temp"):
             os.mkdir("tests/data/temp")
 

@@ -1,13 +1,14 @@
+import unittest
+
 from numpy import ndarray
 
 from device import CpuDevice
 from solvers import pmex
 
-import cpu_test
 from mpi_test import run_test_on_x_process
 
 
-class PmexMpiTestCases(cpu_test.CpuTestCases):
+class PmexMpiTestCases(unittest.TestCase):
     tolerance: float
     matrix_size_multiplier: int
 
