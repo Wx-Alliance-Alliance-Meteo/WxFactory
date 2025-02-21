@@ -106,7 +106,11 @@ def main():
             out_file = f"prof_{rank:04d}.out"
             pr.dump_stats(out_file)
 
-    except (Exception, KeyboardInterrupt) as e:  # KeyboardInterrupt does not seem to be caught with just "Exception"...
+    except (
+        Exception,
+        KeyboardInterrupt,
+        SystemExit,
+    ) as e:  # KeyboardInterrupt does not seem to be caught with just "Exception"...
 
         try:
             if rank == 0:

@@ -192,12 +192,13 @@ class Simulation:
             # Determine what processor counts are allowed: must be equal to 6 * N^2 for some integer N.
             allowed_pe_counts = [
                 i**2 * 6
-                for i in range(1, max(self.config.num_elements_horizontal // 2 + 1, 2))
-                if (self.config.num_elements_horizontal % i) == 0
+                for i in range(1, max(self.config.num_elements_horizontal_total // 2 + 1, 2))
+                if (self.config.num_elements_horizontal_total % i) == 0
             ]
             if self.comm.size not in allowed_pe_counts:
                 raise ValueError(
-                    f"Invalid number of processors for this particular problem size. "
+                    f"Invalid number of processors for this particular "
+                    f"problem size ({self.config.num_elements_horizontal_total} elements per side). "
                     f"Allowed counts are {allowed_pe_counts}"
                 )
 
@@ -300,13 +301,15 @@ class Simulation:
             try:
                 Q, starting_step = self.output.load_state_from_file(self.config.starting_step, self.initial_Q.shape)
                 return Q, starting_step
-            except (FileNotFoundError, ValueError) as e:
+            except (FileNotFoundError, ValueError, SystemExit) as e:
                 if self.rank == 0:
                     print(
                         f"WARNING: Tried to start from timestep {self.config.starting_step}, but unable"
                         " to read initial state for that step. Will start from 0 instead."
                         f"\n{e}"
                     )
+            except Exception as e:
+                print(f"{self.rank} Fail with other ({type(e)})", flush=True)
 
         return self.initial_Q, 0
 

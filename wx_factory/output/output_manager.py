@@ -7,7 +7,7 @@ from numpy.typing import NDArray
 
 from common.configuration import Configuration
 from device import Device
-from geometry import Geometry, DFROperators
+from geometry import Geometry, DFROperators, CubedSphere3D
 from precondition.multigrid import Multigrid
 from solvers import SolverInfo
 from wx_mpi import SingleProcess, Conditional
@@ -58,7 +58,9 @@ class OutputManager:
         self.device = device
         self.comm = device.comm
 
-        with SingleProcess(self.device.comm) as s, Conditional(s):
+        self.num_dim = 3 if isinstance(geometry, CubedSphere3D) else 2
+
+        with SingleProcess(self.comm) as s, Conditional(s):
             output_dir = self.config.output_dir
             try:
                 os.makedirs(os.path.abspath(output_dir), exist_ok=True)
@@ -78,10 +80,9 @@ class OutputManager:
         # Choose a file name hash based on a certain set of parameters:
         state_params = (
             config.dt,
-            config.num_elements_horizontal,
+            config.num_elements_horizontal_total,
             config.num_elements_vertical,
             config.num_solpts,
-            self.comm.size,
         )
         self.config_hash = state_params.__hash__() & 0xFFFFFFFFFFFF
 
@@ -95,11 +96,16 @@ class OutputManager:
     def state_file_name(self, step_id: int) -> str:
         """Return the name of the file where to save the state vector for the current problem,
         for the given timestep."""
-        base_name = f"state_vector_{self.config_hash:012x}_{self.comm.rank:06d}"
+        base_name = f"state_vector_{self.config_hash:012x}"
         return f"{self.output_dir}/{base_name}.{step_id:08d}.npy"
 
     def load_state_from_file(self, step_id, sh):
-        starting_state, _ = load_state(self.state_file_name(step_id), schema=self.config.schema, device=self.device)
+        global_state = None
+        with SingleProcess(self.comm) as s, Conditional(s):
+            global_state, _ = load_state(self.state_file_name(step_id), schema=self.config.schema, device=self.device)
+
+        starting_state = self._distribute_field(global_state, self.num_dim + 1)
+
         if starting_state.shape != sh:
             raise ValueError(
                 f"ERROR reading state vector from file for step {step_id}. "
@@ -117,8 +123,6 @@ class OutputManager:
 
         return Q, step_id
 
-    # def save_state(self, Q):
-
     def step(self, Q: NDArray, step_id: int) -> None:
         """Output the result of the latest timestep."""
         if self.config.output_freq > 0 and (step_id % self.config.output_freq) == 0:
@@ -134,7 +138,10 @@ class OutputManager:
 
         if self.config.save_state_freq > 0 and (step_id % self.config.save_state_freq) == 0:
             t0 = time()
-            save_state(Q, self.config, self.state_file_name(step_id), device=self.device)
+            total_state = self._gather_field(Q, self.num_dim + 1)
+            with SingleProcess(self.comm) as s, Conditional(s):
+                save_state(total_state, self.config, self.state_file_name(step_id), device=self.device)
+
             self.total_save_state_time += time() - t0
             self.num_save_states += 1
 
@@ -144,7 +151,10 @@ class OutputManager:
             self.total_blockstat_time += time() - t0
             self.num_blockstats += 1
 
-    def _gather_field(self, field: NDArray) -> NDArray:
+    def _gather_field(self, field: NDArray, num_dim: int) -> NDArray:
+        return field
+
+    def _distribute_field(self, field: NDArray, num_dim: int) -> NDArray:
         return field
 
     def __write_result__(self, Q: NDArray, step_id: int):

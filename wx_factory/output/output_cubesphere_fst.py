@@ -69,9 +69,6 @@ class OutputCubesphereFst(OutputCubesphere):
 
         to_host = self.device.to_host
 
-        self.is_3d = isinstance(self.geometry, CubedSphere3D)
-        self.num_dim = 3 if self.is_3d else 2
-
         # print(f"gathering lon/lat", flush=True)
         # lon = self._get_writable(self.geometry.block_lon * 180 / math.pi, num_dim=2)
         # lat = self._get_writable(self.geometry.block_lat * 180 / math.pi, num_dim=2)

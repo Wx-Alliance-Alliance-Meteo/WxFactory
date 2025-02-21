@@ -24,6 +24,12 @@ def load_tests():
     suite.addTest(ShallowWaterRestartTestCase(6, "test_read_restart"))
     suite.addTest(Euler3DRestartTestCase(6, "test_read_restart"))
 
+    suite.addTest(ShallowWaterRestartTestCase(24, "test_read_restart"))
+    suite.addTest(Euler3DRestartTestCase(24, "test_read_restart"))
+
+    suite.addTest(ShallowWaterRestartTestCase(24, "test_multisize"))
+    suite.addTest(Euler3DRestartTestCase(24, "test_multisize"))
+
     suite.addTest(GatherScatterTest(6, "gather_scatter_2d"))
     suite.addTest(GatherScatterTest(6, "gather_scatter_elem_2d"))
     suite.addTest(GatherScatterTest(6, "gather_scatter_3d"))
@@ -70,9 +76,44 @@ def load_tests():
     return suite
 
 
-if __name__ == "__main__":
-    runner = MpiRunner(buffer=True)
+def trace_run(runner):
+    import sys
+    import trace
+    import mpi4py
+
+    # define Trace object: trace line numbers at runtime, exclude some modules
+    tracer = trace.Trace(
+        ignoredirs=[sys.prefix, sys.exec_prefix],
+        ignoremods=[
+            "inspect",
+            "contextlib",
+            "_bootstrap",
+            "_weakrefset",
+            "abc",
+            "posixpath",
+            "genericpath",
+            "textwrap",
+        ],
+        trace=1,
+        count=0,
+    )
+
+    # by default trace goes to stdout
+    # redirect to a different file for each processes
+    sys.stdout = open(f"trace_{mpi4py.MPI.COMM_WORLD.rank:04d}.txt", "w")
+
+    tracer.runfunc(runner.run, load_tests())
+
+
+def regular_run(runner):
     result = runner.run(load_tests())
 
     if not result.wasSuccessful():
         sys.exit(-1)
+
+
+if __name__ == "__main__":
+    runner = MpiRunner(buffer=True)
+
+    # trace_run(runner)
+    regular_run(runner)

@@ -65,13 +65,11 @@ class OutputCubesphereNetcdf(OutputCubesphere):
             ni *= side
             nj *= side
             grid_data = ("npe", "Xdim", "Ydim")
-            self.num_dim = 2
         elif self.config.equations == "euler":
             nk, nj, ni = self.geometry.nk, self.geometry.nj, self.geometry.ni
             nj *= side
             ni *= side
             grid_data = ("npe", "Zdim", "Xdim", "Ydim")
-            self.num_dim = 3
         else:
             raise ValueError(f"Unsupported equation type {self.config.equations}")
 

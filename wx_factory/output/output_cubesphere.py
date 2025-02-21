@@ -154,3 +154,6 @@ class OutputCubesphere(OutputManager):
 
     def _gather_field(self, field: NDArray, num_dim: int):
         return self.process_topology.gather_cube(field, num_dim)
+
+    def _distribute_field(self, field: NDArray, num_dim: int):
+        return self.process_topology.distribute_cube(field, num_dim)
