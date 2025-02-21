@@ -5,8 +5,7 @@ from mpi4py import MPI
 from numpy.typing import NDArray
 
 from device import Device
-
-from .wx_mpi import SingleProcess, Conditional
+from wx_mpi import SingleProcess, Conditional
 
 ExchangedVector = Tuple[NDArray, ...] | NDArray
 

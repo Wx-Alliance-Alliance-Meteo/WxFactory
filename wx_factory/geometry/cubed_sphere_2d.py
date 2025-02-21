@@ -10,7 +10,7 @@ from .sphere import cart2sph
 # For type hints
 from common import Configuration
 from device import Device
-from wx_mpi import ProcessTopology
+from process_topology import ProcessTopology
 
 
 class CubedSphere2D(CubedSphere):

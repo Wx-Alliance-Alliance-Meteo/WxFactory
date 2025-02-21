@@ -9,7 +9,7 @@ from common import Configuration
 from device import Device
 from geometry import CubedSphere, CubedSphere3D, DFROperators, Metric2D, Metric3DTopo
 from init.shallow_water_test import height_vortex, height_case1, height_case2, height_unsteady_zonal
-from wx_mpi import ProcessTopology
+from process_topology import ProcessTopology
 
 from .diagnostic import total_energy, potential_enstrophy, global_integral_2d
 from .output_manager import OutputManager

@@ -36,7 +36,6 @@ extensions = [
 
 autosummary_generate = True
 autosummary_mock_imports = [
-    "wx_cupy",
     "precondition.preconditioner_dg",
     "precondition.preconditioner_fv",
     "rhs.rhs",

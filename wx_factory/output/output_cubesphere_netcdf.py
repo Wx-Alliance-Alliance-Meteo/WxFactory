@@ -23,7 +23,8 @@ from common.definitions import (
 from common.configuration import Configuration
 from device import Device
 from geometry import CubedSphere, CubedSphere2D, CubedSphere3D, Metric2D, Metric3DTopo, DFROperators
-from wx_mpi import ProcessTopology, SingleProcess, Conditional
+from process_topology import ProcessTopology
+from wx_mpi import SingleProcess, Conditional
 
 from .diagnostic import potential_vorticity, relative_vorticity
 from .output_cubesphere import OutputCubesphere

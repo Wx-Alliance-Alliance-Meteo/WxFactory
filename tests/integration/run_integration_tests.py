@@ -20,7 +20,7 @@ if __name__ == "__main__":
     parser.add_argument("problems", type=str, nargs="+")
     args = parser.parse_args()
 
-    runner = mpi_test.MpiRunner()
+    runner = mpi_test.MpiRunner(buffer=True)
     results = []
     for problem in args.problems:
         problem_file = os.path.join(main_project_dir, test_cases_dir, problem)

@@ -1,21 +1,19 @@
-__all__ = ["init_wx_cupy", "cuda_avail", "num_devices", "rhs_bubble_cuda", "expm", "Rusanov"]
+__all__ = ["load_cupy", "cuda_avail", "num_devices"]
 
 from mpi4py import MPI
 
-__initialized: bool = False
-num_devices: int = 0
-loading_error: None | Exception = None
-cuda_avail: bool = False
+__initialized = False
+num_devices = 0
+cuda_avail = False
 
 
-def init_wx_cupy():
+def load_cupy():
     global __initialized
 
     if __initialized:
         return
 
     global num_devices
-    global loading_error
     global cuda_avail
 
     try:
@@ -30,7 +28,6 @@ def init_wx_cupy():
             num_devices = 0
 
     except ModuleNotFoundError as e:
-        loading_error = e
         if MPI.COMM_WORLD.rank == 0:
             print(
                 f"cupy does not seem to be installed. "
@@ -39,29 +36,21 @@ def init_wx_cupy():
             )
 
     except ImportError as e:
-        loading_error = e
         if MPI.COMM_WORLD.rank == 0:
             print(f"Module cupy is installed, but we were unable to load it, so we will run on CPUs instead")
 
     except cupy_backends.cuda.api.runtime.CUDARuntimeError as e:
-        loading_error = e
         if MPI.COMM_WORLD.rank == 0:
             print(f"{e}")
             print(f"Module cupy is installed, but we could not find any CUDA device. Will run on CPU instead")
 
     except Exception as e:
-        loading_error = e
+        pass
 
     cuda_avail = num_devices > 0
 
     if MPI.COMM_WORLD.rank == 0:
         avail = "available" if cuda_avail else "not available"
         print(f"CUDA is {avail}")
-
-    if cuda_avail:
-        # import cuda-related modules
-        from .rhs_bubble_cuda import rhs_bubble_cuda
-        from .rusanov import Rusanov
-        from .linalg import expm
 
     __initialized = True

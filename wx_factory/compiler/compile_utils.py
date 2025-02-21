@@ -13,6 +13,7 @@ from mpi4py import MPI
 
 from common import main_project_dir
 from . import compile_kernels
+from wx_mpi import SingleProcess, Conditional
 
 
 cpu_info_filename: str = "/proc/cpuinfo"
@@ -164,17 +165,5 @@ def mpi_compile(kernel_type: str, force: bool = False, comm: MPI.Comm = MPI.COMM
     :param force: Force a rebuild of the module
     :param comm: Communicator to use to perform the build
     """
-    compilation_error = None
-    if comm.rank == 0:
-        try:
-            compile(kernel_type, force=force)
-        except Exception as e:
-            import traceback
-
-            print(traceback.format_exc())
-            compilation_error = e
-
-    compilation_error = comm.bcast(compilation_error, root=0)
-
-    if compilation_error is not None:
-        raise compilation_error
+    with SingleProcess(comm) as s, Conditional(s):
+        compile(kernel_type, force=force)

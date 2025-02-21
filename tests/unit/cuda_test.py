@@ -1,5 +1,7 @@
 import unittest
 
+from device import wx_cupy
+
 
 class CudaTestCases(unittest.TestCase):
     """
@@ -8,9 +10,8 @@ class CudaTestCases(unittest.TestCase):
 
     def setUp(self) -> None:
         super().setUp()
-        import wx_cupy
 
-        wx_cupy.init_wx_cupy()
+        wx_cupy.load_cupy()
 
         if not wx_cupy.cuda_avail:
             reason: str = f"Cannot run test case {str(self)}, no cuda device were found to run the test"

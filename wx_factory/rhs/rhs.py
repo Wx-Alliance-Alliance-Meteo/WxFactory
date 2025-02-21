@@ -9,7 +9,7 @@ from common import Configuration
 from device import Device
 from geometry import DFROperators, Geometry, Metric2D, Metric3DTopo
 from pde import PDE
-from wx_mpi import ProcessTopology
+from process_topology import ProcessTopology
 
 
 class RHS(ABC):

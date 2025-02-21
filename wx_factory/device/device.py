@@ -5,6 +5,7 @@ from mpi4py import MPI
 from numpy.typing import NDArray
 
 from compiler.compile_utils import mpi_compile
+from . import wx_cupy
 
 
 class Device(ABC):
@@ -12,6 +13,12 @@ class Device(ABC):
 
     The device is allowed to be the same as the host (so that code is executed on the host). In such
     a case, most operations do nothing
+
+    :param comm: The MPI communicator associated with this device.
+    :type comm: MPI.Comm
+    :param xp: Basic math/array module for this device (numpy on the CPU, cupy or other on the GPU)
+    :param xalg: Advanced math module for this device (scipy on the CPU, cupy equivalent on the GPU)
+    :param libmodule: Module containing all the compiled code for this device
     """
 
     def __init__(self, comm: MPI.Comm, xp, xalg, libmodule) -> None:
@@ -65,10 +72,13 @@ class CpuDevice(Device):
 
         try:
             mpi_compile("cpp", force=False, comm=comm)
-            import lib.pde.interface_c as interface_c
-        except ModuleNotFoundError:
-            if comm == 0:
-                print(f"Unable to find the interface_c module. You need to compile it")
+            from lib.pde import interface_c
+        except (ModuleNotFoundError, SystemExit):
+            if comm.rank == 0:
+                print(f"Unable to find the interface_c module. You need to compile it.", flush=True)
+            raise
+        except:
+            print(f"Unknown exception!", flush=True)
             raise
 
         super().__init__(comm, numpy, scipy, interface_c)
@@ -94,22 +104,25 @@ class CudaDevice(Device):
 
     def __init__(self, comm: MPI.Comm = MPI.COMM_WORLD, device_list: Optional[List[int]] = None) -> None:
         # Delay imports, to avoid loading CUDA if not asked
-
         import cupy
         import cupyx
         import cupyx.scipy.linalg
 
-        import wx_cupy
-
         try:
             mpi_compile("cuda", force=False, comm=comm)
             import lib.pde.interface_cuda as interface_cuda
-        except ModuleNotFoundError:
+        except (ModuleNotFoundError, SystemExit):
             if comm.rank == 0:
-                print(f"Unable to load the interface_cuda module, you need to compile it if you want to use the GPU")
+                print(
+                    f"Unable to load the interface_cuda module, you need to compile it if you want to use the GPU",
+                    flush=True,
+                )
+            raise
+        except:
+            print(f"{comm.rank} Unknown exception", flush=True)
             raise
 
-        wx_cupy.init_wx_cupy()
+        wx_cupy.load_cupy()
 
         super().__init__(comm, cupy, cupyx.scipy, interface_cuda)
 

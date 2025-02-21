@@ -34,7 +34,8 @@ from rhs.rhs_selector import RhsBundle
 from common import Configuration, ConfigurationSchema, default_schema_path, readfile
 from common.definitions import idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_w
 from device import Device, CpuDevice, CudaDevice
-from wx_mpi import ProcessTopology, do_once
+from process_topology import ProcessTopology
+from wx_mpi import do_once
 
 
 class Simulation:
