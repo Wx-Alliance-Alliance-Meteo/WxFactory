@@ -1,11 +1,15 @@
 from abc import ABC, abstractmethod
-from typing import Any, List, Optional
+from time import time
+from typing import Any, List, Optional, Tuple, TypeVar, Union
 
 from mpi4py import MPI
 from numpy.typing import NDArray
 
 from compiler.compile_utils import mpi_compile
 from . import wx_cupy
+
+
+_Timestamp = TypeVar("Timestamp", bound=Union[float, "Event"])
 
 
 class Device(ABC):
@@ -29,36 +33,30 @@ class Device(ABC):
         self.libmodule = libmodule
 
     @abstractmethod
-    def __synchronize__(self, **kwargs):
-        pass
-
     def synchronize(self, **kwargs):
         """Synchronize this device with the host. This is essentially a host-device barrier."""
-        self.__synchronize__(**kwargs)
 
     @abstractmethod
-    def __array__(self, a: NDArray, **kwargs) -> NDArray:
-        pass
-
     def array(self, a: NDArray, *args, **kwargs) -> NDArray:
         """Copy the given array to this device, if it's not the same as the host."""
-        return self.__array__(a, *args, **kwargs)
 
     @abstractmethod
-    def __pinned__(self, *args, **kwargs) -> NDArray:
-        pass
-
     def pinned(self, *args, **kwargs) -> NDArray:
         """Allocate a host array with pinned memory."""
-        return self.__pinned__(*args, **kwargs)
 
     @abstractmethod
-    def __to_host__(self, val, **kwargs):
-        pass
-
     def to_host(self, val: Any, **kwargs) -> Any:
         """Copy the given array to the host (if it's not there already)."""
-        return self.__to_host__(val, **kwargs)
+
+    @abstractmethod
+    def timestamp(self, **kwargs) -> _Timestamp:
+        """Get the "current" time in the flow of execution. On the GPU, execution may not have started yet,
+        so this function will actually insert a timing event in the flow."""
+
+    @abstractmethod
+    def elapsed(self, timestamps: List[_Timestamp]) -> Tuple[List[float], float]:
+        """Get the set of elapsed times between the given list of timestamps. Also return
+        the total elapsed time (between first and last timestamp)."""
 
     def has_128_bits_float(self) -> bool:
         """Not all devices can perform 128 bits floating point operation"""
@@ -83,31 +81,42 @@ class CpuDevice(Device):
 
         super().__init__(comm, numpy, scipy, interface_c)
 
-    def __synchronize__(self, **kwargs):
+    def synchronize(self, **kwargs):
         """Don't do anything. This is to allow writing generic code when device is not the same as the host."""
-        pass
 
-    def __array__(self, a: NDArray, *args, **kwargs) -> NDArray:
+    def array(self, a: NDArray, *args, **kwargs) -> NDArray:
         """Return the input array unchanged."""
         return a
 
-    def __pinned__(self, *args, **kwargs) -> NDArray:
+    def pinned(self, *args, **kwargs) -> NDArray:
         """Return allocated space, without any special characteristic."""
         return self.xp.empty(*args, **kwargs)
 
-    def __to_host__(self, val, **kwargs):
+    def to_host(self, val, **kwargs):
         """Return the input array unchanged."""
         return val
+
+    def timestamp(self, **kwargs):
+        return time()
+
+    def elapsed(self, timestamps):
+        return [timestamps[i + 1] - timestamps[i] for i in range(len(timestamps) - 1)], timestamps[-1] - timestamps[0]
 
 
 class CudaDevice(Device):
 
     def __init__(self, comm: MPI.Comm = MPI.COMM_WORLD, device_list: Optional[List[int]] = None) -> None:
         # Delay imports, to avoid loading CUDA if not asked
+
+        wx_cupy.load_cupy()
+        if not wx_cupy.cuda_avail:
+            raise ValueError(f"Unable to create a CudaDevice object, no GPU devices were detected")
+
         import cupy
         import cupyx
         import cupyx.scipy.linalg
 
+        # Get compiled library
         try:
             mpi_compile("cuda", force=False, comm=comm)
             import lib.pde.interface_cuda as interface_cuda
@@ -122,13 +131,12 @@ class CudaDevice(Device):
             print(f"{comm.rank} Unknown exception", flush=True)
             raise
 
-        wx_cupy.load_cupy()
-
+        # Set members
         super().__init__(comm, cupy, cupyx.scipy, interface_cuda)
+        self.cupyx = cupyx
+        self.cupy = cupy
 
-        if not wx_cupy.cuda_avail:
-            raise ValueError(f"Unable to create a CudaDevice object, no GPU devices were detected")
-
+        # Choose device on which to run kernels
         if device_list is None:
             device_list = []
         device_list = [x for x in device_list if x < wx_cupy.num_devices]
@@ -136,21 +144,17 @@ class CudaDevice(Device):
         if len(device_list) == 0:
             device_list = range(wx_cupy.num_devices)
 
-        self.cupyx = cupyx
-        self.cupy = cupy
-
-        # Select the CUDA device on which this PE will execute its kernels
-        rank = self.comm.Get_rank()
-        devnum = rank % len(device_list)
+        devnum = self.comm.rank % len(device_list)
         cupy.cuda.Device(device_list[devnum]).use()
 
         # TODO don't use managed memory
         cupy.cuda.set_allocator(cupy.cuda.MemoryPool(cupy.cuda.malloc_managed).malloc)
 
+        # Set up compute and copy streams
         self.main_stream = cupy.cuda.get_current_stream()
         self.copy_stream = cupy.cuda.Stream(non_blocking=True)
 
-    def __synchronize__(self, **kwargs):
+    def synchronize(self, **kwargs):
         """Synchronize a stream, based on input arguments. By default, the main stream is synchronized.
         If copy_stream is True, synchronize that one instead."""
         if "copy_stream" in kwargs and kwargs["copy_stream"]:
@@ -158,17 +162,33 @@ class CudaDevice(Device):
         else:
             self.main_stream.synchronize()
 
-    def __array__(self, a: NDArray, *args, **kwargs) -> NDArray:
+    def array(self, a: NDArray, *args, **kwargs) -> NDArray:
         """Copy given array to the device."""
         return self.xp.asarray(a)
 
-    def __pinned__(self, *args, **kwargs) -> NDArray:
+    def pinned(self, *args, **kwargs) -> NDArray:
         """Allocate an array with pinned memory."""
         return self.cupyx.empty_pinned(*args, **kwargs)
 
-    def __to_host__(self, val, **kwargs):
+    def to_host(self, val, **kwargs):
         """Copy given array to the host."""
         return val.get(**kwargs)
+
+    def timestamp(self, **kwargs):
+        ts = self.cupy.cuda.Event()
+        if "copy_stream" in kwargs and kwargs["copy_stream"]:
+            ts.record(self.copy_stream)
+        else:
+            ts.record(self.main_stream)
+
+        return ts
+
+    def elapsed(self, timestamps):
+        get_time = self.cupy.cuda.get_elapsed_time
+        return (
+            [get_time(timestamps[i], timestamps[i + 1]) / 1000.0 for i in range(len(timestamps) - 1)],
+            get_time(timestamps[0], timestamps[-1]) / 1000.0,
+        )
 
 
 _default_device = None
