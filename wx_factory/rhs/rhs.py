@@ -1,12 +1,10 @@
 from abc import ABC, abstractmethod
-import signal
 import time
 
-from mpi4py import MPI
+import numpy
 from numpy.typing import NDArray
 
 from common import Configuration
-from device import Device
 from geometry import DFROperators, Geometry, Metric2D, Metric3DTopo
 from pde import PDE
 from process_topology import ProcessTopology
@@ -39,6 +37,9 @@ class RHS(ABC):
         self.num_dim = self.pde.num_dim
         self.num_var = self.pde.num_var
 
+        self.timestamps = []
+        self.timings = []
+
         # Initially set all arrays to None, these will be allocated later
         self.f_x1 = None
         self.f_x2 = None
@@ -64,34 +65,57 @@ class RHS(ABC):
         # Initialize rhs matrix
         self.rhs = None
 
+    def clear_timings(self):
+        self.timestamps = []
+        self.timings = []
+
+    def retrieve_last_times(self):
+        self.timings.append(self.device.elapsed(self.timestamps))
+
     def __call__(self, q: NDArray) -> NDArray:
 
-        # 0. Preserve array shape
+        # 0.a Process timing
+        if len(self.timestamps) > 0:  # Process timing from previous steps
+            self.retrieve_last_times()
+        else:
+            self.timestamps = [None for _ in range(9)]
+
+        # 0.b Preserve array shape
         given_shape = q.shape
 
         self.allocate_arrays(q)
 
+        self.timestamps[0] = self.device.timestamp()
+
         # 1. Extrapolate the solution to the boundaries of the element
         self.solution_extrapolation(q)
+        self.timestamps[1] = self.device.timestamp()
 
         self.start_communication()
+        self.timestamps[2] = self.device.timestamp()
 
         # 2. Compute the pointwise fluxes
         self.pointwise_fluxes(q)
+        self.timestamps[3] = self.device.timestamp()
 
         # 3. Compute the derivatives of the discontinuous fluxes
         self.flux_divergence_partial()
+        self.timestamps[4] = self.device.timestamp()
 
         self.end_communication()
+        self.timestamps[5] = self.device.timestamp()
 
         # 4. Compute the Riemann fluxes
         self.riemann_fluxes()
+        self.timestamps[6] = self.device.timestamp()
 
         # 5. Complete the divergence operation
         self.flux_divergence()
+        self.timestamps[7] = self.device.timestamp()
 
         # 6. Add forcing terms
         self.forcing_terms(q)
+        self.timestamps[8] = self.device.timestamp()
 
         # At this moment, a deep copy needs to be returned
         # otherwise issues are encountered after. This needs to be fixed
@@ -162,3 +186,28 @@ class RHS(ABC):
 
     def end_communication(self) -> None:
         pass
+
+    def print_times(self) -> None:
+        timings = numpy.array(self.timings)
+        extrapolation = timings[:, 0].mean() * 1000.0
+        start_comm = timings[:, 1].mean() * 1000.0
+        pw_flux = timings[:, 2].mean() * 1000.0
+        flux_div_1 = timings[:, 3].mean() * 1000.0
+        end_comm = timings[:, 4].mean() * 1000.0
+        riemann = timings[:, 5].mean() * 1000.0
+        flux_div_2 = timings[:, 6].mean() * 1000.0
+        forcing = timings[:, 7].mean() * 1000.0
+        total = timings[:, -1].mean() * 1000.0
+        print(
+            f"RHS times:\n"
+            f"  Extrapolation:  {extrapolation:5.1f} ms\n"
+            f"  Start comm:     {start_comm:5.1f} ms\n"
+            f"  Pointwise flux: {pw_flux:5.1f} ms\n"
+            f"  Flux div 1:     {flux_div_1:5.1f} ms\n"
+            f"  End comm:       {end_comm:5.1f} ms\n"
+            f"  Riemann:        {riemann:5.1f} ms\n"
+            f"  Flux div 2:     {flux_div_2:5.1f} ms\n"
+            f"  Forcing:        {forcing:5.1f} ms\n"
+            f"  -------------------------\n"
+            f"  Total:          {total:5.1f}"
+        )

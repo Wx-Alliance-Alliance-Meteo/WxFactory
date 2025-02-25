@@ -54,7 +54,7 @@ class Device(ABC):
         so this function will actually insert a timing event in the flow."""
 
     @abstractmethod
-    def elapsed(self, timestamps: List[_Timestamp]) -> Tuple[List[float], float]:
+    def elapsed(self, timestamps: List[_Timestamp]) -> List[float]:
         """Get the set of elapsed times between the given list of timestamps. Also return
         the total elapsed time (between first and last timestamp)."""
 
@@ -100,7 +100,9 @@ class CpuDevice(Device):
         return time()
 
     def elapsed(self, timestamps):
-        return [timestamps[i + 1] - timestamps[i] for i in range(len(timestamps) - 1)], timestamps[-1] - timestamps[0]
+        intervals = [timestamps[i + 1] - timestamps[i] for i in range(len(timestamps) - 1)]
+        intervals.append(timestamps[-1] - timestamps[0])
+        return intervals
 
 
 class CudaDevice(Device):
@@ -185,10 +187,9 @@ class CudaDevice(Device):
 
     def elapsed(self, timestamps):
         get_time = self.cupy.cuda.get_elapsed_time
-        return (
-            [get_time(timestamps[i], timestamps[i + 1]) / 1000.0 for i in range(len(timestamps) - 1)],
-            get_time(timestamps[0], timestamps[-1]) / 1000.0,
-        )
+        intervals = [get_time(timestamps[i], timestamps[i + 1]) / 1000.0 for i in range(len(timestamps) - 1)]
+        intervals.append(get_time(timestamps[0], timestamps[-1]) / 1000.0)
+        return intervals
 
 
 _default_device = None

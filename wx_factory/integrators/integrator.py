@@ -12,6 +12,7 @@ from precondition.factorization import Factorization
 from precondition.multigrid import Multigrid
 from output.output_manager import OutputManager
 from solvers import SolverInfo
+from rhs.rhs import RHS
 
 
 class Integrator(ABC):
@@ -92,12 +93,18 @@ class Integrator(ABC):
 
         # Output info from completed step (if possible)
         if self.output_manager is not None:
-            if self.solver_info is not None:
-                self.output_manager.store_solver_stats(
-                    t1 - t0, self.sim_time, dt, self.solver_info, self.preconditioner
-                )
-            else:
-                self.output_manager.store_solver_stats(t1 - t0, self.sim_time, dt, SolverInfo(), self.preconditioner)
+
+            solver_info = self.solver_info if self.solver_info is not None else SolverInfo()
+
+            rhs_times = None
+            if hasattr(self, "rhs") and isinstance(self.rhs, RHS):
+                self.rhs.retrieve_last_times()
+                rhs_times = self.rhs.timings
+
+            self.output_manager.store_solver_stats(
+                t1 - t0, self.sim_time, dt, solver_info, self.preconditioner, rhs_times
+            )
+
         self.solver_info = None
 
         self.sim_time += dt

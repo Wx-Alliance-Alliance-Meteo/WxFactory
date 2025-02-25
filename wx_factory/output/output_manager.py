@@ -1,6 +1,6 @@
 import os
 from time import time
-from typing import Callable, Optional
+from typing import Callable, List, Optional
 
 from mpi4py import MPI
 from numpy.typing import NDArray
@@ -172,6 +172,7 @@ class OutputManager:
         dt: float,
         solver_info: SolverInfo,
         precond: Optional[Multigrid],
+        rhs_times: Optional[List[List[float]]],
     ):
         """Store statistics for the current step into a database."""
         if self.config.store_solver_stats > 0:
@@ -184,6 +185,7 @@ class OutputManager:
                 solver_info.flag,
                 solver_info.iterations,
                 precond,
+                rhs_times,
             )
 
     def finalize(self, total_time: float) -> None:
