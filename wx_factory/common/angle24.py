@@ -5,9 +5,7 @@ value, which when decoded gives -pi/2."""
 import math
 import typing
 
-_INTERVAL = math.pi / 0x1000000
-
-TAngle24 = typing.NewType("angle24", float)
+_INTERVAL = 2.0 * math.pi / 0x1000000
 
 
 def encode(f64: float) -> int:
@@ -15,26 +13,36 @@ def encode(f64: float) -> int:
     Input value must be in the range [-pi/2, pi/2[, otherwise they will be shifted by a multiple of `pi` to fit
     in that range."""
 
-    # Keep in [-pi/2, pi/2[ range
-    while f64 >= (math.pi / 2):
-        print(f"Adjusting from {f64} to {f64 - math.pi}")
-        f64 -= math.pi
-    while f64 < (-math.pi / 2):
-        print(f"Adjusting from {f64} to {f64 + math.pi}")
-        f64 += math.pi
+    # Keep in [-pi, pi[ range
+    while f64 >= math.pi:
+        print(f"Adjusting from {f64} to {f64 - 2.0*math.pi}")
+        f64 -= 2.0 * math.pi
+    while f64 < -math.pi:
+        print(f"Adjusting from {f64} to {f64 + 2.0*math.pi}")
+        f64 += 2.0 * math.pi
 
     # Scale, then shift, then truncate to 24 bits
     return (round(f64 / _INTERVAL) + 0x800000) & 0xFFFFFF
 
 
 def decode(u64: int) -> float:
-    """Decode the given 24-bit integer into a float. The resulting float is in the range [-pi/2, pi/2[.
+    """Decode the given 24-bit integer into a float. The resulting float is in the range [-pi, pi[.
     If the integer is larger than 24 bits, it will be truncated."""
 
     # Truncate to 24 bit, then shift, then scale
     return ((u64 & 0xFFFFFF) - 0x800000) * _INTERVAL
 
 
-def angle24(val: float) -> float:
-    """Adjust the given value to be exactly one that corresponds"""
-    return decode(encode(val))
+class angle24(float):
+    """Subclass of float that describes an angle in the range [-pi, pi[, that can be
+    encoded in 24 bits."""
+
+    def __new__(cls, x=...):
+        return super().__new__(cls, decode(encode(float(x))))
+
+
+if __name__ == "__main__":
+    a = angle24(1.0)
+    initializers = [1.0]
+    for i in initializers:
+        print(f"angle24({i}) = {angle24(i)}")

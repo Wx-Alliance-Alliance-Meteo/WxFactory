@@ -1,16 +1,37 @@
+from collections import OrderedDict
 from configparser import ConfigParser, NoSectionError, NoOptionError
+import copy
 import json
 import types
 from typing import TypeVar, Type, Union, Optional, Callable, Any, Literal, List
 
 import numpy
 
-from .angle24 import angle24, TAngle24
+from .angle24 import angle24
+from .eval_expr import eval_expr
 
 __all__ = ["ConfigurationField", "ConfigurationSchema", "OptionType", "load_default_schema"]
 
 
-CaseSensitiveStr = types.new_class(name="cs-str", bases=(str,))
+class ConfigValueError(ValueError):
+    """Custom exception for config schema/options"""
+
+
+class CaseSensitiveStr(str):
+    """Custom string option type"""
+
+
+CaseSensitiveStr.__name__ = "cs-str"
+
+
+class LowerCaseStr(str):
+    """Custom string option type (always lower case)"""
+
+    def __new__(cls, val: str):
+        return super().__new__(cls, val.lower())
+
+
+LowerCaseStr.__name__ = "lc-str"
 
 OptionType = TypeVar("OptionType", bound=Union[str, CaseSensitiveStr, int, float, List[int], List[float], bool])
 _T = TypeVar("T", str, dict, list)
@@ -20,10 +41,10 @@ _Selectable = TypeVar("Selectable", bound=Union[int, float, str])
 
 default_schema_path = "config/config-format.json"
 
-def _default_validate(_: Any) -> Literal[True]:
-    return True
 
 def make_str(items, markdown: bool = False, header: bool = False):
+    """Create a string from a set of items, each with their own fixed length. If an
+    item is larger than its associated length, it will take space from the following items."""
     result = ""
     desired_length = 0
     for item in items:
@@ -55,38 +76,46 @@ class ConfigFieldRange:
         self.max_value = max_value
         self.selectables = selectables
 
+        # Make sure that the range makes sense
         if selectables is not None and not (min_value is None and max_value is None):
-            raise ValueError(f"You cannot have both a min or a max, and a selectable pool of values")
+            raise ConfigValueError(f"You cannot have both a min or a max, and a selectable pool of values")
 
-    def make_validate(self) -> Callable:
-        """Generate a function that checks whether a value (or list of values) falls within the range."""
-        base_function = None
+        if self.min_value is not None and self.max_value is not None and self.min_value > self.max_value:
+            raise ConfigValueError(f"Min value {self.min_value} is larger than max {self.max_value}")
+
+    def _make_base_validate(self):
+        """Make a function that checks if a single value meets the requirements."""
         if self.selectables is not None:
-            base_function = lambda a: a in self.selectables
+            return lambda a: a in self.selectables
+        if self.min_value is not None and self.max_value is not None:
+            return lambda a: self.min_value <= a <= self.max_value
+        if self.min_value is not None:
+            return lambda a: a >= self.min_value
+        if self.max_value is not None:
+            return lambda a: a <= self.max_value
 
-        elif self.min_value is not None and self.max_value is not None:
-            base_function = lambda a: self.min_value <= a <= self.max_value
-        elif self.min_value is not None:
-            base_function = lambda a: a >= self.min_value
-        elif self.max_value is not None:
-            base_function = lambda a: a <= self.max_value
+        return None
 
-        if base_function is not None:
+    def make_validate(self) -> Callable[[Any], bool]:
+        """Generate a function that checks whether a value (or list of values) falls within the range."""
+        base_function = self._make_base_validate()
+        if base_function is None:
+            return lambda _: True
 
-            def validate(a):
-                if isinstance(a, list):
-                    return all(base_function(x) for x in a)
-                return base_function(a)
+        def validate(a) -> bool:
+            """Verify that the given value falls within this range"""
+            if isinstance(a, list):
+                return all(base_function(x) for x in a)
+            return base_function(a)
 
-            return validate
-
-        return lambda _: True
+        return validate
 
     def __str__(self):
         if self.selectables is not None:
             sel_str = ", ".join(str(s) for s in self.selectables)
             return f"{{{sel_str}}}"
-        elif self.min_value is not None or self.max_value is not None:
+
+        if self.min_value is not None or self.max_value is not None:
             min_str = "-inf" if self.min_value is None else f"{self.min_value}"
             max_str = "inf" if self.max_value is None else f"{self.max_value}"
             return f"[{min_str}, {max_str}]"
@@ -101,14 +130,13 @@ class ConfigurationField:
     another option.
     """
 
-    __name__ = "cs-str"
-
     def __init__(
         self,
         field_name: str,
         field_section: str,
         field_default: Optional[OptionType],
         field_type: Type[OptionType],
+        is_list: bool,
         valid_range: ConfigFieldRange,
         dependency: Optional[tuple[str, List[OptionType]]],
         description: str,
@@ -117,6 +145,7 @@ class ConfigurationField:
         self.section = field_section
         self.field_default = field_default
         self.type = field_type
+        self.is_list = is_list
         self.valid_range = valid_range
         self.validate = self.valid_range.make_validate()
         self.dependency = dependency
@@ -128,44 +157,37 @@ class ConfigurationField:
                 f"its valid range: {self.valid_range}"
             )
 
-    def read(self, parser: ConfigParser) -> OptionType:
+    def _read_single(self, parser: ConfigParser):
+        """Read this field from the given parser (scalar)"""
+        return self.type(parser.get(self.section, self.name))
+
+    def _read_list(self, parser: ConfigParser):
+        """Read this field from the given parser (list)"""
         try:
-            if self.type == float or self.type == numpy.float32:
-                value = parser.getfloat(self.section, self.name)
-            elif self.type == numpy.float32:
-                value = parser.getfloat(self.section, self.name)
-                value = float(numpy.float32(value)) # Truncate to float32 before storing as float64
-            elif self.type == TAngle24:
-                value = angle24(parser.getfloat(self.section, self.name))
-            elif self.type == int:
-                value = parser.getint(self.section, self.name)
-            elif self.type == str:
-                value = parser.get(self.section, self.name).lower()
-            elif self.type == CaseSensitiveStr:
-                value = parser.get(self.section, self.name)
-            elif self.type == bool:
-                value = bool(parser.getint(self.section, self.name))
-            elif self.type == List[int]:
-                try:
-                    value = [parser.getint(self.section, self.name)]
-                except ValueError:
-                    value = [int(x) for x in json.loads(parser.get(self.section, self.name))]
-            elif self.type == List[float]:
-                try:
-                    value = [parser.getfloat(self.section, self.name)]
-                except ValueError:
-                    value = [float(x) for x in json.loads(parser.get(self.section, self.name))]
+            return [self.type(parser.get(self.section, self.name))]
+        except ValueError:
+            return [self.type(x) for x in json.loads(parser.get(self.section, self.name))]
+
+    def read(self, parser: ConfigParser) -> OptionType:
+        """Read this field from the given parser and verify that it falls within its valid range."""
+
+        try:
+            if self.is_list:
+                value = self._read_list(parser)
             else:
-                raise ValueError(f"Cannot get this option type (not implemented): {self.type}")
+                value = self._read_single(parser)
 
         except (NoOptionError, NoSectionError) as e:
             if self.field_default is None:
-                raise ValueError(f"\nMust specify a value for option '{self.name}'") from e
+                raise ConfigValueError(f"\nMust specify a value for option '{self.name}'") from e
 
-            value = self.field_default
+            value = copy.deepcopy(self.field_default)
+
+        except ValueError as e:
+            raise ConfigValueError(e) from e
 
         if not self.validate(value):
-            raise ValueError(
+            raise ConfigValueError(
                 f"Value '{value}' does not fall in acceptable range for field '{self.name}': {self.valid_range}"
             )
 
@@ -186,6 +208,7 @@ class ConfigurationField:
         return header_str
 
     def to_string(self, markdown: bool = False) -> str:
+        """Make a summary of this field that will fit nicely in a table."""
         return make_str(
             [
                 (f"{self.name}", 24),
@@ -201,19 +224,46 @@ class ConfigurationField:
         return self.to_string(markdown=False)
 
 
-def check_list_type(values: list, expected_type: Type[_T], non_empty: bool = False):
-    """Check that every element in the given list has the expected type.
-    Raise a TypeError if that's not the case.
-    If the list is 'None', it's always correct."""
+# class LastUpdatedOrderedDict(OrderedDict):
+#     "Store items in the order the keys were last added"
 
-    if values is not None and len(values) == 0 and non_empty:
-        raise ValueError(f"List should not be empty! {values}")
+#     def __setitem__(self, key, value):
+#         super().__setitem__(key, value)
+#         self.move_to_end(key)
 
-    if values is not None and not all(isinstance(v, expected_type) for v in values):
-        raise TypeError(f"Expected type list of {expected_type}, got {[type(v) for v in values]}")
+
+def sort_fields_by_dependency(fields: list[ConfigurationField]) -> list[ConfigurationField]:
+    # fields_dict: dict[ConfigurationField] = LastUpdatedOrderedDict()
+    sorted_fields: list[ConfigurationField] = []
+    remainder: list[ConfigurationField] = []
+    for f in fields:
+        # if f.name in fields_dict:
+        #     raise ConfigValueError(f"Duplicate field name {f.name}")
+        if f.dependency is None:
+            sorted_fields.append(f)
+            # fields_dict[f.name] = f
+        else:
+            remainder.append(f)
+
+    for f in remainder:
+        # if f.dependency[0] not in fields_dict:
+        #     raise ConfigValueError(f"Field {f.name} depends on a field that does not exist {f.dependency[0]}")
+        # fields_dict[f.name] = f
+        sorted_fields.append(f)
+
+    return sorted_fields
+    # return [f for _, f in fields_dict.items()]
 
 
 class ConfigurationSchema:
+    """A description of the options that can be configured in a config file. This descriptions includes
+    option names, their default value, the range of acceptable values and some basic dependency between
+    options.
+
+    The schema is loaded from a JSON description. Each option is associated with a section; the JSON file
+    may have a list of sections, each containig a list of fields, or it can have a single list of fields,
+    each with an associated section name.
+    """
 
     def __init__(self, json_str: str):
         try:
@@ -222,10 +272,10 @@ class ConfigurationSchema:
             raise ValueError("The configuration schema file is badly formatted. It must be a valid JSON file") from e
 
         self.version = self.__get_attribute("version", format_obj, str)
-        sections = self.__get_attribute("sections", format_obj, list, optional=True)
-        field_list = self.__get_attribute("fields", format_obj, list, optional=True)
+        sections = self.__get_attribute("sections", format_obj, dict, optional=True, is_list=True)
+        field_list = self.__get_attribute("fields", format_obj, dict, optional=True, is_list=True)
 
-        fields = []
+        fields: list[ConfigurationField] = []
         if sections is not None:
             for s in sections:
                 fields.extend(self.__extract_section(s))
@@ -233,136 +283,102 @@ class ConfigurationSchema:
         if field_list is not None:
             fields.extend([self.__extract_field(f) for f in field_list])
 
-        # Sort fields for dependency (also check if they make sense)
-        self.fields: list[ConfigurationField] = []
-        self.fields = fields
+        self.fields = sort_fields_by_dependency(fields)
 
     def __get_attribute(
-        self, attribute_name: str, attributes: dict[str, _T], return_type: Type[_T], optional: bool = False
+        self,
+        attribute_name: str,
+        attributes: dict[str, _T],
+        attribute_type: Type[_T],
+        optional: bool = False,
+        is_list: bool = False,
     ) -> Optional[_T]:
-        """Retrieve an attribute from the given dictionary and verify that it has the specified type."""
-        try:
-            attribute = attributes[attribute_name]
-            if not isinstance(attribute, return_type):
-                raise TypeError(f"Expected type {return_type} for '{attribute_name}', but got {type(attribute)}")
-        except KeyError as e:
+        """Retrieve an attribute from the given dictionary as the specified type. Raise an exception if
+        the attribute does not exist (if not optional) or if it cannot be converted to the specified type."""
+
+        if attribute_name not in attributes:
             if not optional:
-                raise KeyError(f"'{attribute_name}' field not found in the dictionary {attributes}") from e
+                raise KeyError(f"'{attribute_name}' field not found in the dictionary {attributes}")
             return None
 
-        return attribute
+        attribute = attributes[attribute_name]
+
+        # Evaluate expression from string, if appropriate
+        if isinstance(attribute, str) and not issubclass(attribute_type, str):
+            return attribute_type(eval_expr(attribute))
+
+        # Convert to list, if necessary
+        if is_list:
+            if not isinstance(attribute, list):
+                attribute = [attribute]
+            if issubclass(attribute_type, list):
+                return attribute
+            return [attribute_type(a) for a in attribute]
+
+        return attribute_type(attribute)
 
     def __extract_section(self, section: dict) -> list[ConfigurationField]:
-        name = self.__get_attribute("name", section, str)
-        field_list = self.__get_attribute("fields", section, list)
-        fields = [self.__extract_field(f, name) for f in field_list]
+        """Extract all fields from the given section"""
+        section_name = self.__get_attribute("name", section, str)
+        field_list = self.__get_attribute("fields", section, dict, is_list=True)
+        fields = [self.__extract_field(f, section_name) for f in field_list]
 
         return fields
 
     def __get_range(self, field: dict, return_type: Type[_Numerical]) -> ConfigFieldRange:
+        """Extract the valid range of values for the given field."""
         min_value = self.__get_attribute("min", field, return_type, optional=True)
         max_value = self.__get_attribute("max", field, return_type, optional=True)
-        selectables = self.__get_attribute("selectables", field, list, optional=True)
-        check_list_type(selectables, return_type, non_empty=True)
+        selectables = self.__get_attribute("selectables", field, return_type, optional=True, is_list=True)
 
         return ConfigFieldRange(min_value, max_value, selectables)
 
-    def __parse_numerical_field(
-        self, field: dict, return_type: Type[_Numerical]
-    ) -> tuple[Optional[_Numerical], Type[_Numerical], Callable[[_Numerical], bool]]:
-        field_default = self.__get_attribute("default", field, return_type, optional=True)
-        valid_range = self.__get_range(field, return_type)
-
-        return field_default, return_type, valid_range
-
-    def __parse_bool_field(
-        self, field: dict
-    ) -> tuple[Optional[bool], bool, Callable[[Any], bool], Callable[[int], bool]]:
-        field_default = self.__get_attribute("default", field, bool, optional=True)
-
-        def transform(value: int) -> bool:
-            return bool(value)
-
-        if field_default is not None:
-            field_default = transform(field_default)
-
-        return field_default, bool, transform
-
-    def __parse_str_field(self, field: dict, case_sensitive: bool) -> tuple[Optional[str], str, Callable[[str], bool]]:
-        field_default = self.__get_attribute("default", field, str, optional=True)
-        valid_range = self.__get_range(field, str)
-        if not case_sensitive:
-            if field_default is not None:
-                field_default = field_default.lower()
-            if valid_range.selectables is not None:
-                valid_range.selectables = [selectable.lower() for selectable in valid_range.selectables]
-
-        def transform(value: str) -> str:
-            if not case_sensitive:
-                return value.lower()
-
-            return value
-
-        t = CaseSensitiveStr if case_sensitive else str
-
-        return field_default, t, valid_range, transform
-
-    def __parse_numerical_list_field(
-        self, field: dict, return_type: Type[_Numerical]
-    ) -> tuple[Optional[List[_Numerical]], Type[List[_Numerical]], Callable[[List[_Numerical]], bool]]:
-        field_default = self.__get_attribute("default", field, list, optional=True)
-        check_list_type(field_default, return_type)
-        valid_range = self.__get_range(field, return_type)
-
-        return field_default, List[return_type], valid_range
-
     def __extract_field(self, field: dict, field_section: str = "") -> ConfigurationField:
+        """Extract a single field from the given set."""
         field_name = self.__get_attribute("name", field, str)
         if field_section == "":
             field_section = self.__get_attribute("section", field, str)
         field_type_value = self.__get_attribute("type", field, str)
-        field_default: Optional[OptionType] = None
-        field_type: Type[OptionType]
-        transform: Callable[[OptionType], OptionType] = lambda x: x
+
+        # Available types (some with multiple aliases)
+        classes = {
+            "int": int,
+            "float": float,
+            "float32": numpy.float32,
+            "float64": float,
+            "angle24": angle24,
+            "bool": bool,
+            "case-sensitive-str": CaseSensitiveStr,
+            "cs-str": CaseSensitiveStr,
+            "lower-case-str": LowerCaseStr,
+            "lc-str": LowerCaseStr,
+            "str": LowerCaseStr,
+        }
+        if field_type_value[:5] == "list-":
+            is_list = True
+            field_type = classes[field_type_value[5:]]
+        else:
+            is_list = False
+            field_type = classes[field_type_value]
 
         try:
-            match field_type_value:
-                case "int":
-                    field_default, field_type, valid_range = self.__parse_numerical_field(field, int)
-                case "float" | "float64":
-                    field_default, field_type, valid_range = self.__parse_numerical_field(field, float)
-                case "float32":
-                    field_default, field_type, valid_range = self.__parse_numerical_field(field, numpy.float32)
-                case "angle24":
-                    field_default, field_type, valid_range = self.__parse_numerical_field(field, TAngle24)
-                case "bool":
-                    field_default, field_type, transform = self.__parse_bool_field(field)
-                    valid_range = ConfigFieldRange()
-                case "case-sensitive-str":
-                    field_default, field_type, valid_range, transform = self.__parse_str_field(field, True)
-                case "str":
-                    field_default, field_type, valid_range, transform = self.__parse_str_field(field, False)
-                case "list-int":
-                    field_default, field_type, valid_range = self.__parse_numerical_list_field(field, int)
-                case "list-float":
-                    field_default, field_type, valid_range = self.__parse_numerical_list_field(field, float)
-                case _:
-                    raise ValueError(f"The type '{field_type_value}' of field '{field_name}' is not valid")
+            field_default = self.__get_attribute("default", field, field_type, optional=True, is_list=is_list)
+            valid_range = self.__get_range(field, field_type)
+
+            dependency = None
+            dep = self.__get_attribute("dependency", field, dict, optional=True)
+            if dep is not None:
+                dep_field = self.__get_attribute("name", dep, str)
+                dep_values = self.__get_attribute("values", dep, list, is_list=True)
+                dependency = dep_field, dep_values
+
+            description = self.__get_attribute("description", field, str, optional=True)
 
         except Exception as e:
             raise ValueError(f"Field {field_name}") from e
 
-        dependency = None
-        dep = self.__get_attribute("dependency", field, dict, optional=True)
-        if dep is not None:
-            dep_field = self.__get_attribute("name", dep, str)
-            dep_values = self.__get_attribute("values", dep, list)
-            dependency = dep_field, dep_values
-
-        description = self.__get_attribute("description", field, str, optional=True)
-
         return ConfigurationField(
-            field_name, field_section, field_default, field_type, valid_range, dependency, description
+            field_name, field_section, field_default, field_type, is_list, valid_range, dependency, description
         )
 
     def to_string(self, markdown: bool = False):

@@ -27,17 +27,8 @@ class Configuration:
 
         self.parser.read_string(self.config_content)
 
-        for field in [field for field in schema.fields if field.dependency is None]:
-            try:
-                self._get_option(field)
-            except Exception as e:
-                raise ValueError(f"Error reading option {field.name}") from e
-
-        for field in [field for field in schema.fields if field.dependency is not None]:
-            try:
-                self._get_option(field)
-            except Exception as e:
-                raise ValueError(f"Error reading option {field.name}") from e
+        for field in schema.fields:
+            self._get_option(field)
 
         self.state_version = schema.version
 

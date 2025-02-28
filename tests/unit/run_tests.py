@@ -10,6 +10,7 @@ sys.path.append(main_project_dir)
 sys.path.append(main_module_dir)
 
 from tests.unit.common.test_configuration import ConfigurationTestCases
+from tests.unit.common.test_angle24 import Angle24TestCase
 from tests.unit.compiler.test_compilation import CompilationTestCases, CompilationGPUTestCases
 from tests.unit.output.test_state import StateTestCases
 from tests.unit.restart.test_restart import Euler2DRestartTestCase
@@ -44,9 +45,14 @@ def load_tests():
     suite.addTest(StateTestCases("test_save_load_works"))
     suite.addTest(Euler2DRestartTestCase("test_gen_restart"))
     suite.addTest(Euler2DRestartTestCase("test_read_restart"))
+
     suite.addTest(ConfigurationTestCases("test_load_configuration_with_schema_default"))
     suite.addTest(ConfigurationTestCases("test_load_configuration_with_valid_values"))
+    suite.addTest(ConfigurationTestCases("test_load_configuration_with_invalid_values"))
     suite.addTest(ConfigurationTestCases("test_load_configuration_with_dependency"))
+
+    suite.addTest(Angle24TestCase("test_cyclic"))
+    suite.addTest(Angle24TestCase("test_rounding"))
 
     return suite
 

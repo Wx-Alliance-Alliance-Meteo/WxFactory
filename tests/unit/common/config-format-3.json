@@ -1,0 +1,19 @@
+{
+    "version": "0.1",
+    "fields": [
+        {
+            "name": "x",
+            "section": "variable",
+            "type": "int"
+        },
+        {
+            "name": "y",
+            "section": "variable",
+            "type": "int",
+            "dependency": {
+                "name": "x",
+                "values": [1, 2, 3]
+            }
+        }
+    ]
+}

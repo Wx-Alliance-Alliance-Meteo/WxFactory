@@ -22,13 +22,14 @@ WxFactory was built for Python 3.11 (at least).  It also requires an MPI impleme
 * `pybind11` Library to expose C++/Python types to each other
 * `netcdf4` Python/NumPy interface to the netCDF C library (MPI version)
 * `matplotlib` A python plotting library, making publication quality plots
+* `setuptools` To compile C++/CUDA portions of WxFactory
+* `cupy`   [Somewhat optional] If you want to be able to run on GPU (can install `cupy-cuda11x` or `cupy-cuda12x` for precompiled module)
 
 ### Other libraries
 * `netcdf4` Library to handle netCDF files. There is an MPI version of it, if you want parallel output
 * `sqlite` To be able to store solver stats.
 
 ### Optional
-* `cupy`     If you want to be able to run on GPU (can install `cupy-cuda11x` or `cupy-cuda12x` for precompiled module)
 * `cartopy`  A cartographic python library with matplotlib support for visualisation
 * `tqdm`     Progress bar when generating matrices
 * `snakeviz` A tool for visualizing profiling output
