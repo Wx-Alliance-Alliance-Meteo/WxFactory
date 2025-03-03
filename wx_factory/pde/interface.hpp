@@ -14,7 +14,7 @@ struct var
 
   HOST_DEVICE_SPACE operator num_t() const { return *value; }
 
-  HOST_DEVICE_SPACE num_t  operator*() const { return *value; }
+  HOST_DEVICE_SPACE num_t operator*() const { return *value; }
   HOST_DEVICE_SPACE num_t& operator*() { return *value; }
 
   HOST_DEVICE_SPACE void move_index(const int64_t index_change) { value += index_change; }
@@ -36,7 +36,7 @@ struct var_multi
 {
   var<num_t> val[num_var];
 
-  HOST_DEVICE_SPACE num_t  operator[](int i) const { return *val[i]; }
+  HOST_DEVICE_SPACE num_t operator[](int i) const { return *val[i]; }
   HOST_DEVICE_SPACE num_t& operator[](int i) { return *val[i]; }
 
   HOST_DEVICE_SPACE var_multi(num_t* field, const size_t index, const size_t stride) {
@@ -211,6 +211,79 @@ struct forcing_params
     h.move_index(diff);
     christoffel.move_index(diff);
     forcing.move_index(diff);
+  }
+};
+
+
+template <typename real_t, typename num_t>
+struct kernel_params_cubedsphere
+{
+  size_t index = std::numeric_limits<size_t>::max();
+
+  euler_state_3d<const num_t> q;
+  var<const real_t>           sqrt_g;
+  var_multi<const real_t, 9>  h;
+
+  euler_state_3d<num_t> flux[3];
+  var<const num_t>      pressure;
+  euler_state_3d<num_t> wflux_adv[3];
+  euler_state_3d<num_t> wflux_pres[3];
+  var<const num_t>      logp;
+
+  HOST_DEVICE_SPACE kernel_params_cubedsphere(
+      const num_t*  q,      //!< Pointer to the various fields (each variable is grouped)
+      const real_t* sqrt_g, //!< Pointer to sqrt_g values for all points
+      const real_t* h, //!< Pointer to h contravariant values for all points (6 arrays)
+      const size_t  index,  //!< Index of the grid point whose state we want to access
+      const size_t  stride, //!< How many entries in the input array for each variable
+      num_t*        flux_x1,
+      num_t*        flux_x2,
+      num_t*        flux_x3,
+      num_t*        pressure,
+      num_t*        wflux_adv_x1,
+      num_t*        wflux_adv_x2,
+      num_t*        wflux_adv_x3,
+      num_t*        wflux_pres_x1,
+      num_t*        wflux_pres_x2,
+      num_t*        wflux_pres_x3,
+      num_t*        logp) :
+      index(index),
+      q(q, index, stride),
+      sqrt_g(sqrt_g, index),
+      h(h, index, stride),
+      flux{
+          euler_state_3d<num_t>(flux_x1, index, stride),
+          euler_state_3d<num_t>(flux_x2, index, stride),
+          euler_state_3d<num_t>(flux_x3, index, stride)},
+      pressure(pressure, index),
+      wflux_adv{
+          euler_state_3d<num_t>(wflux_adv_x1, index, stride),
+          euler_state_3d<num_t>(wflux_adv_x2, index, stride),
+          euler_state_3d<num_t>(wflux_adv_x3, index, stride)},
+      wflux_pres{
+          euler_state_3d<num_t>(wflux_adv_x1, index, stride),
+          euler_state_3d<num_t>(wflux_adv_x2, index, stride),
+          euler_state_3d<num_t>(wflux_adv_x3, index, stride)},
+      logp(logp, index) {}
+
+  DEVICE_SPACE void set_index(const size_t new_index) {
+    const size_t  old_index = index;
+    const int64_t diff      = static_cast<int64_t>(new_index) - old_index;
+    index                   = new_index;
+    q.move_index(diff);
+    sqrt_g.move_index(diff);
+    h.move_index(diff);
+    flux[0].move_index(diff);
+    flux[1].move_index(diff);
+    flux[2].move_index(diff);
+    pressure.move_index(diff);
+    wflux_adv[0].move_index(diff);
+    wflux_adv[1].move_index(diff);
+    wflux_adv[2].move_index(diff);
+    wflux_pres[0].move_index(diff);
+    wflux_pres[1].move_index(diff);
+    wflux_pres[2].move_index(diff);
+    logp.move_index(diff);
   }
 };
 
