@@ -35,7 +35,7 @@ from common import Configuration, ConfigurationSchema, default_schema_path, read
 from common.definitions import idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_w
 from device import Device, CpuDevice, CudaDevice
 from process_topology import ProcessTopology
-from wx_mpi import do_once
+from wx_mpi import do_once, SingleProcess, Conditional
 
 
 class Simulation:
@@ -49,7 +49,9 @@ class Simulation:
     it entirely.
     """
 
-    def __init__(self, config: Configuration | str, comm: MPI.Comm = MPI.COMM_WORLD) -> None:
+    def __init__(
+        self, config: Configuration | str, comm: MPI.Comm = MPI.COMM_WORLD, print_allowed_pe_counts: bool = False
+    ) -> None:
         """Create a Simulation object from a certain configuration.
 
         :type config: Configuration | str
@@ -72,6 +74,24 @@ class Simulation:
 
         if self.rank == 0:
             print(f"{self.config}", flush=True)
+
+        self.allowed_pe_counts = (
+            [
+                i**2 * 6
+                for i in range(1, max(self.config.num_elements_horizontal_total // 2 + 1, 2))
+                if (self.config.num_elements_horizontal_total % i) == 0
+            ]
+            if self.config.grid_type == "cubed_sphere"
+            else 1
+        )
+
+        with SingleProcess() as s, Conditional(s):
+            if print_allowed_pe_counts:
+                print(
+                    f"Can use the following number of processes to run this configuration:\n"
+                    f"  {self.allowed_pe_counts}"
+                )
+                raise SystemExit(0)
 
         self._adjust_num_elements()
         self.device = self._make_device()
@@ -191,16 +211,11 @@ class Simulation:
         number *per processor*."""
         if self.config.grid_type == "cubed_sphere":
             # Determine what processor counts are allowed: must be equal to 6 * N^2 for some integer N.
-            allowed_pe_counts = [
-                i**2 * 6
-                for i in range(1, max(self.config.num_elements_horizontal_total // 2 + 1, 2))
-                if (self.config.num_elements_horizontal_total % i) == 0
-            ]
-            if self.comm.size not in allowed_pe_counts:
+            if self.comm.size not in self.allowed_pe_counts:
                 raise ValueError(
                     f"Invalid number of processors for this particular "
                     f"problem size ({self.config.num_elements_horizontal_total} elements per side). "
-                    f"Allowed counts are {allowed_pe_counts}"
+                    f"\nAllowed counts are {self.allowed_pe_counts}"
                 )
 
             num_pe_per_tile = self.comm.size // 6
@@ -212,7 +227,7 @@ class Simulation:
                         f"Adjusting horizontal number of elements from {self.config.num_elements_horizontal_total} "
                         f"(total) to {self.config.num_elements_horizontal} (per PE)"
                     )
-                print(f"allowed_pe_counts = {allowed_pe_counts}")
+                print(f"allowed_pe_counts = {self.allowed_pe_counts}")
 
     def _create_geometry(self) -> Geometry:
         """Create the appropriate geometry for the given problem"""

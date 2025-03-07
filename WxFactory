@@ -67,6 +67,11 @@ def main():
             nargs="?",
             help="List all possible configuration options and stop",
         )
+        parser.add_argument(
+            "--allowed_proc_count",
+            action="store_true",
+            help="Print number of processes that can run the given configuration (then exit)",
+        )
 
         args = parser.parse_args()
 
@@ -94,7 +99,7 @@ def main():
             numpy.seterr(all="raise")
 
         # Initialize simulation
-        sim = Simulation(args.config)
+        sim = Simulation(args.config, print_allowed_pe_counts=args.allowed_proc_count)
 
         # This is the actual run
         sim.run()
@@ -129,10 +134,11 @@ def main():
                 sys.exit(130)
 
             if rank == 0:
-                print(f"There was an error while running GEF. Only rank 0 is printing the traceback:")
+                if not isinstance(e, SystemExit):
+                    print(f"There was an error while running GEF. Only rank 0 is printing the traceback:")
                 raise e
 
-            sys.exit(-1)
+            raise SystemExit
 
 
 if __name__ == "__main__":
