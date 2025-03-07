@@ -12,6 +12,7 @@ except ModuleNotFoundError:
     print(f"No sqlite, won't be able to print solver stats")
 
 from common.configuration import Configuration
+from device import Device, CpuDevice, CudaDevice
 from precondition.multigrid import Multigrid
 from wx_mpi import SingleProcess, Conditional
 
@@ -26,7 +27,7 @@ class Column:
 
 
 class ColumnSet:
-    def __init__(self, param: Configuration, num_procs: int) -> None:
+    def __init__(self, param: Configuration, num_procs: int, backend: str) -> None:
         self.run_id = Column("int", -1)
         self.step_id = Column("int", 0)
         self.dg_order = Column("int", param.num_solpts)
@@ -55,6 +56,7 @@ class ColumnSet:
         self.num_solver_it = Column("int")
         self.solver_time = Column("float")
         self.solver_flag = Column("int")
+        self.backend = Column("varchar(64)", backend)
 
         default_radii = (
             "" if not hasattr(param, "exp_smoothe_spectral_radii") else str(param.exp_smoothe_spectral_radii)
@@ -86,20 +88,22 @@ class ColumnSet:
 class SolverStatsOutput:
     """Contains necessary info to store solver stats into a SQL database"""
 
-    def __init__(self, param: Configuration, comm: MPI.Comm = MPI.COMM_WORLD) -> None:
+    def __init__(self, param: Configuration, device: Device) -> None:
         """Connect to the DB file and create (if necessary) the tables. Only 1 PE will perform DB operations."""
 
-        self.comm = comm
+        self.comm = device.comm
 
         # Only 1 PE will connect to the DB and log solver stats
-        self.is_writer = comm.rank == 0
+        self.is_writer = self.comm.rank == 0
         if not (sqlite_available and self.is_writer):
-            if comm.allreduce(0) != 0:
+            if self.comm.allreduce(0) != 0:
                 raise ValueError("Seems like init failed on root PE...")
             return
 
+        backend = "cuda" if isinstance(device, CudaDevice) else "cpu"
+
         self.param = _sanitize_params(param)
-        self.columns = ColumnSet(self.param, comm.size)
+        self.columns = ColumnSet(self.param, self.comm.size, backend)
         self.param_table = "results_param"
 
         self.columns.run_id.value = -1
@@ -112,11 +116,11 @@ class SolverStatsOutput:
             self.db_connection = sqlite3.connect(self.db)
             self.db_cursor = self.db_connection.cursor()
             self.create_results_table()
-            comm.allreduce(0)
+            self.comm.allreduce(0)
 
         except sqlite3.OperationalError:
             # Signal failure to the other PEs
-            comm.allreduce(1)
+            self.comm.allreduce(1)
             raise
 
     def create_results_table(self):

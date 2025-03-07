@@ -75,7 +75,7 @@ class OutputManager:
         self.output_dir = s.return_value
 
         if self.config.store_solver_stats > 0:
-            self.solver_stats_output = SolverStatsOutput(config, self.comm)
+            self.solver_stats_output = SolverStatsOutput(config, self.device)
 
         # Choose a file name hash based on a certain set of parameters:
         state_params = (

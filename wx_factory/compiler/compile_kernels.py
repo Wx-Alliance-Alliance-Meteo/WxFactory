@@ -136,10 +136,6 @@ def compile(kernel_type: str):
 
             abs_mirror = os.path.join(main_project_dir, kernel_cpp_mirror)
 
-            if os.path.exists(abs_mirror):
-                os.remove(abs_mirror)
-
-            os.symlink(os.path.join(main_project_dir, lib), abs_mirror)
         case "cuda":
             ext_cuda = Extension(
                 prefix,
@@ -159,10 +155,15 @@ def compile(kernel_type: str):
 
             abs_mirror = os.path.join(main_project_dir, kernel_cuda_mirror)
 
-            if os.path.exists(abs_mirror):
-                os.remove(abs_mirror)
-
-            os.symlink(os.path.join(main_project_dir, lib), abs_mirror)
+    # Create symlink to compiled library. If the link already exists, make sure there is no
+    # moment where it's absent (this is why we do the link with another name, then move it to the correct name)
+    try:
+        abs_mirror_tmp = abs_mirror + ".tmp"
+        os.symlink(os.path.join(main_project_dir, lib), abs_mirror_tmp)
+        os.rename(abs_mirror_tmp, abs_mirror)
+    except FileExistsError:
+        # That's OK, it's (hopefully) because someone else has made the link
+        pass
 
 
 __all__ = ["compile", "clean"]
