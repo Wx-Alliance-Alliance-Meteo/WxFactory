@@ -85,7 +85,7 @@ class Simulation:
             else 1
         )
 
-        with SingleProcess() as s, Conditional(s):
+        with SingleProcess(self.comm) as s, Conditional(s):
             if print_allowed_pe_counts:
                 print(
                     f"Can use the following number of processes to run this configuration:\n"
