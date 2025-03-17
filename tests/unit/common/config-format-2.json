@@ -73,6 +73,24 @@
             "type": "angle24",
             "default": 0,
             "min": "-pi/2"
+        },
+        {
+            "name": "bool1",
+            "section": "bool",
+            "type": "bool",
+            "default": 0
+        },
+        {
+            "name": "bool2",
+            "section": "bool",
+            "type": "bool",
+            "default": 1
+        },
+        {
+            "name": "bool3",
+            "section": "bool",
+            "type": "bool",
+            "default": 1
         }
     ]
 }

@@ -33,6 +33,11 @@ class LowerCaseStr(str):
 
 LowerCaseStr.__name__ = "lc-str"
 
+
+def str_to_bool(val: str):
+    return bool(int(val))
+
+
 OptionType = TypeVar("OptionType", bound=Union[str, CaseSensitiveStr, int, float, List[int], List[float], bool])
 _T = TypeVar("T", str, dict, list)
 _Numerical = TypeVar("Numerical", bound=Union[int, float])
@@ -347,7 +352,7 @@ class ConfigurationSchema:
             "float32": numpy.float32,
             "float64": float,
             "angle24": angle24,
-            "bool": bool,
+            "bool": str_to_bool,
             "case-sensitive-str": CaseSensitiveStr,
             "cs-str": CaseSensitiveStr,
             "lower-case-str": LowerCaseStr,

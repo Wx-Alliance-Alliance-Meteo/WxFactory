@@ -43,6 +43,9 @@ class ConfigurationTestCases(unittest.TestCase):
         self.assertListEqual(conf.intlist5, [-1])
         self.assertListEqual(conf.intlist6, [0, 2])
         self.assertEqual(conf.string1, "1")
+        self.assertFalse(conf.bool1)
+        self.assertFalse(conf.bool2)
+        self.assertTrue(conf.bool3)
 
     def test_load_configuration_with_invalid_values(self):
         schema = ConfigurationSchema(readfile(os.path.join(config_test_dir, "config-format-2.json")))
