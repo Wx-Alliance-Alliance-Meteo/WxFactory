@@ -22,7 +22,7 @@ except ModuleNotFoundError:
         return a
 
 
-from device import Device, get_default_device
+from device import Device
 from .matvec import MatvecOp
 
 
@@ -41,7 +41,7 @@ def gen_matrix(
     :param jac_file_name: If present, path to the file where the jacobian will be stored
     """
     if device is None:
-        device = get_default_device()
+        device = Device.get_default()
 
     xp = device.xp
 

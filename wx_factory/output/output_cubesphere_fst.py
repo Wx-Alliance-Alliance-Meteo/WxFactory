@@ -87,18 +87,6 @@ class OutputCubesphereFst(OutputCubesphere):
             for r in self.file:
                 print(f"record: {r}")
 
-            # print(
-            #     f"pi/2:   0x{angle24.encode(math.pi/2):x} ({angle24.decode(0x0) + math.pi/2})\n"
-            #     f"3pi/8:  0x{angle24.encode(3*math.pi/8):x} ({angle24.decode(0xe00000) - 3*math.pi/8})\n"
-            #     f"pi/4:   0x{angle24.encode(math.pi/4):x} ({angle24.decode(0xc00000) - math.pi/4})\n"
-            #     f"pi/8:   0x{angle24.encode(math.pi/8):x} ({angle24.decode(0xa00000) - math.pi/8})\n"
-            #     f"0:      0x{angle24.encode(0.):x} ({angle24.decode(0x800000)})\n"
-            #     f"-pi/8:  0x{angle24.encode(-math.pi/8):x} ({angle24.decode(0x600000) + math.pi/8})\n"
-            #     f"-pi/4:  0x{angle24.encode(-math.pi/4):x} ({angle24.decode(0x400000) + math.pi/4})\n"
-            #     f"-3pi/8: 0x{angle24.encode(-3*math.pi/8):x} ({angle24.decode(0x200000) + 3*math.pi/8})\n"
-            #     f"-pi/2:  0x{angle24.encode(-math.pi/2):x} ({angle24.decode(0x0) + math.pi/2})\n"
-            # )
-
             _, nj, ni = lon.shape[:3]
             self.ni = ni
             self.nj = nj * 6
@@ -106,7 +94,7 @@ class OutputCubesphereFst(OutputCubesphere):
             print(f" nijk: {self.ni}, {self.nj}, {self.nk}")
             # If we pass the file when creating the georef, it will read the axes from it (if available)
             self.georef = georef.TGeoRef(self.ni, self.nj, "C", self.ig1, self.ig2, self.ig3, self.ig4, file=self.file)
-            self.georef.define_axes(lon, lat)
+            # self.georef.define_axes(lon, lat)
             self.georef.write("my_grid", self.file)
 
     def _get_writable(self, a, num_dim):
@@ -150,7 +138,7 @@ class OutputCubesphereFst(OutputCubesphere):
 
             with SingleProcess() as s, Conditional(s):
                 h_rec = self._make_record("h", step_id, h)
-                self.file.write(h_rec)
+                self.file.write(h_rec, rewrite=0)
 
         else:
             raise ValueError(f"Unknown grid type {type(self.geometry)}")

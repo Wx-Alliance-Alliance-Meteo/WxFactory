@@ -430,7 +430,7 @@ void select_forcing_euler_cubesphere_3d(
   }
 }
 
-PYBIND11_MODULE(interface_cuda, m) {
+PYBIND11_MODULE(pde_cuda, m) {
   // Pointwise fluxes
   m.def("pointwise_eulercartesian_2d", &select_pointwise_eulercartesian_2d);
 

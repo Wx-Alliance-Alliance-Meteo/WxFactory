@@ -3,42 +3,39 @@ Code to compile the kernels
 """
 
 from glob import glob
+import importlib
+import itertools
 import os
+import re
 import shutil
-import sys
+from types import ModuleType
 
+from mpi4py import MPI
 import pybind11
 from setuptools.command.build_ext import build_ext
 from setuptools import setup, Extension
 
 from common import main_project_dir
-
-library_directory = os.path.join(main_project_dir, "lib")
-build_directory = os.path.join(library_directory, "build")
-
-pde_src_directory = "wx_factory/pde"  # Must be relative
-pde_build_directory = os.path.join(build_directory, pde_src_directory)
-pde_lib_directory = os.path.join(library_directory, "pde")
-kernel_cpp_mirror = os.path.join(pde_lib_directory, "interface_c.so")
-kernel_cuda_mirror = os.path.join(pde_lib_directory, "interface_cuda.so")
+from wx_mpi import SingleProcess, Conditional
 
 
-class default_build_ext(build_ext):
-    """
-    Class to change the build directory
-    """
+proc_id_re = re.compile(r"\b\d{4,10}\b")  # At least 4 digits, surrounded by whitespace
+proc_vendor_re = re.compile(r"\b(intel|amd)\b")
 
-    def initialize_options(self):
-        super().initialize_options()
-        self.build_lib = library_directory
-        self.build_base = build_directory
-        self.build_temp = build_directory
+base_library_directory = os.path.join(main_project_dir, "lib")
+base_build_directory = os.path.join(base_library_directory, "build")
+base_module_dir = "wx_factory"
+
+cpp_compile_flags = "-Wall -shared -std=c++11 -fPIC".split(" ")
+cuda_compile_flags = "-O2 -shared -std=c++11 -Xcompiler -fPIC,-Wall".split(" ")
 
 
-class cuda_build_ext(default_build_ext):
-    """
-    Class to build cuda code
-    """
+class wx_build_ext(build_ext):
+    pass
+
+
+class cuda_build_ext(wx_build_ext):
+    """Define CUDA compiler and linker."""
 
     def build_extensions(self):
         self.compiler.src_extensions.append(".cu")
@@ -48,122 +45,163 @@ class cuda_build_ext(default_build_ext):
         build_ext.build_extensions(self)
 
 
-extra_compiler_args_cpp = "-Wall -shared -std=c++11 -fPIC".split(" ")
-extra_compiler_args_cuda = "-O2 -shared -std=c++11 -Xcompiler -fPIC -Xcompiler -Wall".split(" ")
-pybind_include = pybind11.get_include()
-header_files = glob(pde_src_directory + "/**/*.h", root_dir=main_project_dir, recursive=True) + glob(
-    pde_src_directory + "/**/*.hpp", root_dir=main_project_dir, recursive=True
-)
-cpp_files = glob(pde_src_directory + "/**/*.cpp", root_dir=main_project_dir, recursive=True)
-cuda_files = glob(pde_src_directory + "/**/*.cu", root_dir=main_project_dir, recursive=True)
+def _ext_name(module_name: str, kernel_type: str) -> str:
+    return f"{module_name}-{kernel_type}"
 
 
-def get_non_mirror_lib_path(prefix: str) -> str:
+def get_processor_name() -> str:
     """
-    Get the true path of a library
+    Get the name of the curent processor
 
-    :param prefix: library to search
-    :return: Path of the library
+    :return: The name of the processor, or empty string if the name cannot be found
     """
-    return glob(f"./lib/{prefix}*.so", root_dir=main_project_dir)[0]
+    cpu_info_filename = "/proc/cpuinfo"
+    cpu_info_field = "model name"
+
+    if not os.path.exists(cpu_info_filename):
+        return ""
+
+    with open(cpu_info_filename) as cpu_info:
+        for line in cpu_info:
+            if line.startswith(cpu_info_field):
+                lc = line.split(": ")[1].lower()
+                vendor = proc_vendor_re.search(lc).group()
+                num = proc_id_re.search(lc).group()
+                return f"{vendor}_{num}"
+
+            if line == "":
+                return ""
 
 
-def has_non_mirror_lib(prefix: str) -> bool:
-    """
-    Look to see if a library exists
+class WxExtension(Extension):
+    """Define where to find source files, headers, and where to put the module."""
+
+    def __init__(self, name, backend, suffix, build_ext_class, **kwargs):
+
+        source_dir = os.path.join(base_module_dir, name)
+        source_files = glob(source_dir + f"/**/*.{suffix}", root_dir=main_project_dir, recursive=True)
+        include_dirs = [pybind11.get_include()]
+        header_files = list(
+            itertools.chain.from_iterable(
+                glob(source_dir + f"/**/*.{s}", root_dir=main_project_dir, recursive=True) for s in ["h", "hpp"]
+            )
+        )
+
+        proc_name = get_processor_name()
+        self.build_dir = os.path.join(base_build_directory, name, backend)  # Specific directory for build files
+        self.build_temp = os.path.join(self.build_dir, "tmp")
+        self.lib_dir = os.path.join(base_library_directory, name, proc_name, backend)  # Where the lib file will end up
+
+        # Name of the module, relative to project root
+        self.output_module = f"lib.{name}.{proc_name}.{backend}.{_ext_name(name, backend)}"
+
+        self.build_ext_class = build_ext_class
+
+        super().__init__(
+            _ext_name(name, backend),
+            source_files,
+            include_dirs=include_dirs,
+            depends=header_files,
+            **kwargs,
+        )
+
+    def clean(self):
+        """Remove any product of the compilation (temporary or not)."""
+        for tree in [self.build_dir, self.lib_dir]:
+            if os.path.exists(tree):
+                shutil.rmtree(tree)
 
 
-    :param prefix: library to search
-    :return: True if the library exist
-    """
-    return len(glob(f"./lib/{prefix}*.so", root_dir=main_project_dir)) == 1
+class CppExtension(WxExtension):
+    """Define compilation flags for C++."""
+
+    def __init__(self, name, **kwargs):
+        super().__init__(name, "cpp", "cpp", wx_build_ext, extra_compile_args=cpp_compile_flags, **kwargs)
 
 
-def clean(kernel_type: str):
-    """
-    Clean a kernel specific files
+class CudaExtension(WxExtension):
+    """Define compilation flags for CUDA."""
 
-    :param kernel_type: Type of kernels to clean
-    """
-    if has_non_mirror_lib(f"kernels-{kernel_type}"):
-        os.remove(get_non_mirror_lib_path(f"kernels-{kernel_type}"))
-
-    match kernel_type:
-        case "cpp":
-            if os.path.exists(kernel_cpp_mirror):
-                os.remove(kernel_cpp_mirror)
-
-            abs_mirror = os.path.join(main_project_dir, kernel_cpp_mirror)
-        case "cuda":
-            if os.path.exists(kernel_cuda_mirror):
-                os.remove(kernel_cuda_mirror)
-
-            abs_mirror = os.path.join(main_project_dir, kernel_cuda_mirror)
-
-    if os.path.exists(build_directory):
-        shutil.rmtree(build_directory)
-
-    if os.path.exists(abs_mirror):
-        os.remove(abs_mirror)
+    def __init__(self, name, **kwargs):
+        super().__init__(
+            name,
+            "cuda",
+            "cu",
+            cuda_build_ext,
+            extra_compile_args=cuda_compile_flags,
+            **kwargs,
+        )
 
 
-def compile(kernel_type: str):
+# All the extensions we will want to build for running WxFactory
+_extensions: dict[str, WxExtension] = {
+    _ext_name("pde", "cpp"): CppExtension("pde"),
+    _ext_name("pde", "cuda"): CudaExtension("pde"),
+}
+
+
+def compile_extension(module_name: str, kernel_type: str):
     """
     Compile the kernels
 
-    :param kernel_type: Type of kernels to compile
+    :param module_name: Name of the module we want to compile
+    :param kernel_type: Type of kernel to compile (cpp or cuda)
     """
-    os.makedirs(pde_build_directory, exist_ok=True)
 
-    prefix = f"kernels-{kernel_type}"
-    match kernel_type:
-        case "cpp":
-            ext_cpp = Extension(
-                prefix,
-                cpp_files,
-                include_dirs=[pybind_include],
-                extra_compile_args=extra_compiler_args_cpp,
-                depends=header_files,
-            )
-            setup(
-                ext_modules=[ext_cpp],
-                script_args=["build_ext"],
-                cmdclass={"build_ext": default_build_ext},
-            )
-
-            lib = get_non_mirror_lib_path(prefix)
-            os.makedirs(os.path.join(pde_lib_directory), exist_ok=True)
-
-            abs_mirror = os.path.join(main_project_dir, kernel_cpp_mirror)
-
-        case "cuda":
-            ext_cuda = Extension(
-                prefix,
-                cuda_files,
-                include_dirs=[pybind_include],
-                extra_compile_args=extra_compiler_args_cuda,
-                depends=header_files,
-            )
-            setup(
-                ext_modules=[ext_cuda],
-                script_args=["build_ext"],
-                cmdclass={"build_ext": cuda_build_ext},
-            )
-
-            lib = get_non_mirror_lib_path(prefix)
-            os.makedirs(os.path.join(pde_lib_directory), exist_ok=True)
-
-            abs_mirror = os.path.join(main_project_dir, kernel_cuda_mirror)
-
-    # Create symlink to compiled library. If the link already exists, make sure there is no
-    # moment where it's absent (this is why we do the link with another name, then move it to the correct name)
-    try:
-        abs_mirror_tmp = abs_mirror + ".tmp"
-        os.symlink(os.path.join(main_project_dir, lib), abs_mirror_tmp)
-        os.rename(abs_mirror_tmp, abs_mirror)
-    except FileExistsError:
-        # That's OK, it's (hopefully) because someone else has made the link
-        pass
+    ext = get_extension(module_name, kernel_type)
+    if not os.path.exists(ext.build_dir):
+        os.makedirs(ext.build_dir, exist_ok=True)
+    setup(
+        ext_modules=[ext],
+        script_args=["build_ext"],
+        options={
+            "build": {
+                "build_lib": ext.lib_dir,
+                "build_base": ext.build_dir,
+                "build_temp": ext.build_temp,
+            }
+        },
+        cmdclass={"build_ext": ext.build_ext_class},
+    )
 
 
-__all__ = ["compile", "clean"]
+def compile(module_name: str, kernel_type: str, force: bool = False, comm: MPI.Comm = MPI.COMM_WORLD):
+    """
+    Compile the given module. This is a collective call, but only one process will actually perform the
+    compilation. All processes in the given communicator must call this function.
+
+    :param module_name: The module to compile
+    :param kernel_type: Type of kernels to compile [cpp, cuda]
+    :param force: Whether to force a rebuild of the module
+    :param comm: Communicator used by all processes calling this function
+    """
+    with SingleProcess(comm) as s, Conditional(s):
+        if force:
+            get_extension(module_name, kernel_type).clean()
+
+        compile_extension(module_name, kernel_type)
+
+
+def load_module(module_name: str, kernel_type: str) -> ModuleType:
+    """Import the given module. We don't verify here if it has been compiled.
+
+    :param module_name: The module to compile
+    :param kernel_type: Type of kernels to compile [cpp, cuda]
+    :return: The imported module
+    """
+    module_name = _extensions[_ext_name(module_name, kernel_type)].output_module
+    return importlib.import_module(module_name)
+
+
+def clean_all():
+    """Remove build files for every extension."""
+    for _, ext in _extensions.items():
+        ext.clean()
+
+
+def get_extension(module_name: str, kernel_type: str) -> WxExtension:
+    """Retrieve extension object from its name and kernel type."""
+    return _extensions[_ext_name(module_name, kernel_type)]
+
+
+__all__ = ["clean_all", "compile", "get_extension", "load_module"]

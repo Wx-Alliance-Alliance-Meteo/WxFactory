@@ -41,9 +41,6 @@ class OutputManager:
     Class that uniformizes different output methods
     """
 
-    final_function: Callable[[], None]
-    output_file_name: Callable[[int], str]
-
     def __init__(
         self,
         config: Configuration,
@@ -216,7 +213,8 @@ class OutputManager:
                 f" - Save state: {_readable_time(self.total_save_state_time)} "
                 f"({_readable_time(per_save)}/step)\n"
                 f" - Blockstats: {_readable_time(self.total_blockstat_time)} "
-                f"({_readable_time(per_blockstat)}/step)"
+                f"({_readable_time(per_blockstat)}/step)",
+                flush=True,
             )
 
     def __finalize__(self):

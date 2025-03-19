@@ -4,7 +4,7 @@ from typing import Callable, Optional
 from mpi4py import MPI
 from numpy import ndarray
 
-from device import Device, get_default_device
+from device import Device
 
 
 def kiops(
@@ -66,7 +66,7 @@ def kiops(
     """
 
     if device is None:
-        device = get_default_device()
+        device = Device.get_default()
     comm = device.comm
     xp = device.xp
 

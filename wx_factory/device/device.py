@@ -1,11 +1,12 @@
 from abc import ABC, abstractmethod
+import importlib
 from time import time
 from typing import Any, List, Optional, Tuple, TypeVar, Union
 
 from mpi4py import MPI
 from numpy.typing import NDArray
 
-from compiler.compile_utils import mpi_compile
+from compiler import compile_kernels
 from . import wx_cupy
 
 
@@ -25,12 +26,12 @@ class Device(ABC):
     :param libmodule: Module containing all the compiled code for this device
     """
 
-    def __init__(self, comm: MPI.Comm, xp, xalg, libmodule) -> None:
+    def __init__(self, comm: MPI.Comm, xp, xalg, pde_module) -> None:
         """Set a few modules and functions to have the same name, so that callers can use a single name."""
         self.comm = comm
         self.xp = xp
         self.xalg = xalg
-        self.libmodule = libmodule
+        self.pde = pde_module
 
     @abstractmethod
     def synchronize(self, **kwargs):
@@ -62,15 +63,21 @@ class Device(ABC):
         """Not all devices can perform 128 bits floating point operation"""
         return hasattr(self.xp, "float128")
 
+    @staticmethod
+    def get_default() -> "CpuDevice":
+        return CpuDevice.get_default()
+
 
 class CpuDevice(Device):
+    _default = None
+
     def __init__(self, comm: MPI.Comm = MPI.COMM_WORLD) -> None:
         import numpy
         import scipy
 
         try:
-            mpi_compile("cpp", force=False, comm=comm)
-            from lib.pde import interface_c
+            compile_kernels.compile("pde", "cpp", force=False, comm=comm)
+            pde = compile_kernels.load_module("pde", "cpp")
         except (ModuleNotFoundError, SystemExit):
             if comm.rank == 0:
                 print(f"Unable to find the interface_c module. You need to compile it.", flush=True)
@@ -79,7 +86,11 @@ class CpuDevice(Device):
             print(f"Unknown exception!", flush=True)
             raise
 
-        super().__init__(comm, numpy, scipy, interface_c)
+        super().__init__(comm, numpy, scipy, pde)
+
+        # If there is no default device yet, set it to self
+        if CpuDevice._default is None and comm == MPI.COMM_WORLD:
+            CpuDevice._default = self
 
     def synchronize(self, **kwargs):
         """Don't do anything. This is to allow writing generic code when device is not the same as the host."""
@@ -104,8 +115,15 @@ class CpuDevice(Device):
         intervals.append(timestamps[-1] - timestamps[0])
         return intervals
 
+    @staticmethod
+    def get_default() -> "CpuDevice":
+        if CpuDevice._default is None:
+            CpuDevice._default = CpuDevice()
+        return CpuDevice._default
+
 
 class CudaDevice(Device):
+    _default = None
 
     def __init__(self, comm: MPI.Comm = MPI.COMM_WORLD, device_list: Optional[List[int]] = None) -> None:
         # Delay imports, to avoid loading CUDA if not asked
@@ -120,9 +138,9 @@ class CudaDevice(Device):
 
         # Get compiled library
         try:
-            mpi_compile("cuda", force=False, comm=comm)
-            import lib.pde.interface_cuda as interface_cuda
-        except (ModuleNotFoundError, SystemExit):
+            compile_kernels.compile("pde", "cuda", force=False, comm=comm)
+            pde = compile_kernels.load_module("pde", "cuda")
+        except (ModuleNotFoundError, ImportError, SystemExit):
             if comm.rank == 0:
                 print(
                     f"Unable to load the interface_cuda module, you need to compile it if you want to use the GPU",
@@ -134,7 +152,7 @@ class CudaDevice(Device):
             raise
 
         # Set members
-        super().__init__(comm, cupy, cupyx.scipy, interface_cuda)
+        super().__init__(comm, cupy, cupyx.scipy, pde)
         self.cupyx = cupyx
         self.cupy = cupy
 
@@ -155,6 +173,10 @@ class CudaDevice(Device):
         # Set up compute and copy streams
         self.main_stream = cupy.cuda.get_current_stream()
         self.copy_stream = cupy.cuda.Stream(non_blocking=True)
+
+        # If there is no default device yet, set it to self
+        if CudaDevice._default is None and comm == MPI.COMM_WORLD:
+            CudaDevice._default = self
 
     def synchronize(self, **kwargs):
         """Synchronize a stream, based on input arguments. By default, the main stream is synchronized.
@@ -191,13 +213,8 @@ class CudaDevice(Device):
         intervals.append(get_time(timestamps[0], timestamps[-1]) / 1000.0)
         return intervals
 
-
-_default_device = None
-
-
-def get_default_device():
-    global _default_device
-    if _default_device is None:
-        _default_device = CpuDevice()
-
-    return _default_device
+    @staticmethod
+    def get_default() -> "CudaDevice":
+        if CudaDevice._default is None:
+            CudaDevice._default = CudaDevice()
+        return CudaDevice._default

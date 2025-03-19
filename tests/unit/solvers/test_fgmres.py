@@ -26,6 +26,7 @@ class FgmresComparisonTestCases(cuda_test.CudaTestCases):
         super().setUp()
 
         self.cpu_device = CpuDevice()
+        self.gpu_device = CudaDevice()
 
         seed: int = 5646459
         initial_vector_size: int = 64

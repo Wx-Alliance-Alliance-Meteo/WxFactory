@@ -7,7 +7,7 @@ from typing import Optional
 import numpy
 
 from common import Configuration
-from device import Device, get_default_device
+from device import Device
 from precondition.factorization import Factorization
 from precondition.multigrid import Multigrid
 from output.output_manager import OutputManager
@@ -49,7 +49,7 @@ class Integrator(ABC):
         if "device" in kwargs:
             self.device = kwargs["device"]
         else:
-            self.device = get_default_device()
+            self.device = Device.get_default()
 
         if "preconditioner" in kwargs:
             self.preconditioner = kwargs["preconditioner"]

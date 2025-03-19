@@ -3,6 +3,8 @@ from solvers.pmex import pmex
 import random
 from numpy import ndarray
 
+from device import CudaDevice
+
 import cuda_test
 import ndarray_generator
 
@@ -25,12 +27,14 @@ class KiopsPmexToleranceGpuTestCases(cuda_test.CudaTestCases):
         self.tolerance = 1e-7
         self.rand = random.Random(seed)
 
+        self.device = CudaDevice()
+
         [self.kiops_matrix, self.pmex_matrix] = ndarray_generator.generate_matrixes(
             (initial_matrix_size, initial_matrix_size),
             self.rand,
             rand_min,
             rand_max,
-            [self.gpu_device, self.gpu_device],
+            [self.device, self.device],
         )
 
     def test_compare_kiops_pmex(self):
@@ -40,8 +44,8 @@ class KiopsPmexToleranceGpuTestCases(cuda_test.CudaTestCases):
         w1: ndarray
         w2: ndarray
 
-        w1, stats1 = kiops([1.0], matvec_handle, self.kiops_matrix, self.tolerance, device=self.gpu_device)
-        w2, stats2 = pmex([1.0], matvec_handle, self.pmex_matrix, self.tolerance, device=self.gpu_device)
+        w1, stats1 = kiops([1.0], matvec_handle, self.kiops_matrix, self.tolerance, device=self.device)
+        w2, stats2 = pmex([1.0], matvec_handle, self.pmex_matrix, self.tolerance, device=self.device)
 
         shape: tuple[int, int] = w1.shape
 
@@ -50,10 +54,10 @@ class KiopsPmexToleranceGpuTestCases(cuda_test.CudaTestCases):
 
         self.failIf(not (w2.shape[0] == shape[0] and w2.shape[1] == shape[1]), "Both matrix should be the same size")
 
-        diff: float = self.gpu_device.xp.linalg.norm(w1 - w2).item()
+        diff: float = self.device.xp.linalg.norm(w1 - w2).item()
 
-        w1_value: float = self.gpu_device.xp.linalg.norm(w1).item()
-        w2_value: float = self.gpu_device.xp.linalg.norm(w2).item()
+        w1_value: float = self.device.xp.linalg.norm(w1).item()
+        w2_value: float = self.device.xp.linalg.norm(w2).item()
 
         abs_diff: float = abs(diff)
 

@@ -5,7 +5,7 @@ from typing import Callable, List, Optional, Tuple
 from mpi4py import MPI
 from numpy.typing import NDArray
 
-from device import Device, get_default_device
+from device import Device
 from .global_operations import global_dotprod, global_norm
 
 __all__ = ["fgmres"]
@@ -127,7 +127,7 @@ def fgmres(
     :return: 5. The list of residuals at every iteration
     """
     if device is None:
-        device = get_default_device()
+        device = Device.get_default()
     comm = device.comm
 
     if len(b) <= restart:

@@ -60,7 +60,7 @@ class Epi(Integrator):
                 ]
             )
         else:
-            raise ValueError("Unsupported order for EPI method")
+            raise ValueError(f"Unsupported order {order} for EPI method")
 
         k, self.n_prev = self.A.shape
         # Limit max phi to 1 for EPI 2

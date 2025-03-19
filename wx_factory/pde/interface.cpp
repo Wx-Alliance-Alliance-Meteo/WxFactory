@@ -70,19 +70,19 @@ void pointwise_euler_cubedsphere_3d(
     const int                  verbose) {
 
   const num_t* q_ptr        = get_c_ptr(q_in);
-  num_t* flux_x1_ptr  = get_c_ptr(flux_x1);
-  num_t* flux_x2_ptr  = get_c_ptr(flux_x2);
-  num_t* flux_x3_ptr  = get_c_ptr(flux_x3);
-  num_t* pressure_ptr = get_c_ptr(pressure);
+  num_t*       flux_x1_ptr  = get_c_ptr(flux_x1);
+  num_t*       flux_x2_ptr  = get_c_ptr(flux_x2);
+  num_t*       flux_x3_ptr  = get_c_ptr(flux_x3);
+  num_t*       pressure_ptr = get_c_ptr(pressure);
 
   num_t* wflux_adv_x1_ptr = get_c_ptr(wflux_adv_x1);
   num_t* wflux_adv_x2_ptr = get_c_ptr(wflux_adv_x2);
   num_t* wflux_adv_x3_ptr = get_c_ptr(wflux_adv_x3);
 
-  num_t*  wflux_pres_x1_ptr = get_c_ptr(wflux_pres_x1);
-  num_t*  wflux_pres_x2_ptr = get_c_ptr(wflux_pres_x2);
-  num_t*  wflux_pres_x3_ptr = get_c_ptr(wflux_pres_x3);
-  num_t*  log_pressure_ptr  = get_c_ptr(log_pressure);
+  num_t*        wflux_pres_x1_ptr = get_c_ptr(wflux_pres_x1);
+  num_t*        wflux_pres_x2_ptr = get_c_ptr(wflux_pres_x2);
+  num_t*        wflux_pres_x3_ptr = get_c_ptr(wflux_pres_x3);
+  num_t*        log_pressure_ptr  = get_c_ptr(log_pressure);
   const real_t* sqrt_g_ptr        = get_c_ptr(sqrt_g_in);
   const real_t* h_ptr             = get_c_ptr(h_in);
 
@@ -279,14 +279,18 @@ void forcing_euler_cubesphere_3d(
   }
 }
 
-PYBIND11_MODULE(interface_c, m) {
+PYBIND11_MODULE(pde_cpp, m) {
   // Pointwise fluxes
   m.def("pointwise_eulercartesian_2d", &pointwise_eulercartesian_2d<double>);
   m.def("pointwise_eulercartesian_2d", &pointwise_eulercartesian_2d<complex_t>);
 
   // Pointwise fluxes
-  m.def("pointwise_euler_cubedsphere_3d", &pointwise_euler_cubedsphere_3d<double, double>);
-  m.def("pointwise_euler_cubedsphere_3d", &pointwise_euler_cubedsphere_3d<double, complex_t>);
+  m.def(
+      "pointwise_euler_cubedsphere_3d",
+      &pointwise_euler_cubedsphere_3d<double, double>);
+  m.def(
+      "pointwise_euler_cubedsphere_3d",
+      &pointwise_euler_cubedsphere_3d<double, complex_t>);
 
   // Riemann fluxes
   m.def("riemann_eulercartesian_ausm_2d", &riemann_eulercartesian_ausm_2d<double>);

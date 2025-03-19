@@ -14,7 +14,7 @@ struct var
 
   HOST_DEVICE_SPACE operator num_t() const { return *value; }
 
-  HOST_DEVICE_SPACE num_t operator*() const { return *value; }
+  HOST_DEVICE_SPACE num_t  operator*() const { return *value; }
   HOST_DEVICE_SPACE num_t& operator*() { return *value; }
 
   HOST_DEVICE_SPACE void move_index(const int64_t index_change) { value += index_change; }
@@ -36,7 +36,7 @@ struct var_multi
 {
   var<num_t> val[num_var];
 
-  HOST_DEVICE_SPACE num_t operator[](int i) const { return *val[i]; }
+  HOST_DEVICE_SPACE num_t  operator[](int i) const { return *val[i]; }
   HOST_DEVICE_SPACE num_t& operator[](int i) { return *val[i]; }
 
   HOST_DEVICE_SPACE var_multi(num_t* field, const size_t index, const size_t stride) {
@@ -213,7 +213,6 @@ struct forcing_params
     forcing.move_index(diff);
   }
 };
-
 
 template <typename real_t, typename num_t>
 struct kernel_params_cubedsphere
