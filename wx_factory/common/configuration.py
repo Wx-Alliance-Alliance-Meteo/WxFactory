@@ -4,6 +4,7 @@ from typing import Dict, List, Optional, Self
 
 from .configuration_schema import ConfigurationSchema, ConfigurationField, OptionType
 
+
 __all__ = ["Configuration"]
 
 
@@ -16,6 +17,7 @@ class Configuration:
 
         self.cfg_file = "in-memory"
         self.sections = {}
+        self.schema = schema
         self.parser = ConfigParser()
 
         self.config_content = cfg_file
@@ -25,17 +27,8 @@ class Configuration:
 
         self.parser.read_string(self.config_content)
 
-        for field in [field for field in schema.fields if field.dependency is None]:
-            try:
-                self._get_option(field)
-            except Exception as e:
-                raise ValueError(f"Error reading option {field.name}") from e
-
-        for field in [field for field in schema.fields if field.dependency is not None]:
-            try:
-                self._get_option(field)
-            except Exception as e:
-                raise ValueError(f"Error reading option {field.name}") from e
+        for field in schema.fields:
+            self._get_option(field)
 
         self.state_version = schema.version
 
@@ -88,7 +81,11 @@ class Configuration:
             long_options = {}
             i = 0
             for option in section_options:
-                val = str(getattr(self, option))
+                numeric = getattr(self, option)
+                if isinstance(numeric, float):
+                    val = f"{numeric:.6g}"
+                else:
+                    val = str(numeric)
 
                 if len(option) < 26 and len(val) < 14:
                     if i % 2 == 0:

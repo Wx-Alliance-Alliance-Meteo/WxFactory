@@ -9,9 +9,9 @@ from .cubed_sphere import CubedSphere
 from .sphere import cart2sph
 
 # For type hints
-from wx_mpi import ProcessTopology
 from common import Configuration
-from device import Device, default_device
+from device import Device
+from process_topology import ProcessTopology
 
 
 class CubedSphere3D(CubedSphere):
@@ -21,13 +21,13 @@ class CubedSphere3D(CubedSphere):
         num_elements_horizontal: int,
         num_elements_vertical: int,
         num_solpts: int,
-        λ0: float,
-        ϕ0: float,
-        α0: float,
+        lambda0: float,
+        phi0: float,
+        alpha0: float,
         ztop: float,
         ptopo: ProcessTopology,
         param: Configuration,
-        device: Device = default_device,
+        device: Device,
     ):
         """Initialize the cubed sphere geometry, for an earthlike sphere with no topography.
 
@@ -64,13 +64,13 @@ class CubedSphere3D(CubedSphere):
             Number of elements in the vertical, between 0 and ztop
         num_solpts : int
             Number of nodal points in each of the (x1,x2,x3) dimensions inside the element
-        λ0 : float
+        lambda0 : float
             Grid rotation: physical longitude of the central point of the 0 panel
             Valid range ]-π/2,0]
-        ϕ0 : float
+        phi0 : float
             Grid rotation: physical latitude of the central point of the 0 panel
             Valid range ]-π/4,π/4]
-        α0 : float
+        alpha0 : float
             Grid rotation: rotation of the central meridian of the 0 panel, relatve to true north
             Valid range ]-π/2,0]
         ztop : float
@@ -85,10 +85,8 @@ class CubedSphere3D(CubedSphere):
             Wraps parameters from the configuration pole that are not otherwise specified in this
             constructor.
         """
-        super().__init__(num_solpts, device)
+        super().__init__(num_elements_horizontal, num_elements_vertical, num_solpts, lambda0, phi0, alpha0, device)
         xp = device.xp
-
-        rank = MPI.COMM_WORLD.rank
 
         ## Panel / parallel decomposition properties
         self.ptopo = ptopo
@@ -338,29 +336,29 @@ class CubedSphere3D(CubedSphere):
 
         # Compute the parameters of the rotated grid
 
-        # if (λ0 > 0.) or (λ0 <= -math.pi / 2.):
+        # if (lambda0 > 0.) or (lambda0 <= -math.pi / 2.):
         #    print('lambda0 not within the acceptable range of ]-pi/2 , 0]. Stopping.')
         #    exit(1)
 
-        # if (ϕ0 <= -math.pi/4.) or (ϕ0 > math.pi/4.):
+        # if (phi0 <= -math.pi/4.) or (phi0 > math.pi/4.):
         #    print('phi0 not within the acceptable range of ]-pi/4 , pi/4]. Stopping.')
         #    exit(1)
 
-        # if (α0 <= -math.pi/2.) or (α0 > 0.):
+        # if (alpha0 <= -math.pi/2.) or (alpha0 > 0.):
         #    print('alpha0 not within the acceptable range of ]-pi/2 , 0]. Stopping.')
         #    exit(1)
 
-        c1 = math.cos(λ0)
-        c2 = math.cos(ϕ0)
-        c3 = math.cos(α0)
-        s1 = math.sin(λ0)
-        s2 = math.sin(ϕ0)
-        s3 = math.sin(α0)
+        c1 = math.cos(lambda0)
+        c2 = math.cos(phi0)
+        c3 = math.cos(alpha0)
+        s1 = math.sin(lambda0)
+        s2 = math.sin(phi0)
+        s3 = math.sin(alpha0)
 
         if ptopo.my_panel == 0:
-            lon_p = λ0
-            lat_p = ϕ0
-            angle_p = α0
+            lon_p = lambda0
+            lat_p = phi0
+            angle_p = alpha0
 
         elif ptopo.my_panel == 1:
             lon_p = math.atan2(s1 * s2 * s3 + c1 * c3, c1 * s2 * s3 - s1 * c3)
@@ -369,7 +367,7 @@ class CubedSphere3D(CubedSphere):
 
         elif ptopo.my_panel == 2:
             lon_p = math.atan2(-s1, -c1)
-            lat_p = -ϕ0
+            lat_p = -phi0
             angle_p = -math.atan2(s3, c3)
 
         elif ptopo.my_panel == 3:
@@ -378,20 +376,20 @@ class CubedSphere3D(CubedSphere):
             angle_p = -math.atan2(s2, c2 * c3)
 
         elif ptopo.my_panel == 4:
-            if (abs(ϕ0) < 1e-13) and (abs(α0) < 1e-13):
+            if (abs(phi0) < 1e-13) and (abs(alpha0) < 1e-13):
                 lon_p = 0.0
                 lat_p = math.pi / 2.0
-                angle_p = -λ0
+                angle_p = -lambda0
             else:
                 lon_p = math.atan2(-s1 * s2 * c3 + c1 * s3, -c1 * s2 * c3 - s1 * s3)
                 lat_p = math.asin(c2 * c3)
                 angle_p = math.atan2(c2 * s3, -s2)
 
         elif ptopo.my_panel == 5:
-            if (abs(ϕ0) < 1e-13) and (abs(α0) < 1e-13):
+            if (abs(phi0) < 1e-13) and (abs(alpha0) < 1e-13):
                 lon_p = 0.0
                 lat_p = -math.pi / 2.0
-                angle_p = λ0
+                angle_p = lambda0
             else:
                 lon_p = math.atan2(s1 * s2 * c3 - c1 * s3, c1 * s2 * c3 + s1 * s3)
                 lat_p = -math.asin(c2 * c3)
@@ -480,9 +478,6 @@ class CubedSphere3D(CubedSphere):
 
         # To apply the topography, we need to redefine self.x3 and its interfaced versions.
 
-        # if MPI.COMM_WORLD.rank == 0:
-        #     print(f"floor = \n{zbot_new}\n" f"floor to bulk: \n{self.floor_to_bulk(zbot_new)}")
-
         self.x3[...] = self.zbot[xp.newaxis, :, :] + (ztop - self.zbot[xp.newaxis, :, :]) * self.eta
         self.x3_itf_i[...] = (
             self.zbot_itf_i[xp.newaxis, :, :] + (ztop - self.zbot_itf_i[xp.newaxis, :, :]) * self.eta_itf_i
@@ -513,7 +508,6 @@ class CubedSphere3D(CubedSphere):
         based on the pre-defined equiangular coordinates (x1, x2) and height (x3)
         """
         xp = self.device.xp
-        rank = MPI.COMM_WORLD.rank
 
         # Retrieve the numeric values for use here
         x1 = self.x1
@@ -573,14 +567,6 @@ class CubedSphere3D(CubedSphere):
             self.boundary_we.reshape(self.num_elements_x2, self.num_solpts), self.num_solpts
         ).reshape((self.num_elements_x2, self.num_solpts, self.num_solpts))
 
-        # if MPI.COMM_WORLD.rank == 0:
-        #     print(f"boundary sn (old): \n{self.boundary_sn}")
-        #     print(f"boundary sn (new): \n{self.boundary_sn_new}")
-
-        # if MPI.COMM_WORLD.rank == 0:
-        #    print(f'old X = \n{X_block}')
-        #    print(f'new X = \n{X_new}')
-
         height = x3
 
         # Because of conventions used in the parallel exchanges, both i and j interface variables
@@ -591,9 +577,6 @@ class CubedSphere3D(CubedSphere):
         Y_itf_i = xp.broadcast_to(xp.tan(x2_itf_i)[:, xp.newaxis], (nj, num_elements_x1 + 1)).T
         X_itf_j = xp.broadcast_to(xp.tan(x1_itf_j)[xp.newaxis, :], (num_elements_x2 + 1, ni))
         Y_itf_j = xp.broadcast_to(xp.tan(x2_itf_j)[:, xp.newaxis], (num_elements_x2 + 1, ni))
-
-        # if MPI.COMM_WORLD.rank == 0:
-        #     print(f'x itf i (shape {X_itf_i.shape})= \n{X_itf_i}')
 
         self.delta2_block = 1.0 + X_block**2 + Y_block**2
         self.delta_block = xp.sqrt(self.delta2_block)
@@ -1048,7 +1031,7 @@ class CubedSphere3D(CubedSphere):
     #       else: raise ValueError
 
     def wind2contra_2d(self, u: float | NDArray, v: float | NDArray):
-        """Convert wind fields from the spherical basis (zonal, meridional) to panel-appropriate contrvariant winds,
+        """Convert wind fields from the spherical basis (zonal, meridional) to panel-appropriate contravariant winds,
         in two dimensions
 
         Parameters:
@@ -1078,10 +1061,6 @@ class CubedSphere3D(CubedSphere):
             # correction for height above the surface
             lambda_dot = u / (self.earth_radius * self.coslat_new)
             phi_dot = v / self.earth_radius
-
-        # if MPI.COMM_WORLD.rank == 0:
-        #     print(f"u shape = {u.shape}, lambda_dot shape = {lambda_dot.shape}")
-        #     print(f"X (new) shape = {self.X_new.shape}")
 
         denom = xp.sqrt(
             (

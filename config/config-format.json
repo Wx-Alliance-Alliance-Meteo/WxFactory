@@ -108,8 +108,8 @@
                     "name": "exponential_solver",
                     "type": "str",
                     "default": "pmex",
-                    "selectables": ["pmex", "kiops", "exode", "cwy_1s", "cwy_ne", "cwy_ne1s", "dcgs2", "icwy_1s",
-                                    "icwy_neiop", "icwy_ne", "icwy_ne1s", "kiops_ne", "pmex_1s", "pmex_ne1s"]
+                    "selectables": ["pmex", "kiops", "exode", "pmex_ne", "cwy_1s", "cwy_ne", "cwy_ne1s", "dcgs2",
+                                    "icwy_1s", "icwy_neiop", "icwy_ne", "icwy_ne1s", "kiops_ne", "pmex_1s", "pmex_ne1s"]
                 },
                 {
                     "name": "exode_method",
@@ -302,27 +302,30 @@
                 },
                 {
                     "name": "lambda0",
-                    "type": "float",
+                    "type": "angle24",
                     "dependency": {
                         "name": "grid_type",
                         "values": ["cubed_sphere"]
-                    }
+                    },
+                    "description": "Longitude in radians of the central point of panel 0"
                 },
                 {
                     "name": "phi0",
-                    "type": "float",
+                    "type": "angle24",
                     "dependency": {
                         "name": "grid_type",
                         "values": ["cubed_sphere"]
-                    }
+                    },
+                    "description": "Latitude in radians of the central point of panel 0"
                 },
                 {
                     "name": "alpha0",
-                    "type": "float",
+                    "type": "angle24",
                     "dependency": {
                         "name": "grid_type",
                         "values": ["cubed_sphere"]
-                    }
+                    },
+                    "description": "Rotation in radians of the central meridian of panel 0"
                 },
                 {
                     "name": "ztop",
@@ -516,7 +519,7 @@
                     "name": "output_format",
                     "type": "str",
                     "default": "netcdf",
-                    "selectable": ["netcdf"],
+                    "selectable": ["netcdf", "fst"],
                     "description": "Desired format to use for storing simulation results."
                 }
             ]

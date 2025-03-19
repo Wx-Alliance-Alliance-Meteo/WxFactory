@@ -2,7 +2,7 @@ import math
 
 from mpi4py import MPI
 
-from device import Device, default_device
+from device import Device, CpuDevice
 
 
 def pmex(
@@ -16,8 +16,7 @@ def pmex(
     mmax=128,
     reuse_info=True,
     task1=False,
-    device: Device = default_device,
-    comm: MPI.Comm = MPI.COMM_WORLD,
+    device: Device = None,
 ):
     """
     :param tau_out: Vector of `tau_out`
@@ -43,6 +42,10 @@ def pmex(
     :return: `stats[5]` - the Krylov size of the last substep
     :return: `stats[6]` = ?
     """
+    if device is None:
+        device = Device.get_default()
+
+    comm = device.comm
 
     ppo, n = u.shape
     p = ppo - 1
@@ -192,11 +195,12 @@ def pmex(
             V[j, :] -= sol @ V[0:j, :]
 
             # 5. compute norm estimate with quad precision
-            if device.has_128_bits_float() is True:
+            if device.has_128_bits_float():
                 sum_vec = device.xp.array(global_vec[0:j, 1], device.xp.float128) ** 2
                 sum_sqrd = device.xp.sum(sum_vec)
             else:
                 device.synchronize()
+                default_device = CpuDevice.get_default()
                 sum_vec = default_device.xp.array(global_vec[0:j, 1].get(), default_device.xp.float128) ** 2
                 sum_sqrd = device.array(
                     default_device.xp.asarray(default_device.xp.sum(sum_vec), dtype=default_device.xp.float64)

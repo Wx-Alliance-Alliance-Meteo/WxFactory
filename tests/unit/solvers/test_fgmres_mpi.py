@@ -1,10 +1,14 @@
-import cpu_test
-from solvers.fgmres import fgmres
-from mpi_test import run_test_on_x_process
+import unittest
+
 from numpy import ndarray
 
+from device import CpuDevice
+from solvers.fgmres import fgmres
 
-class FgmresMpiTestCases(cpu_test.CpuTestCases):
+from mpi_test import run_test_on_x_process
+
+
+class FgmresMpiTestCases(unittest.TestCase):
     tolerance: float
     matrix_size_multiplier: int
 
@@ -15,12 +19,14 @@ class FgmresMpiTestCases(cpu_test.CpuTestCases):
 
     def test_fgmres_mpi_2_processes(self):
         comm = run_test_on_x_process(self, 2)
+        device = CpuDevice(comm)
         comm2 = comm.Split(comm.rank)
+        device2 = CpuDevice(comm2)
 
         size: int = comm.size * self.matrix_size_multiplier
 
-        full_matrix: ndarray = self.cpu_device.xp.empty((size, size), dtype=float)
-        full_vector: ndarray = self.cpu_device.xp.empty(size, dtype=float)
+        full_matrix: ndarray = device.xp.empty((size, size), dtype=float)
+        full_vector: ndarray = device.xp.empty(size, dtype=float)
 
         for i in range(size):
             full_vector[i] = i
@@ -38,11 +44,8 @@ class FgmresMpiTestCases(cpu_test.CpuTestCases):
         def partial_matvec_handle(v: ndarray) -> ndarray:
             return matrix @ v
 
-        x1: ndarray
-        x2: ndarray
-
-        x1, _ = fgmres(partial_matvec_handle, vector, tol=self.tolerance, device=self.cpu_device, comm=comm)
-        x2, _ = fgmres(full_matvec_handle, full_vector, tol=self.tolerance, device=self.cpu_device, comm=comm2)
+        x1, *_ = fgmres(partial_matvec_handle, vector, tol=self.tolerance, device=device)
+        x2, *_ = fgmres(full_matvec_handle, full_vector, tol=self.tolerance, device=device2)
 
         """diff: float = self.cpu_device.xp.linalg.norm(x1 - x2[0, from_index:to_index]).item()
 

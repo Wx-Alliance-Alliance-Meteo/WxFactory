@@ -9,7 +9,7 @@ from common import Configuration
 from device import Device
 from geometry import CubedSphere, CubedSphere3D, DFROperators, Metric2D, Metric3DTopo
 from init.shallow_water_test import height_vortex, height_case1, height_case2, height_unsteady_zonal
-from wx_mpi import ProcessTopology
+from process_topology import ProcessTopology
 
 from .diagnostic import total_energy, potential_enstrophy, global_integral_2d
 from .output_manager import OutputManager
@@ -45,35 +45,39 @@ class OutputCubesphere(OutputManager):
 
         h = Q[0, :, :]
 
-        if self.param.case_number == 0:
-            h_anal, _ = height_vortex(self.geometry, self.metric, self.param, step_id)
-        elif self.param.case_number == 1:
-            h_anal = height_case1(self.geometry, self.metric, self.param, step_id)
-        elif self.param.case_number == 2:
-            h_anal = height_case2(self.geometry, self.metric, self.param)
-        elif self.param.case_number == 10:
-            h_anal = height_unsteady_zonal(self.geometry, self.metric, self.param)
+        if self.config.case_number == 0:
+            h_anal, _ = height_vortex(self.geometry, self.metric, self.config, step_id)
+        elif self.config.case_number == 1:
+            h_anal = height_case1(self.geometry, self.metric, self.config, step_id)
+        elif self.config.case_number == 2:
+            h_anal = height_case2(self.geometry, self.metric, self.config)
+        elif self.config.case_number == 10:
+            h_anal = height_unsteady_zonal(self.geometry, self.metric, self.config)
 
-        if self.param.case_number > 1:
+        if self.config.case_number > 1:
             u1_contra = Q[1, :, :] / h
             u2_contra = Q[2, :, :] / h
 
-            if self.param.case_number >= 2:
+            if self.config.case_number >= 2:
                 energy = total_energy(h, u1_contra, u2_contra, self.topo, self.metric)
                 enstrophy = potential_enstrophy(
-                    h, u1_contra, u2_contra, self.geometry, self.metric, self.operators, self.param
+                    h, u1_contra, u2_contra, self.geometry, self.metric, self.operators, self.config
                 )
 
         if self.rank == 0:
             print("\n================================================================================================")
 
-        if self.param.case_number >= 2:
+        if self.config.case_number >= 2:
 
             if self.initial_mass is None:
-                self.initial_mass = global_integral_2d(h, self.operators, self.metric, self.param.num_solpts)
-                self.initial_energy = global_integral_2d(energy, self.operators, self.metric, self.param.num_solpts)
+                self.initial_mass = global_integral_2d(
+                    h, self.operators, self.metric, self.config.num_solpts, self.comm
+                )
+                self.initial_energy = global_integral_2d(
+                    energy, self.operators, self.metric, self.config.num_solpts, self.comm
+                )
                 self.initial_enstrophy = global_integral_2d(
-                    enstrophy, self.operators, self.metric, self.param.num_solpts
+                    enstrophy, self.operators, self.metric, self.config.num_solpts, self.comm
                 )
 
                 if self.rank == 0:
@@ -84,12 +88,16 @@ class OutputCubesphere(OutputManager):
         if self.rank == 0:
             print(f"Blockstats for timestep {step_id}")
 
-        if self.param.case_number <= 2 or self.param.case_number == 10:
-            absol_err = global_integral_2d(abs(h - h_anal), self.operators, self.metric, self.param.num_solpts)
-            int_h_anal = global_integral_2d(abs(h_anal), self.operators, self.metric, self.param.num_solpts)
+        if self.config.case_number <= 2 or self.config.case_number == 10:
+            absol_err = global_integral_2d(
+                abs(h - h_anal), self.operators, self.metric, self.config.num_solpts, self.comm
+            )
+            int_h_anal = global_integral_2d(abs(h_anal), self.operators, self.metric, self.config.num_solpts, self.comm)
 
-            absol_err2 = global_integral_2d((h - h_anal) ** 2, self.operators, self.metric, self.param.num_solpts)
-            int_h_anal2 = global_integral_2d(h_anal**2, self.operators, self.metric, self.param.num_solpts)
+            absol_err2 = global_integral_2d(
+                (h - h_anal) ** 2, self.operators, self.metric, self.config.num_solpts, self.comm
+            )
+            int_h_anal2 = global_integral_2d(h_anal**2, self.operators, self.metric, self.config.num_solpts, self.comm)
 
             max_absol_err = self.comm.allreduce(numpy.max(abs(h - h_anal)), op=MPI.MAX)
             max_h_anal = self.comm.allreduce(numpy.max(h_anal), op=MPI.MAX)
@@ -100,10 +108,12 @@ class OutputCubesphere(OutputManager):
             if self.rank == 0:
                 print(f"l1 = {l1} \t l2 = {l2} \t linf = {linf}")
 
-        if self.param.case_number >= 2:
-            int_mass = global_integral_2d(h, self.operators, self.metric, self.param.num_solpts)
-            int_energy = global_integral_2d(energy, self.operators, self.metric, self.param.num_solpts)
-            int_enstrophy = global_integral_2d(enstrophy, self.operators, self.metric, self.param.num_solpts)
+        if self.config.case_number >= 2:
+            int_mass = global_integral_2d(h, self.operators, self.metric, self.config.num_solpts, self.comm)
+            int_energy = global_integral_2d(energy, self.operators, self.metric, self.config.num_solpts, self.comm)
+            int_enstrophy = global_integral_2d(
+                enstrophy, self.operators, self.metric, self.config.num_solpts, self.comm
+            )
 
             normalized_mass = (int_mass - self.initial_mass) / self.initial_mass
             normalized_energy = (int_energy - self.initial_energy) / self.initial_energy
@@ -142,17 +152,8 @@ class OutputCubesphere(OutputManager):
 
         return panel_field
 
-    def _gather_field(self, field: NDArray) -> Optional[List[NDArray]]:
-        """Gather the given array to a single process (rank 0)
-        :param field: Array on this PE, to send to root
+    def _gather_field(self, field: NDArray, num_dim: int):
+        return self.process_topology.gather_cube(field, num_dim)
 
-        :return: A list of 6 arrays (one for each panel)
-        """
-
-        panel_field = self._gather_panel(field)
-
-        fields = None
-        if panel_field is not None:
-            fields = self.process_topology.panel_roots_comm.gather(panel_field, root=0)
-
-        return fields
+    def _distribute_field(self, field: NDArray, num_dim: int):
+        return self.process_topology.distribute_cube(field, num_dim)

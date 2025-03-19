@@ -1,3 +1,5 @@
+# WxFactory configuration options
+
 | | | | | |
 | - | - | - | - | - |
 | | | | | |
@@ -22,7 +24,9 @@
    | time_integrator       | str   | [none]    |                                  |   | 
    | tolerance             | float  | [none]   |                                  |   | 
    | starting_step         | int   | 0         |                                  |   | 
-   | exponential_solver    | str   | pmex      | {pmex, kiops}                    |   | 
+   | exponential_solver    | str   | pmex      | {pmex, kiops, exode, pmex_ne, cwy_1s, cwy_ne, cwy_ne1s, dcgs2, icwy_1s, icwy_neiop, icwy_ne, icwy_ne1s, kiops_ne, pmex_1s, pmex_ne1s}  |   | 
+   | exode_method          | str   | bs3(2)    | {bs3(2), dp5(4), m4(3), kc3(2), exlrk3(2), exlrk4(3), f14(12), dp8(7), f10(8)}  |   | 
+   | exode_controller      | str   |           |                                  |   | 
    | krylov_size           | int   | 1         | [0, inf]                         |   | 
    | jacobian_method       | str   | complex   | {complex, fd}                    |   | 
    | linear_solver         | str   | fgmres    | {fgmres, gcrot}                  |   | 
@@ -85,3 +89,5 @@
    | output_dir            | cs-str  | results  |                                 | Directory where to store all the output  | 
    | base_output_file      | cs-str  | out     |                                  | Name of file where to store the solution  | 
    | solver_stats_file     | cs-str  | solver_stats.db  |                         | SQL file where to store statistics for this run  | 
+   | store_total_time      | bool  | False     |                                  | Whether to output total runtime in seconds to a file  | 
+   | output_format         | str   | netcdf    |                                  | Desired format to use for storing simulation results.  | 

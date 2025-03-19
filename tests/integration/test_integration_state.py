@@ -8,7 +8,7 @@ import unittest
 from mpi4py import MPI
 import numpy
 
-from common import Configuration, load_default_schema
+from common import Configuration, load_default_schema, readfile
 from output import state
 from simulation import Simulation
 import wx_mpi
@@ -125,7 +125,7 @@ class StateIntegrationTestCases(unittest.TestCase):
         exit_code: Optional[sys._ExitCode] = None
 
         for config_file in self.config_files:
-            config_content = wx_mpi.readfile(config_file)
+            config_content = wx_mpi.do_once(readfile, config_file)
 
             config = Configuration(config_content, self.schema)
 
@@ -153,7 +153,7 @@ class StateIntegrationTestCases(unittest.TestCase):
             [true_data, _] = state.load_state(true_state_vector_file, self.schema)
 
             if data.shape != true_data.shape:
-                self.fail("The result problem is not the same size as the solution's")
+                self.fail(f"Result shape {data.shape} is different from reference solution {true_data.shape}")
 
             delta = true_data - data
 

@@ -1,18 +1,20 @@
 import os
 import random
+import unittest
 
 import common.configuration
 import common.configuration_schema
+from device import CpuDevice
 import output.state
 
-import tests.unit.cpu_test as cpu_test
 import tests.unit.ndarray_generator as ndarray_generator
 import tests.unit.common.config_pack
 
 
-class StateTestCases(cpu_test.CpuTestCases):
+class StateTestCases(unittest.TestCase):
     def setUp(self):
         super().setUp()
+        self.cpu_device = CpuDevice()
         if not os.path.exists("tests/data/temp"):
             os.mkdir("tests/data/temp")
 
@@ -23,7 +25,7 @@ class StateTestCases(cpu_test.CpuTestCases):
             schema_text = "\n".join(f.readlines())
         schema = common.configuration_schema.ConfigurationSchema(schema_text)
 
-        config_path = "tests/data/state_tests/config.ini"
+        config_path = "tests/data/unit/state_tests/config.ini"
         config_text: str
         with open(config_path) as f:
             config_text = "\n".join(f.readlines())

@@ -9,8 +9,8 @@ from .sphere import cart2sph
 
 # For type hints
 from common import Configuration
-from device import Device, default_device
-from wx_mpi import ProcessTopology
+from device import Device
+from process_topology import ProcessTopology
 
 
 class CubedSphere2D(CubedSphere):
@@ -18,24 +18,25 @@ class CubedSphere2D(CubedSphere):
         self,
         num_elements_horizontal: int,
         num_solpts: int,
-        λ0: float,
-        ϕ0: float,
-        α0: float,
+        lambda0: float,
+        phi0: float,
+        alpha0: float,
         ptopo: ProcessTopology,
         param: Configuration,
-        device: Device = default_device,
+        device: Device,
     ):
         """Initialize the cubed sphere geometry, for an earthlike sphere with no topography.
 
-        This function initializes the basic CubedSphere geometry object, which provides the parameters necessary to define
-        the values in numeric (x1, x2, η) coordinates, gnomonic (projected; X, Y, Z) coordinates, spherical (lat, lon, Z),
-        Cartesian (Xc, Yc, Zc) coordinates.
+        This function initializes the basic CubedSphere geometry object, which provides the parameters necessary
+        to define the values in numeric (x1, x2, η) coordinates, gnomonic (projected; X, Y, Z) coordinates,
+        spherical (lat, lon, Z), Cartesian (Xc, Yc, Zc) coordinates.
 
         These coordinates respect the DG formulation, but they are themselves indifferent to the mechanics of
         differentiation.
 
-        On initialization, the coordinate is defined with respect to a smooth sphere, with geometric height varying between
-        0 and ztop.  To impose a topographic mapping, the CubedSphere object must be updated via the update_topo method.
+        On initialization, the coordinate is defined with respect to a smooth sphere, with geometric height
+        varying between 0 and ztop.
+        To impose a topographic mapping, the CubedSphere object must be updated via the update_topo method.
 
         The cubed-sphere panelization is as follows:
         ```
@@ -58,13 +59,13 @@ class CubedSphere2D(CubedSphere):
            Number of elements in the (x1,x2) directions, per panel
         num_solpts: int
            Number of nodal points in each of the (x1,x2,x3) dimensions inside the element
-        λ0: float
+        lambda0: float
            Grid rotation: physical longitude of the central point of the 0 panel
            Valid range ]-π/2,0]
-        ϕ0: float
+        phi0: float
            Grid rotation: physical latitude of the central point of the 0 panel
            Valid range ]-π/4,π/4]
-        α0: float
+        alpha0: float
            Grid rotation: rotation of the central meridian of the 0 panel, relatve to true north
            Valid range ]-π/2,0]
         ztop: float
@@ -79,9 +80,8 @@ class CubedSphere2D(CubedSphere):
            Wraps parameters from the configuration pole that are not otherwise specified in this
            constructor.
         """
-        rank = MPI.COMM_WORLD.rank
 
-        super().__init__(num_solpts, device)
+        super().__init__(num_elements_horizontal, 1, num_solpts, lambda0, phi0, alpha0, device)
         xp = self.device.xp
 
         ## Panel / parallel decomposition properties
@@ -150,11 +150,12 @@ class CubedSphere2D(CubedSphere):
         self.itf_j_shape_2d = (num_elements_x2 + 1, ni)
 
         # The shapes. For a single field (e.g. coordinates of solution points, in the current case), we
-        # have an array of elements, where each element has a total num_solpts**2 (in 2D) or num_solpts**3 (in 3D) solution
-        # points.
+        # have an array of elements, where each element has a total num_solpts**2 (in 2D) or num_solpts**3 (in 3D)
+        # solution points.
         # For the interfaces we have 3 cases:
         # - In 2D, we have 2 arrays (for west-east and south-north interfaces), with the same shape: an array of all
-        #   elements, each with 2*num_solpts interface points (num_solpts for each side of the element along that direction)
+        #   elements, each with 2*num_solpts interface points (num_solpts for each side of the element along that
+        #   direction)
         # - In 3D, horizontally, we also have two arrays (west-east, south-north), but the shape is to be determined
         # - In 3D vertically, we only have one array, with shape similar to horizontally, TBD
         self.grid_shape = (num_elements_x1, num_elements_x2, num_solpts * num_solpts)
@@ -201,29 +202,29 @@ class CubedSphere2D(CubedSphere):
 
         # Compute the parameters of the rotated grid
 
-        # if (λ0 > 0.) or (λ0 <= -math.pi / 2.):
+        # if (lambda0 > 0.) or (lambda0 <= -math.pi / 2.):
         #    print('lambda0 not within the acceptable range of ]-pi/2 , 0]. Stopping.')
         #    exit(1)
 
-        # if (ϕ0 <= -math.pi/4.) or (ϕ0 > math.pi/4.):
+        # if (phi0 <= -math.pi/4.) or (phi0 > math.pi/4.):
         #    print('phi0 not within the acceptable range of ]-pi/4 , pi/4]. Stopping.')
         #    exit(1)
 
-        # if (α0 <= -math.pi/2.) or (α0 > 0.):
+        # if (alpha0 <= -math.pi/2.) or (alpha0 > 0.):
         #    print('alpha0 not within the acceptable range of ]-pi/2 , 0]. Stopping.')
         #    exit(1)
 
-        c1 = math.cos(λ0)
-        c2 = math.cos(ϕ0)
-        c3 = math.cos(α0)
-        s1 = math.sin(λ0)
-        s2 = math.sin(ϕ0)
-        s3 = math.sin(α0)
+        c1 = math.cos(lambda0)
+        c2 = math.cos(phi0)
+        c3 = math.cos(alpha0)
+        s1 = math.sin(lambda0)
+        s2 = math.sin(phi0)
+        s3 = math.sin(alpha0)
 
         if ptopo.my_panel == 0:
-            lon_p = λ0
-            lat_p = ϕ0
-            angle_p = α0
+            lon_p = lambda0
+            lat_p = phi0
+            angle_p = alpha0
 
         elif ptopo.my_panel == 1:
             lon_p = math.atan2(s1 * s2 * s3 + c1 * c3, c1 * s2 * s3 - s1 * c3)
@@ -232,7 +233,7 @@ class CubedSphere2D(CubedSphere):
 
         elif ptopo.my_panel == 2:
             lon_p = math.atan2(-s1, -c1)
-            lat_p = -ϕ0
+            lat_p = -phi0
             angle_p = -math.atan2(s3, c3)
 
         elif ptopo.my_panel == 3:
@@ -241,20 +242,20 @@ class CubedSphere2D(CubedSphere):
             angle_p = -math.atan2(s2, c2 * c3)
 
         elif ptopo.my_panel == 4:
-            if (abs(ϕ0) < 1e-13) and (abs(α0) < 1e-13):
+            if (abs(phi0) < 1e-13) and (abs(alpha0) < 1e-13):
                 lon_p = 0.0
                 lat_p = math.pi / 2.0
-                angle_p = -λ0
+                angle_p = -lambda0
             else:
                 lon_p = math.atan2(-s1 * s2 * c3 + c1 * s3, -c1 * s2 * c3 - s1 * s3)
                 lat_p = math.asin(c2 * c3)
                 angle_p = math.atan2(c2 * s3, -s2)
 
         elif ptopo.my_panel == 5:
-            if (abs(ϕ0) < 1e-13) and (abs(α0) < 1e-13):
+            if (abs(phi0) < 1e-13) and (abs(alpha0) < 1e-13):
                 lon_p = 0.0
                 lat_p = -math.pi / 2.0
-                angle_p = λ0
+                angle_p = lambda0
             else:
                 lon_p = math.atan2(s1 * s2 * c3 - c1 * s3, c1 * s2 * c3 + s1 * s3)
                 lat_p = -math.asin(c2 * c3)

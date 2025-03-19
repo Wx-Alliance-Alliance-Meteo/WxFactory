@@ -1,0 +1,96 @@
+{
+    "version": "0.1",
+    "fields": [
+        {
+            "name": "int1",
+            "section": "number",
+            "type": "int",
+            "min": 0
+        },
+        {
+            "name": "int2",
+            "section": "number",
+            "type": "int",
+            "max": 0
+        },
+        {
+            "name": "int3",
+            "section": "number",
+            "type": "int",
+            "selectables": [0, 1, 2]
+        },
+        {
+            "name": "intlist4",
+            "section": "number",
+            "type": "list-int",
+            "min": 0
+        },
+        {
+            "name": "intlist5",
+            "section": "number",
+            "type": "list-int",
+            "max": 0
+        },
+        {
+            "name": "intlist6",
+            "section": "number",
+            "type": "list-int",
+            "selectables": [0, 1, 2]
+        },
+        {
+            "name": "intlist7",
+            "section":"number",
+            "type":"list-int",
+            "default": [0, 1, 2]
+        },
+        {
+            "name": "intlist8",
+            "section":"number",
+            "type":"list-int",
+            "default": 0
+        },
+        {
+            "name": "string1",
+            "section": "str",
+            "type": "str",
+            "selectables": ["1", "2", "3"]
+        },
+        {
+            "name": "real1",
+            "section": "real",
+            "type": "float",
+            "default": 0
+        },
+        {
+            "name": "real2",
+            "section": "real",
+            "type": "float32",
+            "default": "pi"
+        },
+        {
+            "name": "real3",
+            "section": "real",
+            "type": "angle24",
+            "default": 0,
+            "min": "-pi/2"
+        },
+        {
+            "name": "bool1",
+            "section": "bool",
+            "type": "bool",
+            "default": 0
+        },
+        {
+            "name": "bool2",
+            "section": "bool",
+            "type": "bool",
+            "default": 1
+        },
+        {
+            "name": "bool3",
+            "section": "bool",
+            "type": "bool",
+            "default": 1
+        }
+    ]
+}

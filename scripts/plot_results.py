@@ -31,11 +31,35 @@ case_names = {
     31: "gravity wave",
 }
 
+rhs_timing_columns = [
+    "extrapolation",
+    "start_comm",
+    "pointwise_flux",
+    "flux_div_1",
+    "end_comm",
+    "riemann",
+    "flux_div_2",
+    "forcing",
+    "total",
+]
+
 
 class ProblemDesc:
     """Basic information about a problem specification (mostly size)"""
 
-    def __init__(self, grid_type, equations, case_number, order, hori, vert, dt, num_procs) -> None:
+    def __init__(
+        self,
+        grid_type,
+        equations,
+        case_number,
+        order: int = 0,
+        hori: int = 0,
+        vert: int = 0,
+        dt: float = 0.0,
+        num_procs: int = 0,
+        total_points: int = 0,
+        backend: str = "",
+    ) -> None:
         self.grid_type = grid_type
         self.equations = equations
         self.case_number = case_number
@@ -44,6 +68,8 @@ class ProblemDesc:
         self.vert = vert
         self.dt = dt
         self.num_procs = num_procs
+        self.total_points = total_points
+        self.backend = backend
 
     # def __init__(self, params: Tuple) -> None:
     #    self.grid_type = params[0]
@@ -79,11 +105,16 @@ class ProblemDesc:
         name = f"{gt}_{eq}"
         if self.case_number > 0:
             name += f"_{self.case_number}"
-        name += f"_{self.hori}x{self.vert}x{self.order}"
+        if self.order > 0:
+            name += f"_{self.hori}x{self.vert}x{self.order}"
+        else:
+            name += f"_{self.total_points}"
         if self.num_procs > 0:
             name += f"_{self.num_procs}pe"
         if self.dt > 0.0:
             name += f"_{int(self.dt)}"
+        if self.backend != "":
+            name += f"_{self.backend}"
 
         return name
 
@@ -446,12 +477,17 @@ class FullDataSet:
             title += f"{self.prob.hori}"
         else:
             title += "*"
-        title += f"x{self.prob.vert}x({self.prob.order}) elem"
+        if self.prob.vert > 0 and self.prob.order > 0:
+            title += f"x{self.prob.vert}x({self.prob.order}) elem"
+        else:
+            title += f"{self.prob.total_points} points"
         if self.prob.hori > 0:
             num_dofs = self.prob.hori * self.prob.vert * self.prob.order**2
             if self.prob.grid_type == "cubed_sphere":
                 num_dofs *= self.prob.hori * self.prob.order * 6
             title += f" ({human_format(num_dofs)} DOFs)"
+        if self.prob.backend != "":
+            title += f", {self.prob.backend}"
         title += "\n"
         items = []
         if self.same_dt:
@@ -510,23 +546,68 @@ class FullDataSet:
         # characteristics (size, equations, grid type, etc) and the specified custom condition. This serves
         # as a base subset of the entire data from which aggregate data (averages, scaling, etc.) will be
         # computed
+
+        # Determine total number of points
+        if self.prob.equations == "euler":
+            if self.prob.grid_type == "cubed_sphere":
+                total_points = "(num_elem_h * num_elem_h * num_elem_v * dg_order * dg_order * dg_order)"
+            elif self.prob.grid_type == "cartesian":
+                total_points = "(num_elem_h * num_elem_v * dg_order * dg_order)"
+            else:
+                raise ValueError(f"Unknown grid type {self.prob.grid_type}")
+        elif self.prob.equations == "shallow_water":
+            total_points = "(num_elem_h * num_elem_h * dg_order * dg_order)"
+        else:
+            raise ValueError(f"Unknown equations {self.prob.equations}")
+
+        # Determine conditions (for the WHERE clause)
+        all_conditions = [
+            f"grid_type like '{self.prob.grid_type}'",
+            f"equations like '{self.prob.equations}'",
+            f"case_number = {self.prob.case_number}",
+            f"solver_flag = 0",
+        ]
+        if self.prob.order > 0:
+            all_conditions.append(f"dg_order = {self.prob.order}")
+        if self.prob.hori > 0:
+            all_conditions.append(f"num_elem_h = {self.prob.hori}")
+        if self.prob.vert > 0:
+            all_conditions.append(f"num_elem_v = {self.prob.vert}")
+        if self.prob.num_procs > 0:
+            all_conditions.append(f"num_procs = {self.prob.num_procs}")
+        if self.prob.total_points > 0:
+            all_conditions.append(f"total_points = {self.prob.total_points}")
+        if self.prob.backend != "":
+            all_conditions.append(f"backend like '{self.prob.backend}'")
+
+        all_conditions += conditions
+
+        # Column combinations for RHS timing
+        rhs_averaging = ", ".join([f"avg({x}) as rhs_{x}" for x in rhs_timing_columns])
+
+        # Assemble the query
         base_subtable_query = f"""--sql
-         select *
-         from results_param
-         where
-            grid_type like '{self.prob.grid_type}' AND
-            equations like '{self.prob.equations}' AND
-            case_number = {self.prob.case_number}  AND
-            dg_order    = {self.prob.order}        AND
-         {f'num_elem_h  = {self.prob.hori}         AND' if self.prob.hori > 0 else ''}
-            num_elem_v  = {self.prob.vert}         AND
-         {f'num_procs   = {self.prob.num_procs}    AND' if self.prob.num_procs > 0 else ''}
-            solver_flag = 0                        AND
-            {' AND '.join(conditions)}
+            select *
+            from 
+            -- Base query (from main table)
+            (
+                select *, {total_points} as total_points
+                from results_param
+                where {' AND '.join(all_conditions)}
+            ) q1
+            left join
+            -- Join with RHS timing results, which are in a different table
+            (
+                select run_id, step_id, {rhs_averaging}
+                from rhs_timing
+                group by run_id, step_id
+            ) q2
+            on (q1.run_id = q2.run_id and q1.step_id = q2.step_id)
             ;
-      """.strip().strip(
+        """.strip().strip(
             ";"
         )
+        # ---------------------------------------------------------------------------------------------------
 
         # ---------------------------------------------------------------------------------------------------
         # Query to average out some values when a simulation has been run multiple times with the exact same
@@ -544,6 +625,7 @@ class FullDataSet:
         group_by_list = columns + ["simulation_time", "num_elem_h"]
 
         order_by_list = [
+            "dg_order",
             "num_elem_h",
             "num_mg_levels",
             "mg_solve_coarsest",
@@ -560,17 +642,19 @@ class FullDataSet:
 
         group_by = ", ".join(group_by_list)
         order_by = ", ".join(order_by_list)
+        rhs_averaging_2 = ", ".join(f"avg(rhs_{x}) as rhs_{x}" for x in rhs_timing_columns)
 
         combine_same_configs_query = f"""--sql
-         select *,
-                avg(total_solve_time) as single_step_time,
-                avg(num_solver_it)    as single_step_it,
-                avg(dt)               as single_step_dt        -- these should all be the same
-         from ({base_subtable_query})
-         group by {group_by}
-         order by {order_by}
-         ;
-      """.strip().strip(
+            select *,
+                    avg(total_solve_time)  as single_step_time,
+                    avg(num_solver_it)     as single_step_it,
+                    avg(dt)                as single_step_dt,       -- these should all be the same
+                    {rhs_averaging_2}
+            from ({base_subtable_query})
+            group by {group_by}
+            order by {order_by}
+            ;
+        """.strip().strip(
             ";"
         )
 
@@ -584,51 +668,61 @@ class FullDataSet:
         # iterations per step). These entries can be further combined to generate scaling plots.
         param_query = (
             f"""--sql
-         select 
-                {{columns}},
-                num_elem_h,
-                num_procs,
-                avg(x1) - avg(x0)                  as h_size,           -- should all be the same
-                avg(z1) - avg(z0)                  as v_size,           -- should all be the same
-                avg(single_step_time / initial_dt) as time_per_time,
-                avg(single_step_time)              as avg_step_time,
-                stdev(single_step_time)            as stdev_step_time,
-                avg(single_step_it)                as avg_step_it,
-                stdev(single_step_it)              as stdev_step_time,
-                group_concat(simulation_time),
-                group_concat(single_step_dt),
-                group_concat(single_step_time),
-                group_concat(single_step_it)
-         from ({combine_same_configs_query})
-         group by {{group_by_list}}
-         order by num_mg_levels, mg_solve_coarsest, kiops_dt_factor, (num_pre_smoothe + num_post_smoothe),
-                  time_per_time -- use 'time_per_time' as criterion for best performance (for the purpose of plotting)
-         ;
-      """.strip()
+            select 
+                    {{columns}},
+                    dg_order,
+                    num_elem_h,
+                    num_elem_v
+                    num_procs,
+                    {rhs_averaging_2},
+                    avg(x1) - avg(x0)                  as h_size,           -- should all be the same
+                    avg(z1) - avg(z0)                  as v_size,           -- should all be the same
+                    avg(single_step_time / initial_dt) as time_per_time,
+                    avg(single_step_time)              as avg_step_time,
+                    stdev(single_step_time)            as stdev_step_time,
+                    avg(single_step_it)                as avg_step_it,
+                    stdev(single_step_it)              as stdev_step_time,
+                    group_concat(simulation_time),
+                    group_concat(single_step_dt),
+                    group_concat(single_step_time),
+                    group_concat(single_step_it)
+            from ({combine_same_configs_query})
+            group by {{group_by_list}}
+            order by dg_order, num_mg_levels, mg_solve_coarsest, kiops_dt_factor, (num_pre_smoothe + num_post_smoothe),
+                    time_per_time -- use 'time_per_time' as criterion for best performance (for the purpose of plotting)
+            ;
+            """.strip()
             .strip(";")
             .format(columns=", ".join(columns), group_by_list=", ".join(columns + ["num_elem_h"]))
         )
 
         # ---------------------------------------------------------------------------------------------------
-        # Query to do stuff
-        scaling_parameter = "num_procs" if self.cpu_scaling else "num_elem_h"
+        # Query to further group selected sets according to a scaling parameter
+        scaling_parameter = "num_elem_h"
+        if self.cpu_scaling:
+            scaling_parameter = "num_procs"
+        elif self.prob.hori <= 0:
+            scaling_parameter = "dg_order"
+        # scaling_parameter = "num_procs" if self.cpu_scaling else "num_elem_h"
+        rhs_concat = ", ".join(f"group_concat(rhs_{x})" for x in rhs_timing_columns)
         scaling_query = f"""--sql
-         select {{columns}},
-                avg(h_size),                    -- They should all have the same h size!
-                avg(v_size),                    -- They should all have the same v size!
-                min(time_per_time),
-                min(avg_step_time),
-                group_concat({scaling_parameter}),
-                group_concat(avg_step_time),
-                group_concat(stdev_step_time),
-                group_concat(avg_step_it),
-                group_concat(stdev_step_time)
-         from ({param_query})
-         group by {{columns}}
-         order by {scaling_parameter},
-                  time_per_time -- use 'time_per_time' as criterion for best performance (for the purpose of plotting)
-         ;
-      """.format(
+            select {{columns}},
+                    {rhs_concat},
+                    avg(h_size),                    -- They should all have the same h size!
+                    avg(v_size),                    -- They should all have the same v size!
+                    min(time_per_time),
+                    min(avg_step_time),
+                    group_concat({scaling_parameter}),
+                    group_concat(avg_step_time),
+                    group_concat(stdev_step_time),
+                    group_concat(avg_step_it),
+                    group_concat(stdev_step_time)
+            from ({param_query})
+            group by {{columns}}
+            order by {scaling_parameter},
+                    time_per_time -- use 'time_per_time' as criterion for best performance (for the purpose of plotting)
+            ;
+        """.format(
             columns=", ".join(columns)
         )
 
@@ -637,17 +731,17 @@ class FullDataSet:
         # This computes the average residual after each iteration, averaged over every timestep, for a certain
         # configuration
         base_residual_query = f"""
-         select iteration, avg(residual), stdev(residual)
-         from results_data
-         where run_id in (
-            with subtable as ({base_subtable_query})
-            select distinct run_id
-            from subtable
-            where {{inner_condition}}
-         )
-         group by iteration
-         order by run_id, iteration
-      """.strip()
+            select iteration, avg(residual), stdev(residual)
+            from results_data
+            where run_id in (
+                with subtable as ({base_subtable_query})
+                select distinct run_id
+                from subtable
+                where {{inner_condition}}
+            )
+            group by iteration
+            order by run_id, iteration
+        """.strip()
 
         # Retrieve the desired problem configurations and their stats
         if self.prob.hori > 0 and not self.cpu_scaling:
@@ -698,12 +792,15 @@ class FullDataSet:
                 r["it_per_step"] = np.array([float(x) for x in subset[-1].split(",")])
             else:
                 # Plot evolution as a function of problem size
-
+                # print(f"subset = \n{subset}")
+                if subset[-10] is not None:
+                    for i, col in enumerate(rhs_timing_columns):
+                        # print(f"column {col}, subset[{i-18}] = {subset[i-18]}")
+                        r[f"rhs_{col}"] = np.array([float(x) for x in subset[i - 18].split(",")])
                 r["h_size"] = float(subset[-9])
                 r["v_size"] = float(subset[-8])
 
-                name = "num_procs" if self.cpu_scaling else "num_elem_h"
-                r[name] = np.array([int(x) for x in subset[-5].split(",")])
+                r[scaling_parameter] = np.array([int(x) for x in subset[-5].split(",")])
                 # print(f'r[{name}]: {r[name]}')
                 r["step_times"] = np.array([float(x) for x in subset[-4].split(",")])
                 r["step_times_stdev"] = np.array([float(x) for x in subset[-3].split(",")])
@@ -719,6 +816,20 @@ class FullDataSet:
             num_best = min(num_best, len(param_sets))
             results = results[:num_best]
 
+        base_rhs_query = f"""
+            select iteration, avg(total), stdev(total), avg(extrapolation), avg(start_comm), avg(pointwise_flux),
+                   avg(flux_div_1), avg(end_comm), avg(riemann), avg(flux_div_2), avg(forcing)
+            from rhs_timing
+            where run_id in (
+                with subtable as ({base_subtable_query})
+                select distinct run_id
+                from subtable
+                where {{inner_condition}}
+            )
+            group by iteration
+            order by run_id, iteration
+        """.strip()
+
         # Get the residuals from the other table (only if we're not extracting scaling data)
         if self.prob.hori > 0:
             for subset in results:
@@ -731,6 +842,19 @@ class FullDataSet:
 
                 subset["residuals"] = np.array([r[1] for r in residuals])
                 subset["stdevs"] = np.array([r[2] if r[2] is not None else 0.0 for r in residuals])
+
+                rhs_query = base_rhs_query.format(inner_condition=inner_cond)
+                rhs_times = db_cursor.execute(rhs_query).fetchall()
+                subset["rhs_totals"] = np.array([r[1] for r in rhs_times])
+                subset["rhs_stdevs"] = np.array([r[2] if r[2] is not None else 0.0 for r in rhs_times])
+                subset["rhs_extraps"] = np.array([r[3] for r in rhs_times])
+                subset["rhs_startcomms"] = np.array([r[4] for r in rhs_times])
+                subset["rhs_pwfluxes"] = np.array([r[5] for r in rhs_times])
+                subset["rhs_fluxdiv1s"] = np.array([r[6] for r in rhs_times])
+                subset["rhs_endcomms"] = np.array([r[7] for r in rhs_times])
+                subset["rhs_riemanns"] = np.array([r[8] for r in rhs_times])
+                subset["rhs_fluxdiv2s"] = np.array([r[9] for r in rhs_times])
+                subset["rhs_forcings"] = np.array([r[10] for r in rhs_times])
 
         return results
 
@@ -892,6 +1016,7 @@ class FullDataSet:
 
         for dataset in [self.no_precond, self.fv_ref, self.p_mg, self.fv_mg]:
             for i, data in enumerate(dataset):
+                print(f"dataset {i} = {data}")
                 ax_res.errorbar(
                     np.arange(len(data["residuals"][:MAX_IT])),
                     y=data["residuals"][:MAX_IT],
@@ -917,6 +1042,78 @@ class FullDataSet:
         fig.legend(fontsize=8)
 
         full_filename = self._make_filename("residual")
+        fig.savefig(full_filename)
+        plt.close(fig)
+        print(f"Saving {full_filename}")
+
+    def plot_rhs_timeline(self):
+        # """
+        # Plot the evolution of the residual per FGMRES iteration. Since it varies by time step, we plot the average per
+        # iteration, with error bars for standard deviation
+        # """
+
+        MAX_IT = 50
+        max_res = 0
+        min_res = np.inf
+        max_it = 0
+
+        fig, ax_res = plt.subplots(1, 1)
+
+        for dataset in [self.no_precond, self.fv_ref, self.p_mg, self.fv_mg]:
+            for i, data in enumerate(dataset):
+                if len(data["rhs_totals"]) <= 0:
+                    continue
+                # print(f"dataset {i} = {data}")
+                y = (
+                    np.vstack(
+                        [
+                            data["rhs_extraps"][:MAX_IT],
+                            data["rhs_startcomms"][:MAX_IT],
+                            data["rhs_pwfluxes"][:MAX_IT],
+                            data["rhs_fluxdiv1s"][:MAX_IT],
+                            data["rhs_endcomms"][:MAX_IT],
+                            data["rhs_riemanns"][:MAX_IT],
+                            data["rhs_fluxdiv2s"][:MAX_IT],
+                            data["rhs_forcings"][:MAX_IT],
+                        ]
+                    )
+                    * 1000.0
+                )
+                labels = [
+                    "Extrapolation",
+                    "Start comm",
+                    "Pointwise flux",
+                    "Flux div 1",
+                    "End comm",
+                    "Riemann",
+                    "Flux div 2",
+                    "Forcing",
+                ]
+                ax_res.stackplot(
+                    np.arange(len(data["rhs_totals"][:MAX_IT])),
+                    y,
+                    # color=get_color(data, i),
+                    # linestyle=get_linestyle(data, i),
+                    # marker=get_marker(data),
+                    # label=self._make_label(data),
+                    labels=labels,
+                )
+
+        ax_res.set_xlabel("Iteration #")
+        if max_it > 0:
+            ax_res.set_xlim(left=-1, right=min(max_it, MAX_IT))
+        # ax_res.set_xscale('log')
+
+        # ax_res.set_yscale("log")
+        ax_res.grid(True)
+        ax_res.set_ylabel("Time (ms)")
+        if max_res > 0.0:
+            ax_res.set_ylim(bottom=max(min_res * 0.8, 5e-8), top=min(2e0, max_res * 1.5))
+
+        fig.suptitle(self._make_title("RHS time evolution"), fontsize=9, x=0.04, horizontalalignment="left")
+        fig.legend(fontsize=8)
+
+        full_filename = self._make_filename("rhs_time_evolution")
         fig.savefig(full_filename)
         plt.close(fig)
         print(f"Saving {full_filename}")
@@ -1042,6 +1239,51 @@ class FullDataSet:
         plt.close(fig)
         print(f"Saving {full_filename}")
 
+    def plot_time_per_order(self):
+        """Plot time with respect to discretization order."""
+        fig, ax = plt.subplots(1, 1)
+        for dataset in [self.no_precond, self.fv_ref, self.p_mg, self.fv_mg]:
+            for i, data in enumerate(dataset):
+                if "rhs_total" not in data:
+                    continue
+                print(f"dataset {i} = {data}")
+                y = np.vstack([data[f"rhs_{x}"] for x in rhs_timing_columns[:-1]]) * 1000.0
+                labels = rhs_timing_columns[:-1]
+                ax.stackplot(
+                    data["dg_order"],
+                    y,
+                    labels=labels,
+                )
+
+        # ax.set_yscale('log')
+
+        ax.yaxis.grid()
+
+        ax.set_xlabel(f"Order")
+        ax.set_xticks(self.no_precond[0]["dg_order"])
+        ax.set_ylabel("Time (ms)")
+
+        if self.prob.grid_type == "cartesian2d" and "data" in locals():
+            ax_ar = ax.twiny()
+            ax_ar.set_xlim(ax.get_xlim())
+            locations = ax.get_xticks()
+            locations = locations[locations >= 1]
+            print(f'h size: {data["h_size"]}')
+            print(f'v size: {data["v_size"]}')
+            print(f"locations: {locations}")
+            print(f"prob vert: {self.prob.vert}")
+            ratios = [(data["h_size"] / num_h) / (data["v_size"] / self.prob.vert) for num_h in locations]
+            ax_ar.set_xticks(locations)
+            ax_ar.set_xticklabels([f"{r:.2f}" for r in ratios])
+
+        fig.suptitle(self._make_title("Time (ms)"), fontsize=9, x=0.03, y=0.99, horizontalalignment="left")
+        fig.legend(fontsize=8)
+
+        full_filename = self._make_filename("time_per_order")
+        fig.savefig(full_filename)
+        plt.close(fig)
+        print(f"Saving {full_filename}")
+
 
 def main(args):
     """
@@ -1051,10 +1293,10 @@ def main(args):
     # Basic timing plots
     if any([args.time, args.error_time, args.time_per_step]):
         prob_query = f"""
-         select distinct grid_type, equations, case_number, dg_order, num_elem_h, num_elem_v,
-                         num_procs{', initial_dt' if args.split_dt else ''}
-         from results_param
-      """
+            select distinct grid_type, equations, case_number, dg_order, num_elem_h, num_elem_v,
+                            num_procs{', initial_dt' if args.split_dt else ''}
+            from results_param
+        """
         probs = []
         for p in list(db_cursor.execute(prob_query).fetchall()):
             probs.append(
@@ -1081,11 +1323,11 @@ def main(args):
                 prob_data.plot_time_per_step()
 
     # Basic iteration plots and strong scaling plots
-    if any([args.residual, args.it, args.it_per_step]):
+    if any([args.residual, args.it, args.it_per_step, args.rhs]):
         prob_query = f"""
-         select distinct grid_type, equations, case_number, dg_order, num_elem_h, num_elem_v
-         from results_param
-      """
+            select distinct grid_type, equations, case_number, dg_order, num_elem_h, num_elem_v
+            from results_param
+        """
         probs = [
             ProblemDesc(
                 grid_type=p[0], equations=p[1], case_number=p[2], order=p[3], hori=p[4], vert=p[5], num_procs=0, dt=0
@@ -1101,13 +1343,15 @@ def main(args):
                 prob_data.plot_it()
             if args.it_per_step:
                 prob_data.plot_it_per_step()
+            if args.rhs:
+                prob_data.plot_rhs_timeline()
 
     # Strong scaling plot(s)
     if args.strong_scaling:
         prob_query = f"""
-         select distinct grid_type, equations, case_number, dg_order, num_elem_h, num_elem_v
-         from results_param
-      """
+            select distinct grid_type, equations, case_number, dg_order, num_elem_h, num_elem_v
+            from results_param
+        """
         probs = [
             ProblemDesc(
                 grid_type=p[0], equations=p[1], case_number=p[2], order=p[3], hori=p[4], vert=p[5], num_procs=0, dt=0
@@ -1123,9 +1367,9 @@ def main(args):
     if args.grid_progression:
         # Only plotting iterations for now, so independant of proc count
         prob_query = """
-         select distinct grid_type, equations, case_number, dg_order, num_elem_v
-         from results_param
-      """
+            select distinct grid_type, equations, case_number, dg_order, num_elem_v
+            from results_param
+        """
         probs = [
             ProblemDesc(
                 grid_type=p[0], equations=p[1], case_number=p[2], order=p[3], hori=0, vert=p[4], num_procs=0, dt=0
@@ -1137,6 +1381,24 @@ def main(args):
         for prob in probs:
             prob_data = FullDataSet(prob, output_suffix=args.suffix, pseudo_cfl_cond=args.pseudo_cfl)
             prob_data.plot_it_per_size()
+
+    if args.order_progression:
+        prob_query = """
+            select distinct grid_type, equations, case_number, backend,
+                            (num_elem_h*num_elem_h*num_elem_v*dg_order*dg_order*dg_order)
+            from results_param
+        """
+        probs = [
+            ProblemDesc(grid_type=p[0], equations=p[1], case_number=p[2], backend=p[3], total_points=p[4])
+            for p in list(db_cursor.execute(prob_query).fetchall())
+        ]
+        # group by num_elem_h*num_elem_h*num_elem_v*dg_order*dg_order
+        res = "\n".join([f"{p}" for p in db_cursor.execute(prob_query).fetchall()])
+        print(f"results: \n{res}")
+
+        for prob in probs:
+            prob_data = FullDataSet(prob, output_suffix=args.suffix, pseudo_cfl_cond=args.pseudo_cfl)
+            prob_data.plot_time_per_order()
 
 
 if __name__ == "__main__":
@@ -1171,6 +1433,14 @@ if __name__ == "__main__":
     parser.add_argument("--suffix", type=str, default="", help="Suffix to add to the base output file name")
     parser.add_argument("--grid-progression", action="store_true", help="Plot number of iterations per problem size")
     parser.add_argument("--strong-scaling", action="store_true", help="Plot performance per number of processors")
+    parser.add_argument(
+        "--order-progression",
+        action="store_true",
+        help="Plot timing for a certain total problem size as the order varies",
+    )
+    parser.add_argument(
+        "--rhs", action="store_true", help="Plot evolution of rhs timing over the course of a time step"
+    )
 
     parser.add_argument(
         "--pseudo-cfl",

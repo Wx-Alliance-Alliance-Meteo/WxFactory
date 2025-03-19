@@ -5,6 +5,7 @@ from numpy import ndarray
 import cuda_test
 import ndarray_generator
 from solvers import pmex
+from device import CpuDevice, CudaDevice
 
 
 class PmexComparisonTestCases(cuda_test.CudaTestCases):
@@ -24,6 +25,9 @@ class PmexComparisonTestCases(cuda_test.CudaTestCases):
 
         self.tolerance = 1e-7
         self.rand = random.Random(seed)
+
+        self.cpu_device = CpuDevice()
+        self.gpu_device = CudaDevice()
 
         [self.cpu_matrix, self.gpu_matrix] = ndarray_generator.generate_matrixes(
             (initial_matrix_size, initial_matrix_size),

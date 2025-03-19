@@ -60,7 +60,7 @@ class Epi(Integrator):
                 ]
             )
         else:
-            raise ValueError("Unsupported order for EPI method")
+            raise ValueError(f"Unsupported order {order} for EPI method")
 
         k, self.n_prev = self.A.shape
         # Limit max phi to 1 for EPI 2
@@ -81,7 +81,7 @@ class Epi(Integrator):
     def __step__(self, Q: numpy.ndarray, dt: float):
 
         # If dt changes, discard saved value and redo initialization
-        mpirank = MPI.COMM_WORLD.Get_rank()
+        mpirank = self.device.comm.rank
         if self.dt and abs(self.dt - dt) > 1e-10:
             self.previous_Q = deque()
             self.previous_rhs = deque()
@@ -101,12 +101,12 @@ class Epi(Integrator):
         rhs = self.rhs(Q)
 
         def matvec_handle(v):
-            return matvec_fun(v, dt, Q, rhs, self.rhs, self.jacobian_method, self.device)
+            return matvec_fun(v, dt, Q, rhs, self.rhs, self.jacobian_method)
 
         vec = self.device.xp.zeros((self.max_phi + 1, rhs.size))
         vec[1, :] = rhs.flatten()
         for i in range(self.n_prev):
-            J_deltaQ = matvec_fun(self.previous_Q[i] - Q, 1.0, Q, rhs, self.rhs, self.jacobian_method, self.device)
+            J_deltaQ = matvec_fun(self.previous_Q[i] - Q, 1.0, Q, rhs, self.rhs, self.jacobian_method)
 
             # R(y_{n-i})
             r = (self.previous_rhs[i] - rhs) - self.device.xp.reshape(J_deltaQ, Q.shape)
@@ -116,7 +116,7 @@ class Epi(Integrator):
                 vec[k, :] += alpha * r.flatten()
 
         # ----pmex with norm estimate-----
-        if self.exponential_solver == "pmex":
+        if self.exponential_solver == "pmex_ne":
             phiv, stats = pmex(
                 [1.0],
                 matvec_handle,
@@ -243,12 +243,6 @@ class Epi(Integrator):
             self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
 
             if mpirank == 0:
-                # print to file stats
-                # size      = MPI.COMM_WORLD.Get_size()
-                # file_name = "results_tanya/cwyne_try2_stats_" + "n" + str(size) + "_e" + str(self.int) + "_c" + str(self.case_number) + ".txt"
-                # with open(file_name, 'a') as gg:
-                #  gg.write('{} {} {} {} {} {} {} {} {} \n'.format(stats[0], stats[1], stats[2], stats[3], stats[6], stats[7], stats[8], stats[9], stats[10]))
-
                 print(
                     f"CWY NE converged at iteration {stats[2]} (using {stats[0]} internal substeps "
                     f"and {stats[1]} rejected expm)"
@@ -316,8 +310,8 @@ class Epi(Integrator):
                     f"with local error {stats[3]}"
                 )
 
-            # self.solver_info = SolverInfo(total_num_it=stats[0])
-            # ----------default: kiops-----------
+        # ----- Regular PMEX ------
+        elif self.exponential_solver == "pmex":
             phiv, stats = pmex([1.0], matvec_handle, vec, tol=self.tol, mmax=64, task1=False, device=self.device)
 
             if mpirank == 0:
@@ -327,7 +321,8 @@ class Epi(Integrator):
                     flush=True,
                 )
 
-        else:
+        # ----- Regular KIOPS ------
+        elif self.exponential_solver == "kiops":
             phiv, stats = kiops(
                 [1],
                 matvec_handle,
@@ -348,6 +343,9 @@ class Epi(Integrator):
                     f" {stats[1]} rejected expm) to a solution with local error {stats[4]:.2e}",
                     flush=True,
                 )
+
+        else:
+            raise ValueError(f"Unrecognized exponential solver {self.exponential_solver}")
 
         self.solver_info = SolverInfo(total_num_it=stats[2])
 

@@ -81,12 +81,20 @@ class Srerk(Integrator):
         vec[1, :] = rhs.flatten()
 
         # for printing stats
-        mpirank = MPI.COMM_WORLD.Get_rank()
+        mpirank = self.device.comm.rank
 
         # ---original kiops---
         if self.exponential_solver == "kiops":
             z, stats = kiops(
-                self.c[0], matvec_handle, vec, tol=self.tol, m_init=self.krylov_size, mmin=16, mmax=64, task1=False
+                self.c[0],
+                matvec_handle,
+                vec,
+                tol=self.tol,
+                m_init=self.krylov_size,
+                mmin=16,
+                mmax=64,
+                task1=False,
+                device=self.device,
             )
 
             if mpirank == 0:

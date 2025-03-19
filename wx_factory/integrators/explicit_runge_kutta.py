@@ -153,8 +153,6 @@ class RungeKutta:
                     self.status = "finished"
 
     def _step_impl(self):
-        mpirank = mpirank = MPI.COMM_WORLD.Get_rank()
-
         # mostly follows the scipy implementation of scipy's RungeKutta
         t = self.t
         y = self.y
@@ -204,7 +202,7 @@ class RungeKutta:
                     self.standard_sc = True
 
                 elif self.standard_sc:
-                    factor = self.safety * error_norm ** self.error_exponent
+                    factor = self.safety * error_norm**self.error_exponent
                     self.standard_sc = False
 
                 else:
@@ -212,7 +210,7 @@ class RungeKutta:
                     h_ratio = h / self.h_previous
 
                     factor = self.safety_sc * (
-                        error_norm ** self.minbeta1 * self.error_norm_old ** self.minbeta2 * h_ratio ** self.minalpha
+                        error_norm**self.minbeta1 * self.error_norm_old**self.minbeta2 * h_ratio**self.minalpha
                     )
 
                 if step_rejected:
@@ -226,7 +224,7 @@ class RungeKutta:
                 step_rejected = True
                 # if mpirank == 0:
                 # print("rejected step ", self.num_of_steps, t_new, h, error_norm)
-                h *= limiter(self.safety * error_norm ** self.error_exponent, 2)
+                h *= limiter(self.safety * error_norm**self.error_exponent, 2)
 
                 if h < 1e-12:
                     print("Unable to achieve desired tolerance. EXODE method failed.")

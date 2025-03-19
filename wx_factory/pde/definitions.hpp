@@ -8,13 +8,25 @@
 #include <pybind11/pybind11.h>
 
 #ifdef __CUDACC__
-#define DEVICE_SPACE __device__
+
+#define HOST_DEVICE_SPACE __host__ __device__
+#define DEVICE_SPACE      __device__
+#include <cuda/std/array>
 #include <cuda/std/ccomplex>
 #include <cuda/std/complex>
 using complex_t = cuda::std::complex<double>;
+template <class T, std::size_t N>
+using array = cuda::std::array<T, N>;
+
 #else
+
 #define DEVICE_SPACE
+#define HOST_DEVICE_SPACE
+#include <array>
 using complex_t = std::complex<double>;
+template <class T, std::size_t N>
+using array = std::array<T, N>;
+
 #endif
 
 // Declarations

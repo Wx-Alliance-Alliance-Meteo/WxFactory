@@ -14,19 +14,22 @@ import numpy
 test_tag: int = 0
 
 
-def run_test_on_x_process(test: unittest.TestCase, x: int = 0) -> MPI.Comm:
+def run_test_on_x_process(test: unittest.TestCase, x: int = 0, optional: bool = False) -> MPI.Comm:
     """
     Make the test run on `x` processes
 
     :param test: Test that want to restrict the number of processes
     :param x: Required number of processes, 0 for no restriction
-    :return: The new communicator to be use for the tests
+    :return: The new communicator to be used for the tests
     """
     if x == 0:
         return MPI.COMM_WORLD
 
     if x > MPI.COMM_WORLD.size:
-        test.fail("Not enough process to run this test")
+        if MPI.COMM_WORLD.rank == 0 and not optional:
+            test.fail("Not enough process to run this test")
+        else:
+            test.skipTest(f"Not enough processes to run this test [optional={optional}]")
 
     global test_tag
     is_needed: bool = MPI.COMM_WORLD.rank < x
@@ -54,6 +57,17 @@ class _WritelnDecorator(object):
         if arg:
             self.write(arg)
         self.write("\n")
+
+
+class MpiTestCase(unittest.TestCase):
+    def __init__(self, num_procs: int, methodName="runTest", optional: bool = False):
+        super().__init__(methodName)
+        self.num_procs = num_procs
+        self.optional = optional
+
+    def setUp(self):
+        super().setUp()
+        self.comm = run_test_on_x_process(self, self.num_procs, self.optional)
 
 
 class MpiTestResult(TestResult):
@@ -126,7 +140,7 @@ class MpiTestResult(TestResult):
                             else:
                                 errors.append((0, self.failures[failure_index][1]))
                         else:
-                            errors.append((node_index, wx_mpi.receive_string_from(node_index, MPI.COMM_WORLD)))
+                            errors.append((node_index, MPI.COMM_WORLD.recv(source=node_index)))
                 if len(errors) > 0:
                     self.printErrorList(errors, self.tests_order[test_index])
                 else:
@@ -138,10 +152,10 @@ class MpiTestResult(TestResult):
             else:
                 # Send an error message
                 if to_send[0] == 1:
-                    wx_mpi.send_string_to(self.errors[error_index][1], 0, MPI.COMM_WORLD)
+                    MPI.COMM_WORLD.send(self.errors[error_index][1], dest=0)
                     error_index += 1
                 elif to_send[0] == 2:
-                    wx_mpi.send_string_to(self.failures[failure_index][1], 0, MPI.COMM_WORLD)
+                    MPI.COMM_WORLD.send(self.failures[failure_index][1], dest=0)
                     failure_index += 1
 
         if len(skipped_tests) > 0:
@@ -162,19 +176,24 @@ class MpiTestResult(TestResult):
             self.stream.writeln(f"{error[1]}\n")
 
 
-class MpiRunner(object):
+class MpiRunner(unittest.TextTestRunner):
     """
     Partial reimplementation of the default TextTestRunner class of unittest to add MPI support
     """
 
-    def __init__(self):
-        self.stream = _WritelnDecorator(sys.stderr)
-        self.descriptions = True
-        self.verbosity = False
-        self.failfast = False
-        self.buffer = False
-        self.tb_locals = False
-        self.warnings = None
+    def __init__(
+        self,
+        stream=_WritelnDecorator(sys.stderr),
+        descriptions=True,
+        verbosity=1,
+        failfast=False,
+        buffer=False,
+        resultclass=None,
+        warnings=None,
+        *,
+        tb_locals=False,
+    ):
+        super().__init__(stream, descriptions, verbosity, failfast, buffer, resultclass, warnings, tb_locals=tb_locals)
 
     def run(self, test: unittest.TestSuite | unittest.TestCase) -> TestResult:
         result = MpiTestResult(self.stream, self.descriptions, self.verbosity)
