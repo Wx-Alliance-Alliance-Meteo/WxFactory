@@ -88,10 +88,6 @@ class CpuDevice(Device):
 
         super().__init__(comm, numpy, scipy, pde)
 
-        # If there is no default device yet, set it to self
-        if CpuDevice._default is None and comm == MPI.COMM_WORLD:
-            CpuDevice._default = self
-
     def synchronize(self, **kwargs):
         """Don't do anything. This is to allow writing generic code when device is not the same as the host."""
 
@@ -174,9 +170,7 @@ class CudaDevice(Device):
         self.main_stream = cupy.cuda.get_current_stream()
         self.copy_stream = cupy.cuda.Stream(non_blocking=True)
 
-        # If there is no default device yet, set it to self
-        if CudaDevice._default is None and comm == MPI.COMM_WORLD:
-            CudaDevice._default = self
+        self.debug_stack = 0
 
     def synchronize(self, **kwargs):
         """Synchronize a stream, based on input arguments. By default, the main stream is synchronized.
@@ -199,11 +193,24 @@ class CudaDevice(Device):
         return val.get(**kwargs)
 
     def timestamp(self, **kwargs):
+        debug = True
+
+        if debug:
+            # self.synchronize()
+            if self.debug_stack > 0:
+                self.cupy.cuda.nvtx.RangePop()
+                self.debug_stack -= 1
+
         ts = self.cupy.cuda.Event()
         if "copy_stream" in kwargs and kwargs["copy_stream"]:
             ts.record(self.copy_stream)
         else:
             ts.record(self.main_stream)
+
+        if debug:
+            if "name" in kwargs:
+                self.cupy.cuda.nvtx.RangePush(kwargs["name"])
+                self.debug_stack += 1
 
         return ts
 

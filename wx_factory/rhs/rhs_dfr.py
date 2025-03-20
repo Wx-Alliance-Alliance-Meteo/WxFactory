@@ -133,7 +133,7 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
         self.w_df3_dx3_presa *= self.pressure
         self.w_df3_dx3_presb += logp_bdy_k @ self.ops.correction_DU
         self.w_df3_dx3_presb *= self.pressure * self.wflux_pres_x3
-        self.w_df3_dx3 = self.w_df3_dx3_adv + self.w_df3_dx3_presa + self.w_df3_dx3_presb
+        self.w_df3_dx3[...] = self.w_df3_dx3_adv + self.w_df3_dx3_presa + self.w_df3_dx3_presb
 
         self.rhs[...] = -self.metric.inv_sqrtG_new * (self.df1_dx1 + self.df2_dx2 + self.df3_dx3)
         self.rhs[idx_rho_w] = -self.metric.inv_sqrtG_new * (self.w_df1_dx1 + self.w_df2_dx2 + self.w_df3_dx3)

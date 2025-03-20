@@ -1,7 +1,9 @@
 from mpi4py import MPI
+from numpy.typing import NDArray
 
 from common import Configuration
 from common.definitions import idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_w, idx_rho_theta, p0, cpd, cvd, Rd, gravity
+from device import CudaDevice
 from geometry import CubedSphere3D, Metric3DTopo
 from init.dcmip import dcmip_schar_damping
 
@@ -68,6 +70,15 @@ class PDEEulerCubesphere(PDE):
         self.num_solpts = config.num_solpts
         self.case_number = config.case_number
         self.advection_only = config.case_number < 13
+
+        self.compute_forcings = compute_forcings
+        if isinstance(self.device, CudaDevice):
+            self.compute_forcings = self.device.cupy.fuse(compute_forcings)
+
+        if self.config.desired_device in ["numpy", "cupy"]:
+            self.compute_forcings_inner = self.compute_forcings_py
+        else:
+            self.compute_forcings_inner = self.compute_forcings_code
 
     def pointwise_fluxes(
         self,
@@ -200,38 +211,18 @@ class PDEEulerCubesphere(PDE):
 
         return pressure_itf_x1, pressure_itf_x2
 
-    def forcing_terms(self, rhs, q, pressure, metric, ops, forcing):
-        # Add coriolis, metric terms and other forcings
-
-        xp = self.device.xp
-
-        rho = q[idx_rho]
-        u1 = q[idx_rho_u1] / rho
-        u2 = q[idx_rho_u2] / rho
-        w = q[idx_rho_w] / rho
-
-        # Compiled kernel
-        # forcing2 = xp.zeros_like(forcing)
-        # num_x1 = self.config.num_elements_horizontal
-        # num_x2 = num_x1
-        # num_x3 = self.config.num_elements_vertical
-        # num_solpts = self.config.num_solpts
-        # self.device.libmodule.forcing_euler_cubesphere_3d(
-        #     q,
-        #     pressure,
-        #     metric.sqrtG_new,
-        #     metric.h_contra_new,
-        #     metric.christoffel,
-        #     forcing,
-        #     num_x1,
-        #     num_x2,
-        #     num_x3,
-        #     num_solpts**3,
-        #     0,  # Verbose flag
-        # )
-
-        # Python only
-        compute_forcings(
+    def compute_forcings_py(
+        self,
+        q: NDArray,
+        rho: NDArray,
+        u1: NDArray,
+        u2: NDArray,
+        w: NDArray,
+        pressure: NDArray,
+        metric: Metric3DTopo,
+        forcing: NDArray,
+    ):
+        self.compute_forcings(
             forcing[idx_rho_u1],
             forcing[idx_rho_u2],
             forcing[idx_rho_w],
@@ -274,6 +265,49 @@ class PDEEulerCubesphere(PDE):
             metric.h_contra_new[1, 2],
             metric.h_contra_new[2, 2],
         )
+
+    def compute_forcings_code(
+        self,
+        q: NDArray,
+        rho: NDArray,
+        u1: NDArray,
+        u2: NDArray,
+        w: NDArray,
+        pressure: NDArray,
+        metric: Metric3DTopo,
+        forcing: NDArray,
+    ):
+        num_x1 = self.config.num_elements_horizontal
+        num_x2 = num_x1
+        num_x3 = self.config.num_elements_vertical
+        num_solpts = self.config.num_solpts
+        self.device.pde.forcing_euler_cubesphere_3d(
+            q,
+            pressure,
+            metric.sqrtG_new,
+            metric.h_contra_new,
+            metric.christoffel,
+            forcing,
+            num_x1,
+            num_x2,
+            num_x3,
+            num_solpts**3,
+            0,  # Verbose flag
+        )
+
+    def forcing_terms(self, rhs, q, pressure, metric, ops, forcing):
+        # Add coriolis, metric terms and other forcings
+
+        rho = q[idx_rho]
+        u1 = q[idx_rho_u1] / rho
+        u2 = q[idx_rho_u2] / rho
+        w = q[idx_rho_w] / rho
+
+        self.compute_forcings_inner(q, rho, u1, u2, w, pressure, metric, forcing)
+
+        # if MPI.COMM_WORLD.rank == 0:
+        #     print(f"filter k = \n{ops.highfilter_k}")
+        # raise ValueError
 
         # Gravity effect, in vertical direction
         forcing[idx_rho_w] += (

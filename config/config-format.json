@@ -27,8 +27,8 @@
                 {
                     "name": "desired_device",
                     "type": "str",
-                    "selectables": ["cpu", "cuda"],
-                    "default": "cpu",
+                    "selectables": ["cpp", "cuda", "cupy", "numpy"],
+                    "default": "cpp",
                     "description": "Physical backend to run the computation on"
                 },
                 {
@@ -37,7 +37,7 @@
                     "default": [],
                     "dependency": {
                         "name": "desired_device",
-                        "values": ["cuda"]
+                        "values": ["cuda", "cupy"]
                     },
                     "description": "List of Nvidia physical device to use"
                 }

@@ -1,4 +1,5 @@
 from copy import deepcopy
+import time
 from typing import Any, List, Optional, Tuple
 
 from mpi4py import MPI
@@ -95,33 +96,29 @@ class SolverStatsOutput:
 
         # Only 1 PE will connect to the DB and log solver stats
         self.is_writer = self.comm.rank == 0
-        if not (sqlite_available and self.is_writer):
-            if self.comm.allreduce(0) != 0:
-                raise ValueError("Seems like init failed on root PE...")
-            return
+        with SingleProcess(self.comm) as s, Conditional(s):
 
-        backend = "cuda" if isinstance(device, CudaDevice) else "cpu"
+            backend = param.desired_device
 
-        self.param = _sanitize_params(param)
-        self.columns = ColumnSet(self.param, self.comm.size, backend)
-        self.param_table = "results_param"
+            self.param = _sanitize_params(param)
+            self.columns = ColumnSet(self.param, self.comm.size, backend)
+            self.param_table = "results_param"
 
-        self.columns.run_id.value = -1
-        self.columns.step_id.value = 0
+            self.columns.run_id.value = -1
+            self.columns.step_id.value = 0
 
-        self.db_name = self.param.solver_stats_file
-        self.db = f"{self.param.output_dir}/{self.db_name}"
+            self.db_name = self.param.solver_stats_file
+            self.db = f"{self.param.output_dir}/{self.db_name}"
 
-        try:
             self.db_connection = sqlite3.connect(self.db)
             self.db_cursor = self.db_connection.cursor()
-            self.create_results_table()
-            self.comm.allreduce(0)
-
-        except sqlite3.OperationalError:
-            # Signal failure to the other PEs
-            self.comm.allreduce(1)
-            raise
+            try:
+                self.create_results_table()
+            except sqlite3.OperationalError:
+                # Another simulation instance could have been creating the table at the same time, so we
+                # wait a bit and try a second time
+                time.sleep(1.0)
+                self.create_results_table()
 
     def create_results_table(self):
         """Create the results tables in the database, if they don't already exist."""

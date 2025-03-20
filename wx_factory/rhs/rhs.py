@@ -74,6 +74,8 @@ class RHS(ABC):
 
     def __call__(self, q: NDArray) -> NDArray:
 
+        self.device.synchronize()
+
         # 0.a Process timing
         if len(self.timestamps) > 0:  # Process timing from previous steps
             self.retrieve_last_times()
@@ -85,37 +87,38 @@ class RHS(ABC):
 
         self.allocate_arrays(q)
 
-        self.timestamps[0] = self.device.timestamp()
+        self.timestamps[0] = self.device.timestamp(name="extrap")
 
         # 1. Extrapolate the solution to the boundaries of the element
         self.solution_extrapolation(q)
-        self.timestamps[1] = self.device.timestamp()
+        self.timestamps[1] = self.device.timestamp(name="start comm")
 
         self.start_communication()
-        self.timestamps[2] = self.device.timestamp()
+        self.timestamps[2] = self.device.timestamp(name="pointwise flux")
 
         # 2. Compute the pointwise fluxes
         self.pointwise_fluxes(q)
-        self.timestamps[3] = self.device.timestamp()
+        self.timestamps[3] = self.device.timestamp(name="flux div 1")
 
         # 3. Compute the derivatives of the discontinuous fluxes
         self.flux_divergence_partial()
-        self.timestamps[4] = self.device.timestamp()
+        self.timestamps[4] = self.device.timestamp(name="end comm")
 
         self.end_communication()
-        self.timestamps[5] = self.device.timestamp()
+        self.timestamps[5] = self.device.timestamp(name="riemann")
 
         # 4. Compute the Riemann fluxes
         self.riemann_fluxes()
-        self.timestamps[6] = self.device.timestamp()
+        self.timestamps[6] = self.device.timestamp(name="flux div 2")
 
         # 5. Complete the divergence operation
         self.flux_divergence()
-        self.timestamps[7] = self.device.timestamp()
+        self.timestamps[7] = self.device.timestamp(name="forcing")
 
         # 6. Add forcing terms
         self.forcing_terms(q)
         self.timestamps[8] = self.device.timestamp()
+        self.device.synchronize()
 
         # At this moment, a deep copy needs to be returned
         # otherwise issues are encountered after. This needs to be fixed
