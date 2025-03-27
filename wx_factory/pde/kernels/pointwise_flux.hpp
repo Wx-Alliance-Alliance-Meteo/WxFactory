@@ -1,9 +1,8 @@
-#include "../definitions.hpp"
+#include "definitions/definitions.hpp"
 
 template <typename num_t>
 DEVICE_SPACE void
-pointwise_eulercartesian_2d_kernel(kernel_params<num_t, euler_state_2d> params)
-{
+pointwise_eulercartesian_2d_kernel(kernel_params<num_t, euler_state_2d> params) {
   // Extract variables from state pointer
   const num_t rho       = *params.q.rho;
   const num_t rho_u     = *params.q.rho_u;

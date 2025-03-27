@@ -1,10 +1,9 @@
-#include "../definitions.hpp"
+#include "definitions/definitions.hpp"
 
 template <typename num_t>
 DEVICE_SPACE void boundary_eulercartesian_2d_kernel(
     kernel_params<num_t, euler_state_2d> params,
-    const int                            dir)
-{
+    const int                            dir) {
   // Set the the boundary fluxes pressure
   const num_t rho_theta = *params.q.rho_theta;
   if (dir == 0)

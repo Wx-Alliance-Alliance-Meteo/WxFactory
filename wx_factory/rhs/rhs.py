@@ -136,6 +136,12 @@ class RHS(ABC):
             self.f_x3 = xp.zeros_like(q)
             self.rhs = xp.empty_like(q)
 
+            itf_shape = q.shape[:4] + (2 * self.geom.num_solpts**2,)
+
+            self.q_itf_x1 = xp.empty(itf_shape, dtype=q.dtype)
+            self.q_itf_x2 = xp.empty_like(self.q_itf_x1)
+            self.q_itf_x3 = xp.empty_like(self.q_itf_x1)
+
             self.pressure = xp.zeros_like(q[0])
             self.log_p = xp.zeros_like(q[0])
 

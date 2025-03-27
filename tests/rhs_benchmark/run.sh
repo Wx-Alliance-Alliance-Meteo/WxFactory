@@ -5,6 +5,7 @@ OUTPUT_DIR=/home/vma000/site5/wx_factory/rhs_benchmark
 BASE_WORK_DIR=${SCRIPT_DIR}/tmp
 WORK_DIR=/dev/null
 WX_DIR=${SCRIPT_DIR}/../..
+BASE_JOB=${SCRIPT_DIR}/base.job
 
 mkdir -pv ${OUTPUT_DIR}
 mkdir -pv ${BASE_WORK_DIR}
@@ -16,13 +17,14 @@ function gen_config() {
     num_solpts=$1
     num_elem_hori=$2
     num_elem_vert=$3
+    device=$4
     cat << EOF
         [General]
         equations = Euler
         depth_approx = shallow
 
         [System]
-        desired_device = cpu
+        desired_device = ${device}
 
         [Grid]
         grid_type = cubed_sphere
@@ -64,27 +66,48 @@ for i in {0..1000}; do
 done
 mkdir -pv ${WORK_DIR} || exit -1
 
-gen_config 2 30 30 > ${WORK_DIR}/c1.ini
-gen_config 3 20 20 > ${WORK_DIR}/c2.ini
-gen_config 4 15 15 > ${WORK_DIR}/c3.ini
-gen_config 5 12 12 > ${WORK_DIR}/c4.ini
-gen_config 6 10 10 > ${WORK_DIR}/c5.ini
-
 WTIME=180
 WTIME_GPU=20
-for config in ${WORK_DIR}/*; do
-    c=$(basename ${config})
-    echo "Config $c"
+for device in cpp cuda numpy cupy; do
+# for device in cupy cuda; do
+    mkdir -pv ${WORK_DIR}/$device || exit -1
+    gen_config 2 30 30 $device > ${WORK_DIR}/$device/c01.ini
+    gen_config 3 20 20 $device > ${WORK_DIR}/$device/c02.ini
+    gen_config 4 15 15 $device > ${WORK_DIR}/$device/c03.ini
+    gen_config 5 12 12 $device > ${WORK_DIR}/$device/c04.ini
+    gen_config 6 10 10 $device > ${WORK_DIR}/$device/c05.ini
+    # gen_config 2 60 30 $device > ${WORK_DIR}/$device/c06.ini
+    # gen_config 3 40 20 $device > ${WORK_DIR}/$device/c07.ini
+    # gen_config 4 30 15 $device > ${WORK_DIR}/$device/c08.ini
+    # gen_config 5 24 12 $device > ${WORK_DIR}/$device/c09.ini
+    # gen_config 6 20 10 $device > ${WORK_DIR}/$device/c10.ini
 
-    JOB_SCRIPT=${WORK_DIR}/${c}.job
-    sed -e 's|^WX_DIR=.*|WX_DIR='${WX_DIR}'|' \
-        -e 's|^CONFIG_FILE=.*|CONFIG_FILE='${config}'|' \
-        < base.job > ${JOB_SCRIPT}
+    for config in ${WORK_DIR}/$device/*; do
+        c=$(basename ${config})
+        echo "Config $c"
 
-    LAUNCH_COMMAND_CPU="ord_soumet -cpus 80 -w ${WTIME} -jn ${JOB_NAME} -mpi -jobfile ${JOB_SCRIPT} -listing ${WORK_DIR} -cm 2000M -waste 100"
-    LAUNCH_COMMAND_GPU="ord_soumet -cpus 1x12 -gpus 1 -w ${WTIME} -jn ${JOB_NAME} -mpi -jobfile ${JOB_SCRIPT} -listing ${WORK_DIR} -cm 6000M -waste 100 -mach underhill"
-    # LAUNCH_COMMAND=${LAUNCH_COMMAND_CPU}
-    LAUNCH_COMMAND=${LAUNCH_COMMAND_GPU}
-    echo ${LAUNCH_COMMAND}
-    ${LAUNCH_COMMAND}
+        JOB_SCRIPT=${WORK_DIR}/${device}/${c}.job
+        sed -e 's|^WX_DIR=.*|WX_DIR='${WX_DIR}'|' \
+            -e 's|^CONFIG_FILE=.*|CONFIG_FILE='${config}'|' \
+            < ${BASE_JOB} > ${JOB_SCRIPT}  || exit -1
+
+        LAUNCH_COMMAND_CPU="ord_soumet -cpus 80 -w ${WTIME} -jn ${JOB_NAME} -mpi -jobfile ${JOB_SCRIPT} -listing ${WORK_DIR} -cm 2000M -waste 100"
+        LAUNCH_COMMAND_GPU="ord_soumet -cpus 1x12 -gpus 3 -w ${WTIME} -jn ${JOB_NAME} -mpi -jobfile ${JOB_SCRIPT} -listing ${WORK_DIR} -cm 6000M -waste 100 -mach underhill"
+
+        if [ "cpp" == "${device}" ]; then
+            LAUNCH_COMMAND=${LAUNCH_COMMAND_CPU}
+        elif [ "numpy" == "${device}" ]; then
+            LAUNCH_COMMAND=${LAUNCH_COMMAND_CPU}
+        elif [ "cuda" == "${device}" ]; then
+            LAUNCH_COMMAND=${LAUNCH_COMMAND_GPU}
+        elif [ "cupy" == "${device}" ]; then
+            LAUNCH_COMMAND=${LAUNCH_COMMAND_GPU}
+        else
+            echo "Bad device! $device"
+            exit -1
+        fi
+
+        echo ${LAUNCH_COMMAND}
+        ${LAUNCH_COMMAND}
+    done
 done

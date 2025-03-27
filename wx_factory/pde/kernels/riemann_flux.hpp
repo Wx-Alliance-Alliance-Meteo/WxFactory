@@ -1,6 +1,6 @@
 #include <stdio.h>
 
-#include "../definitions.hpp"
+#include "definitions/definitions.hpp"
 
 template <typename num_t>
 DEVICE_SPACE void riemann_eulercartesian_ausm_2d_kernel(

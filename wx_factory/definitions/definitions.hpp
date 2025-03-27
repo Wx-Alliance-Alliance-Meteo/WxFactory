@@ -116,4 +116,75 @@ const int c323 = 25;
 const int c333 = 26;
 //!}
 
+// Returns the index in a flattened array from a 4d index group
+DEVICE_SPACE inline int
+get_c_index(const int i, const int j, const int k, const int l, const int shape[4]) {
+  return i * shape[1] * shape[2] * shape[3] + j * shape[2] * shape[3] + k * shape[3] + l;
+}
+
+// Return the cupy pointer
+template <typename num_t>
+num_t* get_cupy_pointer(pybind11::object obj) {
+  uintptr_t cp_ptr = obj.attr("data").attr("ptr").cast<uintptr_t>();
+  return reinterpret_cast<num_t*>(cp_ptr);
+  // return cp_ptr;
+}
+
+//! Extract raw pointer to given array's data and cast it to the requested type
+//! \tparam num_t The type we wish to get from the input array
+template <typename num_t>
+num_t* get_c_ptr(const pybind11::array_t<num_t>& a) {
+  return static_cast<num_t*>(a.request().ptr);
+}
+
+template <typename num_t>
+struct var
+{
+  num_t* value = nullptr;
+
+  HOST_DEVICE_SPACE var() {}
+  HOST_DEVICE_SPACE var(num_t* field, const size_t index) : value(field + index) {}
+  HOST_DEVICE_SPACE var(num_t* field) : value(field) {}
+
+  HOST_DEVICE_SPACE operator num_t() const { return *value; }
+
+  HOST_DEVICE_SPACE num_t  operator*() const { return *value; }
+  HOST_DEVICE_SPACE num_t& operator*() { return *value; }
+
+  HOST_DEVICE_SPACE void move_index(const int64_t index_change) { value += index_change; }
+};
+
+template <typename num_t, int size>
+DEVICE_SPACE array<var<num_t>, size>
+             make_var_sequence(const num_t* offset, const size_t stride) {
+  array<var<num_t>, size> result;
+  for (int i = 0; i < size; i++)
+  {
+    result[i] = i * stride + offset;
+  }
+  return result;
+}
+
+template <typename num_t, int num_var>
+struct var_multi
+{
+  var<num_t> val[num_var];
+
+  HOST_DEVICE_SPACE num_t  operator[](int i) const { return *val[i]; }
+  HOST_DEVICE_SPACE num_t& operator[](int i) { return *val[i]; }
+
+  HOST_DEVICE_SPACE var_multi(num_t* field, const size_t index, const size_t stride) {
+    for (int i = 0; i < num_var; ++i)
+    {
+      val[i] = field + index + i * stride;
+    }
+  }
+
+  HOST_DEVICE_SPACE void move_index(const int64_t index_change) {
+    for (int i = 0; i < num_var; ++i)
+    {
+      val[i].move_index(index_change);
+    }
+  }
+};
 #endif // DEFINITIONS_H

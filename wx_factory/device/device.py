@@ -26,12 +26,13 @@ class Device(ABC):
     :param libmodule: Module containing all the compiled code for this device
     """
 
-    def __init__(self, comm: MPI.Comm, xp, xalg, pde_module) -> None:
+    def __init__(self, comm: MPI.Comm, xp, xalg, pde_module, operators_module) -> None:
         """Set a few modules and functions to have the same name, so that callers can use a single name."""
         self.comm = comm
         self.xp = xp
         self.xalg = xalg
         self.pde = pde_module
+        self.operators = operators_module
 
     @abstractmethod
     def synchronize(self, **kwargs):
@@ -78,6 +79,9 @@ class CpuDevice(Device):
         try:
             compile_kernels.compile("pde", "cpp", force=False, comm=comm)
             pde = compile_kernels.load_module("pde", "cpp")
+
+            compile_kernels.compile("operators", "cpp", force=False, comm=comm)
+            operators = compile_kernels.load_module("operators", "cpp")
         except (ModuleNotFoundError, SystemExit):
             if comm.rank == 0:
                 print(f"Unable to find the interface_c module. You need to compile it.", flush=True)
@@ -86,7 +90,7 @@ class CpuDevice(Device):
             print(f"Unknown exception!", flush=True)
             raise
 
-        super().__init__(comm, numpy, scipy, pde)
+        super().__init__(comm, numpy, scipy, pde, operators)
 
     def synchronize(self, **kwargs):
         """Don't do anything. This is to allow writing generic code when device is not the same as the host."""
@@ -136,6 +140,9 @@ class CudaDevice(Device):
         try:
             compile_kernels.compile("pde", "cuda", force=False, comm=comm)
             pde = compile_kernels.load_module("pde", "cuda")
+
+            compile_kernels.compile("operators", "cuda", force=False, comm=comm)
+            operators = compile_kernels.load_module("operators", "cuda")
         except (ModuleNotFoundError, ImportError, SystemExit):
             if comm.rank == 0:
                 print(
@@ -148,7 +155,7 @@ class CudaDevice(Device):
             raise
 
         # Set members
-        super().__init__(comm, cupy, cupyx.scipy, pde)
+        super().__init__(comm, cupy, cupyx.scipy, pde, operators)
         self.cupyx = cupyx
         self.cupy = cupy
 

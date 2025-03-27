@@ -26,8 +26,8 @@ base_library_directory = os.path.join(main_project_dir, "lib")
 base_build_directory = os.path.join(base_library_directory, "build")
 base_module_dir = "wx_factory"
 
-cpp_compile_flags = "-Wall -shared -std=c++11 -fPIC".split(" ")
-cuda_compile_flags = "-O2 -shared -std=c++11 -Xcompiler -fPIC,-Wall".split(" ")
+cpp_compile_flags = "-Wall -shared -std=c++17 -fPIC".split(" ")
+cuda_compile_flags = "-O2 -shared -std=c++17 -Xcompiler -fPIC,-Wall".split(" ")
 
 
 class wx_build_ext(build_ext):
@@ -78,12 +78,15 @@ class WxExtension(Extension):
 
     def __init__(self, name, backend, suffix, build_ext_class, **kwargs):
 
+        common_dir = os.path.join(base_module_dir, "definitions")
         source_dir = os.path.join(base_module_dir, name)
         source_files = glob(source_dir + f"/**/*.{suffix}", root_dir=main_project_dir, recursive=True)
-        include_dirs = [pybind11.get_include()]
+        include_dirs = [pybind11.get_include(), base_module_dir]
         header_files = list(
             itertools.chain.from_iterable(
-                glob(source_dir + f"/**/*.{s}", root_dir=main_project_dir, recursive=True) for s in ["h", "hpp"]
+                glob(subdir + f"/**/*.{s}", root_dir=main_project_dir, recursive=True)
+                for s in ["h", "hpp"]
+                for subdir in [common_dir, source_dir]
             )
         )
 
@@ -137,6 +140,8 @@ class CudaExtension(WxExtension):
 _extensions: dict[str, WxExtension] = {
     _ext_name("pde", "cpp"): CppExtension("pde"),
     _ext_name("pde", "cuda"): CudaExtension("pde"),
+    _ext_name("operators", "cpp"): CppExtension("operators"),
+    _ext_name("operators", "cuda"): CudaExtension("operators"),
 }
 
 

@@ -13,9 +13,13 @@ import compiler.compile_kernels
 def main():
     parser = argparse.ArgumentParser(description="Compile the kernels for WxFactory")
     parser.add_argument("backend", choices=["cpp", "cuda"], nargs="?", default="cpp")
+    parser.add_argument("--no-clean", action="store_true", help="Skip the clean step")
     args = parser.parse_args()
 
-    compiler.compile_kernels.compile("pde", args.backend, force=True)
+    modules = ["pde", "operators"]
+
+    for module in modules:
+        compiler.compile_kernels.compile(module, args.backend, force=not args.no_clean)
 
 
 if __name__ == "__main__":

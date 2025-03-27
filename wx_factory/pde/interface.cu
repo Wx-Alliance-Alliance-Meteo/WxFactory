@@ -3,7 +3,7 @@
 #include <cstddef>
 #include <iostream>
 
-#include "definitions.hpp"
+#include "definitions/definitions.hpp"
 #include "kernels/kernels.h"
 
 namespace py = pybind11;
