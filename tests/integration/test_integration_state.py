@@ -109,6 +109,7 @@ class StateIntegrationTestCases(unittest.TestCase):
         self.num_process_required = _get_option(
             parser, requirement_filename, "System", "processes", int, 1, min_value=1
         )
+        self.error_threshold = _get_option(parser, requirement_filename, "System", "error_threshold", float, None)
 
     def setUp(self):
         if MPI.COMM_WORLD.size != self.num_process_required:
@@ -163,5 +164,5 @@ class StateIntegrationTestCases(unittest.TestCase):
             relative_diff = diff / true_value
 
             self.assertLessEqual(
-                relative_diff, conf.tolerance, f"The relative difference ({relative_diff:.2e}) is too big"
+                relative_diff, self.error_threshold, f"The relative difference ({relative_diff:.2e}) is too big"
             )

@@ -313,7 +313,7 @@ class OutputCubesphereNetcdf(OutputCubesphere):
             # Unpack physical variables
             h = Q[idx_h, :, :]
             if self.topo is not None:
-                h += self.topo.hsurf
+                h = Q[idx_h, :, :] + self.topo.hsurf
             self.store_field(geom.to_single_block(prepare(h)), "h", idx)
 
             if self.config.case_number >= 2:
