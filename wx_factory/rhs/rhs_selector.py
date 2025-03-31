@@ -69,7 +69,7 @@ class RhsBundle:
 
         elif param.equations == "shallow_water" and isinstance(geom, CubedSphere2D):
             self.full = RhsShallowWater(
-                fields_shape, geom, operators, metric, topo, ptopo, param.num_solpts, param.num_elements_horizontal
+                fields_shape, geom, operators, metric, topo, ptopo, geom.num_solpts, geom.num_elements_horizontal
             )
 
         elif param.equations == "euler" and isinstance(geom, Cartesian2D):

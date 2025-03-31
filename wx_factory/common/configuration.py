@@ -33,8 +33,6 @@ class Configuration:
         self.state_version = schema.version
 
         if load_post_config:
-            self.initial_num_solpts = self.num_solpts
-            self.num_elements_horizontal_total = self.num_elements_horizontal
 
             if self.discretization == "fv":
                 if self.num_solpts != 1:
@@ -59,7 +57,7 @@ class Configuration:
         value: Optional[OptionType] = None
         if field.dependency is not None:
             if not hasattr(self, field.dependency[0]):
-                raise ValueError(f"Cannot validate dependency {field.dependency[0]}. dependency not found")
+                return None
 
             if not getattr(self, field.dependency[0]) in field.dependency[1]:
                 return None
@@ -111,7 +109,7 @@ class Configuration:
     bubble_rad: float
     bubble_theta: float
     case_number: int
-    cuda_devices: List
+    cuda_devices: List[int]
     depth_approx: str
     desired_device: str
     dg_to_fv_interp: str
@@ -128,15 +126,17 @@ class Configuration:
     expfilter_strength: float
     expfilter_strength: float
     exponential_solver: str
-    exp_smoothe_num_iters: List
-    exp_smoothe_spectral_radii: List
+    exp_smoothe_num_iters: List[int]
+    exp_smoothe_spectral_radii: List[float]
     filter_apply: bool
     filter_cutoff: float
     filter_cutoff: float
     filter_order: int
     filter_order: int
     gmres_restart: int
+    grid_file: str
     grid_type: str
+    initial_conditions_file: str
     jacobian_method: str
     kiops_dt_factor: float
     krylov_size: int
@@ -171,6 +171,7 @@ class Configuration:
     t_end: float
     time_integrator: str
     tolerance: float
+    topography_file: str
     verbose_precond: int
     verbose_solver: int
     x0: float

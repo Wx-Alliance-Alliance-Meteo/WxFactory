@@ -4,6 +4,9 @@ from time import time
 from mpi4py import MPI
 import numpy
 
+from common import Configuration
+from common.definitions import idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_w
+from device import Device, CpuDevice, CudaDevice
 from geometry import Cartesian2D, CubedSphere, CubedSphere3D, CubedSphere2D, DFROperators, Geometry
 from init.dcmip import dcmip_T11_update_winds, dcmip_T12_update_winds
 from init.init_state_vars import init_state_vars
@@ -23,19 +26,16 @@ from integrators import (
     CrankNicolson,
     Bdf2,
 )
-from precondition.factorization import Factorization
-from precondition.multigrid import Multigrid
 from output.output_manager import OutputManager
 from output.output_cartesian import OutputCartesian
 from output.output_cubesphere_netcdf import OutputCubesphereNetcdf
 from output.output_cubesphere_fst import OutputCubesphereFst
-from rhs.rhs_selector import RhsBundle
-
-from common import Configuration, ConfigurationSchema, default_schema_path, readfile
-from common.definitions import idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_w
-from device import Device, CpuDevice, CudaDevice
+from output.input_manager import InputManager
+from precondition.factorization import Factorization
+from precondition.multigrid import Multigrid
 from process_topology import ProcessTopology
-from wx_mpi import do_once, SingleProcess, Conditional
+from rhs.rhs_selector import RhsBundle
+from wx_mpi import SingleProcess, Conditional
 
 
 class Simulation:
@@ -49,6 +49,8 @@ class Simulation:
     it entirely.
     """
 
+    config: Configuration
+
     def __init__(
         self, config: Configuration | str, comm: MPI.Comm = MPI.COMM_WORLD, print_allowed_pe_counts: bool = False
     ) -> None:
@@ -61,11 +63,12 @@ class Simulation:
         self.comm = comm
         self.rank = self.comm.rank
 
+        # self.input_manager = InputManager(self.comm)
+
         if isinstance(config, Configuration):
             self.config = config
         elif isinstance(config, str):
-            self.schema = ConfigurationSchema(do_once(readfile, default_schema_path, comm=self.comm))
-            self.config = Configuration(do_once(readfile, config, comm=self.comm), self.schema)
+            self.config = InputManager.read_config(config, self.comm)
         else:
             raise ValueError(
                 f"Need to provide either a Configuration or a config file name to create a Simulation\n"
@@ -75,14 +78,26 @@ class Simulation:
         if self.rank == 0:
             print(f"{self.config}", flush=True)
 
+        if self.config.grid_file != "":
+            self.num_elements_horizontal, self.num_solpts, self.lambda0, self.phi0, self.alpha0 = (
+                InputManager.read_grid_params(self.config.grid_file, self.comm)
+            )
+        else:
+            self.num_elements_horizontal = self.config.num_elements_horizontal
+            self.num_solpts = self.config.num_solpts
+            if self.config.grid_type == "cubed_sphere":
+                self.lambda0 = self.config.lambda0
+                self.phi0 = self.config.phi0
+                self.alpha0 = self.config.alpha0
+
         self.allowed_pe_counts = (
             [
                 i**2 * 6
-                for i in range(1, max(self.config.num_elements_horizontal_total // 2 + 1, 2))
-                if (self.config.num_elements_horizontal_total % i) == 0
+                for i in range(1, max(self.num_elements_horizontal // 2 + 1, 2))
+                if (self.num_elements_horizontal % i) == 0
             ]
-            if self.config.grid_type == "cubed_sphere"
-            else 1
+            if self.config.grid_file != "" or self.config.grid_type == "cubed_sphere"
+            else [1]
         )
 
         with SingleProcess(self.comm) as s, Conditional(s):
@@ -96,8 +111,6 @@ class Simulation:
         self._adjust_num_elements()
         self.device = self._make_device()
         self.process_topo = None
-        if self.config.grid_type == "cubed_sphere":
-            self.process_topo = ProcessTopology(self.device, comm=self.comm)
         self.geometry = self._create_geometry()
         self.operators = DFROperators(self.geometry, self.config, self.device)
         self.initial_Q, self.topography, self.metric = init_state_vars(self.geometry, self.operators, self.config)
@@ -209,61 +222,75 @@ class Simulation:
     def _adjust_num_elements(self):
         """Adjust number of horizontal elements in the parameters so that it corresponds to the
         number *per processor*."""
-        if self.config.grid_type == "cubed_sphere":
-            # Determine what processor counts are allowed: must be equal to 6 * N^2 for some integer N.
-            if self.comm.size not in self.allowed_pe_counts:
-                raise ValueError(
-                    f"Invalid number of processors for this particular "
-                    f"problem size ({self.config.num_elements_horizontal_total} elements per side). "
-                    f"\nAllowed counts are {self.allowed_pe_counts}"
-                )
+        if self.comm.size not in self.allowed_pe_counts:
+            raise ValueError(
+                f"Invalid number of processors for this particular "
+                f"problem size ({self.num_elements_horizontal} elements per side). "
+                f"\nAllowed counts are {self.allowed_pe_counts}"
+            )
 
+        self.total_num_elements_horizontal = self.num_elements_horizontal
+        if self.comm.size > 1:
             num_pe_per_tile = self.comm.size // 6
             num_pe_per_line = int(numpy.sqrt(num_pe_per_tile))
-            self.config.num_elements_horizontal = self.config.num_elements_horizontal_total // num_pe_per_line
+            self.num_elements_horizontal = self.total_num_elements_horizontal // num_pe_per_line
             if self.rank == 0:
-                if self.config.num_elements_horizontal_total != self.config.num_elements_horizontal:
+                if self.total_num_elements_horizontal != self.num_elements_horizontal:
                     print(
-                        f"Adjusting horizontal number of elements from {self.config.num_elements_horizontal_total} "
-                        f"(total) to {self.config.num_elements_horizontal} (per PE)"
+                        f"Adjusting horizontal number of elements from {self.total_num_elements_horizontal} "
+                        f"(total) to {self.num_elements_horizontal} (per PE)"
                     )
                 print(f"allowed_pe_counts = {self.allowed_pe_counts}")
 
     def _create_geometry(self) -> Geometry:
         """Create the appropriate geometry for the given problem"""
 
-        if self.config.grid_type == "cubed_sphere" and self.process_topo is not None:
+        if self.config.grid_file != "":
+            self.process_topo = ProcessTopology(self.device, comm=self.comm)
+            return CubedSphere2D(
+                self.num_elements_horizontal,
+                self.num_solpts,
+                self.total_num_elements_horizontal,
+                self.lambda0,
+                self.phi0,
+                self.alpha0,
+                self.process_topo,
+            )
+
+        if self.config.grid_type == "cubed_sphere":
+            self.process_topo = ProcessTopology(self.device, comm=self.comm)
             if self.config.equations == "shallow_water":
                 return CubedSphere2D(
-                    self.config.num_elements_horizontal,
-                    self.config.num_solpts,
-                    self.config.lambda0,
-                    self.config.phi0,
-                    self.config.alpha0,
+                    self.num_elements_horizontal,
+                    self.num_solpts,
+                    self.total_num_elements_horizontal,
+                    self.lambda0,
+                    self.phi0,
+                    self.alpha0,
+                    self.process_topo,
+                )
+            elif self.config.equations == "euler":
+                return CubedSphere3D(
+                    self.num_elements_horizontal,
+                    self.config.num_elements_vertical,
+                    self.num_solpts,
+                    self.total_num_elements_horizontal,
+                    self.lambda0,
+                    self.phi0,
+                    self.alpha0,
+                    self.config.ztop,
                     self.process_topo,
                     self.config,
-                    self.device,
                 )
-            return CubedSphere3D(
-                self.config.num_elements_horizontal,
-                self.config.num_elements_vertical,
-                self.config.num_solpts,
-                self.config.lambda0,
-                self.config.phi0,
-                self.config.alpha0,
-                self.config.ztop,
-                self.process_topo,
-                self.config,
-                self.device,
-            )
 
         if self.config.grid_type == "cartesian2d":
             return Cartesian2D(
                 (self.config.x0, self.config.x1),
                 (self.config.z0, self.config.z1),
-                self.config.num_elements_horizontal,
+                self.num_elements_horizontal,
                 self.config.num_elements_vertical,
-                self.config.num_solpts,
+                self.num_solpts,
+                self.total_num_elements_horizontal,
                 self.device,
             )
 

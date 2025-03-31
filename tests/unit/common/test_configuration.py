@@ -31,11 +31,18 @@ class ConfigurationTestCases(unittest.TestCase):
         self.assertEqual(conf.path, "./Potato")
 
     def test_load_configuration_with_valid_values(self):
-        schema_str = readfile(os.path.join(config_test_dir, "config-format-2.json"))
-        configuration_str = readfile(os.path.join(config_test_dir, "config-2.ini"))
+        schema_file = os.path.join(config_test_dir, "config-format-2.json")
+        config_file = os.path.join(config_test_dir, "config-2.ini")
 
-        schema = ConfigurationSchema(schema_str)
-        conf = Configuration(configuration_str, schema, load_post_config=False)
+        try:
+            schema = ConfigurationSchema(readfile(schema_file))
+        except Exception as e:
+            raise ValueError(f"Could not read and parse schema file {schema_file}")
+        try:
+            conf = Configuration(readfile(config_file), schema, load_post_config=False)
+        except Exception as e:
+            raise ValueError(f"Could not read and parse configuration file {config_file}") from e
+
         self.assertEqual(conf.int1, 0)
         self.assertEqual(conf.int2, 0)
         self.assertEqual(conf.int3, 2)

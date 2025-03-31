@@ -23,7 +23,8 @@ from common.definitions import (
     p0,
 )
 from common import Configuration
-from geometry import Cartesian2D, CubedSphere3D, CubedSphere2D, DFROperators
+from common.graphx import plot_array
+from geometry import Cartesian2D, CubedSphere3D, CubedSphere2D, DFROperators, Metric2D, Metric3DTopo
 
 from .dcmip import (
     dcmip_advection_deformation,
@@ -38,6 +39,7 @@ from .shallow_water_test import (
     case_matsuno,
     case_unsteady_zonal,
     circular_vortex,
+    sw_from_file,
     williamson_case1,
     williamson_case2,
     williamson_case5,
@@ -54,7 +56,7 @@ class Topo:
         self.hsurf_itf_j = hsurf_itf_j
 
 
-def initialize_euler(geom: CubedSphere3D, metric, mtrx: DFROperators, param: Configuration):
+def initialize_euler(geom: CubedSphere3D, metric: Metric3DTopo, mtrx: DFROperators, param: Configuration):
 
     # -------------------------------------------------------------------------|
     # case DCMIP 2012    | Pure advection                                     |
@@ -129,7 +131,7 @@ def initialize_euler(geom: CubedSphere3D, metric, mtrx: DFROperators, param: Con
     return Q, None
 
 
-def initialize_sw(geom: CubedSphere2D, metric, mtrx, param):
+def initialize_sw(geom: CubedSphere2D, metric: Metric2D, mtrx: DFROperators, param: Configuration):
 
     xp = geom.device.xp
 
@@ -153,7 +155,12 @@ def initialize_sw(geom: CubedSphere2D, metric, mtrx, param):
     #   5 : zonal flow over an isolated mountain (shallow water)
     #   6 : Rossby-Haurvitz waves (shallow water)
     #   8 : Unstable jet (shallow water)
-    if param.case_number == 0:
+    if param.case_number == -1:
+        u1_contra, u2_contra, fluid_height, hsurf, dzdx1, dzdx2, hsurf_itf_i, hsurf_itf_j = sw_from_file(
+            geom, mtrx, param
+        )
+
+    elif param.case_number == 0:
         u1_contra, u2_contra, fluid_height = circular_vortex(geom, metric, param)
 
     elif param.case_number == 1:
@@ -187,7 +194,7 @@ def initialize_sw(geom: CubedSphere2D, metric, mtrx, param):
     Q = xp.zeros((num_equations,) + base_shape)
     Q[idx_h, ...] = fluid_height
 
-    if param.case_number <= 1:
+    if param.case_number in [0, 1]:
         # advection only
         Q[idx_u1, ...] = u1_contra
         Q[idx_u2, ...] = u2_contra
@@ -196,8 +203,14 @@ def initialize_sw(geom: CubedSphere2D, metric, mtrx, param):
         Q[idx_hu2, ...] = fluid_height * u2_contra
 
     topo = None
-    if param.case_number == 5 or param.case_number == 10:
+    if param.case_number in [-1, 5, 10]:
         topo = Topo(hsurf, dzdx1, dzdx2, hsurf_itf_i, hsurf_itf_j)
+
+    # comm = geom.device.comm
+    # plot_array(geom.to_single_block(hsurf), f"h_surf.png", comm=comm, background_value=hsurf.min() - 100.0)
+    # plot_array(geom.to_single_block(Q[0]), f"h.png", comm=comm, background_value=Q[0].min())
+    # plot_array(geom.to_single_block(Q[1]), f"u.png", comm=comm, background_value=Q[1].min())
+    # plot_array(geom.to_single_block(Q[2]), f"v.png", comm=comm, background_value=Q[2].min())
 
     return Q, topo
 

@@ -58,7 +58,9 @@ def load_tests():
 
 
 if __name__ == "__main__":
-    runner = unittest.TextTestRunner(buffer=True, verbosity=2)
+    runner = unittest.TextTestRunner(buffer=True, verbosity=1)
     result = runner.run(load_tests())
     if not result.wasSuccessful():
-        sys.exit(-1)
+        failed_tests = "\n  ".join([f"{r[0]}" for r in result.errors + result.unexpectedSuccesses + result.failures])
+        print(f"failed tests: \n  {failed_tests}")
+        raise SystemExit(-1)

@@ -21,13 +21,13 @@ class CubedSphere3D(CubedSphere):
         num_elements_horizontal: int,
         num_elements_vertical: int,
         num_solpts: int,
+        total_num_elements_horizontal: int,
         lambda0: float,
         phi0: float,
         alpha0: float,
         ztop: float,
-        ptopo: ProcessTopology,
+        process_topology: ProcessTopology,
         param: Configuration,
-        device: Device,
     ):
         """Initialize the cubed sphere geometry, for an earthlike sphere with no topography.
 
@@ -78,18 +78,25 @@ class CubedSphere3D(CubedSphere):
             the center of the planet located at x3=(-radius_earth).  Note that this parameter is
             defined prior to any topography mapping, and this initializer defines the grid on
             a smooth sphere.
-        ptopo : Distributed_World
+        process_topology : ProcessTopology
             Wraps the parameters and helper functions necessary for MPI parallelism.  By assumption,
             each panel is a separate MPI process.
         param : Configuration
             Wraps parameters from the configuration pole that are not otherwise specified in this
             constructor.
         """
-        super().__init__(num_elements_horizontal, num_elements_vertical, num_solpts, lambda0, phi0, alpha0, device)
-        xp = device.xp
-
-        ## Panel / parallel decomposition properties
-        self.ptopo = ptopo
+        super().__init__(
+            num_elements_horizontal,
+            num_elements_vertical,
+            num_solpts,
+            total_num_elements_horizontal,
+            lambda0,
+            phi0,
+            alpha0,
+            process_topology,
+        )
+        xp = self.device.xp
+        ptopo = self.process_topology
 
         # Full extent of the cubed-sphere panel
         panel_domain_x1 = (-math.pi / 4, math.pi / 4)

@@ -517,7 +517,7 @@ class ProcessTopology:
 
             # A bit of reshaping is needed to avoid having different lines for different numbers of data dimensions
             # We flatten individual elements of each tile so that they have exactly 1 dimension (even scalars),
-            # then extract the tile from the panel, then give it it's proper shape
+            # then extract the tile from the panel, then give it its proper shape
             panel_side = panel.shape[num_dim - 2]
             tile_side = panel_side // side
             panel_base_shape = panel.shape[:num_dim]

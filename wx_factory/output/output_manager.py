@@ -77,9 +77,9 @@ class OutputManager:
         # Choose a file name hash based on a certain set of parameters:
         state_params = (
             config.dt,
-            config.num_elements_horizontal_total,
+            geometry.total_num_elements_horizontal,
             config.num_elements_vertical,
-            config.num_solpts,
+            geometry.num_solpts,
         )
         self.config_hash = state_params.__hash__() & 0xFFFFFFFFFFFF
 

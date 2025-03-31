@@ -18,12 +18,11 @@ class CubedSphere2D(CubedSphere):
         self,
         num_elements_horizontal: int,
         num_solpts: int,
+        total_num_elements_horizontal: int,
         lambda0: float,
         phi0: float,
         alpha0: float,
-        ptopo: ProcessTopology,
-        param: Configuration,
-        device: Device,
+        process_topology: ProcessTopology,
     ):
         """Initialize the cubed sphere geometry, for an earthlike sphere with no topography.
 
@@ -73,7 +72,7 @@ class CubedSphere2D(CubedSphere):
            the center of the planet located at x3=(-radius_earth).  Note that this parameter is
            defined prior to any topography mapping, and this initializer defines the grid on
            a smooth sphere.
-        ptopo: Distributed_World
+        process_topology: ProcessTopology
            Wraps the parameters and helper functions necessary for MPI parallelism.  By assumption,
            each panel is a separate MPI process.
         param: Configuration
@@ -81,11 +80,18 @@ class CubedSphere2D(CubedSphere):
            constructor.
         """
 
-        super().__init__(num_elements_horizontal, 1, num_solpts, lambda0, phi0, alpha0, device)
+        super().__init__(
+            num_elements_horizontal,
+            1,
+            num_solpts,
+            total_num_elements_horizontal,
+            lambda0,
+            phi0,
+            alpha0,
+            process_topology,
+        )
         xp = self.device.xp
-
-        ## Panel / parallel decomposition properties
-        self.ptopo = ptopo
+        ptopo = self.process_topology
 
         # Full extent of the cubed-sphere panel, in radians
         panel_domain_x1 = (-math.pi / 4, math.pi / 4)
@@ -476,19 +482,13 @@ class CubedSphere2D(CubedSphere):
             return a
 
         expected_shape = (self.num_elements_x2 * self.num_solpts, self.num_elements_x1 * self.num_solpts)
-        if a.ndim == 2 and a.shape == expected_shape:
-            tmp_shape = (self.num_elements_x2, self.num_solpts, self.num_elements_x1, self.num_solpts)
-            new_shape = self.grid_shape
-            return a.reshape(tmp_shape).transpose(0, 2, 1, 3).reshape(new_shape)
+        if a.shape[-2:] != expected_shape:
+            raise ValueError(f"Unhandled shape {a.shape}, expected (...,) + {self.block_shape}")
 
-        elif (a.ndim == 3 and a.shape[1:] == expected_shape) or (
-            a.ndim == 4 and a.shape[2:] == expected_shape and a.shape[1] == 1
-        ):
-            tmp_shape = (a.shape[0], self.num_elements_x2, self.num_solpts, self.num_elements_x1, self.num_solpts)
-            new_shape = (a.shape[0],) + self.grid_shape
-            return a.reshape(tmp_shape).transpose(0, 1, 3, 2, 4).reshape(new_shape)
-
-        raise ValueError(f"Unhandled number of dimensions... Shape is {a.shape}")
+        tmp_shape = a.shape[:-2] + (self.num_elements_x2, self.num_solpts, self.num_elements_x1, self.num_solpts)
+        new_shape = a.shape[:-2] + self.grid_shape
+        xp = self.device.xp
+        return xp.moveaxis(a.reshape(tmp_shape), -2, -3).reshape(new_shape)
 
     def to_single_block(self, a: NDArray) -> NDArray:
         """Convert input array from a list of elements to a single block of points layout."""

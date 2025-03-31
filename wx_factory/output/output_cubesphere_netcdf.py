@@ -138,7 +138,7 @@ class OutputCubesphereNetcdf(OutputCubesphere):
                 hhh.grid_mapping = "cubed_sphere"
                 hhh.set_collective(False)
 
-                if self.config.case_number >= 2:
+                if self.config.case_number >= 2 or self.config.case_number == -1:
                     uuu = self.ncfile.createVariable("U", numpy.dtype("double").char, ("time",) + grid_data)
                     uuu.long_name = "eastward_wind"
                     uuu.units = "m s-1"
@@ -316,7 +316,7 @@ class OutputCubesphereNetcdf(OutputCubesphere):
                 h = Q[idx_h, :, :] + self.topo.hsurf
             self.store_field(geom.to_single_block(prepare(h)), "h", idx)
 
-            if self.config.case_number >= 2:
+            if self.config.case_number >= 2 or self.config.case_number == -1:
                 u1 = Q[idx_hu1, :, :] / h
                 u2 = Q[idx_hu2, :, :] / h
                 u, v = geom.contra2wind(u1, u2)

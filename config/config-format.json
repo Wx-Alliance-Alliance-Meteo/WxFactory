@@ -47,6 +47,22 @@
             "name": "Test_case",
             "fields": [
                 {
+                    "name": "topography_file",
+                    "type": "str",
+                    "dependency":{
+                        "name": "case_number",
+                        "values": [-1]
+                    }
+                },
+                {
+                    "name": "initial_conditions_file",
+                    "type": "str",
+                    "dependency":{
+                        "name": "case_number",
+                        "values": [-1]
+                    }
+                },
+                {
                     "name": "case_number",
                     "type": "int",
                     "default": -1
@@ -159,12 +175,20 @@
                 {
                     "name": "num_solpts",
                     "type": "int",
-                    "min": 1
+                    "min": 1,
+                    "dependency":{
+                        "name": "grid_file",
+                        "values": [""]
+                    }
                 },
                 {
                     "name": "num_elements_horizontal",
                     "type": "int",
-                    "min": 1
+                    "min": 1,
+                    "dependency": {
+                        "name": "grid_file",
+                        "values": [""]
+                    }
                 },
                 {
                     "name": "num_elements_vertical",
@@ -290,9 +314,18 @@
             "name": "Grid",
             "fields": [
                 {
+                    "name": "grid_file",
+                    "type": "str",
+                    "default": ""
+                },
+                {
                     "name": "grid_type",
                     "type": "str",
-                    "selectables": ["cubed_sphere", "cartesian2d"]
+                    "selectables": ["cubed_sphere", "cartesian2d"],
+                    "dependency":{
+                        "name": "grid_file",
+                        "values": [""]
+                    }
                 },
                 {
                     "name": "discretization",

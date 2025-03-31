@@ -173,6 +173,19 @@ class ConfigurationField:
         except ValueError:
             return [self.type(x) for x in json.loads(parser.get(self.section, self.name))]
 
+    def typename(self, inner=False):
+        if self.is_list and not inner:
+            return f"List[{self.typename(True)}]"
+
+        if self.type == angle24:
+            return float.__name__
+        elif self.type == LowerCaseStr:
+            return str.__name__
+        elif self.type == str_to_bool:
+            return bool.__name__
+
+        return self.type.__name__
+
     def read(self, parser: ConfigParser) -> OptionType:
         """Read this field from the given parser and verify that it falls within its valid range."""
 
@@ -406,7 +419,7 @@ class ConfigurationSchema:
         return self.to_string(markdown=False)
 
     def type_hints(self):
-        return "\n".join(f"{f.name}: {f.type.__name__}" for f in self.fields)
+        return "\n".join(f"{f.name}: {f.typename()}" for f in self.fields)
 
 
 def load_default_schema() -> ConfigurationSchema:

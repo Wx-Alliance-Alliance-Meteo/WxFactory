@@ -4,6 +4,8 @@ import os
 import sys
 import unittest
 
+from mpi4py import MPI
+
 from mpi_test import MpiRunner
 
 main_project_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../..")
@@ -109,7 +111,12 @@ def regular_run(runner):
     result = runner.run(load_tests())
 
     if not result.wasSuccessful():
-        sys.exit(-1)
+        if MPI.COMM_WORLD.rank == 0:
+            failed_tests = "\n  ".join(
+                [f"{r[0]}" for r in result.errors + result.unexpectedSuccesses + result.failures]
+            )
+            print(f"failed tests: \n  {failed_tests}")
+        raise SystemExit(-1)
 
 
 if __name__ == "__main__":

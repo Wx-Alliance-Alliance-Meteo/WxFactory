@@ -383,7 +383,7 @@ class Metric3DTopo:
             (dRdx1_ex_j[n3_], dRdx2_ex_j[n3_], dRdeta_ex_j[n3_]),
             (dRdx1_ex_i[w3_], dRdx2_ex_i[w3_], dRdeta_ex_i[w3_]),
             (dRdx1_ex_i[e3_], dRdx2_ex_i[e3_], dRdeta_ex_i[e3_]),
-        ) = geom.ptopo.start_exchange_vectors(
+        ) = geom.process_topology.start_exchange_vectors(
             (dRdx1_ex_j[s2_], dRdx2_ex_j[s2_], dRdeta_ex_j[s2_]),
             (dRdx1_ex_j[n2_], dRdx2_ex_j[n2_], dRdeta_ex_j[n2_]),
             (dRdx1_ex_i[w2_], dRdx2_ex_i[w2_], dRdeta_ex_i[w2_]),
@@ -394,7 +394,7 @@ class Metric3DTopo:
             covariant=True,
         ).wait()
 
-        if geom.ptopo.size > 1:
+        if geom.process_topology.size > 1:
             # Perform exchanges if this is truly a parallel setup.
 
             s_in = xp.s_[..., 1, 0, :]
@@ -411,7 +411,7 @@ class Metric3DTopo:
                 (exch_itf_j[0][n_out], exch_itf_j[1][n_out], exch_itf_j[2][n_out]),
                 (exch_itf_i[0][w_out], exch_itf_i[1][w_out], exch_itf_i[2][w_out]),
                 (exch_itf_i[0][e_out], exch_itf_i[1][e_out], exch_itf_i[2][e_out]),
-            ) = geom.ptopo.start_exchange_vectors(
+            ) = geom.process_topology.start_exchange_vectors(
                 (exch_itf_j[0][s_in], exch_itf_j[1][s_in], exch_itf_j[2][s_in]),
                 (exch_itf_j[0][n_in], exch_itf_j[1][n_in], exch_itf_j[2][n_in]),
                 (exch_itf_i[0][w_in], exch_itf_i[1][w_in], exch_itf_i[2][w_in]),
@@ -919,7 +919,7 @@ class Metric3DTopo:
 
         verbose = False
         if numer_christoffel:
-            if verbose and geom.ptopo.rank == 0:
+            if verbose and geom.process_topology.rank == 0:
                 print("Computing (√g h^{ab})_{,c}")
             grad_sqrtG_metric_contra = matrix.grad(
                 H_contra * sqrtG[numpy.newaxis, numpy.newaxis, :, :, :],
@@ -936,7 +936,7 @@ class Metric3DTopo:
             c_rhs = xp.empty((nk, nj, ni, 3, 3, 3))  # h(i,j,k)^(ab)_(,c)
             c_lhs = xp.zeros((nk, nj, ni, 3, 3, 3, 3, 3, 3))  # Γ(i,j,k)^d_{ef} for row (ab,c)
 
-            if verbose and geom.ptopo.rank == 0:
+            if verbose and geom.process_topology.rank == 0:
                 print("Assembling linear operator for Γ")
 
             for a in range(3):
@@ -948,7 +948,7 @@ class Metric3DTopo:
                             c_lhs[:, :, :, a, b, c, a, d, c] -= sqrtG[:, :, :] * H_contra[d, b, :, :, :]
                             c_lhs[:, :, :, a, b, c, b, c, d] -= sqrtG[:, :, :] * H_contra[a, d, :, :, :]
 
-            if verbose and geom.ptopo.rank == 0:
+            if verbose and geom.process_topology.rank == 0:
                 print("Solving linear operator for Γ")
 
             try:
@@ -969,7 +969,7 @@ class Metric3DTopo:
             space_christoffel.shape = (nk, nj, ni, 3, 3, 3)
             space_christoffel = space_christoffel.transpose((3, 4, 5, 0, 1, 2))
 
-            if verbose and geom.ptopo.rank == 0:
+            if verbose and geom.process_topology.rank == 0:
                 print("Copying Γ to destination arrays")
 
             self.num_christoffel = space_christoffel
@@ -995,7 +995,7 @@ class Metric3DTopo:
             self.christoffel_3_23 = space_christoffel[2, 1, 2, :, :, :].copy()
             self.christoffel_3_33 = space_christoffel[2, 2, 2, :, :, :].copy()
 
-            if verbose and geom.ptopo.rank == 0:
+            if verbose and geom.process_topology.rank == 0:
                 print("Done assembling Γ")
 
         # Assign H_cov and its elements to the object

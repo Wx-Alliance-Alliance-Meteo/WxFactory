@@ -16,7 +16,8 @@ hint_string=$(              \
     ${SCRIPT_DIR}/wx_config.py --list-hints | \
     grep -v 'running build_ext' | \
     sort | \
-    sed -e 's/cs-str/str/' -e 's/^/    /' \
+    sed -e 's/cs-str/str/' \
+        -e 's/^/    /' \
 )
 
 sed -e '/--- START type hints ---/q' ${config_code} > ${tmp_code}

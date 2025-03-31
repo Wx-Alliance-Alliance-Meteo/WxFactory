@@ -14,9 +14,10 @@ class Cartesian2D(Geometry):
         num_elements_x: int,
         num_elements_z: int,
         num_solpts: int,
+        total_num_elements_x: int,
         device: Device,
     ):
-        super().__init__(num_solpts, device)
+        super().__init__(num_solpts, num_elements_x, num_elements_z, total_num_elements_x, device)
         xp = device.xp
 
         scaled_points = 0.5 * (1.0 + self.solutionPoints)
@@ -42,8 +43,6 @@ class Cartesian2D(Geometry):
 
         X1, X3 = xp.meshgrid(x1, x3)
 
-        self.num_elements_x = num_elements_x
-        self.num_elements_z = num_elements_z
         self.X1_cartesian = X1
         self.X3_cartesian = X3
         self.itf_Z = itf_x3
@@ -75,8 +74,16 @@ class Cartesian2D(Geometry):
         num_equations = a.shape[:-3]
 
         # Add other dimensions and reshape to a plottable 2D graph
-        tmp_shape = num_equations + (self.num_elements_z, self.num_elements_x, self.num_solpts, self.num_solpts)
-        new_shape = num_equations + (self.num_elements_z * self.num_solpts, self.num_elements_x * self.num_solpts)
+        tmp_shape = num_equations + (
+            self.num_elements_vertical,
+            self.num_elements_horizontal,
+            self.num_solpts,
+            self.num_solpts,
+        )
+        new_shape = num_equations + (
+            self.num_elements_vertical * self.num_solpts,
+            self.num_elements_horizontal * self.num_solpts,
+        )
         a_new = numpy.swapaxes(a.reshape(tmp_shape), -2, -3).reshape(new_shape)
 
         return a_new

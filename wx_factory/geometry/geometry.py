@@ -15,7 +15,15 @@ class Geometry(ABC):
     Abstract class that groups different geometries
     """
 
-    def __init__(self, num_solpts: int, device: Device, verbose: Optional[bool] = False) -> None:
+    def __init__(
+        self,
+        num_solpts: int,
+        num_elements_horizontal: int,
+        num_elements_vertical: int,
+        total_num_elements_horizontal: int,
+        device: Device,
+        verbose: Optional[bool] = False,
+    ) -> None:
         self.device = device
         xp = self.device.xp
         self.dtype = numpy.dtype(numpy.float64)
@@ -34,6 +42,9 @@ class Geometry(ABC):
         extension_sym.append(sympy.sympify("1"))
 
         self.num_solpts = num_solpts
+        self.num_elements_horizontal = num_elements_horizontal
+        self.num_elements_vertical = num_elements_vertical
+        self.total_num_elements_horizontal = total_num_elements_horizontal
         self.solutionPoints = xp.asarray(solutionPoints)
         self.solutionPoints_sym = solutionPoints_sym
         self.glweights = xp.asarray(glweights)

@@ -28,14 +28,6 @@ except ModuleNotFoundError:
     rmn_available = False
 
 
-def _make_ig4(num_elem_horizontal, num_solpts):
-    if num_elem_horizontal > 0x1FFFF:
-        raise ValueError(f"Num elem ({num_elem_horizontal}) is too large to be encoded! (Max {0x1FFFF})")
-    if num_solpts > 127 or num_solpts < 1:
-        raise ValueError(f"Num solpts ({num_solpts}) is too large to be encoded (max 127)")
-    return ((num_elem_horizontal & 0x1FFFF) << 7) | num_solpts
-
-
 class OutputCubesphereFst(OutputCubesphere):
     def __init__(
         self,
