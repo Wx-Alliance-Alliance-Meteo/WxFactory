@@ -22,7 +22,7 @@ class PDE(ABC):
         pointwise_func: Callable,
         riemann_func: Callable,
     ):
-        self.geom = geometry
+        self.geometry = geometry
         self.config = config
         self.device = geometry.device
         self.metric = metric

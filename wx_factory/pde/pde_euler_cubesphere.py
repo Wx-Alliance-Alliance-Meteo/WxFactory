@@ -67,7 +67,7 @@ class PDEEulerCubesphere(PDE):
             lambda a: a,
             lambda a: a,
         )
-        self.num_solpts = config.num_solpts
+        self.num_solpts = geometry.num_solpts
         self.case_number = config.case_number
         self.advection_only = config.case_number < 13
 
@@ -277,10 +277,10 @@ class PDEEulerCubesphere(PDE):
         metric: Metric3DTopo,
         forcing: NDArray,
     ):
-        num_x1 = self.config.num_elements_horizontal
+        num_x1 = self.geometry.num_elements_horizontal
         num_x2 = num_x1
-        num_x3 = self.config.num_elements_vertical
-        num_solpts = self.config.num_solpts
+        num_x3 = self.geometry.num_elements_vertical
+        num_solpts = self.geometry.num_solpts
         self.device.pde.forcing_euler_cubesphere_3d(
             q,
             pressure,
@@ -317,8 +317,8 @@ class PDEEulerCubesphere(PDE):
         # DCMIP cases 2-1 and 2-2 involve rayleigh damping
         # dcmip_schar_damping modifies the 'forcing' variable to apply the requried Rayleigh damping
         if self.case_number == 21:
-            dcmip_schar_damping(forcing, rho, u1, u2, w, metric, self.geom, shear=False, new_layout=True)
+            dcmip_schar_damping(forcing, rho, u1, u2, w, metric, self.geometry, shear=False, new_layout=True)
         elif self.case_number == 22:
-            dcmip_schar_damping(forcing, rho, u1, u2, w, metric, self.geom, shear=True, new_layout=True)
+            dcmip_schar_damping(forcing, rho, u1, u2, w, metric, self.geometry, shear=True, new_layout=True)
 
         rhs -= forcing
