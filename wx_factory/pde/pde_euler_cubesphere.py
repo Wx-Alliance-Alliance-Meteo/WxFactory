@@ -63,7 +63,7 @@ class PDEEulerCubesphere(PDE):
             metric,
             3,
             5,
-            config.num_elements_horizontal**2 * config.num_elements_vertical,
+            geometry.num_elements_horizontal**2 * geometry.num_elements_vertical,
             lambda a: a,
             lambda a: a,
         )

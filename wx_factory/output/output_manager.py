@@ -78,7 +78,7 @@ class OutputManager:
         state_params = (
             config.dt,
             geometry.total_num_elements_horizontal,
-            config.num_elements_vertical,
+            geometry.num_elements_vertical,
             geometry.num_solpts,
         )
         self.config_hash = state_params.__hash__() & 0xFFFFFFFFFFFF

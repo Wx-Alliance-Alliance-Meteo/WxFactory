@@ -71,13 +71,13 @@ class OutputCubesphere(OutputManager):
 
             if self.initial_mass is None:
                 self.initial_mass = global_integral_2d(
-                    h, self.operators, self.metric, self.config.num_solpts, self.comm
+                    h, self.operators, self.metric, self.geometry.num_solpts, self.comm
                 )
                 self.initial_energy = global_integral_2d(
-                    energy, self.operators, self.metric, self.config.num_solpts, self.comm
+                    energy, self.operators, self.metric, self.geometry.num_solpts, self.comm
                 )
                 self.initial_enstrophy = global_integral_2d(
-                    enstrophy, self.operators, self.metric, self.config.num_solpts, self.comm
+                    enstrophy, self.operators, self.metric, self.geometry.num_solpts, self.comm
                 )
 
                 if self.rank == 0:
@@ -90,14 +90,18 @@ class OutputCubesphere(OutputManager):
 
         if self.config.case_number <= 2 or self.config.case_number == 10:
             absol_err = global_integral_2d(
-                abs(h - h_anal), self.operators, self.metric, self.config.num_solpts, self.comm
+                abs(h - h_anal), self.operators, self.metric, self.geometry.num_solpts, self.comm
             )
-            int_h_anal = global_integral_2d(abs(h_anal), self.operators, self.metric, self.config.num_solpts, self.comm)
+            int_h_anal = global_integral_2d(
+                abs(h_anal), self.operators, self.metric, self.geometry.num_solpts, self.comm
+            )
 
             absol_err2 = global_integral_2d(
-                (h - h_anal) ** 2, self.operators, self.metric, self.config.num_solpts, self.comm
+                (h - h_anal) ** 2, self.operators, self.metric, self.geometry.num_solpts, self.comm
             )
-            int_h_anal2 = global_integral_2d(h_anal**2, self.operators, self.metric, self.config.num_solpts, self.comm)
+            int_h_anal2 = global_integral_2d(
+                h_anal**2, self.operators, self.metric, self.geometry.num_solpts, self.comm
+            )
 
             max_absol_err = self.comm.allreduce(numpy.max(abs(h - h_anal)), op=MPI.MAX)
             max_h_anal = self.comm.allreduce(numpy.max(h_anal), op=MPI.MAX)
@@ -109,10 +113,10 @@ class OutputCubesphere(OutputManager):
                 print(f"l1 = {l1} \t l2 = {l2} \t linf = {linf}")
 
         if self.config.case_number >= 2:
-            int_mass = global_integral_2d(h, self.operators, self.metric, self.config.num_solpts, self.comm)
-            int_energy = global_integral_2d(energy, self.operators, self.metric, self.config.num_solpts, self.comm)
+            int_mass = global_integral_2d(h, self.operators, self.metric, self.geometry.num_solpts, self.comm)
+            int_energy = global_integral_2d(energy, self.operators, self.metric, self.geometry.num_solpts, self.comm)
             int_enstrophy = global_integral_2d(
-                enstrophy, self.operators, self.metric, self.config.num_solpts, self.comm
+                enstrophy, self.operators, self.metric, self.geometry.num_solpts, self.comm
             )
 
             normalized_mass = (int_mass - self.initial_mass) / self.initial_mass
