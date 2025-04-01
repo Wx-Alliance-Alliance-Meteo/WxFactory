@@ -287,7 +287,7 @@ class OutputCubesphereNetcdf(OutputCubesphere):
         lats = self._gather_field(prepare(self.geometry.block_lat * 180 / math.pi), 2)
         if self.config.equations == "euler":
             elevs = self._gather_field(prepare(self.geometry.coordVec_latlon[2, :, :, :]), 3)
-            topos = self._gather_field(prepare(self.geometry.zbot[:, :]), 3)
+            topos = self._gather_field(prepare(self.geometry.zbot[:, :]), 2)
 
         if self.rank == 0:
             for i in range(6):
