@@ -17,6 +17,8 @@ static constexpr real_t extrap_factors[][6] = {
 };
 // clang-format on
 
+constexpr int EXTRAP_3D_BLOCK_SIZE = 128;
+
 template <typename real_t, typename num_t, int order>
 struct extrap_x_kernel
 {
@@ -120,8 +122,10 @@ struct extrap_z_kernel
 template <typename real_t, typename num_t, int order>
 struct extrap_all_kernel
 {
-  DEVICE_SPACE void
-  operator()(extrap_params_cubedsphere<num_t, order> params, const bool verbose) {
+  DEVICE_SPACE void operator()(
+      extrap_params_cubedsphere<num_t, order> params,
+      const num_t*                            elem,
+      const bool                              verbose) {
 
     static_assert(order >= 1 && order <= 6, "Order is not implemented\n");
 
@@ -136,11 +140,16 @@ struct extrap_all_kernel
       return;
     }
 
+    if (elem == nullptr)
+    {
+      elem = &params.elem[0];
+    }
+
     const size_t o2       = order * order;
     const size_t rem      = params.index % o2;
-    const size_t offset_x = params.index % (o2);
+    const size_t offset_x = params.index % o2;
     const size_t offset_y = rem % order + (rem / order) * o2;
-    const size_t offset_z = params.index % (o2);
+    const size_t offset_z = params.index % o2;
 
     num_t side_x1(0.0);
     num_t side_x2(0.0);
@@ -150,15 +159,15 @@ struct extrap_all_kernel
     num_t side_z2(0.0);
     for (int i = 0; i < order; i++)
     {
-      side_x1 += params.elem[offset_x * order + i] * extrap_factors<real_t>[order - 2][i];
-      side_x2 += params.elem[offset_x * order + i] *
-                 extrap_factors<real_t>[order - 2][order - i - 1];
-      side_y1 += params.elem[offset_y + order * i] * extrap_factors<real_t>[order - 2][i];
-      side_y2 += params.elem[offset_y + order * i] *
-                 extrap_factors<real_t>[order - 2][order - i - 1];
-      side_z1 += params.elem[offset_z + o2 * i] * extrap_factors<real_t>[order - 2][i];
-      side_z2 += params.elem[offset_z + o2 * i] *
-                 extrap_factors<real_t>[order - 2][order - i - 1];
+      side_x1 += elem[offset_x * order + i] * extrap_factors<real_t>[order - 2][i];
+      side_x2 +=
+          elem[offset_x * order + i] * extrap_factors<real_t>[order - 2][order - i - 1];
+      side_y1 += elem[offset_y + order * i] * extrap_factors<real_t>[order - 2][i];
+      side_y2 +=
+          elem[offset_y + order * i] * extrap_factors<real_t>[order - 2][order - i - 1];
+      side_z1 += elem[offset_z + o2 * i] * extrap_factors<real_t>[order - 2][i];
+      side_z2 +=
+          elem[offset_z + o2 * i] * extrap_factors<real_t>[order - 2][order - i - 1];
     }
     *params.side_x1 = side_x1;
     *params.side_x2 = side_x2;

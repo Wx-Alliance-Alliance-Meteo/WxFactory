@@ -501,11 +501,11 @@ class ProcessTopology:
         This function is a collective call that must be done by every PE within a panel.
 
         :param field: Tile data we want to send to the panel root (from this current tile)
-        :param axis: Number of data dimensions on the tile (this is different from the number of array dimensions).
+        :param num_dim: Number of data dimensions on the tile (this is different from the number of array dimensions).
             This corresponds to 2 for a single shallow-water variable,
             3 for single 3d-euler variable, 4 for a set of 3d-euler variables, etc.
             This parameter is ignored when the tile is made of 1D data.
-        :type axis: int
+        :type num_dim: int
         :return: The assembled panel, as a single NDArray, on root PE; None on every non-root PE.
         """
         xp = self.device.xp

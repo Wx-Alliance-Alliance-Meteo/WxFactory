@@ -15,31 +15,74 @@ __global__ void extrap_3d(
     const bool                              verbose,
     Func                                    func) {
 
-  const size_t thread_id = threadIdx.x + blockIdx.x * blockDim.x;
+  constexpr size_t o2                 = order * order;
+  constexpr size_t num_elem_per_block = EXTRAP_3D_BLOCK_SIZE / o2;
+  constexpr size_t useful_block_size  = num_elem_per_block * o2;
 
-  if (thread_id < max_num_threads)
+  __shared__ num_t elem[num_elem_per_block][o2][order];
+
+  // const size_t thread_id = threadIdx.x + blockIdx.x * blockDim.x;
+  const size_t thread_id = threadIdx.x + blockIdx.x * useful_block_size;
+  const size_t elem_id   = threadIdx.x / o2;
+  if (threadIdx.x < useful_block_size)
   {
     params.set_index(thread_id);
-    // if (verbose && thread_id < 10)
+    const int row_id = threadIdx.x % o2;
+    for (int i = 0; i < order; i++)
+    {
+      elem[elem_id][row_id][i] = params.elem[row_id * order + i];
+      // if (verbose && thread_id < o2 * 10 && thread_id % o2 < 2)
+      // {
+      //   printf(
+      //       "elem[%d][%2d][%d] = params.elem[%3d] = %f\n",
+      //       (int)elem_id,
+      //       (int)row_id,
+      //       (int)i,
+      //       (int)(row_id * o2 + 1),
+      //       to_real(params.elem[row_id * o2 + i]));
+      // }
+    }
+  }
+
+  __syncthreads();
+
+  // if (thread_id < max_num_threads)
+  if (threadIdx.x < useful_block_size)
+  {
+    // if (verbose && thread_id < o2 * 10 && thread_id % o2 < 2)
     // {
     //   printf(
-    //       "Thread %3ld: index = %3ld, elem[0-3] = %9.3e %9.3e %9.3e %9.3e, sides %3.0f
-    //       "
-    //       "%3.0f %3.0f %3.0f %3.0f %3.0f\n",
+    //       "Thread %3ld: index = %3ld"
+    //       ", elem[0-6] = %9.3e %9.3e %9.3e %9.3e %9.3e %9.3e %9.3e"
+    //       "\n                         "
+    //       "elem[0-6] = %9.3e %9.3e %9.3e %9.3e %9.3e %9.3e %9.3e"
+    //       // ", sides %3.0f %3.0f %3.0f %3.0f %3.0f %3.0f"
+    //       "\n",
     //       thread_id,
     //       params.index,
     //       to_real(params.elem[0]),
     //       to_real(params.elem[1]),
     //       to_real(params.elem[2]),
     //       to_real(params.elem[3]),
-    //       to_real(*params.side_x1),
-    //       to_real(*params.side_x2),
-    //       to_real(*params.side_y1),
-    //       to_real(*params.side_y2),
-    //       to_real(*params.side_z1),
-    //       to_real(*params.side_z2));
+    //       to_real(params.elem[4]),
+    //       to_real(params.elem[5]),
+    //       to_real(params.elem[6]),
+    //       to_real(((num_t*)elem[elem_id])[0]),
+    //       to_real(((num_t*)elem[elem_id])[1]),
+    //       to_real(((num_t*)elem[elem_id])[2]),
+    //       to_real(((num_t*)elem[elem_id])[3]),
+    //       to_real(((num_t*)elem[elem_id])[4]),
+    //       to_real(((num_t*)elem[elem_id])[5]),
+    //       to_real(((num_t*)elem[elem_id])[6])
+    //       // to_real(*params.side_x1),
+    //       // to_real(*params.side_x2),
+    //       // to_real(*params.side_y1),
+    //       // to_real(*params.side_y2),
+    //       // to_real(*params.side_z1),
+    //       // to_real(*params.side_z2)
+    //   );
     // }
-    func(params, verbose);
+    func(params, &elem[elem_id][0][0], verbose);
   }
 }
 
@@ -62,10 +105,14 @@ void launch_extrap_3d(
 
   extrap_params_cubedsphere<num_t, order> p(q, 0, result_x, result_y, result_z);
 
-  const size_t max_num_threads =
+  constexpr size_t o2 = order * order;
+  // constexpr size_t BLOCK_SIZE            = 257;
+  constexpr size_t num_threads_per_block = (EXTRAP_3D_BLOCK_SIZE / o2) * o2;
+
+  const size_t num_active_threads =
       5 * num_elem_x1 * num_elem_x2 * num_elem_x3 * order * order;
-  const int    BLOCK_SIZE = 128;
-  const size_t num_blocks = (max_num_threads + BLOCK_SIZE - 1) / BLOCK_SIZE;
+  const size_t num_blocks = num_active_threads / num_threads_per_block;
+  // const size_t num_blocks = (max_num_threads + BLOCK_SIZE - 1) / BLOCK_SIZE;
 
   //   if (verbose)
   //   {
@@ -74,7 +121,7 @@ void launch_extrap_3d(
   //   }
 
   extrap_3d<real_t, num_t, order>
-      <<<num_blocks, BLOCK_SIZE>>>(p, max_num_threads, bool(verbose), func);
+      <<<num_blocks, EXTRAP_3D_BLOCK_SIZE>>>(p, num_active_threads, bool(verbose), func);
 }
 
 template <typename real_t, typename num_t>

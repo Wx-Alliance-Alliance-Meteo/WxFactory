@@ -261,6 +261,8 @@ void forcing_euler_cubesphere_3d(
 
   const uint64_t stride = num_elem_x3 * num_elem_x2 * num_elem_x1 * num_solpts;
 
+#pragma omp parallel for collapse(3) default(none)                                       \
+    shared(q, pressure, sqrt_g, h, christoffel, forcing)
   for (int i = 0; i < num_elem_x3; i++)
   {
     for (int j = 0; j < num_elem_x2; j++)

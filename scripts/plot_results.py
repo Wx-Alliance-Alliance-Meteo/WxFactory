@@ -266,7 +266,7 @@ class FullDataSet:
         t0 = time()
         # self.no_precond = []
         self.no_precond = self._extract_result_set(
-            ["time_integrator", "solver_tol", "initial_dt", "precond"],
+            ["time_integrator", "solver_tol", "initial_dt", "precond", "backend"],
             time_condition + ['precond = "none"'],
             debug=False,
         )
@@ -1239,14 +1239,15 @@ class FullDataSet:
         plt.close(fig)
         print(f"Saving {full_filename}")
 
-    def plot_time_per_order(self):
-        """Plot time with respect to discretization order."""
-        fig, ax = plt.subplots(1, 1)
+    def plot_rhs_time_per_order_stack(self):
+        """Plot RHS time with respect to discretization order, in a continuous stacked graph."""
         for dataset in [self.no_precond, self.fv_ref, self.p_mg, self.fv_mg]:
             for i, data in enumerate(dataset):
                 if "rhs_total" not in data:
                     continue
-                print(f"dataset {i} = {data}")
+
+                fig, ax = plt.subplots(1, 1)
+                # print(f"dataset {i} = {data}")
                 y = np.vstack([data[f"rhs_{x}"] for x in rhs_timing_columns[:-1]]) * 1000.0
                 labels = rhs_timing_columns[:-1]
                 ax.stackplot(
@@ -1255,34 +1256,103 @@ class FullDataSet:
                     labels=labels,
                 )
 
-        # ax.set_yscale('log')
+                ax.yaxis.grid()
 
-        ax.yaxis.grid()
+                ax.set_xlabel(f"Order")
+                ax.set_xticks(self.no_precond[0]["dg_order"])
+                ax.set_ylabel("Time (ms)")
 
-        ax.set_xlabel(f"Order")
-        ax.set_xticks(self.no_precond[0]["dg_order"])
-        ax.set_ylabel("Time (ms)")
+                if self.prob.grid_type == "cartesian2d" and "data" in locals():
+                    ax_ar = ax.twiny()
+                    ax_ar.set_xlim(ax.get_xlim())
+                    locations = ax.get_xticks()
+                    locations = locations[locations >= 1]
+                    print(f'h size: {data["h_size"]}')
+                    print(f'v size: {data["v_size"]}')
+                    print(f"locations: {locations}")
+                    print(f"prob vert: {self.prob.vert}")
+                    ratios = [(data["h_size"] / num_h) / (data["v_size"] / self.prob.vert) for num_h in locations]
+                    ax_ar.set_xticks(locations)
+                    ax_ar.set_xticklabels([f"{r:.2f}" for r in ratios])
 
-        if self.prob.grid_type == "cartesian2d" and "data" in locals():
-            ax_ar = ax.twiny()
-            ax_ar.set_xlim(ax.get_xlim())
-            locations = ax.get_xticks()
-            locations = locations[locations >= 1]
-            print(f'h size: {data["h_size"]}')
-            print(f'v size: {data["v_size"]}')
-            print(f"locations: {locations}")
-            print(f"prob vert: {self.prob.vert}")
-            ratios = [(data["h_size"] / num_h) / (data["v_size"] / self.prob.vert) for num_h in locations]
-            ax_ar.set_xticks(locations)
-            ax_ar.set_xticklabels([f"{r:.2f}" for r in ratios])
+                fig.suptitle(self._make_title("Time (ms)"), fontsize=9, x=0.03, y=0.99, horizontalalignment="left")
+                fig.legend(fontsize=8)
 
-        fig.suptitle(self._make_title("Time (ms)"), fontsize=9, x=0.03, y=0.99, horizontalalignment="left")
-        fig.legend(fontsize=8)
+                full_filename = self._make_filename(f"time_per_order_{data['backend']}")
+                fig.savefig(full_filename)
+                plt.close(fig)
+                print(f"Saving {full_filename}")
 
-        full_filename = self._make_filename("time_per_order")
-        fig.savefig(full_filename)
-        plt.close(fig)
-        print(f"Saving {full_filename}")
+    def plot_rhs_time_per_order_bar(self):
+        """Plot RHS time with respect to discretization order, in a bar chart (comparing different backends)."""
+        dataset = []
+        for subset in [self.no_precond, self.fv_ref, self.p_mg, self.fv_mg]:
+            for data in subset:
+                if "rhs_total" in data:
+                    dataset.append(data)
+        datasets = {
+            "cpu": [d for d in dataset if d["backend"] in ["cpp", "numpy"]],
+            "gpu": [d for d in dataset if d["backend"] in ["cuda", "cupy"]],
+        }
+
+        for device, dataset in datasets.items():
+            fig, ax = plt.subplots(1, 1)
+            if len(dataset) < 1:
+                continue
+            x = np.arange(len(dataset[0]["dg_order"]))
+            width = 0.2
+            num_col = len(dataset)
+            bottoms = np.zeros((num_col, len(x)))
+            for name in rhs_timing_columns[:-1]:
+                color = None
+                for i, data in enumerate(dataset):
+                    offset = width * i
+
+                    t = data[f"rhs_{name}"] * 1000.0
+                    label = name if i == 0 else None
+                    rects = ax.bar(x + offset, t, width, label=label, bottom=bottoms[i], color=color)
+                    bottoms[i] += t
+                    color = rects.patches[0].get_facecolor()
+
+            ax.legend(ncol=3)
+            ax.set_xticks(x + (width * (num_col - 1) / 2), dataset[0]["dg_order"])
+            ax.set_ylabel(f"RHS time (ms)")
+            ax.set_xlabel(f"Discretization order")
+
+            full_filename = self._make_filename(f"rhs_time_per_order_bar_{device}")
+            fig.savefig(full_filename)
+            plt.close(fig)
+            print(f"Saving {full_filename}")
+
+    def plot_rhs_speedup_per_order(self):
+        cuda_data = next(x for x in self.no_precond if x["backend"] == "cuda")
+        cupy_data = next(x for x in self.no_precond if x["backend"] == "cupy")
+        cpp_data = next(x for x in self.no_precond if x["backend"] == "cpp")
+        numpy_data = next(x for x in self.no_precond if x["backend"] == "numpy")
+
+        for code_data, py_data in zip([cuda_data, cpp_data], [cupy_data, numpy_data]):
+            fig, ax = plt.subplots(1, 1)
+            x = np.arange(len(code_data["dg_order"]))
+            width = 0.1
+            num_col = len(rhs_timing_columns)
+            for i, name in enumerate(rhs_timing_columns):
+                offset = width * i
+                col_name = f"rhs_{name}"
+                t = py_data[col_name] / code_data[col_name]
+                ax.bar(x + offset, t, width, label=name)
+
+            ax.legend(ncol=3)
+            ax.set_xticks(x + (width * (num_col - 1) / 2), code_data["dg_order"])
+            ax.set_ylabel(f"Speedup ({py_data['backend']}/{code_data['backend']})")
+            ax.set_xlabel(f"Discretization order")
+            ax.set_ylim(top=2.0)
+            ax.axhline(1.0, linestyle="--", color="k")
+            fig.tight_layout()
+
+            full_filename = self._make_filename(f"rhs_speedup_per_order_bar_{code_data['backend']}")
+            fig.savefig(full_filename)
+            plt.close(fig)
+            print(f"Saving {full_filename}")
 
 
 def main(args):
@@ -1384,12 +1454,12 @@ def main(args):
 
     if args.order_progression:
         prob_query = """
-            select distinct grid_type, equations, case_number, backend,
+            select distinct grid_type, equations, case_number,
                             (num_elem_h*num_elem_h*num_elem_v*dg_order*dg_order*dg_order)
             from results_param
         """
         probs = [
-            ProblemDesc(grid_type=p[0], equations=p[1], case_number=p[2], backend=p[3], total_points=p[4])
+            ProblemDesc(grid_type=p[0], equations=p[1], case_number=p[2], total_points=p[3])
             for p in list(db_cursor.execute(prob_query).fetchall())
         ]
         # group by num_elem_h*num_elem_h*num_elem_v*dg_order*dg_order
@@ -1398,7 +1468,9 @@ def main(args):
 
         for prob in probs:
             prob_data = FullDataSet(prob, output_suffix=args.suffix, pseudo_cfl_cond=args.pseudo_cfl)
-            prob_data.plot_time_per_order()
+            # prob_data.plot_rhs_time_per_order_stack()
+            prob_data.plot_rhs_time_per_order_bar()
+            prob_data.plot_rhs_speedup_per_order()
 
 
 if __name__ == "__main__":

@@ -27,6 +27,8 @@ void extrap_3d(
   num_t*       result_y = get_c_ptr(result_y_in);
   num_t*       result_z = get_c_ptr(result_z_in);
 
+#pragma omp parallel for collapse(4) default(none)                                       \
+    shared(q, result_x, result_y, result_z, func)
   for (int var = 0; var < 5; var++)
   {
     for (int i = 0; i < num_elem_x3; i++)
@@ -44,42 +46,8 @@ void extrap_3d(
 
             extrap_params_cubedsphere<num_t, order>
                 p(q, index, result_x, result_y, result_z);
-            // if (verbose)
-            // {
-            //   printf(
-            //       "elem (%d, %d, %d, %d) (index %3d) side 1 = %5.0f, side 2 = %5.0f\n",
-            //       var,
-            //       i,
-            //       j,
-            //       k,
-            //       index,
-            //       to_real(*p.side1),
-            //       to_real(*p.side2));
-            // }
-            // if (s == 0 && verbose)
-            // {
-            //   for (int kk = 0; kk < num_solpts; kk++)
-            //   {
-            //     for (int jj = 0; jj < num_solpts; jj++)
-            //     {
-            //       for (int ii = 0; ii < num_solpts; ii++)
-            //       {
-            //         printf(
-            //             "elem (%d, %d, %d, %d)[%d, %d, %d] (index %d) = %f\n",
-            //             var,
-            //             i,
-            //             j,
-            //             k,
-            //             kk,
-            //             jj,
-            //             ii,
-            //             index,
-            //             to_real(p.elem[((kk * num_solpts) + jj) * num_solpts + ii]));
-            //       }
-            //     }
-            //   }
-            // }
-            func(p, verbose);
+
+            func(p, nullptr, verbose);
           }
         }
       }
@@ -182,12 +150,12 @@ void select_extrap_all_3d(
 }
 
 PYBIND11_MODULE(operators_cpp, m) {
-  m.def("extrap_x_3d", &select_extrap_x_3d<double, double>);
-  m.def("extrap_x_3d", &select_extrap_x_3d<double, complex_t>);
-  m.def("extrap_y_3d", &select_extrap_y_3d<double, double>);
-  m.def("extrap_y_3d", &select_extrap_y_3d<double, complex_t>);
-  m.def("extrap_z_3d", &select_extrap_z_3d<double, double>);
-  m.def("extrap_z_3d", &select_extrap_z_3d<double, complex_t>);
+  // m.def("extrap_x_3d", &select_extrap_x_3d<double, double>);
+  // m.def("extrap_x_3d", &select_extrap_x_3d<double, complex_t>);
+  // m.def("extrap_y_3d", &select_extrap_y_3d<double, double>);
+  // m.def("extrap_y_3d", &select_extrap_y_3d<double, complex_t>);
+  // m.def("extrap_z_3d", &select_extrap_z_3d<double, double>);
+  // m.def("extrap_z_3d", &select_extrap_z_3d<double, complex_t>);
 
   m.def("extrap_all_3d", &select_extrap_all_3d<double, double>);
   m.def("extrap_all_3d", &select_extrap_all_3d<double, complex_t>);
