@@ -43,6 +43,7 @@ def load_tests():
     suite.addTest(KiopsPmexToleranceGpuTestCases("test_compare_kiops_pmex"))
 
     suite.addTest(StateTestCases("test_save_load_works"))
+    suite.addTest(StateTestCases("test_load_old_state"))
     suite.addTest(Euler2DRestartTestCase("test_gen_restart"))
     suite.addTest(Euler2DRestartTestCase("test_read_restart"))
 

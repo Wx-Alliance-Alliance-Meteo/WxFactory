@@ -150,8 +150,8 @@ class StateIntegrationTestCases(unittest.TestCase):
             base_name = os.path.split(state_vector_file)[-1]
             true_state_vector_file: str = f"{self.config_dir_path}/{base_name}"
 
-            [data, _] = state.load_state(state_vector_file, self.schema)
-            [true_data, _] = state.load_state(true_state_vector_file, self.schema)
+            [data, _] = state.load_state(state_vector_file)
+            [true_data, _] = state.load_state(true_state_vector_file)
 
             if data.shape != true_data.shape:
                 self.fail(f"Result shape {data.shape} is different from reference solution {true_data.shape}")

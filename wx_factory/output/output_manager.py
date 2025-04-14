@@ -99,7 +99,7 @@ class OutputManager:
     def load_state_from_file(self, step_id, sh):
         global_state = None
         with SingleProcess(self.comm) as s, Conditional(s):
-            global_state, _ = load_state(self.state_file_name(step_id), schema=self.config.schema, device=self.device)
+            global_state, _ = load_state(self.state_file_name(step_id))
 
         starting_state = self._distribute_field(global_state, self.num_dim + 1)
 
@@ -137,7 +137,7 @@ class OutputManager:
             t0 = time()
             total_state = self._gather_field(Q, self.num_dim + 1)
             with SingleProcess(self.comm) as s, Conditional(s):
-                save_state(total_state, self.config, self.state_file_name(step_id), device=self.device)
+                save_state(total_state, self.config, self.state_file_name(step_id))
 
             self.total_save_state_time += time() - t0
             self.num_save_states += 1
