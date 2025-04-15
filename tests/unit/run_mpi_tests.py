@@ -6,7 +6,7 @@ import unittest
 
 from mpi4py import MPI
 
-from mpi_test import MpiRunner
+from mpi_test import MpiRunner, MpiTestSuite
 
 main_project_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../..")
 main_module_dir = os.path.join(main_project_dir, "wx_factory")
@@ -14,6 +14,7 @@ sys.path.append(main_project_dir)
 sys.path.append(main_module_dir)
 
 from tests.unit.common.test_process_topology import ProcessTopologyTest, GatherScatterTest
+from tests.unit.operators.test_extrap import OperatorsExtrapEuler3DTestCase
 from tests.unit.restart.test_restart import ShallowWaterRestartTestCase, Euler3DRestartTestCase
 from tests.unit.solvers.test_pmex_mpi import PmexMpiTestCases
 from tests.unit.solvers.test_kiops_mpi import KiopsMpiTestCases
@@ -21,7 +22,7 @@ from tests.unit.solvers.test_fgmres_mpi import FgmresMpiTestCases
 
 
 def load_tests():
-    suite = unittest.TestSuite()
+    suite = MpiTestSuite()
 
     suite.addTest(ShallowWaterRestartTestCase(6, "test_read_restart"))
     suite.addTest(Euler3DRestartTestCase(6, "test_read_restart"))
@@ -72,6 +73,11 @@ def load_tests():
     suite.addTest(PmexMpiTestCases("test_pmex_mpi_2_processes"))
     suite.addTest(KiopsMpiTestCases("test_kiops_mpi_2_processes"))
 
+    suite.addTest(OperatorsExtrapEuler3DTestCase(6, "test_extrap_kernel_cpu"))
+    suite.addTest(OperatorsExtrapEuler3DTestCase(6, "test_extrap_kernel_gpu"))
+    suite.addTest(OperatorsExtrapEuler3DTestCase(24, "test_extrap_kernel_cpu"))
+    suite.addTest(OperatorsExtrapEuler3DTestCase(24, "test_extrap_kernel_gpu"))
+
     # TODO : This test needs more works on the data division between processes
     # suite.addTest(FgmresMpiTestCases('test_fgmres_mpi_2_processes'))
 
@@ -111,16 +117,11 @@ def regular_run(runner):
     result = runner.run(load_tests())
 
     if not result.wasSuccessful():
-        if MPI.COMM_WORLD.rank == 0:
-            failed_tests = "\n  ".join(
-                [f"{r[0]}" for r in result.errors + result.unexpectedSuccesses + result.failures]
-            )
-            print(f"failed tests: \n  {failed_tests}")
         raise SystemExit(-1)
 
 
 if __name__ == "__main__":
-    runner = MpiRunner(buffer=True)
+    runner = MpiRunner(buffer=True, verbosity=0)
 
     # trace_run(runner)
     regular_run(runner)

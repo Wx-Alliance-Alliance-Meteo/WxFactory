@@ -24,7 +24,8 @@ __global__ void extrap_3d(
   // const size_t thread_id = threadIdx.x + blockIdx.x * blockDim.x;
   const size_t thread_id = threadIdx.x + blockIdx.x * useful_block_size;
   const size_t elem_id   = threadIdx.x / o2;
-  if (threadIdx.x < useful_block_size)
+
+  if (threadIdx.x < useful_block_size && thread_id < max_num_threads)
   {
     params.set_index(thread_id);
     const int row_id = threadIdx.x % o2;
@@ -47,7 +48,7 @@ __global__ void extrap_3d(
   __syncthreads();
 
   // if (thread_id < max_num_threads)
-  if (threadIdx.x < useful_block_size)
+  if (threadIdx.x < useful_block_size && thread_id < max_num_threads)
   {
     // if (verbose && thread_id < o2 * 10 && thread_id % o2 < 2)
     // {
@@ -111,14 +112,29 @@ void launch_extrap_3d(
 
   const size_t num_active_threads =
       5 * num_elem_x1 * num_elem_x2 * num_elem_x3 * order * order;
-  const size_t num_blocks = num_active_threads / num_threads_per_block;
+  const size_t num_blocks =
+      (num_active_threads + num_threads_per_block - 1) / num_threads_per_block;
   // const size_t num_blocks = (max_num_threads + BLOCK_SIZE - 1) / BLOCK_SIZE;
 
-  //   if (verbose)
-  //   {
-  //     std::cout << "Launching " << max_num_threads << " threads, in " << num_blocks
-  //               << " block(s) of size " << BLOCK_SIZE << "\n";
-  //   }
+  if (verbose)
+  {
+    // std::cout << std::format(
+    //     "Launching {} threads in {} block(s) of size {}.\n"
+    //     "Problem size {}x{}x{} elements, order {}\n",
+    //     num_active_threads,
+    //     num_blocks,
+    //     EXTRAP_3D_BLOCK_SIZE,
+    //     num_elem_x1,
+    //     num_elem_x2,
+    //     num_elem_x3,
+    //     order);
+    std::cout << "Launching " << num_active_threads << " threads in " << num_blocks
+              << " block(s) of size " << EXTRAP_3D_BLOCK_SIZE << "(with "
+              << num_active_threads << " active threads per block\n";
+    std::cout << "Problem size " << num_elem_x1 << "x" << num_elem_x2 << "x"
+              << num_elem_x3 << " elements, order " << order << std::endl;
+  }
+  // return;
 
   extrap_3d<real_t, num_t, order>
       <<<num_blocks, EXTRAP_3D_BLOCK_SIZE>>>(p, num_active_threads, bool(verbose), func);

@@ -53,22 +53,22 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
         if config.desired_device in ["numpy", "cupy"]:
             self.extrap_3d = self.extrap_3d_py
 
-    def extrap_3d_py(self, q: NDArray) -> None:
-        self.q_itf_x1[...] = q @ self.ops.extrap_x
-        self.q_itf_x2[...] = q @ self.ops.extrap_y
-        self.q_itf_x3[...] = q @ self.ops.extrap_z
+    def extrap_3d_py(self, q: NDArray, itf_x1: NDArray, itf_x2: NDArray, itf_x3: NDArray) -> None:
+        itf_x1[...] = q @ self.ops.extrap_x
+        itf_x2[...] = q @ self.ops.extrap_y
+        itf_x3[...] = q @ self.ops.extrap_z
 
-    def extrap_3d_code(self, q: NDArray) -> None:
-        xp = self.device.xp
-        self.q_itf_x1[...] = xp.arange(self.q_itf_x1.size).reshape(self.q_itf_x1.shape)
-        self.q_itf_x2[...] = xp.arange(100, self.q_itf_x1.size + 100).reshape(self.q_itf_x1.shape)
-        self.q_itf_x3[...] = xp.arange(500, self.q_itf_x1.size + 500).reshape(self.q_itf_x1.shape)
+    def extrap_3d_code(self, q: NDArray, itf_x1: NDArray, itf_x2: NDArray, itf_x3: NDArray) -> None:
+        # xp = self.device.xp
+        # itf_x1[...] = xp.arange(self.q_itf_x1.size).reshape(self.q_itf_x1.shape)
+        # itf_x2[...] = xp.arange(1000, self.q_itf_x1.size + 1000).reshape(self.q_itf_x1.shape)
+        # itf_x3[...] = xp.arange(500000, self.q_itf_x1.size + 500000).reshape(self.q_itf_x1.shape)
         _, nz, ny, nx = q.shape[:4]
         self.device.operators.extrap_all_3d(
             q,
-            self.q_itf_x1,
-            self.q_itf_x2,
-            self.q_itf_x3,
+            itf_x1,
+            itf_x2,
+            itf_x3,
             nx,
             ny,
             nz,
@@ -76,31 +76,6 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
             # 0 if self.device.comm.rank != 0 else 1,
             0,
         )
-
-        # cuda_x = self.q_itf_x1.copy()
-        # cuda_y = self.q_itf_x2.copy()
-        # cuda_z = self.q_itf_x3.copy()
-        # self.extrap_3d_py(q)
-
-        # diff_x = cuda_x - self.q_itf_x1
-        # diff_y = cuda_y - self.q_itf_x2
-        # diff_z = cuda_z - self.q_itf_x3
-        # diff_xn = xp.linalg.norm(diff_x) / xp.linalg.norm(self.q_itf_x1)
-        # diff_yn = xp.linalg.norm(diff_y) / xp.linalg.norm(self.q_itf_x2)
-        # diff_zn = xp.linalg.norm(diff_z) / xp.linalg.norm(self.q_itf_x3)
-
-        # if diff_xn > 1e-15 or diff_yn > 1e-15 or diff_zn > 1e-15:
-        #     print(f"{self.device.comm.rank} Large diff! {diff_xn:.2e}, {diff_yn:.2e}, {diff_zn:.2e}", flush=True)
-        #     if self.device.comm.rank == 0:
-        #         print(
-        #             f"q \n{q[:2]}\n"
-        #             f"old \n{self.q_itf_x1[:2]}\n"
-        #             f"new \n{cuda_x[:2]}\n"
-        #             f"diff \n{diff_x[:2]}"
-        #             f"                                                                                            ",
-        #             flush=True,
-        #         )
-        #     raise ValueError
 
     def solution_extrapolation(self, q: NDArray) -> None:
         # Extrapolate the solution to element boundaries
@@ -110,7 +85,7 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
         #     xp.matmul(q, self.ops.extrap_z, out=self.q_itf_x3)
         xp = self.device.xp
 
-        self.extrap_3d(q)
+        self.extrap_3d(q, self.q_itf_x1, self.q_itf_x2, self.q_itf_x3)
 
         self.log_rho_p = xp.log(q[idx_rho])
         self.log_rho_theta = xp.log(q[idx_rho_theta])

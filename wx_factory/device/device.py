@@ -68,6 +68,10 @@ class Device(ABC):
     def get_default() -> "CpuDevice":
         return CpuDevice.get_default()
 
+    @staticmethod
+    def cuda_available():
+        return wx_cupy.load_cupy()
+
 
 class CpuDevice(Device):
     _default = None

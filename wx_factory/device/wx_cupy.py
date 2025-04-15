@@ -9,12 +9,11 @@ cuda_avail = False
 
 def load_cupy():
     global __initialized
-
-    if __initialized:
-        return
-
     global num_devices
     global cuda_avail
+
+    if __initialized:
+        return cuda_avail
 
     try:
         import cupy
@@ -56,3 +55,5 @@ def load_cupy():
         print(f"CUDA is {avail}")
 
     __initialized = True
+
+    return cuda_avail

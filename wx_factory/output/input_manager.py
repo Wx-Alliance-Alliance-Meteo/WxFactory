@@ -4,6 +4,8 @@ from mpi4py import MPI
 import numpy
 from numpy.typing import NDArray
 
+from .state import load_state
+
 from common import angle24, Configuration, ConfigurationSchema, default_schema_path, decode_ig4, readfile
 from wx_mpi import do_once, SingleProcess, Conditional
 from process_topology import ProcessTopology
@@ -31,6 +33,22 @@ class InputManager:
         if schema is None:
             schema = ConfigurationSchema(do_once(readfile, default_schema_path, comm=comm))
         return Configuration(do_once(readfile, config_file, comm=comm), schema)
+
+    @staticmethod
+    def read_config_from_save_file(save_file: str, comm: MPI.Comm) -> tuple[Configuration, NDArray]:
+        config_str = None
+        schema_str = None
+        vector = None
+        with SingleProcess(comm) as s, Conditional(s):
+            vector, config = load_state(save_file)
+            config_str = config.config_content
+            schema_str = config.schema.raw_string
+
+        config_str = comm.bcast(config_str)
+        schema_str = comm.bcast(schema_str)
+
+        schema = ConfigurationSchema(schema_str)
+        return Configuration(config_str, schema), vector
 
     @staticmethod
     def read_grid_params(
