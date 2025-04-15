@@ -110,10 +110,11 @@ class WxExtension(Extension):
         )
 
     def clean(self):
-        """Remove any product of the compilation (temporary or not)."""
+        """Remove any files produced by the compilation (temporary or not)."""
         for tree in [self.build_dir, self.lib_dir]:
-            if os.path.exists(tree):
-                shutil.rmtree(tree)
+            for root, _, files in os.walk(tree, topdown=False):
+                for name in files:
+                    os.remove(os.path.join(root, name))
 
 
 class CppExtension(WxExtension):

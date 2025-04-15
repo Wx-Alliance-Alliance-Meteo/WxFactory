@@ -17,20 +17,20 @@ class CompilationTestCases(unittest.TestCase):
         for mod in modules:
             ext = kernels.get_extension(mod, "cpp")
 
-            self.assertFalse(os.path.exists(ext.lib_dir))
+            self.assertEqual(len(os.listdir(ext.lib_dir)), 0)
             kernels.compile(mod, "cpp")
-            self.assertTrue(os.path.exists(ext.lib_dir))
+            self.assertEqual(len(os.listdir(ext.lib_dir)), 1)
 
             kernels.load_module(mod, "cpp")
 
     def test_cpp_compilation_twice(self):
         for mod in modules:
             ext = kernels.get_extension(mod, "cpp")
-            self.assertFalse(os.path.exists(ext.lib_dir))
+            self.assertEqual(len(os.listdir(ext.lib_dir)), 0)
             kernels.compile(mod, "cpp")
-            self.assertTrue(os.path.exists(ext.lib_dir))
+            self.assertEqual(len(os.listdir(ext.lib_dir)), 1)
             kernels.compile(mod, "cpp", force=True)
-            self.assertTrue(os.path.exists(ext.lib_dir))
+            self.assertEqual(len(os.listdir(ext.lib_dir)), 1)
 
 
 class CompilationGPUTestCases(cuda_test.CudaTestCases):
@@ -42,8 +42,8 @@ class CompilationGPUTestCases(cuda_test.CudaTestCases):
 
         for mod in modules:
             ext = kernels.get_extension(mod, "cuda")
-            self.assertFalse(os.path.exists(ext.lib_dir))
+            self.assertEqual(len(os.listdir(ext.lib_dir)), 0)
             kernels.compile(mod, "cuda")
-            self.assertTrue(os.path.exists(ext.lib_dir))
+            self.assertEqual(len(os.listdir(ext.lib_dir)), 1)
 
             kernels.load_module(mod, "cuda")

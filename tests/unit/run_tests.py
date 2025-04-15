@@ -26,9 +26,9 @@ def load_tests():
 
     suite = unittest.TestSuite()
 
-    # suite.addTest(CompilationTestCases("test_cpp_kernels_compilation"))
-    # suite.addTest(CompilationGPUTestCases("test_cuda_kernels_compilation"))
-    # # suite.addTest(CompilationTestCases("test_cpp_compilation_twice"))
+    suite.addTest(CompilationTestCases("test_cpp_kernels_compilation"))
+    suite.addTest(CompilationGPUTestCases("test_cuda_kernels_compilation"))
+    suite.addTest(CompilationTestCases("test_cpp_compilation_twice"))
 
     suite.addTest(PmexComparisonTestCases("test_compare_cpu_to_gpu"))
     suite.addTest(KiopsComparisonTestCases("test_compare_cpu_to_gpu"))
