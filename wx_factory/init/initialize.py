@@ -34,7 +34,7 @@ from .dcmip import (
     dcmip_steady_state_mountain,
     acoustic_wave,
 )
-from .shallow_water_test import (
+from .shallow_water import (
     case_galewsky,
     case_matsuno,
     case_unsteady_zonal,
