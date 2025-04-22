@@ -83,8 +83,11 @@ DEVICE_SPACE inline double to_real(const double& x) {
 const int h11 = 0;
 const int h12 = 1;
 const int h13 = 2;
+const int h21 = 3;
 const int h22 = 4;
 const int h23 = 5;
+const int h31 = 6;
+const int h32 = 7;
 const int h33 = 8;
 
 const int c101 = 0;
@@ -121,6 +124,12 @@ DEVICE_SPACE inline int
 get_c_index(const int i, const int j, const int k, const int l, const int shape[4]) {
   return i * shape[1] * shape[2] * shape[3] + j * shape[2] * shape[3] + k * shape[3] + l;
 }
+
+DEVICE_SPACE inline int
+get_c_index(const int i, const int j, const int k, const int l, const int m, const int shape[5]) {
+  return i * shape[1] * shape[2] * shape[3] * shape[4] + j * shape[2] * shape[3] * shape[4] + k * shape[3] * shape[4] + l * shape[4] + m;
+}
+
 
 // Return the cupy pointer
 template <typename num_t>
