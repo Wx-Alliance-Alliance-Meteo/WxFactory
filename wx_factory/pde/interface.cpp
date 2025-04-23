@@ -66,7 +66,7 @@ void pointwise_euler_cubedsphere_3d(
     const int                  num_elem_x1,
     const int                  num_elem_x2,
     const int                  num_elem_x3,
-    const int                  num_solpts,
+    const int                  num_solpts_tot,
     const int                  verbose) {
 
   const num_t* q_ptr        = get_c_ptr(q_in);
@@ -86,8 +86,8 @@ void pointwise_euler_cubedsphere_3d(
   const real_t* sqrt_g_ptr        = get_c_ptr(sqrt_g_in);
   const real_t* h_ptr             = get_c_ptr(h_in);
 
-  const uint64_t stride = num_elem_x3 * num_elem_x2 * num_elem_x1 * num_solpts;
-  const int array_shape[5]  = {5, num_elem_x3, num_elem_x2, num_elem_x1, num_solpts * num_solpts};
+  const uint64_t stride = num_elem_x3 * num_elem_x2 * num_elem_x1 * num_solpts_tot;
+  const int array_shape[5]  = {5, num_elem_x3, num_elem_x2, num_elem_x1, num_solpts_tot};
 
   for (int i = 0; i < num_elem_x3; i++)
   {
@@ -95,7 +95,7 @@ void pointwise_euler_cubedsphere_3d(
     {
       for (int k = 0; k < num_elem_x1; k++)
       {
-        for (int s = 0; s < num_solpts; s++)
+        for (int s = 0; s < num_solpts_tot; s++)
         {
           const int index = get_c_index(0, i, j, k, s, array_shape);
 

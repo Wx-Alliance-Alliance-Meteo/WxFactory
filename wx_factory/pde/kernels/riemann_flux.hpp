@@ -155,8 +155,8 @@ DEVICE_SPACE void riemann_euler_cubedsphere_rusanov_3d_kernel(
   }
 
   // Get the maximum eigenvalue
-  const num_t eig_l = sqrt_g_l * al + fabs(vnl);
-  const num_t eig_r = sqrt_g_r * ar + fabs(vnr);
+  const num_t eig_l = sqrt_g_l * (al + fabs(vnl));
+  const num_t eig_r = sqrt_g_r * (ar + fabs(vnr));
 
   const num_t scaled_eig = fmax(eig_l, eig_r);
 

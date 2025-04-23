@@ -28,9 +28,10 @@ DEVICE_SPACE void boundary_euler_cubedsphere_3d_kernel(
     euler_state_3d<const num_t> state_in,
     euler_state_3d<num_t> state_b)
 {
-  const num_t w_b = -1.0 * *state_in.rho_w / *state_b.rho;
+  const num_t w_b = -1.0 * *state_in.rho_w / *state_in.rho;
 
   // Set symmetry/slip wall boundary
+  // Extrapolate variables and mirror w-velocity
   *state_b.rho       = *state_in.rho;
   *state_b.rho_u     = *state_in.rho_u;
   *state_b.rho_v     = *state_in.rho_v;

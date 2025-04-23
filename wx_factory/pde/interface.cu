@@ -589,7 +589,7 @@ void select_forcing_euler_cubesphere_3d(
 PYBIND11_MODULE(pde_cuda, m) {
   // Pointwise fluxes
   m.def("pointwise_eulercartesian_2d", &select_pointwise_eulercartesian_2d);
-  // m.def("pointwise_eulercubedsphere_3d", &select_pointwise_euler_cubedsphere_3d);
+  m.def("pointwise_euler_cubedsphere_3d", &select_pointwise_euler_cubedsphere_3d);
 
   // Riemann fluxes
   m.def("riemann_eulercartesian_ausm_2d", &select_riemann_eulercartesian_ausm_2d);

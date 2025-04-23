@@ -8,6 +8,7 @@ from geometry import CubedSphere3D, Metric3DTopo
 from init.dcmip import dcmip_schar_damping
 
 from .pde import PDE
+
 from .fluxes import rusanov_3d_hori_i_new, rusanov_3d_hori_j_new, rusanov_3d_vert_new
 
 
@@ -57,6 +58,7 @@ def compute_forcings(
 
 class PDEEulerCubesphere(PDE):
     def __init__(self, geometry: CubedSphere3D, config: Configuration, metric: Metric3DTopo):
+        pde = geometry.device.pde
         super().__init__(
             geometry,
             config,
@@ -64,10 +66,11 @@ class PDEEulerCubesphere(PDE):
             3,
             5,
             geometry.num_elements_horizontal**2 * geometry.num_elements_vertical,
-            lambda a: a,
-            lambda a: a,
+            pointwise_func=pde.pointwise_euler_cubedsphere_3d,
+            riemann_func=lambda a: a,
         )
         self.num_solpts = geometry.num_solpts
+
         self.case_number = config.case_number
         self.advection_only = config.case_number < 13
 
@@ -80,7 +83,7 @@ class PDEEulerCubesphere(PDE):
         else:
             self.compute_forcings_inner = self.compute_forcings_code
 
-    def pointwise_fluxes(
+    def pointwise_fluxes_cupy(
         self,
         q,
         flux_x1,
@@ -95,6 +98,7 @@ class PDEEulerCubesphere(PDE):
         wflux_pres_x3,
         logp,
     ):
+
         xp = self.device.xp
 
         rho = q[idx_rho]
@@ -133,6 +137,45 @@ class PDEEulerCubesphere(PDE):
 
         wflux_pres_x3[...] = (self.metric.sqrtG_new * self.metric.h_contra_new[2, 2]).astype(q.dtype)
         logp[...] = xp.log(pressure)
+
+    def pointwise_fluxes(
+        self,
+        q,
+        flux_x1,
+        flux_x2,
+        flux_x3,
+        pressure,
+        wflux_adv_x1,
+        wflux_adv_x2,
+        wflux_adv_x3,
+        wflux_pres_x1,
+        wflux_pres_x2,
+        wflux_pres_x3,
+        logp,
+    ):
+
+        # Call appropriate backend kernel
+        self.pointwise_func(
+            q,
+            self.metric.sqrtG_new,
+            self.metric.h_contra_new,
+            flux_x1,
+            flux_x2,
+            flux_x3,
+            pressure,
+            wflux_adv_x1,
+            wflux_adv_x2,
+            wflux_adv_x3,
+            wflux_pres_x1,
+            wflux_pres_x2,
+            wflux_pres_x3,
+            logp,
+            self.geometry.num_elements_x1,
+            self.geometry.num_elements_x2,
+            self.geometry.num_elements_x3,
+            self.num_solpts**3,
+            False,
+        )
 
     def riemann_fluxes(
         self,
