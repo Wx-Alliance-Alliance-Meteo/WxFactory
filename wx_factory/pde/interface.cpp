@@ -243,7 +243,7 @@ template <typename real_t, typename num_t>
 void riemann_euler_cubedsphere_rusanov_3d(
     const py::array_t<num_t>& q_itf_x1_in,
     const py::array_t<num_t>& q_itf_x2_in,
-    const py::array_t<num_t>& q_itf_x3_in,
+    py::array_t<num_t>& q_itf_x3_in,
     const py::array_t<real_t>& sqrt_g_in,
     const py::array_t<real_t>& h_in,
     const int num_elem_x1,
@@ -265,7 +265,7 @@ void riemann_euler_cubedsphere_rusanov_3d(
 
   const num_t* q_itf_x1_ptr = get_c_ptr(q_itf_x1_in);
   const num_t* q_itf_x2_ptr = get_c_ptr(q_itf_x2_in);
-  const num_t* q_itf_x3_ptr = get_c_ptr(q_itf_x3_in);
+  num_t* q_itf_x3_ptr = get_c_ptr(q_itf_x3_in);
 
   num_t* flux_itf_x1_ptr = get_c_ptr(flux_itf_x1);
   num_t* flux_itf_x2_ptr = get_c_ptr(flux_itf_x2);
@@ -293,7 +293,6 @@ void riemann_euler_cubedsphere_rusanov_3d(
   const int array_shape_x1[5]  = {5, num_elem_x3, num_elem_x2, num_elem_x1+2, num_solpts_riem};
   const int array_shape_x2[5]  = {5, num_elem_x3, num_elem_x2+2, num_elem_x1, num_solpts_riem};
   const int array_shape_x3[5]  = {5, num_elem_x3+2, num_elem_x2, num_elem_x1, num_solpts_riem};
-
 
   // Compute the fluxes along the x1-direction
   for (int i = 0; i < num_elem_x3; i++)
@@ -401,15 +400,33 @@ void riemann_euler_cubedsphere_rusanov_3d(
     }
   }
 
-  // Pending
   // Set the x3-direction boundary conditions to ensure no flow via odd symmetry
-  // for (int j = 0; j < num_elem_x2; j++)
-  // {
-  //   for (int k = 0; k < num_elem_x1; k++)
-  //   {
-  //     q_itf_x3
-  //   }
-  // }
+  for (int j = 0; j < num_elem_x2; j++)
+  {
+    for (int k = 0; k < num_elem_x1; k++)
+    {
+      for(int l=0; l<num_solpts * num_solpts; l++)
+      {
+        // Set the bottom boundary
+        const int index_b_bottom = get_c_index(0, 0, j, k, l + num_solpts * num_solpts, array_shape_x3);
+        euler_state_3d<num_t> params_b_bottom(q_itf_x3_ptr, index_b_bottom, stride);
+
+        const int index_in_bottom = get_c_index(0, 1, j, k, l, array_shape_x3);
+        euler_state_3d<const num_t> params_in_bottom(q_itf_x3_ptr, index_in_bottom, stride);
+
+        boundary_euler_cubedsphere_3d_kernel<real_t, num_t>(params_in_bottom, params_b_bottom);
+
+        // Set the top boundary
+        const int index_b_top = get_c_index(0, num_elem_x3 + 1, j, k, l, array_shape_x3);
+        euler_state_3d<num_t> params_b_top(q_itf_x3_ptr, index_b_top, stride);
+
+        const int index_in_top = get_c_index(0, num_elem_x3, j, k, l + num_solpts * num_solpts, array_shape_x3);
+        euler_state_3d<const num_t> params_in_top(q_itf_x3_ptr, index_in_top, stride);
+
+        boundary_euler_cubedsphere_3d_kernel<real_t, num_t>(params_in_top, params_b_top);
+      }
+    }
+  }
 
 
   // Compute the fluxes along the x3-direction

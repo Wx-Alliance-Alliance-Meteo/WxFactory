@@ -128,9 +128,10 @@ DEVICE_SPACE void riemann_euler_cubedsphere_rusanov_3d_kernel(
   const num_t pl = p0 * pow(rho_thetal * Rd * inp0, heat_capacity_ratio);
   const num_t pr = p0 * pow(rho_thetar * Rd * inp0, heat_capacity_ratio);
 
-  // Get the speed of sound on each side
-  const num_t al = sqrt(hdir_0_l * heat_capacity_ratio * pl * inv_rhol);
-  const num_t ar = sqrt(hdir_0_r * heat_capacity_ratio * pr * inv_rhor);
+  // Get the speed of sound on each side (uses h_dir_dir contravariant metric)
+  // 4dir = h[dir,dir]
+  const num_t al = sqrt(params_l.h[4*dir] * heat_capacity_ratio * pl * inv_rhol);
+  const num_t ar = sqrt(params_r.h[4*dir] * heat_capacity_ratio * pr * inv_rhor);
 
   num_t vnr = 0.0;
   num_t vnl = 0.0;
@@ -154,8 +155,8 @@ DEVICE_SPACE void riemann_euler_cubedsphere_rusanov_3d_kernel(
   }
 
   // Get the maximum eigenvalue
-  const num_t eig_l = sqrt_g_l * fabs(al + vnl);
-  const num_t eig_r = sqrt_g_r * fabs(ar + vnr);
+  const num_t eig_l = sqrt_g_l * al + fabs(vnl);
+  const num_t eig_r = sqrt_g_r * ar + fabs(vnr);
 
   const num_t scaled_eig = fmax(eig_l, eig_r);
 
