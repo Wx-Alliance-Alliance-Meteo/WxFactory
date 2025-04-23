@@ -63,9 +63,9 @@ class PDEEulerCubesphere(PDE):
             geometry,
             config,
             metric,
-            3,
-            5,
-            geometry.num_elements_horizontal**2 * geometry.num_elements_vertical,
+            num_dim=3,
+            num_var=5,
+            num_elem=geometry.num_elements_horizontal**2 * geometry.num_elements_vertical,
             pointwise_func=pde.pointwise_euler_cubedsphere_3d,
             riemann_func=lambda a: a,
         )

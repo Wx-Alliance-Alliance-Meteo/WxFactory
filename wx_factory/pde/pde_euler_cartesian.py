@@ -14,9 +14,9 @@ class PDEEulerCartesian(PDE):
             geometry,
             config,
             metric,
-            2,
-            4,
-            geometry.num_elements_horizontal * geometry.num_elements_vertical,
+            num_dim=2,
+            num_var=4,
+            num_elem=geometry.num_elements_horizontal * geometry.num_elements_vertical,
             pointwise_func=pde.pointwise_eulercartesian_2d,
             riemann_func=pde.riemann_eulercartesian_ausm_2d,
         )
