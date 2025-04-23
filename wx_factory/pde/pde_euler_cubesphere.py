@@ -67,8 +67,9 @@ class PDEEulerCubesphere(PDE):
             num_var=5,
             num_elem=geometry.num_elements_horizontal**2 * geometry.num_elements_vertical,
             pointwise_func=pde.pointwise_euler_cubedsphere_3d,
-            riemann_func=lambda a: a,
+            riemann_func=pde.riemann_euler_cubedsphere_rusanov_3d,
         )
+
         self.num_solpts = geometry.num_solpts
 
         self.case_number = config.case_number
@@ -196,6 +197,57 @@ class PDEEulerCubesphere(PDE):
         wflux_pres_itf_x3,
         metric,
     ):
+
+        # Call Riemann kernel in appropriate backend
+        self.riemann_func(
+            q_itf_x1,
+            q_itf_x2,
+            q_itf_x3,
+            metric.sqrtG_itf_i_new,
+            metric.sqrtG_itf_j_new,
+            metric.sqrtG_itf_k_new,
+            metric.h_contra_itf_i_new,
+            metric.h_contra_itf_j_new,
+            metric.h_contra_itf_k_new,
+            self.geometry.num_elements_x1,
+            self.geometry.num_elements_x2,
+            self.geometry.num_elements_x3,
+            self.num_solpts,
+            flux_itf_x1,
+            flux_itf_x2,
+            flux_itf_x3,
+            pressure_itf_x1,
+            pressure_itf_x2,
+            pressure_itf_x3,
+            wflux_adv_itf_x1,
+            wflux_pres_itf_x1,
+            wflux_adv_itf_x2,
+            wflux_pres_itf_x2,
+            wflux_adv_itf_x3,
+            wflux_pres_itf_x3,
+        )
+
+        return pressure_itf_x1, pressure_itf_x2
+
+    def riemann_fluxes_cupy(
+        self,
+        q_itf_x1,
+        q_itf_x2,
+        q_itf_x3,
+        flux_itf_x1,
+        flux_itf_x2,
+        flux_itf_x3,
+        pressure_itf_x1,
+        pressure_itf_x2,
+        pressure_itf_x3,
+        wflux_adv_itf_x1,
+        wflux_pres_itf_x1,
+        wflux_adv_itf_x2,
+        wflux_pres_itf_x2,
+        wflux_adv_itf_x3,
+        wflux_pres_itf_x3,
+        metric,
+    ):
         xp = self.device.xp
         u1_itf_x1 = q_itf_x1[idx_rho_u1] / q_itf_x1[idx_rho]
         u2_itf_x2 = q_itf_x2[idx_rho_u2] / q_itf_x2[idx_rho]
@@ -226,6 +278,7 @@ class PDEEulerCubesphere(PDE):
             self.num_solpts,
             xp,
         )
+
         rusanov_3d_hori_j_new(
             u2_itf_x2,
             q_itf_x2,
@@ -239,6 +292,7 @@ class PDEEulerCubesphere(PDE):
             self.num_solpts,
             xp,
         )
+
         rusanov_3d_vert_new(
             q_itf_x3,
             pressure_itf_x3,
