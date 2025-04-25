@@ -84,7 +84,8 @@ template <typename real_t, typename num_t>
 DEVICE_SPACE void riemann_euler_cubedsphere_rusanov_3d_kernel(
     riemann_params_cubedsphere<real_t, num_t> params_l,
     riemann_params_cubedsphere<real_t, num_t> params_r,
-    const int                            dir) {
+    const int                                 dir,
+    const bool                                boundary) {
 
   // Extract necessary metrics
   const real_t sqrt_g_l = *params_l.sqrt_g;
@@ -158,7 +159,7 @@ DEVICE_SPACE void riemann_euler_cubedsphere_rusanov_3d_kernel(
   const num_t eig_l = (al + fabs(vnl));
   const num_t eig_r = (ar + fabs(vnr));
 
-  const num_t scaled_eig = sqrt_g_l * fmax(eig_l, eig_r);
+  num_t scaled_eig = sqrt_g_l * fmax(eig_l, eig_r);
 
   num_t flux_l[5];
   num_t flux_r[5];
@@ -189,6 +190,10 @@ DEVICE_SPACE void riemann_euler_cubedsphere_rusanov_3d_kernel(
   *params_r.flux.rho_v     = *params_l.flux.rho_v;
   *params_r.flux.rho_w     = *params_l.flux.rho_w;
   *params_r.flux.rho_theta = *params_l.flux.rho_theta;
+
+  // Ensure zero dissipation in advection flux at boundary points
+  // Otherwise, this would create nonzero mass flux at boundaries
+  if(boundary) scaled_eig = scaled_eig * 0.0;
 
   // Store the advection and pressure contribution to vertical fluxes
   *params_l.wflux_adv = 0.5 * (sqrt_g_l * rho_wl * vnl + sqrt_g_r * rho_wr * vnr - scaled_eig * (rho_wr - rho_wl));

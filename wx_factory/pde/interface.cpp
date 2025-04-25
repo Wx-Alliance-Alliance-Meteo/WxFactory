@@ -296,20 +296,14 @@ void riemann_euler_cubedsphere_rusanov_3d(
   const real_t* h_x3_ptr = get_c_ptr(h_x3);
 
   const int      num_solpts_riem = 2 * num_solpts * num_solpts;
-  const uint64_t stride_x1 =
-      num_elem_x3 * num_elem_x2 * (num_elem_x1 + 2) * num_solpts_riem;
-  const uint64_t stride_x2 =
-      num_elem_x3 * (num_elem_x2 + 2) * num_elem_x1 * num_solpts_riem;
-  const uint64_t stride_x3 =
-      (num_elem_x3 + 2) * num_elem_x2 * num_elem_x1 * num_solpts_riem;
+  const uint64_t stride_x1 = num_elem_x3 * num_elem_x2 * (num_elem_x1 + 2) * num_solpts_riem;
+  const uint64_t stride_x2 = num_elem_x3 * (num_elem_x2 + 2) * num_elem_x1 * num_solpts_riem;
+  const uint64_t stride_x3 = (num_elem_x3 + 2) * num_elem_x2 * num_elem_x1 * num_solpts_riem;
 
   // Ensure ghost elements are added to array shapes
-  const int array_shape_x1[5] =
-      {5, num_elem_x3, num_elem_x2, num_elem_x1 + 2, num_solpts_riem};
-  const int array_shape_x2[5] =
-      {5, num_elem_x3, num_elem_x2 + 2, num_elem_x1, num_solpts_riem};
-  const int array_shape_x3[5] =
-      {5, num_elem_x3 + 2, num_elem_x2, num_elem_x1, num_solpts_riem};
+  const int array_shape_x1[5] = {5, num_elem_x3, num_elem_x2, num_elem_x1 + 2, num_solpts_riem};
+  const int array_shape_x2[5] = {5, num_elem_x3, num_elem_x2 + 2, num_elem_x1, num_solpts_riem};
+  const int array_shape_x3[5] = {5, num_elem_x3 + 2, num_elem_x2, num_elem_x1, num_solpts_riem};
 
   // Compute the fluxes along the x1-direction
   for (int i = 0; i < num_elem_x3; i++)
@@ -320,9 +314,7 @@ void riemann_euler_cubedsphere_rusanov_3d(
       {
         for (int l = 0; l < num_solpts * num_solpts; l++)
         {
-          const int index_l =
-              get_c_index(0, i, j, k, l + num_solpts * num_solpts, array_shape_x1);
-
+          const int index_l = get_c_index(0, i, j, k, l + num_solpts * num_solpts, array_shape_x1);
           riemann_params_cubedsphere<real_t, num_t> params_l(
               q_itf_x1_ptr,
               sqrt_g_itf_x1_ptr,
@@ -335,7 +327,6 @@ void riemann_euler_cubedsphere_rusanov_3d(
               wflux_pres_itf_x1_ptr);
 
           const int index_r = get_c_index(0, i, j, k + 1, l, array_shape_x1);
-
           riemann_params_cubedsphere<real_t, num_t> params_r(
               q_itf_x1_ptr,
               sqrt_g_itf_x1_ptr,
@@ -350,7 +341,8 @@ void riemann_euler_cubedsphere_rusanov_3d(
           riemann_euler_cubedsphere_rusanov_3d_kernel<real_t, num_t>(
               params_l,
               params_r,
-              0);
+              0,
+              false); // Consider internal Riemann problem
         }
       }
     }
@@ -365,8 +357,7 @@ void riemann_euler_cubedsphere_rusanov_3d(
       {
         for (int l = 0; l < num_solpts * num_solpts; l++)
         {
-          const int index_l =
-              get_c_index(0, i, j, k, l + num_solpts * num_solpts, array_shape_x2);
+          const int index_l = get_c_index(0, i, j, k, l + num_solpts * num_solpts, array_shape_x2);
           riemann_params_cubedsphere<real_t, num_t> params_l(
               q_itf_x2_ptr,
               sqrt_g_itf_x2_ptr,
@@ -393,7 +384,8 @@ void riemann_euler_cubedsphere_rusanov_3d(
           riemann_euler_cubedsphere_rusanov_3d_kernel<real_t, num_t>(
               params_l,
               params_r,
-              1);
+              1,
+              false); // Consider internal Riemann problem
         }
       }
     }
@@ -407,31 +399,19 @@ void riemann_euler_cubedsphere_rusanov_3d(
       for (int l = 0; l < num_solpts * num_solpts; l++)
       {
         // Set the bottom boundary
-        const int index_b_bottom =
-            get_c_index(0, 0, j, k, l + num_solpts * num_solpts, array_shape_x3);
+        const int index_b_bottom = get_c_index(0, 0, j, k, l + num_solpts * num_solpts, array_shape_x3);
         euler_state_3d<num_t> params_b_bottom(q_itf_x3_ptr, index_b_bottom, stride_x3);
 
         const int index_in_bottom = get_c_index(0, 1, j, k, l, array_shape_x3);
-        euler_state_3d<const num_t> params_in_bottom(
-            q_itf_x3_ptr,
-            index_in_bottom,
-            stride_x3);
+        euler_state_3d<const num_t> params_in_bottom(q_itf_x3_ptr, index_in_bottom, stride_x3);
 
-        boundary_euler_cubedsphere_3d_kernel<real_t, num_t>(
-            params_in_bottom,
-            params_b_bottom);
+        boundary_euler_cubedsphere_3d_kernel<real_t, num_t>(params_in_bottom,params_b_bottom);
 
         // Set the top boundary
         const int index_b_top = get_c_index(0, num_elem_x3 + 1, j, k, l, array_shape_x3);
         euler_state_3d<num_t> params_b_top(q_itf_x3_ptr, index_b_top, stride_x3);
 
-        const int index_in_top = get_c_index(
-            0,
-            num_elem_x3,
-            j,
-            k,
-            l + num_solpts * num_solpts,
-            array_shape_x3);
+        const int index_in_top = get_c_index(0, num_elem_x3, j, k, l + num_solpts * num_solpts, array_shape_x3);
         euler_state_3d<const num_t> params_in_top(q_itf_x3_ptr, index_in_top, stride_x3);
 
         boundary_euler_cubedsphere_3d_kernel<real_t, num_t>(params_in_top, params_b_top);
@@ -448,8 +428,7 @@ void riemann_euler_cubedsphere_rusanov_3d(
       {
         for (int l = 0; l < num_solpts * num_solpts; l++)
         {
-          const int index_l =
-              get_c_index(0, i, j, k, l + num_solpts * num_solpts, array_shape_x3);
+          const int index_l = get_c_index(0, i, j, k, l + num_solpts * num_solpts, array_shape_x3);
           riemann_params_cubedsphere<real_t, num_t> params_l(
               q_itf_x3_ptr,
               sqrt_g_itf_x3_ptr,
@@ -473,10 +452,14 @@ void riemann_euler_cubedsphere_rusanov_3d(
               wflux_adv_itf_x3_ptr,
               wflux_pres_itf_x3_ptr);
 
+          bool boundary_riemann = false;
+          if (i == 0 || i == num_elem_x3)  boundary_riemann = true;
+
           riemann_euler_cubedsphere_rusanov_3d_kernel<real_t, num_t>(
               params_l,
               params_r,
-              2);
+              2,
+              boundary_riemann);
         }
       }
     }
