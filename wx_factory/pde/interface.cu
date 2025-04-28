@@ -135,6 +135,146 @@ __global__ void boundary_eulercartesian_2d(
 }
 
 template <typename real_t, typename num_t>
+__global__ void riemann_euler_cubedsphere_rusanov_3d(
+    const num_t* q_itf,
+    const real_t* sqrt_g,
+    const real_t* h,
+    num_t*       flux_itf,
+    num_t*       pressure,
+    num_t*       wflux_adv_itf,
+    num_t*       wflux_pres_itf,
+    const int    direction,
+    const int    nmax_x1,
+    const int    nmax_x2,
+    const int    nmax_x3,
+    const int    num_solpts_face)
+{
+  // Get the thread id
+  const size_t tid = threadIdx.x + blockIdx.x * blockDim.x;
+  const size_t total_tasks = nmax_x1 * nmax_x2 * nmax_x3 * num_solpts_face;
+
+  if (tid >= total_tasks) return;
+
+  // Get the grid indices
+  // i indexes along the x3-direction
+  // j indexes along the x2-direction
+  // k indexes along the x1-direction
+  // l indexes the point in the face
+  int l = tid % num_solpts_face;
+  int tid2 = tid / num_solpts_face;
+
+  int k = tid2 % nmax_x1;
+  tid2 = tid2 / nmax_x1;
+
+  int j = tid2 % nmax_x2;
+  int i = tid2 / nmax_x2;
+
+  int index_l, index_r, stride;
+
+  if(direction==0)
+  {
+    const int array_shape[5]  = {5, nmax_x3, nmax_x2, nmax_x1+1, 2 * num_solpts_face};
+    stride = (nmax_x1+1) * nmax_x2 * nmax_x3 * num_solpts_face * 2;
+    index_l = get_c_index(0, i, j, k, l + num_solpts_face, array_shape);
+    index_r = get_c_index(0, i, j, k + 1, l, array_shape);
+  }
+  else if(direction==1)
+  {
+    const int array_shape[5]  = {5, nmax_x3, nmax_x2+1, nmax_x1, 2 * num_solpts_face};
+    stride = nmax_x1 * (nmax_x2 + 1)* nmax_x3 * num_solpts_face * 2;
+    index_l = get_c_index(0, i, j, k, l + num_solpts_face, array_shape);
+    index_r = get_c_index(0, i, j + 1, k, l, array_shape);
+  }
+  else
+  {
+    const int array_shape[5]  = {5, nmax_x3+1, nmax_x2, nmax_x1, 2 * num_solpts_face};
+    stride = nmax_x1 * nmax_x2 * (nmax_x3 + 1) * num_solpts_face * 2;
+    index_l = get_c_index(0, i, j, k, l + num_solpts_face, array_shape);
+    index_r = get_c_index(0, i + 1, j, k, l, array_shape);
+  }
+
+  // Get the pointers to the left and right parameters
+  riemann_params_cubedsphere<real_t, num_t> params_l(
+    q_itf,
+    sqrt_g,
+    h,
+    index_l,
+    stride,
+    flux_itf,
+    pressure,
+    wflux_adv_itf,
+    wflux_pres_itf);
+
+  riemann_params_cubedsphere<real_t, num_t> params_r(
+    q_itf,
+    sqrt_g,
+    h,
+    index_r,
+    stride,
+    flux_itf,
+    pressure,
+    wflux_adv_itf,
+    wflux_pres_itf);
+
+  // Compute the Riemann flux
+  bool boundary = (direction == 2 && (i == 0 || i == nmax_x3 - 1));
+  riemann_euler_cubedsphere_rusanov_3d_kernel<real_t, num_t>(params_l, params_r, direction, boundary);
+}
+
+template <typename real_t, typename num_t>
+__global__ void boundary_euler_cubedsphere_3d(
+  num_t* q_itf, int num_elem_x1, int num_elem_x2, int num_elem_x3, int num_solpts_face)
+{
+  // Sets the boundary condition along the vertical direction
+  int tid = blockIdx.x * blockDim.x + threadIdx.x;
+  int total_tasks = num_elem_x2 * num_elem_x1 * num_solpts_face;
+  if (tid >= total_tasks) return;
+
+  // Compute grid indices
+  int l = tid % num_solpts_face;
+  int tid2 = tid / num_solpts_face;
+
+  int k = tid2 % num_elem_x1;
+  int j = tid2 / num_elem_x1;
+
+  const int array_shape[5]  = {5, num_elem_x3 + 2, num_elem_x2, num_elem_x1, 2 * num_solpts_face};
+  const int stride = num_elem_x1 * num_elem_x2 * (num_elem_x3 + 2) * num_solpts_face * 2;
+
+  // Bottom boundary
+  const int index_b_bottom = get_c_index(0, 0, j, k, l + num_solpts_face, array_shape);
+  const int index_in_bottom = get_c_index(0, 1, j, k, l, array_shape);
+
+  euler_state_3d<num_t> params_b_bottom(q_itf, index_b_bottom, stride);
+  euler_state_3d<const num_t> params_in_bottom(q_itf, index_in_bottom, stride);
+
+  boundary_euler_cubedsphere_3d_kernel<real_t, num_t>(params_in_bottom, params_b_bottom);
+
+  // Top boundary
+  const int index_b_top = get_c_index(0, num_elem_x3 + 1, j, k, l, array_shape);
+  const int index_in_top = get_c_index(0, num_elem_x3, j, k, l + num_solpts_face, array_shape);
+
+  euler_state_3d<num_t> params_b_top(q_itf, index_b_top, stride);
+  euler_state_3d<const num_t> params_in_top(q_itf, index_in_top, stride);
+
+  boundary_euler_cubedsphere_3d_kernel<real_t, num_t>(params_in_top, params_b_top);
+}
+
+template <typename real_t, typename num_t>
+__global__ void pointwise_euler_cubedsphere_3d(
+    kernel_params_cubedsphere<real_t, num_t> params,
+    const size_t                  max_num_threads,
+    const bool                    verbose)
+{
+  const size_t thread_id = threadIdx.x + blockIdx.x * blockDim.x;
+
+  if (thread_id < max_num_threads)
+  {
+    params.set_index(thread_id);
+    pointwise_euler_cubedsphere_3d_kernel<real_t, num_t>(params, verbose);
+  }
+}
+
+template <typename real_t, typename num_t>
 __global__ void forcing_euler_cubesphere_3d(
     forcing_params<real_t, num_t> params,
     const size_t                  max_num_threads,
@@ -206,6 +346,366 @@ void select_pointwise_eulercartesian_2d(
         num_elem_x1,
         num_elem_x2,
         num_solpts_tot);
+  }
+}
+
+template <typename real_t, typename num_t>
+void launch_pointwise_euler_cubedsphere_3d(
+  const py::object  q_in,
+  const py::object sqrt_g_in,
+  const py::object h_in,
+  py::object        flux_x1,
+  py::object        flux_x2,
+  py::object        flux_x3,
+  py::object        pressure,
+  py::object        wflux_adv_x1,
+  py::object        wflux_adv_x2,
+  py::object        wflux_adv_x3,
+  py::object        wflux_pres_x1,
+  py::object        wflux_pres_x2,
+  py::object        wflux_pres_x3,
+  py::object        log_pressure,
+  const int                  num_elem_x1,
+  const int                  num_elem_x2,
+  const int                  num_elem_x3,
+  const int                  num_solpts,
+  const int                  verbose) {
+
+  const num_t* q_ptr        = get_cupy_pointer<const num_t>(q_in);
+  num_t*       flux_x1_ptr  = get_cupy_pointer<num_t>(flux_x1);
+  num_t*       flux_x2_ptr  = get_cupy_pointer<num_t>(flux_x2);
+  num_t*       flux_x3_ptr  = get_cupy_pointer<num_t>(flux_x3);
+  num_t*       pressure_ptr = get_cupy_pointer<num_t>(pressure);
+
+  num_t* wflux_adv_x1_ptr = get_cupy_pointer<num_t>(wflux_adv_x1);
+  num_t* wflux_adv_x2_ptr = get_cupy_pointer<num_t>(wflux_adv_x2);
+  num_t* wflux_adv_x3_ptr = get_cupy_pointer<num_t>(wflux_adv_x3);
+
+  num_t*        wflux_pres_x1_ptr = get_cupy_pointer<num_t>(wflux_pres_x1);
+  num_t*        wflux_pres_x2_ptr = get_cupy_pointer<num_t>(wflux_pres_x2);
+  num_t*        wflux_pres_x3_ptr = get_cupy_pointer<num_t>(wflux_pres_x3);
+  num_t*        log_pressure_ptr  = get_cupy_pointer<num_t>(log_pressure);
+  const real_t* sqrt_g_ptr        = get_cupy_pointer<const real_t>(sqrt_g_in);
+  const real_t* h_ptr             = get_cupy_pointer<const real_t>(h_in);
+
+  const size_t stride = num_elem_x1 * num_elem_x2 * num_elem_x3 * num_solpts;
+  kernel_params_cubedsphere<real_t, num_t> base_params(
+    q_ptr,
+    sqrt_g_ptr,
+    h_ptr,
+    0,
+    stride,
+    flux_x1_ptr,
+    flux_x2_ptr,
+    flux_x3_ptr,
+    pressure_ptr,
+    wflux_adv_x1_ptr,
+    wflux_adv_x2_ptr,
+    wflux_adv_x3_ptr,
+    wflux_pres_x1_ptr,
+    wflux_pres_x2_ptr,
+    wflux_pres_x3_ptr,
+    log_pressure_ptr);
+
+  const int    BLOCK_SIZE = 128;
+  const size_t num_blocks = (stride + BLOCK_SIZE - 1) / BLOCK_SIZE;
+  pointwise_euler_cubedsphere_3d<real_t, num_t>
+      <<<num_blocks, BLOCK_SIZE>>>(base_params, stride, bool(verbose));
+}
+
+void select_pointwise_euler_cubedsphere_3d(
+  const py::object  q_in,
+  const py::object sqrt_g_in,
+  const py::object h_in,
+  py::object        flux_x1,
+  py::object        flux_x2,
+  py::object        flux_x3,
+  py::object        pressure,
+  py::object        wflux_adv_x1,
+  py::object        wflux_adv_x2,
+  py::object        wflux_adv_x3,
+  py::object        wflux_pres_x1,
+  py::object        wflux_pres_x2,
+  py::object        wflux_pres_x3,
+  py::object        log_pressure,
+  const int                  num_elem_x1,
+  const int                  num_elem_x2,
+  const int                  num_elem_x3,
+  const int                  num_solpts,
+  const int                  verbose) {
+
+  // Determine cupy array dtype
+  std::string dtype = py::str(q_in.attr("dtype").attr("name"));
+  if (dtype == "float64")
+  {
+    launch_pointwise_euler_cubedsphere_3d<double, double>(
+      q_in,
+      sqrt_g_in,
+      h_in,
+      flux_x1,
+      flux_x2,
+      flux_x3,
+      pressure,
+      wflux_adv_x1,
+      wflux_adv_x2,
+      wflux_adv_x3,
+      wflux_pres_x1,
+      wflux_pres_x2,
+      wflux_pres_x3,
+      log_pressure,
+      num_elem_x1,
+      num_elem_x2,
+      num_elem_x3,
+      num_solpts,
+      verbose);
+  }
+  else if (dtype == "complex128")
+  {
+    launch_pointwise_euler_cubedsphere_3d<double, complex_t>(
+      q_in,
+      sqrt_g_in,
+      h_in,
+      flux_x1,
+      flux_x2,
+      flux_x3,
+      pressure,
+      wflux_adv_x1,
+      wflux_adv_x2,
+      wflux_adv_x3,
+      wflux_pres_x1,
+      wflux_pres_x2,
+      wflux_pres_x3,
+      log_pressure,
+      num_elem_x1,
+      num_elem_x2,
+      num_elem_x3,
+      num_solpts,
+      verbose);
+  }
+  else
+  {
+    std::cerr << __func__ << ": Unrecognized array type " << dtype << "\n";
+  }
+}
+
+template <typename real_t, typename num_t>
+void launch_riemann_euler_cubedsphere_rusanov_3d(
+    const py::object  q_itf_x1_in,
+    const py::object  q_itf_x2_in,
+    py::object        q_itf_x3_in,
+    const py::object sqrt_g_itf_x1,
+    const py::object sqrt_g_itf_x2,
+    const py::object sqrt_g_itf_x3,
+    const py::object h_x1,
+    const py::object h_x2,
+    const py::object h_x3,
+    const int         num_elem_x1,
+    const int         num_elem_x2,
+    const int         num_elem_x3,
+    const int         num_solpts,
+    py::object        flux_itf_x1,
+    py::object        flux_itf_x2,
+    py::object        flux_itf_x3,
+    py::object        pressure_itf_x1,
+    py::object        pressure_itf_x2,
+    py::object        pressure_itf_x3,
+    py::object        wflux_adv_itf_x1,
+    py::object        wflux_pres_itf_x1,
+    py::object        wflux_adv_itf_x2,
+    py::object        wflux_pres_itf_x2,
+    py::object        wflux_adv_itf_x3,
+    py::object        wflux_pres_itf_x3)
+{
+  const num_t*  q_itf_x1_ptr = get_cupy_pointer<const num_t>(q_itf_x1_in);
+  const num_t*  q_itf_x2_ptr = get_cupy_pointer<const num_t>(q_itf_x2_in);
+  num_t*        q_itf_x3_ptr = get_cupy_pointer<num_t>(q_itf_x3_in);
+
+  const real_t* sqrt_g_itf_x1_ptr = get_cupy_pointer<const real_t>(sqrt_g_itf_x1);
+  const real_t* sqrt_g_itf_x2_ptr = get_cupy_pointer<const real_t>(sqrt_g_itf_x2);
+  const real_t* sqrt_g_itf_x3_ptr = get_cupy_pointer<const real_t>(sqrt_g_itf_x3);
+
+  const real_t* h_x1_ptr = get_cupy_pointer<const real_t>(h_x1);
+  const real_t* h_x2_ptr = get_cupy_pointer<const real_t>(h_x2);
+  const real_t* h_x3_ptr = get_cupy_pointer<const real_t>(h_x3);
+
+  num_t* flux_itf_x1_ptr = get_cupy_pointer<num_t>(flux_itf_x1);
+  num_t* flux_itf_x2_ptr = get_cupy_pointer<num_t>(flux_itf_x2);
+  num_t* flux_itf_x3_ptr = get_cupy_pointer<num_t>(flux_itf_x3);
+
+  num_t* pressure_itf_x1_ptr = get_cupy_pointer<num_t>(pressure_itf_x1);
+  num_t* pressure_itf_x2_ptr = get_cupy_pointer<num_t>(pressure_itf_x2);
+  num_t* pressure_itf_x3_ptr = get_cupy_pointer<num_t>(pressure_itf_x3);
+
+  num_t* wflux_adv_itf_x1_ptr = get_cupy_pointer<num_t>(wflux_adv_itf_x1);
+  num_t* wflux_adv_itf_x2_ptr = get_cupy_pointer<num_t>(wflux_adv_itf_x2);
+  num_t* wflux_adv_itf_x3_ptr = get_cupy_pointer<num_t>(wflux_adv_itf_x3);
+
+  num_t* wflux_pres_itf_x1_ptr = get_cupy_pointer<num_t>(wflux_pres_itf_x1);
+  num_t* wflux_pres_itf_x2_ptr = get_cupy_pointer<num_t>(wflux_pres_itf_x2);
+  num_t* wflux_pres_itf_x3_ptr = get_cupy_pointer<num_t>(wflux_pres_itf_x3);
+
+  dim3 threads_per_block(256);
+  int num_solpts_face = num_solpts * num_solpts;
+  int num_tasks, num_blocks;
+
+  // x1-direction
+  num_tasks = num_elem_x3 * num_elem_x2 * (num_elem_x1 + 1) * num_solpts_face;
+  num_blocks = ((num_tasks + threads_per_block.x - 1) / threads_per_block.x);
+
+  riemann_euler_cubedsphere_rusanov_3d<real_t, num_t><<<num_blocks, threads_per_block>>>(
+        q_itf_x1_ptr,
+        sqrt_g_itf_x1_ptr,
+        h_x1_ptr,
+        flux_itf_x1_ptr,
+        pressure_itf_x1_ptr,
+        wflux_adv_itf_x1_ptr,
+        wflux_pres_itf_x1_ptr,
+        0,
+        num_elem_x1 + 1,
+        num_elem_x2,
+        num_elem_x3,
+        num_solpts_face);
+
+  // x2-direction
+  num_tasks = num_elem_x3 * (num_elem_x2 + 1) * num_elem_x1 * num_solpts_face;
+  num_blocks = ((num_tasks + threads_per_block.x - 1) / threads_per_block.x);
+
+  riemann_euler_cubedsphere_rusanov_3d<real_t, num_t><<<num_blocks, threads_per_block>>>(
+        q_itf_x2_ptr,
+        sqrt_g_itf_x2_ptr,
+        h_x2_ptr,
+        flux_itf_x2_ptr,
+        pressure_itf_x2_ptr,
+        wflux_adv_itf_x2_ptr,
+        wflux_pres_itf_x2_ptr,
+        1,
+        num_elem_x1,
+        num_elem_x2 + 1,
+        num_elem_x3,
+        num_solpts_face);
+
+  // Set boundary conditions along the vertical direction
+  num_tasks = num_elem_x2 * num_elem_x1 * num_solpts_face;
+  num_blocks = ((num_tasks + threads_per_block.x - 1) / threads_per_block.x);
+
+  boundary_euler_cubedsphere_3d<real_t,num_t><<<num_blocks, threads_per_block>>>(
+    q_itf_x3_ptr,
+    num_elem_x1,
+    num_elem_x2,
+    num_elem_x3,
+    num_solpts_face
+  );
+
+  // x3-direction
+  num_tasks = (num_elem_x3 + 1) * num_elem_x2 * num_elem_x1 * num_solpts_face;
+  num_blocks = ((num_tasks + threads_per_block.x - 1) / threads_per_block.x);
+
+  riemann_euler_cubedsphere_rusanov_3d<real_t, num_t><<<num_blocks, threads_per_block>>>(
+        q_itf_x3_ptr,
+        sqrt_g_itf_x3_ptr,
+        h_x3_ptr,
+        flux_itf_x3_ptr,
+        pressure_itf_x3_ptr,
+        wflux_adv_itf_x3_ptr,
+        wflux_pres_itf_x3_ptr,
+        2,
+        num_elem_x1,
+        num_elem_x2,
+        num_elem_x3 + 1,
+        num_solpts_face);
+}
+
+void select_riemann_euler_cubedsphere_rusanov_3d(
+    const py::object  q_itf_x1_in,
+    const py::object  q_itf_x2_in,
+    py::object        q_itf_x3_in,
+    const py::object sqrt_g_itf_x1,
+    const py::object sqrt_g_itf_x2,
+    const py::object sqrt_g_itf_x3,
+    const py::object h_x1,
+    const py::object h_x2,
+    const py::object h_x3,
+    const int         num_elem_x1,
+    const int         num_elem_x2,
+    const int         num_elem_x3,
+    const int         num_solpts,
+    py::object        flux_itf_x1,
+    py::object        flux_itf_x2,
+    py::object        flux_itf_x3,
+    py::object        pressure_itf_x1,
+    py::object        pressure_itf_x2,
+    py::object        pressure_itf_x3,
+    py::object        wflux_adv_itf_x1,
+    py::object        wflux_pres_itf_x1,
+    py::object        wflux_adv_itf_x2,
+    py::object        wflux_pres_itf_x2,
+    py::object        wflux_adv_itf_x3,
+    py::object        wflux_pres_itf_x3) {
+
+  std::string dtype = py::str(q_itf_x1_in.attr("dtype").attr("name"));
+  if (dtype == "float64")
+  {
+    launch_riemann_euler_cubedsphere_rusanov_3d<double,double>(
+      q_itf_x1_in,
+      q_itf_x2_in,
+      q_itf_x3_in,
+      sqrt_g_itf_x1,
+      sqrt_g_itf_x2,
+      sqrt_g_itf_x3,
+      h_x1,
+      h_x2,
+      h_x3,
+      num_elem_x1,
+      num_elem_x2,
+      num_elem_x3,
+      num_solpts,
+      flux_itf_x1,
+      flux_itf_x2,
+      flux_itf_x3,
+      pressure_itf_x1,
+      pressure_itf_x2,
+      pressure_itf_x3,
+      wflux_adv_itf_x1,
+      wflux_pres_itf_x1,
+      wflux_adv_itf_x2,
+      wflux_pres_itf_x2,
+      wflux_adv_itf_x3,
+      wflux_pres_itf_x3
+    );
+  }
+  else if (dtype == "complex128")
+  {
+    launch_riemann_euler_cubedsphere_rusanov_3d<double,complex_t>(
+      q_itf_x1_in,
+      q_itf_x2_in,
+      q_itf_x3_in,
+      sqrt_g_itf_x1,
+      sqrt_g_itf_x2,
+      sqrt_g_itf_x3,
+      h_x1,
+      h_x2,
+      h_x3,
+      num_elem_x1,
+      num_elem_x2,
+      num_elem_x3,
+      num_solpts,
+      flux_itf_x1,
+      flux_itf_x2,
+      flux_itf_x3,
+      pressure_itf_x1,
+      pressure_itf_x2,
+      pressure_itf_x3,
+      wflux_adv_itf_x1,
+      wflux_pres_itf_x1,
+      wflux_adv_itf_x2,
+      wflux_pres_itf_x2,
+      wflux_adv_itf_x3,
+      wflux_pres_itf_x3
+    );
+  }
+  else
+  {
+    std::cerr << __func__ << ": Unrecognized array type " << dtype << "\n";
   }
 }
 
@@ -314,39 +814,39 @@ void launch_riemann_eulercartesian_ausm_2d(
 }
 
 void select_riemann_eulercartesian_ausm_2d(
-    py::object q_itf_x1,
-    py::object q_itf_x2,
-    py::object flux_itf_x1,
-    py::object flux_itf_x2,
-    const int  num_elem_x1,
-    const int  num_elem_x2,
-    const int  num_solpts) {
+  py::object q_itf_x1,
+  py::object q_itf_x2,
+  py::object flux_itf_x1,
+  py::object flux_itf_x2,
+  const int  num_elem_x1,
+  const int  num_elem_x2,
+  const int  num_solpts) {
 
-  // Determine the CuPy array dtype
-  std::string dtype = py::str(q_itf_x1.attr("dtype").attr("name"));
+// Determine the CuPy array dtype
+std::string dtype = py::str(q_itf_x1.attr("dtype").attr("name"));
 
-  if (dtype == "float64")
-  {
-    launch_riemann_eulercartesian_ausm_2d<double>(
-        q_itf_x1,
-        q_itf_x2,
-        flux_itf_x1,
-        flux_itf_x2,
-        num_elem_x1,
-        num_elem_x2,
-        num_solpts);
-  }
-  else if (dtype == "complex128")
-  {
-    launch_riemann_eulercartesian_ausm_2d<complex_t>(
-        q_itf_x1,
-        q_itf_x2,
-        flux_itf_x1,
-        flux_itf_x2,
-        num_elem_x1,
-        num_elem_x2,
-        num_solpts);
-  }
+if (dtype == "float64")
+{
+  launch_riemann_eulercartesian_ausm_2d<double>(
+      q_itf_x1,
+      q_itf_x2,
+      flux_itf_x1,
+      flux_itf_x2,
+      num_elem_x1,
+      num_elem_x2,
+      num_solpts);
+}
+else if (dtype == "complex128")
+{
+  launch_riemann_eulercartesian_ausm_2d<complex_t>(
+      q_itf_x1,
+      q_itf_x2,
+      flux_itf_x1,
+      flux_itf_x2,
+      num_elem_x1,
+      num_elem_x2,
+      num_solpts);
+}
 }
 
 template <typename real_t, typename num_t>
@@ -433,9 +933,11 @@ void select_forcing_euler_cubesphere_3d(
 PYBIND11_MODULE(pde_cuda, m) {
   // Pointwise fluxes
   m.def("pointwise_eulercartesian_2d", &select_pointwise_eulercartesian_2d);
+  m.def("pointwise_euler_cubedsphere_3d", &select_pointwise_euler_cubedsphere_3d);
 
   // Riemann fluxes
   m.def("riemann_eulercartesian_ausm_2d", &select_riemann_eulercartesian_ausm_2d);
+  m.def("riemann_euler_cubedsphere_rusanov_3d", &select_riemann_euler_cubedsphere_rusanov_3d);
 
   // Forcing
   m.def("forcing_euler_cubesphere_3d", &select_forcing_euler_cubesphere_3d);

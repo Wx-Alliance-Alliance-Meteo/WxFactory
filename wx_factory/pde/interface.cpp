@@ -66,7 +66,7 @@ void pointwise_euler_cubedsphere_3d(
     const int                  num_elem_x1,
     const int                  num_elem_x2,
     const int                  num_elem_x3,
-    const int                  num_solpts,
+    const int                  num_solpts_tot,
     const int                  verbose) {
 
   const num_t* q_ptr        = get_c_ptr(q_in);
@@ -86,7 +86,8 @@ void pointwise_euler_cubedsphere_3d(
   const real_t* sqrt_g_ptr        = get_c_ptr(sqrt_g_in);
   const real_t* h_ptr             = get_c_ptr(h_in);
 
-  const uint64_t stride = num_elem_x3 * num_elem_x2 * num_elem_x1 * num_solpts;
+  const uint64_t stride    = num_elem_x3 * num_elem_x2 * num_elem_x1 * num_solpts_tot;
+  const int array_shape[5] = {5, num_elem_x3, num_elem_x2, num_elem_x1, num_solpts_tot};
 
   for (int i = 0; i < num_elem_x3; i++)
   {
@@ -94,9 +95,9 @@ void pointwise_euler_cubedsphere_3d(
     {
       for (int k = 0; k < num_elem_x1; k++)
       {
-        for (int s = 0; s < num_solpts; s++)
+        for (int s = 0; s < num_solpts_tot; s++)
         {
-          const int index = ((i * num_elem_x2 + j) * num_elem_x1 + k) * num_solpts + s;
+          const int index = get_c_index(0, i, j, k, s, array_shape);
 
           kernel_params_cubedsphere<real_t, num_t> params(
               q_ptr,
@@ -116,7 +117,7 @@ void pointwise_euler_cubedsphere_3d(
               wflux_pres_x3_ptr,
               log_pressure_ptr);
 
-          // pointwise_euler_cubedsphere_3d_kernel(params);
+          pointwise_euler_cubedsphere_3d_kernel(params, verbose);
         }
       }
     }
@@ -175,7 +176,7 @@ void riemann_eulercartesian_ausm_2d(
         }
       }
 
-      // Solve the Riemann problem along the vertical direc tion
+      // Solve the Riemann problem along the vertical direction
       if (i + 1 < num_elem_x2)
       {
         for (int k = 0; k < num_solpts; k++)
@@ -239,6 +240,233 @@ void riemann_eulercartesian_ausm_2d(
 }
 
 template <typename real_t, typename num_t>
+void riemann_euler_cubedsphere_rusanov_3d(
+    const py::array_t<num_t>&  q_itf_x1_in,
+    const py::array_t<num_t>&  q_itf_x2_in,
+    py::array_t<num_t>&        q_itf_x3_in,
+    const py::array_t<real_t>& sqrt_g_itf_x1,
+    const py::array_t<real_t>& sqrt_g_itf_x2,
+    const py::array_t<real_t>& sqrt_g_itf_x3,
+    const py::array_t<real_t>& h_x1,
+    const py::array_t<real_t>& h_x2,
+    const py::array_t<real_t>& h_x3,
+    const int                  num_elem_x1,
+    const int                  num_elem_x2,
+    const int                  num_elem_x3,
+    const int                  num_solpts,
+    py::array_t<num_t>&        flux_itf_x1,
+    py::array_t<num_t>&        flux_itf_x2,
+    py::array_t<num_t>&        flux_itf_x3,
+    py::array_t<num_t>&        pressure_itf_x1,
+    py::array_t<num_t>&        pressure_itf_x2,
+    py::array_t<num_t>&        pressure_itf_x3,
+    py::array_t<num_t>&        wflux_adv_itf_x1,
+    py::array_t<num_t>&        wflux_pres_itf_x1,
+    py::array_t<num_t>&        wflux_adv_itf_x2,
+    py::array_t<num_t>&        wflux_pres_itf_x2,
+    py::array_t<num_t>&        wflux_adv_itf_x3,
+    py::array_t<num_t>&        wflux_pres_itf_x3) {
+
+  const num_t* q_itf_x1_ptr = get_c_ptr(q_itf_x1_in);
+  const num_t* q_itf_x2_ptr = get_c_ptr(q_itf_x2_in);
+  num_t*       q_itf_x3_ptr = get_c_ptr(q_itf_x3_in);
+
+  num_t* flux_itf_x1_ptr = get_c_ptr(flux_itf_x1);
+  num_t* flux_itf_x2_ptr = get_c_ptr(flux_itf_x2);
+  num_t* flux_itf_x3_ptr = get_c_ptr(flux_itf_x3);
+
+  num_t* pressure_itf_x1_ptr = get_c_ptr(pressure_itf_x1);
+  num_t* pressure_itf_x2_ptr = get_c_ptr(pressure_itf_x2);
+  num_t* pressure_itf_x3_ptr = get_c_ptr(pressure_itf_x3);
+
+  num_t* wflux_adv_itf_x1_ptr = get_c_ptr(wflux_adv_itf_x1);
+  num_t* wflux_adv_itf_x2_ptr = get_c_ptr(wflux_adv_itf_x2);
+  num_t* wflux_adv_itf_x3_ptr = get_c_ptr(wflux_adv_itf_x3);
+
+  num_t* wflux_pres_itf_x1_ptr = get_c_ptr(wflux_pres_itf_x1);
+  num_t* wflux_pres_itf_x2_ptr = get_c_ptr(wflux_pres_itf_x2);
+  num_t* wflux_pres_itf_x3_ptr = get_c_ptr(wflux_pres_itf_x3);
+
+  const real_t* sqrt_g_itf_x1_ptr = get_c_ptr(sqrt_g_itf_x1);
+  const real_t* sqrt_g_itf_x2_ptr = get_c_ptr(sqrt_g_itf_x2);
+  const real_t* sqrt_g_itf_x3_ptr = get_c_ptr(sqrt_g_itf_x3);
+
+  const real_t* h_x1_ptr = get_c_ptr(h_x1);
+  const real_t* h_x2_ptr = get_c_ptr(h_x2);
+  const real_t* h_x3_ptr = get_c_ptr(h_x3);
+
+  const int      num_solpts_riem = 2 * num_solpts * num_solpts;
+  const uint64_t stride_x1 = num_elem_x3 * num_elem_x2 * (num_elem_x1 + 2) * num_solpts_riem;
+  const uint64_t stride_x2 = num_elem_x3 * (num_elem_x2 + 2) * num_elem_x1 * num_solpts_riem;
+  const uint64_t stride_x3 = (num_elem_x3 + 2) * num_elem_x2 * num_elem_x1 * num_solpts_riem;
+
+  // Ensure ghost elements are added to array shapes
+  const int array_shape_x1[5] = {5, num_elem_x3, num_elem_x2, num_elem_x1 + 2, num_solpts_riem};
+  const int array_shape_x2[5] = {5, num_elem_x3, num_elem_x2 + 2, num_elem_x1, num_solpts_riem};
+  const int array_shape_x3[5] = {5, num_elem_x3 + 2, num_elem_x2, num_elem_x1, num_solpts_riem};
+
+  // Compute the fluxes along the x1-direction
+  for (int i = 0; i < num_elem_x3; i++)
+  {
+    for (int j = 0; j < num_elem_x2; j++)
+    {
+      for (int k = 0; k < num_elem_x1 + 1; k++)
+      {
+        for (int l = 0; l < num_solpts * num_solpts; l++)
+        {
+          const int index_l = get_c_index(0, i, j, k, l + num_solpts * num_solpts, array_shape_x1);
+          riemann_params_cubedsphere<real_t, num_t> params_l(
+              q_itf_x1_ptr,
+              sqrt_g_itf_x1_ptr,
+              h_x1_ptr,
+              index_l,
+              stride_x1,
+              flux_itf_x1_ptr,
+              pressure_itf_x1_ptr,
+              wflux_adv_itf_x1_ptr,
+              wflux_pres_itf_x1_ptr);
+
+          const int index_r = get_c_index(0, i, j, k + 1, l, array_shape_x1);
+          riemann_params_cubedsphere<real_t, num_t> params_r(
+              q_itf_x1_ptr,
+              sqrt_g_itf_x1_ptr,
+              h_x1_ptr,
+              index_r,
+              stride_x1,
+              flux_itf_x1_ptr,
+              pressure_itf_x1_ptr,
+              wflux_adv_itf_x1_ptr,
+              wflux_pres_itf_x1_ptr);
+
+          riemann_euler_cubedsphere_rusanov_3d_kernel<real_t, num_t>(
+              params_l,
+              params_r,
+              0,
+              false); // Consider internal Riemann problem
+        }
+      }
+    }
+  }
+
+  // Compute the fluxes along the x2-direction
+  for (int i = 0; i < num_elem_x3; i++)
+  {
+    for (int j = 0; j < num_elem_x2 + 1; j++)
+    {
+      for (int k = 0; k < num_elem_x1; k++)
+      {
+        for (int l = 0; l < num_solpts * num_solpts; l++)
+        {
+          const int index_l = get_c_index(0, i, j, k, l + num_solpts * num_solpts, array_shape_x2);
+          riemann_params_cubedsphere<real_t, num_t> params_l(
+              q_itf_x2_ptr,
+              sqrt_g_itf_x2_ptr,
+              h_x2_ptr,
+              index_l,
+              stride_x2,
+              flux_itf_x2_ptr,
+              pressure_itf_x2_ptr,
+              wflux_adv_itf_x2_ptr,
+              wflux_pres_itf_x2_ptr);
+
+          const int index_r = get_c_index(0, i, j + 1, k, l, array_shape_x2);
+          riemann_params_cubedsphere<real_t, num_t> params_r(
+              q_itf_x2_ptr,
+              sqrt_g_itf_x2_ptr,
+              h_x2_ptr,
+              index_r,
+              stride_x2,
+              flux_itf_x2_ptr,
+              pressure_itf_x2_ptr,
+              wflux_adv_itf_x2_ptr,
+              wflux_pres_itf_x2_ptr);
+
+          riemann_euler_cubedsphere_rusanov_3d_kernel<real_t, num_t>(
+              params_l,
+              params_r,
+              1,
+              false); // Consider internal Riemann problem
+        }
+      }
+    }
+  }
+
+  // Set the x3-direction boundary conditions to ensure no flow via odd symmetry
+  for (int j = 0; j < num_elem_x2; j++)
+  {
+    for (int k = 0; k < num_elem_x1; k++)
+    {
+      for (int l = 0; l < num_solpts * num_solpts; l++)
+      {
+        // Set the bottom boundary
+        const int index_b_bottom = get_c_index(0, 0, j, k, l + num_solpts * num_solpts, array_shape_x3);
+        euler_state_3d<num_t> params_b_bottom(q_itf_x3_ptr, index_b_bottom, stride_x3);
+
+        const int index_in_bottom = get_c_index(0, 1, j, k, l, array_shape_x3);
+        euler_state_3d<const num_t> params_in_bottom(q_itf_x3_ptr, index_in_bottom, stride_x3);
+
+        boundary_euler_cubedsphere_3d_kernel<real_t, num_t>(params_in_bottom,params_b_bottom);
+
+        // Set the top boundary
+        const int index_b_top = get_c_index(0, num_elem_x3 + 1, j, k, l, array_shape_x3);
+        euler_state_3d<num_t> params_b_top(q_itf_x3_ptr, index_b_top, stride_x3);
+
+        const int index_in_top = get_c_index(0, num_elem_x3, j, k, l + num_solpts * num_solpts, array_shape_x3);
+        euler_state_3d<const num_t> params_in_top(q_itf_x3_ptr, index_in_top, stride_x3);
+
+        boundary_euler_cubedsphere_3d_kernel<real_t, num_t>(params_in_top, params_b_top);
+      }
+    }
+  }
+
+  // Compute the fluxes along the x3-direction
+  for (int i = 0; i < num_elem_x3 + 1; i++)
+  {
+    for (int j = 0; j < num_elem_x2; j++)
+    {
+      for (int k = 0; k < num_elem_x1; k++)
+      {
+        for (int l = 0; l < num_solpts * num_solpts; l++)
+        {
+          const int index_l = get_c_index(0, i, j, k, l + num_solpts * num_solpts, array_shape_x3);
+          riemann_params_cubedsphere<real_t, num_t> params_l(
+              q_itf_x3_ptr,
+              sqrt_g_itf_x3_ptr,
+              h_x3_ptr,
+              index_l,
+              stride_x3,
+              flux_itf_x3_ptr,
+              pressure_itf_x3_ptr,
+              wflux_adv_itf_x3_ptr,
+              wflux_pres_itf_x3_ptr);
+
+          const int index_r = get_c_index(0, i + 1, j, k, l, array_shape_x3);
+          riemann_params_cubedsphere<real_t, num_t> params_r(
+              q_itf_x3_ptr,
+              sqrt_g_itf_x3_ptr,
+              h_x3_ptr,
+              index_r,
+              stride_x3,
+              flux_itf_x3_ptr,
+              pressure_itf_x3_ptr,
+              wflux_adv_itf_x3_ptr,
+              wflux_pres_itf_x3_ptr);
+
+          bool boundary_riemann = false;
+          if (i == 0 || i == num_elem_x3)  boundary_riemann = true;
+
+          riemann_euler_cubedsphere_rusanov_3d_kernel<real_t, num_t>(
+              params_l,
+              params_r,
+              2,
+              boundary_riemann);
+        }
+      }
+    }
+  }
+}
+
+template <typename real_t, typename num_t>
 void forcing_euler_cubesphere_3d(
     const py::array_t<num_t>&  q_in,
     const py::array_t<num_t>&  pressure_in,
@@ -261,8 +489,6 @@ void forcing_euler_cubesphere_3d(
 
   const uint64_t stride = num_elem_x3 * num_elem_x2 * num_elem_x1 * num_solpts;
 
-#pragma omp parallel for collapse(3) default(none)                                       \
-    shared(q, pressure, sqrt_g, h, christoffel, forcing)
   for (int i = 0; i < num_elem_x3; i++)
   {
     for (int j = 0; j < num_elem_x2; j++)
@@ -286,7 +512,6 @@ PYBIND11_MODULE(pde_cpp, m) {
   m.def("pointwise_eulercartesian_2d", &pointwise_eulercartesian_2d<double>);
   m.def("pointwise_eulercartesian_2d", &pointwise_eulercartesian_2d<complex_t>);
 
-  // Pointwise fluxes
   m.def(
       "pointwise_euler_cubedsphere_3d",
       &pointwise_euler_cubedsphere_3d<double, double>);
@@ -297,6 +522,12 @@ PYBIND11_MODULE(pde_cpp, m) {
   // Riemann fluxes
   m.def("riemann_eulercartesian_ausm_2d", &riemann_eulercartesian_ausm_2d<double>);
   m.def("riemann_eulercartesian_ausm_2d", &riemann_eulercartesian_ausm_2d<complex_t>);
+  m.def(
+      "riemann_euler_cubedsphere_rusanov_3d",
+      &riemann_euler_cubedsphere_rusanov_3d<double, double>);
+  m.def(
+      "riemann_euler_cubedsphere_rusanov_3d",
+      &riemann_euler_cubedsphere_rusanov_3d<double, complex_t>);
 
   // Forcing functions
   m.def("forcing_euler_cubesphere_3d", &forcing_euler_cubesphere_3d<double, double>);

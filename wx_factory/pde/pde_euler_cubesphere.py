@@ -8,7 +8,6 @@ from geometry import CubedSphere3D, Metric3DTopo
 from init.dcmip import dcmip_schar_damping
 
 from .pde import PDE
-from .fluxes import rusanov_3d_hori_i_new, rusanov_3d_hori_j_new, rusanov_3d_vert_new
 
 
 def compute_forcing_1(f, r, u1, u2, w, p, c01, c02, c03, c11, c12, c13, c22, c23, c33, h11, h12, h13, h22, h23, h33):
@@ -57,17 +56,20 @@ def compute_forcings(
 
 class PDEEulerCubesphere(PDE):
     def __init__(self, geometry: CubedSphere3D, config: Configuration, metric: Metric3DTopo):
+        pde = geometry.device.pde
         super().__init__(
             geometry,
             config,
             metric,
-            3,
-            5,
-            geometry.num_elements_horizontal**2 * geometry.num_elements_vertical,
-            lambda a: a,
-            lambda a: a,
+            num_dim=3,
+            num_var=5,
+            num_elem=geometry.num_elements_horizontal**2 * geometry.num_elements_vertical,
+            pointwise_func=pde.pointwise_euler_cubedsphere_3d,
+            riemann_func=self.get_riemann_solver(pde, "rusanov"),
         )
+
         self.num_solpts = geometry.num_solpts
+
         self.case_number = config.case_number
         self.advection_only = config.case_number < 13
 
@@ -80,133 +82,97 @@ class PDEEulerCubesphere(PDE):
         else:
             self.compute_forcings_inner = self.compute_forcings_code
 
+    @staticmethod
+    def get_riemann_solver(pde, name):
+        if name == "rusanov":
+            return pde.riemann_euler_cubedsphere_rusanov_3d
+
     def pointwise_fluxes(
         self,
-        q,
-        flux_x1,
-        flux_x2,
-        flux_x3,
-        pressure,
-        wflux_adv_x1,
-        wflux_adv_x2,
-        wflux_adv_x3,
-        wflux_pres_x1,
-        wflux_pres_x2,
-        wflux_pres_x3,
-        logp,
+        q: NDArray,
+        flux_x1: NDArray,
+        flux_x2: NDArray,
+        flux_x3: NDArray,
+        pressure: NDArray,
+        wflux_adv_x1: NDArray,
+        wflux_adv_x2: NDArray,
+        wflux_adv_x3: NDArray,
+        wflux_pres_x1: NDArray,
+        wflux_pres_x2: NDArray,
+        wflux_pres_x3: NDArray,
+        logp: NDArray,
     ):
-        xp = self.device.xp
 
-        rho = q[idx_rho]
-        u1 = q[idx_rho_u1] / rho
-        u2 = q[idx_rho_u2] / rho
-        w = q[idx_rho_w] / rho
-
-        # Compute the advective fluxes ...
-        flux_x1[...] = self.metric.sqrtG_new * u1 * q
-        flux_x2[...] = self.metric.sqrtG_new * u2 * q
-        flux_x3[...] = self.metric.sqrtG_new * w * q
-
-        wflux_adv_x1[...] = self.metric.sqrtG_new * u1 * q[idx_rho_w]
-        wflux_adv_x2[...] = self.metric.sqrtG_new * u2 * q[idx_rho_w]
-        wflux_adv_x3[...] = self.metric.sqrtG_new * w * q[idx_rho_w]
-
-        # ... and add the pressure component
-        # Performance note: exp(log) is measurably faster than ** (pow)
-        pressure[...] = p0 * xp.exp((cpd / cvd) * xp.log((Rd / p0) * q[idx_rho_theta]))
-
-        flux_x1[idx_rho_u1] += self.metric.sqrtG_new * self.metric.h_contra_new[0, 0] * pressure
-        flux_x1[idx_rho_u2] += self.metric.sqrtG_new * self.metric.h_contra_new[0, 1] * pressure
-        flux_x1[idx_rho_w] += self.metric.sqrtG_new * self.metric.h_contra_new[0, 2] * pressure
-
-        wflux_pres_x1[...] = (self.metric.sqrtG_new * self.metric.h_contra_new[0, 2]).astype(q.dtype)
-
-        flux_x2[idx_rho_u1] += self.metric.sqrtG_new * self.metric.h_contra_new[1, 0] * pressure
-        flux_x2[idx_rho_u2] += self.metric.sqrtG_new * self.metric.h_contra_new[1, 1] * pressure
-        flux_x2[idx_rho_w] += self.metric.sqrtG_new * self.metric.h_contra_new[1, 2] * pressure
-
-        wflux_pres_x2[...] = (self.metric.sqrtG_new * self.metric.h_contra_new[1, 2]).astype(q.dtype)
-
-        flux_x3[idx_rho_u1] += self.metric.sqrtG_new * self.metric.h_contra_new[2, 0] * pressure
-        flux_x3[idx_rho_u2] += self.metric.sqrtG_new * self.metric.h_contra_new[2, 1] * pressure
-        flux_x3[idx_rho_w] += self.metric.sqrtG_new * self.metric.h_contra_new[2, 2] * pressure
-
-        wflux_pres_x3[...] = (self.metric.sqrtG_new * self.metric.h_contra_new[2, 2]).astype(q.dtype)
-        logp[...] = xp.log(pressure)
+        # Call appropriate backend kernel
+        self.pointwise_func(
+            q,
+            self.metric.sqrtG_new,
+            self.metric.h_contra_new,
+            flux_x1,
+            flux_x2,
+            flux_x3,
+            pressure,
+            wflux_adv_x1,
+            wflux_adv_x2,
+            wflux_adv_x3,
+            wflux_pres_x1,
+            wflux_pres_x2,
+            wflux_pres_x3,
+            logp,
+            self.geometry.num_elements_x1,
+            self.geometry.num_elements_x2,
+            self.geometry.num_elements_x3,
+            self.num_solpts**3,
+            False,
+        )
 
     def riemann_fluxes(
         self,
-        q_itf_x1,
-        q_itf_x2,
-        q_itf_x3,
-        flux_itf_x1,
-        flux_itf_x2,
-        flux_itf_x3,
-        pressure_itf_x1,
-        pressure_itf_x2,
-        pressure_itf_x3,
-        wflux_adv_itf_x1,
-        wflux_pres_itf_x1,
-        wflux_adv_itf_x2,
-        wflux_pres_itf_x2,
-        wflux_adv_itf_x3,
-        wflux_pres_itf_x3,
-        metric,
+        q_itf_x1: NDArray,
+        q_itf_x2: NDArray,
+        q_itf_x3: NDArray,
+        flux_itf_x1: NDArray,
+        flux_itf_x2: NDArray,
+        flux_itf_x3: NDArray,
+        pressure_itf_x1: NDArray,
+        pressure_itf_x2: NDArray,
+        pressure_itf_x3: NDArray,
+        wflux_adv_itf_x1: NDArray,
+        wflux_pres_itf_x1: NDArray,
+        wflux_adv_itf_x2: NDArray,
+        wflux_pres_itf_x2: NDArray,
+        wflux_adv_itf_x3: NDArray,
+        wflux_pres_itf_x3: NDArray,
+        metric: Metric3DTopo,
     ):
-        xp = self.device.xp
-        u1_itf_x1 = q_itf_x1[idx_rho_u1] / q_itf_x1[idx_rho]
-        u2_itf_x2 = q_itf_x2[idx_rho_u2] / q_itf_x2[idx_rho]
-        w_itf_x3 = q_itf_x3[idx_rho_w] / q_itf_x3[idx_rho]
 
-        # Surface and top boundary treatement, imposing no flow (w=0) through top and bottom
-        # csubich -- apply odd symmetry to w at boundary so there is no advective _flux_ through boundary
-        n = w_itf_x3.shape[-1] // 2
-        w_itf_x3[..., 0, :, :, :n] = 0.0
-        w_itf_x3[..., 0, :, :, n:] = -w_itf_x3[..., 1, :, :, :n]
-        w_itf_x3[..., -1, :, :, n:] = 0.0
-        w_itf_x3[..., -1, :, :, :n] = -w_itf_x3[..., -2, :, :, n:]
-
-        pressure_itf_x1[...] = p0 * xp.exp((cpd / cvd) * xp.log(q_itf_x1[idx_rho_theta] * (Rd / p0)))
-        pressure_itf_x2[...] = p0 * xp.exp((cpd / cvd) * xp.log(q_itf_x2[idx_rho_theta] * (Rd / p0)))
-        pressure_itf_x3[...] = p0 * xp.exp((cpd / cvd) * xp.log(q_itf_x3[idx_rho_theta] * (Rd / p0)))
-
-        rusanov_3d_hori_i_new(
-            u1_itf_x1,
+        # Call Riemann kernel in appropriate backend
+        self.riemann_func(
             q_itf_x1,
-            pressure_itf_x1,
-            metric,
-            0,
-            self.advection_only,
+            q_itf_x2,
+            q_itf_x3,
+            metric.sqrtG_itf_i_new,
+            metric.sqrtG_itf_j_new,
+            metric.sqrtG_itf_k_new,
+            metric.h_contra_itf_i_new,
+            metric.h_contra_itf_j_new,
+            metric.h_contra_itf_k_new,
+            self.geometry.num_elements_x1,
+            self.geometry.num_elements_x2,
+            self.geometry.num_elements_x3,
+            self.num_solpts,
             flux_itf_x1,
+            flux_itf_x2,
+            flux_itf_x3,
+            pressure_itf_x1,
+            pressure_itf_x2,
+            pressure_itf_x3,
             wflux_adv_itf_x1,
             wflux_pres_itf_x1,
-            self.num_solpts,
-            xp,
-        )
-        rusanov_3d_hori_j_new(
-            u2_itf_x2,
-            q_itf_x2,
-            pressure_itf_x2,
-            metric,
-            0,
-            self.advection_only,
-            flux_itf_x2,
             wflux_adv_itf_x2,
             wflux_pres_itf_x2,
-            self.num_solpts,
-            xp,
-        )
-        rusanov_3d_vert_new(
-            q_itf_x3,
-            pressure_itf_x3,
-            w_itf_x3,
-            metric,
-            self.advection_only,
-            flux_itf_x3,
             wflux_adv_itf_x3,
             wflux_pres_itf_x3,
-            xp,
-            self.num_solpts,
         )
 
         return pressure_itf_x1, pressure_itf_x2

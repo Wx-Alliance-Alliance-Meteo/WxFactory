@@ -152,10 +152,10 @@ struct kernel_params_cubedsphere
   var_multi<const real_t, 9>  h;
 
   euler_state_3d<num_t> flux[3];
-  var<const num_t>      pressure;
-  euler_state_3d<num_t> wflux_adv[3];
-  euler_state_3d<num_t> wflux_pres[3];
-  var<const num_t>      logp;
+  var<num_t>      pressure;
+  var<num_t> wflux_adv[3];
+  var<num_t> wflux_pres[3];
+  var<num_t>      logp;
 
   HOST_DEVICE_SPACE kernel_params_cubedsphere(
       const num_t*  q,      //!< Pointer to the various fields (each variable is grouped)
@@ -184,13 +184,13 @@ struct kernel_params_cubedsphere
           euler_state_3d<num_t>(flux_x3, index, stride)},
       pressure(pressure, index),
       wflux_adv{
-          euler_state_3d<num_t>(wflux_adv_x1, index, stride),
-          euler_state_3d<num_t>(wflux_adv_x2, index, stride),
-          euler_state_3d<num_t>(wflux_adv_x3, index, stride)},
+          {wflux_adv_x1, index},
+          {wflux_adv_x2, index},
+          {wflux_adv_x3, index}},
       wflux_pres{
-          euler_state_3d<num_t>(wflux_adv_x1, index, stride),
-          euler_state_3d<num_t>(wflux_adv_x2, index, stride),
-          euler_state_3d<num_t>(wflux_adv_x3, index, stride)},
+          {wflux_pres_x1, index},
+          {wflux_pres_x2, index},
+          {wflux_pres_x3, index}},
       logp(logp, index) {}
 
   DEVICE_SPACE void set_index(const size_t new_index) {
@@ -213,5 +213,42 @@ struct kernel_params_cubedsphere
     logp.move_index(diff);
   }
 };
+
+
+
+template <typename real_t, typename num_t>
+struct riemann_params_cubedsphere
+{
+  size_t index = std::numeric_limits<size_t>::max();
+
+  euler_state_3d<const num_t> q;
+  var<const real_t>           sqrt_g;
+  var_multi<const real_t, 9>  h;
+
+  euler_state_3d<num_t> flux;
+  var<num_t>      pressure;
+  var<num_t>      wflux_adv;
+  var<num_t>      wflux_pres;
+
+  HOST_DEVICE_SPACE riemann_params_cubedsphere(
+      const num_t*  q,      //!< Pointer to the various fields (each variable is grouped)
+      const real_t* sqrt_g, //!< Pointer to sqrt_g values for all points
+      const real_t* h, //!< Pointer to h contravariant values for all points (6 arrays)
+      const size_t  index,  //!< Index of the grid point whose state we want to access
+      const size_t  stride, //!< How many entries in the input array for each variable
+      num_t*        flux,
+      num_t*        pressure,
+      num_t*        wflux_adv,
+      num_t*        wflux_pres) :
+      index(index),
+      q(q, index, stride),
+      sqrt_g(sqrt_g, index),
+      h(h, index, stride),
+      flux(flux, index, stride),
+      pressure(pressure, index),
+      wflux_adv(wflux_adv, index),
+      wflux_pres(wflux_pres, index) {}
+};
+
 
 #endif // PDE_INTERFACE_H
