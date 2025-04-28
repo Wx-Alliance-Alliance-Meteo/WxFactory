@@ -18,8 +18,13 @@ class PDEEulerCartesian(PDE):
             num_var=4,
             num_elem=geometry.num_elements_horizontal * geometry.num_elements_vertical,
             pointwise_func=pde.pointwise_eulercartesian_2d,
-            riemann_func=pde.riemann_eulercartesian_ausm_2d,
+            riemann_func=self.get_riemann_solver("ausm"),
         )
+
+    @staticmethod
+    def get_riemann_solver(pde, name):
+        if name == "ausm":
+            return pde.riemann_eulercartesian_ausm_2d
 
     def pointwise_fluxes(self, q: NDArray, flux_x1: NDArray, flux_x2: NDArray, flux_x3: NDArray) -> None:
         num_elem_x1 = self.geometry.num_elements_horizontal

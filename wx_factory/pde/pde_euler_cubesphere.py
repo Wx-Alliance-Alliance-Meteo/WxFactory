@@ -65,7 +65,7 @@ class PDEEulerCubesphere(PDE):
             num_var=5,
             num_elem=geometry.num_elements_horizontal**2 * geometry.num_elements_vertical,
             pointwise_func=pde.pointwise_euler_cubedsphere_3d,
-            riemann_func=pde.riemann_euler_cubedsphere_rusanov_3d,
+            riemann_func=self.get_riemann_solver(pde, "rusanov"),
         )
 
         self.num_solpts = geometry.num_solpts
@@ -81,6 +81,11 @@ class PDEEulerCubesphere(PDE):
             self.compute_forcings_inner = self.compute_forcings_py
         else:
             self.compute_forcings_inner = self.compute_forcings_code
+
+    @staticmethod
+    def get_riemann_solver(pde, name):
+        if name == "rusanov":
+            return pde.riemann_euler_cubedsphere_rusanov_3d
 
     def pointwise_fluxes(
         self,
