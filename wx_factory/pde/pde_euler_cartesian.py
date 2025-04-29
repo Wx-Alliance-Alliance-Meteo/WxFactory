@@ -18,7 +18,7 @@ class PDEEulerCartesian(PDE):
             num_var=4,
             num_elem=geometry.num_elements_horizontal * geometry.num_elements_vertical,
             pointwise_func=pde.pointwise_eulercartesian_2d,
-            riemann_func=self.get_riemann_solver("ausm"),
+            riemann_func=self.get_riemann_solver(pde, "ausm"),
         )
 
     @staticmethod
