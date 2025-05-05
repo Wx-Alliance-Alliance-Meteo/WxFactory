@@ -58,7 +58,7 @@ class MpiTestSuite(unittest.TestSuite):
         return result
 
 
-class MpiTestResult(TestResult):
+class MpiTestResult(unittest.TextTestResult):
     """
     Custom result accumulator: see addCorrectResult.
     """
@@ -149,6 +149,8 @@ class MpiRunner(unittest.TextTestRunner):
         final_time = MPI.COMM_WORLD.reduce(time_taken, MPI.MAX, 0)
 
         if MPI.COMM_WORLD.rank == 0:
+            result.printErrors()
+
             # Print failed and skipped tests, if any
             if len(result.skipped) > 0:
                 skipped_tests = "\n  ".join([f"{r[0]}" for r in result.skipped])
