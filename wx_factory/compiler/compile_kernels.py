@@ -26,9 +26,9 @@ base_library_directory = os.path.join(main_project_dir, "lib")
 base_build_directory = os.path.join(base_library_directory, "build")
 base_module_dir = "wx_factory"
 
-cpp_compile_flags = "-Wall -shared -std=c++17 -fPIC -fopenmp".split(" ")
-cpp_link_flags = "-fopenmp".split(" ")
-cuda_compile_flags = "-O2 -shared -std=c++17 -Xcompiler -fPIC,-Wall".split(" ")
+cpp_compile_flags = "-Wall -shared -std=c++17 -fPIC".split(" ")
+cpp_link_flags = []
+cuda_compile_flags = "-arch native -O2 -shared -std=c++17 -Xcompiler -fPIC,-Wall".split(" ")
 
 
 class wx_build_ext(build_ext):
