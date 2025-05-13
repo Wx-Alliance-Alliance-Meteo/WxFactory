@@ -10,6 +10,7 @@ from init.dcmip import dcmip_schar_damping
 from .pde import PDE
 from .fluxes import rusanov_3d_hori_i_new, rusanov_3d_hori_j_new, rusanov_3d_vert_new
 
+
 def compute_forcing_1(f, r, u1, u2, w, p, c01, c02, c03, c11, c12, c13, c22, c23, c33, h11, h12, h13, h22, h23, h33):
     """Compute forcing for fluid velocity in a single direction based on metric terms and coriolis effect."""
 
@@ -79,8 +80,12 @@ class PDEEulerCubesphere(PDE):
 
         if self.config.desired_device in ["numpy", "cupy"]:
             self.compute_forcings_inner = self.compute_forcings_py
+            self.pointwise_fluxes_inner = self.pointwise_fluxes_py
+            self.riemann_fluxes_inner = self.riemann_fluxes_py
         else:
             self.compute_forcings_inner = self.compute_forcings_code
+            self.pointwise_fluxes_inner = self.pointwise_fluxes_code
+            self.riemann_fluxes_inner = self.riemann_fluxes_code
 
     @staticmethod
     def get_riemann_solver(pde, name):
@@ -88,6 +93,36 @@ class PDEEulerCubesphere(PDE):
             return pde.riemann_euler_cubedsphere_rusanov_3d
 
     def pointwise_fluxes(
+        self,
+        q: NDArray,
+        flux_x1: NDArray,
+        flux_x2: NDArray,
+        flux_x3: NDArray,
+        pressure: NDArray,
+        wflux_adv_x1: NDArray,
+        wflux_adv_x2: NDArray,
+        wflux_adv_x3: NDArray,
+        wflux_pres_x1: NDArray,
+        wflux_pres_x2: NDArray,
+        wflux_pres_x3: NDArray,
+        logp: NDArray,
+    ):
+        self.pointwise_fluxes_inner(
+            q,
+            flux_x1,
+            flux_x2,
+            flux_x3,
+            pressure,
+            wflux_adv_x1,
+            wflux_adv_x2,
+            wflux_adv_x3,
+            wflux_pres_x1,
+            wflux_pres_x2,
+            wflux_pres_x3,
+            logp,
+        )
+
+    def pointwise_fluxes_code(
         self,
         q: NDArray,
         flux_x1: NDArray,
@@ -126,8 +161,7 @@ class PDEEulerCubesphere(PDE):
             False,
         )
 
-
-    def pointwise_fluxes_cupy(
+    def pointwise_fluxes_py(
         self,
         q: NDArray,
         flux_x1: NDArray,
@@ -200,6 +234,44 @@ class PDEEulerCubesphere(PDE):
         wflux_pres_itf_x3: NDArray,
         metric: Metric3DTopo,
     ):
+        self.riemann_fluxes_inner(
+            q_itf_x1,
+            q_itf_x2,
+            q_itf_x3,
+            flux_itf_x1,
+            flux_itf_x2,
+            flux_itf_x3,
+            pressure_itf_x1,
+            pressure_itf_x2,
+            pressure_itf_x3,
+            wflux_adv_itf_x1,
+            wflux_pres_itf_x1,
+            wflux_adv_itf_x2,
+            wflux_pres_itf_x2,
+            wflux_adv_itf_x3,
+            wflux_pres_itf_x3,
+            metric,
+        )
+
+    def riemann_fluxes_code(
+        self,
+        q_itf_x1: NDArray,
+        q_itf_x2: NDArray,
+        q_itf_x3: NDArray,
+        flux_itf_x1: NDArray,
+        flux_itf_x2: NDArray,
+        flux_itf_x3: NDArray,
+        pressure_itf_x1: NDArray,
+        pressure_itf_x2: NDArray,
+        pressure_itf_x3: NDArray,
+        wflux_adv_itf_x1: NDArray,
+        wflux_pres_itf_x1: NDArray,
+        wflux_adv_itf_x2: NDArray,
+        wflux_pres_itf_x2: NDArray,
+        wflux_adv_itf_x3: NDArray,
+        wflux_pres_itf_x3: NDArray,
+        metric: Metric3DTopo,
+    ):
 
         # Call Riemann kernel in appropriate backend
         self.riemann_func(
@@ -232,7 +304,7 @@ class PDEEulerCubesphere(PDE):
 
         return pressure_itf_x1, pressure_itf_x2
 
-    def riemann_fluxes_cupy(
+    def riemann_fluxes_py(
         self,
         q_itf_x1,
         q_itf_x2,
