@@ -16,6 +16,7 @@ sys.path.append(main_module_dir)
 from tests.unit.common.test_process_topology import ProcessTopologyTest, GatherScatterTest
 from tests.unit.operators.test_extrap import OperatorsExtrapEuler3DTestCase
 from tests.unit.restart.test_restart import ShallowWaterRestartTestCase, Euler3DRestartTestCase
+from tests.unit.rhs.test_side_by_side import RhsSideBySideEuler3DTestCase
 from tests.unit.solvers.test_pmex_mpi import PmexMpiTestCases
 from tests.unit.solvers.test_kiops_mpi import KiopsMpiTestCases
 from tests.unit.solvers.test_fgmres_mpi import FgmresMpiTestCases
@@ -77,6 +78,8 @@ def load_tests():
     suite.addTest(OperatorsExtrapEuler3DTestCase(6, "test_extrap_kernel_gpu"))
     suite.addTest(OperatorsExtrapEuler3DTestCase(24, "test_extrap_kernel_cpu"))
     suite.addTest(OperatorsExtrapEuler3DTestCase(24, "test_extrap_kernel_gpu"))
+
+    suite.addTest(RhsSideBySideEuler3DTestCase(6, "test_rhs_side_by_side"))
 
     # TODO : This test needs more works on the data division between processes
     # suite.addTest(FgmresMpiTestCases('test_fgmres_mpi_2_processes'))

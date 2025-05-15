@@ -108,7 +108,8 @@ void launch_extrap_3d(
 
   constexpr size_t o2 = order * order;
   // constexpr size_t BLOCK_SIZE            = 257;
-  constexpr size_t num_threads_per_block = (EXTRAP_3D_BLOCK_SIZE / o2) * o2;
+  constexpr size_t num_elem_per_block    = EXTRAP_3D_BLOCK_SIZE / o2;
+  constexpr size_t num_threads_per_block = num_elem_per_block * o2;
 
   const size_t num_active_threads =
       5 * num_elem_x1 * num_elem_x2 * num_elem_x3 * order * order;
@@ -129,8 +130,9 @@ void launch_extrap_3d(
     //     num_elem_x3,
     //     order);
     std::cout << "Launching " << num_active_threads << " threads in " << num_blocks
-              << " block(s) of size " << EXTRAP_3D_BLOCK_SIZE << "(with "
-              << num_active_threads << " active threads per block\n";
+              << " block(s) of size " << EXTRAP_3D_BLOCK_SIZE << " (with "
+              << num_threads_per_block << " active threads per block, in "
+              << num_elem_per_block << " elements)\n";
     std::cout << "Problem size " << num_elem_x1 << "x" << num_elem_x2 << "x"
               << num_elem_x3 << " elements, order " << order << std::endl;
   }

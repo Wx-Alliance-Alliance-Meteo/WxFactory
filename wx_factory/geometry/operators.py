@@ -213,7 +213,7 @@ class DFROperators:
         xp = geom.device.xp
 
         # Scaled mode numbers
-        modes = xp.arange(geom.num_solpts, like=geom.solutionPoints) / (geom.num_solpts - 1)
+        modes = xp.arange(geom.num_solpts, dtype=geom.solutionPoints.dtype) / (geom.num_solpts - 1)
         Nc = cutoff
 
         # After applying the filter, each mode is reduced in proportion to the filter order

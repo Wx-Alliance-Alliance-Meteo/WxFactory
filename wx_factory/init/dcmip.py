@@ -576,11 +576,11 @@ def dcmip_schar_waves(geom: CubedSphere3D, metric, mtrx: DFROperators, param, sh
     def build_topo_old(latlon):
         lat = latlon[1, 0, :, :]
         lon = latlon[0, 0, :, :]
-        r = geom.earth_radius * numpy.arccos(
-            math.sin(phim) * numpy.sin(lat) + math.cos(phim) * numpy.cos(lat) * numpy.cos(lon - lambdam)
+        r = geom.earth_radius * xp.arccos(
+            math.sin(phim) * xp.sin(lat) + math.cos(phim) * xp.cos(lat) * xp.cos(lon - lambdam)
         )
-        z = numpy.zeros(lat.shape)
-        z[:, :] = h0 * numpy.exp(-(r**2) / Dm**2) * numpy.cos(numpy.pi * r / Dxi) ** 2
+        z = xp.zeros(lat.shape)
+        z[:, :] = h0 * xp.exp(-(r**2) / Dm**2) * xp.cos(xp.pi * r / Dxi) ** 2
         return z
 
     def build_topo(latlon):

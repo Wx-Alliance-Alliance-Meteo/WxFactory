@@ -29,10 +29,10 @@ pointwise_eulercartesian_2d_kernel(kernel_params<num_t, euler_state_2d> params) 
   *params.flux[1].rho_theta = rho_theta * w;
 }
 
-
 template <typename real_t, typename num_t>
-DEVICE_SPACE void
-pointwise_euler_cubedsphere_3d_kernel(kernel_params_cubedsphere<real_t, num_t> params, bool verbose) {
+DEVICE_SPACE void pointwise_euler_cubedsphere_3d_kernel(
+    kernel_params_cubedsphere<real_t, num_t> params,
+    bool                                     verbose) {
 
   // Extract metric
   const real_t sqrt_g = *params.sqrt_g;
@@ -82,5 +82,5 @@ pointwise_euler_cubedsphere_3d_kernel(kernel_params_cubedsphere<real_t, num_t> p
   *params.wflux_pres[2] = sqrt_g * params.h[h33];
 
   *params.pressure = p;
-  *params.logp = log(p);
+  *params.logp     = log(p);
 }

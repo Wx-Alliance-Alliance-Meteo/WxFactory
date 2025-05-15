@@ -52,7 +52,11 @@ class Simulation:
     config: Configuration
 
     def __init__(
-        self, config: Configuration | str, comm: MPI.Comm = MPI.COMM_WORLD, print_allowed_pe_counts: bool = False
+        self,
+        config: Configuration | str,
+        comm: MPI.Comm = MPI.COMM_WORLD,
+        print_allowed_pe_counts: bool = False,
+        quiet=False,
     ) -> None:
         """Create a Simulation object from a certain configuration.
 
@@ -75,7 +79,7 @@ class Simulation:
                 f"(Gave a {type(config)})"
             )
 
-        if self.rank == 0:
+        if self.rank == 0 and not quiet:
             print(f"{self.config}", flush=True)
 
         if self.config.grid_file != "":
@@ -209,10 +213,14 @@ class Simulation:
         be executed."""
         if self.config.desired_device in ["cuda", "cupy"]:
             try:
-                device = CudaDevice(self.comm, self.config.cuda_devices)
+                cuda_devices = self.config.cuda_devices
+            except AttributeError:
+                cuda_devices = []
+            try:
+                device = CudaDevice(self.comm, cuda_devices)
             except ValueError:
                 if self.rank == 0:
-                    print("Switching to CPU")
+                    print("Switching to CPU", flush=True)
                 device = CpuDevice(comm=self.comm)
         else:
             device = CpuDevice(comm=self.comm)
@@ -240,7 +248,7 @@ class Simulation:
                         f"Adjusting horizontal number of elements from {self.total_num_elements_horizontal} "
                         f"(total) to {self.num_elements_horizontal} (per PE)"
                     )
-                print(f"allowed_pe_counts = {self.allowed_pe_counts}")
+                print(f"allowed_pe_counts = {self.allowed_pe_counts}", flush=True)
 
     def _create_geometry(self) -> Geometry:
         """Create the appropriate geometry for the given problem"""

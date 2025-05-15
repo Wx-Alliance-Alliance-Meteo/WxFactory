@@ -79,7 +79,6 @@ DEVICE_SPACE void riemann_eulercartesian_ausm_2d_kernel(
   *params_r.flux[dir].rho_theta = *params_l.flux[dir].rho_theta;
 }
 
-
 template <typename real_t, typename num_t>
 DEVICE_SPACE void riemann_euler_cubedsphere_rusanov_3d_kernel(
     riemann_params_cubedsphere<real_t, num_t> params_l,
@@ -91,13 +90,13 @@ DEVICE_SPACE void riemann_euler_cubedsphere_rusanov_3d_kernel(
   const real_t sqrt_g_l = *params_l.sqrt_g;
   const real_t sqrt_g_r = *params_r.sqrt_g;
 
-  const real_t hdir_0_l = params_l.h[3*dir + 0];
-  const real_t hdir_1_l = params_l.h[3*dir + 1];
-  const real_t hdir_2_l = params_l.h[3*dir + 2];
+  const real_t hdir_0_l = params_l.h[3 * dir + 0];
+  const real_t hdir_1_l = params_l.h[3 * dir + 1];
+  const real_t hdir_2_l = params_l.h[3 * dir + 2];
 
-  const real_t hdir_0_r = params_r.h[3*dir + 0];
-  const real_t hdir_1_r = params_r.h[3*dir + 1];
-  const real_t hdir_2_r = params_r.h[3*dir + 2];
+  const real_t hdir_0_r = params_r.h[3 * dir + 0];
+  const real_t hdir_1_r = params_r.h[3 * dir + 1];
+  const real_t hdir_2_r = params_r.h[3 * dir + 2];
 
   // Unpack variables for improved readability
   const num_t rhol = *params_l.q.rho;
@@ -131,8 +130,8 @@ DEVICE_SPACE void riemann_euler_cubedsphere_rusanov_3d_kernel(
 
   // Get the speed of sound on each side (uses h_dir_dir contravariant metric)
   // 4dir = h[dir,dir]
-  const num_t al = sqrt(params_l.h[4*dir] * heat_capacity_ratio * pl * inv_rhol);
-  const num_t ar = sqrt(params_r.h[4*dir] * heat_capacity_ratio * pr * inv_rhor);
+  const num_t al = sqrt(params_l.h[4 * dir] * heat_capacity_ratio * pl * inv_rhol);
+  const num_t ar = sqrt(params_r.h[4 * dir] * heat_capacity_ratio * pr * inv_rhor);
 
   num_t vnr = 0.0;
   num_t vnl = 0.0;
@@ -178,11 +177,12 @@ DEVICE_SPACE void riemann_euler_cubedsphere_rusanov_3d_kernel(
   flux_r[4] = sqrt_g_r * vnr * rho_thetar;
 
   // Get the Riemann flux
-  *params_l.flux.rho       = 0.5 * (flux_l[0] + flux_r[0] - scaled_eig * (rhor - rhol));
-  *params_l.flux.rho_u     = 0.5 * (flux_l[1] + flux_r[1] - scaled_eig * (rho_ur - rho_ul));
-  *params_l.flux.rho_v     = 0.5 * (flux_l[2] + flux_r[2] - scaled_eig * (rho_vr - rho_vl));
-  *params_l.flux.rho_w     = 0.5 * (flux_l[3] + flux_r[3] - scaled_eig * (rho_wr - rho_wl));
-  *params_l.flux.rho_theta = 0.5 * (flux_l[4] + flux_r[4] - scaled_eig * (rho_thetar - rho_thetal));
+  *params_l.flux.rho   = 0.5 * (flux_l[0] + flux_r[0] - scaled_eig * (rhor - rhol));
+  *params_l.flux.rho_u = 0.5 * (flux_l[1] + flux_r[1] - scaled_eig * (rho_ur - rho_ul));
+  *params_l.flux.rho_v = 0.5 * (flux_l[2] + flux_r[2] - scaled_eig * (rho_vr - rho_vl));
+  *params_l.flux.rho_w = 0.5 * (flux_l[3] + flux_r[3] - scaled_eig * (rho_wr - rho_wl));
+  *params_l.flux.rho_theta =
+      0.5 * (flux_l[4] + flux_r[4] - scaled_eig * (rho_thetar - rho_thetal));
 
   // Copy values to the right-hand side flux
   *params_r.flux.rho       = *params_l.flux.rho;
@@ -193,17 +193,19 @@ DEVICE_SPACE void riemann_euler_cubedsphere_rusanov_3d_kernel(
 
   // Ensure zero dissipation in advection flux at boundary points
   // Otherwise, this would create nonzero mass flux at boundaries
-  if(boundary) scaled_eig = scaled_eig * 0.0;
+  if (boundary)
+    scaled_eig = scaled_eig * 0.0;
 
   // Store the advection and pressure contribution to vertical fluxes
-  *params_l.wflux_adv = 0.5 * (sqrt_g_l * rho_wl * vnl + sqrt_g_r * rho_wr * vnr - scaled_eig * (rho_wr - rho_wl));
+  *params_l.wflux_adv = 0.5 * (sqrt_g_l * rho_wl * vnl + sqrt_g_r * rho_wr * vnr -
+                               scaled_eig * (rho_wr - rho_wl));
   *params_r.wflux_adv = *params_l.wflux_adv;
 
-  const num_t wflux_pres_l = sqrt_g_l * hdir_2_l * pl;
-  const num_t wflux_pres_r = sqrt_g_r * hdir_2_r * pr;
+  const num_t wflux_pres_l   = sqrt_g_l * hdir_2_l * pl;
+  const num_t wflux_pres_r   = sqrt_g_r * hdir_2_r * pr;
   const num_t wflux_pres_avg = 0.5 * (wflux_pres_l + wflux_pres_r);
-  *params_l.wflux_pres = wflux_pres_avg / pl;
-  *params_r.wflux_pres = wflux_pres_avg / pr;
+  *params_l.wflux_pres       = wflux_pres_avg / pl;
+  *params_r.wflux_pres       = wflux_pres_avg / pr;
 
   // Store pressure for later use
   *params_l.pressure = pl;

@@ -26,6 +26,7 @@ class OperatorsExtrapGenericTestCase(MpiTestCase):
             config.desired_device = "cpp" if device == "cpu" else "cuda"
             sim = Simulation(config, comm=self.comm)
             local_state = sim.process_topo.distribute_cube(global_state, 4)
+            local_state = sim.device.array(local_state)  # Copy to GPU, if needed
 
             itf_shape = local_state.shape[:4] + (2 * config.num_solpts**2,)
             xp = sim.device.xp
@@ -41,6 +42,15 @@ class OperatorsExtrapGenericTestCase(MpiTestCase):
             diff2_norm = xp.linalg.norm(diff2) / xp.linalg.norm(x2_py)
             diff3_norm = xp.linalg.norm(diff3) / xp.linalg.norm(x3_py)
 
+            if diff1_norm > 1e-15:
+                if self.comm.rank == 0:
+                    print(
+                        f"Expected \n{x1_py[0, 0, 0, 0]}\n"
+                        f"Got      \n{x1_code[0, 0, 0, 0]}\n"
+                        f"diff     \n{diff1[0, 0, 0, 0]}"
+                        f"                       ",
+                        flush=True,
+                    )
             self.assertLessEqual(diff1_norm, 3e-16)
             self.assertLessEqual(diff2_norm, 3e-16)
             self.assertLessEqual(diff3_norm, 3e-16)
