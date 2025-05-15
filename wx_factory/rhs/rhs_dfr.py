@@ -199,6 +199,9 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
             flip_dim=(-3, -1),
         )
 
+        # Trigger start of transfer by doing an MPI call
+        self.req_r.request.Test()
+
     def end_communication(self):
         xp = self.device.xp
         dtype = self.q_itf_x1.dtype

@@ -7,10 +7,14 @@ from numpy.typing import NDArray
 from common import Configuration
 from geometry import DFROperators, Geometry, Metric2D, Metric3DTopo
 from pde import PDE
-from process_topology import ProcessTopology
+from process_topology import ProcessTopology, ExchangeRequest
 
 
 class RHS(ABC):
+    req_r: ExchangeRequest
+    req_u: ExchangeRequest
+    req_t: ExchangeRequest
+
     def __init__(
         self,
         pde: PDE,
