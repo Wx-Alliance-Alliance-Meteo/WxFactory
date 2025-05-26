@@ -6,6 +6,12 @@ from rhs.rhs import RHS
 from wx_mpi import SingleProcess, Conditional
 
 
+def apply_op(vec: NDArray, op: NDArray):
+    sh = vec.shape
+    return (vec.reshape(-1, sh[-1]) @ op).reshape(*sh[:-1], -1)
+    # return vec @ op
+
+
 class RHSDirecFluxReconstruction(RHS):
 
     def solution_extrapolation(self, q: NDArray) -> None:
@@ -15,10 +21,10 @@ class RHSDirecFluxReconstruction(RHS):
         #     xp.matmul(q, self.ops.extrap_x, out=self.q_itf_x1)
         #     xp.matmul(q, self.ops.extrap_z, out=self.q_itf_x3)
 
-        self.q_itf_x1 = q @ self.ops.extrap_x
-        self.q_itf_x3 = q @ self.ops.extrap_z
+        self.q_itf_x1 = apply_op(q, self.ops.extrap_x)
+        self.q_itf_x3 = apply_op(q, self.ops.extrap_z)
         if hasattr(self.ops, "extrap_y"):
-            self.q_itf_x2 = q @ self.ops.extrap_y
+            self.q_itf_x2 = apply_op(q, self.ops.extrap_y)
 
     def pointwise_fluxes(self, q: NDArray) -> None:
         self.pde.pointwise_fluxes(q, self.f_x1, self.f_x2, self.f_x3)
@@ -31,8 +37,8 @@ class RHSDirecFluxReconstruction(RHS):
         # xp.matmul(self.f_x1, self.ops.derivative_x, out=self.df1_dx1)
         # xp.matmul(self.f_x3, self.ops.derivative_z, out=self.df3_dx3)
 
-        self.df1_dx1 = self.f_x1 @ self.ops.derivative_x
-        self.df3_dx3 = self.f_x3 @ self.ops.derivative_z
+        self.df1_dx1 = apply_op(self.f_x1, self.ops.derivative_x)
+        self.df3_dx3 = apply_op(self.f_x3, self.ops.derivative_z)
 
     def flux_divergence(self):
         xp = self.device.xp
@@ -117,49 +123,49 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
     def flux_divergence_partial(self):
         super().flux_divergence_partial()
 
-        self.df2_dx2 = self.f_x2 @ self.ops.derivative_y
+        self.df2_dx2 = apply_op(self.f_x2, self.ops.derivative_y)
 
-        self.w_df1_dx1_adv = self.wflux_adv_x1 @ self.ops.derivative_x
-        self.w_df1_dx1_presa = self.wflux_pres_x1 @ self.ops.derivative_x
-        self.w_df1_dx1_presb = self.log_p @ self.ops.derivative_x
+        self.w_df1_dx1_adv = apply_op(self.wflux_adv_x1, self.ops.derivative_x)
+        self.w_df1_dx1_presa = apply_op(self.wflux_pres_x1, self.ops.derivative_x)
+        self.w_df1_dx1_presb = apply_op(self.log_p, self.ops.derivative_x)
 
-        self.w_df2_dx2_adv = self.wflux_adv_x2 @ self.ops.derivative_y
-        self.w_df2_dx2_presa = self.wflux_pres_x2 @ self.ops.derivative_y
-        self.w_df2_dx2_presb = self.log_p @ self.ops.derivative_y
+        self.w_df2_dx2_adv = apply_op(self.wflux_adv_x2, self.ops.derivative_y)
+        self.w_df2_dx2_presa = apply_op(self.wflux_pres_x2, self.ops.derivative_y)
+        self.w_df2_dx2_presb = apply_op(self.log_p, self.ops.derivative_y)
 
-        self.w_df3_dx3_adv = self.wflux_adv_x3 @ self.ops.derivative_z
-        self.w_df3_dx3_presa = self.wflux_pres_x3 @ self.ops.derivative_z
-        self.w_df3_dx3_presb = self.log_p @ self.ops.derivative_z
+        self.w_df3_dx3_adv = apply_op(self.wflux_adv_x3, self.ops.derivative_z)
+        self.w_df3_dx3_presa = apply_op(self.wflux_pres_x3, self.ops.derivative_z)
+        self.w_df3_dx3_presb = apply_op(self.log_p, self.ops.derivative_z)
 
     def flux_divergence(self):
         xp = self.device.xp
 
-        self.df1_dx1 += self.f_itf_x1 @ self.ops.correction_WE
-        self.df2_dx2 += self.f_itf_x2 @ self.ops.correction_SN
-        self.df3_dx3 += self.f_itf_x3 @ self.ops.correction_DU
+        self.df1_dx1 += apply_op(self.f_itf_x1, self.ops.correction_WE)
+        self.df2_dx2 += apply_op(self.f_itf_x2, self.ops.correction_SN)
+        self.df3_dx3 += apply_op(self.f_itf_x3, self.ops.correction_DU)
 
         logp_bdy_i = xp.log(self.pressure_itf_x1)
         logp_bdy_j = xp.log(self.pressure_itf_x2)
         logp_bdy_k = xp.log(self.pressure_itf_x3)
 
-        self.w_df1_dx1_adv += self.wflux_adv_itf_x1 @ self.ops.correction_WE
-        self.w_df1_dx1_presa += self.wflux_pres_itf_x1 @ self.ops.correction_WE
+        self.w_df1_dx1_adv += apply_op(self.wflux_adv_itf_x1, self.ops.correction_WE)
+        self.w_df1_dx1_presa += apply_op(self.wflux_pres_itf_x1, self.ops.correction_WE)
         self.w_df1_dx1_presa *= self.pressure
-        self.w_df1_dx1_presb += logp_bdy_i @ self.ops.correction_WE
+        self.w_df1_dx1_presb += apply_op(logp_bdy_i, self.ops.correction_WE)
         self.w_df1_dx1_presb *= self.pressure * self.wflux_pres_x1
         self.w_df1_dx1[...] = self.w_df1_dx1_adv + self.w_df1_dx1_presa + self.w_df1_dx1_presb
 
-        self.w_df2_dx2_adv += self.wflux_adv_itf_x2 @ self.ops.correction_SN
-        self.w_df2_dx2_presa += self.wflux_pres_itf_x2 @ self.ops.correction_SN
+        self.w_df2_dx2_adv += apply_op(self.wflux_adv_itf_x2, self.ops.correction_SN)
+        self.w_df2_dx2_presa += apply_op(self.wflux_pres_itf_x2, self.ops.correction_SN)
         self.w_df2_dx2_presa *= self.pressure
-        self.w_df2_dx2_presb += logp_bdy_j @ self.ops.correction_SN
+        self.w_df2_dx2_presb += apply_op(logp_bdy_j, self.ops.correction_SN)
         self.w_df2_dx2_presb *= self.pressure * self.wflux_pres_x2
         self.w_df2_dx2[...] = self.w_df2_dx2_adv + self.w_df2_dx2_presa + self.w_df2_dx2_presb
 
-        self.w_df3_dx3_adv += self.wflux_adv_itf_x3 @ self.ops.correction_DU
-        self.w_df3_dx3_presa += self.wflux_pres_itf_x3 @ self.ops.correction_DU
+        self.w_df3_dx3_adv += apply_op(self.wflux_adv_itf_x3, self.ops.correction_DU)
+        self.w_df3_dx3_presa += apply_op(self.wflux_pres_itf_x3, self.ops.correction_DU)
         self.w_df3_dx3_presa *= self.pressure
-        self.w_df3_dx3_presb += logp_bdy_k @ self.ops.correction_DU
+        self.w_df3_dx3_presb += apply_op(logp_bdy_k, self.ops.correction_DU)
         self.w_df3_dx3_presb *= self.pressure * self.wflux_pres_x3
         self.w_df3_dx3[...] = self.w_df3_dx3_adv + self.w_df3_dx3_presa + self.w_df3_dx3_presb
 
