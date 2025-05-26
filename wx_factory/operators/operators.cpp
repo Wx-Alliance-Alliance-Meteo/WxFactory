@@ -28,35 +28,15 @@ void extrap_3d(
     const int              verbose,
     Func                   func) {
 
-  const num_t* q        = get_c_ptr<num_t>(q_in);
-  num_t*       result_x = get_c_ptr<num_t>(result_x_in);
-  num_t*       result_y = get_c_ptr<num_t>(result_y_in);
-  num_t*       result_z = get_c_ptr<num_t>(result_z_in);
+  const int num_threads = 5 * num_elem_x3 * num_elem_x2 * num_elem_x1 * order * order;
 
-#pragma omp target teams distribute collapse(5)
-  for (int var = 0; var < 5; var++)
+  extrap_params_cubedsphere<num_t, order>
+      p(0, q_in, result_x_in, result_y_in, result_z_in);
+#pragma omp target teams distribute
+  for (int index = 0; index < num_threads; index++)
   {
-    for (int i = 0; i < num_elem_x3; i++)
-    {
-      for (int j = 0; j < num_elem_x2; j++)
-      {
-        for (int k = 0; k < num_elem_x1; k++)
-        {
-          for (int s = 0; s < order * order; s++)
-          {
-            const int index =
-                ((((var * num_elem_x3) + i) * num_elem_x2 + j) * num_elem_x1 + k) *
-                    order * order +
-                s;
-
-            extrap_params_cubedsphere<num_t, order>
-                p(q, index, result_x, result_y, result_z);
-
-            func(p, nullptr, verbose);
-          }
-        }
-      }
-    }
+    p.set_index(index);
+    func(p, nullptr, verbose);
   }
 }
 

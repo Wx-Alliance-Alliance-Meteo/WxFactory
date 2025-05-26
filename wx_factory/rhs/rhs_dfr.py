@@ -2,6 +2,7 @@ import numpy
 from numpy.typing import NDArray
 
 from common.definitions import idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_w, idx_rho_theta
+from geometry import CubedSphere
 from rhs.rhs import RHS
 from wx_mpi import SingleProcess, Conditional
 
@@ -53,7 +54,18 @@ class RHSDirecFluxReconstruction(RHS):
 
 
 class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
-    def __init__(self, pde, geometry, operators, metric, topography, process_topo, config, expected_shape, debug=False):
+    def __init__(
+        self,
+        pde,
+        geometry: CubedSphere,
+        operators,
+        metric,
+        topography,
+        process_topo,
+        config,
+        expected_shape,
+        debug=False,
+    ):
         super().__init__(pde, geometry, operators, metric, topography, process_topo, config, expected_shape, debug)
         self.extrap_3d = self.extrap_3d_code
         if config.desired_device in ["numpy", "cupy"]:
@@ -105,7 +117,6 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
             self.wflux_pres_itf_full_x2 = xp.zeros_like(self.q_itf_full_x2[0])
             self.wflux_adv_itf_full_x3 = xp.zeros_like(self.q_itf_full_x3[0])
             self.wflux_pres_itf_full_x3 = xp.zeros_like(self.q_itf_full_x3[0])
-
 
     def extrap_3d_py(self, q: NDArray, itf_x1: NDArray, itf_x2: NDArray, itf_x3: NDArray) -> None:
         itf_x1[...] = q @ self.ops.extrap_x
@@ -171,6 +182,24 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
     def flux_divergence_partial(self):
 
         self.df1_dx1 = apply_op(self.f_x1, self.ops.derivative_x)
+
+        xp = self.device.xp
+        res = xp.zeros_like(self.df1_dx1)
+        num_fields, nz, ny, nx = self.f_x1.shape[:4]
+        num_solpts = self.geom.num_solpts
+        self.device.operators.deriv_x_3d(
+            self.f_x1,
+            self.ops.derivative_x,
+            res,
+            num_fields,
+            nx,
+            ny,
+            nz,
+            num_solpts,
+            0 if self.device.comm.rank != 0 else 1,
+            # 0,
+        )
+
         self.df2_dx2 = apply_op(self.f_x2, self.ops.derivative_y)
         self.df3_dx3 = apply_op(self.f_x3, self.ops.derivative_z)
 

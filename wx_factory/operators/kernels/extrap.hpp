@@ -186,4 +186,15 @@ struct extrap_all_kernel
   }
 };
 
+template <typename real_t, typename num_t, int order>
+struct my_func
+{
+  DEVICE_SPACE void operator()(
+      extrap_params_cubedsphere<num_t, order> params,
+      const num_t*                            ptr,
+      const bool                              verbose) {
+    printf("hi. i = %d\n", verbose);
+  }
+};
+
 #endif

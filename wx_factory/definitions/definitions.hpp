@@ -7,6 +7,8 @@
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
 
+#include <iostream>
+
 #ifdef __CUDACC__
 
 #define HOST_DEVICE_SPACE __host__ __device__
@@ -18,6 +20,25 @@ using complex_t = cuda::std::complex<double>;
 template <class T, std::size_t N>
 using array = cuda::std::array<T, N>;
 
+#define cudaCheck(cmd) cudaApiAssert((cmd), __FILE__, __LINE__)
+
+//! Test the given return code and abort the program with an error message if it is not
+//! "cudaSuccess"
+inline void cudaApiAssert(const cudaError_t code, const char* filename, const int line) {
+  if (code != cudaSuccess)
+  {
+    std::cerr << "CUDA API call failed: " << cudaGetErrorString(code) << ", at "
+              << filename << ":" << line << "\n";
+    exit(-1);
+  }
+}
+
+template <typename num_t>
+num_t* get_raw_pointer(const pybind11::object& obj) {
+  uintptr_t cp_ptr = obj.attr("data").attr("ptr").cast<uintptr_t>();
+  return reinterpret_cast<num_t*>(cp_ptr);
+}
+
 #else
 
 #define DEVICE_SPACE
@@ -26,6 +47,11 @@ using array = cuda::std::array<T, N>;
 using complex_t = std::complex<double>;
 template <class T, std::size_t N>
 using array = std::array<T, N>;
+
+template <typename num_t>
+num_t* get_raw_pointer(const pybind11::array_t<num_t>& a) {
+  return static_cast<num_t*>(a.request().ptr);
+}
 
 #endif
 

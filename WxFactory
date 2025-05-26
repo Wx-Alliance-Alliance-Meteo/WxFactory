@@ -99,7 +99,7 @@ def main():
             pr = cProfile.Profile()
             pr.enable()
 
-        numpy.set_printoptions(suppress=True, linewidth=256)
+        numpy.set_printoptions(suppress=True, linewidth=256, precision=1)
         if args.ignore_numpy_warnings:
             numpy.seterr(all="ignore")
 

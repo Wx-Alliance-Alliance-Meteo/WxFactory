@@ -207,6 +207,12 @@ class DFROperators:
             corr_east = self.diff_ext[1:-1, -1]
             self.correction_WE = xp.vstack((xp.kron(ident, corr_west), xp.kron(ident, corr_east)))
 
+        if device.comm.rank == 0:
+            print(f"derivative_x (shape {self.derivative_x.shape})= \n{self.derivative_x}")
+            print(f"diff solpt = \n{self.diff_solpt}", flush=True)
+
+        # raise SystemExit(0)
+
     def make_filter(self, alpha: float, order: int, cutoff: float, geom: Geometry):
         """Build an exponential modal filter as described in Warburton, eqn 5.16."""
 
