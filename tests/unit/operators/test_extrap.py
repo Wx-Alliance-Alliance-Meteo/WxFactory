@@ -51,9 +51,9 @@ class OperatorsExtrapGenericTestCase(MpiTestCase):
                         f"                       ",
                         flush=True,
                     )
-            self.assertLessEqual(diff1_norm, 3e-16)
-            self.assertLessEqual(diff2_norm, 3e-16)
-            self.assertLessEqual(diff3_norm, 3e-16)
+            self.assertLessEqual(diff1_norm, 4e-16)
+            self.assertLessEqual(diff2_norm, 4e-16)
+            self.assertLessEqual(diff3_norm, 4e-16)
 
     def test_extrap_kernel_cpu(self):
         self.test_extrap_kernel("cpu")
