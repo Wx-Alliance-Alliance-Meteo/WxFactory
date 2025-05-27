@@ -97,12 +97,12 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
         self.log_rho_theta = xp.log(q[idx_rho_theta])
 
         # TODO clean this up (avoid overwriting previous computation)
-        self.q_itf_x1[idx_rho] = xp.exp(self.log_rho_p @ self.ops.extrap_x)
-        self.q_itf_x1[idx_rho_theta] = xp.exp(self.log_rho_theta @ self.ops.extrap_x)
-        self.q_itf_x2[idx_rho] = xp.exp(self.log_rho_p @ self.ops.extrap_y)
-        self.q_itf_x2[idx_rho_theta] = xp.exp(self.log_rho_theta @ self.ops.extrap_y)
-        self.q_itf_x3[idx_rho] = xp.exp(self.log_rho_p @ self.ops.extrap_z)
-        self.q_itf_x3[idx_rho_theta] = xp.exp(self.log_rho_theta @ self.ops.extrap_z)
+        self.q_itf_x1[idx_rho] = xp.exp(apply_op(self.log_rho_p, self.ops.extrap_x))
+        self.q_itf_x1[idx_rho_theta] = xp.exp(apply_op(self.log_rho_theta, self.ops.extrap_x))
+        self.q_itf_x2[idx_rho] = xp.exp(apply_op(self.log_rho_p, self.ops.extrap_y))
+        self.q_itf_x2[idx_rho_theta] = xp.exp(apply_op(self.log_rho_theta, self.ops.extrap_y))
+        self.q_itf_x3[idx_rho] = xp.exp(apply_op(self.log_rho_p, self.ops.extrap_z))
+        self.q_itf_x3[idx_rho_theta] = xp.exp(apply_op(self.log_rho_theta, self.ops.extrap_z))
 
     def pointwise_fluxes(self, q: NDArray) -> None:
         self.pde.pointwise_fluxes(
@@ -121,9 +121,10 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
         )
 
     def flux_divergence_partial(self):
-        super().flux_divergence_partial()
 
+        self.df1_dx1 = apply_op(self.f_x1, self.ops.derivative_x)
         self.df2_dx2 = apply_op(self.f_x2, self.ops.derivative_y)
+        self.df3_dx3 = apply_op(self.f_x3, self.ops.derivative_z)
 
         self.w_df1_dx1_adv = apply_op(self.wflux_adv_x1, self.ops.derivative_x)
         self.w_df1_dx1_presa = apply_op(self.wflux_pres_x1, self.ops.derivative_x)
