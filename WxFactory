@@ -42,11 +42,12 @@ def main():
     try:
         from simulation import Simulation
         import wx_mpi
+        from device import Device
     except (ImportError, NameError) as e:
         if rank == 0:
             print(e)
             raise
-        sys.exit(-1)
+        raise SystemExit(-1)
 
     # Only rank 0 parses the arguments
     with wx_mpi.SingleProcess() as s, wx_mpi.Conditional(s):
@@ -73,6 +74,13 @@ def main():
             help="Print number of processes that can run the given configuration (then exit)",
         )
 
+        parser.add_argument(
+            "--disable-unified-memory",
+            action="store_true",
+            help="Don't use unified (managed) CPU-GPU memory. "
+            "Only use this option if the MPI implementation supports CUDA",
+        )
+
         args = parser.parse_args()
 
         print(f'Start time : {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}', flush=True)
@@ -97,6 +105,9 @@ def main():
 
         if args.numpy_warn_as_except:
             numpy.seterr(all="raise")
+
+        if args.disable_unified_memory:
+            Device.use_unified_memory = False
 
         # Initialize simulation
         sim = Simulation(args.config, print_allowed_pe_counts=args.allowed_proc_count)

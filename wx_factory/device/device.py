@@ -26,6 +26,10 @@ class Device(ABC):
     :param libmodule: Module containing all the compiled code for this device
     """
 
+    # Whether we should use unified memory as the default allocator (CUDA code)
+    # This should only be disabled if the MPI implementation supports CUDA
+    use_unified_memory = True
+
     def __init__(self, comm: MPI.Comm, xp, xalg, pde_module, operators_module) -> None:
         """Set a few modules and functions to have the same name, so that callers can use a single name."""
         self.comm = comm
@@ -174,8 +178,8 @@ class CudaDevice(Device):
         devnum = self.comm.rank % len(device_list)
         cupy.cuda.Device(device_list[devnum]).use()
 
-        # TODO don't use managed memory
-        cupy.cuda.set_allocator(cupy.cuda.MemoryPool(cupy.cuda.malloc_managed).malloc)
+        if Device.use_unified_memory:
+            cupy.cuda.set_allocator(cupy.cuda.MemoryPool(cupy.cuda.malloc_managed).malloc)
 
         # Set up compute and copy streams
         self.main_stream = cupy.cuda.get_current_stream()
