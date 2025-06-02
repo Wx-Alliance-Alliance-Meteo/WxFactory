@@ -19,7 +19,7 @@ from common import main_project_dir
 from wx_mpi import SingleProcess, Conditional
 
 
-proc_id_re = re.compile(r"\b\d{4,10}\b")  # At least 4 digits, surrounded by whitespace
+proc_id_re = re.compile(r"\b\d{4,10}")  # At least 4 digits, at the beginning of the word
 proc_vendor_re = re.compile(r"\b(intel|amd)\b")
 
 base_library_directory = os.path.join(main_project_dir, "lib")
@@ -66,8 +66,10 @@ def get_processor_name() -> str:
         for line in cpu_info:
             if line.startswith(cpu_info_field):
                 lc = line.split(": ")[1].lower()
-                vendor = proc_vendor_re.search(lc).group()
-                num = proc_id_re.search(lc).group()
+                result = proc_vendor_re.search(lc)
+                vendor = "unknown-vendor" if result is None else result.group()
+                result = proc_id_re.search(lc)
+                num = "0000" if result is None else result.group()
                 return f"{vendor}_{num}"
 
             if line == "":
