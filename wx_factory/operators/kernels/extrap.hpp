@@ -128,6 +128,7 @@ struct extrap_all_kernel
       const bool                              verbose) {
 
     static_assert(order >= 1 && order <= 6, "Order is not implemented\n");
+    (void)verbose; // only used for debugging
 
     if constexpr (order == 1)
     {

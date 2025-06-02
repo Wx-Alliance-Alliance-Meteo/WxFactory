@@ -34,6 +34,8 @@ DEVICE_SPACE void pointwise_euler_cubedsphere_3d_kernel(
     kernel_params_cubedsphere<real_t, num_t> params,
     bool                                     verbose) {
 
+  (void)verbose; // disable compiler warning. Only used for debugging
+
   // Extract metric
   const real_t sqrt_g = *params.sqrt_g;
 

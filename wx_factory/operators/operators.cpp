@@ -27,8 +27,6 @@ void extrap_3d(
   num_t*       result_y = get_c_ptr(result_y_in);
   num_t*       result_z = get_c_ptr(result_z_in);
 
-#pragma omp parallel for collapse(4) default(none)                                       \
-    shared(q, result_x, result_y, result_z, func)
   for (int var = 0; var < 5; var++)
   {
     for (int i = 0; i < num_elem_x3; i++)
