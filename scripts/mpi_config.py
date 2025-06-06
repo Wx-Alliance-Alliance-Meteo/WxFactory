@@ -51,20 +51,20 @@ def main():
 
         for i in range(num_devices):
             try:
-                dev_info(i)
+                dev_info(i, node_id=node_id)
             except:
                 print(f"{i} is a wrong number")
 
         # if cupy_avail: cp.show_config()
 
 
-def dev_info(id):
+def dev_info(id, node_id=-1):
     with cp.cuda.Device(id) as dev:
         free_mem, total_mem = dev.mem_info
         kb = 1024
         mb = kb * kb
         gb = kb * kb * kb
-        print(f"  Device {id}: {free_mem / gb :.1f}/{total_mem / gb :.1f} GB available")
+        print(f"(Node {node_id:3d}) Device {id}: {free_mem / gb :.1f}/{total_mem / gb :.1f} GB available")
 
 
 if __name__ == "__main__":
