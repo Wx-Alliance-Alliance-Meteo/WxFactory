@@ -21,6 +21,8 @@ scripts/**/*.pdf
 
 __pycache__/
 *.py[cod]
+.cache
+.cupy
 
 /*.pdf
 jacobian

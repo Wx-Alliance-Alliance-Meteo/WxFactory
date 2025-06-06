@@ -6,7 +6,7 @@ try:
     from mpi4py import MPI
 except ModuleNotFoundError:
     print(f"mpi4py does not seem available, so we can't do anything")
-    sys.exit(-1)
+    raise SystemExit(-1)
 
 try:
     import cupy as cp
@@ -24,10 +24,14 @@ def main():
     num_pes = MPI.COMM_WORLD.size
     rank = MPI.COMM_WORLD.rank
 
+    # print(f"Process {rank:2d}/{num_pes}")
+
     node_comm = MPI.COMM_WORLD.Split_type(MPI.COMM_TYPE_SHARED, rank)
 
     node_rank = node_comm.rank
     node_size = node_comm.size
+
+    # print(f"Process {rank:2d}/{num_pes} ({node_rank:2d}/{node_size:2d} on node)")
 
     node_roots_comm = MPI.COMM_WORLD.Split(node_rank == 0, rank)
 

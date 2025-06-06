@@ -318,6 +318,9 @@ class ProcessTopology:
         if self.panel_comm.rank != 0:
             self.panel_roots_comm = MPI.COMM_NULL
 
+        self.send_buffer = None
+        self.recv_buffer = None
+
     def prepare_scalar_buffer(
         self,
         south: NDArray,
@@ -466,10 +469,52 @@ class ProcessTopology:
 
         # return ExchangeRequest(recv_buffer, mpi_request, shape=south[0].shape, is_vector=True)
 
-    def initiate_transfers(self, send_info: list[tuple[NDArray, tuple[int, ...], bool]]):
+    def start_exchange_euler_3d(
+        self,
+        south: NDArray,
+        north: NDArray,
+        west: NDArray,
+        east: NDArray,
+        boundary_sn: NDArray,
+        boundary_we: NDArray,
+        flip_dim: int | Tuple[int, ...] = -1,
+    ):
+        xp = self.device.xp
+        convert = self.convert_contra
+        base_shape = get_base_shape(south[0].shape, boundary_sn.shape)
+
+        if self.send_buffer is None or self.send_buffer.nbytes < south.nbytes * 4:
+            self.send_buffer = xp.empty(4 * south.nbytes, dtype=xp.uint8)
+            self.recv_buffer = xp.empty_like(self.send_buffer)
+
+        buffer_shape = (4, south.shape[0]) + base_shape
+        num_elem = math.prod(buffer_shape)
+        # send_buffer = xp.empty((4, south.shape[0]) + base_shape, dtype=south[0].dtype)
+        send_buffer = xp.ravel(self.send_buffer).view(dtype=south.dtype)[:num_elem].reshape(buffer_shape)
+        recv_buffer = xp.ravel(self.recv_buffer).view(dtype=south.dtype)[:num_elem].reshape(buffer_shape)
+
+        inputs = [south, north, west, east]
+        boundaries = [boundary_sn, boundary_sn, boundary_we, boundary_we]
+        for i, (data, bd) in enumerate(zip(inputs, boundaries)):
+            send_buffer[i, 1], send_buffer[i, 2] = convert[i](
+                data[1].reshape(base_shape), data[2].reshape(base_shape), bd
+            )
+            send_buffer[i, 0] = data[0].reshape(base_shape)
+            send_buffer[i, 3:] = data[3:].reshape((data.shape[0] - 3,) + base_shape)
+
+            if self.flip[i]:
+                send_buffer[i, :] = xp.flip(send_buffer[i, :], axis=flip_dim)  # Flip arrays, if needed
+
+        self.device.synchronize()  # When using GPU
+
+        return self.initiate_transfers([(send_buffer, south[0].shape, True)], recv_buffer=recv_buffer)[0]
+
+    def initiate_transfers(self, send_info: list[tuple[NDArray, tuple[int, ...], bool]], recv_buffer=None):
         requests: list[ExchangeRequest] = []
+
         for send_buffer, shape, is_vector in send_info:
-            recv_buffer = self.device.xp.empty_like(send_buffer)
+            if recv_buffer is None:
+                recv_buffer = self.device.xp.empty_like(send_buffer)
             req = self.comm_dist_graph.Ineighbor_alltoall(send_buffer, recv_buffer)
             requests.append(ExchangeRequest(recv_buffer, req, shape=shape, is_vector=is_vector))
 
@@ -679,6 +724,8 @@ class ExchangeRequest:
                 self.to_tuple = lambda a: (a[0].reshape(self.shape), a[1].reshape(self.shape))
             elif self.recv_buffer.shape[1] == 3:  # 3D
                 self.to_tuple = lambda a: (a[0].reshape(self.shape), a[1].reshape(self.shape), a[2].reshape(self.shape))
+            elif self.recv_buffer.shape[1] == 5:  # Euler 3D all
+                self.to_tuple = lambda a: a.reshape((5,) + self.shape)
             else:
                 raise ValueError(f"Can only handle vectors with 2 or 3 components, not {self.recv_buffer.shape[1]}")
 

@@ -174,69 +174,29 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
         self.rhs[idx_rho_w] = -self.metric.inv_sqrtG_new * (self.w_df1_dx1 + self.w_df2_dx2 + self.w_df3_dx3)
 
     def start_communication(self):
-        s2_ = numpy.s_[..., 0, :, : self.geom.itf_size]
-        n2_ = numpy.s_[..., -1, :, self.geom.itf_size :]
-        w2_ = numpy.s_[..., 0, : self.geom.itf_size]
-        e2_ = numpy.s_[..., -1, self.geom.itf_size :]
 
-        self.transfer_s = self.q_itf_x2[s2_]
-        self.req_r = self.ptopo.start_exchange_scalars(
-            self.q_itf_x2[idx_rho][s2_],
-            self.q_itf_x2[idx_rho][n2_],
-            self.q_itf_x1[idx_rho][w2_],
-            self.q_itf_x1[idx_rho][e2_],
-            boundary_shape=self.geom.halo_side_shape,
-            flip_dim=(-3, -1),
-        )
-        self.req_u = self.ptopo.start_exchange_vectors(
-            (self.q_itf_x2[idx_rho_u1][s2_], self.q_itf_x2[idx_rho_u2][s2_], self.q_itf_x2[idx_rho_w][s2_]),
-            (self.q_itf_x2[idx_rho_u1][n2_], self.q_itf_x2[idx_rho_u2][n2_], self.q_itf_x2[idx_rho_w][n2_]),
-            (self.q_itf_x1[idx_rho_u1][w2_], self.q_itf_x1[idx_rho_u2][w2_], self.q_itf_x1[idx_rho_w][w2_]),
-            (self.q_itf_x1[idx_rho_u1][e2_], self.q_itf_x1[idx_rho_u2][e2_], self.q_itf_x1[idx_rho_w][e2_]),
+        self.req_all = self.ptopo.start_exchange_euler_3d(
+            self.q_itf_x2[..., 0, :, : self.geom.itf_size],
+            self.q_itf_x2[..., -1, :, self.geom.itf_size :],
+            self.q_itf_x1[..., 0, : self.geom.itf_size],
+            self.q_itf_x1[..., -1, self.geom.itf_size :],
             self.geom.boundary_sn_new,
             self.geom.boundary_we_new,
             flip_dim=(-3, -1),
         )
-        self.req_t = self.ptopo.start_exchange_scalars(
-            self.q_itf_x2[idx_rho_theta][s2_],
-            self.q_itf_x2[idx_rho_theta][n2_],
-            self.q_itf_x1[idx_rho_theta][w2_],
-            self.q_itf_x1[idx_rho_theta][e2_],
-            boundary_shape=self.geom.halo_side_shape,
-            flip_dim=(-3, -1),
-        )
-
-        # Trigger start of transfer by doing an MPI call
-        self.req_r.request.Test()
 
     def end_communication(self):
-        xp = self.device.xp
-        dtype = self.q_itf_x1.dtype
-        if self.q_itf_s is None or self.q_itf_w.dtype != dtype:
-            sh = (self.num_var,) + self.req_r.shape
-            self.q_itf_s = xp.zeros(sh, dtype=dtype)
-            self.q_itf_n = xp.zeros(sh, dtype=dtype)
-            self.q_itf_w = xp.zeros(sh, dtype=dtype)
-            self.q_itf_e = xp.zeros(sh, dtype=dtype)
+        # xp = self.device.xp
+        # dtype = self.q_itf_x1.dtype
+        # if self.q_itf_s is None or self.q_itf_w.dtype != dtype:
+        #     sh = (self.num_var,) + self.req_all.shape
+        #     self.q_itf_s = xp.zeros(sh, dtype=dtype)
+        #     self.q_itf_n = xp.zeros(sh, dtype=dtype)
+        #     self.q_itf_w = xp.zeros(sh, dtype=dtype)
+        #     self.q_itf_e = xp.zeros(sh, dtype=dtype)
 
-        (
-            self.q_itf_s[idx_rho],
-            self.q_itf_n[idx_rho],
-            self.q_itf_w[idx_rho],
-            self.q_itf_e[idx_rho],
-        ) = self.req_r.wait()
-        (
-            (self.q_itf_s[idx_rho_u1], self.q_itf_s[idx_rho_u2], self.q_itf_s[idx_rho_w]),
-            (self.q_itf_n[idx_rho_u1], self.q_itf_n[idx_rho_u2], self.q_itf_n[idx_rho_w]),
-            (self.q_itf_w[idx_rho_u1], self.q_itf_w[idx_rho_u2], self.q_itf_w[idx_rho_w]),
-            (self.q_itf_e[idx_rho_u1], self.q_itf_e[idx_rho_u2], self.q_itf_e[idx_rho_w]),
-        ) = self.req_u.wait()
-        (
-            self.q_itf_s[idx_rho_theta],
-            self.q_itf_n[idx_rho_theta],
-            self.q_itf_w[idx_rho_theta],
-            self.q_itf_e[idx_rho_theta],
-        ) = self.req_t.wait()
+        # self.q_itf_s[...], self.q_itf_n[...], self.q_itf_w[...], self.q_itf_e[...] = self.req_all.wait()
+        self.q_itf_s, self.q_itf_n, self.q_itf_w, self.q_itf_e = self.req_all.wait()
 
     def riemann_fluxes(self) -> None:
         xp = self.device.xp
