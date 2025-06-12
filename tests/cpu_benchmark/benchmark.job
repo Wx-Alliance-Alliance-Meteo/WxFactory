@@ -1,0 +1,16 @@
+#! /usr/bin/env bash
+
+#PBS -l select=1:ncpus=80:mpiprocs=80:mem=400gb
+#PBS -j oe
+#PBS -l walltime=01:00:00
+#PBS -N cpu_benchmark
+
+WX_DIR=/home/vma000/code/wx_factory_clean
+
+cd ${WX_DIR}
+. ~/launch-scripts/wx/load_u2_env.sh
+
+CONFIG_FILE=./tests/cpu_benchmark/config.ini
+echo ${CONFIG_FILE}
+mpirun -n 24 ./WxFactory ${CONFIG_FILE}
+

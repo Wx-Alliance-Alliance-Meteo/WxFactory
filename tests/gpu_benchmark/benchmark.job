@@ -1,0 +1,28 @@
+#!/bin/bash -l
+
+#SBATCH --export=USER,LOGNAME,HOME,MAIL,PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+#SBATCH --job-name=gpu_benchmark               
+#SBATCH --output=out_gpu_benchmark_%j.txt
+#SBATCH --partition=gpu_a100
+#SBATCH --account=eccc_mrd__gpu_a100
+#SBATCH --time=00:10:00
+#SBATCH --ntasks=32
+#SBATCH --cpus-per-task=8                
+#SBATCH --gpus=16
+#SBATCH --mem-per-cpu=1000M
+
+WX_DIR=/home/vma000/code/wx_factory_clean
+
+cd ${WX_DIR}
+. ~/launch-scripts/wx/gpsc/load_u2_env.sh
+
+CONFIG_FILE=./tests/gpu_benchmark/config.ini
+
+mpirun -n 6 ./scripts/mpi_config.py
+mpirun -n 16 ./scripts/mpi_config.py
+mpirun -n 32 ./scripts/mpi_config.py
+
+echo ${CONFIG_FILE}
+mpirun -n 6 ./WxFactory ${CONFIG_FILE}
+mpirun -n 24 ./WxFactory ${CONFIG_FILE}
+
