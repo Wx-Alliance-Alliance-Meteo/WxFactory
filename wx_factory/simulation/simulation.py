@@ -219,8 +219,11 @@ class Simulation:
             try:
                 device = CudaDevice(self.comm, cuda_devices)
             except ValueError:
+                device = None
                 if self.rank == 0:
                     print("Switching to CPU", flush=True)
+
+            if device is None:
                 device = CpuDevice(comm=self.comm)
         else:
             device = CpuDevice(comm=self.comm)
