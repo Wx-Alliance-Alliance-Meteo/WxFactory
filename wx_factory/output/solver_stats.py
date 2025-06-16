@@ -31,16 +31,10 @@ class Column:
 class ColumnSet:
     def __init__(self, param: Configuration, num_procs: int, backend: str) -> None:
 
-        factor = 1
-        if num_procs > 1:
-            factor = int(math.sqrt(num_procs // 6))
-            if 6 * factor**2 != num_procs:
-                raise ValueError(f"Incomprehensible proc count {num_procs}")
-
         self.run_id = Column("int", -1)
         self.step_id = Column("int", 0)
         self.dg_order = Column("int", param.num_solpts)
-        self.num_elem_h = Column("int", param.num_elements_horizontal * factor)
+        self.num_elem_h = Column("int", param.num_elements_horizontal)
         self.num_elem_v = Column("int", param.num_elements_vertical)
         self.initial_dt = Column("int", param.dt)
         self.dt = Column("int", param.dt)

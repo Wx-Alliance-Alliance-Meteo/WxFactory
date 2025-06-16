@@ -1,0 +1,15 @@
+#! /usr/bin/env bash
+
+#PBS -l select=1:ncpus=80:mpiprocs=80:mem=400gb
+#PBS -j oe
+#PBS -l walltime=00:30:00
+#PBS -N cpu_benchmark
+
+
+WX_DIR=/dev/null
+CONFIG_FILE=/dev/null
+NUM_CPUS=0
+
+cd ${WX_DIR}
+. ./scripts/load_env.sh
+mpirun -n ${NUM_CPUS} ./WxFactory ${CONFIG_FILE}

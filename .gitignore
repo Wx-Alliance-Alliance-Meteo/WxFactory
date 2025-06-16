@@ -30,6 +30,7 @@ listings
 results
 work
 tests/**/tmp
+tests/**/*.o[0-9]*
 
 scripts/load_env.sh
 

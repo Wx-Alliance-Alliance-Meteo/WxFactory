@@ -384,7 +384,7 @@ class FullDataSet:
 
         t4 = time()
 
-        # print(f'extracted results in {t4 - t0:.2f}s ({t1 - t0:.3f}, {t2 - t1:.3f}, {t3 - t2:.3f}, {t4 - t3:.3f})')
+        print(f"extracted results in {t4 - t0:.2f}s ({t1 - t0:.3f}, {t2 - t1:.3f}, {t3 - t2:.3f}, {t4 - t3:.3f})")
 
         self.same_tol = not has_diff([self.no_precond, self.fv_ref, self.p_mg, self.fv_mg], ["solver_tol"])
         self.same_dt = not has_diff([self.no_precond, self.fv_ref, self.p_mg, self.fv_mg], ["initial_dt"])
@@ -666,13 +666,14 @@ class FullDataSet:
         # Overall, each result from this query will become one entry in a plot (for example, evolution of
         # computation time or iterations with respect to simulation time, or average computation time or
         # iterations per step). These entries can be further combined to generate scaling plots.
+        group_by_list_2 = [item for item in group_by_list if item != "simulation_time"]
         param_query = (
             f"""--sql
             select 
                     {{columns}},
                     dg_order,
                     num_elem_h,
-                    num_elem_v
+                    num_elem_v,
                     num_procs,
                     {rhs_averaging_2},
                     avg(x1) - avg(x0)                  as h_size,           -- should all be the same
@@ -687,13 +688,13 @@ class FullDataSet:
                     group_concat(single_step_time),
                     group_concat(single_step_it)
             from ({combine_same_configs_query})
-            group by {{group_by_list}}
+            group by {{group_by}}
             order by dg_order, num_mg_levels, mg_solve_coarsest, kiops_dt_factor, (num_pre_smoothe + num_post_smoothe),
                     time_per_time -- use 'time_per_time' as criterion for best performance (for the purpose of plotting)
             ;
             """.strip()
             .strip(";")
-            .format(columns=", ".join(columns), group_by_list=", ".join(columns + ["num_elem_h"]))
+            .format(columns=", ".join(columns), group_by=", ".join(group_by_list_2))
         )
 
         # ---------------------------------------------------------------------------------------------------
@@ -705,6 +706,7 @@ class FullDataSet:
             scaling_parameter = "dg_order"
         # scaling_parameter = "num_procs" if self.cpu_scaling else "num_elem_h"
         rhs_concat = ", ".join(f"group_concat(rhs_{x})" for x in rhs_timing_columns)
+        columns_h = columns if "num_elem_h" in columns else columns + ["num_elem_h"]
         scaling_query = f"""--sql
             select {{columns}},
                     {rhs_concat},
@@ -723,7 +725,7 @@ class FullDataSet:
                     time_per_time -- use 'time_per_time' as criterion for best performance (for the purpose of plotting)
             ;
         """.format(
-            columns=", ".join(columns)
+            columns=", ".join(columns_h)
         )
 
         # ---------------------------------------------------------------------------------------------------
@@ -894,10 +896,27 @@ class FullDataSet:
     def plot_time_per_cpu(self):
         """Plot the average step time with respect to number of processors."""
         fig, ax = plt.subplots(1, 1)
+        min_cpu = 100000000
+        max_cpu = 0
+        min_cpu_time = 0.0
+        time_54 = 0.0
         for dataset in [self.no_precond, self.fv_ref, self.p_mg, self.fv_mg]:
             for i, data in enumerate(dataset):
+                procs = np.array(data["num_procs"])
+                m = np.argmin(procs)
+                if procs[m] < min_cpu:
+                    min_cpu = procs[m]
+                    min_cpu_time = data["step_times"][m]
+
+                w = np.where(procs == 54)
+                if len(w) > 0:
+                    if time_54 <= 0.0:
+                        time_54 = 1e38
+                    time_54 = min(time_54, data["step_times"][w[0]])
+
+                max_cpu = max(max_cpu, procs.max())
                 ax.errorbar(
-                    data["num_procs"],
+                    procs,
                     y=data["step_times"],
                     yerr=data["step_times_stdev"],
                     color=get_color(data, i),
@@ -905,11 +924,18 @@ class FullDataSet:
                     marker=get_marker(data),
                     label=self._make_label(data),
                 )
+                for x, y in zip(procs, data["step_times"]):
+                    ax.annotate(str(x), xy=(x * 0.9, y * 1.2))
 
+        print(f"min cpu = {min_cpu}, mincputime = {min_cpu_time}, maxcpu = {max_cpu}")
+        ax.plot([min_cpu, max_cpu], [min_cpu_time, min_cpu_time * min_cpu / max_cpu])
+        ax.plot([54, max_cpu], [time_54, time_54 * 54 / max_cpu])
         ax.yaxis.grid()
 
-        ax.set_xlabel("Time (s/s?)")
-        ax.set_ylabel("Number of processors")
+        ax.set_xlabel("Number of processors")
+        ax.set_ylabel("Time")
+        ax.set_xscale("log", base=10)
+        ax.set_yscale("log", base=60)
 
         fig.suptitle(self._make_title("Average step time"), fontsize=9, x=0.04, horizontalalignment="left")
         fig.legend(fontsize=8)
