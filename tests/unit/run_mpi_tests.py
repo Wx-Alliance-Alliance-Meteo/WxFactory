@@ -13,8 +13,9 @@ main_module_dir = os.path.join(main_project_dir, "wx_factory")
 sys.path.append(main_project_dir)
 sys.path.append(main_module_dir)
 
-from tests.unit.common.test_process_topology import ProcessTopologyTest, GatherScatterTest
+from tests.unit.common.test_process_topology import ExchangeTest, GatherScatterTest
 from tests.unit.operators.test_extrap import OperatorsExtrapEuler3DTestCase
+from tests.unit.pde.test_rusanov_3d import PdeRusanov3DTestCase
 from tests.unit.restart.test_restart import ShallowWaterRestartTestCase, Euler3DRestartTestCase
 from tests.unit.rhs.test_side_by_side import RhsSideBySideEuler3DTestCase
 from tests.unit.solvers.test_pmex_mpi import PmexMpiTestCases
@@ -57,22 +58,27 @@ def load_tests():
     suite.addTest(GatherScatterTest(6, "fail_not_cube"))
     suite.addTest(GatherScatterTest(6, "fail_wrong_num_dim"))
 
-    suite.addTest(ProcessTopologyTest("vector2d_1d_shape1d"))
-    suite.addTest(ProcessTopologyTest("vector2d_1d_shape2d"))
-    suite.addTest(ProcessTopologyTest("vector2d_2d_shape1d"))
-    suite.addTest(ProcessTopologyTest("vector2d_2d_shape3d"))
-    suite.addTest(ProcessTopologyTest("vector3d_1d_shape1d"))
-    suite.addTest(ProcessTopologyTest("vector3d_1d_shape2d"))
-    suite.addTest(ProcessTopologyTest("vector3d_3d_shape1d"))
-    suite.addTest(ProcessTopologyTest("vector3d_4d_shape3d"))
-    suite.addTest(ProcessTopologyTest("scalar_1d_shape1d"))
-    suite.addTest(ProcessTopologyTest("scalar_1d_shape2d"))
-    suite.addTest(ProcessTopologyTest("scalar_1d_shape3d"))
-    suite.addTest(ProcessTopologyTest("scalar_2d_shape1d"))
-    suite.addTest(ProcessTopologyTest("scalar_2d_shape2d"))
+    suite.addTest(ExchangeTest("vector2d_1d_shape1d"))
+    suite.addTest(ExchangeTest("vector2d_1d_shape2d"))
+    suite.addTest(ExchangeTest("vector2d_2d_shape1d"))
+    suite.addTest(ExchangeTest("vector2d_2d_shape3d"))
+    suite.addTest(ExchangeTest("vector3d_1d_shape1d"))
+    suite.addTest(ExchangeTest("vector3d_1d_shape2d"))
+    suite.addTest(ExchangeTest("vector3d_3d_shape1d"))
+    suite.addTest(ExchangeTest("vector3d_4d_shape3d"))
+    suite.addTest(ExchangeTest("scalar_1d_shape1d"))
+    suite.addTest(ExchangeTest("scalar_1d_shape2d"))
+    suite.addTest(ExchangeTest("scalar_1d_shape3d"))
+    suite.addTest(ExchangeTest("scalar_2d_shape1d"))
+    suite.addTest(ExchangeTest("scalar_2d_shape2d"))
 
     suite.addTest(PmexMpiTestCases("test_pmex_mpi_2_processes"))
     suite.addTest(KiopsMpiTestCases("test_kiops_mpi_2_processes"))
+
+    suite.addTest(PdeRusanov3DTestCase(6, "test_rusanov_kernel_cpu"))
+    suite.addTest(PdeRusanov3DTestCase(6, "test_rusanov_kernel_gpu"))
+    suite.addTest(PdeRusanov3DTestCase(24, "test_rusanov_kernel_cpu"))
+    suite.addTest(PdeRusanov3DTestCase(24, "test_rusanov_kernel_gpu"))
 
     suite.addTest(OperatorsExtrapEuler3DTestCase(6, "test_extrap_kernel_cpu"))
     suite.addTest(OperatorsExtrapEuler3DTestCase(6, "test_extrap_kernel_gpu"))
