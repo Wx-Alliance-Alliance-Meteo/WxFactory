@@ -233,6 +233,8 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
             self.wflux_adv_itf_x3 = xp.zeros_like(self.f_itf_x3[0])
             self.wflux_pres_itf_x3 = xp.zeros_like(self.f_itf_x3[0])
 
+            # Set to ones, because uninitialized values will be used in a log
+            # TODO separate two interface sides so that we don't need to do these useless calculations
             self.q_itf_full_x1 = xp.ones(itf_i_shape, dtype=dtype)
             self.q_itf_full_x2 = xp.ones(itf_j_shape, dtype=dtype)
             self.q_itf_full_x3 = xp.ones(itf_k_shape, dtype=dtype)
@@ -256,14 +258,17 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
         self.q_itf_full_x2[mid_j] = self.q_itf_x2
         self.q_itf_full_x3[mid_k] = self.q_itf_x3
 
+        # Element interfaces from neighboring tiles
         self.q_itf_full_x1[w] = self.q_itf_w
         self.q_itf_full_x1[e] = self.q_itf_e
         self.q_itf_full_x2[s] = self.q_itf_s
         self.q_itf_full_x2[n] = self.q_itf_n
+
+        # Top + bottom layers
         self.q_itf_full_x3[b] = self.q_itf_full_x3[..., 1, :, :, : self.geom.itf_size]
-        self.q_itf_full_x3[..., 0, :, :, : self.geom.itf_size] = self.q_itf_full_x3[b]
+        # self.q_itf_full_x3[..., 0, :, :, : self.geom.itf_size] = self.q_itf_full_x3[b]
         self.q_itf_full_x3[t] = self.q_itf_full_x3[..., -2, :, :, self.geom.itf_size :]
-        self.q_itf_full_x3[..., -1, :, :, self.geom.itf_size :] = self.q_itf_full_x3[t]
+        # self.q_itf_full_x3[..., -1, :, :, self.geom.itf_size :] = self.q_itf_full_x3[t]
 
         self.pde.riemann_fluxes(
             self.q_itf_full_x1,

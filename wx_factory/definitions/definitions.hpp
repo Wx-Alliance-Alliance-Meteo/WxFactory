@@ -30,7 +30,7 @@ using array = std::array<T, N>;
 #endif
 
 // Declarations
-DEVICE_SPACE const double p0                  = 100000.;
+DEVICE_SPACE const double p0                  = 100000.0;
 DEVICE_SPACE const double Rd                  = 287.05;
 DEVICE_SPACE const double cpd                 = 1005.46;
 DEVICE_SPACE const double cvd                 = (cpd - Rd);
@@ -125,11 +125,16 @@ get_c_index(const int i, const int j, const int k, const int l, const int shape[
   return i * shape[1] * shape[2] * shape[3] + j * shape[2] * shape[3] + k * shape[3] + l;
 }
 
-DEVICE_SPACE inline int
-get_c_index(const int i, const int j, const int k, const int l, const int m, const int shape[5]) {
-  return i * shape[1] * shape[2] * shape[3] * shape[4] + j * shape[2] * shape[3] * shape[4] + k * shape[3] * shape[4] + l * shape[4] + m;
+DEVICE_SPACE inline int get_c_index(
+    const int i,
+    const int j,
+    const int k,
+    const int l,
+    const int m,
+    const int shape[5]) {
+  return i * shape[1] * shape[2] * shape[3] * shape[4] +
+         j * shape[2] * shape[3] * shape[4] + k * shape[3] * shape[4] + l * shape[4] + m;
 }
-
 
 // Return the cupy pointer
 template <typename num_t>

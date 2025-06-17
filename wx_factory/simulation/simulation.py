@@ -257,7 +257,7 @@ class Simulation:
         """Create the appropriate geometry for the given problem"""
 
         if self.config.grid_file != "":
-            self.process_topo = ProcessTopology(self.device, comm=self.comm)
+            self.process_topo = ProcessTopology(self.device, comm_in=self.comm)
             return CubedSphere2D(
                 self.num_elements_horizontal,
                 self.num_solpts,
@@ -269,7 +269,7 @@ class Simulation:
             )
 
         if self.config.grid_type == "cubed_sphere":
-            self.process_topo = ProcessTopology(self.device, comm=self.comm)
+            self.process_topo = ProcessTopology(self.device, comm_in=self.comm)
             if self.config.equations == "shallow_water":
                 return CubedSphere2D(
                     self.num_elements_horizontal,

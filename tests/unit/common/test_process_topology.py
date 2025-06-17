@@ -45,8 +45,8 @@ class ExchangeTest(unittest.TestCase):
 
         dev = TestDeviceClass(self.comm)
 
-        self.topo = ProcessTopology(dev, comm=self.comm)
-        self.topos = [ProcessTopology(dev, rank=i, comm=self.comm) for i in range(self.size)]
+        self.topo = ProcessTopology(dev, comm_in=self.comm)
+        self.topos = [ProcessTopology(dev, rank=i, comm_in=self.comm) for i in range(self.size)]
 
         self.neighbor_topo = [
             self.topos[self.topo.destinations[SOUTH]],
@@ -576,7 +576,7 @@ class GatherScatterTest(MpiTestCase):
 
         dev = TestDeviceClass(self.comm)
         xp = dev.xp
-        self.topo = ProcessTopology(dev, comm=self.comm)
+        self.topo = ProcessTopology(dev, comm_in=self.comm)
         # For testing gather/scatter functions
         self.global_data_1 = xp.arange(6 * 12 * 12).reshape(6, 12, 12)  # A flat (2D) field
         # A 2D field of 3x3 elements
@@ -627,7 +627,7 @@ class GatherScatterTest(MpiTestCase):
         #     print(f"tile ({my_panel}, ({my_row}, {my_col})): \n{tile_data_ref}", flush=True)
 
         cube = self.topo.gather_cube(tile_data_ref.copy(), num_dim)
-        with SingleProcess(self.topo.comm) as s, Conditional(s):
+        with SingleProcess(self.topo._comm) as s, Conditional(s):
             # print(f"cube = \n{cube[0]}", flush=True)
             diff = cube - global_data
             diff_norm = xp.linalg.norm(diff)

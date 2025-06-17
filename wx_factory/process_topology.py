@@ -5,7 +5,7 @@ from mpi4py import MPI
 from numpy.typing import NDArray
 
 from device import Device, CudaDevice
-from wx_mpi import SingleProcess, Conditional
+from wx_mpi import SingleProcess, Conditional, split_nodes
 
 ExchangedVector = Tuple[NDArray, ...] | NDArray
 
@@ -47,7 +47,7 @@ class ProcessTopology:
          +---+---+---+---+
     """
 
-    def __init__(self, device: Device, rank: Optional[int] = None, comm: MPI.Comm = MPI.COMM_WORLD):
+    def __init__(self, device: Device, rank: Optional[int] = None, comm_in: MPI.Comm = MPI.COMM_WORLD):
         """Create a cube-sphere process topology.
 
         :param device: Device on which MPI exchanges are to be made, like a CPU or a GPU.
@@ -62,9 +62,15 @@ class ProcessTopology:
 
         self.device = device
 
-        self.comm = comm
-        self.size = comm.Get_size()
-        self.rank = comm.Get_rank() if rank is None else rank
+        self.node_comm, self.node_id = split_nodes(comm_in)
+
+        # Reorder processes, grouping them by node (processes on the same node will have contiguous ranks)
+        # This one is named with an underscore because it is internal to a ProcessTopology object, it will differ
+        # from the communicator used by a Simulation
+        self._comm = comm_in.Split(0, self.node_id)
+
+        self.size = self._comm.size
+        self._rank = self._comm.rank if rank is None else rank
 
         self.num_pe_per_panel = int(self.size / 6)
         self.num_lines_per_panel = int(math.sqrt(self.num_pe_per_panel))
@@ -88,8 +94,8 @@ class ProcessTopology:
                 col += self.num_lines_per_panel
             return panel * self.num_pe_per_panel + row * self.num_lines_per_panel + col
 
-        self.my_panel = math.floor(self.rank / self.num_pe_per_panel)
-        self.my_rank_in_panel = self.rank - (self.my_panel * self.num_pe_per_panel)
+        self.my_panel = math.floor(self._rank / self.num_pe_per_panel)
+        self.my_rank_in_panel = self._rank - (self.my_panel * self.num_pe_per_panel)
         self.my_row = math.floor(self.my_rank_in_panel / self.num_lines_per_panel)
         self.my_col = int(self.my_rank_in_panel % self.num_lines_per_panel)
 
@@ -310,11 +316,11 @@ class ProcessTopology:
         # Distributed Graph
         self.sources = [my_south, my_north, my_west, my_east]  # Must correspond to values of SOUTH, NORTH, WEST, EAST
         self.destinations = self.sources
-        self.comm_dist_graph = comm.Create_dist_graph_adjacent(self.sources, self.destinations)
+        self.comm_dist_graph = self._comm.Create_dist_graph_adjacent(self.sources, self.destinations)
 
         # Panel communicators
-        self.panel_comm = self.comm.Split(self.my_panel, self.rank)
-        self.panel_roots_comm = self.comm.Split(self.panel_comm.rank == 0, self.rank)
+        self.panel_comm = self._comm.Split(self.my_panel, self._rank)
+        self.panel_roots_comm = self._comm.Split(self.panel_comm.rank == 0, self._rank)
         if self.panel_comm.rank != 0:
             self.panel_roots_comm = MPI.COMM_NULL
 
@@ -620,7 +626,7 @@ class ProcessTopology:
         side = self.num_lines_per_panel
 
         panel_list = None
-        with SingleProcess(self.comm) as s, Conditional(s):
+        with SingleProcess(self._comm) as s, Conditional(s):
 
             # Verifications
             if field.ndim < num_dim + 1 or field.shape[0] != 6 or field.shape[num_dim - 1] != field.shape[num_dim]:

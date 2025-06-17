@@ -31,8 +31,8 @@ class OutputCubesphere(OutputManager):
         self.topo = topography
         self.process_topology = process_topology
 
-        self.rank = self.process_topology.rank
-        self.comm = self.process_topology.comm
+        self.comm = self.device.comm
+        self.rank = self.comm.rank
 
         self.initial_mass = None
         self.initial_energy = None
