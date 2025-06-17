@@ -340,6 +340,13 @@ class PDEEulerCubesphere(PDE):
         pressure_itf_x2[...] = p0 * xp.exp((cpd / cvd) * xp.log(q_itf_x2[idx_rho_theta] * (Rd / p0)))
         pressure_itf_x3[...] = p0 * xp.exp((cpd / cvd) * xp.log(q_itf_x3[idx_rho_theta] * (Rd / p0)))
 
+        pressure_itf_x1[:, :, 0, :n] = 0.0
+        pressure_itf_x1[:, :, -1, n:] = 0.0
+        pressure_itf_x2[:, 0, :, :n] = 0.0
+        pressure_itf_x2[:, -1, :, n:] = 0.0
+        pressure_itf_x3[0, :, :, :n] = 0.0
+        pressure_itf_x3[-1, :, :, n:] = 0.0
+
         rusanov_3d_hori_i_new(
             u1_itf_x1,
             q_itf_x1,

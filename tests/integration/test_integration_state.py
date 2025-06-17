@@ -119,7 +119,7 @@ class StateIntegrationTestCases(unittest.TestCase):
 
         self.schema = load_default_schema()
         self.config_files = glob.glob(f"{self.config_dir_path}/config*.ini")
-        print(f"Config files: {self.config_files}")
+        # print(f"Config files: {self.config_files}")
 
     def test_state(self):
         has_exited: bool = False

@@ -31,7 +31,7 @@ def gen_data_1(num_processes: int, num_data_hori_per_proc: int, device: Device):
     return xp.array(data)
 
 
-class ProcessTopologyTest(unittest.TestCase):
+class ExchangeTest(unittest.TestCase):
     topo: ProcessTopology
     rank: int
     comm: MPI.Comm
