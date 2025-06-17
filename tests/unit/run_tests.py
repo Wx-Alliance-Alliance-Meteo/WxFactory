@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 
+import argparse
 import os
+import re
 import sys
+from typing import Optional
 import unittest
 
 main_project_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../..")
@@ -21,46 +24,62 @@ from tests.unit.solvers.test_kiops_pmex_tolerance_cpu import KiopsPmexToleranceC
 from tests.unit.solvers.test_kiops_pmex_tolerance_gpu import KiopsPmexToleranceGpuTestCases
 
 
-def load_tests():
+def add_test(suite: unittest.TestSuite, test: unittest.TestCase, test_re: Optional[re.Pattern]):
+    if test_re is None or test_re.search(str(test)) is not None:
+        suite.addTest(test)
+
+
+def load_tests(test_name):
     """Create a test suite with cases we want to run."""
 
+    test_re = re.compile(test_name, re.IGNORECASE)
     suite = unittest.TestSuite()
 
-    suite.addTest(CompilationTestCases("test_cpp_kernels_compilation"))
-    suite.addTest(CompilationGPUTestCases("test_cuda_kernels_compilation"))
-    suite.addTest(CompilationTestCases("test_cpp_compilation_twice"))
+    add_test(suite, CompilationTestCases("test_cpp_kernels_compilation"), test_re)
+    add_test(suite, CompilationGPUTestCases("test_cuda_kernels_compilation"), test_re)
+    add_test(suite, CompilationTestCases("test_cpp_compilation_twice"), test_re)
 
-    suite.addTest(PmexComparisonTestCases("test_compare_cpu_to_gpu"))
-    suite.addTest(KiopsComparisonTestCases("test_compare_cpu_to_gpu"))
-    suite.addTest(FgmresComparisonTestCases("test_compare_cpu_to_gpu"))
+    add_test(suite, PmexComparisonTestCases("test_compare_cpu_to_gpu"), test_re)
+    add_test(suite, KiopsComparisonTestCases("test_compare_cpu_to_gpu"), test_re)
+    add_test(suite, FgmresComparisonTestCases("test_compare_cpu_to_gpu"), test_re)
 
-    suite.addTest(FgmresEdgeCasesTestCases("test_fgmres_throw_when_b_is_smaller_or_equal_to_restart"))
+    add_test(suite, FgmresEdgeCasesTestCases("test_fgmres_throw_when_b_is_smaller_or_equal_to_restart"), test_re)
 
-    suite.addTest(FgmresScipyTestCases("test_compare_implementation_to_scipy"))
-    suite.addTest(FgmresScipyTestCases("test_compare_implementation_to_scipy_and_residual"))
+    add_test(suite, FgmresScipyTestCases("test_compare_implementation_to_scipy"), test_re)
+    add_test(suite, FgmresScipyTestCases("test_compare_implementation_to_scipy_and_residual"), test_re)
 
-    suite.addTest(KiopsPmexToleranceCpuTestCases("test_compare_kiops_pmex"))
-    suite.addTest(KiopsPmexToleranceGpuTestCases("test_compare_kiops_pmex"))
+    add_test(suite, KiopsPmexToleranceCpuTestCases("test_compare_kiops_pmex"), test_re)
+    add_test(suite, KiopsPmexToleranceGpuTestCases("test_compare_kiops_pmex"), test_re)
 
-    suite.addTest(StateTestCases("test_save_load_works"))
-    suite.addTest(StateTestCases("test_load_old_state"))
-    suite.addTest(Euler2DRestartTestCase("test_gen_restart"))
-    suite.addTest(Euler2DRestartTestCase("test_read_restart"))
+    add_test(suite, StateTestCases("test_save_load_works"), test_re)
+    add_test(suite, StateTestCases("test_load_old_state"), test_re)
+    add_test(suite, Euler2DRestartTestCase("test_gen_restart"), test_re)
+    add_test(suite, Euler2DRestartTestCase("test_read_restart"), test_re)
 
-    suite.addTest(ConfigurationTestCases("test_load_configuration_with_schema_default"))
-    suite.addTest(ConfigurationTestCases("test_load_configuration_with_valid_values"))
-    suite.addTest(ConfigurationTestCases("test_load_configuration_with_invalid_values"))
-    suite.addTest(ConfigurationTestCases("test_load_configuration_with_dependency"))
+    add_test(suite, ConfigurationTestCases("test_load_configuration_with_schema_default"), test_re)
+    add_test(suite, ConfigurationTestCases("test_load_configuration_with_valid_values"), test_re)
+    add_test(suite, ConfigurationTestCases("test_load_configuration_with_invalid_values"), test_re)
+    add_test(suite, ConfigurationTestCases("test_load_configuration_with_dependency"), test_re)
 
-    suite.addTest(Angle24TestCase("test_cyclic"))
-    suite.addTest(Angle24TestCase("test_rounding"))
+    add_test(suite, Angle24TestCase("test_cyclic"), test_re)
+    add_test(suite, Angle24TestCase("test_rounding"), test_re)
 
     return suite
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Solve NWP problems with WxFactory!")
+    parser.add_argument(
+        "test_name",
+        nargs="?",
+        default="",
+        type=str,
+        help="Will only run tests whose name or type matches this regular expression.",
+    )
+    args = parser.parse_args()
+
     runner = unittest.TextTestRunner(buffer=True, verbosity=1)
-    result = runner.run(load_tests())
+    result = runner.run(load_tests(args.test_name))
     if not result.wasSuccessful():
         failed_tests = "\n  ".join([f"{r[0]}" for r in result.errors + result.unexpectedSuccesses + result.failures])
         print(f"failed tests: \n  {failed_tests}")

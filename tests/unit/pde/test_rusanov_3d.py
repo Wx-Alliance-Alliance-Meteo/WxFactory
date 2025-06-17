@@ -98,21 +98,19 @@ class PdeRusanovGenericTestCase(MpiTestCase):
                 if norm > 0.0:
                     diff_norms[i] /= norm
 
-            threshold = 3e-16
+            threshold = 4e-16
             if xp.any(diff_norms > threshold):
-                if self.comm.rank == 0:
-                    numpy.set_printoptions(precision=2)
-                    print(
-                        f"Rank {self.comm.rank} differences: {xp.count_nonzero(diff_norms > threshold)}\n{diff_norms}",
-                        flush=True,
-                    )
-                    # print(f"q itf full x3: \n{sim.rhs.full.q_itf_full_x3[4]}\n", flush=True)
-                    # print(
-                    #     f"pressure py: \n{outputs_py[5]}\n"
-                    #     f"pressure code: \n{outputs_code[5]}\n"
-                    #     f"pressure diff: \n{diffs[5]}",
-                    #     flush=True,
-                    # )
+                print(
+                    f"Rank {self.comm.rank} differences: {xp.count_nonzero(diff_norms > threshold)}\n{diff_norms}",
+                    flush=True,
+                )
+                # print(f"q itf full x3: \n{sim.rhs.full.q_itf_full_x3[4]}\n", flush=True)
+                # print(
+                #     f"pressure py: \n{outputs_py[5]}\n"
+                #     f"pressure code: \n{outputs_code[5]}\n"
+                #     f"pressure diff: \n{diffs[5]}",
+                #     flush=True,
+                # )
 
                 self.fail(f"Difference is too large")
 

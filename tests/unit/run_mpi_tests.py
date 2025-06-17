@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 
+import argparse
 import os
+import re
 import sys
-import unittest
-
-from mpi4py import MPI
+from typing import Optional
+from unittest import TestCase, TestSuite
 
 from mpi_test import MpiRunner, MpiTestSuite
 
@@ -23,69 +24,75 @@ from tests.unit.solvers.test_kiops_mpi import KiopsMpiTestCases
 from tests.unit.solvers.test_fgmres_mpi import FgmresMpiTestCases
 
 
-def load_tests():
+def add_test(suite: TestSuite, test: TestCase, test_re: Optional[re.Pattern]):
+    if test_re is None or test_re.search(str(test)) is not None:
+        suite.addTest(test)
+
+
+def load_tests(test_name: str):
     suite = MpiTestSuite()
 
-    suite.addTest(ShallowWaterRestartTestCase(6, "test_read_restart"))
-    suite.addTest(Euler3DRestartTestCase(6, "test_read_restart"))
+    test_re = re.compile(test_name, re.IGNORECASE)
+    add_test(suite, ShallowWaterRestartTestCase(6, "test_read_restart"), test_re)
+    add_test(suite, Euler3DRestartTestCase(6, "test_read_restart"), test_re)
 
-    suite.addTest(ShallowWaterRestartTestCase(24, "test_read_restart"))
-    suite.addTest(Euler3DRestartTestCase(24, "test_read_restart"))
+    add_test(suite, ShallowWaterRestartTestCase(24, "test_read_restart"), test_re)
+    add_test(suite, Euler3DRestartTestCase(24, "test_read_restart"), test_re)
 
-    suite.addTest(ShallowWaterRestartTestCase(24, "test_multisize"))
-    suite.addTest(Euler3DRestartTestCase(24, "test_multisize"))
+    add_test(suite, ShallowWaterRestartTestCase(24, "test_multisize"), test_re)
+    add_test(suite, Euler3DRestartTestCase(24, "test_multisize"), test_re)
 
-    suite.addTest(GatherScatterTest(6, "gather_scatter_2d"))
-    suite.addTest(GatherScatterTest(6, "gather_scatter_elem_2d"))
-    suite.addTest(GatherScatterTest(6, "gather_scatter_3d"))
-    suite.addTest(GatherScatterTest(6, "gather_scatter_elem_3d"))
-    suite.addTest(GatherScatterTest(6, "gather_scatter_elem_4d"))
+    add_test(suite, GatherScatterTest(6, "gather_scatter_2d"), test_re)
+    add_test(suite, GatherScatterTest(6, "gather_scatter_elem_2d"), test_re)
+    add_test(suite, GatherScatterTest(6, "gather_scatter_3d"), test_re)
+    add_test(suite, GatherScatterTest(6, "gather_scatter_elem_3d"), test_re)
+    add_test(suite, GatherScatterTest(6, "gather_scatter_elem_4d"), test_re)
 
-    suite.addTest(GatherScatterTest(24, "gather_scatter_2d"))
-    suite.addTest(GatherScatterTest(24, "gather_scatter_elem_2d"))
-    suite.addTest(GatherScatterTest(24, "gather_scatter_3d"))
-    suite.addTest(GatherScatterTest(24, "gather_scatter_elem_3d"))
-    suite.addTest(GatherScatterTest(24, "gather_scatter_elem_4d"))
+    add_test(suite, GatherScatterTest(24, "gather_scatter_2d"), test_re)
+    add_test(suite, GatherScatterTest(24, "gather_scatter_elem_2d"), test_re)
+    add_test(suite, GatherScatterTest(24, "gather_scatter_3d"), test_re)
+    add_test(suite, GatherScatterTest(24, "gather_scatter_elem_3d"), test_re)
+    add_test(suite, GatherScatterTest(24, "gather_scatter_elem_4d"), test_re)
 
-    suite.addTest(GatherScatterTest(54, "gather_scatter_2d", optional=True))
-    suite.addTest(GatherScatterTest(54, "gather_scatter_elem_2d", optional=True))
-    suite.addTest(GatherScatterTest(54, "gather_scatter_3d", optional=True))
-    suite.addTest(GatherScatterTest(54, "gather_scatter_elem_3d", optional=True))
-    suite.addTest(GatherScatterTest(54, "gather_scatter_elem_4d", optional=True))
+    add_test(suite, GatherScatterTest(54, "gather_scatter_2d", optional=True), test_re)
+    add_test(suite, GatherScatterTest(54, "gather_scatter_elem_2d", optional=True), test_re)
+    add_test(suite, GatherScatterTest(54, "gather_scatter_3d", optional=True), test_re)
+    add_test(suite, GatherScatterTest(54, "gather_scatter_elem_3d", optional=True), test_re)
+    add_test(suite, GatherScatterTest(54, "gather_scatter_elem_4d", optional=True), test_re)
 
-    suite.addTest(GatherScatterTest(24, "fail_wrong_num_proc"))  # This test needs at least 24 procs
-    suite.addTest(GatherScatterTest(6, "fail_not_square"))
-    suite.addTest(GatherScatterTest(6, "fail_not_cube"))
-    suite.addTest(GatherScatterTest(6, "fail_wrong_num_dim"))
+    add_test(suite, GatherScatterTest(24, "fail_wrong_num_proc"), test_re)  # This test needs at least 24 procs
+    add_test(suite, GatherScatterTest(6, "fail_not_square"), test_re)
+    add_test(suite, GatherScatterTest(6, "fail_not_cube"), test_re)
+    add_test(suite, GatherScatterTest(6, "fail_wrong_num_dim"), test_re)
 
-    suite.addTest(ExchangeTest("vector2d_1d_shape1d"))
-    suite.addTest(ExchangeTest("vector2d_1d_shape2d"))
-    suite.addTest(ExchangeTest("vector2d_2d_shape1d"))
-    suite.addTest(ExchangeTest("vector2d_2d_shape3d"))
-    suite.addTest(ExchangeTest("vector3d_1d_shape1d"))
-    suite.addTest(ExchangeTest("vector3d_1d_shape2d"))
-    suite.addTest(ExchangeTest("vector3d_3d_shape1d"))
-    suite.addTest(ExchangeTest("vector3d_4d_shape3d"))
-    suite.addTest(ExchangeTest("scalar_1d_shape1d"))
-    suite.addTest(ExchangeTest("scalar_1d_shape2d"))
-    suite.addTest(ExchangeTest("scalar_1d_shape3d"))
-    suite.addTest(ExchangeTest("scalar_2d_shape1d"))
-    suite.addTest(ExchangeTest("scalar_2d_shape2d"))
+    add_test(suite, ExchangeTest("vector2d_1d_shape1d"), test_re)
+    add_test(suite, ExchangeTest("vector2d_1d_shape2d"), test_re)
+    add_test(suite, ExchangeTest("vector2d_2d_shape1d"), test_re)
+    add_test(suite, ExchangeTest("vector2d_2d_shape3d"), test_re)
+    add_test(suite, ExchangeTest("vector3d_1d_shape1d"), test_re)
+    add_test(suite, ExchangeTest("vector3d_1d_shape2d"), test_re)
+    add_test(suite, ExchangeTest("vector3d_3d_shape1d"), test_re)
+    add_test(suite, ExchangeTest("vector3d_4d_shape3d"), test_re)
+    add_test(suite, ExchangeTest("scalar_1d_shape1d"), test_re)
+    add_test(suite, ExchangeTest("scalar_1d_shape2d"), test_re)
+    add_test(suite, ExchangeTest("scalar_1d_shape3d"), test_re)
+    add_test(suite, ExchangeTest("scalar_2d_shape1d"), test_re)
+    add_test(suite, ExchangeTest("scalar_2d_shape2d"), test_re)
 
-    suite.addTest(PmexMpiTestCases("test_pmex_mpi_2_processes"))
-    suite.addTest(KiopsMpiTestCases("test_kiops_mpi_2_processes"))
+    add_test(suite, PmexMpiTestCases("test_pmex_mpi_2_processes"), test_re)
+    add_test(suite, KiopsMpiTestCases("test_kiops_mpi_2_processes"), test_re)
 
-    suite.addTest(PdeRusanov3DTestCase(6, "test_rusanov_kernel_cpu"))
-    suite.addTest(PdeRusanov3DTestCase(6, "test_rusanov_kernel_gpu"))
-    suite.addTest(PdeRusanov3DTestCase(24, "test_rusanov_kernel_cpu"))
-    suite.addTest(PdeRusanov3DTestCase(24, "test_rusanov_kernel_gpu"))
+    add_test(suite, PdeRusanov3DTestCase(6, "test_rusanov_kernel_cpu"), test_re)
+    add_test(suite, PdeRusanov3DTestCase(6, "test_rusanov_kernel_gpu"), test_re)
+    add_test(suite, PdeRusanov3DTestCase(24, "test_rusanov_kernel_cpu"), test_re)
+    add_test(suite, PdeRusanov3DTestCase(24, "test_rusanov_kernel_gpu"), test_re)
 
-    suite.addTest(OperatorsExtrapEuler3DTestCase(6, "test_extrap_kernel_cpu"))
-    suite.addTest(OperatorsExtrapEuler3DTestCase(6, "test_extrap_kernel_gpu"))
-    suite.addTest(OperatorsExtrapEuler3DTestCase(24, "test_extrap_kernel_cpu"))
-    suite.addTest(OperatorsExtrapEuler3DTestCase(24, "test_extrap_kernel_gpu"))
+    add_test(suite, OperatorsExtrapEuler3DTestCase(6, "test_extrap_kernel_cpu"), test_re)
+    add_test(suite, OperatorsExtrapEuler3DTestCase(6, "test_extrap_kernel_gpu"), test_re)
+    add_test(suite, OperatorsExtrapEuler3DTestCase(24, "test_extrap_kernel_cpu"), test_re)
+    add_test(suite, OperatorsExtrapEuler3DTestCase(24, "test_extrap_kernel_gpu"), test_re)
 
-    suite.addTest(RhsSideBySideEuler3DTestCase(6, "test_rhs_side_by_side"))
+    add_test(suite, RhsSideBySideEuler3DTestCase(6, "test_rhs_side_by_side"), test_re)
 
     # TODO : This test needs more works on the data division between processes
     # suite.addTest(FgmresMpiTestCases('test_fgmres_mpi_2_processes'))
@@ -122,15 +129,25 @@ def trace_run(runner):
     tracer.runfunc(runner.run, load_tests())
 
 
-def regular_run(runner):
-    result = runner.run(load_tests())
+def regular_run(runner, args):
+    result = runner.run(load_tests(args.test_name))
 
     if not result.wasSuccessful():
         raise SystemExit(-1)
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Solve NWP problems with WxFactory!")
+    parser.add_argument(
+        "test_name",
+        nargs="?",
+        default="",
+        type=str,
+        help="Will only run tests whose name or type matches this regular expression.",
+    )
+    args = parser.parse_args()
+
     runner = MpiRunner(buffer=True, verbosity=0)
 
     # trace_run(runner)
-    regular_run(runner)
+    regular_run(runner, args)
