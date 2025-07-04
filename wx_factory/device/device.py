@@ -179,6 +179,8 @@ class CudaDevice(Device):
         cupy.cuda.Device(device_list[devnum]).use()
 
         if Device.use_unified_memory:
+            if self.comm.rank == 0:
+                print(f"Using unified memory", flush=True)
             cupy.cuda.set_allocator(cupy.cuda.MemoryPool(cupy.cuda.malloc_managed).malloc)
 
         # Set up compute and copy streams

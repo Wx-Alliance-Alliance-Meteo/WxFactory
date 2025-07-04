@@ -42,22 +42,36 @@ def main():
     num_nodes = MPI.COMM_WORLD.allreduce(num_nodes, op=MPI.SUM)
 
     if rank == 0:
-        print(f"Launched with {num_pes} PEs on {num_nodes} nodes.")
+        print(f"Launched with {num_pes} PEs on {num_nodes} nodes.", flush=True)
 
         # if cupy_avail: cp.show_config()
 
     MPI.COMM_WORLD.Barrier()
 
+    global_ranks_on_node = node_comm.gather(MPI.COMM_WORLD.rank)
+
     if node_rank == 0:
         node_id = node_roots_comm.rank
 
-        print(f"Node {node_id:3d}: \n" f"  node size = {node_size}\n" f"  num CUDA devices = {num_devices}\n")
+        print(
+            f"Node {node_id:3d}: \n"
+            f"  node size = {node_size}\n"
+            f"  num CUDA devices = {num_devices}\n"
+            f"  Global ranks: {global_ranks_on_node}\n",
+            flush=True,
+        )
+
+        if node_id > 0:
+            ok = node_roots_comm.recv(source=node_id - 1)
 
         for i in range(num_devices):
             try:
                 dev_info(i, node_id=node_id)
             except:
-                print(f"{i} is a wrong number")
+                print(f"{i} is a wrong number", flush=True)
+
+        if node_id < node_roots_comm.size - 1:
+            node_roots_comm.send(1, dest=node_id + 1)
 
         # if cupy_avail: cp.show_config()
 
@@ -68,7 +82,7 @@ def dev_info(id, node_id=-1):
         kb = 1024
         mb = kb * kb
         gb = kb * kb * kb
-        print(f"(Node {node_id:3d}) Device {id}: {free_mem / gb :.1f}/{total_mem / gb :.1f} GB available")
+        print(f"(Node {node_id:3d}) Device {id}: {free_mem / gb :.1f}/{total_mem / gb :.1f} GB available", flush=True)
 
 
 if __name__ == "__main__":
