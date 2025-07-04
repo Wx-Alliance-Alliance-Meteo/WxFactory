@@ -270,10 +270,10 @@ class OutputCubesphereNetcdf(OutputCubesphere):
                     q4.grid_mapping = "cubed_sphere"
                     q4.set_collective(False)
 
-        prepare = self.device.to_host
+        to_host = lambda a: self.device.to_host(a) if a is not None else None
 
-        panel_x = self._gather_panel(prepare(self.geometry.x1[...]))
-        panel_y = self._gather_panel(prepare(self.geometry.x2[...]))
+        panel_x = to_host(self._gather_panel(self.geometry.x1[...]))
+        panel_y = to_host(self._gather_panel(self.geometry.x2[...]))
 
         if self.rank == 0:
             xxx[:] = panel_x
@@ -281,14 +281,16 @@ class OutputCubesphereNetcdf(OutputCubesphere):
             if self.config.equations == "euler":
                 # No gathering needed for vertical coords
                 # FIXME: With mapped coordinates, x3/height is a truly 3D coordinate
-                zzz[:] = prepare(self.geometry.x3[:, 0, 0])
+                zzz[:] = to_host(self.geometry.x3[:, 0, 0])
 
-        lons = self._gather_field(prepare(self.geometry.block_lon * 180 / math.pi), 2)
-        lats = self._gather_field(prepare(self.geometry.block_lat * 180 / math.pi), 2)
+        self.comm.barrier()
+        lons = to_host(self._gather_field(self.geometry.block_lon * 180 / math.pi, 2))
+        lats = to_host(self._gather_field(self.geometry.block_lat * 180 / math.pi, 2))
         if self.config.equations == "euler":
-            elevs = self._gather_field(prepare(self.geometry.coordVec_latlon[2, :, :, :]), 3)
-            topos = self._gather_field(prepare(self.geometry.zbot[:, :]), 2)
+            elevs = to_host(self._gather_field(self.geometry.coordVec_latlon[2, :, :, :], 3))
+            topos = to_host(self._gather_field(self.geometry.zbot[:, :], 2))
 
+        print(f"{self.rank} here 1", flush=True)
         if self.rank == 0:
             for i in range(6):
                 tile[i] = i
@@ -300,7 +302,6 @@ class OutputCubesphereNetcdf(OutputCubesphere):
                     topo[i, :, :] = topos[i]
 
     def __write_result__(self, Q, step_id):
-        prepare = self.device.to_host
         geom = self.geometry
 
         idx = 0
@@ -314,7 +315,7 @@ class OutputCubesphereNetcdf(OutputCubesphere):
             h = Q[idx_h, :, :]
             if self.topo is not None:
                 h = Q[idx_h, :, :] + self.topo.hsurf
-            self.store_field(geom.to_single_block(prepare(h)), "h", idx)
+            self.store_field(geom.to_single_block(h), "h", idx)
 
             if self.config.case_number >= 2 or self.config.case_number == -1:
                 u1 = Q[idx_hu1, :, :] / h
@@ -323,10 +324,10 @@ class OutputCubesphereNetcdf(OutputCubesphere):
                 rv = relative_vorticity(u1, u2, self.metric, self.operators)
                 pv = potential_vorticity(h, u1, u2, self.metric, self.operators)
 
-                self.store_field(prepare(geom.to_single_block(u)), "U", idx)
-                self.store_field(prepare(geom.to_single_block(v)), "V", idx)
-                self.store_field(prepare(geom.to_single_block(rv)), "RV", idx)
-                self.store_field(prepare(geom.to_single_block(pv)), "PV", idx)
+                self.store_field(geom.to_single_block(u), "U", idx)
+                self.store_field(geom.to_single_block(v), "V", idx)
+                self.store_field(geom.to_single_block(rv), "RV", idx)
+                self.store_field(geom.to_single_block(pv), "PV", idx)
 
         elif isinstance(geom, CubedSphere3D):  # Euler equations
             rho = Q[idx_rho, ...]
@@ -337,19 +338,19 @@ class OutputCubesphereNetcdf(OutputCubesphere):
 
             u, v, w = geom.contra2wind_3d(u1, u2, u3, self.metric)
 
-            self.store_field(geom.to_single_block(prepare(rho)), "rho", idx)
-            self.store_field(geom.to_single_block(prepare(u)), "U", idx)
-            self.store_field(geom.to_single_block(prepare(v)), "V", idx)
-            self.store_field(geom.to_single_block(prepare(w)), "W", idx)
-            self.store_field(geom.to_single_block(prepare(theta)), "theta", idx)
-            self.store_field(geom.to_single_block(prepare(p0 * (Q[idx_rho_theta] * Rd / p0) ** (cpd / cvd))), "P", idx)
+            self.store_field(geom.to_single_block(rho), "rho", idx)
+            self.store_field(geom.to_single_block(u), "U", idx)
+            self.store_field(geom.to_single_block(v), "V", idx)
+            self.store_field(geom.to_single_block(w), "W", idx)
+            self.store_field(geom.to_single_block(theta), "theta", idx)
+            self.store_field(geom.to_single_block(p0 * (Q[idx_rho_theta] * Rd / p0) ** (cpd / cvd)), "P", idx)
 
             if self.config.case_number == 11 or self.config.case_number == 12:
-                self.store_field(geom.to_single_block(prepare(Q[5, ...] / rho)), "q1", idx)
+                self.store_field(geom.to_single_block(Q[5, ...] / rho), "q1", idx)
 
             if self.config.case_number == 11:
                 for i in [6, 7, 8]:
-                    self.store_field(geom.to_single_block(prepare(Q[i, ...] / rho)), f"q{i-4}", idx)
+                    self.store_field(geom.to_single_block(Q[i, ...] / rho), f"q{i-4}", idx)
 
         else:
             raise ValueError(f"Unknown class for geom: {geom}")
@@ -363,5 +364,6 @@ class OutputCubesphereNetcdf(OutputCubesphere):
         """Store data in the open netcdf file."""
         fields = self._gather_field(field, self.num_dim)
         if fields is not None:
+            to_host = self.device.to_host
             for i, f in enumerate(fields):
-                self.ncfile[name][step_id, i] = f
+                self.ncfile[name][step_id, i] = to_host(f)
