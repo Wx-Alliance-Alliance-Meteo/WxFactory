@@ -700,13 +700,15 @@ class FullDataSet:
         # ---------------------------------------------------------------------------------------------------
         # Query to further group selected sets according to a scaling parameter
         scaling_parameter = "num_elem_h"
+        with_num_elem_h = True
         if self.cpu_scaling:
             scaling_parameter = "num_procs"
         elif self.prob.hori <= 0:
             scaling_parameter = "dg_order"
+            with_num_elem_h = False
         # scaling_parameter = "num_procs" if self.cpu_scaling else "num_elem_h"
         rhs_concat = ", ".join(f"group_concat(rhs_{x})" for x in rhs_timing_columns)
-        columns_h = columns if "num_elem_h" in columns else columns + ["num_elem_h"]
+        scaling_columns = [col for col in columns if with_num_elem_h or col != "num_elem_h"]
         scaling_query = f"""--sql
             select {{columns}},
                     {rhs_concat},
@@ -725,7 +727,7 @@ class FullDataSet:
                     time_per_time -- use 'time_per_time' as criterion for best performance (for the purpose of plotting)
             ;
         """.format(
-            columns=", ".join(columns_h)
+            columns=", ".join(scaling_columns)
         )
 
         # ---------------------------------------------------------------------------------------------------
@@ -1351,12 +1353,16 @@ class FullDataSet:
             print(f"Saving {full_filename}")
 
     def plot_rhs_speedup_per_order(self):
-        cuda_data = next(x for x in self.no_precond if x["backend"] == "cuda")
-        cupy_data = next(x for x in self.no_precond if x["backend"] == "cupy")
-        cpp_data = next(x for x in self.no_precond if x["backend"] == "cpp")
-        numpy_data = next(x for x in self.no_precond if x["backend"] == "numpy")
 
-        for code_data, py_data in zip([cuda_data, cpp_data], [cupy_data, numpy_data]):
+        def get_data(backend):
+            try:
+                return next(x for x in self.no_precond if x["backend"] == backend)
+            except StopIteration:
+                return None
+
+        def do_plot(code_data, py_data):
+            # print(f"code data = \n{code_data}")
+            # print(f"py data = \n{py_data}")
             fig, ax = plt.subplots(1, 1)
             x = np.arange(len(code_data["dg_order"]))
             width = 0.1
@@ -1371,7 +1377,8 @@ class FullDataSet:
             ax.set_xticks(x + (width * (num_col - 1) / 2), code_data["dg_order"])
             ax.set_ylabel(f"Speedup ({py_data['backend']}/{code_data['backend']})")
             ax.set_xlabel(f"Discretization order")
-            ax.set_ylim(top=2.0)
+            # ax.set_ylim(top=2.0)
+            # ax.set_yscale("log", base=2)
             ax.axhline(1.0, linestyle="--", color="k")
             fig.tight_layout()
 
@@ -1379,6 +1386,16 @@ class FullDataSet:
             fig.savefig(full_filename)
             plt.close(fig)
             print(f"Saving {full_filename}")
+
+        cuda_data = get_data("cuda")
+        cupy_data = get_data("cupy")
+        cpp_data = get_data("cpp")
+        numpy_data = get_data("numpy")
+
+        if cuda_data is not None and cupy_data is not None:
+            do_plot(cuda_data, cupy_data)
+        if cpp_data is not None and numpy_data is not None:
+            do_plot(cpp_data, numpy_data)
 
 
 def main(args):
