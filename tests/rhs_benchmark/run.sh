@@ -76,6 +76,7 @@ for device in cpp cuda numpy cupy; do
     gen_config 4 15 15 $device > ${WORK_DIR}/$device/c03.ini
     gen_config 5 12 12 $device > ${WORK_DIR}/$device/c04.ini
     gen_config 6 10 10 $device > ${WORK_DIR}/$device/c05.ini
+
     # gen_config 2 60 30 $device > ${WORK_DIR}/$device/c06.ini
     # gen_config 3 40 20 $device > ${WORK_DIR}/$device/c07.ini
     # gen_config 4 30 15 $device > ${WORK_DIR}/$device/c08.ini
@@ -91,20 +92,25 @@ for device in cpp cuda numpy cupy; do
             -e 's|^CONFIG_FILE=.*|CONFIG_FILE='${config}'|' \
             < ${BASE_JOB} > ${JOB_SCRIPT}  || exit -1
 
-        LAUNCH_COMMAND_CPU="ord_soumet -cpus 80 -w ${WTIME} -jn ${JOB_NAME} -mpi -jobfile ${JOB_SCRIPT} -listing ${WORK_DIR} -cm 2000M -waste 100"
-        LAUNCH_COMMAND_GPU="ord_soumet -cpus 1x12 -gpus 3 -w ${WTIME} -jn ${JOB_NAME} -mpi -jobfile ${JOB_SCRIPT} -listing ${WORK_DIR} -cm 6000M -waste 100 -mach underhill"
-
-        if [ "cpp" == "${device}" ]; then
-            LAUNCH_COMMAND=${LAUNCH_COMMAND_CPU}
-        elif [ "numpy" == "${device}" ]; then
-            LAUNCH_COMMAND=${LAUNCH_COMMAND_CPU}
-        elif [ "cuda" == "${device}" ]; then
-            LAUNCH_COMMAND=${LAUNCH_COMMAND_GPU}
-        elif [ "cupy" == "${device}" ]; then
-            LAUNCH_COMMAND=${LAUNCH_COMMAND_GPU}
+        if [ "cpp" == ${device} ] || [ "numpy" == "${device}" ]; then
+            sed -i ${JOB_SCRIPT} \
+                -e 's|^#PBS -l select=.*|#PBS -l select=1:ncpus=80:mpiprocs=80:mem=180gb|' \
+                -e 's|^#SBATCH --partition=.*|#SBATCH --partition=standard|' \
+                -e 's|^#SBATCH --account=.*|#SBATCH --account=eccc_mrd|'
+        elif [ "cuda" == "${device}" ] || [ "cupy" == "${device}" ]; then
+            sed -i ${JOB_SCRIPT} \
+                -e 's|^#PBS -l select=.*|#PBS -l select=2:ncpus=48:mpiprocs=4:ngpus=4:mem=205gb\n#PBS -q gpu|' \
+                -e 's|^#SBATCH --partition=.*|#SBATCH --partition=gpu_a100|' \
+                -e 's|^#SBATCH --account=.*|#SBATCH --account=eccc_mrd__gpu_a100\n#SBATCH --gpus=1\n|'
         else
-            echo "Bad device! $device"
+            echo "Whooah something wrong"
             exit -1
+        fi
+
+        if which sbatch 2>/dev/null ; then
+            LAUNCH_COMMAND="sbatch --ignore-pbs ${JOB_SCRIPT}"
+        else
+            LAUNCH_COMMAND="qsub ${JOB_SCRIPT}"
         fi
 
         echo ${LAUNCH_COMMAND}

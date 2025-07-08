@@ -1,8 +1,36 @@
-#! /usr/bin/env bash
+#! /bin/bash --login
+
+#PBS -l select=x:ncpus=x:mpiprocs=x:ngpus=x:mem=xgb
+#PBS -l place=scatter
+#PBS -j oe
+#PBS -l walltime=01:00:00
+#PBS -N rhs_benchmark
+
+#SBATCH --export=USER,LOGNAME,HOME,MAIL,PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+#SBATCH --comment="image=registry.maze.science.gc.ca/ssc-hpcs/generic-job:ubuntu24.04"
+#SBATCH --output=out_rhs_benchmark_%j.txt
+#SBATCH --partition=gpu_a100
+#SBATCH --account=eccc_mrd__gpu_a100
+#SBATCH --time=01:00:00
+#SBATCH --ntasks=6
+#SBATCH --mem=50000
+#SBATCH --job-name=rhs_benchmark
+
+export SLURM_EXPORT_ENV=ALL
 
 WX_DIR=/dev/null
 CONFIG_FILE=/dev/null
 
+MPIRUN=mpirun
+if which srun 2>/dev/null; then
+    MPIRUN=srun
+fi
+
 cd ${WX_DIR}
 . ./scripts/load_env.sh
-mpirun -n 6 ./WxFactory ${CONFIG_FILE}
+export TMPDIR=${HOME}/tmp
+
+set -x
+${MPIRUN} -n 6 ./scripts/mpi_config.py
+${MPIRUN} -n 6 ./WxFactory ${CONFIG_FILE}
+set +x
