@@ -41,6 +41,7 @@ venv
 
 stdout
 *out.txt
+out*.txt
 diff*.dat
 geom*.dat
 

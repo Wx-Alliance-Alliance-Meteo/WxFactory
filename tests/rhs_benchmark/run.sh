@@ -101,7 +101,7 @@ for device in cpp cuda numpy cupy; do
             sed -i ${JOB_SCRIPT} \
                 -e 's|^#PBS -l select=.*|#PBS -l select=2:ncpus=48:mpiprocs=4:ngpus=4:mem=205gb\n#PBS -q gpu|' \
                 -e 's|^#SBATCH --partition=.*|#SBATCH --partition=gpu_a100|' \
-                -e 's|^#SBATCH --account=.*|#SBATCH --account=eccc_mrd__gpu_a100\n#SBATCH --gpus=6\n|'
+                -e 's|^#SBATCH --account=.*|#SBATCH --account=eccc_mrd__gpu_a100\n#SBATCH --gpus=6#SBATCH --cpus-per-gpu=32\n|'
         else
             echo "Whooah something wrong"
             exit -1
