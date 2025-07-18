@@ -548,7 +548,7 @@ def dcmip_steady_state_mountain(geom: CubedSphere3D, metric, mtrx, param):
     return rho, u1_contra, u2_contra, w, theta
 
 
-def dcmip_schar_waves(geom: CubedSphere3D, metric, mtrx: DFROperators, param, shear=False):
+def dcmip_schar_waves(geom: CubedSphere3D, metric, mtrx: DFROperators, param: Configuration, shear=False):
     """
     Tests 2-1 and 2-2:  Non-hydrostatic Mountain Waves over a Schaer-type Mountain
     """
@@ -562,6 +562,13 @@ def dcmip_schar_waves(geom: CubedSphere3D, metric, mtrx: DFROperators, param, sh
     Dxi = 4000.0  # Mountain wavelength (meters)
     Ueq = 20.0  # Reference zonal wind velocity (equator)
     Peq = 100000.0  # Reference surface pressure (Pa)
+
+    if param.enable_schar_waves:
+        lambdam = param.schar_waves_longitude
+        phim = param.schar_waves_lattitude
+        h0 = param.schar_waves_height
+        Dm = param.schar_waves_radius
+        Dxi = param.schar_waves_length
 
     if shear:
         Cs = 2.5e-4  # Wind shear rate (1/m), for shear case
