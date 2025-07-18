@@ -1,5 +1,5 @@
 {
-    "version": "0.1",
+    "version": "0.2",
     "sections": [
         {
             "name": "General",
@@ -554,6 +554,73 @@
                     "default": "netcdf",
                     "selectable": ["netcdf", "fst"],
                     "description": "Desired format to use for storing simulation results."
+                }
+            ]
+        },
+        {
+            "name": "Post_processing",
+            "fields": [
+                {
+                    "name": "enable_schar_waves",
+                    "type": "bool",
+                    "default": false,
+                    "description": "Enable Schar wave mountains to grow (stabilisation issue)"
+                },
+                {
+                    "name": "schar_waves_longitude",
+                    "type": "float",
+                    "description": "Mountain longitude center point (radians)",
+                    "dependency": {
+                        "name": "enable_schar_waves",
+                        "values": [true]
+                    }
+                },
+                {
+                    "name": "schar_waves_lattitude",
+                    "type": "float",
+                    "description": "Mountain latitude center point (radians)",
+                    "dependency": {
+                        "name": "enable_schar_waves",
+                        "values": [true]
+                    }
+                },
+                {
+                    "name": "schar_waves_height",
+                    "type": "float",
+                    "description": "Peak height of the mountain range (m)",
+                    "dependency": {
+                        "name": "enable_schar_waves",
+                        "values": [true]
+                    }
+                },
+                {
+                    "name": "schar_waves_radius",
+                    "type": "float",
+                    "description": "Mountain radius (meters)",
+                    "dependency": {
+                        "name": "enable_schar_waves",
+                        "values": [true]
+                    }
+                },
+                {
+                    "name": "schar_waves_length",
+                    "type": "float",
+                    "description": "Mountain wavelength (meters)",
+                    "dependency": {
+                        "name": "enable_schar_waves",
+                        "values": [true]
+                    }
+                },
+                {
+                    "name": "schar_waves_step",
+                    "type": "int",
+                    "min": 0,
+                    "default": 0,
+                    "description": "Number of step of interpolation, 0 is instantaneous",
+                    "dependency": {
+                        "name": "enable_schar_waves",
+                        "values": [true]
+                    }
                 }
             ]
         }

@@ -1,5 +1,6 @@
 import sys
 from time import time
+from typing import List
 
 from mpi4py import MPI
 import numpy
@@ -36,7 +37,7 @@ from precondition.multigrid import Multigrid
 from process_topology import ProcessTopology
 from rhs.rhs_selector import RhsBundle
 from wx_mpi import SingleProcess, Conditional
-
+from post_proccessing import PostProcessor, ScharWavesPostProcessor
 
 class Simulation:
     """Encapsulate parameters and structures needed to run a WxFactory simulation.
@@ -50,6 +51,7 @@ class Simulation:
     """
 
     config: Configuration
+    post_processors: List[PostProcessor]
 
     def __init__(
         self,
@@ -66,6 +68,8 @@ class Simulation:
         """
         self.comm = comm
         self.rank = self.comm.rank
+
+        self.post_processors = []
 
         # self.input_manager = InputManager(self.comm)
 
@@ -146,6 +150,7 @@ class Simulation:
         self.t = self.config.dt * self.starting_step
         self.integrator.sim_time = self.t
         self.num_steps = int(numpy.ceil(self.config.t_end / self.config.dt)) - self.starting_step
+        self._create_post_processors()
 
     def step(self):
         """Advance the simulation by one time step."""
@@ -187,6 +192,9 @@ class Simulation:
                 self.Q[idx_rho_u1, :, :, :] = self.Q[idx_rho, :, :, :] * u1_contra
                 self.Q[idx_rho_u2, :, :, :] = self.Q[idx_rho, :, :, :] * u2_contra
                 self.Q[idx_rho_w, :, :, :] = self.Q[idx_rho, :, :, :] * w_wind
+
+            for post_precessor in self.post_processors:
+                post_precessor.process()
 
             self.output.step(self.Q, self.step_id)  # Perform any requested output
             sys.stdout.flush()
@@ -444,3 +452,9 @@ class Simulation:
         self.comm.Allreduce(error_detected, error_detected_out, MPI.MAX)
         if error_detected_out[0] > 0:
             raise ValueError(f"NaN")
+
+    def _create_post_processors(self):
+        if self.config.enable_schar_waves and self.config.equations == "euler":
+            schar_waves = ScharWavesPostProcessor(self.config, self.geometry, self.metric)
+            self.post_processors.append(schar_waves)
+            schar_waves.build(1 if self.config.schar_waves_step == 0 else 0)
