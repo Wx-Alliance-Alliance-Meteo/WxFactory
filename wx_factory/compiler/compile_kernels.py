@@ -19,7 +19,7 @@ from common import main_project_dir
 from wx_mpi import SingleProcess, Conditional
 
 
-proc_id_re = re.compile(r"\b\d{4,10}\b")  # At least 4 digits, surrounded by whitespace
+proc_id_re = re.compile(r"\b\d{4,10}")  # Starts with 4–10 digits, letters/characters allowed after.
 proc_vendor_re = re.compile(r"\b(intel|amd)\b")
 
 base_library_directory = os.path.join(main_project_dir, "lib")
