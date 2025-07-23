@@ -1,5 +1,4 @@
 import os
-import math
 
 from mpi_test import MpiTestCase
 from device import Device
