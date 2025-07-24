@@ -5,6 +5,6 @@ WX_DIR=${SCRIPT_DIR}/..
 
 cd ${WX_DIR}
 
-${WX_DIR}/tests/unit/run_tests.py
-mpirun -n 6 ${WX_DIR}/tests/unit/run_mpi_tests.py
-${WX_DIR}/tests/integration/run_all_integration_tests.sh
+${WX_DIR}/tests/unit/run_tests.py || exit -1
+mpirun -n 24 ${WX_DIR}/tests/unit/run_mpi_tests.py || exit -1
+${WX_DIR}/tests/integration/run_all_integration_tests.sh || exit -1

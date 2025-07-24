@@ -23,7 +23,7 @@ class Geometry(ABC):
         ## Element properties -- solution and extension points
         # Gauss-Legendre solution points
         solutionPoints_sym, solutionPoints, glweights = gauss_legendre(num_solpts, xp)
-        if verbose and MPI.COMM_WORLD.rank == 0:
+        if verbose and self.device.comm.rank == 0:
             print(f"Solution points : {solutionPoints}")
             print(f"GL weights : {glweights}")
 

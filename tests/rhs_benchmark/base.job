@@ -1,0 +1,8 @@
+#! /usr/bin/env bash
+
+WX_DIR=/dev/null
+CONFIG_FILE=/dev/null
+
+cd ${WX_DIR}
+. ./scripts/load_env.sh
+mpirun -n 6 ./WxFactory ${CONFIG_FILE}

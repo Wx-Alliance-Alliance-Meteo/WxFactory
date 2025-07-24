@@ -40,7 +40,7 @@ def solid_body_rotation(geom: CubedSphere2D, metric, param):
 
 
 def circular_vortex(geom, metric, param):
-    if MPI.COMM_WORLD.rank == 0:
+    if geom.device.comm.rank == 0:
         print("--------------------------------------------------------------")
         print("CASE 0 (Tracer): Circular vortex, Nair and Machenhauer,2002   ")
         print("--------------------------------------------------------------")
@@ -102,7 +102,7 @@ def height_vortex(geom, metric, param, step):
 
 
 def williamson_case1(geom, metric, param):
-    if MPI.COMM_WORLD.rank == 0:
+    if geom.device.comm.rank == 0:
         print(
             "---------------------------------------------------------------\n"
             "WILLIAMSON CASE 1 (Tracer): Cosine Bell, Williamson et al.,1992\n"
@@ -140,7 +140,7 @@ def height_case1(geom: CubedSphere2D, metric, param, step):
 
 
 def williamson_case2(geom, metric, param):
-    if MPI.COMM_WORLD.rank == 0:
+    if geom.device.comm.rank == 0:
         print("--------------------------------------------")
         print("WILLIAMSON CASE 2, Williamson et al. (1992) ")
         print("Steady state nonlinear geostrophic flow     ")
@@ -162,7 +162,7 @@ def height_case2(geom, metric, param):
 
 
 def williamson_case5(geom: CubedSphere2D, metric, mtrx: DFROperators, param):
-    if MPI.COMM_WORLD.rank == 0:
+    if geom.device.comm.rank == 0:
         print(
             "--------------------------------------------\n"
             "WILLIAMSON CASE 5, Williamson et al. (1992) \n"
@@ -221,7 +221,7 @@ def williamson_case5(geom: CubedSphere2D, metric, mtrx: DFROperators, param):
 
 
 def williamson_case6(geom: CubedSphere2D, metric, param):
-    if MPI.COMM_WORLD.rank == 0:
+    if geom.device.comm.rank == 0:
         print(
             f"--------------------------------------------\n"
             f"WILLIAMSON CASE 6, Williamson et al. (1992) \n"
@@ -274,7 +274,7 @@ def williamson_case6(geom: CubedSphere2D, metric, param):
 
 
 def case_galewsky(geom, metric, param):
-    if MPI.COMM_WORLD.rank == 0:
+    if geom.device.comm.rank == 0:
         print("--------------------------------------------")
         print("CASE 8, Galewsky et al. (2004)              ")
         print("Barotropic wave                             ")
@@ -346,7 +346,7 @@ def case_galewsky(geom, metric, param):
 
 
 def case_matsuno(geom, metric, param):
-    if MPI.COMM_WORLD.rank == 0:
+    if geom.device.comm.rank == 0:
         print("--------------------------------------------")
         print("CASE 9, Shamir et al.,2019,GMD,12,2181-2193 ")
 
@@ -398,7 +398,7 @@ def case_matsuno(geom, metric, param):
 
 
 def case_unsteady_zonal(geom, metric, mtrx, param):
-    if MPI.COMM_WORLD.rank == 0:
+    if geom.device.comm.rank == 0:
         print("--------------------------------------------")
         print("CASE 10, Läuter et al. (2005)               ")
         print("Zonal balanced time dependent flow          ")

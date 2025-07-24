@@ -426,7 +426,8 @@ disable=raw-checker-failed,
         f-string-without-interpolation,
         relative-beyond-top-level,
         missing-module-docstring,
-        unspecified-encoding
+        unspecified-encoding,
+        wrong-import-position
 
 # Enable the message, report, category or checker with the given id(s). You can
 # either give multiple identifier separated by comma (,) or put this option

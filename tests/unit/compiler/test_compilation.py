@@ -1,59 +1,49 @@
 import unittest
 import os
 
-import compiler.compile_utils
-import compiler.compile_kernels
+import compiler.compile_kernels as kernels
 import cuda_test
+
+modules = ["pde"]
 
 
 class CompilationTestCases(unittest.TestCase):
+
     def setUp(self):
         super().setUp()
-        compiler.compile_utils.clean("cpp")
-        compiler.compile_utils.clean("cuda")
+        kernels.clean_all()
 
     def test_cpp_kernels_compilation(self):
-        lib_path = os.path.join("lib", "pde", "interface_c.so")
-        hash_path = os.path.join("lib", "cpp", "hash")
+        for mod in modules:
+            ext = kernels.get_extension(mod, "cpp")
 
-        self.assertFalse(os.path.exists(lib_path))
-        self.assertFalse(os.path.exists(hash_path))
-        compiler.compile_utils.compile("cpp")
-        self.assertTrue(os.path.exists(lib_path))
-        self.assertTrue(os.path.exists(hash_path))
+            self.assertFalse(os.path.exists(ext.lib_dir))
+            kernels.compile(mod, "cpp")
+            self.assertTrue(os.path.exists(ext.lib_dir))
 
-        import lib.pde.interface_c as interface_c
+            kernels.load_module(mod, "cpp")
 
     def test_cpp_compilation_twice(self):
-        lib_path = os.path.join("lib", "pde", "interface_c.so")
-        hash_path = os.path.join("lib", "cpp", "hash")
-
-        self.assertFalse(os.path.exists(lib_path))
-        self.assertFalse(os.path.exists(hash_path))
-        compiler.compile_utils.compile("cpp")
-        self.assertTrue(os.path.exists(lib_path))
-        self.assertTrue(os.path.exists(hash_path))
-        compiler.compile_utils.compile("cpp", True)
-        self.assertTrue(os.path.exists(lib_path))
-        self.assertTrue(os.path.exists(hash_path))
+        for mod in modules:
+            ext = kernels.get_extension(mod, "cpp")
+            self.assertFalse(os.path.exists(ext.lib_dir))
+            kernels.compile(mod, "cpp")
+            self.assertTrue(os.path.exists(ext.lib_dir))
+            kernels.compile(mod, "cpp", force=True)
+            self.assertTrue(os.path.exists(ext.lib_dir))
 
 
 class CompilationGPUTestCases(cuda_test.CudaTestCases):
     def setUp(self):
         super().setUp()
-        compiler.compile_utils.clean("cpp")
-        compiler.compile_utils.clean("cuda")
+        kernels.clean_all()
 
     def test_cuda_kernels_compilation(self):
-        lib_path = compiler.compile_kernels.kernel_cuda_mirror
-        hash_path = os.path.join(compiler.compile_utils.get_kernel_lib_path("cuda"), "hash")
 
-        self.assertFalse(os.path.exists(lib_path))
-        self.assertFalse(os.path.exists(hash_path))
+        for mod in modules:
+            ext = kernels.get_extension(mod, "cuda")
+            self.assertFalse(os.path.exists(ext.lib_dir))
+            kernels.compile(mod, "cuda")
+            self.assertTrue(os.path.exists(ext.lib_dir))
 
-        compiler.compile_utils.compile("cuda")
-
-        self.assertTrue(os.path.exists(lib_path))
-        self.assertTrue(os.path.exists(hash_path))
-
-        import lib.pde.interface_cuda as interface_cuda
+            kernels.load_module(mod, "cuda")

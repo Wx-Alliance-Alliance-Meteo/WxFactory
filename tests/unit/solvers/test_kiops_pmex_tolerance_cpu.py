@@ -1,13 +1,16 @@
-from solvers.kiops import kiops
-from solvers.pmex import pmex
 import random
+import unittest
+
 from numpy import ndarray
 
-import cpu_test
+from device import CpuDevice
+from solvers.kiops import kiops
+from solvers.pmex import pmex
+
 import ndarray_generator
 
 
-class KiopsPmexToleranceCpuTestCases(cpu_test.CpuTestCases):
+class KiopsPmexToleranceCpuTestCases(unittest.TestCase):
     tolerance: float
     rand: random.Random
 
@@ -16,6 +19,8 @@ class KiopsPmexToleranceCpuTestCases(cpu_test.CpuTestCases):
 
     def setUp(self) -> None:
         super().setUp()
+
+        self.cpu_device = CpuDevice()
 
         seed: int = 5646459
         initial_matrix_size: int = 64

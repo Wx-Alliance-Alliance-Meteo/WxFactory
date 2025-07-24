@@ -12,8 +12,10 @@ try:
     import cupy as cp
 
     cupy_avail = True
-except (ModuleNotFoundError, ImportError):
+    num_devices = cp.cuda.runtime.getDeviceCount()
+except (ModuleNotFoundError, ImportError, RuntimeError):
     cupy_avail = False
+    num_devices = 0
     if MPI.COMM_WORLD.rank == 0:
         print(f"Unable to import module cupy")
 
@@ -44,10 +46,6 @@ def main():
 
     if node_rank == 0:
         node_id = node_roots_comm.rank
-
-        num_devices = 0
-        if cupy_avail:
-            num_devices = cp.cuda.runtime.getDeviceCount()
 
         print(f"Node {node_id:3d}: \n" f"  node size = {node_size}\n" f"  num CUDA devices = {num_devices}\n")
 

@@ -11,19 +11,19 @@ namespace py = pybind11;
 template <typename num_t>
 void pointwise_eulercartesian_2d(
     const py::array_t<num_t>& q_in,
-    py::array_t<num_t>&       flux_x1_in,
-    py::array_t<num_t>&       flux_x2_in,
+    py::array_t<num_t>&       flux_x1,
+    py::array_t<num_t>&       flux_x2,
     const int                 num_elem_x1,
     const int                 num_elem_x2,
     const int                 num_solpts_tot) {
   py::buffer_info buf1 = q_in.request();
-  py::buffer_info buf2 = flux_x1_in.request();
-  py::buffer_info buf3 = flux_x2_in.request();
+  py::buffer_info buf2 = flux_x1.request();
+  py::buffer_info buf3 = flux_x2.request();
 
   // Get the pointers
-  num_t* q       = static_cast<num_t*>(buf1.ptr);
-  num_t* flux_x1 = static_cast<num_t*>(buf2.ptr);
-  num_t* flux_x2 = static_cast<num_t*>(buf3.ptr);
+  num_t* q_ptr       = static_cast<num_t*>(buf1.ptr);
+  num_t* flux_x1_ptr = static_cast<num_t*>(buf2.ptr);
+  num_t* flux_x2_ptr = static_cast<num_t*>(buf3.ptr);
 
   const int stride         = num_elem_x1 * num_elem_x2 * num_solpts_tot;
   const int array_shape[4] = {4, num_elem_x2, num_elem_x1, num_solpts_tot};
@@ -38,10 +38,86 @@ void pointwise_eulercartesian_2d(
 
         // Store variables and pointers to compute the fluxes
         kernel_params<num_t, euler_state_2d>
-            params(q, flux_x1, flux_x2, nullptr, ind, stride);
+            params(q_ptr, flux_x1_ptr, flux_x2_ptr, nullptr, ind, stride);
 
         // Call the pointwise flux kernel
         pointwise_eulercartesian_2d_kernel(params);
+      }
+    }
+  }
+}
+
+template <typename real_t, typename num_t>
+void pointwise_euler_cubedsphere_3d(
+    const py::array_t<num_t>&  q_in,
+    const py::array_t<real_t>& sqrt_g_in,
+    const py::array_t<real_t>& h_in,
+    py::array_t<num_t>&        flux_x1,
+    py::array_t<num_t>&        flux_x2,
+    py::array_t<num_t>&        flux_x3,
+    py::array_t<num_t>&        pressure,
+    py::array_t<num_t>&        wflux_adv_x1,
+    py::array_t<num_t>&        wflux_adv_x2,
+    py::array_t<num_t>&        wflux_adv_x3,
+    py::array_t<num_t>&        wflux_pres_x1,
+    py::array_t<num_t>&        wflux_pres_x2,
+    py::array_t<num_t>&        wflux_pres_x3,
+    py::array_t<num_t>&        log_pressure,
+    const int                  num_elem_x1,
+    const int                  num_elem_x2,
+    const int                  num_elem_x3,
+    const int                  num_solpts,
+    const int                  verbose) {
+
+  const num_t* q_ptr        = get_c_ptr(q_in);
+  num_t*       flux_x1_ptr  = get_c_ptr(flux_x1);
+  num_t*       flux_x2_ptr  = get_c_ptr(flux_x2);
+  num_t*       flux_x3_ptr  = get_c_ptr(flux_x3);
+  num_t*       pressure_ptr = get_c_ptr(pressure);
+
+  num_t* wflux_adv_x1_ptr = get_c_ptr(wflux_adv_x1);
+  num_t* wflux_adv_x2_ptr = get_c_ptr(wflux_adv_x2);
+  num_t* wflux_adv_x3_ptr = get_c_ptr(wflux_adv_x3);
+
+  num_t*        wflux_pres_x1_ptr = get_c_ptr(wflux_pres_x1);
+  num_t*        wflux_pres_x2_ptr = get_c_ptr(wflux_pres_x2);
+  num_t*        wflux_pres_x3_ptr = get_c_ptr(wflux_pres_x3);
+  num_t*        log_pressure_ptr  = get_c_ptr(log_pressure);
+  const real_t* sqrt_g_ptr        = get_c_ptr(sqrt_g_in);
+  const real_t* h_ptr             = get_c_ptr(h_in);
+
+  const uint64_t stride = num_elem_x3 * num_elem_x2 * num_elem_x1 * num_solpts;
+
+  for (int i = 0; i < num_elem_x3; i++)
+  {
+    for (int j = 0; j < num_elem_x2; j++)
+    {
+      for (int k = 0; k < num_elem_x1; k++)
+      {
+        for (int s = 0; s < num_solpts; s++)
+        {
+          const int index = ((i * num_elem_x2 + j) * num_elem_x1 + k) * num_solpts + s;
+
+          kernel_params_cubedsphere<real_t, num_t> params(
+              q_ptr,
+              sqrt_g_ptr,
+              h_ptr,
+              index,
+              stride,
+              flux_x1_ptr,
+              flux_x2_ptr,
+              flux_x3_ptr,
+              pressure_ptr,
+              wflux_adv_x1_ptr,
+              wflux_adv_x2_ptr,
+              wflux_adv_x3_ptr,
+              wflux_pres_x1_ptr,
+              wflux_pres_x2_ptr,
+              wflux_pres_x3_ptr,
+              log_pressure_ptr);
+
+          // pointwise_euler_cubedsphere_3d_kernel(params);
+        }
       }
     }
   }
@@ -203,10 +279,18 @@ void forcing_euler_cubesphere_3d(
   }
 }
 
-PYBIND11_MODULE(interface_c, m) {
+PYBIND11_MODULE(pde_cpp, m) {
   // Pointwise fluxes
   m.def("pointwise_eulercartesian_2d", &pointwise_eulercartesian_2d<double>);
   m.def("pointwise_eulercartesian_2d", &pointwise_eulercartesian_2d<complex_t>);
+
+  // Pointwise fluxes
+  m.def(
+      "pointwise_euler_cubedsphere_3d",
+      &pointwise_euler_cubedsphere_3d<double, double>);
+  m.def(
+      "pointwise_euler_cubedsphere_3d",
+      &pointwise_euler_cubedsphere_3d<double, complex_t>);
 
   // Riemann fluxes
   m.def("riemann_eulercartesian_ausm_2d", &riemann_eulercartesian_ausm_2d<double>);

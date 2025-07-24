@@ -804,9 +804,9 @@ def dcmip_gravity_wave(geom: CubedSphere3D, metric: Metric3DTopo, mtrx: DFROpera
     w = xp.zeros_like(u)
 
     ## Set a trivial topography
-    zbot = xp.zeros(geom.coordVec_latlon.shape[2:], like=geom.coordVec_latlon)
-    zbot_itf_i = xp.zeros(geom.coordVec_latlon_itf_i.shape[2:], like=geom.coordVec_latlon_itf_i)
-    zbot_itf_j = xp.zeros(geom.coordVec_latlon_itf_j.shape[2:], like=geom.coordVec_latlon_itf_j)
+    zbot = xp.zeros_like(geom.coordVec_latlon[0, 0])
+    zbot_itf_i = xp.zeros_like(geom.coordVec_latlon_itf_i[0, 0])
+    zbot_itf_j = xp.zeros_like(geom.coordVec_latlon_itf_j[0, 0])
 
     # Update the geometry object with the new bottom topography
     geom.apply_topography(zbot, zbot_itf_i, zbot_itf_j, None, None, None)
@@ -877,5 +877,91 @@ def dcmip_gravity_wave(geom: CubedSphere3D, metric: Metric3DTopo, mtrx: DFROpera
     #   theta_pert = 0. # for debuging
 
     theta = theta_base + theta_pert
+
+    return rho, u1_contra, u2_contra, w, theta
+
+
+# =========================================================================
+# Test 77:  Acoustic Wave
+# =========================================================================
+
+
+def acoustic_wave(geom: CubedSphere3D, metric: Metric3DTopo):
+
+    xp = geom.device.xp
+
+    T0 = 300.0
+    Δp = 100
+    eta_v = 1
+    re = 6371000
+    rc = re / 3
+    ztop = 10000
+
+    # -----------------------------------------------------------------------
+    #    TEMPERATURE IS CONSTANT 300 K
+    # -----------------------------------------------------------------------
+
+    t = T0
+
+    # -----------------------------------------------------------------------
+    #    THE VELOCITIES ARE ZERO (STATE AT REST)
+    # -----------------------------------------------------------------------
+
+    # Zonal Velocity
+
+    u = 0.0
+
+    # Meridional Velocity
+
+    v = 0.0
+
+    # Vertical Velocity
+
+    w = 0.0
+
+    # ## Set a trivial topography
+    # zbot = numpy.zeros(geom.coordVec_latlon.shape[2:])
+    # zbot_itf_i = numpy.zeros(geom.coordVec_latlon_itf_i.shape[2:])
+    # zbot_itf_j = numpy.zeros(geom.coordVec_latlon_itf_j.shape[2:])
+    # # Update the geometry object with the new bottom topography
+    # geom.apply_topography(zbot, zbot_itf_i, zbot_itf_j)
+
+    # And regenerate the metric to take this new topography into account
+    metric.build_metric()
+
+    # u1_contra, u2_contra = wind2contra_2d(u, v, geom)
+    u1_contra, u2_contra = geom.wind2contra_2d(u, v)
+
+    # -----------------------------------------------------------------------
+    #    Pressure
+    # -----------------------------------------------------------------------
+
+    H = Rd * T0 / gravity
+    p_mean = p0 * xp.exp(-geom.height_new / H)
+
+    lat = geom.polar[1, ...]
+    lon = geom.polar[0, ...]
+    r = re * xp.arccos(xp.cos(lat) * xp.cos(lon))
+    f = numpy.where(r > rc, 0.0, (Δp / 2) * (1 + numpy.cos((math.pi * r) / rc)))
+    g = numpy.sin((eta_v * math.pi * r) / ztop)
+    p_perturb = f * g
+    pressure = p_mean + p_perturb
+    # pdb.set_trace()
+
+    # Full_u_p = MPI.COMM_WORLD.gather(p_mean, root=0)
+    # if MPI.COMM_WORLD.rank == 0:
+    #     numpy.save("p_mean2.npy", Full_u_p)
+
+    # -----------------------------------------------------------------------
+    #    RHO (density)
+    # -----------------------------------------------------------------------
+
+    rho = pressure / (Rd * t)
+
+    # -----------------------------------------------------------------------
+    #     initialize TV (virtual temperature)
+    # -----------------------------------------------------------------------
+
+    theta = t * (p0 / pressure) ** (Rd / cpd)
 
     return rho, u1_contra, u2_contra, w, theta

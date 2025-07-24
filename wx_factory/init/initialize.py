@@ -1,4 +1,5 @@
 import numpy
+from numpy.typing import NDArray
 
 from common.definitions import (
     idx_rho,
@@ -22,13 +23,15 @@ from common.definitions import (
     p0,
 )
 from common import Configuration
-from device import Device, default_device
+from geometry import Cartesian2D, CubedSphere3D, CubedSphere2D, DFROperators
+
 from .dcmip import (
     dcmip_advection_deformation,
     dcmip_advection_hadley,
     dcmip_gravity_wave,
     dcmip_schar_waves,
     dcmip_steady_state_mountain,
+    acoustic_wave,
 )
 from .shallow_water_test import (
     case_galewsky,
@@ -41,12 +44,6 @@ from .shallow_water_test import (
     williamson_case6,
 )
 
-from geometry import Cartesian2D, CubedSphere3D, CubedSphere2D
-
-# typing
-from numpy.typing import NDArray
-from geometry import Cartesian2D
-
 
 class Topo:
     def __init__(self, hsurf, dzdx1, dzdx2, hsurf_itf_i, hsurf_itf_j):
@@ -57,7 +54,7 @@ class Topo:
         self.hsurf_itf_j = hsurf_itf_j
 
 
-def initialize_euler(geom: CubedSphere3D, metric, mtrx, param):
+def initialize_euler(geom: CubedSphere3D, metric, mtrx: DFROperators, param: Configuration):
 
     # -------------------------------------------------------------------------|
     # case DCMIP 2012    | Pure advection                                     |
@@ -109,8 +106,10 @@ def initialize_euler(geom: CubedSphere3D, metric, mtrx, param):
         rho, u1_contra, u2_contra, w, potential_temperature = dcmip_schar_waves(geom, metric, mtrx, param, True)
     elif param.case_number == 31:
         rho, u1_contra, u2_contra, w, potential_temperature = dcmip_gravity_wave(geom, metric, mtrx, param)
+    elif param.case_number == 77:
+        rho, u1_contra, u2_contra, w, potential_temperature = acoustic_wave(geom, metric)
     else:
-        raise ValueError("Something has gone horribly wrong in initialization. Back away slowly")
+        raise ValueError(f"Unknown case number {param.case_number}")
 
     Q = xp.zeros((num_equations,) + rho.shape, dtype=rho.dtype)
 

@@ -1,6 +1,5 @@
 from numpy import ndarray
 
-from common.device import Device, default_device
 from common.definitions import (
     idx_2d_rho,
     idx_2d_rho_u,
@@ -27,9 +26,8 @@ class RhsBubble(RHS):
         num_solpts: int,
         num_elements_x: int,
         num_elements_z: int,
-        device: Device = default_device,
     ):
-        super().__init__(shape, geom, mtrx, num_solpts, num_elements_x, num_elements_z, device)
+        super().__init__(shape, geom, mtrx, num_solpts, num_elements_x, num_elements_z, geom.device)
 
     def __compute_rhs__(
         self,
@@ -39,10 +37,9 @@ class RhsBubble(RHS):
         num_solpts: int,
         num_elements_x: int,
         num_elements_z: int,
-        device: Device = default_device,
     ) -> ndarray:
 
-        xp = device.xp
+        xp = self.device.xp
         flux_x1 = xp.empty_like(Q)
         flux_x3 = xp.empty_like(Q)
 

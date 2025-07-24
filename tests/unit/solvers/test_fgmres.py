@@ -1,13 +1,15 @@
-from solvers.fgmres import fgmres
-
 import random
+import unittest
+
 from numpy import ndarray
 import scipy
 import scipy.sparse.linalg
 
+from device import CpuDevice, CudaDevice
+from solvers.fgmres import fgmres
+
 import ndarray_generator
 import cuda_test
-import cpu_test
 
 
 class FgmresComparisonTestCases(cuda_test.CudaTestCases):
@@ -22,6 +24,10 @@ class FgmresComparisonTestCases(cuda_test.CudaTestCases):
 
     def setUp(self) -> None:
         super().setUp()
+
+        self.cpu_device = CpuDevice()
+        self.gpu_device = CudaDevice()
+
         seed: int = 5646459
         initial_vector_size: int = 64
         rand_min: float = -1000.0
@@ -73,7 +79,7 @@ class FgmresComparisonTestCases(cuda_test.CudaTestCases):
         self.assertLessEqual(relative_diff_x2, self.tolerance, "Fgmres didn't give a value close to the gpu value")
 
 
-class FgmresScipyTestCases(cpu_test.CpuTestCases):
+class FgmresScipyTestCases(unittest.TestCase):
     tolerance: float
     rand: random.Random
 
@@ -82,6 +88,8 @@ class FgmresScipyTestCases(cpu_test.CpuTestCases):
 
     def setUp(self):
         super().setUp()
+
+        self.cpu_device = CpuDevice()
 
         seed: int = 5646459
         self.tolerance = 1e-7
@@ -150,12 +158,14 @@ class FgmresScipyTestCases(cpu_test.CpuTestCases):
         self.assertLessEqual(relative_residual, self.tolerance)
 
 
-class FgmresEdgeCasesTestCases(cpu_test.CpuTestCases):
+class FgmresEdgeCasesTestCases(unittest.TestCase):
     tolerance: float
     rand: random.Random
 
     def setUp(self):
         super().setUp()
+
+        self.cpu_device = CpuDevice()
 
         seed: int = 5646459
         self.tolerance = 1e-7

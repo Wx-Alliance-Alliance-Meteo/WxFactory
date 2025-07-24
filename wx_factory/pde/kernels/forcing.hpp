@@ -4,7 +4,7 @@
 #include "../interface.hpp"
 
 template <typename real_t, typename num_t>
-num_t compute_single_forcing(
+DEVICE_SPACE num_t compute_single_forcing(
     // clang-format off
     const num_t  r, const num_t  u, const num_t  v, const num_t  w, const num_t  p,
     const real_t h11, const real_t h12, const real_t h13, const real_t h22, const real_t h23, const real_t h33,
@@ -23,7 +23,7 @@ num_t compute_single_forcing(
 }
 
 template <typename real_t, typename num_t>
-void forcing_euler_cubesphere_3d_kernel(
+DEVICE_SPACE void forcing_euler_cubesphere_3d_kernel(
     forcing_params<real_t, num_t> params,
     const bool                    verbose) {
 

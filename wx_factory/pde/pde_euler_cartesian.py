@@ -9,7 +9,7 @@ class PDEEulerCartesian(PDE):
 
     def __init__(self, geometry: Cartesian2D, config, metric):
 
-        libmodule = geometry.device.libmodule
+        pde = geometry.device.pde
         super().__init__(
             geometry,
             config,
@@ -17,8 +17,8 @@ class PDEEulerCartesian(PDE):
             2,
             4,
             config.num_elements_horizontal * config.num_elements_vertical,
-            pointwise_func=libmodule.pointwise_eulercartesian_2d,
-            riemann_func=libmodule.riemann_eulercartesian_ausm_2d,
+            pointwise_func=pde.pointwise_eulercartesian_2d,
+            riemann_func=pde.riemann_eulercartesian_ausm_2d,
         )
 
     def pointwise_fluxes(self, q: NDArray, flux_x1: NDArray, flux_x2: NDArray, flux_x3: NDArray) -> None:

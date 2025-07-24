@@ -7,7 +7,7 @@ from common.definitions import idx_h, idx_hu1, idx_hu2, gravity
 from geometry import CubedSphere2D, DFROperators, Metric2D
 from init.initialize import Topo
 from .rhs import RHS
-from wx_mpi import ProcessTopology
+from process_topology import ProcessTopology
 
 
 class RhsShallowWater:

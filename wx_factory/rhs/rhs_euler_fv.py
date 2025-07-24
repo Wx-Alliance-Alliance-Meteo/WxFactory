@@ -16,9 +16,9 @@ from common.definitions import (
 )
 
 # For type hints
-from common.process_topology import ProcessTopology
 from geometry import CubedSphere3D, DFROperators, Metric3DTopo
 from init.dcmip import dcmip_schar_damping
+from wx_mpi import ProcessTopology
 
 
 # @profile

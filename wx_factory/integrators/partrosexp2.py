@@ -43,11 +43,12 @@ class PartRosExp2(Integrator):
         vec[1, :] = f_exp.copy()
 
         tic = time()
-        phiv, stats = pmex([1.0], J_exp, vec, tol=self.tol, task1=False)
+        phiv, stats = pmex([1.0], J_exp, vec, tol=self.tol, task1=False, device=self.device)
         time_exp = time() - tic
-        if MPI.COMM_WORLD.rank == 0:
+        if self.device.comm.rank == 0:
             print(
-                f"PMEX convergence at iteration {stats[2]} (using {stats[0]} internal substeps and {stats[1]} rejected expm)"
+                f"PMEX convergence at iteration {stats[2]} (using {stats[0]} internal substeps"
+                f" and {stats[1]} rejected expm)"
             )
 
         tic = time()
@@ -66,12 +67,13 @@ class PartRosExp2(Integrator):
             maxiter=None,
             preconditioner=self.preconditioner,
             verbose=self.verbose_solver,
+            device=self.device,
         )
         time_imp = time() - tic
 
         self.solver_info = SolverInfo(flag, time_imp, num_iter, residuals)
 
-        if MPI.COMM_WORLD.rank == 0:
+        if self.device.comm.rank == 0:
             result_type = "convergence" if flag == 0 else "stagnation/interruption"
             print(
                 f"FGMRES {result_type} at iteration {num_iter} in {time_imp:4.1f} s to a solution with"

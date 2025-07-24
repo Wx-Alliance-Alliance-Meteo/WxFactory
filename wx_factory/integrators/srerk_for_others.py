@@ -4,7 +4,7 @@ from typing import Callable, List, Optional
 import numpy
 from mpi4py import MPI
 
-from common.program_options import Configuration
+from common import Configuration
 from .integrator import Integrator, alpha_coeff
 from solvers import (
     kiops,
@@ -98,7 +98,7 @@ class Srerk_others(Integrator):
         vec[1, :] = rhs.flatten()
 
         # for printing stats
-        mpirank = MPI.COMM_WORLD.Get_rank()
+        mpirank = self.device.comm.rank
 
         # ---original kiops---
         if self.exponential_solver == "kiops":

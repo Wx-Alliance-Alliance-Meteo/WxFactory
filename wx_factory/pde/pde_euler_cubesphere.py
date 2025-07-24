@@ -3,10 +3,10 @@ from mpi4py import MPI
 from common import Configuration
 from common.definitions import idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_w, idx_rho_theta, p0, cpd, cvd, Rd, gravity
 from geometry import CubedSphere3D, Metric3DTopo
+from init.dcmip import dcmip_schar_damping
 
 from .pde import PDE
-from rhs.fluxes import rusanov_3d_hori_i_new, rusanov_3d_hori_j_new, rusanov_3d_vert_new
-from init.dcmip import dcmip_schar_damping
+from .fluxes import rusanov_3d_hori_i_new, rusanov_3d_hori_j_new, rusanov_3d_vert_new
 
 
 def compute_forcing_1(f, r, u1, u2, w, p, c01, c02, c03, c11, c12, c13, c22, c23, c33, h11, h12, h13, h22, h23, h33):
@@ -45,9 +45,6 @@ def compute_forcings(
         f2, r, u1, u2, w, p, c101, c102, c103, c111, c112, c113, c122, c123, c133, h11, h12, h13, h22, h23, h33
     )
 
-    # if MPI.COMM_WORLD.rank == 0:
-    #     print(f"f2 = {f2}")
-    # raise ValueError
     compute_forcing_1(
         f3, r, u1, u2, w, p, c201, c202, c203, c211, c212, c213, c222, c223, c233, h11, h12, h13, h22, h23, h33
     )
@@ -225,12 +222,12 @@ class PDEEulerCubesphere(PDE):
         #     metric.sqrtG_new,
         #     metric.h_contra_new,
         #     metric.christoffel,
-        #     forcing2,
+        #     forcing,
         #     num_x1,
         #     num_x2,
         #     num_x3,
         #     num_solpts**3,
-        #     verbose,
+        #     0,  # Verbose flag
         # )
 
         # Python only

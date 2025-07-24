@@ -6,7 +6,7 @@ from common import Configuration
 from geometry import Cartesian2D, CubedSphere2D, CubedSphere3D, DFROperators, Geometry, Metric2D, Metric3DTopo
 from init.initialize import Topo
 from pde import PDEEulerCartesian, PDEEulerCubesphere
-from wx_mpi import ProcessTopology
+from process_topology import ProcessTopology
 
 from .rhs_bubble_convective import rhs_bubble as rhs_bubble_convective
 from .rhs_bubble_implicit import rhs_bubble_implicit

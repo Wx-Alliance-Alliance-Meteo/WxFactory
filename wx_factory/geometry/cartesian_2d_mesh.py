@@ -2,7 +2,7 @@ from typing import Self, Tuple
 
 import numpy
 
-from device import Device, default_device
+from device import Device
 from .geometry import Geometry
 
 
@@ -14,7 +14,7 @@ class Cartesian2D(Geometry):
         num_elements_x: int,
         num_elements_z: int,
         num_solpts: int,
-        device: Device = default_device,
+        device: Device,
     ):
         super().__init__(num_solpts, device)
         xp = device.xp

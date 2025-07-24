@@ -57,9 +57,9 @@ def potential_enstrophy(h, u1_contra, u2_contra, geom, metric, mtrx, param):
     return (rv + metric.coriolis_f) ** 2 / (2 * h)
 
 
-def global_integral_2d(field: NDArray, mtrx: DFROperators, metric, num_solpts: int):
+def global_integral_2d(field: NDArray, mtrx: DFROperators, metric, num_solpts: int, comm: MPI.Comm = MPI.COMM_WORLD):
 
     ny, nx = field.shape[:2]
     local_sum = numpy.sum((field * metric.sqrtG).reshape(ny, nx, num_solpts, num_solpts) * mtrx.quad_weights)
 
-    return MPI.COMM_WORLD.allreduce(local_sum)
+    return comm.allreduce(local_sum)

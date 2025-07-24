@@ -14,16 +14,16 @@ from .output_manager import OutputManager
 
 class OutputCartesian(OutputManager):
     def __write_result__(self, Q, step_id):
-        filename = f"{self.output_dir}/euler2D_{self.param.case_number}_{step_id:08d}"
+        filename = f"{self.output_dir}/euler2D_{self.config.case_number}_{step_id:08d}"
         Q_cartesian = self.geometry.to_single_block(Q)
 
-        if self.param.case_number == 0:
+        if self.config.case_number == 0:
             image_field(self.geometry, (Q_cartesian[RHO_W, ...]), filename, -1, 1, 25, label="w (m/s)", colormap="bwr")
-        elif self.param.case_number <= 2:
+        elif self.config.case_number <= 2:
             image_field(self.geometry, (Q_cartesian[RHO_THETA, ...] / Q_cartesian[RHO, ...]), filename, 303.1, 303.7, 7)
-        elif self.param.case_number == 3:
+        elif self.config.case_number == 3:
             image_field(self.geometry, (Q_cartesian[RHO_THETA, ...] / Q_cartesian[RHO, ...]), filename, 303.0, 303.7, 8)
-        elif self.param.case_number == 4:
+        elif self.config.case_number == 4:
             image_field(
                 self.geometry, (Q_cartesian[RHO_THETA, ...] / Q_cartesian[RHO, ...]), filename, 290.0, 300.0, 10
             )
@@ -55,7 +55,7 @@ class OutputCartesian(OutputManager):
         theta = Q[RHO_THETA] / rho
         theta_mincoord, theta_maxcoord, theta_min, theta_max, theta_avg = get_stats(theta, geom)
 
-        if MPI.COMM_WORLD.rank == 0:
+        if self.comm.rank == 0:
             print("==============================================")
             print(f" Blockstats for timestep {step_id}")
             print(f"   Var        Min        Max        Mean")

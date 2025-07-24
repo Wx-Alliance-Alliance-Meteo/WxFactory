@@ -4,7 +4,7 @@ import numpy
 
 from common.definitions import idx_2d_rho, idx_2d_rho_u, idx_2d_rho_w, idx_2d_rho_theta, p0, Rd, cpd, cvd, gravity
 from geometry import Cartesian2D
-from .fluxes import FluxFunction2D
+from pde.fluxes import FluxFunction2D
 
 
 # @profile

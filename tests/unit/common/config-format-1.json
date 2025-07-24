@@ -1,0 +1,47 @@
+{
+    "version": "0.1",
+    "fields": [
+        {
+            "name": "size",
+            "section": "problem",
+            "type": "int"
+        },
+        {
+            "name": "time",
+            "section": "integrator",
+            "type": "float",
+            "default": 0.0
+        },
+        {
+            "name": "end_time",
+            "section": "integrator",
+            "type": "float",
+            "default": 1.0
+        },
+        {
+            "name": "verbose",
+            "section": "debug",
+            "type": "bool"
+        },
+        {
+            "name": "values1",
+            "section": "other",
+            "type": "list-int"
+        },
+        {
+            "name": "values2",
+            "section": "other",
+            "type": "list-float"
+        },
+        {
+            "name": "config-name",
+            "section": "config",
+            "type": "str"
+        },
+        {
+            "name": "path",
+            "section": "config",
+            "type": "case-sensitive-str"
+        }
+    ]
+}
