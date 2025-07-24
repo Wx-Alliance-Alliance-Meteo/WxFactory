@@ -457,4 +457,3 @@ class Simulation:
         if self.config.enable_schar_waves and self.config.equations == "euler":
             schar_waves = ScharWavesPostProcessor(self.config, self.geometry, self.metric)
             self.post_processors.append(schar_waves)
-            schar_waves.build(1 if self.config.schar_waves_step == 0 else 0)

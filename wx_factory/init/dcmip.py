@@ -563,12 +563,15 @@ def dcmip_schar_waves(geom: CubedSphere3D, metric, mtrx: DFROperators, param: Co
     Ueq = 20.0  # Reference zonal wind velocity (equator)
     Peq = 100000.0  # Reference surface pressure (Pa)
 
+    ratio = 1.0
     if param.enable_schar_waves:
         lambdam = param.schar_waves_longitude
         phim = param.schar_waves_lattitude
         h0 = param.schar_waves_height
         Dm = param.schar_waves_radius
         Dxi = param.schar_waves_length
+        ratio = 0.0 if param.schar_waves_step != 0 else 1.0
+
 
     if shear:
         Cs = 2.5e-4  # Wind shear rate (1/m), for shear case
@@ -624,7 +627,7 @@ def dcmip_schar_waves(geom: CubedSphere3D, metric, mtrx: DFROperators, param: Co
         raise ValueError
 
     # Update the geometry object with the new bottom topography
-    geom.apply_topography(zbot, zbot_itf_i, zbot_itf_j, zbot_new, zbot_itf_i_new, zbot_itf_j_new)
+    geom.apply_topography(zbot * ratio, zbot_itf_i * ratio, zbot_itf_j * ratio, zbot_new * ratio, zbot_itf_i_new * ratio, zbot_itf_j_new * ratio)
     # And regenerate the metric to take this new topography into account
     metric.build_metric()
 
