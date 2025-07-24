@@ -34,6 +34,7 @@ class Epi(Integrator):
         super().__init__(param, preconditioner=None, **kwargs)
         self.rhs = rhs
         self.tol = param.tolerance
+        self.rtol = param.exode_rtol
         self.krylov_size = 1
         self.jacobian_method = param.jacobian_method
         self.exponential_solver = param.exponential_solver
@@ -116,7 +117,7 @@ class Epi(Integrator):
                 vec[k, :] += alpha * r.flatten()
 
         # ----pmex with norm estimate-----
-        if self.exponential_solver == "pmex":
+        if self.exponential_solver == "pmex_ne":
             phiv, stats = pmex(
                 [1.0],
                 matvec_handle,
@@ -135,6 +136,16 @@ class Epi(Integrator):
                     f"PMEX NE converged at iteration {stats[2]} (using {stats[0]} internal substeps "
                     f" and {stats[1]} rejected expm)"
                     f" to a solution with local error {stats[4]:.2e}"
+                )
+        elif self.exponential_solver == "pmex":
+
+            phiv, stats = pmex([1.0], matvec_handle, vec, tol=self.tol, mmax=64, task1=False, device=self.device)
+
+            if mpirank == 0:
+                print(
+                    f"PMEX converged at iteration {stats[2]} (using {stats[0]} internal substeps and"
+                    f" {stats[1]} rejected expm) to a solution with local error {stats[4]:.2e}",
+                    flush=True,
                 )
 
         # ----pmex with 1-sync-----
@@ -305,6 +316,7 @@ class Epi(Integrator):
                 method=self.exode_method,
                 controller=self.exode_controller,
                 atol=self.tol,
+                rtol=self.rtol,
                 task1=False,
                 verbose=False,
             )
@@ -314,17 +326,6 @@ class Epi(Integrator):
                 print(
                     f"EXODE converged at iteration {stats[0]}, with {stats[1]} rejected steps "
                     f"with local error {stats[3]}"
-                )
-
-            # self.solver_info = SolverInfo(total_num_it=stats[0])
-            # ----------default: kiops-----------
-            phiv, stats = pmex([1.0], matvec_handle, vec, tol=self.tol, mmax=64, task1=False, device=self.device)
-
-            if mpirank == 0:
-                print(
-                    f"PMEX converged at iteration {stats[2]} (using {stats[0]} internal substeps and"
-                    f" {stats[1]} rejected expm) to a solution with local error {stats[4]:.2e}",
-                    flush=True,
                 )
 
         else:

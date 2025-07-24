@@ -16,6 +16,7 @@ class EpiStiff(Integrator):
         super().__init__(param, **kwargs)
         self.rhs = rhs
         self.tol = param.tolerance
+        self.rtol = param.exode_rtol
         self.krylov_size = 1
         self.jacobian_method = param.jacobian_method
         self.exponential_solver = param.exponential_solver
@@ -97,6 +98,7 @@ class EpiStiff(Integrator):
                 method=self.exode_method,
                 controller=self.exode_controller,
                 atol=self.tol,
+                rtol=self.rtol,
                 task1=False,
                 verbose=False,
             )

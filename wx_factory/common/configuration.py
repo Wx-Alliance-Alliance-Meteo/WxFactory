@@ -174,6 +174,7 @@ class Configuration:
     t_end: float
     time_integrator: str
     tolerance: float
+    exode_rtol: float
     verbose_precond: int
     verbose_solver: int
     x0: float
