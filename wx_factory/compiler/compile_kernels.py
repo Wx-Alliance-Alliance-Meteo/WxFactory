@@ -116,6 +116,8 @@ class WxExtension(Extension):
         for tree in [self.build_dir, self.lib_dir]:
             for root, _, files in os.walk(tree, topdown=False):
                 for name in files:
+                    if name[:4] == ".nfs":  # Skip .nfs files (they are already being deleted)
+                        continue
                     os.remove(os.path.join(root, name))
 
 

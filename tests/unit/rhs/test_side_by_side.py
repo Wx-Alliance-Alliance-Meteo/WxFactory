@@ -49,11 +49,13 @@ class RhsSideBySideGenericTestCase(MpiTestCase):
             diff_cpp = results["cpp"] - ref
             diff_cuda = gpu_device.to_host(results["cuda"]) - ref
             diff_cupy = gpu_device.to_host(results["cupy"]) - ref
+            diff_cuda_cupy = results["cuda"] - results["cupy"]
 
             ref_norm = numpy.linalg.norm(ref)
             diff_cpp_norm = numpy.linalg.norm(diff_cpp) / ref_norm
             diff_cuda_norm = gpu_device.xp.linalg.norm(diff_cuda) / ref_norm
             diff_cupy_norm = gpu_device.xp.linalg.norm(diff_cupy) / ref_norm
+            diff_cuda_cupy_norm = gpu_device.xp.linalg.norm(diff_cuda_cupy) / gpu_device.xp.linalg.norm(results["cuda"])
 
             cpp_ok = diff_cpp_norm < THRESHOLD
             cuda_ok = diff_cuda_norm < THRESHOLD
@@ -61,9 +63,10 @@ class RhsSideBySideGenericTestCase(MpiTestCase):
 
             if self.comm.rank == 0:
                 print(
-                    f"cpp:  {diff_cpp_norm:.2e} ({cpp_ok})\n"
-                    f"cuda: {diff_cuda_norm:.2e} ({cuda_ok})\n"
-                    f"cupy: {diff_cupy_norm:.2e} ({cupy_ok})",
+                    f"cpp:       {diff_cpp_norm:.2e} ({cpp_ok})\n"
+                    f"cuda:      {diff_cuda_norm:.2e} ({cuda_ok})\n"
+                    f"cupy:      {diff_cupy_norm:.2e} ({cupy_ok})\n"
+                    f"cuda/cupy: {diff_cuda_cupy_norm:.2e}",
                     flush=True,
                 )
 
