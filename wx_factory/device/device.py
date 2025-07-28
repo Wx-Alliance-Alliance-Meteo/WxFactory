@@ -133,7 +133,7 @@ class CpuDevice(Device):
 class CudaDevice(Device):
     _default = None
 
-    def __init__(self, comm: MPI.Comm = MPI.COMM_WORLD, device_list: Optional[List[int]] = None) -> None:
+    def __init__(self, comm: MPI.Comm, compiled_lib: str = "cuda", device_list: Optional[List[int]] = None) -> None:
         # Delay imports, to avoid loading CUDA if not asked
 
         wx_cupy.load_cupy()
@@ -149,12 +149,12 @@ class CudaDevice(Device):
             compile_kernels.compile("pde", "cuda", force=False, comm=comm)
             pde = compile_kernels.load_module("pde", "cuda")
 
-            compile_kernels.compile("operators", "cuda", force=False, comm=comm)
-            operators = compile_kernels.load_module("operators", "cuda")
+            compile_kernels.compile("operators", compiled_lib, force=False, comm=comm)
+            operators = compile_kernels.load_module("operators", compiled_lib)
         except (ModuleNotFoundError, ImportError, SystemExit):
             if comm.rank == 0:
                 print(
-                    f"Unable to load the interface_cuda module, you need to compile it if you want to use the GPU",
+                    f"Unable to load the compiled CUDA modules, you need to compile it if you want to use the GPU",
                     flush=True,
                 )
             raise

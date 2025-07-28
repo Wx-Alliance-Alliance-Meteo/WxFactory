@@ -89,8 +89,8 @@ def load_tests(test_name: str):
 
     add_test(suite, OperatorsExtrapEuler3DTestCase(6, "test_extrap_kernel_cpu"), test_re)
     add_test(suite, OperatorsExtrapEuler3DTestCase(6, "test_extrap_kernel_gpu"), test_re)
-    add_test(suite, OperatorsExtrapEuler3DTestCase(24, "test_extrap_kernel_cpu"), test_re)
-    add_test(suite, OperatorsExtrapEuler3DTestCase(24, "test_extrap_kernel_gpu"), test_re)
+    add_test(suite, OperatorsExtrapEuler3DTestCase(24, "test_extrap_kernel_cpu", optional=True), test_re)
+    add_test(suite, OperatorsExtrapEuler3DTestCase(24, "test_extrap_kernel_gpu", optional=True), test_re)
 
     add_test(suite, RhsSideBySideEuler3DTestCase(6, "test_rhs_side_by_side"), test_re)
 

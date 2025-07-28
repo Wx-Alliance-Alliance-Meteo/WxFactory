@@ -23,7 +23,7 @@ class OperatorsExtrapGenericTestCase(MpiTestCase):
 
         for state_file in state_files:
             config, global_state = InputManager.read_config_from_save_file(state_file, self.comm)
-            config.desired_device = "cpp" if device == "cpu" else "cuda"
+            config.desired_device = device
             sim = Simulation(config, comm=self.comm)
             local_state = sim.process_topo.distribute_cube(global_state, 4)
             local_state = sim.device.array(local_state)  # Copy to GPU, if needed
@@ -51,18 +51,20 @@ class OperatorsExtrapGenericTestCase(MpiTestCase):
                         f"                       ",
                         flush=True,
                     )
+
             self.assertLessEqual(diff1_norm, 4e-16)
             self.assertLessEqual(diff2_norm, 4e-16)
             self.assertLessEqual(diff3_norm, 4e-16)
 
     def test_extrap_kernel_cpu(self):
-        self.test_extrap_kernel("cpu")
+        self.test_extrap_kernel("cpp")
 
     def test_extrap_kernel_gpu(self):
         if not Device.cuda_available():
             self.skipTest(f"Need CUDA for this test")
 
-        self.test_extrap_kernel("gpu")
+        self.test_extrap_kernel("cuda")
+        self.test_extrap_kernel("omp")
 
 
 class OperatorsExtrapEuler3DTestCase(OperatorsExtrapGenericTestCase):
