@@ -145,9 +145,10 @@ if __name__ == "__main__":
         type=str,
         help="Will only run tests whose name or type matches this regular expression.",
     )
+    parser.add_argument("--no-buffer", action="store_true", help="Print all test output to terminal")
     args = parser.parse_args()
 
-    runner = MpiRunner(buffer=True, verbosity=0)
+    runner = MpiRunner(buffer=not args.no_buffer, verbosity=0)
 
     # trace_run(runner)
     regular_run(runner, args)

@@ -80,7 +80,7 @@ class Device(ABC):
 class CpuDevice(Device):
     _default = None
 
-    def __init__(self, comm: MPI.Comm = MPI.COMM_WORLD) -> None:
+    def __init__(self, comm: MPI.Comm) -> None:
         import numpy
         import scipy
 
@@ -126,7 +126,7 @@ class CpuDevice(Device):
     @staticmethod
     def get_default() -> "CpuDevice":
         if CpuDevice._default is None:
-            CpuDevice._default = CpuDevice()
+            CpuDevice._default = CpuDevice(MPI.COMM_WORLD)
         return CpuDevice._default
 
 
@@ -240,5 +240,5 @@ class CudaDevice(Device):
     @staticmethod
     def get_default() -> "CudaDevice":
         if CudaDevice._default is None:
-            CudaDevice._default = CudaDevice()
+            CudaDevice._default = CudaDevice(MPI.COMM_WORLD)
         return CudaDevice._default
