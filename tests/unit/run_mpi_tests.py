@@ -22,6 +22,8 @@ from tests.unit.rhs.test_side_by_side import RhsSideBySideEuler3DTestCase
 from tests.unit.solvers.test_pmex_mpi import PmexMpiTestCases
 from tests.unit.solvers.test_kiops_mpi import KiopsMpiTestCases
 from tests.unit.solvers.test_fgmres_mpi import FgmresMpiTestCases
+from tests.unit.pde.test_pointwise_flux_3d import PDEPointWiseFlux3DTestCase
+from tests.unit.pde.test_riemann_flux import PDERiemannFlux3DTestCase
 
 
 def add_test(suite: TestSuite, test: TestCase, test_re: Optional[re.Pattern]):
@@ -93,6 +95,9 @@ def load_tests(test_name: str):
     add_test(suite, OperatorsExtrapEuler3DTestCase(24, "test_extrap_kernel_gpu", optional=True), test_re)
 
     add_test(suite, RhsSideBySideEuler3DTestCase(6, "test_rhs_side_by_side"), test_re)
+
+    add_test(suite, PDEPointWiseFlux3DTestCase(6, "test_pointwise_flux_kernel_cpu"), test_re)
+    add_test(suite, PDERiemannFlux3DTestCase(6, "test_riemann_flux_kernel_cpu"), test_re)
 
     # TODO : This test needs more works on the data division between processes
     # suite.addTest(FgmresMpiTestCases('test_fgmres_mpi_2_processes'))

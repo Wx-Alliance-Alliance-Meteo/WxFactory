@@ -99,6 +99,7 @@ class RhsSideBySideGenericTestCase(MpiTestCase):
             self.assertTrue(cpp_ok)
             self.assertTrue(cuda_ok)
             self.assertTrue(cupy_ok)
+            self.assertTrue(omp_ok)
 
 
 class RhsSideBySideEuler3DTestCase(RhsSideBySideGenericTestCase):
