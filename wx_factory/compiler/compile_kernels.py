@@ -28,7 +28,22 @@ base_module_dir = "wx_factory"
 
 cpp_compile_flags = "-Wall -Wextra -shared -std=c++17 -fPIC".split(" ")
 cpp_link_flags = []
+omp_compile_flags = [
+    "-mp=gpu",
+    "-gpu=cc80",
+    "-Wall",
+    "-shared",
+    "-std=c++17",
+    "-fPIC",
+    "--diag_suppress",
+    "inline_gnu_noinline_conflict,subscript_out_of_range",
+    "-DWX_OMP",
+    # "-Minfo",
+]
+omp_link_flags = ["-mp=gpu", "-gpu=cc80", "-shared"]
+
 cuda_compile_flags = "-arch native -O2 -shared -std=c++17 -Xcompiler -fPIC,-Wall,-Wextra".split(" ")
+cuda_link_flags = ["-shared", "-arch", "native"]
 
 
 class wx_build_ext(build_ext):
@@ -41,7 +56,19 @@ class cuda_build_ext(wx_build_ext):
     def build_extensions(self):
         self.compiler.src_extensions.append(".cu")
         self.compiler.set_executable("compiler_so", "nvcc")
-        self.compiler.set_executable("linker_so", "nvcc -shared")
+        self.compiler.set_executable("linker_so", "nvcc")
+
+        build_ext.build_extensions(self)
+
+
+class omp_build_ext(wx_build_ext):
+    """Define CUDA compiler and linker."""
+
+    def build_extensions(self):
+        self.compiler.src_extensions.append(".cpp")
+        self.compiler.set_executable("compiler_so", "nvc++")
+        self.compiler.set_executable("compiler_cxx", "nvc++")
+        self.compiler.set_executable("linker_so", "nvc++")
 
         build_ext.build_extensions(self)
 
@@ -79,7 +106,7 @@ def get_processor_name() -> str:
 class WxExtension(Extension):
     """Define where to find source files, headers, and where to put the module."""
 
-    def __init__(self, name, backend, suffix, build_ext_class, **kwargs):
+    def __init__(self, name: str, backend: str, suffix: str, build_ext_class, **kwargs):
 
         common_dir = os.path.join(base_module_dir, "definitions")
         source_dir = os.path.join(base_module_dir, name)
@@ -136,6 +163,21 @@ class CppExtension(WxExtension):
         )
 
 
+class OmpExtension(WxExtension):
+    """Define compilation flags for OpenMP offload."""
+
+    def __init__(self, name, **kwargs):
+        super().__init__(
+            name,
+            "omp",
+            "cpp",
+            omp_build_ext,
+            extra_compile_args=omp_compile_flags,
+            extra_link_args=omp_link_flags,
+            **kwargs,
+        )
+
+
 class CudaExtension(WxExtension):
     """Define compilation flags for CUDA."""
 
@@ -146,6 +188,7 @@ class CudaExtension(WxExtension):
             "cu",
             cuda_build_ext,
             extra_compile_args=cuda_compile_flags,
+            extra_link_args=cuda_link_flags,
             **kwargs,
         )
 
@@ -156,6 +199,7 @@ _extensions: dict[str, WxExtension] = {
     _ext_name("pde", "cuda"): CudaExtension("pde"),
     _ext_name("operators", "cpp"): CppExtension("operators"),
     _ext_name("operators", "cuda"): CudaExtension("operators"),
+    _ext_name("operators", "omp"): OmpExtension("operators"),
 }
 
 

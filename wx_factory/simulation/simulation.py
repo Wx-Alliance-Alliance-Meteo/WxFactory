@@ -211,13 +211,15 @@ class Simulation:
     def _make_device(self) -> Device:
         """Create the device object which will determine on what hardware (CPU/GPU) each part of the simulation will
         be executed."""
-        if self.config.desired_device in ["cuda", "cupy"]:
+        if self.config.desired_device in ["cuda", "cupy", "omp"]:
             try:
                 cuda_devices = self.config.cuda_devices
             except AttributeError:
                 cuda_devices = []
+
+            lib = "omp" if self.config.desired_device == "omp" else "cuda"
             try:
-                device = CudaDevice(self.comm, cuda_devices)
+                device = CudaDevice(self.comm, compiled_lib=lib, device_list=cuda_devices)
             except ValueError:
                 device = None
                 if self.rank == 0:

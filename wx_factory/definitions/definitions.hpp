@@ -147,8 +147,23 @@ num_t* get_cupy_pointer(pybind11::object obj) {
 //! Extract raw pointer to given array's data and cast it to the requested type
 //! \tparam num_t The type we wish to get from the input array
 template <typename num_t>
-num_t* get_c_ptr(const pybind11::array_t<num_t>& a) {
+const num_t* get_c_ptr(const pybind11::array_t<num_t>& a) {
   return static_cast<num_t*>(a.request().ptr);
+}
+template <typename num_t>
+num_t* get_c_ptr(pybind11::array_t<num_t>& a) {
+  return static_cast<num_t*>(a.request().ptr);
+}
+
+template <typename num_t>
+const num_t* get_c_ptr(const pybind11::object& obj) {
+  uintptr_t cp_ptr = obj.attr("data").attr("ptr").cast<uintptr_t>();
+  return reinterpret_cast<num_t*>(cp_ptr);
+}
+template <typename num_t>
+num_t* get_c_ptr(pybind11::object& obj) {
+  uintptr_t cp_ptr = obj.attr("data").attr("ptr").cast<uintptr_t>();
+  return reinterpret_cast<num_t*>(cp_ptr);
 }
 
 template <typename num_t>

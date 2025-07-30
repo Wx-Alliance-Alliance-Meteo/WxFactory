@@ -5,11 +5,11 @@
 #SBATCH --output=out_gpu_benchmark_%j.txt
 #SBATCH --partition=gpu_a100
 #SBATCH --account=eccc_mrd__gpu_a100
-#SBATCH --time=00:10:00
-#SBATCH --ntasks=32
-#SBATCH --cpus-per-task=8                
-#SBATCH --gpus=16
-#SBATCH --mem-per-cpu=1000M
+#SBATCH --time=00:20:00
+#SBATCH --ntasks=24
+#SBATCH --cpus-per-gpu=32                
+#SBATCH --gpus=12
+#SBATCH --mem-per-gpu=40G
 
 WX_DIR=/home/vma000/code/wx_factory_clean
 
@@ -18,11 +18,11 @@ cd ${WX_DIR}
 
 CONFIG_FILE=./tests/gpu_benchmark/config.ini
 
-mpirun -n 6 ./scripts/mpi_config.py
-mpirun -n 16 ./scripts/mpi_config.py
-mpirun -n 32 ./scripts/mpi_config.py
+srun -n 6 ./scripts/mpi_config.py
+srun -n 16 ./scripts/mpi_config.py
+srun -n 24 ./scripts/mpi_config.py
 
 echo ${CONFIG_FILE}
-mpirun -n 6 ./WxFactory ${CONFIG_FILE}
-mpirun -n 24 ./WxFactory ${CONFIG_FILE}
+srun -n 6 ./WxFactory ${CONFIG_FILE} --disable-unified-memory
+srun -n 24 ./WxFactory ${CONFIG_FILE} --disable-unified-memory
 

@@ -1,5 +1,6 @@
 import random
 
+from mpi4py import MPI
 from numpy import ndarray
 
 import cuda_test
@@ -26,8 +27,8 @@ class PmexComparisonTestCases(cuda_test.CudaTestCases):
         self.tolerance = 1e-7
         self.rand = random.Random(seed)
 
-        self.cpu_device = CpuDevice()
-        self.gpu_device = CudaDevice()
+        self.cpu_device = CpuDevice(MPI.COMM_WORLD)
+        self.gpu_device = CudaDevice(MPI.COMM_WORLD)
 
         [self.cpu_matrix, self.gpu_matrix] = ndarray_generator.generate_matrixes(
             (initial_matrix_size, initial_matrix_size),

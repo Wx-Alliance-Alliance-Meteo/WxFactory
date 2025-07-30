@@ -91,8 +91,8 @@ def load_tests(test_name: str):
 
     add_test(suite, OperatorsExtrapEuler3DTestCase(6, "test_extrap_kernel_cpu"), test_re)
     add_test(suite, OperatorsExtrapEuler3DTestCase(6, "test_extrap_kernel_gpu"), test_re)
-    add_test(suite, OperatorsExtrapEuler3DTestCase(24, "test_extrap_kernel_cpu"), test_re)
-    add_test(suite, OperatorsExtrapEuler3DTestCase(24, "test_extrap_kernel_gpu"), test_re)
+    add_test(suite, OperatorsExtrapEuler3DTestCase(24, "test_extrap_kernel_cpu", optional=True), test_re)
+    add_test(suite, OperatorsExtrapEuler3DTestCase(24, "test_extrap_kernel_gpu", optional=True), test_re)
 
     add_test(suite, RhsSideBySideEuler3DTestCase(6, "test_rhs_side_by_side"), test_re)
 
@@ -150,9 +150,10 @@ if __name__ == "__main__":
         type=str,
         help="Will only run tests whose name or type matches this regular expression.",
     )
+    parser.add_argument("--no-buffer", action="store_true", help="Print all test output to terminal")
     args = parser.parse_args()
 
-    runner = MpiRunner(buffer=True, verbosity=0)
+    runner = MpiRunner(buffer=not args.no_buffer, verbosity=0)
 
     # trace_run(runner)
     regular_run(runner, args)

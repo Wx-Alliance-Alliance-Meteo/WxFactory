@@ -13,6 +13,7 @@
 #SBATCH --account=eccc_mrd__gpu_a100
 #SBATCH --time=01:00:00
 #SBATCH --ntasks=6
+#SBATCH --nodes=1
 #SBATCH --mem=50000
 #SBATCH --job-name=rhs_benchmark
 
@@ -28,9 +29,13 @@ fi
 
 cd ${WX_DIR}
 . ./scripts/load_env.sh
+
+which python
+which mpirun
+
 export TMPDIR=${HOME}/tmp
 
 set -x
 ${MPIRUN} -n 6 ./scripts/mpi_config.py
-${MPIRUN} -n 6 ./WxFactory ${CONFIG_FILE}
+${MPIRUN} -n 6 ./WxFactory ${CONFIG_FILE} --disable-unified-memory
 set +x
