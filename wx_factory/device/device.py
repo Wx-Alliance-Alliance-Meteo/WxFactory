@@ -146,8 +146,8 @@ class CudaDevice(Device):
 
         # Get compiled library
         try:
-            compile_kernels.compile("pde", "cuda", force=False, comm=comm)
-            pde = compile_kernels.load_module("pde", "cuda")
+            compile_kernels.compile("pde", compiled_lib, force=False, comm=comm)
+            pde = compile_kernels.load_module("pde", compiled_lib)
 
             compile_kernels.compile("operators", compiled_lib, force=False, comm=comm)
             operators = compile_kernels.load_module("operators", compiled_lib)
@@ -177,6 +177,8 @@ class CudaDevice(Device):
 
         devnum = self.comm.rank % len(device_list)
         cupy.cuda.Device(device_list[devnum]).use()
+        if compiled_lib == "omp":
+            pde.set_omp_device(device_list[devnum])
 
         if Device.use_unified_memory:
             if self.comm.rank == 0:
