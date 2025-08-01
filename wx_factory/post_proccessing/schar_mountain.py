@@ -3,7 +3,7 @@ from common import Configuration
 from geometry import CubedSphere3D, Metric3DTopo
 import math
 
-class ScharWavesPostProcessor(post_proccessor.PostProcessor):
+class ScharMountainPostProcessor(post_proccessor.PostProcessor):
     lambdam: float  # mountain longitude center point (radians)
     phim: float  # mountain latitude center point (radians)
     h0: float  # peak height of the mountain range (m)
@@ -26,13 +26,13 @@ class ScharWavesPostProcessor(post_proccessor.PostProcessor):
         self.xp = geom.device.xp
         self.metric = metric
 
-        self.lambdam = config.schar_waves_longitude
-        self.phim = config.schar_waves_lattitude
-        self.h0 = config.schar_waves_height
-        self.Dm = config.schar_waves_radius
-        self.Dxi = config.schar_waves_length
+        self.lambdam = config.schar_mountain_longitude
+        self.phim = config.schar_mountain_lattitude
+        self.h0 = config.schar_mountain_height
+        self.Dm = config.schar_mountain_radius
+        self.Dxi = config.schar_mountain_length
         
-        self.step_to_completion = config.schar_waves_step
+        self.step_to_completion = config.schar_mountain_step
         self.step = 0
 
     def build(self, ratio: float):

@@ -564,13 +564,13 @@ def dcmip_schar_waves(geom: CubedSphere3D, metric, mtrx: DFROperators, param: Co
     Peq = 100000.0  # Reference surface pressure (Pa)
 
     ratio = 1.0
-    if param.enable_schar_waves:
-        lambdam = param.schar_waves_longitude
-        phim = param.schar_waves_lattitude
-        h0 = param.schar_waves_height
-        Dm = param.schar_waves_radius
-        Dxi = param.schar_waves_length
-        ratio = 0.0 if param.schar_waves_step != 0 else 1.0
+    if param.enable_schar_mountain:
+        lambdam = param.schar_mountain_longitude
+        phim = param.schar_mountain_lattitude
+        h0 = param.schar_mountain_height
+        Dm = param.schar_mountain_radius
+        Dxi = param.schar_mountain_length
+        ratio = 0.0 if param.schar_mountain_step != 0 else 1.0
 
 
     if shear:

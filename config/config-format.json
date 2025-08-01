@@ -561,64 +561,64 @@
             "name": "Post_processing",
             "fields": [
                 {
-                    "name": "enable_schar_waves",
+                    "name": "enable_schar_mountain",
                     "type": "bool",
                     "default": false,
                     "description": "Enable Schar wave mountains to grow (stabilisation issue)"
                 },
                 {
-                    "name": "schar_waves_longitude",
+                    "name": "schar_mountain_longitude",
                     "type": "float",
                     "description": "Mountain longitude center point (radians)",
                     "dependency": {
-                        "name": "enable_schar_waves",
+                        "name": "enable_schar_mountain",
                         "values": [true]
                     }
                 },
                 {
-                    "name": "schar_waves_lattitude",
+                    "name": "schar_mountain_lattitude",
                     "type": "float",
                     "description": "Mountain latitude center point (radians)",
                     "dependency": {
-                        "name": "enable_schar_waves",
+                        "name": "enable_schar_mountain",
                         "values": [true]
                     }
                 },
                 {
-                    "name": "schar_waves_height",
+                    "name": "schar_mountain_height",
                     "type": "float",
                     "description": "Peak height of the mountain range (m)",
                     "dependency": {
-                        "name": "enable_schar_waves",
+                        "name": "enable_schar_mountain",
                         "values": [true]
                     }
                 },
                 {
-                    "name": "schar_waves_radius",
+                    "name": "schar_mountain_radius",
                     "type": "float",
                     "description": "Mountain radius (meters)",
                     "dependency": {
-                        "name": "enable_schar_waves",
+                        "name": "enable_schar_mountain",
                         "values": [true]
                     }
                 },
                 {
-                    "name": "schar_waves_length",
+                    "name": "schar_mountain_length",
                     "type": "float",
                     "description": "Mountain wavelength (meters)",
                     "dependency": {
-                        "name": "enable_schar_waves",
+                        "name": "enable_schar_mountain",
                         "values": [true]
                     }
                 },
                 {
-                    "name": "schar_waves_step",
+                    "name": "schar_mountain_step",
                     "type": "int",
                     "min": 0,
                     "default": 0,
                     "description": "Number of step of interpolation, 0 is instantaneous",
                     "dependency": {
-                        "name": "enable_schar_waves",
+                        "name": "enable_schar_mountain",
                         "values": [true]
                     }
                 }

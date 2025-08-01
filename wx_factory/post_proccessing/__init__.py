@@ -1,4 +1,4 @@
 from .post_proccessor import PostProcessor
-from .schar_waves import ScharWavesPostProcessor
+from .schar_mountain import ScharMountainPostProcessor
 
-__all__ = ["PostProcessor", "ScharWavesPostProcessor"]
+__all__ = ["PostProcessor", "ScharMountainPostProcessor"]

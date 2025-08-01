@@ -37,7 +37,7 @@ from precondition.multigrid import Multigrid
 from process_topology import ProcessTopology
 from rhs.rhs_selector import RhsBundle
 from wx_mpi import SingleProcess, Conditional
-from post_proccessing import PostProcessor, ScharWavesPostProcessor
+from post_proccessing import PostProcessor, ScharMountainPostProcessor
 
 class Simulation:
     """Encapsulate parameters and structures needed to run a WxFactory simulation.
@@ -454,6 +454,6 @@ class Simulation:
             raise ValueError(f"NaN")
 
     def _create_post_processors(self):
-        if self.config.enable_schar_waves and self.config.equations == "euler":
-            schar_waves = ScharWavesPostProcessor(self.config, self.geometry, self.metric)
+        if self.config.enable_schar_mountain and self.config.equations == "euler":
+            schar_waves = ScharMountainPostProcessor(self.config, self.geometry, self.metric)
             self.post_processors.append(schar_waves)
