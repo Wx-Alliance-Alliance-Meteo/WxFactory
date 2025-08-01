@@ -2,6 +2,7 @@ from . import post_proccessor
 from common import Configuration
 from geometry import CubedSphere3D, Metric3DTopo
 import math
+import numpy
 
 class ScharMountainPostProcessor(post_proccessor.PostProcessor):
     lambdam: float  # mountain longitude center point (radians)
@@ -14,6 +15,14 @@ class ScharMountainPostProcessor(post_proccessor.PostProcessor):
     step_to_completion: int
 
     step: int
+
+    zbot: numpy.ndarray
+    zbot_itf_i: numpy.ndarray
+    zbot_itf_j: numpy.ndarray
+
+    zbot_new: numpy.ndarray
+    zbot_itf_i_new: numpy.ndarray
+    zbot_itf_j_new: numpy.ndarray
 
     def __init__(self, config: Configuration, geom: CubedSphere3D, metric: Metric3DTopo):
         if config is None:
@@ -34,37 +43,40 @@ class ScharMountainPostProcessor(post_proccessor.PostProcessor):
         
         self.step_to_completion = config.schar_mountain_step
         self.step = 0
+        self.build()
 
-    def build(self, ratio: float):
+    def build(self):
         """
         ratio : % of the actual montain to apply and build
         """
-        zbot = self.build_topo_old(self.geom.coordVec_latlon)
-        zbot_itf_i = self.build_topo_old(self.geom.coordVec_latlon_itf_i)
-        zbot_itf_j = self.build_topo_old(self.geom.coordVec_latlon_itf_j)
+        self.zbot = self.build_topo_old(self.geom.coordVec_latlon)
+        self.zbot_itf_i = self.build_topo_old(self.geom.coordVec_latlon_itf_i)
+        self.zbot_itf_j = self.build_topo_old(self.geom.coordVec_latlon_itf_j)
 
-        zbot_new = self.build_topo(self.geom.get_floor(self.geom.polar))
-        zbot_itf_i_new = self.build_topo(self.geom.get_itf_i_floor(self.geom.polar_itf_i))
-        zbot_itf_j_new = self.build_topo(self.geom.get_itf_j_floor(self.geom.polar_itf_j))
-        zbot_itf_i_new[self.geom.floor_west_edge] = 0.0
-        zbot_itf_i_new[self.geom.floor_east_edge] = 0.0
-        zbot_itf_j_new[self.geom.floor_south_edge] = 0.0
-        zbot_itf_j_new[self.geom.floor_north_edge] = 0.0
+        self.zbot_new = self.build_topo(self.geom.get_floor(self.geom.polar))
+        self.zbot_itf_i_new = self.build_topo(self.geom.get_itf_i_floor(self.geom.polar_itf_i))
+        self.zbot_itf_j_new = self.build_topo(self.geom.get_itf_j_floor(self.geom.polar_itf_j))
+        self.zbot_itf_i_new[self.geom.floor_west_edge] = 0.0
+        self.zbot_itf_i_new[self.geom.floor_east_edge] = 0.0
+        self.zbot_itf_j_new[self.geom.floor_south_edge] = 0.0
+        self.zbot_itf_j_new[self.geom.floor_north_edge] = 0.0
 
-        diff = zbot_new - self.geom.to_new_floor(zbot)
+        diff = self.zbot_new - self.geom.to_new_floor(self.zbot)
         diffn = self.xp.linalg.norm(diff)
 
-        diffi = zbot_itf_i_new - self.geom.to_new_itf_i_floor(zbot_itf_i)
+        diffi = self.zbot_itf_i_new - self.geom.to_new_itf_i_floor(self.zbot_itf_i)
         diffin = self.xp.linalg.norm(diffi)
 
-        diffj = zbot_itf_j_new - self.geom.to_new_itf_j_floor(zbot_itf_j)
+        diffj = self.zbot_itf_j_new - self.geom.to_new_itf_j_floor(self.zbot_itf_j)
         diffjn = self.xp.linalg.norm(diffj)
 
         if diffn > 0.0 or diffin > 0.0 or diffjn > 0.0:
             raise ValueError
-
+        
+    def apply(self, ratio: float):
         # Update the geometry object with the new bottom topography
-        self.geom.apply_topography(zbot * ratio, zbot_itf_i * ratio, zbot_itf_j * ratio, zbot_new * ratio, zbot_itf_i_new * ratio, zbot_itf_j_new * ratio)
+        self.geom.apply_topography(self.zbot * ratio, self.zbot_itf_i * ratio, self.zbot_itf_j * ratio,
+                                    self.zbot_new * ratio, self.zbot_itf_i_new * ratio, self.zbot_itf_j_new * ratio)
         
         # And regenerate the metric to take this new topography into account
         self.metric.build_metric()
@@ -73,7 +85,7 @@ class ScharMountainPostProcessor(post_proccessor.PostProcessor):
         if self.step < self.step_to_completion:
             self.step += 1
             ratio = float(self.step) / self.step_to_completion
-            self.build(ratio)
+            self.apply(ratio)
 
     def build_topo_old(self, latlon):
         lat = latlon[1, 0, :, :]
