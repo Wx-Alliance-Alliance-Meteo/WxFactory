@@ -28,7 +28,7 @@ class Device(ABC):
 
     # Whether we should use unified memory as the default allocator (CUDA code)
     # This should only be disabled if the MPI implementation supports CUDA
-    use_unified_memory = True
+    use_unified_memory = False
 
     def __init__(self, comm: MPI.Comm, xp, xalg, pde_module, operators_module) -> None:
         """Set a few modules and functions to have the same name, so that callers can use a single name."""
@@ -67,6 +67,12 @@ class Device(ABC):
     def has_128_bits_float(self) -> bool:
         """Not all devices can perform 128 bits floating point operation"""
         return hasattr(self.xp, "float128")
+
+    def start_range(self, *args, **kwargs):
+        pass
+
+    def end_range(self):
+        pass
 
     @staticmethod
     def get_default() -> "CpuDevice":
@@ -232,6 +238,12 @@ class CudaDevice(Device):
                 self.debug_stack += 1
 
         return ts
+
+    def start_range(self, name, color=0):
+        self.cupy.cuda.nvtx.RangePush(name, color)
+
+    def end_range(self):
+        self.cupy.cuda.nvtx.RangePop()
 
     def elapsed(self, timestamps):
         get_time = self.cupy.cuda.get_elapsed_time
