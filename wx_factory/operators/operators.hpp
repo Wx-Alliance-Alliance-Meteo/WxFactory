@@ -60,19 +60,14 @@ struct extrap_params_cubedsphere
       ArrayType&       result_z) :
       index(index),
       elem_id(index / itf_size),
-      elem(get_raw_pointer<const num_t>(q), elem_id),
-      side_x1(get_raw_pointer<num_t>(result_x), compute_itf_offset(index, order)),
-      side_x2(
-          get_raw_pointer<num_t>(result_x),
-          compute_itf_offset(index, order) + itf_size),
-      side_y1(get_raw_pointer<num_t>(result_y), compute_itf_offset(index, order)),
-      side_y2(
-          get_raw_pointer<num_t>(result_y),
-          compute_itf_offset(index, order) + itf_size),
-      side_z1(get_raw_pointer<num_t>(result_z), compute_itf_offset(index, order)),
-      side_z2(
-          get_raw_pointer<num_t>(result_z),
-          compute_itf_offset(index, order) + itf_size) {}
+      elem(get_raw_ptr<num_t>(q), elem_id),
+      side_x1(get_raw_ptr<num_t>(result_x), compute_itf_offset(index, order)),
+      side_x2(get_raw_ptr<num_t>(result_x), compute_itf_offset(index, order) + itf_size),
+      side_y1(get_raw_ptr<num_t>(result_y), compute_itf_offset(index, order)),
+      side_y2(get_raw_ptr<num_t>(result_y), compute_itf_offset(index, order) + itf_size),
+      side_z1(get_raw_ptr<num_t>(result_z), compute_itf_offset(index, order)),
+      side_z2(get_raw_ptr<num_t>(result_z), compute_itf_offset(index, order) + itf_size) {
+  }
 
   DEVICE_SPACE void set_index(const size_t new_index) {
     const size_t old_index   = index;

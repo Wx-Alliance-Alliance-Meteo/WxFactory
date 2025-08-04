@@ -33,12 +33,6 @@ inline void cudaApiAssert(const cudaError_t code, const char* filename, const in
   }
 }
 
-template <typename num_t>
-num_t* get_raw_pointer(const pybind11::object& obj) {
-  uintptr_t cp_ptr = obj.attr("data").attr("ptr").cast<uintptr_t>();
-  return reinterpret_cast<num_t*>(cp_ptr);
-}
-
 #else
 
 #define DEVICE_SPACE
@@ -47,11 +41,6 @@ num_t* get_raw_pointer(const pybind11::object& obj) {
 using complex_t = std::complex<double>;
 template <class T, std::size_t N>
 using array = std::array<T, N>;
-
-template <typename num_t>
-num_t* get_raw_pointer(const pybind11::array_t<num_t>& a) {
-  return static_cast<num_t*>(a.request().ptr);
-}
 
 #endif
 
@@ -181,21 +170,21 @@ num_t* get_cupy_pointer(pybind11::object obj) {
 //! Extract raw pointer to given array's data and cast it to the requested type
 //! \tparam num_t The type we wish to get from the input array
 template <typename num_t>
-const num_t* get_c_ptr(const pybind11::array_t<num_t>& a) {
+const num_t* get_raw_ptr(const pybind11::array_t<num_t>& a) {
   return static_cast<num_t*>(a.request().ptr);
 }
 template <typename num_t>
-num_t* get_c_ptr(pybind11::array_t<num_t>& a) {
+num_t* get_raw_ptr(pybind11::array_t<num_t>& a) {
   return static_cast<num_t*>(a.request().ptr);
 }
 
 template <typename num_t>
-const num_t* get_c_ptr(const pybind11::object& obj) {
+const num_t* get_raw_ptr(const pybind11::object& obj) {
   uintptr_t cp_ptr = obj.attr("data").attr("ptr").cast<uintptr_t>();
   return reinterpret_cast<num_t*>(cp_ptr);
 }
 template <typename num_t>
-num_t* get_c_ptr(pybind11::object& obj) {
+num_t* get_raw_ptr(pybind11::object& obj) {
   uintptr_t cp_ptr = obj.attr("data").attr("ptr").cast<uintptr_t>();
   return reinterpret_cast<num_t*>(cp_ptr);
 }

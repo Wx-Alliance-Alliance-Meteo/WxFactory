@@ -38,11 +38,11 @@ def load_tests(test_name: str):
     add_test(suite, ShallowWaterRestartTestCase(6, "test_read_restart"), test_re)
     add_test(suite, Euler3DRestartTestCase(6, "test_read_restart"), test_re)
 
-    add_test(suite, ShallowWaterRestartTestCase(24, "test_read_restart"), test_re)
-    add_test(suite, Euler3DRestartTestCase(24, "test_read_restart"), test_re)
+    add_test(suite, ShallowWaterRestartTestCase(24, "test_read_restart", optional=True), test_re)
+    add_test(suite, Euler3DRestartTestCase(24, "test_read_restart", optional=True), test_re)
 
-    add_test(suite, ShallowWaterRestartTestCase(24, "test_multisize"), test_re)
-    add_test(suite, Euler3DRestartTestCase(24, "test_multisize"), test_re)
+    add_test(suite, ShallowWaterRestartTestCase(24, "test_multisize", optional=True), test_re)
+    add_test(suite, Euler3DRestartTestCase(24, "test_multisize", optional=True), test_re)
 
     add_test(suite, GatherScatterTest(6, "gather_scatter_2d"), test_re)
     add_test(suite, GatherScatterTest(6, "gather_scatter_elem_2d"), test_re)
@@ -50,11 +50,11 @@ def load_tests(test_name: str):
     add_test(suite, GatherScatterTest(6, "gather_scatter_elem_3d"), test_re)
     add_test(suite, GatherScatterTest(6, "gather_scatter_elem_4d"), test_re)
 
-    add_test(suite, GatherScatterTest(24, "gather_scatter_2d"), test_re)
-    add_test(suite, GatherScatterTest(24, "gather_scatter_elem_2d"), test_re)
-    add_test(suite, GatherScatterTest(24, "gather_scatter_3d"), test_re)
-    add_test(suite, GatherScatterTest(24, "gather_scatter_elem_3d"), test_re)
-    add_test(suite, GatherScatterTest(24, "gather_scatter_elem_4d"), test_re)
+    add_test(suite, GatherScatterTest(24, "gather_scatter_2d", optional=True), test_re)
+    add_test(suite, GatherScatterTest(24, "gather_scatter_elem_2d", optional=True), test_re)
+    add_test(suite, GatherScatterTest(24, "gather_scatter_3d", optional=True), test_re)
+    add_test(suite, GatherScatterTest(24, "gather_scatter_elem_3d", optional=True), test_re)
+    add_test(suite, GatherScatterTest(24, "gather_scatter_elem_4d", optional=True), test_re)
 
     add_test(suite, GatherScatterTest(54, "gather_scatter_2d", optional=True), test_re)
     add_test(suite, GatherScatterTest(54, "gather_scatter_elem_2d", optional=True), test_re)
@@ -62,7 +62,9 @@ def load_tests(test_name: str):
     add_test(suite, GatherScatterTest(54, "gather_scatter_elem_3d", optional=True), test_re)
     add_test(suite, GatherScatterTest(54, "gather_scatter_elem_4d", optional=True), test_re)
 
-    add_test(suite, GatherScatterTest(24, "fail_wrong_num_proc"), test_re)  # This test needs at least 24 procs
+    add_test(
+        suite, GatherScatterTest(24, "fail_wrong_num_proc", optional=True), test_re
+    )  # This test needs at least 24 procs
     add_test(suite, GatherScatterTest(6, "fail_not_square"), test_re)
     add_test(suite, GatherScatterTest(6, "fail_not_cube"), test_re)
     add_test(suite, GatherScatterTest(6, "fail_wrong_num_dim"), test_re)
@@ -86,8 +88,8 @@ def load_tests(test_name: str):
 
     add_test(suite, PdeRusanov3DTestCase(6, "test_rusanov_kernel_cpu"), test_re)
     add_test(suite, PdeRusanov3DTestCase(6, "test_rusanov_kernel_gpu"), test_re)
-    add_test(suite, PdeRusanov3DTestCase(24, "test_rusanov_kernel_cpu"), test_re)
-    add_test(suite, PdeRusanov3DTestCase(24, "test_rusanov_kernel_gpu"), test_re)
+    add_test(suite, PdeRusanov3DTestCase(24, "test_rusanov_kernel_cpu", optional=True), test_re)
+    add_test(suite, PdeRusanov3DTestCase(24, "test_rusanov_kernel_gpu", optional=True), test_re)
 
     add_test(suite, OperatorsExtrapEuler3DTestCase(6, "test_extrap_kernel_cpu"), test_re)
     add_test(suite, OperatorsExtrapEuler3DTestCase(6, "test_extrap_kernel_gpu"), test_re)

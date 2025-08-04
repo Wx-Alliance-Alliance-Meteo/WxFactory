@@ -82,22 +82,22 @@ void pointwise_euler_cubedsphere_3d(
     const int               num_solpts_tot,
     const int               verbose) {
 
-  const num_t* q_ptr        = get_c_ptr<num_t>(q_in);
-  num_t*       flux_x1_ptr  = get_c_ptr<num_t>(flux_x1);
-  num_t*       flux_x2_ptr  = get_c_ptr<num_t>(flux_x2);
-  num_t*       flux_x3_ptr  = get_c_ptr<num_t>(flux_x3);
-  num_t*       pressure_ptr = get_c_ptr<num_t>(pressure);
+  const num_t* q_ptr        = get_raw_ptr<num_t>(q_in);
+  num_t*       flux_x1_ptr  = get_raw_ptr<num_t>(flux_x1);
+  num_t*       flux_x2_ptr  = get_raw_ptr<num_t>(flux_x2);
+  num_t*       flux_x3_ptr  = get_raw_ptr<num_t>(flux_x3);
+  num_t*       pressure_ptr = get_raw_ptr<num_t>(pressure);
 
-  num_t* wflux_adv_x1_ptr = get_c_ptr<num_t>(wflux_adv_x1);
-  num_t* wflux_adv_x2_ptr = get_c_ptr<num_t>(wflux_adv_x2);
-  num_t* wflux_adv_x3_ptr = get_c_ptr<num_t>(wflux_adv_x3);
+  num_t* wflux_adv_x1_ptr = get_raw_ptr<num_t>(wflux_adv_x1);
+  num_t* wflux_adv_x2_ptr = get_raw_ptr<num_t>(wflux_adv_x2);
+  num_t* wflux_adv_x3_ptr = get_raw_ptr<num_t>(wflux_adv_x3);
 
-  num_t*        wflux_pres_x1_ptr = get_c_ptr<num_t>(wflux_pres_x1);
-  num_t*        wflux_pres_x2_ptr = get_c_ptr<num_t>(wflux_pres_x2);
-  num_t*        wflux_pres_x3_ptr = get_c_ptr<num_t>(wflux_pres_x3);
-  num_t*        log_pressure_ptr  = get_c_ptr<num_t>(log_pressure);
-  const real_t* sqrt_g_ptr        = get_c_ptr<real_t>(sqrt_g_in);
-  const real_t* h_ptr             = get_c_ptr<real_t>(h_in);
+  num_t*        wflux_pres_x1_ptr = get_raw_ptr<num_t>(wflux_pres_x1);
+  num_t*        wflux_pres_x2_ptr = get_raw_ptr<num_t>(wflux_pres_x2);
+  num_t*        wflux_pres_x3_ptr = get_raw_ptr<num_t>(wflux_pres_x3);
+  num_t*        log_pressure_ptr  = get_raw_ptr<num_t>(log_pressure);
+  const real_t* sqrt_g_ptr        = get_raw_ptr<real_t>(sqrt_g_in);
+  const real_t* h_ptr             = get_raw_ptr<real_t>(h_in);
 
   const uint64_t stride    = num_elem_x3 * num_elem_x2 * num_elem_x1 * num_solpts_tot;
   const int array_shape[5] = {5, num_elem_x3, num_elem_x2, num_elem_x1, num_solpts_tot};
@@ -281,33 +281,33 @@ void riemann_euler_cubedsphere_rusanov_3d(
     py_array<num_t>&        wflux_adv_itf_x3,
     py_array<num_t>&        wflux_pres_itf_x3) {
 
-  const num_t* q_itf_x1_ptr = get_c_ptr<num_t>(q_itf_x1_in);
-  const num_t* q_itf_x2_ptr = get_c_ptr<num_t>(q_itf_x2_in);
-  num_t*       q_itf_x3_ptr = get_c_ptr<num_t>(q_itf_x3_in);
+  const num_t* q_itf_x1_ptr = get_raw_ptr<num_t>(q_itf_x1_in);
+  const num_t* q_itf_x2_ptr = get_raw_ptr<num_t>(q_itf_x2_in);
+  num_t*       q_itf_x3_ptr = get_raw_ptr<num_t>(q_itf_x3_in);
 
-  num_t* flux_itf_x1_ptr = get_c_ptr<num_t>(flux_itf_x1);
-  num_t* flux_itf_x2_ptr = get_c_ptr<num_t>(flux_itf_x2);
-  num_t* flux_itf_x3_ptr = get_c_ptr<num_t>(flux_itf_x3);
+  num_t* flux_itf_x1_ptr = get_raw_ptr<num_t>(flux_itf_x1);
+  num_t* flux_itf_x2_ptr = get_raw_ptr<num_t>(flux_itf_x2);
+  num_t* flux_itf_x3_ptr = get_raw_ptr<num_t>(flux_itf_x3);
 
-  num_t* pressure_itf_x1_ptr = get_c_ptr<num_t>(pressure_itf_x1);
-  num_t* pressure_itf_x2_ptr = get_c_ptr<num_t>(pressure_itf_x2);
-  num_t* pressure_itf_x3_ptr = get_c_ptr<num_t>(pressure_itf_x3);
+  num_t* pressure_itf_x1_ptr = get_raw_ptr<num_t>(pressure_itf_x1);
+  num_t* pressure_itf_x2_ptr = get_raw_ptr<num_t>(pressure_itf_x2);
+  num_t* pressure_itf_x3_ptr = get_raw_ptr<num_t>(pressure_itf_x3);
 
-  num_t* wflux_adv_itf_x1_ptr = get_c_ptr<num_t>(wflux_adv_itf_x1);
-  num_t* wflux_adv_itf_x2_ptr = get_c_ptr<num_t>(wflux_adv_itf_x2);
-  num_t* wflux_adv_itf_x3_ptr = get_c_ptr<num_t>(wflux_adv_itf_x3);
+  num_t* wflux_adv_itf_x1_ptr = get_raw_ptr<num_t>(wflux_adv_itf_x1);
+  num_t* wflux_adv_itf_x2_ptr = get_raw_ptr<num_t>(wflux_adv_itf_x2);
+  num_t* wflux_adv_itf_x3_ptr = get_raw_ptr<num_t>(wflux_adv_itf_x3);
 
-  num_t* wflux_pres_itf_x1_ptr = get_c_ptr<num_t>(wflux_pres_itf_x1);
-  num_t* wflux_pres_itf_x2_ptr = get_c_ptr<num_t>(wflux_pres_itf_x2);
-  num_t* wflux_pres_itf_x3_ptr = get_c_ptr<num_t>(wflux_pres_itf_x3);
+  num_t* wflux_pres_itf_x1_ptr = get_raw_ptr<num_t>(wflux_pres_itf_x1);
+  num_t* wflux_pres_itf_x2_ptr = get_raw_ptr<num_t>(wflux_pres_itf_x2);
+  num_t* wflux_pres_itf_x3_ptr = get_raw_ptr<num_t>(wflux_pres_itf_x3);
 
-  const real_t* sqrt_g_itf_x1_ptr = get_c_ptr<real_t>(sqrt_g_itf_x1);
-  const real_t* sqrt_g_itf_x2_ptr = get_c_ptr<real_t>(sqrt_g_itf_x2);
-  const real_t* sqrt_g_itf_x3_ptr = get_c_ptr<real_t>(sqrt_g_itf_x3);
+  const real_t* sqrt_g_itf_x1_ptr = get_raw_ptr<real_t>(sqrt_g_itf_x1);
+  const real_t* sqrt_g_itf_x2_ptr = get_raw_ptr<real_t>(sqrt_g_itf_x2);
+  const real_t* sqrt_g_itf_x3_ptr = get_raw_ptr<real_t>(sqrt_g_itf_x3);
 
-  const real_t* h_x1_ptr = get_c_ptr<real_t>(h_x1);
-  const real_t* h_x2_ptr = get_c_ptr<real_t>(h_x2);
-  const real_t* h_x3_ptr = get_c_ptr<real_t>(h_x3);
+  const real_t* h_x1_ptr = get_raw_ptr<real_t>(h_x1);
+  const real_t* h_x2_ptr = get_raw_ptr<real_t>(h_x2);
+  const real_t* h_x3_ptr = get_raw_ptr<real_t>(h_x3);
 
   const int      num_solpts_riem = 2 * num_solpts * num_solpts;
   const uint64_t stride_x1 =
@@ -520,12 +520,12 @@ void forcing_euler_cubesphere_3d(
     const int               num_solpts,
     const int               verbose) {
 
-  const num_t*  q           = get_c_ptr<num_t>(q_in);
-  const num_t*  pressure    = get_c_ptr<num_t>(pressure_in);
-  const real_t* sqrt_g      = get_c_ptr<real_t>(sqrt_g_in);
-  const real_t* h           = get_c_ptr<real_t>(h_in);
-  const real_t* christoffel = get_c_ptr<real_t>(christoffel_in);
-  num_t*        forcing     = get_c_ptr<num_t>(forcing_in);
+  const num_t*  q           = get_raw_ptr<num_t>(q_in);
+  const num_t*  pressure    = get_raw_ptr<num_t>(pressure_in);
+  const real_t* sqrt_g      = get_raw_ptr<real_t>(sqrt_g_in);
+  const real_t* h           = get_raw_ptr<real_t>(h_in);
+  const real_t* christoffel = get_raw_ptr<real_t>(christoffel_in);
+  num_t*        forcing     = get_raw_ptr<num_t>(forcing_in);
 
   const uint64_t stride = num_elem_x3 * num_elem_x2 * num_elem_x1 * num_solpts;
 

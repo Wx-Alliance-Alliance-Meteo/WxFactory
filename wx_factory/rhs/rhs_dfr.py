@@ -183,22 +183,22 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
 
         self.df1_dx1 = apply_op(self.f_x1, self.ops.derivative_x)
 
-        xp = self.device.xp
-        res = xp.zeros_like(self.df1_dx1)
-        num_fields, nz, ny, nx = self.f_x1.shape[:4]
-        num_solpts = self.geom.num_solpts
-        self.device.operators.deriv_x_3d(
-            self.f_x1,
-            self.ops.derivative_x,
-            res,
-            num_fields,
-            nx,
-            ny,
-            nz,
-            num_solpts,
-            0 if self.device.comm.rank != 0 else 1,
-            # 0,
-        )
+        # xp = self.device.xp
+        # res = xp.zeros_like(self.df1_dx1)
+        # num_fields, nz, ny, nx = self.f_x1.shape[:4]
+        # num_solpts = self.geom.num_solpts
+        # self.device.operators.deriv_x_3d(
+        #     self.f_x1,
+        #     self.ops.derivative_x,
+        #     res,
+        #     num_fields,
+        #     nx,
+        #     ny,
+        #     nz,
+        #     num_solpts,
+        #     0 if self.device.comm.rank != 0 else 1,
+        #     # 0,
+        # )
 
         self.df2_dx2 = apply_op(self.f_x2, self.ops.derivative_y)
         self.df3_dx3 = apply_op(self.f_x3, self.ops.derivative_z)
