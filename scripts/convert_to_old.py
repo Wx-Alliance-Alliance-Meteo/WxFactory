@@ -18,7 +18,7 @@ import output.output_manager
 
 d = device.CpuDevice(MPI.COMM_WORLD)
 
-config, T0 = output.InputManager.read_config_from_save_file('./tests/data/temp/state_vector_47170bb8616a.00000125.npy', MPI.COMM_WORLD)
+config, T0 = output.InputManager.read_config_from_save_file('./tests/data/temp/state_vector_47170bb8616a.00000000.npy', MPI.COMM_WORLD)
 config.output_dir = "./tests/data/temp/old"
 process_topo = process_topology.ProcessTopology(d, MPI.COMM_WORLD.rank)
 print((0,) if T0 is None else T0.shape, process_topo.distribute_cube(T0, 4).shape)
@@ -42,4 +42,4 @@ for i in range(5):
 print(T0_old.shape)
 
 om = output.output_manager.OutputManager(config, cs, None, d)
-om.step(process_topo.gather_cube(T0_old, 4), 125)
+om.step(process_topo.gather_cube(T0_old, 4), 0)
