@@ -166,6 +166,22 @@
                     "type": "int",
                     "default": 20,
                     "min": 1
+                },
+                {
+                    "name": "splitting_integrator_1",
+                    "type": "str",
+                    "dependancy": {
+                        "name": "time_integrator",
+                        "values": ["lie", "strang"]
+                    }
+                },
+                {
+                    "name": "splitting_integrator_2",
+                    "type": "str",
+                    "dependancy": {
+                        "name": "time_integrator",
+                        "values": ["lie", "strang"]
+                    }
                 }
             ]
         },
