@@ -170,6 +170,7 @@
                 {
                     "name": "splitting_integrator_1",
                     "type": "str",
+                    "default": "",
                     "dependancy": {
                         "name": "time_integrator",
                         "values": ["lie", "strang"]
@@ -178,6 +179,7 @@
                 {
                     "name": "splitting_integrator_2",
                     "type": "str",
+                    "default": "",
                     "dependancy": {
                         "name": "time_integrator",
                         "values": ["lie", "strang"]
