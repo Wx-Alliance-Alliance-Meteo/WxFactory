@@ -24,16 +24,13 @@ class ScharMountainPostProcessor(post_proccessor.PostProcessor):
     zbot_itf_i_new: numpy.ndarray
     zbot_itf_j_new: numpy.ndarray
 
-    def __init__(self, config: Configuration, geom: CubedSphere3D, metric: Metric3DTopo):
+    def __init__(self, config: Configuration, geom: CubedSphere3D):
         if config is None:
             raise ValueError("The configuration must no be None")
         if type(geom) != CubedSphere3D or geom is None:
             raise TypeError("The Schar waves works only with a 3D cubed sphere")
-        if type(metric) != Metric3DTopo or metric is None:
-            raise TypeError("The Schar waves works only with a 3D metric topology")
         self.geom = geom
         self.xp = geom.device.xp
-        self.metric = metric
 
         self.lambdam = config.schar_mountain_longitude
         self.phim = config.schar_mountain_lattitude

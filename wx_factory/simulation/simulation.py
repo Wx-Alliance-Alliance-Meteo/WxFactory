@@ -1,6 +1,6 @@
 import sys
 from time import time
-from typing import List
+from typing import List, Dict, Type
 
 from mpi4py import MPI
 import numpy
@@ -51,7 +51,7 @@ class Simulation:
     """
 
     config: Configuration
-    post_processors: List[PostProcessor]
+    post_processors: Dict[Type, PostProcessor]
 
     def __init__(
         self,
@@ -69,7 +69,7 @@ class Simulation:
         self.comm = comm
         self.rank = self.comm.rank
 
-        self.post_processors = []
+        self.post_processors = {}
 
         # self.input_manager = InputManager(self.comm)
 
@@ -121,7 +121,7 @@ class Simulation:
         self.process_topo = None
         self.geometry = self._create_geometry()
         self.operators = DFROperators(self.geometry, self.config, self.device)
-        self.initial_Q, self.topography, self.metric = init_state_vars(self.geometry, self.operators, self.config)
+        self.initial_Q, self.topography, self.metric = init_state_vars(self.geometry, self.operators, self.config, self.post_processors)
         self.preconditioner = self._create_preconditioner(self.initial_Q)
         self.output = self._create_output_manager()
         self.initial_Q, self.starting_step = self._determine_starting_state()
@@ -150,7 +150,6 @@ class Simulation:
         self.t = self.config.dt * self.starting_step
         self.integrator.sim_time = self.t
         self.num_steps = int(numpy.ceil(self.config.t_end / self.config.dt)) - self.starting_step
-        self._create_post_processors()
 
     def step(self):
         """Advance the simulation by one time step."""
@@ -193,8 +192,8 @@ class Simulation:
                 self.Q[idx_rho_u2, :, :, :] = self.Q[idx_rho, :, :, :] * u2_contra
                 self.Q[idx_rho_w, :, :, :] = self.Q[idx_rho, :, :, :] * w_wind
 
-            for post_precessor in self.post_processors:
-                post_precessor.process()
+            for post_precessor_type in self.post_processors:
+                self.post_processors[post_precessor_type].process()
 
             self.output.step(self.Q, self.step_id)  # Perform any requested output
             sys.stdout.flush()
@@ -289,7 +288,7 @@ class Simulation:
                     self.process_topo,
                 )
             elif self.config.equations == "euler":
-                return CubedSphere3D(
+                cube_sphere = CubedSphere3D(
                     self.num_elements_horizontal,
                     self.config.num_elements_vertical,
                     self.num_solpts,
@@ -301,6 +300,11 @@ class Simulation:
                     self.process_topo,
                     self.config,
                 )
+            
+                if self.config.enable_schar_mountain:
+                    schar_mountain = ScharMountainPostProcessor(self.config, cube_sphere)
+                    self.post_processors[ScharMountainPostProcessor] = schar_mountain
+                return cube_sphere
 
         if self.config.grid_type == "cartesian2d":
             return Cartesian2D(
@@ -452,8 +456,3 @@ class Simulation:
         self.comm.Allreduce(error_detected, error_detected_out, MPI.MAX)
         if error_detected_out[0] > 0:
             raise ValueError(f"NaN")
-
-    def _create_post_processors(self):
-        if self.config.enable_schar_mountain and self.config.equations == "euler":
-            schar_waves = ScharMountainPostProcessor(self.config, self.geometry, self.metric)
-            self.post_processors.append(schar_waves)

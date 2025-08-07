@@ -552,84 +552,19 @@ def dcmip_schar_waves(geom: CubedSphere3D, metric, mtrx: DFROperators, param: Co
     """
     Tests 2-1 and 2-2:  Non-hydrostatic Mountain Waves over a Schaer-type Mountain
     """
+
     xp = geom.device.xp
 
+    metric.build_metric()
+
     T0 = 300.0  # temperature (K)
-    lambdam = math.pi / 4.0  # mountain longitude center point (radians)
-    phim = 0.0  # mountain latitude center point (radians)
-    h0 = 250.0  # peak height of the mountain range (m)
-    Dm = 5000.0  # mountain radius (meters)
-    Dxi = 4000.0  # Mountain wavelength (meters)
     Ueq = 20.0  # Reference zonal wind velocity (equator)
     Peq = 100000.0  # Reference surface pressure (Pa)
-
-    ratio = 1.0
-    if param.enable_schar_mountain:
-        lambdam = param.schar_mountain_longitude
-        phim = param.schar_mountain_lattitude
-        h0 = param.schar_mountain_height
-        Dm = param.schar_mountain_radius
-        Dxi = param.schar_mountain_length
-        ratio = 0.0 if param.schar_mountain_step != 0 else 1.0
-
 
     if shear:
         Cs = 2.5e-4  # Wind shear rate (1/m), for shear case
     else:
         Cs = 0.0
-
-    # -----------------------------------------------------------------------
-    #    Set topography
-    # -----------------------------------------------------------------------
-
-    # Build topography based on lateral great-circle distance from the mountain center
-    def build_topo_old(latlon):
-        lat = latlon[1, 0, :, :]
-        lon = latlon[0, 0, :, :]
-        r = geom.earth_radius * xp.arccos(
-            math.sin(phim) * xp.sin(lat) + math.cos(phim) * xp.cos(lat) * xp.cos(lon - lambdam)
-        )
-        z = xp.zeros(lat.shape)
-        z[:, :] = h0 * xp.exp(-(r**2) / Dm**2) * xp.cos(xp.pi * r / Dxi) ** 2
-        return z
-
-    def build_topo(latlon):
-        lat = latlon[1]
-        lon = latlon[0]
-        r = geom.earth_radius * xp.arccos(
-            math.sin(phim) * xp.sin(lat) + math.cos(phim) * xp.cos(lat) * xp.cos(lon - lambdam)
-        )
-
-        return h0 * xp.exp(-(r**2) / Dm**2) * xp.cos(xp.pi * r / Dxi) ** 2
-
-    zbot = build_topo_old(geom.coordVec_latlon)
-    zbot_itf_i = build_topo_old(geom.coordVec_latlon_itf_i)
-    zbot_itf_j = build_topo_old(geom.coordVec_latlon_itf_j)
-
-    zbot_new = build_topo(geom.get_floor(geom.polar))
-    zbot_itf_i_new = build_topo(geom.get_itf_i_floor(geom.polar_itf_i))
-    zbot_itf_j_new = build_topo(geom.get_itf_j_floor(geom.polar_itf_j))
-    zbot_itf_i_new[geom.floor_west_edge] = 0.0
-    zbot_itf_i_new[geom.floor_east_edge] = 0.0
-    zbot_itf_j_new[geom.floor_south_edge] = 0.0
-    zbot_itf_j_new[geom.floor_north_edge] = 0.0
-
-    diff = zbot_new - geom.to_new_floor(zbot)
-    diffn = xp.linalg.norm(diff)
-
-    diffi = zbot_itf_i_new - geom.to_new_itf_i_floor(zbot_itf_i)
-    diffin = xp.linalg.norm(diffi)
-
-    diffj = zbot_itf_j_new - geom.to_new_itf_j_floor(zbot_itf_j)
-    diffjn = xp.linalg.norm(diffj)
-
-    if diffn > 0.0 or diffin > 0.0 or diffjn > 0.0:
-        raise ValueError
-
-    # Update the geometry object with the new bottom topography
-    geom.apply_topography(zbot * ratio, zbot_itf_i * ratio, zbot_itf_j * ratio, zbot_new * ratio, zbot_itf_i_new * ratio, zbot_itf_j_new * ratio)
-    # And regenerate the metric to take this new topography into account
-    metric.build_metric()
 
     ## Coordinate vectors in 3D
 
