@@ -1,7 +1,7 @@
 #ifndef PDE_INTERFACE_H
 #define PDE_INTERFACE_H
 
-#include "definitions/definitions.hpp"
+#include "common/parameters.hpp"
 
 template <typename num_t>
 struct euler_state_2d
@@ -152,10 +152,10 @@ struct kernel_params_cubedsphere
   var_multi<const real_t, 9>  h;
 
   euler_state_3d<num_t> flux[3];
-  var<num_t>      pressure;
-  var<num_t> wflux_adv[3];
-  var<num_t> wflux_pres[3];
-  var<num_t>      logp;
+  var<num_t>            pressure;
+  var<num_t>            wflux_adv[3];
+  var<num_t>            wflux_pres[3];
+  var<num_t>            logp;
 
   HOST_DEVICE_SPACE kernel_params_cubedsphere(
       const num_t*  q,      //!< Pointer to the various fields (each variable is grouped)
@@ -183,14 +183,8 @@ struct kernel_params_cubedsphere
           euler_state_3d<num_t>(flux_x2, index, stride),
           euler_state_3d<num_t>(flux_x3, index, stride)},
       pressure(pressure, index),
-      wflux_adv{
-          {wflux_adv_x1, index},
-          {wflux_adv_x2, index},
-          {wflux_adv_x3, index}},
-      wflux_pres{
-          {wflux_pres_x1, index},
-          {wflux_pres_x2, index},
-          {wflux_pres_x3, index}},
+      wflux_adv{{wflux_adv_x1, index}, {wflux_adv_x2, index}, {wflux_adv_x3, index}},
+      wflux_pres{{wflux_pres_x1, index}, {wflux_pres_x2, index}, {wflux_pres_x3, index}},
       logp(logp, index) {}
 
   DEVICE_SPACE void set_index(const size_t new_index) {
@@ -214,8 +208,6 @@ struct kernel_params_cubedsphere
   }
 };
 
-
-
 template <typename real_t, typename num_t>
 struct riemann_params_cubedsphere
 {
@@ -226,9 +218,9 @@ struct riemann_params_cubedsphere
   var_multi<const real_t, 9>  h;
 
   euler_state_3d<num_t> flux;
-  var<num_t>      pressure;
-  var<num_t>      wflux_adv;
-  var<num_t>      wflux_pres;
+  var<num_t>            pressure;
+  var<num_t>            wflux_adv;
+  var<num_t>            wflux_pres;
 
   HOST_DEVICE_SPACE riemann_params_cubedsphere(
       const num_t*  q,      //!< Pointer to the various fields (each variable is grouped)
@@ -249,6 +241,5 @@ struct riemann_params_cubedsphere
       wflux_adv(wflux_adv, index),
       wflux_pres(wflux_pres, index) {}
 };
-
 
 #endif // PDE_INTERFACE_H

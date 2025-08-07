@@ -1,4 +1,5 @@
-#include "definitions/definitions.hpp"
+#include "common/parameters.hpp"
+#include "common/physical_constants.hpp"
 
 template <typename num_t>
 DEVICE_SPACE void

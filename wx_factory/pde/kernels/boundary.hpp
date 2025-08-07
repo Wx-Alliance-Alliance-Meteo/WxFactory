@@ -1,4 +1,5 @@
-#include "definitions/definitions.hpp"
+#include "common/parameters.hpp"
+#include "common/physical_constants.hpp"
 
 template <typename num_t>
 DEVICE_SPACE void boundary_eulercartesian_2d_kernel(
@@ -22,12 +23,10 @@ DEVICE_SPACE void boundary_eulercartesian_2d_kernel(
   }
 }
 
-
 template <typename real_t, typename num_t>
 DEVICE_SPACE void boundary_euler_cubedsphere_3d_kernel(
     euler_state_3d<const num_t> state_in,
-    euler_state_3d<num_t> state_b)
-{
+    euler_state_3d<num_t>       state_b) {
   const num_t w_b = -1.0 * *state_in.rho_w / *state_in.rho;
 
   // Set symmetry/slip wall boundary

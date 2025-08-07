@@ -19,6 +19,8 @@ struct extrap_all_kernel
 
     // clang-format off
     constexpr real_t extrap_factors[][6] = {
+      {},
+      {1.0},
       {1.366025403784438819, -0.366025403784438708},
       {1.478830557701235948, -0.666666666666666408, 0.187836108965430404},
       {1.526788125457266831, -0.813632449486927478, 0.400761520311650465, -0.113917196281990041},
@@ -49,12 +51,12 @@ struct extrap_all_kernel
     num_t side_z2(0.0);
     for (int i = 0; i < order; i++)
     {
-      side_x1 += elem[offset_x * order + i] * extrap_factors[order - 2][i];
-      side_x2 += elem[offset_x * order + i] * extrap_factors[order - 2][order - i - 1];
-      side_y1 += elem[offset_y + order * i] * extrap_factors[order - 2][i];
-      side_y2 += elem[offset_y + order * i] * extrap_factors[order - 2][order - i - 1];
-      side_z1 += elem[offset_z + o2 * i] * extrap_factors[order - 2][i];
-      side_z2 += elem[offset_z + o2 * i] * extrap_factors[order - 2][order - i - 1];
+      side_x1 += elem[offset_x * order + i] * extrap_factors[order][i];
+      side_x2 += elem[offset_x * order + i] * extrap_factors[order][order - i - 1];
+      side_y1 += elem[offset_y + order * i] * extrap_factors[order][i];
+      side_y2 += elem[offset_y + order * i] * extrap_factors[order][order - i - 1];
+      side_z1 += elem[offset_z + o2 * i] * extrap_factors[order][i];
+      side_z2 += elem[offset_z + o2 * i] * extrap_factors[order][order - i - 1];
     }
     *params.side_x1 = side_x1;
     *params.side_x2 = side_x2;

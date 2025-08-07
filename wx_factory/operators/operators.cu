@@ -6,7 +6,6 @@
 
 #include <pybind11/stl.h>
 
-#include "definitions/definitions.hpp"
 #include "kernels/kernels.h"
 
 namespace py = pybind11;

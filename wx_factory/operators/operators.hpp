@@ -1,7 +1,7 @@
 #ifndef OPERATORS_HPP_
 #define OPERATORS_HPP_
 
-#include "definitions/definitions.hpp"
+#include "common/parameters.hpp"
 
 template <typename num_t, int order>
 struct element

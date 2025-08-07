@@ -1,7 +1,7 @@
 #ifndef FORCING_H_
 #define FORCING_H_
 
-#include "../interface.hpp"
+#include "../pde.hpp"
 
 template <typename real_t, typename num_t>
 DEVICE_SPACE num_t compute_single_forcing(
