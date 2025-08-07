@@ -1,23 +1,19 @@
 #include "operators.hpp"
 
+#include <cmath>
 #include <cstdio>
 #include <iostream>
+
+#include <pybind11/stl.h>
 
 #include "definitions/definitions.hpp"
 #include "kernels/kernels.h"
 
 namespace py = pybind11;
 
-template <
-    typename real_t,
-    typename num_t,
-    int order,
-    template <typename, typename, int> class MyFunc,
-    template <typename, int> class ParamType>
-__global__ void element_wise_kernel(
-    ParamType<num_t, order> params,
-    const size_t            max_num_threads,
-    const bool              verbose) {
+template <typename num_t, int order, typename MyFunc>
+__global__ void
+element_wise_kernel(MyFunc func, const size_t max_num_threads, const bool verbose) {
 
   constexpr size_t group_size         = order * order;
   constexpr size_t num_elem_per_block = EXTRAP_3D_BLOCK_SIZE / group_size;
@@ -31,11 +27,11 @@ __global__ void element_wise_kernel(
 
   if (threadIdx.x < useful_block_size && thread_id < max_num_threads)
   {
-    params.set_index(thread_id);
+    func.params.set_index(thread_id);
     const int row_id = threadIdx.x % group_size;
     for (int i = 0; i < order; i++)
     {
-      elem[elem_id][row_id][i] = params.elem[row_id * order + i];
+      elem[elem_id][row_id][i] = func.params.elem[row_id * order + i];
     }
   }
 
@@ -44,25 +40,12 @@ __global__ void element_wise_kernel(
   if (threadIdx.x < useful_block_size && thread_id < max_num_threads)
   {
     // func(params, &elem[elem_id][0][0], verbose);
-    MyFunc<real_t, num_t, order>()(params, &elem[elem_id][0][0], verbose);
+    func(&elem[elem_id][0][0], verbose);
   }
 }
 
-template <
-    typename real_t,
-    typename num_t,
-    int order,
-    template <typename, int> class ParamType,
-    template <typename, typename, int> class MyFunc,
-    typename... Args>
-void launch_kernel(
-    const int num_elem_x1,
-    const int num_elem_x2,
-    const int num_elem_x3,
-    const int verbose,
-    Args... args) {
-
-  ParamType<num_t, order> p(0, args...);
+template <typename num_t, int order, typename MyFunc>
+void launch_kernel(const std::vector<int>& num_elements, const int verbose, MyFunc func) {
 
   constexpr size_t o2 = order * order;
   // constexpr size_t BLOCK_SIZE            = 257;
@@ -70,7 +53,7 @@ void launch_kernel(
   constexpr size_t num_threads_per_block = num_elem_per_block * o2;
 
   const size_t num_active_threads =
-      5 * num_elem_x1 * num_elem_x2 * num_elem_x3 * order * order;
+      5 * num_elements[0] * num_elements[1] * num_elements[2] * order * order;
   const size_t num_blocks =
       (num_active_threads + num_threads_per_block - 1) / num_threads_per_block;
   // const size_t num_blocks = (max_num_threads + BLOCK_SIZE - 1) / BLOCK_SIZE;
@@ -81,38 +64,60 @@ void launch_kernel(
               << " block(s) of size " << EXTRAP_3D_BLOCK_SIZE << " (with "
               << num_threads_per_block << " active threads per block, in "
               << num_elem_per_block << " elements)\n";
-    std::cout << "Problem size " << num_elem_x1 << "x" << num_elem_x2 << "x"
-              << num_elem_x3 << " elements, order " << order << std::endl;
+    std::cout << "Problem size " << num_elements[0] << "x" << num_elements[1] << "x"
+              << num_elements[2] << " elements, order " << order << std::endl;
   }
 
-  element_wise_kernel<real_t, num_t, order, MyFunc>
-      <<<num_blocks, EXTRAP_3D_BLOCK_SIZE>>>(p, num_active_threads, bool(verbose));
+  element_wise_kernel<num_t, order>
+      <<<num_blocks, EXTRAP_3D_BLOCK_SIZE>>>(func, num_active_threads, bool(verbose));
 }
 
 template <
     typename real_t,
     typename num_t,
-    template <typename, int> class ParamType,
     template <typename, typename, int> class KernelType,
     typename... Args>
 void select_order(
-    const int num_elem_x1,
-    const int num_elem_x2,
-    const int num_elem_x3,
-    const int num_solpts,
-    const int verbose,
+    const std::vector<int>& num_elements,
+    const int               num_solpts,
+    const int               verbose,
     Args... args) {
   switch (num_solpts)
   {
     // clang-format off
-  case 1: launch_kernel<real_t, num_t, 1, ParamType, KernelType>(num_elem_x1, num_elem_x2, num_elem_x3, verbose, args...); break;
-  case 2: launch_kernel<real_t, num_t, 2, ParamType, KernelType>(num_elem_x1, num_elem_x2, num_elem_x3, verbose, args...); break;
-  case 3: launch_kernel<real_t, num_t, 3, ParamType, KernelType>(num_elem_x1, num_elem_x2, num_elem_x3, verbose, args...); break;
-  case 4: launch_kernel<real_t, num_t, 4, ParamType, KernelType>(num_elem_x1, num_elem_x2, num_elem_x3, verbose, args...); break;
-  case 5: launch_kernel<real_t, num_t, 5, ParamType, KernelType>(num_elem_x1, num_elem_x2, num_elem_x3, verbose, args...); break;
-  case 6: launch_kernel<real_t, num_t, 6, ParamType, KernelType>(num_elem_x1, num_elem_x2, num_elem_x3, verbose, args...); break;
+  case 1: launch_kernel<num_t, 1>(num_elements, verbose, KernelType<real_t, num_t, 1>(args...)); break;
+  case 2: launch_kernel<num_t, 2>(num_elements, verbose, KernelType<real_t, num_t, 2>(args...)); break;
+  case 3: launch_kernel<num_t, 3>(num_elements, verbose, KernelType<real_t, num_t, 3>(args...)); break;
+  case 4: launch_kernel<num_t, 4>(num_elements, verbose, KernelType<real_t, num_t, 4>(args...)); break;
+  case 5: launch_kernel<num_t, 5>(num_elements, verbose, KernelType<real_t, num_t, 5>(args...)); break;
+  case 6: launch_kernel<num_t, 6>(num_elements, verbose, KernelType<real_t, num_t, 6>(args...)); break;
   default: std::cerr << __func__ << ": Not implemented for order " << num_solpts << "\n"; break;
     // clang-format on
+  }
+}
+
+template <template <typename, typename, int> class KernelType, typename... Args>
+void select_type(
+    const std::string&      dtype,
+    const std::vector<int>& num_elements,
+    const int               num_solpts,
+    const int               verbose,
+    Args... args) {
+  if (dtype == "float64")
+  {
+    select_order<double, double, KernelType>(num_elements, num_solpts, verbose, args...);
+  }
+  else if (dtype == "complex128")
+  {
+    select_order<double, complex_t, KernelType>(
+        num_elements,
+        num_solpts,
+        verbose,
+        args...);
+  }
+  else
+  {
+    std::cerr << __func__ << ": Unrecognized array type " << dtype << std::endl;
   }
 }
 
@@ -121,43 +126,25 @@ void select_extrap_all_3d_type(
     py::object&       result_x_in,
     py::object&       result_y_in,
     py::object&       result_z_in,
-    const int         num_elem_x1,
-    const int         num_elem_x2,
-    const int         num_elem_x3,
-    const int         num_solpts,
     const int         verbose) {
 
   std::string dtype = py::str(q_in.attr("dtype").attr("name"));
-  if (dtype == "float64")
-  {
-    select_order<double, double, extrap_params_cubedsphere, extrap_all_kernel>(
-        num_elem_x1,
-        num_elem_x2,
-        num_elem_x3,
-        num_solpts,
-        verbose,
-        q_in,
-        result_x_in,
-        result_y_in,
-        result_z_in);
-  }
-  else if (dtype == "complex128")
-  {
-    select_order<double, complex_t, extrap_params_cubedsphere, extrap_all_kernel>(
-        num_elem_x1,
-        num_elem_x2,
-        num_elem_x3,
-        num_solpts,
-        verbose,
-        q_in,
-        result_x_in,
-        result_y_in,
-        result_z_in);
-  }
-  else
-  {
-    std::cerr << __func__ << ": Unrecognized array type " << dtype << "\n";
-  }
+  auto        shape = (q_in.attr("shape")).cast<std::vector<int>>();
+
+  const int num_elem_x3 = shape[1];
+  const int num_elem_x2 = shape[2];
+  const int num_elem_x1 = shape[3];
+  const int num_solpts  = static_cast<int>(std::cbrt(shape[4]));
+
+  select_type<extrap_all_kernel>(
+      dtype,
+      {num_elem_x1, num_elem_x2, num_elem_x3},
+      num_solpts,
+      verbose,
+      q_in,
+      result_x_in,
+      result_y_in,
+      result_z_in);
 }
 
 __constant__ double deriv_x_operator[MAX_DERIV_ORDER * MAX_DERIV_ORDER * MAX_DERIV_ORDER];
