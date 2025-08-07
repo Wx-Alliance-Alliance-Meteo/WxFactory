@@ -393,7 +393,6 @@ class ConfigurationSchema:
         else:
             is_list = False
             field_type = classes[field_type_value]
-
         try:
             field_default = self.__get_attribute("default", field, field_type, optional=True, is_list=is_list)
             valid_range = self.__get_range(field, field_type)
@@ -402,7 +401,7 @@ class ConfigurationSchema:
             dep = self.__get_attribute("dependency", field, dict, optional=True)
             if dep is not None:
                 dep_field = self.__get_attribute("name", dep, str)
-                dep_values = self.__get_attribute("values", dep, field_type, is_list=True)
+                dep_values = self.__get_attribute("values", dep, list, is_list=True)
                 dependency = dep_field, dep_values
 
             description = self.__get_attribute("description", field, str, optional=True)
