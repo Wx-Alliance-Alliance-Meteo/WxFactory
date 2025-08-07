@@ -99,14 +99,6 @@ DEVICE_SPACE inline int get_c_index(
          j * shape[2] * shape[3] * shape[4] + k * shape[3] * shape[4] + l * shape[4] + m;
 }
 
-// Return the cupy pointer
-template <typename num_t>
-num_t* get_cupy_pointer(pybind11::object obj) {
-  uintptr_t cp_ptr = obj.attr("data").attr("ptr").cast<uintptr_t>();
-  return reinterpret_cast<num_t*>(cp_ptr);
-  // return cp_ptr;
-}
-
 //! Extract raw pointer to given array's data and cast it to the requested type
 //! \tparam num_t The type we wish to get from the input array
 //! Numpy (const) version

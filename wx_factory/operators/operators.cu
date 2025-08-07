@@ -192,9 +192,9 @@ void launch_deriv_3d(
     const int         num_elem_x3,
     const int         verbose,
     Func              func) {
-  const num_t*  field    = get_cupy_pointer<const num_t>(field_in);
-  const real_t* op       = get_cupy_pointer<const real_t>(operator_in);
-  num_t*        result_x = get_cupy_pointer<num_t>(result_x_in);
+  const num_t*  field    = get_raw_ptr<const num_t>(field_in);
+  const real_t* op       = get_raw_ptr<const real_t>(operator_in);
+  num_t*        result_x = get_raw_ptr<num_t>(result_x_in);
 
   (void)func; // TODO remove this
 

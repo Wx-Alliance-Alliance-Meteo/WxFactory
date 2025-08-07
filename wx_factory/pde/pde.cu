@@ -382,22 +382,22 @@ void launch_pointwise_euler_cubedsphere_3d(
     const int        num_solpts,
     const int        verbose) {
 
-  const num_t* q_ptr        = get_cupy_pointer<const num_t>(q_in);
-  num_t*       flux_x1_ptr  = get_cupy_pointer<num_t>(flux_x1);
-  num_t*       flux_x2_ptr  = get_cupy_pointer<num_t>(flux_x2);
-  num_t*       flux_x3_ptr  = get_cupy_pointer<num_t>(flux_x3);
-  num_t*       pressure_ptr = get_cupy_pointer<num_t>(pressure);
+  const num_t* q_ptr        = get_raw_ptr<const num_t>(q_in);
+  num_t*       flux_x1_ptr  = get_raw_ptr<num_t>(flux_x1);
+  num_t*       flux_x2_ptr  = get_raw_ptr<num_t>(flux_x2);
+  num_t*       flux_x3_ptr  = get_raw_ptr<num_t>(flux_x3);
+  num_t*       pressure_ptr = get_raw_ptr<num_t>(pressure);
 
-  num_t* wflux_adv_x1_ptr = get_cupy_pointer<num_t>(wflux_adv_x1);
-  num_t* wflux_adv_x2_ptr = get_cupy_pointer<num_t>(wflux_adv_x2);
-  num_t* wflux_adv_x3_ptr = get_cupy_pointer<num_t>(wflux_adv_x3);
+  num_t* wflux_adv_x1_ptr = get_raw_ptr<num_t>(wflux_adv_x1);
+  num_t* wflux_adv_x2_ptr = get_raw_ptr<num_t>(wflux_adv_x2);
+  num_t* wflux_adv_x3_ptr = get_raw_ptr<num_t>(wflux_adv_x3);
 
-  num_t*        wflux_pres_x1_ptr = get_cupy_pointer<num_t>(wflux_pres_x1);
-  num_t*        wflux_pres_x2_ptr = get_cupy_pointer<num_t>(wflux_pres_x2);
-  num_t*        wflux_pres_x3_ptr = get_cupy_pointer<num_t>(wflux_pres_x3);
-  num_t*        log_pressure_ptr  = get_cupy_pointer<num_t>(log_pressure);
-  const real_t* sqrt_g_ptr        = get_cupy_pointer<const real_t>(sqrt_g_in);
-  const real_t* h_ptr             = get_cupy_pointer<const real_t>(h_in);
+  num_t*        wflux_pres_x1_ptr = get_raw_ptr<num_t>(wflux_pres_x1);
+  num_t*        wflux_pres_x2_ptr = get_raw_ptr<num_t>(wflux_pres_x2);
+  num_t*        wflux_pres_x3_ptr = get_raw_ptr<num_t>(wflux_pres_x3);
+  num_t*        log_pressure_ptr  = get_raw_ptr<num_t>(log_pressure);
+  const real_t* sqrt_g_ptr        = get_raw_ptr<const real_t>(sqrt_g_in);
+  const real_t* h_ptr             = get_raw_ptr<const real_t>(h_in);
 
   const size_t stride = num_elem_x1 * num_elem_x2 * num_elem_x3 * num_solpts;
   kernel_params_cubedsphere<real_t, num_t> base_params(
@@ -526,33 +526,33 @@ void launch_riemann_euler_cubedsphere_rusanov_3d(
     py::object       wflux_pres_itf_x2,
     py::object       wflux_adv_itf_x3,
     py::object       wflux_pres_itf_x3) {
-  const num_t* q_itf_x1_ptr = get_cupy_pointer<const num_t>(q_itf_x1_in);
-  const num_t* q_itf_x2_ptr = get_cupy_pointer<const num_t>(q_itf_x2_in);
-  num_t*       q_itf_x3_ptr = get_cupy_pointer<num_t>(q_itf_x3_in);
+  const num_t* q_itf_x1_ptr = get_raw_ptr<const num_t>(q_itf_x1_in);
+  const num_t* q_itf_x2_ptr = get_raw_ptr<const num_t>(q_itf_x2_in);
+  num_t*       q_itf_x3_ptr = get_raw_ptr<num_t>(q_itf_x3_in);
 
-  const real_t* sqrt_g_itf_x1_ptr = get_cupy_pointer<const real_t>(sqrt_g_itf_x1);
-  const real_t* sqrt_g_itf_x2_ptr = get_cupy_pointer<const real_t>(sqrt_g_itf_x2);
-  const real_t* sqrt_g_itf_x3_ptr = get_cupy_pointer<const real_t>(sqrt_g_itf_x3);
+  const real_t* sqrt_g_itf_x1_ptr = get_raw_ptr<const real_t>(sqrt_g_itf_x1);
+  const real_t* sqrt_g_itf_x2_ptr = get_raw_ptr<const real_t>(sqrt_g_itf_x2);
+  const real_t* sqrt_g_itf_x3_ptr = get_raw_ptr<const real_t>(sqrt_g_itf_x3);
 
-  const real_t* h_x1_ptr = get_cupy_pointer<const real_t>(h_x1);
-  const real_t* h_x2_ptr = get_cupy_pointer<const real_t>(h_x2);
-  const real_t* h_x3_ptr = get_cupy_pointer<const real_t>(h_x3);
+  const real_t* h_x1_ptr = get_raw_ptr<const real_t>(h_x1);
+  const real_t* h_x2_ptr = get_raw_ptr<const real_t>(h_x2);
+  const real_t* h_x3_ptr = get_raw_ptr<const real_t>(h_x3);
 
-  num_t* flux_itf_x1_ptr = get_cupy_pointer<num_t>(flux_itf_x1);
-  num_t* flux_itf_x2_ptr = get_cupy_pointer<num_t>(flux_itf_x2);
-  num_t* flux_itf_x3_ptr = get_cupy_pointer<num_t>(flux_itf_x3);
+  num_t* flux_itf_x1_ptr = get_raw_ptr<num_t>(flux_itf_x1);
+  num_t* flux_itf_x2_ptr = get_raw_ptr<num_t>(flux_itf_x2);
+  num_t* flux_itf_x3_ptr = get_raw_ptr<num_t>(flux_itf_x3);
 
-  num_t* pressure_itf_x1_ptr = get_cupy_pointer<num_t>(pressure_itf_x1);
-  num_t* pressure_itf_x2_ptr = get_cupy_pointer<num_t>(pressure_itf_x2);
-  num_t* pressure_itf_x3_ptr = get_cupy_pointer<num_t>(pressure_itf_x3);
+  num_t* pressure_itf_x1_ptr = get_raw_ptr<num_t>(pressure_itf_x1);
+  num_t* pressure_itf_x2_ptr = get_raw_ptr<num_t>(pressure_itf_x2);
+  num_t* pressure_itf_x3_ptr = get_raw_ptr<num_t>(pressure_itf_x3);
 
-  num_t* wflux_adv_itf_x1_ptr = get_cupy_pointer<num_t>(wflux_adv_itf_x1);
-  num_t* wflux_adv_itf_x2_ptr = get_cupy_pointer<num_t>(wflux_adv_itf_x2);
-  num_t* wflux_adv_itf_x3_ptr = get_cupy_pointer<num_t>(wflux_adv_itf_x3);
+  num_t* wflux_adv_itf_x1_ptr = get_raw_ptr<num_t>(wflux_adv_itf_x1);
+  num_t* wflux_adv_itf_x2_ptr = get_raw_ptr<num_t>(wflux_adv_itf_x2);
+  num_t* wflux_adv_itf_x3_ptr = get_raw_ptr<num_t>(wflux_adv_itf_x3);
 
-  num_t* wflux_pres_itf_x1_ptr = get_cupy_pointer<num_t>(wflux_pres_itf_x1);
-  num_t* wflux_pres_itf_x2_ptr = get_cupy_pointer<num_t>(wflux_pres_itf_x2);
-  num_t* wflux_pres_itf_x3_ptr = get_cupy_pointer<num_t>(wflux_pres_itf_x3);
+  num_t* wflux_pres_itf_x1_ptr = get_raw_ptr<num_t>(wflux_pres_itf_x1);
+  num_t* wflux_pres_itf_x2_ptr = get_raw_ptr<num_t>(wflux_pres_itf_x2);
+  num_t* wflux_pres_itf_x3_ptr = get_raw_ptr<num_t>(wflux_pres_itf_x3);
 
   dim3 threads_per_block(256);
   int  num_solpts_face = num_solpts * num_solpts;
@@ -869,12 +869,12 @@ void launch_forcing_euler_cubesphere_3d(
     const int  num_elem_x3,
     const int  num_solpts,
     const int  verbose) {
-  const num_t*  q           = get_cupy_pointer<const num_t>(q_in);
-  const num_t*  pressure    = get_cupy_pointer<const num_t>(pressure_in);
-  const real_t* sqrt_g      = get_cupy_pointer<const real_t>(sqrt_g_in);
-  const real_t* h           = get_cupy_pointer<const real_t>(h_in);
-  const real_t* christoffel = get_cupy_pointer<const real_t>(christoffel_in);
-  num_t*        forcing     = get_cupy_pointer<num_t>(forcing_in);
+  const num_t*  q           = get_raw_ptr<const num_t>(q_in);
+  const num_t*  pressure    = get_raw_ptr<const num_t>(pressure_in);
+  const real_t* sqrt_g      = get_raw_ptr<const real_t>(sqrt_g_in);
+  const real_t* h           = get_raw_ptr<const real_t>(h_in);
+  const real_t* christoffel = get_raw_ptr<const real_t>(christoffel_in);
+  num_t*        forcing     = get_raw_ptr<num_t>(forcing_in);
 
   const size_t stride = num_elem_x1 * num_elem_x2 * num_elem_x3 * num_solpts;
   forcing_params<real_t, num_t>
