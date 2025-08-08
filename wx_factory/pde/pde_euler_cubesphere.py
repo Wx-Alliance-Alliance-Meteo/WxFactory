@@ -154,10 +154,6 @@ class PDEEulerCubesphere(PDE):
             wflux_pres_x2,
             wflux_pres_x3,
             logp,
-            self.geometry.num_elements_x1,
-            self.geometry.num_elements_x2,
-            self.geometry.num_elements_x3,
-            self.num_solpts**3,
             False,
         )
 
@@ -454,10 +450,6 @@ class PDEEulerCubesphere(PDE):
         metric: Metric3DTopo,
         forcing: NDArray,
     ):
-        num_x1 = self.geometry.num_elements_horizontal
-        num_x2 = num_x1
-        num_x3 = self.geometry.num_elements_vertical
-        num_solpts = self.geometry.num_solpts
         self.device.pde.forcing_euler_cubesphere_3d(
             q,
             pressure,
@@ -465,10 +457,6 @@ class PDEEulerCubesphere(PDE):
             metric.h_contra_new,
             metric.christoffel,
             forcing,
-            num_x1,
-            num_x2,
-            num_x3,
-            num_solpts**3,
             0,  # Verbose flag
         )
 

@@ -76,65 +76,34 @@ void pointwise_euler_cubedsphere_3d(
     py_array<num_t>&        wflux_pres_x2,
     py_array<num_t>&        wflux_pres_x3,
     py_array<num_t>&        log_pressure,
-    const int               num_elem_x1,
-    const int               num_elem_x2,
-    const int               num_elem_x3,
-    const int               num_solpts_tot,
     const int               verbose) {
 
-  const num_t* q_ptr        = get_raw_ptr<num_t>(q_in);
-  num_t*       flux_x1_ptr  = get_raw_ptr<num_t>(flux_x1);
-  num_t*       flux_x2_ptr  = get_raw_ptr<num_t>(flux_x2);
-  num_t*       flux_x3_ptr  = get_raw_ptr<num_t>(flux_x3);
-  num_t*       pressure_ptr = get_raw_ptr<num_t>(pressure);
+  const auto&  shape  = q_in.request().shape;
+  const size_t stride = shape[1] * shape[2] * shape[3] * shape[4];
+  // const int array_shape[5] = {5, num_elem_x3, num_elem_x2, num_elem_x1,
+  // num_solpts_tot};
 
-  num_t* wflux_adv_x1_ptr = get_raw_ptr<num_t>(wflux_adv_x1);
-  num_t* wflux_adv_x2_ptr = get_raw_ptr<num_t>(wflux_adv_x2);
-  num_t* wflux_adv_x3_ptr = get_raw_ptr<num_t>(wflux_adv_x3);
+  PointwiseFluxEuler3DKernel<real_t, num_t> kernel_func(
+      q_in,
+      sqrt_g_in,
+      h_in,
+      flux_x1,
+      flux_x2,
+      flux_x3,
+      pressure,
+      wflux_adv_x1,
+      wflux_adv_x2,
+      wflux_adv_x3,
+      wflux_pres_x1,
+      wflux_pres_x2,
+      wflux_pres_x3,
+      log_pressure,
+      stride);
 
-  num_t*        wflux_pres_x1_ptr = get_raw_ptr<num_t>(wflux_pres_x1);
-  num_t*        wflux_pres_x2_ptr = get_raw_ptr<num_t>(wflux_pres_x2);
-  num_t*        wflux_pres_x3_ptr = get_raw_ptr<num_t>(wflux_pres_x3);
-  num_t*        log_pressure_ptr  = get_raw_ptr<num_t>(log_pressure);
-  const real_t* sqrt_g_ptr        = get_raw_ptr<real_t>(sqrt_g_in);
-  const real_t* h_ptr             = get_raw_ptr<real_t>(h_in);
-
-  const uint64_t stride    = num_elem_x3 * num_elem_x2 * num_elem_x1 * num_solpts_tot;
-  const int array_shape[5] = {5, num_elem_x3, num_elem_x2, num_elem_x1, num_solpts_tot};
-
-#pragma omp target teams distribute collapse(4)
-  for (int i = 0; i < num_elem_x3; i++)
+#pragma omp target teams distribute
+  for (size_t index = 0; index < stride; index++)
   {
-    for (int j = 0; j < num_elem_x2; j++)
-    {
-      for (int k = 0; k < num_elem_x1; k++)
-      {
-        for (int s = 0; s < num_solpts_tot; s++)
-        {
-          const int index = get_c_index(0, i, j, k, s, array_shape);
-
-          kernel_params_cubedsphere<real_t, num_t> params(
-              q_ptr,
-              sqrt_g_ptr,
-              h_ptr,
-              index,
-              stride,
-              flux_x1_ptr,
-              flux_x2_ptr,
-              flux_x3_ptr,
-              pressure_ptr,
-              wflux_adv_x1_ptr,
-              wflux_adv_x2_ptr,
-              wflux_adv_x3_ptr,
-              wflux_pres_x1_ptr,
-              wflux_pres_x2_ptr,
-              wflux_pres_x3_ptr,
-              log_pressure_ptr);
-
-          pointwise_euler_cubedsphere_3d_kernel(params, verbose);
-        }
-      }
-    }
+    kernel_func(index, verbose);
   }
 }
 
@@ -508,44 +477,23 @@ void riemann_euler_cubedsphere_rusanov_3d(
 
 template <typename real_t, typename num_t>
 void forcing_euler_cubesphere_3d(
-    const py_array<num_t>&  q_in,
-    const py_array<num_t>&  pressure_in,
-    const py_array<real_t>& sqrt_g_in,
-    const py_array<real_t>& h_in,
-    const py_array<real_t>& christoffel_in,
-    py_array<num_t>&        forcing_in,
-    const int               num_elem_x1,
-    const int               num_elem_x2,
-    const int               num_elem_x3,
-    const int               num_solpts,
+    const py_array<num_t>&  q,
+    const py_array<num_t>&  pressure,
+    const py_array<real_t>& sqrt_g,
+    const py_array<real_t>& h,
+    const py_array<real_t>& christoffel,
+    py_array<num_t>&        forcing,
     const int               verbose) {
 
-  const num_t*  q           = get_raw_ptr<num_t>(q_in);
-  const num_t*  pressure    = get_raw_ptr<num_t>(pressure_in);
-  const real_t* sqrt_g      = get_raw_ptr<real_t>(sqrt_g_in);
-  const real_t* h           = get_raw_ptr<real_t>(h_in);
-  const real_t* christoffel = get_raw_ptr<real_t>(christoffel_in);
-  num_t*        forcing     = get_raw_ptr<num_t>(forcing_in);
+  const auto&  shape  = q.request().shape;
+  const size_t stride = shape[1] * shape[2] * shape[3] * shape[4];
+  ForcingKernel<real_t, num_t>
+      kernel_func(q, pressure, sqrt_g, h, christoffel, forcing, stride);
 
-  const uint64_t stride = num_elem_x3 * num_elem_x2 * num_elem_x1 * num_solpts;
-
-#pragma omp target teams distribute collapse(4)                                          \
-    is_device_ptr(q, pressure, sqrt_g, h, christoffel)
-  for (int i = 0; i < num_elem_x3; i++)
+#pragma omp target teams distribute is_device_ptr(q, pressure, sqrt_g, h, christoffel)
+  for (size_t index = 0; index < stride; index++)
   {
-    for (int j = 0; j < num_elem_x2; j++)
-    {
-      for (int k = 0; k < num_elem_x1; k++)
-      {
-        for (int s = 0; s < num_solpts; s++)
-        {
-          const int index = ((i * num_elem_x2 + j) * num_elem_x1 + k) * num_solpts + s;
-          forcing_params<real_t, num_t>
-              p(q, pressure, sqrt_g, h, christoffel, forcing, index, stride);
-          forcing_euler_cubesphere_3d_kernel(p, verbose);
-        }
-      }
-    }
+    kernel_func(index, verbose);
   }
 }
 

@@ -4,8 +4,6 @@
 #include <cstdio>
 #include <iostream>
 
-#include <pybind11/stl.h>
-
 #include "kernels/kernels.h"
 
 namespace py = pybind11;

@@ -134,10 +134,6 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
             itf_x1,
             itf_x2,
             itf_x3,
-            nx,
-            ny,
-            nz,
-            self.geom.num_solpts,
             # 0 if self.device.comm.rank != 0 else 1,
             0,
         )
