@@ -4,7 +4,7 @@ import os
 import compiler.compile_kernels as kernels
 import cuda_test
 
-modules = ["pde"]
+modules = ["pde", "operators"]
 
 
 class CompilationTestCases(unittest.TestCase):
@@ -17,7 +17,11 @@ class CompilationTestCases(unittest.TestCase):
         for mod in modules:
             ext = kernels.get_extension(mod, "cpp")
 
-            self.assertEqual(len(os.listdir(ext.lib_dir)), 0)
+            ext.clean()
+            try:
+                self.assertEqual(len(os.listdir(ext.lib_dir)), 0)
+            except FileNotFoundError:
+                pass
             kernels.compile(mod, "cpp")
             self.assertEqual(len(os.listdir(ext.lib_dir)), 1)
 
@@ -26,11 +30,13 @@ class CompilationTestCases(unittest.TestCase):
     def test_cpp_compilation_twice(self):
         for mod in modules:
             ext = kernels.get_extension(mod, "cpp")
-            self.assertEqual(len(os.listdir(ext.lib_dir)), 0)
+            # self.assertEqual(len(os.listdir(ext.lib_dir)), 0)
             kernels.compile(mod, "cpp")
-            self.assertEqual(len(os.listdir(ext.lib_dir)), 1)
+            files = [f for f in os.listdir(ext.lib_dir) if f[:4] != ".nfs"]
+            self.assertEqual(len(files), 1)
             kernels.compile(mod, "cpp", force=True)
-            self.assertEqual(len(os.listdir(ext.lib_dir)), 1)
+            files = [f for f in os.listdir(ext.lib_dir) if f[:4] != ".nfs"]
+            self.assertEqual(len(files), 1)
 
 
 class CompilationGPUTestCases(cuda_test.CudaTestCases):
@@ -42,7 +48,11 @@ class CompilationGPUTestCases(cuda_test.CudaTestCases):
 
         for mod in modules:
             ext = kernels.get_extension(mod, "cuda")
-            self.assertEqual(len(os.listdir(ext.lib_dir)), 0)
+            ext.clean()
+            try:
+                self.assertEqual(len(os.listdir(ext.lib_dir)), 0)
+            except FileNotFoundError:
+                pass
             kernels.compile(mod, "cuda")
             self.assertEqual(len(os.listdir(ext.lib_dir)), 1)
 

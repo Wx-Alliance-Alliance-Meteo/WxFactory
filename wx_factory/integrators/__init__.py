@@ -11,9 +11,10 @@ from .integrator import Integrator
 from .partrosexp2 import PartRosExp2
 from .ros2 import Ros2
 from .rosexp2 import RosExp2
-from .splitting import StrangSplitting
+from .splitting import StrangSplitting, LieSplitting
 from .srerk import Srerk
 from .tvdrk3 import Tvdrk3
+from .neural import Neural
 
 __all__ = [
     "Epi",
@@ -25,9 +26,11 @@ __all__ = [
     "Ros2",
     "RosExp2",
     "StrangSplitting",
+    "LieSplitting",
     "Srerk",
     "Tvdrk3",
     "BackwardEuler",
     "CrankNicolson",
     "Bdf2",
+    "Neural",
 ]

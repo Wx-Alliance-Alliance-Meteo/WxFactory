@@ -59,6 +59,54 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
         if config.desired_device in ["numpy", "cupy"]:
             self.extrap_3d = self.extrap_3d_py
 
+    def allocate_arrays(self, q):
+        super().allocate_arrays(q)
+
+        xp = self.device.xp
+        dtype = self.q_itf_x1.dtype
+
+        itf_i_shape = (self.num_var,) + self.geom.itf_i_shape
+        itf_j_shape = (self.num_var,) + self.geom.itf_j_shape
+        itf_k_shape = (self.num_var,) + self.geom.itf_k_shape
+
+        if self.f_itf_x1 is None or self.f_itf_x1.dtype != dtype:
+            self.f_itf_x1 = xp.zeros_like(self.q_itf_x1)
+            self.f_itf_x2 = xp.zeros_like(self.q_itf_x2)
+            self.f_itf_x3 = xp.zeros_like(self.q_itf_x3)
+
+            self.pressure_itf_x1 = xp.zeros_like(self.f_itf_x1[0])
+            self.pressure_itf_x2 = xp.zeros_like(self.f_itf_x2[0])
+            self.pressure_itf_x3 = xp.zeros_like(self.f_itf_x3[0])
+
+            self.wflux_adv_itf_x1 = xp.zeros_like(self.f_itf_x1[0])
+            self.wflux_pres_itf_x1 = xp.zeros_like(self.f_itf_x1[0])
+            self.wflux_adv_itf_x2 = xp.zeros_like(self.f_itf_x2[0])
+            self.wflux_pres_itf_x2 = xp.zeros_like(self.f_itf_x2[0])
+            self.wflux_adv_itf_x3 = xp.zeros_like(self.f_itf_x3[0])
+            self.wflux_pres_itf_x3 = xp.zeros_like(self.f_itf_x3[0])
+
+            # Set to ones, because uninitialized values will be used in a log
+            # TODO separate two interface sides so that we don't need to do these useless calculations
+            self.q_itf_full_x1 = xp.ones(itf_i_shape, dtype=dtype)
+            self.q_itf_full_x2 = xp.ones(itf_j_shape, dtype=dtype)
+            self.q_itf_full_x3 = xp.ones(itf_k_shape, dtype=dtype)
+
+            self.f_itf_full_x1 = xp.zeros_like(self.q_itf_full_x1)
+            self.f_itf_full_x2 = xp.zeros_like(self.q_itf_full_x2)
+            self.f_itf_full_x3 = xp.zeros_like(self.q_itf_full_x3)
+
+            self.pressure_itf_full_x1 = xp.zeros_like(self.q_itf_full_x1[0])
+            self.pressure_itf_full_x2 = xp.zeros_like(self.q_itf_full_x2[0])
+            self.pressure_itf_full_x3 = xp.zeros_like(self.q_itf_full_x3[0])
+
+            self.wflux_adv_itf_full_x1 = xp.zeros_like(self.q_itf_full_x1[0])
+            self.wflux_pres_itf_full_x1 = xp.zeros_like(self.q_itf_full_x1[0])
+            self.wflux_adv_itf_full_x2 = xp.zeros_like(self.q_itf_full_x2[0])
+            self.wflux_pres_itf_full_x2 = xp.zeros_like(self.q_itf_full_x2[0])
+            self.wflux_adv_itf_full_x3 = xp.zeros_like(self.q_itf_full_x3[0])
+            self.wflux_pres_itf_full_x3 = xp.zeros_like(self.q_itf_full_x3[0])
+
+
     def extrap_3d_py(self, q: NDArray, itf_x1: NDArray, itf_x2: NDArray, itf_x3: NDArray) -> None:
         itf_x1[...] = q @ self.ops.extrap_x
         itf_x2[...] = q @ self.ops.extrap_y
@@ -200,11 +248,6 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
 
     def riemann_fluxes(self) -> None:
         xp = self.device.xp
-        dtype = self.q_itf_x1.dtype
-
-        itf_i_shape = (self.num_var,) + self.geom.itf_i_shape
-        itf_j_shape = (self.num_var,) + self.geom.itf_j_shape
-        itf_k_shape = (self.num_var,) + self.geom.itf_k_shape
 
         mid_i = xp.s_[..., 1:-1, :]
         mid_j = xp.s_[..., 1:-1, :, :]
@@ -216,43 +259,6 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
         e = numpy.s_[..., -1, : self.geom.itf_size]
         b = numpy.s_[..., 0, :, :, self.geom.itf_size :]
         t = numpy.s_[..., -1, :, :, : self.geom.itf_size]
-
-        if self.f_itf_x1 is None or self.f_itf_x1.dtype != dtype:
-            self.f_itf_x1 = xp.zeros_like(self.q_itf_x1)
-            self.f_itf_x2 = xp.zeros_like(self.q_itf_x2)
-            self.f_itf_x3 = xp.zeros_like(self.q_itf_x3)
-
-            self.pressure_itf_x1 = xp.zeros_like(self.f_itf_x1[0])
-            self.pressure_itf_x2 = xp.zeros_like(self.f_itf_x2[0])
-            self.pressure_itf_x3 = xp.zeros_like(self.f_itf_x3[0])
-
-            self.wflux_adv_itf_x1 = xp.zeros_like(self.f_itf_x1[0])
-            self.wflux_pres_itf_x1 = xp.zeros_like(self.f_itf_x1[0])
-            self.wflux_adv_itf_x2 = xp.zeros_like(self.f_itf_x2[0])
-            self.wflux_pres_itf_x2 = xp.zeros_like(self.f_itf_x2[0])
-            self.wflux_adv_itf_x3 = xp.zeros_like(self.f_itf_x3[0])
-            self.wflux_pres_itf_x3 = xp.zeros_like(self.f_itf_x3[0])
-
-            # Set to ones, because uninitialized values will be used in a log
-            # TODO separate two interface sides so that we don't need to do these useless calculations
-            self.q_itf_full_x1 = xp.ones(itf_i_shape, dtype=dtype)
-            self.q_itf_full_x2 = xp.ones(itf_j_shape, dtype=dtype)
-            self.q_itf_full_x3 = xp.ones(itf_k_shape, dtype=dtype)
-
-            self.f_itf_full_x1 = xp.zeros_like(self.q_itf_full_x1)
-            self.f_itf_full_x2 = xp.zeros_like(self.q_itf_full_x2)
-            self.f_itf_full_x3 = xp.zeros_like(self.q_itf_full_x3)
-
-            self.pressure_itf_full_x1 = xp.zeros_like(self.q_itf_full_x1[0])
-            self.pressure_itf_full_x2 = xp.zeros_like(self.q_itf_full_x2[0])
-            self.pressure_itf_full_x3 = xp.zeros_like(self.q_itf_full_x3[0])
-
-            self.wflux_adv_itf_full_x1 = xp.zeros_like(self.q_itf_full_x1[0])
-            self.wflux_pres_itf_full_x1 = xp.zeros_like(self.q_itf_full_x1[0])
-            self.wflux_adv_itf_full_x2 = xp.zeros_like(self.q_itf_full_x2[0])
-            self.wflux_pres_itf_full_x2 = xp.zeros_like(self.q_itf_full_x2[0])
-            self.wflux_adv_itf_full_x3 = xp.zeros_like(self.q_itf_full_x3[0])
-            self.wflux_pres_itf_full_x3 = xp.zeros_like(self.q_itf_full_x3[0])
 
         self.q_itf_full_x1[mid_i] = self.q_itf_x1
         self.q_itf_full_x2[mid_j] = self.q_itf_x2
