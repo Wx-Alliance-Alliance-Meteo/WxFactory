@@ -27,7 +27,7 @@
                 {
                     "name": "desired_device",
                     "type": "str",
-                    "selectables": ["cpp", "cuda", "cupy", "numpy"],
+                    "selectables": ["cpp", "cuda", "cupy", "numpy", "omp"],
                     "default": "cpp",
                     "description": "Physical backend to run the computation on"
                 },
@@ -166,6 +166,24 @@
                     "type": "int",
                     "default": 20,
                     "min": 1
+                },
+                {
+                    "name": "splitting_integrator_1",
+                    "type": "str",
+                    "default": "",
+                    "dependancy": {
+                        "name": "time_integrator",
+                        "values": ["lie", "strang"]
+                    }
+                },
+                {
+                    "name": "splitting_integrator_2",
+                    "type": "str",
+                    "default": "",
+                    "dependancy": {
+                        "name": "time_integrator",
+                        "values": ["lie", "strang"]
+                    }
                 }
             ]
         },

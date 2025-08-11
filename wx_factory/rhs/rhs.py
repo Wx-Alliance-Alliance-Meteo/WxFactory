@@ -78,8 +78,6 @@ class RHS(ABC):
 
     def __call__(self, q: NDArray) -> NDArray:
 
-        self.device.synchronize()
-
         # 0.a Process timing
         if len(self.timestamps) > 0:  # Process timing from previous steps
             self.retrieve_last_times()
@@ -122,7 +120,6 @@ class RHS(ABC):
         # 6. Add forcing terms
         self.forcing_terms(q)
         self.timestamps[8] = self.device.timestamp()
-        self.device.synchronize()
 
         # At this moment, a deep copy needs to be returned
         # otherwise issues are encountered after. This needs to be fixed

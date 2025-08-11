@@ -30,14 +30,22 @@ using array = std::array<T, N>;
 #endif
 
 // Declarations
-DEVICE_SPACE const double p0                  = 100000.0;
-DEVICE_SPACE const double Rd                  = 287.05;
-DEVICE_SPACE const double cpd                 = 1005.46;
-DEVICE_SPACE const double cvd                 = (cpd - Rd);
-DEVICE_SPACE const double kappa               = Rd / cpd;
-DEVICE_SPACE const double heat_capacity_ratio = cpd / cvd;
-DEVICE_SPACE const double inp0                = 1.0 / p0;
-DEVICE_SPACE const double Rdinp0              = Rd * inp0;
+// DEVICE_SPACE const double p0 = 100000.0;
+// DEVICE_SPACE const double Rd = 287.05;
+// DEVICE_SPACE const double cpd                 = 1005.46;
+// DEVICE_SPACE const double cvd                 = (cpd - Rd);
+// DEVICE_SPACE const double kappa               = Rd / cpd;
+// DEVICE_SPACE const double heat_capacity_ratio = cpd / cvd;
+// DEVICE_SPACE const double inp0                = 1.0 / p0;
+// DEVICE_SPACE const double Rdinp0              = Rd * inp0;
+#define p0                  100000.0
+#define Rd                  287.05
+#define cpd                 1005.46
+#define cvd                 (cpd - Rd)
+#define kappa               (Rd / cpd)
+#define heat_capacity_ratio (cpd / cvd)
+#define inp0                (1.0 / p0)
+#define Rdinp0              (Rd * inp0)
 
 const int BLOCK_SIZE = 256;
 
@@ -147,8 +155,23 @@ num_t* get_cupy_pointer(pybind11::object obj) {
 //! Extract raw pointer to given array's data and cast it to the requested type
 //! \tparam num_t The type we wish to get from the input array
 template <typename num_t>
-num_t* get_c_ptr(const pybind11::array_t<num_t>& a) {
+const num_t* get_c_ptr(const pybind11::array_t<num_t>& a) {
   return static_cast<num_t*>(a.request().ptr);
+}
+template <typename num_t>
+num_t* get_c_ptr(pybind11::array_t<num_t>& a) {
+  return static_cast<num_t*>(a.request().ptr);
+}
+
+template <typename num_t>
+const num_t* get_c_ptr(const pybind11::object& obj) {
+  uintptr_t cp_ptr = obj.attr("data").attr("ptr").cast<uintptr_t>();
+  return reinterpret_cast<num_t*>(cp_ptr);
+}
+template <typename num_t>
+num_t* get_c_ptr(pybind11::object& obj) {
+  uintptr_t cp_ptr = obj.attr("data").attr("ptr").cast<uintptr_t>();
+  return reinterpret_cast<num_t*>(cp_ptr);
 }
 
 template <typename num_t>

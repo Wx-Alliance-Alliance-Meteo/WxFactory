@@ -75,10 +75,10 @@ def main():
         )
 
         parser.add_argument(
-            "--disable-unified-memory",
+            "--enable-unified-memory",
             action="store_true",
-            help="Don't use unified (managed) CPU-GPU memory. "
-            "Only use this option if the MPI implementation supports CUDA",
+            help="Use unified (managed) CPU-GPU memory. "
+            "Only use this option if the MPI implementation does not support CUDA",
         )
 
         args = parser.parse_args()
@@ -106,8 +106,8 @@ def main():
         if args.numpy_warn_as_except:
             numpy.seterr(all="raise")
 
-        if args.disable_unified_memory:
-            Device.use_unified_memory = False
+        if args.enable_unified_memory:
+            Device.use_unified_memory = True
 
         # Initialize simulation
         sim = Simulation(args.config, print_allowed_pe_counts=args.allowed_proc_count)

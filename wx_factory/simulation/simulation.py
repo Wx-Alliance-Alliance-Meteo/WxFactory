@@ -21,11 +21,13 @@ from integrators import (
     Ros2,
     RosExp2,
     StrangSplitting,
+    LieSplitting,
     Srerk,
     Tvdrk3,
     BackwardEuler,
     CrankNicolson,
     Bdf2,
+    Neural,
 )
 from output.output_manager import OutputManager
 from output.output_cartesian import OutputCartesian
@@ -140,7 +142,7 @@ class Simulation:
             self.device,
         )
 
-        self.integrator = self._create_time_integrator()
+        self.integrator = self._create_time_integrator(self.config.time_integrator)
         self.integrator.output_manager = self.output
         self.integrator.device = self.device
 
@@ -218,13 +220,15 @@ class Simulation:
     def _make_device(self) -> Device:
         """Create the device object which will determine on what hardware (CPU/GPU) each part of the simulation will
         be executed."""
-        if self.config.desired_device in ["cuda", "cupy"]:
+        if self.config.desired_device in ["cuda", "cupy", "omp"]:
             try:
                 cuda_devices = self.config.cuda_devices
             except AttributeError:
                 cuda_devices = []
+
+            lib = "omp" if self.config.desired_device == "omp" else "cuda"
             try:
-                device = CudaDevice(self.comm, cuda_devices)
+                device = CudaDevice(self.comm, compiled_lib=lib, device_list=cuda_devices)
             except ValueError:
                 device = None
                 if self.rank == 0:
@@ -379,72 +383,93 @@ class Simulation:
 
         return self.initial_Q, 0
 
-    def _create_time_integrator(self) -> Integrator:
+    def _create_time_integrator(self, integrator_name: str) -> Integrator:
         """Create the appropriate time integrator object based on params"""
 
         # --- Exponential time integrators
-        if self.config.time_integrator[:9] == "epi_stiff" and self.config.time_integrator[9:].isdigit():
-            order = int(self.config.time_integrator[9:])
+        if integrator_name[:9] == "epi_stiff" and integrator_name[9:].isdigit():
+            order = int(integrator_name[9:])
             if self.comm.rank == 0:
                 print(f"Running with EPI_stiff{order}")
             return EpiStiff(self.config, order, self.rhs.full, init_substeps=10, device=self.device)
-        if self.config.time_integrator[:3] == "epi" and self.config.time_integrator[3:].isdigit():
-            order = int(self.config.time_integrator[3:])
+        if integrator_name[:3] == "epi" and integrator_name[3:].isdigit():
+            order = int(integrator_name[3:])
             if self.comm.rank == 0:
                 print(f"Running with EPI{order}")
             return Epi(self.config, order, self.rhs.full, init_substeps=10, device=self.device)
-        if self.config.time_integrator[:5] == "srerk" and self.config.time_integrator[5:].isdigit():
-            order = int(self.config.time_integrator[5:])
+        if integrator_name[:5] == "srerk" and integrator_name[5:].isdigit():
+            order = int(integrator_name[5:])
             if self.comm.rank == 0:
                 print(f"Running with SRERK{order}")
             return Srerk(self.config, order, self.rhs.full, device=self.device)
 
         # --- Explicit
-        if self.config.time_integrator == "euler1":
+        if integrator_name == "euler1":
             if self.comm.rank == 0:
                 print("WARNING: Running with first-order explicit Euler timestepping.")
                 print("         This is UNSTABLE and should be used only for debugging.")
             return Euler1(self.config, self.rhs.full, device=self.device)
-        if self.config.time_integrator == "tvdrk3":
+        if integrator_name == "tvdrk3":
             return Tvdrk3(self.config, self.rhs.full, device=self.device)
 
         # --- Rosenbrock
-        if self.config.time_integrator == "ros2":
+        if integrator_name == "ros2":
             return Ros2(self.config, self.rhs.full, preconditioner=self.preconditioner, device=self.device)
 
         # --- Rosenbrock - Exponential
-        if self.config.time_integrator == "rosexp2":
+        if integrator_name == "rosexp2":
             return RosExp2(
                 self.config, self.rhs.full, self.rhs.full, preconditioner=self.preconditioner, device=self.device
             )
-        if self.config.time_integrator == "partrosexp2":
+        if integrator_name == "partrosexp2":
             return PartRosExp2(
                 self.config, self.rhs.full, self.rhs.implicit, preconditioner=self.preconditioner, device=self.device
             )
 
         # --- Implicit - Explicit
-        if self.config.time_integrator == "imex2":
+        if integrator_name == "imex2":
             return Imex2(self.config, self.rhs.explicit, self.rhs.implicit, device=self.device)
 
         # --- Fully implicit
-        if self.config.time_integrator == "backward_euler":
+        if integrator_name == "backward_euler":
             return BackwardEuler(self.config, self.rhs.full, preconditioner=self.preconditioner, device=self.device)
-        if self.config.time_integrator == "bdf2":
+        if integrator_name == "bdf2":
             return Bdf2(self.config, self.rhs.full, preconditioner=self.preconditioner, device=self.device)
-        if self.config.time_integrator == "crank_nicolson":
+        if integrator_name == "crank_nicolson":
             return CrankNicolson(self.config, self.rhs.full, preconditioner=self.preconditioner, device=self.device)
 
+        # --- Neural network
+        if integrator_name == "neural":
+            return Neural(self.config)
+
         # --- Operator splitting
-        if self.config.time_integrator == "strang_epi2_ros2":
+        unavailable_sub_integrators = ["lie", "strang"]
+        if integrator_name in unavailable_sub_integrators:
+            integrator_name_1 = self.config.splitting_integrator_1
+            integrator_name_2 = self.config.splitting_integrator_2
+
+            if integrator_name_1 in unavailable_sub_integrators or integrator_name_2 in unavailable_sub_integrators:
+                raise ValueError(f"Time integration method {integrator_name} with sub integration {integrator_name_1} and {integrator_name_2} not supported")
+            
+            sub_integrator_1 = self._create_time_integrator(integrator_name_1)
+            sub_integrator_2 = self._create_time_integrator(integrator_name_2)
+
+            if integrator_name == "strang":
+                return StrangSplitting(self.config, sub_integrator_1, sub_integrator_2)
+            
+            if integrator_name == "lie":
+                return LieSplitting(self.config, sub_integrator_1, sub_integrator_2)
+        
+        if integrator_name == "strang_epi2_ros2":
             stepper1 = Epi(self.config, 2, self.rhs.explicit, device=self.device)
             stepper2 = Ros2(self.config, self.rhs.implicit, preconditioner=self.preconditioner, device=self.device)
             return StrangSplitting(self.config, stepper1, stepper2)
-        if self.config.time_integrator == "strang_ros2_epi2":
+        if integrator_name == "strang_ros2_epi2":
             stepper1 = Ros2(self.config, self.rhs.implicit, preconditioner=self.preconditioner, device=self.device)
             stepper2 = Epi(self.config, 2, self.rhs.explicit)
             return StrangSplitting(self.config, stepper1, stepper2)
 
-        raise ValueError(f"Time integration method {self.config.time_integrator} not supported")
+        raise ValueError(f"Time integration method {integrator_name} not supported")
 
     def _check_for_nan(self, Q):
         """Raise an exception if there are NaNs in the input"""

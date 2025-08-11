@@ -2,6 +2,7 @@ import os
 import random
 import unittest
 
+from mpi4py import MPI
 import numpy
 
 import common.configuration
@@ -19,7 +20,7 @@ state_tmp_dir = "tests/data/temp"
 class StateTestCases(unittest.TestCase):
     def setUp(self):
         super().setUp()
-        self.cpu_device = CpuDevice()
+        self.cpu_device = CpuDevice(MPI.COMM_WORLD)
         if not os.path.exists(state_tmp_dir):
             os.mkdir(state_tmp_dir)
 

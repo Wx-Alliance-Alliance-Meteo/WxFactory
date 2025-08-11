@@ -77,9 +77,10 @@ if __name__ == "__main__":
         type=str,
         help="Will only run tests whose name or type matches this regular expression.",
     )
+    parser.add_argument("--no-buffer", action="store_true", help="Print all test output to terminal")
     args = parser.parse_args()
 
-    runner = unittest.TextTestRunner(buffer=True, verbosity=1)
+    runner = unittest.TextTestRunner(buffer=not args.no_buffer, verbosity=1)
     result = runner.run(load_tests(args.test_name))
     if not result.wasSuccessful():
         failed_tests = "\n  ".join([f"{r[0]}" for r in result.errors + result.unexpectedSuccesses + result.failures])
