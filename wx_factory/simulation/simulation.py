@@ -1,5 +1,6 @@
 import sys
 from time import time
+from typing import List, Dict, Type
 
 from mpi4py import MPI
 import numpy
@@ -38,7 +39,7 @@ from precondition.multigrid import Multigrid
 from process_topology import ProcessTopology
 from rhs.rhs_selector import RhsBundle
 from wx_mpi import SingleProcess, Conditional
-
+from post_proccessing import PostProcessor, ScharMountainPostProcessor
 
 class Simulation:
     """Encapsulate parameters and structures needed to run a WxFactory simulation.
@@ -52,6 +53,7 @@ class Simulation:
     """
 
     config: Configuration
+    post_processors: Dict[Type, PostProcessor]
 
     def __init__(
         self,
@@ -68,6 +70,8 @@ class Simulation:
         """
         self.comm = comm
         self.rank = self.comm.rank
+
+        self.post_processors = {}
 
         # self.input_manager = InputManager(self.comm)
 
@@ -119,7 +123,7 @@ class Simulation:
         self.process_topo = None
         self.geometry = self._create_geometry()
         self.operators = DFROperators(self.geometry, self.config, self.device)
-        self.initial_Q, self.topography, self.metric = init_state_vars(self.geometry, self.operators, self.config)
+        self.initial_Q, self.topography, self.metric = init_state_vars(self.geometry, self.operators, self.config, self.post_processors)
         self.preconditioner = self._create_preconditioner(self.initial_Q)
         self.output = self._create_output_manager()
         self.initial_Q, self.starting_step = self._determine_starting_state()
@@ -189,6 +193,9 @@ class Simulation:
                 self.Q[idx_rho_u1, :, :, :] = self.Q[idx_rho, :, :, :] * u1_contra
                 self.Q[idx_rho_u2, :, :, :] = self.Q[idx_rho, :, :, :] * u2_contra
                 self.Q[idx_rho_w, :, :, :] = self.Q[idx_rho, :, :, :] * w_wind
+
+            for post_precessor_type in self.post_processors:
+                self.post_processors[post_precessor_type].process()
 
             self.output.step(self.Q, self.step_id)  # Perform any requested output
             sys.stdout.flush()
@@ -285,7 +292,7 @@ class Simulation:
                     self.process_topo,
                 )
             elif self.config.equations == "euler":
-                return CubedSphere3D(
+                cube_sphere = CubedSphere3D(
                     self.num_elements_horizontal,
                     self.config.num_elements_vertical,
                     self.num_solpts,
@@ -297,6 +304,11 @@ class Simulation:
                     self.process_topo,
                     self.config,
                 )
+            
+                if self.config.enable_schar_mountain:
+                    schar_mountain = ScharMountainPostProcessor(self.config, cube_sphere)
+                    self.post_processors[ScharMountainPostProcessor] = schar_mountain
+                return cube_sphere
 
         if self.config.grid_type == "cartesian2d":
             return Cartesian2D(

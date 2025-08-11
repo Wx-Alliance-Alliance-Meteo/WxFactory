@@ -40,11 +40,21 @@ def str_to_bool(val: str):
 
 OptionType = TypeVar("OptionType", bound=Union[str, CaseSensitiveStr, int, float, List[int], List[float], bool])
 _T = TypeVar("T", str, dict, list)
-_Numerical = TypeVar("Numerical", bound=Union[int, float])
+_Numerical = TypeVar("Numerical", bound=Union[int, float, angle24, numpy.float32])
 _Selectable = TypeVar("Selectable", bound=Union[int, float, str])
 
 
 default_schema_path = "config/config-format.json"
+
+def needs_evaluation(attribute: _T, attribute_type: Type[_T]) -> bool:
+    try:
+        float(attribute)
+        is_numeric = True
+    except:
+        is_numeric = False
+
+    to_numeric = attribute_type in _Numerical.__bound__.__args__
+    return not is_numeric and to_numeric and isinstance(attribute, str) and not issubclass(attribute_type, str)
 
 
 def make_str(items, markdown: bool = False, header: bool = False):
@@ -164,14 +174,15 @@ class ConfigurationField:
 
     def _read_single(self, parser: ConfigParser):
         """Read this field from the given parser (scalar)"""
-        return self.type(parser.get(self.section, self.name))
+        value = parser.get(self.section, self.name)
+        return self.type(eval_expr(value) if needs_evaluation(value, self.type) else value)
 
     def _read_list(self, parser: ConfigParser):
         """Read this field from the given parser (list)"""
         try:
             return [self.type(parser.get(self.section, self.name))]
         except ValueError:
-            return [self.type(x) for x in json.loads(parser.get(self.section, self.name))]
+            return [self.type(eval_expr(x)) if needs_evaluation(x, self.type) else self.type(x) for x in json.loads(parser.get(self.section, self.name))]
 
     def typename(self, inner=False):
         if self.is_list and not inner:
@@ -324,7 +335,7 @@ class ConfigurationSchema:
         attribute = attributes[attribute_name]
 
         # Evaluate expression from string, if appropriate
-        if isinstance(attribute, str) and not issubclass(attribute_type, str):
+        if needs_evaluation(attribute, attribute_type):
             return attribute_type(eval_expr(attribute))
 
         # Convert to list, if necessary
@@ -333,8 +344,8 @@ class ConfigurationSchema:
                 attribute = [attribute]
             if issubclass(attribute_type, list):
                 return attribute
-            return [attribute_type(a) for a in attribute]
-
+            return [attribute_type(eval_expr(a) if needs_evaluation(a, attribute_type) else a) for a in attribute]
+        
         return attribute_type(attribute)
 
     def __extract_section(self, section: dict) -> list[ConfigurationField]:
@@ -380,7 +391,6 @@ class ConfigurationSchema:
         else:
             is_list = False
             field_type = classes[field_type_value]
-
         try:
             field_default = self.__get_attribute("default", field, field_type, optional=True, is_list=is_list)
             valid_range = self.__get_range(field, field_type)

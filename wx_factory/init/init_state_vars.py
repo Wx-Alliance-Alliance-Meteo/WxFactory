@@ -5,10 +5,11 @@ from numpy.typing import NDArray
 from common.configuration import Configuration
 from geometry import DFROperators, Geometry, Metric2D, Metric3DTopo, Cartesian2D, CubedSphere2D, CubedSphere3D
 from init.initialize import initialize_cartesian2d, initialize_euler, initialize_sw, Topo
-
+from typing import Dict, Type
+from post_proccessing import PostProcessor, ScharMountainPostProcessor
 
 def init_state_vars(
-    geom: Geometry, operators: DFROperators, param: Configuration
+    geom: Geometry, operators: DFROperators, param: Configuration, post_processors: Dict[Type, PostProcessor]
 ) -> tuple[NDArray[numpy.float64], Topo | None, Metric2D | Metric3DTopo | None]:
     """Get intial value for state variables as well at topography information, based on the test case."""
 
@@ -17,6 +18,9 @@ def init_state_vars(
 
     if param.equations == "euler" and isinstance(geom, CubedSphere3D):
         metric = Metric3DTopo(geom, operators)
+        if param.enable_schar_mountain:
+            post_processors[ScharMountainPostProcessor].metric = metric
+            post_processors[ScharMountainPostProcessor].apply(1 if param.schar_mountain_step == 0 else 0)
         Q, topo = initialize_euler(geom, metric, operators, param)
         # Q: dimensions [5,nk,nj,ni], order ρ, u, v, w, θ
 
