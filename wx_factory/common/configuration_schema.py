@@ -47,13 +47,11 @@ _Selectable = TypeVar("Selectable", bound=Union[int, float, str])
 default_schema_path = "config/config-format.json"
 
 def needs_evaluation(attribute: _T, attribute_type: Type[_T]) -> bool:
-    is_numeric = False
-    for t in _Numerical.__bound__.__args__:
-        try:
-            t(attribute)
-            is_numeric = True
-        except:
-            pass
+    try:
+        float(attribute)
+        is_numeric = True
+    except:
+        is_numeric = False
 
     to_numeric = attribute_type in _Numerical.__bound__.__args__
     return not is_numeric and to_numeric and isinstance(attribute, str) and not issubclass(attribute_type, str)
