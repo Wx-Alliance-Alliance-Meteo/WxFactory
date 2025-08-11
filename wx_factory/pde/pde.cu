@@ -309,39 +309,6 @@ void launch_pointwise_euler_cartesian_2d(
       num_solpts_tot);
 }
 
-void select_pointwise_eulercartesian_2d(
-    py::object q,
-    py::object flux_x1,
-    py::object flux_x2,
-    const int  num_elem_x1,
-    const int  num_elem_x2,
-    const int  num_solpts_tot) {
-  // Determine the CuPy array dtype
-  std::string dtype = py::str(q.attr("dtype").attr("name"));
-
-  // Dispatch according to type
-  if (dtype == "float64")
-  {
-    launch_pointwise_euler_cartesian_2d<double>(
-        q,
-        flux_x1,
-        flux_x2,
-        num_elem_x1,
-        num_elem_x2,
-        num_solpts_tot);
-  }
-  else if (dtype == "complex128")
-  {
-    launch_pointwise_euler_cartesian_2d<complex_t>(
-        q,
-        flux_x1,
-        flux_x2,
-        num_elem_x1,
-        num_elem_x2,
-        num_solpts_tot);
-  }
-}
-
 template <typename real_t, typename num_t>
 void launch_riemann_euler_cubedsphere_rusanov_3d(
     const py::object q_itf_x1_in,
@@ -699,6 +666,31 @@ void select_riemann_eulercartesian_ausm_2d(
   }
 }
 
+class KernelLauncher
+{
+protected:
+  int block_size_ = 128;
+
+public:
+  KernelLauncher() = default;
+  KernelLauncher(const int block_size) : block_size_(block_size) {}
+};
+
+class PointwiseKernelLauncher : public KernelLauncher
+{
+public:
+  PointwiseKernelLauncher() = default;
+  PointwiseKernelLauncher(const int block_size) : KernelLauncher(block_size) {}
+  template <typename KernelType>
+  void launch(const size_t num_threads, const int verbose, KernelType kernel_func) const {
+    const size_t num_blocks = (num_threads + block_size_ - 1) / block_size_;
+    pointwise_kernel<<<num_blocks, block_size_>>>(
+        num_threads,
+        bool(verbose),
+        kernel_func);
+  }
+};
+
 template <typename KernelType>
 void launch_pointwise_kernel(
     const size_t num_threads,
@@ -710,11 +702,15 @@ void launch_pointwise_kernel(
   pointwise_kernel<<<num_blocks, BLOCK_SIZE>>>(num_threads, bool(verbose), kernel_func);
 }
 
-template <template <typename, typename> class KernelType, typename... Args>
+template <
+    template <typename, typename> class KernelType,
+    typename LauncherType,
+    typename... Args>
 void select_type(
     const std::string&      dtype,
     const std::vector<int>& shape,
     const int               verbose,
+    const LauncherType&     launcher,
     Args... args) {
 
   size_t num_threads = 1;
@@ -725,14 +721,14 @@ void select_type(
 
   if (dtype == "float64")
   {
-    launch_pointwise_kernel(
+    launcher.launch(
         num_threads,
         verbose,
         KernelType<double, double>(args..., num_threads));
   }
   else if (dtype == "complex128")
   {
-    launch_pointwise_kernel(
+    launcher.launch(
         num_threads,
         verbose,
         KernelType<double, complex_t>(args..., num_threads));
@@ -743,6 +739,40 @@ void select_type(
   }
 }
 
+void select_pointwise_eulercartesian_2d(
+    py::object q,
+    py::object flux_x1,
+    py::object flux_x2,
+    const int  num_elem_x1,
+    const int  num_elem_x2,
+    const int  num_solpts_tot) {
+  // Determine the CuPy array dtype
+  std::string dtype = py::str(q.attr("dtype").attr("name"));
+  // const auto& shape = q.attr("shape").cast<std::vector<int>>();
+  // select<
+
+  // Dispatch according to type
+  if (dtype == "float64")
+  {
+    launch_pointwise_euler_cartesian_2d<double>(
+        q,
+        flux_x1,
+        flux_x2,
+        num_elem_x1,
+        num_elem_x2,
+        num_solpts_tot);
+  }
+  else if (dtype == "complex128")
+  {
+    launch_pointwise_euler_cartesian_2d<complex_t>(
+        q,
+        flux_x1,
+        flux_x2,
+        num_elem_x1,
+        num_elem_x2,
+        num_solpts_tot);
+  }
+}
 void select_pointwise_euler_cubedsphere_3d(
     const py::object q_in,
     const py::object sqrt_g_in,
@@ -767,6 +797,7 @@ void select_pointwise_euler_cubedsphere_3d(
       dtype,
       {shape[1], shape[2], shape[3], shape[4]},
       verbose,
+      PointwiseKernelLauncher(),
       q_in,
       sqrt_g_in,
       h_in,
@@ -799,6 +830,7 @@ void select_forcing_euler_cubesphere_3d(
       dtype,
       {shape[1], shape[2], shape[3], shape[4]},
       verbose,
+      PointwiseKernelLauncher(),
       q,
       pressure,
       sqrt_g,
