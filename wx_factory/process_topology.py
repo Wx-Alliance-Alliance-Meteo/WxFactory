@@ -600,12 +600,15 @@ class ProcessTopology:
         # Only panel roots can go further
         if panel is None:
             return None
+        
+        panels = self.device.xp.empty((6,) + panel.shape)
+        self.panel_roots_comm.Gather(panel, panels, root=0)
 
-        panels = self.panel_roots_comm.gather(panel, root=0)
-
-        # Only the root of the entire cubesphere topology with continue
-        if panels is None:
+        if self.panel_roots_comm.rank != 0:
             return None
+        # Only the root of the entire cubesphere topology with continue
+        #if panels is None:
+        #    return None
 
         return self.device.xp.stack(panels)
 
