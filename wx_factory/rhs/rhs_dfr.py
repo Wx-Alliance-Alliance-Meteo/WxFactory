@@ -295,11 +295,18 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
         self.q_itf_full_x2[s] = self.q_itf_s
         self.q_itf_full_x2[n] = self.q_itf_n
 
+        itf_size = self.geom.itf_size
         # Top + bottom layers
         self.q_itf_full_x3[b] = self.q_itf_full_x3[..., 1, :, :, : self.geom.itf_size]
         # self.q_itf_full_x3[..., 0, :, :, : self.geom.itf_size] = self.q_itf_full_x3[b]
         self.q_itf_full_x3[t] = self.q_itf_full_x3[..., -2, :, :, self.geom.itf_size :]
         # self.q_itf_full_x3[..., -1, :, :, self.geom.itf_size :] = self.q_itf_full_x3[t]
+        self.q_itf_full_x3[idx_rho_w, 0, :, :, :itf_size] = 0.0
+        self.q_itf_full_x3[idx_rho_w, 0, :, :, itf_size:] = -self.q_itf_full_x3[idx_rho_w, 1, :, :, :itf_size]
+        self.q_itf_full_x3[idx_rho_w, -1, :, :, itf_size:] = 0.0
+        self.q_itf_full_x3[idx_rho_w, -1, :, :, :itf_size] = -self.q_itf_full_x3[idx_rho_w, -2, :, :, itf_size:]
+
+        before = self.q_itf_full_x3.copy()
 
         self.pde.riemann_fluxes(
             self.q_itf_full_x1,
@@ -319,6 +326,13 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
             self.wflux_pres_itf_full_x3,
             self.metric,
         )
+
+        after = self.q_itf_full_x3.copy()
+
+        # diff = after - before
+        # if self.device.comm.rank == 0:
+        #     numpy.set_printoptions(precision=2)
+        #     print(f"riemann_fluxes diff = \n{diff}", flush=True)
 
         self.f_itf_x1[...] = self.f_itf_full_x1[mid_i]
         self.f_itf_x2[...] = self.f_itf_full_x2[mid_j]

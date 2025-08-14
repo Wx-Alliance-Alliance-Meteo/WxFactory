@@ -384,46 +384,50 @@ void riemann_euler_cubedsphere_rusanov_3d(
     }
   }
 
-  // Set the x3-direction boundary conditions to ensure no flow via odd symmetry
-#pragma omp target teams distribute collapse(3)
-  for (int j = 0; j < num_elem_x2; j++)
-  {
-    for (int k = 0; k < num_elem_x1; k++)
-    {
-      for (int l = 0; l < num_solpts * num_solpts; l++)
-      {
-        // Set the bottom boundary
-        const int index_b_bottom =
-            get_c_index(0, 0, j, k, l + num_solpts * num_solpts, array_shape_x3);
-        euler_state_3d<num_t> params_b_bottom(q_itf_x3_ptr, index_b_bottom, stride_x3);
+  //   // Set the x3-direction boundary conditions to ensure no flow via odd symmetry
+  // #pragma omp target teams distribute collapse(3)
+  //   for (int j = 0; j < num_elem_x2; j++)
+  //   {
+  //     for (int k = 0; k < num_elem_x1; k++)
+  //     {
+  //       for (int l = 0; l < num_solpts * num_solpts; l++)
+  //       {
+  //         // Set the bottom boundary
+  //         const int index_b_bottom =
+  //             get_c_index(0, 0, j, k, l + num_solpts * num_solpts, array_shape_x3);
+  //         euler_state_3d<num_t> params_b_bottom(q_itf_x3_ptr, index_b_bottom,
+  //         stride_x3);
 
-        const int index_in_bottom = get_c_index(0, 1, j, k, l, array_shape_x3);
-        euler_state_3d<const num_t> params_in_bottom(
-            q_itf_x3_ptr,
-            index_in_bottom,
-            stride_x3);
+  //         const int index_in_bottom = get_c_index(0, 1, j, k, l, array_shape_x3);
+  //         euler_state_3d<const num_t> params_in_bottom(
+  //             q_itf_x3_ptr,
+  //             index_in_bottom,
+  //             stride_x3);
 
-        boundary_euler_cubedsphere_3d_kernel<real_t, num_t>(
-            params_in_bottom,
-            params_b_bottom);
+  //         boundary_euler_cubedsphere_3d_kernel<real_t, num_t>(
+  //             params_in_bottom,
+  //             params_b_bottom);
 
-        // Set the top boundary
-        const int index_b_top = get_c_index(0, num_elem_x3 + 1, j, k, l, array_shape_x3);
-        euler_state_3d<num_t> params_b_top(q_itf_x3_ptr, index_b_top, stride_x3);
+  //         // Set the top boundary
+  //         const int index_b_top = get_c_index(0, num_elem_x3 + 1, j, k, l,
+  //         array_shape_x3); euler_state_3d<num_t> params_b_top(q_itf_x3_ptr,
+  //         index_b_top, stride_x3);
 
-        const int index_in_top = get_c_index(
-            0,
-            num_elem_x3,
-            j,
-            k,
-            l + num_solpts * num_solpts,
-            array_shape_x3);
-        euler_state_3d<const num_t> params_in_top(q_itf_x3_ptr, index_in_top, stride_x3);
+  //         const int index_in_top = get_c_index(
+  //             0,
+  //             num_elem_x3,
+  //             j,
+  //             k,
+  //             l + num_solpts * num_solpts,
+  //             array_shape_x3);
+  //         euler_state_3d<const num_t> params_in_top(q_itf_x3_ptr, index_in_top,
+  //         stride_x3);
 
-        boundary_euler_cubedsphere_3d_kernel<real_t, num_t>(params_in_top, params_b_top);
-      }
-    }
-  }
+  //         boundary_euler_cubedsphere_3d_kernel<real_t, num_t>(params_in_top,
+  //         params_b_top);
+  //       }
+  //     }
+  //   }
 
   // Compute the fluxes along the x3-direction
 #pragma omp target teams distribute collapse(4)
