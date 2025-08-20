@@ -27,7 +27,7 @@
                 {
                     "name": "desired_device",
                     "type": "str",
-                    "selectables": ["cpp", "cuda", "cupy", "numpy", "omp"],
+                    "selectables": ["cpp", "cuda", "cupy", "numpy", "omp", "torch"],
                     "default": "cpp",
                     "description": "Physical backend to run the computation on"
                 },

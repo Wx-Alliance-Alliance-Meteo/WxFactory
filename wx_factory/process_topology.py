@@ -414,6 +414,7 @@ class ProcessTopology:
 
         inputs = [south, north, west, east]
         boundaries = [boundary_sn, boundary_sn, boundary_we, boundary_we]
+        
         for i, (data, bd) in enumerate(zip(inputs, boundaries)):
             send_buffer[i, 0], send_buffer[i, 1] = convert[i](
                 data[0].reshape(base_shape), data[1].reshape(base_shape), bd
@@ -421,7 +422,9 @@ class ProcessTopology:
             if len(data) == 3:
                 send_buffer[i, 2] = data[2].reshape(base_shape)  # 3rd dimension if present
             if self.flip[i]:
+                flip_dim = flip_dim if type(flip_dim) == tuple else (flip_dim,)
                 send_buffer[i] = xp.flip(send_buffer[i], axis=flip_dim)  # Flip arrays, if needed
+        
 
         return send_buffer, south[0].shape, True
 

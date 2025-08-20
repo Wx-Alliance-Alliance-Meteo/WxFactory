@@ -81,7 +81,7 @@ class PDEEulerCubesphere(PDE):
         self.compute_forcings_inner = self.compute_forcings_py
         self.pointwise_fluxes_inner = self.pointwise_fluxes_py
         self.riemann_fluxes_inner = self.riemann_fluxes_py
-        if self.config.desired_device not in ["numpy", "cupy"]:
+        if self.config.desired_device not in ["numpy", "cupy", "torch"]:
             if hasattr(self.device.pde, "forcing_euler_cubesphere_3d"):
                 self.compute_forcings_inner = self.compute_forcings_code
             self.pointwise_fluxes_inner = self.pointwise_fluxes_code
