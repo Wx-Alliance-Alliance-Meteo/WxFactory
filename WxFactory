@@ -135,7 +135,7 @@ def main():
 
             if rank == 0:
                 if not isinstance(e, SystemExit):
-                    print(f"There was an error while running GEF. Only rank 0 is printing the traceback:")
+                    print(f"There was an error while running WxFactory. Only rank 0 is printing the traceback:")
                 raise e
 
             raise SystemExit
