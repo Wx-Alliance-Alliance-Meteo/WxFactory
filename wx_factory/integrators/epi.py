@@ -102,7 +102,7 @@ class Epi(Integrator):
         def matvec_handle(v):
             return matvec_fun(v, dt, Q, rhs, self.rhs, self.jacobian_method)
 
-        vec = self.device.xp.zeros((self.max_phi + 1, rhs.size))
+        vec = self.device.xp.zeros((self.max_phi + 1, math.prod(rhs.shape)), dtype=Q.dtype)
         vec[1, :] = rhs.flatten()
         for i in range(self.n_prev):
             J_deltaQ = matvec_fun(self.previous_Q[i] - Q, 1.0, Q, rhs, self.rhs, self.jacobian_method)

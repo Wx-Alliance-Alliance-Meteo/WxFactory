@@ -52,7 +52,7 @@ class DFROperators:
 
         # Build Vandermonde matrix to transform the modal representation to the (interior)
         # nodal representation
-        V = legvander(grd.solutionPoints, grd.num_solpts - 1)
+        V = legvander(grd.solutionPoints, grd.num_solpts - 1, xp)
         # Invert the matrix to transform from interior nodes to modes
         invV = xp.linalg.inv(V)
 
@@ -62,8 +62,8 @@ class DFROperators:
 
         # Note that extrap_neg and extrap_pos should be vectors, not a one-row matrix; numpy
         # treats the two differently.
-        extrap_neg = (legvander(xp.array([-1.0]), grd.num_solpts - 1) @ invV).reshape((-1,))
-        extrap_pos = (legvander(xp.array([+1.0]), grd.num_solpts - 1) @ invV).reshape((-1,))
+        extrap_neg = (legvander(xp.array([-1.0], dtype=V.dtype), grd.num_solpts - 1, xp) @ invV).reshape((-1,))
+        extrap_pos = (legvander(xp.array([+1.0], dtype=V.dtype), grd.num_solpts - 1, xp) @ invV).reshape((-1,))
 
         self.extrap_west = extrap_neg
         self.extrap_east = extrap_pos
@@ -72,12 +72,13 @@ class DFROperators:
         self.extrap_down = extrap_neg
         self.extrap_up = extrap_pos
 
-        V = legvander(grd.solutionPoints, grd.num_solpts - 1)
+        V = legvander(grd.solutionPoints, grd.num_solpts - 1, xp)
         invV = xp.linalg.inv(V)
-        feye = xp.eye(grd.num_solpts)
+        feye = xp.eye(grd.num_solpts, dtype=V.dtype)
         feye[-1, -1] = 0.0
         self.highfilter = V @ (feye @ invV)
-        self.highfilter_k = xp.kron(self.highfilter.T, xp.eye(grd.num_solpts**2))  # Only valid in 3D (hence the **2)
+
+        self.highfilter_k = xp.kron(self.highfilter.T, xp.eye(grd.num_solpts**2, dtype=V.dtype))  # Only valid in 3D (hence the **2)
 
         # if device.comm.rank == 0:
         #     print(f"high filter = \n{self.highfilter}")
@@ -111,8 +112,8 @@ class DFROperators:
                     param.expfilter_strength, param.expfilter_order, param.expfilter_cutoff, grd
                 )
 
-                I2 = xp.eye(grd.num_solpts)
-                I3 = xp.eye(grd.num_solpts**2)
+                I2 = xp.eye(grd.num_solpts, dtype=V.dtype)
+                I3 = xp.eye(grd.num_solpts**2, dtype=V.dtype)
                 filter_x = xp.kron(I3, self.expfilter).T
                 filter_y = xp.kron(I2, xp.kron(self.expfilter, I2)).T
                 filter_z = xp.kron(self.expfilter, I3).T
@@ -155,8 +156,8 @@ class DFROperators:
         self.quad_weights = xp.outer(grd.glweights, grd.glweights)
 
         if isinstance(grd, CubedSphere3D):
-            I2 = xp.identity(grd.num_solpts)
-            I3 = xp.identity(grd.num_solpts**2)
+            I2 = xp.identity(grd.num_solpts, dtype=V.dtype)
+            I3 = xp.identity(grd.num_solpts**2, dtype=V.dtype)
 
             self.extrap_x = xp.vstack((xp.kron(I3, self.extrap_west), xp.kron(I3, self.extrap_east))).T
             self.extrap_y = xp.vstack(
@@ -225,7 +226,7 @@ class DFROperators:
         # Now, use a Vandermonde matrix to transform this modal filter into a nodal form
 
         # mode-to-node operator
-        vander = legvander(geom.solutionPoints, geom.num_solpts - 1)
+        vander = legvander(geom.solutionPoints, geom.num_solpts - 1, xp)
 
         # node-to-mode operator
         ivander = xp.linalg.inv(vander)
@@ -285,35 +286,30 @@ class DFROperators:
            Destination array for operation. If provided, should be a C-contiguous array with the same shape
            as `field_interior`.
         """
-
-        if out is None:
-            # Create an empty array for output
-            output = numpy.empty_like(field_interior)
-        else:
-            # Create a view of the output so that the shape of the original is not modified
-            output = out.view()
+        xp = grid.device.xp
+        output = xp.empty_like(field_interior) if out is None else out.reshape(field_interior.shape)
 
         # Create views of the input arrays for reshaping, in order to express the differentiation as
         # a set of matrix multiplications
 
-        field_view = field_interior.view()
-        border_i_view = border_i.view()
+        field_view = field_interior.reshape((-1, grid.num_solpts))
+        border_i_view = border_i.reshape((-1, 2))
 
         # Reshape to a flat view.  Assigning to array.shape will raise an exception if the new shape would
         # require a memory copy; this implicitly ensures that the input arrays are fully contiguous in
         # memory.
-        field_view.shape = (-1, grid.num_solpts)
-        border_i_view.shape = (-1, 2)
-        output.shape = field_view.shape
+        output = output.reshape((-1, grid.num_solpts))
 
         # Perform the matrix transposition
-        numpy.dot(field_view, self.diff_solpt_tr, out=output)
+        xp.matmul(field_view, self.diff_solpt_tr, out=output)
         # output[:] = field_view @ self.diff_solpt_tr# + border_i_view @ self.correction_tr
         output[:] += border_i_view @ self.correction_tr
         # print(grid.ptopo.rank, field_view[:2,:], '\n', border_i_view[:2,:],'\n',output[:2,:])
 
         # Reshape the output array back to its canonical extents
-        output.shape = field_interior.shape
+        output = output.reshape(field_interior.shape)
+        if out is not None:
+            out[...] = output[...]
 
         return output
 
@@ -337,32 +333,35 @@ class DFROperators:
            Destination array for operation. If provided, should be a C-contiguous array
            with shape (numvars, npts_z, npts_y, nels_x, 2).
         """
+        xp = grid.device.xp
 
         # Array shape for the i-border of a single variable, based on the grid decomposition
         border_shape = (grid.num_elements_x1, 2)
         # Number of variables we're extending
-        # nbvars = numpy.prod(field_interior.shape) // (grid.ni)
-        nbvars = field_interior.size // grid.ni
+        nbvars = math.prod(field_interior.shape) // (grid.ni)
+        #nbvars = field_interior.size // grid.ni
 
         if out is None:
             # Create an array for the output
-            border = numpy.empty((nbvars,) + border_shape, dtype=field_interior.dtype, like=field_interior)
+            border = xp.empty((nbvars,) + border_shape, dtype=field_interior.dtype)
         else:
             # Create a view of the output so that the shape of the original is not modified
-            border = out.view()
+            border = out
 
         # Reshape to the from required for matrix multiplication
-        border.shape = (-1, 2)
+        border = border.reshape((-1, 2))
 
         # Create an array view of the interior, reshaped for matrix multiplication
-        field_interior_view = field_interior.view()
-        field_interior_view.shape = (-1, grid.num_solpts)
+        field_interior_view = field_interior.reshape((-1, grid.num_solpts))
 
         # Perform the extrapolations via matrix multiplication
         border[:, 0] = field_interior_view @ self.extrap_west
         border[:, 1] = field_interior_view @ self.extrap_east
 
-        border.shape = tuple(field_interior.shape[0:-1]) + border_shape
+        border = border.reshape(tuple(field_interior.shape[0:-1]) + border_shape)
+        if out is not None:
+            out[...] = border
+
         return border
 
     def comma_j(
@@ -391,35 +390,31 @@ class DFROperators:
            as `field_interior`.
         """
 
-        if out is None:
-            # Create an empty array for output
-            output = numpy.empty_like(field_interior)
-        else:
-            # Create a view of the output so that the shape of the original is not modified
-            output = out.view()
+        xp = grid.device.xp
+        output = xp.empty_like(field_interior) if out is None else out.reshape(field_interior.shape)
 
         # Compute the number of variables we're differentiating, including number of levels
-        # nbvars = numpy.prod(output.shape) // (grid.ni * grid.nj)
-        nbvars = output.size // (grid.ni * grid.nj)
+        nbvars = math.prod(output.shape) // (grid.ni * grid.nj)
+        #nbvars = output.size // (grid.ni * grid.nj)
 
         # Create views of the input arrays for reshaping, in order to express the differentiation as
         # a set of matrix multiplications
 
-        field_view = field_interior.view()
-        border_j_view = border_j.view()
+        field_view = field_interior.reshape((nbvars * grid.num_elements_x2, grid.num_solpts, grid.ni))
+        border_j_view = border_j.reshape((nbvars * grid.num_elements_x2, 2, grid.ni))
 
         # Reshape to a flat view.  Assigning to array.shape will raise an exception if the new shape would
         # require a memory copy; this implicitly ensures that the input arrays are fully contiguous in
         # memory.
-        field_view.shape = (nbvars * grid.num_elements_x2, grid.num_solpts, grid.ni)
-        border_j_view.shape = (nbvars * grid.num_elements_x2, 2, grid.ni)
-        output.shape = field_view.shape
+        output = output.reshape(field_view.shape)
 
         # Perform the matrix transposition
         output[:] = self.diff_solpt @ field_view + self.correction @ border_j_view
 
         # Reshape the output array back to its canonical extents
-        output.shape = field_interior.shape
+        output = output.reshape(field_interior.shape)
+        if out is not None:
+            out[...] = output[...]
 
         return output
 
@@ -444,25 +439,24 @@ class DFROperators:
            Destination array for operation. If provided, should be a C-contiguous array with
            shape (numvars, npts_z, nels_y, 2, npts_x).
         """
-
+        xp = grid.device.xp
         # Array shape for the i-border of a single variable, based on the grid decomposition
         border_shape = (grid.num_elements_x2, 2, grid.ni)
         # Number of variables times number of vertical levels we're extending
-        # nbvars = numpy.prod(field_interior.shape) // (grid.ni * grid.nj)
-        nbvars = field_interior.size // (grid.ni * grid.nj)
+        nbvars = math.prod(field_interior.shape) // (grid.ni * grid.nj)
+        #nbvars = field_interior.size // (grid.ni * grid.nj)
 
         if out is None:
             # Create an array for the output
-            border = numpy.empty((nbvars,) + border_shape, dtype=field_interior.dtype, like=field_interior)
+            border = xp.empty((nbvars,) + border_shape, dtype=field_interior.dtype)
         else:
             # Create a view of the output so that the shape of the original is not modified
-            border = out.view()
+            border = out
         # Reshape to the from required for matrix multiplication
-        border.shape = (-1, 2, grid.ni)
+        border = border.reshape((-1, 2, grid.ni))
 
         # Create an array view of the interior, reshaped for matrix multiplication
-        field_interior_view = field_interior.view()
-        field_interior_view.shape = (-1, grid.num_solpts, grid.ni)
+        field_interior_view = field_interior.reshape((-1, grid.num_solpts, grid.ni))
 
         # Perform the extrapolations via matrix multiplication
         # print(border[:,0,:].shape, field_interior_view.shape, self.extrap_south.T.shape)
@@ -471,7 +465,11 @@ class DFROperators:
 
         # field_interior.shape[0:-2] is (nbvars,nk) for many 3D fields, (nbvars,) for many 2D fields,
         # (nk) for a single 3D field, and () for a single 2D field.
-        border.shape = tuple(field_interior.shape[0:-2]) + border_shape
+        
+        border = border.reshape(tuple(field_interior.shape[0:-2]) + border_shape)
+        if out is not None:
+            out[...] = border
+
         return border
 
     def comma_k(
@@ -499,36 +497,31 @@ class DFROperators:
            Destination array for operation. If provided, should be a C-contiguous array with the same shape
            as `field_interior`.
         """
-
-        if out is None:
-            # Create an empty array for output
-            output = numpy.empty_like(field_interior)
-        else:
-            # Create a view of the output so that the shape of the original is not modified
-            output = out.view()
+        xp = grid.device.xp
+        output = xp.empty_like(field_interior) if out is None else out.reshape(field_interior.shape)
 
         # Compute the number of variables we're differentiating
-        # nbvars = numpy.prod(output.shape) // (grid.ni * grid.nj * grid.nk)
-        nbvars = output.size // (grid.ni * grid.nj * grid.nk)
+        nbvars = math.prod(output.shape) // (grid.ni * grid.nj * grid.nk)
+        #nbvars = output.size // (grid.ni * grid.nj * grid.nk)
 
         # Create views of the input arrays for reshaping, in order to express the differentiation as
         # a set of matrix multiplications
 
-        field_view = field_interior.view()
-        border_k_view = border_k.view()
+        field_view = field_interior.reshape((nbvars * grid.num_elements_x3, grid.num_solpts, grid.ni * grid.nj))
+        border_k_view = border_k.reshape((nbvars * grid.num_elements_x3, 2, grid.ni * grid.nj))
 
         # Reshape to a flat view.  Assigning to array.shape will raise an exception if the new shape would
         # require a memory copy; this implicitly ensures that the input arrays are fully contiguous in
         # memory.
-        field_view.shape = (nbvars * grid.num_elements_x3, grid.num_solpts, grid.ni * grid.nj)
-        border_k_view.shape = (nbvars * grid.num_elements_x3, 2, grid.ni * grid.nj)
-        output.shape = field_view.shape
+        output = output.reshape(field_view.shape)
 
         # Perform the matrix transposition
         output[:] = self.diff_solpt @ field_view + self.correction @ border_k_view
 
         # Reshape the output array back to its canonical extents
-        output.shape = field_interior.shape
+        output = output.reshape(field_interior.shape)
+        if out is not None:
+            out[...] = output[...]
 
         return output
 
@@ -601,34 +594,37 @@ class DFROperators:
            Destination array for operation. If provided, should be a C-contiguous array
            with shape (numvars, nels_z, 2, npts_y, npts_x).
         """
+        xp = grid.device.xp
 
         # Array shape for the i-border of a single variable, based on the grid decomposition
         border_shape = (grid.num_elements_x3, 2, grid.nj, grid.ni)
         # Number of variables we're extending
-        # nbvars = numpy.prod(field_interior.shape) // (grid.ni * grid.nj * grid.nk)
-        nbvars = field_interior.size // (grid.ni * grid.nj * grid.nk)
+        nbvars = math.prod(field_interior.shape) // (grid.ni * grid.nj * grid.nk)
+        #nbvars = field_interior.size // (grid.ni * grid.nj * grid.nk)
 
         if out is None:
             # Create an array for the output
-            border = numpy.empty((nbvars,) + border_shape, dtype=field_interior.dtype, like=field_interior)
+            border = xp.empty((nbvars,) + border_shape, dtype=field_interior.dtype)
         else:
             # Create a view of the output so that the shape of the original is not modified
-            border = out.view()
+            border = out
         # Reshape to the from required for matrix multiplication
-        border.shape = (-1, 2, grid.ni * grid.nj)
+        border = border.reshape((-1, 2, grid.ni * grid.nj))
 
         # Create an array view of the interior, reshaped for matrix multiplication
-        field_interior_view = field_interior.view()
-        field_interior_view.shape = (-1, grid.num_solpts, grid.ni * grid.nj)
+        field_interior_view = field_interior.reshape((-1, grid.num_solpts, grid.ni * grid.nj))
 
         # Perform the extrapolations via matrix multiplication
         border[:, 0, :] = self.extrap_down @ field_interior_view
         border[:, 1, :] = self.extrap_up @ field_interior_view
 
         if nbvars > 1:
-            border.shape = (nbvars,) + border_shape
+            border = border.reshape((nbvars,) + border_shape)
         else:
-            border.shape = border_shape
+            border = border.reshape(border_shape)
+        
+        if out is not None:
+            out[...] = border        
         return border
 
     # Take the gradient of one or more variables, with output shape [3,nvars,ni,nj,nk]
@@ -670,42 +666,40 @@ class DFROperators:
         grad : numpy.ndarray, shape [3,...]
            Gradiant (covariant derivatives) of the input field
         """
+        xp = geom.device.xp
         (nk, nj, ni) = field.shape[-3:]
-        ff = field.view()
-        ff.shape = (-1, nk, nj, ni)
+        ff = field.reshape((-1, nk, nj, ni))
 
         nvar = ff.shape[0]
         nel_i = itf_i.shape[-1] - 1
         nel_j = itf_j.shape[-2] - 1
         nel_k = itf_k.shape[-3] - 1
 
-        iti = itf_i.view()
-        iti.shape = (nvar, nk, nj, nel_i + 1)
+        iti = itf_i.reshape((nvar, nk, nj, nel_i + 1))
 
-        itj = itf_j.view()
-        itj.shape = (nvar, nk, nel_j + 1, ni)
+        itj = itf_j.reshape((nvar, nk, nel_j + 1, ni))
 
-        itk = itf_k.view()
-        itk.shape = (nvar, nel_k + 1, nj, ni)
+        itk = itf_k.reshape((nvar, nel_k + 1, nj, ni))
 
         # shape: (nvar, nk, nj, nel_i, 2)
-        ext_i = numpy.stack((iti[:, :, :, :-1], iti[:, :, :, 1:]), axis=-1)
+        ext_i = xp.stack((iti[:, :, :, :-1], iti[:, :, :, 1:]), axis=-1)
         # shape: (nvar, nk, nel_j, 2, ni)
-        ext_j = numpy.stack((itj[:, :, :-1, :], itj[:, :, 1:, :]), axis=-2)
+        ext_j = xp.stack((itj[:, :, :-1, :], itj[:, :, 1:, :]), axis=-2)
         # shape: (nvar, nel_k, 2, nj, ni)
-        ext_k = numpy.stack((itk[:, :-1, :, :], itk[:, 1:, :, :]), axis=-3)
+        ext_k = xp.stack((itk[:, :-1, :, :], itk[:, 1:, :, :]), axis=-3)
 
         if out is None:
-            output = numpy.zeros((3, nvar, nk, nj, ni), like=field)
+            output = xp.zeros((3, nvar, nk, nj, ni), dtype=field.dtype)
         else:
-            output = out.view()
-            output.shape = (3, nvar, nk, nj, ni)
+            output = out.reshape((3, nvar, nk, nj, ni))
 
         self.comma_i(ff, ext_i, geom, out=output[0])
         self.comma_j(ff, ext_j, geom, out=output[1])
         self.comma_k(ff, ext_k, geom, out=output[2])
 
-        output.shape = (3,) + field.shape
+        output = output.reshape((3,) + field.shape)
+        if out is not None:
+            out[...] = output
 
         return output
 
@@ -925,7 +919,7 @@ def row_reduce(A: numpy.ndarray, ncols: Optional[int] = None) -> numpy.ndarray:
     return A_rre
 
 
-def legvander(x: NDArray[numpy.float64], deg: int) -> NDArray[numpy.float64]:
+def legvander(x: NDArray[numpy.float64], deg: int, xp) -> NDArray[numpy.float64]:
     """
     NumPy's legvander, slightly modified to work with any array type.
 
@@ -933,11 +927,11 @@ def legvander(x: NDArray[numpy.float64], deg: int) -> NDArray[numpy.float64]:
     """
 
     dims = (deg + 1,) + x.shape
-    v = numpy.empty_like(x, shape=dims)
+    v = xp.empty(dims, dtype=x.dtype)
 
     v[0] = 1
     if deg > 0:
         v[1] = x
         for i in range(2, deg + 1):
             v[i] = (v[i - 1] * x * (2 * i - 1) - v[i - 2] * (i - 1)) / i
-    return numpy.moveaxis(v, 0, -1)
+    return xp.moveaxis(v, 0, -1)

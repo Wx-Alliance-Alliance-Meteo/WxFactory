@@ -90,7 +90,7 @@ class ScharMountainPostProcessor(post_proccessor.PostProcessor):
         r = self.geom.earth_radius * self.xp.arccos(
             math.sin(self.phim) * self.xp.sin(lat) + math.cos(self.phim) * self.xp.cos(lat) * self.xp.cos(lon - self.lambdam)
         )
-        z = self.xp.zeros(lat.shape)
+        z = self.xp.zeros(lat.shape, dtype=lat.dtype)
         z[:, :] = self.h0 * self.xp.exp(-(r**2) / self.Dm**2) * self.xp.cos(self.xp.pi * r / self.Dxi) ** 2
         return z
 

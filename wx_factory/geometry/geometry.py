@@ -26,7 +26,7 @@ class Geometry(ABC):
     ) -> None:
         self.device = device
         xp = self.device.xp
-        self.dtype = numpy.dtype(numpy.float64)
+        self.dtype = xp.float64
 
         ## Element properties -- solution and extension points
         # Gauss-Legendre solution points

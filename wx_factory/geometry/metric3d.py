@@ -81,12 +81,12 @@ class Metric3DTopo:
         alpha = geom.angle_p  # Clockwise rotation about the Z axis
         phi = geom.lat_p  # Counterclockwise rotation about the X axis, sending [0,0,1] to a particular latitude
         lam = geom.lon_p  # Counterclockwise rotation about the Z axis, sending [0,-1,0] to a particular longitude
-        salp = numpy.sin(alpha)
-        calp = numpy.cos(alpha)
-        sphi = numpy.sin(phi)
-        cphi = numpy.cos(phi)
-        slam = numpy.sin(lam)
-        clam = numpy.cos(lam)
+        salp = math.sin(alpha)
+        calp = math.cos(alpha)
+        sphi = math.sin(phi)
+        cphi = math.cos(phi)
+        slam = math.sin(lam)
+        clam = math.cos(lam)
 
         ## Compute partial derivatives of R
 
@@ -104,11 +104,11 @@ class Metric3DTopo:
 
         # Build the boundary-extensions of h, based on the interface boundaries
         # ext_i shape: (nk, nj, num_elements_x1, 2) - west/east boundaries
-        height_ext_i = numpy.stack((height_itf_i[:, :, :-1], height_itf_i[:, :, 1:]), axis=-1)
+        height_ext_i = xp.stack((height_itf_i[:, :, :-1], height_itf_i[:, :, 1:]), axis=-1)
         # ext_j shape: (nk, num_elements_x2, 2, ni) - south/north boundaries
-        height_ext_j = numpy.stack((height_itf_j[:, :-1, :], height_itf_j[:, 1:, :]), axis=-2)
+        height_ext_j = xp.stack((height_itf_j[:, :-1, :], height_itf_j[:, 1:, :]), axis=-2)
         # ext_k shape: (num_elements_x3, 2, nj, ni) - bottom/top boundaries
-        height_ext_k = numpy.stack((height_itf_k[:-1, :, :], height_itf_k[1:, :, :]), axis=-3)
+        height_ext_k = xp.stack((height_itf_k[:-1, :, :], height_itf_k[1:, :, :]), axis=-3)
 
         dRdx1_int = matrix.comma_i(height_int, height_ext_i, geom) * 2 / delta_x
         dRdx2_int = matrix.comma_j(height_int, height_ext_j, geom) * 2 / delta_y
@@ -306,8 +306,8 @@ class Metric3DTopo:
         dRdeta_ex_k[mid_k] = dRdeta_int_new @ matrix.extrap_z
 
         # _k only needs permutation to assign to the exchange arrays
-        exch_itf_i[2, :, 1:-1, :, :] = dRdeta_extrap_i.transpose(0, 2, 3, 1)
-        exch_itf_j[2, :, 1:-1, :, :] = dRdeta_extrap_j.transpose(0, 1, 2, 3)
+        exch_itf_i[2, :, 1:-1, :, :] = xp.transpose(dRdeta_extrap_i, (0, 2, 3, 1))
+        exch_itf_j[2, :, 1:-1, :, :] = xp.transpose(dRdeta_extrap_j, (0, 1, 2, 3))
 
         # tmp = xp.zeros_like(exch_itf_i[0])
         # tmp[..., 1:-1, :, :]= dRdx1_extrap_i.transpose(0, 2, 3, 1)
@@ -966,8 +966,8 @@ class Metric3DTopo:
                         for i in range(ni):
                             space_christoffel[k, j, i, ...] = xp.linalg.solve(lhs_tmp[k, j, i], rhs_tmp[k, j, i])
 
-            space_christoffel.shape = (nk, nj, ni, 3, 3, 3)
-            space_christoffel = space_christoffel.transpose((3, 4, 5, 0, 1, 2))
+            space_christoffel = space_christoffel.reshape((nk, nj, ni, 3, 3, 3))
+            space_christoffel = xp.transpose(space_christoffel, (3, 4, 5, 0, 1, 2))
 
             if verbose and geom.process_topology.rank == 0:
                 print("Copying Γ to destination arrays")

@@ -53,14 +53,14 @@ def pmex(
     if p == 0:
         p = 1
         # Add extra column of zeros
-        u = device.xp.row_stack((u, device.xp.zeros(len(u))))
+        u = device.xp.row_stack((u, device.xp.zeros(len(u), dtype=u.dtype)))
 
     step = 0
     krystep = 0
     ireject = 0
     reject = 0
     exps = 0
-    sgn = device.xp.sign(tau_out[-1])
+    sgn = math.copysign(1, tau_out[-1])
     tau_now = 0.0
     tau_end = abs(tau_out[-1])
     happy = False
@@ -76,14 +76,14 @@ def pmex(
     m = max(mmin, min(m_init, mmax))
 
     # Preallocate matrix
-    V = device.xp.zeros((mmax + 1, n + p))
-    H = device.xp.zeros((mmax + 1, mmax + 1))
-    Minv = device.xp.eye(mmax)
-    M = device.xp.eye(mmax)
-    N = device.xp.zeros([mmax, mmax])
+    V = device.xp.zeros((mmax + 1, n + p), dtype=u.dtype)
+    H = device.xp.zeros((mmax + 1, mmax + 1), dtype=u.dtype)
+    Minv = device.xp.eye(mmax, dtype=u.dtype)
+    M = device.xp.eye(mmax, dtype=u.dtype)
+    N = device.xp.zeros([mmax, mmax], dtype=u.dtype)
 
     # Initial condition
-    w = device.xp.zeros((numSteps, n))
+    w = device.xp.zeros((numSteps, n), dtype=u.dtype)
     w[0, :] = u[0, :].copy()
 
     # compute the 1-norm of u
@@ -148,6 +148,7 @@ def pmex(
             # Normalize initial vector (this norm is nonzero)
             local_sum = V[0, 0:n] @ V[0, 0:n]
             global_sum_nrm = device.xp.empty_like(local_sum)
+            #print(local_sum.dtype, global_sum_nrm.dtype, flush=True)
             device.synchronize()
             comm.Allreduce([local_sum, MPI.DOUBLE], [global_sum_nrm, MPI.DOUBLE])
             beta = math.sqrt(global_sum_nrm + V[j, n : n + p] @ V[j, n : n + p])

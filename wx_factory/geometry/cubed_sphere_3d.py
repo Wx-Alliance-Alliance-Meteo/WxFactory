@@ -231,20 +231,20 @@ class CubedSphere3D(CubedSphere):
 
         offsets_x1 = x1_boundaries[:-1]
         ref_solpts_x1 = delta_x1 / delta_comp * (-minComp + self.solutionPoints)
-        x1 = xp.repeat(offsets_x1, num_solpts) + xp.tile(ref_solpts_x1, num_elements_x1)
+        x1 = xp.repeat(offsets_x1, num_solpts) + xp.tile(ref_solpts_x1, (num_elements_x1,))
 
         offsets_x2 = x2_boundaries[:-1]
         ref_solpts_x2 = delta_x2 / delta_comp * (-minComp + self.solutionPoints)
-        x2 = xp.repeat(offsets_x2, num_solpts) + xp.tile(ref_solpts_x2, num_elements_x2)
+        x2 = xp.repeat(offsets_x2, num_solpts) + xp.tile(ref_solpts_x2, (num_elements_x2,))
 
         offsets_x3 = x3_boundaries[:-1]
         ref_solpts_x3 = delta_x3 / delta_comp * (-minComp + self.solutionPoints)
-        x3_linear = xp.repeat(offsets_x3, num_solpts) + xp.tile(ref_solpts_x3, num_elements_x3)
+        x3_linear = xp.repeat(offsets_x3, num_solpts) + xp.tile(ref_solpts_x3, (num_elements_x3,))
         x3 = xp.repeat(x3_linear, ni * nj).reshape(self.grid_shape_3d)
 
         offsets_eta = eta_boundaries[:-1]
         ref_solpts_eta = delta_eta / delta_comp * (-minComp + self.solutionPoints)
-        eta_linear = xp.repeat(offsets_eta, num_solpts) + xp.tile(ref_solpts_eta, num_elements_x3)
+        eta_linear = xp.repeat(offsets_eta, num_solpts) + xp.tile(ref_solpts_eta, (num_elements_x3,))
         eta = xp.repeat(eta_linear, ni * nj).reshape(self.grid_shape_3d)
 
         def linear_to_full_k(a):
@@ -568,10 +568,10 @@ class CubedSphere3D(CubedSphere):
         self.boundary_we = Y_block[:, 0]  # Coordinates of the west and east boundaries along the Y (south-north) axis
 
         self.boundary_sn_new = xp.tile(
-            self.boundary_sn.reshape(self.num_elements_x1, self.num_solpts), self.num_solpts
+            self.boundary_sn.reshape(self.num_elements_x1, self.num_solpts), (self.num_solpts,)
         ).reshape((self.num_elements_x1, self.num_solpts, self.num_solpts))
         self.boundary_we_new = xp.tile(
-            self.boundary_we.reshape(self.num_elements_x2, self.num_solpts), self.num_solpts
+            self.boundary_we.reshape(self.num_elements_x2, self.num_solpts), (self.num_solpts,)
         ).reshape((self.num_elements_x2, self.num_solpts, self.num_solpts))
 
         height = x3
@@ -992,7 +992,7 @@ class CubedSphere3D(CubedSphere):
         new = xp.zeros(a.shape[:-2] + self.itf_i_floor_shape, dtype=a.dtype)
         tmp_shape1 = a.shape[:-2] + (self.num_elements_x2, self.num_solpts, self.num_elements_x1 + 1)
 
-        tmp_array = numpy.moveaxis(a.reshape(tmp_shape1), -2, -1)
+        tmp_array = xp.moveaxis(a.reshape(tmp_shape1), -2, -1)
 
         west = numpy.s_[..., 1:, : self.num_solpts]
         east = numpy.s_[..., :-1, self.num_solpts :]

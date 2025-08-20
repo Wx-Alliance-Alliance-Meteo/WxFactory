@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 import importlib
 from time import time
-from typing import Any, List, Optional, Tuple, TypeVar, Union
+from typing import Any, List, Optional, Tuple, TypeVar, Union, Self
 
 from mpi4py import MPI
 from numpy.typing import NDArray
@@ -256,3 +256,59 @@ class CudaDevice(Device):
         if CudaDevice._default is None:
             CudaDevice._default = CudaDevice(MPI.COMM_WORLD)
         return CudaDevice._default
+
+class PytorchDevice(Device):
+    _default: Self = None
+
+    def __init__(self, comm: MPI.Comm) -> None:
+        # TODO : Remplacer pour avoir les bons kernels si on est sur GPU
+        import numpy
+        import scipy
+        import torch
+        from .wx_torch import TorchXp
+
+        try:
+            compile_kernels.compile("pde", "cpp", force=False, comm=comm)
+            pde = compile_kernels.load_module("pde", "cpp")
+
+            compile_kernels.compile("operators", "cpp", force=False, comm=comm)
+            operators = compile_kernels.load_module("operators", "cpp")
+        except (ModuleNotFoundError, SystemExit):
+            if comm.rank == 0:
+                print(f"Unable to find the interface_c module. You need to compile it.", flush=True)
+            raise
+        except:
+            print(f"Unknown exception!", flush=True)
+            raise
+
+        super().__init__(comm, TorchXp(), scipy, pde, operators)
+
+    
+    def synchronize(self, **kwargs):
+        """Don't do anything. This is to allow writing generic code when device is not the same as the host."""
+
+    def array(self, a: NDArray, *args, **kwargs) -> NDArray:
+        """Return the input array unchanged."""
+        return a
+
+    def pinned(self, *args, **kwargs) -> NDArray:
+        """Return allocated space, without any special characteristic."""
+        return self.xp.empty(*args, **kwargs)
+
+    def to_host(self, val, **kwargs):
+        """Return the input array unchanged."""
+        return val
+
+    def timestamp(self, **kwargs):
+        return time()
+
+    def elapsed(self, timestamps):
+        intervals = [timestamps[i + 1] - timestamps[i] for i in range(len(timestamps) - 1)]
+        intervals.append(timestamps[-1] - timestamps[0])
+        return intervals
+
+    @staticmethod
+    def get_default() -> Self:
+        if PytorchDevice._default is None:
+            PytorchDevice._default = PytorchDevice(MPI.COMM_WORLD)
+        return PytorchDevice._default

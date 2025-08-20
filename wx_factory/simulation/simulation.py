@@ -7,7 +7,7 @@ import numpy
 
 from common import Configuration
 from common.definitions import idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_w
-from device import Device, CpuDevice, CudaDevice
+from device import Device, CpuDevice, CudaDevice, PytorchDevice
 from geometry import Cartesian2D, CubedSphere, CubedSphere3D, CubedSphere2D, DFROperators, Geometry
 from init.dcmip import dcmip_T11_update_winds, dcmip_T12_update_winds
 from init.init_state_vars import init_state_vars
@@ -236,6 +236,8 @@ class Simulation:
 
             if device is None:
                 device = CpuDevice(comm=self.comm)
+        elif self.config.desired_device == "torch":
+            device = PytorchDevice(comm=self.comm)
         else:
             device = CpuDevice(comm=self.comm)
 
