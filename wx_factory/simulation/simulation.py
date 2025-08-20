@@ -123,6 +123,7 @@ class Simulation:
         self.process_topo = None
         self.geometry = self._create_geometry()
         self.operators = DFROperators(self.geometry, self.config, self.device)
+        self.complex_operators = DFROperators(self.geometry, self.config, self.device, self.device.xp.complex128)
         self.initial_Q, self.topography, self.metric = init_state_vars(self.geometry, self.operators, self.config, self.post_processors)
         self.preconditioner = self._create_preconditioner(self.initial_Q)
         self.output = self._create_output_manager()

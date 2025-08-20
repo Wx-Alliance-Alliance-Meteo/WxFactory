@@ -6,7 +6,7 @@ from typing import Optional
 from typing import Self, TypeVar
 
 from mpi4py import MPI
-from numpy.typing import NDArray
+from numpy.typing import NDArray, DTypeLike
 
 from common.definitions import idx_2d_rho_w
 from common import Configuration
@@ -29,7 +29,7 @@ class DFROperators:
        * Correction matrices: `correction`, `correction_tr`.
     """
 
-    def __init__(self, grd: Geometry, param: Configuration, device: Device):
+    def __init__(self, grd: Geometry, param: Configuration, device: Device, dtype: DTypeLike = None):
         """Initialize the Direct Flux Reconstruction operators (matrices) based on input grid parameters.
 
         Parameters
@@ -46,13 +46,14 @@ class DFROperators:
         """
 
         xp = device.xp
+        self.dtype = xp.float64 if dtype is None else dtype
 
         if param.filter_apply and not isinstance(grd.solutionPoints, xp.ndarray):
             raise NotImplementedError("DFROperators cannot form a filter with non-numpy arrays")
 
         # Build Vandermonde matrix to transform the modal representation to the (interior)
         # nodal representation
-        V = legvander(grd.solutionPoints, grd.num_solpts - 1, xp)
+        V = legvander(grd.solutionPoints, grd.num_solpts - 1, xp).astype(self.dtype)
         # Invert the matrix to transform from interior nodes to modes
         invV = xp.linalg.inv(V)
 
@@ -62,8 +63,11 @@ class DFROperators:
 
         # Note that extrap_neg and extrap_pos should be vectors, not a one-row matrix; numpy
         # treats the two differently.
-        extrap_neg = (legvander(xp.array([-1.0], dtype=V.dtype), grd.num_solpts - 1, xp) @ invV).reshape((-1,))
-        extrap_pos = (legvander(xp.array([+1.0], dtype=V.dtype), grd.num_solpts - 1, xp) @ invV).reshape((-1,))
+        extrap_neg = (legvander(xp.array([-1.0], dtype=self.dtype), grd.num_solpts - 1, xp) @ invV).reshape((-1,))
+        extrap_pos = (legvander(xp.array([+1.0], dtype=self.dtype), grd.num_solpts - 1, xp) @ invV).reshape((-1,))
+
+        assert extrap_neg.dtype == self.dtype
+        assert extrap_pos.dtype == self.dtype
 
         self.extrap_west = extrap_neg
         self.extrap_east = extrap_pos
@@ -72,20 +76,20 @@ class DFROperators:
         self.extrap_down = extrap_neg
         self.extrap_up = extrap_pos
 
-        V = legvander(grd.solutionPoints, grd.num_solpts - 1, xp)
+        V = legvander(grd.solutionPoints, grd.num_solpts - 1, xp).astype(self.dtype)
         invV = xp.linalg.inv(V)
-        feye = xp.eye(grd.num_solpts, dtype=V.dtype)
+        feye = xp.eye(grd.num_solpts, dtype=self.dtype)
         feye[-1, -1] = 0.0
         self.highfilter = V @ (feye @ invV)
 
-        self.highfilter_k = xp.kron(self.highfilter.T, xp.eye(grd.num_solpts**2, dtype=V.dtype))  # Only valid in 3D (hence the **2)
+        self.highfilter_k = xp.kron(self.highfilter.T, xp.eye(grd.num_solpts**2, dtype=self.dtype))  # Only valid in 3D (hence the **2)
 
         # if device.comm.rank == 0:
         #     print(f"high filter = \n{self.highfilter}")
         #     print(f"high filter k = \n{self.highfilter_k}")
 
         diff = diffmat(grd.extension_sym)
-        diff = xp.asarray(diff)
+        diff = xp.asarray(diff).astype(self.dtype)
 
         if param.filter_apply:
             self.V = vandermonde(grd.extension)
@@ -93,11 +97,13 @@ class DFROperators:
             N = len(grd.extension) - 1
             Nc = math.floor(param.filter_cutoff * N)
             self.filter = filter_exponential(N, Nc, param.filter_order, self.V, self.invV)
-            self.diff_ext = (self.filter @ diff).astype(float)
+            self.diff_ext = xp.asarray(self.filter @ diff).astype(self.dtype)
             self.diff_ext[xp.abs(self.diff_ext) < 1e-20] = 0.0
 
         else:
             self.diff_ext = diff
+
+        assert self.diff_ext.dtype == self.dtype
 
         self.expfilter_apply = param.expfilter_apply
         if param.expfilter_apply:
@@ -118,6 +124,7 @@ class DFROperators:
                 filter_y = xp.kron(I2, xp.kron(self.expfilter, I2)).T
                 filter_z = xp.kron(self.expfilter, I3).T
                 self.expfilter_new = (filter_x @ filter_y) @ filter_z
+                assert self.expfilter_new.dtype == self.dtype
 
         # Create sponge layer (if desired)
         self.apply_sponge = param.apply_sponge
@@ -126,7 +133,7 @@ class DFROperators:
                 raise TypeError(f"The sponge can only be applied on a Cartesian2D geometry")
             nk, ni = grd.X1.shape
             zs = param.z1 - param.sponge_zscale  # zs is bottom of layer
-            self.beta = xp.zeros_like(grd.X1)  # used as our damping profile
+            self.beta = xp.zeros(grd.X1.shape, dtype=self.dtype)  # used as our damping profile
             # Loop over points
             # TODO use implicit loop (will also work with CUDA)
             for k in range(nk):
@@ -137,6 +144,8 @@ class DFROperators:
                             + (1.0 / param.sponge_tscale)
                             * xp.sin((0.5 * xp.pi) * (grd.X3[k, i] - zs) / (param.z1 - zs)) ** 2
                         )
+            
+            assert self.beta.dtype == self.dtype
 
         if check_skewcentrosymmetry(self.diff_ext) is False:
             raise ValueError("Something horribly wrong has happened in the creation of the differentiation matrix")
@@ -150,10 +159,18 @@ class DFROperators:
 
         # Ordinary differentiation matrices (used only in diagnostic calculations)
         self.diff = diffmat(grd.solutionPoints)
-        self.diff = xp.asarray(self.diff)
+        self.diff = xp.asarray(self.diff).astype(self.dtype)
         self.diff_tr = self.diff.T
 
-        self.quad_weights = xp.outer(grd.glweights, grd.glweights)
+        self.quad_weights = xp.outer(grd.glweights, grd.glweights).astype(self.dtype)
+
+        assert self.diff_solpt.dtype == self.dtype
+        assert self.correction.dtype == self.dtype
+        assert self.diff_solpt_tr.dtype == self.dtype
+        assert self.correction_tr.dtype == self.dtype
+        assert self.diff.dtype == self.dtype
+        assert self.diff_tr.dtype == self.dtype
+        assert self.quad_weights.dtype == self.dtype
 
         if isinstance(grd, CubedSphere3D):
             I2 = xp.identity(grd.num_solpts, dtype=V.dtype)
@@ -207,6 +224,16 @@ class DFROperators:
             corr_west = self.diff_ext[1:-1, 0]
             corr_east = self.diff_ext[1:-1, -1]
             self.correction_WE = xp.vstack((xp.kron(ident, corr_west), xp.kron(ident, corr_east)))
+        assert self.extrap_x.dtype == self.dtype
+        assert self.extrap_y.dtype == self.dtype
+        assert self.extrap_z.dtype == self.dtype
+        assert self.derivative_x.dtype == self.dtype
+        assert self.derivative_y.dtype == self.dtype
+        assert self.derivative_z.dtype == self.dtype
+        assert self.correction_DU.dtype == self.dtype
+        assert self.correction_SN.dtype == self.dtype
+        assert self.correction_WE.dtype == self.dtype
+
 
     def make_filter(self, alpha: float, order: int, cutoff: float, geom: Geometry):
         """Build an exponential modal filter as described in Warburton, eqn 5.16."""
