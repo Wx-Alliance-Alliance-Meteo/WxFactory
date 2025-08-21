@@ -29,7 +29,7 @@ class RHS(ABC):
     ) -> None:
         self.pde = pde
         self.geom = geometry
-        self.ops = operators
+        self.r_ops = operators
         self.metric = metric
         self.topo = topography
         self.ptopo = process_topo

@@ -182,15 +182,16 @@ def pmex(
             if j > 1:
                 M[j - 1, 0 : j - 1] = global_vec[0 : j - 1, 0]
                 N[0 : j - 1, j - 1] = -global_vec[0 : j - 1, 0]
-                Minv[j - 1, 0 : j - 1] = -global_vec[0 : j - 1, 0].T @ Minv[0 : j - 1, 0 : j - 1]
+                Minv[j - 1, 0 : j - 1] = -device.xp.transpose(global_vec[0 : j - 1, 0]) @ Minv[0 : j - 1, 0 : j - 1]
 
             # 3b. part 1: the mat-vec
             rhs = (device.xp.eye(j) + device.xp.matmul(N[0:j, 0:j], Minv[0:j, 0:j])) @ global_vec[0:j, 1]
 
             # 3c. part 2: the lower triangular solve
-            sol = device.xalg.linalg.solve_triangular(
+            # array because the xalg can, in some case, yield array with incompatible type to xp
+            sol = device.array(device.xalg.linalg.solve_triangular(
                 M[0:j, 0:j], rhs, unit_diagonal=True, check_finite=False, overwrite_b=True
-            )
+            ))
 
             # 4. Orthogonalize
             V[j, :] -= sol @ V[0:j, :]
@@ -202,9 +203,9 @@ def pmex(
             else:
                 device.synchronize()
                 default_device = CpuDevice.get_default()
-                sum_vec = default_device.xp.array(global_vec[0:j, 1].get(), default_device.xp.float128) ** 2
+                sum_vec = device.to_host(global_vec[0:j, 1]).astype(default_device.xp.float128) ** 2
                 sum_sqrd = device.array(
-                    default_device.xp.asarray(default_device.xp.sum(sum_vec), dtype=default_device.xp.float64)
+                    default_device.xp.sum(sum_vec).astype(default_device.xp.float64)
                 )
 
             # sum_sqrd = sum(global_vec[0:j,1]**2)
@@ -217,8 +218,7 @@ def pmex(
                 curr_nrm = math.sqrt(global_sum_nrm + V[j, n : n + p] @ V[j, n : n + p])
                 reg_comm_nrm += 1
             else:
-                # compute norm estimate in quad precision
-                curr_nrm = device.xp.array(device.xp.sqrt(global_vec[-1, 1] - sum_sqrd), device.xp.float64)
+                curr_nrm = device.xp.sqrt(global_vec[-1, 1] - sum_sqrd)
 
             # Happy breakdown
             if curr_nrm < tol:
@@ -240,7 +240,7 @@ def pmex(
         H[j, j - 1] = 0.0
 
         # Compute the exponential of the augmented matrix
-        F_half = device.xalg.linalg.expm(sgn * 0.5 * tau * H[0 : j + 1, 0 : j + 1])
+        F_half = device.array(device.xalg.linalg.expm(sgn * 0.5 * tau * H[0 : j + 1, 0 : j + 1]))
         F = F_half @ F_half
 
         exps += 1
@@ -334,7 +334,7 @@ def pmex(
 
                 for k in range(blownTs):
                     tau_phantom = tau_out[l + k] - tau_now
-                    F2 = device.xalg.linalg.expm(sgn * tau_phantom * H[0:j, :j])
+                    F2 = device.array(device.xalg.linalg.expm(sgn * tau_phantom * H[0:j, :j]))
                     w[l + k, :] = beta * F2[:j, 0] @ V[:j, :n]
 
                 # Advance l.

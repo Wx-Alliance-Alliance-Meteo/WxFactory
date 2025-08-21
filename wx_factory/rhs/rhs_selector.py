@@ -20,6 +20,7 @@ class RhsBundle:
         self,
         geom: Geometry,
         operators: DFROperators,
+        complex_operators: DFROperators,
         metric: Metric2D | Metric3DTopo | None,
         topo: Optional[Topo],
         ptopo: Optional[ProcessTopology],
@@ -41,14 +42,8 @@ class RhsBundle:
 
         if param.equations == "euler" and isinstance(geom, CubedSphere3D):
             pde = PDEEulerCubesphere(geom, param, metric)
-            # Original RHS_DirecFluxReconstruction_mpi implementation without in-place matmuloperations
-            #self.full = RHSDirecFluxReconstruction_mpi(
-            #    pde, geom, operators, metric, topo, ptopo, param, fields_shape, debug=debug
-            #)
-
-            # New RHS_DirecFluxReconstruction_mpi_v2 implementation with in-place matmul operations
             self.full = RHSDirecFluxReconstruction_mpi_v2(
-                pde, geom, operators, metric, topo, ptopo, param, fields_shape, debug=debug
+                pde, geom, operators, complex_operators, metric, topo, ptopo, param, fields_shape, debug=debug
             )
 
             # rhs_functions = {'dg': rhs_euler,

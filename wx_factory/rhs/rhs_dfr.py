@@ -70,6 +70,7 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
         pde,
         geometry: CubedSphere,
         operators,
+        complex_operators,
         metric,
         topography,
         process_topo,
@@ -78,19 +79,23 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
         debug=False,
     ):
         super().__init__(pde, geometry, operators, metric, topography, process_topo, config, expected_shape, debug)
+        self.c_ops = complex_operators
         self.extrap_3d = self.extrap_3d_code
-        if config.desired_device in ["numpy", "cupy"]:
+        if config.desired_device in ["numpy", "cupy", "torch"]:
             self.extrap_3d = self.extrap_3d_py
 
     def allocate_arrays(self, q):
         super().allocate_arrays(q)
 
+        self.ops = self.c_ops if xp.iscomplexobj(q) else self.r_ops
         xp = self.device.xp
         dtype = self.q_itf_x1.dtype
 
         itf_i_shape = (self.num_var,) + self.geom.itf_i_shape
         itf_j_shape = (self.num_var,) + self.geom.itf_j_shape
         itf_k_shape = (self.num_var,) + self.geom.itf_k_shape
+
+        self.selected_ops = self.c_ops if xp.iscomplexobj(q) else self.ops
 
         if self.f_itf_x1 is None or self.f_itf_x1.dtype != dtype:
             self.f_itf_x1 = xp.zeros_like(self.q_itf_x1)
@@ -346,6 +351,7 @@ class RHSDirecFluxReconstruction_mpi_v2(RHSDirecFluxReconstruction):
         pde,
         geometry: CubedSphere,
         operators,
+        complex_operators,
         metric,
         topography,
         process_topo,
@@ -354,8 +360,9 @@ class RHSDirecFluxReconstruction_mpi_v2(RHSDirecFluxReconstruction):
         debug=False,
     ):
         super().__init__(pde, geometry, operators, metric, topography, process_topo, config, expected_shape, debug)
+        self.c_ops = complex_operators
         self.extrap_3d = self.extrap_3d_code
-        if config.desired_device in ["numpy", "cupy"]:
+        if config.desired_device in ["numpy", "cupy", "torch"]:
             self.extrap_3d = self.extrap_3d_py
 
     def allocate_arrays(self, q):
@@ -363,6 +370,8 @@ class RHSDirecFluxReconstruction_mpi_v2(RHSDirecFluxReconstruction):
 
         xp = self.device.xp
         dtype = self.q_itf_x1.dtype
+
+        self.ops = self.c_ops if xp.iscomplexobj(q) else self.r_ops
 
         itf_i_shape = (self.num_var,) + self.geom.itf_i_shape
         itf_j_shape = (self.num_var,) + self.geom.itf_j_shape
@@ -609,7 +618,7 @@ class RHSDirecFluxReconstruction_mpi_v2(RHSDirecFluxReconstruction):
         self.wflux_pres_itf_x3[...] = self.wflux_pres_itf_full_x3[mid_k]
 
     def forcing_terms(self, q: NDArray) -> None:
-        self.pde.forcing_terms(self.rhs, q, self.pressure, self.metric, self.ops, self.forcing)
+        self.pde.forcing_terms(self.rhs, q, self.pressure, self.metric, self.selected_ops, self.forcing)
 
         # For pure advection problems, we do not update the dynamical variables
         if self.pde.advection_only:

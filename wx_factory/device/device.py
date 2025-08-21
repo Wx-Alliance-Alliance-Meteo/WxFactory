@@ -312,8 +312,8 @@ class PytorchDevice(Device):
         """Don't do anything. This is to allow writing generic code when device is not the same as the host."""
 
     def array(self, a: NDArray, *args, **kwargs) -> NDArray:
-        """Return the input array unchanged."""
-        return a
+        """Copy given array to torch."""
+        return self.xp.asarray(a)
 
     def pinned(self, *args, **kwargs) -> NDArray:
         """Return allocated space, without any special characteristic."""
@@ -321,7 +321,7 @@ class PytorchDevice(Device):
 
     def to_host(self, val, **kwargs):
         """Return the input array unchanged."""
-        return val
+        return val.cpu().numpy().copy()
 
     def timestamp(self, **kwargs):
         return time()

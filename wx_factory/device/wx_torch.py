@@ -26,7 +26,9 @@ class TorchXp:
             second if second.is_contiguous() else second.contiguous()
         )
     
-    def transpose(self, array: torch.Tensor, axis: typing.Optional[typing.List[int] | typing.Tuple[int, ...]]):
+    def transpose(self, array: torch.Tensor, axis: typing.Optional[typing.List[int] | typing.Tuple[int, ...]] = None) -> torch.Tensor:
+        if axis is None or len(axis) == 0:
+            axis = list(reversed(range(len(array.shape))))
         return array.permute(axis)
     
     def identity(self, dim: int, **kwargs) -> torch.Tensor:
@@ -37,6 +39,24 @@ class TorchXp:
     
     def iscomplexobj(self, array: torch.Tensor) -> bool:
         return array.is_complex()
+    
+    def maximum(self, a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
+        if not self.iscomplexobj(a):
+            return torch.maximum(a, b)
+        
+        real_a = a.real
+        imag_a = a.imag
+        real_b = b.real
+        imag_b = b.imag
+
+        real_mask = real_a > real_b
+        equals_mask = real_a == real_b
+        imag_mask = imag_a > imag_b
+
+        mask = real_mask | (equals_mask & imag_mask)
+
+        return torch.where(mask, a, b)
+
     
     def __getattr__(self, name):
         return getattr(torch, name)
