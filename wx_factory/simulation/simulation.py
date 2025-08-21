@@ -135,6 +135,7 @@ class Simulation:
         self.rhs = RhsBundle(
             self.geometry,
             self.operators,
+            self.complex_operators,
             self.metric,
             self.topography,
             self.process_topo,
@@ -477,7 +478,7 @@ class Simulation:
     def _check_for_nan(self, Q):
         """Raise an exception if there are NaNs in the input"""
         error_detected = numpy.array([0], dtype=numpy.int32)
-        if numpy.any(numpy.isnan(Q)):
+        if numpy.any(numpy.isnan(self.device.to_host(Q))):
             print(f"NaN detected on process {self.comm.rank}")
             error_detected[0] = 1
         error_detected_out = numpy.zeros_like(error_detected)

@@ -53,10 +53,11 @@ class RHSDirecFluxReconstruction(RHS):
 
 
 class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
-    def __init__(self, pde, geometry, operators, metric, topography, process_topo, config, expected_shape, debug=False):
+    def __init__(self, pde, geometry, operators, complex_operators, metric, topography, process_topo, config, expected_shape, debug=False):
         super().__init__(pde, geometry, operators, metric, topography, process_topo, config, expected_shape, debug)
+        self.c_ops = complex_operators
         self.extrap_3d = self.extrap_3d_code
-        if config.desired_device in ["numpy", "cupy"]:
+        if config.desired_device in ["numpy", "cupy", "torch"]:
             self.extrap_3d = self.extrap_3d_py
 
     def allocate_arrays(self, q):
@@ -68,6 +69,8 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
         itf_i_shape = (self.num_var,) + self.geom.itf_i_shape
         itf_j_shape = (self.num_var,) + self.geom.itf_j_shape
         itf_k_shape = (self.num_var,) + self.geom.itf_k_shape
+
+        self.selected_ops = self.c_ops if xp.iscomplexobj(q) else self.ops
 
         if self.f_itf_x1 is None or self.f_itf_x1.dtype != dtype:
             self.f_itf_x1 = xp.zeros_like(self.q_itf_x1)
@@ -108,9 +111,9 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
 
 
     def extrap_3d_py(self, q: NDArray, itf_x1: NDArray, itf_x2: NDArray, itf_x3: NDArray) -> None:
-        itf_x1[...] = q @ self.ops.extrap_x
-        itf_x2[...] = q @ self.ops.extrap_y
-        itf_x3[...] = q @ self.ops.extrap_z
+        itf_x1[...] = q @ self.selected_ops.extrap_x
+        itf_x2[...] = q @ self.selected_ops.extrap_y
+        itf_x3[...] = q @ self.selected_ops.extrap_z
 
     def extrap_3d_code(self, q: NDArray, itf_x1: NDArray, itf_x2: NDArray, itf_x3: NDArray) -> None:
         # xp = self.device.xp
@@ -145,12 +148,12 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
         self.log_rho_theta = xp.log(q[idx_rho_theta])
 
         # TODO clean this up (avoid overwriting previous computation)
-        self.q_itf_x1[idx_rho] = xp.exp(apply_op(self.log_rho_p, self.ops.extrap_x))
-        self.q_itf_x1[idx_rho_theta] = xp.exp(apply_op(self.log_rho_theta, self.ops.extrap_x))
-        self.q_itf_x2[idx_rho] = xp.exp(apply_op(self.log_rho_p, self.ops.extrap_y))
-        self.q_itf_x2[idx_rho_theta] = xp.exp(apply_op(self.log_rho_theta, self.ops.extrap_y))
-        self.q_itf_x3[idx_rho] = xp.exp(apply_op(self.log_rho_p, self.ops.extrap_z))
-        self.q_itf_x3[idx_rho_theta] = xp.exp(apply_op(self.log_rho_theta, self.ops.extrap_z))
+        self.q_itf_x1[idx_rho] = xp.exp(apply_op(self.log_rho_p, self.selected_ops.extrap_x))
+        self.q_itf_x1[idx_rho_theta] = xp.exp(apply_op(self.log_rho_theta, self.selected_ops.extrap_x))
+        self.q_itf_x2[idx_rho] = xp.exp(apply_op(self.log_rho_p, self.selected_ops.extrap_y))
+        self.q_itf_x2[idx_rho_theta] = xp.exp(apply_op(self.log_rho_theta, self.selected_ops.extrap_y))
+        self.q_itf_x3[idx_rho] = xp.exp(apply_op(self.log_rho_p, self.selected_ops.extrap_z))
+        self.q_itf_x3[idx_rho_theta] = xp.exp(apply_op(self.log_rho_theta, self.selected_ops.extrap_z))
 
     def pointwise_fluxes(self, q: NDArray) -> None:
         self.pde.pointwise_fluxes(
@@ -170,51 +173,51 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
 
     def flux_divergence_partial(self):
 
-        self.df1_dx1 = apply_op(self.f_x1, self.ops.derivative_x)
-        self.df2_dx2 = apply_op(self.f_x2, self.ops.derivative_y)
-        self.df3_dx3 = apply_op(self.f_x3, self.ops.derivative_z)
+        self.df1_dx1 = apply_op(self.f_x1, self.selected_ops.derivative_x)
+        self.df2_dx2 = apply_op(self.f_x2, self.selected_ops.derivative_y)
+        self.df3_dx3 = apply_op(self.f_x3, self.selected_ops.derivative_z)
 
-        self.w_df1_dx1_adv = apply_op(self.wflux_adv_x1, self.ops.derivative_x)
-        self.w_df1_dx1_presa = apply_op(self.wflux_pres_x1, self.ops.derivative_x)
-        self.w_df1_dx1_presb = apply_op(self.log_p, self.ops.derivative_x)
+        self.w_df1_dx1_adv = apply_op(self.wflux_adv_x1, self.selected_ops.derivative_x)
+        self.w_df1_dx1_presa = apply_op(self.wflux_pres_x1, self.selected_ops.derivative_x)
+        self.w_df1_dx1_presb = apply_op(self.log_p, self.selected_ops.derivative_x)
 
-        self.w_df2_dx2_adv = apply_op(self.wflux_adv_x2, self.ops.derivative_y)
-        self.w_df2_dx2_presa = apply_op(self.wflux_pres_x2, self.ops.derivative_y)
-        self.w_df2_dx2_presb = apply_op(self.log_p, self.ops.derivative_y)
+        self.w_df2_dx2_adv = apply_op(self.wflux_adv_x2, self.selected_ops.derivative_y)
+        self.w_df2_dx2_presa = apply_op(self.wflux_pres_x2, self.selected_ops.derivative_y)
+        self.w_df2_dx2_presb = apply_op(self.log_p, self.selected_ops.derivative_y)
 
-        self.w_df3_dx3_adv = apply_op(self.wflux_adv_x3, self.ops.derivative_z)
-        self.w_df3_dx3_presa = apply_op(self.wflux_pres_x3, self.ops.derivative_z)
-        self.w_df3_dx3_presb = apply_op(self.log_p, self.ops.derivative_z)
+        self.w_df3_dx3_adv = apply_op(self.wflux_adv_x3, self.selected_ops.derivative_z)
+        self.w_df3_dx3_presa = apply_op(self.wflux_pres_x3, self.selected_ops.derivative_z)
+        self.w_df3_dx3_presb = apply_op(self.log_p, self.selected_ops.derivative_z)
 
     def flux_divergence(self):
         xp = self.device.xp
 
-        self.df1_dx1 += apply_op(self.f_itf_x1, self.ops.correction_WE)
-        self.df2_dx2 += apply_op(self.f_itf_x2, self.ops.correction_SN)
-        self.df3_dx3 += apply_op(self.f_itf_x3, self.ops.correction_DU)
+        self.df1_dx1 += apply_op(self.f_itf_x1, self.selected_ops.correction_WE)
+        self.df2_dx2 += apply_op(self.f_itf_x2, self.selected_ops.correction_SN)
+        self.df3_dx3 += apply_op(self.f_itf_x3, self.selected_ops.correction_DU)
 
         logp_bdy_i = xp.log(self.pressure_itf_x1)
         logp_bdy_j = xp.log(self.pressure_itf_x2)
         logp_bdy_k = xp.log(self.pressure_itf_x3)
 
-        self.w_df1_dx1_adv += apply_op(self.wflux_adv_itf_x1, self.ops.correction_WE)
-        self.w_df1_dx1_presa += apply_op(self.wflux_pres_itf_x1, self.ops.correction_WE)
+        self.w_df1_dx1_adv += apply_op(self.wflux_adv_itf_x1, self.selected_ops.correction_WE)
+        self.w_df1_dx1_presa += apply_op(self.wflux_pres_itf_x1, self.selected_ops.correction_WE)
         self.w_df1_dx1_presa *= self.pressure
-        self.w_df1_dx1_presb += apply_op(logp_bdy_i, self.ops.correction_WE)
+        self.w_df1_dx1_presb += apply_op(logp_bdy_i, self.selected_ops.correction_WE)
         self.w_df1_dx1_presb *= self.pressure * self.wflux_pres_x1
         self.w_df1_dx1[...] = self.w_df1_dx1_adv + self.w_df1_dx1_presa + self.w_df1_dx1_presb
 
-        self.w_df2_dx2_adv += apply_op(self.wflux_adv_itf_x2, self.ops.correction_SN)
-        self.w_df2_dx2_presa += apply_op(self.wflux_pres_itf_x2, self.ops.correction_SN)
+        self.w_df2_dx2_adv += apply_op(self.wflux_adv_itf_x2, self.selected_ops.correction_SN)
+        self.w_df2_dx2_presa += apply_op(self.wflux_pres_itf_x2, self.selected_ops.correction_SN)
         self.w_df2_dx2_presa *= self.pressure
-        self.w_df2_dx2_presb += apply_op(logp_bdy_j, self.ops.correction_SN)
+        self.w_df2_dx2_presb += apply_op(logp_bdy_j, self.selected_ops.correction_SN)
         self.w_df2_dx2_presb *= self.pressure * self.wflux_pres_x2
         self.w_df2_dx2[...] = self.w_df2_dx2_adv + self.w_df2_dx2_presa + self.w_df2_dx2_presb
 
-        self.w_df3_dx3_adv += apply_op(self.wflux_adv_itf_x3, self.ops.correction_DU)
-        self.w_df3_dx3_presa += apply_op(self.wflux_pres_itf_x3, self.ops.correction_DU)
+        self.w_df3_dx3_adv += apply_op(self.wflux_adv_itf_x3, self.selected_ops.correction_DU)
+        self.w_df3_dx3_presa += apply_op(self.wflux_pres_itf_x3, self.selected_ops.correction_DU)
         self.w_df3_dx3_presa *= self.pressure
-        self.w_df3_dx3_presb += apply_op(logp_bdy_k, self.ops.correction_DU)
+        self.w_df3_dx3_presb += apply_op(logp_bdy_k, self.selected_ops.correction_DU)
         self.w_df3_dx3_presb *= self.pressure * self.wflux_pres_x3
         self.w_df3_dx3[...] = self.w_df3_dx3_adv + self.w_df3_dx3_presa + self.w_df3_dx3_presb
 
@@ -311,7 +314,7 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
         self.wflux_pres_itf_x3[...] = self.wflux_pres_itf_full_x3[mid_k]
 
     def forcing_terms(self, q: NDArray) -> None:
-        self.pde.forcing_terms(self.rhs, q, self.pressure, self.metric, self.ops, self.forcing)
+        self.pde.forcing_terms(self.rhs, q, self.pressure, self.metric, self.selected_ops, self.forcing)
 
         # For pure advection problems, we do not update the dynamical variables
         if self.pde.advection_only:
