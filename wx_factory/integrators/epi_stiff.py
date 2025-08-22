@@ -66,13 +66,13 @@ class EpiStiff(Integrator):
         def matvec_handle(v):
             return matvec_fun(v, dt, Q, rhs, self.rhs, self.jacobian_method)
 
-        vec = numpy.zeros((self.max_phi + 1, rhs.size))
+        vec = self.device.xp.zeros((self.max_phi + 1, math.prod(rhs.shape)), dtype=Q.dtype)
         vec[1, :] = rhs.flatten()
         for i in range(self.n_prev):
             J_deltaQ = matvec_fun(self.previous_Q[i] - Q, 1.0, Q, rhs, self.rhs, self.jacobian_method)
 
             # R(y_{n-i})
-            r = (self.previous_rhs[i] - rhs) - numpy.reshape(J_deltaQ, Q.shape)
+            r = (self.previous_rhs[i] - rhs) - J_deltaQ.reshape(Q.shape)
 
             for k, alpha in enumerate(self.A[:, i]):
                 # v_k = Sum_{i=1}^{n_prev} A_{k,i} R(y_{n-i})
@@ -110,7 +110,7 @@ class EpiStiff(Integrator):
 
         else:
             phiv, stats = kiops(
-                [1], matvec_handle, vec, tol=self.tol, m_init=self.krylov_size, mmin=16, mmax=64, task1=False
+                [1], matvec_handle, vec, tol=self.tol, m_init=self.krylov_size, mmin=16, mmax=64, task1=False, device=self.device
             )
 
             self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)

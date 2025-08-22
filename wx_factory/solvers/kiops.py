@@ -86,8 +86,8 @@ def kiops(
     m = max(mmin, min(m_init, mmax))
 
     # Preallocate matrix
-    V = xp.zeros((mmax + 1, n + p))
-    H = xp.zeros((mmax + 1, mmax + 1))
+    V = xp.zeros((mmax + 1, n + p), dtype=u.dtype)
+    H = xp.zeros((mmax + 1, mmax + 1), dtype=u.dtype)
 
     step = 0
     krystep = 0
@@ -105,7 +105,7 @@ def kiops(
     numSteps = len(tau_out)
 
     # Initial condition
-    w = xp.zeros((numSteps, n))
+    w = xp.zeros((numSteps, n), dtype=u.dtype)
     w[0, :] = u[0, :].copy()
 
     # compute 1-norm of u
@@ -218,7 +218,7 @@ def kiops(
         H[j, j - 1] = 0.0
 
         # Compute the exponential of the augmented matrix
-        F = device.xalg.linalg.expm(sgn * tau * H[: j + 1, : j + 1])
+        F = device.array(device.xalg.linalg.expm(sgn * tau * H[: j + 1, : j + 1]))
         exps += 1
 
         # Restore the value of H_{m+1,m}
@@ -272,8 +272,8 @@ def kiops(
             tau_opt = tau * (gamma / omega) ** (1 / order)
             tau_opt = min(remaining_time, max(tau / 5, min(5 * tau, tau_opt)))
 
-            m_opt = xp.ceil(j + xp.log(omega / gamma) / xp.log(kest))
-            m_opt = max(mmin, min(mmax, max(xp.floor(3 / 4 * m), min(m_opt, xp.ceil(4 / 3 * m)))))
+            m_opt = math.ceil(j + math.log(omega / gamma) / math.log(kest))
+            m_opt = max(mmin, min(mmax, max(math.floor(3 / 4 * m), min(m_opt, math.ceil(4 / 3 * m)))))
 
             if j == mmax:
                 if omega > delta:
