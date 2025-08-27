@@ -60,6 +60,7 @@ def load_tests(test_name):
     add_test(suite, ConfigurationTestCases("test_load_configuration_with_valid_values"), test_re)
     add_test(suite, ConfigurationTestCases("test_load_configuration_with_invalid_values"), test_re)
     add_test(suite, ConfigurationTestCases("test_load_configuration_with_dependency"), test_re)
+    add_test(suite, ConfigurationTestCases("test_load_configuration_with_expression"), test_re)
 
     add_test(suite, Angle24TestCase("test_cyclic"), test_re)
     add_test(suite, Angle24TestCase("test_rounding"), test_re)

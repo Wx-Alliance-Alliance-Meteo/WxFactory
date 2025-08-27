@@ -31,6 +31,7 @@ cpp_link_flags = []
 omp_compile_flags = [
     "-mp=gpu",
     "-gpu=cc80",
+    "-O2",
     "-Wall",
     "-shared",
     "-std=c++17",
@@ -197,6 +198,7 @@ class CudaExtension(WxExtension):
 _extensions: dict[str, WxExtension] = {
     _ext_name("pde", "cpp"): CppExtension("pde"),
     _ext_name("pde", "cuda"): CudaExtension("pde"),
+    _ext_name("pde", "omp"): OmpExtension("pde"),
     _ext_name("operators", "cpp"): CppExtension("operators"),
     _ext_name("operators", "cuda"): CudaExtension("operators"),
     _ext_name("operators", "omp"): OmpExtension("operators"),

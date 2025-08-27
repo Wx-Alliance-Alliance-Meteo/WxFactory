@@ -1,8 +1,9 @@
 from configparser import ConfigParser
 import copy
 from typing import Dict, List, Optional, Self
+from .eval_expr import eval_expr
 
-from .configuration_schema import ConfigurationSchema, ConfigurationField, OptionType
+from .configuration_schema import ConfigurationSchema, ConfigurationField, OptionType, needs_evaluation
 
 
 __all__ = ["Configuration"]
@@ -59,7 +60,8 @@ class Configuration:
             if not hasattr(self, field.dependency[0]):
                 return None
 
-            if not getattr(self, field.dependency[0]) in field.dependency[1]:
+            values = [eval_expr(v) if needs_evaluation(field.dependency[1][0], type(getattr(self, field.dependency[0]))) else v for v in field.dependency[1]]
+            if not getattr(self, field.dependency[0]) in values:
                 return None
 
         value = field.read(self.parser)
