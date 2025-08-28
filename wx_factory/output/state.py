@@ -55,6 +55,7 @@ def load_state(input_file_name: str) -> Tuple[numpy.ndarray, Configuration]:
         except:
             save_version = 0
 
+        stored_schema = None
         if save_version >= 1:
             schema_lines = []
             for line in input_file:
@@ -62,12 +63,17 @@ def load_state(input_file_name: str) -> Tuple[numpy.ndarray, Configuration]:
                 if _CONFIG_CONTENT_MARKER == line_str:
                     break
                 schema_lines.append(line_str)
-            config_schema = ConfigurationSchema("\n".join(schema_lines))
-        else:
-            config_schema = load_default_schema()
+            stored_schema = ConfigurationSchema("\n".join(schema_lines))
+
+        default_schema = load_default_schema()
 
         config_content = "".join([str(line, "utf-8") for line in input_file.readlines()]).strip()
 
-        conf = Configuration(config_content, config_schema)
+        conf = None
+        try:
+            conf = Configuration(config_content, default_schema)
+        except:
+            if stored_schema is not None:
+                conf = Configuration(config_content, stored_schema)
 
         return state, conf

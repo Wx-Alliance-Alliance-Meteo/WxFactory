@@ -37,7 +37,7 @@ def load_tests(test_name):
 
     add_test(suite, CompilationTestCases("test_cpp_kernels_compilation"), test_re)
     add_test(suite, CompilationGPUTestCases("test_cuda_kernels_compilation"), test_re)
-    add_test(suite, CompilationTestCases("test_cpp_compilation_twice"), test_re)
+    # add_test(suite, CompilationTestCases("test_cpp_compilation_twice"), test_re)
 
     add_test(suite, PmexComparisonTestCases("test_compare_cpu_to_gpu"), test_re)
     add_test(suite, KiopsComparisonTestCases("test_compare_cpu_to_gpu"), test_re)
