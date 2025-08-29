@@ -331,10 +331,6 @@ class PDEEulerCubesphere(PDE):
         # Surface and top boundary treatement, imposing no flow (w=0) through top and bottom
         # csubich -- apply odd symmetry to w at boundary so there is no advective _flux_ through boundary
         n = w_itf_x3.shape[-1] // 2
-        w_itf_x3[..., 0, :, :, :n] = 0.0
-        w_itf_x3[..., 0, :, :, n:] = -w_itf_x3[..., 1, :, :, :n]
-        w_itf_x3[..., -1, :, :, n:] = 0.0
-        w_itf_x3[..., -1, :, :, :n] = -w_itf_x3[..., -2, :, :, n:]
 
         pressure_itf_x1[...] = p0 * xp.exp((cpd / cvd) * xp.log(q_itf_x1[idx_rho_theta] * (Rd / p0)))
         pressure_itf_x2[...] = p0 * xp.exp((cpd / cvd) * xp.log(q_itf_x2[idx_rho_theta] * (Rd / p0)))

@@ -1,4 +1,5 @@
 import os
+import sys
 
 import numpy
 
@@ -6,8 +7,18 @@ from device import Device
 from output import InputManager
 from simulation import Simulation
 from rhs.rhs_dfr import RHSDirecFluxReconstruction_mpi
+from common.definitions import idx_rho_w
 
 from mpi_test import MpiTestCase
+
+
+def rel_diff(a, b, xp):
+    ref = xp.linalg.norm(a)
+    diff = xp.linalg.norm(b - a)
+    if ref > 0:
+        diff /= ref
+
+    return diff
 
 
 class PdeRusanovGenericTestCase(MpiTestCase):
@@ -36,7 +47,52 @@ class PdeRusanovGenericTestCase(MpiTestCase):
             sim.rhs.full.pointwise_fluxes(local_state)
             sim.rhs.full.flux_divergence_partial()
             sim.rhs.full.end_communication()
+
+            q_itf_full_x1 = xp.ones_like(sim.rhs.full.q_itf_full_x1)
+            q_itf_full_x2 = xp.ones_like(sim.rhs.full.q_itf_full_x2)
+            q_itf_full_x3 = xp.ones_like(sim.rhs.full.q_itf_full_x3)
+
+            mid_i = xp.s_[..., 1:-1, :]
+            mid_j = xp.s_[..., 1:-1, :, :]
+            mid_k = xp.s_[..., 1:-1, :, :, :]
+
+            itf_size = sim.rhs.full.geom.itf_size
+            s = numpy.s_[..., 0, :, itf_size:]
+            n = numpy.s_[..., -1, :, :itf_size]
+            w = numpy.s_[..., 0, itf_size:]
+            e = numpy.s_[..., -1, :itf_size]
+            b = numpy.s_[..., 0, :, :, itf_size:]
+            t = numpy.s_[..., -1, :, :, :itf_size]
+
+            q_itf_full_x1[mid_i] = sim.rhs.full.q_itf_x1
+            q_itf_full_x2[mid_j] = sim.rhs.full.q_itf_x2
+            q_itf_full_x3[mid_k] = sim.rhs.full.q_itf_x3
+
+            # Element interfaces from neighboring tiles
+            q_itf_full_x1[w] = sim.rhs.full.q_itf_w
+            q_itf_full_x1[e] = sim.rhs.full.q_itf_e
+            q_itf_full_x2[s] = sim.rhs.full.q_itf_s
+            q_itf_full_x2[n] = sim.rhs.full.q_itf_n
+
+            # Top + bottom layers
+            q_itf_full_x3[b] = q_itf_full_x3[..., 1, :, :, :itf_size]
+            q_itf_full_x3[t] = q_itf_full_x3[..., -2, :, :, itf_size:]
+
+            q_itf_full_x3[idx_rho_w, 0, :, :, :itf_size] = 0.0
+            q_itf_full_x3[idx_rho_w, 0, :, :, itf_size:] = -q_itf_full_x3[idx_rho_w, 1, :, :, :itf_size]
+            q_itf_full_x3[idx_rho_w, -1, :, :, itf_size:] = 0.0
+            q_itf_full_x3[idx_rho_w, -1, :, :, :itf_size] = -q_itf_full_x3[idx_rho_w, -2, :, :, itf_size:]
+
             sim.rhs.full.riemann_fluxes()  # Need that to properly initialize input arrays
+            d1 = rel_diff(q_itf_full_x1, sim.rhs.full.q_itf_full_x1, xp)
+            d2 = rel_diff(q_itf_full_x2, sim.rhs.full.q_itf_full_x2, xp)
+            d3 = rel_diff(q_itf_full_x3, sim.rhs.full.q_itf_full_x3, xp)
+
+            print(f"rel diffs {d1:.2e} {d2:.2e} {d3:.2e}", flush=True)
+
+            # if sim.device.comm.rank == 0:
+            #     numpy.set_printoptions(precision=2)
+            #     print(f"diff (rank 0) = \n{sim.rhs.full.q_itf_full_x3 - q_itf_full_x3}", flush=True)
 
             outputs_code = [
                 xp.zeros_like(sim.rhs.full.q_itf_full_x1),  # flux x1
@@ -55,9 +111,12 @@ class PdeRusanovGenericTestCase(MpiTestCase):
             outputs_py = [xp.zeros_like(a) for a in outputs_code]
 
             sim.rhs.full.pde.riemann_fluxes_py(
-                sim.rhs.full.q_itf_full_x1,
-                sim.rhs.full.q_itf_full_x2,
-                sim.rhs.full.q_itf_full_x3,
+                # sim.rhs.full.q_itf_full_x1,
+                # sim.rhs.full.q_itf_full_x2,
+                # sim.rhs.full.q_itf_full_x3,
+                q_itf_full_x1,
+                q_itf_full_x2,
+                q_itf_full_x3,
                 outputs_py[0],
                 outputs_py[1],
                 outputs_py[2],
@@ -73,9 +132,12 @@ class PdeRusanovGenericTestCase(MpiTestCase):
                 sim.rhs.full.metric,
             )
             sim.rhs.full.pde.riemann_fluxes_code(
-                sim.rhs.full.q_itf_full_x1,
-                sim.rhs.full.q_itf_full_x2,
-                sim.rhs.full.q_itf_full_x3,
+                # sim.rhs.full.q_itf_full_x1,
+                # sim.rhs.full.q_itf_full_x2,
+                # sim.rhs.full.q_itf_full_x3,
+                q_itf_full_x1,
+                q_itf_full_x2,
+                q_itf_full_x3,
                 outputs_code[0],
                 outputs_code[1],
                 outputs_code[2],
@@ -100,6 +162,7 @@ class PdeRusanovGenericTestCase(MpiTestCase):
 
             threshold = 4e-16
             if xp.any(diff_norms > threshold):
+                numpy.set_printoptions(precision=2, linewidth=sys.maxsize)
                 print(
                     f"Rank {self.comm.rank} differences: {xp.count_nonzero(diff_norms > threshold)}\n{diff_norms}",
                     flush=True,

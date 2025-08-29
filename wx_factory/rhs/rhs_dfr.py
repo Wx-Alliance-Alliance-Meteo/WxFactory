@@ -106,7 +106,6 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
             self.wflux_adv_itf_full_x3 = xp.zeros_like(self.q_itf_full_x3[0])
             self.wflux_pres_itf_full_x3 = xp.zeros_like(self.q_itf_full_x3[0])
 
-
     def extrap_3d_py(self, q: NDArray, itf_x1: NDArray, itf_x2: NDArray, itf_x3: NDArray) -> None:
         itf_x1[...] = q @ self.ops.extrap_x
         itf_x2[...] = q @ self.ops.extrap_y
@@ -248,17 +247,18 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
 
     def riemann_fluxes(self) -> None:
         xp = self.device.xp
+        itf_size = self.geom.itf_size
 
         mid_i = xp.s_[..., 1:-1, :]
         mid_j = xp.s_[..., 1:-1, :, :]
         mid_k = xp.s_[..., 1:-1, :, :, :]
 
-        s = numpy.s_[..., 0, :, self.geom.itf_size :]
-        n = numpy.s_[..., -1, :, : self.geom.itf_size]
-        w = numpy.s_[..., 0, self.geom.itf_size :]
-        e = numpy.s_[..., -1, : self.geom.itf_size]
-        b = numpy.s_[..., 0, :, :, self.geom.itf_size :]
-        t = numpy.s_[..., -1, :, :, : self.geom.itf_size]
+        s = numpy.s_[..., 0, :, itf_size:]
+        n = numpy.s_[..., -1, :, :itf_size]
+        w = numpy.s_[..., 0, itf_size:]
+        e = numpy.s_[..., -1, :itf_size]
+        b = numpy.s_[..., 0, :, :, itf_size:]
+        t = numpy.s_[..., -1, :, :, :itf_size]
 
         self.q_itf_full_x1[mid_i] = self.q_itf_x1
         self.q_itf_full_x2[mid_j] = self.q_itf_x2
@@ -271,10 +271,13 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
         self.q_itf_full_x2[n] = self.q_itf_n
 
         # Top + bottom layers
-        self.q_itf_full_x3[b] = self.q_itf_full_x3[..., 1, :, :, : self.geom.itf_size]
-        # self.q_itf_full_x3[..., 0, :, :, : self.geom.itf_size] = self.q_itf_full_x3[b]
-        self.q_itf_full_x3[t] = self.q_itf_full_x3[..., -2, :, :, self.geom.itf_size :]
-        # self.q_itf_full_x3[..., -1, :, :, self.geom.itf_size :] = self.q_itf_full_x3[t]
+        self.q_itf_full_x3[b] = self.q_itf_full_x3[..., 1, :, :, :itf_size]
+        self.q_itf_full_x3[t] = self.q_itf_full_x3[..., -2, :, :, itf_size:]
+        # Boundary conditions
+        self.q_itf_full_x3[idx_rho_w, 0, :, :, :itf_size] = 0.0
+        self.q_itf_full_x3[idx_rho_w, 0, :, :, itf_size:] = -self.q_itf_full_x3[idx_rho_w, 1, :, :, :itf_size]
+        self.q_itf_full_x3[idx_rho_w, -1, :, :, itf_size:] = 0.0
+        self.q_itf_full_x3[idx_rho_w, -1, :, :, :itf_size] = -self.q_itf_full_x3[idx_rho_w, -2, :, :, itf_size:]
 
         self.pde.riemann_fluxes(
             self.q_itf_full_x1,

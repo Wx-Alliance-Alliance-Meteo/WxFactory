@@ -257,7 +257,7 @@ template <typename real_t, typename num_t>
 void riemann_euler_cubedsphere_rusanov_3d(
     const py_array<num_t>&  q_itf_x1_in,
     const py_array<num_t>&  q_itf_x2_in,
-    py_array<num_t>&        q_itf_x3_in,
+    const py_array<num_t>&  q_itf_x3_in,
     const py_array<real_t>& sqrt_g_itf_x1,
     const py_array<real_t>& sqrt_g_itf_x2,
     const py_array<real_t>& sqrt_g_itf_x3,
@@ -283,7 +283,7 @@ void riemann_euler_cubedsphere_rusanov_3d(
 
   const num_t* q_itf_x1_ptr = get_c_ptr<num_t>(q_itf_x1_in);
   const num_t* q_itf_x2_ptr = get_c_ptr<num_t>(q_itf_x2_in);
-  num_t*       q_itf_x3_ptr = get_c_ptr<num_t>(q_itf_x3_in);
+  const num_t* q_itf_x3_ptr = get_c_ptr<num_t>(q_itf_x3_in);
 
   num_t* flux_itf_x1_ptr = get_c_ptr<num_t>(flux_itf_x1);
   num_t* flux_itf_x2_ptr = get_c_ptr<num_t>(flux_itf_x2);
@@ -411,47 +411,6 @@ void riemann_euler_cubedsphere_rusanov_3d(
               1,
               false); // Consider internal Riemann problem
         }
-      }
-    }
-  }
-
-  // Set the x3-direction boundary conditions to ensure no flow via odd symmetry
-#pragma omp target teams distribute collapse(3)
-  for (int j = 0; j < num_elem_x2; j++)
-  {
-    for (int k = 0; k < num_elem_x1; k++)
-    {
-      for (int l = 0; l < num_solpts * num_solpts; l++)
-      {
-        // Set the bottom boundary
-        const int index_b_bottom =
-            get_c_index(0, 0, j, k, l + num_solpts * num_solpts, array_shape_x3);
-        euler_state_3d<num_t> params_b_bottom(q_itf_x3_ptr, index_b_bottom, stride_x3);
-
-        const int index_in_bottom = get_c_index(0, 1, j, k, l, array_shape_x3);
-        euler_state_3d<const num_t> params_in_bottom(
-            q_itf_x3_ptr,
-            index_in_bottom,
-            stride_x3);
-
-        boundary_euler_cubedsphere_3d_kernel<real_t, num_t>(
-            params_in_bottom,
-            params_b_bottom);
-
-        // Set the top boundary
-        const int index_b_top = get_c_index(0, num_elem_x3 + 1, j, k, l, array_shape_x3);
-        euler_state_3d<num_t> params_b_top(q_itf_x3_ptr, index_b_top, stride_x3);
-
-        const int index_in_top = get_c_index(
-            0,
-            num_elem_x3,
-            j,
-            k,
-            l + num_solpts * num_solpts,
-            array_shape_x3);
-        euler_state_3d<const num_t> params_in_top(q_itf_x3_ptr, index_in_top, stride_x3);
-
-        boundary_euler_cubedsphere_3d_kernel<real_t, num_t>(params_in_top, params_b_top);
       }
     }
   }
