@@ -74,6 +74,13 @@ class Device(ABC):
     def end_range(self):
         pass
 
+    def mem_usage(self, tag=""):
+        self.__mem_usage__(tag)
+
+    @abstractmethod
+    def __mem_usage__(self, tag):
+        pass
+
     @staticmethod
     def get_default() -> "CpuDevice":
         return CpuDevice.get_default()
@@ -129,6 +136,9 @@ class CpuDevice(Device):
         intervals.append(timestamps[-1] - timestamps[0])
         return intervals
 
+    def __mem_usage__(self, tag):
+        pass
+
     @staticmethod
     def get_default() -> "CpuDevice":
         if CpuDevice._default is None:
@@ -179,10 +189,11 @@ class CudaDevice(Device):
         device_list = [x for x in device_list if x < wx_cupy.num_devices]
 
         if len(device_list) == 0:
-            device_list = range(wx_cupy.num_devices)
+            device_list = [x for x in range(wx_cupy.num_devices)]
 
         devnum = self.comm.rank % len(device_list)
-        cupy.cuda.Device(device_list[devnum]).use()
+        self.cuda_device = cupy.cuda.Device(device_list[devnum])
+        self.cuda_device.use()
         if compiled_lib == "omp":
             pde.set_omp_device(device_list[devnum])
 
@@ -250,6 +261,13 @@ class CudaDevice(Device):
         intervals = [get_time(timestamps[i], timestamps[i + 1]) / 1000.0 for i in range(len(timestamps) - 1)]
         intervals.append(get_time(timestamps[0], timestamps[-1]) / 1000.0)
         return intervals
+
+    def __mem_usage__(self, tag):
+        dev = self.cuda_device
+        free_mem, total_mem = dev.mem_info
+        kb = 1024
+        gb = kb * kb * kb
+        print(f"{tag:10s}: {free_mem / gb :.1f}/{total_mem / gb :.1f} GB available", flush=True)
 
     @staticmethod
     def get_default() -> "CudaDevice":

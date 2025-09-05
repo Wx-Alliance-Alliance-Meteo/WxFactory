@@ -5,6 +5,7 @@ from typing import List, Dict, Type
 from mpi4py import MPI
 import numpy
 
+
 from common import Configuration
 from common.definitions import idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_w
 from device import Device, CpuDevice, CudaDevice
@@ -40,6 +41,7 @@ from process_topology import ProcessTopology
 from rhs.rhs_selector import RhsBundle
 from wx_mpi import SingleProcess, Conditional
 from post_proccessing import PostProcessor, ScharMountainPostProcessor
+
 
 class Simulation:
     """Encapsulate parameters and structures needed to run a WxFactory simulation.
@@ -123,7 +125,9 @@ class Simulation:
         self.process_topo = None
         self.geometry = self._create_geometry()
         self.operators = DFROperators(self.geometry, self.config, self.device)
-        self.initial_Q, self.topography, self.metric = init_state_vars(self.geometry, self.operators, self.config, self.post_processors)
+        self.initial_Q, self.topography, self.metric = init_state_vars(
+            self.geometry, self.operators, self.config, self.post_processors
+        )
         self.preconditioner = self._create_preconditioner(self.initial_Q)
         self.output = self._create_output_manager()
         self.initial_Q, self.starting_step = self._determine_starting_state()
@@ -304,7 +308,7 @@ class Simulation:
                     self.process_topo,
                     self.config,
                 )
-            
+
                 if self.config.enable_schar_mountain:
                     schar_mountain = ScharMountainPostProcessor(self.config, cube_sphere)
                     self.post_processors[ScharMountainPostProcessor] = schar_mountain
@@ -449,17 +453,19 @@ class Simulation:
             integrator_name_2 = self.config.splitting_integrator_2
 
             if integrator_name_1 in unavailable_sub_integrators or integrator_name_2 in unavailable_sub_integrators:
-                raise ValueError(f"Time integration method {integrator_name} with sub integration {integrator_name_1} and {integrator_name_2} not supported")
-            
+                raise ValueError(
+                    f"Time integration method {integrator_name} with sub integration {integrator_name_1} and {integrator_name_2} not supported"
+                )
+
             sub_integrator_1 = self._create_time_integrator(integrator_name_1)
             sub_integrator_2 = self._create_time_integrator(integrator_name_2)
 
             if integrator_name == "strang":
                 return StrangSplitting(self.config, sub_integrator_1, sub_integrator_2)
-            
+
             if integrator_name == "lie":
                 return LieSplitting(self.config, sub_integrator_1, sub_integrator_2)
-        
+
         if integrator_name == "strang_epi2_ros2":
             stepper1 = Epi(self.config, 2, self.rhs.explicit, device=self.device)
             stepper2 = Ros2(self.config, self.rhs.implicit, preconditioner=self.preconditioner, device=self.device)
