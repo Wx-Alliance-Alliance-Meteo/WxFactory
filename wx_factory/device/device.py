@@ -7,8 +7,9 @@ from mpi4py import MPI
 from numpy.typing import NDArray
 
 from compiler import compile_kernels
-from . import wx_cupy
+from wx_mpi import split_nodes
 
+from . import wx_cupy
 
 _Timestamp = TypeVar("Timestamp", bound=Union[float, "Event"])
 
@@ -191,7 +192,12 @@ class CudaDevice(Device):
         if len(device_list) == 0:
             device_list = [x for x in range(wx_cupy.num_devices)]
 
-        devnum = self.comm.rank % len(device_list)
+        node_comm, _ = split_nodes(comm)
+        num_procs = node_comm.size
+        num_devices = len(device_list)
+        num_per_device = (num_procs + num_devices - 1) // num_devices
+        devnum = node_comm.rank // num_per_device
+
         self.cuda_device = cupy.cuda.Device(device_list[devnum])
         self.cuda_device.use()
         if compiled_lib == "omp":
