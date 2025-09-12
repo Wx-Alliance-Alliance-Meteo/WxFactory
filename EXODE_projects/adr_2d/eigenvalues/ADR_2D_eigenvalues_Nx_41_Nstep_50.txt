@@ -1,0 +1,4 @@
+epi_method = epi 2  with tolerance =  1e-08
+Solve using  RK45  with  50  steps with spatial grid  41 x 41 using epi 2
+Elapsed Time:  1564.4014 seconds
+error using  50  steps is  0.00813073445239282

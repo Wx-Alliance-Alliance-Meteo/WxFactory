@@ -1,0 +1,5 @@
+MPI startup(): PMI server not found. Please set I_MPI_PMI_LIBRARY variable if it is not a singleton case.
+epi_method = epi 2  with tolerance =  1e-08
+Solve using  RK45  with  200  steps with spatial grid  41 x 41 using epi 2
+Elapsed Time:  418.1115 seconds
+error using  200  steps is  0.00045457067487063047

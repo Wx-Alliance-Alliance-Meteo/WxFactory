@@ -8,7 +8,6 @@ import scipy.linalg
 
 
 def pmex(τ_out, A, u, tol=1e-7, delta=1.2, m_init=10, mmin=10, mmax=128, reuse_info=False, task1=False):
-
     ppo, n = u.shape
     p = ppo - 1
 
@@ -44,7 +43,7 @@ def pmex(τ_out, A, u, tol=1e-7, delta=1.2, m_init=10, mmin=10, mmax=128, reuse_
       m_init = pmex.suggested_m
       m_opt  = 1
    """
-
+    
     # We only allow m to vary between mmin and mmax
     # mmin = 1
     m = max(mmin, min(m_init, mmax))

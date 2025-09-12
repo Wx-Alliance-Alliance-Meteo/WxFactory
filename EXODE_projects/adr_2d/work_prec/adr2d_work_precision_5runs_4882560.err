@@ -1,0 +1,14 @@
+slurmstepd: error: Unable to create TMPDIR [/tmp/siw001/177028]: No such file or directory
+slurmstepd: error: Setting TMPDIR to /tmp
+
+CondaError: Run 'conda init' before 'conda activate'
+
+Traceback (most recent call last):
+  File "/fs/homeu2/eccc/mrd/rpnatm/siw001/WxFactory_exode_paper/EXODE_projects/adr_2d/main_adr.py", line 108, in <module>
+    Q = stepper.step(Q, dt)
+  File "/home/siw001/WxFactory_exode_paper/wx_factory/integrators/integrator.py", line 89, in step
+    result = self.__step__(Q, dt)
+  File "/home/siw001/WxFactory_exode_paper/wx_factory/integrators/epi_for_others.py", line 98, in __step__
+    mpirank = self.device.comm.Get_rank()
+              ^^^^^^^^^^^
+AttributeError: 'Epi_others' object has no attribute 'device'

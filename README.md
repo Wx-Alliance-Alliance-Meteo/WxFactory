@@ -1,4 +1,4 @@
-# WxFactory
+#WxFactory
 Research numerical weather model. The name is inspired by [Richardson’s Fantastic Forecast Factory](https://www.emetsoc.org/resources/rff/)
 
 ## Requirements
@@ -78,3 +78,16 @@ snakeviz ./profile_0000.out
 
 ## If you find this project useful, please cite:
 Gaudreault, S., Charron, M., Dallerit, V., & Tokman, M. (2022). High-order numerical solutions to the shallow-water equations on the rotated cubed-sphere grid. Journal of Computational Physics, 449, 110792. [https://doi.org/10.1016/j.jcp.2021.110792](https://doi.org/10.1016/j.jcp.2021.110792)
+
+
+
+## For EXODE paper: 
+The code to run the ADR problem is: EXODE_projects/adr_2d/adr_2d.py 
+For example: 
+	python adr_2d.py 2 pmex 1e-3 1e-3
+
+To run the code for the Rossby wave problem, it's the case6 implemented in the Wx_Factory code. The code has to be run with a minimum of 6 cores. 
+ 
+An example to run this for scaling or work-precision is the run_case6_strong_scaling_bs32.sh 
+
+
