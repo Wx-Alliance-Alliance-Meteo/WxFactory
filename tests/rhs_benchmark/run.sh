@@ -5,6 +5,7 @@ OUTPUT_DIR=/home/vma000/site5/wx_factory/rhs_benchmark
 BASE_WORK_DIR=${SCRIPT_DIR}/tmp
 WORK_DIR=/dev/null
 WX_DIR=${SCRIPT_DIR}/../..
+BASE_JOB=${SCRIPT_DIR}/base.job
 
 mkdir -pv ${OUTPUT_DIR}
 mkdir -pv ${BASE_WORK_DIR}
@@ -16,13 +17,14 @@ function gen_config() {
     num_solpts=$1
     num_elem_hori=$2
     num_elem_vert=$3
+    device=$4
     cat << EOF
         [General]
         equations = Euler
         depth_approx = shallow
 
         [System]
-        desired_device = cpu
+        desired_device = ${device}
 
         [Grid]
         grid_type = cubed_sphere
@@ -64,27 +66,54 @@ for i in {0..1000}; do
 done
 mkdir -pv ${WORK_DIR} || exit -1
 
-gen_config 2 30 30 > ${WORK_DIR}/c1.ini
-gen_config 3 20 20 > ${WORK_DIR}/c2.ini
-gen_config 4 15 15 > ${WORK_DIR}/c3.ini
-gen_config 5 12 12 > ${WORK_DIR}/c4.ini
-gen_config 6 10 10 > ${WORK_DIR}/c5.ini
-
 WTIME=180
 WTIME_GPU=20
-for config in ${WORK_DIR}/*; do
-    c=$(basename ${config})
-    echo "Config $c"
+for device in cpp cuda numpy cupy; do
+# for device in cupy cuda; do
+    mkdir -pv ${WORK_DIR}/$device || exit -1
+    gen_config 2 30 30 $device > ${WORK_DIR}/$device/c01.ini
+    gen_config 3 20 20 $device > ${WORK_DIR}/$device/c02.ini
+    gen_config 4 15 15 $device > ${WORK_DIR}/$device/c03.ini
+    gen_config 5 12 12 $device > ${WORK_DIR}/$device/c04.ini
+    gen_config 6 10 10 $device > ${WORK_DIR}/$device/c05.ini
 
-    JOB_SCRIPT=${WORK_DIR}/${c}.job
-    sed -e 's|^WX_DIR=.*|WX_DIR='${WX_DIR}'|' \
-        -e 's|^CONFIG_FILE=.*|CONFIG_FILE='${config}'|' \
-        < base.job > ${JOB_SCRIPT}
+    # gen_config 2 60 30 $device > ${WORK_DIR}/$device/c06.ini
+    # gen_config 3 40 20 $device > ${WORK_DIR}/$device/c07.ini
+    # gen_config 4 30 15 $device > ${WORK_DIR}/$device/c08.ini
+    # gen_config 5 24 12 $device > ${WORK_DIR}/$device/c09.ini
+    # gen_config 6 20 10 $device > ${WORK_DIR}/$device/c10.ini
 
-    LAUNCH_COMMAND_CPU="ord_soumet -cpus 80 -w ${WTIME} -jn ${JOB_NAME} -mpi -jobfile ${JOB_SCRIPT} -listing ${WORK_DIR} -cm 2000M -waste 100"
-    LAUNCH_COMMAND_GPU="ord_soumet -cpus 1x12 -gpus 1 -w ${WTIME} -jn ${JOB_NAME} -mpi -jobfile ${JOB_SCRIPT} -listing ${WORK_DIR} -cm 6000M -waste 100 -mach underhill"
-    # LAUNCH_COMMAND=${LAUNCH_COMMAND_CPU}
-    LAUNCH_COMMAND=${LAUNCH_COMMAND_GPU}
-    echo ${LAUNCH_COMMAND}
-    ${LAUNCH_COMMAND}
+    for config in ${WORK_DIR}/$device/*; do
+        c=$(basename ${config})
+        echo "Config $c"
+
+        JOB_SCRIPT=${WORK_DIR}/${device}/${c}.job
+        sed -e 's|^WX_DIR=.*|WX_DIR='${WX_DIR}'|' \
+            -e 's|^CONFIG_FILE=.*|CONFIG_FILE='${config}'|' \
+            < ${BASE_JOB} > ${JOB_SCRIPT}  || exit -1
+
+        if [ "cpp" == ${device} ] || [ "numpy" == "${device}" ]; then
+            sed -i ${JOB_SCRIPT} \
+                -e 's|^#PBS -l select=.*|#PBS -l select=1:ncpus=80:mpiprocs=80:mem=180gb|' \
+                -e 's|^#SBATCH --partition=.*|#SBATCH --partition=standard|' \
+                -e 's|^#SBATCH --account=.*|#SBATCH --account=eccc_mrd|'
+        elif [ "cuda" == "${device}" ] || [ "cupy" == "${device}" ]; then
+            sed -i ${JOB_SCRIPT} \
+                -e 's|^#PBS -l select=.*|#PBS -l select=2:ncpus=48:mpiprocs=4:ngpus=4:mem=205gb\n#PBS -q gpu|' \
+                -e 's|^#SBATCH --partition=.*|#SBATCH --partition=gpu_a100|' \
+                -e 's|^#SBATCH --account=.*|#SBATCH --account=eccc_mrd__gpu_a100\n#SBATCH --gpus=6#SBATCH --cpus-per-gpu=32\n|'
+        else
+            echo "Whooah something wrong"
+            exit -1
+        fi
+
+        if which sbatch 2>/dev/null ; then
+            LAUNCH_COMMAND="sbatch --ignore-pbs ${JOB_SCRIPT}"
+        else
+            LAUNCH_COMMAND="qsub ${JOB_SCRIPT}"
+        fi
+
+        echo ${LAUNCH_COMMAND}
+        ${LAUNCH_COMMAND}
+    done
 done

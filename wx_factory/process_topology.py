@@ -4,8 +4,8 @@ from typing import Callable, Optional, Tuple
 from mpi4py import MPI
 from numpy.typing import NDArray
 
-from device import Device
-from wx_mpi import SingleProcess, Conditional
+from device import Device, CudaDevice
+from wx_mpi import SingleProcess, Conditional, split_nodes
 
 ExchangedVector = Tuple[NDArray, ...] | NDArray
 
@@ -47,7 +47,7 @@ class ProcessTopology:
          +---+---+---+---+
     """
 
-    def __init__(self, device: Device, rank: Optional[int] = None, comm: MPI.Comm = MPI.COMM_WORLD):
+    def __init__(self, device: Device, rank: Optional[int] = None, comm_in: MPI.Comm = MPI.COMM_WORLD):
         """Create a cube-sphere process topology.
 
         :param device: Device on which MPI exchanges are to be made, like a CPU or a GPU.
@@ -62,9 +62,15 @@ class ProcessTopology:
 
         self.device = device
 
-        self.comm = comm
-        self.size = comm.Get_size()
-        self.rank = comm.Get_rank() if rank is None else rank
+        self.node_comm, self.node_id = split_nodes(comm_in)
+
+        # Reorder processes, grouping them by node (processes on the same node will have contiguous ranks)
+        # This one is named with an underscore because it is internal to a ProcessTopology object, it will differ
+        # from the communicator used by a Simulation
+        self._comm = comm_in.Split(0, self.node_id)
+
+        self.size = self._comm.size
+        self._rank = self._comm.rank if rank is None else rank
 
         self.num_pe_per_panel = int(self.size / 6)
         self.num_lines_per_panel = int(math.sqrt(self.num_pe_per_panel))
@@ -88,8 +94,8 @@ class ProcessTopology:
                 col += self.num_lines_per_panel
             return panel * self.num_pe_per_panel + row * self.num_lines_per_panel + col
 
-        self.my_panel = math.floor(self.rank / self.num_pe_per_panel)
-        self.my_rank_in_panel = self.rank - (self.my_panel * self.num_pe_per_panel)
+        self.my_panel = math.floor(self._rank / self.num_pe_per_panel)
+        self.my_rank_in_panel = self._rank - (self.my_panel * self.num_pe_per_panel)
         self.my_row = math.floor(self.my_rank_in_panel / self.num_lines_per_panel)
         self.my_col = int(self.my_rank_in_panel % self.num_lines_per_panel)
 
@@ -135,44 +141,96 @@ class ProcessTopology:
         ]
         # fmt: on
 
+        def p00(a1, a2, coord):
+            return (a1 + 2.0 * coord / (1.0 + coord**2) * a2, a2)  # South neighbor
+
+        def p01(a1, a2, coord):
+            return (a1 - 2.0 * coord / (1.0 + coord**2) * a2, a2)  # North neighbor
+
+        def p02(a1, a2, coord):
+            return (a1, 2.0 * coord / (1.0 + coord**2) * a1 + a2)  # West neighbor
+
+        def p03(a1, a2, coord):
+            return (a1, -2.0 * coord / (1.0 + coord**2) * a1 + a2)  # East neighbor
+
+        def p10(a1, a2, coord):
+            return (a2, -a1 - 2.0 * coord / (1.0 + coord**2) * a2)  # South neighbor
+
+        def p11(a1, a2, coord):
+            return (-a2, a1 - 2.0 * coord / (1.0 + coord**2) * a2)  # North neighbor
+
+        def p12(a1, a2, coord):
+            return (a1, 2.0 * coord / (1.0 + coord**2) * a1 + a2)  # West neighbor
+
+        def p13(a1, a2, coord):
+            return (a1, -2.0 * coord / (1.0 + coord**2) * a1 + a2)  # East neighbor
+
+        def p20(a1, a2, coord):
+            return (-a1 - 2.0 * coord / (1.0 + coord**2) * a2, -a2)  # South neighbor
+
+        def p21(a1, a2, coord):
+            return (-a1 + 2.0 * coord / (1.0 + coord**2) * a2, -a2)  # North neighbor
+
+        def p22(a1, a2, coord):
+            return (a1, 2.0 * coord / (1.0 + coord**2) * a1 + a2)  # West neighbor
+
+        def p23(a1, a2, coord):
+            return (a1, -2.0 * coord / (1.0 + coord**2) * a1 + a2)  # East neighbor
+
+        def p30(a1, a2, coord):
+            return (-a2, a1 + 2.0 * coord / (1.0 + coord**2) * a2)  # South neighbor
+
+        def p31(a1, a2, coord):
+            return (a2, -a1 + 2.0 * coord / (1.0 + coord**2) * a2)  # North neighbor
+
+        def p32(a1, a2, coord):
+            return (a1, 2.0 * coord / (1.0 + coord**2) * a1 + a2)  # West neighbor
+
+        def p33(a1, a2, coord):
+            return (a1, -2.0 * coord / (1.0 + coord**2) * a1 + a2)  # East neighbor
+
+        def p40(a1, a2, coord):
+            return (a1 + 2.0 * coord / (1.0 + coord**2) * a2, a2)  # South neighbor
+
+        def p41(a1, a2, coord):
+            return (-a1 + 2.0 * coord / (1.0 + coord**2) * a2, -a2)  # North neighbor
+
+        def p42(a1, a2, coord):
+            return (-2.0 * coord / (1.0 + coord**2) * a1 - a2, a1)  # West neighbor
+
+        def p43(a1, a2, coord):
+            return (-2.0 * coord / (1.0 + coord**2) * a1 + a2, -a1)  # East neigbor
+
+        def p50(a1, a2, coord):
+            return (-a1 - 2.0 * coord / (1.0 + coord**2) * a2, -a2)  # South neighbor
+
+        def p51(a1, a2, coord):
+            return (a1 - 2.0 * coord / (1.0 + coord**2) * a2, a2)  # North neighbor
+
+        def p52(a1, a2, coord):
+            return (2.0 * coord / (1.0 + coord**2) * a1 + a2, -a1)  # West neighbor
+
+        def p53(a1, a2, coord):
+            return (2.0 * coord / (1.0 + coord**2) * a1 - a2, a1)  # East neighbor
+
         convert_contras = [
-            [  # Panel 0
-                lambda a1, a2, coord: (a1 + 2.0 * coord / (1.0 + coord**2) * a2, a2),  # South neighbor
-                lambda a1, a2, coord: (a1 - 2.0 * coord / (1.0 + coord**2) * a2, a2),  # North neighbor
-                lambda a1, a2, coord: (a1, 2.0 * coord / (1.0 + coord**2) * a1 + a2),  # West neighbor
-                lambda a1, a2, coord: (a1, -2.0 * coord / (1.0 + coord**2) * a1 + a2),  # East neighbor
-            ],
-            [  # Panel 1
-                lambda a1, a2, coord: (a2, -a1 - 2.0 * coord / (1.0 + coord**2) * a2),  # South neighbor
-                lambda a1, a2, coord: (-a2, a1 - 2.0 * coord / (1.0 + coord**2) * a2),  # North neighbor
-                lambda a1, a2, coord: (a1, 2.0 * coord / (1.0 + coord**2) * a1 + a2),  # West neighbor
-                lambda a1, a2, coord: (a1, -2.0 * coord / (1.0 + coord**2) * a1 + a2),  # East neighbor
-            ],
-            [  # Panel 2
-                lambda a1, a2, coord: (-a1 - 2.0 * coord / (1.0 + coord**2) * a2, -a2),  # South neighbor
-                lambda a1, a2, coord: (-a1 + 2.0 * coord / (1.0 + coord**2) * a2, -a2),  # North neighbor
-                lambda a1, a2, coord: (a1, 2.0 * coord / (1.0 + coord**2) * a1 + a2),  # West neighbor
-                lambda a1, a2, coord: (a1, -2.0 * coord / (1.0 + coord**2) * a1 + a2),  # East neighbor
-            ],
-            [  # Panel 3
-                lambda a1, a2, coord: (-a2, a1 + 2.0 * coord / (1.0 + coord**2) * a2),  # South neighbor
-                lambda a1, a2, coord: (a2, -a1 + 2.0 * coord / (1.0 + coord**2) * a2),  # North neighbor
-                lambda a1, a2, coord: (a1, 2.0 * coord / (1.0 + coord**2) * a1 + a2),  # West neighbor
-                lambda a1, a2, coord: (a1, -2.0 * coord / (1.0 + coord**2) * a1 + a2),  # East neighbor
-            ],
-            [  # Panel 4
-                lambda a1, a2, coord: (a1 + 2.0 * coord / (1.0 + coord**2) * a2, a2),  # South neighbor
-                lambda a1, a2, coord: (-a1 + 2.0 * coord / (1.0 + coord**2) * a2, -a2),  # North neighbor
-                lambda a1, a2, coord: (-2.0 * coord / (1.0 + coord**2) * a1 - a2, a1),  # West neighbor
-                lambda a1, a2, coord: (-2.0 * coord / (1.0 + coord**2) * a1 + a2, -a1),  # East neigbor
-            ],
-            [  # Panel 5
-                lambda a1, a2, coord: (-a1 - 2.0 * coord / (1.0 + coord**2) * a2, -a2),  # South neighbor
-                lambda a1, a2, coord: (a1 - 2.0 * coord / (1.0 + coord**2) * a2, a2),  # North neighbor
-                lambda a1, a2, coord: (2.0 * coord / (1.0 + coord**2) * a1 + a2, -a1),  # West neighbor
-                lambda a1, a2, coord: (2.0 * coord / (1.0 + coord**2) * a1 - a2, a1),  # East neighbor
-            ],
+            [p00, p01, p02, p03],  # Panel 0
+            [p10, p11, p12, p13],  # Panel 1
+            [p20, p21, p22, p23],  # Panel 2
+            [p30, p31, p32, p33],  # Panel 3
+            [p40, p41, p42, p43],  # Panel 4
+            [p50, p51, p52, p53],  # Panel 5
         ]
+
+        if isinstance(device, CudaDevice):
+            convert_contras = [[device.cupy.fuse(f) for f in a] for a in convert_contras]
+            # def f(a1, a2, coord):
+            #     return (a1 + 2.0 * coord / (1.0 + coord**2) * a2, a2)
+
+            # convert_contras[0][0] = device.cupy.fuse(f)
+
+        # print(f"convert_contras = {convert_contras}")
+        # raise ValueError
 
         convert_covs = [
             [  # Panel 0
@@ -258,13 +316,37 @@ class ProcessTopology:
         # Distributed Graph
         self.sources = [my_south, my_north, my_west, my_east]  # Must correspond to values of SOUTH, NORTH, WEST, EAST
         self.destinations = self.sources
-        self.comm_dist_graph = comm.Create_dist_graph_adjacent(self.sources, self.destinations)
+        self.comm_dist_graph = self._comm.Create_dist_graph_adjacent(self.sources, self.destinations)
 
         # Panel communicators
-        self.panel_comm = self.comm.Split(self.my_panel, self.rank)
-        self.panel_roots_comm = self.comm.Split(self.panel_comm.rank == 0, self.rank)
+        self.panel_comm = self._comm.Split(self.my_panel, self._rank)
+        self.panel_roots_comm = self._comm.Split(self.panel_comm.rank == 0, self._rank)
         if self.panel_comm.rank != 0:
             self.panel_roots_comm = MPI.COMM_NULL
+
+        self.send_buffer = None
+        self.recv_buffer = None
+
+    def prepare_scalar_buffer(
+        self,
+        south: NDArray,
+        north: NDArray,
+        west: NDArray,
+        east: NDArray,
+        boundary_shape: Tuple[int, ...],
+        flip_dim: int | Tuple[int, ...] = -1,
+    ):
+        xp = self.device.xp
+
+        base_shape = get_base_shape(south.shape, boundary_shape)
+        send_buffer = xp.empty((4,) + base_shape, dtype=south[0].dtype)
+
+        # Fill send buffer
+        for i, data in enumerate([south, north, west, east]):
+            tmp = data.reshape(base_shape)
+            send_buffer[i] = xp.flip(tmp, axis=flip_dim) if self.flip[i] else tmp
+
+        return send_buffer, south.shape, False
 
     def start_exchange_scalars(
         self,
@@ -301,23 +383,47 @@ class ProcessTopology:
         :rtype: ExchangeRequest
 
         """
-        xp = self.device.xp
 
-        base_shape = get_base_shape(south.shape, boundary_shape)
-        send_buffer = xp.empty((4,) + base_shape, dtype=south[0].dtype)
-        recv_buffer = xp.empty_like(send_buffer)
-
-        # Fill send buffer
-        for i, data in enumerate([south, north, west, east]):
-            tmp = data.reshape(base_shape)
-            send_buffer[i] = xp.flip(tmp, axis=flip_dim) if self.flip[i] else tmp
+        send_info = self.prepare_scalar_buffer(south, north, west, east, boundary_shape, flip_dim)
 
         self.device.synchronize()  # When using GPU
 
-        # Initiate MPI transfer
-        mpi_request = self.comm_dist_graph.Ineighbor_alltoall(send_buffer, recv_buffer)
+        return self.initiate_transfers([send_info])[0]
+        # # Initiate MPI transfer
+        # mpi_request = self.comm_dist_graph.Ineighbor_alltoall(send_buffer, recv_buffer)
 
-        return ExchangeRequest(recv_buffer, mpi_request, shape=south.shape, is_vector=False)
+        # return ExchangeRequest(recv_buffer, mpi_request, shape=south.shape, is_vector=False)
+
+    def prepare_vector_buffer(
+        self,
+        south: ExchangedVector,
+        north: ExchangedVector,
+        west: ExchangedVector,
+        east: ExchangedVector,
+        boundary_sn: NDArray,
+        boundary_we: NDArray,
+        flip_dim: int | Tuple[int, ...] = -1,
+        covariant: bool = False,
+    ):
+        xp = self.device.xp
+
+        convert = self.convert_cov if covariant else self.convert_contra
+
+        base_shape = get_base_shape(south[0].shape, boundary_sn.shape)
+        send_buffer = xp.empty((4, len(south)) + base_shape, dtype=south[0].dtype)
+
+        inputs = [south, north, west, east]
+        boundaries = [boundary_sn, boundary_sn, boundary_we, boundary_we]
+        for i, (data, bd) in enumerate(zip(inputs, boundaries)):
+            send_buffer[i, 0], send_buffer[i, 1] = convert[i](
+                data[0].reshape(base_shape), data[1].reshape(base_shape), bd
+            )
+            if len(data) == 3:
+                send_buffer[i, 2] = data[2].reshape(base_shape)  # 3rd dimension if present
+            if self.flip[i]:
+                send_buffer[i] = xp.flip(send_buffer[i], axis=flip_dim)  # Flip arrays, if needed
+
+        return send_buffer, south[0].shape, True
 
     def start_exchange_vectors(
         self,
@@ -359,31 +465,66 @@ class ProcessTopology:
         :return: A request (MPI-like) for the transfer of the arrays. Waiting on the request will return the
                     resulting arrays in the same way as the input.
         """
+        send_info = self.prepare_vector_buffer(south, north, west, east, boundary_sn, boundary_we, flip_dim, covariant)
+
+        self.device.synchronize()  # When using GPU
+
+        return self.initiate_transfers([send_info])[0]
+        # recv_buffer = self.device.empty_like(send_buffer)
+        # mpi_request = self.comm_dist_graph.Ineighbor_alltoall(send_buffer, recv_buffer)
+
+        # return ExchangeRequest(recv_buffer, mpi_request, shape=south[0].shape, is_vector=True)
+
+    def start_exchange_euler_3d(
+        self,
+        south: NDArray,
+        north: NDArray,
+        west: NDArray,
+        east: NDArray,
+        boundary_sn: NDArray,
+        boundary_we: NDArray,
+        flip_dim: int | Tuple[int, ...] = -1,
+    ):
         xp = self.device.xp
-
-        convert = self.convert_cov if covariant else self.convert_contra
-
+        convert = self.convert_contra
         base_shape = get_base_shape(south[0].shape, boundary_sn.shape)
-        send_buffer = xp.empty((4, len(south)) + base_shape, dtype=south[0].dtype)
-        recv_buffer = xp.empty_like(send_buffer)
+
+        if self.send_buffer is None or self.send_buffer.nbytes < south.nbytes * 4:
+            self.send_buffer = xp.empty(4 * south.nbytes, dtype=xp.uint8)
+            self.recv_buffer = xp.empty_like(self.send_buffer)
+
+        buffer_shape = (4, south.shape[0]) + base_shape
+        num_elem = math.prod(buffer_shape)
+        # send_buffer = xp.empty((4, south.shape[0]) + base_shape, dtype=south[0].dtype)
+        send_buffer = xp.ravel(self.send_buffer).view(dtype=south.dtype)[:num_elem].reshape(buffer_shape)
+        recv_buffer = xp.ravel(self.recv_buffer).view(dtype=south.dtype)[:num_elem].reshape(buffer_shape)
 
         inputs = [south, north, west, east]
         boundaries = [boundary_sn, boundary_sn, boundary_we, boundary_we]
         for i, (data, bd) in enumerate(zip(inputs, boundaries)):
-            send_buffer[i, 0], send_buffer[i, 1] = convert[i](
-                data[0].reshape(base_shape), data[1].reshape(base_shape), bd
+            send_buffer[i, 1], send_buffer[i, 2] = convert[i](
+                data[1].reshape(base_shape), data[2].reshape(base_shape), bd
             )
-            if len(data) == 3:
-                send_buffer[i, 2] = data[2].reshape(base_shape)  # 3rd dimension if present
+            send_buffer[i, 0] = data[0].reshape(base_shape)
+            send_buffer[i, 3:] = data[3:].reshape((data.shape[0] - 3,) + base_shape)
+
             if self.flip[i]:
-                send_buffer[i] = xp.flip(send_buffer[i], axis=flip_dim)  # Flip arrays, if needed
+                send_buffer[i, :] = xp.flip(send_buffer[i, :], axis=flip_dim)  # Flip arrays, if needed
 
         self.device.synchronize()  # When using GPU
 
-        # Initiate MPI transfer
-        mpi_request = self.comm_dist_graph.Ineighbor_alltoall(send_buffer, recv_buffer)
+        return self.initiate_transfers([(send_buffer, south[0].shape, True)], recv_buffer=recv_buffer)[0]
 
-        return ExchangeRequest(recv_buffer, mpi_request, shape=south[0].shape, is_vector=True)
+    def initiate_transfers(self, send_info: list[tuple[NDArray, tuple[int, ...], bool]], recv_buffer=None):
+        requests: list[ExchangeRequest] = []
+
+        for send_buffer, shape, is_vector in send_info:
+            if recv_buffer is None:
+                recv_buffer = self.device.xp.empty_like(send_buffer)
+            req = self.comm_dist_graph.Ineighbor_alltoall(send_buffer, recv_buffer)
+            requests.append(ExchangeRequest(recv_buffer, req, shape=shape, is_vector=is_vector))
+
+        return requests
 
     def gather_tiles_to_panel(self, field: NDArray, num_dim: int) -> Optional[NDArray]:
         """Send given tile data (`field`) to one PE (the root) on current panel.
@@ -411,11 +552,11 @@ class ProcessTopology:
         This function is a collective call that must be done by every PE within a panel.
 
         :param field: Tile data we want to send to the panel root (from this current tile)
-        :param axis: Number of data dimensions on the tile (this is different from the number of array dimensions).
+        :param num_dim: Number of data dimensions on the tile (this is different from the number of array dimensions).
             This corresponds to 2 for a single shallow-water variable,
             3 for single 3d-euler variable, 4 for a set of 3d-euler variables, etc.
             This parameter is ignored when the tile is made of 1D data.
-        :type axis: int
+        :type num_dim: int
         :return: The assembled panel, as a single NDArray, on root PE; None on every non-root PE.
         """
         xp = self.device.xp
@@ -460,10 +601,13 @@ class ProcessTopology:
         if panel is None:
             return None
 
-        panels = self.panel_roots_comm.gather(panel, root=0)
+        panels = None
+        if self.panel_roots_comm.rank == 0:
+            panels = self.device.xp.empty((6,) + panel.shape, dtype=panel.dtype)
+        self.panel_roots_comm.Gather(panel, panels, root=0)
 
         # Only the root of the entire cubesphere topology with continue
-        if panels is None:
+        if self.panel_roots_comm.rank != 0:
             return None
 
         return self.device.xp.stack(panels)
@@ -485,7 +629,7 @@ class ProcessTopology:
         side = self.num_lines_per_panel
 
         panel_list = None
-        with SingleProcess(self.comm) as s, Conditional(s):
+        with SingleProcess(self._comm) as s, Conditional(s):
 
             # Verifications
             if field.ndim < num_dim + 1 or field.shape[0] != 6 or field.shape[num_dim - 1] != field.shape[num_dim]:
@@ -517,7 +661,7 @@ class ProcessTopology:
 
             # A bit of reshaping is needed to avoid having different lines for different numbers of data dimensions
             # We flatten individual elements of each tile so that they have exactly 1 dimension (even scalars),
-            # then extract the tile from the panel, then give it it's proper shape
+            # then extract the tile from the panel, then give it its proper shape
             panel_side = panel.shape[num_dim - 2]
             tile_side = panel_side // side
             panel_base_shape = panel.shape[:num_dim]
@@ -589,6 +733,8 @@ class ExchangeRequest:
                 self.to_tuple = lambda a: (a[0].reshape(self.shape), a[1].reshape(self.shape))
             elif self.recv_buffer.shape[1] == 3:  # 3D
                 self.to_tuple = lambda a: (a[0].reshape(self.shape), a[1].reshape(self.shape), a[2].reshape(self.shape))
+            elif self.recv_buffer.shape[1] == 5:  # Euler 3D all
+                self.to_tuple = lambda a: a.reshape((5,) + self.shape)
             else:
                 raise ValueError(f"Can only handle vectors with 2 or 3 components, not {self.recv_buffer.shape[1]}")
 

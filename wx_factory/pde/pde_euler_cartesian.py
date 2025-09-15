@@ -14,17 +14,22 @@ class PDEEulerCartesian(PDE):
             geometry,
             config,
             metric,
-            2,
-            4,
-            config.num_elements_horizontal * config.num_elements_vertical,
+            num_dim=2,
+            num_var=4,
+            num_elem=geometry.num_elements_horizontal * geometry.num_elements_vertical,
             pointwise_func=pde.pointwise_eulercartesian_2d,
-            riemann_func=pde.riemann_eulercartesian_ausm_2d,
+            riemann_func=self.get_riemann_solver(pde, "ausm"),
         )
 
+    @staticmethod
+    def get_riemann_solver(pde, name):
+        if name == "ausm":
+            return pde.riemann_eulercartesian_ausm_2d
+
     def pointwise_fluxes(self, q: NDArray, flux_x1: NDArray, flux_x2: NDArray, flux_x3: NDArray) -> None:
-        num_elem_x1 = self.config.num_elements_horizontal
-        num_elem_x3 = self.config.num_elements_vertical
-        num_solpts_tot = self.config.num_solpts**2
+        num_elem_x1 = self.geometry.num_elements_horizontal
+        num_elem_x3 = self.geometry.num_elements_vertical
+        num_solpts_tot = self.geometry.num_solpts**2
 
         self.pointwise_func(q, flux_x1, flux_x3, num_elem_x1, num_elem_x3, num_solpts_tot)
 
@@ -38,9 +43,9 @@ class PDEEulerCartesian(PDE):
         flux_itf_x3: NDArray,
     ) -> None:
 
-        num_elem_x1 = self.config.num_elements_horizontal
-        num_elem_x3 = self.config.num_elements_vertical
-        num_solpts = self.config.num_solpts
+        num_elem_x1 = self.geometry.num_elements_horizontal
+        num_elem_x3 = self.geometry.num_elements_vertical
+        num_solpts = self.geometry.num_solpts
 
         self.riemann_func(q_itf_x1, q_itf_x3, flux_itf_x1, flux_itf_x3, num_elem_x1, num_elem_x3, num_solpts)
 

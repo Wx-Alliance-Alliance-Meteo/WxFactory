@@ -27,6 +27,8 @@ DEVICE_SPACE void forcing_euler_cubesphere_3d_kernel(
     forcing_params<real_t, num_t> params,
     const bool                    verbose) {
 
+  (void)verbose; // only used for debugging
+
   const num_t rho = *params.q.rho;
   const num_t u   = *params.q.rho_u / rho;
   const num_t v   = *params.q.rho_v / rho;

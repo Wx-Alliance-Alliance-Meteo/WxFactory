@@ -39,7 +39,6 @@ class Epi(Integrator):
         self.exponential_solver = param.exponential_solver
         self.case_number = param.case_number
         self.int = param.time_integrator
-        self.elem = param.num_elements_horizontal
         self.exode_method = param.exode_method
         self.exode_controller = param.exode_controller
 

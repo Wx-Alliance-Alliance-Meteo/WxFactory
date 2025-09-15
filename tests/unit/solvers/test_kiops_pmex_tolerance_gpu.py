@@ -1,9 +1,11 @@
-from solvers.kiops import kiops
-from solvers.pmex import pmex
 import random
+
+from mpi4py import MPI
 from numpy import ndarray
 
 from device import CudaDevice
+from solvers.kiops import kiops
+from solvers.pmex import pmex
 
 import cuda_test
 import ndarray_generator
@@ -27,7 +29,7 @@ class KiopsPmexToleranceGpuTestCases(cuda_test.CudaTestCases):
         self.tolerance = 1e-7
         self.rand = random.Random(seed)
 
-        self.device = CudaDevice()
+        self.device = CudaDevice(MPI.COMM_WORLD)
 
         [self.kiops_matrix, self.pmex_matrix] = ndarray_generator.generate_matrixes(
             (initial_matrix_size, initial_matrix_size),

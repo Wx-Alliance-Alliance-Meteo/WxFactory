@@ -1,6 +1,7 @@
 import random
 import unittest
 
+from mpi4py import MPI
 from numpy import ndarray
 
 from device import CpuDevice
@@ -20,7 +21,7 @@ class KiopsPmexToleranceCpuTestCases(unittest.TestCase):
     def setUp(self) -> None:
         super().setUp()
 
-        self.cpu_device = CpuDevice()
+        self.cpu_device = CpuDevice(MPI.COMM_WORLD)
 
         seed: int = 5646459
         initial_matrix_size: int = 64

@@ -1,6 +1,7 @@
 import random
 import unittest
 
+from mpi4py import MPI
 from numpy import ndarray
 import scipy
 import scipy.sparse.linalg
@@ -25,8 +26,8 @@ class FgmresComparisonTestCases(cuda_test.CudaTestCases):
     def setUp(self) -> None:
         super().setUp()
 
-        self.cpu_device = CpuDevice()
-        self.gpu_device = CudaDevice()
+        self.cpu_device = CpuDevice(MPI.COMM_WORLD)
+        self.gpu_device = CudaDevice(MPI.COMM_WORLD)
 
         seed: int = 5646459
         initial_vector_size: int = 64
@@ -89,7 +90,7 @@ class FgmresScipyTestCases(unittest.TestCase):
     def setUp(self):
         super().setUp()
 
-        self.cpu_device = CpuDevice()
+        self.cpu_device = CpuDevice(MPI.COMM_WORLD)
 
         seed: int = 5646459
         self.tolerance = 1e-7
@@ -165,7 +166,7 @@ class FgmresEdgeCasesTestCases(unittest.TestCase):
     def setUp(self):
         super().setUp()
 
-        self.cpu_device = CpuDevice()
+        self.cpu_device = CpuDevice(MPI.COMM_WORLD)
 
         seed: int = 5646459
         self.tolerance = 1e-7

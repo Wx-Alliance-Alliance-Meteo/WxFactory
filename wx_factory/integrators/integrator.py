@@ -105,6 +105,9 @@ class Integrator(ABC):
                 t1 - t0, self.sim_time, dt, solver_info, self.preconditioner, rhs_times
             )
 
+            if hasattr(self, "rhs") and isinstance(self.rhs, RHS):
+                self.rhs.clear_timings()
+
         self.solver_info = None
 
         self.sim_time += dt

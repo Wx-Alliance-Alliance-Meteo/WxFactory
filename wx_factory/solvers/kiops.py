@@ -2,15 +2,15 @@ import math
 from typing import Callable, Optional
 
 from mpi4py import MPI
-from numpy import ndarray
+from numpy.typing import NDArray
 
 from device import Device
 
 
 def kiops(
-    tau_out: ndarray,
-    A: Callable[[ndarray], ndarray],
-    u: ndarray,
+    tau_out: NDArray,
+    A: Callable[[NDArray], NDArray],
+    u: NDArray,
     tol: float = 1e-7,
     m_init: int = 10,
     mmin: int = 10,
@@ -18,7 +18,7 @@ def kiops(
     iop: int = 2,
     task1: bool = False,
     device: Optional[Device] = None,
-) -> tuple[ndarray, tuple]:
+) -> tuple[NDArray, tuple]:
     """kiops(tstops, A, u; kwargs...) -> (w, stats)
 
     Evaluate a linear combinaton of the ``φ`` functions evaluated at ``tA`` acting on
@@ -86,8 +86,8 @@ def kiops(
     m = max(mmin, min(m_init, mmax))
 
     # Preallocate matrix
-    V = xp.zeros((mmax + 1, n + p))
-    H = xp.zeros((mmax + 1, mmax + 1))
+    V: NDArray = xp.zeros((mmax + 1, n + p))
+    H: NDArray = xp.zeros((mmax + 1, mmax + 1))
 
     step = 0
     krystep = 0
@@ -105,7 +105,7 @@ def kiops(
     numSteps = len(tau_out)
 
     # Initial condition
-    w = xp.zeros((numSteps, n))
+    w: NDArray = xp.zeros((numSteps, n))
     w[0, :] = u[0, :].copy()
 
     # compute 1-norm of u
@@ -148,6 +148,9 @@ def kiops(
     kestold = True
 
     l = 0
+    beta = 0.0
+    order = 0.0
+    kest = 0.0
 
     while tau_now < tau_end:
 
@@ -257,7 +260,7 @@ def kiops(
                 kestold = False
             elif kestold or ireject == 0:
                 kestold = True
-                kest = 2
+                kest = 2.0
             else:
                 kestold = True
 
@@ -314,7 +317,16 @@ def kiops(
                 l += blownTs
 
             # Using the standard scheme
-            w[l, :] = beta * F[:j, 0] @ V[:j, :n]
+            # The python way would be to do just "beta * F @ V", but this allocates a temporary matrix
+            # the size of V. For very large problems, that is not practical. Instead, we compute the linear
+            # combination with an explicit loop, accumulating each iteration into the result array.
+            # The explicit loop has a low cost compared to that of the scalar * vector operation, so it does
+            # not affect performance in a noticeable way.
+            tmp1 = beta * F[:j, 0]
+            tmp2 = w[l, :]
+            tmp2[:] = tmp1[0] * V[0, :n]
+            for i in range(1, j):
+                tmp2[:] += tmp1[i] * V[i, :n]
 
             # Update tau_out
             tau_now += tau

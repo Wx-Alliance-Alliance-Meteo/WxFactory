@@ -3,6 +3,7 @@ import os
 from . import angle24
 from .configuration import Configuration
 from .configuration_schema import ConfigurationSchema, load_default_schema, default_schema_path, ConfigValueError
+from .grid_encoding import decode_ig4, make_ig4
 from .readfile import readfile
 
 main_project_dir = os.path.realpath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -14,9 +15,11 @@ __all__ = [
     "Configuration",
     "ConfigurationSchema",
     "ConfigValueError",
+    "decode_ig4",
     "default_schema_path",
     "load_default_schema",
     "main_project_dir",
     "main_module_dir",
+    "make_ig4",
     "readfile",
 ]

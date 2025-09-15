@@ -107,7 +107,7 @@ function test_cart2d() {
     output_dir=${TEST_DIR}
     filter_apply=1
     precond_flux=ausm
-    desired_device=cpu
+    desired_device=cpp
 
     echo "Original config: ${CART_CONFIG_ORIG}"
     cp ${CART_CONFIG_ORIG} ${CONFIG_BASE}
@@ -174,7 +174,7 @@ function test_shallow_water() {
     save_state_freq=1
     store_solver_stats=1
     output_dir=${TEST_DIR}
-    desired_device=cpu
+    desired_device=cpp
 
     config_orig=${1}
     echo "Original config: ${config_orig}"
@@ -231,7 +231,7 @@ function test_cube_sphere_euler() {
     save_state_freq=1
     store_solver_stats=1
     output_dir=${TEST_DIR}
-    desired_device=cpu
+    desired_device=cpp
 
     config_orig=${1}
     echo "Original config: ${config_orig}"

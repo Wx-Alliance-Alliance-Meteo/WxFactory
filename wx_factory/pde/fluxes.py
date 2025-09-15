@@ -5,6 +5,7 @@ A bunch of flux functions for our RHS functions
 from typing import Callable, Tuple
 
 import numpy
+from numpy.typing import NDArray
 
 from common.definitions import (
     cpd,
@@ -148,16 +149,16 @@ def rusanov_2d_fv(Q, ifaces_var, ifaces_pres, ifaces_flux, kfaces_var, kfaces_pr
 
 
 def rusanov_3d_vert_new(
-    variables_itf_k,
-    pressure_itf_k,
-    w_itf_k,
+    variables_itf_k: NDArray,
+    pressure_itf_k: NDArray,
+    w_itf_k: NDArray,
     metric: Metric3DTopo,
-    advection_only,
-    flux_x3_itf_k,
-    wflux_adv_x3_itf_k,
-    wflux_pres_x3_itf_k,
+    advection_only: bool,
+    flux_x3_itf_k: NDArray,
+    wflux_adv_x3_itf_k: NDArray,
+    wflux_pres_x3_itf_k: NDArray,
     xp,
-    num_solpts,
+    num_solpts: int,
 ):
     # south/north here are relative to an element, *not* an interface
     south = xp.s_[..., 1:, :, :, : num_solpts**2]
@@ -210,6 +211,9 @@ def rusanov_3d_vert_new(
         flux_d + flux_u - eig * metric.sqrtG_itf_k_new[north] * (variables_itf_k[south] - variables_itf_k[north])
     )
     flux_x3_itf_k[south] = flux_x3_itf_k[north]
+
+    eig[0, ...] = 0.0
+    eig[-1, ...] = 0.0
 
     # Riemann solver, separating pressure and advection terms for rho-w
     wflux_adv_x3_itf_k[north] = 0.5 * (
