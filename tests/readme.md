@@ -96,11 +96,12 @@ There are no conventions yet, but here are our recommendations :
 
 ### Pour les configs dans tests/data/integration/dcmip{21,31}
 * run WxFactory on this config (up to ~40 min)
-* mpirun -n 6 ./scripts/convert_to_old.py [pas d'input pour l'instant, mais ça va être l'output de la config qui vient de rouler, timestep 0]
-* ./scripts/generate potential temperature [pas d'input pour l'isntant, mais on veut netcfd + state vector (ancient layout)]
-* comparer avec Figure 8
-* ./script generate hovmoller [même input que l'autre]
-* comparer avec Fig 9
+* python ./scripts/generate_potential_temperature_plot.py DATA_PATH.nc
+* comparer avec Figure 8 - potential temperature
+* python ./scripts/generate_hovmoller_diagram DATA_PATH.nc
+* comparer avec Fig 9 - hovmoller diagram of potential temperature
+* 
+* mpirun -n 6 ./scripts/convert_to_old.py converti à l'ancien layout - non utilis/
 
 ### TODO
 * une fois que c'est fait, rouler les *gros* tests dans tests/data/validation
