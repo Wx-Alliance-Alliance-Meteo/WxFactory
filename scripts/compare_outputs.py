@@ -15,13 +15,12 @@ import argparse
 
 import netCDF4 as nc
 
-from math import gcd
-from wx_factory.common.interpolation import lagrange_poly
-from common.interpolation import Interpolator
-
+# from common.interpolation import Interpolator
 from scipy.interpolate import RegularGridInterpolator
 
 
+# Grid interpolator with method 'quintic'
+# Equivalent to finite elements with 5 points
 def get_interpolator(dest):
 
     nz, ny, nx = dest.shape[0], dest.shape[1], dest.shape[2]
@@ -44,8 +43,9 @@ def project(data, interpolator: RegularGridInterpolator):
     return data_proj
 
 
+# L2 error
+# Note that relative error scales badly with grid size
 def get_error(grid1, grid2):
-
     err = np.abs(grid1 - grid2)
     err_l2 = np.linalg.norm(err)
     err_l2_rel = err_l2 / np.linalg.norm(grid1)
@@ -53,6 +53,16 @@ def get_error(grid1, grid2):
     return err_l2, err_l2_rel
 
 
+# Root mean square error normalized with range normalization
+def get_error_rmse(grid1, grid2):
+    rmse = np.sqrt(np.mean((grid1 - grid2) ** 2))
+
+    range = np.max(grid1) - np.min(grid1)
+    nrmse = rmse / range
+    return rmse, nrmse
+
+
+# Choose variable, time and panel for the grid size
 def process_netcdf(data1, data2, variable: str, panel, time_index):
     data1_var = data1[variable]
     data2_var = data2[variable]
@@ -62,12 +72,16 @@ def process_netcdf(data1, data2, variable: str, panel, time_index):
     return data1_ready, data2_ready
 
 
+# Nrmse of spectral error
+# Finds the error in frequency distribution
+# In theory, it is impervious to shifts
 def spectral_error(grid1, grid2):
     fft1 = np.abs(np.fft.fftn(grid1))
     fft2 = np.abs(np.fft.fftn(grid2))
 
-    err = np.linalg.norm(fft1 - fft2)
-    err_rel = err / np.linalg.norm(fft1)
+    err = np.sqrt(np.mean((fft1 - fft2) ** 2))
+    rms_base = np.sqrt(np.mean(fft1**2))
+    err_rel = err / (rms_base)
     return err, err_rel
 
 
@@ -87,35 +101,41 @@ def main(args):
         sp_err_abs = [None] * 5
         sp_err_rel = [None] * 5
 
+        rmse = [None] * 5
+        nrmse = [None] * 5
+
         # Iterate through each panels
         for i in range(0, 5):
-            theta1, theta2 = process_netcdf(data1, data2, var, i, time_index)
+            data1_var, data2_var = process_netcdf(data1, data2, var, i, time_index)
 
             # Interpolating one of the grids since different sizes
-            if theta1.shape != theta2.shape:
+            if data1_var.shape != data2_var.shape:
 
                 # Interpolating along the grids with more points
-                isMin1 = np.sum(theta1.shape) > np.sum(theta2.shape)
+                isMin1 = np.sum(data1_var.shape) > np.sum(data2_var.shape)
 
-                interpolator = get_interpolator(theta1 if isMin1 else theta2)
-                projected = project(theta2 if isMin1 else theta1, interpolator)
+                interpolator = get_interpolator(data1_var if isMin1 else data2_var)
+                projected = project(data2_var if isMin1 else data1_var, interpolator)
 
-                err_abs[i], err_rel[i] = get_error(theta2 if isMin1 else theta1, projected)
-                sp_err_abs[i], sp_err_rel[i] = spectral_error(theta2 if isMin1 else theta1, projected)
+                err_abs[i], err_rel[i] = get_error(data2_var if isMin1 else data1_var, projected)
+                sp_err_abs[i], sp_err_rel[i] = spectral_error(data2_var if isMin1 else data1_var, projected)
+                rmse[i], nrmse[i] = get_error_rmse(data2_var if isMin1 else data1_var, projected)
 
             # Same grid, we take l2 error and l2 spectral error
             else:
-                err_abs[i], err_rel[i] = get_error(theta1, theta2)
-                sp_err_abs[i], sp_err_rel[i] = spectral_error(theta1, theta2)
+                err_abs[i], err_rel[i] = get_error(data1_var, data2_var)
+                sp_err_abs[i], sp_err_rel[i] = spectral_error(data1_var, data2_var)
+                rmse[i], nrmse[i] = get_error_rmse(data1_var, data2_var)
 
-        # note: might consider rt mean square instead
         print("")
         print(f"-------------")
         print(f"Report for {var}")
-        print(f"Absolute error: {np.mean(err_abs)}, ")
-        print(f"Relative error: {np.mean(err_rel)}")
-        print(f"Absolute spectral error: {np.mean(sp_err_abs)}, ")
-        print(f"Relative spectral error: {np.mean(sp_err_rel)}")
+        # print(f"Root mean square error: {np.mean(rmse)}")
+        print(f"Normalized root mean square error: {np.max(nrmse)}")
+        # print(f"Absolute spectral error: {np.mean(sp_err_abs)}, ")
+        print(f"Relative spectral error: {np.max(sp_err_rel)}")
+        # print(f"Absolute error: {np.mean(err_abs)}, ")
+        # print(f"Relative error (for comparison): {np.max(err_rel)}")
 
 
 if __name__ == "__main__":
@@ -135,7 +155,8 @@ if __name__ == "__main__":
         nargs="+",
         type=str,
         default=["P", "rho", "theta"],
-        help="List of variables to estimate the error with. e.g. --vars P rho theta",
+        help="""List of variables to estimate the error with. e.g. --vars P rho theta
+        Options: P, rho, theta, U, V, W""",
     )
 
     # Run
