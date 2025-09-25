@@ -23,9 +23,16 @@ WxFactory was built for Python 3.11 (at least).  It also requires an MPI impleme
 * `netcdf4` Python/NumPy interface to the netCDF C library (MPI version)
 * `matplotlib` A python plotting library, making publication quality plots
 * `setuptools` To compile C++/CUDA portions of WxFactory
-* `cupy`   [Somewhat optional] If you want to be able to run on GPU (can install `cupy-cuda11x` or `cupy-cuda12x` for precompiled module)
+* `cupy`   If you want to be able to run on GPU (can install `cupy-cuda11x` or `cupy-cuda12x` for precompiled module)
 
-### Other libraries
+### External programs/libraries
+* A CUDA-aware installation of MPI (was tested with HPC-X)
+* CUDA toolkit
+    * CUDA runtime
+    * `nvcc` compiler
+* A C++ compiler
+
+### Other libraries [not necessary for benchmark]
 * `netcdf4` Library to handle netCDF files. There is an MPI version of it, if you want parallel output
 * `sqlite` To be able to store solver stats.
 
@@ -43,13 +50,12 @@ Linux distribution or with `pip`.
 
 ## Running WxFactory
 
-```
-# With the cubed sphere as a grid:
-mpirun -n 6 ./WxFactory config/case6.ini
+In general: `mpirun -n 6 ./WxFactory config/case6.ini`
 
-# With the 2D cartesian grid:
-./WxFactory config/gaussian_bubble.ini
-```
+To run the benchmark:
+- Edit `tests/benchmark_gen8/config_8th_deg.ini` to specify a valid output directory (the `output_dir` option)
+- Run `mpirun -n [##] ./WxFactory tests/benchmark_gen8/config_8th_deg.ini`
+- **TODO**: Verify the result by comparing with....  
 
 ## Profiling WxFactory
 
