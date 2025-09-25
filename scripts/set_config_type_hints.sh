@@ -14,7 +14,6 @@ fi
 
 hint_string=$(              \
     ${SCRIPT_DIR}/wx_config.py --list-hints | \
-    grep -v 'running build_ext' | \
     sort | \
     sed -e 's/cs-str/str/' \
         -e 's/^/    /' \

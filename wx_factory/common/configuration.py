@@ -117,9 +117,12 @@ class Configuration:
     dg_to_fv_interp: str
     discretization: str
     dt: float
+    enable_schar_mountain: bool
     equations: str
     exode_controller: str
     exode_method: str
+    exp_smoothe_num_iters: List[int]
+    exp_smoothe_spectral_radii: List[float]
     expfilter_apply: bool
     expfilter_cutoff: float
     expfilter_cutoff: float
@@ -128,8 +131,6 @@ class Configuration:
     expfilter_strength: float
     expfilter_strength: float
     exponential_solver: str
-    exp_smoothe_num_iters: List[int]
-    exp_smoothe_spectral_radii: List[float]
     filter_apply: bool
     filter_cutoff: float
     filter_cutoff: float
@@ -159,11 +160,19 @@ class Configuration:
     output_freq: int
     phi0: float
     precond_flux: str
-    preconditioner: str
     precond_tolerance: float
+    preconditioner: str
     pseudo_cfl: float
     save_state_freq: int
+    schar_mountain_height: float
+    schar_mountain_lattitude: float
+    schar_mountain_length: float
+    schar_mountain_longitude: float
+    schar_mountain_radius: float
+    schar_mountain_step: int
     solver_stats_file: str
+    splitting_integrator_1: str
+    splitting_integrator_2: str
     sponge_tscale: float
     sponge_zscale: float
     starting_step: int
