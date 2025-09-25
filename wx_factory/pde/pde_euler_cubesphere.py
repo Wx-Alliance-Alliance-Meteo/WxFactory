@@ -56,6 +56,9 @@ def compute_forcings(
 
 
 class PDEEulerCubesphere(PDE):
+    geometry: CubedSphere3D
+    metric: Metric3DTopo
+
     def __init__(self, geometry: CubedSphere3D, config: Configuration, metric: Metric3DTopo):
         pde = geometry.device.pde
         super().__init__(
@@ -188,6 +191,8 @@ class PDEEulerCubesphere(PDE):
         flux_x2[...] = self.metric.sqrtG_new * u2 * q
         flux_x3[...] = self.metric.sqrtG_new * w * q
 
+        tmp1 = flux_x1.copy()
+
         wflux_adv_x1[...] = self.metric.sqrtG_new * u1 * q[idx_rho_w]
         wflux_adv_x2[...] = self.metric.sqrtG_new * u2 * q[idx_rho_w]
         wflux_adv_x3[...] = self.metric.sqrtG_new * w * q[idx_rho_w]
@@ -199,6 +204,9 @@ class PDEEulerCubesphere(PDE):
         flux_x1[idx_rho_u1] += self.metric.sqrtG_new * self.metric.h_contra_new[0, 0] * pressure
         flux_x1[idx_rho_u2] += self.metric.sqrtG_new * self.metric.h_contra_new[0, 1] * pressure
         flux_x1[idx_rho_w] += self.metric.sqrtG_new * self.metric.h_contra_new[0, 2] * pressure
+
+        # tmp1 = self.metric.sqrtG_new * self.metric.h_contra_new[0, 2] * pressure  # This is bad
+        tmp1 = self.metric.h_contra_new[0, 2]
 
         wflux_pres_x1[...] = (self.metric.sqrtG_new * self.metric.h_contra_new[0, 2]).astype(q.dtype)
 
@@ -214,6 +222,8 @@ class PDEEulerCubesphere(PDE):
 
         wflux_pres_x3[...] = (self.metric.sqrtG_new * self.metric.h_contra_new[2, 2]).astype(q.dtype)
         logp[...] = xp.log(pressure)
+
+        return tmp1
 
     def riemann_fluxes(
         self,

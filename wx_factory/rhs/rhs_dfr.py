@@ -152,6 +152,7 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
         self.q_itf_x3[idx_rho_theta] = xp.exp(apply_op(self.log_rho_theta, self.ops.extrap_z))
 
     def pointwise_fluxes(self, q: NDArray) -> None:
+        self.f_x1[:] = 0.0
         self.pde.pointwise_fluxes(
             q,
             self.f_x1,

@@ -182,6 +182,9 @@ class DFROperators:
             self.correction_SN = xp.vstack((xp.kron(I2, xp.kron(corr_south, I2)), xp.kron(I2, xp.kron(corr_north, I2))))
             self.correction_DU = xp.vstack((xp.kron(corr_down, I3), xp.kron(corr_up, I3)))
 
+            if grd.device.comm.rank == 0:
+                print(f"Deriv Y = \n{self.derivative_y}", flush=True)
+                # print(f"Correction S-N  = \n{self.correction_SN}", flush=True)
             # if device.comm.rank == 0:
             #     print(f"3D c x = \n{self.correction_WE}")
             #     print(f"3D c y = \n{self.correction_SN}")

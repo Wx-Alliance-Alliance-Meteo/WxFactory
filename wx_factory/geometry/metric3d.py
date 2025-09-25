@@ -4,8 +4,10 @@ import sys
 from mpi4py import MPI
 import numpy
 from numpy.typing import NDArray
+import gmpy2
 
 from .cubed_sphere_3d import CubedSphere3D
+from device import CudaDevice, CpuDevice
 from .operators import DFROperators
 
 
@@ -28,11 +30,14 @@ class Metric3DTopo:
         xp = geom.device.xp
         dtype = geom.gnomonic.dtype
 
+        rank = geom.device.comm.rank
+
         # Whether computing deep or shallow metric
         deep = self.deep
 
         # Shorthand variable for the globe radius, used when computing a shallow-atmosphere metric
         A = geom.earth_radius
+        # A = 1.0
 
         # Gnomonic coordinates in element interiors
         X_int = geom.coordVec_gnom[0, :, :, :]
@@ -90,17 +95,22 @@ class Metric3DTopo:
 
         ## Compute partial derivatives of R
 
+        factor = 1.0
+        if isinstance(geom.device, CpuDevice):
+            # factor = gmpy2.mpfr(1.0, precision=500)
+            pass
+
         # First, we won't use R.  R = H + (radius), and we can improve numerical conditioning by removing that
         # DC offset term.  dR/d(stuff) = dH/d(stuff)
-        height_int = geom.coordVec_gnom[2, :, :, :]
-        height_itf_i = geom.coordVec_gnom_itf_i[2, :, :, :]
-        height_itf_j = geom.coordVec_gnom_itf_j[2, :, :, :]
-        height_itf_k = geom.coordVec_gnom_itf_k[2, :, :, :]
+        height_int = geom.coordVec_gnom[2, :, :, :] * factor
+        height_itf_i = geom.coordVec_gnom_itf_i[2, :, :, :] * factor
+        height_itf_j = geom.coordVec_gnom_itf_j[2, :, :, :] * factor
+        height_itf_k = geom.coordVec_gnom_itf_k[2, :, :, :] * factor
 
-        height_int_new = geom.gnomonic[2, ...]
-        height_itf_i_new = geom.gnomonic_itf_i[2, ...]
-        height_itf_j_new = geom.gnomonic_itf_j[2, ...]
-        height_itf_k_new = geom.gnomonic_itf_k[2, ...]
+        height_int_new = geom.gnomonic[2, ...] * factor
+        height_itf_i_new = geom.gnomonic_itf_i[2, ...] * factor
+        height_itf_j_new = geom.gnomonic_itf_j[2, ...] * factor
+        height_itf_k_new = geom.gnomonic_itf_k[2, ...] * factor
 
         # Build the boundary-extensions of h, based on the interface boundaries
         # ext_i shape: (nk, nj, num_elements_x1, 2) - west/east boundaries
@@ -123,6 +133,23 @@ class Metric3DTopo:
         dRdeta_int_new = (
             height_int_new @ matrix.derivative_z + height_itf_k_new[..., 1:-1, :, :, :] @ matrix.correction_DU
         ) * (2 / delta_eta)
+
+        self.dRdx1 = dRdx1_int
+        self.dRdx2 = dRdx2_int
+        # self.height_ext_j = height_ext_j
+        self.height_int = height_int_new
+        self.height_itf_j = height_itf_j_new[..., 1:-1, :, :]
+        self.dRdx1_new = dRdx1_int_new
+        self.dRdx2_new = dRdx2_int_new
+        self.drx2_a = height_int_new @ matrix.derivative_y
+        self.drx2_b = height_itf_j_new[..., 1:-1, :, :] @ matrix.correction_SN
+        self.dRdeta_new = dRdeta_int_new
+        # if rank == 0:
+        #     # print(f"drdx1= \n{self.dRdx1}", flush=True)
+        #     print(f"drdx2= \n{self.dRdx2}", flush=True)
+        #     # print(f"height_ext_j= \n{height_ext_j}", flush=True)
+
+        return
 
         # def to_new_itf_j(a):
         #     src_shape = (
@@ -519,6 +546,9 @@ class Metric3DTopo:
         def compute_metric(X, Y, R, dRdx1, dRdx2, dRdeta):
             delsq = 1 + X**2 + Y**2  # δ², per Charron May 2022
             del4 = delsq**2
+            # delsq = 1.0
+            # delta_x = 1.0
+            # delta_eta = 1.0
 
             Hcov = xp.empty((3, 3) + X.shape)
             Hcontra = xp.empty((3, 3) + X.shape)
@@ -610,6 +640,26 @@ class Metric3DTopo:
                     / (dRdeta)
                 )  # h^13
                 Hcontra[2, 0, :] = Hcontra[0, 2, :]  # h^31 by symmetry
+
+                # if rank == 0:
+                #     pass
+                #     # print()
+                #     # print(f"delta_x = {delta_x}", flush=True)
+                #     # print(f"delta_eta = {delta_eta}", flush=True)
+                #     # print(f"A = {A}", flush=True)
+                #     # print(f"delsq = \n{delsq}", flush=True)
+                #     # # print(f"X = \n{X}", flush=True)
+                #     # # print(f"Y = \n{Y}", flush=True)
+                #     # print(f"dRdx1 = \n{dRdx1}", flush=True)
+                #     # print(f"dRdx2 = \n{dRdx2}", flush=True)
+                #     # print(f"dRdeta = \n{dRdeta}", flush=True)
+                #     # # print(f"1 + X**2 = \n{1+X**2}", flush=True)
+                #     # # print(f"1 + Y**2 = \n{1+Y**2}", flush=True)
+                #     t1 = dRdx1 * delsq * (1 + Y**2)  # / (A**2 * (1 + X**2))
+                #     t2 = dRdx2 * delsq * X * Y  # / (A**2 * (1 + X**2) * (1 + Y**2))
+                #     # print(f"t1 = \n{t1}", flush=True)
+                #     # print(f"t2 = \n{t2}", flush=True)
+                #     print(f"t1 + t2 = \n{t1 + t2}", flush=True)
 
                 Hcontra[1, 1, :] = (4 / delta_y**2) * (delsq / (A**2 * (1 + Y**2)))  # h^22
 

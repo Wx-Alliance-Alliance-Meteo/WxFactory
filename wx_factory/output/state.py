@@ -41,7 +41,7 @@ def save_state(state: NDArray, param: Configuration, output_file_name: str) -> N
         output_file.write(bytes(param.config_content, "utf-8"))
 
 
-def load_state(input_file_name: str) -> Tuple[numpy.ndarray, Configuration]:
+def load_state(input_file_name: str) -> Tuple[NDArray, Configuration]:
     """Retrieve simulation state from file, along with its configuration.
 
     There are several components to the save file. They are retrieved in the same

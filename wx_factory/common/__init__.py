@@ -1,4 +1,5 @@
 import os
+import sys
 
 from . import angle24
 from .configuration import Configuration
@@ -8,6 +9,8 @@ from .readfile import readfile
 
 main_project_dir = os.path.realpath(os.path.join(os.path.dirname(__file__), "..", ".."))
 main_module_dir = os.path.join(main_project_dir, "wx_factory")
+
+sys.path.append(main_project_dir)
 
 
 __all__ = [
