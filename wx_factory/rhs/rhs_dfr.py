@@ -273,11 +273,6 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
         # Top + bottom layers
         self.q_itf_full_x3[b] = self.q_itf_full_x3[..., 1, :, :, :itf_size]
         self.q_itf_full_x3[t] = self.q_itf_full_x3[..., -2, :, :, itf_size:]
-        # Boundary conditions
-        self.q_itf_full_x3[idx_rho_w, 0, :, :, :itf_size] = 0.0
-        self.q_itf_full_x3[idx_rho_w, 0, :, :, itf_size:] = -self.q_itf_full_x3[idx_rho_w, 1, :, :, :itf_size]
-        self.q_itf_full_x3[idx_rho_w, -1, :, :, itf_size:] = 0.0
-        self.q_itf_full_x3[idx_rho_w, -1, :, :, :itf_size] = -self.q_itf_full_x3[idx_rho_w, -2, :, :, itf_size:]
 
         self.pde.riemann_fluxes(
             self.q_itf_full_x1,
