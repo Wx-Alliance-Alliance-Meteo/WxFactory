@@ -142,11 +142,11 @@ class StateIntegrationTestCases(unittest.TestCase):
 
             if has_exited:
                 print(f"Process {MPI.COMM_WORLD.rank} has exited prematurely")
-                sys.exit(exit_code)
+                raise SystemExit(exit_code)
 
             conf = sim.config
 
-            state_vector_file = sim.output.state_file_name(conf.save_state_freq)
+            state_vector_file = sim.output.state_file_name(sim.step_id)
             base_name = os.path.split(state_vector_file)[-1]
             true_state_vector_file: str = f"{self.config_dir_path}/{base_name}"
 

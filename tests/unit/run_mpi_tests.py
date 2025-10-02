@@ -62,9 +62,7 @@ def load_tests(test_name: str):
     add_test(suite, GatherScatterTest(54, "gather_scatter_elem_3d", optional=True), test_re)
     add_test(suite, GatherScatterTest(54, "gather_scatter_elem_4d", optional=True), test_re)
 
-    add_test(
-        suite, GatherScatterTest(24, "fail_wrong_num_proc", optional=True), test_re
-    )  # This test needs at least 24 procs
+    add_test(suite, GatherScatterTest(24, "fail_wrong_num_proc", optional=True), test_re)  # Needs at least 24 procs
     add_test(suite, GatherScatterTest(6, "fail_not_square"), test_re)
     add_test(suite, GatherScatterTest(6, "fail_not_cube"), test_re)
     add_test(suite, GatherScatterTest(6, "fail_wrong_num_dim"), test_re)

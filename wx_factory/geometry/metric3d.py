@@ -919,7 +919,7 @@ class Metric3DTopo:
 
         verbose = False
         if numer_christoffel:
-            if verbose and geom.process_topology.rank == 0:
+            if verbose and geom.device.comm.rank == 0:
                 print("Computing (√g h^{ab})_{,c}")
             grad_sqrtG_metric_contra = matrix.grad(
                 H_contra * sqrtG[numpy.newaxis, numpy.newaxis, :, :, :],
@@ -933,46 +933,51 @@ class Metric3DTopo:
             nj = geom.nj
             nk = geom.nk
 
-            c_rhs = xp.empty((nk, nj, ni, 3, 3, 3))  # h(i,j,k)^(ab)_(,c)
-            c_lhs = xp.zeros((nk, nj, ni, 3, 3, 3, 3, 3, 3))  # Γ(i,j,k)^d_{ef} for row (ab,c)
+            # The call to linalg.solve can require a lot of memory in temporary allocations. This is problematic
+            # for very large simulations. Therefore, we split the calculation of christoffel symbols across
+            # vertical levels, so that only a relatively small temporary array is used
+            space_christoffel: NDArray = xp.empty((nk, nj, ni, 27))
+            for k in range(nk):
+                c_rhs = xp.empty((nj, ni, 3, 3, 3))  # h(i,j,k)^(ab)_(,c)
+                c_lhs = xp.zeros((nj, ni, 3, 3, 3, 3, 3, 3))  # Γ(i,j,k)^d_{ef} for row (ab,c)
 
-            if verbose and geom.process_topology.rank == 0:
-                print("Assembling linear operator for Γ")
+                if verbose and geom.device.comm.rank == 0:
+                    print("Assembling linear operator for Γ")
 
-            for a in range(3):
-                for b in range(3):
-                    for c in range(3):
-                        c_rhs[:, :, :, a, b, c] = grad_sqrtG_metric_contra[c, a, b, :, :, :]
-                        for d in range(3):
-                            c_lhs[:, :, :, a, b, c, d, c, d] += sqrtG[:, :, :] * H_contra[a, b, :, :, :]
-                            c_lhs[:, :, :, a, b, c, a, d, c] -= sqrtG[:, :, :] * H_contra[d, b, :, :, :]
-                            c_lhs[:, :, :, a, b, c, b, c, d] -= sqrtG[:, :, :] * H_contra[a, d, :, :, :]
+                for a in range(3):
+                    for b in range(3):
+                        for c in range(3):
+                            c_rhs[:, :, a, b, c] = grad_sqrtG_metric_contra[c, a, b, k, :, :]
+                            for d in range(3):
+                                c_lhs[:, :, a, b, c, d, c, d] += sqrtG[k, :, :] * H_contra[a, b, k, :, :]
+                                c_lhs[:, :, a, b, c, a, d, c] -= sqrtG[k, :, :] * H_contra[d, b, k, :, :]
+                                c_lhs[:, :, a, b, c, b, c, d] -= sqrtG[k, :, :] * H_contra[a, d, k, :, :]
 
-            if verbose and geom.process_topology.rank == 0:
-                print("Solving linear operator for Γ")
+                if verbose and geom.device.comm.rank == 0:
+                    print("Solving linear operator for Γ")
 
-            try:
-                # This call does not work with numpy 2.x
-                # The explicit loop (in the except clause) is fine with numpy, but extremely slow with cupy.
-                # That's why we do this call, an only do the explicit loop if it fails.
-                # TODO Find a better way to handle this. It's probably doable with numpy 2.x with a single call...
-                space_christoffel = numpy.linalg.solve(c_lhs.reshape(nk, nj, ni, 27, 27), c_rhs.reshape(nk, nj, ni, 27))
-            except ValueError:
-                lhs_tmp = c_lhs.reshape(nk, nj, ni, 27, 27)
-                rhs_tmp = c_rhs.reshape(nk, nj, ni, 27)
-                space_christoffel = xp.empty_like(rhs_tmp)
-                for k in range(nk):
+                try:
+                    # This call does not work with numpy 2.x
+                    # The explicit loop (in the except clause) is fine with numpy, but extremely slow with cupy.
+                    # That's why we do this call, an only do the explicit loop if it fails.
+                    # TODO Find a better way to handle this. It's probably doable with numpy 2.x with a single call...
+                    space_christoffel[k, ...] = xp.linalg.solve(
+                        c_lhs.reshape(nj, ni, 27, 27), c_rhs.reshape(nj, ni, 27)
+                    )
+                except ValueError:
+                    lhs_tmp = c_lhs.reshape(nj, ni, 27, 27)
+                    rhs_tmp = c_rhs.reshape(nj, ni, 27)
+                    # space_christoffel = xp.empty_like(rhs_tmp)
+                    # for k in range(nk):
                     for j in range(nj):
                         for i in range(ni):
-                            space_christoffel[k, j, i, ...] = xp.linalg.solve(lhs_tmp[k, j, i], rhs_tmp[k, j, i])
+                            space_christoffel[k, j, i, ...] = xp.linalg.solve(lhs_tmp[j, i], rhs_tmp[j, i])
 
             space_christoffel.shape = (nk, nj, ni, 3, 3, 3)
             space_christoffel = space_christoffel.transpose((3, 4, 5, 0, 1, 2))
 
-            if verbose and geom.process_topology.rank == 0:
+            if verbose and geom.device.comm.rank == 0:
                 print("Copying Γ to destination arrays")
-
-            self.num_christoffel = space_christoffel
 
             self.christoffel_1_11 = space_christoffel[0, 0, 0, :, :, :].copy()
             self.christoffel_1_12 = space_christoffel[0, 0, 1, :, :, :].copy()
@@ -995,7 +1000,7 @@ class Metric3DTopo:
             self.christoffel_3_23 = space_christoffel[2, 1, 2, :, :, :].copy()
             self.christoffel_3_33 = space_christoffel[2, 2, 2, :, :, :].copy()
 
-            if verbose and geom.process_topology.rank == 0:
+            if verbose and geom.device.comm.rank == 0:
                 print("Done assembling Γ")
 
         # Assign H_cov and its elements to the object
@@ -1055,39 +1060,6 @@ class Metric3DTopo:
         self.H_contra_32 = H_contra[2, 1, :, :, :]
         self.H_contra_33 = H_contra[2, 2, :, :, :]
 
-        self.H_contra_itf_i = H_contra_itf_i
-        self.H_contra_11_itf_i = H_contra_itf_i[0, 0, :, :, :]
-        self.H_contra_12_itf_i = H_contra_itf_i[0, 1, :, :, :]
-        self.H_contra_13_itf_i = H_contra_itf_i[0, 2, :, :, :]
-        self.H_contra_21_itf_i = H_contra_itf_i[1, 0, :, :, :]
-        self.H_contra_22_itf_i = H_contra_itf_i[1, 1, :, :, :]
-        self.H_contra_23_itf_i = H_contra_itf_i[1, 2, :, :, :]
-        self.H_contra_31_itf_i = H_contra_itf_i[2, 0, :, :, :]
-        self.H_contra_32_itf_i = H_contra_itf_i[2, 1, :, :, :]
-        self.H_contra_33_itf_i = H_contra_itf_i[2, 2, :, :, :]
-
-        self.H_contra_itf_j = H_contra_itf_j
-        self.H_contra_11_itf_j = H_contra_itf_j[0, 0, :, :, :]
-        self.H_contra_12_itf_j = H_contra_itf_j[0, 1, :, :, :]
-        self.H_contra_13_itf_j = H_contra_itf_j[0, 2, :, :, :]
-        self.H_contra_21_itf_j = H_contra_itf_j[1, 0, :, :, :]
-        self.H_contra_22_itf_j = H_contra_itf_j[1, 1, :, :, :]
-        self.H_contra_23_itf_j = H_contra_itf_j[1, 2, :, :, :]
-        self.H_contra_31_itf_j = H_contra_itf_j[2, 0, :, :, :]
-        self.H_contra_32_itf_j = H_contra_itf_j[2, 1, :, :, :]
-        self.H_contra_33_itf_j = H_contra_itf_j[2, 2, :, :, :]
-
-        self.H_contra_itf_k = H_contra_itf_k
-        self.H_contra_11_itf_k = H_contra_itf_k[0, 0, :, :, :]
-        self.H_contra_12_itf_k = H_contra_itf_k[0, 1, :, :, :]
-        self.H_contra_13_itf_k = H_contra_itf_k[0, 2, :, :, :]
-        self.H_contra_21_itf_k = H_contra_itf_k[1, 0, :, :, :]
-        self.H_contra_22_itf_k = H_contra_itf_k[1, 1, :, :, :]
-        self.H_contra_23_itf_k = H_contra_itf_k[1, 2, :, :, :]
-        self.H_contra_31_itf_k = H_contra_itf_k[2, 0, :, :, :]
-        self.H_contra_32_itf_k = H_contra_itf_k[2, 1, :, :, :]
-        self.H_contra_33_itf_k = H_contra_itf_k[2, 2, :, :, :]
-
         self.sqrtG = sqrtG
         self.sqrtG_itf_i = sqrtG_itf_i
         self.sqrtG_itf_j = sqrtG_itf_j
@@ -1141,9 +1113,9 @@ class Metric3DTopo:
 
         self.h_contra_new = geom._to_new(self.H_contra)
         self.h_contra = self.h_contra_new
-        self.h_contra_itf_i_new = geom._to_new_itf_i(self.H_contra_itf_i)
-        self.h_contra_itf_j_new = geom._to_new_itf_j(self.H_contra_itf_j)
-        self.h_contra_itf_k_new = geom._to_new_itf_k(self.H_contra_itf_k)
+        self.h_contra_itf_i_new = geom._to_new_itf_i(H_contra_itf_i)
+        self.h_contra_itf_j_new = geom._to_new_itf_j(H_contra_itf_j)
+        self.h_contra_itf_k_new = geom._to_new_itf_k(H_contra_itf_k)
 
         self.h_cov_new = geom._to_new(self.H_cov)
         self.h_cov_itf_i_new = geom._to_new_itf_i(self.H_cov_itf_i)

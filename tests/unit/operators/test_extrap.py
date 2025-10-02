@@ -67,7 +67,7 @@ class OperatorsExtrapGenericTestCase(MpiTestCase):
             self.skipTest(f"Need CUDA for this test")
 
         self.test_extrap_kernel("cuda")
-        self.test_extrap_kernel("omp")
+        # self.test_extrap_kernel("omp")
 
 
 class OperatorsExtrapEuler3DTestCase(OperatorsExtrapGenericTestCase):

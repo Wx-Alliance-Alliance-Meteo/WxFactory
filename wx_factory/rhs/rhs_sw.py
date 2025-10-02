@@ -168,7 +168,7 @@ class RhsShallowWater:
         north = xp.s_[..., :-1, :, num_solpts:]
 
         a = xp.sqrt(gravity * var_itf_i[idx_h] * metric.H_contra_11_itf_i)
-        tmp = var_itf_i[idx_h] * a
+        tmp = xp.maximum(var_itf_i[idx_h] * a, 1e-12)
         m = xp.where(tmp != 0.0, var_itf_i[idx_hu1] / tmp, 0.0)
 
         big_M = 0.25 * ((m[east] + 1.0) ** 2 - (m[west] - 1.0) ** 2)
@@ -189,7 +189,7 @@ class RhsShallowWater:
 
         # Common AUSM fluxes
         a = xp.sqrt(gravity * var_itf_j[idx_h] * metric.H_contra_22_itf_j)
-        m = var_itf_j[idx_hu2] / (var_itf_j[idx_h] * a)
+        m = var_itf_j[idx_hu2] /xp.maximum(var_itf_j[idx_h] * a, 1e-12)
         m[xp.where(xp.isnan(m))] = 0.0
         big_M = 0.25 * ((m[north] + 1.0) ** 2 - (m[south] - 1.0) ** 2)
 

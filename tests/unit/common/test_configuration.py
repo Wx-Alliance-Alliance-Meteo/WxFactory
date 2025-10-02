@@ -2,6 +2,9 @@ import os
 import glob
 import unittest
 
+from common.eval_expr import _math_constants
+_math_constants["e"] = 1
+_math_constants["f"] = 5
 from common import Configuration, ConfigurationSchema, readfile, ConfigValueError
 
 
@@ -88,3 +91,25 @@ class ConfigurationTestCases(unittest.TestCase):
         conf = Configuration(configuration_str, schema, load_post_config=False)
         self.assertEqual(conf.x, 5)
         self.assertFalse(hasattr(conf, "y"))
+
+    def test_load_configuration_with_expression(self):
+        schema_str: str
+        configuration_str: str
+        with open(os.path.join(config_test_dir, "config-format-4.json"), "rt") as f:
+            schema_str = "\n".join(f.readlines())
+
+        with open(os.path.join(config_test_dir, "config-4.ini")) as f:
+            configuration_str = "\n".join(f.readlines())
+
+        schema = ConfigurationSchema(schema_str)
+        conf = Configuration(configuration_str, schema, load_post_config=False)
+        self.assertEqual(conf.x, _math_constants["pi"])
+        self.assertEqual(conf.x2, _math_constants["pi"])
+        self.assertEqual(conf.y, _math_constants["pi"] + 1)
+        self.assertEqual(conf.z, _math_constants["pi"] * 2)
+        self.assertEqual(conf.a, _math_constants["e"] + 4)
+        self.assertEqual(conf.b, [_math_constants["e"] + 1, _math_constants["f"] + 2])
+        self.assertEqual(conf.c, [_math_constants["pi"] + 1, _math_constants["pi"] - 1])
+        self.assertEqual(conf.c2, [_math_constants["pi"], _math_constants["pi"] + 1])
+        self.assertEqual(conf.d, _math_constants["pi"])
+        self.assertEqual(conf.e, 2)

@@ -84,7 +84,7 @@ template <typename real_t, typename num_t>
 DEVICE_SPACE void riemann_euler_cubedsphere_rusanov_3d_kernel(
     riemann_params_cubedsphere<real_t, num_t> params_l,
     riemann_params_cubedsphere<real_t, num_t> params_r,
-    const int                                 dir,
+    const int                                 dir, //!< 0: along X, 1: along Y, 2: along Z
     const bool                                boundary) {
 
   // Extract necessary metrics
@@ -142,17 +142,21 @@ DEVICE_SPACE void riemann_euler_cubedsphere_rusanov_3d_kernel(
     vnl = ul;
     vnr = ur;
   }
-
-  if (dir == 1)
+  else if (dir == 1)
   {
     vnl = vl;
     vnr = vr;
   }
-
-  if (dir == 2)
+  else if (dir == 2)
   {
     vnl = wl;
     vnr = wr;
+
+    // Apply odd symmetry to w at boundary so there is no advective _flux_ through
+    // boundary. It doesn't matter which of the two sides is flipped, since they will
+    // cancel out
+    if (boundary)
+      vnr = -wr;
   }
 
   // Get the maximum eigenvalue
@@ -191,11 +195,6 @@ DEVICE_SPACE void riemann_euler_cubedsphere_rusanov_3d_kernel(
   *params_r.flux.rho_v     = *params_l.flux.rho_v;
   *params_r.flux.rho_w     = *params_l.flux.rho_w;
   *params_r.flux.rho_theta = *params_l.flux.rho_theta;
-
-  // Ensure zero dissipation in advection flux at boundary points
-  // Otherwise, this would create nonzero mass flux at boundaries
-  if (boundary)
-    scaled_eig = scaled_eig * 0.0;
 
   // Store the advection and pressure contribution to vertical fluxes
   *params_l.wflux_adv = 0.5 * (sqrt_g_l * rho_wl * vnl + sqrt_g_r * rho_wr * vnr -

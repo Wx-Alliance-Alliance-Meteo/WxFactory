@@ -346,7 +346,7 @@ template <typename real_t, typename num_t>
 void launch_riemann_euler_cubedsphere_rusanov_3d(
     const py::object q_itf_x1_in,
     const py::object q_itf_x2_in,
-    py::object       q_itf_x3_in,
+    const py::object q_itf_x3_in,
     const py::object sqrt_g_itf_x1,
     const py::object sqrt_g_itf_x2,
     const py::object sqrt_g_itf_x3,
@@ -371,7 +371,7 @@ void launch_riemann_euler_cubedsphere_rusanov_3d(
     py::object       wflux_pres_itf_x3) {
   const num_t* q_itf_x1_ptr = get_raw_ptr<const num_t>(q_itf_x1_in);
   const num_t* q_itf_x2_ptr = get_raw_ptr<const num_t>(q_itf_x2_in);
-  num_t*       q_itf_x3_ptr = get_raw_ptr<num_t>(q_itf_x3_in);
+  const num_t* q_itf_x3_ptr = get_raw_ptr<num_t>(q_itf_x3_in);
 
   const real_t* sqrt_g_itf_x1_ptr = get_raw_ptr<const real_t>(sqrt_g_itf_x1);
   const real_t* sqrt_g_itf_x2_ptr = get_raw_ptr<const real_t>(sqrt_g_itf_x2);
@@ -437,17 +437,6 @@ void launch_riemann_euler_cubedsphere_rusanov_3d(
       num_elem_x3,
       num_solpts_face);
 
-  // Set boundary conditions along the vertical direction
-  num_tasks  = num_elem_x2 * num_elem_x1 * num_solpts_face;
-  num_blocks = ((num_tasks + threads_per_block.x - 1) / threads_per_block.x);
-
-  boundary_euler_cubedsphere_3d<real_t, num_t><<<num_blocks, threads_per_block>>>(
-      q_itf_x3_ptr,
-      num_elem_x1,
-      num_elem_x2,
-      num_elem_x3,
-      num_solpts_face);
-
   // x3-direction
   num_tasks  = (num_elem_x3 + 1) * num_elem_x2 * num_elem_x1 * num_solpts_face;
   num_blocks = ((num_tasks + threads_per_block.x - 1) / threads_per_block.x);
@@ -470,7 +459,7 @@ void launch_riemann_euler_cubedsphere_rusanov_3d(
 void select_riemann_euler_cubedsphere_rusanov_3d(
     const py::object q_itf_x1_in,
     const py::object q_itf_x2_in,
-    py::object       q_itf_x3_in,
+    const py::object q_itf_x3_in,
     const py::object sqrt_g_itf_x1,
     const py::object sqrt_g_itf_x2,
     const py::object sqrt_g_itf_x3,

@@ -91,3 +91,20 @@ There are no conventions yet, but here are our recommendations :
 * Each test case should start with `test_{whatever you are testing}`
 * If possible, use already created entrypoints
 * To add an integration test, add a line in the `run_all_integration_tests.sh`
+
+## Validation
+
+### Pour les configs dans tests/data/integration/dcmip{21,31}
+* run WxFactory on this config (up to ~40 min)
+* python ./scripts/generate_potential_temperature_plot.py DATA_PATH.nc
+* comparer avec Figure 8 - potential temperature
+* python ./scripts/generate_hovmoller_diagram DATA_PATH.nc
+* comparer avec Fig 9 - hovmoller diagram of potential temperature
+* 
+* mpirun -n 6 ./scripts/convert_to_old.py converti à l'ancien layout - non utilis/
+
+### TODO
+* une fois que c'est fait, rouler les *gros* tests dans tests/data/validation
+* Vérifier que c,est les mêmes résultats que ceux dans tests/data/integration/dcmip31
+* Stocker le résultat dans le dépôt
+* Vérifier que ça roule sur GPU

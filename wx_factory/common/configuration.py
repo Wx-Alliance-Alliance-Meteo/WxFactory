@@ -1,8 +1,9 @@
 from configparser import ConfigParser
 import copy
 from typing import Dict, List, Optional, Self
+from .eval_expr import eval_expr
 
-from .configuration_schema import ConfigurationSchema, ConfigurationField, OptionType
+from .configuration_schema import ConfigurationSchema, ConfigurationField, OptionType, needs_evaluation
 
 
 __all__ = ["Configuration"]
@@ -59,7 +60,8 @@ class Configuration:
             if not hasattr(self, field.dependency[0]):
                 return None
 
-            if not getattr(self, field.dependency[0]) in field.dependency[1]:
+            values = [eval_expr(v) if needs_evaluation(field.dependency[1][0], type(getattr(self, field.dependency[0]))) else v for v in field.dependency[1]]
+            if not getattr(self, field.dependency[0]) in values:
                 return None
 
         value = field.read(self.parser)
@@ -115,9 +117,12 @@ class Configuration:
     dg_to_fv_interp: str
     discretization: str
     dt: float
+    enable_schar_mountain: bool
     equations: str
     exode_controller: str
     exode_method: str
+    exp_smoothe_num_iters: List[int]
+    exp_smoothe_spectral_radii: List[float]
     expfilter_apply: bool
     expfilter_cutoff: float
     expfilter_cutoff: float
@@ -126,8 +131,6 @@ class Configuration:
     expfilter_strength: float
     expfilter_strength: float
     exponential_solver: str
-    exp_smoothe_num_iters: List[int]
-    exp_smoothe_spectral_radii: List[float]
     filter_apply: bool
     filter_cutoff: float
     filter_cutoff: float
@@ -157,11 +160,19 @@ class Configuration:
     output_freq: int
     phi0: float
     precond_flux: str
-    preconditioner: str
     precond_tolerance: float
+    preconditioner: str
     pseudo_cfl: float
     save_state_freq: int
+    schar_mountain_height: float
+    schar_mountain_lattitude: float
+    schar_mountain_length: float
+    schar_mountain_longitude: float
+    schar_mountain_radius: float
+    schar_mountain_step: int
     solver_stats_file: str
+    splitting_integrator_1: str
+    splitting_integrator_2: str
     sponge_tscale: float
     sponge_zscale: float
     starting_step: int

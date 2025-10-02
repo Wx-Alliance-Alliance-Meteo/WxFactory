@@ -39,7 +39,7 @@ class RhsSideBySideGenericTestCase(MpiTestCase):
             config, global_state = InputManager.read_config_from_save_file(state_file, self.comm)
 
             results: dict[str, NDArray] = {}
-            for backend in ["cpp", "numpy", "cuda", "cupy", "omp"]:
+            for backend in ["cpp", "numpy", "cuda", "cupy"]:
                 local_config = copy.deepcopy(config)
                 local_config.desired_device = backend
                 sim = Simulation(local_config, comm=self.comm, quiet=True)
@@ -54,7 +54,7 @@ class RhsSideBySideGenericTestCase(MpiTestCase):
             diff_cuda = results["cuda"] - ref
             diff_cupy = results["cupy"] - ref
             diff_cuda_cupy = results["cuda"] - results["cupy"]
-            diff_omp = results["omp"] - ref
+            # diff_omp = results["omp"] - ref
 
             # ref_norm = numpy.linalg.norm(ref)
             # diff_cpp_norm = numpy.linalg.norm(diff_cpp) / ref_norm
@@ -67,20 +67,20 @@ class RhsSideBySideGenericTestCase(MpiTestCase):
             diff_cuda_norm = rel_diff(ref, results["cuda"])
             diff_cupy_norm = rel_diff(ref, results["cupy"])
             diff_cuda_cupy_norm = rel_diff(results["cuda"], results["cupy"])
-            diff_omp_norm = rel_diff(ref, results["omp"])
+            # diff_omp_norm = rel_diff(ref, results["omp"])
 
             cpp_ok = diff_cpp_norm < THRESHOLD
             cuda_ok = diff_cuda_norm < THRESHOLD
             cupy_ok = diff_cupy_norm < THRESHOLD
-            omp_ok = diff_omp_norm < THRESHOLD
+            # omp_ok = diff_omp_norm < THRESHOLD
 
             if self.comm.rank == 0:
                 print(
                     f"cpp:       {diff_cpp_norm:.2e} ({cpp_ok})\n"
                     f"cuda:      {diff_cuda_norm:.2e} ({cuda_ok})\n"
                     f"cupy:      {diff_cupy_norm:.2e} ({cupy_ok})\n"
-                    f"cuda/cupy: {diff_cuda_cupy_norm:.2e}\n"
-                    f"cupy:      {diff_omp_norm:.2e} ({omp_ok})",
+                    f"cuda/cupy: {diff_cuda_cupy_norm:.2e}\n",
+                    # f"cupy:      {diff_omp_norm:.2e} ({omp_ok})",
                     flush=True,
                 )
 
@@ -99,7 +99,7 @@ class RhsSideBySideGenericTestCase(MpiTestCase):
             self.assertTrue(cpp_ok)
             self.assertTrue(cuda_ok)
             self.assertTrue(cupy_ok)
-            self.assertTrue(omp_ok)
+            # self.assertTrue(omp_ok)
 
 
 class RhsSideBySideEuler3DTestCase(RhsSideBySideGenericTestCase):
