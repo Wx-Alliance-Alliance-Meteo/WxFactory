@@ -26,7 +26,7 @@ base_library_directory = os.path.join(main_project_dir, "lib")
 base_build_directory = os.path.join(base_library_directory, "build")
 base_module_dir = "wx_factory"
 
-cpp_compile_flags = "-Wall -Wextra -shared -std=c++17 -fPIC".split(" ")
+cpp_compile_flags = "-Wall -Wextra -shared -std=c++17 -fPIC -Wno-unknown-pragmas".split(" ")
 cpp_link_flags = []
 omp_compile_flags = [
     "-mp=gpu",
@@ -109,7 +109,7 @@ class WxExtension(Extension):
 
     def __init__(self, name: str, backend: str, suffix: str, build_ext_class, **kwargs):
 
-        common_dir = os.path.join(base_module_dir, "definitions")
+        common_dir = os.path.join(base_module_dir, "common")
         source_dir = os.path.join(base_module_dir, name)
         source_files = glob(source_dir + f"/**/*.{suffix}", root_dir=main_project_dir, recursive=True)
         include_dirs = [pybind11.get_include(), base_module_dir]

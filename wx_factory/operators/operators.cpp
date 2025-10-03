@@ -2,6 +2,8 @@
 
 #include <iostream>
 
+#include <pybind11/stl.h>
+
 #include "kernels/kernels.h"
 
 namespace py = pybind11;
@@ -16,139 +18,40 @@ using py_array = py::array_t<T>;
 #define MODULE_NAME operators_cpp
 #endif
 
-template <typename real_t, typename num_t, int order, typename Func>
-void extrap_3d(
-    const py_array<num_t>& q_in,
-    py_array<num_t>&       result_x_in,
-    py_array<num_t>&       result_y_in,
-    py_array<num_t>&       result_z_in,
-    const int              num_elem_x1,
-    const int              num_elem_x2,
-    const int              num_elem_x3,
-    const int              verbose,
-    Func                   func) {
-
-  const num_t* q        = get_c_ptr<num_t>(q_in);
-  num_t*       result_x = get_c_ptr<num_t>(result_x_in);
-  num_t*       result_y = get_c_ptr<num_t>(result_y_in);
-  num_t*       result_z = get_c_ptr<num_t>(result_z_in);
-
-#pragma omp target teams distribute collapse(5)
-  for (int var = 0; var < 5; var++)
+template <typename Func>
+void extrap_3d(const size_t num_threads, const int verbose, Func func) {
+#pragma omp target teams distribute
+  for (size_t index = 0; index < num_threads; index++)
   {
-    for (int i = 0; i < num_elem_x3; i++)
-    {
-      for (int j = 0; j < num_elem_x2; j++)
-      {
-        for (int k = 0; k < num_elem_x1; k++)
-        {
-          for (int s = 0; s < order * order; s++)
-          {
-            const int index =
-                ((((var * num_elem_x3) + i) * num_elem_x2 + j) * num_elem_x1 + k) *
-                    order * order +
-                s;
-
-            extrap_params_cubedsphere<num_t, order>
-                p(q, index, result_x, result_y, result_z);
-
-            func(p, nullptr, verbose);
-          }
-        }
-      }
-    }
-  }
-}
-
-template <typename real_t, typename num_t>
-void select_extrap_x_3d(
-    const py::array_t<num_t>& q_in,
-    py::array_t<num_t>&       result_in,
-    const int                 num_elem_x1,
-    const int                 num_elem_x2,
-    const int                 num_elem_x3,
-    const int                 num_solpts,
-    const int                 verbose) {
-  switch (num_solpts)
-  {
-    // clang-format off
-  case 1: extrap_3d<real_t, num_t, 1>(q_in, result_in, result_in, result_in, num_elem_x1, num_elem_x2, num_elem_x3, verbose, extrap_x_kernel<real_t, num_t, 1>()); break;
-  case 2: extrap_3d<real_t, num_t, 2>(q_in, result_in, result_in, result_in, num_elem_x1, num_elem_x2, num_elem_x3, verbose, extrap_x_kernel<real_t, num_t, 2>()); break;
-  case 3: extrap_3d<real_t, num_t, 3>(q_in, result_in, result_in, result_in, num_elem_x1, num_elem_x2, num_elem_x3, verbose, extrap_x_kernel<real_t, num_t, 3>()); break;
-  case 4: extrap_3d<real_t, num_t, 4>(q_in, result_in, result_in, result_in, num_elem_x1, num_elem_x2, num_elem_x3, verbose, extrap_x_kernel<real_t, num_t, 4>()); break;
-  case 5: extrap_3d<real_t, num_t, 5>(q_in, result_in, result_in, result_in, num_elem_x1, num_elem_x2, num_elem_x3, verbose, extrap_x_kernel<real_t, num_t, 5>()); break;
-  case 6: extrap_3d<real_t, num_t, 6>(q_in, result_in, result_in, result_in, num_elem_x1, num_elem_x2, num_elem_x3, verbose, extrap_x_kernel<real_t, num_t, 6>()); break;
-  default: std::cerr << __func__ << ": Not implemented for order " << num_solpts << "\n"; break;
-    // clang-format on
-  }
-}
-
-template <typename real_t, typename num_t>
-void select_extrap_y_3d(
-    const py::array_t<num_t>& q_in,
-    py::array_t<num_t>&       result_in,
-    const int                 num_elem_x1,
-    const int                 num_elem_x2,
-    const int                 num_elem_x3,
-    const int                 num_solpts,
-    const int                 verbose) {
-  switch (num_solpts)
-  {
-    // clang-format off
-  case 1: extrap_3d<real_t, num_t, 1>(q_in, result_in, result_in, result_in, num_elem_x1, num_elem_x2, num_elem_x3, verbose, extrap_y_kernel<real_t, num_t, 1>()); break;
-  case 2: extrap_3d<real_t, num_t, 2>(q_in, result_in, result_in, result_in, num_elem_x1, num_elem_x2, num_elem_x3, verbose, extrap_y_kernel<real_t, num_t, 2>()); break;
-  case 3: extrap_3d<real_t, num_t, 3>(q_in, result_in, result_in, result_in, num_elem_x1, num_elem_x2, num_elem_x3, verbose, extrap_y_kernel<real_t, num_t, 3>()); break;
-  case 4: extrap_3d<real_t, num_t, 4>(q_in, result_in, result_in, result_in, num_elem_x1, num_elem_x2, num_elem_x3, verbose, extrap_y_kernel<real_t, num_t, 4>()); break;
-  case 5: extrap_3d<real_t, num_t, 5>(q_in, result_in, result_in, result_in, num_elem_x1, num_elem_x2, num_elem_x3, verbose, extrap_y_kernel<real_t, num_t, 5>()); break;
-  case 6: extrap_3d<real_t, num_t, 6>(q_in, result_in, result_in, result_in, num_elem_x1, num_elem_x2, num_elem_x3, verbose, extrap_y_kernel<real_t, num_t, 6>()); break;
-  default: std::cerr << __func__ << ": Not implemented for order " << num_solpts << "\n"; break;
-    // clang-format on
-  }
-}
-
-template <typename real_t, typename num_t>
-void select_extrap_z_3d(
-    const py::array_t<num_t>& q_in,
-    py::array_t<num_t>&       result_in,
-    const int                 num_elem_x1,
-    const int                 num_elem_x2,
-    const int                 num_elem_x3,
-    const int                 num_solpts,
-    const int                 verbose) {
-  switch (num_solpts)
-  {
-    // clang-format off
-  case 1: extrap_3d<real_t, num_t, 1>(q_in, result_in, result_in, result_in, num_elem_x1, num_elem_x2, num_elem_x3, verbose, extrap_z_kernel<real_t, num_t, 1>()); break;
-  case 2: extrap_3d<real_t, num_t, 2>(q_in, result_in, result_in, result_in, num_elem_x1, num_elem_x2, num_elem_x3, verbose, extrap_z_kernel<real_t, num_t, 2>()); break;
-  case 3: extrap_3d<real_t, num_t, 3>(q_in, result_in, result_in, result_in, num_elem_x1, num_elem_x2, num_elem_x3, verbose, extrap_z_kernel<real_t, num_t, 3>()); break;
-  case 4: extrap_3d<real_t, num_t, 4>(q_in, result_in, result_in, result_in, num_elem_x1, num_elem_x2, num_elem_x3, verbose, extrap_z_kernel<real_t, num_t, 4>()); break;
-  case 5: extrap_3d<real_t, num_t, 5>(q_in, result_in, result_in, result_in, num_elem_x1, num_elem_x2, num_elem_x3, verbose, extrap_z_kernel<real_t, num_t, 5>()); break;
-  case 6: extrap_3d<real_t, num_t, 6>(q_in, result_in, result_in, result_in, num_elem_x1, num_elem_x2, num_elem_x3, verbose, extrap_z_kernel<real_t, num_t, 6>()); break;
-  default: std::cerr << __func__ << ": Not implemented for order " << num_solpts << "\n"; break;
-    // clang-format on
+    func.params.set_index(index);
+    func(nullptr, verbose);
   }
 }
 
 template <typename real_t, typename num_t>
 void select_extrap_all_3d(
-    const py_array<num_t>& q_in,
-    py_array<num_t>&       result_x_in,
-    py_array<num_t>&       result_y_in,
-    py_array<num_t>&       result_z_in,
-    const int              num_elem_x1,
-    const int              num_elem_x2,
-    const int              num_elem_x3,
-    const int              num_solpts,
+    const py_array<num_t>& q,
+    py_array<num_t>&       result_x,
+    py_array<num_t>&       result_y,
+    py_array<num_t>&       result_z,
     const int              verbose) {
+
+  const auto shape       = q.request().shape;
+  const int  num_elem_x3 = shape[1];
+  const int  num_elem_x2 = shape[2];
+  const int  num_elem_x1 = shape[3];
+  const int  num_solpts  = static_cast<int>(std::cbrt(shape[4]));
+
+  const size_t num_threads = 5 * num_elem_x1 * num_elem_x2 * num_elem_x3 * num_solpts * num_solpts;
   switch (num_solpts)
   {
     // clang-format off
-  case 1: extrap_3d<real_t, num_t, 1>(q_in, result_x_in, result_y_in, result_z_in, num_elem_x1, num_elem_x2, num_elem_x3, verbose, extrap_all_kernel<real_t, num_t, 1>()); break;
-  case 2: extrap_3d<real_t, num_t, 2>(q_in, result_x_in, result_y_in, result_z_in, num_elem_x1, num_elem_x2, num_elem_x3, verbose, extrap_all_kernel<real_t, num_t, 2>()); break;
-  case 3: extrap_3d<real_t, num_t, 3>(q_in, result_x_in, result_y_in, result_z_in, num_elem_x1, num_elem_x2, num_elem_x3, verbose, extrap_all_kernel<real_t, num_t, 3>()); break;
-  case 4: extrap_3d<real_t, num_t, 4>(q_in, result_x_in, result_y_in, result_z_in, num_elem_x1, num_elem_x2, num_elem_x3, verbose, extrap_all_kernel<real_t, num_t, 4>()); break;
-  case 5: extrap_3d<real_t, num_t, 5>(q_in, result_x_in, result_y_in, result_z_in, num_elem_x1, num_elem_x2, num_elem_x3, verbose, extrap_all_kernel<real_t, num_t, 5>()); break;
-  case 6: extrap_3d<real_t, num_t, 6>(q_in, result_x_in, result_y_in, result_z_in, num_elem_x1, num_elem_x2, num_elem_x3, verbose, extrap_all_kernel<real_t, num_t, 6>()); break;
+  case 1: extrap_3d(num_threads, verbose, extrap_all_kernel<real_t, num_t, 1>(q, result_x, result_y, result_z)); break;
+  case 2: extrap_3d(num_threads, verbose, extrap_all_kernel<real_t, num_t, 2>(q, result_x, result_y, result_z)); break;
+  case 3: extrap_3d(num_threads, verbose, extrap_all_kernel<real_t, num_t, 3>(q, result_x, result_y, result_z)); break;
+  case 4: extrap_3d(num_threads, verbose, extrap_all_kernel<real_t, num_t, 4>(q, result_x, result_y, result_z)); break;
+  case 5: extrap_3d(num_threads, verbose, extrap_all_kernel<real_t, num_t, 5>(q, result_x, result_y, result_z)); break;
+  case 6: extrap_3d(num_threads, verbose, extrap_all_kernel<real_t, num_t, 6>(q, result_x, result_y, result_z)); break;
   default: std::cerr << __func__ << ": Not implemented for order " << num_solpts << "\n"; break;
     // clang-format on
   }
