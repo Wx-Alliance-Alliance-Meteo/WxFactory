@@ -64,8 +64,7 @@ struct var
 };
 
 template <typename num_t, int size>
-DEVICE_SPACE array<var<num_t>, size>
-             make_var_sequence(const num_t* offset, const size_t stride) {
+DEVICE_SPACE array<var<num_t>, size> make_var_sequence(const num_t* offset, const size_t stride) {
   array<var<num_t>, size> result;
   for (int i = 0; i < size; i++)
   {

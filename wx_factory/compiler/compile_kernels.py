@@ -26,7 +26,7 @@ base_library_directory = os.path.join(main_project_dir, "lib")
 base_build_directory = os.path.join(base_library_directory, "build")
 base_module_dir = "wx_factory"
 
-cpp_compile_flags = "-Wall -Wextra -shared -std=c++17 -fPIC".split(" ")
+cpp_compile_flags = "-Wall -Wextra -shared -std=c++17 -fPIC -Wno-unknown-pragmas".split(" ")
 cpp_link_flags = []
 omp_compile_flags = [
     "-mp=gpu",

@@ -182,11 +182,6 @@ class DFROperators:
             self.correction_SN = xp.vstack((xp.kron(I2, xp.kron(corr_south, I2)), xp.kron(I2, xp.kron(corr_north, I2))))
             self.correction_DU = xp.vstack((xp.kron(corr_down, I3), xp.kron(corr_up, I3)))
 
-            # if device.comm.rank == 0:
-            #     print(f"3D c x = \n{self.correction_WE}")
-            #     print(f"3D c y = \n{self.correction_SN}")
-            #     print(f"3D c z = \n{self.correction_DU}")
-
         else:
             ident = xp.identity(grd.num_solpts)
             self.extrap_x = xp.vstack((xp.kron(ident, self.extrap_west), xp.kron(ident, self.extrap_east))).T
@@ -206,12 +201,6 @@ class DFROperators:
             corr_west = self.diff_ext[1:-1, 0]
             corr_east = self.diff_ext[1:-1, -1]
             self.correction_WE = xp.vstack((xp.kron(ident, corr_west), xp.kron(ident, corr_east)))
-
-        if device.comm.rank == 0:
-            print(f"derivative_x (shape {self.derivative_x.shape})= \n{self.derivative_x}")
-            print(f"diff solpt = \n{self.diff_solpt}", flush=True)
-
-        # raise SystemExit(0)
 
     def make_filter(self, alpha: float, order: int, cutoff: float, geom: Geometry):
         """Build an exponential modal filter as described in Warburton, eqn 5.16."""

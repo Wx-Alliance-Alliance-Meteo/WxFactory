@@ -24,8 +24,7 @@ __global__ void pointwise_eulercartesian_2d(
   if (ind < nmax)
   {
     // Store variables and pointers to compute the fluxes
-    kernel_params<num_t, euler_state_2d>
-        params(q, flux_x1, flux_x2, nullptr, ind, stride);
+    kernel_params<num_t, euler_state_2d> params(q, flux_x1, flux_x2, nullptr, ind, stride);
 
     // Call the pointwise flux kernel
     pointwise_eulercartesian_2d_kernel(params);
@@ -247,9 +246,8 @@ __global__ void boundary_euler_cubedsphere_3d(
   int k = tid2 % num_elem_x1;
   int j = tid2 / num_elem_x1;
 
-  const int array_shape[5] =
-      {5, num_elem_x3 + 2, num_elem_x2, num_elem_x1, 2 * num_solpts_face};
-  const int stride = num_elem_x1 * num_elem_x2 * (num_elem_x3 + 2) * num_solpts_face * 2;
+  const int array_shape[5] = {5, num_elem_x3 + 2, num_elem_x2, num_elem_x1, 2 * num_solpts_face};
+  const int stride         = num_elem_x1 * num_elem_x2 * (num_elem_x3 + 2) * num_solpts_face * 2;
 
   // Bottom boundary
   const int index_b_bottom  = get_c_index(0, 0, j, k, l + num_solpts_face, array_shape);
@@ -261,9 +259,8 @@ __global__ void boundary_euler_cubedsphere_3d(
   boundary_euler_cubedsphere_3d_kernel<real_t, num_t>(params_in_bottom, params_b_bottom);
 
   // Top boundary
-  const int index_b_top = get_c_index(0, num_elem_x3 + 1, j, k, l, array_shape);
-  const int index_in_top =
-      get_c_index(0, num_elem_x3, j, k, l + num_solpts_face, array_shape);
+  const int index_b_top  = get_c_index(0, num_elem_x3 + 1, j, k, l, array_shape);
+  const int index_in_top = get_c_index(0, num_elem_x3, j, k, l + num_solpts_face, array_shape);
 
   euler_state_3d<num_t>       params_b_top(q_itf, index_b_top, stride);
   euler_state_3d<const num_t> params_in_top(q_itf, index_in_top, stride);
@@ -294,8 +291,7 @@ void launch_pointwise_euler_cartesian_2d(
   uintptr_t cupy_flux_x1_ptr = flux_x1.attr("data").attr("ptr").cast<size_t>();
   uintptr_t cupy_flux_x2_ptr = flux_x2.attr("data").attr("ptr").cast<size_t>();
 
-  const int num_blocks =
-      (num_elem_x1 * num_elem_x2 * num_solpts_tot + BLOCK_SIZE - 1) / BLOCK_SIZE;
+  const int num_blocks = (num_elem_x1 * num_elem_x2 * num_solpts_tot + BLOCK_SIZE - 1) / BLOCK_SIZE;
 
   const num_t* q_ptr       = reinterpret_cast<const num_t*>(cupy_q_ptr);
   num_t*       flux_x1_ptr = reinterpret_cast<num_t*>(cupy_flux_x1_ptr);
@@ -689,10 +685,7 @@ void select_riemann_eulercartesian_ausm_2d(
 }
 
 template <typename KernelType>
-void launch_pointwise_kernel(
-    const size_t num_threads,
-    const int    verbose,
-    KernelType   kernel_func) {
+void launch_pointwise_kernel(const size_t num_threads, const int verbose, KernelType kernel_func) {
 
   const int    BLOCK_SIZE = 128;
   const size_t num_blocks = (num_threads + BLOCK_SIZE - 1) / BLOCK_SIZE;
@@ -714,10 +707,7 @@ void select_type(
 
   if (dtype == "float64")
   {
-    launch_pointwise_kernel(
-        num_threads,
-        verbose,
-        KernelType<double, double>(args..., num_threads));
+    launch_pointwise_kernel(num_threads, verbose, KernelType<double, double>(args..., num_threads));
   }
   else if (dtype == "complex128")
   {
@@ -803,9 +793,7 @@ PYBIND11_MODULE(pde_cuda, m) {
 
   // Riemann fluxes
   m.def("riemann_eulercartesian_ausm_2d", &select_riemann_eulercartesian_ausm_2d);
-  m.def(
-      "riemann_euler_cubedsphere_rusanov_3d",
-      &select_riemann_euler_cubedsphere_rusanov_3d);
+  m.def("riemann_euler_cubedsphere_rusanov_3d", &select_riemann_euler_cubedsphere_rusanov_3d);
 
   // Forcing
   m.def("forcing_euler_cubesphere_3d", &select_forcing_euler_cubesphere_3d);

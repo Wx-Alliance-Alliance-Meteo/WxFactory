@@ -75,8 +75,7 @@ struct shallow_water_state_2d
   }
 };
 
-// Stores the parameters of type <num_t> for equations <state> required to call a given
-// kernel
+// Stores the parameters of type <num_t> for equations <state> required to call a given kernel
 template <typename num_t, template <typename> class state>
 struct kernel_params
 {
@@ -115,7 +114,7 @@ struct riemann_params_cubedsphere
   HOST_DEVICE_SPACE riemann_params_cubedsphere(
       const num_t*  q,      //!< Pointer to the various fields (each variable is grouped)
       const real_t* sqrt_g, //!< Pointer to sqrt_g values for all points
-      const real_t* h, //!< Pointer to h contravariant values for all points (6 arrays)
+      const real_t* h,      //!< Pointer to h contravariant values for all points (6 arrays)
       const size_t  index,  //!< Index of the grid point whose state we want to access
       const size_t  stride, //!< How many entries in the input array for each variable
       num_t*        flux,

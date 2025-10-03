@@ -13,6 +13,11 @@ def apply_op(vec: NDArray, op: NDArray):
     # return vec @ op
 
 
+mid_i = numpy.s_[..., 1:-1, :]
+mid_j = numpy.s_[..., 1:-1, :, :]
+mid_k = numpy.s_[..., 1:-1, :, :, :]
+
+
 class RHSDirecFluxReconstruction(RHS):
 
     def solution_extrapolation(self, q: NDArray) -> None:
@@ -178,24 +183,6 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
     def flux_divergence_partial(self):
 
         self.df1_dx1 = apply_op(self.f_x1, self.ops.derivative_x)
-
-        # xp = self.device.xp
-        # res = xp.zeros_like(self.df1_dx1)
-        # num_fields, nz, ny, nx = self.f_x1.shape[:4]
-        # num_solpts = self.geom.num_solpts
-        # self.device.operators.deriv_x_3d(
-        #     self.f_x1,
-        #     self.ops.derivative_x,
-        #     res,
-        #     num_fields,
-        #     nx,
-        #     ny,
-        #     nz,
-        #     num_solpts,
-        #     0 if self.device.comm.rank != 0 else 1,
-        #     # 0,
-        # )
-
         self.df2_dx2 = apply_op(self.f_x2, self.ops.derivative_y)
         self.df3_dx3 = apply_op(self.f_x3, self.ops.derivative_z)
 
@@ -259,25 +246,10 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
         )
 
     def end_communication(self):
-        # xp = self.device.xp
-        # dtype = self.q_itf_x1.dtype
-        # if self.q_itf_s is None or self.q_itf_w.dtype != dtype:
-        #     sh = (self.num_var,) + self.req_all.shape
-        #     self.q_itf_s = xp.zeros(sh, dtype=dtype)
-        #     self.q_itf_n = xp.zeros(sh, dtype=dtype)
-        #     self.q_itf_w = xp.zeros(sh, dtype=dtype)
-        #     self.q_itf_e = xp.zeros(sh, dtype=dtype)
-
-        # self.q_itf_s[...], self.q_itf_n[...], self.q_itf_w[...], self.q_itf_e[...] = self.req_all.wait()
         self.q_itf_s, self.q_itf_n, self.q_itf_w, self.q_itf_e = self.req_all.wait()
 
-    def riemann_fluxes(self) -> None:
-        xp = self.device.xp
+    def _riemann_fluxes_prepare(self) -> None:
         itf_size = self.geom.itf_size
-
-        mid_i = xp.s_[..., 1:-1, :]
-        mid_j = xp.s_[..., 1:-1, :, :]
-        mid_k = xp.s_[..., 1:-1, :, :, :]
 
         s = numpy.s_[..., 0, :, itf_size:]
         n = numpy.s_[..., -1, :, :itf_size]
@@ -299,6 +271,9 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
         # Top + bottom layers
         self.q_itf_full_x3[b] = self.q_itf_full_x3[..., 1, :, :, :itf_size]
         self.q_itf_full_x3[t] = self.q_itf_full_x3[..., -2, :, :, itf_size:]
+
+    def riemann_fluxes(self) -> None:
+        self._riemann_fluxes_prepare()
 
         self.pde.riemann_fluxes(
             self.q_itf_full_x1,

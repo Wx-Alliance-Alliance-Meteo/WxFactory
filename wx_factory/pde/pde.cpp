@@ -279,20 +279,14 @@ void riemann_euler_cubedsphere_rusanov_3d(
   const real_t* h_x3_ptr = get_raw_ptr<real_t>(h_x3);
 
   const int      num_solpts_riem = 2 * num_solpts * num_solpts;
-  const uint64_t stride_x1 =
-      num_elem_x3 * num_elem_x2 * (num_elem_x1 + 2) * num_solpts_riem;
-  const uint64_t stride_x2 =
-      num_elem_x3 * (num_elem_x2 + 2) * num_elem_x1 * num_solpts_riem;
-  const uint64_t stride_x3 =
-      (num_elem_x3 + 2) * num_elem_x2 * num_elem_x1 * num_solpts_riem;
+  const uint64_t stride_x1       = num_elem_x3 * num_elem_x2 * (num_elem_x1 + 2) * num_solpts_riem;
+  const uint64_t stride_x2       = num_elem_x3 * (num_elem_x2 + 2) * num_elem_x1 * num_solpts_riem;
+  const uint64_t stride_x3       = (num_elem_x3 + 2) * num_elem_x2 * num_elem_x1 * num_solpts_riem;
 
   // Ensure ghost elements are added to array shapes
-  const int array_shape_x1[5] =
-      {5, num_elem_x3, num_elem_x2, num_elem_x1 + 2, num_solpts_riem};
-  const int array_shape_x2[5] =
-      {5, num_elem_x3, num_elem_x2 + 2, num_elem_x1, num_solpts_riem};
-  const int array_shape_x3[5] =
-      {5, num_elem_x3 + 2, num_elem_x2, num_elem_x1, num_solpts_riem};
+  const int array_shape_x1[5] = {5, num_elem_x3, num_elem_x2, num_elem_x1 + 2, num_solpts_riem};
+  const int array_shape_x2[5] = {5, num_elem_x3, num_elem_x2 + 2, num_elem_x1, num_solpts_riem};
+  const int array_shape_x3[5] = {5, num_elem_x3 + 2, num_elem_x2, num_elem_x1, num_solpts_riem};
 
   // Compute the fluxes along the x1-direction
 #pragma omp target teams distribute collapse(4)
@@ -304,8 +298,7 @@ void riemann_euler_cubedsphere_rusanov_3d(
       {
         for (int l = 0; l < num_solpts * num_solpts; l++)
         {
-          const int index_l =
-              get_c_index(0, i, j, k, l + num_solpts * num_solpts, array_shape_x1);
+          const int index_l = get_c_index(0, i, j, k, l + num_solpts * num_solpts, array_shape_x1);
           riemann_params_cubedsphere<real_t, num_t> params_l(
               q_itf_x1_ptr,
               sqrt_g_itf_x1_ptr,
@@ -349,8 +342,7 @@ void riemann_euler_cubedsphere_rusanov_3d(
       {
         for (int l = 0; l < num_solpts * num_solpts; l++)
         {
-          const int index_l =
-              get_c_index(0, i, j, k, l + num_solpts * num_solpts, array_shape_x2);
+          const int index_l = get_c_index(0, i, j, k, l + num_solpts * num_solpts, array_shape_x2);
           riemann_params_cubedsphere<real_t, num_t> params_l(
               q_itf_x2_ptr,
               sqrt_g_itf_x2_ptr,
@@ -394,8 +386,7 @@ void riemann_euler_cubedsphere_rusanov_3d(
       {
         for (int l = 0; l < num_solpts * num_solpts; l++)
         {
-          const int index_l =
-              get_c_index(0, i, j, k, l + num_solpts * num_solpts, array_shape_x3);
+          const int index_l = get_c_index(0, i, j, k, l + num_solpts * num_solpts, array_shape_x3);
           riemann_params_cubedsphere<real_t, num_t> params_l(
               q_itf_x3_ptr,
               sqrt_g_itf_x3_ptr,
@@ -444,10 +435,9 @@ void forcing_euler_cubesphere_3d(
     py_array<num_t>&        forcing,
     const int               verbose) {
 
-  const auto&  shape  = q.request().shape;
-  const size_t stride = shape[1] * shape[2] * shape[3] * shape[4];
-  ForcingKernel<real_t, num_t>
-      kernel_func(q, pressure, sqrt_g, h, christoffel, forcing, stride);
+  const auto&                  shape  = q.request().shape;
+  const size_t                 stride = shape[1] * shape[2] * shape[3] * shape[4];
+  ForcingKernel<real_t, num_t> kernel_func(q, pressure, sqrt_g, h, christoffel, forcing, stride);
 
 #pragma omp target teams distribute is_device_ptr(q, pressure, sqrt_g, h, christoffel)
   for (size_t index = 0; index < stride; index++)
@@ -680,9 +670,7 @@ void set_omp_device(const int device_id) {
 
 PYBIND11_MODULE(pde_omp, m) {
   m.def("pointwise_euler_cubedsphere_3d", &select_pointwise_euler_cubedsphere_3d);
-  m.def(
-      "riemann_euler_cubedsphere_rusanov_3d",
-      &select_riemann_euler_cubedsphere_rusanov_3d);
+  m.def("riemann_euler_cubedsphere_rusanov_3d", &select_riemann_euler_cubedsphere_rusanov_3d);
   // The OpenMP offload forcing kernel seems slower than cupy
   // m.def("forcing_euler_cubesphere_3d", &select_forcing_euler_cubesphere_3d);
   m.def("set_omp_device", &set_omp_device);
@@ -695,12 +683,8 @@ PYBIND11_MODULE(pde_cpp, m) {
   m.def("pointwise_eulercartesian_2d", &pointwise_eulercartesian_2d<double>);
   m.def("pointwise_eulercartesian_2d", &pointwise_eulercartesian_2d<complex_t>);
 
-  m.def(
-      "pointwise_euler_cubedsphere_3d",
-      &pointwise_euler_cubedsphere_3d<double, double>);
-  m.def(
-      "pointwise_euler_cubedsphere_3d",
-      &pointwise_euler_cubedsphere_3d<double, complex_t>);
+  m.def("pointwise_euler_cubedsphere_3d", &pointwise_euler_cubedsphere_3d<double, double>);
+  m.def("pointwise_euler_cubedsphere_3d", &pointwise_euler_cubedsphere_3d<double, complex_t>);
 
   // Riemann fluxes
   m.def("riemann_eulercartesian_ausm_2d", &riemann_eulercartesian_ausm_2d<double>);

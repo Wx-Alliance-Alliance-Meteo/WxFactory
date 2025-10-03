@@ -9,8 +9,7 @@
 namespace py = pybind11;
 
 template <typename num_t, int order, typename MyFunc>
-__global__ void
-element_wise_kernel(MyFunc func, const size_t max_num_threads, const bool verbose) {
+__global__ void element_wise_kernel(MyFunc func, const size_t max_num_threads, const bool verbose) {
 
   constexpr size_t group_size         = order * order;
   constexpr size_t num_elem_per_block = EXTRAP_3D_BLOCK_SIZE / group_size;
@@ -58,9 +57,8 @@ void launch_kernel(const std::vector<int>& num_elements, const int verbose, MyFu
   if (verbose)
   {
     std::cout << "Launching " << num_active_threads << " threads in " << num_blocks
-              << " block(s) of size " << EXTRAP_3D_BLOCK_SIZE << " (with "
-              << num_threads_per_block << " active threads per block, in "
-              << num_elem_per_block << " elements)\n";
+              << " block(s) of size " << EXTRAP_3D_BLOCK_SIZE << " (with " << num_threads_per_block
+              << " active threads per block, in " << num_elem_per_block << " elements)\n";
     std::cout << "Problem size " << num_elements[0] << "x" << num_elements[1] << "x"
               << num_elements[2] << " elements, order " << order << std::endl;
   }
@@ -106,11 +104,7 @@ void select_type(
   }
   else if (dtype == "complex128")
   {
-    select_order<double, complex_t, KernelType>(
-        num_elements,
-        num_solpts,
-        verbose,
-        args...);
+    select_order<double, complex_t, KernelType>(num_elements, num_solpts, verbose, args...);
   }
   else
   {
@@ -119,14 +113,14 @@ void select_type(
 }
 
 void select_extrap_all_3d_type(
-    const py::object& q_in,
-    py::object&       result_x_in,
-    py::object&       result_y_in,
-    py::object&       result_z_in,
+    const py::object& q,
+    py::object&       result_x,
+    py::object&       result_y,
+    py::object&       result_z,
     const int         verbose) {
 
-  std::string dtype = py::str(q_in.attr("dtype").attr("name"));
-  auto        shape = (q_in.attr("shape")).cast<std::vector<int>>();
+  std::string dtype = py::str(q.attr("dtype").attr("name"));
+  const auto  shape = (q.attr("shape")).cast<std::vector<int>>();
 
   const int num_elem_x3 = shape[1];
   const int num_elem_x2 = shape[2];
@@ -138,10 +132,10 @@ void select_extrap_all_3d_type(
       {num_elem_x1, num_elem_x2, num_elem_x3},
       num_solpts,
       verbose,
-      q_in,
-      result_x_in,
-      result_y_in,
-      result_z_in);
+      q,
+      result_x,
+      result_y,
+      result_z);
 }
 
 __constant__ double deriv_x_operator[MAX_DERIV_ORDER * MAX_DERIV_ORDER * MAX_DERIV_ORDER];
@@ -198,12 +192,8 @@ void launch_deriv_3d(
 
   constexpr size_t o3 = order * order * order;
 
-  cudaCheck(cudaMemcpyToSymbol(
-      deriv_x_operator,
-      op,
-      o3 * sizeof(real_t),
-      0,
-      cudaMemcpyDeviceToDevice));
+  cudaCheck(
+      cudaMemcpyToSymbol(deriv_x_operator, op, o3 * sizeof(real_t), 0, cudaMemcpyDeviceToDevice));
 
   // extrap_params_cubedsphere<num_t, order> p(q, 0, result_x, result_y, result_z);
 
@@ -230,12 +220,10 @@ void launch_deriv_3d(
     //     num_elem_x3,
     //     order);
     std::cout << "Launching " << num_active_threads << " threads in " << num_blocks
-              << " block(s) of size " << EXTRAP_3D_BLOCK_SIZE << " (with "
-              << num_threads_per_block << " active threads per block, in "
-              << num_elem_per_block << " elements)\n";
-    std::cout << "Problem size " << num_fields << " vars, " << num_elem_x1 << "x"
-              << num_elem_x2 << "x" << num_elem_x3 << " elements, order " << order
-              << std::endl;
+              << " block(s) of size " << EXTRAP_3D_BLOCK_SIZE << " (with " << num_threads_per_block
+              << " active threads per block, in " << num_elem_per_block << " elements)\n";
+    std::cout << "Problem size " << num_fields << " vars, " << num_elem_x1 << "x" << num_elem_x2
+              << "x" << num_elem_x3 << " elements, order " << order << std::endl;
   }
   // return;
 

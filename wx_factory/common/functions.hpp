@@ -28,8 +28,8 @@ using array = cuda::std::array<T, N>;
 inline void cudaApiAssert(const cudaError_t code, const char* filename, const int line) {
   if (code != cudaSuccess)
   {
-    std::cerr << "CUDA API call failed: " << cudaGetErrorString(code) << ", at "
-              << filename << ":" << line << "\n";
+    std::cerr << "CUDA API call failed: " << cudaGetErrorString(code) << ", at " << filename << ":"
+              << line << "\n";
     exit(-1);
   }
 }
@@ -89,15 +89,10 @@ get_c_index(const int i, const int j, const int k, const int l, const int shape[
   return i * shape[1] * shape[2] * shape[3] + j * shape[2] * shape[3] + k * shape[3] + l;
 }
 
-DEVICE_SPACE inline int get_c_index(
-    const int i,
-    const int j,
-    const int k,
-    const int l,
-    const int m,
-    const int shape[5]) {
-  return i * shape[1] * shape[2] * shape[3] * shape[4] +
-         j * shape[2] * shape[3] * shape[4] + k * shape[3] * shape[4] + l * shape[4] + m;
+DEVICE_SPACE inline int
+get_c_index(const int i, const int j, const int k, const int l, const int m, const int shape[5]) {
+  return i * shape[1] * shape[2] * shape[3] * shape[4] + j * shape[2] * shape[3] * shape[4] +
+         k * shape[3] * shape[4] + l * shape[4] + m;
 }
 
 //! Extract raw pointer to given array's data and cast it to the requested type
