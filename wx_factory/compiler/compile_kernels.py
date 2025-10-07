@@ -202,6 +202,8 @@ _extensions: dict[str, WxExtension] = {
     _ext_name("operators", "cpp"): CppExtension("operators"),
     _ext_name("operators", "cuda"): CudaExtension("operators"),
     _ext_name("operators", "omp"): OmpExtension("operators"),
+    
+    _ext_name("kernel_template", "cpp"): CppExtension("kernel_template"),
 }
 
 
