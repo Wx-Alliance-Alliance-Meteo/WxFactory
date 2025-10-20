@@ -22,11 +22,22 @@ from wx_mpi import SingleProcess, Conditional
 proc_id_re = re.compile(r"\b\d{4,10}")  # At least 4 digits, at the beginning of the word
 proc_vendor_re = re.compile(r"\b(intel|amd)\b")
 
+_proc_name = ""
+
 base_library_directory = os.path.join(main_project_dir, "lib")
 base_build_directory = os.path.join(base_library_directory, "build")
 base_module_dir = "wx_factory"
 
-cpp_compile_flags = "-Wall -Wextra -shared -std=c++17 -fPIC -Wno-unknown-pragmas".split(" ")
+cpp_compile_flags = [
+    "-Wall",
+    "-Wextra",
+    "-shared",
+    "-std=c++17",
+    "-fPIC",
+    "-O2",
+    "-march=x86-64-v3",
+    "-Wno-unknown-pragmas",
+]
 cpp_link_flags = []
 omp_compile_flags = [
     "-mp=gpu",
@@ -43,8 +54,20 @@ omp_compile_flags = [
 ]
 omp_link_flags = ["-mp=gpu", "-gpu=cc80", "-shared"]
 
-cuda_compile_flags = "-arch native -O2 -shared -std=c++17 -Xcompiler -fPIC,-Wall,-Wextra".split(" ")
-cuda_link_flags = ["-shared", "-arch", "native"]
+cuda_compile_flags = [
+    "-arch=compute_80",
+    "-code=sm_80,sm_90",
+    "-O2",
+    "-shared",
+    "-std=c++17",
+    "-Xcompiler",
+    "-fPIC,-Wall,-Wextra",
+]
+cuda_link_flags = [
+    "-shared",
+    "-arch=compute_80",
+    "-code=sm_80,sm_90",
+]
 
 
 class wx_build_ext(build_ext):
@@ -121,7 +144,11 @@ class WxExtension(Extension):
             )
         )
 
-        proc_name = get_processor_name()
+        if _proc_name != "":
+            proc_name = _proc_name
+        else:
+            proc_name = get_processor_name()
+
         self.build_dir = os.path.join(base_build_directory, name, backend)  # Specific directory for build files
         self.build_temp = os.path.join(self.build_dir, "tmp")
         self.lib_dir = os.path.join(base_library_directory, name, proc_name, backend)  # Where the lib file will end up
@@ -195,13 +222,26 @@ class CudaExtension(WxExtension):
 
 
 # All the extensions we will want to build for running WxFactory
+_allowed_extensions = [
+    ("pde", "cpp"),
+    ("pde", "cuda"),
+    ("pde", "omp"),
+    ("operators", "cpp"),
+    ("operators", "cuda"),
+    ("operators", "omp"),
+]
+_ext_class = {
+    "cpp": CppExtension,
+    "cuda": CudaExtension,
+    "omp": OmpExtension,
+}
 _extensions: dict[str, WxExtension] = {
-    _ext_name("pde", "cpp"): CppExtension("pde"),
-    _ext_name("pde", "cuda"): CudaExtension("pde"),
-    _ext_name("pde", "omp"): OmpExtension("pde"),
-    _ext_name("operators", "cpp"): CppExtension("operators"),
-    _ext_name("operators", "cuda"): CudaExtension("operators"),
-    _ext_name("operators", "omp"): OmpExtension("operators"),
+    # _ext_name("pde", "cpp"): CppExtension("pde"),
+    # _ext_name("pde", "cuda"): CudaExtension("pde"),
+    # _ext_name("pde", "omp"): OmpExtension("pde"),
+    # _ext_name("operators", "cpp"): CppExtension("operators"),
+    # _ext_name("operators", "cuda"): CudaExtension("operators"),
+    # _ext_name("operators", "omp"): OmpExtension("operators"),
 }
 
 
@@ -230,7 +270,7 @@ def compile_extension(module_name: str, kernel_type: str):
     )
 
 
-def compile(module_name: str, kernel_type: str, force: bool = False, comm: MPI.Comm = MPI.COMM_WORLD):
+def compile(module_name: str, kernel_type: str, force: bool = False, comm: MPI.Comm = MPI.COMM_WORLD, proc_name=""):
     """
     Compile the given module. This is a collective call, but only one process will actually perform the
     compilation. All processes in the given communicator must call this function.
@@ -254,7 +294,7 @@ def load_module(module_name: str, kernel_type: str) -> ModuleType:
     :param kernel_type: Type of kernels to compile [cpp, cuda]
     :return: The imported module
     """
-    module_name = _extensions[_ext_name(module_name, kernel_type)].output_module
+    module_name = get_extension(module_name, kernel_type).output_module
     return importlib.import_module(module_name)
 
 
@@ -266,7 +306,15 @@ def clean_all():
 
 def get_extension(module_name: str, kernel_type: str) -> WxExtension:
     """Retrieve extension object from its name and kernel type."""
-    return _extensions[_ext_name(module_name, kernel_type)]
+    name = _ext_name(module_name, kernel_type)
+    try:
+        return _extensions[name]
+    except KeyError:
+        if (module_name, kernel_type) in _allowed_extensions:
+            _extensions[name] = _ext_class[kernel_type](module_name)
+            return _extensions[name]
+
+        raise
 
 
 __all__ = ["clean_all", "compile", "get_extension", "load_module"]
