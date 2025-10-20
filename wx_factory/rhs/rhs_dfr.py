@@ -2,6 +2,7 @@ import numpy
 from numpy.typing import NDArray
 
 from common.definitions import idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_w, idx_rho_theta
+from geometry import CubedSphere
 from rhs.rhs import RHS
 from wx_mpi import SingleProcess, Conditional
 
@@ -10,6 +11,11 @@ def apply_op(vec: NDArray, op: NDArray):
     sh = vec.shape
     return (vec.reshape(-1, sh[-1]) @ op).reshape(*sh[:-1], -1)
     # return vec @ op
+
+
+mid_i = numpy.s_[..., 1:-1, :]
+mid_j = numpy.s_[..., 1:-1, :, :]
+mid_k = numpy.s_[..., 1:-1, :, :, :]
 
 
 class RHSDirecFluxReconstruction(RHS):
@@ -53,7 +59,18 @@ class RHSDirecFluxReconstruction(RHS):
 
 
 class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
-    def __init__(self, pde, geometry, operators, metric, topography, process_topo, config, expected_shape, debug=False):
+    def __init__(
+        self,
+        pde,
+        geometry: CubedSphere,
+        operators,
+        metric,
+        topography,
+        process_topo,
+        config,
+        expected_shape,
+        debug=False,
+    ):
         super().__init__(pde, geometry, operators, metric, topography, process_topo, config, expected_shape, debug)
         self.extrap_3d = self.extrap_3d_code
         if config.desired_device in ["numpy", "cupy"]:
@@ -122,10 +139,6 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
             itf_x1,
             itf_x2,
             itf_x3,
-            nx,
-            ny,
-            nz,
-            self.geom.num_solpts,
             # 0 if self.device.comm.rank != 0 else 1,
             0,
         )
@@ -233,25 +246,10 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
         )
 
     def end_communication(self):
-        # xp = self.device.xp
-        # dtype = self.q_itf_x1.dtype
-        # if self.q_itf_s is None or self.q_itf_w.dtype != dtype:
-        #     sh = (self.num_var,) + self.req_all.shape
-        #     self.q_itf_s = xp.zeros(sh, dtype=dtype)
-        #     self.q_itf_n = xp.zeros(sh, dtype=dtype)
-        #     self.q_itf_w = xp.zeros(sh, dtype=dtype)
-        #     self.q_itf_e = xp.zeros(sh, dtype=dtype)
-
-        # self.q_itf_s[...], self.q_itf_n[...], self.q_itf_w[...], self.q_itf_e[...] = self.req_all.wait()
         self.q_itf_s, self.q_itf_n, self.q_itf_w, self.q_itf_e = self.req_all.wait()
 
-    def riemann_fluxes(self) -> None:
-        xp = self.device.xp
+    def _riemann_fluxes_prepare(self) -> None:
         itf_size = self.geom.itf_size
-
-        mid_i = xp.s_[..., 1:-1, :]
-        mid_j = xp.s_[..., 1:-1, :, :]
-        mid_k = xp.s_[..., 1:-1, :, :, :]
 
         s = numpy.s_[..., 0, :, itf_size:]
         n = numpy.s_[..., -1, :, :itf_size]
@@ -273,11 +271,9 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
         # Top + bottom layers
         self.q_itf_full_x3[b] = self.q_itf_full_x3[..., 1, :, :, :itf_size]
         self.q_itf_full_x3[t] = self.q_itf_full_x3[..., -2, :, :, itf_size:]
-        # Boundary conditions
-        self.q_itf_full_x3[idx_rho_w, 0, :, :, :itf_size] = 0.0
-        self.q_itf_full_x3[idx_rho_w, 0, :, :, itf_size:] = -self.q_itf_full_x3[idx_rho_w, 1, :, :, :itf_size]
-        self.q_itf_full_x3[idx_rho_w, -1, :, :, itf_size:] = 0.0
-        self.q_itf_full_x3[idx_rho_w, -1, :, :, :itf_size] = -self.q_itf_full_x3[idx_rho_w, -2, :, :, itf_size:]
+
+    def riemann_fluxes(self) -> None:
+        self._riemann_fluxes_prepare()
 
         self.pde.riemann_fluxes(
             self.q_itf_full_x1,

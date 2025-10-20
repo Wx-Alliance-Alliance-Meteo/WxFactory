@@ -154,10 +154,6 @@ class PDEEulerCubesphere(PDE):
             wflux_pres_x2,
             wflux_pres_x3,
             logp,
-            self.geometry.num_elements_x1,
-            self.geometry.num_elements_x2,
-            self.geometry.num_elements_x3,
-            self.num_solpts**3,
             False,
         )
 
@@ -332,6 +328,11 @@ class PDEEulerCubesphere(PDE):
         # csubich -- apply odd symmetry to w at boundary so there is no advective _flux_ through boundary
         n = w_itf_x3.shape[-1] // 2
 
+        w_itf_x3[..., 0, :, :, :n] = 0.0
+        w_itf_x3[..., 0, :, :, n:] = -w_itf_x3[..., 1, :, :, :n]
+        w_itf_x3[..., -1, :, :, n:] = 0.0
+        w_itf_x3[..., -1, :, :, :n] = -w_itf_x3[..., -2, :, :, n:]
+
         pressure_itf_x1[...] = p0 * xp.exp((cpd / cvd) * xp.log(q_itf_x1[idx_rho_theta] * (Rd / p0)))
         pressure_itf_x2[...] = p0 * xp.exp((cpd / cvd) * xp.log(q_itf_x2[idx_rho_theta] * (Rd / p0)))
         pressure_itf_x3[...] = p0 * xp.exp((cpd / cvd) * xp.log(q_itf_x3[idx_rho_theta] * (Rd / p0)))
@@ -450,10 +451,6 @@ class PDEEulerCubesphere(PDE):
         metric: Metric3DTopo,
         forcing: NDArray,
     ):
-        num_x1 = self.geometry.num_elements_horizontal
-        num_x2 = num_x1
-        num_x3 = self.geometry.num_elements_vertical
-        num_solpts = self.geometry.num_solpts
         self.device.pde.forcing_euler_cubesphere_3d(
             q,
             pressure,
@@ -461,10 +458,6 @@ class PDEEulerCubesphere(PDE):
             metric.h_contra_new,
             metric.christoffel,
             forcing,
-            num_x1,
-            num_x2,
-            num_x3,
-            num_solpts**3,
             0,  # Verbose flag
         )
 

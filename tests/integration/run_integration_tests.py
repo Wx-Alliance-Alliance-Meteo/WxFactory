@@ -23,9 +23,9 @@ if __name__ == "__main__":
     runner = mpi_test.MpiRunner(buffer=True)
     results = []
     for problem in args.problems:
-        problem_file = os.path.join(main_project_dir, test_cases_dir, problem)
-        result = runner.run(StateIntegrationTestCases(problem_file))
+        problem_dir = os.path.join(main_project_dir, test_cases_dir, problem)
+        result = runner.run(StateIntegrationTestCases(problem_dir))
         results.append(result)
 
     if not all(r.wasSuccessful() for r in results):
-        sys.exit(-1)
+        raise SystemExit(-1)

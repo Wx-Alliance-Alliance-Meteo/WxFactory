@@ -142,7 +142,7 @@ class StateIntegrationTestCases(unittest.TestCase):
 
             if has_exited:
                 print(f"Process {MPI.COMM_WORLD.rank} has exited prematurely")
-                sys.exit(exit_code)
+                raise SystemExit(exit_code)
 
             conf = sim.config
 

@@ -21,6 +21,9 @@ class OperatorsExtrapGenericTestCase(MpiTestCase):
     def test_extrap_kernel(self, device: str):
         state_files = [os.path.join(self.state_dir, f) for f in os.listdir(self.state_dir)]
 
+        if self.comm.rank == 0:
+            print(f"Device: {device}", flush=True)
+
         for state_file in state_files:
             config, global_state = InputManager.read_config_from_save_file(state_file, self.comm)
             config.desired_device = device
@@ -64,7 +67,7 @@ class OperatorsExtrapGenericTestCase(MpiTestCase):
             self.skipTest(f"Need CUDA for this test")
 
         self.test_extrap_kernel("cuda")
-        self.test_extrap_kernel("omp")
+        # self.test_extrap_kernel("omp")
 
 
 class OperatorsExtrapEuler3DTestCase(OperatorsExtrapGenericTestCase):

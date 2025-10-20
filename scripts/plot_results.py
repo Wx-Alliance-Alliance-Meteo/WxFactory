@@ -1334,9 +1334,12 @@ class FullDataSet:
             for name in rhs_timing_columns[:-1]:
                 color = None
                 for i, data in enumerate(dataset):
+                    # print(f"data = \n{data}")
                     offset = width * i
 
-                    t = data[f"rhs_{name}"] * 1000.0
+                    t = np.zeros_like(bottoms[0])
+                    tmp = data[f"rhs_{name}"] * 1000.0
+                    t[: tmp.size] = tmp[:]
                     label = name if i == 0 else None
                     rects = ax.bar(x + offset, t, width, label=label, bottom=bottoms[i], color=color)
                     bottoms[i] += t

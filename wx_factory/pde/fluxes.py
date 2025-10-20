@@ -212,9 +212,6 @@ def rusanov_3d_vert_new(
     )
     flux_x3_itf_k[south] = flux_x3_itf_k[north]
 
-    eig[0, ...] = 0.0
-    eig[-1, ...] = 0.0
-
     # Riemann solver, separating pressure and advection terms for rho-w
     wflux_adv_x3_itf_k[north] = 0.5 * (
         wflux_adv_d
