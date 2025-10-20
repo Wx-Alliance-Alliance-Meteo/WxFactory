@@ -211,6 +211,9 @@ class ProcessTopology:
             return (2.0 * coord / (1.0 + coord**2) * a1 + a2, -a1)  # West neighbor
 
         def p53(a1, a2, coord):
+            # print("a1 shape: ", a1.shape)
+            # print("a2 shape: ", a2.shape)
+            # print("coord shape: ", coord.shape)
             return (2.0 * coord / (1.0 + coord**2) * a1 - a2, a1)  # East neighbor
 
         convert_contras = [
@@ -338,20 +341,14 @@ class ProcessTopology:
     ):
         xp = self.device.xp
 
-        print("prepare scalar buffer:")
-        print("data shape: ", data.shape)
-
         base_shape = get_base_shape(south.shape, boundary_shape)
         send_buffer = xp.empty((4,) + base_shape, dtype=south[0].dtype)
-        
-        print("base shape: ", base_shape)
-        
+
         # Fill send buffer
         for i, data in enumerate([south, north, west, east]):
             tmp = data.reshape(base_shape)
             send_buffer[i] = xp.flip(tmp, axis=flip_dim) if self.flip[i] else tmp
 
-        
         return send_buffer, south.shape, False
 
     def start_exchange_scalars(
@@ -478,7 +475,7 @@ class ProcessTopology:
         return self.initiate_transfers([send_info])[0]
         # recv_buffer = self.device.empty_like(send_buffer)
         # mpi_request = self.comm_dist_graph.Ineighbor_alltoall(send_buffer, recv_buffer)
-    
+
         # return ExchangeRequest(recv_buffer, mpi_request, shape=south[0].shape, is_vector=True)
 
     def start_exchange_euler_3d(
@@ -491,44 +488,79 @@ class ProcessTopology:
         boundary_we: NDArray,
         flip_dim: int | Tuple[int, ...] = -1,
     ):
-        # print("-----------------")
-        # print("north sahpe: ", north.shape)
-        # print("sn boundaryL ", boundary_sn.shape)
-        # print("we boundaryL ", boundary_we.shape)
-        # print("flip dim: ", flip_dim)
+        # print("start exchange euler")
         xp = self.device.xp
         convert = self.convert_contra
+
         base_shape = get_base_shape(south[0].shape, boundary_sn.shape)
-        # print("base shape: ", base_shape)
-        # print(self.send_buffer)
 
         if self.send_buffer is None or self.send_buffer.nbytes < south.nbytes * 4:
             self.send_buffer = xp.empty(4 * south.nbytes, dtype=xp.uint8)
+            self.send_buffer_cpp = xp.empty(4 * south.nbytes, dtype=xp.uint8)
             self.recv_buffer = xp.empty_like(self.send_buffer)
 
         buffer_shape = (4, south.shape[0]) + base_shape
-        # print("buffer shape: ", buffer_shape)
         num_elem = math.prod(buffer_shape)
-        # print("num_elem: ", num_elem)
-        # send_buffer = xp.empty((4, south.shape[0]) + base_shape, dtype=south[0].dtype)
+
         send_buffer = xp.ravel(self.send_buffer).view(dtype=south.dtype)[:num_elem].reshape(buffer_shape)
-        print("send buffer: ", send_buffer.shape)
+        send_buffer_cpp = xp.ravel(self.send_buffer_cpp).view(dtype=south.dtype)[:num_elem].reshape(buffer_shape)
         recv_buffer = xp.ravel(self.recv_buffer).view(dtype=south.dtype)[:num_elem].reshape(buffer_shape)
-        print("rcv buffer: ", recv_buffer.shape)
 
         inputs = [south, north, west, east]
         boundaries = [boundary_sn, boundary_sn, boundary_we, boundary_we]
+
+        # Straight dims test
+        flip_dim = {-3, -1}
+        # Cpp call
+        self.device.samples.start_exchange_euler_3d_cpp(
+            send_buffer_cpp,
+            south,
+            north,
+            west,
+            east,
+            boundary_sn,
+            boundary_we,
+            list(south.shape),
+            list(flip_dim),
+            list(self.flip),
+            int(self.my_panel),
+        )
+
         for i, (data, bd) in enumerate(zip(inputs, boundaries)):
-            send_buffer[i, 1], send_buffer[i, 2] = convert[i](
-                data[1].reshape(base_shape), data[2].reshape(base_shape), bd
-            )
+
+            send_buffer[i, 1] = data[1].reshape(base_shape)
+            send_buffer[i, 2] = data[2].reshape(base_shape)
+
+            # TODO: reenable convert shape, removed for testing
+            # send_buffer[i, 1], send_buffer[i, 2] = convert[i](
+            #     data[1].reshape(base_shape), data[2].reshape(base_shape), bd
+            # )
+
             send_buffer[i, 0] = data[0].reshape(base_shape)
             send_buffer[i, 3:] = data[3:].reshape((data.shape[0] - 3,) + base_shape)
 
             if self.flip[i]:
-                send_buffer[i, :] = xp.flip(send_buffer[i, :], axis=flip_dim)  # Flip arrays, if needed
+                send_buffer[i, :] = xp.flip(send_buffer[i, :], axis=flip_dim)
 
-        self.device.synchronize()  # When using GPU
+        # compare
+        base_shape = boundary_sn.shape
+        buffer_shape = (4, south.shape[0]) + base_shape
+
+        send_buffer_py = (
+            xp.ravel(self.send_buffer).view(dtype=south.dtype)[: xp.prod(xp.array(buffer_shape))].reshape(buffer_shape)
+        )
+        send_buffer_cpp = (
+            xp.ravel(self.send_buffer_cpp)
+            .view(dtype=south.dtype)[: xp.prod(xp.array(buffer_shape))]
+            .reshape(buffer_shape)
+        )
+
+        eq = send_buffer_py == send_buffer_cpp
+        matches = int(xp.count_nonzero(eq))
+        total = int(eq.size)
+        print(f"matches: {matches}/{total}")
+
+        self.device.synchronize()
 
         return self.initiate_transfers([(send_buffer, south[0].shape, True)], recv_buffer=recv_buffer)[0]
 

@@ -2,5 +2,6 @@
 #define TEMPLATE_KERNELS_HPP
 
 #include "pairs.hpp"
+#include "flip.hpp"
 
 #endif

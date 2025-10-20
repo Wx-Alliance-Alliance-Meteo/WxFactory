@@ -32,10 +32,12 @@ omp_compile_flags = [
     "-mp=gpu",
     "-gpu=cc80",
     "-O2",
+    # "-O0",
     "-Wall",
     "-shared",
     "-std=c++17",
     "-fPIC",
+    "-g",  # dwarf
     "--diag_suppress",
     "inline_gnu_noinline_conflict,subscript_out_of_range",
     "-DWX_OMP",
@@ -202,7 +204,6 @@ _extensions: dict[str, WxExtension] = {
     _ext_name("operators", "cpp"): CppExtension("operators"),
     _ext_name("operators", "cuda"): CudaExtension("operators"),
     _ext_name("operators", "omp"): OmpExtension("operators"),
-    
     _ext_name("kernel_template", "cpp"): CppExtension("kernel_template"),
 }
 
