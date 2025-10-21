@@ -80,9 +80,7 @@ void start_exchange_euler_3d_cpp(
         T* o1 = p_send_buffer + i * block_size + 1 * var_size;
         T* o2 = p_send_buffer + i * block_size + 2 * var_size;
 
-
-        // TODO: reenable convert pairs
-        // convert_pair(a1, a2, coord, o1, o2, panel, i, n_coord, var_size);
+        convert_pair(a1, a2, coord, o1, o2, panel, i, n_coord, var_size);
 
     if (flip_flags[i]) {
 
@@ -100,6 +98,22 @@ Ref: https://pybind11.readthedocs.io/en/stable/basics.html
 The first argument "kernel_template_cpp" here needs to correspond to the one compiled in compile_kernels.py/device.py
 */
 PYBIND11_MODULE(kernel_template_cpp, m) {
+
+    // ** Keep double first as double can overload to complex
+    m.def("start_exchange_euler_3d_cpp", &start_exchange_euler_3d_cpp<double, double>,
+        py::arg("send_buffer"),
+        py::arg("south"),
+        py::arg("north"),
+        py::arg("west"),
+        py::arg("east"),
+        py::arg("boundary_sn"),
+        py::arg("boundary_we"),
+        py::arg("shape"),
+        py::arg("flip_dim"),
+        py::arg("flip_flags"),
+        py::arg("panel"),
+        "hpp version of euler buffers packing"
+    );
 
     m.def("start_exchange_euler_3d_cpp", &start_exchange_euler_3d_cpp<std::complex<double>, double>,
         py::arg("send_buffer"),
