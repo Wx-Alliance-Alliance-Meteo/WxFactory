@@ -33,19 +33,6 @@ class Configuration:
 
         self.state_version = schema.version
 
-        if load_post_config:
-
-            if self.discretization == "fv":
-                if self.num_solpts != 1:
-                    raise ValueError(
-                        f"The number of solution of solution points ({self.num_solpts}) in configuration file"
-                        " is inconsistent with a finite volume discretization"
-                    )
-
-            if self.mg_smoother == "exp":
-                self.exp_smoothe_spectral_radius = self.exp_smoothe_spectral_radii[0]
-                self.exp_smoothe_num_iter = self.exp_smoothe_num_iters[0]
-
     def __deepcopy__(self: Self, memo) -> Self:
         do_not_deepcopy = {}
         other = copy.copy(self)
@@ -57,10 +44,18 @@ class Configuration:
     def _get_option(self, field: ConfigurationField) -> OptionType:
         value: Optional[OptionType] = None
         if field.dependency is not None:
+            # print(f"field '{field.name}' has dependency {field.dependency}")
             if not hasattr(self, field.dependency[0]):
                 return None
 
-            values = [eval_expr(v) if needs_evaluation(field.dependency[1][0], type(getattr(self, field.dependency[0]))) else v for v in field.dependency[1]]
+            values = [
+                (
+                    eval_expr(v)
+                    if needs_evaluation(field.dependency[1][0], type(getattr(self, field.dependency[0])))
+                    else v
+                )
+                for v in field.dependency[1]
+            ]
             if not getattr(self, field.dependency[0]) in values:
                 return None
 
