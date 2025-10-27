@@ -560,15 +560,17 @@ class ProcessTopology:
 
         for i, (data, bd) in enumerate(zip(inputs, boundaries)):
 
-            send_buffer[i, 1], send_buffer[i, 2] = convert[i](
-                data[1].reshape(base_shape), data[2].reshape(base_shape), bd
-            )
+            send_buffer[i, 1] = data[1].reshape(base_shape)
+            send_buffer[i, 2] = data[2].reshape(base_shape)
+            # send_buffer[i, 1], send_buffer[i, 2] = convert[i](
+            #     data[1].reshape(base_shape), data[2].reshape(base_shape), bd
+            # )
 
             send_buffer[i, 0] = data[0].reshape(base_shape)
             send_buffer[i, 3:] = data[3:].reshape((data.shape[0] - 3,) + base_shape)
 
-            if self.flip[i]:
-                send_buffer[i, :] = xp.flip(send_buffer[i, :], axis=flip_dim)
+            # if self.flip[i]:
+            # send_buffer[i, :] = xp.flip(send_buffer[i, :], axis=flip_dim)
 
         end_time = time.perf_counter()
         start_time_cpp = time.perf_counter()
@@ -600,12 +602,14 @@ class ProcessTopology:
             cpp_buf = send_buffer_cpp
 
         if not np.allclose(py_buf, cpp_buf, rtol=1e-6, atol=1e-8):
-            out_string += "Buffers mismatch!\n"
+            out_string += "Buffers mismatch\n"
             # out_string += "buffer py: " + np.array2string(py_buf.ravel()[:10]) + "\n"
             # out_string += "buffer cpp: " + np.array2string(cpp_buf.ravel()[:10]) + "\n"
 
+            print("MISTMATCH")
+
         else:
-            out_string += "Buffers match!\n"
+            out_string += "Buffers match\n"
             # out_string += "buffer py: " + np.array2string(py_buf.ravel()[:10]) + "\n"
             # out_string += "buffer cpp: " + np.array2string(cpp_buf.ravel()[:10]) + "\n"
 

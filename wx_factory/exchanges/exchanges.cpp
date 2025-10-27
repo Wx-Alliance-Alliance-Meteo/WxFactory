@@ -6,7 +6,6 @@
 #include <pybind11/stl.h> 
 #include <pybind11/complex.h>
 
-#include <typeinfo>
 
 #include "kernels/kernels.h"
 
@@ -44,7 +43,6 @@ void start_exchange_euler_3d_cpp(
 
     
     // pointer unpacking
-    // TODO: .mutable_data() ?
     T* p_send_buffer = static_cast<T*>(send_buffer.request().ptr);
     T* p_south = static_cast<T*>(south.request().ptr);
     T* p_north = static_cast<T*>(north.request().ptr);
@@ -70,25 +68,25 @@ void start_exchange_euler_3d_cpp(
         // allocation
         std::memcpy(p_send_buffer + i * block_size, p_data[i], block_size*sizeof(T));
 
-        // Convert pairs - transformation to
+            // Convert pairs - transformation to
 
-        T* a1 = p_data[i] + 1 * var_size;
-        T* a2 = p_data[i] + 2 * var_size;
+            T* a1 = p_data[i] + 1 * var_size;
+            T* a2 = p_data[i] + 2 * var_size;
 
-        U* coord = p_boundary[i];
+            U* coord = p_boundary[i];
 
-        T* o1 = p_send_buffer + i * block_size + 1 * var_size;
-        T* o2 = p_send_buffer + i * block_size + 2 * var_size;
+            T* o1 = p_send_buffer + i * block_size + 1 * var_size;
+            T* o2 = p_send_buffer + i * block_size + 2 * var_size;
 
-        convert_pair(a1, a2, coord, o1, o2, panel, i, n_coord, var_size);
+            convert_pair(a1, a2, coord, o1, o2, panel, i, n_coord, var_size);
 
-    if (flip_flags[i]) {
+            if (flip_flags[i]) {
 
+                flip_axis(p_send_buffer + i * block_size, shape, flip_dims);
 
-        flip_axis(p_send_buffer + i * block_size, shape, flip_dims);
+            }
+    } // for
 
-        }
-    }
 }
 
 
@@ -97,7 +95,8 @@ Bindings python - cpp
 Ref: https://pybind11.readthedocs.io/en/stable/basics.html
 The first argument "kernel_template_cpp" here needs to correspond to the one compiled in compile_kernels.py/device.py
 */
-PYBIND11_MODULE(kernel_template_cpp, m) {
+
+PYBIND11_MODULE(exchanges_cpp, m) {
 
     // ** Keep double first as double can overload to complex
     m.def("start_exchange_euler_3d_cpp", &start_exchange_euler_3d_cpp<double, double>,

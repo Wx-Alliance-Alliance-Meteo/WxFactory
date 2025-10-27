@@ -31,14 +31,14 @@ class Device(ABC):
     # This should only be disabled if the MPI implementation supports CUDA
     use_unified_memory = False
 
-    def __init__(self, comm: MPI.Comm, xp, xalg, pde_module, operators_module, sample_module) -> None:
+    def __init__(self, comm: MPI.Comm, xp, xalg, pde_module, operators_module, exchanges_module) -> None:
         """Set a few modules and functions to have the same name, so that callers can use a single name."""
         self.comm = comm
         self.xp = xp
         self.xalg = xalg
         self.pde = pde_module
         self.operators = operators_module
-        self.samples = sample_module
+        self.exchanges = exchanges_module
 
     @abstractmethod
     def synchronize(self, **kwargs):
@@ -105,9 +105,9 @@ class CpuDevice(Device):
 
             compile_kernels.compile("operators", "cpp", force=False, comm=comm)
             operators = compile_kernels.load_module("operators", "cpp")
-            
-            compile_kernels.compile("kernel_template", "cpp", force=False, comm=comm)
-            sample = compile_kernels.load_module("kernel_template", "cpp")
+
+            compile_kernels.compile("exchanges", "cpp", force=False, comm=comm)
+            exchanges = compile_kernels.load_module("exchanges", "cpp")
         except (ModuleNotFoundError, SystemExit):
             if comm.rank == 0:
                 print(f"Unable to find the interface_c module. You need to compile it.", flush=True)
@@ -116,7 +116,7 @@ class CpuDevice(Device):
             print(f"Unknown exception!", flush=True)
             raise
 
-        super().__init__(comm, numpy, scipy, pde, operators, sample)
+        super().__init__(comm, numpy, scipy, pde, operators, exchanges)
 
     def synchronize(self, **kwargs):
         """Don't do anything. This is to allow writing generic code when device is not the same as the host."""
@@ -163,7 +163,8 @@ class CudaDevice(Device):
 
         import cupy
         import cupyx
-        import cupyx.scipy.linalg
+
+        # import cupyx.scipy.linalg
 
         # Get compiled library
         try:
@@ -172,6 +173,10 @@ class CudaDevice(Device):
 
             compile_kernels.compile("operators", compiled_lib, force=False, comm=comm)
             operators = compile_kernels.load_module("operators", compiled_lib)
+
+            compile_kernels.compile("exchanges", compiled_lib, force=False, comm=comm)
+            exchanges = compile_kernels.load_module("exchanges", compiled_lib)
+
         except (ModuleNotFoundError, ImportError, SystemExit):
             if comm.rank == 0:
                 print(
@@ -184,7 +189,7 @@ class CudaDevice(Device):
             raise
 
         # Set members
-        super().__init__(comm, cupy, cupyx.scipy, pde, operators)
+        super().__init__(comm, cupy, cupyx.scipy, pde, operators, exchanges)
         self.cupyx = cupyx
         self.cupy = cupy
 

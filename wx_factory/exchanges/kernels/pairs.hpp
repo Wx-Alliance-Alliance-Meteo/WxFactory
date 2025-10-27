@@ -9,7 +9,7 @@ struct TransformRule {
     int s21, s22, s23, s24;
 };
 
-extern const TransformRule rules[6][4];
+// extern const TransformRule rules[6][4];
 
 template <typename T, typename U>
 void convert_pair(const T* a1, const T* a2, const U* coord, T* o1, T* o2, int panel, int neighbour, int n_coord, int var_size)
@@ -65,7 +65,7 @@ void convert_pair(const T* a1, const T* a2, const U* coord, T* o1, T* o2, int pa
 }
 
 
-constexpr TransformRule rules[6][4] = {
+inline constexpr TransformRule rules[6][4] = {
     // Panel 0
     {
         { 1, 0, 0, 1,   0, 1, 0, 0 },  // South

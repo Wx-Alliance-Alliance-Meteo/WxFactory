@@ -204,7 +204,8 @@ _extensions: dict[str, WxExtension] = {
     _ext_name("operators", "cpp"): CppExtension("operators"),
     _ext_name("operators", "cuda"): CudaExtension("operators"),
     _ext_name("operators", "omp"): OmpExtension("operators"),
-    _ext_name("kernel_template", "cpp"): CppExtension("kernel_template"),
+    _ext_name("exchanges", "cpp"): CppExtension("exchanges"),
+    _ext_name("exchanges", "cuda"): CudaExtension("exchanges"),
 }
 
 
@@ -269,6 +270,8 @@ def clean_all():
 
 def get_extension(module_name: str, kernel_type: str) -> WxExtension:
     """Retrieve extension object from its name and kernel type."""
+    print("module name: ", module_name)
+    print("kernel_type: ", kernel_type)
     return _extensions[_ext_name(module_name, kernel_type)]
 
 
