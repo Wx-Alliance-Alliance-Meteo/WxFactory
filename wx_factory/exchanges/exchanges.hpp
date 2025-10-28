@@ -49,11 +49,11 @@ __global__ void memcpy_faces_kernel(
 
 template <typename T, typename U>
 __global__ void convert_pair_kernel(
-    const T* __restrict__ a1,
-    const T* __restrict__ a2,
-    const U* __restrict__ coord,
-    T* __restrict__ o1,
-    T* __restrict__ o2,
+    const T*  a1,
+    const T* a2,
+    const U*  coord,
+    T*  o1,
+    T* o2,
     int panel,
     int neighbour,
     int n_coord,
@@ -62,11 +62,12 @@ __global__ void convert_pair_kernel(
 template <typename T>
 __global__ void flip_axis_kernel(
     T* arr,
+    int total_size,
     const int* shape,
     const int* stride,
     int ndim,
-    int axis,
-    size_t total_size);
+    int axis
+);
 
 
 // Host wrappers
@@ -112,7 +113,7 @@ void start_exchange_euler_3d(
     int panel);
 
 // Conversion table
-inline constexpr TransformRule rules[6][4] = {
+static constexpr TransformRule rules[6][4] = {
     // Panel 0
     {
         { 1, 0, 0, 1,   0, 1, 0, 0 },  // South
@@ -157,7 +158,7 @@ inline constexpr TransformRule rules[6][4] = {
     }
 };
 
-extern __constant__ TransformRule rules_c[6][4];
+// extern __constant__ TransformRule rules_c[6][4];
 
 
 
