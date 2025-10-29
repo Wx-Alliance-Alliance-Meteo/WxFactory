@@ -1,5 +1,5 @@
 {
-    "version": "0.1",
+    "version": "0.2",
     "sections": [
         {
             "name": "General",
@@ -27,8 +27,8 @@
                 {
                     "name": "desired_device",
                     "type": "str",
-                    "selectables": ["cpu", "cuda"],
-                    "default": "cpu",
+                    "selectables": ["cpp", "cuda", "cupy", "numpy", "omp"],
+                    "default": "cpp",
                     "description": "Physical backend to run the computation on"
                 },
                 {
@@ -37,7 +37,7 @@
                     "default": [],
                     "dependency": {
                         "name": "desired_device",
-                        "values": ["cuda"]
+                        "values": ["cuda", "cupy"]
                     },
                     "description": "List of Nvidia physical device to use"
                 }
@@ -46,6 +46,22 @@
         {
             "name": "Test_case",
             "fields": [
+                {
+                    "name": "topography_file",
+                    "type": "str",
+                    "dependency":{
+                        "name": "case_number",
+                        "values": [-1]
+                    }
+                },
+                {
+                    "name": "initial_conditions_file",
+                    "type": "str",
+                    "dependency":{
+                        "name": "case_number",
+                        "values": [-1]
+                    }
+                },
                 {
                     "name": "case_number",
                     "type": "int",
@@ -154,6 +170,24 @@
                     "type": "int",
                     "default": 20,
                     "min": 1
+                },
+                {
+                    "name": "splitting_integrator_1",
+                    "type": "str",
+                    "default": "",
+                    "dependancy": {
+                        "name": "time_integrator",
+                        "values": ["lie", "strang"]
+                    }
+                },
+                {
+                    "name": "splitting_integrator_2",
+                    "type": "str",
+                    "default": "",
+                    "dependancy": {
+                        "name": "time_integrator",
+                        "values": ["lie", "strang"]
+                    }
                 }
             ]
         },
@@ -163,12 +197,20 @@
                 {
                     "name": "num_solpts",
                     "type": "int",
-                    "min": 1
+                    "min": 1,
+                    "dependency":{
+                        "name": "grid_file",
+                        "values": [""]
+                    }
                 },
                 {
                     "name": "num_elements_horizontal",
                     "type": "int",
-                    "min": 1
+                    "min": 1,
+                    "dependency": {
+                        "name": "grid_file",
+                        "values": [""]
+                    }
                 },
                 {
                     "name": "num_elements_vertical",
@@ -294,9 +336,18 @@
             "name": "Grid",
             "fields": [
                 {
+                    "name": "grid_file",
+                    "type": "str",
+                    "default": ""
+                },
+                {
                     "name": "grid_type",
                     "type": "str",
-                    "selectables": ["cubed_sphere", "cartesian2d"]
+                    "selectables": ["cubed_sphere", "cartesian2d"],
+                    "dependency":{
+                        "name": "grid_file",
+                        "values": [""]
+                    }
                 },
                 {
                     "name": "discretization",
@@ -525,6 +576,73 @@
                     "default": "netcdf",
                     "selectable": ["netcdf", "fst"],
                     "description": "Desired format to use for storing simulation results."
+                }
+            ]
+        },
+        {
+            "name": "Post_processing",
+            "fields": [
+                {
+                    "name": "enable_schar_mountain",
+                    "type": "bool",
+                    "default": false,
+                    "description": "Enable Schar wave mountains to grow (stabilisation issue)"
+                },
+                {
+                    "name": "schar_mountain_longitude",
+                    "type": "float",
+                    "description": "Mountain longitude center point (radians)",
+                    "dependency": {
+                        "name": "enable_schar_mountain",
+                        "values": [true]
+                    }
+                },
+                {
+                    "name": "schar_mountain_lattitude",
+                    "type": "float",
+                    "description": "Mountain latitude center point (radians)",
+                    "dependency": {
+                        "name": "enable_schar_mountain",
+                        "values": [true]
+                    }
+                },
+                {
+                    "name": "schar_mountain_height",
+                    "type": "float",
+                    "description": "Peak height of the mountain range (m)",
+                    "dependency": {
+                        "name": "enable_schar_mountain",
+                        "values": [true]
+                    }
+                },
+                {
+                    "name": "schar_mountain_radius",
+                    "type": "float",
+                    "description": "Mountain radius (meters)",
+                    "dependency": {
+                        "name": "enable_schar_mountain",
+                        "values": [true]
+                    }
+                },
+                {
+                    "name": "schar_mountain_length",
+                    "type": "float",
+                    "description": "Mountain wavelength (meters)",
+                    "dependency": {
+                        "name": "enable_schar_mountain",
+                        "values": [true]
+                    }
+                },
+                {
+                    "name": "schar_mountain_step",
+                    "type": "int",
+                    "min": 0,
+                    "default": 0,
+                    "description": "Number of step of interpolation, 0 is instantaneous",
+                    "dependency": {
+                        "name": "enable_schar_mountain",
+                        "values": [true]
+                    }
                 }
             ]
         }

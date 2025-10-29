@@ -7,10 +7,14 @@ from numpy.typing import NDArray
 from common import Configuration
 from geometry import DFROperators, Geometry, Metric2D, Metric3DTopo
 from pde import PDE
-from process_topology import ProcessTopology
+from process_topology import ProcessTopology, ExchangeRequest
 
 
 class RHS(ABC):
+    req_r: ExchangeRequest
+    req_u: ExchangeRequest
+    req_t: ExchangeRequest
+
     def __init__(
         self,
         pde: PDE,
@@ -85,33 +89,33 @@ class RHS(ABC):
 
         self.allocate_arrays(q)
 
-        self.timestamps[0] = self.device.timestamp()
+        self.timestamps[0] = self.device.timestamp(name="extrap")
 
         # 1. Extrapolate the solution to the boundaries of the element
         self.solution_extrapolation(q)
-        self.timestamps[1] = self.device.timestamp()
+        self.timestamps[1] = self.device.timestamp(name="start comm")
 
         self.start_communication()
-        self.timestamps[2] = self.device.timestamp()
+        self.timestamps[2] = self.device.timestamp(name="pointwise flux")
 
         # 2. Compute the pointwise fluxes
         self.pointwise_fluxes(q)
-        self.timestamps[3] = self.device.timestamp()
+        self.timestamps[3] = self.device.timestamp(name="flux div 1")
 
         # 3. Compute the derivatives of the discontinuous fluxes
         self.flux_divergence_partial()
-        self.timestamps[4] = self.device.timestamp()
+        self.timestamps[4] = self.device.timestamp(name="end comm")
 
         self.end_communication()
-        self.timestamps[5] = self.device.timestamp()
+        self.timestamps[5] = self.device.timestamp(name="riemann")
 
         # 4. Compute the Riemann fluxes
         self.riemann_fluxes()
-        self.timestamps[6] = self.device.timestamp()
+        self.timestamps[6] = self.device.timestamp(name="flux div 2")
 
         # 5. Complete the divergence operation
         self.flux_divergence()
-        self.timestamps[7] = self.device.timestamp()
+        self.timestamps[7] = self.device.timestamp(name="forcing")
 
         # 6. Add forcing terms
         self.forcing_terms(q)
@@ -132,6 +136,12 @@ class RHS(ABC):
             self.f_x2 = xp.zeros_like(q)
             self.f_x3 = xp.zeros_like(q)
             self.rhs = xp.empty_like(q)
+
+            itf_shape = q.shape[:4] + (2 * self.geom.num_solpts**2,)
+
+            self.q_itf_x1 = xp.empty(itf_shape, dtype=q.dtype)
+            self.q_itf_x2 = xp.empty_like(self.q_itf_x1)
+            self.q_itf_x3 = xp.empty_like(self.q_itf_x1)
 
             self.pressure = xp.zeros_like(q[0])
             self.log_p = xp.zeros_like(q[0])

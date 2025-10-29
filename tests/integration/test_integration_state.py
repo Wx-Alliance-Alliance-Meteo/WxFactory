@@ -109,6 +109,7 @@ class StateIntegrationTestCases(unittest.TestCase):
         self.num_process_required = _get_option(
             parser, requirement_filename, "System", "processes", int, 1, min_value=1
         )
+        self.error_threshold = _get_option(parser, requirement_filename, "System", "error_threshold", float, None)
 
     def setUp(self):
         if MPI.COMM_WORLD.size != self.num_process_required:
@@ -118,7 +119,7 @@ class StateIntegrationTestCases(unittest.TestCase):
 
         self.schema = load_default_schema()
         self.config_files = glob.glob(f"{self.config_dir_path}/config*.ini")
-        print(f"Config files: {self.config_files}")
+        # print(f"Config files: {self.config_files}")
 
     def test_state(self):
         has_exited: bool = False
@@ -145,12 +146,12 @@ class StateIntegrationTestCases(unittest.TestCase):
 
             conf = sim.config
 
-            state_vector_file = sim.output.state_file_name(conf.save_state_freq)
+            state_vector_file = sim.output.state_file_name(sim.step_id)
             base_name = os.path.split(state_vector_file)[-1]
             true_state_vector_file: str = f"{self.config_dir_path}/{base_name}"
 
-            [data, _] = state.load_state(state_vector_file, self.schema)
-            [true_data, _] = state.load_state(true_state_vector_file, self.schema)
+            [data, _] = state.load_state(state_vector_file)
+            [true_data, _] = state.load_state(true_state_vector_file)
 
             if data.shape != true_data.shape:
                 self.fail(f"Result shape {data.shape} is different from reference solution {true_data.shape}")
@@ -163,5 +164,5 @@ class StateIntegrationTestCases(unittest.TestCase):
             relative_diff = diff / true_value
 
             self.assertLessEqual(
-                relative_diff, conf.tolerance, f"The relative difference ({relative_diff:.2e}) is too big"
+                relative_diff, self.error_threshold, f"The relative difference ({relative_diff:.2e}) is too big"
             )

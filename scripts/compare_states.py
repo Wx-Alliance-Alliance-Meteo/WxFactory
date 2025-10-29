@@ -7,10 +7,10 @@ import matplotlib.pyplot as plt
 import numpy
 
 # We assume the script is in a subfolder of the main project
-main_wx_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..")
+main_wx_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../wx_factory")
 sys.path.append(main_wx_dir)
 
-from output.state import load_state
+from output import load_state
 
 
 def main(args):

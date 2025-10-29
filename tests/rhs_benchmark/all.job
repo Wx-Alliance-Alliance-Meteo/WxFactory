@@ -1,0 +1,31 @@
+#! /usr/bin/env bash
+
+#PBS -l select=2:ncpus=48:mpiprocs=4:ngpus=4:mem=205gb
+#PBS -l place=scatter
+#PBS -j oe
+#PBS -l walltime=01:00:00
+#PBS -N rhs_benchmark
+#PBS -q gpu
+
+WX_DIR=/home/vma000/code/wx_factory_clean
+
+cd ${WX_DIR}
+#. ~/launch-scripts/wx/load_u2_env.sh
+export OMP_NUM_THREADS=1
+module load nvhpc-25.3/nvhpc
+. ~/python-environments/wx-gpsc/bin/activate
+
+mpirun -n 4 ./scripts/mpi_config.py
+mpirun -n 6 ./scripts/mpi_config.py
+mpirun -n 8 ./scripts/mpi_config.py
+
+for CONFIG_FILE in ./tests/rhs_benchmark/{cuda,cupy}/*.ini; do
+    echo ${CONFIG_FILE}
+    mpirun -n 6 ./WxFactory ${CONFIG_FILE} --disable-unified-memory
+done
+
+mpirun -n 6 nsys profile -o cuda_implicit.%p ./WxFactory ./tests/rhs_benchmark/c04.ini --disable-unified-memory
+mpirun -n 6 nsys profile -o cuda_explicit.%p ./WxFactory ./tests/rhs_benchmark/c04_rk.ini --disable-unified-memory
+mpirun -n 6 nsys profile -o cupy_implicit.%p ./WxFactory ./tests/rhs_benchmark/c04_cupy.ini --disable-unified-memory
+mpirun -n 6 nsys profile -o cupy_explicit.%p ./WxFactory ./tests/rhs_benchmark/c04_rk_cupy.ini --disable-unified-memory
+

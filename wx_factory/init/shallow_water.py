@@ -5,8 +5,12 @@ from mpi4py import MPI
 import numpy
 
 from common.definitions import day_in_secs, gravity
+from common import Configuration
 from geometry import wind2contra_2d, CubedSphere2D, DFROperators
 from init.matsuno import eval_field
+from output.input_manager import InputManager
+
+from common.graphx import plot_array
 
 
 def eval_u_prime(lat):
@@ -99,6 +103,73 @@ def height_vortex(geom, metric, param, step):
     h = 1.0 - numpy.tanh((rho / gamma) * numpy.sin(lonR - Omega * step_time))
 
     return h, Omega
+
+
+def sw_from_file(geom: CubedSphere2D, operators: DFROperators, config: Configuration):
+    xp = geom.device.xp
+
+    h_surface = InputManager.read_mountain(config.topography_file, geom)
+    h, u, v = InputManager.read_fields(config.initial_conditions_file, ["GZ", "UU", "VV"], geom)
+    h[...] *= 10 / gravity
+
+    # TODO for debugging
+    # h_surface[...] = 0.0
+    # h_surface[...] *= 0.0
+
+    # comm = geom.device.comm
+    # plot_array(geom.to_single_block(h_surface), f"h_surf.png", comm=comm, background_value=h_surface.min() - 100.0)
+    # plot_array(geom.to_single_block(h), f"h.png", comm=comm, background_value=h.min())
+    # plot_array(geom.to_single_block(u), f"u.png", comm=comm, background_value=u.min())
+    # plot_array(geom.to_single_block(v), f"v.png", comm=comm, background_value=v.min())
+
+    num_solpts = geom.num_solpts
+    num_elem = geom.num_elements_horizontal
+    h_surface_itf_i = xp.zeros((num_elem, num_elem + 2, 2 * num_solpts), dtype=h_surface.dtype)
+    h_surface_itf_j = xp.zeros((num_elem + 2, num_elem, 2 * num_solpts), dtype=h_surface.dtype)
+
+    # Easier shape to work with
+    h_split = h_surface.reshape(h_surface.shape[:-1] + (num_solpts, num_solpts))
+    print(f"itf shapes: {h_split.shape}, {h_surface_itf_i.shape}, {h_surface_itf_j.shape}", flush=True)
+
+    h_south = h_split[..., 0, :]
+    h_north = h_split[..., -1, :]
+    h_west = h_split[..., :, 0]
+    h_east = h_split[..., :, -1]
+
+    # Start transferring borders
+    transfer = geom.process_topology.start_exchange_scalars(
+        h_south[..., 0, :, :],
+        h_north[..., -1, :, :],
+        h_west[..., 0, :],
+        h_east[..., -1, :],
+        boundary_shape=(num_elem, num_solpts),
+    )
+
+    # Compute upper boundary (north, east)
+    # We just take the average
+    h_surface_itf_i[..., :, 1:-2, num_solpts:] = (h_west[..., :, 1:, :] + h_east[..., :, :-1, :]) * 0.5
+    h_surface_itf_j[..., 1:-2, :, num_solpts:] = (h_south[..., 1:, :, :] + h_north[..., :-1, :, :]) * 0.5
+
+    # Receive borders from neighbors
+    h_s, h_n, h_w, h_e = transfer.wait()
+
+    # Tile borders
+    h_surface_itf_i[..., :, 0, num_solpts:] = (h_w + h_west[..., 0, :]) * 0.5
+    h_surface_itf_i[..., :, -2, num_solpts:] = (h_east[..., -1, :] + h_e) * 0.5
+    h_surface_itf_j[..., 0, :, num_solpts:] = (h_s + h_south[..., 0, :, :]) * 0.5
+    h_surface_itf_j[..., -2, :, num_solpts:] = (h_north[..., -1, :, :] + h_n) * 0.5
+
+    # Copy to lower boundary (south, west)
+    h_surface_itf_i[..., :, 1:, :num_solpts] = h_surface_itf_i[..., :, :-1, num_solpts:]
+    h_surface_itf_j[..., 1:, :, :num_solpts] = h_surface_itf_j[..., :-1, :, num_solpts:]
+
+    # Compute mountain gradient
+    dzdx1 = h_surface @ operators.derivative_x + geom.middle_itf_i(h_surface_itf_i) @ operators.correction_WE
+    dzdx2 = h_surface @ operators.derivative_y + geom.middle_itf_j(h_surface_itf_j) @ operators.correction_SN
+
+    u1, u2 = geom.wind2contra(u, v)
+
+    return u1, u2, h - h_surface, h_surface, dzdx1, dzdx2, h_surface_itf_i, h_surface_itf_j
 
 
 def williamson_case1(geom, metric, param):

@@ -1,7 +1,9 @@
 from mpi4py import MPI
+from numpy.typing import NDArray
 
 from common import Configuration
 from common.definitions import idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_w, idx_rho_theta, p0, cpd, cvd, Rd, gravity
+from device import CudaDevice
 from geometry import CubedSphere3D, Metric3DTopo
 from init.dcmip import dcmip_schar_damping
 
@@ -55,34 +57,124 @@ def compute_forcings(
 
 class PDEEulerCubesphere(PDE):
     def __init__(self, geometry: CubedSphere3D, config: Configuration, metric: Metric3DTopo):
+        pde = geometry.device.pde
         super().__init__(
             geometry,
             config,
             metric,
-            3,
-            5,
-            config.num_elements_horizontal**2 * config.num_elements_vertical,
-            lambda a: a,
-            lambda a: a,
+            num_dim=3,
+            num_var=5,
+            num_elem=geometry.num_elements_horizontal**2 * geometry.num_elements_vertical,
+            pointwise_func=pde.pointwise_euler_cubedsphere_3d,
+            riemann_func=self.get_riemann_solver(pde, "rusanov"),
         )
-        self.num_solpts = config.num_solpts
+
+        self.num_solpts = geometry.num_solpts
+
         self.case_number = config.case_number
         self.advection_only = config.case_number < 13
 
+        self.compute_forcings = compute_forcings
+        if isinstance(self.device, CudaDevice):
+            self.compute_forcings = self.device.cupy.fuse(compute_forcings)
+
+        self.compute_forcings_inner = self.compute_forcings_py
+        self.pointwise_fluxes_inner = self.pointwise_fluxes_py
+        self.riemann_fluxes_inner = self.riemann_fluxes_py
+        if self.config.desired_device not in ["numpy", "cupy"]:
+            if hasattr(self.device.pde, "forcing_euler_cubesphere_3d"):
+                self.compute_forcings_inner = self.compute_forcings_code
+            self.pointwise_fluxes_inner = self.pointwise_fluxes_code
+            self.riemann_fluxes_inner = self.riemann_fluxes_code
+
+    @staticmethod
+    def get_riemann_solver(pde, name):
+        if name == "rusanov":
+            return pde.riemann_euler_cubedsphere_rusanov_3d
+
     def pointwise_fluxes(
         self,
-        q,
-        flux_x1,
-        flux_x2,
-        flux_x3,
-        pressure,
-        wflux_adv_x1,
-        wflux_adv_x2,
-        wflux_adv_x3,
-        wflux_pres_x1,
-        wflux_pres_x2,
-        wflux_pres_x3,
-        logp,
+        q: NDArray,
+        flux_x1: NDArray,
+        flux_x2: NDArray,
+        flux_x3: NDArray,
+        pressure: NDArray,
+        wflux_adv_x1: NDArray,
+        wflux_adv_x2: NDArray,
+        wflux_adv_x3: NDArray,
+        wflux_pres_x1: NDArray,
+        wflux_pres_x2: NDArray,
+        wflux_pres_x3: NDArray,
+        logp: NDArray,
+    ):
+        self.pointwise_fluxes_inner(
+            q,
+            flux_x1,
+            flux_x2,
+            flux_x3,
+            pressure,
+            wflux_adv_x1,
+            wflux_adv_x2,
+            wflux_adv_x3,
+            wflux_pres_x1,
+            wflux_pres_x2,
+            wflux_pres_x3,
+            logp,
+        )
+
+    def pointwise_fluxes_code(
+        self,
+        q: NDArray,
+        flux_x1: NDArray,
+        flux_x2: NDArray,
+        flux_x3: NDArray,
+        pressure: NDArray,
+        wflux_adv_x1: NDArray,
+        wflux_adv_x2: NDArray,
+        wflux_adv_x3: NDArray,
+        wflux_pres_x1: NDArray,
+        wflux_pres_x2: NDArray,
+        wflux_pres_x3: NDArray,
+        logp: NDArray,
+    ):
+
+        # Call appropriate backend kernel
+        self.pointwise_func(
+            q,
+            self.metric.sqrtG_new,
+            self.metric.h_contra_new,
+            flux_x1,
+            flux_x2,
+            flux_x3,
+            pressure,
+            wflux_adv_x1,
+            wflux_adv_x2,
+            wflux_adv_x3,
+            wflux_pres_x1,
+            wflux_pres_x2,
+            wflux_pres_x3,
+            logp,
+            self.geometry.num_elements_x1,
+            self.geometry.num_elements_x2,
+            self.geometry.num_elements_x3,
+            self.num_solpts**3,
+            False,
+        )
+
+    def pointwise_fluxes_py(
+        self,
+        q: NDArray,
+        flux_x1: NDArray,
+        flux_x2: NDArray,
+        flux_x3: NDArray,
+        pressure: NDArray,
+        wflux_adv_x1: NDArray,
+        wflux_adv_x2: NDArray,
+        wflux_adv_x3: NDArray,
+        wflux_pres_x1: NDArray,
+        wflux_pres_x2: NDArray,
+        wflux_pres_x3: NDArray,
+        logp: NDArray,
     ):
         xp = self.device.xp
 
@@ -125,6 +217,95 @@ class PDEEulerCubesphere(PDE):
 
     def riemann_fluxes(
         self,
+        q_itf_x1: NDArray,
+        q_itf_x2: NDArray,
+        q_itf_x3: NDArray,
+        flux_itf_x1: NDArray,
+        flux_itf_x2: NDArray,
+        flux_itf_x3: NDArray,
+        pressure_itf_x1: NDArray,
+        pressure_itf_x2: NDArray,
+        pressure_itf_x3: NDArray,
+        wflux_adv_itf_x1: NDArray,
+        wflux_pres_itf_x1: NDArray,
+        wflux_adv_itf_x2: NDArray,
+        wflux_pres_itf_x2: NDArray,
+        wflux_adv_itf_x3: NDArray,
+        wflux_pres_itf_x3: NDArray,
+        metric: Metric3DTopo,
+    ):
+        self.riemann_fluxes_inner(
+            q_itf_x1,
+            q_itf_x2,
+            q_itf_x3,
+            flux_itf_x1,
+            flux_itf_x2,
+            flux_itf_x3,
+            pressure_itf_x1,
+            pressure_itf_x2,
+            pressure_itf_x3,
+            wflux_adv_itf_x1,
+            wflux_pres_itf_x1,
+            wflux_adv_itf_x2,
+            wflux_pres_itf_x2,
+            wflux_adv_itf_x3,
+            wflux_pres_itf_x3,
+            metric,
+        )
+
+    def riemann_fluxes_code(
+        self,
+        q_itf_x1: NDArray,
+        q_itf_x2: NDArray,
+        q_itf_x3: NDArray,
+        flux_itf_x1: NDArray,
+        flux_itf_x2: NDArray,
+        flux_itf_x3: NDArray,
+        pressure_itf_x1: NDArray,
+        pressure_itf_x2: NDArray,
+        pressure_itf_x3: NDArray,
+        wflux_adv_itf_x1: NDArray,
+        wflux_pres_itf_x1: NDArray,
+        wflux_adv_itf_x2: NDArray,
+        wflux_pres_itf_x2: NDArray,
+        wflux_adv_itf_x3: NDArray,
+        wflux_pres_itf_x3: NDArray,
+        metric: Metric3DTopo,
+    ):
+
+        # Call Riemann kernel in appropriate backend
+        self.riemann_func(
+            q_itf_x1,
+            q_itf_x2,
+            q_itf_x3,
+            metric.sqrtG_itf_i_new,
+            metric.sqrtG_itf_j_new,
+            metric.sqrtG_itf_k_new,
+            metric.h_contra_itf_i_new,
+            metric.h_contra_itf_j_new,
+            metric.h_contra_itf_k_new,
+            self.geometry.num_elements_x1,
+            self.geometry.num_elements_x2,
+            self.geometry.num_elements_x3,
+            self.num_solpts,
+            flux_itf_x1,
+            flux_itf_x2,
+            flux_itf_x3,
+            pressure_itf_x1,
+            pressure_itf_x2,
+            pressure_itf_x3,
+            wflux_adv_itf_x1,
+            wflux_pres_itf_x1,
+            wflux_adv_itf_x2,
+            wflux_pres_itf_x2,
+            wflux_adv_itf_x3,
+            wflux_pres_itf_x3,
+        )
+
+        return pressure_itf_x1, pressure_itf_x2
+
+    def riemann_fluxes_py(
+        self,
         q_itf_x1,
         q_itf_x2,
         q_itf_x3,
@@ -150,14 +331,17 @@ class PDEEulerCubesphere(PDE):
         # Surface and top boundary treatement, imposing no flow (w=0) through top and bottom
         # csubich -- apply odd symmetry to w at boundary so there is no advective _flux_ through boundary
         n = w_itf_x3.shape[-1] // 2
-        w_itf_x3[..., 0, :, :, :n] = 0.0
-        w_itf_x3[..., 0, :, :, n:] = -w_itf_x3[..., 1, :, :, :n]
-        w_itf_x3[..., -1, :, :, n:] = 0.0
-        w_itf_x3[..., -1, :, :, :n] = -w_itf_x3[..., -2, :, :, n:]
 
         pressure_itf_x1[...] = p0 * xp.exp((cpd / cvd) * xp.log(q_itf_x1[idx_rho_theta] * (Rd / p0)))
         pressure_itf_x2[...] = p0 * xp.exp((cpd / cvd) * xp.log(q_itf_x2[idx_rho_theta] * (Rd / p0)))
         pressure_itf_x3[...] = p0 * xp.exp((cpd / cvd) * xp.log(q_itf_x3[idx_rho_theta] * (Rd / p0)))
+
+        pressure_itf_x1[:, :, 0, :n] = 0.0
+        pressure_itf_x1[:, :, -1, n:] = 0.0
+        pressure_itf_x2[:, 0, :, :n] = 0.0
+        pressure_itf_x2[:, -1, :, n:] = 0.0
+        pressure_itf_x3[0, :, :, :n] = 0.0
+        pressure_itf_x3[-1, :, :, n:] = 0.0
 
         rusanov_3d_hori_i_new(
             u1_itf_x1,
@@ -200,38 +384,18 @@ class PDEEulerCubesphere(PDE):
 
         return pressure_itf_x1, pressure_itf_x2
 
-    def forcing_terms(self, rhs, q, pressure, metric, ops, forcing):
-        # Add coriolis, metric terms and other forcings
-
-        xp = self.device.xp
-
-        rho = q[idx_rho]
-        u1 = q[idx_rho_u1] / rho
-        u2 = q[idx_rho_u2] / rho
-        w = q[idx_rho_w] / rho
-
-        # Compiled kernel
-        # forcing2 = xp.zeros_like(forcing)
-        # num_x1 = self.config.num_elements_horizontal
-        # num_x2 = num_x1
-        # num_x3 = self.config.num_elements_vertical
-        # num_solpts = self.config.num_solpts
-        # self.device.libmodule.forcing_euler_cubesphere_3d(
-        #     q,
-        #     pressure,
-        #     metric.sqrtG_new,
-        #     metric.h_contra_new,
-        #     metric.christoffel,
-        #     forcing,
-        #     num_x1,
-        #     num_x2,
-        #     num_x3,
-        #     num_solpts**3,
-        #     0,  # Verbose flag
-        # )
-
-        # Python only
-        compute_forcings(
+    def compute_forcings_py(
+        self,
+        q: NDArray,
+        rho: NDArray,
+        u1: NDArray,
+        u2: NDArray,
+        w: NDArray,
+        pressure: NDArray,
+        metric: Metric3DTopo,
+        forcing: NDArray,
+    ):
+        self.compute_forcings(
             forcing[idx_rho_u1],
             forcing[idx_rho_u2],
             forcing[idx_rho_w],
@@ -275,6 +439,49 @@ class PDEEulerCubesphere(PDE):
             metric.h_contra_new[2, 2],
         )
 
+    def compute_forcings_code(
+        self,
+        q: NDArray,
+        rho: NDArray,
+        u1: NDArray,
+        u2: NDArray,
+        w: NDArray,
+        pressure: NDArray,
+        metric: Metric3DTopo,
+        forcing: NDArray,
+    ):
+        num_x1 = self.geometry.num_elements_horizontal
+        num_x2 = num_x1
+        num_x3 = self.geometry.num_elements_vertical
+        num_solpts = self.geometry.num_solpts
+        self.device.pde.forcing_euler_cubesphere_3d(
+            q,
+            pressure,
+            metric.sqrtG_new,
+            metric.h_contra_new,
+            metric.christoffel,
+            forcing,
+            num_x1,
+            num_x2,
+            num_x3,
+            num_solpts**3,
+            0,  # Verbose flag
+        )
+
+    def forcing_terms(self, rhs, q, pressure, metric, ops, forcing):
+        # Add coriolis, metric terms and other forcings
+
+        rho = q[idx_rho]
+        u1 = q[idx_rho_u1] / rho
+        u2 = q[idx_rho_u2] / rho
+        w = q[idx_rho_w] / rho
+
+        self.compute_forcings_inner(q, rho, u1, u2, w, pressure, metric, forcing)
+
+        # if MPI.COMM_WORLD.rank == 0:
+        #     print(f"filter k = \n{ops.highfilter_k}")
+        # raise ValueError
+
         # Gravity effect, in vertical direction
         forcing[idx_rho_w] += (
             metric.inv_dzdeta_new * gravity * metric.inv_sqrtG_new * ((metric.sqrtG_new * rho) @ ops.highfilter_k)
@@ -283,8 +490,8 @@ class PDEEulerCubesphere(PDE):
         # DCMIP cases 2-1 and 2-2 involve rayleigh damping
         # dcmip_schar_damping modifies the 'forcing' variable to apply the requried Rayleigh damping
         if self.case_number == 21:
-            dcmip_schar_damping(forcing, rho, u1, u2, w, metric, self.geom, shear=False, new_layout=True)
+            dcmip_schar_damping(forcing, rho, u1, u2, w, metric, self.geometry, shear=False, new_layout=True)
         elif self.case_number == 22:
-            dcmip_schar_damping(forcing, rho, u1, u2, w, metric, self.geom, shear=True, new_layout=True)
+            dcmip_schar_damping(forcing, rho, u1, u2, w, metric, self.geometry, shear=True, new_layout=True)
 
         rhs -= forcing

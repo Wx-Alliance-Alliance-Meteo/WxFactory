@@ -21,6 +21,8 @@ scripts/**/*.pdf
 
 __pycache__/
 *.py[cod]
+.cache
+.cupy
 
 /*.pdf
 jacobian
@@ -28,6 +30,7 @@ listings
 results
 work
 tests/**/tmp
+tests/**/*.o[0-9]*
 
 scripts/load_env.sh
 
@@ -38,9 +41,11 @@ venv
 
 stdout
 *out.txt
+out*.txt
 diff*.dat
 geom*.dat
 
+*.fst
 *.png
 *.out
 *.nc

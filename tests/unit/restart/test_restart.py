@@ -139,12 +139,11 @@ class MultiProcRestartTestCase(MpiTestCase):
             # Compare the two restart files
             if self.smaller_comm.rank == 0:
                 self.assertTrue(os.path.exists(restart_file))
-                q1, _ = load_state(restart_file_ref, self.schema, self.base_sim.device)
-                q2, _ = load_state(restart_file, self.schema, self.smaller_sim.device)
+                q1, _ = load_state(restart_file_ref)
+                q2, _ = load_state(restart_file)
 
-                xp = self.device.xp
                 diff = q1 - q2
-                rel_norm = xp.linalg.norm(diff) / xp.linalg.norm(q1)
+                rel_norm = numpy.linalg.norm(diff) / numpy.linalg.norm(q1)
 
                 self.assertLessEqual(rel_norm, 1e-15, "Result should be the same with different proc counts")
 

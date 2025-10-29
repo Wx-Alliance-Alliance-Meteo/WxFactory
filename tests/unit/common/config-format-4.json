@@ -1,0 +1,63 @@
+{
+    "version": "0.1",
+    "fields": [
+        {
+            "name": "x",
+            "section": "variable",
+            "type": "float"
+        },
+        {
+            "name": "x2",
+            "section": "variable",
+            "type": "float",
+            "default": "pi"
+        },
+        {
+            "name": "y",
+            "section": "variable",
+            "type": "float"
+        },
+        {
+            "name": "z",
+            "section": "variable",
+            "type": "float"
+        },
+        {
+            "name": "a",
+            "section": "variable",
+            "type": "int"
+        },
+        {
+            "name": "b",
+            "section": "variable",
+            "type": "list-int"
+        },
+        {
+            "name": "c",
+            "section": "variable",
+            "type": "list-float"
+        },
+        {
+            "name": "c2",
+            "section": "variable",
+            "type": "list-float",
+            "default": ["pi", "pi + 1"]
+        },
+        {
+            "name": "d",
+            "section": "variable",
+            "type": "float",
+            "selectable": ["pi", "pi + 1"]
+        },
+        {
+            "name": "e",
+            "section": "variable",
+            "type": "float",
+            "default": 1,
+            "dependency": {
+                "name": "d",
+                "values": ["pi"]
+            }
+        }
+    ]
+}

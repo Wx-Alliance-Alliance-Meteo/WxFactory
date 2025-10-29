@@ -7,8 +7,9 @@ from mpi4py import MPI
 from numpy.typing import NDArray
 
 from compiler import compile_kernels
-from . import wx_cupy
+from wx_mpi import split_nodes
 
+from . import wx_cupy
 
 _Timestamp = TypeVar("Timestamp", bound=Union[float, "Event"])
 
@@ -26,12 +27,17 @@ class Device(ABC):
     :param libmodule: Module containing all the compiled code for this device
     """
 
-    def __init__(self, comm: MPI.Comm, xp, xalg, pde_module) -> None:
+    # Whether we should use unified memory as the default allocator (CUDA code)
+    # This should only be disabled if the MPI implementation supports CUDA
+    use_unified_memory = False
+
+    def __init__(self, comm: MPI.Comm, xp, xalg, pde_module, operators_module) -> None:
         """Set a few modules and functions to have the same name, so that callers can use a single name."""
         self.comm = comm
         self.xp = xp
         self.xalg = xalg
         self.pde = pde_module
+        self.operators = operators_module
 
     @abstractmethod
     def synchronize(self, **kwargs):
@@ -63,21 +69,41 @@ class Device(ABC):
         """Not all devices can perform 128 bits floating point operation"""
         return hasattr(self.xp, "float128")
 
+    def start_range(self, *args, **kwargs):
+        pass
+
+    def end_range(self):
+        pass
+
+    def mem_usage(self, tag=""):
+        self.__mem_usage__(tag)
+
+    @abstractmethod
+    def __mem_usage__(self, tag):
+        pass
+
     @staticmethod
     def get_default() -> "CpuDevice":
         return CpuDevice.get_default()
+
+    @staticmethod
+    def cuda_available():
+        return wx_cupy.load_cupy()
 
 
 class CpuDevice(Device):
     _default = None
 
-    def __init__(self, comm: MPI.Comm = MPI.COMM_WORLD) -> None:
+    def __init__(self, comm: MPI.Comm) -> None:
         import numpy
         import scipy
 
         try:
             compile_kernels.compile("pde", "cpp", force=False, comm=comm)
             pde = compile_kernels.load_module("pde", "cpp")
+
+            compile_kernels.compile("operators", "cpp", force=False, comm=comm)
+            operators = compile_kernels.load_module("operators", "cpp")
         except (ModuleNotFoundError, SystemExit):
             if comm.rank == 0:
                 print(f"Unable to find the interface_c module. You need to compile it.", flush=True)
@@ -86,11 +112,7 @@ class CpuDevice(Device):
             print(f"Unknown exception!", flush=True)
             raise
 
-        super().__init__(comm, numpy, scipy, pde)
-
-        # If there is no default device yet, set it to self
-        if CpuDevice._default is None and comm == MPI.COMM_WORLD:
-            CpuDevice._default = self
+        super().__init__(comm, numpy, scipy, pde, operators)
 
     def synchronize(self, **kwargs):
         """Don't do anything. This is to allow writing generic code when device is not the same as the host."""
@@ -115,17 +137,20 @@ class CpuDevice(Device):
         intervals.append(timestamps[-1] - timestamps[0])
         return intervals
 
+    def __mem_usage__(self, tag):
+        pass
+
     @staticmethod
     def get_default() -> "CpuDevice":
         if CpuDevice._default is None:
-            CpuDevice._default = CpuDevice()
+            CpuDevice._default = CpuDevice(MPI.COMM_WORLD)
         return CpuDevice._default
 
 
 class CudaDevice(Device):
     _default = None
 
-    def __init__(self, comm: MPI.Comm = MPI.COMM_WORLD, device_list: Optional[List[int]] = None) -> None:
+    def __init__(self, comm: MPI.Comm, compiled_lib: str = "cuda", device_list: Optional[List[int]] = None) -> None:
         # Delay imports, to avoid loading CUDA if not asked
 
         wx_cupy.load_cupy()
@@ -138,12 +163,15 @@ class CudaDevice(Device):
 
         # Get compiled library
         try:
-            compile_kernels.compile("pde", "cuda", force=False, comm=comm)
-            pde = compile_kernels.load_module("pde", "cuda")
+            compile_kernels.compile("pde", compiled_lib, force=False, comm=comm)
+            pde = compile_kernels.load_module("pde", compiled_lib)
+
+            compile_kernels.compile("operators", compiled_lib, force=False, comm=comm)
+            operators = compile_kernels.load_module("operators", compiled_lib)
         except (ModuleNotFoundError, ImportError, SystemExit):
             if comm.rank == 0:
                 print(
-                    f"Unable to load the interface_cuda module, you need to compile it if you want to use the GPU",
+                    f"Unable to load the compiled CUDA modules, you need to compile it if you want to use the GPU",
                     flush=True,
                 )
             raise
@@ -152,7 +180,7 @@ class CudaDevice(Device):
             raise
 
         # Set members
-        super().__init__(comm, cupy, cupyx.scipy, pde)
+        super().__init__(comm, cupy, cupyx.scipy, pde, operators)
         self.cupyx = cupyx
         self.cupy = cupy
 
@@ -162,21 +190,29 @@ class CudaDevice(Device):
         device_list = [x for x in device_list if x < wx_cupy.num_devices]
 
         if len(device_list) == 0:
-            device_list = range(wx_cupy.num_devices)
+            device_list = [x for x in range(wx_cupy.num_devices)]
 
-        devnum = self.comm.rank % len(device_list)
-        cupy.cuda.Device(device_list[devnum]).use()
+        node_comm, _ = split_nodes(comm)
+        num_procs = node_comm.size
+        num_devices = len(device_list)
+        num_per_device = (num_procs + num_devices - 1) // num_devices
+        devnum = node_comm.rank // num_per_device
 
-        # TODO don't use managed memory
-        cupy.cuda.set_allocator(cupy.cuda.MemoryPool(cupy.cuda.malloc_managed).malloc)
+        self.cuda_device = cupy.cuda.Device(device_list[devnum])
+        self.cuda_device.use()
+        if compiled_lib == "omp":
+            pde.set_omp_device(device_list[devnum])
+
+        if Device.use_unified_memory:
+            if self.comm.rank == 0:
+                print(f"Using unified memory", flush=True)
+            cupy.cuda.set_allocator(cupy.cuda.MemoryPool(cupy.cuda.malloc_managed).malloc)
 
         # Set up compute and copy streams
         self.main_stream = cupy.cuda.get_current_stream()
         self.copy_stream = cupy.cuda.Stream(non_blocking=True)
 
-        # If there is no default device yet, set it to self
-        if CudaDevice._default is None and comm == MPI.COMM_WORLD:
-            CudaDevice._default = self
+        self.debug_stack = 0
 
     def synchronize(self, **kwargs):
         """Synchronize a stream, based on input arguments. By default, the main stream is synchronized.
@@ -199,13 +235,32 @@ class CudaDevice(Device):
         return val.get(**kwargs)
 
     def timestamp(self, **kwargs):
+        debug = True
+
+        if debug:
+            # self.synchronize()
+            if self.debug_stack > 0:
+                self.cupy.cuda.nvtx.RangePop()
+                self.debug_stack -= 1
+
         ts = self.cupy.cuda.Event()
         if "copy_stream" in kwargs and kwargs["copy_stream"]:
             ts.record(self.copy_stream)
         else:
             ts.record(self.main_stream)
 
+        if debug:
+            if "name" in kwargs:
+                self.cupy.cuda.nvtx.RangePush(kwargs["name"])
+                self.debug_stack += 1
+
         return ts
+
+    def start_range(self, name, color=0):
+        self.cupy.cuda.nvtx.RangePush(name, color)
+
+    def end_range(self):
+        self.cupy.cuda.nvtx.RangePop()
 
     def elapsed(self, timestamps):
         get_time = self.cupy.cuda.get_elapsed_time
@@ -213,8 +268,15 @@ class CudaDevice(Device):
         intervals.append(get_time(timestamps[0], timestamps[-1]) / 1000.0)
         return intervals
 
+    def __mem_usage__(self, tag):
+        dev = self.cuda_device
+        free_mem, total_mem = dev.mem_info
+        kb = 1024
+        gb = kb * kb * kb
+        print(f"{tag:10s}: {free_mem / gb :.1f}/{total_mem / gb :.1f} GB available", flush=True)
+
     @staticmethod
     def get_default() -> "CudaDevice":
         if CudaDevice._default is None:
-            CudaDevice._default = CudaDevice()
+            CudaDevice._default = CudaDevice(MPI.COMM_WORLD)
         return CudaDevice._default

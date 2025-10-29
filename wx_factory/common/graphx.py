@@ -21,15 +21,16 @@ def plot_field_from_file(geom_prefix, field_prefix):
     plot_field(geom, field[0, :, :] ** 2)
 
 
-def plot_array(array, filename=None):
-    rank = MPI.COMM_WORLD.Get_rank()
+def plot_array(array, filename=None, comm=MPI.COMM_WORLD, background_value=0):
+    rank = comm.Get_rank()
 
-    all_arrays = MPI.COMM_WORLD.gather(array, root=0)
+    all_arrays = comm.gather(array, root=0)
 
     if rank == 0:
-        print(f"Doing the plotting")
+        print(f"Doing the plotting", flush=True)
 
-        z = numpy.zeros_like(all_arrays[0])
+        z = numpy.empty_like(all_arrays[0])
+        z[...] = background_value
         c1 = numpy.vstack((z, numpy.flipud(all_arrays[3]), z))
         c2 = numpy.vstack((numpy.flipud(all_arrays[4]), numpy.flipud(all_arrays[0]), numpy.flipud(all_arrays[5])))
         c3 = numpy.vstack((z, numpy.flipud(all_arrays[1]), z))
@@ -41,8 +42,8 @@ def plot_array(array, filename=None):
 
         im = ax.imshow(common, interpolation="nearest")
         cbar = ax.figure.colorbar(im, ax=ax)
-        ax.set_xticks(ticks=numpy.arange(0, common.shape[0], 2))
-        ax.set_yticks(ticks=numpy.arange(0, common.shape[1], 2))
+        # ax.set_xticks(ticks=numpy.arange(0, common.shape[0], 2))
+        # ax.set_yticks(ticks=numpy.arange(0, common.shape[1], 2))
 
         matplotlib.pyplot.tight_layout()
 
@@ -51,7 +52,7 @@ def plot_array(array, filename=None):
         else:
             matplotlib.pyplot.savefig(filename)
 
-    MPI.COMM_WORLD.Barrier()
+    comm.Barrier()
 
 
 def image_field(

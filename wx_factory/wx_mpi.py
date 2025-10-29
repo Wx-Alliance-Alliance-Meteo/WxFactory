@@ -163,3 +163,21 @@ def do_once(action, *args, comm: MPI.Comm = MPI.COMM_WORLD) -> Any:
         s.return_value = action(*args)
 
     return s.return_value
+
+
+def split_nodes(comm: MPI.Comm) -> tuple[MPI.Comm, int]:
+    """Split the given communicator into nodes (1 communicator per node)
+
+    :param comm: The communicator we want to split
+    :type comm: MPI.Comm
+    :return: A communicator for only the current node, and a node ID
+    :rtype: tuple[MPI.Comm, int]
+    """
+    node_comm = comm.Split_type(MPI.COMM_TYPE_SHARED, comm.rank)
+
+    node_roots_comm = comm.Split(node_comm.rank == 0, comm.rank)  # Node roots in one comm, the rest in another
+
+    node_id = node_roots_comm.rank
+    node_id = node_comm.bcast(node_id, 0)  # Only node root is sending, so everyone then has the correct node ID
+
+    return node_comm, node_id
