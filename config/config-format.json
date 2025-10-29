@@ -99,6 +99,10 @@
                     "name": "tolerance",
                     "type": "float"
                 },
+		{
+		    "name": "exode_rtol",
+                    "type": "float"
+		},
                 {
                     "name": "starting_step",
                     "type": "int",
