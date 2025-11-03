@@ -128,15 +128,33 @@
                                     "icwy_1s", "icwy_neiop", "icwy_ne", "icwy_ne1s", "kiops_ne", "pmex_1s", "pmex_ne1s"]
                 },
                 {
+                    "name": "exode_rtol",
+                    "type": "float",
+                    "dependency": {
+                        "name": "exponential_solver",
+                        "values": ["exode"]
+                    }
+                },
+                {
                     "name": "exode_method",
                     "type": "str",
                     "default": "BS3(2)",
-                    "selectables": [ "BS3(2)", "DP5(4)", "M4(3)", "KC3(2)", "EXLRK3(2)", "EXLRK4(3)", "F14(12)", "DP8(7)", "F10(8)" ]
+                    "selectables": [ "BS3(2)", "DP5(4)", "M4(3)", "KC3(2)", "EXLRK3(2)", "EXLRK4(3)", "EXLRK4(3)MINA5",
+                                     "EXLRK4(3)MINA5PARAM0","EXLRK4(3)MINA5PARAM0D5","EXLRK4(3)MINA5PARAMN0D25",
+                                     "RALSTON43","F14(12)", "DP8(7)", "F10(8)" ],
+                    "dependency": {
+                        "name": "exponential_solver",
+                        "values": ["exode"]
+                    }
                 },
                 {
                     "name": "exode_controller",
                     "type": "str",
-                    "default": ""
+                    "default": "",
+                    "dependency": {
+                        "name": "exponential_solver",
+                        "values": ["exode"]
+                    }
                 },
                 {
                     "name": "krylov_size",
@@ -171,7 +189,7 @@
                     "name": "splitting_integrator_1",
                     "type": "str",
                     "default": "",
-                    "dependancy": {
+                    "dependency": {
                         "name": "time_integrator",
                         "values": ["lie", "strang"]
                     }
@@ -180,7 +198,7 @@
                     "name": "splitting_integrator_2",
                     "type": "str",
                     "default": "",
-                    "dependancy": {
+                    "dependency": {
                         "name": "time_integrator",
                         "values": ["lie", "strang"]
                     }

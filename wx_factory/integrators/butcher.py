@@ -1,6 +1,170 @@
 import numpy
 from .explicit_runge_kutta import RungeKutta
+import math
 
+class ExLRK43minA5param0(RungeKutta):
+    # effective number of stages
+    n_stages = 4
+
+    # order of the main method
+    order = 4
+
+    # order of the secondary embedded method
+    error_estimator_order = 3  # for linear
+
+    # order of the secondary embedded method
+    error_estimator_order = 3  # for linear
+
+    # time fraction coefficients (nodes)
+    C = numpy.array([0, 0.396461261635592, 1.00172794910661, 0.961049202230222])
+
+    # runge kutta coefficient matrix
+    A = numpy.array(
+        [
+            [0.0, 0.0, 0.0, 0.0],
+            [0.396461261635592, 0.0, 0.0, 0.0],
+            [-2.690877824436190, 3.692605773542800, 0.0, 0.0],
+            [-1.780816400915870, 2.705947587006750, 0.035918016139342, 0.0],
+        ]
+    )
+
+    # output coefficients (weights)
+    B = numpy.array([0.124850249161287  , 0.569052061306734 , -0.4862991121957897, 0.792396801727768])
+
+    # error coefficients (weights Bh - B)
+    E = numpy.array([0.084219968340823944648, 0.68354490724266631170, 0.,  0.083032977309500495393,  0.14920214710700924826])
+    E[:-1] -= B
+
+class ExLRK43minA5param0d5(RungeKutta):
+    # effective number of stages
+    n_stages = 4
+
+    # order of the main method
+    order = 4
+
+    # order of the secondary embedded method
+    error_estimator_order = 3  # for linear
+
+    # order of the secondary embedded method
+    error_estimator_order = 3  # for linear
+
+    # time fraction coefficients (nodes)
+    C = numpy.array([0, 0.396461261635592, 1.00172794910661, 0.961049202230222])
+
+    # runge kutta coefficient matrix
+    A = numpy.array(
+        [
+            [0.0, 0.0, 0.0, 0.0],
+            [0.396461261635592, 0.0, 0.0, 0.0],
+            [-2.690877824436190, 3.692605773542800, 0.0, 0.0],
+            [-1.780816400915870, 2.705947587006750, 0.035918016139342, 0.0],
+        ]
+    )
+
+    # output coefficients (weights)
+    B = numpy.array([0.124850249161287  , 0.569052061306734 , -0.4862991121957897, 0.792396801727768])
+
+    # error coefficients (weights Bh - B)
+    E = numpy.array([0.042444980542884778305,  0.80126344816542027396, 0.5, -0.64631631285597168776,  0.30260788414766663552])
+    E[:-1] -= B
+
+class ExLRK43minA5paramn0d25(RungeKutta):
+    # effective number of stages
+    n_stages = 4
+
+    # order of the main method
+    order = 4
+
+    # order of the secondary embedded method
+    error_estimator_order = 3  # for linear
+
+    # order of the secondary embedded method
+    error_estimator_order = 3  # for linear
+
+    # time fraction coefficients (nodes)
+    C = numpy.array([0, 0.396461261635592, 1.00172794910661, 0.961049202230222])
+
+    # runge kutta coefficient matrix
+    A = numpy.array(
+        [
+            [0.0, 0.0, 0.0, 0.0],
+            [0.396461261635592, 0.0, 0.0, 0.0],
+            [-2.690877824436190, 3.692605773542800, 0.0, 0.0],
+            [-1.780816400915870, 2.705947587006750, 0.035918016139342, 0.0],
+        ]
+    )
+
+    # output coefficients (weights)
+    B = numpy.array([0.124850249161287  , 0.569052061306734 , -0.4862991121957897, 0.792396801727768])
+
+    # error coefficients (weights Bh - B)
+    E = numpy.array([0.10510746223979352782, 0.62468563678128933057, -0.25, 0.44770762239223658697,  0.072499278586680554630])
+    E[:-1] -= B
+
+class Ralston4(RungeKutta):
+    # effective number of stages
+    n_stages = 4
+
+    # order of the main method
+    order = 4
+
+    # order of the secondary embedded method
+    error_estimator_order = 3  # for linear
+
+    # order of the secondary embedded method
+    error_estimator_order = 3  # for linear
+
+    # time fraction coefficients (nodes)
+    C = numpy.array([0., 2./5., (14.-3.*math.sqrt(5.))/16., 1.])
+
+    # runge kutta coefficient matrix
+    A = numpy.array(
+        [
+            [0.0, 0.0, 0.0, 0.0],
+            [2./5., 0.0, 0.0, 0.0],
+            [(-2889.+1428.*math.sqrt(5.))/1024., (3785.-1620.*math.sqrt(5.))/1024., 0.0, 0.0],
+            [(-3365.+2094.*math.sqrt(5.))/6040., (-975.-3046.*math.sqrt(5.))/2552., (467040.+203968.*math.sqrt(5.))/ 240845., 0.0],
+        ]
+    )
+
+    # output coefficients (weights)
+    B = numpy.array([(263.+24.*math.sqrt(5.))/1812., (125.-1000.*math.sqrt(5.))/3828., (3426304.+1661952.*math.sqrt(5.))/5924787., (30.-4.*math.sqrt(5.))/123.])
+
+    # error coefficients (weights Bh - B)
+    E = numpy.array([-0.28043619791666666667 + 0.20507812500000000000*math.sqrt(5), -0.73242187500000000000*math.sqrt(5) + 1.0403103298611111111, 1.25,1.1345486111111111111*math.sqrt(5) - 2.4370659722222222222,  -0.60720486111111111111*math.sqrt(5) + 1.4271918402777777778])
+    E[:-1] -= B
+
+
+
+class ExLRK43minA5(RungeKutta):
+    # effective number of stages
+    n_stages = 4
+
+    # order of the main method
+    order = 4
+
+    # order of the secondary embedded method
+    error_estimator_order = 3  # for linear
+
+    # time fraction coefficients (nodes)
+    C = numpy.array([0, 0.396461261635592, 1.00172794910661, 0.961049202230222])
+    
+    # runge kutta coefficient matrix
+    A = numpy.array(
+        [
+            [0.0, 0.0, 0.0, 0.0],
+            [0.396461261635592, 0.0, 0.0, 0.0],
+            [-2.690877824436190, 3.692605773542800, 0.0, 0.0],
+            [-1.780816400915870, 2.705947587006750, 0.035918016139342, 0.0],
+        ]
+    )
+
+    # output coefficients (weights)
+    B = numpy.array([0.124850249161287  , 0.569052061306734 , -0.4862991121957897, 0.792396801727768])
+
+    # error coefficients (weights Bh - B)
+    E = numpy.array([0.117639958579175, 0.589370074504463 , -0.4, 0.666512409441878,   0.026477557474483])
+    E[:-1] -= B
 
 class ExLRK43(RungeKutta):
     # effective number of stages
@@ -2286,6 +2450,11 @@ METHODS = {
     "KC3(2)": KC32,
     "EXLRK3(2)": ExLRK32,
     "EXLRK4(3)": ExLRK43,
+    "EXLRK4(3)MINA5": ExLRK43minA5,
+    "EXLRK4(3)MINA5PARAM0":ExLRK43minA5param0,
+    "EXLRK4(3)MINA5PARAM0D5":ExLRK43minA5param0d5,
+    "EXLRK4(3)MINA5PARAMN0D25":ExLRK43minA5paramn0d25,
+    "RALSTON43": Ralston4,
     "F14(12)": F14_12,
     "DP8(7)": DP87,
     "F10(8)": F10_8,

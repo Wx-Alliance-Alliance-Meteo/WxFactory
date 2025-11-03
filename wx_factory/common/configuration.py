@@ -173,6 +173,7 @@ class Configuration:
     t_end: float
     time_integrator: str
     tolerance: float
+    exode_rtol: float
     topography_file: str
     verbose_precond: int
     verbose_solver: int

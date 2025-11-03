@@ -19,8 +19,10 @@ class EpiStiff(Integrator):
         self.krylov_size = 1
         self.jacobian_method = param.jacobian_method
         self.exponential_solver = param.exponential_solver
-        self.exode_method = param.exode_method
-        self.exode_controller = param.exode_controller
+        if self.exponential_solver == "exode":
+            self.exode_rtol = param.exode_rtol
+            self.exode_method = param.exode_method
+            self.exode_controller = param.exode_controller
 
         if order < 2:
             raise ValueError("Unsupported order for EPI method")
@@ -97,6 +99,7 @@ class EpiStiff(Integrator):
                 method=self.exode_method,
                 controller=self.exode_controller,
                 atol=self.tol,
+                rtol=self.exode_rtol,
                 task1=False,
                 verbose=False,
             )

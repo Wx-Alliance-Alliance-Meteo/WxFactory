@@ -39,8 +39,10 @@ class Epi(Integrator):
         self.exponential_solver = param.exponential_solver
         self.case_number = param.case_number
         self.int = param.time_integrator
-        self.exode_method = param.exode_method
-        self.exode_controller = param.exode_controller
+        if self.exponential_solver == "exode":
+            self.exode_method = param.exode_method
+            self.exode_controller = param.exode_controller
+            self.exode_rtol = param.exode_rtol
 
         if order == 2:
             self.A = self.device.xp.array([[]])
@@ -298,6 +300,7 @@ class Epi(Integrator):
                 method=self.exode_method,
                 controller=self.exode_controller,
                 atol=self.tol,
+                rtol=self.exode_rtol,
                 task1=False,
                 verbose=False,
             )
