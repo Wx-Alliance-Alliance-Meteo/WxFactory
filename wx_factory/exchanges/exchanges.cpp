@@ -6,10 +6,70 @@
 #include <pybind11/stl.h> 
 #include <pybind11/complex.h>
 
+#include "exchanges.hpp"
 
 #include "kernels/kernels.h"
 
 namespace py = pybind11;
+
+template<typename T>
+void flip_axis_wrapper_cpu(T* arr, const std::vector<int>& shape, const std::vector<int>& axes) {
+    const int ndim = shape.size();
+
+    std::vector<int> stride(ndim);
+    stride[ndim - 1] = 1;
+    for (int d = ndim - 2; d >= 0; --d) {
+        stride[d] = stride[d + 1] * shape[d + 1];
+    }
+
+    int total_size = std::accumulate(shape.begin(), shape.end(), 1, std::multiplies<>());
+
+    for (int axis : axes) {
+        // convert python negative format
+        if (axis < 0) {
+            axis += ndim;
+        }
+
+        int dim = shape[axis];
+        int stride_axis = stride[axis];
+        int outer = total_size / (dim * stride_axis);
+
+        for (int o = 0; o < outer; ++o) {
+            int base_idx = o * dim * stride_axis;
+            for (int i = 0; i < dim / 2; ++i) {
+                int idx = base_idx + i * stride_axis;
+                int idx_opp = base_idx + (dim - 1 - i) * stride_axis;
+                for (int j = 0; j < stride_axis; ++j) {
+                    flip_axis_kernel_shared(arr, idx + j, idx_opp + j);
+                }
+            }
+        }
+    }
+}
+
+template <typename T, typename U>
+void convert_pair_wrapper_cpu(
+    const T* p_data_face, const U* p_boundary_face,
+    T* p_send_buffer,
+    int block_size,
+    int panel, int neighbour,
+    int n_coord, int var_size
+) {
+
+
+    const TransformRule& rule = rules[panel][neighbour];
+
+    const T* a1 = p_data_face + 1 * var_size;
+    const T* a2 = p_data_face + 2 * var_size;
+    const U* coord = p_boundary_face;
+
+    T* o1 = p_send_buffer + 1 * var_size;
+    T* o2 = p_send_buffer + 2 * var_size;
+
+    for (int i = 0; i < var_size; ++i) {
+        convert_pair_kernel_shared(a1, a2, coord, o1, o2, i, n_coord, rule);
+    }
+}
 
 // template <typename T>
 // T* allocate_buffer(const std::vector<int>& shape);
@@ -68,26 +128,48 @@ void start_exchange_euler_3d_cpp(
         // allocation
         std::memcpy(p_send_buffer + i * block_size, p_data[i], block_size*sizeof(T));
 
-            // Convert pairs - transformation to
 
-            T* a1 = p_data[i] + 1 * var_size;
-            T* a2 = p_data[i] + 2 * var_size;
+        const T* p_data_face = p_data[i];
+        const U* p_boundary_face = p_boundary[i];
+        T* p_send_buffer_face = p_send_buffer + i * block_size;
 
-            U* coord = p_boundary[i];
+        // Convert pairs - transformation to
 
-            T* o1 = p_send_buffer + i * block_size + 1 * var_size;
-            T* o2 = p_send_buffer + i * block_size + 2 * var_size;
+        p_data_face = p_data[i];
+        p_boundary_face = p_boundary[i];
+        convert_pair_wrapper_cpu(p_data_face, p_boundary_face, p_send_buffer_face, block_size, panel, i, n_coord, var_size);
 
-            convert_pair(a1, a2, coord, o1, o2, panel, i, n_coord, var_size);
+        if (flip_flags[i]) {
 
-            if (flip_flags[i]) {
-
-                flip_axis(p_send_buffer + i * block_size, shape, flip_dims);
-
-            }
+            // flip_axis_nogpu(p_send_buffer + i * block_size, shape, flip_dims);
+            flip_axis_wrapper_cpu(p_send_buffer + i * block_size, shape, flip_dims);
+        }
     } // for
 
 }
+
+template<typename T>
+void flip_axis_wrapper_cpu(T* arr, const std::vector<int>& shape, const std::vector<int>& axes) {
+
+    const int ndim = shape.size();
+
+    // stride per dimension
+    std::vector<int> stride(ndim);
+    stride[ndim-1] = 1;
+    for (int d = ndim - 2; d >= 0; --d) {
+        stride[d] = stride[d+1] * shape[d+1];
+    }
+    
+    int total_size = std::accumulate(shape.begin(), shape.end(), 1, std::multiplies<>());
+    for (int axis: axes) {
+        for (int i = 0; i < ndim / 2; i++) {
+            int dim = shape[axis];
+            int stride_axis = stride[axis];
+            flip_axis_kernel<T>(arr, total_size, dim, stride_axis, axis);
+        }
+    }
+}
+
 
 
 /*
