@@ -21,23 +21,32 @@ __global__ void flip_axis_kernel(
     int total_size,
     int dim,
     int stride_axis,
-    int axis
+    int outer_rows,
+    int block_size,
+    const bool* flip_flags
 );
 
 template <typename T>
-void flip_axis_wrapper_gpu(T* d_arr, const std::vector<int>& shape, const std::vector<int>& axes);
+void flip_axis_wrapper_gpu(T* d_arr, const std::vector<int>& shape, const std::vector<int>& axes, int block_size, const std::vector<bool>& flip_flags);
+
 
 template <typename T, typename U>
 void convert_pair_wrapper_gpu(
-    const T* p_data_face, const U* p_boundary_face,
+    const T* p_data[4], const U* p_boundary[4],
     T* p_send_buffer,
     int block_size,
-    int panel, int neighbour,
+    int panel,
     int n_coord, int var_size
 );
 
+
+template <typename T, typename U>
+__global__ void convert_pair_kernel(
+    const T* const* p_data,
+    const U* const* p_boundary, T* p_send_buffer, int panel, int n_coord, int var_size, int block_size);
+
 // Conversion table
-static constexpr TransformRule rules[6][4] = {
+__device__ __constant__  TransformRule rules[6][4] = {
     // Panel 0
     {
         { 1, 0, 0, 1,   0, 1, 0, 0 },  // South
