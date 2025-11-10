@@ -83,12 +83,6 @@ void start_exchange_euler_3d_cu (
     convert_pair_wrapper_gpu<T, U>(p_data, p_boundary, p_send_buffer, block_size, panel, n_coord, var_size);
 
     flip_axis_wrapper_gpu<T>(p_send_buffer, shape, flip_dims, block_size, flip_flags);
-
-    // for (int i = 0; i < 4; i++) {
-    //     if (flip_flags[i]) {
-    //         flip_axis_wrapper_gpu<T>(p_send_buffer + i * block_size, shape, flip_dims);
-    //     }
-    // }
 }
 
 void start_exchange_euler_3d_wrapper(
@@ -156,29 +150,25 @@ void convert_pair_wrapper_gpu(
     int n_coord, int var_size
 ) {
 
-    const T** d_p_data     = nullptr;
-    const U** d_p_boundary = nullptr;
-    cudaMalloc(&d_p_data,     4 * sizeof(T*));
-    cudaMalloc(&d_p_boundary, 4 * sizeof(U*));
-
-    cudaMemcpy(d_p_data, p_data, 4 * sizeof(T*), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_p_boundary, p_boundary, 4 * sizeof(U*), cudaMemcpyHostToDevice);
-
 
     int BLOCK_SIZE = 128;
     dim3 threads(BLOCK_SIZE);
     dim3 blocks((var_size + BLOCK_SIZE - 1) / BLOCK_SIZE, 4);
-    
-    convert_pair_kernel<T, U><<<blocks, threads>>>(d_p_data, d_p_boundary, p_send_buffer, panel, n_coord, var_size, block_size);
 
-    cudaFree(d_p_data);
-    cudaFree(d_p_boundary);
+    
+    PairParams<T, U> params;
+    for (int i = 0; i < 4; ++i) {
+        params.data[i]     = p_data[i];
+        params.boundary[i] = p_boundary[i];
+    }
+
+    
+    convert_pair_kernel<T, U><<<blocks, threads>>>(params, p_send_buffer, panel, n_coord, var_size, block_size);
 }
 
 template <typename T, typename U>
 __global__ void convert_pair_kernel(
-    const T* const* p_data,
-    const U* const* p_boundary, T* p_send_buffer, int panel, int n_coord, int var_size, int block_size) {
+        PairParams<T, U> params, T* p_send_buffer, int panel, int n_coord, int var_size, int block_size) {
 
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     int face = blockIdx.y;
@@ -187,9 +177,9 @@ __global__ void convert_pair_kernel(
     
     const TransformRule& rule = rules[panel][face];
     
-    const T* a1 = p_data[face] + 1 * var_size;
-    const T* a2 = p_data[face] + 2 * var_size;
-    const U* coord = p_boundary[face];
+    const T* a1 = params.data[face] + 1 * var_size;
+    const T* a2 = params.data[face] + 2 * var_size;
+    const U* coord = params.boundary[face];
 
     T* base = p_send_buffer + face * block_size;
     T* o1 = base + 1 * var_size;
@@ -198,39 +188,13 @@ __global__ void convert_pair_kernel(
     convert_pair_kernel_shared(a1, a2, coord, o1, o2, idx, n_coord, rule);
 }
 
-template <typename T>
-__global__ void flip_axis_kernel(
-    T* arr,
-    int total_size,
-    int dim,
-    int stride_axis,
-    int outer_rows,
-    int block_size,
-    const bool* flip_flags
-) {
-    int o = blockIdx.x;
-    int i = threadIdx.x;
-    int face = blockIdx.y;
-
-    
-    if (face >= 4) return;
-    if (o >= outer_rows || i >= dim / 2) return;
 
 
-    if (flip_flags && !flip_flags[face]) return;
-
-
-    int base_idx = o * dim * stride_axis;
-    int idx = base_idx + i * stride_axis;
-    int idx_opp = base_idx + (dim - 1 - i) * stride_axis;
-
-    for (int j = 0; j < stride_axis; ++j) {
-        flip_axis_kernel_shared(arr + block_size*face, idx + j, idx_opp + j);
-    }
-}
+__device__ __constant__ unsigned char c_flags[4];
 
 template <typename T>
 void flip_axis_wrapper_gpu(T* d_arr, const std::vector<int>& shape, const std::vector<int>& axes, int block_size, const std::vector<bool>& flip_flags) {
+    
     int ndim = shape.size();
 
     // strides
@@ -241,13 +205,10 @@ void flip_axis_wrapper_gpu(T* d_arr, const std::vector<int>& shape, const std::v
 
     int total_size = std::accumulate(shape.begin(), shape.end(), 1, std::multiplies<>());
     
-    bool h_flags[4] = {true, true, true, true};
-    if (flip_flags.size() == 4) {
-        for (int i = 0; i < 4; ++i) h_flags[i] = flip_flags[i];
-    }
-    bool* d_flags = nullptr;
-    cudaCheck(cudaMalloc(&d_flags, 4 * sizeof(bool)));
-    cudaCheck(cudaMemcpy(d_flags, h_flags, 4 * sizeof(bool), cudaMemcpyHostToDevice));
+
+    Flags flags{};
+    for (int i = 0; i < 4 && i < (int)flip_flags.size(); ++i) flags.f[i] = flip_flags[i] ? 1 : 0;
+
 
     for (int axis : axes) {
         if (axis < 0)
@@ -261,10 +222,98 @@ void flip_axis_wrapper_gpu(T* d_arr, const std::vector<int>& shape, const std::v
 
         dim3 outer(total_size / (dim * stride_axis), 4);
 
-        flip_axis_kernel<T><<<outer, dim/2>>>(d_arr, total_size, dim, stride_axis, outer_rows, block_size, d_flags);
-        cudaDeviceSynchronize();
+        flip_axis_kernel<T><<<outer, dim/2>>>(d_arr, total_size, dim, stride_axis, outer_rows, block_size, flags);
     }
 }
+
+template <typename T>
+__global__ void flip_axis_kernel(
+    T* arr,
+    int total_size,
+    int dim,
+    int stride_axis,
+    int outer_rows,
+    int block_size,
+    Flags flags
+) {
+    int o = blockIdx.x;
+    int i = threadIdx.x;
+    int face = blockIdx.y;
+
+    
+    if (face >= 4) return;
+    if (o >= outer_rows || i >= dim / 2) return;
+    
+    if (!flags.f[face]) return;
+
+
+
+    int base_idx = o * dim * stride_axis;
+    int idx = base_idx + i * stride_axis;
+    int idx_opp = base_idx + (dim - 1 - i) * stride_axis;
+
+    for (int j = 0; j < stride_axis; ++j) {
+        flip_axis_kernel_shared(arr + block_size*face, idx + j, idx_opp + j);
+    }
+}
+
+
+// template <typename T>
+// __global__ void flip_axis_kernel(
+//     T* arr,
+//     int dim,
+//     int stride_axis,
+//     int outer_rows,
+//     int block_size,
+//     int face
+// ) {
+//     int o = blockIdx.x;
+//     int base = face * block_size + o * dim * stride_axis;
+//     int half = dim / 2;
+
+//     for (int i = threadIdx.x; i < half; i += blockDim.x) {
+//         int idx = base + i * stride_axis;
+//         int idx_opp = base + (dim - 1 - i) * stride_axis;
+
+//         for (int j = 0; j < stride_axis; ++j) {
+//             flip_axis_kernel_shared(arr + block_size * face, idx + j, idx_opp + j);
+//         }
+//     }
+// }
+
+// template <typename T>
+// void flip_axis_wrapper_gpu(T* d_arr, const std::vector<int>& shape, const std::vector<int>& axes, int block_size, const std::vector<bool>& flip_flags) {
+//     int ndim = shape.size();
+
+//     // strides
+//     std::vector<int> stride(ndim);
+//     stride[ndim - 1] = 1;
+//     for (int d = ndim - 2; d >= 0; --d)
+//         stride[d] = stride[d + 1] * shape[d + 1];
+
+//     int total_size = std::accumulate(shape.begin(), shape.end(), 1, std::multiplies<>());
+    
+
+//     const int threads = 128;
+//     for (int axis : axes) {
+//         if (axis < 0)
+//             axis += ndim;
+
+//         int dim = shape[axis];
+//         int stride_axis = stride[axis];
+        
+//         int outer_rows = total_size / (dim * stride_axis);
+//         dim3 grid(outer_rows); 
+//         dim3 block(threads);
+
+
+//         dim3 outer(total_size / (dim * stride_axis), 4);
+//         for (int face = 0; face < 4; ++face) {
+//             if (flip_flags.size() == 4 && !flip_flags[face]) continue;
+//             flip_axis_kernel<T><<<grid, block>>>(d_arr, dim, stride_axis, outer_rows, block_size, face);
+//         }
+//     }
+// }
 
 PYBIND11_MODULE(exchanges_cuda, m) {
     m.def("start_exchange_euler_3d_cpp", &start_exchange_euler_3d_wrapper);

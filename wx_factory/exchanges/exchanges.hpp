@@ -15,20 +15,27 @@
 
 namespace py = pybind11;
 
+struct Flags { unsigned char f[4]; };
+
+template <typename T>
+void flip_axis_wrapper_gpu(T* d_arr, const std::vector<int>& shape, const std::vector<int>& axes, int block_size, const std::vector<bool>& flip_flags);
+
 template <typename T>
 __global__ void flip_axis_kernel(
-    T* arr,
+    T* arr, 
     int total_size,
     int dim,
     int stride_axis,
     int outer_rows,
     int block_size,
-    const bool* flip_flags
+    Flags flags
 );
 
-template <typename T>
-void flip_axis_wrapper_gpu(T* d_arr, const std::vector<int>& shape, const std::vector<int>& axes, int block_size, const std::vector<bool>& flip_flags);
-
+template <typename T, typename U>
+struct PairParams {
+    const T* data[4];
+    const U* boundary[4];
+};
 
 template <typename T, typename U>
 void convert_pair_wrapper_gpu(
@@ -42,8 +49,7 @@ void convert_pair_wrapper_gpu(
 
 template <typename T, typename U>
 __global__ void convert_pair_kernel(
-    const T* const* p_data,
-    const U* const* p_boundary, T* p_send_buffer, int panel, int n_coord, int var_size, int block_size);
+        PairParams<T, U> params, T* p_send_buffer, int panel, int n_coord, int var_size, int block_size);
 
 // Conversion table
 __device__ __constant__  TransformRule rules[6][4] = {
