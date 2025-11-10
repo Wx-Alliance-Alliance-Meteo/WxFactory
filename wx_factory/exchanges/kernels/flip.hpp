@@ -5,8 +5,8 @@
 template <typename T>
 HOST_DEVICE_SPACE void flip_axis_kernel_shared(
     T* arr,
-    int idx,
-    int idx_opp // opposite
+    size_t idx,
+    size_t idx_opp // opposite
 ) {    
     T tmp = arr[idx];
     arr[idx] = arr[idx_opp];

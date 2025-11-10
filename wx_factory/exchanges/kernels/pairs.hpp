@@ -5,7 +5,7 @@
 
 
 template <typename T, typename U>
-HOST_DEVICE_SPACE void convert_pair_kernel_shared(const T* a1, const T* a2, const U* coord, T* o1, T* o2, int idx, int n_coord, const TransformRule& rule) {
+HOST_DEVICE_SPACE void convert_pair_kernel_shared(const T* a1, const T* a2, const U* coord, T* o1, T* o2, size_t idx, size_t n_coord, const TransformRule& rule) {
 
     U x = coord[idx % n_coord];
     U c = (2.0 * x) / (1.0 + x*x);
