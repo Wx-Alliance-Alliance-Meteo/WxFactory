@@ -499,27 +499,31 @@ class ProcessTopology:
         buffer_shape = (4, south.shape[0]) + base_shape
         num_elem = math.prod(buffer_shape)
 
-        # send_buffer_cpp = xp.empty(4 * south.nbytes, dtype=xp.uint8)
         send_buffer_cpp = xp.empty(buffer_shape, dtype=south.dtype)
+        self.recv_buffer = xp.empty_like(send_buffer_cpp)
+
         send_buffer_cpp = xp.ravel(send_buffer_cpp).view(dtype=south.dtype)[:num_elem].reshape(buffer_shape)
+        recv_buffer = xp.ravel(self.recv_buffer).view(dtype=south.dtype)[:num_elem].reshape(buffer_shape)
 
         block_shape = list(send_buffer_cpp[0].shape)
 
-        self.device.samples.start_exchange_euler_3d_cpp(
+        self.device.exchanges.start_exchange_euler_3d_cpp(
             send_buffer_cpp,
-            south,
-            north,
-            west,
-            east,
-            boundary_sn,
-            boundary_we,
-            block_shape,  # * correction
+            xp.ascontiguousarray(south),
+            xp.ascontiguousarray(north),
+            xp.ascontiguousarray(west),
+            xp.ascontiguousarray(east),
+            xp.ascontiguousarray(boundary_sn),
+            xp.ascontiguousarray(boundary_we),
+            block_shape,
             list(flip_dim),
             list(self.flip),
             int(self.my_panel),
         )
 
-        return send_buffer_cpp
+        self.device.synchronize()
+
+        # return self.initiate_transfers([(send_buffer_cpp, south[0].shape, True)], recv_buffer=recv_buffer)[0]
 
     def start_exchange_euler_3d(
         self,
@@ -531,23 +535,13 @@ class ProcessTopology:
         boundary_we: NDArray,
         flip_dim: int | Tuple[int, ...] = -1,
     ):
-
-        start_time = time.perf_counter()
-
         xp = self.device.xp
-
         convert = self.convert_contra
-
         base_shape = get_base_shape(south[0].shape, boundary_sn.shape)
 
-        out_string = ""
-
         if self.send_buffer is None or self.send_buffer.nbytes < south.nbytes * 4:
-            self.send_buffer = xp.empty_like(self.send_buffer)
-
-        num_elem = 4 * math.prod(south.shape)
-        self.send_buffer = xp.empty(num_elem, dtype=south.dtype)
-        self.recv_buffer = xp.empty_like(self.send_buffer)
+            self.send_buffer = xp.empty(4 * south.nbytes, dtype=xp.uint8)
+            self.recv_buffer = xp.empty_like(self.send_buffer)
 
         buffer_shape = (4, south.shape[0]) + base_shape
         num_elem = math.prod(buffer_shape)
@@ -557,65 +551,17 @@ class ProcessTopology:
 
         inputs = [south, north, west, east]
         boundaries = [boundary_sn, boundary_sn, boundary_we, boundary_we]
-
         for i, (data, bd) in enumerate(zip(inputs, boundaries)):
-
-            send_buffer[i, 1] = data[1].reshape(base_shape)
-            send_buffer[i, 2] = data[2].reshape(base_shape)
-            # send_buffer[i, 1], send_buffer[i, 2] = convert[i](
-            #     data[1].reshape(base_shape), data[2].reshape(base_shape), bd
-            # )
-
+            send_buffer[i, 1], send_buffer[i, 2] = convert[i](
+                data[1].reshape(base_shape), data[2].reshape(base_shape), bd
+            )
             send_buffer[i, 0] = data[0].reshape(base_shape)
             send_buffer[i, 3:] = data[3:].reshape((data.shape[0] - 3,) + base_shape)
 
-            # if self.flip[i]:
-            # send_buffer[i, :] = xp.flip(send_buffer[i, :], axis=flip_dim)
+            if self.flip[i]:
+                send_buffer[i, :] = xp.flip(send_buffer[i, :], axis=flip_dim)  # Flip arrays, if needed
 
-        end_time = time.perf_counter()
-        start_time_cpp = time.perf_counter()
-        # compare
-        send_buffer_cpp = self.start_exchange_euler_3d_cpp(
-            south,
-            north,
-            west,
-            east,
-            boundary_sn,
-            boundary_we,
-            flip_dim,
-        )
-        end_time_cpp = time.perf_counter()
-
-        time_py = end_time - start_time
-        time_cpp = end_time_cpp - start_time_cpp
-        out_string += "Time py: " + str(time_py) + "\n"
-        out_string += "Time cpp: " + str(time_cpp) + "\n"
-        out_string += "Improvements: " + str(time_py / time_cpp) + "\n"
-
-        import numpy as np
-
-        if hasattr(xp, "asnumpy"):
-            py_buf = xp.asnumpy(send_buffer)
-            cpp_buf = xp.asnumpy(send_buffer_cpp)
-        else:
-            py_buf = send_buffer
-            cpp_buf = send_buffer_cpp
-
-        if not np.allclose(py_buf, cpp_buf, rtol=1e-6, atol=1e-8):
-            out_string += "Buffers mismatch\n"
-            # out_string += "buffer py: " + np.array2string(py_buf.ravel()[:10]) + "\n"
-            # out_string += "buffer cpp: " + np.array2string(cpp_buf.ravel()[:10]) + "\n"
-
-            print("MISTMATCH")
-
-        else:
-            out_string += "Buffers match\n"
-            # out_string += "buffer py: " + np.array2string(py_buf.ravel()[:10]) + "\n"
-            # out_string += "buffer cpp: " + np.array2string(cpp_buf.ravel()[:10]) + "\n"
-
-        print(out_string)
-
-        self.device.synchronize()
+        self.device.synchronize()  # When using GPU
 
         return self.initiate_transfers([(send_buffer, south[0].shape, True)], recv_buffer=recv_buffer)[0]
 
