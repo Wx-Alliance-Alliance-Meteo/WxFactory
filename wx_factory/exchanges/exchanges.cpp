@@ -51,13 +51,12 @@ template <typename T, typename U>
 void convert_pair_wrapper_cpu(
     const T* p_data_face, const U* p_boundary_face,
     T* p_send_buffer,
-    int block_size,
     int panel, int neighbour,
     int n_coord, int var_size
 ) {
 
 
-    const TransformRule& rule = rules[panel][neighbour];
+    const TransformRule& rule = RULES[panel][neighbour];
 
     const T* a1 = p_data_face + 1 * var_size;
     const T* a2 = p_data_face + 2 * var_size;
@@ -71,11 +70,6 @@ void convert_pair_wrapper_cpu(
     }
 }
 
-// template <typename T>
-// T* allocate_buffer(const std::vector<int>& shape);
-
-// T - match np dtype
-// c_style - row-major C
 
 /*
 We allocate the buffers for ghost cells between panels (called for one panel)
@@ -101,7 +95,6 @@ void start_exchange_euler_3d_cpp(
 )
 {
 
-    
     // pointer unpacking
     T* p_send_buffer = static_cast<T*>(send_buffer.request().ptr);
     T* p_south = static_cast<T*>(south.request().ptr);
@@ -119,9 +112,6 @@ void start_exchange_euler_3d_cpp(
     const int var_size = std::accumulate(shape.begin() + 1, shape.end(), 1, std::multiplies<>());
     const int n_coord = std::accumulate(shape.begin() + 2, shape.end(), 1, std::multiplies<>());
     const size_t block_size = static_cast<size_t>(n_var) * var_size;
-
-    int total_elements = 4 * n_var * var_size;
-
     
     for (int i = 0; i < 4; ++i) {
 
@@ -137,39 +127,14 @@ void start_exchange_euler_3d_cpp(
 
         p_data_face = p_data[i];
         p_boundary_face = p_boundary[i];
-        convert_pair_wrapper_cpu(p_data_face, p_boundary_face, p_send_buffer_face, block_size, panel, i, n_coord, var_size);
+        convert_pair_wrapper_cpu(p_data_face, p_boundary_face, p_send_buffer_face, panel, i, n_coord, var_size);
 
         if (flip_flags[i]) {
-
-            // flip_axis_nogpu(p_send_buffer + i * block_size, shape, flip_dims);
             flip_axis_wrapper_cpu(p_send_buffer + i * block_size, shape, flip_dims);
         }
     } // for
 
 }
-
-template<typename T>
-void flip_axis_wrapper_cpu(T* arr, const std::vector<int>& shape, const std::vector<int>& axes) {
-
-    const int ndim = shape.size();
-
-    // stride per dimension
-    std::vector<int> stride(ndim);
-    stride[ndim-1] = 1;
-    for (int d = ndim - 2; d >= 0; --d) {
-        stride[d] = stride[d+1] * shape[d+1];
-    }
-    
-    int total_size = std::accumulate(shape.begin(), shape.end(), 1, std::multiplies<>());
-    for (int axis: axes) {
-        for (int i = 0; i < ndim / 2; i++) {
-            int dim = shape[axis];
-            int stride_axis = stride[axis];
-            flip_axis_kernel<T>(arr, total_size, dim, stride_axis, axis);
-        }
-    }
-}
-
 
 
 /*

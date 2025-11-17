@@ -67,6 +67,9 @@ def load_tests(test_name: str):
     add_test(suite, GatherScatterTest(6, "fail_not_cube"), test_re)
     add_test(suite, GatherScatterTest(6, "fail_wrong_num_dim"), test_re)
 
+    add_test(suite, ExchangeTest("euler_3d_exchange_py"), test_re)
+    add_test(suite, ExchangeTest("euler_3d_exchange_cpp"), test_re)
+
     add_test(suite, ExchangeTest("vector2d_1d_shape1d"), test_re)
     add_test(suite, ExchangeTest("vector2d_1d_shape2d"), test_re)
     add_test(suite, ExchangeTest("vector2d_2d_shape1d"), test_re)

@@ -25,6 +25,9 @@ void memcpy_faces_wrapper(
     size_t face_size
 );
 
+
+#ifdef __CUDACC__
+
 struct Flags { unsigned char f[4]; };
 
 template <typename T>
@@ -61,51 +64,6 @@ template <typename T, typename U>
 __global__ void convert_pair_kernel(
     PairParams<T, U> params, T* send_buffer, const int panel, const size_t coord_size, const size_t var_size, const size_t face_size);
 
-// Conversion table
-__device__ __constant__  TransformRule rules[6][4] = {
-    // Panel 0
-    {
-        { 1, 0, 0, 1,   0, 1, 0, 0 },  // South
-        { 1, 0, 0, -1,  0, 1, 0, 0 },  // North
-        { 1, 0, 0, 0,   0, 1, 1, 0 },  // West
-        { 1, 0, 0, 0,   0, 1, -1, 0 }, // East
-    },
-    // Panel 1
-    {
-        { 0, 1, 0, 0,  -1, 0, 0, -1 }, // South
-        { 0,-1, 0, 0,   1, 0, 0, -1 }, // North
-        { 1, 0, 0, 0,   0, 1, 1, 0 },  // West
-        { 1, 0, 0, 0,   0, 1,-1, 0 },  // East
-    },
-    // Panel 2
-    {
-        {-1, 0, 0, -1,  0,-1, 0, 0 },  // South
-        {-1, 0, 0, 1,   0,-1, 0, 0 },  // North
-        { 1, 0, 0, 0,   0, 1, 1, 0 },  // West
-        { 1, 0, 0, 0,   0, 1,-1, 0 },  // East
-    },
-    // Panel 3
-    {
-        { 0,-1, 0, 0,   1, 0, 0, 1 },  // South
-        { 0, 1, 0, 0,  -1, 0, 0, 1 },  // North
-        { 1, 0, 0, 0,   0, 1, 1, 0 },  // West
-        { 1, 0, 0, 0,   0, 1,-1, 0 },  // East
-    },
-    // Panel 4
-    {
-        { 1, 0, 0, 1,   0, 1, 0, 0 },  // South
-        {-1, 0, 0, 1,   0,-1, 0, 0 },  // North
-        { 0,-1, -1, 0,   1, 0, 0, 0 }, // West
-        { 0, 1, -1, 0,  -1, 0, 0, 0 }, // East
-    },
-    // Panel 5
-    {
-        {-1, 0, 0,-1,   0,-1, 0, 0 },  // South
-        { 1, 0, 0,-1,   0, 1, 0, 0 },  // North
-        { 0, 1, 1, 0,  -1, 0, 0, 0 },  // West
-        { 0,-1, 1, 0,   1, 0, 0, 0 },  // East
-    }
-};
-
+#endif // __CUDACC__
 
 #endif //EXCHANGES_HPP_

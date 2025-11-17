@@ -1,8 +1,8 @@
 import unittest
 import sys
 
-import numpy
 from mpi4py import MPI
+import os
 
 from device import Device, CpuDevice, CudaDevice
 from process_topology import ProcessTopology, SOUTH, NORTH, WEST, EAST
@@ -11,6 +11,10 @@ from wx_mpi import SingleProcess, Conditional
 from tests.unit.mpi_test import run_test_on_x_process, MpiTestCase
 
 TestDeviceClass = CpuDevice
+
+from typing import Tuple
+
+import types
 
 
 def gen_data_1(num_processes: int, num_data_hori_per_proc: int, device: Device):
@@ -78,6 +82,108 @@ class ExchangeTest(unittest.TestCase):
         self.data = self.all_data[self.rank]
         self.neighbor_data = [self.all_data[x] for x in self.to_neighbor]
         self.xp = dev.xp
+
+    def _generate_mock_buffer_data(
+        self,
+        num_sol_pts: int,
+        num_vert: int,
+        num_hor: int,
+        num_var: int = 5,
+    ) -> Tuple:
+
+        xp = self.xp
+
+        # shapes
+        south_shape = (num_var, num_vert, num_hor, num_sol_pts * num_sol_pts)
+        face_size = xp.prod(south_shape)
+
+        south = xp.arange(0 * face_size, 1 * face_size, dtype=xp.float64).reshape(south_shape)
+        north = xp.arange(1 * face_size, 2 * face_size, dtype=xp.float64).reshape(south_shape)
+        west = xp.arange(2 * face_size, 3 * face_size, dtype=xp.float64).reshape(south_shape)
+        east = xp.arange(3 * face_size, 4 * face_size, dtype=xp.float64).reshape(south_shape)
+
+        boundary_sn_shape = (num_var, num_sol_pts, num_sol_pts)
+        boundary_size = xp.prod(boundary_sn_shape)
+        boundary_sn = xp.arange(0 * boundary_size, 1 * boundary_size, dtype=xp.float64).reshape(boundary_sn_shape)
+        boundary_we = xp.arange(1 * boundary_size, 2 * boundary_size, dtype=xp.float64).reshape(boundary_sn_shape)
+
+        return south, north, west, east, boundary_sn, boundary_we
+
+    def euler_3d_exchange_py(self):
+
+        xp = self.xp
+
+        # Test first rank
+        if self.rank != 0:
+            return
+
+        # Override initiate_transfers to capture buffer
+        def mock_initiate_transfers(topo_self, send_recv_list, recv_buffer):
+            send_buffer, shape, flag = send_recv_list[0]
+            topo_self._captured_send_buffer = send_buffer.copy()
+            topo_self._captured_recv_buffer = recv_buffer.copy()
+            return [recv_buffer]
+
+        self.topo.initiate_transfers = types.MethodType(mock_initiate_transfers, self.topo)
+
+        south, north, west, east, boundary_sn, boundary_we = self._generate_mock_buffer_data(
+            num_sol_pts=2, num_vert=3, num_hor=5
+        )
+
+        self.topo.start_exchange_euler_3d(south, north, west, east, boundary_sn, boundary_we)
+        captured_send = getattr(self.topo, "_captured_send_buffer", None)
+
+        current_dir = os.path.dirname(__file__)
+        file_path = os.path.join(current_dir, "..", "test_data", "exchange235_reference_test.npy")
+        file_path = os.path.abspath(file_path)
+
+        reference = xp.asarray(xp.load(file_path))
+
+        xp.testing.assert_allclose(
+            captured_send,
+            reference,
+            rtol=1e-12,
+            atol=1e-15,
+            err_msg="send_buffer error in process_topology - start_exchange_euler_3d",
+        )
+
+    def euler_3d_exchange_cpp(self):
+
+        xp = self.xp
+
+        # Test first rank
+        if self.rank != 0:
+            return
+
+        # Override initiate_transfers to capture buffer
+        def mock_initiate_transfers(topo_self, send_recv_list, recv_buffer):
+            send_buffer, shape, flag = send_recv_list[0]
+            topo_self._captured_send_buffer = send_buffer.copy()
+            topo_self._captured_recv_buffer = recv_buffer.copy()
+            return [recv_buffer]
+
+        self.topo.initiate_transfers = types.MethodType(mock_initiate_transfers, self.topo)
+
+        south, north, west, east, boundary_sn, boundary_we = self._generate_mock_buffer_data(
+            num_sol_pts=2, num_vert=3, num_hor=5
+        )
+
+        self.topo.start_exchange_euler_3d_cpp(south, north, west, east, boundary_sn, boundary_we, flip_dim=(-1,))
+        captured_send = getattr(self.topo, "_captured_send_buffer", None)
+
+        current_dir = os.path.dirname(__file__)
+        file_path = os.path.join(current_dir, "..", "test_data", "exchange235_reference_test.npy")
+        file_path = os.path.abspath(file_path)
+
+        reference = xp.asarray(xp.load(file_path))
+
+        xp.testing.assert_allclose(
+            captured_send,
+            reference,
+            rtol=1e-12,
+            atol=1e-15,
+            err_msg="send_buffer error in process_topology - start_exchange_euler_3d",
+        )
 
     def vector2d_1d_shape1d(self):
         xp = self.xp

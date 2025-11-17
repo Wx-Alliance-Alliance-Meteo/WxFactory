@@ -75,7 +75,7 @@ void start_exchange_euler_3d_wrapper(
     py::object& east,
     py::object& boundary_sn,
     py::object& boundary_we,
-    const std::vector<int>& slice_shape,     // reference slice shape (n_variables, n_vert, n_hori, n*n nodal pts)
+    const std::vector<int>& slice_shape, // reference slice shape (n_variables, n_vert, n_hori, n*n nodal pts)
     const std::vector<int>& flip_axes,
     const std::vector<bool>& flip_flags,
     const int panel
@@ -83,7 +83,6 @@ void start_exchange_euler_3d_wrapper(
 {
 
     std::string T_type = py::str(send_buffer.attr("dtype").attr("name"));
-    // std::string U_type = py::str(boundary_sn.attr("dtype").attr("name"));
 
     // Different template according to buffer type
     if (T_type == "float64") {
@@ -158,8 +157,8 @@ __global__ void convert_pair_kernel(
     if (idx >= var_size || face_idx > 3) return;
     
     // Convert coordinate for variable 1 and 2
-    const TransformRule& rule = rules[panel][face_idx];
-    
+    const TransformRule& rule = RULES[panel][face_idx];
+
     const T* a1 = params.data[face_idx] + 1 * var_size; // var 1
     const T* a2 = params.data[face_idx] + 2 * var_size; // var 2
     const U* coord = params.boundary[face_idx];

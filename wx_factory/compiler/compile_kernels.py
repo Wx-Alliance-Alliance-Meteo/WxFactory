@@ -270,8 +270,6 @@ def clean_all():
 
 def get_extension(module_name: str, kernel_type: str) -> WxExtension:
     """Retrieve extension object from its name and kernel type."""
-    print("module name: ", module_name)
-    print("kernel_type: ", kernel_type)
     return _extensions[_ext_name(module_name, kernel_type)]
 
 

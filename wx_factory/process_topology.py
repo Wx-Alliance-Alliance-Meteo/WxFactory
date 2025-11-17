@@ -523,7 +523,7 @@ class ProcessTopology:
 
         self.device.synchronize()
 
-        # return self.initiate_transfers([(send_buffer_cpp, south[0].shape, True)], recv_buffer=recv_buffer)[0]
+        return self.initiate_transfers([(send_buffer_cpp, south[0].shape, True)], recv_buffer=recv_buffer)[0]
 
     def start_exchange_euler_3d(
         self,
@@ -535,6 +535,7 @@ class ProcessTopology:
         boundary_we: NDArray,
         flip_dim: int | Tuple[int, ...] = -1,
     ):
+
         xp = self.device.xp
         convert = self.convert_contra
         base_shape = get_base_shape(south[0].shape, boundary_sn.shape)
