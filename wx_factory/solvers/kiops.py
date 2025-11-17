@@ -221,7 +221,14 @@ def kiops(
         H[j, j - 1] = 0.0
 
         # Compute the exponential of the augmented matrix
-        F = device.xalg.linalg.expm(sgn * tau * H[: j + 1, : j + 1])
+        from device.device import CudaDevice
+
+        if isinstance(device, CudaDevice):
+            from cupyx.scipy.linalg import expm  # submodule not in xalg
+
+            F = expm(sgn * tau * H[: j + 1, : j + 1])
+        else:
+            F = device.xalg.linalg.expm(sgn * tau * H[: j + 1, : j + 1])
         exps += 1
 
         # Restore the value of H_{m+1,m}
