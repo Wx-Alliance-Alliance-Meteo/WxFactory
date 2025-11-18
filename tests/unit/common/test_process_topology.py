@@ -134,7 +134,7 @@ class ExchangeTest(unittest.TestCase):
         captured_send = getattr(self.topo, "_captured_send_buffer", None)
 
         current_dir = os.path.dirname(__file__)
-        file_path = os.path.join(current_dir, "..", "test_data", "exchange235_reference_test.npy")
+        file_path = os.path.join(current_dir, "..", "..", "data", "unit", "common", "exchange235_reference_test.npy")
         file_path = os.path.abspath(file_path)
 
         reference = xp.asarray(xp.load(file_path))
@@ -172,7 +172,7 @@ class ExchangeTest(unittest.TestCase):
         captured_send = getattr(self.topo, "_captured_send_buffer", None)
 
         current_dir = os.path.dirname(__file__)
-        file_path = os.path.join(current_dir, "..", "test_data", "exchange235_reference_test.npy")
+        file_path = os.path.join(current_dir, "..", "..", "data", "unit", "common", "exchange235_reference_test.npy")
         file_path = os.path.abspath(file_path)
 
         reference = xp.asarray(xp.load(file_path))
