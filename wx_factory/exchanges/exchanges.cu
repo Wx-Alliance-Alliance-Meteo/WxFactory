@@ -117,10 +117,40 @@ void memcpy_faces_wrapper(
     size_t face_size
 ) {
 
-    cudaMemcpyAsync(send_buffer, south, face_size * sizeof(T), cudaMemcpyDeviceToDevice);
-    cudaMemcpyAsync(send_buffer + face_size, north, face_size * sizeof(T), cudaMemcpyDeviceToDevice);
-    cudaMemcpyAsync(send_buffer + 2*face_size, west,  face_size * sizeof(T), cudaMemcpyDeviceToDevice);
-    cudaMemcpyAsync(send_buffer + 3*face_size, east,  face_size * sizeof(T), cudaMemcpyDeviceToDevice);
+    const int BLOCK_SIZE = 128;
+    const dim3 threads(BLOCK_SIZE);
+    const dim3 blocks((face_size + BLOCK_SIZE - 1) / BLOCK_SIZE, 4);
+
+    memcpy_faces_kernel<<<blocks, threads>>>(send_buffer, south, north, west, east, face_size);
+
+    // cudaMemcpyAsync(send_buffer, south, face_size * sizeof(T), cudaMemcpyDeviceToDevice);
+    // cudaMemcpyAsync(send_buffer + face_size, north, face_size * sizeof(T), cudaMemcpyDeviceToDevice);
+    // cudaMemcpyAsync(send_buffer + 2*face_size, west,  face_size * sizeof(T), cudaMemcpyDeviceToDevice);
+    // cudaMemcpyAsync(send_buffer + 3*face_size, east,  face_size * sizeof(T), cudaMemcpyDeviceToDevice);
+}
+
+template <typename T>
+__global__ void memcpy_faces_kernel(
+    T* send_buffer,
+    const T* south,
+    const T* north,
+    const T* west,
+    const T* east,
+    size_t face_size
+) {
+    size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
+    size_t face_id = blockIdx.y;
+
+    if (idx < face_size) {
+        const T* src;
+        switch (face_id) {
+            case 0: src = south; break;
+            case 1: src = north; break;
+            case 2: src = west;  break;
+            case 3: src = east;  break;
+        }
+        send_buffer[face_id * face_size + idx] = src[idx];
+    }
 }
 
 template <typename T, typename U>

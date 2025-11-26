@@ -31,6 +31,17 @@ void memcpy_faces_wrapper(
 struct Flags { unsigned char f[4]; };
 
 template <typename T>
+__global__ void memcpy_faces_kernel(
+    T* send_buffer,
+    const T* south,
+    const T* north,
+    const T* west,
+    const T* east,
+    size_t face_size
+);
+
+
+template <typename T>
 void flip_axis_wrapper_gpu(T* send_buffer, const std::vector<int>& slice_shape, const std::vector<int>& flip_axes, size_t face_size, const std::vector<bool>& flip_flags);
 
 template <typename T>
