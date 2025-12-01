@@ -10,7 +10,7 @@ __all__ = ["Configuration"]
 
 
 class Configuration:
-    """All the config options for GEF"""
+    """All the config options for WxFactory"""
 
     sections: Dict[str, List[str]]
 

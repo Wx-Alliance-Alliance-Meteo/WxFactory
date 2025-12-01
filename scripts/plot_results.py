@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Set of functions to create various plots from GEF solver stats stored in a SQLite database
+Set of functions to create various plots from WxFactory solver stats stored in a SQLite database
 """
 
 import sqlite3

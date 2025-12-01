@@ -13,16 +13,16 @@ BASE_LOAD_ENV=${SCRIPT_DIR}/load_env.sh
 
 function echo_usage() {
     echo "${SCRIPT_NAME}:"
-    echo "  Launch a GEF configuration on a cluster."
+    echo "  Launch a WxFactory configuration on a cluster."
     echo
     echo "Usage: ${SCRIPT_NAME} [config_file] [[options]]"
     echo
     echo "  Make sure to provide a file called \"load_env.sh\" in the same directory"
-    echo "  as this script to load the execution environment you want to use for running GEF."
-    echo "  That file will be sourced before running GEF."
+    echo "  as this script to load the execution environment you want to use for running WxFactory."
+    echo "  That file will be sourced before running WxFactory."
     echo
     echo "  options:"
-    echo "    [config_file]   Path of the GEF configuration you want to run"
+    echo "    [config_file]   Path of the WxFactory configuration you want to run"
     echo "    -h|--help       Print this message"
     echo "    -c|--cpu        Number of cores you want to use for running"
     echo "    -m|--mach       Name of the machine on which you want to run"
@@ -89,7 +89,7 @@ fi
 JOB_NAME="no_name"
 for i in {0..1000}; do
     d=$(date +%Y%m%d_%H%M%S)
-    JOB_NAME=gef.$d.$i
+    JOB_NAME=wx_factory.$d.$i
     WORK_DIR=${BASE_WORK_DIR}/$d.$i
     test -d ${WORK_DIR} || break
 done
