@@ -4,7 +4,8 @@
         {
             "name": "size",
             "section": "problem",
-            "type": "int"
+            "type": "int",
+            "default": null
         },
         {
             "name": "time",

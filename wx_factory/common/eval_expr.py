@@ -17,7 +17,7 @@ _operators = {
 _math_constants = {"pi": math.pi}
 
 
-def eval_expr(expr):
+def eval_expr(expr: str) -> float | int:
     """Evaluate the expression from the given string to get a numerical result. Only simple operations are allowed:
     +, -, *, / and some mathematical constants."""
     return _eval(ast.parse(expr, mode="eval").body)

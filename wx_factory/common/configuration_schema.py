@@ -46,6 +46,7 @@ _Selectable = TypeVar("Selectable", bound=Union[int, float, str])
 
 default_schema_path = "config/config-format.json"
 
+
 def needs_evaluation(attribute: _T, attribute_type: Type[_T]) -> bool:
     try:
         float(attribute)
@@ -175,14 +176,19 @@ class ConfigurationField:
     def _read_single(self, parser: ConfigParser):
         """Read this field from the given parser (scalar)"""
         value = parser.get(self.section, self.name)
-        return self.type(eval_expr(value) if needs_evaluation(value, self.type) else value)
+        if needs_evaluation(value, self.type):
+            value = eval_expr(value)
+        return self.type(value)
 
     def _read_list(self, parser: ConfigParser):
         """Read this field from the given parser (list)"""
         try:
             return [self.type(parser.get(self.section, self.name))]
         except ValueError:
-            return [self.type(eval_expr(x)) if needs_evaluation(x, self.type) else self.type(x) for x in json.loads(parser.get(self.section, self.name))]
+            return [
+                self.type(eval_expr(x)) if needs_evaluation(x, self.type) else self.type(x)
+                for x in json.loads(parser.get(self.section, self.name))
+            ]
 
     def typename(self, inner=False):
         if self.is_list and not inner:
@@ -253,32 +259,49 @@ class ConfigurationField:
         return self.to_string(markdown=False)
 
 
-# class LastUpdatedOrderedDict(OrderedDict):
-#     "Store items in the order the keys were last added"
+class LastUpdatedOrderedDict(OrderedDict):
+    "Store items in the order the keys were last added"
 
-#     def __setitem__(self, key, value):
-#         super().__setitem__(key, value)
-#         self.move_to_end(key)
+    def __setitem__(self, key, value):
+        super().__setitem__(key, value)
+        self.move_to_end(key)
 
 
 def sort_fields_by_dependency(fields: list[ConfigurationField]) -> list[ConfigurationField]:
-    # fields_dict: dict[ConfigurationField] = LastUpdatedOrderedDict()
+    fields_dict: dict[str, ConfigurationField] = LastUpdatedOrderedDict()
     sorted_fields: list[ConfigurationField] = []
     remainder: list[ConfigurationField] = []
+
+    previous_count = len(fields)
     for f in fields:
-        # if f.name in fields_dict:
-        #     raise ConfigValueError(f"Duplicate field name {f.name}")
+        if f.name in fields_dict:
+            raise ConfigValueError(f"Duplicate field name {f.name}")
+
         if f.dependency is None:
             sorted_fields.append(f)
-            # fields_dict[f.name] = f
+            fields_dict[f.name] = f
         else:
             remainder.append(f)
 
-    for f in remainder:
-        # if f.dependency[0] not in fields_dict:
-        #     raise ConfigValueError(f"Field {f.name} depends on a field that does not exist {f.dependency[0]}")
-        # fields_dict[f.name] = f
-        sorted_fields.append(f)
+    current_count = len(remainder)
+    num_passes = 0
+    while current_count < previous_count and current_count > 0:
+        new_remainder = []
+        previous_count = current_count
+        for f in remainder:
+            if f.dependency[0] not in fields_dict:
+                # print(f"Field {f.name} depends on a field that does not exist {f.dependency[0]}")
+                new_remainder.append(f)
+            else:
+                fields_dict[f.name] = f
+
+            sorted_fields.append(f)
+
+        remainder = new_remainder
+        current_count = len(remainder)
+        num_passes += 1
+
+    # print(f"sorted in {num_passes} passes")
 
     return sorted_fields
     # return [f for _, f in fields_dict.items()]
@@ -334,6 +357,11 @@ class ConfigurationSchema:
 
         attribute = attributes[attribute_name]
 
+        if attribute is None:
+            if not optional:
+                raise ValueError(f"'{attribute_name}' field not found in the dictionary {attributes}")
+            return None
+
         # Evaluate expression from string, if appropriate
         if needs_evaluation(attribute, attribute_type):
             return attribute_type(eval_expr(attribute))
@@ -345,7 +373,7 @@ class ConfigurationSchema:
             if issubclass(attribute_type, list):
                 return attribute
             return [attribute_type(eval_expr(a) if needs_evaluation(a, attribute_type) else a) for a in attribute]
-        
+
         return attribute_type(attribute)
 
     def __extract_section(self, section: dict) -> list[ConfigurationField]:
@@ -405,7 +433,7 @@ class ConfigurationSchema:
             description = self.__get_attribute("description", field, str, optional=True)
 
         except Exception as e:
-            raise ValueError(f"Field {field_name}") from e
+            raise ValueError(f"Field '{field_name}'") from e
 
         return ConfigurationField(
             field_name, field_section, field_default, field_type, is_list, valid_range, dependency, description

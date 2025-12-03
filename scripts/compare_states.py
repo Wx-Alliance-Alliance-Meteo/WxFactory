@@ -70,7 +70,7 @@ def main(args):
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description="Compare vector states produced by GEF")
+    parser = argparse.ArgumentParser(description="Compare vector states produced by WxFactory")
     parser.add_argument("files", type=str, nargs="+", help="Files that contains vector states to compare")
     args = parser.parse_args()
     main(args)

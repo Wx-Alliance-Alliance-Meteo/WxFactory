@@ -79,7 +79,7 @@ class OutputCubesphereNetcdf(OutputCubesphere):
         if self.ncfile is not None:
             # write general attributes
             self.ncfile.history = "Created " + time.ctime(time.time())
-            self.ncfile.description = "GEF Model"
+            self.ncfile.description = "WxFactory Model"
             self.ncfile.details = "Cubed-sphere coordinates, Gauss-Legendre collocated grid"
 
             self.ncfile.createDimension("time", None)  # unlimited
