@@ -39,7 +39,7 @@
                         "name": "desired_device",
                         "values": ["cuda", "cupy"]
                     },
-                    "description": "List of Nvidia physical device to use"
+                    "description": "List of Nvidia physical devices to use"
                 }
             ]
         },
@@ -86,7 +86,11 @@
                 {
                     "name": "bubble_theta",
                     "type": "float",
-                    "default": 0.0
+                    "default": 0.0,
+                    "dependency": {
+                        "name": "grid_type",
+                        "values": ["cartesian2d"]
+                    }
                 },
                 {
                     "name": "bubble_rad",
@@ -229,30 +233,12 @@
                     }
                 },
                 {
-                    "name": "filter_order",
-                    "type": "int",
-                    "default": 0,
-                    "dependency": {
-                        "name": "filter_apply",
-                        "values": [false]
-                    }
-                },
-                {
                     "name": "filter_cutoff",
                     "type": "float",
                     "default": 0.25,
                     "dependency": {
                         "name": "filter_apply",
                         "values": [true]
-                    }
-                },
-                {
-                    "name": "filter_cutoff",
-                    "type": "float",
-                    "default": 0.0,
-                    "dependency": {
-                        "name": "filter_apply",
-                        "values": [false]
                     }
                 },
                 {
@@ -269,33 +255,7 @@
                     }
                 },
                 {
-                    "name": "expfilter_order",
-                    "type": "int",
-                    "default": 0,
-                    "dependency": {
-                        "name": "expfilter_apply",
-                        "values": [false]
-                    }
-                },
-                {
                     "name": "expfilter_cutoff",
-                    "type": "float",
-                    "dependency": {
-                        "name": "expfilter_apply",
-                        "values": [true]
-                    }
-                },
-                {
-                    "name": "expfilter_cutoff",
-                    "type": "float",
-                    "default": 0.0,
-                    "dependency": {
-                        "name": "expfilter_apply",
-                        "values": [false]
-                    }
-                },
-                {
-                    "name": "expfilter_strength",
                     "type": "float",
                     "dependency": {
                         "name": "expfilter_apply",
@@ -305,10 +265,9 @@
                 {
                     "name": "expfilter_strength",
                     "type": "float",
-                    "default": 0.0,
                     "dependency": {
                         "name": "expfilter_apply",
-                        "values": [false]
+                        "values": [true]
                     }
                 },
                 {
@@ -319,12 +278,20 @@
                 {
                     "name": "sponge_tscale",
                     "type": "float",
-                    "default": 1.0
+                    "default": 1.0,
+                    "dependency": {
+                        "name": "apply_sponge",
+                        "values": [true]
+                    }
                 },
                 {
                     "name": "sponge_zscale",
                     "type": "float",
-                    "default": 0.0
+                    "default": 0.0,
+                    "dependency": {
+                        "name": "apply_sponge",
+                        "values": [true]
+                    }
                 }
             ]
         },
@@ -434,7 +401,11 @@
                     "name": "precond_flux",
                     "type": "str",
                     "default": "ausm",
-                    "selectables": ["ausm", "upwind", "rusanov"]
+                    "selectables": ["ausm", "upwind", "rusanov"],
+                    "dependency": {
+                        "name": "preconditioner",
+                        "values": ["fv", "fv-mg", "p-mg"]
+                    }
                 },
                 {
                     "name": "num_mg_levels",
@@ -449,25 +420,41 @@
                 {
                     "name": "precond_tolerance",
                     "type": "float",
-                    "default": 1e-1
+                    "default": 1e-1,
+                    "dependency": {
+                        "name": "preconditioner",
+                        "values": ["fv", "fv-mg", "p-mg"]
+                    }
                 },
                 {
                     "name": "num_pre_smoothe",
                     "type": "int",
                     "default": 1,
-                    "min": 0
+                    "min": 0,
+                    "dependency": {
+                        "name": "preconditioner",
+                        "values": ["fv-mg", "p-mg"]
+                    }
                 },
                 {
                     "name": "num_post_smoothe",
                     "type": "int",
                     "default": 1,
-                    "min": 0
+                    "min": 0,
+                    "dependency": {
+                        "name": "preconditioner",
+                        "values": ["fv-mg", "p-mg"]
+                    }
                 },
                 {
                     "name": "mg_smoother",
                     "type": "str",
                     "default": "exp",
-                    "selectables": ["exp", "kiops", "erk3", "erk1", "ark3"]
+                    "selectables": ["exp", "kiops", "erk3", "erk1", "ark3"],
+                    "dependency": {
+                        "name": "preconditioner",
+                        "values": ["fv-mg", "p-mg"]
+                    }
                 },
                 {
                     "name": "exp_smoothe_spectral_radii",
@@ -490,28 +477,48 @@
                 {
                     "name": "mg_solve_coarsest",
                     "type": "bool",
-                    "default": false
+                    "default": false,
+                    "dependency": {
+                        "name": "preconditioner",
+                        "values": ["fv-mg", "p-mg"]
+                    }
                 },
                 {
                     "name": "kiops_dt_factor",
                     "type": "float",
-                    "default": 1.1
+                    "default": 1.1,
+                    "dependency": {
+                        "name": "mg_smoother",
+                        "values": ["kiops"]
+                    }
                 },
                 {
                     "name": "verbose_precond",
                     "type": "int",
-                    "default": 0
+                    "default": 0,
+                    "dependency": {
+                        "name": "preconditioner",
+                        "values": ["fv", "fv-mg", "p-mg", "lu", "ilu"]
+                    }
                 },
                 {
                     "name": "dg_to_fv_interp",
                     "type": "str",
                     "default": "lagrange",
-                    "selectables": ["l2-norm", "lagrange"]
+                    "selectables": ["l2-norm", "lagrange"],
+                    "dependency": {
+                        "name": "preconditioner",
+                        "values": ["fv", "fv-mg", "p-mg"]
+                    }
                 },
                 {
                     "name": "pseudo_cfl",
                     "type": "float",
-                    "default": 1.0
+                    "default": 1.0,
+                    "dependency": {
+                        "name": "preconditioner",
+                        "values": ["fv-mg", "p-mg"]
+                    }
                 }
             ]
         },

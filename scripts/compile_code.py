@@ -15,7 +15,11 @@ def main():
     parser.add_argument("backend", choices=["cpp", "cuda", "omp"], nargs="?", default="cpp")
     parser.add_argument("--no-clean", action="store_true", help="Skip the clean step")
     parser.add_argument("--modules", type=str, nargs="+", default=["pde", "operators", "exchanges"])
+    parser.add_argument("--proc-name", type=str, default="")
     args = parser.parse_args()
+
+    if args.proc_name != "":
+        compiler.compile_kernels._proc_name = args.proc_name
 
     for module in args.modules:
         compiler.compile_kernels.compile(module, args.backend, force=not args.no_clean)

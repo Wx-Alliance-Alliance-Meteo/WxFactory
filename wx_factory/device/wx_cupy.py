@@ -31,7 +31,7 @@ def load_cupy():
             print(f"{e}")
             print(
                 f"cupy does not seem to be installed. "
-                f"You need it (and GPUs) to be able run GEF with device=cuda.\n"
+                f"You need it (and GPUs) to be able run WxFactory with device=cuda.\n"
                 f"We will run on CPU instead"
             )
 

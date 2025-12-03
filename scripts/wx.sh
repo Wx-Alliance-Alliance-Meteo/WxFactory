@@ -31,5 +31,5 @@ echo "Running WxFactory with config ${config_file}"
 pwd
 
 #nsys profile mpirun ./main_gef.py ${config_file}
-mpirun nsys profile -o gef.%q{OMPI_COMM_WORLD_RANK} -f true -t cuda,nvtx ./main_gef.py ${config_file}
+mpirun nsys profile -o wx_factory.%q{OMPI_COMM_WORLD_RANK} -f true -t cuda,nvtx ./main_gef.py ${config_file}
 
