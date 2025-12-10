@@ -16,6 +16,7 @@ from matplotlib.ticker import FormatStrFormatter
 
 import argparse
 import ast
+from types import SimpleNamespace
 
 
 def _read_data(path):
@@ -102,6 +103,38 @@ def _closest_value_index(arr, val):
     minval = arr[argmin]
     return argmin, minval
 
+def run(
+    data_file,
+    output_file=None,
+    lat_value=0.0,
+    lat_index=-1,
+    height_index=-1,
+    height_value=5243.55,
+    time_start_index=-1,
+    time_start_value=-1.0,
+    time_stop_index=0,
+    time_stop_value=0.0,
+    plot_kwargs=None,
+):
+    if output_file is None:
+        output_file = os.path.join(root_dir, "results", "hovmoller")
+
+    args = SimpleNamespace(
+        data_file=data_file,
+        output_file=output_file,
+        lat_value=lat_value,
+        lat_index=lat_index,
+        height_index=height_index,
+        height_value=height_value,
+        time_start_index=time_start_index,
+        time_start_value=time_start_value,
+        time_stop_index=time_stop_index,
+        time_stop_value=time_stop_value,
+        plot_kwargs=plot_kwargs,
+    )
+
+    # Call original main()
+    return main(args)
 
 def main(args):
     theta, times, lons, lats, elevs = _read_data(args.data_file)

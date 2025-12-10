@@ -3,6 +3,8 @@
 import os
 import sys
 import argparse
+from types import SimpleNamespace
+
 
 root_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..")
 src_dir = os.path.join(root_dir, "wx_factory")
@@ -247,6 +249,9 @@ def spectral_error(grid1: NDArray, grid2: NDArray):
 
 
 def main(args):
+    
+    
+    all_reports_text: list[str] = []
 
     # Load data
     data1 = None
@@ -329,12 +334,10 @@ def main(args):
 
         # Report stream
         report_text = build_report_text(variable_label, var_index, results_by_method, errors_by_method)
-        
         for line in report_text.splitlines():
             print(line)
+        all_reports_text.append(report_text)
 
-
-                
     if args.save_path:
         try:
             with open(args.save_path, "w", encoding="utf-8") as f:
@@ -342,6 +345,29 @@ def main(args):
             print(f"\nSaved report to: {args.save_path}")
         except Exception as e:
             print(f"\nFailed to save report to {args.save_path}: {e}")
+            
+    return all_reports_text
+
+    # Small wrapper to run from python
+def run (
+    data_file_1: str,
+    data_file_2: str,
+    *,
+    input_type: str = "netcdf",
+    time_index: int = -1,
+    save_path: str = "",
+    vars: list[str] = None,
+) -> str:
+    args = SimpleNamespace(
+        data_file_1=data_file_1,
+        data_file_2=data_file_2,
+        input_type=input_type,
+        time_index=time_index,
+        save_path=save_path,
+        vars=vars or ["P", "rho", "theta"],
+    )
+    return main(args)
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
