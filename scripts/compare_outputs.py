@@ -20,7 +20,7 @@ from scipy.interpolate import RegularGridInterpolator
 
 from typing import Dict, Optional, Tuple, Iterable, List
 
-INTERP_METHODS = ["linear", "cubic", "quintic"] # Grid interpolator method
+INTERP_METHODS = ["linear", "cubic", "quintic"]
 interp_results: Dict[str, Dict[str, float]] = {}
 interp_errors: Dict[str, str] = {}
 
@@ -148,23 +148,19 @@ def iter_report_lines(
     for method in method_order:
         panels = results_by_method.get(method, [])
 
-        # Collect metric arrays across panels
         nrmse_vals  = [rp["nrmse"]     for rp in panels if "nrmse"     in rp]
         sp_rel_vals = [rp["sp_err_rel"]for rp in panels if "sp_err_rel" in rp]
         err_rel_vals= [rp["err_rel"]   for rp in panels if "err_rel"    in rp]
-        # Optional extras:
         rmse_vals   = [rp["rmse"]      for rp in panels if "rmse"       in rp]
         sp_abs_vals = [rp["sp_err_abs"]for rp in panels if "sp_err_abs" in rp]
         err_abs_vals= [rp["err_abs"]   for rp in panels if "err_abs"    in rp]
 
-        # Section header
         yield ""
         yield ("Method: direct (same-grid)" if method == "direct" else f"Method: {method}")
 
         if len(panels) == 0:
             yield "  No metrics (all panels failed or none applicable)."
         else:
-            # Aggregated stats across panels (matches your style)
             yield f"  NRMSE (mean across panels): {safe_mean(nrmse_vals):.6g}"
             yield f"  NRMSE (max  across panels): {safe_max(nrmse_vals):.6g}"
             yield f"  Spectral relative error (mean): {safe_mean(sp_rel_vals):.6g}"
@@ -172,12 +168,6 @@ def iter_report_lines(
             yield f"  Relative L2 error (mean): {safe_mean(err_rel_vals):.6g}"
             yield f"  Relative L2 error (max):  {safe_max(err_rel_vals):.6g}"
 
-            # Optional extras (uncomment if you want them)
-            # yield f"  RMSE (mean across panels): {safe_mean(rmse_vals):.6g}"
-            # yield f"  Absolute spectral error (mean): {safe_mean(sp_abs_vals):.6g}"
-            # yield f"  Absolute L2 error (mean): {safe_mean(err_abs_vals):.6g}"
-
-        # Error notes for this method
         for msg in errors_by_method.get(method, []):
             yield f"  Note: {msg}"
 
@@ -270,10 +260,6 @@ def main(args):
 
     # Variable loop
     vars = args.vars
-    if args.input_type == "sv":
-        vars = range(
-            data1.shape[1]
-        )  # since state_vector does not have the names of the variables, we can use the length of the variable vector
 
     # Iterate through each data variable such as rho, P, theta
     for var_index in range(len(vars)):

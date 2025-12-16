@@ -19,7 +19,7 @@ import generate_hovmoller_diagram
 
 ALLOWED_TYPES = [".npy", ".nc"]
 
-def _get_reference_sv(reference_url: str, store_reference_path: str):
+def _get_reference(reference_url: str, store_reference_path: str):
     """
     Description: Download and stores a reference sv or netcdf
     """
@@ -100,9 +100,8 @@ def _get_image(source_url: str, store_path: str):
 def main(args):
     
     # Aggregate different reports
-    reference_path = _get_reference_sv(args.reference_url, args.store_reference_path)
+    reference_path = _get_reference(args.reference_url, args.store_reference_path)
     compare_report_list = _get_compare_summary(args.target_file, reference_path)
-    
     
     # Plots (only compatible with netcdf)
     isPlot = False
@@ -141,7 +140,10 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="""Generate a summary to compare two state vectors - by default BigConfig -.
+        description="""
+        Generate a [html, ] report of comparison between two [netcdf, state vectors] grid.
+        We gather the nrmse, l2 and spectral error across the different panels.
+        If the grids are not the same size, we try [linear, cubic, quintic] interpolation with the finer grid as reference.
     """
     )
     # Target file of evaluation
@@ -150,10 +152,10 @@ if __name__ == "__main__":
     parser.add_argument("--target_hovmoller_plot_store_path", default = "/home/ngv000/repos/WxFactory/scripts/validation/tmp/target_hovmoller.png", type=str)
 
     # Reference / baseline file
-    # parser.add_argument("--reference_url", default="https://web.science.gc.ca/~ngv000/WxFactory/state_vector_toy.npy", type=str)
-    parser.add_argument("--reference_url", default="https://web.science.gc.ca/~ngv000/WxFactory/toy_netcdf.nc", type=str)
-    parser.add_argument("--store_reference_path", default="/home/ngv000/repos/WxFactory/scripts/validation/tmp/reference.nc", type=str)
-    # parser.add_argument("--store_reference_path", default="/home/ngv000/repos/WxFactory/scripts/validation/tmp/reference.npy", type=str)
+    parser.add_argument("--reference_url", default="https://web.science.gc.ca/~ngv000/WxFactory/reference_state.npy", type=str)
+    # parser.add_argument("--reference_url", default="https://web.science.gc.ca/~ngv000/WxFactory/toy_netcdf.nc", type=str)
+    # parser.add_argument("--store_reference_path", default="/home/ngv000/repos/WxFactory/scripts/validation/tmp/reference.nc", type=str)
+    parser.add_argument("--store_reference_path", default="/home/ngv000/repos/WxFactory/scripts/validation/tmp/reference.npy", type=str)
     parser.add_argument("--store_reference_path_potential", default="/home/ngv000/repos/WxFactory/scripts/validation/tmp/potential_ref_plot.jpg", type=str)
     parser.add_argument("--store_reference_path_hovmoller", default="/home/ngv000/repos/WxFactory/scripts/validation/tmp/hovmoller_ref_plot.jpg", type=str)
 
