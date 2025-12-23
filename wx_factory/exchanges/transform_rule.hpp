@@ -6,7 +6,7 @@ struct TransformRule {
     int s21, s22, s23, s24;
 };
 
-inline constexpr TransformRule kRulesHost[6][4] = {
+const TransformRule kRulesHost[6][4] = {
     // Panel 0
     {
         { 1, 0, 0, 1,   0, 1, 0, 0 },  // South
@@ -53,15 +53,11 @@ inline constexpr TransformRule kRulesHost[6][4] = {
 
 // alias RULES for both cuda and cpu
 #ifdef __CUDACC__
-
-extern __constant__ TransformRule kRulesDevice[6][4];
-
-void UploadRulesToDevice();
-
-# define RULES kRulesDevice
+extern __device__ __constant__ TransformRule kRulesDevice[6][4];
+#define RULES kRulesDevice
 #else
-
-# define RULES kRulesHost
+extern const TransformRule kRulesHost[6][4];
+#define RULES kRulesHost
 #endif
 
 #endif // TRANSFORM_RULE_H_

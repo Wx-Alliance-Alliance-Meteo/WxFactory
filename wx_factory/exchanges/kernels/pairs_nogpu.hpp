@@ -4,12 +4,14 @@
 #include <iostream>
 #include <vector>
 
+#include "transform_rule.hpp"
+
 struct TransformRule {
     int s11, s12, s13, s14;
     int s21, s22, s23, s24;
 };
 
-extern const TransformRule rules_cpu[6][4];
+extern const TransformRule RULES[6][4];
 
 template <typename num_t, typename real_t>
 void convert_pair_nogpu(const num_t* a1, const num_t* a2, const real_t* coord, num_t* o1, num_t* o2, int panel, int neighbour, int n_coord, int var_size)
@@ -49,50 +51,5 @@ void convert_pair_nogpu(const num_t* a1, const num_t* a2, const real_t* coord, n
     }
 
 }
-
-inline constexpr TransformRule rules_cpu[6][4] = {
-    // Panel 0
-    {
-        { 1, 0, 0, 1,   0, 1, 0, 0 },  // South
-        { 1, 0, 0, -1,  0, 1, 0, 0 },  // North
-        { 1, 0, 0, 0,   0, 1, 1, 0 },  // West
-        { 1, 0, 0, 0,   0, 1, -1, 0 }, // East
-    },
-    // Panel 1
-    {
-        { 0, 1, 0, 0,  -1, 0, 0, -1 }, // South
-        { 0,-1, 0, 0,   1, 0, 0, -1 }, // North
-        { 1, 0, 0, 0,   0, 1, 1, 0 },  // West
-        { 1, 0, 0, 0,   0, 1,-1, 0 },  // East
-    },
-    // Panel 2
-    {
-        {-1, 0, 0, -1,  0,-1, 0, 0 },  // South
-        {-1, 0, 0, 1,   0,-1, 0, 0 },  // North
-        { 1, 0, 0, 0,   0, 1, 1, 0 },  // West
-        { 1, 0, 0, 0,   0, 1,-1, 0 },  // East
-    },
-    // Panel 3
-    {
-        { 0,-1, 0, 0,   1, 0, 0, 1 },  // South
-        { 0, 1, 0, 0,  -1, 0, 0, 1 },  // North
-        { 1, 0, 0, 0,   0, 1, 1, 0 },  // West
-        { 1, 0, 0, 0,   0, 1,-1, 0 },  // East
-    },
-    // Panel 4
-    {
-        { 1, 0, 0, 1,   0, 1, 0, 0 },  // South
-        {-1, 0, 0, 1,   0,-1, 0, 0 },  // North
-        { 0,-1, -1, 0,   1, 0, 0, 0 }, // West
-        { 0, 1, -1, 0,  -1, 0, 0, 0 }, // East
-    },
-    // Panel 5
-    {
-        {-1, 0, 0,-1,   0,-1, 0, 0 },  // South
-        { 1, 0, 0,-1,   0, 1, 0, 0 },  // North
-        { 0, 1, 1, 0,  -1, 0, 0, 0 },  // West
-        { 0,-1, 1, 0,   1, 0, 0, 0 },  // East
-    }
-};
 
 #endif
