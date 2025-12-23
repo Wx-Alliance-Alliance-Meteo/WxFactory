@@ -507,14 +507,27 @@ class ProcessTopology:
 
         block_shape = list(send_buffer_cpp[0].shape)
 
+        # self.device.exchanges.start_exchange_euler_3d_cpp(
+        #     send_buffer_cpp,
+        #     xp.ascontiguousarray(south),
+        #     xp.ascontiguousarray(north),
+        #     xp.ascontiguousarray(west),
+        #     xp.ascontiguousarray(east),
+        #     xp.ascontiguousarray(boundary_sn),
+        #     xp.ascontiguousarray(boundary_we),
+        #     block_shape,
+        #     list(flip_dim),
+        #     list(self.flip),
+        #     int(self.my_panel),
+        # )
         self.device.exchanges.start_exchange_euler_3d_cpp(
             send_buffer_cpp,
-            xp.ascontiguousarray(south),
-            xp.ascontiguousarray(north),
-            xp.ascontiguousarray(west),
-            xp.ascontiguousarray(east),
-            xp.ascontiguousarray(boundary_sn),
-            xp.ascontiguousarray(boundary_we),
+            south,
+            north,
+            west,
+            east,
+            boundary_sn,
+            boundary_we,
             block_shape,
             list(flip_dim),
             list(self.flip),

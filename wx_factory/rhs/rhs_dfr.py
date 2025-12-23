@@ -234,26 +234,27 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
         self.rhs[idx_rho_w] = -self.metric.inv_sqrtG_new * (self.w_df1_dx1 + self.w_df2_dx2 + self.w_df3_dx3)
 
     def start_communication(self):
-
-        self.req_all = self.ptopo.start_exchange_euler_3d_cpp(
-            self.q_itf_x2[..., 0, :, : self.geom.itf_size],
-            self.q_itf_x2[..., -1, :, self.geom.itf_size :],
-            self.q_itf_x1[..., 0, : self.geom.itf_size],
-            self.q_itf_x1[..., -1, self.geom.itf_size :],
-            self.geom.boundary_sn_new,
-            self.geom.boundary_we_new,
-            flip_dim=(-3, -1),
-        )
-
-        # self.req_all = self.ptopo.start_exchange_euler_3d(
-        #     self.q_itf_x2[..., 0, :, : self.geom.itf_size],
-        #     self.q_itf_x2[..., -1, :, self.geom.itf_size :],
-        #     self.q_itf_x1[..., 0, : self.geom.itf_size],
-        #     self.q_itf_x1[..., -1, self.geom.itf_size :],
-        #     self.geom.boundary_sn_new,
-        #     self.geom.boundary_we_new,
-        #     flip_dim=(-3, -1),
-        # )
+        
+        if self.config.desired_device in ("cuda", "cpp"):
+            self.req_all = self.ptopo.start_exchange_euler_3d_cpp(
+                self.q_itf_x2[..., 0, :, : self.geom.itf_size],
+                self.q_itf_x2[..., -1, :, self.geom.itf_size :],
+                self.q_itf_x1[..., 0, : self.geom.itf_size],
+                self.q_itf_x1[..., -1, self.geom.itf_size :],
+                self.geom.boundary_sn_new,
+                self.geom.boundary_we_new,
+                flip_dim=(-3, -1),
+            )
+        else: # cupy fallback
+            self.req_all = self.ptopo.start_exchange_euler_3d(
+                self.q_itf_x2[..., 0, :, : self.geom.itf_size],
+                self.q_itf_x2[..., -1, :, self.geom.itf_size :],
+                self.q_itf_x1[..., 0, : self.geom.itf_size],
+                self.q_itf_x1[..., -1, self.geom.itf_size :],
+                self.geom.boundary_sn_new,
+                self.geom.boundary_we_new,
+                flip_dim=(-3, -1),
+            )
 
     def end_communication(self):
         self.q_itf_s, self.q_itf_n, self.q_itf_w, self.q_itf_e = self.req_all.wait()

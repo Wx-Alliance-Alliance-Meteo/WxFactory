@@ -2,7 +2,7 @@
 #define EXCHANGES_HPP_
 
 #include "common/parameters.hpp"
-#include "common/transform_rule.hpp"
+#include "transform_rule.hpp"
 
 #include <vector>
 #include <numeric>
@@ -15,13 +15,13 @@
 
 namespace py = pybind11;
 
-template <typename T>
+template <typename num_t>
 void memcpy_faces_wrapper(
-    T* send_buffer,
-    const T* south,
-    const T* north,
-    const T* west,
-    const T* east,
+    num_t* send_buffer,
+    const num_t* south,
+    const num_t* north,
+    const num_t* west,
+    const num_t* east,
     size_t face_size
 );
 
@@ -30,23 +30,23 @@ void memcpy_faces_wrapper(
 
 struct Flags { unsigned char f[4]; };
 
-template <typename T>
+template <typename num_t>
 __global__ void memcpy_faces_kernel(
-    T* send_buffer,
-    const T* south,
-    const T* north,
-    const T* west,
-    const T* east,
+    num_t* send_buffer,
+    const num_t* south,
+    const num_t* north,
+    const num_t* west,
+    const num_t* east,
     size_t face_size
 );
 
 
-template <typename T>
-void flip_axis_wrapper_gpu(T* send_buffer, const std::vector<int>& slice_shape, const std::vector<int>& flip_axes, size_t face_size, const std::vector<bool>& flip_flags);
+template <typename num_t>
+void flip_axis_wrapper_gpu(num_t* send_buffer, const std::vector<int>& slice_shape, const std::vector<int>& flip_axes, size_t face_size, const std::vector<bool>& flip_flags);
 
-template <typename T>
+template <typename num_t>
 __global__ void flip_axis_kernel(
-    T* send_buffer,
+    num_t* send_buffer,
     int dim,
     const size_t stride_axis,
     const size_t outer_rows,
@@ -54,26 +54,26 @@ __global__ void flip_axis_kernel(
     Flags flags
 );
 
-template <typename T, typename U>
+template <typename num_t, typename real_t>
 struct PairParams {
-    const T* data[4];
-    const U* boundary[4];
+    const num_t* data[4];
+    const real_t* boundary[4];
 };
 
-template <typename T, typename U>
+template <typename num_t, typename real_t>
 void convert_pair_wrapper_gpu(
-    const T* face_data[4],
-    const U* face_boundary[4],
-    T* send_buffer,
+    const num_t* face_data[4],
+    const real_t* face_boundary[4],
+    num_t* send_buffer,
     const size_t face_size,
     const int panel,
     const size_t coord_size,
     const size_t var_size
 );
 
-template <typename T, typename U>
+template <typename num_t, typename real_t>
 __global__ void convert_pair_kernel(
-    PairParams<T, U> params, T* send_buffer, const int panel, const size_t coord_size, const size_t var_size, const size_t face_size);
+    PairParams<num_t, real_t> params, num_t* send_buffer, const int panel, const size_t coord_size, const size_t var_size, const size_t face_size);
 
 #endif // __CUDACC__
 

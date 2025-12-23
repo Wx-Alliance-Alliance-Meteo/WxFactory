@@ -224,8 +224,7 @@ def kiops(
         from device.device import CudaDevice
 
         if isinstance(device, CudaDevice):
-            from cupyx.scipy.linalg import expm  # submodule not in xalg
-
+            from cupyx.scipy.linalg import expm  # submodule not in xalg - maybe some differences to fix?
             F = expm(sgn * tau * H[: j + 1, : j + 1])
         else:
             F = device.xalg.linalg.expm(sgn * tau * H[: j + 1, : j + 1])

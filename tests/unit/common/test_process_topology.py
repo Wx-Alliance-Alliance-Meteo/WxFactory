@@ -1,20 +1,18 @@
 import unittest
 import sys
+import os
+import types
 
 from mpi4py import MPI
-import os
 
 from device import Device, CpuDevice, CudaDevice
 from process_topology import ProcessTopology, SOUTH, NORTH, WEST, EAST
 from wx_mpi import SingleProcess, Conditional
 
 from tests.unit.mpi_test import run_test_on_x_process, MpiTestCase
-
-TestDeviceClass = CpuDevice
-
 from typing import Tuple
 
-import types
+TestDeviceClass = CpuDevice
 
 
 def gen_data_1(num_processes: int, num_data_hori_per_proc: int, device: Device):

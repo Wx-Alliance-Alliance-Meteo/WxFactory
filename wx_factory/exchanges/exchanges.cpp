@@ -7,13 +7,12 @@
 #include <pybind11/complex.h>
 
 #include "exchanges.hpp"
-
 #include "kernels/kernels.h"
 
 namespace py = pybind11;
 
-template<typename T>
-void flip_axis_wrapper_cpu(T* arr, const std::vector<int>& shape, const std::vector<int>& axes) {
+template<typename num_t>
+void flip_axis_wrapper_cpu(num_t* arr, const std::vector<int>& shape, const std::vector<int>& axes) {
     const int ndim = shape.size();
 
     std::vector<int> stride(ndim);
@@ -47,10 +46,10 @@ void flip_axis_wrapper_cpu(T* arr, const std::vector<int>& shape, const std::vec
     }
 }
 
-template <typename T, typename U>
+template <typename num_t, typename real_t>
 void convert_pair_wrapper_cpu(
-    const T* p_data_face, const U* p_boundary_face,
-    T* p_send_buffer,
+    const num_t* p_data_face, const real_t* p_boundary_face,
+    num_t* p_send_buffer,
     int panel, int neighbour,
     int n_coord, int var_size
 ) {
@@ -58,12 +57,12 @@ void convert_pair_wrapper_cpu(
 
     const TransformRule& rule = RULES[panel][neighbour];
 
-    const T* a1 = p_data_face + 1 * var_size;
-    const T* a2 = p_data_face + 2 * var_size;
-    const U* coord = p_boundary_face;
+    const num_t* a1 = p_data_face + 1 * var_size;
+    const num_t* a2 = p_data_face + 2 * var_size;
+    const real_t* coord = p_boundary_face;
 
-    T* o1 = p_send_buffer + 1 * var_size;
-    T* o2 = p_send_buffer + 2 * var_size;
+    num_t* o1 = p_send_buffer + 1 * var_size;
+    num_t* o2 = p_send_buffer + 2 * var_size;
 
     for (int i = 0; i < var_size; ++i) {
         convert_pair_kernel_shared(a1, a2, coord, o1, o2, i, n_coord, rule);
@@ -77,15 +76,15 @@ For each neighbour, the slice corresponds to a z * (x or y) vertical-horizontal 
 
 4 faces, 5 variables
 */
-template <typename T, typename U>
+template <typename num_t, typename real_t>
 void start_exchange_euler_3d_cpp(
-    py::array_t<T, py::array::c_style> send_buffer,
-    py::array_t<T, py::array::c_style> south,
-    py::array_t<T, py::array::c_style> north,
-    py::array_t<T, py::array::c_style> west,
-    py::array_t<T, py::array::c_style> east,
-    py::array_t<U, py::array::c_style> boundary_sn,
-    py::array_t<U, py::array::c_style> boundary_we,
+    py::array_t<num_t, py::array::c_style> send_buffer,
+    py::array_t<num_t, py::array::c_style> south,
+    py::array_t<num_t, py::array::c_style> north,
+    py::array_t<num_t, py::array::c_style> west,
+    py::array_t<num_t, py::array::c_style> east,
+    py::array_t<real_t, py::array::c_style> boundary_sn,
+    py::array_t<real_t, py::array::c_style> boundary_we,
 
     // reference slice shape (n_variables, n_vert, n_hori, n*n nodal pts)
     const std::vector<int>& shape,
@@ -96,16 +95,16 @@ void start_exchange_euler_3d_cpp(
 {
 
     // pointer unpacking
-    T* p_send_buffer = static_cast<T*>(send_buffer.request().ptr);
-    T* p_south = static_cast<T*>(south.request().ptr);
-    T* p_north = static_cast<T*>(north.request().ptr);
-    T* p_west = static_cast<T*>(west.request().ptr);
-    T* p_east = static_cast<T*>(east.request().ptr);
-    U* p_boundary_sn = static_cast<U*>(boundary_sn.request().ptr); // Different type
-    U* p_boundary_we = static_cast<U*>(boundary_we.request().ptr);
+    num_t* p_send_buffer = static_cast<num_t*>(send_buffer.request().ptr);
+    num_t* p_south = static_cast<num_t*>(south.request().ptr);
+    num_t* p_north = static_cast<num_t*>(north.request().ptr);
+    num_t* p_west = static_cast<num_t*>(west.request().ptr);
+    num_t* p_east = static_cast<num_t*>(east.request().ptr);
+    real_t* p_boundary_sn = static_cast<real_t*>(boundary_sn.request().ptr); // Different type
+    real_t* p_boundary_we = static_cast<real_t*>(boundary_we.request().ptr);
 
-    T* p_data[4] = {p_south, p_north, p_west, p_east};
-    U* p_boundary[4] = {p_boundary_sn, p_boundary_sn, p_boundary_we, p_boundary_we};
+    num_t* p_data[4] = {p_south, p_north, p_west, p_east};
+    real_t* p_boundary[4] = {p_boundary_sn, p_boundary_sn, p_boundary_we, p_boundary_we};
 
     
     const int n_var = shape[0];
@@ -116,12 +115,12 @@ void start_exchange_euler_3d_cpp(
     for (int i = 0; i < 4; ++i) {
 
         // allocation
-        std::memcpy(p_send_buffer + i * block_size, p_data[i], block_size*sizeof(T));
+        std::memcpy(p_send_buffer + i * block_size, p_data[i], block_size*sizeof(num_t));
 
 
-        const T* p_data_face = p_data[i];
-        const U* p_boundary_face = p_boundary[i];
-        T* p_send_buffer_face = p_send_buffer + i * block_size;
+        const num_t* p_data_face = p_data[i];
+        const real_t* p_boundary_face = p_boundary[i];
+        num_t* p_send_buffer_face = p_send_buffer + i * block_size;
 
         // Convert pairs - transformation to
 

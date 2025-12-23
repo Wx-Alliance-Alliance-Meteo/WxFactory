@@ -7,9 +7,6 @@
 #include <algorithm>
 
 #include <iostream>
-using std::cout;
-using std::endl;
-
 
 /*
 Same as x.flip(array, axis=flip_dim) in python
@@ -20,9 +17,9 @@ For multiple axes, use case example:
     }
 */
 
-template <typename T>
+template <typename num_t>
 void flip_axis_nogpu(
-    T* arr,
+    num_t* arr,
     const std::vector<int>& shape,
     const std::vector<int>& axes
 ) {
