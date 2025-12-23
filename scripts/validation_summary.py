@@ -33,7 +33,7 @@ def _get_reference(reference_url: str, store_reference_path: str):
     print(r.status_code, r.headers.get("Content-Type"), len(r.content))
     r.raise_for_status()
     if not r.content:
-        raise RuntimeError("Empty response body")
+        raise RuntimeError("No content")
 
     # Save
     os.makedirs(os.path.dirname(store_reference_path), exist_ok=True)
@@ -52,22 +52,25 @@ def _get_compare_summary(target_path: str, reference):
         raise ValueError(f"Unsupported type: {extension}")
     if extension != extension_reference:
         raise ValueError(f"No reference type matches type {extension}")
+
+    report = compare_outputs.run(
+        target_path,
+        reference,
+        vars=["P", "rho", "theta"],
+    )
+    # if target_path.endswith(".nc"):
+    #     report = compare_outputs.run(
+    #         target_path,
+    #         reference,
+    #         vars=["P", "rho", "theta"],
+    #     )
+    # elif target_path.endswith(".npy"):
+    #     report = compare_outputs.run(
+    #         target_path,
+    #         reference,
+    #         vars=["P", "rho", "theta"],
+    #     )
     
-    if target_path.endswith(".nc"):
-        report = compare_outputs.run(
-            target_path,
-            reference,
-            input_type="netcdf",
-            vars=["P", "rho", "theta"],
-        )
-    elif target_path.endswith(".npy"):
-        report = compare_outputs.run(
-            target_path,
-            reference,
-            input_type="sv",
-            vars=["P", "rho", "theta"],
-        )
-        
     return report
 
 def _plot_potential(source_path: str, output_file: str):
@@ -103,41 +106,61 @@ def main(args):
     reference_path = _get_reference(args.reference_url, args.store_reference_path)
     compare_report_list = _get_compare_summary(args.target_file, reference_path)
     
-    # Plots (only compatible with netcdf)
-    isPlot = False
-    if (args.target_file.endswith(".nc")):
-        isPlot = True
     
-        potential_plot = _plot_potential(args.target_file, args.target_potential_plot_store_path)
-        reference_potential_plot = _get_image(args.reference_potential_plot_url, args.store_reference_path_potential)
+    # # Plots (only compatible with netcdf)
+    # isPlot = False
+    # if (args.target_file.endswith(".nc")):
+    #     isPlot = True
+    
+    #     potential_plot = _plot_potential(args.target_file, args.target_potential_plot_store_path)
+    #     reference_potential_plot = _get_image(args.reference_potential_plot_url, args.store_reference_path_potential)
         
-        hovmoller_plot = _plot_hovmoller(args.target_file, args.target_hovmoller_plot_store_path)
-        reference_hovmoller_plot = _get_image(args.reference_hovmoller_plot_url, args.store_reference_path_hovmoller)    
+    #     hovmoller_plot = _plot_hovmoller(args.target_file, args.target_hovmoller_plot_store_path)
+    #     reference_hovmoller_plot = _get_image(args.reference_hovmoller_plot_url, args.store_reference_path_hovmoller)    
     
-    else:
-        print("File type not supported for temperature potential and hovmoller plots")
+    # else:
+    #     print("File type not supported for temperature potential and hovmoller plots")
     
-    # Build summary
-    report = validation.Report(title="Validation Report")
+    # # Build html summary
+    # report = validation.Report(title="Validation Report")
     
-    summary = validation.Section(title="Summary")
-    for compare_report in compare_report_list:
-        summary.blocks.append(validation.TextBlock(compare_report))
-    report.add(summary)
+    # summary = validation.Section(title="Summary")
+    # for compare_report in compare_report_list:
+    #     summary.blocks.append(validation.TextBlock(compare_report))
+    # report.add(summary)
     
-    if isPlot:
-        potential = validation.Section(title="Potential")
-        potential.blocks.append(validation.ImageBlock(title="Potential Plot", image_path=potential_plot, caption="Potential plot"))
-        potential.blocks.append(validation.ImageBlock(title="Reference Potential Plot", image_path=reference_potential_plot))
-        report.add(potential)
+    # if isPlot:
+    #     potential = validation.Section(title="Potential")
+    #     potential.blocks.append(validation.ImageBlock(title="Potential Plot", image_path=potential_plot, caption="Potential plot"))
+    #     potential.blocks.append(validation.ImageBlock(title="Reference Potential Plot", image_path=reference_potential_plot))
+    #     report.add(potential)
         
-        hovmoller = validation.Section(title="Hovmoller")
-        hovmoller.blocks.append(validation.ImageBlock(title="Hovmoller Diagram", image_path=hovmoller_plot, caption="Hovmoller diagram"))
-        hovmoller.blocks.append(validation.ImageBlock(title="Reference Hovmoller Diagram", image_path=reference_hovmoller_plot))
-        report.add(hovmoller)
+    #     hovmoller = validation.Section(title="Hovmoller")
+    #     hovmoller.blocks.append(validation.ImageBlock(title="Hovmoller Diagram", image_path=hovmoller_plot, caption="Hovmoller diagram"))
+    #     hovmoller.blocks.append(validation.ImageBlock(title="Reference Hovmoller Diagram", image_path=reference_hovmoller_plot))
+    #     report.add(hovmoller)
         
-    report.save("scripts/validation/report.html")
+    # report.save("scripts/validation/report.html")
+    
+    # Gather test data
+    panel_test = [
+        r.nrmse
+        for r in compare_report_list
+        if r.variable == args.test_var
+        and r.method in {args.test_inter, "direct"}
+    ]
+    avg_panel = np.average(panel_test)
+    max_panel = np.max(panel_test)
+    
+    test_threshold = args.test_threshold
+    is_pass = avg_panel < test_threshold
+    is_pass_max = np.max(panel_test) < test_threshold
+    
+    print(f"avg panel {'pass' if is_pass else 'fail'} with error {avg_panel} {'<' if is_pass else '>'} threshold {test_threshold}")
+    print(f"max panel {'pass' if is_pass_max else 'fail'} with error {max_panel} {'<' if is_pass else '>'} threshold {test_threshold}")
 
+    return (is_pass, test_threshold)
+    
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="""
@@ -150,17 +173,22 @@ if __name__ == "__main__":
     parser.add_argument("target_file", help="")
     parser.add_argument("--target_potential_plot_store_path", default = "/home/ngv000/repos/WxFactory/scripts/validation/tmp/target_potential.png", type=str)
     parser.add_argument("--target_hovmoller_plot_store_path", default = "/home/ngv000/repos/WxFactory/scripts/validation/tmp/target_hovmoller.png", type=str)
-
+    
     # Reference / baseline file
     parser.add_argument("--reference_url", default="https://web.science.gc.ca/~ngv000/WxFactory/reference_state.npy", type=str)
-    # parser.add_argument("--reference_url", default="https://web.science.gc.ca/~ngv000/WxFactory/toy_netcdf.nc", type=str)
-    # parser.add_argument("--store_reference_path", default="/home/ngv000/repos/WxFactory/scripts/validation/tmp/reference.nc", type=str)
     parser.add_argument("--store_reference_path", default="/home/ngv000/repos/WxFactory/scripts/validation/tmp/reference.npy", type=str)
     parser.add_argument("--store_reference_path_potential", default="/home/ngv000/repos/WxFactory/scripts/validation/tmp/potential_ref_plot.jpg", type=str)
     parser.add_argument("--store_reference_path_hovmoller", default="/home/ngv000/repos/WxFactory/scripts/validation/tmp/hovmoller_ref_plot.jpg", type=str)
 
     parser.add_argument("--reference_potential_plot_url", default = "https://web.science.gc.ca/~ngv000/WxFactory/rubber_duck.jpg", type=str)
     parser.add_argument("--reference_hovmoller_plot_url", default = "https://web.science.gc.ca/~ngv000/WxFactory/mr_potato.jpg", type=str)
+
+    # Pass / fail evaluation
+    parser.add_argument("--test_threshold", default=1e-6, type=float)
+    parser.add_argument("--test_inter", default="cubic", type=str, help="Preferred interpolation method: linear, cubic or quintic. Todo lagrange polynomials.")
+    parser.add_argument("--test_var", default="theta", type=str, help="Pass-fail test on which variable")
+    parser.add_argument("--test_metric", default="nrmse"
+    )
 
     args = parser.parse_args()
     main(args)
