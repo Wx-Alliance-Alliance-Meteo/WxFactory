@@ -1,0 +1,81 @@
+# WxFactory
+Research numerical weather model. The name is inspired by [Richardson’s Fantastic Forecast Factory](https://www.emetsoc.org/resources/rff/)
+
+## Documentation list
+
+Full documentation is [available here](http://hpfx.collab.science.gc.ca/~sdyn001/WxFactory).
+
+- [Testing](./tests/readme.md)
+- [Contributing](./doc/contribute.md)
+- [References](./doc/references.md)
+
+## Requirements
+
+WxFactory was built for Python 3.11 (at least).  It also requires an MPI implementation.
+
+### Python packages
+* Python version at least 3.11
+* `numpy` Scientific tools for Python
+* `scipy` Python-based ecosystem of open-source software for mathematics, science, and engineering
+* `sympy` Python library for symbolic mathematics
+* `mpi4py` Python interface for MPI
+* `pybind11` Library to expose C++/Python types to each other
+* `netcdf4` Python/NumPy interface to the netCDF C library (MPI version)
+* `matplotlib` A python plotting library, making publication quality plots
+* `setuptools` To compile C++/CUDA portions of WxFactory
+* `cupy`   If you want to be able to run on GPU (can install `cupy-cuda11x` or `cupy-cuda12x` for precompiled module)
+#### For validation
+* `requests` To be able to download reference results
+* `tqdm` Viewing download progress when validating results
+
+### External programs/libraries
+* A CUDA-aware installation of MPI (was tested with HPC-X)
+* CUDA toolkit
+    * CUDA runtime
+    * `nvcc` compiler
+* A C++ compiler
+
+### Other libraries [not necessary for benchmark]
+* `netcdf4` Library to handle netCDF files. There is an MPI version of it, if you want parallel output
+* `sqlite` To be able to store solver stats.
+
+### Optional
+* `cartopy`  A cartographic python library with matplotlib support for visualisation
+* `tqdm`     Progress bar when generating matrices
+* `snakeviz` A tool for visualizing profiling output
+
+### To build documentation
+* `Sphinx`      Library to build the documentation
+* `myst-parser` Library to parse markdown files for documentation
+
+Python packages can be installed with the package management system of your
+Linux distribution or with `pip`.
+
+## Running WxFactory
+
+In general: `mpirun -n 6 ./WxFactory config/case6.ini`
+
+To run the benchmark:
+- Edit `tests/benchmark_gen8/config_8th_deg.ini` to specify a valid output directory (the `output_dir` option)
+- Run `mpirun -n [##] ./WxFactory tests/benchmark_gen8/config_8th_deg.ini`
+- **TODO**: Verify the result by comparing with....  
+
+## Profiling WxFactory
+
+You can generate an execution profile when running WxFactory by adding the `--profile` flag to the main command. For example:
+```
+mpirun -n 6 python3 ./WxFactory --profile config/case6.ini
+```
+
+This will generate a set of `profile_####.out` files, one for each launched process, that can be viewed with `snakeviz`. _You need to be able to open a browser window from the terminal to use this command_:
+```
+snakeviz ./profile_0000.out
+```
+
+## Configuration options
+
+The configuration parameters available to put in the file passed as an argument to `WxFactory`
+are listed [here](doc/config_options.md).
+
+## If you find this project useful, please cite:
+Gaudreault, S., Charron, M., Dallerit, V., & Tokman, M. (2022). High-order numerical solutions to the shallow-water equations on the rotated cubed-sphere grid. Journal of Computational Physics, 449, 110792. [https://doi.org/10.1016/j.jcp.2021.110792](https://doi.org/10.1016/j.jcp.2021.110792)

@@ -1,78 +1,70 @@
 # WxFactory
-Research numerical weather model. The name is inspired by [Richardson’s Fantastic Forecast Factory](https://www.emetsoc.org/resources/rff/)
-
-## Documentation list
-
-Full documentation is [available here](http://hpfx.collab.science.gc.ca/~sdyn001/WxFactory).
-
-- [Testing](./tests/readme.md)
-- [Contributing](./doc/contribute.md)
-- [References](./doc/references.md)
+WxFactory is a numerical model that solves the Euler equations on a cubed-sphere grid.
+It is used to test large-scale modelling of the atmosphere on multiple GPUs.
+Coordination between GPUs is managed using MPI. The GPUs themselves are mostly used through the CuPy python module,
+with performance critical parts of the code written in CUDA.
 
 ## Requirements
 
-WxFactory was built for Python 3.11 (at least).  It also requires an MPI implementation.
+* Python >= 3.11
+* MPI (CUDA-aware)
 
-### Python packages
-* Python version at least 3.11
-* `numpy` Scientific tools for Python
-* `scipy` Python-based ecosystem of open-source software for mathematics, science, and engineering
-* `sympy` Python library for symbolic mathematics
-* `mpi4py` Python interface for MPI
-* `pybind11` Library to expose C++/Python types to each other
-* `netcdf4` Python/NumPy interface to the netCDF C library (MPI version)
-* `matplotlib` A python plotting library, making publication quality plots
-* `setuptools` To compile C++/CUDA portions of WxFactory
-* `cupy`   If you want to be able to run on GPU (can install `cupy-cuda11x` or `cupy-cuda12x` for precompiled module)
-
-### External programs/libraries
-* A CUDA-aware installation of MPI (was tested with HPC-X)
+### To take advantage of compiled code
 * CUDA toolkit
     * CUDA runtime
     * `nvcc` compiler
 * A C++ compiler
 
-### Other libraries [not necessary for benchmark]
+### Python packages
+* `numpy`       Scientific tools for Python
+* `scipy`       Python-based ecosystem of open-source software for mathematics, science, and engineering
+* `sympy`       Python library for symbolic mathematics
+* `mpi4py`      Python interface for MPI
+* `pybind11`    Library to expose C++/Python types to each other
+* `netcdf4`     Python/NumPy interface to the netCDF C library (MPI version)
+* `matplotlib`  A python plotting library, making publication quality plots
+* `setuptools`  To compile C++/CUDA portions of WxFactory
+* `cupy`        To be able to run on GPU (can install `cupy-cuda11x` or `cupy-cuda12x` for precompiled module)
+
+#### For validation
+* `requests` To be able to download reference results
+* `tqdm` Viewing download progress when validating results
+
+#### Optional
+* `cartopy`  A cartographic python library with matplotlib support for visualisation
+* `snakeviz` A tool for visualizing profiling output
 * `netcdf4` Library to handle netCDF files. There is an MPI version of it, if you want parallel output
 * `sqlite` To be able to store solver stats.
-
-### Optional
-* `cartopy`  A cartographic python library with matplotlib support for visualisation
-* `tqdm`     Progress bar when generating matrices
-* `snakeviz` A tool for visualizing profiling output
-
-### To build documentation
 * `Sphinx`      Library to build the documentation
 * `myst-parser` Library to parse markdown files for documentation
 
-Python packages can be installed with the package management system of your
-Linux distribution or with `pip`.
+## Running the benchmark
 
-## Running WxFactory
-
-In general: `mpirun -n 6 ./WxFactory config/case6.ini`
-
-To run the benchmark:
 - Edit `tests/benchmark_gen8/config_8th_deg.ini` to specify a valid output directory (the `output_dir` option)
-- Run `mpirun -n [##] ./WxFactory tests/benchmark_gen8/config_8th_deg.ini`
-- **TODO**: Verify the result by comparing with....  
+- Run 
+    ```
+    mpirun -n [##] ./WxFactory ./tests/benchmark_gen8/config_8th_deg.ini
+    ```
+    where `[##]` is the number of MPI processes that will be used. While `WxFactory` can run with more processes than
+    there are GPUs available, performance is usually better when running exactly one process per GPU.
 
-## Profiling WxFactory
+- `WxFactory` can only be run with specific numbers of processes. To know what numbers are possible, you can run
+    ```
+    ./WxFactory --allowed-proc-count ./tests/benchmark_gen8/config_8th_deg.ini
+    ```
 
-You can generate an execution profile when running WxFactory by adding the `--profile` flag to the main command. For example:
+### Validating the results
+
+To verify that the results of the run are correct, run
 ```
-mpirun -n 6 python3 ./WxFactory --profile config/case6.ini
+./scripts/validate_benchmark.py [directory where results are stored]
 ```
 
-This will generate a set of `profile_####.out` files, one for each launched process, that can be viewed with `snakeviz`. _You need to be able to open a browser window from the terminal to use this command_:
-```
-snakeviz ./profile_0000.out
-```
+This will download the reference solution and compare the current results with them. The `--max-concurrent` option of
+the validation script can be used to speed up the comparison, but running all of them simultaneously may require 150+ GB
+of RAM.
 
-## Configuration options
 
-The configuration parameters available to put in the file passed as an argument to `WxFactory`
-are listed [here](doc/config_options.md).
+# More documentation
 
-## If you find this project useful, please cite:
-Gaudreault, S., Charron, M., Dallerit, V., & Tokman, M. (2022). High-order numerical solutions to the shallow-water equations on the rotated cubed-sphere grid. Journal of Computational Physics, 449, 110792. [https://doi.org/10.1016/j.jcp.2021.110792](https://doi.org/10.1016/j.jcp.2021.110792)
+[Available here](README_detailed.md)
