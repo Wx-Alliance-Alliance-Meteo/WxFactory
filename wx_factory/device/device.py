@@ -94,23 +94,27 @@ class Device(ABC):
 class CpuDevice(Device):
     _default = None
 
-    def __init__(self, comm: MPI.Comm) -> None:
+    def __init__(self, comm: MPI.Comm, with_compiled: bool = True) -> None:
         import numpy
         import scipy
 
-        try:
-            compile_kernels.compile("pde", "cpp", force=False, comm=comm)
-            pde = compile_kernels.load_module("pde", "cpp")
+        pde = None
+        operators = None
 
-            compile_kernels.compile("operators", "cpp", force=False, comm=comm)
-            operators = compile_kernels.load_module("operators", "cpp")
-        except (ModuleNotFoundError, SystemExit):
-            if comm.rank == 0:
-                print(f"Unable to find the interface_c module. You need to compile it.", flush=True)
-            raise
-        except:
-            print(f"Unknown exception!", flush=True)
-            raise
+        if with_compiled:
+            try:
+                compile_kernels.compile("pde", "cpp", force=False, comm=comm)
+                pde = compile_kernels.load_module("pde", "cpp")
+
+                compile_kernels.compile("operators", "cpp", force=False, comm=comm)
+                operators = compile_kernels.load_module("operators", "cpp")
+            except (ModuleNotFoundError, SystemExit):
+                if comm.rank == 0:
+                    print(f"Unable to find the interface_c module. You need to compile it.", flush=True)
+                raise
+            except:
+                print(f"Unknown exception!", flush=True)
+                raise
 
         super().__init__(comm, numpy, scipy, pde, operators)
 
@@ -162,22 +166,26 @@ class CudaDevice(Device):
         import cupyx.scipy.linalg
 
         # Get compiled library
-        try:
-            compile_kernels.compile("pde", compiled_lib, force=False, comm=comm)
-            pde = compile_kernels.load_module("pde", compiled_lib)
+        pde = None
+        operators = None
 
-            compile_kernels.compile("operators", compiled_lib, force=False, comm=comm)
-            operators = compile_kernels.load_module("operators", compiled_lib)
-        except (ModuleNotFoundError, ImportError, SystemExit):
-            if comm.rank == 0:
-                print(
-                    f"Unable to load the compiled CUDA modules, you need to compile it if you want to use the GPU",
-                    flush=True,
-                )
-            raise
-        except:
-            print(f"{comm.rank} Unknown exception", flush=True)
-            raise
+        if compiled_lib in ["omp", "cuda"]:
+            try:
+                compile_kernels.compile("pde", compiled_lib, force=False, comm=comm)
+                pde = compile_kernels.load_module("pde", compiled_lib)
+
+                compile_kernels.compile("operators", compiled_lib, force=False, comm=comm)
+                operators = compile_kernels.load_module("operators", compiled_lib)
+            except (ModuleNotFoundError, ImportError, SystemExit):
+                if comm.rank == 0:
+                    print(
+                        f"Unable to load the compiled CUDA modules, you need to compile it if you want to use the GPU",
+                        flush=True,
+                    )
+                raise
+            except:
+                print(f"{comm.rank} Unknown exception", flush=True)
+                raise
 
         # Set members
         super().__init__(comm, cupy, cupyx.scipy, pde, operators)

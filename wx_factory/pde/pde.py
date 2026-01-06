@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Callable
+from typing import Callable, Optional
 
 from numpy.typing import NDArray
 
@@ -19,8 +19,8 @@ class PDE(ABC):
         num_dim: int,
         num_var: int,
         num_elem: int,
-        pointwise_func: Callable,
-        riemann_func: Callable,
+        pointwise_func: Optional[Callable],
+        riemann_func: Optional[Callable],
     ):
         self.geometry = geometry
         self.config = config
@@ -31,8 +31,8 @@ class PDE(ABC):
         self.num_var = num_var
         self.num_elem = num_elem
 
-        if pointwise_func is None or riemann_func is None:
-            raise ValueError(f"Must provide a pointwise and a Riemann flux function")
+        # if pointwise_func is None or riemann_func is None:
+        #     raise ValueError(f"Must provide a pointwise and a Riemann flux function")
 
         self.pointwise_func = pointwise_func
         self.riemann_func = riemann_func

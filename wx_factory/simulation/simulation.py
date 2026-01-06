@@ -230,18 +230,17 @@ class Simulation:
             except AttributeError:
                 cuda_devices = []
 
-            lib = "omp" if self.config.desired_device == "omp" else "cuda"
             try:
-                device = CudaDevice(self.comm, compiled_lib=lib, device_list=cuda_devices)
+                device = CudaDevice(self.comm, compiled_lib=self.config.desired_device, device_list=cuda_devices)
             except ValueError:
                 device = None
                 if self.rank == 0:
                     print("Switching to CPU", flush=True)
 
             if device is None:
-                device = CpuDevice(comm=self.comm)
+                device = CpuDevice(comm=self.comm, with_compiled=(self.config.desired_device in ["omp", "cuda"]))
         else:
-            device = CpuDevice(comm=self.comm)
+            device = CpuDevice(comm=self.comm, with_compiled=(self.config.desired_device == "cpp"))
 
         return device
 

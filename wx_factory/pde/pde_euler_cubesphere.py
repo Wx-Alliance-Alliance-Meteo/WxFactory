@@ -58,6 +58,13 @@ def compute_forcings(
 class PDEEulerCubesphere(PDE):
     def __init__(self, geometry: CubedSphere3D, config: Configuration, metric: Metric3DTopo):
         pde = geometry.device.pde
+
+        pointwise_func = None
+        riemann_func = None
+        if pde is not None:
+            pointwise_func = pde.pointwise_euler_cubedsphere_3d
+            riemann_func = self.get_riemann_solver(pde, "rusanov")
+
         super().__init__(
             geometry,
             config,
@@ -65,8 +72,8 @@ class PDEEulerCubesphere(PDE):
             num_dim=3,
             num_var=5,
             num_elem=geometry.num_elements_horizontal**2 * geometry.num_elements_vertical,
-            pointwise_func=pde.pointwise_euler_cubedsphere_3d,
-            riemann_func=self.get_riemann_solver(pde, "rusanov"),
+            pointwise_func=pointwise_func,
+            riemann_func=riemann_func,
         )
 
         self.num_solpts = geometry.num_solpts
