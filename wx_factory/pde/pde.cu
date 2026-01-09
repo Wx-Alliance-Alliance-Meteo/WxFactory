@@ -404,16 +404,16 @@ void launch_riemann_euler_cubedsphere_rusanov_3d(
       num_elem_x3,
       num_solpts_face);
 
-  // Set boundary conditions along the vertical direction
-  num_tasks  = num_elem_x2 * num_elem_x1 * num_solpts_face;
-  num_blocks = ((num_tasks + threads_per_block.x - 1) / threads_per_block.x);
+  // // Set boundary conditions along the vertical direction
+  // num_tasks  = num_elem_x2 * num_elem_x1 * num_solpts_face;
+  // num_blocks = ((num_tasks + threads_per_block.x - 1) / threads_per_block.x);
 
-  boundary_euler_cubedsphere_3d<real_t, num_t><<<num_blocks, threads_per_block>>>(
-      q_itf_x3_ptr,
-      num_elem_x1,
-      num_elem_x2,
-      num_elem_x3,
-      num_solpts_face);
+  // boundary_euler_cubedsphere_3d<real_t, num_t><<<num_blocks, threads_per_block>>>(
+  //     q_itf_x3_ptr,
+  //     num_elem_x1,
+  //     num_elem_x2,
+  //     num_elem_x3,
+  //     num_solpts_face);
 
   // x3-direction
   num_tasks  = (num_elem_x3 + 1) * num_elem_x2 * num_elem_x1 * num_solpts_face;
