@@ -8,11 +8,8 @@ from init.initialize import Topo
 from pde import PDEEulerCartesian, PDEEulerCubesphere
 from process_topology import ProcessTopology
 
-from .rhs_bubble_convective import rhs_bubble as rhs_bubble_convective
-from .rhs_bubble_implicit import rhs_bubble_implicit
 from .rhs_sw import RhsShallowWater
 from .rhs_dfr import RHSDirecFluxReconstruction, RHSDirecFluxReconstruction_mpi, RHSDirecFluxReconstruction_mpi_v2
-from .rhs_fv import RHSFiniteVolume
 
 
 class RhsBundle:
@@ -38,8 +35,6 @@ class RhsBundle:
 
         if param.discretization == "dfr" or param.discretization == "dg":
             rhs_class = RHSDirecFluxReconstruction
-        elif param.discretization == "fv":
-            rhs_class = RHSFiniteVolume
         else:
             raise ValueError(f"Unknown discretization {param.discretization}")
 
