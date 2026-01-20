@@ -245,14 +245,10 @@ def initialize_cartesian2d(geom: Cartesian2D, param: Configuration) -> NDArray[n
 
         xc = 500.0
         zc = 260.0
-
         pert = 0.5
 
-        for k in range(nk):
-            for i in range(ni):
-                r = (geom.X1[k, i] - xc) ** 2 + (geom.X3[k, i] - zc) ** 2
-                if r < param.bubble_rad**2:
-                    θ[k, i] += pert
+        r = (geom.X1 - xc) ** 2 + (geom.X3 - zc) ** 2
+        θ = xp.where(r < param.bubble_rad**2, θ + pert, θ)
 
     elif param.case_number == 2:
         # Gaussian bubble
