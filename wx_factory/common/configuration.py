@@ -145,6 +145,7 @@ class Configuration:
     matmul_backend: str
     mg_smoother: str
     mg_solve_coarsest: bool
+    netcdf_use_collective: bool
     num_elements_horizontal: int
     num_elements_vertical: int
     num_mg_levels: int
