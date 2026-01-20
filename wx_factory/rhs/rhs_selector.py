@@ -11,7 +11,7 @@ from process_topology import ProcessTopology
 from .rhs_bubble_convective import rhs_bubble as rhs_bubble_convective
 from .rhs_bubble_implicit import rhs_bubble_implicit
 from .rhs_sw import RhsShallowWater
-from .rhs_dfr import RHSDirecFluxReconstruction, RHSDirecFluxReconstruction_mpi
+from .rhs_dfr import RHSDirecFluxReconstruction, RHSDirecFluxReconstruction_mpi, RHSDirecFluxReconstruction_mpi_v2
 from .rhs_fv import RHSFiniteVolume
 
 
@@ -45,9 +45,16 @@ class RhsBundle:
 
         if param.equations == "euler" and isinstance(geom, CubedSphere3D):
             pde = PDEEulerCubesphere(geom, param, metric)
-            self.full = RHSDirecFluxReconstruction_mpi(
+            # Original RHS_DirecFluxReconstruction_mpi implementation without in-place matmuloperations
+            #self.full = RHSDirecFluxReconstruction_mpi(
+            #    pde, geom, operators, metric, topo, ptopo, param, fields_shape, debug=debug
+            #)
+
+            # New RHS_DirecFluxReconstruction_mpi_v2 implementation with in-place matmul operations
+            self.full = RHSDirecFluxReconstruction_mpi_v2(
                 pde, geom, operators, metric, topo, ptopo, param, fields_shape, debug=debug
             )
+
             # rhs_functions = {'dg': rhs_euler,
             #                  'fv': rhs_euler}
 

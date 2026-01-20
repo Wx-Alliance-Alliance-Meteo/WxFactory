@@ -40,6 +40,13 @@
                         "values": ["cuda", "cupy"]
                     },
                     "description": "List of Nvidia physical devices to use"
+                },
+                {
+                    "name": "matmul_backend",
+                    "type": "str",
+                    "selectables": ["default", "nvmath"],
+                    "default": "default",
+                    "description": "Backend for matrix multiplication operations (default uses numpy/cupy, nvmath uses nvmath-python)"
                 }
             ]
         },

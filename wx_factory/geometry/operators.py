@@ -202,6 +202,29 @@ class DFROperators:
             corr_east = self.diff_ext[1:-1, -1]
             self.correction_WE = xp.vstack((xp.kron(ident, corr_west), xp.kron(ident, corr_east)))
 
+        # Ensure operators are in C_CONTIGUOUS format for better GEMM performance
+        self.extrap_x = xp.ascontiguousarray(self.extrap_x)
+        self.extrap_y = xp.ascontiguousarray(self.extrap_y)
+        self.extrap_z = xp.ascontiguousarray(self.extrap_z)
+        self.derivative_x = xp.ascontiguousarray(self.derivative_x)
+        self.derivative_y = xp.ascontiguousarray(self.derivative_y)
+        self.derivative_z = xp.ascontiguousarray(self.derivative_z)
+        self.correction_WE = xp.ascontiguousarray(self.correction_WE)
+        self.correction_SN = xp.ascontiguousarray(self.correction_SN)
+        self.correction_DU = xp.ascontiguousarray(self.correction_DU)
+
+        # Complex128 variants of operators for mixed-type matmul (complex128 @ complex128)
+        # These avoid runtime upcasting when the input array is complex128
+        self.extrap_x_complex = xp.ascontiguousarray(self.extrap_x.astype(xp.complex128))
+        self.extrap_y_complex = xp.ascontiguousarray(self.extrap_y.astype(xp.complex128))
+        self.extrap_z_complex = xp.ascontiguousarray(self.extrap_z.astype(xp.complex128))
+        self.derivative_x_complex = xp.ascontiguousarray(self.derivative_x.astype(xp.complex128))
+        self.derivative_y_complex = xp.ascontiguousarray(self.derivative_y.astype(xp.complex128))
+        self.derivative_z_complex = xp.ascontiguousarray(self.derivative_z.astype(xp.complex128))
+        self.correction_WE_complex = xp.ascontiguousarray(self.correction_WE.astype(xp.complex128))
+        self.correction_SN_complex = xp.ascontiguousarray(self.correction_SN.astype(xp.complex128))
+        self.correction_DU_complex = xp.ascontiguousarray(self.correction_DU.astype(xp.complex128))
+
     def make_filter(self, alpha: float, order: int, cutoff: float, geom: Geometry):
         """Build an exponential modal filter as described in Warburton, eqn 5.16."""
 

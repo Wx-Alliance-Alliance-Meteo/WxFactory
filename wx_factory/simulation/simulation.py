@@ -39,6 +39,7 @@ from precondition.factorization import Factorization
 from precondition.multigrid import Multigrid
 from process_topology import ProcessTopology
 from rhs.rhs_selector import RhsBundle
+from common.matmul import set_matmul_backend
 from wx_mpi import SingleProcess, Conditional
 from post_proccessing import PostProcessor, ScharMountainPostProcessor
 
@@ -122,6 +123,10 @@ class Simulation:
 
         self._adjust_num_elements()
         self.device = self._make_device()
+
+        # Set matmul backend from config
+        set_matmul_backend(self.config.matmul_backend, self.device.xp)
+
         self.process_topo = None
         self.geometry = self._create_geometry()
         self.operators = DFROperators(self.geometry, self.config, self.device)

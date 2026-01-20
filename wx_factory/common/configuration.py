@@ -142,6 +142,7 @@ class Configuration:
     linear_solver: str
     matsuno_amp: float
     matsuno_wave_type: str
+    matmul_backend: str
     mg_smoother: str
     mg_solve_coarsest: bool
     num_elements_horizontal: int
