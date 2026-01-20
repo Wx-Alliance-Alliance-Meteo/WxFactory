@@ -222,7 +222,8 @@ def initialize_cartesian2d(geom: Cartesian2D, param: Configuration) -> NDArray[n
     xp = geom.device.xp
 
     # Initial state at rest, isentropic, hydrostatic
-    #   nk, ni = geom.X1.shape
+    nk = param.num_elements_vertical
+    ni = param.num_elements_horizontal
     Q = xp.zeros((num_equations, param.num_elements_vertical, param.num_elements_horizontal, geom.num_solpts**2))
     uu = xp.zeros_like(geom.X1)
     ww = xp.zeros_like(geom.X1)
@@ -279,32 +280,24 @@ def initialize_cartesian2d(geom: Cartesian2D, param: Configuration) -> NDArray[n
 
     elif param.case_number == 3:
         # Colliding bubbles
-
+        
+        # First bubble (warm)
         A = 0.5
         a = 150
         s = 50
         x0 = 500
         z0 = 300
-        for k in range(nk):
-            for i in range(ni):
-                r = xp.sqrt((geom.X1[k, i] - x0) ** 2 + (geom.X3[k, i] - z0) ** 2)
-                if r <= a:
-                    θ[k, i] += A
-                else:
-                    θ[k, i] += A * xp.exp(-(((r - a) / s) ** 2))
-
+        r = xp.sqrt((geom.X1 - x0) ** 2 + (geom.X3 - z0) ** 2)
+        θ = xp.where(r <= a, θ + A, θ + A * xp.exp(-(((r - a) / s) ** 2)))
+        
+        # Second bubble (cold)
         A = -0.15
         a = 0
         s = 50
         x0 = 560
         z0 = 640
-        for k in range(nk):
-            for i in range(ni):
-                r = xp.sqrt((geom.X1[k, i] - x0) ** 2 + (geom.X3[k, i] - z0) ** 2)
-                if r <= a:
-                    θ[k, i] += A
-                else:
-                    θ[k, i] += A * xp.exp(-(((r - a) / s) ** 2))
+        r = xp.sqrt((geom.X1 - x0) ** 2 + (geom.X3 - z0) ** 2)
+        θ = xp.where(r <= a, θ + A, θ + A * xp.exp(-(((r - a) / s) ** 2)))
 
     elif param.case_number == 4:
         # Cold density current
