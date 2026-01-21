@@ -65,8 +65,8 @@ def circular_vortex(geom, metric, param):
 
     return u1, u2, h
 
-
 def height_vortex(geom, metric, param, step):
+    
     step_time = step * param.dt
 
     lon_center = math.pi - 0.8
@@ -92,17 +92,14 @@ def height_vortex(geom, metric, param, step):
     Vt = V0 * (3.0 / 2.0 * math.sqrt(3.0)) * (1.0 / numpy.cosh(rho)) ** 2 * numpy.tanh(rho)
 
     Omega = numpy.zeros_like(geom.lat)
-
-    ni, nj = geom.lat.shape
-
-    for i in range(ni):
-        for j in range(nj):
-            if abs(rho[i, j]) > 1e-9:
-                Omega[i, j] = Vt[i, j] / (geom.earth_radius * rho[i, j])
+    
+    mask = numpy.abs(rho) > 1e-9
+    Omega[mask] = Vt[mask] / (geom.earth_radius * rho[mask])
 
     h = 1.0 - numpy.tanh((rho / gamma) * numpy.sin(lonR - Omega * step_time))
 
     return h, Omega
+
 
 
 def sw_from_file(geom: CubedSphere2D, operators: DFROperators, config: Configuration):

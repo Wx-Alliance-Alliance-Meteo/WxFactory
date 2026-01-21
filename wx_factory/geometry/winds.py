@@ -18,7 +18,8 @@ def wind2contra_2d(u: Union[float, numpy.ndarray], v: Union[float, numpy.ndarray
     v : float | numpy.ndarray
        Input meridional winds, in meters per second
     geom : CubedSphere
-       Geometry object (CubedSphere), describing the grid configuration and globe paramters.  Required parameters:
+       Geometry object (CubedSphere), describing the grid configuration and globe paramters.
+       Required parameters:
        earth_radius, coslat, lat_p, angle_p, X, Y, delta2
 
     Returns:
@@ -39,38 +40,49 @@ def wind2contra_2d(u: Union[float, numpy.ndarray], v: Union[float, numpy.ndarray
         lambda_dot = u / (geom.earth_radius * geom.coslat)
         phi_dot = v / geom.earth_radius
 
+    if hasattr(geom, 'X_new'):
+        # CubedSphere3D
+        X = geom.X_new
+        Y = geom.Y_new
+        delta2 = geom.delta2_new
+    else:
+        # CubedSphere2D
+        X = geom.X
+        Y = geom.Y
+        delta2 = geom.delta2
+
     denom = numpy.sqrt(
         (
             math.cos(geom.lat_p)
-            + geom.X_block * math.sin(geom.lat_p) * math.sin(geom.angle_p)
-            - geom.Y_block * math.sin(geom.lat_p) * math.cos(geom.angle_p)
+            + X * math.sin(geom.lat_p) * math.sin(geom.angle_p)
+            - Y * math.sin(geom.lat_p) * math.cos(geom.angle_p)
         )
         ** 2
-        + (geom.X_block * math.cos(geom.angle_p) + geom.Y_block * math.sin(geom.angle_p)) ** 2
+        + (X * math.cos(geom.angle_p) + Y * math.sin(geom.angle_p)) ** 2
     )
 
     dx1dlon = math.cos(geom.lat_p) * math.cos(geom.angle_p) + (
-        geom.X_block * geom.Y_block * math.cos(geom.lat_p) * math.sin(geom.angle_p)
-        - geom.Y_block * math.sin(geom.lat_p)
-    ) / (1.0 + geom.X_block**2)
+        X * Y * math.cos(geom.lat_p) * math.sin(geom.angle_p)
+        - Y * math.sin(geom.lat_p)
+    ) / (1.0 + X**2)
     dx2dlon = (
-        geom.X_block * geom.Y_block * math.cos(geom.lat_p) * math.cos(geom.angle_p)
-        + geom.X_block * math.sin(geom.lat_p)
-    ) / (1.0 + geom.Y_block**2) + math.cos(geom.lat_p) * math.sin(geom.angle_p)
+        X * Y * math.cos(geom.lat_p) * math.cos(geom.angle_p)
+        + X * math.sin(geom.lat_p)
+    ) / (1.0 + Y**2) + math.cos(geom.lat_p) * math.sin(geom.angle_p)
 
     dx1dlat = (
-        -geom.delta2_block
+        -delta2
         * (
-            (math.cos(geom.lat_p) * math.sin(geom.angle_p) + geom.X_block * math.sin(geom.lat_p))
-            / (1.0 + geom.X_block**2)
+            (math.cos(geom.lat_p) * math.sin(geom.angle_p) + X * math.sin(geom.lat_p))
+            / (1.0 + X**2)
         )
         / denom
     )
     dx2dlat = (
-        geom.delta2_block
+        delta2
         * (
-            (math.cos(geom.lat_p) * math.cos(geom.angle_p) - geom.Y_block * math.sin(geom.lat_p))
-            / (1.0 + geom.Y_block**2)
+            (math.cos(geom.lat_p) * math.cos(geom.angle_p) - Y * math.sin(geom.lat_p))
+            / (1.0 + Y**2)
         )
         / denom
     )
@@ -155,51 +167,63 @@ def contra2wind_2d(u1: Union[float, numpy.ndarray], u2: Union[float, numpy.ndarr
     u1_contra = u1 * geom.delta_x1 / 2.0
     u2_contra = u2 * geom.delta_x2 / 2.0
 
+    if hasattr(geom, 'X_new'):
+        # CubedSphere3D
+        X = geom.X_new
+        Y = geom.Y_new
+        delta2 = geom.delta2_new
+    else:
+        # CubedSphere2D
+        X = geom.X
+        Y = geom.Y
+        delta2 = geom.delta2
+
     denom = (
         math.cos(geom.lat_p)
-        + geom.X_block * math.sin(geom.lat_p) * math.sin(geom.angle_p)
-        - geom.Y_block * math.sin(geom.lat_p) * math.cos(geom.angle_p)
-    ) ** 2 + (geom.X_block * math.cos(geom.angle_p) + geom.Y_block * math.sin(geom.angle_p)) ** 2
+        + X * math.sin(geom.lat_p) * math.sin(geom.angle_p)
+        - Y * math.sin(geom.lat_p) * math.cos(geom.angle_p)
+    ) ** 2 + (X * math.cos(geom.angle_p) + Y * math.sin(geom.angle_p)) ** 2
 
     dlondx1 = (
-        (math.cos(geom.lat_p) * math.cos(geom.angle_p) - geom.Y_block * math.sin(geom.lat_p))
-        * (1.0 + geom.X_block**2)
+        (math.cos(geom.lat_p) * math.cos(geom.angle_p) + X * Y * math.cos(geom.lat_p) * math.sin(geom.angle_p)
+        - Y * math.sin(geom.lat_p))
+        * (1.0 + X**2)
         / denom
     )
 
     dlondx2 = (
-        (math.cos(geom.lat_p) * math.sin(geom.angle_p) + geom.X_block * math.sin(geom.lat_p))
-        * (1.0 + geom.Y_block**2)
+        (math.cos(geom.lat_p) * math.sin(geom.angle_p) + X * math.sin(geom.lat_p))
+        * (1.0 + Y**2)
         / denom
     )
 
     denom[:, :] = numpy.sqrt(
         (
             math.cos(geom.lat_p)
-            + geom.X_block * math.sin(geom.lat_p) * math.sin(geom.angle_p)
-            - geom.Y_block * math.sin(geom.lat_p) * math.cos(geom.angle_p)
+            + X * math.sin(geom.lat_p) * math.sin(geom.angle_p)
+            - Y * math.sin(geom.lat_p) * math.cos(geom.angle_p)
         )
         ** 2
-        + (geom.X_block * math.cos(geom.angle_p) + geom.Y_block * math.sin(geom.angle_p)) ** 2
+        + (X * math.cos(geom.angle_p) + Y * math.sin(geom.angle_p)) ** 2
     )
 
     dlatdx1 = -(
         (
-            geom.X_block * geom.Y_block * math.cos(geom.lat_p) * math.cos(geom.angle_p)
-            + geom.X_block * math.sin(geom.lat_p)
-            + (1.0 + geom.Y_block**2) * math.cos(geom.lat_p) * math.sin(geom.angle_p)
+            X * Y * math.cos(geom.lat_p) * math.cos(geom.angle_p)
+            + X * math.sin(geom.lat_p)
+            + (1.0 + Y**2) * math.cos(geom.lat_p) * math.sin(geom.angle_p)
         )
-        * (1.0 + geom.X_block**2)
-    ) / (geom.delta2_block * denom)
+        * (1.0 + X**2)
+    ) / (delta2 * denom)
 
     dlatdx2 = (
         (
-            (1.0 + geom.X_block**2) * math.cos(geom.lat_p) * math.cos(geom.angle_p)
-            + geom.X_block * geom.Y_block * math.cos(geom.lat_p) * math.sin(geom.angle_p)
-            - geom.Y_block * math.sin(geom.lat_p)
+            (1.0 + X**2) * math.cos(geom.lat_p) * math.cos(geom.angle_p)
+            + X * Y * math.cos(geom.lat_p) * math.sin(geom.angle_p)
+            - Y * math.sin(geom.lat_p)
         )
-        * (1.0 + geom.Y_block**2)
-    ) / (geom.delta2_block * denom)
+        * (1.0 + Y**2)
+    ) / (delta2 * denom)
 
     if geom.nk > 1 and geom.deep:
         # If we are in a 3D geometry with the deep atmosphere, the conversion from

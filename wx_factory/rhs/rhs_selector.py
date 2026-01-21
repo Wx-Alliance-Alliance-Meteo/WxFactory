@@ -9,6 +9,7 @@ from pde import PDEEulerCartesian, PDEEulerCubesphere
 from process_topology import ProcessTopology
 
 from .rhs_sw import RhsShallowWater
+from .rhs_advection2d import RhsAdvection2d
 from .rhs_dfr import RHSDirecFluxReconstruction, RHSDirecFluxReconstruction_mpi, RHSDirecFluxReconstruction_mpi_v2
 
 
@@ -70,9 +71,17 @@ class RhsBundle:
             # )
 
         elif param.equations == "shallow_water" and isinstance(geom, CubedSphere2D):
-            self.full = RhsShallowWater(
-                fields_shape, geom, operators, metric, topo, ptopo, geom.num_solpts, geom.num_elements_horizontal
-            )
+            # Check if this is an advection-only test case
+            if param.case_number <= 1:
+                # Use RhsAdvection2d for advection-only cases
+                self.full = RhsAdvection2d(
+                    fields_shape, geom, operators, metric, ptopo, geom.num_solpts, geom.num_elements_horizontal
+                )
+            else:
+                # Use RhsShallowWater for full shallow water cases
+                self.full = RhsShallowWater(
+                    fields_shape, geom, operators, metric, topo, ptopo, geom.num_solpts, geom.num_elements_horizontal
+                )
 
         elif param.equations == "euler" and isinstance(geom, Cartesian2D):
             pde = PDEEulerCartesian(geom, param, metric)

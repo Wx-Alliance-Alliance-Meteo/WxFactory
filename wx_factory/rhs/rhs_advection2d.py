@@ -1,139 +1,190 @@
-import numpy
+from typing import Optional
 
-from common.definitions import idx_h, idx_hu1, idx_hu2, gravity
+from mpi4py import MPI
+from numpy.typing import NDArray
+
+from common.definitions import idx_h, idx_u1, idx_u2
+from geometry import CubedSphere2D, DFROperators, Metric2D
+from process_topology import ProcessTopology
 
 
-def rhs_advection2d(Q: numpy.ndarray, geom, mtrx, metric, ptopo, num_solpts: int, num_elements_hori: int):
+class RhsAdvection2d:
+    """
+    RHS for 2D advection-only (passive tracer transport with prescribed velocities)
+    """
 
-    type_vec = Q.dtype
-    num_equations = Q.shape[0]
-    num_interfaces_hori = num_elements_hori + 1
+    def __init__(
+        self,
+        shape: tuple[int, ...],
+        geom: CubedSphere2D,
+        operators: DFROperators,
+        metric: Metric2D,
+        ptopo: ProcessTopology,
+        num_solpts: int,
+        num_elements_hori: int,
+    ):
+        self.shape = shape
+        self.geom = geom
+        self.operators = operators
+        self.metric = metric
+        self.ptopo = ptopo
+        self.num_solpts = num_solpts
+        self.num_elements_hori = num_elements_hori
 
-    idx_u1 = 1
-    idx_u2 = 2
+    def __call__(self, vec: NDArray) -> NDArray:
+        """Compute the value of the right-hand side based on the input state.
 
-    df1_dx1, df2_dx2, flux_x1, flux_x2 = [numpy.zeros_like(Q, dtype=type_vec) for _ in range(4)]
-
-    flux_x1_itf_i = numpy.zeros(
-        (num_equations, num_elements_hori + 2, num_solpts * num_elements_hori, 2), dtype=type_vec
-    )
-    flux_x2_itf_j, var_itf_i, var_itf_j = [
-        numpy.zeros((num_equations, num_elements_hori + 2, 2, num_solpts * num_elements_hori), dtype=type_vec)
-        for _ in range(3)
-    ]
-
-    # Offset due to the halo
-    offset = 1
-
-    # Interpolate to the element interface
-    for elem in range(num_elements_hori):
-        epais = elem * num_solpts + numpy.arange(num_solpts)
-        pos = elem + offset
-
-        # --- Direction x1
-        var_itf_i[:, pos, 0, :] = Q[:, :, epais] @ mtrx.extrap_west
-        var_itf_i[:, pos, 1, :] = Q[:, :, epais] @ mtrx.extrap_east
-
-        # --- Direction x2
-        var_itf_j[:, pos, 0, :] = mtrx.extrap_south @ Q[:, epais, :]
-        var_itf_j[:, pos, 1, :] = mtrx.extrap_north @ Q[:, epais, :]
-
-    # Initiate transfers
-    request_u = ptopo.start_exchange_vectors(
-        (var_itf_j[idx_hu1, 1, 0], var_itf_j[idx_hu2, 1, 0]),  # South boundary
-        (var_itf_j[idx_hu1, -2, 1], var_itf_j[idx_hu2, -2, 1]),  # North boundary
-        (var_itf_i[idx_hu1, 1, 0], var_itf_i[idx_hu2, 1, 0]),  # West boundary
-        (var_itf_i[idx_hu1, -2, 1], var_itf_i[idx_hu2, -2, 1]),  # East boundary
-        geom.X[0, :],
-        geom.Y[:, 0],
-    )  # Coordinates at the boundary
-    request_h = ptopo.start_exchange_scalars(
-        var_itf_j[idx_h, 1, 0], var_itf_j[idx_h, -2, 1], var_itf_i[idx_h, 1, 0], var_itf_i[idx_h, -2, 1]
-    )
-
-    # Compute the fluxes
-    flux_x1[idx_h] = metric.sqrtG * Q[idx_h] * Q[idx_u1]
-    flux_x2[idx_h] = metric.sqrtG * Q[idx_h] * Q[idx_u2]
-
-    # Interior contribution to the derivatives, corrections for the boundaries will be added later
-    for elem in range(num_elements_hori):
-        epais = elem * num_solpts + numpy.arange(num_solpts)
-
-        # --- Direction x1
-        df1_dx1[:, :, epais] = flux_x1[:, :, epais] @ mtrx.diff_solpt_tr
-
-        # --- Direction x2
-        df2_dx2[:, epais, :] = mtrx.diff_solpt @ flux_x2[:, epais, :]
-
-    # Finish transfers
-    (
-        (var_itf_j[idx_hu1, 0, 1], var_itf_j[idx_hu2, 0, 1]),
-        (var_itf_j[idx_hu1, -1, 0], var_itf_j[idx_hu2, -1, 0]),
-        (var_itf_i[idx_hu1, 0, 1], var_itf_i[idx_hu2, 0, 1]),
-        (var_itf_i[idx_hu1, -1, 0], var_itf_i[idx_hu2, -1, 0]),
-    ) = request_u.wait()
-    var_itf_j[idx_h, 0, 1], var_itf_j[idx_h, -1, 0], var_itf_i[idx_h, 0, 1], var_itf_i[idx_h, -1, 0] = request_h.wait()
-
-    # Common AUSM fluxes
-    for itf in range(num_interfaces_hori):
-
-        elem_L = itf
-        elem_R = itf + 1
-
-        ################
-        # Direction x1 #
-        ################
-
-        eig_L = numpy.abs(var_itf_i[idx_u1, elem_L, 1, :])
-        eig_R = numpy.abs(var_itf_i[idx_u1, elem_R, 0, :])
-
-        eig = numpy.maximum(eig_L, eig_R)
-
-        flux_L = metric.sqrtG_itf_i[itf, :] * var_itf_i[idx_h, elem_L, 1, :] * var_itf_i[idx_u1, elem_L, 1, :]
-        flux_R = metric.sqrtG_itf_i[itf, :] * var_itf_i[idx_h, elem_R, 0, :] * var_itf_i[idx_u1, elem_R, 0, :]
-
-        flux_x1_itf_i[idx_h, elem_L, :, 1] = 0.5 * (
-            flux_L
-            + flux_R
-            - eig * metric.sqrtG_itf_i[itf, :] * (var_itf_i[idx_h, elem_R, 0, :] - var_itf_i[idx_h, elem_L, 1, :])
+        :param vec: Vector containing the input state. It can have any shape, as long as its size is the same as the
+                    one used to create this RHS object
+        :return: Value of the right-hand side, in the same shape as the input
+        """
+        old_shape = vec.shape
+        result = self.__compute_rhs__(
+            vec.reshape(self.shape),
+            self.geom,
+            self.operators,
+            self.metric,
+            self.ptopo,
+            self.num_solpts,
+            self.num_elements_hori,
         )
-        flux_x1_itf_i[idx_h, elem_R, :, 0] = flux_x1_itf_i[idx_h, elem_L, :, 1]
+        return result.reshape(old_shape)
 
-        ################
-        # Direction x2 #
-        ################
+    def __compute_rhs__(
+        self,
+        Q: NDArray,
+        geom: CubedSphere2D,
+        mtrx: DFROperators,
+        metric: Metric2D,
+        ptopo: ProcessTopology,
+        num_solpts: int,
+        num_elements_hori: int,
+    ) -> NDArray:
+        """
+        Compute the RHS for advection-only cases
+        """
 
-        eig_L = numpy.abs(var_itf_j[idx_u2, elem_L, 1, :])
-        eig_R = numpy.abs(var_itf_j[idx_u2, elem_R, 0, :])
+        xp = geom.device.xp
 
-        eig = numpy.maximum(eig_L, eig_R)
+        num_equations = Q.shape[0]
 
-        flux_L = metric.sqrtG_itf_j[itf, :] * var_itf_j[idx_h, elem_L, 1, :] * var_itf_j[idx_u2, elem_L, 1, :]
-        flux_R = metric.sqrtG_itf_j[itf, :] * var_itf_j[idx_h, elem_R, 0, :] * var_itf_j[idx_u2, elem_R, 0, :]
+        itf_i_shape = (num_equations,) + geom.itf_i_shape
+        itf_j_shape = (num_equations,) + geom.itf_j_shape
 
-        flux_x2_itf_j[idx_h, elem_L, 1, :] = 0.5 * (
-            flux_L
-            + flux_R
-            - eig * metric.sqrtG_itf_j[itf, :] * (var_itf_j[idx_h, elem_R, 0, :] - var_itf_j[idx_h, elem_L, 1, :])
+        # Interpolate to the element interface (middle elements only, halo remains 0)
+        var_itf_i = xp.zeros(itf_i_shape, dtype=Q.dtype)
+        var_itf_i[:, :, 1:-1, :] = Q @ mtrx.extrap_x
+
+        var_itf_j = xp.zeros(itf_j_shape, dtype=Q.dtype)
+        var_itf_j[:, 1:-1, :, :] = Q @ mtrx.extrap_y
+
+        # For advection-only cases, velocities are stored directly as u1 and u2 (not hu1 and hu2)
+        u1 = Q[idx_u1]
+        u2 = Q[idx_u2]
+
+        # Initiate transfers. The first and last row (column) of elements of each array is part of the halo.
+        # Each PE must thus send the second and second-to-last row (column) of elements.
+        # There is a separate function for sending vector data, since they must potentially be converted to the
+        # neighbor PE's coordinate system
+        request_u = ptopo.start_exchange_vectors(
+            south=((var_itf_j[idx_u1, 1, :, :num_solpts]), (var_itf_j[idx_u2, 1, :, :num_solpts])),
+            north=((var_itf_j[idx_u1, -2, :, num_solpts:]), (var_itf_j[idx_u2, -2, :, num_solpts:])),
+            west=((var_itf_i[idx_u1, :, 1, :num_solpts]), (var_itf_i[idx_u2, :, 1, :num_solpts])),
+            east=((var_itf_i[idx_u1, :, -2, num_solpts:]), (var_itf_i[idx_u2, :, -2, num_solpts:])),
+            boundary_sn=geom.boundary_sn,
+            boundary_we=geom.boundary_we,
         )
-        flux_x2_itf_j[idx_h, elem_R, 0, :] = flux_x2_itf_j[idx_h, elem_L, 1, :]
+        request_h = ptopo.start_exchange_scalars(
+            south=var_itf_j[idx_h, 1, :, :num_solpts],
+            north=var_itf_j[idx_h, -2, :, num_solpts:],
+            west=var_itf_i[idx_h, :, 1, :num_solpts],
+            east=var_itf_i[idx_h, :, -2, num_solpts:],
+            boundary_shape=(num_elements_hori * num_solpts,),
+        )
 
-    # Compute the derivatives
-    for elem in range(num_elements_hori):
-        epais = elem * num_solpts + numpy.arange(num_solpts)
+        # Compute fluxes
+        flux_x1 = xp.empty_like(Q)
+        flux_x2 = xp.empty_like(Q)
 
-        # --- Direction x1
+        flux_x1[idx_h] = metric.sqrtG * Q[idx_h] * u1
+        flux_x2[idx_h] = metric.sqrtG * Q[idx_h] * u2
 
-        df1_dx1[:, :, epais] += flux_x1_itf_i[:, elem + offset, :, :] @ mtrx.correction_tr
+        # Velocity fluxes are zero for advection-only (velocities not evolved)
+        flux_x1[idx_u1] = 0.0
+        flux_x2[idx_u1] = 0.0
+        flux_x1[idx_u2] = 0.0
+        flux_x2[idx_u2] = 0.0
 
-        # --- Direction x2
+        # Interior contribution to the derivatives, corrections for the boundaries will be added later
+        df1_dx1 = flux_x1 @ mtrx.derivative_x
+        df2_dx2 = flux_x2 @ mtrx.derivative_y
 
-        df2_dx2[:, epais, :] += mtrx.correction @ flux_x2_itf_j[:, elem + offset, :, :]
+        # Finish transfers.
+        # We receive the halo, so it is stored in the first and last row/column of each array
+        (
+            (var_itf_j[idx_u1, 0, :, num_solpts:], var_itf_j[idx_u2, 0, :, num_solpts:]),  # South boundary
+            (var_itf_j[idx_u1, -1, :, :num_solpts], var_itf_j[idx_u2, -1, :, :num_solpts]),  # North boundary
+            (var_itf_i[idx_u1, :, 0, num_solpts:], var_itf_i[idx_u2, :, 0, num_solpts:]),  # West boundary
+            (var_itf_i[idx_u1, :, -1, :num_solpts], var_itf_i[idx_u2, :, -1, :num_solpts]),  # East boundary
+        ) = request_u.wait()
 
-    # Assemble the right-hand sides
-    rhs = metric.inv_sqrtG * -(df1_dx1 + df2_dx2)
+        (
+            var_itf_j[idx_h, 0, :, num_solpts:],  # South boundary
+            var_itf_j[idx_h, -1, :, :num_solpts],  # North boundary
+            var_itf_i[idx_h, :, 0, num_solpts:],  # West boundary
+            var_itf_i[idx_h, :, -1, :num_solpts],  # East boundary
+        ) = request_h.wait()
 
-    rhs[idx_u1, :, :] = 0.0
-    rhs[idx_u2, :, :] = 0.0
+        # West and east are defined relative to the elements, *not* to the interface itself.
+        # Therefore, a certain interface will be the western interface of its eastern element and vice-versa
+        #
+        #   western-elem   itf  eastern-elem
+        #   ________________|_____________________|
+        #                   |
+        #   west .  east -->|<-- west  .  east -->
+        #                   |
+        west = xp.s_[..., 1:, :num_solpts]
+        east = xp.s_[..., :-1, num_solpts:]
+        south = xp.s_[..., 1:, :, :num_solpts]
+        north = xp.s_[..., :-1, :, num_solpts:]
 
-    return rhs
+        # Rusanov flux for advection
+        # Direction x1
+        eig = xp.maximum(xp.abs(var_itf_i[idx_u1][west]), xp.abs(var_itf_i[idx_u1][east]))
+
+        flux_x1_itf = xp.zeros_like(var_itf_i)
+        flux_L = metric.sqrtG_itf_i[east] * var_itf_i[idx_h][east] * var_itf_i[idx_u1][east]
+        flux_R = metric.sqrtG_itf_i[east] * var_itf_i[idx_h][west] * var_itf_i[idx_u1][west]
+
+        flux_x1_itf[idx_h][east] = 0.5 * (
+            flux_L + flux_R - eig * metric.sqrtG_itf_i[east] * (var_itf_i[idx_h][west] - var_itf_i[idx_h][east])
+        )
+        flux_x1_itf[idx_h][west] = flux_x1_itf[idx_h][east]
+
+        # Direction x2
+        eig = xp.maximum(xp.abs(var_itf_j[idx_u2][south]), xp.abs(var_itf_j[idx_u2][north]))
+
+        flux_x2_itf = xp.zeros_like(var_itf_j)
+        flux_L = metric.sqrtG_itf_j[north] * var_itf_j[idx_h][north] * var_itf_j[idx_u2][north]
+        flux_R = metric.sqrtG_itf_j[north] * var_itf_j[idx_h][south] * var_itf_j[idx_u2][south]
+
+        flux_x2_itf[idx_h][north] = 0.5 * (
+            flux_L + flux_R - eig * metric.sqrtG_itf_j[north] * (var_itf_j[idx_h][south] - var_itf_j[idx_h][north])
+        )
+        flux_x2_itf[idx_h][south] = flux_x2_itf[idx_h][north]
+
+        # Add boundary flux corrections
+        df1_dx1 = df1_dx1 + flux_x1_itf[:, :, 1:-1, :] @ mtrx.correction_WE
+        df2_dx2 = df2_dx2 + flux_x2_itf[:, 1:-1, :, :] @ mtrx.correction_SN
+
+        # No forcing terms for pure advection
+        forcing = xp.zeros_like(Q)
+
+        # Assemble the right-hand side
+        rhs = metric.inv_sqrtG * -(df1_dx1 + df2_dx2) - forcing
+
+        # For advection-only, velocity fields are prescribed (not evolved)
+        rhs[idx_u1] = 0.0
+        rhs[idx_u2] = 0.0
+
+        return rhs
