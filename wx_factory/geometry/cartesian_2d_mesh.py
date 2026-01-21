@@ -51,7 +51,6 @@ class Cartesian2D(Geometry):
         self.Δx3 = Δx3
         self.xperiodic = False
 
-        # TODO : hackathon SG
         self.X1 = xp.zeros((num_elements_z, num_elements_x, num_solpts**2))
         self.X3 = xp.zeros((num_elements_z, num_elements_x, num_solpts**2))
         idx_elem = 0
@@ -65,6 +64,12 @@ class Cartesian2D(Geometry):
                 self.X1[ek, ei, :] = X1[start_k:end_k, start_i:end_i].flatten()
                 self.X3[ek, ei, :] = X3[start_k:end_k, start_i:end_i].flatten()
                 idx_elem += 1
+
+        # For the plots
+        self.x0 = x1[0]
+        self.x1 = x1[-1]
+        self.z0 = x3[0]
+        self.z1 = x3[-1]
 
     def to_single_block(self, a):
         """Convert an array of values over this grid (which be may organized as a list of elements)

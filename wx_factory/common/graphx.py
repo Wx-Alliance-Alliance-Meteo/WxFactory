@@ -66,7 +66,19 @@ def image_field(
     colormap: str = "jet",
 ):
     device = geom.device
-    fig, ax = matplotlib.pyplot.subplots()
+
+    domain_width = geom.x1 - geom.x0
+    domain_height = geom.z1 - geom.z0
+    aspect_ratio = domain_width / domain_height
+    
+    # Base height in inches, width scaled by aspect ratio
+    fig_height = 10
+    fig_width = fig_height * aspect_ratio
+    
+    # Clamp width between 8 and 24 inches
+#    fig_width = max(8, min(24, fig_width))
+    
+    fig, ax = matplotlib.pyplot.subplots(figsize=(fig_width, fig_height))
 
     #   if not geom.xperiodic:
     cmap = matplotlib.pyplot.contourf(
@@ -97,7 +109,7 @@ def image_field(
     #                                       levels=numpy.linspace(vmin,vmax,n), extend="both")
     ax.set_aspect("equal", "box")
 
-    cbar = fig.colorbar(cmap, ax=ax, orientation="vertical", shrink=0.5)
+    cbar = fig.colorbar(cmap, ax=ax, orientation="vertical")
     cbar.set_label(
         label,
     )
