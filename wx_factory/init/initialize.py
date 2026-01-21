@@ -234,8 +234,18 @@ def initialize_cartesian2d(geom: Cartesian2D, param: Configuration) -> NDArray[n
         θ *= param.bubble_theta
 
     if param.case_number == 0:
-        # Mountain wave
-        geom.make_mountain()
+        # Create the step mountain topography
+        xc = (geom.x0 + geom.x1) / 2.0  # Center of domain
+        mountain_width = 1000.0  # Width of step
+        mountain_height = 250.0  # Height of step
+        
+        # Create step mountain in the X1 coordinate
+        # This creates a step function: 0 outside, mountain_height inside the step region
+        geom.z_bottom = xp.where(
+            xp.abs(geom.X1 - xc) < mountain_width / 2.0,
+            mountain_height,
+            0.0
+        )
 
         # Use periodic BC in x-direction
         geom.xperiodic = True
@@ -262,18 +272,6 @@ def initialize_cartesian2d(geom: Cartesian2D, param: Configuration) -> NDArray[n
 
         θ = xp.where(r <= a, θ + A, θ + A * xp.exp(-(((r - a) / s) ** 2)))
 
-        # TODO : hackathon SG
-        # TODO : refaire
-
-        # Enforce mirror symmetry
-    #      if ni % 2 == 0:
-    #         middle_col = ni / 2
-    #      else:
-    #         middle_col = ni / 2 + 1
-    #
-    #      for i in range(int(middle_col)):
-    #         θ[:, ni-i-1] = θ[:, i]
-
     elif param.case_number == 3:
         # Colliding bubbles
         
@@ -296,23 +294,20 @@ def initialize_cartesian2d(geom: Cartesian2D, param: Configuration) -> NDArray[n
         θ = xp.where(r <= a, θ + A, θ + A * xp.exp(-(((r - a) / s) ** 2)))
 
     elif param.case_number == 4:
-        # Cold density current
-        x0 = 0.0
-        z0 = 3000.0
-        xr = 4000.0
-        zr = 2000.0
-        θc = -15.0
-
-        # Use periodic BC in x-direction
-        # geom.xperiodic = True
-
-        for k in range(nk):
-            for i in range(ni):
-                r = xp.sqrt(((geom.X1[k, i] - x0) / xr) ** 2 + ((geom.X3[k, i] - z0) / zr) ** 2)
-                if r <= 1.0:
-                    θ[k, i] += 0.5 * θc * (1.0 + xp.cos(xp.pi * r))
-
-        geom.make_mountain(mountain_type="step")
+        # Density current
+        
+        # Parameters for density current
+        xc = 0.0  # Center x position
+        zc = 3000.0  # Height of the cold pool center
+        xr = 4000.0  # Horizontal radius
+        zr = 2000.0  # Vertical radius
+        
+        # Normalized distance from center
+        r = xp.sqrt(((geom.X1 - xc) / xr) ** 2 + ((geom.X3 - zc) / zr) ** 2)
+        
+        # Temperature perturbation (cold anomaly)
+        θ_pert = xp.where(r <= 1.0, -15.0 * (1.0 + xp.cos(xp.pi * r)) / 2.0, 0.0)
+        θ = θ + θ_pert
 
     if param.case_number == 0:
         N_star = 0.01
@@ -337,3 +332,4 @@ def initialize_cartesian2d(geom: Cartesian2D, param: Configuration) -> NDArray[n
     Q[idx_2d_rho_theta, :, :] = ρ * θ
 
     return Q
+
