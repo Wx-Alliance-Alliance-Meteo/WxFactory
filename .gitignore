@@ -8,6 +8,8 @@
 *.nsys-rep
 *.so
 
+wx_factory/_version.py
+
 doc/*.pdf
 doc/aux/*
 doc/svg-inkscape/*
