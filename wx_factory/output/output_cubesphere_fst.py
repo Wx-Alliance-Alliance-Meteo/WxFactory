@@ -85,7 +85,7 @@ class OutputCubesphereFst(OutputCubesphere):
             self.nk = 1  # TODO set proper nk
             print(f" nijk: {self.ni}, {self.nj}, {self.nk}")
             # If we pass the file when creating the georef, it will read the axes from it (if available)
-            self.georef = georef.TGeoRef(self.ni, self.nj, "C", self.ig1, self.ig2, self.ig3, self.ig4, file=self.file)
+            self.georef = georef.GeoRef(self.ni, self.nj, "Q", self.ig1, self.ig2, self.ig3, self.ig4, file=self.file)
             # self.georef.define_axes(lon, lat)
             self.georef.write("my_grid", self.file)
 
