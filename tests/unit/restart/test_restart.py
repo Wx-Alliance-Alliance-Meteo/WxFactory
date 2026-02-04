@@ -10,7 +10,7 @@ from simulation import Simulation
 from wx_mpi import do_once
 
 from mpi_test import MpiTestCase
-
+from wx_mpi import SingleProcess, Conditional
 
 class Euler2DRestartTestCase(unittest.TestCase):
 
@@ -108,44 +108,75 @@ class MultiProcRestartTestCase(MpiTestCase):
         """Verify that we can use the same restart file for different processor counts"""
 
         self.assertGreaterEqual(
-            self.comm.size, 24, f"We need at least 24 processors for this test, but we only have {self.comm.size}"
+            self.comm.size, 24,
+            f"We need at least 24 processors for this test, but we only have {self.comm.size}"
         )
+        
+        #  source and clean slate
+        restart_file_24 = self.base_sim.output.state_file_name(1)
+        restart_file_24_ref = f"{restart_file_24}.ref"
 
-        restart_file = self.base_sim.output.state_file_name(1)
-        restart_file_ref = f"{restart_file}.ref"
 
-        # Make sure there is not restart file
-        if self.comm.rank == 0:
-            if os.path.exists(restart_file):
-                os.remove(restart_file)
 
-            self.assertFalse(os.path.exists(restart_file))
+        restart_file_6 = None
+        if self.smaller_comm is not None:
+            restart_file_6 = self.smaller_sim.output.state_file_name(1)
 
-        # Generate the restart, then move it to use as a reference
+        with SingleProcess(self.comm) as s, Conditional(s):
+            if os.path.exists(restart_file_6):
+                os.remove(restart_file_6)
+            if os.path.exists(restart_file_24):
+                os.remove(restart_file_24)
+            if os.path.exists(restart_file_24_ref):
+                os.remove(restart_file_24_ref)
+
+        self.comm.barrier() # cleanups on all ranks
+
+        # generate restart - 24 ranks
         self.base_sim.step()
 
-        if self.comm.rank == 0:
-            self.assertTrue(os.path.exists(restart_file))
-            os.rename(restart_file, restart_file_ref)
+        with SingleProcess(self.comm) as s, Conditional(s):
+            self.assertTrue(os.path.exists(restart_file_24))
+            os.rename(restart_file_24, restart_file_24_ref) # ref restart assigned to full rank (avoid collision 6 and 24 ranks)
+            # transer fail safe
+            self.assertFalse(os.path.exists(restart_file_24))
+            self.assertTrue(os.path.exists(restart_file_24_ref))
 
-            self.assertFalse(os.path.exists(restart_file))
+        self.comm.barrier()
 
-        # With a smaller number of processors, use the same config to generate a restart
-        # If both restart files are identical, this means different processor counts can generate/read the
-        # same file
+        # generate restart - 6 ranks
         if self.smaller_comm is not None:
             self.smaller_sim.step()
+            self.smaller_comm.barrier()
 
-            # Compare the two restart files
-            if self.smaller_comm.rank == 0:
-                self.assertTrue(os.path.exists(restart_file))
-                q1, _ = load_state(restart_file_ref)
-                q2, _ = load_state(restart_file)
+        self.comm.barrier()
 
-                diff = q1 - q2
-                rel_norm = numpy.linalg.norm(diff) / numpy.linalg.norm(q1)
+        
+        # compare restart files
+        with SingleProcess(self.comm) as s, Conditional(s):
+            
+            self.assertTrue(os.path.exists(restart_file_6))
+            self.assertTrue(os.path.exists(restart_file_24_ref))
+            
+            q1, meta1 = load_state(restart_file_24_ref)
+            q2, meta2 = load_state(restart_file_6)
 
-                self.assertLessEqual(rel_norm, 1e-15, "Result should be the same with different proc counts")
+            diff = q1 - q2
+            rel_norm = numpy.linalg.norm(diff) / numpy.linalg.norm(q1)
+            
+            import numpy as np
+
+            diff_float = np.float32(q1) - np.float32(q2)
+            print("Max difference in float32:", np.max(np.abs(diff_float)))
+
+            diff_double = np.float64(q1) - np.float64(q2)
+            print("Max difference in float64:", np.max(np.abs(diff_double)))
+            
+            self.assertLessEqual(
+                rel_norm, 1e-15,
+                "Result should be the same with different proc counts"
+            )
+
 
         self.comm.barrier()
 
@@ -157,4 +188,5 @@ class ShallowWaterRestartTestCase(MultiProcRestartTestCase):
 
 class Euler3DRestartTestCase(MultiProcRestartTestCase):
     def __init__(self, num_procs, methodName, optional=False):
+        # super().__init__(num_procs, "euler3d_small.ini", methodName, optional)
         super().__init__(num_procs, "euler3d.ini", methodName, optional)
