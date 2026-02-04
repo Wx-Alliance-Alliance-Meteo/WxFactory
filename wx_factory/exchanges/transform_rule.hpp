@@ -6,58 +6,22 @@ struct TransformRule {
     int s21, s22, s23, s24;
 };
 
-const TransformRule kRulesHost[6][4] = {
-    // Panel 0
-    {
-        { 1, 0, 0, 1,   0, 1, 0, 0 },  // South
-        { 1, 0, 0,-1,   0, 1, 0, 0 },  // North
-        { 1, 0, 0, 0,   0, 1, 1, 0 },  // West
-        { 1, 0, 0, 0,   0, 1,-1, 0 },  // East
-    },
-    // Panel 1
-    {
-        { 0, 1, 0, 0,  -1, 0, 0,-1 },  // South
-        { 0,-1, 0, 0,   1, 0, 0,-1 },  // North
-        { 1, 0, 0, 0,   0, 1, 1, 0 },  // West
-        { 1, 0, 0, 0,   0, 1,-1, 0 },  // East
-    },
-    // Panel 2
-    {
-        {-1, 0, 0,-1,   0,-1, 0, 0 },  // South
-        {-1, 0, 0, 1,   0,-1, 0, 0 },  // North
-        { 1, 0, 0, 0,   0, 1, 1, 0 },  // West
-        { 1, 0, 0, 0,   0, 1,-1, 0 },  // East
-    },
-    // Panel 3
-    {
-        { 0,-1, 0, 0,   1, 0, 0, 1 },  // South
-        { 0, 1, 0, 0,  -1, 0, 0, 1 },  // North
-        { 1, 0, 0, 0,   0, 1, 1, 0 },  // West
-        { 1, 0, 0, 0,   0, 1,-1, 0 },  // East
-    },
-    // Panel 4
-    {
-        { 1, 0, 0, 1,   0, 1, 0, 0 },  // South
-        {-1, 0, 0, 1,   0,-1, 0, 0 },  // North
-        { 0,-1,-1, 0,   1, 0, 0, 0 },  // West
-        { 0, 1,-1, 0,  -1, 0, 0, 0 },  // East
-    },
-    // Panel 5
-    {
-        {-1, 0, 0,-1,   0,-1, 0, 0 },  // South
-        { 1, 0, 0,-1,   0, 1, 0, 0 },  // North
-        { 0, 1, 1, 0,  -1, 0, 0, 0 },  // West
-        { 0,-1, 1, 0,   1, 0, 0, 0 },  // East
-    }
-};
+constexpr int N_PANELS = 6;
+constexpr int N_FACES  = 4;
 
-// alias RULES for both cuda and cpu
+// host
+extern const TransformRule kRulesHost[N_PANELS][N_FACES];
+
+// device
 #ifdef __CUDACC__
-extern __device__ __constant__ TransformRule kRulesDevice[6][4];
-#define RULES kRulesDevice
+    __constant__ TransformRule kRulesDevice[N_PANELS][N_FACES];
+    #define RULES kRulesDevice
+
 #else
-extern const TransformRule kRulesHost[6][4];
-#define RULES kRulesHost
+    #define RULES kRulesHost
 #endif
+
+
+void init_transform_rules_cuda(); // copy rules host to device
 
 #endif // TRANSFORM_RULE_H_

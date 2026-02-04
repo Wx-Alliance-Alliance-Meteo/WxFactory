@@ -389,7 +389,7 @@ class ProcessTopology:
         :rtype: ExchangeRequest
 
         """
-        print("start_exchange_scalars")
+        # print("start_exchange_scalars")
         send_info = self.prepare_scalar_buffer(south, north, west, east, boundary_shape, flip_dim)
 
         self.device.synchronize()  # When using GPU
@@ -507,27 +507,14 @@ class ProcessTopology:
 
         block_shape = list(send_buffer_cpp[0].shape)
 
-        # self.device.exchanges.start_exchange_euler_3d_cpp(
-        #     send_buffer_cpp,
-        #     xp.ascontiguousarray(south),
-        #     xp.ascontiguousarray(north),
-        #     xp.ascontiguousarray(west),
-        #     xp.ascontiguousarray(east),
-        #     xp.ascontiguousarray(boundary_sn),
-        #     xp.ascontiguousarray(boundary_we),
-        #     block_shape,
-        #     list(flip_dim),
-        #     list(self.flip),
-        #     int(self.my_panel),
-        # )
         self.device.exchanges.start_exchange_euler_3d_cpp(
             send_buffer_cpp,
-            south,
-            north,
-            west,
-            east,
-            boundary_sn,
-            boundary_we,
+            xp.ascontiguousarray(south),
+            xp.ascontiguousarray(north),
+            xp.ascontiguousarray(west),
+            xp.ascontiguousarray(east),
+            xp.ascontiguousarray(boundary_sn),
+            xp.ascontiguousarray(boundary_we),
             block_shape,
             list(flip_dim),
             list(self.flip),

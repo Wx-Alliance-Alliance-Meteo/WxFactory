@@ -16,6 +16,7 @@
 
 namespace py = pybind11;
 
+
 template <typename num_t>
 num_t* get_device_ptr(py::object& obj) {
     auto iface = obj.attr("__cuda_array_interface__");
@@ -23,7 +24,6 @@ num_t* get_device_ptr(py::object& obj) {
     uintptr_t ptr_value = data_tuple[0].cast<uintptr_t>();
     return reinterpret_cast<num_t*>(ptr_value);
 }
-
 
 template <typename num_t, typename real_t>
 void start_exchange_euler_3d(
@@ -121,11 +121,6 @@ void memcpy_faces_wrapper(
     const dim3 blocks((face_size + BLOCK_SIZE - 1) / BLOCK_SIZE, 4);
 
     memcpy_faces_kernel<<<blocks, threads>>>(send_buffer, south, north, west, east, face_size);
-
-    // cudaMemcpyAsync(send_buffer, south, face_size * sizeof(T), cudaMemcpyDeviceToDevice);
-    // cudaMemcpyAsync(send_buffer + face_size, north, face_size * sizeof(T), cudaMemcpyDeviceToDevice);
-    // cudaMemcpyAsync(send_buffer + 2*face_size, west,  face_size * sizeof(T), cudaMemcpyDeviceToDevice);
-    // cudaMemcpyAsync(send_buffer + 3*face_size, east,  face_size * sizeof(T), cudaMemcpyDeviceToDevice);
 }
 
 template <typename num_t>
@@ -152,6 +147,7 @@ __global__ void memcpy_faces_kernel(
     }
 }
 
+
 template <typename num_t, typename real_t>
 void convert_pair_wrapper_gpu(
     const num_t* face_data[4],
@@ -163,6 +159,7 @@ void convert_pair_wrapper_gpu(
     const size_t var_size
 ) {
 
+    
     const int BLOCK_SIZE = 128;
     const dim3 threads(BLOCK_SIZE);
     const dim3 blocks((var_size + BLOCK_SIZE - 1) / BLOCK_SIZE, 4);
@@ -273,5 +270,6 @@ __global__ void flip_axis_kernel(
 }
 
 PYBIND11_MODULE(exchanges_cuda, m) {
+    init_transform_rules_cuda();
     m.def("start_exchange_euler_3d_cpp", &start_exchange_euler_3d_wrapper);
 }
