@@ -53,11 +53,11 @@ class OutputCubesphereFst(OutputCubesphere):
         self.ig1 = angle24.encode(geometry.lambda0)
         self.ig2 = angle24.encode(geometry.phi0)
         self.ig3 = angle24.encode(geometry.alpha0)
-        self.ig4 = _make_ig4(geometry.num_elem_horizontal, geometry.num_solpts)
+        self.ig4 = georef.cubed_sphere.encodeig4(geometry.num_elements_horizontal, geometry.num_solpts)
 
         self.rank = self.comm.rank
         self.filename = f"{self.output_dir}/{self.config.base_output_file}.fst"
-        self.file = None
+        self.file: rmn.fst24_file = None
         self.georef = None
 
         to_host = self.device.to_host
@@ -66,9 +66,21 @@ class OutputCubesphereFst(OutputCubesphere):
         # lon = self._get_writable(self.geometry.block_lon * 180 / math.pi, num_dim=2)
         # lat = self._get_writable(self.geometry.block_lat * 180 / math.pi, num_dim=2)
         lon = self._get_writable(self.geometry.block_lon, num_dim=2)
+        #print (f"longitude: {lon}")
+        #print (f"x: {self._get_writable(self.geometry.X, num_dim=2)}")
         lat = self._get_writable(self.geometry.block_lat, num_dim=2)
+        #print (f"latitude: {lat}")
 
-        sys.stdout.flush()
+        lon_deg = numpy.degrees(lon.ravel())
+        lat_deg = numpy.degrees(lat.ravel())
+
+        lon_c_style = (lon_deg + 180) % 360 - 180
+
+        with open("lonlat_wxfactory.txt", "w") as f:
+            f.write("Index\tLongitude\tLatitude\n")
+            for i in range(len(lon_c_style)):
+                f.write(f"{i}\t{lon_c_style[i]:.18f}\t{lat_deg[i]:.18f}\n")
+        
 
         with SingleProcess() as s, Conditional(s):
             self.file = rmn.fst24_file(self.filename, "RSF+R/W")
@@ -83,11 +95,54 @@ class OutputCubesphereFst(OutputCubesphere):
             self.ni = ni
             self.nj = nj * 6
             self.nk = 1  # TODO set proper nk
-            print(f" nijk: {self.ni}, {self.nj}, {self.nk}")
+            print(f" nijk: {self.ni}, {self.nj}, {self.nk}", flush = True)
+            
+
             # If we pass the file when creating the georef, it will read the axes from it (if available)
-            self.georef = georef.GeoRef(self.ni, self.nj, "Q", self.ig1, self.ig2, self.ig3, self.ig4, file=self.file)
+            self.georef = georef.GeoRef(self.ni, self.nj, "Q", self.ig1, self.ig2, self.ig3, self.ig4, self.file)
             # self.georef.define_axes(lon, lat)
-            self.georef.write("my_grid", self.file)
+            self.georef.write_fst(self.file, self.ig1, self.ig2, self.ig3, self.ig4, "my_grid")
+            q_query = self.file.new_query(ig1=8388608)
+            #print(f"requete: {q_query}")
+
+            #for record in q_query:
+                #print(f"record: {record}")
+             #   print(f"donnees: {record.data}")
+
+        data_georef = numpy.loadtxt("lonlat_georef.txt", skiprows=1, dtype=numpy.float64)
+        data_wfactory = numpy.loadtxt("lonlat_wxfactory.txt", skiprows=1, dtype=numpy.float64)
+
+        # Vérification de la taille
+        if data_georef.shape[0] != data_wfactory.shape[0]:
+            print(f"Attention: Tailles différentes! C: {len(data_georef)}, Py: {len(data_wfactory)}")
+            min_len = min(len(data_georef), len(data_wfactory))
+            data_georef, data_wfactory = data_georef[:min_len], data_wfactory[:min_len]
+
+        # Calcul des différences
+        diff_lon = numpy.abs(data_georef[:, 1] - data_wfactory[:, 1])
+        diff_lat = numpy.abs(data_georef[:, 2] - data_wfactory[:, 2])
+
+        # Statistiques
+        max_diff_lon = numpy.max(diff_lon)
+        max_diff_lat = numpy.max(diff_lat)
+
+        print(f"--- Analyse de Précision ---")
+        print(f"Erreur max Longitude: {max_diff_lon:.20e}")
+        print(f"Erreur max Latitude : {max_diff_lat:.20e}")
+
+        # Vérification du seuil 10^-16
+        seuil = 1e-16
+        if max_diff_lon < seuil and max_diff_lat < seuil:
+            print("L'erreur est inférieure à 10^-16")
+        else:
+            indices_erreur = numpy.where((diff_lon > seuil) | (diff_lat > seuil))[0]
+            print(f"❌ ÉCHEC : {len(indices_erreur)} points dépassent le seuil.")
+            print(f"Premier index problématique : {indices_erreur[0]}")
+            print(f"Valeur georef  : {data_georef[indices_erreur[0], 1]:.18e}")
+            print(f"Valeur wxfactory : {data_wfactory[indices_erreur[0], 1]:.18e}")
+    
+
+                
 
     def _get_writable(self, a, num_dim):
         return self.device.to_host(self._gather_field(a, num_dim))
@@ -114,7 +169,7 @@ class OutputCubesphereFst(OutputCubesphere):
             ig4=self.ig4,
             nomvar=name[:4],
             typvar="A",
-            grtyp="C",
+            grtyp="Q",
         )
 
     def __write_result__(self, Q, step_id):
