@@ -59,7 +59,7 @@ class InputManager:
 
         with SingleProcess(comm) as s, Conditional(s):
             with rmn.fst24_file(grid_file_name) as grid_file:
-                for record in grid_file.new_query(typvar="X", grtyp="C"):
+                for record in grid_file.new_query(typvar="X", grtyp="Q"):
                     s.return_value = decode_ig4(record.ig4) + (
                         angle24.decode(record.ig1),
                         angle24.decode(record.ig2),

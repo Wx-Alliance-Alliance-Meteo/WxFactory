@@ -43,7 +43,7 @@ def main():
         from simulation import Simulation
         import wx_mpi
         from device import Device
-    except (ImportError, NameError) as e:
+    except (ImportError, NameError, OSError) as e:
         if rank == 0:
             print(e)
             raise
