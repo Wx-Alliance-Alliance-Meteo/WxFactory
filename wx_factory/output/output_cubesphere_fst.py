@@ -88,54 +88,7 @@ class OutputCubesphereFst(OutputCubesphere):
             # If we pass the file when creating the georef, it will read the axes from it (if available)
             self.georef = georef.GeoRef(self.ni, self.nj, "Q", self.ig1, self.ig2, self.ig3, self.ig4, self.file)
             # self.georef.define_axes(lon, lat)
-            self.georef.write_fst(self.file, self.ig1, self.ig2, self.ig3, self.ig4, "my_grid")
-
-        # Generation du fichier txt lon/lat wxfactory
-        lon_deg = numpy.degrees(lon.ravel())
-        lat_deg = numpy.degrees(lat.ravel())
-
-        # Conversion du format 0-360 vers -180/180
-        lon_c_style = (lon_deg + 180) % 360 - 180
-
-        with open("lonlat_wxfactory.txt", "w") as f:
-            f.write("Index\tLongitude\tLatitude\n")
-            for i in range(len(lon_c_style)):
-                f.write(f"{i}\t{lon_c_style[i]:.18f}\t{lat_deg[i]:.18f}\n")
-
-        # Comparaison absolue des fichiers lon/lat georef et wxfactory
-        data_georef = numpy.loadtxt("lonlat_georef.txt", skiprows=1, dtype=numpy.float64)
-        data_wfactory = numpy.loadtxt("lonlat_wxfactory.txt", skiprows=1, dtype=numpy.float64)
-
-        # Vérification de la taille
-        if data_georef.shape[0] != data_wfactory.shape[0]:
-            print(f"Attention: Tailles différentes! C: {len(data_georef)}, Py: {len(data_wfactory)}")
-            min_len = min(len(data_georef), len(data_wfactory))
-            data_georef, data_wfactory = data_georef[:min_len], data_wfactory[:min_len]
-
-        # Calcul des différences
-        diff_lon = numpy.abs(data_georef[:, 1] - data_wfactory[:, 1]) / (180)
-        diff_lat = numpy.abs(data_georef[:, 2] - data_wfactory[:, 2]) / (90)
-
-        # Statistiques
-        max_diff_lon = numpy.max(diff_lon)
-        max_diff_lat = numpy.max(diff_lat)
-
-        print(f"--- Analyse de Précision ---")
-        print(f"Erreur max Longitude: {max_diff_lon:.20e}")
-        print(f"Erreur max Latitude : {max_diff_lat:.20e}")
-
-        # Vérification du seuil 10^-15
-        seuil = 1e-15
-        if max_diff_lon < seuil and max_diff_lat < seuil:
-            print("L'erreur est inférieure à 10^-15")
-        else:
-            indices_erreur = numpy.where((diff_lon > seuil) | (diff_lat > seuil))[0]
-            print(f"ÉCHEC : {len(indices_erreur)} points dépassent le seuil.")
-            print(f"Premier index problématique : {indices_erreur[0]}")
-            print(f"Valeur georef  : {data_georef[indices_erreur[0], 1]:.18e}")
-            print(f"Valeur wxfactory : {data_wfactory[indices_erreur[0], 1]:.18e}")
-    
-
+            self.georef.write_fst(self.file, self.ig1, self.ig2, self.ig3, self.ig4, "my_grid")  
                 
 
     def _get_writable(self, a, num_dim):
