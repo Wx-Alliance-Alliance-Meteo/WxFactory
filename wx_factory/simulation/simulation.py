@@ -70,6 +70,7 @@ class Simulation:
         :param config: All options relevant to the simulation. Can be an already-initialized Configuration object, or
                        the name of a file where to find these options.
         """
+        print("Initializing simulation!")
         self.comm = comm
         self.rank = self.comm.rank
 
@@ -123,7 +124,9 @@ class Simulation:
         self._adjust_num_elements()
         self.device = self._make_device()
         self.process_topo = None
+        print("Creating geometry")
         self.geometry = self._create_geometry()
+        print("Creating DFROperators")
         self.operators = DFROperators(self.geometry, self.config, self.device)
         self.initial_Q, self.topography, self.metric = init_state_vars(
             self.geometry, self.operators, self.config, self.post_processors

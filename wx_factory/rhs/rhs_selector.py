@@ -11,7 +11,7 @@ from process_topology import ProcessTopology
 from .rhs_bubble_convective import rhs_bubble as rhs_bubble_convective
 from .rhs_bubble_implicit import rhs_bubble_implicit
 from .rhs_sw import RhsShallowWater
-from .rhs_dfr import RHSDirecFluxReconstruction, RHSDirecFluxReconstruction_mpi
+from .rhs_dfr import RHSDirecFluxReconstruction, RHSDirecFluxReconstruction_mpi, RHSDirectFluxReconstructionArtificialViscosity
 from .rhs_fv import RHSFiniteVolume
 
 
@@ -37,7 +37,8 @@ class RhsBundle:
             raise ValueError(f"Partitioned integrators have not been ported to the new layout yet")
 
         if param.discretization == "dfr" or param.discretization == "dg":
-            rhs_class = RHSDirecFluxReconstruction
+            #rhs_class = RHSDirecFluxReconstruction    # without enropy stability
+            rhs_class = RHSDirecFluxReconstructionArtificialViscosity
         elif param.discretization == "fv":
             rhs_class = RHSFiniteVolume
         else:

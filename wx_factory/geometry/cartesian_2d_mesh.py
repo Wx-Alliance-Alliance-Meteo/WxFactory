@@ -20,7 +20,7 @@ class Cartesian2D(Geometry):
         super().__init__(num_solpts, num_elements_x, num_elements_z, total_num_elements_x, device)
         xp = device.xp
 
-        scaled_points = 0.5 * (1.0 + self.solutionPoints)
+        scaled_points = 0.5 * (1.0 + self.solutionPoints) 
 
         # --- Horizontal coord
         Δx1 = (domain_x[1] - domain_x[0]) / num_elements_x
@@ -42,7 +42,7 @@ class Cartesian2D(Geometry):
             x3[idz : idz + num_solpts] = itf_x3[i] + scaled_points * Δx3
 
         X1, X3 = xp.meshgrid(x1, x3)
-
+        
         self.X1_cartesian = X1
         self.X3_cartesian = X3
         self.itf_Z = itf_x3

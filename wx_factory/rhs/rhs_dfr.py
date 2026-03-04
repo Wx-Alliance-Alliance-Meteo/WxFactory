@@ -11,6 +11,70 @@ def apply_op(vec: NDArray, op: NDArray):
     return (vec.reshape(-1, sh[-1]) @ op).reshape(*sh[:-1], -1)
     # return vec @ op
 
+class RHSDirecFluxReconstructionArtificialViscosityEntropy(RHS):
+
+    def solution_extrapolation(self, q: NDArray) -> None:
+        # Extrapolate the solution to element boundaries
+
+        self.q_itf_x1 = apply_op(q, self.ops.extrap_x)
+        self.q_itf_x3 = apply_op(q, self.ops.extrap_z)
+            
+    def solution_extrapolation_entropy(self, v: NDArray) -> None:
+        # Extrapolate the entropy variables to element boundaries
+
+        self.v_itf_x1 = apply_op(v, self.ops.extrap_x)
+        self.v_itf_x3 = apply_op(v, self.ops.extrap_z)
+        
+    def entropy_gradient_partial(self,v: NDArray) -> None:
+        # Gradient for a vector v
+        
+        self.dv_dx1 = apply_op(self.v, self.ops.derivative_x)
+        self.dv_dx3 = apply_op(self.v, self.ops.derivative_z)
+        
+    def entropy_jump(self) -> None:
+        # Entropy jump
+        # TODO write entropy jump
+        self.v_jump_x1 = None
+        self.v_jump_x3 = None
+        
+    def entropy_gradient(self) -> None:
+        # Entropy jumm
+        xp = self.device.xp
+
+        self.dv_dx1 += self.v_jump_x1 @ self.ops.correction_WE
+        self.dv_dx1 *= -2.0 / self.geom.Δx1
+
+        self.dv_dx3 += self.v_jump_x3 @ self.ops.correction_DU
+        self.dv_dx3 *= -2.0 / self.geom.Δx3
+
+        xp.add(self.dv_dx1, self.dv_dx3, out=self.sigma)
+    
+      
+    def pointwise_fluxes(self, q: NDArray) -> None:
+        self.pde.pointwise_fluxes(q, self.f_x1, self.f_x2, self.f_x3)
+
+    def flux_divergence_partial(self) -> NDArray:
+        xp = self.device.xp
+
+        # Compute derivatives, with correction from boundaries
+        # Investigate why this is slower
+        # xp.matmul(self.f_x1, self.ops.derivative_x, out=self.df1_dx1)
+        # xp.matmul(self.f_x3, self.ops.derivative_z, out=self.df3_dx3)
+
+        self.df1_dx1 = apply_op(self.f_x1, self.ops.derivative_x)
+        self.df3_dx3 = apply_op(self.f_x3, self.ops.derivative_z)
+
+    def flux_divergence(self):
+        xp = self.device.xp
+
+        self.df1_dx1 += self.f_itf_x1 @ self.ops.correction_WE
+        self.df1_dx1 *= -2.0 / self.geom.Δx1
+
+        self.df3_dx3 += self.f_itf_x3 @ self.ops.correction_DU
+        self.df3_dx3 *= -2.0 / self.geom.Δx3
+
+        xp.add(self.df1_dx1, self.df3_dx3, out=self.rhs)
+
 
 class RHSDirecFluxReconstruction(RHS):
 

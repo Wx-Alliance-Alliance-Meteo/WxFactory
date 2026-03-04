@@ -65,6 +65,18 @@ class RHS(ABC):
         self.q_itf_n = None
         self.q_itf_w = None
         self.q_itf_e = None
+        
+        # ESAV variables
+        self.v_itf_x1 = None
+        self.v_itf_x3 = None
+        
+        self.dv_dx1 = None
+        self.dv_dx3 = None
+        
+        self.v_jump_x1 = None
+        self.v_jump_x3 = None
+        
+        self.sigma = None
 
         # Initialize rhs matrix
         self.rhs = None
@@ -102,7 +114,7 @@ class RHS(ABC):
         self.pointwise_fluxes(q)
         self.timestamps[3] = self.device.timestamp(name="flux div 1")
 
-        # 3. Compute the derivatives of the discontinuous fluxes
+        # 3. Compute the derivatives of the discontinuous fluxes - the volume integral
         self.flux_divergence_partial()
         self.timestamps[4] = self.device.timestamp(name="end comm")
 
@@ -119,7 +131,46 @@ class RHS(ABC):
 
         # 6. Add forcing terms
         self.forcing_terms(q)
-        self.timestamps[8] = self.device.timestamp()
+        self.timestamps[8] = self.device.timestamp(name="artificial viscosity")
+        
+        #
+        #
+        # 7. Add artificial viscosity for entropy stability
+        #
+        #
+        
+        # 7.1 Extrapolate the entropy variables to the boundaries of the element
+        # TODO: Precompute v from q
+        self.solution_extrapolation_entropy(v)
+        
+        #
+        # 7.2. Compute gradient of v via BR1 (Theta_i, w)
+        #
+        # 7.2.1 Compute the derivatives of the entropy variables 
+        self.entropy_gradient_partial(v: NDArray)
+        # 7.2.2 Compute the jump across the interfaces
+        self.entropy_jump()
+        # 7.2.3 Complete the gradient operation by ading the boundary terms
+        self.entropy_gradient()
+        
+        #
+        # 7.3 Compute the viscosity coeff
+        #
+        # 7.3.1 Compute the entropy residual
+        # Compute volume term
+        
+        
+        
+        
+        # 7.3 Compute the viscosity coefficients epsilon_k
+        
+        # 7.4 Compute the jacobian du/dv
+        
+        # 7.5 Compute viscous flux (-sigma_i, w)
+        
+        # 7.5 Extrapolate the entropy fluxes
+        
+        # 7.6 Apply central flux (boundary terms  for viscous flux sigma_i
 
         # At this moment, a deep copy needs to be returned
         # otherwise issues are encountered after. This needs to be fixed
