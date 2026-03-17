@@ -4,6 +4,7 @@ from numpy.typing import NDArray
 from common.definitions import idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_w, idx_rho_theta
 from rhs.rhs import RHS
 from wx_mpi import SingleProcess, Conditional
+from init.entropy_vars import conservative_to_entropy, du_dv
 
 
 def apply_op(vec: NDArray, op: NDArray):
@@ -18,38 +19,7 @@ class RHSDirecFluxReconstructionArtificialViscosityEntropy(RHS):
 
         self.q_itf_x1 = apply_op(q, self.ops.extrap_x)
         self.q_itf_x3 = apply_op(q, self.ops.extrap_z)
-            
-    def solution_extrapolation_entropy(self, v: NDArray) -> None:
-        # Extrapolate the entropy variables to element boundaries
-
-        self.v_itf_x1 = apply_op(v, self.ops.extrap_x)
-        self.v_itf_x3 = apply_op(v, self.ops.extrap_z)
-        
-    def entropy_gradient_partial(self,v: NDArray) -> None:
-        # Gradient for a vector v
-        
-        self.dv_dx1 = apply_op(self.v, self.ops.derivative_x)
-        self.dv_dx3 = apply_op(self.v, self.ops.derivative_z)
-        
-    def entropy_jump(self) -> None:
-        # Entropy jump
-        # TODO write entropy jump
-        self.v_jump_x1 = None
-        self.v_jump_x3 = None
-        
-    def entropy_gradient(self) -> None:
-        # Entropy jumm
-        xp = self.device.xp
-
-        self.dv_dx1 += self.v_jump_x1 @ self.ops.correction_WE
-        self.dv_dx1 *= -2.0 / self.geom.Δx1
-
-        self.dv_dx3 += self.v_jump_x3 @ self.ops.correction_DU
-        self.dv_dx3 *= -2.0 / self.geom.Δx3
-
-        xp.add(self.dv_dx1, self.dv_dx3, out=self.sigma)
     
-      
     def pointwise_fluxes(self, q: NDArray) -> None:
         self.pde.pointwise_fluxes(q, self.f_x1, self.f_x2, self.f_x3)
 
@@ -74,6 +44,84 @@ class RHSDirecFluxReconstructionArtificialViscosityEntropy(RHS):
         self.df3_dx3 *= -2.0 / self.geom.Δx3
 
         xp.add(self.df1_dx1, self.df3_dx3, out=self.rhs)
+        
+    #
+    # ESAV Methods
+    #
+    
+    def solution_extrapolation_entropy(self, v: NDArray) -> None:
+        # Extrapolate the entropy variables to element boundaries
+
+        self.v_itf_x1 = apply_op(v, self.ops.extrap_x)
+        self.v_itf_x3 = apply_op(v, self.ops.extrap_z)
+        
+    def entropy_gradient_partial(self,v: NDArray) -> None:
+        """Gradient for v - discontinuous part, no boundary terms"""
+        
+        self.dv_dx1 = apply_op(v, self.ops.derivative_x)
+        self.dv_dx3 = apply_op(v, self.ops.derivative_z)
+        
+    def entropy_average(self) -> None:
+        """Entropy average"""
+        # TODO write entropy average
+        self.v_avg_x1 = None
+        self.v_avg_x3 = None
+        
+    def entropy_gradient(self) -> None:
+        """Compute derivatives of v, with correction from boundaries"""
+     
+        self.dv_dx1 += self.v_avg_x1 @ self.ops.correction_WE
+        self.dv_dx1 *= 2.0 / self.geom.Δx1
+
+        self.dv_dx3 += self.v_avg_x3 @ self.ops.correction_DU
+        self.dv_dx3 *= 2.0 / self.geom.Δx3
+        
+    def viscosity_coeff(self, q: NDArray)->None:
+        """Computes the elementwise constant viscosity coefficient"""
+        # TODO: implement the entropy preserving viscosity coeffs
+        xp = self.device.xp
+        
+        epsilon_val = 1e-3
+        self.epsilon = xp.full_like(q,epsilon_val)
+        
+    def viscous_fluxes(self, q: NDArray)->None:
+        """Computes the viscous flux g_m = \sum_n epsilon K_mn dv_dxn"""
+        xp = self.device.xp
+        
+        Kdg1_dx1 = xp.einsum('abijk,bijk->aijk', self.K, self.dg1_dx1) # matrix-vector multiplication along the first dimensions (a,b,:,:,:) and (b,:,:,:)
+        self.g_x1 = self.epsilon * Kdg1_dx1 
+        
+        Kdg3_dx3 = xp.einsum('abijk,bijk->aijk', self.K, self.dg1_dx1)
+        self.g_x3 = self.epsilon * Kdg3_dx3
+       
+        
+    def compute_K(self, q: NDArray) -> None:
+        """Computes K= du/dv"""
+        self.K = du_dv(q)
+        
+    def viscous_flux_divergence_partial(self) -> None:
+        """Part of the divergence for g - discontinuous part, no boundary terms"""
+        
+        self.dg1_dx1 = apply_op(self.g_x1, self.ops.derivative_x)
+        self.dg3_dx3 = apply_op(self.g_x3, self.ops.derivative_z)
+        
+    def viscous_flux_average(self) -> None:
+        """Entropy average"""
+        # TODO write entropy average
+        self.g_avg_x1 = None
+        self.g_avg_x3 = None
+        
+    def viscous_flux_divergence(self) -> None:
+        """Compute derivatives of g, with correction from boundaries"""
+        xp = self.device.xp
+
+        self.dg1_dx1 += self.g_avg_x1 @ self.ops.correction_WE
+        self.dg1_dx1 *= 2.0 / self.geom.Δx1
+
+        self.dg3_dx3 += self.g_itf_x3 @ self.ops.correction_DU
+        self.dg3_dx3 *= 2.0 / self.geom.Δx3
+
+        xp.add(self.dg1_dx1, self.dg3_dx3, out=self.rhs)
 
 
 class RHSDirecFluxReconstruction(RHS):

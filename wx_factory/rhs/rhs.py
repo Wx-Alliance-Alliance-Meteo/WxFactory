@@ -8,6 +8,7 @@ from common import Configuration
 from geometry import DFROperators, Geometry, Metric2D, Metric3DTopo
 from pde import PDE
 from process_topology import ProcessTopology, ExchangeRequest
+from init.entropy_vars import conservative_to_entropy, du_dv
 
 
 class RHS(ABC):
@@ -67,16 +68,29 @@ class RHS(ABC):
         self.q_itf_e = None
         
         # ESAV variables
+        self. v = None
+        
         self.v_itf_x1 = None
         self.v_itf_x3 = None
         
         self.dv_dx1 = None
         self.dv_dx3 = None
         
-        self.v_jump_x1 = None
-        self.v_jump_x3 = None
+        self.v_avg_x1 = None
+        self.v_avg_x3 = None
         
-        self.sigma = None
+        self.epsilon = None
+        self.K = None
+        
+        self.g_x1 = None
+        self.g_x3 = None
+        
+        self.dg1_dx1 = None
+        self.dg3_dx3 = None
+        
+        self.g_avg_x1 = None
+        self.g_avg_x3 = None
+        
 
         # Initialize rhs matrix
         self.rhs = None
@@ -139,38 +153,38 @@ class RHS(ABC):
         #
         #
         
+        # 7.0 Compute entropy variables from solution variables
+        # TODO: check if config is right
+        v = conservative_to_entropy(q,self.geom,self.config)
+        
         # 7.1 Extrapolate the entropy variables to the boundaries of the element
-        # TODO: Precompute v from q
         self.solution_extrapolation_entropy(v)
         
         #
-        # 7.2. Compute gradient of v via BR1 (Theta_i, w)
+        # 7.2. Compute auxiliary variable - gradient of v 
         #
-        # 7.2.1 Compute the derivatives of the entropy variables 
-        self.entropy_gradient_partial(v: NDArray)
-        # 7.2.2 Compute the jump across the interfaces
-        self.entropy_jump()
+        # 7.2.1 Compute the derivatives of the discontinuous entropy variables 
+        self.entropy_gradient_partial(v)
+        # 7.2.2 Compute the common interface - average across the interfaces
+        self.entropy_average()
         # 7.2.3 Complete the gradient operation by ading the boundary terms
         self.entropy_gradient()
         
         #
-        # 7.3 Compute the viscosity coeff
-        #
-        # 7.3.1 Compute the entropy residual
-        # Compute volume term
-        
-        
-        
-        
-        # 7.3 Compute the viscosity coefficients epsilon_k
-        
-        # 7.4 Compute the jacobian du/dv
-        
-        # 7.5 Compute viscous flux (-sigma_i, w)
-        
-        # 7.5 Extrapolate the entropy fluxes
-        
-        # 7.6 Apply central flux (boundary terms  for viscous flux sigma_i
+        # 7.3 Compute the diffusion term
+        # 
+        # 7.3.1 Compute viscosity coefficients
+        self.viscosity_coeff(q)
+        # 7.3.2 Compute K = du_dv
+        self.compute_K(q)
+        # 7.3.3 Compute the viscous flux
+        self.viscous_fluxes()
+        # 7.3.4 Compute the derivative of the discontinuous viscous flux g
+        self.viscous_flux_divergence_partial()
+        # 7.3.5 Compute the average of g
+        self.viscous_flux_average()
+        # 7.3.6 Complete the divergence operation for g
+        self.viscous_flux_divergence()
 
         # At this moment, a deep copy needs to be returned
         # otherwise issues are encountered after. This needs to be fixed
@@ -272,3 +286,47 @@ class RHS(ABC):
             f"  -------------------------\n"
             f"  Total:          {total:5.1f}"
         )
+        
+    # ESAV methods
+    
+    @abstractmethod
+    def solution_extrapolation_entropy(self, v: NDArray) -> None:
+        pass
+    
+    @abstractmethod
+    def entropy_gradient_partial(self,v: NDArray) -> None:
+        pass
+    
+    @abstractmethod   
+    def entropy_average(self) -> None:
+        pass
+    
+    @abstractmethod    
+    def entropy_gradient(self) -> None:
+        pass
+    
+    @abstractmethod    
+    def viscosity_coeff(self, q: NDArray) -> None:
+        pass
+    
+    @abstractmethod    
+    def viscous_fluxes(self) -> None:
+        pass
+    
+    @abstractmethod    
+    def compute_K(self, q: NDArray) -> None:
+        pass
+    
+    @abstractmethod
+    def viscous_flux_divergence_partial(self) -> None:
+        pass
+    
+    @abstractmethod
+    def viscous_flux_average(self) -> None:
+        pass
+    
+    @abstractmethod
+    def viscous_flux_divergence(self) -> None:
+        pass
+    
+    
