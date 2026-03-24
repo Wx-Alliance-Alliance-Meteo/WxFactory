@@ -1,6 +1,6 @@
 from .rhs import RHS
-from .rhs_dfr import RHSDirecFluxReconstruction, RHSDirecFluxReconstructionArtificialViscosity
+from .rhs_dfr import RHSDirecFluxReconstruction, RHSDirectFluxReconstruction_ESAV
 from .rhs_fv import RHSFiniteVolume
 from .rhs_selector import RhsBundle
 
-__all__ = ["RHS", "RHSBundle", "RHSDirecFluxReconstruction","RHSDirecFluxReconstructionArtificialViscosity", "RHSFiniteVolume"]
+__all__ = ["RHS", "RHSBundle", "RHSDirecFluxReconstruction","RHSDirectFluxReconstruction_ESAV", "RHSFiniteVolume"]

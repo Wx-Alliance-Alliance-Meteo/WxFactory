@@ -11,7 +11,7 @@ from process_topology import ProcessTopology
 from .rhs_bubble_convective import rhs_bubble as rhs_bubble_convective
 from .rhs_bubble_implicit import rhs_bubble_implicit
 from .rhs_sw import RhsShallowWater
-from .rhs_dfr import RHSDirecFluxReconstruction, RHSDirecFluxReconstruction_mpi, RHSDirectFluxReconstructionArtificialViscosity
+from .rhs_dfr import RHSDirecFluxReconstruction, RHSDirecFluxReconstruction_mpi, RHSDirectFluxReconstruction_ESAV
 from .rhs_fv import RHSFiniteVolume
 
 
@@ -38,7 +38,7 @@ class RhsBundle:
 
         if param.discretization == "dfr" or param.discretization == "dg":
             #rhs_class = RHSDirecFluxReconstruction    # without enropy stability
-            rhs_class = RHSDirecFluxReconstructionArtificialViscosity
+            rhs_class = RHSDirectFluxReconstruction_ESAV #with entropy stable artificial viscosity
         elif param.discretization == "fv":
             rhs_class = RHSFiniteVolume
         else:

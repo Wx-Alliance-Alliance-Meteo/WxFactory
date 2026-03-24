@@ -34,7 +34,8 @@ def conservative_to_entropy(Q: NDArray, geom: Cartesian2D, param: Configuration)
     num_equations = 4
     xp = geom.device.xp
     
-    V = xp.zeros((num_equations, param.num_elements_vertical, param.num_elements_horizontal, geom.num_solpts**2))
+    #V = xp.zeros((num_equations, param.num_elements_vertical, param.num_elements_horizontal, geom.num_solpts**2))
+    V = xp.zeros_like(Q)
     
     ρ, ρ_uu, ρ_ww, ρ_θ, uu , ww, θ = conservative_to_prim(Q)
     

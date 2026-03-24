@@ -52,3 +52,19 @@ class PDE(ABC):
         flux_itf_x3: NDArray,
     ):
         pass
+    
+    @abstractmethod
+    def entropy_average(
+        self,
+        q_itf_x1: NDArray,
+        q_itf_x3: NDArray,
+    ):
+        pass
+    
+    @abstractmethod
+    def viscous_flux_average(
+        self,
+        g1_itf_x1: NDArray,
+        g3_itf_x3: NDArray,
+    ):
+        pass
