@@ -40,7 +40,7 @@ def conservative_to_entropy(Q: NDArray, geom: Cartesian2D, param: Configuration)
     ρ, ρ_uu, ρ_ww, ρ_θ, uu , ww, θ = conservative_to_prim(Q)
     
     gamma = cpd/cvd
-    p = p0 * ((Rd * ρ_θ)/p0)**gamma # pressure
+    p = p0 * (((Rd * ρ_θ)/p0)**gamma) # pressure
     
     # # Compute conservative variables in terms of total energy E
     ρ_e, ρ_E, _ = Theta_to_E(ρ,ρ_uu,ρ_ww,ρ_θ)
@@ -79,7 +79,7 @@ def Theta_to_E(ρ,ρ_uu,ρ_ww,ρ_θ):
     
     gamma = cpd/cvd
 
-    ρ_e = cvd * θ * ((Rd * ρ_θ)/p0)**(gamma-1) 
+    ρ_e = ρ * cvd * θ * ((Rd * ρ_θ)/p0)**(gamma-1) 
     ρ_E = ρ_e + 0.5 * (ρ_uu * uu + ρ_ww * ww)
     E = ρ_E/ρ
     
@@ -158,26 +158,21 @@ def du_dv(Q: NDArray, geom: Cartesian2D, param: Configuration):
     K[0,0,:,:,:] = k00
     K[0,1,:,:,:] = k01
     K[0,2,:,:,:] = k02
-    K[0,2,:,:,:] = k03
+    K[0,3,:,:,:] = k03
     
     K[1,0,:,:,:] = k01
     K[1,1,:,:,:] = k11
     K[1,2,:,:,:] = k12
-    K[1,2,:,:,:] = k13
+    K[1,3,:,:,:] = k13
     
     K[2,0,:,:,:] = k02
     K[2,1,:,:,:] = k12
     K[2,2,:,:,:] = k22
-    K[2,2,:,:,:] = k23
-    
-    K[2,0,:,:,:] = k02
-    K[2,1,:,:,:] = k12
-    K[2,2,:,:,:] = k22
-    K[2,2,:,:,:] = k23
+    K[2,3,:,:,:] = k23
     
     K[3,0,:,:,:] = k03
     K[3,1,:,:,:] = k13
     K[3,2,:,:,:] = k23
-    K[3,2,:,:,:] = k33
+    K[3,3,:,:,:] = k33
     
     return K

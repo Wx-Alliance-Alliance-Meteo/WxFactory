@@ -8,7 +8,7 @@ from common import Configuration
 from geometry import DFROperators, Geometry, Metric2D, Metric3DTopo
 from pde import PDE
 from process_topology import ProcessTopology, ExchangeRequest
-from init.entropy_vars import conservative_to_entropy, du_dv
+from init.entropy_vars import conservative_to_entropy, du_dv, entropy_to_conservative
 
 
 class RHS(ABC):
@@ -144,7 +144,7 @@ class RHS(ABC):
         self.timestamps[7] = self.device.timestamp(name="forcing")
 
         # 6. Add forcing terms
-        # self.forcing_terms(q)
+        self.forcing_terms(q)
         self.timestamps[8] = self.device.timestamp(name="artificial viscosity")
         
         #

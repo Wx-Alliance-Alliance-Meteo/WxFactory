@@ -80,7 +80,7 @@ class RHSDirectFluxReconstruction_ESAV(RHS):
         # TODO: implement the entropy preserving viscosity coeffs
         xp = self.device.xp
         
-        epsilon_val = 1e-3
+        epsilon_val = 5e-3
         self.epsilon = xp.full_like(q,epsilon_val)
         
     def viscous_fluxes(self)->None:
