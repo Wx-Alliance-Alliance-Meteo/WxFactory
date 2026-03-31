@@ -31,7 +31,6 @@ def conservative_to_entropy(Q: NDArray, geom: Cartesian2D, param: Configuration)
     """ Computes entropy variables V(Q) = dS/dQ from the conservative variables
     Shape: (num_equations, param.num_elements_vertical, param.num_elements_horizontal, geom.num_solpts**2))"""
     # Possible issues: diviosion by zero
-    num_equations = 4
     xp = geom.device.xp
     
     #V = xp.zeros((num_equations, param.num_elements_vertical, param.num_elements_horizontal, geom.num_solpts**2))
@@ -45,7 +44,8 @@ def conservative_to_entropy(Q: NDArray, geom: Cartesian2D, param: Configuration)
     # # Compute conservative variables in terms of total energy E
     ρ_e, ρ_E, _ = Theta_to_E(ρ,ρ_uu,ρ_ww,ρ_θ)
     
-    s = xp.log(p/ρ**gamma)
+    
+    s = xp.log(p) - gamma * xp.log(ρ)
     
     v1 = (ρ_e * (gamma + 1 - s) - ρ_E) / ρ_e
     v2 = ρ_uu/ρ_e
@@ -60,10 +60,10 @@ def conservative_to_entropy(Q: NDArray, geom: Cartesian2D, param: Configuration)
     return V
 
 def conservative_to_prim(Q: NDArray):
-    ρ = Q[idx_2d_rho, :, :]
-    ρ_uu = Q[idx_2d_rho_u, :, :]
-    ρ_ww = Q[idx_2d_rho_w, :, :] 
-    ρ_θ = Q[idx_2d_rho_theta, :, :] 
+    ρ = Q[idx_2d_rho, :, :, :]
+    ρ_uu = Q[idx_2d_rho_u, :, :, :]
+    ρ_ww = Q[idx_2d_rho_w, :, :,  :] 
+    ρ_θ = Q[idx_2d_rho_theta, :, :,:] 
     
     uu = ρ_uu / ρ
     ww = ρ_ww / ρ
@@ -84,6 +84,11 @@ def Theta_to_E(ρ,ρ_uu,ρ_ww,ρ_θ):
     E = ρ_E/ρ
     
     return ρ_e, ρ_E, E
+
+def E_to_Theta(e,ρ):
+    gamma = cpd/cvd
+    θ = (e/cvd)**(1/(gamma)) * (p0/(Rd*ρ))**((gamma-1)/(gamma))
+    return θ
 
 def entropy_to_conservative(V: NDArray, geom: Cartesian2D, param: Configuration) -> NDArray[numpy.float64]:
     """ Compute conservative variable from entropy variables"""
@@ -108,14 +113,20 @@ def entropy_to_conservative(V: NDArray, geom: Cartesian2D, param: Configuration)
     ρ_ww = ρ_e * v3
     ρ_E = ρ_e * (1 - (v2**2 + v3**2)/(2*v4))
     
-    # To do: Energy to potential
+    # TODO: Energy to potential
+    e = ρ_e/ρ
     
-    Q = xp.zeros((num_equations, param.num_elements_vertical, param.num_elements_horizontal, geom.num_solpts**2))
+    θ = E_to_Theta(e,ρ)
+    ρ_θ = ρ*θ
     
-    # Q[idx_2d_rho, :, :] = ρ
-    # Q[idx_2d_rho_u, :, :] = ρ_uu
-    # Q[idx_2d_rho_w, :, :] = ρ_ww
-    # Q[idx_2d_rho_theta, :, :] = ρ_θ
+    
+    #Q = xp.zeros((num_equations, param.num_elements_vertical, param.num_elements_horizontal, geom.num_solpts**2))
+    Q = xp.zeros_like(V)
+    
+    Q[idx_2d_rho, :, :] = ρ
+    Q[idx_2d_rho_u, :, :] = ρ_uu
+    Q[idx_2d_rho_w, :, :] = ρ_ww
+    Q[idx_2d_rho_theta, :, :] = ρ_θ
     
     return Q
 
@@ -137,19 +148,22 @@ def du_dv(Q: NDArray, geom: Cartesian2D, param: Configuration):
     # ρ_e = cvd * θ * ((Rd * ρ_θ)/p0)**(gamma-1) 
     # ρ_E = ρ_e + 0.5 * (ρ_uu * uu + ρ_ww * ww)
     
-    _, _, E = Theta_to_E(ρ,ρ_uu,ρ_ww,ρ_θ)
+    _, ρ_E, E = Theta_to_E(ρ,ρ_uu,ρ_ww,ρ_θ)
     
     k00 = ρ
     k01 = ρ_uu
     k02 = ρ_ww
-    k03 = E
+    # k03 = E
+    k03 = ρ_E
     
     k11 = ρ_uu * uu + p
     k12 = ρ_uu * ww 
-    k13 = uu* (E + p)
+    # k13 = uu* (E + p)
+    k13 = uu* (ρ_E + p)
     
     k22 = ρ_ww * ww + p
-    k23 = ww*(E+p)
+    # k23 = ww*(E+p)
+    k23 = ww*(ρ_E+p)
     
     a = xp.sqrt(gamma * (p/ρ))
     H = a**2/ (gamma-1) + 0.5* (uu**2 + ww**2)
