@@ -27,6 +27,10 @@ class OutputCartesian(OutputManager):
             image_field(
                 self.geometry, (Q_cartesian[RHO_THETA, ...] / Q_cartesian[RHO, ...]), filename, 290.0, 300.0, 10
             )
+        elif self.config.case_number == 100:
+            image_field(
+                self.geometry, Q_cartesian[RHO, ...], filename, 0, 2, 100
+            )
 
     def __blockstats__(self, Q: numpy.ndarray, step_id: int):
 

@@ -150,7 +150,9 @@ void riemann_eulercartesian_ausm_2d(
     py_array<num_t>&       flux_itf_x2_in,
     const int              num_elem_x1,
     const int              num_elem_x2,
-    const int              num_solpts) {
+    const int              num_solpts,
+    const bool             periodic_x,
+    const bool             periodic_y) {
   py::buffer_info buf1 = q_itf_x1_in.request();
   py::buffer_info buf2 = q_itf_x2_in.request();
   py::buffer_info buf3 = flux_itf_x1_in.request();
@@ -170,8 +172,12 @@ void riemann_eulercartesian_ausm_2d(
   {
     for (int j = 0; j < num_elem_x1; j++)
     {
+      // Get right-side indices
+      int jp = (j + 1) % num_elem_x1;
+      int ip = (i + 1) % num_elem_x2;
+
       // Solve along the horizontal  direction
-      if (j + 1 < num_elem_x1)
+      if (j + 1 < num_elem_x1 || periodic_x)
       {
         for (int k = 0; k < num_solpts; k++)
         {
@@ -181,7 +187,7 @@ void riemann_eulercartesian_ausm_2d(
               params_l(q_itf_x1, flux_itf_x1, nullptr, nullptr, indl, stride);
 
           // Initialize right-hand-size parameters
-          const int indr = get_c_index(0, i, j + 1, k, array_shape);
+          const int indr = get_c_index(0, i, jp, k, array_shape);
           kernel_params<num_t, euler_state_2d>
               params_r(q_itf_x1, flux_itf_x1, nullptr, nullptr, indr, stride);
 
@@ -191,7 +197,7 @@ void riemann_eulercartesian_ausm_2d(
       }
 
       // Solve the Riemann problem along the vertical direction
-      if (i + 1 < num_elem_x2)
+      if (i + 1 < num_elem_x2 || periodic_y)
       {
         for (int k = 0; k < num_solpts; k++)
         {
@@ -201,7 +207,7 @@ void riemann_eulercartesian_ausm_2d(
               params_l(q_itf_x2, nullptr, flux_itf_x2, nullptr, indl, stride);
 
           // Initialize right-hand-size parameters
-          const int indr = get_c_index(0, i + 1, j, k, array_shape);
+          const int indr = get_c_index(0, ip, j, k, array_shape);
           kernel_params<num_t, euler_state_2d>
               params_r(q_itf_x2, nullptr, flux_itf_x2, nullptr, indr, stride);
 
@@ -213,42 +219,47 @@ void riemann_eulercartesian_ausm_2d(
   }
 
   // Update boundary conditions
-
-  // Set the boundary fluxes along the horizontal direction
-  for (int i = 0; i < num_elem_x2; i++)
+  if(!periodic_x)
   {
-    for (int j = 0; j < num_solpts; j++)
+    // Set the boundary fluxes along the horizontal direction
+    for (int i = 0; i < num_elem_x2; i++)
     {
-      // Set the fluxes on the left boundary
-      const int indl = get_c_index(0, i, 0, j, array_shape);
-      kernel_params<num_t, euler_state_2d>
-          params_l(q_itf_x1, flux_itf_x1, nullptr, nullptr, indl, stride);
-      boundary_eulercartesian_2d_kernel(params_l, 0);
+      for (int j = 0; j < num_solpts; j++)
+      {
+        // Set the fluxes on the left boundary
+        const int indl = get_c_index(0, i, 0, j, array_shape);
+        kernel_params<num_t, euler_state_2d>
+            params_l(q_itf_x1, flux_itf_x1, nullptr, nullptr, indl, stride);
+        boundary_eulercartesian_2d_kernel(params_l, 0);
 
-      // Set the fluxes on the right boundary
-      const int indr = get_c_index(0, i, num_elem_x1 - 1, j + num_solpts, array_shape);
-      kernel_params<num_t, euler_state_2d>
-          params_r(q_itf_x1, flux_itf_x1, nullptr, nullptr, indr, stride);
-      boundary_eulercartesian_2d_kernel(params_r, 0);
+        // Set the fluxes on the right boundary
+        const int indr = get_c_index(0, i, num_elem_x1 - 1, j + num_solpts, array_shape);
+        kernel_params<num_t, euler_state_2d>
+            params_r(q_itf_x1, flux_itf_x1, nullptr, nullptr, indr, stride);
+        boundary_eulercartesian_2d_kernel(params_r, 0);
+      }
     }
   }
 
-  // Set the boundary fluxes along the vertical direction
-  for (int i = 0; i < num_elem_x1; i++)
+  if(!periodic_y)
   {
-    for (int j = 0; j < num_solpts; j++)
+    // Set the boundary fluxes along the vertical direction
+    for (int i = 0; i < num_elem_x1; i++)
     {
-      // Set the fluxes on the bottom boundary
-      const int indb = get_c_index(0, 0, i, j, array_shape);
-      kernel_params<num_t, euler_state_2d>
-          params_b(q_itf_x2, nullptr, flux_itf_x2, nullptr, indb, stride);
-      boundary_eulercartesian_2d_kernel(params_b, 1);
+      for (int j = 0; j < num_solpts; j++)
+      {
+        // Set the fluxes on the bottom boundary
+        const int indb = get_c_index(0, 0, i, j, array_shape);
+        kernel_params<num_t, euler_state_2d>
+            params_b(q_itf_x2, nullptr, flux_itf_x2, nullptr, indb, stride);
+        boundary_eulercartesian_2d_kernel(params_b, 1);
 
-      // Set the fluxes on the top boundary
-      const int indt = get_c_index(0, num_elem_x2 - 1, i, j + num_solpts, array_shape);
-      kernel_params<num_t, euler_state_2d>
-          params_t(q_itf_x2, nullptr, flux_itf_x2, nullptr, indt, stride);
-      boundary_eulercartesian_2d_kernel(params_t, 1);
+        // Set the fluxes on the top boundary
+        const int indt = get_c_index(0, num_elem_x2 - 1, i, j + num_solpts, array_shape);
+        kernel_params<num_t, euler_state_2d>
+            params_t(q_itf_x2, nullptr, flux_itf_x2, nullptr, indt, stride);
+        boundary_eulercartesian_2d_kernel(params_t, 1);
+      }
     }
   }
 }

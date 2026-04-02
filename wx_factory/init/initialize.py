@@ -215,7 +215,7 @@ def initialize_sw(geom: CubedSphere2D, metric: Metric2D, mtrx: DFROperators, par
 
 
 def initialize_cartesian2d(geom: Cartesian2D, param: Configuration) -> NDArray[numpy.float64]:
-    """Initialize a problem on a 2D cartesian grid based on a case number."""    
+    """Initialize a problem on a 2D cartesian grid based on a case number."""
     num_equations = 4
     xp = geom.device.xp
 
@@ -323,6 +323,20 @@ def initialize_cartesian2d(geom: Cartesian2D, param: Configuration) -> NDArray[n
 
         geom.make_mountain(mountain_type="step")
 
+    elif param.case_number == 100:
+        geom.xperiodic = True
+        geom.zperiodic = False
+
+        A = 0.5
+        ρ = 1.0 + A * xp.sin(2.0 * xp.pi * geom.X1)
+        uu = 0.1
+        ww = 0
+        p = 10
+        θ = p/(Rd*ρ)
+        T = p / (Rd * ρ)
+        exner = (p / p0) ** (Rd / cpd)
+        θ = T / exner
+
     if param.case_number == 0:
         N_star = 0.01
         t0 = 288
@@ -334,11 +348,13 @@ def initialize_cartesian2d(geom: Cartesian2D, param: Configuration) -> NDArray[n
         θ = t0 * xp.exp(a00 * geom.X3)
 
         uu[:, :] = 10.0
-
+        ρ = p0 / (Rd * θ) * exner ** (cvd / Rd)
+    elif param.case_number == 100:
+        pass
     else:
         exner = 1.0 - gravity / (cpd * θ) * geom.X3
+        ρ = p0 / (Rd * θ) * exner ** (cvd / Rd)
 
-    ρ = p0 / (Rd * θ) * exner ** (cvd / Rd)
 
     Q[idx_2d_rho, :, :] = ρ
     Q[idx_2d_rho_u, :, :] = ρ * uu

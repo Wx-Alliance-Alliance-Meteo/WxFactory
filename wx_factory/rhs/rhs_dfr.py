@@ -19,7 +19,7 @@ class RHSDirectFluxReconstruction_ESAV(RHS):
 
         self.q_itf_x1 = apply_op(q, self.ops.extrap_x)
         self.q_itf_x3 = apply_op(q, self.ops.extrap_z)
-    
+
     def pointwise_fluxes(self, q: NDArray) -> None:
         self.pde.pointwise_fluxes(q, self.f_x1, self.f_x2, self.f_x3)
 
@@ -44,73 +44,74 @@ class RHSDirectFluxReconstruction_ESAV(RHS):
         self.df3_dx3 *= -2.0 / self.geom.Δx3
 
         xp.add(self.df1_dx1, self.df3_dx3, out=self.rhs)
-        
+
     #
     # ESAV Methods
     #
-    
+
     def solution_extrapolation_entropy(self, v: NDArray) -> None:
         # Extrapolate the entropy variables to element boundaries
 
         self.v_itf_x1 = apply_op(v, self.ops.extrap_x)
         self.v_itf_x3 = apply_op(v, self.ops.extrap_z)
-        
+
     def entropy_gradient_partial(self,v: NDArray) -> None:
         """Gradient for v - discontinuous part, no boundary terms"""
-        
+
         self.dv_dx1 = apply_op(v, self.ops.derivative_x)
         self.dv_dx3 = apply_op(v, self.ops.derivative_z)
-        
+
     def entropy_average(self) -> None:
         """Entropy average"""
 
         self.v_avg_x1, self.v_avg_x3 = self.pde.entropy_average(self.q_itf_x1,self.q_itf_x3)
-        
+
     def entropy_gradient(self) -> None:
         """Compute derivatives of v, with correction from boundaries"""
-     
+
         self.dv_dx1 += self.v_avg_x1 @ self.ops.correction_WE
         self.dv_dx1 *= 2.0 / self.geom.Δx1
 
         self.dv_dx3 += self.v_avg_x3 @ self.ops.correction_DU
         self.dv_dx3 *= 2.0 / self.geom.Δx3
-        
+
     def viscosity_coeff(self, q: NDArray)->None:
         """Computes the elementwise constant viscosity coefficient"""
         # TODO: implement the entropy preserving viscosity coeffs
         xp = self.device.xp
-        
-        epsilon_val = 1e-2
+
+        # ATTENTION: This was set to 0
+        epsilon_val = 0
         self.epsilon = xp.full_like(q,epsilon_val)
-        
+
     def viscous_fluxes(self)->None:
         """Computes the viscous flux g_m = \sum_n epsilon K_mn dv_dxn"""
         xp = self.device.xp
-        
+
         Kdg1_dx1 = xp.einsum('abijk,bijk->aijk', self.K, self.dv_dx1) # matrix-vector multiplication along the first dimensions (a,b,:,:,:) and (b,:,:,:)
-        self.g_x1 = self.epsilon * Kdg1_dx1 
-        
+        self.g_x1 = self.epsilon * Kdg1_dx1
+
         Kdg3_dx3 = xp.einsum('abijk,bijk->aijk', self.K, self.dv_dx3)
         self.g_x3 = self.epsilon * Kdg3_dx3
-         
+
     def compute_K(self, q: NDArray) -> None:
         """Computes K= du/dv"""
         self.K = du_dv(q,self.geom,self.config)
-        
+
     def viscous_flux_divergence_partial(self) -> None:
         """Part of the divergence for g - discontinuous part, no boundary terms"""
-        
+
         self.dg1_dx1 = apply_op(self.g_x1, self.ops.derivative_x)
         self.dg3_dx3 = apply_op(self.g_x3, self.ops.derivative_z)
-        
+
     def viscous_flux_average(self) -> None:
         """Entropy average"""
-        
+
         g1_itf_x1 = apply_op(self.g_x1, self.ops.extrap_x)
         g3_itf_x3 = apply_op(self.g_x3, self.ops.extrap_z)
-        
+
         # i = 0
-        # j = 0 
+        # j = 0
         # num_solpts = 1
         # west_indices = slice(0,num_solpts)
         # east_indices = slice(num_solpts,2*num_solpts)
@@ -121,17 +122,17 @@ class RHSDirectFluxReconstruction_ESAV(RHS):
         # print("g1_itf_x1 east",g1_itf_x1[:,i,j,east_indices])
         # print("g3_itf_x3 down",g3_itf_x3[:,i,j,down_indices])
         # print("g3_itf_x3 up",g3_itf_x3[:,i,j,up_indices])
-        
+
         self.g_avg_x1, self.g_avg_x3 = self.pde.viscous_flux_average(g1_itf_x1,g3_itf_x3)
-        
-        
-        
+
+
+
         # print("\n")
         # print("g_avg_x1 west",self.g_avg_x1[:,i,j,west_indices])
         # print("g_avg_x1 east",self.g_avg_x1[:,i,j,east_indices])
         # print("g_avg_x3 down",self.g_avg_x3[:,i,j,down_indices])
         # print("g_avg_x3 up",self.g_avg_x3[:,i,j,up_indices])
-        
+
     def viscous_flux_divergence(self) -> None:
         """Compute derivatives of g, with correction from boundaries"""
         xp = self.device.xp

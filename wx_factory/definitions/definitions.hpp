@@ -38,12 +38,13 @@ using array = std::array<T, N>;
 // DEVICE_SPACE const double heat_capacity_ratio = cpd / cvd;
 // DEVICE_SPACE const double inp0                = 1.0 / p0;
 // DEVICE_SPACE const double Rdinp0              = Rd * inp0;
-#define p0                  100000.0
-#define Rd                  287.05
-#define cpd                 1005.46
-#define cvd                 (cpd - Rd)
-#define kappa               (Rd / cpd)
-#define heat_capacity_ratio (cpd / cvd)
+#define gamma_tmp           1.4
+#define p0                  1.0
+#define Rd                  1.0
+#define cvd                 (1.0 / (gamma_tmp - 1.0))
+#define cpd                 (cvd + Rd)
+#define kappa               ((gamma_tmp - 1.0) / gamma_tmp)
+#define heat_capacity_ratio (gamma_tmp)
 #define inp0                (1.0 / p0)
 #define Rdinp0              (Rd * inp0)
 

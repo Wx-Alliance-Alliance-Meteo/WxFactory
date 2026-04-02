@@ -30,3 +30,41 @@ idx_2d_rho = 0
 idx_2d_rho_u = 1
 idx_2d_rho_w = 2
 idx_2d_rho_theta = 3
+
+#################################
+# Redefining for EULER VORTEX
+################################
+
+nbfaces = 6
+
+day_in_secs = 24.0 * 3600.0  # Days in seconds
+
+gravity = 0  # Gravitational acceleration (m s^-2)
+
+heat_capacity_ratio = 1.4
+p0 = 1  # reference pressure (Pa)
+Rd = 1  # J K-1 kg-1 ! gas constant for dry air
+cvd = (1.0 / (heat_capacity_ratio - 1.0))
+cpd = (cvd + Rd)
+kappa = Rd / cpd
+
+# Indices for the shallow water model variables
+idx_h = 0
+idx_hu1 = 1
+idx_hu2 = 2
+idx_u1 = 1
+idx_u2 = 2
+
+# Indices for the Euler model variables
+idx_rho = 0
+idx_rho_u1 = 1
+idx_rho_u2 = 2
+idx_rho_w = 3
+idx_rho_theta = 4
+
+# Indices for the cartesian 2D grid (Euler)
+idx_2d_rho = 0
+idx_2d_rho_u = 1
+idx_2d_rho_w = 2
+idx_2d_rho_theta = 3
+

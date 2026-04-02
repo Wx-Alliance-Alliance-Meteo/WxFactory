@@ -38,12 +38,14 @@ __global__ void riemann_eulercartesian_ausm_2d(
     const int    num_elem_x2,
     const int    num_solpts,
     const int    direction,
+    const bool   periodic,
     const int    nmax_x,
     const int    nmax_y,
-    const int    nmax_z) {
-  const int ix = blockIdx.x * blockDim.x + threadIdx.x;
-  const int iy = blockIdx.y * blockDim.y + threadIdx.y;
-  const int iz = blockIdx.z * blockDim.z + threadIdx.z;
+    const int    nmax_z)
+{
+  const int ix = blockIdx.x * blockDim.x + threadIdx.x; // x2 index
+  const int iy = blockIdx.y * blockDim.y + threadIdx.y; // x1 index
+  const int iz = blockIdx.z * blockDim.z + threadIdx.z; // solpt index
 
   if (ix < nmax_x && iy < nmax_y && iz < nmax_z)
   {
@@ -53,33 +55,31 @@ __global__ void riemann_eulercartesian_ausm_2d(
 
     if (direction == 0)
     {
-      // Initialize left-hand side parameters
+      const int jy = periodic ? ((iy + 1) % num_elem_x1) : (iy + 1);
+
       const int indl = get_c_index(0, ix, iy, num_solpts + iz, array_shape);
       kernel_params<num_t, euler_state_2d>
           params_l(q_itf, flux_itf, nullptr, nullptr, indl, stride);
 
-      // Initialize right-hand-size parameters
-      const int indr = get_c_index(0, ix, iy + 1, iz, array_shape);
+      const int indr = get_c_index(0, ix, jy, iz, array_shape);
       kernel_params<num_t, euler_state_2d>
           params_r(q_itf, flux_itf, nullptr, nullptr, indr, stride);
 
-      // Call Riemann kernel on the horizontal direction
-      riemann_eulercartesian_ausm_2d_kernel(params_l, params_r, direction);
+      riemann_eulercartesian_ausm_2d_kernel(params_l, params_r, 0);
     }
     else if (direction == 1)
     {
-      // Initialize left-hand side parameters
+      const int ixp = periodic ? ((ix + 1) % num_elem_x2) : (ix + 1);
+
       const int indl = get_c_index(0, ix, iy, num_solpts + iz, array_shape);
       kernel_params<num_t, euler_state_2d>
           params_l(q_itf, nullptr, flux_itf, nullptr, indl, stride);
 
-      // Initialize right-hand-size parameters
-      const int indr = get_c_index(0, ix + 1, iy, iz, array_shape);
+      const int indr = get_c_index(0, ixp, iy, iz, array_shape);
       kernel_params<num_t, euler_state_2d>
           params_r(q_itf, nullptr, flux_itf, nullptr, indr, stride);
 
-      // Call Riemann kernel on the horizontal direction
-      riemann_eulercartesian_ausm_2d_kernel(params_l, params_r, direction);
+      riemann_eulercartesian_ausm_2d_kernel(params_l, params_r, 1);
     }
   }
 }
@@ -667,14 +667,15 @@ void launch_riemann_eulercartesian_ausm_2d(
     py::object flux_itf_x2,
     const int  num_elem_x1,
     const int  num_elem_x2,
-    const int  num_solpts) {
-  // Extract CuPy pointers
+    const int  num_solpts,
+    const bool periodic_x,
+    const bool periodic_y)
+{
   uintptr_t cupy_q_x1_ptr    = q_itf_x1.attr("data").attr("ptr").cast<size_t>();
   uintptr_t cupy_q_x2_ptr    = q_itf_x2.attr("data").attr("ptr").cast<size_t>();
   uintptr_t cupy_flux_x1_ptr = flux_itf_x1.attr("data").attr("ptr").cast<size_t>();
   uintptr_t cupy_flux_x2_ptr = flux_itf_x2.attr("data").attr("ptr").cast<size_t>();
 
-  // Reinterpret as appropriate pointers
   const num_t* q_x1_ptr = reinterpret_cast<const num_t*>(cupy_q_x1_ptr);
   const num_t* q_x2_ptr = reinterpret_cast<const num_t*>(cupy_q_x2_ptr);
   num_t*       f_x1_ptr = reinterpret_cast<num_t*>(cupy_flux_x1_ptr);
@@ -682,16 +683,17 @@ void launch_riemann_eulercartesian_ausm_2d(
 
   int width, height, depth;
 
-  // Call Riemann solver on the horizontal direction
+  dim3 threads_per_block(8, 8, 8);
+
+  // x1-direction interfaces
   width  = num_elem_x2;
-  height = num_elem_x1 - 1;
+  height = periodic_x ? num_elem_x1 : (num_elem_x1 - 1);
   depth  = num_solpts;
 
-  dim3 threads_per_block(8, 8, 8);
   dim3 num_blocks1(
-      (width + threads_per_block.x - 1) / threads_per_block.x,
+      (width  + threads_per_block.x - 1) / threads_per_block.x,
       (height + threads_per_block.y - 1) / threads_per_block.y,
-      (depth + threads_per_block.z - 1) / threads_per_block.z);
+      (depth  + threads_per_block.z - 1) / threads_per_block.z);
 
   riemann_eulercartesian_ausm_2d<num_t><<<num_blocks1, threads_per_block>>>(
       q_x1_ptr,
@@ -700,19 +702,20 @@ void launch_riemann_eulercartesian_ausm_2d(
       num_elem_x2,
       num_solpts,
       0,
+      periodic_x,
       width,
       height,
       depth);
 
-  // Call Riemann solver on the vertical direction
-  width  = num_elem_x2 - 1;
+  // x2-direction interfaces
+  width  = periodic_y ? num_elem_x2 : (num_elem_x2 - 1);
   height = num_elem_x1;
   depth  = num_solpts;
 
   dim3 num_blocks2(
-      (width + threads_per_block.x - 1) / threads_per_block.x,
+      (width  + threads_per_block.x - 1) / threads_per_block.x,
       (height + threads_per_block.y - 1) / threads_per_block.y,
-      (depth + threads_per_block.z - 1) / threads_per_block.z);
+      (depth  + threads_per_block.z - 1) / threads_per_block.z);
 
   riemann_eulercartesian_ausm_2d<num_t><<<num_blocks2, threads_per_block>>>(
       q_x2_ptr,
@@ -721,46 +724,52 @@ void launch_riemann_eulercartesian_ausm_2d(
       num_elem_x2,
       num_solpts,
       1,
+      periodic_y,
       width,
       height,
       depth);
 
-  // Set the boundary fluxes on the horizontal direction
   dim3 threads_per_block2(16, 16);
 
-  width  = num_elem_x2;
-  height = num_solpts;
+  if (!periodic_x)
+  {
+    width  = num_elem_x2;
+    height = num_solpts;
 
-  dim3 num_blocks3(
-      (width + threads_per_block2.x - 1) / threads_per_block2.x,
-      (height + threads_per_block2.y - 1) / threads_per_block2.y);
+    dim3 num_blocks3(
+        (width  + threads_per_block2.x - 1) / threads_per_block2.x,
+        (height + threads_per_block2.y - 1) / threads_per_block2.y);
 
-  boundary_eulercartesian_2d<num_t><<<num_blocks3, threads_per_block2>>>(
-      q_x1_ptr,
-      f_x1_ptr,
-      num_elem_x1,
-      num_elem_x2,
-      num_solpts,
-      0,
-      width,
-      height);
+    boundary_eulercartesian_2d<num_t><<<num_blocks3, threads_per_block2>>>(
+        q_x1_ptr,
+        f_x1_ptr,
+        num_elem_x1,
+        num_elem_x2,
+        num_solpts,
+        0,
+        width,
+        height);
+  }
 
-  width  = num_elem_x1;
-  height = num_solpts;
+  if (!periodic_y)
+  {
+    width  = num_elem_x1;
+    height = num_solpts;
 
-  dim3 num_blocks4(
-      (width + threads_per_block2.x - 1) / threads_per_block2.x,
-      (height + threads_per_block2.y - 1) / threads_per_block2.y);
+    dim3 num_blocks4(
+        (width  + threads_per_block2.x - 1) / threads_per_block2.x,
+        (height + threads_per_block2.y - 1) / threads_per_block2.y);
 
-  boundary_eulercartesian_2d<num_t><<<num_blocks4, threads_per_block2>>>(
-      q_x2_ptr,
-      f_x2_ptr,
-      num_elem_x1,
-      num_elem_x2,
-      num_solpts,
-      1,
-      width,
-      height);
+    boundary_eulercartesian_2d<num_t><<<num_blocks4, threads_per_block2>>>(
+        q_x2_ptr,
+        f_x2_ptr,
+        num_elem_x1,
+        num_elem_x2,
+        num_solpts,
+        1,
+        width,
+        height);
+  }
 }
 
 void select_riemann_eulercartesian_ausm_2d(
@@ -770,7 +779,9 @@ void select_riemann_eulercartesian_ausm_2d(
     py::object flux_itf_x2,
     const int  num_elem_x1,
     const int  num_elem_x2,
-    const int  num_solpts) {
+    const int  num_solpts,
+    const bool periodic_x1,
+    const bool periodic_x2) {
 
   // Determine the CuPy array dtype
   std::string dtype = py::str(q_itf_x1.attr("dtype").attr("name"));
@@ -784,7 +795,9 @@ void select_riemann_eulercartesian_ausm_2d(
         flux_itf_x2,
         num_elem_x1,
         num_elem_x2,
-        num_solpts);
+        num_solpts,
+        periodic_x1,
+        periodic_x2);
   }
   else if (dtype == "complex128")
   {
@@ -795,7 +808,9 @@ void select_riemann_eulercartesian_ausm_2d(
         flux_itf_x2,
         num_elem_x1,
         num_elem_x2,
-        num_solpts);
+        num_solpts,
+        periodic_x1,
+        periodic_x2);
   }
 }
 
