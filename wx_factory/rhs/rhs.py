@@ -152,9 +152,16 @@ class RHS(ABC):
         # 7. Add artificial viscosity for entropy stability
         #
         #
+        # i = 0 # vertical index
+        # j = 1 # horizontal index
+        # num_solpts = 3
+        # west_indices = slice(0,num_solpts)
+        # east_indices = slice(num_solpts,2*num_solpts)
+        # down_indices = west_indices
+        # up_indices = east_indices
         
-        # 7.0 Compute entropy variables from solution variables
-        # TODO: check if config is right
+        # # 7.0 Compute entropy variables from solution variables
+        # # TODO: check if config is right
         v = conservative_to_entropy(q,self.geom,self.config)
         
         # 7.1 Extrapolate the entropy variables to the boundaries of the element
@@ -167,6 +174,11 @@ class RHS(ABC):
         self.entropy_gradient_partial(v)
         # 7.2.2 Compute the common interface - average across the interfaces
         self.entropy_average()
+        # print("\n")
+        # print("v_itf_x1: west\n",self.v_avg_x1[:,i,j,west_indices])
+        # print("v_itf_x1: east\n",self.v_avg_x1[:,i,j,east_indices])
+        # print("v_itf_x3 : down\n",self.v_avg_x3[:,i,j,down_indices])
+        # print("v_itf_x3 : up\n",self.v_avg_x3[:,i,j,up_indices])
         # 7.2.3 Complete the gradient operation by ading the boundary terms
         self.entropy_gradient()
         
@@ -183,6 +195,11 @@ class RHS(ABC):
         self.viscous_flux_divergence_partial()
         # 7.3.5 Compute the average of g
         self.viscous_flux_average()
+        # print("\n")
+        # print("g1_avg_x1: west\n",self.g_avg_x1[:,i,j,west_indices])
+        # print("g1_avg_x1: east\n",self.g_avg_x1[:,i,j,east_indices])
+        # print("g3_avg_x3 : down\n",self.g_avg_x3[:,i,j,down_indices])
+        # print("g3_avg_x3 : up\n",self.g_avg_x3[:,i,j,up_indices])
         # 7.3.6 Complete the divergence operation for g
         self.viscous_flux_divergence()
 

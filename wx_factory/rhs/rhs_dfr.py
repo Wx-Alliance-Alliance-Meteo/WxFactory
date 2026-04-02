@@ -80,7 +80,7 @@ class RHSDirectFluxReconstruction_ESAV(RHS):
         # TODO: implement the entropy preserving viscosity coeffs
         xp = self.device.xp
         
-        epsilon_val = 5e-3
+        epsilon_val = 1e-2
         self.epsilon = xp.full_like(q,epsilon_val)
         
     def viscous_fluxes(self)->None:
@@ -109,7 +109,28 @@ class RHSDirectFluxReconstruction_ESAV(RHS):
         g1_itf_x1 = apply_op(self.g_x1, self.ops.extrap_x)
         g3_itf_x3 = apply_op(self.g_x3, self.ops.extrap_z)
         
+        # i = 0
+        # j = 0 
+        # num_solpts = 1
+        # west_indices = slice(0,num_solpts)
+        # east_indices = slice(num_solpts,2*num_solpts)
+        # down_indices = west_indices
+        # up_indices = east_indices
+        # print("\n")
+        # print("g1_itf_x1 west",g1_itf_x1[:,i,j,west_indices])
+        # print("g1_itf_x1 east",g1_itf_x1[:,i,j,east_indices])
+        # print("g3_itf_x3 down",g3_itf_x3[:,i,j,down_indices])
+        # print("g3_itf_x3 up",g3_itf_x3[:,i,j,up_indices])
+        
         self.g_avg_x1, self.g_avg_x3 = self.pde.viscous_flux_average(g1_itf_x1,g3_itf_x3)
+        
+        
+        
+        # print("\n")
+        # print("g_avg_x1 west",self.g_avg_x1[:,i,j,west_indices])
+        # print("g_avg_x1 east",self.g_avg_x1[:,i,j,east_indices])
+        # print("g_avg_x3 down",self.g_avg_x3[:,i,j,down_indices])
+        # print("g_avg_x3 up",self.g_avg_x3[:,i,j,up_indices])
         
     def viscous_flux_divergence(self) -> None:
         """Compute derivatives of g, with correction from boundaries"""

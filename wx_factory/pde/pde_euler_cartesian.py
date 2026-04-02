@@ -57,6 +57,7 @@ class PDEEulerCartesian(PDE):
         self,
         q_itf_x1: NDArray,
         q_itf_x3: NDArray,
+        bc = "other"
     ):
         """Computes averages of entropy variables. No-slip boundary conditions."""
         xp = self.device.xp
@@ -70,34 +71,45 @@ class PDEEulerCartesian(PDE):
         east_indices = slice(num_solpts,2*num_solpts)
         down_indices = west_indices
         up_indices = east_indices
-        # print("\n\nentropy average")
-        # print("q_itf_x3",q_itf_x3)
-        # print("q_itf_x3",q_itf_x3[idx_2d_rho_u:idx_2d_rho_w+1, 1, 5, 0])
         
         
         # 1. Add ghost cells
         q_itf_ghost_x1 = xp.pad(q_itf_x1, ((0, 0), (0, 0), (1, 1), (0, 0)), mode='constant',constant_values=0) # (num_eqs, num_el_vertical, num_el_horizontal+2, 2*num_solpts)
         q_itf_ghost_x3 = xp.pad(q_itf_x3, ((0, 0), (1, 1), (0, 0), (0, 0)), mode='constant',constant_values=0) # (num_eqs, num_el_vertical+2, num_el_horizontal, 2*num_solpts)
 
-        # Copy the values at the boundaries to the ghost cells
-        q_itf_ghost_x1[:, :, 0, east_indices] =  q_itf_ghost_x1[:, :, 1, west_indices]
-        q_itf_ghost_x1[:, :, -1, west_indices] =  q_itf_ghost_x1[:, :, -2, east_indices]
-    
-        q_itf_ghost_x3[:, 0, :, up_indices] =  q_itf_ghost_x3[:, 1, :, down_indices]
-        q_itf_ghost_x3[:, -1, :, down_indices] =  q_itf_ghost_x3[:, -2, :, up_indices]
+        if bc == "periodic":
+            # Copy the values at the boundaries to the ghost cells
+            q_itf_ghost_x1[:, :, 0, east_indices] =  q_itf_ghost_x1[:, :, -2, east_indices]
+            q_itf_ghost_x1[:, :, -1, west_indices] =  q_itf_ghost_x1[:, :, 1, west_indices]
         
-        # print("idx_2d_rho_u",idx_2d_rho_u)
-        # print("idx_2d_rho_w",idx_2d_rho_w)
-        # print("q_itf_ghost_x3",q_itf_ghost_x3[idx_2d_rho_u:idx_2d_rho_w+1, 2, 5, 0])
-    
-        # Enforce no-slip boundary conditions (uu=0,ww=0) at ghost cells (set uu, ww to appropriate negative values at ghost cells)
-        q_itf_ghost_x1[idx_2d_rho_u:idx_2d_rho_w+1, :, 0, east_indices] =  -q_itf_ghost_x1[idx_2d_rho_u:idx_2d_rho_w+1, :, 0, east_indices]
-        q_itf_ghost_x1[idx_2d_rho_u:idx_2d_rho_w+1, :, -1, west_indices] =  -q_itf_ghost_x1[idx_2d_rho_u:idx_2d_rho_w+1, :, -1, west_indices]
+            # # from bottom to top
+            q_itf_ghost_x3[:, 0, :, up_indices] =  q_itf_ghost_x3[:, -2, :, up_indices]
+            q_itf_ghost_x3[:, -1, :, down_indices] =  q_itf_ghost_x3[:, 1, :, down_indices]
+        else:     
+            # Copy the values at the boundaries to the ghost cells
+            q_itf_ghost_x1[:, :, 0, east_indices] =  q_itf_ghost_x1[:, :, 1, west_indices]
+            q_itf_ghost_x1[:, :, -1, west_indices] =  q_itf_ghost_x1[:, :, -2, east_indices]
         
-        q_itf_ghost_x3[idx_2d_rho_u:idx_2d_rho_w+1,  0, :, up_indices] =  -q_itf_ghost_x3[idx_2d_rho_u:idx_2d_rho_w+1,  0, :, up_indices]
-        q_itf_ghost_x3[idx_2d_rho_u:idx_2d_rho_w+1, -1, :, down_indices] =  -q_itf_ghost_x3[idx_2d_rho_u:idx_2d_rho_w+1, -1, :, down_indices]
-    
-    
+            # # from bottom to top
+            q_itf_ghost_x3[:, 0, :, up_indices] =  q_itf_ghost_x3[:, 1, :, down_indices]
+            q_itf_ghost_x3[:, -1, :, down_indices] =  q_itf_ghost_x3[:, -2, :, up_indices]
+        
+            # # # from top to bottom
+            # q_itf_ghost_x3[:, 0, :, down_indices] =  q_itf_ghost_x3[:, 1, :, up_indices]
+            # q_itf_ghost_x3[:, -1, :, up_indices] =  q_itf_ghost_x3[:, -2, :, down_indices]
+            
+            # Enforce no-slip boundary conditions (uu=0,ww=0) at ghost cells (set uu, ww to appropriate negative values at ghost cells)
+            q_itf_ghost_x1[idx_2d_rho_u:idx_2d_rho_w+1, :, 0, east_indices] =  -q_itf_ghost_x1[idx_2d_rho_u:idx_2d_rho_w+1, :, 0, east_indices]
+            q_itf_ghost_x1[idx_2d_rho_u:idx_2d_rho_w+1, :, -1, west_indices] =  -q_itf_ghost_x1[idx_2d_rho_u:idx_2d_rho_w+1, :, -1, west_indices]
+            
+            # # from bottom to top
+            q_itf_ghost_x3[idx_2d_rho_u:idx_2d_rho_w+1,  0, :, up_indices] =  -q_itf_ghost_x3[idx_2d_rho_u:idx_2d_rho_w+1,  0, :, up_indices]
+            q_itf_ghost_x3[idx_2d_rho_u:idx_2d_rho_w+1, -1, :, down_indices] =  -q_itf_ghost_x3[idx_2d_rho_u:idx_2d_rho_w+1, -1, :, down_indices]
+            # # # # # from top to bottom
+            # q_itf_ghost_x3[idx_2d_rho_u:idx_2d_rho_w+1,  0, :, down_indices] =  -q_itf_ghost_x3[idx_2d_rho_u:idx_2d_rho_w+1,  0, :, down_indices]
+            # q_itf_ghost_x3[idx_2d_rho_u:idx_2d_rho_w+1, -1, :, up_indices] =  -q_itf_ghost_x3[idx_2d_rho_u:idx_2d_rho_w+1, -1, :, up_indices]
+        
+        
         # 2. Compute q- and q+
         # q- and q+ to compute avg on the western boundary of the element 
         q_minus_west = q_itf_ghost_x1[:, :, 1:num_elements_horizontal+1, west_indices] # (num_eqs, num_el_vertical, num_el_horizontal, num_solpts)
@@ -107,6 +119,7 @@ class PDEEulerCartesian(PDE):
         q_minus_east = q_itf_ghost_x1[:, :, 1:num_elements_horizontal+1, east_indices] 
         q_plus_east = q_itf_ghost_x1[:, :, 2:num_elements_horizontal+2, west_indices]
         
+        # # from bottom to top
         # q- and q+ to compute avg on the lower boundary of the element 
         q_minus_down = q_itf_ghost_x3[:, 1:num_elements_vertical+1, :, down_indices] 
         q_plus_down = q_itf_ghost_x3[:, 0:num_elements_vertical, :, up_indices]
@@ -115,6 +128,15 @@ class PDEEulerCartesian(PDE):
         q_minus_up = q_itf_ghost_x3[:, 1:num_elements_vertical+1, :, up_indices] 
         q_plus_up = q_itf_ghost_x3[:, 2:num_elements_vertical+2, :, down_indices]
         
+        # from top to bottom
+        # q- and q+ to compute avg on the lower boundary of the element 
+        # q_minus_down = q_itf_ghost_x3[:, 1:num_elements_vertical+1, :, down_indices] 
+        # q_plus_down = q_itf_ghost_x3[:, 2:num_elements_vertical+2, :, up_indices]
+        
+        # # q- and q+ to compute avg on the western boundary of the element
+        # q_minus_up = q_itf_ghost_x3[:, 1:num_elements_vertical+1, :, up_indices] 
+        # q_plus_up = q_itf_ghost_x3[:, 0:num_elements_vertical, :, down_indices]
+    
         # 3. Compute v(u-) and v(u+)
         v_minus_west = conservative_to_entropy(q_minus_west, self.geometry, self.config)
         v_plus_west = conservative_to_entropy(q_plus_west, self.geometry, self.config)
@@ -145,6 +167,7 @@ class PDEEulerCartesian(PDE):
         self,
         g1_itf_x1: NDArray,
         g3_itf_x3: NDArray,
+        bc = "other"
     ):
         """Computes averages of viscous flux . Flux equals 0 at the boundary."""
         xp = self.device.xp
@@ -163,13 +186,27 @@ class PDEEulerCartesian(PDE):
         g1_itf_ghost_x1 = xp.pad(g1_itf_x1, ((0, 0), (0, 0), (1, 1), (0, 0)), mode='constant',constant_values=0) # (num_eqs, num_el_vertical, num_el_horizontal+2, 2*num_solpts)
         g3_itf_ghost_x3 = xp.pad(g3_itf_x3, ((0, 0), (1, 1), (0, 0), (0, 0)), mode='constant',constant_values=0) # (num_eqs, num_el_vertical+2, num_el_horizontal, 2*num_solpts)
         
-        # Enforce wall conditions (g=0) by setting all values at the ghost cells to appropriate negative values
-        g1_itf_ghost_x1[:, :, 0, east_indices] =  -g1_itf_ghost_x1[:, :, 1, west_indices]
-        g1_itf_ghost_x1[:, :, -1, west_indices] =  -g1_itf_ghost_x1[:, :, -2, east_indices]
+        if bc == "periodic":
+            # Enforce wall conditions (g=0) by setting all values at the ghost cells to appropriate negative values
+            g1_itf_ghost_x1[:, :, 0, east_indices] =  g1_itf_ghost_x1[:, :, -2, east_indices]
+            g1_itf_ghost_x1[:, :, -1, west_indices] =  g1_itf_ghost_x1[:, :, 1, west_indices]
 
-        g3_itf_ghost_x3[:, 0, :, up_indices] =  -g3_itf_ghost_x3[:, 1, :, down_indices]
-        g3_itf_ghost_x3[:, -1, :, down_indices] =  -g3_itf_ghost_x3[:, -2, :, up_indices]
+            # # from bottom to top
+            g3_itf_ghost_x3[:, 0, :, up_indices] =  g3_itf_ghost_x3[:, -2, :, up_indices]
+            g3_itf_ghost_x3[:, -1, :, down_indices] =  g3_itf_ghost_x3[:, 1, :, down_indices]
+        else:
+            # Enforce wall conditions (g=0) by setting all values at the ghost cells to appropriate negative values
+            g1_itf_ghost_x1[:, :, 0, east_indices] =  -g1_itf_ghost_x1[:, :, 1, west_indices]
+            g1_itf_ghost_x1[:, :, -1, west_indices] =  -g1_itf_ghost_x1[:, :, -2, east_indices]
 
+            # # from bottom to top
+            g3_itf_ghost_x3[:, 0, :, up_indices] =  -g3_itf_ghost_x3[:, 1, :, down_indices]
+            g3_itf_ghost_x3[:, -1, :, down_indices] =  -g3_itf_ghost_x3[:, -2, :, up_indices]
+            #
+            # ##from top to bottom
+            # g3_itf_ghost_x3[:, 0, :, down_indices] =  -g3_itf_ghost_x3[:, 1, :, up_indices]
+            # g3_itf_ghost_x3[:, -1, :, up_indices] =  -g3_itf_ghost_x3[:, -2, :, down_indices]
+        
         
         # 2. Compute g- and g+ for each edge
         # g- and g+ to compute avg on the western boundary of the element 
@@ -180,7 +217,8 @@ class PDEEulerCartesian(PDE):
         g1_minus_east = g1_itf_ghost_x1[:, :, 1:num_elements_horizontal+1, east_indices] 
         g1_plus_east = g1_itf_ghost_x1[:, :, 2:num_elements_horizontal+2, west_indices]
         
-        # g- and g+ to compute avg on the lower boundary of the element 
+        # from bottom to top
+        # #g- and g+ to compute avg on the lower boundary of the element 
         g3_minus_down = g3_itf_ghost_x3[:, 1:num_elements_vertical+1, :, down_indices] 
         g3_plus_down = g3_itf_ghost_x3[:, 0:num_elements_vertical, :, up_indices]
         
@@ -188,6 +226,16 @@ class PDEEulerCartesian(PDE):
         g3_minus_up = g3_itf_ghost_x3[:, 1:num_elements_vertical+1, :, up_indices] 
         g3_plus_up = g3_itf_ghost_x3[:, 2:num_elements_vertical+2, :, down_indices]
         
+        #
+        # from top to bottom
+        # g- and g+ to compute avg on the lower boundary of the element 
+        # g3_minus_down = g3_itf_ghost_x3[:, 1:num_elements_vertical+1, :, down_indices] 
+        # g3_plus_down = g3_itf_ghost_x3[:, 2:num_elements_vertical+2, :, up_indices]
+        
+        # # g- and g+ to compute avg on the western boundary of the element
+        # g3_minus_up = g3_itf_ghost_x3[:, 1:num_elements_vertical+1, :, up_indices] 
+        # g3_plus_up = g3_itf_ghost_x3[:, 0:num_elements_vertical, :, down_indices]
+    
         
         # 3. Compute the average: {g} = 1/2 * [g(u-) + g(u+)]
         g1_avg_west = 0.5 * (g1_minus_west + g1_plus_west)
@@ -200,5 +248,14 @@ class PDEEulerCartesian(PDE):
         # 4. Concantenate the arays
         g1_avg_x1 = xp.concatenate([g1_avg_west, g1_avg_east], axis=3) # (num_eqs, num_elements_vertical, num_elements_horizontal, 2*num_solpts)
         g3_avg_x3 = xp.concatenate([g3_avg_down, g3_avg_up], axis=3)
+        
+        # Try setting the bc explicitly
+        # Enforce wall conditions (g=0) by setting all values at the ghost cells to appropriate negative values
+        # g1_avg_x1[:, :, 0, east_indices] =  0
+        # g1_avg_x1[:, :, -1, west_indices] =  0
+
+        # # # from bottom to top
+        # g3_avg_x3[:, 0, :, up_indices] =  0
+        # g3_avg_x3[:, -1, :, down_indices] =  0
         
         return g1_avg_x1,g3_avg_x3
