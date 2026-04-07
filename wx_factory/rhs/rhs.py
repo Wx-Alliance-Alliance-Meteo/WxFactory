@@ -144,7 +144,7 @@ class RHS(ABC):
         self.timestamps[7] = self.device.timestamp(name="forcing")
 
         # 6. Add forcing terms
-        self.forcing_terms(q)
+        # self.forcing_terms(q)
         self.timestamps[8] = self.device.timestamp(name="artificial viscosity")
         
         #

@@ -81,7 +81,7 @@ class RHSDirectFluxReconstruction_ESAV(RHS):
         xp = self.device.xp
 
         # ATTENTION: This was set to 0
-        epsilon_val = 0
+        epsilon_val = 1e-3
         self.epsilon = xp.full_like(q,epsilon_val)
 
     def viscous_fluxes(self)->None:

@@ -485,6 +485,15 @@ class Simulation:
         error_detected = numpy.array([0], dtype=numpy.int32)
         if numpy.any(numpy.isnan(Q)):
             print(f"NaN detected on process {self.comm.rank}")
+            if(numpy.any(numpy.isnan(Q[0,:,:,:]))):
+                print("NaN detected on rho")
+            if(numpy.any(numpy.isnan(Q[1,:,:,:]))):
+                print("NaN detected on rho*u")
+            if(numpy.any(numpy.isnan(Q[2,:,:,:]))):
+                print("NaN detected on rho*w")
+            if(numpy.any(numpy.isnan(Q[3,:,:,:]))):
+                print("NaN detected on rho*theta")
+            
             error_detected[0] = 1
         error_detected_out = numpy.zeros_like(error_detected)
         self.comm.Allreduce(error_detected, error_detected_out, MPI.MAX)

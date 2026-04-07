@@ -59,8 +59,7 @@ class PDEEulerCartesian(PDE):
     def entropy_average(
         self,
         q_itf_x1: NDArray,
-        q_itf_x3: NDArray,
-        bc = "other"
+        q_itf_x3: NDArray
     ):
         """Computes averages of entropy variables. No-slip boundary conditions."""
         xp = self.device.xp
@@ -80,7 +79,9 @@ class PDEEulerCartesian(PDE):
         q_itf_ghost_x1 = xp.pad(q_itf_x1, ((0, 0), (0, 0), (1, 1), (0, 0)), mode='constant',constant_values=0) # (num_eqs, num_el_vertical, num_el_horizontal+2, 2*num_solpts)
         q_itf_ghost_x3 = xp.pad(q_itf_x3, ((0, 0), (1, 1), (0, 0), (0, 0)), mode='constant',constant_values=0) # (num_eqs, num_el_vertical+2, num_el_horizontal, 2*num_solpts)
 
-        if bc == "periodic":
+        if self.config.case_number == 100:
+            # Set periodic BC for entropy wave
+            # print("e: case 100")
             # Copy the values at the boundaries to the ghost cells
             q_itf_ghost_x1[:, :, 0, east_indices] =  q_itf_ghost_x1[:, :, -2, east_indices]
             q_itf_ghost_x1[:, :, -1, west_indices] =  q_itf_ghost_x1[:, :, 1, west_indices]
@@ -159,6 +160,12 @@ class PDEEulerCartesian(PDE):
 
         v_avg_down = 0.5 * (v_minus_down + v_plus_down)
         v_avg_up = 0.5 * (v_minus_up + v_plus_up)
+        
+        # v_avg_west =  (-v_minus_west + v_plus_west)
+        # v_avg_east = (-v_minus_east + v_plus_east)
+
+        # v_avg_down =  (-v_minus_down + v_plus_down)
+        # v_avg_up = (-v_minus_up + v_plus_up)
 
         # 5. Concantenate the arays
         v_avg_x1 = xp.concatenate([v_avg_west, v_avg_east], axis=3) # (num_eqs, num_elements_vertical, num_elements_horizontal, 2*num_solpts)
@@ -169,8 +176,7 @@ class PDEEulerCartesian(PDE):
     def viscous_flux_average(
         self,
         g1_itf_x1: NDArray,
-        g3_itf_x3: NDArray,
-        bc = "other"
+        g3_itf_x3: NDArray
     ):
         """Computes averages of viscous flux . Flux equals 0 at the boundary."""
         xp = self.device.xp
@@ -189,8 +195,9 @@ class PDEEulerCartesian(PDE):
         g1_itf_ghost_x1 = xp.pad(g1_itf_x1, ((0, 0), (0, 0), (1, 1), (0, 0)), mode='constant',constant_values=0) # (num_eqs, num_el_vertical, num_el_horizontal+2, 2*num_solpts)
         g3_itf_ghost_x3 = xp.pad(g3_itf_x3, ((0, 0), (1, 1), (0, 0), (0, 0)), mode='constant',constant_values=0) # (num_eqs, num_el_vertical+2, num_el_horizontal, 2*num_solpts)
 
-        if bc == "periodic":
-            # Enforce wall conditions (g=0) by setting all values at the ghost cells to appropriate negative values
+        if self.config.case_number == 100:
+            # Set periodic BC for entropy wave case
+            # print("vf: case 100")
             g1_itf_ghost_x1[:, :, 0, east_indices] =  g1_itf_ghost_x1[:, :, -2, east_indices]
             g1_itf_ghost_x1[:, :, -1, west_indices] =  g1_itf_ghost_x1[:, :, 1, west_indices]
 
@@ -246,6 +253,13 @@ class PDEEulerCartesian(PDE):
 
         g3_avg_down = 0.5 * (g3_minus_down + g3_plus_down)
         g3_avg_up = 0.5 * (g3_minus_up + g3_plus_up)
+        
+        # g1_avg_west =  (-g1_minus_west + g1_plus_west)
+        # g1_avg_east = (-g1_minus_east + g1_plus_east)
+
+        # g3_avg_down = (-g3_minus_down + g3_plus_down)
+        # g3_avg_up = (-g3_minus_up + g3_plus_up)
+
 
 
         # 4. Concantenate the arays
