@@ -44,8 +44,12 @@ venv
 stdout
 *out.txt
 out*.txt
+out*-ib
+*.[eo][0-9]*
+
 diff*.dat
 geom*.dat
+*.job
 
 *.fst
 *.png
