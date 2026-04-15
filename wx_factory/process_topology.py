@@ -613,7 +613,7 @@ class ProcessTopology:
         if self.panel_roots_comm.rank != 0:
             return None
 
-        return self.device.xp.stack(panels)
+        return self.device.xp.stack([panels[i] for i in range(6)])
 
     def distribute_cube(self, field: Optional[NDArray], num_dim: int):
         """Split the given single array into its component tiles (according to this topology) and send

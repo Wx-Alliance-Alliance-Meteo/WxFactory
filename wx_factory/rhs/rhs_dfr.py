@@ -618,7 +618,7 @@ class RHSDirecFluxReconstruction_mpi_v2(RHSDirecFluxReconstruction):
         self.wflux_pres_itf_x3[...] = self.wflux_pres_itf_full_x3[mid_k]
 
     def forcing_terms(self, q: NDArray) -> None:
-        self.pde.forcing_terms(self.rhs, q, self.pressure, self.metric, self.selected_ops, self.forcing)
+        self.pde.forcing_terms(self.rhs, q, self.pressure, self.metric, self.ops, self.forcing)
 
         # For pure advection problems, we do not update the dynamical variables
         if self.pde.advection_only:

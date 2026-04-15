@@ -331,6 +331,10 @@ class PytorchDevice(Device):
         intervals.append(timestamps[-1] - timestamps[0])
         return intervals
 
+    def __mem_usage__(self, tag):
+        pass
+
+
     @staticmethod
     def get_default() -> Self:
         if PytorchDevice._default is None:

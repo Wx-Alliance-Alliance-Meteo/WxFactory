@@ -160,7 +160,7 @@ class DFROperators:
         # Ordinary differentiation matrices (used only in diagnostic calculations)
         self.diff = diffmat(grd.solutionPoints)
         self.diff = xp.asarray(self.diff).astype(self.dtype)
-        self.diff_tr = self.diff.T
+        self.diff_tr = self.diff.T.copy()
 
         self.quad_weights = xp.outer(grd.glweights, grd.glweights).astype(self.dtype)
 
@@ -176,15 +176,15 @@ class DFROperators:
             I2 = xp.identity(grd.num_solpts, dtype=V.dtype)
             I3 = xp.identity(grd.num_solpts**2, dtype=V.dtype)
 
-            self.extrap_x = xp.vstack((xp.kron(I3, self.extrap_west), xp.kron(I3, self.extrap_east))).T
+            self.extrap_x = xp.vstack((xp.kron(I3, self.extrap_west), xp.kron(I3, self.extrap_east))).T.copy()
             self.extrap_y = xp.vstack(
                 (xp.kron(I2, xp.kron(self.extrap_south, I2)), xp.kron(I2, xp.kron(self.extrap_north, I2)))
-            ).T
-            self.extrap_z = xp.vstack((xp.kron(self.extrap_down, I3), xp.kron(self.extrap_up, I3))).T
+            ).T.copy()
+            self.extrap_z = xp.vstack((xp.kron(self.extrap_down, I3), xp.kron(self.extrap_up, I3))).T.copy()
 
-            self.derivative_x = xp.kron(I3, self.diff_solpt).T
-            self.derivative_y = xp.kron(I2, xp.kron(self.diff_solpt, I2)).T
-            self.derivative_z = xp.kron(self.diff_solpt, I3).T
+            self.derivative_x = xp.kron(I3, self.diff_solpt).T.copy()
+            self.derivative_y = xp.kron(I2, xp.kron(self.diff_solpt, I2)).T.copy()
+            self.derivative_z = xp.kron(self.diff_solpt, I3).T.copy()
 
             # if rank == 0:
             #     print(f"deriv z = \n{self.derivative_z}")
@@ -202,13 +202,13 @@ class DFROperators:
 
         else:
             ident = xp.identity(grd.num_solpts)
-            self.extrap_x = xp.vstack((xp.kron(ident, self.extrap_west), xp.kron(ident, self.extrap_east))).T
-            self.extrap_y = xp.vstack((xp.kron(self.extrap_south, ident), xp.kron(self.extrap_north, ident))).T
-            self.extrap_z = xp.vstack((xp.kron(self.extrap_down, ident), xp.kron(self.extrap_up, ident))).T
+            self.extrap_x = xp.vstack((xp.kron(ident, self.extrap_west), xp.kron(ident, self.extrap_east))).T.copy()
+            self.extrap_y = xp.vstack((xp.kron(self.extrap_south, ident), xp.kron(self.extrap_north, ident))).T.copy()
+            self.extrap_z = xp.vstack((xp.kron(self.extrap_down, ident), xp.kron(self.extrap_up, ident))).T.copy()
 
-            self.derivative_x = xp.kron(ident, self.diff_solpt).T
-            self.derivative_y = xp.kron(self.diff_solpt, ident).T
-            self.derivative_z = xp.kron(self.diff_solpt, ident).T
+            self.derivative_x = xp.kron(ident, self.diff_solpt).T.copy()
+            self.derivative_y = xp.kron(self.diff_solpt, ident).T.copy()
+            self.derivative_z = xp.kron(self.diff_solpt, ident).T.copy()
 
             corr_down = self.diff_ext[1:-1, 0]
             corr_up = self.diff_ext[1:-1, -1]
@@ -231,27 +231,27 @@ class DFROperators:
 
 
         # Ensure operators are in C_CONTIGUOUS format for better GEMM performance
-        self.extrap_x = xp.ascontiguousarray(self.extrap_x)
-        self.extrap_y = xp.ascontiguousarray(self.extrap_y)
-        self.extrap_z = xp.ascontiguousarray(self.extrap_z)
-        self.derivative_x = xp.ascontiguousarray(self.derivative_x)
-        self.derivative_y = xp.ascontiguousarray(self.derivative_y)
-        self.derivative_z = xp.ascontiguousarray(self.derivative_z)
-        self.correction_WE = xp.ascontiguousarray(self.correction_WE)
-        self.correction_SN = xp.ascontiguousarray(self.correction_SN)
-        self.correction_DU = xp.ascontiguousarray(self.correction_DU)
+        # self.extrap_x = xp.ascontiguousarray(self.extrap_x)
+        # self.extrap_y = xp.ascontiguousarray(self.extrap_y)
+        # self.extrap_z = xp.ascontiguousarray(self.extrap_z)
+        # self.derivative_x = xp.ascontiguousarray(self.derivative_x)
+        # self.derivative_y = xp.ascontiguousarray(self.derivative_y)
+        # self.derivative_z = xp.ascontiguousarray(self.derivative_z)
+        # self.correction_WE = xp.ascontiguousarray(self.correction_WE)
+        # self.correction_SN = xp.ascontiguousarray(self.correction_SN)
+        # self.correction_DU = xp.ascontiguousarray(self.correction_DU)
 
         # Complex128 variants of operators for mixed-type matmul (complex128 @ complex128)
         # These avoid runtime upcasting when the input array is complex128
-        self.extrap_x_complex = xp.ascontiguousarray(self.extrap_x.astype(xp.complex128))
-        self.extrap_y_complex = xp.ascontiguousarray(self.extrap_y.astype(xp.complex128))
-        self.extrap_z_complex = xp.ascontiguousarray(self.extrap_z.astype(xp.complex128))
-        self.derivative_x_complex = xp.ascontiguousarray(self.derivative_x.astype(xp.complex128))
-        self.derivative_y_complex = xp.ascontiguousarray(self.derivative_y.astype(xp.complex128))
-        self.derivative_z_complex = xp.ascontiguousarray(self.derivative_z.astype(xp.complex128))
-        self.correction_WE_complex = xp.ascontiguousarray(self.correction_WE.astype(xp.complex128))
-        self.correction_SN_complex = xp.ascontiguousarray(self.correction_SN.astype(xp.complex128))
-        self.correction_DU_complex = xp.ascontiguousarray(self.correction_DU.astype(xp.complex128))
+        self.extrap_x_complex = self.extrap_x.astype(xp.complex128)
+        self.extrap_y_complex = self.extrap_y.astype(xp.complex128)
+        self.extrap_z_complex = self.extrap_z.astype(xp.complex128)
+        self.derivative_x_complex = self.derivative_x.astype(xp.complex128)
+        self.derivative_y_complex = self.derivative_y.astype(xp.complex128)
+        self.derivative_z_complex = self.derivative_z.astype(xp.complex128)
+        self.correction_WE_complex = self.correction_WE.astype(xp.complex128)
+        self.correction_SN_complex = self.correction_SN.astype(xp.complex128)
+        self.correction_DU_complex = self.correction_DU.astype(xp.complex128)
 
     def make_filter(self, alpha: float, order: int, cutoff: float, geom: Geometry):
         """Build an exponential modal filter as described in Warburton, eqn 5.16."""
