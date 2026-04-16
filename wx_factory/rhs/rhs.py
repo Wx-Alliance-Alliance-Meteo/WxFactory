@@ -73,6 +73,9 @@ class RHS(ABC):
         self.v_itf_x1 = None
         self.v_itf_x3 = None
         
+        self.dv_dx1_volume = None
+        self.dv_dx3_volume = None
+        
         self.dv_dx1 = None
         self.dv_dx3 = None
         
@@ -185,10 +188,10 @@ class RHS(ABC):
         #
         # 7.3 Compute the diffusion term
         # 
+         # 7.3.2 Compute K = du_dv
+        self.compute_K(q)
         # 7.3.1 Compute viscosity coefficients
         self.viscosity_coeff(q)
-        # 7.3.2 Compute K = du_dv
-        self.compute_K(q)
         # 7.3.3 Compute the viscous flux
         self.viscous_fluxes()
         # 7.3.4 Compute the derivative of the discontinuous viscous flux g

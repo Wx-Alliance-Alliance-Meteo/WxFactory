@@ -124,9 +124,7 @@ class Simulation:
         self._adjust_num_elements()
         self.device = self._make_device()
         self.process_topo = None
-        print("Creating geometry")
         self.geometry = self._create_geometry()
-        print("Creating DFROperators")
         self.operators = DFROperators(self.geometry, self.config, self.device)
         self.initial_Q, self.topography, self.metric = init_state_vars(
             self.geometry, self.operators, self.config, self.post_processors
@@ -222,7 +220,7 @@ class Simulation:
         while self.step():
             pass  # Step until everything is done
 
-        self.output.finalize(time() - start_time)  # Close any open output file
+        self.output.finalize(time() - start_time,self.step_id,self.Q)  # Close any open output file
 
     def _make_device(self) -> Device:
         """Create the device object which will determine on what hardware (CPU/GPU) each part of the simulation will

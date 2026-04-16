@@ -206,6 +206,9 @@ class DFROperators:
             corr_west = self.diff_ext[1:-1, 0]
             corr_east = self.diff_ext[1:-1, -1]
             self.correction_WE = xp.vstack((xp.kron(ident, corr_west), xp.kron(ident, corr_east)))
+            
+            self.weights_boundary_integral = grd.glweights # boundary quadrature weights for 2d cartesian grid
+            self.weights_volume_integral = xp.kron(grd.glweights, grd.glweights)  # volume quadrature weights for 2d cartesian grid
 
     def make_filter(self, alpha: float, order: int, cutoff: float, geom: Geometry):
         """Build an exponential modal filter as described in Warburton, eqn 5.16."""

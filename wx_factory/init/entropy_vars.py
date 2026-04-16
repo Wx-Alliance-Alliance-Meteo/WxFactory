@@ -190,3 +190,19 @@ def du_dv(Q: NDArray, geom: Cartesian2D, param: Configuration):
     K[3,3,:,:,:] = k33
     
     return K
+
+def entropy_potential(Q: NDArray)-> NDArray[numpy.float64]:
+    psi_x1 = Q[idx_2d_rho_u, :, :, :]
+    psi_x2 = Q[idx_2d_rho_w, :, :,  :] 
+    return psi_x1, psi_x2
+
+def entropy(Q: NDArray,geom:Cartesian2D)-> NDArray[numpy.float64]:
+    xp = geom.device.xp
+    
+    ρ, _, _, ρ_θ, _ , _, _ = conservative_to_prim(Q)
+    
+    gamma = cpd/cvd
+    p = p0 * (((Rd * ρ_θ)/p0)**gamma) # pressure
+    
+    s = xp.log(p) - gamma * xp.log(ρ) # physical entropy
+    return s
