@@ -57,11 +57,14 @@ class RHSDirectFluxReconstruction_ESAV(RHS):
 
     def entropy_gradient_partial(self,v: NDArray) -> None:
         """Gradient for v - discontinuous part, no boundary terms"""
+        xp = self.device.xp
+
         self.dv_dx1_volume = apply_op(v, self.ops.derivative_x)
         self.dv_dx3_volume = apply_op(v, self.ops.derivative_z)
         
-        self.dv_dx1 = self.dv_dx1_volume
-        self.dv_dx3 = self.dv_dx3_volume
+        # Important! save a copy
+        self.dv_dx1 = xp.array(self.dv_dx1_volume, copy=True)
+        self.dv_dx3 = xp.array(self.dv_dx3_volume, copy=True)
         
         self.dv_dx1_volume *= 2.0 / self.geom.Δx1
         self.dv_dx3_volume *= 2.0 / self.geom.Δx3
@@ -120,9 +123,9 @@ class RHSDirectFluxReconstruction_ESAV(RHS):
         boundary_int2_DU = self.geom.Δx1 / 2.0 * self.boundary_integral(psi3_itf_x3)
         
         # Compute entropy residual
-        sigma = vol_int1 + vol_int2 + \
-            - boundary_int1_WE[:,:,0] + boundary_int1_WE[:,:,1] - boundary_int1_DU[:,:,0] + boundary_int1_DU[:,:,1] + \
-            - boundary_int2_WE[:,:,0] + boundary_int2_WE[:,:,1] -  boundary_int2_DU[:,:,0] + boundary_int2_DU[:,:,1] 
+        sigma = (vol_int1 + vol_int2 
+            - boundary_int1_WE[:,:,0] + boundary_int1_WE[:,:,1] - boundary_int1_DU[:,:,0] + boundary_int1_DU[:,:,1] 
+            - boundary_int2_WE[:,:,0] + boundary_int2_WE[:,:,1] -  boundary_int2_DU[:,:,0] + boundary_int2_DU[:,:,1] )
         return sigma
     
     def denominator_viscosity_coeff(self):
