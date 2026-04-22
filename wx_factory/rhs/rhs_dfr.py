@@ -5,6 +5,7 @@ from common.definitions import idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_w, idx_r
 from rhs.rhs import RHS
 from wx_mpi import SingleProcess, Conditional
 from init.entropy_vars import conservative_to_entropy, du_dv, entropy_potential
+from common.graphx import image_field
 
 
 def apply_op(vec: NDArray, op: NDArray):
@@ -110,9 +111,15 @@ class RHSDirectFluxReconstruction_ESAV(RHS):
         vol_int1 = self.geom.Δx1 / 2.0 * self.geom.Δx3 / 2.0 * self.volume_integral(self.dot_product(self.f_x1 , self.dv_dx1_volume))
         vol_int2 = self.geom.Δx1 / 2.0 * self.geom.Δx3 / 2.0 * self.volume_integral(self.dot_product(self.f_x3 , self.dv_dx3_volume))
         
+        # print("vol_int1.max",xp.max(vol_int1))
+        # print("vol_int2.max",xp.max(vol_int2))
+        
+        
         # Precompute entropy potentials
         psi1_itf_x1, psi3_itf_x1 = entropy_potential(self.q_itf_x1)
         psi1_itf_x3, psi3_itf_x3 = entropy_potential(self.q_itf_x3)
+        # print("q_itf_x1",self.q_itf_x1.shape)
+        
         
         # Boundary terms
         # psi_1
@@ -122,10 +129,15 @@ class RHSDirectFluxReconstruction_ESAV(RHS):
         boundary_int2_WE = self.geom.Δx3 / 2.0 * self.boundary_integral(psi3_itf_x1)
         boundary_int2_DU = self.geom.Δx1 / 2.0 * self.boundary_integral(psi3_itf_x3)
         
+        # print("boundary_int1_WE",boundary_int1_WE.shape)
+        
         # Compute entropy residual
         sigma = (vol_int1 + vol_int2 
             - boundary_int1_WE[:,:,0] + boundary_int1_WE[:,:,1] - boundary_int1_DU[:,:,0] + boundary_int1_DU[:,:,1] 
             - boundary_int2_WE[:,:,0] + boundary_int2_WE[:,:,1] -  boundary_int2_DU[:,:,0] + boundary_int2_DU[:,:,1] )
+        # sigma = (vol_int1 + vol_int2 
+        #     - boundary_int1_WE[:,:,0] + boundary_int1_WE[:,:,1] 
+        #     -  boundary_int2_DU[:,:,0] + boundary_int2_DU[:,:,1] )
         return sigma
     
     def denominator_viscosity_coeff(self):
@@ -150,19 +162,32 @@ class RHSDirectFluxReconstruction_ESAV(RHS):
         entropy_stable_coeff = True
         
         if(entropy_stable_coeff):
-            
+            # print("entropy stable")
+            # print("\n")
             sigma = self.entropy_residual() # Compute entropy residual
             
             a = -xp.minimum(0, sigma) # Compute numerator
             b = self.denominator_viscosity_coeff()
-            
+            # print("a.max",xp.max(a))
+            # print("sigma.max",xp.max(sigma))
             self.epsilon = self.approx_division(a,b)  
-            print("epsilon",self.epsilon) 
+            # print("epsilon min",xp.min(self.epsilon)) 
+            # print("epsilon max",xp.max(self.epsilon))
+            # print("max epsilon",xp.max(self.epsilon)) 
         else:
-            epsilon_val = 0
+            epsilon_val = 1e-3
             num_equations = 4
             shape = (num_equations, self.config.num_elements_vertical, self.config.num_elements_horizontal)
             self.epsilon = xp.full(shape, epsilon_val, dtype=q.dtype)
+            
+            
+            # noise = 0.01 * xp.random.randn(*self.epsilon.shape)  # small random values
+            # # print("max noise", xp.max(noise))
+            # self.epsilon += noise
+        
+        # filename= "results/epsilon"
+        # image_field(self.geom, self.epsilon, filename, xp.min(self.epsilon)- 1e-6, xp.max(self.epsilon)+ 1e-6, 100)
+        # print("epsilon max", xp.max(self.epsilon))
 
     def viscous_fluxes(self)->None:
         """Computes the viscous flux g_m = \sum_n epsilon K_mn dv_dxn"""

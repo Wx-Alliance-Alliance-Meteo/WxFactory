@@ -197,6 +197,7 @@ def entropy_potential(Q: NDArray)-> NDArray[numpy.float64]:
     return psi_x1, psi_x2
 
 def entropy(Q: NDArray,geom:Cartesian2D)-> NDArray[numpy.float64]:
+    "Computes physical entropy s = log(p / rho**gamma)"
     xp = geom.device.xp
     
     ρ, _, _, ρ_θ, _ , _, _ = conservative_to_prim(Q)
@@ -206,3 +207,11 @@ def entropy(Q: NDArray,geom:Cartesian2D)-> NDArray[numpy.float64]:
     
     s = xp.log(p) - gamma * xp.log(ρ) # physical entropy
     return s
+
+def entropy_function(Q: NDArray,geom:Cartesian2D)-> NDArray[numpy.float64]:
+    "Computes mathematical entropy function  S(u) = -rho*s"
+    xp = geom.device.xp
+    ρ, _, _, ρ_θ, _ , _, _ = conservative_to_prim(Q)
+    s = entropy(Q,geom)
+    return - ρ*s
+    

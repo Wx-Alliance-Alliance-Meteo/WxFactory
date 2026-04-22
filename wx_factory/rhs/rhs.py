@@ -106,7 +106,11 @@ class RHS(ABC):
         self.timings.append(self.device.elapsed(self.timestamps))
 
     def __call__(self, q: NDArray) -> NDArray:
-
+        xp = self.device.xp
+        
+        # print("\n ---------------------------------------\n")
+        # print("q.max",xp.max(q))
+        
         # 0.a Process timing
         if len(self.timestamps) > 0:  # Process timing from previous steps
             self.retrieve_last_times()

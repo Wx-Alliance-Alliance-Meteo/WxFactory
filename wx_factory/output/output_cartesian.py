@@ -27,7 +27,7 @@ class OutputCartesian(OutputManager):
             image_field(
                 self.geometry, (Q_cartesian[RHO_THETA, ...] / Q_cartesian[RHO, ...]), filename, 290.0, 300.0, 10
             )
-        elif self.config.case_number == 100:
+        elif self.config.case_number == 100 or self.config.case_number == 101 or self.config.case_number == 102:
             image_field(
                 self.geometry, Q_cartesian[RHO, ...], filename, 0, 2, 100
             )

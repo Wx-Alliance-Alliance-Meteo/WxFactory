@@ -79,7 +79,7 @@ class PDEEulerCartesian(PDE):
         q_itf_ghost_x1 = xp.pad(q_itf_x1, ((0, 0), (0, 0), (1, 1), (0, 0)), mode='constant',constant_values=0) # (num_eqs, num_el_vertical, num_el_horizontal+2, 2*num_solpts)
         q_itf_ghost_x3 = xp.pad(q_itf_x3, ((0, 0), (1, 1), (0, 0), (0, 0)), mode='constant',constant_values=0) # (num_eqs, num_el_vertical+2, num_el_horizontal, 2*num_solpts)
 
-        if self.config.case_number == 100:
+        if self.config.case_number == 100 or self.config.case_number == 101 or self.config.case_number == 102:
             # Set periodic BC for entropy wave
             # print("e: case 100")
             # Copy the values at the boundaries to the ghost cells
@@ -195,7 +195,7 @@ class PDEEulerCartesian(PDE):
         g1_itf_ghost_x1 = xp.pad(g1_itf_x1, ((0, 0), (0, 0), (1, 1), (0, 0)), mode='constant',constant_values=0) # (num_eqs, num_el_vertical, num_el_horizontal+2, 2*num_solpts)
         g3_itf_ghost_x3 = xp.pad(g3_itf_x3, ((0, 0), (1, 1), (0, 0), (0, 0)), mode='constant',constant_values=0) # (num_eqs, num_el_vertical+2, num_el_horizontal, 2*num_solpts)
 
-        if self.config.case_number == 100:
+        if self.config.case_number == 100 or self.config.case_number == 101 or self.config.case_number == 102:
             # Set periodic BC for entropy wave case
             # print("vf: case 100")
             g1_itf_ghost_x1[:, :, 0, east_indices] =  g1_itf_ghost_x1[:, :, -2, east_indices]

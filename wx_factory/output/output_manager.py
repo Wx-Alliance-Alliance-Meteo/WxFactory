@@ -15,7 +15,7 @@ from wx_mpi import SingleProcess, Conditional
 from .solver_stats import SolverStatsOutput
 from .state import save_state, load_state
 
-from init.entropy_vars import entropy
+from init.entropy_vars import entropy, entropy_function
 from common.graphx import plot_entropy
 
 
@@ -223,21 +223,28 @@ class OutputManager:
         
         # Compute and plot entropy history over time steps
         xp = self.device.xp
-        entropy_history = xp.zeros(last_step_id) 
+        # entropy_history = xp.zeros(last_step_id) 
+        entropy_func_history = xp.zeros(last_step_id) 
         sh = last_Q.shape
         for step_id in range(last_step_id):
             
             Q_i,_ = self.load_state_from_file(step_id,sh)
             s_i = entropy(Q_i,self.geometry)
-            
-            # TODO: move integration to the function or use the one from RHS_DFR_ESAVRHSDirectFluxReconstruction_ESAV
-            s_i_integrated = self.geometry.Δx1 / 2.0 * self.geometry.Δx3 / 2. * xp.sum(s_i * self.operators.weights_volume_integral)
+            S_func_i = entropy_function(Q_i,self.geometry)
+          
+            # TODO: move integration to the function or use the one from RHSDirectFluxReconstruction_ESAV
+            # s_i_integrated = self.geometry.Δx1 / 2.0 * self.geometry.Δx3 / 2. * xp.sum(s_i * self.operators.weights_volume_integral)
+            S_func_i_integrated = self.geometry.Δx1 / 2.0 * self.geometry.Δx3 / 2. * xp.sum(S_func_i * self.operators.weights_volume_integral)
             # s_i = xp.average(entropy(Q_i,self.geometry))
-            
-            entropy_history[step_id] = s_i_integrated
+            # entropy_history[step_id] = s_i_integrated
+            entropy_func_history[step_id] = S_func_i_integrated
         
         # TODO: reuse other plotting functions or rewrite this one
-        plot_entropy(entropy_history,"results/entropy_history")
+        # plot_entropy(entropy_history,"results/entropy_history")
+        # print("entropy_history",entropy_history.shape)
+        # print("entropy_func_history",entropy_func_history.shape)
+        # print("entropy_func_history",entropy_func_history.dtype)
+        plot_entropy(entropy_func_history,"results/entropy_func_history")
         
 
     def __finalize__(self):

@@ -59,7 +59,8 @@ def plot_entropy(entropy_history, filename=None):
     if filename is None:
         matplotlib.pyplot.show()
     else :
-        matplotlib.pyplot.savefig(filename)
+        matplotlib.pyplot.savefig(filename) 
+    matplotlib.pyplot.clf()
     
 
 

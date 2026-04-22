@@ -336,6 +336,49 @@ def initialize_cartesian2d(geom: Cartesian2D, param: Configuration) -> NDArray[n
         T = p / (Rd * ρ)
         exner = (p / p0) ** (Rd / cpd)
         θ = T / exner
+    
+    elif param.case_number == 101:
+        geom.xperiodic = True
+        geom.zperiodic = False
+
+        A = 0.5
+        ρ = 1.0 + A * xp.sin(2.0 * xp.pi * (geom.X1 + geom.X3))
+        uu = 0.1
+        ww = 0.2
+        p = 10
+        θ = p/(Rd*ρ)
+        T = p / (Rd * ρ)
+        exner = (p / p0) ** (Rd / cpd)
+        θ = T / exner
+        
+    elif param.case_number == 102:
+        geom.xperiodic = True
+        geom.zperiodic = False
+
+        X1 = geom.X1
+        X3 = geom.X3
+
+        ρ = xp.zeros_like(X1)
+        uu  = xp.zeros_like(X1)
+        ww  = xp.zeros_like(X1)
+        p   = xp.zeros_like(X1)
+
+        # Masks for quadrants
+        q1 = (X1 >= 0) & (X3 >= 0)   # top-right
+        q2 = (X1 <  0) & (X3 >= 0)   # top-left
+        q3 = (X1 <  0) & (X3 <  0)   # bottom-left
+        q4 = (X1 >= 0) & (X3 <  0)   # bottom-right
+
+        # Assign values
+        ρ[q1], uu[q1], ww[q1], p[q1] = 0.5313, 0.0,    0.0,    0.4
+        ρ[q2], uu[q2], ww[q2], p[q2] = 1.0,    0.7276, 0.0,    1.0
+        ρ[q3], uu[q3], ww[q3], p[q3] = 0.8,    0.0,    0.0,    1.0
+        ρ[q4], uu[q4], ww[q4], p[q4] = 1.0,    0.0,    0.7276, 1.0
+        
+        θ = p/(Rd*ρ)
+        T = p / (Rd * ρ)
+        exner = (p / p0) ** (Rd / cpd)
+        θ = T / exner
 
     if param.case_number == 0:
         N_star = 0.01
@@ -350,6 +393,10 @@ def initialize_cartesian2d(geom: Cartesian2D, param: Configuration) -> NDArray[n
         uu[:, :] = 10.0
         ρ = p0 / (Rd * θ) * exner ** (cvd / Rd)
     elif param.case_number == 100:
+        pass
+    elif param.case_number == 101:
+        pass
+    elif param.case_number == 102:
         pass
     else:
         exner = 1.0 - gravity / (cpd * θ) * geom.X3
