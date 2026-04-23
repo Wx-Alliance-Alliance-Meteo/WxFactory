@@ -182,29 +182,27 @@ class CubedSphere2D(CubedSphere):
         # Element interior
         offsets_x1 = domain_x1[0] + delta_x1 * xp.arange(num_elements_x1)
         ref_solpts_x1 = delta_x1 / Δcomp * (-minComp + self.solutionPoints)
-        self.x1 = xp.repeat(offsets_x1, num_solpts) + xp.tile(ref_solpts_x1, num_elements_x1)
+        self.x1 = xp.repeat(offsets_x1, num_solpts) + xp.tile(ref_solpts_x1, (num_elements_x1,))
 
         offsets_x2 = domain_x2[0] + delta_x2 * xp.arange(num_elements_x2)
         ref_solpts_x2 = delta_x2 / Δcomp * (-minComp + self.solutionPoints)
-        self.x2 = xp.repeat(offsets_x2, num_solpts) + xp.tile(ref_solpts_x2, num_elements_x2)
+        self.x2 = xp.repeat(offsets_x2, num_solpts) + xp.tile(ref_solpts_x2, (num_elements_x2,))
 
         # Element interfaces
-        self.x1_itf_i = xp.linspace(
-            domain_x1[0], domain_x1[1], num_elements_x1 + 1
-        )  # At every boundary between elements
+        self.x1_itf_i = xp.linspace(domain_x1[0], domain_x1[1], num_elements_x1 + 1, dtype=self.dtype)
         self.x2_itf_i = self.x2.copy()  # Copy over x2, without change because of tensor product structure
 
         self.x1_itf_j = self.x1.copy()
-        self.x2_itf_j = xp.linspace(domain_x2[0], domain_x2[1], num_elements_x2 + 1)
+        self.x2_itf_j = xp.linspace(domain_x2[0], domain_x2[1], num_elements_x2 + 1, dtype=self.dtype)
 
         ## Construct the combined coordinate vector for the numeric/equiangular coordinate (x1, x2)
         self.block_radians_x1, self.block_radians_x2 = xp.meshgrid(self.x1, self.x2)
         i_x1, i_x2 = xp.meshgrid(self.x1_itf_i, self.x2_itf_i, indexing="ij")
-        j_x1, j_x2 = xp.meshgrid(self.x1_itf_j, self.x2_itf_j)
+        j_x1, j_x2 = xp.meshgrid(self.x1_itf_j, self.x2_itf_j, indexing="xy")
 
-        self.radians = self._to_new(xp.array([self.block_radians_x1, self.block_radians_x2]))
-        self.coordVec_itf_i = self._to_new_itf_i(xp.array([i_x1, i_x2]))
-        self.coordVec_itf_j = self._to_new_itf_j(xp.array([j_x1, j_x2]))
+        self.radians = self._to_new(xp.stack((self.block_radians_x1, self.block_radians_x2)))
+        self.coordVec_itf_i = self._to_new_itf_i(xp.stack((i_x1, i_x2)))
+        self.coordVec_itf_j = self._to_new_itf_j(xp.stack((j_x1, j_x2)))
 
         # Compute the parameters of the rotated grid
 
@@ -523,9 +521,8 @@ class CubedSphere2D(CubedSphere):
 
             tmp_shape = a.shape[:-2] + (self.num_elements_x1 + 1, self.num_elements_x2, self.num_solpts)
             offset = len(a.shape) - 2
-            transp = tuple([i for i in range(offset)]) + (1 + offset, 0 + offset, 2 + offset)
+            tmp_array = a.reshape(tmp_shape).swapaxes(1 + offset, offset)
 
-            tmp_array = a.reshape(tmp_shape).transpose(transp)
             new[..., :-1, east_itf] = tmp_array
             new[..., 1:, west_itf] = tmp_array
 

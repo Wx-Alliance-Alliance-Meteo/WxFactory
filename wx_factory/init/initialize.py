@@ -134,6 +134,7 @@ def initialize_euler(geom: CubedSphere3D, metric: Metric3DTopo, mtrx: DFROperato
 def initialize_sw(geom: CubedSphere2D, metric: Metric2D, mtrx: DFROperators, param: Configuration):
 
     xp = geom.device.xp
+    dtype = xp.float64
 
     # ni, nj = geom.lon.shape
     num_equations = 3
@@ -142,11 +143,11 @@ def initialize_sw(geom: CubedSphere2D, metric: Metric2D, mtrx: DFROperators, par
     itf_i_shape = geom.lon_itf_i.shape
     itf_j_shape = geom.lon_itf_j.shape
 
-    hsurf = xp.zeros(base_shape)
-    dzdx1 = xp.zeros(base_shape)
-    dzdx2 = xp.zeros(base_shape)
-    hsurf_itf_i = xp.zeros(itf_i_shape)
-    hsurf_itf_j = xp.zeros(itf_j_shape)
+    hsurf = xp.zeros(base_shape, dtype=dtype)
+    dzdx1 = xp.zeros(base_shape, dtype=dtype)
+    dzdx2 = xp.zeros(base_shape, dtype=dtype)
+    hsurf_itf_i = xp.zeros(itf_i_shape, dtype=dtype)
+    hsurf_itf_j = xp.zeros(itf_j_shape, dtype=dtype)
 
     # --- Shallow water
     #   0 : deformation flow (passive advection only)
@@ -191,7 +192,7 @@ def initialize_sw(geom: CubedSphere2D, metric: Metric2D, mtrx: DFROperators, par
     else:
         raise ValueError(f"Unknown case number {param.case_number} for Shallow Water equations")
 
-    Q = xp.zeros((num_equations,) + base_shape)
+    Q = xp.zeros((num_equations,) + base_shape, dtype=dtype)
     Q[idx_h, ...] = fluid_height
 
     if param.case_number in [0, 1]:

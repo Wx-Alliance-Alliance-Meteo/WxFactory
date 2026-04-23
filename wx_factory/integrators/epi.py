@@ -4,6 +4,7 @@ from typing import Callable
 
 from mpi4py import MPI
 import numpy
+from numpy.typing import NDArray
 
 from common.configuration import Configuration
 from solvers import (
@@ -77,7 +78,7 @@ class Epi(Integrator):
 
         self.init_substeps = init_substeps
 
-    def __step__(self, Q: numpy.ndarray, dt: float):
+    def __step__(self, Q: NDArray, dt: float):
 
         # If dt changes, discard saved value and redo initialization
         mpirank = self.device.comm.rank
