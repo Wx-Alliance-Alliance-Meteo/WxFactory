@@ -171,7 +171,9 @@ class RhsShallowWater:
         tmp = xp.maximum(var_itf_i[idx_h] * a, 1e-12)
         m = xp.where(tmp != 0.0, var_itf_i[idx_hu1] / tmp, 0.0)
 
-        big_M = 0.25 * ((m[east] + 1.0) ** 2 - (m[west] - 1.0) ** 2)
+        # Workaround for CuPy bug where n**2 is wrong when n is complex with a negative real value
+        mw2 = (m[west] - 1.0) * (m[west] - 1.0)
+        big_M = 0.25 * ((m[east] + 1.0) ** 2 - mw2)
 
         flux_x1_itf = xp.zeros_like(var_itf_i)
         # ------ Advection part
@@ -189,9 +191,11 @@ class RhsShallowWater:
 
         # Common AUSM fluxes
         a = xp.sqrt(gravity * var_itf_j[idx_h] * metric.H_contra_22_itf_j)
-        m = var_itf_j[idx_hu2] /xp.maximum(var_itf_j[idx_h] * a, 1e-12)
+        m = var_itf_j[idx_hu2] / xp.maximum(var_itf_j[idx_h] * a, 1e-12)
         m[xp.where(xp.isnan(m))] = 0.0
-        big_M = 0.25 * ((m[north] + 1.0) ** 2 - (m[south] - 1.0) ** 2)
+        # Workaround for CuPy bug where n**2 is wrong when n is complex with a negative real value
+        ms2 = (m[south] - 1.0) * (m[south] - 1.0)
+        big_M = 0.25 * ((m[north] + 1.0) ** 2 - ms2)
 
         flux_x2_itf = xp.zeros_like(var_itf_j)
         # ------ Advection part
