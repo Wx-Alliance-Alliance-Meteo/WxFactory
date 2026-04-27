@@ -308,7 +308,6 @@ class OutputCubesphereNetcdf(OutputCubesphere):
             elevs = to_host(self._gather_field(self.geometry.coordVec_latlon[2, :, :, :], 3))
             topos = to_host(self._gather_field(self.geometry.zbot[:, :], 2))
 
-        print(f"{self.rank} here 1", flush=True)
         if self.rank == 0:
             for i in range(6):
                 tile[i] = i
