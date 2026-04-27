@@ -337,14 +337,19 @@ class ProcessTopology:
         flip_dim: int | Tuple[int, ...] = -1,
     ):
         xp = self.device.xp
+        rank = self.device.comm.rank
 
         base_shape = get_base_shape(south.shape, boundary_shape)
         send_buffer = xp.empty((4,) + base_shape, dtype=south[0].dtype)
 
+        if not isinstance(flip_dim, Tuple):
+            flip_dim = (flip_dim,)
+
         # Fill send buffer
         for i, data in enumerate([south, north, west, east]):
-            tmp = data.reshape(base_shape)
-            send_buffer[i] = xp.flip(tmp, axis=flip_dim) if self.flip[i] else tmp
+            send_buffer[i] = data.reshape(base_shape)
+            if self.flip[i]:
+                send_buffer[i] = xp.flip(send_buffer[i], axis=flip_dim)
 
         return send_buffer, south.shape, False
 

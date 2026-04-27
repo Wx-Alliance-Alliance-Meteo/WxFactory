@@ -19,7 +19,8 @@ class RHS(ABC):
         self,
         pde: PDE,
         geometry: Geometry,
-        operators: DFROperators,
+        operators_real: DFROperators,
+        operators_complex: DFROperators,
         metric: Metric2D | Metric3DTopo,
         topography,
         process_topo: ProcessTopology,
@@ -29,7 +30,8 @@ class RHS(ABC):
     ) -> None:
         self.pde = pde
         self.geom = geometry
-        self.r_ops = operators
+        self.ops_real = operators_real
+        self.ops_complex = operators_complex
         self.metric = metric
         self.topo = topography
         self.ptopo = process_topo
@@ -40,6 +42,9 @@ class RHS(ABC):
 
         self.num_dim = self.pde.num_dim
         self.num_var = self.pde.num_var
+
+        # Default value, when __call__ is not called
+        self.ops = self.ops_real
 
         self.timestamps = []
         self.timings = []
@@ -86,6 +91,8 @@ class RHS(ABC):
 
         # 0.b Preserve array shape
         given_shape = q.shape
+
+        self.ops = self.ops_complex if self.device.xp.iscomplexobj(q) else self.ops_real
 
         self.allocate_arrays(q)
 

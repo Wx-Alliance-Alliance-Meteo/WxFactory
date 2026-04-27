@@ -129,10 +129,10 @@ class Simulation:
 
         self.process_topo = None
         self.geometry = self._create_geometry()
-        self.operators = DFROperators(self.geometry, self.config, self.device)
-        self.complex_operators = DFROperators(self.geometry, self.config, self.device, self.device.xp.complex128)
+        self.operators_real = DFROperators(self.geometry, self.config, self.device)
+        self.operators_complex = DFROperators(self.geometry, self.config, self.device, self.device.xp.complex128)
         self.initial_Q, self.topography, self.metric = init_state_vars(
-            self.geometry, self.operators, self.config, self.post_processors
+            self.geometry, self.operators_real, self.config, self.post_processors
         )
         self.preconditioner = self._create_preconditioner(self.initial_Q)
         self.output = self._create_output_manager()
@@ -143,8 +143,8 @@ class Simulation:
 
         self.rhs = RhsBundle(
             self.geometry,
-            self.operators,
-            self.complex_operators,
+            self.operators_real,
+            self.operators_complex,
             self.metric,
             self.topography,
             self.process_topo,
@@ -179,7 +179,7 @@ class Simulation:
                 print(f"Step {self.step_id} of {self.num_steps + self.starting_step}", flush=True)
 
             self.Q = self.integrator.step(self.Q, self.config.dt)
-            self.Q = self.operators.apply_filters(self.Q, self.geometry, self.metric, self.config.dt)
+            self.Q = self.operators_real.apply_filters(self.Q, self.geometry, self.metric, self.config.dt)
 
             if self.rank == 0:
                 print(f"Elapsed time for step: {self.integrator.latest_time:.3f} secs", flush=True)
@@ -192,14 +192,14 @@ class Simulation:
             # TODO put this inside the `step` function of the integrator
             if self.config.case_number == 11:
                 u1_contra, u2_contra, w_wind = dcmip_T11_update_winds(
-                    self.geometry, self.metric, self.operators, self.config, time=self.t
+                    self.geometry, self.metric, self.operators_real, self.config, time=self.t
                 )
                 self.Q[idx_rho_u1, :, :, :] = self.Q[idx_rho, :, :, :] * u1_contra
                 self.Q[idx_rho_u2, :, :, :] = self.Q[idx_rho, :, :, :] * u2_contra
                 self.Q[idx_rho_w, :, :, :] = self.Q[idx_rho, :, :, :] * w_wind
             elif self.config.case_number == 12:
                 u1_contra, u2_contra, w_wind = dcmip_T12_update_winds(
-                    self.geometry, self.metric, self.operators, self.config, time=self.t
+                    self.geometry, self.metric, self.operators_real, self.config, time=self.t
                 )
                 self.Q[idx_rho_u1, :, :, :] = self.Q[idx_rho, :, :, :] * u1_contra
                 self.Q[idx_rho_u2, :, :, :] = self.Q[idx_rho, :, :, :] * u2_contra
@@ -353,13 +353,13 @@ class Simulation:
 
     def _create_output_manager(self) -> OutputManager:
         if isinstance(self.geometry, Cartesian2D):
-            return OutputCartesian(self.config, self.geometry, self.operators, self.device)
+            return OutputCartesian(self.config, self.geometry, self.operators_real, self.device)
         elif isinstance(self.geometry, CubedSphere):
             if self.config.output_format == "netcdf":
                 return OutputCubesphereNetcdf(
                     self.config,
                     self.geometry,
-                    self.operators,
+                    self.operators_real,
                     self.device,
                     self.metric,
                     self.topography,
@@ -369,7 +369,7 @@ class Simulation:
                 return OutputCubesphereFst(
                     self.config,
                     self.geometry,
-                    self.operators,
+                    self.operators_real,
                     self.device,
                     self.metric,
                     self.topography,

@@ -6,7 +6,7 @@ import numpy
 from device import Device
 from output import InputManager
 from simulation import Simulation
-from rhs.rhs_dfr import RHSDirecFluxReconstruction_mpi
+from rhs.rhs_dfr import RHSDirecFluxReconstruction_mpi_v2
 from common.definitions import idx_rho_w
 
 from mpi_test import MpiTestCase
@@ -38,8 +38,9 @@ class PdeRusanovGenericTestCase(MpiTestCase):
 
             xp = sim.device.xp
 
-            if not isinstance(sim.rhs.full, RHSDirecFluxReconstruction_mpi):
-                raise ValueError(f"Incorrect RHS type {type(sim.rhs.full)}. Expected {RHSDirecFluxReconstruction_mpi}")
+            expected_type = RHSDirecFluxReconstruction_mpi_v2
+            if not isinstance(sim.rhs.full, expected_type):
+                raise ValueError(f"Incorrect RHS type {type(sim.rhs.full)}. Expected {expected_type}")
 
             sim.rhs.full.allocate_arrays(local_state)
             sim.rhs.full.solution_extrapolation(local_state)

@@ -19,8 +19,8 @@ class RhsBundle:
     def __init__(
         self,
         geom: Geometry,
-        operators: DFROperators,
-        complex_operators: DFROperators,
+        operators_real: DFROperators,
+        operators_complex: DFROperators,
         metric: Metric2D | Metric3DTopo | None,
         topo: Optional[Topo],
         ptopo: Optional[ProcessTopology],
@@ -43,19 +43,19 @@ class RhsBundle:
         if param.equations == "euler" and isinstance(geom, CubedSphere3D):
             pde = PDEEulerCubesphere(geom, param, metric)
             self.full = RHSDirecFluxReconstruction_mpi_v2(
-                pde, geom, operators, complex_operators, metric, topo, ptopo, param, fields_shape, debug=debug
+                pde, geom, operators_real, operators_complex, metric, topo, ptopo, param, fields_shape, debug=debug
             )
 
             # rhs_functions = {'dg': rhs_euler,
             #                  'fv': rhs_euler}
 
             # self.full = generate_rhs(rhs_functions[param.discretization],
-            #                          geom, operators, metric, ptopo, param.num_solpts, param.num_elements_horizontal,
+            #                          geom, operators_real, metric, ptopo, param.num_solpts, param.num_elements_horizontal,
             #                          param.num_elements_vertical, param.case_number, device=device)
             # self.full.extra = RhsEuler(
             #     fields_shape,
             #     geom,
-            #     operators,
+            #     operators_real,
             #     metric,
             #     ptopo,
             #     param.num_solpts,
@@ -70,17 +70,27 @@ class RhsBundle:
             if param.case_number <= 1:
                 # Use RhsAdvection2d for advection-only cases
                 self.full = RhsAdvection2d(
-                    fields_shape, geom, operators, metric, ptopo, geom.num_solpts, geom.num_elements_horizontal
+                    fields_shape, geom, operators_real, metric, ptopo, geom.num_solpts, geom.num_elements_horizontal
                 )
             else:
                 # Use RhsShallowWater for full shallow water cases
                 self.full = RhsShallowWater(
-                    fields_shape, geom, operators, metric, topo, ptopo, geom.num_solpts, geom.num_elements_horizontal
+                    fields_shape,
+                    geom,
+                    operators_real,
+                    operators_complex,
+                    metric,
+                    topo,
+                    ptopo,
+                    geom.num_solpts,
+                    geom.num_elements_horizontal,
                 )
 
         elif param.equations == "euler" and isinstance(geom, Cartesian2D):
             pde = PDEEulerCartesian(geom, param, metric)
-            self.full = rhs_class(pde, geom, operators, metric, topo, ptopo, param, fields_shape)
+            self.full = rhs_class(
+                pde, geom, operators_real, operators_complex, metric, topo, ptopo, param, fields_shape
+            )
 
             self.implicit = not_implemented
             self.explicit = not_implemented

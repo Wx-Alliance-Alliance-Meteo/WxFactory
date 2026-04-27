@@ -19,7 +19,8 @@ class RhsShallowWater:
         self,
         shape: tuple[int, ...],
         geom: CubedSphere2D,
-        operators: DFROperators,
+        operators_real: DFROperators,
+        operators_complex: DFROperators,
         metric: Metric2D,
         topo: Optional[Topo],
         ptopo: ProcessTopology,
@@ -28,7 +29,8 @@ class RhsShallowWater:
     ):
         self.shape = shape
         self.geom = geom
-        self.operators = operators
+        self.operators_real = operators_real
+        self.operators_complex = operators_complex
         self.metric = metric
         self.topo = topo
         self.ptopo = ptopo
@@ -43,10 +45,11 @@ class RhsShallowWater:
         :return: Value of the right-hand side, in the same shape as the input
         """
         old_shape = vec.shape
+        operators = self.operators_complex if self.geom.device.xp.iscomplexobj(vec) else self.operators_real
         result = self.__compute_rhs__(
             vec.reshape(self.shape),
             self.geom,
-            self.operators,
+            operators,
             self.metric,
             self.topo,
             self.ptopo,
@@ -168,7 +171,7 @@ class RhsShallowWater:
         north = xp.s_[..., :-1, :, num_solpts:]
 
         a = xp.sqrt(gravity * var_itf_i[idx_h] * metric.H_contra_11_itf_i)
-        tmp = xp.maximum(var_itf_i[idx_h] * a, 1e-12)
+        tmp = xp.clip(var_itf_i[idx_h] * a, min=1e-12)
         m = xp.where(tmp != 0.0, var_itf_i[idx_hu1] / tmp, 0.0)
 
         # Workaround for CuPy bug where n**2 is wrong when n is complex with a negative real value
@@ -178,7 +181,7 @@ class RhsShallowWater:
         flux_x1_itf = xp.zeros_like(var_itf_i)
         # ------ Advection part
         flux_x1_itf[east] = metric.sqrtG_itf_i[east] * (
-            xp.maximum(0.0, big_M) * a[east] * var_itf_i[east] + xp.minimum(0.0, big_M) * a[west] * var_itf_i[west]
+            xp.clip(big_M, min=0.0) * a[east] * var_itf_i[east] + xp.clip(big_M, max=0.0) * a[west] * var_itf_i[west]
         )
         # ------ Pressure part
         p11 = metric.sqrtG_itf_i * (0.5 * gravity) * metric.H_contra_11_itf_i * var_itf_i[idx_h] ** 2
@@ -191,7 +194,7 @@ class RhsShallowWater:
 
         # Common AUSM fluxes
         a = xp.sqrt(gravity * var_itf_j[idx_h] * metric.H_contra_22_itf_j)
-        m = var_itf_j[idx_hu2] / xp.maximum(var_itf_j[idx_h] * a, 1e-12)
+        m = var_itf_j[idx_hu2] / xp.clip(var_itf_j[idx_h] * a, min=1e-12)
         m[xp.where(xp.isnan(m))] = 0.0
         # Workaround for CuPy bug where n**2 is wrong when n is complex with a negative real value
         ms2 = (m[south] - 1.0) * (m[south] - 1.0)
@@ -200,7 +203,7 @@ class RhsShallowWater:
         flux_x2_itf = xp.zeros_like(var_itf_j)
         # ------ Advection part
         flux_x2_itf[north] = metric.sqrtG_itf_j[north] * (
-            xp.maximum(0.0, big_M) * a[north] * var_itf_j[north] + xp.minimum(0.0, big_M) * a[south] * var_itf_j[south]
+            xp.clip(big_M, min=0.0) * a[north] * var_itf_j[north] + xp.clip(big_M, max=0.0) * a[south] * var_itf_j[south]
         )
         # ------ Pressure part
         p12 = metric.sqrtG_itf_j * (0.5 * gravity) * metric.H_contra_12_itf_j * var_itf_j[idx_h] ** 2

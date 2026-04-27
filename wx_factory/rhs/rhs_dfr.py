@@ -3,7 +3,7 @@ from numpy.typing import NDArray
 
 from common.definitions import idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_w, idx_rho_theta
 from common.matmul import apply_op
-from geometry import CubedSphere
+from geometry import CubedSphere, DFROperators
 from rhs.rhs import RHS
 from wx_mpi import SingleProcess, Conditional
 
@@ -53,8 +53,12 @@ class RHSDirecFluxReconstruction(RHS):
     def flux_divergence(self):
         xp = self.device.xp
 
-        op_correction_WE = self.ops.correction_WE if not xp.iscomplexobj(self.f_itf_x1) else self.ops.correction_WE_complex
-        op_correction_DU = self.ops.correction_DU if not xp.iscomplexobj(self.f_itf_x3) else self.ops.correction_DU_complex
+        op_correction_WE = (
+            self.ops.correction_WE if not xp.iscomplexobj(self.f_itf_x1) else self.ops.correction_WE_complex
+        )
+        op_correction_DU = (
+            self.ops.correction_DU if not xp.iscomplexobj(self.f_itf_x3) else self.ops.correction_DU_complex
+        )
 
         self.df1_dx1 += apply_op(self.f_itf_x1, op_correction_WE)
         self.df1_dx1 *= -2.0 / self.geom.Δx1
@@ -64,13 +68,14 @@ class RHSDirecFluxReconstruction(RHS):
 
         xp.add(self.df1_dx1, self.df3_dx3, out=self.rhs)
 
+
 class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
     def __init__(
         self,
         pde,
         geometry: CubedSphere,
-        operators,
-        complex_operators,
+        operators_real: DFROperators,
+        operators_complex: DFROperators,
         metric,
         topography,
         process_topo,
@@ -78,8 +83,18 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
         expected_shape,
         debug=False,
     ):
-        super().__init__(pde, geometry, operators, metric, topography, process_topo, config, expected_shape, debug)
-        self.c_ops = complex_operators
+        super().__init__(
+            pde,
+            geometry,
+            operators_real,
+            operators_complex,
+            metric,
+            topography,
+            process_topo,
+            config,
+            expected_shape,
+            debug,
+        )
         self.extrap_3d = self.extrap_3d_code
         if config.desired_device in ["numpy", "cupy", "torch"]:
             self.extrap_3d = self.extrap_3d_py
@@ -87,15 +102,12 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
     def allocate_arrays(self, q):
         super().allocate_arrays(q)
 
-        self.ops = self.c_ops if xp.iscomplexobj(q) else self.r_ops
         xp = self.device.xp
         dtype = self.q_itf_x1.dtype
 
         itf_i_shape = (self.num_var,) + self.geom.itf_i_shape
         itf_j_shape = (self.num_var,) + self.geom.itf_j_shape
         itf_k_shape = (self.num_var,) + self.geom.itf_k_shape
-
-        self.selected_ops = self.c_ops if xp.iscomplexobj(q) else self.ops
 
         if self.f_itf_x1 is None or self.f_itf_x1.dtype != dtype:
             self.f_itf_x1 = xp.zeros_like(self.q_itf_x1)
@@ -221,9 +233,15 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
     def flux_divergence(self):
         xp = self.device.xp
 
-        op_correction_WE = self.ops.correction_WE if not xp.iscomplexobj(self.f_itf_x1) else self.ops.correction_WE_complex
-        op_correction_SN = self.ops.correction_SN if not xp.iscomplexobj(self.f_itf_x2) else self.ops.correction_SN_complex
-        op_correction_DU = self.ops.correction_DU if not xp.iscomplexobj(self.f_itf_x3) else self.ops.correction_DU_complex
+        op_correction_WE = (
+            self.ops.correction_WE if not xp.iscomplexobj(self.f_itf_x1) else self.ops.correction_WE_complex
+        )
+        op_correction_SN = (
+            self.ops.correction_SN if not xp.iscomplexobj(self.f_itf_x2) else self.ops.correction_SN_complex
+        )
+        op_correction_DU = (
+            self.ops.correction_DU if not xp.iscomplexobj(self.f_itf_x3) else self.ops.correction_DU_complex
+        )
 
         self.df1_dx1 += apply_op(self.f_itf_x1, op_correction_WE)
         self.df2_dx2 += apply_op(self.f_itf_x2, op_correction_SN)
@@ -350,8 +368,8 @@ class RHSDirecFluxReconstruction_mpi_v2(RHSDirecFluxReconstruction):
         self,
         pde,
         geometry: CubedSphere,
-        operators,
-        complex_operators,
+        operators_real: DFROperators,
+        operators_complex: DFROperators,
         metric,
         topography,
         process_topo,
@@ -359,8 +377,18 @@ class RHSDirecFluxReconstruction_mpi_v2(RHSDirecFluxReconstruction):
         expected_shape,
         debug=False,
     ):
-        super().__init__(pde, geometry, operators, metric, topography, process_topo, config, expected_shape, debug)
-        self.c_ops = complex_operators
+        super().__init__(
+            pde,
+            geometry,
+            operators_real,
+            operators_complex,
+            metric,
+            topography,
+            process_topo,
+            config,
+            expected_shape,
+            debug,
+        )
         self.extrap_3d = self.extrap_3d_code
         if config.desired_device in ["numpy", "cupy", "torch"]:
             self.extrap_3d = self.extrap_3d_py
@@ -370,8 +398,6 @@ class RHSDirecFluxReconstruction_mpi_v2(RHSDirecFluxReconstruction):
 
         xp = self.device.xp
         dtype = self.q_itf_x1.dtype
-
-        self.ops = self.c_ops if xp.iscomplexobj(q) else self.r_ops
 
         itf_i_shape = (self.num_var,) + self.geom.itf_i_shape
         itf_j_shape = (self.num_var,) + self.geom.itf_j_shape
@@ -505,9 +531,15 @@ class RHSDirecFluxReconstruction_mpi_v2(RHSDirecFluxReconstruction):
     def flux_divergence(self):
         xp = self.device.xp
 
-        op_correction_WE = self.ops.correction_WE if not xp.iscomplexobj(self.f_itf_x1) else self.ops.correction_WE_complex
-        op_correction_SN = self.ops.correction_SN if not xp.iscomplexobj(self.f_itf_x2) else self.ops.correction_SN_complex
-        op_correction_DU = self.ops.correction_DU if not xp.iscomplexobj(self.f_itf_x3) else self.ops.correction_DU_complex
+        op_correction_WE = (
+            self.ops.correction_WE if not xp.iscomplexobj(self.f_itf_x1) else self.ops.correction_WE_complex
+        )
+        op_correction_SN = (
+            self.ops.correction_SN if not xp.iscomplexobj(self.f_itf_x2) else self.ops.correction_SN_complex
+        )
+        op_correction_DU = (
+            self.ops.correction_DU if not xp.iscomplexobj(self.f_itf_x3) else self.ops.correction_DU_complex
+        )
 
         # Accumulate correction terms into self.rhs
         apply_op(self.f_itf_x1, op_correction_WE, out=self.rhs, beta=1.0)
@@ -538,7 +570,9 @@ class RHSDirecFluxReconstruction_mpi_v2(RHSDirecFluxReconstruction):
         apply_op(logp_bdy_k, op_correction_DU, out=self.w_df3_dx3_presb, beta=1.0)
         self.w_df3_dx3_presb *= self.wflux_pres_x3
 
-        self.rhs[idx_rho_w] = self.w_df1_dx1 + self.pressure * (self.w_presa + self.w_df1_dx1_presb + self.w_df2_dx2_presb + self.w_df3_dx3_presb)
+        self.rhs[idx_rho_w] = self.w_df1_dx1 + self.pressure * (
+            self.w_presa + self.w_df1_dx1_presb + self.w_df2_dx2_presb + self.w_df3_dx3_presb
+        )
         self.rhs *= -self.metric.inv_sqrtG_new
 
     def start_communication(self):
