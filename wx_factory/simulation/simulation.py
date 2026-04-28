@@ -41,6 +41,7 @@ from process_topology import ProcessTopology
 from rhs.rhs_selector import RhsBundle
 from wx_mpi import SingleProcess, Conditional
 from post_proccessing import PostProcessor, ScharMountainPostProcessor
+from init.entropy_vars import entropy, entropy_function
 
 
 class Simulation:
@@ -201,8 +202,14 @@ class Simulation:
 
             for post_precessor_type in self.post_processors:
                 self.post_processors[post_precessor_type].process()
-
-            self.output.step(self.Q, self.step_id)  # Perform any requested output
+                
+            # Compute integrated entropy
+            xp = self.device.xp
+            entropy_func = entropy_function(self.Q,self.geometry)
+            # TODO: move integration to the function or use the one from RHSDirectFluxReconstruction_ESAV
+            entropy_func_integrated = self.geometry.Δx1 / 2.0 * self.geometry.Δx3 / 2.0 * xp.sum(entropy_func * self.operators.weights_volume_integral)
+            
+            self.output.step(self.Q, self.step_id, entropy_func_integrated, self.rhs.full.epsilon)  # Perform any requested output
             sys.stdout.flush()
 
             if self.integrator.failure_flag == 0:

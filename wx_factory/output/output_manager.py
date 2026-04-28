@@ -15,8 +15,7 @@ from wx_mpi import SingleProcess, Conditional
 from .solver_stats import SolverStatsOutput
 from .state import save_state, load_state
 
-from init.entropy_vars import entropy, entropy_function
-from common.graphx import plot_entropy
+from common.graphx import plot_entropy, image_field
 
 
 def _readable_time(seconds):
@@ -92,6 +91,9 @@ class OutputManager:
         self.total_write_time = 0.0
         self.total_save_state_time = 0.0
         self.total_blockstat_time = 0.0
+        
+        # Entropy 
+        self.integrated_entropy_history = []
 
     def state_file_name(self, step_id: int) -> str:
         """Return the name of the file where to save the state vector for the current problem,
@@ -123,7 +125,7 @@ class OutputManager:
 
         return Q, step_id
 
-    def step(self, Q: NDArray, step_id: int) -> None:
+    def step(self, Q: NDArray, step_id: int, integrated_entropy: float = None, epsilon: NDArray = None) -> None:
         """Output the result of the latest timestep."""
         if self.config.output_freq > 0 and (step_id % self.config.output_freq) == 0:
             if self.comm.rank == 0:
@@ -135,6 +137,16 @@ class OutputManager:
 
             self.total_write_time += time() - t0
             self.num_writes += 1
+            
+            # # Plot epsilon
+            # # TODO: move to a separate function in OutputCartesian
+            # if epsilon is not None:
+            #     xp = self.device.xp
+            #     filename= f"{self.output_dir}/epslion_{self.config.case_number}_{step_id:08d}"
+            #     num_solpts = self.geometry.num_solpts
+            #     # print("epsilon.shape",self.epsilon.shape)
+            #     epsilon_to_plot = xp.kron(epsilon, xp.ones((num_solpts, num_solpts)))
+            #     image_field(self.geometry, epsilon_to_plot, filename, xp.min(epsilon) - 1e-10, xp.max(epsilon)+1e-10, 100)
 
         if self.config.save_state_freq > 0 and (step_id % self.config.save_state_freq) == 0:
             t0 = time()
@@ -150,6 +162,10 @@ class OutputManager:
             self.__blockstats__(Q, step_id)
             self.total_blockstat_time += time() - t0
             self.num_blockstats += 1
+            
+        if integrated_entropy != None:
+            self.integrated_entropy_history.append(integrated_entropy)
+        
 
     def _gather_field(self, field: NDArray, num_dim: int) -> NDArray:
         return field
@@ -222,29 +238,7 @@ class OutputManager:
         
         
         # Compute and plot entropy history over time steps
-        xp = self.device.xp
-        # entropy_history = xp.zeros(last_step_id) 
-        entropy_func_history = xp.zeros(last_step_id) 
-        sh = last_Q.shape
-        for step_id in range(last_step_id):
-            
-            Q_i,_ = self.load_state_from_file(step_id,sh)
-            s_i = entropy(Q_i,self.geometry)
-            S_func_i = entropy_function(Q_i,self.geometry)
-          
-            # TODO: move integration to the function or use the one from RHSDirectFluxReconstruction_ESAV
-            # s_i_integrated = self.geometry.Δx1 / 2.0 * self.geometry.Δx3 / 2. * xp.sum(s_i * self.operators.weights_volume_integral)
-            S_func_i_integrated = self.geometry.Δx1 / 2.0 * self.geometry.Δx3 / 2. * xp.sum(S_func_i * self.operators.weights_volume_integral)
-            # s_i = xp.average(entropy(Q_i,self.geometry))
-            # entropy_history[step_id] = s_i_integrated
-            entropy_func_history[step_id] = S_func_i_integrated
-        
-        # TODO: reuse other plotting functions or rewrite this one
-        # plot_entropy(entropy_history,"results/entropy_history")
-        # print("entropy_history",entropy_history.shape)
-        # print("entropy_func_history",entropy_func_history.shape)
-        # print("entropy_func_history",entropy_func_history.dtype)
-        plot_entropy(entropy_func_history,"results/entropy_func_history")
+        plot_entropy(self.integrated_entropy_history,"results/entropy_func_history")
         
 
     def __finalize__(self):
