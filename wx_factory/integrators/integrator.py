@@ -54,6 +54,7 @@ class Integrator(ABC):
         if "preconditioner" in kwargs:
             self.preconditioner = kwargs["preconditioner"]
 
+        self.param = param
         self.verbose_solver = param.verbose_solver
         self.solver_info = None
         self.sim_time = -1.0

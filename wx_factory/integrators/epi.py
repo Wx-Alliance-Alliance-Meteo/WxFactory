@@ -10,6 +10,7 @@ from common.configuration import Configuration
 from solvers import (
     kiops,
     matvec_fun,
+    MatvecOpBasic,
     pmex,
     pmex_1s,
     pmex_ne1s,
@@ -100,8 +101,7 @@ class Epi(Integrator):
         # Regular EPI step
         rhs = self.rhs(Q)
 
-        def matvec_handle(v):
-            return matvec_fun(v, dt, Q, rhs, self.rhs, self.jacobian_method)
+        matvec_handle = MatvecOpBasic(dt, Q, self.rhs, self.param)
 
         vec = self.device.xp.zeros((self.max_phi + 1, math.prod(rhs.shape)), dtype=Q.dtype)
         vec[1, :] = rhs.flatten()

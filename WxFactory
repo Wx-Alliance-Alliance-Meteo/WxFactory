@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 
 """ The WxFactory model """
+import datetime
+
+earliest = datetime.datetime.now()
 
 import argparse
-import datetime
 import os.path
 import sys
 
@@ -88,12 +90,16 @@ def main():
 
         args = parser.parse_args()
 
-        print(f'Start time : {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}', flush=True)
-
         if not os.path.exists(args.config):
             raise ValueError(f"Config file does not seem to exist: {args.config}")
 
     args = MPI.COMM_WORLD.bcast(args, root=0)
+
+    if MPI.COMM_WORLD.rank == 0:
+        now = datetime.datetime.now()
+        load_time = now - earliest
+        print(f'Start time : {now.strftime("%Y-%m-%d %H:%M:%S")} (loaded in {load_time})', flush=True)
+
 
     if args.proc_name != "":
         from compiler import compile_kernels

@@ -2,6 +2,9 @@ import math
 from typing import Callable, Tuple
 
 import numpy
+from numpy.typing import NDArray
+
+from common import Configuration
 
 
 class MatvecOp:
@@ -10,11 +13,11 @@ class MatvecOp:
     """
 
     matvec: Callable[[numpy.ndarray], numpy.ndarray]
-    dtype: type
+    dtype: numpy.dtype
     shape: Tuple
     size: int
 
-    def __init__(self, matvec: Callable[[numpy.ndarray], numpy.ndarray], dtype: type, shape: Tuple) -> None:
+    def __init__(self, matvec: Callable[[NDArray], NDArray], dtype: numpy.dtype, shape: Tuple) -> None:
         self.matvec = matvec
         self.dtype = dtype
         self.shape = shape
@@ -29,17 +32,27 @@ class MatvecOp:
 
 
 class MatvecOpBasic(MatvecOp):
-    def __init__(self, dt: float, Q: numpy.ndarray) -> None:
-        super().__init__(lambda vec: matvec_fun(vec, dt, Q), Q.dtype, Q.shape)
+    def __init__(self, dt: float, Q: NDArray, rhs_handle: Callable[[NDArray], NDArray], param: Configuration) -> None:
+        rhs_result = rhs_handle(Q)
+        points_per_panel = (param.num_elements_horizontal * param.num_solpts) ** 2
+        epsilon_factor = 1.0 + points_per_panel / 100000.0
+        super().__init__(
+            lambda vec: matvec_fun(
+                vec, dt, Q, rhs_result, rhs_handle, param.jacobian_method, eps_factor=epsilon_factor
+            ),
+            Q.dtype,
+            Q.shape,
+        )
 
 
 def matvec_fun(
-    vec: numpy.ndarray,
+    vec: NDArray,
     dt: float,
-    Q: numpy.ndarray,
-    rhs: numpy.ndarray,
-    rhs_handle,
-    method="complex",
+    Q: NDArray,
+    rhs: NDArray,
+    rhs_handle: Callable[[NDArray], NDArray],
+    method: str,
+    eps_factor: float = 1.0,
 ) -> numpy.ndarray:
     """
     Basic Matvec operation `A * vec`
@@ -61,7 +74,7 @@ def matvec_fun(
         jac = dt * (rhs_handle(Qvec) / epsilon).imag
     else:
         # Finite difference approximation
-        epsilon = math.sqrt(numpy.finfo(numpy.float32).eps)
+        epsilon = math.sqrt(numpy.finfo(numpy.float32).eps) * eps_factor
         Qvec = Q + epsilon * vec.reshape(Q.shape)
         jac = dt * (rhs_handle(Qvec) - rhs) / epsilon
 
