@@ -2,6 +2,17 @@ from mpi4py import MPI
 import numpy
 import pickle
 import matplotlib.pyplot
+import matplotlib.colors as mcolors
+
+# imports for create animation
+import glob
+import os
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.image as img
+# import cv2
+from matplotlib.animation import FuncAnimation
+from PIL import Image
 
 plot_index = 0
 
@@ -116,6 +127,48 @@ def image_field(
 
     return
 
+def image_field_entropy_diff(
+    geom: "Cartesian2D",
+    field: numpy.ndarray,
+    filename: str,
+    vmin: float,
+    vmax: float,
+    n: int,
+    label: str = "K",
+    colormap: str = "jet",
+):
+    device = geom.device
+    fig, ax = matplotlib.pyplot.subplots()
+    # print(vmin)
+    # # print(vcenter)
+    # print(vmax)
+        
+    if (vmin< 0 and vmax>0):
+        norm = mcolors.TwoSlopeNorm(vmin=vmin, vcenter=0.0, vmax=vmax)
+    else:
+        vcenter = (vmin + vmax)/2
+        norm = mcolors.TwoSlopeNorm(vmin=vmin, vcenter=vcenter, vmax=vmax)
+
+    cmap = matplotlib.pyplot.contourf(
+        device.to_host(geom.X1_cartesian),
+        device.to_host(geom.X3_cartesian),
+        device.to_host(field),
+        cmap="seismic",  # or "coolwarm", "RdBu_r"
+        levels=numpy.linspace(vmin, vmax, n),
+        norm=norm,
+        extend="both",
+    )
+    ax.set_aspect("equal", "box")
+
+    cbar = fig.colorbar(cmap, ax=ax, orientation="vertical", shrink=0.5)
+    cbar.set_label(
+        label,
+    )
+
+    matplotlib.pyplot.savefig(filename)
+    matplotlib.pyplot.close(fig)
+
+    return
 
 def print_mountain(
     x1,
@@ -201,3 +254,54 @@ def print_residual_per_variable(geom, field, filename=None):
     plot_index += 1
 
     return
+
+#
+#   Make animations
+#
+
+def create_animation(path,folder,filename,outname):
+
+    # path1 = "/Users/kate/Desktop/results_comparison/EntropyStabilityAnalysis/Riemann_0001/results"
+    # path2 = "/Users/kate/Desktop/results_comparison/EntropyStabilityAnalysis/Riemann_0001/"
+    # problem = "Riemann_0001_"
+    # code = "_ees"
+    # # filename = "epslion_102"
+    # filename = "euler2D_102"
+    # file = filename + "_*"
+
+    fullfilename = filename + "_*.png"
+    #files = sorted(glob.glob(os.path.join(path1, file)))
+    print("/Users/kate/Documents/VScodeProjects/MSthesis/WxFactory/results/epsilon")
+    print(os.path.join(path, folder,fullfilename))
+    print(os.listdir(os.path.join(path, folder)))
+    files = sorted(glob.glob(os.path.join(path, folder, fullfilename), recursive=True))
+    # files = sorted(glob.glob(os.path.join(path, folder,fullfilename)))
+
+    fig, ax = plt.subplots()
+
+    # load first frame to initialize
+    # data = np.loadtxt(files[0])
+    # data = img.imread(files[0])
+    data = Image.open(files[0])
+    # flip clockwise 
+    data = data.transpose(Image.FLIP_TOP_BOTTOM)
+    # data = cv2.rotate(data, cv2.ROTATE_90_CLOCKWISE)
+    im = ax.imshow(data, origin='lower', animated=True)
+
+    ani = FuncAnimation(fig, update, frames=len(files), interval=100)
+
+    fulloutname = f"{outname}.gif"
+    fullpath = os.path.join(path, fulloutname)
+    # video_filename = f"{problem}{filename}{code}.gif"
+    # video_full_path = os.path.join(path2, video_filename)
+
+    ani.save(fullpath,  writer="ffmpeg", fps=10)
+
+
+def update(frame):
+    data = Image.open(files[frame])
+    # flip clockwise 
+    data = data.transpose(Image.FLIP_TOP_BOTTOM)
+    im.set_array(data)
+    ax.set_title(f"Step {files[frame].split('_')[-1]}")
+    return [im]

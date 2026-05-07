@@ -4,7 +4,8 @@ from numpy.typing import NDArray
 from common.definitions import idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_w, idx_rho_theta
 from rhs.rhs import RHS
 from wx_mpi import SingleProcess, Conditional
-from init.entropy_vars import conservative_to_entropy, du_dv, entropy_potential
+from init.entropy_vars import conservative_to_entropy, du_dv,\
+    entropy_potential, entropy_to_conservative, jacobian_complex_field, jacobian_fd_field, dρE_dρθ
 from common.graphx import image_field
 
 
@@ -17,12 +18,25 @@ class RHSDirectFluxReconstruction_ESAV(RHS):
 
     def solution_extrapolation(self, q: NDArray) -> None:
         # Extrapolate the solution to element boundaries
-
+        xp = self.device.xp
         self.q_itf_x1 = apply_op(q, self.ops.extrap_x)
         self.q_itf_x3 = apply_op(q, self.ops.extrap_z)
+        
+        # print("\nq_itf_x1\n",xp.min(self.q_itf_x1),"\n",xp.max(self.q_itf_x1))
+        # print("\nq_itf_x3\n",xp.min(self.q_itf_x3),"\n",xp.max(self.q_itf_x3))
+        
+        # print("\nq_itf_x1\n",self.q_itf_x1[:,self.i,self.j,:])
+        # print("\nq_itf_x3\n",self.q_itf_x3[:,self.i,self.j,:])
 
     def pointwise_fluxes(self, q: NDArray) -> None:
+        xp = self.device.xp
         self.pde.pointwise_fluxes(q, self.f_x1, self.f_x2, self.f_x3)
+        
+        # print("\nf_x1\n",xp.min(self.f_x1),"\n",xp.max(self.f_x1))
+        # print("\nf_x3\n",xp.min(self.f_x3),"\n",xp.max(self.f_x3))
+        
+        # print("\nf_x1\n",self.f_x1[:,self.i,self.j,:])
+        # print("\nf_x3\n",self.f_x3[:,self.i,self.j,:])
 
     def flux_divergence_partial(self) -> NDArray:
         xp = self.device.xp
@@ -34,6 +48,12 @@ class RHSDirectFluxReconstruction_ESAV(RHS):
 
         self.df1_dx1 = apply_op(self.f_x1, self.ops.derivative_x)
         self.df3_dx3 = apply_op(self.f_x3, self.ops.derivative_z)
+        
+        # print("\ndf1_x1 partial\n",xp.min(self.df1_dx1),"\n",xp.max(self.df1_dx1))
+        # print("\ndf3_x3 partial\n",xp.min(self.df3_dx3),"\n",xp.max(self.df3_dx3))
+        
+        # print("\ndf1_x1 partial\n",self.df1_dx1[:,self.i,self.j,:])
+        # print("\ndf3_x3 partial\n",self.df3_dx3[:,self.i,self.j,:])
 
     def flux_divergence(self):
         xp = self.device.xp
@@ -43,6 +63,13 @@ class RHSDirectFluxReconstruction_ESAV(RHS):
 
         self.df3_dx3 += self.f_itf_x3 @ self.ops.correction_DU
         self.df3_dx3 *= -2.0 / self.geom.Δx3
+        
+        # print("\ndf1_x1 full\n",xp.min(self.df1_dx1),"\n",xp.max(self.df1_dx1))
+        # print("\ndf3_x3 full\n",xp.min(self.df3_dx3),"\n",xp.max(self.df3_dx3))
+        # print("\nflux divergence full")
+        # # print("\ndf1_x1 full\n",self.df1_dx1[:,self.i,self.j,:])
+        # print("\ndf3_x3 full\n",self.df3_dx3[:,self.i,self.j,:])
+        # print("\ndf3_x3 full close to 0\n",xp.all(self.df3_dx3 == 0))
 
         xp.add(self.df1_dx1, self.df3_dx3, out=self.rhs)
 
@@ -79,6 +106,14 @@ class RHSDirectFluxReconstruction_ESAV(RHS):
         
         self.dv_dx1_volume *= 2.0 / self.geom.Δx1
         self.dv_dx3_volume *= 2.0 / self.geom.Δx3
+        
+        # print("\nentropy gradientds partial")
+        # print("\nv\n",self.v[:,self.i1,self.j1,:])
+        # print("self.ops.derivative_x",self.ops.derivative_x)
+        # print("self.ops.derivative_z",self.ops.derivative_z)
+        
+        # print("\ndv_x1 partial\n",self.dv_dx1[:,self.i1,self.j1,:])
+        # print("\ndv_x3 partial\n",self.dv_dx3[:,self.i1,self.j1,:])
 
     def entropy_average(self) -> None:
         """Entropy average"""
@@ -87,15 +122,26 @@ class RHSDirectFluxReconstruction_ESAV(RHS):
 
     def entropy_gradient(self) -> None:
         """Compute derivatives of v, with correction from boundaries"""
-
+        xp = self.device.xp
+        
         self.dv_dx1 += self.v_avg_x1 @ self.ops.correction_WE
         self.dv_dx1 *= 2.0 / self.geom.Δx1
 
         self.dv_dx3 += self.v_avg_x3 @ self.ops.correction_DU
         self.dv_dx3 *= 2.0 / self.geom.Δx3
         
+        print("\nentropy gradientds full")
+        # print("\ndv_x1 full\n",self.dv_dx1[:,self.i,self.j,:])
+        # print("\ndv_x3 full\n",self.dv_dx3[:,self.i1,self.j1,:])
+        print("\ndv_x3 full close to 0",xp.all(xp.isclose(self.dv_dx3,0)))
+        
     def volume_integral(self,h):
         xp = self.device.xp
+        
+        # print("\nvolume integral\n")
+        # print("h\n",h[self.i1,self.j1,:])
+        # print("weights\n",self.ops.weights_volume_integral)
+        # print("result\n",xp.einsum('vhp,p->vh', h, self.ops.weights_volume_integral)[self.i1,self.j1])
         
         return xp.einsum('vhp,p->vh', h, self.ops.weights_volume_integral)
 
@@ -115,7 +161,7 @@ class RHSDirectFluxReconstruction_ESAV(RHS):
         return xp.einsum('pijk,pijk->ijk', a, b)
         
     
-    def entropy_residual(self):
+    def entropy_residual(self,print_results = False):
         xp = self.device.xp
         
         # print("entropy residual\n")
@@ -126,8 +172,55 @@ class RHSDirectFluxReconstruction_ESAV(RHS):
         west_indices = slice(0,num_solpts)
         east_indices = slice(num_solpts,2*num_solpts)
         
+        df1_dx1_volume = 2.0 / self.geom.Δx1 * apply_op(self.f_x1, self.ops.derivative_x)
+        df3_dx3_volume = 2.0 / self.geom.Δx3 * apply_op(self.f_x3, self.ops.derivative_z)
+        
+        # print("\n")
+        # print("self.f_x1\n",self.f_x1[:,self.i1, self.j1,:])
+        # print("self.dv_dx1_volume\n",self.dv_dx1_volume[:,self.i1, self.j1,:])
+        
+        # # print("self.f_x3\n",self.f_x3[:,self.i1, self.j1,:])
+        # # print("self.dv_dx3_volume\n",self.dv_dx3_volume[:,self.i1, self.j1,:])
+        
+        # print("self.dot_product(self.f_x1 , self.dv_dx1_volume)\n",self.dot_product(self.f_x1 , self.dv_dx1_volume)[self.i1, self.j1,:])
+        
+        
         vol_int1 = self.geom.Δx1 / 2.0 * self.geom.Δx3 / 2.0 * self.volume_integral(self.dot_product(self.f_x1 , self.dv_dx1_volume))
+        # vol_int1_diff = self.geom.Δx1 / 2.0 * self.geom.Δx3 / 2.0 * self.volume_integral(self.dot_product(df1_dx1_volume , self.v))
         vol_int2 = self.geom.Δx1 / 2.0 * self.geom.Δx3 / 2.0 * self.volume_integral(self.dot_product(self.f_x3 , self.dv_dx3_volume))
+        vol_int2_diff = self.geom.Δx1 / 2.0 * self.geom.Δx3 / 2.0 * self.volume_integral(self.dot_product(df3_dx3_volume , self.v))
+        vol_int2_diff2 = self.geom.Δx1 / 2.0 * self.geom.Δx3 / 2.0 * self.volume_integral(self.dot_product(self.df3_dx3 , self.v))
+        vol_int2_diff3 = self.geom.Δx1 / 2.0 * self.geom.Δx3 / 2.0 * self.volume_integral(self.dot_product(self.f_x3 , self.dv_dx3))
+        
+        # print("\n")
+        # # print(f"f_x1 [{self.i1},{self.j1}]: ",self.f_x1[:,self.i1, self.j1,:])
+        # # print(f"f_x1[{self.i2},{self.j2}]: ",self.f_x1[:,self.i2, self.j2,:])
+        # print(f"f_x1 [{self.i1},{self.j1}] = f_x1 [{self.i2},{self.j2}]: ", xp.all(self.f_x1[:,self.i1, self.j1,:] == self.f_x1[:,self.i2, self.j2,:]))
+        # print(f"f_x1 [{self.i1},{self.j1}] approx f_x1 [{self.i2},{self.j2}]: ", xp.allclose(self.f_x1[:,self.i1, self.j1,:],self.f_x1[:,self.i2, self.j2,:],rtol=0,atol=self.atol))
+       
+        # print("\n")
+        # # print(f"dv_dx1_volume [{self.i1},{self.j1}]: ",self.dv_dx1_volume[:,self.i1, self.j1,:])
+        # # print(f"dv_dx1_volume[{self.i2},{self.j2}]: ",self.dv_dx1_volume[:,self.i2, self.j2,:])
+        # print(f"dv_dx1_volume [{self.i1},{self.j1}] = dv_dx1_volume [{self.i2},{self.j2}]: ", xp.all(self.dv_dx1_volume[:,self.i1, self.j1,:] == self.dv_dx1_volume[:,self.i2, self.j2,:]))
+        # print(f"dv_dx1_volume [{self.i1},{self.j1}] approx dv_dx1_volume [{self.i2},{self.j2}]: ", xp.allclose(self.dv_dx1_volume[:,self.i1, self.j1,:],self.dv_dx1_volume[:,self.i2, self.j2,:],rtol=0,atol=self.atol))
+        # print("dx1",self.geom.Δx1 / 2.0 )
+        # print("dx3",self.geom.Δx3 / 2.0 )
+        # print("\n")
+        # print(f"vol_int1 [{self.i1},{self.j1}]: ",vol_int1[self.i1, self.j1])
+        # print(f"vol_int1 [{self.i2},{self.j2}]: ",vol_int1[self.i2, self.j2])
+        # print(f"vol_int1 [{self.i1},{self.j1}] = vol_int1 [{self.i2},{self.j2}]: ", vol_int1[self.i1, self.j1] == vol_int1[self.i2, self.j2])
+        
+        # print("\n")
+        # print(f"vol_int2 [{self.i1},{self.j1}]: ",vol_int2[self.i1, self.j1])
+        # print(f"vol_int2 [{self.i2},{self.j2}]: ",vol_int2[self.i2, self.j2])
+        # print(f"vol_int2 [{self.i1},{self.j1}] = vol_int2 [{self.i2},{self.j2}]: ", vol_int2[self.i1, self.j1] == vol_int2[self.i2, self.j2])
+        
+        # print("f1 dv_dx1 \n",vol_int1[self.i,self.j])
+        # print("df1_dx1 v\n",vol_int1_diff[self.i,self.j])
+        # print("\nf3 dv_dx3_volume \n",vol_int2[self.i,self.j])
+        # print("df3_dx3_volume v\n",vol_int2_diff[self.i,self.j])
+        # print("df3_dx3_full v\n",vol_int2_diff2[self.i,self.j])
+        # print("f3 dv_dx3_full\n",vol_int2_diff3[self.i,self.j])
         
         # print("f_x1.min",xp.min(self.f_x1))
         # print("f_x1.max",xp.max(self.f_x1))
@@ -146,10 +239,31 @@ class RHSDirectFluxReconstruction_ESAV(RHS):
         # Precompute entropy potentials
         psi1_itf_x1, psi3_itf_x1 = entropy_potential(self.q_itf_x1)
         psi1_itf_x3, psi3_itf_x3 = entropy_potential(self.q_itf_x3)
-        # print("q_itf_x1",self.q_itf_x1.shape)
         
-        # print("psi1_itf_x1 min",xp.min(psi1_itf_x1))
-        # print("psi1_itf_x1 max",xp.max(psi1_itf_x1))
+        # print("self.q_itf_x1\n",self.q_itf_x1[:,self.i1,self.j1,:])
+        # print("self.psi1_itf_x1\n",psi1_itf_x1[self.i1,self.j1,:])
+        # print("self.psi3_itf_x1\n",psi3_itf_x1[self.i1,self.j1,:])
+        
+        
+        if print_results:
+            print("psi1_itf_x1",psi1_itf_x1.shape)
+            # print("psi1_itf_x1 west min\n",xp.min(psi1_itf_x1[...,0],axis = 0))
+            # print("psi1_itf_x1 west max\n",xp.max(psi1_itf_x1[...,0],axis = 0))
+            print("psi1_itf_x1 west diff\n",xp.max(psi1_itf_x1[...,0],axis = 0)-xp.min(psi1_itf_x1[...,0],axis = 0))
+            
+            # print("psi1_itf_x1 east min\n",xp.min(psi1_itf_x1[...,1],axis = 0))
+            # print("psi1_itf_x1 east max\n",xp.max(psi1_itf_x1[...,1],axis = 0))
+            print("psi1_itf_x1 east diff\n",xp.max(psi1_itf_x1[...,1],axis = 0)-xp.min(psi1_itf_x1[...,1],axis = 0))
+            
+            print("psi3_itf_x1",psi3_itf_x1.shape)
+            # print("psi1_itf_x1 west min\n",xp.min(psi1_itf_x1[...,0],axis = 0))
+            # print("psi1_itf_x1 west max\n",xp.max(psi1_itf_x1[...,0],axis = 0))
+            print("psi3_itf_x1 west diff\n",xp.max(psi3_itf_x1[...,0],axis = 0)-xp.min(psi3_itf_x1[...,0],axis = 0))
+            
+            # print("psi1_itf_x1 east min\n",xp.min(psi1_itf_x1[...,1],axis = 0))
+            # print("psi1_itf_x1 east max\n",xp.max(psi1_itf_x1[...,1],axis = 0))
+            print("psi3_itf_x1 east diff\n",xp.max(psi3_itf_x1[...,1],axis = 0)-xp.min(psi3_itf_x1[...,1],axis = 0))
+        
         
         # print("psi3_itf_x1 min",xp.min(psi3_itf_x1))
         # print("psi3_itf_x1 max",xp.max(psi3_itf_x1))
@@ -181,6 +295,19 @@ class RHSDirectFluxReconstruction_ESAV(RHS):
         boundary_int2_WE = self.geom.Δx3 / 2.0 * self.boundary_integral(psi3_itf_x1)
         boundary_int2_DU = self.geom.Δx1 / 2.0 * self.boundary_integral(psi3_itf_x3)
         
+        # print("\nboundary_int1_WE\n",boundary_int1_WE[self.i1,self.j1,:])
+        
+        # print("\n")
+        # print(f"boundary_int1_WE [{self.i1},{self.j1}]: ",boundary_int1_WE[self.i1, self.j1,:])
+        # print(f"boundary_int1_WE [{self.i2},{self.j2}]: ",boundary_int1_WE[self.i2, self.j2,:])
+        # print(f"boundary_int1_WE [{self.i1},{self.j1}] = boundary_int1_WE [{self.i2},{self.j2}]: ", boundary_int1_WE[self.i1, self.j1,:] == boundary_int1_WE[self.i2, self.j2,:])
+        
+        # print("\n")
+        # print(f"boundary_int1_DU [{self.i1},{self.j1}]: ",boundary_int1_DU[self.i1, self.j1,:])
+        # print(f"boundary_int1_DU [{self.i2},{self.j2}]: ",boundary_int1_DU[self.i2, self.j2,:])
+        # print(f"boundary_int1_DU [{self.i1},{self.j1}] = boundary_int1_DU [{self.i2},{self.j2}]: ", boundary_int1_DU[self.i1, self.j1,:] == boundary_int1_DU[self.i2, self.j2,:])
+        
+        
         # print("boundary_int2_WE [i,j,east]",xp.min(boundary_int2_WE))
         # print("boundary_int2_WE [i,j+1,west]",xp.max(boundary_int2_WE))
         
@@ -197,8 +324,10 @@ class RHSDirectFluxReconstruction_ESAV(RHS):
         # print("boundary_int2_DU max",xp.max(boundary_int2_DU))
         # print("boundary_int1_WE",boundary_int1_WE.shape)
         
+        # print("- boundary_int1_WE[i1,j1,0] + boundary_int1_WE[i1,j1,1]",- boundary_int1_WE[self.i1,self.j1,0] + boundary_int1_WE[self.i1,self.j1,1])
+        
         # Compute entropy residual
-        sigma = ( - vol_int1 - vol_int2 
+        sigma = ( - vol_int1 - vol_int2
             - boundary_int1_WE[:,:,0] + boundary_int1_WE[:,:,1] - boundary_int1_DU[:,:,0] + boundary_int1_DU[:,:,1] 
             - boundary_int2_WE[:,:,0] + boundary_int2_WE[:,:,1] -  boundary_int2_DU[:,:,0] + boundary_int2_DU[:,:,1] )
         # sigma = (- vol_int1 - vol_int2 
@@ -211,6 +340,53 @@ class RHSDirectFluxReconstruction_ESAV(RHS):
       
         Kdv1_dx1 = xp.einsum('abijk,bijk->aijk', self.K, self.dv_dx1)
         Kdv3_dx3 = xp.einsum('abijk,bijk->aijk', self.K, self.dv_dx3)
+        
+        # Kdg1_dx1 = self.K[..., None] * self.dv_dx1
+        # Kdg3_dx3 = self.K[..., None] * self.dv_dx3
+        
+        # Kdv1_dx1 = xp.einsum('abijk,bijk->aijk', self.K[..., None], self.dv_dx1)
+        # Kdv3_dx3 = xp.einsum('abijk,bijk->aijk', self.K[..., None], self.dv_dx3)
+        
+    
+        q_avg_x1, q_avg_x3 = self.pde.viscous_flux_average(self.q_itf_x1,self.q_itf_x3)
+        
+
+        dq_dx1 = apply_op(self.q, self.ops.derivative_x)
+        # dρE_dρθ_q = dρE_dρθ(self.q)
+        # dq_dx1[3,:,:,:] *= dρE_dρθ_q
+        
+        dq_dx1_itf =  q_avg_x1 @ self.ops.correction_WE
+        # dρE_dρθ_q_avg_x1 = dρE_dρθ(q_avg_x1)
+        # dq_dx1_itf[3,:,:,:] *= dρE_dρθ_q_avg_x1
+        dq_dx1 += dq_dx1_itf
+        
+        dq_dx1 *= 2.0 / self.geom.Δx1
+        
+        K1dv1_dx1 = xp.einsum('abijk,bijk->aijk', self.K1, self.dv_dx1)
+        K2dv1_dx1 = xp.einsum('abijk,bijk->aijk', self.K2, self.dv_dx1)
+        
+        print("denominator viscosity coeff: start\n")
+        print("q[:,i1,j1]\n", self.q[:,self.i1,self.j1,:])
+        print("v[:,i1,j1]\n", self.v[:,self.i1,self.j1,:])
+        print("v(q)[:,i1,j1]\n", conservative_to_entropy(self.q,self.geom,self.config)[:,self.i1,self.j1,:])
+        print("q(v)[:,i1,j1]\n", entropy_to_conservative(self.v,self.geom,self.config)[:,self.i1,self.j1,:])
+        print("\n")
+        print("K[:,i1,j1]\n", self.K[3,:,self.i1,self.j1,0])
+        print("K1[:,i1,j1]\n", self.K1[3,:,self.i1,self.j1,0])
+        print("K2[:,i1,j1]\n", self.K2[3,:,self.i1,self.j1,0])
+        print("dv/dx1[:,i1,j1]\n", self.dv_dx1[:,self.i1,self.j1,0])
+        print("\n")
+        print("K1dv1_dx1[:,i1,j1]\n", K1dv1_dx1[:,self.i1,self.j1,:])
+        print("Kdv1_dx1[:,i1,j1]\n", Kdv1_dx1[:,self.i1,self.j1,:])
+        print("dq_dx1[:,i1,j1]\n", dq_dx1[:,self.i1,self.j1,:])
+        
+        print("denominator viscosity coeff: end \n")
+    
+        
+        
+        
+        # print(f"K[{self.i1},{self.j1}]\n", self.K[:,:,self.i1,self.j1])
+        # print(f"dv_dx1[{self.i1},{self.j1}]\n", self.dv_dx1[:,self.i1,self.j1,:])
         # Volume terms
         vol_int1 = self.geom.Δx1 / 2.0 * self.geom.Δx3 / 2.0 * self.volume_integral(self.dot_product(Kdv1_dx1 , self.dv_dx1))
         vol_int2 = self.geom.Δx1 / 2.0 * self.geom.Δx3 / 2.0 * self.volume_integral(self.dot_product(Kdv3_dx3 , self.dv_dx3))
@@ -226,10 +402,12 @@ class RHSDirectFluxReconstruction_ESAV(RHS):
         # TODO: implement the entropy preserving viscosity coeffs
         xp = self.device.xp
         entropy_stable_coeff = True
+    
         
         if(entropy_stable_coeff):
-            # print("\n")
-            # print("entropy stable")
+            # print("entropy stable!")
+            print("\n##########################################################\n")
+        
             # print("\n")
             sigma = self.entropy_residual() # Compute entropy residual
             
@@ -247,17 +425,51 @@ class RHSDirectFluxReconstruction_ESAV(RHS):
             # print("sigma",sigma[i,j])
             # print("a",a[i,j])
             # print("b",b[i,j])
+            print("\n")
+            print(f"sigma [{self.i1},{self.j1}]: ",sigma[self.i1, self.j1])
+            print(f"sigma [{self.i2},{self.j2}]: ",sigma[self.i2, self.j2])
+            print(f"sigma [{self.i1},{self.j1}] = sigma [{self.i2},{self.j2}]: ", sigma[self.i1, self.j1] == sigma[self.i2, self.j2])
+            print("sigma atol: ",xp.max(xp.abs(sigma[self.i1, self.j1] - sigma[self.i2, self.j2])))
+            
+            
+            print("\n")
+            print(f"numerator [{self.i1},{self.j1}]: ",a[self.i1, self.j1])
+            print(f"numerator [{self.i2},{self.j2}]: ",a[self.i2, self.j2])
+            print(f"numerator [{self.i1},{self.j1}] = numerator [{self.i2},{self.j2}]: ", a[self.i1, self.j1] == a[self.i2, self.j2])
+            print("numerator atol: ",xp.max(xp.abs(a[self.i1, self.j1] - a[self.i2, self.j2])))
+            
+            print("\n")
+            print(f"denominator [{self.i1},{self.j1}]: ",b[self.i1, self.j1])
+            print(f"denominator [{self.i2},{self.j2}]: ",b[self.i2, self.j2])
+            print(f"denominator [{self.i1},{self.j1}] = denominator [{self.i2},{self.j2}]: ", b[self.i1, self.j1] == b[self.i2, self.j2])
+            print("denominator atol: ",xp.max(xp.abs(b[self.i1, self.j1] - b[self.i2, self.j2])))
+            # print(f"denominator [{self.i1},{self.j1}] approx denominator[{self.i2},{self.j2}]: ", xp.allclose(self.b[self.i1, self.j1],self.epsilon[self.i2, self.j2],rtol=0,atol=self.atol))
         
             self.epsilon = self.approx_division(a,b)  
             
-
-            # print("epsilon min",xp.min(self.epsilon)) 
-            # print("epsilon max",xp.max(self.epsilon))
+            print("\n")
+            print(f"epsilon [{self.i1},{self.j1}]: ",self.epsilon[self.i1, self.j1])
+            print(f"epsilon [{self.i2},{self.j2}]: ",self.epsilon[self.i2, self.j2])
+            print(f"epsilon [{self.i1},{self.j1}] = epsilon [{self.i2},{self.j2}]: ", self.epsilon[self.i1, self.j1] == self.epsilon[self.i2, self.j2])
+            print("epsilon atol: ",xp.max(xp.abs(self.epsilon[self.i1, self.j1] - self.epsilon[self.i2, self.j2])))
+            # print(f"epsilon [{self.i1},{self.j1}] approx epsilon [{self.i2},{self.j2}]: ", xp.allclose(self.epsilon[self.i1, self.j1],self.epsilon[self.i2, self.j2],rtol=0,atol=self.atol))
+        
+            # print(self.epsilon[0, :])
+            # print(xp.all(self.epsilon == self.epsilon[0, :], axis=0))
+            # print("not equal by column",xp.all(xp.all(self.epsilon == self.epsilon[0, :], axis=0)))
+            
+            # print("epsilon min by column",xp.min(self.epsilon,axis = 0)) 
+            # print("epsilon max by column",xp.max(self.epsilon,axis = 0))
+            if(xp.any(xp.abs(xp.max(self.epsilon,axis = 0) - xp.min(self.epsilon,axis = 0))>1e-10)):
+                # print("epsilon max by column\n",xp.max(self.epsilon,axis = 0) - xp.min(self.epsilon,axis = 0))
+                print("not equal")
+                # self.entropy_residual(True)
+         
             # print("max epsilon",xp.max(self.epsilon)) 
             # print("epsilon shape",self.epsilon.shape)
             # print("epsilon ",self.epsilon[i,j])
         else:
-            epsilon_val = 1e-10
+            epsilon_val = 0
             num_equations = 4
             # shape = (num_equations, self.config.num_elements_vertical, self.config.num_elements_horizontal)
             shape = (self.config.num_elements_vertical, self.config.num_elements_horizontal)
@@ -282,14 +494,31 @@ class RHSDirectFluxReconstruction_ESAV(RHS):
         xp = self.device.xp
 
         Kdg1_dx1 = xp.einsum('abijk,bijk->aijk', self.K, self.dv_dx1) # matrix-vector multiplication along the first dimensions (a,b,:,:,:) and (b,:,:,:)
+        # Kdg1_dx1 = self.K[..., None] * self.dv_dx1
+        # Kdg1_dx1 = xp.einsum('abijk,bijk->aijk', self.K[..., None], self.dv_dx1)
         self.g_x1 = self.epsilon[..., None] * Kdg1_dx1
 
         Kdg3_dx3 = xp.einsum('abijk,bijk->aijk', self.K, self.dv_dx3)
+        # Kdg3_dx3 = self.K[..., None] * self.dv_dx3
+        # Kdg3_dx3 = xp.einsum('abijk,bijk->aijk', self.K[..., None], self.dv_dx3)
         self.g_x3 = self.epsilon[..., None] * Kdg3_dx3
 
     def compute_K(self, q: NDArray) -> None:
         """Computes K= du/dv"""
+        xp = self.device.xp
+        # q_bar = xp.mean(q, axis=-1)
+        
+        # print("q_bar",q_bar.shape)
+        
+        # self.K = du_dv(q_bar,self.geom,self.config)
+        
+        # print("K shape",self.K.shape)
         self.K = du_dv(q,self.geom,self.config)
+        self.K1 = jacobian_complex_field(entropy_to_conservative,self.v,self.geom,self.config)
+        self.K2 = jacobian_fd_field(entropy_to_conservative,self.v,self.geom,self.config)
+        
+        print("K1[:,i1,j1,0]\n",self.K1[:,:,self.i1,self.j1,0])
+        print("K[:,i1,j1,0]\n",self.K[:,:,self.i1,self.j1,0])
 
     def viscous_flux_divergence_partial(self) -> None:
         """Part of the divergence for g - discontinuous part, no boundary terms"""

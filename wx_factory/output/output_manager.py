@@ -15,7 +15,7 @@ from wx_mpi import SingleProcess, Conditional
 from .solver_stats import SolverStatsOutput
 from .state import save_state, load_state
 
-from common.graphx import plot_entropy, image_field
+from common.graphx import plot_entropy, image_field, image_field_entropy_diff, create_animation
 
 
 def _readable_time(seconds):
@@ -63,6 +63,15 @@ class OutputManager:
             output_dir = self.config.output_dir
             try:
                 os.makedirs(os.path.abspath(output_dir), exist_ok=True)
+                # epsilon
+                subdir_path = os.path.join(output_dir, "epsilon")
+                os.makedirs(subdir_path, exist_ok=True)
+                # cell_entropy_diff
+                subdir_path = os.path.join(output_dir, "cell_entropy_diff")
+                os.makedirs(subdir_path, exist_ok=True)
+                # euler2D
+                subdir_path = os.path.join(output_dir, "euler2D")
+                os.makedirs(subdir_path, exist_ok=True)
             except PermissionError:
                 new_name = "results"
                 print(f"WARNING: Unable to create directory {output_dir} for output. Will use './{new_name}' instead")
@@ -94,6 +103,7 @@ class OutputManager:
         
         # Entropy 
         self.integrated_entropy_history = []
+        self.cell_entropy_history = []
 
     def state_file_name(self, step_id: int) -> str:
         """Return the name of the file where to save the state vector for the current problem,
@@ -125,7 +135,7 @@ class OutputManager:
 
         return Q, step_id
 
-    def step(self, Q: NDArray, step_id: int, integrated_entropy: float = None, epsilon: NDArray = None) -> None:
+    def step(self, Q: NDArray, step_id: int, integrated_entropy: float = None, cell_entropy = None, epsilon: NDArray = None) -> None:
         """Output the result of the latest timestep."""
         if self.config.output_freq > 0 and (step_id % self.config.output_freq) == 0:
             if self.comm.rank == 0:
@@ -138,16 +148,42 @@ class OutputManager:
             self.total_write_time += time() - t0
             self.num_writes += 1
             
-            # # Plot epsilon
-            # # TODO: move to a separate function in OutputCartesian
-            # if epsilon is not None:
-            #     xp = self.device.xp
-            #     filename= f"{self.output_dir}/epslion_{self.config.case_number}_{step_id:08d}"
-            #     num_solpts = self.geometry.num_solpts
-            #     # print("epsilon.shape",self.epsilon.shape)
-            #     epsilon_to_plot = xp.kron(epsilon, xp.ones((num_solpts, num_solpts)))
-            #     image_field(self.geometry, epsilon_to_plot, filename, xp.min(epsilon) - 1e-10, xp.max(epsilon)+1e-10, 100)
-
+            # Plot epsilon
+            # TODO: move to a separate function in OutputCartesian
+            if epsilon is not None:
+                xp = self.device.xp
+                filename= f"{self.output_dir}/epsilon/epsilon_{self.config.case_number}_{step_id:08d}"
+                num_solpts = self.geometry.num_solpts
+                # print("epsilon.shape",self.epsilon.shape)
+                epsilon_to_plot = xp.kron(epsilon, xp.ones((num_solpts, num_solpts)))
+                image_field(self.geometry, epsilon_to_plot, filename, xp.min(epsilon) - 1e-10, xp.max(epsilon)+1e-10, 100)
+                
+            if cell_entropy is not None:
+                # print("step_id",step_id)
+                # print("output_freq",self.config.output_freq)
+                # print("diff", step_id - self.config.output_freq)
+                xp = self.device.xp
+                filename= f"{self.output_dir}/cell_entropy_diff/cell_entropy_diff_{self.config.case_number}_{step_id:08d}"
+                num_solpts = self.geometry.num_solpts
+                # print("epsilon.shape",self.epsilon.shape)
+                diff_idx = step_id - self.config.output_freq
+                # print("\ndiff", step_id - self.config.output_freq)
+            
+                cell_entropy_diff = cell_entropy - self.cell_entropy_history[diff_idx]
+                # print("cell.emntropy_history.shape",self.cell_entropy_history[diff_idx].shape)
+                cell_entropy_to_plot = xp.kron(cell_entropy_diff, xp.ones((num_solpts, num_solpts)))
+                # print("min",xp.min(cell_entropy_to_plot))
+                # print("max",xp.max(cell_entropy_to_plot))
+                # print( xp.min(cell_entropy_to_plot))
+                # print( xp.max(cell_entropy_to_plot))
+                image_field_entropy_diff(self.geometry, cell_entropy_to_plot, filename, xp.min(cell_entropy_to_plot) - 1e-14, xp.max(cell_entropy_to_plot)+1e-14, 100)
+                # filename1= f"{self.output_dir}/cell_entropy_curr_{self.config.case_number}_{step_id:08d}"
+                # cell_entropy_to_plot = xp.kron(cell_entropy, xp.ones((num_solpts, num_solpts)))
+                # image_field(self.geometry, cell_entropy_to_plot, filename, xp.min(cell_entropy_to_plot) - 1e-14, xp.max(cell_entropy_to_plot)+1e-14, 100)
+                # filename2= f"{self.output_dir}/cell_entropy_prev_{self.config.case_number}_{step_id:08d}"
+                # cell_entropy_to_plot = xp.kron(self.cell_entropy_history[diff_idx], xp.ones((num_solpts, num_solpts)))
+                # image_field(self.geometry, cell_entropy_to_plot, filename, xp.min(cell_entropy_to_plot) - 1e-14, xp.max(cell_entropy_to_plot)+1e-14, 100)
+                
         if self.config.save_state_freq > 0 and (step_id % self.config.save_state_freq) == 0:
             t0 = time()
             total_state = self._gather_field(Q, self.num_dim + 1)
@@ -165,6 +201,11 @@ class OutputManager:
             
         if integrated_entropy != None:
             self.integrated_entropy_history.append(integrated_entropy)
+        if cell_entropy is not None:
+            self.cell_entropy_history.append(cell_entropy)
+            
+        # print("length(self.integrated_entropy_history)",len(self.integrated_entropy_history))
+        # print("\n")
         
 
     def _gather_field(self, field: NDArray, num_dim: int) -> NDArray:
@@ -236,9 +277,21 @@ class OutputManager:
                 flush=True,
             )
         
-        
+        # print("plotting entropy")
         # Compute and plot entropy history over time steps
         plot_entropy(self.integrated_entropy_history,"results/entropy_func_history")
+        
+        make_animations = False
+        # TODO: implement 
+        if (make_animations):
+            # create_animation epsilon
+            # path,folder,filename,outname
+            path = "/Users/kate/Documents/VScodeProjects/MSthesis/WxFactory/results"
+            create_animation(self.output_dir,"epsilon",f"epsilon_{self.config.case_number}",f"epsilon_{self.config.case_number}")
+            # create_animation cell_entropy_diff
+            # create_animation euler2D
+            
+            
         
 
     def __finalize__(self):

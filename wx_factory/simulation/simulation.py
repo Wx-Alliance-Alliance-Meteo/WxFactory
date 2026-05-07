@@ -208,8 +208,9 @@ class Simulation:
             entropy_func = entropy_function(self.Q,self.geometry)
             # TODO: move integration to the function or use the one from RHSDirectFluxReconstruction_ESAV
             entropy_func_integrated = self.geometry.Δx1 / 2.0 * self.geometry.Δx3 / 2.0 * xp.sum(entropy_func * self.operators.weights_volume_integral)
-            
-            self.output.step(self.Q, self.step_id, entropy_func_integrated, self.rhs.full.epsilon)  # Perform any requested output
+            entropy_func_cell = self.geometry.Δx1 / 2.0 * self.geometry.Δx3 / 2.0 * xp.einsum('vhp,p->vh', entropy_func, self.operators.weights_volume_integral)
+        
+            self.output.step(self.Q, self.step_id, entropy_func_integrated, entropy_func_cell, self.rhs.full.epsilon)  # Perform any requested output
             sys.stdout.flush()
 
             if self.integrator.failure_flag == 0:

@@ -14,7 +14,7 @@ from .output_manager import OutputManager
 
 class OutputCartesian(OutputManager):
     def __write_result__(self, Q, step_id):
-        filename = f"{self.output_dir}/euler2D_{self.config.case_number}_{step_id:08d}"
+        filename = f"{self.output_dir}/euler2D/euler2D_{self.config.case_number}_{step_id:08d}"
         Q_cartesian = self.geometry.to_single_block(Q)
 
         if self.config.case_number == 0:
