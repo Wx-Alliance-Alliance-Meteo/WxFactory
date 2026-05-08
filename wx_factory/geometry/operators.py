@@ -15,6 +15,7 @@ from device import Device
 from .cartesian_2d_mesh import Cartesian2D
 from .cubed_sphere_3d import CubedSphere3D
 from .geometry import Geometry
+from .quadrature import gauss_legendre
 
 T = TypeVar("T", bound=numpy.generic)
 
@@ -79,6 +80,11 @@ class DFROperators:
         self.highfilter = V @ (feye @ invV)
         self.highfilter_k = xp.kron(self.highfilter.T, xp.eye(grd.num_solpts**2))  # Only valid in 3D (hence the **2)
 
+        # For ESAV
+        solutionPoints_sym, solutionPoints, glweights = gauss_legendre(grd.num_solpts, xp)
+
+        diff_esav = diffmat(solutionPoints_sym)
+        diff_esav = xp.asarray(diff_esav)
         # if device.comm.rank == 0:
         #     print(f"high filter = \n{self.highfilter}")
         #     print(f"high filter k = \n{self.highfilter_k}")
@@ -140,6 +146,7 @@ class DFROperators:
         if check_skewcentrosymmetry(self.diff_ext) is False:
             raise ValueError("Something horribly wrong has happened in the creation of the differentiation matrix")
 
+
         # Force matrices to be in C-contiguous order
         self.diff_solpt = self.diff_ext[1:-1, 1:-1].copy()
         self.correction = xp.column_stack((self.diff_ext[1:-1, 0], self.diff_ext[1:-1, -1]))
@@ -197,6 +204,9 @@ class DFROperators:
             self.derivative_y = xp.kron(self.diff_solpt, ident).T
             self.derivative_z = xp.kron(self.diff_solpt, ident).T
 
+            self.derivative_x_esav = xp.kron(ident, diff_esav).T
+            self.derivative_z_esav = xp.kron(diff_esav, ident).T
+
             corr_down = self.diff_ext[1:-1, 0]
             corr_up = self.diff_ext[1:-1, -1]
             self.correction_DU = xp.vstack((xp.kron(corr_down, ident), xp.kron(corr_up, ident)))
@@ -206,7 +216,7 @@ class DFROperators:
             corr_west = self.diff_ext[1:-1, 0]
             corr_east = self.diff_ext[1:-1, -1]
             self.correction_WE = xp.vstack((xp.kron(ident, corr_west), xp.kron(ident, corr_east)))
-            
+
             self.weights_boundary_integral = grd.glweights # boundary quadrature weights for 2d cartesian grid
             self.weights_volume_integral = xp.kron(grd.glweights, grd.glweights)  # volume quadrature weights for 2d cartesian grid
 
