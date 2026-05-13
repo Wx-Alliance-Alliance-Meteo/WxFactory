@@ -21,6 +21,7 @@ from common.definitions import (
     cvd,
     Rd,
     p0,
+    heat_capacity_ratio
 )
 from common import Configuration
 from common.graphx import plot_array
@@ -335,8 +336,9 @@ def initialize_cartesian2d(geom: Cartesian2D, param: Configuration) -> NDArray[n
         θ = p/(Rd*ρ)
         T = p / (Rd * ρ)
         exner = (p / p0) ** (Rd / cpd)
-        θ = T / exner
-    
+
+        E = p / (ρ * (heat_capacity_ratio - 1.0)) + 0.5 * (uu * uu + ww * ww);
+
     elif param.case_number == 101:
         geom.xperiodic = True
         geom.zperiodic = False
@@ -350,7 +352,7 @@ def initialize_cartesian2d(geom: Cartesian2D, param: Configuration) -> NDArray[n
         T = p / (Rd * ρ)
         exner = (p / p0) ** (Rd / cpd)
         θ = T / exner
-        
+
     elif param.case_number == 102:
         geom.xperiodic = True
         geom.zperiodic = False
@@ -374,11 +376,12 @@ def initialize_cartesian2d(geom: Cartesian2D, param: Configuration) -> NDArray[n
         ρ[q2], uu[q2], ww[q2], p[q2] = 1.0,    0.7276, 0.0,    1.0
         ρ[q3], uu[q3], ww[q3], p[q3] = 0.8,    0.0,    0.0,    1.0
         ρ[q4], uu[q4], ww[q4], p[q4] = 1.0,    0.0,    0.7276, 1.0
-        
+
         θ = p/(Rd*ρ)
         T = p / (Rd * ρ)
         exner = (p / p0) ** (Rd / cpd)
         θ = T / exner
+        E = p / (ρ * (heat_capacity_ratio - 1.0)) + 0.5 * (uu * uu + ww * ww);
 
     if param.case_number == 0:
         N_star = 0.01
@@ -406,7 +409,8 @@ def initialize_cartesian2d(geom: Cartesian2D, param: Configuration) -> NDArray[n
     Q[idx_2d_rho, :, :] = ρ
     Q[idx_2d_rho_u, :, :] = ρ * uu
     Q[idx_2d_rho_w, :, :] = ρ * ww
-    Q[idx_2d_rho_theta, :, :] = ρ * θ
+    Q[idx_2d_rho_theta, :, :] = ρ * E
+
 
     return Q
 

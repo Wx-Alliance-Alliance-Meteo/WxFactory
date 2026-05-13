@@ -29,8 +29,8 @@ DEVICE_SPACE void riemann_eulercartesian_ausm_2d_kernel(
   const num_t wr       = rho_wr * inv_rhor;
 
   // Compute the left and right-hand side pressure states
-  const num_t pl = p0 * pow(rho_thetal * Rd * inp0, heat_capacity_ratio);
-  const num_t pr = p0 * pow(rho_thetar * Rd * inp0, heat_capacity_ratio);
+  const num_t pl = (heat_capacity_ratio-1) * (rho_thetal - 0.5 *(rho_ul * ul + rho_wl*wl));
+  const num_t pr = (heat_capacity_ratio-1) * (rho_thetar - 0.5 *(rho_ur * ur + rho_wr*wr));
 
   // Get the speed of sound on each side
   const num_t al = sqrt(heat_capacity_ratio * pl * inv_rhol);
@@ -59,18 +59,21 @@ DEVICE_SPACE void riemann_eulercartesian_ausm_2d_kernel(
   const num_t Mmin = fmin(0.0, M) * ar;
 
   // Set the interface fluxes
+  const num_t p_face = 0.5 * (Ml * pl - Mr * pr);
+
   *params_l.flux[dir].rho = rhol * Mmax + rhor * Mmin;
   if (dir == 0)
   {
-    *params_l.flux[dir].rho_u = 0.5 * (Ml * pl - Mr * pr);
+    *params_l.flux[dir].rho_u = rho_ul * Mmax + rho_ur * Mmin + p_face;
     *params_l.flux[dir].rho_w = rho_wl * Mmax + rho_wr * Mmin;
   }
   else
   {
     *params_l.flux[dir].rho_u = rho_ul * Mmax + rho_ur * Mmin;
-    *params_l.flux[dir].rho_w = 0.5 * (Ml * pl - Mr * pr);
+    *params_l.flux[dir].rho_w = rho_wl * Mmax + rho_wr * Mmin + p_face;
   }
-  *params_l.flux[dir].rho_theta = rho_thetal * Mmax + rho_thetar * Mmin;
+
+  *params_l.flux[dir].rho_theta = (rho_thetal + pl) * Mmax + (rho_thetar + pr) * Mmin;
 
   // Copy values to the right-hand side flux
   *params_r.flux[dir].rho       = *params_l.flux[dir].rho;
@@ -78,6 +81,102 @@ DEVICE_SPACE void riemann_eulercartesian_ausm_2d_kernel(
   *params_r.flux[dir].rho_w     = *params_l.flux[dir].rho_w;
   *params_r.flux[dir].rho_theta = *params_l.flux[dir].rho_theta;
 }
+
+// Rusanov version
+// template <typename num_t>
+// DEVICE_SPACE void riemann_eulercartesian_ausm_2d_kernel(
+//     kernel_params<num_t, euler_state_2d> params_l,
+//     kernel_params<num_t, euler_state_2d> params_r,
+//     const int                            dir) {
+
+//     // Left state
+//     const num_t rhol  = *params_l.q.rho;
+//     const num_t rho_ul = *params_l.q.rho_u;
+//     const num_t rho_wl = *params_l.q.rho_w;
+//     const num_t rho_El = *params_l.q.rho_theta; // actually rho*E
+
+//     const num_t inv_rhol = 1.0 / rhol;
+//     const num_t ul = rho_ul * inv_rhol;
+//     const num_t wl = rho_wl * inv_rhol;
+
+//     const num_t kinetic_l = 0.5 * (rho_ul * ul + rho_wl * wl);
+//     const num_t pl = (heat_capacity_ratio - 1.0) * (rho_El - kinetic_l);
+//     const num_t al = sqrt(heat_capacity_ratio * pl * inv_rhol);
+
+//     // Right state
+//     const num_t rhor  = *params_r.q.rho;
+//     const num_t rho_ur = *params_r.q.rho_u;
+//     const num_t rho_wr = *params_r.q.rho_w;
+//     const num_t rho_Er = *params_r.q.rho_theta; // actually rho*E
+
+//     const num_t inv_rhor = 1.0 / rhor;
+//     const num_t ur = rho_ur * inv_rhor;
+//     const num_t wr = rho_wr * inv_rhor;
+
+//     const num_t kinetic_r = 0.5 * (rho_ur * ur + rho_wr * wr);
+//     const num_t pr = (heat_capacity_ratio - 1.0) * (rho_Er - kinetic_r);
+//     const num_t ar = sqrt(heat_capacity_ratio * pr * inv_rhor);
+
+//     // Normal velocities
+//     num_t vnl = 0.0;
+//     num_t vnr = 0.0;
+
+//     if (dir == 0)
+//     {
+//       vnl = ul;
+//       vnr = ur;
+//     } else
+//     {
+//       vnl = wl;
+//       vnr = wr;
+//     }
+
+//     const num_t lambda = fmax(fabs(vnl) + al, fabs(vnr) + ar);
+
+//     // Physical fluxes: left and right
+//     num_t Fl_rho, Fl_rho_u, Fl_rho_w, Fl_rho_E;
+//     num_t Fr_rho, Fr_rho_u, Fr_rho_w, Fr_rho_E;
+
+//     if (dir == 0)
+//     {
+//       // x-direction flux
+//       Fl_rho   = rho_ul;
+//       Fl_rho_u = rho_ul * ul + pl;
+//       Fl_rho_w = rho_ul * wl;
+//       Fl_rho_E = (rho_El + pl) * ul;
+
+//       Fr_rho   = rho_ur;
+//       Fr_rho_u = rho_ur * ur + pr;
+//       Fr_rho_w = rho_ur * wr;
+//       Fr_rho_E = (rho_Er + pr) * ur;
+//     } else
+//     {
+//       // z/w-direction flux
+//       Fl_rho   = rho_wl;
+//       Fl_rho_u = rho_wl * ul;
+//       Fl_rho_w = rho_wl * wl + pl;
+//       Fl_rho_E = (rho_El + pl) * wl;
+
+//       Fr_rho   = rho_wr;
+//       Fr_rho_u = rho_wr * ur;
+//       Fr_rho_w = rho_wr * wr + pr;
+//       Fr_rho_E = (rho_Er + pr) * wr;
+//     }
+
+//     // Rusanov / local Lax-Friedrichs flux
+//     *params_l.flux[dir].rho = 0.5 * (Fl_rho + Fr_rho) - 0.5 * lambda * (rhor - rhol);
+//     *params_l.flux[dir].rho_u = 0.5 * (Fl_rho_u + Fr_rho_u) - 0.5 * lambda * (rho_ur - rho_ul);
+//     *params_l.flux[dir].rho_w = 0.5 * (Fl_rho_w + Fr_rho_w) - 0.5 * lambda * (rho_wr - rho_wl);
+//     *params_l.flux[dir].rho_theta = 0.5 * (Fl_rho_E + Fr_rho_E) - 0.5 * lambda * (rho_Er - rho_El);
+
+//     // Copy to right-hand side flux
+//     *params_r.flux[dir].rho       = *params_l.flux[dir].rho;
+//     *params_r.flux[dir].rho_u     = *params_l.flux[dir].rho_u;
+//     *params_r.flux[dir].rho_w     = *params_l.flux[dir].rho_w;
+//     *params_r.flux[dir].rho_theta = *params_l.flux[dir].rho_theta;
+// }
+
+
 
 template <typename real_t, typename num_t>
 DEVICE_SPACE void riemann_euler_cubedsphere_rusanov_3d_kernel(

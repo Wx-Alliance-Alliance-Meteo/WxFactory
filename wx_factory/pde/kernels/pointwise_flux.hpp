@@ -15,18 +15,18 @@ pointwise_eulercartesian_2d_kernel(kernel_params<num_t, euler_state_2d> params) 
   const num_t w       = rho_w * inv_rho;
 
   // Get the pressure
-  const num_t p = p0 * exp(heat_capacity_ratio * log(Rdinp0 * rho_theta));
+  const num_t p = (heat_capacity_ratio - 1) * (rho_theta - 0.5 * (rho_u * u + rho_w * w));
 
   // Set the values of the fluxes
   *params.flux[0].rho       = rho_u;
   *params.flux[0].rho_u     = rho_u * u + p;
   *params.flux[0].rho_w     = rho_u * w;
-  *params.flux[0].rho_theta = rho_theta * u;
+  *params.flux[0].rho_theta = (rho_theta + p) * u; // Really energy flux, rho_theta is rho*E
 
   *params.flux[1].rho       = rho_w;
   *params.flux[1].rho_u     = rho_w * u;
   *params.flux[1].rho_w     = rho_w * w + p;
-  *params.flux[1].rho_theta = rho_theta * w;
+  *params.flux[1].rho_theta = (rho_theta + p) * w; // Really energy flux, rho_theta is rho*E
 }
 
 template <typename real_t, typename num_t>

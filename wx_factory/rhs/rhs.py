@@ -66,35 +66,35 @@ class RHS(ABC):
         self.q_itf_n = None
         self.q_itf_w = None
         self.q_itf_e = None
-        
+
         # ESAV variables
-        
+
         self.v = None
-        
+
         self.v_itf_x1 = None
         self.v_itf_x3 = None
-        
+
         self.dv_dx1_volume = None
         self.dv_dx3_volume = None
-        
+
         self.dv_dx1 = None
         self.dv_dx3 = None
-        
+
         self.v_avg_x1 = None
         self.v_avg_x3 = None
-        
+
         self.epsilon = None
         self.K = None
-        
+
         self.g_x1 = None
         self.g_x3 = None
-        
+
         self.dg1_dx1 = None
         self.dg3_dx3 = None
-        
+
         self.g_avg_x1 = None
         self.g_avg_x3 = None
-        
+
 
         # Initialize rhs matrix
         self.rhs = None
@@ -108,7 +108,7 @@ class RHS(ABC):
 
     def __call__(self, q: NDArray) -> NDArray:
         xp = self.device.xp
-        print("\n -------------------------------------------------------------------------------------\n")
+        # print("\n -------------------------------------------------------------------------------------\n")
         # self.i = 2
         # self.j = 39
         self.i1 = 0
@@ -116,16 +116,16 @@ class RHS(ABC):
         self.i2 = 1
         self.j2 = 36
         self.atol = 1e-12
-        
+
         self.q = q
         # print("\nq\n",xp.min(q),"\n",xp.max(q))
-        print("\nq\n",q[:,self.i1,self.j1,:])
-        print(f"q [{1},{38}] = q [{2},{38}]: ", xp.all(q[:,self.i1, self.j1,:] == q[:,self.i2, self.j2,:]))
-        print(f"q [{self.i1},{self.j1}] = q [{self.i2},{self.j2}]: ", xp.all(q[:,self.i1, self.j1,:] == q[:,self.i2, self.j2,:]))
-        
-        print(f"q [{1},{38}] approx q [{2},{38}]: ", xp.allclose(q[:,self.i1, self.i1,:] , q[:,self.i2, self.j2,:],rtol=0,atol=self.atol))
-        print(f"q [{self.i1},{self.j1}] approx q [{self.i2},{self.j2}]: ", xp.allclose(q[:,self.i1, self.j1,:],q[:,self.i2, self.j2,:],rtol=0,atol=self.atol))
-        
+        # print("\nq\n",q[:,self.i1,self.j1,:])
+        # print(f"q [{1},{38}] = q [{2},{38}]: ", xp.all(q[:,self.i1, self.j1,:] == q[:,self.i2, self.j2,:]))
+        # print(f"q [{self.i1},{self.j1}] = q [{self.i2},{self.j2}]: ", xp.all(q[:,self.i1, self.j1,:] == q[:,self.i2, self.j2,:]))
+
+        # print(f"q [{1},{38}] approx q [{2},{38}]: ", xp.allclose(q[:,self.i1, self.i1,:] , q[:,self.i2, self.j2,:],rtol=0,atol=self.atol))
+        # print(f"q [{self.i1},{self.j1}] approx q [{self.i2},{self.j2}]: ", xp.allclose(q[:,self.i1, self.j1,:],q[:,self.i2, self.j2,:],rtol=0,atol=self.atol))
+
         # 0.a Process timing
         if len(self.timestamps) > 0:  # Process timing from previous steps
             self.retrieve_last_times()
@@ -168,62 +168,41 @@ class RHS(ABC):
         # 6. Add forcing terms
         # self.forcing_terms(q)
         self.timestamps[8] = self.device.timestamp(name="artificial viscosity")
-        
-        #
-        #
+
         # 7. Add artificial viscosity for entropy stability
-        #
-        #
-        # i = 0 # vertical index
-        # j = 1 # horizontal index
-        # num_solpts = 3
-        # west_indices = slice(0,num_solpts)
-        # east_indices = slice(num_solpts,2*num_solpts)
-        # down_indices = west_indices
-        # up_indices = east_indices
-        
         # # 7.0 Compute entropy variables from solution variables
-        # # TODO: check if config is right
-        print("q atol: ",xp.max(xp.abs(q[:,self.i1, self.j1,:] - q[:,self.i2, self.j2,:])))
         self.v = conservative_to_entropy(q,self.geom,self.config)
-        print("v atol: ",xp.max(xp.abs(self.v[:,self.i1, self.j1,:] - self.v[:,self.i2, self.j2,:])))
-        
+
         # 7.1 Extrapolate the entropy variables to the boundaries of the element
         self.solution_extrapolation_entropy(self.v)
-        
+
+        # 7.2. Compute auxiliary variable - gradient of v
         #
-        # 7.2. Compute auxiliary variable - gradient of v 
-        #
-        # 7.2.1 Compute the derivatives of the discontinuous entropy variables 
+        # 7.2.1 Compute the derivatives of the discontinuous entropy variables
         self.entropy_gradient_partial(self.v)
+
         # 7.2.2 Compute the common interface - average across the interfaces
         self.entropy_average()
-        # print("\n")
-        # print("v_itf_x1: west\n",self.v_avg_x1[:,i,j,west_indices])
-        # print("v_itf_x1: east\n",self.v_avg_x1[:,i,j,east_indices])
-        # print("v_itf_x3 : down\n",self.v_avg_x3[:,i,j,down_indices])
-        # print("v_itf_x3 : up\n",self.v_avg_x3[:,i,j,up_indices])
+
         # 7.2.3 Complete the gradient operation by ading the boundary terms
         self.entropy_gradient()
-        
-        #
+
         # 7.3 Compute the diffusion term
-        # 
-         # 7.3.2 Compute K = du_dv
+        # 7.3.2 Compute K = du_dv
         self.compute_K(q)
+
         # 7.3.1 Compute viscosity coefficients
         self.viscosity_coeff(q)
+
         # 7.3.3 Compute the viscous flux
         self.viscous_fluxes()
+
         # 7.3.4 Compute the derivative of the discontinuous viscous flux g
         self.viscous_flux_divergence_partial()
+
         # 7.3.5 Compute the average of g
         self.viscous_flux_average()
-        # print("\n")
-        # print("g1_avg_x1: west\n",self.g_avg_x1[:,i,j,west_indices])
-        # print("g1_avg_x1: east\n",self.g_avg_x1[:,i,j,east_indices])
-        # print("g3_avg_x3 : down\n",self.g_avg_x3[:,i,j,down_indices])
-        # print("g3_avg_x3 : up\n",self.g_avg_x3[:,i,j,up_indices])
+
         # 7.3.6 Complete the divergence operation for g
         self.viscous_flux_divergence()
 
@@ -327,47 +306,47 @@ class RHS(ABC):
             f"  -------------------------\n"
             f"  Total:          {total:5.1f}"
         )
-        
+
     # ESAV methods
-    
+
     @abstractmethod
     def solution_extrapolation_entropy(self, v: NDArray) -> None:
         pass
-    
+
     @abstractmethod
     def entropy_gradient_partial(self,v: NDArray) -> None:
         pass
-    
-    @abstractmethod   
+
+    @abstractmethod
     def entropy_average(self) -> None:
         pass
-    
-    @abstractmethod    
+
+    @abstractmethod
     def entropy_gradient(self) -> None:
         pass
-    
-    @abstractmethod    
+
+    @abstractmethod
     def viscosity_coeff(self, q: NDArray) -> None:
         pass
-    
-    @abstractmethod    
+
+    @abstractmethod
     def viscous_fluxes(self) -> None:
         pass
-    
-    @abstractmethod    
+
+    @abstractmethod
     def compute_K(self, q: NDArray) -> None:
         pass
-    
+
     @abstractmethod
     def viscous_flux_divergence_partial(self) -> None:
         pass
-    
+
     @abstractmethod
     def viscous_flux_average(self) -> None:
         pass
-    
+
     @abstractmethod
     def viscous_flux_divergence(self) -> None:
         pass
-    
-    
+
+
