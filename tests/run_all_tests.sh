@@ -10,4 +10,4 @@ cd ${WX_DIR}
 
 ${MPIRUN} -n 1 ${PYTHON} ${WX_DIR}/tests/unit/run_tests.py || exit -1
 ${MPIRUN} -n 24 ${PYTHON} ${WX_DIR}/tests/unit/run_mpi_tests.py || exit -1
-${MPIRUN} -n 1 ${WX_DIR}/tests/integration/run_all_integration_tests.sh || exit -1
+${WX_DIR}/tests/integration/run_all_integration_tests.sh || exit -1

@@ -18,9 +18,10 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("problems", type=str, nargs="+")
+    parser.add_argument("--no-buffer", action="store_true", help="Display output as the test runs")
     args = parser.parse_args()
 
-    runner = mpi_test.MpiRunner(buffer=True)
+    runner = mpi_test.MpiRunner(buffer=not args.no_buffer)
     results = []
     for problem in args.problems:
         problem_dir = os.path.join(main_project_dir, test_cases_dir, problem)
