@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
-""" The WxFactory model """
+"""The WxFactory model"""
+
 import datetime
 
 earliest = datetime.datetime.now()
@@ -8,6 +9,8 @@ earliest = datetime.datetime.now()
 import argparse
 import os.path
 import sys
+import traceback
+import warnings
 
 from mpi4py import MPI
 import numpy
@@ -87,22 +90,50 @@ def main():
             default="",
             help="Force processor name to something specific (for compiled libraries)",
         )
+        parser.add_argument(
+            "--suppress-warnings",
+            action="store_true",
+            help="Suppress warnings from external libraries (mostly related to math operations)",
+        )
+        parser.add_argument(
+            "--warning-traceback", action="store_true", help="Print stack trace when there is a warning"
+        )
 
         args = parser.parse_args()
 
         if not os.path.exists(args.config):
             raise ValueError(f"Config file does not seem to exist: {args.config}")
 
+    # Send arguments to every PE
     args = MPI.COMM_WORLD.bcast(args, root=0)
 
+    # Print start + load time
     if MPI.COMM_WORLD.rank == 0:
         now = datetime.datetime.now()
         load_time = now - earliest
         print(f'Start time : {now.strftime("%Y-%m-%d %H:%M:%S")} (loaded in {load_time})', flush=True)
 
+    # Handle warnings
+    if args.suppress_warnings:
+        warnings.filterwarnings("ignore")
 
+    elif args.warning_traceback:
+
+        def warn_with_traceback(message, category, filename, lineno, file=None, line=None):
+
+            log = sys.stderr
+            if file and hasattr(file, "write"):
+                log = file
+            traceback.print_stack(file=log)
+            log.write(warnings.formatwarning(message, category, filename, lineno, line))
+
+        if MPI.COMM_WORLD.rank == 0:
+            warnings.showwarning = warn_with_traceback
+
+    # Manage processor for compilation
     if args.proc_name != "":
         from compiler import compile_kernels
+
         compile_kernels._proc_name = args.proc_name
 
     try:

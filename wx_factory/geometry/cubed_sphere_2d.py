@@ -196,7 +196,7 @@ class CubedSphere2D(CubedSphere):
         self.x2_itf_j = xp.linspace(domain_x2[0], domain_x2[1], num_elements_x2 + 1, dtype=self.dtype)
 
         ## Construct the combined coordinate vector for the numeric/equiangular coordinate (x1, x2)
-        self.block_radians_x1, self.block_radians_x2 = xp.meshgrid(self.x1, self.x2)
+        self.block_radians_x1, self.block_radians_x2 = xp.meshgrid(self.x1, self.x2, indexing="xy")
         i_x1, i_x2 = xp.meshgrid(self.x1_itf_i, self.x2_itf_i, indexing="ij")
         j_x1, j_x2 = xp.meshgrid(self.x1_itf_j, self.x2_itf_j, indexing="xy")
 

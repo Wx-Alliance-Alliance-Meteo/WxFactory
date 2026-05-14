@@ -171,8 +171,7 @@ class RhsShallowWater:
         north = xp.s_[..., :-1, :, num_solpts:]
 
         a = xp.sqrt(gravity * var_itf_i[idx_h] * metric.H_contra_11_itf_i)
-        tmp = xp.maximum(var_itf_i[idx_h] * a, 1e-12)
-        m = xp.where(tmp != 0.0, var_itf_i[idx_hu1] / tmp, 0.0)
+        m = xp.where(xp.real(a) > 0.0, var_itf_i[idx_hu1] / (var_itf_i[idx_h] * a), 0.0)
 
         # Workaround for CuPy bug where n**2 is wrong when n is complex with a negative real value
         mw2 = (m[west] - 1.0) * (m[west] - 1.0)
@@ -180,8 +179,8 @@ class RhsShallowWater:
 
         flux_x1_itf = xp.zeros_like(var_itf_i)
         # ------ Advection part
-        flux_x1_itf[east] = metric.sqrtG_itf_i[east] * (
-            xp.maximum(0.0, big_M) * a[east] * var_itf_i[east] + xp.minimum(0.0, big_M) * a[west] * var_itf_i[west]
+        flux_x1_itf[east] = metric.sqrtG_itf_i[east] * xp.where(
+            xp.real(big_M) > 0.0, big_M * a[east] * var_itf_i[east], big_M * a[west] * var_itf_i[west]
         )
         # ------ Pressure part
         p11 = metric.sqrtG_itf_i * (0.5 * gravity) * metric.H_contra_11_itf_i * var_itf_i[idx_h] ** 2
@@ -194,16 +193,16 @@ class RhsShallowWater:
 
         # Common AUSM fluxes
         a = xp.sqrt(gravity * var_itf_j[idx_h] * metric.H_contra_22_itf_j)
-        m = var_itf_j[idx_hu2] / xp.maximum(var_itf_j[idx_h] * a, 1e-12)
-        m[xp.where(xp.isnan(m))] = 0.0
+        m = xp.where(xp.real(a) > 0.0, var_itf_j[idx_hu2] / (var_itf_j[idx_h] * a), 0.0)
+
         # Workaround for CuPy bug where n**2 is wrong when n is complex with a negative real value
         ms2 = (m[south] - 1.0) * (m[south] - 1.0)
         big_M = 0.25 * ((m[north] + 1.0) ** 2 - ms2)
 
         flux_x2_itf = xp.zeros_like(var_itf_j)
         # ------ Advection part
-        flux_x2_itf[north] = metric.sqrtG_itf_j[north] * (
-            xp.maximum(0.0, big_M) * a[north] * var_itf_j[north] + xp.minimum(0.0, big_M) * a[south] * var_itf_j[south]
+        flux_x2_itf[north] = metric.sqrtG_itf_j[north] * xp.where(
+            xp.real(big_M) > 0.0, big_M * a[north] * var_itf_j[north], big_M * a[south] * var_itf_j[south]
         )
         # ------ Pressure part
         p12 = metric.sqrtG_itf_j * (0.5 * gravity) * metric.H_contra_12_itf_j * var_itf_j[idx_h] ** 2
