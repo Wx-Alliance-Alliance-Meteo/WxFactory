@@ -6,7 +6,7 @@ try:
     from mpi4py import MPI
 except ModuleNotFoundError:
     print(f"mpi4py does not seem available, so we can't do anything")
-    raise SystemExit(-1)
+    raise
 
 try:
     import cupy as cp
