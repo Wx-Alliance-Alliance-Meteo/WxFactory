@@ -6,13 +6,17 @@ pybind11
 netcdf4
 matplotlib
 setuptools
+
 # GPU support (install the variant matching your CUDA version)
 # cupy-cuda11x
 # cupy-cuda12x
+
 # Optional visualization / tooling
 # cartopy
 # tqdm
 # snakeviz
+
 # Documentation
 # sphinx
 # myst-parser
+# sphinx-rtd-theme
