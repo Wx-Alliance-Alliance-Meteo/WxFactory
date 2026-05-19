@@ -77,6 +77,9 @@ class RhsShallowWater:
 
         num_equations = Q.shape[0]
 
+        #####################################################
+        ## Alloc + interpolate
+
         itf_i_shape = (num_equations,) + geom.itf_i_shape
         itf_j_shape = (num_equations,) + geom.itf_j_shape
 
@@ -91,6 +94,7 @@ class RhsShallowWater:
 
         var_itf_j = xp.zeros(itf_j_shape, dtype=Q.dtype)
         var_itf_j[:, 1:-1, :, :] = Q_unpacked @ mtrx.extrap_y
+        #####################################################
 
         # Unpack dynamical variables
         Q_unpacked[idx_hu1] /= Q[idx_h]
@@ -98,6 +102,10 @@ class RhsShallowWater:
 
         u1 = Q_unpacked[idx_hu1]
         u2 = Q_unpacked[idx_hu2]
+
+
+        #####################################################
+        ## Start communication
 
         # Initiate transfers. The first and last row (column) of elements of each array is part of the halo.
         # Each PE must thus send the second and second-to-last row (column) of elements.
@@ -118,8 +126,10 @@ class RhsShallowWater:
             east=var_itf_i[idx_h, :, -2, num_solpts:],
             boundary_shape=(num_elements_hori * num_solpts,),
         )
+        #####################################################
 
-        # Compute fluxes
+        ####################################################
+        ## Compute fluxes (pointwise)
         flux_x1 = xp.empty_like(Q)
         flux_x2 = xp.empty_like(Q)
 
@@ -132,11 +142,18 @@ class RhsShallowWater:
 
         flux_x1[idx_hu2] = metric.sqrtG * (Q[idx_hu2] * u1 + 0.5 * gravity * metric.H_contra_21 * hsquared)
         flux_x2[idx_hu2] = metric.sqrtG * (Q[idx_hu2] * u2 + 0.5 * gravity * metric.H_contra_22 * hsquared)
+        ####################################################
 
+
+        ####################################################
+        ## Flux divergence (partial)
         # Interior contribution to the derivatives, corrections for the boundaries will be added later
         df1_dx1 = flux_x1 @ mtrx.derivative_x
         df2_dx2 = flux_x2 @ mtrx.derivative_y
+        ####################################################
 
+
+        ####################################################
         # Finish transfers. We receive the halo, so it is stored in the first and last row/column of each array
         (
             (var_itf_j[idx_hu1, 0, :, num_solpts:], var_itf_j[idx_hu2, 0, :, num_solpts:]),  # South boundary
@@ -151,11 +168,15 @@ class RhsShallowWater:
             var_itf_i[idx_h, :, 0, num_solpts:],  # West boundary
             var_itf_i[idx_h, :, -1, :num_solpts],  # East boundary
         ) = request_h.wait()
+        ####################################################
 
         # Substract topo after extrapolation
         if topo is not None:
             var_itf_i[idx_h] -= topo.hsurf_itf_i
             var_itf_j[idx_h] -= topo.hsurf_itf_j
+
+        ####################################################
+        ##  Riemann fluxes
 
         # West and east are defined relative to the elements, *not* to the interface itself.
         # Therefore, a certain interface will be the western interface of its eastern element and vice-versa
@@ -215,6 +236,7 @@ class RhsShallowWater:
         # Compute the derivatives
         df1_dx1[...] += flux_x1_itf[:, :, 1:-1, :] @ mtrx.correction_WE
         df2_dx2[...] += flux_x2_itf[:, 1:-1, :, :] @ mtrx.correction_SN
+        #################################################### (end riemann fluxes)
 
         if topo is None:
             topo_dzdx1 = 0.0
@@ -224,6 +246,8 @@ class RhsShallowWater:
             topo_dzdx1 = topo.dzdx1
             topo_dzdx2 = topo.dzdx2
 
+        ####################################################
+        ## Forcings
         # Add coriolis, metric and terms due to varying bottom topography
         # Note: christoffel_1_22 and metric.christoffel_2_11 are zero
         forcing = xp.zeros_like(Q)
@@ -242,5 +266,6 @@ class RhsShallowWater:
 
         # Assemble the right-hand sides
         rhs = metric.inv_sqrtG * (-df1_dx1 - df2_dx2) - forcing
+        ####################################################
 
         return rhs
