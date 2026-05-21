@@ -87,30 +87,30 @@ def entropy_to_conservative(V: NDArray, geom: Cartesian2D, param: Configuration)
     v4 = V[idx_2d_rho_theta, :, :]
 
     # _________________________________________________
-    # beta = -v4
+    beta = -v4
 
-    # uu = v2 / beta
-    # ww = v3 / beta
+    uu = v2 / beta
+    ww = v3 / beta
 
-    # s = gamma - (gamma - 1) * v1 - 0.5 * (gamma - 1) * beta (uu**2 + ww**2)
+    s = gamma - (gamma - 1) * v1 - 0.5 * (gamma - 1) * beta * (uu**2 + ww**2)
 
-    # rho = xp.exp(-s/(gamma-1)) * xp.power(beta,-1/(gamma-1))
+    ρ = xp.exp(-s/(gamma-1)) * xp.power(beta,-1/(gamma-1))
 
-    # p = rho/beta
-    # rho_u = rho * uu
-    # rho_w = rho * ww
-    # rho_E = p/(gamma-1) + 0.5 * rho * (uu**2 + ww**2)
+    p = ρ/beta
+    ρ_uu = ρ * uu
+    ρ_ww = ρ * ww
+    ρ_E = p/(gamma-1) + 0.5 * ρ * (uu**2 + ww**2)
     # _________________________________________________
 
-    s = gamma - v1 + (v2**2 + v3**2) / (2 * v4)
+    # s = gamma - v1 + (v2**2 + v3**2) / (2 * v4)
 
-    # Check this formula!!!!
-    ρ_e = ((gamma - 1) / (-v4) ** gamma) ** (1 / (gamma - 1)) * xp.exp(-s / (gamma - 1))
+    # # Check this formula!!!!
+    # ρ_e = ((gamma - 1) / (-v4) ** gamma) ** (1 / (gamma - 1)) * xp.exp(-s / (gamma - 1))
 
-    ρ = -ρ_e * v4
-    ρ_uu = ρ_e * v2
-    ρ_ww = ρ_e * v3
-    ρ_E = ρ_e * (1 - (v2**2 + v3**2) / (2 * v4))
+    # ρ = -ρ_e * v4
+    # ρ_uu = ρ_e * v2
+    # ρ_ww = ρ_e * v3
+    # ρ_E = ρ_e * (1 - (v2**2 + v3**2) / (2 * v4))
 
     Q = xp.zeros_like(V)
 
