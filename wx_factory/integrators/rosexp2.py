@@ -72,3 +72,7 @@ class RosExp2(Integrator):
             print(f"Elapsed time: exponential {time_exp:.3f} secs ; implicit {time_imp:.3f} secs")
 
         return numpy.reshape(Qnew, Q.shape)
+
+REGISTRY = {
+    "rosexp2": lambda cfg, rhs, prec, dev: RosExp2(cfg, rhs.full, rhs.full, preconditioner=prec, device=dev),
+}

@@ -42,3 +42,7 @@ class BackwardEuler(Integrator):
         self.solver_info = SolverInfo(0, t1 - t0, num_iter, residuals)
 
         return numpy.reshape(newQ, Q.shape)
+
+REGISTRY = {
+    "backward_euler": lambda cfg, rhs, prec, dev: BackwardEuler(cfg, rhs.full, preconditioner=prec, device=dev),
+}

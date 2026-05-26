@@ -39,3 +39,7 @@ class CrankNicolson(Integrator):
         self.solver_info = SolverInfo(0, t1 - t0, num_iter, residuals)
 
         return numpy.reshape(newQ, Q.shape)
+
+REGISTRY = {
+    "crank_nicolson": lambda cfg, rhs, prec, dev: CrankNicolson(cfg, rhs.full, preconditioner=prec, device=dev),
+}

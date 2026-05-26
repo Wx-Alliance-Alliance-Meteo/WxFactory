@@ -83,3 +83,7 @@ class PartRosExp2(Integrator):
             print(f"Elapsed time: exponential {time_exp:.3f} secs ; implicit {time_imp:.3f} secs")
 
         return numpy.reshape(Qnew, Q.shape)
+
+REGISTRY = {
+    "partrosexp2": lambda cfg, rhs, prec, dev: PartRosExp2(cfg, rhs.full, rhs.implicit, preconditioner=prec, device=dev),
+}

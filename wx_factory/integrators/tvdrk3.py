@@ -17,3 +17,8 @@ class Tvdrk3(Integrator):
 
         self.solver_info = SolverInfo(total_num_it=1)
         return Q
+
+
+REGISTRY = {
+    "tvdrk3": lambda cfg, rhs, prec, dev: Tvdrk3(cfg, rhs.full, device=dev),
+}

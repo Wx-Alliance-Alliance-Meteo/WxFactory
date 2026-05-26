@@ -42,3 +42,7 @@ class Bdf2(Integrator):
         self.Qprev = Q.copy()
 
         return numpy.reshape(newQ, Q.shape)
+
+REGISTRY = {
+    "bdf2": lambda cfg, rhs, prec, dev: Bdf2(cfg, rhs.full, preconditioner=prec, device=dev),
+}

@@ -47,3 +47,32 @@ class OS22Splitting(Integrator):
             if self.alpha[numofstage, 1] != 0:
                 Q = self.scheme2.step(Q, self.alpha[numofstage, 1] * dt)
         return Q
+
+
+def _make_generic_splitting_factory(cls):
+    def factory(cfg, rhs, prec, dev):
+        from . import resolve
+        sub1 = resolve(cfg.splitting_integrator_1, cfg, rhs, prec, dev)
+        sub2 = resolve(cfg.splitting_integrator_2, cfg, rhs, prec, dev)
+        return cls(cfg, sub1, sub2)
+    return factory
+
+
+def _strang_epi2_ros2(cfg, rhs, prec, dev):
+    from .epi import Epi
+    from .ros2 import Ros2
+    return StrangSplitting(cfg, Epi(cfg, 2, rhs.explicit, device=dev), Ros2(cfg, rhs.implicit, preconditioner=prec, device=dev))
+
+
+def _strang_ros2_epi2(cfg, rhs, prec, dev):
+    from .epi import Epi
+    from .ros2 import Ros2
+    return StrangSplitting(cfg, Ros2(cfg, rhs.implicit, preconditioner=prec, device=dev), Epi(cfg, 2, rhs.explicit, device=dev))
+
+
+REGISTRY = {
+    "lie": _make_generic_splitting_factory(LieSplitting),
+    "strang": _make_generic_splitting_factory(StrangSplitting),
+    "strang_epi2_ros2": _strang_epi2_ros2,
+    "strang_ros2_epi2": _strang_ros2_epi2,
+}

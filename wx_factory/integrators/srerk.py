@@ -574,3 +574,10 @@ class Srerk(Integrator):
 
         # Update solution
         return Q + dt * numpy.reshape(z, Q.shape)
+
+
+def _make_srerk_factory(order):
+    return lambda cfg, rhs, prec, dev: Srerk(cfg, order, rhs.full, device=dev)
+
+
+REGISTRY = {f"srerk{o}": _make_srerk_factory(o) for o in range(3, 10)}

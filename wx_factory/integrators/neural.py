@@ -8,3 +8,8 @@ class Neural(Integrator):
 
     def __step__(self, Q, dt):
         return Q
+
+
+REGISTRY = {
+    "neural": lambda cfg, rhs, prec, dev: Neural(cfg),
+}

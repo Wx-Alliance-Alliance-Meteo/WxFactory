@@ -79,3 +79,7 @@ class Ros2(Integrator):
         self.failure_flag = flag
 
         return xp.reshape(Qnew, Q.shape)
+
+REGISTRY = {
+    "ros2": lambda cfg, rhs, prec, dev: Ros2(cfg, rhs.full, preconditioner=prec, device=dev),
+}

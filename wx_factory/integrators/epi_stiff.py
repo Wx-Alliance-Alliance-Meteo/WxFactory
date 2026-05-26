@@ -130,3 +130,10 @@ class EpiStiff(Integrator):
 
         # Update solution
         return Q + numpy.reshape(phiv, Q.shape) * dt
+
+
+def _make_epi_stiff_factory(order):
+    return lambda cfg, rhs, prec, dev: EpiStiff(cfg, order, rhs.full, init_substeps=10, device=dev)
+
+
+REGISTRY = {f"epi_stiff{o}": _make_epi_stiff_factory(o) for o in range(2, 10)}

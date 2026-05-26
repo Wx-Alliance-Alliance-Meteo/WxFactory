@@ -358,3 +358,10 @@ class Epi(Integrator):
 
         # Update solution
         return Q + self.device.xp.reshape(phiv, Q.shape) * dt
+
+
+def _make_epi_factory(order):
+    return lambda cfg, rhs, prec, dev: Epi(cfg, order, rhs.full, init_substeps=10, device=dev)
+
+
+REGISTRY = {f"epi{o}": _make_epi_factory(o) for o in range(2, 7)}
