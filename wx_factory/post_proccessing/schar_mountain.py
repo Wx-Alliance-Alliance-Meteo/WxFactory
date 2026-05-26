@@ -78,11 +78,12 @@ class ScharMountainPostProcessor(post_proccessor.PostProcessor):
         # And regenerate the metric to take this new topography into account
         self.metric.build_metric()
 
-    def process(self):
+    def process(self, Q: numpy.ndarray, t: float) -> numpy.ndarray:
         if self.step < self.step_to_completion:
             self.step += 1
             ratio = float(self.step) / self.step_to_completion
             self.apply(ratio)
+        return Q
 
     def build_topo_old(self, latlon):
         lat = latlon[1, 0, :, :]

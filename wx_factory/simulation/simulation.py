@@ -7,10 +7,8 @@ import numpy
 
 
 from common import Configuration
-from common.definitions import idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_w
 from device import Device, CpuDevice, CudaDevice, PytorchDevice
 from geometry import Cartesian2D, CubedSphere, CubedSphere3D, CubedSphere2D, DFROperators, Geometry
-from init.dcmip import dcmip_T11_update_winds, dcmip_T12_update_winds
 from init.init_state_vars import init_state_vars
 from integrators import Integrator, resolve as _resolve_integrator
 from output.output_manager import OutputManager
@@ -22,7 +20,7 @@ from process_topology import ProcessTopology
 from rhs.rhs_selector import RhsBundle
 from common.matmul import set_matmul_backend
 from wx_mpi import SingleProcess, Conditional
-from post_proccessing import PostProcessor, ScharMountainPostProcessor
+from post_proccessing import PostProcessor, ScharMountainPostProcessor, DcmipT11WindPostProcessor, DcmipT12WindPostProcessor
 
 
 class Simulation:
@@ -132,6 +130,8 @@ class Simulation:
             self.device,
         )
 
+        self._register_dcmip_post_processors()
+
         self.integrator = self._create_time_integrator(self.config.time_integrator)
         self.integrator.output_manager = self.output
         self.integrator.device = self.device
@@ -167,25 +167,8 @@ class Simulation:
             # TODO put this inside the `step` function of the integrator
             self._check_for_nan(self.Q)
 
-            # Overwrite winds for some DCMIP tests
-            # TODO put this inside the `step` function of the integrator
-            if self.config.case_number == 11:
-                u1_contra, u2_contra, w_wind = dcmip_T11_update_winds(
-                    self.geometry, self.metric, self.operators_real, self.config, time=self.t
-                )
-                self.Q[idx_rho_u1, :, :, :] = self.Q[idx_rho, :, :, :] * u1_contra
-                self.Q[idx_rho_u2, :, :, :] = self.Q[idx_rho, :, :, :] * u2_contra
-                self.Q[idx_rho_w, :, :, :] = self.Q[idx_rho, :, :, :] * w_wind
-            elif self.config.case_number == 12:
-                u1_contra, u2_contra, w_wind = dcmip_T12_update_winds(
-                    self.geometry, self.metric, self.operators_real, self.config, time=self.t
-                )
-                self.Q[idx_rho_u1, :, :, :] = self.Q[idx_rho, :, :, :] * u1_contra
-                self.Q[idx_rho_u2, :, :, :] = self.Q[idx_rho, :, :, :] * u2_contra
-                self.Q[idx_rho_w, :, :, :] = self.Q[idx_rho, :, :, :] * w_wind
-
-            for post_precessor_type in self.post_processors:
-                self.post_processors[post_precessor_type].process()
+            for post_processor_type in self.post_processors:
+                self.Q = self.post_processors[post_processor_type].process(self.Q, self.t)
 
             self.output.step(self.Q, self.step_id)  # Perform any requested output
             sys.stdout.flush()
@@ -371,6 +354,17 @@ class Simulation:
         if self.comm.rank == 0:
             print(f"Running with time integrator: {name}")
         return _resolve_integrator(name, self.config, self.rhs, self.preconditioner, self.device)
+
+    def _register_dcmip_post_processors(self) -> None:
+        """Register prescribed-wind post-processors for DCMIP test cases 11 and 12."""
+        if self.config.case_number == 11:
+            self.post_processors[DcmipT11WindPostProcessor] = DcmipT11WindPostProcessor(
+                self.geometry, self.metric, self.operators_real, self.config
+            )
+        elif self.config.case_number == 12:
+            self.post_processors[DcmipT12WindPostProcessor] = DcmipT12WindPostProcessor(
+                self.geometry, self.metric, self.operators_real, self.config
+            )
 
     def _check_for_nan(self, Q):
         """Raise an exception if there are NaNs in the input"""
