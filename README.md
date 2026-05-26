@@ -1,74 +1,57 @@
 # WxFactory
-Research numerical weather model. The name is inspired by [Richardson’s Fantastic Forecast Factory](https://www.emetsoc.org/resources/rff/)
 
-## Documentation list
+A research numerical weather prediction framework inspired by [Richardson's Fantastic Forecast Factory](https://www.emetsoc.org/resources/rff/).
+
+## Documentation
 
 Full documentation is [available here](http://hpfx.collab.science.gc.ca/~sdyn001/WxFactory).
 
+- [Configuration options](doc/config_options.md)
 - [Testing](./tests/readme.md)
 - [Contributing](./doc/contribute.md)
 - [References](./doc/references.md)
 
 ## Requirements
 
-WxFactory was built for Python 3.11 (at least).  It also requires an MPI implementation.
+Python 3.11 or later and an MPI implementation are required.
 
-### Python packages
-* Python version at least 3.11
-* `numpy` Scientific tools for Python
-* `scipy` Python-based ecosystem of open-source software for mathematics, science, and engineering
-* `sympy` Python library for symbolic mathematics
-* `mpi4py` Python interface for MPI
-* `pybind11` Library to expose C++/Python types to each other
-* `netcdf4` Python/NumPy interface to the netCDF C library (MPI version)
-* `matplotlib` A python plotting library, making publication quality plots
-* `setuptools` To compile C++/CUDA portions of WxFactory
-* `cupy`   [Somewhat optional] If you want to be able to run on GPU (can install `cupy-cuda11x` or `cupy-cuda12x` for precompiled module)
+Necessary Python packages can be installed using:
 
-### Other libraries
-* `netcdf4` Library to handle netCDF files. There is an MPI version of it, if you want parallel output
-* `sqlite` To be able to store solver stats.
+```
+pip install -r requirements.txt
+```
 
-### Optional
-* `cartopy`  A cartographic python library with matplotlib support for visualisation
-* `tqdm`     Progress bar when generating matrices
-* `snakeviz` A tool for visualizing profiling output
+For GPU support, also install the CuPy variant matching your CUDA version (`cupy-cuda11x` or `cupy-cuda12x`).
 
-### To build documentation
-* `Sphinx`      Library to build the documentation
-* `myst-parser` Library to parse markdown files for documentation
+## Installation
 
-Python packages can be installed with the package management system of your
-Linux distribution or with `pip`.
+```
+pip install -e .
+```
 
 ## Running WxFactory
 
 ```
-# With the cubed sphere as a grid:
-mpirun -n 6 ./WxFactory config/case6.ini
+# Cubed-sphere grid (requires a multiple of 6 processes):
+mpirun -n 6 wxfactory config/case6.ini
 
-# With the 2D cartesian grid:
-./WxFactory config/gaussian_bubble.ini
+# 2D Cartesian grid:
+wxfactory config/gaussian_bubble.ini
 ```
 
-## Profiling WxFactory
+## Profiling
 
-You can generate an execution profile when running WxFactory by adding the `--profile` flag to the main command. For example:
-```
-mpirun -n 6 python3 ./WxFactory --profile config/case6.ini
-```
+Add `--profile` to generate per-process profile files (`prof_0000.out`, etc.), then view them with `snakeviz`:
 
-This will generate a set of `profile_####.out` files, one for each launched process, that can be viewed with `snakeviz`. _You need to be able to open a browser window from the terminal to use this command_:
 ```
-snakeviz ./profile_0000.out
+mpirun -n 6 wxfactory --profile config/case6.ini
+snakeviz prof_0000.out
 ```
 
-## Configuration options
+## Citation
 
-The configuration parameters available to put in the file passed as an argument to `WxFactory`
-are listed [here](doc/config_options.md).
+If you find this project useful, please cite:
 
-## If you find this project useful, please cite:
-Gaudreault, S., Charron, M., Dallerit, V., & Tokman, M. (2022). High-order numerical solutions to the shallow-water equations on the rotated cubed-sphere grid. Journal of Computational Physics, 449, 110792. [https://doi.org/10.1016/j.jcp.2021.110792](https://doi.org/10.1016/j.jcp.2021.110792)
+Gaudreault, S., Charron, M., Dallerit, V., & Tokman, M. (2022). High-order numerical solutions to the shallow-water equations on the rotated cubed-sphere grid. *Journal of Computational Physics*, 449, 110792. https://doi.org/10.1016/j.jcp.2021.110792
 
-Gaudreault, S., Subich, C., Panday, S., Charron, M., Magnoux, V., Dallerit, V., & Tokman, M. (2025). Application of High‐Order Direct Flux Reconstruction and Stiffness‐Resilient Time Integration to Simulations of Idealized Atmospheric Flows. International Journal for Numerical Methods in Fluids. [https://doi.org/10.1002/fld.70046](https://doi.org/10.1002/fld.70046)
+Gaudreault, S., Subich, C., Panday, S., Charron, M., Magnoux, V., Dallerit, V., & Tokman, M. (2025). Application of High-Order Direct Flux Reconstruction and Stiffness-Resilient Time Integration to Simulations of Idealized Atmospheric Flows. *International Journal for Numerical Methods in Fluids*. https://doi.org/10.1002/fld.70046
