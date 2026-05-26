@@ -35,8 +35,6 @@ from output.output_cartesian import OutputCartesian
 from output.output_cubesphere_netcdf import OutputCubesphereNetcdf
 from output.output_cubesphere_fst import OutputCubesphereFst
 from output.input_manager import InputManager
-from precondition.factorization import Factorization
-from precondition.multigrid import Multigrid
 from process_topology import ProcessTopology
 from rhs.rhs_selector import RhsBundle
 from common.matmul import set_matmul_backend
@@ -75,8 +73,6 @@ class Simulation:
         self.rank = self.comm.rank
 
         self.post_processors = {}
-
-        # self.input_manager = InputManager(self.comm)
 
         if isinstance(config, Configuration):
             self.config = config
@@ -336,19 +332,10 @@ class Simulation:
 
         raise ValueError(f"Invalid grid type/process_topo: {self.config.grid_type}, {self.process_topo}")
 
-    def _create_preconditioner(self, Q: numpy.ndarray) -> Multigrid | Factorization | None:
+    def _create_preconditioner(self, Q: numpy.ndarray) -> None:
         """Create the preconditioner required by the given params"""
         if self.config.preconditioner != "none":
-            raise ValueError(f"Preconditioner is currently unavalable, until it get fixed")
-
-        if self.config.preconditioner == "p-mg":
-            return Multigrid(self.config, self.process_topo, self.device, discretization="dg")
-        if self.config.preconditioner == "fv-mg":
-            return Multigrid(self.config, self.process_topo, self.device, discretization="fv")
-        if self.config.preconditioner == "fv":
-            return Multigrid(self.config, self.process_topo, self.device, discretization="fv", fv_only=True)
-        if self.config.preconditioner in ["lu", "ilu"]:
-            return Factorization(Q.dtype, Q.shape, self.config)
+            raise ValueError("Preconditioner is currently unavailable, until it gets fixed")
         return None
 
     def _create_output_manager(self) -> OutputManager:
