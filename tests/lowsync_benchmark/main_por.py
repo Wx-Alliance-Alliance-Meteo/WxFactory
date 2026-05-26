@@ -16,9 +16,11 @@ import numpy as np
 import sys
 import math
 
+from types import SimpleNamespace
+
 from mpi4py import MPI
 from stiff_pdes import JTV, initWorld, rhs_jac_pdefuncs, print_stuff
-from integrators import Integrator, epi_for_others
+from integrators import Epi
 from time import time
 
 
@@ -71,18 +73,24 @@ alpha = 10.0  # coeff for advection
 gamma = 0.0  # coeff for reaction
 
 # 5. set up integrator
-# access to functions that are inputs for EPI constructor
 rhs = rhs_jac_pdefuncs.porous_rhs
 jtv = rhs_jac_pdefuncs.porous_jtv
 
-# lamdba function of rhs, that way when called inside the integrator
-# the coefficients and world info don't have to be consistently passed
-# as an argument
 rhs_handle = lambda u: rhs(u, alpha, world)
+jac_handle = lambda v, Q, scale: jtv(v, Q, scale, epsilon, alpha, gamma, world)
 
-stepper = epi_for_others.Epi_others(
-    epi_order, rhs_handle, jtv, ortho_method, world, [epsilon, alpha, gamma], init_substeps=10
+config = SimpleNamespace(
+    tolerance=1e-12,
+    verbose_solver=0,
+    jacobian_method="complex",
+    exponential_solver=ortho_method,
+    case_number=0,
+    time_integrator=f"epi{epi_order}",
+    exode_method="",
+    exode_controller="",
 )
+
+stepper = Epi(config, epi_order, rhs_handle, jac=jac_handle, init_substeps=10)
 
 # 6. set up time integration
 t_start = 0.0

@@ -49,7 +49,7 @@ def opt_nodes(order: int):
 class Srerk(Integrator):
     """Stiffness resilient exponential Runge-Kutta methods"""
 
-    def __init__(self, param: Configuration, order: int, rhs: Callable, nodes: Optional[List] = None, **kwargs):
+    def __init__(self, param: Configuration, order: int, rhs: Callable, jac: Callable = None, nodes: Optional[List] = None, **kwargs):
         """
         If the nodes are NOT specified, return the SRERK method of the specified order with min error terms
         If the nodes are specified, return the SRERK method with these nodes and ignore the 'order' parameter
@@ -57,6 +57,7 @@ class Srerk(Integrator):
 
         super().__init__(param, **kwargs)
         self.rhs = rhs
+        self.jac = jac
         self.tol = param.tolerance
         self.krylov_size = 1
         self.jacobian_method = param.jacobian_method
@@ -74,7 +75,10 @@ class Srerk(Integrator):
 
     def __step__(self, Q: numpy.ndarray, dt: float):
         rhs = self.rhs(Q)
-        matvec_handle = lambda v: matvec_fun(v, dt, Q, rhs, self.rhs, self.jacobian_method)
+        if self.jac is not None:
+            matvec_handle = lambda v: self.jac(v, Q, dt)
+        else:
+            matvec_handle = lambda v: matvec_fun(v, dt, Q, rhs, self.rhs, self.jacobian_method)
 
         # Initial projection
         vec = numpy.zeros((2, rhs.size))

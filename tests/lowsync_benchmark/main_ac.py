@@ -17,9 +17,11 @@ import numpy as np
 import math
 import sys
 
+from types import SimpleNamespace
+
 from mpi4py import MPI
 from stiff_pdes import JTV, initWorld, rhs_jac_pdefuncs, print_stuff
-from integrators import Integrator, epi_for_others, srerk_for_others
+from integrators import Epi, Srerk
 from time import time
 
 # 1. initialize world
@@ -54,26 +56,27 @@ alpha = 0.0  # coeff for advection
 gamma = 0.0  # coeff for reaction
 
 # 5. set up integrator
-# access to functions that are inputs for EPI constructor
 rhs = rhs_jac_pdefuncs.allencahn_rhs
 jtv = rhs_jac_pdefuncs.allencahn_jtv
 
-# lamdba function of rhs, that way when called inside the integrator
-# the coefficients and world info don't have to be consistently passed
-# as an argument
 rhs_handle = lambda u: rhs(u, epsilon, world)
+jac_handle = lambda v, Q, scale: jtv(v, Q, scale, epsilon, alpha, gamma, world)
 
-# Now set up the 'stepper' function
-# the only two options for this test are EPI and SRERK
+config = SimpleNamespace(
+    tolerance=1e-12,
+    verbose_solver=0,
+    jacobian_method="complex",
+    exponential_solver=ortho_method,
+    case_number=0,
+    time_integrator=method,
+    exode_method="",
+    exode_controller="",
+)
+
 if int_type == "srerk":
-    stepper = srerk_for_others.Srerk_others(order, rhs_handle, jtv, ortho_method, world, [epsilon, alpha, gamma])
-    # print("using srerk of order = {}".format( order))
-
+    stepper = Srerk(config, order, rhs_handle, jac=jac_handle)
 else:
-    stepper = epi_for_others.Epi_others(
-        order, rhs_handle, jtv, ortho_method, world, [epsilon, alpha, gamma], init_substeps=10
-    )
-    # print("using epi of order = {}".format(order))
+    stepper = Epi(config, order, rhs_handle, jac=jac_handle, init_substeps=10)
 
 # 6. set up time integration
 # possitle dt from paper: 0.5, 0.25, 0.1250, 0.0625, 0.03125

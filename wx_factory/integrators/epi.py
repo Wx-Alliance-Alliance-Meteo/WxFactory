@@ -31,10 +31,11 @@ from .integrator import Integrator, SolverInfo
 
 class Epi(Integrator):
     def __init__(
-        self, param: Configuration, order: int, rhs: Callable, init_method=None, init_substeps: int = 1, **kwargs
+        self, param: Configuration, order: int, rhs: Callable, jac: Callable = None, init_method=None, init_substeps: int = 1, **kwargs
     ):
         super().__init__(param, preconditioner=None, **kwargs)
         self.rhs = rhs
+        self.jac = jac
         self.tol = param.tolerance
         self.krylov_size = 1
         self.jacobian_method = param.jacobian_method
@@ -101,12 +102,18 @@ class Epi(Integrator):
         # Regular EPI step
         rhs = self.rhs(Q)
 
-        matvec_handle = MatvecOpBasic(dt, Q, self.rhs, self.param)
+        if self.jac is not None:
+            matvec_handle = lambda v: self.jac(v, Q, dt)
+        else:
+            matvec_handle = MatvecOpBasic(dt, Q, self.rhs, self.param)
 
         vec = self.device.xp.zeros((self.max_phi + 1, math.prod(rhs.shape)), dtype=Q.dtype)
         vec[1, :] = rhs.flatten()
         for i in range(self.n_prev):
-            J_deltaQ = matvec_fun(self.previous_Q[i] - Q, 1.0, Q, rhs, self.rhs, self.jacobian_method)
+            if self.jac is not None:
+                J_deltaQ = self.jac(self.previous_Q[i] - Q, Q, 1.0)
+            else:
+                J_deltaQ = matvec_fun(self.previous_Q[i] - Q, 1.0, Q, rhs, self.rhs, self.jacobian_method)
 
             # R(y_{n-i})
             r = (self.previous_rhs[i] - rhs) - self.device.xp.reshape(J_deltaQ, Q.shape)
