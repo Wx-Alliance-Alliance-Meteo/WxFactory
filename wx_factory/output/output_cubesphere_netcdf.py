@@ -92,8 +92,6 @@ class OutputCubesphereNetcdf(OutputCubesphere):
             tme = self.ncfile.createVariable("time", numpy.float64, ("time",))
             tme.units = "hours since 1800-01-01"
             tme.long_name = "time"
-            if self.config.netcdf_use_collective:
-                tme.set_collective(False)
 
             # create tiles axis
             tile = self.ncfile.createVariable("npe", "i4", ("npe"))
@@ -137,8 +135,6 @@ class OutputCubesphereNetcdf(OutputCubesphere):
                 hhh.units = "m"
                 hhh.coordinates = "lons lats"
                 hhh.grid_mapping = "cubed_sphere"
-                if self.config.netcdf_use_collective:
-                    hhh.set_collective(False)
 
                 if self.config.case_number >= 2 or self.config.case_number == -1:
                     uuu = self.ncfile.createVariable("U", numpy.dtype("double").char, ("time",) + grid_data)
@@ -147,8 +143,6 @@ class OutputCubesphereNetcdf(OutputCubesphere):
                     uuu.standard_name = "eastward_wind"
                     uuu.coordinates = "lons lats"
                     uuu.grid_mapping = "cubed_sphere"
-                    if self.config.netcdf_use_collective:
-                        uuu.set_collective(False)
 
                     vvv = self.ncfile.createVariable("V", numpy.dtype("double").char, ("time",) + grid_data)
                     vvv.long_name = "northward_wind"
@@ -156,8 +150,6 @@ class OutputCubesphereNetcdf(OutputCubesphere):
                     vvv.standard_name = "northward_wind"
                     vvv.coordinates = "lons lats"
                     vvv.grid_mapping = "cubed_sphere"
-                    if self.config.netcdf_use_collective:
-                        vvv.set_collective(False)
 
                     drv = self.ncfile.createVariable("RV", numpy.dtype("double").char, ("time",) + grid_data)
                     drv.long_name = "Relative vorticity"
@@ -165,8 +157,6 @@ class OutputCubesphereNetcdf(OutputCubesphere):
                     drv.standard_name = "Relative vorticity"
                     drv.coordinates = "lons lats"
                     drv.grid_mapping = "cubed_sphere"
-                    if self.config.netcdf_use_collective:
-                        drv.set_collective(False)
 
                     dpv = self.ncfile.createVariable("PV", numpy.dtype("double").char, ("time",) + grid_data)
                     dpv.long_name = "Potential vorticity"
@@ -174,8 +164,6 @@ class OutputCubesphereNetcdf(OutputCubesphere):
                     dpv.standard_name = "Potential vorticity"
                     dpv.coordinates = "lons lats"
                     dpv.grid_mapping = "cubed_sphere"
-                    if self.config.netcdf_use_collective:
-                        dpv.set_collective(False)
 
             elif self.config.equations == "euler":
                 elev = self.ncfile.createVariable("elev", numpy.dtype("double").char, grid_data)
@@ -184,8 +172,6 @@ class OutputCubesphereNetcdf(OutputCubesphere):
                 elev.standard_name = "Elevation"
                 elev.coordinates = "lons lats"
                 elev.grid_mapping = "cubed_sphere"
-                if self.config.netcdf_use_collective:
-                    elev.set_collective(False)
 
                 topo = self.ncfile.createVariable("topo", numpy.dtype("double").char, grid_data2D)
                 topo.long_name = "Topopgraphy"
@@ -193,8 +179,6 @@ class OutputCubesphereNetcdf(OutputCubesphere):
                 topo.standard_name = "Topography"
                 topo.coordinates = "lons lats"
                 topo.grid_mapping = "cubed_sphere"
-                if self.config.netcdf_use_collective:
-                    topo.set_collective(False)
 
                 uuu = self.ncfile.createVariable("U", numpy.dtype("double").char, ("time",) + grid_data)
                 uuu.long_name = "eastward_wind"
@@ -202,8 +186,6 @@ class OutputCubesphereNetcdf(OutputCubesphere):
                 uuu.standard_name = "eastward_wind"
                 uuu.coordinates = "lons lats"
                 uuu.grid_mapping = "cubed_sphere"
-                if self.config.netcdf_use_collective:
-                    uuu.set_collective(False)
 
                 vvv = self.ncfile.createVariable("V", numpy.dtype("double").char, ("time",) + grid_data)
                 vvv.long_name = "northward_wind"
@@ -211,8 +193,6 @@ class OutputCubesphereNetcdf(OutputCubesphere):
                 vvv.standard_name = "northward_wind"
                 vvv.coordinates = "lons lats"
                 vvv.grid_mapping = "cubed_sphere"
-                if self.config.netcdf_use_collective:
-                    vvv.set_collective(False)
 
                 www = self.ncfile.createVariable("W", numpy.dtype("double").char, ("time",) + grid_data)
                 www.long_name = "upward_air_velocity"
@@ -220,8 +200,6 @@ class OutputCubesphereNetcdf(OutputCubesphere):
                 www.standard_name = "upward_air_velocity"
                 www.coordinates = "lons lats"
                 www.grid_mapping = "cubed_sphere"
-                if self.config.netcdf_use_collective:
-                    www.set_collective(False)
 
                 density = self.ncfile.createVariable("rho", numpy.dtype("double").char, ("time",) + grid_data)
                 density.long_name = "air_density"
@@ -229,8 +207,6 @@ class OutputCubesphereNetcdf(OutputCubesphere):
                 density.standard_name = "air_density"
                 density.coordinates = "lons lats"
                 density.grid_mapping = "cubed_sphere"
-                if self.config.netcdf_use_collective:
-                    density.set_collective(False)
 
                 potential_temp = self.ncfile.createVariable("theta", numpy.dtype("double").char, ("time",) + grid_data)
                 potential_temp.long_name = "air_potential_temperature"
@@ -238,8 +214,6 @@ class OutputCubesphereNetcdf(OutputCubesphere):
                 potential_temp.standard_name = "air_potential_temperature"
                 potential_temp.coordinates = "lons lats"
                 potential_temp.grid_mapping = "cubed_sphere"
-                if self.config.netcdf_use_collective:
-                    potential_temp.set_collective(False)
 
                 press = self.ncfile.createVariable("P", numpy.dtype("double").char, ("time",) + grid_data)
                 press.long_name = "air_pressure"
@@ -247,8 +221,6 @@ class OutputCubesphereNetcdf(OutputCubesphere):
                 press.standard_name = "air_pressure"
                 press.coordinates = "lons lats"
                 press.grid_mapping = "cubed_sphere"
-                if self.config.netcdf_use_collective:
-                    press.set_collective(False)
 
                 if self.config.case_number == 11 or self.config.case_number == 12:
                     q1 = self.ncfile.createVariable("q1", numpy.dtype("double").char, ("time",) + grid_data)
@@ -257,8 +229,6 @@ class OutputCubesphereNetcdf(OutputCubesphere):
                     q1.standard_name = "Tracer q1"
                     q1.coordinates = "lons lats"
                     q1.grid_mapping = "cubed_sphere"
-                    if self.config.netcdf_use_collective:
-                        q1.set_collective(False)
 
                 if self.config.case_number == 11:
                     q2 = self.ncfile.createVariable("q2", numpy.dtype("double").char, ("time",) + grid_data)
@@ -267,8 +237,6 @@ class OutputCubesphereNetcdf(OutputCubesphere):
                     q2.standard_name = "Tracer q2"
                     q2.coordinates = "lons lats"
                     q2.grid_mapping = "cubed_sphere"
-                    if self.config.netcdf_use_collective:
-                        q2.set_collective(False)
 
                     q3 = self.ncfile.createVariable("q3", numpy.dtype("double").char, ("time",) + grid_data)
                     q3.long_name = "q3"
@@ -276,8 +244,6 @@ class OutputCubesphereNetcdf(OutputCubesphere):
                     q3.standard_name = "Tracer q3"
                     q3.coordinates = "lons lats"
                     q3.grid_mapping = "cubed_sphere"
-                    if self.config.netcdf_use_collective:
-                        q3.set_collective(False)
 
                     q4 = self.ncfile.createVariable("q4", numpy.dtype("double").char, ("time",) + grid_data)
                     q4.long_name = "q4"
@@ -285,8 +251,6 @@ class OutputCubesphereNetcdf(OutputCubesphere):
                     q4.standard_name = "Tracer q4"
                     q4.coordinates = "lons lats"
                     q4.grid_mapping = "cubed_sphere"
-                    if self.config.netcdf_use_collective:
-                        q4.set_collective(False)
 
         to_host = lambda a: self.device.to_host(a) if a is not None else None
 
