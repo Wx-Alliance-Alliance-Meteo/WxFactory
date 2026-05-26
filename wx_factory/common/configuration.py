@@ -120,16 +120,11 @@ class Configuration:
     exp_smoothe_spectral_radii: List[float]
     expfilter_apply: bool
     expfilter_cutoff: float
-    expfilter_cutoff: float
     expfilter_order: int
-    expfilter_order: int
-    expfilter_strength: float
     expfilter_strength: float
     exponential_solver: str
     filter_apply: bool
     filter_cutoff: float
-    filter_cutoff: float
-    filter_order: int
     filter_order: int
     gmres_restart: int
     grid_file: str
