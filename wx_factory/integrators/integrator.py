@@ -116,26 +116,6 @@ class Integrator(ABC):
 
         return result
 
-
-class scipy_counter:  # TODO : tempo
-    """Callback object for linear solvers (from Scipy and others)."""
-
-    def __init__(self, disp=False):
-        self._disp = disp
-        self.niter = 0
-        self.res = 0.0
-
-    def __call__(self, rk=None):
-        self.niter += 1
-        if rk is not None:
-            self.res = float(rk)
-        if self._disp:
-            print(f"iter {self.niter:3d}\trk = {str(rk)}", flush=True)
-
-    def num_iter(self):
-        return self.niter
-
-
 def alpha_coeff(c):
     """Compute the coefficients for stiffness resilient exponential methods based on node values c."""
     m = len(c)
