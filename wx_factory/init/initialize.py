@@ -1,7 +1,7 @@
 import numpy
 from numpy.typing import NDArray
 
-from common.definitions import (
+from ..common.definitions import (
     idx_rho,
     idx_rho_u1,
     idx_rho_u2,
@@ -22,9 +22,9 @@ from common.definitions import (
     Rd,
     p0,
 )
-from common import Configuration
-from common.graphx import plot_array
-from geometry import Cartesian2D, CubedSphere3D, CubedSphere2D, DFROperators, Metric2D, Metric3DTopo
+from ..common import Configuration
+from ..common.graphx import plot_array
+from ..geometry import Cartesian2D, CubedSphere3D, CubedSphere2D, DFROperators, Metric2D, Metric3DTopo
 
 from .dcmip import (
     dcmip_advection_deformation,

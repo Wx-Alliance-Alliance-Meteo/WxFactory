@@ -1,13 +1,13 @@
 from mpi4py import MPI
 import numpy
 
-from common.definitions import (
+from ..common.definitions import (
     idx_2d_rho as RHO,
     idx_2d_rho_u as RHO_U,
     idx_2d_rho_w as RHO_W,
     idx_2d_rho_theta as RHO_THETA,
 )
-from common.graphx import image_field
+from ..common.graphx import image_field
 
 from .output_manager import OutputManager
 

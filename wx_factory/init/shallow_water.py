@@ -4,13 +4,13 @@ import sys
 from mpi4py import MPI
 import numpy
 
-from common.definitions import day_in_secs, gravity
-from common import Configuration
-from geometry import wind2contra_2d, CubedSphere2D, DFROperators
-from init.matsuno import eval_field
-from output.input_manager import InputManager
+from ..common.definitions import day_in_secs, gravity
+from ..common import Configuration
+from ..geometry import wind2contra_2d, CubedSphere2D, DFROperators
+from ..init.matsuno import eval_field
+from ..output.input_manager import InputManager
 
-from common.graphx import plot_array
+from ..common.graphx import plot_array
 
 
 def eval_u_prime(lat):

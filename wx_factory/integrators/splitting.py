@@ -1,4 +1,4 @@
-from common.configuration import Configuration
+from ..common.configuration import Configuration
 from .integrator import Integrator
 
 

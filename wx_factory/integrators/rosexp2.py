@@ -4,9 +4,9 @@ from typing import Callable
 from mpi4py import MPI
 import numpy
 
-from common.configuration import Configuration
+from ..common.configuration import Configuration
 from .integrator import Integrator, SolverInfo
-from solvers import fgmres, matvec_fun, matvec_rat, pmex
+from ..solvers import fgmres, matvec_fun, matvec_rat, pmex
 
 
 class RosExp2(Integrator):

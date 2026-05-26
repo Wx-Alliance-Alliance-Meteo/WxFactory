@@ -8,9 +8,9 @@ from typing import Self, TypeVar
 from mpi4py import MPI
 from numpy.typing import NDArray, DTypeLike
 
-from common.definitions import idx_2d_rho_w
-from common import Configuration
-from device import Device
+from ..common.definitions import idx_2d_rho_w
+from ..common import Configuration
+from ..device import Device
 
 from .cartesian_2d_mesh import Cartesian2D
 from .cubed_sphere_3d import CubedSphere3D

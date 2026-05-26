@@ -1,6 +1,6 @@
 from . import post_proccessor
-from common import Configuration
-from geometry import CubedSphere3D, Metric3DTopo
+from ..common import Configuration
+from ..geometry import CubedSphere3D, Metric3DTopo
 import math
 import numpy
 

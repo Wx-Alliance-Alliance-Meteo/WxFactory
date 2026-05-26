@@ -6,7 +6,7 @@ from typing import Callable, List, Optional
 from mpi4py import MPI
 import numpy
 
-from common.definitions import (
+from ..common.definitions import (
     idx_2d_rho,
     idx_2d_rho_u,
     idx_2d_rho_w,
@@ -22,15 +22,15 @@ from common.definitions import (
     p0,
     Rd,
 )
-from device import Device
-from common.interpolation import Interpolator
-from common import Configuration
-from geometry import Cartesian2D, CubedSphere3D, DFROperators
-from init.init_state_vars import init_state_vars
-from precondition.smoother import KiopsSmoother, ExponentialSmoother, RK1Smoother, RK3Smoother, ARK3Smoother
-from rhs.rhs_selector import RhsBundle
-from solvers import fgmres, global_norm, KrylovJacobian, matvec_rat, MatvecOp
-from process_topology import ProcessTopology
+from ..device import Device
+from ..common.interpolation import Interpolator
+from ..common import Configuration
+from ..geometry import Cartesian2D, CubedSphere3D, DFROperators
+from ..init.init_state_vars import init_state_vars
+from ..precondition.smoother import KiopsSmoother, ExponentialSmoother, RK1Smoother, RK3Smoother, ARK3Smoother
+from ..rhs.rhs_selector import RhsBundle
+from ..solvers import fgmres, global_norm, KrylovJacobian, matvec_rat, MatvecOp
+from ..process_topology import ProcessTopology
 
 MatvecOperator = Callable[[numpy.ndarray], numpy.ndarray]
 

@@ -2,9 +2,9 @@ import math
 
 import numpy
 
-from common.configuration import Configuration
-from common.definitions import cpd, gravity, p0, Rd
-from geometry import CubedSphere3D, DFROperators, Metric3DTopo, wind2contra_2d, wind2contra_3d
+from ..common.configuration import Configuration
+from ..common.definitions import cpd, gravity, p0, Rd
+from ..geometry import CubedSphere3D, DFROperators, Metric3DTopo, wind2contra_2d, wind2contra_3d
 
 # =======================================================================
 #

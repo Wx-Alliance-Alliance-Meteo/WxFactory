@@ -5,7 +5,7 @@ from typing import Callable, List, Optional, Tuple
 from mpi4py import MPI
 from numpy.typing import NDArray
 
-from device import Device
+from ..device import Device
 from .global_operations import global_dotprod, global_norm
 
 __all__ = ["fgmres"]

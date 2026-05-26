@@ -4,8 +4,8 @@ from typing import Callable, Optional, Tuple
 from mpi4py import MPI
 from numpy.typing import NDArray
 
-from device import Device, CudaDevice
-from wx_mpi import SingleProcess, Conditional, split_nodes
+from .device import Device, CudaDevice
+from .wx_mpi import SingleProcess, Conditional, split_nodes
 
 ExchangedVector = Tuple[NDArray, ...] | NDArray
 

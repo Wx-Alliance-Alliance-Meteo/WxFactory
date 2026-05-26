@@ -3,7 +3,7 @@ from typing import Optional, Tuple
 import numpy
 from numpy.typing import NDArray
 
-from common import Configuration, ConfigurationSchema, load_default_schema
+from ..common import Configuration, ConfigurationSchema, load_default_schema
 
 
 def get_array_module(a):

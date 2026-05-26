@@ -4,8 +4,8 @@ import math
 import numpy
 from mpi4py import MPI
 
-from common.configuration import Configuration
-from solvers import kiops, matvec_fun, pmex, exode
+from ..common.configuration import Configuration
+from ..solvers import kiops, matvec_fun, pmex, exode
 
 from .epi import Epi
 from .integrator import Integrator, alpha_coeff

@@ -1,0 +1,173 @@
+"""Entry point for the WxFactory model."""
+
+import datetime
+
+earliest = datetime.datetime.now()
+
+import argparse
+import cProfile
+import os.path
+import sys
+import traceback
+import warnings
+
+from mpi4py import MPI
+import numpy
+
+
+class _ConfigOptionsAction(argparse.Action):
+    def __init__(self, option_strings, dest, **kwargs):
+        super().__init__(option_strings, dest, default=argparse.SUPPRESS, **kwargs)
+
+    def __call__(self, parser, namespace, values, option_string, **kwargs) -> None:
+        from wx_factory.common import load_default_schema
+
+        schema = load_default_schema()
+        if values == "md":
+            print(f"{schema.to_string(True)}")
+        else:
+            print(f"Config options:\n{schema.to_string(False)}")
+
+        parser.exit()
+
+
+def main():
+    """Execute a WxFactory simulation."""
+    args = None
+    rank = MPI.COMM_WORLD.rank
+
+    try:
+        from wx_factory.simulation import Simulation
+        import wx_factory.wx_mpi as wx_mpi
+        from wx_factory.device import Device
+    except (ImportError, NameError, OSError) as e:
+        if rank == 0:
+            print(e)
+            raise
+        raise SystemExit(-1)
+
+    with wx_mpi.SingleProcess() as s, wx_mpi.Conditional(s):
+        parser = argparse.ArgumentParser(description="Solve NWP problems with WxFactory!")
+        parser.add_argument("--profile", action="store_true", help="Produce an execution profile when running")
+        parser.add_argument("config", type=str, help="File that contains simulation parameters")
+        parser.add_argument(
+            "--show-every-crash", action="store_true", help="In case of an exception, show output from alllllll PEs"
+        )
+        parser.add_argument(
+            "--numpy-warn-as-except", action="store_true", help="Raise an exception if there is a numpy warning"
+        )
+        parser.add_argument("--ignore-numpy-warnings", action="store_true", help="Suppress runtime warnings from numpy")
+        parser.add_argument(
+            "--config-options",
+            action=_ConfigOptionsAction,
+            type=str,
+            nargs="?",
+            help="List all possible configuration options and stop",
+        )
+        parser.add_argument(
+            "--allowed-proc-count",
+            action="store_true",
+            help="Print number of processes that can run the given configuration (then exit)",
+        )
+        parser.add_argument(
+            "--enable-unified-memory",
+            action="store_true",
+            help="Use unified (managed) CPU-GPU memory. "
+            "Only use this option if the MPI implementation does not support CUDA",
+        )
+        parser.add_argument(
+            "--proc-name",
+            type=str,
+            default="",
+            help="Force processor name to something specific (for compiled libraries)",
+        )
+        parser.add_argument(
+            "--suppress-warnings",
+            action="store_true",
+            help="Suppress warnings from external libraries (mostly related to math operations)",
+        )
+        parser.add_argument(
+            "--warning-traceback", action="store_true", help="Print stack trace when there is a warning"
+        )
+
+        args = parser.parse_args()
+
+        if not os.path.exists(args.config):
+            raise ValueError(f"Config file does not seem to exist: {args.config}")
+
+    args = MPI.COMM_WORLD.bcast(args, root=0)
+
+    if MPI.COMM_WORLD.rank == 0:
+        now = datetime.datetime.now()
+        load_time = now - earliest
+        print(f'Start time : {now.strftime("%Y-%m-%d %H:%M:%S")} (loaded in {load_time})', flush=True)
+
+    if args.suppress_warnings:
+        warnings.filterwarnings("ignore")
+    elif args.warning_traceback:
+
+        def warn_with_traceback(message, category, filename, lineno, file=None, line=None):
+            log = sys.stderr
+            if file and hasattr(file, "write"):
+                log = file
+            traceback.print_stack(file=log)
+            log.write(warnings.formatwarning(message, category, filename, lineno, line))
+
+        if MPI.COMM_WORLD.rank == 0:
+            warnings.showwarning = warn_with_traceback
+
+    if args.proc_name != "":
+        from wx_factory.compiler import compile_kernels
+
+        compile_kernels._proc_name = args.proc_name
+
+    try:
+        pr = None
+        if args.profile:
+            pr = cProfile.Profile()
+            pr.enable()
+
+        numpy.set_printoptions(suppress=True, linewidth=256)
+        if args.ignore_numpy_warnings:
+            numpy.seterr(all="ignore")
+
+        if args.numpy_warn_as_except:
+            numpy.seterr(all="raise")
+
+        if args.enable_unified_memory:
+            Device.use_unified_memory = True
+
+        sim = Simulation(args.config, print_allowed_pe_counts=args.allowed_proc_count)
+        sim.run()
+
+        if args.profile and pr:
+            pr.disable()
+            out_file = f"prof_{rank:04d}.out"
+            pr.dump_stats(out_file)
+
+    except (Exception, KeyboardInterrupt, SystemExit) as e:
+        try:
+            if rank == 0:
+                sim.output.finalize(0.0)
+        except UnboundLocalError:
+            pass
+        finally:
+            sys.stdout.flush()
+            if args and args.show_every_crash:
+                raise e
+
+            if isinstance(e, KeyboardInterrupt):
+                if rank == 0:
+                    print(f"{rank:5d} Keyboard interrupt")
+                sys.exit(130)
+
+            if rank == 0:
+                if not isinstance(e, SystemExit):
+                    print(f"There was an error while running WxFactory. Only rank 0 is printing the traceback:")
+                raise e
+
+            raise SystemExit
+
+
+if __name__ == "__main__":
+    main()

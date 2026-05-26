@@ -9,7 +9,7 @@ import scipy.linalg
 import pandas as pd
 
 from mpi4py import MPI
-from stiff_pdes import JTV, initWorld, print_stuff
+from ..stiff_pdes import JTV, initWorld, print_stuff
 
 # 1. initialize world
 # how to call InitWorld

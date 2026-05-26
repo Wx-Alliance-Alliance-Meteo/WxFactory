@@ -6,7 +6,7 @@ from mpi4py import MPI
 import numpy
 from numpy.typing import NDArray
 
-from common.definitions import (
+from ..common.definitions import (
     idx_h,
     idx_hu1,
     idx_hu2,
@@ -20,11 +20,11 @@ from common.definitions import (
     p0,
     Rd,
 )
-from common.configuration import Configuration
-from device import Device
-from geometry import CubedSphere, CubedSphere2D, CubedSphere3D, Metric2D, Metric3DTopo, DFROperators
-from process_topology import ProcessTopology
-from wx_mpi import SingleProcess, Conditional
+from ..common.configuration import Configuration
+from ..device import Device
+from ..geometry import CubedSphere, CubedSphere2D, CubedSphere3D, Metric2D, Metric3DTopo, DFROperators
+from ..process_topology import ProcessTopology
+from ..wx_mpi import SingleProcess, Conditional
 
 from .diagnostic import potential_vorticity, relative_vorticity
 from .output_cubesphere import OutputCubesphere

@@ -4,10 +4,10 @@ import time
 import numpy
 from numpy.typing import NDArray
 
-from common import Configuration
-from geometry import DFROperators, Geometry, Metric2D, Metric3DTopo
-from pde import PDE
-from process_topology import ProcessTopology, ExchangeRequest
+from ..common import Configuration
+from ..geometry import DFROperators, Geometry, Metric2D, Metric3DTopo
+from ..pde import PDE
+from ..process_topology import ProcessTopology, ExchangeRequest
 
 
 class RHS(ABC):

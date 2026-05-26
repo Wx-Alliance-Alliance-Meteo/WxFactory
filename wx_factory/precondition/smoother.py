@@ -6,8 +6,8 @@ from mpi4py import MPI
 import numpy
 import scipy.linalg
 
-from solvers import kiops, global_norm, matvec_rat, matvec_fun
-from rhs.rhs_selector import RhsBundle
+from ..solvers import kiops, global_norm, matvec_rat, matvec_fun
+from ..rhs.rhs_selector import RhsBundle
 
 _MatvecOp = Callable[[numpy.ndarray], numpy.ndarray]
 _Rhs = Callable[[numpy.ndarray], numpy.ndarray]

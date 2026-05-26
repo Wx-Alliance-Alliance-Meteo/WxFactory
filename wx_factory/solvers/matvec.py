@@ -4,7 +4,7 @@ from typing import Callable, Tuple
 import numpy
 from numpy.typing import NDArray
 
-from common import Configuration
+from ..common import Configuration
 
 
 class MatvecOp:

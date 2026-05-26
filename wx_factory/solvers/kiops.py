@@ -4,7 +4,7 @@ from typing import Callable, Optional
 from mpi4py import MPI
 from numpy.typing import NDArray
 
-from device import Device
+from ..device import Device
 
 
 def kiops(

@@ -6,12 +6,12 @@ from numpy.typing import NDArray
 
 from .state import load_state
 
-from common import angle24, Configuration, ConfigurationSchema, default_schema_path, decode_ig4, readfile
-from wx_mpi import do_once, SingleProcess, Conditional
-from process_topology import ProcessTopology
-from geometry import CubedSphere2D
+from ..common import angle24, Configuration, ConfigurationSchema, default_schema_path, decode_ig4, readfile
+from ..wx_mpi import do_once, SingleProcess, Conditional
+from ..process_topology import ProcessTopology
+from ..geometry import CubedSphere2D
 
-from common.graphx import plot_array
+from ..common.graphx import plot_array
 
 try:
     import rmn

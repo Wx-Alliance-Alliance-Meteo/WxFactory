@@ -6,21 +6,21 @@ from mpi4py import MPI
 import numpy
 
 
-from common import Configuration
-from device import Device, CpuDevice, CudaDevice, PytorchDevice
-from geometry import Cartesian2D, CubedSphere, CubedSphere3D, CubedSphere2D, DFROperators, Geometry
-from init.init_state_vars import init_state_vars
-from integrators import Integrator, resolve as _resolve_integrator
-from output.output_manager import OutputManager
-from output.output_cartesian import OutputCartesian
-from output.output_cubesphere_netcdf import OutputCubesphereNetcdf
-from output.output_cubesphere_fst import OutputCubesphereFst
-from output.input_manager import InputManager
-from process_topology import ProcessTopology
-from rhs.rhs_selector import RhsBundle
-from common.matmul import set_matmul_backend
-from wx_mpi import SingleProcess, Conditional
-from post_proccessing import PostProcessor, ScharMountainPostProcessor, DcmipT11WindPostProcessor, DcmipT12WindPostProcessor
+from ..common import Configuration
+from ..device import Device, CpuDevice, CudaDevice, PytorchDevice
+from ..geometry import Cartesian2D, CubedSphere, CubedSphere3D, CubedSphere2D, DFROperators, Geometry
+from ..init.init_state_vars import init_state_vars
+from ..integrators import Integrator, resolve as _resolve_integrator
+from ..output.output_manager import OutputManager
+from ..output.output_cartesian import OutputCartesian
+from ..output.output_cubesphere_netcdf import OutputCubesphereNetcdf
+from ..output.output_cubesphere_fst import OutputCubesphereFst
+from ..output.input_manager import InputManager
+from ..process_topology import ProcessTopology
+from ..rhs.rhs_selector import RhsBundle
+from ..common.matmul import set_matmul_backend
+from ..wx_mpi import SingleProcess, Conditional
+from ..post_proccessing import PostProcessor, ScharMountainPostProcessor, DcmipT11WindPostProcessor, DcmipT12WindPostProcessor
 
 
 class Simulation:

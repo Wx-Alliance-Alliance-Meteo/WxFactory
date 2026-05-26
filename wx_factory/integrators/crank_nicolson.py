@@ -2,7 +2,7 @@ import numpy
 from time import time
 
 from .integrator import Integrator, SolverInfo
-from solvers import newton_krylov
+from ..solvers import newton_krylov
 
 
 class CrankNicolson(Integrator):

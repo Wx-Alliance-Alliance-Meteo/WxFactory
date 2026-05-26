@@ -3,9 +3,9 @@ from typing import Callable
 
 from numpy.typing import NDArray
 
-from common import Configuration
-from device import Device
-from geometry import Geometry, Metric2D, Metric3DTopo
+from ..common import Configuration
+from ..device import Device
+from ..geometry import Geometry, Metric2D, Metric3DTopo
 
 
 class PDE(ABC):

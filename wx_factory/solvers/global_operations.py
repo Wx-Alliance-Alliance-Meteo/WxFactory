@@ -6,7 +6,7 @@ from mpi4py import MPI
 import numpy
 from numpy.typing import NDArray
 
-from device import Device
+from ..device import Device
 
 __all__ = ["global_norm", "global_dotprod", "global_inf_norm"]
 

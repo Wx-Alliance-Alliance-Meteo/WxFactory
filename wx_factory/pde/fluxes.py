@@ -7,7 +7,7 @@ from typing import Callable, Tuple
 import numpy
 from numpy.typing import NDArray
 
-from common.definitions import (
+from ..common.definitions import (
     cpd,
     cvd,
     heat_capacity_ratio,
@@ -23,7 +23,7 @@ from common.definitions import (
     idx_rho_w,
 )
 
-from geometry import Metric3DTopo
+from ..geometry import Metric3DTopo
 
 FluxFunction2D = Callable[
     [numpy.ndarray, numpy.ndarray, numpy.ndarray, numpy.ndarray, numpy.ndarray, numpy.ndarray, numpy.ndarray],

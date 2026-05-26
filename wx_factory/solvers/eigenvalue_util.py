@@ -22,7 +22,7 @@ except ModuleNotFoundError:
         return a
 
 
-from device import Device
+from ..device import Device
 from .matvec import MatvecOp
 
 

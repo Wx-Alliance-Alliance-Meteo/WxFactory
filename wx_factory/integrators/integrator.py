@@ -6,13 +6,13 @@ from typing import Optional
 
 import numpy
 
-from common import Configuration
-from device import Device
-from precondition.factorization import Factorization
-from precondition.multigrid import Multigrid
-from output.output_manager import OutputManager
-from solvers import SolverInfo
-from rhs.rhs import RHS
+from ..common import Configuration
+from ..device import Device
+from ..precondition.factorization import Factorization
+from ..precondition.multigrid import Multigrid
+from ..output.output_manager import OutputManager
+from ..solvers import SolverInfo
+from ..rhs.rhs import RHS
 
 
 class Integrator(ABC):

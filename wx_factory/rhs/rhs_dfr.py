@@ -1,11 +1,11 @@
 import numpy
 from numpy.typing import NDArray
 
-from common.definitions import idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_w, idx_rho_theta
-from common.matmul import apply_op
-from geometry import CubedSphere, DFROperators
-from rhs.rhs import RHS
-from wx_mpi import SingleProcess, Conditional
+from ..common.definitions import idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_w, idx_rho_theta
+from ..common.matmul import apply_op
+from ..geometry import CubedSphere, DFROperators
+from ..rhs.rhs import RHS
+from ..wx_mpi import SingleProcess, Conditional
 
 
 mid_i = numpy.s_[..., 1:-1, :]

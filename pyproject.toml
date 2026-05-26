@@ -1,5 +1,29 @@
-[tool.black]
-line-length = 120
+[build-system]
+requires = ["setuptools>=64", "setuptools_scm>=8"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "wxfactory"
+dynamic = ["version"]
+description = "A numerical weather prediction research framework"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.10"
+dependencies = [
+    "mpi4py",
+    "numpy",
+    "scipy",
+]
+
+[project.scripts]
+wxfactory = "wx_factory.main:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["wx_factory*"]
 
 [tool.setuptools_scm]
 write_to = "wx_factory/_version.py"
+
+[tool.black]
+line-length = 120

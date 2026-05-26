@@ -6,8 +6,8 @@ from mpi4py import MPI
 import numpy
 from numpy.typing import NDArray
 
-from common.configuration import Configuration
-from solvers import (
+from ..common.configuration import Configuration
+from ..solvers import (
     kiops,
     matvec_fun,
     MatvecOpBasic,

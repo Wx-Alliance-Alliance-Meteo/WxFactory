@@ -13,10 +13,10 @@ except ModuleNotFoundError:
     sqlite_available = False
     print(f"No sqlite, won't be able to print solver stats")
 
-from common.configuration import Configuration
-from device import Device, CpuDevice, CudaDevice
-from precondition.multigrid import Multigrid
-from wx_mpi import SingleProcess, Conditional
+from ..common.configuration import Configuration
+from ..device import Device, CpuDevice, CudaDevice
+from ..precondition.multigrid import Multigrid
+from ..wx_mpi import SingleProcess, Conditional
 
 
 class Column:

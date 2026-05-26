@@ -5,12 +5,12 @@ from typing import Callable, List, Optional
 from mpi4py import MPI
 from numpy.typing import NDArray
 
-from common.configuration import Configuration
-from device import Device
-from geometry import Geometry, DFROperators, CubedSphere3D
-from precondition.multigrid import Multigrid
-from solvers import SolverInfo
-from wx_mpi import SingleProcess, Conditional
+from ..common.configuration import Configuration
+from ..device import Device
+from ..geometry import Geometry, DFROperators, CubedSphere3D
+from ..precondition.multigrid import Multigrid
+from ..solvers import SolverInfo
+from ..wx_mpi import SingleProcess, Conditional
 
 from .solver_stats import SolverStatsOutput
 from .state import save_state, load_state

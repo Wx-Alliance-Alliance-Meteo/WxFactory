@@ -6,8 +6,8 @@ from typing import Any, List, Optional, Tuple, TypeVar, Union, Self
 from mpi4py import MPI
 from numpy.typing import NDArray
 
-from compiler import compile_kernels
-from wx_mpi import split_nodes
+from ..compiler import compile_kernels
+from ..wx_mpi import split_nodes
 
 from . import wx_cupy
 

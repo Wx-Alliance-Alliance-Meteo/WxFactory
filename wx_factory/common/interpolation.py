@@ -1,8 +1,8 @@
 import numpy
 
-from common.definitions import idx_u1, idx_u2
-from common.configuration import Configuration
-from geometry import gauss_legendre, lagrange_eval, remesh_operator
+from ..common.definitions import idx_u1, idx_u2
+from ..common.configuration import Configuration
+from ..geometry import gauss_legendre, lagrange_eval, remesh_operator
 
 basis_point_sets = {}
 

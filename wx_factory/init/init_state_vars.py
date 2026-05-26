@@ -2,11 +2,11 @@ import numpy
 from numpy.typing import NDArray
 
 
-from common.configuration import Configuration
-from geometry import DFROperators, Geometry, Metric2D, Metric3DTopo, Cartesian2D, CubedSphere2D, CubedSphere3D
-from init.initialize import initialize_cartesian2d, initialize_euler, initialize_sw, Topo
+from ..common.configuration import Configuration
+from ..geometry import DFROperators, Geometry, Metric2D, Metric3DTopo, Cartesian2D, CubedSphere2D, CubedSphere3D
+from ..init.initialize import initialize_cartesian2d, initialize_euler, initialize_sw, Topo
 from typing import Dict, Type
-from post_proccessing import PostProcessor, ScharMountainPostProcessor
+from ..post_proccessing import PostProcessor, ScharMountainPostProcessor
 
 def init_state_vars(
     geom: Geometry, operators: DFROperators, param: Configuration, post_processors: Dict[Type, PostProcessor]

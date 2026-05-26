@@ -20,8 +20,8 @@ import sys
 from types import SimpleNamespace
 
 from mpi4py import MPI
-from stiff_pdes import JTV, initWorld, rhs_jac_pdefuncs, print_stuff
-from integrators import Epi, Srerk
+from wx_factory.stiff_pdes import JTV, initWorld, rhs_jac_pdefuncs, print_stuff
+from wx_factory.integrators import Epi, Srerk
 from time import time
 
 # 1. initialize world

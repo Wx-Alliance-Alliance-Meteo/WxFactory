@@ -8,7 +8,7 @@ import math
 import scipy.linalg
 
 from mpi4py import MPI
-from stiff_pdes import JTV, initWorld, print_stuff
+from ..stiff_pdes import JTV, initWorld, print_stuff
 
 # from print_stuff import *
 

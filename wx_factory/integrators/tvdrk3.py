@@ -1,6 +1,6 @@
 from typing import Callable
 
-from common.configuration import Configuration
+from ..common.configuration import Configuration
 from .integrator import Integrator, SolverInfo
 
 

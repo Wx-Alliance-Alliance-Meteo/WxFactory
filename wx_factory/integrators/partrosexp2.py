@@ -5,9 +5,9 @@ from mpi4py import MPI
 import numpy
 from scipy.sparse.linalg import LinearOperator
 
-from common.configuration import Configuration
+from ..common.configuration import Configuration
 from .integrator import Integrator, SolverInfo
-from solvers import fgmres, matvec_fun, pmex
+from ..solvers import fgmres, matvec_fun, pmex
 
 
 class PartRosExp2(Integrator):

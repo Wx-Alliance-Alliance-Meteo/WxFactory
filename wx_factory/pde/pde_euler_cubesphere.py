@@ -1,11 +1,11 @@
 from mpi4py import MPI
 from numpy.typing import NDArray
 
-from common import Configuration
-from common.definitions import idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_w, idx_rho_theta, p0, cpd, cvd, Rd, gravity
-from device import CudaDevice
-from geometry import CubedSphere3D, Metric3DTopo
-from init.dcmip import dcmip_schar_damping
+from ..common import Configuration
+from ..common.definitions import idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_w, idx_rho_theta, p0, cpd, cvd, Rd, gravity
+from ..device import CudaDevice
+from ..geometry import CubedSphere3D, Metric3DTopo
+from ..init.dcmip import dcmip_schar_damping
 
 from .pde import PDE
 from .fluxes import rusanov_3d_hori_i_new, rusanov_3d_hori_j_new, rusanov_3d_vert_new

@@ -7,16 +7,16 @@ from mpi4py import MPI
 import numpy
 from numpy.typing import NDArray
 
-from common import Configuration, angle24
-from common.definitions import (
+from ..common import Configuration, angle24
+from ..common.definitions import (
     idx_h,
     idx_hu1,
     idx_hu2,
 )
-from device import Device
-from geometry import CubedSphere, CubedSphere2D, CubedSphere3D, Metric2D, Metric3DTopo, DFROperators
-from process_topology import ProcessTopology
-from wx_mpi import SingleProcess, Conditional
+from ..device import Device
+from ..geometry import CubedSphere, CubedSphere2D, CubedSphere3D, Metric2D, Metric3DTopo, DFROperators
+from ..process_topology import ProcessTopology
+from ..wx_mpi import SingleProcess, Conditional
 
 from .output_cubesphere import OutputCubesphere
 

@@ -1,4 +1,4 @@
-from output.state import load_state
+from ..output.state import load_state
 import numpy as np
 
 

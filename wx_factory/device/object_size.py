@@ -1,4 +1,4 @@
-from device import wx_cupy
+from ..device import wx_cupy
 
 import numpy
 

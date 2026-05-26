@@ -3,9 +3,9 @@ from typing import Optional
 from mpi4py import MPI
 from numpy.typing import NDArray
 
-from common.definitions import idx_h, idx_u1, idx_u2
-from geometry import CubedSphere2D, DFROperators, Metric2D
-from process_topology import ProcessTopology
+from ..common.definitions import idx_h, idx_u1, idx_u2
+from ..geometry import CubedSphere2D, DFROperators, Metric2D
+from ..process_topology import ProcessTopology
 
 
 class RhsAdvection2d:

@@ -2,7 +2,7 @@ import math
 
 from mpi4py import MPI
 
-from device import Device, CpuDevice
+from ..device import Device, CpuDevice
 
 
 def pmex(

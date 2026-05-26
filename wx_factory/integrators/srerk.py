@@ -4,8 +4,8 @@ from typing import Callable, List, Optional
 from mpi4py import MPI
 import numpy
 
-from common.configuration import Configuration
-from solvers import (
+from ..common.configuration import Configuration
+from ..solvers import (
     cwy_ne,
     cwy_1s,
     cwy_ne1s,

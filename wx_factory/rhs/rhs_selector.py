@@ -2,11 +2,11 @@ from typing import Callable, Optional, Tuple
 
 from numpy.typing import NDArray
 
-from common import Configuration
-from geometry import Cartesian2D, CubedSphere2D, CubedSphere3D, DFROperators, Geometry, Metric2D, Metric3DTopo
-from init.initialize import Topo
-from pde import PDEEulerCartesian, PDEEulerCubesphere
-from process_topology import ProcessTopology
+from ..common import Configuration
+from ..geometry import Cartesian2D, CubedSphere2D, CubedSphere3D, DFROperators, Geometry, Metric2D, Metric3DTopo
+from ..init.initialize import Topo
+from ..pde import PDEEulerCartesian, PDEEulerCubesphere
+from ..process_topology import ProcessTopology
 
 from .rhs_sw import RhsShallowWater
 from .rhs_advection2d import RhsAdvection2d

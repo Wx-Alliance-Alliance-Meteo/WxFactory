@@ -2,8 +2,8 @@ from mpi4py import MPI
 import numpy
 from numpy.typing import NDArray
 
-from common.definitions import gravity
-from geometry import DFROperators, Metric2D
+from ..common.definitions import gravity
+from ..geometry import DFROperators, Metric2D
 
 
 def relative_vorticity(u1_contra: NDArray, u2_contra: NDArray, metric: Metric2D, mtrx: DFROperators) -> NDArray:

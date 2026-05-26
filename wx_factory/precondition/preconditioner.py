@@ -4,8 +4,8 @@ from typing import Tuple, Optional
 from mpi4py import MPI
 import numpy
 
-from common.configuration import Configuration
-from solvers import MatvecOp
+from ..common.configuration import Configuration
+from ..solvers import MatvecOp
 
 
 class Preconditioner(MatvecOp, ABC):

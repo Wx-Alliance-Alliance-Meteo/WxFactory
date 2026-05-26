@@ -8,9 +8,9 @@ from .cubed_sphere import CubedSphere
 from .sphere import cart2sph
 
 # For type hints
-from common import Configuration
-from device import Device
-from process_topology import ProcessTopology
+from ..common import Configuration
+from ..device import Device
+from ..process_topology import ProcessTopology
 
 
 class CubedSphere2D(CubedSphere):

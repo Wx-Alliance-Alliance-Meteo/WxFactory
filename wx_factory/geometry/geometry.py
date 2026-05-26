@@ -6,7 +6,7 @@ import numpy
 from numpy.typing import NDArray
 import sympy
 
-from device import Device
+from ..device import Device
 from .quadrature import gauss_legendre
 
 

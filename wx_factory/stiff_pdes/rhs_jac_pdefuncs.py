@@ -14,7 +14,7 @@
 import numpy as np
 
 from mpi4py import MPI
-from stiff_pdes import JTV
+from ..stiff_pdes import JTV
 
 
 # -------------------------ALLEN-CAHN--------------------------------

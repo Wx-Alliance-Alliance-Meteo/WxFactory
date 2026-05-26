@@ -2,7 +2,7 @@ from typing import Self, Tuple
 
 import numpy
 
-from device import Device
+from ..device import Device
 from .geometry import Geometry
 
 

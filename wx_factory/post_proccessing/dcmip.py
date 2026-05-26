@@ -1,8 +1,8 @@
 import numpy
 
 from . import post_proccessor
-from common.definitions import idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_w
-from init.dcmip import dcmip_T11_update_winds, dcmip_T12_update_winds
+from ..common.definitions import idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_w
+from ..init.dcmip import dcmip_T11_update_winds, dcmip_T12_update_winds
 
 
 class DcmipT11WindPostProcessor(post_proccessor.PostProcessor):

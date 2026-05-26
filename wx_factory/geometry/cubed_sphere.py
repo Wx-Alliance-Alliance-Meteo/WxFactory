@@ -1,6 +1,6 @@
-from device import Device
+from ..device import Device
 from .geometry import Geometry
-from process_topology import ProcessTopology
+from ..process_topology import ProcessTopology
 
 
 class CubedSphere(Geometry):
