@@ -20,7 +20,7 @@ from ..process_topology import ProcessTopology
 from ..rhs.rhs_selector import RhsBundle
 from ..common.matmul import set_matmul_backend
 from ..wx_mpi import SingleProcess, Conditional
-from ..post_proccessing import PostProcessor, ScharMountainPostProcessor, DcmipT11WindPostProcessor, DcmipT12WindPostProcessor
+from ..step_hooks import StepHook, ScharMountainHook, DcmipT11WindHook, DcmipT12WindHook
 
 
 class Simulation:
@@ -35,7 +35,7 @@ class Simulation:
     """
 
     config: Configuration
-    post_processors: Dict[Type, PostProcessor]
+    step_hooks: Dict[Type, StepHook]
 
     def __init__(
         self,
@@ -53,7 +53,7 @@ class Simulation:
         self.comm = comm
         self.rank = self.comm.rank
 
-        self.post_processors = {}
+        self.step_hooks = {}
 
         if isinstance(config, Configuration):
             self.config = config
@@ -109,7 +109,7 @@ class Simulation:
         self.operators_real = DFROperators(self.geometry, self.config, self.device)
         self.operators_complex = DFROperators(self.geometry, self.config, self.device, self.device.xp.complex128)
         self.initial_Q, self.topography, self.metric = init_state_vars(
-            self.geometry, self.operators_real, self.config, self.post_processors
+            self.geometry, self.operators_real, self.config, self.step_hooks
         )
         self.preconditioner = self._create_preconditioner(self.initial_Q)
         self.output = self._create_output_manager()
@@ -130,7 +130,7 @@ class Simulation:
             self.device,
         )
 
-        self._register_dcmip_post_processors()
+        self._register_dcmip_step_hooks()
 
         self.integrator = self._create_time_integrator(self.config.time_integrator)
         self.integrator.output_manager = self.output
@@ -167,8 +167,8 @@ class Simulation:
             # TODO put this inside the `step` function of the integrator
             self._check_for_nan(self.Q)
 
-            for post_processor_type in self.post_processors:
-                self.Q = self.post_processors[post_processor_type].process(self.Q, self.t)
+            for hook_type in self.step_hooks:
+                self.Q = self.step_hooks[hook_type].process(self.Q, self.t)
 
             self.output.step(self.Q, self.step_id)  # Perform any requested output
             sys.stdout.flush()
@@ -281,8 +281,8 @@ class Simulation:
                 )
 
                 if self.config.enable_schar_mountain:
-                    schar_mountain = ScharMountainPostProcessor(self.config, cube_sphere)
-                    self.post_processors[ScharMountainPostProcessor] = schar_mountain
+                    schar_mountain = ScharMountainHook(self.config, cube_sphere)
+                    self.step_hooks[ScharMountainHook] = schar_mountain
                 return cube_sphere
 
         if self.config.grid_type == "cartesian2d":
@@ -355,14 +355,14 @@ class Simulation:
             print(f"Running with time integrator: {name}")
         return _resolve_integrator(name, self.config, self.rhs, self.preconditioner, self.device)
 
-    def _register_dcmip_post_processors(self) -> None:
-        """Register prescribed-wind post-processors for DCMIP test cases 11 and 12."""
+    def _register_dcmip_step_hooks(self) -> None:
+        """Register prescribed-wind step hooks for DCMIP test cases 11 and 12."""
         if self.config.case_number == 11:
-            self.post_processors[DcmipT11WindPostProcessor] = DcmipT11WindPostProcessor(
+            self.step_hooks[DcmipT11WindHook] = DcmipT11WindHook(
                 self.geometry, self.metric, self.operators_real, self.config
             )
         elif self.config.case_number == 12:
-            self.post_processors[DcmipT12WindPostProcessor] = DcmipT12WindPostProcessor(
+            self.step_hooks[DcmipT12WindHook] = DcmipT12WindHook(
                 self.geometry, self.metric, self.operators_real, self.config
             )
 

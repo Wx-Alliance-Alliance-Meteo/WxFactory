@@ -1,11 +1,11 @@
 import numpy
 
-from . import post_proccessor
+from . import step_hook
 from ..common.definitions import idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_w
 from ..init.dcmip import dcmip_T11_update_winds, dcmip_T12_update_winds
 
 
-class DcmipT11WindPostProcessor(post_proccessor.PostProcessor):
+class DcmipT11WindHook(step_hook.StepHook):
     """Overwrite momentum components with DCMIP test 11 prescribed winds after each step."""
 
     def __init__(self, geom, metric, operators, config):
@@ -24,7 +24,7 @@ class DcmipT11WindPostProcessor(post_proccessor.PostProcessor):
         return Q
 
 
-class DcmipT12WindPostProcessor(post_proccessor.PostProcessor):
+class DcmipT12WindHook(step_hook.StepHook):
     """Overwrite momentum components with DCMIP test 12 prescribed winds after each step."""
 
     def __init__(self, geom, metric, operators, config):

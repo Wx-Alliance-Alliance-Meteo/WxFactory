@@ -1,10 +1,10 @@
-from . import post_proccessor
+from . import step_hook
 from ..common import Configuration
 from ..geometry import CubedSphere3D, Metric3DTopo
 import math
 import numpy
 
-class ScharMountainPostProcessor(post_proccessor.PostProcessor):
+class ScharMountainHook(step_hook.StepHook):
     lambdam: float  # mountain longitude center point (radians)
     phim: float  # mountain latitude center point (radians)
     h0: float  # peak height of the mountain range (m)
@@ -37,7 +37,7 @@ class ScharMountainPostProcessor(post_proccessor.PostProcessor):
         self.h0 = config.schar_mountain_height
         self.Dm = config.schar_mountain_radius
         self.Dxi = config.schar_mountain_length
-        
+
         self.step_to_completion = config.schar_mountain_step
         self.step = 0
         self.build()
@@ -69,12 +69,12 @@ class ScharMountainPostProcessor(post_proccessor.PostProcessor):
 
         if diffn > 0.0 or diffin > 0.0 or diffjn > 0.0:
             raise ValueError
-        
+
     def apply(self, ratio: float):
         # Update the geometry object with the new bottom topography
         self.geom.apply_topography(self.zbot * ratio, self.zbot_itf_i * ratio, self.zbot_itf_j * ratio,
                                     self.zbot_new * ratio, self.zbot_itf_i_new * ratio, self.zbot_itf_j_new * ratio)
-        
+
         # And regenerate the metric to take this new topography into account
         self.metric.build_metric()
 
