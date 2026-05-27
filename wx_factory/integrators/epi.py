@@ -17,6 +17,18 @@ from ..solvers import (
 
 from .integrator import Integrator, SolverInfo
 
+_COEFF_TABLES = {
+    2: [[]],
+    3: [[2 / 3]],
+    4: [[-3 / 10, 3 / 40], [32 / 5, -11 / 10]],
+    5: [[-4 / 5, 2 / 5, -4 / 45], [12, -9 / 2, 8 / 9], [3, 0, -1 / 3]],
+    6: [
+        [-49 / 60, 351 / 560, -359 / 1260, 367 / 6720],
+        [92 / 7, -99 / 14, 176 / 63, -1 / 2],
+        [485 / 21, -151 / 14, 23 / 9, -31 / 168],
+    ],
+}
+
 
 class Epi(Integrator):
     def __init__(
@@ -30,28 +42,13 @@ class Epi(Integrator):
         self.jacobian_method = param.jacobian_method
         self.exponential_solver = param.exponential_solver
         self.case_number = param.case_number
-        self.int = param.time_integrator
+        self.time_integrator = param.time_integrator
         self.exode_method = param.exode_method
         self.exode_controller = param.exode_controller
 
-        if order == 2:
-            self.A = self.device.xp.array([[]])
-        elif order == 3:
-            self.A = self.device.xp.array([[2 / 3]])
-        elif order == 4:
-            self.A = self.device.xp.array([[-3 / 10, 3 / 40], [32 / 5, -11 / 10]])
-        elif order == 5:
-            self.A = self.device.xp.array([[-4 / 5, 2 / 5, -4 / 45], [12, -9 / 2, 8 / 9], [3, 0, -1 / 3]])
-        elif order == 6:
-            self.A = self.device.xp.array(
-                [
-                    [-49 / 60, 351 / 560, -359 / 1260, 367 / 6720],
-                    [92 / 7, -99 / 14, 176 / 63, -1 / 2],
-                    [485 / 21, -151 / 14, 23 / 9, -31 / 168],
-                ]
-            )
-        else:
-            raise ValueError(f"Unsupported order {order} for EPI method")
+        if order not in _COEFF_TABLES:
+            raise ValueError(f"Unsupported order {order} for EPI method. Supported orders: {sorted(_COEFF_TABLES)}")
+        self.A = self.device.xp.array(_COEFF_TABLES[order])
 
         k, self.n_prev = self.A.shape
         # Limit max phi to 1 for EPI 2
