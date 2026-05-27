@@ -4,7 +4,6 @@ import math
 from time import time
 from typing import Callable
 
-from mpi4py import MPI
 
 from ..common.configuration import Configuration
 from .integrator import Integrator

@@ -95,6 +95,5 @@ class RhsBundle:
             self.implicit = not_implemented
             self.explicit = not_implemented
             self.convective = not_implemented
-            self.viscous = not_implemented
         else:
             raise ValueError(f"Unrecognized combination of equations ({param.equations}) and geometry ({type(geom)})")

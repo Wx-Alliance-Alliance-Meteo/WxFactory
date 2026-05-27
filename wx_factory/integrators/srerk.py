@@ -2,7 +2,6 @@ import math
 from itertools import combinations
 from typing import Callable, List, Optional
 
-from mpi4py import MPI
 import numpy
 
 from ..common.configuration import Configuration

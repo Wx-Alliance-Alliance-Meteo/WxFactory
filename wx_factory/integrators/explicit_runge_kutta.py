@@ -7,7 +7,6 @@ import logging
 from typing import Callable, Optional, Tuple, Union, Literal
 import numpy
 from ..solvers.global_operations import global_inf_norm
-from mpi4py import MPI
 
 # Constants
 BIG_FACTOR = 4.0

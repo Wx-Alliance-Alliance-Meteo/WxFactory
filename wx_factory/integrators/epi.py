@@ -2,7 +2,6 @@ from collections import deque
 import math
 from typing import Callable
 
-from mpi4py import MPI
 import numpy
 from numpy.typing import NDArray
 
@@ -41,8 +40,6 @@ class Epi(Integrator):
         self.krylov_size = 1
         self.jacobian_method = param.jacobian_method
         self.exponential_solver = param.exponential_solver
-        self.case_number = param.case_number
-        self.time_integrator = param.time_integrator
         self.exode_method = param.exode_method
         self.exode_controller = param.exode_controller
 

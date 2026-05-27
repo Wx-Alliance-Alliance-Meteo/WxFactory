@@ -1,7 +1,6 @@
 from time import time
 from typing import Callable
 
-from mpi4py import MPI
 import numpy
 from scipy.sparse.linalg import LinearOperator
 

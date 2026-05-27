@@ -2,7 +2,6 @@ from collections import deque
 import math
 
 import numpy
-from mpi4py import MPI
 
 from ..common.configuration import Configuration
 from ..solvers import kiops, matvec_fun, pmex, exode

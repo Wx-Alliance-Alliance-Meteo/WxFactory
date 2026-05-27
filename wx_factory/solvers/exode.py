@@ -1,9 +1,7 @@
 import math
 import numpy
-import sys
 
 # from integrators.butcher import *
-from scipy.sparse.linalg import eigs
 
 
 def exode(
