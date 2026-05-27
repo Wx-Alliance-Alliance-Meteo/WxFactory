@@ -8,7 +8,8 @@ from ..common.configuration import Configuration
 from ..solvers import kiops, matvec_fun, pmex, exode
 
 from .epi import Epi
-from .integrator import Integrator, alpha_coeff
+from .integrator import Integrator
+from .srerk import alpha_coeff
 
 
 class EpiStiff(Integrator):

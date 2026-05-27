@@ -1,6 +1,4 @@
 from abc import ABC, abstractmethod
-from itertools import combinations
-import math
 from time import time
 from typing import Optional
 
@@ -120,16 +118,3 @@ class Integrator(ABC):
         self.num_completed_steps += 1
 
         return result
-
-def alpha_coeff(c):
-    """Compute the coefficients for stiffness resilient exponential methods based on node values c."""
-    m = len(c)
-    alpha = numpy.zeros((m, m))
-    for i in range(m):
-        c_no_i = [cc for (j, cc) in enumerate(c) if j != i]
-        denom = c[i] ** 2 * math.prod([c[i] - cl for cl in c_no_i])
-        for k in range(m):
-            sp = sum([math.prod(v) for v in combinations(c_no_i, m - k - 1)])
-            alpha[k, i] = (-1) ** (m - k + 1) * math.factorial(k + 2) * sp / denom
-
-    return alpha

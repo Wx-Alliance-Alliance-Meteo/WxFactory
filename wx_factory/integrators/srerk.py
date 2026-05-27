@@ -1,4 +1,5 @@
 import math
+from itertools import combinations
 from typing import Callable, List, Optional
 
 from mpi4py import MPI
@@ -11,7 +12,20 @@ from ..solvers import (
     pmex,
 )
 
-from .integrator import Integrator, alpha_coeff
+from .integrator import Integrator
+
+
+def alpha_coeff(c):
+    """Compute the coefficients for stiffness resilient exponential methods based on node values c."""
+    m = len(c)
+    alpha = numpy.zeros((m, m))
+    for i in range(m):
+        c_no_i = [cc for (j, cc) in enumerate(c) if j != i]
+        denom = c[i] ** 2 * math.prod([c[i] - cl for cl in c_no_i])
+        for k in range(m):
+            sp = sum([math.prod(v) for v in combinations(c_no_i, m - k - 1)])
+            alpha[k, i] = (-1) ** (m - k + 1) * math.factorial(k + 2) * sp / denom
+    return alpha
 
 
 # Computes nodes for SRERK methods with minimal error terms
