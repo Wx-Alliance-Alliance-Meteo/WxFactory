@@ -127,7 +127,6 @@ class Simulation:
             self.process_topo,
             self.config,
             self.initial_Q.shape,
-            self.device,
         )
 
         self._register_dcmip_step_hooks()
