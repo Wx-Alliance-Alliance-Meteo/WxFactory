@@ -264,6 +264,7 @@ class CudaDevice(Device):
 
     def elapsed(self, timestamps):
         get_time = self.cupy.cuda.get_elapsed_time
+        timestamps[-1].synchronize()
         intervals = [get_time(timestamps[i], timestamps[i + 1]) / 1000.0 for i in range(len(timestamps) - 1)]
         intervals.append(get_time(timestamps[0], timestamps[-1]) / 1000.0)
         return intervals
