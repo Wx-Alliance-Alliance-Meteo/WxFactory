@@ -1,3 +1,5 @@
+import numpy
+
 from ..common.configuration import Configuration
 from .integrator import Integrator
 
@@ -29,7 +31,7 @@ class StrangSplitting(Integrator):
 
 class OS22Splitting(Integrator):
     def __init__(self, param: Configuration, scheme1: Integrator, scheme2: Integrator, os_param):
-        super().__init__()
+        super().__init__(param, preconditioner=None)
         self.scheme1 = scheme1
         self.scheme2 = scheme2
         self.os_param = os_param
