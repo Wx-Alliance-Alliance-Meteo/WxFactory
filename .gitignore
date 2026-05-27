@@ -29,7 +29,7 @@ __pycache__/
 /*.pdf
 jacobian
 listings
-results
+results*
 work
 tests/**/tmp
 tests/**/*.o[0-9]*
