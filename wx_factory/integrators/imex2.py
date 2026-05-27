@@ -8,8 +8,8 @@ from ..solvers import newton_krylov
 
 
 class Imex2(Integrator):
-    def __init__(self, param: Configuration, rhs_exp: Callable, rhs_imp: Callable, **kwargs):
-        super().__init__(param, **kwargs)
+    def __init__(self, param: Configuration, rhs_exp: Callable, rhs_imp: Callable, *, device=None):
+        super().__init__(param, device=device)
 
         self.rhs_exp = rhs_exp
         self.rhs_imp = rhs_imp

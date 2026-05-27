@@ -3,8 +3,8 @@ from .integrator import Integrator
 
 
 class Euler1(Integrator):
-    def __init__(self, param: Configuration, rhs, **kwargs):
-        super().__init__(param, **kwargs)
+    def __init__(self, param: Configuration, rhs, *, device=None):
+        super().__init__(param, device=device)
         if self.device.comm.rank == 0:
             print("WARNING: Running with first-order explicit Euler timestepping.")
             print("         This is UNSTABLE and should be used only for debugging.")

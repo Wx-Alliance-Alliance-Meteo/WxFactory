@@ -6,8 +6,8 @@ from .integrator import Integrator, SolverInfo
 
 
 class Bdf2(Integrator):
-    def __init__(self, param, rhs, preconditioner=None, init_substeps=1, **kwargs):
-        super().__init__(param, **kwargs)
+    def __init__(self, param, rhs, *, preconditioner=None, init_substeps=1, device=None):
+        super().__init__(param, device=device, preconditioner=preconditioner)
         self.rhs = rhs
         self.tol = param.tolerance
         self.init_substeps = init_substeps

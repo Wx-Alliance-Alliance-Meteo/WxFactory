@@ -6,8 +6,8 @@ from ..solvers import newton_krylov
 
 
 class CrankNicolson(Integrator):
-    def __init__(self, param, rhs, **kwargs):
-        super().__init__(param, **kwargs)
+    def __init__(self, param, rhs, *, device=None, preconditioner=None):
+        super().__init__(param, device=device, preconditioner=preconditioner)
         self.rhs = rhs
         self.tol = param.tolerance
 

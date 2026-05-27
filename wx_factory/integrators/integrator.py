@@ -39,21 +39,17 @@ class Integrator(ABC):
     preconditioner: Optional[Multigrid]
     solver_info: Optional[SolverInfo]
 
-    def __init__(self, param: Configuration, **kwargs) -> None:
-        self.output_manager = None
-        self.preconditioner = None
-
-        if "output_manager" in kwargs:
-            self.output_manager = kwargs["output_manager"]
-
-        if "device" in kwargs:
-            self.device = kwargs["device"]
-        else:
-            self.device = Device.get_default()
-
-        if "preconditioner" in kwargs:
-            self.preconditioner = kwargs["preconditioner"]
-
+    def __init__(
+        self,
+        param: Configuration,
+        *,
+        output_manager: Optional[OutputManager] = None,
+        device: Optional[Device] = None,
+        preconditioner=None,
+    ) -> None:
+        self.output_manager = output_manager
+        self.preconditioner = preconditioner
+        self.device = device if device is not None else Device.get_default()
         self.param = param
         self.verbose_solver = param.verbose_solver
         self.solver_info = None

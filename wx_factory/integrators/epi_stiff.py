@@ -12,8 +12,8 @@ from .integrator import Integrator, alpha_coeff
 
 
 class EpiStiff(Integrator):
-    def __init__(self, param: Configuration, order: int, rhs, init_method=None, init_substeps: int = 1, **kwargs):
-        super().__init__(param, **kwargs)
+    def __init__(self, param: Configuration, order: int, rhs, init_method=None, init_substeps: int = 1, *, device=None):
+        super().__init__(param, device=device)
         self.rhs = rhs
         self.tol = param.tolerance
         self.krylov_size = 1

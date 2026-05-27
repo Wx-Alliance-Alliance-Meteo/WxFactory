@@ -11,8 +11,8 @@ from ..solvers import matvec_fun, pmex
 
 
 class PartRosExp2(Integrator):
-    def __init__(self, param: Configuration, rhs_full: Callable, rhs_imp: Callable, **kwargs):
-        super().__init__(param, **kwargs)
+    def __init__(self, param: Configuration, rhs_full: Callable, rhs_imp: Callable, *, device=None, preconditioner=None):
+        super().__init__(param, device=device, preconditioner=preconditioner)
 
         self.rhs_full = rhs_full
         self.rhs_imp = rhs_imp

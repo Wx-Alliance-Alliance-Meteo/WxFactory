@@ -5,8 +5,8 @@ from .integrator import Integrator, SolverInfo
 
 
 class Tvdrk3(Integrator):
-    def __init__(self, param: Configuration, rhs: Callable, **kwargs):
-        super().__init__(param, **kwargs)
+    def __init__(self, param: Configuration, rhs: Callable, *, device=None):
+        super().__init__(param, device=device)
         self.rhs = rhs
 
     def __step__(self, Q, dt):

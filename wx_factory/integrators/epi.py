@@ -20,9 +20,9 @@ from .integrator import Integrator, SolverInfo
 
 class Epi(Integrator):
     def __init__(
-        self, param: Configuration, order: int, rhs: Callable, jac: Callable = None, init_method=None, init_substeps: int = 1, **kwargs
+        self, param: Configuration, order: int, rhs: Callable, jac: Callable = None, init_method=None, init_substeps: int = 1, *, device=None
     ):
-        super().__init__(param, preconditioner=None, **kwargs)
+        super().__init__(param, device=device)
         self.rhs = rhs
         self.jac = jac
         self.tol = param.tolerance
@@ -65,7 +65,7 @@ class Epi(Integrator):
         if init_method or self.n_prev == 0:
             self.init_method = init_method
         else:
-            self.init_method = Epi(param, 2, rhs, **kwargs)
+            self.init_method = Epi(param, 2, rhs, device=device)
 
         self.init_substeps = init_substeps
 
