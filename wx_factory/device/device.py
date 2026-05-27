@@ -108,7 +108,7 @@ class CpuDevice(Device):
             if comm.rank == 0:
                 print(f"Unable to find the interface_c module. You need to compile it.", flush=True)
             raise
-        except:
+        except Exception:
             print(f"Unknown exception!", flush=True)
             raise
 
