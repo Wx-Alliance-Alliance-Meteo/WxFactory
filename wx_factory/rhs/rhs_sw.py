@@ -20,37 +20,25 @@ class RhsShallowWater(RHS):
         metric: Metric2D,
         topo: Optional[Topo],
         ptopo: ProcessTopology,
-        num_solpts: int,
-        num_elements_hori: int,
     ):
-        self.shape = shape
-        self.geom = geom
-        self.ops_real = operators_real
-        self.ops_complex = operators_complex
-        self.metric = metric
-        self.topo = topo
-        self.ptopo = ptopo
-        self.num_solpts = num_solpts
-        self.num_elements_hori = num_elements_hori
-        self.device = geom.device
-
-        self.timestamps = []
-        self.timings = []
-
-        self.f_x1 = None
-        self.f_x2 = None
-        self.f_x3 = None
-
-        self.df1_dx1 = None
-        self.df2_dx2 = None
-        self.df3_dx3 = None
+        super().__init__(
+            pde=None,
+            geometry=geom,
+            operators_real=operators_real,
+            operators_complex=operators_complex,
+            metric=metric,
+            topography=topo,
+            process_topo=ptopo,
+            config=None,
+            expected_shape=shape,
+        )
+        self.num_solpts = geom.num_solpts
+        self.num_elements_hori = geom.num_elements_horizontal
 
         self.var_itf_j = None
         self.var_itf_i = None
         self.u1 = None
         self.u2 = None
-
-        self.rhs = None
 
     def allocate_arrays(self, q):
         return

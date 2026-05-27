@@ -82,8 +82,6 @@ class RhsBundle:
                     metric,
                     topo,
                     ptopo,
-                    geom.num_solpts,
-                    geom.num_elements_horizontal,
                 )
 
         elif param.equations == "euler" and isinstance(geom, Cartesian2D):

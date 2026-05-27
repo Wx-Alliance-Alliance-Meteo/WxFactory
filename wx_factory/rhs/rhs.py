@@ -17,14 +17,14 @@ class RHS(ABC):
 
     def __init__(
         self,
-        pde: PDE,
+        pde: PDE | None,
         geometry: Geometry,
         operators_real: DFROperators,
         operators_complex: DFROperators,
         metric: Metric2D | Metric3DTopo,
         topography,
         process_topo: ProcessTopology,
-        config: Configuration,
+        config: Configuration | None,
         expected_shape: tuple[int, ...],
         debug: bool = False,
     ) -> None:
@@ -40,8 +40,9 @@ class RHS(ABC):
         self.expected_shape = expected_shape
         self.debug = debug
 
-        self.num_dim = self.pde.num_dim
-        self.num_var = self.pde.num_var
+        if pde is not None:
+            self.num_dim = self.pde.num_dim
+            self.num_var = self.pde.num_var
 
         # Default value, when __call__ is not called
         self.ops = self.ops_real
