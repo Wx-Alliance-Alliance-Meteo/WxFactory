@@ -10,9 +10,7 @@ from unittest import TestCase, TestSuite
 from mpi_test import MpiRunner, MpiTestSuite
 
 main_project_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../..")
-main_module_dir = os.path.join(main_project_dir, "wx_factory")
 sys.path.append(main_project_dir)
-sys.path.append(main_module_dir)
 
 from tests.unit.common.test_process_topology import ExchangeTest, GatherScatterTest
 from tests.unit.operators.test_extrap import OperatorsExtrapEuler3DTestCase

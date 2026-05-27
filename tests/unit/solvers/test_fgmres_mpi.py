@@ -2,8 +2,8 @@ import unittest
 
 from numpy import ndarray
 
-from device import CpuDevice
-from solvers.fgmres import fgmres
+from wx_factory.device import CpuDevice
+from wx_factory.solvers.fgmres import fgmres
 
 from mpi_test import run_test_on_x_process
 

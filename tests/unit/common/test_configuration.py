@@ -2,10 +2,10 @@ import os
 import glob
 import unittest
 
-from common.eval_expr import _math_constants
+from wx_factory.common.eval_expr import _math_constants
 _math_constants["e"] = 1
 _math_constants["f"] = 5
-from common import Configuration, ConfigurationSchema, readfile, ConfigValueError
+from wx_factory.common import Configuration, ConfigurationSchema, readfile, ConfigValueError
 
 
 self_dir = os.path.dirname(os.path.realpath(__file__))

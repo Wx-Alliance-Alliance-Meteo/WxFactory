@@ -3,10 +3,11 @@ import random
 from mpi4py import MPI
 from numpy import ndarray
 
+from wx_factory.solvers import pmex
+from wx_factory.device import CpuDevice, CudaDevice
+
 import cuda_test
 import ndarray_generator
-from solvers import pmex
-from device import CpuDevice, CudaDevice
 
 
 class PmexComparisonTestCases(cuda_test.CudaTestCases):

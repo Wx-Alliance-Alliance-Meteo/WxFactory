@@ -2,8 +2,8 @@ import unittest
 
 from numpy import ndarray
 
-from device import CpuDevice
-from solvers import pmex
+from wx_factory.device import CpuDevice
+from wx_factory.solvers import pmex
 
 from mpi_test import run_test_on_x_process
 

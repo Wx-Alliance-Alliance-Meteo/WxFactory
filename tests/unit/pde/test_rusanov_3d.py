@@ -3,11 +3,11 @@ import sys
 
 import numpy
 
-from device import Device
-from output import InputManager
-from simulation import Simulation
-from rhs.rhs_dfr import RHSDirecFluxReconstruction_mpi_v2
-from common.definitions import idx_rho_w
+from wx_factory.device import Device
+from wx_factory.output import InputManager
+from wx_factory.simulation import Simulation
+from wx_factory.rhs.rhs_dfr import RHSDirecFluxReconstruction_mpi_v2
+from wx_factory.common.definitions import idx_rho_w
 
 from mpi_test import MpiTestCase
 

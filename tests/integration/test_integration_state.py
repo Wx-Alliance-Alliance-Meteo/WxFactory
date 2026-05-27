@@ -8,11 +8,10 @@ import unittest
 from mpi4py import MPI
 import numpy
 
-from common import Configuration, load_default_schema, readfile
-from output import state
-from simulation import Simulation
-import wx_mpi
-
+from wx_factory.common import Configuration, load_default_schema, readfile
+from wx_factory.output import state
+from wx_factory.simulation import Simulation
+import wx_factory.wx_mpi
 
 OptionType = TypeVar("OptionType", bound=Union[int, float, str, bool])
 
@@ -126,16 +125,18 @@ class StateIntegrationTestCases(unittest.TestCase):
         exit_code: Optional[sys._ExitCode] = None
 
         for config_file in self.config_files:
-            config_content = wx_mpi.do_once(readfile, config_file)
+            config_content = wx_factory.wx_mpi.do_once(readfile, config_file)
 
             config = Configuration(config_content, self.schema)
 
             try:
                 sim = Simulation(config)
                 sim.run()
+
             except SystemExit as e:
                 has_exited = True
                 exit_code = e.code
+
             except Exception as e:
                 print(e, flush=True)
                 raise e

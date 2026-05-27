@@ -1,7 +1,7 @@
 import math
 import unittest
 
-from common import angle24
+from wx_factory.common import angle24
 
 
 class Angle24TestCase(unittest.TestCase):

@@ -3,9 +3,9 @@ import random
 from mpi4py import MPI
 from numpy import ndarray
 
-from device import CudaDevice
-from solvers.kiops import kiops
-from solvers.pmex import pmex
+from wx_factory.device import CudaDevice
+from wx_factory.solvers.kiops import kiops
+from wx_factory.solvers.pmex import pmex
 
 import cuda_test
 import ndarray_generator

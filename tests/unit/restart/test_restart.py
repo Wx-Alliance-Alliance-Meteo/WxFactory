@@ -4,10 +4,10 @@ import unittest
 
 import numpy
 
-from common import Configuration, ConfigurationSchema, default_schema_path, load_default_schema, readfile
-from output.state import load_state
-from simulation import Simulation
-from wx_mpi import do_once
+from wx_factory.common import Configuration, ConfigurationSchema, default_schema_path, load_default_schema, readfile
+from wx_factory.output.state import load_state
+from wx_factory.simulation import Simulation
+from wx_factory.wx_mpi import do_once
 
 from mpi_test import MpiTestCase
 

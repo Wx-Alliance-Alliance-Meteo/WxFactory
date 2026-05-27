@@ -1,13 +1,14 @@
 import os
 import copy
 
-from mpi_test import MpiTestCase
 from numpy.typing import NDArray
 import numpy
 
-from device import Device
-from output import InputManager
-from simulation import Simulation
+from wx_factory.device import Device
+from wx_factory.output import InputManager
+from wx_factory.simulation import Simulation
+
+from mpi_test import MpiTestCase
 
 
 def rel_diff(a, b):

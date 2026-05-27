@@ -6,8 +6,8 @@ from numpy import ndarray
 import scipy
 import scipy.sparse.linalg
 
-from device import CpuDevice, CudaDevice
-from solvers.fgmres import fgmres
+from wx_factory.device import CpuDevice, CudaDevice
+from wx_factory.solvers.fgmres import fgmres
 
 import ndarray_generator
 import cuda_test

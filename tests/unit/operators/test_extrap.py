@@ -4,11 +4,11 @@ import unittest
 
 from mpi4py import MPI
 
-from common import Configuration
-from device import Device
-from output import InputManager
-from simulation import Simulation
-from wx_mpi import SingleProcess, Conditional
+from wx_factory.common import Configuration
+from wx_factory.device import Device
+from wx_factory.output import InputManager
+from wx_factory.simulation import Simulation
+from wx_factory.wx_mpi import SingleProcess, Conditional
 
 from mpi_test import MpiTestCase
 

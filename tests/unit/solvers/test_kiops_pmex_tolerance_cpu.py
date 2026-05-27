@@ -4,9 +4,9 @@ import unittest
 from mpi4py import MPI
 from numpy import ndarray
 
-from device import CpuDevice
-from solvers.kiops import kiops
-from solvers.pmex import pmex
+from wx_factory.device import CpuDevice
+from wx_factory.solvers.kiops import kiops
+from wx_factory.solvers.pmex import pmex
 
 import ndarray_generator
 

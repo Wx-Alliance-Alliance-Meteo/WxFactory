@@ -2,7 +2,7 @@ import random
 
 from numpy import ndarray
 
-from device import Device
+from wx_factory.device import Device
 
 
 def generate_vectors(size: int, random: random.Random, min: float, max: float, devices: list[Device]) -> list[ndarray]:

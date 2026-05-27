@@ -1,7 +1,7 @@
 import unittest
 import os
 
-import compiler.compile_kernels as kernels
+import wx_factory.compiler.compile_kernels as kernels
 import cuda_test
 
 modules = ["pde", "operators"]

@@ -1,6 +1,6 @@
 import unittest
 
-from device import wx_cupy
+from wx_factory.device import wx_cupy
 
 
 class CudaTestCases(unittest.TestCase):

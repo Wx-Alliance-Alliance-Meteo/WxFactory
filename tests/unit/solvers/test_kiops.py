@@ -3,8 +3,8 @@ import random
 from mpi4py import MPI
 from numpy import ndarray
 
-from device import CpuDevice, CudaDevice
-from solvers.kiops import kiops
+from wx_factory.device import CpuDevice, CudaDevice
+from wx_factory.solvers.kiops import kiops
 
 import cuda_test
 import ndarray_generator

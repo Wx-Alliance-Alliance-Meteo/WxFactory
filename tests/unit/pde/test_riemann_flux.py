@@ -3,12 +3,13 @@ import time
 
 import numpy
 
+from wx_factory.device import Device
+from wx_factory.output import InputManager
+from wx_factory.simulation import Simulation
+from wx_factory.rhs.rhs import RHS
+from wx_factory.pde import PDE
+
 from mpi_test import MpiTestCase
-from device import Device
-from output import InputManager
-from simulation import Simulation
-from rhs.rhs import RHS
-from pde import PDE
 
 
 class FakePDE(PDE):

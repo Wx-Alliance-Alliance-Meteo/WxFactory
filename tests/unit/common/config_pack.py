@@ -1,4 +1,4 @@
-from common.configuration import Configuration
+from wx_factory.common.configuration import Configuration
 
 def pack(configuration: Configuration):
     sects = {}
