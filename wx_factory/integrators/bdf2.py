@@ -33,7 +33,8 @@ class Bdf2(Integrator):
                 self.preconditioner.prepare(dt, Q, self.Qprev)
                 maxiter = 800
             newQ, num_iter, residuals = newton_krylov(
-                nonlin_fun, Q, f_tol=self.tol, fgmres_precond=self.preconditioner, verbose=False, maxiter=maxiter
+                nonlin_fun, Q, f_tol=self.tol, preconditioner=self.preconditioner,
+                verbose=False, maxiter=maxiter,
             )
         t1 = time()
 

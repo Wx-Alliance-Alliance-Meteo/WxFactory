@@ -135,8 +135,7 @@
                     "name": "exponential_solver",
                     "type": "str",
                     "default": "pmex",
-                    "selectables": ["pmex", "kiops", "exode", "pmex_ne", "cwy_1s", "cwy_ne", "cwy_ne1s", "dcgs2",
-                                    "icwy_1s", "icwy_neiop", "icwy_ne", "icwy_ne1s", "kiops_ne", "pmex_1s", "pmex_ne1s"]
+                    "selectables": ["pmex", "pmex_ne", "kiops", "exode"]
                 },
                 {
                     "name": "exode_method",
@@ -160,12 +159,6 @@
                     "type": "str",
                     "default": "complex",
                     "selectables": ["complex", "fd"]
-                },
-                {
-                    "name": "linear_solver",
-                    "type": "str",
-                    "default": "fgmres",
-                    "selectables": ["fgmres", "gcrot"]
                 },
                 {
                     "name": "verbose_solver",

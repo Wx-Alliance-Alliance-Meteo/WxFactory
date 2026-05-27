@@ -11,7 +11,7 @@ from ..device import Device
 from ..precondition.factorization import Factorization
 from ..precondition.multigrid import Multigrid
 from ..output.output_manager import OutputManager
-from ..solvers import SolverInfo
+from ..solvers import SolverInfo, fgmres, global_norm
 from ..rhs.rhs import RHS
 
 
@@ -60,6 +60,15 @@ class Integrator(ABC):
         self.sim_time = -1.0
         self.failure_flag = 0
         self.num_completed_steps = 0
+
+    def _solve_linear(self, A, b, x0=None, tol=1e-8, restart=20, maxiter=None):
+        return fgmres(
+            A, b, x0=x0, tol=tol,
+            restart=restart, maxiter=maxiter,
+            preconditioner=self.preconditioner,
+            verbose=self.verbose_solver,
+            device=self.device,
+        )
 
     @abstractmethod
     def __step__(self, Q: numpy.ndarray, dt: float) -> numpy.ndarray:

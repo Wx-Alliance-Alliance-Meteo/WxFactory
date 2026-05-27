@@ -260,9 +260,9 @@ class MultigridLevel:
                 numpy.ravel(field),
                 numpy.ravel(cn_fun(field)),
                 cn_fun,
-                fgmres_restart=10,
-                fgmres_maxiter=1,
-                fgmres_precond=None,
+                restart=10,
+                maxiter_linear=1,
+                preconditioner=None,
             )
             self.matrix_operator = self.jacobian.op
 
@@ -274,9 +274,9 @@ class MultigridLevel:
                 numpy.ravel(field),
                 numpy.ravel(nonlin_fun(field)),
                 nonlin_fun,
-                fgmres_restart=10,
-                fgmres_maxiter=1,
-                fgmres_precond=None,
+                restart=10,
+                maxiter_linear=1,
+                preconditioner=None,
             )
             self.matrix_operator = self.jacobian.op
 

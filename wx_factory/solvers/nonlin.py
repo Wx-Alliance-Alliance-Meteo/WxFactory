@@ -12,9 +12,9 @@ from .global_operations import global_norm, global_inf_norm
 def newton_krylov(
     F,
     x0,
-    fgmres_restart=30,
-    fgmres_maxiter=1,
-    fgmres_precond=None,
+    restart=30,
+    maxiter_linear=1,
+    preconditioner=None,
     verbose=False,
     maxiter=None,
     f_tol=None,
@@ -51,7 +51,8 @@ def newton_krylov(
     Fx_norm = global_norm(Fx)
 
     jacobian = KrylovJacobian(
-        x.copy(), Fx, func, fgmres_restart=fgmres_restart, fgmres_maxiter=fgmres_maxiter, fgmres_precond=fgmres_precond
+        x.copy(), Fx, func,
+        restart=restart, maxiter_linear=maxiter_linear, preconditioner=preconditioner,
     )
 
     if maxiter is None:
@@ -172,14 +173,14 @@ def _nonlin_line_search(func, x, Fx, dx, search_type="armijo", rdiff=1e-8, smin=
 
 class KrylovJacobian:
 
-    def __init__(self, x, f, func, fgmres_restart, fgmres_maxiter, fgmres_precond):
+    def __init__(self, x, f, func, restart, maxiter_linear, preconditioner):
         self.func = func
         self.shape = (f.size, x.size)
         self.dtype = f.dtype
 
-        self.fgmres_restart = fgmres_restart
-        self.fgmres_maxiter = fgmres_maxiter
-        self.fgmres_precond = fgmres_precond
+        self.restart = restart
+        self.maxiter_linear = maxiter_linear
+        self.preconditioner = preconditioner
 
         self.x0 = x
         self.f0 = f
@@ -201,15 +202,14 @@ class KrylovJacobian:
         return (self.func(self.x0 + sc * v) - self.f0) / sc
 
     def solve(self, rhs, tol=0):
-        sol, res, norm_b, num_iter, info, residuals = fgmres(
+        sol, *_ = fgmres(
             self.op,
             rhs,
             tol=tol,
-            restart=self.fgmres_restart,
-            maxiter=self.fgmres_maxiter,
-            preconditioner=self.fgmres_precond,
+            restart=self.restart,
+            maxiter=self.maxiter_linear,
+            preconditioner=self.preconditioner,
         )
-        # print(f'reached residual {res:.3e} after {num_iter:3d} iterations')
         return sol
 
     def update(self, x, f):

@@ -30,7 +30,6 @@
    | exode_controller      | lc-str  |         |                                  |   | 
    | krylov_size           | int   | 1         | [0, inf]                         |   | 
    | jacobian_method       | lc-str  | complex  | {complex, fd}                   |   | 
-   | linear_solver         | lc-str  | fgmres  | {fgmres, gcrot}                  |   | 
    | verbose_solver        | int   | 0         |                                  |   | 
    | gmres_restart         | int   | 20        | [1, inf]                         |   | 
    | splitting_integrator_1  | lc-str  |       |                                  |   | 

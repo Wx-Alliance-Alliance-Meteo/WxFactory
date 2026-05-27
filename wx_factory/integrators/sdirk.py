@@ -47,8 +47,8 @@ class SDIRKLstable(Integrator):
             SDIRK_fun1,
             Q,
             f_tol=self.tol,
-            fgmres_restart=30,
-            fgmres_precond=self.preconditioner,
+            restart=30,
+            preconditioner=self.preconditioner,
             verbose=False,
             maxiter=maxiter,
         )
@@ -56,8 +56,8 @@ class SDIRKLstable(Integrator):
             SDIRK_fun2,
             Q,
             f_tol=self.tol,
-            fgmres_restart=30,
-            fgmres_precond=self.preconditioner,
+            restart=30,
+            preconditioner=self.preconditioner,
             verbose=False,
             maxiter=maxiter,
         )

@@ -7,7 +7,7 @@ from scipy.sparse.linalg import LinearOperator
 
 from ..common.configuration import Configuration
 from .integrator import Integrator, SolverInfo
-from ..solvers import fgmres, matvec_fun, pmex
+from ..solvers import matvec_fun, pmex
 
 
 class PartRosExp2(Integrator):
@@ -58,16 +58,8 @@ class PartRosExp2(Integrator):
 
         b = (A(Q_flat) + (phiv + 0.5 * f_imp) * dt).flatten()
         Q_x0 = Q_flat.copy()
-        Qnew, norm_r, norm_b, num_iter, flag, residuals = fgmres(
-            A,
-            b,
-            x0=Q_x0,
-            tol=self.tol,
-            restart=self.gmres_restart,
-            maxiter=None,
-            preconditioner=self.preconditioner,
-            verbose=self.verbose_solver,
-            device=self.device,
+        Qnew, norm_r, norm_b, num_iter, flag, residuals = self._solve_linear(
+            A, b, x0=Q_x0, tol=self.tol, restart=self.gmres_restart,
         )
         time_imp = time() - tic
 

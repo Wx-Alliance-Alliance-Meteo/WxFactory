@@ -134,7 +134,6 @@ class Configuration:
     kiops_dt_factor: float
     krylov_size: int
     lambda0: float
-    linear_solver: str
     matsuno_amp: float
     matsuno_wave_type: str
     matmul_backend: str
