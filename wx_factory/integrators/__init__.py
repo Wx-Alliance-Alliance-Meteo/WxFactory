@@ -10,7 +10,6 @@ from . import (
     epi_stiff as _epi_stiff,
     euler1 as _euler1,
     imex2 as _imex2,
-    neural as _neural,
     partrosexp2 as _partrosexp2,
     ros2 as _ros2,
     rosexp2 as _rosexp2,
@@ -32,12 +31,22 @@ from .rosexp2 import RosExp2
 from .splitting import StrangSplitting, LieSplitting
 from .srerk import Srerk
 from .tvdrk3 import Tvdrk3
-from .neural import Neural
 
 REGISTRY: dict = {}
 for _mod in [
-    _backward_euler, _bdf2, _crank_nicolson, _epi, _epi_stiff, _euler1, _imex2,
-    _neural, _partrosexp2, _ros2, _rosexp2, _splitting, _srerk, _tvdrk3,
+    _backward_euler,
+    _bdf2,
+    _crank_nicolson,
+    _epi,
+    _epi_stiff,
+    _euler1,
+    _imex2,
+    _partrosexp2,
+    _ros2,
+    _rosexp2,
+    _splitting,
+    _srerk,
+    _tvdrk3,
 ]:
     REGISTRY.update(_mod.REGISTRY)
 
@@ -50,8 +59,21 @@ def resolve(name: str, config, rhs, preconditioner, device) -> Integrator:
 
 
 __all__ = [
-    "Epi", "EpiStiff", "Euler1", "Imex2", "Integrator", "PartRosExp2",
-    "Ros2", "RosExp2", "StrangSplitting", "LieSplitting", "Srerk", "Tvdrk3",
-    "BackwardEuler", "CrankNicolson", "Bdf2", "Neural",
-    "REGISTRY", "resolve",
+    "Epi",
+    "EpiStiff",
+    "Euler1",
+    "Imex2",
+    "Integrator",
+    "PartRosExp2",
+    "Ros2",
+    "RosExp2",
+    "StrangSplitting",
+    "LieSplitting",
+    "Srerk",
+    "Tvdrk3",
+    "BackwardEuler",
+    "CrankNicolson",
+    "Bdf2",
+    "REGISTRY",
+    "resolve",
 ]
