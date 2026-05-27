@@ -9,6 +9,7 @@ from ..init.initialize import Topo
 from .rhs import RHS
 from ..process_topology import ProcessTopology
 
+
 class RhsShallowWater(RHS):
     def __init__(
         self,
@@ -35,7 +36,7 @@ class RhsShallowWater(RHS):
 
         self.timestamps = []
         self.timings = []
-        
+
         self.f_x1 = None
         self.f_x2 = None
         self.f_x3 = None
@@ -52,6 +53,9 @@ class RhsShallowWater(RHS):
         self.rhs = None
 
     def allocate_arrays(self, q):
+        return
+
+    def solution_extrapolation(self, q: NDArray) -> None:
         xp = self.geom.device.xp
 
         num_equations = q.shape[0]
@@ -77,7 +81,6 @@ class RhsShallowWater(RHS):
         self.u1 = Q_unpacked[idx_hu1]
         self.u2 = Q_unpacked[idx_hu2]
 
-
     def start_communication(self):
 
         # Initiate transfers. The first and last row (column) of elements of each array is part of the halo.
@@ -85,24 +88,33 @@ class RhsShallowWater(RHS):
         # There is a separate function for sending vector data, since they must potentially be converted to the
         # neighbor PE's coordinate system
         self.request_u = self.ptopo.start_exchange_vectors(
-            south=((self.var_itf_j[idx_hu1, 1, :, :self.num_solpts]), (self.var_itf_j[idx_hu2, 1, :, :self.num_solpts])),
-            north=((self.var_itf_j[idx_hu1, -2, :, self.num_solpts:]), (self.var_itf_j[idx_hu2, -2, :, self.num_solpts:])),
-            west=((self.var_itf_i[idx_hu1, :, 1, :self.num_solpts]), (self.var_itf_i[idx_hu2, :, 1, :self.num_solpts])),
-            east=((self.var_itf_i[idx_hu1, :, -2, self.num_solpts:]), (self.var_itf_i[idx_hu2, :, -2, self.num_solpts:])),
+            south=(
+                (self.var_itf_j[idx_hu1, 1, :, : self.num_solpts]),
+                (self.var_itf_j[idx_hu2, 1, :, : self.num_solpts]),
+            ),
+            north=(
+                (self.var_itf_j[idx_hu1, -2, :, self.num_solpts :]),
+                (self.var_itf_j[idx_hu2, -2, :, self.num_solpts :]),
+            ),
+            west=(
+                (self.var_itf_i[idx_hu1, :, 1, : self.num_solpts]),
+                (self.var_itf_i[idx_hu2, :, 1, : self.num_solpts]),
+            ),
+            east=(
+                (self.var_itf_i[idx_hu1, :, -2, self.num_solpts :]),
+                (self.var_itf_i[idx_hu2, :, -2, self.num_solpts :]),
+            ),
             boundary_sn=self.geom.boundary_sn,
             boundary_we=self.geom.boundary_we,
         )
         self.request_h = self.ptopo.start_exchange_scalars(
-            south=self.var_itf_j[idx_h, 1, :, :self.num_solpts],
-            north=self.var_itf_j[idx_h, -2, :, self.num_solpts:],
-            west=self.var_itf_i[idx_h, :, 1, :self.num_solpts],
-            east=self.var_itf_i[idx_h, :, -2, self.num_solpts:],
+            south=self.var_itf_j[idx_h, 1, :, : self.num_solpts],
+            north=self.var_itf_j[idx_h, -2, :, self.num_solpts :],
+            west=self.var_itf_i[idx_h, :, 1, : self.num_solpts],
+            east=self.var_itf_i[idx_h, :, -2, self.num_solpts :],
             boundary_shape=(self.num_elements_hori * self.num_solpts,),
         )
 
-    def solution_extrapolation(self, q: NDArray) -> None:
-        return
-    
     def pointwise_fluxes(self, q):
         xp = self.geom.device.xp
         self.f_x1 = xp.empty_like(q)
@@ -112,39 +124,57 @@ class RhsShallowWater(RHS):
         self.f_x2[idx_h] = self.metric.sqrtG * q[idx_hu2]
 
         hsquared = q[idx_h] ** 2
-        self.f_x1[idx_hu1] = self.metric.sqrtG * (q[idx_hu1] * self.u1 + 0.5 * gravity * self.metric.H_contra_11 * hsquared)
-        self.f_x2[idx_hu1] = self.metric.sqrtG * (q[idx_hu1] * self.u2 + 0.5 * gravity * self.metric.H_contra_12 * hsquared)
+        self.f_x1[idx_hu1] = self.metric.sqrtG * (
+            q[idx_hu1] * self.u1 + 0.5 * gravity * self.metric.H_contra_11 * hsquared
+        )
+        self.f_x2[idx_hu1] = self.metric.sqrtG * (
+            q[idx_hu1] * self.u2 + 0.5 * gravity * self.metric.H_contra_12 * hsquared
+        )
 
-        self.f_x1[idx_hu2] = self.metric.sqrtG * (q[idx_hu2] * self.u1 + 0.5 * gravity * self.metric.H_contra_21 * hsquared)
-        self.f_x2[idx_hu2] = self.metric.sqrtG * (q[idx_hu2] * self.u2 + 0.5 * gravity * self.metric.H_contra_22 * hsquared)
+        self.f_x1[idx_hu2] = self.metric.sqrtG * (
+            q[idx_hu2] * self.u1 + 0.5 * gravity * self.metric.H_contra_21 * hsquared
+        )
+        self.f_x2[idx_hu2] = self.metric.sqrtG * (
+            q[idx_hu2] * self.u2 + 0.5 * gravity * self.metric.H_contra_22 * hsquared
+        )
 
     def flux_divergence_partial(self):
         # Interior contribution to the derivatives, corrections for the boundaries will be added later
         self.df1_dx1 = self.f_x1 @ self.ops_real.derivative_x
         self.df2_dx2 = self.f_x2 @ self.ops_real.derivative_y
 
+    def end_communication(self):
         # Finish transfers. We receive the halo, so it is stored in the first and last row/column of each array
         (
-            (self.var_itf_j[idx_hu1, 0, :, self.num_solpts:], self.var_itf_j[idx_hu2, 0, :, self.num_solpts:]),  # South boundary
-            (self.var_itf_j[idx_hu1, -1, :, :self.num_solpts], self.var_itf_j[idx_hu2, -1, :, :self.num_solpts]),  # North boundary
-            (self.var_itf_i[idx_hu1, :, 0, self.num_solpts:], self.var_itf_i[idx_hu2, :, 0, self.num_solpts:]),  # West boundary
-            (self.var_itf_i[idx_hu1, :, -1, :self.num_solpts], self.var_itf_i[idx_hu2, :, -1, :self.num_solpts]),  # East boundary
+            (
+                self.var_itf_j[idx_hu1, 0, :, self.num_solpts :],
+                self.var_itf_j[idx_hu2, 0, :, self.num_solpts :],
+            ),  # South boundary
+            (
+                self.var_itf_j[idx_hu1, -1, :, : self.num_solpts],
+                self.var_itf_j[idx_hu2, -1, :, : self.num_solpts],
+            ),  # North boundary
+            (
+                self.var_itf_i[idx_hu1, :, 0, self.num_solpts :],
+                self.var_itf_i[idx_hu2, :, 0, self.num_solpts :],
+            ),  # West boundary
+            (
+                self.var_itf_i[idx_hu1, :, -1, : self.num_solpts],
+                self.var_itf_i[idx_hu2, :, -1, : self.num_solpts],
+            ),  # East boundary
         ) = self.request_u.wait()
 
         (
-            self.var_itf_j[idx_h, 0, :, self.num_solpts:],  # South boundary
-            self.var_itf_j[idx_h, -1, :, :self.num_solpts],  # North boundary
-            self.var_itf_i[idx_h, :, 0, self.num_solpts:],  # West boundary
-            self.var_itf_i[idx_h, :, -1, :self.num_solpts],  # East boundary
+            self.var_itf_j[idx_h, 0, :, self.num_solpts :],  # South boundary
+            self.var_itf_j[idx_h, -1, :, : self.num_solpts],  # North boundary
+            self.var_itf_i[idx_h, :, 0, self.num_solpts :],  # West boundary
+            self.var_itf_i[idx_h, :, -1, : self.num_solpts],  # East boundary
         ) = self.request_h.wait()
 
         # Substract topo after extrapolation
         if self.topo is not None:
             self.var_itf_i[idx_h] -= self.topo.hsurf_itf_i
             self.var_itf_j[idx_h] -= self.topo.hsurf_itf_j
-
-    def flux_divergence(self):
-        return
 
     def riemann_fluxes(self):
         # West and east are defined relative to the elements, *not* to the interface itself.
@@ -156,11 +186,11 @@ class RhsShallowWater(RHS):
         #   west .  east -->|<-- west  .  east -->
         #                   |
         xp = self.geom.device.xp
-        
-        west = xp.s_[..., 1:, :self.num_solpts]
-        east = xp.s_[..., :-1, self.num_solpts:]
-        south = xp.s_[..., 1:, :, :self.num_solpts]
-        north = xp.s_[..., :-1, :, self.num_solpts:]
+
+        west = xp.s_[..., 1:, : self.num_solpts]
+        east = xp.s_[..., :-1, self.num_solpts :]
+        south = xp.s_[..., 1:, :, : self.num_solpts]
+        north = xp.s_[..., :-1, :, self.num_solpts :]
 
         a = xp.sqrt(gravity * self.var_itf_i[idx_h] * self.metric.H_contra_11_itf_i)
         m = xp.where(xp.real(a) > 0.0, self.var_itf_i[idx_hu1] / (self.var_itf_i[idx_h] * a), 0.0)
@@ -169,19 +199,19 @@ class RhsShallowWater(RHS):
         mw2 = (m[west] - 1.0) * (m[west] - 1.0)
         big_M = 0.25 * ((m[east] + 1.0) ** 2 - mw2)
 
-        flux_x1_itf = xp.zeros_like(self.var_itf_i)
+        self.flux_x1_itf = xp.zeros_like(self.var_itf_i)
         # ------ Advection part
-        flux_x1_itf[east] = self.metric.sqrtG_itf_i[east] * xp.where(
+        self.flux_x1_itf[east] = self.metric.sqrtG_itf_i[east] * xp.where(
             xp.real(big_M) > 0.0, big_M * a[east] * self.var_itf_i[east], big_M * a[west] * self.var_itf_i[west]
         )
         # ------ Pressure part
         p11 = self.metric.sqrtG_itf_i * (0.5 * gravity) * self.metric.H_contra_11_itf_i * self.var_itf_i[idx_h] ** 2
         p21 = self.metric.sqrtG_itf_i * (0.5 * gravity) * self.metric.H_contra_21_itf_i * self.var_itf_i[idx_h] ** 2
-        flux_x1_itf[idx_hu1][east] += 0.5 * ((1.0 + m[east]) * p11[east] + (1.0 - m[west]) * p11[west])
-        flux_x1_itf[idx_hu2][east] += 0.5 * ((1.0 + m[east]) * p21[east] + (1.0 - m[west]) * p21[west])
+        self.flux_x1_itf[idx_hu1][east] += 0.5 * ((1.0 + m[east]) * p11[east] + (1.0 - m[west]) * p11[west])
+        self.flux_x1_itf[idx_hu2][east] += 0.5 * ((1.0 + m[east]) * p21[east] + (1.0 - m[west]) * p21[west])
 
         # ------ Copy to west interface of eastern element
-        flux_x1_itf[west] = flux_x1_itf[east]
+        self.flux_x1_itf[west] = self.flux_x1_itf[east]
 
         # Common AUSM fluxes
         a = xp.sqrt(gravity * self.var_itf_j[idx_h] * self.metric.H_contra_22_itf_j)
@@ -191,22 +221,22 @@ class RhsShallowWater(RHS):
         ms2 = (m[south] - 1.0) * (m[south] - 1.0)
         big_M = 0.25 * ((m[north] + 1.0) ** 2 - ms2)
 
-        flux_x2_itf = xp.zeros_like(self.var_itf_j)
+        self.flux_x2_itf = xp.zeros_like(self.var_itf_j)
         # ------ Advection part
-        flux_x2_itf[north] = self.metric.sqrtG_itf_j[north] * xp.where(
+        self.flux_x2_itf[north] = self.metric.sqrtG_itf_j[north] * xp.where(
             xp.real(big_M) > 0.0, big_M * a[north] * self.var_itf_j[north], big_M * a[south] * self.var_itf_j[south]
         )
         # ------ Pressure part
         p12 = self.metric.sqrtG_itf_j * (0.5 * gravity) * self.metric.H_contra_12_itf_j * self.var_itf_j[idx_h] ** 2
         p22 = self.metric.sqrtG_itf_j * (0.5 * gravity) * self.metric.H_contra_22_itf_j * self.var_itf_j[idx_h] ** 2
-        flux_x2_itf[idx_hu1][north] += 0.5 * ((1.0 + m[north]) * p12[north] + (1.0 - m[south]) * p12[south])
-        flux_x2_itf[idx_hu2][north] += 0.5 * ((1.0 + m[north]) * p22[north] + (1.0 - m[south]) * p22[south])
+        self.flux_x2_itf[idx_hu1][north] += 0.5 * ((1.0 + m[north]) * p12[north] + (1.0 - m[south]) * p12[south])
+        self.flux_x2_itf[idx_hu2][north] += 0.5 * ((1.0 + m[north]) * p22[north] + (1.0 - m[south]) * p22[south])
         # ------ Copy to south interface of northern element
-        flux_x2_itf[south] = flux_x2_itf[north]
+        self.flux_x2_itf[south] = self.flux_x2_itf[north]
 
-        # Compute the derivatives
-        self.df1_dx1[...] += flux_x1_itf[:, :, 1:-1, :] @ self.ops_real.correction_WE
-        self.df2_dx2[...] += flux_x2_itf[:, 1:-1, :, :] @ self.ops_real.correction_SN
+    def flux_divergence(self):
+        self.df1_dx1[...] += self.flux_x1_itf[:, :, 1:-1, :] @ self.ops_real.correction_WE
+        self.df2_dx2[...] += self.flux_x2_itf[:, 1:-1, :, :] @ self.ops_real.correction_SN
 
     def forcing_terms(self, q: NDArray):
         xp = self.geom.device.xp
