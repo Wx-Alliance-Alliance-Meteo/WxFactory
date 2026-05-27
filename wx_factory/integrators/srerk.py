@@ -116,7 +116,7 @@ class Srerk(Integrator):
 
         # ----else, integrator not defined---
         else:
-            raise ValueError("Unrecognized solver {self.exponential_solver}")
+            raise ValueError(f"Unrecognized solver {self.exponential_solver}")
 
         # Loop over all the other projections
         for i_proj in range(1, self.n_proj):
@@ -180,7 +180,7 @@ class Srerk(Integrator):
 
             # ---integrator not defined
             else:
-                raise ValueError("Unrecognized solver {self.exponential_solver}")
+                raise ValueError(f"Unrecognized solver {self.exponential_solver}")
 
         # Update solution
         return Q + dt * numpy.reshape(z, Q.shape)
