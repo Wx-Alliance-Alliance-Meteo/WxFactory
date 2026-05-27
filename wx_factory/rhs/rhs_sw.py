@@ -57,10 +57,10 @@ class RhsShallowWater(RHS):
 
         # Interpolate to the element interface (middle elements only, halo remains 0)
         self.var_itf_i = xp.zeros(itf_i_shape, dtype=q.dtype)
-        self.var_itf_i[:, :, 1:-1, :] = Q_unpacked @ self.ops_real.extrap_x
+        self.var_itf_i[:, :, 1:-1, :] = Q_unpacked @ self.ops.extrap_x
 
         self.var_itf_j = xp.zeros(itf_j_shape, dtype=q.dtype)
-        self.var_itf_j[:, 1:-1, :, :] = Q_unpacked @ self.ops_real.extrap_y
+        self.var_itf_j[:, 1:-1, :, :] = Q_unpacked @ self.ops.extrap_y
 
         # Unpack dynamical variables
         Q_unpacked[idx_hu1] /= q[idx_h]
@@ -128,8 +128,8 @@ class RhsShallowWater(RHS):
 
     def flux_divergence_partial(self):
         # Interior contribution to the derivatives, corrections for the boundaries will be added later
-        self.df1_dx1 = self.f_x1 @ self.ops_real.derivative_x
-        self.df2_dx2 = self.f_x2 @ self.ops_real.derivative_y
+        self.df1_dx1 = self.f_x1 @ self.ops.derivative_x
+        self.df2_dx2 = self.f_x2 @ self.ops.derivative_y
 
     def end_communication(self):
         # Finish transfers. We receive the halo, so it is stored in the first and last row/column of each array
@@ -223,8 +223,8 @@ class RhsShallowWater(RHS):
         self.flux_x2_itf[south] = self.flux_x2_itf[north]
 
     def flux_divergence(self):
-        self.df1_dx1[...] += self.flux_x1_itf[:, :, 1:-1, :] @ self.ops_real.correction_WE
-        self.df2_dx2[...] += self.flux_x2_itf[:, 1:-1, :, :] @ self.ops_real.correction_SN
+        self.df1_dx1[...] += self.flux_x1_itf[:, :, 1:-1, :] @ self.ops.correction_WE
+        self.df2_dx2[...] += self.flux_x2_itf[:, 1:-1, :, :] @ self.ops.correction_SN
 
     def forcing_terms(self, q: NDArray):
         xp = self.geom.device.xp
