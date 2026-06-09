@@ -3,6 +3,7 @@ import sys
 
 from mpi4py import MPI
 import numpy
+import xarray as xr
 
 from ..common.definitions import day_in_secs, gravity
 from ..common import Configuration
@@ -65,8 +66,9 @@ def circular_vortex(geom, metric, param):
 
     return u1, u2, h
 
+
 def height_vortex(geom, metric, param, step):
-    
+
     step_time = step * param.dt
 
     lon_center = math.pi - 0.8
@@ -92,7 +94,7 @@ def height_vortex(geom, metric, param, step):
     Vt = V0 * (3.0 / 2.0 * math.sqrt(3.0)) * (1.0 / numpy.cosh(rho)) ** 2 * numpy.tanh(rho)
 
     Omega = numpy.zeros_like(geom.lat)
-    
+
     mask = numpy.abs(rho) > 1e-9
     Omega[mask] = Vt[mask] / (geom.earth_radius * rho[mask])
 
@@ -100,6 +102,54 @@ def height_vortex(geom, metric, param, step):
 
     return h, Omega
 
+
+def sw_from_ERA5(geom: CubedSphere2D, param, t):
+    xp = geom.device.xp
+
+    ds = xr.open_zarr(param.initial_condition, consolidated=True)
+
+    features = list(ds["features"].values)
+
+    idx_geo = features.index("geopotential_h500")
+    idx_u = features.index("u_component_of_wind_h500")
+    idx_v = features.index("v_component_of_wind_h500")
+
+    geopotential = ds["data"].isel(time=t, features=idx_geo)
+    u = ds["data"].isel(time=t, features=idx_u)
+    v = ds["data"].isel(time=t, features=idx_v)
+
+    target_lon = (geom.lon * 180 / numpy.pi) % 360
+    target_lat = geom.lat * 180 / numpy.pi
+
+    # Flatten for interpolation
+    lon_flat = target_lon.reshape(-1)
+    lat_flat = target_lat.reshape(-1)
+
+    # Interpolate ERA5 → geom
+    geop_interp = geopotential.interp(
+        longitude=("points", lon_flat), latitude=("points", lat_flat), method="linear"
+    ).values
+
+    u_interp = u.interp(longitude=("points", lon_flat), latitude=("points", lat_flat), method="linear").values
+
+    v_interp = v.interp(longitude=("points", lon_flat), latitude=("points", lat_flat), method="linear").values
+
+    # Reshape back to cubed-sphere
+    shape = geom.lon.shape
+    geop_interp = geop_interp.reshape(shape)
+    u_interp = u_interp.reshape(shape)
+    v_interp = v_interp.reshape(shape)
+
+    geop_interp = xp.asarray(geop_interp)
+    u_interp = xp.asarray(u_interp)
+    v_interp = xp.asarray(v_interp)
+
+    g = 9.80616
+    fluid_height = geop_interp / g
+
+    u1_contra, u2_contra = geom.wind2contra(u_interp, v_interp)
+
+    return u1_contra, u2_contra, fluid_height
 
 
 def sw_from_file(geom: CubedSphere2D, operators: DFROperators, config: Configuration):

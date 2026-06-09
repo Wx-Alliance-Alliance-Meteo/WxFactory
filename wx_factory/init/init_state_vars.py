@@ -8,6 +8,7 @@ from ..init.initialize import initialize_cartesian2d, initialize_euler, initiali
 from typing import Dict, Type
 from ..step_hooks import StepHook, ScharMountainHook
 
+
 def init_state_vars(
     geom: Geometry, operators: DFROperators, param: Configuration, step_hooks: Dict[Type, StepHook]
 ) -> tuple[NDArray[numpy.float64], Topo | None, Metric2D | Metric3DTopo | None]:

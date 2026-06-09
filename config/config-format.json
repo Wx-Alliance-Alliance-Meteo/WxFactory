@@ -18,6 +18,11 @@
                         "name": "equations",
                         "values": ["euler"]
                     }
+                },
+                {
+                    "name": "initial_condition",
+                    "type": "str",
+                    "default": ""
                 }
             ]
         },
