@@ -62,3 +62,4 @@ geom*.dat
 *.tmp
 
 lib
+paradis_temp/

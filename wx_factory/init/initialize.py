@@ -39,6 +39,7 @@ from .shallow_water import (
     case_matsuno,
     case_unsteady_zonal,
     circular_vortex,
+    sw_from_ERA5,
     sw_from_file,
     williamson_case1,
     williamson_case2,
@@ -156,7 +157,10 @@ def initialize_sw(geom: CubedSphere2D, metric: Metric2D, mtrx: DFROperators, par
     #   5 : zonal flow over an isolated mountain (shallow water)
     #   6 : Rossby-Haurvitz waves (shallow water)
     #   8 : Unstable jet (shallow water)
-    if param.case_number == -1:
+    if param.case_number == -2:
+        u1_contra, u2_contra, fluid_height = sw_from_ERA5(geom, param, 0)
+
+    elif param.case_number == -1:
         u1_contra, u2_contra, fluid_height, hsurf, dzdx1, dzdx2, hsurf_itf_i, hsurf_itf_j = sw_from_file(
             geom, mtrx, param
         )
@@ -204,7 +208,7 @@ def initialize_sw(geom: CubedSphere2D, metric: Metric2D, mtrx: DFROperators, par
         Q[idx_hu2, ...] = fluid_height * u2_contra
 
     topo = None
-    if param.case_number in [-1, 5, 10]:
+    if param.case_number in [-1, -2, 5, 10]:
         topo = Topo(hsurf, dzdx1, dzdx2, hsurf_itf_i, hsurf_itf_j)
 
     # comm = geom.device.comm
@@ -239,14 +243,10 @@ def initialize_cartesian2d(geom: Cartesian2D, param: Configuration) -> NDArray[n
         xc = (geom.x0 + geom.x1) / 2.0  # Center of domain
         mountain_width = 1000.0  # Width of step
         mountain_height = 250.0  # Height of step
-        
+
         # Create step mountain in the X1 coordinate
         # This creates a step function: 0 outside, mountain_height inside the step region
-        geom.z_bottom = xp.where(
-            xp.abs(geom.X1 - xc) < mountain_width / 2.0,
-            mountain_height,
-            0.0
-        )
+        geom.z_bottom = xp.where(xp.abs(geom.X1 - xc) < mountain_width / 2.0, mountain_height, 0.0)
 
         # Use periodic BC in x-direction
         geom.xperiodic = True
@@ -275,7 +275,7 @@ def initialize_cartesian2d(geom: Cartesian2D, param: Configuration) -> NDArray[n
 
     elif param.case_number == 3:
         # Colliding bubbles
-        
+
         # First bubble (warm)
         A = 0.5
         a = 150
@@ -284,7 +284,7 @@ def initialize_cartesian2d(geom: Cartesian2D, param: Configuration) -> NDArray[n
         z0 = 300
         r = xp.sqrt((geom.X1 - x0) ** 2 + (geom.X3 - z0) ** 2)
         θ = xp.where(r <= a, θ + A, θ + A * xp.exp(-(((r - a) / s) ** 2)))
-        
+
         # Second bubble (cold)
         A = -0.15
         a = 0
@@ -296,16 +296,16 @@ def initialize_cartesian2d(geom: Cartesian2D, param: Configuration) -> NDArray[n
 
     elif param.case_number == 4:
         # Density current
-        
+
         # Parameters for density current
         xc = 0.0  # Center x position
         zc = 3000.0  # Height of the cold pool center
         xr = 4000.0  # Horizontal radius
         zr = 2000.0  # Vertical radius
-        
+
         # Normalized distance from center
         r = xp.sqrt(((geom.X1 - xc) / xr) ** 2 + ((geom.X3 - zc) / zr) ** 2)
-        
+
         # Temperature perturbation (cold anomaly)
         θ_pert = xp.where(r <= 1.0, -15.0 * (1.0 + xp.cos(xp.pi * r)) / 2.0, 0.0)
         θ = θ + θ_pert
@@ -333,4 +333,3 @@ def initialize_cartesian2d(geom: Cartesian2D, param: Configuration) -> NDArray[n
     Q[idx_2d_rho_theta, :, :] = ρ * θ
 
     return Q
-
