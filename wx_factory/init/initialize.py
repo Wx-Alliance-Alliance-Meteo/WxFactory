@@ -1,5 +1,6 @@
 import numpy
 from numpy.typing import NDArray
+import xarray as xr
 
 from ..common.definitions import (
     idx_rho,
@@ -158,7 +159,8 @@ def initialize_sw(geom: CubedSphere2D, metric: Metric2D, mtrx: DFROperators, par
     #   6 : Rossby-Haurvitz waves (shallow water)
     #   8 : Unstable jet (shallow water)
     if param.case_number == -2:
-        u1_contra, u2_contra, fluid_height = sw_from_ERA5(geom, param, 0)
+        ds = xr.open_zarr(param.initial_condition, consolidated=True)
+        u1_contra, u2_contra, fluid_height = sw_from_ERA5(geom, ds, 0)
 
     elif param.case_number == -1:
         u1_contra, u2_contra, fluid_height, hsurf, dzdx1, dzdx2, hsurf_itf_i, hsurf_itf_j = sw_from_file(

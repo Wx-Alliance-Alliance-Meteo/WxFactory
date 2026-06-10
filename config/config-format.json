@@ -23,6 +23,16 @@
                     "name": "initial_condition",
                     "type": "str",
                     "default": ""
+                },
+                {
+                    "name": "time_start",
+                    "type": "str",
+                    "default": ""
+                },
+                {
+                    "name": "time_end",
+                    "type": "str",
+                    "default": ""
                 }
             ]
         },

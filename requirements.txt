@@ -6,6 +6,7 @@ pybind11
 netcdf4
 matplotlib
 setuptools
+xarray
 
 # GPU support (install the variant matching your CUDA version)
 # cupy-cuda11x

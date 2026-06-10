@@ -103,10 +103,8 @@ def height_vortex(geom, metric, param, step):
     return h, Omega
 
 
-def sw_from_ERA5(geom: CubedSphere2D, param, t):
+def sw_from_ERA5(geom: CubedSphere2D, ds, t):
     xp = geom.device.xp
-
-    ds = xr.open_zarr(param.initial_condition, consolidated=True)
 
     features = list(ds["features"].values)
 

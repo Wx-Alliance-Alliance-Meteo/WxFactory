@@ -27,6 +27,7 @@ For GPU support, also install the CuPy variant matching your CUDA version (`cupy
 
 ```
 pip install -e .
+pip install git+https://github.com/csubich/layerquantizer.git
 ```
 
 ## Running WxFactory

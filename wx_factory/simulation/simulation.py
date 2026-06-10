@@ -21,6 +21,7 @@ from ..rhs.rhs_selector import RhsBundle
 from ..common.matmul import set_matmul_backend
 from ..wx_mpi import SingleProcess, Conditional
 from ..step_hooks import StepHook, ScharMountainHook, DcmipT11WindHook, DcmipT12WindHook
+from ..init.export_era5_all import export_era5_all_timesteps
 
 
 class Simulation:
@@ -178,16 +179,18 @@ class Simulation:
         return False
 
     def run(self):
-        """Run the entire simulation step by step"""
-        self.step_id = self.starting_step
-        self.Q = self.initial_Q
+        if self.config.initial_condition == "":
+            """Run the entire simulation step by step"""
+            self.step_id = self.starting_step
+            self.Q = self.initial_Q
 
-        start_time = time()
+            start_time = time()
 
-        while self.step():
-            pass  # Step until everything is done
-
-        self.output.finalize(time() - start_time)  # Close any open output file
+            while self.step():
+                pass  # Step until everything is done
+            self.output.finalize(time() - start_time)  # Close any open output file
+        else:
+            export_era5_all_timesteps(self, self.config.initial_condition)
 
     def _make_device(self) -> Device:
         """Create the device object which will determine on what hardware (CPU/GPU) each part of the simulation will

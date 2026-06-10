@@ -1,7 +1,7 @@
 import xarray as xr
 import matplotlib.pyplot as plt
 
-ds = xr.open_zarr("/fs/site7/eccc/mrd/rpna/cap003/datasets/era5_0.25deg_13level/2020", consolidated=True)
+ds = xr.open_zarr("/fs/site7/eccc/mrd/rpna/cap003/datasets/era5_0.25deg_13level_lq/2020", consolidated=True)
 
 # Convert longitude from [0, 360] → [-180, 180]
 ds = ds.assign_coords(longitude=(((ds.longitude + 180) % 360) - 180))
