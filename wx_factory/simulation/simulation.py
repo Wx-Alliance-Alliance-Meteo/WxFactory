@@ -136,7 +136,12 @@ class Simulation:
         self.integrator.output_manager = self.output
         self.integrator.device = self.device
 
-        self.output.step(self.initial_Q, self.starting_step)
+        if self.config.case_number == -2:
+            self.output.__write_result__(self.initial_Q, self.config.ds_subset.data["time"][0])
+            # Remove next line if using extract all
+            self.output.__finalize__()
+        else:
+            self.output.step(self.initial_Q, self.starting_step)
         sys.stdout.flush()
 
         self.t = self.config.dt * self.starting_step
@@ -179,7 +184,7 @@ class Simulation:
         return False
 
     def run(self):
-        if self.config.initial_condition == "":
+        if self.config.case_number != -2:
             """Run the entire simulation step by step"""
             self.step_id = self.starting_step
             self.Q = self.initial_Q
@@ -189,8 +194,8 @@ class Simulation:
             while self.step():
                 pass  # Step until everything is done
             self.output.finalize(time() - start_time)  # Close any open output file
-        else:
-            export_era5_all_timesteps(self, self.config.initial_condition)
+        # else:
+        #    export_era5_all_timesteps(self, self.config)
 
     def _make_device(self) -> Device:
         """Create the device object which will determine on what hardware (CPU/GPU) each part of the simulation will

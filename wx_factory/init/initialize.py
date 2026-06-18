@@ -133,6 +133,28 @@ def initialize_euler(geom: CubedSphere3D, metric: Metric3DTopo, mtrx: DFROperato
     return Q, None
 
 
+def extract_available_levels(ds):
+    features = list(ds["features"].values)
+    feature_set = set(str(f) for f in features)
+
+    levels = []
+
+    for f in features:
+        name = str(f)
+
+        if name.startswith("geopotential_h"):
+            level = name.split("_h")[-1]
+
+            geo = f"geopotential_h{level}"
+            u = f"u_component_of_wind_h{level}"
+            v = f"v_component_of_wind_h{level}"
+
+            if geo in feature_set and u in feature_set and v in feature_set:
+                levels.append(int(level))
+
+    return sorted(set(levels))
+
+
 def initialize_sw(geom: CubedSphere2D, metric: Metric2D, mtrx: DFROperators, param: Configuration):
 
     xp = geom.device.xp
@@ -160,7 +182,32 @@ def initialize_sw(geom: CubedSphere2D, metric: Metric2D, mtrx: DFROperators, par
     #   8 : Unstable jet (shallow water)
     if param.case_number == -2:
         ds = xr.open_zarr(param.initial_condition, consolidated=True)
-        u1_contra, u2_contra, fluid_height = sw_from_ERA5(geom, ds, 0)
+        time_start = str(param.time_start)
+        time_end = str(param.time_end)
+
+        if time_start and time_end:
+            ds_subset = ds.sel(time=slice(time_start, time_end))
+        else:
+            ds_subset = ds
+
+        features = list(ds_subset["features"].values)
+        feature_map = {str(f): i for i, f in enumerate(features)}
+
+        levels = extract_available_levels(ds)
+        NZ = len(levels)
+        # For output_manager
+        param.z_levels = levels
+        param.ds_subset = ds_subset
+        # For export_era5_all if used
+        param.feature_map = feature_map
+
+        u1_contra, u2_contra, fluid_height = sw_from_ERA5(geom, ds_subset, 0, levels, feature_map)
+
+        Q = xp.zeros((NZ, num_equations) + base_shape, dtype=dtype)
+
+        Q[:, idx_h, ...] = fluid_height
+        Q[:, idx_hu1, ...] = fluid_height * u1_contra
+        Q[:, idx_hu2, ...] = fluid_height * u2_contra
 
     elif param.case_number == -1:
         u1_contra, u2_contra, fluid_height, hsurf, dzdx1, dzdx2, hsurf_itf_i, hsurf_itf_j = sw_from_file(
@@ -198,16 +245,17 @@ def initialize_sw(geom: CubedSphere2D, metric: Metric2D, mtrx: DFROperators, par
     else:
         raise ValueError(f"Unknown case number {param.case_number} for Shallow Water equations")
 
-    Q = xp.zeros((num_equations,) + base_shape, dtype=dtype)
-    Q[idx_h, ...] = fluid_height
+    if param.case_number != -2:
+        Q = xp.zeros((num_equations,) + base_shape, dtype=dtype)
+        Q[idx_h, ...] = fluid_height
 
-    if param.case_number in [0, 1]:
-        # advection only
-        Q[idx_u1, ...] = u1_contra
-        Q[idx_u2, ...] = u2_contra
-    else:
-        Q[idx_hu1, ...] = fluid_height * u1_contra
-        Q[idx_hu2, ...] = fluid_height * u2_contra
+        if param.case_number in [0, 1]:
+            # advection only
+            Q[idx_u1, ...] = u1_contra
+            Q[idx_u2, ...] = u2_contra
+        else:
+            Q[idx_hu1, ...] = fluid_height * u1_contra
+            Q[idx_hu2, ...] = fluid_height * u2_contra
 
     topo = None
     if param.case_number in [-1, -2, 5, 10]:

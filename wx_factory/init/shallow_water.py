@@ -103,18 +103,16 @@ def height_vortex(geom, metric, param, step):
     return h, Omega
 
 
-def sw_from_ERA5(geom: CubedSphere2D, ds, t):
+def sw_from_ERA5(geom: CubedSphere2D, ds, t, levels, feature_map):
     xp = geom.device.xp
 
-    features = list(ds["features"].values)
+    idx_geo_all = [feature_map[f"geopotential_h{z}"] for z in levels]
+    idx_u_all = [feature_map[f"u_component_of_wind_h{z}"] for z in levels]
+    idx_v_all = [feature_map[f"v_component_of_wind_h{z}"] for z in levels]
 
-    idx_geo = features.index("geopotential_h500")
-    idx_u = features.index("u_component_of_wind_h500")
-    idx_v = features.index("v_component_of_wind_h500")
-
-    geopotential = ds["data"].isel(time=t, features=idx_geo)
-    u = ds["data"].isel(time=t, features=idx_u)
-    v = ds["data"].isel(time=t, features=idx_v)
+    geopotential = ds["data"].isel(time=t, features=idx_geo_all)
+    u = ds["data"].isel(time=t, features=idx_u_all)
+    v = ds["data"].isel(time=t, features=idx_v_all)
 
     target_lon = (geom.lon * 180 / numpy.pi) % 360
     target_lat = geom.lat * 180 / numpy.pi
@@ -133,7 +131,7 @@ def sw_from_ERA5(geom: CubedSphere2D, ds, t):
     v_interp = v.interp(longitude=("points", lon_flat), latitude=("points", lat_flat), method="linear").values
 
     # Reshape back to cubed-sphere
-    shape = geom.lon.shape
+    shape = (len(levels),) + geom.lon.shape
     geop_interp = geop_interp.reshape(shape)
     u_interp = u_interp.reshape(shape)
     v_interp = v_interp.reshape(shape)
@@ -145,7 +143,11 @@ def sw_from_ERA5(geom: CubedSphere2D, ds, t):
     g = 9.80616
     fluid_height = geop_interp / g
 
-    u1_contra, u2_contra = geom.wind2contra(u_interp, v_interp)
+    u1_contra = xp.zeros_like(u_interp)
+    u2_contra = xp.zeros_like(v_interp)
+
+    for z in range(len(levels)):
+        u1_contra[z], u2_contra[z] = geom.wind2contra(u_interp[z], v_interp[z])
 
     return u1_contra, u2_contra, fluid_height
 

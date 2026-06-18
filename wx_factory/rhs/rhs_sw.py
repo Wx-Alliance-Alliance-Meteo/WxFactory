@@ -40,6 +40,16 @@ class RhsShallowWater(RHS):
         self.u1 = None
         self.u2 = None
 
+    def __call__(self, q):
+        if q.ndim == 5:
+            results = []
+            for k in range(q.shape[0]):
+                rhs_k = super().__call__(q[k])
+                results.append(rhs_k)
+            return self.geom.device.xp.stack(results, axis=0)
+        else:
+            return super().__call__(q)
+
     def allocate_arrays(self, q):
         return
 
