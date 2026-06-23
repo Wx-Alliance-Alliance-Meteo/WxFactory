@@ -43,10 +43,10 @@ class RhsShallowWater(RHS):
     def __call__(self, q):
         if q.ndim == 5:
             results = []
-            for k in range(q.shape[0]):
-                rhs_k = super().__call__(q[k])
+            for k in range(q.shape[1]):
+                rhs_k = super().__call__(q[:, k])
                 results.append(rhs_k)
-            return self.geom.device.xp.stack(results, axis=0)
+            return self.geom.device.xp.stack(results, axis=1)
         else:
             return super().__call__(q)
 

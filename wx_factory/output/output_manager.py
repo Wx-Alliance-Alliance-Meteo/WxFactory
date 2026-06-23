@@ -128,7 +128,10 @@ class OutputManager:
 
             t0 = time()
 
-            self.__write_result__(Q, step_id)
+            if self.config.case_number == -2:
+                self.__write_result__(Q, self.geometry.ds_subset.data["time"][step_id])
+            else:
+                self.__write_result__(Q, step_id)
 
             self.total_write_time += time() - t0
             self.num_writes += 1

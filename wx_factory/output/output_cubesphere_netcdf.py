@@ -48,7 +48,7 @@ class OutputCubesphereNetcdf(OutputCubesphere):
         self.filename = f"{self.output_dir}/{self.config.base_output_file}.nc"
         self.nz = None
         if config.case_number == -2:
-            self.z_levels = config.z_levels
+            self.z_levels = geometry.z_levels
 
         """if config.output_freq > 0:
             self._output_init()"""
@@ -327,7 +327,7 @@ class OutputCubesphereNetcdf(OutputCubesphere):
         if not self.initialized:
 
             if Q.ndim == 5:
-                self.nz = Q.shape[0]
+                self.nz = Q.shape[1]
             else:
                 self.nz = 1
 
@@ -347,7 +347,7 @@ class OutputCubesphereNetcdf(OutputCubesphere):
             if Q.ndim == 5:
                 for k in range(self.nz):
 
-                    h = Q[k, idx_h, ...]
+                    h = Q[idx_h, k, ...]
 
                     if self.topo is not None:
                         h = h + self.topo.hsurf
@@ -358,8 +358,8 @@ class OutputCubesphereNetcdf(OutputCubesphere):
 
                     if self.config.case_number >= 2 or self.config.case_number in [-1, -2]:
 
-                        u1 = Q[k, idx_hu1, ...] / h
-                        u2 = Q[k, idx_hu2, ...] / h
+                        u1 = Q[idx_hu1, k, ...] / h
+                        u2 = Q[idx_hu2, k, ...] / h
 
                         u, v = geom.contra2wind(u1, u2)
 

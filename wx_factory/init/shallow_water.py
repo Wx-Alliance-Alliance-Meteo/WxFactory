@@ -146,8 +146,7 @@ def sw_from_ERA5(geom: CubedSphere2D, ds, t, levels, feature_map):
     u1_contra = xp.zeros_like(u_interp)
     u2_contra = xp.zeros_like(v_interp)
 
-    for z in range(len(levels)):
-        u1_contra[z], u2_contra[z] = geom.wind2contra(u_interp[z], v_interp[z])
+    u1_contra, u2_contra = geom.wind2contra(u_interp, v_interp)
 
     return u1_contra, u2_contra, fluid_height
 

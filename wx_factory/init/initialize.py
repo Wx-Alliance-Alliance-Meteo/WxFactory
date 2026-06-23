@@ -166,6 +166,7 @@ def initialize_sw(geom: CubedSphere2D, metric: Metric2D, mtrx: DFROperators, par
     base_shape = geom.lon.shape
     itf_i_shape = geom.lon_itf_i.shape
     itf_j_shape = geom.lon_itf_j.shape
+    Q_shape = (num_equations,)
 
     hsurf = xp.zeros(base_shape, dtype=dtype)
     dzdx1 = xp.zeros(base_shape, dtype=dtype)
@@ -196,18 +197,12 @@ def initialize_sw(geom: CubedSphere2D, metric: Metric2D, mtrx: DFROperators, par
         levels = extract_available_levels(ds)
         NZ = len(levels)
         # For output_manager
-        param.z_levels = levels
-        param.ds_subset = ds_subset
-        # For export_era5_all if used
-        param.feature_map = feature_map
+        geom.z_levels = levels
+        geom.ds_subset = ds_subset
+
+        Q_shape = (num_equations, NZ)
 
         u1_contra, u2_contra, fluid_height = sw_from_ERA5(geom, ds_subset, 0, levels, feature_map)
-
-        Q = xp.zeros((NZ, num_equations) + base_shape, dtype=dtype)
-
-        Q[:, idx_h, ...] = fluid_height
-        Q[:, idx_hu1, ...] = fluid_height * u1_contra
-        Q[:, idx_hu2, ...] = fluid_height * u2_contra
 
     elif param.case_number == -1:
         u1_contra, u2_contra, fluid_height, hsurf, dzdx1, dzdx2, hsurf_itf_i, hsurf_itf_j = sw_from_file(
@@ -245,17 +240,16 @@ def initialize_sw(geom: CubedSphere2D, metric: Metric2D, mtrx: DFROperators, par
     else:
         raise ValueError(f"Unknown case number {param.case_number} for Shallow Water equations")
 
-    if param.case_number != -2:
-        Q = xp.zeros((num_equations,) + base_shape, dtype=dtype)
-        Q[idx_h, ...] = fluid_height
+    Q = xp.zeros(Q_shape + base_shape, dtype=dtype)
+    Q[idx_h, ...] = fluid_height
 
-        if param.case_number in [0, 1]:
-            # advection only
-            Q[idx_u1, ...] = u1_contra
-            Q[idx_u2, ...] = u2_contra
-        else:
-            Q[idx_hu1, ...] = fluid_height * u1_contra
-            Q[idx_hu2, ...] = fluid_height * u2_contra
+    if param.case_number in [0, 1]:
+        # advection only
+        Q[idx_u1, ...] = u1_contra
+        Q[idx_u2, ...] = u2_contra
+    else:
+        Q[idx_hu1, ...] = fluid_height * u1_contra
+        Q[idx_hu2, ...] = fluid_height * u2_contra
 
     topo = None
     if param.case_number in [-1, -2, 5, 10]:
