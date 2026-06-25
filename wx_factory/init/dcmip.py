@@ -647,7 +647,7 @@ def dcmip_schar_damping(
        flag for whether the reference velocity field has vertical shear (case 2-2) or not (2-1)"""
 
     # Grab forcing index variables from 'definitions', since forcing is modified in-place
-    from common.definitions import idx_rho_u1, idx_rho_u2, idx_rho_w
+    from ..common.definitions import idx_rho_u1, idx_rho_u2, idx_rho_w
 
     xp = geom.device.xp
 

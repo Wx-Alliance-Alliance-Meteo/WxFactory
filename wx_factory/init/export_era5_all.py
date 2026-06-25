@@ -20,15 +20,15 @@ def export_era5_all_timesteps(sim, config: Configuration):
     time_start = str(config.time_start)
     time_end = str(config.time_end)
 
-    ds_subset = ds.sel(time=slice(time_start, time_end))
+    dataset = ds.sel(time=slice(time_start, time_end))
 
-    features = list(ds_subset["features"].values)
+    features = list(dataset["features"].values)
     feature_map = {str(f): i for i, f in enumerate(features)}
     NZ = len(geom.z_levels)
 
-    for i in range(ds_subset.sizes["time"] - 1):
+    for i in range(dataset.sizes["time"] - 1):
         if i != 0:
-            u1_contra, u2_contra, fluid_height = sw_from_ERA5(geom, ds_subset, i, geom.z_levels, feature_map)
+            u1_contra, u2_contra, fluid_height = sw_from_ERA5(geom, dataset, i, geom.z_levels, feature_map)
 
             Q = xp.zeros((num_equations, NZ) + base_shape, dtype=dtype)
 

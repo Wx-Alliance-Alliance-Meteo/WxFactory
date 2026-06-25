@@ -40,6 +40,7 @@ class OutputCubesphereNetcdf(OutputCubesphere):
         device: Device,
         metric: Metric2D | Metric3DTopo,
         topo,
+        dataset,
         process_topo: ProcessTopology,
     ):
         super().__init__(config, geometry, operators, device, metric, topo, process_topo)
@@ -53,6 +54,7 @@ class OutputCubesphereNetcdf(OutputCubesphere):
         """if config.output_freq > 0:
             self._output_init()"""
         self.initialized = False
+        self.dataset = dataset
 
     def _output_init(self, NZ):
         """Initialise the netCDF4 file."""

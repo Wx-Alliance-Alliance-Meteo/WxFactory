@@ -129,7 +129,7 @@ class OutputManager:
             t0 = time()
 
             if self.config.case_number == -2:
-                self.__write_result__(Q, self.geometry.ds_subset.data["time"][step_id])
+                self.__write_result__(Q, self.dataset.data["time"][step_id])
             else:
                 self.__write_result__(Q, step_id)
 

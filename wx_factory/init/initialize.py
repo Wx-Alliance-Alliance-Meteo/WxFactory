@@ -159,6 +159,7 @@ def initialize_sw(geom: CubedSphere2D, metric: Metric2D, mtrx: DFROperators, par
 
     xp = geom.device.xp
     dtype = xp.float64
+    dataset = None
 
     # ni, nj = geom.lon.shape
     num_equations = 3
@@ -187,22 +188,21 @@ def initialize_sw(geom: CubedSphere2D, metric: Metric2D, mtrx: DFROperators, par
         time_end = str(param.time_end)
 
         if time_start and time_end:
-            ds_subset = ds.sel(time=slice(time_start, time_end))
+            dataset = ds.sel(time=slice(time_start, time_end))
         else:
-            ds_subset = ds
+            dataset = ds
 
-        features = list(ds_subset["features"].values)
+        features = list(dataset["features"].values)
         feature_map = {str(f): i for i, f in enumerate(features)}
 
         levels = extract_available_levels(ds)
         NZ = len(levels)
         # For output_manager
         geom.z_levels = levels
-        geom.ds_subset = ds_subset
 
         Q_shape = (num_equations, NZ)
 
-        u1_contra, u2_contra, fluid_height = sw_from_ERA5(geom, ds_subset, 0, levels, feature_map)
+        u1_contra, u2_contra, fluid_height = sw_from_ERA5(geom, dataset, 0, levels, feature_map)
 
     elif param.case_number == -1:
         u1_contra, u2_contra, fluid_height, hsurf, dzdx1, dzdx2, hsurf_itf_i, hsurf_itf_j = sw_from_file(
@@ -261,7 +261,7 @@ def initialize_sw(geom: CubedSphere2D, metric: Metric2D, mtrx: DFROperators, par
     # plot_array(geom.to_single_block(Q[1]), f"u.png", comm=comm, background_value=Q[1].min())
     # plot_array(geom.to_single_block(Q[2]), f"v.png", comm=comm, background_value=Q[2].min())
 
-    return Q, topo
+    return Q, topo, dataset
 
 
 def initialize_cartesian2d(geom: Cartesian2D, param: Configuration) -> NDArray[numpy.float64]:
