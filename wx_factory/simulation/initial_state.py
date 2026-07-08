@@ -1,4 +1,4 @@
-class InitialQ:
+class InitialState:
     def __init__(self, Q, topography, metric, dataset):
         self.Q = Q
         self.topography = topography

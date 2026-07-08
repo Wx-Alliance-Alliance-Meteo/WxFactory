@@ -110,24 +110,24 @@ class Simulation:
         self.geometry = self._create_geometry()
         self.operators_real = DFROperators(self.geometry, self.config, self.device)
         self.operators_complex = DFROperators(self.geometry, self.config, self.device, self.device.xp.complex128)
-        self.initial_Q = init_state_vars(self.geometry, self.operators_real, self.config, self.step_hooks)
+        self.initial_state = init_state_vars(self.geometry, self.operators_real, self.config, self.step_hooks)
 
-        self.preconditioner = self._create_preconditioner(self.initial_Q.Q)
+        self.preconditioner = self._create_preconditioner(self.initial_state.Q)
         self.output = self._create_output_manager()
-        self.initial_Q.Q, self.starting_step = self._determine_starting_state()
+        self.initial_state.Q, self.starting_step = self._determine_starting_state()
 
-        self.Q = self.initial_Q.Q.copy()
+        self.Q = self.initial_state.Q.copy()
         self.step_id = self.starting_step
 
         self.rhs = RhsBundle(
             self.geometry,
             self.operators_real,
             self.operators_complex,
-            self.initial_Q.metric,
-            self.initial_Q.topography,
+            self.initial_state.metric,
+            self.initial_state.topography,
             self.process_topo,
             self.config,
-            self.initial_Q.Q.shape,
+            self.initial_state.Q.shape,
         )
 
         self._register_dcmip_step_hooks()
@@ -136,7 +136,7 @@ class Simulation:
         self.integrator.output_manager = self.output
         self.integrator.device = self.device
 
-        self.output.step(self.initial_Q.Q, self.starting_step)
+        self.output.step(self.initial_state.Q, self.starting_step)
         sys.stdout.flush()
 
         self.t = self.config.dt * self.starting_step
@@ -158,7 +158,7 @@ class Simulation:
                 print(f"Step {self.step_id} of {self.num_steps + self.starting_step}", flush=True)
 
             self.Q = self.integrator.step(self.Q, self.config.dt)
-            self.Q = self.operators_real.apply_filters(self.Q, self.geometry, self.initial_Q.metric, self.config.dt)
+            self.Q = self.operators_real.apply_filters(self.Q, self.geometry, self.initial_state.metric, self.config.dt)
 
             if self.rank == 0:
                 print(f"Elapsed time for step: {self.integrator.latest_time:.3f} secs", flush=True)
@@ -182,7 +182,7 @@ class Simulation:
         if self.config.time_start == "":
             """Run the entire simulation step by step"""
             self.step_id = self.starting_step
-            self.Q = self.initial_Q.Q
+            self.Q = self.initial_state.Q
 
             start_time = time()
 
@@ -316,9 +316,9 @@ class Simulation:
                     self.geometry,
                     self.operators_real,
                     self.device,
-                    self.initial_Q.metric,
-                    self.initial_Q.topography,
-                    self.initial_Q.dataset,
+                    self.initial_state.metric,
+                    self.initial_state.topography,
+                    self.initial_state.dataset,
                     self.process_topo,
                 )
             elif self.config.output_format == "fst":
@@ -327,8 +327,8 @@ class Simulation:
                     self.geometry,
                     self.operators_real,
                     self.device,
-                    self.initial_Q.metric,
-                    self.initial_Q.topography,
+                    self.initial_state.metric,
+                    self.initial_state.topography,
                     self.process_topo,
                 )
             elif self.config.output_format == "zarr":
@@ -350,7 +350,9 @@ class Simulation:
         """Try to load the state for the given starting step and, if successful, swap it with the initial state"""
         if self.config.starting_step > 0:
             try:
-                Q, starting_step = self.output.load_state_from_file(self.config.starting_step, self.initial_Q.Q.shape)
+                Q, starting_step = self.output.load_state_from_file(
+                    self.config.starting_step, self.initial_state.Q.shape
+                )
                 return Q, starting_step
             except (FileNotFoundError, ValueError, SystemExit) as e:
                 if self.rank == 0:
@@ -362,7 +364,7 @@ class Simulation:
             except Exception as e:
                 print(f"{self.rank} Fail with other ({type(e)})", flush=True)
 
-        return self.initial_Q.Q, 0
+        return self.initial_state.Q, 0
 
     def _create_time_integrator(self, name: str) -> Integrator:
         """Create the appropriate time integrator object based on params"""
@@ -374,11 +376,11 @@ class Simulation:
         """Register prescribed-wind step hooks for DCMIP test cases 11 and 12."""
         if self.config.case_number == 11:
             self.step_hooks[DcmipT11WindHook] = DcmipT11WindHook(
-                self.geometry, self.initial_Q.metric, self.operators_real, self.config
+                self.geometry, self.initial_state.metric, self.operators_real, self.config
             )
         elif self.config.case_number == 12:
             self.step_hooks[DcmipT12WindHook] = DcmipT12WindHook(
-                self.geometry, self.initial_Q.metric, self.operators_real, self.config
+                self.geometry, self.initial_state.metric, self.operators_real, self.config
             )
 
     def _check_for_nan(self, Q):

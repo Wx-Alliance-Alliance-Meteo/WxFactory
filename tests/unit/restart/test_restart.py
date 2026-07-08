@@ -49,7 +49,7 @@ class Euler2DRestartTestCase(unittest.TestCase):
         self.assertEqual(sim.starting_step, 1, f"Starting step is not 1! {sim.starting_step}")
 
         # Verify that the state just read is the same as was saved
-        diff = sim.initial_Q - new_sim.Q
+        diff = sim.initial_state.Q - new_sim.Q
         diff_norm = numpy.linalg.norm(diff)
         self.assertTrue(diff_norm == 0.0, f"Restart state is not the same as computed")
 
@@ -100,7 +100,7 @@ class MultiProcRestartTestCase(MpiTestCase):
         self.assertEqual(sim.starting_step, 1, f"Starting step is not 1! {sim.starting_step}")
 
         # Verify that the loaded state is the same as the simulated one
-        diff = sim.initial_Q - self.base_sim.Q
+        diff = sim.initial_state.Q - self.base_sim.Q
         diff_norm = numpy.linalg.norm(diff)
         self.assertTrue(diff_norm == 0.0, f"Restart state is not the same as computed, diff = {diff_norm:.2e}")
 

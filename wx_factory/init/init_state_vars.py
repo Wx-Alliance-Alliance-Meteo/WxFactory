@@ -7,7 +7,7 @@ from ..geometry import DFROperators, Geometry, Metric2D, Metric3DTopo, Cartesian
 from ..init.initialize import initialize_cartesian2d, initialize_euler, initialize_sw, Topo
 from typing import Dict, Type
 from ..step_hooks import StepHook, ScharMountainHook
-from ..simulation.initial_Q import InitialQ
+from ..simulation.initial_state import InitialState
 
 
 def init_state_vars(
@@ -37,4 +37,4 @@ def init_state_vars(
     else:
         raise ValueError(f"Unrecognized combination of equations ({param.equations} and geometry ({geom}))")
 
-    return InitialQ(Q, topo, metric, dataset)
+    return InitialState(Q, topo, metric, dataset)

@@ -32,7 +32,6 @@ from solvers import MatvecOp, MatvecOpRat, fgmres
 from simulation import Simulation
 from wx_mpi import ProcessTopology
 
-
 # num_el = 0
 # order = 0
 # num_var = 3
@@ -83,9 +82,9 @@ def get_matvecs(cfg_file: str, state_file: Optional[str] = None, build_imex: boo
     # preconditioner = create_preconditioner(param, ptopo, Q)
 
     if state_file is not None:
-        sim.initial_Q = load(state_file)
+        sim.initial_state.Q = load(state_file)
 
-    Q = sim.initial_Q
+    Q = sim.initial_state.Q
 
     # Create the matvec function(s)
     matvecs = {}
