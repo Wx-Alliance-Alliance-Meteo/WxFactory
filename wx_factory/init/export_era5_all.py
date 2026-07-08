@@ -6,7 +6,7 @@ from ..common.definitions import idx_h, idx_hu1, idx_hu2
 from ..common.configuration import Configuration
 
 
-def export_era5_all_timesteps(sim, config: Configuration):
+def export_era5_all_timesteps(sim, config: Configuration, dataset):
 
     t0 = time()
     geom = sim.geometry
@@ -16,17 +16,11 @@ def export_era5_all_timesteps(sim, config: Configuration):
     num_equations = 3
     dtype = xp.float64
 
-    ds = xr.open_zarr(config.initial_condition, consolidated=True)
-    time_start = str(config.time_start)
-    time_end = str(config.time_end)
-
-    dataset = ds.sel(time=slice(time_start, time_end))
-
     features = list(dataset["features"].values)
     feature_map = {str(f): i for i, f in enumerate(features)}
     NZ = len(geom.z_levels)
 
-    for i in range(dataset.sizes["time"] - 1):
+    for i in range(dataset.sizes["time"]):
         if i != 0:
             u1_contra, u2_contra, fluid_height = sw_from_ERA5(geom, dataset, i, geom.z_levels, feature_map)
 

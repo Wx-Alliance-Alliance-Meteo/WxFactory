@@ -190,7 +190,13 @@ def initialize_sw(geom: CubedSphere2D, metric: Metric2D, mtrx: DFROperators, par
         if time_start and time_end:
             dataset = ds.sel(time=slice(time_start, time_end))
         else:
-            dataset = ds
+            dataset = ds.isel(time=[0])
+
+        # To be removed depending on Paradise design choices
+        if len(dataset.time) > 1 and dataset["time"].values[-1] == numpy.datetime64(
+            str(param.time_end).replace("t", "T")
+        ):
+            dataset = dataset.isel(time=slice(None, -1))
 
         features = list(dataset["features"].values)
         feature_map = {str(f): i for i, f in enumerate(features)}

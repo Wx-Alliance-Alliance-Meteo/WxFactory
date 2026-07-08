@@ -15,6 +15,7 @@ from ..output.output_manager import OutputManager
 from ..output.output_cartesian import OutputCartesian
 from ..output.output_cubesphere_netcdf import OutputCubesphereNetcdf
 from ..output.output_cubesphere_fst import OutputCubesphereFst
+from ..output.output_cubesphere_zarr import OutputCubesphereZarr
 from ..output.input_manager import InputManager
 from ..process_topology import ProcessTopology
 from ..rhs.rhs_selector import RhsBundle
@@ -189,7 +190,7 @@ class Simulation:
                 pass  # Step until everything is done
             self.output.finalize(time() - start_time)  # Close any open output file
         else:
-            export_era5_all_timesteps(self, self.config)
+            export_era5_all_timesteps(self, self.config, self.initial_Q.dataset)
 
     def _make_device(self) -> Device:
         """Create the device object which will determine on what hardware (CPU/GPU) each part of the simulation will
@@ -329,6 +330,18 @@ class Simulation:
                     self.initial_Q.metric,
                     self.initial_Q.topography,
                     self.process_topo,
+                )
+            elif self.config.output_format == "zarr":
+                return OutputCubesphereZarr(
+                    self.config,
+                    self.geometry,
+                    self.operators_real,
+                    self.device,
+                    self.initial_Q.metric,
+                    self.initial_Q.topography,
+                    self.initial_Q.dataset,
+                    self.process_topo,
+                    self.initial_Q.Q,
                 )
 
         raise ValueError(f"Unrecognized geometry type {type(self.geometry)}")
