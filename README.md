@@ -32,6 +32,10 @@ pip install git+https://github.com/csubich/layerquantizer.git
 
 ## Running WxFactory
 
+The `wxfactory` command below is created by `pip install -e .` (see [Installation](#installation)).
+If you have not installed the package and want to run straight from the source tree, use the
+`./WxFactory` launcher script instead (e.g. `mpirun -n 6 ./WxFactory config/case6.ini`).
+
 ```
 # Cubed-sphere grid (requires a multiple of 6 processes):
 mpirun -n 6 wxfactory config/case6.ini

@@ -7,7 +7,6 @@ name = "wxfactory"
 dynamic = ["version"]
 description = "A numerical weather prediction research framework"
 readme = "README.md"
-license-files = [ "LICENSE" ]
 requires-python = ">=3.10"
 dependencies = [
     "mpi4py",
@@ -17,6 +16,12 @@ dependencies = [
 
 [project.scripts]
 wxfactory = "wx_factory.main:main"
+
+[tool.setuptools]
+# Kept under [tool.setuptools] (rather than [project], which is PEP 639 and needs setuptools >= 77)
+# so that older setuptools accept it. compile_kernels.py re-reads this file when building the C++/
+# CUDA kernels, so an unsupported key here breaks kernel compilation, not just packaging.
+license-files = ["LICENSE"]
 
 [tool.setuptools.packages.find]
 where = ["."]
