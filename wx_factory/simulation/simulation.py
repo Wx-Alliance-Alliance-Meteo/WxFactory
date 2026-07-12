@@ -17,7 +17,7 @@ from ..output.output_cubesphere_netcdf import OutputCubesphereNetcdf
 from ..output.output_cubesphere_fst import OutputCubesphereFst
 from ..output.input_manager import InputManager
 from ..process_topology import ProcessTopology
-from ..rhs.rhs_selector import RhsBundle
+from ..rhs.rhs_selector import RhsContext, resolve_rhs
 from ..common.matmul import set_matmul_backend
 from ..wx_mpi import SingleProcess, Conditional
 from ..step_hooks import StepHook, ScharMountainHook, DcmipT11WindHook, DcmipT12WindHook
@@ -118,15 +118,17 @@ class Simulation:
         self.Q = self.initial_state.Q.copy()
         self.step_id = self.starting_step
 
-        self.rhs = RhsBundle(
-            self.geometry,
-            self.operators_real,
-            self.operators_complex,
-            self.initial_state.metric,
-            self.initial_state.topography,
-            self.process_topo,
-            self.config,
-            self.initial_state.Q.shape,
+        self.rhs = resolve_rhs(
+            RhsContext(
+                geom=self.geometry,
+                operators_real=self.operators_real,
+                operators_complex=self.operators_complex,
+                metric=self.initial_state.metric,
+                topo=self.initial_state.topography,
+                ptopo=self.process_topo,
+                param=self.config,
+                fields_shape=self.initial_state.Q.shape,
+            )
         )
 
         self._register_dcmip_step_hooks()

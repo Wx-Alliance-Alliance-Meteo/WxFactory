@@ -14,6 +14,7 @@ from tests.unit.common.test_configuration import ConfigurationTestCases
 from tests.unit.common.test_config_hints import ConfigHintsTestCases
 from tests.unit.common.test_sort_fields import SortFieldsByDependencyTestCases
 from tests.unit.common.test_angle24 import Angle24TestCase
+from tests.unit.rhs.test_rhs_registry import RhsBundleTestCases, RhsRegistryTestCases
 from tests.unit.compiler.test_compilation import CompilationTestCases, CompilationGPUTestCases
 from tests.unit.output.test_state import StateTestCases
 from tests.unit.restart.test_restart import Euler2DRestartTestCase
@@ -74,6 +75,15 @@ def load_tests(test_name):
 
     add_test(suite, Angle24TestCase("test_cyclic"), test_re)
     add_test(suite, Angle24TestCase("test_rounding"), test_re)
+
+    add_test(suite, RhsBundleTestCases("test_full_and_shape_are_stored"), test_re)
+    add_test(suite, RhsBundleTestCases("test_missing_partitions_raise_when_called"), test_re)
+    add_test(suite, RhsBundleTestCases("test_provided_partitions_are_used"), test_re)
+    add_test(suite, RhsRegistryTestCases("test_expected_combinations_are_registered"), test_re)
+    add_test(suite, RhsRegistryTestCases("test_unknown_discretization_raises"), test_re)
+    add_test(suite, RhsRegistryTestCases("test_unregistered_combination_raises_helpful_error"), test_re)
+    add_test(suite, RhsRegistryTestCases("test_resolve_dispatches_to_registered_factory"), test_re)
+    add_test(suite, RhsRegistryTestCases("test_duplicate_registration_raises"), test_re)
 
     return suite
 
