@@ -18,6 +18,7 @@ from ..output.output_cubesphere_fst import OutputCubesphereFst
 from ..output.input_manager import InputManager
 from ..process_topology import ProcessTopology
 from ..rhs.rhs_selector import RhsContext, resolve_rhs
+from ..precondition import PreconditionerContext, resolve_preconditioner
 from ..common.matmul import set_matmul_backend
 from ..wx_mpi import SingleProcess, Conditional
 from ..step_hooks import StepHook, ScharMountainHook, DcmipT11WindHook, DcmipT12WindHook
@@ -111,7 +112,6 @@ class Simulation:
         self.operators_complex = DFROperators(self.geometry, self.config, self.device, self.device.xp.complex128)
         self.initial_state = init_state_vars(self.geometry, self.operators_real, self.config, self.step_hooks)
 
-        self.preconditioner = self._create_preconditioner(self.initial_state.Q)
         self.output = self._create_output_manager()
         self.initial_state.Q, self.starting_step = self._determine_starting_state()
 
@@ -127,6 +127,20 @@ class Simulation:
                 topo=self.initial_state.topography,
                 ptopo=self.process_topo,
                 param=self.config,
+                fields_shape=self.initial_state.Q.shape,
+            )
+        )
+
+        self.preconditioner = resolve_preconditioner(
+            PreconditionerContext(
+                config=self.config,
+                device=self.device,
+                geometry=self.geometry,
+                operators=self.operators_real,
+                rhs=self.rhs,
+                metric=self.initial_state.metric,
+                topography=self.initial_state.topography,
+                ptopo=self.process_topo,
                 fields_shape=self.initial_state.Q.shape,
             )
         )
@@ -300,12 +314,6 @@ class Simulation:
             )
 
         raise ValueError(f"Invalid grid type/process_topo: {self.config.grid_type}, {self.process_topo}")
-
-    def _create_preconditioner(self, Q: numpy.ndarray) -> None:
-        """Create the preconditioner required by the given params"""
-        if self.config.preconditioner != "none":
-            raise ValueError("Preconditioner is currently unavailable, until it gets fixed")
-        return None
 
     def _create_output_manager(self) -> OutputManager:
         if isinstance(self.geometry, Cartesian2D):

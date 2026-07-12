@@ -61,3 +61,24 @@ The RHS depends on a pair: the equation set and the geometry it runs on. These a
    partitioned integrator, also pass `explicit=` / `implicit=` to `RhsBundle`.
 3. Add `"my_equations"` to the `equations` option's `selectables` in `config/config-format.json`
    and regenerate the config type hints (see above).
+
+### Add a new preconditioner
+
+Preconditioners are selected by the `preconditioner` config option and registered in
+`wx_factory/precondition/`. There are currently no built-in preconditioners (the historical ones
+were removed because they were broken); `preconditioner = none` means no preconditioning.
+
+1. Add a class that subclasses `Preconditioner` (from `wx_factory/precondition/preconditioner.py`).
+   Implement `__apply__(vec, x0, verbose)` (how it acts on a vector), and override `prepare(dt, Q)`
+   if it needs to refresh internal state at the start of each time step.
+2. Register a factory for its config name:
+   ```python
+   @register_preconditioner("my_precond")
+   def _build(ctx: PreconditionerContext) -> Preconditioner:
+       return MyPreconditioner(ctx.rhs, ctx.geometry, ctx.config, ...)
+   ```
+   `ctx` (a `PreconditionerContext`) carries the config, device, geometry, operators, the RHS
+   bundle, metric, topography, process topology, and the state-vector shape.
+3. Add `"my_precond"` to the `preconditioner` option's `selectables` in `config/config-format.json`
+   and regenerate the config type hints. Linear-solver-based integrators will then receive it
+   through `self.preconditioner` and call `prepare` / apply it automatically.

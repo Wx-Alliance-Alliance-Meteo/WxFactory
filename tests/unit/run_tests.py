@@ -15,6 +15,7 @@ from tests.unit.common.test_config_hints import ConfigHintsTestCases
 from tests.unit.common.test_sort_fields import SortFieldsByDependencyTestCases
 from tests.unit.common.test_angle24 import Angle24TestCase
 from tests.unit.rhs.test_rhs_registry import RhsBundleTestCases, RhsRegistryTestCases
+from tests.unit.precondition.test_preconditioner_registry import PreconditionerRegistryTestCases
 from tests.unit.compiler.test_compilation import CompilationTestCases, CompilationGPUTestCases
 from tests.unit.output.test_state import StateTestCases
 from tests.unit.restart.test_restart import Euler2DRestartTestCase
@@ -84,6 +85,13 @@ def load_tests(test_name):
     add_test(suite, RhsRegistryTestCases("test_unregistered_combination_raises_helpful_error"), test_re)
     add_test(suite, RhsRegistryTestCases("test_resolve_dispatches_to_registered_factory"), test_re)
     add_test(suite, RhsRegistryTestCases("test_duplicate_registration_raises"), test_re)
+
+    add_test(suite, PreconditionerRegistryTestCases("test_none_resolves_to_no_preconditioner"), test_re)
+    add_test(suite, PreconditionerRegistryTestCases("test_no_builtin_preconditioners"), test_re)
+    add_test(suite, PreconditionerRegistryTestCases("test_unknown_preconditioner_raises_helpful_error"), test_re)
+    add_test(suite, PreconditionerRegistryTestCases("test_resolve_dispatches_to_registered_factory"), test_re)
+    add_test(suite, PreconditionerRegistryTestCases("test_duplicate_registration_raises"), test_re)
+    add_test(suite, PreconditionerRegistryTestCases("test_base_prepare_is_a_noop"), test_re)
 
     return suite
 

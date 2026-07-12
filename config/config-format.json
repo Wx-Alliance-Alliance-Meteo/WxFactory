@@ -410,93 +410,7 @@
                     "name": "preconditioner",
                     "type": "str",
                     "default": "none",
-                    "selectables": ["none", "fv", "fv-mg", "p-mg", "lu", "ilu"]
-                },
-                {
-                    "name": "precond_flux",
-                    "type": "str",
-                    "default": "ausm",
-                    "selectables": ["ausm", "upwind", "rusanov"],
-                    "dependency": {
-                        "name": "preconditioner",
-                        "values": ["fv", "fv-mg", "p-mg"]
-                    }
-                },
-                {
-                    "name": "num_mg_levels",
-                    "type": "int",
-                    "default": 1,
-                    "min": 1,
-                    "dependency": {
-                        "name": "preconditioner",
-                        "values": ["fv-mg", "p-mg"]
-                    }
-                },
-                {
-                    "name": "precond_tolerance",
-                    "type": "float",
-                    "default": 1e-1,
-                    "dependency": {
-                        "name": "preconditioner",
-                        "values": ["fv", "fv-mg", "p-mg"]
-                    }
-                },
-                {
-                    "name": "num_pre_smoothe",
-                    "type": "int",
-                    "default": 1,
-                    "min": 0,
-                    "dependency": {
-                        "name": "preconditioner",
-                        "values": ["fv-mg", "p-mg"]
-                    }
-                },
-                {
-                    "name": "num_post_smoothe",
-                    "type": "int",
-                    "default": 1,
-                    "min": 0,
-                    "dependency": {
-                        "name": "preconditioner",
-                        "values": ["fv-mg", "p-mg"]
-                    }
-                },
-                {
-                    "name": "mg_smoother",
-                    "type": "str",
-                    "default": "exp",
-                    "selectables": ["exp", "kiops", "erk3", "erk1", "ark3"],
-                    "dependency": {
-                        "name": "preconditioner",
-                        "values": ["fv-mg", "p-mg"]
-                    }
-                },
-                {
-                    "name": "exp_smoothe_spectral_radii",
-                    "type": "list-float",
-                    "default": [2.0],
-                    "dependency": {
-                        "name": "mg_smoother",
-                        "values": ["exp"]
-                    }
-                },
-                {
-                    "name": "exp_smoothe_num_iters",
-                    "type": "list-int",
-                    "default": [4],
-                    "dependency": {
-                        "name": "mg_smoother",
-                        "values": ["exp"]
-                    }
-                },
-                {
-                    "name": "mg_solve_coarsest",
-                    "type": "bool",
-                    "default": false,
-                    "dependency": {
-                        "name": "preconditioner",
-                        "values": ["fv-mg", "p-mg"]
-                    }
+                    "selectables": ["none"]
                 },
                 {
                     "name": "kiops_dt_factor",
@@ -510,31 +424,7 @@
                 {
                     "name": "verbose_precond",
                     "type": "int",
-                    "default": 0,
-                    "dependency": {
-                        "name": "preconditioner",
-                        "values": ["fv", "fv-mg", "p-mg", "lu", "ilu"]
-                    }
-                },
-                {
-                    "name": "dg_to_fv_interp",
-                    "type": "str",
-                    "default": "lagrange",
-                    "selectables": ["l2-norm", "lagrange"],
-                    "dependency": {
-                        "name": "preconditioner",
-                        "values": ["fv", "fv-mg", "p-mg"]
-                    }
-                },
-                {
-                    "name": "pseudo_cfl",
-                    "type": "float",
-                    "default": 1.0,
-                    "dependency": {
-                        "name": "preconditioner",
-                        "values": ["fv-mg", "p-mg"]
-                    }
-                }
+                    "default": 0}
             ]
         },
         {
@@ -559,12 +449,6 @@
                     "description": "Frequency in timesteps at which to save the state vector"
                 },
                 {
-                    "name": "store_solver_stats",
-                    "type": "bool",
-                    "default": false,
-                    "description": "Whether to store solver stats (at every timestep)"
-                },
-                {
                     "name": "output_dir",
                     "type": "case-sensitive-str",
                     "default": "results",
@@ -575,12 +459,6 @@
                     "type": "case-sensitive-str",
                     "default": "out",
                     "description": "Name of file where to store the solution"
-                },
-                {
-                    "name": "solver_stats_file",
-                    "type": "case-sensitive-str",
-                    "default": "solver_stats.db",
-                    "description": "SQL file where to store statistics for this run"
                 },
                 {
                     "name": "store_total_time",

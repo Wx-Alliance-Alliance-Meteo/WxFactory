@@ -6,11 +6,9 @@ import numpy
 
 from ..common import Configuration
 from ..device import Device
-from ..precondition.factorization import Factorization
-from ..precondition.multigrid import Multigrid
+from ..precondition import Preconditioner
 from ..output.output_manager import OutputManager
 from ..solvers import SolverInfo, fgmres, global_norm
-from ..rhs.rhs import RHS
 
 
 class Integrator(ABC):
@@ -34,7 +32,7 @@ class Integrator(ABC):
     latest_time: float
     output_manager: Optional[OutputManager]
     device: Device
-    preconditioner: Optional[Multigrid]
+    preconditioner: Optional[Preconditioner]
     solver_info: Optional[SolverInfo]
 
     def __init__(
@@ -82,39 +80,13 @@ class Integrator(ABC):
         self.__prestep__(Q, dt)
 
         if self.preconditioner is not None:
-            if isinstance(self.preconditioner, Multigrid):
-                self.preconditioner.prepare(dt, Q)
-            elif isinstance(self.preconditioner, Factorization):
-                if hasattr(self, "A"):
-                    self.preconditioner.prepare(self.A)
-                else:
-                    print(
-                        f"Trying to use a factorization-based preconditioner, but you didn't provide a matrix"
-                        f"(must define it in the __prestep__ method of your integrator)"
-                    )
+            self.preconditioner.prepare(dt, Q)
 
         # The stepping itself
         result = self.__step__(Q, dt)
 
         t1 = time()
         self.latest_time = t1 - t0
-
-        # Output info from completed step (if possible)
-        if self.output_manager is not None:
-
-            solver_info = self.solver_info if self.solver_info is not None else SolverInfo()
-
-            rhs_times = None
-            if hasattr(self, "rhs") and isinstance(self.rhs, RHS):
-                self.rhs.retrieve_last_times()
-                rhs_times = self.rhs.timings
-
-            self.output_manager.store_solver_stats(
-                t1 - t0, self.sim_time, dt, solver_info, self.preconditioner, rhs_times
-            )
-
-            if hasattr(self, "rhs") and isinstance(self.rhs, RHS):
-                self.rhs.clear_timings()
 
         self.solver_info = None
 

@@ -8,11 +8,8 @@ from numpy.typing import NDArray
 from ..common.configuration import Configuration
 from ..device import Device
 from ..geometry import Geometry, DFROperators, CubedSphere3D
-from ..precondition.multigrid import Multigrid
-from ..solvers import SolverInfo
 from ..wx_mpi import SingleProcess, Conditional
 
-from .solver_stats import SolverStatsOutput
 from .state import save_state, load_state
 
 
@@ -70,9 +67,6 @@ class OutputManager:
             s.return_value = output_dir
 
         self.output_dir = s.return_value
-
-        if self.config.store_solver_stats > 0:
-            self.solver_stats_output = SolverStatsOutput(config, self.device)
 
         # Choose a file name hash based on a certain set of parameters:
         state_params = (
@@ -164,29 +158,6 @@ class OutputManager:
     def __blockstats__(self, Q: NDArray, step_id: int):
         """Class-specific blockstats implementation."""
         # Not implemented by default
-
-    def store_solver_stats(
-        self,
-        total_time: float,
-        simulation_time: float,
-        dt: float,
-        solver_info: SolverInfo,
-        precond: Optional[Multigrid],
-        rhs_times: Optional[List[List[float]]],
-    ):
-        """Store statistics for the current step into a database."""
-        if self.config.store_solver_stats > 0:
-            self.solver_stats_output.write_output(
-                total_time,
-                simulation_time,
-                dt,
-                solver_info.total_num_it,
-                solver_info.time,
-                solver_info.flag,
-                solver_info.iterations,
-                precond,
-                rhs_times,
-            )
 
     def finalize(self, total_time: float) -> None:
         """

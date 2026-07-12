@@ -23,7 +23,6 @@ class Configuration:
         self.config_content = cfg_file
 
         self.depth_approx = None
-        self.num_mg_levels = 1
 
         self.parser.read_string(self.config_content)
 
@@ -106,15 +105,12 @@ class Configuration:
     cuda_devices: List[int]
     depth_approx: str
     desired_device: str
-    dg_to_fv_interp: str
     discretization: str
     dt: float
     enable_schar_mountain: bool
     equations: str
     exode_controller: str
     exode_method: str
-    exp_smoothe_num_iters: List[int]
-    exp_smoothe_spectral_radii: List[float]
     expfilter_apply: bool
     expfilter_cutoff: float
     expfilter_order: int
@@ -135,23 +131,15 @@ class Configuration:
     matmul_backend: str
     matsuno_amp: float
     matsuno_wave_type: str
-    mg_smoother: str
-    mg_solve_coarsest: bool
     netcdf_use_collective: bool
     num_elements_horizontal: int
     num_elements_vertical: int
-    num_mg_levels: int
-    num_post_smoothe: int
-    num_pre_smoothe: int
     num_solpts: int
     output_dir: str
     output_format: str
     output_freq: int
     phi0: float
-    precond_flux: str
-    precond_tolerance: float
     preconditioner: str
-    pseudo_cfl: float
     save_state_freq: int
     schar_mountain_height: float
     schar_mountain_lattitude: float
@@ -159,14 +147,12 @@ class Configuration:
     schar_mountain_longitude: float
     schar_mountain_radius: float
     schar_mountain_step: int
-    solver_stats_file: str
     splitting_integrator_1: str
     splitting_integrator_2: str
     sponge_tscale: float
     sponge_zscale: float
     starting_step: int
     stat_freq: int
-    store_solver_stats: bool
     store_total_time: bool
     t_end: float
     time_end: str
