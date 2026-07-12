@@ -8,7 +8,7 @@ import numpy
 
 from ..common import Configuration
 from ..device import Device, CpuDevice, CudaDevice, PytorchDevice
-from ..geometry import CubedSphere3D, DFROperators, GeometryContext, resolve_geometry
+from ..geometry import DFROperators, GeometryContext, resolve_geometry
 from ..init.init_state_vars import init_state_vars
 from ..integrators import Integrator, resolve as _resolve_integrator
 from ..output.registry import OutputContext, resolve_output
@@ -17,7 +17,8 @@ from ..rhs.rhs_selector import RhsContext, resolve_rhs
 from ..precondition import PreconditionerContext, resolve_preconditioner
 from ..common.matmul import set_matmul_backend
 from ..wx_mpi import SingleProcess, Conditional
-from ..step_hooks import StepHook, ScharMountainHook, DcmipT11WindHook, DcmipT12WindHook
+from ..step_hooks import StepHook
+from ..step_hooks.registry import PHASE_GEOMETRY, PHASE_STATE, StepHookContext, resolve_step_hooks
 from ..init.export_era5_all import export_era5_all_timesteps
 
 
@@ -105,7 +106,10 @@ class Simulation:
         self.geometry = resolve_geometry(GeometryContext.from_simulation(self))
         # Cubed-sphere geometries carry a process topology; a Cartesian grid has none.
         self.process_topo = getattr(self.geometry, "process_topology", None)
-        self._register_geometry_step_hooks()
+        # Geometry-phase step hooks must exist before init_state_vars, which reads them.
+        self.step_hooks.update(
+            resolve_step_hooks(StepHookContext(config=self.config, geometry=self.geometry), phase=PHASE_GEOMETRY)
+        )
         self.operators_real = DFROperators(self.geometry, self.config, self.device)
         self.operators_complex = DFROperators(self.geometry, self.config, self.device, self.device.xp.complex128)
         self.initial_state = init_state_vars(self.geometry, self.operators_real, self.config, self.step_hooks)
@@ -154,7 +158,18 @@ class Simulation:
             )
         )
 
-        self._register_dcmip_step_hooks()
+        # State-phase step hooks can now be built (they need the metric and operators).
+        self.step_hooks.update(
+            resolve_step_hooks(
+                StepHookContext(
+                    config=self.config,
+                    geometry=self.geometry,
+                    operators=self.operators_real,
+                    metric=self.initial_state.metric,
+                ),
+                phase=PHASE_STATE,
+            )
+        )
 
         self.integrator = self._create_time_integrator(self.config.time_integrator)
         self.integrator.output_manager = self.output
@@ -265,11 +280,6 @@ class Simulation:
                     )
                 print(f"allowed_pe_counts = {self.allowed_pe_counts}", flush=True)
 
-    def _register_geometry_step_hooks(self) -> None:
-        """Register step hooks that depend on the geometry (before the initial state is built)."""
-        if self.config.enable_schar_mountain and isinstance(self.geometry, CubedSphere3D):
-            self.step_hooks[ScharMountainHook] = ScharMountainHook(self.config, self.geometry)
-
     def _determine_starting_state(self):
         """Try to load the state for the given starting step and, if successful, swap it with the initial state"""
         if self.config.starting_step > 0:
@@ -295,17 +305,6 @@ class Simulation:
         if self.comm.rank == 0:
             print(f"Running with time integrator: {name}")
         return _resolve_integrator(name, self.config, self.rhs, self.preconditioner, self.device)
-
-    def _register_dcmip_step_hooks(self) -> None:
-        """Register prescribed-wind step hooks for DCMIP test cases 11 and 12."""
-        if self.config.case_number == 11:
-            self.step_hooks[DcmipT11WindHook] = DcmipT11WindHook(
-                self.geometry, self.initial_state.metric, self.operators_real, self.config
-            )
-        elif self.config.case_number == 12:
-            self.step_hooks[DcmipT12WindHook] = DcmipT12WindHook(
-                self.geometry, self.initial_state.metric, self.operators_real, self.config
-            )
 
     def _check_for_nan(self, Q):
         """Raise an exception if there are NaNs in the input"""

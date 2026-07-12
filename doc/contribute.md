@@ -98,6 +98,24 @@ option, and are registered in `wx_factory/output/registry.py`.
 3. Add `"my_format"` to the `output_format` option's `selectables` in `config/config-format.json`
    and regenerate the config type hints.
 
+### Add a new step hook
+
+A step hook post-processes the state after every time step. Hooks are registered in
+`wx_factory/step_hooks/registry.py`. Unlike the other choices, several hooks may apply at once, so
+each registers a *provider* that returns a hook instance when it applies or `None` otherwise.
+
+1. Add your `StepHook` subclass (implement `process(Q, t)`).
+2. Register a provider, choosing the phase it is resolved in — `PHASE_GEOMETRY` (only the geometry
+   and config are available; runs before the initial state is built) or `PHASE_STATE` (the metric
+   and operators are available):
+   ```python
+   @register_step_hook("my_hook", phase=PHASE_STATE)
+   def _provider(ctx: StepHookContext):
+       if ctx.config.case_number == 42:
+           return MyHook(ctx.geometry, ctx.metric, ctx.operators, ctx.config)
+       return None
+   ```
+
 ### Add a new preconditioner
 
 Preconditioners are selected by the `preconditioner` config option and registered in

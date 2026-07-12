@@ -18,6 +18,7 @@ from tests.unit.rhs.test_rhs_registry import RhsBundleTestCases, RhsRegistryTest
 from tests.unit.precondition.test_preconditioner_registry import PreconditionerRegistryTestCases
 from tests.unit.geometry.test_geometry_registry import GeometryRegistryTestCases
 from tests.unit.output.test_output_registry import OutputRegistryTestCases
+from tests.unit.step_hooks.test_step_hook_registry import StepHookRegistryTestCases
 from tests.unit.compiler.test_compilation import CompilationTestCases, CompilationGPUTestCases
 from tests.unit.output.test_state import StateTestCases
 from tests.unit.restart.test_restart import Euler2DRestartTestCase
@@ -106,6 +107,15 @@ def load_tests(test_name):
     add_test(suite, OutputRegistryTestCases("test_format_specific_dispatch"), test_re)
     add_test(suite, OutputRegistryTestCases("test_unknown_combination_raises_helpful_error"), test_re)
     add_test(suite, OutputRegistryTestCases("test_duplicate_registration_raises"), test_re)
+
+    add_test(suite, StepHookRegistryTestCases("test_builtin_hooks_registered_with_expected_phases"), test_re)
+    add_test(suite, StepHookRegistryTestCases("test_resolve_only_returns_requested_phase"), test_re)
+    add_test(suite, StepHookRegistryTestCases("test_schar_does_not_apply_to_non_cubesphere"), test_re)
+    add_test(suite, StepHookRegistryTestCases("test_dcmip_dispatches_on_case_number"), test_re)
+    add_test(suite, StepHookRegistryTestCases("test_no_hooks_when_nothing_applies"), test_re)
+    add_test(suite, StepHookRegistryTestCases("test_provider_returning_none_is_skipped"), test_re)
+    add_test(suite, StepHookRegistryTestCases("test_unknown_phase_raises"), test_re)
+    add_test(suite, StepHookRegistryTestCases("test_duplicate_registration_raises"), test_re)
 
     return suite
 
