@@ -31,7 +31,15 @@ _COEFF_TABLES = {
 
 class Epi(Integrator):
     def __init__(
-        self, param: Configuration, order: int, rhs: Callable, jac: Callable = None, init_method=None, init_substeps: int = 1, *, device=None
+        self,
+        param: Configuration,
+        order: int,
+        rhs: Callable,
+        jac: Callable = None,
+        init_method=None,
+        init_substeps: int = 1,
+        *,
+        device=None,
     ):
         super().__init__(param, device=device)
         self.rhs = rhs

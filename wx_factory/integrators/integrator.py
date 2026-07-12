@@ -57,8 +57,12 @@ class Integrator(ABC):
 
     def _solve_linear(self, A, b, x0=None, tol=1e-8, restart=20, maxiter=None):
         return fgmres(
-            A, b, x0=x0, tol=tol,
-            restart=restart, maxiter=maxiter,
+            A,
+            b,
+            x0=x0,
+            tol=tol,
+            restart=restart,
+            maxiter=maxiter,
             preconditioner=self.preconditioner,
             verbose=self.verbose_solver,
             device=self.device,

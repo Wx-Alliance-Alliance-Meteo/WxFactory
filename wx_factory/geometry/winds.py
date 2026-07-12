@@ -40,7 +40,7 @@ def wind2contra_2d(u: Union[float, numpy.ndarray], v: Union[float, numpy.ndarray
         lambda_dot = u / (geom.earth_radius * geom.coslat)
         phi_dot = v / geom.earth_radius
 
-    if hasattr(geom, 'X_new'):
+    if hasattr(geom, "X_new"):
         # CubedSphere3D
         X = geom.X_new
         Y = geom.Y_new
@@ -62,29 +62,17 @@ def wind2contra_2d(u: Union[float, numpy.ndarray], v: Union[float, numpy.ndarray
     )
 
     dx1dlon = math.cos(geom.lat_p) * math.cos(geom.angle_p) + (
-        X * Y * math.cos(geom.lat_p) * math.sin(geom.angle_p)
-        - Y * math.sin(geom.lat_p)
+        X * Y * math.cos(geom.lat_p) * math.sin(geom.angle_p) - Y * math.sin(geom.lat_p)
     ) / (1.0 + X**2)
-    dx2dlon = (
-        X * Y * math.cos(geom.lat_p) * math.cos(geom.angle_p)
-        + X * math.sin(geom.lat_p)
-    ) / (1.0 + Y**2) + math.cos(geom.lat_p) * math.sin(geom.angle_p)
+    dx2dlon = (X * Y * math.cos(geom.lat_p) * math.cos(geom.angle_p) + X * math.sin(geom.lat_p)) / (
+        1.0 + Y**2
+    ) + math.cos(geom.lat_p) * math.sin(geom.angle_p)
 
     dx1dlat = (
-        -delta2
-        * (
-            (math.cos(geom.lat_p) * math.sin(geom.angle_p) + X * math.sin(geom.lat_p))
-            / (1.0 + X**2)
-        )
-        / denom
+        -delta2 * ((math.cos(geom.lat_p) * math.sin(geom.angle_p) + X * math.sin(geom.lat_p)) / (1.0 + X**2)) / denom
     )
     dx2dlat = (
-        delta2
-        * (
-            (math.cos(geom.lat_p) * math.cos(geom.angle_p) - Y * math.sin(geom.lat_p))
-            / (1.0 + Y**2)
-        )
-        / denom
+        delta2 * ((math.cos(geom.lat_p) * math.cos(geom.angle_p) - Y * math.sin(geom.lat_p)) / (1.0 + Y**2)) / denom
     )
 
     # transform to the reference element
@@ -128,7 +116,7 @@ def wind2contra_3d(
     # First, re-use wind2contra_2d to get preliminary values for u1_contra and u2_contra.  We will update this with the
     # contribution from vertical velocity in a second step.
 
-    (u1_contra, u2_contra) = wind2contra_2d(u, v, geom)
+    u1_contra, u2_contra = wind2contra_2d(u, v, geom)
 
     # Second, convert w to _covariant_ u3, which points in the vertical direction regardless of topography.  We do this
     # by multiplying by dz/deta, or dividing by metric.inv_dzdeta  (equivalently, taking the dot product with the e_3 basis
@@ -167,7 +155,7 @@ def contra2wind_2d(u1: Union[float, numpy.ndarray], u2: Union[float, numpy.ndarr
     u1_contra = u1 * geom.delta_x1 / 2.0
     u2_contra = u2 * geom.delta_x2 / 2.0
 
-    if hasattr(geom, 'X_new'):
+    if hasattr(geom, "X_new"):
         # CubedSphere3D
         X = geom.X_new
         Y = geom.Y_new
@@ -185,17 +173,16 @@ def contra2wind_2d(u1: Union[float, numpy.ndarray], u2: Union[float, numpy.ndarr
     ) ** 2 + (X * math.cos(geom.angle_p) + Y * math.sin(geom.angle_p)) ** 2
 
     dlondx1 = (
-        (math.cos(geom.lat_p) * math.cos(geom.angle_p) + X * Y * math.cos(geom.lat_p) * math.sin(geom.angle_p)
-        - Y * math.sin(geom.lat_p))
+        (
+            math.cos(geom.lat_p) * math.cos(geom.angle_p)
+            + X * Y * math.cos(geom.lat_p) * math.sin(geom.angle_p)
+            - Y * math.sin(geom.lat_p)
+        )
         * (1.0 + X**2)
         / denom
     )
 
-    dlondx2 = (
-        (math.cos(geom.lat_p) * math.sin(geom.angle_p) + X * math.sin(geom.lat_p))
-        * (1.0 + Y**2)
-        / denom
-    )
+    dlondx2 = (math.cos(geom.lat_p) * math.sin(geom.angle_p) + X * math.sin(geom.lat_p)) * (1.0 + Y**2) / denom
 
     denom[:, :] = numpy.sqrt(
         (

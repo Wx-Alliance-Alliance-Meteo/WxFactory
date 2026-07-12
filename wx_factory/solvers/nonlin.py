@@ -51,8 +51,12 @@ def newton_krylov(
     Fx_norm = global_norm(Fx)
 
     jacobian = KrylovJacobian(
-        x.copy(), Fx, func,
-        restart=restart, maxiter_linear=maxiter_linear, preconditioner=preconditioner,
+        x.copy(),
+        Fx,
+        func,
+        restart=restart,
+        maxiter_linear=maxiter_linear,
+        preconditioner=preconditioner,
     )
 
     if maxiter is None:

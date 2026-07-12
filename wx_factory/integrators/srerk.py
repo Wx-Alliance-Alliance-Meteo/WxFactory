@@ -51,7 +51,16 @@ def opt_nodes(order: int):
 class Srerk(Integrator):
     """Stiffness resilient exponential Runge-Kutta methods"""
 
-    def __init__(self, param: Configuration, order: int, rhs: Callable, jac: Callable = None, nodes: Optional[List] = None, *, device=None):
+    def __init__(
+        self,
+        param: Configuration,
+        order: int,
+        rhs: Callable,
+        jac: Callable = None,
+        nodes: Optional[List] = None,
+        *,
+        device=None,
+    ):
         """
         If the nodes are NOT specified, return the SRERK method of the specified order with min error terms
         If the nodes are specified, return the SRERK method with these nodes and ignore the 'order' parameter

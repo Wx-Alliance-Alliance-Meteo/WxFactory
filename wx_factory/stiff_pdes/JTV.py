@@ -1,21 +1,21 @@
 """
- Here I set up the discretization operators that will be used for the 
- RHS and Jtv functions for the pdes.
+Here I set up the discretization operators that will be used for the
+RHS and Jtv functions for the pdes.
 
- There are 5 laplacian and 5 advection operators, each with the following BCs:
- 1. homogeneous Dirichlet
- 2. homogeneous Neumann
- 3. Periodic
+There are 5 laplacian and 5 advection operators, each with the following BCs:
+1. homogeneous Dirichlet
+2. homogeneous Neumann
+3. Periodic
 
- Another Laplacian and advection operators are used for the 
- non-constant Jacobian. For example, the nonLinLapPeriodic is for the 
- Porous Medium equation, derivative of (u^2)_xx.
+Another Laplacian and advection operators are used for the
+non-constant Jacobian. For example, the nonLinLapPeriodic is for the
+Porous Medium equation, derivative of (u^2)_xx.
 
- And finally a pair for the rhs of the nonlinear advection or Laplacian.
- For example 1/2(u^2)_x rhs term in Burger's equation.
+And finally a pair for the rhs of the nonlinear advection or Laplacian.
+For example 1/2(u^2)_x rhs term in Burger's equation.
 
- There are also local communication helper functions to communicate local
- data for the stencils that are located on different processors. 
+There are also local communication helper functions to communicate local
+data for the stencils that are located on different processors.
 
 """
 

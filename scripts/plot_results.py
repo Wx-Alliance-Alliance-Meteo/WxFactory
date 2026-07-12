@@ -604,9 +604,7 @@ class FullDataSet:
             ) q2
             on (q1.run_id = q2.run_id and q1.step_id = q2.step_id)
             ;
-        """.strip().strip(
-            ";"
-        )
+        """.strip().strip(";")
         # ---------------------------------------------------------------------------------------------------
 
         # ---------------------------------------------------------------------------------------------------
@@ -654,9 +652,7 @@ class FullDataSet:
             group by {group_by}
             order by {order_by}
             ;
-        """.strip().strip(
-            ";"
-        )
+        """.strip().strip(";")
 
         # ---------------------------------------------------------------------------------------------------
         # Query to compute statistics from multiple time steps for each problem configuration that
@@ -667,8 +663,7 @@ class FullDataSet:
         # computation time or iterations with respect to simulation time, or average computation time or
         # iterations per step). These entries can be further combined to generate scaling plots.
         group_by_list_2 = [item for item in group_by_list if item != "simulation_time"]
-        param_query = (
-            f"""--sql
+        param_query = f"""--sql
             select 
                     {{columns}},
                     dg_order,
@@ -692,10 +687,7 @@ class FullDataSet:
             order by dg_order, num_mg_levels, mg_solve_coarsest, kiops_dt_factor, (num_pre_smoothe + num_post_smoothe),
                     time_per_time -- use 'time_per_time' as criterion for best performance (for the purpose of plotting)
             ;
-            """.strip()
-            .strip(";")
-            .format(columns=", ".join(columns), group_by=", ".join(group_by_list_2))
-        )
+            """.strip().strip(";").format(columns=", ".join(columns), group_by=", ".join(group_by_list_2))
 
         # ---------------------------------------------------------------------------------------------------
         # Query to further group selected sets according to a scaling parameter
@@ -726,9 +718,7 @@ class FullDataSet:
             order by {scaling_parameter},
                     time_per_time -- use 'time_per_time' as criterion for best performance (for the purpose of plotting)
             ;
-        """.format(
-            columns=", ".join(scaling_columns)
-        )
+        """.format(columns=", ".join(scaling_columns))
 
         # ---------------------------------------------------------------------------------------------------
         # Query to retrieve and compute the average residual evolution for the selected problem configurations

@@ -42,6 +42,7 @@ class BackwardEuler(Integrator):
 
         return numpy.reshape(newQ, Q.shape)
 
+
 REGISTRY = {
     "backward_euler": lambda cfg, rhs, prec, dev: BackwardEuler(cfg, rhs.full, preconditioner=prec, device=dev),
 }

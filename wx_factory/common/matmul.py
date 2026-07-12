@@ -10,7 +10,6 @@ from typing import Optional
 
 from numpy.typing import NDArray
 
-
 # Create a dedicated logger for nvmath that only shows warnings and above
 # This is because there is something else in this program that is setting the
 # root logger level on rank 0 to INFO, causing a lot of verbose output otherwise.
@@ -53,6 +52,7 @@ class MatmulManager:
         if self._nvmath_available is None:
             try:
                 from nvmath.linalg import Matmul
+
                 self._nvmath_available = True
             except ImportError:
                 self._nvmath_available = False
@@ -140,7 +140,9 @@ class MatmulManager:
 
         if key not in self._cache:
             if out is not None:
-                mm = Matmul(a, b, c=out, alpha=alpha, beta=beta, options=MatmulOptions(logger=_nvmath_logger, inplace=True))
+                mm = Matmul(
+                    a, b, c=out, alpha=alpha, beta=beta, options=MatmulOptions(logger=_nvmath_logger, inplace=True)
+                )
             else:
                 mm = Matmul(a, b, alpha=alpha, options=MatmulOptions(logger=_nvmath_logger))
             mm.plan()

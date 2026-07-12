@@ -1,5 +1,5 @@
 """
- This is the main file for running 2D Burger's equation. 
+This is the main file for running 2D Burger's equation.
 
 """
 

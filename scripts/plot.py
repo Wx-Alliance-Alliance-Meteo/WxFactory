@@ -221,7 +221,7 @@ def plot_res(dataFolder, plotFolder):
     for f in files:
         m = patern.match(f)
         if m is not None:
-            (case, resolution, order) = m.group(1, 2, 3)
+            case, resolution, order = m.group(1, 2, 3)
 
             if case == "case2":
                 large_dt = False

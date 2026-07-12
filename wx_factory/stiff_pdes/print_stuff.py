@@ -1,5 +1,5 @@
 """
-	function to print the final solution and stats to file
+function to print the final solution and stats to file
 
 """
 

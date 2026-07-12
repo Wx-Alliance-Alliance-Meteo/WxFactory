@@ -14,12 +14,14 @@ def dev_info(id):
         attr = dev.attributes
         if id == 0:
             try:
-                print(f"  Max block size: {attr['MaxBlockDimX']} x {attr['MaxBlockDimY']} x {attr['MaxBlockDimZ']} "
-                      f"(max total threads {attr['MaxThreadsPerBlock']})")
+                print(
+                    f"  Max block size: {attr['MaxBlockDimX']} x {attr['MaxBlockDimY']} x {attr['MaxBlockDimZ']} "
+                    f"(max total threads {attr['MaxThreadsPerBlock']})"
+                )
                 print(f"  Max grid size: {attr['MaxGridDimX']} x {attr['MaxGridDimY']} x {attr['MaxGridDimZ']}")
                 print(f"  Max blocks per SM: {attr['MaxBlocksPerMultiprocessor']}")
                 print(f"  Max threads per SM: {attr['MaxThreadsPerMultiProcessor']}")
-                num_sm = attr['MultiProcessorCount']
+                num_sm = attr["MultiProcessorCount"]
                 print(f"  Number of SMs: {num_sm} -> {num_sm * 128} cores (?)")
                 print(f"  Max registers per block: {attr['MaxRegistersPerBlock']}")
                 print(f"  Max shared mem per block: {attr['MaxSharedMemoryPerBlock'] / kb:.1f} kB")

@@ -10,7 +10,9 @@ from ..solvers import matvec_fun, pmex
 
 
 class PartRosExp2(Integrator):
-    def __init__(self, param: Configuration, rhs_full: Callable, rhs_imp: Callable, *, device=None, preconditioner=None):
+    def __init__(
+        self, param: Configuration, rhs_full: Callable, rhs_imp: Callable, *, device=None, preconditioner=None
+    ):
         super().__init__(param, device=device, preconditioner=preconditioner)
 
         self.rhs_full = rhs_full
@@ -58,7 +60,11 @@ class PartRosExp2(Integrator):
         b = (A(Q_flat) + (phiv + 0.5 * f_imp) * dt).flatten()
         Q_x0 = Q_flat.copy()
         Qnew, norm_r, norm_b, num_iter, flag, residuals = self._solve_linear(
-            A, b, x0=Q_x0, tol=self.tol, restart=self.gmres_restart,
+            A,
+            b,
+            x0=Q_x0,
+            tol=self.tol,
+            restart=self.gmres_restart,
         )
         time_imp = time() - tic
 
@@ -75,6 +81,9 @@ class PartRosExp2(Integrator):
 
         return numpy.reshape(Qnew, Q.shape)
 
+
 REGISTRY = {
-    "partrosexp2": lambda cfg, rhs, prec, dev: PartRosExp2(cfg, rhs.full, rhs.implicit, preconditioner=prec, device=dev),
+    "partrosexp2": lambda cfg, rhs, prec, dev: PartRosExp2(
+        cfg, rhs.full, rhs.implicit, preconditioner=prec, device=dev
+    ),
 }

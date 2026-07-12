@@ -40,6 +40,7 @@ class CrankNicolson(Integrator):
 
         return numpy.reshape(newQ, Q.shape)
 
+
 REGISTRY = {
     "crank_nicolson": lambda cfg, rhs, prec, dev: CrankNicolson(cfg, rhs.full, preconditioner=prec, device=dev),
 }

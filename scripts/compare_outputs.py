@@ -4,7 +4,6 @@ import os
 import sys
 import argparse
 
-
 root_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..")
 src_dir = os.path.join(root_dir, "wx_factory")
 sys.path.append(root_dir)

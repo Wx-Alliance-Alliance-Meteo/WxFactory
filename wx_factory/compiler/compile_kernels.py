@@ -18,7 +18,6 @@ from setuptools import setup, Extension
 from ..common import main_project_dir
 from ..wx_mpi import SingleProcess, Conditional
 
-
 proc_id_re = re.compile(r"\b\d{4,10}")  # At least 4 digits, at the beginning of the word
 proc_vendor_re = re.compile(r"\b(intel|amd)\b")
 

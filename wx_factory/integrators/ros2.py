@@ -36,7 +36,12 @@ class Ros2(Integrator):
 
         t0 = time()
         Qnew, norm_r, norm_b, num_iter, flag, residuals = self._solve_linear(
-            self.A, self.b, x0=self.Q_flat, tol=self.tol, restart=self.gmres_restart, maxiter=maxiter,
+            self.A,
+            self.b,
+            x0=self.Q_flat,
+            tol=self.tol,
+            restart=self.gmres_restart,
+            maxiter=maxiter,
         )
         t1 = time()
 
@@ -52,6 +57,7 @@ class Ros2(Integrator):
         self.failure_flag = flag
 
         return xp.reshape(Qnew, Q.shape)
+
 
 REGISTRY = {
     "ros2": lambda cfg, rhs, prec, dev: Ros2(cfg, rhs.full, preconditioner=prec, device=dev),

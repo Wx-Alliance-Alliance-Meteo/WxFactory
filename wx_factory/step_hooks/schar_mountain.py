@@ -4,6 +4,7 @@ from ..geometry import CubedSphere3D, Metric3DTopo
 import math
 import numpy
 
+
 class ScharMountainHook(step_hook.StepHook):
     lambdam: float  # mountain longitude center point (radians)
     phim: float  # mountain latitude center point (radians)
@@ -72,8 +73,14 @@ class ScharMountainHook(step_hook.StepHook):
 
     def apply(self, ratio: float):
         # Update the geometry object with the new bottom topography
-        self.geom.apply_topography(self.zbot * ratio, self.zbot_itf_i * ratio, self.zbot_itf_j * ratio,
-                                    self.zbot_new * ratio, self.zbot_itf_i_new * ratio, self.zbot_itf_j_new * ratio)
+        self.geom.apply_topography(
+            self.zbot * ratio,
+            self.zbot_itf_i * ratio,
+            self.zbot_itf_j * ratio,
+            self.zbot_new * ratio,
+            self.zbot_itf_i_new * ratio,
+            self.zbot_itf_j_new * ratio,
+        )
 
         # And regenerate the metric to take this new topography into account
         self.metric.build_metric()
@@ -89,7 +96,8 @@ class ScharMountainHook(step_hook.StepHook):
         lat = latlon[1, 0, :, :]
         lon = latlon[0, 0, :, :]
         r = self.geom.earth_radius * self.xp.arccos(
-            math.sin(self.phim) * self.xp.sin(lat) + math.cos(self.phim) * self.xp.cos(lat) * self.xp.cos(lon - self.lambdam)
+            math.sin(self.phim) * self.xp.sin(lat)
+            + math.cos(self.phim) * self.xp.cos(lat) * self.xp.cos(lon - self.lambdam)
         )
         z = self.xp.zeros(lat.shape, dtype=lat.dtype)
         z[:, :] = self.h0 * self.xp.exp(-(r**2) / self.Dm**2) * self.xp.cos(self.xp.pi * r / self.Dxi) ** 2
@@ -99,7 +107,8 @@ class ScharMountainHook(step_hook.StepHook):
         lat = latlon[1]
         lon = latlon[0]
         r = self.geom.earth_radius * self.xp.arccos(
-            math.sin(self.phim) * self.xp.sin(lat) + math.cos(self.phim) * self.xp.cos(lat) * self.xp.cos(lon - self.lambdam)
+            math.sin(self.phim) * self.xp.sin(lat)
+            + math.cos(self.phim) * self.xp.cos(lat) * self.xp.cos(lon - self.lambdam)
         )
 
         return self.h0 * self.xp.exp(-(r**2) / self.Dm**2) * self.xp.cos(self.xp.pi * r / self.Dxi) ** 2

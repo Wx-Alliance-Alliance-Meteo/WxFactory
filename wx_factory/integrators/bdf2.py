@@ -33,8 +33,12 @@ class Bdf2(Integrator):
                 self.preconditioner.prepare(dt, Q, self.Qprev)
                 maxiter = 800
             newQ, num_iter, residuals = newton_krylov(
-                nonlin_fun, Q, f_tol=self.tol, preconditioner=self.preconditioner,
-                verbose=False, maxiter=maxiter,
+                nonlin_fun,
+                Q,
+                f_tol=self.tol,
+                preconditioner=self.preconditioner,
+                verbose=False,
+                maxiter=maxiter,
             )
         t1 = time()
 
@@ -43,6 +47,7 @@ class Bdf2(Integrator):
         self.Qprev = Q.copy()
 
         return numpy.reshape(newQ, Q.shape)
+
 
 REGISTRY = {
     "bdf2": lambda cfg, rhs, prec, dev: Bdf2(cfg, rhs.full, preconditioner=prec, device=dev),
