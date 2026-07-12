@@ -62,6 +62,24 @@ The RHS depends on a pair: the equation set and the geometry it runs on. These a
 3. Add `"my_equations"` to the `equations` option's `selectables` in `config/config-format.json`
    and regenerate the config type hints (see above).
 
+### Add a new grid (geometry)
+
+The geometry depends on a pair: the grid type and the equation set. These are registered in
+`wx_factory/geometry/registry.py`.
+
+1. Add your `Geometry` subclass.
+2. Register a factory for the `(grid_type, equations)` combination:
+   ```python
+   @register_geometry("my_grid", "euler")
+   def _build(ctx: GeometryContext) -> Geometry:
+       return MyGrid(ctx.num_elements_horizontal, ctx.num_solpts, ..., ctx.device)
+   ```
+   `ctx` (a `GeometryContext`) carries the config, device, MPI communicator, and the derived grid
+   sizes. If your grid needs a process topology (like the cubed sphere), create it in the factory;
+   `Simulation` retrieves it back from `geometry.process_topology`.
+3. Add `"my_grid"` to the `grid_type` option's `selectables` in `config/config-format.json` and
+   regenerate the config type hints.
+
 ### Add a new preconditioner
 
 Preconditioners are selected by the `preconditioner` config option and registered in

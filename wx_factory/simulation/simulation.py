@@ -8,7 +8,7 @@ import numpy
 
 from ..common import Configuration
 from ..device import Device, CpuDevice, CudaDevice, PytorchDevice
-from ..geometry import Cartesian2D, CubedSphere, CubedSphere3D, CubedSphere2D, DFROperators, Geometry
+from ..geometry import Cartesian2D, CubedSphere, CubedSphere3D, DFROperators, GeometryContext, resolve_geometry
 from ..init.init_state_vars import init_state_vars
 from ..integrators import Integrator, resolve as _resolve_integrator
 from ..output.output_manager import OutputManager
@@ -16,7 +16,6 @@ from ..output.output_cartesian import OutputCartesian
 from ..output.output_cubesphere_netcdf import OutputCubesphereNetcdf
 from ..output.output_cubesphere_fst import OutputCubesphereFst
 from ..output.input_manager import InputManager
-from ..process_topology import ProcessTopology
 from ..rhs.rhs_selector import RhsContext, resolve_rhs
 from ..precondition import PreconditionerContext, resolve_preconditioner
 from ..common.matmul import set_matmul_backend
@@ -106,8 +105,10 @@ class Simulation:
         # Set matmul backend from config
         set_matmul_backend(self.config.matmul_backend, self.device.xp)
 
-        self.process_topo = None
-        self.geometry = self._create_geometry()
+        self.geometry = resolve_geometry(GeometryContext.from_simulation(self))
+        # Cubed-sphere geometries carry a process topology; a Cartesian grid has none.
+        self.process_topo = getattr(self.geometry, "process_topology", None)
+        self._register_geometry_step_hooks()
         self.operators_real = DFROperators(self.geometry, self.config, self.device)
         self.operators_complex = DFROperators(self.geometry, self.config, self.device, self.device.xp.complex128)
         self.initial_state = init_state_vars(self.geometry, self.operators_real, self.config, self.step_hooks)
@@ -256,64 +257,10 @@ class Simulation:
                     )
                 print(f"allowed_pe_counts = {self.allowed_pe_counts}", flush=True)
 
-    def _create_geometry(self) -> Geometry:
-        """Create the appropriate geometry for the given problem"""
-
-        if self.config.grid_file != "":
-            self.process_topo = ProcessTopology(self.device, comm_in=self.comm)
-            return CubedSphere2D(
-                self.num_elements_horizontal,
-                self.num_solpts,
-                self.total_num_elements_horizontal,
-                self.lambda0,
-                self.phi0,
-                self.alpha0,
-                self.process_topo,
-            )
-
-        if self.config.grid_type == "cubed_sphere":
-            self.process_topo = ProcessTopology(self.device, comm_in=self.comm)
-            if self.config.equations == "shallow_water":
-                return CubedSphere2D(
-                    self.num_elements_horizontal,
-                    self.num_solpts,
-                    self.total_num_elements_horizontal,
-                    self.lambda0,
-                    self.phi0,
-                    self.alpha0,
-                    self.process_topo,
-                )
-            elif self.config.equations == "euler":
-                cube_sphere = CubedSphere3D(
-                    self.num_elements_horizontal,
-                    self.config.num_elements_vertical,
-                    self.num_solpts,
-                    self.total_num_elements_horizontal,
-                    self.lambda0,
-                    self.phi0,
-                    self.alpha0,
-                    self.config.ztop,
-                    self.process_topo,
-                    self.config,
-                )
-
-                if self.config.enable_schar_mountain:
-                    schar_mountain = ScharMountainHook(self.config, cube_sphere)
-                    self.step_hooks[ScharMountainHook] = schar_mountain
-                return cube_sphere
-
-        if self.config.grid_type == "cartesian2d":
-            return Cartesian2D(
-                (self.config.x0, self.config.x1),
-                (self.config.z0, self.config.z1),
-                self.num_elements_horizontal,
-                self.config.num_elements_vertical,
-                self.num_solpts,
-                self.total_num_elements_horizontal,
-                self.device,
-            )
-
-        raise ValueError(f"Invalid grid type/process_topo: {self.config.grid_type}, {self.process_topo}")
+    def _register_geometry_step_hooks(self) -> None:
+        """Register step hooks that depend on the geometry (before the initial state is built)."""
+        if self.config.enable_schar_mountain and isinstance(self.geometry, CubedSphere3D):
+            self.step_hooks[ScharMountainHook] = ScharMountainHook(self.config, self.geometry)
 
     def _create_output_manager(self) -> OutputManager:
         if isinstance(self.geometry, Cartesian2D):

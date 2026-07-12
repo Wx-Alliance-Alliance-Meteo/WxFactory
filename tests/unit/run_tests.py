@@ -16,6 +16,7 @@ from tests.unit.common.test_sort_fields import SortFieldsByDependencyTestCases
 from tests.unit.common.test_angle24 import Angle24TestCase
 from tests.unit.rhs.test_rhs_registry import RhsBundleTestCases, RhsRegistryTestCases
 from tests.unit.precondition.test_preconditioner_registry import PreconditionerRegistryTestCases
+from tests.unit.geometry.test_geometry_registry import GeometryRegistryTestCases
 from tests.unit.compiler.test_compilation import CompilationTestCases, CompilationGPUTestCases
 from tests.unit.output.test_state import StateTestCases
 from tests.unit.restart.test_restart import Euler2DRestartTestCase
@@ -92,6 +93,12 @@ def load_tests(test_name):
     add_test(suite, PreconditionerRegistryTestCases("test_resolve_dispatches_to_registered_factory"), test_re)
     add_test(suite, PreconditionerRegistryTestCases("test_duplicate_registration_raises"), test_re)
     add_test(suite, PreconditionerRegistryTestCases("test_base_prepare_is_a_noop"), test_re)
+
+    add_test(suite, GeometryRegistryTestCases("test_expected_combinations_are_registered"), test_re)
+    add_test(suite, GeometryRegistryTestCases("test_unregistered_combination_raises_helpful_error"), test_re)
+    add_test(suite, GeometryRegistryTestCases("test_resolve_dispatches_to_registered_factory"), test_re)
+    add_test(suite, GeometryRegistryTestCases("test_grid_file_forces_cubed_sphere_2d"), test_re)
+    add_test(suite, GeometryRegistryTestCases("test_duplicate_registration_raises"), test_re)
 
     return suite
 

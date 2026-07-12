@@ -8,9 +8,14 @@ from .metric3d import Metric3DTopo
 from .metric2d import Metric2D
 from .quadrature import gauss_legendre
 from .winds import contra2wind_2d, contra2wind_3d, wind2contra_2d, wind2contra_3d
+from .registry import GEOMETRY_REGISTRY, GeometryContext, register_geometry, resolve_geometry
 
 __all__ = [
     "Cartesian2D",
+    "GEOMETRY_REGISTRY",
+    "GeometryContext",
+    "register_geometry",
+    "resolve_geometry",
     "contra2wind_2d",
     "contra2wind_3d",
     "CubedSphere",
