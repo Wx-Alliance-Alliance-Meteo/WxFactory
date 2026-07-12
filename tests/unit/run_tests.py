@@ -12,6 +12,7 @@ sys.path.append(main_project_dir)
 
 from tests.unit.common.test_configuration import ConfigurationTestCases
 from tests.unit.common.test_config_hints import ConfigHintsTestCases
+from tests.unit.common.test_sort_fields import SortFieldsByDependencyTestCases
 from tests.unit.common.test_angle24 import Angle24TestCase
 from tests.unit.compiler.test_compilation import CompilationTestCases, CompilationGPUTestCases
 from tests.unit.output.test_state import StateTestCases
@@ -62,6 +63,14 @@ def load_tests(test_name):
     add_test(suite, ConfigurationTestCases("test_load_configuration_with_expression"), test_re)
 
     add_test(suite, ConfigHintsTestCases("test_type_hints_are_up_to_date"), test_re)
+
+    add_test(suite, SortFieldsByDependencyTestCases("test_no_dependencies_preserves_order"), test_re)
+    add_test(suite, SortFieldsByDependencyTestCases("test_dependent_field_placed_after_target"), test_re)
+    add_test(suite, SortFieldsByDependencyTestCases("test_multi_level_chain_is_ordered"), test_re)
+    add_test(suite, SortFieldsByDependencyTestCases("test_no_field_is_emitted_more_than_once"), test_re)
+    add_test(suite, SortFieldsByDependencyTestCases("test_unresolvable_dependency_is_kept_not_dropped"), test_re)
+    add_test(suite, SortFieldsByDependencyTestCases("test_dependency_cycle_does_not_hang_and_keeps_fields"), test_re)
+    add_test(suite, SortFieldsByDependencyTestCases("test_duplicate_name_raises"), test_re)
 
     add_test(suite, Angle24TestCase("test_cyclic"), test_re)
     add_test(suite, Angle24TestCase("test_rounding"), test_re)
