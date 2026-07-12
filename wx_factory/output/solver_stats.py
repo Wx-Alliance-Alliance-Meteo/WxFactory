@@ -141,8 +141,7 @@ class SolverStatsOutput:
             """
             self.db_cursor.execute(create_string)
 
-            self.db_cursor.execute(
-                """
+            self.db_cursor.execute("""
                 CREATE TABLE results_data (
                     run_id    int,
                     step_id   int,
@@ -151,11 +150,9 @@ class SolverStatsOutput:
                     time      float(23),
                     work      float(23)
                 );
-                """
-            )
+                """)
 
-            self.db_cursor.execute(
-                """
+            self.db_cursor.execute("""
                 CREATE TABLE rhs_timing (
                     run_id         int,
                     step_id        int,
@@ -170,8 +167,7 @@ class SolverStatsOutput:
                     forcing        float(24),
                     total          float(23)
                 );
-                """
-            )
+                """)
 
             self.db_connection.commit()
         else:  # The table exists, check its columns
@@ -284,8 +280,6 @@ class SolverStatsOutput:
         )
 
         if rhs_times is not None:
-            # print(f"rhs times = \n{rhs_times}")
-            # print(f"rhs_times[0] = \n{rhs_times[0]}")
             num_entries = 9
             if len(rhs_times[0]) == num_entries:
                 self.db_cursor.executemany(

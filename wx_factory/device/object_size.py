@@ -18,7 +18,6 @@ def readable_size(num_bytes: float) -> str:
         return result, units[-1]
 
     num, u = get_num()
-    # print(f"{num_bytes} -> {num}, {u}")
 
     return f"{num:6.1f} {u}"
 

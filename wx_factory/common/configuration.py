@@ -5,7 +5,6 @@ from .eval_expr import eval_expr
 
 from .configuration_schema import ConfigurationSchema, ConfigurationField, OptionType, needs_evaluation
 
-
 __all__ = ["Configuration"]
 
 
@@ -44,7 +43,6 @@ class Configuration:
     def _get_option(self, field: ConfigurationField) -> OptionType:
         value: Optional[OptionType] = None
         if field.dependency is not None:
-            # print(f"field '{field.name}' has dependency {field.dependency}")
             if not hasattr(self, field.dependency[0]):
                 return None
 
@@ -89,7 +87,6 @@ class Configuration:
                     i += 1
                 else:
                     long_options[option] = val
-                    # i = 1
             if i % 2 == 1:
                 out += " |"
 

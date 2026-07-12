@@ -29,8 +29,6 @@ class FV_preconditioner:
     def __init__(self, param, sample_field, ptopo, origin_field="dg", origin_order=None, prefix=""):
         self.max_iter = 1000
 
-        # print(f'Params:\n{param}')
-
         self.origin_order = param.num_solpts if origin_order is None else origin_order
         self.dest_order = select_order(self.origin_order, origin_field)
 
@@ -84,9 +82,6 @@ class FV_preconditioner:
 
         print(f"Origin field shape: {self.origin_field_shape}, dest field shape: {self.dest_field_shape}")
 
-        # if self.dest_order > 3:
-        #    self.preconditioner = FV_preconditioner(self.param, dest_field, ptopo, origin_field='fv', origin_order=self.dest_order, prefix=self.prefix+'  ')
-
     def restrict(self, vec):
         return self.interpolate(vec.reshape(self.origin_field_shape))
 
@@ -95,19 +90,9 @@ class FV_preconditioner:
 
     def apply(self, vec):
 
-        # return vec
         t0 = time()
 
         input_vec = numpy.ravel(self.restrict(vec))
-
-        # print(f'input_vec.shape = {input_vec.shape}')
-
-        # output_vec = numpy.zeros_like(input_vec)
-        # level = self.mg_params.max_level
-        # num_iter = 0
-        # for i in range(5):
-        #    output_vec = mg(input_vec, output_vec, level, self.mg_params, dt=500)
-        #    num_iter += 1
 
         output_vec, num_iter, mg_time = mg_solve(input_vec, self.dt, self.mg_params, max_num_it=1)
         # output_vec, _, num_iter, _ = fgmres(self.dest_matrix, input_vec, preconditioner=self.preconditioner, tol=1e-1, maxiter=self.max_iter)

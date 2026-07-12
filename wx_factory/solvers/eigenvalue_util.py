@@ -52,7 +52,6 @@ def gen_matrix(
     size = MPI.COMM_WORLD.Get_size()
 
     if compressed is None:
-        # compressed = n_loc * size > 150000
         compressed = True
 
     if rank == 0:

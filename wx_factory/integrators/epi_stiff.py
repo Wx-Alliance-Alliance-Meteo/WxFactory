@@ -36,7 +36,6 @@ class EpiStiff(Integrator):
         if init_method or self.n_prev == 0:
             self.init_method = init_method
         else:
-            # self.init_method = Epirk4s3a(rhs, tol, krylov_size)
             self.init_method = Epi(param, 2, rhs, device=self.device)
 
         self.init_substeps = init_substeps
@@ -110,7 +109,15 @@ class EpiStiff(Integrator):
 
         else:
             phiv, stats = kiops(
-                [1], matvec_handle, vec, tol=self.tol, m_init=self.krylov_size, mmin=16, mmax=64, task1=False, device=self.device
+                [1],
+                matvec_handle,
+                vec,
+                tol=self.tol,
+                m_init=self.krylov_size,
+                mmin=16,
+                mmax=64,
+                task1=False,
+                device=self.device,
             )
 
             self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)

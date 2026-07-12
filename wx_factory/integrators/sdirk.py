@@ -23,17 +23,12 @@ class SDIRKLstable(Integrator):
     def SDIRKLstable_system2(self, Q2, Q, Q1, dt, rhs):
         return (Q2 - Q) / dt - (1.0 - 2.0 * self.sdirkparam) * rhs(Q1) - self.sdirkparam * rhs(Q2)
 
-    # def SDIRKLstable_system(self, Q_plus, Q, Q1, Q2, dt, rhs):
-    #    return (Q_plus - Q)/dt - 0.5*rhs(Q1) - 0.5*rhs(Q2)
-
     def __step__(self, Q, dt):
         def SDIRK_fun1(Q1):
             return self.SDIRKLstable_system1(Q1, Q, dt, self.rhs)
 
         def SDIRK_fun2(Q2):
             return self.SDIRKLstable_system2(Q2, Q, Q1, dt, self.rhs)
-
-        #   def SDIRK_fun(Q_plus): return self.SDIRKLstable_system(Q_plus, Q, Q1, Q2, dt, self.rhs)
 
         maxiter = None
         if self.preconditioner is not None:

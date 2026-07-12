@@ -72,7 +72,6 @@ def kiops(
 
     tau_out = device.array(tau_out)
     u = device.array(u)
-    # tol     = device.array(tol)     # That's not an array...
 
     ppo, n = u.shape
     p = ppo - 1

@@ -162,7 +162,6 @@ def sw_from_file(geom: CubedSphere2D, operators: DFROperators, config: Configura
     # h_surface[...] = 0.0
     # h_surface[...] *= 0.0
 
-    # comm = geom.device.comm
     # plot_array(geom.to_single_block(h_surface), f"h_surf.png", comm=comm, background_value=h_surface.min() - 100.0)
     # plot_array(geom.to_single_block(h), f"h.png", comm=comm, background_value=h.min())
     # plot_array(geom.to_single_block(u), f"u.png", comm=comm, background_value=u.min())
@@ -295,7 +294,6 @@ def williamson_case5(geom: CubedSphere2D, metric, mtrx: DFROperators, param):
     h_star = (
         gravity * h0 - (geom.earth_radius * geom.rotation_speed * u0 + 0.5 * u0**2) * (geom.sinlat) ** 2
     ) / gravity
-    # h_star = geom.to_single_block(h_star)
 
     # Isolated mountain
     hs0 = 2000.0

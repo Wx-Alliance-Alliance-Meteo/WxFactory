@@ -238,7 +238,6 @@ class CudaDevice(Device):
         debug = True
 
         if debug:
-            # self.synchronize()
             if self.debug_stack > 0:
                 self.cupy.cuda.nvtx.RangePop()
                 self.debug_stack -= 1
@@ -282,6 +281,7 @@ class CudaDevice(Device):
             CudaDevice._default = CudaDevice(MPI.COMM_WORLD)
         return CudaDevice._default
 
+
 class PytorchDevice(Device):
     _default: Self = None
 
@@ -308,7 +308,6 @@ class PytorchDevice(Device):
 
         super().__init__(comm, TorchXp(), scipy, pde, operators)
 
-    
     def synchronize(self, **kwargs):
         """Don't do anything. This is to allow writing generic code when device is not the same as the host."""
 
@@ -334,7 +333,6 @@ class PytorchDevice(Device):
 
     def __mem_usage__(self, tag):
         pass
-
 
     @staticmethod
     def get_default() -> Self:

@@ -290,7 +290,6 @@ def sort_fields_by_dependency(fields: list[ConfigurationField]) -> list[Configur
         previous_count = current_count
         for f in remainder:
             if f.dependency[0] not in fields_dict:
-                # print(f"Field {f.name} depends on a field that does not exist {f.dependency[0]}")
                 new_remainder.append(f)
             else:
                 fields_dict[f.name] = f
@@ -301,10 +300,7 @@ def sort_fields_by_dependency(fields: list[ConfigurationField]) -> list[Configur
         current_count = len(remainder)
         num_passes += 1
 
-    # print(f"sorted in {num_passes} passes")
-
     return sorted_fields
-    # return [f for _, f in fields_dict.items()]
 
 
 class ConfigurationSchema:

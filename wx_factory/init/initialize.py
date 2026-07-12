@@ -255,7 +255,6 @@ def initialize_sw(geom: CubedSphere2D, metric: Metric2D, mtrx: DFROperators, par
     if param.case_number in [-1, -2, 5, 10]:
         topo = Topo(hsurf, dzdx1, dzdx2, hsurf_itf_i, hsurf_itf_j)
 
-    # comm = geom.device.comm
     # plot_array(geom.to_single_block(hsurf), f"h_surf.png", comm=comm, background_value=hsurf.min() - 100.0)
     # plot_array(geom.to_single_block(Q[0]), f"h.png", comm=comm, background_value=Q[0].min())
     # plot_array(geom.to_single_block(Q[1]), f"u.png", comm=comm, background_value=Q[1].min())

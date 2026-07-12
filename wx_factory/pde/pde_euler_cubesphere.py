@@ -472,8 +472,6 @@ class PDEEulerCubesphere(PDE):
         self.compute_forcings_inner(q, rho, u1, u2, w, pressure, metric, forcing)
 
         # if MPI.COMM_WORLD.rank == 0:
-        #     print(f"filter k = \n{ops.highfilter_k}")
-        # raise ValueError
 
         # Gravity effect, in vertical direction
         forcing[idx_rho_w] += (

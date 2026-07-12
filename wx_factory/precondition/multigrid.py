@@ -115,7 +115,6 @@ class MultigridLevel:
         operators = DFROperators(self.geometry, p)
 
         field, topo, self.metric = init_state_vars(self.geometry, operators, self.param)
-        # self.rhs = RhsBundle(self.geometry, operators, self.metric, topo, ptopo, self.param, field.shape, device)
 
         rhs_class = get_rhs("dfr")
         self.rhs = rhs_class("euler-cartesian", self.geometry, operators, self.metric, topo, ptopo, self.param, device)
@@ -171,7 +170,6 @@ class MultigridLevel:
 
         if self.param.mg_smoother in ["erk1", "erk3", "ark3"]:
             cfl = self.param.pseudo_cfl
-            # factor = 1.0 / (self.ndim * (2 * self.param.num_solpts + 1))
             factor = 1.0 / (2 * (2 * self.param.num_solpts + 1))
 
             min_geo = min(self.geometry.Δx1, min(self.geometry.Δx2, self.geometry.Δx3))
@@ -206,33 +204,8 @@ class MultigridLevel:
             for _ in range(field.ndim - 1):
                 tile_shape += (1,)
             speed_max = numpy.ravel(numpy.tile(speed_max, tile_shape))
-            # speed_max = numpy.amax(speed_max)
 
-            # self.pseudo_dt = numpy.amin(delta_min * factor / speed_max) * cfl / dt
             self.pseudo_dt = (delta_min * factor / speed_max) * cfl / dt
-
-            # if self.verbose > 1:
-            #    sp_z = numpy.mean(speed_z)
-            #    so_z = numpy.mean(sound_z)
-            #    sp_z_max = numpy.amax(speed_z)
-            #    so_z_max = numpy.amax(sound_z)
-            #    min_dt = numpy.amin(self.pseudo_dt)
-            #    max_dt = numpy.amax(self.pseudo_dt)
-            #    avg_dt = numpy.mean(self.pseudo_dt)
-            #    print(
-            #          # f'factor {abs(1.- self.geometry.solutionPoints[-1])},'
-            #          f' h_33 {numpy.mean(numpy.sqrt(self.metric.H_contra_33)):.4f}'
-            #          f', min {min_geo:.3f}'
-            #          f', delta {delta_min:.3f}'
-            #          f', pseudo_dt = {avg_dt:.2e} ({min_dt:.2e} - {max_dt:.2e})'
-            #          f', speed max = {numpy.amax(speed_max):.2e} (avg {numpy.mean(speed_max):.2e})'
-            #          f', sound_speed = {numpy.mean(sound_speed):.2e} ({numpy.max(sound_speed):.2e})'
-            #          f', speed_z / sound_z = {sp_z / so_z :.3f} ({sp_z_max / so_z_max :.3f})')
-            #    sys.stdout.flush()
-            #    # raise ValueError
-
-            # if self.verbose > 1:
-            #    print(f'pseudo_dt = {self.pseudo_dt}')
 
             if self.param.mg_smoother == "erk1":
                 self.pre_smoothe = RK1Smoother(self.pseudo_dt)
@@ -253,9 +226,6 @@ class MultigridLevel:
         elif self.param.time_integrator == "crank_nicolson":
             cn_fun = CrankNicolsonFunFactory(field, dt, self.rhs.full)
 
-            # self.cn_fun = lambda Q_plus: (Q_plus - self.fv_field) / dt - 0.5 * ( self.fv_rhs_fun(Q_plus) +
-            #                              self.fv_rhs_fun(self.fv_field) )
-            # self.cn_fun = cn_fun
             self.jacobian = KrylovJacobian(
                 numpy.ravel(field),
                 numpy.ravel(cn_fun(field)),
@@ -340,9 +310,6 @@ class Multigrid(MatvecOp):
             self.orders = [self.max_num_fv_elems // (2**i) for i in range(self.max_num_levels + 1)]
             if fv_only:
                 self.orders.insert(0, param.initial_num_solpts)
-            # if self.extra_fv_step:
-            #    print(f'There is an extra FV step, from order {param.initial_num_solpts} to {self.orders[0]}')
-            #    self.orders = [param.initial_num_solpts] + self.orders
             self.elem_counts_hori = [
                 param.num_elements_horizontal * order // param.initial_num_solpts for order in self.orders
             ]
@@ -450,14 +417,10 @@ class Multigrid(MatvecOp):
         Compute the matrix-vector operator for every grid level. Also compute the pseudo time step size for each level.
         """
 
-        # if MPI.COMM_WORLD.rank == 0: print(f'original field: \n{field[0]}')
         next_field = self.initial_interpolate(field)
-        # if MPI.COMM_WORLD.rank == 0: print(f'FV field: \n{next_field[0]}')
         next_prev_field = self.initial_interpolate(prev_field) if prev_field is not None else None
         for i_level in range(self.max_num_levels):
             next_field, next_prev_field = self.levels[i_level].prepare(dt, next_field, next_prev_field)
-            # if MPI.COMM_WORLD.rank == 0: print(f'FV field {i_level}: \n{next_field[0]}')
-        # raise ValueError
 
     def __call__(self, vec: numpy.ndarray, x0: Optional[numpy.ndarray] = None, verbose: Optional[int] = None):
         if verbose is None:
@@ -538,8 +501,6 @@ class Multigrid(MatvecOp):
         if x is None:
             x = numpy.zeros_like(b)
 
-        # level_work += lvl_param.smoother_work_unit * lvl_param.num_pre_smoothe * lvl_param.work_ratio
-
         corr_res = sm_res
         if level < num_levels - 1:
 
@@ -551,7 +512,6 @@ class Multigrid(MatvecOp):
                 correction = self.iterate(
                     residual, correction, level + 1, num_levels=num_levels, gamma=gamma, verbose=verbose
                 )
-                # level_work += work
 
             before_res = 0.0
             if verbose:
@@ -579,7 +539,6 @@ class Multigrid(MatvecOp):
                     f"..Solved res:           {corr_res:.3e} (rel {rel:7.3f}) in {num_iter} iterations"
                     f" and {t1 - t0:.2f}s"
                 )
-            # level_work += num_iter * lvl_param.work_ratio
 
         # Post smoothing
         for i in range(lvl_param.num_post_smoothe):
@@ -587,8 +546,6 @@ class Multigrid(MatvecOp):
             if verbose:
                 sm_res, rel = self.compare_res(A, b, x, corr_res)
                 print(f"..Postsmooth {level:2d}.{i+1:02d} res: {sm_res:.3e} (rel {rel:7.3f})")
-
-        # level_work += lvl_param.num_post_smoothe * lvl_param.smoother_work_unit * lvl_param.work_ratio
 
         if verbose:
             final_res, rel = self.compare_res(A, b, x, initial_res)
@@ -654,7 +611,6 @@ class Multigrid(MatvecOp):
         A = self.levels[level].matrix_operator
         num_it = 0
         for it in range(max_num_it):
-            # print(f'Calling iterate, b = \n{b.reshape(self.levels[level].shape)[:5]}')
 
             x, work = self.iterate(b, x, level, coarsest_level=coarsest_level, gamma=gamma, verbose=verbose)
             first_zero = False
@@ -666,7 +622,6 @@ class Multigrid(MatvecOp):
                 residual = b - A(x)
                 total_work += 1.0
                 norm_r = global_norm(residual)
-                # print(f'norm_r/b = {norm_r/norm_b:.2e}')
                 residuals.append((norm_r / norm_b, time() - t_start, total_work))
                 if norm_r < tol_relative:
                     return x, norm_r / norm_b, num_it, 0, residuals
@@ -688,7 +643,6 @@ class CrankNicolsonFunFactory:
         self.rhs_handle = rhs_handle
 
     def __call__(self, Q_plus):
-        # print(f'In CN_fun, input shape {Q_plus.shape}, supposed field shape {self.Q.shape}')
         input_vec = Q_plus.reshape(self.Q.shape)
         q_plus_rhs = self.rhs_handle(input_vec)
         q_rhs = self.rhs_handle(self.Q)
@@ -706,6 +660,5 @@ class Bdf2FunFactory:
     def __call__(self, Q_plus):
         input_vec = Q_plus.reshape(self.Q.shape)
         q_plus_rhs = self.rhs_handle(input_vec)
-        # q_rhs = self.fv_rhs_fun(self.fv_field)
         result = (input_vec - 4.0 / 3.0 * self.Q + 1.0 / 3.0 * self.Q_prev) / self.dt - 2.0 / 3.0 * q_plus_rhs
         return numpy.ravel(result)

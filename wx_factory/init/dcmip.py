@@ -338,7 +338,6 @@ def dcmip_advection_hadley(geom, metric, mtrx, param):
 def dcmip_mountain(geom: CubedSphere3D, metric, mtrx, param):
 
     lon_m = 3.0 * numpy.pi / 2.0
-    # lon_m = 0.0
     lat_m = 0.0
     radius_m = 3.0 * numpy.pi / 4.0 * 0.5
     height_max = 2000.0
@@ -394,31 +393,6 @@ def dcmip_mountain(geom: CubedSphere3D, metric, mtrx, param):
     return h_surf, h_surf_itf_i, h_surf_itf_j, dhdx1, dhdx2
 
 
-# def dcmip_advection_orography(geom, metric, mtrx, param):
-#   tau     = 12.0 * 86400.0             # period of motion 12 days (s)
-#   u0      = 2.0*math.pi*a_ref/tau      # Velocity Magnitude (m/s)
-#   T0      = 300.0                      # temperature (K)
-#   H       = Rd * T0 / grav             # scale height (m)
-#   alpha   = math.pi/6.0                # rotation angle (radians), 30 degrees
-#   lambdam = 3.0*math.pi/2.0            # mountain longitude center point (radians)
-#   phim    = 0.0                        # mountain latitude center point (radians)
-#   h0      = 2000.0                     # peak height of the mountain range (m)
-#   Rm      = 3.0*math.pi/4.0            # mountain radius (radians)
-#   zetam   = math.pi/16.0               # mountain oscillation half-width (radians)
-#   lambdap = math.pi/2.0                # cloud-like tracer longitude center point (radians)
-#   phip    = 0.0                        # cloud-like tracer latitude center point (radians)
-#   Rp      = mathpi/4.0                 # cloud-like tracer radius (radians)
-#   zp1     = 3050.0                     # midpoint of first (lowermost) tracer (m)
-#   zp2     = 5050.0                     # midpoint of second tracer (m)
-#   zp3     = 8200.0                     # midpoint of third (topmost) tracer (m)
-#   dzp1    = 1000.0                     # thickness of first (lowermost) tracer (m)
-#   dzp2    = 1000.0                     # thickness of second tracer (m)
-#   dzp3    = 400.0                      # thickness of third (topmost) tracer (m)
-#   ztop    = 12000.0                     # model top (m)
-#
-#   return rho, u1_contra, u2_contra, w, theta, q1
-
-
 # ==========================================================================================
 # TEST CASE 2X - IMPACT OF OROGRAPHY ON A NON-ROTATING PLANET
 # ==========================================================================================
@@ -459,7 +433,6 @@ def dcmip_steady_state_mountain(geom: CubedSphere3D, metric, mtrx, param):
     exponent = 0.0
     if gamma != 0:
         exponent = gravity / (Rd * gamma)
-        # exponent_rev = 1.0 / exponent # Unused
 
     # -----------------------------------------------------------------------
     #    Set topography
@@ -568,8 +541,6 @@ def dcmip_schar_waves(geom: CubedSphere3D, metric, mtrx: DFROperators, param: Co
 
     ## Coordinate vectors in 3D
 
-    # lat = geom.coordVec_latlon[1, :, :, :]  # Latitude as 3D field
-    # z_3d = geom.coordVec_latlon[2, :, :, :]  # Retrieve all z-levels
     lat = geom.polar[1, ...]  # Latitude as 3D field
     z_3d = geom.polar[2, ...]  # Retrieve all z-levels
 
@@ -819,7 +790,6 @@ def dcmip_gravity_wave(geom: CubedSphere3D, metric: Metric3DTopo, mtrx: DFROpera
     s = (d**2) / (d**2 + r**2)
 
     theta_pert = delta_theta * s * xp.sin(2.0 * math.pi * geom.height_new / Lz)
-    #   theta_pert = 0. # for debuging
 
     theta = theta_base + theta_pert
 
@@ -864,13 +834,6 @@ def acoustic_wave(geom: CubedSphere3D, metric: Metric3DTopo):
 
     w = 0.0
 
-    # ## Set a trivial topography
-    # zbot = numpy.zeros(geom.coordVec_latlon.shape[2:])
-    # zbot_itf_i = numpy.zeros(geom.coordVec_latlon_itf_i.shape[2:])
-    # zbot_itf_j = numpy.zeros(geom.coordVec_latlon_itf_j.shape[2:])
-    # # Update the geometry object with the new bottom topography
-    # geom.apply_topography(zbot, zbot_itf_i, zbot_itf_j)
-
     # And regenerate the metric to take this new topography into account
     metric.build_metric()
 
@@ -891,11 +854,6 @@ def acoustic_wave(geom: CubedSphere3D, metric: Metric3DTopo):
     g = numpy.sin((eta_v * math.pi * r) / ztop)
     p_perturb = f * g
     pressure = p_mean + p_perturb
-    # pdb.set_trace()
-
-    # Full_u_p = MPI.COMM_WORLD.gather(p_mean, root=0)
-    # if MPI.COMM_WORLD.rank == 0:
-    #     numpy.save("p_mean2.npy", Full_u_p)
 
     # -----------------------------------------------------------------------
     #    RHO (density)

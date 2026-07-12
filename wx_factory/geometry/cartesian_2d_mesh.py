@@ -56,7 +56,6 @@ class Cartesian2D(Geometry):
         idx_elem = 0
         for ek in range(num_elements_z):
             for ei in range(num_elements_x):
-                #            idx_elem = ei + num_elements_z * ek
                 start_i = ei * num_solpts
                 end_i = (ei + 1) * num_solpts
                 start_k = ek * num_solpts

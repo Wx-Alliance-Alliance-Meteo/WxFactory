@@ -10,7 +10,7 @@ from ..process_topology import ProcessTopology
 
 from .rhs_sw import RhsShallowWater
 from .rhs_advection2d import RhsAdvection2d
-from .rhs_dfr import RHSDirecFluxReconstruction, RHSDirecFluxReconstruction_mpi, RHSDirecFluxReconstruction_mpi_v2
+from .rhs_dfr import RHSDirecFluxReconstruction, RHSDirecFluxReconstruction_mpi_v2
 
 
 class RhsBundle:
@@ -45,25 +45,6 @@ class RhsBundle:
             self.full = RHSDirecFluxReconstruction_mpi_v2(
                 pde, geom, operators_real, operators_complex, metric, topo, ptopo, param, fields_shape, debug=debug
             )
-
-            # rhs_functions = {'dg': rhs_euler,
-            #                  'fv': rhs_euler}
-
-            # self.full = generate_rhs(rhs_functions[param.discretization],
-            #                          geom, operators_real, metric, ptopo, param.num_solpts, param.num_elements_horizontal,
-            #                          param.num_elements_vertical, param.case_number, device=device)
-            # self.full.extra = RhsEuler(
-            #     fields_shape,
-            #     geom,
-            #     operators_real,
-            #     metric,
-            #     ptopo,
-            #     param.num_solpts,
-            #     param.num_elements_horizontal,
-            #     param.num_elements_vertical,
-            #     param.case_number,
-            #     device=geom.device,
-            # )
 
         elif param.equations == "shallow_water" and isinstance(geom, CubedSphere2D):
             # Check if this is an advection-only test case

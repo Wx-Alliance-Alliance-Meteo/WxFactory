@@ -234,8 +234,6 @@ class KiopsSmoother(Smoother):
 
         phiv, stats = kiops([1], J, vec, tol=1e-6, m_init=10, mmin=10, mmax=64, task1=False)
 
-        #      print('norm phiv', global_norm(phiv.flatten()))
-        #      print(f'KIOPS converged at iteration {stats[2]} (using {stats[0]} internal substeps)'
         #               f' to a solution with local error {stats[4]:.2e}')
         result = phiv.flatten() * pseudo_dt
         if x is not None:
@@ -251,15 +249,10 @@ class RK1Smoother(Smoother):
         self.h = h
 
     def __smoothe__(self, A: _MatvecOp, b: numpy.ndarray, x: numpy.ndarray) -> numpy.ndarray:
-        # print(f'b:\n{b}')
-        # print(f'x:\n{x}')
         if x is None:
             x = self.h * b
         else:
             x += self.h * (b - A(x))
-
-        # print(f'A: \n{A}')
-        # print(f'x (after):\n{x}')
 
         return x
 
@@ -296,19 +289,13 @@ class ARKSmoother(Smoother):
         self.field = field
         self.dt = dt
         self.rhs = rhs
-        # self.rhs_implicit = rhs.implicit
-        # self.rhs_explicit = rhs.explicit
-        # self.rhs_imp_0 = rhs.implicit(field)
-        # self.rhs_exp_0 = rhs.explicit(field)
         self.rhs_conv_0 = self.rhs.convective(field)
         self.rhs_full_0 = self.rhs.full(field)
 
     def A_conv(self, x):
-        # return matvec_rat(x, self.dt, self.field, self.rhs_imp_0, self.rhs_implicit)
         return matvec_fun(x, self.dt, self.field, self.rhs_conv_0, self.rhs.convective) * (-self.dt / 2.0)
 
     def A_visc(self, x):
-        # return matvec_rat(x, self.dt, self.field, self.rhs_exp_0, self.rhs_explicit)
         return x - (self.dt / 2.0) * (
             matvec_fun(x, self.dt, self.field, self.rhs_full_0, self.rhs.full)
             - matvec_fun(x, self.dt, self.field, self.rhs_conv_0, self.rhs.convective)
@@ -323,7 +310,6 @@ class ARK3Smoother(ARKSmoother):
         alpha2 = 0.395
         alpha3 = 1.0
 
-        # beta1 = 1.0
         beta2 = 0.5
         beta3 = 0.5
 

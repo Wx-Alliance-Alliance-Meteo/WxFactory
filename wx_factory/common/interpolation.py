@@ -234,10 +234,8 @@ class Interpolator:
             self.velocity_ids = [idx_u1, idx_u2]
             self.velocity_interp = self.elem_interp.copy()
             if origin_type == "dg" and dest_type == "fv":
-                # velocity_interp *= xp.sqrt(origin_order)
                 self.velocity_interp *= origin_order ** (1.0 / ndim)
             elif dest_order < origin_order:
-                # velocity_interp *= xp.sqrt(dest_order / origin_order)
                 self.velocity_interp *= (dest_order / origin_order) ** (1.0 / ndim)
 
             if dest_order == origin_order:
@@ -245,7 +243,6 @@ class Interpolator:
             else:
                 self.velocity_reverse_interp = xp.linalg.pinv(self.velocity_interp)
 
-        # print(f'interpolator: origin type/order: {origin_type}/{origin_order}, dest type/order: {dest_type}/{dest_order}')
         if verbose:
             print(f"elem_interp:\n{self.elem_interp}")
             print(f"reverse:\n{self.reverse_interp}")
@@ -272,10 +269,6 @@ class Interpolator:
             result = xp.empty_like(fields, shape=(num_fields, new_size_vert, new_size_horiz, new_size_horiz))
         else:
             raise ValueError(f"We cannot deal with ndim = {self.ndim}")
-
-        # o_type = self.origin_type if not reverse else self.dest_type
-        # d_type = self.dest_type   if not reverse else self.origin_type
-        # print(f'ndim: {self.ndim}, shape: {o_type} {fields.shape} -> {d_type} {result.shape} (interp shape: {base_interp.T.shape})')
 
         # Perform the interpolation for each field
         if reverse:

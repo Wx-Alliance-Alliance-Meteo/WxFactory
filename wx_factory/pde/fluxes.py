@@ -112,8 +112,6 @@ def rusanov_2d_fv(Q, ifaces_var, ifaces_pres, ifaces_flux, kfaces_var, kfaces_pr
     icomm_flux = ifaces_flux.copy()
     kcomm_flux = kfaces_flux.copy()
 
-    # print(f'Q shape = {Q.shape}')
-
     # Along x3
     eig_L = numpy.abs(kfaces_var[idx_2d_rho_w, :-1, 1, :] / kfaces_var[idx_2d_rho, :-1, 1, :]) + numpy.sqrt(
         heat_capacity_ratio * kfaces_pres[:-1, 1, :] / kfaces_var[idx_2d_rho, :-1, 1, :]
@@ -362,7 +360,6 @@ def rusanov_3d_hori_i_new(
             / variables_itf_i[idx_rho][west]
         )
 
-    # print(f"eig_d type = {eig_L.dtype}, u1_d type = {u1_L.dtype}, var itf i type = {variables_itf_i.dtype}")
     eig = xp.maximum(eig_l, eig_r)
 
     # Advective part of the flux ...

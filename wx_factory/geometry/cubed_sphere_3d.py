@@ -156,12 +156,6 @@ class CubedSphere3D(CubedSphere):
         maxComp = max(self.extension)
         delta_comp = maxComp - minComp
 
-        # Define the coordinate values at the interfaces between elements
-        # interfaces_x1 = numpy.linspace(start = domain_x1[0], stop = domain_x1[1], num = num_elements_x1 + 1)
-        # interfaces_x2 = numpy.linspace(start = domain_x2[0], stop = domain_x2[1], num = num_elements_x2 + 1)
-        # interfaces_x3 = numpy.linspace(start = domain_x3[0], stop = domain_x3[1], num = num_elements_x3 + 1)
-        # interfaces_eta = numpy.linspace(start = domain_eta[0], stop = domain_eta[1], num = num_elements_x3 + 1)
-
         ni = num_elements_x1 * num_solpts
         nj = num_elements_x2 * num_solpts
         nk = num_elements_x3 * num_solpts
@@ -215,9 +209,6 @@ class CubedSphere3D(CubedSphere):
         self.floor_east_edge = numpy.s_[..., -1, num_solpts:]
         self.floor_south_edge = numpy.s_[..., 0, :, :num_solpts]
         self.floor_north_edge = numpy.s_[..., -1, :, num_solpts:]
-
-        # Assign a token zbot, potentially to be overridden later with supplied topography
-        # self.zbot = xp.zeros(self.grid_shape_2d)
 
         ## Coordinate vectors for the numeric / angular coordinate system
 
@@ -342,19 +333,6 @@ class CubedSphere3D(CubedSphere):
         self.radians_itf_k = self._to_new_itf_k(coordVec_num_itf_k)
 
         # Compute the parameters of the rotated grid
-
-        # if (lambda0 > 0.) or (lambda0 <= -math.pi / 2.):
-        #    print('lambda0 not within the acceptable range of ]-pi/2 , 0]. Stopping.')
-        #    exit(1)
-
-        # if (phi0 <= -math.pi/4.) or (phi0 > math.pi/4.):
-        #    print('phi0 not within the acceptable range of ]-pi/4 , pi/4]. Stopping.')
-        #    exit(1)
-
-        # if (alpha0 <= -math.pi/2.) or (alpha0 > 0.):
-        #    print('alpha0 not within the acceptable range of ]-pi/2 , 0]. Stopping.')
-        #    exit(1)
-
         c1 = math.cos(lambda0)
         c2 = math.cos(phi0)
         c3 = math.cos(alpha0)
@@ -443,7 +421,6 @@ class CubedSphere3D(CubedSphere):
         # will be redefined if this case involves topography mapping – x1/x2/η will remain the same,
         # as will the DG structures.
         self.apply_topography(None, None, None, None, None, None)
-        # self._build_physical_coordinates()
 
     def apply_topography(
         self,
@@ -559,8 +536,6 @@ class CubedSphere3D(CubedSphere):
 
         Y_block, X_block = xp.meshgrid(xp.tan(x2), xp.tan(x1), indexing="ij")
 
-        # X_new = self.to_new_floor(X_block)
-        # Y_new = self.to_new_floor(Y_block)
         X_new = self._to_new(xp.tile(X_block, (num_elements_x3 * self.num_solpts, 1, 1)))
         Y_new = self._to_new(xp.tile(Y_block, (num_elements_x3 * self.num_solpts, 1, 1)))
 
@@ -875,7 +850,6 @@ class CubedSphere3D(CubedSphere):
         if a.shape[-3:] != self.itf_k_shape_3d:
             raise ValueError(f"Unexpected array shape {a.shape}, expected (...,) {self.itf_k_shape_3d})")
 
-        # plane_shape = (self.num_elements_x3 + 2, self.num_elements_x2, self.num_elements_x1, (self.num_solpts**2) * 2)
         new = xp.zeros(a.shape[:-3] + self.itf_k_shape, dtype=a.dtype)
 
         tmp_shape1 = a.shape[:-3] + (
@@ -1019,23 +993,6 @@ class CubedSphere3D(CubedSphere):
         new[north] = tmp_array
 
         return new
-
-    # def _to_new_itf(self, a):
-    #    """Convert input array (interface) to new memory layout"""
-
-    #    expected_shape_1 = (self.num_elements_x2 * self.num_solpts, self.num_elements_x1 + 1)
-    #    expected_shape_2 = (self.num_elements_x2 + 1, self.num_elements_x1 * self.num_solpts)
-    #    expected_shapes = [expected_shape_1, expected_shape_2]
-
-    #    if a.ndim == 2 and a.shape in expected_shapes:
-    #       new_shape = self.itf_shape_2d
-    #       if a.shape == expected_shape_1:
-    #          tmp_shape = (self.num_elements_x2, self.num_solpts, self.num_elements_x1 + 1)
-    #          return a.reshape(tmp_shape).transpose
-
-    #       elif a.shape == expected_shape_2:
-    #          tmp_shape = (self.num_elements_x2 + 1, self.num_elements_x1, self.num_solpts)
-    #       else: raise ValueError
 
     def wind2contra_2d(self, u: float | NDArray, v: float | NDArray):
         """Convert wind fields from the spherical basis (zonal, meridional) to panel-appropriate contravariant winds,

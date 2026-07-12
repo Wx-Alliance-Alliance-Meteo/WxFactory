@@ -72,7 +72,6 @@ def pmex(
     first_accepted = True
 
     # We only allow m to vary between mmin and mmax
-    # mmin = 1
     m = max(mmin, min(m_init, mmax))
 
     # Preallocate matrix
@@ -108,7 +107,6 @@ def pmex(
     u_flip = nu * device.xp.flipud(u[1:, :])
 
     # Compute and initial starting approximation for the step size
-    # tau = min(pmex.suggested_step, tau_end)
 
     # follow same as kiops
     tau = tau_end
@@ -148,7 +146,6 @@ def pmex(
             # Normalize initial vector (this norm is nonzero)
             local_sum = V[0, 0:n] @ V[0, 0:n]
             global_sum_nrm = device.xp.empty_like(local_sum)
-            #print(local_sum.dtype, global_sum_nrm.dtype, flush=True)
             device.synchronize()
             comm.Allreduce([local_sum, MPI.DOUBLE], [global_sum_nrm, MPI.DOUBLE])
             beta = math.sqrt(global_sum_nrm + V[j, n : n + p] @ V[j, n : n + p])
@@ -189,9 +186,11 @@ def pmex(
 
             # 3c. part 2: the lower triangular solve
             # array because the xalg can, in some case, yield array with incompatible type to xp
-            sol = device.array(device.xalg.linalg.solve_triangular(
-                M[0:j, 0:j], rhs, unit_diagonal=True, check_finite=False, overwrite_b=True
-            ))
+            sol = device.array(
+                device.xalg.linalg.solve_triangular(
+                    M[0:j, 0:j], rhs, unit_diagonal=True, check_finite=False, overwrite_b=True
+                )
+            )
 
             # 4. Orthogonalize
             V[j, :] -= sol @ V[0:j, :]
@@ -204,11 +203,8 @@ def pmex(
                 device.synchronize()
                 default_device = CpuDevice.get_default()
                 sum_vec = device.to_host(global_vec[0:j, 1]).astype(default_device.xp.float128) ** 2
-                sum_sqrd = device.array(
-                    default_device.xp.sum(sum_vec).astype(default_device.xp.float64)
-                )
+                sum_sqrd = device.array(default_device.xp.sum(sum_vec).astype(default_device.xp.float64))
 
-            # sum_sqrd = sum(global_vec[0:j,1]**2)
             if global_vec[-1, 1] < sum_sqrd:
                 # use communication to compute norm estimate
                 local_sum = V[j, 0:n] @ V[j, 0:n]

@@ -36,7 +36,6 @@ class Factorization(Preconditioner):
         )
 
         matrix_hash = values.__hash__() & 0xFFFFFFFFFFFF
-        # matrix_hash = int(hash_obj.hexdigest()) & 0xffffffffffff
         self.matrix_file = os.path.join(param.output_dir, f"mat_{matrix_hash:012x}.{MPI.COMM_WORLD.rank}.npz")
 
     def prepare(self, matvec: Callable[[numpy.ndarray], numpy.ndarray]) -> None:

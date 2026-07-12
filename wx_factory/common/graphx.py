@@ -15,9 +15,6 @@ def plot_field_from_file(geom_prefix, field_prefix):
     geom = pickle.load(open(geom_filename, "rb"))
     field = pickle.load(open(field_filename, "rb"))
 
-    # if rank == 0:
-    #    print('field = {}'.format(field[0,:,:]))
-
     plot_field(geom, field[0, :, :] ** 2)
 
 
@@ -42,8 +39,6 @@ def plot_array(array, filename=None, comm=MPI.COMM_WORLD, background_value=0):
 
         im = ax.imshow(common, interpolation="nearest")
         cbar = ax.figure.colorbar(im, ax=ax)
-        # ax.set_xticks(ticks=numpy.arange(0, common.shape[0], 2))
-        # ax.set_yticks(ticks=numpy.arange(0, common.shape[1], 2))
 
         matplotlib.pyplot.tight_layout()
 
@@ -70,17 +65,13 @@ def image_field(
     domain_width = geom.x1 - geom.x0
     domain_height = geom.z1 - geom.z0
     aspect_ratio = domain_width / domain_height
-    
+
     # Base height in inches, width scaled by aspect ratio
     fig_height = 10
     fig_width = fig_height * aspect_ratio
-    
-    # Clamp width between 8 and 24 inches
-#    fig_width = max(8, min(24, fig_width))
-    
+
     fig, ax = matplotlib.pyplot.subplots(figsize=(fig_width, fig_height))
 
-    #   if not geom.xperiodic:
     cmap = matplotlib.pyplot.contourf(
         device.to_host(geom.X1_cartesian),
         device.to_host(geom.X3_cartesian),
@@ -89,24 +80,6 @@ def image_field(
         levels=numpy.linspace(vmin, vmax, n),
         extend="both",
     )
-    #   else:
-    # X1 = numpy.append(geom.X1[:, -1:], geom.X1, axis=1)
-    # print(f'geom x1: \n{geom.X1[:, :2]}')
-    # print(f'x1: {X1[:, :3]}')
-    # raise ValueError
-    #      X1 = numpy.append(numpy.append(geom.X1[:, -2:], geom.X1, axis=1), geom.X1[:, :2], axis=1)
-    #      X1[:,  1] = 2*X1[:,  2] - X1[:,  3]
-    #      X1[:,  0] = 2*X1[:,  1] - X1[:,  2]
-    #      X1[:, -2] = 2*X1[:, -3] - X1[:, -4]
-    #      X1[:, -1] = 2*X1[:, -2] - X1[:, -3]
-    #      X3 = numpy.append(numpy.append(geom.X3[:, -2:], geom.X3, axis=1), geom.X3[:, :2], axis=1)
-    #      X3[:,  1] = 2*X3[:,  2] - X3[:,  3]
-    #      X3[:,  0] = 2*X3[:,  1] - X3[:,  2]
-    #      X3[:, -2] = 2*X3[:, -3] - X3[:, -4]
-    #      X3[:, -1] = 2*X3[:, -2] - X3[:, -3]
-    #      f  = numpy.append(numpy.append(field[:, -2:], field, axis=1), field[:, :2], axis=1)
-    #      cmap = matplotlib.pyplot.contourf(X1, X3, f, cmap=colormap,
-    #                                       levels=numpy.linspace(vmin,vmax,n), extend="both")
     ax.set_aspect("equal", "box")
 
     cbar = fig.colorbar(cmap, ax=ax, orientation="vertical")
@@ -132,11 +105,8 @@ def print_mountain(
         raise ValueError(f"Either provide both normal arrays or none of them")
 
     fig, ax_mtn = matplotlib.pyplot.subplots()
-    # cmap = matplotlib.pyplot.contourf(geom.X1[:num_elem, :], geom.X3[:num_elem, :], mountain[:num_elem, :], levels=2)
-    # matplotlib.pyplot.imshow(numpy.flip(mountain[:num_elem, :], axis=0), interpolation='nearest')
     ax_mtn.scatter(x1, x3, c=mountain, marker="s")
 
-    # ax_mtn.arrow(10, 10, 10, 10)
     length_factor = 30.0
     if normals_x is not None:
         for i in range(mountain.shape[0]):
@@ -167,9 +137,6 @@ def print_residual_per_variable(geom, field, filename=None):
     fig, axes = matplotlib.pyplot.subplots(2, 2, sharex=True, sharey=True)
 
     def plot_var(ax, vals, title):
-        # Always include 0 (?), avoid null range
-        # minval = min(vals.min() - 1e-15, 0.0)
-        # maxval = max(vals.max() + 1e-15, 0.0)
         minval = vals.min() - 1e-15
         maxval = vals.max() + 1e-15
         if minval < 0.0 and maxval > 0.0:
@@ -189,9 +156,6 @@ def print_residual_per_variable(geom, field, filename=None):
     plot_var(axes[0][1], field[RHO_THETA], "Rho-theta")
     plot_var(axes[1][0], field[RHO_U], "Rho-u")
     plot_var(axes[1][1], field[RHO_W], "Rho-w")
-
-    # cbar = fig.colorbar(cmap, ax=axes, orientation='vertical')
-    # cbar.set_label('Residual',)
 
     global plot_index
 

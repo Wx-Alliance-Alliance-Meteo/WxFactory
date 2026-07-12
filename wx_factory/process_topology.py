@@ -224,13 +224,6 @@ class ProcessTopology:
 
         if isinstance(device, CudaDevice):
             convert_contras = [[device.cupy.fuse(f) for f in a] for a in convert_contras]
-            # def f(a1, a2, coord):
-            #     return (a1 + 2.0 * coord / (1.0 + coord**2) * a2, a2)
-
-            # convert_contras[0][0] = device.cupy.fuse(f)
-
-        # print(f"convert_contras = {convert_contras}")
-        # raise ValueError
 
         convert_covs = [
             [  # Panel 0
@@ -395,9 +388,6 @@ class ProcessTopology:
 
         return self.initiate_transfers([send_info])[0]
         # # Initiate MPI transfer
-        # mpi_request = self.comm_dist_graph.Ineighbor_alltoall(send_buffer, recv_buffer)
-
-        # return ExchangeRequest(recv_buffer, mpi_request, shape=south.shape, is_vector=False)
 
     def prepare_vector_buffer(
         self,
@@ -419,7 +409,7 @@ class ProcessTopology:
 
         inputs = [south, north, west, east]
         boundaries = [boundary_sn, boundary_sn, boundary_we, boundary_we]
-        
+
         for i, (data, bd) in enumerate(zip(inputs, boundaries)):
             send_buffer[i, 0], send_buffer[i, 1] = convert[i](
                 data[0].reshape(base_shape), data[1].reshape(base_shape), bd
@@ -429,7 +419,6 @@ class ProcessTopology:
             if self.flip[i]:
                 flip_dim = flip_dim if type(flip_dim) == tuple else (flip_dim,)
                 send_buffer[i] = xp.flip(send_buffer[i], axis=flip_dim)  # Flip arrays, if needed
-        
 
         return send_buffer, south[0].shape, True
 
@@ -478,10 +467,6 @@ class ProcessTopology:
         self.device.synchronize()  # When using GPU
 
         return self.initiate_transfers([send_info])[0]
-        # recv_buffer = self.device.empty_like(send_buffer)
-        # mpi_request = self.comm_dist_graph.Ineighbor_alltoall(send_buffer, recv_buffer)
-
-        # return ExchangeRequest(recv_buffer, mpi_request, shape=south[0].shape, is_vector=True)
 
     def start_exchange_euler_3d(
         self,
@@ -503,7 +488,6 @@ class ProcessTopology:
 
         buffer_shape = (4, south.shape[0]) + base_shape
         num_elem = math.prod(buffer_shape)
-        # send_buffer = xp.empty((4, south.shape[0]) + base_shape, dtype=south[0].dtype)
         send_buffer = xp.ravel(self.send_buffer).view(dtype=south.dtype)[:num_elem].reshape(buffer_shape)
         recv_buffer = xp.ravel(self.recv_buffer).view(dtype=south.dtype)[:num_elem].reshape(buffer_shape)
 

@@ -30,10 +30,3 @@ class Preconditioner(MatvecOp, ABC):
         self, vec: numpy.ndarray, x0: Optional[numpy.ndarray] = None, verbose: Optional[int] = None
     ) -> numpy.ndarray:
         pass
-
-    # def prepare(self, dt: float, field: numpy.ndarray, prev_field:Optional[numpy.ndarray] = None) -> None:
-    #    return self.__prepare__(dt, field, prev_field)
-
-    # @abstractmethod
-    # def __prepare__(self, dt: float, field: numpy.ndarray, prev_field:Optional[numpy.ndarray] = None) -> None:
-    #    pass

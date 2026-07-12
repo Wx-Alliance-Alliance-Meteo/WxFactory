@@ -50,12 +50,6 @@ class DG_preconditioner:
         self.num_elements = param.num_elements_horizontal
 
         self.max_iter = 1000
-        # if self.small_order == 2:
-        #    self.max_iter = 2
-        # elif self.small_order == 3:
-        #    self.max_iter = 2
-        # elif self.small_order == 4:
-        #    self.max_iter = 4
 
         print(f"Creating a preconditioner of order {self.small_order}")
 

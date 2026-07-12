@@ -62,18 +62,11 @@ class OutputCubesphereFst(OutputCubesphere):
 
         to_host = self.device.to_host
 
-        # print(f"gathering lon/lat", flush=True)
-        # lon = self._get_writable(self.geometry.block_lon * 180 / math.pi, num_dim=2)
-        # lat = self._get_writable(self.geometry.block_lat * 180 / math.pi, num_dim=2)
         lon = self._get_writable(self.geometry.block_lon, num_dim=2)
         lat = self._get_writable(self.geometry.block_lat, num_dim=2)
 
-
         with SingleProcess() as s, Conditional(s):
             self.file = rmn.fst24_file(self.filename, "RSF+R/W")
-
-            # print(f"lon = \n{lon / 180.0 * math.pi}")
-            # print(f"lat = \n{lat}")
 
             for r in self.file:
                 print(f"record: {r}")
@@ -82,14 +75,11 @@ class OutputCubesphereFst(OutputCubesphere):
             self.ni = ni
             self.nj = nj * 6
             self.nk = 1  # TODO set proper nk
-            print(f" nijk: {self.ni}, {self.nj}, {self.nk}", flush = True)
-            
+            print(f" nijk: {self.ni}, {self.nj}, {self.nk}", flush=True)
 
             # If we pass the file when creating the georef, it will read the axes from it (if available)
             self.georef = georef.GeoRef(self.ni, self.nj, "Q", self.ig1, self.ig2, self.ig3, self.ig4, self.file)
-            # self.georef.define_axes(lon, lat)
-            self.georef.write_fst(self.file, self.ig1, self.ig2, self.ig3, self.ig4, "my_grid")  
-                
+            self.georef.write_fst(self.file, self.ig1, self.ig2, self.ig3, self.ig4, "my_grid")
 
     def _get_writable(self, a, num_dim):
         return self.device.to_host(self._gather_field(a, num_dim))

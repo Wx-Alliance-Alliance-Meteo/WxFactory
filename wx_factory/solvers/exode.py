@@ -1,8 +1,6 @@
 import math
 import numpy
 
-# from integrators.butcher import *
-
 
 def exode(
     τ_out,
@@ -92,17 +90,12 @@ def exode(
              numpy.savetxt(foutput, eigenvalues_imag, delimiter=",") 
          
          # Calculuate and save the eigenvalues to file. TODO: need better ways
-         #for i in range(matrix_size):
             #sys.stdout.write(str(eigenvalues[i].real) + " " )
          #sys.stdout.write("\n")
 
-         #for i in range(matrix_siz):
             #sys.stdout.write(str(eigenvalues[i].imag) + " " )
          #sys.stdout.write("\n")
          
-         #print("eigenvalues = ", eigenvalues) 
-         #numpy.savetxt('/home/siw001/gef/vicky/ADR_2D/testoutput/grid_size_160000/eigenvalues/ADR_2D_real_eig.csv', eigenvalues_real, delimiter=',')
-         #numpy.savetxt('/home/siw001/gef/vicky/ADR_2D/testoutput/grid_size_160000/eigenvalues/ADR_2D_real_eig.csv', eigenvalues_imag, delimiter=',')
          """
 
         elif solver.status == "failed":
@@ -128,7 +121,6 @@ def exode(
         solver.h,
     )  # TODO
     # keep track of h_previous, use as first step for next iteration.
-    # print("previous step = ", stats[4], "final step = ", stats[5])
 
     exode.first_step = numpy.median(numpy.diff(ts))
 

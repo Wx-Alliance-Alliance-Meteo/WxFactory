@@ -131,12 +131,6 @@ class CubedSphere2D(CubedSphere):
         maxComp = max(self.extension)
         Δcomp = maxComp - minComp
 
-        # Define the coordinate values at the interfaces between elements
-        # interfaces_x1 = numpy.linspace(start = domain_x1[0], stop = domain_x1[1], num = num_elements_x1 + 1)
-        # interfaces_x2 = numpy.linspace(start = domain_x2[0], stop = domain_x2[1], num = num_elements_x2 + 1)
-        # interfaces_x3 = numpy.linspace(start = domain_x3[0], stop = domain_x3[1], num = num_elements_x3 + 1)
-        # interfaces_eta = numpy.linspace(start = domain_eta[0], stop = domain_eta[1], num = num_elements_x3 + 1)
-
         ni = num_elements_x1 * num_solpts
         nj = num_elements_x2 * num_solpts
         nk = 1
@@ -165,7 +159,6 @@ class CubedSphere2D(CubedSphere):
         # - In 3D, horizontally, we also have two arrays (west-east, south-north), but the shape is to be determined
         # - In 3D vertically, we only have one array, with shape similar to horizontally, TBD
         self.grid_shape = (num_elements_x1, num_elements_x2, num_solpts * num_solpts)
-        # self.grid_shape_3d_new = (num_elements_x1 * num_elements_x2 * num_elements_x3, num_solpts * num_solpts * num_solpts)
         # i and j interfaces have same shape (because same number of elements in each direction)
         self.itf_i_shape = (num_elements_x2, num_elements_x1 + 2, num_solpts * 2)
         self.itf_j_shape = (num_elements_x2 + 2, num_elements_x1, num_solpts * 2)
@@ -205,19 +198,6 @@ class CubedSphere2D(CubedSphere):
         self.coordVec_itf_j = self._to_new_itf_j(xp.stack((j_x1, j_x2)))
 
         # Compute the parameters of the rotated grid
-
-        # if (lambda0 > 0.) or (lambda0 <= -math.pi / 2.):
-        #    print('lambda0 not within the acceptable range of ]-pi/2 , 0]. Stopping.')
-        #    exit(1)
-
-        # if (phi0 <= -math.pi/4.) or (phi0 > math.pi/4.):
-        #    print('phi0 not within the acceptable range of ]-pi/4 , pi/4]. Stopping.')
-        #    exit(1)
-
-        # if (alpha0 <= -math.pi/2.) or (alpha0 > 0.):
-        #    print('alpha0 not within the acceptable range of ]-pi/2 , 0]. Stopping.')
-        #    exit(1)
-
         c1 = math.cos(lambda0)
         c2 = math.cos(phi0)
         c3 = math.cos(alpha0)
@@ -510,7 +490,6 @@ class CubedSphere2D(CubedSphere):
 
     def _to_new_itf_i(self, a):
         """Convert input array (west and east interface) to new memory layout"""
-        # expected_shape = (self.num_elements_x2 * self.num_solpts, self.num_elements_x1 + 1)
         xp = self.device.xp
         expected_shape = (self.num_elements_x1 + 1, self.num_elements_x2 * self.num_solpts)
         if a.shape[-2:] == expected_shape:
@@ -540,7 +519,6 @@ class CubedSphere2D(CubedSphere):
         if a.shape[-2:] == expected_shape:
             plane_shape = (self.num_elements_x2 + 2, self.num_elements_x1, self.num_solpts * 2)
             new = xp.empty(a.shape[:-2] + plane_shape, dtype=a.dtype)
-            # new[...] = 1000.0
             south = numpy.s_[..., 1:, :, : self.num_solpts]  # South boundary of elements, including northern halo
             north = numpy.s_[..., :-1, :, self.num_solpts :]  # North boundary of elements, including southern halo
 
@@ -551,8 +529,6 @@ class CubedSphere2D(CubedSphere):
 
             new[self.south_edge] = 0.0
             new[self.north_edge] = 0.0
-
-            # raise ValueError(f'a = \n{a[0]}\nnew_tmp = \n{new_tmp[0]}\nnew = \n{new[0]}')
 
             return xp.squeeze(new)
         else:

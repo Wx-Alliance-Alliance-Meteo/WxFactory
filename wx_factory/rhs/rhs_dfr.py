@@ -7,7 +7,6 @@ from ..geometry import CubedSphere, DFROperators
 from ..rhs.rhs import RHS
 from ..wx_mpi import SingleProcess, Conditional
 
-
 mid_i = numpy.s_[..., 1:-1, :]
 mid_j = numpy.s_[..., 1:-1, :, :]
 mid_k = numpy.s_[..., 1:-1, :, :, :]
@@ -27,11 +26,6 @@ class RHSDirecFluxReconstruction(RHS):
 
     def solution_extrapolation(self, q: NDArray) -> None:
         # Extrapolate the solution to element boundaries
-        # if self.num_dim == 2:
-        # Investigate why this is slower since no reallocation is needed
-        #     xp.matmul(q, self.ops.extrap_x, out=self.q_itf_x1)
-        #     xp.matmul(q, self.ops.extrap_z, out=self.q_itf_x3)
-
         xp = self.device.xp
 
         op_extrap_x = self.ops.extrap_x if not xp.iscomplexobj(q) else self.ops.extrap_x_complex
@@ -50,10 +44,6 @@ class RHSDirecFluxReconstruction(RHS):
         xp = self.device.xp
 
         # Compute derivatives, with correction from boundaries
-        # Investigate why this is slower
-        # xp.matmul(self.f_x1, self.ops.derivative_x, out=self.df1_dx1)
-        # xp.matmul(self.f_x3, self.ops.derivative_z, out=self.df3_dx3)
-
         op_dx = self.ops.derivative_x if not xp.iscomplexobj(self.f_x1) else self.ops.derivative_x_complex
         op_dz = self.ops.derivative_z if not xp.iscomplexobj(self.f_x3) else self.ops.derivative_z_complex
 
@@ -178,26 +168,16 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
         itf_x3[...] = q @ self.ops.extrap_z
 
     def extrap_3d_code(self, q: NDArray, itf_x1: NDArray, itf_x2: NDArray, itf_x3: NDArray) -> None:
-        # xp = self.device.xp
-        # itf_x1[...] = xp.arange(self.q_itf_x1.size).reshape(self.q_itf_x1.shape)
-        # itf_x2[...] = xp.arange(1000, self.q_itf_x1.size + 1000).reshape(self.q_itf_x1.shape)
-        # itf_x3[...] = xp.arange(500000, self.q_itf_x1.size + 500000).reshape(self.q_itf_x1.shape)
-        _, nz, ny, nx = q.shape[:4]
         self.device.operators.extrap_all_3d(
             q,
             itf_x1,
             itf_x2,
             itf_x3,
-            # 0 if self.device.comm.rank != 0 else 1,
             0,
         )
 
     def solution_extrapolation(self, q: NDArray) -> None:
         # Extrapolate the solution to element boundaries
-        # if self.num_dim == 2:
-        # Investigate why this is slower since no reallocation is needed
-        #     xp.matmul(q, self.ops.extrap_x, out=self.q_itf_x1)
-        #     xp.matmul(q, self.ops.extrap_z, out=self.q_itf_x3)
         xp = self.device.xp
 
         op_extrap_x = self.ops.extrap_x if not xp.iscomplexobj(q) else self.ops.extrap_x_complex
@@ -488,26 +468,16 @@ class RHSDirecFluxReconstruction_mpi_v2(RHSDirecFluxReconstruction):
         itf_x3[...] = q @ self.ops.extrap_z
 
     def extrap_3d_code(self, q: NDArray, itf_x1: NDArray, itf_x2: NDArray, itf_x3: NDArray) -> None:
-        # xp = self.device.xp
-        # itf_x1[...] = xp.arange(self.q_itf_x1.size).reshape(self.q_itf_x1.shape)
-        # itf_x2[...] = xp.arange(1000, self.q_itf_x1.size + 1000).reshape(self.q_itf_x1.shape)
-        # itf_x3[...] = xp.arange(500000, self.q_itf_x1.size + 500000).reshape(self.q_itf_x1.shape)
-        _, nz, ny, nx = q.shape[:4]
         self.device.operators.extrap_all_3d(
             q,
             itf_x1,
             itf_x2,
             itf_x3,
-            # 0 if self.device.comm.rank != 0 else 1,
             0,
         )
 
     def solution_extrapolation(self, q: NDArray) -> None:
         # Extrapolate the solution to element boundaries
-        # if self.num_dim == 2:
-        # Investigate why this is slower since no reallocation is needed
-        #     xp.matmul(q, self.ops.extrap_x, out=self.q_itf_x1)
-        #     xp.matmul(q, self.ops.extrap_z, out=self.q_itf_x3)
         xp = self.device.xp
 
         op_extrap_x = self.ops.extrap_x if not xp.iscomplexobj(q) else self.ops.extrap_x_complex

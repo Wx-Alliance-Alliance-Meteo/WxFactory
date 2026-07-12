@@ -82,11 +82,9 @@ class DFROperators:
         feye[-1, -1] = 0.0
         self.highfilter = V @ (feye @ invV)
 
-        self.highfilter_k = xp.kron(self.highfilter.T, xp.eye(grd.num_solpts**2, dtype=self.dtype))  # Only valid in 3D (hence the **2)
-
-        # if device.comm.rank == 0:
-        #     print(f"high filter = \n{self.highfilter}")
-        #     print(f"high filter k = \n{self.highfilter_k}")
+        self.highfilter_k = xp.kron(
+            self.highfilter.T, xp.eye(grd.num_solpts**2, dtype=self.dtype)
+        )  # Only valid in 3D (hence the **2)
 
         diff = diffmat(grd.extension_sym)
         diff = xp.asarray(diff).astype(self.dtype)
@@ -144,7 +142,7 @@ class DFROperators:
                             + (1.0 / param.sponge_tscale)
                             * xp.sin((0.5 * xp.pi) * (grd.X3[k, i] - zs) / (param.z1 - zs)) ** 2
                         )
-            
+
             assert self.beta.dtype == self.dtype
 
         if check_skewcentrosymmetry(self.diff_ext) is False:
@@ -186,9 +184,6 @@ class DFROperators:
             self.derivative_y = xp.kron(I2, xp.kron(self.diff_solpt, I2)).T.copy()
             self.derivative_z = xp.kron(self.diff_solpt, I3).T.copy()
 
-            # if rank == 0:
-            #     print(f"deriv z = \n{self.derivative_z}")
-
             corr_west = self.diff_ext[1:-1, 0]
             corr_east = self.diff_ext[1:-1, -1]
             corr_south = corr_west
@@ -228,18 +223,6 @@ class DFROperators:
         assert self.correction_DU.dtype == self.dtype
         assert self.correction_SN.dtype == self.dtype
         assert self.correction_WE.dtype == self.dtype
-
-
-        # Ensure operators are in C_CONTIGUOUS format for better GEMM performance
-        # self.extrap_x = xp.ascontiguousarray(self.extrap_x)
-        # self.extrap_y = xp.ascontiguousarray(self.extrap_y)
-        # self.extrap_z = xp.ascontiguousarray(self.extrap_z)
-        # self.derivative_x = xp.ascontiguousarray(self.derivative_x)
-        # self.derivative_y = xp.ascontiguousarray(self.derivative_y)
-        # self.derivative_z = xp.ascontiguousarray(self.derivative_z)
-        # self.correction_WE = xp.ascontiguousarray(self.correction_WE)
-        # self.correction_SN = xp.ascontiguousarray(self.correction_SN)
-        # self.correction_DU = xp.ascontiguousarray(self.correction_DU)
 
         # Complex128 variants of operators for mixed-type matmul (complex128 @ complex128)
         # These avoid runtime upcasting when the input array is complex128
@@ -347,9 +330,7 @@ class DFROperators:
 
         # Perform the matrix transposition
         xp.matmul(field_view, self.diff_solpt_tr, out=output)
-        # output[:] = field_view @ self.diff_solpt_tr# + border_i_view @ self.correction_tr
         output[:] += border_i_view @ self.correction_tr
-        # print(grid.ptopo.rank, field_view[:2,:], '\n', border_i_view[:2,:],'\n',output[:2,:])
 
         # Reshape the output array back to its canonical extents
         output = output.reshape(field_interior.shape)
@@ -384,7 +365,6 @@ class DFROperators:
         border_shape = (grid.num_elements_x1, 2)
         # Number of variables we're extending
         nbvars = math.prod(field_interior.shape) // (grid.ni)
-        #nbvars = field_interior.size // grid.ni
 
         if out is None:
             # Create an array for the output
@@ -440,7 +420,6 @@ class DFROperators:
 
         # Compute the number of variables we're differentiating, including number of levels
         nbvars = math.prod(output.shape) // (grid.ni * grid.nj)
-        #nbvars = output.size // (grid.ni * grid.nj)
 
         # Create views of the input arrays for reshaping, in order to express the differentiation as
         # a set of matrix multiplications
@@ -489,7 +468,6 @@ class DFROperators:
         border_shape = (grid.num_elements_x2, 2, grid.ni)
         # Number of variables times number of vertical levels we're extending
         nbvars = math.prod(field_interior.shape) // (grid.ni * grid.nj)
-        #nbvars = field_interior.size // (grid.ni * grid.nj)
 
         if out is None:
             # Create an array for the output
@@ -504,13 +482,12 @@ class DFROperators:
         field_interior_view = field_interior.reshape((-1, grid.num_solpts, grid.ni))
 
         # Perform the extrapolations via matrix multiplication
-        # print(border[:,0,:].shape, field_interior_view.shape, self.extrap_south.T.shape)
         border[:, 0, :] = self.extrap_south @ field_interior_view
         border[:, 1, :] = self.extrap_north @ field_interior_view
 
         # field_interior.shape[0:-2] is (nbvars,nk) for many 3D fields, (nbvars,) for many 2D fields,
         # (nk) for a single 3D field, and () for a single 2D field.
-        
+
         border = border.reshape(tuple(field_interior.shape[0:-2]) + border_shape)
         if out is not None:
             out[...] = border
@@ -547,7 +524,6 @@ class DFROperators:
 
         # Compute the number of variables we're differentiating
         nbvars = math.prod(output.shape) // (grid.ni * grid.nj * grid.nk)
-        #nbvars = output.size // (grid.ni * grid.nj * grid.nk)
 
         # Create views of the input arrays for reshaping, in order to express the differentiation as
         # a set of matrix multiplications
@@ -595,7 +571,6 @@ class DFROperators:
         """
 
         # Number of variables we're extending
-        # nbvars = numpy.prod(field_interior.shape) // (grid.ni * grid.nj * grid.nk)
         nbvars = field_interior.size // (grid.ni * grid.nj * grid.nk)
 
         if out is None:
@@ -645,7 +620,6 @@ class DFROperators:
         border_shape = (grid.num_elements_x3, 2, grid.nj, grid.ni)
         # Number of variables we're extending
         nbvars = math.prod(field_interior.shape) // (grid.ni * grid.nj * grid.nk)
-        #nbvars = field_interior.size // (grid.ni * grid.nj * grid.nk)
 
         if out is None:
             # Create an array for the output
@@ -667,9 +641,9 @@ class DFROperators:
             border = border.reshape((nbvars,) + border_shape)
         else:
             border = border.reshape(border_shape)
-        
+
         if out is not None:
-            out[...] = border        
+            out[...] = border
         return border
 
     # Take the gradient of one or more variables, with output shape [3,nvars,ni,nj,nk]
@@ -712,7 +686,7 @@ class DFROperators:
            Gradiant (covariant derivatives) of the input field
         """
         xp = geom.device.xp
-        (nk, nj, ni) = field.shape[-3:]
+        nk, nj, ni = field.shape[-3:]
         ff = field.reshape((-1, nk, nj, ni))
 
         nvar = ff.shape[0]

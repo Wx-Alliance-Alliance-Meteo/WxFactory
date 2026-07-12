@@ -95,10 +95,8 @@ class InputManager:
             with rmn.fst24_file(data_file_name) as data_file:
                 fields = [next(data_file.new_query(nomvar=var)).data.T.reshape(target_shape) for var in field_names]
 
-        # print(f"fields = {fields}")
         fields = [geometry.process_topology.distribute_cube(f, 2) for f in fields]
 
-        # for name, f in zip(field_names, fields):
         #     plot_array(f, f"{name}.png", comm=comm, background_value=f.min() - 10.0)
 
         xp = geometry.device.xp
