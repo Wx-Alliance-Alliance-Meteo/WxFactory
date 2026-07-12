@@ -470,7 +470,7 @@
                     "name": "output_format",
                     "type": "str",
                     "default": "netcdf",
-                    "selectable": ["netcdf", "fst"],
+                    "selectables": ["netcdf", "fst"],
                     "description": "Desired format to use for storing simulation results."
                 },
                 {

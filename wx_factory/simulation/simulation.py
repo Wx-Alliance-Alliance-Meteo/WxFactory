@@ -8,13 +8,10 @@ import numpy
 
 from ..common import Configuration
 from ..device import Device, CpuDevice, CudaDevice, PytorchDevice
-from ..geometry import Cartesian2D, CubedSphere, CubedSphere3D, DFROperators, GeometryContext, resolve_geometry
+from ..geometry import CubedSphere3D, DFROperators, GeometryContext, resolve_geometry
 from ..init.init_state_vars import init_state_vars
 from ..integrators import Integrator, resolve as _resolve_integrator
-from ..output.output_manager import OutputManager
-from ..output.output_cartesian import OutputCartesian
-from ..output.output_cubesphere_netcdf import OutputCubesphereNetcdf
-from ..output.output_cubesphere_fst import OutputCubesphereFst
+from ..output.registry import OutputContext, resolve_output
 from ..output.input_manager import InputManager
 from ..rhs.rhs_selector import RhsContext, resolve_rhs
 from ..precondition import PreconditionerContext, resolve_preconditioner
@@ -113,7 +110,18 @@ class Simulation:
         self.operators_complex = DFROperators(self.geometry, self.config, self.device, self.device.xp.complex128)
         self.initial_state = init_state_vars(self.geometry, self.operators_real, self.config, self.step_hooks)
 
-        self.output = self._create_output_manager()
+        self.output = resolve_output(
+            OutputContext(
+                config=self.config,
+                device=self.device,
+                geometry=self.geometry,
+                operators=self.operators_real,
+                metric=self.initial_state.metric,
+                topography=self.initial_state.topography,
+                dataset=self.initial_state.dataset,
+                ptopo=self.process_topo,
+            )
+        )
         self.initial_state.Q, self.starting_step = self._determine_starting_state()
 
         self.Q = self.initial_state.Q.copy()
@@ -261,34 +269,6 @@ class Simulation:
         """Register step hooks that depend on the geometry (before the initial state is built)."""
         if self.config.enable_schar_mountain and isinstance(self.geometry, CubedSphere3D):
             self.step_hooks[ScharMountainHook] = ScharMountainHook(self.config, self.geometry)
-
-    def _create_output_manager(self) -> OutputManager:
-        if isinstance(self.geometry, Cartesian2D):
-            return OutputCartesian(self.config, self.geometry, self.operators_real, self.device)
-        elif isinstance(self.geometry, CubedSphere):
-            if self.config.output_format == "netcdf":
-                return OutputCubesphereNetcdf(
-                    self.config,
-                    self.geometry,
-                    self.operators_real,
-                    self.device,
-                    self.initial_state.metric,
-                    self.initial_state.topography,
-                    self.initial_state.dataset,
-                    self.process_topo,
-                )
-            elif self.config.output_format == "fst":
-                return OutputCubesphereFst(
-                    self.config,
-                    self.geometry,
-                    self.operators_real,
-                    self.device,
-                    self.initial_state.metric,
-                    self.initial_state.topography,
-                    self.process_topo,
-                )
-
-        raise ValueError(f"Unrecognized geometry type {type(self.geometry)}")
 
     def _determine_starting_state(self):
         """Try to load the state for the given starting step and, if successful, swap it with the initial state"""

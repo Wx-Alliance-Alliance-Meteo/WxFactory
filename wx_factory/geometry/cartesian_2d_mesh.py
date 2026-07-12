@@ -7,6 +7,9 @@ from .geometry import Geometry
 
 
 class Cartesian2D(Geometry):
+    # Selects the output manager family (see wx_factory/output/registry.py).
+    output_family = "cartesian"
+
     def __init__(
         self: Self,
         domain_x: Tuple[float, float],

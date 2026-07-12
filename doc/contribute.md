@@ -80,6 +80,24 @@ The geometry depends on a pair: the grid type and the equation set. These are re
 3. Add `"my_grid"` to the `grid_type` option's `selectables` in `config/config-format.json` and
    regenerate the config type hints.
 
+### Add a new output format
+
+Output managers are selected by the geometry's `output_family` and the `output_format` config
+option, and are registered in `wx_factory/output/registry.py`.
+
+1. Add your `OutputManager` subclass.
+2. Register a factory for the `(output_family, output_format)` combination:
+   ```python
+   @register_output("cubesphere", "my_format")
+   def _build(ctx: OutputContext) -> OutputManager:
+       return MyOutput(ctx.config, ctx.geometry, ctx.operators, ctx.device, ...)
+   ```
+   Register with `output_format=None` if the output does not depend on the format (as the
+   Cartesian output does). A geometry advertises its family through the `output_family` class
+   attribute.
+3. Add `"my_format"` to the `output_format` option's `selectables` in `config/config-format.json`
+   and regenerate the config type hints.
+
 ### Add a new preconditioner
 
 Preconditioners are selected by the `preconditioner` config option and registered in
