@@ -8,3 +8,18 @@ The two branches that may be used by everyone are `main` and `dev`
 2. During your work, commit frequently in your branch.
 3. Write tests to verify that your code works. Please include these tests in the commits (we have a directory just for that!)
 4. Open a merge request from your branch to a the one from which you started.
+
+## Configuration options
+
+The available configuration options are described in a single place: the schema file
+`config/config-format.json`. To keep `config.<option>` autocompletion and static type checking
+working, `wx_factory/common/configuration.py` carries a block of generated type annotations.
+
+If you add, remove, or change the type of an option in the schema, regenerate that block:
+
+```
+python -m wx_factory.common.config_hints --write
+```
+
+and commit the change. A unit test (and the `checks` CI workflow) runs
+`python -m wx_factory.common.config_hints --check` and will fail if the annotations are stale.

@@ -1,26 +1,10 @@
 #!/usr/bin/env bash
+#
+# Regenerate the static type-hint block in wx_factory/common/configuration.py from the
+# configuration schema. Thin wrapper around the wx_factory.common.config_hints module,
+# which does the generation (and provides a --check mode used by the tests and CI).
 
-SCRIPT_NAME=$(basename ${BASH_SOURCE[0]})
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
-WX_DIR=$(dirname ${SCRIPT_DIR})
+WX_DIR=$(dirname "${SCRIPT_DIR}")
 
-config_code=${WX_DIR}/wx_factory/common/configuration.py
-tmp_code=${config_code}.tmp
-
-if [ ! -f ${config_code} ]; then
-    echo "Could not locate configuration code at ${config_code}"
-    exit -1
-fi
-
-hint_string=$(              \
-    ${SCRIPT_DIR}/wx_config.py --list-hints | \
-    sort | \
-    sed -e 's/cs-str/str/' \
-        -e 's/^/    /' \
-)
-
-sed -e '/--- START type hints ---/q' ${config_code} > ${tmp_code}
-echo -e "${hint_string}" >> ${tmp_code}
-sed -ne '/--- END type hints ---/,$ p' ${config_code} >> ${tmp_code}
-
-mv ${tmp_code} ${config_code}
+cd "${WX_DIR}" && exec python3 -m wx_factory.common.config_hints --write

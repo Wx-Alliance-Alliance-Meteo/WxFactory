@@ -11,6 +11,7 @@ main_project_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..
 sys.path.append(main_project_dir)
 
 from tests.unit.common.test_configuration import ConfigurationTestCases
+from tests.unit.common.test_config_hints import ConfigHintsTestCases
 from tests.unit.common.test_angle24 import Angle24TestCase
 from tests.unit.compiler.test_compilation import CompilationTestCases, CompilationGPUTestCases
 from tests.unit.output.test_state import StateTestCases
@@ -59,6 +60,8 @@ def load_tests(test_name):
     add_test(suite, ConfigurationTestCases("test_load_configuration_with_invalid_values"), test_re)
     add_test(suite, ConfigurationTestCases("test_load_configuration_with_dependency"), test_re)
     add_test(suite, ConfigurationTestCases("test_load_configuration_with_expression"), test_re)
+
+    add_test(suite, ConfigHintsTestCases("test_type_hints_are_up_to_date"), test_re)
 
     add_test(suite, Angle24TestCase("test_cyclic"), test_re)
     add_test(suite, Angle24TestCase("test_rounding"), test_re)

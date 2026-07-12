@@ -126,14 +126,15 @@ class Configuration:
     gmres_restart: int
     grid_file: str
     grid_type: str
+    initial_condition: str
     initial_conditions_file: str
     jacobian_method: str
     kiops_dt_factor: float
     krylov_size: int
     lambda0: float
+    matmul_backend: str
     matsuno_amp: float
     matsuno_wave_type: str
-    matmul_backend: str
     mg_smoother: str
     mg_solve_coarsest: bool
     netcdf_use_collective: bool
@@ -168,7 +169,9 @@ class Configuration:
     store_solver_stats: bool
     store_total_time: bool
     t_end: float
+    time_end: str
     time_integrator: str
+    time_start: str
     tolerance: float
     topography_file: str
     verbose_precond: int
