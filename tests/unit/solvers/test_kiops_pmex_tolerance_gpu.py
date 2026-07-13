@@ -54,7 +54,7 @@ class KiopsPmexToleranceGpuTestCases(cuda_test.CudaTestCases):
         self.assertEqual(len(w1.shape), 2, "Kiops didn't return a matrix")
         self.assertEqual(len(w2.shape), 2, "Pmex didn't return a matrix")
 
-        self.failIf(not (w2.shape[0] == shape[0] and w2.shape[1] == shape[1]), "Both matrix should be the same size")
+        self.assertEqual(w2.shape, shape, "Both matrix should be the same size")
 
         diff: float = self.device.xp.linalg.norm(w1 - w2).item()
 

@@ -53,7 +53,7 @@ class KiopsComparisonTestCases(cuda_test.CudaTestCases):
         self.assertEqual(len(w1.shape), 2, "Kiops didn't return a matrix with the cpu device")
         self.assertEqual(len(w2.shape), 2, "Kiops didn't return a matrix with the gpu device")
 
-        self.failIf(not (w2.shape[0] == shape[0] and w2.shape[1] == shape[1]), "Both matrix should be the same size")
+        self.assertEqual(w2.shape, shape, "Both matrix should be the same size")
 
         diff: float = self.cpu_device.xp.linalg.norm(w1 - self.gpu_device.to_host(w2)).item()
 
