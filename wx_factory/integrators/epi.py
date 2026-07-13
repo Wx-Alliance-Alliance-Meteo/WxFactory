@@ -46,6 +46,7 @@ class Epi(Integrator):
         self.jac = jac
         self.tol = param.tolerance
         self.krylov_size = 1
+        self.krylov_mmax = param.krylov_mmax
         self.jacobian_method = param.jacobian_method
         self.exponential_solver = param.exponential_solver
         self.exode_method = param.exode_method
@@ -122,7 +123,7 @@ class Epi(Integrator):
                 tol=self.tol,
                 m_init=self.krylov_size,
                 mmin=16,
-                mmax=64,
+                mmax=self.krylov_mmax,
                 task1=False,
                 device=self.device,
             )
@@ -157,7 +158,9 @@ class Epi(Integrator):
 
         # ----- Regular PMEX ------
         elif self.exponential_solver == "pmex":
-            phiv, stats = pmex([1.0], matvec_handle, vec, tol=self.tol, mmax=64, task1=False, device=self.device)
+            phiv, stats = pmex(
+                [1.0], matvec_handle, vec, tol=self.tol, mmax=self.krylov_mmax, task1=False, device=self.device
+            )
 
             if mpirank == 0:
                 print(
@@ -175,7 +178,7 @@ class Epi(Integrator):
                 tol=self.tol,
                 m_init=self.krylov_size,
                 mmin=16,
-                mmax=64,
+                mmax=self.krylov_mmax,
                 task1=False,
                 device=self.device,
             )

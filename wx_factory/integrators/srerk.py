@@ -71,6 +71,7 @@ class Srerk(Integrator):
         self.jac = jac
         self.tol = param.tolerance
         self.krylov_size = 1
+        self.krylov_mmax = param.krylov_mmax
         self.jacobian_method = param.jacobian_method
         self.exponential_solver = param.exponential_solver
 
@@ -107,7 +108,7 @@ class Srerk(Integrator):
                 tol=self.tol,
                 m_init=self.krylov_size,
                 mmin=16,
-                mmax=64,
+                mmax=self.krylov_mmax,
                 task1=False,
                 device=self.device,
             )
@@ -125,7 +126,14 @@ class Srerk(Integrator):
         elif self.exponential_solver == "pmex":
 
             z, stats = pmex(
-                self.c[0], matvec_handle, vec, tol=self.tol, m_init=self.krylov_size, mmin=16, mmax=64, task1=False
+                self.c[0],
+                matvec_handle,
+                vec,
+                tol=self.tol,
+                m_init=self.krylov_size,
+                mmin=16,
+                mmax=self.krylov_mmax,
+                task1=False,
             )
             self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
 
@@ -165,7 +173,7 @@ class Srerk(Integrator):
                     tol=self.tol,
                     m_init=self.krylov_size,
                     mmin=16,
-                    mmax=64,
+                    mmax=self.krylov_mmax,
                     task1=False,
                 )
 
@@ -188,7 +196,7 @@ class Srerk(Integrator):
                     tol=self.tol,
                     m_init=self.krylov_size,
                     mmin=16,
-                    mmax=64,
+                    mmax=self.krylov_mmax,
                     task1=False,
                 )
                 self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
