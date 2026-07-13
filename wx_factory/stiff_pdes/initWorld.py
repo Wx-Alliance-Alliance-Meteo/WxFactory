@@ -90,6 +90,17 @@ class InitWorld:
         yo.rank = comm.Get_rank()
         yo.size = comm.Get_size()
 
+        # Every spatial operator in JTV.py gets its halo values from the MPI neighbour exchange,
+        # which is only performed when size > 1; there is no serial fallback, so on a single rank
+        # the neighbour buffers are never assigned and the operators fail with UnboundLocalError.
+        # Refuse the run up front with a clear message instead.
+        if yo.size < 2:
+            raise ValueError(
+                "The stiff_pdes operators require more than one MPI rank: their neighbour "
+                "exchange has no serial implementation. Run with at least 4 ranks (the process "
+                "count must be a perfect square)."
+            )
+
         yo.BCType = BCType
 
         if comm.Get_rank() == 0:

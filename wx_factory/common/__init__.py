@@ -22,5 +22,4 @@ __all__ = [
     "main_module_dir",
     "make_ig4",
     "readfile",
-    "sv_to_netcdf",
 ]

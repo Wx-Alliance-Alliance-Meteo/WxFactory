@@ -11,8 +11,6 @@ from ..wx_mpi import do_once, SingleProcess, Conditional
 from ..process_topology import ProcessTopology
 from ..geometry import CubedSphere2D
 
-from ..common.graphx import plot_array
-
 try:
     import rmn
 
@@ -81,7 +79,6 @@ class InputManager:
                     break
 
         mountain_field = geometry.process_topology.distribute_cube(mountain_field, 2)
-        # plot_array(mountain_field, "mountain.png", comm=comm, background_value=-100)
 
         return geometry.device.xp.asarray(geometry._to_new(mountain_field))
 
@@ -96,8 +93,6 @@ class InputManager:
                 fields = [next(data_file.new_query(nomvar=var)).data.T.reshape(target_shape) for var in field_names]
 
         fields = [geometry.process_topology.distribute_cube(f, 2) for f in fields]
-
-        #     plot_array(f, f"{name}.png", comm=comm, background_value=f.min() - 10.0)
 
         xp = geometry.device.xp
         return xp.asarray(geometry._to_new(numpy.stack(fields)))

@@ -56,8 +56,3 @@ def print_stats(stats, filename, m):
 
     with open(filename, "a") as gg:
         gg.write("{} {} {} {}\n".format(m, stats[2], stats[0], stats[1]))
-
-    with open(filename, "a") as gg:
-        for j in range(0, len(finalSolOrder)):
-
-            gg.write("{} \n".format(finalSolOrder[j]))

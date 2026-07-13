@@ -109,31 +109,6 @@ def compute_dg_to_fv_small_projection(dg_order, fv_order, quad_order=1):
     return result
 
 
-def compute_dg_l2_proj(origin_order, dest_order):
-    quad_order = max(origin_order, dest_order) + 1
-    points_sym, quad_weights = scipy.special.roots_legendre(quad_order)
-    points = numpy.array(points_sym)
-
-    L_src = [lagrange_poly(i, origin_order) for i in range(origin_order)]
-    L_dest = [lagrange_poly(i, dest_order) for i in range(dest_order)]
-
-    def inner_prod(f, g):
-        f_tmp = f(points)
-        g_tmp = g(points)
-        m = numpy.array(f_tmp * g_tmp)
-        sol = m @ quad_weights
-        return sol.evalf()
-
-    mass_matrix = numpy.zeros((dest_order, dest_order))
-    proj_matrix = numpy.zeros((dest_order, origin_order))
-
-    for i in range(dest_order):
-        mass_matrix[i] = numpy.array([inner_prod(L_dest[i], L) for L in L_dest])
-        proj_matrix[i] = numpy.array([inner_prod(L_dest[i], L) for L in L_src])
-
-    return numpy.linalg.inv(mass_matrix) @ proj_matrix
-
-
 def get_basis_points(basis_type: str, order: int, include_boundary: bool = False) -> numpy.ndarray:
     """Get the basis points of a reference element of a certain order. The domain is [-1, 1]."""
     if basis_type == "dg":

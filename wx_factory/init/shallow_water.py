@@ -11,8 +11,6 @@ from ..geometry import wind2contra_2d, CubedSphere2D, DFROperators
 from ..init.matsuno import eval_field
 from ..output.input_manager import InputManager
 
-from ..common.graphx import plot_array
-
 
 def eval_u_prime(lat):
     u_max = 80.0
@@ -161,11 +159,6 @@ def sw_from_file(geom: CubedSphere2D, operators: DFROperators, config: Configura
     # TODO for debugging
     # h_surface[...] = 0.0
     # h_surface[...] *= 0.0
-
-    # plot_array(geom.to_single_block(h_surface), f"h_surf.png", comm=comm, background_value=h_surface.min() - 100.0)
-    # plot_array(geom.to_single_block(h), f"h.png", comm=comm, background_value=h.min())
-    # plot_array(geom.to_single_block(u), f"u.png", comm=comm, background_value=u.min())
-    # plot_array(geom.to_single_block(v), f"v.png", comm=comm, background_value=v.min())
 
     num_solpts = geom.num_solpts
     num_elem = geom.num_elements_horizontal

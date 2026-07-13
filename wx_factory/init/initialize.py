@@ -24,7 +24,6 @@ from ..common.definitions import (
     p0,
 )
 from ..common import Configuration
-from ..common.graphx import plot_array
 from ..geometry import Cartesian2D, CubedSphere3D, CubedSphere2D, DFROperators, Metric2D, Metric3DTopo
 
 from .dcmip import (
@@ -254,11 +253,6 @@ def initialize_sw(geom: CubedSphere2D, metric: Metric2D, mtrx: DFROperators, par
     topo = None
     if param.case_number in [-1, -2, 5, 10]:
         topo = Topo(hsurf, dzdx1, dzdx2, hsurf_itf_i, hsurf_itf_j)
-
-    # plot_array(geom.to_single_block(hsurf), f"h_surf.png", comm=comm, background_value=hsurf.min() - 100.0)
-    # plot_array(geom.to_single_block(Q[0]), f"h.png", comm=comm, background_value=Q[0].min())
-    # plot_array(geom.to_single_block(Q[1]), f"u.png", comm=comm, background_value=Q[1].min())
-    # plot_array(geom.to_single_block(Q[2]), f"v.png", comm=comm, background_value=Q[2].min())
 
     return Q, topo, dataset
 
