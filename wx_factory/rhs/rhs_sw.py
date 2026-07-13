@@ -191,7 +191,12 @@ class RhsShallowWater(RHS):
         north = xp.s_[..., :-1, :, self.num_solpts :]
 
         a = xp.sqrt(gravity * self.var_itf_i[idx_h] * self.metric.H_contra_11_itf_i)
-        m = xp.where(xp.real(a) > 0.0, self.var_itf_i[idx_hu1] / (self.var_itf_i[idx_h] * a), 0.0)
+        # Only the meaningful half of each halo interface column is filled by the neighbour exchange;
+        # the other half stays h = hu = 0, so the division there would be 0/0. The ufunc `where=`
+        # skips those elements outright, unlike xp.where, which evaluates both branches and only then
+        # discards the NaNs. Entries not selected keep the 0.0 that `out` is initialized to.
+        denom = self.var_itf_i[idx_h] * a
+        m = xp.divide(self.var_itf_i[idx_hu1], denom, out=xp.zeros_like(denom), where=xp.real(a) > 0.0)
 
         # Workaround for CuPy bug where n**2 is wrong when n is complex with a negative real value
         mw2 = (m[west] - 1.0) * (m[west] - 1.0)
@@ -213,7 +218,9 @@ class RhsShallowWater(RHS):
 
         # Common AUSM fluxes
         a = xp.sqrt(gravity * self.var_itf_j[idx_h] * self.metric.H_contra_22_itf_j)
-        m = xp.where(xp.real(a) > 0.0, self.var_itf_j[idx_hu2] / (self.var_itf_j[idx_h] * a), 0.0)
+        # Same as above, for the south-north interfaces.
+        denom = self.var_itf_j[idx_h] * a
+        m = xp.divide(self.var_itf_j[idx_hu2], denom, out=xp.zeros_like(denom), where=xp.real(a) > 0.0)
 
         # Workaround for CuPy bug where n**2 is wrong when n is complex with a negative real value
         ms2 = (m[south] - 1.0) * (m[south] - 1.0)
