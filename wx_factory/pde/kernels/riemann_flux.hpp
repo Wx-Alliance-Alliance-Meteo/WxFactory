@@ -85,7 +85,9 @@ DEVICE_SPACE void riemann_euler_cubedsphere_rusanov_3d_kernel(
     riemann_params_cubedsphere<real_t, num_t> params_l,
     riemann_params_cubedsphere<real_t, num_t> params_r,
     const int                                 dir, //!< 0: along X, 1: along Y, 2: along Z
-    const bool                                boundary) {
+    const bool                                boundary,
+    const bool advection_only //!< Prescribed wind: no acoustic waves, so no acoustic dissipation
+) {
 
   // Extract necessary metrics
   const real_t sqrt_g_l = *params_l.sqrt_g;
@@ -131,8 +133,13 @@ DEVICE_SPACE void riemann_euler_cubedsphere_rusanov_3d_kernel(
 
   // Get the speed of sound on each side (uses h_dir_dir contravariant metric)
   // 4dir = h[dir,dir]
-  const num_t al = sqrt(params_l.h[4 * dir] * heat_capacity_ratio * pl * inv_rhol);
-  const num_t ar = sqrt(params_r.h[4 * dir] * heat_capacity_ratio * pr * inv_rhor);
+  // For a pure advection problem the wind is prescribed and the dynamical variables are frozen,
+  // so the only wave speeds are the advection speeds. Including the (much larger) speed of sound
+  // in the Rusanov eigenvalue would add a lot of spurious diffusion to the advected quantities.
+  const num_t al =
+      advection_only ? num_t(0.0) : sqrt(params_l.h[4 * dir] * heat_capacity_ratio * pl * inv_rhol);
+  const num_t ar =
+      advection_only ? num_t(0.0) : sqrt(params_r.h[4 * dir] * heat_capacity_ratio * pr * inv_rhor);
 
   num_t vnr = 0.0;
   num_t vnl = 0.0;
@@ -195,6 +202,20 @@ DEVICE_SPACE void riemann_euler_cubedsphere_rusanov_3d_kernel(
   *params_r.flux.rho_v     = *params_l.flux.rho_v;
   *params_r.flux.rho_w     = *params_l.flux.rho_w;
   *params_r.flux.rho_theta = *params_l.flux.rho_theta;
+
+  // Every advected quantity that follows the meteorological variables is treated exactly like the
+  // density (the continuity equation): a purely advective flux, and the same Rusanov dissipation.
+  for (size_t k = 0; k < params_l.q.tracers.size(); k++)
+  {
+    const num_t rho_ql = params_l.q.tracers[k];
+    const num_t rho_qr = params_r.q.tracers[k];
+
+    const num_t tracer_flux_l = sqrt_g_l * vnl * rho_ql;
+    const num_t tracer_flux_r = sqrt_g_r * vnr * rho_qr;
+
+    params_l.flux.tracers[k] = 0.5 * (tracer_flux_l + tracer_flux_r - scaled_eig * (rho_qr - rho_ql));
+    params_r.flux.tracers[k] = params_l.flux.tracers[k];
+  }
 
   // Store the advection and pressure contribution to vertical fluxes
   *params_l.wflux_adv = 0.5 * (sqrt_g_l * rho_wl * vnl + sqrt_g_r * rho_wr * vnr -

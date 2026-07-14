@@ -27,6 +27,10 @@ struct euler_state_2d
   }
 };
 
+//! Number of meteorological variables in a 3D Euler state. Anything stored after them is a
+//! passively advected quantity (a tracer, a hydrometeor, a chemical species).
+const size_t num_euler_var_3d = 5;
+
 template <typename num_t>
 struct euler_state_3d
 {
@@ -36,17 +40,23 @@ struct euler_state_3d
   var<num_t> rho_w;
   var<num_t> rho_theta;
 
+  //! The rho*q of every passively advected quantity that follows the meteorological variables.
+  //! Each of them obeys the continuity equation, so the kernels only need the advective flux.
+  var_dynamic<num_t> tracers;
+
   // Constructor
   DEVICE_SPACE euler_state_3d(
-      num_t*       q,     //!< Pointer to the various fields (each variable is grouped)
-      const size_t index, //!< Index of the grid point whose state we want to access
-      const size_t stride //!< How many entries in the input array for each variable
+      num_t*       q,      //!< Pointer to the various fields (each variable is grouped)
+      const size_t index,  //!< Index of the grid point whose state we want to access
+      const size_t stride, //!< How many entries in the input array for each variable
+      const size_t num_tracers = 0 //!< How many advected quantities follow the Euler variables
       ) :
       rho(q, index),
       rho_u(q + stride, index),
       rho_v(q + (2 * stride), index),
       rho_w(q + (3 * stride), index),
-      rho_theta(q + (4 * stride), index) {}
+      rho_theta(q + (4 * stride), index),
+      tracers(q + (num_euler_var_3d * stride), index, stride, num_tracers) {}
 
   DEVICE_SPACE void move_index(const int64_t diff) {
     rho.move_index(diff);
@@ -54,6 +64,7 @@ struct euler_state_3d
     rho_v.move_index(diff);
     rho_w.move_index(diff);
     rho_theta.move_index(diff);
+    tracers.move_index(diff);
   }
 };
 
@@ -120,12 +131,14 @@ struct riemann_params_cubedsphere
       num_t*        flux,
       num_t*        pressure,
       num_t*        wflux_adv,
-      num_t*        wflux_pres) :
+      num_t*        wflux_pres,
+      const size_t  num_tracers = 0 //!< How many advected quantities follow the Euler variables
+      ) :
       index(index),
-      q(q, index, stride),
+      q(q, index, stride, num_tracers),
       sqrt_g(sqrt_g, index),
       h(h, index, stride),
-      flux(flux, index, stride),
+      flux(flux, index, stride, num_tracers),
       pressure(pressure, index),
       wflux_adv(wflux_adv, index),
       wflux_pres(wflux_pres, index) {}

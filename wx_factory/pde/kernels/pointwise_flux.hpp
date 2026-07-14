@@ -64,15 +64,16 @@ struct kernel_params_cubedsphere
       ArrayT1&       wflux_pres_x2,
       ArrayT1&       wflux_pres_x3,
       ArrayT1&       logp,
-      const size_t   stride //!< How many entries in the input array for each variable
+      const size_t   stride, //!< How many entries in the input array for each variable
+      const size_t   num_tracers = 0 //!< How many advected quantities follow the Euler variables
       ) :
-      q(get_raw_ptr<num_t>(q), index, stride),
+      q(get_raw_ptr<num_t>(q), index, stride, num_tracers),
       sqrt_g(get_raw_ptr<real_t>(sqrt_g), index),
       h(get_raw_ptr<real_t>(h), index, stride),
       flux{
-          euler_state_3d<num_t>(get_raw_ptr<num_t>(flux_x1), index, stride),
-          euler_state_3d<num_t>(get_raw_ptr<num_t>(flux_x2), index, stride),
-          euler_state_3d<num_t>(get_raw_ptr<num_t>(flux_x3), index, stride)},
+          euler_state_3d<num_t>(get_raw_ptr<num_t>(flux_x1), index, stride, num_tracers),
+          euler_state_3d<num_t>(get_raw_ptr<num_t>(flux_x2), index, stride, num_tracers),
+          euler_state_3d<num_t>(get_raw_ptr<num_t>(flux_x3), index, stride, num_tracers)},
       pressure(get_raw_ptr<num_t>(pressure), index),
       wflux_adv{
           {get_raw_ptr<num_t>(wflux_adv_x1), index},
@@ -167,6 +168,17 @@ struct PointwiseFluxEuler3DKernel
 
     *params.pressure = p;
     *params.logp     = log(p);
+
+    // Every advected quantity that follows the meteorological variables obeys the continuity
+    // equation, so its flux is the purely advective sqrt(G) * u^i * (rho q). No pressure term.
+    for (size_t k = 0; k < params.q.tracers.size(); k++)
+    {
+      const num_t rho_q = params.q.tracers[k];
+
+      params.flux[0].tracers[k] = sqrt_g * rho_q * u;
+      params.flux[1].tracers[k] = sqrt_g * rho_q * v;
+      params.flux[2].tracers[k] = sqrt_g * rho_q * w;
+    }
   }
 };
 

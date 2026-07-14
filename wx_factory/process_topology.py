@@ -721,14 +721,16 @@ class ExchangeRequest:
 
         # Vector data
         if self.is_vector:
-            if self.recv_buffer.shape[1] == 2:  # 2D
+            num_comp = self.recv_buffer.shape[1]
+            if num_comp == 2:  # 2D
                 self.to_tuple = lambda a: (a[0].reshape(self.shape), a[1].reshape(self.shape))
-            elif self.recv_buffer.shape[1] == 3:  # 3D
+            elif num_comp == 3:  # 3D
                 self.to_tuple = lambda a: (a[0].reshape(self.shape), a[1].reshape(self.shape), a[2].reshape(self.shape))
-            elif self.recv_buffer.shape[1] == 5:  # Euler 3D all
-                self.to_tuple = lambda a: a.reshape((5,) + self.shape)
             else:
-                raise ValueError(f"Can only handle vectors with 2 or 3 components, not {self.recv_buffer.shape[1]}")
+                # A whole 3D state: the 5 Euler variables, plus any number of advected tracers.
+                # start_exchange_euler_3d rotates only components 1 and 2 (the horizontal momenta)
+                # and sends the rest as scalars, so the block comes back as a single array.
+                self.to_tuple = lambda a: a.reshape((num_comp,) + self.shape)
 
     def wait(self) -> Tuple[ExchangedVector, ExchangedVector, ExchangedVector, ExchangedVector]:
         """Wait for the exchange started when creating this object to be done.

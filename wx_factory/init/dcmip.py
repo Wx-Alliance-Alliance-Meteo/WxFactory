@@ -28,6 +28,25 @@ from ..geometry import CubedSphere3D, DFROperators, Metric3DTopo, wind2contra_2d
 # X = 1) is selected.
 
 
+def dcmip_prescribed_rho_theta(geom):
+    """Prescribed density and rho*theta for the DCMIP advection tests (1-1 and 1-2).
+
+    The atmosphere is isothermal at T0 = 300 K and hydrostatic, so the pressure, the density and the
+    potential temperature are analytic and time independent. DCMIP requires that the dynamic updates
+    of the density, temperature and pressure be disabled for these tests, so a step hook restores
+    these fields after every step."""
+    xp = geom.device.xp
+
+    T0 = 300.0  # temperature
+    H = Rd * T0 / gravity  # scale height
+
+    p = p0 * xp.exp(-geom.height_new / H)
+    rho = p / (Rd * T0)
+    theta = T0 * (p0 / p) ** (Rd / cpd)
+
+    return rho, rho * theta
+
+
 def dcmip_T11_update_winds(geom, metric, mtrx, param, time=float(0)):
     """
     Test 11 - Deformational Advection
@@ -39,64 +58,55 @@ def dcmip_T11_update_winds(geom, metric, mtrx, param, time=float(0)):
     The velocities are time dependent and therefore must be updated in the dynamical core.
     """
 
+    xp = geom.device.xp
+
+    # Coordinates in the element-wise ("new") memory layout, matching the state vector.
+    lon = geom.lon_new
+    lat = geom.lat_new
+    height = geom.height_new
+
     tau = 12.0 * 86400.0  # period of motion 12 days
     u0 = (2.0 * math.pi * geom.earth_radius) / tau  # 2 pi a / 12 days
-    k0 = ((10.0 * geom.earth_radius) / tau,)  # Velocity Magnitude
+    k0 = (10.0 * geom.earth_radius) / tau  # Velocity Magnitude
     omega0 = (23000.0 * math.pi) / tau  # Velocity Magnitude
     T0 = 300.0  # temperature
     H = Rd * T0 / gravity  # scale height
 
-    p = p0 * numpy.exp(-geom.height / H)
-    ptop = p0 * math.exp(-12000.0 / H)
+    p = p0 * xp.exp(-height / H)
+    ptop = p0 * math.exp(-param.ztop / H)
 
-    lonp = geom.lon - 2.0 * math.pi * time / tau
+    lonp = lon - 2.0 * math.pi * time / tau
 
     # Shape function
     bs = 0.2
-    s = (
-        1.0
-        + math.exp((ptop - p0) / (bs * ptop))
-        - numpy.exp((p - p0) / (bs * ptop))
-        - numpy.exp((ptop - p) / (bs * ptop))
-    )
+    s = 1.0 + math.exp((ptop - p0) / (bs * ptop)) - xp.exp((p - p0) / (bs * ptop)) - xp.exp((ptop - p) / (bs * ptop))
 
     # Zonal Velocity
 
     ud = (
         (omega0 * geom.earth_radius)
         / (bs * ptop)
-        * numpy.cos(lonp)
-        * (numpy.cos(geom.lat) ** 2.0)
+        * xp.cos(lonp)
+        * (xp.cos(lat) ** 2.0)
         * math.cos(2.0 * math.pi * time / tau)
-        * (-numpy.exp((p - p0) / (bs * ptop)) + numpy.exp((ptop - p) / (bs * ptop)))
+        * (-xp.exp((p - p0) / (bs * ptop)) + xp.exp((ptop - p) / (bs * ptop)))
     )
 
-    u = (
-        k0 * numpy.sin(lonp) * numpy.sin(lonp) * numpy.sin(2.0 * geom.lat) * math.cos(math.pi * time / tau)
-        + u0 * numpy.cos(geom.lat)
-        + ud
-    )
+    u = k0 * xp.sin(lonp) * xp.sin(lonp) * xp.sin(2.0 * lat) * math.cos(math.pi * time / tau) + u0 * xp.cos(lat) + ud
 
     # Meridional Velocity
 
-    v = k0 * numpy.sin(2.0 * lonp) * numpy.cos(geom.lat) * math.cos(math.pi * time / tau)
+    v = k0 * xp.sin(2.0 * lonp) * xp.cos(lat) * math.cos(math.pi * time / tau)
 
     # Vertical Velocity
 
-    w = (
-        -((Rd * T0) / (gravity * p))
-        * omega0
-        * numpy.sin(lonp)
-        * numpy.cos(geom.lat)
-        * math.cos(2.0 * math.pi * time / tau)
-        * s
-    )
+    w = -((Rd * T0) / (gravity * p)) * omega0 * xp.sin(lonp) * xp.cos(lat) * math.cos(2.0 * math.pi * time / tau) * s
 
-    # Contravariant components
+    # The state vector holds the contravariant components of the wind in the cubed-sphere
+    # coordinates, not the (zonal, meridional, vertical) components of the DCMIP document.
+    u1_contra, u2_contra, u3_contra = geom.wind2contra(u, v, w, metric)
 
-    u1_contra, u2_contra = wind2contra_2d(u, v, geom)
-
-    return u1_contra, u2_contra, w
+    return u1_contra, u2_contra, u3_contra
 
 
 # ==========================================================================================
@@ -109,6 +119,12 @@ def dcmip_T12_update_winds(geom, metric, mtrx, param, time=float(0)):
     Test 12 - 3D Hadley-like flow
     The velocities are time dependent and therefore must be updated in the dynamical core.
     """
+    xp = geom.device.xp
+
+    # Coordinates in the element-wise ("new") memory layout, matching the state vector.
+    lat = geom.lat_new
+    height = geom.height_new
+
     tau = 86400.0  # period of motion 1 day (in s)
     u0 = 40.0  # Zonal velocity magnitude (m/s)
     w0 = 0.15  # Vertical velocity magnitude (m/s), changed in v5
@@ -117,7 +133,7 @@ def dcmip_T12_update_winds(geom, metric, mtrx, param, time=float(0)):
     K = 5.0  # number of Hadley-like cells
 
     # Height and pressure are aligned (p = p0 exp(-z/H))
-    p = p0 * numpy.exp(-geom.height / H)
+    p = p0 * xp.exp(-height / H)
 
     # -----------------------------------------------------------------------
     #    TEMPERATURE IS CONSTANT 300 K
@@ -134,7 +150,7 @@ def dcmip_T12_update_winds(geom, metric, mtrx, param, time=float(0)):
 
     # Zonal Velocity
 
-    u = u0 * numpy.cos(geom.lat)
+    u = u0 * xp.cos(lat)
 
     # Meridional Velocity
 
@@ -142,10 +158,10 @@ def dcmip_T12_update_winds(geom, metric, mtrx, param, time=float(0)):
         -(rho0 / rho)
         * (geom.earth_radius * w0 * math.pi)
         / (K * param.ztop)
-        * numpy.cos(geom.lat)
-        * numpy.sin(K * geom.lat)
-        * numpy.cos(math.pi * geom.height / param.ztop)
-        * numpy.cos(math.pi * time / tau)
+        * xp.cos(lat)
+        * xp.sin(K * lat)
+        * xp.cos(math.pi * height / param.ztop)
+        * math.cos(math.pi * time / tau)
     )
 
     # Vertical Velocity - can be changed to vertical pressure velocity by
@@ -154,16 +170,16 @@ def dcmip_T12_update_winds(geom, metric, mtrx, param, time=float(0)):
     w = (
         (rho0 / rho)
         * (w0 / K)
-        * (-2.0 * numpy.sin(K * geom.lat) * numpy.sin(geom.lat) + K * numpy.cos(geom.lat) * numpy.cos(K * geom.lat))
-        * numpy.sin(math.pi * geom.height / param.ztop)
-        * numpy.cos(math.pi * time / tau)
+        * (-2.0 * xp.sin(K * lat) * xp.sin(lat) + K * xp.cos(lat) * xp.cos(K * lat))
+        * xp.sin(math.pi * height / param.ztop)
+        * math.cos(math.pi * time / tau)
     )
 
-    # Contravariant components
+    # The state vector holds the contravariant components of the wind in the cubed-sphere
+    # coordinates, not the (zonal, meridional, vertical) components of the DCMIP document.
+    u1_contra, u2_contra, u3_contra = geom.wind2contra(u, v, w, metric)
 
-    u1_contra, u2_contra = wind2contra_2d(u, v, geom)
-
-    return u1_contra, u2_contra, w
+    return u1_contra, u2_contra, u3_contra
 
 
 def dcmip_advection_deformation(geom, metric, mtrx, param):
@@ -187,13 +203,24 @@ def dcmip_advection_deformation(geom, metric, mtrx, param):
     #    HEIGHT AND PRESSURE
     # -----------------------------------------------------------------------
 
-    p = p0 * numpy.exp(-geom.height / H)
+    xp = geom.device.xp
+
+    # The surface is flat for this test (z_s = 0, so Phi_s = 0), but the metric is only
+    # token-initialized by its constructor and must still be built explicitly.
+    metric.build_metric()
+
+    # Coordinates in the element-wise ("new") memory layout, matching the state vector.
+    lon = geom.lon_new
+    lat = geom.lat_new
+    height = geom.height_new
+
+    p = p0 * xp.exp(-height / H)
 
     # -----------------------------------------------------------------------
     #    WINDS
     # -----------------------------------------------------------------------
 
-    u1_contra, u2_contra, w = dcmip_T11_update_winds(geom, metric, mtrx, param, time=0)
+    u1_contra, u2_contra, u3_contra = dcmip_T11_update_winds(geom, metric, mtrx, param, time=0)
 
     # -----------------------------------------------------------------------
     #    TEMPERATURE IS CONSTANT 300 K
@@ -218,62 +245,42 @@ def dcmip_advection_deformation(geom, metric, mtrx, param):
     #     initialize tracers
     # -----------------------------------------------------------------------
 
-    # Tracer 1 - Cosine Bells
+    # Tracer 1 - Cosine Bells (DCMIP eq. 28-30)
 
-    # To calculate great circle distance
-    sin_tmp = numpy.empty_like(p)
-    cos_tmp = numpy.empty_like(p)
-    sin_tmp2 = numpy.empty_like(p)
-    cos_tmp2 = numpy.empty_like(p)
+    # Great circle distance to each bell centre, normalized by the Earth radius 'a'
+    r1 = xp.arccos(math.sin(phi0) * xp.sin(lat) + math.cos(phi0) * xp.cos(lat) * xp.cos(lon - lambda0))
+    r2 = xp.arccos(math.sin(phi1) * xp.sin(lat) + math.cos(phi1) * xp.cos(lat) * xp.cos(lon - lambda1))
 
-    sin_tmp[:, :, :] = numpy.sin(geom.lat) * math.sin(phi0)
-    cos_tmp[:, :, :] = numpy.cos(geom.lat) * math.cos(phi0)
-    sin_tmp2[:, :, :] = numpy.sin(geom.lat) * math.sin(phi1)
-    cos_tmp2[:, :, :] = numpy.cos(geom.lat) * math.cos(phi1)
+    d1 = xp.minimum(1.0, (r1 / RR) ** 2 + ((height - z0) / ZZ) ** 2)
+    d2 = xp.minimum(1.0, (r2 / RR) ** 2 + ((height - z0) / ZZ) ** 2)
 
-    # great circle distance without 'a'
+    q1 = 0.5 * (1.0 + xp.cos(math.pi * d1)) + 0.5 * (1.0 + xp.cos(math.pi * d2))
 
-    r = numpy.arccos(sin_tmp + cos_tmp * numpy.cos(geom.lon - lambda0))
-    r2 = numpy.arccos(sin_tmp2 + cos_tmp2 * numpy.cos(geom.lon - lambda1))
-    d1 = numpy.minimum(1.0, (r / RR) ** 2 + ((geom.height - z0) / ZZ) ** 2)
-    d2 = numpy.minimum(1.0, (r2 / RR) ** 2 + ((geom.height - z0) / ZZ) ** 2)
-
-    q1 = 0.5 * (1.0 + numpy.cos(math.pi * d1)) + 0.5 * (1.0 + numpy.cos(math.pi * d2))
-
-    # Tracer 2 - Correlated Cosine Bells
+    # Tracer 2 - Correlated Cosine Bells (DCMIP eq. 31)
 
     q2 = 0.9 - 0.8 * q1**2
 
-    # Tracer 3 - Slotted Ellipse
-
-    # Make the ellipse
-    q3 = numpy.zeros_like(q1)
-    nk, ni, nj = q3.shape
-    for k in range(nk):
-        for i in range(ni):
-            for j in range(nj):
-                # Make the ellipse
-                if d1[k, i, j] <= RR:
-                    q3[k, i, j] = 1.0
-                elif d2[k, i, j] <= RR:
-                    q3[k, i, j] = 1.0
-                else:
-                    q3[k, i, j] = 0.1
-
-                # Put in the slot
-                if geom.height[k, i, j] > z0 and abs(geom.lat[i, j]) < 0.125:
-                    q3[k, i, j] = 0.1
+    # Tracer 3 - Slotted Ellipse (DCMIP eq. 32-33): 1 inside either ellipse, 0.1 elsewhere,
+    # with a slot cut out above the tracer centre height near the equator.
+    q3 = xp.where((d1 <= 0.5) | (d2 <= 0.5), 1.0, 0.1)
+    q3 = xp.where((height > z0) & (xp.abs(lat) < 0.125), 0.1, q3)
 
     # Tracer 4: q4 is chosen so that, in combination with the other three tracer
-    #           fields with weight (3/10), the sum is equal to one
+    #           fields with weight (3/10), the sum is equal to one (DCMIP eq. 34)
 
     q4 = 1.0 - 0.3 * (q1 + q2 + q3)
 
-    return rho, u1_contra, u2_contra, w, theta, q1, q2, q3, q4
+    return rho, u1_contra, u2_contra, u3_contra, theta, q1, q2, q3, q4
 
 
 def dcmip_advection_hadley(geom, metric, mtrx, param):
     """Test 12 - 3D Hadley-like flow"""
+    xp = geom.device.xp
+
+    metric.build_metric()
+
+    height = geom.height_new
+
     tau = 86400.0  # period of motion 1 day (in s)
     T0 = 300.0  # temperature (K)
     H = Rd * T0 / gravity  # scale height
@@ -286,13 +293,13 @@ def dcmip_advection_hadley(geom, metric, mtrx, param):
     # -----------------------------------------------------------------------
 
     # Height and pressure are aligned (p = p0 exp(-z/H))
-    p = p0 * numpy.exp(-geom.height / H)
+    p = p0 * xp.exp(-height / H)
 
     # -----------------------------------------------------------------------
     #    WINDS
     # -----------------------------------------------------------------------
 
-    u1_contra, u2_contra, w = dcmip_T12_update_winds(geom, metric, mtrx, param, time=0)
+    u1_contra, u2_contra, u3_contra = dcmip_T12_update_winds(geom, metric, mtrx, param, time=0)
 
     # -----------------------------------------------------------------------
     #    TEMPERATURE IS CONSTANT 300 K
@@ -317,17 +324,15 @@ def dcmip_advection_hadley(geom, metric, mtrx, param):
     #     initialize tracers
     # -----------------------------------------------------------------------
 
-    # Tracer 1 - Layer
+    # Tracer 1 - Layer (DCMIP eq. 39): a cosine bell in the vertical, zero outside [z1, z2]
 
-    q1 = numpy.zeros_like(p)
-    nk, ni, nj = q1.shape
-    for k in range(nk):
-        for i in range(ni):
-            for j in range(nj):
-                if geom.height[k, i, j] < z2 and geom.height[k, i, j] > z1:
-                    q1[k, i, j] = 0.5 * (1.0 + math.cos(2.0 * math.pi * (geom.height[k, i, j] - z0) / (z2 - z1)))
+    q1 = xp.where(
+        (height > z1) & (height < z2),
+        0.5 * (1.0 + xp.cos(2.0 * math.pi * (height - z0) / (z2 - z1))),
+        0.0,
+    )
 
-    return rho, u1_contra, u2_contra, w, theta, q1
+    return rho, u1_contra, u2_contra, u3_contra, theta, q1
 
 
 # ============================================================================================

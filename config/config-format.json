@@ -47,6 +47,17 @@
                     "description": "Physical backend to run the computation on"
                 },
                 {
+                    "name": "pytorch_device",
+                    "type": "str",
+                    "selectables": ["cuda", "cpu"],
+                    "default": "cuda",
+                    "dependency": {
+                        "name": "desired_device",
+                        "values": ["torch"]
+                    },
+                    "description": "Where the Pytorch backend puts its tensors. Falls back to the CPU if no GPU is available"
+                },
+                {
                     "name": "cuda_devices",
                     "type": "list-int",
                     "default": [],

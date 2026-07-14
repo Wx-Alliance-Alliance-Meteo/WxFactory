@@ -41,15 +41,21 @@ __global__ void element_wise_kernel(MyFunc func, const size_t max_num_threads, c
 }
 
 template <typename num_t, int order, typename MyFunc>
-void launch_kernel(const std::vector<int>& num_elements, const int verbose, MyFunc func) {
+void launch_kernel(
+    const std::vector<int>& num_elements,
+    const int               num_var,
+    const int               verbose,
+    MyFunc                  func) {
 
   constexpr size_t o2 = order * order;
   // constexpr size_t BLOCK_SIZE            = 257;
   constexpr size_t num_elem_per_block    = EXTRAP_3D_BLOCK_SIZE / o2;
   constexpr size_t num_threads_per_block = num_elem_per_block * o2;
 
+  // Every variable of the state is extrapolated, whatever their number: the meteorological
+  // variables and the advected quantities (tracers, hydrometeors, chemical species) that follow.
   const size_t num_active_threads =
-      5 * num_elements[0] * num_elements[1] * num_elements[2] * order * order;
+      size_t(num_var) * num_elements[0] * num_elements[1] * num_elements[2] * order * order;
   const size_t num_blocks =
       (num_active_threads + num_threads_per_block - 1) / num_threads_per_block;
   // const size_t num_blocks = (max_num_threads + BLOCK_SIZE - 1) / BLOCK_SIZE;
@@ -74,18 +80,19 @@ template <
     typename... Args>
 void select_order(
     const std::vector<int>& num_elements,
+    const int               num_var,
     const int               num_solpts,
     const int               verbose,
     Args... args) {
   switch (num_solpts)
   {
     // clang-format off
-  case 1: launch_kernel<num_t, 1>(num_elements, verbose, KernelType<real_t, num_t, 1>(args...)); break;
-  case 2: launch_kernel<num_t, 2>(num_elements, verbose, KernelType<real_t, num_t, 2>(args...)); break;
-  case 3: launch_kernel<num_t, 3>(num_elements, verbose, KernelType<real_t, num_t, 3>(args...)); break;
-  case 4: launch_kernel<num_t, 4>(num_elements, verbose, KernelType<real_t, num_t, 4>(args...)); break;
-  case 5: launch_kernel<num_t, 5>(num_elements, verbose, KernelType<real_t, num_t, 5>(args...)); break;
-  case 6: launch_kernel<num_t, 6>(num_elements, verbose, KernelType<real_t, num_t, 6>(args...)); break;
+  case 1: launch_kernel<num_t, 1>(num_elements, num_var, verbose, KernelType<real_t, num_t, 1>(args...)); break;
+  case 2: launch_kernel<num_t, 2>(num_elements, num_var, verbose, KernelType<real_t, num_t, 2>(args...)); break;
+  case 3: launch_kernel<num_t, 3>(num_elements, num_var, verbose, KernelType<real_t, num_t, 3>(args...)); break;
+  case 4: launch_kernel<num_t, 4>(num_elements, num_var, verbose, KernelType<real_t, num_t, 4>(args...)); break;
+  case 5: launch_kernel<num_t, 5>(num_elements, num_var, verbose, KernelType<real_t, num_t, 5>(args...)); break;
+  case 6: launch_kernel<num_t, 6>(num_elements, num_var, verbose, KernelType<real_t, num_t, 6>(args...)); break;
   default: std::cerr << __func__ << ": Not implemented for order " << num_solpts << "\n"; break;
     // clang-format on
   }
@@ -95,16 +102,17 @@ template <template <typename, typename, int> class KernelType, typename... Args>
 void select_type(
     const std::string&      dtype,
     const std::vector<int>& num_elements,
+    const int               num_var,
     const int               num_solpts,
     const int               verbose,
     Args... args) {
   if (dtype == "float64")
   {
-    select_order<double, double, KernelType>(num_elements, num_solpts, verbose, args...);
+    select_order<double, double, KernelType>(num_elements, num_var, num_solpts, verbose, args...);
   }
   else if (dtype == "complex128")
   {
-    select_order<double, complex_t, KernelType>(num_elements, num_solpts, verbose, args...);
+    select_order<double, complex_t, KernelType>(num_elements, num_var, num_solpts, verbose, args...);
   }
   else
   {
@@ -122,6 +130,7 @@ void select_extrap_all_3d_type(
   std::string dtype = py::str(q.attr("dtype").attr("name"));
   const auto  shape = (q.attr("shape")).cast<std::vector<int>>();
 
+  const int num_var     = shape[0];
   const int num_elem_x3 = shape[1];
   const int num_elem_x2 = shape[2];
   const int num_elem_x1 = shape[3];
@@ -130,6 +139,7 @@ void select_extrap_all_3d_type(
   select_type<extrap_all_kernel>(
       dtype,
       {num_elem_x1, num_elem_x2, num_elem_x3},
+      num_var,
       num_solpts,
       verbose,
       q,

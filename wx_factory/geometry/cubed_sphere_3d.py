@@ -1148,7 +1148,7 @@ class CubedSphere3D(CubedSphere):
             / denom
         )
 
-        denom[:, :] = numpy.sqrt(
+        denom[:, :] = self.device.xp.sqrt(
             (
                 math.cos(self.lat_p)
                 + self.X_new * math.sin(self.lat_p) * math.sin(self.angle_p)

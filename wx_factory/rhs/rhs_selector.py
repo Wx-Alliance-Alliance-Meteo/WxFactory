@@ -118,7 +118,8 @@ def resolve_rhs(ctx: RhsContext) -> RhsBundle:
 
 @register_rhs("euler", CubedSphere3D)
 def _euler_cubesphere(ctx: RhsContext) -> RhsBundle:
-    pde = PDEEulerCubesphere(ctx.geom, ctx.param, ctx.metric)
+    # The state is the 5 Euler variables followed by any number of passively advected quantities.
+    pde = PDEEulerCubesphere(ctx.geom, ctx.param, ctx.metric, num_var=ctx.fields_shape[0])
     full = RHSDirecFluxReconstruction_mpi_v2(
         pde,
         ctx.geom,

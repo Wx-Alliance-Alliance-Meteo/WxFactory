@@ -80,6 +80,8 @@ void pointwise_euler_cubedsphere_3d(
 
   const auto&  shape  = q_in.request().shape;
   const size_t stride = shape[1] * shape[2] * shape[3] * shape[4];
+  // Anything stored after the meteorological variables is a passively advected quantity
+  const size_t num_tracers = shape[0] - num_euler_var_3d;
   // const int array_shape[5] = {5, num_elem_x3, num_elem_x2, num_elem_x1,
   // num_solpts_tot};
 
@@ -98,7 +100,8 @@ void pointwise_euler_cubedsphere_3d(
       wflux_pres_x2,
       wflux_pres_x3,
       log_pressure,
-      stride);
+      stride,
+      num_tracers);
 
 #pragma omp target teams distribute
   for (size_t index = 0; index < stride; index++)
@@ -248,7 +251,8 @@ void riemann_euler_cubedsphere_rusanov_3d(
     py_array<num_t>&        wflux_adv_itf_x2,
     py_array<num_t>&        wflux_pres_itf_x2,
     py_array<num_t>&        wflux_adv_itf_x3,
-    py_array<num_t>&        wflux_pres_itf_x3) {
+    py_array<num_t>&        wflux_pres_itf_x3,
+    const bool              advection_only) {
 
   const num_t* q_itf_x1_ptr = get_raw_ptr<num_t>(q_itf_x1_in);
   const num_t* q_itf_x2_ptr = get_raw_ptr<num_t>(q_itf_x2_in);
@@ -279,6 +283,7 @@ void riemann_euler_cubedsphere_rusanov_3d(
   const real_t* h_x3_ptr = get_raw_ptr<real_t>(h_x3);
 
   const int      num_solpts_riem = 2 * num_solpts * num_solpts;
+  const size_t   num_tracers     = q_itf_x1_in.request().shape[0] - num_euler_var_3d;
   const uint64_t stride_x1       = num_elem_x3 * num_elem_x2 * (num_elem_x1 + 2) * num_solpts_riem;
   const uint64_t stride_x2       = num_elem_x3 * (num_elem_x2 + 2) * num_elem_x1 * num_solpts_riem;
   const uint64_t stride_x3       = (num_elem_x3 + 2) * num_elem_x2 * num_elem_x1 * num_solpts_riem;
@@ -308,7 +313,8 @@ void riemann_euler_cubedsphere_rusanov_3d(
               flux_itf_x1_ptr,
               pressure_itf_x1_ptr,
               wflux_adv_itf_x1_ptr,
-              wflux_pres_itf_x1_ptr);
+              wflux_pres_itf_x1_ptr,
+              num_tracers);
 
           const int index_r = get_c_index(0, i, j, k + 1, l, array_shape_x1);
           riemann_params_cubedsphere<real_t, num_t> params_r(
@@ -320,13 +326,15 @@ void riemann_euler_cubedsphere_rusanov_3d(
               flux_itf_x1_ptr,
               pressure_itf_x1_ptr,
               wflux_adv_itf_x1_ptr,
-              wflux_pres_itf_x1_ptr);
+              wflux_pres_itf_x1_ptr,
+              num_tracers);
 
           riemann_euler_cubedsphere_rusanov_3d_kernel<real_t, num_t>(
               params_l,
               params_r,
               0,
-              false); // Consider internal Riemann problem
+              false, // Consider internal Riemann problem
+              advection_only);
         }
       }
     }
@@ -352,7 +360,8 @@ void riemann_euler_cubedsphere_rusanov_3d(
               flux_itf_x2_ptr,
               pressure_itf_x2_ptr,
               wflux_adv_itf_x2_ptr,
-              wflux_pres_itf_x2_ptr);
+              wflux_pres_itf_x2_ptr,
+              num_tracers);
 
           const int index_r = get_c_index(0, i, j + 1, k, l, array_shape_x2);
           riemann_params_cubedsphere<real_t, num_t> params_r(
@@ -364,13 +373,15 @@ void riemann_euler_cubedsphere_rusanov_3d(
               flux_itf_x2_ptr,
               pressure_itf_x2_ptr,
               wflux_adv_itf_x2_ptr,
-              wflux_pres_itf_x2_ptr);
+              wflux_pres_itf_x2_ptr,
+              num_tracers);
 
           riemann_euler_cubedsphere_rusanov_3d_kernel<real_t, num_t>(
               params_l,
               params_r,
               1,
-              false); // Consider internal Riemann problem
+              false, // Consider internal Riemann problem
+              advection_only);
         }
       }
     }
@@ -396,7 +407,8 @@ void riemann_euler_cubedsphere_rusanov_3d(
               flux_itf_x3_ptr,
               pressure_itf_x3_ptr,
               wflux_adv_itf_x3_ptr,
-              wflux_pres_itf_x3_ptr);
+              wflux_pres_itf_x3_ptr,
+              num_tracers);
 
           const int index_r = get_c_index(0, i + 1, j, k, l, array_shape_x3);
           riemann_params_cubedsphere<real_t, num_t> params_r(
@@ -408,7 +420,8 @@ void riemann_euler_cubedsphere_rusanov_3d(
               flux_itf_x3_ptr,
               pressure_itf_x3_ptr,
               wflux_adv_itf_x3_ptr,
-              wflux_pres_itf_x3_ptr);
+              wflux_pres_itf_x3_ptr,
+              num_tracers);
 
           bool boundary_riemann = false;
           if (i == 0 || i == num_elem_x3)
@@ -418,7 +431,8 @@ void riemann_euler_cubedsphere_rusanov_3d(
               params_l,
               params_r,
               2,
-              boundary_riemann);
+              boundary_riemann,
+              advection_only);
         }
       }
     }
@@ -547,7 +561,8 @@ void select_riemann_euler_cubedsphere_rusanov_3d(
     py::object&       wflux_adv_itf_x2,
     py::object&       wflux_pres_itf_x2,
     py::object&       wflux_adv_itf_x3,
-    py::object&       wflux_pres_itf_x3) {
+    py::object&       wflux_pres_itf_x3,
+    const bool        advection_only) {
 
   std::string dtype = py::str(q_itf_x1_in.attr("dtype").attr("name"));
   if (dtype == "float64")
@@ -577,7 +592,8 @@ void select_riemann_euler_cubedsphere_rusanov_3d(
         wflux_adv_itf_x2,
         wflux_pres_itf_x2,
         wflux_adv_itf_x3,
-        wflux_pres_itf_x3);
+        wflux_pres_itf_x3,
+        advection_only);
   }
   else if (dtype == "complex128")
   {
@@ -606,7 +622,8 @@ void select_riemann_euler_cubedsphere_rusanov_3d(
         wflux_adv_itf_x2,
         wflux_pres_itf_x2,
         wflux_adv_itf_x3,
-        wflux_pres_itf_x3);
+        wflux_pres_itf_x3,
+        advection_only);
   }
   else
   {

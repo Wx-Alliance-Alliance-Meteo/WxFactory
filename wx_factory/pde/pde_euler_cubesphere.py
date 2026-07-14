@@ -56,14 +56,16 @@ def compute_forcings(
 
 
 class PDEEulerCubesphere(PDE):
-    def __init__(self, geometry: CubedSphere3D, config: Configuration, metric: Metric3DTopo):
+    def __init__(self, geometry: CubedSphere3D, config: Configuration, metric: Metric3DTopo, num_var: int = 5):
+        # num_var is 5 for the Euler equations alone. Passively advected tracers are appended to the
+        # state. Only the array sizes depend on num_var.
         pde = geometry.device.pde
         super().__init__(
             geometry,
             config,
             metric,
             num_dim=3,
-            num_var=5,
+            num_var=num_var,
             num_elem=geometry.num_elements_horizontal**2 * geometry.num_elements_vertical,
             pointwise_func=pde.pointwise_euler_cubedsphere_3d,
             riemann_func=self.get_riemann_solver(pde, "rusanov"),
@@ -296,6 +298,7 @@ class PDEEulerCubesphere(PDE):
             wflux_pres_itf_x2,
             wflux_adv_itf_x3,
             wflux_pres_itf_x3,
+            self.advection_only,
         )
 
         return pressure_itf_x1, pressure_itf_x2

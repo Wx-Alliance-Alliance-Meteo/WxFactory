@@ -37,12 +37,16 @@ void select_extrap_all_3d(
     const int              verbose) {
 
   const auto shape       = q.request().shape;
+  const int  num_var     = shape[0];
   const int  num_elem_x3 = shape[1];
   const int  num_elem_x2 = shape[2];
   const int  num_elem_x1 = shape[3];
   const int  num_solpts  = static_cast<int>(std::cbrt(shape[4]));
 
-  const size_t num_threads = 5 * num_elem_x1 * num_elem_x2 * num_elem_x3 * num_solpts * num_solpts;
+  // Every variable of the state is extrapolated, whatever their number: the meteorological
+  // variables and the advected quantities (tracers, hydrometeors, chemical species) that follow.
+  const size_t num_threads =
+      size_t(num_var) * num_elem_x1 * num_elem_x2 * num_elem_x3 * num_solpts * num_solpts;
   switch (num_solpts)
   {
     // clang-format off

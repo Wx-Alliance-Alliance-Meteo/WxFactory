@@ -141,6 +141,7 @@ class Configuration:
     output_freq: int
     phi0: float
     preconditioner: str
+    pytorch_device: str
     save_state_freq: int
     schar_mountain_height: float
     schar_mountain_lattitude: float

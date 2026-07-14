@@ -285,12 +285,11 @@ class CudaDevice(Device):
 class PytorchDevice(Device):
     _default: Self = None
 
-    def __init__(self, comm: MPI.Comm) -> None:
-        # TODO : Remplacer pour avoir les bons kernels si on est sur GPU
+    def __init__(self, comm: MPI.Comm, device_type: str = "cuda") -> None:
         import numpy
         import scipy
         import torch
-        from .wx_torch import TorchXp
+        from .wx_torch import TorchAlg, TorchXp
 
         try:
             compile_kernels.compile("pde", "cpp", force=False, comm=comm)
@@ -306,10 +305,32 @@ class PytorchDevice(Device):
             print(f"Unknown exception!", flush=True)
             raise
 
-        super().__init__(comm, TorchXp(), scipy, pde, operators)
+        # Torch only ever uses the pure-python (xp) kernels, so putting it on a GPU is entirely a
+        # matter of where the tensors live. Ranks of a node are spread over the available devices
+        # the same way CudaDevice does it.
+        self.torch = torch
+        if device_type == "cuda" and torch.cuda.is_available():
+            node_comm, _ = split_nodes(comm)
+            num_devices = torch.cuda.device_count()
+            num_per_device = (node_comm.size + num_devices - 1) // num_devices
+            self.torch_device = torch.device("cuda", node_comm.rank // num_per_device)
+        else:
+            if device_type == "cuda" and comm.rank == 0:
+                print("No GPU available for the Pytorch backend, falling back to the CPU", flush=True)
+            self.torch_device = torch.device("cpu")
+
+        # Every tensor the code creates goes through torch's default device, including the ones made
+        # by the bare torch functions that TorchXp forwards to.
+        torch.set_default_device(self.torch_device)
+        if comm.rank == 0:
+            print(f"Pytorch backend running on {self.torch_device}", flush=True)
+
+        super().__init__(comm, TorchXp(), TorchAlg(), pde, operators)
 
     def synchronize(self, **kwargs):
-        """Don't do anything. This is to allow writing generic code when device is not the same as the host."""
+        """Wait for the queued GPU work. A no-op when the tensors are already on the host."""
+        if self.torch_device.type == "cuda":
+            self.torch.cuda.synchronize(self.torch_device)
 
     def array(self, a: NDArray, *args, **kwargs) -> NDArray:
         """Copy given array to torch."""

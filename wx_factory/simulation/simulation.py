@@ -251,7 +251,7 @@ class Simulation:
             if device is None:
                 device = CpuDevice(comm=self.comm)
         elif self.config.desired_device == "torch":
-            device = PytorchDevice(comm=self.comm)
+            device = PytorchDevice(comm=self.comm, device_type=self.config.pytorch_device)
         else:
             device = CpuDevice(comm=self.comm)
 

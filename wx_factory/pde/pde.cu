@@ -148,7 +148,9 @@ __global__ void riemann_euler_cubedsphere_rusanov_3d(
     const int     nmax_x1,
     const int     nmax_x2,
     const int     nmax_x3,
-    const int     num_solpts_face) {
+    const int     num_solpts_face,
+    const size_t  num_tracers,
+    const bool    advection_only) {
   // Get the thread id
   const size_t tid         = threadIdx.x + blockIdx.x * blockDim.x;
   const size_t total_tasks = nmax_x1 * nmax_x2 * nmax_x3 * num_solpts_face;
@@ -204,7 +206,8 @@ __global__ void riemann_euler_cubedsphere_rusanov_3d(
       flux_itf,
       pressure,
       wflux_adv_itf,
-      wflux_pres_itf);
+      wflux_pres_itf,
+      num_tracers);
 
   riemann_params_cubedsphere<real_t, num_t> params_r(
       q_itf,
@@ -215,7 +218,8 @@ __global__ void riemann_euler_cubedsphere_rusanov_3d(
       flux_itf,
       pressure,
       wflux_adv_itf,
-      wflux_pres_itf);
+      wflux_pres_itf,
+      num_tracers);
 
   // Compute the Riemann flux
   bool boundary = (direction == 2 && (i == 0 || i == nmax_x3 - 1));
@@ -223,7 +227,8 @@ __global__ void riemann_euler_cubedsphere_rusanov_3d(
       params_l,
       params_r,
       direction,
-      boundary);
+      boundary,
+      advection_only);
 }
 
 template <typename real_t, typename num_t>
@@ -364,7 +369,8 @@ void launch_riemann_euler_cubedsphere_rusanov_3d(
     py::object       wflux_adv_itf_x2,
     py::object       wflux_pres_itf_x2,
     py::object       wflux_adv_itf_x3,
-    py::object       wflux_pres_itf_x3) {
+    py::object       wflux_pres_itf_x3,
+    const bool       advection_only) {
   const num_t* q_itf_x1_ptr = get_raw_ptr<const num_t>(q_itf_x1_in);
   const num_t* q_itf_x2_ptr = get_raw_ptr<const num_t>(q_itf_x2_in);
   const num_t* q_itf_x3_ptr = get_raw_ptr<num_t>(q_itf_x3_in);
@@ -397,6 +403,10 @@ void launch_riemann_euler_cubedsphere_rusanov_3d(
   int  num_solpts_face = num_solpts * num_solpts;
   int  num_tasks, num_blocks;
 
+  // Anything stored after the meteorological variables is a passively advected quantity
+  const size_t num_var     = q_itf_x1_in.attr("shape").cast<std::vector<int>>()[0];
+  const size_t num_tracers = num_var - num_euler_var_3d;
+
   // x1-direction
   num_tasks  = num_elem_x3 * num_elem_x2 * (num_elem_x1 + 1) * num_solpts_face;
   num_blocks = ((num_tasks + threads_per_block.x - 1) / threads_per_block.x);
@@ -413,7 +423,9 @@ void launch_riemann_euler_cubedsphere_rusanov_3d(
       num_elem_x1 + 1,
       num_elem_x2,
       num_elem_x3,
-      num_solpts_face);
+      num_solpts_face,
+      num_tracers,
+      advection_only);
 
   // x2-direction
   num_tasks  = num_elem_x3 * (num_elem_x2 + 1) * num_elem_x1 * num_solpts_face;
@@ -431,7 +443,9 @@ void launch_riemann_euler_cubedsphere_rusanov_3d(
       num_elem_x1,
       num_elem_x2 + 1,
       num_elem_x3,
-      num_solpts_face);
+      num_solpts_face,
+      num_tracers,
+      advection_only);
 
   // x3-direction
   num_tasks  = (num_elem_x3 + 1) * num_elem_x2 * num_elem_x1 * num_solpts_face;
@@ -449,7 +463,9 @@ void launch_riemann_euler_cubedsphere_rusanov_3d(
       num_elem_x1,
       num_elem_x2,
       num_elem_x3 + 1,
-      num_solpts_face);
+      num_solpts_face,
+      num_tracers,
+      advection_only);
 }
 
 void select_riemann_euler_cubedsphere_rusanov_3d(
@@ -477,7 +493,8 @@ void select_riemann_euler_cubedsphere_rusanov_3d(
     py::object       wflux_adv_itf_x2,
     py::object       wflux_pres_itf_x2,
     py::object       wflux_adv_itf_x3,
-    py::object       wflux_pres_itf_x3) {
+    py::object       wflux_pres_itf_x3,
+    const bool       advection_only) {
 
   std::string dtype = py::str(q_itf_x1_in.attr("dtype").attr("name"));
   if (dtype == "float64")
@@ -507,7 +524,8 @@ void select_riemann_euler_cubedsphere_rusanov_3d(
         wflux_adv_itf_x2,
         wflux_pres_itf_x2,
         wflux_adv_itf_x3,
-        wflux_pres_itf_x3);
+        wflux_pres_itf_x3,
+        advection_only);
   }
   else if (dtype == "complex128")
   {
@@ -536,7 +554,8 @@ void select_riemann_euler_cubedsphere_rusanov_3d(
         wflux_adv_itf_x2,
         wflux_pres_itf_x2,
         wflux_adv_itf_x3,
-        wflux_pres_itf_x3);
+        wflux_pres_itf_x3,
+        advection_only);
   }
   else
   {
@@ -722,6 +741,42 @@ void select_type(
   }
 }
 
+//! Same as select_type, but forwards one extra value after the stride. Used by kernels whose
+//! parameters end with the number of advected quantities carried by the state.
+template <template <typename, typename> class KernelType, typename... Args>
+void select_type_with_tracers(
+    const std::string&      dtype,
+    const std::vector<int>& shape,
+    const int               verbose,
+    const size_t            num_tracers,
+    Args... args) {
+
+  size_t num_threads = 1;
+  for (auto val : shape)
+  {
+    num_threads *= val;
+  }
+
+  if (dtype == "float64")
+  {
+    launch_pointwise_kernel(
+        num_threads,
+        verbose,
+        KernelType<double, double>(args..., num_threads, num_tracers));
+  }
+  else if (dtype == "complex128")
+  {
+    launch_pointwise_kernel(
+        num_threads,
+        verbose,
+        KernelType<double, complex_t>(args..., num_threads, num_tracers));
+  }
+  else
+  {
+    std::cerr << __func__ << ": Unrecognized array type " << dtype << std::endl;
+  }
+}
+
 void select_pointwise_euler_cubedsphere_3d(
     const py::object q_in,
     const py::object sqrt_g_in,
@@ -742,10 +797,15 @@ void select_pointwise_euler_cubedsphere_3d(
   // Determine cupy array dtype
   std::string dtype = py::str(q_in.attr("dtype").attr("name"));
   const auto& shape = q_in.attr("shape").cast<std::vector<int>>();
-  select_type<PointwiseFluxEuler3DKernel>(
+
+  // Anything stored after the meteorological variables is a passively advected quantity
+  const size_t num_tracers = shape[0] - num_euler_var_3d;
+
+  select_type_with_tracers<PointwiseFluxEuler3DKernel>(
       dtype,
       {shape[1], shape[2], shape[3], shape[4]},
       verbose,
+      num_tracers,
       q_in,
       sqrt_g_in,
       h_in,

@@ -211,6 +211,15 @@ class OutputCubesphereNetcdf(OutputCubesphere):
                 topo.coordinates = "lons lats"
                 topo.grid_mapping = "cubed_sphere"
 
+                # Volume of each solution point, so that global integrals (e.g. the DCMIP error
+                # norms, which are defined as I[x] = sum_j x_j V_j) can be computed from the output.
+                volume = self.ncfile.createVariable("volume", numpy.dtype("double").char, grid_data)
+                volume.long_name = "Cell volume"
+                volume.units = "m3"
+                volume.standard_name = "Cell volume"
+                volume.coordinates = "lons lats"
+                volume.grid_mapping = "cubed_sphere"
+
                 uuu = self.ncfile.createVariable("U", numpy.dtype("double").char, ("time",) + grid_data)
                 uuu.long_name = "eastward_wind"
                 uuu.units = "m s-1"
@@ -302,6 +311,7 @@ class OutputCubesphereNetcdf(OutputCubesphere):
         if self.config.equations == "euler":
             elevs = to_host(self._gather_field(self.geometry.coordVec_latlon[2, :, :, :], 3))
             topos = to_host(self._gather_field(self.geometry.zbot[:, :], 2))
+            vols = to_host(self._gather_field(self.geometry.to_single_block(self._cell_volume()), 3))
 
         if self.rank == 0:
             for i in range(6):
@@ -312,6 +322,23 @@ class OutputCubesphereNetcdf(OutputCubesphere):
                 for i in range(6):
                     elev[i, :, :, :] = elevs[i]
                     topo[i, :, :] = topos[i]
+                    volume[i, :, :, :] = vols[i]
+
+    def _cell_volume(self) -> NDArray:
+        """Volume associated with each solution point.
+
+        On the cubed sphere the elements are uniform in the computational coordinates, so the volume
+        of a solution point is sqrt(G) times its tensor-product Gauss-Legendre quadrature weight,
+        times the (constant) volume of a reference element. The solution points inside an element are
+        ordered with x1 varying fastest, then x2, then x3."""
+        geom = self.geometry
+        xp = geom.device.xp
+
+        w = geom.glweights
+        w3d = xp.kron(w, xp.kron(w, w))  # ordering: x3 slowest, x1 fastest
+
+        elem_volume = geom.delta_x1 * geom.delta_x2 * geom.delta_x3 / 8.0
+        return self.metric.sqrtG_new * w3d * elem_volume
 
     def store_field_Zdim(self, field, name: str, time_idx: int, level_idx: int):
         fields = self._gather_field(field, self.num_dim)

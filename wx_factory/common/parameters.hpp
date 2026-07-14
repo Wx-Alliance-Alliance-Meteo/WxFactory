@@ -73,6 +73,30 @@ DEVICE_SPACE array<var<num_t>, size> make_var_sequence(const num_t* offset, cons
   return result;
 }
 
+//! Access to a run-time number of variables stored contiguously, one after the other, in a flat
+//! array. Same idea as var_multi, but the count is only known at run time: this is what lets the
+//! state carry an arbitrary number of advected quantities (tracers, hydrometeors, chemical species)
+//! after the meteorological variables.
+template <typename num_t>
+struct var_dynamic
+{
+  num_t* base   = nullptr; //!< First variable, already offset to the current grid point
+  size_t stride = 0;       //!< Distance between two consecutive variables
+  size_t count  = 0;       //!< How many variables there are
+
+  HOST_DEVICE_SPACE var_dynamic() {}
+
+  HOST_DEVICE_SPACE var_dynamic(num_t* field, const size_t index, const size_t stride, const size_t count) :
+      base(field + index), stride(stride), count(count) {}
+
+  HOST_DEVICE_SPACE num_t  operator[](const size_t i) const { return base[i * stride]; }
+  HOST_DEVICE_SPACE num_t& operator[](const size_t i) { return base[i * stride]; }
+
+  HOST_DEVICE_SPACE size_t size() const { return count; }
+
+  HOST_DEVICE_SPACE void move_index(const int64_t index_change) { base += index_change; }
+};
+
 template <typename num_t, int num_var>
 struct var_multi
 {
