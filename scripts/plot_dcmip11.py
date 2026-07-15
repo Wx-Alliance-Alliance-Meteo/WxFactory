@@ -165,7 +165,7 @@ def mixing_diagnostics(q1, q2, weight):
     }
 
 
-def scatter_to_grid(x, y, values, x_range, y_range, shape, periodic_x=None):
+def scatter_to_grid(x, y, values, x_range, y_range, shape, periodic_x=None, method="linear"):
     """Interpolate the scattered cubed-sphere points onto a regular grid.
 
     Contouring the raw points directly (tricontourf) triangulates them in the plotting plane, which
@@ -184,7 +184,7 @@ def scatter_to_grid(x, y, values, x_range, y_range, shape, periodic_x=None):
         y = numpy.tile(y, 3)
         values = numpy.tile(values, 3)
 
-    return griddata((x, y), values, (grid_x, grid_y), method="linear")
+    return griddata((x, y), values, (grid_x, grid_y), method=method)
 
 
 def color_range(data, name):
@@ -210,7 +210,11 @@ def plot_lat_lon(data, day, level, outdir):
         q = field[it, :, iz].ravel()
         vmin, vmax = color_range(data, name)
 
-        image = scatter_to_grid(lon, lat, q, (0, 360), (-90, 90), (181, 361), periodic_x=360.0)
+        # The cubed sphere's outermost points stop short of the poles, so the top and bottom rows of
+        # the target grid fall outside the data and come back as NaN, which imshow would draw as
+        # blank strips. Fill them with zero.
+        image = scatter_to_grid(lon, lat, q, (0, 360), (-90, 90), (361, 721), periodic_x=360.0)
+        image = numpy.nan_to_num(image, nan=0.0)
         rendered = ax.imshow(
             image,
             origin="lower",
@@ -247,24 +251,51 @@ def equator_band(lat, lat_tol):
     return abs_lat < tol, tol
 
 
+def equator_columns(data, lat_tol=2.0):
+    """The (panel, x, y) columns whose foot lies near the equator, with their vertical profiles.
+
+    The model levels are unevenly spaced Gauss-Legendre points, so the interpolation to regular
+    heights has to be done one column at a time, up a monotonic line. Triangulating the raw points
+    in the (longitude, height) plane instead is what stripes the picture.
+    """
+    lat2d = data["lat"][:, 0]  # (panel, x, y)
+    lon2d = data["lon"][:, 0]
+    abs_lat = numpy.abs(lat2d)
+    columns = numpy.sort(abs_lat.ravel())
+    minimum_points = max(3, int(0.01 * columns.size))
+    lat_tol = max(lat_tol, columns[minimum_points])
+
+    mask = abs_lat < lat_tol  # (panel, x, y)
+    z_cols = numpy.moveaxis(data["elev"], 1, -1)[mask]  # (ncol, nz)
+    lon_cols = lon2d[mask]
+    return lon_cols, z_cols, mask, lat_tol
+
+
 def plot_lon_height(data, day, outdir, lat_tol=2.0):
-    """Longitude-height cross section along the equator."""
+    """Longitude-height cross section along the equator, on regular height levels."""
     it = time_index(data["time"], day * DAY)
+    lon_cols, z_cols, mask, lat_tol = equator_columns(data, lat_tol)
 
-    near_equator, lat_tol = equator_band(data["lat"], lat_tol)
-    lon = data["lon"][near_equator]
-    z = data["elev"][near_equator]
-
-    # The first and last levels sit half a cell away from the ground and the model top, so bound the
-    # axis by the data itself: extending it further would only leave an empty strip.
-    zbot, ztop = float(z.min()), float(z.max())
+    zbot, ztop = float(z_cols.min()), float(z_cols.max())
+    heights = numpy.linspace(zbot, ztop, 181)
+    longitudes = numpy.linspace(0.0, 360.0, 361)
+    order = numpy.argsort(lon_cols)
+    lon_sorted = lon_cols[order]
 
     fig, axes = plt.subplots(2, 2, figsize=(14, 8), constrained_layout=True)
     for ax, (name, field) in zip(axes.ravel(), data["tracers"].items()):
-        q = field[it][near_equator]
+        q_cols = numpy.moveaxis(field[it], 1, -1)[mask]  # (panel, z, x, y) -> (ncol, nz)
         vmin, vmax = color_range(data, name)
 
-        image = scatter_to_grid(lon, z, q, (0, 360), (zbot, ztop), (181, 361), periodic_x=360.0)
+        # First up each monotonic column onto the regular heights, then across longitude.
+        on_heights = numpy.empty((len(lon_cols), heights.size))
+        for c in range(len(lon_cols)):
+            on_heights[c] = numpy.interp(heights, z_cols[c], q_cols[c])
+
+        image = numpy.empty((heights.size, longitudes.size))
+        for r in range(heights.size):
+            image[r] = numpy.interp(longitudes, lon_sorted, on_heights[order, r], period=360.0)
+
         rendered = ax.imshow(
             image,
             origin="lower",
@@ -276,7 +307,7 @@ def plot_lon_height(data, day, outdir, lat_tol=2.0):
             interpolation="bilinear",
         )
         fig.colorbar(rendered, ax=ax, shrink=0.85)
-        ax.set_title(f"{name}   [{q.min():.3f}, {q.max():.3f}]")
+        ax.set_title(f"{name}   [{image.min():.3f}, {image.max():.3f}]")
         ax.set_xlabel("longitude (deg)")
         ax.set_ylabel("height (m)")
 

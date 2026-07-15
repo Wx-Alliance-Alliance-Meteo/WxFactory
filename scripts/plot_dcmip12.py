@@ -25,7 +25,6 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import netCDF4
 import numpy
-from scipy.interpolate import griddata
 
 HOUR = 3600.0
 
@@ -70,47 +69,42 @@ def error_norms(q, q_exact, volume):
     return l1, l2, linf
 
 
-def meridian_band(lon, longitude, tolerance=2.0):
-    """The grid points lying near a meridian.
+def meridian_columns(data, longitude, tolerance=2.0):
+    """The (panel, x, y) columns lying near a meridian, with their vertical profiles.
 
-    The cubed sphere has no column exactly on a given meridian, and how close it comes depends on
-    the resolution, so widen the tolerance until the band holds enough points to interpolate.
+    The cubed sphere has no column exactly on a given meridian, so widen the tolerance until the band
+    holds enough columns. The model levels are unevenly spaced Gauss-Legendre points, so the
+    interpolation to regular heights has to be done one column at a time, up a monotonic line;
+    triangulating the raw points in the (latitude, height) plane instead stripes the picture.
     """
-    # Angular distance to the meridian, taking the 0/360 wrap into account.
-    distance = numpy.abs((lon - longitude + 180.0) % 360.0 - 180.0)
+    lon2d = data["lon"][:, 0]  # (panel, x, y)
+    lat2d = data["lat"][:, 0]
 
-    columns = numpy.sort(distance[:, 0].ravel())
+    # Angular distance to the meridian, taking the 0/360 wrap into account.
+    distance = numpy.abs((lon2d - longitude + 180.0) % 360.0 - 180.0)
+    columns = numpy.sort(distance.ravel())
     minimum_points = max(3, int(0.01 * columns.size))
     tolerance = max(tolerance, columns[minimum_points])
 
-    return distance < tolerance, tolerance
-
-
-def scatter_to_grid(x, y, values, x_range, y_range, shape):
-    """Interpolate the scattered cubed-sphere points onto a regular grid.
-
-    Contouring the raw points triangulates them in the plotting plane, which on a cubed sphere leaves
-    slivers along the panel edges and wedges near the poles. Interpolating first, and letting imshow
-    smooth, avoids all of that.
-    """
-    grid_x, grid_y = numpy.meshgrid(
-        numpy.linspace(x_range[0], x_range[1], shape[1]),
-        numpy.linspace(y_range[0], y_range[1], shape[0]),
-    )
-    return griddata((x, y), values, (grid_x, grid_y), method="linear")
+    mask = distance < tolerance  # (panel, x, y)
+    z_cols = numpy.moveaxis(data["elev"], 1, -1)[mask]  # (ncol, nz)
+    lat_cols = lat2d[mask]
+    return lat_cols, z_cols, mask, tolerance
 
 
 def plot_lat_height(data, hours, outdir):
     """Latitude-height cross sections of q1 along the section meridian, one panel per time."""
-    on_meridian, tolerance = meridian_band(data["lon"], SECTION_LONGITUDE)
-
-    lat = data["lat"][on_meridian]
-    z = data["elev"][on_meridian]
+    lat_cols, z_cols, mask, tolerance = meridian_columns(data, SECTION_LONGITUDE)
 
     # Bound the axes by the data. The outermost grid points fall short of the poles and of the
     # ground, and extending the axes past them would only leave empty strips.
-    latmin, latmax = float(lat.min()), float(lat.max())
-    zbot, ztop = float(z.min()), float(z.max())
+    latmin, latmax = float(lat_cols.min()), float(lat_cols.max())
+    zbot, ztop = float(z_cols.min()), float(z_cols.max())
+
+    latitudes = numpy.linspace(latmin, latmax, 181)
+    heights = numpy.linspace(zbot, ztop, 181)
+    order = numpy.argsort(lat_cols)
+    lat_sorted = lat_cols[order]
 
     # A colour scale fixed on the initial state makes the times comparable, and lets the
     # over- and undershoots of an unlimited scheme show up as saturation.
@@ -122,9 +116,17 @@ def plot_lat_height(data, hours, outdir):
 
     for ax, hour in zip(axes, hours):
         it = time_index(data["time"], hour * HOUR)
-        q = data["q1"][it][on_meridian]
+        q_cols = numpy.moveaxis(data["q1"][it], 1, -1)[mask]  # (panel, z, x, y) -> (ncol, nz)
 
-        image = scatter_to_grid(lat, z, q, (latmin, latmax), (zbot, ztop), (181, 181))
+        # First up each monotonic column onto the regular heights, then across latitude.
+        on_heights = numpy.empty((len(lat_cols), heights.size))
+        for c in range(len(lat_cols)):
+            on_heights[c] = numpy.interp(heights, z_cols[c], q_cols[c])
+
+        image = numpy.empty((heights.size, latitudes.size))
+        for r in range(heights.size):
+            image[r] = numpy.interp(latitudes, lat_sorted, on_heights[order, r])
+
         rendered = ax.imshow(
             image,
             origin="lower",
@@ -136,7 +138,7 @@ def plot_lat_height(data, hours, outdir):
             interpolation="bilinear",
         )
         fig.colorbar(rendered, ax=ax, shrink=0.85)
-        ax.set_title(f"t = {hour:g} h   [{q.min():.3f}, {q.max():.3f}]")
+        ax.set_title(f"t = {hour:g} h   [{image.min():.3f}, {image.max():.3f}]")
         ax.set_xlabel("latitude (deg)")
 
     axes[0].set_ylabel("height (m)")
