@@ -157,7 +157,9 @@
                 },
                 {
                     "name": "tolerance",
-                    "type": "float"
+                    "type": "float",
+                    "default": 1e-7,
+                    "description": "Convergence tolerance of the implicit / exponential integrators' inner solver. Ignored by the explicit integrators (e.g. tvdrk3), which have no inner solve."
                 },
                 {
                     "name": "starting_step",

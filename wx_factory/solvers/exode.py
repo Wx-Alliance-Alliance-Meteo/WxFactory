@@ -14,7 +14,7 @@ def exode(
     verbose=False,
 ):
     # Import here to resolve circular import
-    from integrators.butcher import METHODS
+    from ..integrators.butcher import METHODS
 
     if not hasattr(exode, "first_step"):
         exode.first_step = τ_out  # TODO : use CFL condition ?
