@@ -140,6 +140,7 @@ class Configuration:
     output_format: str
     output_freq: int
     phi0: float
+    precision: str
     preconditioner: str
     pytorch_device: str
     save_state_freq: int
@@ -149,6 +150,8 @@ class Configuration:
     schar_mountain_longitude: float
     schar_mountain_radius: float
     schar_mountain_step: int
+    sleve_scale_large: float
+    sleve_scale_small: float
     splitting_integrator_1: str
     splitting_integrator_2: str
     sponge_tscale: float
@@ -164,6 +167,7 @@ class Configuration:
     topography_file: str
     verbose_precond: int
     verbose_solver: int
+    vertical_coord: str
     x0: float
     x1: float
     z0: float

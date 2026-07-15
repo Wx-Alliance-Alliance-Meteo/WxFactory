@@ -262,7 +262,7 @@ class OutputCubesphereNetcdf(OutputCubesphere):
                 press.coordinates = "lons lats"
                 press.grid_mapping = "cubed_sphere"
 
-                if self.config.case_number == 11 or self.config.case_number == 12:
+                if self.config.case_number in (11, 12, 13):
                     q1 = self.ncfile.createVariable("q1", numpy.dtype("double").char, ("time",) + grid_data)
                     q1.long_name = "q1"
                     q1.units = "kg m-3"
@@ -270,7 +270,7 @@ class OutputCubesphereNetcdf(OutputCubesphere):
                     q1.coordinates = "lons lats"
                     q1.grid_mapping = "cubed_sphere"
 
-                if self.config.case_number == 11:
+                if self.config.case_number in (11, 13):
                     q2 = self.ncfile.createVariable("q2", numpy.dtype("double").char, ("time",) + grid_data)
                     q2.long_name = "q2"
                     q2.units = "kg m-3"
@@ -439,10 +439,10 @@ class OutputCubesphereNetcdf(OutputCubesphere):
             self.store_field(geom.to_single_block(theta), "theta", idx)
             self.store_field(geom.to_single_block(p0 * (Q[idx_rho_theta] * Rd / p0) ** (cpd / cvd)), "P", idx)
 
-            if self.config.case_number == 11 or self.config.case_number == 12:
+            if self.config.case_number in (11, 12, 13):
                 self.store_field(geom.to_single_block(Q[5, ...] / rho), "q1", idx)
 
-            if self.config.case_number == 11:
+            if self.config.case_number in (11, 13):
                 for i in [6, 7, 8]:
                     self.store_field(geom.to_single_block(Q[i, ...] / rho), f"q{i-4}", idx)
 

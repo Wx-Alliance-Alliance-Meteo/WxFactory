@@ -39,6 +39,13 @@ class Device(ABC):
         self.pde = pde_module
         self.operators = operators_module
 
+        # Floating-point precision of the whole computation. Defaults to double; the Simulation
+        # overrides these from the `precision` configuration option. Single precision halves the
+        # memory footprint (and the bandwidth), which is what lets the finer resolutions fit on a
+        # GPU, at the cost of accuracy.
+        self.real_dtype = xp.float64
+        self.complex_dtype = xp.complex128
+
     @abstractmethod
     def synchronize(self, **kwargs):
         """Synchronize this device with the host. This is essentially a host-device barrier."""

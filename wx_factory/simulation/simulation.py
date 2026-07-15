@@ -100,6 +100,16 @@ class Simulation:
         self._adjust_num_elements()
         self.device = self._make_device()
 
+        # Choose the floating-point precision of the whole computation. Single precision halves the
+        # memory footprint, which is what lets the finer resolutions fit on a GPU.
+        xp = self.device.xp
+        if self.config.precision == "single":
+            self.device.real_dtype = xp.float32
+            self.device.complex_dtype = xp.complex64
+        else:
+            self.device.real_dtype = xp.float64
+            self.device.complex_dtype = xp.complex128
+
         # Set matmul backend from config
         set_matmul_backend(self.config.matmul_backend, self.device.xp)
 
@@ -111,7 +121,7 @@ class Simulation:
             resolve_step_hooks(StepHookContext(config=self.config, geometry=self.geometry), phase=PHASE_GEOMETRY)
         )
         self.operators_real = DFROperators(self.geometry, self.config, self.device)
-        self.operators_complex = DFROperators(self.geometry, self.config, self.device, self.device.xp.complex128)
+        self.operators_complex = DFROperators(self.geometry, self.config, self.device, self.device.complex_dtype)
         self.initial_state = init_state_vars(self.geometry, self.operators_real, self.config, self.step_hooks)
 
         self.output = resolve_output(

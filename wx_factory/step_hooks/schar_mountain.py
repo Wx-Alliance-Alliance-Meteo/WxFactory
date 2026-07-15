@@ -54,6 +54,24 @@ class ScharMountainHook(step_hook.StepHook):
         self.zbot_new = self.build_topo(self.geom.get_floor(self.geom.polar))
         self.zbot_itf_i_new = self.build_topo(self.geom.get_itf_i_floor(self.geom.polar_itf_i))
         self.zbot_itf_j_new = self.build_topo(self.geom.get_itf_j_floor(self.geom.polar_itf_j))
+
+        # Large-scale part of the mountain, for the SLEVE vertical coordinate (see build_topo)
+        self.large = self.build_topo_old(self.geom.coordVec_latlon, large_scale_only=True)
+        self.large_itf_i = self.build_topo_old(self.geom.coordVec_latlon_itf_i, large_scale_only=True)
+        self.large_itf_j = self.build_topo_old(self.geom.coordVec_latlon_itf_j, large_scale_only=True)
+
+        self.large_new = self.build_topo(self.geom.get_floor(self.geom.polar), large_scale_only=True)
+        self.large_itf_i_new = self.build_topo(
+            self.geom.get_itf_i_floor(self.geom.polar_itf_i), large_scale_only=True
+        )
+        self.large_itf_j_new = self.build_topo(
+            self.geom.get_itf_j_floor(self.geom.polar_itf_j), large_scale_only=True
+        )
+        self.large_itf_i_new[self.geom.floor_west_edge] = 0.0
+        self.large_itf_i_new[self.geom.floor_east_edge] = 0.0
+        self.large_itf_j_new[self.geom.floor_south_edge] = 0.0
+        self.large_itf_j_new[self.geom.floor_north_edge] = 0.0
+
         self.zbot_itf_i_new[self.geom.floor_west_edge] = 0.0
         self.zbot_itf_i_new[self.geom.floor_east_edge] = 0.0
         self.zbot_itf_j_new[self.geom.floor_south_edge] = 0.0
@@ -80,6 +98,12 @@ class ScharMountainHook(step_hook.StepHook):
             self.zbot_new * ratio,
             self.zbot_itf_i_new * ratio,
             self.zbot_itf_j_new * ratio,
+            self.large * ratio,
+            self.large_itf_i * ratio,
+            self.large_itf_j * ratio,
+            self.large_new * ratio,
+            self.large_itf_i_new * ratio,
+            self.large_itf_j_new * ratio,
         )
 
         # And regenerate the metric to take this new topography into account
@@ -92,23 +116,30 @@ class ScharMountainHook(step_hook.StepHook):
             self.apply(ratio)
         return Q
 
-    def build_topo_old(self, latlon):
+    def build_topo_old(self, latlon, large_scale_only: bool = False):
         lat = latlon[1, 0, :, :]
         lon = latlon[0, 0, :, :]
-        r = self.geom.earth_radius * self.xp.arccos(
-            math.sin(self.phim) * self.xp.sin(lat)
-            + math.cos(self.phim) * self.xp.cos(lat) * self.xp.cos(lon - self.lambdam)
-        )
         z = self.xp.zeros(lat.shape, dtype=lat.dtype)
-        z[:, :] = self.h0 * self.xp.exp(-(r**2) / self.Dm**2) * self.xp.cos(self.xp.pi * r / self.Dxi) ** 2
+        z[:, :] = self.topo(lon, lat, large_scale_only)
         return z
 
-    def build_topo(self, latlon):
-        lat = latlon[1]
-        lon = latlon[0]
+    def build_topo(self, latlon, large_scale_only: bool = False):
+        return self.topo(latlon[0], latlon[1], large_scale_only)
+
+    def topo(self, lon, lat, large_scale_only: bool = False):
+        """
+        The Schar mountain: a Gaussian envelope modulated by a short-wavelength ripple.
+
+        Since cos² x = (1 + cos 2x)/2, half of the envelope carries the whole mountain height with
+        none of the ripple. That half is the large-scale part h1 asked for by the SLEVE vertical
+        coordinate (Schar et al. 2002, eq. 27), the rest is the small-scale part h2.
+        """
         r = self.geom.earth_radius * self.xp.arccos(
             math.sin(self.phim) * self.xp.sin(lat)
             + math.cos(self.phim) * self.xp.cos(lat) * self.xp.cos(lon - self.lambdam)
         )
 
-        return self.h0 * self.xp.exp(-(r**2) / self.Dm**2) * self.xp.cos(self.xp.pi * r / self.Dxi) ** 2
+        envelope = self.h0 * self.xp.exp(-(r**2) / self.Dm**2)
+        shape = 0.5 if large_scale_only else self.xp.cos(self.xp.pi * r / self.Dxi) ** 2
+
+        return envelope * shape

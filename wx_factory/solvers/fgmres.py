@@ -175,14 +175,18 @@ def fgmres(
 
     residuals.append(((norm_r / norm_b).item(), time() - t_start, 0.0))
 
+    # The Krylov work arrays follow the working precision (and, where relevant, the complex type)
+    # of the right-hand side.
+    dtype = b.dtype
+
     for outer in range(maxiter):
         # NOTE: We are dealing with row-major matrices, but we store the transpose of H and V.
-        H = xp.zeros((restart + 2, restart + 2))
-        R = xp.zeros((restart + 2, restart + 2))  # rhs of the MGS factorization (should be H.transposed?)
-        T = xp.zeros((restart + 2, restart + 2))
-        K = xp.zeros((restart + 2, restart + 2))
-        V = xp.zeros((restart + 2, num_dofs))  # row-major ordering
-        Z = xp.zeros((restart + 1, num_dofs))  # row-major ordering
+        H = xp.zeros((restart + 2, restart + 2), dtype=dtype)
+        R = xp.zeros((restart + 2, restart + 2), dtype=dtype)  # rhs of the MGS factorization (should be H.transposed?)
+        T = xp.zeros((restart + 2, restart + 2), dtype=dtype)
+        K = xp.zeros((restart + 2, restart + 2), dtype=dtype)
+        V = xp.zeros((restart + 2, num_dofs), dtype=dtype)  # row-major ordering
+        Z = xp.zeros((restart + 1, num_dofs), dtype=dtype)  # row-major ordering
         Q = []  # Givens Rotations
 
         V[0, :] = r / norm_r
@@ -191,7 +195,7 @@ def fgmres(
         v_norm = _ortho_1_sync_igs(V, R, T, K, 2, device)
 
         # This is the RHS vector for the problem in the Krylov Space
-        g = xp.zeros(num_dofs)
+        g = xp.zeros(num_dofs, dtype=dtype)
         g[0] = norm_r
         for inner in range(restart):
 

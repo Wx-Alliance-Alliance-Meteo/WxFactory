@@ -6,6 +6,7 @@ import numpy
 from numpy.typing import NDArray
 
 from .cubed_sphere_3d import CubedSphere3D
+from .geometry import cast_double_arrays
 from .operators import DFROperators
 
 
@@ -846,62 +847,10 @@ class Metric3DTopo:
             if verbose and geom.device.comm.rank == 0:
                 print("Done assembling Γ")
 
-        # Assign H_cov and its elements to the object
-        self.H_cov = H_cov
-        self.H_cov_11 = H_cov[0, 0, :, :, :]
-        self.H_cov_12 = H_cov[0, 1, :, :, :]
-        self.H_cov_13 = H_cov[0, 2, :, :, :]
-        self.H_cov_21 = H_cov[1, 0, :, :, :]
-        self.H_cov_22 = H_cov[1, 1, :, :, :]
-        self.H_cov_23 = H_cov[1, 2, :, :, :]
-        self.H_cov_31 = H_cov[2, 0, :, :, :]
-        self.H_cov_32 = H_cov[2, 1, :, :, :]
-        self.H_cov_33 = H_cov[2, 2, :, :, :]
-
-        self.H_cov_itf_i = H_cov_itf_i
-        self.H_cov_11_itf_i = H_cov_itf_i[0, 0, :, :, :]
-        self.H_cov_12_itf_i = H_cov_itf_i[0, 1, :, :, :]
-        self.H_cov_13_itf_i = H_cov_itf_i[0, 2, :, :, :]
-        self.H_cov_21_itf_i = H_cov_itf_i[1, 0, :, :, :]
-        self.H_cov_22_itf_i = H_cov_itf_i[1, 1, :, :, :]
-        self.H_cov_23_itf_i = H_cov_itf_i[1, 2, :, :, :]
-        self.H_cov_31_itf_i = H_cov_itf_i[2, 0, :, :, :]
-        self.H_cov_32_itf_i = H_cov_itf_i[2, 1, :, :, :]
-        self.H_cov_33_itf_i = H_cov_itf_i[2, 2, :, :, :]
-
-        self.H_cov_itf_j = H_cov_itf_j
-        self.H_cov_11_itf_j = H_cov_itf_j[0, 0, :, :, :]
-        self.H_cov_12_itf_j = H_cov_itf_j[0, 1, :, :, :]
-        self.H_cov_13_itf_j = H_cov_itf_j[0, 2, :, :, :]
-        self.H_cov_21_itf_j = H_cov_itf_j[1, 0, :, :, :]
-        self.H_cov_22_itf_j = H_cov_itf_j[1, 1, :, :, :]
-        self.H_cov_23_itf_j = H_cov_itf_j[1, 2, :, :, :]
-        self.H_cov_31_itf_j = H_cov_itf_j[2, 0, :, :, :]
-        self.H_cov_32_itf_j = H_cov_itf_j[2, 1, :, :, :]
-        self.H_cov_33_itf_j = H_cov_itf_j[2, 2, :, :, :]
-
-        self.H_cov_itf_k = H_cov_itf_k
-        self.H_cov_11_itf_k = H_cov_itf_k[0, 0, :, :, :]
-        self.H_cov_12_itf_k = H_cov_itf_k[0, 1, :, :, :]
-        self.H_cov_13_itf_k = H_cov_itf_k[0, 2, :, :, :]
-        self.H_cov_21_itf_k = H_cov_itf_k[1, 0, :, :, :]
-        self.H_cov_22_itf_k = H_cov_itf_k[1, 1, :, :, :]
-        self.H_cov_23_itf_k = H_cov_itf_k[1, 2, :, :, :]
-        self.H_cov_31_itf_k = H_cov_itf_k[2, 0, :, :, :]
-        self.H_cov_32_itf_k = H_cov_itf_k[2, 1, :, :, :]
-        self.H_cov_33_itf_k = H_cov_itf_k[2, 2, :, :, :]
-
-        # Assign H_contra and its elements to the object
-        self.H_contra = H_contra
-        self.H_contra_11 = H_contra[0, 0, :, :, :]
-        self.H_contra_12 = H_contra[0, 1, :, :, :]
-        self.H_contra_13 = H_contra[0, 2, :, :, :]
-        self.H_contra_21 = H_contra[1, 0, :, :, :]
-        self.H_contra_22 = H_contra[1, 1, :, :, :]
-        self.H_contra_23 = H_contra[1, 2, :, :, :]
-        self.H_contra_31 = H_contra[2, 0, :, :, :]
-        self.H_contra_32 = H_contra[2, 1, :, :, :]
-        self.H_contra_33 = H_contra[2, 2, :, :, :]
+        # The metric tensors are kept in the element-wise ("new") layout alone, which is the one the
+        # right-hand side reads. The arrays on the old layout, and the per-component views of them,
+        # are only intermediates here: at 1 deg / L60 they came to some 180 MB per process, which is
+        # the difference between this resolution fitting on a GPU and not.
 
         self.sqrtG = sqrtG
         self.sqrtG_itf_i = sqrtG_itf_i
@@ -954,19 +903,20 @@ class Metric3DTopo:
         self.christoffel[2, 7] = geom._to_new(self.christoffel_3_23)
         self.christoffel[2, 8] = geom._to_new(self.christoffel_3_33)
 
-        self.h_contra_new = geom._to_new(self.H_contra)
-        self.h_contra = self.h_contra_new
+        self.h_contra_new = geom._to_new(H_contra)
         self.h_contra_itf_i_new = geom._to_new_itf_i(H_contra_itf_i)
         self.h_contra_itf_j_new = geom._to_new_itf_j(H_contra_itf_j)
         self.h_contra_itf_k_new = geom._to_new_itf_k(H_contra_itf_k)
 
-        self.h_cov_new = geom._to_new(self.H_cov)
-        self.h_cov_itf_i_new = geom._to_new_itf_i(self.H_cov_itf_i)
-        self.h_cov_itf_j_new = geom._to_new_itf_j(self.H_cov_itf_j)
-        self.h_cov_itf_k_new = geom._to_new_itf_k(self.H_cov_itf_k)
+        # Only the volume covariant metric is needed (to convert winds); nothing reads its value at
+        # the interfaces.
+        self.h_cov_new = geom._to_new(H_cov)
 
         self.sqrtG_new = geom._to_new(self.sqrtG)
         self.sqrtG_itf_i_new = geom._to_new_itf_i(self.sqrtG_itf_i)
         self.sqrtG_itf_j_new = geom._to_new_itf_j(self.sqrtG_itf_j)
         self.sqrtG_itf_k_new = geom._to_new_itf_k(self.sqrtG_itf_k)
+
+        # Store the metric terms in the working precision (see cast_double_arrays).
+        cast_double_arrays(self, xp, geom.dtype)
         self.inv_sqrtG_new = 1.0 / self.sqrtG_new

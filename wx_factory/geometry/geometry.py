@@ -10,6 +10,23 @@ from ..device import Device
 from .quadrature import gauss_legendre
 
 
+def cast_double_arrays(obj, xp, dtype) -> None:
+    """Cast every double-precision array attribute of `obj` to `dtype`, in place.
+
+    Geometry and metric terms are built in double precision, where the differencing of the terrain
+    is most accurate, and then stored in the working precision. This walks the object's attributes
+    and downcasts the double arrays, leaving integer indices, masks and already-single arrays alone.
+    Works for both NumPy/CuPy arrays (`astype`) and PyTorch tensors (`to`).
+    """
+    if dtype == xp.float64:
+        return
+
+    for name, value in vars(obj).items():
+        if hasattr(value, "dtype") and hasattr(value, "shape") and value.dtype == xp.float64:
+            cast = value.astype(dtype) if hasattr(value, "astype") else value.to(dtype)
+            setattr(obj, name, cast)
+
+
 class Geometry(ABC):
     """
     Abstract class that groups different geometries
@@ -26,7 +43,7 @@ class Geometry(ABC):
     ) -> None:
         self.device = device
         xp = self.device.xp
-        self.dtype = xp.float64
+        self.dtype = self.device.real_dtype
 
         ## Element properties -- solution and extension points
         # Gauss-Legendre solution points

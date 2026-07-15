@@ -20,6 +20,13 @@
                     }
                 },
                 {
+                    "name": "precision",
+                    "type": "str",
+                    "selectables": ["double", "single"],
+                    "default": "double",
+                    "description": "Floating-point precision of the whole computation. Single precision halves the memory footprint and bandwidth (letting finer resolutions fit on a GPU), at the cost of accuracy"
+                },
+                {
                     "name": "initial_condition",
                     "type": "str",
                     "default": ""
@@ -386,6 +393,37 @@
                         "name": "grid_type",
                         "values": ["cubed_sphere"]
                     }
+                },
+                {
+                    "name": "vertical_coord",
+                    "type": "str",
+                    "selectables": ["gal_chen", "sleve"],
+                    "default": "gal_chen",
+                    "dependency": {
+                        "name": "grid_type",
+                        "values": ["cubed_sphere"]
+                    },
+                    "description": "Terrain-following vertical coordinate. gal_chen decays the terrain linearly with height; sleve (Schar et al. 2002) decays the large- and small-scale parts of the terrain at different rates, so that small-scale features vanish faster aloft"
+                },
+                {
+                    "name": "sleve_scale_large",
+                    "type": "float",
+                    "default": 10000.0,
+                    "dependency": {
+                        "name": "vertical_coord",
+                        "values": ["sleve"]
+                    },
+                    "description": "SLEVE decay scale height s1 of the large-scale topography (m)"
+                },
+                {
+                    "name": "sleve_scale_small",
+                    "type": "float",
+                    "default": 2500.0,
+                    "dependency": {
+                        "name": "vertical_coord",
+                        "values": ["sleve"]
+                    },
+                    "description": "SLEVE decay scale height s2 of the small-scale topography (m). Should be well below sleve_scale_large"
                 },
                 {
                     "name": "x0",

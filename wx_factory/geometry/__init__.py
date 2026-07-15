@@ -7,7 +7,7 @@ from .operators import DFROperators, lagrange_eval, remesh_operator
 from .metric3d import Metric3DTopo
 from .metric2d import Metric2D
 from .quadrature import gauss_legendre
-from .winds import contra2wind_2d, contra2wind_3d, wind2contra_2d, wind2contra_3d
+from .winds import contra2wind_2d, wind2contra_2d
 from .registry import GEOMETRY_REGISTRY, GeometryContext, register_geometry, resolve_geometry
 
 __all__ = [
@@ -17,7 +17,6 @@ __all__ = [
     "register_geometry",
     "resolve_geometry",
     "contra2wind_2d",
-    "contra2wind_3d",
     "CubedSphere",
     "CubedSphere2D",
     "CubedSphere3D",
@@ -29,5 +28,4 @@ __all__ = [
     "Metric3DTopo",
     "remesh_operator",
     "wind2contra_2d",
-    "wind2contra_3d",
 ]

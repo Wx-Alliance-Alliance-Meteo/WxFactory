@@ -29,6 +29,7 @@ from ..geometry import Cartesian2D, CubedSphere3D, CubedSphere2D, DFROperators, 
 from .dcmip import (
     dcmip_advection_deformation,
     dcmip_advection_hadley,
+    dcmip_advection_orography,
     dcmip_gravity_wave,
     dcmip_schar_waves,
     dcmip_steady_state_mountain,
@@ -101,6 +102,11 @@ def initialize_euler(geom: CubedSphere3D, metric: Metric3DTopo, mtrx: DFROperato
     elif param.case_number == 12:
         num_equations = 6
         rho, u1_contra, u2_contra, w, potential_temperature, q1 = dcmip_advection_hadley(geom, metric, mtrx, param)
+    elif param.case_number == 13:
+        num_equations = 9
+        rho, u1_contra, u2_contra, w, potential_temperature, q1, q2, q3, q4 = dcmip_advection_orography(
+            geom, metric, mtrx, param
+        )
     elif param.case_number == 20:
         rho, u1_contra, u2_contra, w, potential_temperature = dcmip_steady_state_mountain(geom, metric, mtrx, param)
     elif param.case_number == 21:
@@ -122,9 +128,9 @@ def initialize_euler(geom: CubedSphere3D, metric: Metric3DTopo, mtrx: DFROperato
     Q[idx_rho_w, ...] = rho * w
     Q[idx_rho_theta, ...] = rho * potential_temperature
 
-    if param.case_number == 11 or param.case_number == 12:
+    if param.case_number in (11, 12, 13):
         Q[5, ...] = rho * q1
-    if param.case_number == 11:
+    if param.case_number in (11, 13):
         Q[6, ...] = rho * q2
         Q[7, ...] = rho * q3
         Q[8, ...] = rho * q4

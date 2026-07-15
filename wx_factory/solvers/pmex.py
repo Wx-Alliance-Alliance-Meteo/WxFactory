@@ -81,6 +81,10 @@ def pmex(
     M = device.xp.eye(mmax, dtype=u.dtype)
     N = device.xp.zeros([mmax, mmax], dtype=u.dtype)
 
+    # The MPI datatype for the reductions must match the working precision of the buffers, which
+    # follows u.dtype (single or double).
+    mpi_real = MPI.FLOAT if u.dtype == device.xp.float32 else MPI.DOUBLE
+
     # Initial condition
     w = device.xp.zeros((numSteps, n), dtype=u.dtype)
     w[0, :] = u[0, :].copy()
@@ -90,7 +94,7 @@ def pmex(
     global_normU = device.xp.empty_like(local_nrmU)
 
     device.synchronize()
-    comm.Allreduce([local_nrmU, MPI.DOUBLE], [global_normU, MPI.DOUBLE])
+    comm.Allreduce([local_nrmU, mpi_real], [global_normU, mpi_real])
 
     normU = device.xp.amax(global_normU)
 
@@ -147,7 +151,7 @@ def pmex(
             local_sum = V[0, 0:n] @ V[0, 0:n]
             global_sum_nrm = device.xp.empty_like(local_sum)
             device.synchronize()
-            comm.Allreduce([local_sum, MPI.DOUBLE], [global_sum_nrm, MPI.DOUBLE])
+            comm.Allreduce([local_sum, mpi_real], [global_sum_nrm, mpi_real])
             beta = math.sqrt(global_sum_nrm + V[j, n : n + p] @ V[j, n : n + p])
 
             # The first Krylov basis vector
@@ -168,7 +172,7 @@ def pmex(
             global_vec = device.xp.empty_like(local_vec)
 
             device.synchronize()
-            comm.Allreduce([local_vec, MPI.DOUBLE], [global_vec, MPI.DOUBLE])
+            comm.Allreduce([local_vec, mpi_real], [global_vec, mpi_real])
 
             global_vec += V[0 : j + 1, n : n + p] @ V[j - 1 : j + 1, n : n + p].T
 
@@ -210,7 +214,7 @@ def pmex(
                 local_sum = V[j, 0:n] @ V[j, 0:n]
                 global_sum_nrm = device.xp.empty_like(local_sum)
                 device.synchronize()
-                comm.Allreduce([local_sum, MPI.DOUBLE], [global_sum_nrm, MPI.DOUBLE])
+                comm.Allreduce([local_sum, mpi_real], [global_sum_nrm, mpi_real])
                 curr_nrm = math.sqrt(global_sum_nrm + V[j, n : n + p] @ V[j, n : n + p])
                 reg_comm_nrm += 1
             else:

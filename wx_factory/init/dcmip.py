@@ -4,7 +4,7 @@ import numpy
 
 from ..common.configuration import Configuration
 from ..common.definitions import cpd, gravity, p0, Rd
-from ..geometry import CubedSphere3D, DFROperators, Metric3DTopo, wind2contra_2d, wind2contra_3d
+from ..geometry import CubedSphere3D, DFROperators, Metric3DTopo, wind2contra_2d
 
 # =======================================================================
 #
@@ -340,62 +340,152 @@ def dcmip_advection_hadley(geom, metric, mtrx, param):
 # ============================================================================================
 
 
-def dcmip_mountain(geom: CubedSphere3D, metric, mtrx, param):
+def dcmip_advection_orography(geom: CubedSphere3D, metric, mtrx, param):
+    """
+    Test 13 - Horizontal advection of thin cloud-like tracers in the presence of orography
 
-    lon_m = 3.0 * numpy.pi / 2.0
-    lat_m = 0.0
-    radius_m = 3.0 * numpy.pi / 4.0 * 0.5
-    height_max = 2000.0
-    oscillation_half_width = numpy.pi / 16.0
+    Three thin cloud decks are carried once around the sphere, at constant height above mean sea
+    level, over a Schar-like mountain with compact support. Because the vertical coordinate follows
+    the terrain, a wind that is purely horizontal in physical space still crosses the coordinate
+    surfaces: that "perceived" vertical velocity (section 1.3 and Appendix B of the document) is what
+    the test is really about. Here it comes out of the metric on its own, since wind2contra converts
+    the physical wind (u, v, w = 0) exactly.
+    """
+    xp = geom.device.xp
 
-    def compute_distance_radian(lon, lat):
-        """Compute the angular distance (in radians) of the given lon/lat coordinates from the center of the mountain"""
-        return numpy.minimum(radius_m, numpy.sqrt((lon - lon_m) ** 2 + (lat - lat_m) ** 2))
+    tau = 12.0 * 86400.0  # period of motion 12 days (s)
+    u0 = 2.0 * math.pi * geom.earth_radius / tau  # velocity magnitude (m/s)
+    T0 = 300.0  # isothermal temperature (K)
+    H = Rd * T0 / gravity  # scale height (m)
+    alpha = math.pi / 6.0  # advection angle (radians), 30 degrees
 
-    def compute_height_from_dist(dist):
-        """Compute the height of the surface that corresponds to the given distance(s) from the mountain center.
-        Based on the DCMIP case 1-3 description"""
-        return (
-            height_max
-            / 2.0
-            * (1.0 + numpy.cos(numpy.pi * dist / radius_m))
-            * numpy.cos(numpy.pi * dist / oscillation_half_width)
+    # Mountain (Table XI)
+    lambdam = 3.0 * math.pi / 2.0  # mountain longitude center point (radians)
+    phim = 0.0  # mountain latitude center point (radians)
+    h0 = 2000.0  # peak height of the mountain range (m)
+    Rm = 3.0 * math.pi / 4.0  # mountain radius (radians)
+    zetam = math.pi / 16.0  # mountain oscillation half-width (radians)
+
+    # Cloud-like tracers (Table XI)
+    lambdap = math.pi / 2.0  # cloud longitude center point (radians)
+    phip = 0.0  # cloud latitude center point (radians)
+    Rp = math.pi / 4.0  # cloud radius (radians)
+    zp = (3050.0, 5050.0, 8200.0)  # midpoint of each cloud deck (m)
+    dzp = (1000.0, 1000.0, 400.0)  # thickness of each cloud deck (m)
+
+    def surface_height(latlon, large_scale_only=False):
+        """
+        The Schar-like mountain of DCMIP eqs. 47 and 48, from a (lon, lat) pair of fields.
+
+        The mountain is a smooth bell h*(rm) modulated by a short-wavelength ripple cos²(π rm/ζm).
+        With cos² x = (1 + cos 2x)/2, it splits exactly into
+
+            zs = h* cos²(π rm/ζm) = h*/2  +  (h*/2) cos(2π rm/ζm),
+
+        a bell that carries the whole mountain height and a ripple of zero mean. The first term is
+        the large-scale part h1 that SLEVE asks for (this is also the choice made by Schar et al.
+        2002, eq. 27, for their own two-dimensional version of this mountain), the second is the
+        small-scale part h2 that we want to decay quickly with height.
+        """
+        lon, lat = latlon[0], latlon[1]
+
+        # Great circle distance from the centre of the mountain, in radians.
+        rm = xp.arccos(math.sin(phim) * xp.sin(lat) + math.cos(phim) * xp.cos(lat) * xp.cos(lon - lambdam))
+
+        bell = 0.5 * h0 * (1.0 + xp.cos(math.pi * rm / Rm))
+        shape = 0.5 if large_scale_only else xp.cos(math.pi * rm / zetam) ** 2
+
+        return xp.where(rm < Rm, bell * shape, 0.0)
+
+    # ------------------------------------------------------------------------------------------
+    #     Topography. The vertical coordinate is terrain following, so this has to be in place
+    #     before the metric, the heights and therefore the tracers can be computed.
+    # ------------------------------------------------------------------------------------------
+
+    zbot_new = surface_height(geom.get_floor(geom.polar))
+    zbot_itf_i_new = surface_height(geom.get_itf_i_floor(geom.polar_itf_i))
+    zbot_itf_j_new = surface_height(geom.get_itf_j_floor(geom.polar_itf_j))
+
+    zbot = surface_height(geom.coordVec_latlon[:, 0])
+    zbot_itf_i = surface_height(geom.coordVec_latlon_itf_i[:, 0])
+    zbot_itf_j = surface_height(geom.coordVec_latlon_itf_j[:, 0])
+
+    large_new = surface_height(geom.get_floor(geom.polar), large_scale_only=True)
+    large_itf_i_new = surface_height(geom.get_itf_i_floor(geom.polar_itf_i), large_scale_only=True)
+    large_itf_j_new = surface_height(geom.get_itf_j_floor(geom.polar_itf_j), large_scale_only=True)
+
+    large = surface_height(geom.coordVec_latlon[:, 0], large_scale_only=True)
+    large_itf_i = surface_height(geom.coordVec_latlon_itf_i[:, 0], large_scale_only=True)
+    large_itf_j = surface_height(geom.coordVec_latlon_itf_j[:, 0], large_scale_only=True)
+
+    geom.apply_topography(
+        zbot,
+        zbot_itf_i,
+        zbot_itf_j,
+        zbot_new,
+        zbot_itf_i_new,
+        zbot_itf_j_new,
+        large,
+        large_itf_i,
+        large_itf_j,
+        large_new,
+        large_itf_i_new,
+        large_itf_j_new,
+    )
+    metric.build_metric()
+
+    # Coordinates in the element-wise ("new") layout. The heights follow the terrain, so they are
+    # only meaningful once the topography above has been applied.
+    lon = geom.lon_new
+    lat = geom.lat_new
+    height = geom.height_new
+
+    # ------------------------------------------------------------------------------------------
+    #     Winds (eqs. 44-46). The flow is horizontal with respect to mean sea level, so the
+    #     physical vertical velocity vanishes.
+    # ------------------------------------------------------------------------------------------
+
+    u = u0 * (xp.cos(lat) * math.cos(alpha) + xp.sin(lat) * xp.cos(lon) * math.sin(alpha))
+    v = -u0 * xp.sin(lon) * math.sin(alpha)
+    w = xp.zeros_like(u)
+
+    u1_contra, u2_contra, u3_contra = geom.wind2contra(u, v, w, metric)
+
+    # ------------------------------------------------------------------------------------------
+    #     Isothermal atmosphere at rest with respect to the mass field
+    # ------------------------------------------------------------------------------------------
+
+    p = p0 * xp.exp(-height / H)
+    rho = p / (Rd * T0)
+    theta = T0 * (p0 / p) ** (Rd / cpd)
+
+    # ------------------------------------------------------------------------------------------
+    #     The three cloud decks (eqs. 49-53), initially away from the mountain
+    # ------------------------------------------------------------------------------------------
+
+    # Great circle distance from the centre of the cloud decks, in radians.
+    rp = xp.arccos(math.sin(phip) * xp.sin(lat) + math.cos(phip) * xp.cos(lat) * xp.cos(lon - lambdap))
+    inside = rp < Rp
+
+    # The lower and medium decks are disk shaped (eq. 51) ...
+    def disk(i):
+        rz = xp.abs(height - zp[i])
+        return xp.where(
+            inside & (rz < 0.5 * dzp[i]),
+            0.25 * (1.0 + xp.cos(2.0 * math.pi * rz / dzp[i])) * (1.0 + xp.cos(math.pi * rp / Rp)),
+            0.0,
         )
 
-    # Distances from the mountain on all grid and interface points
-    distance = compute_distance_radian(geom.lon[0, :, :], geom.lat[0, :, :])
-    distance_itf_i = compute_distance_radian(geom.lon_itf_i, geom.lat_itf_i)
-    distance_itf_j = compute_distance_radian(geom.lon_itf_j, geom.lat_itf_j)
+    q1 = disk(0)
+    q2 = disk(1)
 
-    # Height at every grid and interface point
-    h_surf = compute_height_from_dist(distance)
+    # ... and the upper one is box shaped (eq. 52)
+    q3 = xp.where(inside & (xp.abs(height - zp[2]) < 0.5 * dzp[2]), 1.0, 0.0)
 
-    num_interfaces_horiz = param.num_elements_horizontal + 1
-    h_surf_itf_i = numpy.zeros((param.num_elements_horizontal + 2, param.num_solpts * param.num_elements_horizontal, 2))
-    h_surf_itf_j = numpy.zeros((param.num_elements_horizontal + 2, 2, param.num_solpts * param.num_elements_horizontal))
+    # The total tracer field (eq. 53)
+    q4 = q1 + q2 + q3
 
-    h_surf_itf_i[0:num_interfaces_horiz, :, 1] = compute_height_from_dist(distance_itf_i.T)
-    h_surf_itf_i[1 : num_interfaces_horiz + 1, :, 0] = h_surf_itf_i[0:num_interfaces_horiz, :, 1]
-
-    h_surf_itf_j[0:num_interfaces_horiz, 1, :] = compute_height_from_dist(distance_itf_j)
-    h_surf_itf_j[1 : num_interfaces_horiz + 1, 0, :] = h_surf_itf_j[0:num_interfaces_horiz, 1, :]
-
-    # Height derivative along x and y at every grid point
-    _, ni, nj = geom.lon.shape
-    dhdx1 = numpy.zeros((ni, nj))
-    dhdx2 = numpy.zeros((ni, nj))
-
-    offset = 1  # Offset due to the halo
-    for elem in range(param.num_elements_horizontal):
-        epais = elem * param.num_solpts + numpy.arange(param.num_solpts)
-
-        # --- Direction x1
-        dhdx1[:, epais] = h_surf[:, epais] @ mtrx.diff_solpt_tr + h_surf_itf_i[elem + offset, :, :] @ mtrx.correction_tr
-
-        # --- Direction x2
-        dhdx2[epais, :] = mtrx.diff_solpt @ h_surf[epais, :] + mtrx.correction @ h_surf_itf_j[elem + offset, :, :]
-
-    return h_surf, h_surf_itf_i, h_surf_itf_j, dhdx1, dhdx2
+    return rho, u1_contra, u2_contra, u3_contra, theta, q1, q2, q3, q4
 
 
 # ==========================================================================================
@@ -603,7 +693,6 @@ def dcmip_schar_damping(
     metric: Metric3DTopo,
     geom: CubedSphere3D,
     shear: bool,
-    new_layout: bool,
 ):
     """Implements the required Rayleigh damping for DCMIP cases 2-1 and 2-2
 
@@ -639,12 +728,8 @@ def dcmip_schar_damping(
         Cs = 0.0
 
     # Get coordinates
-    if new_layout:
-        lat = geom.polar[1, ...]
-        z_3d = geom.polar[2, ...]
-    else:
-        lat = geom.coordVec_latlon[1, :, :, :]  # Latitude as 3D field
-        z_3d = geom.coordVec_latlon[2, :, :, :]  # Retrieve all z-levels
+    lat = geom.polar[1, ...]
+    z_3d = geom.polar[2, ...]
 
     # Build the damping mask (eqn 79), weighted by ρ and τ0^(-1)
     damping_weight = (
@@ -664,10 +749,7 @@ def dcmip_schar_damping(
     vref = 0.0
     wref = 0.0
 
-    if new_layout:
-        u1ref, u2ref, u3ref = geom.wind2contra(uref, vref, wref, metric)
-    else:
-        u1ref, u2ref, u3ref = wind2contra_3d(uref, vref, wref, geom, metric)
+    u1ref, u2ref, u3ref = geom.wind2contra(uref, vref, wref, metric)
 
     # Increment velocity forcing (eqn 78).  Take note that this modification is in-place,
     # and the sign is positive because rhs_euler includes its own negative sign

@@ -84,6 +84,10 @@ def kiops(
     # We only allow m to vary between mmin and mmax
     m = max(mmin, min(m_init, mmax))
 
+    # The MPI datatype for the reductions must match the working precision of the buffers, which
+    # follows u.dtype (single or double).
+    mpi_real = MPI.FLOAT if u.dtype == xp.float32 else MPI.DOUBLE
+
     # Preallocate matrix
     V: NDArray = xp.zeros((mmax + 1, n + p), dtype=u.dtype)
     H: NDArray = xp.zeros((mmax + 1, mmax + 1), dtype=u.dtype)
@@ -111,7 +115,7 @@ def kiops(
     local_normU = xp.sum(xp.abs(u[1:, :]), axis=1)
     global_normU = xp.empty_like(local_normU)
     device.synchronize()
-    comm.Allreduce([local_normU, MPI.DOUBLE], [global_normU, MPI.DOUBLE])
+    comm.Allreduce([local_normU, mpi_real], [global_normU, mpi_real])
     normU = xp.amax(global_normU)
 
     # Normalization factors
@@ -168,7 +172,7 @@ def kiops(
             local_sum = V[0, :n] @ V[0, :n]
             global_sum = xp.empty_like(local_sum)
             device.synchronize()
-            comm.Allreduce([local_sum, MPI.DOUBLE], [global_sum, MPI.DOUBLE])
+            comm.Allreduce([local_sum, mpi_real], [global_sum, mpi_real])
             beta = xp.sqrt(global_sum + V[0, n : n + p] @ V[0, n : n + p])
 
             # The first Krylov basis vector
@@ -189,7 +193,7 @@ def kiops(
             local_sum = V[ilow:j, :n] @ V[j, :n]
             global_sum = xp.empty_like(local_sum)
             device.synchronize()
-            comm.Allreduce([local_sum, MPI.DOUBLE], [global_sum, MPI.DOUBLE])
+            comm.Allreduce([local_sum, mpi_real], [global_sum, mpi_real])
 
             H[ilow:j, j - 1] = global_sum + V[ilow:j, n : n + p] @ V[j, n : n + p]
 
@@ -198,7 +202,7 @@ def kiops(
             local_sum = V[j, :n] @ V[j, :n]
             global_sum = xp.empty_like(local_sum)
             device.synchronize()
-            comm.Allreduce([local_sum, MPI.DOUBLE], [global_sum, MPI.DOUBLE])
+            comm.Allreduce([local_sum, mpi_real], [global_sum, mpi_real])
             nrm = xp.sqrt(global_sum + V[j, n : n + p] @ V[j, n : n + p])
 
             # Happy breakdown

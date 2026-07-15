@@ -6,6 +6,7 @@ import numpy
 from numpy.typing import NDArray
 
 from .cubed_sphere import CubedSphere
+from .geometry import cast_double_arrays
 from .sphere import cart2sph
 
 # For type hints
@@ -117,6 +118,23 @@ class CubedSphere3D(CubedSphere):
         PE_end_x3 = ztop
 
         self.ztop = ztop
+
+        # Terrain-following vertical coordinate. Gal-Chen decays the terrain linearly with height;
+        # SLEVE (Schar et al. 2002) decays the large- and small-scale parts of the terrain at
+        # different rates, so that the small scales, which are the ones that hurt, disappear from
+        # the coordinate surfaces much lower down.
+        self.vertical_coord = param.vertical_coord
+        self.sleve_gamma = None
+        self._sleve_reported = False
+        if self.vertical_coord == "sleve":
+            # These two only exist in the configuration when the SLEVE coordinate is selected
+            self.sleve_scale_large = param.sleve_scale_large
+            self.sleve_scale_small = param.sleve_scale_small
+        elif self.vertical_coord == "gal_chen":
+            self.sleve_scale_large = None
+            self.sleve_scale_small = None
+        else:
+            raise ValueError(f"Invalid vertical coordinate ({self.vertical_coord})")
 
         # Define the computational η coordinate
         PE_start_eta = 0.0
@@ -422,6 +440,64 @@ class CubedSphere3D(CubedSphere):
         # as will the DG structures.
         self.apply_topography(None, None, None, None, None, None)
 
+    def _decay(self, eta: NDArray, scale: float) -> NDArray:
+        """
+        Vertical decay function b(η) of the terrain-following coordinate, which goes from 1 at the
+        surface (η=0) to 0 at the model top (η=1).
+
+        Gal-Chen decays the terrain linearly. SLEVE (Schar et al. 2002, eq. 15) decays it like a
+        sinh, so that a terrain feature loses a factor 1/e of its amplitude over a depth `scale`:
+        the smaller the scale height, the lower down the feature disappears from the coordinate
+        surfaces.
+        """
+        xp = self.device.xp
+
+        if self.vertical_coord == "gal_chen":
+            return 1.0 - eta
+
+        k = self.ztop / scale
+        return xp.sinh(k * (1.0 - eta)) / math.sinh(k)
+
+    def _check_invertibility(self, h_large: NDArray, h_small: NDArray):
+        """
+        Verify the SLEVE invertibility condition (Schar et al. 2002, eq. 20).
+
+        γ is a lower bound on the Jacobian ∂z/∂η, normalized so that γ ≤ 0 means the coordinate
+        surfaces cross each other somewhere: the mapping is no longer one to one and the whole
+        discretization is meaningless. γ also bounds the thickness of the lowest layer, and so the
+        vertical Courant number (their eq. 21), which is why it is worth reporting even when
+        positive.
+        """
+        if self.vertical_coord != "gal_chen":
+            comm = MPI.COMM_WORLD
+            h1_max = comm.allreduce(float(abs(h_large).max()), MPI.MAX)
+            h2_max = comm.allreduce(float(abs(h_small).max()), MPI.MAX)
+
+            def term(h_max, scale):
+                return h_max / scale / math.tanh(self.ztop / scale)
+
+            self.sleve_gamma = 1.0 - term(h1_max, self.sleve_scale_large) - term(h2_max, self.sleve_scale_small)
+
+            # Report the first time there is any topography to speak of. Before that the mapping is
+            # trivial and γ = 1, which says nothing.
+            first = not self._sleve_reported and max(h1_max, h2_max) > 0.0
+            self._sleve_reported = self._sleve_reported or first
+
+            if first and comm.rank == 0 and self.sleve_gamma > 0.0:
+                print(
+                    f"SLEVE coordinate: s1 = {self.sleve_scale_large:.0f} m, s2 = {self.sleve_scale_small:.0f} m, "
+                    f"h1_max = {h1_max:.0f} m, h2_max = {h2_max:.0f} m, γ = {self.sleve_gamma:.3f}",
+                    flush=True,
+                )
+
+            if self.sleve_gamma <= 0.0:
+                raise ValueError(
+                    f"The SLEVE coordinate is not invertible (γ = {self.sleve_gamma:.3f} ≤ 0): the coordinate "
+                    f"surfaces would cross each other. Increase sleve_scale_small "
+                    f"(currently {self.sleve_scale_small} m) or sleve_scale_large "
+                    f"(currently {self.sleve_scale_large} m), or lower the topography."
+                )
+
     def apply_topography(
         self,
         zbot: Optional[NDArray],
@@ -430,11 +506,26 @@ class CubedSphere3D(CubedSphere):
         zbot_new: Optional[NDArray],
         zbot_itf_i_new: Optional[NDArray],
         zbot_itf_j_new: Optional[NDArray],
+        zbot_large: Optional[NDArray] = None,
+        zbot_large_itf_i: Optional[NDArray] = None,
+        zbot_large_itf_j: Optional[NDArray] = None,
+        zbot_large_new: Optional[NDArray] = None,
+        zbot_large_itf_i_new: Optional[NDArray] = None,
+        zbot_large_itf_j_new: Optional[NDArray] = None,
     ):
         """
         Apply a topography field, given by heights (above the 0 reference sphere) specified at
-        interior points, i-boundaries, and j-boundaries.  This function applies a linear mapping,
-        where η=0 corresponds to the given surface and η=1 corresponds to the top.
+        interior points, i-boundaries, and j-boundaries, in both the old and the element-wise
+        ("new") layouts.
+
+        The mapping sends η=0 to the given surface and η=1 to the top, following
+
+            z(x¹, x², η) = z_top η + h₁ b₁(η) + h₂ b₂(η),
+
+        where h₁ is the large-scale part of the topography and h₂ = z_bot − h₁ is what is left of
+        it (Schar et al. 2002, eq. 14). The optional `zbot_large` arguments give h₁; when they are
+        absent, the whole topography is taken to be large-scale, which is the only sensible default
+        and is what Gal-Chen does in any case, since it decays both parts at the same rate.
         """
 
         xp = self.device.xp
@@ -458,27 +549,59 @@ class CubedSphere3D(CubedSphere):
             self.zbot_itf_i = zbot_itf_i.copy()
             self.zbot_itf_j = zbot_itf_j.copy()
 
+        # Split the topography into its large- and small-scale parts. Without a split, everything
+        # is large-scale and the small-scale part is empty.
+        def split(total, large):
+            h1 = total if large is None else large
+            return h1, total - h1
+
+        h1, h2 = split(self.zbot[xp.newaxis, :, :], None if zbot_large is None else zbot_large[xp.newaxis, :, :])
+        h1_i, h2_i = split(
+            self.zbot_itf_i[xp.newaxis, :, :],
+            None if zbot_large_itf_i is None else zbot_large_itf_i[xp.newaxis, :, :],
+        )
+        h1_j, h2_j = split(
+            self.zbot_itf_j[xp.newaxis, :, :],
+            None if zbot_large_itf_j is None else zbot_large_itf_j[xp.newaxis, :, :],
+        )
+
+        h1_bulk, h2_bulk = split(
+            self.floor_to_bulk(self.z_floor),
+            None if zbot_large_new is None else self.floor_to_bulk(zbot_large_new),
+        )
+        h1_i_bulk, h2_i_bulk = split(
+            self.floor_i_to_bulk(self.z_floor_itf_i),
+            None if zbot_large_itf_i_new is None else self.floor_i_to_bulk(zbot_large_itf_i_new),
+        )
+        h1_j_bulk, h2_j_bulk = split(
+            self.floor_j_to_bulk(self.z_floor_itf_j),
+            None if zbot_large_itf_j_new is None else self.floor_j_to_bulk(zbot_large_itf_j_new),
+        )
+        h1_k_bulk, h2_k_bulk = split(
+            self.floor_to_bulk(self.z_floor, k_itf=True),
+            None if zbot_large_new is None else self.floor_to_bulk(zbot_large_new, k_itf=True),
+        )
+
+        self._check_invertibility(h1_bulk, h2_bulk)
+
         ztop = self.ztop
+        s1 = self.sleve_scale_large
+        s2 = self.sleve_scale_small
+
+        def height(eta, h_large, h_small):
+            return ztop * eta + h_large * self._decay(eta, s1) + h_small * self._decay(eta, s2)
 
         # To apply the topography, we need to redefine self.x3 and its interfaced versions.
 
-        self.x3[...] = self.zbot[xp.newaxis, :, :] + (ztop - self.zbot[xp.newaxis, :, :]) * self.eta
-        self.x3_itf_i[...] = (
-            self.zbot_itf_i[xp.newaxis, :, :] + (ztop - self.zbot_itf_i[xp.newaxis, :, :]) * self.eta_itf_i
-        )
-        self.x3_itf_j[...] = (
-            self.zbot_itf_j[xp.newaxis, :, :] + (ztop - self.zbot_itf_j[xp.newaxis, :, :]) * self.eta_itf_j
-        )
-        self.x3_itf_k[...] = self.zbot[xp.newaxis, :, :] + (ztop - self.zbot[xp.newaxis, :, :]) * self.eta_itf_k
+        self.x3[...] = height(self.eta, h1, h2)
+        self.x3_itf_i[...] = height(self.eta_itf_i, h1_i, h2_i)
+        self.x3_itf_j[...] = height(self.eta_itf_j, h1_j, h2_j)
+        self.x3_itf_k[...] = height(self.eta_itf_k, h1, h2)
 
-        zbot_bulk = self.floor_to_bulk(self.z_floor)
-        zbot_i_bulk = self.floor_i_to_bulk(self.z_floor_itf_i)
-        zbot_j_bulk = self.floor_j_to_bulk(self.z_floor_itf_j)
-        zbot_k_bulk = self.floor_to_bulk(self.z_floor, k_itf=True)
-        self.x3_new[...] = zbot_bulk + (ztop - zbot_bulk) * self.eta_new
-        self.x3_itf_i_new[...] = zbot_i_bulk + (ztop - zbot_i_bulk) * self.eta_itf_i_new
-        self.x3_itf_j_new[...] = zbot_j_bulk + (ztop - zbot_j_bulk) * self.eta_itf_j_new
-        self.x3_itf_k_new[...] = zbot_k_bulk + (ztop - zbot_k_bulk) * self.eta_itf_k_new
+        self.x3_new[...] = height(self.eta_new, h1_bulk, h2_bulk)
+        self.x3_itf_i_new[...] = height(self.eta_itf_i_new, h1_i_bulk, h2_i_bulk)
+        self.x3_itf_j_new[...] = height(self.eta_itf_j_new, h1_j_bulk, h2_j_bulk)
+        self.x3_itf_k_new[...] = height(self.eta_itf_k_new, h1_k_bulk, h2_k_bulk)
 
         self.x3_itf_k_new[self.bottom_edge] = 0.0
         self.x3_itf_k_new[self.top_edge] = 0.0
@@ -737,6 +860,11 @@ class CubedSphere3D(CubedSphere):
 
         self.coslon_new = xp.cos(self.polar[0, ...])
         self.coslat_new = xp.cos(self.polar[1, ...])
+
+        # The coordinates are built in double precision for accuracy, then stored in the requested
+        # precision. Doing this here, before the metric is built, means the metric (which differences
+        # these arrays through the operators) sees a single, consistent dtype.
+        cast_double_arrays(self, self.device.xp, self.dtype)
 
     def _to_new(self, a: NDArray) -> NDArray:
         """Convert input array to new memory layout"""
@@ -1094,20 +1222,25 @@ class CubedSphere3D(CubedSphere):
             Tuple of contravariant winds
         """
 
+        # x1 and x2 are functions of the longitude and the latitude alone, so a parcel's dx1/dt and
+        # dx2/dt follow from the horizontal wind only: these are already the exact contravariant
+        # components, whatever the terrain does.
         u1_contra, u2_contra = self.wind2contra_2d(u, v)
 
-        # Second, convert w to _covariant_ u3, which points in the vertical direction regardless of topography.
-        # We do this by multiplying by dz/deta, or dividing by metric.inv_dzdeta  (equivalently, taking the dot product
-        # with the e_3 basis vector)
-        u3_cov = w / metric.inv_dzdeta_new
-
-        # Now, convert covariant u3 to contravariant components.  Because topography, u^3 is normal to the
-        # terrain-following x1 and x2 coordinates, implying that u^3 has horizontal components.
-        # To cancel this, we need to adjust u^1 and u^2 accordingly.
-
-        u1_contra += metric.h_contra_new[0, 2, ...] * u3_cov
-        u2_contra += metric.h_contra_new[1, 2, ...] * u3_cov
-        u3_contra = metric.h_contra_new[2, 2, ...] * u3_cov
+        # This inverts contra2wind_3d exactly. There, the physical vertical wind is recovered by
+        # lowering the index with the covariant metric and scaling back to metres,
+        #
+        #     w = (h_31 u^1 + h_32 u^2 + h_33 u^3) * inv_dzdeta,
+        #
+        # so solving for u^3 gives what follows. Over sloping terrain h_31 and h_32 do not vanish,
+        # which is what makes a purely horizontal wind (w = 0) produce a non-zero u^3: the
+        # "perceived" vertical velocity of a terrain-following coordinate. On flat terrain the cross
+        # terms drop out and this reduces to u^3 = w * inv_dzdeta.
+        u3_contra = (
+            w / metric.inv_dzdeta_new
+            - metric.h_cov_new[2, 0, ...] * u1_contra
+            - metric.h_cov_new[2, 1, ...] * u2_contra
+        ) / metric.h_cov_new[2, 2, ...]
 
         return (u1_contra, u2_contra, u3_contra)
 

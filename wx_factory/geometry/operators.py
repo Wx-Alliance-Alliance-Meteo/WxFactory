@@ -46,7 +46,7 @@ class DFROperators:
         """
 
         xp = device.xp
-        self.dtype = xp.float64 if dtype is None else dtype
+        self.dtype = device.real_dtype if dtype is None else dtype
 
         if param.filter_apply and not isinstance(grd.solutionPoints, xp.ndarray):
             raise NotImplementedError("DFROperators cannot form a filter with non-numpy arrays")

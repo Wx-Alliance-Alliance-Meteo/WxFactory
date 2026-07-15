@@ -74,7 +74,8 @@ class PDEEulerCubesphere(PDE):
         self.num_solpts = geometry.num_solpts
 
         self.case_number = config.case_number
-        self.advection_only = config.case_number < 13
+        # The DCMIP transport tests (1-1, 1-2 and 1-3) prescribe the wind and freeze the mass field.
+        self.advection_only = config.case_number <= 13
 
         self.compute_forcings = compute_forcings
         if isinstance(self.device, CudaDevice):
@@ -484,8 +485,8 @@ class PDEEulerCubesphere(PDE):
         # DCMIP cases 2-1 and 2-2 involve rayleigh damping
         # dcmip_schar_damping modifies the 'forcing' variable to apply the requried Rayleigh damping
         if self.case_number == 21:
-            dcmip_schar_damping(forcing, rho, u1, u2, w, metric, self.geometry, shear=False, new_layout=True)
+            dcmip_schar_damping(forcing, rho, u1, u2, w, metric, self.geometry, shear=False)
         elif self.case_number == 22:
-            dcmip_schar_damping(forcing, rho, u1, u2, w, metric, self.geometry, shear=True, new_layout=True)
+            dcmip_schar_damping(forcing, rho, u1, u2, w, metric, self.geometry, shear=True)
 
         rhs -= forcing
