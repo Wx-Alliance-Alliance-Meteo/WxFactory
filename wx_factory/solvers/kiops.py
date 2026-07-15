@@ -155,6 +155,12 @@ def kiops(
     order = 0.0
     kest = 0.0
 
+    # Smallest positive normal of the working precision. In single precision the truncation-error
+    # indicator below can underflow to (near) zero once the Krylov space over-resolves a substep,
+    # which turns the step-size controller (log(omega / gamma), with omega = 0) into a crash. This
+    # floor lets us detect that case.
+    tiny_err = float(xp.finfo(u.dtype).tiny)
+
     while tau_now < tau_end:
 
         # Compute necessary starting information
@@ -242,56 +248,70 @@ def kiops(
             # Local truncation error estimation
             err = xp.abs(beta * nrm * F[j - 1, j])
 
-            # Error for this step
-            oldomega = omega
-            omega = tau_end * err / (tau * tol)
-            omega = device.to_host(omega)
+            # In single precision err can underflow to (near) zero once the current Krylov space
+            # resolves the substep to machine accuracy. The controller below would then set omega = 0
+            # and take log(omega / gamma) = log(0) in the m_opt update, which crashes. Such a step is
+            # fully resolved, so accept it and hold the step size / Krylov size, exactly as for a
+            # happy breakdown. In double precision this underflow does not occur, so this branch never
+            # triggers there.
+            if not device.to_host(err) > tiny_err:
+                omega = 0.0
+                err = 0.0
+                tau_new = min(tau_end - (tau_now + tau), tau)
+                m_new = m
 
-            # Estimate order
-            if m == oldm and tau != oldtau and ireject >= 1:
-                order = max(1.0, math.log(omega / oldomega) / device.to_host(xp.log(tau / oldtau)))
-                orderold = False
-            elif orderold or ireject == 0:
-                orderold = True
-                order = j / 4
             else:
-                orderold = True
 
-            # Estimate k
-            if m != oldm and tau == oldtau and ireject >= 1:
-                kest = max(1.1, (omega / oldomega) ** (1 / (oldm - m)))
-                kestold = False
-            elif kestold or ireject == 0:
-                kestold = True
-                kest = 2.0
-            else:
-                kestold = True
+                # Error for this step
+                oldomega = omega
+                omega = tau_end * err / (tau * tol)
+                omega = device.to_host(omega)
 
-            if omega > delta:
-                remaining_time = tau_end - tau_now
-            else:
-                remaining_time = tau_end - (tau_now + tau)
-
-            # Krylov adaptivity
-
-            same_tau = min(remaining_time, tau)
-            tau_opt = tau * (gamma / omega) ** (1 / order)
-            tau_opt = min(remaining_time, max(tau / 5, min(5 * tau, tau_opt)))
-
-            m_opt = math.ceil(j + math.log(omega / gamma) / math.log(kest))
-            m_opt = max(mmin, min(mmax, max(math.floor(3 / 4 * m), min(m_opt, math.ceil(4 / 3 * m)))))
-
-            if j == mmax:
-                if omega > delta:
-                    m_new = j
-                    tau_new = tau * (gamma_mmax / omega) ** (1 / order)
-                    tau_new = min(tau_end - tau_now, max(tau / 5, tau_new))
+                # Estimate order
+                if m == oldm and tau != oldtau and ireject >= 1:
+                    order = max(1.0, math.log(omega / oldomega) / device.to_host(xp.log(tau / oldtau)))
+                    orderold = False
+                elif orderold or ireject == 0:
+                    orderold = True
+                    order = j / 4
                 else:
-                    tau_new = tau_opt
-                    m_new = m
-            else:
-                m_new = m_opt
-                tau_new = same_tau
+                    orderold = True
+
+                # Estimate k
+                if m != oldm and tau == oldtau and ireject >= 1:
+                    kest = max(1.1, (omega / oldomega) ** (1 / (oldm - m)))
+                    kestold = False
+                elif kestold or ireject == 0:
+                    kestold = True
+                    kest = 2.0
+                else:
+                    kestold = True
+
+                if omega > delta:
+                    remaining_time = tau_end - tau_now
+                else:
+                    remaining_time = tau_end - (tau_now + tau)
+
+                # Krylov adaptivity
+
+                same_tau = min(remaining_time, tau)
+                tau_opt = tau * (gamma / omega) ** (1 / order)
+                tau_opt = min(remaining_time, max(tau / 5, min(5 * tau, tau_opt)))
+
+                m_opt = math.ceil(j + math.log(omega / gamma) / math.log(kest))
+                m_opt = max(mmin, min(mmax, max(math.floor(3 / 4 * m), min(m_opt, math.ceil(4 / 3 * m)))))
+
+                if j == mmax:
+                    if omega > delta:
+                        m_new = j
+                        tau_new = tau * (gamma_mmax / omega) ** (1 / order)
+                        tau_new = min(tau_end - tau_now, max(tau / 5, tau_new))
+                    else:
+                        tau_new = tau_opt
+                        m_new = m
+                else:
+                    m_new = m_opt
+                    tau_new = same_tau
 
         # Check error against target
         if omega <= delta:

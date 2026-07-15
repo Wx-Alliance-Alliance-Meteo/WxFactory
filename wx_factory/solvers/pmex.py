@@ -130,6 +130,11 @@ def pmex(
     kestold = True
     same_tau = None
 
+    # Smallest positive normal of the working precision. In single precision the truncation-error
+    # indicators below can underflow to (near) zero once the Krylov space over-resolves a substep,
+    # which turns the step-size controller into 0/0 = NaN. This floor lets us detect that case.
+    tiny_err = float(device.xp.finfo(u.dtype).tiny)
+
     l = 0
 
     while tau_now < tau_end:
@@ -262,51 +267,65 @@ def pmex(
             err_half = abs(beta * nrm * F_half[j - 1, j])
             err = abs(beta * nrm * F[j - 1, j])
 
-            # Error for this step
-            old_ohm = ohm
-            ohm = tau_end * err / (tau * tol)
+            # In single precision err and err_half can underflow to (near) zero once the current
+            # Krylov space resolves the substep to machine accuracy. The controller below would then
+            # form err / err_half = 0 / 0 = NaN (or order = log(1) = 0, dividing by zero in tau_opt)
+            # and crash. Such a step is fully resolved, so accept it and hold the step size / Krylov
+            # size, exactly as for a happy breakdown. In double precision these underflows do not
+            # occur, so this branch never triggers there.
+            if not (err > tiny_err and err_half > tiny_err and err != err_half):
+                ohm = 0.0
+                err = 0.0
+                tau_new = min(tau_end - (tau_now + tau), tau)
+                m_new = m
 
-            # Estimate order
-            order = math.log(err / err_half) / math.log(2)
-
-            # Estimate k
-            if m != old_m and tau == old_tau and ireject >= 1:
-                kest = max(1.1, (ohm / old_ohm) ** (1 / (old_m - m)))
-                kestold = False
-            elif kestold is True or ireject == 0:
-                kest = 2
-                kestold = True
             else:
-                kestold = True
 
-            if ohm > delta:
-                remaining_time = tau_end - tau_now
-            else:
-                remaining_time = tau_end - (tau_now + tau)
+                # Error for this step
+                old_ohm = ohm
+                ohm = tau_end * err / (tau * tol)
 
-            # Krylov adaptivity
-            same_tau = min(remaining_time, tau)
+                # Estimate order
+                order = math.log(err / err_half) / math.log(2)
 
-            tau_opt = tau * (gamma / ohm) ** (1 / order)
-            tau_opt = min(remaining_time, max(tau / 5, min(5 * tau, tau_opt)))
+                # Estimate k
+                if m != old_m and tau == old_tau and ireject >= 1:
+                    kest = max(1.1, (ohm / old_ohm) ** (1 / (old_m - m)))
+                    kestold = False
+                elif kestold is True or ireject == 0:
+                    kest = 2
+                    kestold = True
+                else:
+                    kestold = True
 
-            m_opt = math.ceil(j + math.log(ohm / gamma) / math.log(kest))
-            m_opt = max(mmin, min(mmax, max(math.floor(3 / 4 * m), min(m_opt, math.ceil(4 / 3 * m)))))
-
-            if j == mmax:
                 if ohm > delta:
-                    m_new = j
-                    tau_new = tau * (gamma_mmax / ohm) ** (1 / order)
-                    tau_new = min(tau_end - tau_now, max(tau / 5, tau_new))
+                    remaining_time = tau_end - tau_now
                 else:
-                    tau_new = tau_opt
-                    m_new = m
-            else:
-                if same_tau < tau:
-                    m_new = m  # We reduced tau to avoid small step size. Then keep m constant.
+                    remaining_time = tau_end - (tau_now + tau)
+
+                # Krylov adaptivity
+                same_tau = min(remaining_time, tau)
+
+                tau_opt = tau * (gamma / ohm) ** (1 / order)
+                tau_opt = min(remaining_time, max(tau / 5, min(5 * tau, tau_opt)))
+
+                m_opt = math.ceil(j + math.log(ohm / gamma) / math.log(kest))
+                m_opt = max(mmin, min(mmax, max(math.floor(3 / 4 * m), min(m_opt, math.ceil(4 / 3 * m)))))
+
+                if j == mmax:
+                    if ohm > delta:
+                        m_new = j
+                        tau_new = tau * (gamma_mmax / ohm) ** (1 / order)
+                        tau_new = min(tau_end - tau_now, max(tau / 5, tau_new))
+                    else:
+                        tau_new = tau_opt
+                        m_new = m
                 else:
-                    m_new = m_opt
-                tau_new = same_tau
+                    if same_tau < tau:
+                        m_new = m  # We reduced tau to avoid small step size. Then keep m constant.
+                    else:
+                        m_new = m_opt
+                    tau_new = same_tau
 
         # Check error against target
         if ohm <= delta:
