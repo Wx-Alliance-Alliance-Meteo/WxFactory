@@ -11,6 +11,7 @@ xarray
 # GPU support (install the variant matching your CUDA version)
 # cupy-cuda11x
 # cupy-cuda12x
+# pip3 install torch torchvision --index-url https://download.pytorch.org/whl/cu132
 
 # Optional visualization / tooling
 # cartopy
