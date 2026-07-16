@@ -4,6 +4,8 @@ import unittest
 from wx_factory.geometry import registry
 from wx_factory.geometry.registry import GEOMETRY_REGISTRY, register_geometry, resolve_geometry
 
+from wx_test import WxTestCase
+
 
 def make_ctx(grid_type, equations, grid_file=""):
     """Minimal context: resolve_geometry only reads config.grid_file / grid_type / equations."""
@@ -11,7 +13,7 @@ def make_ctx(grid_type, equations, grid_file=""):
     return types.SimpleNamespace(config=config)
 
 
-class GeometryRegistryTestCases(unittest.TestCase):
+class GeometryRegistryTestCases(WxTestCase):
     def test_expected_combinations_are_registered(self):
         keys = set(GEOMETRY_REGISTRY)
         self.assertIn(("cubed_sphere", "euler"), keys)

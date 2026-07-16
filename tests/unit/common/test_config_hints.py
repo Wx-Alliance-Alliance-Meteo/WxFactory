@@ -2,8 +2,10 @@ import unittest
 
 from wx_factory.common import config_hints
 
+from wx_test import WxTestCase
 
-class ConfigHintsTestCases(unittest.TestCase):
+
+class ConfigHintsTestCases(WxTestCase):
     def test_type_hints_are_up_to_date(self):
         """The generated type-hint block in configuration.py must match the schema.
 

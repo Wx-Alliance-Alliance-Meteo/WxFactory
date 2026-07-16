@@ -13,11 +13,12 @@ try:
 
     cupy_avail = True
     num_devices = cp.cuda.runtime.getDeviceCount()
-except (ModuleNotFoundError, ImportError, RuntimeError):
+except (ModuleNotFoundError, ImportError, RuntimeError) as e:
     cupy_avail = False
     num_devices = 0
     if MPI.COMM_WORLD.rank == 0:
         print(f"Unable to import module cupy")
+        print(e)
 
 
 def main():

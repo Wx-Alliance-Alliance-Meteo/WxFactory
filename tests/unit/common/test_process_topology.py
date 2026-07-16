@@ -31,14 +31,16 @@ def gen_data_1(num_processes: int, num_data_hori_per_proc: int, device: Device):
     return xp.array(data)
 
 
-class ExchangeTest(unittest.TestCase):
+class ExchangeTest(MpiTestCase):
     topo: ProcessTopology
     rank: int
     comm: MPI.Comm
 
+    def __init__(self, methodName, optional=False):
+        super().__init__(6, methodName, optional)
+
     def setUp(self) -> None:
         super().setUp()
-        self.comm: MPI.Comm = run_test_on_x_process(self, 6)
 
         self.size = self.comm.size
         self.rank = self.comm.rank

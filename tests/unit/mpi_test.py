@@ -10,6 +10,8 @@ import warnings
 from mpi4py import MPI
 import numpy
 
+from wx_test import WxTestCase
+
 
 def run_test_on_x_process(test: unittest.TestCase, x: int = 0, optional: bool = False) -> MPI.Comm:
     """
@@ -38,7 +40,7 @@ def run_test_on_x_process(test: unittest.TestCase, x: int = 0, optional: bool = 
     return comm
 
 
-class MpiTestCase(unittest.TestCase):
+class MpiTestCase(WxTestCase):
     def __init__(self, num_procs: int, methodName="runTest", optional: bool = False):
         super().__init__(methodName)
         self.num_procs = num_procs
@@ -53,7 +55,7 @@ class MpiTestSuite(unittest.TestSuite):
     def run(self, result, debug=False):
         for test in self:
             if MPI.COMM_WORLD.rank == 0:
-                print(f"running {test}", flush=True)
+                print(f"Running {test}", flush=True)
             test.run(result)
         return result
 

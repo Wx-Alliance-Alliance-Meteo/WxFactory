@@ -140,7 +140,9 @@ def regular_run(runner, args):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Solve NWP problems with WxFactory!")
+    parser = argparse.ArgumentParser(
+        usage="mpirun -n [6+] %(prog)s [options]", description="Run the suite of multi-process tests."
+    )
     parser.add_argument(
         "test_name",
         nargs="?",

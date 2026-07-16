@@ -1,9 +1,8 @@
-import unittest
-
+from wx_test import WxTestCase
 from wx_factory.device import wx_cupy
 
 
-class CudaTestCases(unittest.TestCase):
+class CudaTestCases(WxTestCase):
     """
     Base test case for a test case that requires a Cuda device
     """

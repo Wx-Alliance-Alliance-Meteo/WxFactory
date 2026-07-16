@@ -1,6 +1,5 @@
 import copy
 import os
-import unittest
 
 import numpy
 
@@ -9,10 +8,10 @@ from wx_factory.output.state import load_state
 from wx_factory.simulation import Simulation
 from wx_factory.wx_mpi import do_once
 
-from mpi_test import MpiTestCase
+from mpi_test import MpiTestCase, WxTestCase
 
 
-class Euler2DRestartTestCase(unittest.TestCase):
+class Euler2DRestartTestCase(WxTestCase):
 
     def setUp(self) -> None:
         super().setUp()

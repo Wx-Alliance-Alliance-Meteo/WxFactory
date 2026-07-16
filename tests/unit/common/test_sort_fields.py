@@ -7,6 +7,8 @@ from wx_factory.common.configuration_schema import (
     sort_fields_by_dependency,
 )
 
+from wx_test import WxTestCase
+
 
 def make_field(name, dependency=None):
     """Build a minimal ConfigurationField for ordering tests."""
@@ -26,7 +28,7 @@ def names(fields):
     return [f.name for f in fields]
 
 
-class SortFieldsByDependencyTestCases(unittest.TestCase):
+class SortFieldsByDependencyTestCases(WxTestCase):
     def test_no_dependencies_preserves_order(self):
         fields = [make_field("a"), make_field("b"), make_field("c")]
         self.assertEqual(names(sort_fields_by_dependency(fields)), ["a", "b", "c"])

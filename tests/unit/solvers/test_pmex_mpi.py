@@ -1,14 +1,13 @@
-import unittest
-
 from numpy import ndarray
 
 from wx_factory.device import CpuDevice
 from wx_factory.solvers import pmex
 
 from mpi_test import run_test_on_x_process
+from wx_test import WxTestCase
 
 
-class PmexMpiTestCases(unittest.TestCase):
+class PmexMpiTestCases(WxTestCase):
     tolerance: float
     matrix_size_multiplier: int
 

@@ -3,11 +3,12 @@ import os
 
 import wx_factory.compiler.compile_kernels as kernels
 import cuda_test
+from wx_test import WxTestCase
 
 modules = ["pde", "operators"]
 
 
-class CompilationTestCases(unittest.TestCase):
+class CompilationTestCases(WxTestCase):
 
     def setUp(self):
         super().setUp()

@@ -10,6 +10,8 @@ from wx_factory.step_hooks.registry import (
     resolve_step_hooks,
 )
 
+from wx_test import WxTestCase
+
 
 class _FakeGeom:
     pass
@@ -23,7 +25,7 @@ def make_ctx(**config_kwargs):
     return StepHookContext(config=config, geometry=_FakeGeom())
 
 
-class StepHookRegistryTestCases(unittest.TestCase):
+class StepHookRegistryTestCases(WxTestCase):
     def test_builtin_hooks_registered_with_expected_phases(self):
         phases = {name: phase for name, (phase, _) in STEP_HOOK_REGISTRY.items()}
         self.assertEqual(phases.get("schar_mountain"), PHASE_GEOMETRY)

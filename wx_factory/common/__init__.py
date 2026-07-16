@@ -5,6 +5,7 @@ from .configuration import Configuration
 from .configuration_schema import ConfigurationSchema, load_default_schema, default_schema_path, ConfigValueError
 from .grid_encoding import decode_ig4, make_ig4
 from .readfile import readfile
+from . import config_hints
 
 main_project_dir = os.path.realpath(os.path.join(os.path.dirname(__file__), "..", ".."))
 main_module_dir = os.path.join(main_project_dir, "wx_factory")
@@ -12,6 +13,7 @@ main_module_dir = os.path.join(main_project_dir, "wx_factory")
 
 __all__ = [
     "angle24",
+    "config_hints",
     "Configuration",
     "ConfigurationSchema",
     "ConfigValueError",

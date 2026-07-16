@@ -1,5 +1,4 @@
 import random
-import unittest
 
 from mpi4py import MPI
 from numpy import ndarray
@@ -11,6 +10,7 @@ from wx_factory.solvers.fgmres import fgmres
 
 import ndarray_generator
 import cuda_test
+from wx_test import WxTestCase
 
 
 class FgmresComparisonTestCases(cuda_test.CudaTestCases):
@@ -80,7 +80,7 @@ class FgmresComparisonTestCases(cuda_test.CudaTestCases):
         self.assertLessEqual(relative_diff_x2, self.tolerance, "Fgmres didn't give a value close to the gpu value")
 
 
-class FgmresScipyTestCases(unittest.TestCase):
+class FgmresScipyTestCases(WxTestCase):
     tolerance: float
     rand: random.Random
 
@@ -159,7 +159,7 @@ class FgmresScipyTestCases(unittest.TestCase):
         self.assertLessEqual(relative_residual, self.tolerance)
 
 
-class FgmresEdgeCasesTestCases(unittest.TestCase):
+class FgmresEdgeCasesTestCases(WxTestCase):
     tolerance: float
     rand: random.Random
 

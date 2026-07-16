@@ -8,13 +8,15 @@ from wx_factory.precondition import (
     resolve_preconditioner,
 )
 
+from wx_test import WxTestCase
+
 
 def make_ctx(name):
     """Minimal context: resolve_preconditioner only reads config.preconditioner."""
     return types.SimpleNamespace(config=types.SimpleNamespace(preconditioner=name))
 
 
-class PreconditionerRegistryTestCases(unittest.TestCase):
+class PreconditionerRegistryTestCases(WxTestCase):
     def test_none_resolves_to_no_preconditioner(self):
         self.assertIsNone(resolve_preconditioner(make_ctx("none")))
 

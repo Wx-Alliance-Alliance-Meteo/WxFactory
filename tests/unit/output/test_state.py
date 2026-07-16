@@ -1,6 +1,5 @@
 import os
 import random
-import unittest
 
 from mpi4py import MPI
 import numpy
@@ -12,12 +11,13 @@ import wx_factory.output.state
 
 import tests.unit.ndarray_generator as ndarray_generator
 import tests.unit.common.config_pack
+from wx_test import WxTestCase
 
 state_input_dir = "tests/data/unit/state_tests"
 state_tmp_dir = "tests/data/temp"
 
 
-class StateTestCases(unittest.TestCase):
+class StateTestCases(WxTestCase):
     def setUp(self):
         super().setUp()
         self.cpu_device = CpuDevice(MPI.COMM_WORLD)

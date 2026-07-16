@@ -3,6 +3,8 @@ import unittest
 
 from wx_factory.output.registry import OUTPUT_REGISTRY, register_output, resolve_output
 
+from wx_test import WxTestCase
+
 
 def make_ctx(output_family, output_format):
     """Minimal context: resolve_output only reads geometry.output_family and config.output_format."""
@@ -11,7 +13,7 @@ def make_ctx(output_family, output_format):
     return types.SimpleNamespace(geometry=geometry, config=config)
 
 
-class OutputRegistryTestCases(unittest.TestCase):
+class OutputRegistryTestCases(WxTestCase):
     def test_expected_combinations_are_registered(self):
         keys = set(OUTPUT_REGISTRY)
         self.assertIn(("cartesian", None), keys)

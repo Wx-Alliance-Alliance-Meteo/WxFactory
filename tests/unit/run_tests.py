@@ -7,6 +7,8 @@ import sys
 from typing import Optional
 import unittest
 
+from wx_test import WxTestSuite
+
 main_project_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../..")
 sys.path.append(main_project_dir)
 
@@ -34,15 +36,16 @@ def add_test(suite: unittest.TestSuite, test: unittest.TestCase, test_re: Option
         suite.addTest(test)
 
 
-def load_tests(test_name):
+def load_tests(test_name: str, skip_compile: bool):
     """Create a test suite with cases we want to run."""
 
     test_re = re.compile(test_name, re.IGNORECASE)
-    suite = unittest.TestSuite()
+    suite = WxTestSuite()
 
-    add_test(suite, CompilationTestCases("test_cpp_kernels_compilation"), test_re)
-    add_test(suite, CompilationGPUTestCases("test_cuda_kernels_compilation"), test_re)
-    # add_test(suite, CompilationTestCases("test_cpp_compilation_twice"), test_re)
+    if not skip_compile:
+        add_test(suite, CompilationTestCases("test_cpp_kernels_compilation"), test_re)
+        add_test(suite, CompilationGPUTestCases("test_cuda_kernels_compilation"), test_re)
+        # add_test(suite, CompilationTestCases("test_cpp_compilation_twice"), test_re)
 
     add_test(suite, PmexComparisonTestCases("test_compare_cpu_to_gpu"), test_re)
     add_test(suite, KiopsComparisonTestCases("test_compare_cpu_to_gpu"), test_re)
@@ -121,7 +124,7 @@ def load_tests(test_name):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Solve NWP problems with WxFactory!")
+    parser = argparse.ArgumentParser(description="Run the suite of single-process tests.")
     parser.add_argument(
         "test_name",
         nargs="?",
@@ -130,10 +133,11 @@ if __name__ == "__main__":
         help="Will only run tests whose name or type matches this regular expression.",
     )
     parser.add_argument("--no-buffer", action="store_true", help="Print all test output to terminal")
+    parser.add_argument("--skip-compile", action="store_true", help="Skip compilation test cases (they are slow)")
     args = parser.parse_args()
 
-    runner = unittest.TextTestRunner(buffer=not args.no_buffer, verbosity=1)
-    result = runner.run(load_tests(args.test_name))
+    runner = unittest.TextTestRunner(buffer=not args.no_buffer, verbosity=0)
+    result = runner.run(load_tests(args.test_name, args.skip_compile))
     if not result.wasSuccessful():
         failed_tests = "\n  ".join([f"{r[0]}" for r in result.errors + result.unexpectedSuccesses + result.failures])
         print(f"failed tests: \n  {failed_tests}")

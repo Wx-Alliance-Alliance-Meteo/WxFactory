@@ -1,5 +1,4 @@
 import random
-import unittest
 
 from mpi4py import MPI
 from numpy import ndarray
@@ -9,9 +8,10 @@ from wx_factory.solvers.kiops import kiops
 from wx_factory.solvers.pmex import pmex
 
 import ndarray_generator
+from wx_test import WxTestCase
 
 
-class KiopsPmexToleranceCpuTestCases(unittest.TestCase):
+class KiopsPmexToleranceCpuTestCases(WxTestCase):
     tolerance: float
     rand: random.Random
 

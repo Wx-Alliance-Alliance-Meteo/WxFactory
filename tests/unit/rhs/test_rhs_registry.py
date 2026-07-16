@@ -5,6 +5,8 @@ from wx_factory.geometry import Cartesian2D, CubedSphere2D, CubedSphere3D
 from wx_factory.rhs import rhs_selector
 from wx_factory.rhs.rhs_selector import RHS_REGISTRY, RhsBundle, register_rhs, resolve_rhs
 
+from wx_test import WxTestCase
+
 
 def make_ctx(equations, geom, discretization="dfr"):
     """Minimal RhsContext-like object: resolve_rhs only reads param and type(geom)."""
@@ -16,7 +18,7 @@ class DummyGeom:
     pass
 
 
-class RhsBundleTestCases(unittest.TestCase):
+class RhsBundleTestCases(WxTestCase):
     def test_full_and_shape_are_stored(self):
         sentinel = object()
         bundle = RhsBundle(full=sentinel, shape=(2, 3))
@@ -38,7 +40,7 @@ class RhsBundleTestCases(unittest.TestCase):
         self.assertIs(bundle.implicit, imp)
 
 
-class RhsRegistryTestCases(unittest.TestCase):
+class RhsRegistryTestCases(WxTestCase):
     def test_expected_combinations_are_registered(self):
         keys = set(RHS_REGISTRY)
         self.assertIn(("euler", CubedSphere3D), keys)
