@@ -13,6 +13,8 @@ from wx_factory.output import state
 from wx_factory.simulation import Simulation
 import wx_factory.wx_mpi
 
+from tests.unit.wx_test import WxTestCase
+
 OptionType = TypeVar("OptionType", bound=Union[int, float, str, bool])
 
 
@@ -86,7 +88,7 @@ def _get_option(
     return value
 
 
-class StateIntegrationTestCases(unittest.TestCase):
+class StateIntegrationTestCases(WxTestCase):
     config_dir_path: str
     num_process_required: int
 

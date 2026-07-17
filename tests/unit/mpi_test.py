@@ -10,7 +10,7 @@ import warnings
 from mpi4py import MPI
 import numpy
 
-from wx_test import WxTestCase
+from tests.unit.wx_test import WxTestCase
 
 
 def run_test_on_x_process(test: unittest.TestCase, x: int = 0, optional: bool = False) -> MPI.Comm:

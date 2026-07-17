@@ -4,6 +4,8 @@ import argparse
 import os
 import sys
 
+from mpi4py import MPI
+
 main_project_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../..")
 sys.path.append(main_project_dir)
 
@@ -23,6 +25,8 @@ if __name__ == "__main__":
     results = []
     for problem in args.problems:
         problem_dir = os.path.join(main_project_dir, test_cases_dir, problem)
+        if MPI.COMM_WORLD.rank == 0:
+            print(f"Running integration test for {os.path.basename(os.path.normpath(problem_dir))}")
         result = runner.run(StateIntegrationTestCases(problem_dir))
         results.append(result)
 
