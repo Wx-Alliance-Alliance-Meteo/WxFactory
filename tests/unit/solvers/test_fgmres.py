@@ -138,7 +138,7 @@ class FgmresScipyTestCases(WxTestCase):
         initial_vector_size: int = 64
 
         self.cpu_A_matrix = self.cpu_device.xp.eye(initial_vector_size, dtype=float)
-        self.cpu_vector = self.cpu_device.xp.array(range(1, initial_vector_size + 1))
+        self.cpu_vector = self.cpu_device.xp.array(range(1, initial_vector_size + 1), dtype=float)
         self.cpu_A_matrix[initial_vector_size - 1, 0] = 1
 
         x1, norm_r1, norm_b1, niter1, flag1, residuals1 = fgmres(
