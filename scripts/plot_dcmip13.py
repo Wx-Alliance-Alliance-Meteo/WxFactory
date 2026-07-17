@@ -254,9 +254,7 @@ def plot_lon_height(data, days, outdir, label, field="q4"):
         ax.set_ylabel("height (m)")
 
     axes[-1].set_xlabel("longitude (deg)")
-    fig.suptitle(
-        f"DCMIP 1-3 ({label}): {field} along the equator (|lat| < {tolerance:.1f} deg), on height levels"
-    )
+    fig.suptitle(f"DCMIP 1-3 ({label}): {field} along the equator (|lat| < {tolerance:.1f} deg), on height levels")
     path = os.path.join(outdir, f"dcmip13_{label}_lonheight_{field}.png")
     fig.savefig(path, dpi=140, bbox_inches="tight")
     plt.close(fig)

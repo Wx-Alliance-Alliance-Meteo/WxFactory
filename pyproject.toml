@@ -32,3 +32,4 @@ write_to = "wx_factory/_version.py"
 
 [tool.black]
 line-length = 120
+target-version = ["py311"]

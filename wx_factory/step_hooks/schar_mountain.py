@@ -61,12 +61,8 @@ class ScharMountainHook(step_hook.StepHook):
         self.large_itf_j = self.build_topo_old(self.geom.coordVec_latlon_itf_j, large_scale_only=True)
 
         self.large_new = self.build_topo(self.geom.get_floor(self.geom.polar), large_scale_only=True)
-        self.large_itf_i_new = self.build_topo(
-            self.geom.get_itf_i_floor(self.geom.polar_itf_i), large_scale_only=True
-        )
-        self.large_itf_j_new = self.build_topo(
-            self.geom.get_itf_j_floor(self.geom.polar_itf_j), large_scale_only=True
-        )
+        self.large_itf_i_new = self.build_topo(self.geom.get_itf_i_floor(self.geom.polar_itf_i), large_scale_only=True)
+        self.large_itf_j_new = self.build_topo(self.geom.get_itf_j_floor(self.geom.polar_itf_j), large_scale_only=True)
         self.large_itf_i_new[self.geom.floor_west_edge] = 0.0
         self.large_itf_i_new[self.geom.floor_east_edge] = 0.0
         self.large_itf_j_new[self.geom.floor_south_edge] = 0.0

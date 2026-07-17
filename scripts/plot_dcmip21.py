@@ -127,9 +127,7 @@ def plot_sections(data, outdir, label, field, cmap, title, filename, symmetric=T
     times = []
     for target in SNAPSHOTS:
         it = time_index(data["time"], target)
-        images.append(
-            section_image(data[field][it], mask, z_cols, lon_cols, heights, longitudes, order, lon_sorted)
-        )
+        images.append(section_image(data[field][it], mask, z_cols, lon_cols, heights, longitudes, order, lon_sorted))
         times.append(float(data["time"][it]))
 
     evolved = numpy.concatenate([img.ravel() for img, t in zip(images, times) if t > 0.0])
@@ -139,9 +137,7 @@ def plot_sections(data, outdir, label, field, cmap, title, filename, symmetric=T
     else:
         vmin, vmax = 0.0, scale
 
-    fig, axes = plt.subplots(
-        len(images), 1, figsize=(11.0, 2.7 * len(images)), constrained_layout=True, sharex=True
-    )
+    fig, axes = plt.subplots(len(images), 1, figsize=(11.0, 2.7 * len(images)), constrained_layout=True, sharex=True)
     axes = numpy.atleast_1d(axes)
 
     for ax, image, t in zip(axes, images, times):
@@ -220,14 +216,20 @@ def main():
     written = [
         plot_topography(data, args.output_dir, label),
         plot_sections(
-            data, args.output_dir, label,
-            field="tprime", cmap="RdBu_r",
+            data,
+            args.output_dir,
+            label,
+            field="tprime",
+            cmap="RdBu_r",
             title="temperature perturbation T' = T - Teq (K)",
             filename="dcmip21_{label}_tprime.png",
         ),
         plot_sections(
-            data, args.output_dir, label,
-            field="w", cmap="RdBu_r",
+            data,
+            args.output_dir,
+            label,
+            field="w",
+            cmap="RdBu_r",
             title="vertical velocity w (m/s)",
             filename="dcmip21_{label}_w.png",
         ),
