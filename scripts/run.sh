@@ -13,6 +13,6 @@ for v in $vars; do
     exports="${exports} -x $v"
 done
 
-# exports="${exports} -x LD_PRELOAD=libmpi.so"
+exports="${exports} -x LD_PRELOAD=libmpi.so"
 
 mpirun ${exports} $@
