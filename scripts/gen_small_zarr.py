@@ -14,7 +14,7 @@ output_zarr = "results/2020_small.zarr"
 ds = xr.open_zarr(input_zarr)
 
 # Option 1: Select a date range
-subset = ds.isel(time=slice(0, 8))
+subset = ds.isel(time=slice(0, 1))
 
 # Remove inherited zarr encoding
 for var in subset.variables:
