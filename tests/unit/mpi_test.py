@@ -1,11 +1,11 @@
-import sys
 import time
+import traceback
 from types import TracebackType
-from typing import List, Tuple
+from typing import List, Tuple, Union
 import unittest
 from unittest.result import TestResult
+from unittest.runner import _WritelnDecorator
 from unittest.signals import registerResult
-import warnings
 
 from mpi4py import MPI
 import numpy
@@ -71,8 +71,9 @@ class MpiTestResult(unittest.TextTestResult):
     _SKIP = 3
     _UNEXPECTED_SUCCESS = 4
 
-    tests_order: List[unittest.TestCase] = None
-    results_as_list: List[int]  # 0=Nothing special, 1=error, 2=fail, 3=skip
+    def __init__(self, stream: _WritelnDecorator, descriptions: bool, verbosity: int) -> None:
+        super().__init__(stream, descriptions, verbosity)
+        self.extra_errors = []
 
     def addSuccess(self, test: unittest.TestCase) -> None:
         self.addCorrectResult(test, MpiTestResult._SUCCESS)
@@ -80,11 +81,17 @@ class MpiTestResult(unittest.TextTestResult):
     def addSkip(self, test: unittest.TestCase, reason: str) -> None:
         self.addCorrectResult(test, MpiTestResult._SKIP, reason=reason)
 
-    def addError(self, test: unittest.TestCase, err: tuple[type[BaseException], BaseException, TracebackType]) -> None:
+    def addError(
+        self,
+        test: unittest.TestCase,
+        err: Union[tuple[type[BaseException], BaseException, TracebackType], tuple[None, None, None]],
+    ) -> None:
         self.addCorrectResult(test, MpiTestResult._ERROR, err=err)
 
     def addFailure(
-        self, test: unittest.TestCase, err: tuple[type[BaseException], BaseException, TracebackType]
+        self,
+        test: unittest.TestCase,
+        err: Union[tuple[type[BaseException], BaseException, TracebackType], tuple[None, None, None]],
     ) -> None:
         self.addCorrectResult(test, MpiTestResult._FAILURE, err=err)
 
@@ -111,7 +118,21 @@ class MpiTestResult(unittest.TextTestResult):
         if "reason" in kwargs:
             reason = kwargs["reason"]
 
+        if isinstance(err[2], TracebackType):
+            err_buffer = err[:2] + (traceback.format_tb(err[2]),)
+        else:
+            err_buffer = err
+
         all_results = numpy.array(MPI.COMM_WORLD.allgather(result))
+        all_errors = MPI.COMM_WORLD.gather(err_buffer, root=0)
+
+        if all_errors is not None:
+            different_types = [all_errors[0][0]]
+            for i, e in enumerate(all_errors[1:]):
+                if e[0] is not None and e[0] not in different_types:
+                    different_types.append(e[0])
+                    self.extra_errors.append(e)
+
         if numpy.any(all_results == MpiTestResult._ERROR):
             super().addError(test, err)
         elif numpy.any(all_results == MpiTestResult._FAILURE):
@@ -122,6 +143,14 @@ class MpiTestResult(unittest.TextTestResult):
             super().addSkip(test, reason)
         else:
             super().addSuccess(test)
+
+    def printErrors(self) -> None:
+        super().printErrors()
+        if len(self.extra_errors) > 0:
+            self.stream.writeln(self.separator2)
+            self.stream.writeln(f"Errors from other ranks:")
+            for e in self.extra_errors:
+                self.stream.writeln(f"{''.join(e[2])}\n{e[1]}")
 
 
 class MpiRunner(unittest.TextTestRunner):
