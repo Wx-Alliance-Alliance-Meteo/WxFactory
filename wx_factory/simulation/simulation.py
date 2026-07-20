@@ -135,7 +135,6 @@ class Simulation:
         self.integrator = self._create_time_integrator(self.config.time_integrator)
         self.integrator.output_manager = self.output
         self.integrator.device = self.device
-
         self.output.step(self.initial_state.Q, self.starting_step)
         sys.stdout.flush()
 
@@ -190,7 +189,7 @@ class Simulation:
                 pass  # Step until everything is done
             self.output.finalize(time() - start_time)  # Close any open output file
         else:
-            export_era5_all_timesteps(self, self.config, self.initial_Q.dataset)
+            export_era5_all_timesteps(self, self.config, self.initial_state.dataset)
 
     def _make_device(self) -> Device:
         """Create the device object which will determine on what hardware (CPU/GPU) each part of the simulation will
@@ -337,11 +336,11 @@ class Simulation:
                     self.geometry,
                     self.operators_real,
                     self.device,
-                    self.initial_Q.metric,
-                    self.initial_Q.topography,
-                    self.initial_Q.dataset,
+                    self.initial_state.metric,
+                    self.initial_state.topography,
+                    self.initial_state.dataset,
                     self.process_topo,
-                    self.initial_Q.Q,
+                    self.initial_state.Q,
                 )
 
         raise ValueError(f"Unrecognized geometry type {type(self.geometry)}")

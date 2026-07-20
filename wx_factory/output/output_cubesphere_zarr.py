@@ -1,6 +1,5 @@
 import numpy as np
 import xarray as xr
-from numcodecs import Blosc
 from mpi4py import MPI
 import os
 import shutil
@@ -12,8 +11,6 @@ from ..common.definitions import idx_h, idx_hu1, idx_hu2
 
 
 class OutputCubesphereZarr(OutputCubesphere):
-
-    equ = ["h", "U", "V", "RV", "PV"]
 
     def __init__(
         self,
@@ -28,14 +25,21 @@ class OutputCubesphereZarr(OutputCubesphere):
         Q,
     ):
         super().__init__(config, geometry, operators, device, metric, topo, process_topo)
+        self.equ = ["h", "U", "V", "RV", "PV"]
         self.dataset = dataset
-        self.time_counter = {}
         self.panel_id = self.process_topology.my_panel
         self.max_time = len(self.dataset.time)
 
         # --- get real ERA5 time ---
-        self.year = int(str(dataset.data["time"][0].values)[:4])
-        self.filename = f"{self.output_dir}/{self.year}.zarr"
+        self.time_to_index = {}
+        self.all_times = self.dataset.time.values
+        self.time_to_index = {str(t): i for i, t in enumerate(self.all_times)}
+        """if config.base_output_file == "out":
+            self.month = str(self.dataset.data["time"][0].values)[:7]
+            self.filename = f"{self.output_dir}/{self.month}.zarr"
+        else:"""
+        self.filename = f"{self.output_dir}/{config.base_output_file}.zarr"
+        print("Name file", self.filename)
         self.marker_path = None
 
         # --- init once per year ---
@@ -49,7 +53,6 @@ class OutputCubesphereZarr(OutputCubesphere):
             self._output_init(Q, self.filename)
 
         self.comm.Barrier()
-        self.time_counter[self.year] = 0
 
     # --------------------------------------------------
     def _output_init(self, Q, filename):
@@ -63,12 +66,9 @@ class OutputCubesphereZarr(OutputCubesphere):
         ny = lons.shape[-2]
         nx = lats.shape[-1]
 
-        # detect Z dimension
-        nz = Q.shape[1] if Q.ndim == 5 else 1
-
         ds = xr.Dataset(
             coords={
-                "time": np.arange(self.max_time),
+                "time": self.all_times,
                 "equations": self.equ,
                 "z": np.arange(nz),
                 "faces": np.arange(npe),
@@ -92,18 +92,18 @@ class OutputCubesphereZarr(OutputCubesphere):
                 "equations": 1,
                 "z": nz,
                 "faces": 1,
-                "y": ny // 2,
-                "x": nx // 2,
+                "y": ny,
+                "x": nx,
             }
         )
-
         if self.rank == 0:
             ds.to_zarr(filename, mode="w")
             self.marker_path = self.create_inprogress_marker(filename)
 
     # --------------------------------------------------
     def __write_result__(self, Q, step_id):
-
+        time_val = step_id.values
+        t_index = self.time_to_index[str(time_val)]
         if Q.ndim == 5:
             nz = Q.shape[1]
         else:
@@ -143,7 +143,6 @@ class OutputCubesphereZarr(OutputCubesphere):
         z, nvar, ey, ex, npts = data.shape
 
         # reshape solpts → (sy, sx)
-        # since num_solpts = 3 → 9 = 3×3
         ns = int(np.sqrt(npts))
 
         data = data.reshape(z, nvar, ey, ex, ns, ns)
@@ -169,9 +168,7 @@ class OutputCubesphereZarr(OutputCubesphere):
         # WRITE REGION
         # ---------------------------
 
-        t_index = self.time_counter[self.year]
-        self.time_counter[self.year] += 1
-
+        t_index = self.time_to_index[str(time_val)]
         region = {
             "time": slice(t_index, t_index + 1),
             "equations": slice(0, len(self.equ)),
@@ -192,6 +189,7 @@ class OutputCubesphereZarr(OutputCubesphere):
 
             if hasattr(self, "marker_path") and os.path.exists(self.marker_path):
                 os.remove(self.marker_path)
+            self.remove_stale_markers(self.filename)
 
     def create_inprogress_marker(self, zarr_path):
 

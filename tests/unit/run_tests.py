@@ -20,6 +20,7 @@ from tests.unit.solvers.test_kiops import KiopsComparisonTestCases
 from tests.unit.solvers.test_fgmres import FgmresComparisonTestCases, FgmresScipyTestCases, FgmresEdgeCasesTestCases
 from tests.unit.solvers.test_kiops_pmex_tolerance_cpu import KiopsPmexToleranceCpuTestCases
 from tests.unit.solvers.test_kiops_pmex_tolerance_gpu import KiopsPmexToleranceGpuTestCases
+from tests.unit.zarr.compare_zarr_to_nc import CompareZarrToNcTestCase
 
 
 def add_test(suite: unittest.TestSuite, test: unittest.TestCase, test_re: Optional[re.Pattern]):
@@ -62,6 +63,7 @@ def load_tests(test_name):
 
     add_test(suite, Angle24TestCase("test_cyclic"), test_re)
     add_test(suite, Angle24TestCase("test_rounding"), test_re)
+    add_test(suite, CompareZarrToNcTestCase("test_compare_zarr_to_nc"), test_re)
 
     return suite
 

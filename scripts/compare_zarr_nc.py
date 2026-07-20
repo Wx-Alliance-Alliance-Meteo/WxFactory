@@ -65,7 +65,7 @@ def compare_h(nc_file, zarr_store, atol=1e-12):
     #
     if h_nc.shape == h_zarr.shape:
         if report_difference("DIRECT COMPARISON", h_nc, h_zarr, atol):
-            print("\n✅ PERFECT MATCH")
+            print("\nPERFECT MATCH")
             return
 
     #
@@ -88,7 +88,7 @@ def compare_h(nc_file, zarr_store, atol=1e-12):
                 h_trans,
                 atol,
             ):
-                print("\n✅ DATA MATCHES AFTER X/Y TRANSPOSE")
+                print("\nDATA MATCHES AFTER X/Y TRANSPOSE")
                 return
 
     #
@@ -133,14 +133,6 @@ def compare_h(nc_file, zarr_store, atol=1e-12):
 
         print("ZR  min/max:", np.min(h_zarr[t]), np.max(h_zarr[t]))
 
-    """for t in [0, 15]:
-
-        print(f"\n=== TIME {t} ===")
-
-        print("NetCDF:", np.min(h_nc[t]), np.max(h_nc[t]))
-
-        print("Zarr:", np.min(h_zarr[t]), np.max(h_zarr[t]))"""
-
     #
     # Coordinate diagnostics
     #
@@ -156,7 +148,7 @@ def compare_h(nc_file, zarr_store, atol=1e-12):
 
         print("Longitude range:", np.nanmin(lons_nc), np.nanmax(lons_nc))
 
-    print("\n❌ FILES DO NOT APPEAR IDENTICAL")
+    print("\nFILES DO NOT APPEAR IDENTICAL")
 
 
 if __name__ == "__main__":
