@@ -1,12 +1,17 @@
 import sys
 import numpy
 import math
-import scipy.sparse.linalg
 import scipy.optimize
 from time import time
 
 from .fgmres import fgmres
 from .global_operations import global_norm, global_inf_norm
+from ..device import Device
+
+
+def _machine_eps(dtype) -> float:
+    """Machine epsilon for the working precision, inferred from the array dtype (numpy or torch)."""
+    return float(numpy.finfo(numpy.float32).eps) if "32" in str(dtype) else float(numpy.finfo(numpy.float64).eps)
 
 
 def newton_krylov(
@@ -22,7 +27,13 @@ def newton_krylov(
     x_tol=None,
     x_rtol=None,
     line_search="armijo",
+    device=None,
+    eta0=1e-3,
 ):
+
+    if device is None:
+        device = Device.get_default()
+    xp = device.xp
 
     t_start = time()
     iteration = 0
@@ -30,10 +41,10 @@ def newton_krylov(
     gamma = 0.9
     eta_max = 0.9999
     eta_treshold = 0.1
-    eta = 1e-3
+    eta = eta0
 
     if f_tol is None:
-        f_tol = numpy.finfo(numpy.float_).eps ** (1.0 / 3)
+        f_tol = _machine_eps(x0.dtype) ** (1.0 / 3)
     if f_rtol is None:
         f_rtol = numpy.inf
     if x_tol is None:
@@ -43,12 +54,12 @@ def newton_krylov(
 
     f0_norm = None
 
-    func = lambda z: F(numpy.reshape(z, x0.shape)).flatten()
+    func = lambda z: F(z.reshape(x0.shape)).flatten()
     x = x0.flatten()
 
-    dx = numpy.full_like(x, numpy.inf)
+    dx = xp.full_like(x, float("inf"))
     Fx = func(x)
-    Fx_norm = global_norm(Fx)
+    Fx_norm = global_norm(Fx, device=device)
 
     jacobian = KrylovJacobian(
         x.copy(),
@@ -57,15 +68,17 @@ def newton_krylov(
         restart=restart,
         maxiter_linear=maxiter_linear,
         preconditioner=preconditioner,
+        device=device,
     )
 
     if maxiter is None:
-        maxiter = 100 * (x.size + 1)
+        maxiter = 100 * (x.shape[0] + 1)
 
     if line_search not in (None, "armijo", "wolfe"):
         raise ValueError("Invalid line search")
 
     residuals = []
+    terminated = False
 
     for n in range(maxiter):
 
@@ -90,22 +103,22 @@ def newton_krylov(
         if terminated:
             break
 
-        tol = min(eta, eta * Fx_norm)
+        tol = min(eta, eta * float(Fx_norm))
         dx = -jacobian.solve(Fx, tol=tol)
 
         # Line search, or Newton step
         if line_search:
-            s, x, Fx, Fx_norm_new = _nonlin_line_search(func, x, Fx, dx, line_search)
+            s, x, Fx, Fx_norm_new = _nonlin_line_search(func, x, Fx, dx, device, line_search)
         else:
             s = 1.0
             x = x + dx
             Fx = func(x)
-            Fx_norm_new = global_norm(Fx)
+            Fx_norm_new = global_norm(Fx, device=device)
 
         jacobian.update(x.copy(), Fx)
 
         # Adjust forcing parameters for inexact methods
-        eta_A = gamma * Fx_norm_new**2 / Fx_norm**2
+        eta_A = gamma * float(Fx_norm_new) ** 2 / float(Fx_norm) ** 2
         if gamma * eta**2 < eta_treshold:
             eta = min(eta_max, eta_A)
         else:
@@ -120,24 +133,24 @@ def newton_krylov(
     else:
         print("The maximum number of iterations allowed by the JFNK method has been reached.")
 
-    if terminated == 1:
+    if terminated:
         print(f"A solution was found after {iteration-1} steps of the JFNK method.")
 
-    return numpy.reshape(x, x0.shape), iteration - 1, residuals
+    return x.reshape(x0.shape), iteration - 1, residuals
 
 
-def _nonlin_line_search(func, x, Fx, dx, search_type="armijo", rdiff=1e-8, smin=1e-2):
+def _nonlin_line_search(func, x, Fx, dx, device, search_type="armijo", rdiff=1e-8, smin=1e-2):
     tmp_s = [0]
     tmp_Fx = [Fx]
-    tmp_phi = [global_norm(Fx) ** 2]
-    s_norm = global_norm(x) / global_norm(dx)
+    tmp_phi = [float(global_norm(Fx, device=device)) ** 2]
+    s_norm = float(global_norm(x, device=device)) / float(global_norm(dx, device=device))
 
     def phi(s, store=True):
         if s == tmp_s[0]:
             return tmp_phi[0]
         xt = x + s * dx
         v = func(xt)
-        p = global_norm(v) ** 2
+        p = float(global_norm(v, device=device)) ** 2
         if store:
             tmp_s[0] = s
             tmp_phi[0] = p
@@ -170,17 +183,18 @@ def _nonlin_line_search(func, x, Fx, dx, search_type="armijo", rdiff=1e-8, smin=
         Fx = tmp_Fx[0]
     else:
         Fx = func(x)
-    Fx_norm = global_norm(Fx)
+    Fx_norm = global_norm(Fx, device=device)
 
     return s, x, Fx, Fx_norm
 
 
 class KrylovJacobian:
 
-    def __init__(self, x, f, func, restart, maxiter_linear, preconditioner):
+    def __init__(self, x, f, func, restart, maxiter_linear, preconditioner, device):
         self.func = func
-        self.shape = (f.size, x.size)
+        self.shape = (f.shape[0], x.shape[0])
         self.dtype = f.dtype
+        self.device = device
 
         self.restart = restart
         self.maxiter_linear = maxiter_linear
@@ -188,10 +202,8 @@ class KrylovJacobian:
 
         self.x0 = x
         self.f0 = f
-        self.rdiff = math.sqrt(numpy.finfo(x.dtype).eps)
+        self.rdiff = math.sqrt(_machine_eps(x.dtype))
         self._update_diff_step()
-
-        self.op = scipy.sparse.linalg.aslinearoperator(self)
 
     def _update_diff_step(self):
         mx = global_inf_norm(self.x0)
@@ -199,20 +211,24 @@ class KrylovJacobian:
         self.omega = self.rdiff * max(1, mx) / max(1, mf)
 
     def matvec(self, v):
-        nv = global_norm(v)
-        if nv == 0:
+        nv = global_norm(v, device=self.device)
+        if float(nv) == 0:
             return 0 * v
         sc = self.omega / nv
         return (self.func(self.x0 + sc * v) - self.f0) / sc
 
+    def __call__(self, v):
+        return self.matvec(v)
+
     def solve(self, rhs, tol=0):
         sol, *_ = fgmres(
-            self.op,
+            self,
             rhs,
             tol=tol,
             restart=self.restart,
             maxiter=self.maxiter_linear,
             preconditioner=self.preconditioner,
+            device=self.device,
         )
         return sol
 
