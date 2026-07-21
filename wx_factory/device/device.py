@@ -321,16 +321,19 @@ class PytorchDevice(Device):
             num_devices = torch.cuda.device_count()
             num_per_device = (node_comm.size + num_devices - 1) // num_devices
             self.torch_device = torch.device("cuda", node_comm.rank // num_per_device)
+            torch.cuda.set_device(self.torch_device)
         else:
             if device_type == "cuda" and comm.rank == 0:
                 print("No GPU available for the Pytorch backend, falling back to the CPU", flush=True)
             self.torch_device = torch.device("cpu")
 
+        torch.set_default_device(self.torch_device)
+
         # Every tensor the code creates goes through torch's default device, including the ones made
         # by the bare torch functions that TorchXp forwards to.
         torch.set_default_device(self.torch_device)
         if comm.rank == 0:
-            print(f"Pytorch backend running on {self.torch_device}", flush=True)
+            print(f"Pytorch backend running on {self.torch_device} (on rank {comm.rank})", flush=True)
 
         super().__init__(comm, TorchXp(), TorchAlg(), pde, operators)
 

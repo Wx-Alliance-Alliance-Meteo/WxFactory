@@ -36,11 +36,11 @@ class TorchAlg:
 class TorchXp:
     s_ = numpy.s_
 
-    def __init__(self):
-        pass
+    def __init__(self, device=None):
+        self.device = device
 
     def array(self, value, **kwargs) -> torch.Tensor:
-        return torch.tensor(value, **kwargs, device=None)
+        return torch.tensor(value, **kwargs, device=self.device)
 
     def append(self, *args, **kwargs) -> torch.Tensor:
         return torch.cat(args, **kwargs)
@@ -64,7 +64,7 @@ class TorchXp:
     def identity(self, dim: int, **kwargs) -> torch.Tensor:
         return torch.eye(dim, dim, **kwargs)
 
-    def flip(self, array: torch.Tensor, axis: int | typing.Tuple[int, ...]):
+    def flip(self, array: torch.Tensor, axis: typing.Tuple[int, ...]):
         return torch.flip(array, axis)
 
     def iscomplexobj(self, array: torch.Tensor) -> bool:

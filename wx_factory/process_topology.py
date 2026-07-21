@@ -597,6 +597,7 @@ class ProcessTopology:
         panels = None
         if self.panel_roots_comm.rank == 0:
             panels = self.device.xp.empty((6,) + panel.shape, dtype=panel.dtype)
+        self.device.synchronize()
         self.panel_roots_comm.Gather(panel, panels, root=0)
 
         # Only the root of the entire cubesphere topology with continue
@@ -621,32 +622,39 @@ class ProcessTopology:
         """
         side = self.num_lines_per_panel
 
-        panel_list = None
+        # Validate input field parameters
         with SingleProcess(self._comm) as s, Conditional(s):
 
-            # Verifications
+            if field is None:
+                raise ValueError("No field on root process")
+
             if field.ndim < num_dim + 1 or field.shape[0] != 6 or field.shape[num_dim - 1] != field.shape[num_dim]:
-                print(f"This is not a cube with square panels {field.shape}, num_dim {num_dim}", flush=True)
-                raise ValueError
+                raise ValueError(f"This is not a cube with square panels {field.shape}, num_dim {num_dim}")
 
             panel_side = field.shape[num_dim - 1]
             tile_side = panel_side // side
             if tile_side * side != panel_side:
                 acceptable = [6 * i**2 for i in range(1, panel_side + 1) if panel_side % i == 0]
-                print(
+                raise ValueError(
                     f"The given field shape {field.shape} cannot be distributed to this process topology\n"
                     f"Acceptable number of processes are {acceptable}",
-                    flush=True,
                 )
-                raise ValueError
 
-            # Group panels into list
-            panel_list = [field[i] for i in range(6)]
-
+        xp = self.device.xp
         tile_list = None
         if self.panel_comm.rank == 0:
-            # Send panel list
-            panel = self.panel_roots_comm.scatter(panel_list, root=0)
+
+            # We need to create the receive buffer before doing the scatter, because some backends (pytorch) create
+            # them on the wrong device otherwise
+
+            # First send type and size of each panel
+            to_send = None if field is None else (field.shape[1:], field.dtype)
+            panel_params = self.panel_roots_comm.bcast(to_send, root=0)
+
+            # Create the receive buffer + fill it
+            panel = xp.empty(panel_params[0], dtype=panel_params[1])
+            self.device.synchronize()
+            self.panel_roots_comm.Scatter(field, panel, root=0)
 
             # Tile == panel if we only have 1 proc per panel
             if self.size == 6:
@@ -741,9 +749,13 @@ class ExchangeRequest:
         :return: The received data as a tuple of 4, in the same shape as the data that were sent
         :raise TimeoutError: If we wait for longer than the specified timeout
         """
-        num_tests = 0
         t0 = time.time()
-        if timeout >= 0.0:
+        num_tests = 0
+
+        # Wait until we have received from all neighbors (until timeout)
+        if timeout < 0.0:
+            self.request.Wait()
+        else:
             while not self.request.Test():
                 wait_time = time.time() - t0
                 if wait_time >= timeout:
@@ -752,8 +764,6 @@ class ExchangeRequest:
                 num_tests += 1
                 if num_tests > 10:
                     time.sleep(0.0005)
-        else:
-            self.request.wait()
 
         # t1 = time.time()
         # print(f"Waited {num_tests:3d} times ({(t1 - t0)*1000:.2f} ms)", flush=True)
