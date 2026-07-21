@@ -1,4 +1,5 @@
 import math
+import time
 from typing import Callable, Optional, Tuple
 
 from mpi4py import MPI
@@ -732,12 +733,31 @@ class ExchangeRequest:
                 # and sends the rest as scalars, so the block comes back as a single array.
                 self.to_tuple = lambda a: a.reshape((num_comp,) + self.shape)
 
-    def wait(self) -> Tuple[ExchangedVector, ExchangedVector, ExchangedVector, ExchangedVector]:
+    def wait(self, timeout=10.0) -> Tuple[ExchangedVector, ExchangedVector, ExchangedVector, ExchangedVector]:
         """Wait for the exchange started when creating this object to be done.
 
+        :param timeout: How long we should wait for the request to complete before throwing an error
+        :type timeout: float
         :return: The received data as a tuple of 4, in the same shape as the data that were sent
+        :raise TimeoutError: If we wait for longer than the specified timeout
         """
-        self.request.Wait()
+        num_tests = 0
+        t0 = time.time()
+        if timeout >= 0.0:
+            while not self.request.Test():
+                wait_time = time.time() - t0
+                if wait_time >= timeout:
+                    # self.request.Cancel()
+                    raise TimeoutError(f"Waited {wait_time:.4f} s (>={timeout:.1f}) for MPI request")
+                num_tests += 1
+                if num_tests > 10:
+                    time.sleep(0.0005)
+        else:
+            self.request.wait()
+
+        # t1 = time.time()
+        # print(f"Waited {num_tests:3d} times ({(t1 - t0)*1000:.2f} ms)", flush=True)
+
         return (
             self.to_tuple(self.recv_buffer[SOUTH]),
             self.to_tuple(self.recv_buffer[NORTH]),
