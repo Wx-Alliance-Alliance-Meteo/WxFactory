@@ -139,6 +139,8 @@ if __name__ == "__main__":
     runner = unittest.TextTestRunner(buffer=not args.no_buffer, verbosity=0)
     result = runner.run(load_tests(args.test_name, args.skip_compile))
     if not result.wasSuccessful():
-        failed_tests = "\n  ".join([f"{r[0]}" for r in result.errors + result.unexpectedSuccesses + result.failures])
+        failed_tests = "\n  ".join(
+            [f"{r[0]}" for r in result.errors + result.failures] + [f"{r}" for r in result.unexpectedSuccesses]
+        )
         print(f"failed tests: \n  {failed_tests}")
         raise SystemExit(-1)

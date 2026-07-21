@@ -1,19 +1,19 @@
 import unittest
 import sys
+from typing import Tuple
 
 import numpy
+from numpy.typing import NDArray
 from mpi4py import MPI
 
-from wx_factory.device import Device, CpuDevice, CudaDevice
+from wx_factory.device import Device, CpuDevice, CudaDevice, PytorchDevice
 from wx_factory.process_topology import ProcessTopology, SOUTH, NORTH, WEST, EAST
 from wx_factory.wx_mpi import SingleProcess, Conditional
 
 from tests.unit.mpi_test import run_test_on_x_process, MpiTestCase
 
-TestDeviceClass = CpuDevice
 
-
-def gen_data_1(num_processes: int, num_data_hori_per_proc: int, device: Device):
+def gen_data_1(num_processes: int, num_data_hori_per_proc: int, device: Device) -> NDArray:
     xp = device.xp
 
     range_per_proc = 2.0 / num_processes
@@ -25,9 +25,9 @@ def gen_data_1(num_processes: int, num_data_hori_per_proc: int, device: Device):
         stop = proc * range_per_proc + (side + 1) * range_per_side - 1.0
         start += range_per_elem / 2.0
         stop += range_per_elem / 2.0
-        return xp.arange(start, stop, range_per_elem)
+        return numpy.arange(start, stop, range_per_elem)
 
-    data = [[make_range(proc, side) for side in range(4)] for proc in range(num_processes)]
+    data = numpy.array([[make_range(proc, side) for side in range(4)] for proc in range(num_processes)])
     return xp.array(data)
 
 
@@ -36,8 +36,8 @@ class ExchangeTest(MpiTestCase):
     rank: int
     comm: MPI.Comm
 
-    def __init__(self, methodName, optional=False):
-        super().__init__(6, methodName, optional)
+    def __init__(self, methodName: str, device: str, optional: bool = False):
+        super().__init__(6, methodName, device, optional)
 
     def setUp(self) -> None:
         super().setUp()
@@ -45,10 +45,8 @@ class ExchangeTest(MpiTestCase):
         self.size = self.comm.size
         self.rank = self.comm.rank
 
-        dev = TestDeviceClass(self.comm)
-
-        self.topo = ProcessTopology(dev, comm_in=self.comm)
-        self.topos = [ProcessTopology(dev, rank=i, comm_in=self.comm) for i in range(self.size)]
+        self.topo = ProcessTopology(self.device, comm_in=self.comm)
+        self.topos = [ProcessTopology(self.device, rank=i, comm_in=self.comm) for i in range(self.size)]
 
         self.neighbor_topo = [
             self.topos[self.topo.destinations[SOUTH]],
@@ -59,8 +57,8 @@ class ExchangeTest(MpiTestCase):
 
         self.NUM_DATA_HORI = 12
 
-        self.all_data = gen_data_1(self.size, self.NUM_DATA_HORI, dev)
-        self.coord = dev.xp.arange(-1.0 + 1.0 / self.NUM_DATA_HORI, 1.0, 2.0 / self.NUM_DATA_HORI)
+        self.all_data = gen_data_1(self.size, self.NUM_DATA_HORI, self.device)
+        self.coord = self.device.xp.arange(-1.0 + 1.0 / self.NUM_DATA_HORI, 1.0, 2.0 / self.NUM_DATA_HORI)
         # if self.rank == 0:
         #     print(f'coord = {self.coord}')
 
@@ -79,29 +77,29 @@ class ExchangeTest(MpiTestCase):
 
         self.data = self.all_data[self.rank]
         self.neighbor_data = [self.all_data[x] for x in self.to_neighbor]
-        self.xp = dev.xp
+        self.xp = self.device.xp
 
     def vector2d_1d_shape1d(self):
         xp = self.xp
-        south = (self.data[SOUTH], self.data[SOUTH][::-1])
-        north = (self.data[NORTH], self.data[NORTH][::-1])
-        west = (self.data[WEST], self.data[WEST][::-1])
-        east = (self.data[EAST], self.data[EAST][::-1])
+        south = (self.data[SOUTH], xp.flip(self.data[SOUTH], (-1,)))
+        north = (self.data[NORTH], xp.flip(self.data[NORTH], (-1,)))
+        west = (self.data[WEST], xp.flip(self.data[WEST], (-1,)))
+        east = (self.data[EAST], xp.flip(self.data[EAST], (-1,)))
         request = self.topo.start_exchange_vectors(south, north, west, east, self.coord, self.coord)
-        (s1, s2), (n1, n2), (w1, w2), (e1, e2) = request.wait()
+        (s1, s2), (n1, n2), (w1, w2), (e1, e2) = request.wait(timeout=1.0)
         result = [(s1, s2), (n1, n2), (w1, w2), (e1, e2)]
 
         sys.stdout.flush()
 
         for dir in [SOUTH, NORTH, WEST, EAST]:
             other0 = self.neighbor_data[dir][self.from_neighbor[dir]]
-            other1 = other0[::-1]
+            other1 = xp.flip(other0, (-1,))
             r0_other, r1_other = self.neighbor_topo[dir].convert_contra[self.from_neighbor[dir]](
                 other0, other1, self.coord
             )
             if self.neighbor_topo[dir].flip[self.from_neighbor[dir]]:
-                r0_other = xp.flip(r0_other)
-                r1_other = xp.flip(r1_other)
+                r0_other = xp.flip(r0_other, (-1,))
+                r1_other = xp.flip(r1_other, (-1,))
             diff_s = xp.linalg.norm(result[dir][0] - r0_other + result[dir][1] - r1_other)
             self.assertLess(
                 diff_s,
@@ -116,25 +114,25 @@ class ExchangeTest(MpiTestCase):
     def vector2d_1d_shape2d(self):
         xp = self.xp
         new_shape = (6, 2)
-        south = (self.data[SOUTH].reshape(new_shape), self.data[SOUTH][::-1].reshape(new_shape))
-        north = (self.data[NORTH].reshape(new_shape), self.data[NORTH][::-1].reshape(new_shape))
-        west = (self.data[WEST].reshape(new_shape), self.data[WEST][::-1].reshape(new_shape))
-        east = (self.data[EAST].reshape(new_shape), self.data[EAST][::-1].reshape(new_shape))
+        south = (self.data[SOUTH].reshape(new_shape), xp.flip(self.data[SOUTH], (-1,)).reshape(new_shape))
+        north = (self.data[NORTH].reshape(new_shape), xp.flip(self.data[NORTH], (-1,)).reshape(new_shape))
+        west = (self.data[WEST].reshape(new_shape), xp.flip(self.data[WEST], (-1,)).reshape(new_shape))
+        east = (self.data[EAST].reshape(new_shape), xp.flip(self.data[EAST], (-1,)).reshape(new_shape))
         request = self.topo.start_exchange_vectors(south, north, west, east, self.coord, self.coord)
-        (s1, s2), (n1, n2), (w1, w2), (e1, e2) = request.wait()
+        (s1, s2), (n1, n2), (w1, w2), (e1, e2) = request.wait(timeout=1.0)
         result = [(s1, s2), (n1, n2), (w1, w2), (e1, e2)]
 
         sys.stdout.flush()
 
         for dir in [SOUTH, NORTH, WEST, EAST]:
             other0 = self.neighbor_data[dir][self.from_neighbor[dir]]
-            other1 = other0[::-1]
+            other1 = xp.flip(other0, (-1,))
             r0_other, r1_other = self.neighbor_topo[dir].convert_contra[self.from_neighbor[dir]](
                 other0, other1, self.coord
             )
             if self.neighbor_topo[dir].flip[self.from_neighbor[dir]]:
-                r0_other = xp.flip(r0_other)
-                r1_other = xp.flip(r1_other)
+                r0_other = xp.flip(r0_other, (-1,))
+                r1_other = xp.flip(r1_other, (-1,))
 
             r0_other = r0_other.reshape(new_shape)
             r1_other = r1_other.reshape(new_shape)
@@ -156,7 +154,7 @@ class ExchangeTest(MpiTestCase):
         xp = self.xp
 
         def make_data(d):
-            return (xp.stack([d, d + 1.0]), xp.stack([d[::-1], d[::-1] + 1.0]))
+            return (xp.stack([d, d + 1.0]), xp.stack([xp.flip(d, (-1,)), xp.flip(d, (-1,)) + 1.0]))
 
         south = make_data(self.data[SOUTH])
         north = make_data(self.data[NORTH])
@@ -164,7 +162,7 @@ class ExchangeTest(MpiTestCase):
         east = make_data(self.data[EAST])
 
         request = self.topo.start_exchange_vectors(south, north, west, east, self.coord, self.coord)
-        (s1, s2), (n1, n2), (w1, w2), (e1, e2) = request.wait()
+        (s1, s2), (n1, n2), (w1, w2), (e1, e2) = request.wait(timeout=1.0)
         result = [(s1, s2), (n1, n2), (w1, w2), (e1, e2)]
 
         sys.stdout.flush()
@@ -175,8 +173,8 @@ class ExchangeTest(MpiTestCase):
                 other[0], other[1], self.coord
             )
             if self.neighbor_topo[dir].flip[self.from_neighbor[dir]]:
-                r0_other = xp.flip(r0_other, axis=-1)
-                r1_other = xp.flip(r1_other, axis=-1)
+                r0_other = xp.flip(r0_other, axis=(-1,))
+                r1_other = xp.flip(r1_other, axis=(-1,))
 
             diff_s = xp.linalg.norm(result[dir][0] - r0_other + result[dir][1] - r1_other)
             self.assertLess(
@@ -198,7 +196,7 @@ class ExchangeTest(MpiTestCase):
         def make_data(d):
             return (
                 xp.stack([d, d + 1.0]).reshape((2,) + new_shape),
-                xp.stack([d[::-1], d[::-1] + 1.0]).reshape((2,) + new_shape),
+                xp.stack([xp.flip(d, (-1,)), xp.flip(d, (-1,)) + 1.0]).reshape((2,) + new_shape),
             )
 
         south = make_data(self.data[SOUTH])
@@ -207,7 +205,7 @@ class ExchangeTest(MpiTestCase):
         east = make_data(self.data[EAST])
 
         request = self.topo.start_exchange_vectors(south, north, west, east, self.coord, self.coord)
-        (s1, s2), (n1, n2), (w1, w2), (e1, e2) = request.wait()
+        (s1, s2), (n1, n2), (w1, w2), (e1, e2) = request.wait(timeout=1.0)
         result = [(s1, s2), (n1, n2), (w1, w2), (e1, e2)]
 
         sys.stdout.flush()
@@ -218,8 +216,8 @@ class ExchangeTest(MpiTestCase):
                 other[0].reshape((2, self.NUM_DATA_HORI)), other[1].reshape((2, self.NUM_DATA_HORI)), self.coord
             )
             if self.neighbor_topo[dir].flip[self.from_neighbor[dir]]:
-                r0_other = xp.flip(r0_other, axis=1)
-                r1_other = xp.flip(r1_other, axis=1)
+                r0_other = xp.flip(r0_other, axis=(1,))
+                r1_other = xp.flip(r1_other, axis=(1,))
 
             r0_other = r0_other.reshape((2,) + new_shape)
             r1_other = r1_other.reshape((2,) + new_shape)
@@ -241,14 +239,14 @@ class ExchangeTest(MpiTestCase):
         xp = self.xp
 
         def make_data(d):
-            return (d, d[::-1], d + 5.0)
+            return (d, xp.flip(d, (-1,)), d + 5.0)
 
         south = make_data(self.data[SOUTH])
         north = make_data(self.data[NORTH])
         west = make_data(self.data[WEST])
         east = make_data(self.data[EAST])
         request = self.topo.start_exchange_vectors(south, north, west, east, self.coord, self.coord)
-        (s1, s2, s3), (n1, n2, n3), (w1, w2, w3), (e1, e2, e3) = request.wait()
+        (s1, s2, s3), (n1, n2, n3), (w1, w2, w3), (e1, e2, e3) = request.wait(timeout=1.0)
         result = [(s1, s2, s3), (n1, n2, n3), (w1, w2, w3), (e1, e2, e3)]
 
         sys.stdout.flush()
@@ -260,9 +258,9 @@ class ExchangeTest(MpiTestCase):
             )
             r2_other = other[2]
             if self.neighbor_topo[dir].flip[self.from_neighbor[dir]]:
-                r0_other = xp.flip(r0_other)
-                r1_other = xp.flip(r1_other)
-                r2_other = xp.flip(r2_other)
+                r0_other = xp.flip(r0_other, (-1,))
+                r1_other = xp.flip(r1_other, (-1,))
+                r2_other = xp.flip(r2_other, (-1,))
 
             diff_s = (
                 xp.linalg.norm(result[dir][0] - r0_other)
@@ -285,15 +283,19 @@ class ExchangeTest(MpiTestCase):
         new_data_shape = (1,) + base_shape
         new_line_shape = (1,) + (self.NUM_DATA_HORI,)
 
-        def make_data(d):
-            return (d.reshape(new_data_shape), d[::-1].reshape(new_data_shape), d.reshape(new_data_shape) + 5.0)
+        def make_data(d) -> Tuple[NDArray, NDArray, NDArray]:
+            return (
+                d.reshape(new_data_shape),
+                xp.flip(d, axis=(-1,)).reshape(new_data_shape),
+                d.reshape(new_data_shape) + 5.0,
+            )
 
         south = make_data(self.data[SOUTH])
         north = make_data(self.data[NORTH])
         west = make_data(self.data[WEST])
         east = make_data(self.data[EAST])
         request = self.topo.start_exchange_vectors(south, north, west, east, self.coord, self.coord)
-        (s1, s2, s3), (n1, n2, n3), (w1, w2, w3), (e1, e2, e3) = request.wait()
+        (s1, s2, s3), (n1, n2, n3), (w1, w2, w3), (e1, e2, e3) = request.wait(timeout=1.0)
         result = [(s1, s2, s3), (n1, n2, n3), (w1, w2, w3), (e1, e2, e3)]
 
         sys.stdout.flush()
@@ -303,11 +305,11 @@ class ExchangeTest(MpiTestCase):
             r0_other, r1_other = self.neighbor_topo[dir].convert_contra[self.from_neighbor[dir]](
                 other[0].reshape(new_line_shape), other[1].reshape(new_line_shape), self.coord
             )
-            r2_other = other[2]
+            r2_other = other[2].reshape(new_line_shape)
             if self.neighbor_topo[dir].flip[self.from_neighbor[dir]]:
-                r0_other = xp.flip(r0_other)
-                r1_other = xp.flip(r1_other)
-                r2_other = xp.flip(r2_other)
+                r0_other = xp.flip(r0_other, (-1,))
+                r1_other = xp.flip(r1_other, (-1,))
+                r2_other = xp.flip(r2_other, (-1,))
 
             r0_other = r0_other.reshape(new_data_shape)
             r1_other = r1_other.reshape(new_data_shape)
@@ -322,15 +324,16 @@ class ExchangeTest(MpiTestCase):
                 diff_s,
                 1e-15,
                 f"rank {self.rank}: {dir} data is wrong (norm {diff_s:.2e})\n"
-                f" expected {r0_other}\n"
-                f" got      {result[dir][0]}",
+                f" expected \n{r0_other}\n{r1_other}\n{r2_other}\n"
+                f" got      \n{result[dir][0]}\n{result[dir][1]}\n{result[dir][2]}",
             )
 
     def vector3d_3d_shape1d(self):
         xp = self.xp
 
-        def make_data(d):
-            e = d[::-1]
+        def make_data(d0):
+            d = self.device.to_host(d0)
+            e = numpy.flip(d, (-1,))
             return (
                 xp.array([[[d, d + 1.0], [d + 0.1, d + 1.1]], [[d + 0.2, d + 1.2], [d + 2.2, d + 3.2]]]),
                 xp.array([[[e, e + 1.0], [e + 0.1, e + 1.1]], [[e + 0.2, e + 1.2], [e + 2.2, e + 3.2]]]),
@@ -342,7 +345,7 @@ class ExchangeTest(MpiTestCase):
         west = make_data(self.data[WEST])
         east = make_data(self.data[EAST])
         request = self.topo.start_exchange_vectors(south, north, west, east, self.coord, self.coord)
-        (s1, s2, s3), (n1, n2, n3), (w1, w2, w3), (e1, e2, e3) = request.wait()
+        (s1, s2, s3), (n1, n2, n3), (w1, w2, w3), (e1, e2, e3) = request.wait(timeout=1.0)
         result = [(s1, s2, s3), (n1, n2, n3), (w1, w2, w3), (e1, e2, e3)]
 
         sys.stdout.flush()
@@ -354,9 +357,9 @@ class ExchangeTest(MpiTestCase):
             )
             r2_other = other[2]
             if self.neighbor_topo[dir].flip[self.from_neighbor[dir]]:
-                r0_other = xp.flip(r0_other, axis=3)
-                r1_other = xp.flip(r1_other, axis=3)
-                r2_other = xp.flip(r2_other, axis=3)
+                r0_other = xp.flip(r0_other, axis=(3,))
+                r1_other = xp.flip(r1_other, axis=(3,))
+                r2_other = xp.flip(r2_other, axis=(3,))
 
             diff_s = (
                 xp.linalg.norm(result[dir][0] - r0_other)
@@ -379,8 +382,9 @@ class ExchangeTest(MpiTestCase):
         new_data_shape = (2, 2, 2, 2) + base_shape
         new_line_shape = (2, 2, 2, 2) + (self.NUM_DATA_HORI,)
 
-        def make_data(d):
-            e = d[::-1]
+        def make_data(d0):
+            d = self.device.to_host(d0)
+            e = numpy.flip(d, (-1,))
             return (
                 xp.array(
                     [
@@ -407,7 +411,7 @@ class ExchangeTest(MpiTestCase):
         west = make_data(self.data[WEST])
         east = make_data(self.data[EAST])
         request = self.topo.start_exchange_vectors(south, north, west, east, self.coord, self.coord)
-        (s1, s2, s3), (n1, n2, n3), (w1, w2, w3), (e1, e2, e3) = request.wait()
+        (s1, s2, s3), (n1, n2, n3), (w1, w2, w3), (e1, e2, e3) = request.wait(timeout=1.0)
         result = [(s1, s2, s3), (n1, n2, n3), (w1, w2, w3), (e1, e2, e3)]
 
         sys.stdout.flush()
@@ -419,9 +423,9 @@ class ExchangeTest(MpiTestCase):
             )
             r2_other = other[2].reshape(new_line_shape)
             if self.neighbor_topo[dir].flip[self.from_neighbor[dir]]:
-                r0_other = xp.flip(r0_other, axis=4)
-                r1_other = xp.flip(r1_other, axis=4)
-                r2_other = xp.flip(r2_other, axis=4)
+                r0_other = xp.flip(r0_other, axis=(4,))
+                r1_other = xp.flip(r1_other, axis=(4,))
+                r2_other = xp.flip(r2_other, axis=(4,))
 
             r0_other = r0_other.reshape(new_data_shape)
             r1_other = r1_other.reshape(new_data_shape)
@@ -448,13 +452,13 @@ class ExchangeTest(MpiTestCase):
         west = self.data[WEST]
         east = self.data[EAST]
         request = self.topo.start_exchange_scalars(south, north, west, east, boundary_shape=(self.NUM_DATA_HORI,))
-        s, n, w, e = request.wait()
+        s, n, w, e = request.wait(timeout=1.0)
         result = [s, n, w, e]
 
         for dir in [SOUTH, NORTH, WEST, EAST]:
             other = self.neighbor_data[dir][self.from_neighbor[dir]]
             if self.neighbor_topo[dir].flip[self.from_neighbor[dir]]:
-                other = xp.flip(other)
+                other = xp.flip(other, axis=(-1,))
             diff = xp.linalg.norm(result[dir] - other)
             self.assertLess(
                 diff,
@@ -472,13 +476,13 @@ class ExchangeTest(MpiTestCase):
         west = self.data[WEST].reshape(new_shape)
         east = self.data[EAST].reshape(new_shape)
         request = self.topo.start_exchange_scalars(south, north, west, east, boundary_shape=(self.NUM_DATA_HORI,))
-        s, n, w, e = request.wait()
+        s, n, w, e = request.wait(timeout=1.0)
         result = [s, n, w, e]
 
         for dir in [SOUTH, NORTH, WEST, EAST]:
             other = self.neighbor_data[dir][self.from_neighbor[dir]]
             if self.neighbor_topo[dir].flip[self.from_neighbor[dir]]:
-                other = xp.flip(other)
+                other = xp.flip(other, (-1,))
             other = other.reshape(new_shape)
             diff = xp.linalg.norm(result[dir] - other)
             self.assertLess(
@@ -497,13 +501,13 @@ class ExchangeTest(MpiTestCase):
         west = self.data[WEST].reshape(new_shape)
         east = self.data[EAST].reshape(new_shape)
         request = self.topo.start_exchange_scalars(south, north, west, east, boundary_shape=(self.NUM_DATA_HORI,))
-        s, n, w, e = request.wait()
+        s, n, w, e = request.wait(timeout=1.0)
         result = [s, n, w, e]
 
         for dir in [SOUTH, NORTH, WEST, EAST]:
             other = self.neighbor_data[dir][self.from_neighbor[dir]]
             if self.neighbor_topo[dir].flip[self.from_neighbor[dir]]:
-                other = xp.flip(other)
+                other = xp.flip(other, (-1,))
             other = other.reshape(new_shape)
             diff = xp.linalg.norm(result[dir] - other)
             self.assertLess(
@@ -521,13 +525,13 @@ class ExchangeTest(MpiTestCase):
         west = xp.stack([self.data[WEST], self.data[WEST] + 1.0])
         east = xp.stack([self.data[EAST], self.data[EAST] + 1.0])
         request = self.topo.start_exchange_scalars(south, north, west, east, boundary_shape=(self.NUM_DATA_HORI,))
-        s, n, w, e = request.wait()
+        s, n, w, e = request.wait(timeout=1.0)
         result = [s, n, w, e]
 
         for dir in [SOUTH, NORTH, WEST, EAST]:
             other = self.neighbor_data[dir][self.from_neighbor[dir]]
             if self.neighbor_topo[dir].flip[self.from_neighbor[dir]]:
-                other = xp.flip(other)
+                other = xp.flip(other, (-1,))
 
             other = xp.stack([other, other + 1.0])
             diff = xp.linalg.norm(result[dir] - other)
@@ -547,13 +551,13 @@ class ExchangeTest(MpiTestCase):
         west = xp.stack([self.data[WEST].reshape(new_shape), self.data[WEST].reshape(new_shape) + 1.0])
         east = xp.stack([self.data[EAST].reshape(new_shape), self.data[EAST].reshape(new_shape) + 1.0])
         request = self.topo.start_exchange_scalars(south, north, west, east, boundary_shape=(self.NUM_DATA_HORI,))
-        s, n, w, e = request.wait()
+        s, n, w, e = request.wait(timeout=1.0)
         result = [s, n, w, e]
 
         for dir in [SOUTH, NORTH, WEST, EAST]:
             other = self.neighbor_data[dir][self.from_neighbor[dir]]
             if self.neighbor_topo[dir].flip[self.from_neighbor[dir]]:
-                other = xp.flip(other)
+                other = xp.flip(other, (-1,))
 
             other = other.reshape(new_shape)
             other = xp.stack([other, other + 1.0])
@@ -570,31 +574,31 @@ class ExchangeTest(MpiTestCase):
 class GatherScatterTest(MpiTestCase):
     topo: ProcessTopology
 
-    def __init__(self, num_procs, methodName, optional=False):
-        super().__init__(num_procs, methodName, optional)
+    def __init__(self, num_procs: int, methodName: str, device: str, optional: bool = False):
+        super().__init__(num_procs, methodName, device, optional)
+        self.device_str = device
 
     def setUp(self) -> None:
         super().setUp()
 
-        dev = TestDeviceClass(self.comm)
-        xp = dev.xp
-        self.topo = ProcessTopology(dev, comm_in=self.comm)
+        xp = self.device.xp
+        self.topo = ProcessTopology(self.device, comm_in=self.comm)
         # For testing gather/scatter functions
-        self.global_data_1 = xp.arange(6 * 12 * 12).reshape(6, 12, 12)  # A flat (2D) field
+        self.global_data_1 = xp.arange(6 * 12 * 12, dtype=float).reshape(6, 12, 12)  # A flat (2D) field
         # A 2D field of 3x3 elements
-        self.global_data_2 = xp.arange(6 * 12 * 12 * 3 * 3).reshape(6, 12, 12, 3, 3)
+        self.global_data_2 = xp.arange(6 * 12 * 12 * 3 * 3, dtype=float).reshape(6, 12, 12, 3, 3)
         # A 3D field of scalars
-        self.global_data_3a = xp.arange(6 * 4 * 12 * 12).reshape(6, 4, 12, 12)
+        self.global_data_3a = xp.arange(6 * 4 * 12 * 12, dtype=float).reshape(6, 4, 12, 12)
         # A 3D field of 3x3 elements
-        self.global_data_3b = xp.arange(6 * 4 * 12 * 12 * 2 * 2).reshape(6, 4, 12, 12, 2, 2)
+        self.global_data_3b = xp.arange(6 * 4 * 12 * 12 * 2 * 2, dtype=float).reshape(6, 4, 12, 12, 2, 2)
         # A 4D field of 3x3 elements
-        self.global_data_4 = xp.arange(6 * 3 * 4 * 12 * 12 * 2 * 2).reshape(6, 3, 4, 12, 12, 2, 2)
+        self.global_data_4 = xp.arange(6 * 3 * 4 * 12 * 12 * 2 * 2, dtype=float).reshape(6, 3, 4, 12, 12, 2, 2)
 
         self.global_data_fail_1 = xp.arange(6 * 13 * 13).reshape(6, 13, 13)
         self.global_data_fail_2 = xp.arange(6 * 12 * 14).reshape(6, 12, 14)
         self.global_data_fail_3 = xp.arange(4 * 12 * 12).reshape(4, 12, 12)
         self.global_data_fail_4 = xp.arange(6 * 6).reshape(6, 6)
-        self.xp = dev.xp
+        self.xp = self.device.xp
 
     def gather_scatter(self, global_data, num_dim):
         xp = self.xp
@@ -630,6 +634,8 @@ class GatherScatterTest(MpiTestCase):
 
         cube = self.topo.gather_cube(tile_data_ref.copy(), num_dim)
         with SingleProcess(self.topo._comm) as s, Conditional(s):
+            if cube is None:
+                raise ValueError("No cube!")
             # print(f"cube = \n{cube[0]}", flush=True)
             diff = cube - global_data
             diff_norm = xp.linalg.norm(diff)

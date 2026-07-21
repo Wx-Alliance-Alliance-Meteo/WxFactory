@@ -3,12 +3,13 @@ import traceback
 from types import TracebackType
 from typing import List, Tuple, Union
 import unittest
-from unittest.result import TestResult
-from unittest.runner import _WritelnDecorator
+from unittest.runner import _WritelnDecorator, TextTestResult
 from unittest.signals import registerResult
 
 from mpi4py import MPI
 import numpy
+
+import wx_factory.wx_mpi
 
 from tests.unit.wx_test import WxTestCase
 
@@ -41,14 +42,17 @@ def run_test_on_x_process(test: unittest.TestCase, x: int = 0, optional: bool = 
 
 
 class MpiTestCase(WxTestCase):
-    def __init__(self, num_procs: int, methodName="runTest", optional: bool = False):
-        super().__init__(methodName)
+    def __init__(self, num_procs: int, methodName: str = "runTest", device_name: str = "cpu", optional: bool = False):
+        super().__init__(methodName, device_name)
         self.num_procs = num_procs
         self.optional = optional
 
+    def __str__(self):
+        return super().__str__() + f".{self.num_procs}"
+
     def setUp(self):
-        super().setUp()
         self.comm = run_test_on_x_process(self, self.num_procs, self.optional)
+        super().setUp()
 
 
 class MpiTestSuite(unittest.TestSuite):
@@ -112,7 +116,7 @@ class MpiTestResult(unittest.TextTestResult):
         """
 
         err = (None, None, None)
-        reason = (test, None)
+        reason = ""
         if "err" in kwargs:
             err = kwargs["err"]
         if "reason" in kwargs:
@@ -129,7 +133,7 @@ class MpiTestResult(unittest.TextTestResult):
         if all_errors is not None:
             different_types = [all_errors[0][0]]
             for i, e in enumerate(all_errors[1:]):
-                if e[0] is not None and e[0] not in different_types:
+                if e[0] is not None and not issubclass(e[0], wx_factory.wx_mpi._Skip) and e[0] not in different_types:
                     different_types.append(e[0])
                     self.extra_errors.append(e)
 
@@ -158,7 +162,7 @@ class MpiRunner(unittest.TextTestRunner):
     Partial reimplementation of the default TextTestRunner class of unittest to add MPI support
     """
 
-    def run(self, test: unittest.TestSuite | unittest.TestCase) -> TestResult:
+    def run(self, test: unittest.TestSuite | unittest.TestCase) -> TextTestResult:
         result = MpiTestResult(self.stream, self.descriptions, self.verbosity)
         registerResult(result)
         result.failfast = self.failfast
@@ -176,7 +180,7 @@ class MpiRunner(unittest.TextTestRunner):
 
         time_taken = stop_time - start_time
 
-        num_run = result.testsRun
+        num_run = result.testsRun - len(result.skipped)
         final_time = MPI.COMM_WORLD.reduce(time_taken, MPI.MAX, 0)
 
         if MPI.COMM_WORLD.rank == 0:

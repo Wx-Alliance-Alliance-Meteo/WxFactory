@@ -7,10 +7,10 @@ import sys
 from typing import Optional
 from unittest import TestCase, TestSuite
 
-from mpi_test import MpiRunner, MpiTestSuite
-
 main_project_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../..")
 sys.path.append(main_project_dir)
+
+from mpi_test import MpiRunner, MpiTestSuite
 
 from tests.unit.common.test_process_topology import ExchangeTest, GatherScatterTest
 from tests.unit.operators.test_extrap import OperatorsExtrapEuler3DTestCase
@@ -42,42 +42,43 @@ def load_tests(test_name: str):
     add_test(suite, ShallowWaterRestartTestCase(24, "test_multisize", optional=True), test_re)
     add_test(suite, Euler3DRestartTestCase(24, "test_multisize", optional=True), test_re)
 
-    add_test(suite, GatherScatterTest(6, "gather_scatter_2d"), test_re)
-    add_test(suite, GatherScatterTest(6, "gather_scatter_elem_2d"), test_re)
-    add_test(suite, GatherScatterTest(6, "gather_scatter_3d"), test_re)
-    add_test(suite, GatherScatterTest(6, "gather_scatter_elem_3d"), test_re)
-    add_test(suite, GatherScatterTest(6, "gather_scatter_elem_4d"), test_re)
+    for dev in ["cpu", "torch", "cuda"]:
+        add_test(suite, ExchangeTest("vector2d_1d_shape1d", dev), test_re)
+        add_test(suite, ExchangeTest("vector2d_1d_shape2d", dev), test_re)
+        add_test(suite, ExchangeTest("vector2d_2d_shape1d", dev), test_re)
+        add_test(suite, ExchangeTest("vector2d_2d_shape3d", dev), test_re)
+        add_test(suite, ExchangeTest("vector3d_1d_shape1d", dev), test_re)
+        add_test(suite, ExchangeTest("vector3d_1d_shape2d", dev), test_re)
+        add_test(suite, ExchangeTest("vector3d_3d_shape1d", dev), test_re)
+        add_test(suite, ExchangeTest("vector3d_4d_shape3d", dev), test_re)
+        add_test(suite, ExchangeTest("scalar_1d_shape1d", dev), test_re)
+        add_test(suite, ExchangeTest("scalar_1d_shape2d", dev), test_re)
+        add_test(suite, ExchangeTest("scalar_1d_shape3d", dev), test_re)
+        add_test(suite, ExchangeTest("scalar_2d_shape1d", dev), test_re)
+        add_test(suite, ExchangeTest("scalar_2d_shape2d", dev), test_re)
 
-    add_test(suite, GatherScatterTest(24, "gather_scatter_2d", optional=True), test_re)
-    add_test(suite, GatherScatterTest(24, "gather_scatter_elem_2d", optional=True), test_re)
-    add_test(suite, GatherScatterTest(24, "gather_scatter_3d", optional=True), test_re)
-    add_test(suite, GatherScatterTest(24, "gather_scatter_elem_3d", optional=True), test_re)
-    add_test(suite, GatherScatterTest(24, "gather_scatter_elem_4d", optional=True), test_re)
+        add_test(suite, GatherScatterTest(6, "gather_scatter_2d", dev), test_re)
+        add_test(suite, GatherScatterTest(6, "gather_scatter_elem_2d", dev), test_re)
+        add_test(suite, GatherScatterTest(6, "gather_scatter_3d", dev), test_re)
+        add_test(suite, GatherScatterTest(6, "gather_scatter_elem_3d", dev), test_re)
+        add_test(suite, GatherScatterTest(6, "gather_scatter_elem_4d", dev), test_re)
 
-    add_test(suite, GatherScatterTest(54, "gather_scatter_2d", optional=True), test_re)
-    add_test(suite, GatherScatterTest(54, "gather_scatter_elem_2d", optional=True), test_re)
-    add_test(suite, GatherScatterTest(54, "gather_scatter_3d", optional=True), test_re)
-    add_test(suite, GatherScatterTest(54, "gather_scatter_elem_3d", optional=True), test_re)
-    add_test(suite, GatherScatterTest(54, "gather_scatter_elem_4d", optional=True), test_re)
+        add_test(suite, GatherScatterTest(24, "gather_scatter_2d", dev, optional=True), test_re)
+        add_test(suite, GatherScatterTest(24, "gather_scatter_elem_2d", dev, optional=True), test_re)
+        add_test(suite, GatherScatterTest(24, "gather_scatter_3d", dev, optional=True), test_re)
+        add_test(suite, GatherScatterTest(24, "gather_scatter_elem_3d", dev, optional=True), test_re)
+        add_test(suite, GatherScatterTest(24, "gather_scatter_elem_4d", dev, optional=True), test_re)
 
-    add_test(suite, GatherScatterTest(24, "fail_wrong_num_proc", optional=True), test_re)  # Needs at least 24 procs
-    add_test(suite, GatherScatterTest(6, "fail_not_square"), test_re)
-    add_test(suite, GatherScatterTest(6, "fail_not_cube"), test_re)
-    add_test(suite, GatherScatterTest(6, "fail_wrong_num_dim"), test_re)
+        add_test(suite, GatherScatterTest(54, "gather_scatter_2d", dev, optional=True), test_re)
+        add_test(suite, GatherScatterTest(54, "gather_scatter_elem_2d", dev, optional=True), test_re)
+        add_test(suite, GatherScatterTest(54, "gather_scatter_3d", dev, optional=True), test_re)
+        add_test(suite, GatherScatterTest(54, "gather_scatter_elem_3d", dev, optional=True), test_re)
+        add_test(suite, GatherScatterTest(54, "gather_scatter_elem_4d", dev, optional=True), test_re)
 
-    add_test(suite, ExchangeTest("vector2d_1d_shape1d"), test_re)
-    add_test(suite, ExchangeTest("vector2d_1d_shape2d"), test_re)
-    add_test(suite, ExchangeTest("vector2d_2d_shape1d"), test_re)
-    add_test(suite, ExchangeTest("vector2d_2d_shape3d"), test_re)
-    add_test(suite, ExchangeTest("vector3d_1d_shape1d"), test_re)
-    add_test(suite, ExchangeTest("vector3d_1d_shape2d"), test_re)
-    add_test(suite, ExchangeTest("vector3d_3d_shape1d"), test_re)
-    add_test(suite, ExchangeTest("vector3d_4d_shape3d"), test_re)
-    add_test(suite, ExchangeTest("scalar_1d_shape1d"), test_re)
-    add_test(suite, ExchangeTest("scalar_1d_shape2d"), test_re)
-    add_test(suite, ExchangeTest("scalar_1d_shape3d"), test_re)
-    add_test(suite, ExchangeTest("scalar_2d_shape1d"), test_re)
-    add_test(suite, ExchangeTest("scalar_2d_shape2d"), test_re)
+        add_test(suite, GatherScatterTest(24, "fail_wrong_num_proc", dev, optional=True), test_re)  # Needs 24+ procs
+        add_test(suite, GatherScatterTest(6, "fail_not_square", dev), test_re)
+        add_test(suite, GatherScatterTest(6, "fail_not_cube", dev), test_re)
+        add_test(suite, GatherScatterTest(6, "fail_wrong_num_dim", dev), test_re)
 
     add_test(suite, PmexMpiTestCases("test_pmex_mpi_2_processes"), test_re)
     add_test(suite, KiopsMpiTestCases("test_kiops_mpi_2_processes"), test_re)
@@ -103,7 +104,7 @@ def load_tests(test_name: str):
     return suite
 
 
-def trace_run(runner):
+def trace_run(runner, args):
     import sys
     import trace
     import mpi4py
@@ -129,7 +130,7 @@ def trace_run(runner):
     # redirect to a different file for each processes
     sys.stdout = open(f"trace_{mpi4py.MPI.COMM_WORLD.rank:04d}.txt", "w")
 
-    tracer.runfunc(runner.run, load_tests())
+    tracer.runfunc(runner.run, load_tests(args.test_name))
 
 
 def regular_run(runner, args):
@@ -155,5 +156,5 @@ if __name__ == "__main__":
 
     runner = MpiRunner(buffer=not args.no_buffer, verbosity=0)
 
-    # trace_run(runner)
+    # trace_run(runner, args)
     regular_run(runner, args)
