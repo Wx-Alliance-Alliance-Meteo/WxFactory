@@ -11,7 +11,7 @@ import numpy
 
 import wx_factory.wx_mpi
 
-from tests.unit.wx_test import WxTestCase
+from tests.unit.wx_test import WxTestCase, WxTestResult
 
 
 def run_test_on_x_process(test: unittest.TestCase, x: int = 0, optional: bool = False) -> MPI.Comm:
@@ -55,16 +55,7 @@ class MpiTestCase(WxTestCase):
         super().setUp()
 
 
-class MpiTestSuite(unittest.TestSuite):
-    def run(self, result, debug=False):
-        for test in self:
-            if MPI.COMM_WORLD.rank == 0:
-                print(f"Running {test}", flush=True)
-            test.run(result)
-        return result
-
-
-class MpiTestResult(unittest.TextTestResult):
+class MpiTestResult(WxTestResult):
     """
     Custom result accumulator: see addCorrectResult.
     """
@@ -75,9 +66,11 @@ class MpiTestResult(unittest.TextTestResult):
     _SKIP = 3
     _UNEXPECTED_SUCCESS = 4
 
-    def __init__(self, stream: _WritelnDecorator, descriptions: bool, verbosity: int) -> None:
+    def __init__(self, stream, descriptions: str, verbosity: int) -> None:
         super().__init__(stream, descriptions, verbosity)
         self.extra_errors = []
+        self.rank = MPI.COMM_WORLD.rank
+        self.verbose = True if self.rank == 0 else False
 
     def addSuccess(self, test: unittest.TestCase) -> None:
         self.addCorrectResult(test, MpiTestResult._SUCCESS)
@@ -147,6 +140,10 @@ class MpiTestResult(unittest.TextTestResult):
             super().addSkip(test, reason)
         else:
             super().addSuccess(test)
+
+        # if self.rank == 0:
+        #     self.stream.writeln("STATUS")
+        #     # self.stream.flush()
 
     def printErrors(self) -> None:
         super().printErrors()

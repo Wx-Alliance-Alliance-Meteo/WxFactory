@@ -5,12 +5,12 @@ import os
 import re
 import sys
 from typing import Optional
-from unittest import TestCase, TestSuite
+import unittest
 
 main_project_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../..")
 sys.path.append(main_project_dir)
 
-from mpi_test import MpiRunner, MpiTestSuite
+from mpi_test import MpiRunner
 
 from tests.unit.common.test_process_topology import ExchangeTest, GatherScatterTest
 from tests.unit.operators.test_extrap import OperatorsExtrapEuler3DTestCase
@@ -24,13 +24,13 @@ from tests.unit.pde.test_pointwise_flux_3d import PDEPointWiseFlux3DTestCase
 from tests.unit.pde.test_riemann_flux import PDERiemannFlux3DTestCase
 
 
-def add_test(suite: TestSuite, test: TestCase, test_re: Optional[re.Pattern]):
+def add_test(suite: unittest.TestSuite, test: unittest.TestCase, test_re: Optional[re.Pattern]):
     if test_re is None or test_re.search(str(test)) is not None:
         suite.addTest(test)
 
 
 def load_tests(test_name: str):
-    suite = MpiTestSuite()
+    suite = unittest.TestSuite()
 
     test_re = re.compile(test_name, re.IGNORECASE)
     add_test(suite, ShallowWaterRestartTestCase(6, "test_read_restart"), test_re)
