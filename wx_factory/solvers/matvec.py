@@ -5,6 +5,7 @@ import numpy
 from numpy.typing import NDArray
 
 from ..common import Configuration
+from .global_operations import global_inf_norm
 
 
 class MatvecOp:
@@ -73,8 +74,18 @@ def matvec_fun(
         Qvec = Q + 1j * epsilon * vec.reshape(Q.shape)
         jac = dt * (rhs_handle(Qvec) / epsilon).imag
     else:
-        # Finite difference approximation
-        epsilon = math.sqrt(numpy.finfo(numpy.float32).eps) * eps_factor
+        # Finite difference approximation of the Jacobian-vector product.
+        if "32" in str(Q.dtype):
+            # Single precision: a fixed absolute step is lost to round-off when the state components
+            # are large -- Q + epsilon*vec rounds straight back to Q, so the finite difference returns
+            # a corrupted Jacobian and the exponential integrators inject energy and blow up. The
+            # solution is to scale the step by the global magnitude of the state.
+            q_scale = max(1.0, float(global_inf_norm(Q)))
+            epsilon = math.sqrt(numpy.finfo(numpy.float32).eps) * eps_factor * q_scale
+        else:
+            # Double precision: the fixed step is small relative to the state resolution, so no
+            # scaling is needed. This formulation is accurate enough and avoid the global communication
+            epsilon = math.sqrt(numpy.finfo(numpy.float32).eps) * eps_factor
         Qvec = Q + epsilon * vec.reshape(Q.shape)
         jac = dt * (rhs_handle(Qvec) - rhs) / epsilon
 

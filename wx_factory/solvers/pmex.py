@@ -47,6 +47,13 @@ def pmex(
 
     comm = device.comm
 
+    # Reject unreachable tolerance
+    tol_floor = 100.0 * float(device.xp.finfo(u.dtype).eps)
+    if tol < tol_floor:
+        raise ValueError(
+            f"PMEX tolerance {tol:.1e} is unreachable in {u.dtype} precision; " f"use at least {tol_floor:.1e}."
+        )
+
     ppo, n = u.shape
     p = ppo - 1
 
@@ -74,16 +81,20 @@ def pmex(
     # We only allow m to vary between mmin and mmax
     m = max(mmin, min(m_init, mmax))
 
+    # Mixed precision: the basis V stays in the working precision, but the bookkeeping (H, M, Minv, N),
+    # the matrix exponential and the error estimates use acc (float64 for a float32 basis).
+    acc = device.xp.float64 if u.dtype == device.xp.float32 else u.dtype
+
     # Preallocate matrix
     V = device.xp.zeros((mmax + 1, n + p), dtype=u.dtype)
-    H = device.xp.zeros((mmax + 1, mmax + 1), dtype=u.dtype)
-    Minv = device.xp.eye(mmax, dtype=u.dtype)
-    M = device.xp.eye(mmax, dtype=u.dtype)
-    N = device.xp.zeros([mmax, mmax], dtype=u.dtype)
+    H = device.xp.zeros((mmax + 1, mmax + 1), dtype=acc)
+    Minv = device.xp.eye(mmax, dtype=acc)
+    M = device.xp.eye(mmax, dtype=acc)
+    N = device.xp.zeros([mmax, mmax], dtype=acc)
 
-    # The MPI datatype for the reductions must match the working precision of the buffers, which
-    # follows u.dtype (single or double).
+    # The MPI datatype for the reductions must match the precision of the buffer being reduced.
     mpi_real = MPI.FLOAT if u.dtype == device.xp.float32 else MPI.DOUBLE
+    mpi_acc = MPI.DOUBLE if acc == device.xp.float64 else MPI.FLOAT
 
     # Initial condition
     w = device.xp.zeros((numSteps, n), dtype=u.dtype)
@@ -130,10 +141,7 @@ def pmex(
     kestold = True
     same_tau = None
 
-    # Smallest positive normal of the working precision. In single precision the truncation-error
-    # indicators below can underflow to (near) zero once the Krylov space over-resolves a substep,
-    # which turns the step-size controller into 0/0 = NaN. This floor lets us detect that case.
-    tiny_err = float(device.xp.finfo(u.dtype).tiny)
+    tiny_err = float(device.xp.finfo(acc).tiny)
 
     l = 0
 
@@ -153,11 +161,11 @@ def pmex(
             V[j, n + p - 1] = mu
 
             # Normalize initial vector (this norm is nonzero)
-            local_sum = V[0, 0:n] @ V[0, 0:n]
+            local_sum = V[0, 0:n].astype(acc) @ V[0, 0:n].astype(acc)
             global_sum_nrm = device.xp.empty_like(local_sum)
             device.synchronize()
-            comm.Allreduce([local_sum, mpi_real], [global_sum_nrm, mpi_real])
-            beta = math.sqrt(global_sum_nrm + V[j, n : n + p] @ V[j, n : n + p])
+            comm.Allreduce([local_sum, mpi_acc], [global_sum_nrm, mpi_acc])
+            beta = math.sqrt(global_sum_nrm + V[j, n : n + p].astype(acc) @ V[j, n : n + p].astype(acc))
 
             # The first Krylov basis vector
             V[j, :] /= beta
@@ -173,13 +181,13 @@ def pmex(
             V[j, -1] = 0.0
 
             # 2. compute terms needed for R and T
-            local_vec = V[0 : j + 1, 0:n] @ V[j - 1 : j + 1, 0:n].T
+            local_vec = (V[0 : j + 1, 0:n] @ V[j - 1 : j + 1, 0:n].T).astype(acc)
             global_vec = device.xp.empty_like(local_vec)
 
             device.synchronize()
-            comm.Allreduce([local_vec, mpi_real], [global_vec, mpi_real])
+            comm.Allreduce([local_vec, mpi_acc], [global_vec, mpi_acc])
 
-            global_vec += V[0 : j + 1, n : n + p] @ V[j - 1 : j + 1, n : n + p].T
+            global_vec += (V[0 : j + 1, n : n + p] @ V[j - 1 : j + 1, n : n + p].T).astype(acc)
 
             # 3. Projection with 2-step Gauss-Seidel to the orthogonal complement
             # Note: this is done in two steps. (1) matvec and (2) a lower
@@ -191,7 +199,7 @@ def pmex(
                 Minv[j - 1, 0 : j - 1] = -device.xp.transpose(global_vec[0 : j - 1, 0]) @ Minv[0 : j - 1, 0 : j - 1]
 
             # 3b. part 1: the mat-vec
-            rhs = (device.xp.eye(j) + device.xp.matmul(N[0:j, 0:j], Minv[0:j, 0:j])) @ global_vec[0:j, 1]
+            rhs = (device.xp.eye(j, dtype=acc) + device.xp.matmul(N[0:j, 0:j], Minv[0:j, 0:j])) @ global_vec[0:j, 1]
 
             # 3c. part 2: the lower triangular solve
             # array because the xalg can, in some case, yield array with incompatible type to xp
@@ -202,7 +210,7 @@ def pmex(
             )
 
             # 4. Orthogonalize
-            V[j, :] -= sol @ V[0:j, :]
+            V[j, :] -= sol.astype(u.dtype) @ V[0:j, :]
 
             # 5. compute norm estimate with quad precision
             if device.has_128_bits_float():
@@ -216,11 +224,11 @@ def pmex(
 
             if global_vec[-1, 1] < sum_sqrd:
                 # use communication to compute norm estimate
-                local_sum = V[j, 0:n] @ V[j, 0:n]
+                local_sum = V[j, 0:n].astype(acc) @ V[j, 0:n].astype(acc)
                 global_sum_nrm = device.xp.empty_like(local_sum)
                 device.synchronize()
-                comm.Allreduce([local_sum, mpi_real], [global_sum_nrm, mpi_real])
-                curr_nrm = math.sqrt(global_sum_nrm + V[j, n : n + p] @ V[j, n : n + p])
+                comm.Allreduce([local_sum, mpi_acc], [global_sum_nrm, mpi_acc])
+                curr_nrm = math.sqrt(global_sum_nrm + V[j, n : n + p].astype(acc) @ V[j, n : n + p].astype(acc))
                 reg_comm_nrm += 1
             else:
                 curr_nrm = device.xp.sqrt(global_vec[-1, 1] - sum_sqrd)
@@ -231,7 +239,8 @@ def pmex(
                 break
 
             # Normalize vector and set norm to H matrix
-            V[j, :] /= curr_nrm
+            # acc scalar)
+            V[j, :] /= float(curr_nrm)
             H[j, j - 1] = curr_nrm
             H[0:j, j - 1] = sol
 
@@ -354,13 +363,13 @@ def pmex(
                 for k in range(blownTs):
                     tau_phantom = tau_out[l + k] - tau_now
                     F2 = device.array(device.xalg.linalg.expm(sgn * tau_phantom * H[0:j, :j]))
-                    w[l + k, :] = beta * F2[:j, 0] @ V[:j, :n]
+                    w[l + k, :] = (beta * F2[:j, 0]).astype(u.dtype) @ V[:j, :n]
 
                 # Advance l.
                 l += blownTs
 
             # Using the standard scheme
-            w[l, :] = beta * F[:j, 0] @ V[:j, :n]
+            w[l, :] = (beta * F[:j, 0]).astype(u.dtype) @ V[:j, :n]
 
             # Update tau_out
             tau_now += tau
