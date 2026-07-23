@@ -54,6 +54,7 @@ def matvec_fun(
     rhs_handle: Callable[[NDArray], NDArray],
     method: str,
     eps_factor: float = 1.0,
+    q_scale: float | None = None,
 ) -> numpy.ndarray:
     """
     Basic Matvec operation `A * vec`
@@ -64,6 +65,9 @@ def matvec_fun(
     :param rhs: Last computed RHS
     :param rhs_handle: Right hand side to compute
     :param method: Method to use for the calculation
+    :param q_scale: Precomputed max(1, ||Q||_inf) for the single-precision step scaling. Q is fixed
+                    across all the matvecs of one Krylov solve, so a caller that issues many of them
+                    can compute this once and pass it in, avoiding a global reduction per matvec.
 
     :return: Result of the `A * vec` operation
     """
@@ -80,7 +84,8 @@ def matvec_fun(
             # are large -- Q + epsilon*vec rounds straight back to Q, so the finite difference returns
             # a corrupted Jacobian and the exponential integrators inject energy and blow up. The
             # solution is to scale the step by the global magnitude of the state.
-            q_scale = max(1.0, float(global_inf_norm(Q)))
+            if q_scale is None:
+                q_scale = max(1.0, float(global_inf_norm(Q)))
             epsilon = math.sqrt(numpy.finfo(numpy.float32).eps) * eps_factor * q_scale
         else:
             # Double precision: the fixed step is small relative to the state resolution, so no

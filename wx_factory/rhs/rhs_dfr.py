@@ -1,7 +1,7 @@
 import numpy
 from numpy.typing import NDArray
 
-from ..common.definitions import idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_w, idx_rho_theta
+from ..common.definitions import idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_w, idx_rho_theta, gravity
 from ..common.matmul import apply_op
 from ..geometry import CubedSphere, DFROperators
 from ..rhs.rhs import RHS
@@ -673,3 +673,198 @@ class RHSDirecFluxReconstruction_mpi_v2(RHSDirecFluxReconstruction):
             self.rhs[idx_rho_u2] = 0.0
             self.rhs[idx_rho_w] = 0.0
             self.rhs[idx_rho_theta] = 0.0
+
+    def implicit(self, q: NDArray) -> NDArray:
+        """Vertically-stiff partition f1 for PartRosExp2 (Option B: exact vertical part of ``full``).
+
+        Reproduces the x3-only part of the full right-hand side, so that f2 = full - f1 (taken by
+        difference in the integrator) contains only horizontal operators. The four rows
+        rho, rho u1, rho u2, rho theta use the plain vertical flux divergence; the rho_w row uses the
+        same well-balanced split as ``full`` (advective divergence + p * central metric divergence +
+        (sqrtG h33) p * central log-pressure divergence, design note eq:wbrhow), and gravity is the
+        same high-order-filtered source as ``full`` (the -= sign comes from ``rhs -= forcing`` there).
+        Christoffel/Coriolis forcing and the Rayleigh sponge are horizontal/source terms and stay in
+        f2. The vertical operator couples only within a column, so no horizontal halo exchange is
+        needed; the horizontal interface traces are filled locally purely so the shared Riemann
+        routine runs (its x1/x2 outputs are discarded)."""
+        xp = self.device.xp
+        given_shape = q.shape
+        self.ops = self.ops_complex if xp.iscomplexobj(q) else self.ops_real
+        self.allocate_arrays(q)
+
+        # 1. Extrapolate to element boundaries (vertical traces are the ones we use).
+        self.solution_extrapolation(q)
+
+        # No horizontal exchange: feed local face values so the (shared) Riemann routine runs. Only the
+        # x3 fluxes are used; the x1/x2 results computed from these local traces are discarded.
+        itf_size = self.geom.itf_size
+        self.q_itf_w = self.q_itf_x1[..., 0, :itf_size].copy()
+        self.q_itf_e = self.q_itf_x1[..., -1, itf_size:].copy()
+        self.q_itf_s = self.q_itf_x2[..., 0, :, :itf_size].copy()
+        self.q_itf_n = self.q_itf_x2[..., -1, :, itf_size:].copy()
+
+        # 2. Pointwise fluxes: f_x3 (all rows) plus the well-balanced pieces wflux_adv_x3, wflux_pres_x3,
+        #    log_p and the pressure.
+        self.pointwise_fluxes(q)
+
+        # 3. Interior vertical derivative d3(sqrtG F3) for all five rows (rho_w overwritten below).
+        op_dz = self.ops.derivative_z if not xp.iscomplexobj(self.f_x3) else self.ops.derivative_z_complex
+        apply_op(self.f_x3, op_dz, out=self.rhs, beta=0.0)
+
+        # 4. Vertical Rusanov interface fluxes (fills f_itf_x3, wflux_adv/pres_itf_x3, pressure_itf_x3).
+        self.riemann_fluxes()
+
+        # 5. Boundary correction for the four plain rows.
+        op_corr = self.ops.correction_DU if not xp.iscomplexobj(self.f_itf_x3) else self.ops.correction_DU_complex
+        apply_op(self.f_itf_x3, op_corr, out=self.rhs, beta=1.0)
+
+        # 5b. Well-balanced rho_w row (x3 only), mirroring the vertical part of ``full``:
+        #     R_w = D3^R[sqrtG w rho_w] + p * ( D3^c_g[sqrtG h33] + (sqrtG h33) * D3^c[log p] ).
+        w_df3 = apply_op(self.wflux_adv_x3, op_dz)
+        apply_op(self.wflux_adv_itf_x3, op_corr, out=w_df3, beta=1.0)
+
+        w_presa = apply_op(self.wflux_pres_x3, op_dz)
+        apply_op(self.wflux_pres_itf_x3, op_corr, out=w_presa, beta=1.0)
+
+        logp_bdy_k = xp.log(self.pressure_itf_x3)
+        w_presb = apply_op(self.log_p, op_dz)
+        apply_op(logp_bdy_k, op_corr, out=w_presb, beta=1.0)
+        w_presb *= self.wflux_pres_x3
+
+        self.rhs[idx_rho_w] = w_df3 + self.pressure * (w_presa + w_presb)
+
+        # 6. Outer 1/sqrtG factor.
+        self.rhs *= -self.metric.inv_sqrtG_new
+
+        # 7. Gravity source in the vertical-momentum row (same filtered form as ``full``; the sign is
+        #    that of ``rhs -= forcing``).
+        self.rhs[idx_rho_w] -= (
+            self.metric.inv_dzdeta_new
+            * gravity
+            * self.metric.inv_sqrtG_new
+            * ((self.metric.sqrtG_new * q[idx_rho]) @ self.ops.highfilter_k)
+        )
+
+        return self.rhs.reshape(given_shape).copy()
+
+    def explicit(self, q: NDArray) -> NDArray:
+        """Horizontal partition f2 = full - f1 for PartRosExp2, computed DIRECTLY (not as full - f1).
+
+        Forming full - f1 in single precision loses almost all of f2: f1 nearly equals full in the
+        theta-scaled rho_theta row (the vertical flux dominates), so the difference is a catastrophic
+        cancellation of large float32 numbers, which then makes the exponential propagator blow up.
+        Here the horizontal (x1, x2) flux divergences, the well-balanced rho_w horizontal terms and
+        the Christoffel/Coriolis/Rayleigh forcing are accumulated directly; gravity is removed since
+        it belongs to f1, so f1 + f2 = full exactly."""
+        xp = self.device.xp
+        given_shape = q.shape
+        self.ops = self.ops_complex if xp.iscomplexobj(q) else self.ops_real
+        self.allocate_arrays(q)
+
+        self.solution_extrapolation(q)
+        self.start_communication()
+        self.pointwise_fluxes(q)
+
+        cplx = xp.iscomplexobj(self.f_x1)
+        op_dx = self.ops.derivative_x if not cplx else self.ops.derivative_x_complex
+        op_dy = self.ops.derivative_y if not cplx else self.ops.derivative_y_complex
+
+        # 1. Interior horizontal derivatives (x1, x2 only).
+        apply_op(self.f_x1, op_dx, out=self.rhs, beta=0.0)
+        apply_op(self.f_x2, op_dy, out=self.rhs, beta=1.0)
+        apply_op(self.wflux_adv_x1, op_dx, out=self.w_df1_dx1, beta=0.0)
+        apply_op(self.wflux_adv_x2, op_dy, out=self.w_df1_dx1, beta=1.0)
+        self.w_presa = apply_op(self.wflux_pres_x1, op_dx)
+        apply_op(self.wflux_pres_x2, op_dy, out=self.w_presa, beta=1.0)
+        self.w_df1_dx1_presb = apply_op(self.log_p, op_dx)
+        self.w_df2_dx2_presb = apply_op(self.log_p, op_dy)
+
+        self.end_communication()
+        self.riemann_fluxes()
+
+        op_corr_WE = self.ops.correction_WE if not cplx else self.ops.correction_WE_complex
+        op_corr_SN = self.ops.correction_SN if not cplx else self.ops.correction_SN_complex
+
+        # 2. Boundary corrections (x1, x2 only).
+        apply_op(self.f_itf_x1, op_corr_WE, out=self.rhs, beta=1.0)
+        apply_op(self.f_itf_x2, op_corr_SN, out=self.rhs, beta=1.0)
+        apply_op(self.wflux_adv_itf_x1, op_corr_WE, out=self.w_df1_dx1, beta=1.0)
+        apply_op(self.wflux_adv_itf_x2, op_corr_SN, out=self.w_df1_dx1, beta=1.0)
+        apply_op(self.wflux_pres_itf_x1, op_corr_WE, out=self.w_presa, beta=1.0)
+        apply_op(self.wflux_pres_itf_x2, op_corr_SN, out=self.w_presa, beta=1.0)
+
+        logp_bdy_i = xp.log(self.pressure_itf_x1)
+        logp_bdy_j = xp.log(self.pressure_itf_x2)
+        apply_op(logp_bdy_i, op_corr_WE, out=self.w_df1_dx1_presb, beta=1.0)
+        self.w_df1_dx1_presb *= self.wflux_pres_x1
+        apply_op(logp_bdy_j, op_corr_SN, out=self.w_df2_dx2_presb, beta=1.0)
+        self.w_df2_dx2_presb *= self.wflux_pres_x2
+
+        # 3. Well-balanced rho_w horizontal row, then the outer 1/sqrtG factor.
+        self.rhs[idx_rho_w] = self.w_df1_dx1 + self.pressure * (
+            self.w_presa + self.w_df1_dx1_presb + self.w_df2_dx2_presb
+        )
+        self.rhs *= -self.metric.inv_sqrtG_new
+
+        # 4. Forcing (Christoffel / Coriolis / Rayleigh), obtained as the full forcing with gravity
+        #    added back (gravity is in f1).
+        self.forcing_terms(q)
+        self.rhs[idx_rho_w] += (
+            self.metric.inv_dzdeta_new
+            * gravity
+            * self.metric.inv_sqrtG_new
+            * ((self.metric.sqrtG_new * q[idx_rho]) @ self.ops.highfilter_k)
+        )
+
+        return self.rhs.reshape(given_shape).copy()
+
+    def horizontal_flux_div(self, q: NDArray) -> NDArray:
+        """Plain horizontal (x1, x2) flux divergence for all five rows, no well-balanced rho_w split
+        and no forcing. Used to split f2 into a stiff (acoustic) part -- whose analytic Jacobian is
+        cheap and exact -- and a non-stiff remainder (well-balanced rho_w correction + forcing) that
+        PartRosExp2 differentiates by finite differences. Populates the horizontal traces / exchanged
+        neighbours / pressure that the analytic Jacobian reuses."""
+        xp = self.device.xp
+        given_shape = q.shape
+        self.ops = self.ops_complex if xp.iscomplexobj(q) else self.ops_real
+        self.allocate_arrays(q)
+
+        self.solution_extrapolation(q)
+        self.start_communication()
+        self.pointwise_fluxes(q)
+
+        cplx = xp.iscomplexobj(self.f_x1)
+        op_dx = self.ops.derivative_x if not cplx else self.ops.derivative_x_complex
+        op_dy = self.ops.derivative_y if not cplx else self.ops.derivative_y_complex
+        apply_op(self.f_x1, op_dx, out=self.rhs, beta=0.0)
+        apply_op(self.f_x2, op_dy, out=self.rhs, beta=1.0)
+
+        self.end_communication()
+        self.riemann_fluxes()
+
+        op_corr_WE = self.ops.correction_WE if not cplx else self.ops.correction_WE_complex
+        op_corr_SN = self.ops.correction_SN if not cplx else self.ops.correction_SN_complex
+        apply_op(self.f_itf_x1, op_corr_WE, out=self.rhs, beta=1.0)
+        apply_op(self.f_itf_x2, op_corr_SN, out=self.rhs, beta=1.0)
+        self.rhs *= -self.metric.inv_sqrtG_new
+        return self.rhs.reshape(given_shape).copy()
+
+    def forcing_only(self, q: NDArray) -> NDArray:
+        """Just the f2 forcing (Christoffel / Coriolis / Rayleigh), no flux, no gravity. This is the
+        non-stiff remainder of f2 that PartRosExp2 differentiates by finite differences (the stiff
+        flux divergence has an analytic Jacobian). Sign matches ``rhs -= forcing`` with gravity added
+        back (gravity is in f1)."""
+        xp = self.device.xp
+        given_shape = q.shape
+        self.ops = self.ops_complex if xp.iscomplexobj(q) else self.ops_real
+        self.allocate_arrays(q)
+        self.pointwise_fluxes(q)  # sets self.pressure
+        self.rhs[...] = 0.0
+        self.forcing_terms(q)  # rhs -= (Christoffel/Coriolis/gravity/Rayleigh)
+        self.rhs[idx_rho_w] += (
+            self.metric.inv_dzdeta_new
+            * gravity
+            * self.metric.inv_sqrtG_new
+            * ((self.metric.sqrtG_new * q[idx_rho]) @ self.ops.highfilter_k)
+        )
+        return self.rhs.reshape(given_shape).copy()

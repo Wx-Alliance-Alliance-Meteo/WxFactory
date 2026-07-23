@@ -132,7 +132,7 @@ def _euler_cubesphere(ctx: RhsContext) -> RhsBundle:
         ctx.fields_shape,
         debug=ctx.debug,
     )
-    return RhsBundle(full=full, shape=ctx.fields_shape)
+    return RhsBundle(full=full, shape=ctx.fields_shape, implicit=full.implicit, explicit=full.explicit)
 
 
 @register_rhs("shallow_water", CubedSphere2D)
