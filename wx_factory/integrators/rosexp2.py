@@ -17,6 +17,7 @@ class RosExp2(Integrator):
         self.rhs_full = rhs_full
         self.rhs_imp = rhs_imp
         self.tol = param.tolerance
+        self.jacobian_method = param.jacobian_method
         self.gmres_restart = param.gmres_restart
 
     def __step__(self, Q, dt):
@@ -27,7 +28,9 @@ class RosExp2(Integrator):
         n = len(Q_flat)
 
         def J_exp(v):
-            return matvec_fun(v, dt, Q, rhs_full, self.rhs_full) - matvec_fun(v, dt, Q, rhs_imp, self.rhs_imp)
+            return matvec_fun(v, dt, Q, rhs_full, self.rhs_full, self.jacobian_method) - matvec_fun(
+                v, dt, Q, rhs_imp, self.rhs_imp, self.jacobian_method
+            )
 
         vec = numpy.zeros((2, n))
         vec[1, :] = rhs_full.flatten()

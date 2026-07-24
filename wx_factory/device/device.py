@@ -332,6 +332,18 @@ class PytorchDevice(Device):
         # Every tensor the code creates goes through torch's default device, including the ones made
         # by the bare torch functions that TorchXp forwards to.
         torch.set_default_device(self.torch_device)
+
+        # WxFactory only ever runs the model forward -- it never backpropagates. Put the whole
+        # process into inference mode as soon as the Pytorch backend is up: no autograd graph is
+        # built and no version-counter / view tracking is done, which saves the per-op autograd
+        # bookkeeping and guarantees nothing accidentally starts recording a graph. Entering it
+        # globally (and holding the guard for the process's lifetime) covers construction, stepping
+        # and output uniformly, avoiding the pitfalls of mixing inference and normal tensors across
+        # an inside/outside-inference-mode boundary.
+        if not torch.is_inference_mode_enabled():
+            self._inference_mode_guard = torch.inference_mode()
+            self._inference_mode_guard.__enter__()
+
         if comm.rank == 0:
             print(f"Pytorch backend running on {self.torch_device} (on rank {comm.rank})", flush=True)
 
