@@ -2,7 +2,7 @@ import math
 
 from mpi4py import MPI
 
-from ..device import Device, CpuDevice
+from ..device import Device
 
 
 def pmex(
@@ -212,18 +212,18 @@ def pmex(
             # 4. Orthogonalize
             V[j, :] -= sol.astype(u.dtype) @ V[0:j, :]
 
-            # 5. compute norm estimate with quad precision
-            if device.has_128_bits_float():
-                sum_vec = device.xp.array(global_vec[0:j, 1], device.xp.float128) ** 2
-                sum_sqrd = device.xp.sum(sum_vec)
-            else:
-                device.synchronize()
-                default_device = CpuDevice.get_default()
-                sum_vec = device.to_host(global_vec[0:j, 1]).astype(default_device.xp.float128) ** 2
-                sum_sqrd = device.array(default_device.xp.sum(sum_vec).astype(default_device.xp.float64))
+            # 5. Norm of the freshly orthogonalized vector V[j], estimated by Pythagoras. Near a happy
+            #    breakdown these two terms nearly cancel, so the cheap difference loses accuracy there.
+            #    We trust the cheap difference while it is a healthy fraction of ||Av||^2, and fall back 
+            #    to an exact, communicated norm only in the cancellation regime (rare, near breakdown), 
+            #    where the direct sum of squares of the small residual has no cancellation.
+            raw_nrm_sq = global_vec[-1, 1]
+            sum_sqrd = (global_vec[0:j, 1] ** 2).sum()
+            diff = raw_nrm_sq - sum_sqrd
+            cancel_floor = 100.0 * float(device.xp.finfo(u.dtype).eps)
 
-            if global_vec[-1, 1] < sum_sqrd:
-                # use communication to compute norm estimate
+            if diff <= cancel_floor * raw_nrm_sq:
+                # Severe cancellation: recompute the norm directly (one reduction, no cancellation).
                 local_sum = V[j, 0:n].astype(acc) @ V[j, 0:n].astype(acc)
                 global_sum_nrm = device.xp.empty_like(local_sum)
                 device.synchronize()
@@ -231,7 +231,7 @@ def pmex(
                 curr_nrm = math.sqrt(global_sum_nrm + V[j, n : n + p].astype(acc) @ V[j, n : n + p].astype(acc))
                 reg_comm_nrm += 1
             else:
-                curr_nrm = device.xp.sqrt(global_vec[-1, 1] - sum_sqrd)
+                curr_nrm = device.xp.sqrt(diff)
 
             # Happy breakdown
             if curr_nrm < tol:
