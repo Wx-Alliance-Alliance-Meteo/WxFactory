@@ -132,7 +132,6 @@ class Configuration:
     matmul_backend: str
     matsuno_amp: float
     matsuno_wave_type: str
-    netcdf_use_collective: bool
     num_elements_horizontal: int
     num_elements_vertical: int
     num_solpts: int

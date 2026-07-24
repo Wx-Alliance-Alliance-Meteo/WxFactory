@@ -530,14 +530,7 @@
                     "default": "netcdf",
                     "selectables": ["netcdf", "fst"],
                     "description": "Desired format to use for storing simulation results."
-                },
-                {
-                    "name": "netcdf_use_collective",
-                    "type": "bool",
-                    "default": true,
-                    "description": "Enable NetCDF collective I/O operations (requires parallel NetCDF support)"
                 }
-                
             ]
         },
         {
