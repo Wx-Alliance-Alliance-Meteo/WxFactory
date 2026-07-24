@@ -1,3 +1,4 @@
+import math
 from time import time
 from typing import Callable
 
@@ -5,7 +6,7 @@ import numpy
 
 from ..common.configuration import Configuration
 from .integrator import Integrator, SolverInfo
-from ..solvers import pmex
+from ..solvers import pmex, kiops, exode
 from ..rhs.vertical_jacobian import (
     assemble_j1_blocks_analytic,
     block_thomas_solve,
@@ -49,6 +50,61 @@ class PartRosExp2(Integrator):
         self.jacobian_method = param.jacobian_method  # kept for config compatibility; J_exp is now fully analytic
         self.krylov_mmax = param.krylov_mmax  # cap the exponential Krylov space (memory)
         self.krylov_m = None  # previous step's final Krylov size, recycled as the next m_init (see __step__)
+        # Which solver evaluates phi_1(J_exp) @ vec (pmex / kiops / exode), honoured like in epi.py.
+        self.exponential_solver = param.exponential_solver
+        self.krylov_size = param.krylov_size  # kiops / pmex_ne restart size
+        self.exode_method = param.exode_method
+        self.exode_controller = param.exode_controller
+
+    def _apply_phi(self, J_exp: Callable, vec):
+        """Evaluate phi_1(J_exp) @ vec with the configured exponential solver (pmex / kiops / exode).
+
+        Mirrors epi.py's dispatch and stats conventions; returns the phi vector. pmex/kiops carry a
+        recycled Krylov size across steps; exode is an adaptive RK and carries none."""
+        rank0 = self.device.comm.rank == 0
+        solver = self.exponential_solver
+
+        if solver in ("pmex", "pmex_ne"):
+            m_init = self.krylov_m if self.krylov_m is not None else 10
+            mmin = 16 if solver == "pmex_ne" else 10
+            phiv, stats = pmex(
+                [1.0], J_exp, vec, tol=self.tol, m_init=m_init, mmin=mmin,
+                mmax=self.krylov_mmax, task1=False, device=self.device,
+            )
+            self.krylov_m = stats[5]  # final Krylov size, reused as next step's m_init
+            if rank0:
+                print(
+                    f"PMEX convergence at iteration {stats[2]} (using {stats[0]} internal substeps"
+                    f" and {stats[1]} rejected expm)",
+                    flush=True,
+                )
+        elif solver == "kiops":
+            phiv, stats = kiops(
+                [1], J_exp, vec, tol=self.tol, m_init=self.krylov_size, mmin=16,
+                mmax=self.krylov_mmax, task1=False, device=self.device,
+            )
+            self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
+            if rank0:
+                print(
+                    f"KIOPS convergence at iteration {stats[2]} (using {stats[0]} internal substeps"
+                    f" and {stats[1]} rejected expm)",
+                    flush=True,
+                )
+        elif solver == "exode":
+            phiv, stats = exode(
+                1.0, J_exp, vec, method=self.exode_method, controller=self.exode_controller,
+                atol=self.tol, task1=False, verbose=False, device=self.device,
+            )
+            if rank0:
+                print(
+                    f"EXODE converged at iteration {stats[0]} with {stats[1]} rejected steps"
+                    f" (local error {stats[3]:.2e})",
+                    flush=True,
+                )
+        else:
+            raise ValueError(f"Unrecognized exponential solver {solver!r}")
+
+        return phiv
 
     def __step__(self, Q: numpy.ndarray, dt: float):
         xp = self.device.xp
@@ -75,21 +131,9 @@ class PartRosExp2(Integrator):
         vec[0, :] = 0.5 * f_imp
         vec[1, :] = f_exp
 
-        # Recycle the Krylov size across steps. 
-        m_init = self.krylov_m if self.krylov_m is not None else 10
-
         tic = time()
-        phiv, stats = pmex(
-            [1.0], J_exp, vec, tol=self.tol, m_init=m_init, mmax=self.krylov_mmax, task1=False, device=self.device
-        )
+        phiv = self._apply_phi(J_exp, vec)
         time_exp = time() - tic
-        self.krylov_m = stats[5]  # final Krylov size of this step, reused as next step's m_init
-        if self.device.comm.rank == 0:
-            print(
-                f"PMEX convergence at iteration {stats[2]} (using {stats[0]} internal substeps"
-                f" and {stats[1]} rejected expm)",
-                flush=True,
-            )
 
         # Implicit part
         tic = time()

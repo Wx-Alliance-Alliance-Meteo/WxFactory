@@ -147,6 +147,7 @@ class Epi(Integrator):
                 atol=self.tol,
                 task1=False,
                 verbose=False,
+                device=self.device,
             )
 
             # comment out for scaling test

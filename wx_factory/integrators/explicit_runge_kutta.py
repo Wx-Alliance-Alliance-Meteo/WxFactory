@@ -69,6 +69,7 @@ class RungeKutta:
         atol: float = 1e-6,
         first_step: Optional[float] = None,
         controller: Union[str, Tuple[float, float, float, float], None] = None,
+        device=None,
     ):
         """
         Initialize the Runge-Kutta solver.
@@ -95,10 +96,18 @@ class RungeKutta:
         # Validate Butcher tableau coefficients before proceeding
         self._validate_butcher_tableau()
 
+        # Array module of the state (numpy on the CPU, torch/cupy on a GPU). All operations that touch
+        # the state vector or the RK stages go through it, so the solver runs on whatever backend the
+        # exponential integrator uses. The Butcher coefficients (validated as numpy above) get
+        # device-resident, working-precision copies for the K-stage matmuls.
+        self.xp = device.xp if device is not None else numpy
         self.t_old = None
         self.t = t0
         self._fun, self.y = fun, y0
         self.t_bound = t_bound
+        self._A = self.xp.array(self.A).astype(self.y.dtype)
+        self._B = self.xp.array(self.B).astype(self.y.dtype)
+        self._E = self.xp.array(self.E).astype(self.y.dtype)
 
         def self_fun(t: float, y: numpy.ndarray) -> numpy.ndarray:
             """Wrapper around the ODE function that counts evaluations."""
@@ -107,7 +116,7 @@ class RungeKutta:
 
         self.fun = self_fun
 
-        self.n = self.y.size
+        self.n = math.prod(self.y.shape)  # numpy .size is an int, but torch .size is a method
         self.status = "running"
 
         self.nfev = 0
@@ -142,7 +151,7 @@ class RungeKutta:
         self.h = first_step
 
         # Initialize stage vectors
-        self.K = numpy.empty((self.n_stages + 1, self.n), self.y.dtype)
+        self.K = self.xp.empty((self.n_stages + 1, self.n), dtype=self.y.dtype)
         self.FSAL = 1 if self.E[self.n_stages] else 0
         self.h_previous = None
         self.y_old = None
@@ -351,21 +360,21 @@ class RungeKutta:
             # calculate RK stages
             self.K[0] = self.f
             for i in range(1, self.n_stages):
-                dy = h * (self.K[:i, :].T @ self.A[i, :i])
+                dy = h * (self.K[:i, :].T @ self._A[i, :i])
                 self.K[i] = self.fun(self.t + self.C[i] * h, self.y + dy)
 
             # Update solution
-            y_new = y + h * (self.K[: self.n_stages].T @ self.B)
+            y_new = y + h * (self.K[: self.n_stages].T @ self._B)
 
             # calculate error norm
             if self.FSAL:
                 # do FSAL evaluation if needed for error estimate
                 self.K[self.n_stages, :] = self.fun(self.t + h, y_new)
 
-            scale = self.atol + numpy.maximum(numpy.abs(y), numpy.abs(y_new)) * self.rtol
+            scale = self.atol + self.xp.maximum(self.xp.abs(y), self.xp.abs(y_new)) * self.rtol
 
             # exclude K[-1] if not FSAL. It could contain nan or inf
-            err_estimate = h * (self.K[: self.n_stages + self.FSAL].T @ self.E[: self.n_stages + self.FSAL])
+            err_estimate = h * (self.K[: self.n_stages + self.FSAL].T @ self._E[: self.n_stages + self.FSAL])
             error_norm = global_inf_norm(err_estimate / scale)
 
             # evaluate error
@@ -460,9 +469,11 @@ class RungeKutta:
                 "You may want to check the implementation of this method."
             )
 
-        # determine min_step parameters
-        epsneg = numpy.finfo(self.y.dtype).epsneg
-        tiny = numpy.finfo(self.y.dtype).tiny
+        # determine min_step parameters (finfo constants; map a torch dtype like 'torch.float32' to
+        # the numpy dtype so numpy.finfo, which has epsneg, works regardless of backend)
+        np_dtype = numpy.dtype(str(self.y.dtype).rsplit(".", 1)[-1])
+        epsneg = numpy.finfo(np_dtype).epsneg
+        tiny = numpy.finfo(np_dtype).tiny
         h_min_a = 10 * epsneg / cdiff
         h_min_b = math.sqrt(tiny)
 

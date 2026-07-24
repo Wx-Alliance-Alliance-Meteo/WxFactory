@@ -12,9 +12,12 @@ def exode(
     atol=1e-6,
     task1=False,
     verbose=False,
+    device=None,
 ):
     # Import here to resolve circular import
     from ..integrators.butcher import METHODS
+
+    xp = device.xp if device is not None else numpy
 
     if not hasattr(exode, "first_step"):
         exode.first_step = τ_out  # TODO : use CFL condition ?
@@ -27,7 +30,7 @@ def exode(
     if p == 0:
         p = 1
         # Add extra column of zeros
-        u = numpy.row_stack((u, numpy.zeros(len(u))))
+        u = xp.row_stack((u, xp.zeros(len(u), dtype=u.dtype)))
 
     y0 = u[0].copy()
 
@@ -55,6 +58,7 @@ def exode(
         first_step=exode.first_step,
         rtol=rtol,
         atol=atol,
+        device=device,
     )
 
     ts = [t0]
