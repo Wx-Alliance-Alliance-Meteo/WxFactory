@@ -8,8 +8,9 @@ from mpi4py import MPI
 
 from wx_factory.device import CpuDevice, CudaDevice, PytorchDevice
 
+
 class WxTestResult(unittest.TextTestResult):
-    
+
     def __init__(self, stream: _WritelnDecorator, descriptions: bool, verbosity: int) -> None:
         super().__init__(stream, descriptions, verbosity)
         self.verbose = True
@@ -37,17 +38,23 @@ class WxTestResult(unittest.TextTestResult):
         if self.verbose:
             self.stream.write("PASS ")
 
-    def addError(self, test: unittest.TestCase, err: tuple[type[BaseException], BaseException, Any] | tuple[None, None, None]) -> None:
+    def addError(
+        self, test: unittest.TestCase, err: tuple[type[BaseException], BaseException, Any] | tuple[None, None, None]
+    ) -> None:
         super().addError(test, err)
         if self.verbose:
             self.stream.write("ERROR ")
 
-    def addFailure(self, test: unittest.TestCase, err: tuple[type[BaseException], BaseException, Any] | tuple[None, None, None]) -> None:
+    def addFailure(
+        self, test: unittest.TestCase, err: tuple[type[BaseException], BaseException, Any] | tuple[None, None, None]
+    ) -> None:
         super().addFailure(test, err)
         if self.verbose:
             self.stream.write("FAIL ")
 
-    def addExpectedFailure(self, test: unittest.TestCase, err: tuple[type[BaseException], BaseException, Any] | tuple[None, None, None]) -> None:
+    def addExpectedFailure(
+        self, test: unittest.TestCase, err: tuple[type[BaseException], BaseException, Any] | tuple[None, None, None]
+    ) -> None:
         super().addExpectedFailure(test, err)
         if self.verbose:
             self.stream.write("PASS ")
@@ -56,6 +63,7 @@ class WxTestResult(unittest.TextTestResult):
         super().addUnexpectedSuccess(test)
         if self.verbose:
             self.stream.write("FAIL ")
+
 
 class WxTestCase(unittest.TestCase):
     def __init__(self, methodName: str, device_name: str = "cpu") -> None:
@@ -79,6 +87,6 @@ class WxTestCase(unittest.TestCase):
         else:
             self.device = CpuDevice(self.comm)
 
+
 class WxTestRunner(unittest.TextTestRunner):
     resultclass = WxTestResult
-

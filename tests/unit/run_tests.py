@@ -135,7 +135,7 @@ if __name__ == "__main__":
     parser.add_argument("--skip-compile", action="store_true", help="Skip compilation test cases (they are slow)")
     args = parser.parse_args()
 
-    runner = WxTestRunner(buffer = not args.no_buffer, verbosity=0)
+    runner = WxTestRunner(buffer=not args.no_buffer, verbosity=0)
     result = runner.run(load_tests(args.test_name, args.skip_compile))
     if not result.wasSuccessful():
         failed_tests = "\n  ".join(
