@@ -159,7 +159,7 @@ def main():
             if isinstance(e, KeyboardInterrupt):
                 if rank == 0:
                     print(f"{rank:5d} Keyboard interrupt")
-                sys.exit(130)
+                raise SystemExit(130)
 
             if rank == 0:
                 if not isinstance(e, SystemExit):
