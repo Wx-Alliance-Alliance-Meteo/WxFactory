@@ -5,8 +5,7 @@ import numpy
 
 from ..common.configuration import Configuration
 from .integrator import Integrator, SolverInfo
-from ..solvers import matvec_fun, pmex
-from ..solvers.global_operations import global_inf_norm
+from ..solvers import pmex
 from ..rhs.vertical_jacobian import (
     assemble_j1_blocks_analytic,
     block_thomas_solve,
@@ -14,6 +13,8 @@ from ..rhs.vertical_jacobian import (
     col_to_state,
     j2_prepare,
     j2_flux_matvec,
+    forcing_jac_prepare,
+    forcing_jvp,
 )
 
 
@@ -45,7 +46,7 @@ class PartRosExp2(Integrator):
         self.rhs_imp = rhs_imp  # f1 = the vertically-stiff partition
         self.rhs_exp = rhs_exp  # f2 = the horizontal partition (computed directly, not full - f1)
         self.tol = param.tolerance
-        self.jacobian_method = param.jacobian_method  # for the matrix-free J2 products (use 'fd' in single)
+        self.jacobian_method = param.jacobian_method  # kept for config compatibility; J_exp is now fully analytic
         self.krylov_mmax = param.krylov_mmax  # cap the exponential Krylov space (memory)
         self.krylov_m = None  # previous step's final Krylov size, recycled as the next m_init (see __step__)
 
@@ -55,22 +56,19 @@ class PartRosExp2(Integrator):
 
         f1 = self.rhs_imp(Q)
         f2 = self.rhs_exp(Q)  # horizontal partition, computed directly (no full - f1 cancellation)
-        forcing_base = self.rhs_full.forcing_only(Q)  # base for the FD of the non-stiff forcing
         j2_base = j2_prepare(self.rhs_full, Q)  # frozen base of the analytic J2, computed once per step
+        forcing_base = forcing_jac_prepare(self.rhs_full, Q)  # frozen base of the analytic forcing Jacobian
         f_imp = f1.flatten()
         f_exp = f2.flatten()
 
-        # Q is fixed across every matvec of the PMEX solve, so its single-precision FD step scale is
-        # too: compute it once here instead of a global reduction inside each matvec_fun call.
-        q_scale = max(1.0, float(global_inf_norm(Q)))
-
-        # Exponential part
+        # Exponential part: both the horizontal flux Jacobian and the non-stiff forcing Jacobian are
+        # applied analytically, so J_exp is finite-difference-free (no float32 FD noise, no per-matvec
+        # global reduction for the step scale).
         def J_exp(v):
-            jflux = j2_flux_matvec(self.rhs_full, Q, v.reshape(Q.shape), j2_base).flatten()
-            jforcing = matvec_fun(
-                v, dt, Q, forcing_base, self.rhs_full.forcing_only, self.jacobian_method, q_scale=q_scale
-            )
-            return dt * jflux + jforcing
+            vv = v.reshape(Q.shape)
+            jflux = j2_flux_matvec(self.rhs_full, Q, vv, j2_base)
+            jforcing = forcing_jvp(self.rhs_full, Q, vv, forcing_base)
+            return (dt * (jflux + jforcing)).flatten()
 
         n = f_imp.shape[0]
         vec = xp.zeros((2, n), dtype=Q.dtype)

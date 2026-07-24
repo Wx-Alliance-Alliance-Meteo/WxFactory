@@ -714,3 +714,86 @@ def j2_flux_matvec(rhsobj, q, dq, base=None):
     apply_op(dfitf2[_mid_j], ops.correction_SN, out=out, beta=1.0)
     out *= -m.inv_sqrtG_new
     return out
+
+
+# -----------------------------------------------------------------------------
+# Analytic Jacobian of the non-stiff forcing (forcing_only) -- Christoffel/Coriolis/pressure
+# source plus the DCMIP Rayleigh sponge. This term is pointwise: gravity is the only non-local
+# contribution to forcing_only and it cancels exactly there (added and subtracted with the same
+# formula), so d(forcing_only)/dq is a per-point 5x5 map with no grid coupling.
+# -----------------------------------------------------------------------------
+
+
+def forcing_jac_prepare(rhsobj, q):
+    """Precompute the frozen state-dependent coefficients for :func:`forcing_jvp`.
+
+    All of these are functions of the fixed state q, which PartRosExp2 holds constant across every
+    matvec of one PMEX solve, so they are computed once per step. Returns the velocities, the
+    analytic pressure derivative dp/d(rho_theta) = gamma p / rho_theta, and the frozen Rayleigh
+    sponge coefficients (or None when the case has no sponge)."""
+    xp = rhsobj.device.xp
+    rho = q[idx_rho]
+    u = (q[idx_rho_u1] / rho, q[idx_rho_u2] / rho, q[idx_rho_w] / rho)
+    rt = q[idx_rho_theta]
+    # Same equation of state as the pointwise kernel: p = p0 (Rd/p0 rho_theta)^gamma.
+    p = p0 * xp.exp(heat_capacity_ratio * xp.log((Rd / p0) * rt))
+    dpdrt = heat_capacity_ratio * p / rt
+
+    ray = None
+    case = getattr(rhsobj.pde, "case_number", None)
+    if case in (21, 22):
+        from ..init.dcmip import dcmip_schar_damping_coeffs
+
+        rate, u1ref, u2ref, u3ref = dcmip_schar_damping_coeffs(rhsobj.metric, rhsobj.pde.geometry, shear=(case == 22))
+        ray = (rate, (u1ref, u2ref, u3ref))
+
+    return u, dpdrt, ray
+
+
+def forcing_jvp(rhsobj, q, v, base=None):
+    """Analytic Jacobian-vector product of ``forcing_only`` on v (pointwise, no grid coupling).
+
+    Mirrors ``compute_forcing_1`` (the momentum source F^d = 2 rho (c0k u^k) + c_ij (rho u^i u^j +
+    h^ij p), summed over i<=j) direction by direction, plus the linear Rayleigh sponge. The rho and
+    rho_theta rows of forcing_only are identically zero, so only the momentum rows are filled. The
+    overall minus sign is ``rhs -= forcing``."""
+    xp = rhsobj.device.xp
+    m = rhsobj.metric
+    if base is None:
+        base = forcing_jac_prepare(rhsobj, q)
+    u, dpdrt, ray = base
+    u1, u2, u3 = u
+    ch = m.christoffel  # (3 directions, 9 components, ...spatial)
+    hc = m.h_contra_new
+    h11, h12, h13 = hc[0, 0], hc[0, 1], hc[0, 2]
+    h22, h23, h33 = hc[1, 1], hc[1, 2], hc[2, 2]
+
+    dr = v[idx_rho]
+    dm = (v[idx_rho_u1], v[idx_rho_u2], v[idx_rho_w])
+    drt = v[idx_rho_theta]
+
+    out = xp.zeros_like(v)
+    for d, row in enumerate(_MOM):
+        c01, c02, c03 = ch[d, 0], ch[d, 1], ch[d, 2]
+        c11, c12, c13 = ch[d, 3], ch[d, 4], ch[d, 5]
+        c22, c23, c33 = ch[d, 6], ch[d, 7], ch[d, 8]
+
+        # Rows of the pointwise forcing Jacobian dF^d/dq, in conserved variables.
+        a_r = -(c11 * u1 * u1 + 2.0 * c12 * u1 * u2 + 2.0 * c13 * u1 * u3
+                + c22 * u2 * u2 + 2.0 * c23 * u2 * u3 + c33 * u3 * u3)
+        a_m1 = 2.0 * c01 + 2.0 * (c11 * u1 + c12 * u2 + c13 * u3)
+        a_m2 = 2.0 * c02 + 2.0 * (c12 * u1 + c22 * u2 + c23 * u3)
+        a_m3 = 2.0 * c03 + 2.0 * (c13 * u1 + c23 * u2 + c33 * u3)
+        a_rt = (c11 * h11 + 2.0 * c12 * h12 + 2.0 * c13 * h13
+                + c22 * h22 + 2.0 * c23 * h23 + c33 * h33) * dpdrt
+
+        dF = a_r * dr + a_m1 * dm[0] + a_m2 * dm[1] + a_m3 * dm[2] + a_rt * drt
+
+        if ray is not None:
+            rate, uref = ray
+            # Rayleigh sponge R^d = rate (rho_u^d - rho uref^d), linear in q: dR^d = rate (dm_d - uref^d dr).
+            dF = dF + rate * (dm[d] - uref[d] * dr)
+
+        out[row] = -dF
+
+    return out

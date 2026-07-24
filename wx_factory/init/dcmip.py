@@ -684,6 +684,52 @@ def dcmip_schar_waves(geom: CubedSphere3D, metric, mtrx: DFROperators, param: Co
     return rho, u1_contra, u2_contra, u3_contra, theta
 
 
+def dcmip_schar_damping_coeffs(metric: Metric3DTopo, geom: CubedSphere3D, shear: bool):
+    """Frozen (state-independent) coefficients of the DCMIP 2-1/2-2 Rayleigh sponge.
+
+    The sponge forcing is ``rho * mask/tau0 * (u^i - u^i_ref)``; the mask (a function of height only)
+    and the reference contravariant velocities depend on the geometry, not on the state. Returns
+    ``(rate, u1ref, u2ref, u3ref)`` with ``rate = mask/tau0``, so the forcing is
+    ``rho * rate * (u^i - u^i_ref)``. This lets both the forcing itself and its analytic Jacobian
+    share one definition of the sponge."""
+    xp = geom.device.xp
+
+    # Case parameters
+    T0 = 300.0  # temperature (K)
+    Ueq = 20.0  # Reference zonal wind velocity (equator)
+    Zh = 20000.0  # Threshold level for Rayleigh damping/sponge layer (m)
+    tau0 = 25.0  # Time scale of Rayleigh damping (s)
+
+    if shear:
+        Cs = 2.5e-4  # Wind shear rate (1/m), for shear case
+    else:
+        Cs = 0.0
+
+    # Get coordinates
+    lat = geom.polar[1, ...]
+    z_3d = geom.polar[2, ...]
+
+    # Build the damping mask (eqn 79), weighted by tau0^(-1); the rho weighting is applied by the caller
+    rate = xp.sin(xp.pi / 2 * (z_3d - Zh) / (geom.ztop - Zh)) ** 2 / tau0  # z > zh, everywhere at first
+    # Reset to 0 below the threshold height
+    rate[z_3d <= Zh] = 0.0
+
+    ## Temperature in 3D
+    if Ueq != 0:
+        Tref = T0 * (1 - Cs * Ueq**2 / gravity * xp.sin(lat) ** 2)
+    else:
+        Tref = T0
+
+    # Get u, v, w reference velocities and convert to contravariant
+    uref = Ueq * xp.cos(lat) * (2 * T0 / Tref * Cs * z_3d + Tref / T0) ** 0.5
+    vref = 0.0
+    wref = 0.0
+
+    u1ref, u2ref, u3ref = geom.wind2contra(uref, vref, wref, metric)
+
+    return rate, u1ref, u2ref, u3ref
+
+
 def dcmip_schar_damping(
     forcing: numpy.ndarray,
     rho: numpy.ndarray,
@@ -714,42 +760,8 @@ def dcmip_schar_damping(
     # Grab forcing index variables from 'definitions', since forcing is modified in-place
     from ..common.definitions import idx_rho_u1, idx_rho_u2, idx_rho_w
 
-    xp = geom.device.xp
-
-    # Case parameters
-    T0 = 300.0  # temperature (K)
-    Ueq = 20.0  # Reference zonal wind velocity (equator)
-    Zh = 20000.0  # Threshold level for Rayleigh damping/sponge layer (m)
-    tau0 = 25.0  # Time scale of Rayleigh damping (s)
-
-    if shear:
-        Cs = 2.5e-4  # Wind shear rate (1/m), for shear case
-    else:
-        Cs = 0.0
-
-    # Get coordinates
-    lat = geom.polar[1, ...]
-    z_3d = geom.polar[2, ...]
-
-    # Build the damping mask (eqn 79), weighted by ρ and τ0^(-1)
-    damping_weight = (
-        rho / tau0 * xp.sin(xp.pi / 2 * (z_3d - Zh) / (geom.ztop - Zh)) ** 2
-    )  # z > zh, defined everywhere at first
-    # Reset to 0 below the threshold height
-    damping_weight[z_3d <= Zh] = 0.0
-
-    ## Temperature in 3D
-    if Ueq != 0:
-        Tref = T0 * (1 - Cs * Ueq**2 / gravity * xp.sin(lat) ** 2)
-    else:
-        Tref = T0
-
-    # Get u, v, w reference velocities and convert to contravariant
-    uref = Ueq * xp.cos(lat) * (2 * T0 / Tref * Cs * z_3d + Tref / T0) ** 0.5
-    vref = 0.0
-    wref = 0.0
-
-    u1ref, u2ref, u3ref = geom.wind2contra(uref, vref, wref, metric)
+    rate, u1ref, u2ref, u3ref = dcmip_schar_damping_coeffs(metric, geom, shear)
+    damping_weight = rho * rate  # eqn 79, weighted by rho and tau0^(-1)
 
     # Increment velocity forcing (eqn 78).  Take note that this modification is in-place,
     # and the sign is positive because rhs_euler includes its own negative sign
