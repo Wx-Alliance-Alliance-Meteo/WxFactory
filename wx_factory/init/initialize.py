@@ -6,17 +6,13 @@ from ..common.definitions import (
     idx_rho,
     idx_rho_u1,
     idx_rho_u2,
-    idx_rho_w,
+    idx_rho_u3,
     idx_rho_theta,
     idx_h,
     idx_u1,
     idx_u2,
     idx_hu1,
     idx_hu2,
-    idx_2d_rho,
-    idx_2d_rho_u,
-    idx_2d_rho_w,
-    idx_2d_rho_theta,
     gravity,
     cpd,
     cvd,
@@ -24,7 +20,7 @@ from ..common.definitions import (
     p0,
 )
 from ..common import Configuration
-from ..geometry import Cartesian2D, CubedSphere3D, CubedSphere2D, DFROperators, Metric2D, Metric3DTopo
+from ..geometry import CubedSphere3D, CubedSphere2D, DFROperators, Metric2D, Metric3DTopo
 
 from .dcmip import (
     dcmip_advection_deformation,
@@ -125,7 +121,7 @@ def initialize_euler(geom: CubedSphere3D, metric: Metric3DTopo, mtrx: DFROperato
     Q[idx_rho, ...] = rho
     Q[idx_rho_u1, ...] = rho * u1_contra
     Q[idx_rho_u2, ...] = rho * u2_contra
-    Q[idx_rho_w, ...] = rho * w
+    Q[idx_rho_u3, ...] = rho * w
     Q[idx_rho_theta, ...] = rho * potential_temperature
 
     if param.case_number in (11, 12, 13):
@@ -263,116 +259,64 @@ def initialize_sw(geom: CubedSphere2D, metric: Metric2D, mtrx: DFROperators, par
     return Q, topo, dataset
 
 
-def initialize_cartesian2d(geom: Cartesian2D, param: Configuration) -> NDArray[numpy.float64]:
-    """Initialize a problem on a 2D cartesian grid based on a case number."""
+def initialize_cartesian3d(geom, param: Configuration) -> NDArray[numpy.float64]:
+    """Initialize a problem on a flat 3D cartesian slab, from the same case numbers as the 2D grid.
 
-    num_equations = 4
+    The 2D cartesian cases live in the (x, z) plane; here they are extruded uniformly in y (the flow
+    stays y-invariant, u2 = 0), so a 2D bubble becomes a 3D ridge. Every case's potential-temperature
+    perturbation, base stratification and background wind are reused verbatim -- only the coordinates
+    are the flat slab's physical X1 (x) / X3 (z), and the state carries the 5th (y-momentum) variable.
+    """
     xp = geom.device.xp
+    x1, x3 = geom.X1, geom.X3  # physical x and z, (ne3, ne2, ne1, ns**3)
 
-    # Initial state at rest, isentropic, hydrostatic
-    nk = param.num_elements_vertical
-    ni = param.num_elements_horizontal
-    Q = xp.zeros((num_equations, param.num_elements_vertical, param.num_elements_horizontal, geom.num_solpts**2))
-    uu = xp.zeros_like(geom.X1)
-    ww = xp.zeros_like(geom.X1)
-    exner = xp.zeros_like(geom.X1)
-    θ = xp.ones_like(geom.X1)
-
+    uu = xp.zeros_like(x1)
+    ww = xp.zeros_like(x1)
+    θ = xp.ones_like(x1)
     if param.case_number != 0:
         θ *= param.bubble_theta
 
     if param.case_number == 0:
-        # Create the step mountain topography
-        xc = (geom.x0 + geom.x1) / 2.0  # Center of domain
-        mountain_width = 1000.0  # Width of step
-        mountain_height = 250.0  # Height of step
-
-        # Create step mountain in the X1 coordinate
-        # This creates a step function: 0 outside, mountain_height inside the step region
-        geom.z_bottom = xp.where(xp.abs(geom.X1 - xc) < mountain_width / 2.0, mountain_height, 0.0)
-
-        # Use periodic BC in x-direction
-        geom.xperiodic = True
-
+        # Stratified background with a uniform wind (the step-mountain flow). The mountain topography
+        # itself is a terrain-following-metric concern (update_topo) and is not applied here yet.
+        xc = (geom.X1.min() + geom.X1.max()) / 2.0  # noqa: F841 (kept for parity with the 2D setup)
     elif param.case_number == 1:
         # Pill
-
-        xc = 500.0
-        zc = 260.0
-        pert = 0.5
-
-        r = (geom.X1 - xc) ** 2 + (geom.X3 - zc) ** 2
+        xc, zc, pert = 500.0, 260.0, 0.5
+        r = (x1 - xc) ** 2 + (x3 - zc) ** 2
         θ = xp.where(r < param.bubble_rad**2, θ + pert, θ)
-
     elif param.case_number == 2:
         # Gaussian bubble
-
-        A = 0.5
-        a = 50
-        s = 100
-        x0 = 500
-        z0 = 260
-        r = xp.sqrt((geom.X1 - x0) ** 2 + (geom.X3 - z0) ** 2)
-
+        A, a, s, x0, z0 = 0.5, 50, 100, 500, 260
+        r = xp.sqrt((x1 - x0) ** 2 + (x3 - z0) ** 2)
         θ = xp.where(r <= a, θ + A, θ + A * xp.exp(-(((r - a) / s) ** 2)))
-
     elif param.case_number == 3:
-        # Colliding bubbles
-
-        # First bubble (warm)
-        A = 0.5
-        a = 150
-        s = 50
-        x0 = 500
-        z0 = 300
-        r = xp.sqrt((geom.X1 - x0) ** 2 + (geom.X3 - z0) ** 2)
-        θ = xp.where(r <= a, θ + A, θ + A * xp.exp(-(((r - a) / s) ** 2)))
-
-        # Second bubble (cold)
-        A = -0.15
-        a = 0
-        s = 50
-        x0 = 560
-        z0 = 640
-        r = xp.sqrt((geom.X1 - x0) ** 2 + (geom.X3 - z0) ** 2)
-        θ = xp.where(r <= a, θ + A, θ + A * xp.exp(-(((r - a) / s) ** 2)))
-
+        # Colliding bubbles: warm then cold
+        for A, a, s, x0, z0 in ((0.5, 150, 50, 500, 300), (-0.15, 0, 50, 560, 640)):
+            r = xp.sqrt((x1 - x0) ** 2 + (x3 - z0) ** 2)
+            θ = xp.where(r <= a, θ + A, θ + A * xp.exp(-(((r - a) / s) ** 2)))
     elif param.case_number == 4:
-        # Density current
-
-        # Parameters for density current
-        xc = 0.0  # Center x position
-        zc = 3000.0  # Height of the cold pool center
-        xr = 4000.0  # Horizontal radius
-        zr = 2000.0  # Vertical radius
-
-        # Normalized distance from center
-        r = xp.sqrt(((geom.X1 - xc) / xr) ** 2 + ((geom.X3 - zc) / zr) ** 2)
-
-        # Temperature perturbation (cold anomaly)
-        θ_pert = xp.where(r <= 1.0, -15.0 * (1.0 + xp.cos(xp.pi * r)) / 2.0, 0.0)
-        θ = θ + θ_pert
+        # Density current (cold anomaly)
+        xc, zc, xr, zr = 0.0, 3000.0, 4000.0, 2000.0
+        r = xp.sqrt(((x1 - xc) / xr) ** 2 + ((x3 - zc) / zr) ** 2)
+        θ = θ + xp.where(r <= 1.0, -15.0 * (1.0 + xp.cos(xp.pi * r)) / 2.0, 0.0)
 
     if param.case_number == 0:
-        N_star = 0.01
-        t0 = 288
-
+        N_star, t0 = 0.01, 288.0
         a00 = N_star**2 / gravity
         capc1 = gravity**2 / (N_star**2 * cpd * t0)
-
-        exner = 1.0 - capc1 * (1.0 - xp.exp(-a00 * geom.X3))
-        θ = t0 * xp.exp(a00 * geom.X3)
-
-        uu[:, :] = 10.0
-
+        exner = 1.0 - capc1 * (1.0 - xp.exp(-a00 * x3))
+        θ = t0 * xp.exp(a00 * x3)
+        uu = uu + 10.0
     else:
-        exner = 1.0 - gravity / (cpd * θ) * geom.X3
+        exner = 1.0 - gravity / (cpd * θ) * x3
 
     ρ = p0 / (Rd * θ) * exner ** (cvd / Rd)
 
-    Q[idx_2d_rho, :, :] = ρ
-    Q[idx_2d_rho_u, :, :] = ρ * uu
-    Q[idx_2d_rho_w, :, :] = ρ * ww
-    Q[idx_2d_rho_theta, :, :] = ρ * θ
-
+    Q = xp.zeros((5,) + geom.grid_shape_3d_new, dtype=x1.dtype)
+    Q[idx_rho] = ρ
+    Q[idx_rho_u1] = ρ * uu
+    Q[idx_rho_u2] = 0.0  # y-invariant extrusion
+    Q[idx_rho_u3] = ρ * ww
+    Q[idx_rho_theta] = ρ * θ
     return Q

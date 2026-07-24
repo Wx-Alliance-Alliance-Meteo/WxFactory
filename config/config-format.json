@@ -129,7 +129,7 @@
                     "default": 0.0,
                     "dependency": {
                         "name": "grid_type",
-                        "values": ["cartesian2d"]
+                        "values": ["cartesian3d"]
                     }
                 },
                 {
@@ -311,29 +311,6 @@
                         "name": "expfilter_apply",
                         "values": [true]
                     }
-                },
-                {
-                    "name": "apply_sponge",
-                    "type": "bool",
-                    "default": false
-                },
-                {
-                    "name": "sponge_tscale",
-                    "type": "float",
-                    "default": 1.0,
-                    "dependency": {
-                        "name": "apply_sponge",
-                        "values": [true]
-                    }
-                },
-                {
-                    "name": "sponge_zscale",
-                    "type": "float",
-                    "default": 0.0,
-                    "dependency": {
-                        "name": "apply_sponge",
-                        "values": [true]
-                    }
                 }
             ]
         },
@@ -348,17 +325,31 @@
                 {
                     "name": "grid_type",
                     "type": "str",
-                    "selectables": ["cubed_sphere", "cartesian2d"],
+                    "selectables": ["cubed_sphere", "cartesian3d"],
                     "dependency":{
                         "name": "grid_file",
                         "values": [""]
                     }
                 },
                 {
+                    "name": "lateral_boundary",
+                    "type": "str",
+                    "selectables": ["donor_cell", "wall", "periodic"],
+                    "default": "donor_cell",
+                    "description": "Lateral (horizontal) boundary treatment. donor_cell exchanges traces with the neighbouring tile (the cubed sphere's inter-panel donor cell); wall reflects the tile's own boundary trace (solid wall); periodic wraps the tile to its opposite edge. The cubed sphere always uses donor_cell; wall/periodic are for cartesian grids."
+                },
+                {
                     "name": "discretization",
                     "type": "str",
                     "default": "dg",
                     "selectables": ["dg", "fv"]
+                },
+                {
+                    "name": "advection_only",
+                    "type": "str",
+                    "default": "auto",
+                    "selectables": ["auto", "on", "off"],
+                    "description": "Whether the Euler dynamics are frozen and only passive advection is integrated. 'auto' derives it from the DCMIP case number (cases <= 13 are advection tests); 'on'/'off' force it. Cartesian grids are always fully dynamical."
                 },
                 {
                     "name": "lambda0",
@@ -432,7 +423,7 @@
                     "type": "float",
                     "dependency": {
                         "name": "grid_type",
-                        "values": ["cartesian2d"]
+                        "values": ["cartesian3d"]
                     }
                 },
                 {
@@ -440,7 +431,25 @@
                     "type": "float",
                     "dependency": {
                         "name": "grid_type",
-                        "values": ["cartesian2d"]
+                        "values": ["cartesian3d"]
+                    }
+                },
+                {
+                    "name": "y0",
+                    "type": "float",
+                    "default": 0.0,
+                    "dependency": {
+                        "name": "grid_type",
+                        "values": ["cartesian3d"]
+                    }
+                },
+                {
+                    "name": "y1",
+                    "type": "float",
+                    "default": 1000.0,
+                    "dependency": {
+                        "name": "grid_type",
+                        "values": ["cartesian3d"]
                     }
                 },
                 {
@@ -448,7 +457,7 @@
                     "type": "float",
                     "dependency": {
                         "name": "grid_type",
-                        "values": ["cartesian2d"]
+                        "values": ["cartesian3d"]
                     }
                 },
                 {
@@ -456,7 +465,7 @@
                     "type": "float",
                     "dependency": {
                         "name": "grid_type",
-                        "values": ["cartesian2d"]
+                        "values": ["cartesian3d"]
                     }
                 }
            ]

@@ -97,7 +97,7 @@ class Configuration:
 
     # --- START type hints --- automatically generated (do not touch)
     alpha0: float
-    apply_sponge: bool
+    advection_only: str
     base_output_file: str
     bubble_rad: float
     bubble_theta: float
@@ -128,6 +128,7 @@ class Configuration:
     kiops_dt_factor: float
     krylov_mmax: int
     krylov_size: int
+    lateral_boundary: str
     lambda0: float
     matmul_backend: str
     matsuno_amp: float
@@ -154,8 +155,6 @@ class Configuration:
     sleve_scale_small: float
     splitting_integrator_1: str
     splitting_integrator_2: str
-    sponge_tscale: float
-    sponge_zscale: float
     starting_step: int
     stat_freq: int
     store_total_time: bool

@@ -8,11 +8,9 @@ from typing import Self, TypeVar
 from mpi4py import MPI
 from numpy.typing import NDArray, DTypeLike
 
-from ..common.definitions import idx_2d_rho_w
 from ..common import Configuration
 from ..device import Device
 
-from .cartesian_2d_mesh import Cartesian2D
 from .cubed_sphere_3d import CubedSphere3D
 from .geometry import Geometry
 
@@ -105,7 +103,7 @@ class DFROperators:
 
         self.expfilter_apply = param.expfilter_apply
         if param.expfilter_apply:
-            if not isinstance(grd, CubedSphere3D):
+            if not getattr(grd, "is_3d_euler_grid", False):
                 raise TypeError(f"The 3D filter can only be applied on a CubedSphere3D geometry")
             if grd.num_solpts < 2:
                 if device.comm.rank == 0:
@@ -123,27 +121,6 @@ class DFROperators:
                 filter_z = xp.kron(self.expfilter, I3).T
                 self.expfilter_new = (filter_x @ filter_y) @ filter_z
                 assert self.expfilter_new.dtype == self.dtype
-
-        # Create sponge layer (if desired)
-        self.apply_sponge = param.apply_sponge
-        if param.apply_sponge:
-            if not isinstance(grd, Cartesian2D):
-                raise TypeError(f"The sponge can only be applied on a Cartesian2D geometry")
-            nk, ni = grd.X1.shape
-            zs = param.z1 - param.sponge_zscale  # zs is bottom of layer
-            self.beta = xp.zeros(grd.X1.shape, dtype=self.dtype)  # used as our damping profile
-            # Loop over points
-            # TODO use implicit loop (will also work with CUDA)
-            for k in range(nk):
-                for i in range(ni):
-                    if grd.X3[k, i] >= zs:
-                        self.beta[k, i] = (
-                            self.beta[k, i]
-                            + (1.0 / param.sponge_tscale)
-                            * xp.sin((0.5 * xp.pi) * (grd.X3[k, i] - zs) / (param.z1 - zs)) ** 2
-                        )
-
-            assert self.beta.dtype == self.dtype
 
         if check_skewcentrosymmetry(self.diff_ext) is False:
             raise ValueError("Something horribly wrong has happened in the creation of the differentiation matrix")
@@ -170,7 +147,7 @@ class DFROperators:
         assert self.diff_tr.dtype == self.dtype
         assert self.quad_weights.dtype == self.dtype
 
-        if isinstance(grd, CubedSphere3D):
+        if getattr(grd, "is_3d_euler_grid", False):
             I2 = xp.identity(grd.num_solpts, dtype=V.dtype)
             I3 = xp.identity(grd.num_solpts**2, dtype=V.dtype)
 
@@ -196,7 +173,7 @@ class DFROperators:
             self.correction_DU = xp.vstack((xp.kron(corr_down, I3), xp.kron(corr_up, I3)))
 
         else:
-            ident = xp.identity(grd.num_solpts)
+            ident = xp.identity(grd.num_solpts, dtype=self.dtype)
             self.extrap_x = xp.vstack((xp.kron(ident, self.extrap_west), xp.kron(ident, self.extrap_east))).T.copy()
             self.extrap_y = xp.vstack((xp.kron(self.extrap_south, ident), xp.kron(self.extrap_north, ident))).T.copy()
             self.extrap_z = xp.vstack((xp.kron(self.extrap_down, ident), xp.kron(self.extrap_up, ident))).T.copy()
@@ -266,20 +243,6 @@ class DFROperators:
 
         if self.expfilter_apply:
             Q = self.apply_filter_3d(Q, metric)
-
-        # Apply Sponge (if desired)
-        if self.apply_sponge:
-            nk, ni = geom.X1.shape
-            # Loop over points
-            # TODO use implicit loop (will also work with CUDA)
-            for k in range(nk):
-                for i in range(ni):
-                    # !!!!!!!!
-                    # !!! Important Note:
-                    #     TODO: For 3D, we want to rotate radially, apply sponge, rotate back
-                    # !!!!!!!!
-                    ww = (1.0 / (1.0 + self.beta[k, i] * dt)) * Q[idx_2d_rho_w, k, i]
-                    Q[idx_2d_rho_w, k, i] = ww
 
         return Q
 

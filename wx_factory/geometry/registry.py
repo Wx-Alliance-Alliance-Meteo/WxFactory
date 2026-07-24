@@ -1,6 +1,6 @@
 """Select the geometry (grid) for a given problem.
 
-Which grid to build depends on a pair: the grid type (``cubed_sphere``, ``cartesian2d``, ...) and
+Which grid to build depends on a pair: the grid type (``cubed_sphere``, ``cartesian3d``, ...) and
 the equation set that runs on it (``euler`` needs a 3D cubed sphere, ``shallow_water`` a 2D one).
 Each supported combination registers a factory in ``GEOMETRY_REGISTRY`` and is looked up by
 :func:`resolve_geometry`, so adding a grid means adding one factory and one ``@register_geometry``
@@ -16,10 +16,11 @@ from mpi4py import MPI
 
 from ..process_topology import ProcessTopology
 
-from .cartesian_2d_mesh import Cartesian2D
+from .cartesian_3d import Cartesian3D
 from .cubed_sphere_2d import CubedSphere2D
 from .cubed_sphere_3d import CubedSphere3D
 from .geometry import Geometry
+from .lateral_exchange import FlatTileTopology
 
 if TYPE_CHECKING:
     from ..common import Configuration
@@ -82,11 +83,31 @@ def register_geometry(grid_type: str, equations: str) -> Callable[[GeometryFacto
     return decorator
 
 
+# Which lateral boundary treatments each grid type accepts. The cubed sphere's panels are physically
+# connected, so it must use donor_cell; a single cartesian tile has no neighbour, so it uses a local
+# wall or periodic boundary. Enforced in resolve_geometry to fail fast on an incompatible config.
+_LATERAL_BOUNDARY_BY_GRID: dict[str, tuple[str, ...]] = {
+    "cubed_sphere": ("donor_cell",),
+    "cartesian3d": ("wall", "periodic"),
+}
+
+
+def validate_lateral_boundary(grid_type: str, lateral_boundary: str) -> None:
+    allowed = _LATERAL_BOUNDARY_BY_GRID.get(grid_type)
+    if allowed is not None and lateral_boundary not in allowed:
+        raise ValueError(
+            f"lateral_boundary = '{lateral_boundary}' is incompatible with grid_type = '{grid_type}'. "
+            f"Allowed for this grid: {list(allowed)}."
+        )
+
+
 def resolve_geometry(ctx: "GeometryContext") -> Geometry:
     """Build the geometry for the grid type and equations described by ``ctx``."""
     if ctx.config.grid_file != "":
         # A grid file always describes a 2D cubed-sphere grid, whatever the other options say.
         return GEOMETRY_REGISTRY[_GRID_FILE_KEY](ctx)
+
+    validate_lateral_boundary(ctx.config.grid_type, getattr(ctx.config, "lateral_boundary", "donor_cell"))
 
     key = (ctx.config.grid_type, ctx.config.equations)
     try:
@@ -130,14 +151,25 @@ def _cubed_sphere_3d(ctx: "GeometryContext") -> Geometry:
     )
 
 
-@register_geometry("cartesian2d", "euler")
-def _cartesian_2d(ctx: "GeometryContext") -> Geometry:
-    return Cartesian2D(
-        (ctx.config.x0, ctx.config.x1),
-        (ctx.config.z0, ctx.config.z1),
+@register_geometry("cartesian3d", "euler")
+def _cartesian_3d(ctx: "GeometryContext") -> Geometry:
+    # A flat cartesian slab: the identity-metric limit of the cubed sphere, on a single tile with a
+    # local lateral boundary (wall or periodic) instead of the panel donor-cell exchange.
+    lateral = getattr(ctx.config, "lateral_boundary", "wall")
+    topo = FlatTileTopology(ctx.device, lateral, comm=ctx.comm)
+    # Vertical extent: an explicit ztop, else the top of the z0..z1 box (measured from z0).
+    ztop = getattr(ctx.config, "ztop", 0.0) or (ctx.config.z1 - ctx.config.z0)
+    # y defaults to the x extent when a config gives only a 2D (x, z) box.
+    y0 = getattr(ctx.config, "y0", ctx.config.x0)
+    y1 = getattr(ctx.config, "y1", ctx.config.x1)
+    return Cartesian3D(
         ctx.num_elements_horizontal,
         ctx.config.num_elements_vertical,
         ctx.num_solpts,
         ctx.total_num_elements_horizontal,
-        ctx.device,
+        ztop,
+        topo,
+        ctx.config,
+        x_extent=(ctx.config.x0, ctx.config.x1),
+        y_extent=(y0, y1),
     )

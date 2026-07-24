@@ -11,7 +11,7 @@ from ..common.definitions import (
     idx_rho,
     idx_rho_u1,
     idx_rho_u2,
-    idx_rho_w,
+    idx_rho_u3,
     idx_rho_theta,
     heat_capacity_ratio,
     p0,
@@ -27,13 +27,13 @@ _bot_k = numpy.s_[..., 0, :, :, :]
 _top_k = numpy.s_[..., -1, :, :, :]
 
 
-_MOM = (idx_rho_u1, idx_rho_u2, idx_rho_w)
+_MOM = (idx_rho_u1, idx_rho_u2, idx_rho_u3)
 
 
 def ad_matvec(dq, q, pressure, direction, h1d, h2d, h3d):
     """Apply direction-specific pointwise flux Jacobian A^d(q) to dq."""
     rho = q[idx_rho]
-    u = (q[idx_rho_u1] / rho, q[idx_rho_u2] / rho, q[idx_rho_w] / rho)
+    u = (q[idx_rho_u1] / rho, q[idx_rho_u2] / rho, q[idx_rho_u3] / rho)
     theta = q[idx_rho_theta] / rho
     md = _MOM[direction]
     ud = u[direction]
@@ -55,7 +55,7 @@ def ad_matvec(dq, q, pressure, direction, h1d, h2d, h3d):
 def ad_matrix(q, pressure, direction, h1d, h2d, h3d, xp):
     """Build explicit 5x5 flux Jacobian A^d(q) at each point."""
     rho = q[idx_rho]
-    u = (q[idx_rho_u1] / rho, q[idx_rho_u2] / rho, q[idx_rho_w] / rho)
+    u = (q[idx_rho_u1] / rho, q[idx_rho_u2] / rho, q[idx_rho_u3] / rho)
     theta = q[idx_rho_theta] / rho
     md = _MOM[direction]
     ud = u[direction]
@@ -141,10 +141,10 @@ def implicit_jvp(rhsobj, q: NDArray, dq: NDArray, base=None) -> NDArray:
     # Wall reflection of vertical momentum for plain rows
     qf_r = qf.copy()
     dqf_r = dqf.copy()
-    qf_r[idx_rho_w][_bot_k] *= -1.0
-    qf_r[idx_rho_w][_top_k] *= -1.0
-    dqf_r[idx_rho_w][_bot_k] *= -1.0
-    dqf_r[idx_rho_w][_top_k] *= -1.0
+    qf_r[idx_rho_u3][_bot_k] *= -1.0
+    qf_r[idx_rho_u3][_top_k] *= -1.0
+    dqf_r[idx_rho_u3][_bot_k] *= -1.0
+    dqf_r[idx_rho_u3][_top_k] *= -1.0
 
     # Interface pressure
     p_itf = p0 * xp.exp((cpd / cvd) * xp.log(qf[idx_rho_theta] * (Rd / p0)))
@@ -154,8 +154,8 @@ def implicit_jvp(rhsobj, q: NDArray, dq: NDArray, base=None) -> NDArray:
     h33_itf = m.h_contra_itf_k_new[2, 2]
     sg_itf = m.sqrtG_itf_k_new
 
-    w_d = qf[idx_rho_w][north] / qf[idx_rho][north]
-    w_u = qf[idx_rho_w][south] / qf[idx_rho][south]
+    w_d = qf[idx_rho_u3][north] / qf[idx_rho][north]
+    w_u = qf[idx_rho_u3][south] / qf[idx_rho][south]
     eig_d = xp.abs(w_d) + xp.sqrt(h33_itf[north] * heat_capacity_ratio * p_itf[north] / qf[idx_rho][north])
     eig_u = xp.abs(w_u) + xp.sqrt(h33_itf[south] * heat_capacity_ratio * p_itf[south] / qf[idx_rho][south])
     eig = xp.maximum(eig_d, eig_u)
@@ -183,17 +183,17 @@ def implicit_jvp(rhsobj, q: NDArray, dq: NDArray, base=None) -> NDArray:
     w_presb_base = w_presb_base * wfp
 
     # Interior perturbations
-    w = q[idx_rho_w] / q[idx_rho]
+    w = q[idx_rho_u3] / q[idx_rho]
     dp = heat_capacity_ratio * pressure / q[idx_rho_theta] * dq[idx_rho_theta]
     dlogp = heat_capacity_ratio / q[idx_rho_theta] * dq[idx_rho_theta]
-    dwadv_x3 = m.sqrtG_new * (2.0 * w * dq[idx_rho_w] - w**2 * dq[idx_rho])
+    dwadv_x3 = m.sqrtG_new * (2.0 * w * dq[idx_rho_u3] - w**2 * dq[idx_rho])
 
     # Interface perturbations
     p_d, p_u = p_itf[north], p_itf[south]
     rt_d, rt_u = qf[idx_rho_theta][north], qf[idx_rho_theta][south]
     dp_d = heat_capacity_ratio * p_d / rt_d * dqf[idx_rho_theta][north]
     dp_u = heat_capacity_ratio * p_u / rt_u * dqf[idx_rho_theta][south]
-    drw_d, drw_u = dqf[idx_rho_w][north], dqf[idx_rho_w][south]
+    drw_d, drw_u = dqf[idx_rho_u3][north], dqf[idx_rho_u3][south]
 
     dwadv_full = xp.zeros_like(dqf[idx_rho])
     dwadv_d = sg_itf[north] * (2.0 * w_d * drw_d - w_d**2 * dqf[idx_rho][north])
@@ -221,9 +221,9 @@ def implicit_jvp(rhsobj, q: NDArray, dq: NDArray, base=None) -> NDArray:
     # Combine rows, apply scaling and gravity Jacobian
     out = apply_op(dfx3, op_dz)
     apply_op(dfitf, op_corr, out=out, beta=1.0)
-    out[idx_rho_w] = drhs_w
+    out[idx_rho_u3] = drhs_w
     out *= -m.inv_sqrtG_new
-    out[idx_rho_w] -= (
+    out[idx_rho_u3] -= (
         m.inv_dzdeta_new * gravity * m.inv_sqrtG_new * ((m.sqrtG_new * dq[idx_rho]) @ ops.highfilter_k)
     )
     return out
@@ -335,7 +335,7 @@ def assemble_j1_blocks_analytic(rhsobj, q):
     met = rhsobj.metric
     ns, nh, nv, nz, ny, nx, m, ncol = _col_dims(rhsobj, q)
     gam = heat_capacity_ratio
-    rw, rt, rr = idx_rho_w, idx_rho_theta, idx_rho
+    rw, rt, rr = idx_rho_u3, idx_rho_theta, idx_rho
     dt_ = q.dtype
 
     base = j1_prepare(rhsobj, q)
@@ -733,7 +733,7 @@ def forcing_jac_prepare(rhsobj, q):
     sponge coefficients (or None when the case has no sponge)."""
     xp = rhsobj.device.xp
     rho = q[idx_rho]
-    u = (q[idx_rho_u1] / rho, q[idx_rho_u2] / rho, q[idx_rho_w] / rho)
+    u = (q[idx_rho_u1] / rho, q[idx_rho_u2] / rho, q[idx_rho_u3] / rho)
     rt = q[idx_rho_theta]
     # Same equation of state as the pointwise kernel: p = p0 (Rd/p0 rho_theta)^gamma.
     p = p0 * xp.exp(heat_capacity_ratio * xp.log((Rd / p0) * rt))
@@ -769,7 +769,7 @@ def forcing_jvp(rhsobj, q, v, base=None):
     h22, h23, h33 = hc[1, 1], hc[1, 2], hc[2, 2]
 
     dr = v[idx_rho]
-    dm = (v[idx_rho_u1], v[idx_rho_u2], v[idx_rho_w])
+    dm = (v[idx_rho_u1], v[idx_rho_u2], v[idx_rho_u3])
     drt = v[idx_rho_theta]
 
     out = xp.zeros_like(v)

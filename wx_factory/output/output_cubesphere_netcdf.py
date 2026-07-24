@@ -14,7 +14,7 @@ from ..common.definitions import (
     idx_rho,
     idx_rho_u1,
     idx_rho_u2,
-    idx_rho_w,
+    idx_rho_u3,
     idx_rho_theta,
     cpd,
     cvd,
@@ -423,11 +423,11 @@ class OutputCubesphereNetcdf(OutputCubesphere):
                     self.store_field(geom.to_single_block(rv), "RV", idx)
                     self.store_field(geom.to_single_block(pv), "PV", idx)
 
-        elif isinstance(geom, CubedSphere3D):  # Euler equations
+        elif getattr(geom, "is_3d_euler_grid", False):  # Euler equations
             rho = Q[idx_rho, ...]
             u1 = Q[idx_rho_u1, ...] / rho
             u2 = Q[idx_rho_u2, ...] / rho
-            u3 = Q[idx_rho_w, ...] / rho
+            u3 = Q[idx_rho_u3, ...] / rho
             theta = Q[idx_rho_theta, ...] / rho
 
             u, v, w = geom.contra2wind_3d(u1, u2, u3, self.metric)

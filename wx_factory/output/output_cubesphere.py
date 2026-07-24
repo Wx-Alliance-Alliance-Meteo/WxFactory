@@ -40,7 +40,7 @@ class OutputCubesphere(OutputManager):
 
     def __blockstats__(self, Q, step_id):
         # Blockstats only work for the 2D cubed sphere for now
-        if isinstance(self.geometry, CubedSphere3D):
+        if getattr(self.geometry, "is_3d_euler_grid", False):
             return
 
         h = Q[0, :, :]

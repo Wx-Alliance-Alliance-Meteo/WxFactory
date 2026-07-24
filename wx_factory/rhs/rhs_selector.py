@@ -1,7 +1,7 @@
 """Select the right-hand-side (RHS) functions for a given set of equations and geometry.
 
 The RHS to use depends on a pair: the equation set (``euler``, ``shallow_water``, ...) and the
-geometry it runs on (``CubedSphere3D``, ``CubedSphere2D``, ``Cartesian2D``, ...). Rather than a
+geometry it runs on (``CubedSphere3D``, ``CubedSphere2D``, ``Cartesian3D``, ...). Rather than a
 chain of ``if``/``isinstance`` tests, each supported combination is registered in ``RHS_REGISTRY``
 and looked up by :func:`resolve_rhs`. Adding a new equation set therefore means adding one factory
 and one ``@register_rhs(...)`` line, in one place.
@@ -17,9 +17,17 @@ from dataclasses import dataclass
 from typing import Callable, Optional, Tuple
 
 from ..common import Configuration
-from ..geometry import Cartesian2D, CubedSphere2D, CubedSphere3D, DFROperators, Geometry, Metric2D, Metric3DTopo
+from ..geometry import (
+    Cartesian3D,
+    CubedSphere2D,
+    CubedSphere3D,
+    DFROperators,
+    Geometry,
+    Metric2D,
+    Metric3DTopo,
+)
 from ..init.initialize import Topo
-from ..pde import PDEEulerCartesian, PDEEulerCubesphere
+from ..pde import PDEEuler3D
 from ..process_topology import ProcessTopology
 
 from .rhs_sw import RhsShallowWater
@@ -119,7 +127,7 @@ def resolve_rhs(ctx: RhsContext) -> RhsBundle:
 @register_rhs("euler", CubedSphere3D)
 def _euler_cubesphere(ctx: RhsContext) -> RhsBundle:
     # The state is the 5 Euler variables followed by any number of passively advected quantities.
-    pde = PDEEulerCubesphere(ctx.geom, ctx.param, ctx.metric, num_var=ctx.fields_shape[0])
+    pde = PDEEuler3D(ctx.geom, ctx.param, ctx.metric, num_var=ctx.fields_shape[0])
     full = RHSDirecFluxReconstruction_mpi_v2(
         pde,
         ctx.geom,
@@ -131,6 +139,23 @@ def _euler_cubesphere(ctx: RhsContext) -> RhsBundle:
         ctx.param,
         ctx.fields_shape,
         debug=ctx.debug,
+    )
+    return RhsBundle(full=full, shape=ctx.fields_shape, implicit=full.implicit, explicit=full.explicit)
+
+
+# A flat cartesian slab is the identity-metric limit of the cubed sphere (see Cartesian3D): it runs
+# the very same 3D Euler RHS and partition, only with a flat metric.
+@register_rhs("euler", Cartesian3D)
+def _euler_cartesian3d(ctx: RhsContext) -> RhsBundle:
+    pde = PDEEuler3D(ctx.geom, ctx.param, ctx.metric, num_var=ctx.fields_shape[0])
+    # The cubed sphere derives advection_only from the DCMIP case numbering (case <= 13 == advection
+    # test), but the cartesian cases reuse those small numbers for dynamical bubbles/currents. A
+    # cartesian Euler slab is always fully dynamical unless the config explicitly asks otherwise.
+    if getattr(ctx.param, "advection_only", "auto") == "auto":
+        pde.advection_only = False
+    full = RHSDirecFluxReconstruction_mpi_v2(
+        pde, ctx.geom, ctx.operators_real, ctx.operators_complex, ctx.metric,
+        ctx.topo, ctx.ptopo, ctx.param, ctx.fields_shape, debug=ctx.debug,
     )
     return RhsBundle(full=full, shape=ctx.fields_shape, implicit=full.implicit, explicit=full.explicit)
 
@@ -159,21 +184,4 @@ def _shallow_water_cubesphere(ctx: RhsContext) -> RhsBundle:
             ctx.topo,
             ctx.ptopo,
         )
-    return RhsBundle(full=full, shape=ctx.fields_shape)
-
-
-@register_rhs("euler", Cartesian2D)
-def _euler_cartesian(ctx: RhsContext) -> RhsBundle:
-    pde = PDEEulerCartesian(ctx.geom, ctx.param, ctx.metric)
-    full = RHSDirecFluxReconstruction(
-        pde,
-        ctx.geom,
-        ctx.operators_real,
-        ctx.operators_complex,
-        ctx.metric,
-        ctx.topo,
-        ctx.ptopo,
-        ctx.param,
-        ctx.fields_shape,
-    )
     return RhsBundle(full=full, shape=ctx.fields_shape)

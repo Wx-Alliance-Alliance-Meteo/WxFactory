@@ -758,7 +758,7 @@ def dcmip_schar_damping(
        flag for whether the reference velocity field has vertical shear (case 2-2) or not (2-1)"""
 
     # Grab forcing index variables from 'definitions', since forcing is modified in-place
-    from ..common.definitions import idx_rho_u1, idx_rho_u2, idx_rho_w
+    from ..common.definitions import idx_rho_u1, idx_rho_u2, idx_rho_u3
 
     rate, u1ref, u2ref, u3ref = dcmip_schar_damping_coeffs(metric, geom, shear)
     damping_weight = rho * rate  # eqn 79, weighted by rho and tau0^(-1)
@@ -767,7 +767,7 @@ def dcmip_schar_damping(
     # and the sign is positive because rhs_euler includes its own negative sign
     forcing[idx_rho_u1] += damping_weight * (u1 - u1ref)
     forcing[idx_rho_u2] += damping_weight * (u2 - u2ref)
-    forcing[idx_rho_w] += damping_weight * (u3 - u3ref)
+    forcing[idx_rho_u3] += damping_weight * (u3 - u3ref)
 
 
 # ==========================================================================================

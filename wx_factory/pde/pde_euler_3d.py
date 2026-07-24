@@ -2,7 +2,7 @@ from mpi4py import MPI
 from numpy.typing import NDArray
 
 from ..common import Configuration
-from ..common.definitions import idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_w, idx_rho_theta, p0, cpd, cvd, Rd, gravity
+from ..common.definitions import idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_u3, idx_rho_theta, p0, cpd, cvd, Rd, gravity
 from ..device import CudaDevice
 from ..geometry import CubedSphere3D, Metric3DTopo
 from ..init.dcmip import dcmip_schar_damping
@@ -55,7 +55,7 @@ def compute_forcings(
     )
 
 
-class PDEEulerCubesphere(PDE):
+class PDEEuler3D(PDE):
     def __init__(self, geometry: CubedSphere3D, config: Configuration, metric: Metric3DTopo, num_var: int = 5):
         # num_var is 5 for the Euler equations alone. Passively advected tracers are appended to the
         # state. Only the array sizes depend on num_var.
@@ -75,7 +75,10 @@ class PDEEulerCubesphere(PDE):
 
         self.case_number = config.case_number
         # The DCMIP transport tests (1-1, 1-2 and 1-3) prescribe the wind and freeze the mass field.
-        self.advection_only = config.case_number <= 13
+        # 'auto' (the default) derives this from the case number; 'on'/'off' force it (cartesian
+        # grids reuse the small case numbers for dynamical bubbles, so they set it off).
+        mode = getattr(config, "advection_only", "auto")
+        self.advection_only = {"on": True, "off": False}.get(mode, config.case_number <= 13)
 
         self.compute_forcings = compute_forcings
         if isinstance(self.device, CudaDevice):
@@ -180,16 +183,16 @@ class PDEEulerCubesphere(PDE):
         rho = q[idx_rho]
         u1 = q[idx_rho_u1] / rho
         u2 = q[idx_rho_u2] / rho
-        w = q[idx_rho_w] / rho
+        w = q[idx_rho_u3] / rho
 
         # Compute the advective fluxes ...
         flux_x1[...] = self.metric.sqrtG_new * u1 * q
         flux_x2[...] = self.metric.sqrtG_new * u2 * q
         flux_x3[...] = self.metric.sqrtG_new * w * q
 
-        wflux_adv_x1[...] = self.metric.sqrtG_new * u1 * q[idx_rho_w]
-        wflux_adv_x2[...] = self.metric.sqrtG_new * u2 * q[idx_rho_w]
-        wflux_adv_x3[...] = self.metric.sqrtG_new * w * q[idx_rho_w]
+        wflux_adv_x1[...] = self.metric.sqrtG_new * u1 * q[idx_rho_u3]
+        wflux_adv_x2[...] = self.metric.sqrtG_new * u2 * q[idx_rho_u3]
+        wflux_adv_x3[...] = self.metric.sqrtG_new * w * q[idx_rho_u3]
 
         # ... and add the pressure component
         # Performance note: exp(log) is measurably faster than ** (pow)
@@ -197,19 +200,19 @@ class PDEEulerCubesphere(PDE):
 
         flux_x1[idx_rho_u1] += self.metric.sqrtG_new * self.metric.h_contra_new[0, 0] * pressure
         flux_x1[idx_rho_u2] += self.metric.sqrtG_new * self.metric.h_contra_new[0, 1] * pressure
-        flux_x1[idx_rho_w] += self.metric.sqrtG_new * self.metric.h_contra_new[0, 2] * pressure
+        flux_x1[idx_rho_u3] += self.metric.sqrtG_new * self.metric.h_contra_new[0, 2] * pressure
 
         wflux_pres_x1[...] = (self.metric.sqrtG_new * self.metric.h_contra_new[0, 2]).astype(q.dtype)
 
         flux_x2[idx_rho_u1] += self.metric.sqrtG_new * self.metric.h_contra_new[1, 0] * pressure
         flux_x2[idx_rho_u2] += self.metric.sqrtG_new * self.metric.h_contra_new[1, 1] * pressure
-        flux_x2[idx_rho_w] += self.metric.sqrtG_new * self.metric.h_contra_new[1, 2] * pressure
+        flux_x2[idx_rho_u3] += self.metric.sqrtG_new * self.metric.h_contra_new[1, 2] * pressure
 
         wflux_pres_x2[...] = (self.metric.sqrtG_new * self.metric.h_contra_new[1, 2]).astype(q.dtype)
 
         flux_x3[idx_rho_u1] += self.metric.sqrtG_new * self.metric.h_contra_new[2, 0] * pressure
         flux_x3[idx_rho_u2] += self.metric.sqrtG_new * self.metric.h_contra_new[2, 1] * pressure
-        flux_x3[idx_rho_w] += self.metric.sqrtG_new * self.metric.h_contra_new[2, 2] * pressure
+        flux_x3[idx_rho_u3] += self.metric.sqrtG_new * self.metric.h_contra_new[2, 2] * pressure
 
         wflux_pres_x3[...] = (self.metric.sqrtG_new * self.metric.h_contra_new[2, 2]).astype(q.dtype)
         logp[...] = xp.log(pressure)
@@ -326,7 +329,7 @@ class PDEEulerCubesphere(PDE):
         xp = self.device.xp
         u1_itf_x1 = q_itf_x1[idx_rho_u1] / q_itf_x1[idx_rho]
         u2_itf_x2 = q_itf_x2[idx_rho_u2] / q_itf_x2[idx_rho]
-        w_itf_x3 = q_itf_x3[idx_rho_w] / q_itf_x3[idx_rho]
+        w_itf_x3 = q_itf_x3[idx_rho_u3] / q_itf_x3[idx_rho]
 
         # Surface and top boundary treatement, imposing no flow (w=0) through top and bottom
         # csubich -- apply odd symmetry to w at boundary so there is no advective _flux_ through boundary
@@ -403,7 +406,7 @@ class PDEEulerCubesphere(PDE):
         self.compute_forcings(
             forcing[idx_rho_u1],
             forcing[idx_rho_u2],
-            forcing[idx_rho_w],
+            forcing[idx_rho_u3],
             rho,
             u1,
             u2,
@@ -471,14 +474,14 @@ class PDEEulerCubesphere(PDE):
         rho = q[idx_rho]
         u1 = q[idx_rho_u1] / rho
         u2 = q[idx_rho_u2] / rho
-        w = q[idx_rho_w] / rho
+        w = q[idx_rho_u3] / rho
 
         self.compute_forcings_inner(q, rho, u1, u2, w, pressure, metric, forcing)
 
         # if MPI.COMM_WORLD.rank == 0:
 
         # Gravity effect, in vertical direction
-        forcing[idx_rho_w] += (
+        forcing[idx_rho_u3] += (
             metric.inv_dzdeta_new * gravity * metric.inv_sqrtG_new * ((metric.sqrtG_new * rho) @ ops.highfilter_k)
         )
 

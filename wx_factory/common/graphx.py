@@ -3,7 +3,7 @@ import matplotlib.pyplot
 
 
 def image_field(
-    geom: "Cartesian2D",
+    geom,
     field: numpy.ndarray,
     filename: str,
     vmin: float,

@@ -17,6 +17,10 @@ from ..process_topology import ProcessTopology
 
 class CubedSphere3D(CubedSphere):
 
+    # Marks a 3D Euler DG grid, so operator / output code can distinguish 3D from 2D without
+    # depending on this concrete class (Cartesian3D sets the same flag without inheriting).
+    is_3d_euler_grid = True
+
     def __init__(
         self,
         num_elements_horizontal: int,
@@ -29,6 +33,7 @@ class CubedSphere3D(CubedSphere):
         ztop: float,
         process_topology: ProcessTopology,
         param: Configuration,
+        num_elements_x2: int | None = None,
     ):
         """Initialize the cubed sphere geometry, for an earthlike sphere with no topography.
 
@@ -146,7 +151,9 @@ class CubedSphere3D(CubedSphere):
         domain_eta = (PE_start_eta, PE_end_eta)
 
         num_elements_x1 = num_elements_horizontal
-        num_elements_x2 = num_elements_horizontal
+        # x2 (the second horizontal direction) is normally equal to x1, but a flat slab can collapse
+        # it to a single "empty" element to run a 2D (x, z) problem as a thin 3D geometry.
+        num_elements_x2 = num_elements_horizontal if num_elements_x2 is None else num_elements_x2
         num_elements_x3 = num_elements_vertical
 
         # Assign the number of elements and solution points to the CubedSphere

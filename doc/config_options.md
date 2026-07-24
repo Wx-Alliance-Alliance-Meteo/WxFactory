@@ -39,9 +39,6 @@
    | num_elements_vertical  | int  | 1         | [1, inf]                         |   | 
    | filter_apply          | str_to_bool  | False  |                              |   | 
    | expfilter_apply       | str_to_bool  | False  |                              |   | 
-   | apply_sponge          | str_to_bool  | False  |                              |   | 
-   | sponge_tscale         | float  | 1.0      |                                  |   | 
-   | sponge_zscale         | float  | 0.0      |                                  |   | 
    | num_solpts            | int   | [none]    | [1, inf]                         |   | 
    | num_elements_horizontal  | int  | [none]  | [1, inf]                         |   | 
    | filter_order          | int   | 16        |                                  |   | 
@@ -58,13 +55,17 @@
  | **[Grid]**            | **Type**  | **Default**  | **Valid range**           | **Description**  | 
    | grid_file             | lc-str  |         |                                  |   | 
    | discretization        | lc-str  | dg      | {dg, fv}                         |   | 
-   | grid_type             | lc-str  | [none]  | {cubed_sphere, cartesian2d}      |   | 
+   | grid_type             | lc-str  | [none]  | {cubed_sphere, cartesian3d}      |   | 
+   | lateral_boundary      | lc-str  | donor_cell | {donor_cell, wall, periodic}  | Horizontal boundary treatment. donor_cell for the cubed sphere; wall/periodic for cartesian3d  | 
+   | advection_only        | lc-str  | auto    | {auto, on, off}                  | Freeze the dynamics and advect passively. auto = derive from the DCMIP case number  | 
    | lambda0               | angle24  | [none]  |                                 | Longitude in radians of the central point of panel 0  | 
    | phi0                  | angle24  | [none]  |                                 | Latitude in radians of the central point of panel 0  | 
    | alpha0                | angle24  | [none]  |                                 | Rotation in radians of the central meridian of panel 0  | 
    | ztop                  | float  | 0.0      |                                  |   | 
-   | x0                    | float  | [none]   |                                  |   | 
+   | x0                    | float  | [none]   |                                  | Cartesian (x, z) box, extruded as a thin y-slab for cartesian3d  | 
    | x1                    | float  | [none]   |                                  |   | 
+   | y0                    | float  | 0.0      |                                  | y-extent of the (empty) extruded dimension for cartesian3d  | 
+   | y1                    | float  | 1000.0   |                                  |   | 
    | z0                    | float  | [none]   |                                  |   | 
    | z1                    | float  | [none]   |                                  |   | 
 | | | | | |

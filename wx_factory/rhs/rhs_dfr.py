@@ -1,7 +1,7 @@
 import numpy
 from numpy.typing import NDArray
 
-from ..common.definitions import idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_w, idx_rho_theta, gravity
+from ..common.definitions import idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_u3, idx_rho_theta, gravity
 from ..common.matmul import apply_op
 from ..geometry import CubedSphere, DFROperators
 from ..rhs.rhs import RHS
@@ -279,7 +279,7 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
         self.w_df3_dx3[...] = self.w_df3_dx3_adv + self.w_df3_dx3_presa + self.w_df3_dx3_presb
 
         self.rhs[...] = -self.metric.inv_sqrtG_new * (self.df1_dx1 + self.df2_dx2 + self.df3_dx3)
-        self.rhs[idx_rho_w] = -self.metric.inv_sqrtG_new * (self.w_df1_dx1 + self.w_df2_dx2 + self.w_df3_dx3)
+        self.rhs[idx_rho_u3] = -self.metric.inv_sqrtG_new * (self.w_df1_dx1 + self.w_df2_dx2 + self.w_df3_dx3)
 
     def start_communication(self):
 
@@ -365,7 +365,7 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
             self.rhs[idx_rho] = 0.0
             self.rhs[idx_rho_u1] = 0.0
             self.rhs[idx_rho_u2] = 0.0
-            self.rhs[idx_rho_w] = 0.0
+            self.rhs[idx_rho_u3] = 0.0
             self.rhs[idx_rho_theta] = 0.0
 
 
@@ -582,7 +582,7 @@ class RHSDirecFluxReconstruction_mpi_v2(RHSDirecFluxReconstruction):
         apply_op(logp_bdy_k, op_correction_DU, out=self.w_df3_dx3_presb, beta=1.0)
         self.w_df3_dx3_presb *= self.wflux_pres_x3
 
-        self.rhs[idx_rho_w] = self.w_df1_dx1 + self.pressure * (
+        self.rhs[idx_rho_u3] = self.w_df1_dx1 + self.pressure * (
             self.w_presa + self.w_df1_dx1_presb + self.w_df2_dx2_presb + self.w_df3_dx3_presb
         )
         self.rhs *= -self.metric.inv_sqrtG_new
@@ -671,7 +671,7 @@ class RHSDirecFluxReconstruction_mpi_v2(RHSDirecFluxReconstruction):
             self.rhs[idx_rho] = 0.0
             self.rhs[idx_rho_u1] = 0.0
             self.rhs[idx_rho_u2] = 0.0
-            self.rhs[idx_rho_w] = 0.0
+            self.rhs[idx_rho_u3] = 0.0
             self.rhs[idx_rho_theta] = 0.0
 
     def implicit(self, q: NDArray) -> NDArray:
@@ -731,14 +731,14 @@ class RHSDirecFluxReconstruction_mpi_v2(RHSDirecFluxReconstruction):
         apply_op(logp_bdy_k, op_corr, out=w_presb, beta=1.0)
         w_presb *= self.wflux_pres_x3
 
-        self.rhs[idx_rho_w] = w_df3 + self.pressure * (w_presa + w_presb)
+        self.rhs[idx_rho_u3] = w_df3 + self.pressure * (w_presa + w_presb)
 
         # 6. Outer 1/sqrtG factor.
         self.rhs *= -self.metric.inv_sqrtG_new
 
         # 7. Gravity source in the vertical-momentum row (same filtered form as ``full``; the sign is
         #    that of ``rhs -= forcing``).
-        self.rhs[idx_rho_w] -= (
+        self.rhs[idx_rho_u3] -= (
             self.metric.inv_dzdeta_new
             * gravity
             * self.metric.inv_sqrtG_new
@@ -801,7 +801,7 @@ class RHSDirecFluxReconstruction_mpi_v2(RHSDirecFluxReconstruction):
         self.w_df2_dx2_presb *= self.wflux_pres_x2
 
         # 3. Well-balanced rho_w horizontal row, then the outer 1/sqrtG factor.
-        self.rhs[idx_rho_w] = self.w_df1_dx1 + self.pressure * (
+        self.rhs[idx_rho_u3] = self.w_df1_dx1 + self.pressure * (
             self.w_presa + self.w_df1_dx1_presb + self.w_df2_dx2_presb
         )
         self.rhs *= -self.metric.inv_sqrtG_new
@@ -809,7 +809,7 @@ class RHSDirecFluxReconstruction_mpi_v2(RHSDirecFluxReconstruction):
         # 4. Forcing (Christoffel / Coriolis / Rayleigh), obtained as the full forcing with gravity
         #    added back (gravity is in f1).
         self.forcing_terms(q)
-        self.rhs[idx_rho_w] += (
+        self.rhs[idx_rho_u3] += (
             self.metric.inv_dzdeta_new
             * gravity
             * self.metric.inv_sqrtG_new
@@ -861,7 +861,7 @@ class RHSDirecFluxReconstruction_mpi_v2(RHSDirecFluxReconstruction):
         self.pointwise_fluxes(q)  # sets self.pressure
         self.rhs[...] = 0.0
         self.forcing_terms(q)  # rhs -= (Christoffel/Coriolis/gravity/Rayleigh)
-        self.rhs[idx_rho_w] += (
+        self.rhs[idx_rho_u3] += (
             self.metric.inv_dzdeta_new
             * gravity
             * self.metric.inv_sqrtG_new

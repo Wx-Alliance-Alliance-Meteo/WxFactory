@@ -52,7 +52,7 @@ class OutputManager:
         self.device = device
         self.comm = device.comm
 
-        self.num_dim = 3 if isinstance(geometry, CubedSphere3D) else 2
+        self.num_dim = 3 if getattr(geometry, "is_3d_euler_grid", False) else 2
 
         with SingleProcess(self.comm) as s, Conditional(s):
             output_dir = self.config.output_dir

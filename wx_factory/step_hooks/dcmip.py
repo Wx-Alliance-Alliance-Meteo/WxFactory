@@ -1,7 +1,7 @@
 import numpy
 
 from . import step_hook
-from ..common.definitions import idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_w, idx_rho_theta
+from ..common.definitions import idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_u3, idx_rho_theta
 from ..init.dcmip import dcmip_prescribed_rho_theta, dcmip_T11_update_winds, dcmip_T12_update_winds
 
 
@@ -40,7 +40,7 @@ class _DcmipAdvectionHook(step_hook.StepHook):
         Q[idx_rho_theta] = rho_theta
         Q[idx_rho_u1] = rho * u1_contra
         Q[idx_rho_u2] = rho * u2_contra
-        Q[idx_rho_w] = rho * w_wind
+        Q[idx_rho_u3] = rho * w_wind
 
         return Q
 

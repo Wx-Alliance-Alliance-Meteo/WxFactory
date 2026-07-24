@@ -16,8 +16,8 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Callable, Optional
 
 from .output_manager import OutputManager
-from .output_cartesian import OutputCartesian
 from .output_cubesphere_netcdf import OutputCubesphereNetcdf
+from .output_cartesian import OutputCartesian
 from .output_cubesphere_fst import OutputCubesphereFst
 
 if TYPE_CHECKING:
@@ -78,11 +78,6 @@ def resolve_output(ctx: "OutputContext") -> OutputManager:
     return factory(ctx)
 
 
-@register_output("cartesian")
-def _cartesian(ctx: "OutputContext") -> OutputManager:
-    return OutputCartesian(ctx.config, ctx.geometry, ctx.operators, ctx.device)
-
-
 @register_output("cubesphere", "netcdf")
 def _cubesphere_netcdf(ctx: "OutputContext") -> OutputManager:
     return OutputCubesphereNetcdf(
@@ -108,3 +103,9 @@ def _cubesphere_fst(ctx: "OutputContext") -> OutputManager:
         ctx.topography,
         ctx.ptopo,
     )
+
+
+@register_output("cartesian")
+def _cartesian_images(ctx: "OutputContext") -> OutputManager:
+    """Cartesian slabs are visualised as x-z images regardless of the requested output_format."""
+    return OutputCartesian(ctx.config, ctx.geometry, ctx.operators, ctx.device)
