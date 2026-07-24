@@ -201,21 +201,25 @@ def pmex(
             # 3b. part 1: the mat-vec
             rhs = (device.xp.eye(j, dtype=acc) + device.xp.matmul(N[0:j, 0:j], Minv[0:j, 0:j])) @ global_vec[0:j, 1]
 
-            # 3c. part 2: the lower triangular solve
-            # array because the xalg can, in some case, yield array with incompatible type to xp
-            sol = device.array(
-                device.xalg.linalg.solve_triangular(
-                    M[0:j, 0:j], rhs, unit_diagonal=True, check_finite=False, overwrite_b=True
+            # 3c. part 2: the LOWER triangular solve
+            if hasattr(device.xp.linalg, "solve_triangular"):
+                sol = device.xp.linalg.solve_triangular(
+                    M[0:j, 0:j].contiguous(), rhs.reshape(-1, 1), upper=False, unitriangular=True
+                )[:, 0]
+            else:
+                sol = device.array(
+                    device.xalg.linalg.solve_triangular(
+                        M[0:j, 0:j], rhs, lower=True, unit_diagonal=True, check_finite=False
+                    )
                 )
-            )
 
             # 4. Orthogonalize
             V[j, :] -= sol.astype(u.dtype) @ V[0:j, :]
 
             # 5. Norm of the freshly orthogonalized vector V[j], estimated by Pythagoras. Near a happy
             #    breakdown these two terms nearly cancel, so the cheap difference loses accuracy there.
-            #    We trust the cheap difference while it is a healthy fraction of ||Av||^2, and fall back 
-            #    to an exact, communicated norm only in the cancellation regime (rare, near breakdown), 
+            #    We trust the cheap difference while it is a healthy fraction of ||Av||^2, and fall back
+            #    to an exact, communicated norm only in the cancellation regime (rare, near breakdown),
             #    where the direct sum of squares of the small residual has no cancellation.
             raw_nrm_sq = global_vec[-1, 1]
             sum_sqrd = (global_vec[0:j, 1] ** 2).sum()
