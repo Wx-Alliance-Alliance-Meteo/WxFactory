@@ -1,8 +1,68 @@
+import time
+from typing import Any
 import unittest
+from unittest import TestResult
+from unittest.runner import _WritelnDecorator
 
 from mpi4py import MPI
 
 from wx_factory.device import CpuDevice, CudaDevice, PytorchDevice
+
+
+class WxTestResult(unittest.TextTestResult):
+
+    def __init__(self, stream: _WritelnDecorator, descriptions: bool, verbosity: int) -> None:
+        super().__init__(stream, descriptions, verbosity)
+        self.verbose = True
+
+    def startTest(self, test: unittest.TestCase) -> None:
+        super().startTest(test)
+        self.t0 = time.time()
+        if self.verbose:
+            self.stream.write(f"Running {test} ... ")
+            self.stream.flush()
+
+    def addSkip(self, test: unittest.TestCase, reason: str) -> None:
+        super().addSkip(test, reason)
+        if self.verbose:
+            self.stream.write("SKIP ")
+
+    def stopTest(self, test: unittest.TestCase) -> None:
+        self.t1 = time.time()
+        super().stopTest(test)
+        if self.verbose:
+            self.stream.writeln(f"({(self.t1 - self.t0) * 1000:.1f} ms)")
+
+    def addSuccess(self, test: unittest.TestCase) -> None:
+        super().addSuccess(test)
+        if self.verbose:
+            self.stream.write("PASS ")
+
+    def addError(
+        self, test: unittest.TestCase, err: tuple[type[BaseException], BaseException, Any] | tuple[None, None, None]
+    ) -> None:
+        super().addError(test, err)
+        if self.verbose:
+            self.stream.write("ERROR ")
+
+    def addFailure(
+        self, test: unittest.TestCase, err: tuple[type[BaseException], BaseException, Any] | tuple[None, None, None]
+    ) -> None:
+        super().addFailure(test, err)
+        if self.verbose:
+            self.stream.write("FAIL ")
+
+    def addExpectedFailure(
+        self, test: unittest.TestCase, err: tuple[type[BaseException], BaseException, Any] | tuple[None, None, None]
+    ) -> None:
+        super().addExpectedFailure(test, err)
+        if self.verbose:
+            self.stream.write("PASS ")
+
+    def addUnexpectedSuccess(self, test: unittest.TestCase) -> None:
+        super().addUnexpectedSuccess(test)
+        if self.verbose:
+            self.stream.write("FAIL ")
 
 
 class WxTestCase(unittest.TestCase):
@@ -28,10 +88,5 @@ class WxTestCase(unittest.TestCase):
             self.device = CpuDevice(self.comm)
 
 
-class WxTestSuite(unittest.TestSuite):
-    def run(self, result, debug=False):
-        for test in self:
-            # print(f"running {test.__class__}.{test._testMethodName}")
-            print(f"Running {test}")
-            test.run(result)
-        return result
+class WxTestRunner(unittest.TextTestRunner):
+    resultclass = WxTestResult

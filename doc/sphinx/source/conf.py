@@ -49,6 +49,7 @@ autodoc_typehints = "description"
 
 templates_path = ["_templates"]
 exclude_patterns = []
+myst_heading_anchors = 3
 
 
 def skip(app, what, name, obj, would_skip, options):

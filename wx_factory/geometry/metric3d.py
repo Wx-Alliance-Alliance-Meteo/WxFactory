@@ -802,20 +802,9 @@ class Metric3DTopo:
                 if verbose and geom.device.comm.rank == 0:
                     print("Solving linear operator for Γ")
 
-                try:
-                    # This call does not work with numpy 2.x
-                    # The explicit loop (in the except clause) is fine with numpy, but extremely slow with cupy.
-                    # That's why we do this call, an only do the explicit loop if it fails.
-                    # TODO Find a better way to handle this. It's probably doable with numpy 2.x with a single call...
-                    space_christoffel[k, ...] = xp.linalg.solve(
-                        c_lhs.reshape(nj, ni, 27, 27), c_rhs.reshape(nj, ni, 27)
-                    )
-                except ValueError:
-                    lhs_tmp = c_lhs.reshape(nj, ni, 27, 27)
-                    rhs_tmp = c_rhs.reshape(nj, ni, 27)
-                    for j in range(nj):
-                        for i in range(ni):
-                            space_christoffel[k, j, i, ...] = xp.linalg.solve(lhs_tmp[j, i], rhs_tmp[j, i])
+                space_christoffel[k, ...] = xp.linalg.solve(
+                    c_lhs.reshape(nj, ni, 27, 27), c_rhs.reshape(nj, ni, 27, 1)
+                ).squeeze(-1)
 
             space_christoffel = space_christoffel.reshape((nk, nj, ni, 3, 3, 3))
             space_christoffel = xp.transpose(space_christoffel, (3, 4, 5, 0, 1, 2))

@@ -14,7 +14,7 @@ from ..simulation.initial_state import InitialState
 
 def init_state_vars(
     geom: Geometry, operators: DFROperators, param: Configuration, step_hooks: Dict[Type, StepHook]
-) -> tuple[NDArray[numpy.float64], Topo | None, Metric2D | Metric3DTopo | None]:
+) -> InitialState:
     """Get intial value for state variables as well at topography information, based on the test case."""
 
     topo = None

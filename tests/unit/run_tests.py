@@ -7,11 +7,10 @@ import sys
 from typing import Optional
 import unittest
 
-from wx_test import WxTestSuite
-
 main_project_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../..")
 sys.path.append(main_project_dir)
 
+from wx_test import WxTestRunner
 from tests.unit.common.test_configuration import ConfigurationTestCases
 from tests.unit.common.test_config_hints import ConfigHintsTestCases
 from tests.unit.common.test_sort_fields import SortFieldsByDependencyTestCases
@@ -40,7 +39,7 @@ def load_tests(test_name: str, skip_compile: bool):
     """Create a test suite with cases we want to run."""
 
     test_re = re.compile(test_name, re.IGNORECASE)
-    suite = WxTestSuite()
+    suite = unittest.TestSuite()
 
     if not skip_compile:
         add_test(suite, CompilationTestCases("test_cpp_kernels_compilation"), test_re)
@@ -136,7 +135,7 @@ if __name__ == "__main__":
     parser.add_argument("--skip-compile", action="store_true", help="Skip compilation test cases (they are slow)")
     args = parser.parse_args()
 
-    runner = unittest.TextTestRunner(buffer=not args.no_buffer, verbosity=0)
+    runner = WxTestRunner(buffer=not args.no_buffer, verbosity=0)
     result = runner.run(load_tests(args.test_name, args.skip_compile))
     if not result.wasSuccessful():
         failed_tests = "\n  ".join(

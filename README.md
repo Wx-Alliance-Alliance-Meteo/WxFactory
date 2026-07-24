@@ -6,10 +6,10 @@ A research numerical weather prediction framework inspired by [Richardson's Fant
 
 Full documentation is [available here](http://hpfx.collab.science.gc.ca/~sdyn001/WxFactory).
 
-- [Configuration options](doc/config_options.md)
-- [Testing](./tests/readme.md)
-- [Contributing](./doc/contribute.md)
-- [References](./doc/references.md)
+- [Configuration options](doc/config_options)
+- [Testing](./tests/readme)
+- [Contributing](./doc/contribute)
+- [References](./doc/references)
 
 ## Requirements
 
