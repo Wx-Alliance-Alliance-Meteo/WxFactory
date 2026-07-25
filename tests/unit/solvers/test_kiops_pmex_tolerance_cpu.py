@@ -1,9 +1,10 @@
+import torch
 import random
 
 from mpi4py import MPI
 from numpy import ndarray
 
-from wx_factory.device import CpuDevice
+from wx_factory.device import PytorchDevice
 from wx_factory.solvers.kiops import kiops
 from wx_factory.solvers.pmex import pmex
 
@@ -21,7 +22,7 @@ class KiopsPmexToleranceCpuTestCases(WxTestCase):
     def setUp(self) -> None:
         super().setUp()
 
-        self.cpu_device = CpuDevice(MPI.COMM_WORLD)
+        self.cpu_device = PytorchDevice(MPI.COMM_WORLD, "cpu")
 
         seed: int = 5646459
         initial_matrix_size: int = 64
@@ -58,10 +59,10 @@ class KiopsPmexToleranceCpuTestCases(WxTestCase):
 
         self.assertEqual(w2.shape, shape, "Both matrix should be the same size")
 
-        diff: float = self.cpu_device.xp.linalg.norm(w1 - w2).item()
+        diff: float = torch.linalg.norm(w1 - w2).item()
 
-        w1_value: float = self.cpu_device.xp.linalg.norm(w1).item()
-        w2_value: float = self.cpu_device.xp.linalg.norm(w2).item()
+        w1_value: float = torch.linalg.norm(w1).item()
+        w2_value: float = torch.linalg.norm(w2).item()
 
         abs_diff: float = abs(diff)
 

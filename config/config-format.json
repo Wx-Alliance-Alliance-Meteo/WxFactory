@@ -47,39 +47,11 @@
             "name": "System",
             "fields": [
                 {
-                    "name": "desired_device",
-                    "type": "str",
-                    "selectables": ["cpp", "cuda", "cupy", "numpy", "omp", "torch"],
-                    "default": "cpp",
-                    "description": "Physical backend to run the computation on"
-                },
-                {
                     "name": "pytorch_device",
                     "type": "str",
                     "selectables": ["cuda", "cpu"],
                     "default": "cuda",
-                    "dependency": {
-                        "name": "desired_device",
-                        "values": ["torch"]
-                    },
-                    "description": "Where the Pytorch backend puts its tensors. Falls back to the CPU if no GPU is available"
-                },
-                {
-                    "name": "cuda_devices",
-                    "type": "list-int",
-                    "default": [],
-                    "dependency": {
-                        "name": "desired_device",
-                        "values": ["cuda", "cupy"]
-                    },
-                    "description": "List of Nvidia physical devices to use"
-                },
-                {
-                    "name": "matmul_backend",
-                    "type": "str",
-                    "selectables": ["default", "nvmath"],
-                    "default": "default",
-                    "description": "Backend for matrix multiplication operations (default uses numpy/cupy, nvmath uses nvmath-python)"
+                    "description": "Where the computation puts its tensors. Falls back to the CPU if no GPU is available"
                 }
             ]
         },

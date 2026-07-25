@@ -5,6 +5,7 @@ library (numpy, cupy or torch) and brought to the host as a Python scalar (or a 
 before the MPI reduction, so they work whether the vectors live on the CPU or a GPU. Bringing the
 scalar to the host also forces a device synchronization, which the callers need anyway."""
 
+import torch
 from typing import Optional
 
 from mpi4py import MPI
@@ -22,7 +23,7 @@ def _to_scalar(value):
 
 
 def global_norm(vec: NDArray, device: Optional[Device] = None):
-    """Compute vector 2-norm across all PEs (from the given device, default CpuDevice).
+    """Compute vector 2-norm across all PEs (from the given device, default PytorchDevice).
 
     Returns a 0-d array of the device's array library, so callers can still use ``.item()`` on it."""
     if len(vec.shape) != 1:
@@ -32,7 +33,7 @@ def global_norm(vec: NDArray, device: Optional[Device] = None):
 
     local_sum = _to_scalar(vec @ vec)
     total = device.comm.allreduce(local_sum)
-    return device.xp.sqrt(device.xp.asarray(total))
+    return torch.sqrt(torch.asarray(total))
 
 
 def global_dotprod(vec1: NDArray, vec2: NDArray, comm: MPI.Comm = MPI.COMM_WORLD):
@@ -60,4 +61,4 @@ def global_allreduce(array: NDArray, device: Optional[Device] = None):
     host = numpy.ascontiguousarray(device.to_host(array))
     total = numpy.empty_like(host)
     device.comm.Allreduce(host, total)
-    return device.xp.asarray(total)
+    return torch.asarray(total)

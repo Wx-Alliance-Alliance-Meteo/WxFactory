@@ -16,7 +16,7 @@ import geometry
 import numpy
 import output.output_manager
 
-d = device.CpuDevice(MPI.COMM_WORLD)
+d = device.PytorchDevice(MPI.COMM_WORLD, "cpu")
 
 config, T0 = output.InputManager.read_config_from_save_file(
     "./tests/data/temp/state_vector_47170bb8616a.00000000.npy", MPI.COMM_WORLD

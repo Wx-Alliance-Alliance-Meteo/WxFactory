@@ -1,3 +1,4 @@
+import torch
 import math
 import sys
 
@@ -102,8 +103,6 @@ def height_vortex(geom, metric, param, step):
 
 
 def sw_from_ERA5(geom: CubedSphere2D, ds, t, levels, feature_map):
-    xp = geom.device.xp
-
     idx_geo_all = [feature_map[f"geopotential_h{z}"] for z in levels]
     idx_u_all = [feature_map[f"u_component_of_wind_h{z}"] for z in levels]
     idx_v_all = [feature_map[f"v_component_of_wind_h{z}"] for z in levels]
@@ -134,15 +133,15 @@ def sw_from_ERA5(geom: CubedSphere2D, ds, t, levels, feature_map):
     u_interp = u_interp.reshape(shape)
     v_interp = v_interp.reshape(shape)
 
-    geop_interp = xp.asarray(geop_interp)
-    u_interp = xp.asarray(u_interp)
-    v_interp = xp.asarray(v_interp)
+    geop_interp = torch.asarray(geop_interp)
+    u_interp = torch.asarray(u_interp)
+    v_interp = torch.asarray(v_interp)
 
     g = 9.80616
     fluid_height = geop_interp / g
 
-    u1_contra = xp.zeros_like(u_interp)
-    u2_contra = xp.zeros_like(v_interp)
+    u1_contra = torch.zeros_like(u_interp)
+    u2_contra = torch.zeros_like(v_interp)
 
     u1_contra, u2_contra = geom.wind2contra(u_interp, v_interp)
 
@@ -150,8 +149,6 @@ def sw_from_ERA5(geom: CubedSphere2D, ds, t, levels, feature_map):
 
 
 def sw_from_file(geom: CubedSphere2D, operators: DFROperators, config: Configuration):
-    xp = geom.device.xp
-
     h_surface = InputManager.read_mountain(config.topography_file, geom)
     h, u, v = InputManager.read_fields(config.initial_conditions_file, ["GZ", "UU", "VV"], geom)
     h[...] *= 10 / gravity
@@ -162,8 +159,8 @@ def sw_from_file(geom: CubedSphere2D, operators: DFROperators, config: Configura
 
     num_solpts = geom.num_solpts
     num_elem = geom.num_elements_horizontal
-    h_surface_itf_i = xp.zeros((num_elem, num_elem + 2, 2 * num_solpts), dtype=h_surface.dtype)
-    h_surface_itf_j = xp.zeros((num_elem + 2, num_elem, 2 * num_solpts), dtype=h_surface.dtype)
+    h_surface_itf_i = torch.zeros((num_elem, num_elem + 2, 2 * num_solpts), dtype=h_surface.dtype)
+    h_surface_itf_j = torch.zeros((num_elem + 2, num_elem, 2 * num_solpts), dtype=h_surface.dtype)
 
     # Easier shape to work with
     h_split = h_surface.reshape(h_surface.shape[:-1] + (num_solpts, num_solpts))

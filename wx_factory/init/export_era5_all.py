@@ -1,3 +1,4 @@
+import torch
 from .shallow_water import sw_from_ERA5
 from time import time
 import xarray as xr
@@ -10,11 +11,9 @@ def export_era5_all_timesteps(sim, config: Configuration):
 
     t0 = time()
     geom = sim.geometry
-    xp = geom.device.xp
-
     base_shape = geom.lon.shape
     num_equations = 3
-    dtype = xp.float64
+    dtype = torch.float64
 
     ds = xr.open_zarr(config.initial_condition, consolidated=True)
     time_start = str(config.time_start)
@@ -30,7 +29,7 @@ def export_era5_all_timesteps(sim, config: Configuration):
         if i != 0:
             u1_contra, u2_contra, fluid_height = sw_from_ERA5(geom, dataset, i, geom.z_levels, feature_map)
 
-            Q = xp.zeros((num_equations, NZ) + base_shape, dtype=dtype)
+            Q = torch.zeros((num_equations, NZ) + base_shape, dtype=dtype)
 
             Q[idx_h, ...] = fluid_height
             Q[idx_hu1, ...] = fluid_height * u1_contra

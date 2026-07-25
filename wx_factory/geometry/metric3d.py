@@ -1,3 +1,4 @@
+import torch
 import math
 import sys
 
@@ -26,7 +27,6 @@ class Metric3DTopo:
         # Retrieve objects for easier access
         geom = self.geom
         matrix = self.matrix
-        xp = geom.device.xp
         dtype = geom.gnomonic.dtype
 
         # Whether computing deep or shallow metric
@@ -105,11 +105,11 @@ class Metric3DTopo:
 
         # Build the boundary-extensions of h, based on the interface boundaries
         # ext_i shape: (nk, nj, num_elements_x1, 2) - west/east boundaries
-        height_ext_i = xp.stack((height_itf_i[:, :, :-1], height_itf_i[:, :, 1:]), axis=-1)
+        height_ext_i = torch.stack((height_itf_i[:, :, :-1], height_itf_i[:, :, 1:]), dim=-1)
         # ext_j shape: (nk, num_elements_x2, 2, ni) - south/north boundaries
-        height_ext_j = xp.stack((height_itf_j[:, :-1, :], height_itf_j[:, 1:, :]), axis=-2)
+        height_ext_j = torch.stack((height_itf_j[:, :-1, :], height_itf_j[:, 1:, :]), dim=-2)
         # ext_k shape: (num_elements_x3, 2, nj, ni) - bottom/top boundaries
-        height_ext_k = xp.stack((height_itf_k[:-1, :, :], height_itf_k[1:, :, :]), axis=-3)
+        height_ext_k = torch.stack((height_itf_k[:-1, :, :], height_itf_k[1:, :, :]), dim=-3)
 
         dRdx1_int = matrix.comma_i(height_int, height_ext_i, geom) * 2 / delta_x
         dRdx2_int = matrix.comma_j(height_int, height_ext_j, geom) * 2 / delta_y
@@ -129,10 +129,10 @@ class Metric3DTopo:
         # exchange code demands contravariant components, and dRd(...) is covariant.  We can perform the conversion
         # by constructing a (temporary) 2D metric in terms of X and Y only at the interfaces:
 
-        metric_2d_contra_itf_i = xp.zeros((2, 2) + geom.itf_i_shape_3d)
-        metric_2d_contra_itf_j = xp.zeros((2, 2) + geom.itf_j_shape_3d)
-        metric_2d_cov_itf_i = xp.zeros((2, 2) + geom.itf_i_shape_3d)
-        metric_2d_cov_itf_j = xp.zeros((2, 2) + geom.itf_j_shape_3d)
+        metric_2d_contra_itf_i = torch.zeros((2, 2) + geom.itf_i_shape_3d)
+        metric_2d_contra_itf_j = torch.zeros((2, 2) + geom.itf_j_shape_3d)
+        metric_2d_cov_itf_i = torch.zeros((2, 2) + geom.itf_i_shape_3d)
+        metric_2d_cov_itf_j = torch.zeros((2, 2) + geom.itf_j_shape_3d)
 
         for metric_contra, metric_cov, X, Y in zip(
             (metric_2d_contra_itf_i, metric_2d_contra_itf_j),
@@ -155,14 +155,14 @@ class Metric3DTopo:
         # extrapolation,
         # in order for the MPI exchange to occur with contiguous subarrays.
 
-        exch_itf_i = xp.zeros((3, geom.nk, geom.num_elements_x1 + 2, 2, geom.nj))
-        exch_itf_j = xp.zeros((3, geom.nk, geom.num_elements_x2 + 2, 2, geom.ni))
+        exch_itf_i = torch.zeros((3, geom.nk, geom.num_elements_x1 + 2, 2, geom.nj))
+        exch_itf_j = torch.zeros((3, geom.nk, geom.num_elements_x2 + 2, 2, geom.ni))
 
         # Perform extrapolation.  Extrapolation in i and j will be written to arrays for exchange, but k does not
         # require an exchange; we can average directly and will handle this afterwards
-        dRdx1_itf_k = xp.empty_like(R_itf_k)
-        dRdx2_itf_k = xp.empty_like(R_itf_k)
-        dRdeta_itf_k = xp.empty_like(R_itf_k)
+        dRdx1_itf_k = torch.empty_like(R_itf_k)
+        dRdx2_itf_k = torch.empty_like(R_itf_k)
+        dRdeta_itf_k = torch.empty_like(R_itf_k)
 
         # Extrapolate the interior values to each edge
         dRdx1_extrap_i = matrix.extrapolate_i(dRdx1_int, geom)  # Output dims: (nk,nj,nel_x,2)
@@ -176,18 +176,18 @@ class Metric3DTopo:
         dRdeta_extrap_k = matrix.extrapolate_k(dRdeta_int, geom)
 
         dtype = dRdx1_int_new.dtype
-        mid_i = xp.s_[..., 1:-1, :]
-        mid_j = xp.s_[..., 1:-1, :, :]
-        mid_k = xp.s_[..., 1:-1, :, :, :]
-        dRdx1_ex_i = xp.zeros(geom.itf_i_shape, dtype=dtype)
-        dRdx1_ex_j = xp.zeros(geom.itf_j_shape, dtype=dtype)
-        dRdx1_ex_k = xp.zeros(geom.itf_k_shape, dtype=dtype)
-        dRdx2_ex_i = xp.zeros(geom.itf_i_shape, dtype=dtype)
-        dRdx2_ex_j = xp.zeros(geom.itf_j_shape, dtype=dtype)
-        dRdx2_ex_k = xp.zeros(geom.itf_k_shape, dtype=dtype)
-        dRdeta_ex_i = xp.zeros(geom.itf_i_shape, dtype=dtype)
-        dRdeta_ex_j = xp.zeros(geom.itf_j_shape, dtype=dtype)
-        dRdeta_ex_k = xp.zeros(geom.itf_k_shape, dtype=dtype)
+        mid_i = numpy.s_[..., 1:-1, :]
+        mid_j = numpy.s_[..., 1:-1, :, :]
+        mid_k = numpy.s_[..., 1:-1, :, :, :]
+        dRdx1_ex_i = torch.zeros(geom.itf_i_shape, dtype=dtype)
+        dRdx1_ex_j = torch.zeros(geom.itf_j_shape, dtype=dtype)
+        dRdx1_ex_k = torch.zeros(geom.itf_k_shape, dtype=dtype)
+        dRdx2_ex_i = torch.zeros(geom.itf_i_shape, dtype=dtype)
+        dRdx2_ex_j = torch.zeros(geom.itf_j_shape, dtype=dtype)
+        dRdx2_ex_k = torch.zeros(geom.itf_k_shape, dtype=dtype)
+        dRdeta_ex_i = torch.zeros(geom.itf_i_shape, dtype=dtype)
+        dRdeta_ex_j = torch.zeros(geom.itf_j_shape, dtype=dtype)
+        dRdeta_ex_k = torch.zeros(geom.itf_k_shape, dtype=dtype)
 
         dRdx1_ex_i[mid_i] = dRdx1_int_new @ matrix.extrap_x
         dRdx1_ex_j[mid_j] = dRdx1_int_new @ matrix.extrap_y
@@ -200,8 +200,8 @@ class Metric3DTopo:
         dRdeta_ex_k[mid_k] = dRdeta_int_new @ matrix.extrap_z
 
         # _k only needs permutation to assign to the exchange arrays
-        exch_itf_i[2, :, 1:-1, :, :] = xp.transpose(dRdeta_extrap_i, (0, 2, 3, 1))
-        exch_itf_j[2, :, 1:-1, :, :] = xp.transpose(dRdeta_extrap_j, (0, 1, 2, 3))
+        exch_itf_i[2, :, 1:-1, :, :] = torch.permute(dRdeta_extrap_i, (0, 2, 3, 1))
+        exch_itf_j[2, :, 1:-1, :, :] = torch.permute(dRdeta_extrap_j, (0, 1, 2, 3))
 
         # _i and _j additionally need conversion to contravariant coordinates
         for el in range(geom.num_elements_x1):
@@ -248,14 +248,14 @@ class Metric3DTopo:
         # formulation u3 exchanges like a scalar (because there is no orientation change at panel
         # boundaries))
 
-        s2_ = xp.s_[..., 1, :, : geom.num_solpts**2]
-        n2_ = xp.s_[..., -2, :, geom.num_solpts**2 :]
-        w2_ = xp.s_[..., 1, : geom.num_solpts**2]
-        e2_ = xp.s_[..., -2, geom.num_solpts**2 :]
-        s3_ = xp.s_[..., 0, :, geom.num_solpts**2 :]
-        n3_ = xp.s_[..., -1, :, : geom.num_solpts**2]
-        w3_ = xp.s_[..., 0, geom.num_solpts**2 :]
-        e3_ = xp.s_[..., -1, : geom.num_solpts**2]
+        s2_ = numpy.s_[..., 1, :, : geom.num_solpts**2]
+        n2_ = numpy.s_[..., -2, :, geom.num_solpts**2 :]
+        w2_ = numpy.s_[..., 1, : geom.num_solpts**2]
+        e2_ = numpy.s_[..., -2, geom.num_solpts**2 :]
+        s3_ = numpy.s_[..., 0, :, geom.num_solpts**2 :]
+        n3_ = numpy.s_[..., -1, :, : geom.num_solpts**2]
+        w3_ = numpy.s_[..., 0, geom.num_solpts**2 :]
+        e3_ = numpy.s_[..., -1, : geom.num_solpts**2]
         (
             (dRdx1_ex_j[s3_], dRdx2_ex_j[s3_], dRdeta_ex_j[s3_]),
             (dRdx1_ex_j[n3_], dRdx2_ex_j[n3_], dRdeta_ex_j[n3_]),
@@ -275,12 +275,12 @@ class Metric3DTopo:
         if geom.process_topology.size > 1:
             # Perform exchanges if this is truly a parallel setup.
 
-            s_in = xp.s_[..., 1, 0, :]
-            n_in = xp.s_[..., -2, 1, :]
+            s_in = numpy.s_[..., 1, 0, :]
+            n_in = numpy.s_[..., -2, 1, :]
             w_in = s_in
             e_in = n_in
-            s_out = xp.s_[..., 0, 1, :]
-            n_out = xp.s_[..., -1, 0, :]
+            s_out = numpy.s_[..., 0, 1, :]
+            n_out = numpy.s_[..., -1, 0, :]
             w_out = s_out
             e_out = n_out
 
@@ -310,12 +310,12 @@ class Metric3DTopo:
             exch_itf_j[:, :, -1, 0, :] = exch_itf_j[:, :, -2, 1, :]
 
         # Define the averaged interface values
-        dRdx1_itf_i = xp.empty_like(R_itf_i)
-        dRdx2_itf_i = xp.empty_like(R_itf_i)
-        dRdeta_itf_i = xp.empty_like(R_itf_i)
-        dRdx1_itf_j = xp.empty_like(R_itf_j)
-        dRdx2_itf_j = xp.empty_like(R_itf_j)
-        dRdeta_itf_j = xp.empty_like(R_itf_j)
+        dRdx1_itf_i = torch.empty_like(R_itf_i)
+        dRdx2_itf_i = torch.empty_like(R_itf_i)
+        dRdeta_itf_i = torch.empty_like(R_itf_i)
+        dRdx1_itf_j = torch.empty_like(R_itf_j)
+        dRdx2_itf_j = torch.empty_like(R_itf_j)
+        dRdeta_itf_j = torch.empty_like(R_itf_j)
 
         # i-interface values
         for bdy in range(geom.num_elements_x1 + 1):
@@ -366,9 +366,9 @@ class Metric3DTopo:
             delsq = 1 + X**2 + Y**2  # δ², per Charron May 2022
             del4 = delsq**2
 
-            Hcov = xp.empty((3, 3) + X.shape)
-            Hcontra = xp.empty((3, 3) + X.shape)
-            rootG = xp.empty_like(X)
+            Hcov = torch.empty((3, 3) + X.shape)
+            Hcontra = torch.empty((3, 3) + X.shape)
+            rootG = torch.empty_like(X)
 
             if deep:
                 Hcov[0, 0, :] = (delta_x**2 / 4) * (R**2 / del4 * (1 + X**2) ** 2 * (1 + Y**2) + dRdx1**2)  # g_11
@@ -425,7 +425,7 @@ class Metric3DTopo:
                     * R**2
                     * (1 + X**2)
                     * (1 + Y**2)
-                    * xp.abs(dRdeta)
+                    * torch.abs(dRdeta)
                     / delsq ** (1.5)
                 )
             else:  # Shallow, so all bare R terms become A terms
@@ -483,7 +483,7 @@ class Metric3DTopo:
                     * A**2
                     * (1 + X**2)
                     * (1 + Y**2)
-                    * xp.abs(dRdeta)
+                    * torch.abs(dRdeta)
                     / delsq ** (1.5)
                 )
 
@@ -585,14 +585,14 @@ class Metric3DTopo:
         # Because we assume the quality of mixed partial derivatives (d^2f/dadb = d^2f/dbda), we need to extend _(i,j,k)
         # for x1, _(j,k) for x2, and only _k for eta.
 
-        dRdx1_ext_i = xp.stack((dRdx1_itf_i[:, :, :-1], dRdx1_itf_i[:, :, 1:]), axis=-1)  # min/max-i boundaries
-        dRdx1_ext_j = xp.stack((dRdx1_itf_j[:, :-1, :], dRdx1_itf_j[:, 1:, :]), axis=-2)  # min/max-j boundaries
-        dRdx1_ext_k = xp.stack((dRdx1_itf_k[:-1, :, :], dRdx1_itf_k[1:, :, :]), axis=-3)  # min/max-k boundaries
+        dRdx1_ext_i = torch.stack((dRdx1_itf_i[:, :, :-1], dRdx1_itf_i[:, :, 1:]), dim=-1)  # min/max-i boundaries
+        dRdx1_ext_j = torch.stack((dRdx1_itf_j[:, :-1, :], dRdx1_itf_j[:, 1:, :]), dim=-2)  # min/max-j boundaries
+        dRdx1_ext_k = torch.stack((dRdx1_itf_k[:-1, :, :], dRdx1_itf_k[1:, :, :]), dim=-3)  # min/max-k boundaries
 
-        dRdx2_ext_j = xp.stack((dRdx2_itf_j[:, :-1, :], dRdx2_itf_j[:, 1:, :]), axis=-2)  # min/max-j boundaries
-        dRdx2_ext_k = xp.stack((dRdx2_itf_k[:-1, :, :], dRdx2_itf_k[1:, :, :]), axis=-3)  # min/max-k boundaries
+        dRdx2_ext_j = torch.stack((dRdx2_itf_j[:, :-1, :], dRdx2_itf_j[:, 1:, :]), dim=-2)  # min/max-j boundaries
+        dRdx2_ext_k = torch.stack((dRdx2_itf_k[:-1, :, :], dRdx2_itf_k[1:, :, :]), dim=-3)  # min/max-k boundaries
 
-        dRdeta_ext_k = xp.stack((dRdeta_itf_k[:-1, :, :], dRdeta_itf_k[1:, :, :]), axis=-3)  # min/max-k boundaries
+        dRdeta_ext_k = torch.stack((dRdeta_itf_k[:-1, :, :], dRdeta_itf_k[1:, :, :]), dim=-3)  # min/max-k boundaries
 
         # With the extension information, compute the partial derivatives.  We do not need any parallel
         # synchronization here because we only use the Christoffel symbols at element-interior points.
@@ -782,10 +782,10 @@ class Metric3DTopo:
             # The call to linalg.solve can require a lot of memory in temporary allocations. This is problematic
             # for very large simulations. Therefore, we split the calculation of christoffel symbols across
             # vertical levels, so that only a relatively small temporary array is used
-            space_christoffel: NDArray = xp.empty((nk, nj, ni, 27))
+            space_christoffel: NDArray = torch.empty((nk, nj, ni, 27))
             for k in range(nk):
-                c_rhs = xp.empty((nj, ni, 3, 3, 3))  # h(i,j,k)^(ab)_(,c)
-                c_lhs = xp.zeros((nj, ni, 3, 3, 3, 3, 3, 3))  # Γ(i,j,k)^d_{ef} for row (ab,c)
+                c_rhs = torch.empty((nj, ni, 3, 3, 3))  # h(i,j,k)^(ab)_(,c)
+                c_lhs = torch.zeros((nj, ni, 3, 3, 3, 3, 3, 3))  # Γ(i,j,k)^d_{ef} for row (ab,c)
 
                 if verbose and geom.device.comm.rank == 0:
                     print("Assembling linear operator for Γ")
@@ -802,12 +802,12 @@ class Metric3DTopo:
                 if verbose and geom.device.comm.rank == 0:
                     print("Solving linear operator for Γ")
 
-                space_christoffel[k, ...] = xp.linalg.solve(
+                space_christoffel[k, ...] = torch.linalg.solve(
                     c_lhs.reshape(nj, ni, 27, 27), c_rhs.reshape(nj, ni, 27, 1)
                 ).squeeze(-1)
 
             space_christoffel = space_christoffel.reshape((nk, nj, ni, 3, 3, 3))
-            space_christoffel = xp.transpose(space_christoffel, (3, 4, 5, 0, 1, 2))
+            space_christoffel = torch.permute(space_christoffel, (3, 4, 5, 0, 1, 2))
 
             if verbose and geom.device.comm.rank == 0:
                 print("Copying Γ to destination arrays")
@@ -861,7 +861,7 @@ class Metric3DTopo:
         self.inv_dzdeta = 1 / dRdeta_int * 2 / delta_eta
         self.inv_dzdeta_new = geom._to_new(self.inv_dzdeta)
 
-        self.christoffel = xp.zeros((3, 9) + geom.grid_shape_3d_new, dtype=dtype)
+        self.christoffel = torch.zeros((3, 9) + geom.grid_shape_3d_new, dtype=dtype)
         self.christoffel[0, 0] = geom._to_new(self.christoffel_1_01)
         self.christoffel[0, 1] = geom._to_new(self.christoffel_1_02)
         self.christoffel[0, 2] = geom._to_new(self.christoffel_1_03)
@@ -907,5 +907,5 @@ class Metric3DTopo:
         self.sqrtG_itf_k_new = geom._to_new_itf_k(self.sqrtG_itf_k)
 
         # Store the metric terms in the working precision (see cast_double_arrays).
-        cast_double_arrays(self, xp, geom.dtype)
+        cast_double_arrays(self, geom.dtype)
         self.inv_sqrtG_new = 1.0 / self.sqrtG_new

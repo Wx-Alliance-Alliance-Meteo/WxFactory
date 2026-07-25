@@ -12,6 +12,8 @@ dependencies = [
     "mpi4py",
     "numpy",
     "scipy",
+    "torch",
+    "sympy",
 ]
 
 [project.scripts]
@@ -19,8 +21,7 @@ wxfactory = "wx_factory.main:main"
 
 [tool.setuptools]
 # Kept under [tool.setuptools] (rather than [project], which is PEP 639 and needs setuptools >= 77)
-# so that older setuptools accept it. compile_kernels.py re-reads this file when building the C++/
-# CUDA kernels, so an unsupported key here breaks kernel compilation, not just packaging.
+# so that older setuptools accept it.
 license-files = ["LICENSE"]
 
 [tool.setuptools.packages.find]

@@ -1,3 +1,5 @@
+import numpy
+import torch
 import os
 from time import time
 from typing import Callable, List, Optional
@@ -102,14 +104,14 @@ class OutputManager:
                 f"ERROR reading state vector from file for step {step_id}. "
                 f"The shape is wrong! ({starting_state.shape}, should be {sh})"
             )
-        Q = self.device.xp.asarray(starting_state)
+        Q = torch.asarray(starting_state)
 
         if self.comm.rank == 0:
             print(f"Starting simulation from step {step_id} (rather than 0)")
             if step_id * self.config.dt >= self.config.t_end:
                 print(
                     f"WARNING: Won't run any steps, since we will stop at step "
-                    f"{int(self.device.xp.ceil(self.config.t_end / self.config.dt))}"
+                    f"{int(torch.ceil(self.config.t_end / self.config.dt))}"
                 )
 
         return Q, step_id

@@ -1,3 +1,4 @@
+import torch
 import sys
 import numpy
 import math
@@ -33,8 +34,6 @@ def newton_krylov(
 
     if device is None:
         device = Device.get_default()
-    xp = device.xp
-
     t_start = time()
     iteration = 0
 
@@ -57,7 +56,7 @@ def newton_krylov(
     func = lambda z: F(z.reshape(x0.shape)).flatten()
     x = x0.flatten()
 
-    dx = xp.full_like(x, float("inf"))
+    dx = torch.full_like(x, float("inf"))
     Fx = func(x)
     Fx_norm = global_norm(Fx, device=device)
 

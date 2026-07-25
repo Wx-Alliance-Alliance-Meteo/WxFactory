@@ -19,8 +19,6 @@ class PDE(ABC):
         num_dim: int,
         num_var: int,
         num_elem: int,
-        pointwise_func: Callable,
-        riemann_func: Callable,
     ):
         self.geometry = geometry
         self.config = config
@@ -30,12 +28,6 @@ class PDE(ABC):
         self.num_dim = num_dim
         self.num_var = num_var
         self.num_elem = num_elem
-
-        if pointwise_func is None or riemann_func is None:
-            raise ValueError(f"Must provide a pointwise and a Riemann flux function")
-
-        self.pointwise_func = pointwise_func
-        self.riemann_func = riemann_func
 
     @abstractmethod
     def pointwise_fluxes(self, q: NDArray, flux_x1: NDArray, flux_x2: NDArray, flux_x3: NDArray):

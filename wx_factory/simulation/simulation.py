@@ -7,7 +7,7 @@ import numpy
 
 
 from ..common import Configuration
-from ..device import Device, CpuDevice, CudaDevice, PytorchDevice
+from ..device import Device, PytorchDevice
 from ..geometry import DFROperators, GeometryContext, resolve_geometry
 from ..init.init_state_vars import init_state_vars
 from ..integrators import Integrator, resolve as _resolve_integrator
@@ -15,7 +15,7 @@ from ..output.registry import OutputContext, resolve_output
 from ..output.input_manager import InputManager
 from ..rhs.rhs_selector import RhsContext, resolve_rhs
 from ..precondition import PreconditionerContext, resolve_preconditioner
-from ..common.matmul import set_matmul_backend
+import torch
 from ..wx_mpi import SingleProcess, Conditional
 from ..step_hooks import StepHook
 from ..step_hooks.registry import PHASE_GEOMETRY, PHASE_STATE, StepHookContext, resolve_step_hooks
@@ -102,16 +102,12 @@ class Simulation:
 
         # Choose the floating-point precision of the whole computation. Single precision halves the
         # memory footprint, which is what lets the finer resolutions fit on a GPU.
-        xp = self.device.xp
         if self.config.precision == "single":
-            self.device.real_dtype = xp.float32
-            self.device.complex_dtype = xp.complex64
+            self.device.real_dtype = torch.float32
+            self.device.complex_dtype = torch.complex64
         else:
-            self.device.real_dtype = xp.float64
-            self.device.complex_dtype = xp.complex128
-
-        # Set matmul backend from config
-        set_matmul_backend(self.config.matmul_backend, self.device.xp)
+            self.device.real_dtype = torch.float64
+            self.device.complex_dtype = torch.complex128
 
         self.geometry = resolve_geometry(GeometryContext.from_simulation(self))
         # Cubed-sphere geometries carry a process topology; a Cartesian grid has none.
@@ -244,28 +240,7 @@ class Simulation:
     def _make_device(self) -> Device:
         """Create the device object which will determine on what hardware (CPU/GPU) each part of the simulation will
         be executed."""
-        if self.config.desired_device in ["cuda", "cupy", "omp"]:
-            try:
-                cuda_devices = self.config.cuda_devices
-            except AttributeError:
-                cuda_devices = []
-
-            lib = "omp" if self.config.desired_device == "omp" else "cuda"
-            try:
-                device = CudaDevice(self.comm, compiled_lib=lib, device_list=cuda_devices)
-            except ValueError:
-                device = None
-                if self.rank == 0:
-                    print("Switching to CPU", flush=True)
-
-            if device is None:
-                device = CpuDevice(comm=self.comm)
-        elif self.config.desired_device == "torch":
-            device = PytorchDevice(comm=self.comm, device_type=self.config.pytorch_device)
-        else:
-            device = CpuDevice(comm=self.comm)
-
-        return device
+        return PytorchDevice(comm=self.comm, device_type=getattr(self.config, "pytorch_device", "cuda"))
 
     def _adjust_num_elements(self):
         """Adjust number of horizontal elements in the parameters so that it corresponds to the

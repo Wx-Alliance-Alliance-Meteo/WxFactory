@@ -39,7 +39,6 @@ def main():
     try:
         from wx_factory.simulation import Simulation
         import wx_factory.wx_mpi as wx_mpi
-        from wx_factory.device import Device
     except (ImportError, NameError, OSError) as e:
         if rank == 0:
             print(e)
@@ -68,12 +67,6 @@ def main():
             "--allowed-proc-count",
             action="store_true",
             help="Print number of processes that can run the given configuration (then exit)",
-        )
-        parser.add_argument(
-            "--enable-unified-memory",
-            action="store_true",
-            help="Use unified (managed) CPU-GPU memory. "
-            "Only use this option if the MPI implementation does not support CUDA",
         )
         parser.add_argument(
             "--proc-name",
@@ -116,11 +109,6 @@ def main():
         if MPI.COMM_WORLD.rank == 0:
             warnings.showwarning = warn_with_traceback
 
-    if args.proc_name != "":
-        from wx_factory.compiler import compile_kernels
-
-        compile_kernels._proc_name = args.proc_name
-
     try:
         pr = None
         if args.profile:
@@ -133,9 +121,6 @@ def main():
 
         if args.numpy_warn_as_except:
             numpy.seterr(all="raise")
-
-        if args.enable_unified_memory:
-            Device.use_unified_memory = True
 
         sim = Simulation(args.config, print_allowed_pe_counts=args.allowed_proc_count)
         sim.run()

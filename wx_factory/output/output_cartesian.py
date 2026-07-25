@@ -5,6 +5,7 @@ x-z contour plots (the classic 2D bubble/current pictures). The slab is a thin y
 so any y-plane is representative; we take the middle one and plot it with :func:`image_field`.
 """
 
+import torch
 import numpy
 
 from ..common.definitions import idx_rho, idx_rho_u1, idx_rho_u3, idx_rho_theta
@@ -37,7 +38,6 @@ class OutputCartesian(OutputManager):
             image_field(self.geometry, theta, filename, float(theta.min()), float(theta.max()), 20)
 
     def __blockstats__(self, Q, step_id):
-        xp = self.device.xp
         rho = Q[idx_rho]
         theta = Q[idx_rho_theta] / rho
         u1 = Q[idx_rho_u1] / rho
@@ -46,4 +46,4 @@ class OutputCartesian(OutputManager):
             print("==============================================", flush=True)
             print(f" Blockstats for timestep {step_id}", flush=True)
             for name, f in (("rho", rho), ("u1", u1), ("u3", u3), ("theta", theta)):
-                print(f"   {name:6s} min {float(xp.min(f)):+.6e}  max {float(xp.max(f)):+.6e}", flush=True)
+                print(f"   {name:6s} min {float(torch.min(f)):+.6e}  max {float(torch.max(f)):+.6e}", flush=True)

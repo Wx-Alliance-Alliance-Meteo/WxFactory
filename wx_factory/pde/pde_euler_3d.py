@@ -1,9 +1,9 @@
 from mpi4py import MPI
 from numpy.typing import NDArray
+import torch
 
 from ..common import Configuration
 from ..common.definitions import idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_u3, idx_rho_theta, p0, cpd, cvd, Rd, gravity
-from ..device import CudaDevice
 from ..geometry import CubedSphere3D, Metric3DTopo
 from ..init.dcmip import dcmip_schar_damping
 
@@ -59,7 +59,6 @@ class PDEEuler3D(PDE):
     def __init__(self, geometry: CubedSphere3D, config: Configuration, metric: Metric3DTopo, num_var: int = 5):
         # num_var is 5 for the Euler equations alone. Passively advected tracers are appended to the
         # state. Only the array sizes depend on num_var.
-        pde = geometry.device.pde
         super().__init__(
             geometry,
             config,
@@ -67,8 +66,6 @@ class PDEEuler3D(PDE):
             num_dim=3,
             num_var=num_var,
             num_elem=geometry.num_elements_horizontal**2 * geometry.num_elements_vertical,
-            pointwise_func=pde.pointwise_euler_cubedsphere_3d,
-            riemann_func=self.get_riemann_solver(pde, "rusanov"),
         )
 
         self.num_solpts = geometry.num_solpts
@@ -81,22 +78,6 @@ class PDEEuler3D(PDE):
         self.advection_only = {"on": True, "off": False}.get(mode, config.case_number <= 13)
 
         self.compute_forcings = compute_forcings
-        if isinstance(self.device, CudaDevice):
-            self.compute_forcings = self.device.cupy.fuse(compute_forcings)
-
-        self.compute_forcings_inner = self.compute_forcings_py
-        self.pointwise_fluxes_inner = self.pointwise_fluxes_py
-        self.riemann_fluxes_inner = self.riemann_fluxes_py
-        if self.config.desired_device not in ["numpy", "cupy", "torch"]:
-            if hasattr(self.device.pde, "forcing_euler_cubesphere_3d"):
-                self.compute_forcings_inner = self.compute_forcings_code
-            self.pointwise_fluxes_inner = self.pointwise_fluxes_code
-            self.riemann_fluxes_inner = self.riemann_fluxes_code
-
-    @staticmethod
-    def get_riemann_solver(pde, name):
-        if name == "rusanov":
-            return pde.riemann_euler_cubedsphere_rusanov_3d
 
     def pointwise_fluxes(
         self,
@@ -113,7 +94,7 @@ class PDEEuler3D(PDE):
         wflux_pres_x3: NDArray,
         logp: NDArray,
     ):
-        self.pointwise_fluxes_inner(
+        self.pointwise_fluxes_py(
             q,
             flux_x1,
             flux_x2,
@@ -126,41 +107,6 @@ class PDEEuler3D(PDE):
             wflux_pres_x2,
             wflux_pres_x3,
             logp,
-        )
-
-    def pointwise_fluxes_code(
-        self,
-        q: NDArray,
-        flux_x1: NDArray,
-        flux_x2: NDArray,
-        flux_x3: NDArray,
-        pressure: NDArray,
-        wflux_adv_x1: NDArray,
-        wflux_adv_x2: NDArray,
-        wflux_adv_x3: NDArray,
-        wflux_pres_x1: NDArray,
-        wflux_pres_x2: NDArray,
-        wflux_pres_x3: NDArray,
-        logp: NDArray,
-    ):
-
-        # Call appropriate backend kernel
-        self.pointwise_func(
-            q,
-            self.metric.sqrtG_new,
-            self.metric.h_contra_new,
-            flux_x1,
-            flux_x2,
-            flux_x3,
-            pressure,
-            wflux_adv_x1,
-            wflux_adv_x2,
-            wflux_adv_x3,
-            wflux_pres_x1,
-            wflux_pres_x2,
-            wflux_pres_x3,
-            logp,
-            False,
         )
 
     def pointwise_fluxes_py(
@@ -178,8 +124,6 @@ class PDEEuler3D(PDE):
         wflux_pres_x3: NDArray,
         logp: NDArray,
     ):
-        xp = self.device.xp
-
         rho = q[idx_rho]
         u1 = q[idx_rho_u1] / rho
         u2 = q[idx_rho_u2] / rho
@@ -196,7 +140,7 @@ class PDEEuler3D(PDE):
 
         # ... and add the pressure component
         # Performance note: exp(log) is measurably faster than ** (pow)
-        pressure[...] = p0 * xp.exp((cpd / cvd) * xp.log((Rd / p0) * q[idx_rho_theta]))
+        pressure[...] = p0 * torch.exp((cpd / cvd) * torch.log((Rd / p0) * q[idx_rho_theta]))
 
         flux_x1[idx_rho_u1] += self.metric.sqrtG_new * self.metric.h_contra_new[0, 0] * pressure
         flux_x1[idx_rho_u2] += self.metric.sqrtG_new * self.metric.h_contra_new[0, 1] * pressure
@@ -215,7 +159,7 @@ class PDEEuler3D(PDE):
         flux_x3[idx_rho_u3] += self.metric.sqrtG_new * self.metric.h_contra_new[2, 2] * pressure
 
         wflux_pres_x3[...] = (self.metric.sqrtG_new * self.metric.h_contra_new[2, 2]).astype(q.dtype)
-        logp[...] = xp.log(pressure)
+        logp[...] = torch.log(pressure)
 
     def riemann_fluxes(
         self,
@@ -236,7 +180,7 @@ class PDEEuler3D(PDE):
         wflux_pres_itf_x3: NDArray,
         metric: Metric3DTopo,
     ):
-        self.riemann_fluxes_inner(
+        self.riemann_fluxes_py(
             q_itf_x1,
             q_itf_x2,
             q_itf_x3,
@@ -254,58 +198,6 @@ class PDEEuler3D(PDE):
             wflux_pres_itf_x3,
             metric,
         )
-
-    def riemann_fluxes_code(
-        self,
-        q_itf_x1: NDArray,
-        q_itf_x2: NDArray,
-        q_itf_x3: NDArray,
-        flux_itf_x1: NDArray,
-        flux_itf_x2: NDArray,
-        flux_itf_x3: NDArray,
-        pressure_itf_x1: NDArray,
-        pressure_itf_x2: NDArray,
-        pressure_itf_x3: NDArray,
-        wflux_adv_itf_x1: NDArray,
-        wflux_pres_itf_x1: NDArray,
-        wflux_adv_itf_x2: NDArray,
-        wflux_pres_itf_x2: NDArray,
-        wflux_adv_itf_x3: NDArray,
-        wflux_pres_itf_x3: NDArray,
-        metric: Metric3DTopo,
-    ):
-
-        # Call Riemann kernel in appropriate backend
-        self.riemann_func(
-            q_itf_x1,
-            q_itf_x2,
-            q_itf_x3,
-            metric.sqrtG_itf_i_new,
-            metric.sqrtG_itf_j_new,
-            metric.sqrtG_itf_k_new,
-            metric.h_contra_itf_i_new,
-            metric.h_contra_itf_j_new,
-            metric.h_contra_itf_k_new,
-            self.geometry.num_elements_x1,
-            self.geometry.num_elements_x2,
-            self.geometry.num_elements_x3,
-            self.num_solpts,
-            flux_itf_x1,
-            flux_itf_x2,
-            flux_itf_x3,
-            pressure_itf_x1,
-            pressure_itf_x2,
-            pressure_itf_x3,
-            wflux_adv_itf_x1,
-            wflux_pres_itf_x1,
-            wflux_adv_itf_x2,
-            wflux_pres_itf_x2,
-            wflux_adv_itf_x3,
-            wflux_pres_itf_x3,
-            self.advection_only,
-        )
-
-        return pressure_itf_x1, pressure_itf_x2
 
     def riemann_fluxes_py(
         self,
@@ -326,7 +218,6 @@ class PDEEuler3D(PDE):
         wflux_pres_itf_x3,
         metric,
     ):
-        xp = self.device.xp
         u1_itf_x1 = q_itf_x1[idx_rho_u1] / q_itf_x1[idx_rho]
         u2_itf_x2 = q_itf_x2[idx_rho_u2] / q_itf_x2[idx_rho]
         w_itf_x3 = q_itf_x3[idx_rho_u3] / q_itf_x3[idx_rho]
@@ -340,9 +231,9 @@ class PDEEuler3D(PDE):
         w_itf_x3[..., -1, :, :, n:] = 0.0
         w_itf_x3[..., -1, :, :, :n] = -w_itf_x3[..., -2, :, :, n:]
 
-        pressure_itf_x1[...] = p0 * xp.exp((cpd / cvd) * xp.log(q_itf_x1[idx_rho_theta] * (Rd / p0)))
-        pressure_itf_x2[...] = p0 * xp.exp((cpd / cvd) * xp.log(q_itf_x2[idx_rho_theta] * (Rd / p0)))
-        pressure_itf_x3[...] = p0 * xp.exp((cpd / cvd) * xp.log(q_itf_x3[idx_rho_theta] * (Rd / p0)))
+        pressure_itf_x1[...] = p0 * torch.exp((cpd / cvd) * torch.log(q_itf_x1[idx_rho_theta] * (Rd / p0)))
+        pressure_itf_x2[...] = p0 * torch.exp((cpd / cvd) * torch.log(q_itf_x2[idx_rho_theta] * (Rd / p0)))
+        pressure_itf_x3[...] = p0 * torch.exp((cpd / cvd) * torch.log(q_itf_x3[idx_rho_theta] * (Rd / p0)))
 
         pressure_itf_x1[:, :, 0, :n] = 0.0
         pressure_itf_x1[:, :, -1, n:] = 0.0
@@ -362,7 +253,6 @@ class PDEEuler3D(PDE):
             wflux_adv_itf_x1,
             wflux_pres_itf_x1,
             self.num_solpts,
-            xp,
         )
         rusanov_3d_hori_j_new(
             u2_itf_x2,
@@ -375,7 +265,6 @@ class PDEEuler3D(PDE):
             wflux_adv_itf_x2,
             wflux_pres_itf_x2,
             self.num_solpts,
-            xp,
         )
         rusanov_3d_vert_new(
             q_itf_x3,
@@ -386,7 +275,6 @@ class PDEEuler3D(PDE):
             flux_itf_x3,
             wflux_adv_itf_x3,
             wflux_pres_itf_x3,
-            xp,
             self.num_solpts,
         )
 
@@ -447,27 +335,6 @@ class PDEEuler3D(PDE):
             metric.h_contra_new[2, 2],
         )
 
-    def compute_forcings_code(
-        self,
-        q: NDArray,
-        rho: NDArray,
-        u1: NDArray,
-        u2: NDArray,
-        w: NDArray,
-        pressure: NDArray,
-        metric: Metric3DTopo,
-        forcing: NDArray,
-    ):
-        self.device.pde.forcing_euler_cubesphere_3d(
-            q,
-            pressure,
-            metric.sqrtG_new,
-            metric.h_contra_new,
-            metric.christoffel,
-            forcing,
-            0,  # Verbose flag
-        )
-
     def forcing_terms(self, rhs, q, pressure, metric, ops, forcing):
         # Add coriolis, metric terms and other forcings
 
@@ -476,7 +343,7 @@ class PDEEuler3D(PDE):
         u2 = q[idx_rho_u2] / rho
         w = q[idx_rho_u3] / rho
 
-        self.compute_forcings_inner(q, rho, u1, u2, w, pressure, metric, forcing)
+        self.compute_forcings_py(q, rho, u1, u2, w, pressure, metric, forcing)
 
         # if MPI.COMM_WORLD.rank == 0:
 

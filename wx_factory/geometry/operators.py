@@ -1,3 +1,5 @@
+from ..common.matmul import kron
+import torch
 import numpy
 import numpy.linalg
 import math
@@ -43,17 +45,16 @@ class DFROperators:
            If applied, at what relative wavenumber (0 < cutoff < 1) to begin applying the filter
         """
 
-        xp = device.xp
         self.dtype = device.real_dtype if dtype is None else dtype
 
-        if param.filter_apply and not isinstance(grd.solutionPoints, xp.ndarray):
+        if param.filter_apply and not isinstance(grd.solutionPoints, numpy.ndarray):
             raise NotImplementedError("DFROperators cannot form a filter with non-numpy arrays")
 
         # Build Vandermonde matrix to transform the modal representation to the (interior)
         # nodal representation
-        V = legvander(grd.solutionPoints, grd.num_solpts - 1, xp).astype(self.dtype)
+        V = legvander(grd.solutionPoints, grd.num_solpts - 1).astype(self.dtype)
         # Invert the matrix to transform from interior nodes to modes
-        invV = xp.linalg.inv(V)
+        invV = torch.linalg.inv(V)
 
         # Build the negative and positive-side extrapolation matrices by:
         # *) transforming interior nodes to modes
@@ -61,8 +62,8 @@ class DFROperators:
 
         # Note that extrap_neg and extrap_pos should be vectors, not a one-row matrix; numpy
         # treats the two differently.
-        extrap_neg = (legvander(xp.array([-1.0], dtype=self.dtype), grd.num_solpts - 1, xp) @ invV).reshape((-1,))
-        extrap_pos = (legvander(xp.array([+1.0], dtype=self.dtype), grd.num_solpts - 1, xp) @ invV).reshape((-1,))
+        extrap_neg = (legvander(torch.tensor([-1.0], dtype=self.dtype), grd.num_solpts - 1) @ invV).reshape((-1,))
+        extrap_pos = (legvander(torch.tensor([+1.0], dtype=self.dtype), grd.num_solpts - 1) @ invV).reshape((-1,))
 
         assert extrap_neg.dtype == self.dtype
         assert extrap_pos.dtype == self.dtype
@@ -74,18 +75,18 @@ class DFROperators:
         self.extrap_down = extrap_neg
         self.extrap_up = extrap_pos
 
-        V = legvander(grd.solutionPoints, grd.num_solpts - 1, xp).astype(self.dtype)
-        invV = xp.linalg.inv(V)
-        feye = xp.eye(grd.num_solpts, dtype=self.dtype)
+        V = legvander(grd.solutionPoints, grd.num_solpts - 1).astype(self.dtype)
+        invV = torch.linalg.inv(V)
+        feye = torch.eye(grd.num_solpts, dtype=self.dtype)
         feye[-1, -1] = 0.0
         self.highfilter = V @ (feye @ invV)
 
-        self.highfilter_k = xp.kron(
-            self.highfilter.T, xp.eye(grd.num_solpts**2, dtype=self.dtype)
+        self.highfilter_k = kron(
+            self.highfilter.T, torch.eye(grd.num_solpts**2, dtype=self.dtype)
         )  # Only valid in 3D (hence the **2)
 
         diff = diffmat(grd.extension_sym)
-        diff = xp.asarray(diff).astype(self.dtype)
+        diff = torch.asarray(diff).astype(self.dtype)
 
         if param.filter_apply:
             self.V = vandermonde(grd.extension)
@@ -93,8 +94,8 @@ class DFROperators:
             N = len(grd.extension) - 1
             Nc = math.floor(param.filter_cutoff * N)
             self.filter = filter_exponential(N, Nc, param.filter_order, self.V, self.invV)
-            self.diff_ext = xp.asarray(self.filter @ diff).astype(self.dtype)
-            self.diff_ext[xp.abs(self.diff_ext) < 1e-20] = 0.0
+            self.diff_ext = torch.asarray(self.filter @ diff).astype(self.dtype)
+            self.diff_ext[torch.abs(self.diff_ext) < 1e-20] = 0.0
 
         else:
             self.diff_ext = diff
@@ -114,11 +115,11 @@ class DFROperators:
                     param.expfilter_strength, param.expfilter_order, param.expfilter_cutoff, grd
                 )
 
-                I2 = xp.eye(grd.num_solpts, dtype=V.dtype)
-                I3 = xp.eye(grd.num_solpts**2, dtype=V.dtype)
-                filter_x = xp.kron(I3, self.expfilter).T
-                filter_y = xp.kron(I2, xp.kron(self.expfilter, I2)).T
-                filter_z = xp.kron(self.expfilter, I3).T
+                I2 = torch.eye(grd.num_solpts, dtype=V.dtype)
+                I3 = torch.eye(grd.num_solpts**2, dtype=V.dtype)
+                filter_x = kron(I3, self.expfilter).T
+                filter_y = kron(I2, kron(self.expfilter, I2)).T
+                filter_z = kron(self.expfilter, I3).T
                 self.expfilter_new = (filter_x @ filter_y) @ filter_z
                 assert self.expfilter_new.dtype == self.dtype
 
@@ -127,17 +128,17 @@ class DFROperators:
 
         # Force matrices to be in C-contiguous order
         self.diff_solpt = self.diff_ext[1:-1, 1:-1].copy()
-        self.correction = xp.column_stack((self.diff_ext[1:-1, 0], self.diff_ext[1:-1, -1]))
+        self.correction = torch.column_stack((self.diff_ext[1:-1, 0], self.diff_ext[1:-1, -1]))
 
         self.diff_solpt_tr = self.diff_solpt.T.copy()
         self.correction_tr = self.correction.T.copy()
 
         # Ordinary differentiation matrices (used only in diagnostic calculations)
         self.diff = diffmat(grd.solutionPoints)
-        self.diff = xp.asarray(self.diff).astype(self.dtype)
+        self.diff = torch.asarray(self.diff).astype(self.dtype)
         self.diff_tr = self.diff.T.copy()
 
-        self.quad_weights = xp.outer(grd.glweights, grd.glweights).astype(self.dtype)
+        self.quad_weights = torch.outer(grd.glweights, grd.glweights).astype(self.dtype)
 
         assert self.diff_solpt.dtype == self.dtype
         assert self.correction.dtype == self.dtype
@@ -148,18 +149,18 @@ class DFROperators:
         assert self.quad_weights.dtype == self.dtype
 
         if getattr(grd, "is_3d_euler_grid", False):
-            I2 = xp.identity(grd.num_solpts, dtype=V.dtype)
-            I3 = xp.identity(grd.num_solpts**2, dtype=V.dtype)
+            I2 = torch.eye(grd.num_solpts, dtype=V.dtype)
+            I3 = torch.eye(grd.num_solpts**2, dtype=V.dtype)
 
-            self.extrap_x = xp.vstack((xp.kron(I3, self.extrap_west), xp.kron(I3, self.extrap_east))).T.copy()
-            self.extrap_y = xp.vstack(
-                (xp.kron(I2, xp.kron(self.extrap_south, I2)), xp.kron(I2, xp.kron(self.extrap_north, I2)))
+            self.extrap_x = torch.vstack((kron(I3, self.extrap_west), kron(I3, self.extrap_east))).T.copy()
+            self.extrap_y = torch.vstack(
+                (kron(I2, kron(self.extrap_south, I2)), kron(I2, kron(self.extrap_north, I2)))
             ).T.copy()
-            self.extrap_z = xp.vstack((xp.kron(self.extrap_down, I3), xp.kron(self.extrap_up, I3))).T.copy()
+            self.extrap_z = torch.vstack((kron(self.extrap_down, I3), kron(self.extrap_up, I3))).T.copy()
 
-            self.derivative_x = xp.kron(I3, self.diff_solpt).T.copy()
-            self.derivative_y = xp.kron(I2, xp.kron(self.diff_solpt, I2)).T.copy()
-            self.derivative_z = xp.kron(self.diff_solpt, I3).T.copy()
+            self.derivative_x = kron(I3, self.diff_solpt).T.copy()
+            self.derivative_y = kron(I2, kron(self.diff_solpt, I2)).T.copy()
+            self.derivative_z = kron(self.diff_solpt, I3).T.copy()
 
             corr_west = self.diff_ext[1:-1, 0]
             corr_east = self.diff_ext[1:-1, -1]
@@ -168,29 +169,29 @@ class DFROperators:
             corr_down = corr_west
             corr_up = corr_east
 
-            self.correction_WE = xp.vstack((xp.kron(I3, corr_west), xp.kron(I3, corr_east)))
-            self.correction_SN = xp.vstack((xp.kron(I2, xp.kron(corr_south, I2)), xp.kron(I2, xp.kron(corr_north, I2))))
-            self.correction_DU = xp.vstack((xp.kron(corr_down, I3), xp.kron(corr_up, I3)))
+            self.correction_WE = torch.vstack((kron(I3, corr_west), kron(I3, corr_east)))
+            self.correction_SN = torch.vstack((kron(I2, kron(corr_south, I2)), kron(I2, kron(corr_north, I2))))
+            self.correction_DU = torch.vstack((kron(corr_down, I3), kron(corr_up, I3)))
 
         else:
-            ident = xp.identity(grd.num_solpts, dtype=self.dtype)
-            self.extrap_x = xp.vstack((xp.kron(ident, self.extrap_west), xp.kron(ident, self.extrap_east))).T.copy()
-            self.extrap_y = xp.vstack((xp.kron(self.extrap_south, ident), xp.kron(self.extrap_north, ident))).T.copy()
-            self.extrap_z = xp.vstack((xp.kron(self.extrap_down, ident), xp.kron(self.extrap_up, ident))).T.copy()
+            ident = torch.eye(grd.num_solpts, dtype=self.dtype)
+            self.extrap_x = torch.vstack((kron(ident, self.extrap_west), kron(ident, self.extrap_east))).T.copy()
+            self.extrap_y = torch.vstack((kron(self.extrap_south, ident), kron(self.extrap_north, ident))).T.copy()
+            self.extrap_z = torch.vstack((kron(self.extrap_down, ident), kron(self.extrap_up, ident))).T.copy()
 
-            self.derivative_x = xp.kron(ident, self.diff_solpt).T.copy()
-            self.derivative_y = xp.kron(self.diff_solpt, ident).T.copy()
-            self.derivative_z = xp.kron(self.diff_solpt, ident).T.copy()
+            self.derivative_x = kron(ident, self.diff_solpt).T.copy()
+            self.derivative_y = kron(self.diff_solpt, ident).T.copy()
+            self.derivative_z = kron(self.diff_solpt, ident).T.copy()
 
             corr_down = self.diff_ext[1:-1, 0]
             corr_up = self.diff_ext[1:-1, -1]
-            self.correction_DU = xp.vstack((xp.kron(corr_down, ident), xp.kron(corr_up, ident)))
+            self.correction_DU = torch.vstack((kron(corr_down, ident), kron(corr_up, ident)))
 
-            self.correction_SN = xp.vstack((xp.kron(corr_down, ident), xp.kron(corr_up, ident)))
+            self.correction_SN = torch.vstack((kron(corr_down, ident), kron(corr_up, ident)))
 
             corr_west = self.diff_ext[1:-1, 0]
             corr_east = self.diff_ext[1:-1, -1]
-            self.correction_WE = xp.vstack((xp.kron(ident, corr_west), xp.kron(ident, corr_east)))
+            self.correction_WE = torch.vstack((kron(ident, corr_west), kron(ident, corr_east)))
         assert self.extrap_x.dtype == self.dtype
         assert self.extrap_y.dtype == self.dtype
         assert self.extrap_z.dtype == self.dtype
@@ -203,40 +204,38 @@ class DFROperators:
 
         # Complex128 variants of operators for mixed-type matmul (complex128 @ complex128)
         # These avoid runtime upcasting when the input array is complex128
-        self.extrap_x_complex = self.extrap_x.astype(xp.complex128)
-        self.extrap_y_complex = self.extrap_y.astype(xp.complex128)
-        self.extrap_z_complex = self.extrap_z.astype(xp.complex128)
-        self.derivative_x_complex = self.derivative_x.astype(xp.complex128)
-        self.derivative_y_complex = self.derivative_y.astype(xp.complex128)
-        self.derivative_z_complex = self.derivative_z.astype(xp.complex128)
-        self.correction_WE_complex = self.correction_WE.astype(xp.complex128)
-        self.correction_SN_complex = self.correction_SN.astype(xp.complex128)
-        self.correction_DU_complex = self.correction_DU.astype(xp.complex128)
+        self.extrap_x_complex = self.extrap_x.astype(torch.complex128)
+        self.extrap_y_complex = self.extrap_y.astype(torch.complex128)
+        self.extrap_z_complex = self.extrap_z.astype(torch.complex128)
+        self.derivative_x_complex = self.derivative_x.astype(torch.complex128)
+        self.derivative_y_complex = self.derivative_y.astype(torch.complex128)
+        self.derivative_z_complex = self.derivative_z.astype(torch.complex128)
+        self.correction_WE_complex = self.correction_WE.astype(torch.complex128)
+        self.correction_SN_complex = self.correction_SN.astype(torch.complex128)
+        self.correction_DU_complex = self.correction_DU.astype(torch.complex128)
 
     def make_filter(self, alpha: float, order: int, cutoff: float, geom: Geometry):
         """Build an exponential modal filter as described in Warburton, eqn 5.16."""
 
-        xp = geom.device.xp
-
         # Scaled mode numbers
-        modes = xp.arange(geom.num_solpts, dtype=geom.solutionPoints.dtype) / (geom.num_solpts - 1)
+        modes = torch.arange(geom.num_solpts, dtype=geom.solutionPoints.dtype) / (geom.num_solpts - 1)
         Nc = cutoff
 
         # After applying the filter, each mode is reduced in proportion to the filter order
         # and the mode number relative to num_solpts, with modes below the cutoff limit untouched
 
-        residual_modes = xp.ones_like(modes)
-        residual_modes[modes > Nc] = xp.exp(-alpha * ((modes[modes > Nc] - cutoff) / (1 - cutoff)) ** order)
+        residual_modes = torch.ones_like(modes)
+        residual_modes[modes > Nc] = torch.exp(-alpha * ((modes[modes > Nc] - cutoff) / (1 - cutoff)) ** order)
 
         # Now, use a Vandermonde matrix to transform this modal filter into a nodal form
 
         # mode-to-node operator
-        vander = legvander(geom.solutionPoints, geom.num_solpts - 1, xp)
+        vander = legvander(geom.solutionPoints, geom.num_solpts - 1)
 
         # node-to-mode operator
-        ivander = xp.linalg.inv(vander)
+        ivander = torch.linalg.inv(vander)
 
-        return vander @ xp.diag(residual_modes) @ ivander
+        return vander @ torch.diag(residual_modes) @ ivander
 
     def apply_filters(self, Q: numpy.ndarray, geom: Geometry, metric, dt: float):
         """Apply the filters that have been activated on the given state vector."""
@@ -277,8 +276,7 @@ class DFROperators:
            Destination array for operation. If provided, should be a C-contiguous array with the same shape
            as `field_interior`.
         """
-        xp = grid.device.xp
-        output = xp.empty_like(field_interior) if out is None else out.reshape(field_interior.shape)
+        output = torch.empty_like(field_interior) if out is None else out.reshape(field_interior.shape)
 
         # Create views of the input arrays for reshaping, in order to express the differentiation as
         # a set of matrix multiplications
@@ -292,7 +290,7 @@ class DFROperators:
         output = output.reshape((-1, grid.num_solpts))
 
         # Perform the matrix transposition
-        xp.matmul(field_view, self.diff_solpt_tr, out=output)
+        torch.matmul(field_view, self.diff_solpt_tr, out=output)
         output[:] += border_i_view @ self.correction_tr
 
         # Reshape the output array back to its canonical extents
@@ -322,8 +320,6 @@ class DFROperators:
            Destination array for operation. If provided, should be a C-contiguous array
            with shape (numvars, npts_z, npts_y, nels_x, 2).
         """
-        xp = grid.device.xp
-
         # Array shape for the i-border of a single variable, based on the grid decomposition
         border_shape = (grid.num_elements_x1, 2)
         # Number of variables we're extending
@@ -331,7 +327,7 @@ class DFROperators:
 
         if out is None:
             # Create an array for the output
-            border = xp.empty((nbvars,) + border_shape, dtype=field_interior.dtype)
+            border = torch.empty((nbvars,) + border_shape, dtype=field_interior.dtype)
         else:
             # Create a view of the output so that the shape of the original is not modified
             border = out
@@ -378,8 +374,7 @@ class DFROperators:
            as `field_interior`.
         """
 
-        xp = grid.device.xp
-        output = xp.empty_like(field_interior) if out is None else out.reshape(field_interior.shape)
+        output = torch.empty_like(field_interior) if out is None else out.reshape(field_interior.shape)
 
         # Compute the number of variables we're differentiating, including number of levels
         nbvars = math.prod(output.shape) // (grid.ni * grid.nj)
@@ -426,7 +421,6 @@ class DFROperators:
            Destination array for operation. If provided, should be a C-contiguous array with
            shape (numvars, npts_z, nels_y, 2, npts_x).
         """
-        xp = grid.device.xp
         # Array shape for the i-border of a single variable, based on the grid decomposition
         border_shape = (grid.num_elements_x2, 2, grid.ni)
         # Number of variables times number of vertical levels we're extending
@@ -434,7 +428,7 @@ class DFROperators:
 
         if out is None:
             # Create an array for the output
-            border = xp.empty((nbvars,) + border_shape, dtype=field_interior.dtype)
+            border = torch.empty((nbvars,) + border_shape, dtype=field_interior.dtype)
         else:
             # Create a view of the output so that the shape of the original is not modified
             border = out
@@ -482,8 +476,7 @@ class DFROperators:
            Destination array for operation. If provided, should be a C-contiguous array with the same shape
            as `field_interior`.
         """
-        xp = grid.device.xp
-        output = xp.empty_like(field_interior) if out is None else out.reshape(field_interior.shape)
+        output = torch.empty_like(field_interior) if out is None else out.reshape(field_interior.shape)
 
         # Compute the number of variables we're differentiating
         nbvars = math.prod(output.shape) // (grid.ni * grid.nj * grid.nk)
@@ -577,8 +570,6 @@ class DFROperators:
            Destination array for operation. If provided, should be a C-contiguous array
            with shape (numvars, nels_z, 2, npts_y, npts_x).
         """
-        xp = grid.device.xp
-
         # Array shape for the i-border of a single variable, based on the grid decomposition
         border_shape = (grid.num_elements_x3, 2, grid.nj, grid.ni)
         # Number of variables we're extending
@@ -586,7 +577,7 @@ class DFROperators:
 
         if out is None:
             # Create an array for the output
-            border = xp.empty((nbvars,) + border_shape, dtype=field_interior.dtype)
+            border = torch.empty((nbvars,) + border_shape, dtype=field_interior.dtype)
         else:
             # Create a view of the output so that the shape of the original is not modified
             border = out
@@ -648,7 +639,6 @@ class DFROperators:
         grad : numpy.ndarray, shape [3,...]
            Gradiant (covariant derivatives) of the input field
         """
-        xp = geom.device.xp
         nk, nj, ni = field.shape[-3:]
         ff = field.reshape((-1, nk, nj, ni))
 
@@ -664,14 +654,14 @@ class DFROperators:
         itk = itf_k.reshape((nvar, nel_k + 1, nj, ni))
 
         # shape: (nvar, nk, nj, nel_i, 2)
-        ext_i = xp.stack((iti[:, :, :, :-1], iti[:, :, :, 1:]), axis=-1)
+        ext_i = torch.stack((iti[:, :, :, :-1], iti[:, :, :, 1:]), dim=-1)
         # shape: (nvar, nk, nel_j, 2, ni)
-        ext_j = xp.stack((itj[:, :, :-1, :], itj[:, :, 1:, :]), axis=-2)
+        ext_j = torch.stack((itj[:, :, :-1, :], itj[:, :, 1:, :]), dim=-2)
         # shape: (nvar, nel_k, 2, nj, ni)
-        ext_k = xp.stack((itk[:, :-1, :, :], itk[:, 1:, :, :]), axis=-3)
+        ext_k = torch.stack((itk[:, :-1, :, :], itk[:, 1:, :, :]), dim=-3)
 
         if out is None:
-            output = xp.zeros((3, nvar, nk, nj, ni), dtype=field.dtype)
+            output = torch.zeros((3, nvar, nk, nj, ni), dtype=field.dtype)
         else:
             output = out.reshape((3, nvar, nk, nj, ni))
 
@@ -901,7 +891,7 @@ def row_reduce(A: numpy.ndarray, ncols: Optional[int] = None) -> numpy.ndarray:
     return A_rre
 
 
-def legvander(x: NDArray[numpy.float64], deg: int, xp) -> NDArray[numpy.float64]:
+def legvander(x: NDArray[numpy.float64], deg: int) -> NDArray[numpy.float64]:
     """
     NumPy's legvander, slightly modified to work with any array type.
 
@@ -909,11 +899,11 @@ def legvander(x: NDArray[numpy.float64], deg: int, xp) -> NDArray[numpy.float64]
     """
 
     dims = (deg + 1,) + x.shape
-    v = xp.empty(dims, dtype=x.dtype)
+    v = torch.empty(dims, dtype=x.dtype)
 
     v[0] = 1
     if deg > 0:
         v[1] = x
         for i in range(2, deg + 1):
             v[i] = (v[i - 1] * x * (2 * i - 1) - v[i - 2] * (i - 1)) / i
-    return xp.moveaxis(v, 0, -1)
+    return torch.moveaxis(v, 0, -1)

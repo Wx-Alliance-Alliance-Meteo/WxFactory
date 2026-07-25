@@ -1,7 +1,7 @@
 import types
 import unittest
 
-from wx_factory.geometry import Cartesian2D, CubedSphere2D, CubedSphere3D
+from wx_factory.geometry import Cartesian3D, CubedSphere2D, CubedSphere3D
 from wx_factory.rhs import rhs_selector
 from wx_factory.rhs.rhs_selector import RHS_REGISTRY, RhsBundle, register_rhs, resolve_rhs
 
@@ -44,11 +44,11 @@ class RhsRegistryTestCases(WxTestCase):
     def test_expected_combinations_are_registered(self):
         keys = set(RHS_REGISTRY)
         self.assertIn(("euler", CubedSphere3D), keys)
-        self.assertIn(("euler", Cartesian2D), keys)
+        self.assertIn(("euler", Cartesian3D), keys)
         self.assertIn(("shallow_water", CubedSphere2D), keys)
 
     def test_unknown_discretization_raises(self):
-        ctx = make_ctx("euler", Cartesian2D.__new__(Cartesian2D), discretization="finite_volume")
+        ctx = make_ctx("euler", Cartesian3D.__new__(Cartesian3D), discretization="finite_volume")
         with self.assertRaises(ValueError):
             resolve_rhs(ctx)
 

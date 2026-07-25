@@ -1,3 +1,4 @@
+import torch
 import random
 
 from numpy import ndarray
@@ -18,7 +19,7 @@ def generate_vectors(size: int, random: random.Random, min: float, max: float, d
     :return: List of vectors. Each vector is mapped to its corresponding device in `devices`. Each vector contains the same data
     """
 
-    arrs: list[ndarray] = [device.xp.empty(size, dtype=float) for device in devices]
+    arrs: list[ndarray] = [torch.empty(size, dtype=float) for device in devices]
 
     for it in range(size):
         nb: float = random.uniform(min, max)
@@ -44,7 +45,7 @@ def generate_matrixes(
     :return: List of matrixes. Each matrix is mapped to its corresponding device in `devices`. Each matrix contains the same data
     """
 
-    arrs: list[ndarray] = [device.xp.empty(size, dtype=float) for device in devices]
+    arrs: list[ndarray] = [torch.empty(size, dtype=float) for device in devices]
 
     for it1 in range(size[0]):
         for it2 in range(size[1]):

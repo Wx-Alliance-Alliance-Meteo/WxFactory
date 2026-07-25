@@ -6,7 +6,7 @@ import numpy
 
 import wx_factory.common.configuration
 import wx_factory.common.configuration_schema
-from wx_factory.device import CpuDevice
+from wx_factory.device import PytorchDevice
 import wx_factory.output.state
 
 import tests.unit.ndarray_generator as ndarray_generator
@@ -20,7 +20,7 @@ state_tmp_dir = "tests/data/temp"
 class StateTestCases(WxTestCase):
     def setUp(self):
         super().setUp()
-        self.cpu_device = CpuDevice(MPI.COMM_WORLD)
+        self.cpu_device = PytorchDevice(MPI.COMM_WORLD, "cpu")
         if not os.path.exists(state_tmp_dir):
             os.mkdir(state_tmp_dir)
 

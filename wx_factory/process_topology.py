@@ -1,3 +1,5 @@
+import numpy
+import torch
 import math
 import time
 from typing import Callable, Optional, Tuple
@@ -5,7 +7,7 @@ from typing import Callable, Optional, Tuple
 from mpi4py import MPI
 from numpy.typing import NDArray
 
-from .device import Device, CudaDevice
+from .device import Device
 from .wx_mpi import SingleProcess, Conditional, split_nodes
 
 ExchangedVector = Tuple[NDArray, ...] | NDArray
@@ -223,9 +225,6 @@ class ProcessTopology:
             [p50, p51, p52, p53],  # Panel 5
         ]
 
-        if isinstance(device, CudaDevice):
-            convert_contras = [[device.cupy.fuse(f) for f in a] for a in convert_contras]
-
         convert_covs = [
             [  # Panel 0
                 lambda a1, a2, x: (a1, a2 - 2.0 * x / (1.0 + x**2) * a1),  # South neighbor
@@ -330,11 +329,10 @@ class ProcessTopology:
         boundary_shape: Tuple[int, ...],
         flip_dim: int | Tuple[int, ...] = -1,
     ):
-        xp = self.device.xp
         rank = self.device.comm.rank
 
         base_shape = get_base_shape(south.shape, boundary_shape)
-        send_buffer = xp.empty((4,) + base_shape, dtype=south[0].dtype)
+        send_buffer = torch.empty((4,) + base_shape, dtype=south[0].dtype)
 
         if not isinstance(flip_dim, Tuple):
             flip_dim = (flip_dim,)
@@ -343,7 +341,7 @@ class ProcessTopology:
         for i, data in enumerate([south, north, west, east]):
             send_buffer[i] = data.reshape(base_shape)
             if self.flip[i]:
-                send_buffer[i] = xp.flip(send_buffer[i], axis=flip_dim)
+                send_buffer[i] = torch.flip(send_buffer[i], flip_dim)
 
         return send_buffer, south.shape, False
 
@@ -401,12 +399,10 @@ class ProcessTopology:
         flip_dim: int | Tuple[int, ...] = -1,
         covariant: bool = False,
     ):
-        xp = self.device.xp
-
         convert = self.convert_cov if covariant else self.convert_contra
 
         base_shape = get_base_shape(south[0].shape, boundary_sn.shape)
-        send_buffer = xp.empty((4, len(south)) + base_shape, dtype=south[0].dtype)
+        send_buffer = torch.empty((4, len(south)) + base_shape, dtype=south[0].dtype)
 
         inputs = [south, north, west, east]
         boundaries = [boundary_sn, boundary_sn, boundary_we, boundary_we]
@@ -419,7 +415,7 @@ class ProcessTopology:
                 send_buffer[i, 2] = data[2].reshape(base_shape)  # 3rd dimension if present
             if self.flip[i]:
                 flip_dim = flip_dim if type(flip_dim) == tuple else (flip_dim,)
-                send_buffer[i] = xp.flip(send_buffer[i], axis=flip_dim)  # Flip arrays, if needed
+                send_buffer[i] = torch.flip(send_buffer[i], flip_dim)  # Flip arrays, if needed
 
         return send_buffer, south[0].shape, True
 
@@ -479,18 +475,17 @@ class ProcessTopology:
         boundary_we: NDArray,
         flip_dim: int | Tuple[int, ...] = -1,
     ):
-        xp = self.device.xp
         convert = self.convert_contra
         base_shape = get_base_shape(south[0].shape, boundary_sn.shape)
 
         if self.send_buffer is None or self.send_buffer.nbytes < south.nbytes * 4:
-            self.send_buffer = xp.empty(4 * south.nbytes, dtype=xp.uint8)
-            self.recv_buffer = xp.empty_like(self.send_buffer)
+            self.send_buffer = torch.empty(4 * south.nbytes, dtype=torch.uint8)
+            self.recv_buffer = torch.empty_like(self.send_buffer)
 
         buffer_shape = (4, south.shape[0]) + base_shape
         num_elem = math.prod(buffer_shape)
-        send_buffer = xp.ravel(self.send_buffer).view(dtype=south.dtype)[:num_elem].reshape(buffer_shape)
-        recv_buffer = xp.ravel(self.recv_buffer).view(dtype=south.dtype)[:num_elem].reshape(buffer_shape)
+        send_buffer = torch.ravel(self.send_buffer).view(dtype=south.dtype)[:num_elem].reshape(buffer_shape)
+        recv_buffer = torch.ravel(self.recv_buffer).view(dtype=south.dtype)[:num_elem].reshape(buffer_shape)
 
         inputs = [south, north, west, east]
         boundaries = [boundary_sn, boundary_sn, boundary_we, boundary_we]
@@ -502,7 +497,7 @@ class ProcessTopology:
             send_buffer[i, 3:] = data[3:].reshape((data.shape[0] - 3,) + base_shape)
 
             if self.flip[i]:
-                send_buffer[i, :] = xp.flip(send_buffer[i, :], axis=flip_dim)  # Flip arrays, if needed
+                send_buffer[i, :] = torch.flip(send_buffer[i, :], flip_dim if isinstance(flip_dim, tuple) else (flip_dim,))  # Flip arrays, if needed
 
         self.device.synchronize()  # When using GPU
 
@@ -513,7 +508,7 @@ class ProcessTopology:
 
         for send_buffer, shape, is_vector in send_info:
             if recv_buffer is None:
-                recv_buffer = self.device.xp.empty_like(send_buffer)
+                recv_buffer = torch.empty_like(send_buffer)
             req = self.comm_dist_graph.Ineighbor_alltoall(send_buffer, recv_buffer)
             requests.append(ExchangeRequest(recv_buffer, req, shape=shape, is_vector=is_vector))
 
@@ -552,8 +547,6 @@ class ProcessTopology:
         :type num_dim: int
         :return: The assembled panel, as a single NDArray, on root PE; None on every non-root PE.
         """
-        xp = self.device.xp
-
         if self.panel_comm.size == 1:
             return field
 
@@ -565,12 +558,12 @@ class ProcessTopology:
         side = self.num_lines_per_panel
         if field.ndim == 1:
             # When gathering a 1D array, put them all end-to-end
-            panel_field = xp.concatenate(panel_fields[:side])
+            panel_field = torch.concatenate(panel_fields[:side])
         else:
             # When gathering 2D+ array, join the tiles in a square
-            panel_field = xp.concatenate(
-                [xp.concatenate(panel_fields[i * side : (i + 1) * side], axis=num_dim - 1) for i in range(side)],
-                axis=num_dim - 2,
+            panel_field = torch.concatenate(
+                [torch.concatenate(panel_fields[i * side : (i + 1) * side], dim=num_dim - 1) for i in range(side)],
+                dim=num_dim - 2,
             )
 
         return panel_field
@@ -596,7 +589,7 @@ class ProcessTopology:
 
         panels = None
         if self.panel_roots_comm.rank == 0:
-            panels = self.device.xp.empty((6,) + panel.shape, dtype=panel.dtype)
+            panels = torch.empty((6,) + panel.shape, dtype=panel.dtype)
         self.device.synchronize()
         self.panel_roots_comm.Gather(panel, panels, root=0)
 
@@ -604,7 +597,7 @@ class ProcessTopology:
         if self.panel_roots_comm.rank != 0:
             return None
 
-        return self.device.xp.stack([panels[i] for i in range(6)])
+        return torch.stack([panels[i] for i in range(6)])
 
     def distribute_cube(self, field: Optional[NDArray], num_dim: int):
         """Split the given single array into its component tiles (according to this topology) and send
@@ -640,7 +633,6 @@ class ProcessTopology:
                     f"Acceptable number of processes are {acceptable}",
                 )
 
-        xp = self.device.xp
         tile_list = None
         if self.panel_comm.rank == 0:
 
@@ -652,7 +644,7 @@ class ProcessTopology:
             panel_params = self.panel_roots_comm.bcast(to_send, root=0)
 
             # Create the receive buffer + fill it
-            panel = xp.empty(panel_params[0], dtype=panel_params[1])
+            panel = torch.empty(panel_params[0], dtype=panel_params[1])
             self.device.synchronize()
             self.panel_roots_comm.Scatter(field, panel, root=0)
 

@@ -20,14 +20,10 @@ from tests.unit.precondition.test_preconditioner_registry import PreconditionerR
 from tests.unit.geometry.test_geometry_registry import GeometryRegistryTestCases
 from tests.unit.output.test_output_registry import OutputRegistryTestCases
 from tests.unit.step_hooks.test_step_hook_registry import StepHookRegistryTestCases
-from tests.unit.compiler.test_compilation import CompilationTestCases, CompilationGPUTestCases
 from tests.unit.output.test_state import StateTestCases
 from tests.unit.restart.test_restart import Euler2DRestartTestCase
-from tests.unit.solvers.test_pmex import PmexComparisonTestCases
-from tests.unit.solvers.test_kiops import KiopsComparisonTestCases
-from tests.unit.solvers.test_fgmres import FgmresComparisonTestCases, FgmresScipyTestCases, FgmresEdgeCasesTestCases
+from tests.unit.solvers.test_fgmres import FgmresScipyTestCases, FgmresEdgeCasesTestCases
 from tests.unit.solvers.test_kiops_pmex_tolerance_cpu import KiopsPmexToleranceCpuTestCases
-from tests.unit.solvers.test_kiops_pmex_tolerance_gpu import KiopsPmexToleranceGpuTestCases
 
 
 def add_test(suite: unittest.TestSuite, test: unittest.TestCase, test_re: Optional[re.Pattern]):
@@ -35,20 +31,11 @@ def add_test(suite: unittest.TestSuite, test: unittest.TestCase, test_re: Option
         suite.addTest(test)
 
 
-def load_tests(test_name: str, skip_compile: bool):
+def load_tests(test_name: str):
     """Create a test suite with cases we want to run."""
 
     test_re = re.compile(test_name, re.IGNORECASE)
     suite = unittest.TestSuite()
-
-    if not skip_compile:
-        add_test(suite, CompilationTestCases("test_cpp_kernels_compilation"), test_re)
-        add_test(suite, CompilationGPUTestCases("test_cuda_kernels_compilation"), test_re)
-        # add_test(suite, CompilationTestCases("test_cpp_compilation_twice"), test_re)
-
-    add_test(suite, PmexComparisonTestCases("test_compare_cpu_to_gpu"), test_re)
-    add_test(suite, KiopsComparisonTestCases("test_compare_cpu_to_gpu"), test_re)
-    add_test(suite, FgmresComparisonTestCases("test_compare_cpu_to_gpu"), test_re)
 
     add_test(suite, FgmresEdgeCasesTestCases("test_fgmres_throw_when_b_is_smaller_or_equal_to_restart"), test_re)
 
@@ -56,7 +43,6 @@ def load_tests(test_name: str, skip_compile: bool):
     add_test(suite, FgmresScipyTestCases("test_compare_implementation_to_scipy_and_residual"), test_re)
 
     add_test(suite, KiopsPmexToleranceCpuTestCases("test_compare_kiops_pmex"), test_re)
-    add_test(suite, KiopsPmexToleranceGpuTestCases("test_compare_kiops_pmex"), test_re)
 
     add_test(suite, StateTestCases("test_save_load_works"), test_re)
     add_test(suite, StateTestCases("test_load_old_state"), test_re)
@@ -132,11 +118,10 @@ if __name__ == "__main__":
         help="Will only run tests whose name or type matches this regular expression.",
     )
     parser.add_argument("--no-buffer", action="store_true", help="Print all test output to terminal")
-    parser.add_argument("--skip-compile", action="store_true", help="Skip compilation test cases (they are slow)")
     args = parser.parse_args()
 
     runner = WxTestRunner(buffer=not args.no_buffer, verbosity=0)
-    result = runner.run(load_tests(args.test_name, args.skip_compile))
+    result = runner.run(load_tests(args.test_name))
     if not result.wasSuccessful():
         failed_tests = "\n  ".join(
             [f"{r[0]}" for r in result.errors + result.failures] + [f"{r}" for r in result.unexpectedSuccesses]

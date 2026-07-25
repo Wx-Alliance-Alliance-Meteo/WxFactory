@@ -1,321 +1,42 @@
-from abc import ABC, abstractmethod
-import importlib
+"""The compute device: where tensors live (CPU or a specific GPU) and the MPI communicator.
+
+Now that the whole model is written directly against PyTorch there is a single device type. This
+object no longer abstracts an array module; it just holds the process's ``comm``, the torch device
+its tensors live on, the working floating-point precision, and a few host/device transfer and
+timing helpers.
+"""
+
+import os
 from time import time
-from typing import Any, List, Optional, Tuple, TypeVar, Union, Self
+from typing import Any, Self
 
 from mpi4py import MPI
-from numpy.typing import NDArray
+import torch
 
-from ..compiler import compile_kernels
 from ..wx_mpi import split_nodes
 
-from . import wx_cupy
+# WxFactory speaks NumPy-flavoured method names in a few places; make torch tensors answer to them
+# too, so the same call works whether an array happens to be a tensor or a host NumPy array.
+torch.Tensor.astype = torch.Tensor.to
+torch.Tensor.copy = torch.Tensor.clone
 
-_Timestamp = TypeVar("Timestamp", bound=Union[float, "Event"])
 
+def _differentiable_requested() -> bool:
+    """Whether the user asked to keep autograd on (opt out of inference mode)."""
+    return os.environ.get("WX_FACTORY_DIFFERENTIABLE", "").lower() in ("1", "true", "yes", "on")
 
-class Device(ABC):
-    """Description of a device on which code can be executed.
 
-    The device is allowed to be the same as the host (so that code is executed on the host). In such
-    a case, most operations do nothing
+class Device:
+    """The PyTorch compute device and its MPI communicator."""
 
-    :param comm: The MPI communicator associated with this device.
-    :type comm: MPI.Comm
-    :param xp: Basic math/array module for this device (numpy on the CPU, cupy or other on the GPU)
-    :param xalg: Advanced math module for this device (scipy on the CPU, cupy equivalent on the GPU)
-    :param libmodule: Module containing all the compiled code for this device
-    """
-
-    # Whether we should use unified memory as the default allocator (CUDA code)
-    # This should only be disabled if the MPI implementation supports CUDA
-    use_unified_memory = False
-
-    def __init__(self, comm: MPI.Comm, xp, xalg, pde_module, operators_module) -> None:
-        """Set a few modules and functions to have the same name, so that callers can use a single name."""
-        self.comm = comm
-        self.xp = xp
-        self.xalg = xalg
-        self.pde = pde_module
-        self.operators = operators_module
-
-        # Floating-point precision of the whole computation. Defaults to double; the Simulation
-        # overrides these from the `precision` configuration option. Single precision halves the
-        # memory footprint (and the bandwidth), which is what lets the finer resolutions fit on a
-        # GPU, at the cost of accuracy.
-        self.real_dtype = xp.float64
-        self.complex_dtype = xp.complex128
-
-    @abstractmethod
-    def synchronize(self, **kwargs):
-        """Synchronize this device with the host. This is essentially a host-device barrier."""
-
-    @abstractmethod
-    def array(self, a: NDArray, *args, **kwargs) -> NDArray:
-        """Copy the given array to this device, if it's not the same as the host."""
-
-    @abstractmethod
-    def pinned(self, *args, **kwargs) -> NDArray:
-        """Allocate a host array with pinned memory."""
-
-    @abstractmethod
-    def to_host(self, val: Any, **kwargs) -> Any:
-        """Copy the given array to the host (if it's not there already)."""
-
-    @abstractmethod
-    def timestamp(self, **kwargs) -> _Timestamp:
-        """Get the "current" time in the flow of execution. On the GPU, execution may not have started yet,
-        so this function will actually insert a timing event in the flow."""
-
-    @abstractmethod
-    def elapsed(self, timestamps: List[_Timestamp]) -> List[float]:
-        """Get the set of elapsed times between the given list of timestamps. Also return
-        the total elapsed time (between first and last timestamp)."""
-
-    def has_128_bits_float(self) -> bool:
-        """Not all devices can perform 128 bits floating point operation"""
-        return hasattr(self.xp, "float128")
-
-    def start_range(self, *args, **kwargs):
-        pass
-
-    def end_range(self):
-        pass
-
-    def mem_usage(self, tag=""):
-        self.__mem_usage__(tag)
-
-    @abstractmethod
-    def __mem_usage__(self, tag):
-        pass
-
-    @staticmethod
-    def get_default() -> "CpuDevice":
-        return CpuDevice.get_default()
-
-    @staticmethod
-    def cuda_available():
-        return wx_cupy.load_cupy()
-
-
-class CpuDevice(Device):
-    _default = None
-
-    def __init__(self, comm: MPI.Comm) -> None:
-        import numpy
-        import scipy
-
-        try:
-            compile_kernels.compile("pde", "cpp", force=False, comm=comm)
-            pde = compile_kernels.load_module("pde", "cpp")
-
-            compile_kernels.compile("operators", "cpp", force=False, comm=comm)
-            operators = compile_kernels.load_module("operators", "cpp")
-        except (ModuleNotFoundError, SystemExit):
-            if comm.rank == 0:
-                print(f"Unable to find the interface_c module. You need to compile it.", flush=True)
-            raise
-        except Exception:
-            print(f"Unknown exception!", flush=True)
-            raise
-
-        super().__init__(comm, numpy, scipy, pde, operators)
-
-    def synchronize(self, **kwargs):
-        """Don't do anything. This is to allow writing generic code when device is not the same as the host."""
-
-    def array(self, a: NDArray, *args, **kwargs) -> NDArray:
-        """Return the input array unchanged."""
-        return a
-
-    def pinned(self, *args, **kwargs) -> NDArray:
-        """Return allocated space, without any special characteristic."""
-        return self.xp.empty(*args, **kwargs)
-
-    def to_host(self, val, **kwargs):
-        """Return the input array unchanged."""
-        return val
-
-    def timestamp(self, **kwargs):
-        return time()
-
-    def elapsed(self, timestamps):
-        intervals = [timestamps[i + 1] - timestamps[i] for i in range(len(timestamps) - 1)]
-        intervals.append(timestamps[-1] - timestamps[0])
-        return intervals
-
-    def __mem_usage__(self, tag):
-        pass
-
-    @staticmethod
-    def get_default() -> "CpuDevice":
-        if CpuDevice._default is None:
-            CpuDevice._default = CpuDevice(MPI.COMM_WORLD)
-        return CpuDevice._default
-
-
-class CudaDevice(Device):
-    _default = None
-
-    def __init__(self, comm: MPI.Comm, compiled_lib: str = "cuda", device_list: Optional[List[int]] = None) -> None:
-        # Delay imports, to avoid loading CUDA if not asked
-
-        wx_cupy.load_cupy()
-        if not wx_cupy.cuda_avail:
-            raise ValueError(f"Unable to create a CudaDevice object, no GPU devices were detected")
-
-        import cupy
-        import cupyx
-        import cupyx.scipy.linalg
-
-        # Get compiled library
-        try:
-            compile_kernels.compile("pde", compiled_lib, force=False, comm=comm)
-            pde = compile_kernels.load_module("pde", compiled_lib)
-
-            compile_kernels.compile("operators", compiled_lib, force=False, comm=comm)
-            operators = compile_kernels.load_module("operators", compiled_lib)
-        except (ModuleNotFoundError, ImportError, SystemExit):
-            if comm.rank == 0:
-                print(
-                    f"Unable to load the compiled CUDA modules, you need to compile it if you want to use the GPU",
-                    flush=True,
-                )
-            raise
-        except:
-            print(f"{comm.rank} Unknown exception", flush=True)
-            raise
-
-        # Set members
-        super().__init__(comm, cupy, cupyx.scipy, pde, operators)
-        self.cupyx = cupyx
-        self.cupy = cupy
-
-        # Choose device on which to run kernels
-        if device_list is None:
-            device_list = []
-        device_list = [x for x in device_list if x < wx_cupy.num_devices]
-
-        if len(device_list) == 0:
-            device_list = [x for x in range(wx_cupy.num_devices)]
-
-        node_comm, _ = split_nodes(comm)
-        num_procs = node_comm.size
-        num_devices = len(device_list)
-        num_per_device = (num_procs + num_devices - 1) // num_devices
-        devnum = node_comm.rank // num_per_device
-
-        self.cuda_device = cupy.cuda.Device(device_list[devnum])
-        self.cuda_device.use()
-        if compiled_lib == "omp":
-            pde.set_omp_device(device_list[devnum])
-
-        if Device.use_unified_memory:
-            if self.comm.rank == 0:
-                print(f"Using unified memory", flush=True)
-            cupy.cuda.set_allocator(cupy.cuda.MemoryPool(cupy.cuda.malloc_managed).malloc)
-
-        # Set up compute and copy streams
-        self.main_stream = cupy.cuda.get_current_stream()
-        self.copy_stream = cupy.cuda.Stream(non_blocking=True)
-
-        self.debug_stack = 0
-
-    def synchronize(self, **kwargs):
-        """Synchronize a stream, based on input arguments. By default, the main stream is synchronized.
-        If copy_stream is True, synchronize that one instead."""
-        if "copy_stream" in kwargs and kwargs["copy_stream"]:
-            self.copy_stream.synchronize()
-        else:
-            self.main_stream.synchronize()
-
-    def array(self, a: NDArray, *args, **kwargs) -> NDArray:
-        """Copy given array to the device."""
-        return self.xp.asarray(a)
-
-    def pinned(self, *args, **kwargs) -> NDArray:
-        """Allocate an array with pinned memory."""
-        return self.cupyx.empty_pinned(*args, **kwargs)
-
-    def to_host(self, val, **kwargs):
-        """Copy given array to the host."""
-        return val.get(**kwargs)
-
-    def timestamp(self, **kwargs):
-        debug = True
-
-        if debug:
-            if self.debug_stack > 0:
-                self.cupy.cuda.nvtx.RangePop()
-                self.debug_stack -= 1
-
-        ts = self.cupy.cuda.Event()
-        if "copy_stream" in kwargs and kwargs["copy_stream"]:
-            ts.record(self.copy_stream)
-        else:
-            ts.record(self.main_stream)
-
-        if debug:
-            if "name" in kwargs:
-                self.cupy.cuda.nvtx.RangePush(kwargs["name"])
-                self.debug_stack += 1
-
-        return ts
-
-    def start_range(self, name, color=0):
-        self.cupy.cuda.nvtx.RangePush(name, color)
-
-    def end_range(self):
-        self.cupy.cuda.nvtx.RangePop()
-
-    def elapsed(self, timestamps):
-        get_time = self.cupy.cuda.get_elapsed_time
-        timestamps[-1].synchronize()
-        intervals = [get_time(timestamps[i], timestamps[i + 1]) / 1000.0 for i in range(len(timestamps) - 1)]
-        intervals.append(get_time(timestamps[0], timestamps[-1]) / 1000.0)
-        return intervals
-
-    def __mem_usage__(self, tag):
-        dev = self.cuda_device
-        free_mem, total_mem = dev.mem_info
-        kb = 1024
-        gb = kb * kb * kb
-        print(f"{tag:10s}: {free_mem / gb :.1f}/{total_mem / gb :.1f} GB available", flush=True)
-
-    @staticmethod
-    def get_default() -> "CudaDevice":
-        if CudaDevice._default is None:
-            CudaDevice._default = CudaDevice(MPI.COMM_WORLD)
-        return CudaDevice._default
-
-
-class PytorchDevice(Device):
     _default: Self = None
 
     def __init__(self, comm: MPI.Comm, device_type: str = "cuda") -> None:
-        import numpy
-        import scipy
-        import torch
-        from .wx_torch import TorchAlg, TorchXp
-
-        try:
-            compile_kernels.compile("pde", "cpp", force=False, comm=comm)
-            pde = compile_kernels.load_module("pde", "cpp")
-
-            compile_kernels.compile("operators", "cpp", force=False, comm=comm)
-            operators = compile_kernels.load_module("operators", "cpp")
-        except (ModuleNotFoundError, SystemExit):
-            if comm.rank == 0:
-                print(f"Unable to find the interface_c module. You need to compile it.", flush=True)
-            raise
-        except:
-            print(f"Unknown exception!", flush=True)
-            raise
-
-        # Torch only ever uses the pure-python (xp) kernels, so putting it on a GPU is entirely a
-        # matter of where the tensors live. Ranks of a node are spread over the available devices
-        # the same way CudaDevice does it.
+        self.comm = comm
         self.torch = torch
+
+        # Putting the model on a GPU is entirely a matter of where the tensors live. Ranks of a node
+        # are spread over the available devices.
         if device_type == "cuda" and torch.cuda.is_available():
             node_comm, _ = split_nodes(comm)
             num_devices = torch.cuda.device_count()
@@ -327,46 +48,40 @@ class PytorchDevice(Device):
                 print("No GPU available for the Pytorch backend, falling back to the CPU", flush=True)
             self.torch_device = torch.device("cpu")
 
+        # Every tensor the code creates goes through torch's default device.
         torch.set_default_device(self.torch_device)
 
-        # Every tensor the code creates goes through torch's default device, including the ones made
-        # by the bare torch functions that TorchXp forwards to.
-        torch.set_default_device(self.torch_device)
-
-        # WxFactory only ever runs the model forward -- it never backpropagates. Put the whole
-        # process into inference mode as soon as the Pytorch backend is up: no autograd graph is
-        # built and no version-counter / view tracking is done, which saves the per-op autograd
-        # bookkeeping and guarantees nothing accidentally starts recording a graph. Entering it
-        # globally (and holding the guard for the process's lifetime) covers construction, stepping
-        # and output uniformly, avoiding the pitfalls of mixing inference and normal tensors across
-        # an inside/outside-inference-mode boundary.
-        if not torch.is_inference_mode_enabled():
+        # WxFactory only runs the model forward, so by default we enter inference mode process-wide:
+        # no autograd graph is built and no version-counter / view tracking is done, which saves the
+        # per-op autograd bookkeeping. Set WX_FACTORY_DIFFERENTIABLE=1 to keep autograd on (e.g. to
+        # backpropagate through the model).
+        if not _differentiable_requested() and not torch.is_inference_mode_enabled():
             self._inference_mode_guard = torch.inference_mode()
             self._inference_mode_guard.__enter__()
+
+        # Floating-point precision of the whole computation. Defaults to double; the Simulation
+        # overrides these from the `precision` configuration option. Single precision halves the
+        # memory footprint (and the bandwidth), which is what lets the finer resolutions fit on a GPU.
+        self.real_dtype = torch.float64
+        self.complex_dtype = torch.complex128
 
         if comm.rank == 0:
             print(f"Pytorch backend running on {self.torch_device} (on rank {comm.rank})", flush=True)
 
-        super().__init__(comm, TorchXp(), TorchAlg(), pde, operators)
-
     def synchronize(self, **kwargs):
         """Wait for the queued GPU work. A no-op when the tensors are already on the host."""
         if self.torch_device.type == "cuda":
-            self.torch.cuda.synchronize(self.torch_device)
+            torch.cuda.synchronize(self.torch_device)
 
-    def array(self, a: NDArray, *args, **kwargs) -> NDArray:
-        """Copy given array to torch."""
-        return self.xp.asarray(a)
+    def array(self, a: Any) -> torch.Tensor:
+        """Bring an array-like onto this device as a tensor."""
+        return torch.asarray(a)
 
-    def pinned(self, *args, **kwargs) -> NDArray:
-        """Return allocated space, without any special characteristic."""
-        return self.xp.empty(*args, **kwargs)
-
-    def to_host(self, val, **kwargs):
-        """Return the input array unchanged."""
+    def to_host(self, val: torch.Tensor, **kwargs) -> Any:
+        """Copy a tensor back to the host as a NumPy array."""
         return val.cpu().numpy().copy()
 
-    def timestamp(self, **kwargs):
+    def timestamp(self, **kwargs) -> float:
         return time()
 
     def elapsed(self, timestamps):
@@ -374,11 +89,12 @@ class PytorchDevice(Device):
         intervals.append(timestamps[-1] - timestamps[0])
         return intervals
 
-    def __mem_usage__(self, tag):
-        pass
-
     @staticmethod
     def get_default() -> Self:
-        if PytorchDevice._default is None:
-            PytorchDevice._default = PytorchDevice(MPI.COMM_WORLD)
-        return PytorchDevice._default
+        if Device._default is None:
+            Device._default = Device(MPI.COMM_WORLD)
+        return Device._default
+
+
+# Historical name; there is only one device type now.
+PytorchDevice = Device

@@ -1,3 +1,4 @@
+import torch
 import numpy
 from numpy.typing import NDArray
 import xarray as xr
@@ -86,8 +87,6 @@ def initialize_euler(geom: CubedSphere3D, metric: Metric3DTopo, mtrx: DFROperato
     # DCMIP_2016: https://www.earthsystemcog.org/projects/dcmip-2016/         |
     # -------------------------------------------------------------------------|
 
-    xp = geom.device.xp
-
     num_equations = 5
 
     if param.case_number == 11:
@@ -116,7 +115,7 @@ def initialize_euler(geom: CubedSphere3D, metric: Metric3DTopo, mtrx: DFROperato
     else:
         raise ValueError(f"Unknown case number {param.case_number}")
 
-    Q = xp.zeros((num_equations,) + rho.shape, dtype=rho.dtype)
+    Q = torch.zeros((num_equations,) + rho.shape, dtype=rho.dtype)
 
     Q[idx_rho, ...] = rho
     Q[idx_rho_u1, ...] = rho * u1_contra
@@ -158,8 +157,7 @@ def extract_available_levels(ds):
 
 def initialize_sw(geom: CubedSphere2D, metric: Metric2D, mtrx: DFROperators, param: Configuration):
 
-    xp = geom.device.xp
-    dtype = xp.float64
+    dtype = torch.float64
     dataset = None
 
     # ni, nj = geom.lon.shape
@@ -170,11 +168,11 @@ def initialize_sw(geom: CubedSphere2D, metric: Metric2D, mtrx: DFROperators, par
     itf_j_shape = geom.lon_itf_j.shape
     Q_shape = (num_equations,)
 
-    hsurf = xp.zeros(base_shape, dtype=dtype)
-    dzdx1 = xp.zeros(base_shape, dtype=dtype)
-    dzdx2 = xp.zeros(base_shape, dtype=dtype)
-    hsurf_itf_i = xp.zeros(itf_i_shape, dtype=dtype)
-    hsurf_itf_j = xp.zeros(itf_j_shape, dtype=dtype)
+    hsurf = torch.zeros(base_shape, dtype=dtype)
+    dzdx1 = torch.zeros(base_shape, dtype=dtype)
+    dzdx2 = torch.zeros(base_shape, dtype=dtype)
+    hsurf_itf_i = torch.zeros(itf_i_shape, dtype=dtype)
+    hsurf_itf_j = torch.zeros(itf_j_shape, dtype=dtype)
 
     # --- Shallow water
     #   0 : deformation flow (passive advection only)
@@ -241,7 +239,7 @@ def initialize_sw(geom: CubedSphere2D, metric: Metric2D, mtrx: DFROperators, par
     else:
         raise ValueError(f"Unknown case number {param.case_number} for Shallow Water equations")
 
-    Q = xp.zeros(Q_shape + base_shape, dtype=dtype)
+    Q = torch.zeros(Q_shape + base_shape, dtype=dtype)
     Q[idx_h, ...] = fluid_height
 
     if param.case_number in [0, 1]:
@@ -267,12 +265,11 @@ def initialize_cartesian3d(geom, param: Configuration) -> NDArray[numpy.float64]
     perturbation, base stratification and background wind are reused verbatim -- only the coordinates
     are the flat slab's physical X1 (x) / X3 (z), and the state carries the 5th (y-momentum) variable.
     """
-    xp = geom.device.xp
     x1, x3 = geom.X1, geom.X3  # physical x and z, (ne3, ne2, ne1, ns**3)
 
-    uu = xp.zeros_like(x1)
-    ww = xp.zeros_like(x1)
-    θ = xp.ones_like(x1)
+    uu = torch.zeros_like(x1)
+    ww = torch.zeros_like(x1)
+    θ = torch.ones_like(x1)
     if param.case_number != 0:
         θ *= param.bubble_theta
 
@@ -284,36 +281,36 @@ def initialize_cartesian3d(geom, param: Configuration) -> NDArray[numpy.float64]
         # Pill
         xc, zc, pert = 500.0, 260.0, 0.5
         r = (x1 - xc) ** 2 + (x3 - zc) ** 2
-        θ = xp.where(r < param.bubble_rad**2, θ + pert, θ)
+        θ = torch.where(r < param.bubble_rad**2, θ + pert, θ)
     elif param.case_number == 2:
         # Gaussian bubble
         A, a, s, x0, z0 = 0.5, 50, 100, 500, 260
-        r = xp.sqrt((x1 - x0) ** 2 + (x3 - z0) ** 2)
-        θ = xp.where(r <= a, θ + A, θ + A * xp.exp(-(((r - a) / s) ** 2)))
+        r = torch.sqrt((x1 - x0) ** 2 + (x3 - z0) ** 2)
+        θ = torch.where(r <= a, θ + A, θ + A * torch.exp(-(((r - a) / s) ** 2)))
     elif param.case_number == 3:
         # Colliding bubbles: warm then cold
         for A, a, s, x0, z0 in ((0.5, 150, 50, 500, 300), (-0.15, 0, 50, 560, 640)):
-            r = xp.sqrt((x1 - x0) ** 2 + (x3 - z0) ** 2)
-            θ = xp.where(r <= a, θ + A, θ + A * xp.exp(-(((r - a) / s) ** 2)))
+            r = torch.sqrt((x1 - x0) ** 2 + (x3 - z0) ** 2)
+            θ = torch.where(r <= a, θ + A, θ + A * torch.exp(-(((r - a) / s) ** 2)))
     elif param.case_number == 4:
         # Density current (cold anomaly)
         xc, zc, xr, zr = 0.0, 3000.0, 4000.0, 2000.0
-        r = xp.sqrt(((x1 - xc) / xr) ** 2 + ((x3 - zc) / zr) ** 2)
-        θ = θ + xp.where(r <= 1.0, -15.0 * (1.0 + xp.cos(xp.pi * r)) / 2.0, 0.0)
+        r = torch.sqrt(((x1 - xc) / xr) ** 2 + ((x3 - zc) / zr) ** 2)
+        θ = θ + torch.where(r <= 1.0, -15.0 * (1.0 + torch.cos(torch.pi * r)) / 2.0, 0.0)
 
     if param.case_number == 0:
         N_star, t0 = 0.01, 288.0
         a00 = N_star**2 / gravity
         capc1 = gravity**2 / (N_star**2 * cpd * t0)
-        exner = 1.0 - capc1 * (1.0 - xp.exp(-a00 * x3))
-        θ = t0 * xp.exp(a00 * x3)
+        exner = 1.0 - capc1 * (1.0 - torch.exp(-a00 * x3))
+        θ = t0 * torch.exp(a00 * x3)
         uu = uu + 10.0
     else:
         exner = 1.0 - gravity / (cpd * θ) * x3
 
     ρ = p0 / (Rd * θ) * exner ** (cvd / Rd)
 
-    Q = xp.zeros((5,) + geom.grid_shape_3d_new, dtype=x1.dtype)
+    Q = torch.zeros((5,) + geom.grid_shape_3d_new, dtype=x1.dtype)
     Q[idx_rho] = ρ
     Q[idx_rho_u1] = ρ * uu
     Q[idx_rho_u2] = 0.0  # y-invariant extrusion

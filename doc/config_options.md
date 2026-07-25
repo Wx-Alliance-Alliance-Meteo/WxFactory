@@ -7,8 +7,7 @@
    | depth_approx          | lc-str  | deep    | {deep, shallow}                  |   | 
 | | | | | |
  | **[System]**          | **Type**  | **Default**  | **Valid range**           | **Description**  | 
-   | desired_device        | lc-str  | cpp     | {cpp, cuda, cupy, numpy, omp}    | Physical backend to run the computation on  | 
-   | cuda_devices          | int   | []        |                                  | List of Nvidia physical device to use  | 
+   | pytorch_device        | lc-str  | cuda    | {cuda, cpu}                      | Where the computation puts its tensors. Falls back to the CPU if no GPU is available  | 
 | | | | | |
  | **[Test_case]**       | **Type**  | **Default**  | **Valid range**           | **Description**  | 
    | case_number           | int   | -1        |                                  |   | 

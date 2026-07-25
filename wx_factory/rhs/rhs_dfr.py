@@ -1,3 +1,4 @@
+import torch
 import numpy
 from numpy.typing import NDArray
 
@@ -16,21 +17,17 @@ class RHSDirecFluxReconstruction(RHS):
 
     def allocate_arrays(self, q: NDArray) -> None:
         super().allocate_arrays(q)
-        xp = self.device.xp
-
         if self.q_itf_x1 is None or self.q_itf_x1.dtype != q.dtype:
             itf_shape = q.shape[:4] + (2 * self.geom.num_solpts**2,)
-            self.q_itf_x1 = xp.empty(itf_shape, dtype=q.dtype)
-            self.q_itf_x2 = xp.empty_like(self.q_itf_x1)
-            self.q_itf_x3 = xp.empty_like(self.q_itf_x1)
+            self.q_itf_x1 = torch.empty(itf_shape, dtype=q.dtype)
+            self.q_itf_x2 = torch.empty_like(self.q_itf_x1)
+            self.q_itf_x3 = torch.empty_like(self.q_itf_x1)
 
     def solution_extrapolation(self, q: NDArray) -> None:
         # Extrapolate the solution to element boundaries
-        xp = self.device.xp
-
-        op_extrap_x = self.ops.extrap_x if not xp.iscomplexobj(q) else self.ops.extrap_x_complex
-        op_extrap_z = self.ops.extrap_z if not xp.iscomplexobj(q) else self.ops.extrap_z_complex
-        op_extrap_y = self.ops.extrap_y if not xp.iscomplexobj(q) else self.ops.extrap_y_complex
+        op_extrap_x = self.ops.extrap_x if not torch.is_complex(q) else self.ops.extrap_x_complex
+        op_extrap_z = self.ops.extrap_z if not torch.is_complex(q) else self.ops.extrap_z_complex
+        op_extrap_y = self.ops.extrap_y if not torch.is_complex(q) else self.ops.extrap_y_complex
 
         self.q_itf_x1 = apply_op(q, op_extrap_x)
         self.q_itf_x3 = apply_op(q, op_extrap_z)
@@ -41,23 +38,19 @@ class RHSDirecFluxReconstruction(RHS):
         self.pde.pointwise_fluxes(q, self.f_x1, self.f_x2, self.f_x3)
 
     def flux_divergence_partial(self) -> NDArray:
-        xp = self.device.xp
-
         # Compute derivatives, with correction from boundaries
-        op_dx = self.ops.derivative_x if not xp.iscomplexobj(self.f_x1) else self.ops.derivative_x_complex
-        op_dz = self.ops.derivative_z if not xp.iscomplexobj(self.f_x3) else self.ops.derivative_z_complex
+        op_dx = self.ops.derivative_x if not torch.is_complex(self.f_x1) else self.ops.derivative_x_complex
+        op_dz = self.ops.derivative_z if not torch.is_complex(self.f_x3) else self.ops.derivative_z_complex
 
         self.df1_dx1 = apply_op(self.f_x1, op_dx)
         self.df3_dx3 = apply_op(self.f_x3, op_dz)
 
     def flux_divergence(self):
-        xp = self.device.xp
-
         op_correction_WE = (
-            self.ops.correction_WE if not xp.iscomplexobj(self.f_itf_x1) else self.ops.correction_WE_complex
+            self.ops.correction_WE if not torch.is_complex(self.f_itf_x1) else self.ops.correction_WE_complex
         )
         op_correction_DU = (
-            self.ops.correction_DU if not xp.iscomplexobj(self.f_itf_x3) else self.ops.correction_DU_complex
+            self.ops.correction_DU if not torch.is_complex(self.f_itf_x3) else self.ops.correction_DU_complex
         )
 
         self.df1_dx1 += apply_op(self.f_itf_x1, op_correction_WE)
@@ -66,7 +59,7 @@ class RHSDirecFluxReconstruction(RHS):
         self.df3_dx3 += apply_op(self.f_itf_x3, op_correction_DU)
         self.df3_dx3 *= -2.0 / self.geom.Δx3
 
-        xp.add(self.df1_dx1, self.df3_dx3, out=self.rhs)
+        torch.add(self.df1_dx1, self.df3_dx3, out=self.rhs)
 
 
 class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
@@ -95,14 +88,11 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
             expected_shape,
             debug,
         )
-        self.extrap_3d = self.extrap_3d_code
-        if config.desired_device in ["numpy", "cupy", "torch"]:
-            self.extrap_3d = self.extrap_3d_py
+        self.extrap_3d = self.extrap_3d_py
 
     def allocate_arrays(self, q):
         super().allocate_arrays(q)
 
-        xp = self.device.xp
         dtype = self.q_itf_x1.dtype
 
         itf_i_shape = (self.num_var,) + self.geom.itf_i_shape
@@ -110,92 +100,81 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
         itf_k_shape = (self.num_var,) + self.geom.itf_k_shape
 
         if self.f_itf_x1 is None or self.f_itf_x1.dtype != dtype:
-            self.pressure = xp.zeros_like(q[0])
-            self.log_p = xp.zeros_like(q[0])
+            self.pressure = torch.zeros_like(q[0])
+            self.log_p = torch.zeros_like(q[0])
 
-            self.wflux_adv_x1 = xp.zeros_like(q[0])
-            self.wflux_pres_x1 = xp.zeros_like(q[0])
-            self.wflux_adv_x2 = xp.zeros_like(q[0])
-            self.wflux_pres_x2 = xp.zeros_like(q[0])
-            self.wflux_adv_x3 = xp.zeros_like(q[0])
-            self.wflux_pres_x3 = xp.zeros_like(q[0])
+            self.wflux_adv_x1 = torch.zeros_like(q[0])
+            self.wflux_pres_x1 = torch.zeros_like(q[0])
+            self.wflux_adv_x2 = torch.zeros_like(q[0])
+            self.wflux_pres_x2 = torch.zeros_like(q[0])
+            self.wflux_adv_x3 = torch.zeros_like(q[0])
+            self.wflux_pres_x3 = torch.zeros_like(q[0])
 
-            self.w_df1_dx1 = xp.zeros_like(q[0])
-            self.w_df2_dx2 = xp.zeros_like(q[0])
-            self.w_df3_dx3 = xp.zeros_like(q[0])
+            self.w_df1_dx1 = torch.zeros_like(q[0])
+            self.w_df2_dx2 = torch.zeros_like(q[0])
+            self.w_df3_dx3 = torch.zeros_like(q[0])
 
-            self.forcing = xp.zeros_like(q)
+            self.forcing = torch.zeros_like(q)
 
-            self.f_itf_x1 = xp.zeros_like(self.q_itf_x1)
-            self.f_itf_x2 = xp.zeros_like(self.q_itf_x2)
-            self.f_itf_x3 = xp.zeros_like(self.q_itf_x3)
+            self.f_itf_x1 = torch.zeros_like(self.q_itf_x1)
+            self.f_itf_x2 = torch.zeros_like(self.q_itf_x2)
+            self.f_itf_x3 = torch.zeros_like(self.q_itf_x3)
 
-            self.pressure_itf_x1 = xp.zeros_like(self.f_itf_x1[0])
-            self.pressure_itf_x2 = xp.zeros_like(self.f_itf_x2[0])
-            self.pressure_itf_x3 = xp.zeros_like(self.f_itf_x3[0])
+            self.pressure_itf_x1 = torch.zeros_like(self.f_itf_x1[0])
+            self.pressure_itf_x2 = torch.zeros_like(self.f_itf_x2[0])
+            self.pressure_itf_x3 = torch.zeros_like(self.f_itf_x3[0])
 
-            self.wflux_adv_itf_x1 = xp.zeros_like(self.f_itf_x1[0])
-            self.wflux_pres_itf_x1 = xp.zeros_like(self.f_itf_x1[0])
-            self.wflux_adv_itf_x2 = xp.zeros_like(self.f_itf_x2[0])
-            self.wflux_pres_itf_x2 = xp.zeros_like(self.f_itf_x2[0])
-            self.wflux_adv_itf_x3 = xp.zeros_like(self.f_itf_x3[0])
-            self.wflux_pres_itf_x3 = xp.zeros_like(self.f_itf_x3[0])
+            self.wflux_adv_itf_x1 = torch.zeros_like(self.f_itf_x1[0])
+            self.wflux_pres_itf_x1 = torch.zeros_like(self.f_itf_x1[0])
+            self.wflux_adv_itf_x2 = torch.zeros_like(self.f_itf_x2[0])
+            self.wflux_pres_itf_x2 = torch.zeros_like(self.f_itf_x2[0])
+            self.wflux_adv_itf_x3 = torch.zeros_like(self.f_itf_x3[0])
+            self.wflux_pres_itf_x3 = torch.zeros_like(self.f_itf_x3[0])
 
             # Set to ones, because uninitialized values will be used in a log
             # TODO separate two interface sides so that we don't need to do these useless calculations
-            self.q_itf_full_x1 = xp.ones(itf_i_shape, dtype=dtype)
-            self.q_itf_full_x2 = xp.ones(itf_j_shape, dtype=dtype)
-            self.q_itf_full_x3 = xp.ones(itf_k_shape, dtype=dtype)
+            self.q_itf_full_x1 = torch.ones(itf_i_shape, dtype=dtype)
+            self.q_itf_full_x2 = torch.ones(itf_j_shape, dtype=dtype)
+            self.q_itf_full_x3 = torch.ones(itf_k_shape, dtype=dtype)
 
-            self.f_itf_full_x1 = xp.zeros_like(self.q_itf_full_x1)
-            self.f_itf_full_x2 = xp.zeros_like(self.q_itf_full_x2)
-            self.f_itf_full_x3 = xp.zeros_like(self.q_itf_full_x3)
+            self.f_itf_full_x1 = torch.zeros_like(self.q_itf_full_x1)
+            self.f_itf_full_x2 = torch.zeros_like(self.q_itf_full_x2)
+            self.f_itf_full_x3 = torch.zeros_like(self.q_itf_full_x3)
 
-            self.pressure_itf_full_x1 = xp.zeros_like(self.q_itf_full_x1[0])
-            self.pressure_itf_full_x2 = xp.zeros_like(self.q_itf_full_x2[0])
-            self.pressure_itf_full_x3 = xp.zeros_like(self.q_itf_full_x3[0])
+            self.pressure_itf_full_x1 = torch.zeros_like(self.q_itf_full_x1[0])
+            self.pressure_itf_full_x2 = torch.zeros_like(self.q_itf_full_x2[0])
+            self.pressure_itf_full_x3 = torch.zeros_like(self.q_itf_full_x3[0])
 
-            self.wflux_adv_itf_full_x1 = xp.zeros_like(self.q_itf_full_x1[0])
-            self.wflux_pres_itf_full_x1 = xp.zeros_like(self.q_itf_full_x1[0])
-            self.wflux_adv_itf_full_x2 = xp.zeros_like(self.q_itf_full_x2[0])
-            self.wflux_pres_itf_full_x2 = xp.zeros_like(self.q_itf_full_x2[0])
-            self.wflux_adv_itf_full_x3 = xp.zeros_like(self.q_itf_full_x3[0])
-            self.wflux_pres_itf_full_x3 = xp.zeros_like(self.q_itf_full_x3[0])
+            self.wflux_adv_itf_full_x1 = torch.zeros_like(self.q_itf_full_x1[0])
+            self.wflux_pres_itf_full_x1 = torch.zeros_like(self.q_itf_full_x1[0])
+            self.wflux_adv_itf_full_x2 = torch.zeros_like(self.q_itf_full_x2[0])
+            self.wflux_pres_itf_full_x2 = torch.zeros_like(self.q_itf_full_x2[0])
+            self.wflux_adv_itf_full_x3 = torch.zeros_like(self.q_itf_full_x3[0])
+            self.wflux_pres_itf_full_x3 = torch.zeros_like(self.q_itf_full_x3[0])
 
     def extrap_3d_py(self, q: NDArray, itf_x1: NDArray, itf_x2: NDArray, itf_x3: NDArray) -> None:
         itf_x1[...] = q @ self.ops.extrap_x
         itf_x2[...] = q @ self.ops.extrap_y
         itf_x3[...] = q @ self.ops.extrap_z
 
-    def extrap_3d_code(self, q: NDArray, itf_x1: NDArray, itf_x2: NDArray, itf_x3: NDArray) -> None:
-        self.device.operators.extrap_all_3d(
-            q,
-            itf_x1,
-            itf_x2,
-            itf_x3,
-            0,
-        )
-
     def solution_extrapolation(self, q: NDArray) -> None:
         # Extrapolate the solution to element boundaries
-        xp = self.device.xp
-
-        op_extrap_x = self.ops.extrap_x if not xp.iscomplexobj(q) else self.ops.extrap_x_complex
-        op_extrap_z = self.ops.extrap_z if not xp.iscomplexobj(q) else self.ops.extrap_z_complex
-        op_extrap_y = self.ops.extrap_y if not xp.iscomplexobj(q) else self.ops.extrap_y_complex
+        op_extrap_x = self.ops.extrap_x if not torch.is_complex(q) else self.ops.extrap_x_complex
+        op_extrap_z = self.ops.extrap_z if not torch.is_complex(q) else self.ops.extrap_z_complex
+        op_extrap_y = self.ops.extrap_y if not torch.is_complex(q) else self.ops.extrap_y_complex
 
         self.extrap_3d(q, self.q_itf_x1, self.q_itf_x2, self.q_itf_x3)
 
-        self.log_rho_p = xp.log(q[idx_rho])
-        self.log_rho_theta = xp.log(q[idx_rho_theta])
+        self.log_rho_p = torch.log(q[idx_rho])
+        self.log_rho_theta = torch.log(q[idx_rho_theta])
 
         # TODO clean this up (avoid overwriting previous computation)
-        self.q_itf_x1[idx_rho] = xp.exp(apply_op(self.log_rho_p, op_extrap_x))
-        self.q_itf_x1[idx_rho_theta] = xp.exp(apply_op(self.log_rho_theta, op_extrap_x))
-        self.q_itf_x2[idx_rho] = xp.exp(apply_op(self.log_rho_p, op_extrap_y))
-        self.q_itf_x2[idx_rho_theta] = xp.exp(apply_op(self.log_rho_theta, op_extrap_y))
-        self.q_itf_x3[idx_rho] = xp.exp(apply_op(self.log_rho_p, op_extrap_z))
-        self.q_itf_x3[idx_rho_theta] = xp.exp(apply_op(self.log_rho_theta, op_extrap_z))
+        self.q_itf_x1[idx_rho] = torch.exp(apply_op(self.log_rho_p, op_extrap_x))
+        self.q_itf_x1[idx_rho_theta] = torch.exp(apply_op(self.log_rho_theta, op_extrap_x))
+        self.q_itf_x2[idx_rho] = torch.exp(apply_op(self.log_rho_p, op_extrap_y))
+        self.q_itf_x2[idx_rho_theta] = torch.exp(apply_op(self.log_rho_theta, op_extrap_y))
+        self.q_itf_x3[idx_rho] = torch.exp(apply_op(self.log_rho_p, op_extrap_z))
+        self.q_itf_x3[idx_rho_theta] = torch.exp(apply_op(self.log_rho_theta, op_extrap_z))
 
     def pointwise_fluxes(self, q: NDArray) -> None:
         self.pde.pointwise_fluxes(
@@ -214,11 +193,9 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
         )
 
     def flux_divergence_partial(self):
-        xp = self.device.xp
-
-        op_dx = self.ops.derivative_x if not xp.iscomplexobj(self.f_x1) else self.ops.derivative_x_complex
-        op_dy = self.ops.derivative_y if not xp.iscomplexobj(self.f_x2) else self.ops.derivative_y_complex
-        op_dz = self.ops.derivative_z if not xp.iscomplexobj(self.f_x3) else self.ops.derivative_z_complex
+        op_dx = self.ops.derivative_x if not torch.is_complex(self.f_x1) else self.ops.derivative_x_complex
+        op_dy = self.ops.derivative_y if not torch.is_complex(self.f_x2) else self.ops.derivative_y_complex
+        op_dz = self.ops.derivative_z if not torch.is_complex(self.f_x3) else self.ops.derivative_z_complex
 
         self.df1_dx1 = apply_op(self.f_x1, op_dx)
         self.df2_dx2 = apply_op(self.f_x2, op_dy)
@@ -237,25 +214,23 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
         self.w_df3_dx3_presb = apply_op(self.log_p, op_dz)
 
     def flux_divergence(self):
-        xp = self.device.xp
-
         op_correction_WE = (
-            self.ops.correction_WE if not xp.iscomplexobj(self.f_itf_x1) else self.ops.correction_WE_complex
+            self.ops.correction_WE if not torch.is_complex(self.f_itf_x1) else self.ops.correction_WE_complex
         )
         op_correction_SN = (
-            self.ops.correction_SN if not xp.iscomplexobj(self.f_itf_x2) else self.ops.correction_SN_complex
+            self.ops.correction_SN if not torch.is_complex(self.f_itf_x2) else self.ops.correction_SN_complex
         )
         op_correction_DU = (
-            self.ops.correction_DU if not xp.iscomplexobj(self.f_itf_x3) else self.ops.correction_DU_complex
+            self.ops.correction_DU if not torch.is_complex(self.f_itf_x3) else self.ops.correction_DU_complex
         )
 
         self.df1_dx1 += apply_op(self.f_itf_x1, op_correction_WE)
         self.df2_dx2 += apply_op(self.f_itf_x2, op_correction_SN)
         self.df3_dx3 += apply_op(self.f_itf_x3, op_correction_DU)
 
-        logp_bdy_i = xp.log(self.pressure_itf_x1)
-        logp_bdy_j = xp.log(self.pressure_itf_x2)
-        logp_bdy_k = xp.log(self.pressure_itf_x3)
+        logp_bdy_i = torch.log(self.pressure_itf_x1)
+        logp_bdy_j = torch.log(self.pressure_itf_x2)
+        logp_bdy_k = torch.log(self.pressure_itf_x3)
 
         self.w_df1_dx1_adv += apply_op(self.wflux_adv_itf_x1, op_correction_WE)
         self.w_df1_dx1_presa += apply_op(self.wflux_pres_itf_x1, op_correction_WE)
@@ -395,14 +370,11 @@ class RHSDirecFluxReconstruction_mpi_v2(RHSDirecFluxReconstruction):
             expected_shape,
             debug,
         )
-        self.extrap_3d = self.extrap_3d_code
-        if config.desired_device in ["numpy", "cupy", "torch"]:
-            self.extrap_3d = self.extrap_3d_py
+        self.extrap_3d = self.extrap_3d_py
 
     def allocate_arrays(self, q):
         super().allocate_arrays(q)
 
-        xp = self.device.xp
         dtype = self.q_itf_x1.dtype
 
         itf_i_shape = (self.num_var,) + self.geom.itf_i_shape
@@ -410,92 +382,81 @@ class RHSDirecFluxReconstruction_mpi_v2(RHSDirecFluxReconstruction):
         itf_k_shape = (self.num_var,) + self.geom.itf_k_shape
 
         if self.f_itf_x1 is None or self.f_itf_x1.dtype != dtype:
-            self.pressure = xp.zeros_like(q[0])
-            self.log_p = xp.zeros_like(q[0])
+            self.pressure = torch.zeros_like(q[0])
+            self.log_p = torch.zeros_like(q[0])
 
-            self.wflux_adv_x1 = xp.zeros_like(q[0])
-            self.wflux_pres_x1 = xp.zeros_like(q[0])
-            self.wflux_adv_x2 = xp.zeros_like(q[0])
-            self.wflux_pres_x2 = xp.zeros_like(q[0])
-            self.wflux_adv_x3 = xp.zeros_like(q[0])
-            self.wflux_pres_x3 = xp.zeros_like(q[0])
+            self.wflux_adv_x1 = torch.zeros_like(q[0])
+            self.wflux_pres_x1 = torch.zeros_like(q[0])
+            self.wflux_adv_x2 = torch.zeros_like(q[0])
+            self.wflux_pres_x2 = torch.zeros_like(q[0])
+            self.wflux_adv_x3 = torch.zeros_like(q[0])
+            self.wflux_pres_x3 = torch.zeros_like(q[0])
 
-            self.w_df1_dx1 = xp.zeros_like(q[0])
-            self.w_df2_dx2 = xp.zeros_like(q[0])
-            self.w_df3_dx3 = xp.zeros_like(q[0])
+            self.w_df1_dx1 = torch.zeros_like(q[0])
+            self.w_df2_dx2 = torch.zeros_like(q[0])
+            self.w_df3_dx3 = torch.zeros_like(q[0])
 
-            self.forcing = xp.zeros_like(q)
+            self.forcing = torch.zeros_like(q)
 
-            self.f_itf_x1 = xp.zeros_like(self.q_itf_x1)
-            self.f_itf_x2 = xp.zeros_like(self.q_itf_x2)
-            self.f_itf_x3 = xp.zeros_like(self.q_itf_x3)
+            self.f_itf_x1 = torch.zeros_like(self.q_itf_x1)
+            self.f_itf_x2 = torch.zeros_like(self.q_itf_x2)
+            self.f_itf_x3 = torch.zeros_like(self.q_itf_x3)
 
-            self.pressure_itf_x1 = xp.zeros_like(self.f_itf_x1[0])
-            self.pressure_itf_x2 = xp.zeros_like(self.f_itf_x2[0])
-            self.pressure_itf_x3 = xp.zeros_like(self.f_itf_x3[0])
+            self.pressure_itf_x1 = torch.zeros_like(self.f_itf_x1[0])
+            self.pressure_itf_x2 = torch.zeros_like(self.f_itf_x2[0])
+            self.pressure_itf_x3 = torch.zeros_like(self.f_itf_x3[0])
 
-            self.wflux_adv_itf_x1 = xp.zeros_like(self.f_itf_x1[0])
-            self.wflux_pres_itf_x1 = xp.zeros_like(self.f_itf_x1[0])
-            self.wflux_adv_itf_x2 = xp.zeros_like(self.f_itf_x2[0])
-            self.wflux_pres_itf_x2 = xp.zeros_like(self.f_itf_x2[0])
-            self.wflux_adv_itf_x3 = xp.zeros_like(self.f_itf_x3[0])
-            self.wflux_pres_itf_x3 = xp.zeros_like(self.f_itf_x3[0])
+            self.wflux_adv_itf_x1 = torch.zeros_like(self.f_itf_x1[0])
+            self.wflux_pres_itf_x1 = torch.zeros_like(self.f_itf_x1[0])
+            self.wflux_adv_itf_x2 = torch.zeros_like(self.f_itf_x2[0])
+            self.wflux_pres_itf_x2 = torch.zeros_like(self.f_itf_x2[0])
+            self.wflux_adv_itf_x3 = torch.zeros_like(self.f_itf_x3[0])
+            self.wflux_pres_itf_x3 = torch.zeros_like(self.f_itf_x3[0])
 
             # Set to ones, because uninitialized values will be used in a log
             # TODO separate two interface sides so that we don't need to do these useless calculations
-            self.q_itf_full_x1 = xp.ones(itf_i_shape, dtype=dtype)
-            self.q_itf_full_x2 = xp.ones(itf_j_shape, dtype=dtype)
-            self.q_itf_full_x3 = xp.ones(itf_k_shape, dtype=dtype)
+            self.q_itf_full_x1 = torch.ones(itf_i_shape, dtype=dtype)
+            self.q_itf_full_x2 = torch.ones(itf_j_shape, dtype=dtype)
+            self.q_itf_full_x3 = torch.ones(itf_k_shape, dtype=dtype)
 
-            self.f_itf_full_x1 = xp.zeros_like(self.q_itf_full_x1)
-            self.f_itf_full_x2 = xp.zeros_like(self.q_itf_full_x2)
-            self.f_itf_full_x3 = xp.zeros_like(self.q_itf_full_x3)
+            self.f_itf_full_x1 = torch.zeros_like(self.q_itf_full_x1)
+            self.f_itf_full_x2 = torch.zeros_like(self.q_itf_full_x2)
+            self.f_itf_full_x3 = torch.zeros_like(self.q_itf_full_x3)
 
-            self.pressure_itf_full_x1 = xp.zeros_like(self.q_itf_full_x1[0])
-            self.pressure_itf_full_x2 = xp.zeros_like(self.q_itf_full_x2[0])
-            self.pressure_itf_full_x3 = xp.zeros_like(self.q_itf_full_x3[0])
+            self.pressure_itf_full_x1 = torch.zeros_like(self.q_itf_full_x1[0])
+            self.pressure_itf_full_x2 = torch.zeros_like(self.q_itf_full_x2[0])
+            self.pressure_itf_full_x3 = torch.zeros_like(self.q_itf_full_x3[0])
 
-            self.wflux_adv_itf_full_x1 = xp.zeros_like(self.q_itf_full_x1[0])
-            self.wflux_pres_itf_full_x1 = xp.zeros_like(self.q_itf_full_x1[0])
-            self.wflux_adv_itf_full_x2 = xp.zeros_like(self.q_itf_full_x2[0])
-            self.wflux_pres_itf_full_x2 = xp.zeros_like(self.q_itf_full_x2[0])
-            self.wflux_adv_itf_full_x3 = xp.zeros_like(self.q_itf_full_x3[0])
-            self.wflux_pres_itf_full_x3 = xp.zeros_like(self.q_itf_full_x3[0])
+            self.wflux_adv_itf_full_x1 = torch.zeros_like(self.q_itf_full_x1[0])
+            self.wflux_pres_itf_full_x1 = torch.zeros_like(self.q_itf_full_x1[0])
+            self.wflux_adv_itf_full_x2 = torch.zeros_like(self.q_itf_full_x2[0])
+            self.wflux_pres_itf_full_x2 = torch.zeros_like(self.q_itf_full_x2[0])
+            self.wflux_adv_itf_full_x3 = torch.zeros_like(self.q_itf_full_x3[0])
+            self.wflux_pres_itf_full_x3 = torch.zeros_like(self.q_itf_full_x3[0])
 
     def extrap_3d_py(self, q: NDArray, itf_x1: NDArray, itf_x2: NDArray, itf_x3: NDArray) -> None:
         itf_x1[...] = q @ self.ops.extrap_x
         itf_x2[...] = q @ self.ops.extrap_y
         itf_x3[...] = q @ self.ops.extrap_z
 
-    def extrap_3d_code(self, q: NDArray, itf_x1: NDArray, itf_x2: NDArray, itf_x3: NDArray) -> None:
-        self.device.operators.extrap_all_3d(
-            q,
-            itf_x1,
-            itf_x2,
-            itf_x3,
-            0,
-        )
-
     def solution_extrapolation(self, q: NDArray) -> None:
         # Extrapolate the solution to element boundaries
-        xp = self.device.xp
-
-        op_extrap_x = self.ops.extrap_x if not xp.iscomplexobj(q) else self.ops.extrap_x_complex
-        op_extrap_z = self.ops.extrap_z if not xp.iscomplexobj(q) else self.ops.extrap_z_complex
-        op_extrap_y = self.ops.extrap_y if not xp.iscomplexobj(q) else self.ops.extrap_y_complex
+        op_extrap_x = self.ops.extrap_x if not torch.is_complex(q) else self.ops.extrap_x_complex
+        op_extrap_z = self.ops.extrap_z if not torch.is_complex(q) else self.ops.extrap_z_complex
+        op_extrap_y = self.ops.extrap_y if not torch.is_complex(q) else self.ops.extrap_y_complex
 
         self.extrap_3d(q, self.q_itf_x1, self.q_itf_x2, self.q_itf_x3)
 
-        self.log_rho_p = xp.log(q[idx_rho])
-        self.log_rho_theta = xp.log(q[idx_rho_theta])
+        self.log_rho_p = torch.log(q[idx_rho])
+        self.log_rho_theta = torch.log(q[idx_rho_theta])
 
         # TODO clean this up (avoid overwriting previous computation)
-        self.q_itf_x1[idx_rho] = xp.exp(apply_op(self.log_rho_p, op_extrap_x))
-        self.q_itf_x1[idx_rho_theta] = xp.exp(apply_op(self.log_rho_theta, op_extrap_x))
-        self.q_itf_x2[idx_rho] = xp.exp(apply_op(self.log_rho_p, op_extrap_y))
-        self.q_itf_x2[idx_rho_theta] = xp.exp(apply_op(self.log_rho_theta, op_extrap_y))
-        self.q_itf_x3[idx_rho] = xp.exp(apply_op(self.log_rho_p, op_extrap_z))
-        self.q_itf_x3[idx_rho_theta] = xp.exp(apply_op(self.log_rho_theta, op_extrap_z))
+        self.q_itf_x1[idx_rho] = torch.exp(apply_op(self.log_rho_p, op_extrap_x))
+        self.q_itf_x1[idx_rho_theta] = torch.exp(apply_op(self.log_rho_theta, op_extrap_x))
+        self.q_itf_x2[idx_rho] = torch.exp(apply_op(self.log_rho_p, op_extrap_y))
+        self.q_itf_x2[idx_rho_theta] = torch.exp(apply_op(self.log_rho_theta, op_extrap_y))
+        self.q_itf_x3[idx_rho] = torch.exp(apply_op(self.log_rho_p, op_extrap_z))
+        self.q_itf_x3[idx_rho_theta] = torch.exp(apply_op(self.log_rho_theta, op_extrap_z))
 
     def pointwise_fluxes(self, q: NDArray) -> None:
         self.pde.pointwise_fluxes(
@@ -514,11 +475,9 @@ class RHSDirecFluxReconstruction_mpi_v2(RHSDirecFluxReconstruction):
         )
 
     def flux_divergence_partial(self):
-        xp = self.device.xp
-
-        op_dx = self.ops.derivative_x if not xp.iscomplexobj(self.f_x1) else self.ops.derivative_x_complex
-        op_dy = self.ops.derivative_y if not xp.iscomplexobj(self.f_x2) else self.ops.derivative_y_complex
-        op_dz = self.ops.derivative_z if not xp.iscomplexobj(self.f_x3) else self.ops.derivative_z_complex
+        op_dx = self.ops.derivative_x if not torch.is_complex(self.f_x1) else self.ops.derivative_x_complex
+        op_dy = self.ops.derivative_y if not torch.is_complex(self.f_x2) else self.ops.derivative_y_complex
+        op_dz = self.ops.derivative_z if not torch.is_complex(self.f_x3) else self.ops.derivative_z_complex
 
         # Accumulate uncorrected derivatives into self.rhs directly
         apply_op(self.f_x1, op_dx, out=self.rhs, beta=0.0)
@@ -541,16 +500,14 @@ class RHSDirecFluxReconstruction_mpi_v2(RHSDirecFluxReconstruction):
         self.w_df3_dx3_presb = apply_op(self.log_p, op_dz)
 
     def flux_divergence(self):
-        xp = self.device.xp
-
         op_correction_WE = (
-            self.ops.correction_WE if not xp.iscomplexobj(self.f_itf_x1) else self.ops.correction_WE_complex
+            self.ops.correction_WE if not torch.is_complex(self.f_itf_x1) else self.ops.correction_WE_complex
         )
         op_correction_SN = (
-            self.ops.correction_SN if not xp.iscomplexobj(self.f_itf_x2) else self.ops.correction_SN_complex
+            self.ops.correction_SN if not torch.is_complex(self.f_itf_x2) else self.ops.correction_SN_complex
         )
         op_correction_DU = (
-            self.ops.correction_DU if not xp.iscomplexobj(self.f_itf_x3) else self.ops.correction_DU_complex
+            self.ops.correction_DU if not torch.is_complex(self.f_itf_x3) else self.ops.correction_DU_complex
         )
 
         # Accumulate correction terms into self.rhs
@@ -558,9 +515,9 @@ class RHSDirecFluxReconstruction_mpi_v2(RHSDirecFluxReconstruction):
         apply_op(self.f_itf_x2, op_correction_SN, out=self.rhs, beta=1.0)
         apply_op(self.f_itf_x3, op_correction_DU, out=self.rhs, beta=1.0)
 
-        logp_bdy_i = xp.log(self.pressure_itf_x1)
-        logp_bdy_j = xp.log(self.pressure_itf_x2)
-        logp_bdy_k = xp.log(self.pressure_itf_x3)
+        logp_bdy_i = torch.log(self.pressure_itf_x1)
+        logp_bdy_j = torch.log(self.pressure_itf_x2)
+        logp_bdy_k = torch.log(self.pressure_itf_x3)
 
         # Accumulate correction for advective terms into common self.w_df1_dx1 variable
         # Accumulate correction for pressure A terms into common self.w_presa variable
@@ -687,9 +644,8 @@ class RHSDirecFluxReconstruction_mpi_v2(RHSDirecFluxReconstruction):
         f2. The vertical operator couples only within a column, so no horizontal halo exchange is
         needed; the horizontal interface traces are filled locally purely so the shared Riemann
         routine runs (its x1/x2 outputs are discarded)."""
-        xp = self.device.xp
         given_shape = q.shape
-        self.ops = self.ops_complex if xp.iscomplexobj(q) else self.ops_real
+        self.ops = self.ops_complex if torch.is_complex(q) else self.ops_real
         self.allocate_arrays(q)
 
         # 1. Extrapolate to element boundaries (vertical traces are the ones we use).
@@ -708,14 +664,14 @@ class RHSDirecFluxReconstruction_mpi_v2(RHSDirecFluxReconstruction):
         self.pointwise_fluxes(q)
 
         # 3. Interior vertical derivative d3(sqrtG F3) for all five rows (rho_w overwritten below).
-        op_dz = self.ops.derivative_z if not xp.iscomplexobj(self.f_x3) else self.ops.derivative_z_complex
+        op_dz = self.ops.derivative_z if not torch.is_complex(self.f_x3) else self.ops.derivative_z_complex
         apply_op(self.f_x3, op_dz, out=self.rhs, beta=0.0)
 
         # 4. Vertical Rusanov interface fluxes (fills f_itf_x3, wflux_adv/pres_itf_x3, pressure_itf_x3).
         self.riemann_fluxes()
 
         # 5. Boundary correction for the four plain rows.
-        op_corr = self.ops.correction_DU if not xp.iscomplexobj(self.f_itf_x3) else self.ops.correction_DU_complex
+        op_corr = self.ops.correction_DU if not torch.is_complex(self.f_itf_x3) else self.ops.correction_DU_complex
         apply_op(self.f_itf_x3, op_corr, out=self.rhs, beta=1.0)
 
         # 5b. Well-balanced rho_w row (x3 only), mirroring the vertical part of ``full``:
@@ -726,7 +682,7 @@ class RHSDirecFluxReconstruction_mpi_v2(RHSDirecFluxReconstruction):
         w_presa = apply_op(self.wflux_pres_x3, op_dz)
         apply_op(self.wflux_pres_itf_x3, op_corr, out=w_presa, beta=1.0)
 
-        logp_bdy_k = xp.log(self.pressure_itf_x3)
+        logp_bdy_k = torch.log(self.pressure_itf_x3)
         w_presb = apply_op(self.log_p, op_dz)
         apply_op(logp_bdy_k, op_corr, out=w_presb, beta=1.0)
         w_presb *= self.wflux_pres_x3
@@ -756,16 +712,15 @@ class RHSDirecFluxReconstruction_mpi_v2(RHSDirecFluxReconstruction):
         Here the horizontal (x1, x2) flux divergences, the well-balanced rho_w horizontal terms and
         the Christoffel/Coriolis/Rayleigh forcing are accumulated directly; gravity is removed since
         it belongs to f1, so f1 + f2 = full exactly."""
-        xp = self.device.xp
         given_shape = q.shape
-        self.ops = self.ops_complex if xp.iscomplexobj(q) else self.ops_real
+        self.ops = self.ops_complex if torch.is_complex(q) else self.ops_real
         self.allocate_arrays(q)
 
         self.solution_extrapolation(q)
         self.start_communication()
         self.pointwise_fluxes(q)
 
-        cplx = xp.iscomplexobj(self.f_x1)
+        cplx = torch.is_complex(self.f_x1)
         op_dx = self.ops.derivative_x if not cplx else self.ops.derivative_x_complex
         op_dy = self.ops.derivative_y if not cplx else self.ops.derivative_y_complex
 
@@ -793,8 +748,8 @@ class RHSDirecFluxReconstruction_mpi_v2(RHSDirecFluxReconstruction):
         apply_op(self.wflux_pres_itf_x1, op_corr_WE, out=self.w_presa, beta=1.0)
         apply_op(self.wflux_pres_itf_x2, op_corr_SN, out=self.w_presa, beta=1.0)
 
-        logp_bdy_i = xp.log(self.pressure_itf_x1)
-        logp_bdy_j = xp.log(self.pressure_itf_x2)
+        logp_bdy_i = torch.log(self.pressure_itf_x1)
+        logp_bdy_j = torch.log(self.pressure_itf_x2)
         apply_op(logp_bdy_i, op_corr_WE, out=self.w_df1_dx1_presb, beta=1.0)
         self.w_df1_dx1_presb *= self.wflux_pres_x1
         apply_op(logp_bdy_j, op_corr_SN, out=self.w_df2_dx2_presb, beta=1.0)
@@ -824,16 +779,15 @@ class RHSDirecFluxReconstruction_mpi_v2(RHSDirecFluxReconstruction):
         cheap and exact -- and a non-stiff remainder (well-balanced rho_w correction + forcing) that
         PartRosExp2 differentiates by finite differences. Populates the horizontal traces / exchanged
         neighbours / pressure that the analytic Jacobian reuses."""
-        xp = self.device.xp
         given_shape = q.shape
-        self.ops = self.ops_complex if xp.iscomplexobj(q) else self.ops_real
+        self.ops = self.ops_complex if torch.is_complex(q) else self.ops_real
         self.allocate_arrays(q)
 
         self.solution_extrapolation(q)
         self.start_communication()
         self.pointwise_fluxes(q)
 
-        cplx = xp.iscomplexobj(self.f_x1)
+        cplx = torch.is_complex(self.f_x1)
         op_dx = self.ops.derivative_x if not cplx else self.ops.derivative_x_complex
         op_dy = self.ops.derivative_y if not cplx else self.ops.derivative_y_complex
         apply_op(self.f_x1, op_dx, out=self.rhs, beta=0.0)
@@ -854,9 +808,8 @@ class RHSDirecFluxReconstruction_mpi_v2(RHSDirecFluxReconstruction):
         non-stiff remainder of f2 that PartRosExp2 differentiates by finite differences (the stiff
         flux divergence has an analytic Jacobian). Sign matches ``rhs -= forcing`` with gravity added
         back (gravity is in f1)."""
-        xp = self.device.xp
         given_shape = q.shape
-        self.ops = self.ops_complex if xp.iscomplexobj(q) else self.ops_real
+        self.ops = self.ops_complex if torch.is_complex(q) else self.ops_real
         self.allocate_arrays(q)
         self.pointwise_fluxes(q)  # sets self.pressure
         self.rhs[...] = 0.0

@@ -1,3 +1,4 @@
+import torch
 import unittest
 import sys
 from typing import Tuple
@@ -6,7 +7,7 @@ import numpy
 from numpy.typing import NDArray
 from mpi4py import MPI
 
-from wx_factory.device import Device, CpuDevice, CudaDevice, PytorchDevice
+from wx_factory.device import Device
 from wx_factory.process_topology import ProcessTopology, SOUTH, NORTH, WEST, EAST
 from wx_factory.wx_mpi import SingleProcess, Conditional
 
@@ -14,8 +15,6 @@ from tests.unit.mpi_test import run_test_on_x_process, MpiTestCase
 
 
 def gen_data_1(num_processes: int, num_data_hori_per_proc: int, device: Device) -> NDArray:
-    xp = device.xp
-
     range_per_proc = 2.0 / num_processes
     range_per_side = range_per_proc / 4
     range_per_elem = range_per_side / num_data_hori_per_proc * (1.0 + 1e-14)
@@ -28,7 +27,7 @@ def gen_data_1(num_processes: int, num_data_hori_per_proc: int, device: Device) 
         return numpy.arange(start, stop, range_per_elem)
 
     data = numpy.array([[make_range(proc, side) for side in range(4)] for proc in range(num_processes)])
-    return xp.array(data)
+    return torch.tensor(data)
 
 
 class ExchangeTest(MpiTestCase):
@@ -58,7 +57,7 @@ class ExchangeTest(MpiTestCase):
         self.NUM_DATA_HORI = 12
 
         self.all_data = gen_data_1(self.size, self.NUM_DATA_HORI, self.device)
-        self.coord = self.device.xp.arange(-1.0 + 1.0 / self.NUM_DATA_HORI, 1.0, 2.0 / self.NUM_DATA_HORI)
+        self.coord = torch.arange(-1.0 + 1.0 / self.NUM_DATA_HORI, 1.0, 2.0 / self.NUM_DATA_HORI)
         # if self.rank == 0:
         #     print(f'coord = {self.coord}')
 
@@ -77,14 +76,11 @@ class ExchangeTest(MpiTestCase):
 
         self.data = self.all_data[self.rank]
         self.neighbor_data = [self.all_data[x] for x in self.to_neighbor]
-        self.xp = self.device.xp
-
     def vector2d_1d_shape1d(self):
-        xp = self.xp
-        south = (self.data[SOUTH], xp.flip(self.data[SOUTH], (-1,)))
-        north = (self.data[NORTH], xp.flip(self.data[NORTH], (-1,)))
-        west = (self.data[WEST], xp.flip(self.data[WEST], (-1,)))
-        east = (self.data[EAST], xp.flip(self.data[EAST], (-1,)))
+        south = (self.data[SOUTH], torch.flip(self.data[SOUTH], (-1,)))
+        north = (self.data[NORTH], torch.flip(self.data[NORTH], (-1,)))
+        west = (self.data[WEST], torch.flip(self.data[WEST], (-1,)))
+        east = (self.data[EAST], torch.flip(self.data[EAST], (-1,)))
         request = self.topo.start_exchange_vectors(south, north, west, east, self.coord, self.coord)
         (s1, s2), (n1, n2), (w1, w2), (e1, e2) = request.wait(timeout=1.0)
         result = [(s1, s2), (n1, n2), (w1, w2), (e1, e2)]
@@ -93,14 +89,14 @@ class ExchangeTest(MpiTestCase):
 
         for dir in [SOUTH, NORTH, WEST, EAST]:
             other0 = self.neighbor_data[dir][self.from_neighbor[dir]]
-            other1 = xp.flip(other0, (-1,))
+            other1 = torch.flip(other0, (-1,))
             r0_other, r1_other = self.neighbor_topo[dir].convert_contra[self.from_neighbor[dir]](
                 other0, other1, self.coord
             )
             if self.neighbor_topo[dir].flip[self.from_neighbor[dir]]:
-                r0_other = xp.flip(r0_other, (-1,))
-                r1_other = xp.flip(r1_other, (-1,))
-            diff_s = xp.linalg.norm(result[dir][0] - r0_other + result[dir][1] - r1_other)
+                r0_other = torch.flip(r0_other, (-1,))
+                r1_other = torch.flip(r1_other, (-1,))
+            diff_s = torch.linalg.norm(result[dir][0] - r0_other + result[dir][1] - r1_other)
             self.assertLess(
                 diff_s,
                 1e-15,
@@ -112,12 +108,11 @@ class ExchangeTest(MpiTestCase):
             )
 
     def vector2d_1d_shape2d(self):
-        xp = self.xp
         new_shape = (6, 2)
-        south = (self.data[SOUTH].reshape(new_shape), xp.flip(self.data[SOUTH], (-1,)).reshape(new_shape))
-        north = (self.data[NORTH].reshape(new_shape), xp.flip(self.data[NORTH], (-1,)).reshape(new_shape))
-        west = (self.data[WEST].reshape(new_shape), xp.flip(self.data[WEST], (-1,)).reshape(new_shape))
-        east = (self.data[EAST].reshape(new_shape), xp.flip(self.data[EAST], (-1,)).reshape(new_shape))
+        south = (self.data[SOUTH].reshape(new_shape), torch.flip(self.data[SOUTH], (-1,)).reshape(new_shape))
+        north = (self.data[NORTH].reshape(new_shape), torch.flip(self.data[NORTH], (-1,)).reshape(new_shape))
+        west = (self.data[WEST].reshape(new_shape), torch.flip(self.data[WEST], (-1,)).reshape(new_shape))
+        east = (self.data[EAST].reshape(new_shape), torch.flip(self.data[EAST], (-1,)).reshape(new_shape))
         request = self.topo.start_exchange_vectors(south, north, west, east, self.coord, self.coord)
         (s1, s2), (n1, n2), (w1, w2), (e1, e2) = request.wait(timeout=1.0)
         result = [(s1, s2), (n1, n2), (w1, w2), (e1, e2)]
@@ -126,18 +121,18 @@ class ExchangeTest(MpiTestCase):
 
         for dir in [SOUTH, NORTH, WEST, EAST]:
             other0 = self.neighbor_data[dir][self.from_neighbor[dir]]
-            other1 = xp.flip(other0, (-1,))
+            other1 = torch.flip(other0, (-1,))
             r0_other, r1_other = self.neighbor_topo[dir].convert_contra[self.from_neighbor[dir]](
                 other0, other1, self.coord
             )
             if self.neighbor_topo[dir].flip[self.from_neighbor[dir]]:
-                r0_other = xp.flip(r0_other, (-1,))
-                r1_other = xp.flip(r1_other, (-1,))
+                r0_other = torch.flip(r0_other, (-1,))
+                r1_other = torch.flip(r1_other, (-1,))
 
             r0_other = r0_other.reshape(new_shape)
             r1_other = r1_other.reshape(new_shape)
 
-            diff_s = xp.linalg.norm(result[dir][0] - r0_other + result[dir][1] - r1_other)
+            diff_s = torch.linalg.norm(result[dir][0] - r0_other + result[dir][1] - r1_other)
             self.assertLess(
                 diff_s,
                 1e-15,
@@ -151,10 +146,8 @@ class ExchangeTest(MpiTestCase):
             )
 
     def vector2d_2d_shape1d(self):
-        xp = self.xp
-
         def make_data(d):
-            return (xp.stack([d, d + 1.0]), xp.stack([xp.flip(d, (-1,)), xp.flip(d, (-1,)) + 1.0]))
+            return (torch.stack([d, d + 1.0]), torch.stack([torch.flip(d, (-1,)), torch.flip(d, (-1,)) + 1.0]))
 
         south = make_data(self.data[SOUTH])
         north = make_data(self.data[NORTH])
@@ -173,10 +166,10 @@ class ExchangeTest(MpiTestCase):
                 other[0], other[1], self.coord
             )
             if self.neighbor_topo[dir].flip[self.from_neighbor[dir]]:
-                r0_other = xp.flip(r0_other, axis=(-1,))
-                r1_other = xp.flip(r1_other, axis=(-1,))
+                r0_other = torch.flip(r0_other, (-1,))
+                r1_other = torch.flip(r1_other, (-1,))
 
-            diff_s = xp.linalg.norm(result[dir][0] - r0_other + result[dir][1] - r1_other)
+            diff_s = torch.linalg.norm(result[dir][0] - r0_other + result[dir][1] - r1_other)
             self.assertLess(
                 diff_s,
                 1e-15,
@@ -190,13 +183,12 @@ class ExchangeTest(MpiTestCase):
             )
 
     def vector2d_2d_shape3d(self):
-        xp = self.xp
         new_shape = (2, 3, 2)
 
         def make_data(d):
             return (
-                xp.stack([d, d + 1.0]).reshape((2,) + new_shape),
-                xp.stack([xp.flip(d, (-1,)), xp.flip(d, (-1,)) + 1.0]).reshape((2,) + new_shape),
+                torch.stack([d, d + 1.0]).reshape((2,) + new_shape),
+                torch.stack([torch.flip(d, (-1,)), torch.flip(d, (-1,)) + 1.0]).reshape((2,) + new_shape),
             )
 
         south = make_data(self.data[SOUTH])
@@ -216,13 +208,13 @@ class ExchangeTest(MpiTestCase):
                 other[0].reshape((2, self.NUM_DATA_HORI)), other[1].reshape((2, self.NUM_DATA_HORI)), self.coord
             )
             if self.neighbor_topo[dir].flip[self.from_neighbor[dir]]:
-                r0_other = xp.flip(r0_other, axis=(1,))
-                r1_other = xp.flip(r1_other, axis=(1,))
+                r0_other = torch.flip(r0_other, (1,))
+                r1_other = torch.flip(r1_other, (1,))
 
             r0_other = r0_other.reshape((2,) + new_shape)
             r1_other = r1_other.reshape((2,) + new_shape)
 
-            diff_s = xp.linalg.norm(result[dir][0] - r0_other + result[dir][1] - r1_other)
+            diff_s = torch.linalg.norm(result[dir][0] - r0_other + result[dir][1] - r1_other)
             self.assertLess(
                 diff_s,
                 1e-15,
@@ -236,10 +228,8 @@ class ExchangeTest(MpiTestCase):
             )
 
     def vector3d_1d_shape1d(self):
-        xp = self.xp
-
         def make_data(d):
-            return (d, xp.flip(d, (-1,)), d + 5.0)
+            return (d, torch.flip(d, (-1,)), d + 5.0)
 
         south = make_data(self.data[SOUTH])
         north = make_data(self.data[NORTH])
@@ -258,14 +248,14 @@ class ExchangeTest(MpiTestCase):
             )
             r2_other = other[2]
             if self.neighbor_topo[dir].flip[self.from_neighbor[dir]]:
-                r0_other = xp.flip(r0_other, (-1,))
-                r1_other = xp.flip(r1_other, (-1,))
-                r2_other = xp.flip(r2_other, (-1,))
+                r0_other = torch.flip(r0_other, (-1,))
+                r1_other = torch.flip(r1_other, (-1,))
+                r2_other = torch.flip(r2_other, (-1,))
 
             diff_s = (
-                xp.linalg.norm(result[dir][0] - r0_other)
-                + xp.linalg.norm(result[dir][1] - r1_other)
-                + xp.linalg.norm(result[dir][2] - r2_other)
+                torch.linalg.norm(result[dir][0] - r0_other)
+                + torch.linalg.norm(result[dir][1] - r1_other)
+                + torch.linalg.norm(result[dir][2] - r2_other)
             )
             self.assertLess(
                 diff_s,
@@ -278,7 +268,6 @@ class ExchangeTest(MpiTestCase):
             )
 
     def vector3d_1d_shape2d(self):
-        xp = self.xp
         base_shape = (3, 4)
         new_data_shape = (1,) + base_shape
         new_line_shape = (1,) + (self.NUM_DATA_HORI,)
@@ -286,7 +275,7 @@ class ExchangeTest(MpiTestCase):
         def make_data(d) -> Tuple[NDArray, NDArray, NDArray]:
             return (
                 d.reshape(new_data_shape),
-                xp.flip(d, axis=(-1,)).reshape(new_data_shape),
+                torch.flip(d, (-1,)).reshape(new_data_shape),
                 d.reshape(new_data_shape) + 5.0,
             )
 
@@ -307,18 +296,18 @@ class ExchangeTest(MpiTestCase):
             )
             r2_other = other[2].reshape(new_line_shape)
             if self.neighbor_topo[dir].flip[self.from_neighbor[dir]]:
-                r0_other = xp.flip(r0_other, (-1,))
-                r1_other = xp.flip(r1_other, (-1,))
-                r2_other = xp.flip(r2_other, (-1,))
+                r0_other = torch.flip(r0_other, (-1,))
+                r1_other = torch.flip(r1_other, (-1,))
+                r2_other = torch.flip(r2_other, (-1,))
 
             r0_other = r0_other.reshape(new_data_shape)
             r1_other = r1_other.reshape(new_data_shape)
             r2_other = r2_other.reshape(new_data_shape)
 
             diff_s = (
-                xp.linalg.norm(result[dir][0] - r0_other)
-                + xp.linalg.norm(result[dir][1] - r1_other)
-                + xp.linalg.norm(result[dir][2] - r2_other)
+                torch.linalg.norm(result[dir][0] - r0_other)
+                + torch.linalg.norm(result[dir][1] - r1_other)
+                + torch.linalg.norm(result[dir][2] - r2_other)
             )
             self.assertLess(
                 diff_s,
@@ -329,15 +318,13 @@ class ExchangeTest(MpiTestCase):
             )
 
     def vector3d_3d_shape1d(self):
-        xp = self.xp
-
         def make_data(d0):
             d = self.device.to_host(d0)
             e = numpy.flip(d, (-1,))
             return (
-                xp.array([[[d, d + 1.0], [d + 0.1, d + 1.1]], [[d + 0.2, d + 1.2], [d + 2.2, d + 3.2]]]),
-                xp.array([[[e, e + 1.0], [e + 0.1, e + 1.1]], [[e + 0.2, e + 1.2], [e + 2.2, e + 3.2]]]),
-                xp.array([[[d + 0.3, d + 1.3], [d + 0.4, d + 1.4]], [[d + 0.5, d + 1.5], [d + 2.6, d + 3.6]]]),
+                torch.tensor([[[d, d + 1.0], [d + 0.1, d + 1.1]], [[d + 0.2, d + 1.2], [d + 2.2, d + 3.2]]]),
+                torch.tensor([[[e, e + 1.0], [e + 0.1, e + 1.1]], [[e + 0.2, e + 1.2], [e + 2.2, e + 3.2]]]),
+                torch.tensor([[[d + 0.3, d + 1.3], [d + 0.4, d + 1.4]], [[d + 0.5, d + 1.5], [d + 2.6, d + 3.6]]]),
             )
 
         south = make_data(self.data[SOUTH])
@@ -357,14 +344,14 @@ class ExchangeTest(MpiTestCase):
             )
             r2_other = other[2]
             if self.neighbor_topo[dir].flip[self.from_neighbor[dir]]:
-                r0_other = xp.flip(r0_other, axis=(3,))
-                r1_other = xp.flip(r1_other, axis=(3,))
-                r2_other = xp.flip(r2_other, axis=(3,))
+                r0_other = torch.flip(r0_other, (3,))
+                r1_other = torch.flip(r1_other, (3,))
+                r2_other = torch.flip(r2_other, (3,))
 
             diff_s = (
-                xp.linalg.norm(result[dir][0] - r0_other)
-                + xp.linalg.norm(result[dir][1] - r1_other)
-                + xp.linalg.norm(result[dir][2] - r2_other)
+                torch.linalg.norm(result[dir][0] - r0_other)
+                + torch.linalg.norm(result[dir][1] - r1_other)
+                + torch.linalg.norm(result[dir][2] - r2_other)
             )
             self.assertLess(
                 diff_s,
@@ -377,7 +364,6 @@ class ExchangeTest(MpiTestCase):
             )
 
     def vector3d_4d_shape3d(self):
-        xp = self.xp
         base_shape = (3, 4)
         new_data_shape = (2, 2, 2, 2) + base_shape
         new_line_shape = (2, 2, 2, 2) + (self.NUM_DATA_HORI,)
@@ -386,19 +372,19 @@ class ExchangeTest(MpiTestCase):
             d = self.device.to_host(d0)
             e = numpy.flip(d, (-1,))
             return (
-                xp.array(
+                torch.tensor(
                     [
                         [[[d, d + 1.0], [d + 0.1, d + 1.1]], [[d + 0.2, d + 1.2], [d + 2.2, d + 3.2]]],
                         [[[d, d + 1.0], [d + 0.1, d + 1.1]], [[d + 0.2, d + 1.2], [d + 2.2, d + 3.2]]],
                     ]
                 ).reshape(new_data_shape),
-                xp.array(
+                torch.tensor(
                     [
                         [[[e, e + 1.0], [e + 0.1, e + 1.1]], [[e + 0.2, e + 1.2], [e + 2.2, e + 3.2]]],
                         [[[e, e + 1.0], [e + 0.1, e + 1.1]], [[e + 0.2, e + 1.2], [e + 2.2, e + 3.2]]],
                     ]
                 ).reshape(new_data_shape),
-                xp.array(
+                torch.tensor(
                     [
                         [[[d + 0.3, d + 1.3], [d + 0.4, d + 1.4]], [[d + 0.5, d + 1.5], [d + 2.6, d + 3.6]]],
                         [[[d + 0.3, d + 1.3], [d + 0.4, d + 1.4]], [[d + 0.5, d + 1.5], [d + 2.6, d + 3.6]]],
@@ -423,18 +409,18 @@ class ExchangeTest(MpiTestCase):
             )
             r2_other = other[2].reshape(new_line_shape)
             if self.neighbor_topo[dir].flip[self.from_neighbor[dir]]:
-                r0_other = xp.flip(r0_other, axis=(4,))
-                r1_other = xp.flip(r1_other, axis=(4,))
-                r2_other = xp.flip(r2_other, axis=(4,))
+                r0_other = torch.flip(r0_other, (4,))
+                r1_other = torch.flip(r1_other, (4,))
+                r2_other = torch.flip(r2_other, (4,))
 
             r0_other = r0_other.reshape(new_data_shape)
             r1_other = r1_other.reshape(new_data_shape)
             r2_other = r2_other.reshape(new_data_shape)
 
             diff_s = (
-                xp.linalg.norm(result[dir][0] - r0_other)
-                + xp.linalg.norm(result[dir][1] - r1_other)
-                + xp.linalg.norm(result[dir][2] - r2_other)
+                torch.linalg.norm(result[dir][0] - r0_other)
+                + torch.linalg.norm(result[dir][1] - r1_other)
+                + torch.linalg.norm(result[dir][2] - r2_other)
             )
             self.assertLess(
                 diff_s,
@@ -446,7 +432,6 @@ class ExchangeTest(MpiTestCase):
             )
 
     def scalar_1d_shape1d(self):
-        xp = self.xp
         south = self.data[SOUTH]
         north = self.data[NORTH]
         west = self.data[WEST]
@@ -458,8 +443,8 @@ class ExchangeTest(MpiTestCase):
         for dir in [SOUTH, NORTH, WEST, EAST]:
             other = self.neighbor_data[dir][self.from_neighbor[dir]]
             if self.neighbor_topo[dir].flip[self.from_neighbor[dir]]:
-                other = xp.flip(other, axis=(-1,))
-            diff = xp.linalg.norm(result[dir] - other)
+                other = torch.flip(other, (-1,))
+            diff = torch.linalg.norm(result[dir] - other)
             self.assertLess(
                 diff,
                 1e-15,
@@ -469,7 +454,6 @@ class ExchangeTest(MpiTestCase):
             )
 
     def scalar_1d_shape2d(self):
-        xp = self.xp
         new_shape = (4, 3)
         south = self.data[SOUTH].reshape(new_shape)
         north = self.data[NORTH].reshape(new_shape)
@@ -482,9 +466,9 @@ class ExchangeTest(MpiTestCase):
         for dir in [SOUTH, NORTH, WEST, EAST]:
             other = self.neighbor_data[dir][self.from_neighbor[dir]]
             if self.neighbor_topo[dir].flip[self.from_neighbor[dir]]:
-                other = xp.flip(other, (-1,))
+                other = torch.flip(other, (-1,))
             other = other.reshape(new_shape)
-            diff = xp.linalg.norm(result[dir] - other)
+            diff = torch.linalg.norm(result[dir] - other)
             self.assertLess(
                 diff,
                 1e-15,
@@ -494,7 +478,6 @@ class ExchangeTest(MpiTestCase):
             )
 
     def scalar_1d_shape3d(self):
-        xp = self.xp
         new_shape = (2, 3, 2)
         south = self.data[SOUTH].reshape(new_shape)
         north = self.data[NORTH].reshape(new_shape)
@@ -507,9 +490,9 @@ class ExchangeTest(MpiTestCase):
         for dir in [SOUTH, NORTH, WEST, EAST]:
             other = self.neighbor_data[dir][self.from_neighbor[dir]]
             if self.neighbor_topo[dir].flip[self.from_neighbor[dir]]:
-                other = xp.flip(other, (-1,))
+                other = torch.flip(other, (-1,))
             other = other.reshape(new_shape)
-            diff = xp.linalg.norm(result[dir] - other)
+            diff = torch.linalg.norm(result[dir] - other)
             self.assertLess(
                 diff,
                 1e-15,
@@ -519,11 +502,10 @@ class ExchangeTest(MpiTestCase):
             )
 
     def scalar_2d_shape1d(self):
-        xp = self.xp
-        south = xp.stack([self.data[SOUTH], self.data[SOUTH] + 1.0])
-        north = xp.stack([self.data[NORTH], self.data[NORTH] + 1.0])
-        west = xp.stack([self.data[WEST], self.data[WEST] + 1.0])
-        east = xp.stack([self.data[EAST], self.data[EAST] + 1.0])
+        south = torch.stack([self.data[SOUTH], self.data[SOUTH] + 1.0])
+        north = torch.stack([self.data[NORTH], self.data[NORTH] + 1.0])
+        west = torch.stack([self.data[WEST], self.data[WEST] + 1.0])
+        east = torch.stack([self.data[EAST], self.data[EAST] + 1.0])
         request = self.topo.start_exchange_scalars(south, north, west, east, boundary_shape=(self.NUM_DATA_HORI,))
         s, n, w, e = request.wait(timeout=1.0)
         result = [s, n, w, e]
@@ -531,10 +513,10 @@ class ExchangeTest(MpiTestCase):
         for dir in [SOUTH, NORTH, WEST, EAST]:
             other = self.neighbor_data[dir][self.from_neighbor[dir]]
             if self.neighbor_topo[dir].flip[self.from_neighbor[dir]]:
-                other = xp.flip(other, (-1,))
+                other = torch.flip(other, (-1,))
 
-            other = xp.stack([other, other + 1.0])
-            diff = xp.linalg.norm(result[dir] - other)
+            other = torch.stack([other, other + 1.0])
+            diff = torch.linalg.norm(result[dir] - other)
             self.assertLess(
                 diff,
                 1e-15,
@@ -544,12 +526,11 @@ class ExchangeTest(MpiTestCase):
             )
 
     def scalar_2d_shape2d(self):
-        xp = self.xp
         new_shape = (4, 3)
-        south = xp.stack([self.data[SOUTH].reshape(new_shape), self.data[SOUTH].reshape(new_shape) + 1.0])
-        north = xp.stack([self.data[NORTH].reshape(new_shape), self.data[NORTH].reshape(new_shape) + 1.0])
-        west = xp.stack([self.data[WEST].reshape(new_shape), self.data[WEST].reshape(new_shape) + 1.0])
-        east = xp.stack([self.data[EAST].reshape(new_shape), self.data[EAST].reshape(new_shape) + 1.0])
+        south = torch.stack([self.data[SOUTH].reshape(new_shape), self.data[SOUTH].reshape(new_shape) + 1.0])
+        north = torch.stack([self.data[NORTH].reshape(new_shape), self.data[NORTH].reshape(new_shape) + 1.0])
+        west = torch.stack([self.data[WEST].reshape(new_shape), self.data[WEST].reshape(new_shape) + 1.0])
+        east = torch.stack([self.data[EAST].reshape(new_shape), self.data[EAST].reshape(new_shape) + 1.0])
         request = self.topo.start_exchange_scalars(south, north, west, east, boundary_shape=(self.NUM_DATA_HORI,))
         s, n, w, e = request.wait(timeout=1.0)
         result = [s, n, w, e]
@@ -557,11 +538,11 @@ class ExchangeTest(MpiTestCase):
         for dir in [SOUTH, NORTH, WEST, EAST]:
             other = self.neighbor_data[dir][self.from_neighbor[dir]]
             if self.neighbor_topo[dir].flip[self.from_neighbor[dir]]:
-                other = xp.flip(other, (-1,))
+                other = torch.flip(other, (-1,))
 
             other = other.reshape(new_shape)
-            other = xp.stack([other, other + 1.0])
-            diff = xp.linalg.norm(result[dir] - other)
+            other = torch.stack([other, other + 1.0])
+            diff = torch.linalg.norm(result[dir] - other)
             self.assertLess(
                 diff,
                 1e-15,
@@ -581,27 +562,23 @@ class GatherScatterTest(MpiTestCase):
     def setUp(self) -> None:
         super().setUp()
 
-        xp = self.device.xp
         self.topo = ProcessTopology(self.device, comm_in=self.comm)
         # For testing gather/scatter functions
-        self.global_data_1 = xp.arange(6 * 12 * 12, dtype=float).reshape(6, 12, 12)  # A flat (2D) field
+        self.global_data_1 = torch.arange(6 * 12 * 12, dtype=float).reshape(6, 12, 12)  # A flat (2D) field
         # A 2D field of 3x3 elements
-        self.global_data_2 = xp.arange(6 * 12 * 12 * 3 * 3, dtype=float).reshape(6, 12, 12, 3, 3)
+        self.global_data_2 = torch.arange(6 * 12 * 12 * 3 * 3, dtype=float).reshape(6, 12, 12, 3, 3)
         # A 3D field of scalars
-        self.global_data_3a = xp.arange(6 * 4 * 12 * 12, dtype=float).reshape(6, 4, 12, 12)
+        self.global_data_3a = torch.arange(6 * 4 * 12 * 12, dtype=float).reshape(6, 4, 12, 12)
         # A 3D field of 3x3 elements
-        self.global_data_3b = xp.arange(6 * 4 * 12 * 12 * 2 * 2, dtype=float).reshape(6, 4, 12, 12, 2, 2)
+        self.global_data_3b = torch.arange(6 * 4 * 12 * 12 * 2 * 2, dtype=float).reshape(6, 4, 12, 12, 2, 2)
         # A 4D field of 3x3 elements
-        self.global_data_4 = xp.arange(6 * 3 * 4 * 12 * 12 * 2 * 2, dtype=float).reshape(6, 3, 4, 12, 12, 2, 2)
+        self.global_data_4 = torch.arange(6 * 3 * 4 * 12 * 12 * 2 * 2, dtype=float).reshape(6, 3, 4, 12, 12, 2, 2)
 
-        self.global_data_fail_1 = xp.arange(6 * 13 * 13).reshape(6, 13, 13)
-        self.global_data_fail_2 = xp.arange(6 * 12 * 14).reshape(6, 12, 14)
-        self.global_data_fail_3 = xp.arange(4 * 12 * 12).reshape(4, 12, 12)
-        self.global_data_fail_4 = xp.arange(6 * 6).reshape(6, 6)
-        self.xp = self.device.xp
-
+        self.global_data_fail_1 = torch.arange(6 * 13 * 13).reshape(6, 13, 13)
+        self.global_data_fail_2 = torch.arange(6 * 12 * 14).reshape(6, 12, 14)
+        self.global_data_fail_3 = torch.arange(4 * 12 * 12).reshape(4, 12, 12)
+        self.global_data_fail_4 = torch.arange(6 * 6).reshape(6, 6)
     def gather_scatter(self, global_data, num_dim):
-        xp = self.xp
         side = self.topo.num_lines_per_panel
         tile_side = global_data.shape[num_dim - 1] // side
         my_panel = self.topo.my_panel
@@ -638,12 +615,12 @@ class GatherScatterTest(MpiTestCase):
                 raise ValueError("No cube!")
             # print(f"cube = \n{cube[0]}", flush=True)
             diff = cube - global_data
-            diff_norm = xp.linalg.norm(diff)
+            diff_norm = torch.linalg.norm(diff)
             self.assertEqual(diff_norm, 0, f"Gathering failed")
 
         tile = self.topo.distribute_cube(cube, num_dim)
         tile_diff = tile_data_ref - tile
-        tile_diff_norm = xp.linalg.norm(tile_diff)
+        tile_diff_norm = torch.linalg.norm(tile_diff)
         self.assertEqual(tile_diff_norm, 0, f"Distributing failed")
 
     def gather_scatter_2d(self):

@@ -1,3 +1,4 @@
+import torch
 from . import step_hook
 from ..common import Configuration
 from ..geometry import CubedSphere3D, Metric3DTopo
@@ -31,8 +32,6 @@ class ScharMountainHook(step_hook.StepHook):
         if type(geom) != CubedSphere3D or geom is None:
             raise TypeError("The Schar waves works only with a 3D cubed sphere")
         self.geom = geom
-        self.xp = geom.device.xp
-
         self.lambdam = config.schar_mountain_longitude
         self.phim = config.schar_mountain_lattitude
         self.h0 = config.schar_mountain_height
@@ -74,13 +73,13 @@ class ScharMountainHook(step_hook.StepHook):
         self.zbot_itf_j_new[self.geom.floor_north_edge] = 0.0
 
         diff = self.zbot_new - self.geom.to_new_floor(self.zbot)
-        diffn = self.xp.linalg.norm(diff)
+        diffn = torch.linalg.norm(diff)
 
         diffi = self.zbot_itf_i_new - self.geom.to_new_itf_i_floor(self.zbot_itf_i)
-        diffin = self.xp.linalg.norm(diffi)
+        diffin = torch.linalg.norm(diffi)
 
         diffj = self.zbot_itf_j_new - self.geom.to_new_itf_j_floor(self.zbot_itf_j)
-        diffjn = self.xp.linalg.norm(diffj)
+        diffjn = torch.linalg.norm(diffj)
 
         if diffn > 0.0 or diffin > 0.0 or diffjn > 0.0:
             raise ValueError
@@ -115,7 +114,7 @@ class ScharMountainHook(step_hook.StepHook):
     def build_topo_old(self, latlon, large_scale_only: bool = False):
         lat = latlon[1, 0, :, :]
         lon = latlon[0, 0, :, :]
-        z = self.xp.zeros(lat.shape, dtype=lat.dtype)
+        z = torch.zeros(lat.shape, dtype=lat.dtype)
         z[:, :] = self.topo(lon, lat, large_scale_only)
         return z
 
@@ -130,12 +129,12 @@ class ScharMountainHook(step_hook.StepHook):
         none of the ripple. That half is the large-scale part h1 asked for by the SLEVE vertical
         coordinate (Schar et al. 2002, eq. 27), the rest is the small-scale part h2.
         """
-        r = self.geom.earth_radius * self.xp.arccos(
-            math.sin(self.phim) * self.xp.sin(lat)
-            + math.cos(self.phim) * self.xp.cos(lat) * self.xp.cos(lon - self.lambdam)
+        r = self.geom.earth_radius * torch.arccos(
+            math.sin(self.phim) * torch.sin(lat)
+            + math.cos(self.phim) * torch.cos(lat) * torch.cos(lon - self.lambdam)
         )
 
-        envelope = self.h0 * self.xp.exp(-(r**2) / self.Dm**2)
-        shape = 0.5 if large_scale_only else self.xp.cos(self.xp.pi * r / self.Dxi) ** 2
+        envelope = self.h0 * torch.exp(-(r**2) / self.Dm**2)
+        shape = 0.5 if large_scale_only else torch.cos(torch.pi * r / self.Dxi) ** 2
 
         return envelope * shape

@@ -6,18 +6,6 @@ from numpy.typing import NDArray
 from ..common import Configuration, ConfigurationSchema, load_default_schema
 
 
-def get_array_module(a):
-    try:
-        import cupy
-
-        if isinstance(a, cupy.ndarray):
-            return cupy
-    except:
-        return numpy
-
-    return numpy
-
-
 _SAVE_VERSION_ID = 1
 _CONFIG_CONTENT_MARKER = "----- config_content ------\n"
 
@@ -33,8 +21,7 @@ def save_state(state: NDArray, param: Configuration, output_file_name: str) -> N
         5. Configuration content
     """
     with open(output_file_name, "wb+") as output_file:
-        xp = get_array_module(state)
-        xp.save(output_file, state)
+        numpy.save(output_file, state)
         output_file.write(bytes(f"{_SAVE_VERSION_ID}\n", "utf-8"))
         output_file.write(bytes(param.schema.raw_string, "utf-8"))
         output_file.write(bytes(f"{_CONFIG_CONTENT_MARKER}", "utf-8"))

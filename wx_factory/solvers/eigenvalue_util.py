@@ -1,3 +1,4 @@
+import torch
 from itertools import product
 import os
 import pickle
@@ -43,8 +44,6 @@ def gen_matrix(
     if device is None:
         device = Device.get_default()
 
-    xp = device.xp
-
     # neq, ni, nj = matvec.shape
     n_loc = matvec.size
 
@@ -59,7 +58,7 @@ def gen_matrix(
 
     # Global unit vector we will multiply the matrix with
     # (Section that corresponds to this tile)
-    Qid = xp.zeros((n_loc), dtype=matvec.dtype)
+    Qid = torch.zeros((n_loc), dtype=matvec.dtype)
 
     def progress(a):
         return a

@@ -18,7 +18,7 @@ class GeometryRegistryTestCases(WxTestCase):
         keys = set(GEOMETRY_REGISTRY)
         self.assertIn(("cubed_sphere", "euler"), keys)
         self.assertIn(("cubed_sphere", "shallow_water"), keys)
-        self.assertIn(("cartesian2d", "euler"), keys)
+        self.assertIn(("cartesian3d", "euler"), keys)
 
     def test_unregistered_combination_raises_helpful_error(self):
         with self.assertRaises(ValueError) as cm:
@@ -44,7 +44,7 @@ class GeometryRegistryTestCases(WxTestCase):
         original = GEOMETRY_REGISTRY[key]
         GEOMETRY_REGISTRY[key] = lambda ctx: marker
         try:
-            result = resolve_geometry(make_ctx("cartesian2d", "euler", grid_file="my_grid.nc"))
+            result = resolve_geometry(make_ctx("cartesian3d", "euler", grid_file="my_grid.nc"))
             self.assertIs(result, marker)
         finally:
             GEOMETRY_REGISTRY[key] = original

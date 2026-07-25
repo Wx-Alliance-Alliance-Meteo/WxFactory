@@ -6,7 +6,7 @@ from unittest.runner import _WritelnDecorator
 
 from mpi4py import MPI
 
-from wx_factory.device import CpuDevice, CudaDevice, PytorchDevice
+from wx_factory.device import PytorchDevice
 
 
 class WxTestResult(unittest.TextTestResult):
@@ -77,15 +77,12 @@ class WxTestCase(unittest.TestCase):
     def setUp(self) -> None:
         super().setUp()
 
-        if self.device_name == "torch":
-            self.device = PytorchDevice(self.comm)
-        elif self.device_name == "cuda":
-            try:
-                self.device = CudaDevice(self.comm)
-            except ValueError:
-                self.skipTest("Could not create a CudaDevice, probably no GPU available")
-        else:
-            self.device = CpuDevice(self.comm)
+        # Only the Pytorch backend remains. "cuda" asks for GPU tensors (skip if unavailable);
+        # anything else keeps the tensors on the host.
+        device_type = "cuda" if self.device_name == "cuda" else "cpu"
+        self.device = PytorchDevice(self.comm, device_type=device_type)
+        if self.device_name == "cuda" and self.device.torch_device.type != "cuda":
+            self.skipTest("No GPU available for the Pytorch backend")
 
 
 class WxTestRunner(unittest.TextTestRunner):

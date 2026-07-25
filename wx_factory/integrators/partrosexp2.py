@@ -1,3 +1,4 @@
+import torch
 import math
 from time import time
 from typing import Callable
@@ -107,7 +108,6 @@ class PartRosExp2(Integrator):
         return phiv
 
     def __step__(self, Q: numpy.ndarray, dt: float):
-        xp = self.device.xp
         rhsobj = self.rhs_full
 
         f1 = self.rhs_imp(Q)
@@ -127,7 +127,7 @@ class PartRosExp2(Integrator):
             return (dt * (jflux + jforcing)).flatten()
 
         n = f_imp.shape[0]
-        vec = xp.zeros((2, n), dtype=Q.dtype)
+        vec = torch.zeros((2, n), dtype=Q.dtype)
         vec[0, :] = 0.5 * f_imp
         vec[1, :] = f_exp
 

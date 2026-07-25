@@ -1,6 +1,7 @@
+import torch
 from numpy import ndarray
 
-from wx_factory.device import CpuDevice
+from wx_factory.device import PytorchDevice
 from wx_factory.solvers.fgmres import fgmres
 
 from mpi_test import run_test_on_x_process
@@ -18,14 +19,14 @@ class FgmresMpiTestCases(WxTestCase):
 
     def test_fgmres_mpi_2_processes(self):
         comm = run_test_on_x_process(self, 2)
-        device = CpuDevice(comm)
+        device = PytorchDevice(comm, "cpu")
         comm2 = comm.Split(comm.rank)
-        device2 = CpuDevice(comm2)
+        device2 = PytorchDevice(comm2, "cpu")
 
         size: int = comm.size * self.matrix_size_multiplier
 
-        full_matrix: ndarray = device.xp.empty((size, size), dtype=float)
-        full_vector: ndarray = device.xp.empty(size, dtype=float)
+        full_matrix: ndarray = torch.empty((size, size), dtype=float)
+        full_vector: ndarray = torch.empty(size, dtype=float)
 
         for i in range(size):
             full_vector[i] = i
@@ -46,9 +47,9 @@ class FgmresMpiTestCases(WxTestCase):
         x1, *_ = fgmres(partial_matvec_handle, vector, tol=self.tolerance, device=device)
         x2, *_ = fgmres(full_matvec_handle, full_vector, tol=self.tolerance, device=device2)
 
-        """diff: float = self.cpu_device.xp.linalg.norm(x1 - x2[0, from_index:to_index]).item()
+        """diff: float = torch.linalg.norm(x1 - x2[0, from_index:to_index]).item()
 
-        norm: float = self.cpu_device.xp.linalg.norm(x1).item()
+        norm: float = torch.linalg.norm(x1).item()
 
         abs_diff = abs(diff)
 

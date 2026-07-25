@@ -1,3 +1,4 @@
+import torch
 from collections import deque
 import math
 from typing import Callable
@@ -54,7 +55,7 @@ class Epi(Integrator):
 
         if order not in _COEFF_TABLES:
             raise ValueError(f"Unsupported order {order} for EPI method. Supported orders: {sorted(_COEFF_TABLES)}")
-        self.A = self.device.xp.array(_COEFF_TABLES[order])
+        self.A = torch.tensor(_COEFF_TABLES[order])
 
         k, self.n_prev = self.A.shape
         # Limit max phi to 1 for EPI 2
@@ -99,7 +100,7 @@ class Epi(Integrator):
         else:
             matvec_handle = MatvecOpBasic(dt, Q, self.rhs, self.param)
 
-        vec = self.device.xp.zeros((self.max_phi + 1, math.prod(rhs.shape)), dtype=Q.dtype)
+        vec = torch.zeros((self.max_phi + 1, math.prod(rhs.shape)), dtype=Q.dtype)
         vec[1, :] = rhs.flatten()
         for i in range(self.n_prev):
             if self.jac is not None:
@@ -108,7 +109,7 @@ class Epi(Integrator):
                 J_deltaQ = matvec_fun(self.previous_Q[i] - Q, 1.0, Q, rhs, self.rhs, self.jacobian_method)
 
             # R(y_{n-i})
-            r = (self.previous_rhs[i] - rhs) - self.device.xp.reshape(J_deltaQ, Q.shape)
+            r = (self.previous_rhs[i] - rhs) - torch.reshape(J_deltaQ, Q.shape)
 
             for k, alpha in enumerate(self.A[:, i], start=2):
                 # v_k = Sum_{i=1}^{n_prev} A_{k,i} R(y_{n-i})
@@ -206,7 +207,7 @@ class Epi(Integrator):
             self.previous_rhs.appendleft(rhs)
 
         # Update solution
-        return Q + self.device.xp.reshape(phiv, Q.shape) * dt
+        return Q + torch.reshape(phiv, Q.shape) * dt
 
 
 def _make_epi_factory(order):

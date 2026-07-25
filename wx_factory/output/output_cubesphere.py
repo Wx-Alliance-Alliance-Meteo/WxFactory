@@ -1,3 +1,4 @@
+import torch
 import math
 from typing import List, Optional
 
@@ -133,8 +134,6 @@ class OutputCubesphere(OutputManager):
     def _gather_panel(self, field: NDArray) -> Optional[NDArray]:
         """ """
         panel_comm = self.process_topology.panel_comm
-        xp = self.device.xp
-
         if panel_comm.size == 1:
             return field
 
@@ -148,10 +147,10 @@ class OutputCubesphere(OutputManager):
 
         side = self.process_topology.num_lines_per_panel
         if field.ndim == 1:
-            panel_field = xp.concatenate(panel_fields[:side])
+            panel_field = torch.concatenate(panel_fields[:side])
         else:
-            panel_field = xp.concatenate(
-                [xp.concatenate(panel_fields[i * side : (i + 1) * side], axis=-1) for i in range(side)], axis=-2
+            panel_field = torch.concatenate(
+                [torch.concatenate(panel_fields[i * side : (i + 1) * side], dim=-1) for i in range(side)], dim=-2
             )
 
         return panel_field

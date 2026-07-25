@@ -96,15 +96,13 @@ class Configuration:
         return out
 
     # --- START type hints --- automatically generated (do not touch)
-    alpha0: float
     advection_only: str
+    alpha0: float
     base_output_file: str
     bubble_rad: float
     bubble_theta: float
     case_number: int
-    cuda_devices: List[int]
     depth_approx: str
-    desired_device: str
     discretization: str
     dt: float
     enable_schar_mountain: bool
@@ -128,9 +126,8 @@ class Configuration:
     kiops_dt_factor: float
     krylov_mmax: int
     krylov_size: int
-    lateral_boundary: str
     lambda0: float
-    matmul_backend: str
+    lateral_boundary: str
     matsuno_amp: float
     matsuno_wave_type: str
     num_elements_horizontal: int
@@ -168,6 +165,8 @@ class Configuration:
     vertical_coord: str
     x0: float
     x1: float
+    y0: float
+    y1: float
     z0: float
     z1: float
     ztop: float

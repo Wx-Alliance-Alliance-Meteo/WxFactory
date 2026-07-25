@@ -1,3 +1,3 @@
-from .device import CpuDevice, CudaDevice, Device, PytorchDevice
+from .device import Device, PytorchDevice
 
-__all__ = ["CpuDevice", "CudaDevice", "Device", "PytorchDevice"]
+__all__ = ["Device", "PytorchDevice"]

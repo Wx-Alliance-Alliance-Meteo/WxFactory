@@ -1,3 +1,4 @@
+import torch
 from abc import ABC, abstractmethod
 import time
 
@@ -93,7 +94,7 @@ class RHS(ABC):
         # 0.b Preserve array shape
         given_shape = q.shape
 
-        self.ops = self.ops_complex if self.device.xp.iscomplexobj(q) else self.ops_real
+        self.ops = self.ops_complex if torch.is_complex(q) else self.ops_real
 
         self.allocate_arrays(q)
 
@@ -137,13 +138,11 @@ class RHS(ABC):
         return self.__call__(q)
 
     def allocate_arrays(self, q: NDArray):
-        xp = self.device.xp
-
         if self.f_x1 is None or self.f_x1.dtype != q.dtype:
-            self.f_x1 = xp.zeros_like(q)
-            self.f_x2 = xp.zeros_like(q)
-            self.f_x3 = xp.zeros_like(q)
-            self.rhs = xp.empty_like(q)
+            self.f_x1 = torch.zeros_like(q)
+            self.f_x2 = torch.zeros_like(q)
+            self.f_x3 = torch.zeros_like(q)
+            self.rhs = torch.empty_like(q)
 
     @abstractmethod
     def solution_extrapolation(self, q: NDArray) -> None:
@@ -154,11 +153,10 @@ class RHS(ABC):
         pass
 
     def riemann_fluxes(self) -> None:
-        xp = self.device.xp
         if self.f_itf_x1 is None or self.f_itf_x1.dtype != self.q_itf_x1.dtype:
-            self.f_itf_x1 = xp.zeros_like(self.q_itf_x1)
-            self.f_itf_x2 = xp.zeros_like(self.q_itf_x2)
-            self.f_itf_x3 = xp.zeros_like(self.q_itf_x3)
+            self.f_itf_x1 = torch.zeros_like(self.q_itf_x1)
+            self.f_itf_x2 = torch.zeros_like(self.q_itf_x2)
+            self.f_itf_x3 = torch.zeros_like(self.q_itf_x3)
 
         self.pde.riemann_fluxes(
             self.q_itf_x1, self.q_itf_x2, self.q_itf_x3, self.f_itf_x1, self.f_itf_x2, self.f_itf_x3

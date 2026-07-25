@@ -15,6 +15,7 @@ metric3d) evaluates its existing closed form at the flat limit and produces the 
 following cartesian metric -- christoffel == 0, h^12 == 0, h^11 == 4 / delta_x1^2 -- with no new math.
 """
 
+import torch
 from .cubed_sphere_3d import CubedSphere3D
 from .geometry import Geometry
 
@@ -84,7 +85,6 @@ def _build_physical_coords(g, x_extent, y_extent):
     The cubed-sphere scaffold builds angular x1/x2; the flat slab needs true metres for initial
     conditions and output. Each element spans a physical width, and within it the solution points sit
     at the Gauss-Legendre nodes (mapped from the reference [-1, 1] to [0, delta])."""
-    xp = g.device.xp
     ns = g.num_solpts
     x0, x1 = (0.0, 1.0) if x_extent is None else x_extent
     y0, y1 = (0.0, 1.0) if y_extent is None else y_extent
@@ -94,31 +94,29 @@ def _build_physical_coords(g, x_extent, y_extent):
 
     # reference solution points mapped to [0, delta] within one element
     node = 0.5 * (1.0 + g.solutionPoints)  # in [0, 1]
-    xe = x0 + (xp.arange(g.num_elements_x1)[:, None] + node[None, :]) * dx  # (ne1, ns)
-    ye = y0 + (xp.arange(g.num_elements_x2)[:, None] + node[None, :]) * dy  # (ne2, ns)
-    ze = (xp.arange(g.num_elements_x3)[:, None] + node[None, :]) * dz        # (ne3, ns)
+    xe = x0 + (torch.arange(g.num_elements_x1)[:, None] + node[None, :]) * dx  # (ne1, ns)
+    ye = y0 + (torch.arange(g.num_elements_x2)[:, None] + node[None, :]) * dy  # (ne2, ns)
+    ze = (torch.arange(g.num_elements_x3)[:, None] + node[None, :]) * dz        # (ne3, ns)
 
     # ns**3 solution points within an element are ordered (k, j, i) -> flat index
-    idx = xp.arange(ns**3)
+    idx = torch.arange(ns**3)
     i_idx, j_idx, k_idx = idx % ns, (idx // ns) % ns, idx // ns**2
     ne3, ne2, ne1 = g.num_elements_x3, g.num_elements_x2, g.num_elements_x1
-    g.X1 = xp.broadcast_to(xe[:, i_idx][None, None, :, :], g.grid_shape_3d_new).copy()
-    g.X2 = xp.broadcast_to(ye[:, j_idx][None, :, None, :], g.grid_shape_3d_new).copy()
-    g.X3 = xp.broadcast_to(ze[:, k_idx][:, None, None, :], g.grid_shape_3d_new).copy()
+    g.X1 = torch.broadcast_to(xe[:, i_idx][None, None, :, :], g.grid_shape_3d_new).copy()
+    g.X2 = torch.broadcast_to(ye[:, j_idx][None, :, None, :], g.grid_shape_3d_new).copy()
+    g.X3 = torch.broadcast_to(ze[:, k_idx][:, None, None, :], g.grid_shape_3d_new).copy()
 
     # 2D (x, z) plane in the single-block layout (nk, ni), for x-z image output. The slab is
     # y-invariant, so any y-plane is representative. x runs along ni (element-major), z along nk.
     ni, nk = ne1 * ns, ne3 * ns
-    g.X1_cartesian = xp.broadcast_to(xe.reshape(-1)[None, :], (nk, ni)).copy()
-    g.X3_cartesian = xp.broadcast_to(ze.reshape(-1)[:, None], (nk, ni)).copy()
+    g.X1_cartesian = torch.broadcast_to(xe.reshape(-1)[None, :], (nk, ni)).copy()
+    g.X3_cartesian = torch.broadcast_to(ze.reshape(-1)[:, None], (nk, ni)).copy()
     g.x0, g.x1 = x0, x1
     g.z0, g.z1 = 0.0, g.ztop
 
 
 def _flatten(g, x_extent, y_extent):
     """Replace the sphere's curvature/rotation with the flat cartesian limit, in place on ``g``."""
-    xp = g.device.xp
-
     # A flat slab: unit "radius" (shallow metric uses A = earth_radius, so A = 1 keeps the horizontal
     # metric height-independent and single-precision clean), and no rotation.
     g.earth_radius = 1.0
@@ -151,10 +149,10 @@ def _flatten(g, x_extent, y_extent):
     # Block coordinates feed the (rotation) christoffels and Coriolis; zero them, keep delta_block
     # nonzero to avoid a divide-by-zero in the (now identically zero) Coriolis term.
     if hasattr(g, "X_block"):
-        g.X_block = xp.zeros_like(g.X_block)
-        g.Y_block = xp.zeros_like(g.Y_block)
-        g.delta_block = xp.ones_like(g.delta_block)
-        g.boundary_sn = xp.zeros_like(g.boundary_sn)
-        g.boundary_we = xp.zeros_like(g.boundary_we)
-        g.boundary_sn_new = xp.zeros_like(g.boundary_sn_new)
-        g.boundary_we_new = xp.zeros_like(g.boundary_we_new)
+        g.X_block = torch.zeros_like(g.X_block)
+        g.Y_block = torch.zeros_like(g.Y_block)
+        g.delta_block = torch.ones_like(g.delta_block)
+        g.boundary_sn = torch.zeros_like(g.boundary_sn)
+        g.boundary_we = torch.zeros_like(g.boundary_we)
+        g.boundary_sn_new = torch.zeros_like(g.boundary_sn_new)
+        g.boundary_we_new = torch.zeros_like(g.boundary_we_new)

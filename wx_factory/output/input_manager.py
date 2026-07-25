@@ -1,3 +1,4 @@
+import torch
 from typing import Optional
 
 from mpi4py import MPI
@@ -80,7 +81,7 @@ class InputManager:
 
         mountain_field = geometry.process_topology.distribute_cube(mountain_field, 2)
 
-        return geometry.device.xp.asarray(geometry._to_new(mountain_field))
+        return torch.asarray(geometry._to_new(mountain_field))
 
     @staticmethod
     def read_fields(data_file_name: str, field_names: list[str], geometry: CubedSphere2D) -> NDArray:
@@ -94,5 +95,4 @@ class InputManager:
 
         fields = [geometry.process_topology.distribute_cube(f, 2) for f in fields]
 
-        xp = geometry.device.xp
-        return xp.asarray(geometry._to_new(numpy.stack(fields)))
+        return torch.asarray(geometry._to_new(numpy.stack(fields)))

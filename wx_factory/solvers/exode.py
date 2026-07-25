@@ -1,3 +1,4 @@
+import torch
 import math
 import numpy
 
@@ -17,7 +18,6 @@ def exode(
     # Import here to resolve circular import
     from ..integrators.butcher import METHODS
 
-    xp = device.xp if device is not None else numpy
 
     if not hasattr(exode, "first_step"):
         exode.first_step = τ_out  # TODO : use CFL condition ?
@@ -30,7 +30,7 @@ def exode(
     if p == 0:
         p = 1
         # Add extra column of zeros
-        u = xp.row_stack((u, xp.zeros(len(u), dtype=u.dtype)))
+        u = torch.row_stack((u, torch.zeros(len(u), dtype=u.dtype)))
 
     y0 = u[0].copy()
 

@@ -1,3 +1,6 @@
+from .dense import expm, solve_triangular
+import numpy
+import torch
 import math
 from typing import Callable, Optional
 
@@ -68,8 +71,6 @@ def kiops(
     if device is None:
         device = Device.get_default()
     comm = device.comm
-    xp = device.xp
-
     tau_out = device.array(tau_out)
     u = device.array(u)
 
@@ -79,27 +80,27 @@ def kiops(
     if p == 0:
         p = 1
         # Add extra column of zeros
-        u = xp.row_stack((u, xp.zeros(len(u))))
+        u = torch.row_stack((u, torch.zeros(len(u))))
 
     # We only allow m to vary between mmin and mmax
     m = max(mmin, min(m_init, mmax))
 
     # The MPI datatype for the reductions must match the working precision of the buffers, which
     # follows u.dtype (single or double).
-    mpi_real = MPI.FLOAT if u.dtype == xp.float32 else MPI.DOUBLE
+    mpi_real = MPI.FLOAT if u.dtype == torch.float32 else MPI.DOUBLE
 
     # Preallocate matrix
-    V: NDArray = xp.zeros((mmax + 1, n + p), dtype=u.dtype)
-    H: NDArray = xp.zeros((mmax + 1, mmax + 1), dtype=u.dtype)
+    V: NDArray = torch.zeros((mmax + 1, n + p), dtype=u.dtype)
+    H: NDArray = torch.zeros((mmax + 1, mmax + 1), dtype=u.dtype)
 
     step = 0
     krystep = 0
     ireject = 0
     reject = 0
     exps = 0
-    sgn = xp.sign(tau_out[-1])
+    sgn = torch.sign(tau_out[-1])
     tau_now = 0.0
-    tau_end = xp.abs(tau_out[-1])
+    tau_end = torch.abs(tau_out[-1])
     happy = False
     j = 0
 
@@ -108,19 +109,19 @@ def kiops(
     numSteps = len(tau_out)
 
     # Initial condition
-    w: NDArray = xp.zeros((numSteps, n), dtype=u.dtype)
+    w: NDArray = torch.zeros((numSteps, n), dtype=u.dtype)
     w[0, :] = u[0, :].copy()
 
     # compute 1-norm of u
-    local_normU = xp.sum(xp.abs(u[1:, :]), axis=1)
-    global_normU = xp.empty_like(local_normU)
+    local_normU = torch.sum(torch.abs(u[1:, :]), dim=1)
+    global_normU = torch.empty_like(local_normU)
     device.synchronize()
     comm.Allreduce([local_normU, mpi_real], [global_normU, mpi_real])
-    normU = xp.amax(global_normU)
+    normU = torch.amax(global_normU)
 
     # Normalization factors
     if ppo > 1 and normU > 0:
-        ex = xp.ceil(xp.log2(normU))
+        ex = torch.ceil(torch.log2(normU))
         nu = 2 ** (-ex)
         mu = 2**ex
     else:
@@ -128,7 +129,7 @@ def kiops(
         mu = 1.0
 
     # Flip the rest of the u matrix
-    u_flip = nu * xp.flipud(u[1:, :])
+    u_flip = nu * torch.flipud(u[1:, :])
 
     # Compute an initial starting approximation for the step size
     tau = tau_end
@@ -159,7 +160,7 @@ def kiops(
     # indicator below can underflow to (near) zero once the Krylov space over-resolves a substep,
     # which turns the step-size controller (log(omega / gamma), with omega = 0) into a crash. This
     # floor lets us detect that case.
-    tiny_err = float(xp.finfo(u.dtype).tiny)
+    tiny_err = float(torch.finfo(u.dtype).tiny)
 
     while tau_now < tau_end:
 
@@ -176,10 +177,10 @@ def kiops(
 
             # Normalize initial vector (this norm is nonzero)
             local_sum = V[0, :n] @ V[0, :n]
-            global_sum = xp.empty_like(local_sum)
+            global_sum = torch.empty_like(local_sum)
             device.synchronize()
             comm.Allreduce([local_sum, mpi_real], [global_sum, mpi_real])
-            beta = xp.sqrt(global_sum + V[0, n : n + p] @ V[0, n : n + p])
+            beta = torch.sqrt(global_sum + V[0, n : n + p] @ V[0, n : n + p])
 
             # The first Krylov basis vector
             V[0, :] /= beta
@@ -197,7 +198,7 @@ def kiops(
             # Classical Gram-Schmidt
             ilow = max(0, j - iop)
             local_sum = V[ilow:j, :n] @ V[j, :n]
-            global_sum = xp.empty_like(local_sum)
+            global_sum = torch.empty_like(local_sum)
             device.synchronize()
             comm.Allreduce([local_sum, mpi_real], [global_sum, mpi_real])
 
@@ -206,10 +207,10 @@ def kiops(
             V[j, :] = V[j, :] - V[ilow:j, :].T @ H[ilow:j, j - 1]
 
             local_sum = V[j, :n] @ V[j, :n]
-            global_sum = xp.empty_like(local_sum)
+            global_sum = torch.empty_like(local_sum)
             device.synchronize()
             comm.Allreduce([local_sum, mpi_real], [global_sum, mpi_real])
-            nrm = xp.sqrt(global_sum + V[j, n : n + p] @ V[j, n : n + p])
+            nrm = torch.sqrt(global_sum + V[j, n : n + p] @ V[j, n : n + p])
 
             # Happy breakdown
             if nrm < tol:
@@ -230,7 +231,7 @@ def kiops(
         H[j, j - 1] = 0.0
 
         # Compute the exponential of the augmented matrix
-        F = device.array(device.xalg.linalg.expm(sgn * tau * H[: j + 1, : j + 1]))
+        F = device.array(expm(sgn * tau * H[: j + 1, : j + 1]))
         exps += 1
 
         # Restore the value of H_{m+1,m}
@@ -246,7 +247,7 @@ def kiops(
 
         else:
             # Local truncation error estimation
-            err = xp.abs(beta * nrm * F[j - 1, j])
+            err = torch.abs(beta * nrm * F[j - 1, j])
 
             # In single precision err can underflow to (near) zero once the current Krylov space
             # resolves the substep to machine accuracy. The controller below would then set omega = 0
@@ -269,7 +270,7 @@ def kiops(
 
                 # Estimate order
                 if m == oldm and tau != oldtau and ireject >= 1:
-                    order = max(1.0, math.log(omega / oldomega) / device.to_host(xp.log(tau / oldtau)))
+                    order = max(1.0, math.log(omega / oldomega) / device.to_host(torch.log(tau / oldtau)))
                     orderold = False
                 elif orderold or ireject == 0:
                     orderold = True
@@ -324,7 +325,7 @@ def kiops(
             blownTs = 0
             nextT = tau_now + tau
             for k in range(l, numSteps):
-                if xp.abs(tau_out[k]) < xp.abs(nextT):
+                if torch.abs(tau_out[k]) < torch.abs(nextT):
                     blownTs += 1
 
             if blownTs != 0:
@@ -333,7 +334,7 @@ def kiops(
 
                 for k in range(blownTs):
                     tauPhantom = tau_out[l + k] - tau_now
-                    F2 = device.xalg.linalg.expm(sgn * tauPhantom * H[:j, :j])
+                    F2 = expm(sgn * tauPhantom * H[:j, :j])
                     w[l + k, :] = beta * F2[:j, 0] @ V[:j, :n]
 
                 # Advance l.

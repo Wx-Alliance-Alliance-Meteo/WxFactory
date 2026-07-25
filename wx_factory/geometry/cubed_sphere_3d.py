@@ -1,3 +1,4 @@
+import torch
 import math
 from typing import Optional
 
@@ -101,7 +102,6 @@ class CubedSphere3D(CubedSphere):
             alpha0,
             process_topology,
         )
-        xp = self.device.xp
         ptopo = self.process_topology
 
         # Full extent of the cubed-sphere panel
@@ -240,34 +240,34 @@ class CubedSphere3D(CubedSphere):
         # Define the base coordinate.  x1 and x2 are fundamentally 1D arrays,
         # while x3 and eta are 3D arrays in support of coordinate mapping
 
-        x1_boundaries = xp.linspace(domain_x1[0], domain_x1[1], num_elements_x1 + 1)
-        x2_boundaries = xp.linspace(domain_x2[0], domain_x2[1], num_elements_x2 + 1)
-        x3_boundaries = xp.linspace(domain_x3[0], domain_x3[1], num_elements_x3 + 1)
-        eta_boundaries = xp.linspace(domain_eta[0], domain_eta[1], num_elements_x3 + 1)
+        x1_boundaries = torch.linspace(domain_x1[0], domain_x1[1], num_elements_x1 + 1)
+        x2_boundaries = torch.linspace(domain_x2[0], domain_x2[1], num_elements_x2 + 1)
+        x3_boundaries = torch.linspace(domain_x3[0], domain_x3[1], num_elements_x3 + 1)
+        eta_boundaries = torch.linspace(domain_eta[0], domain_eta[1], num_elements_x3 + 1)
 
         offsets_x1 = x1_boundaries[:-1]
         ref_solpts_x1 = delta_x1 / delta_comp * (-minComp + self.solutionPoints)
-        x1 = xp.repeat(offsets_x1, num_solpts) + xp.tile(ref_solpts_x1, (num_elements_x1,))
+        x1 = torch.repeat_interleave(offsets_x1, num_solpts) + torch.tile(ref_solpts_x1, (num_elements_x1,))
 
         offsets_x2 = x2_boundaries[:-1]
         ref_solpts_x2 = delta_x2 / delta_comp * (-minComp + self.solutionPoints)
-        x2 = xp.repeat(offsets_x2, num_solpts) + xp.tile(ref_solpts_x2, (num_elements_x2,))
+        x2 = torch.repeat_interleave(offsets_x2, num_solpts) + torch.tile(ref_solpts_x2, (num_elements_x2,))
 
         offsets_x3 = x3_boundaries[:-1]
         ref_solpts_x3 = delta_x3 / delta_comp * (-minComp + self.solutionPoints)
-        x3_linear = xp.repeat(offsets_x3, num_solpts) + xp.tile(ref_solpts_x3, (num_elements_x3,))
-        x3 = xp.repeat(x3_linear, ni * nj).reshape(self.grid_shape_3d)
+        x3_linear = torch.repeat_interleave(offsets_x3, num_solpts) + torch.tile(ref_solpts_x3, (num_elements_x3,))
+        x3 = torch.repeat_interleave(x3_linear, ni * nj).reshape(self.grid_shape_3d)
 
         offsets_eta = eta_boundaries[:-1]
         ref_solpts_eta = delta_eta / delta_comp * (-minComp + self.solutionPoints)
-        eta_linear = xp.repeat(offsets_eta, num_solpts) + xp.tile(ref_solpts_eta, (num_elements_x3,))
-        eta = xp.repeat(eta_linear, ni * nj).reshape(self.grid_shape_3d)
+        eta_linear = torch.repeat_interleave(offsets_eta, num_solpts) + torch.tile(ref_solpts_eta, (num_elements_x3,))
+        eta = torch.repeat_interleave(eta_linear, ni * nj).reshape(self.grid_shape_3d)
 
         def linear_to_full_k(a):
-            return xp.repeat(
-                xp.repeat(a.reshape((num_elements_x3, self.num_solpts)), self.num_solpts**2, axis=1),
+            return torch.repeat_interleave(
+                torch.repeat_interleave(a.reshape((num_elements_x3, self.num_solpts)), self.num_solpts**2, dim=1),
                 num_elements_x2 * num_elements_x1,
-                axis=0,
+                dim=0,
             ).reshape(self.grid_shape_3d_new)
 
         self.x3_new = linear_to_full_k(x3_linear)
@@ -276,22 +276,22 @@ class CubedSphere3D(CubedSphere):
         # Repeat for the interface values
         x1_itf_i = x1_boundaries.copy()
         x2_itf_i = x2.copy()
-        x3_itf_i = xp.repeat(x3[:, :, 0], num_elements_x1 + 1).reshape(self.itf_i_shape_3d)  # Repeat zy plane
-        eta_itf_i = xp.repeat(eta[:, :, 0], num_elements_x1 + 1).reshape(self.itf_i_shape_3d)
+        x3_itf_i = torch.repeat_interleave(x3[:, :, 0], num_elements_x1 + 1).reshape(self.itf_i_shape_3d)  # Repeat zy plane
+        eta_itf_i = torch.repeat_interleave(eta[:, :, 0], num_elements_x1 + 1).reshape(self.itf_i_shape_3d)
         self.x3_itf_i_new = self._to_new_itf_i(x3_itf_i)
         self.eta_itf_i_new = self._to_new_itf_i(eta_itf_i)
 
         x1_itf_j = x1.copy()
         x2_itf_j = x2_boundaries.copy()
-        x3_itf_j = xp.repeat(x3[:, 0, :], num_elements_x2 + 1).reshape(self.itf_j_shape_3d)
-        eta_itf_j = xp.repeat(eta[:, 0, :], num_elements_x2 + 1).reshape(self.itf_j_shape_3d)
+        x3_itf_j = torch.repeat_interleave(x3[:, 0, :], num_elements_x2 + 1).reshape(self.itf_j_shape_3d)
+        eta_itf_j = torch.repeat_interleave(eta[:, 0, :], num_elements_x2 + 1).reshape(self.itf_j_shape_3d)
         self.x3_itf_j_new = self._to_new_itf_j(x3_itf_j)
         self.eta_itf_j_new = self._to_new_itf_j(eta_itf_j)
 
         x1_itf_k = x1.copy()
         x2_itf_k = x2.copy()
-        x3_itf_k = xp.repeat(x3_boundaries, ni * nj).reshape(self.itf_k_shape_3d)
-        eta_itf_k = xp.repeat(eta_boundaries, ni * nj).reshape(self.itf_k_shape_3d)
+        x3_itf_k = torch.repeat_interleave(x3_boundaries, ni * nj).reshape(self.itf_k_shape_3d)
+        eta_itf_k = torch.repeat_interleave(eta_boundaries, ni * nj).reshape(self.itf_k_shape_3d)
         self.x3_itf_k_new = self._to_new_itf_k(x3_itf_k)
         self.eta_itf_k_new = self._to_new_itf_k(eta_itf_k)
 
@@ -321,28 +321,28 @@ class CubedSphere3D(CubedSphere):
 
         ## Construct the combined coordinate vector for the numeric/equiangular coordinate (x1, x2, η)
         ## This is the numeric coordinate at every grid (and interface) point
-        coordVec_num = xp.stack(
-            (xp.broadcast_to(x1[None, None, :], eta.shape), xp.broadcast_to(x2[None, :, None], eta.shape), eta)
+        coordVec_num = torch.stack(
+            (torch.broadcast_to(x1[None, None, :], eta.shape), torch.broadcast_to(x2[None, :, None], eta.shape), eta)
         )
 
-        coordVec_num_itf_i = xp.stack(
+        coordVec_num_itf_i = torch.stack(
             (
-                xp.broadcast_to(x1_itf_i[None, None, :], eta_itf_i.shape),
-                xp.broadcast_to(x2_itf_i[None, :, None], eta_itf_i.shape),
+                torch.broadcast_to(x1_itf_i[None, None, :], eta_itf_i.shape),
+                torch.broadcast_to(x2_itf_i[None, :, None], eta_itf_i.shape),
                 eta_itf_i,
             )
         )
-        coordVec_num_itf_j = xp.stack(
+        coordVec_num_itf_j = torch.stack(
             (
-                xp.broadcast_to(x1_itf_j[None, None, :], eta_itf_j.shape),
-                xp.broadcast_to(x2_itf_j[None, :, None], eta_itf_j.shape),
+                torch.broadcast_to(x1_itf_j[None, None, :], eta_itf_j.shape),
+                torch.broadcast_to(x2_itf_j[None, :, None], eta_itf_j.shape),
                 eta_itf_j,
             )
         )
-        coordVec_num_itf_k = xp.stack(
+        coordVec_num_itf_k = torch.stack(
             (
-                xp.broadcast_to(x1_itf_k[None, None, :], eta_itf_k.shape),
-                xp.broadcast_to(x2_itf_k[None, :, None], eta_itf_k.shape),
+                torch.broadcast_to(x1_itf_k[None, None, :], eta_itf_k.shape),
+                torch.broadcast_to(x2_itf_k[None, :, None], eta_itf_k.shape),
                 eta_itf_k,
             )
         )
@@ -457,13 +457,11 @@ class CubedSphere3D(CubedSphere):
         the smaller the scale height, the lower down the feature disappears from the coordinate
         surfaces.
         """
-        xp = self.device.xp
-
         if self.vertical_coord == "gal_chen":
             return 1.0 - eta
 
         k = self.ztop / scale
-        return xp.sinh(k * (1.0 - eta)) / math.sinh(k)
+        return torch.sinh(k * (1.0 - eta)) / math.sinh(k)
 
     def _check_invertibility(self, h_large: NDArray, h_small: NDArray):
         """
@@ -535,22 +533,20 @@ class CubedSphere3D(CubedSphere):
         and is what Gal-Chen does in any case, since it decays both parts at the same rate.
         """
 
-        xp = self.device.xp
-
         # If no topography was passed, set it to zero
         if zbot_new is None or zbot_itf_i_new is None or zbot_itf_j_new is None:
-            self.z_floor = xp.zeros(self.floor_shape, dtype=self.dtype)
-            self.z_floor_itf_i = xp.zeros(self.itf_i_floor_shape, dtype=self.dtype)
-            self.z_floor_itf_j = xp.zeros(self.itf_j_floor_shape, dtype=self.dtype)
+            self.z_floor = torch.zeros(self.floor_shape, dtype=self.dtype)
+            self.z_floor_itf_i = torch.zeros(self.itf_i_floor_shape, dtype=self.dtype)
+            self.z_floor_itf_j = torch.zeros(self.itf_j_floor_shape, dtype=self.dtype)
         else:
             self.z_floor = zbot_new.copy()
             self.z_floor_itf_i = zbot_itf_i_new.copy()
             self.z_floor_itf_j = zbot_itf_j_new.copy()
 
         if zbot is None or zbot_itf_i is None or zbot_itf_j is None:
-            self.zbot = xp.zeros(self.grid_shape_2d, dtype=self.dtype)
-            self.zbot_itf_i = xp.zeros_like(self.coordVec_num_itf_i[0, 0, ...])
-            self.zbot_itf_j = xp.zeros_like(self.coordVec_num_itf_j[0, 0, ...])
+            self.zbot = torch.zeros(self.grid_shape_2d, dtype=self.dtype)
+            self.zbot_itf_i = torch.zeros_like(self.coordVec_num_itf_i[0, 0, ...])
+            self.zbot_itf_j = torch.zeros_like(self.coordVec_num_itf_j[0, 0, ...])
         else:
             self.zbot = zbot.copy()
             self.zbot_itf_i = zbot_itf_i.copy()
@@ -562,14 +558,14 @@ class CubedSphere3D(CubedSphere):
             h1 = total if large is None else large
             return h1, total - h1
 
-        h1, h2 = split(self.zbot[xp.newaxis, :, :], None if zbot_large is None else zbot_large[xp.newaxis, :, :])
+        h1, h2 = split(self.zbot[None, :, :], None if zbot_large is None else zbot_large[None, :, :])
         h1_i, h2_i = split(
-            self.zbot_itf_i[xp.newaxis, :, :],
-            None if zbot_large_itf_i is None else zbot_large_itf_i[xp.newaxis, :, :],
+            self.zbot_itf_i[None, :, :],
+            None if zbot_large_itf_i is None else zbot_large_itf_i[None, :, :],
         )
         h1_j, h2_j = split(
-            self.zbot_itf_j[xp.newaxis, :, :],
-            None if zbot_large_itf_j is None else zbot_large_itf_j[xp.newaxis, :, :],
+            self.zbot_itf_j[None, :, :],
+            None if zbot_large_itf_j is None else zbot_large_itf_j[None, :, :],
         )
 
         h1_bulk, h2_bulk = split(
@@ -621,8 +617,6 @@ class CubedSphere3D(CubedSphere):
         Build the physical coordinate arrays and vectors (gnomonic plane, lat/lon, Cartesian)
         based on the pre-defined equiangular coordinates (x1, x2) and height (x3)
         """
-        xp = self.device.xp
-
         # Retrieve the numeric values for use here
         x1 = self.x1
         x2 = self.x2
@@ -664,18 +658,18 @@ class CubedSphere3D(CubedSphere):
         # height is still necessarily a 3D array.
         # x comes before y in the indices -> Y is the "fast-varying" index
 
-        Y_block, X_block = xp.meshgrid(xp.tan(x2), xp.tan(x1), indexing="ij")
+        Y_block, X_block = torch.meshgrid(torch.tan(x2), torch.tan(x1), indexing="ij")
 
-        X_new = self._to_new(xp.tile(X_block, (num_elements_x3 * self.num_solpts, 1, 1)))
-        Y_new = self._to_new(xp.tile(Y_block, (num_elements_x3 * self.num_solpts, 1, 1)))
+        X_new = self._to_new(torch.tile(X_block, (num_elements_x3 * self.num_solpts, 1, 1)))
+        Y_new = self._to_new(torch.tile(Y_block, (num_elements_x3 * self.num_solpts, 1, 1)))
 
         self.boundary_sn = X_block[0, :]  # Coordinates of the south and north boundaries along the X (west-east) axis
         self.boundary_we = Y_block[:, 0]  # Coordinates of the west and east boundaries along the Y (south-north) axis
 
-        self.boundary_sn_new = xp.tile(
+        self.boundary_sn_new = torch.tile(
             self.boundary_sn.reshape(self.num_elements_x1, self.num_solpts), (self.num_solpts,)
         ).reshape((self.num_elements_x1, self.num_solpts, self.num_solpts))
-        self.boundary_we_new = xp.tile(
+        self.boundary_we_new = torch.tile(
             self.boundary_we.reshape(self.num_elements_x2, self.num_solpts), (self.num_solpts,)
         ).reshape((self.num_elements_x2, self.num_solpts, self.num_solpts))
 
@@ -685,16 +679,16 @@ class CubedSphere3D(CubedSphere):
         # are expected to be of size (#interface, #pts).  Compared to the usual (j,i) ordering,
         # this means that the i-interface variable should be transposed
 
-        X_itf_i = xp.broadcast_to(xp.tan(x1_itf_i)[xp.newaxis, :], (nj, num_elements_x1 + 1)).T
-        Y_itf_i = xp.broadcast_to(xp.tan(x2_itf_i)[:, xp.newaxis], (nj, num_elements_x1 + 1)).T
-        X_itf_j = xp.broadcast_to(xp.tan(x1_itf_j)[xp.newaxis, :], (num_elements_x2 + 1, ni))
-        Y_itf_j = xp.broadcast_to(xp.tan(x2_itf_j)[:, xp.newaxis], (num_elements_x2 + 1, ni))
+        X_itf_i = torch.broadcast_to(torch.tan(x1_itf_i)[None, :], (nj, num_elements_x1 + 1)).T
+        Y_itf_i = torch.broadcast_to(torch.tan(x2_itf_i)[:, None], (nj, num_elements_x1 + 1)).T
+        X_itf_j = torch.broadcast_to(torch.tan(x1_itf_j)[None, :], (num_elements_x2 + 1, ni))
+        Y_itf_j = torch.broadcast_to(torch.tan(x2_itf_j)[:, None], (num_elements_x2 + 1, ni))
 
         self.delta2_block = 1.0 + X_block**2 + Y_block**2
-        self.delta_block = xp.sqrt(self.delta2_block)
+        self.delta_block = torch.sqrt(self.delta2_block)
 
         self.delta2_new = 1.0 + X_new**2 + Y_new**2
-        self.delta_new = xp.sqrt(self.delta2_new)
+        self.delta_new = torch.sqrt(self.delta2_new)
 
         self.X_block = X_block
         self.Y_block = Y_block
@@ -707,9 +701,9 @@ class CubedSphere3D(CubedSphere):
         # * gnonomic coordinates (X, Y, Z)
 
         def to_gnomonic(coord_num, z):
-            gnom = xp.empty_like(coord_num)
-            gnom[0] = xp.tan(coord_num[0])
-            gnom[1] = xp.tan(coord_num[1])
+            gnom = torch.empty_like(coord_num)
+            gnom[0] = torch.tan(coord_num[0])
+            gnom[1] = torch.tan(coord_num[1])
             gnom[2] = z
             return gnom
 
@@ -725,7 +719,7 @@ class CubedSphere3D(CubedSphere):
 
         ref = coordVec_gnom
         diff = self.gnomonic - self._to_new(ref)
-        diff_n = xp.linalg.norm(diff) / xp.linalg.norm(ref)
+        diff_n = torch.linalg.norm(diff) / torch.linalg.norm(ref)
         if diff_n > 1e-15:
             print(f"Large diff {diff_n:.2e}")
             raise ValueError
@@ -738,8 +732,8 @@ class CubedSphere3D(CubedSphere):
         # Yc = (r+Z)*Y/sqrt(1+X^2+Y^2)
         # Zc = (r+Z)/sqrt(1+X^2+Y^2)
         def gnomonic_to_cartesian(gnom):
-            cart = xp.empty_like(gnom)
-            delt = xp.sqrt(1.0 + gnom[0, ...] ** 2 + gnom[1, ...] ** 2)
+            cart = torch.empty_like(gnom)
+            delt = torch.sqrt(1.0 + gnom[0, ...] ** 2 + gnom[1, ...] ** 2)
             cart[0, ...] = (
                 (self.earth_radius + gnom[2, ...])
                 / delt
@@ -789,7 +783,7 @@ class CubedSphere3D(CubedSphere):
         # * Polar coordinates (lat, lon, Z)
 
         def cartesian_to_polar(cart, gnom):
-            polar = xp.empty_like(cart)
+            polar = torch.empty_like(cart)
             [polar[0, :], polar[1, :], _] = cart2sph(cart[0, :], cart[1, :], cart[2, :])
             polar[2, :] = gnom[2, :]
 
@@ -860,18 +854,18 @@ class CubedSphere3D(CubedSphere):
         self.lon_itf_j = lon_itf_j
         self.lat_itf_j = lat_itf_j
 
-        self.coslon = xp.cos(lon)
-        self.sinlon = xp.sin(lon)
-        self.coslat = xp.cos(lat)
-        self.sinlat = xp.sin(lat)
+        self.coslon = torch.cos(lon)
+        self.sinlon = torch.sin(lon)
+        self.coslat = torch.cos(lat)
+        self.sinlat = torch.sin(lat)
 
-        self.coslon_new = xp.cos(self.polar[0, ...])
-        self.coslat_new = xp.cos(self.polar[1, ...])
+        self.coslon_new = torch.cos(self.polar[0, ...])
+        self.coslat_new = torch.cos(self.polar[1, ...])
 
         # The coordinates are built in double precision for accuracy, then stored in the requested
         # precision. Doing this here, before the metric is built, means the metric (which differences
         # these arrays through the operators) sees a single, consistent dtype.
-        cast_double_arrays(self, self.device.xp, self.dtype)
+        cast_double_arrays(self, self.dtype)
 
     def _to_new(self, a: NDArray) -> NDArray:
         """Convert input array to new memory layout"""
@@ -887,9 +881,7 @@ class CubedSphere3D(CubedSphere):
             self.num_solpts,
         )
         new_shape = a.shape[:-3] + self.grid_shape_3d_new
-        xp = self.device.xp
-
-        return xp.moveaxis(a.reshape(tmp_shape), (-5, -3), (-3, -2)).reshape(new_shape)
+        return torch.moveaxis(a.reshape(tmp_shape), (-5, -3), (-3, -2)).reshape(new_shape)
 
     def to_single_block(self, a):
         """Convert input array to old memory layout"""
@@ -905,9 +897,7 @@ class CubedSphere3D(CubedSphere):
             self.num_solpts,
         )
         new_shape = a.shape[:-4] + self.block_shape
-        xp = self.device.xp
-
-        return xp.moveaxis(a.reshape(tmp_shape), (-3, -2), (-5, -3)).reshape(new_shape)
+        return torch.moveaxis(a.reshape(tmp_shape), (-3, -2), (-5, -3)).reshape(new_shape)
 
     def _to_new_itf_i(self, a):
         """Convert input array (west and east interface) to new memory layout"""
@@ -915,9 +905,7 @@ class CubedSphere3D(CubedSphere):
         if a.shape[-3:] != self.itf_i_shape_3d:
             raise ValueError(f"Unexpected array shape {a.shape}, expected (...,) {self.itf_i_shape_3d})")
 
-        xp = self.device.xp
-
-        new = xp.empty(a.shape[:-3] + self.itf_i_shape, dtype=a.dtype)
+        new = torch.empty(a.shape[:-3] + self.itf_i_shape, dtype=a.dtype)
 
         tmp_shape1 = a.shape[:-3] + (
             self.num_elements_x3,
@@ -932,7 +920,7 @@ class CubedSphere3D(CubedSphere):
             self.num_elements_x1 + 1,
             self.num_solpts**2,
         )
-        tmp_array = xp.moveaxis(a.reshape(tmp_shape1), (-4, -2), (-2, -1)).reshape(tmp_shape2)
+        tmp_array = torch.moveaxis(a.reshape(tmp_shape1), (-4, -2), (-2, -1)).reshape(tmp_shape2)
 
         west = numpy.s_[..., 1:, : self.num_solpts**2]
         east = numpy.s_[..., :-1, self.num_solpts**2 :]
@@ -946,12 +934,10 @@ class CubedSphere3D(CubedSphere):
 
     def _to_new_itf_j(self, a):
         """Convert input array (south and north interface) to new memory layout"""
-        xp = self.device.xp
-
         if a.shape[-3:] != self.itf_j_shape_3d:
             raise ValueError(f"Unexpected array shape {a.shape}, expected (...,) {self.itf_j_shape_3d})")
 
-        new = xp.zeros(a.shape[:-3] + self.itf_j_shape, dtype=a.dtype)
+        new = torch.zeros(a.shape[:-3] + self.itf_j_shape, dtype=a.dtype)
 
         tmp_shape1 = a.shape[:-3] + (
             self.num_elements_x3,
@@ -966,10 +952,10 @@ class CubedSphere3D(CubedSphere):
             self.num_elements_x1,
             self.num_solpts**2,
         )
-        tmp_array = xp.moveaxis(a.reshape(tmp_shape1), -4, -2).reshape(tmp_shape2)
+        tmp_array = torch.moveaxis(a.reshape(tmp_shape1), -4, -2).reshape(tmp_shape2)
 
-        south = xp.s_[..., 1:, :, : self.num_solpts**2]
-        north = xp.s_[..., :-1, :, self.num_solpts**2 :]
+        south = numpy.s_[..., 1:, :, : self.num_solpts**2]
+        north = numpy.s_[..., :-1, :, self.num_solpts**2 :]
         new[south] = tmp_array
         new[north] = tmp_array
 
@@ -980,12 +966,10 @@ class CubedSphere3D(CubedSphere):
 
     def _to_new_itf_k(self, a):
         """Convert input array (bottom and top interface) to new memory layout"""
-        xp = self.device.xp
-
         if a.shape[-3:] != self.itf_k_shape_3d:
             raise ValueError(f"Unexpected array shape {a.shape}, expected (...,) {self.itf_k_shape_3d})")
 
-        new = xp.zeros(a.shape[:-3] + self.itf_k_shape, dtype=a.dtype)
+        new = torch.zeros(a.shape[:-3] + self.itf_k_shape, dtype=a.dtype)
 
         tmp_shape1 = a.shape[:-3] + (
             self.num_elements_x3 + 1,
@@ -1000,10 +984,10 @@ class CubedSphere3D(CubedSphere):
             self.num_elements_x1,
             self.num_solpts**2,
         )
-        tmp_array = xp.swapaxes(a.reshape(tmp_shape1), -3, -2).reshape(tmp_shape2)
+        tmp_array = torch.swapaxes(a.reshape(tmp_shape1), -3, -2).reshape(tmp_shape2)
 
-        bottom = xp.s_[..., 1:, :, :, : self.num_solpts**2]
-        top = xp.s_[..., :-1, :, :, self.num_solpts**2 :]
+        bottom = numpy.s_[..., 1:, :, :, : self.num_solpts**2]
+        top = numpy.s_[..., :-1, :, :, self.num_solpts**2 :]
         new[bottom] = tmp_array
         new[top] = tmp_array
 
@@ -1027,14 +1011,13 @@ class CubedSphere3D(CubedSphere):
         if a.shape[-3:] != self.floor_shape:
             raise ValueError(f"Unhandled shape {a.shape}, expected (...,) + {self.floor_shape}")
 
-        xp = self.device.xp
         axis1 = a.ndim - 2
         repeat_count = self.num_solpts if not k_itf else 2
         tile_count = self.num_elements_x3
         if k_itf:
             tile_count += 2
         dest_shape = self.grid_shape_3d_new if not k_itf else self.itf_k_shape
-        return xp.tile(xp.repeat(a, repeat_count, axis=axis1), (tile_count, 1, 1)).reshape(dest_shape)
+        return torch.tile(torch.repeat_interleave(a, repeat_count, dim=axis1), (tile_count, 1, 1)).reshape(dest_shape)
 
     def get_itf_i_floor(self, a):
         """Retrieve slice of interface-i array 'a' that's on the floor"""
@@ -1050,11 +1033,10 @@ class CubedSphere3D(CubedSphere):
         if a.shape[-3:] != self.itf_i_floor_shape:
             raise ValueError(f"Unhandled shape {a.shape}, expected ... + {self.itf_i_floor_shape}")
 
-        xp = self.device.xp
         tmp_shape1 = a.shape[:-3] + (self.num_elements_x2, self.num_elements_x1 + 2, 2, self.num_solpts)
         axis1 = a.ndim - 1
         a_tmp = a.reshape(tmp_shape1)
-        return xp.tile(xp.repeat(a_tmp, self.num_solpts, axis=axis1), (self.num_elements_x3, 1, 1, 1)).reshape(
+        return torch.tile(torch.repeat_interleave(a_tmp, self.num_solpts, dim=axis1), (self.num_elements_x3, 1, 1, 1)).reshape(
             self.itf_i_shape
         )
 
@@ -1072,11 +1054,10 @@ class CubedSphere3D(CubedSphere):
         if a.shape[-3:] != self.itf_j_floor_shape:
             raise ValueError(f"Unhandled shape {a.shape}, expected ... + {self.itf_j_floor_shape}")
 
-        xp = self.device.xp
         tmp_shape1 = a.shape[:-3] + (self.num_elements_x2 + 2, self.num_elements_x1, 2, self.num_solpts)
         axis1 = a.ndim - 1
         a_tmp = a.reshape(tmp_shape1)
-        return xp.tile(xp.repeat(a_tmp, self.num_solpts, axis=axis1), (self.num_elements_x3, 1, 1, 1)).reshape(
+        return torch.tile(torch.repeat_interleave(a_tmp, self.num_solpts, dim=axis1), (self.num_elements_x3, 1, 1, 1)).reshape(
             self.itf_j_shape
         )
 
@@ -1096,12 +1077,10 @@ class CubedSphere3D(CubedSphere):
         if a.shape[-2:] != expected_shape:
             raise ValueError(f"Unhandled shape {a.shape}, expected ... + {expected_shape}")
 
-        xp = self.device.xp
-
-        new = xp.zeros(a.shape[:-2] + self.itf_i_floor_shape, dtype=a.dtype)
+        new = torch.zeros(a.shape[:-2] + self.itf_i_floor_shape, dtype=a.dtype)
         tmp_shape1 = a.shape[:-2] + (self.num_elements_x2, self.num_solpts, self.num_elements_x1 + 1)
 
-        tmp_array = xp.moveaxis(a.reshape(tmp_shape1), -2, -1)
+        tmp_array = torch.moveaxis(a.reshape(tmp_shape1), -2, -1)
 
         west = numpy.s_[..., 1:, : self.num_solpts]
         east = numpy.s_[..., :-1, self.num_solpts :]
@@ -1116,9 +1095,7 @@ class CubedSphere3D(CubedSphere):
         if a.shape[-2:] != expected_shape:
             raise ValueError(f"Unhandled shape {a.shape}, expected ... + {expected_shape}")
 
-        xp = self.device.xp
-
-        new = xp.zeros(a.shape[:-2] + self.itf_j_floor_shape, dtype=a.dtype)
+        new = torch.zeros(a.shape[:-2] + self.itf_j_floor_shape, dtype=a.dtype)
         tmp_shape1 = a.shape[:-2] + (self.num_elements_x2 + 1, self.num_elements_x1, self.num_solpts)
         tmp_array = a.reshape(tmp_shape1)
 
@@ -1145,8 +1122,6 @@ class CubedSphere3D(CubedSphere):
         (u1_contra, u2_contra) : tuple
             Tuple of contravariant winds"""
 
-        xp = self.device.xp
-
         # First, re-use wind2contra_2d to get preliminary values for u1_contra and u2_contra.  We will update this
         # with the contribution from vertical velocity in a second step.
 
@@ -1161,7 +1136,7 @@ class CubedSphere3D(CubedSphere):
             lambda_dot = u / (self.earth_radius * self.coslat_new)
             phi_dot = v / self.earth_radius
 
-        denom = xp.sqrt(
+        denom = torch.sqrt(
             (
                 math.cos(self.lat_p)
                 + self.X_new * math.sin(self.lat_p) * math.sin(self.angle_p)
@@ -1288,7 +1263,7 @@ class CubedSphere3D(CubedSphere):
             / denom
         )
 
-        denom[:, :] = self.device.xp.sqrt(
+        denom[:, :] = torch.sqrt(
             (
                 math.cos(self.lat_p)
                 + self.X_new * math.sin(self.lat_p) * math.sin(self.angle_p)

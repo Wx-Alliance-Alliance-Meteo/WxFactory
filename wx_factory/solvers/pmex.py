@@ -1,6 +1,9 @@
+import torch
 import math
 
 from mpi4py import MPI
+
+from .dense import expm, solve_triangular
 
 from ..device import Device
 
@@ -48,7 +51,7 @@ def pmex(
     comm = device.comm
 
     # Reject unreachable tolerance
-    tol_floor = 100.0 * float(device.xp.finfo(u.dtype).eps)
+    tol_floor = 100.0 * float(torch.finfo(u.dtype).eps)
     if tol < tol_floor:
         raise ValueError(
             f"PMEX tolerance {tol:.1e} is unreachable in {u.dtype} precision; " f"use at least {tol_floor:.1e}."
@@ -60,7 +63,7 @@ def pmex(
     if p == 0:
         p = 1
         # Add extra column of zeros
-        u = device.xp.row_stack((u, device.xp.zeros(len(u), dtype=u.dtype)))
+        u = torch.row_stack((u, torch.zeros(len(u), dtype=u.dtype)))
 
     step = 0
     krystep = 0
@@ -83,31 +86,31 @@ def pmex(
 
     # Mixed precision: the basis V stays in the working precision, but the bookkeeping (H, M, Minv, N),
     # the matrix exponential and the error estimates use acc (float64 for a float32 basis).
-    acc = device.xp.float64 if u.dtype == device.xp.float32 else u.dtype
+    acc = torch.float64 if u.dtype == torch.float32 else u.dtype
 
     # Preallocate matrix
-    V = device.xp.zeros((mmax + 1, n + p), dtype=u.dtype)
-    H = device.xp.zeros((mmax + 1, mmax + 1), dtype=acc)
-    Minv = device.xp.eye(mmax, dtype=acc)
-    M = device.xp.eye(mmax, dtype=acc)
-    N = device.xp.zeros([mmax, mmax], dtype=acc)
+    V = torch.zeros((mmax + 1, n + p), dtype=u.dtype)
+    H = torch.zeros((mmax + 1, mmax + 1), dtype=acc)
+    Minv = torch.eye(mmax, dtype=acc)
+    M = torch.eye(mmax, dtype=acc)
+    N = torch.zeros([mmax, mmax], dtype=acc)
 
     # The MPI datatype for the reductions must match the precision of the buffer being reduced.
-    mpi_real = MPI.FLOAT if u.dtype == device.xp.float32 else MPI.DOUBLE
-    mpi_acc = MPI.DOUBLE if acc == device.xp.float64 else MPI.FLOAT
+    mpi_real = MPI.FLOAT if u.dtype == torch.float32 else MPI.DOUBLE
+    mpi_acc = MPI.DOUBLE if acc == torch.float64 else MPI.FLOAT
 
     # Initial condition
-    w = device.xp.zeros((numSteps, n), dtype=u.dtype)
+    w = torch.zeros((numSteps, n), dtype=u.dtype)
     w[0, :] = u[0, :].copy()
 
     # compute the 1-norm of u
-    local_nrmU = device.xp.sum(abs(u[1:, :]), axis=1)
-    global_normU = device.xp.empty_like(local_nrmU)
+    local_nrmU = torch.sum(abs(u[1:, :]), dim=1)
+    global_normU = torch.empty_like(local_nrmU)
 
     device.synchronize()
     comm.Allreduce([local_nrmU, mpi_real], [global_normU, mpi_real])
 
-    normU = device.xp.amax(global_normU)
+    normU = torch.amax(global_normU)
 
     # Normalization factors
     if ppo > 1 and normU > 0:
@@ -119,7 +122,7 @@ def pmex(
         mu = 1.0
 
     # Flip the rest of the u matrix
-    u_flip = nu * device.xp.flipud(u[1:, :])
+    u_flip = nu * torch.flipud(u[1:, :])
 
     # Compute and initial starting approximation for the step size
 
@@ -141,7 +144,7 @@ def pmex(
     kestold = True
     same_tau = None
 
-    tiny_err = float(device.xp.finfo(acc).tiny)
+    tiny_err = float(torch.finfo(acc).tiny)
 
     l = 0
 
@@ -162,7 +165,7 @@ def pmex(
 
             # Normalize initial vector (this norm is nonzero)
             local_sum = V[0, 0:n].astype(acc) @ V[0, 0:n].astype(acc)
-            global_sum_nrm = device.xp.empty_like(local_sum)
+            global_sum_nrm = torch.empty_like(local_sum)
             device.synchronize()
             comm.Allreduce([local_sum, mpi_acc], [global_sum_nrm, mpi_acc])
             beta = math.sqrt(global_sum_nrm + V[j, n : n + p].astype(acc) @ V[j, n : n + p].astype(acc))
@@ -182,7 +185,7 @@ def pmex(
 
             # 2. compute terms needed for R and T
             local_vec = (V[0 : j + 1, 0:n] @ V[j - 1 : j + 1, 0:n].T).astype(acc)
-            global_vec = device.xp.empty_like(local_vec)
+            global_vec = torch.empty_like(local_vec)
 
             device.synchronize()
             comm.Allreduce([local_vec, mpi_acc], [global_vec, mpi_acc])
@@ -196,19 +199,19 @@ def pmex(
             if j > 1:
                 M[j - 1, 0 : j - 1] = global_vec[0 : j - 1, 0]
                 N[0 : j - 1, j - 1] = -global_vec[0 : j - 1, 0]
-                Minv[j - 1, 0 : j - 1] = -device.xp.transpose(global_vec[0 : j - 1, 0]) @ Minv[0 : j - 1, 0 : j - 1]
+                Minv[j - 1, 0 : j - 1] = -global_vec[0 : j - 1, 0] @ Minv[0 : j - 1, 0 : j - 1]
 
             # 3b. part 1: the mat-vec
-            rhs = (device.xp.eye(j, dtype=acc) + device.xp.matmul(N[0:j, 0:j], Minv[0:j, 0:j])) @ global_vec[0:j, 1]
+            rhs = (torch.eye(j, dtype=acc) + torch.matmul(N[0:j, 0:j], Minv[0:j, 0:j])) @ global_vec[0:j, 1]
 
             # 3c. part 2: the LOWER triangular solve
-            if hasattr(device.xp.linalg, "solve_triangular"):
-                sol = device.xp.linalg.solve_triangular(
+            if hasattr(torch.linalg, "solve_triangular"):
+                sol = torch.linalg.solve_triangular(
                     M[0:j, 0:j].contiguous(), rhs.reshape(-1, 1), upper=False, unitriangular=True
                 )[:, 0]
             else:
                 sol = device.array(
-                    device.xalg.linalg.solve_triangular(
+                    solve_triangular(
                         M[0:j, 0:j], rhs, lower=True, unit_diagonal=True, check_finite=False
                     )
                 )
@@ -224,18 +227,18 @@ def pmex(
             raw_nrm_sq = global_vec[-1, 1]
             sum_sqrd = (global_vec[0:j, 1] ** 2).sum()
             diff = raw_nrm_sq - sum_sqrd
-            cancel_floor = 100.0 * float(device.xp.finfo(u.dtype).eps)
+            cancel_floor = 100.0 * float(torch.finfo(u.dtype).eps)
 
             if diff <= cancel_floor * raw_nrm_sq:
                 # Severe cancellation: recompute the norm directly (one reduction, no cancellation).
                 local_sum = V[j, 0:n].astype(acc) @ V[j, 0:n].astype(acc)
-                global_sum_nrm = device.xp.empty_like(local_sum)
+                global_sum_nrm = torch.empty_like(local_sum)
                 device.synchronize()
                 comm.Allreduce([local_sum, mpi_acc], [global_sum_nrm, mpi_acc])
                 curr_nrm = math.sqrt(global_sum_nrm + V[j, n : n + p].astype(acc) @ V[j, n : n + p].astype(acc))
                 reg_comm_nrm += 1
             else:
-                curr_nrm = device.xp.sqrt(diff)
+                curr_nrm = torch.sqrt(diff)
 
             # Happy breakdown
             if curr_nrm < tol:
@@ -258,7 +261,7 @@ def pmex(
         H[j, j - 1] = 0.0
 
         # Compute the exponential of the augmented matrix
-        F_half = device.array(device.xalg.linalg.expm(sgn * 0.5 * tau * H[0 : j + 1, 0 : j + 1]))
+        F_half = device.array(expm(sgn * 0.5 * tau * H[0 : j + 1, 0 : j + 1]))
         F = F_half @ F_half
 
         exps += 1
@@ -366,7 +369,7 @@ def pmex(
 
                 for k in range(blownTs):
                     tau_phantom = tau_out[l + k] - tau_now
-                    F2 = device.array(device.xalg.linalg.expm(sgn * tau_phantom * H[0:j, :j]))
+                    F2 = device.array(expm(sgn * tau_phantom * H[0:j, :j]))
                     w[l + k, :] = (beta * F2[:j, 0]).astype(u.dtype) @ V[:j, :n]
 
                 # Advance l.

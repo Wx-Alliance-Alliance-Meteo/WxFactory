@@ -13,15 +13,10 @@ sys.path.append(main_project_dir)
 from mpi_test import MpiRunner
 
 from tests.unit.common.test_process_topology import ExchangeTest, GatherScatterTest
-from tests.unit.operators.test_extrap import OperatorsExtrapEuler3DTestCase
-from tests.unit.pde.test_rusanov_3d import PdeRusanov3DTestCase
 from tests.unit.restart.test_restart import ShallowWaterRestartTestCase, Euler3DRestartTestCase
-from tests.unit.rhs.test_side_by_side import RhsSideBySideEuler3DTestCase
 from tests.unit.solvers.test_pmex_mpi import PmexMpiTestCases
 from tests.unit.solvers.test_kiops_mpi import KiopsMpiTestCases
 from tests.unit.solvers.test_fgmres_mpi import FgmresMpiTestCases
-from tests.unit.pde.test_pointwise_flux_3d import PDEPointWiseFlux3DTestCase
-from tests.unit.pde.test_riemann_flux import PDERiemannFlux3DTestCase
 
 
 def add_test(suite: unittest.TestSuite, test: unittest.TestCase, test_re: Optional[re.Pattern]):
@@ -42,7 +37,7 @@ def load_tests(test_name: str):
     add_test(suite, ShallowWaterRestartTestCase(24, "test_multisize", optional=True), test_re)
     add_test(suite, Euler3DRestartTestCase(24, "test_multisize", optional=True), test_re)
 
-    for dev in ["cpu", "torch", "cuda"]:
+    for dev in ["cpu", "cuda"]:
         add_test(suite, ExchangeTest("vector2d_1d_shape1d", dev), test_re)
         add_test(suite, ExchangeTest("vector2d_1d_shape2d", dev), test_re)
         add_test(suite, ExchangeTest("vector2d_2d_shape1d", dev), test_re)
@@ -83,20 +78,9 @@ def load_tests(test_name: str):
     add_test(suite, PmexMpiTestCases("test_pmex_mpi_2_processes"), test_re)
     add_test(suite, KiopsMpiTestCases("test_kiops_mpi_2_processes"), test_re)
 
-    add_test(suite, PdeRusanov3DTestCase(6, "test_rusanov_kernel_cpu"), test_re)
-    add_test(suite, PdeRusanov3DTestCase(6, "test_rusanov_kernel_gpu"), test_re)
-    add_test(suite, PdeRusanov3DTestCase(24, "test_rusanov_kernel_cpu", optional=True), test_re)
-    add_test(suite, PdeRusanov3DTestCase(24, "test_rusanov_kernel_gpu", optional=True), test_re)
 
-    add_test(suite, OperatorsExtrapEuler3DTestCase(6, "test_extrap_kernel_cpu"), test_re)
-    add_test(suite, OperatorsExtrapEuler3DTestCase(6, "test_extrap_kernel_gpu"), test_re)
-    add_test(suite, OperatorsExtrapEuler3DTestCase(24, "test_extrap_kernel_cpu", optional=True), test_re)
-    add_test(suite, OperatorsExtrapEuler3DTestCase(24, "test_extrap_kernel_gpu", optional=True), test_re)
 
-    add_test(suite, RhsSideBySideEuler3DTestCase(6, "test_rhs_side_by_side"), test_re)
 
-    add_test(suite, PDEPointWiseFlux3DTestCase(6, "test_pointwise_flux_kernel_cpu"), test_re)
-    add_test(suite, PDERiemannFlux3DTestCase(6, "test_riemann_flux_kernel_cpu"), test_re)
 
     # TODO : This test needs more works on the data division between processes
     # suite.addTest(FgmresMpiTestCases('test_fgmres_mpi_2_processes'))

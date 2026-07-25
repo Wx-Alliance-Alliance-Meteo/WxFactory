@@ -1,3 +1,4 @@
+from ..common.matmul import kron
 import math
 import time
 from typing import List
@@ -332,10 +333,8 @@ class OutputCubesphereNetcdf(OutputCubesphere):
         times the (constant) volume of a reference element. The solution points inside an element are
         ordered with x1 varying fastest, then x2, then x3."""
         geom = self.geometry
-        xp = geom.device.xp
-
         w = geom.glweights
-        w3d = xp.kron(w, xp.kron(w, w))  # ordering: x3 slowest, x1 fastest
+        w3d = kron(w, kron(w, w))  # ordering: x3 slowest, x1 fastest
 
         elem_volume = geom.delta_x1 * geom.delta_x2 * geom.delta_x3 / 8.0
         return self.metric.sqrtG_new * w3d * elem_volume
