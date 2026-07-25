@@ -116,8 +116,8 @@ class Simulation:
         self.step_hooks.update(
             resolve_step_hooks(StepHookContext(config=self.config, geometry=self.geometry), phase=PHASE_GEOMETRY)
         )
-        self.operators_real = DFROperators(self.geometry, self.config, self.device)
-        self.operators_complex = DFROperators(self.geometry, self.config, self.device, self.device.complex_dtype)
+        self.operators_real = DFROperators(self.geometry, self.device)
+        self.operators_complex = DFROperators(self.geometry, self.device, self.device.complex_dtype)
         self.initial_state = init_state_vars(self.geometry, self.operators_real, self.config, self.step_hooks)
 
         self.output = resolve_output(
@@ -203,7 +203,6 @@ class Simulation:
                 print(f"Step {self.step_id} of {self.num_steps + self.starting_step}", flush=True)
 
             self.Q = self.integrator.step(self.Q, self.config.dt)
-            self.Q = self.operators_real.apply_filters(self.Q, self.geometry, self.initial_state.metric, self.config.dt)
 
             if self.rank == 0:
                 print(f"Elapsed time for step: {self.integrator.latest_time:.3f} secs", flush=True)

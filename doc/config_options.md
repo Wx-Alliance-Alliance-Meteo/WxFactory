@@ -36,20 +36,8 @@
 | | | | | |
  | **[Spatial_discretization]**  | **Type**  | **Default**  | **Valid range**   | **Description**  | 
    | num_elements_vertical  | int  | 1         | [1, inf]                         |   | 
-   | filter_apply          | str_to_bool  | False  |                              |   | 
-   | expfilter_apply       | str_to_bool  | False  |                              |   | 
    | num_solpts            | int   | [none]    | [1, inf]                         |   | 
    | num_elements_horizontal  | int  | [none]  | [1, inf]                         |   | 
-   | filter_order          | int   | 16        |                                  |   | 
-   | filter_order          | int   | 0         |                                  |   | 
-   | filter_cutoff         | float  | 0.25     |                                  |   | 
-   | filter_cutoff         | float  | 0.0      |                                  |   | 
-   | expfilter_order       | int   | [none]    |                                  |   | 
-   | expfilter_order       | int   | 0         |                                  |   | 
-   | expfilter_cutoff      | float  | [none]   |                                  |   | 
-   | expfilter_cutoff      | float  | 0.0      |                                  |   | 
-   | expfilter_strength    | float  | [none]   |                                  |   | 
-   | expfilter_strength    | float  | 0.0      |                                  |   | 
 | | | | | |
  | **[Grid]**            | **Type**  | **Default**  | **Valid range**           | **Description**  | 
    | grid_file             | lc-str  |         |                                  |   | 

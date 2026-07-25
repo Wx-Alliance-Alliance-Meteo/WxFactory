@@ -231,58 +231,6 @@
                     "type": "int",
                     "min": 1,
                     "default": 1
-                },
-                {
-                    "name": "filter_apply",
-                    "type": "bool",
-                    "default": false
-                },
-                {
-                    "name": "filter_order",
-                    "type": "int",
-                    "default": 16,
-                    "dependency": {
-                        "name": "filter_apply",
-                        "values": [true]
-                    }
-                },
-                {
-                    "name": "filter_cutoff",
-                    "type": "float",
-                    "default": 0.25,
-                    "dependency": {
-                        "name": "filter_apply",
-                        "values": [true]
-                    }
-                },
-                {
-                    "name": "expfilter_apply",
-                    "type": "bool",
-                    "default": false
-                },
-                {
-                    "name": "expfilter_order",
-                    "type": "int",
-                    "dependency": {
-                        "name": "expfilter_apply",
-                        "values": [true]
-                    }
-                },
-                {
-                    "name": "expfilter_cutoff",
-                    "type": "float",
-                    "dependency": {
-                        "name": "expfilter_apply",
-                        "values": [true]
-                    }
-                },
-                {
-                    "name": "expfilter_strength",
-                    "type": "float",
-                    "dependency": {
-                        "name": "expfilter_apply",
-                        "values": [true]
-                    }
                 }
             ]
         },

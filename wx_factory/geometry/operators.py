@@ -7,10 +7,8 @@ import sympy
 from typing import Optional
 from typing import Self, TypeVar
 
-from mpi4py import MPI
 from numpy.typing import NDArray, DTypeLike
 
-from ..common import Configuration
 from ..device import Device
 
 from .cubed_sphere_3d import CubedSphere3D
@@ -29,7 +27,7 @@ class DFROperators:
        * Correction matrices: `correction`, `correction_tr`.
     """
 
-    def __init__(self, grd: Geometry, param: Configuration, device: Device, dtype: DTypeLike = None):
+    def __init__(self, grd: Geometry, device: Device, dtype: DTypeLike = None):
         """Initialize the Direct Flux Reconstruction operators (matrices) based on input grid parameters.
 
         Parameters
@@ -37,8 +35,6 @@ class DFROperators:
         grd : Geometry
            Underlying grid, which must define `solutionPoints`, `solutionPoints_sym`, `extension`, `extension_sym` and
            `num_solpts` as member variables
-        param : Configuration
-           Configuration containing the filter and discretization options.
         device : Device
            Device on which the operator tensors are created.
         dtype : DTypeLike, optional
@@ -46,9 +42,6 @@ class DFROperators:
         """
 
         self.dtype = device.real_dtype if dtype is None else dtype
-
-        if param.filter_apply and not isinstance(grd.solutionPoints, numpy.ndarray):
-            raise NotImplementedError("DFROperators cannot form a filter with non-numpy arrays")
 
         # Build Vandermonde matrix to transform the modal representation to the (interior)
         # nodal representation
@@ -86,42 +79,9 @@ class DFROperators:
         )  # Only valid in 3D (hence the **2)
 
         diff = diffmat(grd.extension_sym)
-        diff = torch.asarray(diff).astype(self.dtype)
-
-        if param.filter_apply:
-            self.V = vandermonde(grd.extension)
-            self.invV = inv(self.V)
-            N = len(grd.extension) - 1
-            Nc = math.floor(param.filter_cutoff * N)
-            self.filter = filter_exponential(N, Nc, param.filter_order, self.V, self.invV)
-            self.diff_ext = torch.asarray(self.filter @ diff).astype(self.dtype)
-            self.diff_ext[torch.abs(self.diff_ext) < 1e-20] = 0.0
-
-        else:
-            self.diff_ext = diff
+        self.diff_ext = torch.asarray(diff).astype(self.dtype)
 
         assert self.diff_ext.dtype == self.dtype
-
-        self.expfilter_apply = param.expfilter_apply
-        if param.expfilter_apply:
-            if not getattr(grd, "is_3d_euler_grid", False):
-                raise TypeError(f"The 3D filter can only be applied on a CubedSphere3D geometry")
-            if grd.num_solpts < 2:
-                if device.comm.rank == 0:
-                    print(f"WARNING: 3D filter can only be applied if we have degree > 1")
-                self.expfilter_apply = False
-            else:
-                self.expfilter = self.make_filter(
-                    param.expfilter_strength, param.expfilter_order, param.expfilter_cutoff, grd
-                )
-
-                I2 = torch.eye(grd.num_solpts, dtype=V.dtype)
-                I3 = torch.eye(grd.num_solpts**2, dtype=V.dtype)
-                filter_x = kron(I3, self.expfilter).T
-                filter_y = kron(I2, kron(self.expfilter, I2)).T
-                filter_z = kron(self.expfilter, I3).T
-                self.expfilter_new = (filter_x @ filter_y) @ filter_z
-                assert self.expfilter_new.dtype == self.dtype
 
         if check_skewcentrosymmetry(self.diff_ext) is False:
             raise ValueError("Something horribly wrong has happened in the creation of the differentiation matrix")
@@ -213,43 +173,6 @@ class DFROperators:
         self.correction_WE_complex = self.correction_WE.astype(torch.complex128)
         self.correction_SN_complex = self.correction_SN.astype(torch.complex128)
         self.correction_DU_complex = self.correction_DU.astype(torch.complex128)
-
-    def make_filter(self, alpha: float, order: int, cutoff: float, geom: Geometry):
-        """Build an exponential modal filter as described in Warburton, eqn 5.16."""
-
-        # Scaled mode numbers
-        modes = torch.arange(geom.num_solpts, dtype=geom.solutionPoints.dtype) / (geom.num_solpts - 1)
-        Nc = cutoff
-
-        # After applying the filter, each mode is reduced in proportion to the filter order
-        # and the mode number relative to num_solpts, with modes below the cutoff limit untouched
-
-        residual_modes = torch.ones_like(modes)
-        residual_modes[modes > Nc] = torch.exp(-alpha * ((modes[modes > Nc] - cutoff) / (1 - cutoff)) ** order)
-
-        # Now, use a Vandermonde matrix to transform this modal filter into a nodal form
-
-        # mode-to-node operator
-        vander = legvander(geom.solutionPoints, geom.num_solpts - 1)
-
-        # node-to-mode operator
-        ivander = torch.linalg.inv(vander)
-
-        return vander @ torch.diag(residual_modes) @ ivander
-
-    def apply_filters(self, Q: numpy.ndarray, geom: Geometry, metric, dt: float):
-        """Apply the filters that have been activated on the given state vector."""
-
-        if self.expfilter_apply:
-            Q = self.apply_filter_3d(Q, metric)
-
-        return Q
-
-    def apply_filter_3d(self, Q: NDArray, metric: "Metric3DTopo"):
-        r"""Apply the exponential filter precomputed in expfilter to input fields \sqrt(g)*Q, and return the
-        filtered array."""
-
-        return ((metric.sqrtG_new * Q) @ self.expfilter_new) * metric.inv_sqrtG_new
 
     def comma_i(
         self: Self, field_interior: NDArray[T], border_i: NDArray[T], grid: CubedSphere3D, out: NDArray[T] | None = None
@@ -751,52 +674,6 @@ def remesh_operator(src_points: numpy.ndarray, target_points: numpy.ndarray) -> 
     modes[i, i] = 0.5  # damp the highest mode
 
     return (V_target @ modes @ inv_V_src).astype(float)
-
-
-def filter_exponential(N, Nc, s, V, invV):
-    r"""
-   Create an exponential filter matrix that can be used to filter out
-   high-frequency noise.
-
-   The filter matrix \(\mathcal{F}\) is defined as \(\mathcal{F}=
-   \mathcal{V}\Lambda\mathcal{V}^{-1}\) where the diagonal matrix,
-   \(\Lambda\) has the entries \(\Lambda_{ii}=\sigma(i-1)\) for
-   \(i=1,\ldots,n+1\) and the filter function, \(\sigma(i)\) has the form
-   \[
-      \sigma(i) =
-         \begin{cases}
-            1 & 0\le i\le n_c \\
-            e^{-\alpha\left (\frac{i-n_c}{n-n_c}\right )^s} & n_c<i\le n.
-      \end{cases}
-   \]
-   Here \(\alpha=-\log(\epsilon_M)\), where \(\epsilon_M\) is the machine
-   precision in working precision, \(n\) is the order of the element,
-   \(n_c\) is a cutoff, below which the low modes are left untouched and
-   \(s\) (has to be even) is the order of the filter.
-
-   Inputs:
-      N : The order of the element.
-      Nc : The cutoff, below which the low modes are left untouched.
-      s : The order of the filter.
-      V : The Vandermonde matrix, \(\mathcal{V}\).
-      invV : The inverse of the Vandermonde matric, \(\mathcal{V}^{-1}\).
-
-   Outputs:
-      F: The return value is the filter matrix, \(\mathcal{F}\).
-   """
-
-    n_digit = 30
-
-    alpha = -sympy.log(sympy.Float(numpy.finfo(float).eps, n_digit))
-
-    F = numpy.identity(N + 1, dtype=object)
-    for i in range(Nc, N + 1):
-        t = sympy.Rational((i - Nc), (N - Nc))
-        F[i, i] = sympy.exp(-alpha * t**s)
-
-    F = V @ F @ invV
-
-    return F
 
 
 def check_skewcentrosymmetry(m: numpy.ndarray) -> bool:
