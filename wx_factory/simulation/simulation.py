@@ -292,8 +292,11 @@ class Simulation:
 
     def _check_for_nan(self, Q):
         """Raise an exception if there are NaNs in the input"""
+        # Reduce on-device so we only transfer a single scalar to the host, and avoid
+        # a full-state D2H PCIe copy of Q just to scan it for NaNs.
+        has_nan = bool(torch.isnan(Q).any().item())
         error_detected = numpy.array([0], dtype=numpy.int32)
-        if numpy.any(numpy.isnan(self.device.to_host(Q))):
+        if has_nan:
             print(f"NaN detected on process {self.comm.rank}")
             error_detected[0] = 1
         error_detected_out = numpy.zeros_like(error_detected)
