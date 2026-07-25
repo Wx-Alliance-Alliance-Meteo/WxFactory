@@ -24,7 +24,7 @@
    | time_integrator       | lc-str  | [none]  |                                  |   | 
    | tolerance             | float  | [none]   |                                  |   | 
    | starting_step         | int   | 0         |                                  |   | 
-   | exponential_solver    | lc-str  | pmex    | {pmex, kiops, exode, pmex_ne, cwy_1s, cwy_ne, cwy_ne1s, dcgs2, icwy_1s, icwy_neiop, icwy_ne, icwy_ne1s, kiops_ne, pmex_1s, pmex_ne1s}  |   | 
+   | exponential_solver    | lc-str  | pmex    |                                  | Registered exponential-system solver.  |
    | exode_method          | lc-str  | bs3(2)  | {bs3(2), dp5(4), m4(3), kc3(2), exlrk3(2), exlrk4(3), f14(12), dp8(7), f10(8)}  |   | 
    | exode_controller      | lc-str  |         |                                  |   | 
    | krylov_size           | int   | 1         | [0, inf]                         |   | 

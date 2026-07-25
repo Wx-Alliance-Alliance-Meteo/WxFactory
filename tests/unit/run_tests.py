@@ -24,6 +24,7 @@ from tests.unit.output.test_state import StateTestCases
 from tests.unit.restart.test_restart import Euler2DRestartTestCase
 from tests.unit.solvers.test_fgmres import FgmresScipyTestCases, FgmresEdgeCasesTestCases
 from tests.unit.solvers.test_kiops_pmex_tolerance_cpu import KiopsPmexToleranceCpuTestCases
+from tests.unit.solvers.test_exponential_solver_registry import ExponentialSolverRegistryTestCases
 
 
 def add_test(suite: unittest.TestSuite, test: unittest.TestCase, test_re: Optional[re.Pattern]):
@@ -43,6 +44,18 @@ def load_tests(test_name: str):
     add_test(suite, FgmresScipyTestCases("test_compare_implementation_to_scipy_and_residual"), test_re)
 
     add_test(suite, KiopsPmexToleranceCpuTestCases("test_compare_kiops_pmex"), test_re)
+
+    add_test(suite, ExponentialSolverRegistryTestCases("test_builtin_solvers_are_registered"), test_re)
+    add_test(suite, ExponentialSolverRegistryTestCases("test_unknown_solver_lists_registered_names"), test_re)
+    add_test(suite, ExponentialSolverRegistryTestCases("test_duplicate_registration_raises"), test_re)
+    add_test(suite, ExponentialSolverRegistryTestCases("test_pmex_adapter_translates_common_request"), test_re)
+    add_test(suite, ExponentialSolverRegistryTestCases("test_pmex_ne_supplies_its_default_minimum"), test_re)
+    add_test(suite, ExponentialSolverRegistryTestCases("test_exode_rejects_multiple_output_times"), test_re)
+    add_test(
+        suite,
+        ExponentialSolverRegistryTestCases("test_rosexp2_resolves_configured_solver_during_construction"),
+        test_re,
+    )
 
     add_test(suite, StateTestCases("test_save_load_works"), test_re)
     add_test(suite, StateTestCases("test_load_old_state"), test_re)

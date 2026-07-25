@@ -6,9 +6,9 @@ import numpy
 
 from ..common.configuration import Configuration
 from ..solvers import (
-    kiops,
+    ExponentialSolverRequest,
     matvec_fun,
-    pmex,
+    resolve_exponential_solver,
 )
 
 from .integrator import Integrator
@@ -74,6 +74,7 @@ class Srerk(Integrator):
         self.krylov_mmax = param.krylov_mmax
         self.jacobian_method = param.jacobian_method
         self.exponential_solver = param.exponential_solver
+        self.solve_exponential = resolve_exponential_solver(self.exponential_solver)
 
         if nodes:
             self.c = nodes
@@ -84,6 +85,23 @@ class Srerk(Integrator):
         self.alpha = []
         for i in range(self.n_proj - 1):
             self.alpha.append(alpha_coeff(self.c[i]))
+
+    def _solve_projection(self, tau_out, matvec_handle, vec):
+        result = self.solve_exponential(
+            ExponentialSolverRequest(
+                tau_out,
+                matvec_handle,
+                vec,
+                self.tol,
+                self.krylov_mmax,
+                self.device,
+                krylov_minit=self.krylov_size,
+                krylov_mmin=16,
+            )
+        )
+        if result.final_krylov_size is not None:
+            self.krylov_size = math.floor(0.7 * result.final_krylov_size + 0.3 * self.krylov_size)
+        return result.value
 
     def __step__(self, Q: numpy.ndarray, dt: float):
         rhs = self.rhs(Q)
@@ -96,57 +114,7 @@ class Srerk(Integrator):
         vec = numpy.zeros((2, rhs.size))
         vec[1, :] = rhs.flatten()
 
-        # for printing stats
-        mpirank = self.device.comm.rank
-
-        # ---original kiops---
-        if self.exponential_solver == "kiops":
-            z, stats = kiops(
-                self.c[0],
-                matvec_handle,
-                vec,
-                tol=self.tol,
-                m_init=self.krylov_size,
-                mmin=16,
-                mmax=self.krylov_mmax,
-                task1=False,
-                device=self.device,
-            )
-
-            if mpirank == 0:
-                print(
-                    f"KIOPS converged at iteration {stats[2]} (using {stats[0]} internal substeps "
-                    f"and {stats[1]} rejected expm)"
-                    f" to a solution with local error {stats[4]:.2e}"
-                )
-
-            self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
-
-        # ---pmex with norm estimate---
-        elif self.exponential_solver == "pmex":
-
-            z, stats = pmex(
-                self.c[0],
-                matvec_handle,
-                vec,
-                tol=self.tol,
-                m_init=self.krylov_size,
-                mmin=16,
-                mmax=self.krylov_mmax,
-                task1=False,
-            )
-            self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
-
-            if mpirank == 0:
-                print(
-                    f"PMEX converged at iteration {stats[2]} (using {stats[0]} internal substeps "
-                    f"and {stats[1]} rejected expm)"
-                    f" to a solution with local error {stats[4]:.2e}"
-                )
-
-        # ----else, integrator not defined---
-        else:
-            raise ValueError(f"Unrecognized solver {self.exponential_solver}")
+        z = self._solve_projection(self.c[0], matvec_handle, vec)
 
         # Loop over all the other projections
         for i_proj in range(1, self.n_proj):
@@ -164,53 +132,7 @@ class Srerk(Integrator):
             vec[1, :] = rhs.flatten()
             vec[3:, :] = self.alpha[i_proj - 1] @ rz
 
-            # ---original kiops---
-            if self.exponential_solver == "kiops":
-                z, stats = kiops(
-                    self.c[i_proj],
-                    matvec_handle,
-                    vec,
-                    tol=self.tol,
-                    m_init=self.krylov_size,
-                    mmin=16,
-                    mmax=self.krylov_mmax,
-                    task1=False,
-                )
-
-                if mpirank == 0:
-                    print(
-                        f"KIOPS converged at iteration {stats[2]} (using {stats[0]} internal substeps "
-                        f"and {stats[1]} rejected expm)"
-                        f" to a solution with local error {stats[4]:.2e}"
-                    )
-
-                self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
-
-            # ---pmex with norm estimate---
-            elif self.exponential_solver == "pmex":
-
-                z, stats = pmex(
-                    self.c[i_proj],
-                    matvec_handle,
-                    vec,
-                    tol=self.tol,
-                    m_init=self.krylov_size,
-                    mmin=16,
-                    mmax=self.krylov_mmax,
-                    task1=False,
-                )
-                self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
-
-                if mpirank == 0:
-                    print(
-                        f"PMEX converged at iteration {stats[2]} (using {stats[0]} internal substeps "
-                        f"and {stats[1]} rejected expm)"
-                        f" to a solution with local error {stats[4]:.2e}"
-                    )
-
-            # ---integrator not defined
-            else:
-                raise ValueError(f"Unrecognized solver {self.exponential_solver}")
+            z = self._solve_projection(self.c[i_proj], matvec_handle, vec)
 
         # Update solution
         return Q + dt * numpy.reshape(z, Q.shape)

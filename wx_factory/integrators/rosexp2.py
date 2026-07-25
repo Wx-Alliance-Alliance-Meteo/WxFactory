@@ -2,10 +2,11 @@ from time import time
 from typing import Callable
 
 import numpy
+import torch
 
 from ..common.configuration import Configuration
 from .integrator import Integrator, SolverInfo
-from ..solvers import matvec_fun, matvec_rat, pmex
+from ..solvers import ExponentialSolverRequest, matvec_fun, matvec_rat, resolve_exponential_solver
 
 
 class RosExp2(Integrator):
@@ -19,6 +20,10 @@ class RosExp2(Integrator):
         self.tol = param.tolerance
         self.jacobian_method = param.jacobian_method
         self.gmres_restart = param.gmres_restart
+        self.krylov_mmax = param.krylov_mmax
+        self.solve_exponential = resolve_exponential_solver(param.exponential_solver)
+        self.exode_method = param.exode_method
+        self.exode_controller = param.exode_controller
 
     def __step__(self, Q, dt):
         rhs_full = self.rhs_full(Q)
@@ -32,17 +37,24 @@ class RosExp2(Integrator):
                 v, dt, Q, rhs_imp, self.rhs_imp, self.jacobian_method
             )
 
-        vec = numpy.zeros((2, n))
+        vec = torch.zeros((2, n), dtype=Q.dtype)
         vec[1, :] = rhs_full.flatten()
 
         tic = time()
-        phiv, stats = pmex([1.0], J_exp, vec, tol=self.tol, task1=False, device=self.device)
-        time_exp = time() - tic
-        if self.device.comm.rank == 0:
-            print(
-                f"PMEX convergence at iteration {stats[2]} (using {stats[0]} internal substeps and"
-                f" {stats[1]} rejected expm)"
+        exponential_result = self.solve_exponential(
+            ExponentialSolverRequest(
+                [1.0],
+                J_exp,
+                vec,
+                self.tol,
+                self.krylov_mmax,
+                self.device,
+                exode_method=self.exode_method,
+                exode_controller=self.exode_controller,
             )
+        )
+        phiv = exponential_result.value
+        time_exp = time() - tic
 
         tic = time()
 

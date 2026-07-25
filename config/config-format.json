@@ -141,8 +141,7 @@
                 {
                     "name": "exponential_solver",
                     "type": "str",
-                    "default": "pmex",
-                    "selectables": ["pmex", "pmex_ne", "kiops", "exode"]
+                    "default": "pmex"
                 },
                 {
                     "name": "exode_method",

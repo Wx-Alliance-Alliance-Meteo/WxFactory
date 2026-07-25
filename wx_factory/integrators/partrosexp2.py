@@ -7,7 +7,7 @@ import numpy
 
 from ..common.configuration import Configuration
 from .integrator import Integrator, SolverInfo
-from ..solvers import pmex, kiops, exode
+from ..solvers import ExponentialSolverRequest, resolve_exponential_solver
 from ..rhs.vertical_jacobian import (
     assemble_j1_blocks_analytic,
     block_thomas_solve,
@@ -53,59 +53,38 @@ class PartRosExp2(Integrator):
         self.krylov_m = None  # previous step's final Krylov size, recycled as the next m_init (see __step__)
         # Which solver evaluates phi_1(J_exp) @ vec (pmex / kiops / exode), honoured like in epi.py.
         self.exponential_solver = param.exponential_solver
+        self.solve_exponential = resolve_exponential_solver(self.exponential_solver)
         self.krylov_size = param.krylov_size  # kiops / pmex_ne restart size
         self.exode_method = param.exode_method
         self.exode_controller = param.exode_controller
 
     def _apply_phi(self, J_exp: Callable, vec):
-        """Evaluate phi_1(J_exp) @ vec with the configured exponential solver (pmex / kiops / exode).
-
-        Mirrors epi.py's dispatch and stats conventions; returns the phi vector. pmex/kiops carry a
-        recycled Krylov size across steps; exode is an adaptive RK and carries none."""
-        rank0 = self.device.comm.rank == 0
+        """Evaluate phi_1(J_exp) @ vec with the configured exponential solver."""
         solver = self.exponential_solver
 
-        if solver in ("pmex", "pmex_ne"):
-            m_init = self.krylov_m if self.krylov_m is not None else 10
-            mmin = 16 if solver == "pmex_ne" else 10
-            phiv, stats = pmex(
-                [1.0], J_exp, vec, tol=self.tol, m_init=m_init, mmin=mmin,
-                mmax=self.krylov_mmax, task1=False, device=self.device,
+        pmex_family = solver in ("pmex", "pmex_ne")
+        result = self.solve_exponential(
+            ExponentialSolverRequest(
+                [1.0],
+                J_exp,
+                vec,
+                self.tol,
+                self.krylov_mmax,
+                self.device,
+                krylov_minit=(self.krylov_m or 10) if pmex_family else self.krylov_size,
+                krylov_mmin=16 if solver in ("pmex_ne", "kiops") else 10,
+                exode_method=self.exode_method,
+                exode_controller=self.exode_controller,
             )
-            self.krylov_m = stats[5]  # final Krylov size, reused as next step's m_init
-            if rank0:
-                print(
-                    f"PMEX convergence at iteration {stats[2]} (using {stats[0]} internal substeps"
-                    f" and {stats[1]} rejected expm)",
-                    flush=True,
-                )
-        elif solver == "kiops":
-            phiv, stats = kiops(
-                [1], J_exp, vec, tol=self.tol, m_init=self.krylov_size, mmin=16,
-                mmax=self.krylov_mmax, task1=False, device=self.device,
-            )
-            self.krylov_size = math.floor(0.7 * stats[5] + 0.3 * self.krylov_size)
-            if rank0:
-                print(
-                    f"KIOPS convergence at iteration {stats[2]} (using {stats[0]} internal substeps"
-                    f" and {stats[1]} rejected expm)",
-                    flush=True,
-                )
-        elif solver == "exode":
-            phiv, stats = exode(
-                1.0, J_exp, vec, method=self.exode_method, controller=self.exode_controller,
-                atol=self.tol, task1=False, verbose=False, device=self.device,
-            )
-            if rank0:
-                print(
-                    f"EXODE converged at iteration {stats[0]} with {stats[1]} rejected steps"
-                    f" (local error {stats[3]:.2e})",
-                    flush=True,
-                )
-        else:
-            raise ValueError(f"Unrecognized exponential solver {solver!r}")
+        )
 
-        return phiv
+        if result.final_krylov_size is not None:
+            if pmex_family:
+                self.krylov_m = result.final_krylov_size
+            else:
+                self.krylov_size = math.floor(0.7 * result.final_krylov_size + 0.3 * self.krylov_size)
+
+        return result.value
 
     def __step__(self, Q: numpy.ndarray, dt: float):
         rhsobj = self.rhs_full

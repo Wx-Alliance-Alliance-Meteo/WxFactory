@@ -42,6 +42,43 @@ do not need to edit a chain of `if`/`elif` tests scattered across the code.
 3. Import the module in `wx_factory/integrators/__init__.py` so its `REGISTRY` is merged.
 4. Add the name to the `time_integrator` option's `selectables` in `config/config-format.json`.
 
+### Add a new exponential solver
+
+Exponential integrators select their inner solver through the registry in
+`wx_factory/solvers/exponential_solver.py`. The `exponential_solver` configuration option is
+validated by this registry, so a new solver does not require changes to the integrators or the
+configuration schema.
+
+1. Write an adapter that accepts an `ExponentialSolverRequest` and returns an
+   `ExponentialSolverResult`.
+2. Register the adapter under its configuration name:
+   ```python
+   @register_exponential_solver("my_solver")
+   def _solve_my_solver(request: ExponentialSolverRequest) -> ExponentialSolverResult:
+       value, stats = my_solver(
+           request.tau_out,
+           request.operator,
+           request.vectors,
+           tol=request.tolerance,
+           device=request.device,
+       )
+       return ExponentialSolverResult(
+           value=value,
+           raw_stats=stats,
+           iterations=stats.iterations,
+           rejected_steps=stats.rejected_steps,
+           local_error=stats.local_error,
+           final_krylov_size=stats.final_krylov_size,
+       )
+   ```
+3. Translate solver-specific arguments and statistics inside the adapter. Integrators should only
+   construct the common request and consume the normalized result.
+4. Validate solver-specific limitations in the adapter. For example, an implementation that
+   supports only one output time should reject a request containing several times with a clear
+   error.
+5. Add registry, argument-translation, statistics, and capability tests under
+   `tests/unit/solvers/`.
+
 ### Add a new equation set / right-hand side
 
 The RHS depends on a pair: the equation set and the geometry it runs on. These are registered in
