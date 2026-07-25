@@ -221,7 +221,6 @@ def fgmres(
             H[inner, : inner + 2] = R[: inner + 2, inner + 1]
             Z[inner + 1, :] /= v_norm
 
-            # TODO : Start CPU here
             # Apply previous Givens rotations to H
             if inner > 0:
                 _apply_givens(Q, H[inner, :], inner)
@@ -272,7 +271,6 @@ def fgmres(
             if comm.rank == 0:
                 print(f"{prefix}res: {norm_r/norm_b:.2e} (iter {niter})", flush=True)
 
-        # TODO : End cpu calculation here
         # Has GMRES stagnated?
         indices = x != 0
         if indices.any():

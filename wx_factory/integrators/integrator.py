@@ -18,7 +18,6 @@ class Integrator(ABC):
 
        output_manager -- OutputManager object that an Integrator can use. When it is present, the Integrator
                          can output some of its intermediary data that can be useful for analysing performance.
-                         For now, it must be assigned *after* the Integrator has been initialized.
        solver_info    -- At each timestep, the content of solver_info is outputted (if output_manager is present)
                          If a certain (derived type) Integrator wants to log information about its convergence,
                          performance and other internal data, it should create a SolverInfo object and assign it

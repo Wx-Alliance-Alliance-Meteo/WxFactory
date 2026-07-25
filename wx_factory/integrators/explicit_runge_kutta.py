@@ -98,10 +98,8 @@ class RungeKutta:
         # Validate Butcher tableau coefficients before proceeding
         self._validate_butcher_tableau()
 
-        # Array module of the state (numpy on the CPU, torch/cupy on a GPU). All operations that touch
-        # the state vector or the RK stages go through it, so the solver runs on whatever backend the
-        # exponential integrator uses. The Butcher coefficients (validated as numpy above) get
-        # device-resident, working-precision copies for the K-stage matmuls.
+        # Keep device-resident, working-precision copies of the validated NumPy Butcher coefficients
+        # for the K-stage matrix multiplications.
         self.t_old = None
         self.t = t0
         self._fun, self.y = fun, y0
@@ -381,9 +379,6 @@ class RungeKutta:
             # evaluate error
             if error_norm < 1:
                 step_accepted = True
-                # Debug logging if needed
-                # logging.debug(f"Step {self.num_of_steps} accepted: t={t_new}, h={h}, error={error_norm}")
-
                 if error_norm < self.tiny_err:
                     factor = BIG_FACTOR
                     self.standard_sc = True
@@ -409,9 +404,6 @@ class RungeKutta:
 
             else:
                 step_rejected = True
-                # Debug logging if needed
-                # logging.debug(f"Step {self.num_of_steps} rejected: t={t_new}, h={h}, error={error_norm}")
-
                 h *= limiter(self.safety * error_norm**self.error_exponent, 2)
 
                 if h < 1e-12:
@@ -470,8 +462,7 @@ class RungeKutta:
                 "You may want to check the implementation of this method."
             )
 
-        # determine min_step parameters (finfo constants; map a torch dtype like 'torch.float32' to
-        # the numpy dtype so numpy.finfo, which has epsneg, works regardless of backend)
+        # Map the Torch dtype to its NumPy equivalent because numpy.finfo provides epsneg.
         np_dtype = numpy.dtype(str(self.y.dtype).rsplit(".", 1)[-1])
         epsneg = numpy.finfo(np_dtype).epsneg
         tiny = numpy.finfo(np_dtype).tiny

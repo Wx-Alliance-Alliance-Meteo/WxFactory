@@ -37,12 +37,12 @@ class DFROperators:
         grd : Geometry
            Underlying grid, which must define `solutionPoints`, `solutionPoints_sym`, `extension`, `extension_sym` and
            `num_solpts` as member variables
-        filter_apply : bool
-           Whether to apply an exponential filter in defininng the differential operators
-        filter_order : int
-           If applied, what order of exponential to use for the filter
-        filter_cutoff : float
-           If applied, at what relative wavenumber (0 < cutoff < 1) to begin applying the filter
+        param : Configuration
+           Configuration containing the filter and discretization options.
+        device : Device
+           Device on which the operator tensors are created.
+        dtype : DTypeLike, optional
+           Tensor dtype. Defaults to the device's working real dtype.
         """
 
         self.dtype = device.real_dtype if dtype is None else dtype

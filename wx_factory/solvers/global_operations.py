@@ -1,9 +1,8 @@
 """Global operations performed on distributed vectors.
 
-These reductions are device-agnostic: the local contribution is computed with the array's own
-library (numpy, cupy or torch) and brought to the host as a Python scalar (or a small host array)
-before the MPI reduction, so they work whether the vectors live on the CPU or a GPU. Bringing the
-scalar to the host also forces a device synchronization, which the callers need anyway."""
+The local contribution is computed with PyTorch and brought to the host as a Python scalar (or a
+small host array) before the MPI reduction. This works with tensors on either the CPU or a GPU.
+Bringing the scalar to the host also forces the device synchronization required by the caller."""
 
 import torch
 from typing import Optional
@@ -43,9 +42,7 @@ def global_dotprod(vec1: NDArray, vec2: NDArray, comm: MPI.Comm = MPI.COMM_WORLD
 
 
 def global_inf_norm(vec: NDArray, comm: MPI.Comm = MPI.COMM_WORLD):
-    """Compute infinity norm across all PEs in the communicator (default COMM_WORLD).
-
-    Uses the array's own ``abs``/``max`` so it works for numpy, cupy and torch alike."""
+    """Compute infinity norm across all PEs in the communicator (default COMM_WORLD)."""
     local_max = _to_scalar(abs(vec).max())
     return comm.allreduce(local_max, op=MPI.MAX)
 

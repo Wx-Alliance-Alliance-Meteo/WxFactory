@@ -149,15 +149,8 @@ class CubedSphere2D(CubedSphere):
         self.itf_i_shape_2d = (nj, num_elements_x1 + 1)
         self.itf_j_shape_2d = (num_elements_x2 + 1, ni)
 
-        # The shapes. For a single field (e.g. coordinates of solution points, in the current case), we
-        # have an array of elements, where each element has a total num_solpts**2 (in 2D) or num_solpts**3 (in 3D)
-        # solution points.
-        # For the interfaces we have 3 cases:
-        # - In 2D, we have 2 arrays (for west-east and south-north interfaces), with the same shape: an array of all
-        #   elements, each with 2*num_solpts interface points (num_solpts for each side of the element along that
-        #   direction)
-        # - In 3D, horizontally, we also have two arrays (west-east, south-north), but the shape is to be determined
-        # - In 3D vertically, we only have one array, with shape similar to horizontally, TBD
+        # A field stores num_solpts**2 solution points per element. Each horizontal interface stores
+        # num_solpts points for both sides of the interface.
         self.grid_shape = (num_elements_x1, num_elements_x2, num_solpts * num_solpts)
         # i and j interfaces have same shape (because same number of elements in each direction)
         self.itf_i_shape = (num_elements_x2, num_elements_x1 + 2, num_solpts * 2)

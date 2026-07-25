@@ -17,7 +17,6 @@ def cast_double_arrays(obj, dtype) -> None:
     Geometry and metric terms are built in double precision, where the differencing of the terrain
     is most accurate, and then stored in the working precision. This walks the object's attributes
     and downcasts the double arrays, leaving integer indices, masks and already-single arrays alone.
-    Works for both NumPy/CuPy arrays (`astype`) and PyTorch tensors (`to`).
     """
     if dtype == torch.float64:
         return

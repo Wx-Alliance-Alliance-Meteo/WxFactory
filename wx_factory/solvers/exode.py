@@ -123,7 +123,7 @@ def exode(
         solver.error_norm_old,
         solver.h_previous,
         solver.h,
-    )  # TODO
+    )
     # keep track of h_previous, use as first step for next iteration.
 
     exode.first_step = numpy.median(numpy.diff(ts))

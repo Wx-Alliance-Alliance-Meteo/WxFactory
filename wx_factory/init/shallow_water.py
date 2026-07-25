@@ -153,10 +153,6 @@ def sw_from_file(geom: CubedSphere2D, operators: DFROperators, config: Configura
     h, u, v = InputManager.read_fields(config.initial_conditions_file, ["GZ", "UU", "VV"], geom)
     h[...] *= 10 / gravity
 
-    # TODO for debugging
-    # h_surface[...] = 0.0
-    # h_surface[...] *= 0.0
-
     num_solpts = geom.num_solpts
     num_elem = geom.num_elements_horizontal
     h_surface_itf_i = torch.zeros((num_elem, num_elem + 2, 2 * num_solpts), dtype=h_surface.dtype)

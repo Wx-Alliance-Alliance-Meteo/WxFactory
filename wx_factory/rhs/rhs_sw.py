@@ -195,7 +195,6 @@ class RhsShallowWater(RHS):
         denom = self.var_itf_i[idx_h] * a
         m = torch.divide(self.var_itf_i[idx_hu1], denom, out=torch.zeros_like(denom), where=torch.real(a) > 0.0)
 
-        # Workaround for CuPy bug where n**2 is wrong when n is complex with a negative real value
         mw2 = (m[west] - 1.0) * (m[west] - 1.0)
         big_M = 0.25 * ((m[east] + 1.0) ** 2 - mw2)
 
@@ -219,7 +218,6 @@ class RhsShallowWater(RHS):
         denom = self.var_itf_j[idx_h] * a
         m = torch.divide(self.var_itf_j[idx_hu2], denom, out=torch.zeros_like(denom), where=torch.real(a) > 0.0)
 
-        # Workaround for CuPy bug where n**2 is wrong when n is complex with a negative real value
         ms2 = (m[south] - 1.0) * (m[south] - 1.0)
         big_M = 0.25 * ((m[north] + 1.0) ** 2 - ms2)
 
