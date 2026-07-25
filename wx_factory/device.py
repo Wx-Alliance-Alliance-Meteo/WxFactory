@@ -13,7 +13,9 @@ from typing import Any, Self
 from mpi4py import MPI
 import torch
 
-from ..wx_mpi import split_nodes
+from .wx_mpi import split_nodes
+
+__all__ = ["Device", "PytorchDevice"]
 
 # WxFactory speaks NumPy-flavoured method names in a few places; make torch tensors answer to them
 # too, so the same call works whether an array happens to be a tensor or a host NumPy array.
