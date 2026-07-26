@@ -23,7 +23,7 @@ from ..geometry import CubedSphere3D
 
 from .step_hook import StepHook
 from .schar_mountain import ScharMountainHook
-from .dcmip import DcmipT11WindHook, DcmipT12WindHook
+from .dcmip import DcmipT11WindHook, DcmipT12WindHook, ExponentialFilterHook
 
 if TYPE_CHECKING:
     from ..common import Configuration
@@ -97,4 +97,11 @@ def _dcmip_t11(ctx: "StepHookContext") -> Optional[StepHook]:
 def _dcmip_t12(ctx: "StepHookContext") -> Optional[StepHook]:
     if ctx.config.case_number == 12:
         return DcmipT12WindHook(ctx.geometry, ctx.metric, ctx.operators, ctx.config)
+    return None
+
+
+@register_step_hook("exponential_filter", phase=PHASE_STATE)
+def _exponential_filter(ctx: "StepHookContext") -> Optional[StepHook]:
+    if ctx.config.expfilter_apply:
+        return ExponentialFilterHook(ctx.geometry, ctx.metric, ctx.operators, ctx.config)
     return None

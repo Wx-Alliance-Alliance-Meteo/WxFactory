@@ -109,6 +109,10 @@ class Configuration:
     equations: str
     exode_controller: str
     exode_method: str
+    expfilter_apply: bool
+    expfilter_cutoff: float
+    expfilter_order: int
+    expfilter_strength: float
     exponential_solver: str
     gmres_restart: int
     grid_file: str

@@ -38,6 +38,10 @@
    | num_elements_vertical  | int  | 1         | [1, inf]                         |   | 
    | num_solpts            | int   | [none]    | [1, inf]                         |   | 
    | num_elements_horizontal  | int  | [none]  | [1, inf]                         |   | 
+   | expfilter_apply       | str_to_bool  | False  |                              | Apply an exponential modal filter to the metric-weighted conservative state after each time step.  |
+   | expfilter_order       | int   | [none]    | [2, inf]                         | Positive even order of the exponential modal filter.  |
+   | expfilter_cutoff      | float  | [none]    | [0.0, 1.0]                      | Normalized modal cutoff below which modes are left unchanged.  |
+   | expfilter_strength    | float  | [none]    | [0.0, inf]                       | Strength alpha in the exponential modal-filter attenuation.  |
 | | | | | |
  | **[Grid]**            | **Type**  | **Default**  | **Valid range**           | **Description**  | 
    | grid_file             | lc-str  |         |                                  |   | 

@@ -174,6 +174,40 @@ class DFROperators:
         self.correction_SN_complex = self.correction_SN.astype(torch.complex128)
         self.correction_DU_complex = self.correction_DU.astype(torch.complex128)
 
+    def make_filter_3d(self, strength: float, order: int, cutoff: float, geom: Geometry):
+        """Build an isotropic exponential modal filter for a three-dimensional element."""
+        if not getattr(geom, "is_3d_euler_grid", False):
+            raise TypeError("The 3D exponential filter requires a three-dimensional Euler geometry")
+        if geom.num_solpts < 2:
+            raise ValueError("The 3D exponential filter requires at least two solution points")
+        if strength < 0.0:
+            raise ValueError("The exponential-filter strength must be non-negative")
+        if order <= 0 or order % 2:
+            raise ValueError("The exponential-filter order must be a positive even integer")
+        if not 0.0 <= cutoff < 1.0:
+            raise ValueError("The exponential-filter cutoff must lie in [0, 1)")
+
+        modes = torch.arange(geom.num_solpts, dtype=self.dtype) / (geom.num_solpts - 1)
+        attenuation = torch.ones_like(modes)
+        filtered = modes > cutoff
+        attenuation[filtered] = torch.exp(
+            -strength * ((modes[filtered] - cutoff) / (1.0 - cutoff)) ** order
+        )
+
+        vandermonde = legvander(geom.solutionPoints, geom.num_solpts - 1).astype(self.dtype)
+        filter_1d = vandermonde @ torch.diag(attenuation) @ torch.linalg.inv(vandermonde)
+        identity_1d = torch.eye(geom.num_solpts, dtype=self.dtype)
+        identity_2d = torch.eye(geom.num_solpts**2, dtype=self.dtype)
+        filter_x = kron(identity_2d, filter_1d).T
+        filter_y = kron(identity_1d, kron(filter_1d, identity_1d)).T
+        filter_z = kron(filter_1d, identity_2d).T
+        return (filter_x @ filter_y) @ filter_z
+
+    @staticmethod
+    def apply_filter_3d(Q: NDArray, metric: "Metric3DTopo", filter_matrix: NDArray):
+        r"""Filter the metric-weighted conservative state \(\sqrt{G}Q\) element by element."""
+        return ((metric.sqrtG_new * Q) @ filter_matrix) * metric.inv_sqrtG_new
+
     def comma_i(
         self: Self, field_interior: NDArray[T], border_i: NDArray[T], grid: CubedSphere3D, out: NDArray[T] | None = None
     ) -> NDArray[T]:

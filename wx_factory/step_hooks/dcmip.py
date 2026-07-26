@@ -5,6 +5,23 @@ from ..common.definitions import idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_u3, id
 from ..init.dcmip import dcmip_prescribed_rho_theta, dcmip_T11_update_winds, dcmip_T12_update_winds
 
 
+class ExponentialFilterHook(step_hook.StepHook):
+    """Apply a configured exponential modal filter after each time step."""
+
+    def __init__(self, geom, metric, operators, config):
+        self.metric = metric
+        self.operators = operators
+        self.filter_matrix = operators.make_filter_3d(
+            strength=config.expfilter_strength,
+            order=config.expfilter_order,
+            cutoff=config.expfilter_cutoff,
+            geom=geom,
+        )
+
+    def process(self, Q: numpy.ndarray, t: float) -> numpy.ndarray:
+        return self.operators.apply_filter_3d(Q, self.metric, self.filter_matrix)
+
+
 class _DcmipAdvectionHook(step_hook.StepHook):
     """Restore the prescribed meteorological state after each step of a DCMIP advection test.
 

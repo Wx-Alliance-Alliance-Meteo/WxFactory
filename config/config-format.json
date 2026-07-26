@@ -230,6 +230,43 @@
                     "type": "int",
                     "min": 1,
                     "default": 1
+                },
+                {
+                    "name": "expfilter_apply",
+                    "type": "bool",
+                    "default": false,
+                    "description": "Apply an exponential modal filter to the metric-weighted conservative state after each time step."
+                },
+                {
+                    "name": "expfilter_order",
+                    "type": "int",
+                    "min": 2,
+                    "dependency": {
+                        "name": "expfilter_apply",
+                        "values": [true]
+                    },
+                    "description": "Positive even order of the exponential modal filter."
+                },
+                {
+                    "name": "expfilter_cutoff",
+                    "type": "float",
+                    "min": 0.0,
+                    "max": 1.0,
+                    "dependency": {
+                        "name": "expfilter_apply",
+                        "values": [true]
+                    },
+                    "description": "Normalized modal cutoff below which modes are left unchanged."
+                },
+                {
+                    "name": "expfilter_strength",
+                    "type": "float",
+                    "min": 0.0,
+                    "dependency": {
+                        "name": "expfilter_apply",
+                        "values": [true]
+                    },
+                    "description": "Strength alpha in the exponential modal-filter attenuation."
                 }
             ]
         },
