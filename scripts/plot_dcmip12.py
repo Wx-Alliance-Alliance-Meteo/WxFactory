@@ -1,184 +1,195 @@
 #!/usr/bin/env python3
-"""Plots and diagnostics for DCMIP-2012 test 1-2 (3D Hadley-like meridional circulation).
+"""Publication-quality plots and diagnostics for DCMIP-2012 test 1-2.
 
-Takes the NetCDF file written by WxFactory and produces what the DCMIP-2012 Test Case Document
-(v1.7, section 1.2) asks for:
-
-  * latitude-height cross sections of the tracer q1 at lambda = 180 degrees, at t = 12 h and
-    t = 24 h (the document's suggested analysis), plus the initial state for reference;
-  * the normalized l1, l2 and l_inf error norms for q1 at t = 1 day, measured against the initial
-    condition -- which is also the exact solution, since the flow reverses over one period.
-
-Unlike test 1-1 this case carries a single tracer, and there are no mixing or correlation
-diagnostics to compute.
+The DCMIP document requests latitude-height sections of ``q1`` at longitude
+180 degrees after 12 and 24 hours, plus normalized error norms at 24 hours.
+Cubed-sphere nodes do not lie on that meridian, so the section is sampled in
+Cartesian unit-sphere coordinates rather than by combining a longitude band.
 
 Usage:
-    python3 scripts/plot_dcmip12.py results/dcmip12.nc [-o output_dir]
+    python scripts/plot_dcmip12.py -o results results/dcmip12.nc
 """
 
 import argparse
-import os
+from pathlib import Path
 
 import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from matplotlib.ticker import MultipleLocator
 import netCDF4
 import numpy
+from scipy.interpolate import PchipInterpolator
+from scipy.spatial import cKDTree
 
 HOUR = 3600.0
-
-# The document suggests a cross section along this meridian.
 SECTION_LONGITUDE = 180.0
+SNAPSHOT_HOURS = (0.0, 12.0, 24.0)
+
+
+def time_index(times, target):
+    """Index of the output nearest a requested time."""
+    return int(numpy.argmin(numpy.abs(times - target)))
 
 
 def load(filename):
-    """Read the fields we need, on the (panel, z, x, y) grid."""
-    with netCDF4.Dataset(filename) as ds:
-        time = numpy.asarray(ds.variables["time"][:])
-        lat = numpy.asarray(ds.variables["lats"][:])
-        lon = numpy.asarray(ds.variables["lons"][:])
-        elev = numpy.asarray(ds.variables["elev"][:])
-        volume = numpy.asarray(ds.variables["volume"][:])
-        q1 = numpy.asarray(ds.variables["q1"][:])
-
-    # lats/lons are (panel, x, y): broadcast them over the vertical so they match the tracer.
-    num_z = elev.shape[1]
-    lat = numpy.repeat(lat[:, numpy.newaxis], num_z, axis=1)
-    lon = numpy.repeat(lon[:, numpy.newaxis], num_z, axis=1)
-
-    return {"time": time, "lat": lat, "lon": lon, "elev": elev, "volume": volume, "q1": q1}
-
-
-def time_index(time, target):
-    """Index of the output closest to `target` seconds."""
-    return int(numpy.argmin(numpy.abs(time - target)))
+    """Read coordinates and only the snapshots needed for plots and norms."""
+    with netCDF4.Dataset(filename) as dataset:
+        all_times = numpy.asarray(dataset.variables["time"][:])
+        indices = [time_index(all_times, hour * HOUR) for hour in SNAPSHOT_HOURS]
+        return {
+            "time": all_times[indices],
+            "lat2d": numpy.asarray(dataset.variables["lats"][:]),
+            "lon2d": numpy.asarray(dataset.variables["lons"][:]),
+            "elevation": numpy.asarray(dataset.variables["elev"][:]),
+            "volume": numpy.asarray(dataset.variables["volume"][:]),
+            "q1": numpy.asarray([dataset.variables["q1"][index] for index in indices]),
+        }
 
 
 def integral(field, volume):
-    """The DCMIP global integral I[x] = sum_j x_j V_j (the volume weights are exact)."""
+    """DCMIP global integral using the model's exact volume weights."""
     return float((field * volume).sum())
 
 
 def error_norms(q, q_exact, volume):
-    """Normalized l1, l2 and l_inf error norms."""
-    err = q - q_exact
-    l1 = integral(numpy.abs(err), volume) / integral(numpy.abs(q_exact), volume)
-    l2 = numpy.sqrt(integral(err**2, volume)) / numpy.sqrt(integral(q_exact**2, volume))
-    linf = numpy.abs(err).max() / numpy.abs(q_exact).max()
+    """Normalized l1, l2 and l-infinity error norms."""
+    error = q - q_exact
+    l1 = integral(numpy.abs(error), volume) / integral(numpy.abs(q_exact), volume)
+    l2 = numpy.sqrt(integral(error**2, volume)) / numpy.sqrt(integral(q_exact**2, volume))
+    linf = numpy.abs(error).max() / numpy.abs(q_exact).max()
     return l1, l2, linf
 
 
-def meridian_columns(data, longitude, tolerance=2.0):
-    """The (panel, x, y) columns lying near a meridian, with their vertical profiles.
-
-    The cubed sphere has no column exactly on a given meridian, so widen the tolerance until the band
-    holds enough columns. The model levels are unevenly spaced Gauss-Legendre points, so the
-    interpolation to regular heights has to be done one column at a time, up a monotonic line;
-    triangulating the raw points in the (latitude, height) plane instead stripes the picture.
-    """
-    lon2d = data["lon"][:, 0]  # (panel, x, y)
-    lat2d = data["lat"][:, 0]
-
-    # Angular distance to the meridian, taking the 0/360 wrap into account.
-    distance = numpy.abs((lon2d - longitude + 180.0) % 360.0 - 180.0)
-    columns = numpy.sort(distance.ravel())
-    minimum_points = max(3, int(0.01 * columns.size))
-    tolerance = max(tolerance, columns[minimum_points])
-
-    mask = distance < tolerance  # (panel, x, y)
-    z_cols = numpy.moveaxis(data["elev"], 1, -1)[mask]  # (ncol, nz)
-    lat_cols = lat2d[mask]
-    return lat_cols, z_cols, mask, tolerance
+def unit_sphere(longitude, latitude):
+    """Cartesian unit vectors for coordinates expressed in degrees."""
+    lon = numpy.deg2rad(longitude)
+    lat = numpy.deg2rad(latitude)
+    cos_lat = numpy.cos(lat)
+    return numpy.stack((cos_lat * numpy.cos(lon), cos_lat * numpy.sin(lon), numpy.sin(lat)), axis=-1)
 
 
-def plot_lat_height(data, hours, outdir):
-    """Latitude-height cross sections of q1 along the section meridian, one panel per time."""
-    lat_cols, z_cols, mask, tolerance = meridian_columns(data, SECTION_LONGITUDE)
+def meridian_stencil(lat, lon, longitude, latitudes, neighbours=4):
+    """Spherical inverse-distance stencil for one exact meridian."""
+    tree = cKDTree(unit_sphere(lon.ravel(), lat.ravel()))
+    target_lon = numpy.full_like(latitudes, longitude)
+    distance, index = tree.query(unit_sphere(target_lon, latitudes), k=neighbours)
+    weight = 1.0 / numpy.maximum(distance, 1.0e-12) ** 2
+    weight /= weight.sum(axis=1, keepdims=True)
+    return index, weight
 
-    # Bound the axes by the data. The outermost grid points fall short of the poles and of the
-    # ground, and extending the axes past them would only leave empty strips.
-    latmin, latmax = float(lat_cols.min()), float(lat_cols.max())
-    zbot, ztop = float(z_cols.min()), float(z_cols.max())
 
-    latitudes = numpy.linspace(latmin, latmax, 181)
-    heights = numpy.linspace(zbot, ztop, 181)
-    order = numpy.argsort(lat_cols)
-    lat_sorted = lat_cols[order]
+def sample_meridian(values, index, weight):
+    """Apply a horizontal meridian stencil to every vertical level."""
+    num_levels = values.shape[1]
+    sampled = numpy.empty((index.shape[0], num_levels))
+    for level in range(num_levels):
+        horizontal = values[:, level].ravel()
+        sampled[:, level] = numpy.sum(horizontal[index] * weight, axis=1)
+    return sampled
 
-    # A colour scale fixed on the initial state makes the times comparable, and lets the
-    # over- and undershoots of an unlimited scheme show up as saturation.
-    initial = data["q1"][0]
-    vmin, vmax = float(initial.min()), float(initial.max())
 
-    fig, axes = plt.subplots(1, len(hours), figsize=(5.2 * len(hours), 4.0), constrained_layout=True, sharey=True)
-    axes = numpy.atleast_1d(axes)
+def regular_section(field, elevations, native_latitudes, heights, plot_latitudes):
+    """Interpolate meridional profiles vertically and then across latitude."""
+    vertical = numpy.empty((native_latitudes.size, heights.size))
+    for column, (z_column, q_column) in enumerate(zip(elevations, field)):
+        sample_height = numpy.clip(heights, z_column[0], z_column[-1])
+        vertical[column] = PchipInterpolator(z_column, q_column)(sample_height)
+    return PchipInterpolator(native_latitudes, vertical, axis=0)(plot_latitudes).T
 
-    for ax, hour in zip(axes, hours):
-        it = time_index(data["time"], hour * HOUR)
-        q_cols = numpy.moveaxis(data["q1"][it], 1, -1)[mask]  # (panel, z, x, y) -> (ncol, nz)
 
-        # First up each monotonic column onto the regular heights, then across latitude.
-        on_heights = numpy.empty((len(lat_cols), heights.size))
-        for c in range(len(lat_cols)):
-            on_heights[c] = numpy.interp(heights, z_cols[c], q_cols[c])
-
-        image = numpy.empty((heights.size, latitudes.size))
-        for r in range(heights.size):
-            image[r] = numpy.interp(latitudes, lat_sorted, on_heights[order, r])
-
-        rendered = ax.imshow(
-            image,
-            origin="lower",
-            extent=[latmin, latmax, zbot, ztop],
-            cmap="viridis",
-            vmin=vmin,
-            vmax=vmax,
-            aspect="auto",
-            interpolation="bilinear",
-        )
-        fig.colorbar(rendered, ax=ax, shrink=0.85)
-        ax.set_title(f"t = {hour:g} h   [{image.min():.3f}, {image.max():.3f}]")
-        ax.set_xlabel("latitude (deg)")
-
-    axes[0].set_ylabel("height (m)")
-    fig.suptitle(
-        f"DCMIP 1-2: tracer q1 along lambda = {SECTION_LONGITUDE:g} deg "
-        f"(|lon - {SECTION_LONGITUDE:g}| < {tolerance:.1f} deg)"
+def plot_latitude_height(data, output_dir):
+    """Render the DCMIP-recommended 12 h and 24 h latitude-height sections."""
+    native_latitudes = numpy.linspace(-90.0, 90.0, 361)
+    plot_latitudes = numpy.linspace(-90.0, 90.0, 721)
+    heights = numpy.linspace(0.0, 12_000.0, 301)
+    index, weight = meridian_stencil(
+        data["lat2d"],
+        data["lon2d"],
+        SECTION_LONGITUDE,
+        native_latitudes,
     )
-    path = os.path.join(outdir, "dcmip12_latheight.png")
-    fig.savefig(path, dpi=140, bbox_inches="tight")
-    plt.close(fig)
-    return path
+
+    elevations = sample_meridian(data["elevation"], index, weight)
+    initial_min = float(data["q1"][0].min())
+    initial_max = float(data["q1"][0].max())
+    levels = numpy.linspace(initial_min, initial_max, 22)
+
+    with plt.rc_context(
+        {
+            "font.family": "serif",
+            "font.size": 9,
+            "axes.linewidth": 0.7,
+            "savefig.dpi": 300,
+        }
+    ):
+        fig, axes = plt.subplots(1, 2, figsize=(7.2, 3.25), constrained_layout=True, sharex=True, sharey=True)
+        contour = None
+        for ax, hour in zip(axes, (12.0, 24.0)):
+            snapshot = data["q1"][time_index(data["time"], hour * HOUR)]
+            meridian = sample_meridian(snapshot, index, weight)
+            image = regular_section(meridian, elevations, native_latitudes, heights, plot_latitudes)
+            contour = ax.contourf(
+                plot_latitudes,
+                heights / 1000.0,
+                image,
+                levels=levels,
+                cmap="viridis",
+                extend="both",
+                antialiased=False,
+            )
+            ax.text(
+                0.03,
+                0.95,
+                rf"$t={hour:g}$ h",
+                transform=ax.transAxes,
+                ha="left",
+                va="top",
+                bbox={"facecolor": "white", "edgecolor": "none", "alpha": 0.82, "pad": 1.8},
+            )
+            ax.set_xlim(-90.0, 90.0)
+            ax.set_ylim(0.0, 12.0)
+            ax.xaxis.set_major_locator(MultipleLocator(30.0))
+            ax.yaxis.set_major_locator(MultipleLocator(2.0))
+            ax.set_xlabel("Latitude (degrees north)")
+            ax.tick_params(length=3.0, width=0.7)
+
+        axes[0].set_ylabel("Height (km)")
+        colorbar = fig.colorbar(contour, ax=axes, shrink=0.95, pad=0.02)
+        colorbar.set_label(r"Tracer $q_1$")
+        fig.suptitle(rf"DCMIP 1-2: $q_1$ at $\lambda={SECTION_LONGITUDE:g}^\circ$", fontsize=10)
+
+        path = output_dir / "dcmip12_latheight.png"
+        fig.savefig(path, bbox_inches="tight")
+        fig.savefig(path.with_suffix(".pdf"), bbox_inches="tight")
+        plt.close(fig)
+    return path, path.with_suffix(".pdf")
 
 
 def report_error_norms(data):
-    """Error norms at the end of the period, where the exact solution is the initial state."""
-    it = time_index(data["time"], data["time"].max())
-    hours = data["time"][it] / HOUR
+    """Report error at 24 h, when the exact solution is the initial state."""
+    final = data["q1"][time_index(data["time"], 24.0 * HOUR)]
+    l1, l2, linf = error_norms(final, data["q1"][0], data["volume"])
 
-    l1, l2, linf = error_norms(data["q1"][it], data["q1"][0], data["volume"])
-
-    print(f"\nNormalized error norms for q1 at t = {hours:g} h (exact solution = initial state)")
+    print("\nNormalized error norms for q1 at t = 24 h (exact solution = initial state)")
     print(f"  {'l1':>12}  {'l2':>12}  {'l_inf':>12}")
     print(f"  {l1:12.4e}  {l2:12.4e}  {linf:12.4e}")
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Plots and diagnostics for DCMIP-2012 test 1-2.")
+    parser = argparse.ArgumentParser(description="Publication-quality plots for DCMIP-2012 test 1-2.")
     parser.add_argument("netcdf_file", help="NetCDF output file produced by WxFactory")
     parser.add_argument("-o", "--output-dir", default="results", help="where to write the figures")
     args = parser.parse_args()
 
-    os.makedirs(args.output_dir, exist_ok=True)
+    output_dir = Path(args.output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
     data = load(args.netcdf_file)
-
     hours = data["time"] / HOUR
-    print(f"Read {args.netcdf_file}: {len(hours)} output times, from {hours[0]:g} h to {hours[-1]:g} h")
+    print(f"Read {args.netcdf_file}; selected diagnostic hours: {', '.join(f'{hour:g}' for hour in hours)}")
 
-    # Hour 0 is the initial condition, and (the flow being periodic) the exact solution at hour 24.
-    written = [plot_lat_height(data, (0, 12, 24), args.output_dir)]
-
+    written = plot_latitude_height(data, output_dir)
     report_error_norms(data)
 
     print("\nFigures written:")

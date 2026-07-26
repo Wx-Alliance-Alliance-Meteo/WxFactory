@@ -89,6 +89,9 @@ class OutputCubesphereNetcdf(OutputCubesphere):
             self.ncfile.history = "Created " + time.ctime(time.time())
             self.ncfile.description = "WxFactory Model"
             self.ncfile.details = "Cubed-sphere coordinates, Gauss-Legendre collocated grid"
+            self.ncfile.case_number = self.config.case_number
+            if hasattr(self.geometry, "earth_radius"):
+                self.ncfile.earth_radius = self.geometry.earth_radius
 
             self.ncfile.createDimension("time", None)  # unlimited
             npe = 6

@@ -17,15 +17,17 @@ Usage:
 """
 
 import argparse
-import os
+from pathlib import Path
 
 import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from matplotlib.ticker import MultipleLocator
 import netCDF4
 import numpy
-from scipy.interpolate import griddata
+from scipy.interpolate import PchipInterpolator
+from scipy.spatial import cKDTree
 
 # The initial tracer distribution is bounded by these values, and q2 follows q1 along the curve
 # psi(chi) = 0.9 - 0.8 chi^2 (DCMIP eq. 173 and the definition of q2).
@@ -44,25 +46,24 @@ def psi(chi):
 
 
 def load(filename):
-    """Read the fields we need. Arrays come back flattened over the (panel, z, x, y) grid."""
+    """Read coordinates and only the snapshots needed by the DCMIP diagnostics."""
     with netCDF4.Dataset(filename) as ds:
-        time = numpy.asarray(ds.variables["time"][:])
-        # lats/lons are (panel, x, y); broadcast them over the vertical to match the tracers.
+        all_times = numpy.asarray(ds.variables["time"][:])
+        indices = [time_index(all_times, day * DAY) for day in (0.0, 6.0, 12.0)]
+        time = all_times[indices]
         lat = numpy.asarray(ds.variables["lats"][:])
         lon = numpy.asarray(ds.variables["lons"][:])
         elev = numpy.asarray(ds.variables["elev"][:])
         volume = numpy.asarray(ds.variables["volume"][:])
-        tracers = {name: numpy.asarray(ds.variables[name][:]) for name in ("q1", "q2", "q3", "q4")}
-
-    num_z = elev.shape[1]
-    lat = numpy.repeat(lat[:, numpy.newaxis], num_z, axis=1)
-    lon = numpy.repeat(lon[:, numpy.newaxis], num_z, axis=1)
+        tracers = {
+            name: numpy.asarray([ds.variables[name][index] for index in indices])
+            for name in ("q1", "q2", "q3", "q4")
+        }
 
     return {
         "time": time,
-        # The writer already stores these in degrees (units "degrees_north" / "degrees_east").
-        "lat": lat,
-        "lon": lon,
+        "lat2d": lat,
+        "lon2d": lon,
         "elev": elev,
         "volume": volume,
         "tracers": tracers,
@@ -165,26 +166,35 @@ def mixing_diagnostics(q1, q2, weight):
     }
 
 
-def scatter_to_grid(x, y, values, x_range, y_range, shape, periodic_x=None, method="linear"):
-    """Interpolate the scattered cubed-sphere points onto a regular grid.
+def unit_sphere(longitude, latitude):
+    """Cartesian unit vectors for coordinates expressed in degrees."""
+    lon = numpy.deg2rad(longitude)
+    lat = numpy.deg2rad(latitude)
+    cos_lat = numpy.cos(lat)
+    return numpy.stack((cos_lat * numpy.cos(lon), cos_lat * numpy.sin(lon), numpy.sin(lat)), axis=-1)
 
-    Contouring the raw points directly (tricontourf) triangulates them in the plotting plane, which
-    on a cubed sphere produces visible artifacts: slivers along the panel edges, wedges near the
-    poles, and a seam where longitude wraps. Interpolating onto a regular grid first, and letting
-    imshow do the smoothing, removes all of them. `periodic_x` repeats the points either side of the
-    domain so the seam at 0/360 degrees closes.
+
+def spherical_resampler(lat, lon, shape=(361, 721), neighbours=4):
+    """Precompute seamless inverse-distance interpolation on the sphere.
+
+    Planar triangulation of longitude and latitude treats 0/360 as distant and
+    degenerates near the poles.  Neighbour lookup in Cartesian unit-sphere
+    coordinates has neither singularity.
     """
-    grid_x, grid_y = numpy.meshgrid(
-        numpy.linspace(x_range[0], x_range[1], shape[1]),
-        numpy.linspace(y_range[0], y_range[1], shape[0]),
-    )
+    plot_latitudes = numpy.linspace(-90.0, 90.0, shape[0])
+    plot_longitudes = numpy.linspace(0.0, 360.0, shape[1])
+    grid_lon, grid_lat = numpy.meshgrid(plot_longitudes, plot_latitudes)
 
-    if periodic_x is not None:
-        x = numpy.concatenate([x - periodic_x, x, x + periodic_x])
-        y = numpy.tile(y, 3)
-        values = numpy.tile(values, 3)
+    tree = cKDTree(unit_sphere(lon.ravel(), lat.ravel()))
+    distance, index = tree.query(unit_sphere(grid_lon, grid_lat).reshape(-1, 3), k=neighbours)
+    weight = 1.0 / numpy.maximum(distance, 1.0e-12) ** 2
+    weight /= weight.sum(axis=1, keepdims=True)
+    return plot_longitudes, plot_latitudes, index, weight
 
-    return griddata((x, y), values, (grid_x, grid_y), method=method)
+
+def apply_spherical_resampler(values, index, weight, shape):
+    """Apply a precomputed spherical interpolation stencil."""
+    return numpy.sum(values.ravel()[index] * weight, axis=1).reshape(shape)
 
 
 def color_range(data, name):
@@ -196,126 +206,146 @@ def color_range(data, name):
     return float(initial.min()), float(initial.max())
 
 
+def tracer_label(name):
+    """Typeset tracer names consistently."""
+    return rf"$q_{name[1:]}$"
+
+
 def plot_lat_lon(data, day, level, outdir):
     """Lat-lon cross section of every tracer at one day and one level."""
     it = time_index(data["time"], day * DAY)
     iz = level_index(data["elev"], level)
     height = data["elev"].mean(axis=(0, 2, 3))[iz]
+    longitudes, latitudes, index, weight = spherical_resampler(data["lat2d"], data["lon2d"])
 
-    lon = data["lon"][:, iz].ravel()
-    lat = data["lat"][:, iz].ravel()
+    with plt.rc_context(
+        {
+            "font.family": "serif",
+            "font.size": 9,
+            "axes.linewidth": 0.7,
+            "savefig.dpi": 300,
+        }
+    ):
+        fig, axes = plt.subplots(2, 2, figsize=(7.2, 5.5), constrained_layout=True, sharex=True, sharey=True)
+        for ax, (name, field) in zip(axes.ravel(), data["tracers"].items()):
+            q = field[it, :, iz]
+            image = apply_spherical_resampler(q, index, weight, (latitudes.size, longitudes.size))
+            vmin, vmax = color_range(data, name)
+            boundaries = numpy.linspace(vmin, vmax, 22)
 
-    fig, axes = plt.subplots(2, 2, figsize=(14, 8), constrained_layout=True)
-    for ax, (name, field) in zip(axes.ravel(), data["tracers"].items()):
-        q = field[it, :, iz].ravel()
-        vmin, vmax = color_range(data, name)
+            contour = ax.contourf(
+                longitudes,
+                latitudes,
+                image,
+                levels=boundaries,
+                cmap="viridis",
+                extend="both",
+                antialiased=False,
+            )
+            colorbar = fig.colorbar(contour, ax=ax, shrink=0.9, pad=0.02)
+            colorbar.set_label(tracer_label(name))
+            ax.set_title(tracer_label(name), fontsize=10)
+            ax.set_xlim(0.0, 360.0)
+            ax.set_ylim(-90.0, 90.0)
+            ax.xaxis.set_major_locator(MultipleLocator(60.0))
+            ax.yaxis.set_major_locator(MultipleLocator(30.0))
+            ax.grid(color="white", lw=0.35, alpha=0.35)
+            ax.set_xlabel("Longitude (degrees east)")
+            ax.set_ylabel("Latitude (degrees north)")
 
-        # The cubed sphere's outermost points stop short of the poles, so the top and bottom rows of
-        # the target grid fall outside the data and come back as NaN, which imshow would draw as
-        # blank strips. Fill them with zero.
-        image = scatter_to_grid(lon, lat, q, (0, 360), (-90, 90), (361, 721), periodic_x=360.0)
-        image = numpy.nan_to_num(image, nan=0.0)
-        rendered = ax.imshow(
-            image,
-            origin="lower",
-            extent=[0, 360, -90, 90],
-            cmap="viridis",
-            vmin=vmin,
-            vmax=vmax,
-            aspect="auto",
-            interpolation="bilinear",
-        )
-        fig.colorbar(rendered, ax=ax, shrink=0.85)
-        ax.set_title(f"{name}   [{q.min():.3f}, {q.max():.3f}]")
-        ax.set_xlabel("longitude (deg)")
-        ax.set_ylabel("latitude (deg)")
-
-    fig.suptitle(f"DCMIP 1-1: tracers at day {day:g}, z = {height:.0f} m")
-    path = os.path.join(outdir, f"dcmip11_latlon_day{day:g}.png")
-    fig.savefig(path, dpi=140, bbox_inches="tight")
-    plt.close(fig)
-    return path
-
-
-def equator_band(lat, lat_tol):
-    """A band of grid points around the equator.
-
-    The cubed sphere has no row exactly on the equator, and how close it gets depends on the
-    resolution, so widen the requested tolerance until the band holds enough points to contour.
-    """
-    abs_lat = numpy.abs(lat)
-    columns = numpy.sort(abs_lat[:, 0].ravel())  # the horizontal grid, one level is enough
-    minimum_points = max(3, int(0.01 * columns.size))
-    tol = max(lat_tol, columns[minimum_points])
-
-    return abs_lat < tol, tol
+        fig.suptitle(f"DCMIP 1-1 tracers at day {day:g}, $z={height:.0f}$ m", fontsize=10)
+        path = outdir / f"dcmip11_latlon_day{day:g}.png"
+        fig.savefig(path, bbox_inches="tight")
+        fig.savefig(path.with_suffix(".pdf"), bbox_inches="tight")
+        plt.close(fig)
+    return path, path.with_suffix(".pdf")
 
 
-def equator_columns(data, lat_tol=2.0):
-    """The (panel, x, y) columns whose foot lies near the equator, with their vertical profiles.
+def equator_stencil(lat, lon):
+    """Interpolation stencils from the four equatorial panels to latitude zero."""
+    stencil = []
+    equator_lon = []
+    for panel in range(lat.shape[0]):
+        for j in range(lat.shape[2]):
+            latitude = lat[panel, :, j]
+            crossings = numpy.flatnonzero(latitude[:-1] * latitude[1:] <= 0.0)
+            if crossings.size == 0:
+                continue
+            i0 = int(crossings[numpy.argmin(numpy.abs(latitude[crossings]))])
+            i1 = i0 + 1
+            weight = float(-latitude[i0] / (latitude[i1] - latitude[i0]))
+            lon0 = float(lon[panel, i0, j])
+            delta = (float(lon[panel, i1, j]) - lon0 + 180.0) % 360.0 - 180.0
+            stencil.append((panel, j, i0, i1, weight))
+            equator_lon.append((lon0 + weight * delta) % 360.0)
 
-    The model levels are unevenly spaced Gauss-Legendre points, so the interpolation to regular
-    heights has to be done one column at a time, up a monotonic line. Triangulating the raw points
-    in the (longitude, height) plane instead is what stripes the picture.
-    """
-    lat2d = data["lat"][:, 0]  # (panel, x, y)
-    lon2d = data["lon"][:, 0]
-    abs_lat = numpy.abs(lat2d)
-    columns = numpy.sort(abs_lat.ravel())
-    minimum_points = max(3, int(0.01 * columns.size))
-    lat_tol = max(lat_tol, columns[minimum_points])
-
-    mask = abs_lat < lat_tol  # (panel, x, y)
-    z_cols = numpy.moveaxis(data["elev"], 1, -1)[mask]  # (ncol, nz)
-    lon_cols = lon2d[mask]
-    return lon_cols, z_cols, mask, lat_tol
+    order = numpy.argsort(equator_lon)
+    return numpy.asarray(equator_lon)[order], [stencil[index] for index in order]
 
 
-def plot_lon_height(data, day, outdir, lat_tol=2.0):
-    """Longitude-height cross section along the equator, on regular height levels."""
+def interpolate_equator(values, stencil):
+    """Interpolate a ``(panel, [z,] x, y)`` array to latitude zero."""
+    profiles = []
+    for panel, j, i0, i1, weight in stencil:
+        if values.ndim == 4:
+            lower, upper = values[panel, :, i0, j], values[panel, :, i1, j]
+        else:
+            lower, upper = values[panel, i0, j], values[panel, i1, j]
+        profiles.append(lower + weight * (upper - lower))
+    return numpy.asarray(profiles)
+
+
+def periodic_section(field, elevations, longitude, heights, plot_longitude):
+    """Shape-preserving interpolation onto a regular longitude-height grid."""
+    vertical = numpy.empty((longitude.size, heights.size))
+    for column, (z_column, q_column) in enumerate(zip(elevations, field)):
+        sample_height = numpy.clip(heights, z_column[0], z_column[-1])
+        vertical[column] = PchipInterpolator(z_column, q_column)(sample_height)
+
+    extended_lon = numpy.concatenate(([longitude[-1] - 360.0], longitude, [longitude[0] + 360.0]))
+    extended_field = numpy.concatenate((vertical[-1:], vertical, vertical[:1]), axis=0)
+    return PchipInterpolator(extended_lon, extended_field, axis=0)(plot_longitude).T
+
+
+def plot_lon_height(data, day, outdir):
+    """Longitude-height section interpolated to the exact equator."""
     it = time_index(data["time"], day * DAY)
-    lon_cols, z_cols, mask, lat_tol = equator_columns(data, lat_tol)
+    longitude, stencil = equator_stencil(data["lat2d"], data["lon2d"])
+    elevations = interpolate_equator(data["elev"], stencil)
+    heights = numpy.linspace(0.0, 12_000.0, 301)
+    plot_longitude = numpy.linspace(0.0, 360.0, 721)
 
-    zbot, ztop = float(z_cols.min()), float(z_cols.max())
-    heights = numpy.linspace(zbot, ztop, 181)
-    longitudes = numpy.linspace(0.0, 360.0, 361)
-    order = numpy.argsort(lon_cols)
-    lon_sorted = lon_cols[order]
+    with plt.rc_context({"font.family": "serif", "font.size": 9, "axes.linewidth": 0.7, "savefig.dpi": 300}):
+        fig, axes = plt.subplots(2, 2, figsize=(7.2, 5.5), constrained_layout=True, sharex=True, sharey=True)
+        for ax, (name, field) in zip(axes.ravel(), data["tracers"].items()):
+            equator_field = interpolate_equator(field[it], stencil)
+            image = periodic_section(equator_field, elevations, longitude, heights, plot_longitude)
+            vmin, vmax = color_range(data, name)
+            contour = ax.contourf(
+                plot_longitude,
+                heights / 1000.0,
+                image,
+                levels=numpy.linspace(vmin, vmax, 22),
+                cmap="viridis",
+                extend="both",
+                antialiased=False,
+            )
+            colorbar = fig.colorbar(contour, ax=ax, shrink=0.9, pad=0.02)
+            colorbar.set_label(tracer_label(name))
+            ax.set_title(tracer_label(name), fontsize=10)
+            ax.set_xlim(0.0, 360.0)
+            ax.set_ylim(0.0, 12.0)
+            ax.xaxis.set_major_locator(MultipleLocator(60.0))
+            ax.yaxis.set_major_locator(MultipleLocator(2.0))
+            ax.set_xlabel("Longitude (degrees east)")
+            ax.set_ylabel("Height (km)")
 
-    fig, axes = plt.subplots(2, 2, figsize=(14, 8), constrained_layout=True)
-    for ax, (name, field) in zip(axes.ravel(), data["tracers"].items()):
-        q_cols = numpy.moveaxis(field[it], 1, -1)[mask]  # (panel, z, x, y) -> (ncol, nz)
-        vmin, vmax = color_range(data, name)
-
-        # First up each monotonic column onto the regular heights, then across longitude.
-        on_heights = numpy.empty((len(lon_cols), heights.size))
-        for c in range(len(lon_cols)):
-            on_heights[c] = numpy.interp(heights, z_cols[c], q_cols[c])
-
-        image = numpy.empty((heights.size, longitudes.size))
-        for r in range(heights.size):
-            image[r] = numpy.interp(longitudes, lon_sorted, on_heights[order, r], period=360.0)
-
-        rendered = ax.imshow(
-            image,
-            origin="lower",
-            extent=[0, 360, zbot, ztop],
-            cmap="viridis",
-            vmin=vmin,
-            vmax=vmax,
-            aspect="auto",
-            interpolation="bilinear",
-        )
-        fig.colorbar(rendered, ax=ax, shrink=0.85)
-        ax.set_title(f"{name}   [{image.min():.3f}, {image.max():.3f}]")
-        ax.set_xlabel("longitude (deg)")
-        ax.set_ylabel("height (m)")
-
-    fig.suptitle(f"DCMIP 1-1: tracers along the equator (|lat| < {lat_tol:g} deg) at day {day:g}")
-    path = os.path.join(outdir, f"dcmip11_lonheight_day{day:g}.png")
-    fig.savefig(path, dpi=140, bbox_inches="tight")
-    plt.close(fig)
-    return path
+        fig.suptitle(f"DCMIP 1-1 tracers at the equator, day {day:g}", fontsize=10)
+        path = outdir / f"dcmip11_lonheight_day{day:g}.png"
+        fig.savefig(path, bbox_inches="tight")
+        fig.savefig(path.with_suffix(".pdf"), bbox_inches="tight")
+        plt.close(fig)
+    return path, path.with_suffix(".pdf")
 
 
 def plot_correlation(data, day, outdir):
@@ -327,29 +357,59 @@ def plot_correlation(data, day, outdir):
     # plot each model level once.
     levels = sorted({level_index(data["elev"], target) for target in MIXING_LEVELS})
 
-    fig, axes = plt.subplots(1, len(levels), figsize=(4 * len(levels), 4.2), constrained_layout=True, sharey=True)
-    axes = numpy.atleast_1d(axes)
-    curve = numpy.linspace(CHI_MIN, CHI_MAX, 200)
+    with plt.rc_context({"font.family": "serif", "font.size": 9, "axes.linewidth": 0.7, "savefig.dpi": 300}):
+        fig, axes = plt.subplots(
+            1,
+            len(levels),
+            figsize=(7.2, 2.25),
+            constrained_layout=True,
+            sharex=True,
+            sharey=True,
+        )
+        axes = numpy.atleast_1d(axes)
+        curve = numpy.linspace(CHI_MIN, CHI_MAX, 300)
+        density = None
 
-    for ax, iz in zip(axes, levels):
-        q1 = data["tracers"]["q1"][it, :, iz].ravel()
-        q2 = data["tracers"]["q2"][it, :, iz].ravel()
+        for ax, iz in zip(axes, levels):
+            q1 = data["tracers"]["q1"][it, :, iz].ravel()
+            q2 = data["tracers"]["q2"][it, :, iz].ravel()
+            density = ax.hexbin(
+                q1,
+                q2,
+                gridsize=65,
+                extent=(-0.08, 1.08, 0.02, 0.98),
+                bins="log",
+                mincnt=1,
+                cmap="Blues",
+                linewidths=0.0,
+                rasterized=True,
+            )
+            ax.plot(curve, psi(curve), color="0.1", lw=1.0, label="Initial curve", zorder=3)
+            ax.plot(
+                [CHI_MIN, CHI_MAX],
+                [psi(CHI_MIN), psi(CHI_MAX)],
+                color="0.25",
+                ls=(0, (3, 2)),
+                lw=0.8,
+                label="Chord",
+                zorder=3,
+            )
+            ax.set_xlabel(r"$q_1$")
+            ax.set_title(f"{mean_height[iz]:.0f} m", fontsize=9)
+            ax.set_xlim(-0.08, 1.08)
+            ax.set_ylim(0.02, 0.98)
+            ax.tick_params(length=2.5)
 
-        ax.plot(curve, psi(curve), "k-", lw=2, label="initial curve", zorder=3)
-        ax.plot([CHI_MIN, CHI_MAX], [psi(CHI_MIN), psi(CHI_MAX)], "k--", lw=1, label="chord", zorder=3)
-        ax.scatter(q1, q2, s=1, alpha=0.3, color="tab:blue")
-        ax.set_xlabel("q1")
-        ax.set_title(f"z = {mean_height[iz]:.0f} m")
-        ax.set_xlim(-0.1, 1.1)
-        ax.set_ylim(0.0, 1.0)
-
-    axes[0].set_ylabel("q2")
-    axes[0].legend(loc="upper right", fontsize=8)
-    fig.suptitle(f"DCMIP 1-1: q1-q2 correlation at day {day:g}")
-    path = os.path.join(outdir, f"dcmip11_correlation_day{day:g}.png")
-    fig.savefig(path, dpi=120)
-    plt.close(fig)
-    return path
+        axes[0].set_ylabel(r"$q_2$")
+        axes[0].legend(loc="lower left", fontsize=7, frameon=False)
+        colorbar = fig.colorbar(density, ax=axes, shrink=0.9, pad=0.01)
+        colorbar.set_label("Sample density")
+        fig.suptitle(rf"DCMIP 1-1: $q_1$–$q_2$ correlation at day {day:g}", fontsize=10)
+        path = outdir / f"dcmip11_correlation_day{day:g}.png"
+        fig.savefig(path, bbox_inches="tight")
+        fig.savefig(path.with_suffix(".pdf"), bbox_inches="tight")
+        plt.close(fig)
+    return path, path.with_suffix(".pdf")
 
 
 def report_error_norms(data, day):
@@ -391,20 +451,19 @@ def main():
     parser.add_argument("-o", "--output-dir", default="results", help="where to write the figures")
     args = parser.parse_args()
 
-    os.makedirs(args.output_dir, exist_ok=True)
+    outdir = Path(args.output_dir)
+    outdir.mkdir(parents=True, exist_ok=True)
     data = load(args.netcdf_file)
 
     days = data["time"] / DAY
-    print(f"Read {args.netcdf_file}: {len(days)} output times, from day {days[0]:g} to day {days[-1]:g}")
+    print(f"Read {args.netcdf_file}; selected diagnostic days: {', '.join(f'{day:g}' for day in days)}")
 
-    written = []
-    # Day 0 is the initial condition, and (since the flow reverses) also the exact solution at day 12.
-    for day in (0, 6, 12):
-        written.append(plot_lat_lon(data, day, 4900.0, args.output_dir))
-    for day in (0, 12):
-        written.append(plot_lon_height(data, day, args.output_dir))
-    written.append(plot_correlation(data, 0, args.output_dir))
-    written.append(plot_correlation(data, 6, args.output_dir))
+    figure_pairs = []
+    for day in (6, 12):
+        figure_pairs.append(plot_lat_lon(data, day, 4900.0, outdir))
+    figure_pairs.append(plot_lon_height(data, 12, outdir))
+    figure_pairs.append(plot_correlation(data, 6, outdir))
+    written = [path for pair in figure_pairs for path in pair]
 
     report_error_norms(data, 12)
     report_mixing(data, 6)

@@ -1,11 +1,9 @@
 import torch
 import math
 
-import numpy
-
 from ..common.configuration import Configuration
 from ..common.definitions import cpd, gravity, p0, Rd
-from ..geometry import CubedSphere3D, DFROperators, Metric3DTopo, wind2contra_2d
+from ..geometry import CubedSphere3D, DFROperators, Metric3DTopo
 
 # =======================================================================
 #
@@ -351,9 +349,17 @@ def dcmip_advection_orography(geom: CubedSphere3D, metric, mtrx, param):
     # Mountain (Table XI)
     lambdam = 3.0 * math.pi / 2.0  # mountain longitude center point (radians)
     phim = 0.0  # mountain latitude center point (radians)
-    h0 = 2000.0  # peak height of the mountain range (m)
     Rm = 3.0 * math.pi / 4.0  # mountain radius (radians)
     zetam = math.pi / 16.0  # mountain oscillation half-width (radians)
+
+    if param.case_number == 201:
+        # If z_s = h0 f(r), its physical radial slope is h0 f'(r) / a.
+        # The maximum of |f'| for the DCMIP bell and ripple below is
+        # 16.004700029593717. Choose h0 so max|dz_s/ds| = tan(70 degrees).
+        maximum_normalized_slope = 16.004700029593717
+        h0 = math.tan(math.radians(70.0)) * geom.earth_radius / maximum_normalized_slope
+    else:
+        h0 = 2000.0  # peak height of the DCMIP 2-0-0 mountain (m)
 
     # Cloud-like tracers (Table XI)
     lambdap = math.pi / 2.0  # cloud longitude center point (radians)
@@ -503,106 +509,77 @@ def dcmip_advection_orography(geom: CubedSphere3D, metric, mtrx, param):
 
 
 def dcmip_steady_state_mountain(geom: CubedSphere3D, metric, mtrx, param):
-    T0 = 300.0  # temperature (K)
-    gamma = 0.00650  # temperature lapse rate (K/m)
+    """DCMIP-2012 test 2-0: hydrostatic atmosphere at rest.
+
+    The same atmospheric state is used for the flat control and the terrain
+    run.  With terrain enabled, geometric height follows the compact,
+    moderately steep mountain from equations 63--64 of the specification.
+    """
+    T0 = 300.0  # surface temperature (K)
+    gamma = 0.0065  # temperature lapse rate (K/m)
     lambdam = 3.0 * math.pi / 2.0  # mountain longitude center point (radians)
     phim = 0.0  # mountain latitude center point (radians)
     h0 = 2000.0  # peak height of the mountain range (m)
     Rm = 3.0 * math.pi / 4.0  # mountain radius (radians)
     zetam = math.pi / 16.0  # mountain oscillation half-width (radians)
 
-    # -----------------------------------------------------------------------
-    #    compute exponents
-    # -----------------------------------------------------------------------
-    exponent = 0.0
-    if gamma != 0:
-        exponent = gravity / (Rd * gamma)
+    def surface_height(latlon, large_scale_only=False):
+        lon, lat = latlon[0], latlon[1]
+        cosine = (
+            math.sin(phim) * torch.sin(lat)
+            + math.cos(phim) * torch.cos(lat) * torch.cos(lon - lambdam)
+        )
+        # Clamp protects arccos from a one-ulp overshoot at the mountain centre.
+        rm = torch.arccos(torch.clamp(cosine, -1.0, 1.0))
+        bell = 0.5 * h0 * (1.0 + torch.cos(math.pi * rm / Rm))
+        shape = 0.5 if large_scale_only else torch.cos(math.pi * rm / zetam) ** 2
+        return torch.where(rm < Rm, bell * shape, 0.0)
 
-    # -----------------------------------------------------------------------
-    #    Set topography
-    # -----------------------------------------------------------------------
-    zbot = numpy.zeros(geom.coordVec_latlon.shape[2:])
-    zbot_itf_i = numpy.zeros(geom.coordVec_latlon_itf_i.shape[2:])
-    zbot_itf_j = numpy.zeros(geom.coordVec_latlon_itf_j.shape[2:])
+    # 200 and 201 are mountain cases. 202 is the deliberately non-standard
+    # flat control; legacy case number 20 retains its old meaning.
+    if param.case_number in (20, 200, 201):
+        zbot_new = surface_height(geom.get_floor(geom.polar))
+        zbot_itf_i_new = surface_height(geom.get_itf_i_floor(geom.polar_itf_i))
+        zbot_itf_j_new = surface_height(geom.get_itf_j_floor(geom.polar_itf_j))
+        zbot = surface_height(geom.coordVec_latlon[:, 0])
+        zbot_itf_i = surface_height(geom.coordVec_latlon_itf_i[:, 0])
+        zbot_itf_j = surface_height(geom.coordVec_latlon_itf_j[:, 0])
 
-    for z, coord in zip(
-        [zbot, zbot_itf_i, zbot_itf_j], [geom.coordVec_latlon, geom.coordVec_latlon_itf_i, geom.coordVec_latlon_itf_j]
-    ):
-        lat = coord[1, 0, :, :]
-        lon = coord[0, 0, :, :]
-        r = numpy.arccos(math.sin(phim) * numpy.sin(lat) + math.cos(phim) * numpy.cos(lat) * numpy.cos(lon - lambdam))
-        z[r < Rm] = (
-            (h0 / 2.0) * (1.0 + numpy.cos(math.pi * r[r < Rm] / Rm)) * numpy.cos(math.pi * r[r < Rm] / zetam) ** 2
-        )  # mountain height
+        # Preserve the analytic bell/ripple split when SLEVE is selected.
+        large_new = surface_height(geom.get_floor(geom.polar), True)
+        large_itf_i_new = surface_height(geom.get_itf_i_floor(geom.polar_itf_i), True)
+        large_itf_j_new = surface_height(geom.get_itf_j_floor(geom.polar_itf_j), True)
+        large = surface_height(geom.coordVec_latlon[:, 0], True)
+        large_itf_i = surface_height(geom.coordVec_latlon_itf_i[:, 0], True)
+        large_itf_j = surface_height(geom.coordVec_latlon_itf_j[:, 0], True)
 
-    # Update the geometry object with the new bottom topography
-    geom.apply_topography(zbot, zbot_itf_i, zbot_itf_j)
-    # And regenerate the metric to take this new topography into account
+        geom.apply_topography(
+            zbot,
+            zbot_itf_i,
+            zbot_itf_j,
+            zbot_new,
+            zbot_itf_i_new,
+            zbot_itf_j_new,
+            large,
+            large_itf_i,
+            large_itf_j,
+            large_new,
+            large_itf_i_new,
+            large_itf_j_new,
+        )
+    else:  # case 202
+        geom.apply_topography(None, None, None, None, None, None)
     metric.build_metric()
 
-    # -----------------------------------------------------------------------
-    #    PS (surface pressure)
-    # -----------------------------------------------------------------------
+    height = geom.height_new
+    exponent = gravity / (Rd * gamma)
+    temperature = T0 - gamma * height
+    pressure = p0 * (1.0 - gamma * height / T0) ** exponent
+    rho = pressure / (Rd * temperature)
+    theta = temperature * (p0 / pressure) ** (Rd / cpd)
 
-    if gamma == 0.0:
-        ps = p0 * numpy.exp(-gravity * zbot / (Rd * T0))
-    else:
-        ps = p0 * (1.0 - gamma / T0 * zbot) ** exponent
-
-    # -----------------------------------------------------------------------
-    #    PRESSURE
-    # -----------------------------------------------------------------------
-
-    if gamma != 0:
-        p = p0 * (1.0 - gamma / T0 * geom.height) ** exponent
-    else:
-        p = p0 * numpy.exp(-gravity / Rd * geom.height / T0)
-
-    # -----------------------------------------------------------------------
-    #    THE VELOCITIES ARE ZERO (STATE AT REST)
-    # -----------------------------------------------------------------------
-
-    # Zonal Velocity
-
-    u = 0.0
-
-    # Meridional Velocity
-
-    v = 0.0
-
-    # Vertical Velocity
-
-    w = 0.0
-
-    u1_contra, u2_contra = wind2contra_2d(u, v, geom)
-
-    # -----------------------------------------------------------------------
-    #    TEMPERATURE WITH CONSTANT LAPSE RATE
-    # -----------------------------------------------------------------------
-
-    t = T0 - gamma * geom.height
-
-    # -----------------------------------------------------------------------
-    #    RHO (density)
-    # -----------------------------------------------------------------------
-
-    rho = p / (Rd * t)
-
-    # -----------------------------------------------------------------------
-    #     initialize Q, set to zero
-    # -----------------------------------------------------------------------
-
-    q = 0.0
-
-    # -----------------------------------------------------------------------
-    #     initialize TV (virtual temperature)
-    # -----------------------------------------------------------------------
-
-    tv = t
-
-    theta = tv * (p0 / p) ** (Rd / cpd)
-
-    return rho, u1_contra, u2_contra, w, theta
+    zero = torch.zeros_like(rho)
+    return rho, zero, zero, zero, theta
 
 
 def dcmip_schar_waves(geom: CubedSphere3D, metric, mtrx: DFROperators, param: Configuration, shear=False):
@@ -761,13 +738,12 @@ def dcmip_schar_damping(
 
 
 def dcmip_gravity_wave(geom: CubedSphere3D, metric: Metric3DTopo, mtrx: DFROperators, param: Configuration):
-    """
-    Test case 31 - gravity waves
+    """DCMIP-2012 test 3-1: non-hydrostatic gravity wave.
 
-    The non-hydrostatic gravity wave test examines the response of models to short time-scale wavemotion triggered
-    by a localized perturbation. The formulation presented in this document is new, but is based on previous
-    approaches by Skamarock et al. (JAS 1994), Tomita and Satoh (FDR 2004), and
-    Jablonowski et al. (NCAR Tech Report 2008)
+    A localized potential-temperature perturbation is superposed on a
+    hydrostatic, gradient-wind-balanced state on an X=125 non-rotating
+    planet. Density deliberately uses the unperturbed temperature, as
+    required by version 3 of the reference initial-condition routine.
     """
 
     u0 = 20.0  # Reference Velocity
@@ -785,34 +761,15 @@ def dcmip_gravity_wave(geom: CubedSphere3D, metric: Metric3DTopo, mtrx: DFROpera
     kappa = Rd / cpd
     inv_kappa = cpd / Rd
 
-    # -----------------------------------------------------------------------
-    #    THE VELOCITIES
-    # -----------------------------------------------------------------------
-
-    # Zonal Velocity
-
-    u = u0 * torch.cos(geom.lat_new)
-
-    # Meridional Velocity
-
-    v = torch.zeros_like(u)
-
-    # Vertical Velocity = Vertical Pressure Velocity = 0
-
-    w = torch.zeros_like(u)
-
-    ## Set a trivial topography
-    zbot = torch.zeros_like(geom.coordVec_latlon[0, 0])
-    zbot_itf_i = torch.zeros_like(geom.coordVec_latlon_itf_i[0, 0])
-    zbot_itf_j = torch.zeros_like(geom.coordVec_latlon_itf_j[0, 0])
-
-    # Update the geometry object with the new bottom topography
-    geom.apply_topography(zbot, zbot_itf_i, zbot_itf_j, None, None, None)
-    # And regenerate the metric to take this new topography into account
+    # Test 3-1 has a flat lower boundary. Reapplying it explicitly keeps the
+    # geometry and metric initialization order consistent with terrain cases.
+    geom.apply_topography(None, None, None, None, None, None)
     metric.build_metric()
 
-    # u1_contra, u2_contra = wind2contra_2d(u, v, geom)
-    u1_contra, u2_contra = geom.wind2contra_2d(u, v)
+    u = u0 * torch.cos(geom.lat_new)
+    v = torch.zeros_like(u)
+    w = torch.zeros_like(u)
+    u1_contra, u2_contra, u3_contra = geom.wind2contra(u, v, w, metric)
 
     # -----------------------------------------------------------------------
     #    SURFACE TEMPERATURE
@@ -875,7 +832,7 @@ def dcmip_gravity_wave(geom: CubedSphere3D, metric: Metric3DTopo, mtrx: DFROpera
 
     theta = theta_base + theta_pert
 
-    return rho, u1_contra, u2_contra, w, theta
+    return rho, u1_contra, u2_contra, u3_contra, theta
 
 
 # =========================================================================

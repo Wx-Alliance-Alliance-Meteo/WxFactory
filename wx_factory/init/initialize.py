@@ -102,7 +102,7 @@ def initialize_euler(geom: CubedSphere3D, metric: Metric3DTopo, mtrx: DFROperato
         rho, u1_contra, u2_contra, w, potential_temperature, q1, q2, q3, q4 = dcmip_advection_orography(
             geom, metric, mtrx, param
         )
-    elif param.case_number == 20:
+    elif param.case_number in (20, 200, 201, 202):
         rho, u1_contra, u2_contra, w, potential_temperature = dcmip_steady_state_mountain(geom, metric, mtrx, param)
     elif param.case_number == 21:
         rho, u1_contra, u2_contra, w, potential_temperature = dcmip_schar_waves(geom, metric, mtrx, param, False)

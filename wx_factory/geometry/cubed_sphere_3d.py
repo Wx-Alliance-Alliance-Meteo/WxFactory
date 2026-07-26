@@ -417,8 +417,12 @@ class CubedSphere3D(CubedSphere):
         if param.case_number == 31:
             planet_scaling_factor = 125.0
             planet_is_rotating = 0.0
-        elif param.case_number == 20:
+        elif param.case_number in (20, 200, 202):
             # Normal planet, but no rotation
+            planet_is_rotating = 0.0
+        elif param.case_number == 201:
+            # DCMIP 2-0-1 uses a reduced-radius, non-rotating planet.
+            planet_scaling_factor = 500
             planet_is_rotating = 0.0
         elif param.case_number == 21 or param.case_number == 22:
             # Small planet, no rotation

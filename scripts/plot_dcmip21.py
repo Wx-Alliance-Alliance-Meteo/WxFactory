@@ -1,241 +1,409 @@
 #!/usr/bin/env python3
-"""Plots for DCMIP-2012 test 2-1 (non-hydrostatic mountain waves over a Schar-type mountain).
+"""Publication-quality plots for DCMIP-2012 test 2-1.
 
-Takes the NetCDF file written by WxFactory and produces what the DCMIP-2012 Test Case Document
-(v1.7, section 2.X / 2.1) suggests for analysis:
+The DCMIP document recommends longitude-height sections at the equator at
+2400, 3600, and 7200 s.  Cubed-sphere nodes do not lie exactly on the
+equator, so this script brackets latitude zero on each equatorial panel and
+interpolates the model fields to it.  Treating a latitude band as a single
+line produces visible stripes and must be avoided.
 
-  * longitude-height cross sections of the temperature perturbation T'(lambda, z) = T - Teq along
-    the equator, at t = 2400 s, 3600 s and 7200 s (the document's suggested snapshots), plus the
-    initial state for reference. The 2400 s and 3600 s frames catch the wave before it has wrapped
-    around the small planet; the 7200 s frame is after it has interfered with itself and the sponge;
-  * the same sections for the vertical velocity w, which the document also recommends analysing;
-  * the surface elevation (the Schar-type mountain), for reference.
-
-The model writes pressure P and density rho, so the temperature is recovered from the ideal gas law
-T = P / (Rd rho). For test 2-1 the background is isothermal at Teq = 300 K, so T' is zero at t = 0
-and is created entirely by the flow over the mountain.
+Both constant-height sections and counterparts on the native SLEVE levels
+are written.  The former are the primary inter-model comparison; the latter
+show the terrain-following coordinate deformation without vertical remapping.
 
 Usage:
-    python3 scripts/plot_dcmip21.py results/dcmip21.nc [-o output_dir] [--label sleve]
+    python scripts/plot_dcmip21.py -o results --label dcmip21 results/dcmip21_rosexp.nc
 """
 
 import argparse
-import os
+from pathlib import Path
 
 import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from matplotlib.ticker import MultipleLocator
 import netCDF4
 import numpy
+from scipy.interpolate import PchipInterpolator
 
-# Gas constant for dry air and the reference (equatorial) temperature of the balanced state.
-RD = 287.0
+# Keep diagnostics consistent with wx_factory/common/definitions.py.  Using
+# 287.0 instead leaves a false ~0.052 K perturbation in the initial state.
+RD = 287.05
 TEQ = 300.0
-
-# The document's suggested analysis snapshots (seconds, unscaled Earth time).
-SNAPSHOTS = (0.0, 2400.0, 3600.0, 7200.0)
-
-# Longitude of the mountain centre (lambda_c = pi / 4), marked on the sections for orientation.
+SNAPSHOTS = (2400.0, 3600.0, 7200.0)
 MOUNTAIN_LON = 45.0
 
 
-def load(filename):
-    """Read pressure, density, vertical velocity and the grid, on the (panel, z, x, y) layout."""
-    with netCDF4.Dataset(filename) as ds:
-        time = numpy.asarray(ds.variables["time"][:])
-        lat = numpy.asarray(ds.variables["lats"][:])
-        lon = numpy.asarray(ds.variables["lons"][:])
-        elev = numpy.asarray(ds.variables["elev"][:])
-        topo = numpy.asarray(ds.variables["topo"][:])
-        pressure = numpy.asarray(ds.variables["P"][:])
-        rho = numpy.asarray(ds.variables["rho"][:])
-        w = numpy.asarray(ds.variables["W"][:])
+def time_indices(times, targets):
+    """Return the nearest output index for every requested time."""
+    return [int(numpy.argmin(numpy.abs(times - target))) for target in targets]
 
-    # Temperature from the ideal gas law, then its perturbation from the isothermal background.
-    temperature = pressure / (RD * rho)
-    tprime = temperature - TEQ
+
+def equator_stencil(lat, lon):
+    """Build interpolation stencils from cubed-sphere nodes to latitude zero.
+
+    Each returned tuple contains a panel, longitude index, the two latitude
+    indices bracketing the equator, and the interpolation weight of the upper
+    point.  Polar panels are excluded naturally because they do not bracket
+    zero.
+    """
+    stencil = []
+    equator_lon = []
+
+    for panel in range(lat.shape[0]):
+        for j in range(lat.shape[2]):
+            latitude = lat[panel, :, j]
+            crossings = numpy.flatnonzero(latitude[:-1] * latitude[1:] <= 0.0)
+            if crossings.size == 0:
+                continue
+
+            i0 = int(crossings[numpy.argmin(numpy.abs(latitude[crossings]))])
+            i1 = i0 + 1
+            weight = float(-latitude[i0] / (latitude[i1] - latitude[i0]))
+
+            # Interpolate longitude on the circle so the 0/360 seam cannot
+            # produce a spurious value near 180 degrees.
+            lon0 = float(lon[panel, i0, j])
+            delta = (float(lon[panel, i1, j]) - lon0 + 180.0) % 360.0 - 180.0
+            longitude = (lon0 + weight * delta) % 360.0
+
+            stencil.append((panel, j, i0, i1, weight))
+            equator_lon.append(longitude)
+
+    order = numpy.argsort(equator_lon)
+    return numpy.asarray(equator_lon)[order], [stencil[i] for i in order]
+
+
+def interpolate_equator(values, stencil):
+    """Interpolate a ``(panel, [z,] x, y)`` array to the exact equator."""
+    profiles = []
+    has_vertical_axis = values.ndim == 4
+    for panel, j, i0, i1, weight in stencil:
+        if has_vertical_axis:
+            lower = values[panel, :, i0, j]
+            upper = values[panel, :, i1, j]
+        else:
+            lower = values[panel, i0, j]
+            upper = values[panel, i1, j]
+        profiles.append(lower + weight * (upper - lower))
+    return numpy.asarray(profiles)
+
+
+def regular_section(field, elevations, longitudes, topography, heights, plot_longitudes):
+    """Interpolate terrain-following profiles to a regular longitude-height grid."""
+    vertical = numpy.empty((longitudes.size, heights.size))
+    for column, (z_column, q_column) in enumerate(zip(elevations, field)):
+        interpolator = PchipInterpolator(z_column, q_column, extrapolate=False)
+        sample_heights = numpy.clip(heights, z_column[0], z_column[-1])
+        vertical[column] = interpolator(sample_heights)
+
+    # Periodic, shape-preserving interpolation across the four equatorial
+    # panels.  Adding one point on either side makes the 0/360 seam continuous.
+    lon_extended = numpy.concatenate(([longitudes[-1] - 360.0], longitudes, [longitudes[0] + 360.0]))
+    field_extended = numpy.concatenate((vertical[-1:], vertical, vertical[:1]), axis=0)
+    image = PchipInterpolator(lon_extended, field_extended, axis=0)(plot_longitudes).T
+
+    topo_extended = numpy.concatenate(([topography[-1]], topography, [topography[0]]))
+    surface = PchipInterpolator(lon_extended, topo_extended)(plot_longitudes)
+    image = numpy.ma.masked_where(heights[:, None] < surface[None, :], image)
+    return image, surface
+
+
+def load_sections(filename):
+    """Read coordinates and only the three snapshots used in the figures."""
+    with netCDF4.Dataset(filename) as dataset:
+        times_all = numpy.asarray(dataset.variables["time"][:])
+        indices = time_indices(times_all, SNAPSHOTS)
+        times = times_all[indices]
+
+        lat = numpy.asarray(dataset.variables["lats"][:])
+        lon = numpy.asarray(dataset.variables["lons"][:])
+        equator_lon, stencil = equator_stencil(lat, lon)
+
+        elevations = interpolate_equator(numpy.asarray(dataset.variables["elev"][:]), stencil)
+        topography = interpolate_equator(numpy.asarray(dataset.variables["topo"][:]), stencil)
+
+        tprime = []
+        vertical_velocity = []
+        for index in indices:
+            pressure = numpy.asarray(dataset.variables["P"][index])
+            density = numpy.asarray(dataset.variables["rho"][index])
+            w = numpy.asarray(dataset.variables["W"][index])
+            tprime.append(interpolate_equator(pressure / (RD * density) - TEQ, stencil))
+            vertical_velocity.append(interpolate_equator(w, stencil))
 
     return {
-        "time": time,
-        "lat2d": lat,
-        "lon2d": lon,
-        "elev": elev,
-        "topo": topo,
-        "tprime": tprime,
-        "w": w,
+        "time": times,
+        "longitude": equator_lon,
+        "elevation": elevations,
+        "topography": topography,
+        "tprime": numpy.asarray(tprime),
+        "w": numpy.asarray(vertical_velocity),
     }
 
 
-def time_index(time, target):
-    """Index of the output closest to `target` seconds."""
-    return int(numpy.argmin(numpy.abs(time - target)))
+def nice_symmetric_limit(images):
+    """Choose a round shared limit that contains every plotted value."""
+    values = numpy.concatenate([numpy.abs(numpy.ma.asarray(image).compressed()) for image in images])
+    raw = float(numpy.max(values))
+    if not numpy.isfinite(raw) or raw == 0.0:
+        return 1.0
+    exponent = 10.0 ** numpy.floor(numpy.log10(raw))
+    return numpy.ceil(raw / exponent * 2.0) / 2.0 * exponent
 
 
-def equator_columns(data, tolerance=2.0):
-    """The (panel, x, y) columns whose foot lies near the equator.
-
-    Returns the column longitudes and, for each column, the full vertical profile of heights. The
-    model levels follow the terrain and are unevenly spaced (Gauss-Legendre points, clustered near
-    the element boundaries), so the interpolation to constant heights has to be done one column at a
-    time, up a monotonic line. Triangulating the raw points in the (longitude, height) plane instead
-    stripes the picture.
-    """
-    lat2d, lon2d = data["lat2d"], data["lon2d"]
-    distance = numpy.abs(lat2d)
-    columns = numpy.sort(distance.ravel())
-    minimum_points = max(3, int(0.01 * columns.size))
-    tolerance = max(tolerance, columns[minimum_points])
-
-    mask = distance < tolerance  # (panel, x, y)
-    # elev is (panel, z, x, y); pick the near-equator columns and put height on the last axis.
-    z_cols = numpy.moveaxis(data["elev"], 1, -1)[mask]  # (ncol, nz)
-    lon_cols = lon2d[mask]  # (ncol,)
-    return lon_cols, z_cols, mask, tolerance
-
-
-def section_image(field_it, mask, z_cols, lon_cols, heights, longitudes, order, lon_sorted):
-    """Interpolate one snapshot onto the regular (longitude, height) grid, column by column."""
-    q_cols = numpy.moveaxis(field_it, 1, -1)[mask]  # (panel, z, x, y) -> (panel, x, y, z), mask -> (ncol, nz)
-
-    # First up each monotonic column onto the regular heights, then across longitude (0/360 wrap).
-    # Outside the column's height range there is no data; hold the nearest value so the terrain foot
-    # and the model top do not leave blank bands.
-    on_heights = numpy.empty((len(lon_cols), heights.size))
-    for c in range(len(lon_cols)):
-        on_heights[c] = numpy.interp(heights, z_cols[c], q_cols[c])
-
-    image = numpy.empty((heights.size, longitudes.size))
-    for r in range(heights.size):
-        image[r] = numpy.interp(longitudes, lon_sorted, on_heights[order, r], period=360.0)
-    return image
-
-
-def plot_sections(data, outdir, label, field, cmap, title, filename, symmetric=True):
-    """Longitude-height equatorial sections of `field` at the document's snapshots."""
-    lon_cols, z_cols, mask, tolerance = equator_columns(data)
-    zbot, ztop = 0.0, float(numpy.max(data["elev"]))
-
-    heights = numpy.linspace(zbot, ztop, 241)
-    longitudes = numpy.linspace(0.0, 360.0, 481)
-    order = numpy.argsort(lon_cols)
-    lon_sorted = lon_cols[order]
-
-    # Build every image first so a single colour scale, set from the evolved field, spans them all.
-    # The initial perturbation is essentially zero, so it must not drive the scale.
+def plot_sections(data, output_dir, label, field, symbol, units, filename):
+    """Render the DCMIP sections after interpolation to geometric height."""
+    heights = numpy.linspace(0.0, 30_000.0, 301)
+    plot_longitudes = numpy.linspace(0.0, 360.0, 721)
     images = []
-    times = []
-    for target in SNAPSHOTS:
-        it = time_index(data["time"], target)
-        images.append(section_image(data[field][it], mask, z_cols, lon_cols, heights, longitudes, order, lon_sorted))
-        times.append(float(data["time"][it]))
-
-    evolved = numpy.concatenate([img.ravel() for img, t in zip(images, times) if t > 0.0])
-    scale = float(numpy.percentile(numpy.abs(evolved), 99.9)) or 1.0
-    if symmetric:
-        vmin, vmax = -scale, scale
-    else:
-        vmin, vmax = 0.0, scale
-
-    fig, axes = plt.subplots(len(images), 1, figsize=(11.0, 2.7 * len(images)), constrained_layout=True, sharex=True)
-    axes = numpy.atleast_1d(axes)
-
-    for ax, image, t in zip(axes, images, times):
-        rendered = ax.imshow(
-            image,
-            origin="lower",
-            extent=[0.0, 360.0, zbot / 1000.0, ztop / 1000.0],
-            cmap=cmap,
-            vmin=vmin,
-            vmax=vmax,
-            aspect="auto",
-            interpolation="bilinear",
+    surfaces = []
+    for snapshot in data[field]:
+        image, surface = regular_section(
+            snapshot,
+            data["elevation"],
+            data["longitude"],
+            data["topography"],
+            heights,
+            plot_longitudes,
         )
-        fig.colorbar(rendered, ax=ax, shrink=0.9)
-        ax.axvline(MOUNTAIN_LON, color="k", lw=0.6, ls=":", alpha=0.5)
-        ax.set_title(f"t = {t:.0f} s   [{image.min():.2f}, {image.max():.2f}]")
-        ax.set_ylabel("height (km)")
+        images.append(image)
+        surfaces.append(surface)
 
-    axes[-1].set_xlabel("longitude (deg)")
-    fig.suptitle(f"DCMIP 2-1 ({label}): {title} along the equator (|lat| < {tolerance:.1f} deg)")
-    path = os.path.join(outdir, filename.format(label=label))
-    fig.savefig(path, dpi=140, bbox_inches="tight")
-    plt.close(fig)
-    return path
+    limit = nice_symmetric_limit(data[field])
+    # An even number of boundaries leaves zero in the middle of a neutral
+    # colour band.  If zero itself is a boundary, roundoff-level sign changes
+    # in the quiet upper atmosphere appear as distracting horizontal stripes.
+    levels = numpy.linspace(-limit, limit, 22)
+
+    with plt.rc_context(
+        {
+            "font.family": "serif",
+            "font.size": 9,
+            "axes.linewidth": 0.7,
+            "xtick.direction": "out",
+            "ytick.direction": "out",
+            "savefig.dpi": 300,
+        }
+    ):
+        fig, axes = plt.subplots(
+            len(images),
+            1,
+            figsize=(7.2, 6.7),
+            sharex=True,
+            sharey=True,
+            constrained_layout=True,
+        )
+
+        contour = None
+        for ax, image, surface, time in zip(axes, images, surfaces, data["time"]):
+            contour = ax.contourf(
+                plot_longitudes,
+                heights / 1000.0,
+                image,
+                levels=levels,
+                cmap="RdBu_r",
+                extend="both",
+                antialiased=False,
+            )
+            ax.fill_between(
+                plot_longitudes,
+                0.0,
+                surface / 1000.0,
+                color="0.25",
+                linewidth=0.0,
+                zorder=5,
+            )
+            ax.axvline(MOUNTAIN_LON, color="0.15", lw=0.55, ls=(0, (2, 2)), alpha=0.8)
+            ax.text(
+                0.012,
+                0.93,
+                f"$t={time:.0f}$ s",
+                transform=ax.transAxes,
+                ha="left",
+                va="top",
+                bbox={"facecolor": "white", "edgecolor": "none", "alpha": 0.82, "pad": 1.8},
+            )
+            ax.set_xlim(0.0, 360.0)
+            ax.set_ylim(0.0, 30.0)
+            ax.set_ylabel("Height (km)")
+            ax.xaxis.set_major_locator(MultipleLocator(45.0))
+            ax.yaxis.set_major_locator(MultipleLocator(5.0))
+            ax.tick_params(length=3.0, width=0.7)
+
+        axes[-1].set_xlabel("Longitude (degrees east)")
+        colorbar = fig.colorbar(contour, ax=axes, location="right", shrink=0.96, pad=0.02)
+        colorbar.set_label(f"{symbol} ({units})")
+        colorbar.set_ticks(numpy.linspace(-limit, limit, 9))
+        fig.suptitle(f"DCMIP 2-1: {symbol} at the equator, constant-height levels — {label}", fontsize=10)
+
+        path = output_dir / filename.format(label=label)
+        fig.savefig(path, bbox_inches="tight")
+        fig.savefig(path.with_suffix(".pdf"), bbox_inches="tight")
+        plt.close(fig)
+    return path, path.with_suffix(".pdf")
 
 
-def plot_topography(data, outdir, label):
-    """The Schar-type surface elevation along the equator.
+def periodic_interpolate(longitude, values, plot_longitude):
+    """Periodically interpolate column-major values across longitude."""
+    extended_lon = numpy.concatenate(([longitude[-1] - 360.0], longitude, [longitude[0] + 360.0]))
+    extended_values = numpy.concatenate((values[-1:], values, values[:1]), axis=0)
+    return PchipInterpolator(extended_lon, extended_values, axis=0)(plot_longitude)
 
-    A full lat-lon map is dominated by the flat background (the Schar mountain is only 250 m tall and
-    compact), so a zoom on the equatorial profile around the mountain centre is more informative. The
-    true surface height is used (the `topo` field), not the first model level, which sits about 170 m
-    up because the lowest Gauss-Legendre node is offset from the terrain floor.
-    """
-    _, _, mask, tolerance = equator_columns(data)
-    lon_cols = data["lon2d"][mask]
-    zs = data["topo"][mask]
-    order = numpy.argsort(lon_cols)
 
-    fig, ax = plt.subplots(figsize=(9.0, 3.4), constrained_layout=True)
-    ax.plot(lon_cols[order], zs[order], color="saddlebrown")
-    ax.fill_between(lon_cols[order], 0.0, zs[order], color="saddlebrown", alpha=0.3)
-    ax.axvline(MOUNTAIN_LON, color="k", lw=0.6, ls=":", alpha=0.5)
-    ax.set_xlim(MOUNTAIN_LON - 20.0, MOUNTAIN_LON + 20.0)
-    ax.set_xlabel("longitude (deg)")
-    ax.set_ylabel("surface height (m)")
-    ax.set_title(f"DCMIP 2-1 ({label}): Schar-type mountain at the equator, max = {zs.max():.0f} m")
+def plot_native_sections(data, output_dir, label, field, symbol, units, filename):
+    """Render exact-equator sections on the native terrain-following levels."""
+    plot_longitude = numpy.linspace(0.0, 360.0, 721)
+    plot_elevation = periodic_interpolate(data["longitude"], data["elevation"], plot_longitude)
+    surface = periodic_interpolate(data["longitude"], data["topography"], plot_longitude)
+    limit = nice_symmetric_limit(data[field])
+    levels = numpy.linspace(-limit, limit, 22)
+    x = numpy.broadcast_to(plot_longitude[:, None], plot_elevation.shape)
 
-    path = os.path.join(outdir, f"dcmip21_{label}_topography.png")
-    fig.savefig(path, dpi=140, bbox_inches="tight")
-    plt.close(fig)
-    return path
+    with plt.rc_context(
+        {
+            "font.family": "serif",
+            "font.size": 9,
+            "axes.linewidth": 0.7,
+            "xtick.direction": "out",
+            "ytick.direction": "out",
+            "savefig.dpi": 300,
+        }
+    ):
+        fig, axes = plt.subplots(
+            len(data["time"]),
+            1,
+            figsize=(7.2, 6.7),
+            sharex=True,
+            sharey=True,
+            constrained_layout=True,
+        )
+        contour = None
+        for ax, snapshot, time in zip(axes, data[field], data["time"]):
+            plot_field = periodic_interpolate(data["longitude"], snapshot, plot_longitude)
+            contour = ax.contourf(
+                x,
+                plot_elevation / 1000.0,
+                plot_field,
+                levels=levels,
+                cmap="RdBu_r",
+                extend="both",
+                antialiased=False,
+            )
+            ax.fill_between(plot_longitude, 0.0, surface / 1000.0, color="0.25", linewidth=0.0, zorder=5)
+            ax.axvline(MOUNTAIN_LON, color="0.15", lw=0.55, ls=(0, (2, 2)), alpha=0.8)
+            ax.text(
+                0.012,
+                0.93,
+                f"$t={time:.0f}$ s",
+                transform=ax.transAxes,
+                ha="left",
+                va="top",
+                bbox={"facecolor": "white", "edgecolor": "none", "alpha": 0.82, "pad": 1.8},
+            )
+            ax.set(xlim=(0.0, 360.0), ylim=(0.0, 30.0))
+            ax.set_ylabel("Height (km)")
+            ax.xaxis.set_major_locator(MultipleLocator(45.0))
+            ax.yaxis.set_major_locator(MultipleLocator(5.0))
+            ax.tick_params(length=3.0, width=0.7)
+
+        axes[-1].set_xlabel("Longitude (degrees east)")
+        colorbar = fig.colorbar(contour, ax=axes, location="right", shrink=0.96, pad=0.02)
+        colorbar.set_label(f"{symbol} ({units})")
+        colorbar.set_ticks(numpy.linspace(-limit, limit, 9))
+        fig.suptitle(f"DCMIP 2-1: {symbol} at the equator, native SLEVE levels — {label}", fontsize=10)
+
+        path = output_dir / filename.format(label=label)
+        fig.savefig(path, bbox_inches="tight")
+        fig.savefig(path.with_suffix(".pdf"), bbox_inches="tight")
+        plt.close(fig)
+    return path, path.with_suffix(".pdf")
+
+
+def plot_topography(data, output_dir, label):
+    """Plot the exact-equator Schär mountain profile."""
+    longitude = data["longitude"]
+    topography = data["topography"]
+    keep = (longitude >= MOUNTAIN_LON - 20.0) & (longitude <= MOUNTAIN_LON + 20.0)
+
+    dense_lon = numpy.linspace(MOUNTAIN_LON - 20.0, MOUNTAIN_LON + 20.0, 801)
+    dense_topo = PchipInterpolator(longitude[keep], topography[keep])(dense_lon)
+
+    with plt.rc_context({"font.family": "serif", "font.size": 9, "savefig.dpi": 300}):
+        fig, ax = plt.subplots(figsize=(7.2, 2.5), constrained_layout=True)
+        ax.plot(dense_lon, dense_topo, color="0.15", lw=1.0)
+        ax.fill_between(dense_lon, 0.0, dense_topo, color="0.65", linewidth=0.0)
+        ax.axvline(MOUNTAIN_LON, color="0.15", lw=0.55, ls=(0, (2, 2)))
+        ax.set(xlim=(25.0, 65.0), ylim=(0.0, None), xlabel="Longitude (degrees east)", ylabel="Height (m)")
+        ax.xaxis.set_major_locator(MultipleLocator(5.0))
+        ax.set_title(f"DCMIP 2-1: Schär mountain at the equator — {label}", fontsize=10)
+        ax.spines[["top", "right"]].set_visible(False)
+
+        path = output_dir / f"dcmip21_{label}_topography.png"
+        fig.savefig(path, bbox_inches="tight")
+        fig.savefig(path.with_suffix(".pdf"), bbox_inches="tight")
+        plt.close(fig)
+    return path, path.with_suffix(".pdf")
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Plots for DCMIP-2012 test 2-1.")
+    parser = argparse.ArgumentParser(description="Publication-quality plots for DCMIP-2012 test 2-1.")
     parser.add_argument("netcdf_file", help="NetCDF output file produced by WxFactory")
     parser.add_argument("-o", "--output-dir", default="results", help="where to write the figures")
-    parser.add_argument(
-        "--label",
-        default=None,
-        help="tag for the figure names and titles (defaults to the name of the NetCDF file)",
-    )
+    parser.add_argument("--label", default=None, help="tag used in figure names and titles")
     args = parser.parse_args()
 
-    label = args.label or os.path.splitext(os.path.basename(args.netcdf_file))[0]
+    source = Path(args.netcdf_file)
+    output_dir = Path(args.output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    label = args.label or source.stem
 
-    os.makedirs(args.output_dir, exist_ok=True)
-    data = load(args.netcdf_file)
+    data = load_sections(source)
+    print(f"Read {source}; selected output times: {', '.join(f'{time:g}' for time in data['time'])} s")
 
-    times = data["time"]
-    print(f"Read {args.netcdf_file}: {len(times)} output times, from {times[0]:g} s to {times[-1]:g} s")
-    print(f"  T' range over the run: [{data['tprime'].min():.3f}, {data['tprime'].max():.3f}] K")
-    print(f"  w  range over the run: [{data['w'].min():.3f}, {data['w'].max():.3f}] m/s")
-
-    written = [
-        plot_topography(data, args.output_dir, label),
+    figure_pairs = [
+        plot_topography(data, output_dir, label),
         plot_sections(
             data,
-            args.output_dir,
+            output_dir,
             label,
             field="tprime",
-            cmap="RdBu_r",
-            title="temperature perturbation T' = T - Teq (K)",
+            symbol=r"Temperature perturbation $T^\prime$",
+            units="K",
             filename="dcmip21_{label}_tprime.png",
+        ),
+        plot_native_sections(
+            data,
+            output_dir,
+            label,
+            field="tprime",
+            symbol=r"Temperature perturbation $T^\prime$",
+            units="K",
+            filename="dcmip21_{label}_tprime_native.png",
         ),
         plot_sections(
             data,
-            args.output_dir,
+            output_dir,
             label,
             field="w",
-            cmap="RdBu_r",
-            title="vertical velocity w (m/s)",
+            symbol=r"Vertical velocity $w$",
+            units=r"m s$^{-1}$",
             filename="dcmip21_{label}_w.png",
         ),
+        plot_native_sections(
+            data,
+            output_dir,
+            label,
+            field="w",
+            symbol=r"Vertical velocity $w$",
+            units=r"m s$^{-1}$",
+            filename="dcmip21_{label}_w_native.png",
+        ),
     ]
+    written = [path for pair in figure_pairs for path in pair]
 
-    print("\nFigures written:")
+    print("Figures written:")
     for path in written:
         print(f"  {path}")
 
