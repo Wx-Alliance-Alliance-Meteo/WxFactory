@@ -163,8 +163,11 @@ def pmex(
                 V[j, n + k] = (tau_now**i) / math.factorial(i) * mu
             V[j, n + p - 1] = mu
 
-            # Normalize initial vector (this norm is nonzero)
-            local_sum = V[0, 0:n].astype(acc) @ V[0, 0:n].astype(acc)
+            # Normalize initial vector (this norm is nonzero). Accumulate the sum of squares in `acc`
+            # (float64 for a float32 basis) via the reduction's dtype rather than upcasting the whole
+            # vector first: `x.astype(acc) @ x.astype(acc)` would materialize two full-size float64
+            # copies of V[0, 0:n] (~68 MiB/rank on the 1 deg/L60 case), which overflows the GPU.
+            local_sum = torch.sum(V[0, 0:n] * V[0, 0:n], dtype=acc)
             global_sum_nrm = torch.empty_like(local_sum)
             device.synchronize()
             comm.Allreduce([local_sum, mpi_acc], [global_sum_nrm, mpi_acc])
@@ -231,7 +234,8 @@ def pmex(
 
             if diff <= cancel_floor * raw_nrm_sq:
                 # Severe cancellation: recompute the norm directly (one reduction, no cancellation).
-                local_sum = V[j, 0:n].astype(acc) @ V[j, 0:n].astype(acc)
+                # float64 accumulation via `dtype=acc`, without full-size float64 temporaries (see above).
+                local_sum = torch.sum(V[j, 0:n] * V[j, 0:n], dtype=acc)
                 global_sum_nrm = torch.empty_like(local_sum)
                 device.synchronize()
                 comm.Allreduce([local_sum, mpi_acc], [global_sum_nrm, mpi_acc])

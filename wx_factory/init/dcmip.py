@@ -244,8 +244,8 @@ def dcmip_advection_deformation(geom, metric, mtrx, param):
     r1 = torch.arccos(math.sin(phi0) * torch.sin(lat) + math.cos(phi0) * torch.cos(lat) * torch.cos(lon - lambda0))
     r2 = torch.arccos(math.sin(phi1) * torch.sin(lat) + math.cos(phi1) * torch.cos(lat) * torch.cos(lon - lambda1))
 
-    d1 = torch.minimum(1.0, (r1 / RR) ** 2 + ((height - z0) / ZZ) ** 2)
-    d2 = torch.minimum(1.0, (r2 / RR) ** 2 + ((height - z0) / ZZ) ** 2)
+    d1 = torch.clamp((r1 / RR) ** 2 + ((height - z0) / ZZ) ** 2, max=1.0)
+    d2 = torch.clamp((r2 / RR) ** 2 + ((height - z0) / ZZ) ** 2, max=1.0)
 
     q1 = 0.5 * (1.0 + torch.cos(math.pi * d1)) + 0.5 * (1.0 + torch.cos(math.pi * d2))
 
