@@ -4,22 +4,22 @@ Computes the derivative of f1 from RHSDirecFluxReconstruction_mpi_v2.implicit.
 Variable order: (rho, rho*u1, rho*u2, rho*w, rho*theta).
 """
 
-import torch
 import numpy
+import torch
 from numpy.typing import NDArray
 
 from ..common.definitions import (
+    Rd,
+    cpd,
+    cvd,
+    gravity,
+    heat_capacity_ratio,
     idx_rho,
+    idx_rho_theta,
     idx_rho_u1,
     idx_rho_u2,
     idx_rho_u3,
-    idx_rho_theta,
-    heat_capacity_ratio,
     p0,
-    cpd,
-    cvd,
-    Rd,
-    gravity,
 )
 from ..common.matmul import apply_op, maximum
 
@@ -251,7 +251,7 @@ def state_to_col(rhsobj, x):
 
 def col_to_state(rhsobj, xc, ref):
     """Inverse of state_to_col."""
-    ns, nh, nv, nz, ny, nx, m, ncol = _col_dims(rhsobj, ref)
+    ns, nh, nv, nz, ny, nx, _, _ = _col_dims(rhsobj, ref)
     p = xc.reshape(ny, nx, nh, nz, nv, ns)
     x6 = torch.permute(p, (4, 3, 0, 1, 5, 2))
     return x6.reshape(ref.shape)
@@ -383,14 +383,36 @@ def assemble_j1_blocks_analytic(rhsobj, q):
     w_d, w_u = qfc[dn][..., rw] / rho_d, qfc[up][..., rw] / rho_u  # eig/wb use unreflected traces
     p_d, p_u = p_itf_c[dn], p_itf_c[up]
     rt_d, rt_u = qfc[dn][..., rt], qfc[up][..., rt]
-    eig = maximum(
-        torch.abs(w_d) + torch.sqrt(h33fc[dn] * gam * p_d / rho_d),
-        torch.abs(w_u) + torch.sqrt(h33fc[up] * gam * p_u / rho_u),
-    )
+    s_d = torch.sqrt(h33fc[dn] * gam * p_d / rho_d)  # acoustic term c_s sqrt(h33), down trace
+    s_u = torch.sqrt(h33fc[up] * gam * p_u / rho_u)  # up trace
+    a_d = torch.abs(w_d) + s_d
+    a_u = torch.abs(w_u) + s_u
+    eig = maximum(a_d, a_u)
     I5 = torch.eye(nv, dtype=dt_).reshape(1, 1, nv, nv)
     lam = (eig * sg_n)[..., None, None]
     Bp = 0.5 * (sg_n[..., None, None] * A3f[dn] + lam * I5)
     Bm = 0.5 * (sg_s[..., None, None] * A3f[up] - lam * I5)
+
+    # Exact linearization of the Rusanov dissipation speed. lambda = |u3| + c_s sqrt(h33) depends
+    # on the state, so it contributes a rank-one term  -1/2 (q_L - q_R) (grad_q lambda)^T  per
+    # interface, evaluated at the trace attaining the max. grad_q lambda is nonzero only in the
+    # acoustic components (rho, rho_w, rho_theta), so the block-lower-triangular structure is kept.
+    # Conventions: the down side wins ties (a_d >= a_u); sgn(0) = 0 (torch.sgn).
+    down_wins = a_d >= a_u
+    w_w = torch.where(down_wins, w_d, w_u)
+    rho_w = torch.where(down_wins, rho_d, rho_u)
+    rt_w = torch.where(down_wins, rt_d, rt_u)
+    s_w = torch.where(down_wins, s_d, s_u)
+    sgn_w = torch.sgn(w_w)
+    glam = torch.zeros_like(qfc[dn])  # grad_q lambda at the winning trace, (ncol, nz+1, nv)
+    glam[..., rr] = -sgn_w * w_w / rho_w - s_w / (2.0 * rho_w)
+    glam[..., rw] = sgn_w / rho_w
+    glam[..., rt] = gam * s_w / (2.0 * rt_w)
+    jump = qfc[up] - qfc[dn]  # q_L^{e+1} - q_R^e (unreflected traces), (ncol, nz+1, nv)
+    Lam = (-0.5 * sg_n)[..., None, None] * jump[..., :, None] * glam[..., None, :]
+    zero_lam = torch.zeros_like(Lam)
+    Bp = Bp + torch.where(down_wins[..., None, None], Lam, zero_lam)  # winning trace on the down side
+    Bm = Bm + torch.where(down_wins[..., None, None], zero_lam, Lam)  # winning trace on the up side
 
     # Linearized trace extrapolation (rho and rho_theta use log-exp map scaling)
     qitfc = _i5c(q_itf_x3, nh, ny, nx)
@@ -441,12 +463,19 @@ def assemble_j1_blocks_analytic(rhsobj, q):
     cwp[..., rr] = -0.5 * sg_n * w_d**2
     cwm[..., rw] = 0.5 * (2.0 * sg_s * w_u - eig * sg_n)
     cwm[..., rr] = -0.5 * sg_s * w_u**2
+    # delta-lambda contribution to the rho_w row: -1/2 sg (rho_w jump) grad_q lambda (cols rr, rw, rt).
+    # The plain-row Lam feeds Bp/Bm whose rho_w row is discarded below, so re-add it here.
+    lam_rw = (-0.5 * sg_n * jump[..., rw])[..., None] * glam
+    zero_rw = torch.zeros_like(lam_rw)
+    cwp = cwp + torch.where(down_wins[..., None], lam_rw, zero_rw)
+    cwm = cwm + torch.where(down_wins[..., None], zero_rw, lam_rw)
     L[:, ED, rw] += torch.einsum("o,cej,cejs->ceojs", dLv, cwp[:, IT], ER[:, EU])
     A[:, ED, rw] += torch.einsum("o,cej,cejs->ceojs", dLv, cwm[:, IT], EL[:, ED])
     A[:, EU, rw] += torch.einsum("o,cej,cejs->ceojs", dRv, cwp[:, IT], ER[:, EU])
     U[:, EU, rw] += torch.einsum("o,cej,cejs->ceojs", dRv, cwm[:, IT], EL[:, ED])
-    A[:, 0, rw] += torch.einsum("o,cj,cjs->cojs", dLv, cwp[:, 0] + cwm[:, 0], EL[:, 0])
-    A[:, nz - 1, rw] += torch.einsum("o,cj,cjs->cojs", dRv, cwp[:, nz] + cwm[:, nz], ER[:, nz - 1])
+    # At a rigid wall the Riemann solver reflects the velocity but copies rho-u3 itself into the
+    # ghost trace. The two advective fluxes therefore cancel and the rho-u3 jump is zero: the
+    # well-balanced advective interface flux, and hence its derivative, is identically zero.
 
     # Pressure operator perturbation
     wfp = wflux_pres_x3
@@ -506,7 +535,7 @@ def blocks_matvec(rhsobj, L, A, U, xc):
 def block_thomas_solve(rhsobj, L, A, U, b, dt):
     """Solve (I - (dt/2) J1) x = b per column via block-Thomas algorithm."""
     a = 0.5 * dt
-    ncol, nz, m, _ = A.shape
+    _, nz, m, _ = A.shape
     out_dtype = b.dtype
     # Form blocks one element at a time to save memory. The elimination needs more precision than
     # the float32 state carries -- without it the density row loses ~400 ulps to cancellation -- but
@@ -600,7 +629,7 @@ def m_matvec(rhsobj, L, A, U, xc, dt):
 
 # -----------------------------------------------------------------------------
 # Analytic horizontal flux-divergence Jacobian J2_flux * v.
-# Linearizes horizontal_flux_div with halo-exchanged perturbation traces.
+# Linearizes the flux part of explicit(), including its well-balanced rho-u3 row.
 # -----------------------------------------------------------------------------
 
 _mid_i = numpy.s_[..., 1:-1, :]
@@ -612,14 +641,16 @@ def _p_itf(rt):
 
 
 def _hori_interface(direction, qf, dqf, sg, hci, left, right):
-    """Compute frozen-lambda differential of horizontal Rusanov flux."""
+    """Exact differential of a horizontal Rusanov interface flux."""
     p_itf = _p_itf(qf[idx_rho_theta])
     mom = _MOM[direction]
     u_r = qf[mom][right] / qf[idx_rho][right]
     u_l = qf[mom][left] / qf[idx_rho][left]
     h00 = hci[direction, direction]
-    eig_l = torch.abs(u_l) + torch.sqrt(h00[left] * heat_capacity_ratio * p_itf[left] / qf[idx_rho][left])
-    eig_r = torch.abs(u_r) + torch.sqrt(h00[right] * heat_capacity_ratio * p_itf[right] / qf[idx_rho][right])
+    sound_l = torch.sqrt(h00[left] * heat_capacity_ratio * p_itf[left] / qf[idx_rho][left])
+    sound_r = torch.sqrt(h00[right] * heat_capacity_ratio * p_itf[right] / qf[idx_rho][right])
+    eig_l = torch.abs(u_l) + sound_l
+    eig_r = torch.abs(u_r) + sound_r
     eig = maximum(eig_l, eig_r)
 
     dflux_l = sg[left] * ad_matvec(
@@ -628,14 +659,89 @@ def _hori_interface(direction, qf, dqf, sg, hci, left, right):
     dflux_r = sg[right] * ad_matvec(
         dqf[right], qf[right], p_itf[right], direction, hci[direction, 0][right], hci[direction, 1][right], hci[direction, 2][right]
     )
+
+    left_wins = eig_l >= eig_r
+    rho_w = torch.where(left_wins, qf[idx_rho][left], qf[idx_rho][right])
+    rt_w = torch.where(left_wins, qf[idx_rho_theta][left], qf[idx_rho_theta][right])
+    u_w = torch.where(left_wins, u_l, u_r)
+    sound_w = torch.where(left_wins, sound_l, sound_r)
+    drho_w = torch.where(left_wins, dqf[idx_rho][left], dqf[idx_rho][right])
+    dmom_w = torch.where(left_wins, dqf[mom][left], dqf[mom][right])
+    drt_w = torch.where(left_wins, dqf[idx_rho_theta][left], dqf[idx_rho_theta][right])
+    du_w = (dmom_w - u_w * drho_w) / rho_w
+    dsound_w = 0.5 * sound_w * (heat_capacity_ratio * drt_w / rt_w - drho_w / rho_w)
+    deig = torch.sgn(u_w) * du_w + dsound_w
+
     out = torch.zeros_like(qf)
-    out[left] = 0.5 * (dflux_l + dflux_r - eig * sg[left] * (dqf[right] - dqf[left]))
+    out[left] = 0.5 * (
+        dflux_l
+        + dflux_r
+        - sg[left] * (eig * (dqf[right] - dqf[left]) + deig * (qf[right] - qf[left]))
+    )
     out[right] = out[left]
     return out
 
 
+def _hori_wb_interface(direction, qf, dqf, sg, hci, left, right):
+    """Differentiate the two interface fluxes used by the well-balanced rho-u3 row."""
+    pressure = _p_itf(qf[idx_rho_theta])
+    dpressure = heat_capacity_ratio * pressure * dqf[idx_rho_theta] / qf[idx_rho_theta]
+    mom = _MOM[direction]
+    u_l = qf[mom][left] / qf[idx_rho][left]
+    u_r = qf[mom][right] / qf[idx_rho][right]
+    du_l = (dqf[mom][left] - u_l * dqf[idx_rho][left]) / qf[idx_rho][left]
+    du_r = (dqf[mom][right] - u_r * dqf[idx_rho][right]) / qf[idx_rho][right]
+
+    sound_l = torch.sqrt(
+        hci[direction, direction][left]
+        * heat_capacity_ratio
+        * pressure[left]
+        / qf[idx_rho][left]
+    )
+    sound_r = torch.sqrt(
+        hci[direction, direction][right]
+        * heat_capacity_ratio
+        * pressure[right]
+        / qf[idx_rho][right]
+    )
+    eig_l = torch.abs(u_l) + sound_l
+    eig_r = torch.abs(u_r) + sound_r
+    left_wins = eig_l >= eig_r
+    eig = maximum(eig_l, eig_r)
+    deig_l = torch.sgn(u_l) * du_l + 0.5 * sound_l * (
+        heat_capacity_ratio * dqf[idx_rho_theta][left] / qf[idx_rho_theta][left]
+        - dqf[idx_rho][left] / qf[idx_rho][left]
+    )
+    deig_r = torch.sgn(u_r) * du_r + 0.5 * sound_r * (
+        heat_capacity_ratio * dqf[idx_rho_theta][right] / qf[idx_rho_theta][right]
+        - dqf[idx_rho][right] / qf[idx_rho][right]
+    )
+    deig = torch.where(left_wins, deig_l, deig_r)
+
+    rw_l, rw_r = qf[idx_rho_u3][left], qf[idx_rho_u3][right]
+    drw_l, drw_r = dqf[idx_rho_u3][left], dqf[idx_rho_u3][right]
+    dadv = 0.5 * (
+        sg[left] * (du_l * rw_l + u_l * drw_l)
+        + sg[right] * (du_r * rw_r + u_r * drw_r)
+        - sg[left] * (eig * (drw_r - drw_l) + deig * (rw_r - rw_l))
+    )
+
+    gp_l = sg[left] * hci[direction, 2][left]
+    gp_r = sg[right] * hci[direction, 2][right]
+    numerator = 0.5 * (gp_l * pressure[left] + gp_r * pressure[right])
+    dnumerator = 0.5 * (gp_l * dpressure[left] + gp_r * dpressure[right])
+    dpres_l = (dnumerator * pressure[left] - numerator * dpressure[left]) / pressure[left] ** 2
+    dpres_r = (dnumerator * pressure[right] - numerator * dpressure[right]) / pressure[right] ** 2
+
+    adv = torch.zeros_like(qf[idx_rho])
+    pres = torch.zeros_like(adv)
+    adv[left], adv[right] = dadv, dadv
+    pres[left], pres[right] = dpres_l, dpres_r
+    return adv, pres
+
+
 def j2_prepare(rhsobj, q):
-    """Precompute frozen base variables for j2_flux_matvec."""
+    """Precompute base variables for j2_flux_matvec."""
     rhsobj.horizontal_flux_div(q)
     return (
         rhsobj.ops,
@@ -648,7 +754,7 @@ def j2_prepare(rhsobj, q):
 
 
 def j2_flux_matvec(rhsobj, q, dq, base=None):
-    """Analytic Jacobian-vector product of horizontal_flux_div on dq."""
+    """Apply the exact horizontal-flux part of the f2 Jacobian to dq."""
     m = rhsobj.metric
     if base is None:
         base = j2_prepare(rhsobj, q)
@@ -703,6 +809,71 @@ def j2_flux_matvec(rhsobj, q, dq, base=None):
     apply_op(dfitf1[_mid_i], ops.correction_WE, out=out, beta=1.0)
     apply_op(dfitf2[_mid_j], ops.correction_SN, out=out, beta=1.0)
     out *= -m.inv_sqrtG_new
+
+    # The production residual uses a pressure-split, well-balanced rho-u3 row in every direction.
+    # Replace the plain horizontal row above by the exact differential of that same split operator.
+    rw = idx_rho_u3
+    rt = idx_rho_theta
+    gp1 = m.sqrtG_new * hc[0, 2]
+    gp2 = m.sqrtG_new * hc[1, 2]
+    u1 = q[idx_rho_u1] / q[idx_rho]
+    u2 = q[idx_rho_u2] / q[idx_rho]
+    du1 = (dq[idx_rho_u1] - u1 * dq[idx_rho]) / q[idx_rho]
+    du2 = (dq[idx_rho_u2] - u2 * dq[idx_rho]) / q[idx_rho]
+    dadv1 = m.sqrtG_new * (du1 * q[rw] + u1 * dq[rw])
+    dadv2 = m.sqrtG_new * (du2 * q[rw] + u2 * dq[rw])
+    dadv = apply_op(dadv1, ops.derivative_x)
+    apply_op(dadv2, ops.derivative_y, out=dadv, beta=1.0)
+
+    dwadv1, dwpres1 = _hori_wb_interface(
+        0, qf1, dqf1, m.sqrtG_itf_i_new, m.h_contra_itf_i_new, east, west
+    )
+    dwadv2, dwpres2 = _hori_wb_interface(
+        1, qf2, dqf2, m.sqrtG_itf_j_new, m.h_contra_itf_j_new, north, south
+    )
+    apply_op(dwadv1[_mid_i], ops.correction_WE, out=dadv, beta=1.0)
+    apply_op(dwadv2[_mid_j], ops.correction_SN, out=dadv, beta=1.0)
+
+    p1 = _p_itf(qf1[rt])
+    p2 = _p_itf(qf2[rt])
+    wp1_l = 0.5 * (
+        m.sqrtG_itf_i_new[east] * m.h_contra_itf_i_new[0, 2][east] * p1[east]
+        + m.sqrtG_itf_i_new[west] * m.h_contra_itf_i_new[0, 2][west] * p1[west]
+    )
+    wp2_l = 0.5 * (
+        m.sqrtG_itf_j_new[north] * m.h_contra_itf_j_new[1, 2][north] * p2[north]
+        + m.sqrtG_itf_j_new[south] * m.h_contra_itf_j_new[1, 2][south] * p2[south]
+    )
+    wp1 = torch.zeros_like(qf1[idx_rho])
+    wp2 = torch.zeros_like(qf2[idx_rho])
+    wp1[east], wp1[west] = wp1_l / p1[east], wp1_l / p1[west]
+    wp2[north], wp2[south] = wp2_l / p2[north], wp2_l / p2[south]
+
+    logp = torch.log(pressure)
+    cbase = apply_op(gp1, ops.derivative_x)
+    apply_op(gp2, ops.derivative_y, out=cbase, beta=1.0)
+    apply_op(wp1[_mid_i], ops.correction_WE, out=cbase, beta=1.0)
+    apply_op(wp2[_mid_j], ops.correction_SN, out=cbase, beta=1.0)
+    logp1 = torch.log(p1)
+    logp2 = torch.log(p2)
+    dlogp1 = heat_capacity_ratio * dqf1[rt] / qf1[rt]
+    dlogp2 = heat_capacity_ratio * dqf2[rt] / qf2[rt]
+    presb1 = apply_op(logp, ops.derivative_x)
+    presb2 = apply_op(logp, ops.derivative_y)
+    apply_op(logp1[_mid_i], ops.correction_WE, out=presb1, beta=1.0)
+    apply_op(logp2[_mid_j], ops.correction_SN, out=presb2, beta=1.0)
+    cbase += gp1 * presb1 + gp2 * presb2
+
+    dlogp = heat_capacity_ratio * dq[rt] / q[rt]
+    dc = apply_op(dwpres1[_mid_i], ops.correction_WE)
+    apply_op(dwpres2[_mid_j], ops.correction_SN, out=dc, beta=1.0)
+    dlog1 = apply_op(dlogp, ops.derivative_x)
+    dlog2 = apply_op(dlogp, ops.derivative_y)
+    apply_op(dlogp1[_mid_i], ops.correction_WE, out=dlog1, beta=1.0)
+    apply_op(dlogp2[_mid_j], ops.correction_SN, out=dlog2, beta=1.0)
+    dc += gp1 * dlog1 + gp2 * dlog2
+    dp = heat_capacity_ratio * pressure * dq[rt] / q[rt]
+    out[rw] = -m.inv_sqrtG_new * (dadv + dp * cbase + pressure * dc)
     return out
 
 

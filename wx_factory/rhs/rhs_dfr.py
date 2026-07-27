@@ -1,12 +1,18 @@
-import torch
 import numpy
+import torch
 from numpy.typing import NDArray
 
-from ..common.definitions import idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_u3, idx_rho_theta, gravity
+from ..common.definitions import (
+    gravity,
+    idx_rho,
+    idx_rho_theta,
+    idx_rho_u1,
+    idx_rho_u2,
+    idx_rho_u3,
+)
 from ..common.matmul import apply_op
 from ..geometry import CubedSphere, DFROperators
 from ..rhs.rhs import RHS
-from ..wx_mpi import SingleProcess, Conditional
 
 mid_i = numpy.s_[..., 1:-1, :]
 mid_j = numpy.s_[..., 1:-1, :, :]
@@ -775,10 +781,9 @@ class RHSDirecFluxReconstruction_mpi_v2(RHSDirecFluxReconstruction):
 
     def horizontal_flux_div(self, q: NDArray) -> NDArray:
         """Plain horizontal (x1, x2) flux divergence for all five rows, no well-balanced rho_w split
-        and no forcing. Used to split f2 into a stiff (acoustic) part -- whose analytic Jacobian is
-        cheap and exact -- and a non-stiff remainder (well-balanced rho_w correction + forcing) that
-        PartRosExp2 differentiates by finite differences. Populates the horizontal traces / exchanged
-        neighbours / pressure that the analytic Jacobian reuses."""
+        and no forcing. Populates the horizontal traces, exchanged neighbours, and pressure reused
+        while applying the analytic f2 Jacobian; that Jacobian replaces this routine's plain rho_w
+        row with the derivative of the well-balanced row used by ``explicit``."""
         given_shape = q.shape
         self.ops = self.ops_complex if torch.is_complex(q) else self.ops_real
         self.allocate_arrays(q)
@@ -805,9 +810,8 @@ class RHSDirecFluxReconstruction_mpi_v2(RHSDirecFluxReconstruction):
 
     def forcing_only(self, q: NDArray) -> NDArray:
         """Just the f2 forcing (Christoffel / Coriolis / Rayleigh), no flux, no gravity. This is the
-        non-stiff remainder of f2 that PartRosExp2 differentiates by finite differences (the stiff
-        flux divergence has an analytic Jacobian). Sign matches ``rhs -= forcing`` with gravity added
-        back (gravity is in f1)."""
+        source whose analytic Jacobian is added to the horizontal flux Jacobian. Sign matches
+        ``rhs -= forcing`` with gravity added back (gravity is in f1)."""
         given_shape = q.shape
         self.ops = self.ops_complex if torch.is_complex(q) else self.ops_real
         self.allocate_arrays(q)

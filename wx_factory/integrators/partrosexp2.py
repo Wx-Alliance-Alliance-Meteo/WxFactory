@@ -1,23 +1,23 @@
-import torch
 import math
+from collections.abc import Callable
 from time import time
-from typing import Callable
 
 import numpy
+import torch
 
 from ..common.configuration import Configuration
-from .integrator import Integrator, SolverInfo
-from ..solvers import ExponentialSolverRequest, resolve_exponential_solver
 from ..rhs.vertical_jacobian import (
     assemble_j1_blocks_analytic,
     block_thomas_solve,
-    state_to_col,
     col_to_state,
-    j2_prepare,
-    j2_flux_matvec,
     forcing_jac_prepare,
     forcing_jvp,
+    j2_flux_matvec,
+    j2_prepare,
+    state_to_col,
 )
+from ..solvers import ExponentialSolverRequest, resolve_exponential_solver
+from .integrator import Integrator, SolverInfo
 
 
 class PartRosExp2(Integrator):
@@ -91,8 +91,8 @@ class PartRosExp2(Integrator):
 
         f1 = self.rhs_imp(Q)
         f2 = self.rhs_exp(Q)  # horizontal partition, computed directly (no full - f1 cancellation)
-        j2_base = j2_prepare(self.rhs_full, Q)  # frozen base of the analytic J2, computed once per step
-        forcing_base = forcing_jac_prepare(self.rhs_full, Q)  # frozen base of the analytic forcing Jacobian
+        j2_base = j2_prepare(self.rhs_full, Q)  # base state data for analytic J2, computed once per step
+        forcing_base = forcing_jac_prepare(self.rhs_full, Q)  # base data for the analytic forcing Jacobian
         f_imp = f1.flatten()
         f_exp = f2.flatten()
 
