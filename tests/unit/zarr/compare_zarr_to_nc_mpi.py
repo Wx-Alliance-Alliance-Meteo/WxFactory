@@ -38,7 +38,6 @@ class CompareZarrToNcTestCase(MpiTestCase):
         self.state_dir = "tests/data/unit/zarr"
         self.metric = None
         self.topography = None
-        self.dataset = None
         self.comm = MPI.COMM_WORLD
         self.config = None
         self.device = None
@@ -116,28 +115,19 @@ class CompareZarrToNcTestCase(MpiTestCase):
 
         elif self.config.equations == "shallow_water" and isinstance(self.geometry, CubedSphere2D):
             self.metric = Metric2D(self.geometry)
-
-        ds = xr.open_zarr(self.config.initial_condition, consolidated=True)
-        time_start = str(self.config.time_start)
-        time_end = str(self.config.time_end)
-
-        if time_start and time_end:
-            self.dataset = ds.sel(time=slice(time_start, time_end))
+        if self.comm.rank == 0:
+            num_dim = len(global_state.shape) - 2
         else:
-            self.dataset = ds.isel(time=[0])
-
-        # To be removed depending on Paradise design choices
-        if len(self.dataset.time) > 1 and self.dataset["time"].values[-1] == np.datetime64(
-            str(self.config.time_end).replace("t", "T")
-        ):
-            self.dataset = self.dataset.isel(time=slice(None, -1))
-
+            num_dim = None
+        num_dim = self.comm.bcast(num_dim, root=0)
         self.Q = self.process_topo.distribute_cube(
             global_state,
-            4,
+            num_dim,
         )
-        levels = self.Q.shape[1]
-        self.geometry.z_levels = levels
+        if len(self.Q.shape) == 5:
+            self.geometry.z_levels = self.Q.shape[1]
+        else:
+            self.geometry.z_levels = 1
         self.output = self._create_output_manager()
         self.output.step(self.Q, 0)
         self.output.finalize(0.0)
@@ -355,7 +345,6 @@ class CompareZarrToNcTestCase(MpiTestCase):
                     self.device,
                     self.metric,
                     self.topography,
-                    self.dataset,
                     self.process_topo,
                 )
             elif self.config.output_format == "fst":
@@ -376,9 +365,7 @@ class CompareZarrToNcTestCase(MpiTestCase):
                     self.device,
                     self.metric,
                     self.topography,
-                    self.dataset,
                     self.process_topo,
-                    self.Q,
                 )
 
         raise ValueError(f"Unrecognized geometry type {type(self.geometry)}")

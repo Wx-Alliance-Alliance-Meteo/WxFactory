@@ -317,7 +317,6 @@ class Simulation:
                     self.device,
                     self.initial_state.metric,
                     self.initial_state.topography,
-                    self.initial_state.dataset,
                     self.process_topo,
                 )
             elif self.config.output_format == "fst":
@@ -338,9 +337,7 @@ class Simulation:
                     self.device,
                     self.initial_state.metric,
                     self.initial_state.topography,
-                    self.initial_state.dataset,
                     self.process_topo,
-                    self.initial_state.Q,
                 )
 
         raise ValueError(f"Unrecognized geometry type {type(self.geometry)}")

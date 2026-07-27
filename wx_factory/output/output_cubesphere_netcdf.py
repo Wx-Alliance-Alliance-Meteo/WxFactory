@@ -40,7 +40,6 @@ class OutputCubesphereNetcdf(OutputCubesphere):
         device: Device,
         metric: Metric2D | Metric3DTopo,
         topo,
-        dataset,
         process_topo: ProcessTopology,
     ):
         super().__init__(config, geometry, operators, device, metric, topo, process_topo)
@@ -54,7 +53,11 @@ class OutputCubesphereNetcdf(OutputCubesphere):
         """if config.output_freq > 0:
             self._output_init()"""
         self.initialized = False
-        self.dataset = dataset
+        if config.time_start:
+                    self.start_time = np.datetime64(str(config.time_start).replace("t", "T"))
+        else:
+            self.start_time = np.datetime64("1800-01-01T00:00:00")
+        self.dt = config.dt
 
     def _output_init(self, NZ):
         """Initialise the netCDF4 file."""
@@ -112,13 +115,9 @@ class OutputCubesphereNetcdf(OutputCubesphere):
 
             # create time axis
             tme = self.ncfile.createVariable("time", numpy.float64, ("time",))
-            if self.config.case_number == -2:
-                tme.units = "hours since 1800-01-01 00:00:00"
-                tme.calendar = "standard"
-            else:
-                tme.units = "hours since 1800-01-01"
-            tme.long_name = "time"
-
+            tme.units = "seconds since 1800-01-01 00:00:00"
+            tme.calendar = "standard"
+            
             # create tiles axis
             tile = self.ncfile.createVariable("npe", "i4", ("npe"))
             tile.grads_dim = "e"
@@ -423,16 +422,15 @@ class OutputCubesphereNetcdf(OutputCubesphere):
             raise ValueError(f"Unknown class for geom: {geom}")
 
         if self.rank == 0:
-            if self.config.case_number == -2:
+            time_val = (
+                        self.start_time
+                        + np.timedelta64(int(step_id * self.dt), "s")
+                    )
 
-                time_val = step_id
+            epoch = np.datetime64("1800-01-01T00:00:00")
+            seconds = (time_val - epoch) / np.timedelta64(1, "s")
 
-                epoch = np.datetime64("1800-01-01T00:00:00")
-                hours = (time_val - epoch) / np.timedelta64(1, "h")
-
-                self.ncfile["time"][idx] = hours
-            else:
-                self.ncfile["time"][idx] = step_id * self.config.dt
+            self.ncfile["time"][idx] = seconds
 
     def __finalize__(self):
         """Finalise the output netCDF4 file."""

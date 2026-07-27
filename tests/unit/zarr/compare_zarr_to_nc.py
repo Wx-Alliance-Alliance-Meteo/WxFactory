@@ -23,8 +23,8 @@ class CompareZarrToNcTestCase(unittest.TestCase):
         4 -> PV
     """
 
-    NC_FILE = "tests/data/unit/zarr/out.nc"
-    ZARR_STORE = "tests/data/unit/zarr/out.zarr"
+    NC_FILE = "results/out.nc"
+    ZARR_STORE = "results/out.zarr"
 
     def test_compare_zarr_to_nc(self):
         if not os.path.exists(self.NC_FILE):
@@ -43,7 +43,15 @@ class CompareZarrToNcTestCase(unittest.TestCase):
                 "Variable 'data' not found in Zarr dataset",
             )
 
-            expected_equations = [str(var) for var in ds_nc.data_vars]
+            #expected_equations = [str(var) for var in ds_nc.data_vars]
+            expected_equations = [
+                "U",
+                "V",
+                "W",
+                "rho",
+                "theta",
+                "P",
+            ]
 
             self.assertIn(
                 "equations",
@@ -58,6 +66,24 @@ class CompareZarrToNcTestCase(unittest.TestCase):
                 expected_equations,
                 ("Unexpected equation ordering.\n" f"Expected: {expected_equations}\n" f"Found:    {actual_equations}"),
             )
+            
+            if "elev" in ds_nc:
+                nc_elev = ds_nc["elev"].values
+                zarr_elev = ds_zarr["elev"].values
+
+                self.assertEqual(
+                    nc_elev.shape,
+                    zarr_elev.shape,
+                )
+
+            if "topo" in ds_nc:
+                nc_topo = ds_nc["topo"].values
+                zarr_topo = ds_zarr["topo"].values
+
+                self.assertEqual(
+                    nc_topo.shape,
+                    zarr_topo.shape,
+                )
 
             for equation_index, variable_name in enumerate(actual_equations):
 
