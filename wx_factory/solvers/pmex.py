@@ -1,11 +1,10 @@
-import torch
 import math
 
+import torch
 from mpi4py import MPI
 
-from .dense import expm, solve_triangular
-
 from ..device import Device
+from .dense import expm, solve_triangular
 
 
 def pmex(
@@ -78,8 +77,6 @@ def pmex(
     conv = 0.0
     reg_comm_nrm = 0
     numSteps = len(tau_out)
-
-    first_accepted = True
 
     # We only allow m to vary between mmin and mmax
     m = max(mmin, min(m_init, mmax))
@@ -214,9 +211,7 @@ def pmex(
                 )[:, 0]
             else:
                 sol = device.array(
-                    solve_triangular(
-                        M[0:j, 0:j], rhs, lower=True, unit_diagonal=True, check_finite=False
-                    )
+                    solve_triangular(M[0:j, 0:j], rhs, lower=True, unit_diagonal=True, check_finite=False)
                 )
 
             # 4. Orthogonalize

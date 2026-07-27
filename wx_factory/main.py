@@ -11,8 +11,8 @@ import sys
 import traceback
 import warnings
 
-from mpi4py import MPI
 import numpy
+from mpi4py import MPI
 
 
 class _ConfigOptionsAction(argparse.Action):
@@ -37,8 +37,8 @@ def main():
     rank = MPI.COMM_WORLD.rank
 
     try:
+        from wx_factory import wx_mpi
         from wx_factory.simulation import Simulation
-        import wx_factory.wx_mpi as wx_mpi
     except (ImportError, NameError, OSError) as e:
         if rank == 0:
             print(e)
@@ -148,7 +148,7 @@ def main():
 
             if rank == 0:
                 if not isinstance(e, SystemExit):
-                    print(f"There was an error while running WxFactory. Only rank 0 is printing the traceback:")
+                    print("There was an error while running WxFactory. Only rank 0 is printing the traceback:")
                 raise e
 
             raise SystemExit

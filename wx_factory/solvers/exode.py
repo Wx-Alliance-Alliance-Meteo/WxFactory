@@ -1,6 +1,7 @@
-import torch
 import math
+
 import numpy
+import torch
 
 
 def exode(
@@ -18,13 +19,12 @@ def exode(
     # Import here to resolve circular import
     from ..integrators.butcher import METHODS
 
-
     if not hasattr(exode, "first_step"):
         exode.first_step = τ_out  # TODO : use CFL condition ?
 
     # TODO : implement dense output for output at intermediate values of τ_out
 
-    ppo, n = u.shape
+    ppo, _n = u.shape
     p = ppo - 1
 
     if p == 0:
@@ -43,7 +43,7 @@ def exode(
     method = method.upper()
 
     if method not in METHODS:
-        raise ValueError("`method` must be one of {}.".format(METHODS))
+        raise ValueError(f"`method` must be one of {METHODS}.")
     else:
         method = METHODS[method]
 
@@ -106,9 +106,7 @@ def exode(
             status = -1
             break
 
-        t_old = solver.t_old
         t = solver.t
-        y = solver.y
 
         ts.append(t)
 

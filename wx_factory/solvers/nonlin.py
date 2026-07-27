@@ -1,13 +1,14 @@
-import torch
-import sys
-import numpy
 import math
-import scipy.optimize
+import sys
 from time import time
 
-from .fgmres import fgmres
-from .global_operations import global_norm, global_inf_norm
+import numpy
+import scipy.optimize
+import torch
+
 from ..device import Device
+from .fgmres import fgmres
+from .global_operations import global_inf_norm, global_norm
 
 
 def _machine_eps(dtype) -> float:
@@ -169,9 +170,9 @@ def _nonlin_line_search(func, x, Fx, dx, device, search_type="armijo", rdiff=1e-
         linesearch_module = scipy.optimize.linesearch
 
     if search_type == "wolfe":
-        s, phi1, phi0 = linesearch_module.scalar_search_wolfe1(phi, derphi, tmp_phi[0], xtol=1e-2, amin=smin)
+        s, _, _ = linesearch_module.scalar_search_wolfe1(phi, derphi, tmp_phi[0], xtol=1e-2, amin=smin)
     elif search_type == "armijo":
-        s, phi1 = linesearch_module.scalar_search_armijo(phi, tmp_phi[0], -tmp_phi[0], amin=smin)
+        s, _ = linesearch_module.scalar_search_armijo(phi, tmp_phi[0], -tmp_phi[0], amin=smin)
 
     if s is None:
         # No suitable step length found. Take the full Newton step, and hope for the best.

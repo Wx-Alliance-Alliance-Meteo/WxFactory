@@ -1,13 +1,12 @@
-from .dense import expm, solve_triangular
-import numpy
-import torch
 import math
-from typing import Callable, Optional
+from collections.abc import Callable
 
+import torch
 from mpi4py import MPI
 from numpy.typing import NDArray
 
 from ..device import Device
+from .dense import expm
 
 
 def kiops(
@@ -20,7 +19,7 @@ def kiops(
     mmax: int = 128,
     iop: int = 2,
     task1: bool = False,
-    device: Optional[Device] = None,
+    device: Device | None = None,
 ) -> tuple[NDArray, tuple]:
     """kiops(tstops, A, u; kwargs...) -> (w, stats)
 

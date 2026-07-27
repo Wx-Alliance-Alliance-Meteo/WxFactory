@@ -1,14 +1,11 @@
-from .dense import solve_triangular
-import numpy
-import torch
-import sys
+from collections.abc import Callable
 from time import time
-from typing import Callable, List, Optional, Tuple
 
-from mpi4py import MPI
+import torch
 from numpy.typing import NDArray
 
 from ..device import Device
+from .dense import solve_triangular
 from .global_operations import global_allreduce, global_dotprod, global_norm
 
 __all__ = ["fgmres"]
@@ -106,16 +103,16 @@ def rotg(a: float, b: float) -> tuple[float, float, float]:
 def fgmres(
     A: MatvecOperator,
     b: NDArray,
-    x0: Optional[NDArray] = None,
+    x0: NDArray | None = None,
     tol: float = 1e-5,
     restart: int = 20,
-    maxiter: Optional[int] = None,
-    preconditioner: Optional[MatvecOperator] = None,
+    maxiter: int | None = None,
+    preconditioner: MatvecOperator | None = None,
     hegedus: bool = False,
     verbose: int = 0,
     prefix: str = "",
-    device: Optional[Device] = None,
-) -> Tuple[NDArray, float, float, int, int, List[Tuple[float, float, float]]]:
+    device: Device | None = None,
+) -> tuple[NDArray, float, float, int, int, list[tuple[float, float, float]]]:
     """
     Solve the given linear system (Ax = b) for x, using the FGMRES algorithm.
 
@@ -141,7 +138,6 @@ def fgmres(
 
     if len(b) <= restart:
         raise ValueError("The b vector should be longer than the number of restart")
-
 
     t_start = time()
     niter = 0
@@ -229,29 +225,27 @@ def fgmres(
             # ==> Note that if restart = num_dofs, then this is unnecessary
             # for the last inner
             #    iteration, when inner = num_dofs-1.
-            if inner != num_dofs - 1:
-                if H[inner, inner + 1] != 0:
-                    [c, s, r] = rotg(float(H[inner, inner]), float(H[inner, inner + 1]))
+            if inner != num_dofs - 1 and H[inner, inner + 1] != 0:
+                [c, s, r] = rotg(float(H[inner, inner]), float(H[inner, inner + 1]))
 
-                    Qblock = torch.tensor([[c, s], [-s.conjugate(), c]], dtype=acc_dtype)
-                    Q.append(Qblock)
+                Qblock = torch.tensor([[c, s], [-s.conjugate(), c]], dtype=acc_dtype)
+                Q.append(Qblock)
 
-                    # Apply Givens Rotation to g,
-                    #   the RHS for the linear system in the Krylov Subspace.
-                    g[inner : inner + 2] = Qblock @ g[inner : inner + 2]
+                # Apply Givens Rotation to g,
+                #   the RHS for the linear system in the Krylov Subspace.
+                g[inner : inner + 2] = Qblock @ g[inner : inner + 2]
 
-                    # Apply effect of Givens Rotation to H
-                    H[inner, inner] = torch.dot(Qblock[0, :], H[inner, inner : inner + 2])
-                    H[inner, inner + 1] = 0.0
+                # Apply effect of Givens Rotation to H
+                H[inner, inner] = torch.dot(Qblock[0, :], H[inner, inner : inner + 2])
+                H[inner, inner + 1] = 0.0
 
             # Don't update norm_r if last inner iteration, because
             # norm_r is calculated directly after this loop ends.
             if inner < restart - 1:
                 norm_r = torch.abs(g[inner + 1])
                 residuals.append(((norm_r / norm_b).item(), time() - t_start, 0.0))
-                if verbose > 1:
-                    if comm.rank == 0:
-                        print(f"{prefix}norm_r / b = {residuals[-1][0]:.3e}", flush=True)
+                if verbose > 1 and comm.rank == 0:
+                    print(f"{prefix}norm_r / b = {residuals[-1][0]:.3e}", flush=True)
                 if norm_r < tol_relative:
                     break
 
@@ -267,9 +261,8 @@ def fgmres(
         norm_r = global_norm(r, device=device)
 
         residuals.append(((norm_r / norm_b).item(), time() - t_start, 0.0))
-        if verbose > 0:
-            if comm.rank == 0:
-                print(f"{prefix}res: {norm_r/norm_b:.2e} (iter {niter})", flush=True)
+        if verbose > 0 and comm.rank == 0:
+            print(f"{prefix}res: {norm_r/norm_b:.2e} (iter {niter})", flush=True)
 
         # Has GMRES stagnated?
         indices = x != 0

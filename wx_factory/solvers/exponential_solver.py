@@ -1,7 +1,8 @@
 """Registry and common interface for exponential-system solvers."""
 
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import Any, Callable, Sequence
+from typing import Any
 
 from ..device import Device
 from .exode import exode
