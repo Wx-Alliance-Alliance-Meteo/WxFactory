@@ -1,18 +1,19 @@
-from ..common.matmul import kron
-import torch
+import math
+from typing import TYPE_CHECKING, Self, TypeVar
+
 import numpy
 import numpy.linalg
-import math
 import sympy
-from typing import Optional
-from typing import Self, TypeVar
+import torch
+from numpy.typing import DTypeLike, NDArray
 
-from numpy.typing import NDArray, DTypeLike
-
+from ..common.matmul import kron
 from ..device import Device
-
 from .cubed_sphere_3d import CubedSphere3D
 from .geometry import Geometry
+
+if TYPE_CHECKING:
+    from .metric3d import Metric3DTopo
 
 T = TypeVar("T", bound=numpy.generic)
 
@@ -42,10 +43,13 @@ class DFROperators:
         """
 
         self.dtype = device.real_dtype if dtype is None else dtype
+        build_dtype = torch.float64
 
         # Build Vandermonde matrix to transform the modal representation to the (interior)
-        # nodal representation
-        V = legvander(grd.solutionPoints, grd.num_solpts - 1).astype(self.dtype)
+        # nodal representation.  Always construct the operators in double precision, then cast the
+        # completed matrices once to the configured working precision.  In particular, this keeps
+        # roundoff from the Vandermonde inversion out of the stored float32 coefficients.
+        V = legvander(grd.solutionPoints, grd.num_solpts - 1).astype(build_dtype)
         # Invert the matrix to transform from interior nodes to modes
         invV = torch.linalg.inv(V)
 
@@ -55,11 +59,15 @@ class DFROperators:
 
         # Note that extrap_neg and extrap_pos should be vectors, not a one-row matrix; numpy
         # treats the two differently.
-        extrap_neg = (legvander(torch.tensor([-1.0], dtype=self.dtype), grd.num_solpts - 1) @ invV).reshape((-1,))
-        extrap_pos = (legvander(torch.tensor([+1.0], dtype=self.dtype), grd.num_solpts - 1) @ invV).reshape((-1,))
+        extrap_neg = (
+            legvander(torch.tensor([-1.0], dtype=build_dtype), grd.num_solpts - 1) @ invV
+        ).reshape((-1,))
+        extrap_pos = (
+            legvander(torch.tensor([+1.0], dtype=build_dtype), grd.num_solpts - 1) @ invV
+        ).reshape((-1,))
 
-        assert extrap_neg.dtype == self.dtype
-        assert extrap_pos.dtype == self.dtype
+        assert extrap_neg.dtype == build_dtype
+        assert extrap_pos.dtype == build_dtype
 
         self.extrap_west = extrap_neg
         self.extrap_east = extrap_pos
@@ -68,20 +76,20 @@ class DFROperators:
         self.extrap_down = extrap_neg
         self.extrap_up = extrap_pos
 
-        V = legvander(grd.solutionPoints, grd.num_solpts - 1).astype(self.dtype)
+        V = legvander(grd.solutionPoints, grd.num_solpts - 1).astype(build_dtype)
         invV = torch.linalg.inv(V)
-        feye = torch.eye(grd.num_solpts, dtype=self.dtype)
+        feye = torch.eye(grd.num_solpts, dtype=build_dtype)
         feye[-1, -1] = 0.0
         self.highfilter = V @ (feye @ invV)
 
         self.highfilter_k = kron(
-            self.highfilter.T, torch.eye(grd.num_solpts**2, dtype=self.dtype)
+            self.highfilter.T, torch.eye(grd.num_solpts**2, dtype=build_dtype)
         )  # Only valid in 3D (hence the **2)
 
         diff = diffmat(grd.extension_sym)
-        self.diff_ext = torch.asarray(diff).astype(self.dtype)
+        self.diff_ext = torch.asarray(diff).astype(build_dtype)
 
-        assert self.diff_ext.dtype == self.dtype
+        assert self.diff_ext.dtype == build_dtype
 
         if check_skewcentrosymmetry(self.diff_ext) is False:
             raise ValueError("Something horribly wrong has happened in the creation of the differentiation matrix")
@@ -95,18 +103,18 @@ class DFROperators:
 
         # Ordinary differentiation matrices (used only in diagnostic calculations)
         self.diff = diffmat(grd.solutionPoints)
-        self.diff = torch.asarray(self.diff).astype(self.dtype)
+        self.diff = torch.asarray(self.diff).astype(build_dtype)
         self.diff_tr = self.diff.T.copy()
 
-        self.quad_weights = torch.outer(grd.glweights, grd.glweights).astype(self.dtype)
+        self.quad_weights = torch.outer(grd.glweights, grd.glweights).astype(build_dtype)
 
-        assert self.diff_solpt.dtype == self.dtype
-        assert self.correction.dtype == self.dtype
-        assert self.diff_solpt_tr.dtype == self.dtype
-        assert self.correction_tr.dtype == self.dtype
-        assert self.diff.dtype == self.dtype
-        assert self.diff_tr.dtype == self.dtype
-        assert self.quad_weights.dtype == self.dtype
+        assert self.diff_solpt.dtype == build_dtype
+        assert self.correction.dtype == build_dtype
+        assert self.diff_solpt_tr.dtype == build_dtype
+        assert self.correction_tr.dtype == build_dtype
+        assert self.diff.dtype == build_dtype
+        assert self.diff_tr.dtype == build_dtype
+        assert self.quad_weights.dtype == build_dtype
 
         if getattr(grd, "is_3d_euler_grid", False):
             I2 = torch.eye(grd.num_solpts, dtype=V.dtype)
@@ -134,7 +142,7 @@ class DFROperators:
             self.correction_DU = torch.vstack((kron(corr_down, I3), kron(corr_up, I3)))
 
         else:
-            ident = torch.eye(grd.num_solpts, dtype=self.dtype)
+            ident = torch.eye(grd.num_solpts, dtype=build_dtype)
             self.extrap_x = torch.vstack((kron(ident, self.extrap_west), kron(ident, self.extrap_east))).T.copy()
             self.extrap_y = torch.vstack((kron(self.extrap_south, ident), kron(self.extrap_north, ident))).T.copy()
             self.extrap_z = torch.vstack((kron(self.extrap_down, ident), kron(self.extrap_up, ident))).T.copy()
@@ -152,6 +160,19 @@ class DFROperators:
             corr_west = self.diff_ext[1:-1, 0]
             corr_east = self.diff_ext[1:-1, -1]
             self.correction_WE = torch.vstack((kron(ident, corr_west), kron(ident, corr_east)))
+        # Runtime matrix products require the operator and state dtypes to match.  Cast only after
+        # every real operator has been derived in float64, so single-precision cases retain their
+        # existing memory/performance characteristics with more accurately rounded coefficients.
+        if self.dtype != build_dtype:
+            for name, value in vars(self).items():
+                if hasattr(value, "dtype") and value.dtype == build_dtype:
+                    setattr(self, name, value.astype(self.dtype))
+
+        if check_skewcentrosymmetry(self.diff_ext) is False:
+            raise ValueError(
+                "The stored differentiation matrix lost skew-centrosymmetry during precision conversion"
+            )
+
         assert self.extrap_x.dtype == self.dtype
         assert self.extrap_y.dtype == self.dtype
         assert self.extrap_z.dtype == self.dtype
@@ -713,7 +734,7 @@ def remesh_operator(src_points: numpy.ndarray, target_points: numpy.ndarray) -> 
 def check_skewcentrosymmetry(m: numpy.ndarray) -> bool:
     """Verify that the given matrix is skew-centrosymmetric"""
     if m.ndim != 2:
-        raise numpy.linalg.LinAlgError(f"Input matrix is not 2-dimensional!")
+        raise numpy.linalg.LinAlgError("Input matrix is not 2-dimensional!")
 
     n, _ = m.shape
     middle_row = 0
@@ -768,7 +789,7 @@ def inv(A: numpy.ndarray) -> numpy.ndarray:
     return A_inv
 
 
-def row_reduce(A: numpy.ndarray, ncols: Optional[int] = None) -> numpy.ndarray:
+def row_reduce(A: numpy.ndarray, ncols: int | None = None) -> numpy.ndarray:
     """Perform Gaussian elimination using row operations."""
     if not A.ndim == 2:
         raise ValueError(f"Only 2-D matrices can be converted to reduced row echelon form, not {A.ndim}-D.")
