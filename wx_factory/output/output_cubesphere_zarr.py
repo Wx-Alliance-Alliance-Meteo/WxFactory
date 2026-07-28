@@ -35,22 +35,33 @@ class OutputCubesphereZarr(OutputCubesphere):
             self.start_time = np.datetime64("1800-01-01T00:00:00")
         self.dt = config.dt
         self.current_time_index = 0
-        # self.max_time = len(self.dataset.time)
+        if self.geometry.nk > 1: 
+            self.nz = self.geometry.nk
+        else:
+            if self.geometry.z_levels:
+                if type(self.geometry.z_levels) == int:
+                    self.nz = self.geometry.z_levels
+                else:
+                    self.nz = len(self.geometry.z_levels)
+            else:
+                self.nz = 1
+        
+        self.npe = 6
+        self.ny = self.geometry.block_lat.shape[-2]
+        self.nx = self.geometry.block_lat.shape[-1]
 
-        # --- get real ERA5 time ---
-        # self.all_times = self.dataset.time.values
-        # self.time_to_index = {str(t): i for i, t in enumerate(self.all_times)}
+        # --- set file name ---
         self.filename = f"{self.output_dir}/{config.base_output_file}.zarr"
         self.marker_path = None
 
-        # --- init once per year ---
-        # check only on rank 0
+        # --- init ---
         if self.rank == 0:
             exists = os.path.exists(self.filename)
             if exists:
                 print(f"Removing existing Zarr store: {self.filename}")
                 shutil.rmtree(self.filename)
             self._output_init(self.filename)
+        self.comm.Barrier()
         if self.config.equations == "euler":
             self.write_static_euler_fields()
         self.comm.Barrier()
@@ -58,99 +69,52 @@ class OutputCubesphereZarr(OutputCubesphere):
     # --------------------------------------------------
     def _output_init(self, filename):
         # gather coordinates
-        lons = self.device.to_host(self.geometry.block_lon * 180 / np.pi)
-        lats = self.device.to_host(self.geometry.block_lat * 180 / np.pi)
 
-        #nz = Q.shape[1] if Q.ndim == 5 else 1
-        if self.geometry.nk > 1: 
-            nz = self.geometry.nk
-        else:
-            if self.geometry.z_levels:
-                if type(self.geometry.z_levels) == int:
-                    nz = self.geometry.z_levels
-                else:
-                    nz = len(self.geometry.z_levels)
-            else:
-                nz = 1
-        npe = 6
-        ny = lons.shape[-2]
-        nx = lats.shape[-1]
+        if self.nz != 1:
+            ds = xr.Dataset(
+                coords={
+                    "time": np.array([], dtype="datetime64[ns]"),
+                    "equations": np.array(self.equ, dtype=object),
+                    "faces": np.arange(self.npe),
+                    "z": np.arange(self.nz),
+                    "y": np.arange(self.ny),
+                    "x": np.arange(self.ny),
+                }
+            )
 
-        if nz != 1:
-            if self.config.equations == "shallow_water":
-                ds = xr.Dataset(
-                    coords={
-                        "time": np.array([], dtype="datetime64[ns]"),
-                        "equations": np.array(self.equ, dtype=object),
-                        "z": np.arange(nz),
-                        "faces": np.arange(npe),
-                        "y": np.arange(ny),
-                        "x": np.arange(nx),
-                    }
-                )
+            # initialize empty variable array
+            shape = (0, len(self.equ), self.npe, self.nz, self.ny, self.ny)
 
-                # initialize empty variable array
-                shape = (0, len(self.equ), nz, npe, ny, nx)
-            
-                ds["data"] = (("time", "equations", "z", "faces", "y", "x"), np.zeros(shape, dtype=np.float64))
+            ds["data"] = (("time", "equations", "faces", "z", "y", "x"), np.zeros(shape, dtype=np.float64))
+            if self.config.equations == "euler":
+                ds["elev"] = (("faces", "z", "y", "x"), np.zeros((self.npe, self.nz, self.ny, self.ny), dtype=np.float64))
 
-                # chunking
-                ds = ds.chunk(
-                    {
-                        "time": 1,
-                        "equations": 1,
-                        "z": nz,
-                        "faces": 1,
-                        "y": ny,
-                        "x": nx,
-                    }
-                )
+                ds["topo"] = (("faces", "y", "x"), np.zeros((self.npe, self.ny, self.ny), dtype=np.float64))
 
-            elif self.config.equations == "euler":
-                ds = xr.Dataset(
-                    coords={
-                        "time": np.array([], dtype="datetime64[ns]"),
-                        "equations": np.array(self.equ, dtype=object),
-                        "faces": np.arange(npe),
-                        "z": np.arange(nz),
-                        "y": np.arange(ny),
-                        "x": np.arange(nx),
-                    }
-                )
-
-                # initialize empty variable array
-                shape = (0, len(self.equ), npe, nz, ny, nx)
-
-                ds["data"] = (("time", "equations", "faces", "z", "y", "x"), np.zeros(shape, dtype=np.float64))
-
-                ds["elev"] = (("faces", "z", "y", "x"), np.zeros((npe, nz, ny, nx), dtype=np.float64))
-
-                ds["topo"] = (("faces", "y", "x"), np.zeros((npe, ny, nx), dtype=np.float64))
-
-                # chunking
-                ds = ds.chunk(
-                    {
-                        "time": 1,
-                        "equations": 1,
-                        "faces": 1,
-                        "z": nz,
-                        "y": ny,
-                        "x": nx,
-                    }
-                )
+            # chunking
+            ds = ds.chunk(
+                {
+                    "time": 1,
+                    "equations": 1,
+                    "faces": 1,
+                    "z": self.nz,
+                    "y": self.ny,
+                    "x": self.ny,
+                }
+            )
         else:
             ds = xr.Dataset(
                 coords={
                     "time": np.array([], dtype="datetime64[ns]"),
                     "equations": np.array(self.equ, dtype=object),
-                    "faces": np.arange(npe),
-                    "y": np.arange(ny),
-                    "x": np.arange(nx),
+                    "faces": np.arange(self.npe),
+                    "y": np.arange(self.ny),
+                    "x": np.arange(self.ny),
                 }
             )
 
             # initialize empty variable array
-            shape = (0, len(self.equ), npe, ny, nx)
+            shape = (0, len(self.equ), self.npe, self.ny, self.ny)
 
             ds["data"] = (
                 ("time", "equations", "faces", "y", "x"),
@@ -163,8 +127,8 @@ class OutputCubesphereZarr(OutputCubesphere):
                     "time": 1,
                     "equations": 1,
                     "faces": 1,
-                    "y": ny,
-                    "x": nx,
+                    "y": self.ny,
+                    "x": self.ny,
                 }
             )
 
@@ -176,35 +140,22 @@ class OutputCubesphereZarr(OutputCubesphere):
 
     # --------------------------------------------------
     def __write_result__(self, Q, step_id):
-        #time_val = step_id.values
         time_val = (
             self.start_time
             + np.timedelta64(int(step_id * self.dt), "s")
         )
-        if self.geometry.nk > 1: 
-            nz = self.geometry.nk
-        else:
-            if self.geometry.z_levels:
-                if type(self.geometry.z_levels) == int:
-                    nz = self.geometry.z_levels
-                else:
-                    nz = len(self.geometry.z_levels)
-            else:
-                nz = 1
-
-        ny = self.geometry.block_lat.shape[-2]
-        nx = self.geometry.block_lat.shape[-1]
+        #nx = self.geometry.block_lat.shape[-1]
 
         t_index = self._append_time_step(
             time_val,
-            nz,
-            ny,
-            nx,
+            self.nz,
+            self.ny,
+            self.ny,
         )
 
         if self.config.equations == "shallow_water":
-            if nz > 1:
-                for k in range(nz):
+            if self.nz > 1:
+                for k in range(self.nz):
                     h = Q[idx_h, k, ...]
 
                     if self.topo is not None:
@@ -269,7 +220,7 @@ class OutputCubesphereZarr(OutputCubesphere):
 
             p = p0 * (Q[idx_rho_theta] * Rd / p0) ** (cpd / cvd)
             
-            for k in range(nz):
+            for k in range(self.nz):
 
                 self.store_field_zarr_Zdim(self.geometry.to_single_block(u), 0, t_index, k)
 
@@ -287,6 +238,17 @@ class OutputCubesphereZarr(OutputCubesphere):
 
     # --------------------------------------------------
     def __finalize__(self):
+        if self.rank == 0:
+            print("\n=== Zarr array shapes ===")
+
+            root = zarr.open_group(
+                self.filename,
+                mode="r",
+            )
+
+            for name, arr in root.arrays():
+                print(f"{name}: {arr.shape}")
+
         return
 
 
@@ -294,55 +256,12 @@ class OutputCubesphereZarr(OutputCubesphere):
 
         if self.rank == 0:
             if nz != 1:
-                if self.config.equations == "shallow_water":
-                    dummy = xr.Dataset(
-                        {
-                            "data": (
-                                ("time", "equations", "z", "faces", "y", "x"),
-                                np.full(
-                                    (1, len(self.equ), nz, 6, ny, nx),
-                                    np.nan,
-                                    dtype=np.float64,
-                                ),
-                            )
-                        },
-                        coords={
-                            "time": np.array([time_val], dtype= "datetime64[s]"),
-                            "equations": np.array(self.equ, dtype=object),
-                            "z": np.arange(nz),
-                            "faces": np.arange(6),
-                            "y": np.arange(ny),
-                            "x": np.arange(nx),
-                        },
-                    )
-                if self.config.equations == "euler":
-                    dummy = xr.Dataset(
-                        {
-                            "data": (
-                                ("time", "equations", "faces", "z", "y", "x"),
-                                np.full(
-                                    (1, len(self.equ), 6, nz, ny, nx),
-                                    np.nan,
-                                    dtype=np.float64,
-                                ),
-                            )
-                        },
-                        coords={
-                            "time": np.array([time_val], dtype= "datetime64[s]"),
-                            "equations": np.array(self.equ, dtype=object),
-                            "faces": np.arange(6),
-                            "z": np.arange(nz),
-                            "y": np.arange(ny),
-                            "x": np.arange(nx),
-                        },
-                    )
-            else:
                 dummy = xr.Dataset(
                     {
                         "data": (
-                            ("time", "equations", "faces", "y", "x"),
+                            ("time", "equations", "faces", "z", "y", "x"),
                             np.full(
-                                (1, len(self.equ), 6, ny, nx),
+                                (1, len(self.equ), self.npe, nz, ny, nx),
                                 np.nan,
                                 dtype=np.float64,
                             ),
@@ -351,7 +270,28 @@ class OutputCubesphereZarr(OutputCubesphere):
                     coords={
                         "time": np.array([time_val], dtype= "datetime64[s]"),
                         "equations": np.array(self.equ, dtype=object),
-                        "faces": np.arange(6),
+                        "faces": np.arange(self.npe),
+                        "z": np.arange(nz),
+                        "y": np.arange(ny),
+                        "x": np.arange(nx),
+                    },
+                )
+            else:
+                dummy = xr.Dataset(
+                    {
+                        "data": (
+                            ("time", "equations", "faces", "y", "x"),
+                            np.full(
+                                (1, len(self.equ), self.npe, ny, nx),
+                                np.nan,
+                                dtype=np.float64,
+                            ),
+                        )
+                    },
+                    coords={
+                        "time": np.array([time_val], dtype= "datetime64[s]"),
+                        "equations": np.array(self.equ, dtype=object),
+                        "faces": np.arange(self.npe),
                         "y": np.arange(ny),
                         "x": np.arange(nx),
                     },
@@ -405,7 +345,7 @@ class OutputCubesphereZarr(OutputCubesphere):
             )
             for face_idx, face in enumerate(fields):
                 if self.config.equations == "shallow_water":
-                    root["data"][t_index, equation_idx, level_idx, face_idx, :, :] = self.device.to_host(face)
+                    root["data"][t_index, equation_idx, face_idx, level_idx, :, :] = self.device.to_host(face)
                 elif self.config.equations == "euler":
                     root["data"][t_index, equation_idx, face_idx, level_idx, :, :] = self.device.to_host(face[level_idx, :, :])
 

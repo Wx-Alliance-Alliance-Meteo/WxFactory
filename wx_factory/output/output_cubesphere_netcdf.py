@@ -46,20 +46,20 @@ class OutputCubesphereNetcdf(OutputCubesphere):
 
         self.ncfile = None
         self.filename = f"{self.output_dir}/{self.config.base_output_file}.nc"
-        self.nz = None
-        if config.case_number == -2:
-            self.z_levels = geometry.z_levels
+        if type(self.geometry.z_levels) == int:
+            self.nz = self.geometry.z_levels
+        else:
+            self.nz = len(self.geometry.z_levels)
 
-        """if config.output_freq > 0:
-            self._output_init()"""
-        self.initialized = False
+        if config.output_freq > 0:
+            self._output_init()
         if config.time_start:
                     self.start_time = np.datetime64(str(config.time_start).replace("t", "T"))
         else:
             self.start_time = np.datetime64("1800-01-01T00:00:00")
         self.dt = config.dt
 
-    def _output_init(self, NZ):
+    def _output_init(self):
         """Initialise the netCDF4 file."""
 
         # import here, so we don't need the module if not outputting
@@ -98,9 +98,9 @@ class OutputCubesphereNetcdf(OutputCubesphere):
             self.ncfile.createDimension("Ydim", ni)
             self.ncfile.createDimension("Xdim", nj)
 
-            if self.config.equations == "shallow_water" and self.config.case_number == -2:
+            if self.config.equations == "shallow_water" and self.nz > 1:
 
-                self.ncfile.createDimension("Zdim", NZ)
+                self.ncfile.createDimension("Zdim", self.nz)
 
                 zzz = self.ncfile.createVariable("Zdim", numpy.float64, ("Zdim",))
                 zzz.long_name = "Zdim"
@@ -109,9 +109,9 @@ class OutputCubesphereNetcdf(OutputCubesphere):
 
                 if self.rank == 0:
                     if hasattr(self, "z_levels"):
-                        zzz[:] = self.z_levels
+                        zzz[:] = self.nz
                     else:
-                        zzz[:] = numpy.arange(NZ)
+                        zzz[:] = numpy.arange(self.nz)
 
             # create time axis
             tme = self.ncfile.createVariable("time", numpy.float64, ("time",))
@@ -155,8 +155,8 @@ class OutputCubesphereNetcdf(OutputCubesphere):
 
             if self.config.equations == "shallow_water":
 
-                if self.config.case_number == -2:
-                    dims = ("time", "Zdim") + grid_data
+                if self.nz > 1:
+                    dims = ("time", "npe", "Zdim", "Xdim", "Ydim")
                 else:
                     dims = ("time",) + grid_data
 
@@ -321,20 +321,9 @@ class OutputCubesphereNetcdf(OutputCubesphere):
         to_host = self.device.to_host
 
         for i, f in enumerate(fields):
-            self.ncfile[name][time_idx, level_idx, i, :, :] = to_host(f)
+            self.ncfile[name][time_idx, i, level_idx, :, :] = to_host(f)
 
     def __write_result__(self, Q, step_id):
-
-        if not self.initialized:
-
-            if Q.ndim == 5:
-                self.nz = Q.shape[1]
-            else:
-                self.nz = 1
-
-            self._output_init(self.nz)
-
-            self.initialized = True
 
         geom = self.geometry
 
@@ -344,7 +333,6 @@ class OutputCubesphereNetcdf(OutputCubesphere):
             idx = 0
 
         if isinstance(geom, CubedSphere2D):  # Shallow water
-
             if Q.ndim == 5:
                 for k in range(self.nz):
 
@@ -431,6 +419,11 @@ class OutputCubesphereNetcdf(OutputCubesphere):
             seconds = (time_val - epoch) / np.timedelta64(1, "s")
 
             self.ncfile["time"][idx] = seconds
+
+        if self.rank == 0:
+            print("\n=== NetCDF variable shapes ===")
+            for name, var in self.ncfile.variables.items():
+                print(f"{name}: {var.shape}")
 
     def __finalize__(self):
         """Finalise the output netCDF4 file."""
