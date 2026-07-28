@@ -1,12 +1,9 @@
 import numpy
 import torch
-from ..common.matmul import maximum
-from typing import Optional
-
-from mpi4py import MPI
 from numpy.typing import NDArray
 
 from ..common.definitions import idx_h, idx_u1, idx_u2
+from ..common.matmul import maximum
 from ..geometry import CubedSphere2D, DFROperators, Metric2D
 from ..process_topology import ProcessTopology
 
@@ -20,7 +17,8 @@ class RhsAdvection2d:
         self,
         shape: tuple[int, ...],
         geom: CubedSphere2D,
-        operators: DFROperators,
+        operators_real: DFROperators,
+        operators_complex: DFROperators,
         metric: Metric2D,
         ptopo: ProcessTopology,
         num_solpts: int,
@@ -28,7 +26,8 @@ class RhsAdvection2d:
     ):
         self.shape = shape
         self.geom = geom
-        self.operators = operators
+        self.operators_real = operators_real
+        self.operators_complex = operators_complex
         self.metric = metric
         self.ptopo = ptopo
         self.num_solpts = num_solpts
@@ -42,10 +41,11 @@ class RhsAdvection2d:
         :return: Value of the right-hand side, in the same shape as the input
         """
         old_shape = vec.shape
+        operators = self.operators_complex if torch.is_complex(vec) else self.operators_real
         result = self.__compute_rhs__(
             vec.reshape(self.shape),
             self.geom,
-            self.operators,
+            operators,
             self.metric,
             self.ptopo,
             self.num_solpts,

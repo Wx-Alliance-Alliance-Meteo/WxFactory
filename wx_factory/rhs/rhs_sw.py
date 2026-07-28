@@ -1,15 +1,12 @@
 import numpy
 import torch
-from typing import Optional
-
-from mpi4py import MPI
 from numpy.typing import NDArray
 
-from ..common.definitions import idx_h, idx_hu1, idx_hu2, gravity
+from ..common.definitions import gravity, idx_h, idx_hu1, idx_hu2
 from ..geometry import CubedSphere2D, DFROperators, Metric2D
 from ..init.initialize import Topo
-from .rhs import RHS
 from ..process_topology import ProcessTopology
+from .rhs import RHS
 
 
 class RhsShallowWater(RHS):
@@ -20,7 +17,7 @@ class RhsShallowWater(RHS):
         operators_real: DFROperators,
         operators_complex: DFROperators,
         metric: Metric2D,
-        topo: Optional[Topo],
+        topo: Topo | None,
         ptopo: ProcessTopology,
     ):
         super().__init__(
@@ -189,11 +186,12 @@ class RhsShallowWater(RHS):
 
         a = torch.sqrt(gravity * self.var_itf_i[idx_h] * self.metric.H_contra_11_itf_i)
         # Only the meaningful half of each halo interface column is filled by the neighbour exchange;
-        # the other half stays h = hu = 0, so the division there would be 0/0. The ufunc `where=`
-        # skips those elements outright, unlike torch.where, which evaluates both branches and only then
-        # discards the NaNs. Entries not selected keep the 0.0 that `out` is initialized to.
+        # the other half stays h = hu = 0, so the division there would be 0/0. Divide only the
+        # selected entries: torch.where evaluates both branches, and torch.divide has no `where=`.
         denom = self.var_itf_i[idx_h] * a
-        m = torch.divide(self.var_itf_i[idx_hu1], denom, out=torch.zeros_like(denom), where=torch.real(a) > 0.0)
+        mask = torch.real(a) > 0.0
+        m = torch.zeros_like(denom)
+        m[mask] = self.var_itf_i[idx_hu1][mask] / denom[mask]
 
         mw2 = (m[west] - 1.0) * (m[west] - 1.0)
         big_M = 0.25 * ((m[east] + 1.0) ** 2 - mw2)
@@ -216,7 +214,9 @@ class RhsShallowWater(RHS):
         a = torch.sqrt(gravity * self.var_itf_j[idx_h] * self.metric.H_contra_22_itf_j)
         # Same as above, for the south-north interfaces.
         denom = self.var_itf_j[idx_h] * a
-        m = torch.divide(self.var_itf_j[idx_hu2], denom, out=torch.zeros_like(denom), where=torch.real(a) > 0.0)
+        mask = torch.real(a) > 0.0
+        m = torch.zeros_like(denom)
+        m[mask] = self.var_itf_j[idx_hu2][mask] / denom[mask]
 
         ms2 = (m[south] - 1.0) * (m[south] - 1.0)
         big_M = 0.25 * ((m[north] + 1.0) ** 2 - ms2)

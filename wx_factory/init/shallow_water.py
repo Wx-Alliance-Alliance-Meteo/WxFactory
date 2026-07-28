@@ -1,14 +1,11 @@
-import torch
 import math
-import sys
 
-from mpi4py import MPI
 import numpy
-import xarray as xr
+import torch
 
-from ..common.definitions import day_in_secs, gravity
 from ..common import Configuration
-from ..geometry import wind2contra_2d, CubedSphere2D, DFROperators
+from ..common.definitions import day_in_secs, gravity
+from ..geometry import CubedSphere2D, DFROperators
 from ..init.matsuno import eval_field
 from ..output.input_manager import InputManager
 
@@ -18,9 +15,7 @@ def eval_u_prime(lat):
     phi0 = math.pi / 7.0
     phi1 = math.pi / 2.0 - phi0
 
-    if lat < phi0:
-        return 0.0
-    elif lat > phi1:
+    if lat < phi0 or lat > phi1:
         return 0.0
 
     e_n = math.exp(-4.0 / ((phi1 - phi0) ** 2))
@@ -58,10 +53,10 @@ def circular_vortex(geom, metric, param):
     u = (
         geom.earth_radius
         * Omega
-        * (math.sin(lat_center) * geom.coslat - math.cos(lat_center) * numpy.cos(geom.lon - lon_center) * geom.sinlat)
+        * (math.sin(lat_center) * geom.coslat - math.cos(lat_center) * torch.cos(geom.lon - lon_center) * geom.sinlat)
     )
-    v = geom.earth_radius * Omega * numpy.cos(lat_center) * numpy.sin(geom.lon - lon_center)
-    u1, u2 = wind2contra_2d(u, v, geom)
+    v = geom.earth_radius * Omega * math.cos(lat_center) * torch.sin(geom.lon - lon_center)
+    u1, u2 = geom.wind2contra(u, v)
 
     return u1, u2, h
 
@@ -77,27 +72,27 @@ def height_vortex(geom, metric, param, step):
     rho_0 = 3.0
     gamma = 5.0
 
-    lonR = numpy.arctan2(
-        geom.coslat * numpy.sin(geom.lon - lon_center),
-        geom.coslat * math.sin(lat_center) * numpy.cos(geom.lon - lon_center) - math.cos(lat_center) * geom.sinlat,
+    lonR = torch.atan2(
+        geom.coslat * torch.sin(geom.lon - lon_center),
+        geom.coslat * math.sin(lat_center) * torch.cos(geom.lon - lon_center) - math.cos(lat_center) * geom.sinlat,
     )
 
-    lonR[lonR < 0.0] = lonR[lonR < 0.0] + (2.0 * math.pi)
+    lonR = torch.where(lonR < 0.0, lonR + 2.0 * math.pi, lonR)
 
-    latR = numpy.arcsin(
-        geom.sinlat * math.sin(lat_center) + geom.coslat * math.cos(lat_center) * numpy.cos(geom.lon - lon_center)
+    latR = torch.asin(
+        geom.sinlat * math.sin(lat_center) + geom.coslat * math.cos(lat_center) * torch.cos(geom.lon - lon_center)
     )
 
-    rho = rho_0 * numpy.cos(latR)
+    rho = rho_0 * torch.cos(latR)
 
-    Vt = V0 * (3.0 / 2.0 * math.sqrt(3.0)) * (1.0 / numpy.cosh(rho)) ** 2 * numpy.tanh(rho)
+    Vt = V0 * (3.0 / 2.0 * math.sqrt(3.0)) * (1.0 / torch.cosh(rho)) ** 2 * torch.tanh(rho)
 
-    Omega = numpy.zeros_like(geom.lat)
+    Omega = torch.zeros_like(geom.lat)
 
-    mask = numpy.abs(rho) > 1e-9
+    mask = torch.abs(rho) > 1e-9
     Omega[mask] = Vt[mask] / (geom.earth_radius * rho[mask])
 
-    h = 1.0 - numpy.tanh((rho / gamma) * numpy.sin(lonR - Omega * step_time))
+    h = 1.0 - torch.tanh((rho / gamma) * torch.sin(lonR - Omega * step_time))
 
     return h, Omega
 
@@ -111,8 +106,8 @@ def sw_from_ERA5(geom: CubedSphere2D, ds, t, levels, feature_map):
     u = ds["data"].isel(time=t, features=idx_u_all)
     v = ds["data"].isel(time=t, features=idx_v_all)
 
-    target_lon = (geom.lon * 180 / numpy.pi) % 360
-    target_lat = geom.lat * 180 / numpy.pi
+    target_lon = geom.device.to_host((geom.lon * 180 / math.pi) % 360)
+    target_lat = geom.device.to_host(geom.lat * 180 / math.pi)
 
     # Flatten for interpolation
     lon_flat = target_lon.reshape(-1)
@@ -234,11 +229,11 @@ def height_case1(geom: CubedSphere2D, metric, param, step):
 
     radius = 1.0 / 3.0
 
-    dist = numpy.arccos(
-        math.sin(lat_center) * geom.sinlat + math.cos(lat_center) * geom.coslat * numpy.cos(geom.lon - lon_center)
+    dist = torch.acos(
+        math.sin(lat_center) * geom.sinlat + math.cos(lat_center) * geom.coslat * torch.cos(geom.lon - lon_center)
     )
 
-    return 0.5 * h0 * (1.0 + numpy.cos(math.pi * dist / radius)) * (dist <= radius)
+    return 0.5 * h0 * (1.0 + torch.cos(math.pi * dist / radius)) * (dist <= radius)
 
 
 def williamson_case2(geom, metric, param):
@@ -289,13 +284,19 @@ def williamson_case5(geom: CubedSphere2D, metric, mtrx: DFROperators, param):
     lon_mountain = 3.0 * math.pi / 2.0
     lat_mountain = math.pi / 6.0
 
-    r = numpy.sqrt(numpy.minimum(rr**2, (geom.lon - lon_mountain) ** 2 + (geom.lat - lat_mountain) ** 2))
+    r = torch.sqrt(torch.clamp((geom.lon - lon_mountain) ** 2 + (geom.lat - lat_mountain) ** 2, max=rr**2))
 
-    r_itf_i = numpy.sqrt(
-        numpy.minimum(rr**2, (geom.lon_itf_i - lon_mountain) ** 2 + (geom.lat_itf_i - lat_mountain) ** 2)
+    r_itf_i = torch.sqrt(
+        torch.clamp(
+            (geom.lon_itf_i - lon_mountain) ** 2 + (geom.lat_itf_i - lat_mountain) ** 2,
+            max=rr**2,
+        )
     )
-    r_itf_j = numpy.sqrt(
-        numpy.minimum(rr**2, (geom.lon_itf_j - lon_mountain) ** 2 + (geom.lat_itf_j - lat_mountain) ** 2)
+    r_itf_j = torch.sqrt(
+        torch.clamp(
+            (geom.lon_itf_j - lon_mountain) ** 2 + (geom.lat_itf_j - lat_mountain) ** 2,
+            max=rr**2,
+        )
     )
 
     r_itf_i[geom.west_edge] = 0.0
@@ -324,10 +325,10 @@ def williamson_case5(geom: CubedSphere2D, metric, mtrx: DFROperators, param):
 def williamson_case6(geom: CubedSphere2D, metric, param):
     if geom.device.comm.rank == 0:
         print(
-            f"--------------------------------------------\n"
-            f"WILLIAMSON CASE 6, Williamson et al. (1992) \n"
-            f"Rossby-Haurwitz wave                        \n"
-            f"--------------------------------------------"
+            "--------------------------------------------\n"
+            "WILLIAMSON CASE 6, Williamson et al. (1992) \n"
+            "Rossby-Haurwitz wave                        \n"
+            "--------------------------------------------"
         )
 
     # Rossby-Haurwitz wave
@@ -357,18 +358,17 @@ def williamson_case6(geom: CubedSphere2D, metric, param):
         h0
         + (
             geom.earth_radius**2 * A
-            + geom.earth_radius**2 * B * numpy.cos(R * geom.lon)
-            + geom.earth_radius**2 * C * numpy.cos(2.0 * R * geom.lon)
+            + geom.earth_radius**2 * B * torch.cos(R * geom.lon)
+            + geom.earth_radius**2 * C * torch.cos(2.0 * R * geom.lon)
         )
         / gravity
     )
 
     u = geom.earth_radius * omega * geom.coslat + geom.earth_radius * K * geom.coslat ** (R - 1) * (
         R * geom.sinlat**2 - geom.coslat**2
-    ) * numpy.cos(R * geom.lon)
-    v = -geom.earth_radius * K * R * geom.coslat ** (R - 1) * geom.sinlat * numpy.sin(R * geom.lon)
+    ) * torch.cos(R * geom.lon)
+    v = -geom.earth_radius * K * R * geom.coslat ** (R - 1) * geom.sinlat * torch.sin(R * geom.lon)
 
-    # u1, u2 = wind2contra_2d(u, v, geom)
     u1, u2 = geom.wind2contra(u, v)
 
     return u1, u2, h
@@ -387,113 +387,109 @@ def case_galewsky(geom, metric, param):
     alpha = 1.0 / 3.0
     beta = 1.0 / 15.0
 
-    ni, nj = geom.lon.shape
+    # This initialization contains a scalar numerical quadrature at every grid point.  Evaluate it
+    # once on host copies, independently of the geometry's element/solution-point layout, then move
+    # the completed fields back to the configured device.
+    lat = geom.device.to_host(geom.lat)
+    lon = geom.device.to_host(geom.lon)
+    u = numpy.zeros_like(lat)
+    v = numpy.zeros_like(lat)
+    h = numpy.zeros_like(lat)
 
-    u = numpy.zeros((ni, nj))
-    v = numpy.zeros((ni, nj))
-    h = numpy.zeros((ni, nj))
+    for idx in numpy.ndindex(lat.shape):
 
-    for i in range(ni):
-        for j in range(nj):
+        # Calculate height field via numerical integration
+        nIntervals = int((lat[idx] + 0.5 * math.pi) / (1.0e-2))
 
-            # Calculate height field via numerical integration
-            nIntervals = int((geom.lat[i, j] + 0.5 * math.pi) / (1.0e-2))
+        nIntervals = max(nIntervals, 1)
 
-            if nIntervals < 1:
-                nIntervals = 1
+        latX = numpy.zeros(nIntervals + 1)
 
-            latX = numpy.zeros(nIntervals + 1)
+        for k in range(nIntervals + 1):
+            latX[k] = -0.5 * math.pi + ((lat[idx] + 0.5 * math.pi) / nIntervals) * k
 
-            for k in range(nIntervals + 1):
-                latX[k] = -0.5 * math.pi + ((geom.lat[i, j] + 0.5 * math.pi) / nIntervals) * k
+        h_integrand = 0.0
 
-            h_integrand = 0.0
+        for k in range(nIntervals):
+            for m in range(-1, 2, 2):
+                dXeval = 0.5 * (latX[k + 1] + latX[k]) + m * math.sqrt(1.0 / 3.0) * 0.5 * (latX[k + 1] - latX[k])
 
-            for k in range(nIntervals):
-                for m in range(-1, 2, 2):
-                    dXeval = 0.5 * (latX[k + 1] + latX[k]) + m * math.sqrt(1.0 / 3.0) * 0.5 * (latX[k + 1] - latX[k])
+                dU = eval_u_prime(dXeval)
 
-                    dU = eval_u_prime(dXeval)
+                h_integrand += (
+                    2.0 * geom.earth_radius * geom.rotation_speed * math.sin(dXeval) + dU * math.tan(dXeval)
+                ) * dU
 
-                    h_integrand += (
-                        2.0 * geom.earth_radius * geom.rotation_speed * math.sin(dXeval) + dU * math.tan(dXeval)
-                    ) * dU
+        h_integrand *= 0.5 * (latX[1] - latX[0])
 
-            h_integrand *= 0.5 * (latX[1] - latX[0])
+        h[idx] = h0 - h_integrand / gravity
 
-            h[i, j] = h0 - h_integrand / gravity
+        # Add perturbation
+        h[idx] += (
+            h_hat
+            * math.cos(lat[idx])
+            * math.exp(-((lon[idx] / alpha) ** 2))
+            * math.exp(-(((phi2 - lat[idx]) / beta) ** 2))
+        )
 
-            # Add perturbation
-            h[i, j] += (
-                h_hat
-                * math.cos(geom.lat[i, j])
-                * math.exp(-((geom.lon[i, j] / alpha) ** 2))
-                * math.exp(-(((phi2 - geom.lat[i, j]) / beta) ** 2))
-            )
+        # Evaluate the velocity field
+        u_p = eval_u_prime(lat[idx])
 
-            # Evaluate the velocity field
-            u_p = eval_u_prime(geom.lat[i, j])
+        if abs(math.cos(lon[idx])) < 1.0e-13:
+            u[idx] = u_p
+        else:
+            u[idx] = (v[idx] * math.sin(lat[idx]) * math.sin(lon[idx]) + u_p * math.cos(lon[idx])) / math.cos(lon[idx])
 
-            if abs(math.cos(geom.lon[i, j])) < 1.0e-13:
-                u[i, j] = u_p
-            else:
-                u[i, j] = (
-                    v[i, j] * math.sin(geom.lat[i, j]) * math.sin(geom.lon[i, j]) + u_p * math.cos(geom.lon[i, j])
-                ) / math.cos(geom.lon[i, j])
-
-    u1, u2 = wind2contra_2d(u, v, geom)
+    dtype = geom.lon.dtype
+    u = torch.asarray(u, dtype=dtype)
+    v = torch.asarray(v, dtype=dtype)
+    h = torch.asarray(h, dtype=dtype)
+    u1, u2 = geom.wind2contra(u, v)
 
     return u1, u2, h
 
 
 def case_matsuno(geom, metric, param):
+    wave_type = {"rossby": "Rossby", "eig": "EIG", "wig": "WIG"}[param.matsuno_wave_type.lower()]
     if geom.device.comm.rank == 0:
         print("--------------------------------------------")
         print("CASE 9, Shamir et al.,2019,GMD,12,2181-2193 ")
 
-        if param.matsuno_wave_type == "Rossby":
+        if wave_type == "Rossby":
             print("The Matsuno baroclinic wave (Rosby)         ")
-        elif param.matsuno_wave_type == "EIG":
+        elif wave_type == "EIG":
             print("The Matsuno baroclinic wave (EIG)           ")
             print("--------------------------------------------")
-        elif param.matsuno_wave_type == "WIG":
+        elif wave_type == "WIG":
             print("The Matsuno baroclinic wave (WIG)           ")
         print("--------------------------------------------")
 
-    ni, nj = geom.lon.shape
+    lat = geom.device.to_host(geom.lat)
+    lon = geom.device.to_host(geom.lon)
+    u = numpy.zeros_like(lat)
+    v = numpy.zeros_like(lat)
+    h = numpy.zeros_like(lat)
 
-    u = numpy.zeros((ni, nj))
-    v = numpy.zeros((ni, nj))
-    h = numpy.zeros((ni, nj))
-
-    h_analytic = numpy.zeros((ni, nj))
-
-    for i in range(ni):
-        for j in range(nj):
-            h[i, j] = (
-                eval_field(
-                    geom.lat[i, j],
-                    geom.lon[i, j],
-                    0.0,
-                    amp=param.matsuno_amp,
-                    field="phi",
-                    wave_type=param.matsuno_wave_type,
-                )
-                / gravity
+    for idx in numpy.ndindex(lat.shape):
+        h[idx] = (
+            eval_field(
+                lat[idx],
+                lon[idx],
+                0.0,
+                amp=param.matsuno_amp,
+                field="phi",
+                wave_type=wave_type,
             )
-            u[i, j] = eval_field(
-                geom.lat[i, j], geom.lon[i, j], 0.0, amp=param.matsuno_amp, field="u", wave_type=param.matsuno_wave_type
-            )
-            v[i, j] = eval_field(
-                geom.lat[i, j], geom.lon[i, j], 0.0, amp=param.matsuno_amp, field="v", wave_type=param.matsuno_wave_type
-            )
+            / gravity
+        )
+        u[idx] = eval_field(lat[idx], lon[idx], 0.0, amp=param.matsuno_amp, field="u", wave_type=wave_type)
+        v[idx] = eval_field(lat[idx], lon[idx], 0.0, amp=param.matsuno_amp, field="v", wave_type=wave_type)
 
-            h_analytic[i, j] = (
-                eval_field(geom.lat[i, j], geom.lon[i, j], param.t_end, field="phi", wave_type=param.matsuno_wave_type)
-                / gravity
-            )
-
-    u1, u2 = wind2contra_2d(u, v, geom)
+    dtype = geom.lon.dtype
+    u = torch.asarray(u, dtype=dtype)
+    v = torch.asarray(v, dtype=dtype)
+    h = torch.asarray(h, dtype=dtype)
+    u1, u2 = geom.wind2contra(u, v)
 
     return u1, u2, h
 
@@ -508,51 +504,23 @@ def case_unsteady_zonal(geom, metric, mtrx, param):
     u0 = 2.0 * math.pi * geom.earth_radius / (12.0 * 24.0 * 3600.0)
 
     # Note, units of k1 and k2 are gpm, m^2/s^2
-    k1 = 133681.0
     k2 = 10.0
 
-    u = u0 * numpy.cos(geom.lat)
-    v = numpy.zeros_like(geom.lat)
+    u = u0 * torch.cos(geom.lat)
+    v = torch.zeros_like(geom.lat)
 
     # Geopotential heights
     h = height_unsteady_zonal(geom, metric, param)
 
-    hs = 0.5 * (geom.earth_radius * geom.rotation_speed * numpy.sin(geom.lat)) ** 2 + k2
+    hs = 0.5 * (geom.earth_radius * geom.rotation_speed * torch.sin(geom.lat)) ** 2 + k2
     hsurf = hs / gravity
 
-    num_interfaces_horiz = param.num_elements_horizontal + 1
-    hsurf_itf_i = numpy.zeros((param.num_elements_horizontal + 2, param.num_solpts * param.num_elements_horizontal, 2))
-    hsurf_itf_j = numpy.zeros((param.num_elements_horizontal + 2, 2, param.num_solpts * param.num_elements_horizontal))
+    hsurf_itf_i = (0.5 * (geom.earth_radius * geom.rotation_speed * torch.sin(geom.lat_itf_i)) ** 2 + k2) / gravity
+    hsurf_itf_j = (0.5 * (geom.earth_radius * geom.rotation_speed * torch.sin(geom.lat_itf_j)) ** 2 + k2) / gravity
+    dzdx1 = hsurf @ mtrx.derivative_x + geom.middle_itf_i(hsurf_itf_i) @ mtrx.correction_WE
+    dzdx2 = hsurf @ mtrx.derivative_y + geom.middle_itf_j(hsurf_itf_j) @ mtrx.correction_SN
 
-    for itf in range(num_interfaces_horiz):
-        elem_L = itf
-        elem_R = itf + 1
-
-        hsurf_itf_i[elem_L, :, 1] = (
-            0.5 * (geom.earth_radius * geom.rotation_speed * numpy.sin(geom.lat_itf_i[:, itf])) ** 2 + k2
-        ) / gravity
-        hsurf_itf_i[elem_R, :, 0] = hsurf_itf_i[elem_L, :, 1]
-
-        hsurf_itf_j[elem_L, 1, :] = (
-            0.5 * (geom.earth_radius * geom.rotation_speed * numpy.sin(geom.lat_itf_j[itf, :])) ** 2 + k2
-        ) / gravity
-        hsurf_itf_j[elem_R, 0, :] = hsurf_itf_j[elem_L, 1, :]
-
-    ni, nj = geom.lon.shape
-    dzdx1 = numpy.zeros((ni, nj))
-    dzdx2 = numpy.zeros((ni, nj))
-
-    offset = 1  # Offset due to the halo
-    for elem in range(param.num_elements_horizontal):
-        epais = elem * param.num_solpts + numpy.arange(param.num_solpts)
-
-        # --- Direction x1
-        dzdx1[:, epais] = hsurf[:, epais] @ mtrx.diff_solpt_tr + hsurf_itf_i[elem + offset, :, :] @ mtrx.correction_tr
-
-        # --- Direction x2
-        dzdx2[epais, :] = mtrx.diff_solpt @ hsurf[epais, :] + mtrx.correction @ hsurf_itf_j[elem + offset, :, :]
-
-    u1, u2 = wind2contra_2d(u, v, geom)
+    u1, u2 = geom.wind2contra(u, v)
     return u1, u2, h, hsurf, dzdx1, dzdx2, hsurf_itf_i, hsurf_itf_j
 
 
@@ -564,17 +532,16 @@ def height_unsteady_zonal(geom, metric, param):
     k1 = 133681.0
     k2 = 10.0
 
-    u = u0 * numpy.cos(geom.lat)
-    v = numpy.zeros_like(geom.lat)
+    sinlat = torch.sin(geom.lat)
 
     # Geopotential heights
     h = (
-        -0.5 * (u0 * numpy.sin(geom.lat) + geom.earth_radius * geom.rotation_speed * numpy.sin(geom.lat)) ** 2
-        + 0.5 * (geom.earth_radius * geom.rotation_speed * numpy.sin(geom.lat)) ** 2
+        -0.5 * (u0 * sinlat + geom.earth_radius * geom.rotation_speed * sinlat) ** 2
+        + 0.5 * (geom.earth_radius * geom.rotation_speed * sinlat) ** 2
         + k1
     )
 
-    hs = 0.5 * (geom.earth_radius * geom.rotation_speed * numpy.sin(geom.lat)) ** 2 + k2
+    hs = 0.5 * (geom.earth_radius * geom.rotation_speed * sinlat) ** 2 + k2
 
     # Revert to height, in metres
     # Note, need h as depth rather than height

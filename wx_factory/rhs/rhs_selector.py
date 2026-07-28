@@ -13,8 +13,8 @@ provide a partition leaves that handle pointing at a placeholder that raises a c
 partitioned integrator tries to use it.
 """
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable, Optional, Tuple
 
 from ..common import Configuration
 from ..geometry import (
@@ -29,10 +29,9 @@ from ..geometry import (
 from ..init.initialize import Topo
 from ..pde import PDEEuler3D
 from ..process_topology import ProcessTopology
-
-from .rhs_sw import RhsShallowWater
 from .rhs_advection2d import RhsAdvection2d
-from .rhs_dfr import RHSDirecFluxReconstruction, RHSDirecFluxReconstruction_mpi_v2
+from .rhs_dfr import RHSDirecFluxReconstruction_mpi_v2
+from .rhs_sw import RhsShallowWater
 
 
 @dataclass
@@ -46,10 +45,10 @@ class RhsContext:
     operators_real: DFROperators
     operators_complex: DFROperators
     metric: Metric2D | Metric3DTopo | None
-    topo: Optional[Topo]
-    ptopo: Optional[ProcessTopology]
+    topo: Topo | None
+    ptopo: ProcessTopology | None
     param: Configuration
-    fields_shape: Tuple[int, ...]
+    fields_shape: tuple[int, ...]
     debug: bool = False
 
 
@@ -78,9 +77,9 @@ class RhsBundle:
         self,
         *,
         full: Callable,
-        shape: Tuple[int, ...],
-        explicit: Optional[Callable] = None,
-        implicit: Optional[Callable] = None,
+        shape: tuple[int, ...],
+        explicit: Callable | None = None,
+        implicit: Callable | None = None,
     ) -> None:
         self.full = full
         self.shape = shape
@@ -154,8 +153,16 @@ def _euler_cartesian3d(ctx: RhsContext) -> RhsBundle:
     if getattr(ctx.param, "advection_only", "auto") == "auto":
         pde.advection_only = False
     full = RHSDirecFluxReconstruction_mpi_v2(
-        pde, ctx.geom, ctx.operators_real, ctx.operators_complex, ctx.metric,
-        ctx.topo, ctx.ptopo, ctx.param, ctx.fields_shape, debug=ctx.debug,
+        pde,
+        ctx.geom,
+        ctx.operators_real,
+        ctx.operators_complex,
+        ctx.metric,
+        ctx.topo,
+        ctx.ptopo,
+        ctx.param,
+        ctx.fields_shape,
+        debug=ctx.debug,
     )
     return RhsBundle(full=full, shape=ctx.fields_shape, implicit=full.implicit, explicit=full.explicit)
 
@@ -168,6 +175,7 @@ def _shallow_water_cubesphere(ctx: RhsContext) -> RhsBundle:
             ctx.fields_shape,
             ctx.geom,
             ctx.operators_real,
+            ctx.operators_complex,
             ctx.metric,
             ctx.ptopo,
             ctx.geom.num_solpts,
