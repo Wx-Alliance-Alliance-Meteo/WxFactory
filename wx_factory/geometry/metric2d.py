@@ -1,8 +1,8 @@
-import torch
 import numpy
-from mpi4py import MPI
+import torch
 
 from .cubed_sphere_2d import CubedSphere2D
+from .geometry import cast_double_arrays
 
 
 class Metric2D:
@@ -164,3 +164,11 @@ class Metric2D:
         self.christoffel_2_12 *= 0.5 * geom.delta_x2
         self.christoffel_2_21 *= 0.5 * geom.delta_x2
         self.christoffel_2_22 *= 0.5 * geom.delta_x2
+
+        self.cast_to_working_precision(geom.working_dtype)
+        geom.cast_to_working_precision()
+
+    def cast_to_working_precision(self, dtype) -> None:
+        """Cast completed metric arrays and restore reciprocal identities in working precision."""
+        cast_double_arrays(self, dtype)
+        self.inv_sqrtG = 1.0 / self.sqrtG

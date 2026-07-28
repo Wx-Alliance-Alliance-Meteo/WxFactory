@@ -1,19 +1,16 @@
-import torch
 import math
 from typing import Optional
 
-from mpi4py import MPI
 import numpy
+import torch
+from mpi4py import MPI
 from numpy.typing import NDArray
-
-from .cubed_sphere import CubedSphere
-from .geometry import cast_double_arrays
-from .sphere import cart2sph
 
 # For type hints
 from ..common import Configuration
-from ..device import Device
 from ..process_topology import ProcessTopology
+from .cubed_sphere import CubedSphere
+from .sphere import cart2sph
 
 
 class CubedSphere3D(CubedSphere):
@@ -860,10 +857,8 @@ class CubedSphere3D(CubedSphere):
         self.coslon_new = torch.cos(self.polar[0, ...])
         self.coslat_new = torch.cos(self.polar[1, ...])
 
-        # The coordinates are built in double precision for accuracy, then stored in the requested
-        # precision. Doing this here, before the metric is built, means the metric (which differences
-        # these arrays through the operators) sees a single, consistent dtype.
-        cast_double_arrays(self, self.dtype)
+        # Keep the completed coordinates in double precision until the metric has been built from
+        # them. Initialization casts geometry and metric together to the configured working dtype.
 
     def _to_new(self, a: NDArray) -> NDArray:
         """Convert input array to new memory layout"""

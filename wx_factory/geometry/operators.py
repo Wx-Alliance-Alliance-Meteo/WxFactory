@@ -208,21 +208,22 @@ class DFROperators:
         if not 0.0 <= cutoff < 1.0:
             raise ValueError("The exponential-filter cutoff must lie in [0, 1)")
 
-        modes = torch.arange(geom.num_solpts, dtype=self.dtype) / (geom.num_solpts - 1)
+        build_dtype = torch.float64
+        modes = torch.arange(geom.num_solpts, dtype=build_dtype) / (geom.num_solpts - 1)
         attenuation = torch.ones_like(modes)
         filtered = modes > cutoff
         attenuation[filtered] = torch.exp(
             -strength * ((modes[filtered] - cutoff) / (1.0 - cutoff)) ** order
         )
 
-        vandermonde = legvander(geom.solutionPoints, geom.num_solpts - 1).astype(self.dtype)
+        vandermonde = legvander(geom.solutionPoints, geom.num_solpts - 1).astype(build_dtype)
         filter_1d = vandermonde @ torch.diag(attenuation) @ torch.linalg.inv(vandermonde)
-        identity_1d = torch.eye(geom.num_solpts, dtype=self.dtype)
-        identity_2d = torch.eye(geom.num_solpts**2, dtype=self.dtype)
+        identity_1d = torch.eye(geom.num_solpts, dtype=build_dtype)
+        identity_2d = torch.eye(geom.num_solpts**2, dtype=build_dtype)
         filter_x = kron(identity_2d, filter_1d).T
         filter_y = kron(identity_1d, kron(filter_1d, identity_1d)).T
         filter_z = kron(filter_1d, identity_2d).T
-        return (filter_x @ filter_y) @ filter_z
+        return ((filter_x @ filter_y) @ filter_z).astype(self.dtype)
 
     @staticmethod
     def apply_filter_3d(Q: NDArray, metric: "Metric3DTopo", filter_matrix: NDArray):

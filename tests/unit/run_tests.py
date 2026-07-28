@@ -18,6 +18,7 @@ from tests.unit.common.test_angle24 import Angle24TestCase
 from tests.unit.rhs.test_rhs_registry import RhsBundleTestCases, RhsRegistryTestCases
 from tests.unit.precondition.test_preconditioner_registry import PreconditionerRegistryTestCases
 from tests.unit.geometry.test_geometry_registry import GeometryRegistryTestCases
+from tests.unit.geometry.test_precision_construction import PrecisionConstructionTestCases
 from tests.unit.output.test_output_registry import OutputRegistryTestCases
 from tests.unit.step_hooks.test_step_hook_registry import StepHookRegistryTestCases
 from tests.unit.output.test_state import StateTestCases
@@ -102,6 +103,18 @@ def load_tests(test_name: str):
     add_test(suite, GeometryRegistryTestCases("test_resolve_dispatches_to_registered_factory"), test_re)
     add_test(suite, GeometryRegistryTestCases("test_grid_file_forces_cubed_sphere_2d"), test_re)
     add_test(suite, GeometryRegistryTestCases("test_duplicate_registration_raises"), test_re)
+    add_test(
+        suite,
+        PrecisionConstructionTestCases("test_quadrature_is_constructed_in_double_precision"),
+        test_re,
+    )
+    add_test(
+        suite,
+        PrecisionConstructionTestCases(
+            "test_single_precision_operators_are_rounded_double_operators"
+        ),
+        test_re,
+    )
 
     add_test(suite, OutputRegistryTestCases("test_expected_combinations_are_registered"), test_re)
     add_test(suite, OutputRegistryTestCases("test_format_independent_family_uses_default_entry"), test_re)

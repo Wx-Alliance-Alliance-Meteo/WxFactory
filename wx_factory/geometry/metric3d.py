@@ -1,9 +1,7 @@
-import torch
 import math
-import sys
 
-from mpi4py import MPI
 import numpy
+import torch
 from numpy.typing import NDArray
 
 from .cubed_sphere_3d import CubedSphere3D
@@ -27,6 +25,11 @@ class Metric3DTopo:
         # Retrieve objects for easier access
         geom = self.geom
         matrix = self.matrix
+        if geom.gnomonic.dtype == torch.float64 and matrix.dtype != torch.float64:
+            # Single-precision runs keep geometry in float64 through initial metric construction.
+            # Use matching double operators for the coordinate derivatives; the runtime operator
+            # set remains in the configured working precision.
+            matrix = DFROperators(geom, geom.device, torch.float64)
         dtype = geom.gnomonic.dtype
 
         # Whether computing deep or shallow metric
@@ -906,6 +909,12 @@ class Metric3DTopo:
         self.sqrtG_itf_j_new = geom._to_new_itf_j(self.sqrtG_itf_j)
         self.sqrtG_itf_k_new = geom._to_new_itf_k(self.sqrtG_itf_k)
 
-        # Store the metric terms in the working precision (see cast_double_arrays).
-        cast_double_arrays(self, geom.dtype)
+        self.inv_sqrtG_new = 1.0 / self.sqrtG_new
+        self.cast_to_working_precision(geom.working_dtype)
+        geom.cast_to_working_precision()
+
+    def cast_to_working_precision(self, dtype) -> None:
+        """Cast completed metric arrays and restore reciprocal identities in working precision."""
+        cast_double_arrays(self, dtype)
+        self.inv_sqrtG = 1.0 / self.sqrtG
         self.inv_sqrtG_new = 1.0 / self.sqrtG_new

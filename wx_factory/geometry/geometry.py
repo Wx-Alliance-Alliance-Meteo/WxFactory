@@ -1,11 +1,8 @@
-import torch
 from abc import ABC, abstractmethod
-from typing import Optional
 
-from mpi4py import MPI
-import numpy
-from numpy.typing import NDArray
 import sympy
+import torch
+from numpy.typing import NDArray
 
 from ..device import Device
 from .quadrature import gauss_legendre
@@ -39,10 +36,15 @@ class Geometry(ABC):
         num_elements_vertical: int,
         total_num_elements_horizontal: int,
         device: Device,
-        verbose: Optional[bool] = False,
+        verbose: bool | None = False,
     ) -> None:
         self.device = device
-        self.dtype = self.device.real_dtype
+        # Grid coordinates and all quantities derived from them are constructed in double
+        # precision.  ``working_dtype`` records the configured runtime precision; initialization
+        # casts the completed geometry and metric together, after the metric has consumed the
+        # double-precision coordinates.
+        self.working_dtype = self.device.real_dtype
+        self.dtype = torch.float64
 
         ## Element properties -- solution and extension points
         # Gauss-Legendre solution points
@@ -66,6 +68,11 @@ class Geometry(ABC):
         self.glweights = torch.asarray(glweights)
         self.extension = torch.asarray(extension)
         self.extension_sym = extension_sym
+
+    def cast_to_working_precision(self) -> None:
+        """Cast completed floating-point geometry arrays to the configured runtime precision."""
+        cast_double_arrays(self, self.working_dtype)
+        self.dtype = self.working_dtype
 
     @abstractmethod
     def to_single_block(self, a: NDArray) -> NDArray:
