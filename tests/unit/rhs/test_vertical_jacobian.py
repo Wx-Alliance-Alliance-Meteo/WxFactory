@@ -13,12 +13,15 @@ assembles a finite operator under the sgn(0) = 0 convention.
 """
 
 import os
+import unittest
 
 import torch
+import torch.autograd.forward_ad as fwad
 from wx_test import WxTestCase
 
 from wx_factory.common import Configuration, load_default_schema, readfile
 from wx_factory.common.definitions import idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_u3
+from wx_factory.device import differentiable_mode
 from wx_factory.rhs.vertical_jacobian import (
     assemble_j1_blocks_analytic,
     blocks_matvec,
@@ -122,6 +125,38 @@ class VerticalJacobianTestCase(WxTestCase):
             f"analytic J2 does not differentiate f2: relative error {error / scale:.3e}; "
             f"per-row errors {row_errors}",
         )
+
+    @unittest.skipUnless(
+        differentiable_mode(),
+        "needs WX_FACTORY_DIFFERENTIABLE=1, which must be set before torch tensors are created",
+    )
+    def test_jacobians_match_forward_mode_autodiff(self) -> None:
+        """Compare the analytic Jacobian actions with forward-mode AD."""
+        Q = self._base_state(seed=1234, w_speed=2.0)
+        gen = torch.Generator().manual_seed(9)
+        v = (torch.rand(Q.shape, generator=gen, dtype=torch.float64) - 0.5) * Q.abs()
+
+        def tangent_of(func):
+            with fwad.dual_level():
+                return fwad.unpack_dual(func(fwad.make_dual(Q, v))).tangent.clone()
+
+        L, A, U = assemble_j1_blocks_analytic(self.rhs, Q)
+        j1v = col_to_state(self.rhs, blocks_matvec(self.rhs, L, A, U, state_to_col(self.rhs, v)), v)
+        j2v = j2_flux_matvec(self.rhs, Q, v, j2_prepare(self.rhs, Q))
+        j2v = j2v + forcing_jvp(self.rhs, Q, v, forcing_jac_prepare(self.rhs, Q))
+
+        for name, analytic, reference in (
+            ("J1", j1v, tangent_of(self.rhs.implicit)),
+            ("J2", j2v, tangent_of(self.rhs.explicit)),
+            ("J1 + J2", j1v + j2v, tangent_of(self.rhs)),
+        ):
+            error = torch.linalg.norm(analytic - reference).item()
+            scale = torch.linalg.norm(reference).item()
+            self.assertLess(
+                error / scale,
+                1.0e-13,
+                f"analytic {name} . v vs forward-mode AD: relative error {error / scale:.3e}",
+            )
 
     def test_jacobian_partition_identity(self) -> None:
         """The two Jacobian actions used by PartRosExp2 must add to the full RHS Jacobian."""

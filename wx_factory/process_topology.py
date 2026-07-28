@@ -1,14 +1,17 @@
-import numpy
-import torch
 import math
 import time
 from typing import Callable, Optional, Tuple
 
+import torch
+import torch.autograd.forward_ad as fwad
 from mpi4py import MPI
 from numpy.typing import NDArray
 
-from .device import Device
-from .wx_mpi import SingleProcess, Conditional, split_nodes
+from .device import Device, differentiable_mode
+from .wx_mpi import Conditional, SingleProcess, split_nodes
+
+# MPI does not preserve forward-AD metadata, so differentiable mode exchanges tangents separately.
+_EXCHANGE_TANGENTS = differentiable_mode()
 
 ExchangedVector = Tuple[NDArray, ...] | NDArray
 
@@ -329,8 +332,6 @@ class ProcessTopology:
         boundary_shape: Tuple[int, ...],
         flip_dim: int | Tuple[int, ...] = -1,
     ):
-        rank = self.device.comm.rank
-
         base_shape = get_base_shape(south.shape, boundary_shape)
         send_buffer = torch.empty((4,) + base_shape, dtype=south[0].dtype)
 
@@ -478,14 +479,20 @@ class ProcessTopology:
         convert = self.convert_contra
         base_shape = get_base_shape(south[0].shape, boundary_sn.shape)
 
-        if self.send_buffer is None or self.send_buffer.nbytes < south.nbytes * 4:
-            self.send_buffer = torch.empty(4 * south.nbytes, dtype=torch.uint8)
-            self.recv_buffer = torch.empty_like(self.send_buffer)
-
         buffer_shape = (4, south.shape[0]) + base_shape
-        num_elem = math.prod(buffer_shape)
-        send_buffer = torch.ravel(self.send_buffer).view(dtype=south.dtype)[:num_elem].reshape(buffer_shape)
-        recv_buffer = torch.ravel(self.recv_buffer).view(dtype=south.dtype)[:num_elem].reshape(buffer_shape)
+
+        if _EXCHANGE_TANGENTS:
+            # Reused byte buffers cannot carry forward-AD tangents.
+            send_buffer = torch.empty(buffer_shape, dtype=south.dtype)
+            recv_buffer = torch.empty(buffer_shape, dtype=south.dtype)
+        else:
+            if self.send_buffer is None or self.send_buffer.nbytes < south.nbytes * 4:
+                self.send_buffer = torch.empty(4 * south.nbytes, dtype=torch.uint8)
+                self.recv_buffer = torch.empty_like(self.send_buffer)
+
+            num_elem = math.prod(buffer_shape)
+            send_buffer = torch.ravel(self.send_buffer).view(dtype=south.dtype)[:num_elem].reshape(buffer_shape)
+            recv_buffer = torch.ravel(self.recv_buffer).view(dtype=south.dtype)[:num_elem].reshape(buffer_shape)
 
         inputs = [south, north, west, east]
         boundaries = [boundary_sn, boundary_sn, boundary_we, boundary_we]
@@ -507,10 +514,31 @@ class ProcessTopology:
         requests: list[ExchangeRequest] = []
 
         for send_buffer, shape, is_vector in send_info:
-            if recv_buffer is None:
+            tangent_send = fwad.unpack_dual(send_buffer).tangent if _EXCHANGE_TANGENTS else None
+            if tangent_send is not None:
+                # Halo exchange is linear, so its JVP is the same exchange applied to the tangent.
+                send_buffer = fwad.unpack_dual(send_buffer).primal
                 recv_buffer = torch.empty_like(send_buffer)
+                tangent_recv = torch.empty_like(tangent_send)
+                tangent_req = self.comm_dist_graph.Ineighbor_alltoall(
+                    tangent_send.contiguous(), tangent_recv
+                )
+            else:
+                tangent_recv = tangent_req = None
+                if recv_buffer is None:
+                    recv_buffer = torch.empty_like(send_buffer)
+
             req = self.comm_dist_graph.Ineighbor_alltoall(send_buffer, recv_buffer)
-            requests.append(ExchangeRequest(recv_buffer, req, shape=shape, is_vector=is_vector))
+            requests.append(
+                ExchangeRequest(
+                    recv_buffer,
+                    req,
+                    shape=shape,
+                    is_vector=is_vector,
+                    tangent_buffer=tangent_recv,
+                    tangent_request=tangent_req,
+                )
+            )
 
         return requests
 
@@ -702,7 +730,15 @@ class ExchangeRequest:
     """Wrapper around an MPI request. Provides a wait function that will wait for MPI transfers to be complete and
     return the received arrays in the specified shape, split among the 4 directions/neighbors."""
 
-    def __init__(self, recv_buffer: NDArray, request: MPI.Request, shape: tuple, is_vector: bool = False):
+    def __init__(
+        self,
+        recv_buffer: NDArray,
+        request: MPI.Request,
+        shape: tuple,
+        is_vector: bool = False,
+        tangent_buffer: Optional[NDArray] = None,
+        tangent_request: Optional[MPI.Request] = None,
+    ):
         """Create a request
 
         :param recv_buffer: Array where all the data will be received
@@ -716,6 +752,8 @@ class ExchangeRequest:
         self.request = request
         self.shape = shape
         self.is_vector = is_vector
+        self.tangent_buffer = tangent_buffer
+        self.tangent_request = tangent_request
 
         # Scalar data
         self.to_tuple: Callable[[NDArray], ExchangedVector] = lambda a: a.reshape(self.shape)
@@ -760,9 +798,14 @@ class ExchangeRequest:
         # t1 = time.time()
         # print(f"Waited {num_tests:3d} times ({(t1 - t0)*1000:.2f} ms)", flush=True)
 
+        received = self.recv_buffer
+        if self.tangent_request is not None:
+            self.tangent_request.Wait()
+            received = fwad.make_dual(received, self.tangent_buffer)
+
         return (
-            self.to_tuple(self.recv_buffer[SOUTH]),
-            self.to_tuple(self.recv_buffer[NORTH]),
-            self.to_tuple(self.recv_buffer[WEST]),
-            self.to_tuple(self.recv_buffer[EAST]),
+            self.to_tuple(received[SOUTH]),
+            self.to_tuple(received[NORTH]),
+            self.to_tuple(received[WEST]),
+            self.to_tuple(received[EAST]),
         )

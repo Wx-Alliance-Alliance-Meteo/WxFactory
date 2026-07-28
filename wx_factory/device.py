@@ -10,12 +10,12 @@ import os
 from time import time
 from typing import Any, Self
 
-from mpi4py import MPI
 import torch
+from mpi4py import MPI
 
 from .wx_mpi import split_nodes
 
-__all__ = ["Device", "PytorchDevice"]
+__all__ = ["Device", "PytorchDevice", "differentiable_mode"]
 
 # WxFactory speaks NumPy-flavoured method names in a few places; make torch tensors answer to them
 # too, so the same call works whether an array happens to be a tensor or a host NumPy array.
@@ -23,8 +23,8 @@ torch.Tensor.astype = torch.Tensor.to
 torch.Tensor.copy = torch.Tensor.clone
 
 
-def _differentiable_requested() -> bool:
-    """Whether the user asked to keep autograd on (opt out of inference mode)."""
+def differentiable_mode() -> bool:
+    """Return whether ``WX_FACTORY_DIFFERENTIABLE`` enables autograd."""
     return os.environ.get("WX_FACTORY_DIFFERENTIABLE", "").lower() in ("1", "true", "yes", "on")
 
 
@@ -53,11 +53,8 @@ class Device:
         # Every tensor the code creates goes through torch's default device.
         torch.set_default_device(self.torch_device)
 
-        # WxFactory only runs the model forward, so by default we enter inference mode process-wide:
-        # no autograd graph is built and no version-counter / view tracking is done, which saves the
-        # per-op autograd bookkeeping. Set WX_FACTORY_DIFFERENTIABLE=1 to keep autograd on (e.g. to
-        # backpropagate through the model).
-        if not _differentiable_requested() and not torch.is_inference_mode_enabled():
+        # The environment variable must be set before Device creates tensors in inference mode.
+        if not differentiable_mode() and not torch.is_inference_mode_enabled():
             self._inference_mode_guard = torch.inference_mode()
             self._inference_mode_guard.__enter__()
 

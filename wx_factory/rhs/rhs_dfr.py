@@ -23,7 +23,7 @@ class RHSDirecFluxReconstruction(RHS):
 
     def allocate_arrays(self, q: NDArray) -> None:
         super().allocate_arrays(q)
-        if self.q_itf_x1 is None or self.q_itf_x1.dtype != q.dtype:
+        if self.workspace_needs_allocation(self.q_itf_x1, q.dtype):
             itf_shape = q.shape[:4] + (2 * self.geom.num_solpts**2,)
             self.q_itf_x1 = torch.empty(itf_shape, dtype=q.dtype)
             self.q_itf_x2 = torch.empty_like(self.q_itf_x1)
@@ -105,7 +105,7 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
         itf_j_shape = (self.num_var,) + self.geom.itf_j_shape
         itf_k_shape = (self.num_var,) + self.geom.itf_k_shape
 
-        if self.f_itf_x1 is None or self.f_itf_x1.dtype != dtype:
+        if self.workspace_needs_allocation(self.f_itf_x1, dtype):
             self.pressure = torch.zeros_like(q[0])
             self.log_p = torch.zeros_like(q[0])
 
@@ -387,7 +387,7 @@ class RHSDirecFluxReconstruction_mpi_v2(RHSDirecFluxReconstruction):
         itf_j_shape = (self.num_var,) + self.geom.itf_j_shape
         itf_k_shape = (self.num_var,) + self.geom.itf_k_shape
 
-        if self.f_itf_x1 is None or self.f_itf_x1.dtype != dtype:
+        if self.workspace_needs_allocation(self.f_itf_x1, dtype):
             self.pressure = torch.zeros_like(q[0])
             self.log_p = torch.zeros_like(q[0])
 
