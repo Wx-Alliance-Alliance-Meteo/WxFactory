@@ -2,10 +2,10 @@ numpy
 scipy
 sympy
 mpi4py
-pybind11
+torch
+packaging
 netcdf4
 matplotlib
-setuptools
 xarray
 
 # GPU support requires a CUDA-enabled PyTorch build compatible with the system CUDA driver.
