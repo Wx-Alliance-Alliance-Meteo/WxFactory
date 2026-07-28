@@ -24,7 +24,7 @@
                     "type": "str",
                     "selectables": ["double", "single"],
                     "default": "double",
-                    "description": "Floating-point precision of the whole computation. Single precision halves the memory footprint and bandwidth (letting finer resolutions fit on a GPU), at the cost of accuracy"
+                    "description": "Runtime floating-point precision. Single precision halves state/operator storage and runtime bandwidth at the cost of accuracy; grid-dependent operators and initial metric terms are constructed in double precision before being cast."
                 },
                 {
                     "name": "initial_condition",
@@ -299,7 +299,8 @@
                     "name": "discretization",
                     "type": "str",
                     "default": "dg",
-                    "selectables": ["dg", "fv"]
+                    "selectables": ["dg"],
+                    "description": "Direct flux reconstruction / discontinuous Galerkin spatial discretization. No finite-volume RHS is currently available."
                 },
                 {
                     "name": "advection_only",
@@ -437,15 +438,6 @@
                     "selectables": ["none"]
                 },
                 {
-                    "name": "kiops_dt_factor",
-                    "type": "float",
-                    "default": 1.1,
-                    "dependency": {
-                        "name": "mg_smoother",
-                        "values": ["kiops"]
-                    }
-                },
-                {
                     "name": "verbose_precond",
                     "type": "int",
                     "default": 0}
@@ -495,7 +487,7 @@
                     "type": "str",
                     "default": "netcdf",
                     "selectables": ["netcdf", "fst"],
-                    "description": "Desired format to use for storing simulation results."
+                    "description": "Cubed-sphere output format. netcdf requires netCDF4; fst additionally requires the external rmn and georef packages. Cartesian output uses its image writer regardless of this setting."
                 }
             ]
         },

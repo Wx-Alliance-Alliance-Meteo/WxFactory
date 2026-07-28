@@ -120,7 +120,6 @@ class Configuration:
     initial_condition: str
     initial_conditions_file: str
     jacobian_method: str
-    kiops_dt_factor: float
     krylov_mmax: int
     krylov_size: int
     lambda0: float

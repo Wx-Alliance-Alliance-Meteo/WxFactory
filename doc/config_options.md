@@ -4,7 +4,7 @@
 | | | | | |
  | **[General]**         | **Type**  | **Default**  | **Valid range**           | **Description**  |
    | equations             | lc-str  | [none]  | {euler, shallow_water}           |   |
-   | precision             | lc-str  | double  | {double, single}                 | Floating-point precision of the whole computation. Single precision halves the memory footprint and bandwidth (letting finer resolutions fit on a GPU), at the cost of accuracy  |
+   | precision             | lc-str  | double  | {double, single}                 | Runtime floating-point precision. Single precision halves state/operator storage and runtime bandwidth at the cost of accuracy; grid-dependent operators and initial metric terms are constructed in double precision before being cast.  |
    | initial_condition     | lc-str  |         |                                  |   |
    | time_start            | lc-str  |         |                                  |   |
    | time_end              | lc-str  |         |                                  |   |
@@ -51,7 +51,7 @@
  | **[Grid]**            | **Type**  | **Default**  | **Valid range**           | **Description**  |
    | grid_file             | lc-str  |         |                                  |   |
    | lateral_boundary      | lc-str  | donor_cell  | {donor_cell, wall, periodic}  | Lateral (horizontal) boundary treatment. donor_cell exchanges traces with the neighbouring tile (the cubed sphere's inter-panel donor cell); wall reflects the tile's own boundary trace (solid wall); periodic wraps the tile to its opposite edge. The cubed sphere always uses donor_cell; wall/periodic are for cartesian grids.  |
-   | discretization        | lc-str  | dg      | {dg, fv}                         |   |
+   | discretization        | lc-str  | dg      | {dg}                             | Direct flux reconstruction / discontinuous Galerkin spatial discretization. No finite-volume RHS is currently available.  |
    | advection_only        | lc-str  | auto    | {auto, on, off}                  | Whether the Euler dynamics are frozen and only passive advection is integrated. 'auto' derives it from the DCMIP case number (cases <= 13 are advection tests); 'on'/'off' force it. Cartesian grids are always fully dynamical.  |
    | grid_type             | lc-str  | [none]  | {cubed_sphere, cartesian3d}      |   |
    | lambda0               | angle24  | [none]  |                                 | Longitude in radians of the central point of panel 0  |
@@ -71,7 +71,6 @@
  | **[Preconditioning]**  | **Type**  | **Default**  | **Valid range**          | **Description**  |
    | preconditioner        | lc-str  | none    | {none}                           |   |
    | verbose_precond       | int   | 0         |                                  |   |
-   | kiops_dt_factor       | float  | 1.1      |                                  |   |
 | | | | | |
  | **[Output_options]**  | **Type**  | **Default**  | **Valid range**           | **Description**  |
    | stat_freq             | int   | 0         |                                  | Frequency in timesteps at which to print block stats  |
@@ -80,7 +79,7 @@
    | output_dir            | cs-str  | results  |                                 | Directory where to store all the output  |
    | base_output_file      | cs-str  | out     |                                  | Name of file where to store the solution  |
    | store_total_time      | str_to_bool  | False  |                              | Whether to output total runtime in seconds to a file  |
-   | output_format         | lc-str  | netcdf  | {netcdf, fst}                    | Desired format to use for storing simulation results.  |
+   | output_format         | lc-str  | netcdf  | {netcdf, fst}                    | Cubed-sphere output format. netcdf requires netCDF4; fst additionally requires the external rmn and georef packages. Cartesian output uses its image writer regardless of this setting.  |
 | | | | | |
  | **[Post_processing]**  | **Type**  | **Default**  | **Valid range**          | **Description**  |
    | enable_schar_mountain  | str_to_bool  | False  |                             | Enable Schar wave mountains to grow (stabilisation issue)  |

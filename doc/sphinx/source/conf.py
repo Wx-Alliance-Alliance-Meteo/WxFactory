@@ -3,12 +3,9 @@
 import os
 import pathlib
 import sys
-import itertools
-
 root = pathlib.Path(__file__).parents[3].resolve().as_posix()
 
 sys.path.insert(0, root)
-sys.path.append(os.path.join(root, "wx_factory"))
 
 # Configuration file for the Sphinx documentation builder.
 #
@@ -19,9 +16,9 @@ sys.path.append(os.path.join(root, "wx_factory"))
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 project = "WxFactory"
-copyright = "2025, ECCC"
+copyright = "2023–2026, ECCC"
 author = "ECCC"
-release = "0.1"
+release = "development"
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
@@ -35,11 +32,7 @@ extensions = [
 ]
 
 autosummary_generate = True
-autosummary_mock_imports = [
-    "precondition.preconditioner_dg",
-    "precondition.preconditioner_fv",
-    "rhs.rhs",
-]
+autosummary_mock_imports = []
 autodoc_default_options = {
     # "members": True,
     # "undoc-members": True,
