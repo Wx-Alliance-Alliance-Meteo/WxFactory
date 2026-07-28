@@ -1,110 +1,59 @@
 # Testing
 
-A growing set of tests is available that cover more and more of WxFactory's functionality. The testing infrastructure is under active development and the way tests are organized is likely to change as progress continues on the project.
+WxFactory uses `unittest` with a small MPI-aware compatibility layer. Run commands from the
+repository root.
 
-## Manual execution
+## Complete test suite
 
-A script is provided to run most availables tests. From the project root directory, run
-```
+```bash
 ./tests/run_all_tests.sh
 ```
 
-The tests are divided into 3 categories, which can be run individually:
-### Single-process unit tests:
+This runs the single-process unit tests, the 24-rank MPI unit tests, and the configured integration
+tests. The MPI tests require an MPI installation and enough ranks for the selected cases.
 
-`./tests/unit/run_tests.py`
+## Individual suites
 
-These tests include some that run on a GPU. GPU tests are skipped if we are unable to initialize the GPU portion of WxFactory.
+Single-process unit tests:
 
-### Multi-process unit tests
+```bash
+./tests/unit/run_tests.py
+```
 
-`mpirun -n [number of processes] ./tests/unit/run_mpi_tests.py`
+MPI unit tests (six ranks are sufficient for the required cases; additional 24- and 54-rank cases
+are enabled when enough ranks are supplied):
 
-They need at least 6 processes
+```bash
+mpirun -n 6 ./tests/unit/run_mpi_tests.py
+```
 
-### Integration tests
+Integration tests:
 
-`./tests/integration/run_all_integration_tests.sh`
+```bash
+./tests/integration/run_all_integration_tests.sh
+```
 
-These tests run a certain configuration for several time steps and verify that the result corresponds to a reference.
-
-Additionally, there is a set of tests that tries to run a variety of configurations simply to check that
-they don't crash, without verifying the result: `./tests/integration/quick_test.sh`.
-These are not included in the `run_all_tests.sh` script; they will eventually become part of the regular
-integration tests.
-
+Both unit-test entry points accept an optional regular expression to select tests and
+`--no-buffer` to show captured output.
 
 ## Test framework
 
-We built a compatibility layer between MPI and Unittest for running tests that requires multiple processes. The layer include a test runner and a utility function to artificially reduce the number of processes for a given test (`tests/mpi_test.py`).
+`WxTestCase` in `tests/unit/wx_test.py` creates the requested PyTorch device for a test. CPU is the
+default. Tests instantiated with `device_name="cuda"` are skipped when CUDA is unavailable.
 
-### How to use the runner
+`MpiTestCase` and `run_test_on_x_process` in `tests/unit/mpi_test.py` restrict a test to a requested
+number of ranks. Optional tests are skipped when too few ranks are available. The returned
+communicator is stored as `MpiTestCase.comm`; callers that create a communicator directly are
+responsible for disconnecting it.
 
-When you create a new entrypoint for a test (ex: `run_tests.py` or `run_mpi_test.py`), you need this snippet of code :
-```python
-from mpi_test import TestRunner
+The suite runners combine results from all participating ranks so an error or failure on any rank
+fails the test.
 
-...
+## Adding tests
 
-def main():
-    # This is the runner. You just need to replace the original Unittest runner to convert a standard test to a MPI test
-    runner = MpiRunner()
-    runner.run("""Your tests go here""")
-```
-
-### How to convert a test
-
-To convert a test to use the MPI layer and that need a defined number of processes, add the following code to a test case (either in the test or the setup) :
-
-```python
-from mpi_test import run_test_on_x_process
-
-...
-
-class Test(...):
-...
-    def test_...(self):
-        comm = run_test_on_x_process(self, """Number of required processes here""")
-        ...
-```
-
-The function either give you a new communicator to give to your function to test or skip the test for the extra processes. If you don't have enough processes to run the test, the test is skipped on every process. Don't forget to disconnect the communicator at the end of the test.
-
-### Utility code
-
-#### ndarray_generator
-
-This file contains utility functions to generate matrixes and vectors per device. The return list has the same size as the device list. Each item return is mapped to its corresponding device (the array is on the device with the same index).
-
-#### cpu_test
-
-In the file, there is a test case class that you can inherit your test case from. This test case create a CPU_Device when setting up the test.
-
-#### gpu_test
-
-In the file, there is a test case class that you can inherit your test case from. This test case create a CPU_Device and a CUDA_Device when setting up the test. It also skip the test when no cuda device can be found.
-
-## Test contribution
-
-There are no conventions yet, but here are our recommendations :
-* Each test file (file that contains tests) should start with `test_{name of the function}`
-* Each test case should start with `test_{whatever you are testing}`
-* If possible, use already created entrypoints
-* To add an integration test, add a line in the `run_all_integration_tests.sh`
-
-## Validation
-
-### Pour les configs dans tests/data/integration/dcmip{21,31}
-* run WxFactory on this config (up to ~40 min)
-* python ./scripts/generate_potential_temperature_plot.py DATA_PATH.nc
-* comparer avec Figure 8 - potential temperature
-* python ./scripts/generate_hovmoller_diagram DATA_PATH.nc
-* comparer avec Fig 9 - hovmoller diagram of potential temperature
-* 
-* mpirun -n 6 ./scripts/convert_to_old.py converti à l'ancien layout - non utilis/
-
-### TODO
-* une fois que c'est fait, rouler les *gros* tests dans tests/data/validation
-* Vérifier que c,est les mêmes résultats que ceux dans tests/data/integration/dcmip31
-* Stocker le résultat dans le dépôt
-* Vérifier que ça roule sur GPU
+- Name test modules `test_<subject>.py` and methods `test_<behavior>`.
+- Prefer an existing runner and register new test cases in `tests/unit/run_tests.py` or
+  `tests/unit/run_mpi_tests.py`.
+- Add integration cases to `tests/integration/run_all_integration_tests.sh`.
+- Test both CPU and CUDA when behavior is device-sensitive.
+- Keep required test data under `tests/data/` and use paths relative to the repository root.

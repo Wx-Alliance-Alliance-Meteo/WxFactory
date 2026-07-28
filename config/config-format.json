@@ -141,7 +141,8 @@
                 {
                     "name": "exponential_solver",
                     "type": "str",
-                    "default": "pmex"
+                    "default": "pmex",
+                    "description": "Registered exponential-system solver. Built-ins are pmex, pmex_ne, kiops, and exode."
                 },
                 {
                     "name": "exode_method",

@@ -42,6 +42,17 @@ class PrecisionConstructionTestCases(WxTestCase):
         filter_single = single.make_filter_3d(36.0, 8, 0.25, geom)
         self.assertTrue(torch.equal(filter_single, filter_double.to(torch.float32)))
 
+        # A cutoff at the documented upper bound is a valid identity filter.
+        identity_filter = double.make_filter_3d(36.0, 8, 1.0, geom)
+        self.assertTrue(
+            torch.allclose(
+                identity_filter,
+                torch.eye(geom.num_solpts**3, dtype=torch.float64),
+                atol=2.0e-14,
+                rtol=0.0,
+            )
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

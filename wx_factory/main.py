@@ -24,7 +24,7 @@ class _ConfigOptionsAction(argparse.Action):
 
         schema = load_default_schema()
         if values == "md":
-            print(f"{schema.to_string(True)}")
+            print(f"# WxFactory configuration options\n{schema.to_string(True)}")
         else:
             print(f"Config options:\n{schema.to_string(False)}")
 

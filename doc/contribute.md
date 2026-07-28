@@ -7,7 +7,7 @@ The two branches that may be used by everyone are `main` and `dev`
 1. Create a new branch, starting from `main` or from `dev`, with a name that fits your project.
 2. During your work, commit frequently in your branch.
 3. Write tests to verify that your code works. Please include these tests in the commits (we have a directory just for that!)
-4. Open a merge request from your branch to a the one from which you started.
+4. Open a pull request from your branch to the branch from which you started.
 
 ## Configuration options
 
@@ -23,6 +23,23 @@ python -m wx_factory.common.config_hints --write
 
 and commit the change. A unit test (and the `checks` CI workflow) runs
 `python -m wx_factory.common.config_hints --check` and will fail if the annotations are stale.
+
+Regenerate the human-readable option table from the same schema after changing it:
+
+```
+wxfactory config/case1.ini --config-options md > doc/config_options.md
+```
+
+The command requires a valid configuration path because it shares the normal command-line parser.
+
+## Numerical precision
+
+Grid coordinates, metric terms, Gauss–Legendre quadrature, DFR operators, and modal filters are
+constructed in `float64`. Completed arrays are cast once to the precision selected by the
+configuration. Preserve this double-build/working-precision boundary when adding derived spatial
+operators: it avoids baking construction roundoff into single-precision coefficients without
+increasing runtime storage. State-dependent fluxes and work arrays should normally remain in the
+configured working precision.
 
 ## Extending WxFactory
 

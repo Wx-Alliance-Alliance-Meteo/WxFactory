@@ -205,8 +205,8 @@ class DFROperators:
             raise ValueError("The exponential-filter strength must be non-negative")
         if order <= 0 or order % 2:
             raise ValueError("The exponential-filter order must be a positive even integer")
-        if not 0.0 <= cutoff < 1.0:
-            raise ValueError("The exponential-filter cutoff must lie in [0, 1)")
+        if not 0.0 <= cutoff <= 1.0:
+            raise ValueError("The exponential-filter cutoff must lie in [0, 1]")
 
         build_dtype = torch.float64
         modes = torch.arange(geom.num_solpts, dtype=build_dtype) / (geom.num_solpts - 1)

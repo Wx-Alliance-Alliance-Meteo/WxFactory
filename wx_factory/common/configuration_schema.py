@@ -78,7 +78,7 @@ def make_str(items, markdown: bool = False, header: bool = False):
     if markdown:
         result += " | "
 
-    return result
+    return result.rstrip()
 
 
 class ConfigFieldRange:
