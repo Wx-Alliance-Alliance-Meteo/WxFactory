@@ -4,7 +4,6 @@
 | | | | | |
  | **[General]**         | **Type**  | **Default**  | **Valid range**           | **Description**  |
    | equations             | lc-str  | [none]  | {euler, shallow_water}           |   |
-   | precision             | lc-str  | double  | {double, single}                 | Runtime floating-point precision. Single precision halves state/operator storage and runtime bandwidth at the cost of accuracy; grid-dependent operators and initial metric terms are constructed in double precision before being cast.  |
    | initial_condition     | lc-str  |         |                                  |   |
    | time_start            | lc-str  |         |                                  |   |
    | time_end              | lc-str  |         |                                  |   |
@@ -12,6 +11,7 @@
 | | | | | |
  | **[System]**          | **Type**  | **Default**  | **Valid range**           | **Description**  |
    | pytorch_device        | lc-str  | cuda    | {cuda, cpu}                      | Where the computation puts its tensors. Falls back to the CPU if no GPU is available  |
+   | precision             | lc-str  | double  | {double, mixed}                  | Runtime floating-point mode. Mixed precision stores the model state and most runtime arrays in single precision, constructs static spatial coefficients in double precision before casting, and selectively uses double precision for accuracy-sensitive solver operations.  |
 | | | | | |
  | **[Test_case]**       | **Type**  | **Default**  | **Valid range**           | **Description**  |
    | case_number           | int   | -1        |                                  |   |

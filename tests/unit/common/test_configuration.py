@@ -14,6 +14,16 @@ config_test_dir = self_dir
 
 
 class ConfigurationTestCases(WxTestCase):
+    def test_main_precision_option(self):
+        schema_file = os.path.join(config_test_dir, "../../../config/config-format.json")
+        schema = ConfigurationSchema(readfile(schema_file))
+        precision = next(field for field in schema.fields if field.name == "precision")
+
+        self.assertEqual(precision.section, "System")
+        self.assertTrue(precision.validate("double"))
+        self.assertTrue(precision.validate("mixed"))
+        self.assertFalse(precision.validate("single"))
+
     def test_load_configuration_with_schema_default(self):
         schema_str: str
         configuration_str: str

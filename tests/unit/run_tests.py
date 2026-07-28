@@ -68,6 +68,7 @@ def load_tests(test_name: str):
     add_test(suite, ConfigurationTestCases("test_load_configuration_with_invalid_values"), test_re)
     add_test(suite, ConfigurationTestCases("test_load_configuration_with_dependency"), test_re)
     add_test(suite, ConfigurationTestCases("test_load_configuration_with_expression"), test_re)
+    add_test(suite, ConfigurationTestCases("test_main_precision_option"), test_re)
 
     add_test(suite, ConfigHintsTestCases("test_type_hints_are_up_to_date"), test_re)
 

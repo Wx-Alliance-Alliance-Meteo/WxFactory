@@ -20,13 +20,6 @@
                     }
                 },
                 {
-                    "name": "precision",
-                    "type": "str",
-                    "selectables": ["double", "single"],
-                    "default": "double",
-                    "description": "Runtime floating-point precision. Single precision halves state/operator storage and runtime bandwidth at the cost of accuracy; grid-dependent operators and initial metric terms are constructed in double precision before being cast."
-                },
-                {
                     "name": "initial_condition",
                     "type": "str",
                     "default": ""
@@ -52,6 +45,13 @@
                     "selectables": ["cuda", "cpu"],
                     "default": "cuda",
                     "description": "Where the computation puts its tensors. Falls back to the CPU if no GPU is available"
+                },
+                {
+                    "name": "precision",
+                    "type": "str",
+                    "selectables": ["double", "mixed"],
+                    "default": "double",
+                    "description": "Runtime floating-point mode. Mixed precision stores the model state and most runtime arrays in single precision, constructs static spatial coefficients in double precision before casting, and selectively uses double precision for accuracy-sensitive solver operations."
                 }
             ]
         },

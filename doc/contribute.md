@@ -35,12 +35,14 @@ The command requires a valid configuration path because it shares the normal com
 ## Numerical precision
 
 Initial grid coordinates and metric terms, Gauss–Legendre quadrature, DFR operators, and modal
-filters are constructed in `float64`. Completed arrays are cast once to the precision selected by
-the configuration. Preserve this double-build/working-precision boundary when adding static
-derived spatial operators: it avoids baking construction roundoff into single-precision
-coefficients without increasing runtime storage. State-dependent fluxes, work arrays, and metrics
-rebuilt after a time-dependent geometry update normally remain in the configured working
-precision.
+filters are constructed in `float64`. In `precision = mixed` mode, completed arrays are cast once
+to `float32`; the model state and most runtime arrays also use `float32`. Accuracy-sensitive solver
+operations—including selected reductions, small bookkeeping matrices, and iterative-refinement
+residuals—use `float64`. The `precision = double` mode retains `float64` throughout. Preserve the
+double-build/working-precision boundary when adding static derived spatial operators: it avoids
+baking construction roundoff into single-precision coefficients without increasing runtime
+storage. State-dependent fluxes, work arrays, and metrics rebuilt after a time-dependent geometry
+update normally remain in the configured working precision.
 
 ## Extending WxFactory
 

@@ -1,25 +1,29 @@
 import sys
 from time import time
-from typing import List, Dict, Type
 
-from mpi4py import MPI
 import numpy
-
+import torch
+from mpi4py import MPI
 
 from ..common import Configuration
 from ..device import Device, PytorchDevice
 from ..geometry import DFROperators, GeometryContext, resolve_geometry
-from ..init.init_state_vars import init_state_vars
-from ..integrators import Integrator, resolve as _resolve_integrator
-from ..output.registry import OutputContext, resolve_output
-from ..output.input_manager import InputManager
-from ..rhs.rhs_selector import RhsContext, resolve_rhs
-from ..precondition import PreconditionerContext, resolve_preconditioner
-import torch
-from ..wx_mpi import SingleProcess, Conditional
-from ..step_hooks import StepHook
-from ..step_hooks.registry import PHASE_GEOMETRY, PHASE_STATE, StepHookContext, resolve_step_hooks
 from ..init.export_era5_all import export_era5_all_timesteps
+from ..init.init_state_vars import init_state_vars
+from ..integrators import Integrator
+from ..integrators import resolve as _resolve_integrator
+from ..output.input_manager import InputManager
+from ..output.registry import OutputContext, resolve_output
+from ..precondition import PreconditionerContext, resolve_preconditioner
+from ..rhs.rhs_selector import RhsContext, resolve_rhs
+from ..step_hooks import StepHook
+from ..step_hooks.registry import (
+    PHASE_GEOMETRY,
+    PHASE_STATE,
+    StepHookContext,
+    resolve_step_hooks,
+)
+from ..wx_mpi import Conditional, SingleProcess
 
 
 class Simulation:
@@ -34,7 +38,7 @@ class Simulation:
     """
 
     config: Configuration
-    step_hooks: Dict[Type, StepHook]
+    step_hooks: dict[type, StepHook]
 
     def __init__(
         self,
@@ -59,7 +63,7 @@ class Simulation:
         elif isinstance(config, str):
             self.config = InputManager.read_config(config, self.comm)
         else:
-            raise ValueError(
+            raise TypeError(
                 f"Need to provide either a Configuration or a config file name to create a Simulation\n"
                 f"(Gave a {type(config)})"
             )
@@ -100,9 +104,10 @@ class Simulation:
         self._adjust_num_elements()
         self.device = self._make_device()
 
-        # Choose the floating-point precision of the whole computation. Single precision halves the
-        # memory footprint, which is what lets the finer resolutions fit on a GPU.
-        if self.config.precision == "single":
+        # Mixed mode stores the model state and most runtime arrays in float32. Static spatial
+        # coefficients are constructed in float64 before casting, and accuracy-sensitive solver
+        # operations selectively retain or accumulate in float64.
+        if self.config.precision == "mixed":
             self.device.real_dtype = torch.float32
             self.device.complex_dtype = torch.complex64
         else:
@@ -279,7 +284,9 @@ class Simulation:
                         " to read initial state for that step. Will start from 0 instead."
                         f"\n{e}"
                     )
-            except Exception as e:
+            # Restart loading crosses file, NumPy, backend, and MPI boundaries. Any failure must
+            # fall back consistently on every rank rather than leave some ranks inside a collective.
+            except Exception as e:  # noqa: BLE001
                 print(f"{self.rank} Fail with other ({type(e)})", flush=True)
 
         return self.initial_state.Q, 0
@@ -302,4 +309,4 @@ class Simulation:
         error_detected_out = numpy.zeros_like(error_detected)
         self.comm.Allreduce(error_detected, error_detected_out, MPI.MAX)
         if error_detected_out[0] > 0:
-            raise ValueError(f"NaN")
+            raise ValueError("NaN")
