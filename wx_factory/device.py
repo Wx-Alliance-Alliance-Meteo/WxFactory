@@ -67,6 +67,9 @@ class Device:
         if comm.rank == 0:
             print(f"Pytorch backend running on {self.torch_device} (on rank {comm.rank})", flush=True)
 
+    def tensor(self, a) -> torch.Tensor:
+        return torch.tensor(a, device=self.torch_device)
+
     def synchronize(self, **kwargs):
         """Wait for the queued GPU work. A no-op when the tensors are already on the host."""
         if self.torch_device.type == "cuda":
@@ -74,7 +77,7 @@ class Device:
 
     def array(self, a: Any) -> torch.Tensor:
         """Bring an array-like onto this device as a tensor."""
-        return torch.asarray(a)
+        return torch.asarray(a, device=self.torch_device)
 
     def to_host(self, val: torch.Tensor, **kwargs) -> Any:
         """Copy a tensor back to the host as a NumPy array."""
@@ -89,7 +92,7 @@ class Device:
         return intervals
 
     @staticmethod
-    def get_default() -> Self:
+    def get_default() -> "Device":
         if Device._default is None:
             Device._default = Device(MPI.COMM_WORLD)
         return Device._default

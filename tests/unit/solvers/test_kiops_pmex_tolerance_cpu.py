@@ -1,23 +1,21 @@
-import torch
 import random
 
 from mpi4py import MPI
 from numpy import ndarray
+import torch
+from torch import Tensor
 
 from wx_factory.device import PytorchDevice
 from wx_factory.solvers.kiops import kiops
 from wx_factory.solvers.pmex import pmex
 
-import ndarray_generator
+import array_generator
 from wx_test import WxTestCase
 
 
 class KiopsPmexToleranceCpuTestCases(WxTestCase):
     tolerance: float
     rand: random.Random
-
-    kiops_matrix: ndarray
-    pmex_matrix: ndarray
 
     def setUp(self) -> None:
         super().setUp()
@@ -34,7 +32,7 @@ class KiopsPmexToleranceCpuTestCases(WxTestCase):
         self.tolerance = 1e-7
         self.rand = random.Random(seed)
 
-        [self.kiops_matrix, self.pmex_matrix] = ndarray_generator.generate_matrixes(
+        [self.kiops_matrix, self.pmex_matrix] = array_generator.generate_matrices(
             (initial_matrix_size, initial_matrix_size),
             self.rand,
             rand_min,
@@ -43,16 +41,13 @@ class KiopsPmexToleranceCpuTestCases(WxTestCase):
         )
 
     def test_compare_kiops_pmex(self):
-        def matvec_handle(v: ndarray) -> ndarray:
+        def matvec_handle(v: Tensor) -> Tensor:
             return v
 
-        w1: ndarray
-        w2: ndarray
+        w1, _ = kiops(self.cpu_device.tensor([1.0]), matvec_handle, self.kiops_matrix, self.tolerance, device=self.cpu_device)
+        w2, _ = pmex(self.cpu_device.tensor([1.0]), matvec_handle, self.pmex_matrix, self.tolerance, device=self.cpu_device)
 
-        w1, stats1 = kiops([1.0], matvec_handle, self.kiops_matrix, self.tolerance, device=self.cpu_device)
-        w2, stats2 = pmex([1.0], matvec_handle, self.pmex_matrix, self.tolerance, device=self.cpu_device)
-
-        shape: tuple[int, int] = w1.shape
+        shape = w1.shape
 
         self.assertEqual(len(w1.shape), 2, "Kiops didn't return a matrix")
         self.assertEqual(len(w2.shape), 2, "Pmex didn't return a matrix")

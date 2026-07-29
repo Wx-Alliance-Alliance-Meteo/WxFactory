@@ -1,8 +1,9 @@
 from collections.abc import Callable
 from time import time
 
-import torch
 from numpy.typing import NDArray
+import torch
+from torch import Tensor
 
 from ..device import Device
 from .dense import solve_triangular
@@ -10,7 +11,7 @@ from .global_operations import global_allreduce, global_dotprod, global_norm
 
 __all__ = ["fgmres"]
 
-MatvecOperator = Callable[[NDArray], NDArray]
+MatvecOperator = Callable[[Tensor], Tensor]
 
 
 def _ortho_1_sync_igs(Q: NDArray, R: NDArray, T: NDArray, K: NDArray, j: int, device: Device):
@@ -102,8 +103,8 @@ def rotg(a: float, b: float) -> tuple[float, float, float]:
 
 def fgmres(
     A: MatvecOperator,
-    b: NDArray,
-    x0: NDArray | None = None,
+    b: Tensor,
+    x0: Tensor | None = None,
     tol: float = 1e-5,
     restart: int = 20,
     maxiter: int | None = None,
@@ -112,7 +113,7 @@ def fgmres(
     verbose: int = 0,
     prefix: str = "",
     device: Device | None = None,
-) -> tuple[NDArray, float, float, int, int, list[tuple[float, float, float]]]:
+) -> tuple[Tensor, float, float, int, int, list[tuple[float, float, float]]]:
     """
     Solve the given linear system (Ax = b) for x, using the FGMRES algorithm.
 

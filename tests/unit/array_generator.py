@@ -1,12 +1,13 @@
-import torch
 import random
 
-from numpy import ndarray
+import torch
 
-from wx_factory.device import Device
+from wx_factory.device import PytorchDevice
 
 
-def generate_vectors(size: int, random: random.Random, min: float, max: float, devices: list[Device]) -> list[ndarray]:
+def generate_vectors(
+    size: int, random: random.Random, min: float, max: float, devices: list[PytorchDevice]
+) -> list[torch.Tensor]:
     """
     Generate a list of vectors
 
@@ -19,7 +20,7 @@ def generate_vectors(size: int, random: random.Random, min: float, max: float, d
     :return: List of vectors. Each vector is mapped to its corresponding device in `devices`. Each vector contains the same data
     """
 
-    arrs: list[ndarray] = [torch.empty(size, dtype=float) for device in devices]
+    arrs: list[torch.Tensor] = [torch.empty(size, dtype=float, device=d.torch_device) for d in devices]
 
     for it in range(size):
         nb: float = random.uniform(min, max)
@@ -30,22 +31,22 @@ def generate_vectors(size: int, random: random.Random, min: float, max: float, d
     return arrs
 
 
-def generate_matrixes(
-    size: tuple[int, int], random: random.Random, min: float, max: float, devices: list[Device]
-) -> list[ndarray]:
+def generate_matrices(
+    size: tuple[int, int], random: random.Random, min: float, max: float, devices: list[PytorchDevice]
+) -> list[torch.Tensor]:
     """
-    Generate a list of matrixes
+    Generate a list of matrices
 
-    :param size: Size of the matrixes
+    :param size: Size of the matrices
     :param random: Randomizer to use
-    :param min: Minimum of the matrixes, may not be in the results
-    :param max: Maximum of the matrixes, may not be in the results
+    :param min: Minimum of the matrices, may not be in the results
+    :param max: Maximum of the matrices, may not be in the results
     :param devices: List of device to create a matrix on
 
-    :return: List of matrixes. Each matrix is mapped to its corresponding device in `devices`. Each matrix contains the same data
+    :return: List of matrices. Each matrix is mapped to its corresponding device in `devices`. Each matrix contains the same data
     """
 
-    arrs: list[ndarray] = [torch.empty(size, dtype=float) for device in devices]
+    arrs: list[torch.Tensor] = [torch.empty(size, dtype=float, device=d.torch_device) for d in devices]
 
     for it1 in range(size[0]):
         for it2 in range(size[1]):

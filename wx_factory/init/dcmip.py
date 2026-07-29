@@ -1,5 +1,7 @@
-import torch
 import math
+
+import torch
+from torch import Tensor
 
 from ..common.configuration import Configuration
 from ..common.definitions import cpd, gravity, p0, Rd
@@ -693,11 +695,11 @@ def dcmip_schar_damping_coeffs(metric: Metric3DTopo, geom: CubedSphere3D, shear:
 
 
 def dcmip_schar_damping(
-    forcing: numpy.ndarray,
-    rho: numpy.ndarray,
-    u1: numpy.ndarray,
-    u2: numpy.ndarray,
-    u3: numpy.ndarray,
+    forcing: Tensor,
+    rho: Tensor,
+    u1: Tensor,
+    u2: Tensor,
+    u3: Tensor,
     metric: Metric3DTopo,
     geom: CubedSphere3D,
     shear: bool,
@@ -706,11 +708,11 @@ def dcmip_schar_damping(
 
     Parameters:
     -----------
-    forcing : numpy.ndarray
+    forcing : Tensor
        The RHS forcing variable as used by rhs_euler, which will be modified in-place to add
        the required Rayleigh damping.  This variable is in flux form (ρu1, ρu2, etc), so this
        function will calculate the required momentum fluxes.
-    rho, u1, u2, u3 : numpy.ndarray
+    rho, u1, u2, u3 : Tensor
        Input variables at the current timestemp
     metric : Metric3DTopo
        3D metric, used to convert velocities between contravariant and geophysical winds
@@ -887,8 +889,8 @@ def acoustic_wave(geom: CubedSphere3D, metric: Metric3DTopo):
     lat = geom.polar[1, ...]
     lon = geom.polar[0, ...]
     r = re * torch.arccos(torch.cos(lat) * torch.cos(lon))
-    f = numpy.where(r > rc, 0.0, (Δp / 2) * (1 + numpy.cos((math.pi * r) / rc)))
-    g = numpy.sin((eta_v * math.pi * r) / ztop)
+    f = torch.where(r > rc, 0.0, (Δp / 2) * (1 + torch.cos((math.pi * r) / rc)))
+    g = torch.sin((eta_v * math.pi * r) / ztop)
     p_perturb = f * g
     pressure = p_mean + p_perturb
 

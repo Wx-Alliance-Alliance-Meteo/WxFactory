@@ -3,16 +3,16 @@ from collections.abc import Callable
 
 import torch
 from mpi4py import MPI
-from numpy.typing import NDArray
+from torch import Tensor
 
 from ..device import Device
 from .dense import expm
 
 
 def kiops(
-    tau_out: NDArray,
-    A: Callable[[NDArray], NDArray],
-    u: NDArray,
+    tau_out: Tensor,
+    A: Callable[[Tensor], Tensor],
+    u: Tensor,
     tol: float = 1e-7,
     m_init: int = 10,
     mmin: int = 10,
@@ -20,7 +20,7 @@ def kiops(
     iop: int = 2,
     task1: bool = False,
     device: Device | None = None,
-) -> tuple[NDArray, tuple]:
+) -> tuple[Tensor, tuple]:
     """kiops(tstops, A, u; kwargs...) -> (w, stats)
 
     Evaluate a linear combinaton of the ``φ`` functions evaluated at ``tA`` acting on
@@ -66,9 +66,9 @@ def kiops(
     :return: `stats[4]` - Error estimate
     :return: `stats[5]` - the Krylov size of the last substep
     """
-
     if device is None:
         device = Device.get_default()
+
     comm = device.comm
     tau_out = device.array(tau_out)
     u = device.array(u)
@@ -89,8 +89,8 @@ def kiops(
     mpi_real = MPI.FLOAT if u.dtype == torch.float32 else MPI.DOUBLE
 
     # Preallocate matrix
-    V: NDArray = torch.zeros((mmax + 1, n + p), dtype=u.dtype)
-    H: NDArray = torch.zeros((mmax + 1, mmax + 1), dtype=u.dtype)
+    V = torch.zeros((mmax + 1, n + p), dtype=u.dtype)
+    H = torch.zeros((mmax + 1, mmax + 1), dtype=u.dtype)
 
     step = 0
     krystep = 0
@@ -108,8 +108,8 @@ def kiops(
     numSteps = len(tau_out)
 
     # Initial condition
-    w: NDArray = torch.zeros((numSteps, n), dtype=u.dtype)
-    w[0, :] = u[0, :].copy()
+    w = torch.zeros((numSteps, n), dtype=u.dtype)
+    w[0, :] = u[0, :].clone()
 
     # compute 1-norm of u
     local_normU = torch.sum(torch.abs(u[1:, :]), dim=1)
@@ -226,7 +226,7 @@ def kiops(
         H[0, j] = 1.0
 
         # Save h_j+1,j and remove it temporarily to compute the exponential of H
-        nrm = H[j, j - 1].copy()
+        nrm = H[j, j - 1].clone()
         H[j, j - 1] = 0.0
 
         # Compute the exponential of the augmented matrix

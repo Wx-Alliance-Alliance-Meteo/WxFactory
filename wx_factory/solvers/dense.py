@@ -6,12 +6,14 @@ and ``solve_triangular`` directly. Results come back as tensors on the host, mat
 exponential integrators (kiops / pmex / fgmres) expect.
 """
 
+from typing import Any
+
 import numpy
 import scipy.linalg
 import torch
 
 
-def _to_host(value):
+def _to_host(value: torch.Tensor | Any) -> numpy.ndarray:
     return value.detach().cpu().numpy() if isinstance(value, torch.Tensor) else numpy.asarray(value)
 
 
