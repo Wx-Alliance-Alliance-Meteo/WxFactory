@@ -1,13 +1,12 @@
-from typing import Optional
-
-from mpi4py import MPI
+import numpy
+import torch
 from numpy.typing import NDArray
 
-from ..common.definitions import idx_h, idx_hu1, idx_hu2, gravity
+from ..common.definitions import gravity, idx_h, idx_hu1, idx_hu2
 from ..geometry import CubedSphere2D, DFROperators, Metric2D
 from ..init.initialize import Topo
-from .rhs import RHS
 from ..process_topology import ProcessTopology
+from .rhs import RHS
 
 
 class RhsShallowWater(RHS):
@@ -18,7 +17,7 @@ class RhsShallowWater(RHS):
         operators_real: DFROperators,
         operators_complex: DFROperators,
         metric: Metric2D,
-        topo: Optional[Topo],
+        topo: Topo | None,
         ptopo: ProcessTopology,
     ):
         super().__init__(
@@ -46,7 +45,7 @@ class RhsShallowWater(RHS):
             for k in range(q.shape[1]):
                 rhs_k = super().__call__(q[:, k])
                 results.append(rhs_k)
-            return self.geom.device.xp.stack(results, axis=1)
+            return torch.stack(results, dim=1)
         else:
             return super().__call__(q)
 
@@ -54,8 +53,6 @@ class RhsShallowWater(RHS):
         return
 
     def solution_extrapolation(self, q: NDArray) -> None:
-        xp = self.geom.device.xp
-
         num_equations = q.shape[0]
         itf_i_shape = (num_equations,) + self.geom.itf_i_shape
         itf_j_shape = (num_equations,) + self.geom.itf_j_shape
@@ -66,10 +63,10 @@ class RhsShallowWater(RHS):
             Q_unpacked[idx_h] += self.topo.hsurf
 
         # Interpolate to the element interface (middle elements only, halo remains 0)
-        self.var_itf_i = xp.zeros(itf_i_shape, dtype=q.dtype)
+        self.var_itf_i = torch.zeros(itf_i_shape, dtype=q.dtype)
         self.var_itf_i[:, :, 1:-1, :] = Q_unpacked @ self.ops.extrap_x
 
-        self.var_itf_j = xp.zeros(itf_j_shape, dtype=q.dtype)
+        self.var_itf_j = torch.zeros(itf_j_shape, dtype=q.dtype)
         self.var_itf_j[:, 1:-1, :, :] = Q_unpacked @ self.ops.extrap_y
 
         # Unpack dynamical variables
@@ -114,9 +111,8 @@ class RhsShallowWater(RHS):
         )
 
     def pointwise_fluxes(self, q):
-        xp = self.geom.device.xp
-        self.f_x1 = xp.empty_like(q)
-        self.f_x2 = xp.empty_like(q)
+        self.f_x1 = torch.empty_like(q)
+        self.f_x2 = torch.empty_like(q)
 
         self.f_x1[idx_h] = self.metric.sqrtG * q[idx_hu1]
         self.f_x2[idx_h] = self.metric.sqrtG * q[idx_hu2]
@@ -183,24 +179,27 @@ class RhsShallowWater(RHS):
         #                   |
         #   west .  east -->|<-- west  .  east -->
         #                   |
-        xp = self.geom.device.xp
+        west = numpy.s_[..., 1:, : self.num_solpts]
+        east = numpy.s_[..., :-1, self.num_solpts :]
+        south = numpy.s_[..., 1:, :, : self.num_solpts]
+        north = numpy.s_[..., :-1, :, self.num_solpts :]
 
-        west = xp.s_[..., 1:, : self.num_solpts]
-        east = xp.s_[..., :-1, self.num_solpts :]
-        south = xp.s_[..., 1:, :, : self.num_solpts]
-        north = xp.s_[..., :-1, :, self.num_solpts :]
+        a = torch.sqrt(gravity * self.var_itf_i[idx_h] * self.metric.H_contra_11_itf_i)
+        # Only the meaningful half of each halo interface column is filled by the neighbour exchange;
+        # the other half stays h = hu = 0, so the division there would be 0/0. Divide only the
+        # selected entries: torch.where evaluates both branches, and torch.divide has no `where=`.
+        denom = self.var_itf_i[idx_h] * a
+        mask = torch.real(a) > 0.0
+        m = torch.zeros_like(denom)
+        m[mask] = self.var_itf_i[idx_hu1][mask] / denom[mask]
 
-        a = xp.sqrt(gravity * self.var_itf_i[idx_h] * self.metric.H_contra_11_itf_i)
-        m = xp.where(xp.real(a) > 0.0, self.var_itf_i[idx_hu1] / (self.var_itf_i[idx_h] * a), 0.0)
-
-        # Workaround for CuPy bug where n**2 is wrong when n is complex with a negative real value
         mw2 = (m[west] - 1.0) * (m[west] - 1.0)
         big_M = 0.25 * ((m[east] + 1.0) ** 2 - mw2)
 
-        self.flux_x1_itf = xp.zeros_like(self.var_itf_i)
+        self.flux_x1_itf = torch.zeros_like(self.var_itf_i)
         # ------ Advection part
-        self.flux_x1_itf[east] = self.metric.sqrtG_itf_i[east] * xp.where(
-            xp.real(big_M) > 0.0, big_M * a[east] * self.var_itf_i[east], big_M * a[west] * self.var_itf_i[west]
+        self.flux_x1_itf[east] = self.metric.sqrtG_itf_i[east] * torch.where(
+            torch.real(big_M) > 0.0, big_M * a[east] * self.var_itf_i[east], big_M * a[west] * self.var_itf_i[west]
         )
         # ------ Pressure part
         p11 = self.metric.sqrtG_itf_i * (0.5 * gravity) * self.metric.H_contra_11_itf_i * self.var_itf_i[idx_h] ** 2
@@ -212,17 +211,20 @@ class RhsShallowWater(RHS):
         self.flux_x1_itf[west] = self.flux_x1_itf[east]
 
         # Common AUSM fluxes
-        a = xp.sqrt(gravity * self.var_itf_j[idx_h] * self.metric.H_contra_22_itf_j)
-        m = xp.where(xp.real(a) > 0.0, self.var_itf_j[idx_hu2] / (self.var_itf_j[idx_h] * a), 0.0)
+        a = torch.sqrt(gravity * self.var_itf_j[idx_h] * self.metric.H_contra_22_itf_j)
+        # Same as above, for the south-north interfaces.
+        denom = self.var_itf_j[idx_h] * a
+        mask = torch.real(a) > 0.0
+        m = torch.zeros_like(denom)
+        m[mask] = self.var_itf_j[idx_hu2][mask] / denom[mask]
 
-        # Workaround for CuPy bug where n**2 is wrong when n is complex with a negative real value
         ms2 = (m[south] - 1.0) * (m[south] - 1.0)
         big_M = 0.25 * ((m[north] + 1.0) ** 2 - ms2)
 
-        self.flux_x2_itf = xp.zeros_like(self.var_itf_j)
+        self.flux_x2_itf = torch.zeros_like(self.var_itf_j)
         # ------ Advection part
-        self.flux_x2_itf[north] = self.metric.sqrtG_itf_j[north] * xp.where(
-            xp.real(big_M) > 0.0, big_M * a[north] * self.var_itf_j[north], big_M * a[south] * self.var_itf_j[south]
+        self.flux_x2_itf[north] = self.metric.sqrtG_itf_j[north] * torch.where(
+            torch.real(big_M) > 0.0, big_M * a[north] * self.var_itf_j[north], big_M * a[south] * self.var_itf_j[south]
         )
         # ------ Pressure part
         p12 = self.metric.sqrtG_itf_j * (0.5 * gravity) * self.metric.H_contra_12_itf_j * self.var_itf_j[idx_h] ** 2
@@ -237,8 +239,6 @@ class RhsShallowWater(RHS):
         self.df2_dx2[...] += self.flux_x2_itf[:, 1:-1, :, :] @ self.ops.correction_SN
 
     def forcing_terms(self, q: NDArray):
-        xp = self.geom.device.xp
-
         if self.topo is None:
             topo_dzdx1 = 0.0
             topo_dzdx2 = 0.0
@@ -249,7 +249,7 @@ class RhsShallowWater(RHS):
 
         # Add coriolis, metric and terms due to varying bottom topography
         # Note: christoffel_1_22 and metric.christoffel_2_11 are zero
-        forcing = xp.zeros_like(q)
+        forcing = torch.zeros_like(q)
         forcing[idx_hu1] = (
             2.0 * (self.metric.christoffel_1_01 * q[idx_hu1] + self.metric.christoffel_1_02 * q[idx_hu2])
             + self.metric.christoffel_1_11 * q[idx_hu1] * self.u1

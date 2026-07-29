@@ -1,0 +1,33 @@
+name: checks
+
+# Lightweight static checks that need neither MPI nor a GPU, so they run quickly on every push
+# and pull request. The full test suite (tests/run_all_tests.sh) needs an MPI runtime and is run
+# separately.
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+
+jobs:
+  static-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: python -m pip install numpy black
+
+      # Fails if configuration.py's generated type hints no longer match the schema. Fix with
+      # `python -m wx_factory.common.config_hints --write`.
+      - name: Configuration type hints are up to date
+        run: python -m wx_factory.common.config_hints --check
+
+      # Fails if any file is not black-formatted. Fix with `black --line-length 120 .`.
+      - name: Code is black-formatted
+        run: black --check --line-length 120 wx_factory tests scripts

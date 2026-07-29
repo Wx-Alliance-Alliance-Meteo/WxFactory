@@ -1,80 +1,140 @@
+import math
+from collections.abc import Callable
 from time import time
-from typing import Callable
 
 import numpy
-from scipy.sparse.linalg import LinearOperator
+import torch
 
 from ..common.configuration import Configuration
+from ..rhs.vertical_jacobian import (
+    assemble_j1_blocks_analytic,
+    block_thomas_solve,
+    col_to_state,
+    forcing_jac_prepare,
+    forcing_jvp,
+    j2_flux_matvec,
+    j2_prepare,
+    state_to_col,
+)
+from ..solvers import ExponentialSolverRequest, resolve_exponential_solver
 from .integrator import Integrator, SolverInfo
-from ..solvers import matvec_fun, pmex
 
 
 class PartRosExp2(Integrator):
-    def __init__(self, param: Configuration, rhs_full: Callable, rhs_imp: Callable, *, device=None, preconditioner=None):
-        super().__init__(param, device=device, preconditioner=preconditioner)
+    """Partitioned Rosenbrock-exponential (PartRosExp2, Dallerit et al. 2024).
 
-        self.rhs_full = rhs_full
-        self.rhs_imp = rhs_imp
+    Splits the right-hand side f = f1 + f2 with f1 the vertically-stiff part (vertical flux divergence
+    + gravity) and f2 the horizontal remainder, and advances
+
+        (I - h/2 J1) delta = h f1 + h phi1(h J2) [ f2 + h/2 J2 f1 ],   y_{n+1} = y_n + delta,
+
+    with J1 = df1/dy assembled analytically (exact derivative of the discrete f1) and solved directly
+    per column by block-Thomas, and J2 = df2/dy applied matrix-free inside a single PMEX phi1
+    evaluation. J1 is reassembled and refactored every step.
+    """
+
+    def __init__(
+        self,
+        param: Configuration,
+        rhs_full: Callable,
+        rhs_imp: Callable,
+        rhs_exp: Callable,
+        *,
+        device=None,
+        preconditioner=None,
+    ):
+        super().__init__(param, device=device, preconditioner=preconditioner)
+        self.rhs_full = rhs_full  # the RHS object: callable (full) and carrier of .implicit / geometry
+        self.rhs_imp = rhs_imp  # f1 = the vertically-stiff partition
+        self.rhs_exp = rhs_exp  # f2 = the horizontal partition (computed directly, not full - f1)
         self.tol = param.tolerance
-        self.gmres_restart = param.gmres_restart
+        self.jacobian_method = param.jacobian_method  # kept for config compatibility; J_exp is now fully analytic
+        self.krylov_mmax = param.krylov_mmax  # cap the exponential Krylov space (memory)
+        self.krylov_m = None  # previous step's final Krylov size, recycled as the next m_init (see __step__)
+        # Which solver evaluates phi_1(J_exp) @ vec (pmex / kiops / exode), honoured like in epi.py.
+        self.exponential_solver = param.exponential_solver
+        self.solve_exponential = resolve_exponential_solver(self.exponential_solver)
+        self.krylov_size = param.krylov_size  # kiops / pmex_ne restart size
+        self.exode_method = param.exode_method
+        self.exode_controller = param.exode_controller
+
+    def _apply_phi(self, J_exp: Callable, vec):
+        """Evaluate phi_1(J_exp) @ vec with the configured exponential solver."""
+        solver = self.exponential_solver
+
+        pmex_family = solver in ("pmex", "pmex_ne")
+        result = self.solve_exponential(
+            ExponentialSolverRequest(
+                [1.0],
+                J_exp,
+                vec,
+                self.tol,
+                self.krylov_mmax,
+                self.device,
+                krylov_minit=(self.krylov_m or 10) if pmex_family else self.krylov_size,
+                krylov_mmin=16 if solver in ("pmex_ne", "kiops") else 10,
+                exode_method=self.exode_method,
+                exode_controller=self.exode_controller,
+            )
+        )
+
+        if result.final_krylov_size is not None:
+            if pmex_family:
+                self.krylov_m = result.final_krylov_size
+            else:
+                self.krylov_size = math.floor(0.7 * result.final_krylov_size + 0.3 * self.krylov_size)
+
+        return result.value
 
     def __step__(self, Q: numpy.ndarray, dt: float):
+        rhsobj = self.rhs_full
 
-        rhs_full = self.rhs_full(Q)
-        rhs_imp = self.rhs_imp(Q)
-        f_imp = rhs_imp.flatten()
-        f_exp = (rhs_full - rhs_imp).flatten()
+        f1 = self.rhs_imp(Q)
+        f2 = self.rhs_exp(Q)  # horizontal partition, computed directly (no full - f1 cancellation)
+        j2_base = j2_prepare(self.rhs_full, Q)  # base state data for analytic J2, computed once per step
+        forcing_base = forcing_jac_prepare(self.rhs_full, Q)  # base data for the analytic forcing Jacobian
+        f_imp = f1.flatten()
+        f_exp = f2.flatten()
 
-        def J_full(v):
-            return matvec_fun(v, dt, Q, rhs_full, self.rhs_full)
-
-        def J_imp(v):
-            return matvec_fun(v, dt, Q, rhs_imp, self.rhs_imp)
-
+        # Exponential part: both the horizontal flux Jacobian and the non-stiff forcing Jacobian are
+        # applied analytically, so J_exp is finite-difference-free (no float32 FD noise, no per-matvec
+        # global reduction for the step scale).
         def J_exp(v):
-            return J_full(v) - J_imp(v)
+            vv = v.reshape(Q.shape)
+            jflux = j2_flux_matvec(self.rhs_full, Q, vv, j2_base)
+            jforcing = forcing_jvp(self.rhs_full, Q, vv, forcing_base)
+            return (dt * (jflux + jforcing)).flatten()
 
-        Q_flat = Q.flatten()
-        n = len(Q_flat)
-
-        vec = numpy.zeros((2, n))
+        n = f_imp.shape[0]
+        vec = torch.zeros((2, n), dtype=Q.dtype)
         vec[0, :] = 0.5 * f_imp
-        vec[1, :] = f_exp.copy()
+        vec[1, :] = f_exp
 
         tic = time()
-        phiv, stats = pmex([1.0], J_exp, vec, tol=self.tol, task1=False, device=self.device)
+        phiv = self._apply_phi(J_exp, vec)
         time_exp = time() - tic
-        if self.device.comm.rank == 0:
-            print(
-                f"PMEX convergence at iteration {stats[2]} (using {stats[0]} internal substeps"
-                f" and {stats[1]} rejected expm)"
-            )
 
+        # Implicit part
         tic = time()
-
-        def A(v):
-            return v - J_imp(v) / 2
-
-        b = (A(Q_flat) + (phiv + 0.5 * f_imp) * dt).flatten()
-        Q_x0 = Q_flat.copy()
-        Qnew, norm_r, norm_b, num_iter, flag, residuals = self._solve_linear(
-            A, b, x0=Q_x0, tol=self.tol, restart=self.gmres_restart,
-        )
+        rhs_delta = ((phiv.reshape(-1) + 0.5 * f_imp) * dt).reshape(Q.shape)
+        L, A, U = assemble_j1_blocks_analytic(rhsobj, Q)
+        bc = state_to_col(rhsobj, rhs_delta)
+        dc = block_thomas_solve(rhsobj, L, A, U, bc, dt)
+        delta = col_to_state(rhsobj, dc, rhs_delta)
         time_imp = time() - tic
 
-        self.solver_info = SolverInfo(flag, time_imp, num_iter, residuals)
-
+        self.solver_info = SolverInfo(0, time_imp, 1, [])
         if self.device.comm.rank == 0:
-            result_type = "convergence" if flag == 0 else "stagnation/interruption"
             print(
-                f"FGMRES {result_type} at iteration {num_iter} in {time_imp:4.1f} s to a solution with"
-                f" relative residual {norm_r/norm_b: .2e}"
+                f"PartRosExp2 direct column solve {time_imp:.3f} s ; exponential {time_exp:.3f} s",
+                flush=True,
             )
 
-            print(f"Elapsed time: exponential {time_exp:.3f} secs ; implicit {time_imp:.3f} secs")
+        return Q + delta
 
-        return numpy.reshape(Qnew, Q.shape)
 
 REGISTRY = {
-    "partrosexp2": lambda cfg, rhs, prec, dev: PartRosExp2(cfg, rhs.full, rhs.implicit, preconditioner=prec, device=dev),
+    "partrosexp2": lambda cfg, rhs, prec, dev: PartRosExp2(
+        cfg, rhs.full, rhs.implicit, rhs.explicit, preconditioner=prec, device=dev
+    ),
 }

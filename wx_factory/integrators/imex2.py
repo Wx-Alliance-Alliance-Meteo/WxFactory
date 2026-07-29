@@ -25,6 +25,7 @@ class Imex2(Integrator):
         # Update solution
         return Q + dt * (self.rhs_imp(Y1) + self.rhs_exp(Y1))
 
+
 REGISTRY = {
     "imex2": lambda cfg, rhs, prec, dev: Imex2(cfg, rhs.explicit, rhs.implicit, device=dev),
 }

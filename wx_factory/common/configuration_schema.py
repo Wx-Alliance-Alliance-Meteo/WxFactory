@@ -78,7 +78,7 @@ def make_str(items, markdown: bool = False, header: bool = False):
     if markdown:
         result += " | "
 
-    return result
+    return result.rstrip()
 
 
 class ConfigFieldRange:
@@ -268,43 +268,46 @@ class LastUpdatedOrderedDict(OrderedDict):
 
 
 def sort_fields_by_dependency(fields: list[ConfigurationField]) -> list[ConfigurationField]:
-    fields_dict: dict[str, ConfigurationField] = LastUpdatedOrderedDict()
+    """Order fields so that each dependency-gated field appears after the field it depends on.
+
+    Configuration reads options in this order, and a gated field is only read once the field it
+    depends on has been set (see Configuration._get_option), so its target must come first. Fields
+    without a dependency keep their original order; each field is emitted exactly once."""
+    resolved: dict[str, ConfigurationField] = LastUpdatedOrderedDict()
     sorted_fields: list[ConfigurationField] = []
     remainder: list[ConfigurationField] = []
 
-    previous_count = len(fields)
     for f in fields:
-        if f.name in fields_dict:
+        if f.name in resolved:
             raise ConfigValueError(f"Duplicate field name {f.name}")
 
         if f.dependency is None:
             sorted_fields.append(f)
-            fields_dict[f.name] = f
+            resolved[f.name] = f
         else:
             remainder.append(f)
 
-    current_count = len(remainder)
-    num_passes = 0
-    while current_count < previous_count and current_count > 0:
-        new_remainder = []
-        previous_count = current_count
+    # Repeatedly place each pending field whose dependency target has already been placed, until a
+    # full pass makes no progress.
+    progress = True
+    while remainder and progress:
+        progress = False
+        still_pending: list[ConfigurationField] = []
         for f in remainder:
-            if f.dependency[0] not in fields_dict:
-                # print(f"Field {f.name} depends on a field that does not exist {f.dependency[0]}")
-                new_remainder.append(f)
+            if f.dependency[0] in resolved:
+                sorted_fields.append(f)
+                resolved[f.name] = f
+                progress = True
             else:
-                fields_dict[f.name] = f
+                still_pending.append(f)
+        remainder = still_pending
 
-            sorted_fields.append(f)
-
-        remainder = new_remainder
-        current_count = len(remainder)
-        num_passes += 1
-
-    # print(f"sorted in {num_passes} passes")
+    # Whatever is left depends on a field that is never placed (missing target or a dependency
+    # cycle). Keep these rather than dropping them; Configuration skips them at runtime if their
+    # dependency turns out to be absent.
+    sorted_fields.extend(remainder)
 
     return sorted_fields
-    # return [f for _, f in fields_dict.items()]
 
 
 class ConfigurationSchema:

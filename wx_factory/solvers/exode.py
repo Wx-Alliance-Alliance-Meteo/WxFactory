@@ -1,7 +1,7 @@
 import math
-import numpy
 
-# from integrators.butcher import *
+import numpy
+import torch
 
 
 def exode(
@@ -14,22 +14,23 @@ def exode(
     atol=1e-6,
     task1=False,
     verbose=False,
+    device=None,
 ):
     # Import here to resolve circular import
-    from integrators.butcher import METHODS
+    from ..integrators.butcher import METHODS
 
     if not hasattr(exode, "first_step"):
         exode.first_step = τ_out  # TODO : use CFL condition ?
 
     # TODO : implement dense output for output at intermediate values of τ_out
 
-    ppo, n = u.shape
+    ppo, _n = u.shape
     p = ppo - 1
 
     if p == 0:
         p = 1
         # Add extra column of zeros
-        u = numpy.row_stack((u, numpy.zeros(len(u))))
+        u = torch.row_stack((u, torch.zeros(len(u), dtype=u.dtype)))
 
     y0 = u[0].copy()
 
@@ -42,7 +43,7 @@ def exode(
     method = method.upper()
 
     if method not in METHODS:
-        raise ValueError("`method` must be one of {}.".format(METHODS))
+        raise ValueError(f"`method` must be one of {METHODS}.")
     else:
         method = METHODS[method]
 
@@ -57,6 +58,7 @@ def exode(
         first_step=exode.first_step,
         rtol=rtol,
         atol=atol,
+        device=device,
     )
 
     ts = [t0]
@@ -92,26 +94,19 @@ def exode(
              numpy.savetxt(foutput, eigenvalues_imag, delimiter=",") 
          
          # Calculuate and save the eigenvalues to file. TODO: need better ways
-         #for i in range(matrix_size):
             #sys.stdout.write(str(eigenvalues[i].real) + " " )
          #sys.stdout.write("\n")
 
-         #for i in range(matrix_siz):
             #sys.stdout.write(str(eigenvalues[i].imag) + " " )
          #sys.stdout.write("\n")
          
-         #print("eigenvalues = ", eigenvalues) 
-         #numpy.savetxt('/home/siw001/gef/vicky/ADR_2D/testoutput/grid_size_160000/eigenvalues/ADR_2D_real_eig.csv', eigenvalues_real, delimiter=',')
-         #numpy.savetxt('/home/siw001/gef/vicky/ADR_2D/testoutput/grid_size_160000/eigenvalues/ADR_2D_real_eig.csv', eigenvalues_imag, delimiter=',')
          """
 
         elif solver.status == "failed":
             status = -1
             break
 
-        t_old = solver.t_old
         t = solver.t
-        y = solver.y
 
         ts.append(t)
 
@@ -126,9 +121,8 @@ def exode(
         solver.error_norm_old,
         solver.h_previous,
         solver.h,
-    )  # TODO
+    )
     # keep track of h_previous, use as first step for next iteration.
-    # print("previous step = ", stats[4], "final step = ", stats[5])
 
     exode.first_step = numpy.median(numpy.diff(ts))
 

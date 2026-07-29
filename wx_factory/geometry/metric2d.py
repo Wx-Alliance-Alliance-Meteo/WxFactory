@@ -1,7 +1,8 @@
 import numpy
-from mpi4py import MPI
+import torch
 
 from .cubed_sphere_2d import CubedSphere2D
+from .geometry import cast_double_arrays
 
 
 class Metric2D:
@@ -11,8 +12,6 @@ class Metric2D:
         # 3D Jacobian, for the cubed-sphere mapping
         # Note that with no topography, ∂z/∂η=1; the model top is included
         # inside the geometry definition, and η=x3
-
-        xp = geom.device.xp
 
         self.sqrtG = geom.earth_radius**2 * (1.0 + geom.X**2) * (1.0 + geom.Y**2) / (geom.delta2 * geom.delta)
         self.sqrtG_itf_i = (
@@ -31,7 +30,7 @@ class Metric2D:
         self.inv_sqrtG = 1.0 / self.sqrtG
 
         # 2D contravariant metric. Put them in the same array
-        self.h_contra = xp.empty((2, 2) + geom.X.shape, dtype=geom.dtype)
+        self.h_contra = torch.empty((2, 2) + geom.X.shape, dtype=geom.dtype)
         self.H_contra_11 = self.h_contra[0, 0]
         self.H_contra_12 = self.h_contra[0, 1]
         self.H_contra_21 = self.h_contra[1, 0]
@@ -165,3 +164,11 @@ class Metric2D:
         self.christoffel_2_12 *= 0.5 * geom.delta_x2
         self.christoffel_2_21 *= 0.5 * geom.delta_x2
         self.christoffel_2_22 *= 0.5 * geom.delta_x2
+
+        self.cast_to_working_precision(geom.working_dtype)
+        geom.cast_to_working_precision()
+
+    def cast_to_working_precision(self, dtype) -> None:
+        """Cast completed metric arrays and restore reciprocal identities in working precision."""
+        cast_double_arrays(self, dtype)
+        self.inv_sqrtG = 1.0 / self.sqrtG

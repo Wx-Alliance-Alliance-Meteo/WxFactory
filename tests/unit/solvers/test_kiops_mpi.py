@@ -1,14 +1,14 @@
-import unittest
-
+import torch
 from numpy import ndarray
 
-from wx_factory.device import CpuDevice
+from wx_factory.device import PytorchDevice
 from wx_factory.solvers import kiops
 
 from mpi_test import run_test_on_x_process
+from wx_test import WxTestCase
 
 
-class KiopsMpiTestCases(unittest.TestCase):
+class KiopsMpiTestCases(WxTestCase):
     tolerance: float
     matrix_size_multiplier: int
 
@@ -19,15 +19,15 @@ class KiopsMpiTestCases(unittest.TestCase):
 
     def test_kiops_mpi_2_processes(self):
         comm = run_test_on_x_process(self, 2)
-        device = CpuDevice(comm)
+        device = PytorchDevice(comm, "cpu")
         comm2 = comm.Split(comm.rank)
-        device2 = CpuDevice(comm2)
+        device2 = PytorchDevice(comm2, "cpu")
 
         def matvec_handle(v: ndarray) -> ndarray:
             return v
 
         size = comm.size * self.matrix_size_multiplier
-        full_matrix = device.xp.empty((size, size), dtype=float)
+        full_matrix = torch.empty((size, size), dtype=float)
 
         for i in range(size):
             for j in range(size):
@@ -43,8 +43,8 @@ class KiopsMpiTestCases(unittest.TestCase):
         w1, _ = kiops([1.0], matvec_handle, matrix, self.tolerance, device=device)
         w2, _ = kiops([1.0], matvec_handle, full_matrix, self.tolerance, device=device2)
 
-        diff = device.xp.linalg.norm(w1 - w2[0, from_index:to_index]).item()
-        norm = device.xp.linalg.norm(w1).item()
+        diff = torch.linalg.norm(w1 - w2[0, from_index:to_index]).item()
+        norm = torch.linalg.norm(w1).item()
 
         abs_diff = abs(diff)
 

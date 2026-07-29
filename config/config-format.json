@@ -40,28 +40,18 @@
             "name": "System",
             "fields": [
                 {
-                    "name": "desired_device",
+                    "name": "pytorch_device",
                     "type": "str",
-                    "selectables": ["cpp", "cuda", "cupy", "numpy", "omp", "torch"],
-                    "default": "cpp",
-                    "description": "Physical backend to run the computation on"
+                    "selectables": ["cuda", "cpu"],
+                    "default": "cuda",
+                    "description": "Where the computation puts its tensors. Falls back to the CPU if no GPU is available"
                 },
                 {
-                    "name": "cuda_devices",
-                    "type": "list-int",
-                    "default": [],
-                    "dependency": {
-                        "name": "desired_device",
-                        "values": ["cuda", "cupy"]
-                    },
-                    "description": "List of Nvidia physical devices to use"
-                },
-                {
-                    "name": "matmul_backend",
+                    "name": "precision",
                     "type": "str",
-                    "selectables": ["default", "nvmath"],
-                    "default": "default",
-                    "description": "Backend for matrix multiplication operations (default uses numpy/cupy, nvmath uses nvmath-python)"
+                    "selectables": ["double", "mixed"],
+                    "default": "double",
+                    "description": "Runtime floating-point mode. Mixed precision stores the model state and most runtime arrays in single precision, constructs static spatial coefficients in double precision before casting, and selectively uses double precision for accuracy-sensitive solver operations."
                 }
             ]
         },
@@ -111,7 +101,7 @@
                     "default": 0.0,
                     "dependency": {
                         "name": "grid_type",
-                        "values": ["cartesian2d"]
+                        "values": ["cartesian3d"]
                     }
                 },
                 {
@@ -139,7 +129,9 @@
                 },
                 {
                     "name": "tolerance",
-                    "type": "float"
+                    "type": "float",
+                    "default": 1e-7,
+                    "description": "Convergence tolerance of the implicit / exponential integrators' inner solver. Ignored by the explicit integrators (e.g. tvdrk3), which have no inner solve."
                 },
                 {
                     "name": "starting_step",
@@ -150,7 +142,7 @@
                     "name": "exponential_solver",
                     "type": "str",
                     "default": "pmex",
-                    "selectables": ["pmex", "pmex_ne", "kiops", "exode"]
+                    "description": "Registered exponential-system solver. Built-ins are pmex, pmex_ne, kiops, and exode."
                 },
                 {
                     "name": "exode_method",
@@ -168,6 +160,13 @@
                     "type": "int",
                     "default": 1,
                     "min": 0
+                },
+                {
+                    "name": "krylov_mmax",
+                    "type": "int",
+                    "default": 64,
+                    "min": 1,
+                    "description": "Largest Krylov subspace the exponential solver may build. The solver stores mmax+1 basis vectors of the full state, so this caps its memory; lowering it trades memory for more internal substeps."
                 },
                 {
                     "name": "jacobian_method",
@@ -234,79 +233,41 @@
                     "default": 1
                 },
                 {
-                    "name": "filter_apply",
-                    "type": "bool",
-                    "default": false
-                },
-                {
-                    "name": "filter_order",
-                    "type": "int",
-                    "default": 16,
-                    "dependency": {
-                        "name": "filter_apply",
-                        "values": [true]
-                    }
-                },
-                {
-                    "name": "filter_cutoff",
-                    "type": "float",
-                    "default": 0.25,
-                    "dependency": {
-                        "name": "filter_apply",
-                        "values": [true]
-                    }
-                },
-                {
                     "name": "expfilter_apply",
                     "type": "bool",
-                    "default": false
+                    "default": false,
+                    "description": "Apply an exponential modal filter to the metric-weighted conservative state after each time step."
                 },
                 {
                     "name": "expfilter_order",
                     "type": "int",
+                    "min": 2,
                     "dependency": {
                         "name": "expfilter_apply",
                         "values": [true]
-                    }
+                    },
+                    "description": "Positive even order of the exponential modal filter."
                 },
                 {
                     "name": "expfilter_cutoff",
                     "type": "float",
+                    "min": 0.0,
+                    "max": 1.0,
                     "dependency": {
                         "name": "expfilter_apply",
                         "values": [true]
-                    }
+                    },
+                    "description": "Normalized modal cutoff below which modes are left unchanged."
                 },
                 {
                     "name": "expfilter_strength",
                     "type": "float",
+                    "min": 0.0,
                     "dependency": {
                         "name": "expfilter_apply",
                         "values": [true]
-                    }
-                },
-                {
-                    "name": "apply_sponge",
-                    "type": "bool",
-                    "default": false
-                },
-                {
-                    "name": "sponge_tscale",
-                    "type": "float",
-                    "default": 1.0,
-                    "dependency": {
-                        "name": "apply_sponge",
-                        "values": [true]
-                    }
-                },
-                {
-                    "name": "sponge_zscale",
-                    "type": "float",
-                    "default": 0.0,
-                    "dependency": {
-                        "name": "apply_sponge",
-                        "values": [true]
-                    }
+                    },
+                    "description": "Strength alpha in the exponential modal-filter attenuation."
                 }
             ]
         },
@@ -321,17 +282,32 @@
                 {
                     "name": "grid_type",
                     "type": "str",
-                    "selectables": ["cubed_sphere", "cartesian2d"],
+                    "selectables": ["cubed_sphere", "cartesian3d"],
                     "dependency":{
                         "name": "grid_file",
                         "values": [""]
                     }
                 },
                 {
+                    "name": "lateral_boundary",
+                    "type": "str",
+                    "selectables": ["donor_cell", "wall", "periodic"],
+                    "default": "donor_cell",
+                    "description": "Lateral (horizontal) boundary treatment. donor_cell exchanges traces with the neighbouring tile (the cubed sphere's inter-panel donor cell); wall reflects the tile's own boundary trace (solid wall); periodic wraps the tile to its opposite edge. The cubed sphere always uses donor_cell; wall/periodic are for cartesian grids."
+                },
+                {
                     "name": "discretization",
                     "type": "str",
                     "default": "dg",
-                    "selectables": ["dg", "fv"]
+                    "selectables": ["dg"],
+                    "description": "Direct flux reconstruction / discontinuous Galerkin spatial discretization. No finite-volume RHS is currently available."
+                },
+                {
+                    "name": "advection_only",
+                    "type": "str",
+                    "default": "auto",
+                    "selectables": ["auto", "on", "off"],
+                    "description": "Whether the Euler dynamics are frozen and only passive advection is integrated. 'auto' derives it from the DCMIP case number (cases <= 13 are advection tests); 'on'/'off' force it. Cartesian grids are always fully dynamical."
                 },
                 {
                     "name": "lambda0",
@@ -370,11 +346,42 @@
                     }
                 },
                 {
+                    "name": "vertical_coord",
+                    "type": "str",
+                    "selectables": ["gal_chen", "sleve"],
+                    "default": "gal_chen",
+                    "dependency": {
+                        "name": "grid_type",
+                        "values": ["cubed_sphere"]
+                    },
+                    "description": "Terrain-following vertical coordinate. gal_chen decays the terrain linearly with height; sleve (Schar et al. 2002) decays the large- and small-scale parts of the terrain at different rates, so that small-scale features vanish faster aloft"
+                },
+                {
+                    "name": "sleve_scale_large",
+                    "type": "float",
+                    "default": 10000.0,
+                    "dependency": {
+                        "name": "vertical_coord",
+                        "values": ["sleve"]
+                    },
+                    "description": "SLEVE decay scale height s1 of the large-scale topography (m)"
+                },
+                {
+                    "name": "sleve_scale_small",
+                    "type": "float",
+                    "default": 2500.0,
+                    "dependency": {
+                        "name": "vertical_coord",
+                        "values": ["sleve"]
+                    },
+                    "description": "SLEVE decay scale height s2 of the small-scale topography (m). Should be well below sleve_scale_large"
+                },
+                {
                     "name": "x0",
                     "type": "float",
                     "dependency": {
                         "name": "grid_type",
-                        "values": ["cartesian2d"]
+                        "values": ["cartesian3d"]
                     }
                 },
                 {
@@ -382,7 +389,25 @@
                     "type": "float",
                     "dependency": {
                         "name": "grid_type",
-                        "values": ["cartesian2d"]
+                        "values": ["cartesian3d"]
+                    }
+                },
+                {
+                    "name": "y0",
+                    "type": "float",
+                    "default": 0.0,
+                    "dependency": {
+                        "name": "grid_type",
+                        "values": ["cartesian3d"]
+                    }
+                },
+                {
+                    "name": "y1",
+                    "type": "float",
+                    "default": 1000.0,
+                    "dependency": {
+                        "name": "grid_type",
+                        "values": ["cartesian3d"]
                     }
                 },
                 {
@@ -390,7 +415,7 @@
                     "type": "float",
                     "dependency": {
                         "name": "grid_type",
-                        "values": ["cartesian2d"]
+                        "values": ["cartesian3d"]
                     }
                 },
                 {
@@ -398,7 +423,7 @@
                     "type": "float",
                     "dependency": {
                         "name": "grid_type",
-                        "values": ["cartesian2d"]
+                        "values": ["cartesian3d"]
                     }
                 }
            ]
@@ -410,131 +435,12 @@
                     "name": "preconditioner",
                     "type": "str",
                     "default": "none",
-                    "selectables": ["none", "fv", "fv-mg", "p-mg", "lu", "ilu"]
-                },
-                {
-                    "name": "precond_flux",
-                    "type": "str",
-                    "default": "ausm",
-                    "selectables": ["ausm", "upwind", "rusanov"],
-                    "dependency": {
-                        "name": "preconditioner",
-                        "values": ["fv", "fv-mg", "p-mg"]
-                    }
-                },
-                {
-                    "name": "num_mg_levels",
-                    "type": "int",
-                    "default": 1,
-                    "min": 1,
-                    "dependency": {
-                        "name": "preconditioner",
-                        "values": ["fv-mg", "p-mg"]
-                    }
-                },
-                {
-                    "name": "precond_tolerance",
-                    "type": "float",
-                    "default": 1e-1,
-                    "dependency": {
-                        "name": "preconditioner",
-                        "values": ["fv", "fv-mg", "p-mg"]
-                    }
-                },
-                {
-                    "name": "num_pre_smoothe",
-                    "type": "int",
-                    "default": 1,
-                    "min": 0,
-                    "dependency": {
-                        "name": "preconditioner",
-                        "values": ["fv-mg", "p-mg"]
-                    }
-                },
-                {
-                    "name": "num_post_smoothe",
-                    "type": "int",
-                    "default": 1,
-                    "min": 0,
-                    "dependency": {
-                        "name": "preconditioner",
-                        "values": ["fv-mg", "p-mg"]
-                    }
-                },
-                {
-                    "name": "mg_smoother",
-                    "type": "str",
-                    "default": "exp",
-                    "selectables": ["exp", "kiops", "erk3", "erk1", "ark3"],
-                    "dependency": {
-                        "name": "preconditioner",
-                        "values": ["fv-mg", "p-mg"]
-                    }
-                },
-                {
-                    "name": "exp_smoothe_spectral_radii",
-                    "type": "list-float",
-                    "default": [2.0],
-                    "dependency": {
-                        "name": "mg_smoother",
-                        "values": ["exp"]
-                    }
-                },
-                {
-                    "name": "exp_smoothe_num_iters",
-                    "type": "list-int",
-                    "default": [4],
-                    "dependency": {
-                        "name": "mg_smoother",
-                        "values": ["exp"]
-                    }
-                },
-                {
-                    "name": "mg_solve_coarsest",
-                    "type": "bool",
-                    "default": false,
-                    "dependency": {
-                        "name": "preconditioner",
-                        "values": ["fv-mg", "p-mg"]
-                    }
-                },
-                {
-                    "name": "kiops_dt_factor",
-                    "type": "float",
-                    "default": 1.1,
-                    "dependency": {
-                        "name": "mg_smoother",
-                        "values": ["kiops"]
-                    }
+                    "selectables": ["none"]
                 },
                 {
                     "name": "verbose_precond",
                     "type": "int",
-                    "default": 0,
-                    "dependency": {
-                        "name": "preconditioner",
-                        "values": ["fv", "fv-mg", "p-mg", "lu", "ilu"]
-                    }
-                },
-                {
-                    "name": "dg_to_fv_interp",
-                    "type": "str",
-                    "default": "lagrange",
-                    "selectables": ["l2-norm", "lagrange"],
-                    "dependency": {
-                        "name": "preconditioner",
-                        "values": ["fv", "fv-mg", "p-mg"]
-                    }
-                },
-                {
-                    "name": "pseudo_cfl",
-                    "type": "float",
-                    "default": 1.0,
-                    "dependency": {
-                        "name": "preconditioner",
-                        "values": ["fv-mg", "p-mg"]
-                    }
-                }
+                    "default": 0}
             ]
         },
         {
@@ -559,12 +465,6 @@
                     "description": "Frequency in timesteps at which to save the state vector"
                 },
                 {
-                    "name": "store_solver_stats",
-                    "type": "bool",
-                    "default": false,
-                    "description": "Whether to store solver stats (at every timestep)"
-                },
-                {
                     "name": "output_dir",
                     "type": "case-sensitive-str",
                     "default": "results",
@@ -577,12 +477,6 @@
                     "description": "Name of file where to store the solution"
                 },
                 {
-                    "name": "solver_stats_file",
-                    "type": "case-sensitive-str",
-                    "default": "solver_stats.db",
-                    "description": "SQL file where to store statistics for this run"
-                },
-                {
                     "name": "store_total_time",
                     "type": "bool",
                     "default": false,
@@ -592,16 +486,9 @@
                     "name": "output_format",
                     "type": "str",
                     "default": "netcdf",
-                    "selectable": ["netcdf", "fst"],
-                    "description": "Desired format to use for storing simulation results."
-                },
-                {
-                    "name": "netcdf_use_collective",
-                    "type": "bool",
-                    "default": true,
-                    "description": "Enable NetCDF collective I/O operations (requires parallel NetCDF support)"
+                    "selectables": ["netcdf", "fst"],
+                    "description": "Cubed-sphere output format. netcdf requires netCDF4; fst additionally requires the external rmn and georef packages. Cartesian output uses its image writer regardless of this setting."
                 }
-                
             ]
         },
         {

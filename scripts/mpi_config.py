@@ -9,15 +9,16 @@ except ModuleNotFoundError:
     raise
 
 try:
-    import cupy as cp
+    import torch
 
-    cupy_avail = True
-    num_devices = cp.cuda.runtime.getDeviceCount()
-except (ModuleNotFoundError, ImportError, RuntimeError):
-    cupy_avail = False
+    torch_avail = True
+    num_devices = torch.cuda.device_count()
+except (ModuleNotFoundError, ImportError, RuntimeError) as e:
+    torch_avail = False
     num_devices = 0
     if MPI.COMM_WORLD.rank == 0:
-        print(f"Unable to import module cupy")
+        print(f"Unable to import module torch")
+        print(e)
 
 
 def main():
@@ -77,12 +78,9 @@ def main():
 
 
 def dev_info(id, node_id=-1):
-    with cp.cuda.Device(id) as dev:
-        free_mem, total_mem = dev.mem_info
-        kb = 1024
-        mb = kb * kb
-        gb = kb * kb * kb
-        print(f"(Node {node_id:3d}) Device {id}: {free_mem / gb :.1f}/{total_mem / gb :.1f} GB available", flush=True)
+    free_mem, total_mem = torch.cuda.mem_get_info(id)
+    gb = 1024**3
+    print(f"(Node {node_id:3d}) Device {id}: {free_mem / gb :.1f}/{total_mem / gb :.1f} GB available", flush=True)
 
 
 if __name__ == "__main__":

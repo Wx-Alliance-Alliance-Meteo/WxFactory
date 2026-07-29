@@ -1,17 +1,20 @@
 import math
-from typing import List, Optional
 
+import torch
 from mpi4py import MPI
-import numpy
 from numpy.typing import NDArray
 
 from ..common import Configuration
 from ..device import Device
-from ..geometry import CubedSphere, CubedSphere3D, DFROperators, Metric2D, Metric3DTopo
-from ..init.shallow_water import height_vortex, height_case1, height_case2, height_unsteady_zonal
+from ..geometry import CubedSphere, DFROperators, Metric2D, Metric3DTopo
+from ..init.shallow_water import (
+    height_case1,
+    height_case2,
+    height_unsteady_zonal,
+    height_vortex,
+)
 from ..process_topology import ProcessTopology
-
-from .diagnostic import total_energy, potential_enstrophy, global_integral_2d
+from .diagnostic import global_integral_2d, potential_enstrophy, total_energy
 from .output_manager import OutputManager
 
 
@@ -40,7 +43,7 @@ class OutputCubesphere(OutputManager):
 
     def __blockstats__(self, Q, step_id):
         # Blockstats only work for the 2D cubed sphere for now
-        if isinstance(self.geometry, CubedSphere3D):
+        if getattr(self.geometry, "is_3d_euler_grid", False):
             return
 
         h = Q[0, :, :]
@@ -67,23 +70,21 @@ class OutputCubesphere(OutputManager):
         if self.rank == 0:
             print("\n================================================================================================")
 
-        if self.config.case_number >= 2:
+        if self.config.case_number >= 2 and self.initial_mass is None:
+            self.initial_mass = global_integral_2d(
+                h, self.operators, self.metric, self.geometry.num_solpts, self.comm
+            )
+            self.initial_energy = global_integral_2d(
+                energy, self.operators, self.metric, self.geometry.num_solpts, self.comm
+            )
+            self.initial_enstrophy = global_integral_2d(
+                enstrophy, self.operators, self.metric, self.geometry.num_solpts, self.comm
+            )
 
-            if self.initial_mass is None:
-                self.initial_mass = global_integral_2d(
-                    h, self.operators, self.metric, self.geometry.num_solpts, self.comm
-                )
-                self.initial_energy = global_integral_2d(
-                    energy, self.operators, self.metric, self.geometry.num_solpts, self.comm
-                )
-                self.initial_enstrophy = global_integral_2d(
-                    enstrophy, self.operators, self.metric, self.geometry.num_solpts, self.comm
-                )
-
-                if self.rank == 0:
-                    print(f"Integral of mass = {self.initial_mass}")
-                    print(f"Integral of energy = {self.initial_energy}")
-                    print(f"Integral of enstrophy = {self.initial_enstrophy}")
+            if self.rank == 0:
+                print(f"Integral of mass = {self.initial_mass}")
+                print(f"Integral of energy = {self.initial_energy}")
+                print(f"Integral of enstrophy = {self.initial_enstrophy}")
 
         if self.rank == 0:
             print(f"Blockstats for timestep {step_id}")
@@ -103,8 +104,8 @@ class OutputCubesphere(OutputManager):
                 h_anal**2, self.operators, self.metric, self.geometry.num_solpts, self.comm
             )
 
-            max_absol_err = self.comm.allreduce(numpy.max(abs(h - h_anal)), op=MPI.MAX)
-            max_h_anal = self.comm.allreduce(numpy.max(h_anal), op=MPI.MAX)
+            max_absol_err = self.comm.allreduce(torch.max(torch.abs(h - h_anal)).item(), op=MPI.MAX)
+            max_h_anal = self.comm.allreduce(torch.max(h_anal).item(), op=MPI.MAX)
 
             l1 = absol_err / int_h_anal
             l2 = math.sqrt(absol_err2 / int_h_anal2)
@@ -130,11 +131,9 @@ class OutputCubesphere(OutputManager):
         if self.rank == 0:
             print("================================================================================================")
 
-    def _gather_panel(self, field: NDArray) -> Optional[NDArray]:
-        """ """
+    def _gather_panel(self, field: NDArray) -> NDArray | None:
+        """Gather the local fields that make up this process's cubed-sphere panel."""
         panel_comm = self.process_topology.panel_comm
-        xp = self.device.xp
-
         if panel_comm.size == 1:
             return field
 
@@ -148,10 +147,10 @@ class OutputCubesphere(OutputManager):
 
         side = self.process_topology.num_lines_per_panel
         if field.ndim == 1:
-            panel_field = xp.concatenate(panel_fields[:side])
+            panel_field = torch.concatenate(panel_fields[:side])
         else:
-            panel_field = xp.concatenate(
-                [xp.concatenate(panel_fields[i * side : (i + 1) * side], axis=-1) for i in range(side)], axis=-2
+            panel_field = torch.concatenate(
+                [torch.concatenate(panel_fields[i * side : (i + 1) * side], dim=-1) for i in range(side)], dim=-2
             )
 
         return panel_field

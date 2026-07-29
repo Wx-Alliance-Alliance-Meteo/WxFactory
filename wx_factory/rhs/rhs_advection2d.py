@@ -1,9 +1,9 @@
-from typing import Optional
-
-from mpi4py import MPI
+import numpy
+import torch
 from numpy.typing import NDArray
 
 from ..common.definitions import idx_h, idx_u1, idx_u2
+from ..common.matmul import maximum
 from ..geometry import CubedSphere2D, DFROperators, Metric2D
 from ..process_topology import ProcessTopology
 
@@ -17,7 +17,8 @@ class RhsAdvection2d:
         self,
         shape: tuple[int, ...],
         geom: CubedSphere2D,
-        operators: DFROperators,
+        operators_real: DFROperators,
+        operators_complex: DFROperators,
         metric: Metric2D,
         ptopo: ProcessTopology,
         num_solpts: int,
@@ -25,7 +26,8 @@ class RhsAdvection2d:
     ):
         self.shape = shape
         self.geom = geom
-        self.operators = operators
+        self.operators_real = operators_real
+        self.operators_complex = operators_complex
         self.metric = metric
         self.ptopo = ptopo
         self.num_solpts = num_solpts
@@ -39,10 +41,11 @@ class RhsAdvection2d:
         :return: Value of the right-hand side, in the same shape as the input
         """
         old_shape = vec.shape
+        operators = self.operators_complex if torch.is_complex(vec) else self.operators_real
         result = self.__compute_rhs__(
             vec.reshape(self.shape),
             self.geom,
-            self.operators,
+            operators,
             self.metric,
             self.ptopo,
             self.num_solpts,
@@ -64,18 +67,16 @@ class RhsAdvection2d:
         Compute the RHS for advection-only cases
         """
 
-        xp = geom.device.xp
-
         num_equations = Q.shape[0]
 
         itf_i_shape = (num_equations,) + geom.itf_i_shape
         itf_j_shape = (num_equations,) + geom.itf_j_shape
 
         # Interpolate to the element interface (middle elements only, halo remains 0)
-        var_itf_i = xp.zeros(itf_i_shape, dtype=Q.dtype)
+        var_itf_i = torch.zeros(itf_i_shape, dtype=Q.dtype)
         var_itf_i[:, :, 1:-1, :] = Q @ mtrx.extrap_x
 
-        var_itf_j = xp.zeros(itf_j_shape, dtype=Q.dtype)
+        var_itf_j = torch.zeros(itf_j_shape, dtype=Q.dtype)
         var_itf_j[:, 1:-1, :, :] = Q @ mtrx.extrap_y
 
         # For advection-only cases, velocities are stored directly as u1 and u2 (not hu1 and hu2)
@@ -103,8 +104,8 @@ class RhsAdvection2d:
         )
 
         # Compute fluxes
-        flux_x1 = xp.empty_like(Q)
-        flux_x2 = xp.empty_like(Q)
+        flux_x1 = torch.empty_like(Q)
+        flux_x2 = torch.empty_like(Q)
 
         flux_x1[idx_h] = metric.sqrtG * Q[idx_h] * u1
         flux_x2[idx_h] = metric.sqrtG * Q[idx_h] * u2
@@ -143,16 +144,16 @@ class RhsAdvection2d:
         #                   |
         #   west .  east -->|<-- west  .  east -->
         #                   |
-        west = xp.s_[..., 1:, :num_solpts]
-        east = xp.s_[..., :-1, num_solpts:]
-        south = xp.s_[..., 1:, :, :num_solpts]
-        north = xp.s_[..., :-1, :, num_solpts:]
+        west = numpy.s_[..., 1:, :num_solpts]
+        east = numpy.s_[..., :-1, num_solpts:]
+        south = numpy.s_[..., 1:, :, :num_solpts]
+        north = numpy.s_[..., :-1, :, num_solpts:]
 
         # Rusanov flux for advection
         # Direction x1
-        eig = xp.maximum(xp.abs(var_itf_i[idx_u1][west]), xp.abs(var_itf_i[idx_u1][east]))
+        eig = maximum(torch.abs(var_itf_i[idx_u1][west]), torch.abs(var_itf_i[idx_u1][east]))
 
-        flux_x1_itf = xp.zeros_like(var_itf_i)
+        flux_x1_itf = torch.zeros_like(var_itf_i)
         flux_L = metric.sqrtG_itf_i[east] * var_itf_i[idx_h][east] * var_itf_i[idx_u1][east]
         flux_R = metric.sqrtG_itf_i[east] * var_itf_i[idx_h][west] * var_itf_i[idx_u1][west]
 
@@ -162,9 +163,9 @@ class RhsAdvection2d:
         flux_x1_itf[idx_h][west] = flux_x1_itf[idx_h][east]
 
         # Direction x2
-        eig = xp.maximum(xp.abs(var_itf_j[idx_u2][south]), xp.abs(var_itf_j[idx_u2][north]))
+        eig = maximum(torch.abs(var_itf_j[idx_u2][south]), torch.abs(var_itf_j[idx_u2][north]))
 
-        flux_x2_itf = xp.zeros_like(var_itf_j)
+        flux_x2_itf = torch.zeros_like(var_itf_j)
         flux_L = metric.sqrtG_itf_j[north] * var_itf_j[idx_h][north] * var_itf_j[idx_u2][north]
         flux_R = metric.sqrtG_itf_j[north] * var_itf_j[idx_h][south] * var_itf_j[idx_u2][south]
 
@@ -178,7 +179,7 @@ class RhsAdvection2d:
         df2_dx2 = df2_dx2 + flux_x2_itf[:, 1:-1, :, :] @ mtrx.correction_SN
 
         # No forcing terms for pure advection
-        forcing = xp.zeros_like(Q)
+        forcing = torch.zeros_like(Q)
 
         # Assemble the right-hand side
         rhs = metric.inv_sqrtG * -(df1_dx1 + df2_dx2) - forcing

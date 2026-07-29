@@ -1,5 +1,6 @@
 from wx_factory.common.configuration import Configuration
 
+
 def pack(configuration: Configuration):
     sects = {}
     for section_name, section_options in configuration.sections.items():

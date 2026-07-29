@@ -1,13 +1,13 @@
 """
-  This script has the matrix-free Jacobian functions
-  and the rhs of each pde
- 
-  At the moment there are 4 PDES (with their RHS and Jtv functions)
+This script has the matrix-free Jacobian functions
+and the rhs of each pde
 
-  1. Allen-Cahn
-  2. Advection-Diffusion-Reaction
-  3. Porous Medium
-  4. Inviscid Burger's
+At the moment there are 4 PDES (with their RHS and Jtv functions)
+
+1. Allen-Cahn
+2. Advection-Diffusion-Reaction
+3. Porous Medium
+4. Inviscid Burger's
 
 """
 
@@ -15,7 +15,6 @@ import numpy as np
 
 from mpi4py import MPI
 from ..stiff_pdes import JTV
-
 
 # -------------------------ALLEN-CAHN--------------------------------
 

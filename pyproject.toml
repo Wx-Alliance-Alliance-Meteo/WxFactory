@@ -7,16 +7,22 @@ name = "wxfactory"
 dynamic = ["version"]
 description = "A numerical weather prediction research framework"
 readme = "README.md"
-license-files = [ "LICENSE" ]
 requires-python = ">=3.10"
 dependencies = [
     "mpi4py",
     "numpy",
     "scipy",
+    "torch",
+    "sympy",
 ]
 
 [project.scripts]
 wxfactory = "wx_factory.main:main"
+
+[tool.setuptools]
+# Kept under [tool.setuptools] (rather than [project], which is PEP 639 and needs setuptools >= 77)
+# so that older setuptools accept it.
+license-files = ["LICENSE"]
 
 [tool.setuptools.packages.find]
 where = ["."]
@@ -27,3 +33,4 @@ write_to = "wx_factory/_version.py"
 
 [tool.black]
 line-length = 120
+target-version = ["py311"]

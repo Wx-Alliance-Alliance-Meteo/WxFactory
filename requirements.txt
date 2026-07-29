@@ -2,15 +2,14 @@ numpy
 scipy
 sympy
 mpi4py
-pybind11
+torch
+packaging
 netcdf4
 matplotlib
-setuptools
 xarray
 
-# GPU support (install the variant matching your CUDA version)
-# cupy-cuda11x
-# cupy-cuda12x
+# GPU support requires a CUDA-enabled PyTorch build compatible with the system CUDA driver.
+# See https://pytorch.org/get-started/locally/ for the appropriate installation command.
 
 # Optional visualization / tooling
 # cartopy

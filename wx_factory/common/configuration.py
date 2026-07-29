@@ -5,7 +5,6 @@ from .eval_expr import eval_expr
 
 from .configuration_schema import ConfigurationSchema, ConfigurationField, OptionType, needs_evaluation
 
-
 __all__ = ["Configuration"]
 
 
@@ -24,7 +23,6 @@ class Configuration:
         self.config_content = cfg_file
 
         self.depth_approx = None
-        self.num_mg_levels = 1
 
         self.parser.read_string(self.config_content)
 
@@ -44,7 +42,6 @@ class Configuration:
     def _get_option(self, field: ConfigurationField) -> OptionType:
         value: Optional[OptionType] = None
         if field.dependency is not None:
-            # print(f"field '{field.name}' has dependency {field.dependency}")
             if not hasattr(self, field.dependency[0]):
                 return None
 
@@ -89,7 +86,6 @@ class Configuration:
                     i += 1
                 else:
                     long_options[option] = val
-                    # i = 1
             if i % 2 == 1:
                 out += " |"
 
@@ -100,60 +96,46 @@ class Configuration:
         return out
 
     # --- START type hints --- automatically generated (do not touch)
+    advection_only: str
     alpha0: float
-    apply_sponge: bool
     base_output_file: str
     bubble_rad: float
     bubble_theta: float
     case_number: int
-    cuda_devices: List[int]
     depth_approx: str
-    desired_device: str
-    dg_to_fv_interp: str
     discretization: str
     dt: float
     enable_schar_mountain: bool
     equations: str
     exode_controller: str
     exode_method: str
-    exp_smoothe_num_iters: List[int]
-    exp_smoothe_spectral_radii: List[float]
     expfilter_apply: bool
     expfilter_cutoff: float
     expfilter_order: int
     expfilter_strength: float
     exponential_solver: str
-    filter_apply: bool
-    filter_cutoff: float
-    filter_order: int
     gmres_restart: int
     grid_file: str
     grid_type: str
+    initial_condition: str
     initial_conditions_file: str
     jacobian_method: str
-    kiops_dt_factor: float
+    krylov_mmax: int
     krylov_size: int
     lambda0: float
+    lateral_boundary: str
     matsuno_amp: float
     matsuno_wave_type: str
-    matmul_backend: str
-    mg_smoother: str
-    mg_solve_coarsest: bool
-    netcdf_use_collective: bool
     num_elements_horizontal: int
     num_elements_vertical: int
-    num_mg_levels: int
-    num_post_smoothe: int
-    num_pre_smoothe: int
     num_solpts: int
     output_dir: str
     output_format: str
     output_freq: int
     phi0: float
-    precond_flux: str
-    precond_tolerance: float
+    precision: str
     preconditioner: str
-    pseudo_cfl: float
+    pytorch_device: str
     save_state_freq: int
     schar_mountain_height: float
     schar_mountain_lattitude: float
@@ -161,23 +143,26 @@ class Configuration:
     schar_mountain_longitude: float
     schar_mountain_radius: float
     schar_mountain_step: int
-    solver_stats_file: str
+    sleve_scale_large: float
+    sleve_scale_small: float
     splitting_integrator_1: str
     splitting_integrator_2: str
-    sponge_tscale: float
-    sponge_zscale: float
     starting_step: int
     stat_freq: int
-    store_solver_stats: bool
     store_total_time: bool
     t_end: float
+    time_end: str
     time_integrator: str
+    time_start: str
     tolerance: float
     topography_file: str
     verbose_precond: int
     verbose_solver: int
+    vertical_coord: str
     x0: float
     x1: float
+    y0: float
+    y1: float
     z0: float
     z1: float
     ztop: float

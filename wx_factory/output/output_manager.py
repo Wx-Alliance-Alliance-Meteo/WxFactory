@@ -1,3 +1,5 @@
+import numpy
+import torch
 import os
 from time import time
 from typing import Callable, List, Optional
@@ -8,11 +10,8 @@ from numpy.typing import NDArray
 from ..common.configuration import Configuration
 from ..device import Device
 from ..geometry import Geometry, DFROperators, CubedSphere3D
-from ..precondition.multigrid import Multigrid
-from ..solvers import SolverInfo
 from ..wx_mpi import SingleProcess, Conditional
 
-from .solver_stats import SolverStatsOutput
 from .state import save_state, load_state
 
 
@@ -55,7 +54,7 @@ class OutputManager:
         self.device = device
         self.comm = device.comm
 
-        self.num_dim = 3 if isinstance(geometry, CubedSphere3D) else 2
+        self.num_dim = 3 if getattr(geometry, "is_3d_euler_grid", False) else 2
 
         with SingleProcess(self.comm) as s, Conditional(s):
             output_dir = self.config.output_dir
@@ -70,9 +69,6 @@ class OutputManager:
             s.return_value = output_dir
 
         self.output_dir = s.return_value
-
-        if self.config.store_solver_stats > 0:
-            self.solver_stats_output = SolverStatsOutput(config, self.device)
 
         # Choose a file name hash based on a certain set of parameters:
         state_params = (
@@ -108,14 +104,14 @@ class OutputManager:
                 f"ERROR reading state vector from file for step {step_id}. "
                 f"The shape is wrong! ({starting_state.shape}, should be {sh})"
             )
-        Q = self.device.xp.asarray(starting_state)
+        Q = torch.asarray(starting_state)
 
         if self.comm.rank == 0:
             print(f"Starting simulation from step {step_id} (rather than 0)")
             if step_id * self.config.dt >= self.config.t_end:
                 print(
                     f"WARNING: Won't run any steps, since we will stop at step "
-                    f"{int(self.device.xp.ceil(self.config.t_end / self.config.dt))}"
+                    f"{int(torch.ceil(self.config.t_end / self.config.dt))}"
                 )
 
         return Q, step_id
@@ -161,29 +157,6 @@ class OutputManager:
     def __blockstats__(self, Q: NDArray, step_id: int):
         """Class-specific blockstats implementation."""
         # Not implemented by default
-
-    def store_solver_stats(
-        self,
-        total_time: float,
-        simulation_time: float,
-        dt: float,
-        solver_info: SolverInfo,
-        precond: Optional[Multigrid],
-        rhs_times: Optional[List[List[float]]],
-    ):
-        """Store statistics for the current step into a database."""
-        if self.config.store_solver_stats > 0:
-            self.solver_stats_output.write_output(
-                total_time,
-                simulation_time,
-                dt,
-                solver_info.total_num_it,
-                solver_info.time,
-                solver_info.flag,
-                solver_info.iterations,
-                precond,
-                rhs_times,
-            )
 
     def finalize(self, total_time: float) -> None:
         """

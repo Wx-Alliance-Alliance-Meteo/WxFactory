@@ -1,76 +1,76 @@
 """
-	Setting up the parallel environment for solving stiff
-	pdes using exponential integrators. 
+    Setting up the parallel environment for solving stiff
+    pdes using exponential integrators.
 
-
-	|-------|-------|-------|
-	|	p0  |  p1   |   p2  |
-	|-------|-------|-------|
-	|	p3  |  p4   |   p5  | 
-	|-------|-------|-------|
-	|	p6  |  p7   |   p8  |
-	|-------|-------|-------|
-	|  p9   | p10   |  p11  |
-	|-------|-------|-------|
-
-	---> x increasing
-	|
-	v
-	y increasing
-
-
-	----processor coordinates----
 
     |-------|-------|-------|
-	| (0,0) | (1,0) | (2,0) |
-	|-------|-------|-------|
-	| (0,1) | (1,1) | (2,1) |  
-	|-------|-------|-------|
-	| (0,2) | (1,2) | (2,2) |
-	|-------|-------|-------|
-	| (0,3) | (1,3) | (2,3) |
-	|-------|-------|-------|
+    |	p0  |  p1   |   p2  |
+    |-------|-------|-------|
+    |	p3  |  p4   |   p5  |
+    |-------|-------|-------|
+    |	p6  |  p7   |   p8  |
+    |-------|-------|-------|
+    |  p9   | p10   |  p11  |
+    |-------|-------|-------|
+
+    ---> x increasing
+    |
+    v
+    y increasing
 
 
-	the domain is split both along the x and y axis, each 
-	processor will hold a chunk of the rows and columns.
+    ----processor coordinates----
 
-	Unfortunately, when we stack the 2D domain into a 1D
-	vector, this means the data will not be contiguous.
+|-------|-------|-------|
+    | (0,0) | (1,0) | (2,0) |
+    |-------|-------|-------|
+    | (0,1) | (1,1) | (2,1) |
+    |-------|-------|-------|
+    | (0,2) | (1,2) | (2,2) |
+    |-------|-------|-------|
+    | (0,3) | (1,3) | (2,3) |
+    |-------|-------|-------|
 
 
-	---p0---
-	|      | row 1
-	|      |
-	---p1---
-	|      | row 1
-	|      |
-	---p2---
-	|      | row 1
-	|      |
-	---p3---
-	|      | row 1
-	|      |
-	---p0---
-	|      | row 2
-	|      |
-	---p1---
-	|      | row 2
-	|      |
-	---p2---
-	|      | row 2
-	|      |
-	---p3---
-	|      | row 2
-	|      |
-	--------
+    the domain is split both along the x and y axis, each
+    processor will hold a chunk of the rows and columns.
 
-	..etc. 
+    Unfortunately, when we stack the 2D domain into a 1D
+    vector, this means the data will not be contiguous.
 
-	To run: mpirun -np p python3 laplacian_exp_perf.py m ortho_method
 
-	where p is the number of processors and m is the dimension of the Krylov subspace
-	and ortho_method is the orthogonalization technique
+    ---p0---
+    |      | row 1
+    |      |
+    ---p1---
+    |      | row 1
+    |      |
+    ---p2---
+    |      | row 1
+    |      |
+    ---p3---
+    |      | row 1
+    |      |
+    ---p0---
+    |      | row 2
+    |      |
+    ---p1---
+    |      | row 2
+    |      |
+    ---p2---
+    |      | row 2
+    |      |
+    ---p3---
+    |      | row 2
+    |      |
+    --------
+
+    ..etc.
+
+    To run: mpirun -np p python3 laplacian_exp_perf.py m ortho_method
+
+    where p is the number of processors and m is the dimension of the Krylov subspace
+    and ortho_method is the orthogonalization technique
 
 """
 
@@ -89,6 +89,17 @@ class InitWorld:
 
         yo.rank = comm.Get_rank()
         yo.size = comm.Get_size()
+
+        # Every spatial operator in JTV.py gets its halo values from the MPI neighbour exchange,
+        # which is only performed when size > 1; there is no serial fallback, so on a single rank
+        # the neighbour buffers are never assigned and the operators fail with UnboundLocalError.
+        # Refuse the run up front with a clear message instead.
+        if yo.size < 2:
+            raise ValueError(
+                "The stiff_pdes operators require more than one MPI rank: their neighbour "
+                "exchange has no serial implementation. Run with at least 4 ranks (the process "
+                "count must be a perfect square)."
+            )
 
         yo.BCType = BCType
 

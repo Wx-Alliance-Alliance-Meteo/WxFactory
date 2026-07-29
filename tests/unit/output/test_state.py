@@ -1,26 +1,27 @@
 import os
 import random
-import unittest
 
 from mpi4py import MPI
 import numpy
+from torch import Tensor
 
 import wx_factory.common.configuration
 import wx_factory.common.configuration_schema
-from wx_factory.device import CpuDevice
+from wx_factory.device import PytorchDevice
 import wx_factory.output.state
 
-import tests.unit.ndarray_generator as ndarray_generator
+import tests.unit.array_generator as array_generator
 import tests.unit.common.config_pack
+from wx_test import WxTestCase
 
 state_input_dir = "tests/data/unit/state_tests"
 state_tmp_dir = "tests/data/temp"
 
 
-class StateTestCases(unittest.TestCase):
+class StateTestCases(WxTestCase):
     def setUp(self):
         super().setUp()
-        self.cpu_device = CpuDevice(MPI.COMM_WORLD)
+        self.cpu_device = PytorchDevice(MPI.COMM_WORLD, "cpu")
         if not os.path.exists(state_tmp_dir):
             os.mkdir(state_tmp_dir)
 
@@ -32,7 +33,6 @@ class StateTestCases(unittest.TestCase):
         schema = wx_factory.common.configuration_schema.ConfigurationSchema(schema_text)
 
         config_path = os.path.join(state_input_dir, "config.ini")
-        config_text: str
         with open(config_path) as f:
             config_text = "\n".join(f.readlines())
 
@@ -40,7 +40,7 @@ class StateTestCases(unittest.TestCase):
         seed: int = 5646459
         rand = random.Random(seed)
         number_of_data = 5
-        [arr] = ndarray_generator.generate_vectors(number_of_data, rand, -10, 10, [self.cpu_device])
+        [arr] = array_generator.generate_vectors(number_of_data, rand, -10, 10, [self.cpu_device])
 
         conf = wx_factory.common.configuration.Configuration(config_text, schema)
 
@@ -77,13 +77,13 @@ class StateTestCases(unittest.TestCase):
 
     def test_load_old_state(self):
         state, config = wx_factory.output.state.load_state(os.path.join(state_input_dir, "old_save_file.wx"))
-        self.assertTrue(isinstance(state, numpy.ndarray))
+        self.assertTrue(isinstance(state, Tensor))
         self.assertEqual(state.shape, (4, 8, 8, 4))
         self.assertTrue(isinstance(config, wx_factory.common.configuration.Configuration))
         self.assertEqual(config.num_solpts, 2)
         self.assertEqual(config.num_elements_horizontal, 8)
         self.assertEqual(config.num_elements_vertical, 8)
         self.assertEqual(config.equations, "euler")
-        self.assertEqual(config.grid_type, "cartesian2d")
+        self.assertEqual(config.grid_type, "cartesian3d")
         self.assertEqual(config.dt, 5)
         self.assertEqual(config.t_end, 150)

@@ -1,22 +1,26 @@
 import math
+from typing import Callable
 
 from mpi4py import MPI
+import torch
+from torch import Tensor
 
-from ..device import Device, CpuDevice
+from ..device import Device
+from .dense import expm, solve_triangular
 
 
 def pmex(
-    tau_out,
-    A,
-    u,
-    tol=1e-7,
-    delta=1.2,
-    m_init=10,
-    mmin=10,
-    mmax=128,
-    reuse_info=True,
-    task1=False,
-    device: Device = None,
+    tau_out: Tensor,
+    A: Callable[[Tensor], Tensor],
+    u: Tensor,
+    tol: float = 1e-7,
+    delta: float = 1.2,
+    m_init: int = 10,
+    mmin: int = 10,
+    mmax: int = 128,
+    reuse_info: bool = True,
+    task1: bool = False,
+    device: Device | None = None,
 ):
     """
     :param tau_out: Vector of `tau_out`
@@ -47,13 +51,20 @@ def pmex(
 
     comm = device.comm
 
+    # Reject unreachable tolerance
+    tol_floor = 100.0 * float(torch.finfo(u.dtype).eps)
+    if tol < tol_floor:
+        raise ValueError(
+            f"PMEX tolerance {tol:.1e} is unreachable in {u.dtype} precision; " f"use at least {tol_floor:.1e}."
+        )
+
     ppo, n = u.shape
     p = ppo - 1
 
     if p == 0:
         p = 1
         # Add extra column of zeros
-        u = device.xp.row_stack((u, device.xp.zeros(len(u), dtype=u.dtype)))
+        u = torch.row_stack((u, torch.zeros(len(u), dtype=u.dtype)))
 
     step = 0
     krystep = 0
@@ -69,31 +80,36 @@ def pmex(
     reg_comm_nrm = 0
     numSteps = len(tau_out)
 
-    first_accepted = True
-
     # We only allow m to vary between mmin and mmax
-    # mmin = 1
     m = max(mmin, min(m_init, mmax))
 
+    # Mixed precision: the basis V stays in the working precision, but the bookkeeping (H, M, Minv, N),
+    # the matrix exponential and the error estimates use acc (float64 for a float32 basis).
+    acc = torch.float64 if u.dtype == torch.float32 else u.dtype
+
     # Preallocate matrix
-    V = device.xp.zeros((mmax + 1, n + p), dtype=u.dtype)
-    H = device.xp.zeros((mmax + 1, mmax + 1), dtype=u.dtype)
-    Minv = device.xp.eye(mmax, dtype=u.dtype)
-    M = device.xp.eye(mmax, dtype=u.dtype)
-    N = device.xp.zeros([mmax, mmax], dtype=u.dtype)
+    V = torch.zeros((mmax + 1, n + p), dtype=u.dtype)
+    H = torch.zeros((mmax + 1, mmax + 1), dtype=acc)
+    Minv = torch.eye(mmax, dtype=acc)
+    M = torch.eye(mmax, dtype=acc)
+    N = torch.zeros([mmax, mmax], dtype=acc)
+
+    # The MPI datatype for the reductions must match the precision of the buffer being reduced.
+    mpi_real = MPI.FLOAT if u.dtype == torch.float32 else MPI.DOUBLE
+    mpi_acc = MPI.DOUBLE if acc == torch.float64 else MPI.FLOAT
 
     # Initial condition
-    w = device.xp.zeros((numSteps, n), dtype=u.dtype)
-    w[0, :] = u[0, :].copy()
+    w = torch.zeros((numSteps, n), dtype=u.dtype)
+    w[0, :] = u[0, :].clone()
 
     # compute the 1-norm of u
-    local_nrmU = device.xp.sum(abs(u[1:, :]), axis=1)
-    global_normU = device.xp.empty_like(local_nrmU)
+    local_nrmU = torch.sum(abs(u[1:, :]), dim=1)
+    global_normU = torch.empty_like(local_nrmU)
 
     device.synchronize()
-    comm.Allreduce([local_nrmU, MPI.DOUBLE], [global_normU, MPI.DOUBLE])
+    comm.Allreduce([local_nrmU, mpi_real], [global_normU, mpi_real])
 
-    normU = device.xp.amax(global_normU)
+    normU = torch.amax(global_normU)
 
     # Normalization factors
     if ppo > 1 and normU > 0:
@@ -105,10 +121,9 @@ def pmex(
         mu = 1.0
 
     # Flip the rest of the u matrix
-    u_flip = nu * device.xp.flipud(u[1:, :])
+    u_flip = nu * torch.flipud(u[1:, :])
 
     # Compute and initial starting approximation for the step size
-    # tau = min(pmex.suggested_step, tau_end)
 
     # follow same as kiops
     tau = tau_end
@@ -128,6 +143,8 @@ def pmex(
     kestold = True
     same_tau = None
 
+    tiny_err = float(torch.finfo(acc).tiny)
+
     l = 0
 
     while tau_now < tau_end:
@@ -145,13 +162,15 @@ def pmex(
                 V[j, n + k] = (tau_now**i) / math.factorial(i) * mu
             V[j, n + p - 1] = mu
 
-            # Normalize initial vector (this norm is nonzero)
-            local_sum = V[0, 0:n] @ V[0, 0:n]
-            global_sum_nrm = device.xp.empty_like(local_sum)
-            #print(local_sum.dtype, global_sum_nrm.dtype, flush=True)
+            # Normalize initial vector (this norm is nonzero). Accumulate the sum of squares in `acc`
+            # (float64 for a float32 basis) via the reduction's dtype rather than upcasting the whole
+            # vector first: `x.astype(acc) @ x.astype(acc)` would materialize two full-size float64
+            # copies of V[0, 0:n] (~68 MiB/rank on the 1 deg/L60 case), which overflows the GPU.
+            local_sum = torch.sum(V[0, 0:n] * V[0, 0:n], dtype=acc)
+            global_sum_nrm = torch.empty_like(local_sum)
             device.synchronize()
-            comm.Allreduce([local_sum, MPI.DOUBLE], [global_sum_nrm, MPI.DOUBLE])
-            beta = math.sqrt(global_sum_nrm + V[j, n : n + p] @ V[j, n : n + p])
+            comm.Allreduce([local_sum, mpi_acc], [global_sum_nrm, mpi_acc])
+            beta = math.sqrt(global_sum_nrm + V[j, n : n + p].to(acc) @ V[j, n : n + p].to(acc))
 
             # The first Krylov basis vector
             V[j, :] /= beta
@@ -167,13 +186,13 @@ def pmex(
             V[j, -1] = 0.0
 
             # 2. compute terms needed for R and T
-            local_vec = V[0 : j + 1, 0:n] @ V[j - 1 : j + 1, 0:n].T
-            global_vec = device.xp.empty_like(local_vec)
+            local_vec = (V[0 : j + 1, 0:n] @ V[j - 1 : j + 1, 0:n].T).to(acc)
+            global_vec = torch.empty_like(local_vec)
 
             device.synchronize()
-            comm.Allreduce([local_vec, MPI.DOUBLE], [global_vec, MPI.DOUBLE])
+            comm.Allreduce([local_vec, mpi_acc], [global_vec, mpi_acc])
 
-            global_vec += V[0 : j + 1, n : n + p] @ V[j - 1 : j + 1, n : n + p].T
+            global_vec += (V[0 : j + 1, n : n + p] @ V[j - 1 : j + 1, n : n + p].T).to(acc)
 
             # 3. Projection with 2-step Gauss-Seidel to the orthogonal complement
             # Note: this is done in two steps. (1) matvec and (2) a lower
@@ -182,43 +201,45 @@ def pmex(
             if j > 1:
                 M[j - 1, 0 : j - 1] = global_vec[0 : j - 1, 0]
                 N[0 : j - 1, j - 1] = -global_vec[0 : j - 1, 0]
-                Minv[j - 1, 0 : j - 1] = -device.xp.transpose(global_vec[0 : j - 1, 0]) @ Minv[0 : j - 1, 0 : j - 1]
+                Minv[j - 1, 0 : j - 1] = -global_vec[0 : j - 1, 0] @ Minv[0 : j - 1, 0 : j - 1]
 
             # 3b. part 1: the mat-vec
-            rhs = (device.xp.eye(j) + device.xp.matmul(N[0:j, 0:j], Minv[0:j, 0:j])) @ global_vec[0:j, 1]
+            rhs = (torch.eye(j, dtype=acc) + torch.matmul(N[0:j, 0:j], Minv[0:j, 0:j])) @ global_vec[0:j, 1]
 
-            # 3c. part 2: the lower triangular solve
-            # array because the xalg can, in some case, yield array with incompatible type to xp
-            sol = device.array(device.xalg.linalg.solve_triangular(
-                M[0:j, 0:j], rhs, unit_diagonal=True, check_finite=False, overwrite_b=True
-            ))
-
-            # 4. Orthogonalize
-            V[j, :] -= sol @ V[0:j, :]
-
-            # 5. compute norm estimate with quad precision
-            if device.has_128_bits_float():
-                sum_vec = device.xp.array(global_vec[0:j, 1], device.xp.float128) ** 2
-                sum_sqrd = device.xp.sum(sum_vec)
+            # 3c. part 2: the LOWER triangular solve
+            if hasattr(torch.linalg, "solve_triangular"):
+                sol = torch.linalg.solve_triangular(
+                    M[0:j, 0:j].contiguous(), rhs.reshape(-1, 1), upper=False, unitriangular=True
+                )[:, 0]
             else:
-                device.synchronize()
-                default_device = CpuDevice.get_default()
-                sum_vec = device.to_host(global_vec[0:j, 1]).astype(default_device.xp.float128) ** 2
-                sum_sqrd = device.array(
-                    default_device.xp.sum(sum_vec).astype(default_device.xp.float64)
+                sol = device.array(
+                    solve_triangular(M[0:j, 0:j], rhs, lower=True, unit_diagonal=True, check_finite=False)
                 )
 
-            # sum_sqrd = sum(global_vec[0:j,1]**2)
-            if global_vec[-1, 1] < sum_sqrd:
-                # use communication to compute norm estimate
-                local_sum = V[j, 0:n] @ V[j, 0:n]
-                global_sum_nrm = device.xp.empty_like(local_sum)
+            # 4. Orthogonalize
+            V[j, :] -= sol.to(u.dtype) @ V[0:j, :]
+
+            # 5. Norm of the freshly orthogonalized vector V[j], estimated by Pythagoras. Near a happy
+            #    breakdown these two terms nearly cancel, so the cheap difference loses accuracy there.
+            #    We trust the cheap difference while it is a healthy fraction of ||Av||^2, and fall back
+            #    to an exact, communicated norm only in the cancellation regime (rare, near breakdown),
+            #    where the direct sum of squares of the small residual has no cancellation.
+            raw_nrm_sq = global_vec[-1, 1]
+            sum_sqrd = (global_vec[0:j, 1] ** 2).sum()
+            diff = raw_nrm_sq - sum_sqrd
+            cancel_floor = 100.0 * float(torch.finfo(u.dtype).eps)
+
+            if diff <= cancel_floor * raw_nrm_sq:
+                # Severe cancellation: recompute the norm directly (one reduction, no cancellation).
+                # float64 accumulation via `dtype=acc`, without full-size float64 temporaries (see above).
+                local_sum = torch.sum(V[j, 0:n] * V[j, 0:n], dtype=acc)
+                global_sum_nrm = torch.empty_like(local_sum)
                 device.synchronize()
-                comm.Allreduce([local_sum, MPI.DOUBLE], [global_sum_nrm, MPI.DOUBLE])
-                curr_nrm = math.sqrt(global_sum_nrm + V[j, n : n + p] @ V[j, n : n + p])
+                comm.Allreduce([local_sum, mpi_acc], [global_sum_nrm, mpi_acc])
+                curr_nrm = math.sqrt(global_sum_nrm + V[j, n : n + p].to(acc) @ V[j, n : n + p].to(acc))
                 reg_comm_nrm += 1
             else:
-                curr_nrm = device.xp.sqrt(global_vec[-1, 1] - sum_sqrd)
+                curr_nrm = torch.sqrt(diff)
 
             # Happy breakdown
             if curr_nrm < tol:
@@ -226,7 +247,8 @@ def pmex(
                 break
 
             # Normalize vector and set norm to H matrix
-            V[j, :] /= curr_nrm
+            # acc scalar)
+            V[j, :] /= float(curr_nrm)
             H[j, j - 1] = curr_nrm
             H[0:j, j - 1] = sol
 
@@ -236,11 +258,11 @@ def pmex(
         H[0, j] = 1.0
 
         # Save h_j+1,j and remove it temporarily to compute the exponential of H
-        nrm = H[j, j - 1].copy()
+        nrm = H[j, j - 1].clone()
         H[j, j - 1] = 0.0
 
         # Compute the exponential of the augmented matrix
-        F_half = device.array(device.xalg.linalg.expm(sgn * 0.5 * tau * H[0 : j + 1, 0 : j + 1]))
+        F_half = device.array(expm(sgn * 0.5 * tau * H[0 : j + 1, 0 : j + 1]))
         F = F_half @ F_half
 
         exps += 1
@@ -262,51 +284,65 @@ def pmex(
             err_half = abs(beta * nrm * F_half[j - 1, j])
             err = abs(beta * nrm * F[j - 1, j])
 
-            # Error for this step
-            old_ohm = ohm
-            ohm = tau_end * err / (tau * tol)
+            # In single precision err and err_half can underflow to (near) zero once the current
+            # Krylov space resolves the substep to machine accuracy. The controller below would then
+            # form err / err_half = 0 / 0 = NaN (or order = log(1) = 0, dividing by zero in tau_opt)
+            # and crash. Such a step is fully resolved, so accept it and hold the step size / Krylov
+            # size, exactly as for a happy breakdown. In double precision these underflows do not
+            # occur, so this branch never triggers there.
+            if not (err > tiny_err and err_half > tiny_err and err != err_half):
+                ohm = 0.0
+                err = 0.0
+                tau_new = min(tau_end - (tau_now + tau), tau)
+                m_new = m
 
-            # Estimate order
-            order = math.log(err / err_half) / math.log(2)
-
-            # Estimate k
-            if m != old_m and tau == old_tau and ireject >= 1:
-                kest = max(1.1, (ohm / old_ohm) ** (1 / (old_m - m)))
-                kestold = False
-            elif kestold is True or ireject == 0:
-                kest = 2
-                kestold = True
             else:
-                kestold = True
 
-            if ohm > delta:
-                remaining_time = tau_end - tau_now
-            else:
-                remaining_time = tau_end - (tau_now + tau)
+                # Error for this step
+                old_ohm = ohm
+                ohm = tau_end * err / (tau * tol)
 
-            # Krylov adaptivity
-            same_tau = min(remaining_time, tau)
+                # Estimate order
+                order = math.log(err / err_half) / math.log(2)
 
-            tau_opt = tau * (gamma / ohm) ** (1 / order)
-            tau_opt = min(remaining_time, max(tau / 5, min(5 * tau, tau_opt)))
+                # Estimate k
+                if m != old_m and tau == old_tau and ireject >= 1:
+                    kest = max(1.1, (ohm / old_ohm) ** (1 / (old_m - m)))
+                    kestold = False
+                elif kestold is True or ireject == 0:
+                    kest = 2
+                    kestold = True
+                else:
+                    kestold = True
 
-            m_opt = math.ceil(j + math.log(ohm / gamma) / math.log(kest))
-            m_opt = max(mmin, min(mmax, max(math.floor(3 / 4 * m), min(m_opt, math.ceil(4 / 3 * m)))))
-
-            if j == mmax:
                 if ohm > delta:
-                    m_new = j
-                    tau_new = tau * (gamma_mmax / ohm) ** (1 / order)
-                    tau_new = min(tau_end - tau_now, max(tau / 5, tau_new))
+                    remaining_time = tau_end - tau_now
                 else:
-                    tau_new = tau_opt
-                    m_new = m
-            else:
-                if same_tau < tau:
-                    m_new = m  # We reduced tau to avoid small step size. Then keep m constant.
+                    remaining_time = tau_end - (tau_now + tau)
+
+                # Krylov adaptivity
+                same_tau = min(remaining_time, tau)
+
+                tau_opt = tau * (gamma / ohm) ** (1 / order)
+                tau_opt = min(remaining_time, max(tau / 5, min(5 * tau, tau_opt)))
+
+                m_opt = math.ceil(j + math.log(ohm / gamma) / math.log(kest))
+                m_opt = max(mmin, min(mmax, max(math.floor(3 / 4 * m), min(m_opt, math.ceil(4 / 3 * m)))))
+
+                if j == mmax:
+                    if ohm > delta:
+                        m_new = j
+                        tau_new = tau * (gamma_mmax / ohm) ** (1 / order)
+                        tau_new = min(tau_end - tau_now, max(tau / 5, tau_new))
+                    else:
+                        tau_new = tau_opt
+                        m_new = m
                 else:
-                    m_new = m_opt
-                tau_new = same_tau
+                    if same_tau < tau:
+                        m_new = m  # We reduced tau to avoid small step size. Then keep m constant.
+                    else:
+                        m_new = m_opt
+                    tau_new = same_tau
 
         # Check error against target
         if ohm <= delta:
@@ -330,18 +366,18 @@ def pmex(
 
             if blownTs != 0:
                 # Copy current w to w we continue with.
-                w[l + blownTs, :] = w[l, :].copy()
+                w[l + blownTs, :] = w[l, :].clone()
 
                 for k in range(blownTs):
                     tau_phantom = tau_out[l + k] - tau_now
-                    F2 = device.array(device.xalg.linalg.expm(sgn * tau_phantom * H[0:j, :j]))
-                    w[l + k, :] = beta * F2[:j, 0] @ V[:j, :n]
+                    F2 = device.array(expm(sgn * tau_phantom * H[0:j, :j]))
+                    w[l + k, :] = (beta * F2[:j, 0]).to(u.dtype) @ V[:j, :n]
 
                 # Advance l.
                 l += blownTs
 
             # Using the standard scheme
-            w[l, :] = beta * F[:j, 0] @ V[:j, :n]
+            w[l, :] = (beta * F[:j, 0]).to(u.dtype) @ V[:j, :n]
 
             # Update tau_out
             tau_now += tau

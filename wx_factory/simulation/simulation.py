@@ -1,28 +1,30 @@
 import sys
 from time import time
-from typing import List, Dict, Type
+from typing import Optional
 
-from mpi4py import MPI
 import numpy
-
+import torch
+from mpi4py import MPI
 
 from ..common import Configuration
-from ..device import Device, CpuDevice, CudaDevice, PytorchDevice
-from ..geometry import Cartesian2D, CubedSphere, CubedSphere3D, CubedSphere2D, DFROperators, Geometry
-from ..init.init_state_vars import init_state_vars
-from ..integrators import Integrator, resolve as _resolve_integrator
-from ..output.output_manager import OutputManager
-from ..output.output_cartesian import OutputCartesian
-from ..output.output_cubesphere_netcdf import OutputCubesphereNetcdf
-from ..output.output_cubesphere_fst import OutputCubesphereFst
-from ..output.output_cubesphere_zarr import OutputCubesphereZarr
-from ..output.input_manager import InputManager
-from ..process_topology import ProcessTopology
-from ..rhs.rhs_selector import RhsBundle
-from ..common.matmul import set_matmul_backend
-from ..wx_mpi import SingleProcess, Conditional
-from ..step_hooks import StepHook, ScharMountainHook, DcmipT11WindHook, DcmipT12WindHook
+from ..device import Device, PytorchDevice
+from ..geometry import DFROperators, GeometryContext, resolve_geometry
 from ..init.export_era5_all import export_era5_all_timesteps
+from ..init.init_state_vars import init_state_vars
+from ..integrators import Integrator
+from ..integrators import resolve as _resolve_integrator
+from ..output.input_manager import InputManager
+from ..output.registry import OutputContext, resolve_output
+from ..precondition import PreconditionerContext, resolve_preconditioner
+from ..rhs.rhs_selector import RhsContext, resolve_rhs
+from ..step_hooks import StepHook
+from ..step_hooks.registry import (
+    PHASE_GEOMETRY,
+    PHASE_STATE,
+    StepHookContext,
+    resolve_step_hooks,
+)
+from ..wx_mpi import Conditional, SingleProcess
 
 
 class Simulation:
@@ -37,14 +39,15 @@ class Simulation:
     """
 
     config: Configuration
-    step_hooks: Dict[Type, StepHook]
+    step_hooks: dict[type, StepHook]
 
     def __init__(
         self,
         config: Configuration | str,
         comm: MPI.Comm = MPI.COMM_WORLD,
         print_allowed_pe_counts: bool = False,
-        quiet=False,
+        quiet: bool = False,
+        device: Optional[Device] = None,
     ) -> None:
         """Create a Simulation object from a certain configuration.
 
@@ -62,7 +65,7 @@ class Simulation:
         elif isinstance(config, str):
             self.config = InputManager.read_config(config, self.comm)
         else:
-            raise ValueError(
+            raise TypeError(
                 f"Need to provide either a Configuration or a config file name to create a Simulation\n"
                 f"(Gave a {type(config)})"
             )
@@ -101,36 +104,85 @@ class Simulation:
                 raise SystemExit(0)
 
         self._adjust_num_elements()
-        self.device = self._make_device()
+        self.device = self._make_device(device)
 
-        # Set matmul backend from config
-        set_matmul_backend(self.config.matmul_backend, self.device.xp)
+        # Mixed mode stores the model state and most runtime arrays in float32. Static spatial
+        # coefficients are constructed in float64 before casting, and accuracy-sensitive solver
+        # operations selectively retain or accumulate in float64.
+        if self.config.precision == "mixed":
+            self.device.real_dtype = torch.float32
+            self.device.complex_dtype = torch.complex64
+        else:
+            self.device.real_dtype = torch.float64
+            self.device.complex_dtype = torch.complex128
 
-        self.process_topo = None
-        self.geometry = self._create_geometry()
-        self.operators_real = DFROperators(self.geometry, self.config, self.device)
-        self.operators_complex = DFROperators(self.geometry, self.config, self.device, self.device.xp.complex128)
+        self.geometry = resolve_geometry(GeometryContext.from_simulation(self))
+        # Cubed-sphere geometries carry a process topology; a Cartesian grid has none.
+        self.process_topo = getattr(self.geometry, "process_topology", None)
+        # Geometry-phase step hooks must exist before init_state_vars, which reads them.
+        self.step_hooks.update(
+            resolve_step_hooks(StepHookContext(config=self.config, geometry=self.geometry), phase=PHASE_GEOMETRY)
+        )
+        self.operators_real = DFROperators(self.geometry, self.device)
+        self.operators_complex = DFROperators(self.geometry, self.device, self.device.complex_dtype)
         self.initial_state = init_state_vars(self.geometry, self.operators_real, self.config, self.step_hooks)
 
-        self.preconditioner = self._create_preconditioner(self.initial_state.Q)
-        self.output = self._create_output_manager()
+        self.output = resolve_output(
+            OutputContext(
+                config=self.config,
+                device=self.device,
+                geometry=self.geometry,
+                operators=self.operators_real,
+                metric=self.initial_state.metric,
+                topography=self.initial_state.topography,
+                dataset=self.initial_state.dataset,
+                ptopo=self.process_topo,
+            )
+        )
         self.initial_state.Q, self.starting_step = self._determine_starting_state()
 
         self.Q = self.initial_state.Q.copy()
         self.step_id = self.starting_step
 
-        self.rhs = RhsBundle(
-            self.geometry,
-            self.operators_real,
-            self.operators_complex,
-            self.initial_state.metric,
-            self.initial_state.topography,
-            self.process_topo,
-            self.config,
-            self.initial_state.Q.shape,
+        self.rhs = resolve_rhs(
+            RhsContext(
+                geom=self.geometry,
+                operators_real=self.operators_real,
+                operators_complex=self.operators_complex,
+                metric=self.initial_state.metric,
+                topo=self.initial_state.topography,
+                ptopo=self.process_topo,
+                param=self.config,
+                fields_shape=self.initial_state.Q.shape,
+            )
         )
 
-        self._register_dcmip_step_hooks()
+        self.preconditioner = resolve_preconditioner(
+            PreconditionerContext(
+                config=self.config,
+                device=self.device,
+                geometry=self.geometry,
+                operators=self.operators_real,
+                rhs=self.rhs,
+                metric=self.initial_state.metric,
+                topography=self.initial_state.topography,
+                ptopo=self.process_topo,
+                fields_shape=self.initial_state.Q.shape,
+            )
+        )
+
+        # State-phase step hooks can now be built (they need the metric and operators).
+        self.step_hooks.update(
+            resolve_step_hooks(
+                StepHookContext(
+                    config=self.config,
+                    geometry=self.geometry,
+                    operators=self.operators_real,
+                    metric=self.initial_state.metric,
+                ),
+                phase=PHASE_STATE,
+            )
+        )
 
         self.integrator = self._create_time_integrator(self.config.time_integrator)
         self.integrator.output_manager = self.output
@@ -157,7 +209,6 @@ class Simulation:
                 print(f"Step {self.step_id} of {self.num_steps + self.starting_step}", flush=True)
 
             self.Q = self.integrator.step(self.Q, self.config.dt)
-            self.Q = self.operators_real.apply_filters(self.Q, self.geometry, self.initial_state.metric, self.config.dt)
 
             if self.rank == 0:
                 print(f"Elapsed time for step: {self.integrator.latest_time:.3f} secs", flush=True)
@@ -191,31 +242,13 @@ class Simulation:
         else:
             export_era5_all_timesteps(self, self.config, self.initial_state.dataset)
 
-    def _make_device(self) -> Device:
+    def _make_device(self, device: Optional[Device]) -> Device:
         """Create the device object which will determine on what hardware (CPU/GPU) each part of the simulation will
         be executed."""
-        if self.config.desired_device in ["cuda", "cupy", "omp"]:
-            try:
-                cuda_devices = self.config.cuda_devices
-            except AttributeError:
-                cuda_devices = []
-
-            lib = "omp" if self.config.desired_device == "omp" else "cuda"
-            try:
-                device = CudaDevice(self.comm, compiled_lib=lib, device_list=cuda_devices)
-            except ValueError:
-                device = None
-                if self.rank == 0:
-                    print("Switching to CPU", flush=True)
-
-            if device is None:
-                device = CpuDevice(comm=self.comm)
-        elif self.config.desired_device == "torch":
-            device = PytorchDevice(comm=self.comm)
-        else:
-            device = CpuDevice(comm=self.comm)
-
-        return device
+        if device is not None:
+            self.comm = device.comm
+            return device
+        return Device(comm=self.comm, device_type=self.config.pytorch_device)
 
     def _adjust_num_elements(self):
         """Adjust number of horizontal elements in the parameters so that it corresponds to the
@@ -240,108 +273,6 @@ class Simulation:
                     )
                 print(f"allowed_pe_counts = {self.allowed_pe_counts}", flush=True)
 
-    def _create_geometry(self) -> Geometry:
-        """Create the appropriate geometry for the given problem"""
-
-        if self.config.grid_file != "":
-            self.process_topo = ProcessTopology(self.device, comm_in=self.comm)
-            return CubedSphere2D(
-                self.num_elements_horizontal,
-                self.num_solpts,
-                self.total_num_elements_horizontal,
-                self.lambda0,
-                self.phi0,
-                self.alpha0,
-                self.process_topo,
-            )
-
-        if self.config.grid_type == "cubed_sphere":
-            self.process_topo = ProcessTopology(self.device, comm_in=self.comm)
-            if self.config.equations == "shallow_water":
-                return CubedSphere2D(
-                    self.num_elements_horizontal,
-                    self.num_solpts,
-                    self.total_num_elements_horizontal,
-                    self.lambda0,
-                    self.phi0,
-                    self.alpha0,
-                    self.process_topo,
-                )
-            elif self.config.equations == "euler":
-                cube_sphere = CubedSphere3D(
-                    self.num_elements_horizontal,
-                    self.config.num_elements_vertical,
-                    self.num_solpts,
-                    self.total_num_elements_horizontal,
-                    self.lambda0,
-                    self.phi0,
-                    self.alpha0,
-                    self.config.ztop,
-                    self.process_topo,
-                    self.config,
-                )
-
-                if self.config.enable_schar_mountain:
-                    schar_mountain = ScharMountainHook(self.config, cube_sphere)
-                    self.step_hooks[ScharMountainHook] = schar_mountain
-                return cube_sphere
-
-        if self.config.grid_type == "cartesian2d":
-            return Cartesian2D(
-                (self.config.x0, self.config.x1),
-                (self.config.z0, self.config.z1),
-                self.num_elements_horizontal,
-                self.config.num_elements_vertical,
-                self.num_solpts,
-                self.total_num_elements_horizontal,
-                self.device,
-            )
-
-        raise ValueError(f"Invalid grid type/process_topo: {self.config.grid_type}, {self.process_topo}")
-
-    def _create_preconditioner(self, Q: numpy.ndarray) -> None:
-        """Create the preconditioner required by the given params"""
-        if self.config.preconditioner != "none":
-            raise ValueError("Preconditioner is currently unavailable, until it gets fixed")
-        return None
-
-    def _create_output_manager(self) -> OutputManager:
-        if isinstance(self.geometry, Cartesian2D):
-            return OutputCartesian(self.config, self.geometry, self.operators_real, self.device)
-        elif isinstance(self.geometry, CubedSphere):
-            if self.config.output_format == "netcdf":
-                return OutputCubesphereNetcdf(
-                    self.config,
-                    self.geometry,
-                    self.operators_real,
-                    self.device,
-                    self.initial_state.metric,
-                    self.initial_state.topography,
-                    self.process_topo,
-                )
-            elif self.config.output_format == "fst":
-                return OutputCubesphereFst(
-                    self.config,
-                    self.geometry,
-                    self.operators_real,
-                    self.device,
-                    self.initial_state.metric,
-                    self.initial_state.topography,
-                    self.process_topo,
-                )
-            elif self.config.output_format == "zarr":
-                return OutputCubesphereZarr(
-                    self.config,
-                    self.geometry,
-                    self.operators_real,
-                    self.device,
-                    self.initial_state.metric,
-                    self.initial_state.topography,
-                    self.process_topo,
-                )
-
-        raise ValueError(f"Unrecognized geometry type {type(self.geometry)}")
-
     def _determine_starting_state(self):
         """Try to load the state for the given starting step and, if successful, swap it with the initial state"""
         if self.config.starting_step > 0:
@@ -357,7 +288,9 @@ class Simulation:
                         " to read initial state for that step. Will start from 0 instead."
                         f"\n{e}"
                     )
-            except Exception as e:
+            # Restart loading crosses file, NumPy, backend, and MPI boundaries. Any failure must
+            # fall back consistently on every rank rather than leave some ranks inside a collective.
+            except Exception as e:  # noqa: BLE001
                 print(f"{self.rank} Fail with other ({type(e)})", flush=True)
 
         return self.initial_state.Q, 0
@@ -368,24 +301,16 @@ class Simulation:
             print(f"Running with time integrator: {name}")
         return _resolve_integrator(name, self.config, self.rhs, self.preconditioner, self.device)
 
-    def _register_dcmip_step_hooks(self) -> None:
-        """Register prescribed-wind step hooks for DCMIP test cases 11 and 12."""
-        if self.config.case_number == 11:
-            self.step_hooks[DcmipT11WindHook] = DcmipT11WindHook(
-                self.geometry, self.initial_state.metric, self.operators_real, self.config
-            )
-        elif self.config.case_number == 12:
-            self.step_hooks[DcmipT12WindHook] = DcmipT12WindHook(
-                self.geometry, self.initial_state.metric, self.operators_real, self.config
-            )
-
     def _check_for_nan(self, Q):
         """Raise an exception if there are NaNs in the input"""
+        # Reduce on-device so we only transfer a single scalar to the host, and avoid
+        # a full-state D2H PCIe copy of Q just to scan it for NaNs.
+        has_nan = bool(torch.isnan(Q).any().item())
         error_detected = numpy.array([0], dtype=numpy.int32)
-        if numpy.any(numpy.isnan(self.device.to_host(Q))):
+        if has_nan:
             print(f"NaN detected on process {self.comm.rank}")
             error_detected[0] = 1
         error_detected_out = numpy.zeros_like(error_detected)
         self.comm.Allreduce(error_detected, error_detected_out, MPI.MAX)
         if error_detected_out[0] > 0:
-            raise ValueError(f"NaN")
+            raise ValueError("NaN")

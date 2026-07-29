@@ -4,6 +4,10 @@ from ..process_topology import ProcessTopology
 
 
 class CubedSphere(Geometry):
+    # Selects the output manager family (see wx_factory/output/registry.py). Inherited by the 2D
+    # and 3D cubed spheres.
+    output_family = "cubesphere"
+
     def __init__(
         self,
         num_elem_horizontal: int,

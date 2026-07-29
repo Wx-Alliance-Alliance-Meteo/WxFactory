@@ -1,16 +1,17 @@
-import sys
+from collections.abc import Callable
 from time import time
-from typing import Callable, List, Optional, Tuple
 
-from mpi4py import MPI
 from numpy.typing import NDArray
+import torch
+from torch import Tensor
 
 from ..device import Device
-from .global_operations import global_dotprod, global_norm
+from .dense import solve_triangular
+from .global_operations import global_allreduce, global_dotprod, global_norm
 
 __all__ = ["fgmres"]
 
-MatvecOperator = Callable[[NDArray], NDArray]
+MatvecOperator = Callable[[Tensor], Tensor]
 
 
 def _ortho_1_sync_igs(Q: NDArray, R: NDArray, T: NDArray, K: NDArray, j: int, device: Device):
@@ -32,19 +33,24 @@ def _ortho_1_sync_igs(Q: NDArray, R: NDArray, T: NDArray, K: NDArray, j: int, de
     if j < 2:
         return -1.0
 
-    comm = device.comm
-    xp = device.xp
+    # Mixed precision: the basis Q is stored in the working precision, but the
+    # inner products and the R/T/K bookkeeping run in the accumulator precision (R's dtype, float64
+    # in single-precision runs) so that orthogonality is not lost to float32 round-off. Coefficients
+    # are cast back to Q's dtype only when they are applied to the float32 basis rows.
+    acc = R.dtype
+    qd = Q.dtype
 
-    local_tmp = Q[:j, :] @ Q[j - 2 : j, :].T  # Q multiplied by its own last 2 rows (up to j)
+    # Accumulate the reduction operand in the higher precision.
+    local_tmp = Q[:j, :].astype(acc) @ Q[j - 2 : j, :].astype(acc).T
 
     device.synchronize()
-    global_tmp = comm.allreduce(local_tmp)  # Expensive step on multi-node execution
+    global_tmp = global_allreduce(local_tmp, device)  # Expensive step on multi-node execution
     small_tmp = global_tmp[: j - 2, 0]
 
     R[: j - 1, j - 1] = global_tmp[: j - 1, 1]
 
     norm2 = global_tmp[j - 2, 0] - (small_tmp @ small_tmp)
-    norm = xp.sqrt(norm2)
+    norm = torch.sqrt(norm2)
     R[j - 2, j - 2] = norm
     R[j - 2, j - 1] -= small_tmp @ R[: j - 2, j - 1]
     R[j - 2, j - 1] /= norm
@@ -52,24 +58,25 @@ def _ortho_1_sync_igs(Q: NDArray, R: NDArray, T: NDArray, K: NDArray, j: int, de
     T[: j - 2, j - 2] = small_tmp / norm
 
     if j > 2:
-        L = xp.tril(T[: j - 2, : j - 2].T, -1)
-        L_plus = L + xp.eye(j - 2)
-        r3 = xp.linalg.solve(L_plus, small_tmp)
+        L = torch.tril(T[: j - 2, : j - 2].T, -1)
+        L_plus = L + torch.eye(j - 2, dtype=acc)
+        r3 = torch.linalg.solve(L_plus, small_tmp)
 
         R[: j - 2, j - 2] = K[: j - 2, j - 3] + r3
         K[: j - 1, j - 2] = (R[: j - 1, j - 1] - (R[: j - 1, 1 : j - 1] @ r3)) / norm
 
-        Q[j - 2, :] -= Q[: j - 2, :].T @ small_tmp
-        Q[j - 1, :] -= Q[: j - 2, :].T @ R[: j - 2, j - 1]  # Important here
+        Q[j - 2, :] -= Q[: j - 2, :].T @ small_tmp.astype(qd)
+        Q[j - 1, :] -= Q[: j - 2, :].T @ R[: j - 2, j - 1].astype(qd)  # Important here
 
     else:
         K[: j - 1, j - 2] = R[: j - 1, j - 1] / norm
 
-    Q[j - 2, :] /= norm
-    Q[j - 1, :] -= Q[j - 2, :] * R[j - 2, j - 1]
-    Q[j - 1, :] /= norm
+    inv_norm = 1.0 / float(norm)
+    Q[j - 2, :] *= inv_norm
+    Q[j - 1, :] -= Q[j - 2, :] * float(R[j - 2, j - 1])
+    Q[j - 1, :] *= inv_norm
 
-    return norm
+    return float(norm)
 
 
 def rotg(a: float, b: float) -> tuple[float, float, float]:
@@ -96,17 +103,17 @@ def rotg(a: float, b: float) -> tuple[float, float, float]:
 
 def fgmres(
     A: MatvecOperator,
-    b: NDArray,
-    x0: Optional[NDArray] = None,
+    b: Tensor,
+    x0: Tensor | None = None,
     tol: float = 1e-5,
     restart: int = 20,
-    maxiter: Optional[int] = None,
-    preconditioner: Optional[MatvecOperator] = None,
+    maxiter: int | None = None,
+    preconditioner: MatvecOperator | None = None,
     hegedus: bool = False,
     verbose: int = 0,
     prefix: str = "",
-    device: Optional[Device] = None,
-) -> Tuple[NDArray, float, float, int, int, List[Tuple[float, float, float]]]:
+    device: Device | None = None,
+) -> tuple[Tensor, float, float, int, int, list[tuple[float, float, float]]]:
     """
     Solve the given linear system (Ax = b) for x, using the FGMRES algorithm.
 
@@ -133,9 +140,6 @@ def fgmres(
     if len(b) <= restart:
         raise ValueError("The b vector should be longer than the number of restart")
 
-    xp = device.xp
-    xalg = device.xalg
-
     t_start = time()
     niter = 0
 
@@ -148,14 +152,14 @@ def fgmres(
         maxiter = num_dofs * 10  # Wild guess
 
     if x0 is None:
-        x = xp.zeros_like(b)
+        x = torch.zeros_like(b)
     else:
         x = x0.copy()
 
     # Check for early stop
     norm_b = global_norm(b, device=device)
     if norm_b == 0.0:
-        return xp.zeros_like(b), 0.0, 0.0, 0, 0, [(0.0, time() - t_start, 0.0)]
+        return torch.zeros_like(b), 0.0, 0.0, 0, 0, [(0.0, time() - t_start, 0.0)]
 
     tol_relative = tol * norm_b
 
@@ -175,14 +179,23 @@ def fgmres(
 
     residuals.append(((norm_r / norm_b).item(), time() - t_start, 0.0))
 
+    # The Krylov basis follows the working precision of the right-hand side, which
+    # keeps its memory footprint low -- the dominant cost. The small orthogonalization/Hessenberg
+    # bookkeeping arrays are promoted to the accumulator precision (float64 when the working precision
+    # is float32) so that a single-precision solve does not lose orthogonality and break down.
+    dtype = b.dtype
+    acc_dtype = torch.float64 if "float32" in str(dtype) else dtype
+
     for outer in range(maxiter):
         # NOTE: We are dealing with row-major matrices, but we store the transpose of H and V.
-        H = xp.zeros((restart + 2, restart + 2))
-        R = xp.zeros((restart + 2, restart + 2))  # rhs of the MGS factorization (should be H.transposed?)
-        T = xp.zeros((restart + 2, restart + 2))
-        K = xp.zeros((restart + 2, restart + 2))
-        V = xp.zeros((restart + 2, num_dofs))  # row-major ordering
-        Z = xp.zeros((restart + 1, num_dofs))  # row-major ordering
+        H = torch.zeros((restart + 2, restart + 2), dtype=acc_dtype)
+        R = torch.zeros(
+            (restart + 2, restart + 2), dtype=acc_dtype
+        )  # rhs of the MGS factorization (should be H.transposed?)
+        T = torch.zeros((restart + 2, restart + 2), dtype=acc_dtype)
+        K = torch.zeros((restart + 2, restart + 2), dtype=acc_dtype)
+        V = torch.zeros((restart + 2, num_dofs), dtype=dtype)  # row-major ordering (working precision)
+        Z = torch.zeros((restart + 1, num_dofs), dtype=dtype)  # row-major ordering (working precision)
         Q = []  # Givens Rotations
 
         V[0, :] = r / norm_r
@@ -190,8 +203,8 @@ def fgmres(
         V[1, :] = A(Z[0, :])
         v_norm = _ortho_1_sync_igs(V, R, T, K, 2, device)
 
-        # This is the RHS vector for the problem in the Krylov Space
-        g = xp.zeros(num_dofs)
+        # This is the RHS vector for the problem in the Krylov Space (accumulator precision)
+        g = torch.zeros(num_dofs, dtype=acc_dtype)
         g[0] = norm_r
         for inner in range(restart):
 
@@ -205,7 +218,6 @@ def fgmres(
             H[inner, : inner + 2] = R[: inner + 2, inner + 1]
             Z[inner + 1, :] /= v_norm
 
-            # TODO : Start CPU here
             # Apply previous Givens rotations to H
             if inner > 0:
                 _apply_givens(Q, H[inner, :], inner)
@@ -214,52 +226,49 @@ def fgmres(
             # ==> Note that if restart = num_dofs, then this is unnecessary
             # for the last inner
             #    iteration, when inner = num_dofs-1.
-            if inner != num_dofs - 1:
-                if H[inner, inner + 1] != 0:
-                    [c, s, r] = rotg(H[inner, inner], H[inner, inner + 1])
+            if inner != num_dofs - 1 and H[inner, inner + 1] != 0:
+                [c, s, r] = rotg(float(H[inner, inner]), float(H[inner, inner + 1]))
 
-                    Qblock = xp.array([[c, s], [-xp.conjugate(s), c]])
-                    Q.append(Qblock)
+                Qblock = torch.tensor([[c, s], [-s.conjugate(), c]], dtype=acc_dtype)
+                Q.append(Qblock)
 
-                    # Apply Givens Rotation to g,
-                    #   the RHS for the linear system in the Krylov Subspace.
-                    g[inner : inner + 2] = Qblock @ g[inner : inner + 2]
+                # Apply Givens Rotation to g,
+                #   the RHS for the linear system in the Krylov Subspace.
+                g[inner : inner + 2] = Qblock @ g[inner : inner + 2]
 
-                    # Apply effect of Givens Rotation to H
-                    H[inner, inner] = xp.dot(Qblock[0, :], H[inner, inner : inner + 2])
-                    H[inner, inner + 1] = 0.0
+                # Apply effect of Givens Rotation to H
+                H[inner, inner] = torch.dot(Qblock[0, :], H[inner, inner : inner + 2])
+                H[inner, inner + 1] = 0.0
 
             # Don't update norm_r if last inner iteration, because
             # norm_r is calculated directly after this loop ends.
             if inner < restart - 1:
-                norm_r = xp.abs(g[inner + 1])
+                norm_r = torch.abs(g[inner + 1])
                 residuals.append(((norm_r / norm_b).item(), time() - t_start, 0.0))
-                if verbose > 1:
-                    if comm.rank == 0:
-                        print(f"{prefix}norm_r / b = {residuals[-1][0]:.3e}", flush=True)
+                if verbose > 1 and comm.rank == 0:
+                    print(f"{prefix}norm_r / b = {residuals[-1][0]:.3e}", flush=True)
                 if norm_r < tol_relative:
                     break
 
         # end inner loop, back to outer loop
 
         # Find best update to x in Krylov Space V.
-        y = xalg.linalg.solve_triangular(H[0 : inner + 1, 0 : inner + 1].T, g[0 : inner + 1])
-        update = xp.ravel(Z[: inner + 1, :].T @ y.reshape(-1, 1))
+        y = solve_triangular(H[0 : inner + 1, 0 : inner + 1].T, g[0 : inner + 1])
+        # Project the correction back onto the (working-precision) preconditioned basis.
+        update = torch.ravel(Z[: inner + 1, :].T @ y.astype(Z.dtype).reshape(-1, 1))
         x = x + update
         r = b - A(x)
 
         norm_r = global_norm(r, device=device)
 
         residuals.append(((norm_r / norm_b).item(), time() - t_start, 0.0))
-        if verbose > 0:
-            if comm.rank == 0:
-                print(f"{prefix}res: {norm_r/norm_b:.2e} (iter {niter})", flush=True)
+        if verbose > 0 and comm.rank == 0:
+            print(f"{prefix}res: {norm_r/norm_b:.2e} (iter {niter})", flush=True)
 
-        # TODO : End cpu calculation here
         # Has GMRES stagnated?
         indices = x != 0
         if indices.any():
-            change = xp.max(xp.abs(update[indices] / x[indices]))
+            change = torch.max(torch.abs(update[indices] / x[indices]))
             if change < 1e-12:
                 # No change, halt
                 return x, norm_r, norm_b, niter, -1, residuals

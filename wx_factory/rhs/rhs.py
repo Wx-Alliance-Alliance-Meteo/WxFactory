@@ -1,13 +1,17 @@
 from abc import ABC, abstractmethod
-import time
 
 import numpy
+import torch
 from numpy.typing import NDArray
 
 from ..common import Configuration
+from ..device import differentiable_mode
 from ..geometry import DFROperators, Geometry, Metric2D, Metric3DTopo
 from ..pde import PDE
-from ..process_topology import ProcessTopology, ExchangeRequest
+from ..process_topology import ExchangeRequest, ProcessTopology
+
+# Forward AD cannot write into scratch tensors captured from an earlier RHS call.
+_ALLOCATE_FRESH = differentiable_mode()
 
 
 class RHS(ABC):
@@ -74,6 +78,7 @@ class RHS(ABC):
 
         # Initialize rhs matrix
         self.rhs = None
+        self._workspace_invalidated = False
 
     def clear_timings(self):
         self.timestamps = []
@@ -93,9 +98,13 @@ class RHS(ABC):
         # 0.b Preserve array shape
         given_shape = q.shape
 
-        self.ops = self.ops_complex if self.device.xp.iscomplexobj(q) else self.ops_real
+        self.ops = self.ops_complex if torch.is_complex(q) else self.ops_real
+
+        if _ALLOCATE_FRESH:
+            self.invalidate_workspace()
 
         self.allocate_arrays(q)
+        self._workspace_invalidated = False
 
         self.timestamps[0] = self.device.timestamp(name="extrap")
 
@@ -137,13 +146,19 @@ class RHS(ABC):
         return self.__call__(q)
 
     def allocate_arrays(self, q: NDArray):
-        xp = self.device.xp
+        if self.workspace_needs_allocation(self.f_x1, q.dtype):
+            self.f_x1 = torch.zeros_like(q)
+            self.f_x2 = torch.zeros_like(q)
+            self.f_x3 = torch.zeros_like(q)
+            self.rhs = torch.empty_like(q)
 
-        if self.f_x1 is None or self.f_x1.dtype != q.dtype:
-            self.f_x1 = xp.zeros_like(q)
-            self.f_x2 = xp.zeros_like(q)
-            self.f_x3 = xp.zeros_like(q)
-            self.rhs = xp.empty_like(q)
+    def invalidate_workspace(self) -> None:
+        """Require fresh scratch arrays on the next evaluation."""
+        self._workspace_invalidated = True
+
+    def workspace_needs_allocation(self, array, dtype) -> bool:
+        """Return whether a scratch array must be allocated."""
+        return self._workspace_invalidated or array is None or array.dtype != dtype
 
     @abstractmethod
     def solution_extrapolation(self, q: NDArray) -> None:
@@ -154,11 +169,10 @@ class RHS(ABC):
         pass
 
     def riemann_fluxes(self) -> None:
-        xp = self.device.xp
-        if self.f_itf_x1 is None or self.f_itf_x1.dtype != self.q_itf_x1.dtype:
-            self.f_itf_x1 = xp.zeros_like(self.q_itf_x1)
-            self.f_itf_x2 = xp.zeros_like(self.q_itf_x2)
-            self.f_itf_x3 = xp.zeros_like(self.q_itf_x3)
+        if self.workspace_needs_allocation(self.f_itf_x1, self.q_itf_x1.dtype):
+            self.f_itf_x1 = torch.zeros_like(self.q_itf_x1)
+            self.f_itf_x2 = torch.zeros_like(self.q_itf_x2)
+            self.f_itf_x3 = torch.zeros_like(self.q_itf_x3)
 
         self.pde.riemann_fluxes(
             self.q_itf_x1, self.q_itf_x2, self.q_itf_x3, self.f_itf_x1, self.f_itf_x2, self.f_itf_x3

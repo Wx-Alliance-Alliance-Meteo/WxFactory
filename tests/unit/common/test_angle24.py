@@ -1,10 +1,11 @@
 import math
-import unittest
 
 from wx_factory.common import angle24
 
+from wx_test import WxTestCase
 
-class Angle24TestCase(unittest.TestCase):
+
+class Angle24TestCase(WxTestCase):
     def test_cyclic(self):
         """Verify that encoding a value that was decoded will always give the same result."""
         decoded = [angle24.decode(i) for i in range(0xFFFFFF)]

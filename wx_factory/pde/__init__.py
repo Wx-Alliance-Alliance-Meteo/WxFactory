@@ -1,5 +1,3 @@
 from .pde import PDE
-from .pde_euler_cartesian import PDEEulerCartesian
-from .pde_euler_cubesphere import PDEEulerCubesphere
+from .pde_euler_3d import PDEEuler3D
 
-__all__ = ["PDE", "PDEEulerCartesian", "PDEEulerCubesphere"]

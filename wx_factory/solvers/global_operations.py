@@ -1,5 +1,10 @@
-"""Global operations performed on distributed vectors."""
+"""Global operations performed on distributed vectors.
 
+The local contribution is computed with PyTorch and brought to the host as a Python scalar (or a
+small host array) before the MPI reduction. This works with tensors on either the CPU or a GPU.
+Bringing the scalar to the host also forces the device synchronization required by the caller."""
+
+import torch
 from typing import Optional
 
 from mpi4py import MPI
@@ -8,29 +13,49 @@ from numpy.typing import NDArray
 
 from ..device import Device
 
-__all__ = ["global_norm", "global_dotprod", "global_inf_norm"]
+__all__ = ["global_norm", "global_dotprod", "global_inf_norm", "global_allreduce"]
+
+
+def _to_scalar(value):
+    """Bring a 0-d device/host reduction result to a Python scalar."""
+    return value.item() if hasattr(value, "item") else value
 
 
 def global_norm(vec: NDArray, device: Optional[Device] = None):
-    """Compute vector norm across all PEs in the communicator (from given device, default CpuDevice)"""
+    """Compute vector 2-norm across all PEs (from the given device, default PytorchDevice).
+
+    Returns a 0-d array of the device's array library, so callers can still use ``.item()`` on it."""
     if len(vec.shape) != 1:
         raise ValueError("This function only accept a vector (1 dimension tensor)")
     if device is None:
         device = Device.get_default()
 
-    comm = device.comm
-
-    local_sum = vec @ vec
-    return device.xp.sqrt(comm.allreduce(local_sum))
+    local_sum = _to_scalar(vec @ vec)
+    total = device.comm.allreduce(local_sum)
+    return torch.sqrt(torch.asarray(total))
 
 
 def global_dotprod(vec1: NDArray, vec2: NDArray, comm: MPI.Comm = MPI.COMM_WORLD):
-    """Compute dot product across all PEs in the communicator (default COMM_WORLD)"""
-    local_sum = vec1 @ vec2
+    """Compute dot product across all PEs in the communicator (default COMM_WORLD)."""
+    local_sum = _to_scalar(vec1 @ vec2)
     return comm.allreduce(local_sum)
 
 
 def global_inf_norm(vec: NDArray, comm: MPI.Comm = MPI.COMM_WORLD):
-    """Compute infinity norm across all PEs in the communicator (default COMM_WORLD)"""
-    local_max = numpy.amax(numpy.abs(vec))
+    """Compute infinity norm across all PEs in the communicator (default COMM_WORLD)."""
+    local_max = _to_scalar(abs(vec).max())
     return comm.allreduce(local_max, op=MPI.MAX)
+
+
+def global_allreduce(array: NDArray, device: Optional[Device] = None):
+    """Sum a small (host or device) array across all PEs, returning it on the device.
+
+    Used for the FGMRES orthogonalization reduction, whose operand is a small matrix rather than a
+    scalar. The buffer is reduced on the host (contiguous numpy) to stay compatible with non
+    CUDA-aware MPI, then copied back to the device."""
+    if device is None:
+        device = Device.get_default()
+    host = numpy.ascontiguousarray(device.to_host(array))
+    total = numpy.empty_like(host)
+    device.comm.Allreduce(host, total)
+    return torch.asarray(total)

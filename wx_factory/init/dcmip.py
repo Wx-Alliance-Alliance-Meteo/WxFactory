@@ -1,10 +1,11 @@
 import math
 
-import numpy
+import torch
+from torch import Tensor
 
 from ..common.configuration import Configuration
 from ..common.definitions import cpd, gravity, p0, Rd
-from ..geometry import CubedSphere3D, DFROperators, Metric3DTopo, wind2contra_2d, wind2contra_3d
+from ..geometry import CubedSphere3D, DFROperators, Metric3DTopo
 
 # =======================================================================
 #
@@ -28,6 +29,23 @@ from ..geometry import CubedSphere3D, DFROperators, Metric3DTopo, wind2contra_2d
 # X = 1) is selected.
 
 
+def dcmip_prescribed_rho_theta(geom):
+    """Prescribed density and rho*theta for the DCMIP advection tests (1-1 and 1-2).
+
+    The atmosphere is isothermal at T0 = 300 K and hydrostatic, so the pressure, the density and the
+    potential temperature are analytic and time independent. DCMIP requires that the dynamic updates
+    of the density, temperature and pressure be disabled for these tests, so a step hook restores
+    these fields after every step."""
+    T0 = 300.0  # temperature
+    H = Rd * T0 / gravity  # scale height
+
+    p = p0 * torch.exp(-geom.height_new / H)
+    rho = p / (Rd * T0)
+    theta = T0 * (p0 / p) ** (Rd / cpd)
+
+    return rho, rho * theta
+
+
 def dcmip_T11_update_winds(geom, metric, mtrx, param, time=float(0)):
     """
     Test 11 - Deformational Advection
@@ -39,64 +57,53 @@ def dcmip_T11_update_winds(geom, metric, mtrx, param, time=float(0)):
     The velocities are time dependent and therefore must be updated in the dynamical core.
     """
 
+    # Coordinates in the element-wise ("new") memory layout, matching the state vector.
+    lon = geom.lon_new
+    lat = geom.lat_new
+    height = geom.height_new
+
     tau = 12.0 * 86400.0  # period of motion 12 days
     u0 = (2.0 * math.pi * geom.earth_radius) / tau  # 2 pi a / 12 days
-    k0 = ((10.0 * geom.earth_radius) / tau,)  # Velocity Magnitude
+    k0 = (10.0 * geom.earth_radius) / tau  # Velocity Magnitude
     omega0 = (23000.0 * math.pi) / tau  # Velocity Magnitude
     T0 = 300.0  # temperature
     H = Rd * T0 / gravity  # scale height
 
-    p = p0 * numpy.exp(-geom.height / H)
-    ptop = p0 * math.exp(-12000.0 / H)
+    p = p0 * torch.exp(-height / H)
+    ptop = p0 * math.exp(-param.ztop / H)
 
-    lonp = geom.lon - 2.0 * math.pi * time / tau
+    lonp = lon - 2.0 * math.pi * time / tau
 
     # Shape function
     bs = 0.2
-    s = (
-        1.0
-        + math.exp((ptop - p0) / (bs * ptop))
-        - numpy.exp((p - p0) / (bs * ptop))
-        - numpy.exp((ptop - p) / (bs * ptop))
-    )
+    s = 1.0 + math.exp((ptop - p0) / (bs * ptop)) - torch.exp((p - p0) / (bs * ptop)) - torch.exp((ptop - p) / (bs * ptop))
 
     # Zonal Velocity
 
     ud = (
         (omega0 * geom.earth_radius)
         / (bs * ptop)
-        * numpy.cos(lonp)
-        * (numpy.cos(geom.lat) ** 2.0)
+        * torch.cos(lonp)
+        * (torch.cos(lat) ** 2.0)
         * math.cos(2.0 * math.pi * time / tau)
-        * (-numpy.exp((p - p0) / (bs * ptop)) + numpy.exp((ptop - p) / (bs * ptop)))
+        * (-torch.exp((p - p0) / (bs * ptop)) + torch.exp((ptop - p) / (bs * ptop)))
     )
 
-    u = (
-        k0 * numpy.sin(lonp) * numpy.sin(lonp) * numpy.sin(2.0 * geom.lat) * math.cos(math.pi * time / tau)
-        + u0 * numpy.cos(geom.lat)
-        + ud
-    )
+    u = k0 * torch.sin(lonp) * torch.sin(lonp) * torch.sin(2.0 * lat) * math.cos(math.pi * time / tau) + u0 * torch.cos(lat) + ud
 
     # Meridional Velocity
 
-    v = k0 * numpy.sin(2.0 * lonp) * numpy.cos(geom.lat) * math.cos(math.pi * time / tau)
+    v = k0 * torch.sin(2.0 * lonp) * torch.cos(lat) * math.cos(math.pi * time / tau)
 
     # Vertical Velocity
 
-    w = (
-        -((Rd * T0) / (gravity * p))
-        * omega0
-        * numpy.sin(lonp)
-        * numpy.cos(geom.lat)
-        * math.cos(2.0 * math.pi * time / tau)
-        * s
-    )
+    w = -((Rd * T0) / (gravity * p)) * omega0 * torch.sin(lonp) * torch.cos(lat) * math.cos(2.0 * math.pi * time / tau) * s
 
-    # Contravariant components
+    # The state vector holds the contravariant components of the wind in the cubed-sphere
+    # coordinates, not the (zonal, meridional, vertical) components of the DCMIP document.
+    u1_contra, u2_contra, u3_contra = geom.wind2contra(u, v, w, metric)
 
-    u1_contra, u2_contra = wind2contra_2d(u, v, geom)
-
-    return u1_contra, u2_contra, w
+    return u1_contra, u2_contra, u3_contra
 
 
 # ==========================================================================================
@@ -109,6 +116,10 @@ def dcmip_T12_update_winds(geom, metric, mtrx, param, time=float(0)):
     Test 12 - 3D Hadley-like flow
     The velocities are time dependent and therefore must be updated in the dynamical core.
     """
+    # Coordinates in the element-wise ("new") memory layout, matching the state vector.
+    lat = geom.lat_new
+    height = geom.height_new
+
     tau = 86400.0  # period of motion 1 day (in s)
     u0 = 40.0  # Zonal velocity magnitude (m/s)
     w0 = 0.15  # Vertical velocity magnitude (m/s), changed in v5
@@ -117,7 +128,7 @@ def dcmip_T12_update_winds(geom, metric, mtrx, param, time=float(0)):
     K = 5.0  # number of Hadley-like cells
 
     # Height and pressure are aligned (p = p0 exp(-z/H))
-    p = p0 * numpy.exp(-geom.height / H)
+    p = p0 * torch.exp(-height / H)
 
     # -----------------------------------------------------------------------
     #    TEMPERATURE IS CONSTANT 300 K
@@ -134,7 +145,7 @@ def dcmip_T12_update_winds(geom, metric, mtrx, param, time=float(0)):
 
     # Zonal Velocity
 
-    u = u0 * numpy.cos(geom.lat)
+    u = u0 * torch.cos(lat)
 
     # Meridional Velocity
 
@@ -142,10 +153,10 @@ def dcmip_T12_update_winds(geom, metric, mtrx, param, time=float(0)):
         -(rho0 / rho)
         * (geom.earth_radius * w0 * math.pi)
         / (K * param.ztop)
-        * numpy.cos(geom.lat)
-        * numpy.sin(K * geom.lat)
-        * numpy.cos(math.pi * geom.height / param.ztop)
-        * numpy.cos(math.pi * time / tau)
+        * torch.cos(lat)
+        * torch.sin(K * lat)
+        * torch.cos(math.pi * height / param.ztop)
+        * math.cos(math.pi * time / tau)
     )
 
     # Vertical Velocity - can be changed to vertical pressure velocity by
@@ -154,16 +165,16 @@ def dcmip_T12_update_winds(geom, metric, mtrx, param, time=float(0)):
     w = (
         (rho0 / rho)
         * (w0 / K)
-        * (-2.0 * numpy.sin(K * geom.lat) * numpy.sin(geom.lat) + K * numpy.cos(geom.lat) * numpy.cos(K * geom.lat))
-        * numpy.sin(math.pi * geom.height / param.ztop)
-        * numpy.cos(math.pi * time / tau)
+        * (-2.0 * torch.sin(K * lat) * torch.sin(lat) + K * torch.cos(lat) * torch.cos(K * lat))
+        * torch.sin(math.pi * height / param.ztop)
+        * math.cos(math.pi * time / tau)
     )
 
-    # Contravariant components
+    # The state vector holds the contravariant components of the wind in the cubed-sphere
+    # coordinates, not the (zonal, meridional, vertical) components of the DCMIP document.
+    u1_contra, u2_contra, u3_contra = geom.wind2contra(u, v, w, metric)
 
-    u1_contra, u2_contra = wind2contra_2d(u, v, geom)
-
-    return u1_contra, u2_contra, w
+    return u1_contra, u2_contra, u3_contra
 
 
 def dcmip_advection_deformation(geom, metric, mtrx, param):
@@ -187,13 +198,22 @@ def dcmip_advection_deformation(geom, metric, mtrx, param):
     #    HEIGHT AND PRESSURE
     # -----------------------------------------------------------------------
 
-    p = p0 * numpy.exp(-geom.height / H)
+    # The surface is flat for this test (z_s = 0, so Phi_s = 0), but the metric is only
+    # token-initialized by its constructor and must still be built explicitly.
+    metric.build_metric()
+
+    # Coordinates in the element-wise ("new") memory layout, matching the state vector.
+    lon = geom.lon_new
+    lat = geom.lat_new
+    height = geom.height_new
+
+    p = p0 * torch.exp(-height / H)
 
     # -----------------------------------------------------------------------
     #    WINDS
     # -----------------------------------------------------------------------
 
-    u1_contra, u2_contra, w = dcmip_T11_update_winds(geom, metric, mtrx, param, time=0)
+    u1_contra, u2_contra, u3_contra = dcmip_T11_update_winds(geom, metric, mtrx, param, time=0)
 
     # -----------------------------------------------------------------------
     #    TEMPERATURE IS CONSTANT 300 K
@@ -218,62 +238,40 @@ def dcmip_advection_deformation(geom, metric, mtrx, param):
     #     initialize tracers
     # -----------------------------------------------------------------------
 
-    # Tracer 1 - Cosine Bells
+    # Tracer 1 - Cosine Bells (DCMIP eq. 28-30)
 
-    # To calculate great circle distance
-    sin_tmp = numpy.empty_like(p)
-    cos_tmp = numpy.empty_like(p)
-    sin_tmp2 = numpy.empty_like(p)
-    cos_tmp2 = numpy.empty_like(p)
+    # Great circle distance to each bell centre, normalized by the Earth radius 'a'
+    r1 = torch.arccos(math.sin(phi0) * torch.sin(lat) + math.cos(phi0) * torch.cos(lat) * torch.cos(lon - lambda0))
+    r2 = torch.arccos(math.sin(phi1) * torch.sin(lat) + math.cos(phi1) * torch.cos(lat) * torch.cos(lon - lambda1))
 
-    sin_tmp[:, :, :] = numpy.sin(geom.lat) * math.sin(phi0)
-    cos_tmp[:, :, :] = numpy.cos(geom.lat) * math.cos(phi0)
-    sin_tmp2[:, :, :] = numpy.sin(geom.lat) * math.sin(phi1)
-    cos_tmp2[:, :, :] = numpy.cos(geom.lat) * math.cos(phi1)
+    d1 = torch.clamp((r1 / RR) ** 2 + ((height - z0) / ZZ) ** 2, max=1.0)
+    d2 = torch.clamp((r2 / RR) ** 2 + ((height - z0) / ZZ) ** 2, max=1.0)
 
-    # great circle distance without 'a'
+    q1 = 0.5 * (1.0 + torch.cos(math.pi * d1)) + 0.5 * (1.0 + torch.cos(math.pi * d2))
 
-    r = numpy.arccos(sin_tmp + cos_tmp * numpy.cos(geom.lon - lambda0))
-    r2 = numpy.arccos(sin_tmp2 + cos_tmp2 * numpy.cos(geom.lon - lambda1))
-    d1 = numpy.minimum(1.0, (r / RR) ** 2 + ((geom.height - z0) / ZZ) ** 2)
-    d2 = numpy.minimum(1.0, (r2 / RR) ** 2 + ((geom.height - z0) / ZZ) ** 2)
-
-    q1 = 0.5 * (1.0 + numpy.cos(math.pi * d1)) + 0.5 * (1.0 + numpy.cos(math.pi * d2))
-
-    # Tracer 2 - Correlated Cosine Bells
+    # Tracer 2 - Correlated Cosine Bells (DCMIP eq. 31)
 
     q2 = 0.9 - 0.8 * q1**2
 
-    # Tracer 3 - Slotted Ellipse
-
-    # Make the ellipse
-    q3 = numpy.zeros_like(q1)
-    nk, ni, nj = q3.shape
-    for k in range(nk):
-        for i in range(ni):
-            for j in range(nj):
-                # Make the ellipse
-                if d1[k, i, j] <= RR:
-                    q3[k, i, j] = 1.0
-                elif d2[k, i, j] <= RR:
-                    q3[k, i, j] = 1.0
-                else:
-                    q3[k, i, j] = 0.1
-
-                # Put in the slot
-                if geom.height[k, i, j] > z0 and abs(geom.lat[i, j]) < 0.125:
-                    q3[k, i, j] = 0.1
+    # Tracer 3 - Slotted Ellipse (DCMIP eq. 32-33): 1 inside either ellipse, 0.1 elsewhere,
+    # with a slot cut out above the tracer centre height near the equator.
+    q3 = torch.where((d1 <= 0.5) | (d2 <= 0.5), 1.0, 0.1)
+    q3 = torch.where((height > z0) & (torch.abs(lat) < 0.125), 0.1, q3)
 
     # Tracer 4: q4 is chosen so that, in combination with the other three tracer
-    #           fields with weight (3/10), the sum is equal to one
+    #           fields with weight (3/10), the sum is equal to one (DCMIP eq. 34)
 
     q4 = 1.0 - 0.3 * (q1 + q2 + q3)
 
-    return rho, u1_contra, u2_contra, w, theta, q1, q2, q3, q4
+    return rho, u1_contra, u2_contra, u3_contra, theta, q1, q2, q3, q4
 
 
 def dcmip_advection_hadley(geom, metric, mtrx, param):
     """Test 12 - 3D Hadley-like flow"""
+    metric.build_metric()
+
+    height = geom.height_new
+
     tau = 86400.0  # period of motion 1 day (in s)
     T0 = 300.0  # temperature (K)
     H = Rd * T0 / gravity  # scale height
@@ -286,13 +284,13 @@ def dcmip_advection_hadley(geom, metric, mtrx, param):
     # -----------------------------------------------------------------------
 
     # Height and pressure are aligned (p = p0 exp(-z/H))
-    p = p0 * numpy.exp(-geom.height / H)
+    p = p0 * torch.exp(-height / H)
 
     # -----------------------------------------------------------------------
     #    WINDS
     # -----------------------------------------------------------------------
 
-    u1_contra, u2_contra, w = dcmip_T12_update_winds(geom, metric, mtrx, param, time=0)
+    u1_contra, u2_contra, u3_contra = dcmip_T12_update_winds(geom, metric, mtrx, param, time=0)
 
     # -----------------------------------------------------------------------
     #    TEMPERATURE IS CONSTANT 300 K
@@ -317,17 +315,15 @@ def dcmip_advection_hadley(geom, metric, mtrx, param):
     #     initialize tracers
     # -----------------------------------------------------------------------
 
-    # Tracer 1 - Layer
+    # Tracer 1 - Layer (DCMIP eq. 39): a cosine bell in the vertical, zero outside [z1, z2]
 
-    q1 = numpy.zeros_like(p)
-    nk, ni, nj = q1.shape
-    for k in range(nk):
-        for i in range(ni):
-            for j in range(nj):
-                if geom.height[k, i, j] < z2 and geom.height[k, i, j] > z1:
-                    q1[k, i, j] = 0.5 * (1.0 + math.cos(2.0 * math.pi * (geom.height[k, i, j] - z0) / (z2 - z1)))
+    q1 = torch.where(
+        (height > z1) & (height < z2),
+        0.5 * (1.0 + torch.cos(2.0 * math.pi * (height - z0) / (z2 - z1))),
+        0.0,
+    )
 
-    return rho, u1_contra, u2_contra, w, theta, q1
+    return rho, u1_contra, u2_contra, u3_contra, theta, q1
 
 
 # ============================================================================================
@@ -335,88 +331,158 @@ def dcmip_advection_hadley(geom, metric, mtrx, param):
 # ============================================================================================
 
 
-def dcmip_mountain(geom: CubedSphere3D, metric, mtrx, param):
+def dcmip_advection_orography(geom: CubedSphere3D, metric, mtrx, param):
+    """
+    Test 13 - Horizontal advection of thin cloud-like tracers in the presence of orography
 
-    lon_m = 3.0 * numpy.pi / 2.0
-    # lon_m = 0.0
-    lat_m = 0.0
-    radius_m = 3.0 * numpy.pi / 4.0 * 0.5
-    height_max = 2000.0
-    oscillation_half_width = numpy.pi / 16.0
+    Three thin cloud decks are carried once around the sphere, at constant height above mean sea
+    level, over a Schar-like mountain with compact support. Because the vertical coordinate follows
+    the terrain, a wind that is purely horizontal in physical space still crosses the coordinate
+    surfaces: that "perceived" vertical velocity (section 1.3 and Appendix B of the document) is what
+    the test is really about. Here it comes out of the metric on its own, since wind2contra converts
+    the physical wind (u, v, w = 0) exactly.
+    """
+    tau = 12.0 * 86400.0  # period of motion 12 days (s)
+    u0 = 2.0 * math.pi * geom.earth_radius / tau  # velocity magnitude (m/s)
+    T0 = 300.0  # isothermal temperature (K)
+    H = Rd * T0 / gravity  # scale height (m)
+    alpha = math.pi / 6.0  # advection angle (radians), 30 degrees
 
-    def compute_distance_radian(lon, lat):
-        """Compute the angular distance (in radians) of the given lon/lat coordinates from the center of the mountain"""
-        return numpy.minimum(radius_m, numpy.sqrt((lon - lon_m) ** 2 + (lat - lat_m) ** 2))
+    # Mountain (Table XI)
+    lambdam = 3.0 * math.pi / 2.0  # mountain longitude center point (radians)
+    phim = 0.0  # mountain latitude center point (radians)
+    Rm = 3.0 * math.pi / 4.0  # mountain radius (radians)
+    zetam = math.pi / 16.0  # mountain oscillation half-width (radians)
 
-    def compute_height_from_dist(dist):
-        """Compute the height of the surface that corresponds to the given distance(s) from the mountain center.
-        Based on the DCMIP case 1-3 description"""
-        return (
-            height_max
-            / 2.0
-            * (1.0 + numpy.cos(numpy.pi * dist / radius_m))
-            * numpy.cos(numpy.pi * dist / oscillation_half_width)
+    if param.case_number == 201:
+        # If z_s = h0 f(r), its physical radial slope is h0 f'(r) / a.
+        # The maximum of |f'| for the DCMIP bell and ripple below is
+        # 16.004700029593717. Choose h0 so max|dz_s/ds| = tan(70 degrees).
+        maximum_normalized_slope = 16.004700029593717
+        h0 = math.tan(math.radians(70.0)) * geom.earth_radius / maximum_normalized_slope
+    else:
+        h0 = 2000.0  # peak height of the DCMIP 2-0-0 mountain (m)
+
+    # Cloud-like tracers (Table XI)
+    lambdap = math.pi / 2.0  # cloud longitude center point (radians)
+    phip = 0.0  # cloud latitude center point (radians)
+    Rp = math.pi / 4.0  # cloud radius (radians)
+    zp = (3050.0, 5050.0, 8200.0)  # midpoint of each cloud deck (m)
+    dzp = (1000.0, 1000.0, 400.0)  # thickness of each cloud deck (m)
+
+    def surface_height(latlon, large_scale_only=False):
+        """
+        The Schar-like mountain of DCMIP eqs. 47 and 48, from a (lon, lat) pair of fields.
+
+        The mountain is a smooth bell h*(rm) modulated by a short-wavelength ripple cos²(π rm/ζm).
+        With cos² x = (1 + cos 2x)/2, it splits exactly into
+
+            zs = h* cos²(π rm/ζm) = h*/2  +  (h*/2) cos(2π rm/ζm),
+
+        a bell that carries the whole mountain height and a ripple of zero mean. The first term is
+        the large-scale part h1 that SLEVE asks for (this is also the choice made by Schar et al.
+        2002, eq. 27, for their own two-dimensional version of this mountain), the second is the
+        small-scale part h2 that we want to decay quickly with height.
+        """
+        lon, lat = latlon[0], latlon[1]
+
+        # Great circle distance from the centre of the mountain, in radians.
+        rm = torch.arccos(math.sin(phim) * torch.sin(lat) + math.cos(phim) * torch.cos(lat) * torch.cos(lon - lambdam))
+
+        bell = 0.5 * h0 * (1.0 + torch.cos(math.pi * rm / Rm))
+        shape = 0.5 if large_scale_only else torch.cos(math.pi * rm / zetam) ** 2
+
+        return torch.where(rm < Rm, bell * shape, 0.0)
+
+    # ------------------------------------------------------------------------------------------
+    #     Topography. The vertical coordinate is terrain following, so this has to be in place
+    #     before the metric, the heights and therefore the tracers can be computed.
+    # ------------------------------------------------------------------------------------------
+
+    zbot_new = surface_height(geom.get_floor(geom.polar))
+    zbot_itf_i_new = surface_height(geom.get_itf_i_floor(geom.polar_itf_i))
+    zbot_itf_j_new = surface_height(geom.get_itf_j_floor(geom.polar_itf_j))
+
+    zbot = surface_height(geom.coordVec_latlon[:, 0])
+    zbot_itf_i = surface_height(geom.coordVec_latlon_itf_i[:, 0])
+    zbot_itf_j = surface_height(geom.coordVec_latlon_itf_j[:, 0])
+
+    large_new = surface_height(geom.get_floor(geom.polar), large_scale_only=True)
+    large_itf_i_new = surface_height(geom.get_itf_i_floor(geom.polar_itf_i), large_scale_only=True)
+    large_itf_j_new = surface_height(geom.get_itf_j_floor(geom.polar_itf_j), large_scale_only=True)
+
+    large = surface_height(geom.coordVec_latlon[:, 0], large_scale_only=True)
+    large_itf_i = surface_height(geom.coordVec_latlon_itf_i[:, 0], large_scale_only=True)
+    large_itf_j = surface_height(geom.coordVec_latlon_itf_j[:, 0], large_scale_only=True)
+
+    geom.apply_topography(
+        zbot,
+        zbot_itf_i,
+        zbot_itf_j,
+        zbot_new,
+        zbot_itf_i_new,
+        zbot_itf_j_new,
+        large,
+        large_itf_i,
+        large_itf_j,
+        large_new,
+        large_itf_i_new,
+        large_itf_j_new,
+    )
+    metric.build_metric()
+
+    # Coordinates in the element-wise ("new") layout. The heights follow the terrain, so they are
+    # only meaningful once the topography above has been applied.
+    lon = geom.lon_new
+    lat = geom.lat_new
+    height = geom.height_new
+
+    # ------------------------------------------------------------------------------------------
+    #     Winds (eqs. 44-46). The flow is horizontal with respect to mean sea level, so the
+    #     physical vertical velocity vanishes.
+    # ------------------------------------------------------------------------------------------
+
+    u = u0 * (torch.cos(lat) * math.cos(alpha) + torch.sin(lat) * torch.cos(lon) * math.sin(alpha))
+    v = -u0 * torch.sin(lon) * math.sin(alpha)
+    w = torch.zeros_like(u)
+
+    u1_contra, u2_contra, u3_contra = geom.wind2contra(u, v, w, metric)
+
+    # ------------------------------------------------------------------------------------------
+    #     Isothermal atmosphere at rest with respect to the mass field
+    # ------------------------------------------------------------------------------------------
+
+    p = p0 * torch.exp(-height / H)
+    rho = p / (Rd * T0)
+    theta = T0 * (p0 / p) ** (Rd / cpd)
+
+    # ------------------------------------------------------------------------------------------
+    #     The three cloud decks (eqs. 49-53), initially away from the mountain
+    # ------------------------------------------------------------------------------------------
+
+    # Great circle distance from the centre of the cloud decks, in radians.
+    rp = torch.arccos(math.sin(phip) * torch.sin(lat) + math.cos(phip) * torch.cos(lat) * torch.cos(lon - lambdap))
+    inside = rp < Rp
+
+    # The lower and medium decks are disk shaped (eq. 51) ...
+    def disk(i):
+        rz = torch.abs(height - zp[i])
+        return torch.where(
+            inside & (rz < 0.5 * dzp[i]),
+            0.25 * (1.0 + torch.cos(2.0 * math.pi * rz / dzp[i])) * (1.0 + torch.cos(math.pi * rp / Rp)),
+            0.0,
         )
 
-    # Distances from the mountain on all grid and interface points
-    distance = compute_distance_radian(geom.lon[0, :, :], geom.lat[0, :, :])
-    distance_itf_i = compute_distance_radian(geom.lon_itf_i, geom.lat_itf_i)
-    distance_itf_j = compute_distance_radian(geom.lon_itf_j, geom.lat_itf_j)
+    q1 = disk(0)
+    q2 = disk(1)
 
-    # Height at every grid and interface point
-    h_surf = compute_height_from_dist(distance)
+    # ... and the upper one is box shaped (eq. 52)
+    q3 = torch.where(inside & (torch.abs(height - zp[2]) < 0.5 * dzp[2]), 1.0, 0.0)
 
-    num_interfaces_horiz = param.num_elements_horizontal + 1
-    h_surf_itf_i = numpy.zeros((param.num_elements_horizontal + 2, param.num_solpts * param.num_elements_horizontal, 2))
-    h_surf_itf_j = numpy.zeros((param.num_elements_horizontal + 2, 2, param.num_solpts * param.num_elements_horizontal))
+    # The total tracer field (eq. 53)
+    q4 = q1 + q2 + q3
 
-    h_surf_itf_i[0:num_interfaces_horiz, :, 1] = compute_height_from_dist(distance_itf_i.T)
-    h_surf_itf_i[1 : num_interfaces_horiz + 1, :, 0] = h_surf_itf_i[0:num_interfaces_horiz, :, 1]
-
-    h_surf_itf_j[0:num_interfaces_horiz, 1, :] = compute_height_from_dist(distance_itf_j)
-    h_surf_itf_j[1 : num_interfaces_horiz + 1, 0, :] = h_surf_itf_j[0:num_interfaces_horiz, 1, :]
-
-    # Height derivative along x and y at every grid point
-    _, ni, nj = geom.lon.shape
-    dhdx1 = numpy.zeros((ni, nj))
-    dhdx2 = numpy.zeros((ni, nj))
-
-    offset = 1  # Offset due to the halo
-    for elem in range(param.num_elements_horizontal):
-        epais = elem * param.num_solpts + numpy.arange(param.num_solpts)
-
-        # --- Direction x1
-        dhdx1[:, epais] = h_surf[:, epais] @ mtrx.diff_solpt_tr + h_surf_itf_i[elem + offset, :, :] @ mtrx.correction_tr
-
-        # --- Direction x2
-        dhdx2[epais, :] = mtrx.diff_solpt @ h_surf[epais, :] + mtrx.correction @ h_surf_itf_j[elem + offset, :, :]
-
-    return h_surf, h_surf_itf_i, h_surf_itf_j, dhdx1, dhdx2
-
-
-# def dcmip_advection_orography(geom, metric, mtrx, param):
-#   tau     = 12.0 * 86400.0             # period of motion 12 days (s)
-#   u0      = 2.0*math.pi*a_ref/tau      # Velocity Magnitude (m/s)
-#   T0      = 300.0                      # temperature (K)
-#   H       = Rd * T0 / grav             # scale height (m)
-#   alpha   = math.pi/6.0                # rotation angle (radians), 30 degrees
-#   lambdam = 3.0*math.pi/2.0            # mountain longitude center point (radians)
-#   phim    = 0.0                        # mountain latitude center point (radians)
-#   h0      = 2000.0                     # peak height of the mountain range (m)
-#   Rm      = 3.0*math.pi/4.0            # mountain radius (radians)
-#   zetam   = math.pi/16.0               # mountain oscillation half-width (radians)
-#   lambdap = math.pi/2.0                # cloud-like tracer longitude center point (radians)
-#   phip    = 0.0                        # cloud-like tracer latitude center point (radians)
-#   Rp      = mathpi/4.0                 # cloud-like tracer radius (radians)
-#   zp1     = 3050.0                     # midpoint of first (lowermost) tracer (m)
-#   zp2     = 5050.0                     # midpoint of second tracer (m)
-#   zp3     = 8200.0                     # midpoint of third (topmost) tracer (m)
-#   dzp1    = 1000.0                     # thickness of first (lowermost) tracer (m)
-#   dzp2    = 1000.0                     # thickness of second tracer (m)
-#   dzp3    = 400.0                      # thickness of third (topmost) tracer (m)
-#   ztop    = 12000.0                     # model top (m)
-#
-#   return rho, u1_contra, u2_contra, w, theta, q1
+    return rho, u1_contra, u2_contra, u3_contra, theta, q1, q2, q3, q4
 
 
 # ==========================================================================================
@@ -445,115 +511,83 @@ def dcmip_mountain(geom: CubedSphere3D, metric, mtrx, param):
 
 
 def dcmip_steady_state_mountain(geom: CubedSphere3D, metric, mtrx, param):
-    T0 = 300.0  # temperature (K)
-    gamma = 0.00650  # temperature lapse rate (K/m)
+    """DCMIP-2012 test 2-0: hydrostatic atmosphere at rest.
+
+    The same atmospheric state is used for the flat control and the terrain
+    run.  With terrain enabled, geometric height follows the compact,
+    moderately steep mountain from equations 63--64 of the specification.
+    """
+    T0 = 300.0  # surface temperature (K)
+    gamma = 0.0065  # temperature lapse rate (K/m)
     lambdam = 3.0 * math.pi / 2.0  # mountain longitude center point (radians)
     phim = 0.0  # mountain latitude center point (radians)
     h0 = 2000.0  # peak height of the mountain range (m)
     Rm = 3.0 * math.pi / 4.0  # mountain radius (radians)
     zetam = math.pi / 16.0  # mountain oscillation half-width (radians)
 
-    # -----------------------------------------------------------------------
-    #    compute exponents
-    # -----------------------------------------------------------------------
-    exponent = 0.0
-    if gamma != 0:
-        exponent = gravity / (Rd * gamma)
-        # exponent_rev = 1.0 / exponent # Unused
+    def surface_height(latlon, large_scale_only=False):
+        lon, lat = latlon[0], latlon[1]
+        cosine = (
+            math.sin(phim) * torch.sin(lat)
+            + math.cos(phim) * torch.cos(lat) * torch.cos(lon - lambdam)
+        )
+        # Clamp protects arccos from a one-ulp overshoot at the mountain centre.
+        rm = torch.arccos(torch.clamp(cosine, -1.0, 1.0))
+        bell = 0.5 * h0 * (1.0 + torch.cos(math.pi * rm / Rm))
+        shape = 0.5 if large_scale_only else torch.cos(math.pi * rm / zetam) ** 2
+        return torch.where(rm < Rm, bell * shape, 0.0)
 
-    # -----------------------------------------------------------------------
-    #    Set topography
-    # -----------------------------------------------------------------------
-    zbot = numpy.zeros(geom.coordVec_latlon.shape[2:])
-    zbot_itf_i = numpy.zeros(geom.coordVec_latlon_itf_i.shape[2:])
-    zbot_itf_j = numpy.zeros(geom.coordVec_latlon_itf_j.shape[2:])
+    # 200 and 201 are mountain cases. 202 is the deliberately non-standard
+    # flat control; legacy case number 20 retains its old meaning.
+    if param.case_number in (20, 200, 201):
+        zbot_new = surface_height(geom.get_floor(geom.polar))
+        zbot_itf_i_new = surface_height(geom.get_itf_i_floor(geom.polar_itf_i))
+        zbot_itf_j_new = surface_height(geom.get_itf_j_floor(geom.polar_itf_j))
+        zbot = surface_height(geom.coordVec_latlon[:, 0])
+        zbot_itf_i = surface_height(geom.coordVec_latlon_itf_i[:, 0])
+        zbot_itf_j = surface_height(geom.coordVec_latlon_itf_j[:, 0])
 
-    for z, coord in zip(
-        [zbot, zbot_itf_i, zbot_itf_j], [geom.coordVec_latlon, geom.coordVec_latlon_itf_i, geom.coordVec_latlon_itf_j]
-    ):
-        lat = coord[1, 0, :, :]
-        lon = coord[0, 0, :, :]
-        r = numpy.arccos(math.sin(phim) * numpy.sin(lat) + math.cos(phim) * numpy.cos(lat) * numpy.cos(lon - lambdam))
-        z[r < Rm] = (
-            (h0 / 2.0) * (1.0 + numpy.cos(math.pi * r[r < Rm] / Rm)) * numpy.cos(math.pi * r[r < Rm] / zetam) ** 2
-        )  # mountain height
+        # Preserve the analytic bell/ripple split when SLEVE is selected.
+        large_new = surface_height(geom.get_floor(geom.polar), True)
+        large_itf_i_new = surface_height(geom.get_itf_i_floor(geom.polar_itf_i), True)
+        large_itf_j_new = surface_height(geom.get_itf_j_floor(geom.polar_itf_j), True)
+        large = surface_height(geom.coordVec_latlon[:, 0], True)
+        large_itf_i = surface_height(geom.coordVec_latlon_itf_i[:, 0], True)
+        large_itf_j = surface_height(geom.coordVec_latlon_itf_j[:, 0], True)
 
-    # Update the geometry object with the new bottom topography
-    geom.apply_topography(zbot, zbot_itf_i, zbot_itf_j)
-    # And regenerate the metric to take this new topography into account
+        geom.apply_topography(
+            zbot,
+            zbot_itf_i,
+            zbot_itf_j,
+            zbot_new,
+            zbot_itf_i_new,
+            zbot_itf_j_new,
+            large,
+            large_itf_i,
+            large_itf_j,
+            large_new,
+            large_itf_i_new,
+            large_itf_j_new,
+        )
+    else:  # case 202
+        geom.apply_topography(None, None, None, None, None, None)
     metric.build_metric()
 
-    # -----------------------------------------------------------------------
-    #    PS (surface pressure)
-    # -----------------------------------------------------------------------
+    height = geom.height_new
+    exponent = gravity / (Rd * gamma)
+    temperature = T0 - gamma * height
+    pressure = p0 * (1.0 - gamma * height / T0) ** exponent
+    rho = pressure / (Rd * temperature)
+    theta = temperature * (p0 / pressure) ** (Rd / cpd)
 
-    if gamma == 0.0:
-        ps = p0 * numpy.exp(-gravity * zbot / (Rd * T0))
-    else:
-        ps = p0 * (1.0 - gamma / T0 * zbot) ** exponent
-
-    # -----------------------------------------------------------------------
-    #    PRESSURE
-    # -----------------------------------------------------------------------
-
-    if gamma != 0:
-        p = p0 * (1.0 - gamma / T0 * geom.height) ** exponent
-    else:
-        p = p0 * numpy.exp(-gravity / Rd * geom.height / T0)
-
-    # -----------------------------------------------------------------------
-    #    THE VELOCITIES ARE ZERO (STATE AT REST)
-    # -----------------------------------------------------------------------
-
-    # Zonal Velocity
-
-    u = 0.0
-
-    # Meridional Velocity
-
-    v = 0.0
-
-    # Vertical Velocity
-
-    w = 0.0
-
-    u1_contra, u2_contra = wind2contra_2d(u, v, geom)
-
-    # -----------------------------------------------------------------------
-    #    TEMPERATURE WITH CONSTANT LAPSE RATE
-    # -----------------------------------------------------------------------
-
-    t = T0 - gamma * geom.height
-
-    # -----------------------------------------------------------------------
-    #    RHO (density)
-    # -----------------------------------------------------------------------
-
-    rho = p / (Rd * t)
-
-    # -----------------------------------------------------------------------
-    #     initialize Q, set to zero
-    # -----------------------------------------------------------------------
-
-    q = 0.0
-
-    # -----------------------------------------------------------------------
-    #     initialize TV (virtual temperature)
-    # -----------------------------------------------------------------------
-
-    tv = t
-
-    theta = tv * (p0 / p) ** (Rd / cpd)
-
-    return rho, u1_contra, u2_contra, w, theta
+    zero = torch.zeros_like(rho)
+    return rho, zero, zero, zero, theta
 
 
 def dcmip_schar_waves(geom: CubedSphere3D, metric, mtrx: DFROperators, param: Configuration, shear=False):
     """
     Tests 2-1 and 2-2:  Non-hydrostatic Mountain Waves over a Schaer-type Mountain
     """
-
-    xp = geom.device.xp
 
     metric.build_metric()
 
@@ -568,16 +602,14 @@ def dcmip_schar_waves(geom: CubedSphere3D, metric, mtrx: DFROperators, param: Co
 
     ## Coordinate vectors in 3D
 
-    # lat = geom.coordVec_latlon[1, :, :, :]  # Latitude as 3D field
-    # z_3d = geom.coordVec_latlon[2, :, :, :]  # Retrieve all z-levels
     lat = geom.polar[1, ...]  # Latitude as 3D field
     z_3d = geom.polar[2, ...]  # Retrieve all z-levels
 
     ## Temperature in 3D
     if Ueq != 0:
-        T = T0 * (1 - Cs * Ueq**2 / gravity * xp.sin(lat) ** 2)
+        T = T0 * (1 - Cs * Ueq**2 / gravity * torch.sin(lat) ** 2)
     else:
-        T = T0 * xp.ones_like(lat)
+        T = T0 * torch.ones_like(lat)
 
     ### NOTE: These equations are not in exact balance for the no-hill case.
     ### The DCMIP document assumes a shallow-atmosphere discretization,
@@ -586,19 +618,19 @@ def dcmip_schar_waves(geom: CubedSphere3D, metric, mtrx: DFROperators, param: Co
     ### adjustment.
 
     ## Pressure (eqn 80)
-    p = Peq * xp.exp(-(Ueq**2) / (2 * Rd * T0) * xp.sin(lat) ** 2 - gravity * z_3d / (Rd * T))
+    p = Peq * torch.exp(-(Ueq**2) / (2 * Rd * T0) * torch.sin(lat) ** 2 - gravity * z_3d / (Rd * T))
 
     # Zonal Velocity (eqn 82)
 
-    u = Ueq * xp.cos(lat) * (2 * T0 / T * Cs * z_3d + T / T0) ** 0.5
+    u = Ueq * torch.cos(lat) * (2 * T0 / T * Cs * z_3d + T / T0) ** 0.5
 
     # Meridional Velocity
 
-    v = xp.zeros_like(lat)
+    v = torch.zeros_like(lat)
 
     # Vertical Velocity
 
-    w = xp.zeros_like(lat)
+    w = torch.zeros_like(lat)
 
     # u1_contra, u2_contra, u3_contra = wind2contra_3d(u, v, w, geom, metric)
     u1_contra, u2_contra, u3_contra = geom.wind2contra(u, v, w, metric)
@@ -618,39 +650,14 @@ def dcmip_schar_waves(geom: CubedSphere3D, metric, mtrx: DFROperators, param: Co
     return rho, u1_contra, u2_contra, u3_contra, theta
 
 
-def dcmip_schar_damping(
-    forcing: numpy.ndarray,
-    rho: numpy.ndarray,
-    u1: numpy.ndarray,
-    u2: numpy.ndarray,
-    u3: numpy.ndarray,
-    metric: Metric3DTopo,
-    geom: CubedSphere3D,
-    shear: bool,
-    new_layout: bool,
-):
-    """Implements the required Rayleigh damping for DCMIP cases 2-1 and 2-2
+def dcmip_schar_damping_coeffs(metric: Metric3DTopo, geom: CubedSphere3D, shear: bool):
+    """Frozen (state-independent) coefficients of the DCMIP 2-1/2-2 Rayleigh sponge.
 
-    Parameters:
-    -----------
-    forcing : numpy.ndarray
-       The RHS forcing variable as used by rhs_euler, which will be modified in-place to add
-       the required Rayleigh damping.  This variable is in flux form (ρu1, ρu2, etc), so this
-       function will calculate the required momentum fluxes.
-    rho, u1, u2, u3 : numpy.ndarray
-       Input variables at the current timestemp
-    metric : Metric3DTopo
-       3D metric, used to convert velocities between contravariant and geophysical winds
-    geom : CubedSphere3D
-       Geometry object, also used for velocity conversion
-    shear : bool
-       flag for whether the reference velocity field has vertical shear (case 2-2) or not (2-1)"""
-
-    # Grab forcing index variables from 'definitions', since forcing is modified in-place
-    from ..common.definitions import idx_rho_u1, idx_rho_u2, idx_rho_w
-
-    xp = geom.device.xp
-
+    The sponge forcing is ``rho * mask/tau0 * (u^i - u^i_ref)``; the mask (a function of height only)
+    and the reference contravariant velocities depend on the geometry, not on the state. Returns
+    ``(rate, u1ref, u2ref, u3ref)`` with ``rate = mask/tau0``, so the forcing is
+    ``rho * rate * (u^i - u^i_ref)``. This lets both the forcing itself and its analytic Jacobian
+    share one definition of the sponge."""
     # Case parameters
     T0 = 300.0  # temperature (K)
     Ueq = 20.0  # Reference zonal wind velocity (equator)
@@ -663,41 +670,68 @@ def dcmip_schar_damping(
         Cs = 0.0
 
     # Get coordinates
-    if new_layout:
-        lat = geom.polar[1, ...]
-        z_3d = geom.polar[2, ...]
-    else:
-        lat = geom.coordVec_latlon[1, :, :, :]  # Latitude as 3D field
-        z_3d = geom.coordVec_latlon[2, :, :, :]  # Retrieve all z-levels
+    lat = geom.polar[1, ...]
+    z_3d = geom.polar[2, ...]
 
-    # Build the damping mask (eqn 79), weighted by ρ and τ0^(-1)
-    damping_weight = (
-        rho / tau0 * xp.sin(xp.pi / 2 * (z_3d - Zh) / (geom.ztop - Zh)) ** 2
-    )  # z > zh, defined everywhere at first
+    # Build the damping mask (eqn 79), weighted by tau0^(-1); the rho weighting is applied by the caller
+    rate = torch.sin(torch.pi / 2 * (z_3d - Zh) / (geom.ztop - Zh)) ** 2 / tau0  # z > zh, everywhere at first
     # Reset to 0 below the threshold height
-    damping_weight[z_3d <= Zh] = 0.0
+    rate[z_3d <= Zh] = 0.0
 
     ## Temperature in 3D
     if Ueq != 0:
-        Tref = T0 * (1 - Cs * Ueq**2 / gravity * xp.sin(lat) ** 2)
+        Tref = T0 * (1 - Cs * Ueq**2 / gravity * torch.sin(lat) ** 2)
     else:
         Tref = T0
 
     # Get u, v, w reference velocities and convert to contravariant
-    uref = Ueq * xp.cos(lat) * (2 * T0 / Tref * Cs * z_3d + Tref / T0) ** 0.5
+    uref = Ueq * torch.cos(lat) * (2 * T0 / Tref * Cs * z_3d + Tref / T0) ** 0.5
     vref = 0.0
     wref = 0.0
 
-    if new_layout:
-        u1ref, u2ref, u3ref = geom.wind2contra(uref, vref, wref, metric)
-    else:
-        u1ref, u2ref, u3ref = wind2contra_3d(uref, vref, wref, geom, metric)
+    u1ref, u2ref, u3ref = geom.wind2contra(uref, vref, wref, metric)
+
+    return rate, u1ref, u2ref, u3ref
+
+
+def dcmip_schar_damping(
+    forcing: Tensor,
+    rho: Tensor,
+    u1: Tensor,
+    u2: Tensor,
+    u3: Tensor,
+    metric: Metric3DTopo,
+    geom: CubedSphere3D,
+    shear: bool,
+):
+    """Implements the required Rayleigh damping for DCMIP cases 2-1 and 2-2
+
+    Parameters:
+    -----------
+    forcing : Tensor
+       The RHS forcing variable as used by rhs_euler, which will be modified in-place to add
+       the required Rayleigh damping.  This variable is in flux form (ρu1, ρu2, etc), so this
+       function will calculate the required momentum fluxes.
+    rho, u1, u2, u3 : Tensor
+       Input variables at the current timestemp
+    metric : Metric3DTopo
+       3D metric, used to convert velocities between contravariant and geophysical winds
+    geom : CubedSphere3D
+       Geometry object, also used for velocity conversion
+    shear : bool
+       flag for whether the reference velocity field has vertical shear (case 2-2) or not (2-1)"""
+
+    # Grab forcing index variables from 'definitions', since forcing is modified in-place
+    from ..common.definitions import idx_rho_u1, idx_rho_u2, idx_rho_u3
+
+    rate, u1ref, u2ref, u3ref = dcmip_schar_damping_coeffs(metric, geom, shear)
+    damping_weight = rho * rate  # eqn 79, weighted by rho and tau0^(-1)
 
     # Increment velocity forcing (eqn 78).  Take note that this modification is in-place,
     # and the sign is positive because rhs_euler includes its own negative sign
     forcing[idx_rho_u1] += damping_weight * (u1 - u1ref)
     forcing[idx_rho_u2] += damping_weight * (u2 - u2ref)
-    forcing[idx_rho_w] += damping_weight * (u3 - u3ref)
+    forcing[idx_rho_u3] += damping_weight * (u3 - u3ref)
 
 
 # ==========================================================================================
@@ -706,16 +740,13 @@ def dcmip_schar_damping(
 
 
 def dcmip_gravity_wave(geom: CubedSphere3D, metric: Metric3DTopo, mtrx: DFROperators, param: Configuration):
-    """
-    Test case 31 - gravity waves
+    """DCMIP-2012 test 3-1: non-hydrostatic gravity wave.
 
-    The non-hydrostatic gravity wave test examines the response of models to short time-scale wavemotion triggered
-    by a localized perturbation. The formulation presented in this document is new, but is based on previous
-    approaches by Skamarock et al. (JAS 1994), Tomita and Satoh (FDR 2004), and
-    Jablonowski et al. (NCAR Tech Report 2008)
+    A localized potential-temperature perturbation is superposed on a
+    hydrostatic, gradient-wind-balanced state on an X=125 non-rotating
+    planet. Density deliberately uses the unperturbed temperature, as
+    required by version 3 of the reference initial-condition routine.
     """
-
-    xp = geom.device.xp
 
     u0 = 20.0  # Reference Velocity
     Teq = 300.0  # Temperature at Equator
@@ -732,43 +763,24 @@ def dcmip_gravity_wave(geom: CubedSphere3D, metric: Metric3DTopo, mtrx: DFROpera
     kappa = Rd / cpd
     inv_kappa = cpd / Rd
 
-    # -----------------------------------------------------------------------
-    #    THE VELOCITIES
-    # -----------------------------------------------------------------------
-
-    # Zonal Velocity
-
-    u = u0 * xp.cos(geom.lat_new)
-
-    # Meridional Velocity
-
-    v = xp.zeros_like(u)
-
-    # Vertical Velocity = Vertical Pressure Velocity = 0
-
-    w = xp.zeros_like(u)
-
-    ## Set a trivial topography
-    zbot = xp.zeros_like(geom.coordVec_latlon[0, 0])
-    zbot_itf_i = xp.zeros_like(geom.coordVec_latlon_itf_i[0, 0])
-    zbot_itf_j = xp.zeros_like(geom.coordVec_latlon_itf_j[0, 0])
-
-    # Update the geometry object with the new bottom topography
-    geom.apply_topography(zbot, zbot_itf_i, zbot_itf_j, None, None, None)
-    # And regenerate the metric to take this new topography into account
+    # Test 3-1 has a flat lower boundary. Reapplying it explicitly keeps the
+    # geometry and metric initialization order consistent with terrain cases.
+    geom.apply_topography(None, None, None, None, None, None)
     metric.build_metric()
 
-    # u1_contra, u2_contra = wind2contra_2d(u, v, geom)
-    u1_contra, u2_contra = geom.wind2contra_2d(u, v)
+    u = u0 * torch.cos(geom.lat_new)
+    v = torch.zeros_like(u)
+    w = torch.zeros_like(u)
+    u1_contra, u2_contra, u3_contra = geom.wind2contra(u, v, w, metric)
 
     # -----------------------------------------------------------------------
     #    SURFACE TEMPERATURE
     # -----------------------------------------------------------------------
 
-    TS = bigG + (Teq - bigG) * xp.exp(
+    TS = bigG + (Teq - bigG) * torch.exp(
         -(u0 * N2 / (4.0 * gravity**2))
         * (u0 + 2.0 * geom.rotation_speed * geom.earth_radius)
-        * (xp.cos(2.0 * geom.lat_new) - 1.0)
+        * (torch.cos(2.0 * geom.lat_new) - 1.0)
     )
 
     # -----------------------------------------------------------------------
@@ -777,10 +789,10 @@ def dcmip_gravity_wave(geom: CubedSphere3D, metric: Metric3DTopo, mtrx: DFROpera
 
     ps = (
         Peq
-        * xp.exp(
+        * torch.exp(
             (u0 / (4.0 * bigG * Rd))
             * (u0 + 2.0 * geom.rotation_speed * geom.earth_radius)
-            * (xp.cos(2.0 * geom.lat_new) - 1.0)
+            * (torch.cos(2.0 * geom.lat_new) - 1.0)
         )
         * (TS / Teq) ** inv_kappa
     )
@@ -789,9 +801,9 @@ def dcmip_gravity_wave(geom: CubedSphere3D, metric: Metric3DTopo, mtrx: DFROpera
     #    HEIGHT AND PRESSURE AND MEAN TEMPERATURE
     # -----------------------------------------------------------------------
 
-    p = ps * ((bigG / TS) * xp.exp(-N2 * geom.height_new / gravity) + 1.0 - (bigG / TS)) ** inv_kappa
+    p = ps * ((bigG / TS) * torch.exp(-N2 * geom.height_new / gravity) + 1.0 - (bigG / TS)) ** inv_kappa
 
-    t_mean = bigG * (1.0 - xp.exp(N2 * geom.height_new / gravity)) + TS * xp.exp(N2 * geom.height_new / gravity)
+    t_mean = bigG * (1.0 - torch.exp(N2 * geom.height_new / gravity)) + TS * torch.exp(N2 * geom.height_new / gravity)
 
     theta_base = t_mean * (p0 / p) ** kappa
 
@@ -809,21 +821,20 @@ def dcmip_gravity_wave(geom: CubedSphere3D, metric: Metric3DTopo, mtrx: DFROpera
     #    to the background theta field (not included here)
     # -----------------------------------------------------------------------
 
-    sin_tmp = xp.sin(geom.lat_new) * math.sin(phic)
-    cos_tmp = xp.cos(geom.lat_new) * math.cos(phic)
+    sin_tmp = torch.sin(geom.lat_new) * math.sin(phic)
+    cos_tmp = torch.cos(geom.lat_new) * math.cos(phic)
 
     # great circle distance with 'a/X'
 
-    r = geom.earth_radius * xp.arccos(sin_tmp + cos_tmp * xp.cos(geom.lon_new - lambdac))
+    r = geom.earth_radius * torch.arccos(sin_tmp + cos_tmp * torch.cos(geom.lon_new - lambdac))
 
     s = (d**2) / (d**2 + r**2)
 
-    theta_pert = delta_theta * s * xp.sin(2.0 * math.pi * geom.height_new / Lz)
-    #   theta_pert = 0. # for debuging
+    theta_pert = delta_theta * s * torch.sin(2.0 * math.pi * geom.height_new / Lz)
 
     theta = theta_base + theta_pert
 
-    return rho, u1_contra, u2_contra, w, theta
+    return rho, u1_contra, u2_contra, u3_contra, theta
 
 
 # =========================================================================
@@ -832,8 +843,6 @@ def dcmip_gravity_wave(geom: CubedSphere3D, metric: Metric3DTopo, mtrx: DFROpera
 
 
 def acoustic_wave(geom: CubedSphere3D, metric: Metric3DTopo):
-
-    xp = geom.device.xp
 
     T0 = 300.0
     Δp = 100
@@ -864,13 +873,6 @@ def acoustic_wave(geom: CubedSphere3D, metric: Metric3DTopo):
 
     w = 0.0
 
-    # ## Set a trivial topography
-    # zbot = numpy.zeros(geom.coordVec_latlon.shape[2:])
-    # zbot_itf_i = numpy.zeros(geom.coordVec_latlon_itf_i.shape[2:])
-    # zbot_itf_j = numpy.zeros(geom.coordVec_latlon_itf_j.shape[2:])
-    # # Update the geometry object with the new bottom topography
-    # geom.apply_topography(zbot, zbot_itf_i, zbot_itf_j)
-
     # And regenerate the metric to take this new topography into account
     metric.build_metric()
 
@@ -882,20 +884,15 @@ def acoustic_wave(geom: CubedSphere3D, metric: Metric3DTopo):
     # -----------------------------------------------------------------------
 
     H = Rd * T0 / gravity
-    p_mean = p0 * xp.exp(-geom.height_new / H)
+    p_mean = p0 * torch.exp(-geom.height_new / H)
 
     lat = geom.polar[1, ...]
     lon = geom.polar[0, ...]
-    r = re * xp.arccos(xp.cos(lat) * xp.cos(lon))
-    f = numpy.where(r > rc, 0.0, (Δp / 2) * (1 + numpy.cos((math.pi * r) / rc)))
-    g = numpy.sin((eta_v * math.pi * r) / ztop)
+    r = re * torch.arccos(torch.cos(lat) * torch.cos(lon))
+    f = torch.where(r > rc, 0.0, (Δp / 2) * (1 + torch.cos((math.pi * r) / rc)))
+    g = torch.sin((eta_v * math.pi * r) / ztop)
     p_perturb = f * g
     pressure = p_mean + p_perturb
-    # pdb.set_trace()
-
-    # Full_u_p = MPI.COMM_WORLD.gather(p_mean, root=0)
-    # if MPI.COMM_WORLD.rank == 0:
-    #     numpy.save("p_mean2.npy", Full_u_p)
 
     # -----------------------------------------------------------------------
     #    RHO (density)

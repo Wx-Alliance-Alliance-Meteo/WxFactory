@@ -1,3 +1,4 @@
+import torch
 from time import time
 from typing import Callable
 
@@ -20,23 +21,24 @@ class Ros2(Integrator):
         self.gmres_restart = param.gmres_restart
 
     def __prestep__(self, Q: numpy.ndarray, dt: float) -> None:
-        xp = self.device.xp
-
         rhs = self.rhs_handle(Q)
-        self.Q_flat = xp.ravel(Q)
+        self.Q_flat = torch.ravel(Q)
         self.A = MatvecOpRat(dt, Q, rhs, self.rhs_handle)
-        self.b = self.A(self.Q_flat) + xp.ravel(rhs) * dt
+        self.b = self.A(self.Q_flat) + torch.ravel(rhs) * dt
 
     def __step__(self, Q: numpy.ndarray, dt: float):
-        xp = self.device.xp
-
         maxiter = 20000 // self.gmres_restart
         if self.preconditioner is not None:
             maxiter = 400 // self.gmres_restart
 
         t0 = time()
         Qnew, norm_r, norm_b, num_iter, flag, residuals = self._solve_linear(
-            self.A, self.b, x0=self.Q_flat, tol=self.tol, restart=self.gmres_restart, maxiter=maxiter,
+            self.A,
+            self.b,
+            x0=self.Q_flat,
+            tol=self.tol,
+            restart=self.gmres_restart,
+            maxiter=maxiter,
         )
         t1 = time()
 
@@ -51,7 +53,8 @@ class Ros2(Integrator):
 
         self.failure_flag = flag
 
-        return xp.reshape(Qnew, Q.shape)
+        return torch.reshape(Qnew, Q.shape)
+
 
 REGISTRY = {
     "ros2": lambda cfg, rhs, prec, dev: Ros2(cfg, rhs.full, preconditioner=prec, device=dev),

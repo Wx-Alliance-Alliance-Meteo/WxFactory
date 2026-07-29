@@ -13,10 +13,10 @@
    :maxdepth: 2
    :caption: Contents:
 
-   doc/config_options.md
-   doc/contribute.md
-   doc/references.md
-   tests/readme.md
+   doc/config_options
+   doc/contribute
+   doc/references
+   tests/readme
 
 
 Indices and tables
@@ -34,15 +34,17 @@ API
    :template: custom-module-template.rst
    :recursive:
 
-   common
-   compiler
-   geometry
-   init
-   integrators
-   output
-   pde 
-   precondition
-   rhs
-   solvers
-   tests
-   wx_mpi
+   wx_factory.common
+   wx_factory.device
+   wx_factory.geometry
+   wx_factory.init
+   wx_factory.integrators
+   wx_factory.output
+   wx_factory.pde
+   wx_factory.precondition
+   wx_factory.process_topology
+   wx_factory.rhs
+   wx_factory.simulation
+   wx_factory.solvers
+   wx_factory.step_hooks
+   wx_factory.wx_mpi

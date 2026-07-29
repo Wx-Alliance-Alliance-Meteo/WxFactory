@@ -1,27 +1,26 @@
 import random
-import unittest
 
 from mpi4py import MPI
 from numpy import ndarray
+import torch
+from torch import Tensor
 
-from wx_factory.device import CpuDevice
+from wx_factory.device import PytorchDevice
 from wx_factory.solvers.kiops import kiops
 from wx_factory.solvers.pmex import pmex
 
-import ndarray_generator
+import array_generator
+from wx_test import WxTestCase
 
 
-class KiopsPmexToleranceCpuTestCases(unittest.TestCase):
+class KiopsPmexToleranceCpuTestCases(WxTestCase):
     tolerance: float
     rand: random.Random
-
-    kiops_matrix: ndarray
-    pmex_matrix: ndarray
 
     def setUp(self) -> None:
         super().setUp()
 
-        self.cpu_device = CpuDevice(MPI.COMM_WORLD)
+        self.cpu_device = PytorchDevice(MPI.COMM_WORLD, "cpu")
 
         seed: int = 5646459
         initial_matrix_size: int = 64
@@ -33,7 +32,7 @@ class KiopsPmexToleranceCpuTestCases(unittest.TestCase):
         self.tolerance = 1e-7
         self.rand = random.Random(seed)
 
-        [self.kiops_matrix, self.pmex_matrix] = ndarray_generator.generate_matrixes(
+        [self.kiops_matrix, self.pmex_matrix] = array_generator.generate_matrices(
             (initial_matrix_size, initial_matrix_size),
             self.rand,
             rand_min,
@@ -42,26 +41,23 @@ class KiopsPmexToleranceCpuTestCases(unittest.TestCase):
         )
 
     def test_compare_kiops_pmex(self):
-        def matvec_handle(v: ndarray) -> ndarray:
+        def matvec_handle(v: Tensor) -> Tensor:
             return v
 
-        w1: ndarray
-        w2: ndarray
+        w1, _ = kiops(self.cpu_device.tensor([1.0]), matvec_handle, self.kiops_matrix, self.tolerance, device=self.cpu_device)
+        w2, _ = pmex(self.cpu_device.tensor([1.0]), matvec_handle, self.pmex_matrix, self.tolerance, device=self.cpu_device)
 
-        w1, stats1 = kiops([1.0], matvec_handle, self.kiops_matrix, self.tolerance, device=self.cpu_device)
-        w2, stats2 = pmex([1.0], matvec_handle, self.pmex_matrix, self.tolerance, device=self.cpu_device)
-
-        shape: tuple[int, int] = w1.shape
+        shape = w1.shape
 
         self.assertEqual(len(w1.shape), 2, "Kiops didn't return a matrix")
         self.assertEqual(len(w2.shape), 2, "Pmex didn't return a matrix")
 
-        self.failIf(not (w2.shape[0] == shape[0] and w2.shape[1] == shape[1]), "Both matrix should be the same size")
+        self.assertEqual(w2.shape, shape, "Both matrix should be the same size")
 
-        diff: float = self.cpu_device.xp.linalg.norm(w1 - w2).item()
+        diff: float = torch.linalg.norm(w1 - w2).item()
 
-        w1_value: float = self.cpu_device.xp.linalg.norm(w1).item()
-        w2_value: float = self.cpu_device.xp.linalg.norm(w2).item()
+        w1_value: float = torch.linalg.norm(w1).item()
+        w2_value: float = torch.linalg.norm(w2).item()
 
         abs_diff: float = abs(diff)
 

@@ -4,6 +4,7 @@
 Created on Wed Mar 13 11:03:39 2019
 @author: shlomi
 """
+
 Earth = {
     "angular_frequency": 7.29212e-5,
     "gravitational_acceleration": 9.80616,

@@ -1,3 +1,4 @@
+from ..common.matmul import kron
 import math
 import time
 from typing import List
@@ -14,7 +15,7 @@ from ..common.definitions import (
     idx_rho,
     idx_rho_u1,
     idx_rho_u2,
-    idx_rho_w,
+    idx_rho_u3,
     idx_rho_theta,
     cpd,
     cvd,
@@ -90,6 +91,9 @@ class OutputCubesphereNetcdf(OutputCubesphere):
             self.ncfile.history = "Created " + time.ctime(time.time())
             self.ncfile.description = "WxFactory Model"
             self.ncfile.details = "Cubed-sphere coordinates, Gauss-Legendre collocated grid"
+            self.ncfile.case_number = self.config.case_number
+            if hasattr(self.geometry, "earth_radius"):
+                self.ncfile.earth_radius = self.geometry.earth_radius
 
             self.ncfile.createDimension("time", None)  # unlimited
             npe = 6
@@ -209,6 +213,15 @@ class OutputCubesphereNetcdf(OutputCubesphere):
                 topo.coordinates = "lons lats"
                 topo.grid_mapping = "cubed_sphere"
 
+                # Volume of each solution point, so that global integrals (e.g. the DCMIP error
+                # norms, which are defined as I[x] = sum_j x_j V_j) can be computed from the output.
+                volume = self.ncfile.createVariable("volume", numpy.dtype("double").char, grid_data)
+                volume.long_name = "Cell volume"
+                volume.units = "m3"
+                volume.standard_name = "Cell volume"
+                volume.coordinates = "lons lats"
+                volume.grid_mapping = "cubed_sphere"
+
                 uuu = self.ncfile.createVariable("U", numpy.dtype("double").char, ("time",) + grid_data)
                 uuu.long_name = "eastward_wind"
                 uuu.units = "m s-1"
@@ -251,7 +264,7 @@ class OutputCubesphereNetcdf(OutputCubesphere):
                 press.coordinates = "lons lats"
                 press.grid_mapping = "cubed_sphere"
 
-                if self.config.case_number == 11 or self.config.case_number == 12:
+                if self.config.case_number in (11, 12, 13):
                     q1 = self.ncfile.createVariable("q1", numpy.dtype("double").char, ("time",) + grid_data)
                     q1.long_name = "q1"
                     q1.units = "kg m-3"
@@ -259,7 +272,7 @@ class OutputCubesphereNetcdf(OutputCubesphere):
                     q1.coordinates = "lons lats"
                     q1.grid_mapping = "cubed_sphere"
 
-                if self.config.case_number == 11:
+                if self.config.case_number in (11, 13):
                     q2 = self.ncfile.createVariable("q2", numpy.dtype("double").char, ("time",) + grid_data)
                     q2.long_name = "q2"
                     q2.units = "kg m-3"
@@ -300,6 +313,7 @@ class OutputCubesphereNetcdf(OutputCubesphere):
         if self.config.equations == "euler":
             elevs = to_host(self._gather_field(self.geometry.coordVec_latlon[2, :, :, :], 3))
             topos = to_host(self._gather_field(self.geometry.zbot[:, :], 2))
+            vols = to_host(self._gather_field(self.geometry.to_single_block(self._cell_volume()), 3))
 
         if self.rank == 0:
             for i in range(6):
@@ -310,6 +324,21 @@ class OutputCubesphereNetcdf(OutputCubesphere):
                 for i in range(6):
                     elev[i, :, :, :] = elevs[i]
                     topo[i, :, :] = topos[i]
+                    volume[i, :, :, :] = vols[i]
+
+    def _cell_volume(self) -> NDArray:
+        """Volume associated with each solution point.
+
+        On the cubed sphere the elements are uniform in the computational coordinates, so the volume
+        of a solution point is sqrt(G) times its tensor-product Gauss-Legendre quadrature weight,
+        times the (constant) volume of a reference element. The solution points inside an element are
+        ordered with x1 varying fastest, then x2, then x3."""
+        geom = self.geometry
+        w = geom.glweights
+        w3d = kron(w, kron(w, w))  # ordering: x3 slowest, x1 fastest
+
+        elem_volume = geom.delta_x1 * geom.delta_x2 * geom.delta_x3 / 8.0
+        return self.metric.sqrtG_new * w3d * elem_volume
 
     def store_field_Zdim(self, field, name: str, time_idx: int, level_idx: int):
         fields = self._gather_field(field, self.num_dim)
@@ -382,11 +411,11 @@ class OutputCubesphereNetcdf(OutputCubesphere):
                     self.store_field(geom.to_single_block(rv), "RV", idx)
                     self.store_field(geom.to_single_block(pv), "PV", idx)
 
-        elif isinstance(geom, CubedSphere3D):  # Euler equations
+        elif getattr(geom, "is_3d_euler_grid", False):  # Euler equations
             rho = Q[idx_rho, ...]
             u1 = Q[idx_rho_u1, ...] / rho
             u2 = Q[idx_rho_u2, ...] / rho
-            u3 = Q[idx_rho_w, ...] / rho
+            u3 = Q[idx_rho_u3, ...] / rho
             theta = Q[idx_rho_theta, ...] / rho
 
             u, v, w = geom.contra2wind_3d(u1, u2, u3, self.metric)
@@ -398,10 +427,10 @@ class OutputCubesphereNetcdf(OutputCubesphere):
             self.store_field(geom.to_single_block(theta), "theta", idx)
             self.store_field(geom.to_single_block(p0 * (Q[idx_rho_theta] * Rd / p0) ** (cpd / cvd)), "P", idx)
 
-            if self.config.case_number == 11 or self.config.case_number == 12:
+            if self.config.case_number in (11, 12, 13):
                 self.store_field(geom.to_single_block(Q[5, ...] / rho), "q1", idx)
 
-            if self.config.case_number == 11:
+            if self.config.case_number in (11, 13):
                 for i in [6, 7, 8]:
                     self.store_field(geom.to_single_block(Q[i, ...] / rho), f"q{i-4}", idx)
 

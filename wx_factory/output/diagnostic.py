@@ -1,5 +1,5 @@
+import torch
 from mpi4py import MPI
-import numpy
 from numpy.typing import NDArray
 
 from ..common.definitions import gravity
@@ -60,6 +60,6 @@ def potential_enstrophy(h, u1_contra, u2_contra, geom, metric, mtrx, param):
 def global_integral_2d(field: NDArray, mtrx: DFROperators, metric, num_solpts: int, comm: MPI.Comm = MPI.COMM_WORLD):
 
     ny, nx = field.shape[:2]
-    local_sum = numpy.sum((field * metric.sqrtG).reshape(ny, nx, num_solpts, num_solpts) * mtrx.quad_weights)
+    local_sum = torch.sum((field * metric.sqrtG).reshape(ny, nx, num_solpts, num_solpts) * mtrx.quad_weights).item()
 
     return comm.allreduce(local_sum)

@@ -1,3 +1,4 @@
+import torch
 import numpy
 from numpy.typing import NDArray
 import xarray as xr
@@ -6,17 +7,13 @@ from ..common.definitions import (
     idx_rho,
     idx_rho_u1,
     idx_rho_u2,
-    idx_rho_w,
+    idx_rho_u3,
     idx_rho_theta,
     idx_h,
     idx_u1,
     idx_u2,
     idx_hu1,
     idx_hu2,
-    idx_2d_rho,
-    idx_2d_rho_u,
-    idx_2d_rho_w,
-    idx_2d_rho_theta,
     gravity,
     cpd,
     cvd,
@@ -24,12 +21,12 @@ from ..common.definitions import (
     p0,
 )
 from ..common import Configuration
-from ..common.graphx import plot_array
-from ..geometry import Cartesian2D, CubedSphere3D, CubedSphere2D, DFROperators, Metric2D, Metric3DTopo
+from ..geometry import CubedSphere3D, CubedSphere2D, DFROperators, Metric2D, Metric3DTopo
 
 from .dcmip import (
     dcmip_advection_deformation,
     dcmip_advection_hadley,
+    dcmip_advection_orography,
     dcmip_gravity_wave,
     dcmip_schar_waves,
     dcmip_steady_state_mountain,
@@ -90,8 +87,6 @@ def initialize_euler(geom: CubedSphere3D, metric: Metric3DTopo, mtrx: DFROperato
     # DCMIP_2016: https://www.earthsystemcog.org/projects/dcmip-2016/         |
     # -------------------------------------------------------------------------|
 
-    xp = geom.device.xp
-
     num_equations = 5
 
     if param.case_number == 11:
@@ -102,7 +97,12 @@ def initialize_euler(geom: CubedSphere3D, metric: Metric3DTopo, mtrx: DFROperato
     elif param.case_number == 12:
         num_equations = 6
         rho, u1_contra, u2_contra, w, potential_temperature, q1 = dcmip_advection_hadley(geom, metric, mtrx, param)
-    elif param.case_number == 20:
+    elif param.case_number == 13:
+        num_equations = 9
+        rho, u1_contra, u2_contra, w, potential_temperature, q1, q2, q3, q4 = dcmip_advection_orography(
+            geom, metric, mtrx, param
+        )
+    elif param.case_number in (20, 200, 201, 202):
         rho, u1_contra, u2_contra, w, potential_temperature = dcmip_steady_state_mountain(geom, metric, mtrx, param)
     elif param.case_number == 21:
         rho, u1_contra, u2_contra, w, potential_temperature = dcmip_schar_waves(geom, metric, mtrx, param, False)
@@ -115,17 +115,17 @@ def initialize_euler(geom: CubedSphere3D, metric: Metric3DTopo, mtrx: DFROperato
     else:
         raise ValueError(f"Unknown case number {param.case_number}")
 
-    Q = xp.zeros((num_equations,) + rho.shape, dtype=rho.dtype)
+    Q = torch.zeros((num_equations,) + rho.shape, dtype=rho.dtype)
 
     Q[idx_rho, ...] = rho
     Q[idx_rho_u1, ...] = rho * u1_contra
     Q[idx_rho_u2, ...] = rho * u2_contra
-    Q[idx_rho_w, ...] = rho * w
+    Q[idx_rho_u3, ...] = rho * w
     Q[idx_rho_theta, ...] = rho * potential_temperature
 
-    if param.case_number == 11 or param.case_number == 12:
+    if param.case_number in (11, 12, 13):
         Q[5, ...] = rho * q1
-    if param.case_number == 11:
+    if param.case_number in (11, 13):
         Q[6, ...] = rho * q2
         Q[7, ...] = rho * q3
         Q[8, ...] = rho * q4
@@ -157,8 +157,7 @@ def extract_available_levels(ds):
 
 def initialize_sw(geom: CubedSphere2D, metric: Metric2D, mtrx: DFROperators, param: Configuration):
 
-    xp = geom.device.xp
-    dtype = xp.float64
+    dtype = torch.float64
     dataset = None
 
     # ni, nj = geom.lon.shape
@@ -169,11 +168,11 @@ def initialize_sw(geom: CubedSphere2D, metric: Metric2D, mtrx: DFROperators, par
     itf_j_shape = geom.lon_itf_j.shape
     Q_shape = (num_equations,)
 
-    hsurf = xp.zeros(base_shape, dtype=dtype)
-    dzdx1 = xp.zeros(base_shape, dtype=dtype)
-    dzdx2 = xp.zeros(base_shape, dtype=dtype)
-    hsurf_itf_i = xp.zeros(itf_i_shape, dtype=dtype)
-    hsurf_itf_j = xp.zeros(itf_j_shape, dtype=dtype)
+    hsurf = torch.zeros(base_shape, dtype=dtype)
+    dzdx1 = torch.zeros(base_shape, dtype=dtype)
+    dzdx2 = torch.zeros(base_shape, dtype=dtype)
+    hsurf_itf_i = torch.zeros(itf_i_shape, dtype=dtype)
+    hsurf_itf_j = torch.zeros(itf_j_shape, dtype=dtype)
 
     # --- Shallow water
     #   0 : deformation flow (passive advection only)
@@ -246,7 +245,7 @@ def initialize_sw(geom: CubedSphere2D, metric: Metric2D, mtrx: DFROperators, par
     else:
         raise ValueError(f"Unknown case number {param.case_number} for Shallow Water equations")
 
-    Q = xp.zeros(Q_shape + base_shape, dtype=dtype)
+    Q = torch.zeros(Q_shape + base_shape, dtype=dtype)
     Q[idx_h, ...] = fluid_height
 
     if param.case_number in [0, 1]:
@@ -261,125 +260,66 @@ def initialize_sw(geom: CubedSphere2D, metric: Metric2D, mtrx: DFROperators, par
     if param.case_number in [-1, -2, 5, 10]:
         topo = Topo(hsurf, dzdx1, dzdx2, hsurf_itf_i, hsurf_itf_j)
 
-    # comm = geom.device.comm
-    # plot_array(geom.to_single_block(hsurf), f"h_surf.png", comm=comm, background_value=hsurf.min() - 100.0)
-    # plot_array(geom.to_single_block(Q[0]), f"h.png", comm=comm, background_value=Q[0].min())
-    # plot_array(geom.to_single_block(Q[1]), f"u.png", comm=comm, background_value=Q[1].min())
-    # plot_array(geom.to_single_block(Q[2]), f"v.png", comm=comm, background_value=Q[2].min())
-
     return Q, topo, dataset
 
 
-def initialize_cartesian2d(geom: Cartesian2D, param: Configuration) -> NDArray[numpy.float64]:
-    """Initialize a problem on a 2D cartesian grid based on a case number."""
+def initialize_cartesian3d(geom, param: Configuration) -> NDArray[numpy.float64]:
+    """Initialize a problem on a flat 3D cartesian slab, from the same case numbers as the 2D grid.
 
-    num_equations = 4
-    xp = geom.device.xp
+    The 2D cartesian cases live in the (x, z) plane; here they are extruded uniformly in y (the flow
+    stays y-invariant, u2 = 0), so a 2D bubble becomes a 3D ridge. Every case's potential-temperature
+    perturbation, base stratification and background wind are reused verbatim -- only the coordinates
+    are the flat slab's physical X1 (x) / X3 (z), and the state carries the 5th (y-momentum) variable.
+    """
+    x1, x3 = geom.X1, geom.X3  # physical x and z, (ne3, ne2, ne1, ns**3)
 
-    # Initial state at rest, isentropic, hydrostatic
-    nk = param.num_elements_vertical
-    ni = param.num_elements_horizontal
-    Q = xp.zeros((num_equations, param.num_elements_vertical, param.num_elements_horizontal, geom.num_solpts**2))
-    uu = xp.zeros_like(geom.X1)
-    ww = xp.zeros_like(geom.X1)
-    exner = xp.zeros_like(geom.X1)
-    θ = xp.ones_like(geom.X1)
-
+    uu = torch.zeros_like(x1)
+    ww = torch.zeros_like(x1)
+    θ = torch.ones_like(x1)
     if param.case_number != 0:
         θ *= param.bubble_theta
 
     if param.case_number == 0:
-        # Create the step mountain topography
-        xc = (geom.x0 + geom.x1) / 2.0  # Center of domain
-        mountain_width = 1000.0  # Width of step
-        mountain_height = 250.0  # Height of step
-
-        # Create step mountain in the X1 coordinate
-        # This creates a step function: 0 outside, mountain_height inside the step region
-        geom.z_bottom = xp.where(xp.abs(geom.X1 - xc) < mountain_width / 2.0, mountain_height, 0.0)
-
-        # Use periodic BC in x-direction
-        geom.xperiodic = True
-
+        # Stratified background with a uniform wind (the step-mountain flow). The mountain topography
+        # itself is a terrain-following-metric concern (update_topo) and is not applied here yet.
+        xc = (geom.X1.min() + geom.X1.max()) / 2.0  # noqa: F841 (kept for parity with the 2D setup)
     elif param.case_number == 1:
         # Pill
-
-        xc = 500.0
-        zc = 260.0
-        pert = 0.5
-
-        r = (geom.X1 - xc) ** 2 + (geom.X3 - zc) ** 2
-        θ = xp.where(r < param.bubble_rad**2, θ + pert, θ)
-
+        xc, zc, pert = 500.0, 260.0, 0.5
+        r = (x1 - xc) ** 2 + (x3 - zc) ** 2
+        θ = torch.where(r < param.bubble_rad**2, θ + pert, θ)
     elif param.case_number == 2:
         # Gaussian bubble
-
-        A = 0.5
-        a = 50
-        s = 100
-        x0 = 500
-        z0 = 260
-        r = xp.sqrt((geom.X1 - x0) ** 2 + (geom.X3 - z0) ** 2)
-
-        θ = xp.where(r <= a, θ + A, θ + A * xp.exp(-(((r - a) / s) ** 2)))
-
+        A, a, s, x0, z0 = 0.5, 50, 100, 500, 260
+        r = torch.sqrt((x1 - x0) ** 2 + (x3 - z0) ** 2)
+        θ = torch.where(r <= a, θ + A, θ + A * torch.exp(-(((r - a) / s) ** 2)))
     elif param.case_number == 3:
-        # Colliding bubbles
-
-        # First bubble (warm)
-        A = 0.5
-        a = 150
-        s = 50
-        x0 = 500
-        z0 = 300
-        r = xp.sqrt((geom.X1 - x0) ** 2 + (geom.X3 - z0) ** 2)
-        θ = xp.where(r <= a, θ + A, θ + A * xp.exp(-(((r - a) / s) ** 2)))
-
-        # Second bubble (cold)
-        A = -0.15
-        a = 0
-        s = 50
-        x0 = 560
-        z0 = 640
-        r = xp.sqrt((geom.X1 - x0) ** 2 + (geom.X3 - z0) ** 2)
-        θ = xp.where(r <= a, θ + A, θ + A * xp.exp(-(((r - a) / s) ** 2)))
-
+        # Colliding bubbles: warm then cold
+        for A, a, s, x0, z0 in ((0.5, 150, 50, 500, 300), (-0.15, 0, 50, 560, 640)):
+            r = torch.sqrt((x1 - x0) ** 2 + (x3 - z0) ** 2)
+            θ = torch.where(r <= a, θ + A, θ + A * torch.exp(-(((r - a) / s) ** 2)))
     elif param.case_number == 4:
-        # Density current
-
-        # Parameters for density current
-        xc = 0.0  # Center x position
-        zc = 3000.0  # Height of the cold pool center
-        xr = 4000.0  # Horizontal radius
-        zr = 2000.0  # Vertical radius
-
-        # Normalized distance from center
-        r = xp.sqrt(((geom.X1 - xc) / xr) ** 2 + ((geom.X3 - zc) / zr) ** 2)
-
-        # Temperature perturbation (cold anomaly)
-        θ_pert = xp.where(r <= 1.0, -15.0 * (1.0 + xp.cos(xp.pi * r)) / 2.0, 0.0)
-        θ = θ + θ_pert
+        # Density current (cold anomaly)
+        xc, zc, xr, zr = 0.0, 3000.0, 4000.0, 2000.0
+        r = torch.sqrt(((x1 - xc) / xr) ** 2 + ((x3 - zc) / zr) ** 2)
+        θ = θ + torch.where(r <= 1.0, -15.0 * (1.0 + torch.cos(torch.pi * r)) / 2.0, 0.0)
 
     if param.case_number == 0:
-        N_star = 0.01
-        t0 = 288
-
+        N_star, t0 = 0.01, 288.0
         a00 = N_star**2 / gravity
         capc1 = gravity**2 / (N_star**2 * cpd * t0)
-
-        exner = 1.0 - capc1 * (1.0 - xp.exp(-a00 * geom.X3))
-        θ = t0 * xp.exp(a00 * geom.X3)
-
-        uu[:, :] = 10.0
-
+        exner = 1.0 - capc1 * (1.0 - torch.exp(-a00 * x3))
+        θ = t0 * torch.exp(a00 * x3)
+        uu = uu + 10.0
     else:
-        exner = 1.0 - gravity / (cpd * θ) * geom.X3
+        exner = 1.0 - gravity / (cpd * θ) * x3
 
     ρ = p0 / (Rd * θ) * exner ** (cvd / Rd)
 
-    Q[idx_2d_rho, :, :] = ρ
-    Q[idx_2d_rho_u, :, :] = ρ * uu
-    Q[idx_2d_rho_w, :, :] = ρ * ww
-    Q[idx_2d_rho_theta, :, :] = ρ * θ
-
+    Q = torch.zeros((5,) + geom.grid_shape_3d_new, dtype=x1.dtype)
+    Q[idx_rho] = ρ
+    Q[idx_rho_u1] = ρ * uu
+    Q[idx_rho_u2] = 0.0  # y-invariant extrusion
+    Q[idx_rho_u3] = ρ * ww
+    Q[idx_rho_theta] = ρ * θ
     return Q

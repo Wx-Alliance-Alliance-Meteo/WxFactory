@@ -1,18 +1,29 @@
 import os
 import glob
-import unittest
 
 from wx_factory.common.eval_expr import _math_constants
+
 _math_constants["e"] = 1
 _math_constants["f"] = 5
 from wx_factory.common import Configuration, ConfigurationSchema, readfile, ConfigValueError
 
+from wx_test import WxTestCase
 
 self_dir = os.path.dirname(os.path.realpath(__file__))
 config_test_dir = self_dir
 
 
-class ConfigurationTestCases(unittest.TestCase):
+class ConfigurationTestCases(WxTestCase):
+    def test_main_precision_option(self):
+        schema_file = os.path.join(config_test_dir, "../../../config/config-format.json")
+        schema = ConfigurationSchema(readfile(schema_file))
+        precision = next(field for field in schema.fields if field.name == "precision")
+
+        self.assertEqual(precision.section, "System")
+        self.assertTrue(precision.validate("double"))
+        self.assertTrue(precision.validate("mixed"))
+        self.assertFalse(precision.validate("single"))
+
     def test_load_configuration_with_schema_default(self):
         schema_str: str
         configuration_str: str
