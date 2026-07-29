@@ -54,8 +54,8 @@ class Euler2DRestartTestCase(WxTestCase):
 
 
 class MultiProcRestartTestCase(MpiTestCase):
-    def __init__(self, num_procs, config_file, methodName, optional=False):
-        super().__init__(num_procs, methodName, optional)
+    def __init__(self, num_procs: int, config_file: str, methodName: str, device_name: str, optional: bool = False):
+        super().__init__(num_procs, methodName, device_name, optional)
         self.config_file = config_file
 
     def setUp(self):
@@ -66,8 +66,8 @@ class MultiProcRestartTestCase(MpiTestCase):
 
         self.schema = ConfigurationSchema(do_once(readfile, default_schema_path, comm=self.comm))
         self.base_config = Configuration(do_once(readfile, config_path, comm=self.comm), self.schema)
-        self.base_sim = Simulation(self.base_config, comm=self.comm)
-        self.device = self.base_sim.device
+        self.base_config.pytorch_device = self.device_name
+        self.base_sim = Simulation(self.base_config, comm=self.comm, device=self.device)
 
         self.smaller_comm = self.comm.Split(self.comm.rank < 6, self.comm.rank)
         if self.comm.rank >= 6:
@@ -95,8 +95,12 @@ class MultiProcRestartTestCase(MpiTestCase):
         # Create Simulation with starting_step=1 to load the restart file
         config = copy.deepcopy(self.base_config)
         config.starting_step = 1
+        config.pytorch_device = self.device_name
         sim = Simulation(config, comm=self.comm)
         self.assertEqual(sim.starting_step, 1, f"Starting step is not 1! {sim.starting_step}")
+
+        self.assertIn(self.device_name, str(self.base_sim.Q.device), f"Wrong device type for base_sim.Q")
+        self.assertIn(self.device_name, str(sim.initial_state.Q.device), f"Wrong device type for sim.initial_state.Q")
 
         # Verify that the loaded state is the same as the simulated one
         diff = sim.initial_state.Q - self.base_sim.Q
@@ -150,10 +154,10 @@ class MultiProcRestartTestCase(MpiTestCase):
 
 
 class ShallowWaterRestartTestCase(MultiProcRestartTestCase):
-    def __init__(self, num_procs, methodName, optional=False):
-        super().__init__(num_procs, "shallow_water.ini", methodName, optional)
+    def __init__(self, num_procs: int, methodName: str, device_name: str, optional=False):
+        super().__init__(num_procs, "shallow_water.ini", methodName, device_name, optional)
 
 
 class Euler3DRestartTestCase(MultiProcRestartTestCase):
-    def __init__(self, num_procs, methodName, optional=False):
-        super().__init__(num_procs, "euler3d.ini", methodName, optional)
+    def __init__(self, num_procs: int, methodName: str, device_name: str, optional=False):
+        super().__init__(num_procs, "euler3d.ini", methodName, device_name, optional)

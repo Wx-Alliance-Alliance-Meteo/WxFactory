@@ -1,5 +1,6 @@
 import sys
 from time import time
+from typing import Optional
 
 import numpy
 import torch
@@ -45,7 +46,8 @@ class Simulation:
         config: Configuration | str,
         comm: MPI.Comm = MPI.COMM_WORLD,
         print_allowed_pe_counts: bool = False,
-        quiet=False,
+        quiet: bool = False,
+        device: Optional[Device] = None,
     ) -> None:
         """Create a Simulation object from a certain configuration.
 
@@ -102,7 +104,7 @@ class Simulation:
                 raise SystemExit(0)
 
         self._adjust_num_elements()
-        self.device = self._make_device()
+        self.device = self._make_device(device)
 
         # Mixed mode stores the model state and most runtime arrays in float32. Static spatial
         # coefficients are constructed in float64 before casting, and accuracy-sensitive solver
@@ -241,10 +243,12 @@ class Simulation:
         else:
             export_era5_all_timesteps(self, self.config)
 
-    def _make_device(self) -> Device:
+    def _make_device(self, device: Optional[Device]) -> Device:
         """Create the device object which will determine on what hardware (CPU/GPU) each part of the simulation will
         be executed."""
-        return PytorchDevice(comm=self.comm, device_type=getattr(self.config, "pytorch_device", "cuda"))
+        if device is not None and device.comm == self.comm:
+            return device
+        return Device(comm=self.comm, device_type=self.config.pytorch_device)
 
     def _adjust_num_elements(self):
         """Adjust number of horizontal elements in the parameters so that it corresponds to the

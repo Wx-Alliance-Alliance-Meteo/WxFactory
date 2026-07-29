@@ -67,6 +67,9 @@ class WxTestResult(unittest.TextTestResult):
 
 class WxTestCase(unittest.TestCase):
     def __init__(self, methodName: str, device_name: str = "cpu") -> None:
+        """
+        :param device_name: Name of the device where we want to run the test. Can be either "cpu" or "cuda"
+        """
         super().__init__(methodName)
         self.device_name = device_name
         self.comm = MPI.COMM_WORLD

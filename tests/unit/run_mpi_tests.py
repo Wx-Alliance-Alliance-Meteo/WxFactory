@@ -7,6 +7,8 @@ import sys
 from typing import Optional
 import unittest
 
+import torch
+
 main_project_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../..")
 sys.path.append(main_project_dir)
 
@@ -27,17 +29,20 @@ def add_test(suite: unittest.TestSuite, test: unittest.TestCase, test_re: Option
 def load_tests(test_name: str):
     suite = unittest.TestSuite()
 
+    num_devices = torch.cuda.device_count()
+    device_names = ["cpu", "cuda"] if num_devices > 0 else ["cpu"]
+
     test_re = re.compile(test_name, re.IGNORECASE)
-    add_test(suite, ShallowWaterRestartTestCase(6, "test_read_restart"), test_re)
-    add_test(suite, Euler3DRestartTestCase(6, "test_read_restart"), test_re)
+    add_test(suite, ShallowWaterRestartTestCase(6, "test_read_restart", "cpu"), test_re)
+    add_test(suite, Euler3DRestartTestCase(6, "test_read_restart", "cpu"), test_re)
 
-    add_test(suite, ShallowWaterRestartTestCase(24, "test_read_restart", optional=True), test_re)
-    add_test(suite, Euler3DRestartTestCase(24, "test_read_restart", optional=True), test_re)
+    add_test(suite, ShallowWaterRestartTestCase(24, "test_read_restart", "cpu", optional=True), test_re)
+    add_test(suite, Euler3DRestartTestCase(24, "test_read_restart", "cpu", optional=True), test_re)
 
-    add_test(suite, ShallowWaterRestartTestCase(24, "test_multisize", optional=True), test_re)
-    add_test(suite, Euler3DRestartTestCase(24, "test_multisize", optional=True), test_re)
+    add_test(suite, ShallowWaterRestartTestCase(24, "test_multisize", "cpu", optional=True), test_re)
+    add_test(suite, Euler3DRestartTestCase(24, "test_multisize", "cpu", optional=True), test_re)
 
-    for dev in ["cpu", "cuda"]:
+    for dev in device_names:
         add_test(suite, ExchangeTest("vector2d_1d_shape1d", dev), test_re)
         add_test(suite, ExchangeTest("vector2d_1d_shape2d", dev), test_re)
         add_test(suite, ExchangeTest("vector2d_2d_shape1d", dev), test_re)
@@ -77,10 +82,6 @@ def load_tests(test_name: str):
 
     add_test(suite, PmexMpiTestCases("test_pmex_mpi_2_processes"), test_re)
     add_test(suite, KiopsMpiTestCases("test_kiops_mpi_2_processes"), test_re)
-
-
-
-
 
     # TODO : This test needs more works on the data division between processes
     # suite.addTest(FgmresMpiTestCases('test_fgmres_mpi_2_processes'))
@@ -136,9 +137,10 @@ if __name__ == "__main__":
         help="Will only run tests whose name or type matches this regular expression.",
     )
     parser.add_argument("--no-buffer", action="store_true", help="Print all test output to terminal")
+    parser.add_argument("--failfast", action="store_true", help="Stop running tests after 1 failure")
     args = parser.parse_args()
 
-    runner = MpiRunner(buffer=not args.no_buffer, verbosity=0)
+    runner = MpiRunner(buffer=not args.no_buffer, verbosity=0, failfast=args.failfast)
 
     # trace_run(runner, args)
     regular_run(runner, args)
