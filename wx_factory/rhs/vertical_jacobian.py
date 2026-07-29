@@ -521,7 +521,16 @@ def assemble_j1_blocks_analytic(rhsobj, q):
     U *= scale
     A[:, :, rw, :, rr, :] -= torch.einsum("ceo,os,ces->ceos", idzc * gravity * isgc, HF, sgc)
 
-    return L.reshape(ncol, nz, m, m), A.reshape(ncol, nz, m, m), U.reshape(ncol, nz, m, m)
+    L, A, U = L.reshape(ncol, nz, m, m), A.reshape(ncol, nz, m, m), U.reshape(ncol, nz, m, m)
+
+    if rhsobj.y_invariant_slab:
+        # Each variable occupies ns consecutive rows in the column layout.
+        yrow = numpy.s_[..., idx_rho_u2 * ns : (idx_rho_u2 + 1) * ns, :]
+        L[yrow] = 0.0
+        A[yrow] = 0.0
+        U[yrow] = 0.0
+
+    return L, A, U
 
 
 def blocks_matvec(rhsobj, L, A, U, xc):
@@ -874,6 +883,10 @@ def j2_flux_matvec(rhsobj, q, dq, base=None):
     dc += gp1 * dlog1 + gp2 * dlog2
     dp = heat_capacity_ratio * pressure * dq[rt] / q[rt]
     out[rw] = -m.inv_sqrtG_new * (dadv + dp * cbase + pressure * dc)
+
+    if rhsobj.y_invariant_slab:
+        out[idx_rho_u2] = 0.0  # The pinned tendency has zero derivative.
+
     return out
 
 
@@ -954,5 +967,8 @@ def forcing_jvp(rhsobj, q, v, base=None):
             dF = dF + rate * (dm[d] - uref[d] * dr)
 
         out[row] = -dF
+
+    if rhsobj.y_invariant_slab:
+        out[idx_rho_u2] = 0.0  # The pinned tendency has zero derivative.
 
     return out
