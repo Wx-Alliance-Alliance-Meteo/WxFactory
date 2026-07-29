@@ -8,5 +8,5 @@ export PYTHONPATH=${PYTHONPATH}:${WX_DIR}
 cd ${WX_DIR}
 
 ${WX_DIR}/scripts/run.sh -n 1 ${WX_DIR}/tests/unit/run_tests.py || exit -1
-${WX_DIR}/scripts/run.sh -n 24 ${PYTHON} ${WX_DIR}/tests/unit/run_mpi_tests.py || exit -1
+${WX_DIR}/scripts/run.sh -n 6 ${PYTHON} ${WX_DIR}/tests/unit/run_mpi_tests.py || exit -1
 ${WX_DIR}/tests/integration/run_all_integration_tests.sh || exit -1

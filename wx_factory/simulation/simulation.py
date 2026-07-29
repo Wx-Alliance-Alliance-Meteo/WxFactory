@@ -246,7 +246,8 @@ class Simulation:
     def _make_device(self, device: Optional[Device]) -> Device:
         """Create the device object which will determine on what hardware (CPU/GPU) each part of the simulation will
         be executed."""
-        if device is not None and device.comm == self.comm:
+        if device is not None:
+            self.comm = device.comm
             return device
         return Device(comm=self.comm, device_type=self.config.pytorch_device)
 

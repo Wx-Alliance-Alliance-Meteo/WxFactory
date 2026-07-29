@@ -3,17 +3,16 @@ import glob
 import os
 import sys
 from typing import Optional, Type, TypeVar, Union
-import unittest
 
 from mpi4py import MPI
-import numpy
+import torch
 
 from wx_factory.common import Configuration, load_default_schema, readfile
 from wx_factory.output import state
 from wx_factory.simulation import Simulation
 import wx_factory.wx_mpi
 
-from tests.unit.wx_test import WxTestCase
+from tests.unit.mpi_test import MpiTestCase
 
 OptionType = TypeVar("OptionType", bound=Union[int, float, str, bool])
 
@@ -88,12 +87,12 @@ def _get_option(
     return value
 
 
-class StateIntegrationTestCases(WxTestCase):
+class StateIntegrationTestCases(MpiTestCase):
     config_dir_path: str
     num_process_required: int
 
-    def __init__(self, config_dir_path: str):
-        super().__init__("test_state")
+    def __init__(self, config_dir_path: str, device_name: str = "cuda"):
+        super().__init__(MPI.COMM_WORLD.size, "test_state", device_name=device_name)
         self.config_dir_path = config_dir_path
         self.num_process_required = 0
 
@@ -113,6 +112,7 @@ class StateIntegrationTestCases(WxTestCase):
         self.error_threshold = _get_option(parser, requirement_filename, "System", "error_threshold", float, None)
 
     def setUp(self):
+        super().setUp()
         if MPI.COMM_WORLD.size != self.num_process_required:
             self.fail(
                 f"We are using {MPI.COMM_WORLD.size} process(es), but the test requires {self.num_process_required}"
@@ -123,7 +123,7 @@ class StateIntegrationTestCases(WxTestCase):
         # print(f"Config files: {self.config_files}")
 
     def test_state(self):
-        has_exited: bool = False
+        has_exited = 0
         exit_code: Optional[sys._ExitCode] = None
 
         for config_file in self.config_files:
@@ -131,21 +131,8 @@ class StateIntegrationTestCases(WxTestCase):
 
             config = Configuration(config_content, self.schema)
 
-            try:
-                sim = Simulation(config)
-                sim.run()
-
-            except SystemExit as e:
-                has_exited = True
-                exit_code = e.code
-
-            except Exception as e:
-                print(e, flush=True)
-                raise e
-
-            if has_exited:
-                print(f"Process {MPI.COMM_WORLD.rank} has exited prematurely")
-                raise SystemExit(exit_code)
+            sim = Simulation(config, device=self.device)
+            sim.run()
 
             conf = sim.config
 
@@ -153,16 +140,16 @@ class StateIntegrationTestCases(WxTestCase):
             base_name = os.path.split(state_vector_file)[-1]
             true_state_vector_file: str = f"{self.config_dir_path}/{base_name}"
 
-            [data, _] = state.load_state(state_vector_file)
-            [true_data, _] = state.load_state(true_state_vector_file)
+            [data, _] = state.load_state(state_vector_file, device=self.device.torch_device)
+            [true_data, _] = state.load_state(true_state_vector_file, device=self.device.torch_device)
 
             if data.shape != true_data.shape:
                 self.fail(f"Result shape {data.shape} is different from reference solution {true_data.shape}")
 
             delta = true_data - data
 
-            diff = numpy.linalg.norm(delta).item()
-            true_value = numpy.linalg.norm(true_data).item()
+            diff = torch.linalg.norm(delta).item()
+            true_value = torch.linalg.norm(true_data).item()
 
             relative_diff = diff / true_value
 

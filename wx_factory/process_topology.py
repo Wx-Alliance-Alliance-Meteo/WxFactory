@@ -530,8 +530,11 @@ class ProcessTopology:
             send_buffer[i, 0] = data[0].reshape(base_shape)
             send_buffer[i, 3:] = data[3:].reshape((data.shape[0] - 3,) + base_shape)
 
+            # Flip arrays, if needed
             if self.flip[i]:
-                send_buffer[i, :] = torch.flip(send_buffer[i, :], flip_dim if isinstance(flip_dim, tuple) else (flip_dim,))  # Flip arrays, if needed
+                send_buffer[i, :] = torch.flip(
+                    send_buffer[i, :], flip_dim if isinstance(flip_dim, tuple) else (flip_dim,)
+                )
 
         self.device.synchronize()  # When using GPU
 
