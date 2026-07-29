@@ -19,7 +19,7 @@ class WxTestResult(unittest.TextTestResult):
         super().startTest(test)
         self.t0 = time.time()
         if self.verbose:
-            self.stream.write(f"Running {test} ... ")
+            self.stream.write(f"Running {test} ... \n    ")
             self.stream.flush()
 
     def addSkip(self, test: unittest.TestCase, reason: str) -> None:

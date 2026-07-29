@@ -1,24 +1,26 @@
 import math
+from typing import Callable
 
-import torch
 from mpi4py import MPI
+import torch
+from torch import Tensor
 
 from ..device import Device
 from .dense import expm, solve_triangular
 
 
 def pmex(
-    tau_out,
-    A,
-    u,
-    tol=1e-7,
-    delta=1.2,
-    m_init=10,
-    mmin=10,
-    mmax=128,
-    reuse_info=True,
-    task1=False,
-    device: Device = None,
+    tau_out: Tensor,
+    A: Callable[[Tensor], Tensor],
+    u: Tensor,
+    tol: float = 1e-7,
+    delta: float = 1.2,
+    m_init: int = 10,
+    mmin: int = 10,
+    mmax: int = 128,
+    reuse_info: bool = True,
+    task1: bool = False,
+    device: Device | None = None,
 ):
     """
     :param tau_out: Vector of `tau_out`
@@ -98,7 +100,7 @@ def pmex(
 
     # Initial condition
     w = torch.zeros((numSteps, n), dtype=u.dtype)
-    w[0, :] = u[0, :].copy()
+    w[0, :] = u[0, :].clone()
 
     # compute the 1-norm of u
     local_nrmU = torch.sum(abs(u[1:, :]), dim=1)
@@ -168,7 +170,7 @@ def pmex(
             global_sum_nrm = torch.empty_like(local_sum)
             device.synchronize()
             comm.Allreduce([local_sum, mpi_acc], [global_sum_nrm, mpi_acc])
-            beta = math.sqrt(global_sum_nrm + V[j, n : n + p].astype(acc) @ V[j, n : n + p].astype(acc))
+            beta = math.sqrt(global_sum_nrm + V[j, n : n + p].to(acc) @ V[j, n : n + p].to(acc))
 
             # The first Krylov basis vector
             V[j, :] /= beta
@@ -184,13 +186,13 @@ def pmex(
             V[j, -1] = 0.0
 
             # 2. compute terms needed for R and T
-            local_vec = (V[0 : j + 1, 0:n] @ V[j - 1 : j + 1, 0:n].T).astype(acc)
+            local_vec = (V[0 : j + 1, 0:n] @ V[j - 1 : j + 1, 0:n].T).to(acc)
             global_vec = torch.empty_like(local_vec)
 
             device.synchronize()
             comm.Allreduce([local_vec, mpi_acc], [global_vec, mpi_acc])
 
-            global_vec += (V[0 : j + 1, n : n + p] @ V[j - 1 : j + 1, n : n + p].T).astype(acc)
+            global_vec += (V[0 : j + 1, n : n + p] @ V[j - 1 : j + 1, n : n + p].T).to(acc)
 
             # 3. Projection with 2-step Gauss-Seidel to the orthogonal complement
             # Note: this is done in two steps. (1) matvec and (2) a lower
@@ -215,7 +217,7 @@ def pmex(
                 )
 
             # 4. Orthogonalize
-            V[j, :] -= sol.astype(u.dtype) @ V[0:j, :]
+            V[j, :] -= sol.to(u.dtype) @ V[0:j, :]
 
             # 5. Norm of the freshly orthogonalized vector V[j], estimated by Pythagoras. Near a happy
             #    breakdown these two terms nearly cancel, so the cheap difference loses accuracy there.
@@ -234,7 +236,7 @@ def pmex(
                 global_sum_nrm = torch.empty_like(local_sum)
                 device.synchronize()
                 comm.Allreduce([local_sum, mpi_acc], [global_sum_nrm, mpi_acc])
-                curr_nrm = math.sqrt(global_sum_nrm + V[j, n : n + p].astype(acc) @ V[j, n : n + p].astype(acc))
+                curr_nrm = math.sqrt(global_sum_nrm + V[j, n : n + p].to(acc) @ V[j, n : n + p].to(acc))
                 reg_comm_nrm += 1
             else:
                 curr_nrm = torch.sqrt(diff)
@@ -256,7 +258,7 @@ def pmex(
         H[0, j] = 1.0
 
         # Save h_j+1,j and remove it temporarily to compute the exponential of H
-        nrm = H[j, j - 1].copy()
+        nrm = H[j, j - 1].clone()
         H[j, j - 1] = 0.0
 
         # Compute the exponential of the augmented matrix
@@ -364,18 +366,18 @@ def pmex(
 
             if blownTs != 0:
                 # Copy current w to w we continue with.
-                w[l + blownTs, :] = w[l, :].copy()
+                w[l + blownTs, :] = w[l, :].clone()
 
                 for k in range(blownTs):
                     tau_phantom = tau_out[l + k] - tau_now
                     F2 = device.array(expm(sgn * tau_phantom * H[0:j, :j]))
-                    w[l + k, :] = (beta * F2[:j, 0]).astype(u.dtype) @ V[:j, :n]
+                    w[l + k, :] = (beta * F2[:j, 0]).to(u.dtype) @ V[:j, :n]
 
                 # Advance l.
                 l += blownTs
 
             # Using the standard scheme
-            w[l, :] = (beta * F[:j, 0]).astype(u.dtype) @ V[:j, :n]
+            w[l, :] = (beta * F[:j, 0]).to(u.dtype) @ V[:j, :n]
 
             # Update tau_out
             tau_now += tau

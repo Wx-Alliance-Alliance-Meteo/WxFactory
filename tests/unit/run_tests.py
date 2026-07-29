@@ -5,7 +5,9 @@ import os
 import re
 import sys
 from typing import Optional
+import traceback
 import unittest
+import warnings
 
 main_project_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../..")
 sys.path.append(main_project_dir)
@@ -26,6 +28,11 @@ from tests.unit.restart.test_restart import Euler2DRestartTestCase
 from tests.unit.solvers.test_fgmres import FgmresScipyTestCases, FgmresEdgeCasesTestCases
 from tests.unit.solvers.test_kiops_pmex_tolerance_cpu import KiopsPmexToleranceCpuTestCases
 from tests.unit.solvers.test_exponential_solver_registry import ExponentialSolverRegistryTestCases
+
+
+def warn_with_traceback(message, category, filename, lineno, file=None, line=None):
+    traceback.print_stack()
+    print(f"{filename}:{lineno}: {category.__name__}: {message}")
 
 
 def add_test(suite: unittest.TestSuite, test: unittest.TestCase, test_re: Optional[re.Pattern]):
@@ -111,9 +118,7 @@ def load_tests(test_name: str):
     )
     add_test(
         suite,
-        PrecisionConstructionTestCases(
-            "test_single_precision_operators_are_rounded_double_operators"
-        ),
+        PrecisionConstructionTestCases("test_single_precision_operators_are_rounded_double_operators"),
         test_re,
     )
 
@@ -136,6 +141,9 @@ def load_tests(test_name: str):
 
 
 if __name__ == "__main__":
+    warnings.showwarning = warn_with_traceback
+    warnings.simplefilter("always")
+
     parser = argparse.ArgumentParser(description="Run the suite of single-process tests.")
     parser.add_argument(
         "test_name",
@@ -145,9 +153,10 @@ if __name__ == "__main__":
         help="Will only run tests whose name or type matches this regular expression.",
     )
     parser.add_argument("--no-buffer", action="store_true", help="Print all test output to terminal")
+    parser.add_argument("--failfast", action="store_true", help="Stop running tests after 1 failure")
     args = parser.parse_args()
 
-    runner = WxTestRunner(buffer=not args.no_buffer, verbosity=0)
+    runner = WxTestRunner(buffer=not args.no_buffer, verbosity=0, failfast=args.failfast)
     result = runner.run(load_tests(args.test_name))
     if not result.wasSuccessful():
         failed_tests = "\n  ".join(

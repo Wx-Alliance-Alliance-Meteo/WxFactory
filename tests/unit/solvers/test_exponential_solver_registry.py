@@ -1,5 +1,4 @@
 from types import SimpleNamespace
-import unittest
 from unittest.mock import patch
 
 from wx_factory.solvers.exponential_solver import (
@@ -10,8 +9,10 @@ from wx_factory.solvers.exponential_solver import (
 )
 from wx_factory.integrators.rosexp2 import RosExp2
 
+from  tests.unit.wx_test import WxTestCase
 
-class ExponentialSolverRegistryTestCases(unittest.TestCase):
+
+class ExponentialSolverRegistryTestCases(WxTestCase):
     def setUp(self):
         self.device = SimpleNamespace(comm=SimpleNamespace(rank=1))
         self.request = ExponentialSolverRequest(

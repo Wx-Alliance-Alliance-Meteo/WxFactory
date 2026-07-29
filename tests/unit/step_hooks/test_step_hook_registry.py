@@ -21,6 +21,7 @@ def make_ctx(**config_kwargs):
     # Defaults so the built-in providers (which read these) do not raise when resolved together.
     config_kwargs.setdefault("enable_schar_mountain", False)
     config_kwargs.setdefault("case_number", 0)
+    config_kwargs.setdefault("expfilter_apply", False)
     config = types.SimpleNamespace(**config_kwargs)
     return StepHookContext(config=config, geometry=_FakeGeom())
 
@@ -43,7 +44,7 @@ class StepHookRegistryTestCases(WxTestCase):
 
     def test_dcmip_dispatches_on_case_number(self):
         ctx = StepHookContext(
-            config=types.SimpleNamespace(enable_schar_mountain=False, case_number=11),
+            config=types.SimpleNamespace(enable_schar_mountain=False, case_number=11, expfilter_apply=False),
             geometry=_FakeGeom(),
             operators=None,
             metric=None,
