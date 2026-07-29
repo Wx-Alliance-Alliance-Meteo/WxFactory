@@ -19,6 +19,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("problems", type=str, nargs="+")
     parser.add_argument("--no-buffer", action="store_true", help="Display output as the test runs")
+    parser.add_argument("--failfast", action="store_true", help="Stop running tests after 1 failure")
     parser.add_argument(
         "--device",
         type=str,
@@ -28,7 +29,7 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    runner = mpi_test.MpiRunner(buffer=not args.no_buffer, verbosity=0)
+    runner = mpi_test.MpiRunner(buffer=not args.no_buffer, verbosity=0, failfast=args.failfast)
     results = []
     for problem in args.problems:
         problem_dir = os.path.join(main_project_dir, test_cases_dir, problem)

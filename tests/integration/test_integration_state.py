@@ -6,13 +6,14 @@ from typing import Optional, Type, TypeVar, Union
 
 from mpi4py import MPI
 import torch
+from torch import Tensor
 
 from wx_factory.common import Configuration, load_default_schema, readfile
 from wx_factory.output import state
 from wx_factory.simulation import Simulation
 import wx_factory.wx_mpi
 
-from tests.unit.mpi_test import MpiTestCase
+from tests.unit.mpi_test import MpiTestCase, run_test_on_x_process
 
 OptionType = TypeVar("OptionType", bound=Union[int, float, str, bool])
 
@@ -87,6 +88,13 @@ def _get_option(
     return value
 
 
+def get_rel_diff(a: Tensor, b: Tensor) -> float:
+    num_var = a.shape[0]
+    a_sizes = [torch.linalg.norm(a[i]).item() for i in range(num_var)]
+    norms = [torch.linalg.norm(b[i] - a[i]).item() / a_sizes[i] for i in range(num_var)]
+    return sum(norms) / len(norms)
+
+
 class StateIntegrationTestCases(MpiTestCase):
     config_dir_path: str
     num_process_required: int
@@ -99,23 +107,27 @@ class StateIntegrationTestCases(MpiTestCase):
         if not os.path.exists(self.config_dir_path):
             self.fail(f"Could not find test case {self.config_dir_path}")
 
+        self.num_process_required = 0
+        self.error_threshold = -1.0
+
         requirement_filename = f"{self.config_dir_path}/requirement.ini"
-        if not os.path.exists(requirement_filename):
-            raise FileNotFoundError(requirement_filename)
+        if os.path.exists(requirement_filename):
 
-        parser = ConfigParser()
-        parser.read(requirement_filename, encoding="utf-8")
+            parser = ConfigParser()
+            parser.read(requirement_filename, encoding="utf-8")
 
-        self.num_process_required = _get_option(
-            parser, requirement_filename, "System", "processes", int, 1, min_value=1
-        )
-        self.error_threshold = _get_option(parser, requirement_filename, "System", "error_threshold", float, None)
+            self.num_process_required = _get_option(
+                parser, requirement_filename, "System", "processes", int, 1, min_value=1
+            )
+            self.error_threshold = _get_option(parser, requirement_filename, "System", "error_threshold", float, None)
 
     def setUp(self):
         super().setUp()
-        if MPI.COMM_WORLD.size != self.num_process_required:
-            self.fail(
-                f"We are using {MPI.COMM_WORLD.size} process(es), but the test requires {self.num_process_required}"
+        if self.num_process_required > 0:
+            self.assertEqual(
+                MPI.COMM_WORLD.size,
+                self.num_process_required,
+                f"We are using {MPI.COMM_WORLD.size} process(es), but the test requires {self.num_process_required}",
             )
 
         self.schema = load_default_schema()
@@ -123,9 +135,6 @@ class StateIntegrationTestCases(MpiTestCase):
         # print(f"Config files: {self.config_files}")
 
     def test_state(self):
-        has_exited = 0
-        exit_code: Optional[sys._ExitCode] = None
-
         for config_file in self.config_files:
             config_content = wx_factory.wx_mpi.do_once(readfile, config_file)
 
@@ -141,18 +150,23 @@ class StateIntegrationTestCases(MpiTestCase):
             true_state_vector_file: str = f"{self.config_dir_path}/{base_name}"
 
             [data, _] = state.load_state(state_vector_file, device=self.device.torch_device)
-            [true_data, _] = state.load_state(true_state_vector_file, device=self.device.torch_device)
+            [true_data, true_config] = state.load_state(true_state_vector_file, device=self.device.torch_device)
 
-            if data.shape != true_data.shape:
-                self.fail(f"Result shape {data.shape} is different from reference solution {true_data.shape}")
+            self.assertEqual(
+                true_data.shape,
+                data.shape,
+                f"Result shape {data.shape} is different from reference solution {true_data.shape}",
+            )
 
-            delta = true_data - data
+            relative_diff = get_rel_diff(true_data, data)
 
-            diff = torch.linalg.norm(delta).item()
-            true_value = torch.linalg.norm(true_data).item()
+            if self.comm.rank == 0:
+                print(f"relative diff = {relative_diff:.2e}", flush=True)
 
-            relative_diff = diff / true_value
+            error_threshold = self.error_threshold
+            if error_threshold < 0:
+                error_threshold = true_config.tolerance * (true_config.t_end // true_config.dt) / 2
 
             self.assertLessEqual(
-                relative_diff, self.error_threshold, f"The relative difference ({relative_diff:.2e}) is too big"
+                relative_diff, error_threshold, f"The relative difference ({relative_diff:.2e}) is too big"
             )
