@@ -35,10 +35,9 @@ class CompareZarrToNcTestCase(MpiTestCase):
 
     def __init__(self, num_procs, methodName="runTest", optional=False):
         super().__init__(num_procs, methodName, optional)
-        self.state_dir = "tests/data/unit/zarr"
+        self.state_dir = "tests/data/unit/states_for_ouput_managers_tests"
         self.metric = None
         self.topography = None
-        self.comm = MPI.COMM_WORLD
         self.config = None
         self.device = None
         self.operators_real = None
@@ -106,12 +105,16 @@ class CompareZarrToNcTestCase(MpiTestCase):
         self.device = self._make_device()
         self.geometry = self._create_geometry()
         self.operators_real = DFROperators(self.geometry, self.config, self.device)
-
         if self.config.equations == "euler" and isinstance(self.geometry, CubedSphere3D):
             self.metric = Metric3DTopo(self.geometry, self.operators_real)
+            if self.config.enable_schar_mountain:
+                        self.step_hooks[ScharMountainHook].metric = self.metric
+                        self.step_hooks[ScharMountainHook].apply(1 if self.config.schar_mountain_step == 0 else 0)
+            self.metric.build_metric()
 
         elif self.config.equations == "euler" and isinstance(self.geometry, Cartesian2D):
             self.metric = None
+            print("CubedSphere2D")
 
         elif self.config.equations == "shallow_water" and isinstance(self.geometry, CubedSphere2D):
             self.metric = Metric2D(self.geometry)
@@ -131,60 +134,55 @@ class CompareZarrToNcTestCase(MpiTestCase):
         self.output = self._create_output_manager()
         self.output.step(self.Q, 0)
         self.output.finalize(0.0)
+        self.comm.Barrier()
 
         return self.config, tmp_output_dir
 
     def _compare_outputs(self, nc_file, zarr_store):
-
         ds_nc = xr.open_dataset(nc_file)
         ds_zarr = xr.open_zarr(zarr_store)
 
         try:
-            self.assertIn(
-                "data",
-                ds_zarr.data_vars,
-                "Variable 'data' not found in Zarr dataset",
-            )
-            equations = [str(v) for v in ds_zarr["equations"].values.tolist()]
+            for variable_name in ds_nc.data_vars:
 
-            for equation_index, variable_name in enumerate(equations):
                 self.assertIn(
                     variable_name,
-                    ds_nc.data_vars,
-                    f"Variable '{variable_name}' not found in NetCDF",
+                    ds_zarr.data_vars,
+                    f"Variable '{variable_name}' missing from Zarr",
                 )
-                nc_values = ds_nc[variable_name].values
 
-                zarr_values = ds_zarr["data"].isel(equations=equation_index).values
+                nc_values = ds_nc[variable_name].values
+                zarr_values = ds_zarr[variable_name].values
 
                 self.assertEqual(
                     nc_values.shape,
                     zarr_values.shape,
                     (
-                        f"Shape mismatch for '{variable_name}'. "
+                        f"Shape mismatch for variable '{variable_name}'. "
                         f"NetCDF={nc_values.shape}, "
                         f"Zarr={zarr_values.shape}"
                     ),
                 )
-                if not np.array_equal(
-                    nc_values,
-                    zarr_values,
-                ):
+
+                if not np.array_equal(nc_values, zarr_values):
 
                     diff = np.abs(nc_values - zarr_values)
 
-                    mismatch_locations = np.argwhere(nc_values != zarr_values)
+                    mismatch_locations = np.argwhere(
+                        nc_values != zarr_values
+                    )
 
-                    max_diff = np.max(diff)
+                    first_idx = tuple(mismatch_locations[0])
 
-                    report = [
-                        f"Variable '{variable_name}' differs.",
-                        f"Number of mismatches : {len(mismatch_locations)}",
-                        f"Maximum difference   : {max_diff:.16e}",
-                        "",
-                        "First mismatches:",
-                    ]
-                    self.fail("\n".join(report))
+                    self.fail(
+                        f"Variable '{variable_name}' differs.\n"
+                        f"Number of mismatches : {len(mismatch_locations)}\n"
+                        f"Maximum difference : {np.max(diff):.16e}\n"
+                        f"First mismatch idx : {first_idx}\n"
+                        f"NetCDF value       : {nc_values[first_idx]}\n"
+                        f"Zarr value         : {zarr_values[first_idx]}\n"
+                        f"Difference         : {diff[first_idx]}"
+                    )
 
         finally:
             ds_nc.close()
@@ -197,9 +195,7 @@ class CompareZarrToNcTestCase(MpiTestCase):
                 self.skipTest(f"No state-vector pairs found in {self.state_dir}")
 
             for nc_state_file, zarr_state_file in pairs:
-
                 config_nc, tmp_nc_dir = self._generate_output(nc_state_file)
-
                 config_zarr, tmp_zarr_dir = self._generate_output(zarr_state_file)
 
                 try:
@@ -210,12 +206,9 @@ class CompareZarrToNcTestCase(MpiTestCase):
 
                     if not os.path.exists(nc_file):
                         self.fail(f"Expected NetCDF output not found: " f"{nc_file}")
-                        print("Pas de NetCDF")
 
                     if not os.path.exists(zarr_store):
                         self.fail(f"Expected Zarr output not found: " f"{zarr_store}")
-                        print("Pas de Zarr")
-
                     self._compare_outputs(
                         nc_file,
                         zarr_store,

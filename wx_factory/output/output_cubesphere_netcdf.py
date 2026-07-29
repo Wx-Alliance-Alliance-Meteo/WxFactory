@@ -66,9 +66,8 @@ class OutputCubesphereNetcdf(OutputCubesphere):
         import netCDF4
 
         # creating the netcdf file(s)
-        with SingleProcess() as s, Conditional(s):
+        with SingleProcess(self.comm) as s, Conditional(s):
             self.ncfile = netCDF4.Dataset(self.filename, "w", format="NETCDF4")
-
         # create dimensions
         side = self.process_topology.num_lines_per_panel
         if self.config.equations == "shallow_water":
@@ -419,11 +418,6 @@ class OutputCubesphereNetcdf(OutputCubesphere):
             seconds = (time_val - epoch) / np.timedelta64(1, "s")
 
             self.ncfile["time"][idx] = seconds
-
-        if self.rank == 0:
-            print("\n=== NetCDF variable shapes ===")
-            for name, var in self.ncfile.variables.items():
-                print(f"{name}: {var.shape}")
 
     def __finalize__(self):
         """Finalise the output netCDF4 file."""

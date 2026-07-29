@@ -22,7 +22,7 @@ from tests.unit.solvers.test_kiops_mpi import KiopsMpiTestCases
 from tests.unit.solvers.test_fgmres_mpi import FgmresMpiTestCases
 from tests.unit.pde.test_pointwise_flux_3d import PDEPointWiseFlux3DTestCase
 from tests.unit.pde.test_riemann_flux import PDERiemannFlux3DTestCase
-from tests.unit.zarr.compare_zarr_to_nc_mpi import CompareZarrToNcTestCase
+from tests.unit.output_managers.compare_zarr_to_nc_mpi import CompareZarrToNcTestCase
 
 
 def add_test(suite: TestSuite, test: TestCase, test_re: Optional[re.Pattern]):

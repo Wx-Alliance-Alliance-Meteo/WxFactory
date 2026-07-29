@@ -20,7 +20,7 @@ from tests.unit.solvers.test_kiops import KiopsComparisonTestCases
 from tests.unit.solvers.test_fgmres import FgmresComparisonTestCases, FgmresScipyTestCases, FgmresEdgeCasesTestCases
 from tests.unit.solvers.test_kiops_pmex_tolerance_cpu import KiopsPmexToleranceCpuTestCases
 from tests.unit.solvers.test_kiops_pmex_tolerance_gpu import KiopsPmexToleranceGpuTestCases
-from tests.unit.zarr.compare_zarr_to_nc import CompareZarrToNcTestCase
+from tests.unit.output_managers.compare_zarr_to_nc import CompareZarrToNcTestCase
 
 
 def add_test(suite: unittest.TestSuite, test: unittest.TestCase, test_re: Optional[re.Pattern]):

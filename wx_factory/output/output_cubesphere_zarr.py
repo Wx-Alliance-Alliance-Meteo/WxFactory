@@ -47,8 +47,8 @@ class OutputCubesphereZarr(OutputCubesphere):
                 self.nz = 1
         
         self.npe = 6
-        self.ny = self.geometry.block_lat.shape[-2]
-        self.nx = self.geometry.block_lat.shape[-1]
+        self.ny = self.geometry.block_lat.shape[-1]
+        self.nx = self.geometry.block_lon.shape[-1]
 
         # --- set file name ---
         self.filename = f"{self.output_dir}/{config.base_output_file}.zarr"
@@ -74,61 +74,55 @@ class OutputCubesphereZarr(OutputCubesphere):
             ds = xr.Dataset(
                 coords={
                     "time": np.array([], dtype="datetime64[ns]"),
-                    "equations": np.array(self.equ, dtype=object),
-                    "faces": np.arange(self.npe),
-                    "z": np.arange(self.nz),
-                    "y": np.arange(self.ny),
-                    "x": np.arange(self.ny),
+                    "npe": np.arange(self.npe),
+                    "Zdim": np.arange(self.nz),
+                    "Ydim": np.arange(self.ny),
+                    "Xdim": np.arange(self.ny),
                 }
             )
+            for var in self.equ:
+                ds[var] = (("time", "npe", "Zdim", "Ydim", "Xdim"), np.zeros((0, self.npe, self.nz, self.ny, self.nx), dtype=np.float64))      
+
+            ds["lats"] = (("npe", "Ydim", "Xdim"), np.zeros((self.npe, self.ny, self.ny), dtype=np.float64))
+
+            ds["lons"] = (("npe", "Ydim", "Xdim"), np.zeros((self.npe, self.ny, self.ny), dtype=np.float64))
 
             # initialize empty variable array
-            shape = (0, len(self.equ), self.npe, self.nz, self.ny, self.ny)
-
-            ds["data"] = (("time", "equations", "faces", "z", "y", "x"), np.zeros(shape, dtype=np.float64))
             if self.config.equations == "euler":
-                ds["elev"] = (("faces", "z", "y", "x"), np.zeros((self.npe, self.nz, self.ny, self.ny), dtype=np.float64))
 
-                ds["topo"] = (("faces", "y", "x"), np.zeros((self.npe, self.ny, self.ny), dtype=np.float64))
+                ds["elev"] = (("npe", "Zdim", "Ydim", "Xdim"), np.zeros((self.npe, self.nz, self.ny, self.ny), dtype=np.float64))
+
+                ds["topo"] = (("npe", "Ydim", "Xdim"), np.zeros((self.npe, self.ny, self.ny), dtype=np.float64))
 
             # chunking
             ds = ds.chunk(
                 {
                     "time": 1,
-                    "equations": 1,
-                    "faces": 1,
-                    "z": self.nz,
-                    "y": self.ny,
-                    "x": self.ny,
+                    "npe": 1,
+                    "Zdim": self.nz,
+                    "Ydim": self.ny,
+                    "Xdim": self.ny,
                 }
             )
         else:
             ds = xr.Dataset(
                 coords={
                     "time": np.array([], dtype="datetime64[ns]"),
-                    "equations": np.array(self.equ, dtype=object),
-                    "faces": np.arange(self.npe),
-                    "y": np.arange(self.ny),
-                    "x": np.arange(self.ny),
+                    "npe": np.arange(self.npe),
+                    "Ydim": np.arange(self.ny),
+                    "Xdim": np.arange(self.ny),
                 }
             )
-
-            # initialize empty variable array
-            shape = (0, len(self.equ), self.npe, self.ny, self.ny)
-
-            ds["data"] = (
-                ("time", "equations", "faces", "y", "x"),
-                np.zeros(shape, dtype=np.float64),
-            )
+            for var in self.equ:
+                ds[var] = (("time", "npe", "Ydim", "Xdim"), np.zeros((0, self.npe, self.ny, self.nx), dtype=np.float64))
 
             # chunking
             ds = ds.chunk(
                 {
                     "time": 1,
-                    "equations": 1,
-                    "faces": 1,
-                    "y": self.ny,
-                    "x": self.ny,
+                    "npe": 1,
+                    "Ydim": self.ny,
+                    "Xdim": self.ny,
                 }
             )
 
@@ -161,7 +155,7 @@ class OutputCubesphereZarr(OutputCubesphere):
                     if self.topo is not None:
                         h = h + self.topo.hsurf
 
-                    self.store_field_zarr_Zdim(self.geometry.to_single_block(h), 0, t_index, k)
+                    self.store_variable_zarr_Zdim(self.geometry.to_single_block(h), "h", t_index, k)
 
                     u1 = Q[idx_hu1, k, ...] / h
                     u2 = Q[idx_hu2, k, ...] / h
@@ -172,13 +166,13 @@ class OutputCubesphereZarr(OutputCubesphere):
 
                     pv = potential_vorticity(h, u1, u2, self.metric, self.operators)
 
-                    self.store_field_zarr_Zdim(self.geometry.to_single_block(u), 1, t_index, k)
+                    self.store_variable_zarr_Zdim(self.geometry.to_single_block(u), "U", t_index, k)
 
-                    self.store_field_zarr_Zdim(self.geometry.to_single_block(v), 2, t_index, k)
+                    self.store_variable_zarr_Zdim(self.geometry.to_single_block(v), "V", t_index, k)
 
-                    self.store_field_zarr_Zdim(self.geometry.to_single_block(rv), 3, t_index, k)
+                    self.store_variable_zarr_Zdim(self.geometry.to_single_block(rv), "RV", t_index, k)
 
-                    self.store_field_zarr_Zdim(self.geometry.to_single_block(pv), 4, t_index, k)
+                    self.store_variable_zarr_Zdim(self.geometry.to_single_block(pv), "PV", t_index, k)
 
             else:
 
@@ -187,7 +181,7 @@ class OutputCubesphereZarr(OutputCubesphere):
                 if self.topo is not None:
                     h = h + self.topo.hsurf
 
-                self.store_field_zarr(self.geometry.to_single_block(h), 0, t_index)
+                self.store_variable_zarr(self.geometry.to_single_block(h), "h", t_index)
 
                 u1 = Q[idx_hu1, :, :] / h
                 u2 = Q[idx_hu2, :, :] / h
@@ -198,13 +192,13 @@ class OutputCubesphereZarr(OutputCubesphere):
 
                 pv = potential_vorticity(h, u1, u2, self.metric, self.operators)
 
-                self.store_field_zarr(self.geometry.to_single_block(u), 1, t_index)
+                self.store_variable_zarr(self.geometry.to_single_block(u), "U", t_index)
 
-                self.store_field_zarr(self.geometry.to_single_block(v), 2, t_index)
+                self.store_variable_zarr(self.geometry.to_single_block(v), "V", t_index)
 
-                self.store_field_zarr( self.geometry.to_single_block(rv), 3, t_index)
+                self.store_variable_zarr( self.geometry.to_single_block(rv), "RV", t_index)
 
-                self.store_field_zarr(self.geometry.to_single_block(pv), 4, t_index)
+                self.store_variable_zarr(self.geometry.to_single_block(pv), "PV", t_index)
 
             return
 
@@ -222,80 +216,51 @@ class OutputCubesphereZarr(OutputCubesphere):
             
             for k in range(self.nz):
 
-                self.store_field_zarr_Zdim(self.geometry.to_single_block(u), 0, t_index, k)
+                self.store_variable_zarr_Zdim(self.geometry.to_single_block(u), "U", t_index, k)
 
-                self.store_field_zarr_Zdim(self.geometry.to_single_block(v), 1, t_index, k)
+                self.store_variable_zarr_Zdim(self.geometry.to_single_block(v), "V", t_index, k)
 
-                self.store_field_zarr_Zdim(self.geometry.to_single_block(w), 2, t_index, k)
+                self.store_variable_zarr_Zdim(self.geometry.to_single_block(w), "W", t_index, k)
 
-                self.store_field_zarr_Zdim(self.geometry.to_single_block(rho), 3, t_index, k)
+                self.store_variable_zarr_Zdim(self.geometry.to_single_block(rho), "rho", t_index, k)
 
-                self.store_field_zarr_Zdim(self.geometry.to_single_block(theta), 4, t_index, k)
+                self.store_variable_zarr_Zdim(self.geometry.to_single_block(theta), "theta", t_index, k)
 
-                self.store_field_zarr_Zdim(self.geometry.to_single_block(p), 5, t_index, k)
+                self.store_variable_zarr_Zdim(self.geometry.to_single_block(p), "P", t_index, k)
 
             return
 
     # --------------------------------------------------
     def __finalize__(self):
-        if self.rank == 0:
-            print("\n=== Zarr array shapes ===")
-
-            root = zarr.open_group(
-                self.filename,
-                mode="r",
-            )
-
-            for name, arr in root.arrays():
-                print(f"{name}: {arr.shape}")
-
         return
 
 
     def _append_time_step(self, time_val, nz, ny, nx):
-
+        variables = {}
         if self.rank == 0:
             if nz != 1:
-                dummy = xr.Dataset(
-                    {
-                        "data": (
-                            ("time", "equations", "faces", "z", "y", "x"),
-                            np.full(
-                                (1, len(self.equ), self.npe, nz, ny, nx),
-                                np.nan,
-                                dtype=np.float64,
-                            ),
-                        )
-                    },
-                    coords={
-                        "time": np.array([time_val], dtype= "datetime64[s]"),
-                        "equations": np.array(self.equ, dtype=object),
-                        "faces": np.arange(self.npe),
-                        "z": np.arange(nz),
-                        "y": np.arange(ny),
-                        "x": np.arange(nx),
-                    },
-                )
+                for var in self.equ:
+                    variables[var] = (("time", "npe", "Zdim", "Ydim", "Xdim"), np.full((1, self.npe, self.nz, self.ny, self.nx), np.nan, dtype=np.float64))
+                    dummy = xr.Dataset(
+                        variables,
+                        coords={
+                            "time": np.array([time_val], dtype= "datetime64[s]"),
+                            "npe": np.arange(self.npe),
+                            "Zdim": np.arange(nz),
+                            "Ydim": np.arange(ny),
+                            "Xdim": np.arange(nx),
+                        })
             else:
-                dummy = xr.Dataset(
-                    {
-                        "data": (
-                            ("time", "equations", "faces", "y", "x"),
-                            np.full(
-                                (1, len(self.equ), self.npe, ny, nx),
-                                np.nan,
-                                dtype=np.float64,
-                            ),
-                        )
-                    },
-                    coords={
-                        "time": np.array([time_val], dtype= "datetime64[s]"),
-                        "equations": np.array(self.equ, dtype=object),
-                        "faces": np.arange(self.npe),
-                        "y": np.arange(ny),
-                        "x": np.arange(nx),
-                    },
-                )
+                for var in self.equ:
+                    variables[var] = (("time", "npe", "Ydim", "Xdim"), np.full((1, self.npe, self.ny, self.nx), np.nan, dtype=np.float64))
+                    dummy = xr.Dataset(
+                        variables,
+                        coords={
+                            "time": np.array([time_val], dtype= "datetime64[s]"),
+                            "npe": np.arange(self.npe),
+                            "Ydim": np.arange(ny),
+                            "Xdim": np.arange(nx),
+                        })
 
             dummy["time"].encoding = {
                 "units": "seconds since 1800-01-01 00:00:00",
@@ -317,47 +282,55 @@ class OutputCubesphereZarr(OutputCubesphere):
 
         return t_index
 
-    def store_field_zarr(self, field, equation_idx, t_index):
+
+    def store_variable_zarr(self, field, variable_name, t_index):
+
         fields = self._gather_field(field, self.num_dim)
 
         if fields is None:
             return
 
         if self.rank == 0:
+
             root = zarr.open_group(
                 self.filename,
                 mode="r+",
             )
 
             for face_idx, face in enumerate(fields):
-                root["data"][t_index, equation_idx, face_idx, :, :] = self.device.to_host(face)
+                root[variable_name][t_index, face_idx, :, :] = self.device.to_host(face)
 
-    def store_field_zarr_Zdim(self, field, equation_idx, t_index, level_idx):
+    
+    def store_variable_zarr_Zdim(self, field, variable_name, t_index, level_idx):
+
         fields = self._gather_field(field, self.num_dim)
 
         if fields is None:
             return
-        
+
         if self.rank == 0:
             root = zarr.open_group(
                 self.filename,
                 mode="r+",
             )
+
             for face_idx, face in enumerate(fields):
                 if self.config.equations == "shallow_water":
-                    root["data"][t_index, equation_idx, face_idx, level_idx, :, :] = self.device.to_host(face)
+                    root[variable_name][t_index, face_idx, level_idx, :, :] = self.device.to_host(face)
+
                 elif self.config.equations == "euler":
-                    root["data"][t_index, equation_idx, face_idx, level_idx, :, :] = self.device.to_host(face[level_idx, :, :])
+                    root[variable_name][t_index, face_idx, level_idx, :, :] = self.device.to_host(face[level_idx, :, :])
+
 
     def write_static_euler_fields(self):
-        elev = self._gather_field(
-            self.geometry.coordVec_latlon[2, :, :, :],
-            3,
-        )
-        topo = self._gather_field(
-            self.geometry.zbot,
-            2,
-        )
+
+        lats = self._gather_field(self.geometry.block_lat * 180 / np.pi, 2)
+
+        lons = self._gather_field(self.geometry.block_lon * 180 / np.pi, 2)
+
+        elev = self._gather_field(self.geometry.coordVec_latlon[2, :, :, :], 3)
+
+        topo = self._gather_field(self.geometry.zbot, 2)
 
         if self.rank != 0:
             return
@@ -366,6 +339,10 @@ class OutputCubesphereZarr(OutputCubesphere):
             self.filename,
             mode="r+",
         )
+
+        root["lats"][:] = lats
+
+        root["lons"][:] = lons
 
         root["elev"][:] = elev
 
