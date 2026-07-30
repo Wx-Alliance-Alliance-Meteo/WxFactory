@@ -7,6 +7,8 @@ packaging
 netcdf4
 matplotlib
 xarray
+dask
+zarr
 
 # GPU support requires a CUDA-enabled PyTorch build compatible with the system CUDA driver.
 # See https://pytorch.org/get-started/locally/ for the appropriate installation command.

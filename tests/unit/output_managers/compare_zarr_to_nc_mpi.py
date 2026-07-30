@@ -108,8 +108,8 @@ class CompareZarrToNcTestCase(MpiTestCase):
         self.device = self._make_device(self.device)
 
         if self.config.precision == "mixed":
-                    self.device.real_dtype = torch.float32
-                    self.device.complex_dtype = torch.complex64
+            self.device.real_dtype = torch.float32
+            self.device.complex_dtype = torch.complex64
         else:
             self.device.real_dtype = torch.float64
             self.device.complex_dtype = torch.complex128
@@ -119,9 +119,9 @@ class CompareZarrToNcTestCase(MpiTestCase):
         self.process_topo = getattr(self.geometry, "process_topology", None)
 
         self.step_hooks.update(
-                    resolve_step_hooks(StepHookContext(config=self.config, geometry=self.geometry), phase=PHASE_GEOMETRY)
-                )
-        
+            resolve_step_hooks(StepHookContext(config=self.config, geometry=self.geometry), phase=PHASE_GEOMETRY)
+        )
+
         self.operators_real = DFROperators(self.geometry, self.device)
 
         if self.config.equations == "euler" and isinstance(self.geometry, Cartesian3D):
@@ -199,9 +199,7 @@ class CompareZarrToNcTestCase(MpiTestCase):
 
                     diff = np.abs(nc_values - zarr_values)
 
-                    mismatch_locations = np.argwhere(
-                        nc_values != zarr_values
-                    )
+                    mismatch_locations = np.argwhere(nc_values != zarr_values)
 
                     first_idx = tuple(mismatch_locations[0])
 
@@ -264,7 +262,7 @@ class CompareZarrToNcTestCase(MpiTestCase):
                 flush=True,
             )
             raise
-    
+
     def _make_device(self, device: Optional[Device]) -> Device:
         """Create the device object which will determine on what hardware (CPU/GPU) each part of the simulation will
         be executed."""
