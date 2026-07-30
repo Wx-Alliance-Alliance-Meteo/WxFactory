@@ -11,9 +11,6 @@ from ..geometry import DFROperators, Geometry, Metric2D, Metric3DTopo
 from ..pde import PDE
 from ..process_topology import ExchangeRequest, ProcessTopology
 
-# Forward AD cannot write into scratch tensors captured from an earlier RHS call.
-_ALLOCATE_FRESH = differentiable_mode()
-
 
 class RHS(ABC):
     req_r: ExchangeRequest
@@ -104,7 +101,8 @@ class RHS(ABC):
 
         self.ops = self.ops_complex if torch.is_complex(q) else self.ops_real
 
-        if _ALLOCATE_FRESH:
+        # Forward AD cannot write into scratch tensors captured from an earlier RHS call.
+        if differentiable_mode():
             self.invalidate_workspace()
 
         self.allocate_arrays(q)

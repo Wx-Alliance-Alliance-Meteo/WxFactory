@@ -10,9 +10,6 @@ import torch
 
 from ..device import differentiable_mode
 
-# PyTorch has no forward-AD rule for matmul with ``out=``; differentiable mode uses a temporary.
-_MATMUL_NEEDS_OUT_FALLBACK = differentiable_mode()
-
 
 def kron(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
     """Kronecker product. ``torch.kron`` requires contiguous operands."""
@@ -42,7 +39,8 @@ def _matmul(a, b, alpha=1.0, beta=0.0, out=None):
             result *= alpha
         return result
 
-    if _MATMUL_NEEDS_OUT_FALLBACK:
+    # PyTorch has no forward-AD rule for matmul with ``out=``; differentiable mode uses a temporary.
+    if differentiable_mode():
         prod = torch.matmul(a, b)
         if beta == 0.0:
             out.copy_(prod if alpha == 1.0 else prod * alpha)

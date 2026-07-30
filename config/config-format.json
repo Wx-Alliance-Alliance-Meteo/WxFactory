@@ -172,7 +172,7 @@
                     "name": "jacobian_method",
                     "type": "str",
                     "default": "complex",
-                    "selectables": ["complex", "fd"]
+                    "selectables": ["complex", "fd", "ad"]
                 },
                 {
                     "name": "verbose_solver",
