@@ -486,7 +486,7 @@
                     "name": "output_format",
                     "type": "str",
                     "default": "netcdf",
-                    "selectables": ["netcdf", "fst"],
+                    "selectables": ["netcdf", "fst", "zarr"],
                     "description": "Cubed-sphere output format. netcdf requires netCDF4; fst additionally requires the external rmn and georef packages. Cartesian output uses its image writer regardless of this setting."
                 }
             ]

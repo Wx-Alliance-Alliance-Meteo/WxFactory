@@ -1,14 +1,17 @@
+from ..common.matmul import kron
 import numpy as np
 import xarray as xr
 from mpi4py import MPI
 import os
 import shutil
 import zarr
+from numpy.typing import NDArray
 
 
 from .output_cubesphere import OutputCubesphere
 from .diagnostic import potential_vorticity, relative_vorticity
-from ..common.definitions import idx_h, idx_hu1, idx_hu2, idx_hu2, idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_w, idx_rho_theta, cpd, cvd, p0, Rd
+from ..common.definitions import idx_h, idx_hu1, idx_hu2, idx_hu2, idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_u3, idx_rho_theta, cpd, cvd, p0, Rd
+from ..geometry import CubedSphere2D
 
 
 class OutputCubesphereZarr(OutputCubesphere):
@@ -35,9 +38,8 @@ class OutputCubesphereZarr(OutputCubesphere):
             self.start_time = np.datetime64("1800-01-01T00:00:00")
         self.dt = config.dt
         self.current_time_index = 0
-        if self.geometry.nk > 1: 
-            self.nz = self.geometry.nk
-        else:
+        self.geometry = geometry
+        if isinstance(self.geometry, CubedSphere2D):
             if self.geometry.z_levels:
                 if type(self.geometry.z_levels) == int:
                     self.nz = self.geometry.z_levels
@@ -45,9 +47,11 @@ class OutputCubesphereZarr(OutputCubesphere):
                     self.nz = len(self.geometry.z_levels)
             else:
                 self.nz = 1
+        else:
+            self.nz = self.geometry.nk
         
         self.npe = 6
-        self.ny = self.geometry.block_lat.shape[-1]
+        self.ny = self.geometry.block_lat.shape[-2]
         self.nx = self.geometry.block_lon.shape[-1]
 
         # --- set file name ---
@@ -77,22 +81,24 @@ class OutputCubesphereZarr(OutputCubesphere):
                     "npe": np.arange(self.npe),
                     "Zdim": np.arange(self.nz),
                     "Ydim": np.arange(self.ny),
-                    "Xdim": np.arange(self.ny),
+                    "Xdim": np.arange(self.nx),
                 }
             )
             for var in self.equ:
                 ds[var] = (("time", "npe", "Zdim", "Ydim", "Xdim"), np.zeros((0, self.npe, self.nz, self.ny, self.nx), dtype=np.float64))      
 
-            ds["lats"] = (("npe", "Ydim", "Xdim"), np.zeros((self.npe, self.ny, self.ny), dtype=np.float64))
+            ds["lats"] = (("npe", "Ydim", "Xdim"), np.zeros((self.npe, self.ny, self.nx), dtype=np.float64))
 
-            ds["lons"] = (("npe", "Ydim", "Xdim"), np.zeros((self.npe, self.ny, self.ny), dtype=np.float64))
+            ds["lons"] = (("npe", "Ydim", "Xdim"), np.zeros((self.npe, self.ny, self.nx), dtype=np.float64))
 
             # initialize empty variable array
             if self.config.equations == "euler":
 
-                ds["elev"] = (("npe", "Zdim", "Ydim", "Xdim"), np.zeros((self.npe, self.nz, self.ny, self.ny), dtype=np.float64))
+                ds["elev"] = (("npe", "Zdim", "Ydim", "Xdim"), np.zeros((self.npe, self.nz, self.ny, self.nx), dtype=np.float64))
 
-                ds["topo"] = (("npe", "Ydim", "Xdim"), np.zeros((self.npe, self.ny, self.ny), dtype=np.float64))
+                ds["topo"] = (("npe", "Ydim", "Xdim"), np.zeros((self.npe, self.ny, self.nx), dtype=np.float64))
+
+                ds["volume"] = (("npe", "Zdim", "Ydim", "Xdim"), np.zeros((self.npe, self.nz, self.ny, self.nx), dtype=np.float64))
 
             # chunking
             ds = ds.chunk(
@@ -101,7 +107,7 @@ class OutputCubesphereZarr(OutputCubesphere):
                     "npe": 1,
                     "Zdim": self.nz,
                     "Ydim": self.ny,
-                    "Xdim": self.ny,
+                    "Xdim": self.nx,
                 }
             )
         else:
@@ -110,7 +116,7 @@ class OutputCubesphereZarr(OutputCubesphere):
                     "time": np.array([], dtype="datetime64[ns]"),
                     "npe": np.arange(self.npe),
                     "Ydim": np.arange(self.ny),
-                    "Xdim": np.arange(self.ny),
+                    "Xdim": np.arange(self.nx),
                 }
             )
             for var in self.equ:
@@ -122,7 +128,7 @@ class OutputCubesphereZarr(OutputCubesphere):
                     "time": 1,
                     "npe": 1,
                     "Ydim": self.ny,
-                    "Xdim": self.ny,
+                    "Xdim": self.nx,
                 }
             )
 
@@ -144,7 +150,7 @@ class OutputCubesphereZarr(OutputCubesphere):
             time_val,
             self.nz,
             self.ny,
-            self.ny,
+            self.nx,
         )
 
         if self.config.equations == "shallow_water":
@@ -207,7 +213,7 @@ class OutputCubesphereZarr(OutputCubesphere):
             rho = Q[idx_rho, ...]
             u1 = Q[idx_rho_u1, ...] / rho
             u2 = Q[idx_rho_u2, ...] / rho
-            u3 = Q[idx_rho_w, ...] / rho
+            u3 = Q[idx_rho_u3, ...] / rho
             theta = Q[idx_rho_theta, ...] / rho
 
             u, v, w = self.geometry.contra2wind_3d(u1, u2, u3, self.metric)
@@ -332,6 +338,8 @@ class OutputCubesphereZarr(OutputCubesphere):
 
         topo = self._gather_field(self.geometry.zbot, 2)
 
+        volume = self._gather_field(self.geometry.to_single_block(self._cell_volume()), 3)
+
         if self.rank != 0:
             return
 
@@ -340,10 +348,23 @@ class OutputCubesphereZarr(OutputCubesphere):
             mode="r+",
         )
 
-        root["lats"][:] = lats
+        root["lats"][:] = self.device.to_host(lats)
+        root["lons"][:] = self.device.to_host(lons)
+        root["elev"][:] = self.device.to_host(elev)
+        root["topo"][:] = self.device.to_host(topo)
+        root["volume"][:] = self.device.to_host(volume)
 
-        root["lons"][:] = lons
 
-        root["elev"][:] = elev
+    def _cell_volume(self) -> NDArray:
+        """Volume associated with each solution point.
 
-        root["topo"][:] = topo
+        On the cubed sphere the elements are uniform in the computational coordinates, so the volume
+        of a solution point is sqrt(G) times its tensor-product Gauss-Legendre quadrature weight,
+        times the (constant) volume of a reference element. The solution points inside an element are
+        ordered with x1 varying fastest, then x2, then x3."""
+        geom = self.geometry
+        w = geom.glweights
+        w3d = kron(w, kron(w, w))  # ordering: x3 slowest, x1 fastest
+
+        elem_volume = geom.delta_x1 * geom.delta_x2 * geom.delta_x3 / 8.0
+        return self.metric.sqrtG_new * w3d * elem_volume

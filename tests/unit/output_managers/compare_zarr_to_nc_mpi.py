@@ -1,34 +1,35 @@
 import os
 import shutil
 import tempfile
+from typing import Optional
 
 import numpy as np
 from numpy.typing import NDArray
 import xarray as xr
 from mpi4py import MPI
+import torch
 
 from mpi_test import MpiTestCase
 from wx_factory.output import InputManager
-from wx_factory.simulation import Simulation
 from wx_factory.wx_mpi import SingleProcess, Conditional
 from wx_factory.geometry import (
-    Cartesian2D,
-    CubedSphere,
+    Cartesian3D,
     CubedSphere3D,
     CubedSphere2D,
-    Geometry,
     DFROperators,
     Metric2D,
     Metric3DTopo,
 )
+from wx_factory.device import Device
+from wx_factory.output.registry import OutputContext, resolve_output
+from wx_factory.geometry import DFROperators, GeometryContext, resolve_geometry
 from wx_factory.step_hooks import ScharMountainHook
-from wx_factory.output.output_manager import OutputManager
-from wx_factory.output.output_cartesian import OutputCartesian
-from wx_factory.output.output_cubesphere_netcdf import OutputCubesphereNetcdf
-from wx_factory.output.output_cubesphere_fst import OutputCubesphereFst
-from wx_factory.output.output_cubesphere_zarr import OutputCubesphereZarr
-from wx_factory.process_topology import ProcessTopology
-from wx_factory.device import Device, CpuDevice, CudaDevice, PytorchDevice
+from wx_factory.step_hooks.registry import (
+    PHASE_GEOMETRY,
+    PHASE_STATE,
+    StepHookContext,
+    resolve_step_hooks,
+)
 
 
 class CompareZarrToNcTestCase(MpiTestCase):
@@ -101,23 +102,42 @@ class CompareZarrToNcTestCase(MpiTestCase):
             if self.config.grid_file != "" or self.config.grid_type == "cubed_sphere"
             else [1]
         )
+
         self._adjust_num_elements()
-        self.device = self._make_device()
-        self.geometry = self._create_geometry()
-        self.operators_real = DFROperators(self.geometry, self.config, self.device)
-        if self.config.equations == "euler" and isinstance(self.geometry, CubedSphere3D):
-            self.metric = Metric3DTopo(self.geometry, self.operators_real)
-            if self.config.enable_schar_mountain:
-                        self.step_hooks[ScharMountainHook].metric = self.metric
-                        self.step_hooks[ScharMountainHook].apply(1 if self.config.schar_mountain_step == 0 else 0)
+
+        self.device = self._make_device(self.device)
+
+        if self.config.precision == "mixed":
+                    self.device.real_dtype = torch.float32
+                    self.device.complex_dtype = torch.complex64
+        else:
+            self.device.real_dtype = torch.float64
+            self.device.complex_dtype = torch.complex128
+
+        self.geometry = resolve_geometry(GeometryContext.from_simulation(self))
+
+        self.process_topo = getattr(self.geometry, "process_topology", None)
+
+        self.step_hooks.update(
+                    resolve_step_hooks(StepHookContext(config=self.config, geometry=self.geometry), phase=PHASE_GEOMETRY)
+                )
+        
+        self.operators_real = DFROperators(self.geometry, self.device)
+
+        if self.config.equations == "euler" and isinstance(self.geometry, Cartesian3D):
+            self.metric = Metric3DTopo(self.geometry, self.operators)
             self.metric.build_metric()
 
-        elif self.config.equations == "euler" and isinstance(self.geometry, Cartesian2D):
-            self.metric = None
-            print("CubedSphere2D")
+        elif self.config.equations == "euler" and isinstance(self.geometry, CubedSphere3D):
+            self.metric = Metric3DTopo(self.geometry, self.operators_real)
+            if self.config.enable_schar_mountain:
+                self.step_hooks[ScharMountainHook].metric = self.metric
+                self.step_hooks[ScharMountainHook].apply(1 if self.config.schar_mountain_step == 0 else 0)
+            self.metric.build_metric()
 
         elif self.config.equations == "shallow_water" and isinstance(self.geometry, CubedSphere2D):
             self.metric = Metric2D(self.geometry)
+
         if self.comm.rank == 0:
             num_dim = len(global_state.shape) - 2
         else:
@@ -131,7 +151,18 @@ class CompareZarrToNcTestCase(MpiTestCase):
             self.geometry.z_levels = self.Q.shape[1]
         else:
             self.geometry.z_levels = 1
-        self.output = self._create_output_manager()
+
+        self.output = resolve_output(
+            OutputContext(
+                config=self.config,
+                device=self.device,
+                geometry=self.geometry,
+                operators=self.operators_real,
+                metric=self.metric,
+                topography=self.topography,
+                ptopo=self.process_topo,
+            )
+        )
         self.output.step(self.Q, 0)
         self.output.finalize(0.0)
         self.comm.Barrier()
@@ -233,135 +264,14 @@ class CompareZarrToNcTestCase(MpiTestCase):
                 flush=True,
             )
             raise
-
-    def _make_device(self) -> Device:
+    
+    def _make_device(self, device: Optional[Device]) -> Device:
         """Create the device object which will determine on what hardware (CPU/GPU) each part of the simulation will
         be executed."""
-        if self.config.desired_device in ["cuda", "cupy", "omp"]:
-            try:
-                cuda_devices = self.config.cuda_devices
-            except AttributeError:
-                cuda_devices = []
-
-            lib = "omp" if self.config.desired_device == "omp" else "cuda"
-            try:
-                device = CudaDevice(self.comm, compiled_lib=lib, device_list=cuda_devices)
-            except ValueError:
-                device = None
-                if self.comm.rank == 0:
-                    print("Switching to CPU", flush=True)
-
-            if device is None:
-                device = CpuDevice(comm=self.comm)
-        elif self.config.desired_device == "torch":
-            device = PytorchDevice(comm=self.comm)
-        else:
-            device = CpuDevice(comm=self.comm)
-
-        return device
-
-    def _create_geometry(self) -> Geometry:
-        """Create the appropriate geometry for the given problem"""
-
-        if self.config.grid_file != "":
-            self.process_topo = ProcessTopology(self.device, comm_in=self.comm)
-            return CubedSphere2D(
-                self.num_elements_horizontal,
-                self.num_solpts,
-                self.total_num_elements_horizontal,
-                self.lambda0,
-                self.phi0,
-                self.alpha0,
-                self.process_topo,
-            )
-
-        if self.config.grid_type == "cubed_sphere":
-            self.process_topo = ProcessTopology(self.device, comm_in=self.comm)
-            if self.config.equations == "shallow_water":
-                return CubedSphere2D(
-                    self.num_elements_horizontal,
-                    self.num_solpts,
-                    self.total_num_elements_horizontal,
-                    self.lambda0,
-                    self.phi0,
-                    self.alpha0,
-                    self.process_topo,
-                )
-            elif self.config.equations == "euler":
-                cube_sphere = CubedSphere3D(
-                    self.num_elements_horizontal,
-                    self.config.num_elements_vertical,
-                    self.num_solpts,
-                    self.total_num_elements_horizontal,
-                    self.lambda0,
-                    self.phi0,
-                    self.alpha0,
-                    self.config.ztop,
-                    self.process_topo,
-                    self.config,
-                )
-
-                if self.config.enable_schar_mountain:
-                    schar_mountain = ScharMountainHook(self.config, cube_sphere)
-                    self.step_hooks[ScharMountainHook] = schar_mountain
-                return cube_sphere
-
-        if self.config.grid_type == "cartesian2d":
-            return Cartesian2D(
-                (self.config.x0, self.config.x1),
-                (self.config.z0, self.config.z1),
-                self.num_elements_horizontal,
-                self.config.num_elements_vertical,
-                self.num_solpts,
-                self.total_num_elements_horizontal,
-                self.device,
-            )
-
-        raise ValueError(f"Invalid grid type/process_topo: {self.config.grid_type}, {self.process_topo}")
-
-    def _create_output_manager(self) -> OutputManager:
-        if self.comm.rank == 0:
-            print(
-                "output_format =",
-                self.config.output_format,
-                flush=True,
-            )
-
-        if isinstance(self.geometry, Cartesian2D):
-            return OutputCartesian(self.config, self.geometry, self.operators_real, self.device)
-        elif isinstance(self.geometry, CubedSphere):
-            if self.config.output_format == "netcdf":
-                return OutputCubesphereNetcdf(
-                    self.config,
-                    self.geometry,
-                    self.operators_real,
-                    self.device,
-                    self.metric,
-                    self.topography,
-                    self.process_topo,
-                )
-            elif self.config.output_format == "fst":
-                return OutputCubesphereFst(
-                    self.config,
-                    self.geometry,
-                    self.operators_real,
-                    self.device,
-                    self.metric,
-                    self.topography,
-                    self.process_topo,
-                )
-            elif self.config.output_format == "zarr":
-                return OutputCubesphereZarr(
-                    self.config,
-                    self.geometry,
-                    self.operators_real,
-                    self.device,
-                    self.metric,
-                    self.topography,
-                    self.process_topo,
-                )
-
-        raise ValueError(f"Unrecognized geometry type {type(self.geometry)}")
+        if device is not None:
+            self.comm = device.comm
+            return device
+        return Device(comm=self.comm, device_type=self.config.pytorch_device)
 
     def _adjust_num_elements(self):
         """Adjust number of horizontal elements in the parameters so that it corresponds to the

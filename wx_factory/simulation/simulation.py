@@ -135,7 +135,6 @@ class Simulation:
                 operators=self.operators_real,
                 metric=self.initial_state.metric,
                 topography=self.initial_state.topography,
-                dataset=self.initial_state.dataset,
                 ptopo=self.process_topo,
             )
         )
