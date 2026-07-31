@@ -5,13 +5,11 @@ import torch
 from numpy.typing import NDArray
 
 from ..common import Configuration
+from ..common.definitions import idx_rho_u2
 from ..device import differentiable_mode
 from ..geometry import DFROperators, Geometry, Metric2D, Metric3DTopo
 from ..pde import PDE
 from ..process_topology import ExchangeRequest, ProcessTopology
-
-# Forward AD cannot write into scratch tensors captured from an earlier RHS call.
-_ALLOCATE_FRESH = differentiable_mode()
 
 
 class RHS(ABC):
@@ -43,6 +41,9 @@ class RHS(ABC):
         self.device = geometry.device
         self.expected_shape = expected_shape
         self.debug = debug
+
+        # Cache whether this geometry represents a y-invariant x-z slab.
+        self.y_invariant_slab = getattr(geometry, "is_y_invariant_slab", False)
 
         if pde is not None:
             self.num_dim = self.pde.num_dim
@@ -100,7 +101,8 @@ class RHS(ABC):
 
         self.ops = self.ops_complex if torch.is_complex(q) else self.ops_real
 
-        if _ALLOCATE_FRESH:
+        # Forward AD cannot write into scratch tensors captured from an earlier RHS call.
+        if differentiable_mode():
             self.invalidate_workspace()
 
         self.allocate_arrays(q)
@@ -136,11 +138,20 @@ class RHS(ABC):
 
         # 6. Add forcing terms
         self.forcing_terms(q)
+        self.pin_y_momentum()
         self.timestamps[8] = self.device.timestamp()
 
         # At this moment, a deep copy needs to be returned
         # otherwise issues are encountered after. This needs to be fixed
         return self.rhs.reshape(given_shape).copy()
+
+    def pin_y_momentum(self) -> None:
+        """Set the y-momentum tendency to zero for a y-invariant x-z slab.
+
+        Apply this to every partition so their sum remains the full right-hand side.
+        """
+        if self.y_invariant_slab:
+            self.rhs[idx_rho_u2] = 0.0
 
     def full(self, q: NDArray) -> NDArray:
         return self.__call__(q)

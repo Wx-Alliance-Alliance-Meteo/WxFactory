@@ -2,9 +2,12 @@ import math
 from typing import Callable, Tuple
 
 import numpy
+import torch
+import torch.autograd.forward_ad as fwad
 from numpy.typing import NDArray
 
 from ..common import Configuration
+from ..device import differentiable_mode
 from .global_operations import global_inf_norm
 
 
@@ -46,6 +49,28 @@ class MatvecOpBasic(MatvecOp):
         )
 
 
+def _matvec_ad(vec: NDArray, Q: NDArray, rhs_handle: Callable[[NDArray], NDArray]) -> NDArray:
+    """Return ``J . vec`` as the forward-AD tangent of the right-hand side at ``Q``."""
+    if not differentiable_mode():
+        raise RuntimeError(
+            "jacobian_method = ad needs differentiable mode, which is off. It is normally enabled "
+            "from the configuration before the device is created; a Simulation built around a "
+            "device that already installed an inference-mode guard cannot use it."
+        )
+    if torch.is_inference_mode_enabled():
+        raise RuntimeError("jacobian_method = ad cannot differentiate the right-hand side under torch.inference_mode")
+
+    with fwad.dual_level():
+        result = rhs_handle(fwad.make_dual(Q, vec.reshape(Q.shape)))
+        tangent = fwad.unpack_dual(result).tangent
+        if tangent is None:
+            raise RuntimeError(
+                "the right-hand side returned no forward-AD tangent; it dropped the derivative "
+                "of its input (an in-place write into a cached buffer will do this)"
+            )
+        return tangent.clone()
+
+
 def matvec_fun(
     vec: NDArray,
     dt: float,
@@ -64,7 +89,10 @@ def matvec_fun(
     :param Q: ?
     :param rhs: Last computed RHS
     :param rhs_handle: Right hand side to compute
-    :param method: Method to use for the calculation
+    :param method: How to obtain the Jacobian action: ``ad`` for forward-mode automatic
+                   differentiation, ``complex`` for the complex step, anything else for a one-sided
+                   finite difference. The first two are exact; only the finite difference reuses
+                   ``rhs``, so it costs a single extra evaluation instead of roughly two.
     :param q_scale: Precomputed max(1, ||Q||_inf) for the single-precision step scaling. Q is fixed
                     across all the matvecs of one Krylov solve, so a caller that issues many of them
                     can compute this once and pass it in, avoiding a global reduction per matvec.
@@ -72,7 +100,12 @@ def matvec_fun(
     :return: Result of the `A * vec` operation
     """
 
-    if method == "complex":
+    if method == "ad":
+        # Forward-mode automatic differentiation: the exact directional derivative, with no step
+        # size to choose. This matters most in single precision, where the finite difference loses
+        # the derivative to subtractive cancellation.
+        jac = dt * _matvec_ad(vec, Q, rhs_handle)
+    elif method == "complex":
         # Complex-step approximation
         epsilon = math.sqrt(numpy.finfo(float).eps)
         Qvec = Q + 1j * epsilon * vec.reshape(Q.shape)

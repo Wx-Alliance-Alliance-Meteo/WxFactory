@@ -16,6 +16,7 @@ following cartesian metric -- christoffel == 0, h^12 == 0, h^11 == 4 / delta_x1^
 """
 
 import torch
+
 from .cubed_sphere_3d import CubedSphere3D
 from .geometry import Geometry
 
@@ -27,6 +28,9 @@ class Cartesian3D(Geometry):
     # distinguish 3D from 2D without depending on the concrete class.
     is_3d_euler_grid = True
     output_family = "cartesian"  # produces x-z images (a cartesian slab has no cube panels to write)
+
+    # A Cartesian x-z slab is invariant in y, so its y-momentum remains zero.
+    is_y_invariant_slab = True
 
     def __init__(
         self,
@@ -96,12 +100,12 @@ def _build_physical_coords(g, x_extent, y_extent):
     node = 0.5 * (1.0 + g.solutionPoints)  # in [0, 1]
     xe = x0 + (torch.arange(g.num_elements_x1)[:, None] + node[None, :]) * dx  # (ne1, ns)
     ye = y0 + (torch.arange(g.num_elements_x2)[:, None] + node[None, :]) * dy  # (ne2, ns)
-    ze = (torch.arange(g.num_elements_x3)[:, None] + node[None, :]) * dz        # (ne3, ns)
+    ze = (torch.arange(g.num_elements_x3)[:, None] + node[None, :]) * dz  # (ne3, ns)
 
     # ns**3 solution points within an element are ordered (k, j, i) -> flat index
     idx = torch.arange(ns**3)
     i_idx, j_idx, k_idx = idx % ns, (idx // ns) % ns, idx // ns**2
-    ne3, ne2, ne1 = g.num_elements_x3, g.num_elements_x2, g.num_elements_x1
+    ne3, _, ne1 = g.num_elements_x3, g.num_elements_x2, g.num_elements_x1
     g.X1 = torch.broadcast_to(xe[:, i_idx][None, None, :, :], g.grid_shape_3d_new).copy()
     g.X2 = torch.broadcast_to(ye[:, j_idx][None, :, None, :], g.grid_shape_3d_new).copy()
     g.X3 = torch.broadcast_to(ze[:, k_idx][:, None, None, :], g.grid_shape_3d_new).copy()
@@ -138,8 +142,14 @@ def _flatten(g, x_extent, y_extent):
     # them, so delta^2 = 1 + X^2 + Y^2 collapses to 1 and every horizontal derivative of the metric is
     # exactly zero -> no curvature christoffels.
     for name in (
-        "gnomonic", "gnomonic_itf_i", "gnomonic_itf_j", "gnomonic_itf_k",
-        "coordVec_gnom", "coordVec_gnom_itf_i", "coordVec_gnom_itf_j", "coordVec_gnom_itf_k",
+        "gnomonic",
+        "gnomonic_itf_i",
+        "gnomonic_itf_j",
+        "gnomonic_itf_k",
+        "coordVec_gnom",
+        "coordVec_gnom_itf_i",
+        "coordVec_gnom_itf_j",
+        "coordVec_gnom_itf_k",
     ):
         arr = getattr(g, name, None)
         if arr is not None:

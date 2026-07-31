@@ -7,7 +7,7 @@ import torch
 from mpi4py import MPI
 
 from ..common import Configuration
-from ..device import Device, PytorchDevice
+from ..device import Device, PytorchDevice, differentiable_mode, enable_differentiable_mode
 from ..geometry import DFROperators, GeometryContext, resolve_geometry
 from ..init.export_era5_all import export_era5_all_timesteps
 from ..init.init_state_vars import init_state_vars
@@ -104,6 +104,13 @@ class Simulation:
                 raise SystemExit(0)
 
         self._adjust_num_elements()
+
+        # A configuration that differentiates the right-hand side needs autograd left enabled. This
+        # has to be decided before the device installs its inference-mode guard, so it cannot wait
+        # until the integrator asks for a Jacobian.
+        if self._needs_autodiff():
+            enable_differentiable_mode()
+
         self.device = self._make_device(device)
 
         # Mixed mode stores the model state and most runtime arrays in float32. Static spatial
@@ -241,11 +248,22 @@ class Simulation:
         else:
             export_era5_all_timesteps(self, self.config, self.initial_state.dataset)
 
+    def _needs_autodiff(self) -> bool:
+        """Whether this configuration differentiates the right-hand side with autograd."""
+        return self.config.jacobian_method == "ad"
+
     def _make_device(self, device: Optional[Device]) -> Device:
         """Create the device object which will determine on what hardware (CPU/GPU) each part of the simulation will
         be executed."""
         if device is not None:
             self.comm = device.comm
+            if differentiable_mode() and not device.allows_autograd:
+                raise ValueError(
+                    f"jacobian_method = {self.config.jacobian_method} differentiates the right-hand "
+                    f"side, but the given device runs in inference mode, where tensors cannot carry "
+                    f"derivatives. Create the Device after differentiable mode is enabled, or set "
+                    f"WX_FACTORY_DIFFERENTIABLE=1 before the process creates any tensor."
+                )
             return device
         return Device(comm=self.comm, device_type=self.config.pytorch_device)
 

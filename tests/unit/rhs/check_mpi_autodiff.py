@@ -69,12 +69,9 @@ for eps in (1e-4, 1e-5, 1e-6):
     report.append(f"  FD(eps={eps:.0e}) vs AD                : {rel:.3e}")
 
 # Confirm that dropping halo tangents produces a detectable error.
-process_topology._DIFFERENTIABLE_EXCHANGE = False
-try:
+with process_topology.halo_derivatives_disabled():
     with fwad.dual_level():
         without = fwad.unpack_dual(rhs(fwad.make_dual(Q, v))).tangent.clone()
-finally:
-    process_topology._DIFFERENTIABLE_EXCHANGE = True
 
 dropped = global_norm(without - ad) / scale
 report.append(f"  tangent WITHOUT halo exchange vs AD : {dropped:.3e}  (control: must be large)")

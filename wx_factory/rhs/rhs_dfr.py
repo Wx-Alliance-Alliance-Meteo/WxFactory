@@ -707,6 +707,8 @@ class RHSDirecFluxReconstruction_mpi_v2(RHSDirecFluxReconstruction):
             * ((self.metric.sqrtG_new * q[idx_rho]) @ self.ops.highfilter_k)
         )
 
+        self.pin_y_momentum()
+
         return self.rhs.reshape(given_shape).copy()
 
     def explicit(self, q: NDArray) -> NDArray:
@@ -776,6 +778,8 @@ class RHSDirecFluxReconstruction_mpi_v2(RHSDirecFluxReconstruction):
             * self.metric.inv_sqrtG_new
             * ((self.metric.sqrtG_new * q[idx_rho]) @ self.ops.highfilter_k)
         )
+
+        self.pin_y_momentum()
 
         return self.rhs.reshape(given_shape).copy()
 

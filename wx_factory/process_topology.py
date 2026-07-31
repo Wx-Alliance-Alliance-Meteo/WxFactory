@@ -1,5 +1,6 @@
 import math
 import time
+from contextlib import contextmanager
 from typing import Callable, Optional, Tuple
 
 import torch
@@ -9,10 +10,32 @@ from numpy.typing import NDArray
 from .device import Device, differentiable_mode
 from .wx_mpi import Conditional, SingleProcess, split_nodes
 
-# Differentiable mode gives MPI halo exchanges explicit JVP and VJP rules.
-_DIFFERENTIABLE_EXCHANGE = differentiable_mode()
-
 ExchangedVector = Tuple[NDArray, ...] | NDArray
+
+# Test control, see :func:`halo_derivatives_disabled`.
+_halo_derivatives_enabled = True
+
+
+def _differentiable_exchange() -> bool:
+    """Whether halo exchanges must propagate derivatives through their JVP and VJP rules."""
+    return differentiable_mode() and _halo_derivatives_enabled
+
+
+@contextmanager
+def halo_derivatives_disabled():
+    """Drop the derivative contribution of the halo exchange.
+
+    Only meant as a test control: a distributed derivative must change when the neighbour
+    contribution is removed, which is what proves the halo tangent is actually carried.
+    """
+    global _halo_derivatives_enabled
+    previous = _halo_derivatives_enabled
+    _halo_derivatives_enabled = False
+    try:
+        yield
+    finally:
+        _halo_derivatives_enabled = previous
+
 
 SOUTH = 0
 NORTH = 1
@@ -508,7 +531,7 @@ class ProcessTopology:
 
         buffer_shape = (4, south.shape[0]) + base_shape
 
-        if _DIFFERENTIABLE_EXCHANGE:
+        if _differentiable_exchange():
             # Reused byte buffers cannot carry forward-AD tangents.
             send_buffer = torch.empty(buffer_shape, dtype=south.dtype)
             recv_buffer = torch.empty(buffer_shape, dtype=south.dtype)
@@ -576,7 +599,7 @@ class ProcessTopology:
         requests: list[ExchangeRequest] = []
 
         for send_buffer, shape, is_vector in send_info:
-            if _DIFFERENTIABLE_EXCHANGE:
+            if _differentiable_exchange():
                 # The custom operation completes before its result is unpacked.
                 received = _HaloExchange.apply(send_buffer, self)
                 requests.append(ExchangeRequest(received, None, shape=shape, is_vector=is_vector))
