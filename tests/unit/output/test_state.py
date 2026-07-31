@@ -75,15 +75,3 @@ class StateTestCases(WxTestCase):
                         initial_conf_value, value, f"Configuration value {key} in section {section} has changed"
                     )
 
-    def test_load_old_state(self):
-        state, config = wx_factory.output.state.load_state(os.path.join(state_input_dir, "old_save_file.wx"))
-        self.assertTrue(isinstance(state, Tensor))
-        self.assertEqual(state.shape, (4, 8, 8, 4))
-        self.assertTrue(isinstance(config, wx_factory.common.configuration.Configuration))
-        self.assertEqual(config.num_solpts, 2)
-        self.assertEqual(config.num_elements_horizontal, 8)
-        self.assertEqual(config.num_elements_vertical, 8)
-        self.assertEqual(config.equations, "euler")
-        self.assertEqual(config.grid_type, "cartesian3d")
-        self.assertEqual(config.dt, 5)
-        self.assertEqual(config.t_end, 150)

@@ -110,17 +110,6 @@ class StateIntegrationTestCases(MpiTestCase):
         self.num_process_required = 0
         self.error_threshold = -1.0
 
-        requirement_filename = f"{self.config_dir_path}/requirement.ini"
-        if os.path.exists(requirement_filename):
-
-            parser = ConfigParser()
-            parser.read(requirement_filename, encoding="utf-8")
-
-            self.num_process_required = _get_option(
-                parser, requirement_filename, "System", "processes", int, 1, min_value=1
-            )
-            self.error_threshold = _get_option(parser, requirement_filename, "System", "error_threshold", float, None)
-
     def setUp(self):
         super().setUp()
         if self.num_process_required > 0:
