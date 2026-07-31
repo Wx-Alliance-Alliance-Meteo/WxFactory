@@ -62,9 +62,7 @@ class CompareZarrToNcTestCase(unittest.TestCase):
 
                     diff = np.abs(nc_values - zarr_values)
 
-                    mismatch_locations = np.argwhere(
-                        nc_values != zarr_values
-                    )
+                    mismatch_locations = np.argwhere(nc_values != zarr_values)
 
                     first_idx = tuple(mismatch_locations[0])
 
