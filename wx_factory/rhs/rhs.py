@@ -34,6 +34,7 @@ class RHS(ABC):
         self.geom = geometry
         self.ops_real = operators_real
         self.ops_complex = operators_complex
+        self._ops_double = None
         self.metric = metric
         self.topo = topography
         self.ptopo = process_topo
@@ -90,16 +91,16 @@ class RHS(ABC):
 
     def __call__(self, q: NDArray) -> NDArray:
 
-        # 0.a Process timing
+        # Process timing
         if len(self.timestamps) > 0:  # Process timing from previous steps
             self.retrieve_last_times()
         else:
             self.timestamps = [None for _ in range(9)]
 
-        # 0.b Preserve array shape
+        # Preserve array shape
         given_shape = q.shape
 
-        self.ops = self.ops_complex if torch.is_complex(q) else self.ops_real
+        self.ops = self.operators_for(q)
 
         # Forward AD cannot write into scratch tensors captured from an earlier RHS call.
         if differentiable_mode():
@@ -110,33 +111,33 @@ class RHS(ABC):
 
         self.timestamps[0] = self.device.timestamp(name="extrap")
 
-        # 1. Extrapolate the solution to the boundaries of the element
+        # Extrapolate the solution to the boundaries of the element
         self.solution_extrapolation(q)
         self.timestamps[1] = self.device.timestamp(name="start comm")
 
         self.start_communication()
         self.timestamps[2] = self.device.timestamp(name="pointwise flux")
 
-        # 2. Compute the pointwise fluxes
+        # Compute the pointwise fluxes
         self.pointwise_fluxes(q)
         self.timestamps[3] = self.device.timestamp(name="flux div 1")
 
-        # 3. Compute the derivatives of the discontinuous fluxes
+        # Compute the derivatives of the discontinuous fluxes
         self.flux_divergence_partial()
         self.timestamps[4] = self.device.timestamp(name="end comm")
 
         self.end_communication()
         self.timestamps[5] = self.device.timestamp(name="riemann")
 
-        # 4. Compute the Riemann fluxes
+        # Compute the Riemann fluxes
         self.riemann_fluxes()
         self.timestamps[6] = self.device.timestamp(name="flux div 2")
 
-        # 5. Complete the divergence operation
+        # Complete the divergence operation
         self.flux_divergence()
         self.timestamps[7] = self.device.timestamp(name="forcing")
 
-        # 6. Add forcing terms
+        # Add forcing terms
         self.forcing_terms(q)
         self.pin_y_momentum()
         self.timestamps[8] = self.device.timestamp()
@@ -155,6 +156,21 @@ class RHS(ABC):
 
     def full(self, q: NDArray) -> NDArray:
         return self.__call__(q)
+
+    @property
+    def ops_double(self) -> DFROperators:
+        """Return lazily constructed float64 DFR operators."""
+        if self._ops_double is None:
+            self._ops_double = DFROperators(self.geom, self.device, torch.float64)
+        return self._ops_double
+
+    def operators_for(self, q: NDArray) -> DFROperators:
+        """The operator set whose precision matches the state ``q``."""
+        if torch.is_complex(q):
+            return self.ops_complex
+        if q.dtype == torch.float64 and self.ops_real.dtype != torch.float64:
+            return self.ops_double
+        return self.ops_real
 
     def allocate_arrays(self, q: NDArray):
         if self.workspace_needs_allocation(self.f_x1, q.dtype):

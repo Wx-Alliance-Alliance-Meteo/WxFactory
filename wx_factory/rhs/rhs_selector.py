@@ -1,17 +1,4 @@
-"""Select the right-hand-side (RHS) functions for a given set of equations and geometry.
-
-The RHS to use depends on a pair: the equation set (``euler``, ``shallow_water``, ...) and the
-geometry it runs on (``CubedSphere3D``, ``CubedSphere2D``, ``Cartesian3D``, ...). Rather than a
-chain of ``if``/``isinstance`` tests, each supported combination is registered in ``RHS_REGISTRY``
-and looked up by :func:`resolve_rhs`. Adding a new equation set therefore means adding one factory
-and one ``@register_rhs(...)`` line, in one place.
-
-Some time integrators are *partitioned*: IMEX, Rosenbrock-exponential and operator-splitting
-schemes step an explicit and an implicit RHS separately. The bundle returned here always exposes
-``full`` plus the partitioned handles ``explicit`` and ``implicit``; a combination that does not
-provide a partition leaves that handle pointing at a placeholder that raises a clear error if a
-partitioned integrator tries to use it.
-"""
+"""Select RHS functions by equation set and geometry."""
 
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -36,10 +23,7 @@ from .rhs_sw import RhsShallowWater
 
 @dataclass
 class RhsContext:
-    """Everything an RHS factory may need to build its functions.
-
-    A single context object is passed to every factory so they all share one signature, the same
-    way the time-integrator factories all take ``(config, rhs, preconditioner, device)``."""
+    """Inputs shared by RHS factories."""
 
     geom: Geometry
     operators_real: DFROperators
@@ -61,17 +45,7 @@ def _unavailable_partition(_):
 
 
 class RhsBundle:
-    """The set of RHS functions associated with a certain geometry and set of equations.
-
-    Attributes:
-        full       -- The full RHS. Every time integrator uses this.
-        explicit   -- Explicit part, for partitioned (IMEX / splitting) integrators.
-        implicit   -- Implicit part, for partitioned integrators.
-        shape      -- Shape of the state vector this bundle operates on.
-
-    A partition that is not provided for a given problem raises ``NotImplementedError`` when called,
-    rather than being absent, so that selecting an unsupported integrator fails with a clear message.
-    """
+    """Full and partitioned RHS functions for one model configuration."""
 
     def __init__(
         self,
@@ -89,7 +63,7 @@ class RhsBundle:
 
 RhsFactory = Callable[[RhsContext], RhsBundle]
 
-# Maps (equations, geometry class) -> factory that builds the RhsBundle for that combination.
+# Map each equation and geometry pair to its factory.
 RHS_REGISTRY: dict[tuple[str, type], RhsFactory] = {}
 
 
@@ -125,7 +99,7 @@ def resolve_rhs(ctx: RhsContext) -> RhsBundle:
 
 @register_rhs("euler", CubedSphere3D)
 def _euler_cubesphere(ctx: RhsContext) -> RhsBundle:
-    # The state is the 5 Euler variables followed by any number of passively advected quantities.
+    # Additional state variables are passive tracers.
     pde = PDEEuler3D(ctx.geom, ctx.param, ctx.metric, num_var=ctx.fields_shape[0])
     full = RHSDirecFluxReconstruction_mpi_v2(
         pde,
@@ -139,17 +113,14 @@ def _euler_cubesphere(ctx: RhsContext) -> RhsBundle:
         ctx.fields_shape,
         debug=ctx.debug,
     )
-    return RhsBundle(full=full, shape=ctx.fields_shape, implicit=full.implicit, explicit=full.explicit)
+    return RhsBundle(full=full, shape=ctx.fields_shape, implicit=full.implicit_double, explicit=full.explicit_double)
 
 
-# A flat cartesian slab is the identity-metric limit of the cubed sphere (see Cartesian3D): it runs
-# the very same 3D Euler RHS and partition, only with a flat metric.
+# Cartesian slabs use the 3D Euler RHS with an identity metric.
 @register_rhs("euler", Cartesian3D)
 def _euler_cartesian3d(ctx: RhsContext) -> RhsBundle:
     pde = PDEEuler3D(ctx.geom, ctx.param, ctx.metric, num_var=ctx.fields_shape[0])
-    # The cubed sphere derives advection_only from the DCMIP case numbering (case <= 13 == advection
-    # test), but the cartesian cases reuse those small numbers for dynamical bubbles/currents. A
-    # cartesian Euler slab is always fully dynamical unless the config explicitly asks otherwise.
+    # Cartesian case numbers do not follow the DCMIP advection convention.
     if getattr(ctx.param, "advection_only", "auto") == "auto":
         pde.advection_only = False
     full = RHSDirecFluxReconstruction_mpi_v2(
@@ -164,13 +135,13 @@ def _euler_cartesian3d(ctx: RhsContext) -> RhsBundle:
         ctx.fields_shape,
         debug=ctx.debug,
     )
-    return RhsBundle(full=full, shape=ctx.fields_shape, implicit=full.implicit, explicit=full.explicit)
+    return RhsBundle(full=full, shape=ctx.fields_shape, implicit=full.implicit_double, explicit=full.explicit_double)
 
 
 @register_rhs("shallow_water", CubedSphere2D)
 def _shallow_water_cubesphere(ctx: RhsContext) -> RhsBundle:
     if ctx.param.case_number <= 1:
-        # Advection-only test cases
+        # Advection tests.
         full = RhsAdvection2d(
             ctx.fields_shape,
             ctx.geom,
@@ -182,7 +153,7 @@ def _shallow_water_cubesphere(ctx: RhsContext) -> RhsBundle:
             ctx.geom.num_elements_horizontal,
         )
     else:
-        # Full shallow-water equations
+        # Shallow-water dynamics.
         full = RhsShallowWater(
             ctx.fields_shape,
             ctx.geom,
