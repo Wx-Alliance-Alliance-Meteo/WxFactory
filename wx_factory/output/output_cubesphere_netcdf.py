@@ -55,7 +55,7 @@ class OutputCubesphereNetcdf(OutputCubesphere):
         if config.output_freq > 0:
             self._output_init()
         if config.time_start:
-                    self.start_time = np.datetime64(str(config.time_start).replace("t", "T"))
+            self.start_time = np.datetime64(str(config.time_start).replace("t", "T"))
         else:
             self.start_time = np.datetime64("1800-01-01T00:00:00")
         self.dt = config.dt
@@ -120,7 +120,7 @@ class OutputCubesphereNetcdf(OutputCubesphere):
             tme = self.ncfile.createVariable("time", numpy.float64, ("time",))
             tme.units = "seconds since 1800-01-01 00:00:00"
             tme.calendar = "standard"
-            
+
             # create tiles axis
             tile = self.ncfile.createVariable("npe", "i4", ("npe"))
             tile.grads_dim = "e"
@@ -438,10 +438,7 @@ class OutputCubesphereNetcdf(OutputCubesphere):
             raise ValueError(f"Unknown class for geom: {geom}")
 
         if self.rank == 0:
-            time_val = (
-                        self.start_time
-                        + np.timedelta64(int(step_id * self.dt), "s")
-                    )
+            time_val = self.start_time + np.timedelta64(int(step_id * self.dt), "s")
 
             epoch = np.datetime64("1800-01-01T00:00:00")
             seconds = (time_val - epoch) / np.timedelta64(1, "s")
