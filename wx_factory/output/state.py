@@ -1,4 +1,5 @@
 from typing import Optional, Tuple
+import re
 
 import numpy
 from numpy.typing import NDArray
@@ -55,7 +56,9 @@ def load_state(input_file_name: str, device: Optional[torch.device] = None) -> T
 
         default_schema = load_default_schema()
 
-        config_content = "".join([str(line, "utf-8") for line in input_file.readlines()]).strip()
+        content_list = [str(line, "utf-8").strip() for line in input_file.readlines()]
+        content_list = [a for a in content_list if a != ""]
+        config_content = "\n".join(content_list)
 
         try:
             conf = Configuration(config_content, default_schema)

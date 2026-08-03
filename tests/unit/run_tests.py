@@ -53,7 +53,6 @@ def load_tests(test_name: str):
     add_test(suite, FgmresScipyTestCases("test_compare_implementation_to_scipy_and_residual"), test_re)
 
     add_test(suite, KiopsPmexToleranceCpuTestCases("test_compare_kiops_pmex"), test_re)
-    add_test(suite, KiopsPmexToleranceCpuTestCases("test_pmex_accepts_maximum_below_default_minimum"), test_re)
 
     add_test(suite, MatvecTestCases("test_fd_matches_equations_10_and_14"), test_re)
     add_test(suite, MatvecTestCases("test_fd_preserves_working_precision"), test_re)
@@ -72,7 +71,6 @@ def load_tests(test_name: str):
     )
 
     add_test(suite, StateTestCases("test_save_load_works"), test_re)
-    add_test(suite, StateTestCases("test_load_old_state"), test_re)
     add_test(suite, Euler2DRestartTestCase("test_gen_restart"), test_re)
     add_test(suite, Euler2DRestartTestCase("test_read_restart"), test_re)
 

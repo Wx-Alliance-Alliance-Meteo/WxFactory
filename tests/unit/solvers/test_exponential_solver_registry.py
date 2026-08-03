@@ -9,7 +9,7 @@ from wx_factory.solvers.exponential_solver import (
 )
 from wx_factory.integrators.rosexp2 import RosExp2
 
-from  tests.unit.wx_test import WxTestCase
+from tests.unit.wx_test import WxTestCase
 
 
 class ExponentialSolverRegistryTestCases(WxTestCase):

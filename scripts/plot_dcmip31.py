@@ -122,9 +122,7 @@ def plot_initial_condition(longitude, elevation, theta_prime, output, label):
     fig, axes = plt.subplots(
         2, 1, figsize=(10.0, 6.4), gridspec_kw={"height_ratios": (2.2, 1.0)}, constrained_layout=True
     )
-    image = axes[0].contourf(
-        lon_mesh, elevation / 1000.0, theta_prime, levels=levels, cmap="YlOrRd", extend="max"
-    )
+    image = axes[0].contourf(lon_mesh, elevation / 1000.0, theta_prime, levels=levels, cmap="YlOrRd", extend="max")
     fig.colorbar(image, ax=axes[0], label=r"$\theta-\overline{\theta}$ (K)", pad=0.015)
     axes[0].axvline(PERTURBATION_LONGITUDE, color="black", linestyle="--", linewidth=0.8)
     axes[0].set(ylabel="Height (km)", ylim=(0, 10), xlim=(0, 360))
@@ -181,7 +179,9 @@ def main():
 
     plot_initial_condition(longitude_closed, elevation, initial_theta_prime, args.output, args.label)
 
-    angular_distance = numpy.abs((numpy.deg2rad(longitude_closed - PERTURBATION_LONGITUDE) + math.pi) % (2 * math.pi) - math.pi)
+    angular_distance = numpy.abs(
+        (numpy.deg2rad(longitude_closed - PERTURBATION_LONGITUDE) + math.pi) % (2 * math.pi) - math.pi
+    )
     distance = REFERENCE_EARTH_RADIUS / PLANET_FACTOR * angular_distance
     horizontal_shape = 5000.0**2 / (5000.0**2 + distance**2)
     expected_initial = horizontal_shape[None, :] * numpy.sin(2.0 * math.pi * elevation / 20000.0)
@@ -194,8 +194,7 @@ def main():
     ):
         limit = symmetric_limit(field)
         image = ax.contourf(
-            lon_mesh, elevation / 1000.0, field, levels=numpy.linspace(-limit, limit, 22),
-            cmap="RdBu_r", extend="both"
+            lon_mesh, elevation / 1000.0, field, levels=numpy.linspace(-limit, limit, 22), cmap="RdBu_r", extend="both"
         )
         fig.colorbar(image, ax=ax, label=colour_label, pad=0.015)
         ax.set(ylabel="Height (km)", ylim=(0, 10))

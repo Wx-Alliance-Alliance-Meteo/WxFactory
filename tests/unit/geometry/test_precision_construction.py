@@ -34,9 +34,7 @@ class PrecisionConstructionTestCases(WxTestCase):
         single = DFROperators(geom, types.SimpleNamespace(real_dtype=torch.float32))
 
         for name in ("quad_weights", "highfilter", "highfilter_k"):
-            self.assertTrue(
-                torch.equal(getattr(single, name), getattr(double, name).to(torch.float32))
-            )
+            self.assertTrue(torch.equal(getattr(single, name), getattr(double, name).to(torch.float32)))
 
         filter_double = double.make_filter_3d(36.0, 8, 0.25, geom)
         filter_single = single.make_filter_3d(36.0, 8, 0.25, geom)

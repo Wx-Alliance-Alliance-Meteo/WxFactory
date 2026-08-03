@@ -133,8 +133,14 @@ def plot_native_sections(dataset, index, lon, stencils, output, label):
         limit = symmetric_limit([section])
         levels = numpy.linspace(-limit, limit, 22)
         fig, ax = plt.subplots(figsize=(10.0, 4.6), constrained_layout=True)
-        image = ax.contourf(longitude[None, :] + numpy.zeros_like(elevation), elevation / 1000.0, section,
-                            levels=levels, cmap="RdBu_r", extend="both")
+        image = ax.contourf(
+            longitude[None, :] + numpy.zeros_like(elevation),
+            elevation / 1000.0,
+            section,
+            levels=levels,
+            cmap="RdBu_r",
+            extend="both",
+        )
 
         # These are the actual terrain-following solution levels. Drawing every
         # curve makes the compression and bending over the 70-degree mountain
@@ -167,7 +173,9 @@ def plot_maps(dataset, indices, times, interpolator, output, label):
             level500 = int(numpy.argmin(numpy.abs(numpy.mean(pressure, axis=(0, 2, 3)) - P500)))
             data = numpy.asarray(dataset.variables[name][index])
             fields.extend((interpolator(data[:, 0]), interpolator(data[:, level500])))
-            captions.extend((f"day {time / DAY:g}, lowest level", f"day {time / DAY:g}, level {level500 + 1} (~500 hPa)"))
+            captions.extend(
+                (f"day {time / DAY:g}, lowest level", f"day {time / DAY:g}, level {level500 + 1} (~500 hPa)")
+            )
 
         limit = symmetric_limit(fields)
         levels = numpy.linspace(-limit, limit, 22)

@@ -62,9 +62,7 @@ def gauss_legendre(
         else:
             raise ValueError(f"Invalid n = {n}")
 
-        points_num = torch.tensor(
-            [a.evalf(n_digits, chop=True) for a in points_sym], dtype=torch.float64
-        )
+        points_num = torch.tensor([a.evalf(n_digits, chop=True) for a in points_sym], dtype=torch.float64)
     else:
         points_num, weights = scipy.special.roots_legendre(n)
         points_sym = [sympy.Float(n, n_digits) for n in points_num]

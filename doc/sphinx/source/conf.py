@@ -3,6 +3,7 @@
 import os
 import pathlib
 import sys
+
 root = pathlib.Path(__file__).parents[3].resolve().as_posix()
 
 sys.path.insert(0, root)

@@ -267,7 +267,9 @@ class CubedSphere3D(CubedSphere):
         # Repeat for the interface values
         x1_itf_i = x1_boundaries.copy()
         x2_itf_i = x2.copy()
-        x3_itf_i = torch.repeat_interleave(x3[:, :, 0], num_elements_x1 + 1).reshape(self.itf_i_shape_3d)  # Repeat zy plane
+        x3_itf_i = torch.repeat_interleave(x3[:, :, 0], num_elements_x1 + 1).reshape(
+            self.itf_i_shape_3d
+        )  # Repeat zy plane
         eta_itf_i = torch.repeat_interleave(eta[:, :, 0], num_elements_x1 + 1).reshape(self.itf_i_shape_3d)
         self.x3_itf_i_new = self._to_new_itf_i(x3_itf_i)
         self.eta_itf_i_new = self._to_new_itf_i(eta_itf_i)
@@ -1029,9 +1031,9 @@ class CubedSphere3D(CubedSphere):
         tmp_shape1 = a.shape[:-3] + (self.num_elements_x2, self.num_elements_x1 + 2, 2, self.num_solpts)
         axis1 = a.ndim - 1
         a_tmp = a.reshape(tmp_shape1)
-        return torch.tile(torch.repeat_interleave(a_tmp, self.num_solpts, dim=axis1), (self.num_elements_x3, 1, 1, 1)).reshape(
-            self.itf_i_shape
-        )
+        return torch.tile(
+            torch.repeat_interleave(a_tmp, self.num_solpts, dim=axis1), (self.num_elements_x3, 1, 1, 1)
+        ).reshape(self.itf_i_shape)
 
     def get_itf_j_floor(self, a):
         """Retrieve slice of interface-j array 'a' that's on the floor"""
@@ -1050,9 +1052,9 @@ class CubedSphere3D(CubedSphere):
         tmp_shape1 = a.shape[:-3] + (self.num_elements_x2 + 2, self.num_elements_x1, 2, self.num_solpts)
         axis1 = a.ndim - 1
         a_tmp = a.reshape(tmp_shape1)
-        return torch.tile(torch.repeat_interleave(a_tmp, self.num_solpts, dim=axis1), (self.num_elements_x3, 1, 1, 1)).reshape(
-            self.itf_j_shape
-        )
+        return torch.tile(
+            torch.repeat_interleave(a_tmp, self.num_solpts, dim=axis1), (self.num_elements_x3, 1, 1, 1)
+        ).reshape(self.itf_j_shape)
 
     def to_new_floor(self, a: NDArray) -> NDArray:
         """Convert floor array from old to new layout"""
