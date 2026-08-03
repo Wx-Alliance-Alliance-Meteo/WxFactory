@@ -178,12 +178,25 @@ class CompareZarrToNcTestCase(MpiTestCase):
         ds_nc = xr.open_dataset(nc_file)
         ds_zarr = xr.open_zarr(zarr_store)
 
+        nc_vars = set(ds_nc.variables)
+        zarr_vars = set(ds_zarr.variables)
+
+        self.assertSetEqual(
+            nc_vars,
+            zarr_vars,
+            (
+                f"NetCDF and Zarr variable lists differ. "
+                f"Only in NetCDF = {nc_vars - zarr_vars}, "
+                f"Only in Zarr = {zarr_vars - nc_vars}"
+            ),
+        )
+
         try:
-            for variable_name in ds_nc.data_vars:
+            for variable_name in ds_nc.variables:
 
                 self.assertIn(
                     variable_name,
-                    ds_zarr.data_vars,
+                    ds_zarr.variables,
                     f"Variable '{variable_name}' missing from Zarr",
                 )
 

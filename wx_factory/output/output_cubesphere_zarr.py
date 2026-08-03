@@ -65,6 +65,13 @@ class OutputCubesphereZarr(OutputCubesphere):
         self.ny = self.geometry.block_lat.shape[-2]
         self.nx = self.geometry.block_lon.shape[-1]
 
+        self.panel_x = self.device.to_host(self._gather_panel(self.geometry.x1[...]))
+        self.panel_y = self.device.to_host(self._gather_panel(self.geometry.x2[...]))
+        if self.nz != 1 and self.config.equations == "euler":
+            self.zcoord = self.device.to_host(self.geometry.x3[:, 0, 0])
+        else:
+            self.zcoord = np.arange(self.nz)
+
         # --- set file name ---
         self.filename = f"{self.output_dir}/{config.base_output_file}.zarr"
         self.marker_path = None
@@ -77,22 +84,20 @@ class OutputCubesphereZarr(OutputCubesphere):
                 shutil.rmtree(self.filename)
             self._output_init(self.filename)
         self.comm.Barrier()
-        if self.config.equations == "euler":
-            self.write_static_euler_fields()
+        self.write_static_fields()
         self.comm.Barrier()
 
     # --------------------------------------------------
     def _output_init(self, filename):
-        # gather coordinates
 
         if self.nz != 1:
             ds = xr.Dataset(
                 coords={
                     "time": np.array([], dtype="datetime64[ns]"),
                     "npe": np.arange(self.npe),
-                    "Zdim": np.arange(self.nz),
-                    "Ydim": np.arange(self.ny),
-                    "Xdim": np.arange(self.nx),
+                    "Zdim": self.zcoord,
+                    "Ydim": self.panel_y,
+                    "Xdim": self.panel_x,
                 }
             )
             for var in self.equ:
@@ -101,26 +106,39 @@ class OutputCubesphereZarr(OutputCubesphere):
                     np.zeros((0, self.npe, self.nz, self.ny, self.nx), dtype=np.float64),
                 )
 
-            ds["lats"] = (("npe", "Ydim", "Xdim"), np.zeros((self.npe, self.ny, self.nx), dtype=np.float64))
+        else:
+            ds = xr.Dataset(
+                coords={
+                    "time": np.array([], dtype="datetime64[ns]"),
+                    "npe": np.arange(self.npe),
+                    "Ydim": self.panel_y,
+                    "Xdim": self.panel_x,
+                }
+            )
+            for var in self.equ:
+                ds[var] = (("time", "npe", "Ydim", "Xdim"), np.zeros((0, self.npe, self.ny, self.nx), dtype=np.float64))
 
-            ds["lons"] = (("npe", "Ydim", "Xdim"), np.zeros((self.npe, self.ny, self.nx), dtype=np.float64))
+        ds["lats"] = (("npe", "Ydim", "Xdim"), np.zeros((self.npe, self.ny, self.nx), dtype=np.float64))
 
-            # initialize empty variable array
-            if self.config.equations == "euler":
+        ds["lons"] = (("npe", "Ydim", "Xdim"), np.zeros((self.npe, self.ny, self.nx), dtype=np.float64))
 
-                ds["elev"] = (
-                    ("npe", "Zdim", "Ydim", "Xdim"),
-                    np.zeros((self.npe, self.nz, self.ny, self.nx), dtype=np.float64),
-                )
+        # initialize empty variable array
+        if self.config.equations == "euler":
 
-                ds["topo"] = (("npe", "Ydim", "Xdim"), np.zeros((self.npe, self.ny, self.nx), dtype=np.float64))
+            ds["elev"] = (
+                ("npe", "Zdim", "Ydim", "Xdim"),
+                np.zeros((self.npe, self.nz, self.ny, self.nx), dtype=np.float64),
+            )
 
-                ds["volume"] = (
-                    ("npe", "Zdim", "Ydim", "Xdim"),
-                    np.zeros((self.npe, self.nz, self.ny, self.nx), dtype=np.float64),
-                )
+            ds["topo"] = (("npe", "Ydim", "Xdim"), np.zeros((self.npe, self.ny, self.nx), dtype=np.float64))
 
-            # chunking
+            ds["volume"] = (
+                ("npe", "Zdim", "Ydim", "Xdim"),
+                np.zeros((self.npe, self.nz, self.ny, self.nx), dtype=np.float64),
+            )
+
+        # chunking
+        if self.nz != 1:
             ds = ds.chunk(
                 {
                     "time": 1,
@@ -131,18 +149,6 @@ class OutputCubesphereZarr(OutputCubesphere):
                 }
             )
         else:
-            ds = xr.Dataset(
-                coords={
-                    "time": np.array([], dtype="datetime64[ns]"),
-                    "npe": np.arange(self.npe),
-                    "Ydim": np.arange(self.ny),
-                    "Xdim": np.arange(self.nx),
-                }
-            )
-            for var in self.equ:
-                ds[var] = (("time", "npe", "Ydim", "Xdim"), np.zeros((0, self.npe, self.ny, self.nx), dtype=np.float64))
-
-            # chunking
             ds = ds.chunk(
                 {
                     "time": 1,
@@ -163,12 +169,7 @@ class OutputCubesphereZarr(OutputCubesphere):
         time_val = self.start_time + np.timedelta64(int(step_id * self.dt), "s")
         # nx = self.geometry.block_lat.shape[-1]
 
-        t_index = self._append_time_step(
-            time_val,
-            self.nz,
-            self.ny,
-            self.nx,
-        )
+        t_index = self._append_time_step(time_val)
 
         if self.config.equations == "shallow_water":
             if self.nz > 1:
@@ -257,40 +258,40 @@ class OutputCubesphereZarr(OutputCubesphere):
     def __finalize__(self):
         return
 
-    def _append_time_step(self, time_val, nz, ny, nx):
+    def _append_time_step(self, time_val):
         variables = {}
         if self.rank == 0:
-            if nz != 1:
+            if self.nz != 1:
                 for var in self.equ:
                     variables[var] = (
                         ("time", "npe", "Zdim", "Ydim", "Xdim"),
                         np.full((1, self.npe, self.nz, self.ny, self.nx), np.nan, dtype=np.float64),
                     )
-                    dummy = xr.Dataset(
-                        variables,
-                        coords={
-                            "time": np.array([time_val], dtype="datetime64[s]"),
-                            "npe": np.arange(self.npe),
-                            "Zdim": np.arange(nz),
-                            "Ydim": np.arange(ny),
-                            "Xdim": np.arange(nx),
-                        },
-                    )
+                dummy = xr.Dataset(
+                    variables,
+                    coords={
+                        "time": np.array([time_val], dtype="datetime64[s]"),
+                        "npe": np.arange(self.npe),
+                        "Zdim": self.zcoord,
+                        "Ydim": self.panel_y,
+                        "Xdim": self.panel_x,
+                    },
+                )
             else:
                 for var in self.equ:
                     variables[var] = (
                         ("time", "npe", "Ydim", "Xdim"),
                         np.full((1, self.npe, self.ny, self.nx), np.nan, dtype=np.float64),
                     )
-                    dummy = xr.Dataset(
-                        variables,
-                        coords={
-                            "time": np.array([time_val], dtype="datetime64[s]"),
-                            "npe": np.arange(self.npe),
-                            "Ydim": np.arange(ny),
-                            "Xdim": np.arange(nx),
-                        },
-                    )
+                dummy = xr.Dataset(
+                    variables,
+                    coords={
+                        "time": np.array([time_val], dtype="datetime64[s]"),
+                        "npe": np.arange(self.npe),
+                        "Ydim": self.panel_y,
+                        "Xdim": self.panel_x,
+                    },
+                )
 
             dummy["time"].encoding = {
                 "units": "seconds since 1800-01-01 00:00:00",
@@ -349,17 +350,18 @@ class OutputCubesphereZarr(OutputCubesphere):
                 elif self.config.equations == "euler":
                     root[variable_name][t_index, face_idx, level_idx, :, :] = self.device.to_host(face[level_idx, :, :])
 
-    def write_static_euler_fields(self):
+    def write_static_fields(self):
 
         lats = self._gather_field(self.geometry.block_lat * 180 / np.pi, 2)
 
         lons = self._gather_field(self.geometry.block_lon * 180 / np.pi, 2)
 
-        elev = self._gather_field(self.geometry.coordVec_latlon[2, :, :, :], 3)
+        if self.config.equations == "euler":
+            elev = self._gather_field(self.geometry.coordVec_latlon[2, :, :, :], 3)
 
-        topo = self._gather_field(self.geometry.zbot, 2)
+            topo = self._gather_field(self.geometry.zbot, 2)
 
-        volume = self._gather_field(self.geometry.to_single_block(self._cell_volume()), 3)
+            volume = self._gather_field(self.geometry.to_single_block(self._cell_volume()), 3)
 
         if self.rank != 0:
             return
@@ -371,9 +373,10 @@ class OutputCubesphereZarr(OutputCubesphere):
 
         root["lats"][:] = self.device.to_host(lats)
         root["lons"][:] = self.device.to_host(lons)
-        root["elev"][:] = self.device.to_host(elev)
-        root["topo"][:] = self.device.to_host(topo)
-        root["volume"][:] = self.device.to_host(volume)
+        if self.config.equations == "euler":
+            root["elev"][:] = self.device.to_host(elev)
+            root["topo"][:] = self.device.to_host(topo)
+            root["volume"][:] = self.device.to_host(volume)
 
     def _cell_volume(self) -> NDArray:
         """Volume associated with each solution point.
