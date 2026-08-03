@@ -71,9 +71,7 @@ class OutputCubesphere(OutputManager):
             print("\n================================================================================================")
 
         if self.config.case_number >= 2 and self.initial_mass is None:
-            self.initial_mass = global_integral_2d(
-                h, self.operators, self.metric, self.geometry.num_solpts, self.comm
-            )
+            self.initial_mass = global_integral_2d(h, self.operators, self.metric, self.geometry.num_solpts, self.comm)
             self.initial_energy = global_integral_2d(
                 energy, self.operators, self.metric, self.geometry.num_solpts, self.comm
             )

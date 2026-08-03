@@ -74,4 +74,3 @@ class StateTestCases(WxTestCase):
                     self.assertEqual(
                         initial_conf_value, value, f"Configuration value {key} in section {section} has changed"
                     )
-

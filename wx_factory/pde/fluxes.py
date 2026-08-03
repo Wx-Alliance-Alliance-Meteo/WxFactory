@@ -96,7 +96,9 @@ def rusanov_3d_vert_new(
     wflux_adv_x3_itf_k[north] = 0.5 * (
         wflux_adv_d
         + wflux_adv_u
-        - eig * metric.sqrtG_itf_k_new[north] * (variables_itf_k[idx_rho_u3][south] - variables_itf_k[idx_rho_u3][north])
+        - eig
+        * metric.sqrtG_itf_k_new[north]
+        * (variables_itf_k[idx_rho_u3][south] - variables_itf_k[idx_rho_u3][north])
     )
     wflux_adv_x3_itf_k[south] = wflux_adv_x3_itf_k[north]
     wflux_pres_x3_itf_k[north] = 0.5 * (wflux_pres_d + wflux_pres_u) / pressure_itf_k[north]
@@ -250,10 +252,11 @@ def rusanov_3d_hori_j_new(
     wflux_adv_x2_itf_j[north] = 0.5 * (
         wflux_adv_l
         + wflux_adv_r
-        - eig * metric.sqrtG_itf_j_new[north] * (variables_itf_j[idx_rho_u3][south] - variables_itf_j[idx_rho_u3][north])
+        - eig
+        * metric.sqrtG_itf_j_new[north]
+        * (variables_itf_j[idx_rho_u3][south] - variables_itf_j[idx_rho_u3][north])
     )
     wflux_adv_x2_itf_j[south] = wflux_adv_x2_itf_j[north]
 
     wflux_pres_x2_itf_j[north] = 0.5 * (wflux_pres_l + wflux_pres_r) / pressure_itf_j[north]
     wflux_pres_x2_itf_j[south] = 0.5 * (wflux_pres_l + wflux_pres_r) / pressure_itf_j[south]
-

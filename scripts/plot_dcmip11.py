@@ -56,8 +56,7 @@ def load(filename):
         elev = numpy.asarray(ds.variables["elev"][:])
         volume = numpy.asarray(ds.variables["volume"][:])
         tracers = {
-            name: numpy.asarray([ds.variables[name][index] for index in indices])
-            for name in ("q1", "q2", "q3", "q4")
+            name: numpy.asarray([ds.variables[name][index] for index in indices]) for name in ("q1", "q2", "q3", "q4")
         }
 
     return {

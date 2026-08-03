@@ -44,8 +44,12 @@ class KiopsPmexToleranceCpuTestCases(WxTestCase):
         def matvec_handle(v: Tensor) -> Tensor:
             return v
 
-        w1, _ = kiops(self.cpu_device.tensor([1.0]), matvec_handle, self.kiops_matrix, self.tolerance, device=self.cpu_device)
-        w2, _ = pmex(self.cpu_device.tensor([1.0]), matvec_handle, self.pmex_matrix, self.tolerance, device=self.cpu_device)
+        w1, _ = kiops(
+            self.cpu_device.tensor([1.0]), matvec_handle, self.kiops_matrix, self.tolerance, device=self.cpu_device
+        )
+        w2, _ = pmex(
+            self.cpu_device.tensor([1.0]), matvec_handle, self.pmex_matrix, self.tolerance, device=self.cpu_device
+        )
 
         shape = w1.shape
 
