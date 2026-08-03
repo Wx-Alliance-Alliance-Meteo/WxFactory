@@ -152,9 +152,10 @@ class CompareZarrToNcTestCase(MpiTestCase):
             num_dim,
         )
         if len(self.Q.shape) == 5:
-            self.geometry.z_levels = self.Q.shape[1]
+            # self.geometry.z_levels = self.Q.shape[1]
+            self.geometry.z_levels = list(range(self.Q.shape[1]))
         else:
-            self.geometry.z_levels = 1
+            self.geometry.z_levels = [0]
 
         self.output = resolve_output(
             OutputContext(

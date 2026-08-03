@@ -10,7 +10,21 @@ from numpy.typing import NDArray
 
 from .output_cubesphere import OutputCubesphere
 from .diagnostic import potential_vorticity, relative_vorticity
-from ..common.definitions import idx_h, idx_hu1, idx_hu2, idx_hu2, idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_u3, idx_rho_theta, cpd, cvd, p0, Rd
+from ..common.definitions import (
+    idx_h,
+    idx_hu1,
+    idx_hu2,
+    idx_hu2,
+    idx_rho,
+    idx_rho_u1,
+    idx_rho_u2,
+    idx_rho_u3,
+    idx_rho_theta,
+    cpd,
+    cvd,
+    p0,
+    Rd,
+)
 from ..geometry import CubedSphere2D
 
 
@@ -41,15 +55,12 @@ class OutputCubesphereZarr(OutputCubesphere):
         self.geometry = geometry
         if isinstance(self.geometry, CubedSphere2D):
             if self.geometry.z_levels:
-                if type(self.geometry.z_levels) == int:
-                    self.nz = self.geometry.z_levels
-                else:
-                    self.nz = len(self.geometry.z_levels)
+                self.nz = len(self.geometry.z_levels)
             else:
                 self.nz = 1
         else:
             self.nz = self.geometry.nk
-        
+
         self.npe = 6
         self.ny = self.geometry.block_lat.shape[-2]
         self.nx = self.geometry.block_lon.shape[-1]
@@ -85,7 +96,10 @@ class OutputCubesphereZarr(OutputCubesphere):
                 }
             )
             for var in self.equ:
-                ds[var] = (("time", "npe", "Zdim", "Ydim", "Xdim"), np.zeros((0, self.npe, self.nz, self.ny, self.nx), dtype=np.float64))      
+                ds[var] = (
+                    ("time", "npe", "Zdim", "Ydim", "Xdim"),
+                    np.zeros((0, self.npe, self.nz, self.ny, self.nx), dtype=np.float64),
+                )
 
             ds["lats"] = (("npe", "Ydim", "Xdim"), np.zeros((self.npe, self.ny, self.nx), dtype=np.float64))
 
@@ -94,11 +108,17 @@ class OutputCubesphereZarr(OutputCubesphere):
             # initialize empty variable array
             if self.config.equations == "euler":
 
-                ds["elev"] = (("npe", "Zdim", "Ydim", "Xdim"), np.zeros((self.npe, self.nz, self.ny, self.nx), dtype=np.float64))
+                ds["elev"] = (
+                    ("npe", "Zdim", "Ydim", "Xdim"),
+                    np.zeros((self.npe, self.nz, self.ny, self.nx), dtype=np.float64),
+                )
 
                 ds["topo"] = (("npe", "Ydim", "Xdim"), np.zeros((self.npe, self.ny, self.nx), dtype=np.float64))
 
-                ds["volume"] = (("npe", "Zdim", "Ydim", "Xdim"), np.zeros((self.npe, self.nz, self.ny, self.nx), dtype=np.float64))
+                ds["volume"] = (
+                    ("npe", "Zdim", "Ydim", "Xdim"),
+                    np.zeros((self.npe, self.nz, self.ny, self.nx), dtype=np.float64),
+                )
 
             # chunking
             ds = ds.chunk(
@@ -140,11 +160,8 @@ class OutputCubesphereZarr(OutputCubesphere):
 
     # --------------------------------------------------
     def __write_result__(self, Q, step_id):
-        time_val = (
-            self.start_time
-            + np.timedelta64(int(step_id * self.dt), "s")
-        )
-        #nx = self.geometry.block_lat.shape[-1]
+        time_val = self.start_time + np.timedelta64(int(step_id * self.dt), "s")
+        # nx = self.geometry.block_lat.shape[-1]
 
         t_index = self._append_time_step(
             time_val,
@@ -202,7 +219,7 @@ class OutputCubesphereZarr(OutputCubesphere):
 
                 self.store_variable_zarr(self.geometry.to_single_block(v), "V", t_index)
 
-                self.store_variable_zarr( self.geometry.to_single_block(rv), "RV", t_index)
+                self.store_variable_zarr(self.geometry.to_single_block(rv), "RV", t_index)
 
                 self.store_variable_zarr(self.geometry.to_single_block(pv), "PV", t_index)
 
@@ -219,7 +236,7 @@ class OutputCubesphereZarr(OutputCubesphere):
             u, v, w = self.geometry.contra2wind_3d(u1, u2, u3, self.metric)
 
             p = p0 * (Q[idx_rho_theta] * Rd / p0) ** (cpd / cvd)
-            
+
             for k in range(self.nz):
 
                 self.store_variable_zarr_Zdim(self.geometry.to_single_block(u), "U", t_index, k)
@@ -240,33 +257,40 @@ class OutputCubesphereZarr(OutputCubesphere):
     def __finalize__(self):
         return
 
-
     def _append_time_step(self, time_val, nz, ny, nx):
         variables = {}
         if self.rank == 0:
             if nz != 1:
                 for var in self.equ:
-                    variables[var] = (("time", "npe", "Zdim", "Ydim", "Xdim"), np.full((1, self.npe, self.nz, self.ny, self.nx), np.nan, dtype=np.float64))
+                    variables[var] = (
+                        ("time", "npe", "Zdim", "Ydim", "Xdim"),
+                        np.full((1, self.npe, self.nz, self.ny, self.nx), np.nan, dtype=np.float64),
+                    )
                     dummy = xr.Dataset(
                         variables,
                         coords={
-                            "time": np.array([time_val], dtype= "datetime64[s]"),
+                            "time": np.array([time_val], dtype="datetime64[s]"),
                             "npe": np.arange(self.npe),
                             "Zdim": np.arange(nz),
                             "Ydim": np.arange(ny),
                             "Xdim": np.arange(nx),
-                        })
+                        },
+                    )
             else:
                 for var in self.equ:
-                    variables[var] = (("time", "npe", "Ydim", "Xdim"), np.full((1, self.npe, self.ny, self.nx), np.nan, dtype=np.float64))
+                    variables[var] = (
+                        ("time", "npe", "Ydim", "Xdim"),
+                        np.full((1, self.npe, self.ny, self.nx), np.nan, dtype=np.float64),
+                    )
                     dummy = xr.Dataset(
                         variables,
                         coords={
-                            "time": np.array([time_val], dtype= "datetime64[s]"),
+                            "time": np.array([time_val], dtype="datetime64[s]"),
                             "npe": np.arange(self.npe),
                             "Ydim": np.arange(ny),
                             "Xdim": np.arange(nx),
-                        })
+                        },
+                    )
 
             dummy["time"].encoding = {
                 "units": "seconds since 1800-01-01 00:00:00",
@@ -288,7 +312,6 @@ class OutputCubesphereZarr(OutputCubesphere):
 
         return t_index
 
-
     def store_variable_zarr(self, field, variable_name, t_index):
 
         fields = self._gather_field(field, self.num_dim)
@@ -306,7 +329,6 @@ class OutputCubesphereZarr(OutputCubesphere):
             for face_idx, face in enumerate(fields):
                 root[variable_name][t_index, face_idx, :, :] = self.device.to_host(face)
 
-    
     def store_variable_zarr_Zdim(self, field, variable_name, t_index, level_idx):
 
         fields = self._gather_field(field, self.num_dim)
@@ -326,7 +348,6 @@ class OutputCubesphereZarr(OutputCubesphere):
 
                 elif self.config.equations == "euler":
                     root[variable_name][t_index, face_idx, level_idx, :, :] = self.device.to_host(face[level_idx, :, :])
-
 
     def write_static_euler_fields(self):
 
@@ -353,7 +374,6 @@ class OutputCubesphereZarr(OutputCubesphere):
         root["elev"][:] = self.device.to_host(elev)
         root["topo"][:] = self.device.to_host(topo)
         root["volume"][:] = self.device.to_host(volume)
-
 
     def _cell_volume(self) -> NDArray:
         """Volume associated with each solution point.
