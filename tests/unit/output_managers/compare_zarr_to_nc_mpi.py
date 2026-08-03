@@ -107,9 +107,13 @@ class CompareZarrToNcTestCase(MpiTestCase):
 
         self.device = self._make_device(self.device)
 
-        if self.config.precision == "mixed":
-            self.device.real_dtype = torch.float32
-            self.device.complex_dtype = torch.complex64
+        if hasattr(self.config, "precision"):
+            if self.config.precision == "mixed":
+                self.device.real_dtype = torch.float32
+                self.device.complex_dtype = torch.complex64
+            else:
+                self.device.real_dtype = torch.float64
+                self.device.complex_dtype = torch.complex128
         else:
             self.device.real_dtype = torch.float64
             self.device.complex_dtype = torch.complex128

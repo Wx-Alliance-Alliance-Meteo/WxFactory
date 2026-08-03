@@ -27,7 +27,6 @@ from tests.unit.output.test_state import StateTestCases
 from tests.unit.restart.test_restart import Euler2DRestartTestCase
 from tests.unit.solvers.test_fgmres import FgmresScipyTestCases, FgmresEdgeCasesTestCases
 from tests.unit.solvers.test_kiops_pmex_tolerance_cpu import KiopsPmexToleranceCpuTestCases
-from tests.unit.output_managers.compare_zarr_to_nc import CompareZarrToNcTestCase
 from tests.unit.solvers.test_exponential_solver_registry import ExponentialSolverRegistryTestCases
 
 
@@ -89,7 +88,6 @@ def load_tests(test_name: str):
 
     add_test(suite, Angle24TestCase("test_cyclic"), test_re)
     add_test(suite, Angle24TestCase("test_rounding"), test_re)
-    add_test(suite, CompareZarrToNcTestCase("test_compare_zarr_to_nc"), test_re)
 
     add_test(suite, RhsBundleTestCases("test_full_and_shape_are_stored"), test_re)
     add_test(suite, RhsBundleTestCases("test_missing_partitions_raise_when_called"), test_re)
