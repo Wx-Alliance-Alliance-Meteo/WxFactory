@@ -1,14 +1,14 @@
 import math
-from typing import Callable, Tuple
+from collections.abc import Callable
 
 import numpy
 import torch
 import torch.autograd.forward_ad as fwad
+from mpi4py import MPI
 from numpy.typing import NDArray
 
 from ..common import Configuration
 from ..device import differentiable_mode
-from .global_operations import global_inf_norm
 
 
 class MatvecOp:
@@ -18,10 +18,10 @@ class MatvecOp:
 
     matvec: Callable[[numpy.ndarray], numpy.ndarray]
     dtype: numpy.dtype
-    shape: Tuple
+    shape: tuple
     size: int
 
-    def __init__(self, matvec: Callable[[NDArray], NDArray], dtype: numpy.dtype, shape: Tuple) -> None:
+    def __init__(self, matvec: Callable[[NDArray], NDArray], dtype: numpy.dtype, shape: tuple) -> None:
         self.matvec = matvec
         self.dtype = dtype
         self.shape = shape
@@ -35,14 +35,29 @@ class MatvecOp:
         return self.matvec(vec)
 
 
+def _global_norm(vec: NDArray, comm: MPI.Comm) -> numpy.floating:
+    """Compute the distributed 2-norm in the array's working precision."""
+    local_norm = torch.linalg.vector_norm(vec)
+    dtype = numpy.float32 if vec.dtype == torch.float32 else numpy.float64
+    local = numpy.array([(local_norm * local_norm).item()], dtype=dtype)
+    total = numpy.empty_like(local)
+    comm.Allreduce(local, total)
+    return numpy.sqrt(total[0])
+
+
 class MatvecOpBasic(MatvecOp):
     def __init__(self, dt: float, Q: NDArray, rhs_handle: Callable[[NDArray], NDArray], param: Configuration) -> None:
         rhs_result = rhs_handle(Q)
-        points_per_panel = (param.num_elements_horizontal * param.num_solpts) ** 2
-        epsilon_factor = 1.0 + points_per_panel / 100000.0
+        fd_norm_q = _global_norm(Q, MPI.COMM_WORLD) if param.jacobian_method.lower() == "fd" else None
         super().__init__(
             lambda vec: matvec_fun(
-                vec, dt, Q, rhs_result, rhs_handle, param.jacobian_method, eps_factor=epsilon_factor
+                vec,
+                dt,
+                Q,
+                rhs_result,
+                rhs_handle,
+                param.jacobian_method,
+                fd_norm_q=fd_norm_q,
             ),
             Q.dtype,
             Q.shape,
@@ -78,8 +93,7 @@ def matvec_fun(
     rhs: NDArray,
     rhs_handle: Callable[[NDArray], NDArray],
     method: str,
-    eps_factor: float = 1.0,
-    q_scale: float | None = None,
+    fd_norm_q: float | None = None,
 ) -> numpy.ndarray:
     """
     Basic Matvec operation `A * vec`
@@ -89,43 +103,39 @@ def matvec_fun(
     :param Q: ?
     :param rhs: Last computed RHS
     :param rhs_handle: Right hand side to compute
-    :param method: How to obtain the Jacobian action: ``ad`` for forward-mode automatic
-                   differentiation, ``complex`` for the complex step, anything else for a one-sided
-                   finite difference. The first two are exact; only the finite difference reuses
-                   ``rhs``, so it costs a single extra evaluation instead of roughly two.
-    :param q_scale: Precomputed max(1, ||Q||_inf) for the single-precision step scaling. Q is fixed
-                    across all the matvecs of one Krylov solve, so a caller that issues many of them
-                    can compute this once and pass it in, avoiding a global reduction per matvec.
+    :param method: Jacobian-action method: forward AD, complex step, or finite difference.
+    :param fd_norm_q: Cached distributed norm of the linearization state.
 
     :return: Result of the `A * vec` operation
     """
+    method_key = method.lower()
 
-    if method == "ad":
+    if method_key == "ad":
         # Forward-mode automatic differentiation: the exact directional derivative, with no step
         # size to choose. This matters most in single precision, where the finite difference loses
         # the derivative to subtractive cancellation.
         jac = dt * _matvec_ad(vec, Q, rhs_handle)
-    elif method == "complex":
+    elif method_key == "complex":
         # Complex-step approximation
         epsilon = math.sqrt(numpy.finfo(float).eps)
         Qvec = Q + 1j * epsilon * vec.reshape(Q.shape)
         jac = dt * (rhs_handle(Qvec) / epsilon).imag
-    else:
-        # Finite difference approximation of the Jacobian-vector product.
-        if "32" in str(Q.dtype):
-            # Single precision: a fixed absolute step is lost to round-off when the state components
-            # are large -- Q + epsilon*vec rounds straight back to Q, so the finite difference returns
-            # a corrupted Jacobian and the exponential integrators inject energy and blow up. The
-            # solution is to scale the step by the global magnitude of the state.
-            if q_scale is None:
-                q_scale = max(1.0, float(global_inf_norm(Q)))
-            epsilon = math.sqrt(numpy.finfo(numpy.float32).eps) * eps_factor * q_scale
+    elif method_key == "fd":
+        # Following the NITSOL approach, see Eq. 14 in the review article by Knoll and Keyes on the JFNK method.
+        direction = vec.reshape(Q.shape)
+        eps_machine = numpy.float64(torch.finfo(Q.dtype).eps)
+        norm_q = fd_norm_q if fd_norm_q is not None else _global_norm(Q, MPI.COMM_WORLD)
+        norm_v = _global_norm(vec, MPI.COMM_WORLD)
+        if norm_v == 0.0:
+            epsilon = numpy.sqrt(eps_machine)
         else:
-            # Double precision: the fixed step is small relative to the state resolution, so no
-            # scaling is needed. This formulation is accurate enough and avoid the global communication
-            epsilon = math.sqrt(numpy.finfo(numpy.float32).eps) * eps_factor
-        Qvec = Q + epsilon * vec.reshape(Q.shape)
-        jac = dt * (rhs_handle(Qvec) - rhs) / epsilon
+            epsilon = numpy.sqrt((numpy.float64(1.0) + norm_q) * eps_machine) / norm_v
+
+        Qvec = Q + epsilon * direction
+        rhs_difference = rhs_handle(Qvec) - rhs
+        jac = rhs_difference * (dt / epsilon)
+    else:
+        raise ValueError(f"Unknown Jacobian method '{method}'")
 
     return jac.flatten()
 

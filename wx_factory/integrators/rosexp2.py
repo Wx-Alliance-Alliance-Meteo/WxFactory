@@ -1,12 +1,17 @@
+from collections.abc import Callable
 from time import time
-from typing import Callable
 
 import numpy
 import torch
 
 from ..common.configuration import Configuration
+from ..solvers import (
+    ExponentialSolverRequest,
+    matvec_fun,
+    matvec_rat,
+    resolve_exponential_solver,
+)
 from .integrator import Integrator, SolverInfo
-from ..solvers import ExponentialSolverRequest, matvec_fun, matvec_rat, resolve_exponential_solver
 
 
 class RosExp2(Integrator):
@@ -26,8 +31,8 @@ class RosExp2(Integrator):
         self.exode_controller = param.exode_controller
 
     def __step__(self, Q, dt):
-        rhs_full = self.rhs_full(Q)
-        rhs_imp = self.rhs_imp(Q)
+        rhs_full = self.evaluate_rhs(self.rhs_full, Q)
+        rhs_imp = self.evaluate_rhs(self.rhs_imp, Q)
 
         Q_flat = Q.flatten()
         n = len(Q_flat)

@@ -1,8 +1,9 @@
-import numpy
 from time import time
 
-from .integrator import Integrator, SolverInfo
+import numpy
+
 from ..solvers import newton_krylov
+from .integrator import Integrator, SolverInfo
 
 
 class CrankNicolson(Integrator):
@@ -12,7 +13,7 @@ class CrankNicolson(Integrator):
         self.tol = param.tolerance
 
     def CN_system(self, Q_plus, Q, dt, rhs):
-        return (Q_plus - Q) / dt - 0.5 * (rhs(Q_plus) + rhs(Q))
+        return (Q_plus - Q) / dt - 0.5 * (self.evaluate_rhs(rhs, Q_plus) + self.evaluate_rhs(rhs, Q))
 
     def __step__(self, Q, dt):
         def CN_fun(Q_plus):

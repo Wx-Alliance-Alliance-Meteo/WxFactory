@@ -1,14 +1,16 @@
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from time import time
-from typing import Optional
 
 import numpy
+import torch
+from numpy.typing import NDArray
 
 from ..common import Configuration
 from ..device import Device
-from ..precondition import Preconditioner
 from ..output.output_manager import OutputManager
-from ..solvers import SolverInfo, fgmres, global_norm
+from ..precondition import Preconditioner
+from ..solvers import SolverInfo, fgmres
 
 
 class Integrator(ABC):
@@ -29,17 +31,17 @@ class Integrator(ABC):
     """
 
     latest_time: float
-    output_manager: Optional[OutputManager]
+    output_manager: OutputManager | None
     device: Device
-    preconditioner: Optional[Preconditioner]
-    solver_info: Optional[SolverInfo]
+    preconditioner: Preconditioner | None
+    solver_info: SolverInfo | None
 
     def __init__(
         self,
         param: Configuration,
         *,
-        output_manager: Optional[OutputManager] = None,
-        device: Optional[Device] = None,
+        output_manager: OutputManager | None = None,
+        device: Device | None = None,
         preconditioner=None,
     ) -> None:
         self.output_manager = output_manager
@@ -51,6 +53,13 @@ class Integrator(ABC):
         self.sim_time = -1.0
         self.failure_flag = 0
         self.num_completed_steps = 0
+        self.phi_rhs_double = bool(getattr(param, "phi_rhs_double", 1))
+
+    def evaluate_rhs(self, rhs: Callable, Q: NDArray) -> NDArray:
+        """Evaluate an update-driving tendency at its configured precision."""
+        if not self.phi_rhs_double or Q.dtype != torch.float32:
+            return rhs(Q)
+        return rhs(Q.to(torch.float64)).to(Q.dtype)
 
     def _solve_linear(self, A, b, x0=None, tol=1e-8, restart=20, maxiter=None):
         return fgmres(

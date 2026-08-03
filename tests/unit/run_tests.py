@@ -27,6 +27,7 @@ from tests.unit.output.test_state import StateTestCases
 from tests.unit.restart.test_restart import Euler2DRestartTestCase
 from tests.unit.solvers.test_fgmres import FgmresScipyTestCases, FgmresEdgeCasesTestCases
 from tests.unit.solvers.test_kiops_pmex_tolerance_cpu import KiopsPmexToleranceCpuTestCases
+from tests.unit.solvers.test_matvec import MatvecTestCases
 from tests.unit.solvers.test_exponential_solver_registry import ExponentialSolverRegistryTestCases
 
 
@@ -52,6 +53,11 @@ def load_tests(test_name: str):
     add_test(suite, FgmresScipyTestCases("test_compare_implementation_to_scipy_and_residual"), test_re)
 
     add_test(suite, KiopsPmexToleranceCpuTestCases("test_compare_kiops_pmex"), test_re)
+    add_test(suite, KiopsPmexToleranceCpuTestCases("test_pmex_accepts_maximum_below_default_minimum"), test_re)
+
+    add_test(suite, MatvecTestCases("test_fd_matches_equations_10_and_14"), test_re)
+    add_test(suite, MatvecTestCases("test_fd_preserves_working_precision"), test_re)
+    add_test(suite, MatvecTestCases("test_fd_norm_uses_working_precision"), test_re)
 
     add_test(suite, ExponentialSolverRegistryTestCases("test_builtin_solvers_are_registered"), test_re)
     add_test(suite, ExponentialSolverRegistryTestCases("test_unknown_solver_lists_registered_names"), test_re)
