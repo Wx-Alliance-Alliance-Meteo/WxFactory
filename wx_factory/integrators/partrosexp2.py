@@ -7,13 +7,14 @@ import torch
 
 from ..common.configuration import Configuration
 from ..rhs.vertical_jacobian import (
-    assemble_j1_blocks_analytic,
-    block_thomas_solve,
+    assemble_vertical_blocks,
     col_to_state,
     forcing_jac_prepare,
     forcing_jvp,
     j2_flux_matvec,
     j2_prepare,
+    solve_retained_columns,
+    split_vertical_blocks,
     state_to_col,
 )
 from ..solvers import ExponentialSolverRequest, resolve_exponential_solver
@@ -21,16 +22,15 @@ from .integrator import Integrator, SolverInfo
 
 
 class PartRosExp2(Integrator):
-    """Partitioned Rosenbrock-exponential (PartRosExp2, Dallerit et al. 2024).
+    """Second-order partitioned Rosenbrock-exponential integrator.
 
-    Splits the right-hand side f = f1 + f2 with f1 the vertically-stiff part (vertical flux divergence
-    + gravity) and f2 the horizontal remainder, and advances
+    Splits the right-hand side as f = f1 + f2. The column-local stiff partition f1 contains vertical
+    mass, vertical-momentum and thermodynamic fluxes plus gravity. The complementary f2 partition
+    contains the terrain-balanced horizontal-momentum operator and non-stiff forcing. It advances
 
-        (I - h/2 J1) delta = h f1 + h phi1(h J2) [ f2 + h/2 J2 f1 ],   y_{n+1} = y_n + delta,
+        (I - h/2 J1) delta = 1/2 (e^{h J2} + I) h f1 + phi1(h J2) h f2,   y_{n+1} = y_n + delta,
 
-    with J1 = df1/dy assembled analytically (exact derivative of the discrete f1) and solved directly
-    per column by block-Thomas, and J2 = df2/dy applied matrix-free inside a single PMEX phi1
-    evaluation. J1 is reassembled and refactored every step.
+    J1 is assembled and solved by columns; J2 is applied matrix-free.
     """
 
     def __init__(
@@ -44,17 +44,16 @@ class PartRosExp2(Integrator):
         preconditioner=None,
     ):
         super().__init__(param, device=device, preconditioner=preconditioner)
-        self.rhs_full = rhs_full  # the RHS object: callable (full) and carrier of .implicit / geometry
-        self.rhs_imp = rhs_imp  # f1 = the vertically-stiff partition
-        self.rhs_exp = rhs_exp  # f2 = the horizontal partition (computed directly, not full - f1)
+        self.rhs_full = rhs_full
+        self.rhs_imp = rhs_imp  # Vertically stiff partition.
+        self.rhs_exp = rhs_exp  # Complementary partition.
         self.tol = param.tolerance
-        self.jacobian_method = param.jacobian_method  # kept for config compatibility; J_exp is now fully analytic
-        self.krylov_mmax = param.krylov_mmax  # cap the exponential Krylov space (memory)
-        self.krylov_m = None  # previous step's final Krylov size, recycled as the next m_init (see __step__)
-        # Which solver evaluates phi_1(J_exp) @ vec (pmex / kiops / exode), honoured like in epi.py.
+        self.jacobian_method = param.jacobian_method  # Kept for configuration compatibility.
+        self.krylov_mmax = param.krylov_mmax
+        self.krylov_m = None  # Recycled Krylov size.
         self.exponential_solver = param.exponential_solver
         self.solve_exponential = resolve_exponential_solver(self.exponential_solver)
-        self.krylov_size = param.krylov_size  # kiops / pmex_ne restart size
+        self.krylov_size = param.krylov_size
         self.exode_method = param.exode_method
         self.exode_controller = param.exode_controller
 
@@ -90,21 +89,33 @@ class PartRosExp2(Integrator):
         rhsobj = self.rhs_full
 
         f1 = self.rhs_imp(Q)
-        f2 = self.rhs_exp(Q)  # horizontal partition, computed directly (no full - f1 cancellation)
-        j2_base = j2_prepare(self.rhs_full, Q)  # base state data for analytic J2, computed once per step
-        forcing_base = forcing_jac_prepare(self.rhs_full, Q)  # base data for the analytic forcing Jacobian
+        f2 = self.rhs_exp(Q)
+
+        # Split one vertical-block assembly between J1 and J2.
+        L, A, U = assemble_vertical_blocks(rhsobj, Q)
+        momentum_blocks, retained_blocks = split_vertical_blocks(rhsobj, L, A, U)
+        del L, A, U
+
+        j2_base = j2_prepare(self.rhs_full, Q, momentum_blocks)
+        forcing_base = forcing_jac_prepare(self.rhs_full, Q)
         f_imp = f1.flatten()
         f_exp = f2.flatten()
 
-        # Exponential part: both the horizontal flux Jacobian and the non-stiff forcing Jacobian are
-        # applied analytically, so J_exp is finite-difference-free (no float32 FD noise, no per-matvec
-        # global reduction for the step scale).
+        # Apply J2 analytically inside the exponential solver.
         def J_exp(v):
             vv = v.reshape(Q.shape)
             jflux = j2_flux_matvec(self.rhs_full, Q, vv, j2_base)
             jforcing = forcing_jvp(self.rhs_full, Q, vv, forcing_base)
             return (dt * (jflux + jforcing)).flatten()
 
+        # phi0 acts on f1/2 and phi1 on f2, so the solver returns e^{hJ2} f1/2 + phi1(hJ2) f2; adding
+        # f1/2 completes 1/2 (e^{hJ2} + I) f1.
+        #
+        # The equivalent rewrite h f1 + h phi1(hJ2) [f2 + h/2 J2 f1] was tried and is not used. It
+        # sends h/2 J2 f1 through the Krylov space instead of f1/2, which is smaller only while
+        # |h J2| < 1; past that the Krylov space receives a larger vector and the accuracy is worse,
+        # by a factor growing linearly in |h J2|. Since the point of an exponential integrator is to
+        # allow large steps, the form used here is the one that does not degrade with h.
         n = f_imp.shape[0]
         vec = torch.zeros((2, n), dtype=Q.dtype)
         vec[0, :] = 0.5 * f_imp
@@ -114,12 +125,10 @@ class PartRosExp2(Integrator):
         phiv = self._apply_phi(J_exp, vec)
         time_exp = time() - tic
 
-        # Implicit part
         tic = time()
         rhs_delta = ((phiv.reshape(-1) + 0.5 * f_imp) * dt).reshape(Q.shape)
-        L, A, U = assemble_j1_blocks_analytic(rhsobj, Q)
         bc = state_to_col(rhsobj, rhs_delta)
-        dc = block_thomas_solve(rhsobj, L, A, U, bc, dt)
+        dc = solve_retained_columns(rhsobj, retained_blocks, bc, dt)
         delta = col_to_state(rhsobj, dc, rhs_delta)
         time_imp = time() - tic
 

@@ -1,8 +1,27 @@
 {
-    "version": "0.2",
+    "version": "0.3",
     "sections": [
         {
-            "name": "General",
+            "name": "Device",
+            "fields": [
+                {
+                    "name": "pytorch_device",
+                    "type": "str",
+                    "selectables": ["cuda", "cpu"],
+                    "default": "cuda",
+                    "description": "Where the computation puts its tensors. Falls back to the CPU if no GPU is available"
+                },
+                {
+                    "name": "precision",
+                    "type": "str",
+                    "selectables": ["double", "mixed"],
+                    "default": "double",
+                    "description": "Runtime floating-point mode. Mixed precision stores the model state and most runtime arrays in single precision, constructs static spatial coefficients in double precision before casting, and selectively uses double precision for accuracy-sensitive solver operations."
+                }
+            ]
+        },
+        {
+            "name": "Test_case",
             "fields": [
                 {
                     "name": "equations",
@@ -33,31 +52,7 @@
                     "name": "time_end",
                     "type": "str",
                     "default": ""
-                }
-            ]
-        },
-        {
-            "name": "System",
-            "fields": [
-                {
-                    "name": "pytorch_device",
-                    "type": "str",
-                    "selectables": ["cuda", "cpu"],
-                    "default": "cuda",
-                    "description": "Where the computation puts its tensors. Falls back to the CPU if no GPU is available"
                 },
-                {
-                    "name": "precision",
-                    "type": "str",
-                    "selectables": ["double", "mixed"],
-                    "default": "double",
-                    "description": "Runtime floating-point mode. Mixed precision stores the model state and most runtime arrays in single precision, constructs static spatial coefficients in double precision before casting, and selectively uses double precision for accuracy-sensitive solver operations."
-                }
-            ]
-        },
-        {
-            "name": "Test_case",
-            "fields": [
                 {
                     "name": "topography_file",
                     "type": "str",

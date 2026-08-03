@@ -19,7 +19,7 @@ class ConfigurationTestCases(WxTestCase):
         schema = ConfigurationSchema(readfile(schema_file))
         precision = next(field for field in schema.fields if field.name == "precision")
 
-        self.assertEqual(precision.section, "System")
+        self.assertEqual(precision.section, "Device")
         self.assertTrue(precision.validate("double"))
         self.assertTrue(precision.validate("mixed"))
         self.assertFalse(precision.validate("single"))

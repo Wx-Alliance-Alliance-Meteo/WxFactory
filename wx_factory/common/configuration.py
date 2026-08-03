@@ -1,9 +1,14 @@
-from configparser import ConfigParser
 import copy
-from typing import Dict, List, Optional, Self
-from .eval_expr import eval_expr
+from configparser import ConfigParser
+from typing import Self
 
-from .configuration_schema import ConfigurationSchema, ConfigurationField, OptionType, needs_evaluation
+from .configuration_schema import (
+    ConfigurationField,
+    ConfigurationSchema,
+    OptionType,
+    needs_evaluation,
+)
+from .eval_expr import eval_expr
 
 __all__ = ["Configuration"]
 
@@ -11,7 +16,7 @@ __all__ = ["Configuration"]
 class Configuration:
     """All the config options for WxFactory"""
 
-    sections: Dict[str, List[str]]
+    sections: dict[str, list[str]]
 
     def __init__(self, cfg_file: str, schema: ConfigurationSchema, load_post_config: bool = True):
 
@@ -40,7 +45,7 @@ class Configuration:
         return other
 
     def _get_option(self, field: ConfigurationField) -> OptionType:
-        value: Optional[OptionType] = None
+        value: OptionType | None = None
         if field.dependency is not None:
             if not hasattr(self, field.dependency[0]):
                 return None

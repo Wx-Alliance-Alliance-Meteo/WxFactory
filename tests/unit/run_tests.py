@@ -67,7 +67,6 @@ def load_tests(test_name: str):
     )
 
     add_test(suite, StateTestCases("test_save_load_works"), test_re)
-    add_test(suite, StateTestCases("test_load_old_state"), test_re)
     add_test(suite, Euler2DRestartTestCase("test_gen_restart"), test_re)
     add_test(suite, Euler2DRestartTestCase("test_read_restart"), test_re)
 

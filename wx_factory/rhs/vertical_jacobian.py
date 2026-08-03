@@ -1,8 +1,4 @@
-"""Analytic Jacobian of the vertically-stiff partition f1 (PartRosExp2).
-
-Computes the derivative of f1 from RHSDirecFluxReconstruction_mpi_v2.implicit.
-Variable order: (rho, rho*u1, rho*u2, rho*w, rho*theta).
-"""
+"""Analytic Jacobians for the PartRosExp2 partitions."""
 
 import numpy
 import torch
@@ -32,7 +28,7 @@ _MOM = (idx_rho_u1, idx_rho_u2, idx_rho_u3)
 
 
 def ad_matvec(dq, q, pressure, direction, h1d, h2d, h3d):
-    """Apply direction-specific pointwise flux Jacobian A^d(q) to dq."""
+    """Apply a directional pointwise flux Jacobian."""
     rho = q[idx_rho]
     u = (q[idx_rho_u1] / rho, q[idx_rho_u2] / rho, q[idx_rho_u3] / rho)
     theta = q[idx_rho_theta] / rho
@@ -54,7 +50,7 @@ def ad_matvec(dq, q, pressure, direction, h1d, h2d, h3d):
 
 
 def ad_matrix(q, pressure, direction, h1d, h2d, h3d):
-    """Build explicit 5x5 flux Jacobian A^d(q) at each point."""
+    """Build a directional pointwise flux Jacobian."""
     rho = q[idx_rho]
     u = (q[idx_rho_u1] / rho, q[idx_rho_u2] / rho, q[idx_rho_u3] / rho)
     theta = q[idx_rho_theta] / rho
@@ -78,50 +74,26 @@ def ad_matrix(q, pressure, direction, h1d, h2d, h3d):
 
 
 def a3_matvec(dq: NDArray, q: NDArray, pressure: NDArray, h13: NDArray, h23: NDArray, h33: NDArray) -> NDArray:
-    """Vertical-flux Jacobian A3(q) dq (direction-2 case)."""
+    """Apply the vertical pointwise flux Jacobian."""
     return ad_matvec(dq, q, pressure, 2, h13, h23, h33)
 
 
 def _trace_metric(m, comp):
-    """Metric component h^{comp,3} at vertical interfaces."""
+    """Return a vertical-interface metric component."""
     return m.h_contra_itf_k_new[comp, 2]
 
 
-def j1_prepare(rhsobj, q):
-    """Precompute frozen base variables for implicit_jvp."""
-    rhsobj.implicit(q)
-    return (
-        rhsobj.ops,
-        rhsobj.pressure.copy(),
-        rhsobj.q_itf_x3.copy(),
-        rhsobj.q_itf_full_x3.copy(),
-        rhsobj.wflux_pres_x3.copy(),
-        rhsobj.wflux_pres_itf_x3.copy(),
-        rhsobj.log_p.copy(),
-        rhsobj.pressure_itf_x3.copy(),
-    )
-
-
-def implicit_jvp(rhsobj, q: NDArray, dq: NDArray, base=None) -> NDArray:
-    """Compute analytic Jacobian-vector product J1 * dq.
-
-    Supports batched dq on axis 1.
-    """
+def _vertical_flux_jvp(rhsobj, q, dq, ops, pressure, q_itf_x3, q_itf_full_x3):
+    """Linearize the vertical volume and Rusanov interface fluxes."""
     m = rhsobj.metric
-
-    if base is None:
-        base = j1_prepare(rhsobj, q)
-    ops, pressure, q_itf_x3, q_itf_full_x3, wflux_pres_x3, wflux_pres_itf_x3, log_p, pressure_itf_x3 = base
     op_extrap = ops.extrap_z
-    op_dz = ops.derivative_z
-    op_corr = ops.correction_DU
     n = rhsobj.geom.num_solpts**2
 
     # Interior flux perturbation
     h13, h23, h33 = m.h_contra_new[0, 2], m.h_contra_new[1, 2], m.h_contra_new[2, 2]
     dfx3 = m.sqrtG_new * a3_matvec(dq, q, pressure, h13, h23, h33)
 
-    # Trace perturbations (linearized log-exp for rho, rho_theta)
+    # Density traces follow the logarithmic RHS extrapolation.
     dq_itf = apply_op(dq, op_extrap)
     q_itf = q_itf_x3
     dq_itf[idx_rho] = q_itf[idx_rho] * apply_op(dq[idx_rho] / q[idx_rho], op_extrap)
@@ -138,7 +110,7 @@ def implicit_jvp(rhsobj, q: NDArray, dq: NDArray, base=None) -> NDArray:
     qf = q_itf_full_x3
     dqf = to_full(dq_itf, qf)
 
-    # Wall reflection of vertical momentum for plain rows
+    # Reflect vertical momentum at rigid walls.
     qf_r = qf.copy()
     dqf_r = dqf.copy()
     qf_r[idx_rho_u3][_bot_k] *= -1.0
@@ -160,7 +132,7 @@ def implicit_jvp(rhsobj, q: NDArray, dq: NDArray, base=None) -> NDArray:
     eig_u = torch.abs(w_u) + torch.sqrt(h33_itf[south] * heat_capacity_ratio * p_itf[south] / qf[idx_rho][south])
     eig = maximum(eig_d, eig_u)
 
-    # Linearized advective and pressure fluxes at traces
+    # Linearize the interface fluxes.
     dflux_d = sg_itf[north] * a3_matvec(
         dqf_r[north], qf_r[north], p_itf[north], _trace_metric(m, 0)[north], _trace_metric(m, 1)[north], h33_itf[north]
     )
@@ -171,9 +143,48 @@ def implicit_jvp(rhsobj, q: NDArray, dq: NDArray, base=None) -> NDArray:
     dfitf_full = torch.zeros_like(dqf)
     dfitf_full[north] = 0.5 * (dflux_d + dflux_u - eig * sg_itf[north] * (dqf_r[south] - dqf_r[north]))
     dfitf_full[south] = dfitf_full[north]
-    dfitf = dfitf_full[_mid_k]
 
-    # Well-balanced rho_w residual terms
+    # Return shared interface data used by the well-balanced vertical-momentum row.
+    return dfx3, dfitf_full[_mid_k], (dqf, dq_itf, p_itf, eig, w_d, w_u)
+
+
+def j1_prepare(rhsobj, q):
+    """Precompute frozen base variables for implicit_jvp."""
+    rhsobj.implicit(q)
+    return (
+        rhsobj.ops,
+        rhsobj.pressure.copy(),
+        rhsobj.q_itf_x3.copy(),
+        rhsobj.q_itf_full_x3.copy(),
+        rhsobj.wflux_pres_x3.copy(),
+        rhsobj.wflux_pres_itf_x3.copy(),
+        rhsobj.log_p.copy(),
+        rhsobj.pressure_itf_x3.copy(),
+    )
+
+
+def implicit_jvp(rhsobj, q: NDArray, dq: NDArray, base=None) -> NDArray:
+    """Apply J1 to one or more directions on axis 1."""
+    m = rhsobj.metric
+
+    if base is None:
+        base = j1_prepare(rhsobj, q)
+    ops, pressure, q_itf_x3, q_itf_full_x3, wflux_pres_x3, wflux_pres_itf_x3, log_p, pressure_itf_x3 = base
+    op_dz = ops.derivative_z
+    op_corr = ops.correction_DU
+    n = rhsobj.geom.num_solpts**2
+
+    dfx3, dfitf, shared = _vertical_flux_jvp(rhsobj, q, dq, ops, pressure, q_itf_x3, q_itf_full_x3)
+    dqf, dq_itf, p_itf, eig, w_d, w_u = shared
+    q_itf = q_itf_x3
+
+    south = numpy.s_[..., 1:, :, :, :n]
+    north = numpy.s_[..., :-1, :, :, n:]
+    h33_itf = m.h_contra_itf_k_new[2, 2]
+    sg_itf = m.sqrtG_itf_k_new
+    qf = q_itf_full_x3
+
+    # Well-balanced vertical-momentum terms.
     wfp = wflux_pres_x3
     w_presa_base = apply_op(wfp, op_dz)
     apply_op(wflux_pres_itf_x3, op_corr, out=w_presa_base, beta=1.0)
@@ -209,7 +220,7 @@ def implicit_jvp(rhsobj, q: NDArray, dq: NDArray, base=None) -> NDArray:
 
     dlogp_itf = heat_capacity_ratio * dq_itf[idx_rho_theta] / q_itf[idx_rho_theta]
 
-    # Assemble well-balanced rho_w residual perturbation
+    # Assemble the vertical-momentum perturbation.
     dw_df3 = apply_op(dwadv_x3, op_dz)
     apply_op(dwadv_full[_mid_k], op_corr, out=dw_df3, beta=1.0)
     dw_presa = apply_op(dwpres_full[_mid_k], op_corr)
@@ -218,21 +229,19 @@ def implicit_jvp(rhsobj, q: NDArray, dq: NDArray, base=None) -> NDArray:
     dw_presb = dw_presb * wfp
     drhs_w = dw_df3 + dp * (w_presa_base + w_presb_base) + pressure * (dw_presa + dw_presb)
 
-    # Combine rows, apply scaling and gravity Jacobian
+    # Apply the metric factor and gravity Jacobian.
     out = apply_op(dfx3, op_dz)
     apply_op(dfitf, op_corr, out=out, beta=1.0)
     out[idx_rho_u3] = drhs_w
     out *= -m.inv_sqrtG_new
-    out[idx_rho_u3] -= (
-        m.inv_dzdeta_new * gravity * m.inv_sqrtG_new * ((m.sqrtG_new * dq[idx_rho]) @ ops.highfilter_k)
-    )
+    out[idx_rho_u3] -= m.inv_dzdeta_new * gravity * m.inv_sqrtG_new * ((m.sqrtG_new * dq[idx_rho]) @ ops.highfilter_k)
+    # Assign horizontal-momentum derivatives to J2.
+    out[idx_rho_u1] = 0.0
+    out[idx_rho_u2] = 0.0
     return out
 
 
-# -----------------------------------------------------------------------------
 # Column-wise block-tridiagonal assembly of J1.
-# Vertical blocks are dense (5*ns x 5*ns), ordered as (variable, solpt).
-# -----------------------------------------------------------------------------
 
 
 def _col_dims(rhsobj, q):
@@ -242,7 +251,7 @@ def _col_dims(rhsobj, q):
 
 
 def state_to_col(rhsobj, x):
-    """Convert grid layout to column layout (nv, nz, ny, nx, ns**3) -> (ncol, nz, m)."""
+    """Convert grid layout to column layout."""
     ns, nh, nv, nz, ny, nx, m, ncol = _col_dims(rhsobj, x)
     x6 = x.reshape(nv, nz, ny, nx, ns, nh)
     p = torch.permute(x6, (2, 3, 5, 1, 0, 4))
@@ -258,7 +267,7 @@ def col_to_state(rhsobj, xc, ref):
 
 
 def batched_state_to_col(rhsobj, x, ref):
-    """Convert batched state to column layout (nv, nb, nz, ny, nx, ns**3) -> (nb, ncol, nz, m)."""
+    """Convert batched states to column layout."""
     ns, nh, nv, nz, ny, nx, m, ncol = _col_dims(rhsobj, ref)
     nb = x.shape[1]
     x7 = x.reshape(nv, nb, nz, ny, nx, ns, nh)
@@ -267,7 +276,7 @@ def batched_state_to_col(rhsobj, x, ref):
 
 
 def assemble_j1_blocks(rhsobj, q, batch=3):
-    """Assemble block-tridiagonal J1 blocks (L, A, U) per column via 3-color probing."""
+    """Assemble J1 blocks by three-color probing."""
     ns, nh, nv, nz, ny, nx, m, ncol = _col_dims(rhsobj, q)
     L = torch.zeros((ncol, nz, m, m), dtype=q.dtype)
     A = torch.zeros((ncol, nz, m, m), dtype=q.dtype)
@@ -279,7 +288,7 @@ def assemble_j1_blocks(rhsobj, q, batch=3):
     batch = max(1, min(batch, nj))
 
     for c in range(3):
-        # Elements partition by color to avoid overlapping diagonal writes
+        # A color has disjoint block rows.
         eA = torch.asarray([e for e in range(nz) if e % 3 == c])
         eL = torch.asarray([e for e in range(1, nz) if (e - 1) % 3 == c])
         eU = torch.asarray([e for e in range(nz - 1) if (e + 1) % 3 == c])
@@ -297,36 +306,32 @@ def assemble_j1_blocks(rhsobj, q, batch=3):
     return L, A, U
 
 
-# -----------------------------------------------------------------------------
-# Direct (analytic) assembly of blocks without probing.
-# Uses 1D reference operators and pointwise 5x5 blocks.
-# Interface slot t (0..nz) pairs element t-1 up face with element t down face.
-# -----------------------------------------------------------------------------
+# Direct block assembly from one-dimensional operators.
 
 
 def _g2c(arr, ns, nh, ny, nx):
-    """Convert grid array to column layout (ncol, nz, ns)."""
+    """Convert a scalar grid array to column layout."""
     nz = arr.shape[0]
     a = arr.reshape(nz, ny, nx, ns, nh)
     return torch.permute(a, (1, 2, 4, 0, 3)).reshape(ny * nx * nh, nz, ns)
 
 
 def _i2c(arr, nh, ny, nx):
-    """Convert scalar interface array to column layout (ncol, np, 2)."""
+    """Convert scalar interfaces to column layout."""
     npd = arr.shape[0]
     a = arr.reshape(npd, ny, nx, 2, nh)
     return torch.permute(a, (1, 2, 4, 0, 3)).reshape(ny * nx * nh, npd, 2)
 
 
 def _i5c(arr, nh, ny, nx):
-    """Convert state interface array to column layout (ncol, np, 2, nv)."""
+    """Convert state interfaces to column layout."""
     nv, npd = arr.shape[0], arr.shape[1]
     a = arr.reshape(nv, npd, ny, nx, 2, nh)
     return torch.permute(a, (2, 3, 5, 1, 4, 0)).reshape(ny * nx * nh, npd, 2, nv)
 
 
-def assemble_j1_blocks_analytic(rhsobj, q):
-    """Assemble block-tridiagonal J1 directly from closed form (L, A, U)."""
+def assemble_vertical_blocks(rhsobj, q):
+    """Assemble the exact block-tridiagonal vertical-flux Jacobian."""
     met = rhsobj.metric
     ns, nh, nv, nz, ny, nx, m, ncol = _col_dims(rhsobj, q)
     gam = heat_capacity_ratio
@@ -336,7 +341,7 @@ def assemble_j1_blocks_analytic(rhsobj, q):
     base = j1_prepare(rhsobj, q)
     ops, pressure, q_itf_x3, qf, wflux_pres_x3, wflux_pres_itf_x3, log_p, pressure_itf_x3 = base
 
-    # 1D reference operators
+    # One-dimensional reference operators.
     Dz = ops.diff_solpt  # D_int
     eLv, eRv = ops.extrap_down, ops.extrap_up  # e_L, e_R
     dLv, dRv = ops.correction[:, 0], ops.correction[:, 1]  # d_L tilde, d_R tilde
@@ -346,7 +351,7 @@ def assemble_j1_blocks_analytic(rhsobj, q):
     def g2c(a):
         return _g2c(a, ns, nh, ny, nx)
 
-    # Grid variables in column layout
+    # Volume data in column layout.
     qc = state_to_col(rhsobj, q).reshape(ncol, nz, nv, ns)
     pc = g2c(pressure)
     sgc, isgc, idzc = g2c(met.sqrtG_new), g2c(met.inv_sqrtG_new), g2c(met.inv_dzdeta_new)
@@ -359,7 +364,7 @@ def assemble_j1_blocks_analytic(rhsobj, q):
         g2c(met.h_contra_new[2, 2]),
     )
 
-    # Trace variables in column layout (padded: nz + 2 elements, 2 faces)
+    # Padded traces in column layout.
     qfc = _i5c(qf, nh, ny, nx)
     sgfc = _i2c(met.sqrtG_itf_k_new, nh, ny, nx)
     h33fc = _i2c(_trace_metric(met, 2), nh, ny, nx)
@@ -376,7 +381,7 @@ def assemble_j1_blocks_analytic(rhsobj, q):
         h33fc,
     )
 
-    # Interface slot data: down side (p=t, up face), up side (p=t+1, down face)
+    # Pair upper and lower traces at each interface.
     dn, up = numpy.s_[:, : nz + 1, 1], numpy.s_[:, 1:, 0]
     sg_n, sg_s = sgfc[dn], sgfc[up]
     rho_d, rho_u = qfc[dn][..., rr], qfc[up][..., rr]
@@ -393,11 +398,7 @@ def assemble_j1_blocks_analytic(rhsobj, q):
     Bp = 0.5 * (sg_n[..., None, None] * A3f[dn] + lam * I5)
     Bm = 0.5 * (sg_s[..., None, None] * A3f[up] - lam * I5)
 
-    # Exact linearization of the Rusanov dissipation speed. lambda = |u3| + c_s sqrt(h33) depends
-    # on the state, so it contributes a rank-one term  -1/2 (q_L - q_R) (grad_q lambda)^T  per
-    # interface, evaluated at the trace attaining the max. grad_q lambda is nonzero only in the
-    # acoustic components (rho, rho_w, rho_theta), so the block-lower-triangular structure is kept.
-    # Conventions: the down side wins ties (a_d >= a_u); sgn(0) = 0 (torch.sgn).
+    # Include the derivative of the maximum Rusanov speed; the lower trace wins ties.
     down_wins = a_d >= a_u
     w_w = torch.where(down_wins, w_d, w_u)
     rho_w = torch.where(down_wins, rho_d, rho_u)
@@ -414,7 +415,7 @@ def assemble_j1_blocks_analytic(rhsobj, q):
     Bp = Bp + torch.where(down_wins[..., None, None], Lam, zero_lam)  # winning trace on the down side
     Bm = Bm + torch.where(down_wins[..., None, None], zero_lam, Lam)  # winning trace on the up side
 
-    # Linearized trace extrapolation (rho and rho_theta use log-exp map scaling)
+    # Linearize logarithmic density extrapolation.
     qitfc = _i5c(q_itf_x3, nh, ny, nx)
     EL = torch.zeros((ncol, nz, nv, ns), dtype=dt_) + eLv
     ER = torch.zeros((ncol, nz, nv, ns), dtype=dt_) + eRv
@@ -422,29 +423,29 @@ def assemble_j1_blocks_analytic(rhsobj, q):
         EL[:, :, var, :] = eLv * (qitfc[:, :, 0, var][..., None] / qc[:, :, var, :])
         ER[:, :, var, :] = eRv * (qitfc[:, :, 1, var][..., None] / qc[:, :, var, :])
 
-    # ================= plain rows =================
+    # Conservative rows.
     shp = (ncol, nz, nv, ns, nv, ns)
     L = torch.zeros(shp, dtype=dt_)
     A = torch.zeros(shp, dtype=dt_)
     U = torch.zeros(shp, dtype=dt_)
 
-    # Interior volume: Dz x (sqrtG A3)
+    # Volume contribution.
     A += torch.einsum("os,ces,cesij->ceiojs", Dz, sgc, A3s)
 
-    # Interior interfaces: slot t = 1..nz-1
+    # Interior interfaces.
     IT, ED, EU = slice(1, nz), slice(1, nz), slice(0, nz - 1)
     L[:, ED] += torch.einsum("o,ceij,cejs->ceiojs", dLv, Bp[:, IT], ER[:, EU])
     A[:, ED] += torch.einsum("o,ceij,cejs->ceiojs", dLv, Bm[:, IT], EL[:, ED])
     A[:, EU] += torch.einsum("o,ceij,cejs->ceiojs", dRv, Bp[:, IT], ER[:, EU])
     U[:, EU] += torch.einsum("o,ceij,cejs->ceiojs", dRv, Bm[:, IT], EL[:, ED])
 
-    # Walls: ghost side reflected by M
+    # Reflected wall states.
     Mv = torch.ones(nv, dtype=dt_)
     Mv[rw] = -1.0
     A[:, 0] += torch.einsum("o,cij,cjs->ciojs", dLv, Bp[:, 0] * Mv + Bm[:, 0], EL[:, 0])
     A[:, nz - 1] += torch.einsum("o,cij,cjs->ciojs", dRv, Bp[:, nz] + Bm[:, nz] * Mv, ER[:, nz - 1])
 
-    # ================= well-balanced rho_w row =================
+    # Well-balanced vertical-momentum row.
     L[:, :, rw] = 0.0
     A[:, :, rw] = 0.0
     U[:, :, rw] = 0.0
@@ -463,8 +464,7 @@ def assemble_j1_blocks_analytic(rhsobj, q):
     cwp[..., rr] = -0.5 * sg_n * w_d**2
     cwm[..., rw] = 0.5 * (2.0 * sg_s * w_u - eig * sg_n)
     cwm[..., rr] = -0.5 * sg_s * w_u**2
-    # delta-lambda contribution to the rho_w row: -1/2 sg (rho_w jump) grad_q lambda (cols rr, rw, rt).
-    # The plain-row Lam feeds Bp/Bm whose rho_w row is discarded below, so re-add it here.
+    # Restore the wave-speed derivative in the well-balanced row.
     lam_rw = (-0.5 * sg_n * jump[..., rw])[..., None] * glam
     zero_rw = torch.zeros_like(lam_rw)
     cwp = cwp + torch.where(down_wins[..., None], lam_rw, zero_rw)
@@ -473,11 +473,9 @@ def assemble_j1_blocks_analytic(rhsobj, q):
     A[:, ED, rw] += torch.einsum("o,cej,cejs->ceojs", dLv, cwm[:, IT], EL[:, ED])
     A[:, EU, rw] += torch.einsum("o,cej,cejs->ceojs", dRv, cwp[:, IT], ER[:, EU])
     U[:, EU, rw] += torch.einsum("o,cej,cejs->ceojs", dRv, cwm[:, IT], EL[:, ED])
-    # At a rigid wall the Riemann solver reflects the velocity but copies rho-u3 itself into the
-    # ghost trace. The two advective fluxes therefore cancel and the rho-u3 jump is zero: the
-    # well-balanced advective interface flux, and hence its derivative, is identically zero.
+    # Reflected wall states give a zero advective derivative.
 
-    # Pressure operator perturbation
+    # Pressure perturbation.
     wfp = wflux_pres_x3
     w_presa_base = apply_op(wfp, ops.derivative_z)
     apply_op(wflux_pres_itf_x3, ops.correction_DU, out=w_presa_base, beta=1.0)
@@ -487,7 +485,7 @@ def assemble_j1_blocks_analytic(rhsobj, q):
     dpdrt = gam * pc / rtc
     A[:, :, rw, :, rt, :] += torch.einsum("os,ces->ceos", eye_s, g2c(w_presa_base + w_presb_base) * dpdrt)
 
-    # Metric perturbation
+    # Metric-pressure contribution.
     Gd, Gu = sg_n * h33fc[dn], sg_s * h33fc[up]
     cp_d, cp_u = gam * p_d / rt_d, gam * p_u / rt_u
     alpha_d = 0.5 * Gd / p_u * cp_d
@@ -504,7 +502,7 @@ def assemble_j1_blocks_analytic(rhsobj, q):
         "co,c,cs->cos", pdR[:, nz - 1], beta_d[:, nz] + beta_u[:, nz], ER[:, nz - 1, rt]
     )
 
-    # Local element term
+    # Local contribution.
     pw = pc * g2c(wfp)
     A[:, :, rw, :, rt, :] += torch.einsum("ceo,os,ces->ceos", pw, Dz, gam / rtc)
     A[:, :, rw, :, rt, :] += torch.einsum(
@@ -514,7 +512,7 @@ def assemble_j1_blocks_analytic(rhsobj, q):
         "ceo,o,ces->ceos", pw, dRv, gam * ER[:, :, rt, :] / qitfc[:, :, 1, rt][..., None]
     )
 
-    # Scale by -1/sqrtG and add filtered gravity
+    # Apply the metric factor and filtered gravity.
     scale = (-isgc)[:, :, None, :, None, None]
     L *= scale
     A *= scale
@@ -524,12 +522,81 @@ def assemble_j1_blocks_analytic(rhsobj, q):
     L, A, U = L.reshape(ncol, nz, m, m), A.reshape(ncol, nz, m, m), U.reshape(ncol, nz, m, m)
 
     if rhsobj.y_invariant_slab:
-        # Each variable occupies ns consecutive rows in the column layout.
+        # Each variable occupies ns consecutive rows.
         yrow = numpy.s_[..., idx_rho_u2 * ns : (idx_rho_u2 + 1) * ns, :]
         L[yrow] = 0.0
         A[yrow] = 0.0
         U[yrow] = 0.0
 
+    return L, A, U
+
+
+def _momentum_rows(ns: int) -> slice:
+    """Return the horizontal-momentum rows in column layout."""
+    return slice(idx_rho_u1 * ns, (idx_rho_u2 + 1) * ns)
+
+
+def _retained_rows(ns: int, device) -> NDArray:
+    """Return the column-layout rows of the variables f1 keeps: rho, rho_w and rho_theta."""
+    return torch.cat(
+        (
+            torch.arange(idx_rho * ns, (idx_rho + 1) * ns, device=device),
+            torch.arange(idx_rho_u3 * ns, (idx_rho_theta + 1) * ns, device=device),
+        )
+    )
+
+
+def split_vertical_blocks(rhsobj, L, A, U):
+    """Split the vertical blocks into the part each partition needs.
+
+    Returns ``(momentum, retained)``. ``momentum`` holds the horizontal-momentum rows, which f2
+    carries and whose columns span every variable. ``retained`` holds the square sub-blocks of the
+    three variables f1 keeps, which is the system the column solve actually inverts: the momentum
+    rows of J1 are empty and the retained rows do not depend on those variables, so the two sets of
+    unknowns decouple exactly.
+    """
+    ns = rhsobj.geom.num_solpts
+    rows = _momentum_rows(ns)
+    keep = _retained_rows(ns, L.device)
+    momentum = tuple(b[..., rows, :].clone() for b in (L, A, U))
+    retained = tuple(b[..., keep, :][..., :, keep].clone() for b in (L, A, U))
+    return momentum, retained
+
+
+def solve_retained_columns(rhsobj, retained, bc, dt):
+    """Solve (I - dt/2 J1) x = b in column layout using only the variables f1 retains.
+
+    The horizontal-momentum rows of J1 are empty, so those rows of the system are the identity and
+    their solution is the right-hand side unchanged; only the retained sub-system is inverted, which
+    is (3/5)^3 of the block-Thomas work of the full five-variable form.
+    """
+    keep = _retained_rows(rhsobj.geom.num_solpts, bc.device)
+    x = bc.clone()
+    x[..., keep] = block_thomas_solve(rhsobj, *retained, bc[..., keep], dt)
+    return x
+
+
+def momentum_blocks_matvec(rhsobj, momentum, x):
+    """Apply the horizontal-momentum rows of the vertical block operator to a state-layout vector."""
+    Lm, Am, Um = momentum
+    rows = _momentum_rows(rhsobj.geom.num_solpts)
+    xc = state_to_col(rhsobj, x)
+
+    out = torch.einsum("ceij,cej->cei", Am, xc)
+    out[:, 1:] += torch.einsum("ceij,cej->cei", Lm[:, 1:], xc[:, :-1])
+    out[:, :-1] += torch.einsum("ceij,cej->cei", Um[:, :-1], xc[:, 1:])
+
+    full = torch.zeros_like(xc)
+    full[..., rows] = out
+    return col_to_state(rhsobj, full, x)
+
+
+def assemble_j1_blocks_analytic(rhsobj, q):
+    """Block-tridiagonal J1 in the full five-variable layout, with the rows f1 omits set to zero."""
+    L, A, U = assemble_vertical_blocks(rhsobj, q)
+    rows = _momentum_rows(rhsobj.geom.num_solpts)
+    for blocks in (L, A, U):
+        blocks[..., rows, :] = 0.0
     return L, A, U
 
 
@@ -546,11 +613,7 @@ def block_thomas_solve(rhsobj, L, A, U, b, dt):
     a = 0.5 * dt
     _, nz, m, _ = A.shape
     out_dtype = b.dtype
-    # Form blocks one element at a time to save memory. The elimination needs more precision than
-    # the float32 state carries -- without it the density row loses ~400 ulps to cancellation -- but
-    # factoring in float64 is expensive on a consumer GPU (1/64 the float32 rate) and this sweep is
-    # entirely FLOP-bound. So for a single-precision state, factor in float32 and buy the accuracy
-    # back with one step of iterative refinement whose residual is formed in float64.
+    # Mixed mode uses float32 factors and one float64-residual refinement.
     refine = out_dtype == torch.float32
     acc = torch.float32 if refine else torch.float64
     eye = torch.eye(m, dtype=acc).reshape(1, m, m)
@@ -564,8 +627,9 @@ def block_thomas_solve(rhsobj, L, A, U, b, dt):
     def Um(e):
         return (-a) * U[:, e].astype(acc)
 
-    # Cache LU factorization of diagonal blocks to avoid refactoring during back-substitution
+    # Reuse diagonal-block factors during substitution.
     if hasattr(torch.linalg, "lu_factor") and hasattr(torch.linalg, "lu_solve"):
+
         def factor(mat):
             return torch.linalg.lu_factor(mat)
 
@@ -573,6 +637,7 @@ def block_thomas_solve(rhsobj, L, A, U, b, dt):
             return torch.linalg.lu_solve(fac[0], fac[1], rhs)
 
     else:
+
         def factor(mat):
             return mat
 
@@ -585,7 +650,7 @@ def block_thomas_solve(rhsobj, L, A, U, b, dt):
     fac[0] = factor(Am(0))
     d[0] = b[:, 0]
     for e in range(1, nz):
-        # Batched solve for block update and RHS update
+        # Update the diagonal block and right-hand side together.
         rhs_join = torch.concatenate([Um(e - 1), d[e - 1][..., None]], dim=-1)  # (ncol, m, m+1)
         sol = fsolve(fac[e - 1], rhs_join)
         T = sol[..., :m]  # C_{e-1}^{-1} Um_{e-1}
@@ -594,7 +659,7 @@ def block_thomas_solve(rhsobj, L, A, U, b, dt):
         d[e] = b[:, e] - (Lm(e) @ y[..., None])[..., 0]
 
     def substitute(rhs):
-        """Solve M z = rhs with the factors already computed, rhs given per vertical element."""
+        """Solve with the existing block factors."""
         dd = [None] * nz
         dd[0] = rhs[0]
         for e in range(1, nz):
@@ -614,8 +679,7 @@ def block_thomas_solve(rhsobj, L, A, U, b, dt):
         x[e] = fsolve(fac[e], rhs_e[..., None])[..., 0]
 
     if refine:
-        # Residual r = b - M x in float64, one vertical element at a time: a float64 copy of all of
-        # L, A and U at once would be ~400 MB per rank, which does not fit alongside the other five.
+        # Form the float64 residual one element at a time to limit memory use.
         f64 = torch.float64
         eye64 = torch.eye(m, dtype=f64).reshape(1, m, m)
         r = [None] * nz
@@ -636,10 +700,7 @@ def m_matvec(rhsobj, L, A, U, xc, dt):
     return xc - 0.5 * dt * blocks_matvec(rhsobj, L, A, U, xc)
 
 
-# -----------------------------------------------------------------------------
-# Analytic horizontal flux-divergence Jacobian J2_flux * v.
-# Linearizes the flux part of explicit(), including its well-balanced rho-u3 row.
-# -----------------------------------------------------------------------------
+# Analytic flux-divergence contribution to J2.
 
 _mid_i = numpy.s_[..., 1:-1, :]
 _mid_j = numpy.s_[..., 1:-1, :, :]
@@ -663,10 +724,22 @@ def _hori_interface(direction, qf, dqf, sg, hci, left, right):
     eig = maximum(eig_l, eig_r)
 
     dflux_l = sg[left] * ad_matvec(
-        dqf[left], qf[left], p_itf[left], direction, hci[direction, 0][left], hci[direction, 1][left], hci[direction, 2][left]
+        dqf[left],
+        qf[left],
+        p_itf[left],
+        direction,
+        hci[direction, 0][left],
+        hci[direction, 1][left],
+        hci[direction, 2][left],
     )
     dflux_r = sg[right] * ad_matvec(
-        dqf[right], qf[right], p_itf[right], direction, hci[direction, 0][right], hci[direction, 1][right], hci[direction, 2][right]
+        dqf[right],
+        qf[right],
+        p_itf[right],
+        direction,
+        hci[direction, 0][right],
+        hci[direction, 1][right],
+        hci[direction, 2][right],
     )
 
     left_wins = eig_l >= eig_r
@@ -682,11 +755,7 @@ def _hori_interface(direction, qf, dqf, sg, hci, left, right):
     deig = torch.sgn(u_w) * du_w + dsound_w
 
     out = torch.zeros_like(qf)
-    out[left] = 0.5 * (
-        dflux_l
-        + dflux_r
-        - sg[left] * (eig * (dqf[right] - dqf[left]) + deig * (qf[right] - qf[left]))
-    )
+    out[left] = 0.5 * (dflux_l + dflux_r - sg[left] * (eig * (dqf[right] - dqf[left]) + deig * (qf[right] - qf[left])))
     out[right] = out[left]
     return out
 
@@ -701,18 +770,8 @@ def _hori_wb_interface(direction, qf, dqf, sg, hci, left, right):
     du_l = (dqf[mom][left] - u_l * dqf[idx_rho][left]) / qf[idx_rho][left]
     du_r = (dqf[mom][right] - u_r * dqf[idx_rho][right]) / qf[idx_rho][right]
 
-    sound_l = torch.sqrt(
-        hci[direction, direction][left]
-        * heat_capacity_ratio
-        * pressure[left]
-        / qf[idx_rho][left]
-    )
-    sound_r = torch.sqrt(
-        hci[direction, direction][right]
-        * heat_capacity_ratio
-        * pressure[right]
-        / qf[idx_rho][right]
-    )
+    sound_l = torch.sqrt(hci[direction, direction][left] * heat_capacity_ratio * pressure[left] / qf[idx_rho][left])
+    sound_r = torch.sqrt(hci[direction, direction][right] * heat_capacity_ratio * pressure[right] / qf[idx_rho][right])
     eig_l = torch.abs(u_l) + sound_l
     eig_r = torch.abs(u_r) + sound_r
     left_wins = eig_l >= eig_r
@@ -749,8 +808,11 @@ def _hori_wb_interface(direction, qf, dqf, sg, hci, left, right):
     return adv, pres
 
 
-def j2_prepare(rhsobj, q):
-    """Precompute base variables for j2_flux_matvec."""
+def j2_prepare(rhsobj, q, momentum_blocks=None):
+    """Precompute the state and vertical blocks used by ``j2_flux_matvec``."""
+    if momentum_blocks is None:
+        L, A, U = assemble_vertical_blocks(rhsobj, q)
+        momentum_blocks = split_vertical_blocks(rhsobj, L, A, U)
     rhsobj.horizontal_flux_div(q)
     return (
         rhsobj.ops,
@@ -759,15 +821,16 @@ def j2_prepare(rhsobj, q):
         rhsobj.q_itf_x2.copy(),
         rhsobj.q_itf_full_x1.copy(),
         rhsobj.q_itf_full_x2.copy(),
+        momentum_blocks,
     )
 
 
 def j2_flux_matvec(rhsobj, q, dq, base=None):
-    """Apply the exact horizontal-flux part of the f2 Jacobian to dq."""
+    """Apply the flux contribution to J2."""
     m = rhsobj.metric
     if base is None:
         base = j2_prepare(rhsobj, q)
-    ops, pressure, qitf1, qitf2, qf1, qf2 = base
+    ops, pressure, qitf1, qitf2, qf1, qf2, momentum_blocks = base
     n = rhsobj.geom.num_solpts**2
     isz = rhsobj.geom.itf_size
     hc = m.h_contra_new
@@ -817,10 +880,13 @@ def j2_flux_matvec(rhsobj, q, dq, base=None):
 
     apply_op(dfitf1[_mid_i], ops.correction_WE, out=out, beta=1.0)
     apply_op(dfitf2[_mid_j], ops.correction_SN, out=out, beta=1.0)
+
     out *= -m.inv_sqrtG_new
 
-    # The production residual uses a pressure-split, well-balanced rho-u3 row in every direction.
-    # Replace the plain horizontal row above by the exact differential of that same split operator.
+    # The vertical blocks already include the outer metric factor.
+    out += momentum_blocks_matvec(rhsobj, momentum_blocks, dq)
+
+    # Replace the plain vertical-momentum row with its well-balanced differential.
     rw = idx_rho_u3
     rt = idx_rho_theta
     gp1 = m.sqrtG_new * hc[0, 2]
@@ -834,12 +900,8 @@ def j2_flux_matvec(rhsobj, q, dq, base=None):
     dadv = apply_op(dadv1, ops.derivative_x)
     apply_op(dadv2, ops.derivative_y, out=dadv, beta=1.0)
 
-    dwadv1, dwpres1 = _hori_wb_interface(
-        0, qf1, dqf1, m.sqrtG_itf_i_new, m.h_contra_itf_i_new, east, west
-    )
-    dwadv2, dwpres2 = _hori_wb_interface(
-        1, qf2, dqf2, m.sqrtG_itf_j_new, m.h_contra_itf_j_new, north, south
-    )
+    dwadv1, dwpres1 = _hori_wb_interface(0, qf1, dqf1, m.sqrtG_itf_i_new, m.h_contra_itf_i_new, east, west)
+    dwadv2, dwpres2 = _hori_wb_interface(1, qf2, dqf2, m.sqrtG_itf_j_new, m.h_contra_itf_j_new, north, south)
     apply_op(dwadv1[_mid_i], ops.correction_WE, out=dadv, beta=1.0)
     apply_op(dwadv2[_mid_j], ops.correction_SN, out=dadv, beta=1.0)
 
@@ -890,25 +952,15 @@ def j2_flux_matvec(rhsobj, q, dq, base=None):
     return out
 
 
-# -----------------------------------------------------------------------------
-# Analytic Jacobian of the non-stiff forcing (forcing_only) -- Christoffel/Coriolis/pressure
-# source plus the DCMIP Rayleigh sponge. This term is pointwise: gravity is the only non-local
-# contribution to forcing_only and it cancels exactly there (added and subtracted with the same
-# formula), so d(forcing_only)/dq is a per-point 5x5 map with no grid coupling.
-# -----------------------------------------------------------------------------
+# Pointwise Jacobian of the non-stiff forcing.
 
 
 def forcing_jac_prepare(rhsobj, q):
-    """Precompute the frozen state-dependent coefficients for :func:`forcing_jvp`.
-
-    All of these are functions of the fixed state q, which PartRosExp2 holds constant across every
-    matvec of one PMEX solve, so they are computed once per step. Returns the velocities, the
-    analytic pressure derivative dp/d(rho_theta) = gamma p / rho_theta, and the frozen Rayleigh
-    sponge coefficients (or None when the case has no sponge)."""
+    """Precompute state-dependent coefficients for ``forcing_jvp``."""
     rho = q[idx_rho]
     u = (q[idx_rho_u1] / rho, q[idx_rho_u2] / rho, q[idx_rho_u3] / rho)
     rt = q[idx_rho_theta]
-    # Same equation of state as the pointwise kernel: p = p0 (Rd/p0 rho_theta)^gamma.
+    # Match the pointwise equation of state.
     p = p0 * torch.exp(heat_capacity_ratio * torch.log((Rd / p0) * rt))
     dpdrt = heat_capacity_ratio * p / rt
 
@@ -924,12 +976,7 @@ def forcing_jac_prepare(rhsobj, q):
 
 
 def forcing_jvp(rhsobj, q, v, base=None):
-    """Analytic Jacobian-vector product of ``forcing_only`` on v (pointwise, no grid coupling).
-
-    Mirrors ``compute_forcing_1`` (the momentum source F^d = 2 rho (c0k u^k) + c_ij (rho u^i u^j +
-    h^ij p), summed over i<=j) direction by direction, plus the linear Rayleigh sponge. The rho and
-    rho_theta rows of forcing_only are identically zero, so only the momentum rows are filled. The
-    overall minus sign is ``rhs -= forcing``."""
+    """Apply the pointwise Jacobian of ``forcing_only``."""
     m = rhsobj.metric
     if base is None:
         base = forcing_jac_prepare(rhsobj, q)
@@ -950,20 +997,25 @@ def forcing_jvp(rhsobj, q, v, base=None):
         c11, c12, c13 = ch[d, 3], ch[d, 4], ch[d, 5]
         c22, c23, c33 = ch[d, 6], ch[d, 7], ch[d, 8]
 
-        # Rows of the pointwise forcing Jacobian dF^d/dq, in conserved variables.
-        a_r = -(c11 * u1 * u1 + 2.0 * c12 * u1 * u2 + 2.0 * c13 * u1 * u3
-                + c22 * u2 * u2 + 2.0 * c23 * u2 * u3 + c33 * u3 * u3)
+        # Momentum row in conserved variables.
+        a_r = -(
+            c11 * u1 * u1
+            + 2.0 * c12 * u1 * u2
+            + 2.0 * c13 * u1 * u3
+            + c22 * u2 * u2
+            + 2.0 * c23 * u2 * u3
+            + c33 * u3 * u3
+        )
         a_m1 = 2.0 * c01 + 2.0 * (c11 * u1 + c12 * u2 + c13 * u3)
         a_m2 = 2.0 * c02 + 2.0 * (c12 * u1 + c22 * u2 + c23 * u3)
         a_m3 = 2.0 * c03 + 2.0 * (c13 * u1 + c23 * u2 + c33 * u3)
-        a_rt = (c11 * h11 + 2.0 * c12 * h12 + 2.0 * c13 * h13
-                + c22 * h22 + 2.0 * c23 * h23 + c33 * h33) * dpdrt
+        a_rt = (c11 * h11 + 2.0 * c12 * h12 + 2.0 * c13 * h13 + c22 * h22 + 2.0 * c23 * h23 + c33 * h33) * dpdrt
 
         dF = a_r * dr + a_m1 * dm[0] + a_m2 * dm[1] + a_m3 * dm[2] + a_rt * drt
 
         if ray is not None:
             rate, uref = ray
-            # Rayleigh sponge R^d = rate (rho_u^d - rho uref^d), linear in q: dR^d = rate (dm_d - uref^d dr).
+            # Linear Rayleigh-sponge contribution.
             dF = dF + rate * (dm[d] - uref[d] * dr)
 
         out[row] = -dF

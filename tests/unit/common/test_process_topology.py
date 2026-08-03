@@ -76,6 +76,7 @@ class ExchangeTest(MpiTestCase):
 
         self.data = self.all_data[self.rank]
         self.neighbor_data = [self.all_data[x] for x in self.to_neighbor]
+
     def vector2d_1d_shape1d(self):
         south = (self.data[SOUTH], torch.flip(self.data[SOUTH], (-1,)))
         north = (self.data[NORTH], torch.flip(self.data[NORTH], (-1,)))
@@ -578,6 +579,7 @@ class GatherScatterTest(MpiTestCase):
         self.global_data_fail_2 = torch.arange(6 * 12 * 14).reshape(6, 12, 14)
         self.global_data_fail_3 = torch.arange(4 * 12 * 12).reshape(4, 12, 12)
         self.global_data_fail_4 = torch.arange(6 * 6).reshape(6, 6)
+
     def gather_scatter(self, global_data, num_dim):
         side = self.topo.num_lines_per_panel
         tile_side = global_data.shape[num_dim - 1] // side

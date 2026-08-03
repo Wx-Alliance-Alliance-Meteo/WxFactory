@@ -59,12 +59,8 @@ class DFROperators:
 
         # Note that extrap_neg and extrap_pos should be vectors, not a one-row matrix; numpy
         # treats the two differently.
-        extrap_neg = (
-            legvander(torch.tensor([-1.0], dtype=build_dtype), grd.num_solpts - 1) @ invV
-        ).reshape((-1,))
-        extrap_pos = (
-            legvander(torch.tensor([+1.0], dtype=build_dtype), grd.num_solpts - 1) @ invV
-        ).reshape((-1,))
+        extrap_neg = (legvander(torch.tensor([-1.0], dtype=build_dtype), grd.num_solpts - 1) @ invV).reshape((-1,))
+        extrap_pos = (legvander(torch.tensor([+1.0], dtype=build_dtype), grd.num_solpts - 1) @ invV).reshape((-1,))
 
         assert extrap_neg.dtype == build_dtype
         assert extrap_pos.dtype == build_dtype
@@ -169,9 +165,7 @@ class DFROperators:
                     setattr(self, name, value.astype(self.dtype))
 
         if check_skewcentrosymmetry(self.diff_ext) is False:
-            raise ValueError(
-                "The stored differentiation matrix lost skew-centrosymmetry during precision conversion"
-            )
+            raise ValueError("The stored differentiation matrix lost skew-centrosymmetry during precision conversion")
 
         assert self.extrap_x.dtype == self.dtype
         assert self.extrap_y.dtype == self.dtype
@@ -212,9 +206,7 @@ class DFROperators:
         modes = torch.arange(geom.num_solpts, dtype=build_dtype) / (geom.num_solpts - 1)
         attenuation = torch.ones_like(modes)
         filtered = modes > cutoff
-        attenuation[filtered] = torch.exp(
-            -strength * ((modes[filtered] - cutoff) / (1.0 - cutoff)) ** order
-        )
+        attenuation[filtered] = torch.exp(-strength * ((modes[filtered] - cutoff) / (1.0 - cutoff)) ** order)
 
         vandermonde = legvander(geom.solutionPoints, geom.num_solpts - 1).astype(build_dtype)
         filter_1d = vandermonde @ torch.diag(attenuation) @ torch.linalg.inv(vandermonde)
