@@ -1,4 +1,5 @@
-"""The compute device: where tensors live (CPU or a specific GPU) and the MPI communicator.
+"""The context of a simulation: the device on which the model runs (CPU/GPU), the MPI communicator and other
+information related to the execution environment.
 
 Now that the whole model is written directly against PyTorch there is a single device type. This
 object no longer abstracts an array module; it just holds the process's ``comm``, the torch device
@@ -15,7 +16,7 @@ import torch
 
 from .wx_mpi import split_nodes
 
-__all__ = ["Device", "PytorchDevice"]
+__all__ = ["Context"]
 
 # WxFactory speaks NumPy-flavoured method names in a few places; make torch tensors answer to them
 # too, so the same call works whether an array happens to be a tensor or a host NumPy array.
@@ -28,7 +29,7 @@ def _differentiable_requested() -> bool:
     return os.environ.get("WX_FACTORY_DIFFERENTIABLE", "").lower() in ("1", "true", "yes", "on")
 
 
-class Device:
+class Context:
     """The PyTorch compute device and its MPI communicator."""
 
     _default: Self = None
@@ -91,11 +92,7 @@ class Device:
         return intervals
 
     @staticmethod
-    def get_default() -> "Device":
-        if Device._default is None:
-            Device._default = Device(MPI.COMM_WORLD)
-        return Device._default
-
-
-# Historical name; there is only one device type now.
-PytorchDevice = Device
+    def get_default() -> "Context":
+        if Context._default is None:
+            Context._default = Context(MPI.COMM_WORLD)
+        return Context._default

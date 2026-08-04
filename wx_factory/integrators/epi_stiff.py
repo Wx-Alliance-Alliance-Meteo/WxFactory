@@ -13,8 +13,10 @@ from .srerk import alpha_coeff
 
 
 class EpiStiff(Integrator):
-    def __init__(self, param: Configuration, order: int, rhs, init_method=None, init_substeps: int = 1, *, device=None):
-        super().__init__(param, device=device)
+    def __init__(
+        self, param: Configuration, order: int, rhs, init_method=None, init_substeps: int = 1, *, context=None
+    ):
+        super().__init__(param, context=context)
         self.rhs = rhs
         self.tol = param.tolerance
         self.krylov_size = 1
@@ -38,7 +40,7 @@ class EpiStiff(Integrator):
         if init_method or self.n_prev == 0:
             self.init_method = init_method
         else:
-            self.init_method = Epi(param, 2, rhs, device=self.device)
+            self.init_method = Epi(param, 2, rhs, context=self.context)
 
         self.init_substeps = init_substeps
 
@@ -85,7 +87,7 @@ class EpiStiff(Integrator):
                 vec,
                 self.tol,
                 self.krylov_mmax,
-                self.device,
+                self.context,
                 krylov_minit=self.krylov_size if use_recycled_size else None,
                 krylov_mmin=16 if use_recycled_size else None,
                 exode_method=self.exode_method,
@@ -108,7 +110,7 @@ class EpiStiff(Integrator):
 
 
 def _make_epi_stiff_factory(order):
-    return lambda cfg, rhs, prec, dev: EpiStiff(cfg, order, rhs.full, init_substeps=10, device=dev)
+    return lambda cfg, rhs, prec, context: EpiStiff(cfg, order, rhs.full, init_substeps=10, context=context)
 
 
 REGISTRY = {f"epi_stiff{o}": _make_epi_stiff_factory(o) for o in range(2, 10)}

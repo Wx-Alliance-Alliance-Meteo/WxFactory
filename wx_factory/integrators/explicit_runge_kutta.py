@@ -70,7 +70,6 @@ class RungeKutta:
         atol: float = 1e-6,
         first_step: Optional[float] = None,
         controller: Union[str, Tuple[float, float, float, float], None] = None,
-        device=None,
     ):
         """
         Initialize the Runge-Kutta solver.

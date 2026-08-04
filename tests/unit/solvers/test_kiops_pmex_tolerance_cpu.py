@@ -6,7 +6,7 @@ from mpi4py import MPI
 from torch import Tensor
 from wx_test import WxTestCase
 
-from wx_factory.device import PytorchDevice
+from wx_factory.context import Context
 from wx_factory.solvers.kiops import kiops
 from wx_factory.solvers.pmex import pmex
 
@@ -18,7 +18,7 @@ class KiopsPmexToleranceCpuTestCases(WxTestCase):
     def setUp(self) -> None:
         super().setUp()
 
-        self.cpu_device = PytorchDevice(MPI.COMM_WORLD, "cpu")
+        self.cpu_context = Context(self.comm, "cpu")
 
         seed: int = 5646459
         initial_matrix_size: int = 64
@@ -35,7 +35,7 @@ class KiopsPmexToleranceCpuTestCases(WxTestCase):
             self.rand,
             rand_min,
             rand_max,
-            [self.cpu_device, self.cpu_device],
+            [self.cpu_context, self.cpu_context],
         )
 
     def test_compare_kiops_pmex(self):
@@ -43,10 +43,10 @@ class KiopsPmexToleranceCpuTestCases(WxTestCase):
             return v
 
         w1, _ = kiops(
-            self.cpu_device.tensor([1.0]), matvec_handle, self.kiops_matrix, self.tolerance, device=self.cpu_device
+            self.cpu_context.tensor([1.0]), matvec_handle, self.kiops_matrix, self.tolerance, context=self.cpu_context
         )
         w2, _ = pmex(
-            self.cpu_device.tensor([1.0]), matvec_handle, self.pmex_matrix, self.tolerance, device=self.cpu_device
+            self.cpu_context.tensor([1.0]), matvec_handle, self.pmex_matrix, self.tolerance, context=self.cpu_context
         )
 
         shape = w1.shape

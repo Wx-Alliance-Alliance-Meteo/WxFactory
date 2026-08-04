@@ -4,7 +4,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from ..device import Device
+from ..context import Context
 from .exode import exode
 from .kiops import kiops
 from .pmex import pmex
@@ -19,7 +19,7 @@ class ExponentialSolverRequest:
     vectors: Any
     tolerance: float
     krylov_mmax: int
-    device: Device
+    context: Context
     krylov_minit: int | None = None
     krylov_mmin: int | None = None
     exode_method: str = "BS3(2)"
@@ -69,7 +69,7 @@ def resolve_exponential_solver(name: str) -> ExponentialSolver:
 
 def _krylov_result(value, stats, request: ExponentialSolverRequest, label: str) -> ExponentialSolverResult:
     result = ExponentialSolverResult(value, stats, stats[2], stats[1], stats[4], stats[5])
-    if request.announce and request.device.comm.rank == 0:
+    if request.announce and request.context.comm.rank == 0:
         print(
             f"{label} converged at iteration {result.iterations} "
             f"(using {stats[0]} internal substeps and {result.rejected_steps} rejected expm) "
@@ -84,7 +84,7 @@ def _krylov_kwargs(request: ExponentialSolverRequest) -> dict[str, Any]:
         "tol": request.tolerance,
         "mmax": request.krylov_mmax,
         "task1": False,
-        "device": request.device,
+        "context": request.context,
     }
     if request.krylov_minit is not None:
         kwargs["m_init"] = request.krylov_minit
@@ -130,10 +130,10 @@ def _solve_exode(request: ExponentialSolverRequest) -> ExponentialSolverResult:
         atol=request.tolerance,
         task1=False,
         verbose=False,
-        device=request.device,
+        context=request.context,
     )
     result = ExponentialSolverResult(value, stats, stats[0], stats[1], stats[3], None)
-    if request.announce and request.device.comm.rank == 0:
+    if request.announce and request.context.comm.rank == 0:
         print(
             f"EXODE converged at iteration {result.iterations} with {result.rejected_steps} rejected steps "
             f"(local error {result.local_error:.2e})",

@@ -1,16 +1,13 @@
-import torch
 import math
+
 import numpy
 from numpy.typing import NDArray
-
-from mpi4py import MPI
+import torch
 
 from .cubed_sphere import CubedSphere
 from .sphere import cart2sph
 
 # For type hints
-from ..common import Configuration
-from ..device import Device
 from ..process_topology import ProcessTopology
 
 

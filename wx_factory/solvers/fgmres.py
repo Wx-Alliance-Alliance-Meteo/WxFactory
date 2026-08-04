@@ -1,11 +1,11 @@
 from collections.abc import Callable
 from time import time
+from typing import Optional
 
-from numpy.typing import NDArray
 import torch
 from torch import Tensor
 
-from ..device import Device
+from ..context import Context
 from .dense import solve_triangular
 from .global_operations import global_allreduce, global_dotprod, global_norm
 
@@ -14,7 +14,7 @@ __all__ = ["fgmres"]
 MatvecOperator = Callable[[Tensor], Tensor]
 
 
-def _ortho_1_sync_igs(Q: NDArray, R: NDArray, T: NDArray, K: NDArray, j: int, device: Device):
+def _ortho_1_sync_igs(Q: Tensor, R: Tensor, T: Tensor, K: Tensor, j: int, context: Context):
     """Orthonormalization process that only requires a single synchronization step.
 
     This processes row j of matrix Q (starting from 1) so that the first j rows are orthogonal, and the first (j-1)
@@ -41,10 +41,10 @@ def _ortho_1_sync_igs(Q: NDArray, R: NDArray, T: NDArray, K: NDArray, j: int, de
     qd = Q.dtype
 
     # Accumulate the reduction operand in the higher precision.
-    local_tmp = Q[:j, :].astype(acc) @ Q[j - 2 : j, :].astype(acc).T
+    local_tmp = Q[:j, :].to(acc) @ Q[j - 2 : j, :].to(acc).T
 
-    device.synchronize()
-    global_tmp = global_allreduce(local_tmp, device)  # Expensive step on multi-node execution
+    context.synchronize()
+    global_tmp = global_allreduce(local_tmp, context)  # Expensive step on multi-node execution
     small_tmp = global_tmp[: j - 2, 0]
 
     R[: j - 1, j - 1] = global_tmp[: j - 1, 1]
@@ -65,8 +65,8 @@ def _ortho_1_sync_igs(Q: NDArray, R: NDArray, T: NDArray, K: NDArray, j: int, de
         R[: j - 2, j - 2] = K[: j - 2, j - 3] + r3
         K[: j - 1, j - 2] = (R[: j - 1, j - 1] - (R[: j - 1, 1 : j - 1] @ r3)) / norm
 
-        Q[j - 2, :] -= Q[: j - 2, :].T @ small_tmp.astype(qd)
-        Q[j - 1, :] -= Q[: j - 2, :].T @ R[: j - 2, j - 1].astype(qd)  # Important here
+        Q[j - 2, :] -= Q[: j - 2, :].T @ small_tmp.to(qd)
+        Q[j - 1, :] -= Q[: j - 2, :].T @ R[: j - 2, j - 1].to(qd)  # Important here
 
     else:
         K[: j - 1, j - 2] = R[: j - 1, j - 1] / norm
@@ -112,7 +112,7 @@ def fgmres(
     hegedus: bool = False,
     verbose: int = 0,
     prefix: str = "",
-    device: Device | None = None,
+    context: Optional[Context] = None,
 ) -> tuple[Tensor, float, float, int, int, list[tuple[float, float, float]]]:
     """
     Solve the given linear system (Ax = b) for x, using the FGMRES algorithm.
@@ -133,9 +133,9 @@ def fgmres(
     :return: 4. A flag that indicates the convergence status (0 if converged, -1 if not)
     :return: 5. The list of residuals at every iteration
     """
-    if device is None:
-        device = Device.get_default()
-    comm = device.comm
+    if context is None:
+        context = Context.get_default()
+    comm = context.comm
 
     if len(b) <= restart:
         raise ValueError("The b vector should be longer than the number of restart")
@@ -154,10 +154,10 @@ def fgmres(
     if x0 is None:
         x = torch.zeros_like(b)
     else:
-        x = x0.copy()
+        x = x0.clone()
 
     # Check for early stop
-    norm_b = global_norm(b, device=device)
+    norm_b = global_norm(b, context=context)
     if norm_b == 0.0:
         return torch.zeros_like(b), 0.0, 0.0, 0, 0, [(0.0, time() - t_start, 0.0)]
 
@@ -175,7 +175,7 @@ def fgmres(
             Ax0 = A(x)
 
     r = b - Ax0
-    norm_r = global_norm(r, device=device)
+    norm_r = global_norm(r, context=context)
 
     residuals.append(((norm_r / norm_b).item(), time() - t_start, 0.0))
 
@@ -201,7 +201,7 @@ def fgmres(
         V[0, :] = r / norm_r
         Z[0, :] = preconditioner(V[0, :])
         V[1, :] = A(Z[0, :])
-        v_norm = _ortho_1_sync_igs(V, R, T, K, 2, device)
+        v_norm = _ortho_1_sync_igs(V, R, T, K, 2, context)
 
         # This is the RHS vector for the problem in the Krylov Space (accumulator precision)
         g = torch.zeros(num_dofs, dtype=acc_dtype)
@@ -214,7 +214,7 @@ def fgmres(
             Z[inner + 1, :] = preconditioner(V[inner + 1])
 
             V[inner + 2, :] = A(Z[inner + 1, :] / v_norm) * v_norm
-            v_norm = _ortho_1_sync_igs(V, R, T, K, inner + 3, device)
+            v_norm = _ortho_1_sync_igs(V, R, T, K, inner + 3, context)
             H[inner, : inner + 2] = R[: inner + 2, inner + 1]
             Z[inner + 1, :] /= v_norm
 
@@ -259,7 +259,7 @@ def fgmres(
         x = x + update
         r = b - A(x)
 
-        norm_r = global_norm(r, device=device)
+        norm_r = global_norm(r, context=context)
 
         residuals.append(((norm_r / norm_b).item(), time() - t_start, 0.0))
         if verbose > 0 and comm.rank == 0:
@@ -271,18 +271,18 @@ def fgmres(
             change = torch.max(torch.abs(update[indices] / x[indices]))
             if change < 1e-12:
                 # No change, halt
-                return x, norm_r, norm_b, niter, -1, residuals
+                return x, norm_r.item(), norm_b.item(), niter, -1, residuals
 
         # test for convergence
         if norm_r < tol_relative:
-            return x, norm_r, norm_b, niter, 0, residuals
+            return x, norm_r.item(), norm_b.item(), niter, 0, residuals
 
     # end outer loop
 
     flag = 0
     if norm_r >= tol_relative:
         flag = -1
-    return x, norm_r, norm_b, niter, flag, residuals
+    return x, norm_r.item(), norm_b.item(), niter, flag, residuals
 
 
 def _apply_givens(Q, v, k):

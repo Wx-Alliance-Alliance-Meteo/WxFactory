@@ -5,8 +5,8 @@ from .integrator import Integrator, SolverInfo
 
 
 class Tvdrk3(Integrator):
-    def __init__(self, param: Configuration, rhs: Callable, *, device=None):
-        super().__init__(param, device=device)
+    def __init__(self, param: Configuration, rhs: Callable, *, context=None):
+        super().__init__(param, context=context)
         self.rhs = rhs
 
     def __step__(self, Q, dt):
@@ -19,5 +19,5 @@ class Tvdrk3(Integrator):
 
 
 REGISTRY = {
-    "tvdrk3": lambda cfg, rhs, prec, dev: Tvdrk3(cfg, rhs.full, device=dev),
+    "tvdrk3": lambda cfg, rhs, prec, ctx: Tvdrk3(cfg, rhs.full, context=ctx),
 }

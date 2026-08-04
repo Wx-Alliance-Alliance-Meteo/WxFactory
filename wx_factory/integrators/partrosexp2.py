@@ -40,10 +40,10 @@ class PartRosExp2(Integrator):
         rhs_imp: Callable,
         rhs_exp: Callable,
         *,
-        device=None,
+        context=None,
         preconditioner=None,
     ):
-        super().__init__(param, device=device, preconditioner=preconditioner)
+        super().__init__(param, context=context, preconditioner=preconditioner)
         self.rhs_full = rhs_full
         self.rhs_imp = rhs_imp  # Vertically stiff partition.
         self.rhs_exp = rhs_exp  # Complementary partition.
@@ -68,7 +68,7 @@ class PartRosExp2(Integrator):
                 vec,
                 self.tol,
                 self.krylov_mmax,
-                self.device,
+                self.context,
                 krylov_minit=(self.krylov_m or 10) if pmex_family else self.krylov_size,
                 krylov_mmin=16 if solver in ("pmex_ne", "kiops") else 10,
                 exode_method=self.exode_method,
@@ -132,7 +132,7 @@ class PartRosExp2(Integrator):
         time_imp = time() - tic
 
         self.solver_info = SolverInfo(0, time_imp, 1, [])
-        if self.device.comm.rank == 0:
+        if self.context.comm.rank == 0:
             print(
                 f"PartRosExp2 direct column solve {time_imp:.3f} s ; exponential {time_exp:.3f} s",
                 flush=True,
@@ -142,7 +142,7 @@ class PartRosExp2(Integrator):
 
 
 REGISTRY = {
-    "partrosexp2": lambda cfg, rhs, prec, dev: PartRosExp2(
-        cfg, rhs.full, rhs.implicit, rhs.explicit, preconditioner=prec, device=dev
+    "partrosexp2": lambda cfg, rhs, prec, ctx: PartRosExp2(
+        cfg, rhs.full, rhs.implicit, rhs.explicit, preconditioner=prec, context=ctx
     ),
 }

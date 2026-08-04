@@ -13,14 +13,14 @@ from wx_factory.solvers.exponential_solver import (
 
 class ExponentialSolverRegistryTestCases(WxTestCase):
     def setUp(self):
-        self.device = SimpleNamespace(comm=SimpleNamespace(rank=1))
+        self.context = SimpleNamespace(comm=SimpleNamespace(rank=1))
         self.request = ExponentialSolverRequest(
             [1.0],
             lambda value: value,
             object(),
             tolerance=1e-6,
             krylov_mmax=42,
-            device=self.device,
+            context=self.context,
             krylov_minit=7,
             krylov_mmin=5,
             announce=False,
@@ -53,7 +53,7 @@ class ExponentialSolverRegistryTestCases(WxTestCase):
             tol=1e-6,
             mmax=42,
             task1=False,
-            device=self.device,
+            context=self.context,
             m_init=7,
             mmin=5,
         )
@@ -67,7 +67,7 @@ class ExponentialSolverRegistryTestCases(WxTestCase):
             self.request.vectors,
             1e-6,
             42,
-            self.device,
+            self.context,
             announce=False,
         )
 
@@ -82,7 +82,7 @@ class ExponentialSolverRegistryTestCases(WxTestCase):
             self.request.vectors,
             1e-6,
             42,
-            self.device,
+            self.context,
             announce=False,
         )
         with self.assertRaisesRegex(ValueError, "exactly one output time"):
@@ -99,4 +99,4 @@ class ExponentialSolverRegistryTestCases(WxTestCase):
             verbose_solver=0,
         )
         with self.assertRaisesRegex(ValueError, "not registered"):
-            RosExp2(config, lambda value: value, lambda value: value, device=self.device)
+            RosExp2(config, lambda value: value, lambda value: value, context=self.context)

@@ -1,9 +1,10 @@
 import torch
+from torch import Tensor
+
 from mpi_test import run_test_on_x_process
-from numpy import ndarray
 from wx_test import WxTestCase
 
-from wx_factory.device import PytorchDevice
+from wx_factory.context import Context
 from wx_factory.solvers.fgmres import fgmres
 
 
@@ -18,14 +19,14 @@ class FgmresMpiTestCases(WxTestCase):
 
     def test_fgmres_mpi_2_processes(self):
         comm = run_test_on_x_process(self, 2)
-        device = PytorchDevice(comm, "cpu")
+        context = Context(comm, "cpu")
         comm2 = comm.Split(comm.rank)
-        device2 = PytorchDevice(comm2, "cpu")
+        context2 = Context(comm2, "cpu")
 
         size: int = comm.size * self.matrix_size_multiplier
 
-        full_matrix: ndarray = torch.empty((size, size), dtype=float)
-        full_vector: ndarray = torch.empty(size, dtype=float)
+        full_matrix = torch.empty((size, size), dtype=float)
+        full_vector = torch.empty(size, dtype=float)
 
         for i in range(size):
             full_vector[i] = i
@@ -34,17 +35,17 @@ class FgmresMpiTestCases(WxTestCase):
 
         from_index: int = comm.rank * self.matrix_size_multiplier
         to_index: int = (comm.rank + 1) * self.matrix_size_multiplier
-        matrix: ndarray = full_matrix[:, from_index:to_index].copy()
-        vector: ndarray = full_vector[from_index:to_index].copy()
+        matrix = full_matrix[:, from_index:to_index].clone()
+        vector = full_vector[from_index:to_index].clone()
 
-        def full_matvec_handle(v: ndarray) -> ndarray:
+        def full_matvec_handle(v: Tensor) -> Tensor:
             return full_matrix @ v
 
-        def partial_matvec_handle(v: ndarray) -> ndarray:
+        def partial_matvec_handle(v: Tensor) -> Tensor:
             return matrix @ v
 
-        x1, *_ = fgmres(partial_matvec_handle, vector, tol=self.tolerance, device=device)
-        x2, *_ = fgmres(full_matvec_handle, full_vector, tol=self.tolerance, device=device2)
+        x1, *_ = fgmres(partial_matvec_handle, vector, tol=self.tolerance, context=context)
+        x2, *_ = fgmres(full_matvec_handle, full_vector, tol=self.tolerance, context=context2)
 
         """diff: float = torch.linalg.norm(x1 - x2[0, from_index:to_index]).item()
 

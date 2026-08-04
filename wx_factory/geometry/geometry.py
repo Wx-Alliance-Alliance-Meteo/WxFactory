@@ -7,7 +7,7 @@ import numpy
 from numpy.typing import NDArray
 import sympy
 
-from ..device import Device
+from ..context import Context
 from .quadrature import gauss_legendre
 
 
@@ -38,16 +38,16 @@ class Geometry(ABC):
         num_elements_horizontal: int,
         num_elements_vertical: int,
         total_num_elements_horizontal: int,
-        device: Device,
-        verbose: Optional[bool] = False,
+        context: Context,
+        verbose: bool | None = False,
     ) -> None:
-        self.device = device
-        self.dtype = self.device.real_dtype
+        self.context = context
+        self.dtype = self.context.real_dtype
 
         ## Element properties -- solution and extension points
         # Gauss-Legendre solution points
         solutionPoints_sym, solutionPoints, glweights = gauss_legendre(num_solpts)
-        if verbose and self.device.comm.rank == 0:
+        if verbose and self.context.comm.rank == 0:
             print(f"Solution points : {solutionPoints}")
             print(f"GL weights : {glweights}")
 

@@ -14,8 +14,8 @@ class Ros2(Integrator):
     A: MatvecOpRat
     b: numpy.ndarray
 
-    def __init__(self, param: Configuration, rhs_handle: Callable, *, device=None, preconditioner=None) -> None:
-        super().__init__(param, device=device, preconditioner=preconditioner)
+    def __init__(self, param: Configuration, rhs_handle: Callable, *, context=None, preconditioner=None) -> None:
+        super().__init__(param, context=context, preconditioner=preconditioner)
         self.rhs_handle = rhs_handle
         self.tol = param.tolerance
         self.gmres_restart = param.gmres_restart
@@ -26,7 +26,7 @@ class Ros2(Integrator):
         self.A = MatvecOpRat(dt, Q, rhs, self.rhs_handle)
         self.b = self.A(self.Q_flat) + torch.ravel(rhs) * dt
 
-    def __step__(self, Q: numpy.ndarray, dt: float):
+    def __step__(self, Q: torch.Tensor, dt: float):
         maxiter = 20000 // self.gmres_restart
         if self.preconditioner is not None:
             maxiter = 400 // self.gmres_restart
@@ -44,7 +44,7 @@ class Ros2(Integrator):
 
         self.solver_info = SolverInfo(flag, t1 - t0, num_iter, residuals)
 
-        if self.device.comm.rank == 0:
+        if self.context.comm.rank == 0:
             result_type = "convergence" if flag == 0 else "stagnation/interruption"
             print(
                 f"FGMRES {result_type} at iteration {num_iter} in {t1 - t0:4.3f} s to a solution with"
@@ -57,5 +57,5 @@ class Ros2(Integrator):
 
 
 REGISTRY = {
-    "ros2": lambda cfg, rhs, prec, dev: Ros2(cfg, rhs.full, preconditioner=prec, device=dev),
+    "ros2": lambda cfg, rhs, prec, ctx: Ros2(cfg, rhs.full, preconditioner=prec, context=ctx),
 }

@@ -6,11 +6,13 @@ from typing import Callable, Optional, Tuple
 
 from mpi4py import MPI
 from numpy.typing import NDArray
+import torch
+from torch import Tensor
 
-from .device import Device
+from .context import Context
 from .wx_mpi import SingleProcess, Conditional, split_nodes
 
-ExchangedVector = Tuple[NDArray, ...] | NDArray
+ExchangedVector = Tuple[Tensor, ...] | Tensor
 
 SOUTH = 0
 NORTH = 1
@@ -50,11 +52,11 @@ class ProcessTopology:
          +---+---+---+---+
     """
 
-    def __init__(self, device: Device, rank: Optional[int] = None, comm_in: MPI.Comm = MPI.COMM_WORLD):
+    def __init__(self, context: Context, rank: Optional[int] = None):
         """Create a cube-sphere process topology.
 
-        :param device: Device on which MPI exchanges are to be made, like a CPU or a GPU.
-        :type device: Device
+        :param context: Context in which MPI exchanges are to be made.
+        :type context: Context
         :param rank: Rank of the tile the topology will manage. This is useful for creating a tile with a
                     rank different from the process rank, for debugging purposes.
         :type rank: int, optional
@@ -63,14 +65,14 @@ class ProcessTopology:
 
         """
 
-        self.device = device
+        self.context = context
 
-        self.node_comm, self.node_id = split_nodes(comm_in)
+        self.node_comm, self.node_id = split_nodes(context.comm)
 
         # Reorder processes, grouping them by node (processes on the same node will have contiguous ranks)
         # This one is named with an underscore because it is internal to a ProcessTopology object, it will differ
         # from the communicator used by a Simulation
-        self._comm = comm_in.Split(0, self.node_id)
+        self._comm = context.comm.Split(0, self.node_id)
 
         self.size = self._comm.size
         self._rank = self._comm.rank if rank is None else rank
@@ -329,8 +331,6 @@ class ProcessTopology:
         boundary_shape: Tuple[int, ...],
         flip_dim: int | Tuple[int, ...] = -1,
     ):
-        rank = self.device.comm.rank
-
         base_shape = get_base_shape(south.shape, boundary_shape)
         send_buffer = torch.empty((4,) + base_shape, dtype=south[0].dtype)
 
@@ -383,7 +383,7 @@ class ProcessTopology:
 
         send_info = self.prepare_scalar_buffer(south, north, west, east, boundary_shape, flip_dim)
 
-        self.device.synchronize()  # When using GPU
+        self.context.synchronize()  # When using GPU
 
         return self.initiate_transfers([send_info])[0]
         # # Initiate MPI transfer
@@ -394,8 +394,8 @@ class ProcessTopology:
         north: ExchangedVector,
         west: ExchangedVector,
         east: ExchangedVector,
-        boundary_sn: NDArray,
-        boundary_we: NDArray,
+        boundary_sn: Tensor,
+        boundary_we: Tensor,
         flip_dim: int | Tuple[int, ...] = -1,
         covariant: bool = False,
     ):
@@ -461,7 +461,7 @@ class ProcessTopology:
         """
         send_info = self.prepare_vector_buffer(south, north, west, east, boundary_sn, boundary_we, flip_dim, covariant)
 
-        self.device.synchronize()  # When using GPU
+        self.context.synchronize()  # When using GPU
 
         return self.initiate_transfers([send_info])[0]
 
@@ -502,7 +502,7 @@ class ProcessTopology:
                     send_buffer[i, :], flip_dim if isinstance(flip_dim, tuple) else (flip_dim,)
                 )
 
-        self.device.synchronize()  # When using GPU
+        self.context.synchronize()  # When using GPU
 
         return self.initiate_transfers([(send_buffer, south[0].shape, True)], recv_buffer=recv_buffer)[0]
 
@@ -593,7 +593,7 @@ class ProcessTopology:
         panels = None
         if self.panel_roots_comm.rank == 0:
             panels = torch.empty((6,) + panel.shape, dtype=panel.dtype)
-        self.device.synchronize()
+        self.context.synchronize()
         self.panel_roots_comm.Gather(panel, panels, root=0)
 
         # Only the root of the entire cubesphere topology with continue
@@ -648,7 +648,7 @@ class ProcessTopology:
 
             # Create the receive buffer + fill it
             panel = torch.empty(panel_params[0], dtype=panel_params[1])
-            self.device.synchronize()
+            self.context.synchronize()
             self.panel_roots_comm.Scatter(field, panel, root=0)
 
             # Tile == panel if we only have 1 proc per panel

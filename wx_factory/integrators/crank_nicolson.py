@@ -6,8 +6,8 @@ from ..solvers import newton_krylov
 
 
 class CrankNicolson(Integrator):
-    def __init__(self, param, rhs, *, device=None, preconditioner=None):
-        super().__init__(param, device=device, preconditioner=preconditioner)
+    def __init__(self, param, rhs, *, context=None, preconditioner=None):
+        super().__init__(param, context=context, preconditioner=preconditioner)
         self.rhs = rhs
         self.tol = param.tolerance
 
@@ -42,5 +42,7 @@ class CrankNicolson(Integrator):
 
 
 REGISTRY = {
-    "crank_nicolson": lambda cfg, rhs, prec, dev: CrankNicolson(cfg, rhs.full, preconditioner=prec, device=dev),
+    "crank_nicolson": lambda cfg, rhs, prec, context: CrankNicolson(
+        cfg, rhs.full, preconditioner=prec, context=context
+    ),
 }

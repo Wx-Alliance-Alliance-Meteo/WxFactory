@@ -22,7 +22,7 @@ from .output_cubesphere_fst import OutputCubesphereFst
 
 if TYPE_CHECKING:
     from ..common import Configuration
-    from ..device import Device
+    from ..context import Context
     from ..geometry import DFROperators, Geometry
 
 
@@ -35,7 +35,7 @@ class OutputContext:
     the cubed-sphere output managers."""
 
     config: "Configuration"
-    device: "Device"
+    context: "Context"
     geometry: "Geometry"
     operators: "DFROperators"
     metric: object = None
@@ -84,7 +84,7 @@ def _cubesphere_netcdf(ctx: "OutputContext") -> OutputManager:
         ctx.config,
         ctx.geometry,
         ctx.operators,
-        ctx.device,
+        ctx.context,
         ctx.metric,
         ctx.topography,
         ctx.dataset,
@@ -98,7 +98,7 @@ def _cubesphere_fst(ctx: "OutputContext") -> OutputManager:
         ctx.config,
         ctx.geometry,
         ctx.operators,
-        ctx.device,
+        ctx.context,
         ctx.metric,
         ctx.topography,
         ctx.ptopo,
@@ -108,4 +108,4 @@ def _cubesphere_fst(ctx: "OutputContext") -> OutputManager:
 @register_output("cartesian")
 def _cartesian_images(ctx: "OutputContext") -> OutputManager:
     """Cartesian slabs are visualised as x-z images regardless of the requested output_format."""
-    return OutputCartesian(ctx.config, ctx.geometry, ctx.operators, ctx.device)
+    return OutputCartesian(ctx.config, ctx.geometry, ctx.operators, ctx.context)

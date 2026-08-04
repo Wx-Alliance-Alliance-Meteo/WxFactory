@@ -82,10 +82,10 @@ class FlatTileTopology:
     without the cubed sphere's 6-panel MPI topology. Multi-rank cartesian decomposition is future work.
     """
 
-    def __init__(self, device, lateral_boundary: str, comm: MPI.Comm = MPI.COMM_WORLD):
-        self.device = device
-        self._comm = comm
-        self.size = comm.size
+    def __init__(self, context, lateral_boundary: str):
+        self.context = context
+        self._comm = context.comm
+        self.size = context.comm.size
         # Trivial single-tile decomposition: the whole horizontal domain is this one tile.
         self.num_lines_per_panel = 1
         self.num_pe_per_panel = 1
@@ -93,7 +93,7 @@ class FlatTileTopology:
         self.my_row = 0
         self.my_col = 0
         self.my_rank_in_panel = 0
-        self.panel_comm = comm
+        self.panel_comm = context.comm
         self._exchange = SingleTileLateralExchange(lateral_boundary)
 
     def start_exchange_euler_3d(self, *args, **kwargs):

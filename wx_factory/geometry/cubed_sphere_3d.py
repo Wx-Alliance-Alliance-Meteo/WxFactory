@@ -19,7 +19,6 @@ if TYPE_CHECKING:
 
 
 class CubedSphere3D(CubedSphere):
-
     # Marks a 3D Euler DG grid, so operator / output code can distinguish 3D from 2D without
     # depending on this concrete class (Cartesian3D sets the same flag without inheriting).
     is_3d_euler_grid = True

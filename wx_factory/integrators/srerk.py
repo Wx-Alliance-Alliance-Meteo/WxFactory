@@ -59,14 +59,14 @@ class Srerk(Integrator):
         jac: Callable = None,
         nodes: Optional[List] = None,
         *,
-        device=None,
+        context=None,
     ):
         """
         If the nodes are NOT specified, return the SRERK method of the specified order with min error terms
         If the nodes are specified, return the SRERK method with these nodes and ignore the 'order' parameter
         """
 
-        super().__init__(param, device=device)
+        super().__init__(param, context=context)
         self.rhs = rhs
         self.jac = jac
         self.tol = param.tolerance
@@ -93,7 +93,7 @@ class Srerk(Integrator):
                 vec,
                 self.tol,
                 self.krylov_mmax,
-                self.device,
+                self.context,
                 krylov_minit=self.krylov_size,
                 krylov_mmin=16,
             )
@@ -138,7 +138,7 @@ class Srerk(Integrator):
 
 
 def _make_srerk_factory(order):
-    return lambda cfg, rhs, prec, dev: Srerk(cfg, order, rhs.full, device=dev)
+    return lambda cfg, rhs, prec, ctx: Srerk(cfg, order, rhs.full, context=ctx)
 
 
 REGISTRY = {f"srerk{o}": _make_srerk_factory(o) for o in range(3, 10)}

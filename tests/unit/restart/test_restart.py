@@ -72,7 +72,7 @@ class MultiProcRestartTestCase(MpiTestCase):
         self.schema = ConfigurationSchema(do_once(readfile, default_schema_path, comm=self.comm))
         self.base_config = Configuration(do_once(readfile, config_path, comm=self.comm), self.schema)
         self.base_config.pytorch_device = self.device_name
-        self.base_sim = Simulation(self.base_config, comm=self.comm, device=self.device)
+        self.base_sim = Simulation(self.base_config, comm=self.comm, context=self.context)
 
         self.smaller_comm = self.comm.Split(self.comm.rank < 6, self.comm.rank)
         if self.comm.rank >= 6:

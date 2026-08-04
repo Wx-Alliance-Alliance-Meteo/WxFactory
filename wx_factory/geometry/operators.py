@@ -1,14 +1,15 @@
 import math
-from typing import TYPE_CHECKING, Self, TypeVar
+from typing import Optional, Self, TYPE_CHECKING, TypeVar
 
 import numpy
 import numpy.linalg
+from numpy.typing import NDArray
 import sympy
 import torch
-from numpy.typing import DTypeLike, NDArray
+from torch import Tensor
 
 from ..common.matmul import kron
-from ..device import Device
+from ..context import Context
 from .cubed_sphere_3d import CubedSphere3D
 from .geometry import Geometry
 
@@ -28,7 +29,7 @@ class DFROperators:
        * Correction matrices: `correction`, `correction_tr`.
     """
 
-    def __init__(self, grd: Geometry, device: Device, dtype: DTypeLike = None):
+    def __init__(self, grd: Geometry, context: Context, dtype: Optional[torch.dtype] = None):
         """Initialize the Direct Flux Reconstruction operators (matrices) based on input grid parameters.
 
         Parameters
@@ -36,20 +37,20 @@ class DFROperators:
         grd : Geometry
            Underlying grid, which must define `solutionPoints`, `solutionPoints_sym`, `extension`, `extension_sym` and
            `num_solpts` as member variables
-        device : Device
-           Device on which the operator tensors are created.
+        context : Context
+           Context object containing the device, MPI communicator and other configuration information.
         dtype : DTypeLike, optional
-           Tensor dtype. Defaults to the device's working real dtype.
+           Tensor dtype. Defaults to the context's working real dtype.
         """
 
-        self.dtype = device.real_dtype if dtype is None else dtype
+        self.dtype = context.real_dtype if dtype is None else dtype
         build_dtype = torch.float64
 
         # Build Vandermonde matrix to transform the modal representation to the (interior)
         # nodal representation.  Always construct the operators in double precision, then cast the
         # completed matrices once to the configured working precision.  In particular, this keeps
         # roundoff from the Vandermonde inversion out of the stored float32 coefficients.
-        V = legvander(grd.solutionPoints, grd.num_solpts - 1).astype(build_dtype)
+        V = legvander(grd.solutionPoints, grd.num_solpts - 1).to(build_dtype)
         # Invert the matrix to transform from interior nodes to modes
         invV = torch.linalg.inv(V)
 
@@ -72,7 +73,7 @@ class DFROperators:
         self.extrap_down = extrap_neg
         self.extrap_up = extrap_pos
 
-        V = legvander(grd.solutionPoints, grd.num_solpts - 1).astype(build_dtype)
+        V = legvander(grd.solutionPoints, grd.num_solpts - 1).to(build_dtype)
         invV = torch.linalg.inv(V)
         feye = torch.eye(grd.num_solpts, dtype=build_dtype)
         feye[-1, -1] = 0.0
@@ -561,13 +562,13 @@ class DFROperators:
     # Take the gradient of one or more variables, with output shape [3,nvars,ni,nj,nk]
     def grad(
         self: Self,
-        field: NDArray[T],
-        itf_i: NDArray[T],
-        itf_j: NDArray[T],
-        itf_k: NDArray[T],
+        field: Tensor,
+        itf_i: Tensor,
+        itf_j: Tensor,
+        itf_k: Tensor,
         geom: CubedSphere3D,
-        out: NDArray[T] | None = None,
-    ) -> NDArray[T]:
+        out: Tensor | None = None,
+    ) -> Tensor:
         """Take the gradient of one or more variables, given interface values (not element extensions)
 
         This function takes the gradient (covariant derivative) along i, j, and k of each of the input
@@ -577,24 +578,24 @@ class DFROperators:
 
         Parameters:
         -----------
-        field: numpy.ndarray (shape [neqs,nk,nj,ni] or [nk,nj,ni])
+        field: torch.Tensor (shape [neqs,nk,nj,ni] or [nk,nj,ni])
            Input variable, on element-internal nodal points in the conventional lexical order.  If this
            field is a four-dimensional array, the first dimension is the one separating equations.
-        itf_i : numpy.ndarray (shape [...,nk,nj,nel_i])
+        itf_i : torch.Tensor (shape [...,nk,nj,nel_i])
            Values along the i-interface
-        itf_j : numpy.ndarray (shape [...,nk,nel_j,ni])
+        itf_j : torch.Tensor (shape [...,nk,nel_j,ni])
            Values along the j-interface
-        itf_k : numpy.ndarray (shape [...,nel_k,nj,ni])
+        itf_k : torch.Tensor (shape [...,nel_k,nj,ni])
            Values along the k-interface
         geom : Geometry
            Geometry object
-        out : NDArray | None
+        out : torch.Tensor | None
            Destination array for operation. If provided, should be a C-contiguous array
            with shape (3, neqs, nk, nj, ni).
 
         Returns:
         -------
-        grad : numpy.ndarray, shape [3,...]
+        grad : torch.Tensor, shape [3,...]
            Gradiant (covariant derivatives) of the input field
         """
         nk, nj, ni = field.shape[-3:]
@@ -803,7 +804,7 @@ def row_reduce(A: numpy.ndarray, ncols: int | None = None) -> numpy.ndarray:
     return A_rre
 
 
-def legvander(x: NDArray[numpy.float64], deg: int) -> NDArray[numpy.float64]:
+def legvander(x: Tensor, deg: int) -> Tensor:
     """
     NumPy's legvander, slightly modified to work with any array type.
 

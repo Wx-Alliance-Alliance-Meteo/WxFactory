@@ -4,12 +4,12 @@ import random
 from mpi4py import MPI
 from wx_test import WxTestCase
 
+from tests.unit import array_generator
 import tests.unit.common.config_pack
 import wx_factory.common.configuration
 import wx_factory.common.configuration_schema
+from wx_factory.context import Context
 import wx_factory.output.state
-from tests.unit import array_generator
-from wx_factory.device import PytorchDevice
 
 state_input_dir = "tests/data/unit/state_tests"
 state_tmp_dir = "tests/data/temp"
@@ -18,7 +18,7 @@ state_tmp_dir = "tests/data/temp"
 class StateTestCases(WxTestCase):
     def setUp(self):
         super().setUp()
-        self.cpu_device = PytorchDevice(MPI.COMM_WORLD, "cpu")
+        self.cpu_context = Context(self.comm, "cpu")
         if not os.path.exists(state_tmp_dir):
             os.mkdir(state_tmp_dir)
 
@@ -37,7 +37,7 @@ class StateTestCases(WxTestCase):
         seed: int = 5646459
         rand = random.Random(seed)
         number_of_data = 5
-        [arr] = array_generator.generate_vectors(number_of_data, rand, -10, 10, [self.cpu_device])
+        [arr] = array_generator.generate_vectors(number_of_data, rand, -10, 10, [self.cpu_context])
 
         conf = wx_factory.common.configuration.Configuration(config_text, schema)
 

@@ -7,8 +7,8 @@ from ..solvers import newton_krylov
 
 
 class Imex2(Integrator):
-    def __init__(self, param: Configuration, rhs_exp: Callable, rhs_imp: Callable, *, device=None):
-        super().__init__(param, device=device)
+    def __init__(self, param: Configuration, rhs_exp: Callable, rhs_imp: Callable, *, context=None):
+        super().__init__(param, context=context)
 
         self.rhs_exp = rhs_exp
         self.rhs_imp = rhs_imp
@@ -27,5 +27,5 @@ class Imex2(Integrator):
 
 
 REGISTRY = {
-    "imex2": lambda cfg, rhs, prec, dev: Imex2(cfg, rhs.explicit, rhs.implicit, device=dev),
+    "imex2": lambda cfg, rhs, prec, ctx: Imex2(cfg, rhs.explicit, rhs.implicit, context=ctx),
 }

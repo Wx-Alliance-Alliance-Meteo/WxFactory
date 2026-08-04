@@ -32,6 +32,8 @@ from .splitting import StrangSplitting, LieSplitting
 from .srerk import Srerk
 from .tvdrk3 import Tvdrk3
 
+from ..context import Context
+
 REGISTRY: dict = {}
 for _mod in [
     _backward_euler,
@@ -51,11 +53,11 @@ for _mod in [
     REGISTRY.update(_mod.REGISTRY)
 
 
-def resolve(name: str, config, rhs, preconditioner, device) -> Integrator:
+def resolve(name: str, config, rhs, preconditioner, context: Context) -> Integrator:
     """Create the integrator identified by `name`."""
     if name not in REGISTRY:
         raise ValueError(f"Time integration method '{name}' not supported")
-    return REGISTRY[name](config, rhs, preconditioner, device)
+    return REGISTRY[name](config, rhs, preconditioner, context)
 
 
 __all__ = [

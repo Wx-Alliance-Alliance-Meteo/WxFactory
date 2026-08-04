@@ -5,7 +5,7 @@ from unittest.runner import _WritelnDecorator
 
 from mpi4py import MPI
 
-from wx_factory.device import Device
+from wx_factory.context import Context
 
 
 class WxTestResult(unittest.TextTestResult):
@@ -71,7 +71,7 @@ class WxTestCase(unittest.TestCase):
         """
         super().__init__(methodName)
         self.device_name = device_name
-        self.comm = MPI.COMM_WORLD
+        self.comm = MPI.COMM_WORLD  # Default value. Should be overridden by subclasses if needed
 
     def __str__(self):
         return f"{self.__class__.__qualname__}.{self._testMethodName}.{self.device_name}"
@@ -82,8 +82,8 @@ class WxTestCase(unittest.TestCase):
         # Only the Pytorch backend remains. "cuda" asks for GPU tensors (skip if unavailable);
         # anything else keeps the tensors on the host.
         device_type = "cuda" if self.device_name == "cuda" else "cpu"
-        self.device = Device(self.comm, device_type=device_type)
-        if self.device_name == "cuda" and self.device.torch_device.type != "cuda":
+        self.context = Context(self.comm, device_type=device_type)
+        if self.device_name == "cuda" and self.context.torch_device.type != "cuda":
             self.skipTest("No GPU available for the Pytorch backend")
 
 

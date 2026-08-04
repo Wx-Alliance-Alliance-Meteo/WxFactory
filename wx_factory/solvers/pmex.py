@@ -5,7 +5,7 @@ import torch
 from mpi4py import MPI
 from torch import Tensor
 
-from ..device import Device
+from ..context import Context
 from .dense import expm, solve_triangular
 
 
@@ -20,7 +20,7 @@ def pmex(
     mmax: int = 128,
     reuse_info: bool = True,
     task1: bool = False,
-    device: Device | None = None,
+    context: Context | None = None,
 ):
     """
     :param tau_out: Vector of `tau_out`
@@ -34,8 +34,7 @@ def pmex(
     :param reuse_info: ?. Optional
     :param task1: If true, divide the result by 1/tau_out. Optional
 
-    :param device: Device to use for the computing
-    :param comm: Communicator to use for MPI (only relevant for testing)
+    :param context: Context to use for computing
 
     :return: `w` - the linear combination of the ``φ`` functions evaluated at ``tA`` acting on the vectors from ``u``
     :return: `stats[0]` - number of substeps
@@ -46,13 +45,13 @@ def pmex(
     :return: `stats[5]` - the Krylov size of the last substep
     :return: `stats[6]` - number of communicated norm recomputations
     """
-    if device is None:
-        device = Device.get_default()
+    if context is None:
+        context = Context.get_default()
 
     if mmax < mmin:
         raise ValueError(f"mmax ({mmax}) must be greater than or equal to mmin ({mmin})")
 
-    comm = device.comm
+    comm = context.comm
 
     # Reject unreachable tolerance
     tol_floor = 100.0 * float(torch.finfo(u.dtype).eps)
@@ -109,7 +108,7 @@ def pmex(
     local_nrmU = torch.sum(abs(u[1:, :]), dim=1)
     global_normU = torch.empty_like(local_nrmU)
 
-    device.synchronize()
+    context.synchronize()
     comm.Allreduce([local_nrmU, mpi_real], [global_normU, mpi_real])
 
     normU = torch.amax(global_normU)
@@ -171,7 +170,7 @@ def pmex(
             # copies of V[0, 0:n] (~68 MiB/rank on the 1 deg/L60 case), which overflows the GPU.
             local_sum = torch.sum(V[0, 0:n] * V[0, 0:n], dtype=acc)
             global_sum_nrm = torch.empty_like(local_sum)
-            device.synchronize()
+            context.synchronize()
             comm.Allreduce([local_sum, mpi_acc], [global_sum_nrm, mpi_acc])
             beta = math.sqrt(global_sum_nrm + V[j, n : n + p].to(acc) @ V[j, n : n + p].to(acc))
 
@@ -192,7 +191,7 @@ def pmex(
             local_vec = (V[0 : j + 1, 0:n] @ V[j - 1 : j + 1, 0:n].T).to(acc)
             global_vec = torch.empty_like(local_vec)
 
-            device.synchronize()
+            context.synchronize()
             comm.Allreduce([local_vec, mpi_acc], [global_vec, mpi_acc])
 
             global_vec += (V[0 : j + 1, n : n + p] @ V[j - 1 : j + 1, n : n + p].T).to(acc)
@@ -215,9 +214,7 @@ def pmex(
                     M[0:j, 0:j].contiguous(), rhs.reshape(-1, 1), upper=False, unitriangular=True
                 )[:, 0]
             else:
-                sol = device.array(
-                    solve_triangular(M[0:j, 0:j], rhs, lower=True, unit_diagonal=True, check_finite=False)
-                )
+                sol = solve_triangular(M[0:j, 0:j], rhs, lower=True, unit_diagonal=True, check_finite=False)
 
             # 4. Orthogonalize
             V[j, :] -= sol.to(u.dtype) @ V[0:j, :]
@@ -237,7 +234,7 @@ def pmex(
                 # float64 accumulation via `dtype=acc`, without full-size float64 temporaries (see above).
                 local_sum = torch.sum(V[j, 0:n] * V[j, 0:n], dtype=acc)
                 global_sum_nrm = torch.empty_like(local_sum)
-                device.synchronize()
+                context.synchronize()
                 comm.Allreduce([local_sum, mpi_acc], [global_sum_nrm, mpi_acc])
                 curr_nrm = math.sqrt(global_sum_nrm + V[j, n : n + p].to(acc) @ V[j, n : n + p].to(acc))
                 reg_comm_nrm += 1
@@ -265,7 +262,7 @@ def pmex(
         H[j, j - 1] = 0.0
 
         # Compute the exponential of the augmented matrix
-        F_half = device.array(expm(sgn * 0.5 * tau * H[0 : j + 1, 0 : j + 1]))
+        F_half = expm(sgn * 0.5 * tau * H[0 : j + 1, 0 : j + 1])
         F = F_half @ F_half
 
         exps += 1
@@ -373,7 +370,7 @@ def pmex(
 
                 for k in range(blownTs):
                     tau_phantom = tau_out[l + k] - tau_now
-                    F2 = device.array(expm(sgn * tau_phantom * H[0:j, :j]))
+                    F2 = expm(sgn * tau_phantom * H[0:j, :j])
                     w[l + k, :] = (beta * F2[:j, 0]).to(u.dtype) @ V[:j, :n]
 
                 # Advance l.

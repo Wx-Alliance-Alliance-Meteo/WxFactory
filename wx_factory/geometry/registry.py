@@ -24,7 +24,7 @@ from .lateral_exchange import FlatTileTopology
 
 if TYPE_CHECKING:
     from ..common import Configuration
-    from ..device import Device
+    from ..context import Context
     from ..simulation.simulation import Simulation
 
 
@@ -37,7 +37,7 @@ class GeometryContext:
     grid does not use them."""
 
     config: "Configuration"
-    device: "Device"
+    context: "Context"
     comm: MPI.Comm
     num_elements_horizontal: int
     num_solpts: int
@@ -50,7 +50,7 @@ class GeometryContext:
     def from_simulation(cls, sim: "Simulation") -> "GeometryContext":
         return cls(
             config=sim.config,
-            device=sim.device,
+            context=sim.context,
             comm=sim.comm,
             num_elements_horizontal=sim.num_elements_horizontal,
             num_solpts=sim.num_solpts,
@@ -122,7 +122,7 @@ def resolve_geometry(ctx: "GeometryContext") -> Geometry:
 
 @register_geometry("cubed_sphere", "shallow_water")
 def _cubed_sphere_2d(ctx: "GeometryContext") -> Geometry:
-    ptopo = ProcessTopology(ctx.device, comm_in=ctx.comm)
+    ptopo = ProcessTopology(ctx.context)
     return CubedSphere2D(
         ctx.num_elements_horizontal,
         ctx.num_solpts,
@@ -136,7 +136,7 @@ def _cubed_sphere_2d(ctx: "GeometryContext") -> Geometry:
 
 @register_geometry("cubed_sphere", "euler")
 def _cubed_sphere_3d(ctx: "GeometryContext") -> Geometry:
-    ptopo = ProcessTopology(ctx.device, comm_in=ctx.comm)
+    ptopo = ProcessTopology(ctx.context)
     return CubedSphere3D(
         ctx.num_elements_horizontal,
         ctx.config.num_elements_vertical,
@@ -156,7 +156,7 @@ def _cartesian_3d(ctx: "GeometryContext") -> Geometry:
     # A flat cartesian slab: the identity-metric limit of the cubed sphere, on a single tile with a
     # local lateral boundary (wall or periodic) instead of the panel donor-cell exchange.
     lateral = getattr(ctx.config, "lateral_boundary", "wall")
-    topo = FlatTileTopology(ctx.device, lateral, comm=ctx.comm)
+    topo = FlatTileTopology(ctx.context, lateral)
     # Vertical extent: an explicit ztop, else the top of the z0..z1 box (measured from z0).
     ztop = getattr(ctx.config, "ztop", 0.0) or (ctx.config.z1 - ctx.config.z0)
     # y defaults to the x extent when a config gives only a 2D (x, z) box.

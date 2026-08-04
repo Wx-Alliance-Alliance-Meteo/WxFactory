@@ -536,7 +536,7 @@ def _momentum_rows(ns: int) -> slice:
     return slice(idx_rho_u1 * ns, (idx_rho_u2 + 1) * ns)
 
 
-def _retained_rows(ns: int, device) -> NDArray:
+def _retained_rows(ns: int, device) -> torch.Tensor:
     """Return the column-layout rows of the variables f1 keeps: rho, rho_w and rho_theta."""
     return torch.cat(
         (

@@ -1,9 +1,10 @@
-import torch
 from typing import Optional
 
 from mpi4py import MPI
 import numpy
 from numpy.typing import NDArray
+import torch
+from torch import Tensor
 
 from .state import load_state
 
@@ -34,7 +35,7 @@ class InputManager:
         return Configuration(do_once(readfile, config_file, comm=comm), schema)
 
     @staticmethod
-    def read_config_from_save_file(save_file: str, comm: MPI.Comm) -> tuple[Configuration, NDArray]:
+    def read_config_from_save_file(save_file: str, comm: MPI.Comm) -> tuple[Configuration, Tensor]:
         config_str = None
         schema_str = None
         vector = None
@@ -68,9 +69,9 @@ class InputManager:
         return s.return_value
 
     @staticmethod
-    def read_mountain(mountain_file_name: str, geometry: CubedSphere2D) -> NDArray:
+    def read_mountain(mountain_file_name: str, geometry: CubedSphere2D) -> Tensor:
         mountain_field = None
-        comm = geometry.device.comm
+        comm = geometry.context.comm
         with SingleProcess(comm) as s, Conditional(s):
             num_points = geometry.total_num_elements_horizontal * geometry.num_solpts
             target_shape = (6,) + (num_points, num_points)
@@ -84,8 +85,8 @@ class InputManager:
         return torch.asarray(geometry._to_new(mountain_field))
 
     @staticmethod
-    def read_fields(data_file_name: str, field_names: list[str], geometry: CubedSphere2D) -> NDArray:
-        comm = geometry.device.comm
+    def read_fields(data_file_name: str, field_names: list[str], geometry: CubedSphere2D) -> Tensor:
+        comm = geometry.context.comm
         fields = [None for _ in field_names]
         with SingleProcess(comm) as s, Conditional(s):
             num_points = geometry.total_num_elements_horizontal * geometry.num_solpts

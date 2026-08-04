@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Callable, Optional, Tuple
 
 if TYPE_CHECKING:
     from ..common import Configuration
-    from ..device import Device
+    from ..context import Context
     from ..geometry import DFROperators, Geometry
     from ..rhs import RhsBundle
     from .preconditioner import Preconditioner
@@ -31,7 +31,7 @@ class PreconditionerContext:
     way the RHS and time-integrator factories do."""
 
     config: "Configuration"
-    device: "Device"
+    context: "Context"
     geometry: "Geometry"
     operators: "DFROperators"
     rhs: "RhsBundle"

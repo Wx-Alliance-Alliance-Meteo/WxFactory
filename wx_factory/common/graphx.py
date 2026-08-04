@@ -1,10 +1,12 @@
 import numpy
 import matplotlib.pyplot
 
+from torch import Tensor
+
 
 def image_field(
     geom,
-    field: numpy.ndarray,
+    field: Tensor,
     filename: str,
     vmin: float,
     vmax: float,
@@ -12,8 +14,6 @@ def image_field(
     label: str = "K",
     colormap: str = "jet",
 ):
-    device = geom.device
-
     domain_width = geom.x1 - geom.x0
     domain_height = geom.z1 - geom.z0
     aspect_ratio = domain_width / domain_height
@@ -25,9 +25,9 @@ def image_field(
     fig, ax = matplotlib.pyplot.subplots(figsize=(fig_width, fig_height))
 
     cmap = matplotlib.pyplot.contourf(
-        device.to_host(geom.X1_cartesian),
-        device.to_host(geom.X3_cartesian),
-        device.to_host(field),
+        geom.X1_cartesian.cpu().numpy(),
+        geom.X3_cartesian.cpu().numpy(),
+        field.cpu().numpy(),
         cmap=colormap,
         levels=numpy.linspace(vmin, vmax, n),
         extend="both",
@@ -35,9 +35,7 @@ def image_field(
     ax.set_aspect("equal", "box")
 
     cbar = fig.colorbar(cmap, ax=ax, orientation="vertical")
-    cbar.set_label(
-        label,
-    )
+    cbar.set_label(label)
 
     matplotlib.pyplot.savefig(filename)
     matplotlib.pyplot.close(fig)

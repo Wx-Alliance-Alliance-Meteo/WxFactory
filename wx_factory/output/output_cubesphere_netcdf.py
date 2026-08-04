@@ -1,8 +1,6 @@
 from ..common.matmul import kron
 import math
 import time
-from typing import List
-import numpy as np
 
 from mpi4py import MPI
 import numpy
@@ -23,7 +21,7 @@ from ..common.definitions import (
     Rd,
 )
 from ..common.configuration import Configuration
-from ..device import Device
+from ..context import Context
 from ..geometry import CubedSphere, CubedSphere2D, CubedSphere3D, Metric2D, Metric3DTopo, DFROperators
 from ..process_topology import ProcessTopology
 from ..wx_mpi import SingleProcess, Conditional
@@ -38,13 +36,13 @@ class OutputCubesphereNetcdf(OutputCubesphere):
         config: Configuration,
         geometry: CubedSphere,
         operators: DFROperators,
-        device: Device,
+        context: Context,
         metric: Metric2D | Metric3DTopo,
         topo,
         dataset,
         process_topo: ProcessTopology,
     ):
-        super().__init__(config, geometry, operators, device, metric, topo, process_topo)
+        super().__init__(config, geometry, operators, context, metric, topo, process_topo)
 
         self.ncfile = None
         self.filename = f"{self.output_dir}/{self.config.base_output_file}.nc"
@@ -296,7 +294,7 @@ class OutputCubesphereNetcdf(OutputCubesphere):
                     q4.coordinates = "lons lats"
                     q4.grid_mapping = "cubed_sphere"
 
-        to_host = lambda a: self.device.to_host(a) if a is not None else None
+        to_host = lambda a: self.context.to_host(a) if a is not None else None
 
         panel_x = to_host(self._gather_panel(self.geometry.x1[...]))
         panel_y = to_host(self._gather_panel(self.geometry.x2[...]))
@@ -348,7 +346,7 @@ class OutputCubesphereNetcdf(OutputCubesphere):
         if fields is None:
             return
 
-        to_host = self.device.to_host
+        to_host = self.context.to_host
 
         for i, f in enumerate(fields):
             self.ncfile[name][time_idx, level_idx, i, :, :] = to_host(f)
@@ -456,8 +454,8 @@ class OutputCubesphereNetcdf(OutputCubesphere):
 
                 time_val = step_id
 
-                epoch = np.datetime64("1800-01-01T00:00:00")
-                hours = (time_val - epoch) / np.timedelta64(1, "h")
+                epoch = numpy.datetime64("1800-01-01T00:00:00")
+                hours = (time_val - epoch) / numpy.timedelta64(1, "h")
 
                 self.ncfile["time"][idx] = hours
             else:
@@ -472,6 +470,6 @@ class OutputCubesphereNetcdf(OutputCubesphere):
         """Store data in the open netcdf file."""
         fields = self._gather_field(field, self.num_dim)
         if fields is not None:
-            to_host = self.device.to_host
+            to_host = self.context.to_host
             for i, f in enumerate(fields):
                 self.ncfile[name][step_id, i] = to_host(f)

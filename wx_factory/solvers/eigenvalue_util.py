@@ -1,5 +1,3 @@
-import torch
-from itertools import product
 import os
 import pickle
 from typing import List, Optional
@@ -9,6 +7,7 @@ import numpy
 from numpy.typing import NDArray
 import scipy.sparse
 from scipy.sparse import csc_matrix
+import torch
 
 try:
     from tqdm import tqdm
@@ -23,7 +22,7 @@ except ModuleNotFoundError:
         return a
 
 
-from ..device import Device
+from ..context import Context
 from .matvec import MatvecOp
 
 
@@ -32,7 +31,7 @@ def gen_matrix(
     jac_file_name: Optional[str] = None,
     compressed: Optional[bool] = None,
     local: bool = False,
-    device: Device = None,
+    context: Optional[Context] = None,
 ) -> Optional[scipy.sparse.csc_matrix]:
     """
     Compute and store the Jacobian matrix. It may be computed either as a full or sparse matrix
@@ -41,8 +40,8 @@ def gen_matrix(
     :param matvec: Operator to compute the action of the jacobian on a vector. Holds vector shape and variable type
     :param jac_file_name: If present, path to the file where the jacobian will be stored
     """
-    if device is None:
-        device = Device.get_default()
+    if context is None:
+        context = Context.get_default()
 
     # neq, ni, nj = matvec.shape
     n_loc = matvec.size
@@ -76,7 +75,7 @@ def gen_matrix(
         for i in progress(indices):
             if rank == r:
                 Qid[i] = 1.0
-            col = device.to_host(matvec(Qid.flatten()))
+            col = matvec(Qid.flatten()).cpu().numpy()
             ccol = csc_matrix(col.reshape((col.size, 1))) if compressed else col
             columns[idx] = ccol
             idx += 1

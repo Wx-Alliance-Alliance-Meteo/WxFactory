@@ -4,6 +4,8 @@ import time
 
 import numpy
 from numpy.typing import NDArray
+import torch
+from torch import Tensor
 
 from ..common import Configuration
 from ..common.definitions import idx_rho_u2
@@ -36,7 +38,7 @@ class RHS(ABC):
         self.topo = topography
         self.ptopo = process_topo
         self.config = config
-        self.device = geometry.device
+        self.context = geometry.context
         self.expected_shape = expected_shape
         self.debug = debug
 
@@ -83,9 +85,9 @@ class RHS(ABC):
         self.timings = []
 
     def retrieve_last_times(self):
-        self.timings.append(self.device.elapsed(self.timestamps))
+        self.timings.append(self.context.elapsed(self.timestamps))
 
-    def __call__(self, q: NDArray) -> NDArray:
+    def __call__(self, q: Tensor) -> Tensor:
 
         # Process timing
         if len(self.timestamps) > 0:  # Process timing from previous steps
@@ -100,42 +102,42 @@ class RHS(ABC):
 
         self.allocate_arrays(q)
 
-        self.timestamps[0] = self.device.timestamp(name="extrap")
+        self.timestamps[0] = self.context.timestamp(name="extrap")
 
         # Extrapolate the solution to the boundaries of the element
         self.solution_extrapolation(q)
-        self.timestamps[1] = self.device.timestamp(name="start comm")
+        self.timestamps[1] = self.context.timestamp(name="start comm")
 
         self.start_communication()
-        self.timestamps[2] = self.device.timestamp(name="pointwise flux")
+        self.timestamps[2] = self.context.timestamp(name="pointwise flux")
 
         # Compute the pointwise fluxes
         self.pointwise_fluxes(q)
-        self.timestamps[3] = self.device.timestamp(name="flux div 1")
+        self.timestamps[3] = self.context.timestamp(name="flux div 1")
 
         # Compute the derivatives of the discontinuous fluxes
         self.flux_divergence_partial()
-        self.timestamps[4] = self.device.timestamp(name="end comm")
+        self.timestamps[4] = self.context.timestamp(name="end comm")
 
         self.end_communication()
-        self.timestamps[5] = self.device.timestamp(name="riemann")
+        self.timestamps[5] = self.context.timestamp(name="riemann")
 
         # Compute the Riemann fluxes
         self.riemann_fluxes()
-        self.timestamps[6] = self.device.timestamp(name="flux div 2")
+        self.timestamps[6] = self.context.timestamp(name="flux div 2")
 
         # Complete the divergence operation
         self.flux_divergence()
-        self.timestamps[7] = self.device.timestamp(name="forcing")
+        self.timestamps[7] = self.context.timestamp(name="forcing")
 
         # Add forcing terms
         self.forcing_terms(q)
         self.pin_y_momentum()
-        self.timestamps[8] = self.device.timestamp()
+        self.timestamps[8] = self.context.timestamp()
 
         # At this moment, a deep copy needs to be returned
         # otherwise issues are encountered after. This needs to be fixed
-        return self.rhs.reshape(given_shape).copy()
+        return self.rhs.reshape(given_shape).clone()
 
     def pin_y_momentum(self) -> None:
         """Set the y-momentum tendency to zero for a y-invariant x-z slab.

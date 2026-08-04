@@ -329,7 +329,6 @@ class Metric3DTopo:
         for d_itf_k, d_extrap_k in zip(
             (dRdx1_itf_k, dRdx2_itf_k, dRdeta_itf_k), (dRdx1_extrap_k, dRdx2_extrap_k, dRdeta_extrap_k)
         ):
-
             # Assign absolute minimum/maximum interface values based on the one-sided extrapolation
             d_itf_k[0, :, :] = d_extrap_k[0, 0, :, :]
             d_itf_k[-1, :, :] = d_extrap_k[-1, 1, :, :]
@@ -746,7 +745,7 @@ class Metric3DTopo:
 
         verbose = False
         if numer_christoffel:
-            if verbose and geom.device.comm.rank == 0:
+            if verbose and geom.context.comm.rank == 0:
                 print("Computing (√g h^{ab})_{,c}")
             grad_sqrtG_metric_contra = matrix.grad(
                 H_contra * sqrtG[numpy.newaxis, numpy.newaxis, :, :, :],
@@ -763,12 +762,12 @@ class Metric3DTopo:
             # The call to linalg.solve can require a lot of memory in temporary allocations. This is problematic
             # for very large simulations. Therefore, we split the calculation of christoffel symbols across
             # vertical levels, so that only a relatively small temporary array is used
-            space_christoffel: NDArray = torch.empty((nk, nj, ni, 27))
+            space_christoffel = torch.empty((nk, nj, ni, 27))
             for k in range(nk):
                 c_rhs = torch.empty((nj, ni, 3, 3, 3))  # h(i,j,k)^(ab)_(,c)
                 c_lhs = torch.zeros((nj, ni, 3, 3, 3, 3, 3, 3))  # Γ(i,j,k)^d_{ef} for row (ab,c)
 
-                if verbose and geom.device.comm.rank == 0:
+                if verbose and geom.context.comm.rank == 0:
                     print("Assembling linear operator for Γ")
 
                 for a in range(3):
@@ -780,7 +779,7 @@ class Metric3DTopo:
                                 c_lhs[:, :, a, b, c, a, d, c] -= sqrtG[k, :, :] * H_contra[d, b, k, :, :]
                                 c_lhs[:, :, a, b, c, b, c, d] -= sqrtG[k, :, :] * H_contra[a, d, k, :, :]
 
-                if verbose and geom.device.comm.rank == 0:
+                if verbose and geom.context.comm.rank == 0:
                     print("Solving linear operator for Γ")
 
                 space_christoffel[k, ...] = torch.linalg.solve(
@@ -790,31 +789,31 @@ class Metric3DTopo:
             space_christoffel = space_christoffel.reshape((nk, nj, ni, 3, 3, 3))
             space_christoffel = torch.permute(space_christoffel, (3, 4, 5, 0, 1, 2))
 
-            if verbose and geom.device.comm.rank == 0:
+            if verbose and geom.context.comm.rank == 0:
                 print("Copying Γ to destination arrays")
 
-            christoffel_1_11 = space_christoffel[0, 0, 0, :, :, :].copy()
-            christoffel_1_12 = space_christoffel[0, 0, 1, :, :, :].copy()
-            christoffel_1_13 = space_christoffel[0, 0, 2, :, :, :].copy()
-            christoffel_1_22 = space_christoffel[0, 1, 1, :, :, :].copy()
-            christoffel_1_23 = space_christoffel[0, 1, 2, :, :, :].copy()
-            christoffel_1_33 = space_christoffel[0, 2, 2, :, :, :].copy()
+            christoffel_1_11 = space_christoffel[0, 0, 0, :, :, :].clone()
+            christoffel_1_12 = space_christoffel[0, 0, 1, :, :, :].clone()
+            christoffel_1_13 = space_christoffel[0, 0, 2, :, :, :].clone()
+            christoffel_1_22 = space_christoffel[0, 1, 1, :, :, :].clone()
+            christoffel_1_23 = space_christoffel[0, 1, 2, :, :, :].clone()
+            christoffel_1_33 = space_christoffel[0, 2, 2, :, :, :].clone()
 
-            christoffel_2_11 = space_christoffel[1, 0, 0, :, :, :].copy()
-            christoffel_2_12 = space_christoffel[1, 0, 1, :, :, :].copy()
-            christoffel_2_13 = space_christoffel[1, 0, 2, :, :, :].copy()
-            christoffel_2_22 = space_christoffel[1, 1, 1, :, :, :].copy()
-            christoffel_2_23 = space_christoffel[1, 1, 2, :, :, :].copy()
-            christoffel_2_33 = space_christoffel[1, 2, 2, :, :, :].copy()
+            christoffel_2_11 = space_christoffel[1, 0, 0, :, :, :].clone()
+            christoffel_2_12 = space_christoffel[1, 0, 1, :, :, :].clone()
+            christoffel_2_13 = space_christoffel[1, 0, 2, :, :, :].clone()
+            christoffel_2_22 = space_christoffel[1, 1, 1, :, :, :].clone()
+            christoffel_2_23 = space_christoffel[1, 1, 2, :, :, :].clone()
+            christoffel_2_33 = space_christoffel[1, 2, 2, :, :, :].clone()
 
-            christoffel_3_11 = space_christoffel[2, 0, 0, :, :, :].copy()
-            christoffel_3_12 = space_christoffel[2, 0, 1, :, :, :].copy()
-            christoffel_3_13 = space_christoffel[2, 0, 2, :, :, :].copy()
-            christoffel_3_22 = space_christoffel[2, 1, 1, :, :, :].copy()
-            christoffel_3_23 = space_christoffel[2, 1, 2, :, :, :].copy()
-            christoffel_3_33 = space_christoffel[2, 2, 2, :, :, :].copy()
+            christoffel_3_11 = space_christoffel[2, 0, 0, :, :, :].clone()
+            christoffel_3_12 = space_christoffel[2, 0, 1, :, :, :].clone()
+            christoffel_3_13 = space_christoffel[2, 0, 2, :, :, :].clone()
+            christoffel_3_22 = space_christoffel[2, 1, 1, :, :, :].clone()
+            christoffel_3_23 = space_christoffel[2, 1, 2, :, :, :].clone()
+            christoffel_3_33 = space_christoffel[2, 2, 2, :, :, :].clone()
 
-            if verbose and geom.device.comm.rank == 0:
+            if verbose and geom.context.comm.rank == 0:
                 print("Done assembling Γ")
 
         # Assemble metric terms in the legacy and element-wise layouts.

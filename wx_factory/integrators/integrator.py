@@ -5,9 +5,9 @@ from typing import Optional
 import numpy
 
 from ..common import Configuration
-from ..device import Device
-from ..precondition import Preconditioner
+from ..context import Context
 from ..output.output_manager import OutputManager
+from ..precondition import Preconditioner
 from ..solvers import SolverInfo, fgmres, global_norm
 
 
@@ -24,13 +24,13 @@ class Integrator(ABC):
                          to self.solver_info
        preconditioner -- Optional object that can be used to precondition a problem. It must provide a "prepare"
                          and a "__call__" method.
-       device         -- Object that describes on what hardware (CPU/GPU) the code will run
+       context         -- Object that describes the execution context (including hardware information)
 
     """
 
     latest_time: float
     output_manager: Optional[OutputManager]
-    device: Device
+    context: Context
     preconditioner: Optional[Preconditioner]
     solver_info: Optional[SolverInfo]
 
@@ -39,12 +39,12 @@ class Integrator(ABC):
         param: Configuration,
         *,
         output_manager: Optional[OutputManager] = None,
-        device: Optional[Device] = None,
+        context: Optional[Context] = None,
         preconditioner=None,
     ) -> None:
         self.output_manager = output_manager
         self.preconditioner = preconditioner
-        self.device = device if device is not None else Device.get_default()
+        self.context = context if context is not None else Context.get_default()
         self.param = param
         self.verbose_solver = param.verbose_solver
         self.solver_info = None
@@ -62,7 +62,7 @@ class Integrator(ABC):
             maxiter=maxiter,
             preconditioner=self.preconditioner,
             verbose=self.verbose_solver,
-            device=self.device,
+            context=self.context,
         )
 
     @abstractmethod

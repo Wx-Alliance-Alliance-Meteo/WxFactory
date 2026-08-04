@@ -127,15 +127,15 @@ class StateIntegrationTestCases(MpiTestCase):
 
             config = Configuration(config_content, self.schema)
 
-            sim = Simulation(config, device=self.device)
+            sim = Simulation(config, context=self.context)
             sim.run()
 
             state_vector_file = sim.output.state_file_name(sim.step_id)
             base_name = os.path.split(state_vector_file)[-1]
             true_state_vector_file: str = f"{self.config_dir_path}/{base_name}"
 
-            [data, _] = state.load_state(state_vector_file, device=self.device.torch_device)
-            [true_data, true_config] = state.load_state(true_state_vector_file, device=self.device.torch_device)
+            [data, _] = state.load_state(state_vector_file, device=self.context.torch_device)
+            [true_data, true_config] = state.load_state(true_state_vector_file, device=self.context.torch_device)
 
             self.assertEqual(
                 true_data.shape,

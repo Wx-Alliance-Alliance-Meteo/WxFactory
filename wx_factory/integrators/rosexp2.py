@@ -11,9 +11,9 @@ from ..solvers import ExponentialSolverRequest, matvec_fun, matvec_rat, resolve_
 
 class RosExp2(Integrator):
     def __init__(
-        self, param: Configuration, rhs_full: Callable, rhs_imp: Callable, *, device=None, preconditioner=None
+        self, param: Configuration, rhs_full: Callable, rhs_imp: Callable, *, context=None, preconditioner=None
     ):
-        super().__init__(param, device=device, preconditioner=preconditioner)
+        super().__init__(param, context=context, preconditioner=preconditioner)
 
         self.rhs_full = rhs_full
         self.rhs_imp = rhs_imp
@@ -45,7 +45,7 @@ class RosExp2(Integrator):
                 vec,
                 self.tol,
                 self.krylov_mmax,
-                self.device,
+                self.context,
                 exode_method=self.exode_method,
                 exode_controller=self.exode_controller,
             )
@@ -71,7 +71,7 @@ class RosExp2(Integrator):
 
         self.solver_info = SolverInfo(flag, time_imp, num_iter, residuals)
 
-        if self.device.comm.rank == 0:
+        if self.context.comm.rank == 0:
             result_type = "convergence" if flag == 0 else "stagnation/interruption"
             print(
                 f"FGMRES {result_type} at iteration {num_iter} in {time_imp:4.1f} s to a solution with"
@@ -84,5 +84,5 @@ class RosExp2(Integrator):
 
 
 REGISTRY = {
-    "rosexp2": lambda cfg, rhs, prec, dev: RosExp2(cfg, rhs.full, rhs.full, preconditioner=prec, device=dev),
+    "rosexp2": lambda cfg, rhs, prec, ctx: RosExp2(cfg, rhs.full, rhs.full, preconditioner=prec, context=ctx),
 }
