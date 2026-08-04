@@ -1,17 +1,15 @@
-import torch
-import unittest
 import sys
-from typing import Tuple
+import unittest
 
 import numpy
-from numpy.typing import NDArray
+import torch
 from mpi4py import MPI
+from numpy.typing import NDArray
 
+from tests.unit.mpi_test import MpiTestCase
 from wx_factory.device import Device
-from wx_factory.process_topology import ProcessTopology, SOUTH, NORTH, WEST, EAST
-from wx_factory.wx_mpi import SingleProcess, Conditional
-
-from tests.unit.mpi_test import run_test_on_x_process, MpiTestCase
+from wx_factory.process_topology import EAST, NORTH, SOUTH, WEST, ProcessTopology
+from wx_factory.wx_mpi import Conditional, SingleProcess
 
 
 def gen_data_1(num_processes: int, num_data_hori_per_proc: int, device: Device) -> NDArray:
@@ -273,7 +271,7 @@ class ExchangeTest(MpiTestCase):
         new_data_shape = (1,) + base_shape
         new_line_shape = (1,) + (self.NUM_DATA_HORI,)
 
-        def make_data(d) -> Tuple[NDArray, NDArray, NDArray]:
+        def make_data(d) -> tuple[NDArray, NDArray, NDArray]:
             return (
                 d.reshape(new_data_shape),
                 torch.flip(d, (-1,)).reshape(new_data_shape),
@@ -618,12 +616,12 @@ class GatherScatterTest(MpiTestCase):
             # print(f"cube = \n{cube[0]}", flush=True)
             diff = cube - global_data
             diff_norm = torch.linalg.norm(diff)
-            self.assertEqual(diff_norm, 0, f"Gathering failed")
+            self.assertEqual(diff_norm, 0, "Gathering failed")
 
         tile = self.topo.distribute_cube(cube, num_dim)
         tile_diff = tile_data_ref - tile
         tile_diff_norm = torch.linalg.norm(tile_diff)
-        self.assertEqual(tile_diff_norm, 0, f"Distributing failed")
+        self.assertEqual(tile_diff_norm, 0, "Distributing failed")
 
     def gather_scatter_2d(self):
         self.gather_scatter(self.global_data_1, 2)

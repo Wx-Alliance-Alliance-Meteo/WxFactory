@@ -1,23 +1,19 @@
-import torch
+import numpy
+from numpy.typing import NDArray
+
 
 from ..common.configuration import Configuration
 from ..geometry import (
-    Cartesian3D,
-    CubedSphere2D,
-    CubedSphere3D,
-    DFROperators,
-    Geometry,
-    Metric2D,
-    Metric3DTopo,
+    DFROperators, Geometry, Metric2D, Metric3DTopo, Cartesian3D, CubedSphere2D, CubedSphere3D,
 )
-from ..geometry.geometry import cast_double_arrays
-from ..init.initialize import initialize_cartesian3d, initialize_euler, initialize_sw
+from ..init.initialize import initialize_cartesian3d, initialize_euler, initialize_sw, Topo
+from typing import Dict, Type
+from ..step_hooks import StepHook, ScharMountainHook
 from ..simulation.initial_state import InitialState
-from ..step_hooks import ScharMountainHook, StepHook
 
 
 def init_state_vars(
-    geom: Geometry, operators: DFROperators, param: Configuration, step_hooks: dict[type, StepHook]
+    geom: Geometry, operators: DFROperators, param: Configuration, step_hooks: Dict[Type, StepHook]
 ) -> InitialState:
     """Get intial value for state variables as well at topography information, based on the test case."""
 
@@ -45,16 +41,5 @@ def init_state_vars(
 
     else:
         raise ValueError(f"Unrecognized combination of equations ({param.equations} and geometry ({geom}))")
-
-    # Metric constructors normally establish this precision boundary immediately after consuming
-    # the double-built geometry. Keep this final pass as an idempotent safeguard for every
-    # initialization route and for independently constructed topography/state arrays.
-    working_dtype = geom.working_dtype
-    metric.cast_to_working_precision(working_dtype)
-    if topo is not None:
-        cast_double_arrays(topo, working_dtype)
-    if hasattr(Q, "dtype") and Q.dtype == torch.float64:
-        Q = Q.astype(working_dtype)
-    geom.cast_to_working_precision()
 
     return InitialState(Q, topo, metric, dataset)

@@ -1,30 +1,21 @@
-import torch
+from mpi4py import MPI
 from numpy.typing import NDArray
+import torch
 
 from ..common import Configuration
-from ..common.definitions import (
-    Rd,
-    cpd,
-    cvd,
-    gravity,
-    idx_rho,
-    idx_rho_theta,
-    idx_rho_u1,
-    idx_rho_u2,
-    idx_rho_u3,
-    p0,
-)
+from ..common.definitions import idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_u3, idx_rho_theta, p0, cpd, cvd, Rd, gravity
 from ..geometry import CubedSphere3D, Metric3DTopo
 from ..init.dcmip import dcmip_schar_damping
-from .fluxes import rusanov_3d_hori_i_new, rusanov_3d_hori_j_new, rusanov_3d_vert_new
+
 from .pde import PDE
+from .fluxes import rusanov_3d_hori_i_new, rusanov_3d_hori_j_new, rusanov_3d_vert_new
 
 
-def compute_forcing_1(r, u1, u2, w, p, c01, c02, c03, c11, c12, c13, c22, c23, c33, h11, h12, h13, h22, h23, h33):
+def compute_forcing_1(f, r, u1, u2, w, p, c01, c02, c03, c11, c12, c13, c22, c23, c33, h11, h12, h13, h22, h23, h33):
     """Compute forcing for fluid velocity in a single direction based on metric terms and coriolis effect."""
 
     # fmt: off
-    return (
+    f[:] = (
           2.0 *   r * (c01 * u1 + c02 * u2 + c03 * w)
         +       c11 * (r * u1 * u1 + h11 * p)
         + 2.0 * c12 * (r * u1 * u2 + h12 * p)
@@ -38,8 +29,8 @@ def compute_forcing_1(r, u1, u2, w, p, c01, c02, c03, c11, c12, c13, c22, c23, c
 
 def compute_forcings(
     # fmt: off
-    # Output
-    forcing,
+    # Velocity-forcing outputs
+    f2, f3, f4,
     # Field variables (rho, u1, u2, w and pressure)
     r, u1, u2, w, p,
     # Christoffel symbols
@@ -51,15 +42,16 @@ def compute_forcings(
     h11, h12, h13, h22, h23, h33,
     # fmt: on
 ):
-    """Fill momentum forcing rows without retaining views across in-place updates."""
-    forcing[idx_rho_u1] = compute_forcing_1(
-        r, u1, u2, w, p, c101, c102, c103, c111, c112, c113, c122, c123, c133, h11, h12, h13, h22, h23, h33
+    """Compute velocity forcing from metric and Coriolis terms."""
+    compute_forcing_1(
+        f2, r, u1, u2, w, p, c101, c102, c103, c111, c112, c113, c122, c123, c133, h11, h12, h13, h22, h23, h33
     )
-    forcing[idx_rho_u2] = compute_forcing_1(
-        r, u1, u2, w, p, c201, c202, c203, c211, c212, c213, c222, c223, c233, h11, h12, h13, h22, h23, h33
+
+    compute_forcing_1(
+        f3, r, u1, u2, w, p, c201, c202, c203, c211, c212, c213, c222, c223, c233, h11, h12, h13, h22, h23, h33
     )
-    forcing[idx_rho_u3] = compute_forcing_1(
-        r, u1, u2, w, p, c301, c302, c303, c311, c312, c313, c322, c323, c333, h11, h12, h13, h22, h23, h33
+    compute_forcing_1(
+        f4, r, u1, u2, w, p, c301, c302, c303, c311, c312, c313, c322, c323, c333, h11, h12, h13, h22, h23, h33
     )
 
 
@@ -300,7 +292,9 @@ class PDEEuler3D(PDE):
         forcing: NDArray,
     ):
         self.compute_forcings(
-            forcing,
+            forcing[idx_rho_u1],
+            forcing[idx_rho_u2],
+            forcing[idx_rho_u3],
             rho,
             u1,
             u2,

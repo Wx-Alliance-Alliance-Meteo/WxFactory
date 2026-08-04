@@ -1,15 +1,15 @@
+import torch
 from abc import ABC, abstractmethod
+import time
 
 import numpy
-import torch
 from numpy.typing import NDArray
 
 from ..common import Configuration
 from ..common.definitions import idx_rho_u2
-from ..device import differentiable_mode
 from ..geometry import DFROperators, Geometry, Metric2D, Metric3DTopo
 from ..pde import PDE
-from ..process_topology import ExchangeRequest, ProcessTopology
+from ..process_topology import ProcessTopology, ExchangeRequest
 
 
 class RHS(ABC):
@@ -34,7 +34,6 @@ class RHS(ABC):
         self.geom = geometry
         self.ops_real = operators_real
         self.ops_complex = operators_complex
-        self._ops_double = None
         self.metric = metric
         self.topo = topography
         self.ptopo = process_topo
@@ -80,7 +79,6 @@ class RHS(ABC):
 
         # Initialize rhs matrix
         self.rhs = None
-        self._workspace_invalidated = False
 
     def clear_timings(self):
         self.timestamps = []
@@ -102,12 +100,7 @@ class RHS(ABC):
 
         self.ops = self.operators_for(q)
 
-        # Forward AD cannot write into scratch tensors captured from an earlier RHS call.
-        if differentiable_mode():
-            self.invalidate_workspace()
-
         self.allocate_arrays(q)
-        self._workspace_invalidated = False
 
         self.timestamps[0] = self.device.timestamp(name="extrap")
 
@@ -157,35 +150,18 @@ class RHS(ABC):
     def full(self, q: NDArray) -> NDArray:
         return self.__call__(q)
 
-    @property
-    def ops_double(self) -> DFROperators:
-        """Return lazily constructed float64 DFR operators."""
-        if self._ops_double is None:
-            self._ops_double = DFROperators(self.geom, self.device, torch.float64)
-        return self._ops_double
-
     def operators_for(self, q: NDArray) -> DFROperators:
-        """The operator set whose precision matches the state ``q``."""
+        """Select real or complex operators to match ``q``."""
         if torch.is_complex(q):
             return self.ops_complex
-        if q.dtype == torch.float64 and self.ops_real.dtype != torch.float64:
-            return self.ops_double
         return self.ops_real
 
     def allocate_arrays(self, q: NDArray):
-        if self.workspace_needs_allocation(self.f_x1, q.dtype):
+        if self.f_x1 is None or self.f_x1.dtype != q.dtype:
             self.f_x1 = torch.zeros_like(q)
             self.f_x2 = torch.zeros_like(q)
             self.f_x3 = torch.zeros_like(q)
             self.rhs = torch.empty_like(q)
-
-    def invalidate_workspace(self) -> None:
-        """Require fresh scratch arrays on the next evaluation."""
-        self._workspace_invalidated = True
-
-    def workspace_needs_allocation(self, array, dtype) -> bool:
-        """Return whether a scratch array must be allocated."""
-        return self._workspace_invalidated or array is None or array.dtype != dtype
 
     @abstractmethod
     def solution_extrapolation(self, q: NDArray) -> None:
@@ -196,7 +172,7 @@ class RHS(ABC):
         pass
 
     def riemann_fluxes(self) -> None:
-        if self.workspace_needs_allocation(self.f_itf_x1, self.q_itf_x1.dtype):
+        if self.f_itf_x1 is None or self.f_itf_x1.dtype != self.q_itf_x1.dtype:
             self.f_itf_x1 = torch.zeros_like(self.q_itf_x1)
             self.f_itf_x2 = torch.zeros_like(self.q_itf_x2)
             self.f_itf_x3 = torch.zeros_like(self.q_itf_x3)

@@ -76,12 +76,7 @@ def dcmip_T11_update_winds(geom, metric, mtrx, param, time=float(0)):
 
     # Shape function
     bs = 0.2
-    s = (
-        1.0
-        + math.exp((ptop - p0) / (bs * ptop))
-        - torch.exp((p - p0) / (bs * ptop))
-        - torch.exp((ptop - p) / (bs * ptop))
-    )
+    s = 1.0 + math.exp((ptop - p0) / (bs * ptop)) - torch.exp((p - p0) / (bs * ptop)) - torch.exp((ptop - p) / (bs * ptop))
 
     # Zonal Velocity
 
@@ -94,11 +89,7 @@ def dcmip_T11_update_winds(geom, metric, mtrx, param, time=float(0)):
         * (-torch.exp((p - p0) / (bs * ptop)) + torch.exp((ptop - p) / (bs * ptop)))
     )
 
-    u = (
-        k0 * torch.sin(lonp) * torch.sin(lonp) * torch.sin(2.0 * lat) * math.cos(math.pi * time / tau)
-        + u0 * torch.cos(lat)
-        + ud
-    )
+    u = k0 * torch.sin(lonp) * torch.sin(lonp) * torch.sin(2.0 * lat) * math.cos(math.pi * time / tau) + u0 * torch.cos(lat) + ud
 
     # Meridional Velocity
 
@@ -106,14 +97,7 @@ def dcmip_T11_update_winds(geom, metric, mtrx, param, time=float(0)):
 
     # Vertical Velocity
 
-    w = (
-        -((Rd * T0) / (gravity * p))
-        * omega0
-        * torch.sin(lonp)
-        * torch.cos(lat)
-        * math.cos(2.0 * math.pi * time / tau)
-        * s
-    )
+    w = -((Rd * T0) / (gravity * p)) * omega0 * torch.sin(lonp) * torch.cos(lat) * math.cos(2.0 * math.pi * time / tau) * s
 
     # The state vector holds the contravariant components of the wind in the cubed-sphere
     # coordinates, not the (zonal, meridional, vertical) components of the DCMIP document.
@@ -543,7 +527,10 @@ def dcmip_steady_state_mountain(geom: CubedSphere3D, metric, mtrx, param):
 
     def surface_height(latlon, large_scale_only=False):
         lon, lat = latlon[0], latlon[1]
-        cosine = math.sin(phim) * torch.sin(lat) + math.cos(phim) * torch.cos(lat) * torch.cos(lon - lambdam)
+        cosine = (
+            math.sin(phim) * torch.sin(lat)
+            + math.cos(phim) * torch.cos(lat) * torch.cos(lon - lambdam)
+        )
         # Clamp protects arccos from a one-ulp overshoot at the mountain centre.
         rm = torch.arccos(torch.clamp(cosine, -1.0, 1.0))
         bell = 0.5 * h0 * (1.0 + torch.cos(math.pi * rm / Rm))

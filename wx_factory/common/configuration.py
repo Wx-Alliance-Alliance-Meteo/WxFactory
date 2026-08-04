@@ -138,7 +138,6 @@ class Configuration:
     output_format: str
     output_freq: int
     phi0: float
-    phi_rhs_double: int
     precision: str
     preconditioner: str
     pytorch_device: str

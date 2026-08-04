@@ -4,7 +4,6 @@ import argparse
 import os
 import re
 import sys
-from typing import Optional
 import traceback
 import unittest
 import warnings
@@ -13,22 +12,31 @@ main_project_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..
 sys.path.append(main_project_dir)
 
 from wx_test import WxTestRunner
-from tests.unit.common.test_configuration import ConfigurationTestCases
-from tests.unit.common.test_config_hints import ConfigHintsTestCases
-from tests.unit.common.test_sort_fields import SortFieldsByDependencyTestCases
+
 from tests.unit.common.test_angle24 import Angle24TestCase
-from tests.unit.rhs.test_rhs_registry import RhsBundleTestCases, RhsRegistryTestCases
-from tests.unit.precondition.test_preconditioner_registry import PreconditionerRegistryTestCases
+from tests.unit.common.test_config_hints import ConfigHintsTestCases
+from tests.unit.common.test_configuration import ConfigurationTestCases
+from tests.unit.common.test_sort_fields import SortFieldsByDependencyTestCases
 from tests.unit.geometry.test_geometry_registry import GeometryRegistryTestCases
-from tests.unit.geometry.test_precision_construction import PrecisionConstructionTestCases
 from tests.unit.output.test_output_registry import OutputRegistryTestCases
-from tests.unit.step_hooks.test_step_hook_registry import StepHookRegistryTestCases
 from tests.unit.output.test_state import StateTestCases
+from tests.unit.precondition.test_preconditioner_registry import (
+    PreconditionerRegistryTestCases,
+)
 from tests.unit.restart.test_restart import Euler2DRestartTestCase
-from tests.unit.solvers.test_fgmres import FgmresScipyTestCases, FgmresEdgeCasesTestCases
-from tests.unit.solvers.test_kiops_pmex_tolerance_cpu import KiopsPmexToleranceCpuTestCases
+from tests.unit.rhs.test_rhs_registry import RhsBundleTestCases, RhsRegistryTestCases
+from tests.unit.solvers.test_exponential_solver_registry import (
+    ExponentialSolverRegistryTestCases,
+)
+from tests.unit.solvers.test_fgmres import (
+    FgmresEdgeCasesTestCases,
+    FgmresScipyTestCases,
+)
+from tests.unit.solvers.test_kiops_pmex_tolerance_cpu import (
+    KiopsPmexToleranceCpuTestCases,
+)
 from tests.unit.solvers.test_matvec import MatvecTestCases
-from tests.unit.solvers.test_exponential_solver_registry import ExponentialSolverRegistryTestCases
+from tests.unit.step_hooks.test_step_hook_registry import StepHookRegistryTestCases
 
 
 def warn_with_traceback(message, category, filename, lineno, file=None, line=None):
@@ -36,7 +44,7 @@ def warn_with_traceback(message, category, filename, lineno, file=None, line=Non
     print(f"{filename}:{lineno}: {category.__name__}: {message}")
 
 
-def add_test(suite: unittest.TestSuite, test: unittest.TestCase, test_re: Optional[re.Pattern]):
+def add_test(suite: unittest.TestSuite, test: unittest.TestCase, test_re: re.Pattern | None):
     if test_re is None or test_re.search(str(test)) is not None:
         suite.addTest(test)
 
@@ -115,16 +123,6 @@ def load_tests(test_name: str):
     add_test(suite, GeometryRegistryTestCases("test_resolve_dispatches_to_registered_factory"), test_re)
     add_test(suite, GeometryRegistryTestCases("test_grid_file_forces_cubed_sphere_2d"), test_re)
     add_test(suite, GeometryRegistryTestCases("test_duplicate_registration_raises"), test_re)
-    add_test(
-        suite,
-        PrecisionConstructionTestCases("test_quadrature_is_constructed_in_double_precision"),
-        test_re,
-    )
-    add_test(
-        suite,
-        PrecisionConstructionTestCases("test_single_precision_operators_are_rounded_double_operators"),
-        test_re,
-    )
 
     add_test(suite, OutputRegistryTestCases("test_expected_combinations_are_registered"), test_re)
     add_test(suite, OutputRegistryTestCases("test_format_independent_family_uses_default_entry"), test_re)

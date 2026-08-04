@@ -1,11 +1,13 @@
-from collections.abc import Callable
-from time import time
-
 import numpy
+import scipy
+import math
+from time import time
+from typing import Callable
+
 
 from ..common.configuration import Configuration
-from ..solvers import SolverInfo, newton_krylov
 from .integrator import Integrator
+from ..solvers import fgmres, matvec_rat, SolverInfo, newton_krylov
 
 
 class BackwardEuler(Integrator):
@@ -16,7 +18,7 @@ class BackwardEuler(Integrator):
 
     def __step__(self, Q, dt):
         def BE_fun(Q_plus):
-            return (Q_plus - Q) / dt - self.evaluate_rhs(self.rhs, Q_plus)
+            return (Q_plus - Q) / dt - self.rhs(Q_plus)
 
         maxiter = None
         if self.preconditioner is not None:

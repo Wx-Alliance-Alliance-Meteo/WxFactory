@@ -812,7 +812,8 @@ def j2_prepare(rhsobj, q, momentum_blocks=None):
     """Precompute the state and vertical blocks used by ``j2_flux_matvec``."""
     if momentum_blocks is None:
         L, A, U = assemble_vertical_blocks(rhsobj, q)
-        momentum_blocks = split_vertical_blocks(rhsobj, L, A, U)
+        # split_vertical_blocks returns (momentum, retained); only the momentum rows belong to J2.
+        momentum_blocks, _ = split_vertical_blocks(rhsobj, L, A, U)
     rhsobj.horizontal_flux_div(q)
     return (
         rhsobj.ops,

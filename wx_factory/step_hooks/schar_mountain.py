@@ -130,7 +130,8 @@ class ScharMountainHook(step_hook.StepHook):
         coordinate (Schar et al. 2002, eq. 27), the rest is the small-scale part h2.
         """
         r = self.geom.earth_radius * torch.arccos(
-            math.sin(self.phim) * torch.sin(lat) + math.cos(self.phim) * torch.cos(lat) * torch.cos(lon - self.lambdam)
+            math.sin(self.phim) * torch.sin(lat)
+            + math.cos(self.phim) * torch.cos(lat) * torch.cos(lon - self.lambdam)
         )
 
         envelope = self.h0 * torch.exp(-(r**2) / self.Dm**2)

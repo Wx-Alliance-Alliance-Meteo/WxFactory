@@ -1,8 +1,8 @@
 import unittest
 
-from wx_factory.common import config_hints
-
 from wx_test import WxTestCase
+
+from wx_factory.common import config_hints
 
 
 class ConfigHintsTestCases(WxTestCase):

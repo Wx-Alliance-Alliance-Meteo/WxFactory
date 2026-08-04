@@ -1,11 +1,15 @@
 import types
 import unittest
 
-from wx_factory.geometry import Cartesian3D, CubedSphere2D, CubedSphere3D
-from wx_factory.rhs import rhs_selector
-from wx_factory.rhs.rhs_selector import RHS_REGISTRY, RhsBundle, register_rhs, resolve_rhs
-
 from wx_test import WxTestCase
+
+from wx_factory.geometry import Cartesian3D, CubedSphere2D, CubedSphere3D
+from wx_factory.rhs.rhs_selector import (
+    RHS_REGISTRY,
+    RhsBundle,
+    register_rhs,
+    resolve_rhs,
+)
 
 
 def make_ctx(equations, geom, discretization="dfr"):

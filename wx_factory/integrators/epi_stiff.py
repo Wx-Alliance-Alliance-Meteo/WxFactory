@@ -1,11 +1,12 @@
-import math
+import torch
 from collections import deque
+import math
 
 import numpy
-import torch
 
 from ..common.configuration import Configuration
 from ..solvers import ExponentialSolverRequest, matvec_fun, resolve_exponential_solver
+
 from .epi import Epi
 from .integrator import Integrator
 from .srerk import alpha_coeff
@@ -52,7 +53,7 @@ class EpiStiff(Integrator):
         # Initialize saved values using init_step method
         if len(self.previous_Q) < self.n_prev:
             self.previous_Q.appendleft(Q)
-            self.previous_rhs.appendleft(self.evaluate_rhs(self.rhs, Q))
+            self.previous_rhs.appendleft(self.rhs(Q))
 
             dt /= self.init_substeps
             for i in range(self.init_substeps):
@@ -60,7 +61,7 @@ class EpiStiff(Integrator):
             return Q
 
         # Regular EPI step
-        rhs = self.evaluate_rhs(self.rhs, Q)
+        rhs = self.rhs(Q)
 
         def matvec_handle(v):
             return matvec_fun(v, dt, Q, rhs, self.rhs, self.jacobian_method)

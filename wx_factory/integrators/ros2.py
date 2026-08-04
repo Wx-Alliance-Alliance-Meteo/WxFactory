@@ -1,8 +1,8 @@
-from collections.abc import Callable
+import torch
 from time import time
+from typing import Callable
 
 import numpy
-import torch
 
 from ..common.configuration import Configuration
 from ..solvers import MatvecOpRat, SolverInfo
@@ -21,7 +21,7 @@ class Ros2(Integrator):
         self.gmres_restart = param.gmres_restart
 
     def __prestep__(self, Q: numpy.ndarray, dt: float) -> None:
-        rhs = self.evaluate_rhs(self.rhs_handle, Q)
+        rhs = self.rhs_handle(Q)
         self.Q_flat = torch.ravel(Q)
         self.A = MatvecOpRat(dt, Q, rhs, self.rhs_handle)
         self.b = self.A(self.Q_flat) + torch.ravel(rhs) * dt

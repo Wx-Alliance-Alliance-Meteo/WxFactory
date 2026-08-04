@@ -1,7 +1,9 @@
-import math
-
-import numpy
 import torch
+import math
+import sys
+
+from mpi4py import MPI
+import numpy
 from numpy.typing import NDArray
 
 from .cubed_sphere_3d import CubedSphere3D
@@ -25,11 +27,6 @@ class Metric3DTopo:
         # Retrieve objects for easier access
         geom = self.geom
         matrix = self.matrix
-        if geom.gnomonic.dtype == torch.float64 and matrix.dtype != torch.float64:
-            # Single-precision runs keep geometry in float64 through initial metric construction.
-            # Use matching double operators for the coordinate derivatives; the runtime operator
-            # set remains in the configured working precision.
-            matrix = DFROperators(geom, geom.device, torch.float64)
         dtype = geom.gnomonic.dtype
 
         # Whether computing deep or shallow metric
@@ -839,10 +836,7 @@ class Metric3DTopo:
             if verbose and geom.device.comm.rank == 0:
                 print("Done assembling Γ")
 
-        # The metric tensors are kept in the element-wise ("new") layout alone, which is the one the
-        # right-hand side reads. The arrays on the old layout, and the per-component views of them,
-        # are only intermediates here: at 1 deg / L60 they came to some 180 MB per process, which is
-        # the difference between this resolution fitting on a GPU and not.
+        # Assemble metric terms in the legacy and element-wise layouts.
 
         self.sqrtG = sqrtG
         self.sqrtG_itf_i = sqrtG_itf_i
@@ -909,12 +903,6 @@ class Metric3DTopo:
         self.sqrtG_itf_j_new = geom._to_new_itf_j(self.sqrtG_itf_j)
         self.sqrtG_itf_k_new = geom._to_new_itf_k(self.sqrtG_itf_k)
 
-        self.inv_sqrtG_new = 1.0 / self.sqrtG_new
-        self.cast_to_working_precision(geom.working_dtype)
-        geom.cast_to_working_precision()
-
-    def cast_to_working_precision(self, dtype) -> None:
-        """Cast completed metric arrays and restore reciprocal identities in working precision."""
-        cast_double_arrays(self, dtype)
-        self.inv_sqrtG = 1.0 / self.sqrtG
+        # Store metric terms in the working precision.
+        cast_double_arrays(self, geom.dtype)
         self.inv_sqrtG_new = 1.0 / self.sqrtG_new

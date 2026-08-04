@@ -167,14 +167,8 @@
                     "name": "jacobian_method",
                     "type": "str",
                     "default": "complex",
-                    "selectables": ["complex", "ad", "fd"],
-                    "description": "Jacobian-action method: complex step, forward AD, finite difference."
-                },
-                {
-                    "name": "phi_rhs_double",
-                    "type": "int",
-                    "default": 1,
-                    "description": "Evaluate update-driving tendencies in double precision, then cast them to the working precision. The Jacobian remains in the state's precision."
+                    "selectables": ["complex", "fd"],
+                    "description": "Jacobian-action method: complex step or finite difference."
                 },
                 {
                     "name": "verbose_solver",

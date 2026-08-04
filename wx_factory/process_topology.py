@@ -1,73 +1,21 @@
+import numpy
+import torch
 import math
 import time
-from contextlib import contextmanager
 from typing import Callable, Optional, Tuple
 
-import torch
 from mpi4py import MPI
 from numpy.typing import NDArray
 
-from .device import Device, differentiable_mode
-from .wx_mpi import Conditional, SingleProcess, split_nodes
+from .device import Device
+from .wx_mpi import SingleProcess, Conditional, split_nodes
 
 ExchangedVector = Tuple[NDArray, ...] | NDArray
-
-# Test control, see :func:`halo_derivatives_disabled`.
-_halo_derivatives_enabled = True
-
-
-def _differentiable_exchange() -> bool:
-    """Whether halo exchanges must propagate derivatives through their JVP and VJP rules."""
-    return differentiable_mode() and _halo_derivatives_enabled
-
-
-@contextmanager
-def halo_derivatives_disabled():
-    """Drop the derivative contribution of the halo exchange.
-
-    Only meant as a test control: a distributed derivative must change when the neighbour
-    contribution is removed, which is what proves the halo tangent is actually carried.
-    """
-    global _halo_derivatives_enabled
-    previous = _halo_derivatives_enabled
-    _halo_derivatives_enabled = False
-    try:
-        yield
-    finally:
-        _halo_derivatives_enabled = previous
-
 
 SOUTH = 0
 NORTH = 1
 WEST = 2
 EAST = 3
-
-# Match each message by its sender's boundary slot.
-_HALO_TAG_BASE = 7000
-
-
-class _HaloExchange(torch.autograd.Function):
-    """Differentiable MPI exchange of packed halo blocks.
-
-    Torch handles derivatives of packing, rotations, and flips. The reciprocal block exchange is
-    its own transpose, so the same communication implements its JVP and VJP.
-    """
-
-    @staticmethod
-    def forward(send_buffer: NDArray, ptopo: "ProcessTopology") -> NDArray:
-        return ptopo.exchange_p2p(send_buffer)
-
-    @staticmethod
-    def setup_context(ctx, inputs, output) -> None:
-        ctx.ptopo = inputs[1]
-
-    @staticmethod
-    def backward(ctx, grad_recv: NDArray):
-        return _HaloExchange.apply(grad_recv.contiguous(), ctx.ptopo), None
-
-    @staticmethod
-    def jvp(ctx, tangent_send: NDArray, _):
-        return _HaloExchange.apply(tangent_send.contiguous(), ctx.ptopo)
 
 
 class ProcessTopology:
@@ -369,7 +317,6 @@ class ProcessTopology:
         if self.panel_comm.rank != 0:
             self.panel_roots_comm = MPI.COMM_NULL
 
-        self._sender_slot = None
         self.send_buffer = None
         self.recv_buffer = None
 
@@ -382,6 +329,8 @@ class ProcessTopology:
         boundary_shape: Tuple[int, ...],
         flip_dim: int | Tuple[int, ...] = -1,
     ):
+        rank = self.device.comm.rank
+
         base_shape = get_base_shape(south.shape, boundary_shape)
         send_buffer = torch.empty((4,) + base_shape, dtype=south[0].dtype)
 
@@ -529,20 +478,14 @@ class ProcessTopology:
         convert = self.convert_contra
         base_shape = get_base_shape(south[0].shape, boundary_sn.shape)
 
+        if self.send_buffer is None or self.send_buffer.nbytes < south.nbytes * 4:
+            self.send_buffer = torch.empty(4 * south.nbytes, dtype=torch.uint8)
+            self.recv_buffer = torch.empty_like(self.send_buffer)
+
         buffer_shape = (4, south.shape[0]) + base_shape
-
-        if _differentiable_exchange():
-            # Reused byte buffers cannot carry forward-AD tangents.
-            send_buffer = torch.empty(buffer_shape, dtype=south.dtype)
-            recv_buffer = torch.empty(buffer_shape, dtype=south.dtype)
-        else:
-            if self.send_buffer is None or self.send_buffer.nbytes < south.nbytes * 4:
-                self.send_buffer = torch.empty(4 * south.nbytes, dtype=torch.uint8)
-                self.recv_buffer = torch.empty_like(self.send_buffer)
-
-            num_elem = math.prod(buffer_shape)
-            send_buffer = torch.ravel(self.send_buffer).view(dtype=south.dtype)[:num_elem].reshape(buffer_shape)
-            recv_buffer = torch.ravel(self.recv_buffer).view(dtype=south.dtype)[:num_elem].reshape(buffer_shape)
+        num_elem = math.prod(buffer_shape)
+        send_buffer = torch.ravel(self.send_buffer).view(dtype=south.dtype)[:num_elem].reshape(buffer_shape)
+        recv_buffer = torch.ravel(self.recv_buffer).view(dtype=south.dtype)[:num_elem].reshape(buffer_shape)
 
         inputs = [south, north, west, east]
         boundaries = [boundary_sn, boundary_sn, boundary_we, boundary_we]
@@ -563,48 +506,10 @@ class ProcessTopology:
 
         return self.initiate_transfers([(send_buffer, south[0].shape, True)], recv_buffer=recv_buffer)[0]
 
-    def _sender_slot_per_receive_slot(self) -> list[int]:
-        """Discover which remote boundary slot supplies each local receive slot."""
-        if self._sender_slot is None:
-            sent = torch.tensor([[float(slot)] for slot in range(4)], dtype=torch.float64)
-            received = torch.empty_like(sent)
-            self.comm_dist_graph.Ineighbor_alltoall(sent.contiguous(), received).Wait()
-            self._sender_slot = [int(value) for value in received.flatten().tolist()]
-        return self._sender_slot
-
-    def exchange_p2p(self, send_buffer: NDArray) -> NDArray:
-        """Exchange four boundary blocks using tagged point-to-point messages."""
-        # The custom autograd Function owns graph connectivity across MPI.
-        send_buffer = send_buffer.detach().contiguous()
-        recv_buffer = torch.empty_like(send_buffer)
-
-        # Keep block views alive until all nonblocking transfers finish.
-        blocks = [(send_buffer[slot], recv_buffer[slot]) for slot in (SOUTH, NORTH, WEST, EAST)]
-
-        sender_slot = self._sender_slot_per_receive_slot()
-
-        requests = [
-            self._comm.Irecv(blocks[slot][1], source=self.sources[slot], tag=_HALO_TAG_BASE + sender_slot[slot])
-            for slot in (SOUTH, NORTH, WEST, EAST)
-        ]
-        requests += [
-            self._comm.Isend(blocks[slot][0], dest=self.destinations[slot], tag=_HALO_TAG_BASE + slot)
-            for slot in (SOUTH, NORTH, WEST, EAST)
-        ]
-
-        MPI.Request.Waitall(requests)
-        return recv_buffer
-
     def initiate_transfers(self, send_info: list[tuple[NDArray, tuple[int, ...], bool]], recv_buffer=None):
         requests: list[ExchangeRequest] = []
 
         for send_buffer, shape, is_vector in send_info:
-            if _differentiable_exchange():
-                # The custom operation completes before its result is unpacked.
-                received = _HaloExchange.apply(send_buffer, self)
-                requests.append(ExchangeRequest(received, None, shape=shape, is_vector=is_vector))
-                continue
-
             if recv_buffer is None:
                 recv_buffer = torch.empty_like(send_buffer)
             req = self.comm_dist_graph.Ineighbor_alltoall(send_buffer, recv_buffer)
@@ -800,13 +705,7 @@ class ExchangeRequest:
     """Wrapper around an MPI request. Provides a wait function that will wait for MPI transfers to be complete and
     return the received arrays in the specified shape, split among the 4 directions/neighbors."""
 
-    def __init__(
-        self,
-        recv_buffer: NDArray,
-        request: Optional[MPI.Request],
-        shape: tuple,
-        is_vector: bool = False,
-    ):
+    def __init__(self, recv_buffer: NDArray, request: MPI.Request, shape: tuple, is_vector: bool = False):
         """Create a request
 
         :param recv_buffer: Array where all the data will be received
@@ -847,9 +746,6 @@ class ExchangeRequest:
         """
         t0 = time.time()
         num_tests = 0
-
-        if self.request is None:
-            return tuple(self.to_tuple(self.recv_buffer[side]) for side in (SOUTH, NORTH, WEST, EAST))
 
         # Wait until we have received from all neighbors (until timeout)
         if timeout < 0.0:

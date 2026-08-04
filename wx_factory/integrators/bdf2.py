@@ -1,6 +1,5 @@
-from time import time
-
 import numpy
+from time import time
 
 from ..solvers import newton_krylov
 from .integrator import Integrator, SolverInfo
@@ -21,16 +20,14 @@ class Bdf2(Integrator):
             newQ = Q.copy()
             for _ in range(self.init_substeps):
                 init_dt = dt / self.init_substeps
-                nonlin_fun = lambda Q_plus: (Q_plus - newQ) / init_dt - 0.5 * self.evaluate_rhs(self.rhs, Q_plus)
+                nonlin_fun = lambda Q_plus: (Q_plus - newQ) / init_dt - 0.5 * self.rhs(Q_plus)
 
                 newQ, num_iter, residuals = newton_krylov(nonlin_fun, newQ, f_tol=self.tol)
         else:
             maxiter = None
 
             def nonlin_fun(Q_plus):
-                return (Q_plus - 4.0 / 3.0 * Q + 1.0 / 3.0 * self.Qprev) / dt - 2.0 / 3.0 * self.evaluate_rhs(
-                    self.rhs, Q_plus
-                )
+                return (Q_plus - 4.0 / 3.0 * Q + 1.0 / 3.0 * self.Qprev) / dt - 2.0 / 3.0 * self.rhs(Q_plus)
 
             if self.preconditioner is not None:
                 self.preconditioner.prepare(dt, Q, self.Qprev)

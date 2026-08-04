@@ -3,12 +3,10 @@ from collections.abc import Callable
 
 import numpy
 import torch
-import torch.autograd.forward_ad as fwad
 from mpi4py import MPI
 from numpy.typing import NDArray
 
 from ..common import Configuration
-from ..device import differentiable_mode
 
 
 class MatvecOp:
@@ -64,28 +62,6 @@ class MatvecOpBasic(MatvecOp):
         )
 
 
-def _matvec_ad(vec: NDArray, Q: NDArray, rhs_handle: Callable[[NDArray], NDArray]) -> NDArray:
-    """Return ``J . vec`` as the forward-AD tangent of the right-hand side at ``Q``."""
-    if not differentiable_mode():
-        raise RuntimeError(
-            "jacobian_method = ad needs differentiable mode, which is off. It is normally enabled "
-            "from the configuration before the device is created; a Simulation built around a "
-            "device that already installed an inference-mode guard cannot use it."
-        )
-    if torch.is_inference_mode_enabled():
-        raise RuntimeError("jacobian_method = ad cannot differentiate the right-hand side under torch.inference_mode")
-
-    with fwad.dual_level():
-        result = rhs_handle(fwad.make_dual(Q, vec.reshape(Q.shape)))
-        tangent = fwad.unpack_dual(result).tangent
-        if tangent is None:
-            raise RuntimeError(
-                "the right-hand side returned no forward-AD tangent; it dropped the derivative "
-                "of its input (an in-place write into a cached buffer will do this)"
-            )
-        return tangent.clone()
-
-
 def matvec_fun(
     vec: NDArray,
     dt: float,
@@ -103,19 +79,14 @@ def matvec_fun(
     :param Q: ?
     :param rhs: Last computed RHS
     :param rhs_handle: Right hand side to compute
-    :param method: Jacobian-action method: forward AD, complex step, or finite difference.
+    :param method: Jacobian-action method: complex step or finite difference.
     :param fd_norm_q: Cached distributed norm of the linearization state.
 
     :return: Result of the `A * vec` operation
     """
     method_key = method.lower()
 
-    if method_key == "ad":
-        # Forward-mode automatic differentiation: the exact directional derivative, with no step
-        # size to choose. This matters most in single precision, where the finite difference loses
-        # the derivative to subtractive cancellation.
-        jac = dt * _matvec_ad(vec, Q, rhs_handle)
-    elif method_key == "complex":
+    if method_key == "complex":
         # Complex-step approximation
         epsilon = math.sqrt(numpy.finfo(float).eps)
         Qvec = Q + 1j * epsilon * vec.reshape(Q.shape)
@@ -133,7 +104,7 @@ def matvec_fun(
 
         Qvec = Q + epsilon * direction
         rhs_difference = rhs_handle(Qvec) - rhs
-        jac = rhs_difference * (dt / epsilon)
+        jac = (rhs_difference * (dt / epsilon)).to(Q.dtype)
     else:
         raise ValueError(f"Unknown Jacobian method '{method}'")
 

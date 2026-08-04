@@ -1,11 +1,10 @@
 import torch
+from mpi_test import run_test_on_x_process
 from numpy import ndarray
+from wx_test import WxTestCase
 
 from wx_factory.device import PytorchDevice
 from wx_factory.solvers import kiops
-
-from mpi_test import run_test_on_x_process
-from wx_test import WxTestCase
 
 
 class KiopsMpiTestCases(WxTestCase):

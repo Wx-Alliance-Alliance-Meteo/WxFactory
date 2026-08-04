@@ -23,7 +23,7 @@ class RHSDirecFluxReconstruction(RHS):
 
     def allocate_arrays(self, q: NDArray) -> None:
         super().allocate_arrays(q)
-        if self.workspace_needs_allocation(self.q_itf_x1, q.dtype):
+        if self.q_itf_x1 is None or self.q_itf_x1.dtype != q.dtype:
             itf_shape = q.shape[:4] + (2 * self.geom.num_solpts**2,)
             self.q_itf_x1 = torch.empty(itf_shape, dtype=q.dtype)
             self.q_itf_x2 = torch.empty_like(self.q_itf_x1)
@@ -103,7 +103,7 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
         itf_j_shape = (self.num_var,) + self.geom.itf_j_shape
         itf_k_shape = (self.num_var,) + self.geom.itf_k_shape
 
-        if self.workspace_needs_allocation(self.f_itf_x1, dtype):
+        if self.f_itf_x1 is None or self.f_itf_x1.dtype != dtype:
             self.pressure = torch.zeros_like(q[0])
             self.log_p = torch.zeros_like(q[0])
 
@@ -383,7 +383,7 @@ class RHSDirecFluxReconstruction_mpi_v2(RHSDirecFluxReconstruction):
         itf_j_shape = (self.num_var,) + self.geom.itf_j_shape
         itf_k_shape = (self.num_var,) + self.geom.itf_k_shape
 
-        if self.workspace_needs_allocation(self.f_itf_x1, dtype):
+        if self.f_itf_x1 is None or self.f_itf_x1.dtype != dtype:
             self.pressure = torch.zeros_like(q[0])
             self.log_p = torch.zeros_like(q[0])
 
@@ -688,28 +688,6 @@ class RHSDirecFluxReconstruction_mpi_v2(RHSDirecFluxReconstruction):
         self.pin_y_momentum()
 
         return self.rhs.reshape(given_shape).copy()
-
-    def implicit_double(self, q: NDArray) -> NDArray:
-        """Evaluate f1 in float64 and return it in the state's precision.
-
-        Both partitions are dominated by the rho_theta vertical flux divergence, whose signal scales
-        with the vertical velocity while its rounding noise scales with the much larger magnitude of
-        rho_theta. Evaluating in float64 removes about 7x of that error; the rest is set by the state
-        itself being float32 and needs a reformulation, not a promotion.
-        """
-        if q.dtype != torch.float32:
-            return self.implicit(q)
-        return self.implicit(q.to(torch.float64)).to(q.dtype)
-
-    def explicit_double(self, q: NDArray) -> NDArray:
-        """Evaluate f2 in float64 and return it in the state's precision.
-
-        Worth the same as for f1, and on more of the tendency: measured on DCMIP 2-1, f2 carries a
-        larger float32 error than f1 (5.2e-3 against 1.2e-3) and promoting it gains 7.4x.
-        """
-        if q.dtype != torch.float32:
-            return self.explicit(q)
-        return self.explicit(q.to(torch.float64)).to(q.dtype)
 
     def explicit(self, q: NDArray) -> NDArray:
         """Return the complementary partition f2.

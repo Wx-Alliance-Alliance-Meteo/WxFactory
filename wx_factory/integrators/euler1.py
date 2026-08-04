@@ -11,7 +11,7 @@ class Euler1(Integrator):
         self.rhs = rhs
 
     def __step__(self, Q, dt):
-        Q = Q + self.evaluate_rhs(self.rhs, Q) * dt
+        Q = Q + self.rhs(Q) * dt
         return Q
 
 

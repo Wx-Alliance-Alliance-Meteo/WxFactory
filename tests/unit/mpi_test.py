@@ -1,16 +1,14 @@
 import time
 import traceback
-from types import TracebackType
-from typing import List, Tuple, Union
 import unittest
-from unittest.runner import _WritelnDecorator, TextTestResult
+from types import TracebackType
+from unittest.runner import TextTestResult
 from unittest.signals import registerResult
 
-from mpi4py import MPI
 import numpy
+from mpi4py import MPI
 
 import wx_factory.wx_mpi
-
 from tests.unit.wx_test import WxTestCase, WxTestResult
 
 
@@ -81,14 +79,14 @@ class MpiTestResult(WxTestResult):
     def addError(
         self,
         test: unittest.TestCase,
-        err: Union[tuple[type[BaseException], BaseException, TracebackType], tuple[None, None, None]],
+        err: tuple[type[BaseException], BaseException, TracebackType] | tuple[None, None, None],
     ) -> None:
         self.addCorrectResult(test, MpiTestResult._ERROR, err=err)
 
     def addFailure(
         self,
         test: unittest.TestCase,
-        err: Union[tuple[type[BaseException], BaseException, TracebackType], tuple[None, None, None]],
+        err: tuple[type[BaseException], BaseException, TracebackType] | tuple[None, None, None],
     ) -> None:
         self.addCorrectResult(test, MpiTestResult._FAILURE, err=err)
 
@@ -149,7 +147,7 @@ class MpiTestResult(WxTestResult):
         super().printErrors()
         if len(self.extra_errors) > 0:
             self.stream.writeln(self.separator2)
-            self.stream.writeln(f"Errors from other ranks:")
+            self.stream.writeln("Errors from other ranks:")
             for e in self.extra_errors:
                 self.stream.writeln(f"{''.join(e[2])}\n{e[1]}")
 

@@ -1,8 +1,8 @@
 import math
-from typing import Callable
+from collections.abc import Callable
 
-from mpi4py import MPI
 import torch
+from mpi4py import MPI
 from torch import Tensor
 
 from ..device import Device
@@ -44,10 +44,13 @@ def pmex(
     :return: `stats[3]` - number of matrix exponentials
     :return: `stats[4]` - Error estimate
     :return: `stats[5]` - the Krylov size of the last substep
-    :return: `stats[6]` = ?
+    :return: `stats[6]` - number of communicated norm recomputations
     """
     if device is None:
         device = Device.get_default()
+
+    if mmax < mmin:
+        raise ValueError(f"mmax ({mmax}) must be greater than or equal to mmin ({mmin})")
 
     comm = device.comm
 

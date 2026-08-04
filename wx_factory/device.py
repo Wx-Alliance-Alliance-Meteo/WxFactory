@@ -10,12 +10,12 @@ import os
 from time import time
 from typing import Any, Self
 
-import torch
 from mpi4py import MPI
+import torch
 
 from .wx_mpi import split_nodes
 
-__all__ = ["Device", "PytorchDevice", "differentiable_mode", "enable_differentiable_mode"]
+__all__ = ["Device", "PytorchDevice"]
 
 # WxFactory speaks NumPy-flavoured method names in a few places; make torch tensors answer to them
 # too, so the same call works whether an array happens to be a tensor or a host NumPy array.
@@ -23,30 +23,9 @@ torch.Tensor.astype = torch.Tensor.to
 torch.Tensor.copy = torch.Tensor.clone
 
 
-_differentiable = os.environ.get("WX_FACTORY_DIFFERENTIABLE", "").lower() in ("1", "true", "yes", "on")
-
-
-def differentiable_mode() -> bool:
-    """Return whether autograd is enabled.
-
-    Autograd is off by default: the model then runs under ``torch.inference_mode``, which is
-    cheaper but forbids tensors that carry derivatives. It is turned on either by the
-    ``WX_FACTORY_DIFFERENTIABLE`` environment variable or by :func:`enable_differentiable_mode`.
-
-    Query this at the point of use rather than caching it at import time -- a configuration that
-    needs derivatives (``jacobian_method = ad``) enables it while the modules are already loaded.
-    """
-    return _differentiable
-
-
-def enable_differentiable_mode() -> None:
-    """Enable autograd for the rest of the process.
-
-    Must be called before the :class:`Device` is created, since that is where the inference-mode
-    guard is installed; tensors created under that guard can never carry derivatives.
-    """
-    global _differentiable
-    _differentiable = True
+def _differentiable_requested() -> bool:
+    """Whether the user asked to keep autograd on (opt out of inference mode)."""
+    return os.environ.get("WX_FACTORY_DIFFERENTIABLE", "").lower() in ("1", "true", "yes", "on")
 
 
 class Device:
@@ -74,8 +53,8 @@ class Device:
         # Every tensor the code creates goes through torch's default device.
         torch.set_default_device(self.torch_device)
 
-        # Differentiable mode must be enabled before Device creates tensors in inference mode.
-        if not differentiable_mode() and not torch.is_inference_mode_enabled():
+        # Disable autograd bookkeeping unless WX_FACTORY_DIFFERENTIABLE requests it.
+        if not _differentiable_requested() and not torch.is_inference_mode_enabled():
             self._inference_mode_guard = torch.inference_mode()
             self._inference_mode_guard.__enter__()
 
@@ -87,15 +66,6 @@ class Device:
 
         if comm.rank == 0:
             print(f"Pytorch backend running on {self.torch_device} (on rank {comm.rank})", flush=True)
-
-    @property
-    def allows_autograd(self) -> bool:
-        """Whether tensors on this device can carry derivatives.
-
-        Inference mode is the only thing that prevents it, and it is process-wide, so this also
-        reports an inference-mode guard installed by someone other than this device.
-        """
-        return not torch.is_inference_mode_enabled()
 
     def tensor(self, a) -> torch.Tensor:
         return torch.tensor(a, device=self.torch_device)

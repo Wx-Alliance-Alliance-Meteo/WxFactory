@@ -1,7 +1,6 @@
 import time
-from typing import Any
 import unittest
-from unittest import TestResult
+from typing import Any
 from unittest.runner import _WritelnDecorator
 
 from mpi4py import MPI

@@ -1,16 +1,19 @@
+import torch
 import math
 from typing import Optional
 
-import numpy
-import torch
 from mpi4py import MPI
+import numpy
 from numpy.typing import NDArray
+
+from .cubed_sphere import CubedSphere
+from .geometry import cast_double_arrays
+from .sphere import cart2sph
 
 # For type hints
 from ..common import Configuration
+from ..device import Device
 from ..process_topology import ProcessTopology
-from .cubed_sphere import CubedSphere
-from .sphere import cart2sph
 
 
 class CubedSphere3D(CubedSphere):
@@ -267,9 +270,7 @@ class CubedSphere3D(CubedSphere):
         # Repeat for the interface values
         x1_itf_i = x1_boundaries.copy()
         x2_itf_i = x2.copy()
-        x3_itf_i = torch.repeat_interleave(x3[:, :, 0], num_elements_x1 + 1).reshape(
-            self.itf_i_shape_3d
-        )  # Repeat zy plane
+        x3_itf_i = torch.repeat_interleave(x3[:, :, 0], num_elements_x1 + 1).reshape(self.itf_i_shape_3d)  # Repeat zy plane
         eta_itf_i = torch.repeat_interleave(eta[:, :, 0], num_elements_x1 + 1).reshape(self.itf_i_shape_3d)
         self.x3_itf_i_new = self._to_new_itf_i(x3_itf_i)
         self.eta_itf_i_new = self._to_new_itf_i(eta_itf_i)
@@ -859,8 +860,8 @@ class CubedSphere3D(CubedSphere):
         self.coslon_new = torch.cos(self.polar[0, ...])
         self.coslat_new = torch.cos(self.polar[1, ...])
 
-        # Keep the completed coordinates in double precision until the metric has been built from
-        # them. Initialization casts geometry and metric together to the configured working dtype.
+        # Store coordinates in the working precision before metric construction.
+        cast_double_arrays(self, self.dtype)
 
     def _to_new(self, a: NDArray) -> NDArray:
         """Convert input array to new memory layout"""
@@ -1031,9 +1032,9 @@ class CubedSphere3D(CubedSphere):
         tmp_shape1 = a.shape[:-3] + (self.num_elements_x2, self.num_elements_x1 + 2, 2, self.num_solpts)
         axis1 = a.ndim - 1
         a_tmp = a.reshape(tmp_shape1)
-        return torch.tile(
-            torch.repeat_interleave(a_tmp, self.num_solpts, dim=axis1), (self.num_elements_x3, 1, 1, 1)
-        ).reshape(self.itf_i_shape)
+        return torch.tile(torch.repeat_interleave(a_tmp, self.num_solpts, dim=axis1), (self.num_elements_x3, 1, 1, 1)).reshape(
+            self.itf_i_shape
+        )
 
     def get_itf_j_floor(self, a):
         """Retrieve slice of interface-j array 'a' that's on the floor"""
@@ -1052,9 +1053,9 @@ class CubedSphere3D(CubedSphere):
         tmp_shape1 = a.shape[:-3] + (self.num_elements_x2 + 2, self.num_elements_x1, 2, self.num_solpts)
         axis1 = a.ndim - 1
         a_tmp = a.reshape(tmp_shape1)
-        return torch.tile(
-            torch.repeat_interleave(a_tmp, self.num_solpts, dim=axis1), (self.num_elements_x3, 1, 1, 1)
-        ).reshape(self.itf_j_shape)
+        return torch.tile(torch.repeat_interleave(a_tmp, self.num_solpts, dim=axis1), (self.num_elements_x3, 1, 1, 1)).reshape(
+            self.itf_j_shape
+        )
 
     def to_new_floor(self, a: NDArray) -> NDArray:
         """Convert floor array from old to new layout"""

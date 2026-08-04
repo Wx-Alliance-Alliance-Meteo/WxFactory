@@ -1,27 +1,25 @@
-from configparser import ConfigParser, NoSectionError, NoOptionError
 import glob
 import os
-import sys
-from typing import Optional, Type, TypeVar, Union
+from configparser import ConfigParser, NoOptionError, NoSectionError
+from typing import TypeVar
 
-from mpi4py import MPI
 import torch
+from mpi4py import MPI
 from torch import Tensor
 
+import wx_factory.wx_mpi
+from tests.unit.mpi_test import MpiTestCase
 from wx_factory.common import Configuration, load_default_schema, readfile
 from wx_factory.output import state
 from wx_factory.simulation import Simulation
-import wx_factory.wx_mpi
 
-from tests.unit.mpi_test import MpiTestCase, run_test_on_x_process
-
-OptionType = TypeVar("OptionType", bound=Union[int, float, str, bool])
+OptionType = TypeVar("OptionType", bound=int | float | str | bool)
 
 
 def _get_opt_from_parser(
-    parser: ConfigParser, section_name: str, option_name: str, option_type: Type[OptionType]
+    parser: ConfigParser, section_name: str, option_name: str, option_type: type[OptionType]
 ) -> OptionType:
-    value: Optional[OptionType] = None
+    value: OptionType | None = None
     if option_type == float:
         value = parser.getfloat(section_name, option_name)
     elif option_type == int:
@@ -41,9 +39,9 @@ def _get_opt_from_parser(
 def _validate_option(
     option_name: str,
     value: OptionType,
-    valid_values: Optional[list[OptionType]],
-    min_value: Optional[OptionType],
-    max_value: Optional[OptionType],
+    valid_values: list[OptionType] | None,
+    min_value: OptionType | None,
+    max_value: OptionType | None,
 ) -> OptionType:
 
     if valid_values is not None and value not in valid_values:
@@ -68,13 +66,13 @@ def _get_option(
     filename: str,
     section_name: str,
     option_name: str,
-    option_type: Type[OptionType],
-    default_value: Optional[OptionType],
-    valid_values: Optional[list[OptionType]] = None,
-    min_value: Optional[OptionType] = None,
-    max_value: Optional[OptionType] = None,
+    option_type: type[OptionType],
+    default_value: OptionType | None,
+    valid_values: list[OptionType] | None = None,
+    min_value: OptionType | None = None,
+    max_value: OptionType | None = None,
 ) -> OptionType:
-    value: Optional[OptionType] = None
+    value: OptionType | None = None
 
     try:
         value = _get_opt_from_parser(parser, section_name, option_name, option_type)
@@ -131,8 +129,6 @@ class StateIntegrationTestCases(MpiTestCase):
 
             sim = Simulation(config, device=self.device)
             sim.run()
-
-            conf = sim.config
 
             state_vector_file = sim.output.state_file_name(sim.step_id)
             base_name = os.path.split(state_vector_file)[-1]

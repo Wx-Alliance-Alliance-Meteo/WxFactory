@@ -113,7 +113,7 @@ def _euler_cubesphere(ctx: RhsContext) -> RhsBundle:
         ctx.fields_shape,
         debug=ctx.debug,
     )
-    return RhsBundle(full=full, shape=ctx.fields_shape, implicit=full.implicit_double, explicit=full.explicit_double)
+    return RhsBundle(full=full, shape=ctx.fields_shape, implicit=full.implicit, explicit=full.explicit)
 
 
 # Cartesian slabs use the 3D Euler RHS with an identity metric.
@@ -135,7 +135,7 @@ def _euler_cartesian3d(ctx: RhsContext) -> RhsBundle:
         ctx.fields_shape,
         debug=ctx.debug,
     )
-    return RhsBundle(full=full, shape=ctx.fields_shape, implicit=full.implicit_double, explicit=full.explicit_double)
+    return RhsBundle(full=full, shape=ctx.fields_shape, implicit=full.implicit, explicit=full.explicit)
 
 
 @register_rhs("shallow_water", CubedSphere2D)

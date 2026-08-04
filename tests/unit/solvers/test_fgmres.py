@@ -1,18 +1,17 @@
 import random
 
-from mpi4py import MPI
 import numpy
-from numpy.typing import NDArray
 import scipy
 import scipy.sparse.linalg
 import torch
+from mpi4py import MPI
+from numpy.typing import NDArray
 from torch import Tensor
+from wx_test import WxTestCase
 
+from tests.unit import array_generator
 from wx_factory.device import Device
 from wx_factory.solvers.fgmres import fgmres
-
-import tests.unit.array_generator as array_generator
-from wx_test import WxTestCase
 
 
 class FgmresScipyTestCases(WxTestCase):

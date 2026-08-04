@@ -1,16 +1,14 @@
 import random
 
-from mpi4py import MPI
-from numpy import ndarray
+import array_generator
 import torch
+from mpi4py import MPI
 from torch import Tensor
+from wx_test import WxTestCase
 
 from wx_factory.device import PytorchDevice
 from wx_factory.solvers.kiops import kiops
 from wx_factory.solvers.pmex import pmex
-
-import array_generator
-from wx_test import WxTestCase
 
 
 class KiopsPmexToleranceCpuTestCases(WxTestCase):
@@ -68,5 +66,5 @@ class KiopsPmexToleranceCpuTestCases(WxTestCase):
         relative_diff_w1: float = abs(abs_diff / w1_value)
         relative_diff_w2: float = abs(abs_diff / w2_value)
 
-        self.assertLessEqual(relative_diff_w1, self.tolerance, f"Kiops didn't give a close result")
-        self.assertLessEqual(relative_diff_w2, self.tolerance, f"Pmex didn't give a close result")
+        self.assertLessEqual(relative_diff_w1, self.tolerance, "Kiops didn't give a close result")
+        self.assertLessEqual(relative_diff_w2, self.tolerance, "Pmex didn't give a close result")

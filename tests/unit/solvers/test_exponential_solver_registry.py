@@ -1,15 +1,14 @@
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from tests.unit.wx_test import WxTestCase
+from wx_factory.integrators.rosexp2 import RosExp2
 from wx_factory.solvers.exponential_solver import (
     EXPONENTIAL_SOLVER_REGISTRY,
     ExponentialSolverRequest,
     register_exponential_solver,
     resolve_exponential_solver,
 )
-from wx_factory.integrators.rosexp2 import RosExp2
-
-from tests.unit.wx_test import WxTestCase
 
 
 class ExponentialSolverRegistryTestCases(WxTestCase):

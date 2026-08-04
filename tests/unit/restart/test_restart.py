@@ -2,13 +2,18 @@ import copy
 import os
 
 import numpy
+from mpi_test import MpiTestCase, WxTestCase
 
-from wx_factory.common import Configuration, ConfigurationSchema, default_schema_path, load_default_schema, readfile
+from wx_factory.common import (
+    Configuration,
+    ConfigurationSchema,
+    default_schema_path,
+    load_default_schema,
+    readfile,
+)
 from wx_factory.output.state import load_state
 from wx_factory.simulation import Simulation
 from wx_factory.wx_mpi import do_once
-
-from mpi_test import MpiTestCase, WxTestCase
 
 
 class Euler2DRestartTestCase(WxTestCase):
@@ -50,7 +55,7 @@ class Euler2DRestartTestCase(WxTestCase):
         # Verify that the state just read is the same as was saved
         diff = sim.initial_state.Q - new_sim.Q
         diff_norm = numpy.linalg.norm(diff)
-        self.assertTrue(diff_norm == 0.0, f"Restart state is not the same as computed")
+        self.assertTrue(diff_norm == 0.0, "Restart state is not the same as computed")
 
 
 class MultiProcRestartTestCase(MpiTestCase):
@@ -99,8 +104,8 @@ class MultiProcRestartTestCase(MpiTestCase):
         sim = Simulation(config, comm=self.comm)
         self.assertEqual(sim.starting_step, 1, f"Starting step is not 1! {sim.starting_step}")
 
-        self.assertIn(self.device_name, str(self.base_sim.Q.device), f"Wrong device type for base_sim.Q")
-        self.assertIn(self.device_name, str(sim.initial_state.Q.device), f"Wrong device type for sim.initial_state.Q")
+        self.assertIn(self.device_name, str(self.base_sim.Q.device), "Wrong device type for base_sim.Q")
+        self.assertIn(self.device_name, str(sim.initial_state.Q.device), "Wrong device type for sim.initial_state.Q")
 
         # Verify that the loaded state is the same as the simulated one
         diff = sim.initial_state.Q - self.base_sim.Q

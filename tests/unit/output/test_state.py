@@ -2,17 +2,14 @@ import os
 import random
 
 from mpi4py import MPI
-import numpy
-from torch import Tensor
+from wx_test import WxTestCase
 
+import tests.unit.common.config_pack
 import wx_factory.common.configuration
 import wx_factory.common.configuration_schema
-from wx_factory.device import PytorchDevice
 import wx_factory.output.state
-
-import tests.unit.array_generator as array_generator
-import tests.unit.common.config_pack
-from wx_test import WxTestCase
+from tests.unit import array_generator
+from wx_factory.device import PytorchDevice
 
 state_input_dir = "tests/data/unit/state_tests"
 state_tmp_dir = "tests/data/temp"

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import unittest
+
 from mpi4py import MPI
 
 
@@ -18,6 +19,7 @@ class FakeTest(unittest.TestCase):
 
 import os
 import sys
+
 from mpi_test import MpiRunner
 
 main_project_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..")

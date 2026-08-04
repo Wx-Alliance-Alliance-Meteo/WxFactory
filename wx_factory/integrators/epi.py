@@ -1,17 +1,19 @@
-import math
-from collections import deque
-from collections.abc import Callable
-
 import torch
+from collections import deque
+import math
+from typing import Callable
+
+import numpy
 from numpy.typing import NDArray
 
 from ..common.configuration import Configuration
 from ..solvers import (
     ExponentialSolverRequest,
-    MatvecOpBasic,
     matvec_fun,
+    MatvecOpBasic,
     resolve_exponential_solver,
 )
+
 from .integrator import Integrator, SolverInfo
 
 _COEFF_TABLES = {
@@ -82,7 +84,7 @@ class Epi(Integrator):
         # Initialize saved values using init_step method
         if len(self.previous_Q) < self.n_prev:
             self.previous_Q.appendleft(Q)
-            self.previous_rhs.appendleft(self.evaluate_rhs(self.rhs, Q))
+            self.previous_rhs.appendleft(self.rhs(Q))
             dt /= self.init_substeps
             for i in range(self.init_substeps):
                 Q = self.init_method.step(Q, dt)
@@ -90,7 +92,7 @@ class Epi(Integrator):
             return Q
 
         # Regular EPI step
-        rhs = self.evaluate_rhs(self.rhs, Q)
+        rhs = self.rhs(Q)
 
         if self.jac is not None:
             matvec_handle = lambda v: self.jac(v, Q, dt)
