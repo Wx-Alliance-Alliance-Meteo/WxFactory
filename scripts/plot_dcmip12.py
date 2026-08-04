@@ -7,7 +7,7 @@ Cubed-sphere nodes do not lie on that meridian, so the section is sampled in
 Cartesian unit-sphere coordinates rather than by combining a longitude band.
 
 Usage:
-    python scripts/plot_dcmip12.py -o results results/dcmip12.nc
+    python scripts/plot_dcmip12.py -o results --label dcmip12 [--pdf] results/dcmip12.nc
 """
 
 import argparse
@@ -17,9 +17,9 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from matplotlib.ticker import MultipleLocator
 import netCDF4
 import numpy
+from matplotlib.ticker import MultipleLocator
 from scipy.interpolate import PchipInterpolator
 from scipy.spatial import cKDTree
 
@@ -99,7 +99,7 @@ def regular_section(field, elevations, native_latitudes, heights, plot_latitudes
     return PchipInterpolator(native_latitudes, vertical, axis=0)(plot_latitudes).T
 
 
-def plot_latitude_height(data, output_dir):
+def plot_latitude_height(data, output_dir, label, pdf):
     """Render the DCMIP-recommended 12 h and 24 h latitude-height sections."""
     native_latitudes = numpy.linspace(-90.0, 90.0, 361)
     plot_latitudes = numpy.linspace(-90.0, 90.0, 721)
@@ -158,13 +158,14 @@ def plot_latitude_height(data, output_dir):
         axes[0].set_ylabel("Height (km)")
         colorbar = fig.colorbar(contour, ax=axes, shrink=0.95, pad=0.02)
         colorbar.set_label(r"Tracer $q_1$")
-        fig.suptitle(rf"DCMIP 1-2: $q_1$ at $\lambda={SECTION_LONGITUDE:g}^\circ$", fontsize=10)
+        fig.suptitle(rf"DCMIP 1-2: $q_1$ at $\lambda={SECTION_LONGITUDE:g}^\circ$ — {label}", fontsize=10)
 
-        path = output_dir / "dcmip12_latheight.png"
+        path = output_dir / f"dcmip12_{label}_latheight.png"
         fig.savefig(path, bbox_inches="tight")
-        fig.savefig(path.with_suffix(".pdf"), bbox_inches="tight")
+        if pdf:
+            fig.savefig(path.with_suffix(".pdf"), bbox_inches="tight")
         plt.close(fig)
-    return path, path.with_suffix(".pdf")
+    return (path, path.with_suffix(".pdf")) if pdf else (path,)
 
 
 def report_error_norms(data):
@@ -181,15 +182,19 @@ def main():
     parser = argparse.ArgumentParser(description="Publication-quality plots for DCMIP-2012 test 1-2.")
     parser.add_argument("netcdf_file", help="NetCDF output file produced by WxFactory")
     parser.add_argument("-o", "--output-dir", default="results", help="where to write the figures")
+    parser.add_argument("--label", default=None, help="tag used in figure names and titles")
+    parser.add_argument("--pdf", action="store_true", help="also write PDF figures")
     args = parser.parse_args()
 
+    source = Path(args.netcdf_file)
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-    data = load(args.netcdf_file)
+    label = args.label or source.stem
+    data = load(source)
     hours = data["time"] / HOUR
     print(f"Read {args.netcdf_file}; selected diagnostic hours: {', '.join(f'{hour:g}' for hour in hours)}")
 
-    written = plot_latitude_height(data, output_dir)
+    written = plot_latitude_height(data, output_dir, label, args.pdf)
     report_error_norms(data)
 
     print("\nFigures written:")

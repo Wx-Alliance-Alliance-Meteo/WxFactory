@@ -7,7 +7,7 @@ diagnostics, extracts the equator exactly, and masks terrain rather than
 extrapolating tracer values through it.
 
 Usage:
-    python scripts/plot_dcmip13.py -o results --label gal_chen results/dcmip13.nc
+    python scripts/plot_dcmip13.py -o results --label gal_chen [--pdf] results/dcmip13.nc
 """
 
 import argparse
@@ -17,9 +17,9 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from matplotlib.ticker import MultipleLocator
 import netCDF4
 import numpy
+from matplotlib.ticker import MultipleLocator
 from scipy.interpolate import PchipInterpolator
 from scipy.spatial import cKDTree
 
@@ -162,15 +162,16 @@ def tracer_limits(data, name="q4"):
     return float(initial.min()), float(initial.max())
 
 
-def save_figure(fig, path):
-    """Write high-resolution raster and vector versions."""
+def save_figure(fig, path, pdf):
+    """Write the requested figure formats."""
     fig.savefig(path, bbox_inches="tight")
-    fig.savefig(path.with_suffix(".pdf"), bbox_inches="tight")
+    if pdf:
+        fig.savefig(path.with_suffix(".pdf"), bbox_inches="tight")
     plt.close(fig)
-    return path, path.with_suffix(".pdf")
+    return (path, path.with_suffix(".pdf")) if pdf else (path,)
 
 
-def plot_topography(data, output_dir, label):
+def plot_topography(data, output_dir, label, pdf):
     """True Schär-type surface elevation."""
     longitude, latitude, index, weight = spherical_resampler(data["lat2d"], data["lon2d"])
     image = apply_spherical_resampler(
@@ -201,10 +202,10 @@ def plot_topography(data, output_dir, label):
         ax.set_ylabel("Latitude (degrees north)")
         ax.set_title(f"DCMIP 1-3 surface topography — {label}", fontsize=10)
         path = output_dir / f"dcmip13_{label}_topography.png"
-        return save_figure(fig, path)
+        return save_figure(fig, path, pdf)
 
 
-def plot_model_level_maps(data, output_dir, label):
+def plot_model_level_maps(data, output_dir, label, pdf):
     """q4 maps on the three requested terrain-following model levels."""
     plot_lon, plot_lat, index, weight = spherical_resampler(data["lat2d"], data["lon2d"])
     selected_levels = [level_index(data["elevation"], target) for target in CLOUD_LEVELS]
@@ -247,10 +248,10 @@ def plot_model_level_maps(data, output_dir, label):
         colorbar.set_label(r"Total tracer $q_4$")
         fig.suptitle(f"DCMIP 1-3: $q_4$ on terrain-following model levels — {label}", fontsize=10)
         path = output_dir / f"dcmip13_{label}_latlon.png"
-        return save_figure(fig, path)
+        return save_figure(fig, path, pdf)
 
 
-def plot_native_sections(data, output_dir, label):
+def plot_native_sections(data, output_dir, label, pdf):
     """Exact-equator q4 sections on the native sloping model levels."""
     longitude, stencil = equator_stencil(data["lat2d"], data["lon2d"])
     elevation = interpolate_equator(data["elevation"], stencil)
@@ -298,10 +299,10 @@ def plot_native_sections(data, output_dir, label):
         colorbar.set_label(r"Total tracer $q_4$")
         fig.suptitle(f"DCMIP 1-3: exact-equator $q_4$ on native sloping levels — {label}", fontsize=10)
         path = output_dir / f"dcmip13_{label}_lonlevel_q4.png"
-        return save_figure(fig, path)
+        return save_figure(fig, path, pdf)
 
 
-def plot_constant_height_sections(data, output_dir, label):
+def plot_constant_height_sections(data, output_dir, label, pdf):
     """Exact-equator q4 sections interpolated to geometric height."""
     longitude, stencil = equator_stencil(data["lat2d"], data["lon2d"])
     elevation = interpolate_equator(data["elevation"], stencil)
@@ -357,7 +358,7 @@ def plot_constant_height_sections(data, output_dir, label):
         colorbar.set_label(r"Total tracer $q_4$")
         fig.suptitle(f"DCMIP 1-3: exact-equator $q_4$ on constant-height levels — {label}", fontsize=10)
         path = output_dir / f"dcmip13_{label}_lonheight_q4.png"
-        return save_figure(fig, path)
+        return save_figure(fig, path, pdf)
 
 
 def report_error_norms(data, label):
@@ -376,6 +377,7 @@ def main():
     parser.add_argument("netcdf_file", help="NetCDF output file produced by WxFactory")
     parser.add_argument("-o", "--output-dir", default="results", help="where to write the figures")
     parser.add_argument("--label", default=None, help="tag used in figure names and titles")
+    parser.add_argument("--pdf", action="store_true", help="also write PDF figures")
     args = parser.parse_args()
 
     source = Path(args.netcdf_file)
@@ -387,10 +389,10 @@ def main():
     print(f"Read {source}; selected diagnostic days: {', '.join(f'{day:g}' for day in days)}")
 
     figure_pairs = [
-        plot_topography(data, output_dir, label),
-        plot_model_level_maps(data, output_dir, label),
-        plot_native_sections(data, output_dir, label),
-        plot_constant_height_sections(data, output_dir, label),
+        plot_topography(data, output_dir, label, args.pdf),
+        plot_model_level_maps(data, output_dir, label, args.pdf),
+        plot_native_sections(data, output_dir, label, args.pdf),
+        plot_constant_height_sections(data, output_dir, label, args.pdf),
     ]
     written = [path for pair in figure_pairs for path in pair]
     report_error_norms(data, label)

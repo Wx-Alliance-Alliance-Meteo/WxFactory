@@ -12,7 +12,7 @@ are written.  The former are the primary inter-model comparison; the latter
 show the terrain-following coordinate deformation without vertical remapping.
 
 Usage:
-    python scripts/plot_dcmip21.py -o results --label dcmip21 results/dcmip21_rosexp.nc
+    python scripts/plot_dcmip21.py -o results --label dcmip21 [--pdf] results/dcmip21_rosexp.nc
 """
 
 import argparse
@@ -22,9 +22,9 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from matplotlib.ticker import MultipleLocator
 import netCDF4
 import numpy
+from matplotlib.ticker import MultipleLocator
 from scipy.interpolate import PchipInterpolator
 
 # Keep diagnostics consistent with wx_factory/common/definitions.py.  Using
@@ -153,7 +153,7 @@ def nice_symmetric_limit(images):
     return numpy.ceil(raw / exponent * 2.0) / 2.0 * exponent
 
 
-def plot_sections(data, output_dir, label, field, symbol, units, filename):
+def plot_sections(data, output_dir, label, field, symbol, units, filename, pdf):
     """Render the DCMIP sections after interpolation to geometric height."""
     heights = numpy.linspace(0.0, 30_000.0, 301)
     plot_longitudes = numpy.linspace(0.0, 360.0, 721)
@@ -240,9 +240,10 @@ def plot_sections(data, output_dir, label, field, symbol, units, filename):
 
         path = output_dir / filename.format(label=label)
         fig.savefig(path, bbox_inches="tight")
-        fig.savefig(path.with_suffix(".pdf"), bbox_inches="tight")
+        if pdf:
+            fig.savefig(path.with_suffix(".pdf"), bbox_inches="tight")
         plt.close(fig)
-    return path, path.with_suffix(".pdf")
+    return (path, path.with_suffix(".pdf")) if pdf else (path,)
 
 
 def periodic_interpolate(longitude, values, plot_longitude):
@@ -252,7 +253,7 @@ def periodic_interpolate(longitude, values, plot_longitude):
     return PchipInterpolator(extended_lon, extended_values, axis=0)(plot_longitude)
 
 
-def plot_native_sections(data, output_dir, label, field, symbol, units, filename):
+def plot_native_sections(data, output_dir, label, field, symbol, units, filename, pdf):
     """Render exact-equator sections on the native terrain-following levels."""
     plot_longitude = numpy.linspace(0.0, 360.0, 721)
     plot_elevation = periodic_interpolate(data["longitude"], data["elevation"], plot_longitude)
@@ -316,12 +317,13 @@ def plot_native_sections(data, output_dir, label, field, symbol, units, filename
 
         path = output_dir / filename.format(label=label)
         fig.savefig(path, bbox_inches="tight")
-        fig.savefig(path.with_suffix(".pdf"), bbox_inches="tight")
+        if pdf:
+            fig.savefig(path.with_suffix(".pdf"), bbox_inches="tight")
         plt.close(fig)
-    return path, path.with_suffix(".pdf")
+    return (path, path.with_suffix(".pdf")) if pdf else (path,)
 
 
-def plot_topography(data, output_dir, label):
+def plot_topography(data, output_dir, label, pdf):
     """Plot the exact-equator Schär mountain profile."""
     longitude = data["longitude"]
     topography = data["topography"]
@@ -342,9 +344,10 @@ def plot_topography(data, output_dir, label):
 
         path = output_dir / f"dcmip21_{label}_topography.png"
         fig.savefig(path, bbox_inches="tight")
-        fig.savefig(path.with_suffix(".pdf"), bbox_inches="tight")
+        if pdf:
+            fig.savefig(path.with_suffix(".pdf"), bbox_inches="tight")
         plt.close(fig)
-    return path, path.with_suffix(".pdf")
+    return (path, path.with_suffix(".pdf")) if pdf else (path,)
 
 
 def main():
@@ -352,6 +355,7 @@ def main():
     parser.add_argument("netcdf_file", help="NetCDF output file produced by WxFactory")
     parser.add_argument("-o", "--output-dir", default="results", help="where to write the figures")
     parser.add_argument("--label", default=None, help="tag used in figure names and titles")
+    parser.add_argument("--pdf", action="store_true", help="also write PDF figures")
     args = parser.parse_args()
 
     source = Path(args.netcdf_file)
@@ -363,7 +367,7 @@ def main():
     print(f"Read {source}; selected output times: {', '.join(f'{time:g}' for time in data['time'])} s")
 
     figure_pairs = [
-        plot_topography(data, output_dir, label),
+        plot_topography(data, output_dir, label, args.pdf),
         plot_sections(
             data,
             output_dir,
@@ -372,6 +376,7 @@ def main():
             symbol=r"Temperature perturbation $T^\prime$",
             units="K",
             filename="dcmip21_{label}_tprime.png",
+            pdf=args.pdf,
         ),
         plot_native_sections(
             data,
@@ -381,6 +386,7 @@ def main():
             symbol=r"Temperature perturbation $T^\prime$",
             units="K",
             filename="dcmip21_{label}_tprime_native.png",
+            pdf=args.pdf,
         ),
         plot_sections(
             data,
@@ -390,6 +396,7 @@ def main():
             symbol=r"Vertical velocity $w$",
             units=r"m s$^{-1}$",
             filename="dcmip21_{label}_w.png",
+            pdf=args.pdf,
         ),
         plot_native_sections(
             data,
@@ -399,6 +406,7 @@ def main():
             symbol=r"Vertical velocity $w$",
             units=r"m s$^{-1}$",
             filename="dcmip21_{label}_w_native.png",
+            pdf=args.pdf,
         ),
     ]
     written = [path for pair in figure_pairs for path in pair]
