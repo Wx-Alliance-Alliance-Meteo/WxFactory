@@ -620,7 +620,6 @@ class ProcessTopology:
 
         # Validate input field parameters
         with SingleProcess(self._comm) as s, Conditional(s):
-
             if field is None:
                 raise ValueError("No field on root process")
 
@@ -638,7 +637,6 @@ class ProcessTopology:
 
         tile_list = None
         if self.panel_comm.rank == 0:
-
             # We need to create the receive buffer before doing the scatter, because some backends (pytorch) create
             # them on the wrong device otherwise
 

@@ -447,7 +447,7 @@ class ExchangeTest(MpiTestCase):
             self.assertLess(
                 diff,
                 1e-15,
-                f"rank {self.rank}: {dir} data is wrong (norm {diff:.2e})\n"
+                f"rank {self.rank}: {dir} data is wrong (norm {diff:.2e})\n"  # nofmt
                 f"expected\n{other}\n"
                 f"got\n{result[dir]}",
             )
@@ -471,7 +471,7 @@ class ExchangeTest(MpiTestCase):
             self.assertLess(
                 diff,
                 1e-15,
-                f"rank {self.rank}: {dir} data is wrong (norm {diff:.2e})\n"
+                f"rank {self.rank}: {dir} data is wrong (norm {diff:.2e})\n"  # nofmt
                 f"expected\n{other}\n"
                 f"got\n{result[dir]}",
             )
@@ -495,7 +495,7 @@ class ExchangeTest(MpiTestCase):
             self.assertLess(
                 diff,
                 1e-15,
-                f"rank {self.rank}: {dir} data is wrong (norm {diff:.2e})\n"
+                f"rank {self.rank}: {dir} data is wrong (norm {diff:.2e})\n"  # nofmt
                 f"expected\n{other}\n"
                 f"got\n{result[dir]}",
             )
@@ -519,7 +519,7 @@ class ExchangeTest(MpiTestCase):
             self.assertLess(
                 diff,
                 1e-15,
-                f"rank {self.rank}: {dir} data is wrong (norm {diff:.2e})\n"
+                f"rank {self.rank}: {dir} data is wrong (norm {diff:.2e})\n"  # nofmt
                 f"expected\n{other}\n"
                 f"got\n{result[dir]}",
             )
@@ -545,7 +545,7 @@ class ExchangeTest(MpiTestCase):
             self.assertLess(
                 diff,
                 1e-15,
-                f"rank {self.rank}: {dir} data is wrong (norm {diff:.2e})\n"
+                f"rank {self.rank}: {dir} data is wrong (norm {diff:.2e})\n"  # nofmt
                 f"expected\n{other}\n"
                 f"got\n{result[dir]}",
             )

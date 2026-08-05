@@ -82,7 +82,6 @@ def newton_krylov(
     terminated = False
 
     for n in range(maxiter):
-
         iteration += 1
         f_norm = global_inf_norm(Fx)
         x_norm = global_inf_norm(x)
@@ -135,7 +134,7 @@ def newton_krylov(
         print("The maximum number of iterations allowed by the JFNK method has been reached.")
 
     if terminated:
-        print(f"A solution was found after {iteration-1} steps of the JFNK method.")
+        print(f"A solution was found after {iteration - 1} steps of the JFNK method.")
 
     return x.reshape(x0.shape), iteration - 1, residuals
 
@@ -190,7 +189,6 @@ def _nonlin_line_search(func, x, Fx, dx, context: Context, search_type="armijo",
 
 
 class KrylovJacobian:
-
     def __init__(self, x, f, func, restart, maxiter_linear, preconditioner, context: Context):
         self.func = func
         self.shape = (f.shape[0], x.shape[0])

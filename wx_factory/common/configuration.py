@@ -74,7 +74,7 @@ class Configuration:
         out = "Configuration: \n"
         for section_name, section_options in self.sections.items():
             out += "\n"
-            out += f'  {" " + section_name + " ":-^80s}  '
+            out += f"  {' ' + section_name + ' ':-^80s}  "
             long_options = {}
             i = 0
             for option in section_options:

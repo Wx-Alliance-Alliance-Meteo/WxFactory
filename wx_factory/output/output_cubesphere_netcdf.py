@@ -98,7 +98,6 @@ class OutputCubesphereNetcdf(OutputCubesphere):
             self.ncfile.createDimension("Xdim", nj)
 
             if self.config.equations == "shallow_water" and self.config.case_number == -2:
-
                 self.ncfile.createDimension("Zdim", NZ)
 
                 zzz = self.ncfile.createVariable("Zdim", numpy.float64, ("Zdim",))
@@ -157,7 +156,6 @@ class OutputCubesphereNetcdf(OutputCubesphere):
             lon.units = "degrees_east"
 
             if self.config.equations == "shallow_water":
-
                 if self.config.case_number == -2:
                     dims = ("time", "Zdim") + grid_data
                 else:
@@ -354,7 +352,6 @@ class OutputCubesphereNetcdf(OutputCubesphere):
     def __write_result__(self, Q, step_id):
 
         if not self.initialized:
-
             if Q.ndim == 5:
                 self.nz = Q.shape[1]
             else:
@@ -372,10 +369,8 @@ class OutputCubesphereNetcdf(OutputCubesphere):
             idx = 0
 
         if isinstance(geom, CubedSphere2D):  # Shallow water
-
             if Q.ndim == 5:
                 for k in range(self.nz):
-
                     h = Q[idx_h, k, ...]
 
                     if self.topo is not None:
@@ -386,7 +381,6 @@ class OutputCubesphereNetcdf(OutputCubesphere):
                     self.store_field_Zdim(field_block, "h", idx, k)
 
                     if self.config.case_number >= 2 or self.config.case_number in [-1, -2]:
-
                         u1 = Q[idx_hu1, k, ...] / h
                         u2 = Q[idx_hu2, k, ...] / h
 
@@ -409,7 +403,6 @@ class OutputCubesphereNetcdf(OutputCubesphere):
                 self.store_field(geom.to_single_block(h), "h", idx)
 
                 if self.config.case_number >= 2 or self.config.case_number in [-1, -2]:
-
                     u1 = Q[idx_hu1, :, :] / h
                     u2 = Q[idx_hu2, :, :] / h
 
@@ -444,14 +437,13 @@ class OutputCubesphereNetcdf(OutputCubesphere):
 
             if self.config.case_number in (11, 13):
                 for i in [6, 7, 8]:
-                    self.store_field(geom.to_single_block(Q[i, ...] / rho), f"q{i-4}", idx)
+                    self.store_field(geom.to_single_block(Q[i, ...] / rho), f"q{i - 4}", idx)
 
         else:
             raise ValueError(f"Unknown class for geom: {geom}")
 
         if self.rank == 0:
             if self.config.case_number == -2:
-
                 time_val = step_id
 
                 epoch = numpy.datetime64("1800-01-01T00:00:00")

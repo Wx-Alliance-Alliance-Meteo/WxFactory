@@ -75,7 +75,7 @@ class RosExp2(Integrator):
             result_type = "convergence" if flag == 0 else "stagnation/interruption"
             print(
                 f"FGMRES {result_type} at iteration {num_iter} in {time_imp:4.1f} s to a solution with"
-                f" relative residual {norm_r/norm_b: .2e}"
+                f" relative residual {norm_r / norm_b: .2e}"
             )
 
             print(f"Elapsed time: exponential {time_exp:.3f} secs ; implicit {time_imp:.3f} secs")

@@ -101,7 +101,6 @@ class KC32(RungeKutta):
 
 
 class M43(RungeKutta):
-
     # effective number of stages
     n_stages = 5
 
@@ -134,7 +133,6 @@ class M43(RungeKutta):
 
 
 class BS32(RungeKutta):
-
     order = 3
     error_estimator_order = 2
     n_stages = 3

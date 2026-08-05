@@ -207,7 +207,6 @@ def fgmres(
         g = torch.zeros(num_dofs, dtype=acc_dtype)
         g[0] = norm_r
         for inner in range(restart):
-
             niter += 1
 
             # Modified Gram-Schmidt process (1-sync version, with lagged normalization)
@@ -263,7 +262,7 @@ def fgmres(
 
         residuals.append(((norm_r / norm_b).item(), time() - t_start, 0.0))
         if verbose > 0 and comm.rank == 0:
-            print(f"{prefix}res: {norm_r/norm_b:.2e} (iter {niter})", flush=True)
+            print(f"{prefix}res: {norm_r / norm_b:.2e} (iter {niter})", flush=True)
 
         # Has GMRES stagnated?
         indices = x != 0

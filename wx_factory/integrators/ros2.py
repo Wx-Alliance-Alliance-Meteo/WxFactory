@@ -48,7 +48,7 @@ class Ros2(Integrator):
             result_type = "convergence" if flag == 0 else "stagnation/interruption"
             print(
                 f"FGMRES {result_type} at iteration {num_iter} in {t1 - t0:4.3f} s to a solution with"
-                f" relative residual {norm_r/norm_b : .2e}"
+                f" relative residual {norm_r / norm_b: .2e}"
             )
 
         self.failure_flag = flag

@@ -20,7 +20,6 @@ def print_sol(finalSol, filename, world):
         for k in range(0, world.numPointsY):
             for el in range(0, world.procs_per_xaxis):
                 for m in range(0, world.numPointsX):
-
                     # a. what is the index of the large finalSol array
                     indxSol = (
                         el * world.numPointsX
@@ -43,7 +42,6 @@ def print_sol(finalSol, filename, world):
 
     with open(filename, "a") as gg:
         for j in range(0, len(finalSolOrder)):
-
             gg.write("{} \n".format(finalSolOrder[j]))
 
     return finalSolOrder

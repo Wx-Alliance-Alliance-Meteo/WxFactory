@@ -162,10 +162,8 @@ def kiops(
     tiny_err = float(torch.finfo(u.dtype).tiny)
 
     while tau_now < tau_end:
-
         # Compute necessary starting information
         if j == 0:
-
             V[0, :n] = w[l, :]
 
             # Update the last part of w
@@ -186,7 +184,6 @@ def kiops(
 
         # Incomplete orthogonalization process
         while j < m:
-
             j = j + 1
 
             # Augmented matrix - vector product
@@ -261,7 +258,6 @@ def kiops(
                 m_new = m
 
             else:
-
                 # Error for this step
                 oldomega = omega
                 omega = tau_end * err / (tau * tol)
@@ -315,7 +311,6 @@ def kiops(
 
         # Check error against target
         if omega <= delta:
-
             # Yep, got the required tolerance; update
             reject += ireject
             step += 1

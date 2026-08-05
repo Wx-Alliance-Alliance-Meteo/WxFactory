@@ -46,7 +46,7 @@ def _validate_option(
 
     if valid_values is not None and value not in valid_values:
         raise ValueError(
-            f'"{value}" is not considered a valid value for option "{option_name}".'
+            f'"{value}" is not considered a valid value for option "{option_name}".'  # nofmt
             f" Available values are {valid_values}"
         )
     if min_value is not None:

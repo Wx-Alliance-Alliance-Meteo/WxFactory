@@ -32,8 +32,8 @@ def opt_nodes(order: int):
     if order < 3:
         raise ValueError("Order should be at least 3")
 
-    coeff = (
-        lambda p, q: (-1) ** (p + q)
+    coeff = lambda p, q: (
+        (-1) ** (p + q)
         * math.factorial(p + q + 2)
         / (math.factorial(q) * math.factorial(q + 2) * math.factorial(p - q))
     )
@@ -117,7 +117,6 @@ class Srerk(Integrator):
 
         # Loop over all the other projections
         for i_proj in range(1, self.n_proj):
-
             for i in range(z.shape[0]):
                 z[i, :] = Q.flatten() + dt * z[i, :]
 

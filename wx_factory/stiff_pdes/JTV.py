@@ -28,7 +28,6 @@ import mpi4py.MPI
 def sendData(vec, neigh, world):
 
     if neigh == "top":
-
         # 1. send top data, j+1 index
         # if the rank is >0, send top data to previous rank
         # this will be the u_{i,j+1} data
@@ -40,7 +39,6 @@ def sendData(vec, neigh, world):
             mpi4py.MPI.COMM_WORLD.Send(vec[0 : world.numPointsX], dest=world.BottomNeighRank, tag=24)
 
     elif neigh == "bottom":
-
         # 2. sent bottom data, j-1 index
         # this will be the u_{i,j-1} data
         # last row of data processor has acces too
@@ -57,7 +55,6 @@ def sendData(vec, neigh, world):
         # 3. send data to right neighbor
         # this will be u_{i-1,j} data because x increases -->
         if world.procXID < world.procs_per_xaxis - 1:
-
             # print("rank {} sending right colum to rank {}".format(world.rank, world.RightNeighRank))
             # note, data is not contiguous, need a buffer
             buffer = np.zeros(world.numPointsY)
@@ -72,7 +69,6 @@ def sendData(vec, neigh, world):
         # 4. send data to left neighboor
         # this will be u_{i+1,j} data, because x+ -->
         if world.procXID > 0:
-
             # print("rank {} sending left column to rank {}".format(world.rank, world.LeftNeighRank))
             # note, data is not contiguous because it's stored by rowss
             buffer = np.zeros(world.numPointsY)
@@ -93,28 +89,24 @@ def sendData(vec, neigh, world):
 def recieveData(neigh, world, dataArray):
 
     if neigh == "top":
-
         # 1. recieve top data, index j+1
         # recieve from top processor (though this is physically down)
         if world.procYID < world.procs_per_yaxis - 1:
             mpi4py.MPI.COMM_WORLD.Recv(dataArray, source=world.TopNeighRank, tag=24)
 
     elif neigh == "bottom":
-
         # 2. recieve bottom data, index j-1
         if world.procYID > 0:
             # print("recieving data for rank = {} from rank = {}".format(world.rank, world.BottomNeighRank))
             mpi4py.MPI.COMM_WORLD.Recv(dataArray, source=world.BottomNeighRank, tag=25)
 
     elif neigh == "right":
-
         # 3. recieve left data, u_{i-1,j}
         if world.procXID > 0:
             # print("recieviing left data for rank {} from rank {}".format(world.rank, world.LeftNeighRank))
             mpi4py.MPI.COMM_WORLD.Recv(dataArray, source=world.LeftNeighRank, tag=32)
 
     else:
-
         # 4. recieve right data, u_{i+1,j}
         if world.procXID < world.procs_per_xaxis - 1:
             # print("recieving right data for rank {} from rank {}".format(world.rank, world.RightNeighRank))
@@ -125,7 +117,6 @@ def recieveData(neigh, world, dataArray):
 def sendPerData(vec, neigh, world):
 
     if neigh == "top":
-
         # 1. send top data, j+1 index
         # if the rank is >0, send top data to previous rank
         # this will be the u_{i,j+1} data
@@ -137,7 +128,6 @@ def sendPerData(vec, neigh, world):
             mpi4py.MPI.COMM_WORLD.Send(vec[0 : world.numPointsX], dest=world.BottomNeighRank, tag=24)
 
     elif neigh == "bottom":
-
         # 2. sent bottom data, j-1 index
         # this will be the u_{i,j-1} data
         # last row of data processor has acces too
@@ -154,7 +144,6 @@ def sendPerData(vec, neigh, world):
         # 3. send data to right neighbor
         # this will be u_{i-1,j} data because x increases -->
         if world.procXID == world.procs_per_xaxis - 1:
-
             # print("rank {} sending right colum to rank {}".format(world.rank, world.RightNeighRank))
             # note, data is not contiguous, need a buffer
             buffer = np.zeros(world.numPointsY)
@@ -169,7 +158,6 @@ def sendPerData(vec, neigh, world):
         # 4. send data to left neighboor
         # this will be u_{i+1,j} data, because x+ -->
         if world.procXID == 0:
-
             # print("rank {} sending left column to rank {}".format(world.rank, world.LeftNeighRank))
             # note, data is not contiguous because it's stored by rowss
             buffer = np.zeros(world.numPointsY)
@@ -190,28 +178,24 @@ def sendPerData(vec, neigh, world):
 def recievePerData(neigh, world, dataArray):
 
     if neigh == "top":
-
         # 1. recieve top data, index j+1
         # recieve from top processor (though this is physically down)
         if world.procYID == world.procs_per_yaxis - 1:
             mpi4py.MPI.COMM_WORLD.Recv(dataArray, source=world.TopNeighRank, tag=24)
 
     elif neigh == "bottom":
-
         # 2. recieve bottom data, index j-1
         if world.procYID == 0:
             # print("recieving data for rank = {} from rank = {}".format(world.rank, world.BottomNeighRank))
             mpi4py.MPI.COMM_WORLD.Recv(dataArray, source=world.BottomNeighRank, tag=25)
 
     elif neigh == "right":
-
         # 3. recieve left data, u_{i-1,j}
         if world.procXID == 0:
             # print("recieviing left data for rank {} from rank {}".format(world.rank, world.LeftNeighRank))
             mpi4py.MPI.COMM_WORLD.Recv(dataArray, source=world.LeftNeighRank, tag=32)
 
     else:
-
         # 4. recieve right data, u_{i+1,j}
         if world.procXID == world.procs_per_xaxis - 1:
             # print("recieving right data for rank {} from rank {}".format(world.rank, world.RightNeighRank))
@@ -287,22 +271,18 @@ def laplacianDirichlet(vec, epsilon, world):
     rightData = np.zeros(world.numPointsX)
 
     if world.size > 1:
-
         [TopNeighData, BottomNeighData, LeftNeighData, RightNeighData] = getNeighData(
             vec, world, topData, bottomData, leftData, rightData
         )
 
     # 2. matrix free application of matrix times vector
     for j in range(0, world.numPointsY):  # depth of processor
-
         for i in range(0, world.numPointsX):  # length of data
-
             indx = j * world.numPointsX + i
             current_val = -4.0 * vec[indx]
 
             # left and right neighboor data
             if i == 0:  # left data
-
                 # if procXID == 0, then the data u_{i-1,j} dne
                 if world.procXID == 0:
                     current_val += vec[indx + 1]
@@ -312,7 +292,6 @@ def laplacianDirichlet(vec, epsilon, world):
                     current_val += vec[indx + 1] + LeftNeighData[j]
 
             elif i == world.numPointsY - 1:  # right data
-
                 # if at the last element and at the boundary, then
                 # u_{i+1,j} dne
                 if world.procXID == world.procs_per_xaxis - 1:
@@ -331,7 +310,6 @@ def laplacianDirichlet(vec, epsilon, world):
 
             # top and bottom bcs
             if j == 0:  # bottom data, get u_{k,j-1}
-
                 # if rank == 0, need bottom boundary condition
                 if world.procYID == 0:
                     # print("j = {}, i = {}, indx = {}, indx + pointsXnoBC = {}".format(j, i, indx, indx + world.numPointsXnoBC))
@@ -343,7 +321,6 @@ def laplacianDirichlet(vec, epsilon, world):
                     current_val += BottomNeighData[i] + vec[indx + world.numPointsX]
 
             elif j == world.numPointsY - 1:  # top data, get u_{k,j+1}
-
                 # if rank == size-1, then need top boundary condition
                 # if world.rank == world.size-1:
                 if world.procYID == world.procs_per_yaxis - 1:
@@ -381,7 +358,6 @@ def laplacianNeumann(vec, epsilon, world):
     rightData = np.zeros(world.numPointsX)
 
     if world.size > 1:
-
         # if world.IamRoot: print("---calling regular data---")
 
         [TopNeighData, BottomNeighData, LeftNeighData, RightNeighData] = getNeighData(
@@ -391,15 +367,12 @@ def laplacianNeumann(vec, epsilon, world):
     # 2. matrix free application of matrix times vector
     # print("---compute stencil---")
     for j in range(0, world.numPointsY):  # depth of processor
-
         for i in range(0, world.numPointsX):  # length of data
-
             indx = j * world.numPointsX + i
             current_val = -4.0 * vec[indx]
 
             # left and right neighboor data
             if i == 0:  # left data
-
                 # if procXID == 0, then the data u_{i-1,j} dne
                 if world.procXID == 0:
                     # print("inside left-x boundary condition for 1p")
@@ -410,7 +383,6 @@ def laplacianNeumann(vec, epsilon, world):
                     current_val += vec[indx + 1] + LeftNeighData[j]
 
             elif i == world.numPointsY - 1:  # right data
-
                 # if at the last element and at the boundary, then
                 # u_{i+1,j} dne
                 if world.procXID == world.procs_per_xaxis - 1:
@@ -431,7 +403,6 @@ def laplacianNeumann(vec, epsilon, world):
 
             # top and bottom bcs
             if j == 0:  # bottom data, get u_{k,j-1}
-
                 # if rank == 0, need bottom boundary condition
                 if world.procYID == 0:
                     # print("inside bottom-y boundary condition for 1p")
@@ -442,7 +413,6 @@ def laplacianNeumann(vec, epsilon, world):
                     current_val += BottomNeighData[i] + vec[indx + world.numPointsX]
 
             elif j == world.numPointsY - 1:  # top data, get u_{k,j+1}
-
                 if world.procYID == world.procs_per_yaxis - 1:
                     # print("inside top-y boundary condition for 1p")
                     current_val += (2.0 / 3.0) * vec[indx - world.numPointsX] + (4.0 / 3.0) * vec[indx]
@@ -491,7 +461,6 @@ def nonLinLapPeriodic(vec, u, epsilon, world):
     jacrightData = np.zeros(world.numPointsX)
 
     if world.size > 1:
-
         [TopNeighData, BottomNeighData, LeftNeighData, RightNeighData] = getNeighData(
             vec, world, topData, bottomData, leftData, rightData
         )
@@ -511,19 +480,15 @@ def nonLinLapPeriodic(vec, u, epsilon, world):
     # 2. matrix free application of matrix times vector
     N = world.numPointsX
     for j in range(0, world.numPointsY):  # depth of processor
-
         for i in range(0, world.numPointsX):  # length of data
-
             indx = j * world.numPointsX + i
             current_val = -4.0 * vec[indx] * u[indx]
 
             # left and right neighboor data
             if i == 0:  # left data
-
                 current_val += vec[indx + 1] * u[indx + 1] + LeftNeighData[j] * JacULeftData[j]
 
             elif i == world.numPointsY - 1:  # right data
-
                 current_val += vec[indx - 1] * u[indx - 1] + RightNeighData[j] * JacURightData[j]
 
             # if inbetween points of processor, we have acess to left and right points
@@ -533,11 +498,9 @@ def nonLinLapPeriodic(vec, u, epsilon, world):
 
             # top and bottom bcs
             if j == 0:  # bottom data, get u_{k,j-1}
-
                 current_val += BottomNeighData[i] * JacUBotData[i] + vec[indx + world.numPointsX] * u[indx + N]
 
             elif j == world.numPointsY - 1:  # top data, get u_{k,j+1}
-
                 current_val += TopNeighData[i] * JacUTopData[i] + vec[indx - world.numPointsX] * u[indx - N]
 
             else:  # have acces to data within processors
@@ -567,7 +530,6 @@ def laplacianPeriodic(vec, epsilon, world):
     rightData = np.zeros(world.numPointsX)
 
     if world.size > 1:
-
         [TopNeighData, BottomNeighData, LeftNeighData, RightNeighData] = getNeighData(
             vec, world, topData, bottomData, leftData, rightData
         )
@@ -578,19 +540,15 @@ def laplacianPeriodic(vec, epsilon, world):
 
     # 2. matrix free application of matrix times vector
     for j in range(0, world.numPointsY):  # depth of processor
-
         for i in range(0, world.numPointsX):  # length of data
-
             indx = j * world.numPointsX + i
             current_val = -4.0 * vec[indx]
 
             # left and right neighboor data
             if i == 0:  # left data
-
                 current_val += vec[indx + 1] + LeftNeighData[j]
 
             elif i == world.numPointsY - 1:  # right data
-
                 current_val += vec[indx - 1] + RightNeighData[j]
 
             # if inbetween points of processor, we have acess to left and right points
@@ -600,11 +558,9 @@ def laplacianPeriodic(vec, epsilon, world):
 
             # top and bottom bcs
             if j == 0:  # bottom data, get u_{k,j-1}
-
                 current_val += BottomNeighData[i] + vec[indx + world.numPointsX]
 
             elif j == world.numPointsY - 1:  # top data, get u_{k,j+1}
-
                 current_val += TopNeighData[i] + vec[indx - world.numPointsX]
 
             else:  # have acces to data within processors
@@ -630,7 +586,6 @@ def laplacianUsquared(vec, world):
     rightData = np.zeros(world.numPointsX)
 
     if world.size > 1:
-
         [TopNeighData, BottomNeighData, LeftNeighData, RightNeighData] = getNeighData(
             vec, world, topData, bottomData, leftData, rightData
         )
@@ -644,17 +599,14 @@ def laplacianUsquared(vec, world):
 
     for j in range(N):
         for i in range(N):
-
             indx = j * world.numPointsX + i
             current_val = -4 * vec[indx] ** 2
 
             # left and right neighboor data
             if i == 0:  # left data
-
                 current_val += vec[indx + 1] ** 2 + LeftNeighData[j] ** 2
 
             elif i == world.numPointsY - 1:  # right data
-
                 current_val += vec[indx - 1] ** 2 + RightNeighData[j] ** 2
 
             # if inbetween points of processor, we have acess to left and right points
@@ -664,11 +616,9 @@ def laplacianUsquared(vec, world):
 
             # top and bottom bcs
             if j == 0:  # bottom data, get u_{k,j-1}
-
                 current_val += BottomNeighData[i] ** 2 + vec[indx + N] ** 2
 
             elif j == world.numPointsY - 1:  # top data, get u_{k,j+1}
-
                 current_val += TopNeighData[i] ** 2 + vec[indx - N] ** 2
 
             else:  # have acces to data within processors
@@ -693,7 +643,6 @@ def advectionDirichlet(vec, alpha, world):
     rightData = np.zeros(world.numPointsX)
 
     if world.size > 1:
-
         [TopNeighData, BottomNeighData, LeftNeighData, RightNeighData] = getNeighData(
             vec, world, topData, bottomData, leftData, rightData
         )
@@ -701,15 +650,12 @@ def advectionDirichlet(vec, alpha, world):
     # 2. matrix free application of matrix times vector
     # operator is second order fd
     for j in range(0, world.numPointsY):  # depth of processor
-
         for i in range(0, world.numPointsX):  # length of data
-
             indx = j * world.numPointsX + i
             current_val = 0.0
 
             # left and right neighboor data
             if i == 0:  # left data
-
                 # if procXID == 0, then the data u_{i-1,j} dne
                 if world.procXID == 0:
                     current_val += vec[indx + 1]
@@ -719,7 +665,6 @@ def advectionDirichlet(vec, alpha, world):
                     current_val += vec[indx + 1] - LeftNeighData[j]
 
             elif i == world.numPointsY - 1:  # right data
-
                 # if at the last element and at the boundary, then
                 # u_{i+1,j} dne
                 if world.procXID == world.procs_per_xaxis - 1:
@@ -737,7 +682,6 @@ def advectionDirichlet(vec, alpha, world):
                 current_val += vec[indx + 1] - vec[indx - 1]
 
             if j == 0:
-
                 # if the procYID is 0, then u_{i, j-1} dne
                 if world.procYID == 0:
                     current_val += vec[indx + world.numPointsX]
@@ -747,7 +691,6 @@ def advectionDirichlet(vec, alpha, world):
                     current_val += vec[indx + world.numPointsX] - BottomNeighData[i]
 
             elif j == world.numPointsY - 1:  # top data, get u_{i,j+1}
-
                 # if rank == size-1, then need top boundary condition
                 # if world.rank == world.size-1:
                 if world.procYID == world.procs_per_yaxis - 1 and world.size - 1 != 0:
@@ -782,7 +725,6 @@ def advectionNeumann(vec, alpha, world):
     # to avoid possible communication locks, onl
     # call if we more than 1 processor
     if world.size > 1:
-
         # if world.IamRoot: print("---calling regular data---")
 
         [TopNeighData, BottomNeighData, LeftNeighData, RightNeighData] = getNeighData(
@@ -792,15 +734,12 @@ def advectionNeumann(vec, alpha, world):
     # 2. matrix free application of matrix times vector
     # operator is second order fd
     for j in range(0, world.numPointsY):  # depth of processor
-
         for i in range(0, world.numPointsX):  # length of data
-
             indx = j * world.numPointsX + i
             current_val = 0.0
 
             # left and right neighboor data
             if i == 0:  # left data
-
                 # if procXID == 0, then the data u_{i-1,j} dne
                 if world.procXID == 0:
                     current_val += 4.0 / 3.0 * (vec[indx + 1] - vec[indx])
@@ -810,7 +749,6 @@ def advectionNeumann(vec, alpha, world):
                     current_val += vec[indx + 1] - LeftNeighData[j]
 
             elif i == world.numPointsY - 1:  # right data
-
                 # if at the last element and at the boundary, then
                 # u_{i+1,j} dne
                 if world.procXID == world.procs_per_xaxis - 1:
@@ -828,7 +766,6 @@ def advectionNeumann(vec, alpha, world):
                 current_val += vec[indx + 1] - vec[indx - 1]
 
             if j == 0:
-
                 # if the procYID is 0, then u_{i, j-1} dne
                 if world.procYID == 0:
                     current_val += 4.0 / 3.0 * (vec[indx + world.numPointsX] - vec[indx])
@@ -838,11 +775,9 @@ def advectionNeumann(vec, alpha, world):
                     current_val += vec[indx + world.numPointsX] - BottomNeighData[i]
 
             elif j == world.numPointsY - 1:  # top data, get u_{i,j+1}
-
                 # if rank == size-1, then need top boundary condition
                 # if world.rank == world.size-1:
                 if world.procYID == world.procs_per_yaxis - 1:
-
                     current_val += 4.0 / 3.0 * (vec[indx] - vec[indx - world.numPointsX])
 
                 # else, use data from neighboring processors
@@ -885,15 +820,12 @@ def advectionPeriodic(vec, alpha, world):
     # operator is second order fd
     # print("---computing stencil---")
     for j in range(0, world.numPointsY):  # depth of processor
-
         for i in range(0, world.numPointsX):  # length of data
-
             indx = j * world.numPointsX + i
             current_val = 0.0
 
             # left and right neighboor data
             if i == 0:  # left data
-
                 # if procXID == 0, then the data u_{i-1,j} dne
                 if world.procXID == 0:
                     # print("indx = {}, indx+ (N-1) = {}, vec[indx + N -1] = {}".format(indx, indx + (N-1), vec[indx + (N-1)] ))
@@ -904,7 +836,6 @@ def advectionPeriodic(vec, alpha, world):
                     current_val += vec[indx + 1] - LeftNeighData[j]
 
             elif i == world.numPointsY - 1:  # right data
-
                 # if at the last element and at the boundary, then
                 # u_{i+1,j} dne
                 if world.procXID == world.procs_per_xaxis - 1:
@@ -922,7 +853,6 @@ def advectionPeriodic(vec, alpha, world):
                 current_val += vec[indx + 1] - vec[indx - 1]
 
             if j == 0:
-
                 # if the procYID is 0, then u_{i, j-1} dne
                 if world.procYID == 0:
                     current_val += vec[indx + world.numPointsX] - BottomNeighData[i]
@@ -932,11 +862,9 @@ def advectionPeriodic(vec, alpha, world):
                     current_val += vec[indx + world.numPointsX] - BottomNeighData[i]
 
             elif j == world.numPointsY - 1:  # top data, get u_{i,j+1}
-
                 # if rank == size-1, then need top boundary condition
                 # if world.rank == world.size-1:
                 if world.procYID == world.procs_per_yaxis - 1:
-
                     current_val += TopNeighData[i] - vec[indx - world.numPointsX]
 
                 # else, use data from neighboring processors
@@ -971,7 +899,6 @@ def nonLinAdvecDirichlet(vec, u, alpha, world):
     jacrightData = np.zeros(world.numPointsX)
 
     if world.size > 1:
-
         [TopNeighData, BottomNeighData, LeftNeighData, RightNeighData] = getNeighData(
             vec, world, topData, bottomData, leftData, rightData
         )
@@ -983,15 +910,12 @@ def nonLinAdvecDirichlet(vec, u, alpha, world):
     # 2. matrix free application of matrix times vector
     # operator is second order fd
     for j in range(0, world.numPointsY):  # depth of processor
-
         for i in range(0, world.numPointsX):  # length of data
-
             indx = j * world.numPointsX + i
             current_val = 0.0
 
             # left and right neighboor data
             if i == 0:  # left data
-
                 # if procXID == 0, then the data u_{i-1,j} dne
                 if world.procXID == 0:
                     current_val += vec[indx + 1] * u[indx + 1]
@@ -1001,7 +925,6 @@ def nonLinAdvecDirichlet(vec, u, alpha, world):
                     current_val += vec[indx + 1] * u[indx + 1] - LeftNeighData[j] * JacULeftData[j]
 
             elif i == world.numPointsY - 1:  # right data
-
                 # if at the last element and at the boundary, then
                 # u_{i+1,j} dne
                 if world.procXID == world.procs_per_xaxis - 1:
@@ -1019,7 +942,6 @@ def nonLinAdvecDirichlet(vec, u, alpha, world):
                 current_val += vec[indx + 1] * u[indx + 1] - vec[indx - 1] * u[indx - 1]
 
             if j == 0:
-
                 # if the procYID is 0, then u_{i, j-1} dne
                 if world.procYID == 0:
                     current_val += vec[indx + world.numPointsX] * u[indx + world.numPointsX]
@@ -1031,7 +953,6 @@ def nonLinAdvecDirichlet(vec, u, alpha, world):
                     )
 
             elif j == world.numPointsY - 1:  # top data, get u_{i,j+1}
-
                 # if rank == size-1, then need top boundary condition
                 # if world.rank == world.size-1:
                 if world.procYID == world.procs_per_yaxis - 1 and world.size - 1 != 0:
@@ -1085,7 +1006,6 @@ def nonLinAdvecPeriodic(vec, u, alpha, world):
     jacrightData = np.zeros(world.numPointsX)
 
     if world.size > 1:
-
         # print("---calling regular data---")
         [TopNeighData, BottomNeighData, LeftNeighData, RightNeighData] = getNeighData(
             vec, world, topData, bottomData, leftData, rightData
@@ -1112,15 +1032,12 @@ def nonLinAdvecPeriodic(vec, u, alpha, world):
     # operator is second order fd
     # print("---computing stencil---")
     for j in range(0, world.numPointsY):  # depth of processor
-
         for i in range(0, world.numPointsX):  # length of data
-
             indx = j * world.numPointsX + i
             current_val = 0.0
 
             # left and right neighboor data
             if i == 0:  # left data
-
                 # if procXID == 0, then the data u_{i-1,j} dne
                 if world.procXID == 0:
                     # print("indx = {}, indx+ (N-1) = {}, vec[indx + N -1] = {}".format(indx, indx + (N-1), vec[indx + (N-1)] ))
@@ -1131,7 +1048,6 @@ def nonLinAdvecPeriodic(vec, u, alpha, world):
                     current_val += vec[indx + 1] * u[indx + 1] - LeftNeighData[j] * JacULeftData[j]
 
             elif i == world.numPointsY - 1:  # right data
-
                 # if at the last element and at the boundary, then
                 # u_{i+1,j} dne
                 if world.procXID == world.procs_per_xaxis - 1:
@@ -1149,7 +1065,6 @@ def nonLinAdvecPeriodic(vec, u, alpha, world):
                 current_val += vec[indx + 1] * u[indx + 1] - vec[indx - 1] * u[indx - 1]
 
             if j == 0:
-
                 # if the procYID is 0, then u_{i, j-1} dne
                 if world.procYID == 0:
                     current_val += vec[indx + world.numPointsX] * u[indx + N] - BottomNeighData[i] * JacUBotData[i]
@@ -1159,11 +1074,9 @@ def nonLinAdvecPeriodic(vec, u, alpha, world):
                     current_val += vec[indx + world.numPointsX] * u[indx + N] - BottomNeighData[i] * JacUBotData[i]
 
             elif j == world.numPointsY - 1:  # top data, get u_{i,j+1}
-
                 # if rank == size-1, then need top boundary condition
                 # if world.rank == world.size-1:
                 if world.procYID == world.procs_per_yaxis - 1:
-
                     current_val += TopNeighData[i] * JacUTopData[i] - vec[indx - world.numPointsX] * u[indx - N]
 
                 # else, use data from neighboring processors
@@ -1192,7 +1105,6 @@ def advectionUsquaredDir(vec, world):
     rightData = np.zeros(world.numPointsX)
 
     if world.size > 1:
-
         [TopNeighData, BottomNeighData, LeftNeighData, RightNeighData] = getNeighData(
             vec, world, topData, bottomData, leftData, rightData
         )
@@ -1200,15 +1112,12 @@ def advectionUsquaredDir(vec, world):
     # 2. matrix free application of matrix times vector
     # operator is second order fd
     for j in range(0, world.numPointsY):  # depth of processor
-
         for i in range(0, world.numPointsX):  # length of data
-
             indx = j * world.numPointsX + i
             current_val = 0.0
 
             # left and right neighboor data
             if i == 0:  # left data
-
                 # if procXID == 0, then the data u_{i-1,j} dne
                 if world.procXID == 0:
                     current_val += vec[indx + 1] ** 2
@@ -1218,11 +1127,10 @@ def advectionUsquaredDir(vec, world):
                     current_val += vec[indx + 1] ** 2 - LeftNeighData[j] ** 2
 
             elif i == world.numPointsY - 1:  # right data
-
                 # if at the last element and at the boundary, then
                 # u_{i+1,j} dne
                 if world.procXID == world.procs_per_xaxis - 1:
-                    current_val += -vec[indx - 1] ** 2
+                    current_val += -(vec[indx - 1] ** 2)
 
                 # if at last point in processor domain but not at
                 # end of physical domain, use right neighboor data
@@ -1236,7 +1144,6 @@ def advectionUsquaredDir(vec, world):
                 current_val += vec[indx + 1] ** 2 - vec[indx - 1] ** 2
 
             if j == 0:
-
                 # if the procYID is 0, then u_{i, j-1} dne
                 if world.procYID == 0:
                     current_val += vec[indx + world.numPointsX] ** 2
@@ -1246,12 +1153,11 @@ def advectionUsquaredDir(vec, world):
                     current_val += vec[indx + world.numPointsX] ** 2 - BottomNeighData[i] ** 2
 
             elif j == world.numPointsY - 1:  # top data, get u_{i,j+1}
-
                 # if rank == size-1, then need top boundary condition
                 # if world.rank == world.size-1:
                 if world.procYID == world.procs_per_yaxis - 1 and world.size - 1 != 0:
                     # current_val += world.TopBoundaryCond[i] + vec[indx - world.numPointsXnoBC]
-                    current_val += -vec[indx - world.numPointsX] ** 2
+                    current_val += -(vec[indx - world.numPointsX] ** 2)
 
                 # else, use data from neighboring processors
                 else:
@@ -1296,15 +1202,12 @@ def advectionUsquared(vec, world):
     # operator is second order fd
     # print("---computing stencil---")
     for j in range(0, world.numPointsY):  # depth of processor
-
         for i in range(0, world.numPointsX):  # length of data
-
             indx = j * world.numPointsX + i
             current_val = 0.0
 
             # left and right neighboor data
             if i == 0:  # left data
-
                 # if procXID == 0, then the data u_{i-1,j} dne
                 if world.procXID == 0:
                     current_val += vec[indx + 1] ** 2 - LeftNeighData[j] ** 2
@@ -1314,7 +1217,6 @@ def advectionUsquared(vec, world):
                     current_val += vec[indx + 1] ** 2 - LeftNeighData[j] ** 2
 
             elif i == world.numPointsY - 1:  # right data
-
                 # if at the last element and at the boundary, then
                 # u_{i+1,j} dne
                 if world.procXID == world.procs_per_xaxis - 1:
@@ -1332,7 +1234,6 @@ def advectionUsquared(vec, world):
                 current_val += vec[indx + 1] ** 2 - vec[indx - 1] ** 2
 
             if j == 0:
-
                 # if the procYID is 0, then u_{i, j-1} dne
                 if world.procYID == 0:
                     current_val += vec[indx + N] ** 2 - BottomNeighData[i] ** 2
@@ -1342,11 +1243,9 @@ def advectionUsquared(vec, world):
                     current_val += vec[indx + N] ** 2 - BottomNeighData[i] ** 2
 
             elif j == world.numPointsY - 1:  # top data, get u_{i,j+1}
-
                 # if rank == size-1, then need top boundary condition
                 # if world.rank == world.size-1:
                 if world.procYID == world.procs_per_yaxis - 1:
-
                     current_val += TopNeighData[i] ** 2 - vec[indx - N] ** 2
 
                 # else, use data from neighboring processors

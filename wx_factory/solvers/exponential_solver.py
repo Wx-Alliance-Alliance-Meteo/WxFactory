@@ -62,8 +62,7 @@ def resolve_exponential_solver(name: str) -> ExponentialSolver:
         return EXPONENTIAL_SOLVER_REGISTRY[name]
     except KeyError as exc:
         raise ValueError(
-            f"Exponential solver '{name}' is not registered. "
-            f"Registered solvers: {sorted(EXPONENTIAL_SOLVER_REGISTRY)}"
+            f"Exponential solver '{name}' is not registered. Registered solvers: {sorted(EXPONENTIAL_SOLVER_REGISTRY)}"
         ) from exc
 
 

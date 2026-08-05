@@ -119,8 +119,7 @@ class VerticalJacobianTestCase(WxTestCase):
         self.assertLess(
             error / scale,
             1.0e-7,
-            f"analytic J2 does not differentiate f2: relative error {error / scale:.3e}; "
-            f"per-row errors {row_errors}",
+            f"analytic J2 does not differentiate f2: relative error {error / scale:.3e}; per-row errors {row_errors}",
         )
 
     def test_jacobian_partition_identity(self) -> None:

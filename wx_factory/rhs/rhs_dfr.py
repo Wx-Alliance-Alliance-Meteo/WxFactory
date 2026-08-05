@@ -20,7 +20,6 @@ mid_k = numpy.s_[..., 1:-1, :, :, :]
 
 
 class RHSDirecFluxReconstruction(RHS):
-
     def allocate_arrays(self, q: NDArray) -> None:
         super().allocate_arrays(q)
         if self.q_itf_x1 is None or self.q_itf_x1.dtype != q.dtype:

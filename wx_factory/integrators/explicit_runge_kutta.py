@@ -210,7 +210,7 @@ class RungeKutta:
                 if abs(self.A[i, j]) > numpy.finfo(float).eps:
                     raise ValueError(
                         f"A must be strictly lower triangular for explicit methods, "
-                        f"but A[{i},{j}] = {self.A[i,j]} != 0"
+                        f"but A[{i},{j}] = {self.A[i, j]} != 0"
                     )
 
         # Validate that C values are in [0, 1] (standard for time fractions)

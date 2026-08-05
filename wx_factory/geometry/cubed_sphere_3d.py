@@ -271,9 +271,8 @@ class CubedSphere3D(CubedSphere):
         # Repeat for the interface values
         x1_itf_i = x1_boundaries.copy()
         x2_itf_i = x2.copy()
-        x3_itf_i = torch.repeat_interleave(x3[:, :, 0], num_elements_x1 + 1).reshape(
-            self.itf_i_shape_3d
-        )  # Repeat zy plane
+        # Repeat zy plane
+        x3_itf_i = torch.repeat_interleave(x3[:, :, 0], num_elements_x1 + 1).reshape(self.itf_i_shape_3d)
         eta_itf_i = torch.repeat_interleave(eta[:, :, 0], num_elements_x1 + 1).reshape(self.itf_i_shape_3d)
         self.x3_itf_i_new = self._to_new_itf_i(x3_itf_i)
         self.eta_itf_i_new = self._to_new_itf_i(eta_itf_i)

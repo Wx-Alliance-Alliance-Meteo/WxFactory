@@ -223,15 +223,15 @@ class RHS(ABC):
                 f"RHS times ({'real' if not is_complex else 'complex'}, {num_calls} calls):\n"
                 f"                   Total | per call  (ms)\n"
                 f"  -------------------------------\n"
-                f"  Extrapolation:  {extrapolation:-6.1f} | {extrapolation/num_calls:-6.2f}\n"
-                f"  Start comm:     {start_comm:-6.1f} | {start_comm/num_calls:-6.2f}\n"
-                f"  Pointwise flux: {pw_flux:-6.1f} | {pw_flux/num_calls:-6.2f}\n"
-                f"  Flux div 1:     {flux_div_1:-6.1f} | {flux_div_1/num_calls:-6.2f}\n"
-                f"  End comm:       {end_comm:-6.1f} | {end_comm/num_calls:-6.2f}\n"
-                f"  Riemann:        {riemann:-6.1f} | {riemann/num_calls:-6.2f}\n"
-                f"  Flux div 2:     {flux_div_2:-6.1f} | {flux_div_2/num_calls:-6.2f}\n"
-                f"  Forcing:        {forcing:-6.1f} | {forcing/num_calls:-6.2f}\n"
+                f"  Extrapolation:  {extrapolation:-6.1f} | {extrapolation / num_calls:-6.2f}\n"
+                f"  Start comm:     {start_comm:-6.1f} | {start_comm / num_calls:-6.2f}\n"
+                f"  Pointwise flux: {pw_flux:-6.1f} | {pw_flux / num_calls:-6.2f}\n"
+                f"  Flux div 1:     {flux_div_1:-6.1f} | {flux_div_1 / num_calls:-6.2f}\n"
+                f"  End comm:       {end_comm:-6.1f} | {end_comm / num_calls:-6.2f}\n"
+                f"  Riemann:        {riemann:-6.1f} | {riemann / num_calls:-6.2f}\n"
+                f"  Flux div 2:     {flux_div_2:-6.1f} | {flux_div_2 / num_calls:-6.2f}\n"
+                f"  Forcing:        {forcing:-6.1f} | {forcing / num_calls:-6.2f}\n"
                 f"  -------------------------------\n"
-                f"  Total:        {total:8.1f} | {total/num_calls:6.1f}\n",
+                f"  Total:        {total:8.1f} | {total / num_calls:6.1f}\n",
                 flush=True,
             )

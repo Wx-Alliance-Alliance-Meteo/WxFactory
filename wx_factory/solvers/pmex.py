@@ -57,7 +57,7 @@ def pmex(
     tol_floor = 100.0 * float(torch.finfo(u.dtype).eps)
     if tol < tol_floor:
         raise ValueError(
-            f"PMEX tolerance {tol:.1e} is unreachable in {u.dtype} precision; " f"use at least {tol_floor:.1e}."
+            f"PMEX tolerance {tol:.1e} is unreachable in {u.dtype} precision; use at least {tol_floor:.1e}."
         )
 
     ppo, n = u.shape
@@ -150,10 +150,8 @@ def pmex(
     l = 0
 
     while tau_now < tau_end:
-
         # Compute necessary starting information
         if j == 0:
-
             H[:, :] = 0.0
 
             V[0, 0:n] = w[l, :]
@@ -179,7 +177,6 @@ def pmex(
 
         # Incomplete orthogonalization process
         while j < m:
-
             j = j + 1
 
             # 1. Augmented matrix - vector product
@@ -279,7 +276,6 @@ def pmex(
             happy = False
 
         else:
-
             # Local truncation error estimation
             err_half = abs(beta * nrm * F_half[j - 1, j])
             err = abs(beta * nrm * F[j - 1, j])
@@ -297,7 +293,6 @@ def pmex(
                 m_new = m
 
             else:
-
                 # Error for this step
                 old_ohm = ohm
                 ohm = tau_end * err / (tau * tol)

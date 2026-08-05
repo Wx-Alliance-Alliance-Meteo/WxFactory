@@ -9,7 +9,6 @@ from wx_factory.context import Context
 
 
 class WxTestResult(unittest.TextTestResult):
-
     def __init__(self, stream: _WritelnDecorator, descriptions: bool, verbosity: int) -> None:
         super().__init__(stream, descriptions, verbosity)
         self.verbose = True

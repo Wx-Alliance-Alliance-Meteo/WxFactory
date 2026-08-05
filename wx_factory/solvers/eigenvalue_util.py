@@ -71,7 +71,7 @@ def gen_matrix(
     columns: List[NDArray | csc_matrix | None] = [None for _ in range(len(indices * size))]
     for r in range(size):
         if rank == 0:
-            print(f"Tile {r+1}/{size}")
+            print(f"Tile {r + 1}/{size}")
         for i in progress(indices):
             if rank == r:
                 Qid[i] = 1.0

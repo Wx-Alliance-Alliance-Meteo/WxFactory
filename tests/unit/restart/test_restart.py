@@ -17,7 +17,6 @@ from wx_factory.wx_mpi import do_once
 
 
 class Euler2DRestartTestCase(WxTestCase):
-
     def setUp(self) -> None:
         super().setUp()
 

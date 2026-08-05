@@ -729,7 +729,7 @@ def check_skewcentrosymmetry(m: numpy.ndarray) -> bool:
             print()
             print(
                 f"When the order is odd, the central entry of a skew-centrosymmetric matrix must be zero.\n"
-                f"Actual value is {m[middle_row-1, middle_row-1]}"
+                f"Actual value is {m[middle_row - 1, middle_row - 1]}"
             )
             return False
 

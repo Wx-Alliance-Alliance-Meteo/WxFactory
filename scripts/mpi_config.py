@@ -80,7 +80,7 @@ def main():
 def dev_info(id, node_id=-1):
     free_mem, total_mem = torch.cuda.mem_get_info(id)
     gb = 1024**3
-    print(f"(Node {node_id:3d}) Device {id}: {free_mem / gb :.1f}/{total_mem / gb :.1f} GB available", flush=True)
+    print(f"(Node {node_id:3d}) Device {id}: {free_mem / gb:.1f}/{total_mem / gb:.1f} GB available", flush=True)
 
 
 if __name__ == "__main__":

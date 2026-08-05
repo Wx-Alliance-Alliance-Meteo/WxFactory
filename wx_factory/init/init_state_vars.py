@@ -4,7 +4,13 @@ from numpy.typing import NDArray
 
 from ..common.configuration import Configuration
 from ..geometry import (
-    DFROperators, Geometry, Metric2D, Metric3DTopo, Cartesian3D, CubedSphere2D, CubedSphere3D,
+    DFROperators,
+    Geometry,
+    Metric2D,
+    Metric3DTopo,
+    Cartesian3D,
+    CubedSphere2D,
+    CubedSphere3D,
 )
 from ..init.initialize import initialize_cartesian3d, initialize_euler, initialize_sw, Topo
 from typing import Dict, Type

@@ -339,9 +339,9 @@ def williamson_case6(geom: CubedSphere2D, metric, param):
     K = omega
     h0 = 8000.0
 
-    A = omega / 2.0 * (2.0 * geom.rotation_speed + omega) * geom.coslat**2 + (K**2) / 4.0 * geom.coslat ** (
-        2 * R
-    ) * ((R + 1) * geom.coslat**2 + (2.0 * R**2 - R - 2.0) - 2.0 * (R**2) * geom.coslat ** (-2))
+    A = omega / 2.0 * (2.0 * geom.rotation_speed + omega) * geom.coslat**2 + (K**2) / 4.0 * geom.coslat ** (2 * R) * (
+        (R + 1) * geom.coslat**2 + (2.0 * R**2 - R - 2.0) - 2.0 * (R**2) * geom.coslat ** (-2)
+    )
 
     B = (
         2.0
@@ -397,7 +397,6 @@ def case_galewsky(geom, metric, param):
     h = numpy.zeros_like(lat)
 
     for idx in numpy.ndindex(lat.shape):
-
         # Calculate height field via numerical integration
         nIntervals = int((lat[idx] + 0.5 * math.pi) / (1.0e-2))
 

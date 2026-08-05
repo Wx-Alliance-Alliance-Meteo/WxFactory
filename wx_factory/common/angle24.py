@@ -15,10 +15,10 @@ def encode(f64: float) -> int:
 
     # Keep in [-pi, pi[ range
     while f64 >= math.pi:
-        print(f"Adjusting from {f64} to {f64 - 2.0*math.pi}")
+        print(f"Adjusting from {f64} to {f64 - 2.0 * math.pi}")
         f64 -= 2.0 * math.pi
     while f64 < -math.pi:
-        print(f"Adjusting from {f64} to {f64 + 2.0*math.pi}")
+        print(f"Adjusting from {f64} to {f64 + 2.0 * math.pi}")
         f64 += 2.0 * math.pi
 
     # Scale, then shift, then truncate to 24 bits
