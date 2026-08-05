@@ -59,12 +59,8 @@ class DFROperators:
 
         # Note that extrap_neg and extrap_pos should be vectors, not a one-row matrix; numpy
         # treats the two differently.
-        extrap_neg = (
-            legvander(torch.tensor([-1.0], dtype=build_dtype), grd.num_solpts - 1) @ invV
-        ).reshape((-1,))
-        extrap_pos = (
-            legvander(torch.tensor([+1.0], dtype=build_dtype), grd.num_solpts - 1) @ invV
-        ).reshape((-1,))
+        extrap_neg = (legvander(torch.tensor([-1.0], dtype=build_dtype), grd.num_solpts - 1) @ invV).reshape((-1,))
+        extrap_pos = (legvander(torch.tensor([+1.0], dtype=build_dtype), grd.num_solpts - 1) @ invV).reshape((-1,))
 
         assert extrap_neg.dtype == build_dtype
         assert extrap_pos.dtype == build_dtype
@@ -169,9 +165,7 @@ class DFROperators:
                     setattr(self, name, value.astype(self.dtype))
 
         if check_skewcentrosymmetry(self.diff_ext) is False:
-            raise ValueError(
-                "The stored differentiation matrix lost skew-centrosymmetry during precision conversion"
-            )
+            raise ValueError("The stored differentiation matrix lost skew-centrosymmetry during precision conversion")
 
         assert self.extrap_x.dtype == self.dtype
         assert self.extrap_y.dtype == self.dtype
@@ -182,18 +176,6 @@ class DFROperators:
         assert self.correction_DU.dtype == self.dtype
         assert self.correction_SN.dtype == self.dtype
         assert self.correction_WE.dtype == self.dtype
-
-        # Complex128 variants of operators for mixed-type matmul (complex128 @ complex128)
-        # These avoid runtime upcasting when the input array is complex128
-        self.extrap_x_complex = self.extrap_x.astype(torch.complex128)
-        self.extrap_y_complex = self.extrap_y.astype(torch.complex128)
-        self.extrap_z_complex = self.extrap_z.astype(torch.complex128)
-        self.derivative_x_complex = self.derivative_x.astype(torch.complex128)
-        self.derivative_y_complex = self.derivative_y.astype(torch.complex128)
-        self.derivative_z_complex = self.derivative_z.astype(torch.complex128)
-        self.correction_WE_complex = self.correction_WE.astype(torch.complex128)
-        self.correction_SN_complex = self.correction_SN.astype(torch.complex128)
-        self.correction_DU_complex = self.correction_DU.astype(torch.complex128)
 
     def make_filter_3d(self, strength: float, order: int, cutoff: float, geom: Geometry):
         """Build an isotropic exponential modal filter for a three-dimensional element."""
@@ -211,9 +193,7 @@ class DFROperators:
         modes = torch.arange(geom.num_solpts, dtype=self.dtype) / (geom.num_solpts - 1)
         attenuation = torch.ones_like(modes)
         filtered = modes > cutoff
-        attenuation[filtered] = torch.exp(
-            -strength * ((modes[filtered] - cutoff) / (1.0 - cutoff)) ** order
-        )
+        attenuation[filtered] = torch.exp(-strength * ((modes[filtered] - cutoff) / (1.0 - cutoff)) ** order)
 
         vandermonde = legvander(geom.solutionPoints, geom.num_solpts - 1).astype(self.dtype)
         filter_1d = vandermonde @ torch.diag(attenuation) @ torch.linalg.inv(vandermonde)

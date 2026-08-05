@@ -91,7 +91,6 @@ class ExponentialSolverRegistryTestCases(WxTestCase):
     def test_rosexp2_resolves_configured_solver_during_construction(self):
         config = SimpleNamespace(
             tolerance=1e-6,
-            jacobian_method="fd",
             gmres_restart=20,
             krylov_mmax=42,
             exponential_solver="missing",

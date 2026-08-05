@@ -6,8 +6,6 @@ import torch
 from mpi4py import MPI
 from numpy.typing import NDArray
 
-from ..common import Configuration
-
 
 class MatvecOp:
     """
@@ -44,19 +42,12 @@ def _global_norm(vec: NDArray, comm: MPI.Comm) -> numpy.floating:
 
 
 class MatvecOpBasic(MatvecOp):
-    def __init__(self, dt: float, Q: NDArray, rhs_handle: Callable[[NDArray], NDArray], param: Configuration) -> None:
+    def __init__(self, dt: float, Q: NDArray, rhs_handle: Callable[[NDArray], NDArray]) -> None:
         rhs_result = rhs_handle(Q)
-        fd_norm_q = _global_norm(Q, MPI.COMM_WORLD) if param.jacobian_method.lower() == "fd" else None
+        # Q is fixed during a Krylov solve, so compute its norm once.
+        fd_norm_q = _global_norm(Q, MPI.COMM_WORLD)
         super().__init__(
-            lambda vec: matvec_fun(
-                vec,
-                dt,
-                Q,
-                rhs_result,
-                rhs_handle,
-                param.jacobian_method,
-                fd_norm_q=fd_norm_q,
-            ),
+            lambda vec: matvec_fun(vec, dt, Q, rhs_result, rhs_handle, fd_norm_q=fd_norm_q),
             Q.dtype,
             Q.shape,
         )
@@ -68,45 +59,33 @@ def matvec_fun(
     Q: NDArray,
     rhs: NDArray,
     rhs_handle: Callable[[NDArray], NDArray],
-    method: str,
     fd_norm_q: float | None = None,
 ) -> numpy.ndarray:
     """
-    Basic Matvec operation `A * vec`
+    Apply `A` using a one-sided finite difference of the right-hand side.
 
     :param vec: Vector to apply the operation to
     :param dt: Delta time
     :param Q: ?
     :param rhs: Last computed RHS
     :param rhs_handle: Right hand side to compute
-    :param method: Jacobian-action method: complex step or finite difference.
     :param fd_norm_q: Cached distributed norm of the linearization state.
 
     :return: Result of the `A * vec` operation
     """
-    method_key = method.lower()
-
-    if method_key == "complex":
-        # Complex-step approximation
-        epsilon = math.sqrt(numpy.finfo(float).eps)
-        Qvec = Q + 1j * epsilon * vec.reshape(Q.shape)
-        jac = dt * (rhs_handle(Qvec) / epsilon).imag
-    elif method_key == "fd":
-        # Following the NITSOL approach, see Eq. 14 in the review article by Knoll and Keyes on the JFNK method.
-        direction = vec.reshape(Q.shape)
-        eps_machine = numpy.float64(torch.finfo(Q.dtype).eps)
-        norm_q = fd_norm_q if fd_norm_q is not None else _global_norm(Q, MPI.COMM_WORLD)
-        norm_v = _global_norm(vec, MPI.COMM_WORLD)
-        if norm_v == 0.0:
-            epsilon = numpy.sqrt(eps_machine)
-        else:
-            epsilon = numpy.sqrt((numpy.float64(1.0) + norm_q) * eps_machine) / norm_v
-
-        Qvec = Q + epsilon * direction
-        rhs_difference = rhs_handle(Qvec) - rhs
-        jac = (rhs_difference * (dt / epsilon)).to(Q.dtype)
+    # Knoll and Keyes Eq. 14 finite-difference step.
+    direction = vec.reshape(Q.shape)
+    eps_machine = numpy.float64(torch.finfo(Q.dtype).eps)
+    norm_q = fd_norm_q if fd_norm_q is not None else _global_norm(Q, MPI.COMM_WORLD)
+    norm_v = _global_norm(vec, MPI.COMM_WORLD)
+    if norm_v == 0.0:
+        epsilon = numpy.sqrt(eps_machine)
     else:
-        raise ValueError(f"Unknown Jacobian method '{method}'")
+        epsilon = numpy.sqrt((numpy.float64(1.0) + norm_q) * eps_machine) / norm_v
+
+    Qvec = Q + epsilon * direction
+    rhs_difference = rhs_handle(Qvec) - rhs
+    jac = (rhs_difference * (dt / epsilon)).to(Q.dtype)
 
     return jac.flatten()
 

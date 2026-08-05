@@ -27,7 +27,6 @@ class RhsContext:
 
     geom: Geometry
     operators_real: DFROperators
-    operators_complex: DFROperators
     metric: Metric2D | Metric3DTopo | None
     topo: Topo | None
     ptopo: ProcessTopology | None
@@ -105,7 +104,6 @@ def _euler_cubesphere(ctx: RhsContext) -> RhsBundle:
         pde,
         ctx.geom,
         ctx.operators_real,
-        ctx.operators_complex,
         ctx.metric,
         ctx.topo,
         ctx.ptopo,
@@ -127,7 +125,6 @@ def _euler_cartesian3d(ctx: RhsContext) -> RhsBundle:
         pde,
         ctx.geom,
         ctx.operators_real,
-        ctx.operators_complex,
         ctx.metric,
         ctx.topo,
         ctx.ptopo,
@@ -146,7 +143,6 @@ def _shallow_water_cubesphere(ctx: RhsContext) -> RhsBundle:
             ctx.fields_shape,
             ctx.geom,
             ctx.operators_real,
-            ctx.operators_complex,
             ctx.metric,
             ctx.ptopo,
             ctx.geom.num_solpts,
@@ -158,7 +154,6 @@ def _shallow_water_cubesphere(ctx: RhsContext) -> RhsBundle:
             ctx.fields_shape,
             ctx.geom,
             ctx.operators_real,
-            ctx.operators_complex,
             ctx.metric,
             ctx.topo,
             ctx.ptopo,

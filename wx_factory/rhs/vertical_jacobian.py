@@ -17,7 +17,7 @@ from ..common.definitions import (
     idx_rho_u3,
     p0,
 )
-from ..common.matmul import apply_op, maximum
+from ..common.matmul import apply_op
 
 _mid_k = numpy.s_[..., 1:-1, :, :, :]
 _bot_k = numpy.s_[..., 0, :, :, :]
@@ -130,7 +130,7 @@ def _vertical_flux_jvp(rhsobj, q, dq, ops, pressure, q_itf_x3, q_itf_full_x3):
     w_u = qf[idx_rho_u3][south] / qf[idx_rho][south]
     eig_d = torch.abs(w_d) + torch.sqrt(h33_itf[north] * heat_capacity_ratio * p_itf[north] / qf[idx_rho][north])
     eig_u = torch.abs(w_u) + torch.sqrt(h33_itf[south] * heat_capacity_ratio * p_itf[south] / qf[idx_rho][south])
-    eig = maximum(eig_d, eig_u)
+    eig = torch.maximum(eig_d, eig_u)
 
     # Linearize the interface fluxes.
     dflux_d = sg_itf[north] * a3_matvec(
@@ -392,7 +392,7 @@ def assemble_vertical_blocks(rhsobj, q):
     s_u = torch.sqrt(h33fc[up] * gam * p_u / rho_u)  # up trace
     a_d = torch.abs(w_d) + s_d
     a_u = torch.abs(w_u) + s_u
-    eig = maximum(a_d, a_u)
+    eig = torch.maximum(a_d, a_u)
     I5 = torch.eye(nv, dtype=dt_).reshape(1, 1, nv, nv)
     lam = (eig * sg_n)[..., None, None]
     Bp = 0.5 * (sg_n[..., None, None] * A3f[dn] + lam * I5)
@@ -721,7 +721,7 @@ def _hori_interface(direction, qf, dqf, sg, hci, left, right):
     sound_r = torch.sqrt(h00[right] * heat_capacity_ratio * p_itf[right] / qf[idx_rho][right])
     eig_l = torch.abs(u_l) + sound_l
     eig_r = torch.abs(u_r) + sound_r
-    eig = maximum(eig_l, eig_r)
+    eig = torch.maximum(eig_l, eig_r)
 
     dflux_l = sg[left] * ad_matvec(
         dqf[left],
@@ -775,7 +775,7 @@ def _hori_wb_interface(direction, qf, dqf, sg, hci, left, right):
     eig_l = torch.abs(u_l) + sound_l
     eig_r = torch.abs(u_r) + sound_r
     left_wins = eig_l >= eig_r
-    eig = maximum(eig_l, eig_r)
+    eig = torch.maximum(eig_l, eig_r)
     deig_l = torch.sgn(u_l) * du_l + 0.5 * sound_l * (
         heat_capacity_ratio * dqf[idx_rho_theta][left] / qf[idx_rho_theta][left]
         - dqf[idx_rho][left] / qf[idx_rho][left]

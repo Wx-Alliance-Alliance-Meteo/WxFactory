@@ -18,7 +18,6 @@ class RosExp2(Integrator):
         self.rhs_full = rhs_full
         self.rhs_imp = rhs_imp
         self.tol = param.tolerance
-        self.jacobian_method = param.jacobian_method
         self.gmres_restart = param.gmres_restart
         self.krylov_mmax = param.krylov_mmax
         self.solve_exponential = resolve_exponential_solver(param.exponential_solver)
@@ -33,9 +32,7 @@ class RosExp2(Integrator):
         n = len(Q_flat)
 
         def J_exp(v):
-            return matvec_fun(v, dt, Q, rhs_full, self.rhs_full, self.jacobian_method) - matvec_fun(
-                v, dt, Q, rhs_imp, self.rhs_imp, self.jacobian_method
-            )
+            return matvec_fun(v, dt, Q, rhs_full, self.rhs_full) - matvec_fun(v, dt, Q, rhs_imp, self.rhs_imp)
 
         vec = torch.zeros((2, n), dtype=Q.dtype)
         vec[1, :] = rhs_full.flatten()

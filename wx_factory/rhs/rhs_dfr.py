@@ -30,9 +30,9 @@ class RHSDirecFluxReconstruction(RHS):
             self.q_itf_x3 = torch.empty_like(self.q_itf_x1)
 
     def solution_extrapolation(self, q: NDArray) -> None:
-        op_extrap_x = self.ops.extrap_x if not torch.is_complex(q) else self.ops.extrap_x_complex
-        op_extrap_z = self.ops.extrap_z if not torch.is_complex(q) else self.ops.extrap_z_complex
-        op_extrap_y = self.ops.extrap_y if not torch.is_complex(q) else self.ops.extrap_y_complex
+        op_extrap_x = self.ops.extrap_x
+        op_extrap_z = self.ops.extrap_z
+        op_extrap_y = self.ops.extrap_y
 
         self.q_itf_x1 = apply_op(q, op_extrap_x)
         self.q_itf_x3 = apply_op(q, op_extrap_z)
@@ -43,19 +43,15 @@ class RHSDirecFluxReconstruction(RHS):
         self.pde.pointwise_fluxes(q, self.f_x1, self.f_x2, self.f_x3)
 
     def flux_divergence_partial(self) -> NDArray:
-        op_dx = self.ops.derivative_x if not torch.is_complex(self.f_x1) else self.ops.derivative_x_complex
-        op_dz = self.ops.derivative_z if not torch.is_complex(self.f_x3) else self.ops.derivative_z_complex
+        op_dx = self.ops.derivative_x
+        op_dz = self.ops.derivative_z
 
         self.df1_dx1 = apply_op(self.f_x1, op_dx)
         self.df3_dx3 = apply_op(self.f_x3, op_dz)
 
     def flux_divergence(self):
-        op_correction_WE = (
-            self.ops.correction_WE if not torch.is_complex(self.f_itf_x1) else self.ops.correction_WE_complex
-        )
-        op_correction_DU = (
-            self.ops.correction_DU if not torch.is_complex(self.f_itf_x3) else self.ops.correction_DU_complex
-        )
+        op_correction_WE = self.ops.correction_WE
+        op_correction_DU = self.ops.correction_DU
 
         self.df1_dx1 += apply_op(self.f_itf_x1, op_correction_WE)
         self.df1_dx1 *= -2.0 / self.geom.Δx1
@@ -72,7 +68,6 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
         pde,
         geometry: CubedSphere,
         operators_real: DFROperators,
-        operators_complex: DFROperators,
         metric,
         topography,
         process_topo,
@@ -84,7 +79,6 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
             pde,
             geometry,
             operators_real,
-            operators_complex,
             metric,
             topography,
             process_topo,
@@ -161,9 +155,9 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
         itf_x3[...] = q @ self.ops.extrap_z
 
     def solution_extrapolation(self, q: NDArray) -> None:
-        op_extrap_x = self.ops.extrap_x if not torch.is_complex(q) else self.ops.extrap_x_complex
-        op_extrap_z = self.ops.extrap_z if not torch.is_complex(q) else self.ops.extrap_z_complex
-        op_extrap_y = self.ops.extrap_y if not torch.is_complex(q) else self.ops.extrap_y_complex
+        op_extrap_x = self.ops.extrap_x
+        op_extrap_z = self.ops.extrap_z
+        op_extrap_y = self.ops.extrap_y
 
         self.extrap_3d(q, self.q_itf_x1, self.q_itf_x2, self.q_itf_x3)
 
@@ -195,9 +189,9 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
         )
 
     def flux_divergence_partial(self):
-        op_dx = self.ops.derivative_x if not torch.is_complex(self.f_x1) else self.ops.derivative_x_complex
-        op_dy = self.ops.derivative_y if not torch.is_complex(self.f_x2) else self.ops.derivative_y_complex
-        op_dz = self.ops.derivative_z if not torch.is_complex(self.f_x3) else self.ops.derivative_z_complex
+        op_dx = self.ops.derivative_x
+        op_dy = self.ops.derivative_y
+        op_dz = self.ops.derivative_z
 
         # Accumulate volume derivatives.
         apply_op(self.f_x1, op_dx, out=self.rhs, beta=0.0)
@@ -218,15 +212,9 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
         self.w_df3_dx3_presb = apply_op(self.log_p, op_dz)
 
     def flux_divergence(self):
-        op_correction_WE = (
-            self.ops.correction_WE if not torch.is_complex(self.f_itf_x1) else self.ops.correction_WE_complex
-        )
-        op_correction_SN = (
-            self.ops.correction_SN if not torch.is_complex(self.f_itf_x2) else self.ops.correction_SN_complex
-        )
-        op_correction_DU = (
-            self.ops.correction_DU if not torch.is_complex(self.f_itf_x3) else self.ops.correction_DU_complex
-        )
+        op_correction_WE = self.ops.correction_WE
+        op_correction_SN = self.ops.correction_SN
+        op_correction_DU = self.ops.correction_DU
 
         # Add interface corrections.
         apply_op(self.f_itf_x1, op_correction_WE, out=self.rhs, beta=1.0)
@@ -369,12 +357,12 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
         self.pointwise_fluxes(q)
 
         # The well-balanced vertical-momentum row is replaced below.
-        op_dz = self.ops.derivative_z if not torch.is_complex(self.f_x3) else self.ops.derivative_z_complex
+        op_dz = self.ops.derivative_z
         apply_op(self.f_x3, op_dz, out=self.rhs, beta=0.0)
 
         self.riemann_fluxes()
 
-        op_corr = self.ops.correction_DU if not torch.is_complex(self.f_itf_x3) else self.ops.correction_DU_complex
+        op_corr = self.ops.correction_DU
         apply_op(self.f_itf_x3, op_corr, out=self.rhs, beta=1.0)
 
         # Well-balanced vertical-momentum residual.
@@ -423,9 +411,8 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
         self.start_communication()
         self.pointwise_fluxes(q)
 
-        cplx = torch.is_complex(self.f_x1)
-        op_dx = self.ops.derivative_x if not cplx else self.ops.derivative_x_complex
-        op_dy = self.ops.derivative_y if not cplx else self.ops.derivative_y_complex
+        op_dx = self.ops.derivative_x
+        op_dy = self.ops.derivative_y
 
         # Horizontal volume derivatives.
         apply_op(self.f_x1, op_dx, out=self.rhs, beta=0.0)
@@ -440,8 +427,8 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
         self.end_communication()
         self.riemann_fluxes()
 
-        op_corr_WE = self.ops.correction_WE if not cplx else self.ops.correction_WE_complex
-        op_corr_SN = self.ops.correction_SN if not cplx else self.ops.correction_SN_complex
+        op_corr_WE = self.ops.correction_WE
+        op_corr_SN = self.ops.correction_SN
 
         # Horizontal interface corrections.
         apply_op(self.f_itf_x1, op_corr_WE, out=self.rhs, beta=1.0)
@@ -459,8 +446,8 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
         self.w_df2_dx2_presb *= self.wflux_pres_x2
 
         # Keep the vertical horizontal-momentum fluxes with their terrain pressure balance in f2.
-        op_dz = self.ops.derivative_z if not cplx else self.ops.derivative_z_complex
-        op_corr_DU = self.ops.correction_DU if not cplx else self.ops.correction_DU_complex
+        op_dz = self.ops.derivative_z
+        op_corr_DU = self.ops.correction_DU
         for row in (idx_rho_u1, idx_rho_u2):
             apply_op(self.f_x3[row], op_dz, out=self.rhs[row], beta=1.0)
             apply_op(self.f_itf_x3[row], op_corr_DU, out=self.rhs[row], beta=1.0)
@@ -494,17 +481,16 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
         self.start_communication()
         self.pointwise_fluxes(q)
 
-        cplx = torch.is_complex(self.f_x1)
-        op_dx = self.ops.derivative_x if not cplx else self.ops.derivative_x_complex
-        op_dy = self.ops.derivative_y if not cplx else self.ops.derivative_y_complex
+        op_dx = self.ops.derivative_x
+        op_dy = self.ops.derivative_y
         apply_op(self.f_x1, op_dx, out=self.rhs, beta=0.0)
         apply_op(self.f_x2, op_dy, out=self.rhs, beta=1.0)
 
         self.end_communication()
         self.riemann_fluxes()
 
-        op_corr_WE = self.ops.correction_WE if not cplx else self.ops.correction_WE_complex
-        op_corr_SN = self.ops.correction_SN if not cplx else self.ops.correction_SN_complex
+        op_corr_WE = self.ops.correction_WE
+        op_corr_SN = self.ops.correction_SN
         apply_op(self.f_itf_x1, op_corr_WE, out=self.rhs, beta=1.0)
         apply_op(self.f_itf_x2, op_corr_SN, out=self.rhs, beta=1.0)
         self.rhs *= -self.metric.inv_sqrtG_new

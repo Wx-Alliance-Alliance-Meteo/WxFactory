@@ -111,10 +111,8 @@ class Simulation:
         # operations selectively retain or accumulate in float64.
         if self.config.precision == "mixed":
             self.device.real_dtype = torch.float32
-            self.device.complex_dtype = torch.complex64
         else:
             self.device.real_dtype = torch.float64
-            self.device.complex_dtype = torch.complex128
 
         self.geometry = resolve_geometry(GeometryContext.from_simulation(self))
         # Cubed-sphere geometries carry a process topology; a Cartesian grid has none.
@@ -124,7 +122,6 @@ class Simulation:
             resolve_step_hooks(StepHookContext(config=self.config, geometry=self.geometry), phase=PHASE_GEOMETRY)
         )
         self.operators_real = DFROperators(self.geometry, self.device)
-        self.operators_complex = DFROperators(self.geometry, self.device, self.device.complex_dtype)
         self.initial_state = init_state_vars(self.geometry, self.operators_real, self.config, self.step_hooks)
 
         self.output = resolve_output(
@@ -148,7 +145,6 @@ class Simulation:
             RhsContext(
                 geom=self.geometry,
                 operators_real=self.operators_real,
-                operators_complex=self.operators_complex,
                 metric=self.initial_state.metric,
                 topo=self.initial_state.topography,
                 ptopo=self.process_topo,

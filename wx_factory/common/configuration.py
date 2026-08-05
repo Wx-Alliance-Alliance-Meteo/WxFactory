@@ -124,7 +124,6 @@ class Configuration:
     grid_type: str
     initial_condition: str
     initial_conditions_file: str
-    jacobian_method: str
     krylov_mmax: int
     krylov_size: int
     lambda0: float

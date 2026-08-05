@@ -3,7 +3,6 @@ Explicit Runge-Kutta integrators
 """
 
 import torch
-from ..common.matmul import maximum
 import math
 import logging
 from typing import Callable, Optional, Tuple, Union, Literal
@@ -370,7 +369,7 @@ class RungeKutta:
                 # do FSAL evaluation if needed for error estimate
                 self.K[self.n_stages, :] = self.fun(self.t + h, y_new)
 
-            scale = self.atol + maximum(torch.abs(y), torch.abs(y_new)) * self.rtol
+            scale = self.atol + torch.maximum(torch.abs(y), torch.abs(y_new)) * self.rtol
 
             # exclude K[-1] if not FSAL. It could contain nan or inf
             err_estimate = h * (self.K[: self.n_stages + self.FSAL].T @ self._E[: self.n_stages + self.FSAL])

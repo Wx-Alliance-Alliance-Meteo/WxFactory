@@ -47,7 +47,6 @@ class Epi(Integrator):
         self.tol = param.tolerance
         self.krylov_size = 1
         self.krylov_mmax = param.krylov_mmax
-        self.jacobian_method = param.jacobian_method
         self.exponential_solver = param.exponential_solver
         self.solve_exponential = resolve_exponential_solver(self.exponential_solver)
         self.exode_method = param.exode_method
@@ -97,7 +96,7 @@ class Epi(Integrator):
         if self.jac is not None:
             matvec_handle = lambda v: self.jac(v, Q, dt)
         else:
-            matvec_handle = MatvecOpBasic(dt, Q, self.rhs, self.param)
+            matvec_handle = MatvecOpBasic(dt, Q, self.rhs)
 
         vec = torch.zeros((self.max_phi + 1, math.prod(rhs.shape)), dtype=Q.dtype)
         vec[1, :] = rhs.flatten()
@@ -105,7 +104,7 @@ class Epi(Integrator):
             if self.jac is not None:
                 J_deltaQ = self.jac(self.previous_Q[i] - Q, Q, 1.0)
             else:
-                J_deltaQ = matvec_fun(self.previous_Q[i] - Q, 1.0, Q, rhs, self.rhs, self.jacobian_method)
+                J_deltaQ = matvec_fun(self.previous_Q[i] - Q, 1.0, Q, rhs, self.rhs)
 
             # R(y_{n-i})
             r = (self.previous_rhs[i] - rhs) - torch.reshape(J_deltaQ, Q.shape)

@@ -48,7 +48,6 @@ class PartRosExp2(Integrator):
         self.rhs_imp = rhs_imp  # Vertically stiff partition.
         self.rhs_exp = rhs_exp  # Complementary partition.
         self.tol = param.tolerance
-        self.jacobian_method = param.jacobian_method  # Kept for configuration compatibility.
         self.krylov_mmax = param.krylov_mmax
         self.krylov_m = None  # Recycled Krylov size.
         self.exponential_solver = param.exponential_solver

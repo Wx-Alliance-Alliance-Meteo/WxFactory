@@ -62,7 +62,6 @@ class Device:
         # overrides these from the `precision` configuration option. Single precision halves the
         # memory footprint (and the bandwidth), which is what lets the finer resolutions fit on a GPU.
         self.real_dtype = torch.float64
-        self.complex_dtype = torch.complex128
 
         if comm.rank == 0:
             print(f"Pytorch backend running on {self.torch_device} (on rank {comm.rank})", flush=True)

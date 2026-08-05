@@ -23,7 +23,7 @@ class MatvecTestCases(WxTestCase):
             rhs_inputs.append(value.clone())
             return 3.0 * value
 
-        result = matvec_fun(direction, 2.0, state, rhs(state), rhs, "fd")
+        result = matvec_fun(direction, 2.0, state, rhs(state), rhs)
 
         epsilon = numpy.sqrt(numpy.float64(numpy.finfo(numpy.float32).eps)) / 13.0
         expected_state = state + (direction.to(torch.float64) * epsilon).to(state.dtype)
@@ -40,7 +40,7 @@ class MatvecTestCases(WxTestCase):
             return value
 
         base = rhs(state)
-        result = matvec_fun(direction, 1.0, state, base, rhs, "fd")
+        result = matvec_fun(direction, 1.0, state, base, rhs)
 
         self.assertEqual(rhs_dtypes, [torch.float32, torch.float32])
         self.assertEqual(result.dtype, torch.float32)

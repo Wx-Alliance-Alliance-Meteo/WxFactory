@@ -72,7 +72,6 @@ class Srerk(Integrator):
         self.tol = param.tolerance
         self.krylov_size = 1
         self.krylov_mmax = param.krylov_mmax
-        self.jacobian_method = param.jacobian_method
         self.exponential_solver = param.exponential_solver
         self.solve_exponential = resolve_exponential_solver(self.exponential_solver)
 
@@ -108,7 +107,7 @@ class Srerk(Integrator):
         if self.jac is not None:
             matvec_handle = lambda v: self.jac(v, Q, dt)
         else:
-            matvec_handle = lambda v: matvec_fun(v, dt, Q, rhs, self.rhs, self.jacobian_method)
+            matvec_handle = lambda v: matvec_fun(v, dt, Q, rhs, self.rhs)
 
         # Initial projection
         vec = numpy.zeros((2, rhs.size))

@@ -164,13 +164,6 @@
                     "description": "Largest Krylov subspace the exponential solver may build. The solver stores mmax+1 basis vectors of the full state, so this caps its memory; lowering it trades memory for more internal substeps."
                 },
                 {
-                    "name": "jacobian_method",
-                    "type": "str",
-                    "default": "complex",
-                    "selectables": ["complex", "fd"],
-                    "description": "Jacobian-action method: complex step or finite difference."
-                },
-                {
                     "name": "verbose_solver",
                     "type": "int",
                     "default": 0

@@ -6,7 +6,6 @@ from typing import Callable, Tuple
 
 import numpy
 import torch
-from ..common.matmul import maximum
 from numpy.typing import NDArray
 
 from ..common.definitions import (
@@ -63,7 +62,7 @@ def rusanov_3d_vert_new(
             / variables_itf_k[idx_rho][south]
         )
 
-    eig = maximum(eig_d, eig_u)
+    eig = torch.maximum(eig_d, eig_u)
 
     # Advective part of the flux ...
     flux_d = metric.sqrtG_itf_k_new[north] * w_d * variables_itf_k[north]
@@ -96,7 +95,9 @@ def rusanov_3d_vert_new(
     wflux_adv_x3_itf_k[north] = 0.5 * (
         wflux_adv_d
         + wflux_adv_u
-        - eig * metric.sqrtG_itf_k_new[north] * (variables_itf_k[idx_rho_u3][south] - variables_itf_k[idx_rho_u3][north])
+        - eig
+        * metric.sqrtG_itf_k_new[north]
+        * (variables_itf_k[idx_rho_u3][south] - variables_itf_k[idx_rho_u3][north])
     )
     wflux_adv_x3_itf_k[south] = wflux_adv_x3_itf_k[north]
     wflux_pres_x3_itf_k[north] = 0.5 * (wflux_pres_d + wflux_pres_u) / pressure_itf_k[north]
@@ -140,7 +141,7 @@ def rusanov_3d_hori_i_new(
             / variables_itf_i[idx_rho][west]
         )
 
-    eig = maximum(eig_l, eig_r)
+    eig = torch.maximum(eig_l, eig_r)
 
     # Advective part of the flux ...
     flux_l = metric.sqrtG_itf_i_new[east] * u1_l * variables_itf_i[east]
@@ -217,7 +218,7 @@ def rusanov_3d_hori_j_new(
             / variables_itf_j[idx_rho][south]
         )
 
-    eig = maximum(eig_l, eig_r)
+    eig = torch.maximum(eig_l, eig_r)
 
     # Advective part of the flux
     flux_l = metric.sqrtG_itf_j_new[north] * u2_l * variables_itf_j[north]
@@ -250,10 +251,11 @@ def rusanov_3d_hori_j_new(
     wflux_adv_x2_itf_j[north] = 0.5 * (
         wflux_adv_l
         + wflux_adv_r
-        - eig * metric.sqrtG_itf_j_new[north] * (variables_itf_j[idx_rho_u3][south] - variables_itf_j[idx_rho_u3][north])
+        - eig
+        * metric.sqrtG_itf_j_new[north]
+        * (variables_itf_j[idx_rho_u3][south] - variables_itf_j[idx_rho_u3][north])
     )
     wflux_adv_x2_itf_j[south] = wflux_adv_x2_itf_j[north]
 
     wflux_pres_x2_itf_j[north] = 0.5 * (wflux_pres_l + wflux_pres_r) / pressure_itf_j[north]
     wflux_pres_x2_itf_j[south] = 0.5 * (wflux_pres_l + wflux_pres_r) / pressure_itf_j[south]
-

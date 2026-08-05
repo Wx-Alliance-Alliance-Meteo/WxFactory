@@ -22,7 +22,6 @@ class RHS(ABC):
         pde: PDE | None,
         geometry: Geometry,
         operators_real: DFROperators,
-        operators_complex: DFROperators,
         metric: Metric2D | Metric3DTopo,
         topography,
         process_topo: ProcessTopology,
@@ -33,7 +32,6 @@ class RHS(ABC):
         self.pde = pde
         self.geom = geometry
         self.ops_real = operators_real
-        self.ops_complex = operators_complex
         self.metric = metric
         self.topo = topography
         self.ptopo = process_topo
@@ -151,9 +149,7 @@ class RHS(ABC):
         return self.__call__(q)
 
     def operators_for(self, q: NDArray) -> DFROperators:
-        """Select real or complex operators to match ``q``."""
-        if torch.is_complex(q):
-            return self.ops_complex
+        """Return the real operator set."""
         return self.ops_real
 
     def allocate_arrays(self, q: NDArray):
