@@ -1,19 +1,21 @@
-import torch
 import math
-from typing import Optional
+from typing import TYPE_CHECKING
 
-from mpi4py import MPI
 import numpy
+import torch
+from mpi4py import MPI
 from numpy.typing import NDArray
 
+# For type hints
+from ..common import Configuration
+from ..process_topology import ProcessTopology
 from .cubed_sphere import CubedSphere
 from .geometry import cast_double_arrays
 from .sphere import cart2sph
 
-# For type hints
-from ..common import Configuration
-from ..device import Device
-from ..process_topology import ProcessTopology
+if TYPE_CHECKING:
+    # Only for annotations: metric3d imports this module, so a runtime import would be circular.
+    from .metric3d import Metric3DTopo
 
 
 class CubedSphere3D(CubedSphere):
@@ -270,7 +272,9 @@ class CubedSphere3D(CubedSphere):
         # Repeat for the interface values
         x1_itf_i = x1_boundaries.copy()
         x2_itf_i = x2.copy()
-        x3_itf_i = torch.repeat_interleave(x3[:, :, 0], num_elements_x1 + 1).reshape(self.itf_i_shape_3d)  # Repeat zy plane
+        x3_itf_i = torch.repeat_interleave(x3[:, :, 0], num_elements_x1 + 1).reshape(
+            self.itf_i_shape_3d
+        )  # Repeat zy plane
         eta_itf_i = torch.repeat_interleave(eta[:, :, 0], num_elements_x1 + 1).reshape(self.itf_i_shape_3d)
         self.x3_itf_i_new = self._to_new_itf_i(x3_itf_i)
         self.eta_itf_i_new = self._to_new_itf_i(eta_itf_i)
@@ -503,18 +507,18 @@ class CubedSphere3D(CubedSphere):
 
     def apply_topography(
         self,
-        zbot: Optional[NDArray],
-        zbot_itf_i: Optional[NDArray],
-        zbot_itf_j: Optional[NDArray],
-        zbot_new: Optional[NDArray],
-        zbot_itf_i_new: Optional[NDArray],
-        zbot_itf_j_new: Optional[NDArray],
-        zbot_large: Optional[NDArray] = None,
-        zbot_large_itf_i: Optional[NDArray] = None,
-        zbot_large_itf_j: Optional[NDArray] = None,
-        zbot_large_new: Optional[NDArray] = None,
-        zbot_large_itf_i_new: Optional[NDArray] = None,
-        zbot_large_itf_j_new: Optional[NDArray] = None,
+        zbot: NDArray | None,
+        zbot_itf_i: NDArray | None,
+        zbot_itf_j: NDArray | None,
+        zbot_new: NDArray | None,
+        zbot_itf_i_new: NDArray | None,
+        zbot_itf_j_new: NDArray | None,
+        zbot_large: NDArray | None = None,
+        zbot_large_itf_i: NDArray | None = None,
+        zbot_large_itf_j: NDArray | None = None,
+        zbot_large_new: NDArray | None = None,
+        zbot_large_itf_i_new: NDArray | None = None,
+        zbot_large_itf_j_new: NDArray | None = None,
     ):
         """
         Apply a topography field, given by heights (above the 0 reference sphere) specified at
@@ -619,7 +623,6 @@ class CubedSphere3D(CubedSphere):
         x1 = self.x1
         x2 = self.x2
         x3 = self.x3
-        eta = self.eta
 
         x1_itf_i = self.x1_itf_i
         x2_itf_i = self.x2_itf_i
@@ -638,7 +641,6 @@ class CubedSphere3D(CubedSphere):
 
         ni = self.ni
         nj = self.nj
-        nk = self.nk
 
         num_elements_x1 = self.num_elements_x1
         num_elements_x2 = self.num_elements_x2
@@ -647,9 +649,6 @@ class CubedSphere3D(CubedSphere):
         lon_p = self.lon_p
         lat_p = self.lat_p
         angle_p = self.angle_p
-
-        earth_radius = self.earth_radius
-        rotation_speed = self.rotation_speed
 
         ## Gnomonic (projected plane) coordinate values
         # X and Y (and their interface variants) are 2D arrays on the ij plane;
@@ -773,10 +772,11 @@ class CubedSphere3D(CubedSphere):
         coordVec_cart_itf_j = gnomonic_to_cartesian(coordVec_gnom_itf_j)
         coordVec_cart_itf_k = gnomonic_to_cartesian(coordVec_gnom_itf_k)
 
-        self.cart = gnomonic_to_cartesian(self.gnomonic)
-        self.cart_itf_i = gnomonic_to_cartesian(self.gnomonic_itf_i)
-        self.cart_itf_j = gnomonic_to_cartesian(self.gnomonic_itf_j)
-        self.cart_itf_k = gnomonic_to_cartesian(self.gnomonic_itf_k)
+        # Cartesian coordinates are temporary inputs to the polar conversion.
+        cart = gnomonic_to_cartesian(self.gnomonic)
+        cart_itf_i = gnomonic_to_cartesian(self.gnomonic_itf_i)
+        cart_itf_j = gnomonic_to_cartesian(self.gnomonic_itf_j)
+        cart_itf_k = gnomonic_to_cartesian(self.gnomonic_itf_k)
 
         # * Polar coordinates (lat, lon, Z)
 
@@ -792,10 +792,10 @@ class CubedSphere3D(CubedSphere):
         coordVec_latlon_itf_j = cartesian_to_polar(coordVec_cart_itf_j, coordVec_gnom_itf_j)
         coordVec_latlon_itf_k = cartesian_to_polar(coordVec_cart_itf_k, coordVec_gnom_itf_k)
 
-        self.polar = cartesian_to_polar(self.cart, self.gnomonic)
-        self.polar_itf_i = cartesian_to_polar(self.cart_itf_i, self.gnomonic_itf_i)
-        self.polar_itf_j = cartesian_to_polar(self.cart_itf_j, self.gnomonic_itf_j)
-        self.polar_itf_k = cartesian_to_polar(self.cart_itf_k, self.gnomonic_itf_k)
+        self.polar = cartesian_to_polar(cart, self.gnomonic)
+        self.polar_itf_i = cartesian_to_polar(cart_itf_i, self.gnomonic_itf_i)
+        self.polar_itf_j = cartesian_to_polar(cart_itf_j, self.gnomonic_itf_j)
+        self.polar_itf_k = cartesian_to_polar(cart_itf_k, self.gnomonic_itf_k)
 
         self.polar_itf_i[self.west_edge] = 0.0
         self.polar_itf_i[self.east_edge] = 0.0
@@ -808,11 +808,6 @@ class CubedSphere3D(CubedSphere):
         self.coordVec_gnom_itf_i = coordVec_gnom_itf_i
         self.coordVec_gnom_itf_j = coordVec_gnom_itf_j
         self.coordVec_gnom_itf_k = coordVec_gnom_itf_k
-
-        self.coordVec_cart = coordVec_cart
-        self.coordVec_cart_itf_i = coordVec_cart_itf_i
-        self.coordVec_cart_itf_j = coordVec_cart_itf_j
-        self.coordVec_cart_itf_k = coordVec_cart_itf_k
 
         self.coordVec_latlon = coordVec_latlon
         self.coordVec_latlon_itf_i = coordVec_latlon_itf_i
@@ -1032,9 +1027,9 @@ class CubedSphere3D(CubedSphere):
         tmp_shape1 = a.shape[:-3] + (self.num_elements_x2, self.num_elements_x1 + 2, 2, self.num_solpts)
         axis1 = a.ndim - 1
         a_tmp = a.reshape(tmp_shape1)
-        return torch.tile(torch.repeat_interleave(a_tmp, self.num_solpts, dim=axis1), (self.num_elements_x3, 1, 1, 1)).reshape(
-            self.itf_i_shape
-        )
+        return torch.tile(
+            torch.repeat_interleave(a_tmp, self.num_solpts, dim=axis1), (self.num_elements_x3, 1, 1, 1)
+        ).reshape(self.itf_i_shape)
 
     def get_itf_j_floor(self, a):
         """Retrieve slice of interface-j array 'a' that's on the floor"""
@@ -1053,9 +1048,9 @@ class CubedSphere3D(CubedSphere):
         tmp_shape1 = a.shape[:-3] + (self.num_elements_x2 + 2, self.num_elements_x1, 2, self.num_solpts)
         axis1 = a.ndim - 1
         a_tmp = a.reshape(tmp_shape1)
-        return torch.tile(torch.repeat_interleave(a_tmp, self.num_solpts, dim=axis1), (self.num_elements_x3, 1, 1, 1)).reshape(
-            self.itf_j_shape
-        )
+        return torch.tile(
+            torch.repeat_interleave(a_tmp, self.num_solpts, dim=axis1), (self.num_elements_x3, 1, 1, 1)
+        ).reshape(self.itf_j_shape)
 
     def to_new_floor(self, a: NDArray) -> NDArray:
         """Convert floor array from old to new layout"""
