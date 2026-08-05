@@ -17,7 +17,7 @@ from ..init.initialize import Topo
 from ..pde import PDEEuler3D
 from ..process_topology import ProcessTopology
 from .rhs_advection2d import RhsAdvection2d
-from .rhs_dfr import RHSDirecFluxReconstruction_mpi_v2
+from .rhs_dfr import RHSDirecFluxReconstruction_mpi
 from .rhs_sw import RhsShallowWater
 
 
@@ -101,7 +101,7 @@ def resolve_rhs(ctx: RhsContext) -> RhsBundle:
 def _euler_cubesphere(ctx: RhsContext) -> RhsBundle:
     # Additional state variables are passive tracers.
     pde = PDEEuler3D(ctx.geom, ctx.param, ctx.metric, num_var=ctx.fields_shape[0])
-    full = RHSDirecFluxReconstruction_mpi_v2(
+    full = RHSDirecFluxReconstruction_mpi(
         pde,
         ctx.geom,
         ctx.operators_real,
@@ -123,7 +123,7 @@ def _euler_cartesian3d(ctx: RhsContext) -> RhsBundle:
     # Cartesian case numbers do not follow the DCMIP advection convention.
     if getattr(ctx.param, "advection_only", "auto") == "auto":
         pde.advection_only = False
-    full = RHSDirecFluxReconstruction_mpi_v2(
+    full = RHSDirecFluxReconstruction_mpi(
         pde,
         ctx.geom,
         ctx.operators_real,
