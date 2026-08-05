@@ -8,7 +8,7 @@ timing helpers.
 """
 
 import os
-from time import time
+from time import perf_counter
 from typing import Any, Self
 
 from mpi4py import MPI
@@ -83,12 +83,29 @@ class Context:
         """Copy a tensor back to the host as a NumPy array."""
         return val.cpu().numpy().copy()
 
-    def timestamp(self, **kwargs) -> float:
-        return time()
+    def timestamp(self, **kwargs) -> float | torch.cuda.Event:
+        if self.torch_device.type == "cpu":
+            return perf_counter()
+        else:
+            event = torch.cuda.Event(enable_timing=True)
+            event.record()
+            return event
 
-    def elapsed(self, timestamps):
-        intervals = [timestamps[i + 1] - timestamps[i] for i in range(len(timestamps) - 1)]
-        intervals.append(timestamps[-1] - timestamps[0])
+    def elapsed(self, timestamps: list) -> list[float]:
+        """Return the elapsed time between each pair of timestamps, in milliseconds.
+        The last element is the total time between the first and last timestamps."""
+
+        if isinstance(timestamps[0], float):
+            intervals = [(timestamps[i + 1] - timestamps[i]) * 1000.0 for i in range(len(timestamps) - 1)]
+            intervals.append((timestamps[-1] - timestamps[0]) * 1000.0)
+        elif isinstance(timestamps[0], torch.cuda.Event):
+            intervals = []
+            timestamps[-1].synchronize()
+            intervals = [timestamps[i].elapsed_time(timestamps[i + 1]) for i in range(len(timestamps) - 1)]
+            intervals.append(timestamps[0].elapsed_time(timestamps[-1]))
+        else:
+            raise ValueError(f"Unknown timestamp type {type(timestamps[0])}")
+
         return intervals
 
     @staticmethod

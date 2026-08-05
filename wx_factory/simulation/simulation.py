@@ -234,6 +234,10 @@ class Simulation:
 
             while self.step():
                 pass  # Step until everything is done
+
+            if self.rank == 0:
+                self.rhs.full.print_times()
+
             self.output.finalize(time() - start_time)  # Close any open output file
         else:
             export_era5_all_timesteps(self, self.config)
