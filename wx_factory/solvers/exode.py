@@ -1,5 +1,4 @@
 import math
-from typing import Optional
 
 import numpy
 import torch
@@ -17,7 +16,7 @@ def exode(
     atol=1e-6,
     task1=False,
     verbose: bool = False,
-    context: Optional[Context] = None,
+    context: Context | None = None,
 ):
     # Import here to resolve circular import
     from ..integrators.butcher import METHODS

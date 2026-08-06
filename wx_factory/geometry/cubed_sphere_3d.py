@@ -6,7 +6,6 @@ import torch
 from mpi4py import MPI
 from numpy.typing import NDArray
 
-# For type hints
 from ..common import Configuration
 from ..process_topology import ProcessTopology
 from .cubed_sphere import CubedSphere

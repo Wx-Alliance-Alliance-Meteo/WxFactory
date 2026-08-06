@@ -4,17 +4,15 @@ The local contribution is computed with PyTorch and brought to the host as a Pyt
 small host array) before the MPI reduction. This works with tensors on either the CPU or a GPU.
 Bringing the scalar to the host also forces the device synchronization required by the caller."""
 
-from typing import Optional
-
-from mpi4py import MPI
 import numpy
-from numpy.typing import NDArray
 import torch
+from mpi4py import MPI
+from numpy.typing import NDArray
 from torch import Tensor
 
 from ..context import Context
 
-__all__ = ["global_norm", "global_dotprod", "global_inf_norm", "global_allreduce"]
+__all__ = ["global_allreduce", "global_dotprod", "global_inf_norm", "global_norm"]
 
 
 def _to_scalar(value):
@@ -22,7 +20,7 @@ def _to_scalar(value):
     return value.item() if hasattr(value, "item") else value
 
 
-def global_norm(vec: Tensor, context: Optional[Context] = None):
+def global_norm(vec: Tensor, context: Context | None = None):
     """Compute vector 2-norm across all PEs.
 
     Returns a 0-d array, so callers can still use ``.item()`` on it."""
@@ -48,7 +46,7 @@ def global_inf_norm(vec: NDArray, comm: MPI.Comm = MPI.COMM_WORLD):
     return comm.allreduce(local_max, op=MPI.MAX)
 
 
-def global_allreduce(array: Tensor, context: Optional[Context] = None):
+def global_allreduce(array: Tensor, context: Context | None = None):
     """Sum a small (host or device) array across all PEs, returning it on the device.
 
     Used for the FGMRES orthogonalization reduction, whose operand is a small matrix rather than a

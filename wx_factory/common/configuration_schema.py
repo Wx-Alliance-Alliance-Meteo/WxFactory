@@ -1,9 +1,9 @@
-from collections import OrderedDict
-from configparser import ConfigParser, NoSectionError, NoOptionError
 import copy
 import json
-import types
-from typing import TypeVar, Type, Union, Optional, Callable, Any, Literal, List
+from collections import OrderedDict
+from collections.abc import Callable
+from configparser import ConfigParser, NoOptionError, NoSectionError
+from typing import Any, TypeVar
 
 import numpy
 
@@ -38,16 +38,16 @@ def str_to_bool(val: str):
     return bool(int(val))
 
 
-OptionType = TypeVar("OptionType", bound=Union[str, CaseSensitiveStr, int, float, List[int], List[float], bool])
+OptionType = TypeVar("OptionType", bound=str | CaseSensitiveStr | int | float | list[int] | list[float] | bool)
 _T = TypeVar("T", str, dict, list)
-_Numerical = TypeVar("Numerical", bound=Union[int, float, angle24, numpy.float32])
-_Selectable = TypeVar("Selectable", bound=Union[int, float, str])
+_Numerical = TypeVar("Numerical", bound=int | float | angle24 | numpy.float32)
+_Selectable = TypeVar("Selectable", bound=int | float | str)
 
 
 default_schema_path = "config/config-format.json"
 
 
-def needs_evaluation(attribute: _T, attribute_type: Type[_T]) -> bool:
+def needs_evaluation(attribute: _T, attribute_type: type[_T]) -> bool:
     try:
         float(attribute)
         is_numeric = True
@@ -86,7 +86,7 @@ class ConfigFieldRange:
     the range."""
 
     def __init__(
-        self, min_value: OptionType = None, max_value: OptionType = None, selectables: List[OptionType] = None
+        self, min_value: OptionType = None, max_value: OptionType = None, selectables: list[OptionType] | None = None
     ):
         self.min_value = min_value
         self.max_value = max_value
@@ -94,7 +94,7 @@ class ConfigFieldRange:
 
         # Make sure that the range makes sense
         if selectables is not None and not (min_value is None and max_value is None):
-            raise ConfigValueError(f"You cannot have both a min or a max, and a selectable pool of values")
+            raise ConfigValueError("You cannot have both a min or a max, and a selectable pool of values")
 
         if self.min_value is not None and self.max_value is not None and self.min_value > self.max_value:
             raise ConfigValueError(f"Min value {self.min_value} is larger than max {self.max_value}")
@@ -150,11 +150,11 @@ class ConfigurationField:
         self,
         field_name: str,
         field_section: str,
-        field_default: Optional[OptionType],
-        field_type: Type[OptionType],
+        field_default: OptionType | None,
+        field_type: type[OptionType],
         is_list: bool,
         valid_range: ConfigFieldRange,
-        dependency: Optional[tuple[str, List[OptionType]]],
+        dependency: tuple[str, list[OptionType]] | None,
         description: str,
     ):
         self.name = field_name
@@ -346,10 +346,10 @@ class ConfigurationSchema:
         self,
         attribute_name: str,
         attributes: dict[str, _T],
-        attribute_type: Type[_T],
+        attribute_type: type[_T],
         optional: bool = False,
         is_list: bool = False,
-    ) -> Optional[_T]:
+    ) -> _T | None:
         """Retrieve an attribute from the given dictionary as the specified type. Raise an exception if
         the attribute does not exist (if not optional) or if it cannot be converted to the specified type."""
 
@@ -387,7 +387,7 @@ class ConfigurationSchema:
 
         return fields
 
-    def __get_range(self, field: dict, return_type: Type[_Numerical]) -> ConfigFieldRange:
+    def __get_range(self, field: dict, return_type: type[_Numerical]) -> ConfigFieldRange:
         """Extract the valid range of values for the given field."""
         min_value = self.__get_attribute("min", field, return_type, optional=True)
         max_value = self.__get_attribute("max", field, return_type, optional=True)

@@ -1,11 +1,8 @@
-import torch
 from abc import ABC, abstractmethod
-from typing import Optional
 
-from mpi4py import MPI
-import numpy
-from numpy.typing import NDArray
 import sympy
+import torch
+from numpy.typing import NDArray
 
 from ..context import Context
 from .quadrature import gauss_legendre

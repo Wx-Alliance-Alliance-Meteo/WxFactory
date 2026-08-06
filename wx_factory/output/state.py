@@ -1,7 +1,4 @@
-from typing import Optional, Tuple
-
 import numpy
-from numpy.typing import NDArray
 import torch
 from torch import Tensor
 
@@ -29,7 +26,7 @@ def save_state(state: Tensor, param: Configuration, output_file_name: str) -> No
         output_file.write(bytes(param.config_content, "utf-8"))
 
 
-def load_state(input_file_name: str, device: Optional[torch.device] = None) -> Tuple[Tensor, Configuration]:
+def load_state(input_file_name: str, device: torch.device | None = None) -> tuple[Tensor, Configuration]:
     """Retrieve simulation state from file, along with its configuration.
 
     There are several components to the save file. They are retrieved in the same
@@ -55,7 +52,7 @@ def load_state(input_file_name: str, device: Optional[torch.device] = None) -> T
 
         default_schema = load_default_schema()
 
-        config_content = "".join([str(line, "utf-8") for line in input_file.readlines()]).strip()
+        config_content = "".join([str(line, "utf-8") for line in input_file]).strip()
 
         try:
             conf = Configuration(config_content, default_schema)

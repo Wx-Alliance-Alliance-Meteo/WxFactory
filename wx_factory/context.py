@@ -11,8 +11,8 @@ import os
 from time import perf_counter
 from typing import Any, Self
 
-from mpi4py import MPI
 import torch
+from mpi4py import MPI
 
 from .wx_mpi import split_nodes
 

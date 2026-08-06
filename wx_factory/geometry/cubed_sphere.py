@@ -1,5 +1,5 @@
-from .geometry import Geometry
 from ..process_topology import ProcessTopology
+from .geometry import Geometry
 
 
 class CubedSphere(Geometry):

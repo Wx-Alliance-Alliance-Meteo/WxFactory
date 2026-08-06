@@ -19,9 +19,8 @@ data for the stencils that are located on different processors.
 
 """
 
-import math
-import numpy as np
 import mpi4py.MPI
+import numpy as np
 
 
 # functions for communication
@@ -58,7 +57,7 @@ def sendData(vec, neigh, world):
             # print("rank {} sending right colum to rank {}".format(world.rank, world.RightNeighRank))
             # note, data is not contiguous, need a buffer
             buffer = np.zeros(world.numPointsY)
-            for i in range(0, world.numPointsY):
+            for i in range(world.numPointsY):
                 indx = (world.numPointsX * (i + 1)) - 1
                 buffer[i] = vec[indx]
 
@@ -73,7 +72,7 @@ def sendData(vec, neigh, world):
             # note, data is not contiguous because it's stored by rowss
             buffer = np.zeros(world.numPointsY)
 
-            for i in range(0, world.numPointsY):
+            for i in range(world.numPointsY):
                 indx = world.numPointsX * i
                 buffer[i] = vec[indx]
 
@@ -147,7 +146,7 @@ def sendPerData(vec, neigh, world):
             # print("rank {} sending right colum to rank {}".format(world.rank, world.RightNeighRank))
             # note, data is not contiguous, need a buffer
             buffer = np.zeros(world.numPointsY)
-            for i in range(0, world.numPointsY):
+            for i in range(world.numPointsY):
                 indx = (world.numPointsX * (i + 1)) - 1
                 buffer[i] = vec[indx]
 
@@ -162,7 +161,7 @@ def sendPerData(vec, neigh, world):
             # note, data is not contiguous because it's stored by rowss
             buffer = np.zeros(world.numPointsY)
 
-            for i in range(0, world.numPointsY):
+            for i in range(world.numPointsY):
                 indx = world.numPointsX * i
                 buffer[i] = vec[indx]
 
@@ -276,8 +275,8 @@ def laplacianDirichlet(vec, epsilon, world):
         )
 
     # 2. matrix free application of matrix times vector
-    for j in range(0, world.numPointsY):  # depth of processor
-        for i in range(0, world.numPointsX):  # length of data
+    for j in range(world.numPointsY):  # depth of processor
+        for i in range(world.numPointsX):  # length of data
             indx = j * world.numPointsX + i
             current_val = -4.0 * vec[indx]
 
@@ -366,8 +365,8 @@ def laplacianNeumann(vec, epsilon, world):
 
     # 2. matrix free application of matrix times vector
     # print("---compute stencil---")
-    for j in range(0, world.numPointsY):  # depth of processor
-        for i in range(0, world.numPointsX):  # length of data
+    for j in range(world.numPointsY):  # depth of processor
+        for i in range(world.numPointsX):  # length of data
             indx = j * world.numPointsX + i
             current_val = -4.0 * vec[indx]
 
@@ -479,8 +478,8 @@ def nonLinLapPeriodic(vec, u, epsilon, world):
 
     # 2. matrix free application of matrix times vector
     N = world.numPointsX
-    for j in range(0, world.numPointsY):  # depth of processor
-        for i in range(0, world.numPointsX):  # length of data
+    for j in range(world.numPointsY):  # depth of processor
+        for i in range(world.numPointsX):  # length of data
             indx = j * world.numPointsX + i
             current_val = -4.0 * vec[indx] * u[indx]
 
@@ -539,8 +538,8 @@ def laplacianPeriodic(vec, epsilon, world):
         )
 
     # 2. matrix free application of matrix times vector
-    for j in range(0, world.numPointsY):  # depth of processor
-        for i in range(0, world.numPointsX):  # length of data
+    for j in range(world.numPointsY):  # depth of processor
+        for i in range(world.numPointsX):  # length of data
             indx = j * world.numPointsX + i
             current_val = -4.0 * vec[indx]
 
@@ -649,8 +648,8 @@ def advectionDirichlet(vec, alpha, world):
 
     # 2. matrix free application of matrix times vector
     # operator is second order fd
-    for j in range(0, world.numPointsY):  # depth of processor
-        for i in range(0, world.numPointsX):  # length of data
+    for j in range(world.numPointsY):  # depth of processor
+        for i in range(world.numPointsX):  # length of data
             indx = j * world.numPointsX + i
             current_val = 0.0
 
@@ -733,8 +732,8 @@ def advectionNeumann(vec, alpha, world):
 
     # 2. matrix free application of matrix times vector
     # operator is second order fd
-    for j in range(0, world.numPointsY):  # depth of processor
-        for i in range(0, world.numPointsX):  # length of data
+    for j in range(world.numPointsY):  # depth of processor
+        for i in range(world.numPointsX):  # length of data
             indx = j * world.numPointsX + i
             current_val = 0.0
 
@@ -819,8 +818,8 @@ def advectionPeriodic(vec, alpha, world):
     # 2. matrix free application of matrix times vector
     # operator is second order fd
     # print("---computing stencil---")
-    for j in range(0, world.numPointsY):  # depth of processor
-        for i in range(0, world.numPointsX):  # length of data
+    for j in range(world.numPointsY):  # depth of processor
+        for i in range(world.numPointsX):  # length of data
             indx = j * world.numPointsX + i
             current_val = 0.0
 
@@ -909,8 +908,8 @@ def nonLinAdvecDirichlet(vec, u, alpha, world):
 
     # 2. matrix free application of matrix times vector
     # operator is second order fd
-    for j in range(0, world.numPointsY):  # depth of processor
-        for i in range(0, world.numPointsX):  # length of data
+    for j in range(world.numPointsY):  # depth of processor
+        for i in range(world.numPointsX):  # length of data
             indx = j * world.numPointsX + i
             current_val = 0.0
 
@@ -1031,8 +1030,8 @@ def nonLinAdvecPeriodic(vec, u, alpha, world):
     # 2. matrix free application of matrix times vector
     # operator is second order fd
     # print("---computing stencil---")
-    for j in range(0, world.numPointsY):  # depth of processor
-        for i in range(0, world.numPointsX):  # length of data
+    for j in range(world.numPointsY):  # depth of processor
+        for i in range(world.numPointsX):  # length of data
             indx = j * world.numPointsX + i
             current_val = 0.0
 
@@ -1111,8 +1110,8 @@ def advectionUsquaredDir(vec, world):
 
     # 2. matrix free application of matrix times vector
     # operator is second order fd
-    for j in range(0, world.numPointsY):  # depth of processor
-        for i in range(0, world.numPointsX):  # length of data
+    for j in range(world.numPointsY):  # depth of processor
+        for i in range(world.numPointsX):  # length of data
             indx = j * world.numPointsX + i
             current_val = 0.0
 
@@ -1201,8 +1200,8 @@ def advectionUsquared(vec, world):
     # 2. matrix free application of matrix times vector
     # operator is second order fd
     # print("---computing stencil---")
-    for j in range(0, world.numPointsY):  # depth of processor
-        for i in range(0, world.numPointsX):  # length of data
+    for j in range(world.numPointsY):  # depth of processor
+        for i in range(world.numPointsX):  # length of data
             indx = j * world.numPointsX + i
             current_val = 0.0
 

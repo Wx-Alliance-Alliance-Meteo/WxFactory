@@ -1,12 +1,11 @@
-import torch
-from collections import deque
 import math
+from collections import deque
 
 import numpy
+import torch
 
 from ..common.configuration import Configuration
 from ..solvers import ExponentialSolverRequest, matvec_fun, resolve_exponential_solver
-
 from .epi import Epi
 from .integrator import Integrator
 from .srerk import alpha_coeff

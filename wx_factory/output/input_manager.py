@@ -1,17 +1,12 @@
-from typing import Optional
-
-from mpi4py import MPI
 import numpy
-from numpy.typing import NDArray
 import torch
+from mpi4py import MPI
 from torch import Tensor
 
-from .state import load_state
-
-from ..common import angle24, Configuration, ConfigurationSchema, default_schema_path, decode_ig4, readfile
-from ..wx_mpi import do_once, SingleProcess, Conditional
-from ..process_topology import ProcessTopology
+from ..common import Configuration, ConfigurationSchema, angle24, decode_ig4, default_schema_path, readfile
 from ..geometry import CubedSphere2D
+from ..wx_mpi import Conditional, SingleProcess, do_once
+from .state import load_state
 
 try:
     import rmn
@@ -22,14 +17,14 @@ except ModuleNotFoundError:
 
 
 class InputManager:
-    schema: Optional[ConfigurationSchema]
+    schema: ConfigurationSchema | None
 
     def __init__(self, comm: MPI.Comm):
         self.comm = comm
         self.schema = None
 
     @staticmethod
-    def read_config(config_file: str, comm: MPI.Comm, schema: Optional[ConfigurationSchema] = None) -> Configuration:
+    def read_config(config_file: str, comm: MPI.Comm, schema: ConfigurationSchema | None = None) -> Configuration:
         if schema is None:
             schema = ConfigurationSchema(do_once(readfile, default_schema_path, comm=comm))
         return Configuration(do_once(readfile, config_file, comm=comm), schema)

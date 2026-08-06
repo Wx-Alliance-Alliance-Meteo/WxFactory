@@ -1,13 +1,12 @@
 import os
 import pickle
-from typing import List, Optional
 
-from mpi4py import MPI
 import numpy
-from numpy.typing import NDArray
 import scipy.sparse
-from scipy.sparse import csc_matrix
 import torch
+from mpi4py import MPI
+from numpy.typing import NDArray
+from scipy.sparse import csc_matrix
 
 try:
     from tqdm import tqdm
@@ -17,7 +16,7 @@ except ModuleNotFoundError:
     def tqdm(a):
         global tqdm_message_printed
         if not tqdm_message_printed:
-            print(f'Module "tqdm" was not found. You need it if you want to see progress bars')
+            print('Module "tqdm" was not found. You need it if you want to see progress bars')
             tqdm_message_printed = True
         return a
 
@@ -28,11 +27,11 @@ from .matvec import MatvecOp
 
 def gen_matrix(
     matvec: MatvecOp,
-    jac_file_name: Optional[str] = None,
-    compressed: Optional[bool] = None,
+    jac_file_name: str | None = None,
+    compressed: bool | None = None,
     local: bool = False,
-    context: Optional[Context] = None,
-) -> Optional[scipy.sparse.csc_matrix]:
+    context: Context | None = None,
+) -> scipy.sparse.csc_matrix | None:
     """
     Compute and store the Jacobian matrix. It may be computed either as a full or sparse matrix
     (faster as full, but it may take a *lot* of memory for large matrices). Always stored as
@@ -68,7 +67,7 @@ def gen_matrix(
     # Compute the matrix one column at a time by multiplying by a basis vector
     idx = 0
     indices = list(range(n_loc))
-    columns: List[NDArray | csc_matrix | None] = [None for _ in range(len(indices * size))]
+    columns: list[NDArray | csc_matrix | None] = [None for _ in range(len(indices * size))]
     for r in range(size):
         if rank == 0:
             print(f"Tile {r + 1}/{size}")
@@ -96,7 +95,7 @@ def gen_matrix(
     # We want a global matrix. Gather the tiles into a single matrix
     J_tile_list = MPI.COMM_WORLD.gather(J_tile, root=0)
     if rank == 0:
-        print("")
+        print()
 
         J_full = scipy.sparse.vstack(J_tile_list)
 

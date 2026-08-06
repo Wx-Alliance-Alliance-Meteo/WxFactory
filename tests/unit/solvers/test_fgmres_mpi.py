@@ -1,9 +1,8 @@
 import torch
 from torch import Tensor
 
-from mpi_test import run_test_on_x_process
-from wx_test import WxTestCase
-
+from tests.unit.mpi_test import run_test_on_x_process
+from tests.unit.wx_test import WxTestCase
 from wx_factory.context import Context
 from wx_factory.solvers.fgmres import fgmres
 

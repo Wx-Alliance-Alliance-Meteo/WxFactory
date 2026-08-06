@@ -3,18 +3,15 @@
 import os
 import sys
 
-import numpy
-
 # We assume the script is in a subfolder of the main project
 main_gef_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..")
 sys.path.append(main_gef_dir)
 
-from common.definitions import idx_2d_rho, idx_2d_rho_u, idx_2d_rho_w, idx_2d_rho_theta
+from common.definitions import idx_2d_rho, idx_2d_rho_theta, idx_2d_rho_u, idx_2d_rho_w
 from common.graphx import image_field
 from geometry import Cartesian2D
 from main_gef import create_geometry
 from output.output_cartesian import output_step
-from output.output_manager import OutputManager
 from output.state import load_state
 
 

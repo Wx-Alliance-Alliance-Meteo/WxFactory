@@ -1,12 +1,12 @@
+from collections.abc import Callable
 from time import time
-from typing import Callable
 
 import numpy
 import torch
 
 from ..common.configuration import Configuration
-from .integrator import Integrator, SolverInfo
 from ..solvers import ExponentialSolverRequest, matvec_fun, matvec_rat, resolve_exponential_solver
+from .integrator import Integrator, SolverInfo
 
 
 class RosExp2(Integrator):

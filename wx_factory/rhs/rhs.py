@@ -1,17 +1,15 @@
-import torch
 from abc import ABC, abstractmethod
-import time
 
 import numpy
-from numpy.typing import NDArray
 import torch
+from numpy.typing import NDArray
 from torch import Tensor
 
 from ..common import Configuration
 from ..common.definitions import idx_rho_u2
 from ..geometry import DFROperators, Geometry, Metric2D, Metric3DTopo
 from ..pde import PDE
-from ..process_topology import ProcessTopology, ExchangeRequest
+from ..process_topology import ExchangeRequest, ProcessTopology
 
 
 class RHS(ABC):

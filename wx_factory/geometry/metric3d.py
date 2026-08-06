@@ -2,7 +2,6 @@ import math
 
 import numpy
 import torch
-from numpy.typing import NDArray
 
 from .cubed_sphere_3d import CubedSphere3D
 from .geometry import cast_double_arrays

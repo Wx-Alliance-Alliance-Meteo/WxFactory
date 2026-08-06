@@ -1,8 +1,8 @@
 import numpy
 
-from . import step_hook
-from ..common.definitions import idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_u3, idx_rho_theta
+from ..common.definitions import idx_rho, idx_rho_theta, idx_rho_u1, idx_rho_u2, idx_rho_u3
 from ..init.dcmip import dcmip_prescribed_rho_theta, dcmip_T11_update_winds, dcmip_T12_update_winds
+from . import step_hook
 
 
 class ExponentialFilterHook(step_hook.StepHook):

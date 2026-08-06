@@ -2,7 +2,6 @@ import random
 
 import array_generator
 import torch
-from mpi4py import MPI
 from torch import Tensor
 from wx_test import WxTestCase
 

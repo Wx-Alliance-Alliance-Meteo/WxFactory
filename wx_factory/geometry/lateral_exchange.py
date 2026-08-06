@@ -22,8 +22,6 @@ is validated when a flat case is run end to end (unification phase 4); the mappi
 geometrically intended one.
 """
 
-from mpi4py import MPI
-
 from ..common.definitions import idx_rho_u1, idx_rho_u2
 
 

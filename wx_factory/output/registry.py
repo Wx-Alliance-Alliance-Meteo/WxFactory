@@ -12,13 +12,14 @@ for the requested format.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Callable, Optional
+from typing import TYPE_CHECKING
 
-from .output_manager import OutputManager
-from .output_cubesphere_netcdf import OutputCubesphereNetcdf
 from .output_cartesian import OutputCartesian
 from .output_cubesphere_fst import OutputCubesphereFst
+from .output_cubesphere_netcdf import OutputCubesphereNetcdf
+from .output_manager import OutputManager
 
 if TYPE_CHECKING:
     from ..common import Configuration
@@ -34,10 +35,10 @@ class OutputContext:
     other registries. Some fields (metric, topography, dataset, process topology) are only used by
     the cubed-sphere output managers."""
 
-    config: "Configuration"
-    context: "Context"
-    geometry: "Geometry"
-    operators: "DFROperators"
+    config: Configuration
+    context: Context
+    geometry: Geometry
+    operators: DFROperators
     metric: object = None
     topography: object = None
     dataset: object = None
@@ -48,10 +49,10 @@ OutputFactory = Callable[["OutputContext"], OutputManager]
 
 # Maps (output family, output format) -> factory. A None format is a family-wide default, used when
 # the family's output does not depend on the format.
-OUTPUT_REGISTRY: dict[tuple[str, Optional[str]], OutputFactory] = {}
+OUTPUT_REGISTRY: dict[tuple[str, str | None], OutputFactory] = {}
 
 
-def register_output(output_family: str, output_format: Optional[str] = None):
+def register_output(output_family: str, output_format: str | None = None):
     """Register a factory for a geometry output family and (optionally) a specific output format."""
 
     def decorator(factory: OutputFactory) -> OutputFactory:
@@ -64,7 +65,7 @@ def register_output(output_family: str, output_format: Optional[str] = None):
     return decorator
 
 
-def resolve_output(ctx: "OutputContext") -> OutputManager:
+def resolve_output(ctx: OutputContext) -> OutputManager:
     """Build the output manager for the geometry and output format described by ``ctx``."""
     family = ctx.geometry.output_family
     fmt = ctx.config.output_format
@@ -79,7 +80,7 @@ def resolve_output(ctx: "OutputContext") -> OutputManager:
 
 
 @register_output("cubesphere", "netcdf")
-def _cubesphere_netcdf(ctx: "OutputContext") -> OutputManager:
+def _cubesphere_netcdf(ctx: OutputContext) -> OutputManager:
     return OutputCubesphereNetcdf(
         ctx.config,
         ctx.geometry,
@@ -93,7 +94,7 @@ def _cubesphere_netcdf(ctx: "OutputContext") -> OutputManager:
 
 
 @register_output("cubesphere", "fst")
-def _cubesphere_fst(ctx: "OutputContext") -> OutputManager:
+def _cubesphere_fst(ctx: OutputContext) -> OutputManager:
     return OutputCubesphereFst(
         ctx.config,
         ctx.geometry,
@@ -106,6 +107,6 @@ def _cubesphere_fst(ctx: "OutputContext") -> OutputManager:
 
 
 @register_output("cartesian")
-def _cartesian_images(ctx: "OutputContext") -> OutputManager:
+def _cartesian_images(ctx: OutputContext) -> OutputManager:
     """Cartesian slabs are visualised as x-z images regardless of the requested output_format."""
     return OutputCartesian(ctx.config, ctx.geometry, ctx.operators, ctx.context)

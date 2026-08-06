@@ -1,31 +1,29 @@
-from ..common.matmul import kron
 import math
 import time
 
-from mpi4py import MPI
 import numpy
 from numpy.typing import NDArray
 
+from ..common.configuration import Configuration
 from ..common.definitions import (
+    Rd,
+    cpd,
+    cvd,
     idx_h,
     idx_hu1,
     idx_hu2,
     idx_rho,
+    idx_rho_theta,
     idx_rho_u1,
     idx_rho_u2,
     idx_rho_u3,
-    idx_rho_theta,
-    cpd,
-    cvd,
     p0,
-    Rd,
 )
-from ..common.configuration import Configuration
+from ..common.matmul import kron
 from ..context import Context
-from ..geometry import CubedSphere, CubedSphere2D, CubedSphere3D, Metric2D, Metric3DTopo, DFROperators
+from ..geometry import CubedSphere, CubedSphere2D, DFROperators, Metric2D, Metric3DTopo
 from ..process_topology import ProcessTopology
-from ..wx_mpi import SingleProcess, Conditional
-
+from ..wx_mpi import Conditional, SingleProcess
 from .diagnostic import potential_vorticity, relative_vorticity
 from .output_cubesphere import OutputCubesphere
 

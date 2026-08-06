@@ -1,9 +1,8 @@
-from collections.abc import Callable
 import math
-from typing import Optional
+from collections.abc import Callable
 
-from mpi4py import MPI
 import torch
+from mpi4py import MPI
 from torch import Tensor
 
 from ..context import Context
@@ -20,7 +19,7 @@ def kiops(
     mmax: int = 128,
     iop: int = 2,
     task1: bool = False,
-    context: Optional[Context] = None,
+    context: Context | None = None,
 ) -> tuple[Tensor, tuple]:
     """kiops(tstops, A, u; kwargs...) -> (w, stats)
 

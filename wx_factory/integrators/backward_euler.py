@@ -1,13 +1,11 @@
-import numpy
-import scipy
-import math
+from collections.abc import Callable
 from time import time
-from typing import Callable
 
+import numpy
 
 from ..common.configuration import Configuration
+from ..solvers import SolverInfo, newton_krylov
 from .integrator import Integrator
-from ..solvers import fgmres, matvec_rat, SolverInfo, newton_krylov
 
 
 class BackwardEuler(Integrator):

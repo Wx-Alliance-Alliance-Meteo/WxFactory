@@ -11,9 +11,6 @@ At the moment there are 4 PDES (with their RHS and Jtv functions)
 
 """
 
-import numpy as np
-
-from mpi4py import MPI
 from ..stiff_pdes import JTV
 
 # -------------------------ALLEN-CAHN--------------------------------

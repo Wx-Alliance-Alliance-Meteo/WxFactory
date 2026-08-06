@@ -1,14 +1,12 @@
 import math
 
 import numpy
-from numpy.typing import NDArray
 import torch
+from numpy.typing import NDArray
 
+from ..process_topology import ProcessTopology
 from .cubed_sphere import CubedSphere
 from .sphere import cart2sph
-
-# For type hints
-from ..process_topology import ProcessTopology
 
 
 class CubedSphere2D(CubedSphere):

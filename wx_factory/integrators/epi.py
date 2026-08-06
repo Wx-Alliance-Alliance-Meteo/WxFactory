@@ -1,19 +1,17 @@
-import torch
-from collections import deque
 import math
-from typing import Callable
+from collections import deque
+from collections.abc import Callable
 
-import numpy
+import torch
 from numpy.typing import NDArray
 
 from ..common.configuration import Configuration
 from ..solvers import (
     ExponentialSolverRequest,
-    matvec_fun,
     MatvecOpBasic,
+    matvec_fun,
     resolve_exponential_solver,
 )
-
 from .integrator import Integrator, SolverInfo
 
 _COEFF_TABLES = {

@@ -1,10 +1,11 @@
-import torch
-from .shallow_water import sw_from_ERA5
 from time import time
+
+import torch
 import xarray as xr
 
-from ..common.definitions import idx_h, idx_hu1, idx_hu2
 from ..common.configuration import Configuration
+from ..common.definitions import idx_h, idx_hu1, idx_hu2
+from .shallow_water import sw_from_ERA5
 
 
 def export_era5_all_timesteps(sim, config: Configuration):

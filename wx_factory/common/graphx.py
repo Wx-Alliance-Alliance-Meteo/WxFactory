@@ -1,6 +1,5 @@
-import numpy
 import matplotlib.pyplot
-
+import numpy
 from torch import Tensor
 
 
@@ -39,5 +38,3 @@ def image_field(
 
     matplotlib.pyplot.savefig(filename)
     matplotlib.pyplot.close(fig)
-
-    return

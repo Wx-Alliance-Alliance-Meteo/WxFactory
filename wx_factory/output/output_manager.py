@@ -1,18 +1,14 @@
-import numpy
-import torch
 import os
 from time import time
-from typing import Callable, List, Optional
 
-from mpi4py import MPI
+import torch
 from numpy.typing import NDArray
 
 from ..common.configuration import Configuration
 from ..context import Context
-from ..geometry import Geometry, DFROperators, CubedSphere3D
-from ..wx_mpi import SingleProcess, Conditional
-
-from .state import save_state, load_state
+from ..geometry import DFROperators, Geometry
+from ..wx_mpi import Conditional, SingleProcess
+from .state import load_state, save_state
 
 
 def _readable_time(seconds):

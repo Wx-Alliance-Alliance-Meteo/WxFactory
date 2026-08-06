@@ -1,8 +1,8 @@
-import torch
+from collections.abc import Callable
 from time import time
-from typing import Callable
 
 import numpy
+import torch
 
 from ..common.configuration import Configuration
 from ..solvers import MatvecOpRat, SolverInfo

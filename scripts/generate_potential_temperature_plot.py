@@ -1,21 +1,20 @@
 #!/usr/bin/env python3
 
-import sys
 import os
+import sys
 
 root_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..")
 src_dir = os.path.join(root_dir, "wx_factory")
 sys.path.append(root_dir)
 sys.path.append(src_dir)
 
-import netCDF4 as nc
-import matplotlib.pyplot as plt
-import numpy as np
-
-from matplotlib.ticker import FormatStrFormatter
-
 import argparse
 import ast
+
+import matplotlib.pyplot as plt
+import netCDF4 as nc
+import numpy as np
+from matplotlib.ticker import FormatStrFormatter
 
 
 def _read_data(path):
@@ -79,7 +78,7 @@ def _plot_potential(theta, lons, elevs, time, output_file, plot_kwargs):
     cb.ax.set_ylabel("Δθ", fontsize=14)
     cb.ax.yaxis.set_major_formatter(FormatStrFormatter("%.2f"))
 
-    plt.gca().set_xlabel("\phi")
+    plt.gca().set_xlabel(r"\phi")
     plt.gca().set_xticks([0, 90, 180, 270, 360])
     plt.gca().set_title(f"t = {time:g} s")
     plt.gca().tick_params(axis="x", labelsize=14)

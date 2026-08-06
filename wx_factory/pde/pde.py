@@ -1,10 +1,8 @@
 from abc import ABC, abstractmethod
-from typing import Callable
 
 from numpy.typing import NDArray
 
 from ..common import Configuration
-from ..context import Context
 from ..geometry import Geometry, Metric2D, Metric3DTopo
 
 

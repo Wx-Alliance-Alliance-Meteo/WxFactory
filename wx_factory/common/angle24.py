@@ -3,7 +3,6 @@ can be stored as a 24-bit integer. Technically, pi/2 and -pi/2 map to the same
 value, which when decoded gives -pi/2."""
 
 import math
-import typing
 
 _INTERVAL = 2.0 * math.pi / 0x1000000
 

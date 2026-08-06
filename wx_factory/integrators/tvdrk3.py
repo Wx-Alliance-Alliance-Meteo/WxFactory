@@ -1,4 +1,4 @@
-from typing import Callable
+from collections.abc import Callable
 
 from ..common.configuration import Configuration
 from .integrator import Integrator, SolverInfo

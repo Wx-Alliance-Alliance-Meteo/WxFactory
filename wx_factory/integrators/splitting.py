@@ -43,7 +43,7 @@ class OS22Splitting(Integrator):
         )
 
     def __step__(self, Q, dt):
-        for numofstage in range(0, self.alpha.shape[0]):
+        for numofstage in range(self.alpha.shape[0]):
             if self.alpha[numofstage, 0] != 0:
                 Q = self.scheme1.step(Q, self.alpha[numofstage, 0] * dt)
             if self.alpha[numofstage, 1] != 0:

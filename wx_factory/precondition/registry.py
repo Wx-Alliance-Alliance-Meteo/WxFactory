@@ -12,8 +12,9 @@ See ``doc/contribute.md`` for how to add one.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Callable, Optional, Tuple
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from ..common import Configuration
@@ -30,15 +31,15 @@ class PreconditionerContext:
     A single context object is passed to every factory so they all share one signature, the same
     way the RHS and time-integrator factories do."""
 
-    config: "Configuration"
-    context: "Context"
-    geometry: "Geometry"
-    operators: "DFROperators"
-    rhs: "RhsBundle"
+    config: Configuration
+    context: Context
+    geometry: Geometry
+    operators: DFROperators
+    rhs: RhsBundle
     metric: object
     topography: object
     ptopo: object
-    fields_shape: Tuple[int, ...]
+    fields_shape: tuple[int, ...]
 
 
 PreconditionerFactory = Callable[["PreconditionerContext"], "Preconditioner"]
@@ -59,7 +60,7 @@ def register_preconditioner(name: str) -> Callable[[PreconditionerFactory], Prec
     return decorator
 
 
-def resolve_preconditioner(ctx: "PreconditionerContext") -> Optional["Preconditioner"]:
+def resolve_preconditioner(ctx: PreconditionerContext) -> Preconditioner | None:
     """Build the preconditioner selected by ``ctx.config.preconditioner`` (``None`` if 'none')."""
     name = ctx.config.preconditioner
     if name == "none":

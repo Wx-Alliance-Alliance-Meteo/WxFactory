@@ -2,11 +2,13 @@
 Explicit Runge-Kutta integrators
 """
 
-import torch
-import math
 import logging
-from typing import Callable, Optional, Tuple, Union, Literal
+import math
+from collections.abc import Callable
+
 import numpy
+import torch
+
 from ..solvers.global_operations import global_inf_norm
 
 # Constants
@@ -57,7 +59,7 @@ class RungeKutta:
     B: numpy.ndarray = NotImplemented  # shape: [n_stages]
     C: numpy.ndarray = NotImplemented  # shape: [n_stages]
     E: numpy.ndarray = NotImplemented  # shape: [n_stages + 1]
-    controller: Union[str, Tuple[float, float, float, float]] = "deadbeat"
+    controller: str | tuple[float, float, float, float] = "deadbeat"
 
     def __init__(
         self,
@@ -68,8 +70,8 @@ class RungeKutta:
         max_step: float = numpy.inf,
         rtol: float = 1e-3,
         atol: float = 1e-6,
-        first_step: Optional[float] = None,
-        controller: Union[str, Tuple[float, float, float, float], None] = None,
+        first_step: float | None = None,
+        controller: str | tuple[float, float, float, float] | None = None,
     ):
         """
         Initialize the Runge-Kutta solver.
@@ -248,7 +250,7 @@ class RungeKutta:
                 f"less than order ({self.order}) of the main method."
             )
 
-    def _init_control(self, controller: Union[str, Tuple[float, float, float, float], None]) -> None:
+    def _init_control(self, controller: str | tuple[float, float, float, float] | None) -> None:
         """
         Initialize step size controller parameters.
 
@@ -433,7 +435,7 @@ class RungeKutta:
 
         return True
 
-    def _init_min_step_parameters(self) -> Tuple[float, float]:
+    def _init_min_step_parameters(self) -> tuple[float, float]:
         """
         Define parameters for the minimum step size.
 
@@ -469,7 +471,7 @@ class RungeKutta:
 
         return h_min_a, h_min_b
 
-    def _reassess_stepsize(self, t: float) -> Tuple[float, float]:
+    def _reassess_stepsize(self, t: float) -> tuple[float, float]:
         """
         Reassess the step size based on constraints and integration bounds.
 

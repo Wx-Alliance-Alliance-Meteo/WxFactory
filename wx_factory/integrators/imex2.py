@@ -1,9 +1,8 @@
-from typing import Callable
-
+from collections.abc import Callable
 
 from ..common.configuration import Configuration
-from .integrator import Integrator
 from ..solvers import newton_krylov
+from .integrator import Integrator
 
 
 class Imex2(Integrator):

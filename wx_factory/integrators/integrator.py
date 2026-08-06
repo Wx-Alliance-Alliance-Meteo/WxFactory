@@ -1,14 +1,13 @@
 from abc import ABC, abstractmethod
 from time import time
-from typing import Optional
 
-import numpy
+from torch import Tensor
 
 from ..common import Configuration
 from ..context import Context
 from ..output.output_manager import OutputManager
 from ..precondition import Preconditioner
-from ..solvers import SolverInfo, fgmres, global_norm
+from ..solvers import SolverInfo, fgmres
 
 
 class Integrator(ABC):
@@ -29,17 +28,17 @@ class Integrator(ABC):
     """
 
     latest_time: float
-    output_manager: Optional[OutputManager]
+    output_manager: OutputManager | None
     context: Context
-    preconditioner: Optional[Preconditioner]
-    solver_info: Optional[SolverInfo]
+    preconditioner: Preconditioner | None
+    solver_info: SolverInfo | None
 
     def __init__(
         self,
         param: Configuration,
         *,
-        output_manager: Optional[OutputManager] = None,
-        context: Optional[Context] = None,
+        output_manager: OutputManager | None = None,
+        context: Context | None = None,
         preconditioner=None,
     ) -> None:
         self.output_manager = output_manager
@@ -66,13 +65,13 @@ class Integrator(ABC):
         )
 
     @abstractmethod
-    def __step__(self, Q: numpy.ndarray, dt: float) -> numpy.ndarray:
+    def __step__(self, Q: Tensor, dt: float) -> Tensor:
         pass
 
-    def __prestep__(self, Q: numpy.ndarray, dt: float) -> None:
+    def __prestep__(self, Q: Tensor, dt: float) -> None:
         pass
 
-    def step(self, Q: numpy.ndarray, dt: float):
+    def step(self, Q: Tensor, dt: float) -> Tensor:
         """Advance the system forward in time"""
         t0 = time()
 

@@ -1,18 +1,16 @@
-import numpy
-import torch
 import math
 import time
-from typing import Callable, Optional, Tuple
+from collections.abc import Callable
 
+import torch
 from mpi4py import MPI
 from numpy.typing import NDArray
-import torch
 from torch import Tensor
 
 from .context import Context
-from .wx_mpi import SingleProcess, Conditional, split_nodes
+from .wx_mpi import Conditional, SingleProcess, split_nodes
 
-ExchangedVector = Tuple[Tensor, ...] | Tensor
+ExchangedVector = tuple[Tensor, ...] | Tensor
 
 SOUTH = 0
 NORTH = 1
@@ -52,7 +50,7 @@ class ProcessTopology:
          +---+---+---+---+
     """
 
-    def __init__(self, context: Context, rank: Optional[int] = None):
+    def __init__(self, context: Context, rank: int | None = None):
         """Create a cube-sphere process topology.
 
         :param context: Context in which MPI exchanges are to be made.
@@ -328,13 +326,13 @@ class ProcessTopology:
         north: NDArray,
         west: NDArray,
         east: NDArray,
-        boundary_shape: Tuple[int, ...],
-        flip_dim: int | Tuple[int, ...] = -1,
+        boundary_shape: tuple[int, ...],
+        flip_dim: int | tuple[int, ...] = -1,
     ):
         base_shape = get_base_shape(south.shape, boundary_shape)
         send_buffer = torch.empty((4,) + base_shape, dtype=south[0].dtype)
 
-        if not isinstance(flip_dim, Tuple):
+        if not isinstance(flip_dim, tuple):
             flip_dim = (flip_dim,)
 
         # Fill send buffer
@@ -351,8 +349,8 @@ class ProcessTopology:
         north: NDArray,
         west: NDArray,
         east: NDArray,
-        boundary_shape: Tuple[int, ...],
-        flip_dim: int | Tuple[int, ...] = -1,
+        boundary_shape: tuple[int, ...],
+        flip_dim: int | tuple[int, ...] = -1,
     ):
         """Create a request for exchanging scalar data with neighboring tiles. The 4 input arrays must have the same
         shape and size.
@@ -396,7 +394,7 @@ class ProcessTopology:
         east: ExchangedVector,
         boundary_sn: Tensor,
         boundary_we: Tensor,
-        flip_dim: int | Tuple[int, ...] = -1,
+        flip_dim: int | tuple[int, ...] = -1,
         covariant: bool = False,
     ):
         convert = self.convert_cov if covariant else self.convert_contra
@@ -427,7 +425,7 @@ class ProcessTopology:
         east: ExchangedVector,
         boundary_sn: NDArray,
         boundary_we: NDArray,
-        flip_dim: int | Tuple[int, ...] = -1,
+        flip_dim: int | tuple[int, ...] = -1,
         covariant: bool = False,
     ):
         """Create a request for exchanging vectors with neighboring tiles. The 4 input vectors must have the same shape
@@ -473,7 +471,7 @@ class ProcessTopology:
         east: NDArray,
         boundary_sn: NDArray,
         boundary_we: NDArray,
-        flip_dim: int | Tuple[int, ...] = -1,
+        flip_dim: int | tuple[int, ...] = -1,
     ):
         convert = self.convert_contra
         base_shape = get_base_shape(south[0].shape, boundary_sn.shape)
@@ -517,7 +515,7 @@ class ProcessTopology:
 
         return requests
 
-    def gather_tiles_to_panel(self, field: NDArray, num_dim: int) -> Optional[NDArray]:
+    def gather_tiles_to_panel(self, field: NDArray, num_dim: int) -> NDArray | None:
         """Send given tile data (`field`) to one PE (the root) on current panel.
         The root collects all tiles and assembles them into one array. Other PEs on the panel
         simply return None.
@@ -571,7 +569,7 @@ class ProcessTopology:
 
         return panel_field
 
-    def gather_cube(self, field: NDArray, num_dim: int) -> Optional[NDArray]:
+    def gather_cube(self, field: NDArray, num_dim: int) -> NDArray | None:
         """Gather given tile data into a single array on the root of this process topology. The first dimension
         will necessarily be 6; the rest will depend on the number of dimensions in the data and the number of tiles.
         This function is a collective call that must be made by every process member of this topology.
@@ -602,7 +600,7 @@ class ProcessTopology:
 
         return torch.stack([panels[i] for i in range(6)])
 
-    def distribute_cube(self, field: Optional[NDArray], num_dim: int):
+    def distribute_cube(self, field: NDArray | None, num_dim: int):
         """Split the given single array into its component tiles (according to this topology) and send
         each tile to its corresponding process.
 
@@ -734,7 +732,7 @@ class ExchangeRequest:
                 # and sends the rest as scalars, so the block comes back as a single array.
                 self.to_tuple = lambda a: a.reshape((num_comp,) + self.shape)
 
-    def wait(self, timeout=10.0) -> Tuple[ExchangedVector, ExchangedVector, ExchangedVector, ExchangedVector]:
+    def wait(self, timeout=10.0) -> tuple[ExchangedVector, ExchangedVector, ExchangedVector, ExchangedVector]:
         """Wait for the exchange started when creating this object to be done.
 
         :param timeout: How long we should wait for the request to complete before throwing an error

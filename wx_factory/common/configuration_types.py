@@ -1,3 +1,3 @@
-from typing import TypeVar, Union, List
+from typing import TypeVar
 
-OptionType = TypeVar("OptionType", bound=Union[str, int, float, List[int], List[float], bool])
+OptionType = TypeVar("OptionType", bound=str | int | float | list[int] | list[float] | bool)

@@ -1,6 +1,6 @@
 import math
+from collections.abc import Callable
 from itertools import combinations
-from typing import Callable, List, Optional
 
 import numpy
 
@@ -10,7 +10,6 @@ from ..solvers import (
     matvec_fun,
     resolve_exponential_solver,
 )
-
 from .integrator import Integrator
 
 
@@ -41,7 +40,7 @@ def opt_nodes(order: int):
     c = []
     # Compute optimal nodes for each stage order starting at order 2
     for o in list(range(2, order - 2, 2)) + [order - 2]:
-        p = numpy.polynomial.Polynomial([coeff(o, q) for q in range(0, o + 1)])
+        p = numpy.polynomial.Polynomial([coeff(o, q) for q in range(o + 1)])
         c.append(p.roots())
 
     c.append(numpy.ones(1))
@@ -57,7 +56,7 @@ class Srerk(Integrator):
         order: int,
         rhs: Callable,
         jac: Callable = None,
-        nodes: Optional[List] = None,
+        nodes: list | None = None,
         *,
         context=None,
     ):

@@ -1,6 +1,5 @@
 import sys
 from time import time
-from typing import Optional
 
 import numpy
 import torch
@@ -11,8 +10,7 @@ from ..context import Context
 from ..geometry import DFROperators, GeometryContext, resolve_geometry
 from ..init.export_era5_all import export_era5_all_timesteps
 from ..init.init_state_vars import init_state_vars
-from ..integrators import Integrator
-from ..integrators import resolve as _resolve_integrator
+from ..integrators import Integrator, resolve as _resolve_integrator
 from ..output.input_manager import InputManager
 from ..output.registry import OutputContext, resolve_output
 from ..precondition import PreconditionerContext, resolve_preconditioner
@@ -47,7 +45,7 @@ class Simulation:
         comm: MPI.Comm = MPI.COMM_WORLD,
         print_allowed_pe_counts: bool = False,
         quiet: bool = False,
-        context: Optional[Context] = None,
+        context: Context | None = None,
     ) -> None:
         """Create a Simulation object from a certain configuration.
 
@@ -242,7 +240,7 @@ class Simulation:
         else:
             export_era5_all_timesteps(self, self.config)
 
-    def _make_context(self, context: Optional[Context]) -> Context:
+    def _make_context(self, context: Context | None) -> Context:
         """Create the context object which will determine on what hardware (CPU/GPU) each part of the simulation will
         be executed."""
         if context is not None:

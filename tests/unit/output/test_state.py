@@ -1,15 +1,14 @@
 import os
 import random
 
-from mpi4py import MPI
 from wx_test import WxTestCase
 
-from tests.unit import array_generator
 import tests.unit.common.config_pack
 import wx_factory.common.configuration
 import wx_factory.common.configuration_schema
-from wx_factory.context import Context
 import wx_factory.output.state
+from tests.unit import array_generator
+from wx_factory.context import Context
 
 state_input_dir = "tests/data/unit/state_tests"
 state_tmp_dir = "tests/data/temp"

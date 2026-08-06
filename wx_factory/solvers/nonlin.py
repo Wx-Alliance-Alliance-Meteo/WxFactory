@@ -1,7 +1,6 @@
 import math
 import sys
 from time import time
-from typing import Optional
 
 import numpy
 import scipy.optimize
@@ -30,7 +29,7 @@ def newton_krylov(
     x_tol=None,
     x_rtol=None,
     line_search="armijo",
-    context: Optional[Context] = None,
+    context: Context | None = None,
     eta0=1e-3,
 ):
 

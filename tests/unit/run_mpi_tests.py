@@ -18,7 +18,6 @@ from tests.unit.restart.test_restart import (
     Euler3DRestartTestCase,
     ShallowWaterRestartTestCase,
 )
-from tests.unit.solvers.test_fgmres_mpi import FgmresMpiTestCases
 from tests.unit.solvers.test_kiops_mpi import KiopsMpiTestCases
 from tests.unit.solvers.test_pmex_mpi import PmexMpiTestCases
 

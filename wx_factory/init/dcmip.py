@@ -4,7 +4,7 @@ import torch
 from torch import Tensor
 
 from ..common.configuration import Configuration
-from ..common.definitions import cpd, gravity, p0, Rd
+from ..common.definitions import Rd, cpd, gravity, p0
 from ..geometry import CubedSphere3D, DFROperators, Metric3DTopo
 
 # =======================================================================

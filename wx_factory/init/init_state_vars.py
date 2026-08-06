@@ -1,25 +1,20 @@
-import numpy
-from numpy.typing import NDArray
-
-
 from ..common.configuration import Configuration
 from ..geometry import (
+    Cartesian3D,
+    CubedSphere2D,
+    CubedSphere3D,
     DFROperators,
     Geometry,
     Metric2D,
     Metric3DTopo,
-    Cartesian3D,
-    CubedSphere2D,
-    CubedSphere3D,
 )
-from ..init.initialize import initialize_cartesian3d, initialize_euler, initialize_sw, Topo
-from typing import Dict, Type
-from ..step_hooks import StepHook, ScharMountainHook
+from ..init.initialize import initialize_cartesian3d, initialize_euler, initialize_sw
 from ..simulation.initial_state import InitialState
+from ..step_hooks import ScharMountainHook, StepHook
 
 
 def init_state_vars(
-    geom: Geometry, operators: DFROperators, param: Configuration, step_hooks: Dict[Type, StepHook]
+    geom: Geometry, operators: DFROperators, param: Configuration, step_hooks: dict[type, StepHook]
 ) -> InitialState:
     """Get intial value for state variables as well at topography information, based on the test case."""
 

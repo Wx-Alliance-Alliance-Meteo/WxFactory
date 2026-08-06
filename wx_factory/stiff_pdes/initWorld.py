@@ -75,11 +75,6 @@
 """
 
 import numpy as np
-import math
-import scipy.linalg
-import sys
-
-from mpi4py import MPI
 
 
 class InitWorld:

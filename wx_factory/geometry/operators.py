@@ -1,11 +1,11 @@
 import math
-from typing import Optional, Self, TYPE_CHECKING, TypeVar
+from typing import TYPE_CHECKING, Self, TypeVar
 
 import numpy
 import numpy.linalg
-from numpy.typing import NDArray
 import sympy
 import torch
+from numpy.typing import NDArray
 from torch import Tensor
 
 from ..common.matmul import kron
@@ -29,7 +29,7 @@ class DFROperators:
        * Correction matrices: `correction`, `correction_tr`.
     """
 
-    def __init__(self, grd: Geometry, context: Context, dtype: Optional[torch.dtype] = None):
+    def __init__(self, grd: Geometry, context: Context, dtype: torch.dtype | None = None):
         """Initialize the Direct Flux Reconstruction operators (matrices) based on input grid parameters.
 
         Parameters

@@ -1,14 +1,13 @@
-import torch
 import math
+
 import numpy
 import scipy.special
 import sympy
-from typing import List, Tuple
-
+import torch
 from numpy.typing import NDArray
 
 
-def gauss_legendre(n: int) -> Tuple[List[sympy.Float], NDArray[numpy.float64], NDArray[numpy.float64]]:
+def gauss_legendre(n: int) -> tuple[list[sympy.Float], NDArray[numpy.float64], NDArray[numpy.float64]]:
     """Computes the Gauss-Legendre quadrature points (symbolic and numerical) and weights.
 
     Gauss-Legendre nodes are roots of the Legendre polynomial

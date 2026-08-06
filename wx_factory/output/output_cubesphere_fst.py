@@ -1,12 +1,3 @@
-import math
-import struct
-import sys
-from typing import Optional
-
-from mpi4py import MPI
-import numpy
-from numpy.typing import NDArray
-
 from ..common import Configuration, angle24
 from ..common.definitions import (
     idx_h,
@@ -14,10 +5,9 @@ from ..common.definitions import (
     idx_hu2,
 )
 from ..context import Context
-from ..geometry import CubedSphere, CubedSphere2D, CubedSphere3D, Metric2D, Metric3DTopo, DFROperators
+from ..geometry import CubedSphere, CubedSphere2D, DFROperators, Metric2D, Metric3DTopo
 from ..process_topology import ProcessTopology
-from ..wx_mpi import SingleProcess, Conditional
-
+from ..wx_mpi import Conditional, SingleProcess
 from .output_cubesphere import OutputCubesphere
 
 try:
@@ -45,7 +35,7 @@ class OutputCubesphereFst(OutputCubesphere):
             return
 
         if not rmn_available:
-            raise ValueError(f"Could not import rmn, can't use FST output manager")
+            raise ValueError("Could not import rmn, can't use FST output manager")
 
         import georef
 

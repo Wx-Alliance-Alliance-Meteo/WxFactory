@@ -1,6 +1,5 @@
 from collections.abc import Callable
 from time import time
-from typing import Optional
 
 import torch
 from torch import Tensor
@@ -112,7 +111,7 @@ def fgmres(
     hegedus: bool = False,
     verbose: int = 0,
     prefix: str = "",
-    context: Optional[Context] = None,
+    context: Context | None = None,
 ) -> tuple[Tensor, float, float, int, int, list[tuple[float, float, float]]]:
     """
     Solve the given linear system (Ax = b) for x, using the FGMRES algorithm.

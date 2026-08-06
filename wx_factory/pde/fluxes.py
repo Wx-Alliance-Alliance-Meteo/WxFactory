@@ -2,29 +2,24 @@
 A bunch of flux functions for our RHS functions
 """
 
-from typing import Callable, Tuple
+from collections.abc import Callable
 
 import numpy
 import torch
 from numpy.typing import NDArray
 
 from ..common.definitions import (
-    cpd,
-    cvd,
     heat_capacity_ratio,
-    p0,
-    Rd,
     idx_rho,
     idx_rho_u1,
     idx_rho_u2,
     idx_rho_u3,
 )
-
 from ..geometry import Metric3DTopo
 
 FluxFunction2D = Callable[
     [numpy.ndarray, numpy.ndarray, numpy.ndarray, numpy.ndarray, numpy.ndarray, numpy.ndarray, numpy.ndarray],
-    Tuple[numpy.ndarray, numpy.ndarray],
+    tuple[numpy.ndarray, numpy.ndarray],
 ]
 
 

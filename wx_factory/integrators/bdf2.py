@@ -1,5 +1,6 @@
-import numpy
 from time import time
+
+import numpy
 
 from ..solvers import newton_krylov
 from .integrator import Integrator, SolverInfo
