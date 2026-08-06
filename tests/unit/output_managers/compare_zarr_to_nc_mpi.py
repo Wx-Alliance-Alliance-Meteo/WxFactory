@@ -1,40 +1,36 @@
 import os
 import shutil
 import tempfile
-from typing import Optional
 
 import numpy as np
-from numpy.typing import NDArray
-import xarray as xr
-from mpi4py import MPI
 import torch
+import xarray as xr
 import zarr
-
 from mpi_test import MpiTestCase
-from wx_factory.output import InputManager
-from wx_factory.wx_mpi import SingleProcess, Conditional
+
+from wx_factory.context import Context
 from wx_factory.geometry import (
     Cartesian3D,
-    CubedSphere3D,
     CubedSphere2D,
+    CubedSphere3D,
     DFROperators,
+    GeometryContext,
     Metric2D,
     Metric3DTopo,
+    resolve_geometry,
 )
-from wx_factory.context import Context
+from wx_factory.output import InputManager
 from wx_factory.output.registry import OutputContext, resolve_output
-from wx_factory.geometry import DFROperators, GeometryContext, resolve_geometry
 from wx_factory.step_hooks import ScharMountainHook
 from wx_factory.step_hooks.registry import (
     PHASE_GEOMETRY,
-    PHASE_STATE,
     StepHookContext,
     resolve_step_hooks,
 )
+from wx_factory.wx_mpi import Conditional, SingleProcess
 
 
 class CompareZarrToNcTestCase(MpiTestCase):
-
     def __init__(self, num_procs, methodName="runTest", optional=False):
         super().__init__(num_procs, methodName, optional)
         self.state_dir = "tests/data/unit/states_for_ouput_managers_tests"
@@ -194,7 +190,6 @@ class CompareZarrToNcTestCase(MpiTestCase):
 
         try:
             for variable_name in ds_nc.variables:
-
                 self.assertIn(
                     variable_name,
                     zarr_vars,
@@ -215,7 +210,6 @@ class CompareZarrToNcTestCase(MpiTestCase):
                 )
 
                 if not np.array_equal(nc_values, zarr_values):
-
                     diff = np.abs(nc_values - zarr_values)
 
                     mismatch_locations = np.argwhere(nc_values != zarr_values)

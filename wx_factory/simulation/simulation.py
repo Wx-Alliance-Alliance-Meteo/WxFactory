@@ -222,7 +222,6 @@ class Simulation:
         return False
 
     def run(self):
-        # if self.config.time_start == "":
         """Run the entire simulation step by step"""
         self.step_id = self.starting_step
         self.Q = self.initial_state.Q
@@ -236,8 +235,6 @@ class Simulation:
             self.rhs.full.print_times()
 
         self.output.finalize(time() - start_time)  # Close any open output file
-        """else:
-            export_era5_all_timesteps(self, self.config)"""
 
     def _make_context(self, context: Context | None) -> Context:
         """Create the context object which will determine on what hardware (CPU/GPU) each part of the simulation will
