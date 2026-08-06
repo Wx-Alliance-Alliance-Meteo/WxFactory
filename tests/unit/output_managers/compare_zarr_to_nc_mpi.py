@@ -245,25 +245,23 @@ class CompareZarrToNcTestCase(MpiTestCase):
                 config_nc, tmp_nc_dir = self._generate_output(nc_state_file)
                 config_zarr, tmp_zarr_dir = self._generate_output(zarr_state_file)
 
-                try:
+                if self.comm.rank == 0:
+                    try:
+                        nc_file = f"{tmp_nc_dir}/{config_nc.base_output_file}.nc"
 
-                    nc_file = f"{tmp_nc_dir}/" f"{config_nc.base_output_file}.nc"
+                        zarr_store = f"{tmp_zarr_dir}/{config_zarr.base_output_file}.zarr"
 
-                    zarr_store = f"{tmp_zarr_dir}/" f"{config_zarr.base_output_file}.zarr"
+                        if not os.path.exists(nc_file):
+                            self.fail(f"Expected NetCDF output not found: {nc_file}")
 
-                    if not os.path.exists(nc_file):
-                        self.fail(f"Expected NetCDF output not found: " f"{nc_file}")
+                        if not os.path.exists(zarr_store):
+                            self.fail(f"Expected Zarr output not found: {zarr_store}")
+                        self._compare_outputs(
+                            nc_file,
+                            zarr_store,
+                        )
 
-                    if not os.path.exists(zarr_store):
-                        self.fail(f"Expected Zarr output not found: " f"{zarr_store}")
-                    self._compare_outputs(
-                        nc_file,
-                        zarr_store,
-                    )
-
-                finally:
-                    self.comm.Barrier()
-                    if self.comm.rank == 0:
+                    finally:
                         shutil.rmtree(
                             tmp_nc_dir,
                             ignore_errors=True,
@@ -273,10 +271,9 @@ class CompareZarrToNcTestCase(MpiTestCase):
                             tmp_zarr_dir,
                             ignore_errors=True,
                         )
-                    self.comm.Barrier()
         except Exception as e:
             print(
-                f"Rank {self.comm.rank} failed with " f"{type(e)} : {e}",
+                f"Rank {self.comm.rank} failed with {type(e)} : {e}",
                 flush=True,
             )
             raise
