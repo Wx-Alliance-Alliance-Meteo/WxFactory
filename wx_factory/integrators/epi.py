@@ -11,7 +11,7 @@ from ..solvers import (
     ExponentialSolverRequest,
     resolve_exponential_solver,
 )
-from .integrator import Integrator, SolverInfo
+from .integrator import Integrator
 
 _COEFF_TABLES = {
     2: [[]],
@@ -32,7 +32,7 @@ class Epi(Integrator):
         param: Configuration,
         order: int,
         rhs: Callable,
-        jac: Callable = None,
+        jac: Callable | None = None,
         init_method=None,
         init_substeps: int = 1,
         *,
@@ -128,8 +128,6 @@ class Epi(Integrator):
         phiv = result.value
         if use_recycled_size and result.final_krylov_size is not None:
             self.krylov_size = math.floor(0.7 * result.final_krylov_size + 0.3 * self.krylov_size)
-
-        self.solver_info = SolverInfo(total_num_it=result.iterations)
 
         # Save values for the next timestep
         if self.n_prev > 0:

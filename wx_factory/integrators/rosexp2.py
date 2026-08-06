@@ -7,7 +7,7 @@ import torch
 from ..common.configuration import Configuration
 from ..jacobian import fd_jacobian_matvec, fd_rosenbrock_matvec
 from ..solvers import ExponentialSolverRequest, resolve_exponential_solver
-from .integrator import Integrator, SolverInfo
+from .integrator import Integrator
 
 
 class RosExp2(Integrator):
@@ -63,7 +63,7 @@ class RosExp2(Integrator):
 
         b = (A(Q_flat) + phiv * dt).flatten()
         Q_x0 = Q_flat.copy()
-        Qnew, norm_r, norm_b, num_iter, flag, residuals = self._solve_linear(
+        Qnew, norm_r, norm_b, num_iter, flag, _ = self._solve_linear(
             A,
             b,
             x0=Q_x0,
@@ -71,8 +71,6 @@ class RosExp2(Integrator):
             restart=self.gmres_restart,
         )
         time_imp = time() - tic
-
-        self.solver_info = SolverInfo(flag, time_imp, num_iter, residuals)
 
         if self.context.comm.rank == 0:
             result_type = "convergence" if flag == 0 else "stagnation/interruption"

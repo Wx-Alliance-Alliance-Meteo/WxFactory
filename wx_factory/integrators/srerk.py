@@ -55,7 +55,7 @@ class Srerk(Integrator):
         param: Configuration,
         order: int,
         rhs: Callable,
-        jac: Callable = None,
+        jac: Callable | None = None,
         nodes: list | None = None,
         *,
         context=None,

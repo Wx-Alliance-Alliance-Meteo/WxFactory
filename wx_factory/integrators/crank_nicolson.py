@@ -1,9 +1,7 @@
-from time import time
-
 import numpy
 
 from ..solvers import newton_krylov
-from .integrator import Integrator, SolverInfo
+from .integrator import Integrator
 
 
 class CrankNicolson(Integrator):
@@ -25,8 +23,7 @@ class CrankNicolson(Integrator):
             maxiter = 800
 
         # Update solution
-        t0 = time()
-        newQ, num_iter, residuals = newton_krylov(
+        newQ, _, _ = newton_krylov(
             CN_fun,
             Q,
             f_tol=self.tol,
@@ -35,10 +32,6 @@ class CrankNicolson(Integrator):
             verbose=False,
             maxiter=maxiter,
         )
-        t1 = time()
-
-        self.solver_info = SolverInfo(0, t1 - t0, num_iter, residuals)
-
         return numpy.reshape(newQ, Q.shape)
 
 

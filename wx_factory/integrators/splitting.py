@@ -5,8 +5,8 @@ from .integrator import Integrator
 
 
 class LieSplitting(Integrator):
-    def __init__(self, param: Configuration, scheme1: Integrator, scheme2: Integrator):
-        super().__init__(param, preconditioner=None)
+    def __init__(self, param: Configuration, scheme1: Integrator, scheme2: Integrator, *, context=None):
+        super().__init__(param, context=context, preconditioner=None)
         self.scheme1 = scheme1
         self.scheme2 = scheme2
 
@@ -17,8 +17,8 @@ class LieSplitting(Integrator):
 
 
 class StrangSplitting(Integrator):
-    def __init__(self, param: Configuration, scheme1: Integrator, scheme2: Integrator):
-        super().__init__(param, preconditioner=None)
+    def __init__(self, param: Configuration, scheme1: Integrator, scheme2: Integrator, *, context=None):
+        super().__init__(param, context=context, preconditioner=None)
         self.scheme1 = scheme1
         self.scheme2 = scheme2
 
@@ -30,8 +30,8 @@ class StrangSplitting(Integrator):
 
 
 class OS22Splitting(Integrator):
-    def __init__(self, param: Configuration, scheme1: Integrator, scheme2: Integrator, os_param):
-        super().__init__(param, preconditioner=None)
+    def __init__(self, param: Configuration, scheme1: Integrator, scheme2: Integrator, os_param, *, context=None):
+        super().__init__(param, context=context, preconditioner=None)
         self.scheme1 = scheme1
         self.scheme2 = scheme2
         self.os_param = os_param
@@ -57,9 +57,17 @@ def _make_generic_splitting_factory(cls):
 
         sub1 = resolve(cfg.splitting_integrator_1, cfg, rhs, prec, ctx)
         sub2 = resolve(cfg.splitting_integrator_2, cfg, rhs, prec, ctx)
-        return cls(cfg, sub1, sub2)
+        return cls(cfg, sub1, sub2, context=ctx)
 
     return factory
+
+
+def _os22(cfg, rhs, prec, ctx):
+    from . import resolve
+
+    sub1 = resolve(cfg.splitting_integrator_1, cfg, rhs, prec, ctx)
+    sub2 = resolve(cfg.splitting_integrator_2, cfg, rhs, prec, ctx)
+    return OS22Splitting(cfg, sub1, sub2, cfg.os22_parameter, context=ctx)
 
 
 def _strang_epi2_ros2(cfg, rhs, prec, ctx):
@@ -67,7 +75,10 @@ def _strang_epi2_ros2(cfg, rhs, prec, ctx):
     from .ros2 import Ros2
 
     return StrangSplitting(
-        cfg, Epi(cfg, 2, rhs.explicit, context=ctx), Ros2(cfg, rhs.implicit, preconditioner=prec, context=ctx)
+        cfg,
+        Epi(cfg, 2, rhs.explicit, context=ctx),
+        Ros2(cfg, rhs.implicit, preconditioner=prec, context=ctx),
+        context=ctx,
     )
 
 
@@ -76,13 +87,21 @@ def _strang_ros2_epi2(cfg, rhs, prec, ctx):
     from .ros2 import Ros2
 
     return StrangSplitting(
-        cfg, Ros2(cfg, rhs.implicit, preconditioner=prec, context=ctx), Epi(cfg, 2, rhs.explicit, context=ctx)
+        cfg,
+        Ros2(cfg, rhs.implicit, preconditioner=prec, context=ctx),
+        Epi(cfg, 2, rhs.explicit, context=ctx),
+        context=ctx,
     )
 
 
 REGISTRY = {
     "lie": _make_generic_splitting_factory(LieSplitting),
     "strang": _make_generic_splitting_factory(StrangSplitting),
+    "os22": _os22,
+}
+
+# These schemes bind the explicit and implicit RHS partitions directly.
+PARTITIONED_REGISTRY = {
     "strang_epi2_ros2": _strang_epi2_ros2,
     "strang_ros2_epi2": _strang_ros2_epi2,
 }

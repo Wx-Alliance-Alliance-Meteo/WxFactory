@@ -39,9 +39,8 @@ def str_to_bool(val: str):
 
 
 OptionType = TypeVar("OptionType", bound=str | CaseSensitiveStr | int | float | list[int] | list[float] | bool)
-_T = TypeVar("T", str, dict, list)
-_Numerical = TypeVar("Numerical", bound=int | float | angle24 | numpy.float32)
-_Selectable = TypeVar("Selectable", bound=int | float | str)
+_T = TypeVar("_T", str, dict, list)
+_Numerical = TypeVar("_Numerical", bound=int | float | angle24 | numpy.float32)
 
 
 default_schema_path = "config/config-format.json"
@@ -51,7 +50,7 @@ def needs_evaluation(attribute: _T, attribute_type: type[_T]) -> bool:
     try:
         float(attribute)
         is_numeric = True
-    except:
+    except (TypeError, ValueError):
         is_numeric = False
 
     to_numeric = attribute_type in _Numerical.__bound__.__args__

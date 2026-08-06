@@ -13,14 +13,12 @@ from .global_operations import global_dotprod, global_inf_norm, global_norm
 from .kiops import kiops
 from .nonlin import KrylovJacobian, newton_krylov
 from .pmex import pmex
-from .solver_info import SolverInfo
 
 __all__ = [
     "EXPONENTIAL_SOLVER_REGISTRY",
     "ExponentialSolverRequest",
     "ExponentialSolverResult",
     "KrylovJacobian",
-    "SolverInfo",
     "exode",
     "fgmres",
     "global_dotprod",

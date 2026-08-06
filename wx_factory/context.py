@@ -109,6 +109,11 @@ class Context:
         return intervals
 
     @staticmethod
+    def set_default(context: "Context") -> None:
+        """Set the default context."""
+        Context._default = context
+
+    @staticmethod
     def get_default() -> "Context":
         if Context._default is None:
             Context._default = Context(MPI.COMM_WORLD)

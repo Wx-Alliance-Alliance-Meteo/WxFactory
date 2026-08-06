@@ -2,20 +2,18 @@
 | | | | | |
 | - | - | - | - | - |
 | | | | | |
- | **[General]**         | **Type**  | **Default**  | **Valid range**           | **Description**  |
-   | equations             | lc-str  | [none]  | {euler, shallow_water}           |   |
-   | initial_condition     | lc-str  |         |                                  |   |
-   | time_start            | lc-str  |         |                                  |   |
-   | time_end              | lc-str  |         |                                  |   |
-   | depth_approx          | lc-str  | deep    | {deep, shallow}                  |   |
-| | | | | |
- | **[System]**          | **Type**  | **Default**  | **Valid range**           | **Description**  |
+ | **[Device]**          | **Type**  | **Default**  | **Valid range**           | **Description**  |
    | pytorch_device        | lc-str  | cuda    | {cuda, cpu}                      | Where the computation puts its tensors. Falls back to the CPU if no GPU is available  |
    | precision             | lc-str  | double  | {double, mixed}                  | Runtime floating-point mode. Mixed precision stores the model state and most runtime arrays in single precision, constructs static spatial coefficients in double precision before casting, and selectively uses double precision for accuracy-sensitive solver operations.  |
 | | | | | |
  | **[Test_case]**       | **Type**  | **Default**  | **Valid range**           | **Description**  |
+   | equations             | lc-str  | [none]  | {euler, shallow_water}           |   |
+   | initial_condition     | lc-str  |         |                                  |   |
+   | time_start            | lc-str  |         |                                  |   |
+   | time_end              | lc-str  |         |                                  |   |
    | case_number           | int   | -1        |                                  |   |
    | bubble_rad            | float  | 0.0      |                                  |   |
+   | depth_approx          | lc-str  | deep    | {deep, shallow}                  |   |
    | topography_file       | lc-str  | [none]  |                                  |   |
    | initial_conditions_file  | lc-str  | [none]  |                               |   |
    | matsuno_wave_type     | lc-str  | [none]  |                                  |   |
@@ -33,11 +31,11 @@
    | exode_controller      | lc-str  |         |                                  |   |
    | krylov_size           | int   | 1         | [0, inf]                         |   |
    | krylov_mmax           | int   | 64        | [1, inf]                         | Largest Krylov subspace the exponential solver may build. The solver stores mmax+1 basis vectors of the full state, so this caps its memory; lowering it trades memory for more internal substeps.  |
-   | jacobian_method       | lc-str  | complex  | {complex, fd}                   |   |
    | verbose_solver        | int   | 0         |                                  |   |
    | gmres_restart         | int   | 20        | [1, inf]                         |   |
    | splitting_integrator_1  | lc-str  |       |                                  |   |
    | splitting_integrator_2  | lc-str  |       |                                  |   |
+   | os22_parameter        | float  | [none]   |                                  | Stage parameter p for the OS22 splitting coefficients [[(2p-1)/(2p-2), 1-p], [-1/(2p-2), p]]. Valid values satisfy p != 1.  |
 | | | | | |
  | **[Spatial_discretization]**  | **Type**  | **Default**  | **Valid range**   | **Description**  |
    | num_elements_vertical  | int  | 1         | [1, inf]                         |   |

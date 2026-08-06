@@ -1,15 +1,14 @@
 import math
 from collections.abc import Callable
-from time import time
 
 from ..common.configuration import Configuration
-from ..solvers import SolverInfo, newton_krylov
+from ..solvers import newton_krylov
 from .integrator import Integrator
 
 
 class SDIRKLstable(Integrator):
-    def __init__(self, param: Configuration, rhs_handle: Callable, preconditioner=None) -> None:
-        super().__init__(param, preconditioner=preconditioner)
+    def __init__(self, param: Configuration, rhs_handle: Callable, *, context=None, preconditioner=None) -> None:
+        super().__init__(param, context=context, preconditioner=preconditioner)
         self.rhs = rhs_handle
         self.tol = param.tolerance
         self.sdirkparam = 1.0 + 1.0 / math.sqrt(2.0)
@@ -33,8 +32,7 @@ class SDIRKLstable(Integrator):
             maxiter = 800
 
         # Update solution
-        t0 = time()
-        Q1, num_iter, residuals = newton_krylov(
+        Q1, _, _ = newton_krylov(
             SDIRK_fun1,
             Q,
             f_tol=self.tol,
@@ -43,7 +41,7 @@ class SDIRKLstable(Integrator):
             verbose=False,
             maxiter=maxiter,
         )
-        Q2, num_iter, residuals = newton_krylov(
+        Q2, _, _ = newton_krylov(
             SDIRK_fun2,
             Q,
             f_tol=self.tol,
@@ -53,8 +51,10 @@ class SDIRKLstable(Integrator):
             maxiter=maxiter,
         )
         newQ = Q + dt * (0.5 * self.rhs(Q1) + 0.5 * self.rhs(Q2))
-        t1 = time()
-
-        self.solver_info = SolverInfo(0, t1 - t0, num_iter, residuals)
 
         return newQ
+
+
+REGISTRY = {
+    "sdirk": lambda cfg, rhs, prec, context: SDIRKLstable(cfg, rhs.full, preconditioner=prec, context=context),
+}

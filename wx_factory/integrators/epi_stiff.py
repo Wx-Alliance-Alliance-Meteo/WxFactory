@@ -30,7 +30,7 @@ class EpiStiff(Integrator):
             raise ValueError("Unsupported order for EPI method")
         self.A = alpha_coeff([-i for i in range(-1, 1 - order, -1)])
 
-        m, self.n_prev = self.A.shape
+        _, self.n_prev = self.A.shape
 
         self.max_phi = order if order > 2 else 1
         self.previous_Q = deque()

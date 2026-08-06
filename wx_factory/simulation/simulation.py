@@ -244,8 +244,11 @@ class Simulation:
         be executed."""
         if context is not None:
             self.comm = context.comm
-            return context
-        return Context(comm=self.comm, device_type=self.config.pytorch_device)
+        else:
+            context = Context(comm=self.comm, device_type=self.config.pytorch_device)
+        # Share this context with helpers and nested integrators.
+        Context.set_default(context)
+        return context
 
     def _adjust_num_elements(self):
         """Adjust number of horizontal elements in the parameters so that it corresponds to the

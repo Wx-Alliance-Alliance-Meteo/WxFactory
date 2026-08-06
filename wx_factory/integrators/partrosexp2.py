@@ -18,7 +18,7 @@ from ..jacobian import (
     state_to_columns,
 )
 from ..solvers import ExponentialSolverRequest, resolve_exponential_solver
-from .integrator import Integrator, SolverInfo
+from .integrator import Integrator
 
 
 class PartRosExp2(Integrator):
@@ -130,7 +130,6 @@ class PartRosExp2(Integrator):
         delta = columns_to_state(rhsobj, delta_col, rhs_delta)
         time_imp = time() - tic
 
-        self.solver_info = SolverInfo(0, time_imp, 1, [])
         if self.context.comm.rank == 0:
             print(
                 f"PartRosExp2 direct column solve {time_imp:.3f} s ; exponential {time_exp:.3f} s",
@@ -140,7 +139,9 @@ class PartRosExp2(Integrator):
         return Q + delta
 
 
-REGISTRY = {
+REGISTRY: dict = {}
+
+PARTITIONED_REGISTRY = {
     "partrosexp2": lambda cfg, rhs, prec, ctx: PartRosExp2(
         cfg, rhs.full, rhs.implicit, rhs.explicit, preconditioner=prec, context=ctx
     ),

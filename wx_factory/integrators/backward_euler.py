@@ -1,10 +1,9 @@
 from collections.abc import Callable
-from time import time
 
 import numpy
 
 from ..common.configuration import Configuration
-from ..solvers import SolverInfo, newton_krylov
+from ..solvers import newton_krylov
 from .integrator import Integrator
 
 
@@ -24,8 +23,7 @@ class BackwardEuler(Integrator):
             maxiter = 800
 
         # Update solution
-        t0 = time()
-        newQ, num_iter, residuals = newton_krylov(
+        newQ, _, _ = newton_krylov(
             BE_fun,
             Q,
             f_tol=self.tol,
@@ -34,10 +32,6 @@ class BackwardEuler(Integrator):
             verbose=False,
             maxiter=maxiter,
         )
-        t1 = time()
-
-        self.solver_info = SolverInfo(0, t1 - t0, num_iter, residuals)
-
         return numpy.reshape(newQ, Q.shape)
 
 

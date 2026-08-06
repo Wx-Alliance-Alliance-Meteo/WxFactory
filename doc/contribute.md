@@ -53,14 +53,45 @@ do not need to edit a chain of `if`/`elif` tests scattered across the code.
 
 ### Add a new time integrator
 
-1. Add your integrator class in `wx_factory/integrators/`, subclassing `Integrator`.
-2. In that file, add a `REGISTRY` dict mapping the config name to a factory:
+There are two registries, because there are two kinds of integrator:
+
+* **regular** schemes advance one right-hand side, `rhs.full`. They go in `REGISTRY` and run on
+  every configuration.
+* **partitioned** schemes advance `rhs.explicit` and `rhs.implicit` separately — `imex2`,
+  `partrosexp2`, `strang_epi2_ros2`, `strang_ros2_epi2`. They go in `PARTITIONED_REGISTRY`, and
+  they only run where that partition exists.
+
+Steps:
+
+1. Add your integrator class in `wx_factory/integrators/`, subclassing `Integrator`. Accept a
+   `context` keyword and pass it to `super().__init__`, so the scheme runs on the device the
+   simulation was configured for.
+2. In that file, add the scheme to whichever registry fits. A regular scheme:
    ```python
-   REGISTRY = {"my_scheme": lambda cfg, rhs, prec, dev: MyScheme(cfg, rhs.full, device=dev)}
+   REGISTRY = {"my_scheme": lambda cfg, rhs, prec, ctx: MyScheme(cfg, rhs.full, context=ctx)}
    ```
-   Partitioned schemes use `rhs.explicit` / `rhs.implicit` instead of `rhs.full`.
-3. Import the module in `wx_factory/integrators/__init__.py` so its `REGISTRY` is merged.
-4. Add the name to the `time_integrator` option's `selectables` in `config/config-format.json`.
+   A partitioned one:
+   ```python
+   REGISTRY: dict = {}
+
+   PARTITIONED_REGISTRY = {
+       "my_imex": lambda cfg, rhs, prec, ctx: MyImex(cfg, rhs.explicit, rhs.implicit, context=ctx),
+   }
+   ```
+   A module may define both. A name may not appear in both registries; `integrators/__init__.py`
+   raises at import time if it does.
+3. Import the module in `wx_factory/integrators/__init__.py` and add it to the list of modules whose
+   registries are merged.
+4. If the scheme needs its own configuration options, add them to `config/config-format.json` and
+   regenerate the type hints (see above). Gate them on the integrator name with a `dependency`
+   block, as `os22_parameter` does, so they are only read — and only required — when that scheme is
+   selected. `time_integrator` itself has no `selectables` list: the registries are the authority,
+   and an unknown name produces an error listing what is available.
+
+`resolve` refuses a partitioned scheme when the configuration provides no partition (shallow water,
+2D advection, and Euler with `advection_only = on`), and reports the reason the RHS gave. Generic
+splittings (`lie`, `strang`, `os22`) resolve their sub-integrators through the same function, so a
+partitioned sub-integrator is rejected there too.
 
 ### Add a new exponential solver
 
@@ -111,11 +142,21 @@ The RHS depends on a pair: the equation set and the geometry it runs on. These a
    def _build(ctx: RhsContext) -> RhsBundle:
        pde = MyPDE(ctx.geom, ctx.param, ctx.metric)
        full = MyRhs(pde, ctx.geom, ctx.operators_real, ...)
-       return RhsBundle(full=full, shape=ctx.fields_shape)
+       return RhsBundle(
+           full=full,
+           shape=ctx.fields_shape,
+           partition_reason="the partitioned right-hand side is not implemented for my equations",
+       )
    ```
    `ctx` (an `RhsContext`) carries everything a factory might need: geometry, operators, metric,
-   topography, process topology, config, and the state-vector shape. If the equations support a
-   partitioned integrator, also pass `explicit=` / `implicit=` to `RhsBundle`.
+   topography, process topology, config, and the state-vector shape.
+
+   If the equations do support a partitioned integrator, pass `explicit=` and `implicit=` instead
+   (both, or neither — `RhsBundle` rejects half a partition) and drop `partition_reason`. Otherwise
+   write one sentence saying why there is no partition: it is what the user sees when they select a
+   partitioned integrator, so make it say what would have to change. The same bundle may answer
+   differently depending on its configuration — the Euler factories provide the partition normally
+   but withhold it under `advection_only`, which freezes the dynamics.
 3. Add `"my_equations"` to the `equations` option's `selectables` in `config/config-format.json`
    and regenerate the config type hints (see above).
 

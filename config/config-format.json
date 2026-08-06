@@ -178,19 +178,28 @@
                     "name": "splitting_integrator_1",
                     "type": "str",
                     "default": "",
-                    "dependancy": {
+                    "dependency": {
                         "name": "time_integrator",
-                        "values": ["lie", "strang"]
+                        "values": ["lie", "strang", "os22"]
                     }
                 },
                 {
                     "name": "splitting_integrator_2",
                     "type": "str",
                     "default": "",
-                    "dependancy": {
+                    "dependency": {
                         "name": "time_integrator",
-                        "values": ["lie", "strang"]
+                        "values": ["lie", "strang", "os22"]
                     }
+                },
+                {
+                    "name": "os22_parameter",
+                    "type": "float",
+                    "dependency": {
+                        "name": "time_integrator",
+                        "values": ["os22"]
+                    },
+                    "description": "Stage parameter p for the OS22 splitting coefficients [[(2p-1)/(2p-2), 1-p], [-1/(2p-2), p]]. Valid values satisfy p != 1."
                 }
             ]
         },

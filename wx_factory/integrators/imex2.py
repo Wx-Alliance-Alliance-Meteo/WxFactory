@@ -25,6 +25,8 @@ class Imex2(Integrator):
         return Q + dt * (self.rhs_imp(Y1) + self.rhs_exp(Y1))
 
 
-REGISTRY = {
+REGISTRY: dict = {}
+
+PARTITIONED_REGISTRY = {
     "imex2": lambda cfg, rhs, prec, ctx: Imex2(cfg, rhs.explicit, rhs.implicit, context=ctx),
 }

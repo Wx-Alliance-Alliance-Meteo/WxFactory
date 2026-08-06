@@ -1,7 +1,7 @@
 from collections.abc import Callable
 
 from ..common.configuration import Configuration
-from .integrator import Integrator, SolverInfo
+from .integrator import Integrator
 
 
 class Tvdrk3(Integrator):
@@ -13,8 +13,6 @@ class Tvdrk3(Integrator):
         Q1 = Q + self.rhs(Q) * dt
         Q2 = 0.75 * Q + 0.25 * Q1 + 0.25 * self.rhs(Q1) * dt
         Q = 1.0 / 3.0 * Q + 2.0 / 3.0 * Q2 + 2.0 / 3.0 * self.rhs(Q2) * dt
-
-        self.solver_info = SolverInfo(total_num_it=1)
         return Q
 
 
