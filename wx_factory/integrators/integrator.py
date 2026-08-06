@@ -7,7 +7,7 @@ from ..common import Configuration
 from ..context import Context
 from ..output.output_manager import OutputManager
 from ..precondition import Preconditioner
-from ..solvers import SolverInfo, fgmres
+from ..solvers import fgmres
 
 
 class Integrator(ABC):
@@ -17,10 +17,6 @@ class Integrator(ABC):
 
        output_manager -- OutputManager object that an Integrator can use. When it is present, the Integrator
                          can output some of its intermediary data that can be useful for analysing performance.
-       solver_info    -- At each timestep, the content of solver_info is outputted (if output_manager is present)
-                         If a certain (derived type) Integrator wants to log information about its convergence,
-                         performance and other internal data, it should create a SolverInfo object and assign it
-                         to self.solver_info
        preconditioner -- Optional object that can be used to precondition a problem. It must provide a "prepare"
                          and a "__call__" method.
        context         -- Object that describes the execution context (including hardware information)
@@ -31,7 +27,6 @@ class Integrator(ABC):
     output_manager: OutputManager | None
     context: Context
     preconditioner: Preconditioner | None
-    solver_info: SolverInfo | None
 
     def __init__(
         self,
@@ -46,7 +41,6 @@ class Integrator(ABC):
         self.context = context if context is not None else Context.get_default()
         self.param = param
         self.verbose_solver = param.verbose_solver
-        self.solver_info = None
         self.sim_time = -1.0
         self.failure_flag = 0
         self.num_completed_steps = 0
@@ -85,8 +79,6 @@ class Integrator(ABC):
 
         t1 = time()
         self.latest_time = t1 - t0
-
-        self.solver_info = None
 
         self.sim_time += dt
         self.num_completed_steps += 1

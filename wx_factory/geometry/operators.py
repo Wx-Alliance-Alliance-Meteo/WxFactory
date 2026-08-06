@@ -35,7 +35,7 @@ class DFROperators:
         Parameters
         ----------
         grd : Geometry
-           Underlying grid, which must define `solutionPoints`, `solutionPoints_sym`, `extension`, `extension_sym` and
+           Underlying grid, which must define `solutionPoints`, `extension`, `extension_sym` and
            `num_solpts` as member variables
         context : Context
            Context object containing the device, MPI communicator and other configuration information.
@@ -461,54 +461,6 @@ class DFROperators:
 
         return output
 
-    def filter_k(
-        self: Self, field_interior: NDArray[T], grid: CubedSphere3D, out: NDArray[T] | None = None
-    ) -> NDArray[T]:
-        """Apply a modal filter to remove the highest mode of fiield_interior along the k-dimension
-
-        This method applies the pre-computed 'highfilter' matrix to the field-interior points along
-        the vertical (k) dimension, independently of other directions.  The typical use case is to
-        filter out the highest element mode to avoid an inconsistency in the gravity term of the
-        vertical-only Euler equations, where w_t is proportional to rho*g but rho_t is proportional
-        to w_x.
-
-        Parameters:
-        -----------
-        field_interior : numpy.ndarray
-           The element-interior values of the variable(s) to be differentiated.  This should have
-           a shape of `(numvars,npts_z,npts_y,npts_x)`, respecting the prevailing parallel decomposition.
-        grid : Geometry
-           Grid-defining class, used here solely to provide the canonical definition of the local
-           computational region.
-        out : NDArray | None
-           Destination array for operation. If provided, should be a C-contiguous array with the same shape
-           as `field_interior`.
-        """
-
-        # Number of variables we're extending
-        nbvars = field_interior.size // (grid.ni * grid.nj * grid.nk)
-
-        if out is None:
-            # Output array
-            filtered = numpy.empty(
-                (nbvars * grid.num_elements_x3, grid.num_solpts, grid.ni * grid.nj),
-                dtype=field_interior.dtype,
-                like=field_interior,
-            )
-        else:
-            # Create a view of the output so that the shape of the original is not modified
-            filtered = out.view()
-            filtered.shape = (nbvars * grid.num_elements_x3, grid.num_solpts, grid.ni * grid.nj)
-
-        # Create an array view of the interior, reshaped for matrix multiplication
-        field_interior_view = field_interior.view()
-        field_interior_view.shape = (nbvars * grid.num_elements_x3, grid.num_solpts, grid.ni * grid.nj)
-
-        filtered[:] = self.highfilter @ field_interior_view
-        filtered.shape = field_interior.shape
-
-        return filtered
-
     def extrapolate_k(
         self: Self, field_interior: NDArray[T], grid: CubedSphere3D, out: NDArray[T] | None = None
     ) -> NDArray[T]:
@@ -669,17 +621,6 @@ def lagrange_poly(x: sympy.Symbol, order: int, i: int, xi):
     index = list(range(order + 1))
     index.pop(i)
     return sympy.prod([(x - xi[j]) / (xi[i] - xi[j]) for j in index])
-
-
-def lebesgue(points):
-    """Symbolically compute the integral of the Lagrange polynomial that corresponds to the given points."""
-    M = len(points)
-    eval_set = numpy.linspace(-1, 1, M)
-    x = sympy.symbols("x")
-    l = 0
-    for i in range(M):
-        l = l + sympy.Abs(lagrange_poly(x, M - 1, i, points))
-    return [l.subs(x, eval_set[i]) for i in range(M)]
 
 
 def vandermonde(x: numpy.ndarray):

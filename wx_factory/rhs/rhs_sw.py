@@ -12,7 +12,6 @@ from .rhs import RHS
 class RhsShallowWater(RHS):
     def __init__(
         self,
-        shape: tuple[int, ...],
         geom: CubedSphere2D,
         operators_real: DFROperators,
         metric: Metric2D,
@@ -27,7 +26,6 @@ class RhsShallowWater(RHS):
             topography=topo,
             process_topo=ptopo,
             config=None,
-            expected_shape=shape,
         )
         self.num_solpts = geom.num_solpts
         self.num_elements_hori = geom.num_elements_horizontal

@@ -65,7 +65,7 @@ class ProcessTopology:
 
         self.context = context
 
-        self.node_comm, self.node_id = split_nodes(context.comm)
+        _, self.node_id = split_nodes(context.comm)
 
         # Reorder processes, grouping them by node (processes on the same node will have contiguous ranks)
         # This one is named with an underscore because it is internal to a ProcessTopology object, it will differ

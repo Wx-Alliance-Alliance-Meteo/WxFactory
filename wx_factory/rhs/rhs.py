@@ -26,7 +26,6 @@ class RHS(ABC):
         topography,
         process_topo: ProcessTopology,
         config: Configuration | None,
-        expected_shape: tuple[int, ...],
         debug: bool = False,
     ) -> None:
         self.pde = pde
@@ -37,7 +36,6 @@ class RHS(ABC):
         self.ptopo = process_topo
         self.config = config
         self.context = geometry.context
-        self.expected_shape = expected_shape
         self.debug = debug
 
         # Cache whether this geometry represents a y-invariant x-z slab.

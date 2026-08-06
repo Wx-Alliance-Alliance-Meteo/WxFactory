@@ -6,7 +6,6 @@ import torch
 
 from ..common.configuration import Configuration
 from ..jacobian import FiniteDifferenceRosenbrock
-from ..solvers import SolverInfo
 from .integrator import Integrator
 
 
@@ -33,7 +32,7 @@ class Ros2(Integrator):
             maxiter = 400 // self.gmres_restart
 
         t0 = time()
-        Qnew, norm_r, norm_b, num_iter, flag, residuals = self._solve_linear(
+        Qnew, norm_r, norm_b, num_iter, flag, _ = self._solve_linear(
             self.A,
             self.b,
             x0=self.Q_flat,
@@ -42,8 +41,6 @@ class Ros2(Integrator):
             maxiter=maxiter,
         )
         t1 = time()
-
-        self.solver_info = SolverInfo(flag, t1 - t0, num_iter, residuals)
 
         if self.context.comm.rank == 0:
             result_type = "convergence" if flag == 0 else "stagnation/interruption"

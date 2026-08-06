@@ -108,7 +108,6 @@ def _euler_cubesphere(ctx: RhsContext) -> RhsBundle:
         ctx.topo,
         ctx.ptopo,
         ctx.param,
-        ctx.fields_shape,
         debug=ctx.debug,
     )
     return RhsBundle(full=full, shape=ctx.fields_shape, implicit=full.implicit, explicit=full.explicit)
@@ -129,7 +128,6 @@ def _euler_cartesian3d(ctx: RhsContext) -> RhsBundle:
         ctx.topo,
         ctx.ptopo,
         ctx.param,
-        ctx.fields_shape,
         debug=ctx.debug,
     )
     return RhsBundle(full=full, shape=ctx.fields_shape, implicit=full.implicit, explicit=full.explicit)
@@ -151,7 +149,6 @@ def _shallow_water_cubesphere(ctx: RhsContext) -> RhsBundle:
     else:
         # Shallow-water dynamics.
         full = RhsShallowWater(
-            ctx.fields_shape,
             ctx.geom,
             ctx.operators_real,
             ctx.metric,

@@ -12,6 +12,7 @@ from . import (
     partrosexp2 as _partrosexp2,
     ros2 as _ros2,
     rosexp2 as _rosexp2,
+    sdirk as _sdirk,
     splitting as _splitting,
     srerk as _srerk,
     tvdrk3 as _tvdrk3,
@@ -27,7 +28,8 @@ from .integrator import Integrator
 from .partrosexp2 import PartRosExp2
 from .ros2 import Ros2
 from .rosexp2 import RosExp2
-from .splitting import LieSplitting, StrangSplitting
+from .sdirk import SDIRKLstable
+from .splitting import LieSplitting, OS22Splitting, StrangSplitting
 from .srerk import Srerk
 from .tvdrk3 import Tvdrk3
 
@@ -43,6 +45,7 @@ for _mod in [
     _partrosexp2,
     _ros2,
     _rosexp2,
+    _sdirk,
     _splitting,
     _srerk,
     _tvdrk3,
@@ -68,9 +71,11 @@ __all__ = [
     "Imex2",
     "Integrator",
     "LieSplitting",
+    "OS22Splitting",
     "PartRosExp2",
     "Ros2",
     "RosExp2",
+    "SDIRKLstable",
     "Srerk",
     "StrangSplitting",
     "Tvdrk3",

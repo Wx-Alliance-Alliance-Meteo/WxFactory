@@ -94,31 +94,6 @@ class SingleProcess:
         return ignore_error
 
 
-class MultipleProcesses:
-    def __init__(self, comm: MPI.Comm = MPI.COMM_WORLD, num_procs: int = 0):
-        self.comm = comm
-
-        if num_procs > 0:
-            self.should_skip = self.comm.rank >= num_procs
-            self.sub_comm = comm.Split(0 if self.should_skip else 1, self.comm.rank)
-        else:
-            self.should_skip = False
-            self.sub_comm = self.comm
-
-    def __enter__(self):
-        "Do nothing (but must be implemented)."
-        return self
-
-    def __exit__(self, exception_type, *_):
-        num_errors = 0
-        if exception_type is not None and not issubclass(exception_type, _Skip):
-            num_errors = 1
-
-        total_errors = self.comm.allreduce(num_errors)
-
-        return total_errors == 0
-
-
 class Conditional:
     """When used in combination with :class:`SingleProcess`, skips the content of the context for everyone
     except the root, as defined by the associated :class:`SingleProcess`

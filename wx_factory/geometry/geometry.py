@@ -59,7 +59,6 @@ class Geometry(ABC):
         self.num_elements_vertical = num_elements_vertical
         self.total_num_elements_horizontal = total_num_elements_horizontal
         self.solutionPoints = torch.asarray(solutionPoints)
-        self.solutionPoints_sym = solutionPoints_sym
         self.glweights = torch.asarray(glweights)
         self.extension = torch.asarray(extension)
         self.extension_sym = extension_sym

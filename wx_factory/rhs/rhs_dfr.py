@@ -71,7 +71,6 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
         topography,
         process_topo,
         config,
-        expected_shape,
         debug=False,
     ):
         super().__init__(
@@ -82,7 +81,6 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
             topography,
             process_topo,
             config,
-            expected_shape,
             debug,
         )
         self.extrap_3d = self.extrap_3d_py

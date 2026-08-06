@@ -214,7 +214,6 @@ class CubedSphere3D(CubedSphere):
         self.itf_k_shape = (self.num_elements_x3 + 2, self.num_elements_x2, self.num_elements_x1, self.itf_size * 2)
         self.itf_i_floor_shape = (self.num_elements_x2, self.num_elements_x1 + 2, num_solpts * 2)
         self.itf_j_floor_shape = (self.num_elements_x2 + 2, self.num_elements_x1, num_solpts * 2)
-        self.halo_side_shape = (num_elements_horizontal, num_solpts, num_solpts)
 
         # Interface array edges
         self.west_edge = numpy.s_[..., 0, : num_solpts**2]  # West boundary of the western halo elements
@@ -309,8 +308,6 @@ class CubedSphere3D(CubedSphere):
         self.eta_itf_j = eta_itf_j
 
         # x1, x2, x3 and eta coordinates of bottom-top interface points
-        self.x1_itf_k = x1_itf_k
-        self.x2_itf_k = x2_itf_k
         self.x3_itf_k = x3_itf_k
         self.eta_itf_k = eta_itf_k
 
@@ -682,7 +679,6 @@ class CubedSphere3D(CubedSphere):
         self.delta_block = torch.sqrt(self.delta2_block)
 
         self.delta2_new = 1.0 + X_new**2 + Y_new**2
-        self.delta_new = torch.sqrt(self.delta2_new)
 
         self.X_block = X_block
         self.Y_block = Y_block
@@ -767,7 +763,6 @@ class CubedSphere3D(CubedSphere):
         coordVec_cart = gnomonic_to_cartesian(coordVec_gnom)
         coordVec_cart_itf_i = gnomonic_to_cartesian(coordVec_gnom_itf_i)
         coordVec_cart_itf_j = gnomonic_to_cartesian(coordVec_gnom_itf_j)
-        coordVec_cart_itf_k = gnomonic_to_cartesian(coordVec_gnom_itf_k)
 
         # Cartesian coordinates are temporary inputs to the polar conversion.
         cart = gnomonic_to_cartesian(self.gnomonic)
@@ -787,7 +782,6 @@ class CubedSphere3D(CubedSphere):
         coordVec_latlon = cartesian_to_polar(coordVec_cart, coordVec_gnom)
         coordVec_latlon_itf_i = cartesian_to_polar(coordVec_cart_itf_i, coordVec_gnom_itf_i)
         coordVec_latlon_itf_j = cartesian_to_polar(coordVec_cart_itf_j, coordVec_gnom_itf_j)
-        coordVec_latlon_itf_k = cartesian_to_polar(coordVec_cart_itf_k, coordVec_gnom_itf_k)
 
         self.polar = cartesian_to_polar(cart, self.gnomonic)
         self.polar_itf_i = cartesian_to_polar(cart_itf_i, self.gnomonic_itf_i)
@@ -809,7 +803,6 @@ class CubedSphere3D(CubedSphere):
         self.coordVec_latlon = coordVec_latlon
         self.coordVec_latlon_itf_i = coordVec_latlon_itf_i
         self.coordVec_latlon_itf_j = coordVec_latlon_itf_j
-        self.coordVec_latlon_itf_k = coordVec_latlon_itf_k
 
         lon = coordVec_latlon[0, 0, :, :]
         lat = coordVec_latlon[1, 0, :, :]
@@ -849,7 +842,6 @@ class CubedSphere3D(CubedSphere):
         self.coslat = torch.cos(lat)
         self.sinlat = torch.sin(lat)
 
-        self.coslon_new = torch.cos(self.polar[0, ...])
         self.coslat_new = torch.cos(self.polar[1, ...])
 
         # Store coordinates in the working precision before metric construction.

@@ -20,7 +20,6 @@ class Configuration:
 
     def __init__(self, cfg_file: str, schema: ConfigurationSchema, load_post_config: bool = True):
 
-        self.cfg_file = "in-memory"
         self.sections = {}
         self.schema = schema
         self.parser = ConfigParser()
@@ -33,8 +32,6 @@ class Configuration:
 
         for field in schema.fields:
             self._get_option(field)
-
-        self.state_version = schema.version
 
     def __deepcopy__(self: Self, memo) -> Self:
         do_not_deepcopy = {}
@@ -133,6 +130,7 @@ class Configuration:
     num_elements_horizontal: int
     num_elements_vertical: int
     num_solpts: int
+    os22_parameter: float
     output_dir: str
     output_format: str
     output_freq: int

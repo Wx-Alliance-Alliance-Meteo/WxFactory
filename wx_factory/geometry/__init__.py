@@ -12,6 +12,7 @@ from .winds import contra2wind_2d, wind2contra_2d
 
 __all__ = [
     "GEOMETRY_REGISTRY",
+    "Cartesian3D",
     "CubedSphere",
     "CubedSphere2D",
     "CubedSphere3D",

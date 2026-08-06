@@ -32,6 +32,9 @@ def limiter(u: float, kappa: float) -> float:
     return 1 + kappa * math.atan((u - 1) / kappa)
 
 
+_logger = logging.getLogger(__name__)
+
+
 class RungeKutta:
     """
     Base class for explicit Runge-Kutta methods for solving ODEs.
@@ -119,8 +122,6 @@ class RungeKutta:
         self.status = "running"
 
         self.nfev = 0
-        self.njev = 0
-        self.nlu = 0
 
         self.max_step = max_step
         self.rtol, self.atol = rtol, atol
@@ -223,7 +224,7 @@ class RungeKutta:
         # Validate that B sums approximately to 1 (consistency condition)
         b_sum = numpy.sum(self.B)
         if abs(b_sum - 1.0) > 1e-10:
-            logging.warning(
+            _logger.warning(
                 f"Sum of B coefficients should be 1.0 for consistency, but got {b_sum}. "
                 "This may affect conservation properties."
             )
@@ -232,7 +233,7 @@ class RungeKutta:
         for i in range(self.n_stages):
             row_sum = numpy.sum(self.A[i, :])
             if i > 0 and abs(row_sum - self.C[i]) > 1e-10:
-                logging.warning(
+                _logger.warning(
                     f"For stage {i}, sum of A coefficients ({row_sum}) should match C[{i}] ({self.C[i]}). "
                     "This may indicate an inconsistent Butcher tableau."
                 )
@@ -245,7 +246,7 @@ class RungeKutta:
             raise ValueError(f"error_estimator_order must be a positive integer, got {self.error_estimator_order}")
 
         if self.error_estimator_order >= self.order:
-            logging.warning(
+            _logger.warning(
                 f"error_estimator_order ({self.error_estimator_order}) should typically be "
                 f"less than order ({self.order}) of the main method."
             )
@@ -322,7 +323,7 @@ class RungeKutta:
 
             if not success:
                 self.status = "failed"
-                logging.error(f"Integration failed at t={self.t}")
+                _logger.error(f"Integration failed at t={self.t}")
             else:
                 self.t_old = t
                 if self.t - self.t_bound >= 0:
@@ -351,7 +352,7 @@ class RungeKutta:
 
         while not step_accepted:
             if h < min_step:
-                logging.error(f"Step size {h} below minimum {min_step} at t={t}")
+                _logger.error(f"Step size {h} below minimum {min_step} at t={t}")
                 return False
 
             t_new = t + h
@@ -407,7 +408,7 @@ class RungeKutta:
                 h *= limiter(self.safety * error_norm**self.error_exponent, 2)
 
                 if h < 1e-12:
-                    logging.error(f"Unable to achieve desired tolerance at t={t}. Step size too small: {h}")
+                    _logger.error(f"Unable to achieve desired tolerance at t={t}. Step size too small: {h}")
                     return False
 
                 self.failed_steps += 1
@@ -415,7 +416,7 @@ class RungeKutta:
                 self.num_of_steps += 1
 
                 if numpy.isnan(error_norm) or numpy.isinf(error_norm):
-                    logging.error(f"Overflow or underflow encountered at t={t}")
+                    _logger.error(f"Overflow or underflow encountered at t={t}")
                     return False
 
         if not self.FSAL:
@@ -456,7 +457,7 @@ class RungeKutta:
 
         if cdiff < 1e-3:
             cdiff = 1e-3
-            logging.warning(
+            _logger.warning(
                 "Some C-values of this Runge Kutta method are nearly the "
                 "same but not identical. This limits the minimum stepsize. "
                 "You may want to check the implementation of this method."

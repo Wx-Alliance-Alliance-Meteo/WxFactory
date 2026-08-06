@@ -141,8 +141,6 @@ class CubedSphere2D(CubedSphere):
         self.grid_shape_2d = (nj, ni)
         self.block_shape = (nj, ni)
         # And the shape of arrays corresponding to each of the three interfaces
-        self.itf_i_shape_2d = (nj, num_elements_x1 + 1)
-        self.itf_j_shape_2d = (num_elements_x2 + 1, ni)
 
         # A field stores num_solpts**2 solution points per element. Each horizontal interface stores
         # num_solpts points for both sides of the interface.
