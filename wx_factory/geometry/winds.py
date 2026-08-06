@@ -1,12 +1,11 @@
-import numpy
 import math
-from typing import Union
+
+import numpy
 
 from .cubed_sphere import CubedSphere
-from .cubed_sphere_2d import CubedSphere2D
 
 
-def wind2contra_2d(u: Union[float, numpy.ndarray], v: Union[float, numpy.ndarray], geom: CubedSphere):
+def wind2contra_2d(u: float | numpy.ndarray, v: float | numpy.ndarray, geom: CubedSphere):
     """Convert wind fields from the spherical basis (zonal, meridional) to panel-appropriate contrvariant winds, in two dimensions
 
     Parameters:
@@ -81,7 +80,7 @@ def wind2contra_2d(u: Union[float, numpy.ndarray], v: Union[float, numpy.ndarray
     return u1_contra, u2_contra
 
 
-def contra2wind_2d(u1: Union[float, numpy.ndarray], u2: Union[float, numpy.ndarray], geom: CubedSphere):
+def contra2wind_2d(u1: float | numpy.ndarray, u2: float | numpy.ndarray, geom: CubedSphere):
     """Convert from reference element to "physical winds", in two dimensions
 
     Parameters:

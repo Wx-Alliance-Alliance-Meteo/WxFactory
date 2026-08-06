@@ -1,18 +1,15 @@
 import random
 
-from mpi4py import MPI
 import numpy
-from numpy.typing import NDArray
 import scipy
 import scipy.sparse.linalg
 import torch
 from torch import Tensor
 
-from wx_factory.device import Device
+from tests.unit import array_generator
+from tests.unit.wx_test import WxTestCase
+from wx_factory.context import Context
 from wx_factory.solvers.fgmres import fgmres
-
-import tests.unit.array_generator as array_generator
-from wx_test import WxTestCase
 
 
 class FgmresScipyTestCases(WxTestCase):
@@ -25,35 +22,31 @@ class FgmresScipyTestCases(WxTestCase):
     def setUp(self):
         super().setUp()
 
-        self.cpu_device = Device(MPI.COMM_WORLD, "cpu")
+        self.cpu_context = Context(self.comm, "cpu")
 
         seed: int = 5646459
         self.tolerance = 1e-7
         self.rand = random.Random(seed)
 
-        seed: int = 5646459
         initial_vector_size: int = 64
         rand_min: float = -1000.0
         rand_max: float = 1000.0
 
-        self.tolerance = 1e-7
-        self.rand = random.Random(seed)
-
         [self.cpu_vector] = array_generator.generate_vectors(
-            initial_vector_size, self.rand, rand_min, rand_max, [self.cpu_device]
+            initial_vector_size, self.rand, rand_min, rand_max, [self.cpu_context]
         )
 
         [self.cpu_A_matrix] = array_generator.generate_matrices(
-            (initial_vector_size, initial_vector_size), self.rand, rand_min, rand_max, [self.cpu_device]
+            (initial_vector_size, initial_vector_size), self.rand, rand_min, rand_max, [self.cpu_context]
         )
 
-    def matvec(self, v: NDArray) -> NDArray:
+    def matvec(self, v: Tensor) -> Tensor:
         return self.cpu_A_matrix @ v
 
     def test_compare_implementation_to_scipy(self):
 
         x1, norm_r1, norm_b1, niter1, flag1, residuals1 = fgmres(
-            self.matvec, self.cpu_vector, tol=self.tolerance, restart=20, device=self.cpu_device
+            self.matvec, self.cpu_vector, tol=self.tolerance, restart=20, context=self.cpu_context
         )
         x2, info = scipy.sparse.linalg.gmres(
             self.cpu_A_matrix.numpy(), self.cpu_vector.numpy(), atol=self.tolerance, restart=20
@@ -75,7 +68,7 @@ class FgmresScipyTestCases(WxTestCase):
         self.cpu_A_matrix[initial_vector_size - 1, 0] = 1
 
         x1, norm_r1, norm_b1, niter1, flag1, residuals1 = fgmres(
-            self.matvec, self.cpu_vector, tol=self.tolerance, restart=20, device=self.cpu_device
+            self.matvec, self.cpu_vector, tol=self.tolerance, restart=20, context=self.cpu_context
         )
         x2, info = scipy.sparse.linalg.gmres(
             self.cpu_A_matrix.numpy(), self.cpu_vector.numpy(), atol=self.tolerance, restart=20
@@ -84,7 +77,7 @@ class FgmresScipyTestCases(WxTestCase):
         residual: float = torch.linalg.norm(self.cpu_A_matrix @ x1 - self.cpu_vector).item()
 
         # wx fgmres returns a device tensor; scipy returns a numpy array. Compare on the host.
-        x1_host = self.cpu_device.to_host(x1)
+        x1_host = self.cpu_context.to_host(x1)
         diff: float = numpy.linalg.norm(x2 - x1_host).item()
 
         absolute_diff: float = abs(diff)
@@ -104,7 +97,7 @@ class FgmresEdgeCasesTestCases(WxTestCase):
     def setUp(self):
         super().setUp()
 
-        self.cpu_device = Device(MPI.COMM_WORLD, "cpu")
+        self.cpu_context = Context(self.comm, "cpu")
 
         seed: int = 5646459
         self.tolerance = 1e-7
@@ -119,28 +112,28 @@ class FgmresEdgeCasesTestCases(WxTestCase):
         rand_max: float = 1000.0
 
         [A_matrix] = array_generator.generate_matrices(
-            (limit_vector_size, limit_vector_size), self.rand, rand_min, rand_max, [self.cpu_device]
+            (limit_vector_size, limit_vector_size), self.rand, rand_min, rand_max, [self.cpu_context]
         )
-        [b] = array_generator.generate_vectors(limit_vector_size, self.rand, rand_min, rand_max, [self.cpu_device])
+        [b] = array_generator.generate_vectors(limit_vector_size, self.rand, rand_min, rand_max, [self.cpu_context])
 
         def matvec(v: Tensor) -> Tensor:
             return A_matrix @ v
 
         # this one should not throw
-        fgmres(matvec, b, tol=self.tolerance, restart=bad_limit_vector_size, device=self.cpu_device)
+        fgmres(matvec, b, tol=self.tolerance, restart=bad_limit_vector_size, context=self.cpu_context)
 
         [A_matrix] = array_generator.generate_matrices(
-            (bad_limit_vector_size, bad_limit_vector_size), self.rand, rand_min, rand_max, [self.cpu_device]
+            (bad_limit_vector_size, bad_limit_vector_size), self.rand, rand_min, rand_max, [self.cpu_context]
         )
-        [b] = array_generator.generate_vectors(bad_limit_vector_size, self.rand, rand_min, rand_max, [self.cpu_device])
+        [b] = array_generator.generate_vectors(bad_limit_vector_size, self.rand, rand_min, rand_max, [self.cpu_context])
 
         with self.assertRaises(ValueError):
-            fgmres(matvec, b, tol=self.tolerance, restart=bad_limit_vector_size, device=self.cpu_device)
+            fgmres(matvec, b, tol=self.tolerance, restart=bad_limit_vector_size, context=self.cpu_context)
 
         [A_matrix] = array_generator.generate_matrices(
-            (bad_vector_size, bad_vector_size), self.rand, rand_min, rand_max, [self.cpu_device]
+            (bad_vector_size, bad_vector_size), self.rand, rand_min, rand_max, [self.cpu_context]
         )
-        [b] = array_generator.generate_vectors(bad_vector_size, self.rand, rand_min, rand_max, [self.cpu_device])
+        [b] = array_generator.generate_vectors(bad_vector_size, self.rand, rand_min, rand_max, [self.cpu_context])
 
         with self.assertRaises(ValueError):
-            fgmres(matvec, b, tol=self.tolerance, restart=bad_limit_vector_size, device=self.cpu_device)
+            fgmres(matvec, b, tol=self.tolerance, restart=bad_limit_vector_size, context=self.cpu_context)

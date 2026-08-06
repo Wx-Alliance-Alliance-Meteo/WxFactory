@@ -39,7 +39,7 @@ def solid_body_rotation(geom: CubedSphere2D, metric, param):
 
 
 def circular_vortex(geom, metric, param):
-    if geom.device.comm.rank == 0:
+    if geom.context.comm.rank == 0:
         print("--------------------------------------------------------------")
         print("CASE 0 (Tracer): Circular vortex, Nair and Machenhauer,2002   ")
         print("--------------------------------------------------------------")
@@ -106,8 +106,8 @@ def sw_from_ERA5(geom: CubedSphere2D, ds, t, levels, feature_map):
     u = ds["data"].isel(time=t, features=idx_u_all)
     v = ds["data"].isel(time=t, features=idx_v_all)
 
-    target_lon = geom.device.to_host((geom.lon * 180 / math.pi) % 360)
-    target_lat = geom.device.to_host(geom.lat * 180 / math.pi)
+    target_lon = geom.context.to_host((geom.lon * 180 / math.pi) % 360)
+    target_lat = geom.context.to_host(geom.lat * 180 / math.pi)
 
     # Flatten for interpolation
     lon_flat = target_lon.reshape(-1)
@@ -201,7 +201,7 @@ def sw_from_file(geom: CubedSphere2D, operators: DFROperators, config: Configura
 
 
 def williamson_case1(geom, metric, param):
-    if geom.device.comm.rank == 0:
+    if geom.context.comm.rank == 0:
         print(
             "---------------------------------------------------------------\n"
             "WILLIAMSON CASE 1 (Tracer): Cosine Bell, Williamson et al.,1992\n"
@@ -239,7 +239,7 @@ def height_case1(geom: CubedSphere2D, metric, param, step):
 
 
 def williamson_case2(geom, metric, param):
-    if geom.device.comm.rank == 0:
+    if geom.context.comm.rank == 0:
         print("--------------------------------------------")
         print("WILLIAMSON CASE 2, Williamson et al. (1992) ")
         print("Steady state nonlinear geostrophic flow     ")
@@ -261,7 +261,7 @@ def height_case2(geom, metric, param):
 
 
 def williamson_case5(geom: CubedSphere2D, metric, mtrx: DFROperators, param):
-    if geom.device.comm.rank == 0:
+    if geom.context.comm.rank == 0:
         print(
             "--------------------------------------------\n"
             "WILLIAMSON CASE 5, Williamson et al. (1992) \n"
@@ -325,7 +325,7 @@ def williamson_case5(geom: CubedSphere2D, metric, mtrx: DFROperators, param):
 
 
 def williamson_case6(geom: CubedSphere2D, metric, param):
-    if geom.device.comm.rank == 0:
+    if geom.context.comm.rank == 0:
         print(
             "--------------------------------------------\n"
             "WILLIAMSON CASE 6, Williamson et al. (1992) \n"
@@ -341,9 +341,9 @@ def williamson_case6(geom: CubedSphere2D, metric, param):
     K = omega
     h0 = 8000.0
 
-    A = omega / 2.0 * (2.0 * geom.rotation_speed + omega) * geom.coslat**2 + (K**2) / 4.0 * geom.coslat ** (
-        2 * R
-    ) * ((R + 1) * geom.coslat**2 + (2.0 * R**2 - R - 2.0) - 2.0 * (R**2) * geom.coslat ** (-2))
+    A = omega / 2.0 * (2.0 * geom.rotation_speed + omega) * geom.coslat**2 + (K**2) / 4.0 * geom.coslat ** (2 * R) * (
+        (R + 1) * geom.coslat**2 + (2.0 * R**2 - R - 2.0) - 2.0 * (R**2) * geom.coslat ** (-2)
+    )
 
     B = (
         2.0
@@ -377,7 +377,7 @@ def williamson_case6(geom: CubedSphere2D, metric, param):
 
 
 def case_galewsky(geom, metric, param):
-    if geom.device.comm.rank == 0:
+    if geom.context.comm.rank == 0:
         print("--------------------------------------------")
         print("CASE 8, Galewsky et al. (2004)              ")
         print("Barotropic wave                             ")
@@ -392,14 +392,13 @@ def case_galewsky(geom, metric, param):
     # This initialization contains a scalar numerical quadrature at every grid point.  Evaluate it
     # once on host copies, independently of the geometry's element/solution-point layout, then move
     # the completed fields back to the configured device.
-    lat = geom.device.to_host(geom.lat)
-    lon = geom.device.to_host(geom.lon)
+    lat = geom.context.to_host(geom.lat)
+    lon = geom.context.to_host(geom.lon)
     u = numpy.zeros_like(lat)
     v = numpy.zeros_like(lat)
     h = numpy.zeros_like(lat)
 
     for idx in numpy.ndindex(lat.shape):
-
         # Calculate height field via numerical integration
         nIntervals = int((lat[idx] + 0.5 * math.pi) / (1.0e-2))
 
@@ -453,7 +452,7 @@ def case_galewsky(geom, metric, param):
 
 def case_matsuno(geom, metric, param):
     wave_type = {"rossby": "Rossby", "eig": "EIG", "wig": "WIG"}[param.matsuno_wave_type.lower()]
-    if geom.device.comm.rank == 0:
+    if geom.context.comm.rank == 0:
         print("--------------------------------------------")
         print("CASE 9, Shamir et al.,2019,GMD,12,2181-2193 ")
 
@@ -466,8 +465,8 @@ def case_matsuno(geom, metric, param):
             print("The Matsuno baroclinic wave (WIG)           ")
         print("--------------------------------------------")
 
-    lat = geom.device.to_host(geom.lat)
-    lon = geom.device.to_host(geom.lon)
+    lat = geom.context.to_host(geom.lat)
+    lon = geom.context.to_host(geom.lon)
     u = numpy.zeros_like(lat)
     v = numpy.zeros_like(lat)
     h = numpy.zeros_like(lat)
@@ -497,7 +496,7 @@ def case_matsuno(geom, metric, param):
 
 
 def case_unsteady_zonal(geom, metric, mtrx, param):
-    if geom.device.comm.rank == 0:
+    if geom.context.comm.rank == 0:
         print("--------------------------------------------")
         print("CASE 10, Läuter et al. (2005)               ")
         print("Zonal balanced time dependent flow          ")

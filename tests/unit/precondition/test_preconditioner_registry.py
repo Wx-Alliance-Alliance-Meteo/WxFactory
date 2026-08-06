@@ -1,14 +1,14 @@
 import types
 import unittest
 
+from wx_test import WxTestCase
+
 from wx_factory.precondition import (
     PRECONDITIONER_REGISTRY,
     Preconditioner,
     register_preconditioner,
     resolve_preconditioner,
 )
-
-from wx_test import WxTestCase
 
 
 def make_ctx(name):

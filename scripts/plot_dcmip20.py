@@ -6,7 +6,7 @@ day-3/day-6 maps at the lowest and approximately 500-hPa model levels, the
 500-hPa temperature field, and the time series of global-mean kinetic energy.
 
 Usage:
-    python scripts/plot_dcmip20.py -o results --label mountain results/dcmip20_mountain_rosexp.nc
+    python scripts/plot_dcmip20.py -o results --label mountain [--pdf] results/dcmip20_mountain_rosexp.nc
 """
 
 import argparse
@@ -17,9 +17,9 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from matplotlib.ticker import MultipleLocator
 import netCDF4
 import numpy
+from matplotlib.ticker import MultipleLocator
 from scipy.interpolate import PchipInterpolator
 from scipy.spatial import cKDTree
 
@@ -113,7 +113,15 @@ def symmetric_limit(fields):
     return numpy.ceil(2.0 * maximum / scale) * 0.5 * scale
 
 
-def plot_native_sections(dataset, index, lon, stencils, output, label):
+def save_figure(fig, path, pdf):
+    """Write the requested figure formats."""
+    fig.savefig(path, dpi=300)
+    if pdf:
+        fig.savefig(path.with_suffix(".pdf"), dpi=300)
+    plt.close(fig)
+
+
+def plot_native_sections(dataset, index, lon, stencils, output, label, pdf):
     fields = {
         "U": (r"$u$ (m s$^{-1}$)", "dcmip20_u_equator"),
         "W": (r"$w$ (m s$^{-1}$)", "dcmip20_w_equator"),
@@ -159,12 +167,10 @@ def plot_native_sections(dataset, index, lon, stencils, output, label):
         ax.grid(alpha=0.18, linewidth=0.5)
         fig.colorbar(image, ax=ax, label=colour_label, pad=0.02)
         ax.set_title(f"DCMIP 2-0 at the equator, day 6 — {label}")
-        for suffix in ("png", "pdf"):
-            fig.savefig(output / f"{filename}_{label}.{suffix}", dpi=300)
-        plt.close(fig)
+        save_figure(fig, output / f"{filename}_{label}.png", pdf)
 
 
-def plot_maps(dataset, indices, times, interpolator, output, label):
+def plot_maps(dataset, indices, times, interpolator, output, label, pdf):
     for name, symbol in (("U", "u"), ("V", "v"), ("W", "w")):
         fields = []
         captions = []
@@ -196,9 +202,7 @@ def plot_maps(dataset, indices, times, interpolator, output, label):
         axes[1, 0].set_ylabel("Latitude (degrees north)")
         fig.colorbar(image, ax=axes, label=rf"${symbol}$ (m s$^{{-1}}$)", shrink=0.9)
         fig.suptitle(f"DCMIP 2-0 wind — {label}")
-        for suffix in ("png", "pdf"):
-            fig.savefig(output / f"dcmip20_{name.lower()}_maps_{label}.{suffix}", dpi=300)
-        plt.close(fig)
+        save_figure(fig, output / f"dcmip20_{name.lower()}_maps_{label}.png", pdf)
 
     temperatures = []
     for index in indices:
@@ -217,12 +221,10 @@ def plot_maps(dataset, indices, times, interpolator, output, label):
     axes[0].set_ylabel("Latitude (degrees north)")
     fig.colorbar(image, ax=axes, label=r"$T_{500}$ (K)", shrink=0.9)
     fig.suptitle(f"DCMIP 2-0 temperature at 500 hPa — {label}")
-    for suffix in ("png", "pdf"):
-        fig.savefig(output / f"dcmip20_t500_{label}.{suffix}", dpi=300)
-    plt.close(fig)
+    save_figure(fig, output / f"dcmip20_t500_{label}.png", pdf)
 
 
-def kinetic_energy(dataset, output, label, time_scale):
+def kinetic_energy(dataset, output, label, time_scale, pdf):
     times = numpy.asarray(dataset.variables["time"][:])
     volume = numpy.asarray(dataset.variables["volume"][:])
     denominator = numpy.sum(volume)
@@ -247,9 +249,7 @@ def kinetic_energy(dataset, output, label, time_scale):
         xlim=(0, 6),
     )
     ax.grid(alpha=0.25, linewidth=0.6)
-    for suffix in ("png", "pdf"):
-        fig.savefig(output / f"dcmip20_kinetic_energy_{label}.{suffix}", dpi=300)
-    plt.close(fig)
+    save_figure(fig, output / f"dcmip20_kinetic_energy_{label}.png", pdf)
     print(f"{label}: max global-mean kinetic energy = {numpy.max(values):.8e} m2 s-2")
 
 
@@ -257,9 +257,11 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("input", type=Path)
     parser.add_argument("-o", "--output", type=Path, default=Path("."))
-    parser.add_argument("--label", default="dcmip20")
+    parser.add_argument("--label", default=None, help="tag used in figure names and titles")
+    parser.add_argument("--pdf", action="store_true", help="also write PDF figures")
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=True)
+    label = args.label or args.input.stem
 
     with netCDF4.Dataset(args.input) as dataset:
         times = numpy.asarray(dataset.variables["time"][:])
@@ -274,9 +276,9 @@ def main():
         equator_lon, stencils = equator_stencil(lat, lon)
         interpolator = GlobalInterpolator(lon, lat)
 
-        plot_native_sections(dataset, section_index, equator_lon, stencils, args.output, args.label)
-        plot_maps(dataset, map_indices, times[map_indices] * time_scale, interpolator, args.output, args.label)
-        kinetic_energy(dataset, args.output, args.label, time_scale)
+        plot_native_sections(dataset, section_index, equator_lon, stencils, args.output, label, args.pdf)
+        plot_maps(dataset, map_indices, times[map_indices] * time_scale, interpolator, args.output, label, args.pdf)
+        kinetic_energy(dataset, args.output, label, time_scale, args.pdf)
 
 
 if __name__ == "__main__":

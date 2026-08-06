@@ -1,19 +1,16 @@
-import torch
-from collections import deque
 import math
-from typing import Callable
+from collections import deque
+from collections.abc import Callable
 
-import numpy
+import torch
 from numpy.typing import NDArray
 
 from ..common.configuration import Configuration
+from ..jacobian import FiniteDifferenceJacobian, fd_jacobian_matvec
 from ..solvers import (
     ExponentialSolverRequest,
-    matvec_fun,
-    MatvecOpBasic,
     resolve_exponential_solver,
 )
-
 from .integrator import Integrator, SolverInfo
 
 _COEFF_TABLES = {
@@ -39,15 +36,14 @@ class Epi(Integrator):
         init_method=None,
         init_substeps: int = 1,
         *,
-        device=None,
+        context=None,
     ):
-        super().__init__(param, device=device)
+        super().__init__(param, context=context)
         self.rhs = rhs
         self.jac = jac
         self.tol = param.tolerance
         self.krylov_size = 1
         self.krylov_mmax = param.krylov_mmax
-        self.jacobian_method = param.jacobian_method
         self.exponential_solver = param.exponential_solver
         self.solve_exponential = resolve_exponential_solver(self.exponential_solver)
         self.exode_method = param.exode_method
@@ -69,7 +65,7 @@ class Epi(Integrator):
         if init_method or self.n_prev == 0:
             self.init_method = init_method
         else:
-            self.init_method = Epi(param, 2, rhs, device=device)
+            self.init_method = Epi(param, 2, rhs, context=context)
 
         self.init_substeps = init_substeps
 
@@ -97,7 +93,7 @@ class Epi(Integrator):
         if self.jac is not None:
             matvec_handle = lambda v: self.jac(v, Q, dt)
         else:
-            matvec_handle = MatvecOpBasic(dt, Q, self.rhs, self.param)
+            matvec_handle = FiniteDifferenceJacobian(dt, Q, self.rhs)
 
         vec = torch.zeros((self.max_phi + 1, math.prod(rhs.shape)), dtype=Q.dtype)
         vec[1, :] = rhs.flatten()
@@ -105,7 +101,7 @@ class Epi(Integrator):
             if self.jac is not None:
                 J_deltaQ = self.jac(self.previous_Q[i] - Q, Q, 1.0)
             else:
-                J_deltaQ = matvec_fun(self.previous_Q[i] - Q, 1.0, Q, rhs, self.rhs, self.jacobian_method)
+                J_deltaQ = fd_jacobian_matvec(self.previous_Q[i] - Q, 1.0, Q, rhs, self.rhs)
 
             # R(y_{n-i})
             r = (self.previous_rhs[i] - rhs) - torch.reshape(J_deltaQ, Q.shape)
@@ -122,7 +118,7 @@ class Epi(Integrator):
                 vec,
                 self.tol,
                 self.krylov_mmax,
-                self.device,
+                self.context,
                 krylov_minit=self.krylov_size if use_recycled_size else None,
                 krylov_mmin=16 if use_recycled_size else None,
                 exode_method=self.exode_method,
@@ -147,7 +143,7 @@ class Epi(Integrator):
 
 
 def _make_epi_factory(order):
-    return lambda cfg, rhs, prec, dev: Epi(cfg, order, rhs.full, init_substeps=10, device=dev)
+    return lambda cfg, rhs, prec, ctx: Epi(cfg, order, rhs.full, init_substeps=10, context=ctx)
 
 
 REGISTRY = {f"epi{o}": _make_epi_factory(o) for o in range(2, 7)}

@@ -13,7 +13,7 @@ Test Case Document (v1.7, section 1.1 and Appendix A) asks for:
   * the q1-q2 correlation scatter plots on those same five levels at day 6.
 
 Usage:
-    python3 scripts/plot_dcmip11.py results/dcmip11.nc [-o output_dir]
+    python3 scripts/plot_dcmip11.py -o results --label dcmip11 [--pdf] results/dcmip11.nc
 """
 
 import argparse
@@ -23,9 +23,9 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from matplotlib.ticker import MultipleLocator
 import netCDF4
 import numpy
+from matplotlib.ticker import MultipleLocator
 from scipy.interpolate import PchipInterpolator
 from scipy.spatial import cKDTree
 
@@ -210,7 +210,7 @@ def tracer_label(name):
     return rf"$q_{name[1:]}$"
 
 
-def plot_lat_lon(data, day, level, outdir):
+def plot_lat_lon(data, day, level, outdir, label, pdf):
     """Lat-lon cross section of every tracer at one day and one level."""
     it = time_index(data["time"], day * DAY)
     iz = level_index(data["elev"], level)
@@ -252,12 +252,13 @@ def plot_lat_lon(data, day, level, outdir):
             ax.set_xlabel("Longitude (degrees east)")
             ax.set_ylabel("Latitude (degrees north)")
 
-        fig.suptitle(f"DCMIP 1-1 tracers at day {day:g}, $z={height:.0f}$ m", fontsize=10)
-        path = outdir / f"dcmip11_latlon_day{day:g}.png"
+        fig.suptitle(f"DCMIP 1-1 tracers at day {day:g}, $z={height:.0f}$ m — {label}", fontsize=10)
+        path = outdir / f"dcmip11_{label}_latlon_day{day:g}.png"
         fig.savefig(path, bbox_inches="tight")
-        fig.savefig(path.with_suffix(".pdf"), bbox_inches="tight")
+        if pdf:
+            fig.savefig(path.with_suffix(".pdf"), bbox_inches="tight")
         plt.close(fig)
-    return path, path.with_suffix(".pdf")
+    return (path, path.with_suffix(".pdf")) if pdf else (path,)
 
 
 def equator_stencil(lat, lon):
@@ -306,7 +307,7 @@ def periodic_section(field, elevations, longitude, heights, plot_longitude):
     return PchipInterpolator(extended_lon, extended_field, axis=0)(plot_longitude).T
 
 
-def plot_lon_height(data, day, outdir):
+def plot_lon_height(data, day, outdir, label, pdf):
     """Longitude-height section interpolated to the exact equator."""
     it = time_index(data["time"], day * DAY)
     longitude, stencil = equator_stencil(data["lat2d"], data["lon2d"])
@@ -339,15 +340,16 @@ def plot_lon_height(data, day, outdir):
             ax.set_xlabel("Longitude (degrees east)")
             ax.set_ylabel("Height (km)")
 
-        fig.suptitle(f"DCMIP 1-1 tracers at the equator, day {day:g}", fontsize=10)
-        path = outdir / f"dcmip11_lonheight_day{day:g}.png"
+        fig.suptitle(f"DCMIP 1-1 tracers at the equator, day {day:g} — {label}", fontsize=10)
+        path = outdir / f"dcmip11_{label}_lonheight_day{day:g}.png"
         fig.savefig(path, bbox_inches="tight")
-        fig.savefig(path.with_suffix(".pdf"), bbox_inches="tight")
+        if pdf:
+            fig.savefig(path.with_suffix(".pdf"), bbox_inches="tight")
         plt.close(fig)
-    return path, path.with_suffix(".pdf")
+    return (path, path.with_suffix(".pdf")) if pdf else (path,)
 
 
-def plot_correlation(data, day, outdir):
+def plot_correlation(data, day, outdir, label, pdf):
     """q1 against q2 on the five DCMIP levels, with the initial correlation curve for reference."""
     it = time_index(data["time"], day * DAY)
     mean_height = data["elev"].mean(axis=(0, 2, 3))
@@ -403,12 +405,13 @@ def plot_correlation(data, day, outdir):
         axes[0].legend(loc="lower left", fontsize=7, frameon=False)
         colorbar = fig.colorbar(density, ax=axes, shrink=0.9, pad=0.01)
         colorbar.set_label("Sample density")
-        fig.suptitle(rf"DCMIP 1-1: $q_1$–$q_2$ correlation at day {day:g}", fontsize=10)
-        path = outdir / f"dcmip11_correlation_day{day:g}.png"
+        fig.suptitle(rf"DCMIP 1-1: $q_1$–$q_2$ correlation at day {day:g} — {label}", fontsize=10)
+        path = outdir / f"dcmip11_{label}_correlation_day{day:g}.png"
         fig.savefig(path, bbox_inches="tight")
-        fig.savefig(path.with_suffix(".pdf"), bbox_inches="tight")
+        if pdf:
+            fig.savefig(path.with_suffix(".pdf"), bbox_inches="tight")
         plt.close(fig)
-    return path, path.with_suffix(".pdf")
+    return (path, path.with_suffix(".pdf")) if pdf else (path,)
 
 
 def report_error_norms(data, day):
@@ -448,20 +451,24 @@ def main():
     parser = argparse.ArgumentParser(description="Plots and diagnostics for DCMIP-2012 test 1-1.")
     parser.add_argument("netcdf_file", help="NetCDF output file produced by WxFactory")
     parser.add_argument("-o", "--output-dir", default="results", help="where to write the figures")
+    parser.add_argument("--label", default=None, help="tag used in figure names and titles")
+    parser.add_argument("--pdf", action="store_true", help="also write PDF figures")
     args = parser.parse_args()
 
     outdir = Path(args.output_dir)
     outdir.mkdir(parents=True, exist_ok=True)
-    data = load(args.netcdf_file)
+    source = Path(args.netcdf_file)
+    label = args.label or source.stem
+    data = load(source)
 
     days = data["time"] / DAY
     print(f"Read {args.netcdf_file}; selected diagnostic days: {', '.join(f'{day:g}' for day in days)}")
 
     figure_pairs = []
     for day in (6, 12):
-        figure_pairs.append(plot_lat_lon(data, day, 4900.0, outdir))
-    figure_pairs.append(plot_lon_height(data, 12, outdir))
-    figure_pairs.append(plot_correlation(data, 6, outdir))
+        figure_pairs.append(plot_lat_lon(data, day, 4900.0, outdir, label, args.pdf))
+    figure_pairs.append(plot_lon_height(data, 12, outdir, label, args.pdf))
+    figure_pairs.append(plot_correlation(data, 6, outdir, label, args.pdf))
     written = [path for pair in figure_pairs for path in pair]
 
     report_error_norms(data, 12)

@@ -74,7 +74,7 @@ class Configuration:
         out = "Configuration: \n"
         for section_name, section_options in self.sections.items():
             out += "\n"
-            out += f'  {" " + section_name + " ":-^80s}  '
+            out += f"  {' ' + section_name + ' ':-^80s}  "
             long_options = {}
             i = 0
             for option in section_options:
@@ -124,7 +124,6 @@ class Configuration:
     grid_type: str
     initial_condition: str
     initial_conditions_file: str
-    jacobian_method: str
     krylov_mmax: int
     krylov_size: int
     lambda0: float

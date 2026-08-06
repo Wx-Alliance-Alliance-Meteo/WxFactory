@@ -3,9 +3,9 @@ from .integrator import Integrator
 
 
 class Euler1(Integrator):
-    def __init__(self, param: Configuration, rhs, *, device=None):
-        super().__init__(param, device=device)
-        if self.device.comm.rank == 0:
+    def __init__(self, param: Configuration, rhs, *, context=None):
+        super().__init__(param, context=context)
+        if self.context.comm.rank == 0:
             print("WARNING: Running with first-order explicit Euler timestepping.")
             print("         This is UNSTABLE and should be used only for debugging.")
         self.rhs = rhs
@@ -16,5 +16,5 @@ class Euler1(Integrator):
 
 
 REGISTRY = {
-    "euler1": lambda cfg, rhs, prec, dev: Euler1(cfg, rhs.full, device=dev),
+    "euler1": lambda cfg, rhs, prec, ctx: Euler1(cfg, rhs.full, context=ctx),
 }

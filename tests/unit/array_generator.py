@@ -2,11 +2,11 @@ import random
 
 import torch
 
-from wx_factory.device import PytorchDevice
+from wx_factory.context import Context
 
 
 def generate_vectors(
-    size: int, random: random.Random, min: float, max: float, devices: list[PytorchDevice]
+    size: int, random: random.Random, min: float, max: float, contexts: list[Context]
 ) -> list[torch.Tensor]:
     """
     Generate a list of vectors
@@ -15,12 +15,13 @@ def generate_vectors(
     :param random: Randomizer to use
     :param min: Minimum of the vectors, may not be in the results
     :param max: Maximum of the vectors, may not be in the results
-    :param devices: List of device to create a vector on
+    :param contexts: List of contexts on which to create a vector
 
-    :return: List of vectors. Each vector is mapped to its corresponding device in `devices`. Each vector contains the same data
+    :return: List of vectors. Each vector is mapped to its corresponding device in `contexts`.
+             Each vector contains the same data
     """
 
-    arrs: list[torch.Tensor] = [torch.empty(size, dtype=float, device=d.torch_device) for d in devices]
+    arrs: list[torch.Tensor] = [torch.empty(size, dtype=float, device=ctx.torch_device) for ctx in contexts]
 
     for it in range(size):
         nb: float = random.uniform(min, max)
@@ -32,7 +33,7 @@ def generate_vectors(
 
 
 def generate_matrices(
-    size: tuple[int, int], random: random.Random, min: float, max: float, devices: list[PytorchDevice]
+    size: tuple[int, int], random: random.Random, min: float, max: float, contexts: list[Context]
 ) -> list[torch.Tensor]:
     """
     Generate a list of matrices
@@ -41,12 +42,12 @@ def generate_matrices(
     :param random: Randomizer to use
     :param min: Minimum of the matrices, may not be in the results
     :param max: Maximum of the matrices, may not be in the results
-    :param devices: List of device to create a matrix on
+    :param contexts: List of contexts on which to create a matrix
 
-    :return: List of matrices. Each matrix is mapped to its corresponding device in `devices`. Each matrix contains the same data
+    :return: List of matrices. Each matrix is mapped to its corresponding device in `contexts`. Each matrix contains the same data
     """
 
-    arrs: list[torch.Tensor] = [torch.empty(size, dtype=float, device=d.torch_device) for d in devices]
+    arrs: list[torch.Tensor] = [torch.empty(size, dtype=float, device=ctx.torch_device) for ctx in contexts]
 
     for it1 in range(size[0]):
         for it2 in range(size[1]):

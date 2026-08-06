@@ -1,17 +1,12 @@
-import torch
 import math
+
 import numpy
+import torch
 from numpy.typing import NDArray
 
-from mpi4py import MPI
-
+from ..process_topology import ProcessTopology
 from .cubed_sphere import CubedSphere
 from .sphere import cart2sph
-
-# For type hints
-from ..common import Configuration
-from ..device import Device
-from ..process_topology import ProcessTopology
 
 
 class CubedSphere2D(CubedSphere):

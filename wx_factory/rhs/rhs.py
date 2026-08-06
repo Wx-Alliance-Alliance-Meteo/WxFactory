@@ -3,10 +3,10 @@ from abc import ABC, abstractmethod
 import numpy
 import torch
 from numpy.typing import NDArray
+from torch import Tensor
 
 from ..common import Configuration
 from ..common.definitions import idx_rho_u2
-from ..device import differentiable_mode
 from ..geometry import DFROperators, Geometry, Metric2D, Metric3DTopo
 from ..pde import PDE
 from ..process_topology import ExchangeRequest, ProcessTopology
@@ -22,7 +22,6 @@ class RHS(ABC):
         pde: PDE | None,
         geometry: Geometry,
         operators_real: DFROperators,
-        operators_complex: DFROperators,
         metric: Metric2D | Metric3DTopo,
         topography,
         process_topo: ProcessTopology,
@@ -33,13 +32,11 @@ class RHS(ABC):
         self.pde = pde
         self.geom = geometry
         self.ops_real = operators_real
-        self.ops_complex = operators_complex
-        self._ops_double = None
         self.metric = metric
         self.topo = topography
         self.ptopo = process_topo
         self.config = config
-        self.device = geometry.device
+        self.context = geometry.context
         self.expected_shape = expected_shape
         self.debug = debug
 
@@ -54,7 +51,8 @@ class RHS(ABC):
         self.ops = self.ops_real
 
         self.timestamps = []
-        self.timings = []
+        self.timings_real = []
+        self.timings_complex = []
 
         # Initially set all arrays to None, these will be allocated later
         self.f_x1 = None
@@ -80,20 +78,25 @@ class RHS(ABC):
 
         # Initialize rhs matrix
         self.rhs = None
-        self._workspace_invalidated = False
+
+        self.latest_time_complex = False
 
     def clear_timings(self):
-        self.timestamps = []
-        self.timings = []
+        self.timestamps: list[float | torch.cuda.Event | None] = []
+        self.timings_real = []
+        self.timings_complex = []
 
-    def retrieve_last_times(self):
-        self.timings.append(self.device.elapsed(self.timestamps))
+    def retrieve_last_times(self, is_complex: bool):
+        if is_complex:
+            self.timings_complex.append(self.context.elapsed(self.timestamps))
+        else:
+            self.timings_real.append(self.context.elapsed(self.timestamps))
 
-    def __call__(self, q: NDArray) -> NDArray:
+    def __call__(self, q: Tensor) -> Tensor:
 
         # Process timing
         if len(self.timestamps) > 0:  # Process timing from previous steps
-            self.retrieve_last_times()
+            self.retrieve_last_times(self.latest_time_complex)
         else:
             self.timestamps = [None for _ in range(9)]
 
@@ -101,50 +104,46 @@ class RHS(ABC):
         given_shape = q.shape
 
         self.ops = self.operators_for(q)
-
-        # Forward AD cannot write into scratch tensors captured from an earlier RHS call.
-        if differentiable_mode():
-            self.invalidate_workspace()
+        self.latest_time_complex = torch.is_complex(q)
 
         self.allocate_arrays(q)
-        self._workspace_invalidated = False
 
-        self.timestamps[0] = self.device.timestamp(name="extrap")
+        self.timestamps[0] = self.context.timestamp(name="extrap")
 
         # Extrapolate the solution to the boundaries of the element
         self.solution_extrapolation(q)
-        self.timestamps[1] = self.device.timestamp(name="start comm")
+        self.timestamps[1] = self.context.timestamp(name="start comm")
 
         self.start_communication()
-        self.timestamps[2] = self.device.timestamp(name="pointwise flux")
+        self.timestamps[2] = self.context.timestamp(name="pointwise flux")
 
         # Compute the pointwise fluxes
         self.pointwise_fluxes(q)
-        self.timestamps[3] = self.device.timestamp(name="flux div 1")
+        self.timestamps[3] = self.context.timestamp(name="flux div 1")
 
         # Compute the derivatives of the discontinuous fluxes
         self.flux_divergence_partial()
-        self.timestamps[4] = self.device.timestamp(name="end comm")
+        self.timestamps[4] = self.context.timestamp(name="end comm")
 
         self.end_communication()
-        self.timestamps[5] = self.device.timestamp(name="riemann")
+        self.timestamps[5] = self.context.timestamp(name="riemann")
 
         # Compute the Riemann fluxes
         self.riemann_fluxes()
-        self.timestamps[6] = self.device.timestamp(name="flux div 2")
+        self.timestamps[6] = self.context.timestamp(name="flux div 2")
 
         # Complete the divergence operation
         self.flux_divergence()
-        self.timestamps[7] = self.device.timestamp(name="forcing")
+        self.timestamps[7] = self.context.timestamp(name="forcing")
 
         # Add forcing terms
         self.forcing_terms(q)
         self.pin_y_momentum()
-        self.timestamps[8] = self.device.timestamp()
+        self.timestamps[8] = self.context.timestamp()
 
         # At this moment, a deep copy needs to be returned
         # otherwise issues are encountered after. This needs to be fixed
-        return self.rhs.reshape(given_shape).copy()
+        return self.rhs.reshape(given_shape).clone()
 
     def pin_y_momentum(self) -> None:
         """Set the y-momentum tendency to zero for a y-invariant x-z slab.
@@ -157,35 +156,16 @@ class RHS(ABC):
     def full(self, q: NDArray) -> NDArray:
         return self.__call__(q)
 
-    @property
-    def ops_double(self) -> DFROperators:
-        """Return lazily constructed float64 DFR operators."""
-        if self._ops_double is None:
-            self._ops_double = DFROperators(self.geom, self.device, torch.float64)
-        return self._ops_double
-
     def operators_for(self, q: NDArray) -> DFROperators:
-        """The operator set whose precision matches the state ``q``."""
-        if torch.is_complex(q):
-            return self.ops_complex
-        if q.dtype == torch.float64 and self.ops_real.dtype != torch.float64:
-            return self.ops_double
+        """Return the real operator set."""
         return self.ops_real
 
     def allocate_arrays(self, q: NDArray):
-        if self.workspace_needs_allocation(self.f_x1, q.dtype):
+        if self.f_x1 is None or self.f_x1.dtype != q.dtype:
             self.f_x1 = torch.zeros_like(q)
             self.f_x2 = torch.zeros_like(q)
             self.f_x3 = torch.zeros_like(q)
             self.rhs = torch.empty_like(q)
-
-    def invalidate_workspace(self) -> None:
-        """Require fresh scratch arrays on the next evaluation."""
-        self._workspace_invalidated = True
-
-    def workspace_needs_allocation(self, array, dtype) -> bool:
-        """Return whether a scratch array must be allocated."""
-        return self._workspace_invalidated or array is None or array.dtype != dtype
 
     @abstractmethod
     def solution_extrapolation(self, q: NDArray) -> None:
@@ -196,7 +176,7 @@ class RHS(ABC):
         pass
 
     def riemann_fluxes(self) -> None:
-        if self.workspace_needs_allocation(self.f_itf_x1, self.q_itf_x1.dtype):
+        if self.f_itf_x1 is None or self.f_itf_x1.dtype != self.q_itf_x1.dtype:
             self.f_itf_x1 = torch.zeros_like(self.q_itf_x1)
             self.f_itf_x2 = torch.zeros_like(self.q_itf_x2)
             self.f_itf_x3 = torch.zeros_like(self.q_itf_x3)
@@ -223,26 +203,33 @@ class RHS(ABC):
         pass
 
     def print_times(self) -> None:
-        timings = numpy.array(self.timings)
-        extrapolation = timings[:, 0].mean() * 1000.0
-        start_comm = timings[:, 1].mean() * 1000.0
-        pw_flux = timings[:, 2].mean() * 1000.0
-        flux_div_1 = timings[:, 3].mean() * 1000.0
-        end_comm = timings[:, 4].mean() * 1000.0
-        riemann = timings[:, 5].mean() * 1000.0
-        flux_div_2 = timings[:, 6].mean() * 1000.0
-        forcing = timings[:, 7].mean() * 1000.0
-        total = timings[:, -1].mean() * 1000.0
-        print(
-            f"RHS times:\n"
-            f"  Extrapolation:  {extrapolation:5.1f} ms\n"
-            f"  Start comm:     {start_comm:5.1f} ms\n"
-            f"  Pointwise flux: {pw_flux:5.1f} ms\n"
-            f"  Flux div 1:     {flux_div_1:5.1f} ms\n"
-            f"  End comm:       {end_comm:5.1f} ms\n"
-            f"  Riemann:        {riemann:5.1f} ms\n"
-            f"  Flux div 2:     {flux_div_2:5.1f} ms\n"
-            f"  Forcing:        {forcing:5.1f} ms\n"
-            f"  -------------------------\n"
-            f"  Total:          {total:5.1f}"
-        )
+        for timings, is_complex in zip([self.timings_real, self.timings_complex], [False, True]):
+            if len(timings) == 0:
+                continue
+            timings = numpy.array(timings)
+            extrapolation = timings[:, 0].sum()
+            start_comm = timings[:, 1].sum()
+            pw_flux = timings[:, 2].sum()
+            flux_div_1 = timings[:, 3].sum()
+            end_comm = timings[:, 4].sum()
+            riemann = timings[:, 5].sum()
+            flux_div_2 = timings[:, 6].sum()
+            forcing = timings[:, 7].sum()
+            total = timings[:, -1].sum()
+            num_calls = len(timings)
+            print(
+                f"RHS times ({'real' if not is_complex else 'complex'}, {num_calls} calls):\n"
+                f"                   Total | per call  (ms)\n"
+                f"  -------------------------------\n"
+                f"  Extrapolation:  {extrapolation:-6.1f} | {extrapolation / num_calls:-6.2f}\n"
+                f"  Start comm:     {start_comm:-6.1f} | {start_comm / num_calls:-6.2f}\n"
+                f"  Pointwise flux: {pw_flux:-6.1f} | {pw_flux / num_calls:-6.2f}\n"
+                f"  Flux div 1:     {flux_div_1:-6.1f} | {flux_div_1 / num_calls:-6.2f}\n"
+                f"  End comm:       {end_comm:-6.1f} | {end_comm / num_calls:-6.2f}\n"
+                f"  Riemann:        {riemann:-6.1f} | {riemann / num_calls:-6.2f}\n"
+                f"  Flux div 2:     {flux_div_2:-6.1f} | {flux_div_2 / num_calls:-6.2f}\n"
+                f"  Forcing:        {forcing:-6.1f} | {forcing / num_calls:-6.2f}\n"
+                f"  -------------------------------\n"
+                f"  Total:        {total:8.1f} | {total / num_calls:6.1f}\n",
+                flush=True,
+            )

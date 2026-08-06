@@ -8,27 +8,10 @@ sequence of operator applications into a single output buffer.
 
 import torch
 
-from ..device import differentiable_mode
-
 
 def kron(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
     """Kronecker product. ``torch.kron`` requires contiguous operands."""
     return torch.kron(a.contiguous(), b.contiguous())
-
-
-def maximum(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
-    """Element-wise maximum that also works for complex tensors.
-
-    ``torch.maximum`` is undefined for complex tensors, but the complex-step Jacobian
-    (``jacobian_method = complex``) pushes complex perturbations through the flux eigenvalue
-    estimate. Complex values are ordered lexicographically (real part, then imaginary part), which
-    matches how the differentiated wave-speed bound must behave. Real tensors take the fast path.
-    """
-    if not torch.is_complex(a):
-        return torch.maximum(a, b)
-
-    mask = (a.real > b.real) | ((a.real == b.real) & (a.imag > b.imag))
-    return torch.where(mask, a, b)
 
 
 def _matmul(a, b, alpha=1.0, beta=0.0, out=None):
@@ -38,17 +21,6 @@ def _matmul(a, b, alpha=1.0, beta=0.0, out=None):
         if alpha != 1.0:
             result *= alpha
         return result
-
-    # PyTorch has no forward-AD rule for matmul with ``out=``; differentiable mode uses a temporary.
-    if differentiable_mode():
-        prod = torch.matmul(a, b)
-        if beta == 0.0:
-            out.copy_(prod if alpha == 1.0 else prod * alpha)
-        elif alpha == 1.0 and beta == 1.0:
-            out.add_(prod)
-        else:
-            out.mul_(beta).add_(alpha * prod)
-        return out
 
     if beta == 0.0:
         torch.matmul(a, b, out=out)

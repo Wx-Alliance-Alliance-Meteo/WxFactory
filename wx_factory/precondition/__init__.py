@@ -7,9 +7,9 @@ from .registry import (
 )
 
 __all__ = [
+    "PRECONDITIONER_REGISTRY",
     "Preconditioner",
     "PreconditionerContext",
-    "PRECONDITIONER_REGISTRY",
     "register_preconditioner",
     "resolve_preconditioner",
 ]

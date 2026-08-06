@@ -1,6 +1,5 @@
-from ..device import Device
-from .geometry import Geometry
 from ..process_topology import ProcessTopology
+from .geometry import Geometry
 
 
 class CubedSphere(Geometry):
@@ -25,7 +24,7 @@ class CubedSphere(Geometry):
             num_elem_horizontal,
             num_elem_vertical,
             total_num_elements_horizontal,
-            process_topology.device,
+            process_topology.context,
             verbose,
         )
         self.process_topology = process_topology

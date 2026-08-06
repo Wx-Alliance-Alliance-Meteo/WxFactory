@@ -3,6 +3,8 @@ import math
 import numpy
 import torch
 
+from wx_factory.context import Context
+
 
 def exode(
     τ_out,
@@ -13,8 +15,8 @@ def exode(
     rtol=1e-3,
     atol=1e-6,
     task1=False,
-    verbose=False,
-    device=None,
+    verbose: bool = False,
+    context: Context | None = None,
 ):
     # Import here to resolve circular import
     from ..integrators.butcher import METHODS
@@ -58,7 +60,7 @@ def exode(
         first_step=exode.first_step,
         rtol=rtol,
         atol=atol,
-        device=device,
+        context=context,
     )
 
     ts = [t0]

@@ -4,7 +4,6 @@ import argparse
 import os
 import re
 import sys
-from typing import Optional
 import unittest
 
 import torch
@@ -15,14 +14,16 @@ sys.path.append(main_project_dir)
 from mpi_test import MpiRunner
 
 from tests.unit.common.test_process_topology import ExchangeTest, GatherScatterTest
-from tests.unit.restart.test_restart import ShallowWaterRestartTestCase, Euler3DRestartTestCase
-from tests.unit.solvers.test_pmex_mpi import PmexMpiTestCases
+from tests.unit.restart.test_restart import (
+    Euler3DRestartTestCase,
+    ShallowWaterRestartTestCase,
+)
 from tests.unit.solvers.test_kiops_mpi import KiopsMpiTestCases
-from tests.unit.solvers.test_fgmres_mpi import FgmresMpiTestCases
 from tests.unit.output_managers.compare_zarr_to_nc_mpi import CompareZarrToNcTestCase
+from tests.unit.solvers.test_pmex_mpi import PmexMpiTestCases
 
 
-def add_test(suite: unittest.TestSuite, test: unittest.TestCase, test_re: Optional[re.Pattern]):
+def add_test(suite: unittest.TestSuite, test: unittest.TestCase, test_re: re.Pattern | None):
     if test_re is None or test_re.search(str(test)) is not None:
         suite.addTest(test)
 
@@ -93,8 +94,9 @@ def load_tests(test_name: str):
 
 
 def trace_run(runner, args):
-    import sys
+    import contextlib
     import trace
+
     import mpi4py
 
     # define Trace object: trace line numbers at runtime, exclude some modules
@@ -116,9 +118,9 @@ def trace_run(runner, args):
 
     # by default trace goes to stdout
     # redirect to a different file for each processes
-    sys.stdout = open(f"trace_{mpi4py.MPI.COMM_WORLD.rank:04d}.txt", "w")
-
-    tracer.runfunc(runner.run, load_tests(args.test_name))
+    trace_file = f"trace_{mpi4py.MPI.COMM_WORLD.rank:04d}.txt"
+    with open(trace_file, "w") as trace_output, contextlib.redirect_stdout(trace_output):
+        tracer.runfunc(runner.run, load_tests(args.test_name))
 
 
 def regular_run(runner, args):

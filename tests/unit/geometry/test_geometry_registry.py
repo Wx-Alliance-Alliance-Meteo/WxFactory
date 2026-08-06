@@ -1,10 +1,14 @@
 import types
 import unittest
 
-from wx_factory.geometry import registry
-from wx_factory.geometry.registry import GEOMETRY_REGISTRY, register_geometry, resolve_geometry
-
 from wx_test import WxTestCase
+
+from wx_factory.geometry import registry
+from wx_factory.geometry.registry import (
+    GEOMETRY_REGISTRY,
+    register_geometry,
+    resolve_geometry,
+)
 
 
 def make_ctx(grid_type, equations, grid_file=""):

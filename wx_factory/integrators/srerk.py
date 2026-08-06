@@ -1,16 +1,15 @@
 import math
+from collections.abc import Callable
 from itertools import combinations
-from typing import Callable, List, Optional
 
 import numpy
 
 from ..common.configuration import Configuration
+from ..jacobian import fd_jacobian_matvec
 from ..solvers import (
     ExponentialSolverRequest,
-    matvec_fun,
     resolve_exponential_solver,
 )
-
 from .integrator import Integrator
 
 
@@ -32,8 +31,8 @@ def opt_nodes(order: int):
     if order < 3:
         raise ValueError("Order should be at least 3")
 
-    coeff = (
-        lambda p, q: (-1) ** (p + q)
+    coeff = lambda p, q: (
+        (-1) ** (p + q)
         * math.factorial(p + q + 2)
         / (math.factorial(q) * math.factorial(q + 2) * math.factorial(p - q))
     )
@@ -41,7 +40,7 @@ def opt_nodes(order: int):
     c = []
     # Compute optimal nodes for each stage order starting at order 2
     for o in list(range(2, order - 2, 2)) + [order - 2]:
-        p = numpy.polynomial.Polynomial([coeff(o, q) for q in range(0, o + 1)])
+        p = numpy.polynomial.Polynomial([coeff(o, q) for q in range(o + 1)])
         c.append(p.roots())
 
     c.append(numpy.ones(1))
@@ -57,22 +56,21 @@ class Srerk(Integrator):
         order: int,
         rhs: Callable,
         jac: Callable = None,
-        nodes: Optional[List] = None,
+        nodes: list | None = None,
         *,
-        device=None,
+        context=None,
     ):
         """
         If the nodes are NOT specified, return the SRERK method of the specified order with min error terms
         If the nodes are specified, return the SRERK method with these nodes and ignore the 'order' parameter
         """
 
-        super().__init__(param, device=device)
+        super().__init__(param, context=context)
         self.rhs = rhs
         self.jac = jac
         self.tol = param.tolerance
         self.krylov_size = 1
         self.krylov_mmax = param.krylov_mmax
-        self.jacobian_method = param.jacobian_method
         self.exponential_solver = param.exponential_solver
         self.solve_exponential = resolve_exponential_solver(self.exponential_solver)
 
@@ -94,7 +92,7 @@ class Srerk(Integrator):
                 vec,
                 self.tol,
                 self.krylov_mmax,
-                self.device,
+                self.context,
                 krylov_minit=self.krylov_size,
                 krylov_mmin=16,
             )
@@ -108,7 +106,7 @@ class Srerk(Integrator):
         if self.jac is not None:
             matvec_handle = lambda v: self.jac(v, Q, dt)
         else:
-            matvec_handle = lambda v: matvec_fun(v, dt, Q, rhs, self.rhs, self.jacobian_method)
+            matvec_handle = lambda v: fd_jacobian_matvec(v, dt, Q, rhs, self.rhs)
 
         # Initial projection
         vec = numpy.zeros((2, rhs.size))
@@ -118,7 +116,6 @@ class Srerk(Integrator):
 
         # Loop over all the other projections
         for i_proj in range(1, self.n_proj):
-
             for i in range(z.shape[0]):
                 z[i, :] = Q.flatten() + dt * z[i, :]
 
@@ -139,7 +136,7 @@ class Srerk(Integrator):
 
 
 def _make_srerk_factory(order):
-    return lambda cfg, rhs, prec, dev: Srerk(cfg, order, rhs.full, device=dev)
+    return lambda cfg, rhs, prec, ctx: Srerk(cfg, order, rhs.full, context=ctx)
 
 
 REGISTRY = {f"srerk{o}": _make_srerk_factory(o) for o in range(3, 10)}

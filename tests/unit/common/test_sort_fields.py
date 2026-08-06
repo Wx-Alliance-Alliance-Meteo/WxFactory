@@ -1,13 +1,13 @@
 import unittest
 
+from wx_test import WxTestCase
+
 from wx_factory.common.configuration_schema import (
     ConfigFieldRange,
     ConfigurationField,
     ConfigValueError,
     sort_fields_by_dependency,
 )
-
-from wx_test import WxTestCase
 
 
 def make_field(name, dependency=None):

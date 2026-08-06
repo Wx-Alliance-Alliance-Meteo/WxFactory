@@ -1,13 +1,11 @@
-import torch
-from itertools import product
 import os
 import pickle
-from typing import List, Optional
 
-from mpi4py import MPI
 import numpy
-from numpy.typing import NDArray
 import scipy.sparse
+import torch
+from mpi4py import MPI
+from numpy.typing import NDArray
 from scipy.sparse import csc_matrix
 
 try:
@@ -18,22 +16,22 @@ except ModuleNotFoundError:
     def tqdm(a):
         global tqdm_message_printed
         if not tqdm_message_printed:
-            print(f'Module "tqdm" was not found. You need it if you want to see progress bars')
+            print('Module "tqdm" was not found. You need it if you want to see progress bars')
             tqdm_message_printed = True
         return a
 
 
-from ..device import Device
-from .matvec import MatvecOp
+from ..context import Context
+from ..jacobian import LinearOperator
 
 
 def gen_matrix(
-    matvec: MatvecOp,
-    jac_file_name: Optional[str] = None,
-    compressed: Optional[bool] = None,
+    matvec: LinearOperator,
+    jac_file_name: str | None = None,
+    compressed: bool | None = None,
     local: bool = False,
-    device: Device = None,
-) -> Optional[scipy.sparse.csc_matrix]:
+    context: Context | None = None,
+) -> scipy.sparse.csc_matrix | None:
     """
     Compute and store the Jacobian matrix. It may be computed either as a full or sparse matrix
     (faster as full, but it may take a *lot* of memory for large matrices). Always stored as
@@ -41,8 +39,8 @@ def gen_matrix(
     :param matvec: Operator to compute the action of the jacobian on a vector. Holds vector shape and variable type
     :param jac_file_name: If present, path to the file where the jacobian will be stored
     """
-    if device is None:
-        device = Device.get_default()
+    if context is None:
+        context = Context.get_default()
 
     # neq, ni, nj = matvec.shape
     n_loc = matvec.size
@@ -69,14 +67,14 @@ def gen_matrix(
     # Compute the matrix one column at a time by multiplying by a basis vector
     idx = 0
     indices = list(range(n_loc))
-    columns: List[NDArray | csc_matrix | None] = [None for _ in range(len(indices * size))]
+    columns: list[NDArray | csc_matrix | None] = [None for _ in range(len(indices * size))]
     for r in range(size):
         if rank == 0:
-            print(f"Tile {r+1}/{size}")
+            print(f"Tile {r + 1}/{size}")
         for i in progress(indices):
             if rank == r:
                 Qid[i] = 1.0
-            col = device.to_host(matvec(Qid.flatten()))
+            col = matvec(Qid.flatten()).cpu().numpy()
             ccol = csc_matrix(col.reshape((col.size, 1))) if compressed else col
             columns[idx] = ccol
             idx += 1
@@ -97,7 +95,7 @@ def gen_matrix(
     # We want a global matrix. Gather the tiles into a single matrix
     J_tile_list = MPI.COMM_WORLD.gather(J_tile, root=0)
     if rank == 0:
-        print("")
+        print()
 
         J_full = scipy.sparse.vstack(J_tile_list)
 

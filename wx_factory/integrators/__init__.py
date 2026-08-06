@@ -1,7 +1,6 @@
 """Different methods to step forward in time."""
 
-from .integrator import Integrator
-
+from ..context import Context
 from . import (
     backward_euler as _backward_euler,
     bdf2 as _bdf2,
@@ -17,7 +16,6 @@ from . import (
     srerk as _srerk,
     tvdrk3 as _tvdrk3,
 )
-
 from .backward_euler import BackwardEuler
 from .bdf2 import Bdf2
 from .crank_nicolson import CrankNicolson
@@ -25,10 +23,11 @@ from .epi import Epi
 from .epi_stiff import EpiStiff
 from .euler1 import Euler1
 from .imex2 import Imex2
+from .integrator import Integrator
 from .partrosexp2 import PartRosExp2
 from .ros2 import Ros2
 from .rosexp2 import RosExp2
-from .splitting import StrangSplitting, LieSplitting
+from .splitting import LieSplitting, StrangSplitting
 from .srerk import Srerk
 from .tvdrk3 import Tvdrk3
 
@@ -51,29 +50,29 @@ for _mod in [
     REGISTRY.update(_mod.REGISTRY)
 
 
-def resolve(name: str, config, rhs, preconditioner, device) -> Integrator:
+def resolve(name: str, config, rhs, preconditioner, context: Context) -> Integrator:
     """Create the integrator identified by `name`."""
     if name not in REGISTRY:
         raise ValueError(f"Time integration method '{name}' not supported")
-    return REGISTRY[name](config, rhs, preconditioner, device)
+    return REGISTRY[name](config, rhs, preconditioner, context)
 
 
 __all__ = [
+    "REGISTRY",
+    "BackwardEuler",
+    "Bdf2",
+    "CrankNicolson",
     "Epi",
     "EpiStiff",
     "Euler1",
     "Imex2",
     "Integrator",
+    "LieSplitting",
     "PartRosExp2",
     "Ros2",
     "RosExp2",
-    "StrangSplitting",
-    "LieSplitting",
     "Srerk",
+    "StrangSplitting",
     "Tvdrk3",
-    "BackwardEuler",
-    "CrankNicolson",
-    "Bdf2",
-    "REGISTRY",
     "resolve",
 ]

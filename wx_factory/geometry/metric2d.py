@@ -2,7 +2,6 @@ import numpy
 import torch
 
 from .cubed_sphere_2d import CubedSphere2D
-from .geometry import cast_double_arrays
 
 
 class Metric2D:
@@ -54,9 +53,7 @@ class Metric2D:
         )
 
         self.H_contra_21_itf_i = self.H_contra_12_itf_i.copy()
-        self.H_contra_22_itf_i = geom.delta2_itf_i / (geom.earth_radius**2 * (1.0 + geom.Y_itf_i**2))
 
-        self.H_contra_11_itf_j = geom.delta2_itf_j / (geom.earth_radius**2 * (1.0 + geom.X_itf_j**2))
         self.H_contra_12_itf_j = (
             geom.delta2_itf_j
             * geom.X_itf_j
@@ -64,7 +61,6 @@ class Metric2D:
             / (geom.earth_radius**2 * (1.0 + geom.X_itf_j**2) * (1.0 + geom.Y_itf_j**2))
         )
 
-        self.H_contra_21_itf_j = self.H_contra_12_itf_j.copy()
         self.H_contra_22_itf_j = geom.delta2_itf_j / (geom.earth_radius**2 * (1.0 + geom.Y_itf_j**2))
 
         # 2D covariant metric
@@ -85,16 +81,12 @@ class Metric2D:
         )
 
         self.christoffel_1_01 = geom.rotation_speed * geom.X * geom.Y / geom.delta2 * gridrot
-        self.christoffel_1_10 = self.christoffel_1_01.copy()
 
         self.christoffel_1_02 = -geom.rotation_speed * (1.0 + geom.Y**2) / geom.delta2 * gridrot
-        self.christoffel_1_20 = self.christoffel_1_02.copy()
 
         self.christoffel_2_01 = geom.rotation_speed * (1.0 + geom.X**2) / geom.delta2 * gridrot
-        self.christoffel_2_10 = self.christoffel_2_01.copy()
 
         self.christoffel_2_02 = -geom.rotation_speed * geom.X * geom.Y / geom.delta2 * gridrot
-        self.christoffel_2_20 = self.christoffel_2_02.copy()
 
         self.christoffel_1_11 = 2 * geom.X * geom.Y**2 / geom.delta2
 
@@ -147,12 +139,9 @@ class Metric2D:
         self.H_contra_12_itf_i *= 4.0 / (geom.delta_x1 * geom.delta_x2)
 
         self.H_contra_21_itf_i *= 4.0 / (geom.delta_x1 * geom.delta_x2)
-        self.H_contra_22_itf_i *= 4.0 / (geom.delta_x2**2)
 
-        self.H_contra_11_itf_j *= 4.0 / (geom.delta_x1**2)
         self.H_contra_12_itf_j *= 4.0 / (geom.delta_x1 * geom.delta_x2)
 
-        self.H_contra_21_itf_j *= 4.0 / (geom.delta_x1 * geom.delta_x2)
         self.H_contra_22_itf_j *= 4.0 / (geom.delta_x2**2)
 
         self.christoffel_1_11 *= 0.5 * geom.delta_x1
@@ -164,11 +153,3 @@ class Metric2D:
         self.christoffel_2_12 *= 0.5 * geom.delta_x2
         self.christoffel_2_21 *= 0.5 * geom.delta_x2
         self.christoffel_2_22 *= 0.5 * geom.delta_x2
-
-        self.cast_to_working_precision(geom.working_dtype)
-        geom.cast_to_working_precision()
-
-    def cast_to_working_precision(self, dtype) -> None:
-        """Cast completed metric arrays and restore reciprocal identities in working precision."""
-        cast_double_arrays(self, dtype)
-        self.inv_sqrtG = 1.0 / self.sqrtG

@@ -1,24 +1,24 @@
+from collections.abc import Callable
 from time import time
-from typing import Callable
 
 import numpy
 import torch
 
 from ..common.configuration import Configuration
+from ..jacobian import fd_jacobian_matvec, fd_rosenbrock_matvec
+from ..solvers import ExponentialSolverRequest, resolve_exponential_solver
 from .integrator import Integrator, SolverInfo
-from ..solvers import ExponentialSolverRequest, matvec_fun, matvec_rat, resolve_exponential_solver
 
 
 class RosExp2(Integrator):
     def __init__(
-        self, param: Configuration, rhs_full: Callable, rhs_imp: Callable, *, device=None, preconditioner=None
+        self, param: Configuration, rhs_full: Callable, rhs_imp: Callable, *, context=None, preconditioner=None
     ):
-        super().__init__(param, device=device, preconditioner=preconditioner)
+        super().__init__(param, context=context, preconditioner=preconditioner)
 
         self.rhs_full = rhs_full
         self.rhs_imp = rhs_imp
         self.tol = param.tolerance
-        self.jacobian_method = param.jacobian_method
         self.gmres_restart = param.gmres_restart
         self.krylov_mmax = param.krylov_mmax
         self.solve_exponential = resolve_exponential_solver(param.exponential_solver)
@@ -33,8 +33,8 @@ class RosExp2(Integrator):
         n = len(Q_flat)
 
         def J_exp(v):
-            return matvec_fun(v, dt, Q, rhs_full, self.rhs_full, self.jacobian_method) - matvec_fun(
-                v, dt, Q, rhs_imp, self.rhs_imp, self.jacobian_method
+            return fd_jacobian_matvec(v, dt, Q, rhs_full, self.rhs_full) - fd_jacobian_matvec(
+                v, dt, Q, rhs_imp, self.rhs_imp
             )
 
         vec = torch.zeros((2, n), dtype=Q.dtype)
@@ -48,7 +48,7 @@ class RosExp2(Integrator):
                 vec,
                 self.tol,
                 self.krylov_mmax,
-                self.device,
+                self.context,
                 exode_method=self.exode_method,
                 exode_controller=self.exode_controller,
             )
@@ -59,7 +59,7 @@ class RosExp2(Integrator):
         tic = time()
 
         def A(v):
-            return matvec_rat(v, dt, Q, rhs_imp, self.rhs_imp)
+            return fd_rosenbrock_matvec(v, dt, Q, rhs_imp, self.rhs_imp)
 
         b = (A(Q_flat) + phiv * dt).flatten()
         Q_x0 = Q_flat.copy()
@@ -74,11 +74,11 @@ class RosExp2(Integrator):
 
         self.solver_info = SolverInfo(flag, time_imp, num_iter, residuals)
 
-        if self.device.comm.rank == 0:
+        if self.context.comm.rank == 0:
             result_type = "convergence" if flag == 0 else "stagnation/interruption"
             print(
                 f"FGMRES {result_type} at iteration {num_iter} in {time_imp:4.1f} s to a solution with"
-                f" relative residual {norm_r/norm_b: .2e}"
+                f" relative residual {norm_r / norm_b: .2e}"
             )
 
             print(f"Elapsed time: exponential {time_exp:.3f} secs ; implicit {time_imp:.3f} secs")
@@ -87,5 +87,5 @@ class RosExp2(Integrator):
 
 
 REGISTRY = {
-    "rosexp2": lambda cfg, rhs, prec, dev: RosExp2(cfg, rhs.full, rhs.full, preconditioner=prec, device=dev),
+    "rosexp2": lambda cfg, rhs, prec, ctx: RosExp2(cfg, rhs.full, rhs.full, preconditioner=prec, context=ctx),
 }

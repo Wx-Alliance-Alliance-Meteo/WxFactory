@@ -7,7 +7,7 @@ both along the equator at t=3000 s. Vertical velocity is included as a useful
 non-hydrostatic companion diagnostic.
 
 Usage:
-    python scripts/plot_dcmip31.py -o results --label dcmip31 results/dcmip31_rosexp.nc
+    python scripts/plot_dcmip31.py -o results --label dcmip31 [--pdf] results/dcmip31_rosexp.nc
 """
 
 import argparse
@@ -18,9 +18,9 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from matplotlib.ticker import MultipleLocator
 import netCDF4
 import numpy
+from matplotlib.ticker import MultipleLocator
 
 GRAVITY = 9.80616
 RD = 287.05
@@ -101,9 +101,10 @@ def wavefront_longitudes(time):
     return tuple((PERTURBATION_LONGITUDE + math.degrees(speed * time / radius)) % 360.0 for speed in speeds)
 
 
-def save_figure(fig, output, stem):
-    for suffix in ("png", "pdf"):
-        fig.savefig(output / f"{stem}.{suffix}", dpi=300)
+def save_figure(fig, output, stem, pdf):
+    fig.savefig(output / f"{stem}.png", dpi=300)
+    if pdf:
+        fig.savefig(output / f"{stem}.pdf", dpi=300)
     plt.close(fig)
 
 
@@ -111,7 +112,7 @@ def close_periodic(field):
     return numpy.concatenate((field, field[..., :1]), axis=-1)
 
 
-def plot_initial_condition(longitude, elevation, theta_prime, output, label):
+def plot_initial_condition(longitude, elevation, theta_prime, output, label, pdf):
     """Plot the prescribed perturbation before the dynamical adjustment."""
     mean_heights = numpy.mean(elevation[:, :-1], axis=1)
     level = int(numpy.argmin(numpy.abs(mean_heights - TARGET_HEIGHT)))
@@ -140,16 +141,18 @@ def plot_initial_condition(longitude, elevation, theta_prime, output, label):
     axes[1].xaxis.set_major_locator(MultipleLocator(45))
     axes[1].grid(alpha=0.22, linewidth=0.5)
     fig.suptitle(f"DCMIP 3-1 initial potential-temperature perturbation — {label}")
-    save_figure(fig, output, f"dcmip31_initial_condition_{label}")
+    save_figure(fig, output, f"dcmip31_initial_condition_{label}", pdf)
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("input", type=Path)
     parser.add_argument("-o", "--output", type=Path, default=Path("."))
-    parser.add_argument("--label", default="dcmip31")
+    parser.add_argument("--label", default=None, help="tag used in figure names and titles")
+    parser.add_argument("--pdf", action="store_true", help="also write PDF figures")
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=True)
+    label = args.label or args.input.stem
 
     with netCDF4.Dataset(args.input) as dataset:
         times = numpy.asarray(dataset.variables["time"][:])
@@ -177,7 +180,7 @@ def main():
     w = close_periodic(w)
     lon_mesh = longitude_closed[None, :] + numpy.zeros_like(elevation)
 
-    plot_initial_condition(longitude_closed, elevation, initial_theta_prime, args.output, args.label)
+    plot_initial_condition(longitude_closed, elevation, initial_theta_prime, args.output, label, args.pdf)
 
     angular_distance = numpy.abs(
         (numpy.deg2rad(longitude_closed - PERTURBATION_LONGITUDE) + math.pi) % (2 * math.pi) - math.pi
@@ -202,8 +205,8 @@ def main():
         ax.grid(alpha=0.18, linewidth=0.5)
     axes[1].set(xlabel="Longitude (degrees east)", xlim=(0, 360))
     axes[1].xaxis.set_major_locator(MultipleLocator(45))
-    fig.suptitle(f"DCMIP 3-1 gravity wave at t={times[index]:g} s — {args.label}")
-    save_figure(fig, args.output, f"dcmip31_sections_{args.label}")
+    fig.suptitle(f"DCMIP 3-1 gravity wave at t={times[index]:g} s — {label}")
+    save_figure(fig, args.output, f"dcmip31_sections_{label}", args.pdf)
 
     mean_heights = numpy.mean(elevation[:, :-1], axis=1)
     level = int(numpy.argmin(numpy.abs(mean_heights - TARGET_HEIGHT)))
@@ -218,12 +221,12 @@ def main():
         xlim=(0, 360),
         xlabel="Longitude (degrees east)",
         ylabel=r"$\theta-\overline{\theta}$ (K)",
-        title=f"DCMIP 3-1 at z={mean_heights[level] / 1000.0:.1f} km, t={times[index]:g} s — {args.label}",
+        title=f"DCMIP 3-1 at z={mean_heights[level] / 1000.0:.1f} km, t={times[index]:g} s — {label}",
     )
     ax.xaxis.set_major_locator(MultipleLocator(45))
     ax.grid(alpha=0.22, linewidth=0.5)
     ax.legend(frameon=False)
-    save_figure(fig, args.output, f"dcmip31_theta_5p5km_{args.label}")
+    save_figure(fig, args.output, f"dcmip31_theta_5p5km_{label}", args.pdf)
 
     print(
         f"initial theta'=[{numpy.min(initial_theta_prime):.6g}, {numpy.max(initial_theta_prime):.6g}] K "

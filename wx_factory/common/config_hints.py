@@ -18,7 +18,6 @@ import argparse
 import difflib
 import sys
 from pathlib import Path
-from typing import List
 
 from .configuration_schema import ConfigurationSchema
 
@@ -38,7 +37,7 @@ def load_schema(schema_path: Path = SCHEMA_PATH) -> ConfigurationSchema:
     return ConfigurationSchema(schema_path.read_text())
 
 
-def build_hint_lines(schema: ConfigurationSchema) -> List[str]:
+def build_hint_lines(schema: ConfigurationSchema) -> list[str]:
     """Return the annotation lines (``    name: type``), sorted by option name.
 
     ``CaseSensitiveStr`` reports its type as ``cs-str``, which is not a valid Python type name;
@@ -53,12 +52,12 @@ def build_hint_lines(schema: ConfigurationSchema) -> List[str]:
     return sorted(lines)
 
 
-def render_block(schema: ConfigurationSchema) -> List[str]:
+def render_block(schema: ConfigurationSchema) -> list[str]:
     """Return the full marker-delimited block, including the marker lines."""
     return [START_MARKER, *build_hint_lines(schema), END_MARKER]
 
 
-def splice_block(source: str, block_lines: List[str]) -> str:
+def splice_block(source: str, block_lines: list[str]) -> str:
     """Replace the marker-delimited region of ``source`` with ``block_lines``.
 
     Everything strictly between the START and END markers is replaced; the markers themselves
@@ -91,7 +90,7 @@ def write(schema: ConfigurationSchema, config_path: Path = CONFIG_PATH) -> bool:
     return True
 
 
-def check(schema: ConfigurationSchema, config_path: Path = CONFIG_PATH) -> List[str]:
+def check(schema: ConfigurationSchema, config_path: Path = CONFIG_PATH) -> list[str]:
     """Return a unified diff of what would change if the block were regenerated.
 
     An empty list means the committed block is up to date."""

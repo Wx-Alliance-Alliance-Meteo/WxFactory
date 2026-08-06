@@ -1,14 +1,13 @@
 from abc import ABC, abstractmethod
-from typing import Tuple, Optional
 
 from mpi4py import MPI
-import numpy
+from torch import Tensor
 
 from ..common.configuration import Configuration
-from ..solvers import MatvecOp
+from ..jacobian import LinearOperator
 
 
-class Preconditioner(MatvecOp, ABC):
+class Preconditioner(LinearOperator, ABC):
     """Describes a matrix-like object that can be used to precondition a linear system.
 
     A concrete preconditioner implements ``__apply__`` (how it acts on a vector) and, if it needs
@@ -16,25 +15,21 @@ class Preconditioner(MatvecOp, ABC):
     ``prepare`` uniformly, so no per-type dispatch is needed. See ``doc/contribute.md`` for the
     recipe to add one via the preconditioner registry."""
 
-    def __init__(self, dtype, shape: Tuple, param: Configuration) -> None:
+    def __init__(self, dtype, shape: tuple, param: Configuration) -> None:
         super().__init__(self.apply, dtype, shape)
         self.verbose = param.verbose_precond if MPI.COMM_WORLD.rank == 0 else 0
 
-    def prepare(self, dt: float, Q: numpy.ndarray) -> None:
+    def prepare(self, dt: float, Q: Tensor) -> None:
         """Update per-time-step internal state before the step's linear solves. Default: no-op."""
 
-    def __call__(self, vec: numpy.ndarray, x0: Optional[numpy.ndarray] = None, verbose: Optional[int] = None):
+    def __call__(self, vec: Tensor, x0: Tensor | None = None, verbose: int | None = None) -> Tensor:
         return self.apply(vec, x0, verbose)
 
-    def apply(
-        self, vec: numpy.ndarray, x0: Optional[numpy.ndarray] = None, verbose: Optional[int] = None
-    ) -> numpy.ndarray:
+    def apply(self, vec: Tensor, x0: Tensor | None = None, verbose: int | None = None) -> Tensor:
         if verbose is None:
             verbose = self.verbose
         return self.__apply__(vec, x0, verbose)
 
     @abstractmethod
-    def __apply__(
-        self, vec: numpy.ndarray, x0: Optional[numpy.ndarray] = None, verbose: Optional[int] = None
-    ) -> numpy.ndarray:
+    def __apply__(self, vec: Tensor, x0: Tensor | None = None, verbose: int | None = None) -> Tensor:
         pass

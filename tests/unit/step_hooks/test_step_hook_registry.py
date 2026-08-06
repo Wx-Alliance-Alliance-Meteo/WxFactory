@@ -1,6 +1,8 @@
 import types
 import unittest
 
+from wx_test import WxTestCase
+
 from wx_factory.step_hooks.registry import (
     PHASE_GEOMETRY,
     PHASE_STATE,
@@ -9,8 +11,6 @@ from wx_factory.step_hooks.registry import (
     register_step_hook,
     resolve_step_hooks,
 )
-
-from wx_test import WxTestCase
 
 
 class _FakeGeom:

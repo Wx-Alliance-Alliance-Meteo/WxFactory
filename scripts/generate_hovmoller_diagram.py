@@ -1,21 +1,19 @@
 #!/usr/bin/env python3
 
-import sys
 import os
+import sys
 
 root_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..")
 src_dir = os.path.join(root_dir, "wx_factory")
 sys.path.append(root_dir)
 sys.path.append(src_dir)
 
-import netCDF4 as nc
-import matplotlib.pyplot as plt
-import numpy as np
-
-from matplotlib.ticker import FormatStrFormatter
-
 import argparse
 import ast
+
+import matplotlib.pyplot as plt
+import netCDF4 as nc
+import numpy as np
 
 
 def _read_data(path):
@@ -88,7 +86,7 @@ def _plot_hovmoller(theta, lons, times, output_file, plot_kwargs):
     plt.plot(x_line2, y_line2, color="red", linewidth=2)
 
     # general
-    plt.gca().set_xlabel("\phi")
+    plt.gca().set_xlabel(r"\phi")
     plt.gca().tick_params(axis="x", labelsize=14)
     plt.gca().tick_params(axis="y", labelsize=14)
     plt.gca().set_ylabel("Time (s)", fontsize=14)
@@ -166,9 +164,11 @@ def main(args):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="""Plot the potential temperature perturbation with a fixed latitude
+    parser = argparse.ArgumentParser(
+        description="""Plot the potential temperature perturbation with a fixed latitude
     Call with "python PATH_TO_SCRIPT_DIR/generate_hovmoller_diagram.py PATH_TO_DATA.nc"
-    """)
+    """
+    )
 
     parser.add_argument("data_file", help="Path to the output file")
 

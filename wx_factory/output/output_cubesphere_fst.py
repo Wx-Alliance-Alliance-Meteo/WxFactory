@@ -1,23 +1,13 @@
-import math
-import struct
-import sys
-from typing import Optional
-
-from mpi4py import MPI
-import numpy
-from numpy.typing import NDArray
-
 from ..common import Configuration, angle24
 from ..common.definitions import (
     idx_h,
     idx_hu1,
     idx_hu2,
 )
-from ..device import Device
-from ..geometry import CubedSphere, CubedSphere2D, CubedSphere3D, Metric2D, Metric3DTopo, DFROperators
+from ..context import Context
+from ..geometry import CubedSphere, CubedSphere2D, DFROperators, Metric2D, Metric3DTopo
 from ..process_topology import ProcessTopology
-from ..wx_mpi import SingleProcess, Conditional
-
+from ..wx_mpi import Conditional, SingleProcess
 from .output_cubesphere import OutputCubesphere
 
 try:
@@ -34,18 +24,18 @@ class OutputCubesphereFst(OutputCubesphere):
         config: Configuration,
         geometry: CubedSphere,
         operators: DFROperators,
-        device: Device,
+        context: Context,
         metric: Metric2D | Metric3DTopo,
         topography,
         process_topology: ProcessTopology,
     ):
-        super().__init__(config, geometry, operators, device, metric, topography, process_topology)
+        super().__init__(config, geometry, operators, context, metric, topography, process_topology)
 
         if config.output_freq <= 0:
             return
 
         if not rmn_available:
-            raise ValueError(f"Could not import rmn, can't use FST output manager")
+            raise ValueError("Could not import rmn, can't use FST output manager")
 
         import georef
 
@@ -60,7 +50,7 @@ class OutputCubesphereFst(OutputCubesphere):
         self.file: rmn.fst24_file = None
         self.georef = None
 
-        to_host = self.device.to_host
+        to_host = self.context.to_host
 
         lon = self._get_writable(self.geometry.block_lon, num_dim=2)
         lat = self._get_writable(self.geometry.block_lat, num_dim=2)
@@ -82,7 +72,7 @@ class OutputCubesphereFst(OutputCubesphere):
             self.georef.write_fst(self.file, self.ig1, self.ig2, self.ig3, self.ig4, "my_grid")
 
     def _get_writable(self, a, num_dim):
-        return self.device.to_host(self._gather_field(a, num_dim))
+        return self.context.to_host(self._gather_field(a, num_dim))
 
     def _make_record(self, name, step_id, data):
         return rmn.fst_record(

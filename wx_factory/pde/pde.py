@@ -1,10 +1,8 @@
 from abc import ABC, abstractmethod
-from typing import Callable
 
 from numpy.typing import NDArray
 
 from ..common import Configuration
-from ..device import Device
 from ..geometry import Geometry, Metric2D, Metric3DTopo
 
 
@@ -22,7 +20,7 @@ class PDE(ABC):
     ):
         self.geometry = geometry
         self.config = config
-        self.device = geometry.device
+        self.context = geometry.context
         self.metric = metric
 
         self.num_dim = num_dim

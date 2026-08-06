@@ -1,20 +1,18 @@
-import torch
-import unittest
 import sys
-from typing import Tuple
+import unittest
 
 import numpy
-from numpy.typing import NDArray
+import torch
 from mpi4py import MPI
+from numpy.typing import NDArray
 
-from wx_factory.device import Device
-from wx_factory.process_topology import ProcessTopology, SOUTH, NORTH, WEST, EAST
-from wx_factory.wx_mpi import SingleProcess, Conditional
+from tests.unit.mpi_test import MpiTestCase
+from wx_factory.context import Context
+from wx_factory.process_topology import EAST, NORTH, SOUTH, WEST, ProcessTopology
+from wx_factory.wx_mpi import Conditional, SingleProcess
 
-from tests.unit.mpi_test import run_test_on_x_process, MpiTestCase
 
-
-def gen_data_1(num_processes: int, num_data_hori_per_proc: int, device: Device) -> NDArray:
+def gen_data_1(num_processes: int, num_data_hori_per_proc: int, context: Context) -> NDArray:
     range_per_proc = 2.0 / num_processes
     range_per_side = range_per_proc / 4
     range_per_elem = range_per_side / num_data_hori_per_proc * (1.0 + 1e-14)
@@ -35,8 +33,8 @@ class ExchangeTest(MpiTestCase):
     rank: int
     comm: MPI.Comm
 
-    def __init__(self, methodName: str, device: str, optional: bool = False):
-        super().__init__(6, methodName, device, optional)
+    def __init__(self, methodName: str, device_name: str, optional: bool = False):
+        super().__init__(6, methodName, device_name, optional)
 
     def setUp(self) -> None:
         super().setUp()
@@ -44,8 +42,8 @@ class ExchangeTest(MpiTestCase):
         self.size = self.comm.size
         self.rank = self.comm.rank
 
-        self.topo = ProcessTopology(self.device, comm_in=self.comm)
-        self.topos = [ProcessTopology(self.device, rank=i, comm_in=self.comm) for i in range(self.size)]
+        self.topo = ProcessTopology(self.context)
+        self.topos = [ProcessTopology(self.context, rank=i) for i in range(self.size)]
 
         self.neighbor_topo = [
             self.topos[self.topo.destinations[SOUTH]],
@@ -56,7 +54,7 @@ class ExchangeTest(MpiTestCase):
 
         self.NUM_DATA_HORI = 12
 
-        self.all_data = gen_data_1(self.size, self.NUM_DATA_HORI, self.device)
+        self.all_data = gen_data_1(self.size, self.NUM_DATA_HORI, self.context)
         self.coord = torch.arange(-1.0 + 1.0 / self.NUM_DATA_HORI, 1.0, 2.0 / self.NUM_DATA_HORI)
         # if self.rank == 0:
         #     print(f'coord = {self.coord}')
@@ -273,7 +271,7 @@ class ExchangeTest(MpiTestCase):
         new_data_shape = (1,) + base_shape
         new_line_shape = (1,) + (self.NUM_DATA_HORI,)
 
-        def make_data(d) -> Tuple[NDArray, NDArray, NDArray]:
+        def make_data(d) -> tuple[NDArray, NDArray, NDArray]:
             return (
                 d.reshape(new_data_shape),
                 torch.flip(d, (-1,)).reshape(new_data_shape),
@@ -320,7 +318,7 @@ class ExchangeTest(MpiTestCase):
 
     def vector3d_3d_shape1d(self):
         def make_data(d0):
-            d = self.device.to_host(d0)
+            d = self.context.to_host(d0)
             e = numpy.flip(d, (-1,))
             return (
                 torch.tensor([[[d, d + 1.0], [d + 0.1, d + 1.1]], [[d + 0.2, d + 1.2], [d + 2.2, d + 3.2]]]),
@@ -370,7 +368,7 @@ class ExchangeTest(MpiTestCase):
         new_line_shape = (2, 2, 2, 2) + (self.NUM_DATA_HORI,)
 
         def make_data(d0):
-            d = self.device.to_host(d0)
+            d = self.context.to_host(d0)
             e = numpy.flip(d, (-1,))
             return (
                 torch.tensor(
@@ -449,7 +447,7 @@ class ExchangeTest(MpiTestCase):
             self.assertLess(
                 diff,
                 1e-15,
-                f"rank {self.rank}: {dir} data is wrong (norm {diff:.2e})\n"
+                f"rank {self.rank}: {dir} data is wrong (norm {diff:.2e})\n"  # nofmt
                 f"expected\n{other}\n"
                 f"got\n{result[dir]}",
             )
@@ -473,7 +471,7 @@ class ExchangeTest(MpiTestCase):
             self.assertLess(
                 diff,
                 1e-15,
-                f"rank {self.rank}: {dir} data is wrong (norm {diff:.2e})\n"
+                f"rank {self.rank}: {dir} data is wrong (norm {diff:.2e})\n"  # nofmt
                 f"expected\n{other}\n"
                 f"got\n{result[dir]}",
             )
@@ -497,7 +495,7 @@ class ExchangeTest(MpiTestCase):
             self.assertLess(
                 diff,
                 1e-15,
-                f"rank {self.rank}: {dir} data is wrong (norm {diff:.2e})\n"
+                f"rank {self.rank}: {dir} data is wrong (norm {diff:.2e})\n"  # nofmt
                 f"expected\n{other}\n"
                 f"got\n{result[dir]}",
             )
@@ -521,7 +519,7 @@ class ExchangeTest(MpiTestCase):
             self.assertLess(
                 diff,
                 1e-15,
-                f"rank {self.rank}: {dir} data is wrong (norm {diff:.2e})\n"
+                f"rank {self.rank}: {dir} data is wrong (norm {diff:.2e})\n"  # nofmt
                 f"expected\n{other}\n"
                 f"got\n{result[dir]}",
             )
@@ -547,7 +545,7 @@ class ExchangeTest(MpiTestCase):
             self.assertLess(
                 diff,
                 1e-15,
-                f"rank {self.rank}: {dir} data is wrong (norm {diff:.2e})\n"
+                f"rank {self.rank}: {dir} data is wrong (norm {diff:.2e})\n"  # nofmt
                 f"expected\n{other}\n"
                 f"got\n{result[dir]}",
             )
@@ -556,14 +554,14 @@ class ExchangeTest(MpiTestCase):
 class GatherScatterTest(MpiTestCase):
     topo: ProcessTopology
 
-    def __init__(self, num_procs: int, methodName: str, device: str, optional: bool = False):
-        super().__init__(num_procs, methodName, device, optional)
-        self.device_str = device
+    def __init__(self, num_procs: int, methodName: str, device_name: str, optional: bool = False):
+        super().__init__(num_procs, methodName, device_name, optional)
+        self.device_str = device_name
 
     def setUp(self) -> None:
         super().setUp()
 
-        self.topo = ProcessTopology(self.device, comm_in=self.comm)
+        self.topo = ProcessTopology(self.context)
         # For testing gather/scatter functions
         self.global_data_1 = torch.arange(6 * 12 * 12, dtype=float).reshape(6, 12, 12)  # A flat (2D) field
         # A 2D field of 3x3 elements
@@ -618,12 +616,12 @@ class GatherScatterTest(MpiTestCase):
             # print(f"cube = \n{cube[0]}", flush=True)
             diff = cube - global_data
             diff_norm = torch.linalg.norm(diff)
-            self.assertEqual(diff_norm, 0, f"Gathering failed")
+            self.assertEqual(diff_norm, 0, "Gathering failed")
 
         tile = self.topo.distribute_cube(cube, num_dim)
         tile_diff = tile_data_ref - tile
         tile_diff_norm = torch.linalg.norm(tile_diff)
-        self.assertEqual(tile_diff_norm, 0, f"Distributing failed")
+        self.assertEqual(tile_diff_norm, 0, "Distributing failed")
 
     def gather_scatter_2d(self):
         self.gather_scatter(self.global_data_1, 2)

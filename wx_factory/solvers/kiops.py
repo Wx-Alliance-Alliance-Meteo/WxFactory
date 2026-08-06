@@ -5,7 +5,7 @@ import torch
 from mpi4py import MPI
 from torch import Tensor
 
-from ..device import Device
+from ..context import Context
 from .dense import expm
 
 
@@ -19,7 +19,7 @@ def kiops(
     mmax: int = 128,
     iop: int = 2,
     task1: bool = False,
-    device: Device | None = None,
+    context: Context | None = None,
 ) -> tuple[Tensor, tuple]:
     """kiops(tstops, A, u; kwargs...) -> (w, stats)
 
@@ -55,8 +55,7 @@ def kiops(
     :param iop: length of incomplete orthogonalization procedure (default: 2). Optional
     :param task1: if true, divide the result by 1/T**p. Optional
 
-    :param device: Device to use for the computing
-    :param comm: Communicator to use for MPI (only relevant for testing)
+    :param context: Context to use for the computing and MPI communication
 
     :return: `w` - the linear combination of the ``φ`` functions evaluated at ``tA`` acting on the vectors from ``u``
     :return: `stats[0]` - number of substeps
@@ -66,12 +65,12 @@ def kiops(
     :return: `stats[4]` - Error estimate
     :return: `stats[5]` - the Krylov size of the last substep
     """
-    if device is None:
-        device = Device.get_default()
+    if context is None:
+        context = Context.get_default()
 
-    comm = device.comm
-    tau_out = device.array(tau_out)
-    u = device.array(u)
+    comm = context.comm
+    tau_out = context.array(tau_out)
+    u = context.array(u)
 
     ppo, n = u.shape
     p = ppo - 1
@@ -114,7 +113,7 @@ def kiops(
     # compute 1-norm of u
     local_normU = torch.sum(torch.abs(u[1:, :]), dim=1)
     global_normU = torch.empty_like(local_normU)
-    device.synchronize()
+    context.synchronize()
     comm.Allreduce([local_normU, mpi_real], [global_normU, mpi_real])
     normU = torch.amax(global_normU)
 
@@ -162,10 +161,8 @@ def kiops(
     tiny_err = float(torch.finfo(u.dtype).tiny)
 
     while tau_now < tau_end:
-
         # Compute necessary starting information
         if j == 0:
-
             V[0, :n] = w[l, :]
 
             # Update the last part of w
@@ -177,7 +174,7 @@ def kiops(
             # Normalize initial vector (this norm is nonzero)
             local_sum = V[0, :n] @ V[0, :n]
             global_sum = torch.empty_like(local_sum)
-            device.synchronize()
+            context.synchronize()
             comm.Allreduce([local_sum, mpi_real], [global_sum, mpi_real])
             beta = torch.sqrt(global_sum + V[0, n : n + p] @ V[0, n : n + p])
 
@@ -186,7 +183,6 @@ def kiops(
 
         # Incomplete orthogonalization process
         while j < m:
-
             j = j + 1
 
             # Augmented matrix - vector product
@@ -198,7 +194,7 @@ def kiops(
             ilow = max(0, j - iop)
             local_sum = V[ilow:j, :n] @ V[j, :n]
             global_sum = torch.empty_like(local_sum)
-            device.synchronize()
+            context.synchronize()
             comm.Allreduce([local_sum, mpi_real], [global_sum, mpi_real])
 
             H[ilow:j, j - 1] = global_sum + V[ilow:j, n : n + p] @ V[j, n : n + p]
@@ -207,7 +203,7 @@ def kiops(
 
             local_sum = V[j, :n] @ V[j, :n]
             global_sum = torch.empty_like(local_sum)
-            device.synchronize()
+            context.synchronize()
             comm.Allreduce([local_sum, mpi_real], [global_sum, mpi_real])
             nrm = torch.sqrt(global_sum + V[j, n : n + p] @ V[j, n : n + p])
 
@@ -218,7 +214,7 @@ def kiops(
 
             H[j, j - 1] = nrm
             V[j, :] = V[j, :] / nrm
-            device.synchronize()
+            context.synchronize()
 
             krystep += 1
 
@@ -230,7 +226,7 @@ def kiops(
         H[j, j - 1] = 0.0
 
         # Compute the exponential of the augmented matrix
-        F = device.array(expm(sgn * tau * H[: j + 1, : j + 1]))
+        F = expm(sgn * tau * H[: j + 1, : j + 1])
         exps += 1
 
         # Restore the value of H_{m+1,m}
@@ -254,22 +250,21 @@ def kiops(
             # fully resolved, so accept it and hold the step size / Krylov size, exactly as for a
             # happy breakdown. In double precision this underflow does not occur, so this branch never
             # triggers there.
-            if not device.to_host(err) > tiny_err:
+            if not context.to_host(err) > tiny_err:
                 omega = 0.0
                 err = 0.0
                 tau_new = min(tau_end - (tau_now + tau), tau)
                 m_new = m
 
             else:
-
                 # Error for this step
                 oldomega = omega
                 omega = tau_end * err / (tau * tol)
-                omega = device.to_host(omega)
+                omega = context.to_host(omega)
 
                 # Estimate order
                 if m == oldm and tau != oldtau and ireject >= 1:
-                    order = max(1.0, math.log(omega / oldomega) / device.to_host(torch.log(tau / oldtau)))
+                    order = max(1.0, math.log(omega / oldomega) / context.to_host(torch.log(tau / oldtau)))
                     orderold = False
                 elif orderold or ireject == 0:
                     orderold = True
@@ -315,7 +310,6 @@ def kiops(
 
         # Check error against target
         if omega <= delta:
-
             # Yep, got the required tolerance; update
             reject += ireject
             step += 1

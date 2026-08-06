@@ -1,11 +1,14 @@
-"""Directional-derivative check for the analytic vertical Jacobian J1 (PartRosExp2).
+"""Directional-derivative checks for the analytic Jacobians of the PartRosExp2 partitions.
 
-J1 is the exact derivative of the discrete vertically-stiff partition f1 = rhs.implicit, including
-the delta-lambda variation of the Rusanov dissipation speed. This test compares the assembled
-J1 . v (via block-tridiagonal blocks_matvec) against a central finite-difference directional
-derivative of f1. Finite differences -- not complex step -- because the flux uses torch.abs for
-|u3|, whose complex modulus does not carry the first-order perturbation (complex step would silently
-reproduce the frozen-lambda operator).
+J1 is the exact derivative of the discrete vertically-stiff partition f1 = rhs.implicit, and J2 that
+of the complementary partition f2 = rhs.explicit, both including the variation of the Rusanov
+dissipation speed. Each test compares an analytic Jacobian applied to a vector against a central
+finite-difference directional derivative of the operator it claims to differentiate, and a last one
+checks that the two add up to the Jacobian of the full right-hand side.
+
+Finite differences -- not complex step -- because the flux uses torch.abs for |u3|, whose complex
+modulus does not carry the first-order perturbation (complex step would silently reproduce the
+frozen-lambda operator).
 
 The base state carries a nonzero, single-signed vertical velocity so the evaluation is away from the
 non-smooth set (u3 = 0, argmax switches); a second test checks that the at-rest state (u3 = 0) still
@@ -13,34 +16,31 @@ assembles a finite operator under the sgn(0) = 0 convention.
 """
 
 import os
-import unittest
 
 import torch
-import torch.autograd.forward_ad as fwad
 from wx_test import WxTestCase
 
 from wx_factory.common import Configuration, load_default_schema, readfile
 from wx_factory.common.definitions import idx_rho, idx_rho_u1, idx_rho_u2, idx_rho_u3
-from wx_factory.device import differentiable_mode
-from wx_factory.rhs.vertical_jacobian import (
-    assemble_j1_blocks_analytic,
+from wx_factory.jacobian import (
+    assemble_j1_blocks,
     blocks_matvec,
-    col_to_state,
+    columns_to_state,
     forcing_jac_prepare,
     forcing_jvp,
     j2_flux_matvec,
     j2_prepare,
-    state_to_col,
+    state_to_columns,
 )
 from wx_factory.simulation import Simulation
 
 
-class VerticalJacobianTestCase(WxTestCase):
+class PartitionJacobianTestCase(WxTestCase):
     def setUp(self) -> None:
         super().setUp()
         here = os.path.dirname(os.path.realpath(__file__))
         schema = load_default_schema()
-        self.config = Configuration(readfile(os.path.join(here, "vertical_jacobian_config.ini")), schema)
+        self.config = Configuration(readfile(os.path.join(here, "partition_jacobians_config.ini")), schema)
         self.sim = Simulation(self.config)
         self.rhs = self.sim.rhs.full  # the RHS object (has .metric/.geom); .implicit is f1
 
@@ -69,9 +69,9 @@ class VerticalJacobianTestCase(WxTestCase):
         v = (torch.rand(Q.shape, generator=gen, dtype=torch.float64) - 0.5) * Q.abs()
 
         # Assembled J1 . v
-        L, A, U = assemble_j1_blocks_analytic(self.rhs, Q)
-        vc = state_to_col(self.rhs, v)
-        Jv = col_to_state(self.rhs, blocks_matvec(self.rhs, L, A, U, vc), v)
+        lower, diag, upper = assemble_j1_blocks(self.rhs, Q)
+        vc = state_to_columns(self.rhs, v)
+        Jv = columns_to_state(self.rhs, blocks_matvec(lower, diag, upper, vc), v)
 
         # Central finite-difference directional derivative of f1 = rhs.implicit
         eps = 1.0e-6
@@ -85,8 +85,8 @@ class VerticalJacobianTestCase(WxTestCase):
     def test_finite_at_zero_vertical_velocity(self) -> None:
         # At-rest bubble: u3 = 0 at every trace (the non-smooth set). sgn(0) = 0 must keep J1 finite.
         Q = self.sim.initial_state.Q.clone().to(torch.float64)
-        L, A, U = assemble_j1_blocks_analytic(self.rhs, Q)
-        for blk in (L, A, U):
+        lower, diag, upper = assemble_j1_blocks(self.rhs, Q)
+        for blk in (lower, diag, upper):
             self.assertTrue(torch.isfinite(blk).all(), "J1 blocks contain non-finite entries at u3 = 0")
 
     def test_rhs_partition_identity(self) -> None:
@@ -122,41 +122,8 @@ class VerticalJacobianTestCase(WxTestCase):
         self.assertLess(
             error / scale,
             1.0e-7,
-            f"analytic J2 does not differentiate f2: relative error {error / scale:.3e}; "
-            f"per-row errors {row_errors}",
+            f"analytic J2 does not differentiate f2: relative error {error / scale:.3e}; per-row errors {row_errors}",
         )
-
-    @unittest.skipUnless(
-        differentiable_mode(),
-        "needs WX_FACTORY_DIFFERENTIABLE=1, which must be set before torch tensors are created",
-    )
-    def test_jacobians_match_forward_mode_autodiff(self) -> None:
-        """Compare the analytic Jacobian actions with forward-mode AD."""
-        Q = self._base_state(seed=1234, w_speed=2.0)
-        gen = torch.Generator().manual_seed(9)
-        v = (torch.rand(Q.shape, generator=gen, dtype=torch.float64) - 0.5) * Q.abs()
-
-        def tangent_of(func):
-            with fwad.dual_level():
-                return fwad.unpack_dual(func(fwad.make_dual(Q, v))).tangent.clone()
-
-        L, A, U = assemble_j1_blocks_analytic(self.rhs, Q)
-        j1v = col_to_state(self.rhs, blocks_matvec(self.rhs, L, A, U, state_to_col(self.rhs, v)), v)
-        j2v = j2_flux_matvec(self.rhs, Q, v, j2_prepare(self.rhs, Q))
-        j2v = j2v + forcing_jvp(self.rhs, Q, v, forcing_jac_prepare(self.rhs, Q))
-
-        for name, analytic, reference in (
-            ("J1", j1v, tangent_of(self.rhs.implicit)),
-            ("J2", j2v, tangent_of(self.rhs.explicit)),
-            ("J1 + J2", j1v + j2v, tangent_of(self.rhs)),
-        ):
-            error = torch.linalg.norm(analytic - reference).item()
-            scale = torch.linalg.norm(reference).item()
-            self.assertLess(
-                error / scale,
-                1.0e-13,
-                f"analytic {name} . v vs forward-mode AD: relative error {error / scale:.3e}",
-            )
 
     def test_jacobian_partition_identity(self) -> None:
         """The two Jacobian actions used by PartRosExp2 must add to the full RHS Jacobian."""
@@ -164,10 +131,10 @@ class VerticalJacobianTestCase(WxTestCase):
         gen = torch.Generator().manual_seed(11)
         v = (torch.rand(Q.shape, generator=gen, dtype=torch.float64) - 0.5) * Q.abs()
 
-        L, A, U = assemble_j1_blocks_analytic(self.rhs, Q)
-        j1v = col_to_state(
+        lower, diag, upper = assemble_j1_blocks(self.rhs, Q)
+        j1v = columns_to_state(
             self.rhs,
-            blocks_matvec(self.rhs, L, A, U, state_to_col(self.rhs, v)),
+            blocks_matvec(lower, diag, upper, state_to_columns(self.rhs, v)),
             v,
         )
         j2v = j2_flux_matvec(self.rhs, Q, v, j2_prepare(self.rhs, Q))

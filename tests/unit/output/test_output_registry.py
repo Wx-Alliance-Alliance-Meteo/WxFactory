@@ -1,9 +1,9 @@
 import types
 import unittest
 
-from wx_factory.output.registry import OUTPUT_REGISTRY, register_output, resolve_output
-
 from wx_test import WxTestCase
+
+from wx_factory.output.registry import OUTPUT_REGISTRY, register_output, resolve_output
 
 
 def make_ctx(output_family, output_format):

@@ -36,12 +36,12 @@ class OutputCubesphereZarr(OutputCubesphere):
         config,
         geometry,
         operators,
-        device,
+        context,
         metric,
         topo,
         process_topo,
     ):
-        super().__init__(config, geometry, operators, device, metric, topo, process_topo)
+        super().__init__(config, geometry, operators, context, metric, topo, process_topo)
         if self.config.equations == "shallow_water":
             self.equ = ["h", "U", "V", "RV", "PV"]
         elif self.config.equations == "euler":
@@ -67,10 +67,10 @@ class OutputCubesphereZarr(OutputCubesphere):
         self.ny = self.geometry.block_lat.shape[-2]
         self.nx = self.geometry.block_lon.shape[-1]
 
-        self.panel_x = self.device.to_host(self._gather_panel(self.geometry.x1[...]))
-        self.panel_y = self.device.to_host(self._gather_panel(self.geometry.x2[...]))
+        self.panel_x = self.context.to_host(self._gather_panel(self.geometry.x1[...]))
+        self.panel_y = self.context.to_host(self._gather_panel(self.geometry.x2[...]))
         if self.nz != 1 and self.config.equations == "euler":
-            self.zcoord = self.device.to_host(self.geometry.x3[:, 0, 0])
+            self.zcoord = self.context.to_host(self.geometry.x3[:, 0, 0])
         else:
             self.zcoord = np.arange(self.nz)
 
@@ -272,7 +272,7 @@ class OutputCubesphereZarr(OutputCubesphere):
             return
 
         if self.rank == 0:
-            self.ds_zarr[variable_name][step_id] = self.device.to_host(fields)
+            self.ds_zarr[variable_name][step_id] = self.context.to_host(fields)
 
     def store_variable_zarr_Zdim(self, field, variable_name, step_id, level_idx):
 
@@ -282,7 +282,7 @@ class OutputCubesphereZarr(OutputCubesphere):
             return
 
         if self.rank == 0:
-            self.ds_zarr[variable_name][step_id, :, level_idx, :, :] = self.device.to_host(fields)
+            self.ds_zarr[variable_name][step_id, :, level_idx, :, :] = self.context.to_host(fields)
 
     def write_static_fields(self):
 
@@ -300,12 +300,12 @@ class OutputCubesphereZarr(OutputCubesphere):
         if self.rank != 0:
             return
 
-        self.ds_zarr["lats"][:] = self.device.to_host(lats)
-        self.ds_zarr["lons"][:] = self.device.to_host(lons)
+        self.ds_zarr["lats"][:] = self.context.to_host(lats)
+        self.ds_zarr["lons"][:] = self.context.to_host(lons)
         if self.config.equations == "euler":
-            self.ds_zarr["elev"][:] = self.device.to_host(elev)
-            self.ds_zarr["topo"][:] = self.device.to_host(topo)
-            self.ds_zarr["volume"][:] = self.device.to_host(volume)
+            self.ds_zarr["elev"][:] = self.context.to_host(elev)
+            self.ds_zarr["topo"][:] = self.context.to_host(topo)
+            self.ds_zarr["volume"][:] = self.context.to_host(volume)
 
     def _cell_volume(self) -> NDArray:
         """Volume associated with each solution point.

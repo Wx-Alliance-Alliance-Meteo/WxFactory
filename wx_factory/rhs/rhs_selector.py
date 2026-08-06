@@ -17,7 +17,7 @@ from ..init.initialize import Topo
 from ..pde import PDEEuler3D
 from ..process_topology import ProcessTopology
 from .rhs_advection2d import RhsAdvection2d
-from .rhs_dfr import RHSDirecFluxReconstruction_mpi_v2
+from .rhs_dfr import RHSDirecFluxReconstruction_mpi
 from .rhs_sw import RhsShallowWater
 
 
@@ -27,7 +27,6 @@ class RhsContext:
 
     geom: Geometry
     operators_real: DFROperators
-    operators_complex: DFROperators
     metric: Metric2D | Metric3DTopo | None
     topo: Topo | None
     ptopo: ProcessTopology | None
@@ -101,11 +100,10 @@ def resolve_rhs(ctx: RhsContext) -> RhsBundle:
 def _euler_cubesphere(ctx: RhsContext) -> RhsBundle:
     # Additional state variables are passive tracers.
     pde = PDEEuler3D(ctx.geom, ctx.param, ctx.metric, num_var=ctx.fields_shape[0])
-    full = RHSDirecFluxReconstruction_mpi_v2(
+    full = RHSDirecFluxReconstruction_mpi(
         pde,
         ctx.geom,
         ctx.operators_real,
-        ctx.operators_complex,
         ctx.metric,
         ctx.topo,
         ctx.ptopo,
@@ -113,7 +111,7 @@ def _euler_cubesphere(ctx: RhsContext) -> RhsBundle:
         ctx.fields_shape,
         debug=ctx.debug,
     )
-    return RhsBundle(full=full, shape=ctx.fields_shape, implicit=full.implicit_double, explicit=full.explicit_double)
+    return RhsBundle(full=full, shape=ctx.fields_shape, implicit=full.implicit, explicit=full.explicit)
 
 
 # Cartesian slabs use the 3D Euler RHS with an identity metric.
@@ -123,11 +121,10 @@ def _euler_cartesian3d(ctx: RhsContext) -> RhsBundle:
     # Cartesian case numbers do not follow the DCMIP advection convention.
     if getattr(ctx.param, "advection_only", "auto") == "auto":
         pde.advection_only = False
-    full = RHSDirecFluxReconstruction_mpi_v2(
+    full = RHSDirecFluxReconstruction_mpi(
         pde,
         ctx.geom,
         ctx.operators_real,
-        ctx.operators_complex,
         ctx.metric,
         ctx.topo,
         ctx.ptopo,
@@ -135,7 +132,7 @@ def _euler_cartesian3d(ctx: RhsContext) -> RhsBundle:
         ctx.fields_shape,
         debug=ctx.debug,
     )
-    return RhsBundle(full=full, shape=ctx.fields_shape, implicit=full.implicit_double, explicit=full.explicit_double)
+    return RhsBundle(full=full, shape=ctx.fields_shape, implicit=full.implicit, explicit=full.explicit)
 
 
 @register_rhs("shallow_water", CubedSphere2D)
@@ -146,7 +143,6 @@ def _shallow_water_cubesphere(ctx: RhsContext) -> RhsBundle:
             ctx.fields_shape,
             ctx.geom,
             ctx.operators_real,
-            ctx.operators_complex,
             ctx.metric,
             ctx.ptopo,
             ctx.geom.num_solpts,
@@ -158,7 +154,6 @@ def _shallow_water_cubesphere(ctx: RhsContext) -> RhsBundle:
             ctx.fields_shape,
             ctx.geom,
             ctx.operators_real,
-            ctx.operators_complex,
             ctx.metric,
             ctx.topo,
             ctx.ptopo,

@@ -2,7 +2,6 @@ import math
 
 import numpy
 import torch
-from numpy.typing import NDArray
 
 from .cubed_sphere_3d import CubedSphere3D
 from .geometry import cast_double_arrays
@@ -25,11 +24,6 @@ class Metric3DTopo:
         # Retrieve objects for easier access
         geom = self.geom
         matrix = self.matrix
-        if geom.gnomonic.dtype == torch.float64 and matrix.dtype != torch.float64:
-            # Single-precision runs keep geometry in float64 through initial metric construction.
-            # Use matching double operators for the coordinate derivatives; the runtime operator
-            # set remains in the configured working precision.
-            matrix = DFROperators(geom, geom.device, torch.float64)
         dtype = geom.gnomonic.dtype
 
         # Whether computing deep or shallow metric
@@ -42,38 +36,21 @@ class Metric3DTopo:
         X_int = geom.coordVec_gnom[0, :, :, :]
         Y_int = geom.coordVec_gnom[1, :, :, :]
         R_int = geom.coordVec_gnom[2, :, :, :] + geom.earth_radius
-        self.R_int = R_int
-
-        X_int_new = geom.gnomonic[0, ...]
-        Y_int_new = geom.gnomonic[1, ...]
-        R_int_new = geom.gnomonic[2, ...] + geom.earth_radius
 
         # Gnomonic coordinates at i-interface
         X_itf_i = geom.coordVec_gnom_itf_i[0, :, :, :]
         Y_itf_i = geom.coordVec_gnom_itf_i[1, :, :, :]
         R_itf_i = geom.coordVec_gnom_itf_i[2, :, :, :] + geom.earth_radius
 
-        X_itf_i_new = geom.gnomonic_itf_i[0, ...]
-        Y_itf_i_new = geom.gnomonic_itf_i[1, ...]
-        R_itf_i_new = geom.gnomonic_itf_i[2, ...] + geom.earth_radius
-
         # At j-interface
         X_itf_j = geom.coordVec_gnom_itf_j[0, :, :, :]
         Y_itf_j = geom.coordVec_gnom_itf_j[1, :, :, :]
         R_itf_j = geom.coordVec_gnom_itf_j[2, :, :, :] + geom.earth_radius
 
-        X_itf_j_new = geom.gnomonic_itf_j[0, ...]
-        Y_itf_j_new = geom.gnomonic_itf_j[1, ...]
-        R_itf_j_new = geom.gnomonic_itf_j[2, ...] + geom.earth_radius
-
         # Gnomonic coordinates at k-interface
         X_itf_k = geom.coordVec_gnom_itf_k[0, :, :, :]
         Y_itf_k = geom.coordVec_gnom_itf_k[1, :, :, :]
         R_itf_k = geom.coordVec_gnom_itf_k[2, :, :, :] + geom.earth_radius
-
-        X_itf_k_new = geom.gnomonic_itf_k[0, ...]
-        Y_itf_k_new = geom.gnomonic_itf_k[1, ...]
-        R_itf_k_new = geom.gnomonic_itf_k[2, ...] + geom.earth_radius
 
         # Grid scaling factors, necessary to define the metric and Christoffel symbols
         # with respect to the standard element
@@ -84,13 +61,10 @@ class Metric3DTopo:
         # Grid rotation terms
         alpha = geom.angle_p  # Clockwise rotation about the Z axis
         phi = geom.lat_p  # Counterclockwise rotation about the X axis, sending [0,0,1] to a particular latitude
-        lam = geom.lon_p  # Counterclockwise rotation about the Z axis, sending [0,-1,0] to a particular longitude
         salp = math.sin(alpha)
         calp = math.cos(alpha)
         sphi = math.sin(phi)
         cphi = math.cos(phi)
-        slam = math.sin(lam)
-        clam = math.cos(lam)
 
         ## Compute partial derivatives of R
 
@@ -354,7 +328,6 @@ class Metric3DTopo:
         for d_itf_k, d_extrap_k in zip(
             (dRdx1_itf_k, dRdx2_itf_k, dRdeta_itf_k), (dRdx1_extrap_k, dRdx2_extrap_k, dRdeta_extrap_k)
         ):
-
             # Assign absolute minimum/maximum interface values based on the one-sided extrapolation
             d_itf_k[0, :, :] = d_extrap_k[0, 0, :, :]
             d_itf_k[-1, :, :] = d_extrap_k[-1, 1, :, :]
@@ -365,31 +338,33 @@ class Metric3DTopo:
         # Initialize metric arrays
 
         # Covariant space-only metric
-        def compute_metric(X, Y, R, dRdx1, dRdx2, dRdeta):
+        def compute_metric(X, Y, R, dRdx1, dRdx2, dRdeta, with_cov: bool = True):
+            """Compute metric terms, optionally omitting the covariant metric."""
             delsq = 1 + X**2 + Y**2  # δ², per Charron May 2022
             del4 = delsq**2
 
-            Hcov = torch.empty((3, 3) + X.shape)
+            Hcov = torch.empty((3, 3) + X.shape) if with_cov else None
             Hcontra = torch.empty((3, 3) + X.shape)
             rootG = torch.empty_like(X)
 
             if deep:
-                Hcov[0, 0, :] = (delta_x**2 / 4) * (R**2 / del4 * (1 + X**2) ** 2 * (1 + Y**2) + dRdx1**2)  # g_11
+                if with_cov:
+                    Hcov[0, 0, :] = (delta_x**2 / 4) * (R**2 / del4 * (1 + X**2) ** 2 * (1 + Y**2) + dRdx1**2)  # g_11
 
-                Hcov[0, 1, :] = (delta_x * delta_y / 4) * (
-                    -(R**2) / del4 * X * Y * (1 + X**2) * (1 + Y**2) + dRdx1 * dRdx2
-                )  # g_12
-                Hcov[1, 0, :] = Hcov[0, 1, :]  # g_21 (by symmetry)
+                    Hcov[0, 1, :] = (delta_x * delta_y / 4) * (
+                        -(R**2) / del4 * X * Y * (1 + X**2) * (1 + Y**2) + dRdx1 * dRdx2
+                    )  # g_12
+                    Hcov[1, 0, :] = Hcov[0, 1, :]  # g_21 (by symmetry)
 
-                Hcov[0, 2, :] = delta_eta * delta_x / 4 * dRdx1 * dRdeta  # g_13
-                Hcov[2, 0, :] = Hcov[0, 2, :]  # g_31 by symmetry
+                    Hcov[0, 2, :] = delta_eta * delta_x / 4 * dRdx1 * dRdeta  # g_13
+                    Hcov[2, 0, :] = Hcov[0, 2, :]  # g_31 by symmetry
 
-                Hcov[1, 1, :] = delta_y**2 / 4 * (R**2 / del4 * (1 + X**2) * (1 + Y**2) ** 2 + dRdx2**2)  # g_22
+                    Hcov[1, 1, :] = delta_y**2 / 4 * (R**2 / del4 * (1 + X**2) * (1 + Y**2) ** 2 + dRdx2**2)  # g_22
 
-                Hcov[1, 2, :] = delta_eta * delta_y / 4 * dRdx2 * dRdeta  # g_23
-                Hcov[2, 1, :] = Hcov[1, 2, :]  # g_32 by symmetry
+                    Hcov[1, 2, :] = delta_eta * delta_y / 4 * dRdx2 * dRdeta  # g_23
+                    Hcov[2, 1, :] = Hcov[1, 2, :]  # g_32 by symmetry
 
-                Hcov[2, 2, :] = (delta_eta**2 / 4) * dRdeta**2  # g_33
+                    Hcov[2, 2, :] = (delta_eta**2 / 4) * dRdeta**2  # g_33
 
                 Hcontra[0, 0, :] = (4 / delta_x**2) * (delsq / (R**2 * (1 + X**2)))  # h^11
 
@@ -432,22 +407,23 @@ class Metric3DTopo:
                     / delsq ** (1.5)
                 )
             else:  # Shallow, so all bare R terms become A terms
-                Hcov[0, 0, :] = (delta_x**2 / 4) * (A**2 / del4 * (1 + X**2) ** 2 * (1 + Y**2) + dRdx1**2)  # g_11
+                if with_cov:
+                    Hcov[0, 0, :] = (delta_x**2 / 4) * (A**2 / del4 * (1 + X**2) ** 2 * (1 + Y**2) + dRdx1**2)  # g_11
 
-                Hcov[0, 1, :] = (delta_x * delta_y / 4) * (
-                    -(A**2) / del4 * X * Y * (1 + X**2) * (1 + Y**2) + dRdx1 * dRdx2
-                )  # g_12
-                Hcov[1, 0, :] = Hcov[0, 1, :]  # g_21 (by symmetry)
+                    Hcov[0, 1, :] = (delta_x * delta_y / 4) * (
+                        -(A**2) / del4 * X * Y * (1 + X**2) * (1 + Y**2) + dRdx1 * dRdx2
+                    )  # g_12
+                    Hcov[1, 0, :] = Hcov[0, 1, :]  # g_21 (by symmetry)
 
-                Hcov[0, 2, :] = delta_eta * delta_x / 4 * dRdx1 * dRdeta  # g_13
-                Hcov[2, 0, :] = Hcov[0, 2, :]  # g_31 by symmetry
+                    Hcov[0, 2, :] = delta_eta * delta_x / 4 * dRdx1 * dRdeta  # g_13
+                    Hcov[2, 0, :] = Hcov[0, 2, :]  # g_31 by symmetry
 
-                Hcov[1, 1, :] = delta_y**2 / 4 * (A**2 / del4 * (1 + X**2) * (1 + Y**2) ** 2 + dRdx2**2)  # g_22
+                    Hcov[1, 1, :] = delta_y**2 / 4 * (A**2 / del4 * (1 + X**2) * (1 + Y**2) ** 2 + dRdx2**2)  # g_22
 
-                Hcov[1, 2, :] = delta_eta * delta_y / 4 * dRdx2 * dRdeta  # g_23
-                Hcov[2, 1, :] = Hcov[1, 2, :]  # g_32 by symmetry
+                    Hcov[1, 2, :] = delta_eta * delta_y / 4 * dRdx2 * dRdeta  # g_23
+                    Hcov[2, 1, :] = Hcov[1, 2, :]  # g_32 by symmetry
 
-                Hcov[2, 2, :] = (delta_eta**2 / 4) * dRdeta**2  # g_33
+                    Hcov[2, 2, :] = (delta_eta**2 / 4) * dRdeta**2  # g_33
 
                 Hcontra[0, 0, :] = (4 / delta_x**2) * (delsq / (A**2 * (1 + X**2)))  # h^11
 
@@ -493,14 +469,14 @@ class Metric3DTopo:
             return Hcov, Hcontra, rootG
 
         H_cov, H_contra, sqrtG = compute_metric(X_int, Y_int, R_int, dRdx1_int, dRdx2_int, dRdeta_int)
-        H_cov_itf_i, H_contra_itf_i, sqrtG_itf_i = compute_metric(
-            X_itf_i, Y_itf_i, R_itf_i, dRdx1_itf_i, dRdx2_itf_i, dRdeta_itf_i
+        _, H_contra_itf_i, sqrtG_itf_i = compute_metric(
+            X_itf_i, Y_itf_i, R_itf_i, dRdx1_itf_i, dRdx2_itf_i, dRdeta_itf_i, with_cov=False
         )
-        H_cov_itf_j, H_contra_itf_j, sqrtG_itf_j = compute_metric(
-            X_itf_j, Y_itf_j, R_itf_j, dRdx1_itf_j, dRdx2_itf_j, dRdeta_itf_j
+        _, H_contra_itf_j, sqrtG_itf_j = compute_metric(
+            X_itf_j, Y_itf_j, R_itf_j, dRdx1_itf_j, dRdx2_itf_j, dRdeta_itf_j, with_cov=False
         )
-        H_cov_itf_k, H_contra_itf_k, sqrtG_itf_k = compute_metric(
-            X_itf_k, Y_itf_k, R_itf_k, dRdx1_itf_k, dRdx2_itf_k, dRdeta_itf_k
+        _, H_contra_itf_k, sqrtG_itf_k = compute_metric(
+            X_itf_k, Y_itf_k, R_itf_k, dRdx1_itf_k, dRdx2_itf_k, dRdeta_itf_k, with_cov=False
         )
 
         ## Computation of the Christoffel symbols
@@ -682,70 +658,70 @@ class Metric3DTopo:
         # indices and the inverse scaling factor for the a index.
 
         Christoffel_1_01 *= (2 / delta_x) * (1) * (delta_x / 2)
-        self.christoffel_1_01 = Christoffel_1_01
+        christoffel_1_01 = Christoffel_1_01
         Christoffel_1_02 *= (2 / delta_x) * (1) * (delta_y / 2)
-        self.christoffel_1_02 = Christoffel_1_02
+        christoffel_1_02 = Christoffel_1_02
         Christoffel_1_03 *= (2 / delta_x) * (1) * (delta_eta / 2)
-        self.christoffel_1_03 = Christoffel_1_03
+        christoffel_1_03 = Christoffel_1_03
 
         Christoffel_1_11 *= (2 / delta_x) * (delta_x / 2) * (delta_x / 2)
-        self.christoffel_1_11 = Christoffel_1_11
+        christoffel_1_11 = Christoffel_1_11
         Christoffel_1_12 *= (2 / delta_x) * (delta_x / 2) * (delta_y / 2)
-        self.christoffel_1_12 = Christoffel_1_12
+        christoffel_1_12 = Christoffel_1_12
         Christoffel_1_13 *= (2 / delta_x) * (delta_x / 2) * (delta_eta / 2)
-        self.christoffel_1_13 = Christoffel_1_13
+        christoffel_1_13 = Christoffel_1_13
 
         Christoffel_1_22 *= (2 / delta_x) * (delta_y / 2) * (delta_y / 2)
-        self.christoffel_1_22 = Christoffel_1_22
+        christoffel_1_22 = Christoffel_1_22
         Christoffel_1_23 *= (2 / delta_x) * (delta_y / 2) * (delta_eta / 2)
-        self.christoffel_1_23 = Christoffel_1_23
+        christoffel_1_23 = Christoffel_1_23
 
         Christoffel_1_33 *= (2 / delta_x) * (delta_eta / 2) * (delta_eta / 2)
-        self.christoffel_1_33 = Christoffel_1_33
+        christoffel_1_33 = Christoffel_1_33
 
         Christoffel_2_01 *= (2 / delta_y) * (1) * (delta_x / 2)
-        self.christoffel_2_01 = Christoffel_2_01
+        christoffel_2_01 = Christoffel_2_01
         Christoffel_2_02 *= (2 / delta_y) * (1) * (delta_y / 2)
-        self.christoffel_2_02 = Christoffel_2_02
+        christoffel_2_02 = Christoffel_2_02
         Christoffel_2_03 *= (2 / delta_y) * (1) * (delta_eta / 2)
-        self.christoffel_2_03 = Christoffel_2_03
+        christoffel_2_03 = Christoffel_2_03
 
         Christoffel_2_11 *= (2 / delta_y) * (delta_x / 2) * (delta_x / 2)
-        self.christoffel_2_11 = Christoffel_2_11
+        christoffel_2_11 = Christoffel_2_11
         Christoffel_2_12 *= (2 / delta_y) * (delta_x / 2) * (delta_y / 2)
-        self.christoffel_2_12 = Christoffel_2_12
+        christoffel_2_12 = Christoffel_2_12
         Christoffel_2_13 *= (2 / delta_y) * (delta_x / 2) * (delta_eta / 2)
-        self.christoffel_2_13 = Christoffel_2_13
+        christoffel_2_13 = Christoffel_2_13
 
         Christoffel_2_22 *= (2 / delta_y) * (delta_y / 2) * (delta_y / 2)
-        self.christoffel_2_22 = Christoffel_2_22
+        christoffel_2_22 = Christoffel_2_22
         Christoffel_2_23 *= (2 / delta_y) * (delta_y / 2) * (delta_eta / 2)
-        self.christoffel_2_23 = Christoffel_2_23
+        christoffel_2_23 = Christoffel_2_23
 
         Christoffel_2_33 *= (2 / delta_y) * (delta_eta / 2) * (delta_eta / 2)
-        self.christoffel_2_33 = Christoffel_2_33
+        christoffel_2_33 = Christoffel_2_33
 
         Christoffel_3_01 *= (2 / delta_eta) * (1) * (delta_x / 2)
-        self.christoffel_3_01 = Christoffel_3_01
+        christoffel_3_01 = Christoffel_3_01
         Christoffel_3_02 *= (2 / delta_eta) * (1) * (delta_y / 2)
-        self.christoffel_3_02 = Christoffel_3_02
+        christoffel_3_02 = Christoffel_3_02
         Christoffel_3_03 *= (2 / delta_eta) * (1) * (delta_eta / 2)
-        self.christoffel_3_03 = Christoffel_3_03
+        christoffel_3_03 = Christoffel_3_03
 
         Christoffel_3_11 *= (2 / delta_eta) * (delta_x / 2) * (delta_x / 2)
-        self.christoffel_3_11 = Christoffel_3_11
+        christoffel_3_11 = Christoffel_3_11
         Christoffel_3_12 *= (2 / delta_eta) * (delta_x / 2) * (delta_y / 2)
-        self.christoffel_3_12 = Christoffel_3_12
+        christoffel_3_12 = Christoffel_3_12
         Christoffel_3_13 *= (2 / delta_eta) * (delta_x / 2) * (delta_eta / 2)
-        self.christoffel_3_13 = Christoffel_3_13
+        christoffel_3_13 = Christoffel_3_13
 
         Christoffel_3_22 *= (2 / delta_eta) * (delta_y / 2) * (delta_y / 2)
-        self.christoffel_3_22 = Christoffel_3_22
+        christoffel_3_22 = Christoffel_3_22
         Christoffel_3_23 *= (2 / delta_eta) * (delta_y / 2) * (delta_eta / 2)
-        self.christoffel_3_23 = Christoffel_3_23
+        christoffel_3_23 = Christoffel_3_23
 
         Christoffel_3_33 *= (2 / delta_eta) * (delta_eta / 2) * (delta_eta / 2)
-        self.christoffel_3_33 = Christoffel_3_33
+        christoffel_3_33 = Christoffel_3_33
 
         ## Part 2: Christoffel symbols computed numerically
 
@@ -768,7 +744,7 @@ class Metric3DTopo:
 
         verbose = False
         if numer_christoffel:
-            if verbose and geom.device.comm.rank == 0:
+            if verbose and geom.context.comm.rank == 0:
                 print("Computing (√g h^{ab})_{,c}")
             grad_sqrtG_metric_contra = matrix.grad(
                 H_contra * sqrtG[numpy.newaxis, numpy.newaxis, :, :, :],
@@ -785,12 +761,12 @@ class Metric3DTopo:
             # The call to linalg.solve can require a lot of memory in temporary allocations. This is problematic
             # for very large simulations. Therefore, we split the calculation of christoffel symbols across
             # vertical levels, so that only a relatively small temporary array is used
-            space_christoffel: NDArray = torch.empty((nk, nj, ni, 27))
+            space_christoffel = torch.empty((nk, nj, ni, 27))
             for k in range(nk):
                 c_rhs = torch.empty((nj, ni, 3, 3, 3))  # h(i,j,k)^(ab)_(,c)
                 c_lhs = torch.zeros((nj, ni, 3, 3, 3, 3, 3, 3))  # Γ(i,j,k)^d_{ef} for row (ab,c)
 
-                if verbose and geom.device.comm.rank == 0:
+                if verbose and geom.context.comm.rank == 0:
                     print("Assembling linear operator for Γ")
 
                 for a in range(3):
@@ -802,7 +778,7 @@ class Metric3DTopo:
                                 c_lhs[:, :, a, b, c, a, d, c] -= sqrtG[k, :, :] * H_contra[d, b, k, :, :]
                                 c_lhs[:, :, a, b, c, b, c, d] -= sqrtG[k, :, :] * H_contra[a, d, k, :, :]
 
-                if verbose and geom.device.comm.rank == 0:
+                if verbose and geom.context.comm.rank == 0:
                     print("Solving linear operator for Γ")
 
                 space_christoffel[k, ...] = torch.linalg.solve(
@@ -812,109 +788,82 @@ class Metric3DTopo:
             space_christoffel = space_christoffel.reshape((nk, nj, ni, 3, 3, 3))
             space_christoffel = torch.permute(space_christoffel, (3, 4, 5, 0, 1, 2))
 
-            if verbose and geom.device.comm.rank == 0:
+            if verbose and geom.context.comm.rank == 0:
                 print("Copying Γ to destination arrays")
 
-            self.christoffel_1_11 = space_christoffel[0, 0, 0, :, :, :].copy()
-            self.christoffel_1_12 = space_christoffel[0, 0, 1, :, :, :].copy()
-            self.christoffel_1_13 = space_christoffel[0, 0, 2, :, :, :].copy()
-            self.christoffel_1_22 = space_christoffel[0, 1, 1, :, :, :].copy()
-            self.christoffel_1_23 = space_christoffel[0, 1, 2, :, :, :].copy()
-            self.christoffel_1_33 = space_christoffel[0, 2, 2, :, :, :].copy()
+            christoffel_1_11 = space_christoffel[0, 0, 0, :, :, :].clone()
+            christoffel_1_12 = space_christoffel[0, 0, 1, :, :, :].clone()
+            christoffel_1_13 = space_christoffel[0, 0, 2, :, :, :].clone()
+            christoffel_1_22 = space_christoffel[0, 1, 1, :, :, :].clone()
+            christoffel_1_23 = space_christoffel[0, 1, 2, :, :, :].clone()
+            christoffel_1_33 = space_christoffel[0, 2, 2, :, :, :].clone()
 
-            self.christoffel_2_11 = space_christoffel[1, 0, 0, :, :, :].copy()
-            self.christoffel_2_12 = space_christoffel[1, 0, 1, :, :, :].copy()
-            self.christoffel_2_13 = space_christoffel[1, 0, 2, :, :, :].copy()
-            self.christoffel_2_22 = space_christoffel[1, 1, 1, :, :, :].copy()
-            self.christoffel_2_23 = space_christoffel[1, 1, 2, :, :, :].copy()
-            self.christoffel_2_33 = space_christoffel[1, 2, 2, :, :, :].copy()
+            christoffel_2_11 = space_christoffel[1, 0, 0, :, :, :].clone()
+            christoffel_2_12 = space_christoffel[1, 0, 1, :, :, :].clone()
+            christoffel_2_13 = space_christoffel[1, 0, 2, :, :, :].clone()
+            christoffel_2_22 = space_christoffel[1, 1, 1, :, :, :].clone()
+            christoffel_2_23 = space_christoffel[1, 1, 2, :, :, :].clone()
+            christoffel_2_33 = space_christoffel[1, 2, 2, :, :, :].clone()
 
-            self.christoffel_3_11 = space_christoffel[2, 0, 0, :, :, :].copy()
-            self.christoffel_3_12 = space_christoffel[2, 0, 1, :, :, :].copy()
-            self.christoffel_3_13 = space_christoffel[2, 0, 2, :, :, :].copy()
-            self.christoffel_3_22 = space_christoffel[2, 1, 1, :, :, :].copy()
-            self.christoffel_3_23 = space_christoffel[2, 1, 2, :, :, :].copy()
-            self.christoffel_3_33 = space_christoffel[2, 2, 2, :, :, :].copy()
+            christoffel_3_11 = space_christoffel[2, 0, 0, :, :, :].clone()
+            christoffel_3_12 = space_christoffel[2, 0, 1, :, :, :].clone()
+            christoffel_3_13 = space_christoffel[2, 0, 2, :, :, :].clone()
+            christoffel_3_22 = space_christoffel[2, 1, 1, :, :, :].clone()
+            christoffel_3_23 = space_christoffel[2, 1, 2, :, :, :].clone()
+            christoffel_3_33 = space_christoffel[2, 2, 2, :, :, :].clone()
 
-            if verbose and geom.device.comm.rank == 0:
+            if verbose and geom.context.comm.rank == 0:
                 print("Done assembling Γ")
 
-        # The metric tensors are kept in the element-wise ("new") layout alone, which is the one the
-        # right-hand side reads. The arrays on the old layout, and the per-component views of them,
-        # are only intermediates here: at 1 deg / L60 they came to some 180 MB per process, which is
-        # the difference between this resolution fitting on a GPU and not.
+        # Assemble metric terms in the legacy and element-wise layouts.
 
-        self.sqrtG = sqrtG
-        self.sqrtG_itf_i = sqrtG_itf_i
-        self.sqrtG_itf_j = sqrtG_itf_j
-        self.sqrtG_itf_k = sqrtG_itf_k
-        self.inv_sqrtG = 1 / sqrtG
-
-        self.coriolis_f = (
-            2
-            * geom.rotation_speed
-            / geom.delta_block
-            * (
-                math.sin(geom.lat_p)
-                - geom.X_block * math.cos(geom.lat_p) * math.sin(geom.angle_p)
-                + geom.Y_block * math.cos(geom.lat_p) * math.cos(geom.angle_p)
-            )
-        )
-
-        self.inv_dzdeta = 1 / dRdeta_int * 2 / delta_eta
-        self.inv_dzdeta_new = geom._to_new(self.inv_dzdeta)
+        inv_dzdeta = 1 / dRdeta_int * 2 / delta_eta
+        self.inv_dzdeta_new = geom._to_new(inv_dzdeta)
 
         self.christoffel = torch.zeros((3, 9) + geom.grid_shape_3d_new, dtype=dtype)
-        self.christoffel[0, 0] = geom._to_new(self.christoffel_1_01)
-        self.christoffel[0, 1] = geom._to_new(self.christoffel_1_02)
-        self.christoffel[0, 2] = geom._to_new(self.christoffel_1_03)
-        self.christoffel[0, 3] = geom._to_new(self.christoffel_1_11)
-        self.christoffel[0, 4] = geom._to_new(self.christoffel_1_12)
-        self.christoffel[0, 5] = geom._to_new(self.christoffel_1_13)
-        self.christoffel[0, 6] = geom._to_new(self.christoffel_1_22)
-        self.christoffel[0, 7] = geom._to_new(self.christoffel_1_23)
-        self.christoffel[0, 8] = geom._to_new(self.christoffel_1_33)
+        self.christoffel[0, 0] = geom._to_new(christoffel_1_01)
+        self.christoffel[0, 1] = geom._to_new(christoffel_1_02)
+        self.christoffel[0, 2] = geom._to_new(christoffel_1_03)
+        self.christoffel[0, 3] = geom._to_new(christoffel_1_11)
+        self.christoffel[0, 4] = geom._to_new(christoffel_1_12)
+        self.christoffel[0, 5] = geom._to_new(christoffel_1_13)
+        self.christoffel[0, 6] = geom._to_new(christoffel_1_22)
+        self.christoffel[0, 7] = geom._to_new(christoffel_1_23)
+        self.christoffel[0, 8] = geom._to_new(christoffel_1_33)
 
-        self.christoffel[1, 0] = geom._to_new(self.christoffel_2_01)
-        self.christoffel[1, 1] = geom._to_new(self.christoffel_2_02)
-        self.christoffel[1, 2] = geom._to_new(self.christoffel_2_03)
-        self.christoffel[1, 3] = geom._to_new(self.christoffel_2_11)
-        self.christoffel[1, 4] = geom._to_new(self.christoffel_2_12)
-        self.christoffel[1, 5] = geom._to_new(self.christoffel_2_13)
-        self.christoffel[1, 6] = geom._to_new(self.christoffel_2_22)
-        self.christoffel[1, 7] = geom._to_new(self.christoffel_2_23)
-        self.christoffel[1, 8] = geom._to_new(self.christoffel_2_33)
+        self.christoffel[1, 0] = geom._to_new(christoffel_2_01)
+        self.christoffel[1, 1] = geom._to_new(christoffel_2_02)
+        self.christoffel[1, 2] = geom._to_new(christoffel_2_03)
+        self.christoffel[1, 3] = geom._to_new(christoffel_2_11)
+        self.christoffel[1, 4] = geom._to_new(christoffel_2_12)
+        self.christoffel[1, 5] = geom._to_new(christoffel_2_13)
+        self.christoffel[1, 6] = geom._to_new(christoffel_2_22)
+        self.christoffel[1, 7] = geom._to_new(christoffel_2_23)
+        self.christoffel[1, 8] = geom._to_new(christoffel_2_33)
 
-        self.christoffel[2, 0] = geom._to_new(self.christoffel_3_01)
-        self.christoffel[2, 1] = geom._to_new(self.christoffel_3_02)
-        self.christoffel[2, 2] = geom._to_new(self.christoffel_3_03)
-        self.christoffel[2, 3] = geom._to_new(self.christoffel_3_11)
-        self.christoffel[2, 4] = geom._to_new(self.christoffel_3_12)
-        self.christoffel[2, 5] = geom._to_new(self.christoffel_3_13)
-        self.christoffel[2, 6] = geom._to_new(self.christoffel_3_22)
-        self.christoffel[2, 7] = geom._to_new(self.christoffel_3_23)
-        self.christoffel[2, 8] = geom._to_new(self.christoffel_3_33)
+        self.christoffel[2, 0] = geom._to_new(christoffel_3_01)
+        self.christoffel[2, 1] = geom._to_new(christoffel_3_02)
+        self.christoffel[2, 2] = geom._to_new(christoffel_3_03)
+        self.christoffel[2, 3] = geom._to_new(christoffel_3_11)
+        self.christoffel[2, 4] = geom._to_new(christoffel_3_12)
+        self.christoffel[2, 5] = geom._to_new(christoffel_3_13)
+        self.christoffel[2, 6] = geom._to_new(christoffel_3_22)
+        self.christoffel[2, 7] = geom._to_new(christoffel_3_23)
+        self.christoffel[2, 8] = geom._to_new(christoffel_3_33)
 
         self.h_contra_new = geom._to_new(H_contra)
         self.h_contra_itf_i_new = geom._to_new_itf_i(H_contra_itf_i)
         self.h_contra_itf_j_new = geom._to_new_itf_j(H_contra_itf_j)
         self.h_contra_itf_k_new = geom._to_new_itf_k(H_contra_itf_k)
 
-        # Only the volume covariant metric is needed (to convert winds); nothing reads its value at
-        # the interfaces.
+        # The covariant metric converts winds at volume points.
         self.h_cov_new = geom._to_new(H_cov)
 
-        self.sqrtG_new = geom._to_new(self.sqrtG)
-        self.sqrtG_itf_i_new = geom._to_new_itf_i(self.sqrtG_itf_i)
-        self.sqrtG_itf_j_new = geom._to_new_itf_j(self.sqrtG_itf_j)
-        self.sqrtG_itf_k_new = geom._to_new_itf_k(self.sqrtG_itf_k)
+        self.sqrtG_new = geom._to_new(sqrtG)
+        self.sqrtG_itf_i_new = geom._to_new_itf_i(sqrtG_itf_i)
+        self.sqrtG_itf_j_new = geom._to_new_itf_j(sqrtG_itf_j)
+        self.sqrtG_itf_k_new = geom._to_new_itf_k(sqrtG_itf_k)
 
-        self.inv_sqrtG_new = 1.0 / self.sqrtG_new
-        self.cast_to_working_precision(geom.working_dtype)
-        geom.cast_to_working_precision()
-
-    def cast_to_working_precision(self, dtype) -> None:
-        """Cast completed metric arrays and restore reciprocal identities in working precision."""
-        cast_double_arrays(self, dtype)
-        self.inv_sqrtG = 1.0 / self.sqrtG
+        # Store metric terms in the working precision.
+        cast_double_arrays(self, geom.dtype)
         self.inv_sqrtG_new = 1.0 / self.sqrtG_new

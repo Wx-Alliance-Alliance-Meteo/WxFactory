@@ -3,7 +3,6 @@ import torch
 from numpy.typing import NDArray
 
 from ..common.definitions import idx_h, idx_u1, idx_u2
-from ..common.matmul import maximum
 from ..geometry import CubedSphere2D, DFROperators, Metric2D
 from ..process_topology import ProcessTopology
 
@@ -18,7 +17,6 @@ class RhsAdvection2d:
         shape: tuple[int, ...],
         geom: CubedSphere2D,
         operators_real: DFROperators,
-        operators_complex: DFROperators,
         metric: Metric2D,
         ptopo: ProcessTopology,
         num_solpts: int,
@@ -27,7 +25,6 @@ class RhsAdvection2d:
         self.shape = shape
         self.geom = geom
         self.operators_real = operators_real
-        self.operators_complex = operators_complex
         self.metric = metric
         self.ptopo = ptopo
         self.num_solpts = num_solpts
@@ -41,7 +38,7 @@ class RhsAdvection2d:
         :return: Value of the right-hand side, in the same shape as the input
         """
         old_shape = vec.shape
-        operators = self.operators_complex if torch.is_complex(vec) else self.operators_real
+        operators = self.operators_real
         result = self.__compute_rhs__(
             vec.reshape(self.shape),
             self.geom,
@@ -151,7 +148,7 @@ class RhsAdvection2d:
 
         # Rusanov flux for advection
         # Direction x1
-        eig = maximum(torch.abs(var_itf_i[idx_u1][west]), torch.abs(var_itf_i[idx_u1][east]))
+        eig = torch.maximum(torch.abs(var_itf_i[idx_u1][west]), torch.abs(var_itf_i[idx_u1][east]))
 
         flux_x1_itf = torch.zeros_like(var_itf_i)
         flux_L = metric.sqrtG_itf_i[east] * var_itf_i[idx_h][east] * var_itf_i[idx_u1][east]
@@ -163,7 +160,7 @@ class RhsAdvection2d:
         flux_x1_itf[idx_h][west] = flux_x1_itf[idx_h][east]
 
         # Direction x2
-        eig = maximum(torch.abs(var_itf_j[idx_u2][south]), torch.abs(var_itf_j[idx_u2][north]))
+        eig = torch.maximum(torch.abs(var_itf_j[idx_u2][south]), torch.abs(var_itf_j[idx_u2][north]))
 
         flux_x2_itf = torch.zeros_like(var_itf_j)
         flux_L = metric.sqrtG_itf_j[north] * var_itf_j[idx_h][north] * var_itf_j[idx_u2][north]

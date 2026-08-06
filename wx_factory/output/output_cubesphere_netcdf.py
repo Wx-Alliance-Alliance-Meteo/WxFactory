@@ -1,33 +1,29 @@
-from ..common.matmul import kron
 import math
 import time
-from typing import List
-import numpy as np
 
-from mpi4py import MPI
 import numpy
 from numpy.typing import NDArray
 
+from ..common.configuration import Configuration
 from ..common.definitions import (
+    Rd,
+    cpd,
+    cvd,
     idx_h,
     idx_hu1,
     idx_hu2,
     idx_rho,
+    idx_rho_theta,
     idx_rho_u1,
     idx_rho_u2,
     idx_rho_u3,
-    idx_rho_theta,
-    cpd,
-    cvd,
     p0,
-    Rd,
 )
-from ..common.configuration import Configuration
-from ..device import Device
-from ..geometry import CubedSphere, CubedSphere2D, CubedSphere3D, Metric2D, Metric3DTopo, DFROperators
+from ..common.matmul import kron
+from ..context import Context
+from ..geometry import CubedSphere, CubedSphere2D, DFROperators, Metric2D, Metric3DTopo
 from ..process_topology import ProcessTopology
-from ..wx_mpi import SingleProcess, Conditional
-
+from ..wx_mpi import Conditional, SingleProcess
 from .diagnostic import potential_vorticity, relative_vorticity
 from .output_cubesphere import OutputCubesphere
 
@@ -38,12 +34,12 @@ class OutputCubesphereNetcdf(OutputCubesphere):
         config: Configuration,
         geometry: CubedSphere,
         operators: DFROperators,
-        device: Device,
+        context: Context,
         metric: Metric2D | Metric3DTopo,
         topo,
         process_topo: ProcessTopology,
     ):
-        super().__init__(config, geometry, operators, device, metric, topo, process_topo)
+        super().__init__(config, geometry, operators, context, metric, topo, process_topo)
 
         self.ncfile = None
         self.filename = f"{self.output_dir}/{self.config.base_output_file}.nc"
@@ -55,9 +51,9 @@ class OutputCubesphereNetcdf(OutputCubesphere):
         if config.output_freq > 0:
             self._output_init()
         if config.time_start:
-            self.start_time = np.datetime64(str(config.time_start).replace("t", "T"))
+            self.start_time = numpy.datetime64(str(config.time_start).replace("t", "T"))
         else:
-            self.start_time = np.datetime64("1800-01-01T00:00:00")
+            self.start_time = numpy.datetime64("1800-01-01T00:00:00")
         self.dt = config.dt
 
     def _output_init(self):
@@ -293,7 +289,7 @@ class OutputCubesphereNetcdf(OutputCubesphere):
                     q4.coordinates = "lons lats"
                     q4.grid_mapping = "cubed_sphere"
 
-        to_host = lambda a: self.device.to_host(a) if a is not None else None
+        to_host = lambda a: self.context.to_host(a) if a is not None else None
 
         panel_x = to_host(self._gather_panel(self.geometry.x1[...]))
         panel_y = to_host(self._gather_panel(self.geometry.x2[...]))
@@ -345,7 +341,7 @@ class OutputCubesphereNetcdf(OutputCubesphere):
         if fields is None:
             return
 
-        to_host = self.device.to_host
+        to_host = self.context.to_host
 
         for i, f in enumerate(fields):
             self.ncfile[name][time_idx, i, level_idx, :, :] = to_host(f)
@@ -362,7 +358,6 @@ class OutputCubesphereNetcdf(OutputCubesphere):
         if isinstance(geom, CubedSphere2D):  # Shallow water
             if Q.ndim == 5:
                 for k in range(self.nz):
-
                     h = Q[idx_h, k, ...]
 
                     if self.topo is not None:
@@ -373,7 +368,6 @@ class OutputCubesphereNetcdf(OutputCubesphere):
                     self.store_field_Zdim(field_block, "h", idx, k)
 
                     if self.config.case_number >= 2 or self.config.case_number in [-1, -2]:
-
                         u1 = Q[idx_hu1, k, ...] / h
                         u2 = Q[idx_hu2, k, ...] / h
 
@@ -396,7 +390,6 @@ class OutputCubesphereNetcdf(OutputCubesphere):
                 self.store_field(geom.to_single_block(h), "h", idx)
 
                 if self.config.case_number >= 2 or self.config.case_number in [-1, -2]:
-
                     u1 = Q[idx_hu1, :, :] / h
                     u2 = Q[idx_hu2, :, :] / h
 
@@ -431,16 +424,16 @@ class OutputCubesphereNetcdf(OutputCubesphere):
 
             if self.config.case_number in (11, 13):
                 for i in [6, 7, 8]:
-                    self.store_field(geom.to_single_block(Q[i, ...] / rho), f"q{i-4}", idx)
+                    self.store_field(geom.to_single_block(Q[i, ...] / rho), f"q{i - 4}", idx)
 
         else:
             raise ValueError(f"Unknown class for geom: {geom}")
 
         if self.rank == 0:
-            time_val = self.start_time + np.timedelta64(int(step_id * self.dt), "s")
+            time_val = self.start_time + numpy.timedelta64(int(step_id * self.dt), "s")
 
-            epoch = np.datetime64("1800-01-01T00:00:00")
-            seconds = (time_val - epoch) / np.timedelta64(1, "s")
+            epoch = numpy.datetime64("1800-01-01T00:00:00")
+            seconds = (time_val - epoch) / numpy.timedelta64(1, "s")
 
             self.ncfile["time"][idx] = seconds
 
@@ -453,6 +446,6 @@ class OutputCubesphereNetcdf(OutputCubesphere):
         """Store data in the open netcdf file."""
         fields = self._gather_field(field, self.num_dim)
         if fields is not None:
-            to_host = self.device.to_host
+            to_host = self.context.to_host
             for i, f in enumerate(fields):
                 self.ncfile[name][step_id, i] = to_host(f)

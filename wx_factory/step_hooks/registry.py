@@ -16,14 +16,14 @@ Add a hook by writing the hook class and registering a provider here; nothing el
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Callable, Dict, Optional, Type
+from typing import TYPE_CHECKING
 
 from ..geometry import CubedSphere3D
-
-from .step_hook import StepHook
-from .schar_mountain import ScharMountainHook
 from .dcmip import DcmipT11WindHook, DcmipT12WindHook, ExponentialFilterHook
+from .schar_mountain import ScharMountainHook
+from .step_hook import StepHook
 
 if TYPE_CHECKING:
     from ..common import Configuration
@@ -40,17 +40,17 @@ class StepHookContext:
     """Everything a step-hook provider may need. ``operators`` and ``metric`` are only available in
     the ``state`` phase (they are built from the initial state)."""
 
-    config: "Configuration"
-    geometry: "Geometry"
-    operators: Optional["DFROperators"] = None
+    config: Configuration
+    geometry: Geometry
+    operators: DFROperators | None = None
     metric: object = None
 
 
 # A provider returns a hook instance if it applies to this configuration, otherwise None.
-StepHookProvider = Callable[["StepHookContext"], Optional[StepHook]]
+StepHookProvider = Callable[["StepHookContext"], StepHook | None]
 
 # Maps a hook name to the (phase, provider) that builds it.
-STEP_HOOK_REGISTRY: Dict[str, tuple[str, StepHookProvider]] = {}
+STEP_HOOK_REGISTRY: dict[str, tuple[str, StepHookProvider]] = {}
 
 
 def register_step_hook(name: str, phase: str) -> Callable[[StepHookProvider], StepHookProvider]:
@@ -67,9 +67,9 @@ def register_step_hook(name: str, phase: str) -> Callable[[StepHookProvider], St
     return decorator
 
 
-def resolve_step_hooks(ctx: "StepHookContext", phase: str) -> Dict[Type[StepHook], StepHook]:
+def resolve_step_hooks(ctx: StepHookContext, phase: str) -> dict[type[StepHook], StepHook]:
     """Return the hooks (keyed by type) that apply to ``ctx`` for the given phase."""
-    hooks: Dict[Type[StepHook], StepHook] = {}
+    hooks: dict[type[StepHook], StepHook] = {}
     for _name, (hook_phase, provider) in STEP_HOOK_REGISTRY.items():
         if hook_phase != phase:
             continue
@@ -80,28 +80,28 @@ def resolve_step_hooks(ctx: "StepHookContext", phase: str) -> Dict[Type[StepHook
 
 
 @register_step_hook("schar_mountain", phase=PHASE_GEOMETRY)
-def _schar_mountain(ctx: "StepHookContext") -> Optional[StepHook]:
+def _schar_mountain(ctx: StepHookContext) -> StepHook | None:
     if ctx.config.enable_schar_mountain and isinstance(ctx.geometry, CubedSphere3D):
         return ScharMountainHook(ctx.config, ctx.geometry)
     return None
 
 
 @register_step_hook("dcmip_t11_wind", phase=PHASE_STATE)
-def _dcmip_t11(ctx: "StepHookContext") -> Optional[StepHook]:
+def _dcmip_t11(ctx: StepHookContext) -> StepHook | None:
     if ctx.config.case_number == 11:
         return DcmipT11WindHook(ctx.geometry, ctx.metric, ctx.operators, ctx.config)
     return None
 
 
 @register_step_hook("dcmip_t12_wind", phase=PHASE_STATE)
-def _dcmip_t12(ctx: "StepHookContext") -> Optional[StepHook]:
+def _dcmip_t12(ctx: StepHookContext) -> StepHook | None:
     if ctx.config.case_number == 12:
         return DcmipT12WindHook(ctx.geometry, ctx.metric, ctx.operators, ctx.config)
     return None
 
 
 @register_step_hook("exponential_filter", phase=PHASE_STATE)
-def _exponential_filter(ctx: "StepHookContext") -> Optional[StepHook]:
+def _exponential_filter(ctx: StepHookContext) -> StepHook | None:
     if ctx.config.expfilter_apply:
         return ExponentialFilterHook(ctx.geometry, ctx.metric, ctx.operators, ctx.config)
     return None

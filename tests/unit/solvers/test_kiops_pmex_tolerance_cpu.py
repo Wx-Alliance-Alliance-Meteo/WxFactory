@@ -1,16 +1,13 @@
 import random
 
-from mpi4py import MPI
-from numpy import ndarray
+import array_generator
 import torch
 from torch import Tensor
+from wx_test import WxTestCase
 
-from wx_factory.device import PytorchDevice
+from wx_factory.context import Context
 from wx_factory.solvers.kiops import kiops
 from wx_factory.solvers.pmex import pmex
-
-import array_generator
-from wx_test import WxTestCase
 
 
 class KiopsPmexToleranceCpuTestCases(WxTestCase):
@@ -20,7 +17,7 @@ class KiopsPmexToleranceCpuTestCases(WxTestCase):
     def setUp(self) -> None:
         super().setUp()
 
-        self.cpu_device = PytorchDevice(MPI.COMM_WORLD, "cpu")
+        self.cpu_context = Context(self.comm, "cpu")
 
         seed: int = 5646459
         initial_matrix_size: int = 64
@@ -37,7 +34,7 @@ class KiopsPmexToleranceCpuTestCases(WxTestCase):
             self.rand,
             rand_min,
             rand_max,
-            [self.cpu_device, self.cpu_device],
+            [self.cpu_context, self.cpu_context],
         )
 
     def test_compare_kiops_pmex(self):
@@ -45,10 +42,10 @@ class KiopsPmexToleranceCpuTestCases(WxTestCase):
             return v
 
         w1, _ = kiops(
-            self.cpu_device.tensor([1.0]), matvec_handle, self.kiops_matrix, self.tolerance, device=self.cpu_device
+            self.cpu_context.tensor([1.0]), matvec_handle, self.kiops_matrix, self.tolerance, context=self.cpu_context
         )
         w2, _ = pmex(
-            self.cpu_device.tensor([1.0]), matvec_handle, self.pmex_matrix, self.tolerance, device=self.cpu_device
+            self.cpu_context.tensor([1.0]), matvec_handle, self.pmex_matrix, self.tolerance, context=self.cpu_context
         )
 
         shape = w1.shape
@@ -68,5 +65,5 @@ class KiopsPmexToleranceCpuTestCases(WxTestCase):
         relative_diff_w1: float = abs(abs_diff / w1_value)
         relative_diff_w2: float = abs(abs_diff / w2_value)
 
-        self.assertLessEqual(relative_diff_w1, self.tolerance, f"Kiops didn't give a close result")
-        self.assertLessEqual(relative_diff_w2, self.tolerance, f"Pmex didn't give a close result")
+        self.assertLessEqual(relative_diff_w1, self.tolerance, "Kiops didn't give a close result")
+        self.assertLessEqual(relative_diff_w2, self.tolerance, "Pmex didn't give a close result")

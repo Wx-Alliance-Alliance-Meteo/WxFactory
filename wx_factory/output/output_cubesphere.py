@@ -5,7 +5,7 @@ from mpi4py import MPI
 from numpy.typing import NDArray
 
 from ..common import Configuration
-from ..device import Device
+from ..context import Context
 from ..geometry import CubedSphere, DFROperators, Metric2D, Metric3DTopo
 from ..init.shallow_water import (
     height_case1,
@@ -24,17 +24,17 @@ class OutputCubesphere(OutputManager):
         config: Configuration,
         geometry: CubedSphere,
         operators: DFROperators,
-        device: Device,
+        context: Context,
         metric: Metric2D | Metric3DTopo,
         topography,
         process_topology: ProcessTopology,
     ):
-        super().__init__(config, geometry, operators, device)
+        super().__init__(config, geometry, operators, context)
         self.metric = metric
         self.topo = topography
         self.process_topology = process_topology
 
-        self.comm = self.device.comm
+        self.comm = self.context.comm
         self.rank = self.comm.rank
 
         self.initial_mass = None

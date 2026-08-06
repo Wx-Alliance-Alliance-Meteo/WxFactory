@@ -10,12 +10,11 @@ main_project_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..
 sys.path.append(main_project_dir)
 
 from tests.integration.test_integration_state import StateIntegrationTestCases
-import tests.unit.mpi_test as mpi_test
+from tests.unit import mpi_test
 
 test_cases_dir = "tests/data/integration"
 
 if __name__ == "__main__":
-
     parser = argparse.ArgumentParser()
     parser.add_argument("problems", type=str, nargs="+")
     parser.add_argument("--no-buffer", action="store_true", help="Display output as the test runs")

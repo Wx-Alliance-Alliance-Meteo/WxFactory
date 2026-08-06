@@ -2,30 +2,24 @@
 A bunch of flux functions for our RHS functions
 """
 
-from typing import Callable, Tuple
+from collections.abc import Callable
 
 import numpy
 import torch
-from ..common.matmul import maximum
 from numpy.typing import NDArray
 
 from ..common.definitions import (
-    cpd,
-    cvd,
     heat_capacity_ratio,
-    p0,
-    Rd,
     idx_rho,
     idx_rho_u1,
     idx_rho_u2,
     idx_rho_u3,
 )
-
 from ..geometry import Metric3DTopo
 
 FluxFunction2D = Callable[
     [numpy.ndarray, numpy.ndarray, numpy.ndarray, numpy.ndarray, numpy.ndarray, numpy.ndarray, numpy.ndarray],
-    Tuple[numpy.ndarray, numpy.ndarray],
+    tuple[numpy.ndarray, numpy.ndarray],
 ]
 
 
@@ -63,7 +57,7 @@ def rusanov_3d_vert_new(
             / variables_itf_k[idx_rho][south]
         )
 
-    eig = maximum(eig_d, eig_u)
+    eig = torch.maximum(eig_d, eig_u)
 
     # Advective part of the flux ...
     flux_d = metric.sqrtG_itf_k_new[north] * w_d * variables_itf_k[north]
@@ -142,7 +136,7 @@ def rusanov_3d_hori_i_new(
             / variables_itf_i[idx_rho][west]
         )
 
-    eig = maximum(eig_l, eig_r)
+    eig = torch.maximum(eig_l, eig_r)
 
     # Advective part of the flux ...
     flux_l = metric.sqrtG_itf_i_new[east] * u1_l * variables_itf_i[east]
@@ -219,7 +213,7 @@ def rusanov_3d_hori_j_new(
             / variables_itf_j[idx_rho][south]
         )
 
-    eig = maximum(eig_l, eig_r)
+    eig = torch.maximum(eig_l, eig_r)
 
     # Advective part of the flux
     flux_l = metric.sqrtG_itf_j_new[north] * u2_l * variables_itf_j[north]

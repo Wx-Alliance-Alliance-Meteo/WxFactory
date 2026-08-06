@@ -1,18 +1,14 @@
-import numpy
-import torch
 import os
 from time import time
-from typing import Callable, List, Optional
 
-from mpi4py import MPI
+import torch
 from numpy.typing import NDArray
 
 from ..common.configuration import Configuration
-from ..device import Device
-from ..geometry import Geometry, DFROperators, CubedSphere3D
-from ..wx_mpi import SingleProcess, Conditional
-
-from .state import save_state, load_state
+from ..context import Context
+from ..geometry import DFROperators, Geometry
+from ..wx_mpi import Conditional, SingleProcess
+from .state import load_state, save_state
 
 
 def _readable_time(seconds):
@@ -32,7 +28,7 @@ def _readable_time(seconds):
         s = rem % 60
         return f"{h}:{m:02d}:{s:02d}"
     else:
-        return f"{seconds:.2f}"
+        return f"{seconds:.1f} s"
 
 
 class OutputManager:
@@ -45,14 +41,14 @@ class OutputManager:
         config: Configuration,
         geometry: Geometry,
         operators: DFROperators,
-        device: Device,
+        context: Context,
     ) -> None:
 
         self.config = config
         self.geometry = geometry
         self.operators = operators
-        self.device = device
-        self.comm = device.comm
+        self.context = context
+        self.comm = context.comm
 
         self.num_dim = 3 if getattr(geometry, "is_3d_euler_grid", False) else 2
 
@@ -116,7 +112,7 @@ class OutputManager:
 
         return Q, step_id
 
-    def step(self, Q: NDArray, step_id: int) -> None:
+    def step(self, Q: torch.Tensor, step_id: int) -> None:
         """Output the result of the latest timestep."""
         if self.config.output_freq > 0 and (step_id % self.config.output_freq) == 0:
             if self.comm.rank == 0:

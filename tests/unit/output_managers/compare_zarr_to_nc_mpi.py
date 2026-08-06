@@ -21,7 +21,7 @@ from wx_factory.geometry import (
     Metric2D,
     Metric3DTopo,
 )
-from wx_factory.device import Device
+from wx_factory.context import Context
 from wx_factory.output.registry import OutputContext, resolve_output
 from wx_factory.geometry import DFROperators, GeometryContext, resolve_geometry
 from wx_factory.step_hooks import ScharMountainHook
@@ -41,7 +41,7 @@ class CompareZarrToNcTestCase(MpiTestCase):
         self.metric = None
         self.topography = None
         self.config = None
-        self.device = None
+        self.context = None
         self.operators_real = None
         self.process_topo = None
         self.num_elements_horizontal = None
@@ -106,18 +106,18 @@ class CompareZarrToNcTestCase(MpiTestCase):
 
         self._adjust_num_elements()
 
-        self.device = self._make_device(self.device)
+        self.context = self._make_context(self.context)
 
         if hasattr(self.config, "precision"):
             if self.config.precision == "mixed":
-                self.device.real_dtype = torch.float32
-                self.device.complex_dtype = torch.complex64
+                self.context.real_dtype = torch.float32
+                self.context.complex_dtype = torch.complex64
             else:
-                self.device.real_dtype = torch.float64
-                self.device.complex_dtype = torch.complex128
+                self.context.real_dtype = torch.float64
+                self.context.complex_dtype = torch.complex128
         else:
-            self.device.real_dtype = torch.float64
-            self.device.complex_dtype = torch.complex128
+            self.context.real_dtype = torch.float64
+            self.context.complex_dtype = torch.complex128
 
         self.geometry = resolve_geometry(GeometryContext.from_simulation(self))
 
@@ -127,7 +127,7 @@ class CompareZarrToNcTestCase(MpiTestCase):
             resolve_step_hooks(StepHookContext(config=self.config, geometry=self.geometry), phase=PHASE_GEOMETRY)
         )
 
-        self.operators_real = DFROperators(self.geometry, self.device)
+        self.operators_real = DFROperators(self.geometry, self.context)
 
         if self.config.equations == "euler" and isinstance(self.geometry, Cartesian3D):
             self.metric = Metric3DTopo(self.geometry, self.operators)
@@ -161,7 +161,7 @@ class CompareZarrToNcTestCase(MpiTestCase):
         self.output = resolve_output(
             OutputContext(
                 config=self.config,
-                device=self.device,
+                context=self.context,
                 geometry=self.geometry,
                 operators=self.operators_real,
                 metric=self.metric,
@@ -281,13 +281,13 @@ class CompareZarrToNcTestCase(MpiTestCase):
             )
             raise
 
-    def _make_device(self, device: Optional[Device]) -> Device:
-        """Create the device object which will determine on what hardware (CPU/GPU) each part of the simulation will
+    def _make_context(self, context: Context | None) -> Context:
+        """Create the context object which will determine on what hardware (CPU/GPU) each part of the simulation will
         be executed."""
-        if device is not None:
-            self.comm = device.comm
-            return device
-        return Device(comm=self.comm, device_type=self.config.pytorch_device)
+        if context is not None:
+            self.comm = context.comm
+            return context
+        return Context(comm=self.comm, device_type=self.config.pytorch_device)
 
     def _adjust_num_elements(self):
         """Adjust number of horizontal elements in the parameters so that it corresponds to the

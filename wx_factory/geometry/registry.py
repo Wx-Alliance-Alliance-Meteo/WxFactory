@@ -9,13 +9,13 @@ line -- no change to the simulation setup code.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Callable, Optional
+from typing import TYPE_CHECKING
 
 from mpi4py import MPI
 
 from ..process_topology import ProcessTopology
-
 from .cartesian_3d import Cartesian3D
 from .cubed_sphere_2d import CubedSphere2D
 from .cubed_sphere_3d import CubedSphere3D
@@ -24,7 +24,7 @@ from .lateral_exchange import FlatTileTopology
 
 if TYPE_CHECKING:
     from ..common import Configuration
-    from ..device import Device
+    from ..context import Context
     from ..simulation.simulation import Simulation
 
 
@@ -36,21 +36,21 @@ class GeometryContext:
     RHS and time-integrator factories. The cubed-sphere angles are optional because a Cartesian
     grid does not use them."""
 
-    config: "Configuration"
-    device: "Device"
+    config: Configuration
+    context: Context
     comm: MPI.Comm
     num_elements_horizontal: int
     num_solpts: int
     total_num_elements_horizontal: int
-    lambda0: Optional[float] = None
-    phi0: Optional[float] = None
-    alpha0: Optional[float] = None
+    lambda0: float | None = None
+    phi0: float | None = None
+    alpha0: float | None = None
 
     @classmethod
-    def from_simulation(cls, sim: "Simulation") -> "GeometryContext":
+    def from_simulation(cls, sim: Simulation) -> GeometryContext:
         return cls(
             config=sim.config,
-            device=sim.device,
+            context=sim.context,
             comm=sim.comm,
             num_elements_horizontal=sim.num_elements_horizontal,
             num_solpts=sim.num_solpts,
@@ -101,7 +101,7 @@ def validate_lateral_boundary(grid_type: str, lateral_boundary: str) -> None:
         )
 
 
-def resolve_geometry(ctx: "GeometryContext") -> Geometry:
+def resolve_geometry(ctx: GeometryContext) -> Geometry:
     """Build the geometry for the grid type and equations described by ``ctx``."""
     if ctx.config.grid_file != "":
         # A grid file always describes a 2D cubed-sphere grid, whatever the other options say.
@@ -121,8 +121,8 @@ def resolve_geometry(ctx: "GeometryContext") -> Geometry:
 
 
 @register_geometry("cubed_sphere", "shallow_water")
-def _cubed_sphere_2d(ctx: "GeometryContext") -> Geometry:
-    ptopo = ProcessTopology(ctx.device, comm_in=ctx.comm)
+def _cubed_sphere_2d(ctx: GeometryContext) -> Geometry:
+    ptopo = ProcessTopology(ctx.context)
     return CubedSphere2D(
         ctx.num_elements_horizontal,
         ctx.num_solpts,
@@ -135,8 +135,8 @@ def _cubed_sphere_2d(ctx: "GeometryContext") -> Geometry:
 
 
 @register_geometry("cubed_sphere", "euler")
-def _cubed_sphere_3d(ctx: "GeometryContext") -> Geometry:
-    ptopo = ProcessTopology(ctx.device, comm_in=ctx.comm)
+def _cubed_sphere_3d(ctx: GeometryContext) -> Geometry:
+    ptopo = ProcessTopology(ctx.context)
     return CubedSphere3D(
         ctx.num_elements_horizontal,
         ctx.config.num_elements_vertical,
@@ -152,11 +152,11 @@ def _cubed_sphere_3d(ctx: "GeometryContext") -> Geometry:
 
 
 @register_geometry("cartesian3d", "euler")
-def _cartesian_3d(ctx: "GeometryContext") -> Geometry:
+def _cartesian_3d(ctx: GeometryContext) -> Geometry:
     # A flat cartesian slab: the identity-metric limit of the cubed sphere, on a single tile with a
     # local lateral boundary (wall or periodic) instead of the panel donor-cell exchange.
     lateral = getattr(ctx.config, "lateral_boundary", "wall")
-    topo = FlatTileTopology(ctx.device, lateral, comm=ctx.comm)
+    topo = FlatTileTopology(ctx.context, lateral)
     # Vertical extent: an explicit ztop, else the top of the z0..z1 box (measured from z0).
     ztop = getattr(ctx.config, "ztop", 0.0) or (ctx.config.z1 - ctx.config.z0)
     # y defaults to the x extent when a config gives only a 2D (x, z) box.

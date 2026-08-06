@@ -1,11 +1,10 @@
 import torch
-from numpy import ndarray
+from torch import Tensor
 
-from wx_factory.device import PytorchDevice
+from tests.unit.mpi_test import run_test_on_x_process
+from tests.unit.wx_test import WxTestCase
+from wx_factory.context import Context
 from wx_factory.solvers import pmex
-
-from mpi_test import run_test_on_x_process
-from wx_test import WxTestCase
 
 
 class PmexMpiTestCases(WxTestCase):
@@ -19,30 +18,27 @@ class PmexMpiTestCases(WxTestCase):
 
     def test_pmex_mpi_2_processes(self):
         comm = run_test_on_x_process(self, 2)
-        device = PytorchDevice(comm, "cpu")
+        context = Context(comm, "cpu")
         comm2 = comm.Split(comm.rank)
-        device2 = PytorchDevice(comm2, "cpu")
+        context2 = Context(comm2, "cpu")
 
-        def matvec_handle(v: ndarray) -> ndarray:
+        def matvec_handle(v: Tensor) -> Tensor:
             return v
 
-        size: int = comm.size * self.matrix_size_multiplier
+        size = comm.size * self.matrix_size_multiplier
 
-        full_matrix: ndarray = torch.empty((size, size), dtype=float)
+        full_matrix = torch.empty((size, size), dtype=float)
 
         for i in range(size):
             for j in range(size):
                 full_matrix[i, j] = j + size * i
 
-        from_index: int = comm.rank * self.matrix_size_multiplier
-        to_index: int = (comm.rank + 1) * self.matrix_size_multiplier
-        matrix: ndarray = full_matrix[:, from_index:to_index].copy()
+        from_index = comm.rank * self.matrix_size_multiplier
+        to_index = (comm.rank + 1) * self.matrix_size_multiplier
+        matrix = full_matrix[:, from_index:to_index].copy()
 
-        w1: ndarray
-        w2: ndarray
-
-        w1, _ = pmex([1.0], matvec_handle, matrix, self.tolerance, device=device)
-        w2, _ = pmex([1.0], matvec_handle, full_matrix, self.tolerance, device=device2)
+        w1, _ = pmex(self.context.tensor([1.0]), matvec_handle, matrix, self.tolerance, context=context)
+        w2, _ = pmex(self.context.tensor([1.0]), matvec_handle, full_matrix, self.tolerance, context=context2)
 
         diff = torch.linalg.norm(w1 - w2[0, from_index:to_index]).item()
         norm = torch.linalg.norm(w1).item()

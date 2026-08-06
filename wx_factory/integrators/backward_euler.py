@@ -1,18 +1,16 @@
-import numpy
-import scipy
-import math
+from collections.abc import Callable
 from time import time
-from typing import Callable
 
+import numpy
 
 from ..common.configuration import Configuration
+from ..solvers import SolverInfo, newton_krylov
 from .integrator import Integrator
-from ..solvers import fgmres, matvec_rat, SolverInfo, newton_krylov
 
 
 class BackwardEuler(Integrator):
-    def __init__(self, param: Configuration, rhs_handle: Callable, *, device=None, preconditioner=None) -> None:
-        super().__init__(param, device=device, preconditioner=preconditioner)
+    def __init__(self, param: Configuration, rhs_handle: Callable, *, context=None, preconditioner=None) -> None:
+        super().__init__(param, context=context, preconditioner=preconditioner)
         self.rhs = rhs_handle
         self.tol = param.tolerance
 
@@ -44,5 +42,7 @@ class BackwardEuler(Integrator):
 
 
 REGISTRY = {
-    "backward_euler": lambda cfg, rhs, prec, dev: BackwardEuler(cfg, rhs.full, preconditioner=prec, device=dev),
+    "backward_euler": lambda cfg, rhs, prec, context: BackwardEuler(
+        cfg, rhs.full, preconditioner=prec, context=context
+    ),
 }

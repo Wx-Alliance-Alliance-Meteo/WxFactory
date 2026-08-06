@@ -1,9 +1,11 @@
+import math
+
+import numpy
 import torch
-from . import step_hook
+
 from ..common import Configuration
 from ..geometry import CubedSphere3D, Metric3DTopo
-import math
-import numpy
+from . import step_hook
 
 
 class ScharMountainHook(step_hook.StepHook):

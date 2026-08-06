@@ -1,73 +1,21 @@
 import math
 import time
-from contextlib import contextmanager
-from typing import Callable, Optional, Tuple
+from collections.abc import Callable
 
 import torch
 from mpi4py import MPI
 from numpy.typing import NDArray
+from torch import Tensor
 
-from .device import Device, differentiable_mode
+from .context import Context
 from .wx_mpi import Conditional, SingleProcess, split_nodes
 
-ExchangedVector = Tuple[NDArray, ...] | NDArray
-
-# Test control, see :func:`halo_derivatives_disabled`.
-_halo_derivatives_enabled = True
-
-
-def _differentiable_exchange() -> bool:
-    """Whether halo exchanges must propagate derivatives through their JVP and VJP rules."""
-    return differentiable_mode() and _halo_derivatives_enabled
-
-
-@contextmanager
-def halo_derivatives_disabled():
-    """Drop the derivative contribution of the halo exchange.
-
-    Only meant as a test control: a distributed derivative must change when the neighbour
-    contribution is removed, which is what proves the halo tangent is actually carried.
-    """
-    global _halo_derivatives_enabled
-    previous = _halo_derivatives_enabled
-    _halo_derivatives_enabled = False
-    try:
-        yield
-    finally:
-        _halo_derivatives_enabled = previous
-
+ExchangedVector = tuple[Tensor, ...] | Tensor
 
 SOUTH = 0
 NORTH = 1
 WEST = 2
 EAST = 3
-
-# Match each message by its sender's boundary slot.
-_HALO_TAG_BASE = 7000
-
-
-class _HaloExchange(torch.autograd.Function):
-    """Differentiable MPI exchange of packed halo blocks.
-
-    Torch handles derivatives of packing, rotations, and flips. The reciprocal block exchange is
-    its own transpose, so the same communication implements its JVP and VJP.
-    """
-
-    @staticmethod
-    def forward(send_buffer: NDArray, ptopo: "ProcessTopology") -> NDArray:
-        return ptopo.exchange_p2p(send_buffer)
-
-    @staticmethod
-    def setup_context(ctx, inputs, output) -> None:
-        ctx.ptopo = inputs[1]
-
-    @staticmethod
-    def backward(ctx, grad_recv: NDArray):
-        return _HaloExchange.apply(grad_recv.contiguous(), ctx.ptopo), None
-
-    @staticmethod
-    def jvp(ctx, tangent_send: NDArray, _):
-        return _HaloExchange.apply(tangent_send.contiguous(), ctx.ptopo)
 
 
 class ProcessTopology:
@@ -102,11 +50,11 @@ class ProcessTopology:
          +---+---+---+---+
     """
 
-    def __init__(self, device: Device, rank: Optional[int] = None, comm_in: MPI.Comm = MPI.COMM_WORLD):
+    def __init__(self, context: Context, rank: int | None = None):
         """Create a cube-sphere process topology.
 
-        :param device: Device on which MPI exchanges are to be made, like a CPU or a GPU.
-        :type device: Device
+        :param context: Context in which MPI exchanges are to be made.
+        :type context: Context
         :param rank: Rank of the tile the topology will manage. This is useful for creating a tile with a
                     rank different from the process rank, for debugging purposes.
         :type rank: int, optional
@@ -115,14 +63,14 @@ class ProcessTopology:
 
         """
 
-        self.device = device
+        self.context = context
 
-        self.node_comm, self.node_id = split_nodes(comm_in)
+        self.node_comm, self.node_id = split_nodes(context.comm)
 
         # Reorder processes, grouping them by node (processes on the same node will have contiguous ranks)
         # This one is named with an underscore because it is internal to a ProcessTopology object, it will differ
         # from the communicator used by a Simulation
-        self._comm = comm_in.Split(0, self.node_id)
+        self._comm = context.comm.Split(0, self.node_id)
 
         self.size = self._comm.size
         self._rank = self._comm.rank if rank is None else rank
@@ -369,7 +317,6 @@ class ProcessTopology:
         if self.panel_comm.rank != 0:
             self.panel_roots_comm = MPI.COMM_NULL
 
-        self._sender_slot = None
         self.send_buffer = None
         self.recv_buffer = None
 
@@ -379,13 +326,13 @@ class ProcessTopology:
         north: NDArray,
         west: NDArray,
         east: NDArray,
-        boundary_shape: Tuple[int, ...],
-        flip_dim: int | Tuple[int, ...] = -1,
+        boundary_shape: tuple[int, ...],
+        flip_dim: int | tuple[int, ...] = -1,
     ):
         base_shape = get_base_shape(south.shape, boundary_shape)
         send_buffer = torch.empty((4,) + base_shape, dtype=south[0].dtype)
 
-        if not isinstance(flip_dim, Tuple):
+        if not isinstance(flip_dim, tuple):
             flip_dim = (flip_dim,)
 
         # Fill send buffer
@@ -402,8 +349,8 @@ class ProcessTopology:
         north: NDArray,
         west: NDArray,
         east: NDArray,
-        boundary_shape: Tuple[int, ...],
-        flip_dim: int | Tuple[int, ...] = -1,
+        boundary_shape: tuple[int, ...],
+        flip_dim: int | tuple[int, ...] = -1,
     ):
         """Create a request for exchanging scalar data with neighboring tiles. The 4 input arrays must have the same
         shape and size.
@@ -434,7 +381,7 @@ class ProcessTopology:
 
         send_info = self.prepare_scalar_buffer(south, north, west, east, boundary_shape, flip_dim)
 
-        self.device.synchronize()  # When using GPU
+        self.context.synchronize()  # When using GPU
 
         return self.initiate_transfers([send_info])[0]
         # # Initiate MPI transfer
@@ -445,9 +392,9 @@ class ProcessTopology:
         north: ExchangedVector,
         west: ExchangedVector,
         east: ExchangedVector,
-        boundary_sn: NDArray,
-        boundary_we: NDArray,
-        flip_dim: int | Tuple[int, ...] = -1,
+        boundary_sn: Tensor,
+        boundary_we: Tensor,
+        flip_dim: int | tuple[int, ...] = -1,
         covariant: bool = False,
     ):
         convert = self.convert_cov if covariant else self.convert_contra
@@ -478,7 +425,7 @@ class ProcessTopology:
         east: ExchangedVector,
         boundary_sn: NDArray,
         boundary_we: NDArray,
-        flip_dim: int | Tuple[int, ...] = -1,
+        flip_dim: int | tuple[int, ...] = -1,
         covariant: bool = False,
     ):
         """Create a request for exchanging vectors with neighboring tiles. The 4 input vectors must have the same shape
@@ -512,7 +459,7 @@ class ProcessTopology:
         """
         send_info = self.prepare_vector_buffer(south, north, west, east, boundary_sn, boundary_we, flip_dim, covariant)
 
-        self.device.synchronize()  # When using GPU
+        self.context.synchronize()  # When using GPU
 
         return self.initiate_transfers([send_info])[0]
 
@@ -524,25 +471,19 @@ class ProcessTopology:
         east: NDArray,
         boundary_sn: NDArray,
         boundary_we: NDArray,
-        flip_dim: int | Tuple[int, ...] = -1,
+        flip_dim: int | tuple[int, ...] = -1,
     ):
         convert = self.convert_contra
         base_shape = get_base_shape(south[0].shape, boundary_sn.shape)
 
+        if self.send_buffer is None or self.send_buffer.nbytes < south.nbytes * 4:
+            self.send_buffer = torch.empty(4 * south.nbytes, dtype=torch.uint8)
+            self.recv_buffer = torch.empty_like(self.send_buffer)
+
         buffer_shape = (4, south.shape[0]) + base_shape
-
-        if _differentiable_exchange():
-            # Reused byte buffers cannot carry forward-AD tangents.
-            send_buffer = torch.empty(buffer_shape, dtype=south.dtype)
-            recv_buffer = torch.empty(buffer_shape, dtype=south.dtype)
-        else:
-            if self.send_buffer is None or self.send_buffer.nbytes < south.nbytes * 4:
-                self.send_buffer = torch.empty(4 * south.nbytes, dtype=torch.uint8)
-                self.recv_buffer = torch.empty_like(self.send_buffer)
-
-            num_elem = math.prod(buffer_shape)
-            send_buffer = torch.ravel(self.send_buffer).view(dtype=south.dtype)[:num_elem].reshape(buffer_shape)
-            recv_buffer = torch.ravel(self.recv_buffer).view(dtype=south.dtype)[:num_elem].reshape(buffer_shape)
+        num_elem = math.prod(buffer_shape)
+        send_buffer = torch.ravel(self.send_buffer).view(dtype=south.dtype)[:num_elem].reshape(buffer_shape)
+        recv_buffer = torch.ravel(self.recv_buffer).view(dtype=south.dtype)[:num_elem].reshape(buffer_shape)
 
         inputs = [south, north, west, east]
         boundaries = [boundary_sn, boundary_sn, boundary_we, boundary_we]
@@ -559,52 +500,14 @@ class ProcessTopology:
                     send_buffer[i, :], flip_dim if isinstance(flip_dim, tuple) else (flip_dim,)
                 )
 
-        self.device.synchronize()  # When using GPU
+        self.context.synchronize()  # When using GPU
 
         return self.initiate_transfers([(send_buffer, south[0].shape, True)], recv_buffer=recv_buffer)[0]
-
-    def _sender_slot_per_receive_slot(self) -> list[int]:
-        """Discover which remote boundary slot supplies each local receive slot."""
-        if self._sender_slot is None:
-            sent = torch.tensor([[float(slot)] for slot in range(4)], dtype=torch.float64)
-            received = torch.empty_like(sent)
-            self.comm_dist_graph.Ineighbor_alltoall(sent.contiguous(), received).Wait()
-            self._sender_slot = [int(value) for value in received.flatten().tolist()]
-        return self._sender_slot
-
-    def exchange_p2p(self, send_buffer: NDArray) -> NDArray:
-        """Exchange four boundary blocks using tagged point-to-point messages."""
-        # The custom autograd Function owns graph connectivity across MPI.
-        send_buffer = send_buffer.detach().contiguous()
-        recv_buffer = torch.empty_like(send_buffer)
-
-        # Keep block views alive until all nonblocking transfers finish.
-        blocks = [(send_buffer[slot], recv_buffer[slot]) for slot in (SOUTH, NORTH, WEST, EAST)]
-
-        sender_slot = self._sender_slot_per_receive_slot()
-
-        requests = [
-            self._comm.Irecv(blocks[slot][1], source=self.sources[slot], tag=_HALO_TAG_BASE + sender_slot[slot])
-            for slot in (SOUTH, NORTH, WEST, EAST)
-        ]
-        requests += [
-            self._comm.Isend(blocks[slot][0], dest=self.destinations[slot], tag=_HALO_TAG_BASE + slot)
-            for slot in (SOUTH, NORTH, WEST, EAST)
-        ]
-
-        MPI.Request.Waitall(requests)
-        return recv_buffer
 
     def initiate_transfers(self, send_info: list[tuple[NDArray, tuple[int, ...], bool]], recv_buffer=None):
         requests: list[ExchangeRequest] = []
 
         for send_buffer, shape, is_vector in send_info:
-            if _differentiable_exchange():
-                # The custom operation completes before its result is unpacked.
-                received = _HaloExchange.apply(send_buffer, self)
-                requests.append(ExchangeRequest(received, None, shape=shape, is_vector=is_vector))
-                continue
-
             if recv_buffer is None:
                 recv_buffer = torch.empty_like(send_buffer)
             req = self.comm_dist_graph.Ineighbor_alltoall(send_buffer, recv_buffer)
@@ -612,7 +515,7 @@ class ProcessTopology:
 
         return requests
 
-    def gather_tiles_to_panel(self, field: NDArray, num_dim: int) -> Optional[NDArray]:
+    def gather_tiles_to_panel(self, field: NDArray, num_dim: int) -> NDArray | None:
         """Send given tile data (`field`) to one PE (the root) on current panel.
         The root collects all tiles and assembles them into one array. Other PEs on the panel
         simply return None.
@@ -666,7 +569,7 @@ class ProcessTopology:
 
         return panel_field
 
-    def gather_cube(self, field: NDArray, num_dim: int) -> Optional[NDArray]:
+    def gather_cube(self, field: NDArray, num_dim: int) -> NDArray | None:
         """Gather given tile data into a single array on the root of this process topology. The first dimension
         will necessarily be 6; the rest will depend on the number of dimensions in the data and the number of tiles.
         This function is a collective call that must be made by every process member of this topology.
@@ -688,7 +591,7 @@ class ProcessTopology:
         panels = None
         if self.panel_roots_comm.rank == 0:
             panels = torch.empty((6,) + panel.shape, dtype=panel.dtype)
-        self.device.synchronize()
+        self.context.synchronize()
         self.panel_roots_comm.Gather(panel, panels, root=0)
 
         # Only the root of the entire cubesphere topology with continue
@@ -697,7 +600,7 @@ class ProcessTopology:
 
         return torch.stack([panels[i] for i in range(6)])
 
-    def distribute_cube(self, field: Optional[NDArray], num_dim: int):
+    def distribute_cube(self, field: NDArray | None, num_dim: int):
         """Split the given single array into its component tiles (according to this topology) and send
         each tile to its corresponding process.
 
@@ -715,7 +618,6 @@ class ProcessTopology:
 
         # Validate input field parameters
         with SingleProcess(self._comm) as s, Conditional(s):
-
             if field is None:
                 raise ValueError("No field on root process")
 
@@ -733,7 +635,6 @@ class ProcessTopology:
 
         tile_list = None
         if self.panel_comm.rank == 0:
-
             # We need to create the receive buffer before doing the scatter, because some backends (pytorch) create
             # them on the wrong device otherwise
 
@@ -743,7 +644,7 @@ class ProcessTopology:
 
             # Create the receive buffer + fill it
             panel = torch.empty(panel_params[0], dtype=panel_params[1])
-            self.device.synchronize()
+            self.context.synchronize()
             self.panel_roots_comm.Scatter(field, panel, root=0)
 
             # Tile == panel if we only have 1 proc per panel
@@ -800,13 +701,7 @@ class ExchangeRequest:
     """Wrapper around an MPI request. Provides a wait function that will wait for MPI transfers to be complete and
     return the received arrays in the specified shape, split among the 4 directions/neighbors."""
 
-    def __init__(
-        self,
-        recv_buffer: NDArray,
-        request: Optional[MPI.Request],
-        shape: tuple,
-        is_vector: bool = False,
-    ):
+    def __init__(self, recv_buffer: NDArray, request: MPI.Request, shape: tuple, is_vector: bool = False):
         """Create a request
 
         :param recv_buffer: Array where all the data will be received
@@ -837,7 +732,7 @@ class ExchangeRequest:
                 # and sends the rest as scalars, so the block comes back as a single array.
                 self.to_tuple = lambda a: a.reshape((num_comp,) + self.shape)
 
-    def wait(self, timeout=10.0) -> Tuple[ExchangedVector, ExchangedVector, ExchangedVector, ExchangedVector]:
+    def wait(self, timeout=10.0) -> tuple[ExchangedVector, ExchangedVector, ExchangedVector, ExchangedVector]:
         """Wait for the exchange started when creating this object to be done.
 
         :param timeout: How long we should wait for the request to complete before throwing an error
@@ -847,9 +742,6 @@ class ExchangeRequest:
         """
         t0 = time.time()
         num_tests = 0
-
-        if self.request is None:
-            return tuple(self.to_tuple(self.recv_buffer[side]) for side in (SOUTH, NORTH, WEST, EAST))
 
         # Wait until we have received from all neighbors (until timeout)
         if timeout < 0.0:

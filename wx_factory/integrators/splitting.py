@@ -43,7 +43,7 @@ class OS22Splitting(Integrator):
         )
 
     def __step__(self, Q, dt):
-        for numofstage in range(0, self.alpha.shape[0]):
+        for numofstage in range(self.alpha.shape[0]):
             if self.alpha[numofstage, 0] != 0:
                 Q = self.scheme1.step(Q, self.alpha[numofstage, 0] * dt)
             if self.alpha[numofstage, 1] != 0:
@@ -52,31 +52,31 @@ class OS22Splitting(Integrator):
 
 
 def _make_generic_splitting_factory(cls):
-    def factory(cfg, rhs, prec, dev):
+    def factory(cfg, rhs, prec, ctx):
         from . import resolve
 
-        sub1 = resolve(cfg.splitting_integrator_1, cfg, rhs, prec, dev)
-        sub2 = resolve(cfg.splitting_integrator_2, cfg, rhs, prec, dev)
+        sub1 = resolve(cfg.splitting_integrator_1, cfg, rhs, prec, ctx)
+        sub2 = resolve(cfg.splitting_integrator_2, cfg, rhs, prec, ctx)
         return cls(cfg, sub1, sub2)
 
     return factory
 
 
-def _strang_epi2_ros2(cfg, rhs, prec, dev):
+def _strang_epi2_ros2(cfg, rhs, prec, ctx):
     from .epi import Epi
     from .ros2 import Ros2
 
     return StrangSplitting(
-        cfg, Epi(cfg, 2, rhs.explicit, device=dev), Ros2(cfg, rhs.implicit, preconditioner=prec, device=dev)
+        cfg, Epi(cfg, 2, rhs.explicit, context=ctx), Ros2(cfg, rhs.implicit, preconditioner=prec, context=ctx)
     )
 
 
-def _strang_ros2_epi2(cfg, rhs, prec, dev):
+def _strang_ros2_epi2(cfg, rhs, prec, ctx):
     from .epi import Epi
     from .ros2 import Ros2
 
     return StrangSplitting(
-        cfg, Ros2(cfg, rhs.implicit, preconditioner=prec, device=dev), Epi(cfg, 2, rhs.explicit, device=dev)
+        cfg, Ros2(cfg, rhs.implicit, preconditioner=prec, context=ctx), Epi(cfg, 2, rhs.explicit, context=ctx)
     )
 
 

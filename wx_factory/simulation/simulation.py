@@ -1,18 +1,16 @@
 import sys
 from time import time
-from typing import Optional
 
 import numpy
 import torch
 from mpi4py import MPI
 
 from ..common import Configuration
-from ..device import Device, PytorchDevice, differentiable_mode, enable_differentiable_mode
+from ..context import Context
 from ..geometry import DFROperators, GeometryContext, resolve_geometry
 from ..init.export_era5_all import export_era5_all_timesteps
 from ..init.init_state_vars import init_state_vars
-from ..integrators import Integrator
-from ..integrators import resolve as _resolve_integrator
+from ..integrators import Integrator, resolve as _resolve_integrator
 from ..output.input_manager import InputManager
 from ..output.registry import OutputContext, resolve_output
 from ..precondition import PreconditionerContext, resolve_preconditioner
@@ -47,7 +45,7 @@ class Simulation:
         comm: MPI.Comm = MPI.COMM_WORLD,
         print_allowed_pe_counts: bool = False,
         quiet: bool = False,
-        device: Optional[Device] = None,
+        context: Context | None = None,
     ) -> None:
         """Create a Simulation object from a certain configuration.
 
@@ -98,30 +96,20 @@ class Simulation:
         with SingleProcess(self.comm) as s, Conditional(s):
             if print_allowed_pe_counts:
                 print(
-                    f"Can use the following number of processes to run this configuration:\n"
-                    f"  {self.allowed_pe_counts}"
+                    f"Can use the following number of processes to run this configuration:\n  {self.allowed_pe_counts}"
                 )
                 raise SystemExit(0)
 
         self._adjust_num_elements()
-
-        # A configuration that differentiates the right-hand side needs autograd left enabled. This
-        # has to be decided before the device installs its inference-mode guard, so it cannot wait
-        # until the integrator asks for a Jacobian.
-        if self._needs_autodiff():
-            enable_differentiable_mode()
-
-        self.device = self._make_device(device)
+        self.context = self._make_context(context)
 
         # Mixed mode stores the model state and most runtime arrays in float32. Static spatial
         # coefficients are constructed in float64 before casting, and accuracy-sensitive solver
         # operations selectively retain or accumulate in float64.
         if self.config.precision == "mixed":
-            self.device.real_dtype = torch.float32
-            self.device.complex_dtype = torch.complex64
+            self.context.real_dtype = torch.float32
         else:
-            self.device.real_dtype = torch.float64
-            self.device.complex_dtype = torch.complex128
+            self.context.real_dtype = torch.float64
 
         self.geometry = resolve_geometry(GeometryContext.from_simulation(self))
         # Cubed-sphere geometries carry a process topology; a Cartesian grid has none.
@@ -130,14 +118,13 @@ class Simulation:
         self.step_hooks.update(
             resolve_step_hooks(StepHookContext(config=self.config, geometry=self.geometry), phase=PHASE_GEOMETRY)
         )
-        self.operators_real = DFROperators(self.geometry, self.device)
-        self.operators_complex = DFROperators(self.geometry, self.device, self.device.complex_dtype)
+        self.operators_real = DFROperators(self.geometry, self.context)
         self.initial_state = init_state_vars(self.geometry, self.operators_real, self.config, self.step_hooks)
 
         self.output = resolve_output(
             OutputContext(
                 config=self.config,
-                device=self.device,
+                context=self.context,
                 geometry=self.geometry,
                 operators=self.operators_real,
                 metric=self.initial_state.metric,
@@ -147,14 +134,13 @@ class Simulation:
         )
         self.initial_state.Q, self.starting_step = self._determine_starting_state()
 
-        self.Q = self.initial_state.Q.copy()
+        self.Q = self.initial_state.Q.clone()
         self.step_id = self.starting_step
 
         self.rhs = resolve_rhs(
             RhsContext(
                 geom=self.geometry,
                 operators_real=self.operators_real,
-                operators_complex=self.operators_complex,
                 metric=self.initial_state.metric,
                 topo=self.initial_state.topography,
                 ptopo=self.process_topo,
@@ -166,7 +152,7 @@ class Simulation:
         self.preconditioner = resolve_preconditioner(
             PreconditionerContext(
                 config=self.config,
-                device=self.device,
+                context=self.context,
                 geometry=self.geometry,
                 operators=self.operators_real,
                 rhs=self.rhs,
@@ -192,7 +178,8 @@ class Simulation:
 
         self.integrator = self._create_time_integrator(self.config.time_integrator)
         self.integrator.output_manager = self.output
-        self.integrator.device = self.device
+        self.integrator.context = self.context
+
         self.output.step(self.initial_state.Q, self.starting_step)
         sys.stdout.flush()
 
@@ -244,28 +231,21 @@ class Simulation:
 
         while self.step():
             pass  # Step until everything is done
+
+        if self.rank == 0:
+            self.rhs.full.print_times()
+
         self.output.finalize(time() - start_time)  # Close any open output file
         """else:
-            export_era5_all_timesteps(self, self.config, self.initial_state.dataset)"""
+            export_era5_all_timesteps(self, self.config)"""
 
-    def _needs_autodiff(self) -> bool:
-        """Whether this configuration differentiates the right-hand side with autograd."""
-        return self.config.jacobian_method == "ad"
-
-    def _make_device(self, device: Optional[Device]) -> Device:
-        """Create the device object which will determine on what hardware (CPU/GPU) each part of the simulation will
+    def _make_context(self, context: Context | None) -> Context:
+        """Create the context object which will determine on what hardware (CPU/GPU) each part of the simulation will
         be executed."""
-        if device is not None:
-            self.comm = device.comm
-            if differentiable_mode() and not device.allows_autograd:
-                raise ValueError(
-                    f"jacobian_method = {self.config.jacobian_method} differentiates the right-hand "
-                    f"side, but the given device runs in inference mode, where tensors cannot carry "
-                    f"derivatives. Create the Device after differentiable mode is enabled, or set "
-                    f"WX_FACTORY_DIFFERENTIABLE=1 before the process creates any tensor."
-                )
-            return device
-        return Device(comm=self.comm, device_type=self.config.pytorch_device)
+        if context is not None:
+            self.comm = context.comm
+            return context
+        return Context(comm=self.comm, device_type=self.config.pytorch_device)
 
     def _adjust_num_elements(self):
         """Adjust number of horizontal elements in the parameters so that it corresponds to the
@@ -316,7 +296,7 @@ class Simulation:
         """Create the appropriate time integrator object based on params"""
         if self.comm.rank == 0:
             print(f"Running with time integrator: {name}")
-        return _resolve_integrator(name, self.config, self.rhs, self.preconditioner, self.device)
+        return _resolve_integrator(name, self.config, self.rhs, self.preconditioner, self.context)
 
     def _check_for_nan(self, Q):
         """Raise an exception if there are NaNs in the input"""

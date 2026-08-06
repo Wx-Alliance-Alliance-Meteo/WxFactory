@@ -6,16 +6,16 @@ import numpy
 import torch
 
 from ..common.configuration import Configuration
-from ..rhs.vertical_jacobian import (
+from ..jacobian import (
     assemble_vertical_blocks,
-    col_to_state,
+    columns_to_state,
     forcing_jac_prepare,
     forcing_jvp,
     j2_flux_matvec,
     j2_prepare,
-    solve_retained_columns,
+    solve_stiff_columns,
     split_vertical_blocks,
-    state_to_col,
+    state_to_columns,
 )
 from ..solvers import ExponentialSolverRequest, resolve_exponential_solver
 from .integrator import Integrator, SolverInfo
@@ -40,15 +40,14 @@ class PartRosExp2(Integrator):
         rhs_imp: Callable,
         rhs_exp: Callable,
         *,
-        device=None,
+        context=None,
         preconditioner=None,
     ):
-        super().__init__(param, device=device, preconditioner=preconditioner)
+        super().__init__(param, context=context, preconditioner=preconditioner)
         self.rhs_full = rhs_full
         self.rhs_imp = rhs_imp  # Vertically stiff partition.
         self.rhs_exp = rhs_exp  # Complementary partition.
         self.tol = param.tolerance
-        self.jacobian_method = param.jacobian_method  # Kept for configuration compatibility.
         self.krylov_mmax = param.krylov_mmax
         self.krylov_m = None  # Recycled Krylov size.
         self.exponential_solver = param.exponential_solver
@@ -69,7 +68,7 @@ class PartRosExp2(Integrator):
                 vec,
                 self.tol,
                 self.krylov_mmax,
-                self.device,
+                self.context,
                 krylov_minit=(self.krylov_m or 10) if pmex_family else self.krylov_size,
                 krylov_mmin=16 if solver in ("pmex_ne", "kiops") else 10,
                 exode_method=self.exode_method,
@@ -92,9 +91,9 @@ class PartRosExp2(Integrator):
         f2 = self.rhs_exp(Q)
 
         # Split one vertical-block assembly between J1 and J2.
-        L, A, U = assemble_vertical_blocks(rhsobj, Q)
-        momentum_blocks, retained_blocks = split_vertical_blocks(rhsobj, L, A, U)
-        del L, A, U
+        lower, diag, upper = assemble_vertical_blocks(rhsobj, Q)
+        momentum_blocks, stiff_blocks = split_vertical_blocks(rhsobj, lower, diag, upper)
+        del lower, diag, upper
 
         j2_base = j2_prepare(self.rhs_full, Q, momentum_blocks)
         forcing_base = forcing_jac_prepare(self.rhs_full, Q)
@@ -127,13 +126,12 @@ class PartRosExp2(Integrator):
 
         tic = time()
         rhs_delta = ((phiv.reshape(-1) + 0.5 * f_imp) * dt).reshape(Q.shape)
-        bc = state_to_col(rhsobj, rhs_delta)
-        dc = solve_retained_columns(rhsobj, retained_blocks, bc, dt)
-        delta = col_to_state(rhsobj, dc, rhs_delta)
+        delta_col = solve_stiff_columns(rhsobj, stiff_blocks, state_to_columns(rhsobj, rhs_delta), dt)
+        delta = columns_to_state(rhsobj, delta_col, rhs_delta)
         time_imp = time() - tic
 
         self.solver_info = SolverInfo(0, time_imp, 1, [])
-        if self.device.comm.rank == 0:
+        if self.context.comm.rank == 0:
             print(
                 f"PartRosExp2 direct column solve {time_imp:.3f} s ; exponential {time_exp:.3f} s",
                 flush=True,
@@ -143,7 +141,7 @@ class PartRosExp2(Integrator):
 
 
 REGISTRY = {
-    "partrosexp2": lambda cfg, rhs, prec, dev: PartRosExp2(
-        cfg, rhs.full, rhs.implicit, rhs.explicit, preconditioner=prec, device=dev
+    "partrosexp2": lambda cfg, rhs, prec, ctx: PartRosExp2(
+        cfg, rhs.full, rhs.implicit, rhs.explicit, preconditioner=prec, context=ctx
     ),
 }

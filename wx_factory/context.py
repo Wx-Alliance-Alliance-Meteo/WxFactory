@@ -1,4 +1,5 @@
-"""The compute device: where tensors live (CPU or a specific GPU) and the MPI communicator.
+"""The context of a simulation: the device on which the model runs (CPU/GPU), the MPI communicator and other
+information related to the execution environment.
 
 Now that the whole model is written directly against PyTorch there is a single device type. This
 object no longer abstracts an array module; it just holds the process's ``comm``, the torch device
@@ -7,7 +8,7 @@ timing helpers.
 """
 
 import os
-from time import time
+from time import perf_counter
 from typing import Any, Self
 
 import torch
@@ -15,7 +16,7 @@ from mpi4py import MPI
 
 from .wx_mpi import split_nodes
 
-__all__ = ["Device", "PytorchDevice", "differentiable_mode", "enable_differentiable_mode"]
+__all__ = ["Context"]
 
 # WxFactory speaks NumPy-flavoured method names in a few places; make torch tensors answer to them
 # too, so the same call works whether an array happens to be a tensor or a host NumPy array.
@@ -23,33 +24,12 @@ torch.Tensor.astype = torch.Tensor.to
 torch.Tensor.copy = torch.Tensor.clone
 
 
-_differentiable = os.environ.get("WX_FACTORY_DIFFERENTIABLE", "").lower() in ("1", "true", "yes", "on")
+def _differentiable_requested() -> bool:
+    """Whether the user asked to keep autograd on (opt out of inference mode)."""
+    return os.environ.get("WX_FACTORY_DIFFERENTIABLE", "").lower() in ("1", "true", "yes", "on")
 
 
-def differentiable_mode() -> bool:
-    """Return whether autograd is enabled.
-
-    Autograd is off by default: the model then runs under ``torch.inference_mode``, which is
-    cheaper but forbids tensors that carry derivatives. It is turned on either by the
-    ``WX_FACTORY_DIFFERENTIABLE`` environment variable or by :func:`enable_differentiable_mode`.
-
-    Query this at the point of use rather than caching it at import time -- a configuration that
-    needs derivatives (``jacobian_method = ad``) enables it while the modules are already loaded.
-    """
-    return _differentiable
-
-
-def enable_differentiable_mode() -> None:
-    """Enable autograd for the rest of the process.
-
-    Must be called before the :class:`Device` is created, since that is where the inference-mode
-    guard is installed; tensors created under that guard can never carry derivatives.
-    """
-    global _differentiable
-    _differentiable = True
-
-
-class Device:
+class Context:
     """The PyTorch compute device and its MPI communicator."""
 
     _default: Self = None
@@ -74,8 +54,8 @@ class Device:
         # Every tensor the code creates goes through torch's default device.
         torch.set_default_device(self.torch_device)
 
-        # Differentiable mode must be enabled before Device creates tensors in inference mode.
-        if not differentiable_mode() and not torch.is_inference_mode_enabled():
+        # Disable autograd bookkeeping unless WX_FACTORY_DIFFERENTIABLE requests it.
+        if not _differentiable_requested() and not torch.is_inference_mode_enabled():
             self._inference_mode_guard = torch.inference_mode()
             self._inference_mode_guard.__enter__()
 
@@ -83,19 +63,9 @@ class Device:
         # overrides these from the `precision` configuration option. Single precision halves the
         # memory footprint (and the bandwidth), which is what lets the finer resolutions fit on a GPU.
         self.real_dtype = torch.float64
-        self.complex_dtype = torch.complex128
 
         if comm.rank == 0:
             print(f"Pytorch backend running on {self.torch_device} (on rank {comm.rank})", flush=True)
-
-    @property
-    def allows_autograd(self) -> bool:
-        """Whether tensors on this device can carry derivatives.
-
-        Inference mode is the only thing that prevents it, and it is process-wide, so this also
-        reports an inference-mode guard installed by someone other than this device.
-        """
-        return not torch.is_inference_mode_enabled()
 
     def tensor(self, a) -> torch.Tensor:
         return torch.tensor(a, device=self.torch_device)
@@ -113,20 +83,33 @@ class Device:
         """Copy a tensor back to the host as a NumPy array."""
         return val.cpu().numpy().copy()
 
-    def timestamp(self, **kwargs) -> float:
-        return time()
+    def timestamp(self, **kwargs) -> float | torch.cuda.Event:
+        if self.torch_device.type == "cpu":
+            return perf_counter()
+        else:
+            event = torch.cuda.Event(enable_timing=True)
+            event.record()
+            return event
 
-    def elapsed(self, timestamps):
-        intervals = [timestamps[i + 1] - timestamps[i] for i in range(len(timestamps) - 1)]
-        intervals.append(timestamps[-1] - timestamps[0])
+    def elapsed(self, timestamps: list) -> list[float]:
+        """Return the elapsed time between each pair of timestamps, in milliseconds.
+        The last element is the total time between the first and last timestamps."""
+
+        if isinstance(timestamps[0], float):
+            intervals = [(timestamps[i + 1] - timestamps[i]) * 1000.0 for i in range(len(timestamps) - 1)]
+            intervals.append((timestamps[-1] - timestamps[0]) * 1000.0)
+        elif isinstance(timestamps[0], torch.cuda.Event):
+            intervals = []
+            timestamps[-1].synchronize()
+            intervals = [timestamps[i].elapsed_time(timestamps[i + 1]) for i in range(len(timestamps) - 1)]
+            intervals.append(timestamps[0].elapsed_time(timestamps[-1]))
+        else:
+            raise ValueError(f"Unknown timestamp type {type(timestamps[0])}")
+
         return intervals
 
     @staticmethod
-    def get_default() -> "Device":
-        if Device._default is None:
-            Device._default = Device(MPI.COMM_WORLD)
-        return Device._default
-
-
-# Historical name; there is only one device type now.
-PytorchDevice = Device
+    def get_default() -> "Context":
+        if Context._default is None:
+            Context._default = Context(MPI.COMM_WORLD)
+        return Context._default

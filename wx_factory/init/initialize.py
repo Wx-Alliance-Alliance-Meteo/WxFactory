@@ -1,36 +1,35 @@
-import torch
 import numpy
-from numpy.typing import NDArray
+import torch
 import xarray as xr
+from numpy.typing import NDArray
 
+from ..common import Configuration
 from ..common.definitions import (
+    Rd,
+    cpd,
+    cvd,
+    gravity,
+    idx_h,
+    idx_hu1,
+    idx_hu2,
     idx_rho,
+    idx_rho_theta,
     idx_rho_u1,
     idx_rho_u2,
     idx_rho_u3,
-    idx_rho_theta,
-    idx_h,
     idx_u1,
     idx_u2,
-    idx_hu1,
-    idx_hu2,
-    gravity,
-    cpd,
-    cvd,
-    Rd,
     p0,
 )
-from ..common import Configuration
-from ..geometry import CubedSphere3D, CubedSphere2D, DFROperators, Metric2D, Metric3DTopo
-
+from ..geometry import CubedSphere2D, CubedSphere3D, DFROperators, Metric2D, Metric3DTopo
 from .dcmip import (
+    acoustic_wave,
     dcmip_advection_deformation,
     dcmip_advection_hadley,
     dcmip_advection_orography,
     dcmip_gravity_wave,
     dcmip_schar_waves,
     dcmip_steady_state_mountain,
-    acoustic_wave,
 )
 from .shallow_water import (
     case_galewsky,

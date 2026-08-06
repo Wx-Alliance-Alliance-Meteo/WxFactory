@@ -1,13 +1,14 @@
-import numpy
 from time import time
+
+import numpy
 
 from ..solvers import newton_krylov
 from .integrator import Integrator, SolverInfo
 
 
 class Bdf2(Integrator):
-    def __init__(self, param, rhs, *, preconditioner=None, init_substeps=1, device=None):
-        super().__init__(param, device=device, preconditioner=preconditioner)
+    def __init__(self, param, rhs, *, preconditioner=None, init_substeps=1, context=None):
+        super().__init__(param, context=context, preconditioner=preconditioner)
         self.rhs = rhs
         self.tol = param.tolerance
         self.init_substeps = init_substeps
@@ -50,5 +51,5 @@ class Bdf2(Integrator):
 
 
 REGISTRY = {
-    "bdf2": lambda cfg, rhs, prec, dev: Bdf2(cfg, rhs.full, preconditioner=prec, device=dev),
+    "bdf2": lambda cfg, rhs, prec, ctx: Bdf2(cfg, rhs.full, preconditioner=prec, context=ctx),
 }

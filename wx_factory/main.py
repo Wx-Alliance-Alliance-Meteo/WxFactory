@@ -93,7 +93,7 @@ def main():
     if MPI.COMM_WORLD.rank == 0:
         now = datetime.datetime.now()
         load_time = now - earliest
-        print(f'Start time : {now.strftime("%Y-%m-%d %H:%M:%S")} (loaded in {load_time})', flush=True)
+        print(f"Start time : {now.strftime('%Y-%m-%d %H:%M:%S')} (loaded in {load_time})", flush=True)
 
     if args.suppress_warnings:
         warnings.filterwarnings("ignore")

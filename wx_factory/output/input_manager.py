@@ -1,16 +1,12 @@
-import torch
-from typing import Optional
-
-from mpi4py import MPI
 import numpy
-from numpy.typing import NDArray
+import torch
+from mpi4py import MPI
+from torch import Tensor
 
-from .state import load_state
-
-from ..common import angle24, Configuration, ConfigurationSchema, default_schema_path, decode_ig4, readfile
-from ..wx_mpi import do_once, SingleProcess, Conditional
-from ..process_topology import ProcessTopology
+from ..common import Configuration, ConfigurationSchema, angle24, decode_ig4, default_schema_path, readfile
 from ..geometry import CubedSphere2D
+from ..wx_mpi import Conditional, SingleProcess, do_once
+from .state import load_state
 
 try:
     import rmn
@@ -21,20 +17,20 @@ except ModuleNotFoundError:
 
 
 class InputManager:
-    schema: Optional[ConfigurationSchema]
+    schema: ConfigurationSchema | None
 
     def __init__(self, comm: MPI.Comm):
         self.comm = comm
         self.schema = None
 
     @staticmethod
-    def read_config(config_file: str, comm: MPI.Comm, schema: Optional[ConfigurationSchema] = None) -> Configuration:
+    def read_config(config_file: str, comm: MPI.Comm, schema: ConfigurationSchema | None = None) -> Configuration:
         if schema is None:
             schema = ConfigurationSchema(do_once(readfile, default_schema_path, comm=comm))
         return Configuration(do_once(readfile, config_file, comm=comm), schema)
 
     @staticmethod
-    def read_config_from_save_file(save_file: str, comm: MPI.Comm) -> tuple[Configuration, NDArray]:
+    def read_config_from_save_file(save_file: str, comm: MPI.Comm) -> tuple[Configuration, Tensor]:
         config_str = None
         schema_str = None
         vector = None
@@ -68,9 +64,9 @@ class InputManager:
         return s.return_value
 
     @staticmethod
-    def read_mountain(mountain_file_name: str, geometry: CubedSphere2D) -> NDArray:
+    def read_mountain(mountain_file_name: str, geometry: CubedSphere2D) -> Tensor:
         mountain_field = None
-        comm = geometry.device.comm
+        comm = geometry.context.comm
         with SingleProcess(comm) as s, Conditional(s):
             num_points = geometry.total_num_elements_horizontal * geometry.num_solpts
             target_shape = (6,) + (num_points, num_points)
@@ -84,8 +80,8 @@ class InputManager:
         return torch.asarray(geometry._to_new(mountain_field))
 
     @staticmethod
-    def read_fields(data_file_name: str, field_names: list[str], geometry: CubedSphere2D) -> NDArray:
-        comm = geometry.device.comm
+    def read_fields(data_file_name: str, field_names: list[str], geometry: CubedSphere2D) -> Tensor:
+        comm = geometry.context.comm
         fields = [None for _ in field_names]
         with SingleProcess(comm) as s, Conditional(s):
             num_points = geometry.total_num_elements_horizontal * geometry.num_solpts

@@ -6,11 +6,9 @@ so any y-plane is representative; we take the middle one and plot it with :func:
 """
 
 import torch
-import numpy
 
-from ..common.definitions import idx_rho, idx_rho_u1, idx_rho_u3, idx_rho_theta
+from ..common.definitions import idx_rho, idx_rho_theta, idx_rho_u1, idx_rho_u3
 from ..common.graphx import image_field
-
 from .output_manager import OutputManager
 
 

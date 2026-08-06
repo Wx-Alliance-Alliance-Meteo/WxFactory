@@ -1,13 +1,18 @@
-import os
 import glob
+import os
 
 from wx_factory.common.eval_expr import _math_constants
 
 _math_constants["e"] = 1
 _math_constants["f"] = 5
-from wx_factory.common import Configuration, ConfigurationSchema, readfile, ConfigValueError
-
 from wx_test import WxTestCase
+
+from wx_factory.common import (
+    Configuration,
+    ConfigurationSchema,
+    ConfigValueError,
+    readfile,
+)
 
 self_dir = os.path.dirname(os.path.realpath(__file__))
 config_test_dir = self_dir
@@ -50,7 +55,7 @@ class ConfigurationTestCases(WxTestCase):
 
         try:
             schema = ConfigurationSchema(readfile(schema_file))
-        except Exception as e:
+        except Exception:
             raise ValueError(f"Could not read and parse schema file {schema_file}")
         try:
             conf = Configuration(readfile(config_file), schema, load_post_config=False)

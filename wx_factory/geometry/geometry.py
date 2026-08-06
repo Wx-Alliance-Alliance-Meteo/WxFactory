@@ -4,7 +4,7 @@ import sympy
 import torch
 from numpy.typing import NDArray
 
-from ..device import Device
+from ..context import Context
 from .quadrature import gauss_legendre
 
 
@@ -35,21 +35,16 @@ class Geometry(ABC):
         num_elements_horizontal: int,
         num_elements_vertical: int,
         total_num_elements_horizontal: int,
-        device: Device,
+        context: Context,
         verbose: bool | None = False,
     ) -> None:
-        self.device = device
-        # Grid coordinates and all quantities derived from them are constructed in double
-        # precision.  ``working_dtype`` records the configured runtime precision; initialization
-        # casts the completed geometry and metric together, after the metric has consumed the
-        # double-precision coordinates.
-        self.working_dtype = self.device.real_dtype
-        self.dtype = torch.float64
+        self.context = context
+        self.dtype = self.context.real_dtype
 
         ## Element properties -- solution and extension points
         # Gauss-Legendre solution points
         solutionPoints_sym, solutionPoints, glweights = gauss_legendre(num_solpts)
-        if verbose and self.device.comm.rank == 0:
+        if verbose and self.context.comm.rank == 0:
             print(f"Solution points : {solutionPoints}")
             print(f"GL weights : {glweights}")
 
@@ -69,11 +64,6 @@ class Geometry(ABC):
         self.extension = torch.asarray(extension)
         self.extension_sym = extension_sym
         self.z_levels = {""}
-
-    def cast_to_working_precision(self) -> None:
-        """Cast completed floating-point geometry arrays to the configured runtime precision."""
-        cast_double_arrays(self, self.working_dtype)
-        self.dtype = self.working_dtype
 
     @abstractmethod
     def to_single_block(self, a: NDArray) -> NDArray:

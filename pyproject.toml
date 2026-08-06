@@ -34,3 +34,12 @@ write_to = "wx_factory/_version.py"
 [tool.black]
 line-length = 120
 target-version = ["py311"]
+
+[tool.ruff]
+line-length = 120
+indent-width = 4
+target-version = "py311"
+
+[tool.ruff.lint.isort]
+combine-as-imports = true
+force-single-line = false
