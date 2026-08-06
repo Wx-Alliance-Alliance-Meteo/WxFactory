@@ -33,7 +33,12 @@ from .splitting import LieSplitting, OS22Splitting, StrangSplitting
 from .srerk import Srerk
 from .tvdrk3 import Tvdrk3
 
+#: Integrators that advance the full right-hand side.
 REGISTRY: dict = {}
+
+#: Integrators that advance explicit and implicit partitions separately.
+PARTITIONED_REGISTRY: dict = {}
+
 for _mod in [
     _backward_euler,
     _bdf2,
@@ -51,16 +56,35 @@ for _mod in [
     _tvdrk3,
 ]:
     REGISTRY.update(_mod.REGISTRY)
+    PARTITIONED_REGISTRY.update(getattr(_mod, "PARTITIONED_REGISTRY", {}))
+
+_both = sorted(set(REGISTRY) & set(PARTITIONED_REGISTRY))
+if _both:
+    raise RuntimeError(f"Integrators registered as both regular and partitioned: {_both}")
 
 
 def resolve(name: str, config, rhs, preconditioner, context: Context) -> Integrator:
-    """Create the integrator identified by `name`."""
+    """Create an integrator compatible with the available RHS operators."""
+    if name in PARTITIONED_REGISTRY:
+        if not rhs.has_partition:
+            raise ValueError(
+                f"Time integrator '{name}' is a partitioned scheme: it advances the explicit and the "
+                f"implicit right-hand side separately, but {rhs.partition_reason}.\n"
+                f"Use a non-partitioned integrator instead: {', '.join(sorted(REGISTRY))}."
+            )
+        return PARTITIONED_REGISTRY[name](config, rhs, preconditioner, context)
+
     if name not in REGISTRY:
-        raise ValueError(f"Time integration method '{name}' not supported")
+        raise ValueError(
+            f"Time integration method '{name}' not supported.\n"
+            f"Available: {', '.join(sorted(REGISTRY))}.\n"
+            f"Partitioned (need the explicit / implicit RHS): {', '.join(sorted(PARTITIONED_REGISTRY))}."
+        )
     return REGISTRY[name](config, rhs, preconditioner, context)
 
 
 __all__ = [
+    "PARTITIONED_REGISTRY",
     "REGISTRY",
     "BackwardEuler",
     "Bdf2",

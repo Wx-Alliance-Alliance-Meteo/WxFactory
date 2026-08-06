@@ -3,6 +3,7 @@ import unittest
 
 from wx_test import WxTestCase
 
+from wx_factory import integrators
 from wx_factory.geometry import Cartesian3D, CubedSphere2D, CubedSphere3D
 from wx_factory.rhs.rhs_selector import (
     RHS_REGISTRY,
@@ -42,6 +43,29 @@ class RhsBundleTestCases(WxTestCase):
         bundle = RhsBundle(full=lambda q: q, shape=(1,), explicit=exp, implicit=imp)
         self.assertIs(bundle.explicit, exp)
         self.assertIs(bundle.implicit, imp)
+
+    def test_has_partition_reports_availability(self):
+        with_partition = RhsBundle(full=lambda q: q, shape=(1,), explicit=lambda q: q, implicit=lambda q: q)
+        self.assertTrue(with_partition.has_partition)
+        self.assertIsNone(with_partition.partition_reason)
+
+        without = RhsBundle(full=lambda q: q, shape=(1,))
+        self.assertFalse(without.has_partition)
+        self.assertTrue(without.partition_reason)
+
+    def test_reason_reaches_the_user(self):
+        reason = "my equations have no stiff part to separate"
+        bundle = RhsBundle(full=lambda q: q, shape=(1,), partition_reason=reason)
+        self.assertEqual(bundle.partition_reason, reason)
+        with self.assertRaises(NotImplementedError) as raised:
+            bundle.implicit(0)
+        self.assertIn(reason, str(raised.exception))
+
+    def test_half_a_partition_is_rejected(self):
+        with self.assertRaises(ValueError):
+            RhsBundle(full=lambda q: q, shape=(1,), explicit=lambda q: q)
+        with self.assertRaises(ValueError):
+            RhsBundle(full=lambda q: q, shape=(1,), implicit=lambda q: q)
 
 
 class RhsRegistryTestCases(WxTestCase):
@@ -90,6 +114,34 @@ class RhsRegistryTestCases(WxTestCase):
 
         finally:
             del RHS_REGISTRY[("dup_eq", DummyGeom)]
+
+
+class PartitionedIntegratorTestCases(WxTestCase):
+    def test_registries_are_disjoint(self):
+        self.assertEqual(set(integrators.REGISTRY) & set(integrators.PARTITIONED_REGISTRY), set())
+
+    def test_known_partitioned_schemes(self):
+        self.assertIn("partrosexp2", integrators.PARTITIONED_REGISTRY)
+        self.assertIn("imex2", integrators.PARTITIONED_REGISTRY)
+        self.assertIn("tvdrk3", integrators.REGISTRY)
+
+    def test_partitioned_scheme_without_partition_is_refused(self):
+        reason = "the partitioned right-hand side is not implemented for these equations"
+        bundle = RhsBundle(full=lambda q: q, shape=(1,), partition_reason=reason)
+        with self.assertRaises(ValueError) as raised:
+            integrators.resolve("partrosexp2", None, bundle, None, None)
+        message = str(raised.exception)
+        self.assertIn("partrosexp2", message)
+        self.assertIn(reason, message)
+        self.assertIn("tvdrk3", message)
+
+    def test_unknown_scheme_lists_both_registries(self):
+        bundle = RhsBundle(full=lambda q: q, shape=(1,), partition_reason="none here")
+        with self.assertRaises(ValueError) as raised:
+            integrators.resolve("no_such_scheme", None, bundle, None, None)
+        message = str(raised.exception)
+        self.assertIn("tvdrk3", message)
+        self.assertIn("partrosexp2", message)
 
 
 if __name__ == "__main__":

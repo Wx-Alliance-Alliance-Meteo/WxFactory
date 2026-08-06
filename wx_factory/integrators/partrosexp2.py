@@ -139,7 +139,9 @@ class PartRosExp2(Integrator):
         return Q + delta
 
 
-REGISTRY = {
+REGISTRY: dict = {}
+
+PARTITIONED_REGISTRY = {
     "partrosexp2": lambda cfg, rhs, prec, ctx: PartRosExp2(
         cfg, rhs.full, rhs.implicit, rhs.explicit, preconditioner=prec, context=ctx
     ),

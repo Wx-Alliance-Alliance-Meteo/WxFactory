@@ -35,16 +35,22 @@ class RhsContext:
     debug: bool = False
 
 
-def _unavailable_partition(_):
-    raise NotImplementedError(
-        "This combination of equations and geometry does not provide a partitioned (explicit / "
-        "implicit) RHS. Use a non-partitioned time integrator, or implement the partitioned RHS "
-        "for this problem."
-    )
+_GENERIC_NO_PARTITION = (
+    "the explicit / implicit partition is not implemented for this combination of equations and geometry"
+)
+
+
+def _unavailable_partition(reason: str) -> Callable:
+    """Create an unavailable partition that reports its reason."""
+
+    def unavailable(_):
+        raise NotImplementedError(f"No partitioned right-hand side: {reason}.")
+
+    return unavailable
 
 
 class RhsBundle:
-    """Full and partitioned RHS functions for one model configuration."""
+    """Full RHS and optional explicit and implicit partitions."""
 
     def __init__(
         self,
@@ -53,11 +59,21 @@ class RhsBundle:
         shape: tuple[int, ...],
         explicit: Callable | None = None,
         implicit: Callable | None = None,
+        partition_reason: str | None = None,
     ) -> None:
+        if (explicit is None) != (implicit is None):
+            raise ValueError("An RhsBundle defines both the explicit and implicit partitions, or neither")
+
         self.full = full
         self.shape = shape
-        self.explicit = explicit if explicit is not None else _unavailable_partition
-        self.implicit = implicit if implicit is not None else _unavailable_partition
+        self.partition_reason = None if explicit is not None else (partition_reason or _GENERIC_NO_PARTITION)
+        self.explicit = explicit if explicit is not None else _unavailable_partition(self.partition_reason)
+        self.implicit = implicit if implicit is not None else _unavailable_partition(self.partition_reason)
+
+    @property
+    def has_partition(self) -> bool:
+        """Return whether both RHS partitions are available."""
+        return self.partition_reason is None
 
 
 RhsFactory = Callable[[RhsContext], RhsBundle]
@@ -96,6 +112,19 @@ def resolve_rhs(ctx: RhsContext) -> RhsBundle:
     return factory(ctx)
 
 
+def _euler_bundle(ctx: RhsContext, pde, full) -> RhsBundle:
+    if pde.advection_only:
+        return RhsBundle(
+            full=full,
+            shape=ctx.fields_shape,
+            partition_reason=(
+                "advection_only is on, which freezes the Euler dynamics and transports the tracers "
+                "with a prescribed wind, so there is no vertically-stiff partition to separate"
+            ),
+        )
+    return RhsBundle(full=full, shape=ctx.fields_shape, implicit=full.implicit, explicit=full.explicit)
+
+
 @register_rhs("euler", CubedSphere3D)
 def _euler_cubesphere(ctx: RhsContext) -> RhsBundle:
     # Additional state variables are passive tracers.
@@ -110,7 +139,7 @@ def _euler_cubesphere(ctx: RhsContext) -> RhsBundle:
         ctx.param,
         debug=ctx.debug,
     )
-    return RhsBundle(full=full, shape=ctx.fields_shape, implicit=full.implicit, explicit=full.explicit)
+    return _euler_bundle(ctx, pde, full)
 
 
 # Cartesian slabs use the 3D Euler RHS with an identity metric.
@@ -130,13 +159,15 @@ def _euler_cartesian3d(ctx: RhsContext) -> RhsBundle:
         ctx.param,
         debug=ctx.debug,
     )
-    return RhsBundle(full=full, shape=ctx.fields_shape, implicit=full.implicit, explicit=full.explicit)
+    return _euler_bundle(ctx, pde, full)
 
 
 @register_rhs("shallow_water", CubedSphere2D)
 def _shallow_water_cubesphere(ctx: RhsContext) -> RhsBundle:
+    reason: str
     if ctx.param.case_number <= 1:
         # Advection tests.
+        reason = "the partitioned right-hand side is not implemented for 2D advection"
         full = RhsAdvection2d(
             ctx.fields_shape,
             ctx.geom,
@@ -148,6 +179,7 @@ def _shallow_water_cubesphere(ctx: RhsContext) -> RhsBundle:
         )
     else:
         # Shallow-water dynamics.
+        reason = "the partitioned right-hand side is not implemented for the shallow-water equations"
         full = RhsShallowWater(
             ctx.geom,
             ctx.operators_real,
@@ -155,4 +187,4 @@ def _shallow_water_cubesphere(ctx: RhsContext) -> RhsBundle:
             ctx.topo,
             ctx.ptopo,
         )
-    return RhsBundle(full=full, shape=ctx.fields_shape)
+    return RhsBundle(full=full, shape=ctx.fields_shape, partition_reason=reason)

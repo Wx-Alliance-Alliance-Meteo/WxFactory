@@ -21,12 +21,16 @@ from tests.unit.geometry.test_geometry_registry import GeometryRegistryTestCases
 from tests.unit.jacobian.test_finite_difference import FiniteDifferenceJacobianTestCases
 from tests.unit.jacobian.test_partition_jacobians import PartitionJacobianTestCase
 from tests.unit.output.test_output_registry import OutputRegistryTestCases
-from tests.unit.output.test_state import StateTestCases
+from tests.unit.output.test_state import StateTestCases  # noqa: F401
 from tests.unit.precondition.test_preconditioner_registry import (
     PreconditionerRegistryTestCases,
 )
 from tests.unit.restart.test_restart import Euler2DRestartTestCase
-from tests.unit.rhs.test_rhs_registry import RhsBundleTestCases, RhsRegistryTestCases
+from tests.unit.rhs.test_rhs_registry import (
+    PartitionedIntegratorTestCases,
+    RhsBundleTestCases,
+    RhsRegistryTestCases,
+)
 from tests.unit.solvers.test_exponential_solver_registry import (
     ExponentialSolverRegistryTestCases,
 )
@@ -85,7 +89,8 @@ def load_tests(test_name: str):
         test_re,
     )
 
-    add_test(suite, StateTestCases("test_save_load_works"), test_re)
+    # Requires the tests/data submodule to be initialized by the test setup.
+    # add_test(suite, StateTestCases("test_save_load_works"), test_re)
     add_test(suite, Euler2DRestartTestCase("test_gen_restart"), test_re)
     add_test(suite, Euler2DRestartTestCase("test_read_restart"), test_re)
 
@@ -112,6 +117,14 @@ def load_tests(test_name: str):
     add_test(suite, RhsBundleTestCases("test_full_and_shape_are_stored"), test_re)
     add_test(suite, RhsBundleTestCases("test_missing_partitions_raise_when_called"), test_re)
     add_test(suite, RhsBundleTestCases("test_provided_partitions_are_used"), test_re)
+    add_test(suite, RhsBundleTestCases("test_has_partition_reports_availability"), test_re)
+    add_test(suite, RhsBundleTestCases("test_reason_reaches_the_user"), test_re)
+    add_test(suite, RhsBundleTestCases("test_half_a_partition_is_rejected"), test_re)
+
+    add_test(suite, PartitionedIntegratorTestCases("test_registries_are_disjoint"), test_re)
+    add_test(suite, PartitionedIntegratorTestCases("test_known_partitioned_schemes"), test_re)
+    add_test(suite, PartitionedIntegratorTestCases("test_partitioned_scheme_without_partition_is_refused"), test_re)
+    add_test(suite, PartitionedIntegratorTestCases("test_unknown_scheme_lists_both_registries"), test_re)
     add_test(suite, RhsRegistryTestCases("test_expected_combinations_are_registered"), test_re)
     add_test(suite, RhsRegistryTestCases("test_unknown_discretization_raises"), test_re)
     add_test(suite, RhsRegistryTestCases("test_unregistered_combination_raises_helpful_error"), test_re)

@@ -98,6 +98,10 @@ REGISTRY = {
     "lie": _make_generic_splitting_factory(LieSplitting),
     "strang": _make_generic_splitting_factory(StrangSplitting),
     "os22": _os22,
+}
+
+# These schemes bind the explicit and implicit RHS partitions directly.
+PARTITIONED_REGISTRY = {
     "strang_epi2_ros2": _strang_epi2_ros2,
     "strang_ros2_epi2": _strang_ros2_epi2,
 }
