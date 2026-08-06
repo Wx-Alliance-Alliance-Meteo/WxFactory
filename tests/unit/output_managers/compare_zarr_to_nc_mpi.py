@@ -8,6 +8,7 @@ from numpy.typing import NDArray
 import xarray as xr
 from mpi4py import MPI
 import torch
+import zarr
 
 from mpi_test import MpiTestCase
 from wx_factory.output import InputManager
@@ -176,10 +177,10 @@ class CompareZarrToNcTestCase(MpiTestCase):
 
     def _compare_outputs(self, nc_file, zarr_store):
         ds_nc = xr.open_dataset(nc_file)
-        ds_zarr = xr.open_zarr(zarr_store)
+        ds_zarr = zarr.open_group(zarr_store, mode="r")
 
         nc_vars = set(ds_nc.variables)
-        zarr_vars = set(ds_zarr.variables)
+        zarr_vars = set(ds_zarr.array_keys())
 
         self.assertSetEqual(
             nc_vars,
@@ -196,12 +197,12 @@ class CompareZarrToNcTestCase(MpiTestCase):
 
                 self.assertIn(
                     variable_name,
-                    ds_zarr.variables,
+                    zarr_vars,
                     f"Variable '{variable_name}' missing from Zarr",
                 )
 
                 nc_values = ds_nc[variable_name].values
-                zarr_values = ds_zarr[variable_name].values
+                zarr_values = ds_zarr[variable_name][:]
 
                 self.assertEqual(
                     nc_values.shape,
@@ -233,7 +234,6 @@ class CompareZarrToNcTestCase(MpiTestCase):
 
         finally:
             ds_nc.close()
-            ds_zarr.close()
 
     def test_compare_zarr_to_nc(self):
         try:

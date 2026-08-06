@@ -133,12 +133,14 @@ def sw_from_ERA5(geom: CubedSphere2D, ds, t, levels, feature_map):
     v_interp = torch.asarray(v_interp)
 
     g = 9.80616
-    fluid_height = geop_interp / g
 
-    u1_contra = torch.zeros_like(u_interp)
-    u2_contra = torch.zeros_like(v_interp)
+    fluid_height = (geop_interp[:-1] - geop_interp[1:]) / g
 
-    u1_contra, u2_contra = geom.wind2contra(u_interp, v_interp)
+    # Layer-centered winds
+    u_layer = 0.5 * (u_interp[:-1] + u_interp[1:])
+    v_layer = 0.5 * (v_interp[:-1] + v_interp[1:])
+
+    u1_contra, u2_contra = geom.wind2contra(u_layer, v_layer)
 
     return u1_contra, u2_contra, fluid_height
 

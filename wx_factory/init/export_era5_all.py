@@ -17,7 +17,10 @@ def export_era5_all_timesteps(sim, config: Configuration, dataset):
 
     features = list(dataset["features"].values)
     feature_map = {str(f): i for i, f in enumerate(features)}
-    NZ = len(geom.z_levels)
+    if geom.z_levels > 1:
+        NZ = len(geom.z_levels) - 1
+    else:
+        NZ = 1
 
     for i in range(dataset.sizes["time"]):
         if i != 0:

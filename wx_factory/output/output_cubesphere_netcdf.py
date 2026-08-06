@@ -47,10 +47,10 @@ class OutputCubesphereNetcdf(OutputCubesphere):
 
         self.ncfile = None
         self.filename = f"{self.output_dir}/{self.config.base_output_file}.nc"
-        if type(self.geometry.z_levels) == int:
-            self.nz = self.geometry.z_levels
+        if len(self.geometry.z_levels) > 1:
+            self.nz = len(self.geometry.z_levels) - 1
         else:
-            self.nz = len(self.geometry.z_levels)
+            self.nz = 1
 
         if config.output_freq > 0:
             self._output_init()
@@ -75,16 +75,16 @@ class OutputCubesphereNetcdf(OutputCubesphere):
             nj, ni = self.geometry.block_shape
             ni *= side
             nj *= side
-            grid_data = ("npe", "Xdim", "Ydim")
+            grid_data = ("nfaces", "Xdim", "Ydim")
         elif self.config.equations == "euler":
             nk, nj, ni = self.geometry.nk, self.geometry.nj, self.geometry.ni
             nj *= side
             ni *= side
-            grid_data = ("npe", "Zdim", "Xdim", "Ydim")
+            grid_data = ("nfaces", "Zdim", "Xdim", "Ydim")
         else:
             raise ValueError(f"Unsupported equation type {self.config.equations}")
 
-        grid_data2D = ("npe", "Xdim", "Ydim")
+        grid_data2D = ("nfaces", "Xdim", "Ydim")
 
         if self.ncfile is not None:
             # write general attributes
@@ -96,8 +96,8 @@ class OutputCubesphereNetcdf(OutputCubesphere):
                 self.ncfile.earth_radius = self.geometry.earth_radius
 
             self.ncfile.createDimension("time", None)  # unlimited
-            npe = 6
-            self.ncfile.createDimension("npe", npe)
+            nfaces = 6
+            self.ncfile.createDimension("nfaces", nfaces)
             self.ncfile.createDimension("Ydim", ni)
             self.ncfile.createDimension("Xdim", nj)
 
@@ -108,7 +108,6 @@ class OutputCubesphereNetcdf(OutputCubesphere):
                 zzz = self.ncfile.createVariable("Zdim", numpy.float64, ("Zdim",))
                 zzz.long_name = "Zdim"
                 zzz.axis = "Z"
-                zzz.units = "m"
 
                 if self.rank == 0:
                     if hasattr(self, "z_levels"):
@@ -122,7 +121,7 @@ class OutputCubesphereNetcdf(OutputCubesphere):
             tme.calendar = "standard"
 
             # create tiles axis
-            tile = self.ncfile.createVariable("npe", "i4", ("npe"))
+            tile = self.ncfile.createVariable("nfaces", "i4", ("nfaces"))
             tile.grads_dim = "e"
             tile.standard_name = "tile"
             tile.long_name = "cubed-sphere tile"
@@ -159,7 +158,7 @@ class OutputCubesphereNetcdf(OutputCubesphere):
             if self.config.equations == "shallow_water":
 
                 if self.nz > 1:
-                    dims = ("time", "npe", "Zdim", "Xdim", "Ydim")
+                    dims = ("time", "nfaces", "Zdim", "Xdim", "Ydim")
                 else:
                     dims = ("time",) + grid_data
 

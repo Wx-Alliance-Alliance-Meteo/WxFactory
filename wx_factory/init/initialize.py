@@ -201,7 +201,10 @@ def initialize_sw(geom: CubedSphere2D, metric: Metric2D, mtrx: DFROperators, par
         feature_map = {str(f): i for i, f in enumerate(features)}
 
         levels = extract_available_levels(ds)
-        NZ = len(levels)
+        if len(levels) > 1:
+            NZ = len(levels) - 1
+        else:
+            NZ = 1
         # For output_manager
         geom.z_levels = levels
 

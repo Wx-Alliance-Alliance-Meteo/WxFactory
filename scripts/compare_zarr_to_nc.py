@@ -3,14 +3,15 @@
 import sys
 import numpy as np
 import xarray as xr
+import zarr
 
 
 def compare_outputs(nc_file, zarr_store):
     ds_nc = xr.open_dataset(nc_file)
-    ds_zarr = xr.open_zarr(zarr_store)
+    ds_zarr = zarr.open_group(zarr_store, mode="r")
 
     nc_vars = set(ds_nc.variables)
-    zarr_vars = set(ds_zarr.variables)
+    zarr_vars = set(ds_zarr.array_keys())
     if nc_vars != zarr_vars:
         print("ERROR: NetCDF and Zarr variable lists differ")
         print("Only in NetCDF:", sorted(nc_vars - zarr_vars))
@@ -22,13 +23,13 @@ def compare_outputs(nc_file, zarr_store):
 
         for variable_name in ds_nc.variables:
 
-            if variable_name not in ds_zarr.variables:
+            if variable_name not in zarr_vars:
                 print(f"ERROR: Variable '{variable_name}' missing from Zarr")
                 success = False
                 continue
 
             nc_values = ds_nc[variable_name].values
-            zarr_values = ds_zarr[variable_name].values
+            zarr_values = ds_zarr[variable_name][:]
 
             if nc_values.shape != zarr_values.shape:
                 print(
@@ -64,7 +65,6 @@ def compare_outputs(nc_file, zarr_store):
 
     finally:
         ds_nc.close()
-        ds_zarr.close()
 
 
 if __name__ == "__main__":

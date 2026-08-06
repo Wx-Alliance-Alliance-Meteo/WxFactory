@@ -235,18 +235,18 @@ class Simulation:
         return False
 
     def run(self):
-        if self.config.time_start == "":
-            """Run the entire simulation step by step"""
-            self.step_id = self.starting_step
-            self.Q = self.initial_state.Q
+        # if self.config.time_start == "":
+        """Run the entire simulation step by step"""
+        self.step_id = self.starting_step
+        self.Q = self.initial_state.Q
 
-            start_time = time()
+        start_time = time()
 
-            while self.step():
-                pass  # Step until everything is done
-            self.output.finalize(time() - start_time)  # Close any open output file
-        else:
-            export_era5_all_timesteps(self, self.config, self.initial_state.dataset)
+        while self.step():
+            pass  # Step until everything is done
+        self.output.finalize(time() - start_time)  # Close any open output file
+        """else:
+            export_era5_all_timesteps(self, self.config, self.initial_state.dataset)"""
 
     def _needs_autodiff(self) -> bool:
         """Whether this configuration differentiates the right-hand side with autograd."""
