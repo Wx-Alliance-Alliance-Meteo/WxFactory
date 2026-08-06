@@ -2,14 +2,14 @@ import numpy
 import torch
 from wx_test import WxTestCase
 
-from wx_factory.solvers.matvec import _global_norm, matvec_fun
+from wx_factory.jacobian import fd_jacobian_matvec, fd_norm
 
 
-class MatvecTestCases(WxTestCase):
+class FiniteDifferenceJacobianTestCases(WxTestCase):
     def test_fd_norm_uses_working_precision(self):
         vector = torch.tensor([3.0, 4.0], dtype=torch.float32)
 
-        norm = _global_norm(vector, self.comm)
+        norm = fd_norm(vector, self.comm)
 
         self.assertIsInstance(norm, numpy.float32)
         self.assertEqual(norm, numpy.float32(5.0))
@@ -23,7 +23,7 @@ class MatvecTestCases(WxTestCase):
             rhs_inputs.append(value.clone())
             return 3.0 * value
 
-        result = matvec_fun(direction, 2.0, state, rhs(state), rhs)
+        result = fd_jacobian_matvec(direction, 2.0, state, rhs(state), rhs)
 
         epsilon = numpy.sqrt(numpy.float64(numpy.finfo(numpy.float32).eps)) / 13.0
         expected_state = state + (direction.to(torch.float64) * epsilon).to(state.dtype)
@@ -40,7 +40,7 @@ class MatvecTestCases(WxTestCase):
             return value
 
         base = rhs(state)
-        result = matvec_fun(direction, 1.0, state, base, rhs)
+        result = fd_jacobian_matvec(direction, 1.0, state, base, rhs)
 
         self.assertEqual(rhs_dtypes, [torch.float32, torch.float32])
         self.assertEqual(result.dtype, torch.float32)

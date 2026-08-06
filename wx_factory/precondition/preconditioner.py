@@ -4,10 +4,10 @@ from mpi4py import MPI
 from torch import Tensor
 
 from ..common.configuration import Configuration
-from ..solvers import MatvecOp
+from ..jacobian import LinearOperator
 
 
-class Preconditioner(MatvecOp, ABC):
+class Preconditioner(LinearOperator, ABC):
     """Describes a matrix-like object that can be used to precondition a linear system.
 
     A concrete preconditioner implements ``__apply__`` (how it acts on a vector) and, if it needs

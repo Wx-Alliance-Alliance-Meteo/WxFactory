@@ -18,6 +18,8 @@ from tests.unit.common.test_config_hints import ConfigHintsTestCases
 from tests.unit.common.test_configuration import ConfigurationTestCases
 from tests.unit.common.test_sort_fields import SortFieldsByDependencyTestCases
 from tests.unit.geometry.test_geometry_registry import GeometryRegistryTestCases
+from tests.unit.jacobian.test_finite_difference import FiniteDifferenceJacobianTestCases
+from tests.unit.jacobian.test_partition_jacobians import PartitionJacobianTestCase
 from tests.unit.output.test_output_registry import OutputRegistryTestCases
 from tests.unit.output.test_state import StateTestCases
 from tests.unit.precondition.test_preconditioner_registry import (
@@ -35,7 +37,6 @@ from tests.unit.solvers.test_fgmres import (
 from tests.unit.solvers.test_kiops_pmex_tolerance_cpu import (
     KiopsPmexToleranceCpuTestCases,
 )
-from tests.unit.solvers.test_matvec import MatvecTestCases
 from tests.unit.step_hooks.test_step_hook_registry import StepHookRegistryTestCases
 
 
@@ -62,9 +63,15 @@ def load_tests(test_name: str):
 
     add_test(suite, KiopsPmexToleranceCpuTestCases("test_compare_kiops_pmex"), test_re)
 
-    add_test(suite, MatvecTestCases("test_fd_matches_equations_10_and_14"), test_re)
-    add_test(suite, MatvecTestCases("test_fd_preserves_working_precision"), test_re)
-    add_test(suite, MatvecTestCases("test_fd_norm_uses_working_precision"), test_re)
+    add_test(suite, FiniteDifferenceJacobianTestCases("test_fd_matches_equations_10_and_14"), test_re)
+    add_test(suite, FiniteDifferenceJacobianTestCases("test_fd_preserves_working_precision"), test_re)
+    add_test(suite, FiniteDifferenceJacobianTestCases("test_fd_norm_uses_working_precision"), test_re)
+
+    add_test(suite, PartitionJacobianTestCase("test_directional_derivative"), test_re)
+    add_test(suite, PartitionJacobianTestCase("test_finite_at_zero_vertical_velocity"), test_re)
+    add_test(suite, PartitionJacobianTestCase("test_rhs_partition_identity"), test_re)
+    add_test(suite, PartitionJacobianTestCase("test_j2_matches_explicit_directional_derivative"), test_re)
+    add_test(suite, PartitionJacobianTestCase("test_jacobian_partition_identity"), test_re)
 
     add_test(suite, ExponentialSolverRegistryTestCases("test_builtin_solvers_are_registered"), test_re)
     add_test(suite, ExponentialSolverRegistryTestCases("test_unknown_solver_lists_registered_names"), test_re)

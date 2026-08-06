@@ -6,16 +6,16 @@ import numpy
 import torch
 
 from ..common.configuration import Configuration
-from ..rhs.vertical_jacobian import (
+from ..jacobian import (
     assemble_vertical_blocks,
-    col_to_state,
+    columns_to_state,
     forcing_jac_prepare,
     forcing_jvp,
     j2_flux_matvec,
     j2_prepare,
-    solve_retained_columns,
+    solve_stiff_columns,
     split_vertical_blocks,
-    state_to_col,
+    state_to_columns,
 )
 from ..solvers import ExponentialSolverRequest, resolve_exponential_solver
 from .integrator import Integrator, SolverInfo
@@ -91,9 +91,9 @@ class PartRosExp2(Integrator):
         f2 = self.rhs_exp(Q)
 
         # Split one vertical-block assembly between J1 and J2.
-        L, A, U = assemble_vertical_blocks(rhsobj, Q)
-        momentum_blocks, retained_blocks = split_vertical_blocks(rhsobj, L, A, U)
-        del L, A, U
+        lower, diag, upper = assemble_vertical_blocks(rhsobj, Q)
+        momentum_blocks, stiff_blocks = split_vertical_blocks(rhsobj, lower, diag, upper)
+        del lower, diag, upper
 
         j2_base = j2_prepare(self.rhs_full, Q, momentum_blocks)
         forcing_base = forcing_jac_prepare(self.rhs_full, Q)
@@ -126,9 +126,8 @@ class PartRosExp2(Integrator):
 
         tic = time()
         rhs_delta = ((phiv.reshape(-1) + 0.5 * f_imp) * dt).reshape(Q.shape)
-        bc = state_to_col(rhsobj, rhs_delta)
-        dc = solve_retained_columns(rhsobj, retained_blocks, bc, dt)
-        delta = col_to_state(rhsobj, dc, rhs_delta)
+        delta_col = solve_stiff_columns(rhsobj, stiff_blocks, state_to_columns(rhsobj, rhs_delta), dt)
+        delta = columns_to_state(rhsobj, delta_col, rhs_delta)
         time_imp = time() - tic
 
         self.solver_info = SolverInfo(0, time_imp, 1, [])

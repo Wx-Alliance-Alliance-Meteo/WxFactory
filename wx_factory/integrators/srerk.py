@@ -5,9 +5,9 @@ from itertools import combinations
 import numpy
 
 from ..common.configuration import Configuration
+from ..jacobian import fd_jacobian_matvec
 from ..solvers import (
     ExponentialSolverRequest,
-    matvec_fun,
     resolve_exponential_solver,
 )
 from .integrator import Integrator
@@ -106,7 +106,7 @@ class Srerk(Integrator):
         if self.jac is not None:
             matvec_handle = lambda v: self.jac(v, Q, dt)
         else:
-            matvec_handle = lambda v: matvec_fun(v, dt, Q, rhs, self.rhs)
+            matvec_handle = lambda v: fd_jacobian_matvec(v, dt, Q, rhs, self.rhs)
 
         # Initial projection
         vec = numpy.zeros((2, rhs.size))

@@ -22,11 +22,11 @@ except ModuleNotFoundError:
 
 
 from ..context import Context
-from .matvec import MatvecOp
+from ..jacobian import LinearOperator
 
 
 def gen_matrix(
-    matvec: MatvecOp,
+    matvec: LinearOperator,
     jac_file_name: str | None = None,
     compressed: bool | None = None,
     local: bool = False,

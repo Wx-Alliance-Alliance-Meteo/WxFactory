@@ -5,13 +5,14 @@ import numpy
 import torch
 
 from ..common.configuration import Configuration
-from ..solvers import MatvecOpRat, SolverInfo
+from ..jacobian import FiniteDifferenceRosenbrock
+from ..solvers import SolverInfo
 from .integrator import Integrator
 
 
 class Ros2(Integrator):
     Q_flat: numpy.ndarray
-    A: MatvecOpRat
+    A: FiniteDifferenceRosenbrock
     b: numpy.ndarray
 
     def __init__(self, param: Configuration, rhs_handle: Callable, *, context=None, preconditioner=None) -> None:
@@ -23,7 +24,7 @@ class Ros2(Integrator):
     def __prestep__(self, Q: numpy.ndarray, dt: float) -> None:
         rhs = self.rhs_handle(Q)
         self.Q_flat = torch.ravel(Q)
-        self.A = MatvecOpRat(dt, Q, rhs, self.rhs_handle)
+        self.A = FiniteDifferenceRosenbrock(dt, Q, rhs, self.rhs_handle)
         self.b = self.A(self.Q_flat) + torch.ravel(rhs) * dt
 
     def __step__(self, Q: torch.Tensor, dt: float):

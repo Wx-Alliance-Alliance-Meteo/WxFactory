@@ -27,7 +27,7 @@ __pycache__/
 .cupy
 
 /*.pdf
-jacobian
+/jacobian
 listings
 results*
 work

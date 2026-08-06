@@ -5,7 +5,8 @@ import numpy
 import torch
 
 from ..common.configuration import Configuration
-from ..solvers import ExponentialSolverRequest, matvec_fun, resolve_exponential_solver
+from ..jacobian import fd_jacobian_matvec
+from ..solvers import ExponentialSolverRequest, resolve_exponential_solver
 from .epi import Epi
 from .integrator import Integrator
 from .srerk import alpha_coeff
@@ -64,12 +65,12 @@ class EpiStiff(Integrator):
         rhs = self.rhs(Q)
 
         def matvec_handle(v):
-            return matvec_fun(v, dt, Q, rhs, self.rhs)
+            return fd_jacobian_matvec(v, dt, Q, rhs, self.rhs)
 
         vec = torch.zeros((self.max_phi + 1, math.prod(rhs.shape)), dtype=Q.dtype)
         vec[1, :] = rhs.flatten()
         for i in range(self.n_prev):
-            J_deltaQ = matvec_fun(self.previous_Q[i] - Q, 1.0, Q, rhs, self.rhs)
+            J_deltaQ = fd_jacobian_matvec(self.previous_Q[i] - Q, 1.0, Q, rhs, self.rhs)
 
             # R(y_{n-i})
             r = (self.previous_rhs[i] - rhs) - J_deltaQ.reshape(Q.shape)

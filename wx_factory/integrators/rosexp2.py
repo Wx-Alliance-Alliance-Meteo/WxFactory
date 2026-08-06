@@ -5,7 +5,8 @@ import numpy
 import torch
 
 from ..common.configuration import Configuration
-from ..solvers import ExponentialSolverRequest, matvec_fun, matvec_rat, resolve_exponential_solver
+from ..jacobian import fd_jacobian_matvec, fd_rosenbrock_matvec
+from ..solvers import ExponentialSolverRequest, resolve_exponential_solver
 from .integrator import Integrator, SolverInfo
 
 
@@ -32,7 +33,9 @@ class RosExp2(Integrator):
         n = len(Q_flat)
 
         def J_exp(v):
-            return matvec_fun(v, dt, Q, rhs_full, self.rhs_full) - matvec_fun(v, dt, Q, rhs_imp, self.rhs_imp)
+            return fd_jacobian_matvec(v, dt, Q, rhs_full, self.rhs_full) - fd_jacobian_matvec(
+                v, dt, Q, rhs_imp, self.rhs_imp
+            )
 
         vec = torch.zeros((2, n), dtype=Q.dtype)
         vec[1, :] = rhs_full.flatten()
@@ -56,7 +59,7 @@ class RosExp2(Integrator):
         tic = time()
 
         def A(v):
-            return matvec_rat(v, dt, Q, rhs_imp, self.rhs_imp)
+            return fd_rosenbrock_matvec(v, dt, Q, rhs_imp, self.rhs_imp)
 
         b = (A(Q_flat) + phiv * dt).flatten()
         Q_x0 = Q_flat.copy()

@@ -11,7 +11,6 @@ from .exponential_solver import (
 from .fgmres import fgmres
 from .global_operations import global_dotprod, global_inf_norm, global_norm
 from .kiops import kiops
-from .matvec import MatvecOp, MatvecOpBasic, MatvecOpRat, matvec_fun, matvec_rat
 from .nonlin import KrylovJacobian, newton_krylov
 from .pmex import pmex
 from .solver_info import SolverInfo
@@ -21,9 +20,6 @@ __all__ = [
     "ExponentialSolverRequest",
     "ExponentialSolverResult",
     "KrylovJacobian",
-    "MatvecOp",
-    "MatvecOpBasic",
-    "MatvecOpRat",
     "SolverInfo",
     "exode",
     "fgmres",
@@ -31,8 +27,6 @@ __all__ = [
     "global_inf_norm",
     "global_norm",
     "kiops",
-    "matvec_fun",
-    "matvec_rat",
     "newton_krylov",
     "pmex",
     "register_exponential_solver",
