@@ -17,6 +17,7 @@ from tests.unit.common.test_angle24 import Angle24TestCase
 from tests.unit.common.test_config_hints import ConfigHintsTestCases
 from tests.unit.common.test_configuration import ConfigurationTestCases
 from tests.unit.common.test_sort_fields import SortFieldsByDependencyTestCases
+from tests.unit.geometry.test_exponential_filter import ExponentialFilterTestCase
 from tests.unit.geometry.test_geometry_registry import GeometryRegistryTestCases
 from tests.unit.jacobian.test_finite_difference import FiniteDifferenceJacobianTestCases
 from tests.unit.jacobian.test_partition_jacobians import PartitionJacobianTestCase
@@ -70,6 +71,12 @@ def load_tests(test_name: str):
     add_test(suite, FiniteDifferenceJacobianTestCases("test_fd_matches_equations_10_and_14"), test_re)
     add_test(suite, FiniteDifferenceJacobianTestCases("test_fd_preserves_working_precision"), test_re)
     add_test(suite, FiniteDifferenceJacobianTestCases("test_fd_norm_uses_working_precision"), test_re)
+
+    add_test(suite, ExponentialFilterTestCase("test_quadrature_weights_are_double_precision"), test_re)
+    add_test(suite, ExponentialFilterTestCase("test_lowest_mode_is_unfiltered"), test_re)
+    add_test(suite, ExponentialFilterTestCase("test_high_modes_are_attenuated"), test_re)
+    add_test(suite, ExponentialFilterTestCase("test_preserves_metric_weighted_integral"), test_re)
+    add_test(suite, ExponentialFilterTestCase("test_unweighted_filtering_would_not_conserve"), test_re)
 
     add_test(suite, PartitionJacobianTestCase("test_directional_derivative"), test_re)
     add_test(suite, PartitionJacobianTestCase("test_finite_at_zero_vertical_velocity"), test_re)
