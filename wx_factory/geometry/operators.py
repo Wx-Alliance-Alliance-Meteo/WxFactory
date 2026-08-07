@@ -43,6 +43,7 @@ class DFROperators:
            Tensor dtype. Defaults to the context's working real dtype.
         """
 
+        self.context = context
         self.dtype = context.real_dtype if dtype is None else dtype
         build_dtype = torch.float64
 
@@ -84,7 +85,7 @@ class DFROperators:
         )  # Only valid in 3D (hence the **2)
 
         diff = diffmat(grd.extension_sym)
-        self.diff_ext = torch.asarray(diff).astype(build_dtype)
+        self.diff_ext = torch.asarray(diff).to(build_dtype)
 
         assert self.diff_ext.dtype == build_dtype
 
@@ -92,18 +93,18 @@ class DFROperators:
             raise ValueError("Something horribly wrong has happened in the creation of the differentiation matrix")
 
         # Force matrices to be in C-contiguous order
-        self.diff_solpt = self.diff_ext[1:-1, 1:-1].copy()
+        self.diff_solpt = self.diff_ext[1:-1, 1:-1].clone()
         self.correction = torch.column_stack((self.diff_ext[1:-1, 0], self.diff_ext[1:-1, -1]))
 
-        self.diff_solpt_tr = self.diff_solpt.T.copy()
-        self.correction_tr = self.correction.T.copy()
+        self.diff_solpt_tr = self.diff_solpt.T.clone()
+        self.correction_tr = self.correction.T.clone()
 
         # Ordinary differentiation matrices (used only in diagnostic calculations)
         self.diff = diffmat(grd.solutionPoints)
-        self.diff = torch.asarray(self.diff).astype(build_dtype)
-        self.diff_tr = self.diff.T.copy()
+        self.diff = torch.asarray(self.diff).to(build_dtype)
+        self.diff_tr = self.diff.T.clone()
 
-        self.quad_weights = torch.outer(grd.glweights, grd.glweights).astype(build_dtype)
+        self.quad_weights = torch.outer(grd.glweights, grd.glweights).to(build_dtype)
 
         assert self.diff_solpt.dtype == build_dtype
         assert self.correction.dtype == build_dtype
@@ -117,15 +118,15 @@ class DFROperators:
             I2 = torch.eye(grd.num_solpts, dtype=V.dtype)
             I3 = torch.eye(grd.num_solpts**2, dtype=V.dtype)
 
-            self.extrap_x = torch.vstack((kron(I3, self.extrap_west), kron(I3, self.extrap_east))).T.copy()
+            self.extrap_x = torch.vstack((kron(I3, self.extrap_west), kron(I3, self.extrap_east))).T.clone()
             self.extrap_y = torch.vstack(
                 (kron(I2, kron(self.extrap_south, I2)), kron(I2, kron(self.extrap_north, I2)))
-            ).T.copy()
-            self.extrap_z = torch.vstack((kron(self.extrap_down, I3), kron(self.extrap_up, I3))).T.copy()
+            ).T.clone()
+            self.extrap_z = torch.vstack((kron(self.extrap_down, I3), kron(self.extrap_up, I3))).T.clone()
 
-            self.derivative_x = kron(I3, self.diff_solpt).T.copy()
-            self.derivative_y = kron(I2, kron(self.diff_solpt, I2)).T.copy()
-            self.derivative_z = kron(self.diff_solpt, I3).T.copy()
+            self.derivative_x = kron(I3, self.diff_solpt).T.clone()
+            self.derivative_y = kron(I2, kron(self.diff_solpt, I2)).T.clone()
+            self.derivative_z = kron(self.diff_solpt, I3).T.clone()
 
             corr_west = self.diff_ext[1:-1, 0]
             corr_east = self.diff_ext[1:-1, -1]
@@ -140,13 +141,13 @@ class DFROperators:
 
         else:
             ident = torch.eye(grd.num_solpts, dtype=build_dtype)
-            self.extrap_x = torch.vstack((kron(ident, self.extrap_west), kron(ident, self.extrap_east))).T.copy()
-            self.extrap_y = torch.vstack((kron(self.extrap_south, ident), kron(self.extrap_north, ident))).T.copy()
-            self.extrap_z = torch.vstack((kron(self.extrap_down, ident), kron(self.extrap_up, ident))).T.copy()
+            self.extrap_x = torch.vstack((kron(ident, self.extrap_west), kron(ident, self.extrap_east))).T.clone()
+            self.extrap_y = torch.vstack((kron(self.extrap_south, ident), kron(self.extrap_north, ident))).T.clone()
+            self.extrap_z = torch.vstack((kron(self.extrap_down, ident), kron(self.extrap_up, ident))).T.clone()
 
-            self.derivative_x = kron(ident, self.diff_solpt).T.copy()
-            self.derivative_y = kron(self.diff_solpt, ident).T.copy()
-            self.derivative_z = kron(self.diff_solpt, ident).T.copy()
+            self.derivative_x = kron(ident, self.diff_solpt).T.clone()
+            self.derivative_y = kron(self.diff_solpt, ident).T.clone()
+            self.derivative_z = kron(self.diff_solpt, ident).T.clone()
 
             corr_down = self.diff_ext[1:-1, 0]
             corr_up = self.diff_ext[1:-1, -1]
@@ -163,7 +164,7 @@ class DFROperators:
         if self.dtype != build_dtype:
             for name, value in vars(self).items():
                 if hasattr(value, "dtype") and value.dtype == build_dtype:
-                    setattr(self, name, value.astype(self.dtype))
+                    setattr(self, name, value.to(self.dtype))
 
         if check_skewcentrosymmetry(self.diff_ext) is False:
             raise ValueError("The stored differentiation matrix lost skew-centrosymmetry during precision conversion")
@@ -196,7 +197,7 @@ class DFROperators:
         filtered = modes > cutoff
         attenuation[filtered] = torch.exp(-strength * ((modes[filtered] - cutoff) / (1.0 - cutoff)) ** order)
 
-        vandermonde = legvander(geom.solutionPoints, geom.num_solpts - 1).astype(self.dtype)
+        vandermonde = legvander(geom.solutionPoints, geom.num_solpts - 1).to(self.dtype)
         filter_1d = vandermonde @ torch.diag(attenuation) @ torch.linalg.inv(vandermonde)
         identity_1d = torch.eye(geom.num_solpts, dtype=self.dtype)
         identity_2d = torch.eye(geom.num_solpts**2, dtype=self.dtype)
@@ -211,8 +212,8 @@ class DFROperators:
         return ((metric.sqrtG_new * Q) @ filter_matrix) * metric.inv_sqrtG_new
 
     def comma_i(
-        self: Self, field_interior: NDArray[T], border_i: NDArray[T], grid: CubedSphere3D, out: NDArray[T] | None = None
-    ) -> NDArray[T]:
+        self: Self, field_interior: Tensor, border_i: Tensor, grid: CubedSphere3D, out: Tensor | None = None
+    ) -> Tensor:
         """Take a partial derivative along the i-index
 
         This method takes the partial derivative of an input field, potentially consisting of several
@@ -221,17 +222,17 @@ class DFROperators:
 
         Parameters
         ----------
-        field_interior : NDArray
+        field_interior : Tensor
            The element-interior values of the variable(s) to be differentiated.  This should have
            a shape of `(numvars,npts_z,npts_y,npts_x)`, respecting the prevailing parallel decomposition.
-        border_i : NDArray
+        border_i : Tensor
            The element-boundary values of the fields to be differentiated, along the i-axis.  This should
            have a shape of `(numvars,npts_z,npts_y,nels_x,2)`, with [:,0] being the leftmost boundary
            (minimal `i`), and [:,1] being the rightmost boundary (maximal `i`)
         grid : Geometry
            Grid-defining class, used here solely to provide the canonical definition of the local
            computational region.
-        out : NDArray | None
+        out : Tensor | None
            Destination array for operation. If provided, should be a C-contiguous array with the same shape
            as `field_interior`.
         """
@@ -259,9 +260,7 @@ class DFROperators:
 
         return output
 
-    def extrapolate_i(
-        self: Self, field_interior: NDArray[T], grid: CubedSphere3D, out: NDArray[T] | None = None
-    ) -> NDArray[T]:
+    def extrapolate_i(self: Self, field_interior: Tensor, grid: CubedSphere3D, out: Tensor | None = None) -> Tensor:
         """Compute the i-border values along each element of field_interior
 
         This method extrapolates the variables in `field_interior` to the boundary along
@@ -269,13 +268,13 @@ class DFROperators:
 
         Parameters
         ----------
-        field_interior : numpy.ndarray
+        field_interior : Tensor
            The element-interior values of the variable(s) to be differentiated.  This should have
            a shape of `(numvars,npts_z,npts_y,npts_x)`, respecting the prevailing parallel decomposition.
         grid : Geometry
            Grid-defining class, used here solely to provide the canonical definition of the local
            computational region.
-        out : NDArray | None
+        out : Tensor | None
            Destination array for operation. If provided, should be a C-contiguous array
            with shape (numvars, npts_z, npts_y, nels_x, 2).
         """
@@ -308,8 +307,8 @@ class DFROperators:
         return border
 
     def comma_j(
-        self: Self, field_interior: NDArray[T], border_j: NDArray[T], grid: CubedSphere3D, out: NDArray[T] | None = None
-    ) -> NDArray[T]:
+        self: Self, field_interior: Tensor, border_j: Tensor, grid: CubedSphere3D, out: Tensor | None = None
+    ) -> Tensor:
         """Take a partial derivative along the j-index
 
         This method takes the partial derivative of an input field, potentially consisting of several
@@ -318,17 +317,17 @@ class DFROperators:
 
         Parameters
         ----------
-        field_interior : numpy.ndarray
+        field_interior : Tensor
            The element-interior values of the variable(s) to be differentiated.  This should have
            a shape of `(numvars,npts_z,npts_y,npts_x)`, respecting the prevailing parallel decomposition.
-        border_j : numpy.ndarray
+        border_j : Tensor
            The element-boundary values of the fields to be differentiated, along the i-axis.  This should
            have a shape of `(numvars,npts_z,nels_y,2,npts_x)`, with [:,0,:] being the southmost boundary
            (minimal `j`), and [:,1,:] being the north boundary (maximal `j`)
         grid : Geometry
            Grid-defining class, used here solely to provide the canonical definition of the local
            computational region.
-        out : NDArray | None
+        out : Tensor | None
            Destination array for operation. If provided, should be a C-contiguous array with the same shape
            as `field_interior`.
         """
@@ -359,9 +358,7 @@ class DFROperators:
 
         return output
 
-    def extrapolate_j(
-        self: Self, field_interior: NDArray[T], grid: CubedSphere3D, out: NDArray[T] | None = None
-    ) -> NDArray[T]:
+    def extrapolate_j(self: Self, field_interior: Tensor, grid: CubedSphere3D, out: Tensor | None = None) -> Tensor:
         """Compute the j-border values along each element of field_interior
 
         This method extrapolates the variables in `field_interior` to the boundary along
@@ -369,14 +366,14 @@ class DFROperators:
 
         Parameters
         ----------
-        field_interior : numpy.ndarray
+        field_interior : Tensor
            The element-interior values of the variable(s) to be differentiated.  This should have
            a shape of `(numvars,npts_z,npts_y,npts_x)`, respecting the prevailing parallel decomposition.
            To allow for differentiation of 2D objects, npts_z can be one.
         grid : Geometry
            Grid-defining class, used here solely to provide the canonical definition of the local
            computational region.
-        out : NDArray | None
+        out : Tensor | None
            Destination array for operation. If provided, should be a C-contiguous array with
            shape (numvars, npts_z, nels_y, 2, npts_x).
         """
@@ -411,8 +408,8 @@ class DFROperators:
         return border
 
     def comma_k(
-        self: Self, field_interior: NDArray[T], border_k: NDArray[T], grid: CubedSphere3D, out: NDArray[T] | None = None
-    ) -> NDArray[T]:
+        self: Self, field_interior: Tensor, border_k: Tensor, grid: CubedSphere3D, out: Tensor | None = None
+    ) -> Tensor:
         """Take a partial derivative along the k-index
 
         This method takes the partial derivative of an input field, potentially consisting of several
@@ -421,17 +418,17 @@ class DFROperators:
 
         Parameters
         ----------
-        field_interior : numpy.ndarray
+        field_interior : Tensor
            The element-interior values of the variable(s) to be differentiated.  This should have
            a shape of `(numvars,npts_z,npts_y,npts_x)`, respecting the prevailing parallel decomposition.
-        border_k : numpy.array
+        border_k : Tensor
            The element-boundary values of the fields to be differentiated, along the i-axis.  This should
            have a shape of `(numvars,nels_z,2,npts_y,npts_x)`, with [:,0,:] being the downmost boundary
            (minimal `k`), and [:,1,:] being the upmost boundary (maximal `k`)
         grid : Geometry
            Grid-defining class, used here solely to provide the canonical definition of the local
            computational region.
-        out : NDArray | None
+        out : Tensor | None
            Destination array for operation. If provided, should be a C-contiguous array with the same shape
            as `field_interior`.
         """
@@ -461,9 +458,7 @@ class DFROperators:
 
         return output
 
-    def extrapolate_k(
-        self: Self, field_interior: NDArray[T], grid: CubedSphere3D, out: NDArray[T] | None = None
-    ) -> NDArray[T]:
+    def extrapolate_k(self: Self, field_interior: Tensor, grid: CubedSphere3D, out: Tensor | None = None) -> Tensor:
         """Compute the k-border values along each element of field_interior
 
         This method extrapolates the variables in `field_interior` to the boundary along
@@ -471,13 +466,13 @@ class DFROperators:
 
         Parameters
         ----------
-        field_interior : numpy.ndarray
+        field_interior : Tensor
            The element-interior values of the variable(s) to be differentiated.  This should have
            a shape of `(numvars,npts_z,npts_y,npts_x)`, respecting the prevailing parallel decomposition.
         grid : Geometry
            Grid-defining class, used here solely to provide the canonical definition of the local
            computational region.
-        out : NDArray | None
+        out : Tensor | None
            Destination array for operation. If provided, should be a C-contiguous array
            with shape (numvars, nels_z, 2, npts_y, npts_x).
         """
@@ -587,19 +582,6 @@ class DFROperators:
         return output
 
 
-def lagrange_eval(points, newPt):
-    """Evaluate the Lagrange polynomial of a set of points at a specific point."""
-    M = len(points)
-    x = sympy.symbols("x")
-    l = numpy.zeros_like(points)
-    if M == 1:
-        l[0] = 1  # Constant
-    else:
-        for i in range(M):
-            l[i] = lagrange_poly(x, M - 1, i, points).evalf(subs={x: newPt}, n=20)
-    return l.astype(float)
-
-
 def diffmat(points) -> numpy.ndarray:
     """Create a 2D differentiation matrix for the given set of points."""
     M = len(points)
@@ -623,37 +605,7 @@ def lagrange_poly(x: sympy.Symbol, order: int, i: int, xi):
     return sympy.prod([(x - xi[j]) / (xi[i] - xi[j]) for j in index])
 
 
-def vandermonde(x: numpy.ndarray):
-    r"""Initialize the 1D Vandermonde matrix, \(\mathcal{V}_{ij}=P_j(x_i)\)."""
-    N = len(x)
-
-    V = numpy.zeros((N, N), dtype=object)
-    y = sympy.symbols("y")
-    for j in range(N):
-        for i in range(N):
-            V[i, j] = sympy.legendre(j, y).evalf(subs={y: x[i]}, n=30, chop=True)
-
-    return V
-
-
-def remesh_operator(src_points: numpy.ndarray, target_points: numpy.ndarray) -> numpy.ndarray:
-    """Create an element operator to reduce/prolong a grid."""
-    src_num_solpts = len(src_points)
-    target_num_solpts = len(target_points)
-
-    # Projection
-    inv_V_src = inv(vandermonde(src_points))
-    V_target = vandermonde(target_points)
-
-    modes = numpy.zeros((target_num_solpts, src_num_solpts))
-    for i in range(min(src_num_solpts, target_num_solpts)):
-        modes[i, i] = 1.0
-    modes[i, i] = 0.5  # damp the highest mode
-
-    return (V_target @ modes @ inv_V_src).astype(float)
-
-
-def check_skewcentrosymmetry(m: numpy.ndarray) -> bool:
+def check_skewcentrosymmetry(m: Tensor) -> bool:
     """Verify that the given matrix is skew-centrosymmetric"""
     if m.ndim != 2:
         raise numpy.linalg.LinAlgError("Input matrix is not 2-dimensional!")
@@ -681,34 +633,6 @@ def check_skewcentrosymmetry(m: numpy.ndarray) -> bool:
                 return False
 
     return True
-
-
-# Borrowed from Galois:
-# https://github.com/mhostetter/galois
-def inv(A: numpy.ndarray) -> numpy.ndarray:
-    """Compute the inverse of a matrix."""
-    if not (A.ndim == 2 and A.shape[0] == A.shape[1]):
-        raise numpy.linalg.LinAlgError(f"Argument `A` must be square, not {A.shape}.")
-    n = A.shape[0]
-    I = numpy.eye(n, dtype=A.dtype)
-
-    # Concatenate A and I to get the matrix AI = [A | I]
-    AI = numpy.concatenate((A, I), axis=-1)
-
-    # Perform Gaussian elimination to get the reduced row echelon form AI_rre = [I | A^-1]
-    AI_rre = row_reduce(AI, ncols=n)
-
-    # The rank is the number of non-zero rows of the row reduced echelon form
-    rank = numpy.sum(~numpy.all(AI_rre[:, 0:n] == 0, axis=1))
-    if not rank == n:
-        raise numpy.linalg.LinAlgError(
-            f"Argument `A` is singular and not invertible because it does not"
-            f" have full rank of {n}, but rank of {rank}."
-        )
-
-    A_inv = AI_rre[:, -n:]
-
-    return A_inv
 
 
 def row_reduce(A: numpy.ndarray, ncols: int | None = None) -> numpy.ndarray:
