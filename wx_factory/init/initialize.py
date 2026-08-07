@@ -258,9 +258,18 @@ def initialize_sw(geom: CubedSphere2D, metric: Metric2D, mtrx: DFROperators, par
         Q[idx_hu1, ...] = fluid_height * u1_contra
         Q[idx_hu2, ...] = fluid_height * u2_contra
 
+    # Store the initialized state and topography in the geometry's working precision.
+    Q = Q.astype(geom.dtype)
+
     topo = None
     if param.case_number in [-1, -2, 5, 10]:
-        topo = Topo(hsurf, dzdx1, dzdx2, hsurf_itf_i, hsurf_itf_j)
+        topo = Topo(
+            hsurf.astype(geom.dtype),
+            dzdx1.astype(geom.dtype),
+            dzdx2.astype(geom.dtype),
+            hsurf_itf_i.astype(geom.dtype),
+            hsurf_itf_j.astype(geom.dtype),
+        )
 
     return Q, topo, dataset
 

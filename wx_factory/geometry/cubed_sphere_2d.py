@@ -6,6 +6,7 @@ from numpy.typing import NDArray
 
 from ..process_topology import ProcessTopology
 from .cubed_sphere import CubedSphere
+from .geometry import cast_double_arrays
 from .sphere import cart2sph
 
 
@@ -168,11 +169,11 @@ class CubedSphere2D(CubedSphere):
         self.x2 = torch.repeat_interleave(offsets_x2, num_solpts) + torch.tile(ref_solpts_x2, (num_elements_x2,))
 
         # Element interfaces
-        self.x1_itf_i = torch.linspace(domain_x1[0], domain_x1[1], num_elements_x1 + 1, dtype=self.dtype)
+        self.x1_itf_i = torch.linspace(domain_x1[0], domain_x1[1], num_elements_x1 + 1, dtype=torch.float64)
         self.x2_itf_i = self.x2.copy()  # Copy over x2, without change because of tensor product structure
 
         self.x1_itf_j = self.x1.copy()
-        self.x2_itf_j = torch.linspace(domain_x2[0], domain_x2[1], num_elements_x2 + 1, dtype=self.dtype)
+        self.x2_itf_j = torch.linspace(domain_x2[0], domain_x2[1], num_elements_x2 + 1, dtype=torch.float64)
 
         ## Construct the combined coordinate vector for the numeric/equiangular coordinate (x1, x2)
         self.block_radians_x1, self.block_radians_x2 = torch.meshgrid(self.x1, self.x2, indexing="xy")
@@ -254,6 +255,9 @@ class CubedSphere2D(CubedSphere):
         # as will the DG structures.
 
         self._build_physical_coordinates()
+
+        # Cast coordinates to working precision before metric construction.
+        cast_double_arrays(self, self.dtype)
 
     def _build_physical_coordinates(self):
         """

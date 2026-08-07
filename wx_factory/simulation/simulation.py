@@ -231,7 +231,9 @@ class Simulation:
         while self.step():
             pass  # Step until everything is done
 
-        if self.rank == 0:
+        # print_times is a diagnostic of the instrumented DFR right-hand side; RhsAdvection2d has no
+        # timing instrumentation and does not provide it.
+        if self.rank == 0 and hasattr(self.rhs.full, "print_times"):
             self.rhs.full.print_times()
 
         self.output.finalize(time() - start_time)  # Close any open output file
