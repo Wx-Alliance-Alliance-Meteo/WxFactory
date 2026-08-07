@@ -120,10 +120,7 @@ class OutputManager:
 
             t0 = time()
 
-            if self.config.case_number == -2:
-                self.__write_result__(Q, self.dataset.data["time"][step_id])
-            else:
-                self.__write_result__(Q, step_id)
+            self.__write_result__(Q, step_id)
 
             self.total_write_time += time() - t0
             self.num_writes += 1

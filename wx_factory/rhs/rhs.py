@@ -158,7 +158,7 @@ class RHS(ABC):
         """Return the real operator set."""
         return self.ops_real
 
-    def allocate_arrays(self, q: NDArray):
+    def allocate_arrays(self, q: Tensor):
         if self.f_x1 is None or self.f_x1.dtype != q.dtype:
             self.f_x1 = torch.zeros_like(q)
             self.f_x2 = torch.zeros_like(q)
@@ -202,19 +202,19 @@ class RHS(ABC):
 
     def print_times(self) -> None:
         for timings, is_complex in zip([self.timings_real, self.timings_complex], [False, True]):
-            if len(timings) == 0:
+            if len(timings) <= 1:
                 continue
             timings = numpy.array(timings)
-            extrapolation = timings[:, 0].sum()
-            start_comm = timings[:, 1].sum()
-            pw_flux = timings[:, 2].sum()
-            flux_div_1 = timings[:, 3].sum()
-            end_comm = timings[:, 4].sum()
-            riemann = timings[:, 5].sum()
-            flux_div_2 = timings[:, 6].sum()
-            forcing = timings[:, 7].sum()
-            total = timings[:, -1].sum()
-            num_calls = len(timings)
+            extrapolation = timings[1:, 0].sum()
+            start_comm = timings[1:, 1].sum()
+            pw_flux = timings[1:, 2].sum()
+            flux_div_1 = timings[1:, 3].sum()
+            end_comm = timings[1:, 4].sum()
+            riemann = timings[1:, 5].sum()
+            flux_div_2 = timings[1:, 6].sum()
+            forcing = timings[1:, 7].sum()
+            total = timings[1:, -1].sum()
+            num_calls = len(timings) - 1
             print(
                 f"RHS times ({'real' if not is_complex else 'complex'}, {num_calls} calls):\n"
                 f"                   Total | per call  (ms)\n"

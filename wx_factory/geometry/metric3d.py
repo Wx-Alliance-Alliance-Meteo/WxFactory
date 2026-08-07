@@ -2,6 +2,7 @@ import math
 
 import numpy
 import torch
+from torch import Tensor
 
 from .cubed_sphere_3d import CubedSphere3D
 from .geometry import cast_double_arrays
@@ -16,6 +17,7 @@ class Metric3DTopo:
         self.geom = geom
         self.matrix = matrix
         self.deep = geom.deep
+        self.context = geom.context
 
     def build_metric(self):
         """Construct the metric terms, with the assurance that topography is now defined.  This defines full, 3D arrays
@@ -338,7 +340,9 @@ class Metric3DTopo:
         # Initialize metric arrays
 
         # Covariant space-only metric
-        def compute_metric(X, Y, R, dRdx1, dRdx2, dRdeta, with_cov: bool = True):
+        def compute_metric(
+            X: Tensor, Y: Tensor, R: Tensor, dRdx1: Tensor, dRdx2: Tensor, dRdeta: Tensor, with_cov: bool = True
+        ) -> tuple[Tensor | None, Tensor, Tensor]:
             """Compute metric terms, optionally omitting the covariant metric."""
             delsq = 1 + X**2 + Y**2  # δ², per Charron May 2022
             del4 = delsq**2
@@ -348,7 +352,7 @@ class Metric3DTopo:
             rootG = torch.empty_like(X)
 
             if deep:
-                if with_cov:
+                if Hcov is not None:
                     Hcov[0, 0, :] = (delta_x**2 / 4) * (R**2 / del4 * (1 + X**2) ** 2 * (1 + Y**2) + dRdx1**2)  # g_11
 
                     Hcov[0, 1, :] = (delta_x * delta_y / 4) * (
@@ -407,7 +411,7 @@ class Metric3DTopo:
                     / delsq ** (1.5)
                 )
             else:  # Shallow, so all bare R terms become A terms
-                if with_cov:
+                if Hcov is not None:
                     Hcov[0, 0, :] = (delta_x**2 / 4) * (A**2 / del4 * (1 + X**2) ** 2 * (1 + Y**2) + dRdx1**2)  # g_11
 
                     Hcov[0, 1, :] = (delta_x * delta_y / 4) * (
@@ -522,10 +526,9 @@ class Metric3DTopo:
             Christoffel_1_12 = -Y_int * (1 + Y_int**2) / deltasq + dRdx2_int / A
             Christoffel_1_13 = dRdeta_int / A
 
-        Christoffel_1_22 = 0
-        Christoffel_1_23 = 0
-
-        Christoffel_1_33 = 0
+        Christoffel_1_22 = self.context.tensor([0.0])
+        Christoffel_1_23 = self.context.tensor([0.0])
+        Christoffel_1_33 = self.context.tensor([0.0])
 
         # Γ^2_ab, a≤b
         if deep:
@@ -537,9 +540,9 @@ class Metric3DTopo:
             )
             Christoffel_2_03 = dRdeta_int * Omega / (R_int * (1 + Y_int**2)) * rot3
 
-            Christoffel_2_11 = 0
+            Christoffel_2_11 = self.context.tensor([0.0])
             Christoffel_2_12 = -X_int * (1 + X_int**2) / deltasq + dRdx1_int / R_int
-            Christoffel_2_13 = 0
+            Christoffel_2_13 = self.context.tensor([0.0])
 
             Christoffel_2_22 = 2 * X_int**2 * Y_int / deltasq + dRdx2_int * 2 / R_int
             Christoffel_2_23 = dRdeta_int / R_int
@@ -548,14 +551,14 @@ class Metric3DTopo:
             Christoffel_2_02 = -Omega * X_int * Y_int / deltasq * rot2 + dRdx2_int * Omega / (A * (1 + Y_int**2)) * rot3
             Christoffel_2_03 = dRdeta_int * Omega / (A * (1 + Y_int**2)) * rot3
 
-            Christoffel_2_11 = 0
+            Christoffel_2_11 = self.context.tensor([0.0])
             Christoffel_2_12 = -X_int * (1 + X_int**2) / deltasq + dRdx1_int / A
-            Christoffel_2_13 = 0
+            Christoffel_2_13 = self.context.tensor([0.0])
 
             Christoffel_2_22 = 2 * X_int**2 * Y_int / deltasq + dRdx2_int * 2 / A
             Christoffel_2_23 = dRdeta_int / A
 
-        Christoffel_2_33 = 0
+        Christoffel_2_33 = self.context.tensor([0.0])
 
         # Γ^3_ab, a≤b
         # For this set of terms, we need the second derivatives of R with respect to x1, x1, and η
@@ -857,7 +860,8 @@ class Metric3DTopo:
         self.h_contra_itf_k_new = geom._to_new_itf_k(H_contra_itf_k)
 
         # The covariant metric converts winds at volume points.
-        self.h_cov_new = geom._to_new(H_cov)
+        if H_cov is not None:
+            self.h_cov_new = geom._to_new(H_cov)
 
         self.sqrtG_new = geom._to_new(sqrtG)
         self.sqrtG_itf_i_new = geom._to_new_itf_i(sqrtG_itf_i)

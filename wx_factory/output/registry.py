@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING
 from .output_cartesian import OutputCartesian
 from .output_cubesphere_fst import OutputCubesphereFst
 from .output_cubesphere_netcdf import OutputCubesphereNetcdf
+from .output_cubesphere_zarr import OutputCubesphereZarr
 from .output_manager import OutputManager
 
 if TYPE_CHECKING:
@@ -88,7 +89,6 @@ def _cubesphere_netcdf(ctx: OutputContext) -> OutputManager:
         ctx.context,
         ctx.metric,
         ctx.topography,
-        ctx.dataset,
         ctx.ptopo,
     )
 
@@ -96,6 +96,19 @@ def _cubesphere_netcdf(ctx: OutputContext) -> OutputManager:
 @register_output("cubesphere", "fst")
 def _cubesphere_fst(ctx: OutputContext) -> OutputManager:
     return OutputCubesphereFst(
+        ctx.config,
+        ctx.geometry,
+        ctx.operators,
+        ctx.context,
+        ctx.metric,
+        ctx.topography,
+        ctx.ptopo,
+    )
+
+
+@register_output("cubesphere", "zarr")
+def _cubesphere_netcdf(ctx: "OutputContext") -> OutputManager:
+    return OutputCubesphereZarr(
         ctx.config,
         ctx.geometry,
         ctx.operators,

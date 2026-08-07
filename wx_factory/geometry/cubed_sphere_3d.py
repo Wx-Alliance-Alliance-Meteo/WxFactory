@@ -5,6 +5,7 @@ import numpy
 import torch
 from mpi4py import MPI
 from numpy.typing import NDArray
+from torch import Tensor
 
 from ..common import Configuration
 from ..process_topology import ProcessTopology
@@ -847,7 +848,7 @@ class CubedSphere3D(CubedSphere):
         # Store coordinates in the working precision before metric construction.
         cast_double_arrays(self, self.dtype)
 
-    def _to_new(self, a: NDArray) -> NDArray:
+    def _to_new(self, a: Tensor) -> Tensor:
         """Convert input array to new memory layout"""
         if a.shape[-3:] != self.block_shape:
             raise ValueError(f"Unhandled shape {a.shape}, expected (...,) + {self.block_shape}")

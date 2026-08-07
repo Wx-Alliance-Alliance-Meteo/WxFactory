@@ -165,7 +165,7 @@ def _euler_cartesian3d(ctx: RhsContext) -> RhsBundle:
 @register_rhs("shallow_water", CubedSphere2D)
 def _shallow_water_cubesphere(ctx: RhsContext) -> RhsBundle:
     reason: str
-    if ctx.param.case_number <= 1:
+    if ctx.param.case_number <= 1 and ctx.param.case_number != -2:
         # Advection tests.
         reason = "the partitioned right-hand side is not implemented for 2D advection"
         full = RhsAdvection2d(

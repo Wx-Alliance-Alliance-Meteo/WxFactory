@@ -37,48 +37,50 @@ class OutputCubesphereNetcdf(OutputCubesphere):
         context: Context,
         metric: Metric2D | Metric3DTopo,
         topo,
-        dataset,
         process_topo: ProcessTopology,
     ):
         super().__init__(config, geometry, operators, context, metric, topo, process_topo)
 
         self.ncfile = None
         self.filename = f"{self.output_dir}/{self.config.base_output_file}.nc"
-        self.nz = None
-        if config.case_number == -2:
-            self.z_levels = geometry.z_levels
+        if len(self.geometry.z_levels) > 1:
+            self.nz = len(self.geometry.z_levels) - 1
+        else:
+            self.nz = 1
 
-        """if config.output_freq > 0:
-            self._output_init()"""
-        self.initialized = False
-        self.dataset = dataset
+        if config.output_freq > 0:
+            self._output_init()
+        if config.time_start:
+            self.start_time = numpy.datetime64(str(config.time_start).replace("t", "T"))
+        else:
+            self.start_time = numpy.datetime64("1800-01-01T00:00:00")
+        self.dt = config.dt
 
-    def _output_init(self, NZ):
+    def _output_init(self):
         """Initialise the netCDF4 file."""
 
         # import here, so we don't need the module if not outputting
         import netCDF4
 
         # creating the netcdf file(s)
-        with SingleProcess() as s, Conditional(s):
+        with SingleProcess(self.comm) as s, Conditional(s):
             self.ncfile = netCDF4.Dataset(self.filename, "w", format="NETCDF4")
-
         # create dimensions
         side = self.process_topology.num_lines_per_panel
         if self.config.equations == "shallow_water":
             nj, ni = self.geometry.block_shape
             ni *= side
             nj *= side
-            grid_data = ("npe", "Xdim", "Ydim")
+            grid_data = ("nfaces", "Xdim", "Ydim")
         elif self.config.equations == "euler":
             nk, nj, ni = self.geometry.nk, self.geometry.nj, self.geometry.ni
             nj *= side
             ni *= side
-            grid_data = ("npe", "Zdim", "Xdim", "Ydim")
+            grid_data = ("nfaces", "Zdim", "Xdim", "Ydim")
         else:
             raise ValueError(f"Unsupported equation type {self.config.equations}")
 
-        grid_data2D = ("npe", "Xdim", "Ydim")
+        grid_data2D = ("nfaces", "Xdim", "Ydim")
 
         if self.ncfile is not None:
             # write general attributes
@@ -90,36 +92,32 @@ class OutputCubesphereNetcdf(OutputCubesphere):
                 self.ncfile.earth_radius = self.geometry.earth_radius
 
             self.ncfile.createDimension("time", None)  # unlimited
-            npe = 6
-            self.ncfile.createDimension("npe", npe)
+            nfaces = 6
+            self.ncfile.createDimension("nfaces", nfaces)
             self.ncfile.createDimension("Ydim", ni)
             self.ncfile.createDimension("Xdim", nj)
 
-            if self.config.equations == "shallow_water" and self.config.case_number == -2:
-                self.ncfile.createDimension("Zdim", NZ)
+            if self.config.equations == "shallow_water" and self.nz > 1:
+
+                self.ncfile.createDimension("Zdim", self.nz)
 
                 zzz = self.ncfile.createVariable("Zdim", numpy.float64, ("Zdim",))
                 zzz.long_name = "Zdim"
                 zzz.axis = "Z"
-                zzz.units = "m"
 
                 if self.rank == 0:
                     if hasattr(self, "z_levels"):
-                        zzz[:] = self.z_levels
+                        zzz[:] = self.nz
                     else:
-                        zzz[:] = numpy.arange(NZ)
+                        zzz[:] = numpy.arange(self.nz)
 
             # create time axis
             tme = self.ncfile.createVariable("time", numpy.float64, ("time",))
-            if self.config.case_number == -2:
-                tme.units = "hours since 1800-01-01 00:00:00"
-                tme.calendar = "standard"
-            else:
-                tme.units = "hours since 1800-01-01"
-            tme.long_name = "time"
+            tme.units = "seconds since 1800-01-01 00:00:00"
+            tme.calendar = "standard"
 
             # create tiles axis
-            tile = self.ncfile.createVariable("npe", "i4", ("npe"))
+            tile = self.ncfile.createVariable("nfaces", "i4", ("nfaces"))
             tile.grads_dim = "e"
             tile.standard_name = "tile"
             tile.long_name = "cubed-sphere tile"
@@ -154,8 +152,9 @@ class OutputCubesphereNetcdf(OutputCubesphere):
             lon.units = "degrees_east"
 
             if self.config.equations == "shallow_water":
-                if self.config.case_number == -2:
-                    dims = ("time", "Zdim") + grid_data
+
+                if self.nz > 1:
+                    dims = ("time", "nfaces", "Zdim", "Xdim", "Ydim")
                 else:
                     dims = ("time",) + grid_data
 
@@ -345,19 +344,9 @@ class OutputCubesphereNetcdf(OutputCubesphere):
         to_host = self.context.to_host
 
         for i, f in enumerate(fields):
-            self.ncfile[name][time_idx, level_idx, i, :, :] = to_host(f)
+            self.ncfile[name][time_idx, i, level_idx, :, :] = to_host(f)
 
     def __write_result__(self, Q, step_id):
-
-        if not self.initialized:
-            if Q.ndim == 5:
-                self.nz = Q.shape[1]
-            else:
-                self.nz = 1
-
-            self._output_init(self.nz)
-
-            self.initialized = True
 
         geom = self.geometry
 
@@ -441,15 +430,12 @@ class OutputCubesphereNetcdf(OutputCubesphere):
             raise ValueError(f"Unknown class for geom: {geom}")
 
         if self.rank == 0:
-            if self.config.case_number == -2:
-                time_val = step_id
+            time_val = self.start_time + numpy.timedelta64(int(step_id * self.dt), "s")
 
-                epoch = numpy.datetime64("1800-01-01T00:00:00")
-                hours = (time_val - epoch) / numpy.timedelta64(1, "h")
+            epoch = numpy.datetime64("1800-01-01T00:00:00")
+            seconds = (time_val - epoch) / numpy.timedelta64(1, "s")
 
-                self.ncfile["time"][idx] = hours
-            else:
-                self.ncfile["time"][idx] = step_id * self.config.dt
+            self.ncfile["time"][idx] = seconds
 
     def __finalize__(self):
         """Finalise the output netCDF4 file."""

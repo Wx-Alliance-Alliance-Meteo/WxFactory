@@ -62,6 +62,7 @@ class Geometry(ABC):
         self.glweights = torch.asarray(glweights)
         self.extension = torch.asarray(extension)
         self.extension_sym = extension_sym
+        self.z_levels = {""}
 
     @abstractmethod
     def to_single_block(self, a: NDArray) -> NDArray:

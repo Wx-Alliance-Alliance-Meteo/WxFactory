@@ -129,7 +129,6 @@ class Simulation:
                 operators=self.operators_real,
                 metric=self.initial_state.metric,
                 topography=self.initial_state.topography,
-                dataset=self.initial_state.dataset,
                 ptopo=self.process_topo,
             )
         )
@@ -223,22 +222,19 @@ class Simulation:
         return False
 
     def run(self):
-        if self.config.time_start == "":
-            """Run the entire simulation step by step"""
-            self.step_id = self.starting_step
-            self.Q = self.initial_state.Q
+        """Run the entire simulation step by step"""
+        self.step_id = self.starting_step
+        self.Q = self.initial_state.Q
 
-            start_time = time()
+        start_time = time()
 
-            while self.step():
-                pass  # Step until everything is done
+        while self.step():
+            pass  # Step until everything is done
 
-            if self.rank == 0:
-                self.rhs.full.print_times()
+        if self.rank == 0:
+            self.rhs.full.print_times()
 
-            self.output.finalize(time() - start_time)  # Close any open output file
-        else:
-            export_era5_all_timesteps(self, self.config)
+        self.output.finalize(time() - start_time)  # Close any open output file
 
     def _make_context(self, context: Context | None) -> Context:
         """Create the context object which will determine on what hardware (CPU/GPU) each part of the simulation will

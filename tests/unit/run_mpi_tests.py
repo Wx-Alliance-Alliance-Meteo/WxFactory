@@ -19,6 +19,7 @@ from tests.unit.restart.test_restart import (
     ShallowWaterRestartTestCase,
 )
 from tests.unit.solvers.test_kiops_mpi import KiopsMpiTestCases
+from tests.unit.output_managers.compare_zarr_to_nc_mpi import CompareZarrToNcTestCase
 from tests.unit.solvers.test_pmex_mpi import PmexMpiTestCases
 
 
@@ -83,6 +84,8 @@ def load_tests(test_name: str):
 
     add_test(suite, PmexMpiTestCases("test_pmex_mpi_2_processes"), test_re)
     add_test(suite, KiopsMpiTestCases("test_kiops_mpi_2_processes"), test_re)
+
+    add_test(suite, CompareZarrToNcTestCase(6, "test_compare_zarr_to_nc"), test_re)
 
     # TODO : This test needs more works on the data division between processes
     # suite.addTest(FgmresMpiTestCases('test_fgmres_mpi_2_processes'))
