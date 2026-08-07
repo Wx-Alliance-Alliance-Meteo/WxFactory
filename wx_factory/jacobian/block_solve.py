@@ -1,5 +1,7 @@
 """Application and inversion of the block-tridiagonal vertical operator."""
 
+import functools
+
 import torch
 
 from .column_layout import columns_to_state, horizontal_momentum_rows, state_to_columns, stiff_variable_rows
@@ -39,12 +41,35 @@ def solve_stiff_columns(rhsobj, stiff_blocks, b_col, dt):
     return x
 
 
+#: CUDA compute capabilities with strongly rate-limited FP64 arithmetic.
+_RATE_LIMITED_FP64 = frozenset({(5, 0), (5, 2), (6, 1), (7, 5), (8, 6), (8, 9), (12, 0)})
+
+
+@functools.cache
+def _fp64_is_rate_limited(device_index: int) -> bool:
+    """Return whether the CUDA device has strongly rate-limited FP64 arithmetic.
+
+    Unknown compute capabilities use the conservative float64 path.
+    """
+    return torch.cuda.get_device_capability(device_index) in _RATE_LIMITED_FP64
+
+
+def _factor_in_float32(b) -> bool:
+    """Select float32 factorization for rate-limited CUDA devices."""
+    if b.dtype != torch.float32 or b.device.type != "cuda":
+        return False
+    return _fp64_is_rate_limited(b.device.index if b.device.index is not None else torch.cuda.current_device())
+
+
 def block_thomas_solve(lower, diag, upper, b, dt):
-    """Solve ``(I - dt/2 J1) x = b`` with block Thomas and iterative refinement."""
+    """Solve ``(I - dt/2 J1) x = b`` per column with the block Thomas algorithm.
+
+    Float32 factorization is followed by one refinement step using a float64 residual.
+    """
     half_dt = 0.5 * dt
     _, num_elem_z, block_size, _ = diag.shape
     out_dtype = b.dtype
-    refine = out_dtype == torch.float32
+    refine = _factor_in_float32(b)
     work_dtype = torch.float32 if refine else torch.float64
     identity = torch.eye(block_size, dtype=work_dtype).reshape(1, block_size, block_size)
 
