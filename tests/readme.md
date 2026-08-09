@@ -3,6 +3,18 @@
 WxFactory uses `unittest` with a small MPI-aware compatibility layer. Run commands from the
 repository root.
 
+## Test data
+
+Reference states and configurations live in the `tests/data` submodule. Fetch it before running
+anything, or the tests that read fixtures will fail with a missing-directory error:
+
+```bash
+git submodule update --init tests/data
+```
+
+Note that `tests/data/temp`, which some tests create for their scratch output, will block the
+initial checkout if it is present before the submodule is cloned.
+
 ## Complete test suite
 
 ```bash

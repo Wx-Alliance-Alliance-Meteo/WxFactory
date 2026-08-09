@@ -23,7 +23,7 @@ from tests.unit.geometry.test_geometry_registry import GeometryRegistryTestCases
 from tests.unit.jacobian.test_finite_difference import FiniteDifferenceJacobianTestCases
 from tests.unit.jacobian.test_partition_jacobians import PartitionJacobianTestCase
 from tests.unit.output.test_output_registry import OutputRegistryTestCases
-from tests.unit.output.test_state import StateTestCases  # noqa: F401
+from tests.unit.output.test_state import StateTestCases
 from tests.unit.precondition.test_preconditioner_registry import (
     PreconditionerRegistryTestCases,
 )
@@ -101,7 +101,7 @@ def load_tests(test_name: str):
     )
 
     # Requires the tests/data submodule to be initialized by the test setup.
-    # add_test(suite, StateTestCases("test_save_load_works"), test_re)
+    add_test(suite, StateTestCases("test_save_load_works"), test_re)
     add_test(suite, Euler2DRestartTestCase("test_gen_restart"), test_re)
     add_test(suite, Euler2DRestartTestCase("test_read_restart"), test_re)
 

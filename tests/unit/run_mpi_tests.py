@@ -87,40 +87,7 @@ def load_tests(test_name: str):
 
     add_test(suite, CompareZarrToNcTestCase(6, "test_compare_zarr_to_nc"), test_re)
 
-    # TODO : This test needs more works on the data division between processes
-    # suite.addTest(FgmresMpiTestCases('test_fgmres_mpi_2_processes'))
-
     return suite
-
-
-def trace_run(runner, args):
-    import contextlib
-    import trace
-
-    import mpi4py
-
-    # define Trace object: trace line numbers at runtime, exclude some modules
-    tracer = trace.Trace(
-        ignoredirs=[sys.prefix, sys.exec_prefix],
-        ignoremods=[
-            "inspect",
-            "contextlib",
-            "_bootstrap",
-            "_weakrefset",
-            "abc",
-            "posixpath",
-            "genericpath",
-            "textwrap",
-        ],
-        trace=1,
-        count=0,
-    )
-
-    # by default trace goes to stdout
-    # redirect to a different file for each processes
-    trace_file = f"trace_{mpi4py.MPI.COMM_WORLD.rank:04d}.txt"
-    with open(trace_file, "w") as trace_output, contextlib.redirect_stdout(trace_output):
-        tracer.runfunc(runner.run, load_tests(args.test_name))
 
 
 def regular_run(runner, args):
@@ -147,5 +114,4 @@ if __name__ == "__main__":
 
     runner = MpiRunner(buffer=not args.no_buffer, verbosity=0, failfast=args.failfast)
 
-    # trace_run(runner, args)
     regular_run(runner, args)
