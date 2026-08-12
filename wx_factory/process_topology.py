@@ -532,6 +532,8 @@ class ProcessTopology:
         if panel_fields is None:  # non-root PEs
             return None
 
+        panel_fields = [torch.asarray(f, device=self.context.torch_device) for f in panel_fields]
+
         side = self.num_lines_per_panel
         if field.ndim == 1:
             # When gathering a 1D array, put them all end-to-end

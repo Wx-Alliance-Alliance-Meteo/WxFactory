@@ -143,6 +143,8 @@ class OutputCubesphere(OutputManager):
         if panel_fields is None:  # non-root PEs
             return None
 
+        panel_fields = [torch.asarray(f, device=self.context.torch_device) for f in panel_fields]
+
         side = self.process_topology.num_lines_per_panel
         if field.ndim == 1:
             panel_field = torch.concatenate(panel_fields[:side])
