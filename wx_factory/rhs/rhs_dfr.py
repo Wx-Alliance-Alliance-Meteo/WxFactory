@@ -177,20 +177,14 @@ class RHSDirectFluxReconstruction_ESAV(RHS):
         """Computes the elementwise constant viscosity coefficient"""
         # TODO: implement the entropy preserving viscosity coeffs
         xp = self.device.xp
-        entropy_stable_coeff = True
+        # entropy_stable_coeff = True
+        
+        sigma = self.entropy_residual()
+        a = -xp.minimum(0, sigma)
+        b = self.denominator_viscosity_coeff()
 
-        if entropy_stable_coeff:
-            sigma = self.entropy_residual()
-            a = -xp.minimum(0, sigma)
-            b = self.denominator_viscosity_coeff()
+        self.epsilon = self.approx_division(a, b)
 
-            self.epsilon = self.approx_division(a, b)
-        else:
-            epsilon_val = 0
-            num_equations = 4
-            # shape = (num_equations, self.config.num_elements_vertical, self.config.num_elements_horizontal)
-            shape = (self.config.num_elements_vertical, self.config.num_elements_horizontal)
-            self.epsilon = xp.full(shape, epsilon_val, dtype=q.dtype)
 
     def viscous_fluxes(self) -> None:
         """Computes the viscous flux g_m = \sum_n epsilon K_mn dv_dxn"""
@@ -207,11 +201,8 @@ class RHSDirectFluxReconstruction_ESAV(RHS):
         xp = self.device.xp
         # q_bar = xp.mean(q, axis=-1)
 
-        # print("q_bar",q_bar.shape)
 
         # self.K = du_dv(q_bar,self.geom,self.config)
-
-        # print("K shape",self.K.shape)
         # self.K = du_dv(q, self.geom, self.config)
 
         # q shape: (nvar, ne_z, ne_x, npts)
@@ -234,12 +225,6 @@ class RHSDirectFluxReconstruction_ESAV(RHS):
         # self.K = jacobian_complex_field(entropy_to_conservative, self.v, self.geom, self.config)
         # self.K2 = jacobian_fd_field(entropy_to_conservative, self.v, self.geom, self.config)
 
-        # print(self.K[:, 0, 0, 0])
-        # print(self.K1[:, 0, 0, 0])
-        # print(self.K2[:, 0, 0, 0])
-        # exit()
-        # print("K1[:,i1,j1,0]\n",self.K1[:,:,self.i1,self.j1,0])
-        # print("K[:,i1,j1,0]\n",self.K[:,:,self.i1,self.j1,0])
 
     def viscous_flux_divergence_partial(self) -> None:
         """Part of the divergence for g - discontinuous part, no boundary terms"""

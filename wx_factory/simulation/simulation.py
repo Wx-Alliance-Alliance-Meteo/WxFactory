@@ -42,6 +42,9 @@ from rhs.rhs_selector import RhsBundle
 from wx_mpi import SingleProcess, Conditional
 from post_proccessing import PostProcessor, ScharMountainPostProcessor
 from init.entropy_vars import entropy, entropy_function
+from init.initialize import exact_solution
+from common.graphx import plot_entropy, image_field, image_field_entropy_diff
+
 
 
 class Simulation:
@@ -210,7 +213,25 @@ class Simulation:
             entropy_func_integrated = self.geometry.Δx1 / 2.0 * self.geometry.Δx3 / 2.0 * xp.sum(entropy_func * self.operators.weights_volume_integral)
             entropy_func_cell = self.geometry.Δx1 / 2.0 * self.geometry.Δx3 / 2.0 * xp.einsum('vhp,p->vh', entropy_func, self.operators.weights_volume_integral)
         
-            self.output.step(self.Q, self.step_id, entropy_func_integrated, entropy_func_cell, self.rhs.full.epsilon)  # Perform any requested output
+            # Compute L2 error
+            if self.config.case_number == 100 or self.config.case_number == 101:
+                exact_Q = exact_solution(self.geometry, self.config, self.t)
+                # if self.config.output_freq > 0 and (self.step_id % self.config.output_freq) == 0:
+                #     filename= f"{self.config.output_dir}/exact_sol/exact_sol_{self.config.case_number}_{self.step_id:08d}"
+                #     exact_Q_block = self.geometry.to_single_block(exact_Q)
+                #     image_field(self.geometry, exact_Q_block[0,...], filename, xp.min(exact_Q[0,...]) - 1e-10, xp.max(exact_Q[0,...])+1e-10, 100)
+                ptwise_error = self.Q - exact_Q
+            
+                L2_error = xp.sqrt(
+                    self.geometry.Δx1 
+                    / 2.0 
+                    * self.geometry.Δx3 
+                    / 2.0 
+                    * xp.sum(xp.abs(ptwise_error)**2 * self.operators.weights_volume_integral))
+            else:
+                L2_error = None
+                
+            self.output.step(self.Q, self.step_id, entropy_func_integrated, L2_error, entropy_func_cell, self.rhs.full.epsilon)  # Perform any requested output
             sys.stdout.flush()
 
             if self.integrator.failure_flag == 0:

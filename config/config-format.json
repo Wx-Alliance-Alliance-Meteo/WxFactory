@@ -325,6 +325,11 @@
                     "name": "sponge_zscale",
                     "type": "float",
                     "default": 0.0
+                },
+                {
+                    "name": "artificial_visc",
+                    "type": "bool",
+                    "default": false
                 }
             ]
         },

@@ -107,6 +107,7 @@ class Configuration:
     # --- START type hints --- automatically generated (do not touch)
     alpha0: float
     apply_sponge: bool
+    artificial_visc:bool
     base_output_file: str
     bubble_rad: float
     bubble_theta: float

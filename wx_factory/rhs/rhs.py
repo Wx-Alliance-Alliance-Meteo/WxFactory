@@ -169,42 +169,43 @@ class RHS(ABC):
         # self.forcing_terms(q)
         self.timestamps[8] = self.device.timestamp(name="artificial viscosity")
 
-        # 7. Add artificial viscosity for entropy stability
-        # # 7.0 Compute entropy variables from solution variables
-        self.v = conservative_to_entropy(q,self.geom,self.config)
+        if self.config.artificial_visc == True:
+            # 7. Add artificial viscosity for entropy stability
+            # # 7.0 Compute entropy variables from solution variables
+            self.v = conservative_to_entropy(q,self.geom,self.config)
 
-        # 7.1 Extrapolate the entropy variables to the boundaries of the element
-        self.solution_extrapolation_entropy(self.v)
+            # 7.1 Extrapolate the entropy variables to the boundaries of the element
+            self.solution_extrapolation_entropy(self.v)
 
-        # 7.2. Compute auxiliary variable - gradient of v
-        #
-        # 7.2.1 Compute the derivatives of the discontinuous entropy variables
-        self.entropy_gradient_partial(self.v)
+            # 7.2. Compute auxiliary variable - gradient of v
+            #
+            # 7.2.1 Compute the derivatives of the discontinuous entropy variables
+            self.entropy_gradient_partial(self.v)
 
-        # 7.2.2 Compute the common interface - average across the interfaces
-        self.entropy_average()
+            # 7.2.2 Compute the common interface - average across the interfaces
+            self.entropy_average()
 
-        # 7.2.3 Complete the gradient operation by ading the boundary terms
-        self.entropy_gradient()
+            # 7.2.3 Complete the gradient operation by ading the boundary terms
+            self.entropy_gradient()
 
-        # 7.3 Compute the diffusion term
-        # 7.3.2 Compute K = du_dv
-        self.compute_K(q)
+            # 7.3 Compute the diffusion term
+            # 7.3.2 Compute K = du_dv
+            self.compute_K(q)
 
-        # 7.3.1 Compute viscosity coefficients
-        self.viscosity_coeff(q)
+            # 7.3.1 Compute viscosity coefficients
+            self.viscosity_coeff(q)
 
-        # 7.3.3 Compute the viscous flux
-        self.viscous_fluxes()
+            # 7.3.3 Compute the viscous flux
+            self.viscous_fluxes()
 
-        # 7.3.4 Compute the derivative of the discontinuous viscous flux g
-        self.viscous_flux_divergence_partial()
+            # 7.3.4 Compute the derivative of the discontinuous viscous flux g
+            self.viscous_flux_divergence_partial()
 
-        # 7.3.5 Compute the average of g
-        self.viscous_flux_average()
+            # 7.3.5 Compute the average of g
+            self.viscous_flux_average()
 
-        # 7.3.6 Complete the divergence operation for g
-        self.viscous_flux_divergence()
+            # 7.3.6 Complete the divergence operation for g
+            self.viscous_flux_divergence()
 
         # At this moment, a deep copy needs to be returned
         # otherwise issues are encountered after. This needs to be fixed

@@ -55,6 +55,57 @@ class Topo:
         self.dzdx2 = dzdx2
         self.hsurf_itf_i = hsurf_itf_i
         self.hsurf_itf_j = hsurf_itf_j
+        
+def exact_solution(geom: Cartesian2D, param: Configuration, t: float) -> NDArray[numpy.float64]:
+    num_equations = 4
+    xp = geom.device.xp
+
+    # Initial state at rest, isentropic, hydrostatic
+    #   nk, ni = geom.X1.shape
+    Q = xp.zeros((num_equations, param.num_elements_vertical, param.num_elements_horizontal, geom.num_solpts**2))
+    uu = xp.zeros_like(geom.X1)
+    ww = xp.zeros_like(geom.X1)
+    exner = xp.zeros_like(geom.X1)
+    θ = xp.ones_like(geom.X1)
+    
+    if param.case_number == 100:
+        geom.xperiodic = True
+        geom.zperiodic = False
+
+        # A = 0.5
+        A = 0.5
+        uu = 0.1
+        ww = 0
+        ρ = 1.0 + A * xp.sin(2.0 * xp.pi * ((geom.X1 - uu*t)))
+        p = 10
+        θ = p/(Rd*ρ)
+        T = p / (Rd * ρ)
+        exner = (p / p0) ** (Rd / cpd)
+
+        E = p / (ρ * (heat_capacity_ratio - 1.0)) + 0.5 * (uu * uu + ww * ww)
+
+    elif param.case_number == 101:
+        geom.xperiodic = True
+        geom.zperiodic = False
+
+        A = 0.5
+        uu = 0.1
+        ww = 0.2
+        ρ = 1.0 + A * xp.sin(2.0 * xp.pi * ((geom.X1 - uu*t)+(geom.X3 - ww*t)))
+        p = 10
+        θ = p/(Rd*ρ)
+        T = p / (Rd * ρ)
+        exner = (p / p0) ** (Rd / cpd)
+        θ = T / exner
+        
+        E = p / (ρ * (heat_capacity_ratio - 1.0)) + 0.5 * (uu * uu + ww * ww)
+        
+    Q[idx_2d_rho, :, :] = ρ
+    Q[idx_2d_rho_u, :, :] = ρ * uu
+    Q[idx_2d_rho_w, :, :] = ρ * ww
+    Q[idx_2d_rho_theta, :, :] = ρ * E
+    
+    return Q
 
 
 def initialize_euler(geom: CubedSphere3D, metric: Metric3DTopo, mtrx: DFROperators, param: Configuration):
@@ -337,7 +388,7 @@ def initialize_cartesian2d(geom: Cartesian2D, param: Configuration) -> NDArray[n
         T = p / (Rd * ρ)
         exner = (p / p0) ** (Rd / cpd)
 
-        E = p / (ρ * (heat_capacity_ratio - 1.0)) + 0.5 * (uu * uu + ww * ww);
+        E = p / (ρ * (heat_capacity_ratio - 1.0)) + 0.5 * (uu * uu + ww * ww)
 
     elif param.case_number == 101:
         geom.xperiodic = True
@@ -352,6 +403,8 @@ def initialize_cartesian2d(geom: Cartesian2D, param: Configuration) -> NDArray[n
         T = p / (Rd * ρ)
         exner = (p / p0) ** (Rd / cpd)
         θ = T / exner
+        
+        E = p / (ρ * (heat_capacity_ratio - 1.0)) + 0.5 * (uu * uu + ww * ww)
 
     elif param.case_number == 102:
         geom.xperiodic = True
@@ -381,7 +434,7 @@ def initialize_cartesian2d(geom: Cartesian2D, param: Configuration) -> NDArray[n
         T = p / (Rd * ρ)
         exner = (p / p0) ** (Rd / cpd)
         θ = T / exner
-        E = p / (ρ * (heat_capacity_ratio - 1.0)) + 0.5 * (uu * uu + ww * ww);
+        E = p / (ρ * (heat_capacity_ratio - 1.0)) + 0.5 * (uu * uu + ww * ww)
 
     if param.case_number == 0:
         N_star = 0.01
