@@ -231,6 +231,12 @@
                     "default": 1
                 },
                 {
+                    "name": "numer_christoffel",
+                    "type": "bool",
+                    "default": true,
+                    "description": "Compute the space-only Christoffel symbols numerically, by solving sqrt(g) (h^ab)_;c = 0, rather than evaluating their analytic expressions. The symbols carrying a time index, which produce the Coriolis acceleration, are always taken from their analytic form."
+                },
+                {
                     "name": "expfilter_apply",
                     "type": "bool",
                     "default": false,

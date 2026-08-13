@@ -130,6 +130,7 @@ class Configuration:
     num_elements_horizontal: int
     num_elements_vertical: int
     num_solpts: int
+    numer_christoffel: bool
     os22_parameter: float
     output_dir: str
     output_format: str

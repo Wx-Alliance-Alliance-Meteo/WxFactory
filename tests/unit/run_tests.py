@@ -16,10 +16,12 @@ from wx_test import WxTestRunner
 from tests.unit.common.test_angle24 import Angle24TestCase
 from tests.unit.common.test_config_hints import ConfigHintsTestCases
 from tests.unit.common.test_configuration import ConfigurationTestCases
+from tests.unit.common.test_panel_conversions import PanelConversionTestCase
 from tests.unit.common.test_sort_fields import SortFieldsByDependencyTestCases
 from tests.unit.geometry.test_exponential_filter import ExponentialFilterTestCase
-from tests.unit.geometry.test_operator_identities import OperatorIdentityTestCase
 from tests.unit.geometry.test_geometry_registry import GeometryRegistryTestCases
+from tests.unit.geometry.test_horizontal_metric import HorizontalMetricTestCase
+from tests.unit.geometry.test_operator_identities import OperatorIdentityTestCase
 from tests.unit.jacobian.test_finite_difference import FiniteDifferenceJacobianTestCases
 from tests.unit.jacobian.test_partition_jacobians import PartitionJacobianTestCase
 from tests.unit.output.test_output_registry import OutputRegistryTestCases
@@ -73,6 +75,12 @@ def load_tests(test_name: str):
     add_test(suite, FiniteDifferenceJacobianTestCases("test_fd_preserves_working_precision"), test_re)
     add_test(suite, FiniteDifferenceJacobianTestCases("test_fd_norm_uses_working_precision"), test_re)
 
+    add_test(suite, HorizontalMetricTestCase("test_forms_are_exact_inverses"), test_re)
+    add_test(suite, HorizontalMetricTestCase("test_both_forms_are_symmetric"), test_re)
+    add_test(suite, HorizontalMetricTestCase("test_both_forms_are_positive_definite"), test_re)
+    add_test(suite, HorizontalMetricTestCase("test_reduces_to_the_identity_at_a_panel_centre"), test_re)
+    add_test(suite, HorizontalMetricTestCase("test_off_diagonal_vanishes_only_on_the_axes"), test_re)
+
     add_test(suite, ExponentialFilterTestCase("test_quadrature_weights_are_double_precision"), test_re)
     add_test(suite, ExponentialFilterTestCase("test_lowest_mode_is_unfiltered"), test_re)
     add_test(suite, ExponentialFilterTestCase("test_high_modes_are_attenuated"), test_re)
@@ -111,6 +119,11 @@ def load_tests(test_name: str):
     add_test(suite, ConfigurationTestCases("test_load_configuration_with_dependency"), test_re)
     add_test(suite, ConfigurationTestCases("test_load_configuration_with_expression"), test_re)
     add_test(suite, ConfigurationTestCases("test_main_precision_option"), test_re)
+
+    add_test(suite, PanelConversionTestCase("test_covariant_is_the_inverse_transpose_of_contravariant"), test_re)
+    add_test(suite, PanelConversionTestCase("test_conversions_preserve_the_scalar_contraction"), test_re)
+    add_test(suite, PanelConversionTestCase("test_conversions_are_invertible"), test_re)
+    add_test(suite, PanelConversionTestCase("test_conversions_are_the_identity_at_a_seam_centre"), test_re)
 
     add_test(suite, ConfigHintsTestCases("test_type_hints_are_up_to_date"), test_re)
 

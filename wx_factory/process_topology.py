@@ -16,6 +16,93 @@ NORTH = 1
 WEST = 2
 EAST = 3
 
+# Cubed-sphere seam conversions, indexed by ``[panel][direction]``.
+# Covariant maps are inverse transposes of contravariant maps; see Appendix C of Gaudreault et al.
+# (2022). The vertical component is unchanged because ``x3`` is shared by all panels.
+CONVERT_CONTRAVARIANT: list[list[Callable[[Tensor, Tensor, Tensor], tuple[Tensor, Tensor]]]] = [
+    # Panel 0
+    [
+        lambda a1, a2, coord: (a1 + 2.0 * coord / (1.0 + coord**2) * a2, a2),  # South neighbor
+        lambda a1, a2, coord: (a1 - 2.0 * coord / (1.0 + coord**2) * a2, a2),  # North neighbor
+        lambda a1, a2, coord: (a1, 2.0 * coord / (1.0 + coord**2) * a1 + a2),  # West neighbor
+        lambda a1, a2, coord: (a1, -2.0 * coord / (1.0 + coord**2) * a1 + a2),  # East neighbor
+    ],
+    # Panel 1
+    [
+        lambda a1, a2, coord: (a2, -a1 - 2.0 * coord / (1.0 + coord**2) * a2),  # South neighbor
+        lambda a1, a2, coord: (-a2, a1 - 2.0 * coord / (1.0 + coord**2) * a2),  # North neighbor
+        lambda a1, a2, coord: (a1, 2.0 * coord / (1.0 + coord**2) * a1 + a2),  # West neighbor
+        lambda a1, a2, coord: (a1, -2.0 * coord / (1.0 + coord**2) * a1 + a2),  # East neighbor
+    ],
+    # Panel 2
+    [
+        lambda a1, a2, coord: (-a1 - 2.0 * coord / (1.0 + coord**2) * a2, -a2),  # South neighbor
+        lambda a1, a2, coord: (-a1 + 2.0 * coord / (1.0 + coord**2) * a2, -a2),  # North neighbor
+        lambda a1, a2, coord: (a1, 2.0 * coord / (1.0 + coord**2) * a1 + a2),  # West neighbor
+        lambda a1, a2, coord: (a1, -2.0 * coord / (1.0 + coord**2) * a1 + a2),  # East neighbor
+    ],
+    # Panel 3
+    [
+        lambda a1, a2, coord: (-a2, a1 + 2.0 * coord / (1.0 + coord**2) * a2),  # South neighbor
+        lambda a1, a2, coord: (a2, -a1 + 2.0 * coord / (1.0 + coord**2) * a2),  # North neighbor
+        lambda a1, a2, coord: (a1, 2.0 * coord / (1.0 + coord**2) * a1 + a2),  # West neighbor
+        lambda a1, a2, coord: (a1, -2.0 * coord / (1.0 + coord**2) * a1 + a2),  # East neighbor
+    ],
+    # Panel 4
+    [
+        lambda a1, a2, coord: (a1 + 2.0 * coord / (1.0 + coord**2) * a2, a2),  # South neighbor
+        lambda a1, a2, coord: (-a1 + 2.0 * coord / (1.0 + coord**2) * a2, -a2),  # North neighbor
+        lambda a1, a2, coord: (-2.0 * coord / (1.0 + coord**2) * a1 - a2, a1),  # West neighbor
+        lambda a1, a2, coord: (-2.0 * coord / (1.0 + coord**2) * a1 + a2, -a1),  # East neighbor
+    ],
+    # Panel 5
+    [
+        lambda a1, a2, coord: (-a1 - 2.0 * coord / (1.0 + coord**2) * a2, -a2),  # South neighbor
+        lambda a1, a2, coord: (a1 - 2.0 * coord / (1.0 + coord**2) * a2, a2),  # North neighbor
+        lambda a1, a2, coord: (2.0 * coord / (1.0 + coord**2) * a1 + a2, -a1),  # West neighbor
+        lambda a1, a2, coord: (2.0 * coord / (1.0 + coord**2) * a1 - a2, a1),  # East neighbor
+    ],
+]
+
+CONVERT_COVARIANT: list[list[Callable[[Tensor, Tensor, Tensor], tuple[Tensor, Tensor]]]] = [
+    [  # Panel 0
+        lambda a1, a2, x: (a1, a2 - 2.0 * x / (1.0 + x**2) * a1),  # South neighbor
+        lambda a1, a2, x: (a1, a2 + 2.0 * x / (1.0 + x**2) * a1),  # North neighbor
+        lambda a1, a2, x: (a1 - 2.0 * x / (1.0 + x**2) * a2, a2),  # West neighbor
+        lambda a1, a2, x: (a1 + 2.0 * x / (1.0 + x**2) * a2, a2),  # East neighbor
+    ],
+    [  # Panel 1
+        lambda a1, a2, x: (a2 - 2.0 * x / (1.0 + x**2) * a1, -a1),  # South neighbor
+        lambda a1, a2, x: (-a2 - 2.0 * x / (1.0 + x**2) * a1, a1),  # North neighbor
+        lambda a1, a2, x: (a1 - 2.0 * x / (1.0 + x**2) * a2, a2),  # West neighbor
+        lambda a1, a2, x: (a1 + 2.0 * x / (1.0 + x**2) * a2, a2),  # East neighbor
+    ],
+    [  # Panel 2
+        lambda a1, a2, x: (-a1, -a2 + 2.0 * x / (1.0 + x**2) * a1),  # South neighbor
+        lambda a1, a2, x: (-a1, -a2 - 2.0 * x / (1.0 + x**2) * a1),  # North neighbor
+        lambda a1, a2, x: (a1 - 2.0 * x / (1.0 + x**2) * a2, a2),  # West neighbor
+        lambda a1, a2, x: (a1 + 2.0 * x / (1.0 + x**2) * a2, a2),  # East neighbor
+    ],
+    [  # Panel 3
+        lambda a1, a2, x: (-a2 + 2.0 * x / (1.0 + x**2) * a1, a1),  # South neighbor
+        lambda a1, a2, x: (a2 + 2.0 * x / (1.0 + x**2) * a1, -a1),  # North neighbor
+        lambda a1, a2, x: (a1 - 2.0 * x / (1.0 + x**2) * a2, a2),  # West neighbor
+        lambda a1, a2, x: (a1 + 2.0 * x / (1.0 + x**2) * a2, a2),  # East neighbor
+    ],
+    [  # Panel 4
+        lambda a1, a2, x: (a1, a2 - 2.0 * x / (1.0 + x**2) * a1),  # South neighbor
+        lambda a1, a2, x: (-a1, -a2 - 2.0 * x / (1.0 + x**2) * a1),  # North neighbor
+        lambda a1, a2, x: (-a2, a1 - 2.0 * x / (1.0 + x**2) * a2),  # West neighbor
+        lambda a1, a2, x: (a2, -a1 - 2.0 * x / (1.0 + x**2) * a2),  # East neighbor
+    ],
+    [  # Panel 5
+        lambda a1, a2, x: (-a1, -a2 + 2.0 * x / (1.0 + x**2) * a1),  # South neighbor
+        lambda a1, a2, x: (a1, a2 + 2.0 * x / (1.0 + x**2) * a1),  # North neighbor
+        lambda a1, a2, x: (a2, -a1 + 2.0 * x / (1.0 + x**2) * a2),  # West neighbor
+        lambda a1, a2, x: (-a2, a1 + 2.0 * x / (1.0 + x**2) * a2),  # East neighbor
+    ],
+]
+
 
 class ProcessTopology:
     """Describes a cube-sphere process topology, where each process (tile) is linked to its 4 neighbors.
@@ -143,90 +230,6 @@ class ProcessTopology:
         ]
         # fmt: on
 
-        convert_contras: list[list[Callable[[Tensor, Tensor, Tensor], tuple[Tensor, Tensor]]]] = [
-            # Panel 0
-            [
-                lambda a1, a2, coord: (a1 + 2.0 * coord / (1.0 + coord**2) * a2, a2),  # South neighbor
-                lambda a1, a2, coord: (a1 - 2.0 * coord / (1.0 + coord**2) * a2, a2),  # North neighbor
-                lambda a1, a2, coord: (a1, 2.0 * coord / (1.0 + coord**2) * a1 + a2),  # West neighbor
-                lambda a1, a2, coord: (a1, -2.0 * coord / (1.0 + coord**2) * a1 + a2),  # East neighbor
-            ],
-            # Panel 1
-            [
-                lambda a1, a2, coord: (a2, -a1 - 2.0 * coord / (1.0 + coord**2) * a2),  # South neighbor
-                lambda a1, a2, coord: (-a2, a1 - 2.0 * coord / (1.0 + coord**2) * a2),  # North neighbor
-                lambda a1, a2, coord: (a1, 2.0 * coord / (1.0 + coord**2) * a1 + a2),  # West neighbor
-                lambda a1, a2, coord: (a1, -2.0 * coord / (1.0 + coord**2) * a1 + a2),  # East neighbor
-            ],
-            # Panel 2
-            [
-                lambda a1, a2, coord: (-a1 - 2.0 * coord / (1.0 + coord**2) * a2, -a2),  # South neighbor
-                lambda a1, a2, coord: (-a1 + 2.0 * coord / (1.0 + coord**2) * a2, -a2),  # North neighbor
-                lambda a1, a2, coord: (a1, 2.0 * coord / (1.0 + coord**2) * a1 + a2),  # West neighbor
-                lambda a1, a2, coord: (a1, -2.0 * coord / (1.0 + coord**2) * a1 + a2),  # East neighbor
-            ],
-            # Panel 3
-            [
-                lambda a1, a2, coord: (-a2, a1 + 2.0 * coord / (1.0 + coord**2) * a2),  # South neighbor
-                lambda a1, a2, coord: (a2, -a1 + 2.0 * coord / (1.0 + coord**2) * a2),  # North neighbor
-                lambda a1, a2, coord: (a1, 2.0 * coord / (1.0 + coord**2) * a1 + a2),  # West neighbor
-                lambda a1, a2, coord: (a1, -2.0 * coord / (1.0 + coord**2) * a1 + a2),  # East neighbor
-            ],
-            # Panel 4
-            [
-                lambda a1, a2, coord: (a1 + 2.0 * coord / (1.0 + coord**2) * a2, a2),  # South neighbor
-                lambda a1, a2, coord: (-a1 + 2.0 * coord / (1.0 + coord**2) * a2, -a2),  # North neighbor
-                lambda a1, a2, coord: (-2.0 * coord / (1.0 + coord**2) * a1 - a2, a1),  # West neighbor
-                lambda a1, a2, coord: (-2.0 * coord / (1.0 + coord**2) * a1 + a2, -a1),  # East neigbor
-            ],
-            # Panel 5
-            [
-                lambda a1, a2, coord: (-a1 - 2.0 * coord / (1.0 + coord**2) * a2, -a2),  # South neighbor
-                lambda a1, a2, coord: (a1 - 2.0 * coord / (1.0 + coord**2) * a2, a2),  # North neighbor
-                lambda a1, a2, coord: (2.0 * coord / (1.0 + coord**2) * a1 + a2, -a1),  # West neighbor
-                lambda a1, a2, coord: (2.0 * coord / (1.0 + coord**2) * a1 - a2, a1),  # East neighbor
-            ],
-        ]
-
-        convert_covs: list[list[Callable[[Tensor, Tensor, Tensor], tuple[Tensor, Tensor]]]] = [
-            [  # Panel 0
-                lambda a1, a2, x: (a1, a2 - 2.0 * x / (1.0 + x**2) * a1),  # South neighbor
-                lambda a1, a2, x: (a1, a2 + 2.0 * x / (1.0 + x**2) * a1),  # North neighbor
-                lambda a1, a2, x: (a1 - 2.0 * x / (1.0 + x**2) * a2, a2),  # West neighbor
-                lambda a1, a2, x: (a1 + 2.0 * x / (1.0 + x**2) * a2, a2),  # East neighbor
-            ],
-            [  # Panel 1
-                lambda a1, a2, x: (a2 - 2.0 * x / (1.0 + x**2) * a1, -a1),  # South neighbor
-                lambda a1, a2, x: (-a2 - 2.0 * x / (1.0 + x**2) * a1, a1),  # North neighbor
-                lambda a1, a2, x: (a1 - 2.0 * x / (1.0 + x**2) * a2, a2),  # West neighbor
-                lambda a1, a2, x: (a1 + 2.0 * x / (1.0 + x**2) * a2, a2),  # East neighbor
-            ],
-            [  # Panel 2
-                lambda a1, a2, x: (-a2, -a2 + 2.0 * x / (1.0 + x**2) * a1),  # South neighbor
-                lambda a1, a2, x: (-a1, -a2 - 2.0 * x / (1.0 + x**2) * a1),  # North neighbor
-                lambda a1, a2, x: (a1 - 2.0 * x / (1.0 + x**2) * a2, a2),  # West neighbor
-                lambda a1, a2, x: (a1 + 2.0 * x / (1.0 + x**2) * a2, a2),  # East neighbor
-            ],
-            [  # Panel 3
-                lambda a1, a2, x: (-a2 + 2.0 * x / (1.0 + x**2) * a1, a1),  # South neighbor
-                lambda a1, a2, x: (a2 + 2.0 * x / (1.0 + x**2) * a1, -a1),  # North neighbor
-                lambda a1, a2, x: (a1 - 2.0 * x / (1.0 + x**2) * a2, a2),  # West neighbor
-                lambda a1, a2, x: (a1 + 2.0 * x / (1.0 + x**2) * a2, a2),  # East neighbor
-            ],
-            [  # Panel 4
-                lambda a1, a2, x: (a1, a2 - 2.0 * x / (1.0 + x**2) * a1),  # South neighbor
-                lambda a1, a2, x: (-a1, -a2 - 2.0 * x / (1.0 + x**2) * a1),  # North neighbor
-                lambda a1, a2, x: (-a2, a1 - 2.0 * x / (1.0 + x**2) * a2),  # West neighbor
-                lambda a1, a2, x: (a2, -a1 - 2.0 * x / (1.0 + x**2) * a2),  # East neighbor
-            ],
-            [  # Panel 5
-                lambda a1, a2, x: (-a1, -a2 + 2.0 * x / (1.0 + x**2) * a1),  # South neighbor
-                lambda a1, a2, x: (a1, a2 + 2.0 * x / (1.0 + x**2) * a1),  # North neighbor
-                lambda a1, a2, x: (a2, -a1 + 2.0 * x / (1.0 + x**2) * a2),  # West neighbor
-                lambda a1, a2, x: (-a2, a1 + 2.0 * x / (1.0 + x**2) * a2),  # East neighbor
-            ],
-        ]
-
         neighbor_panels = all_neighbors[self.my_panel]
 
         # --- Middle panel tile
@@ -254,29 +257,29 @@ class ProcessTopology:
         # --- North panel edge
         if self.my_row == self.num_lines_per_panel - 1:
             my_north = rank_from_location(neighbor_panels[NORTH], *edge_coords[self.my_panel][NORTH])
-            self.convert_contra[NORTH] = convert_contras[self.my_panel][NORTH]
-            self.convert_cov[NORTH] = convert_covs[self.my_panel][NORTH]
+            self.convert_contra[NORTH] = CONVERT_CONTRAVARIANT[self.my_panel][NORTH]
+            self.convert_cov[NORTH] = CONVERT_COVARIANT[self.my_panel][NORTH]
             self.flip[NORTH] = flips[self.my_panel][NORTH]
 
         # --- South panel edge
         if self.my_row == 0:
             my_south = rank_from_location(neighbor_panels[SOUTH], *edge_coords[self.my_panel][SOUTH])
-            self.convert_contra[SOUTH] = convert_contras[self.my_panel][SOUTH]
-            self.convert_cov[SOUTH] = convert_covs[self.my_panel][SOUTH]
+            self.convert_contra[SOUTH] = CONVERT_CONTRAVARIANT[self.my_panel][SOUTH]
+            self.convert_cov[SOUTH] = CONVERT_COVARIANT[self.my_panel][SOUTH]
             self.flip[SOUTH] = flips[self.my_panel][SOUTH]
 
         # --- West panel edge
         if self.my_col == 0:
             my_west = rank_from_location(neighbor_panels[WEST], *edge_coords[self.my_panel][WEST])
-            self.convert_contra[WEST] = convert_contras[self.my_panel][WEST]
-            self.convert_cov[WEST] = convert_covs[self.my_panel][WEST]
+            self.convert_contra[WEST] = CONVERT_CONTRAVARIANT[self.my_panel][WEST]
+            self.convert_cov[WEST] = CONVERT_COVARIANT[self.my_panel][WEST]
             self.flip[WEST] = flips[self.my_panel][WEST]
 
         # --- East panel edge
         if self.my_col == self.num_lines_per_panel - 1:
             my_east = rank_from_location(neighbor_panels[EAST], *edge_coords[self.my_panel][EAST])
-            self.convert_contra[EAST] = convert_contras[self.my_panel][EAST]
-            self.convert_cov[EAST] = convert_covs[self.my_panel][EAST]
+            self.convert_contra[EAST] = CONVERT_CONTRAVARIANT[self.my_panel][EAST]
+            self.convert_cov[EAST] = CONVERT_COVARIANT[self.my_panel][EAST]
             self.flip[EAST] = flips[self.my_panel][EAST]
 
         # Distributed Graph

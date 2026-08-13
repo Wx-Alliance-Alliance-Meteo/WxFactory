@@ -3,7 +3,6 @@ import torch
 from numpy.typing import NDArray
 
 from ..common.definitions import (
-    gravity,
     idx_rho,
     idx_rho_theta,
     idx_rho_u1,
@@ -381,7 +380,7 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
         # Gravity uses the same filtered density as the full RHS.
         self.rhs[idx_rho_u3] -= (
             self.metric.inv_dzdeta_new
-            * gravity
+            * self.metric.gravity_new
             * self.metric.inv_sqrtG_new
             * ((self.metric.sqrtG_new * q[idx_rho]) @ self.ops.highfilter_k)
         )
@@ -459,7 +458,7 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
         self.forcing_terms(q)
         self.rhs[idx_rho_u3] += (
             self.metric.inv_dzdeta_new
-            * gravity
+            * self.metric.gravity_new
             * self.metric.inv_sqrtG_new
             * ((self.metric.sqrtG_new * q[idx_rho]) @ self.ops.highfilter_k)
         )
@@ -503,7 +502,7 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
         self.forcing_terms(q)  # rhs -= (Christoffel/Coriolis/gravity/Rayleigh)
         self.rhs[idx_rho_u3] += (
             self.metric.inv_dzdeta_new
-            * gravity
+            * self.metric.gravity_new
             * self.metric.inv_sqrtG_new
             * ((self.metric.sqrtG_new * q[idx_rho]) @ self.ops.highfilter_k)
         )

@@ -118,9 +118,10 @@ class Metric2D:
         # x1 and x2 run from -pi/4 to pi/4 and x3 runs from 0 to htop, but inside each elemenet
         # (from the perspective of the differentiation matrices) each coordinate runs from -1 to 1.
 
-        self.sqrtG *= geom.delta_x1 * geom.delta_x2 / 8.0
-        self.sqrtG_itf_i *= geom.delta_x1 * geom.delta_x2 / 8.0
-        self.sqrtG_itf_j *= geom.delta_x1 * geom.delta_x2 / 8.0
+        # Map the physical area measure to the reference element [-1, 1]^2.
+        self.sqrtG *= geom.delta_x1 * geom.delta_x2 / 4.0
+        self.sqrtG_itf_i *= geom.delta_x1 * geom.delta_x2 / 4.0
+        self.sqrtG_itf_j *= geom.delta_x1 * geom.delta_x2 / 4.0
 
         self.inv_sqrtG = 1.0 / self.sqrtG
 

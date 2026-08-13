@@ -2,7 +2,7 @@ import torch
 from numpy.typing import NDArray
 
 from ..common import Configuration
-from ..common.definitions import Rd, cpd, cvd, gravity, idx_rho, idx_rho_theta, idx_rho_u1, idx_rho_u2, idx_rho_u3, p0
+from ..common.definitions import Rd, cpd, cvd, idx_rho, idx_rho_theta, idx_rho_u1, idx_rho_u2, idx_rho_u3, p0
 from ..geometry import CubedSphere3D, Metric3DTopo
 from ..init.dcmip import dcmip_schar_damping
 from .fluxes import rusanov_3d_hori_i_new, rusanov_3d_hori_j_new, rusanov_3d_vert_new
@@ -381,7 +381,7 @@ class PDEEuler3D(PDE):
 
         # Gravity effect, in vertical direction
         forcing[idx_rho_u3] += (
-            metric.inv_dzdeta_new * gravity * metric.inv_sqrtG_new * ((metric.sqrtG_new * rho) @ ops.highfilter_k)
+            metric.inv_dzdeta_new * metric.gravity_new * metric.inv_sqrtG_new * ((metric.sqrtG_new * rho) @ ops.highfilter_k)
         )
 
         # DCMIP cases 2-1 and 2-2 involve rayleigh damping
