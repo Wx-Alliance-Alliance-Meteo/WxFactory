@@ -98,7 +98,7 @@ class Configuration:
         return out
 
     # --- START type hints --- automatically generated (do not touch)
-    advection_only: str
+    advection_only: bool
     alpha0: float
     base_output_file: str
     bubble_rad: float

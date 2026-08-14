@@ -124,6 +124,12 @@
                     "name": "bubble_rad",
                     "type": "float",
                     "default": 0.0
+                },
+                {
+                    "name": "advection_only",
+                    "type": "bool",
+                    "default": false,
+                    "description": "Whether the Euler dynamics are frozen and only passive advection is integrated. Cartesian grids are always fully dynamical."
                 }
             ]
         },
@@ -367,17 +373,6 @@
                         "dg"
                     ],
                     "description": "Direct flux reconstruction / discontinuous Galerkin spatial discretization. No finite-volume RHS is currently available."
-                },
-                {
-                    "name": "advection_only",
-                    "type": "str",
-                    "default": "auto",
-                    "selectables": [
-                        "auto",
-                        "on",
-                        "off"
-                    ],
-                    "description": "Whether the Euler dynamics are frozen and only passive advection is integrated. 'auto' derives it from the DCMIP case number (cases <= 13 are advection tests); 'on'/'off' force it. Cartesian grids are always fully dynamical."
                 },
                 {
                     "name": "lambda0",

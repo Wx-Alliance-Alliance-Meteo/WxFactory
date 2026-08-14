@@ -1,5 +1,5 @@
 import torch
-from numpy.typing import NDArray
+from torch import Tensor
 
 from ..common import Configuration
 from ..common.definitions import Rd, cpd, cvd, idx_rho, idx_rho_theta, idx_rho_u1, idx_rho_u2, idx_rho_u3, p0
@@ -25,54 +25,18 @@ def compute_forcing_1(f, r, u1, u2, w, p, c01, c02, c03, c11, c12, c13, c22, c23
     # fmt: on
 
 
+# fmt: off
 def compute_forcings(
-    # fmt: off
     # Velocity-forcing outputs
-    f2,
-    f3,
-    f4,
+    f2, f3, f4,
     # Field variables (rho, u1, u2, w and pressure)
-    r,
-    u1,
-    u2,
-    w,
-    p,
+    r, u1, u2, w, p,
     # Christoffel symbols
-    c101,
-    c102,
-    c103,
-    c111,
-    c112,
-    c113,
-    c122,
-    c123,
-    c133,
-    c201,
-    c202,
-    c203,
-    c211,
-    c212,
-    c213,
-    c222,
-    c223,
-    c233,
-    c301,
-    c302,
-    c303,
-    c311,
-    c312,
-    c313,
-    c322,
-    c323,
-    c333,
+    c101, c102, c103, c111, c112, c113, c122, c123, c133,
+    c201, c202, c203, c211, c212, c213, c222, c223, c233,
+    c301, c302, c303, c311, c312, c313, c322, c323, c333,
     # Metric terms
-    h11,
-    h12,
-    h13,
-    h22,
-    h23,
-    h33,
-    # fmt: on
+    h11, h12, h13, h22, h23, h33,
 ):
     """Compute velocity forcing from metric and Coriolis terms."""
     compute_forcing_1(
@@ -85,9 +49,12 @@ def compute_forcings(
     compute_forcing_1(
         f4, r, u1, u2, w, p, c301, c302, c303, c311, c312, c313, c322, c323, c333, h11, h12, h13, h22, h23, h33
     )
+# fmt: on
 
 
 class PDEEuler3D(PDE):
+    metric: Metric3DTopo
+
     def __init__(self, geometry: CubedSphere3D, config: Configuration, metric: Metric3DTopo, num_var: int = 5):
         # num_var is 5 for the Euler equations alone. Passively advected tracers are appended to the
         # state. Only the array sizes depend on num_var.
@@ -101,30 +68,23 @@ class PDEEuler3D(PDE):
         )
 
         self.num_solpts = geometry.num_solpts
-
         self.case_number = config.case_number
-        # The DCMIP transport tests (1-1, 1-2 and 1-3) prescribe the wind and freeze the mass field.
-        # 'auto' (the default) derives this from the case number; 'on'/'off' force it (cartesian
-        # grids reuse the small case numbers for dynamical bubbles, so they set it off).
-        mode = getattr(config, "advection_only", "auto")
-        self.advection_only = {"on": True, "off": False}.get(mode, config.case_number <= 13 and config.case_number >= 0)
-
         self.compute_forcings = compute_forcings
 
     def pointwise_fluxes(
         self,
-        q: NDArray,
-        flux_x1: NDArray,
-        flux_x2: NDArray,
-        flux_x3: NDArray,
-        pressure: NDArray,
-        wflux_adv_x1: NDArray,
-        wflux_adv_x2: NDArray,
-        wflux_adv_x3: NDArray,
-        wflux_pres_x1: NDArray,
-        wflux_pres_x2: NDArray,
-        wflux_pres_x3: NDArray,
-        logp: NDArray,
+        q: Tensor,
+        flux_x1: Tensor,
+        flux_x2: Tensor,
+        flux_x3: Tensor,
+        pressure: Tensor,
+        wflux_adv_x1: Tensor,
+        wflux_adv_x2: Tensor,
+        wflux_adv_x3: Tensor,
+        wflux_pres_x1: Tensor,
+        wflux_pres_x2: Tensor,
+        wflux_pres_x3: Tensor,
+        logp: Tensor,
     ):
         self.pointwise_fluxes_py(
             q,
@@ -143,18 +103,18 @@ class PDEEuler3D(PDE):
 
     def pointwise_fluxes_py(
         self,
-        q: NDArray,
-        flux_x1: NDArray,
-        flux_x2: NDArray,
-        flux_x3: NDArray,
-        pressure: NDArray,
-        wflux_adv_x1: NDArray,
-        wflux_adv_x2: NDArray,
-        wflux_adv_x3: NDArray,
-        wflux_pres_x1: NDArray,
-        wflux_pres_x2: NDArray,
-        wflux_pres_x3: NDArray,
-        logp: NDArray,
+        q: Tensor,
+        flux_x1: Tensor,
+        flux_x2: Tensor,
+        flux_x3: Tensor,
+        pressure: Tensor,
+        wflux_adv_x1: Tensor,
+        wflux_adv_x2: Tensor,
+        wflux_adv_x3: Tensor,
+        wflux_pres_x1: Tensor,
+        wflux_pres_x2: Tensor,
+        wflux_pres_x3: Tensor,
+        logp: Tensor,
     ):
         rho = q[idx_rho]
         u1 = q[idx_rho_u1] / rho
@@ -178,38 +138,38 @@ class PDEEuler3D(PDE):
         flux_x1[idx_rho_u2] += self.metric.sqrtG_new * self.metric.h_contra_new[0, 1] * pressure
         flux_x1[idx_rho_u3] += self.metric.sqrtG_new * self.metric.h_contra_new[0, 2] * pressure
 
-        wflux_pres_x1[...] = (self.metric.sqrtG_new * self.metric.h_contra_new[0, 2]).astype(q.dtype)
+        wflux_pres_x1[...] = (self.metric.sqrtG_new * self.metric.h_contra_new[0, 2]).to(q.dtype)
 
         flux_x2[idx_rho_u1] += self.metric.sqrtG_new * self.metric.h_contra_new[1, 0] * pressure
         flux_x2[idx_rho_u2] += self.metric.sqrtG_new * self.metric.h_contra_new[1, 1] * pressure
         flux_x2[idx_rho_u3] += self.metric.sqrtG_new * self.metric.h_contra_new[1, 2] * pressure
 
-        wflux_pres_x2[...] = (self.metric.sqrtG_new * self.metric.h_contra_new[1, 2]).astype(q.dtype)
+        wflux_pres_x2[...] = (self.metric.sqrtG_new * self.metric.h_contra_new[1, 2]).to(q.dtype)
 
         flux_x3[idx_rho_u1] += self.metric.sqrtG_new * self.metric.h_contra_new[2, 0] * pressure
         flux_x3[idx_rho_u2] += self.metric.sqrtG_new * self.metric.h_contra_new[2, 1] * pressure
         flux_x3[idx_rho_u3] += self.metric.sqrtG_new * self.metric.h_contra_new[2, 2] * pressure
 
-        wflux_pres_x3[...] = (self.metric.sqrtG_new * self.metric.h_contra_new[2, 2]).astype(q.dtype)
+        wflux_pres_x3[...] = (self.metric.sqrtG_new * self.metric.h_contra_new[2, 2]).to(q.dtype)
         logp[...] = torch.log(pressure)
 
     def riemann_fluxes(
         self,
-        q_itf_x1: NDArray,
-        q_itf_x2: NDArray,
-        q_itf_x3: NDArray,
-        flux_itf_x1: NDArray,
-        flux_itf_x2: NDArray,
-        flux_itf_x3: NDArray,
-        pressure_itf_x1: NDArray,
-        pressure_itf_x2: NDArray,
-        pressure_itf_x3: NDArray,
-        wflux_adv_itf_x1: NDArray,
-        wflux_pres_itf_x1: NDArray,
-        wflux_adv_itf_x2: NDArray,
-        wflux_pres_itf_x2: NDArray,
-        wflux_adv_itf_x3: NDArray,
-        wflux_pres_itf_x3: NDArray,
+        q_itf_x1: Tensor,
+        q_itf_x2: Tensor,
+        q_itf_x3: Tensor,
+        flux_itf_x1: Tensor,
+        flux_itf_x2: Tensor,
+        flux_itf_x3: Tensor,
+        pressure_itf_x1: Tensor,
+        pressure_itf_x2: Tensor,
+        pressure_itf_x3: Tensor,
+        wflux_adv_itf_x1: Tensor,
+        wflux_pres_itf_x1: Tensor,
+        wflux_adv_itf_x2: Tensor,
+        wflux_pres_itf_x2: Tensor,
+        wflux_adv_itf_x3: Tensor,
+        wflux_pres_itf_x3: Tensor,
         metric: Metric3DTopo,
     ):
         self.riemann_fluxes_py(
@@ -280,7 +240,7 @@ class PDEEuler3D(PDE):
             pressure_itf_x1,
             metric,
             0,
-            self.advection_only,
+            self.config.advection_only,
             flux_itf_x1,
             wflux_adv_itf_x1,
             wflux_pres_itf_x1,
@@ -292,7 +252,7 @@ class PDEEuler3D(PDE):
             pressure_itf_x2,
             metric,
             0,
-            self.advection_only,
+            self.config.advection_only,
             flux_itf_x2,
             wflux_adv_itf_x2,
             wflux_pres_itf_x2,
@@ -303,7 +263,7 @@ class PDEEuler3D(PDE):
             pressure_itf_x3,
             w_itf_x3,
             metric,
-            self.advection_only,
+            self.config.advection_only,
             flux_itf_x3,
             wflux_adv_itf_x3,
             wflux_pres_itf_x3,
@@ -314,14 +274,14 @@ class PDEEuler3D(PDE):
 
     def compute_forcings_py(
         self,
-        q: NDArray,
-        rho: NDArray,
-        u1: NDArray,
-        u2: NDArray,
-        w: NDArray,
-        pressure: NDArray,
+        q: Tensor,
+        rho: Tensor,
+        u1: Tensor,
+        u2: Tensor,
+        w: Tensor,
+        pressure: Tensor,
         metric: Metric3DTopo,
-        forcing: NDArray,
+        forcing: Tensor,
     ):
         self.compute_forcings(
             forcing[idx_rho_u1],
@@ -381,7 +341,10 @@ class PDEEuler3D(PDE):
 
         # Gravity effect, in vertical direction
         forcing[idx_rho_u3] += (
-            metric.inv_dzdeta_new * metric.gravity_new * metric.inv_sqrtG_new * ((metric.sqrtG_new * rho) @ ops.highfilter_k)
+            metric.inv_dzdeta_new
+            * metric.gravity_new
+            * metric.inv_sqrtG_new
+            * ((metric.sqrtG_new * rho) @ ops.highfilter_k)
         )
 
         # DCMIP cases 2-1 and 2-2 involve rayleigh damping

@@ -329,7 +329,7 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
         self.pde.forcing_terms(self.rhs, q, self.pressure, self.metric, self.ops, self.forcing)
 
         # Freeze the dynamical variables in tracer-only tests.
-        if self.pde.advection_only:
+        if self.config.advection_only:
             self.rhs[idx_rho] = 0.0
             self.rhs[idx_rho_u1] = 0.0
             self.rhs[idx_rho_u2] = 0.0
