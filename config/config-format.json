@@ -7,14 +7,20 @@
                 {
                     "name": "pytorch_device",
                     "type": "str",
-                    "selectables": ["cuda", "cpu"],
+                    "selectables": [
+                        "cuda",
+                        "cpu"
+                    ],
                     "default": "cuda",
                     "description": "Where the computation puts its tensors. Falls back to the CPU if no GPU is available"
                 },
                 {
                     "name": "precision",
                     "type": "str",
-                    "selectables": ["double", "mixed"],
+                    "selectables": [
+                        "double",
+                        "mixed"
+                    ],
                     "default": "double",
                     "description": "Runtime floating-point mode. Mixed precision stores the model state and most runtime arrays in single precision, constructs static spatial coefficients in double precision before casting, and selectively uses double precision for accuracy-sensitive solver operations."
                 }
@@ -26,16 +32,24 @@
                 {
                     "name": "equations",
                     "type": "str",
-                    "selectables": ["euler", "shallow_water"]
+                    "selectables": [
+                        "euler",
+                        "shallow_water"
+                    ]
                 },
                 {
                     "name": "depth_approx",
                     "type": "str",
-                    "selectables": ["deep", "shallow"],
+                    "selectables": [
+                        "deep",
+                        "shallow"
+                    ],
                     "default": "deep",
                     "dependency": {
                         "name": "equations",
-                        "values": ["euler"]
+                        "values": [
+                            "euler"
+                        ]
                     }
                 },
                 {
@@ -51,9 +65,11 @@
                 {
                     "name": "topography_file",
                     "type": "str",
-                    "dependency":{
+                    "dependency": {
                         "name": "case_number",
-                        "values": [-1]
+                        "values": [
+                            -1
+                        ]
                     }
                 },
                 {
@@ -78,7 +94,9 @@
                     "type": "str",
                     "dependency": {
                         "name": "case_number",
-                        "values": [9]
+                        "values": [
+                            9
+                        ]
                     }
                 },
                 {
@@ -86,7 +104,9 @@
                     "type": "float",
                     "dependency": {
                         "name": "case_number",
-                        "values": [9]
+                        "values": [
+                            9
+                        ]
                     }
                 },
                 {
@@ -95,7 +115,9 @@
                     "default": 0.0,
                     "dependency": {
                         "name": "grid_type",
-                        "values": ["cartesian3d"]
+                        "values": [
+                            "cartesian3d"
+                        ]
                     }
                 },
                 {
@@ -142,7 +164,17 @@
                     "name": "exode_method",
                     "type": "str",
                     "default": "BS3(2)",
-                    "selectables": [ "BS3(2)", "DP5(4)", "M4(3)", "KC3(2)", "EXLRK3(2)", "EXLRK4(3)", "F14(12)", "DP8(7)", "F10(8)" ]
+                    "selectables": [
+                        "BS3(2)",
+                        "DP5(4)",
+                        "M4(3)",
+                        "KC3(2)",
+                        "EXLRK3(2)",
+                        "EXLRK4(3)",
+                        "F14(12)",
+                        "DP8(7)",
+                        "F10(8)"
+                    ]
                 },
                 {
                     "name": "exode_controller",
@@ -179,7 +211,11 @@
                     "default": "",
                     "dependency": {
                         "name": "time_integrator",
-                        "values": ["lie", "strang", "os22"]
+                        "values": [
+                            "lie",
+                            "strang",
+                            "os22"
+                        ]
                     }
                 },
                 {
@@ -188,7 +224,11 @@
                     "default": "",
                     "dependency": {
                         "name": "time_integrator",
-                        "values": ["lie", "strang", "os22"]
+                        "values": [
+                            "lie",
+                            "strang",
+                            "os22"
+                        ]
                     }
                 },
                 {
@@ -196,7 +236,9 @@
                     "type": "float",
                     "dependency": {
                         "name": "time_integrator",
-                        "values": ["os22"]
+                        "values": [
+                            "os22"
+                        ]
                     },
                     "description": "Stage parameter p for the OS22 splitting coefficients [[(2p-1)/(2p-2), 1-p], [-1/(2p-2), p]]. Valid values satisfy p != 1."
                 }
@@ -209,9 +251,11 @@
                     "name": "num_solpts",
                     "type": "int",
                     "min": 1,
-                    "dependency":{
+                    "dependency": {
                         "name": "grid_file",
-                        "values": [""]
+                        "values": [
+                            ""
+                        ]
                     }
                 },
                 {
@@ -220,7 +264,9 @@
                     "min": 1,
                     "dependency": {
                         "name": "grid_file",
-                        "values": [""]
+                        "values": [
+                            ""
+                        ]
                     }
                 },
                 {
@@ -247,7 +293,9 @@
                     "min": 2,
                     "dependency": {
                         "name": "expfilter_apply",
-                        "values": [true]
+                        "values": [
+                            true
+                        ]
                     },
                     "description": "Positive even order of the exponential modal filter."
                 },
@@ -258,7 +306,9 @@
                     "max": 1.0,
                     "dependency": {
                         "name": "expfilter_apply",
-                        "values": [true]
+                        "values": [
+                            true
+                        ]
                     },
                     "description": "Normalized modal cutoff below which modes are left unchanged."
                 },
@@ -268,7 +318,9 @@
                     "min": 0.0,
                     "dependency": {
                         "name": "expfilter_apply",
-                        "values": [true]
+                        "values": [
+                            true
+                        ]
                     },
                     "description": "Strength alpha in the exponential modal-filter attenuation."
                 }
@@ -285,16 +337,25 @@
                 {
                     "name": "grid_type",
                     "type": "str",
-                    "selectables": ["cubed_sphere", "cartesian3d"],
-                    "dependency":{
+                    "selectables": [
+                        "cubed_sphere",
+                        "cartesian3d"
+                    ],
+                    "dependency": {
                         "name": "grid_file",
-                        "values": [""]
+                        "values": [
+                            ""
+                        ]
                     }
                 },
                 {
                     "name": "lateral_boundary",
                     "type": "str",
-                    "selectables": ["donor_cell", "wall", "periodic"],
+                    "selectables": [
+                        "donor_cell",
+                        "wall",
+                        "periodic"
+                    ],
                     "default": "donor_cell",
                     "description": "Lateral (horizontal) boundary treatment. donor_cell exchanges traces with the neighbouring tile (the cubed sphere's inter-panel donor cell); wall reflects the tile's own boundary trace (solid wall); periodic wraps the tile to its opposite edge. The cubed sphere always uses donor_cell; wall/periodic are for cartesian grids."
                 },
@@ -302,14 +363,20 @@
                     "name": "discretization",
                     "type": "str",
                     "default": "dg",
-                    "selectables": ["dg"],
+                    "selectables": [
+                        "dg"
+                    ],
                     "description": "Direct flux reconstruction / discontinuous Galerkin spatial discretization. No finite-volume RHS is currently available."
                 },
                 {
                     "name": "advection_only",
                     "type": "str",
                     "default": "auto",
-                    "selectables": ["auto", "on", "off"],
+                    "selectables": [
+                        "auto",
+                        "on",
+                        "off"
+                    ],
                     "description": "Whether the Euler dynamics are frozen and only passive advection is integrated. 'auto' derives it from the DCMIP case number (cases <= 13 are advection tests); 'on'/'off' force it. Cartesian grids are always fully dynamical."
                 },
                 {
@@ -317,7 +384,9 @@
                     "type": "angle24",
                     "dependency": {
                         "name": "grid_type",
-                        "values": ["cubed_sphere"]
+                        "values": [
+                            "cubed_sphere"
+                        ]
                     },
                     "description": "Longitude in radians of the central point of panel 0"
                 },
@@ -326,7 +395,9 @@
                     "type": "angle24",
                     "dependency": {
                         "name": "grid_type",
-                        "values": ["cubed_sphere"]
+                        "values": [
+                            "cubed_sphere"
+                        ]
                     },
                     "description": "Latitude in radians of the central point of panel 0"
                 },
@@ -335,7 +406,9 @@
                     "type": "angle24",
                     "dependency": {
                         "name": "grid_type",
-                        "values": ["cubed_sphere"]
+                        "values": [
+                            "cubed_sphere"
+                        ]
                     },
                     "description": "Rotation in radians of the central meridian of panel 0"
                 },
@@ -345,17 +418,24 @@
                     "default": 0.0,
                     "dependency": {
                         "name": "grid_type",
-                        "values": ["cubed_sphere"]
+                        "values": [
+                            "cubed_sphere"
+                        ]
                     }
                 },
                 {
                     "name": "vertical_coord",
                     "type": "str",
-                    "selectables": ["gal_chen", "sleve"],
+                    "selectables": [
+                        "gal_chen",
+                        "sleve"
+                    ],
                     "default": "gal_chen",
                     "dependency": {
                         "name": "grid_type",
-                        "values": ["cubed_sphere"]
+                        "values": [
+                            "cubed_sphere"
+                        ]
                     },
                     "description": "Terrain-following vertical coordinate. gal_chen decays the terrain linearly with height; sleve (Schar et al. 2002) decays the large- and small-scale parts of the terrain at different rates, so that small-scale features vanish faster aloft"
                 },
@@ -365,7 +445,9 @@
                     "default": 10000.0,
                     "dependency": {
                         "name": "vertical_coord",
-                        "values": ["sleve"]
+                        "values": [
+                            "sleve"
+                        ]
                     },
                     "description": "SLEVE decay scale height s1 of the large-scale topography (m)"
                 },
@@ -375,7 +457,9 @@
                     "default": 2500.0,
                     "dependency": {
                         "name": "vertical_coord",
-                        "values": ["sleve"]
+                        "values": [
+                            "sleve"
+                        ]
                     },
                     "description": "SLEVE decay scale height s2 of the small-scale topography (m). Should be well below sleve_scale_large"
                 },
@@ -384,7 +468,9 @@
                     "type": "float",
                     "dependency": {
                         "name": "grid_type",
-                        "values": ["cartesian3d"]
+                        "values": [
+                            "cartesian3d"
+                        ]
                     }
                 },
                 {
@@ -392,7 +478,9 @@
                     "type": "float",
                     "dependency": {
                         "name": "grid_type",
-                        "values": ["cartesian3d"]
+                        "values": [
+                            "cartesian3d"
+                        ]
                     }
                 },
                 {
@@ -401,7 +489,9 @@
                     "default": 0.0,
                     "dependency": {
                         "name": "grid_type",
-                        "values": ["cartesian3d"]
+                        "values": [
+                            "cartesian3d"
+                        ]
                     }
                 },
                 {
@@ -410,7 +500,9 @@
                     "default": 1000.0,
                     "dependency": {
                         "name": "grid_type",
-                        "values": ["cartesian3d"]
+                        "values": [
+                            "cartesian3d"
+                        ]
                     }
                 },
                 {
@@ -418,7 +510,9 @@
                     "type": "float",
                     "dependency": {
                         "name": "grid_type",
-                        "values": ["cartesian3d"]
+                        "values": [
+                            "cartesian3d"
+                        ]
                     }
                 },
                 {
@@ -426,10 +520,12 @@
                     "type": "float",
                     "dependency": {
                         "name": "grid_type",
-                        "values": ["cartesian3d"]
+                        "values": [
+                            "cartesian3d"
+                        ]
                     }
                 }
-           ]
+            ]
         },
         {
             "name": "Preconditioning",
@@ -438,12 +534,15 @@
                     "name": "preconditioner",
                     "type": "str",
                     "default": "none",
-                    "selectables": ["none"]
+                    "selectables": [
+                        "none"
+                    ]
                 },
                 {
                     "name": "verbose_precond",
                     "type": "int",
-                    "default": 0}
+                    "default": 0
+                }
             ]
         },
         {
@@ -489,7 +588,11 @@
                     "name": "output_format",
                     "type": "str",
                     "default": "netcdf",
-                    "selectables": ["netcdf", "fst", "zarr"],
+                    "selectables": [
+                        "netcdf",
+                        "fst",
+                        "zarr"
+                    ],
                     "description": "Cubed-sphere output format. netcdf requires netCDF4; fst additionally requires the external rmn and georef packages. Cartesian output uses its image writer regardless of this setting."
                 }
             ]
@@ -509,7 +612,9 @@
                     "description": "Mountain longitude center point (radians)",
                     "dependency": {
                         "name": "enable_schar_mountain",
-                        "values": [true]
+                        "values": [
+                            true
+                        ]
                     }
                 },
                 {
@@ -518,7 +623,9 @@
                     "description": "Mountain latitude center point (radians)",
                     "dependency": {
                         "name": "enable_schar_mountain",
-                        "values": [true]
+                        "values": [
+                            true
+                        ]
                     }
                 },
                 {
@@ -527,7 +634,9 @@
                     "description": "Peak height of the mountain range (m)",
                     "dependency": {
                         "name": "enable_schar_mountain",
-                        "values": [true]
+                        "values": [
+                            true
+                        ]
                     }
                 },
                 {
@@ -536,7 +645,9 @@
                     "description": "Mountain radius (meters)",
                     "dependency": {
                         "name": "enable_schar_mountain",
-                        "values": [true]
+                        "values": [
+                            true
+                        ]
                     }
                 },
                 {
@@ -545,7 +656,9 @@
                     "description": "Mountain wavelength (meters)",
                     "dependency": {
                         "name": "enable_schar_mountain",
-                        "values": [true]
+                        "values": [
+                            true
+                        ]
                     }
                 },
                 {
@@ -556,7 +669,9 @@
                     "description": "Number of step of interpolation, 0 is instantaneous",
                     "dependency": {
                         "name": "enable_schar_mountain",
-                        "values": [true]
+                        "values": [
+                            true
+                        ]
                     }
                 }
             ]

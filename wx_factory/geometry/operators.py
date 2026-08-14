@@ -207,7 +207,7 @@ class DFROperators:
         return (filter_x @ filter_y) @ filter_z
 
     @staticmethod
-    def apply_filter_3d(Q: NDArray, metric: "Metric3DTopo", filter_matrix: NDArray):
+    def apply_filter_3d(Q: Tensor, metric: "Metric3DTopo", filter_matrix: Tensor):
         r"""Filter the metric-weighted conservative state \(\sqrt{G}Q\) element by element."""
         return ((metric.sqrtG_new * Q) @ filter_matrix) * metric.inv_sqrtG_new
 
@@ -582,7 +582,7 @@ class DFROperators:
         return output
 
 
-def diffmat(points) -> numpy.ndarray:
+def diffmat(points) -> NDArray:
     """Create a 2D differentiation matrix for the given set of points."""
     M = len(points)
     D = numpy.zeros((M, M))
@@ -635,7 +635,7 @@ def check_skewcentrosymmetry(m: Tensor) -> bool:
     return True
 
 
-def row_reduce(A: numpy.ndarray, ncols: int | None = None) -> numpy.ndarray:
+def row_reduce(A: NDArray, ncols: int | None = None) -> NDArray:
     """Perform Gaussian elimination using row operations."""
     if not A.ndim == 2:
         raise ValueError(f"Only 2-D matrices can be converted to reduced row echelon form, not {A.ndim}-D.")

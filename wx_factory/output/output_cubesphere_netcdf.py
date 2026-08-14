@@ -98,7 +98,6 @@ class OutputCubesphereNetcdf(OutputCubesphere):
             self.ncfile.createDimension("Xdim", nj)
 
             if self.config.equations == "shallow_water" and self.nz > 1:
-
                 self.ncfile.createDimension("Zdim", self.nz)
 
                 zzz = self.ncfile.createVariable("Zdim", numpy.float64, ("Zdim",))
@@ -152,7 +151,6 @@ class OutputCubesphereNetcdf(OutputCubesphere):
             lon.units = "degrees_east"
 
             if self.config.equations == "shallow_water":
-
                 if self.nz > 1:
                     dims = ("time", "nfaces", "Zdim", "Xdim", "Ydim")
                 else:

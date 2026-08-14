@@ -4,7 +4,6 @@ from typing import TYPE_CHECKING
 import numpy
 import torch
 from mpi4py import MPI
-from numpy.typing import NDArray
 from torch import Tensor
 
 from ..common import Configuration
@@ -137,8 +136,8 @@ class CubedSphere3D(CubedSphere):
             self.sleve_scale_large = param.sleve_scale_large
             self.sleve_scale_small = param.sleve_scale_small
         elif self.vertical_coord == "gal_chen":
-            self.sleve_scale_large = None
-            self.sleve_scale_small = None
+            self.sleve_scale_large = float("nan")
+            self.sleve_scale_small = float("nan")
         else:
             raise ValueError(f"Invalid vertical coordinate ({self.vertical_coord})")
 
@@ -271,23 +270,23 @@ class CubedSphere3D(CubedSphere):
         self.eta_new = linear_to_full_k(eta_linear)
 
         # Repeat for the interface values
-        x1_itf_i = x1_boundaries.copy()
-        x2_itf_i = x2.copy()
+        x1_itf_i = x1_boundaries.clone()
+        x2_itf_i = x2.clone()
         # Repeat zy plane
         x3_itf_i = torch.repeat_interleave(x3[:, :, 0], num_elements_x1 + 1).reshape(self.itf_i_shape_3d)
         eta_itf_i = torch.repeat_interleave(eta[:, :, 0], num_elements_x1 + 1).reshape(self.itf_i_shape_3d)
         self.x3_itf_i_new = self._to_new_itf_i(x3_itf_i)
         self.eta_itf_i_new = self._to_new_itf_i(eta_itf_i)
 
-        x1_itf_j = x1.copy()
-        x2_itf_j = x2_boundaries.copy()
+        x1_itf_j = x1.clone()
+        x2_itf_j = x2_boundaries.clone()
         x3_itf_j = torch.repeat_interleave(x3[:, 0, :], num_elements_x2 + 1).reshape(self.itf_j_shape_3d)
         eta_itf_j = torch.repeat_interleave(eta[:, 0, :], num_elements_x2 + 1).reshape(self.itf_j_shape_3d)
         self.x3_itf_j_new = self._to_new_itf_j(x3_itf_j)
         self.eta_itf_j_new = self._to_new_itf_j(eta_itf_j)
 
-        x1_itf_k = x1.copy()
-        x2_itf_k = x2.copy()
+        x1_itf_k = x1.clone()
+        x2_itf_k = x2.clone()
         x3_itf_k = torch.repeat_interleave(x3_boundaries, ni * nj).reshape(self.itf_k_shape_3d)
         eta_itf_k = torch.repeat_interleave(eta_boundaries, ni * nj).reshape(self.itf_k_shape_3d)
         self.x3_itf_k_new = self._to_new_itf_k(x3_itf_k)
@@ -447,7 +446,7 @@ class CubedSphere3D(CubedSphere):
         # as will the DG structures.
         self.apply_topography(None, None, None, None, None, None)
 
-    def _decay(self, eta: NDArray, scale: float) -> NDArray:
+    def _decay(self, eta: Tensor, scale: float) -> Tensor:
         """
         Vertical decay function b(η) of the terrain-following coordinate, which goes from 1 at the
         surface (η=0) to 0 at the model top (η=1).
@@ -463,7 +462,7 @@ class CubedSphere3D(CubedSphere):
         k = self.ztop / scale
         return torch.sinh(k * (1.0 - eta)) / math.sinh(k)
 
-    def _check_invertibility(self, h_large: NDArray, h_small: NDArray):
+    def _check_invertibility(self, h_large: Tensor, h_small: Tensor):
         """
         Verify the SLEVE invertibility condition (Schar et al. 2002, eq. 20).
 
@@ -475,8 +474,8 @@ class CubedSphere3D(CubedSphere):
         """
         if self.vertical_coord != "gal_chen":
             comm = MPI.COMM_WORLD
-            h1_max = comm.allreduce(float(abs(h_large).max()), MPI.MAX)
-            h2_max = comm.allreduce(float(abs(h_small).max()), MPI.MAX)
+            h1_max: float = comm.allreduce(float(abs(h_large).max()), MPI.MAX)
+            h2_max: float = comm.allreduce(float(abs(h_small).max()), MPI.MAX)
 
             def term(h_max, scale):
                 return h_max / scale / math.tanh(self.ztop / scale)
@@ -505,18 +504,18 @@ class CubedSphere3D(CubedSphere):
 
     def apply_topography(
         self,
-        zbot: NDArray | None,
-        zbot_itf_i: NDArray | None,
-        zbot_itf_j: NDArray | None,
-        zbot_new: NDArray | None,
-        zbot_itf_i_new: NDArray | None,
-        zbot_itf_j_new: NDArray | None,
-        zbot_large: NDArray | None = None,
-        zbot_large_itf_i: NDArray | None = None,
-        zbot_large_itf_j: NDArray | None = None,
-        zbot_large_new: NDArray | None = None,
-        zbot_large_itf_i_new: NDArray | None = None,
-        zbot_large_itf_j_new: NDArray | None = None,
+        zbot: Tensor | None,
+        zbot_itf_i: Tensor | None,
+        zbot_itf_j: Tensor | None,
+        zbot_new: Tensor | None,
+        zbot_itf_i_new: Tensor | None,
+        zbot_itf_j_new: Tensor | None,
+        zbot_large: Tensor | None = None,
+        zbot_large_itf_i: Tensor | None = None,
+        zbot_large_itf_j: Tensor | None = None,
+        zbot_large_new: Tensor | None = None,
+        zbot_large_itf_i_new: Tensor | None = None,
+        zbot_large_itf_j_new: Tensor | None = None,
     ):
         """
         Apply a topography field, given by heights (above the 0 reference sphere) specified at
@@ -539,22 +538,22 @@ class CubedSphere3D(CubedSphere):
             self.z_floor_itf_i = torch.zeros(self.itf_i_floor_shape, dtype=self.dtype)
             self.z_floor_itf_j = torch.zeros(self.itf_j_floor_shape, dtype=self.dtype)
         else:
-            self.z_floor = zbot_new.copy()
-            self.z_floor_itf_i = zbot_itf_i_new.copy()
-            self.z_floor_itf_j = zbot_itf_j_new.copy()
+            self.z_floor = zbot_new.clone()
+            self.z_floor_itf_i = zbot_itf_i_new.clone()
+            self.z_floor_itf_j = zbot_itf_j_new.clone()
 
         if zbot is None or zbot_itf_i is None or zbot_itf_j is None:
             self.zbot = torch.zeros(self.grid_shape_2d, dtype=self.dtype)
             self.zbot_itf_i = torch.zeros_like(self.coordVec_num_itf_i[0, 0, ...])
             self.zbot_itf_j = torch.zeros_like(self.coordVec_num_itf_j[0, 0, ...])
         else:
-            self.zbot = zbot.copy()
-            self.zbot_itf_i = zbot_itf_i.copy()
-            self.zbot_itf_j = zbot_itf_j.copy()
+            self.zbot = zbot.clone()
+            self.zbot_itf_i = zbot_itf_i.clone()
+            self.zbot_itf_j = zbot_itf_j.clone()
 
         # Split the topography into its large- and small-scale parts. Without a split, everything
         # is large-scale and the small-scale part is empty.
-        def split(total, large):
+        def split(total: Tensor, large: Tensor | None):
             h1 = total if large is None else large
             return h1, total - h1
 
@@ -591,7 +590,7 @@ class CubedSphere3D(CubedSphere):
         s1 = self.sleve_scale_large
         s2 = self.sleve_scale_small
 
-        def height(eta, h_large, h_small):
+        def height(eta: Tensor, h_large: Tensor, h_small: Tensor) -> Tensor:
             return ztop * eta + h_large * self._decay(eta, s1) + h_small * self._decay(eta, s2)
 
         # To apply the topography, we need to redefine self.x3 and its interfaced versions.
@@ -980,7 +979,7 @@ class CubedSphere3D(CubedSphere):
 
         return new
 
-    def get_floor(self, a: NDArray):
+    def get_floor(self, a: Tensor):
         """Retrieve slice of 'a' that's on the bottom (floor)"""
         if a.shape[-4:] != self.grid_shape_3d_new:
             raise ValueError(f"Unhandled shape {a.shape}, expected ... + {self.grid_shape_3d_new}")
@@ -990,7 +989,7 @@ class CubedSphere3D(CubedSphere):
         floor = numpy.s_[..., 0, :, :, 0, :, :]
         return a.reshape(tmp_shape1)[floor].reshape(tmp_shape2)
 
-    def floor_to_bulk(self, a: NDArray, k_itf: bool = False):
+    def floor_to_bulk(self, a: Tensor, k_itf: bool = False):
         """Expand given floor array to occupy all elements"""
         if a.shape[-3:] != self.floor_shape:
             raise ValueError(f"Unhandled shape {a.shape}, expected (...,) + {self.floor_shape}")
@@ -1003,7 +1002,7 @@ class CubedSphere3D(CubedSphere):
         dest_shape = self.grid_shape_3d_new if not k_itf else self.itf_k_shape
         return torch.tile(torch.repeat_interleave(a, repeat_count, dim=axis1), (tile_count, 1, 1)).reshape(dest_shape)
 
-    def get_itf_i_floor(self, a):
+    def get_itf_i_floor(self, a: Tensor):
         """Retrieve slice of interface-i array 'a' that's on the floor"""
         if a.shape[-4:] != self.itf_i_shape:
             raise ValueError(f"Unhandled shape {a.shape}, expected ... + {self.itf_i_shape}")
@@ -1013,7 +1012,7 @@ class CubedSphere3D(CubedSphere):
         floor = numpy.s_[..., 0, :, :, :, 0, :]
         return a.reshape(tmp_shape1)[floor].reshape(tmp_shape2)
 
-    def floor_i_to_bulk(self, a: NDArray):
+    def floor_i_to_bulk(self, a: Tensor):
         if a.shape[-3:] != self.itf_i_floor_shape:
             raise ValueError(f"Unhandled shape {a.shape}, expected ... + {self.itf_i_floor_shape}")
 
@@ -1024,7 +1023,7 @@ class CubedSphere3D(CubedSphere):
             torch.repeat_interleave(a_tmp, self.num_solpts, dim=axis1), (self.num_elements_x3, 1, 1, 1)
         ).reshape(self.itf_i_shape)
 
-    def get_itf_j_floor(self, a):
+    def get_itf_j_floor(self, a: Tensor):
         """Retrieve slice of interface-j array 'a' that's on the floor"""
         if a.shape[-4:] != self.itf_j_shape:
             raise ValueError(f"Unhandled shape {a.shape}, expected ... + {self.itf_j_shape}")
@@ -1034,7 +1033,7 @@ class CubedSphere3D(CubedSphere):
         floor = numpy.s_[..., 0, :, :, :, 0, :]
         return a.reshape(tmp_shape1)[floor].reshape(tmp_shape2)
 
-    def floor_j_to_bulk(self, a: NDArray):
+    def floor_j_to_bulk(self, a: Tensor):
         if a.shape[-3:] != self.itf_j_floor_shape:
             raise ValueError(f"Unhandled shape {a.shape}, expected ... + {self.itf_j_floor_shape}")
 
@@ -1045,7 +1044,7 @@ class CubedSphere3D(CubedSphere):
             torch.repeat_interleave(a_tmp, self.num_solpts, dim=axis1), (self.num_elements_x3, 1, 1, 1)
         ).reshape(self.itf_j_shape)
 
-    def to_new_floor(self, a: NDArray) -> NDArray:
+    def to_new_floor(self, a: Tensor) -> Tensor:
         """Convert floor array from old to new layout"""
         if a.shape[-2:] != self.grid_shape_2d:
             raise ValueError(f"Unhandled shape {a.shape}, expected ... + {self.grid_shape_2d}")
@@ -1053,9 +1052,9 @@ class CubedSphere3D(CubedSphere):
         tmp_shape1 = a.shape[:-2] + (self.num_elements_x2, self.num_solpts, self.num_elements_x1, self.num_solpts)
         end_shape = a.shape[:-2] + self.floor_shape
 
-        return numpy.swapaxes(a.reshape(tmp_shape1), -3, -2).reshape(end_shape)
+        return torch.swapaxes(a.reshape(tmp_shape1), -3, -2).reshape(end_shape)
 
-    def to_new_itf_i_floor(self, a: NDArray) -> NDArray:
+    def to_new_itf_i_floor(self, a: Tensor) -> Tensor:
         """Convert itf-i array from old to new layout"""
         expected_shape = self.itf_i_shape_3d[1:]
         if a.shape[-2:] != expected_shape:
@@ -1073,7 +1072,7 @@ class CubedSphere3D(CubedSphere):
 
         return new
 
-    def to_new_itf_j_floor(self, a: NDArray) -> NDArray:
+    def to_new_itf_j_floor(self, a: Tensor) -> Tensor:
         """Convert itf-j array from old to new layout"""
         expected_shape = self.itf_j_shape_3d[1:]
         if a.shape[-2:] != expected_shape:
@@ -1090,15 +1089,15 @@ class CubedSphere3D(CubedSphere):
 
         return new
 
-    def wind2contra_2d(self, u: float | NDArray, v: float | NDArray):
+    def wind2contra_2d(self, u: float | Tensor, v: float | Tensor):
         """Convert wind fields from the spherical basis (zonal, meridional) to panel-appropriate contravariant winds,
         in two dimensions
 
         Parameters:
         ----------
-        u : float | NDArray
+        u : float | Tensor
             Input zonal winds, in meters per second
-        v : float | NDArray
+        v : float | Tensor
             Input meridional winds, in meters per second
 
         Returns:
@@ -1163,9 +1162,9 @@ class CubedSphere3D(CubedSphere):
 
     def wind2contra(
         self,
-        u: float | NDArray,
-        v: float | NDArray,
-        w: float | NDArray,
+        u: float | Tensor,
+        v: float | Tensor,
+        w: float | Tensor,
         metric: "Metric3DTopo",
     ):
         """Convert wind fields from spherical values (zonal, meridional, vertical) to contravariant winds
@@ -1173,11 +1172,11 @@ class CubedSphere3D(CubedSphere):
 
         Parameters:
         ----------
-        u : float | numpy.ndarray
+        u : float | Tensor
             Input zonal winds, in meters per second
-        v : float | numpy.ndarray
+        v : float | Tensor
             Input meridional winds, in meters per second
-        w : float | numpy.ndarray
+        w : float | Tensor
             Input vertical winds, in meters per second
         metric : Metric3DTopo
             Metric object containing H_contra and inv_dzdeta parameters
@@ -1210,14 +1209,14 @@ class CubedSphere3D(CubedSphere):
 
         return (u1_contra, u2_contra, u3_contra)
 
-    def contra2wind_2d(self, u1: float | NDArray, u2: float | NDArray):
+    def contra2wind_2d(self, u1: float | Tensor, u2: float | Tensor):
         """Convert from reference element to "physical winds", in two dimensions
 
         Parameters:
         -----------
-        u1 : float | NDArray
+        u1 : float | Tensor
             Contravariant winds along first component (X)
-        u2 : float | NDArray
+        u2 : float | Tensor
             Contravariant winds along second component (Y)
 
         Returns:
@@ -1294,9 +1293,9 @@ class CubedSphere3D(CubedSphere):
 
     def contra2wind_3d(
         self,
-        u1_contra: NDArray,
-        u2_contra: NDArray,
-        u3_contra: NDArray,
+        u1_contra: Tensor,
+        u2_contra: Tensor,
+        u3_contra: Tensor,
         metric: "Metric3DTopo",
     ):
         """Convert from contravariant wind fields to "physical winds" in three dimensions.
@@ -1311,11 +1310,11 @@ class CubedSphere3D(CubedSphere):
 
         Parameters:
         -----------
-        u1_contra: numpy.ndarray
+        u1_contra: Tensor
         contravariant wind, u1 component
-        u2_contra: numpy.ndarray
+        u2_contra: Tensor
         contravariant wind, u2 component
-        u3_contra: numpy.ndarray
+        u3_contra: Tensor
         contravariant wind, u3 component
         geom: CubedSphere
         geometry object, implementing:

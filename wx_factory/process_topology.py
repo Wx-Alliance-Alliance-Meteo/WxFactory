@@ -9,8 +9,6 @@ from torch import Tensor
 from .context import Context
 from .wx_mpi import Conditional, SingleProcess, split_nodes
 
-ExchangedVector = tuple[Tensor, ...] | Tensor
-
 SOUTH = 0
 NORTH = 1
 WEST = 2
@@ -364,10 +362,10 @@ class ProcessTopology:
 
     def prepare_vector_buffer(
         self,
-        south: ExchangedVector,
-        north: ExchangedVector,
-        west: ExchangedVector,
-        east: ExchangedVector,
+        south: tuple[Tensor, ...],
+        north: tuple[Tensor, ...],
+        west: tuple[Tensor, ...],
+        east: tuple[Tensor, ...],
         boundary_sn: Tensor,
         boundary_we: Tensor,
         flip_dim: int | tuple[int, ...] = -1,
@@ -395,10 +393,10 @@ class ProcessTopology:
 
     def start_exchange_vectors(
         self,
-        south: ExchangedVector,
-        north: ExchangedVector,
-        west: ExchangedVector,
-        east: ExchangedVector,
+        south: tuple[Tensor, ...],
+        north: tuple[Tensor, ...],
+        west: tuple[Tensor, ...],
+        east: tuple[Tensor, ...],
         boundary_sn: Tensor,
         boundary_we: Tensor,
         flip_dim: int | tuple[int, ...] = -1,
@@ -522,7 +520,7 @@ class ProcessTopology:
             3 for single 3d-euler variable, 4 for a set of 3d-euler variables, etc.
             This parameter is ignored when the tile is made of 1D data.
         :type num_dim: int
-        :return: The assembled panel, as a single NDArray, on root PE; None on every non-root PE.
+        :return: The assembled panel, as a single torch.Tensor, on root PE; None on every non-root PE.
         """
         if self.panel_comm.size == 1:
             return field
@@ -553,7 +551,7 @@ class ProcessTopology:
         This function is a collective call that must be made by every process member of this topology.
 
         :param field: Tile data
-        :param num_dim: Number of dimensions in the data. For example:
+        :param num_dim: Number of dimensions in the data. For example
             for a single shallow-water variable, it should be 2;
             for a set of shallow-water variables, it should be 3;
             for a set of 3D-euler variables, it should be 4
@@ -695,22 +693,14 @@ class ExchangeRequest:
         self.is_vector = is_vector
 
         # Scalar data
-        self.to_tuple: Callable[[Tensor], ExchangedVector] = lambda a: a.reshape(self.shape)
+        self.to_tuple: Callable[[Tensor], Tensor] = lambda a: a.reshape(self.shape)
 
         # Vector data
         if self.is_vector:
             num_comp = self.recv_buffer.shape[1]
-            if num_comp == 2:  # 2D
-                self.to_tuple = lambda a: (a[0].reshape(self.shape), a[1].reshape(self.shape))
-            elif num_comp == 3:  # 3D
-                self.to_tuple = lambda a: (a[0].reshape(self.shape), a[1].reshape(self.shape), a[2].reshape(self.shape))
-            else:
-                # A whole 3D state: the 5 Euler variables, plus any number of advected tracers.
-                # start_exchange_euler_3d rotates only components 1 and 2 (the horizontal momenta)
-                # and sends the rest as scalars, so the block comes back as a single array.
-                self.to_tuple = lambda a: a.reshape((num_comp,) + self.shape)
+            self.to_tuple = lambda a: a.reshape((num_comp,) + self.shape)
 
-    def wait(self, timeout=10.0) -> tuple[ExchangedVector, ExchangedVector, ExchangedVector, ExchangedVector]:
+    def wait(self, timeout=10.0) -> tuple[Tensor, Tensor, Tensor, Tensor]:
         """Wait for the exchange started when creating this object to be done.
 
         :param timeout: How long we should wait for the request to complete before throwing an error

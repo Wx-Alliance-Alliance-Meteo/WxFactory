@@ -2,7 +2,7 @@ import math
 
 import numpy
 import torch
-from numpy.typing import NDArray
+from torch import Tensor
 
 from ..process_topology import ProcessTopology
 from .cubed_sphere import CubedSphere
@@ -170,9 +170,9 @@ class CubedSphere2D(CubedSphere):
 
         # Element interfaces
         self.x1_itf_i = torch.linspace(domain_x1[0], domain_x1[1], num_elements_x1 + 1, dtype=torch.float64)
-        self.x2_itf_i = self.x2.copy()  # Copy over x2, without change because of tensor product structure
+        self.x2_itf_i = self.x2.clone()  # Copy over x2, without change because of tensor product structure
 
-        self.x1_itf_j = self.x1.copy()
+        self.x1_itf_j = self.x1.clone()
         self.x2_itf_j = torch.linspace(domain_x2[0], domain_x2[1], num_elements_x2 + 1, dtype=torch.float64)
 
         ## Construct the combined coordinate vector for the numeric/equiangular coordinate (x1, x2)
@@ -441,7 +441,7 @@ class CubedSphere2D(CubedSphere):
         self.lon_itf_j = self.polar_itf_j[0, ...]
         self.lat_itf_j = self.polar_itf_j[1, ...]
 
-    def _to_new(self, a: NDArray) -> NDArray:
+    def _to_new(self, a: Tensor) -> Tensor:
         """Convert input array to new memory layout"""
 
         if isinstance(a, float):
@@ -455,7 +455,7 @@ class CubedSphere2D(CubedSphere):
         new_shape = a.shape[:-2] + self.grid_shape
         return torch.moveaxis(a.reshape(tmp_shape), -2, -3).reshape(new_shape)
 
-    def to_single_block(self, a: NDArray) -> NDArray:
+    def to_single_block(self, a: Tensor) -> Tensor:
         """Convert input array from a list of elements to a single block of points layout."""
         expected_shape = (self.num_elements_x2, self.num_elements_x1, self.num_solpts * self.num_solpts)
         if a.shape[-3:] != expected_shape:
@@ -517,14 +517,14 @@ class CubedSphere2D(CubedSphere):
         else:
             raise ValueError(f"Unexpected array shape {a.shape} (expected {expected_shape})")
 
-    def wind2contra(self, u: float | NDArray, v: float | NDArray):
+    def wind2contra(self, u: float | Tensor, v: float | Tensor):
         """Convert wind fields from the spherical basis (zonal, meridional) to panel-appropriate contravariant winds
 
         Parameters:
         ----------
-        u : float | NDArray
+        u : float | Tensor
            Input zonal winds, in meters per second
-        v : float | NDArray
+        v : float | Tensor
            Input meridional winds, in meters per second
 
         Returns:
@@ -580,14 +580,14 @@ class CubedSphere2D(CubedSphere):
 
         return u1_contra, u2_contra
 
-    def contra2wind(self, u1: float | NDArray, u2: float | NDArray) -> tuple[NDArray, NDArray]:
+    def contra2wind(self, u1: float | Tensor, u2: float | Tensor) -> tuple[Tensor, Tensor]:
         """Convert from reference element to "physical winds", in two dimensions
 
         Parameters:
         -----------
-        u1 : float | NDArray
+        u1 : float | Tensor
            Contravariant winds along first component (X)
-        u2 : float | NDArray
+        u2 : float | Tensor
            Contravariant winds along second component (Y)
 
         Returns:

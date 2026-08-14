@@ -1,18 +1,20 @@
 import math
 
-import numpy
+import torch
+from torch import Tensor
 
-from .cubed_sphere import CubedSphere
+from .cubed_sphere_2d import CubedSphere2D
+from .cubed_sphere_3d import CubedSphere3D
 
 
-def wind2contra_2d(u: float | numpy.ndarray, v: float | numpy.ndarray, geom: CubedSphere):
+def wind2contra_2d(u: float | Tensor, v: float | Tensor, geom: CubedSphere2D | CubedSphere3D):
     """Convert wind fields from the spherical basis (zonal, meridional) to panel-appropriate contrvariant winds, in two dimensions
 
     Parameters:
     ----------
-    u : float | numpy.ndarray
+    u : float | Tensor
        Input zonal winds, in meters per second
-    v : float | numpy.ndarray
+    v : float | Tensor
        Input meridional winds, in meters per second
     geom : CubedSphere
        Geometry object (CubedSphere), describing the grid configuration and globe paramters.
@@ -37,8 +39,7 @@ def wind2contra_2d(u: float | numpy.ndarray, v: float | numpy.ndarray, geom: Cub
         lambda_dot = u / (geom.earth_radius * geom.coslat)
         phi_dot = v / geom.earth_radius
 
-    if hasattr(geom, "X_new"):
-        # CubedSphere3D
+    if isinstance(geom, CubedSphere3D):
         X = geom.X_new
         Y = geom.Y_new
         delta2 = geom.delta2_new
@@ -48,7 +49,7 @@ def wind2contra_2d(u: float | numpy.ndarray, v: float | numpy.ndarray, geom: Cub
         Y = geom.Y
         delta2 = geom.delta2
 
-    denom = numpy.sqrt(
+    denom = torch.sqrt(
         (
             math.cos(geom.lat_p)
             + X * math.sin(geom.lat_p) * math.sin(geom.angle_p)
@@ -80,14 +81,14 @@ def wind2contra_2d(u: float | numpy.ndarray, v: float | numpy.ndarray, geom: Cub
     return u1_contra, u2_contra
 
 
-def contra2wind_2d(u1: float | numpy.ndarray, u2: float | numpy.ndarray, geom: CubedSphere):
+def contra2wind_2d(u1: float | Tensor, u2: float | Tensor, geom: CubedSphere2D | CubedSphere3D):
     """Convert from reference element to "physical winds", in two dimensions
 
     Parameters:
     -----------
-    u1 : float | numpy.ndarray
+    u1 : float | Tensor
        Contravariant winds along first component (X)
-    u2 : float | numpy.ndarray
+    u2 : float | Tensor
        Contravariant winds along second component (Y)
     geom : CubedSphere
        Geometry object, containing:
@@ -102,8 +103,7 @@ def contra2wind_2d(u1: float | numpy.ndarray, u2: float | numpy.ndarray, geom: C
     u1_contra = u1 * geom.delta_x1 / 2.0
     u2_contra = u2 * geom.delta_x2 / 2.0
 
-    if hasattr(geom, "X_new"):
-        # CubedSphere3D
+    if isinstance(geom, CubedSphere3D):
         X = geom.X_new
         Y = geom.Y_new
         delta2 = geom.delta2_new
@@ -131,7 +131,7 @@ def contra2wind_2d(u1: float | numpy.ndarray, u2: float | numpy.ndarray, geom: C
 
     dlondx2 = (math.cos(geom.lat_p) * math.sin(geom.angle_p) + X * math.sin(geom.lat_p)) * (1.0 + Y**2) / denom
 
-    denom[:, :] = numpy.sqrt(
+    denom[:, :] = torch.sqrt(
         (
             math.cos(geom.lat_p)
             + X * math.sin(geom.lat_p) * math.sin(geom.angle_p)

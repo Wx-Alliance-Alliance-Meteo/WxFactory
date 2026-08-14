@@ -4,6 +4,7 @@ import unittest
 
 import torch
 
+from tests.unit.wx_test import WxTestCase
 from wx_factory.process_topology import (
     CONVERT_CONTRAVARIANT,
     CONVERT_COVARIANT,
@@ -16,7 +17,7 @@ from wx_factory.process_topology import (
 DIRECTIONS = ((SOUTH, "south"), (NORTH, "north"), (WEST, "west"), (EAST, "east"))
 
 
-class PanelConversionTestCase(unittest.TestCase):
+class PanelConversionTestCase(WxTestCase):
     """Structural identities the twelve seams must satisfy."""
 
     def setUp(self) -> None:

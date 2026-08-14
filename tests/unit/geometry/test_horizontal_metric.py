@@ -4,10 +4,11 @@ import unittest
 
 import torch
 
+from tests.unit.wx_test import WxTestCase
 from wx_factory.geometry.metric3d import horizontal_metric_2d
 
 
-class HorizontalMetricTestCase(unittest.TestCase):
+class HorizontalMetricTestCase(WxTestCase):
     def setUp(self) -> None:
         self.dtype = torch.float64
         # The gnomonic coordinates span [-1, 1] on each panel.

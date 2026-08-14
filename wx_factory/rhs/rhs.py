@@ -1,8 +1,6 @@
 from abc import ABC, abstractmethod
 
-import numpy
 import torch
-from numpy.typing import NDArray
 from torch import Tensor
 
 from ..common import Configuration
@@ -16,6 +14,8 @@ class RHS(ABC):
     req_r: ExchangeRequest
     req_u: ExchangeRequest
     req_t: ExchangeRequest
+
+    rhs: Tensor
 
     def __init__(
         self,
@@ -68,14 +68,6 @@ class RHS(ABC):
         self.df1_dx1 = None
         self.df2_dx2 = None
         self.df3_dx3 = None
-
-        self.q_itf_s = None
-        self.q_itf_n = None
-        self.q_itf_w = None
-        self.q_itf_e = None
-
-        # Initialize rhs matrix
-        self.rhs = None
 
         self.latest_time_complex = False
 
@@ -151,26 +143,26 @@ class RHS(ABC):
         if self.y_invariant_slab:
             self.rhs[idx_rho_u2] = 0.0
 
-    def full(self, q: NDArray) -> NDArray:
+    def full(self, q: Tensor) -> Tensor:
         return self.__call__(q)
 
-    def operators_for(self, q: NDArray) -> DFROperators:
+    def operators_for(self, q: Tensor) -> DFROperators:
         """Return the real operator set."""
         return self.ops_real
 
     def allocate_arrays(self, q: Tensor):
-        if self.f_x1 is None or self.f_x1.dtype != q.dtype:
+        if not hasattr(self, "rhs") or self.rhs.dtype != q.dtype:
             self.f_x1 = torch.zeros_like(q)
             self.f_x2 = torch.zeros_like(q)
             self.f_x3 = torch.zeros_like(q)
             self.rhs = torch.empty_like(q)
 
     @abstractmethod
-    def solution_extrapolation(self, q: NDArray) -> None:
+    def solution_extrapolation(self, q: Tensor) -> None:
         pass
 
     @abstractmethod
-    def pointwise_fluxes(self, q: NDArray) -> None:
+    def pointwise_fluxes(self, q: Tensor) -> None:
         pass
 
     def riemann_fluxes(self) -> None:
@@ -191,7 +183,7 @@ class RHS(ABC):
     def flux_divergence(self) -> None:
         pass
 
-    def forcing_terms(self, q: NDArray) -> None:
+    def forcing_terms(self, q: Tensor) -> None:
         self.pde.forcing_terms(self.rhs, q)
 
     def start_communication(self) -> None:
@@ -204,7 +196,7 @@ class RHS(ABC):
         for timings, is_complex in zip([self.timings_real, self.timings_complex], [False, True]):
             if len(timings) <= 1:
                 continue
-            timings = numpy.array(timings)
+            timings = torch.tensor(timings)
             extrapolation = timings[1:, 0].sum()
             start_comm = timings[1:, 1].sum()
             pw_flux = timings[1:, 2].sum()

@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 
 import sympy
 import torch
-from numpy.typing import NDArray
+from torch import Tensor
 
 from ..context import Context
 from .quadrature import gauss_legendre
@@ -73,6 +73,6 @@ class Geometry(ABC):
         self.z_levels = {""}
 
     @abstractmethod
-    def to_single_block(self, a: NDArray) -> NDArray:
+    def to_single_block(self, a: Tensor) -> Tensor:
         """Convert an array of values over this grid (which be may organized as a list of elements)
         into a single block of data (2D or 3D)."""
