@@ -8,14 +8,13 @@
 | | | | | |
  | **[Test_case]**       | **Type**  | **Default**  | **Valid range**           | **Description**  |
    | equations             | lc-str  | [none]  | {euler, shallow_water}           |   |
-   | initial_condition     | lc-str  |         |                                  |   |
    | time_start            | lc-str  |         |                                  |   |
    | time_end              | lc-str  |         |                                  |   |
    | case_number           | int   | -1        |                                  |   |
    | bubble_rad            | float  | 0.0      |                                  |   |
    | depth_approx          | lc-str  | deep    | {deep, shallow}                  |   |
    | topography_file       | lc-str  | [none]  |                                  |   |
-   | initial_conditions_file  | lc-str  | [none]  |                               |   |
+   | initial_conditions    | lc-str  | [none]  |                               |   |
    | matsuno_wave_type     | lc-str  | [none]  |                                  |   |
    | matsuno_amp           | float  | [none]   |                                  |   |
    | bubble_theta          | float  | 0.0      |                                  |   |

@@ -2,20 +2,42 @@ import math
 
 import numpy
 import torch
+from torch import Tensor
 
+from ..common.definitions import gravity
 from .cubed_sphere_3d import CubedSphere3D
 from .geometry import cast_double_arrays
 from .operators import DFROperators
 
 
+def horizontal_metric_2d(X: Tensor, Y: Tensor) -> tuple[Tensor, Tensor]:
+    """Return the unit-sphere horizontal contravariant and covariant metrics."""
+    delta2 = 1 + X**2 + Y**2
+
+    contra = torch.empty((2, 2) + X.shape, dtype=X.dtype, device=X.device)
+    contra[0, 0] = delta2 / (1 + X**2)
+    contra[0, 1] = delta2 * X * Y / ((1 + X**2) * (1 + Y**2))
+    contra[1, 0] = contra[0, 1]
+    contra[1, 1] = delta2 / (1 + Y**2)
+
+    cov = torch.empty((2, 2) + X.shape, dtype=X.dtype, device=X.device)
+    cov[0, 0] = (1 + X**2) ** 2 * (1 + Y**2) / delta2**2
+    cov[0, 1] = -X * Y * (1 + X**2) * (1 + Y**2) / delta2**2
+    cov[1, 0] = cov[0, 1]
+    cov[1, 1] = (1 + X**2) * (1 + Y**2) ** 2 / delta2**2
+
+    return contra, cov
+
+
 class Metric3DTopo:
-    def __init__(self, geom: CubedSphere3D, matrix: DFROperators):
-        """Token initialization: store geometry and matrix objects.  Defer construction of the metric itself,
-        so that initialization can take place after topography is defined inside the 'geom' object"""
+    def __init__(self, geom: CubedSphere3D, matrix: DFROperators, numer_christoffel: bool = True):
+        """Store geometry and operators until topography is available."""
 
         self.geom = geom
         self.matrix = matrix
         self.deep = geom.deep
+        self.context = geom.context
+        self.numer_christoffel = numer_christoffel
 
     def build_metric(self):
         """Construct the metric terms, with the assurance that topography is now defined.  This defines full, 3D arrays
@@ -106,10 +128,10 @@ class Metric3DTopo:
         # exchange code demands contravariant components, and dRd(...) is covariant.  We can perform the conversion
         # by constructing a (temporary) 2D metric in terms of X and Y only at the interfaces:
 
-        metric_2d_contra_itf_i = torch.zeros((2, 2) + geom.itf_i_shape_3d)
-        metric_2d_contra_itf_j = torch.zeros((2, 2) + geom.itf_j_shape_3d)
-        metric_2d_cov_itf_i = torch.zeros((2, 2) + geom.itf_i_shape_3d)
-        metric_2d_cov_itf_j = torch.zeros((2, 2) + geom.itf_j_shape_3d)
+        metric_2d_contra_itf_i = torch.zeros((2, 2) + geom.itf_i_shape_3d, dtype=dtype)
+        metric_2d_contra_itf_j = torch.zeros((2, 2) + geom.itf_j_shape_3d, dtype=dtype)
+        metric_2d_cov_itf_i = torch.zeros((2, 2) + geom.itf_i_shape_3d, dtype=dtype)
+        metric_2d_cov_itf_j = torch.zeros((2, 2) + geom.itf_j_shape_3d, dtype=dtype)
 
         for metric_contra, metric_cov, X, Y in zip(
             (metric_2d_contra_itf_i, metric_2d_contra_itf_j),
@@ -117,23 +139,16 @@ class Metric3DTopo:
             (X_itf_i, X_itf_j),
             (Y_itf_i, Y_itf_j),
         ):
-            delta2 = 1 + X**2 + Y**2
-            metric_contra[0, 0, :, :, :] = delta2 / (1 + X**2)
-            metric_contra[0, 1, :, :, :] = delta2 * X * Y / ((1 + X**2) + (1 + Y**2))
-            metric_contra[1, 0, :, :, :] = metric_contra[0, 1, :, :, :]
-            metric_contra[1, 1, :, :, :] = delta2 / (1 + Y**2)
-
-            metric_cov[0, 0, :, :, :] = (1 + X**2) ** 2 * (1 + Y**2) / delta2**2
-            metric_cov[0, 1, :, :, :] = -X * Y * (1 + X**2) * (1 + Y**2) / delta2**2
-            metric_cov[1, 0, :, :, :] = metric_cov[0, 1, :, :, :]
-            metric_cov[1, 1, :, :, :] = (1 + X**2) * (1 + Y**2) ** 2 / delta2**2
+            contra, cov = horizontal_metric_2d(X, Y)
+            metric_contra[:, :, :, :, :] = contra
+            metric_cov[:, :, :, :, :] = cov
 
         # Arrays for boundary info:  arrays for parallel exchange have a different shape than the 'natural'
         # extrapolation,
         # in order for the MPI exchange to occur with contiguous subarrays.
 
-        exch_itf_i = torch.zeros((3, geom.nk, geom.num_elements_x1 + 2, 2, geom.nj))
-        exch_itf_j = torch.zeros((3, geom.nk, geom.num_elements_x2 + 2, 2, geom.ni))
+        exch_itf_i = torch.zeros((3, geom.nk, geom.num_elements_x1 + 2, 2, geom.nj), dtype=dtype)
+        exch_itf_j = torch.zeros((3, geom.nk, geom.num_elements_x2 + 2, 2, geom.ni), dtype=dtype)
 
         # Perform extrapolation.  Extrapolation in i and j will be written to arrays for exchange, but k does not
         # require an exchange; we can average directly and will handle this afterwards
@@ -338,133 +353,78 @@ class Metric3DTopo:
         # Initialize metric arrays
 
         # Covariant space-only metric
-        def compute_metric(X, Y, R, dRdx1, dRdx2, dRdeta, with_cov: bool = True):
+        def compute_metric(
+            X: Tensor, Y: Tensor, R: Tensor, dRdx1: Tensor, dRdx2: Tensor, dRdeta: Tensor, with_cov: bool = True
+        ) -> tuple[Tensor | None, Tensor, Tensor]:
             """Compute metric terms, optionally omitting the covariant metric."""
             delsq = 1 + X**2 + Y**2  # δ², per Charron May 2022
             del4 = delsq**2
 
-            Hcov = torch.empty((3, 3) + X.shape) if with_cov else None
-            Hcontra = torch.empty((3, 3) + X.shape)
+            Hcov = torch.empty((3, 3) + X.shape, dtype=X.dtype) if with_cov else None
+            Hcontra = torch.empty((3, 3) + X.shape, dtype=X.dtype)
             rootG = torch.empty_like(X)
 
-            if deep:
-                if with_cov:
-                    Hcov[0, 0, :] = (delta_x**2 / 4) * (R**2 / del4 * (1 + X**2) ** 2 * (1 + Y**2) + dRdx1**2)  # g_11
+            # Use r = a + d_a z in deep mode and r = a in shallow mode.
+            r = R if deep else A
 
-                    Hcov[0, 1, :] = (delta_x * delta_y / 4) * (
-                        -(R**2) / del4 * X * Y * (1 + X**2) * (1 + Y**2) + dRdx1 * dRdx2
-                    )  # g_12
-                    Hcov[1, 0, :] = Hcov[0, 1, :]  # g_21 (by symmetry)
+            if Hcov is not None:
+                Hcov[0, 0, :] = (delta_x**2 / 4) * (r**2 / del4 * (1 + X**2) ** 2 * (1 + Y**2) + dRdx1**2)  # g_11
 
-                    Hcov[0, 2, :] = delta_eta * delta_x / 4 * dRdx1 * dRdeta  # g_13
-                    Hcov[2, 0, :] = Hcov[0, 2, :]  # g_31 by symmetry
+                Hcov[0, 1, :] = (delta_x * delta_y / 4) * (
+                    -(r**2) / del4 * X * Y * (1 + X**2) * (1 + Y**2) + dRdx1 * dRdx2
+                )  # g_12
+                Hcov[1, 0, :] = Hcov[0, 1, :]  # g_21 (by symmetry)
 
-                    Hcov[1, 1, :] = delta_y**2 / 4 * (R**2 / del4 * (1 + X**2) * (1 + Y**2) ** 2 + dRdx2**2)  # g_22
+                Hcov[0, 2, :] = delta_eta * delta_x / 4 * dRdx1 * dRdeta  # g_13
+                Hcov[2, 0, :] = Hcov[0, 2, :]  # g_31 by symmetry
 
-                    Hcov[1, 2, :] = delta_eta * delta_y / 4 * dRdx2 * dRdeta  # g_23
-                    Hcov[2, 1, :] = Hcov[1, 2, :]  # g_32 by symmetry
+                Hcov[1, 1, :] = delta_y**2 / 4 * (r**2 / del4 * (1 + X**2) * (1 + Y**2) ** 2 + dRdx2**2)  # g_22
 
-                    Hcov[2, 2, :] = (delta_eta**2 / 4) * dRdeta**2  # g_33
+                Hcov[1, 2, :] = delta_eta * delta_y / 4 * dRdx2 * dRdeta  # g_23
+                Hcov[2, 1, :] = Hcov[1, 2, :]  # g_32 by symmetry
 
-                Hcontra[0, 0, :] = (4 / delta_x**2) * (delsq / (R**2 * (1 + X**2)))  # h^11
+                Hcov[2, 2, :] = (delta_eta**2 / 4) * dRdeta**2  # g_33
 
-                Hcontra[0, 1, :] = (4 / delta_x / delta_y) * (X * Y * delsq / (R**2 * (1 + X**2) * (1 + Y**2)))  # h^12
-                Hcontra[1, 0, :] = Hcontra[0, 1, :]  # h^21 by symmetry
+            Hcontra[0, 0, :] = (4 / delta_x**2) * (delsq / (r**2 * (1 + X**2)))  # h^11
 
-                Hcontra[0, 2, :] = (4 / delta_x / delta_eta) * (
-                    -(dRdx1 * delsq / (R**2 * (1 + X**2)) + dRdx2 * delsq * X * Y / (R**2 * (1 + X**2) * (1 + Y**2)))
-                    / (dRdeta)
-                )  # h^13
-                Hcontra[2, 0, :] = Hcontra[0, 2, :]  # h^31 by symmetry
+            Hcontra[0, 1, :] = (4 / delta_x / delta_y) * (X * Y * delsq / (r**2 * (1 + X**2) * (1 + Y**2)))  # h^12
+            Hcontra[1, 0, :] = Hcontra[0, 1, :]  # h^21 by symmetry
 
-                Hcontra[1, 1, :] = (4 / delta_y**2) * (delsq / (R**2 * (1 + Y**2)))  # h^22
+            Hcontra[0, 2, :] = (4 / delta_x / delta_eta) * (
+                -(dRdx1 * delsq / (r**2 * (1 + X**2)) + dRdx2 * delsq * X * Y / (r**2 * (1 + X**2) * (1 + Y**2)))
+                / (dRdeta)
+            )  # h^13
+            Hcontra[2, 0, :] = Hcontra[0, 2, :]  # h^31 by symmetry
 
-                Hcontra[1, 2, :] = (4 / delta_y / delta_eta) * (
-                    -(dRdx1 * X * Y * delsq / (R**2 * (1 + X**2) * (1 + Y**2)) + dRdx2 * delsq / (R**2 * (1 + Y**2)))
-                    / dRdeta
-                )  # h^23
-                Hcontra[2, 1, :] = Hcontra[1, 2, :]  # h^32 by symmetry
+            Hcontra[1, 1, :] = (4 / delta_y**2) * (delsq / (r**2 * (1 + Y**2)))  # h^22
 
-                Hcontra[2, 2, :] = (
-                    (4 / delta_eta**2)
-                    * (
-                        1
-                        + dRdx1**2 * delsq / (R**2 * (1 + X**2))
-                        + 2 * dRdx1 * dRdx2 * X * Y * delsq / (R**2 * (1 + X**2) * (1 + Y**2))
-                        + dRdx2**2 * delsq / (R**2 * (1 + Y**2))
-                    )
-                    / dRdeta**2
+            Hcontra[1, 2, :] = (4 / delta_y / delta_eta) * (
+                -(dRdx1 * X * Y * delsq / (r**2 * (1 + X**2) * (1 + Y**2)) + dRdx2 * delsq / (r**2 * (1 + Y**2)))
+                / dRdeta
+            )  # h^23
+            Hcontra[2, 1, :] = Hcontra[1, 2, :]  # h^32 by symmetry
+
+            Hcontra[2, 2, :] = (
+                (4 / delta_eta**2)
+                * (
+                    1
+                    + dRdx1**2 * delsq / (r**2 * (1 + X**2))
+                    + 2 * dRdx1 * dRdx2 * X * Y * delsq / (r**2 * (1 + X**2) * (1 + Y**2))
+                    + dRdx2**2 * delsq / (r**2 * (1 + Y**2))
                 )
+                / dRdeta**2
+            )
 
-                rootG[:] = (
-                    (delta_x / 2)
-                    * (delta_y / 2)
-                    * (delta_eta / 2)
-                    * R**2
-                    * (1 + X**2)
-                    * (1 + Y**2)
-                    * torch.abs(dRdeta)
-                    / delsq ** (1.5)
-                )
-            else:  # Shallow, so all bare R terms become A terms
-                if with_cov:
-                    Hcov[0, 0, :] = (delta_x**2 / 4) * (A**2 / del4 * (1 + X**2) ** 2 * (1 + Y**2) + dRdx1**2)  # g_11
-
-                    Hcov[0, 1, :] = (delta_x * delta_y / 4) * (
-                        -(A**2) / del4 * X * Y * (1 + X**2) * (1 + Y**2) + dRdx1 * dRdx2
-                    )  # g_12
-                    Hcov[1, 0, :] = Hcov[0, 1, :]  # g_21 (by symmetry)
-
-                    Hcov[0, 2, :] = delta_eta * delta_x / 4 * dRdx1 * dRdeta  # g_13
-                    Hcov[2, 0, :] = Hcov[0, 2, :]  # g_31 by symmetry
-
-                    Hcov[1, 1, :] = delta_y**2 / 4 * (A**2 / del4 * (1 + X**2) * (1 + Y**2) ** 2 + dRdx2**2)  # g_22
-
-                    Hcov[1, 2, :] = delta_eta * delta_y / 4 * dRdx2 * dRdeta  # g_23
-                    Hcov[2, 1, :] = Hcov[1, 2, :]  # g_32 by symmetry
-
-                    Hcov[2, 2, :] = (delta_eta**2 / 4) * dRdeta**2  # g_33
-
-                Hcontra[0, 0, :] = (4 / delta_x**2) * (delsq / (A**2 * (1 + X**2)))  # h^11
-
-                Hcontra[0, 1, :] = (4 / delta_x / delta_y) * (X * Y * delsq / (A**2 * (1 + X**2) * (1 + Y**2)))  # h^12
-                Hcontra[1, 0, :] = Hcontra[0, 1, :]  # h^21 by symmetry
-
-                Hcontra[0, 2, :] = (4 / delta_x / delta_eta) * (
-                    -(dRdx1 * delsq / (A**2 * (1 + X**2)) + dRdx2 * delsq * X * Y / (A**2 * (1 + X**2) * (1 + Y**2)))
-                    / (dRdeta)
-                )  # h^13
-                Hcontra[2, 0, :] = Hcontra[0, 2, :]  # h^31 by symmetry
-
-                Hcontra[1, 1, :] = (4 / delta_y**2) * (delsq / (A**2 * (1 + Y**2)))  # h^22
-
-                Hcontra[1, 2, :] = (4 / delta_y / delta_eta) * (
-                    -(dRdx1 * X * Y * delsq / (A**2 * (1 + X**2) * (1 + Y**2)) + dRdx2 * delsq / (A**2 * (1 + Y**2)))
-                    / dRdeta
-                )  # h^23
-                Hcontra[2, 1, :] = Hcontra[1, 2, :]  # h^32 by symmetry
-
-                Hcontra[2, 2, :] = (
-                    (4 / delta_eta**2)
-                    * (
-                        1
-                        + dRdx1**2 * delsq / (A**2 * (1 + X**2))
-                        + 2 * dRdx1 * dRdx2 * X * Y * delsq / (A**2 * (1 + X**2) * (1 + Y**2))
-                        + dRdx2**2 * delsq / (A**2 * (1 + Y**2))
-                    )
-                    / dRdeta**2
-                )
-
-                rootG[:] = (
-                    (delta_x / 2)
-                    * (delta_y / 2)
-                    * (delta_eta / 2)
-                    * A**2
-                    * (1 + X**2)
-                    * (1 + Y**2)
-                    * torch.abs(dRdeta)
-                    / delsq ** (1.5)
-                )
+            rootG[:] = (
+                (delta_x / 2)
+                * (delta_y / 2)
+                * (delta_eta / 2)
+                * r**2
+                * (1 + X**2)
+                * (1 + Y**2)
+                * torch.abs(dRdeta)
+                / delsq ** (1.5)
+            )
 
             return Hcov, Hcontra, rootG
 
@@ -498,64 +458,43 @@ class Metric3DTopo:
         deltasq = 1 + X_int**2 + Y_int**2
         Omega = geom.rotation_speed
 
-        # Γ^1_ab, a≤b
-        if deep:
-            Christoffel_1_01 = (
-                Omega * X_int * Y_int / deltasq * rot1 + dRdx1_int * Omega / (R_int * (1 + X_int**2)) * rot2
-            )
-            Christoffel_1_02 = (
-                -Omega * (-(1 + Y_int**2) / deltasq) * rot1 + dRdx2_int * Omega / (R_int * (1 + X_int**2)) * rot2
-            )
-            Christoffel_1_03 = dRdeta_int * Omega / (R_int * (1 + X_int**2)) * rot2
+        # d_a distinguishes the deep and shallow Christoffel formulas.
+        d_a = 1.0 if deep else 0.0
+        r = R_int if deep else A
 
-            Christoffel_1_11 = 2 * X_int * Y_int**2 / deltasq + dRdx1_int * 2 / R_int
-            Christoffel_1_12 = -Y_int * (1 + Y_int**2) / deltasq + dRdx2_int / R_int
-            Christoffel_1_13 = dRdeta_int / R_int
-        else:  # Shallow atmosphere, R->A
-            Christoffel_1_01 = Omega * X_int * Y_int / deltasq * rot1 + dRdx1_int * Omega / (A * (1 + X_int**2)) * rot2
-            Christoffel_1_02 = (
-                -Omega * (-(1 + Y_int**2) / deltasq) * rot1 + dRdx2_int * Omega / (A * (1 + X_int**2)) * rot2
-            )
-            Christoffel_1_03 = dRdeta_int * Omega / (A * (1 + X_int**2)) * rot2
+        # Γ^1_ab, a≤b -- Equations (A3) and (A11)
+        Christoffel_1_01 = (
+            Omega * X_int * Y_int / deltasq * rot1 + d_a * dRdx1_int * Omega / (r * (1 + X_int**2)) * rot2
+        )
+        Christoffel_1_02 = (
+            -Omega * (1 + Y_int**2) / deltasq * rot1 + d_a * dRdx2_int * Omega / (r * (1 + X_int**2)) * rot2
+        )
+        Christoffel_1_03 = d_a * dRdeta_int * Omega / (r * (1 + X_int**2)) * rot2
 
-            Christoffel_1_11 = 2 * X_int * Y_int**2 / deltasq + dRdx1_int * 2 / A
-            Christoffel_1_12 = -Y_int * (1 + Y_int**2) / deltasq + dRdx2_int / A
-            Christoffel_1_13 = dRdeta_int / A
+        Christoffel_1_11 = 2 * X_int * Y_int**2 / deltasq + d_a * dRdx1_int * 2 / r
+        Christoffel_1_12 = -Y_int * (1 + Y_int**2) / deltasq + d_a * dRdx2_int / r
+        Christoffel_1_13 = d_a * dRdeta_int / r
 
-        Christoffel_1_22 = 0
-        Christoffel_1_23 = 0
+        Christoffel_1_22 = torch.zeros_like(X_int)
+        Christoffel_1_23 = torch.zeros_like(X_int)
+        Christoffel_1_33 = torch.zeros_like(X_int)
 
-        Christoffel_1_33 = 0
+        # Γ^2_ab, a≤b -- Equations (A4) and (A12)
+        Christoffel_2_01 = (
+            Omega * (1 + X_int**2) / deltasq * rot1 + d_a * dRdx1_int * Omega / (r * (1 + Y_int**2)) * rot3
+        )
+        Christoffel_2_02 = (
+            -Omega * X_int * Y_int / deltasq * rot1 + d_a * dRdx2_int * Omega / (r * (1 + Y_int**2)) * rot3
+        )
+        Christoffel_2_03 = d_a * dRdeta_int * Omega / (r * (1 + Y_int**2)) * rot3
 
-        # Γ^2_ab, a≤b
-        if deep:
-            Christoffel_2_01 = (
-                Omega * (1 + X_int**2) / deltasq * rot1 + dRdx1_int * Omega / (R_int * (1 + Y_int**2)) * rot3
-            )
-            Christoffel_2_02 = (
-                -Omega * X_int * Y_int / deltasq * rot2 + dRdx2_int * Omega / (R_int * (1 + Y_int**2)) * rot3
-            )
-            Christoffel_2_03 = dRdeta_int * Omega / (R_int * (1 + Y_int**2)) * rot3
+        Christoffel_2_11 = torch.zeros_like(X_int)
+        Christoffel_2_12 = -X_int * (1 + X_int**2) / deltasq + d_a * dRdx1_int / r
+        Christoffel_2_13 = torch.zeros_like(X_int)
 
-            Christoffel_2_11 = 0
-            Christoffel_2_12 = -X_int * (1 + X_int**2) / deltasq + dRdx1_int / R_int
-            Christoffel_2_13 = 0
-
-            Christoffel_2_22 = 2 * X_int**2 * Y_int / deltasq + dRdx2_int * 2 / R_int
-            Christoffel_2_23 = dRdeta_int / R_int
-        else:  # Shallow
-            Christoffel_2_01 = Omega * (1 + X_int**2) / deltasq * rot1 + dRdx1_int * Omega / (A * (1 + Y_int**2)) * rot3
-            Christoffel_2_02 = -Omega * X_int * Y_int / deltasq * rot2 + dRdx2_int * Omega / (A * (1 + Y_int**2)) * rot3
-            Christoffel_2_03 = dRdeta_int * Omega / (A * (1 + Y_int**2)) * rot3
-
-            Christoffel_2_11 = 0
-            Christoffel_2_12 = -X_int * (1 + X_int**2) / deltasq + dRdx1_int / A
-            Christoffel_2_13 = 0
-
-            Christoffel_2_22 = 2 * X_int**2 * Y_int / deltasq + dRdx2_int * 2 / A
-            Christoffel_2_23 = dRdeta_int / A
-
-        Christoffel_2_33 = 0
+        Christoffel_2_22 = 2 * X_int**2 * Y_int / deltasq + d_a * dRdx2_int * 2 / r
+        Christoffel_2_23 = d_a * dRdeta_int / r
+        Christoffel_2_33 = torch.zeros_like(X_int)
 
         # Γ^3_ab, a≤b
         # For this set of terms, we need the second derivatives of R with respect to x1, x1, and η
@@ -584,71 +523,38 @@ class Metric3DTopo:
 
         d2Rdetaeta = matrix.comma_k(dRdeta_int, dRdeta_ext_k, geom) * 2 / delta_eta
 
-        if deep:
-            Christoffel_3_01 = -(dRdeta_int**-1) * (
-                dRdx1_int * Christoffel_1_01
-                + dRdx2_int * Christoffel_2_01
-                + R_int / deltasq * Omega * (1 + X_int**2) * (cphi * calp - Y_int * sphi)
-            )
-            Christoffel_3_02 = -(dRdeta_int**-1) * (
-                dRdx1_int * Christoffel_1_02
-                + dRdx2_int * Christoffel_2_02
-                + R_int / deltasq * Omega * (1 + Y_int**2) * (cphi * salp + X_int * sphi)
-            )
-            Christoffel_3_03 = (
-                -dRdx1_int * Omega / (R_int * (1 + X_int**2)) * rot2
-                - dRdx2_int * Omega / (R_int * (1 + Y_int**2)) * rot3
-            )
+        # Equations (A5) and (A13)
+        Christoffel_3_01 = -(dRdeta_int**-1) * (
+            dRdx1_int * Christoffel_1_01
+            + dRdx2_int * Christoffel_2_01
+            + d_a * r / deltasq * Omega * (1 + X_int**2) * (cphi * calp - Y_int * sphi)
+        )
+        Christoffel_3_02 = -(dRdeta_int**-1) * (
+            dRdx1_int * Christoffel_1_02
+            + dRdx2_int * Christoffel_2_02
+            + d_a * r / deltasq * Omega * (1 + Y_int**2) * (cphi * salp + X_int * sphi)
+        )
+        Christoffel_3_03 = -d_a * (
+            dRdx1_int * Omega / (r * (1 + X_int**2)) * rot2 + dRdx2_int * Omega / (r * (1 + Y_int**2)) * rot3
+        )
 
-            Christoffel_3_11 = (dRdeta_int**-1) * (
-                d2Rdx1x1 - dRdx1_int * Christoffel_1_11 - R_int / deltasq**2 * (1 + X_int**2) ** 2 * (1 + Y_int**2)
-            )
-            Christoffel_3_12 = (dRdeta_int**-1) * (
-                d2Rdx1x2
-                - dRdx1_int * Christoffel_1_12
-                - dRdx2_int * Christoffel_2_12
-                + R_int / deltasq**2 * X_int * Y_int * (1 + X_int**2) * (1 + Y_int**2)
-            )
-            Christoffel_3_13 = (dRdeta_int**-1) * d2Rdx1eta - dRdx1_int / R_int
+        Christoffel_3_11 = (dRdeta_int**-1) * (
+            d2Rdx1x1 - dRdx1_int * Christoffel_1_11 - d_a * r / deltasq**2 * (1 + X_int**2) ** 2 * (1 + Y_int**2)
+        )
+        Christoffel_3_12 = (dRdeta_int**-1) * (
+            d2Rdx1x2
+            - dRdx1_int * Christoffel_1_12
+            - dRdx2_int * Christoffel_2_12
+            + d_a * r / deltasq**2 * X_int * Y_int * (1 + X_int**2) * (1 + Y_int**2)
+        )
+        Christoffel_3_13 = (dRdeta_int**-1) * d2Rdx1eta - d_a * dRdx1_int / r
 
-            Christoffel_3_22 = (dRdeta_int**-1) * (
-                d2Rdx2x2 - dRdx2_int * Christoffel_2_22 - R_int / deltasq**2 * (1 + X_int**2) * (1 + Y_int**2) ** 2
-            )
-            Christoffel_3_23 = (dRdeta_int**-1) * d2Rdx2eta - dRdx2_int / R_int
+        Christoffel_3_22 = (dRdeta_int**-1) * (
+            d2Rdx2x2 - dRdx2_int * Christoffel_2_22 - d_a * r / deltasq**2 * (1 + X_int**2) * (1 + Y_int**2) ** 2
+        )
+        Christoffel_3_23 = (dRdeta_int**-1) * d2Rdx2eta - d_a * dRdx2_int / r
 
-            Christoffel_3_33 = (dRdeta_int**-1) * d2Rdetaeta
-        else:  # Shallow atmosphere
-            Christoffel_3_01 = -(dRdeta_int**-1) * (
-                dRdx1_int * Christoffel_1_01
-                + dRdx2_int * Christoffel_2_01
-                + A / deltasq * Omega * (1 + X_int**2) * (cphi * calp - Y_int * sphi)
-            )
-            Christoffel_3_02 = -(dRdeta_int**-1) * (
-                dRdx1_int * Christoffel_1_02
-                + dRdx2_int * Christoffel_2_02
-                + A / deltasq * Omega * (1 + Y_int**2) * (cphi * salp + X_int * sphi)
-            )
-            Christoffel_3_03 = (
-                -dRdx1_int * Omega / (A * (1 + X_int**2)) * rot2 - dRdx2_int * Omega / (A * (1 + Y_int**2)) * rot3
-            )
-
-            Christoffel_3_11 = (dRdeta_int**-1) * (
-                d2Rdx1x1 - dRdx1_int * Christoffel_1_11 - A / deltasq**2 * (1 + X_int**2) ** 2 * (1 + Y_int**2)
-            )
-            Christoffel_3_12 = (dRdeta_int**-1) * (
-                d2Rdx1x2
-                - dRdx1_int * Christoffel_1_12
-                - dRdx2_int * Christoffel_2_12
-                + A / deltasq**2 * X_int * Y_int * (1 + X_int**2) * (1 + Y_int**2)
-            )
-            Christoffel_3_13 = (dRdeta_int**-1) * d2Rdx1eta - dRdx1_int / A
-
-            Christoffel_3_22 = (dRdeta_int**-1) * (
-                d2Rdx2x2 - dRdx2_int * Christoffel_2_22 - A / deltasq**2 * (1 + X_int**2) * (1 + Y_int**2) ** 2
-            )
-            Christoffel_3_23 = (dRdeta_int**-1) * d2Rdx2eta - dRdx2_int / A
-
-            Christoffel_3_33 = (dRdeta_int**-1) * d2Rdetaeta
+        Christoffel_3_33 = (dRdeta_int**-1) * d2Rdetaeta
 
         # Now, normalize the Christoffel symbols by the appropriate grid scaling factor.  To this point, the symbols have
         # been defined in terms of x1, x2, and η, but for compatibility with the numerical differentiation we need to define
@@ -739,8 +645,7 @@ class Metric3DTopo:
         # h^ab √g,c + √g h^ab,c = √g (h^ab Γ^d_cd - h^db Γ^a_dc - h^ad Γ^b_cd )
         # (√g h^ab),c = √g (h^ab Γ^d_cd - h^db Γ^a_dc - h^ad Γ^b_cd )
 
-        # Switch to use the numerical formulation of the Christoffel symbol
-        numer_christoffel = True
+        numer_christoffel = self.numer_christoffel
 
         verbose = False
         if numer_christoffel:
@@ -761,10 +666,10 @@ class Metric3DTopo:
             # The call to linalg.solve can require a lot of memory in temporary allocations. This is problematic
             # for very large simulations. Therefore, we split the calculation of christoffel symbols across
             # vertical levels, so that only a relatively small temporary array is used
-            space_christoffel = torch.empty((nk, nj, ni, 27))
+            space_christoffel = torch.empty((nk, nj, ni, 27), dtype=dtype)
             for k in range(nk):
-                c_rhs = torch.empty((nj, ni, 3, 3, 3))  # h(i,j,k)^(ab)_(,c)
-                c_lhs = torch.zeros((nj, ni, 3, 3, 3, 3, 3, 3))  # Γ(i,j,k)^d_{ef} for row (ab,c)
+                c_rhs = torch.empty((nj, ni, 3, 3, 3), dtype=dtype)  # h(i,j,k)^(ab)_(,c)
+                c_lhs = torch.zeros((nj, ni, 3, 3, 3, 3, 3, 3), dtype=dtype)  # Γ(i,j,k)^d_{ef} for row (ab,c)
 
                 if verbose and geom.context.comm.rank == 0:
                     print("Assembling linear operator for Γ")
@@ -820,6 +725,13 @@ class Metric3DTopo:
         inv_dzdeta = 1 / dRdeta_int * 2 / delta_eta
         self.inv_dzdeta_new = geom._to_new(inv_dzdeta)
 
+        # Use radial gravity in deep mode and constant gravity in shallow mode.
+        if deep:
+            gravity_field = gravity * (A / R_int) ** 2
+        else:
+            gravity_field = torch.full_like(R_int, gravity)
+        self.gravity_new = geom._to_new(gravity_field)
+
         self.christoffel = torch.zeros((3, 9) + geom.grid_shape_3d_new, dtype=dtype)
         self.christoffel[0, 0] = geom._to_new(christoffel_1_01)
         self.christoffel[0, 1] = geom._to_new(christoffel_1_02)
@@ -857,7 +769,8 @@ class Metric3DTopo:
         self.h_contra_itf_k_new = geom._to_new_itf_k(H_contra_itf_k)
 
         # The covariant metric converts winds at volume points.
-        self.h_cov_new = geom._to_new(H_cov)
+        if H_cov is not None:
+            self.h_cov_new = geom._to_new(H_cov)
 
         self.sqrtG_new = geom._to_new(sqrtG)
         self.sqrtG_itf_i_new = geom._to_new_itf_i(sqrtG_itf_i)

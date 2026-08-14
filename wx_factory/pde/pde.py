@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 
-from numpy.typing import NDArray
+from torch import Tensor
 
 from ..common import Configuration
 from ..geometry import Geometry, Metric2D, Metric3DTopo
@@ -28,17 +28,17 @@ class PDE(ABC):
         self.num_elem = num_elem
 
     @abstractmethod
-    def pointwise_fluxes(self, q: NDArray, flux_x1: NDArray, flux_x2: NDArray, flux_x3: NDArray):
+    def pointwise_fluxes(self, q: Tensor, flux_x1: Tensor, flux_x2: Tensor, flux_x3: Tensor):
         pass
 
     @abstractmethod
     def riemann_fluxes(
         self,
-        q_itf_x1: NDArray,
-        q_itf_x2: NDArray,
-        q_itf_x3: NDArray,
-        flux_itf_x1: NDArray,
-        flux_itf_x2: NDArray,
-        flux_itf_x3: NDArray,
+        q_itf_x1: Tensor,
+        q_itf_x2: Tensor,
+        q_itf_x3: Tensor,
+        flux_itf_x1: Tensor,
+        flux_itf_x2: Tensor,
+        flux_itf_x3: Tensor,
     ):
         pass

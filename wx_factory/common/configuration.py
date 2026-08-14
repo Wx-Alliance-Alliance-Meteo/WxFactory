@@ -98,7 +98,7 @@ class Configuration:
         return out
 
     # --- START type hints --- automatically generated (do not touch)
-    advection_only: str
+    advection_only: bool
     alpha0: float
     base_output_file: str
     bubble_rad: float
@@ -119,8 +119,7 @@ class Configuration:
     gmres_restart: int
     grid_file: str
     grid_type: str
-    initial_condition: str
-    initial_conditions_file: str
+    initial_conditions: str
     krylov_mmax: int
     krylov_size: int
     lambda0: float
@@ -130,6 +129,7 @@ class Configuration:
     num_elements_horizontal: int
     num_elements_vertical: int
     num_solpts: int
+    numer_christoffel: bool
     os22_parameter: float
     output_dir: str
     output_format: str

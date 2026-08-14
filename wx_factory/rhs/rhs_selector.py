@@ -112,8 +112,8 @@ def resolve_rhs(ctx: RhsContext) -> RhsBundle:
     return factory(ctx)
 
 
-def _euler_bundle(ctx: RhsContext, pde, full) -> RhsBundle:
-    if pde.advection_only:
+def _euler_bundle(ctx: RhsContext, full) -> RhsBundle:
+    if ctx.param.advection_only:
         return RhsBundle(
             full=full,
             shape=ctx.fields_shape,
@@ -139,16 +139,13 @@ def _euler_cubesphere(ctx: RhsContext) -> RhsBundle:
         ctx.param,
         debug=ctx.debug,
     )
-    return _euler_bundle(ctx, pde, full)
+    return _euler_bundle(ctx, full)
 
 
 # Cartesian slabs use the 3D Euler RHS with an identity metric.
 @register_rhs("euler", Cartesian3D)
 def _euler_cartesian3d(ctx: RhsContext) -> RhsBundle:
     pde = PDEEuler3D(ctx.geom, ctx.param, ctx.metric, num_var=ctx.fields_shape[0])
-    # Cartesian case numbers do not follow the DCMIP advection convention.
-    if getattr(ctx.param, "advection_only", "auto") == "auto":
-        pde.advection_only = False
     full = RHSDirecFluxReconstruction_mpi(
         pde,
         ctx.geom,
@@ -159,7 +156,7 @@ def _euler_cartesian3d(ctx: RhsContext) -> RhsBundle:
         ctx.param,
         debug=ctx.debug,
     )
-    return _euler_bundle(ctx, pde, full)
+    return _euler_bundle(ctx, full)
 
 
 @register_rhs("shallow_water", CubedSphere2D)

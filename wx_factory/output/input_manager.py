@@ -1,5 +1,6 @@
 import numpy
 import torch
+import xarray
 from mpi4py import MPI
 from torch import Tensor
 
@@ -14,6 +15,28 @@ try:
     rmn_available = True
 except ModuleNotFoundError:
     rmn_available = False
+
+
+def extract_available_levels(ds: xarray.Dataset):
+    features = list(ds["features"].values)
+    feature_set = {str(f) for f in features}
+
+    levels: list[int] = []
+
+    for f in features:
+        name = str(f)
+
+        if name.startswith("geopotential_h"):
+            level = name.split("_h")[-1]
+
+            geo = f"geopotential_h{level}"
+            u = f"u_component_of_wind_h{level}"
+            v = f"v_component_of_wind_h{level}"
+
+            if geo in feature_set and u in feature_set and v in feature_set:
+                levels.append(int(level))
+
+    return sorted(set(levels))
 
 
 class InputManager:

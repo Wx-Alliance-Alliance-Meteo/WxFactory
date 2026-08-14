@@ -24,12 +24,12 @@ def init_state_vars(
 
     # Cartesian3D is a CubedSphere3D subclass, so it must be matched first (flat slab, its own IC).
     if param.equations == "euler" and isinstance(geom, Cartesian3D):
-        metric = Metric3DTopo(geom, operators)
+        metric = Metric3DTopo(geom, operators, numer_christoffel=param.numer_christoffel)
         metric.build_metric()
         Q = initialize_cartesian3d(geom, param)
 
     elif param.equations == "euler" and isinstance(geom, CubedSphere3D):
-        metric = Metric3DTopo(geom, operators)
+        metric = Metric3DTopo(geom, operators, numer_christoffel=param.numer_christoffel)
         if param.enable_schar_mountain:
             step_hooks[ScharMountainHook].metric = metric
             step_hooks[ScharMountainHook].apply(1 if param.schar_mountain_step == 0 else 0)

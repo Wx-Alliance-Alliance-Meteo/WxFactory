@@ -34,7 +34,14 @@ class LowerCaseStr(str):
 LowerCaseStr.__name__ = "lc-str"
 
 
-def str_to_bool(val: str):
+def str_to_bool(val: str | bool):
+    if isinstance(val, str):
+        lc = val.lower()
+        if lc in ["on", "true", "yes", "oui"]:
+            return True
+        elif lc in ["off", "false", "no", "non"]:
+            return False
+
     return bool(int(val))
 
 

@@ -14,12 +14,14 @@ sys.path.append(main_project_dir)
 from mpi_test import MpiRunner
 
 from tests.unit.common.test_process_topology import ExchangeTest, GatherScatterTest
+from tests.unit.geometry.test_metric2d_identities import Metric2DIdentityTestCase
+from tests.unit.geometry.test_metric_identities import MetricIdentityTestCase
+from tests.unit.output_managers.compare_zarr_to_nc_mpi import CompareZarrToNcTestCase
 from tests.unit.restart.test_restart import (
     Euler3DRestartTestCase,
     ShallowWaterRestartTestCase,
 )
 from tests.unit.solvers.test_kiops_mpi import KiopsMpiTestCases
-from tests.unit.output_managers.compare_zarr_to_nc_mpi import CompareZarrToNcTestCase
 from tests.unit.solvers.test_pmex_mpi import PmexMpiTestCases
 
 
@@ -35,6 +37,26 @@ def load_tests(test_name: str):
     device_names = ["cpu", "cuda"] if num_devices > 0 else ["cpu"]
 
     test_re = re.compile(test_name, re.IGNORECASE)
+    for name in (
+        "test_volume_factor_matches_the_covariant_determinant",
+        "test_metrics_are_inverses",
+        "test_global_integral_recovers_the_area_of_the_sphere",
+    ):
+        add_test(suite, Metric2DIdentityTestCase(6, name, "cpu"), test_re)
+
+    for depth in ("shallow", "deep"):
+        for name in (
+            "test_metrics_are_inverses",
+            "test_interface_metrics_are_inverses",
+            "test_coriolis_does_no_work",
+            "test_depth_approximation_reaches_the_geometry",
+            "test_shallow_drops_every_d_a_term",
+            "test_deep_keeps_the_d_a_terms",
+            "test_gravity_follows_the_depth_approximation",
+            "test_numer_christoffel_affects_only_the_space_only_symbols",
+        ):
+            add_test(suite, MetricIdentityTestCase(6, name, "cpu", depth), test_re)
+
     add_test(suite, ShallowWaterRestartTestCase(6, "test_read_restart", "cpu"), test_re)
     add_test(suite, Euler3DRestartTestCase(6, "test_read_restart", "cpu"), test_re)
 
@@ -87,40 +109,7 @@ def load_tests(test_name: str):
 
     add_test(suite, CompareZarrToNcTestCase(6, "test_compare_zarr_to_nc"), test_re)
 
-    # TODO : This test needs more works on the data division between processes
-    # suite.addTest(FgmresMpiTestCases('test_fgmres_mpi_2_processes'))
-
     return suite
-
-
-def trace_run(runner, args):
-    import contextlib
-    import trace
-
-    import mpi4py
-
-    # define Trace object: trace line numbers at runtime, exclude some modules
-    tracer = trace.Trace(
-        ignoredirs=[sys.prefix, sys.exec_prefix],
-        ignoremods=[
-            "inspect",
-            "contextlib",
-            "_bootstrap",
-            "_weakrefset",
-            "abc",
-            "posixpath",
-            "genericpath",
-            "textwrap",
-        ],
-        trace=1,
-        count=0,
-    )
-
-    # by default trace goes to stdout
-    # redirect to a different file for each processes
-    trace_file = f"trace_{mpi4py.MPI.COMM_WORLD.rank:04d}.txt"
-    with open(trace_file, "w") as trace_output, contextlib.redirect_stdout(trace_output):
-        tracer.runfunc(runner.run, load_tests(args.test_name))
 
 
 def regular_run(runner, args):
@@ -147,5 +136,4 @@ if __name__ == "__main__":
 
     runner = MpiRunner(buffer=not args.no_buffer, verbosity=0, failfast=args.failfast)
 
-    # trace_run(runner, args)
     regular_run(runner, args)

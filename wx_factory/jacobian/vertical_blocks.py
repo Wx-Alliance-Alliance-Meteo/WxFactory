@@ -9,7 +9,6 @@ import numpy
 import torch
 
 from ..common.definitions import (
-    gravity,
     heat_capacity_ratio,
     idx_rho,
     idx_rho_theta,
@@ -104,6 +103,7 @@ class _VerticalBlockAssembly:
         self.sqrtG_col = scalar_to_columns(metric.sqrtG_new, dims)
         self.inv_sqrtG_col = scalar_to_columns(metric.inv_sqrtG_new, dims)
         self.inv_dzdeta_col = scalar_to_columns(metric.inv_dzdeta_new, dims)
+        self.gravity_col = scalar_to_columns(metric.gravity_new, dims)
 
         # dF_3/dq at every volume solution point, shape (num_columns, num_elem_z, num_solpts, 5, 5).
         self.flux_jac_vol = flux_jacobian_matrix(
@@ -423,7 +423,7 @@ class _VerticalBlockAssembly:
         # Add the filtered gravity derivative to the vertical-momentum row.
         self.diag[:, :, idx_rho_u3, :, idx_rho, :] -= torch.einsum(
             "ceo,os,ces->ceos",
-            self.inv_dzdeta_col * gravity * self.inv_sqrtG_col,
+            self.inv_dzdeta_col * self.gravity_col * self.inv_sqrtG_col,
             self.highfilter,
             self.sqrtG_col,
         )

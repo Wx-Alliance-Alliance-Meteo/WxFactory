@@ -25,6 +25,46 @@
             "type": "bool"
         },
         {
+            "name": "bool1",
+            "section": "debug",
+            "type": "bool"
+        },
+        {
+            "name": "bool2",
+            "section": "debug",
+            "type": "bool"
+        },
+        {
+            "name": "bool3",
+            "section": "debug",
+            "type": "bool"
+        },
+        {
+            "name": "bool4",
+            "section": "debug",
+            "type": "bool"
+        },
+        {
+            "name": "bool5",
+            "section": "debug",
+            "type": "bool"
+        },
+        {
+            "name": "bool6",
+            "section": "debug",
+            "type": "bool"
+        },
+        {
+            "name": "bool7",
+            "section": "debug",
+            "type": "bool"
+        },
+        {
+            "name": "bool8",
+            "section": "debug",
+            "type": "bool"
+        },
+        {
             "name": "values1",
             "section": "other",
             "type": "list-int"

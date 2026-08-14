@@ -4,7 +4,7 @@ import unittest
 import numpy
 import torch
 from mpi4py import MPI
-from numpy.typing import NDArray
+from torch import Tensor
 
 from tests.unit.mpi_test import MpiTestCase
 from wx_factory.context import Context
@@ -12,7 +12,7 @@ from wx_factory.process_topology import EAST, NORTH, SOUTH, WEST, ProcessTopolog
 from wx_factory.wx_mpi import Conditional, SingleProcess
 
 
-def gen_data_1(num_processes: int, num_data_hori_per_proc: int, context: Context) -> NDArray:
+def gen_data_1(num_processes: int, num_data_hori_per_proc: int, context: Context) -> Tensor:
     range_per_proc = 2.0 / num_processes
     range_per_side = range_per_proc / 4
     range_per_elem = range_per_side / num_data_hori_per_proc * (1.0 + 1e-14)
@@ -271,7 +271,7 @@ class ExchangeTest(MpiTestCase):
         new_data_shape = (1,) + base_shape
         new_line_shape = (1,) + (self.NUM_DATA_HORI,)
 
-        def make_data(d) -> tuple[NDArray, NDArray, NDArray]:
+        def make_data(d) -> tuple[Tensor, Tensor, Tensor]:
             return (
                 d.reshape(new_data_shape),
                 torch.flip(d, (-1,)).reshape(new_data_shape),
@@ -437,12 +437,13 @@ class ExchangeTest(MpiTestCase):
         east = self.data[EAST]
         request = self.topo.start_exchange_scalars(south, north, west, east, boundary_shape=(self.NUM_DATA_HORI,))
         s, n, w, e = request.wait(timeout=1.0)
-        result = [s, n, w, e]
+        result: list[Tensor] = [s, n, w, e]
 
         for dir in [SOUTH, NORTH, WEST, EAST]:
             other = self.neighbor_data[dir][self.from_neighbor[dir]]
             if self.neighbor_topo[dir].flip[self.from_neighbor[dir]]:
                 other = torch.flip(other, (-1,))
+
             diff = torch.linalg.norm(result[dir] - other)
             self.assertLess(
                 diff,
@@ -460,7 +461,7 @@ class ExchangeTest(MpiTestCase):
         east = self.data[EAST].reshape(new_shape)
         request = self.topo.start_exchange_scalars(south, north, west, east, boundary_shape=(self.NUM_DATA_HORI,))
         s, n, w, e = request.wait(timeout=1.0)
-        result = [s, n, w, e]
+        result: list[Tensor] = [s, n, w, e]
 
         for dir in [SOUTH, NORTH, WEST, EAST]:
             other = self.neighbor_data[dir][self.from_neighbor[dir]]
@@ -484,7 +485,7 @@ class ExchangeTest(MpiTestCase):
         east = self.data[EAST].reshape(new_shape)
         request = self.topo.start_exchange_scalars(south, north, west, east, boundary_shape=(self.NUM_DATA_HORI,))
         s, n, w, e = request.wait(timeout=1.0)
-        result = [s, n, w, e]
+        result: list[Tensor] = [s, n, w, e]
 
         for dir in [SOUTH, NORTH, WEST, EAST]:
             other = self.neighbor_data[dir][self.from_neighbor[dir]]
@@ -507,7 +508,7 @@ class ExchangeTest(MpiTestCase):
         east = torch.stack([self.data[EAST], self.data[EAST] + 1.0])
         request = self.topo.start_exchange_scalars(south, north, west, east, boundary_shape=(self.NUM_DATA_HORI,))
         s, n, w, e = request.wait(timeout=1.0)
-        result = [s, n, w, e]
+        result: list[Tensor] = [s, n, w, e]
 
         for dir in [SOUTH, NORTH, WEST, EAST]:
             other = self.neighbor_data[dir][self.from_neighbor[dir]]
@@ -532,7 +533,7 @@ class ExchangeTest(MpiTestCase):
         east = torch.stack([self.data[EAST].reshape(new_shape), self.data[EAST].reshape(new_shape) + 1.0])
         request = self.topo.start_exchange_scalars(south, north, west, east, boundary_shape=(self.NUM_DATA_HORI,))
         s, n, w, e = request.wait(timeout=1.0)
-        result = [s, n, w, e]
+        result: list[Tensor] = [s, n, w, e]
 
         for dir in [SOUTH, NORTH, WEST, EAST]:
             other = self.neighbor_data[dir][self.from_neighbor[dir]]
@@ -563,15 +564,17 @@ class GatherScatterTest(MpiTestCase):
 
         self.topo = ProcessTopology(self.context)
         # For testing gather/scatter functions
-        self.global_data_1 = torch.arange(6 * 12 * 12, dtype=float).reshape(6, 12, 12)  # A flat (2D) field
+        self.global_data_1 = torch.arange(6 * 12 * 12, dtype=torch.float64).reshape(6, 12, 12)  # A flat (2D) field
         # A 2D field of 3x3 elements
-        self.global_data_2 = torch.arange(6 * 12 * 12 * 3 * 3, dtype=float).reshape(6, 12, 12, 3, 3)
+        self.global_data_2 = torch.arange(6 * 12 * 12 * 3 * 3, dtype=torch.float64).reshape(6, 12, 12, 3, 3)
         # A 3D field of scalars
-        self.global_data_3a = torch.arange(6 * 4 * 12 * 12, dtype=float).reshape(6, 4, 12, 12)
+        self.global_data_3a = torch.arange(6 * 4 * 12 * 12, dtype=torch.float64).reshape(6, 4, 12, 12)
         # A 3D field of 3x3 elements
-        self.global_data_3b = torch.arange(6 * 4 * 12 * 12 * 2 * 2, dtype=float).reshape(6, 4, 12, 12, 2, 2)
+        self.global_data_3b = torch.arange(6 * 4 * 12 * 12 * 2 * 2, dtype=torch.float64).reshape(6, 4, 12, 12, 2, 2)
         # A 4D field of 3x3 elements
-        self.global_data_4 = torch.arange(6 * 3 * 4 * 12 * 12 * 2 * 2, dtype=float).reshape(6, 3, 4, 12, 12, 2, 2)
+        self.global_data_4 = torch.arange(6 * 3 * 4 * 12 * 12 * 2 * 2, dtype=torch.float64).reshape(
+            6, 3, 4, 12, 12, 2, 2
+        )
 
         self.global_data_fail_1 = torch.arange(6 * 13 * 13).reshape(6, 13, 13)
         self.global_data_fail_2 = torch.arange(6 * 12 * 14).reshape(6, 12, 14)

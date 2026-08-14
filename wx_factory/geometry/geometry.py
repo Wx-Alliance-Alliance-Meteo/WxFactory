@@ -2,23 +2,29 @@ from abc import ABC, abstractmethod
 
 import sympy
 import torch
-from numpy.typing import NDArray
+from torch import Tensor
 
 from ..context import Context
 from .quadrature import gauss_legendre
 
+#: Reference-element arrays retained in float64 for operator construction.
+REFERENCE_ELEMENT_ARRAYS = frozenset({"solutionPoints", "glweights", "extension"})
 
-def cast_double_arrays(obj, dtype) -> None:
+
+def cast_double_arrays(obj, dtype, skip: frozenset = REFERENCE_ELEMENT_ARRAYS) -> None:
     """Cast every double-precision array attribute of `obj` to `dtype`, in place.
 
     Geometry and metric terms are built in double precision, where the differencing of the terrain
     is most accurate, and then stored in the working precision. This walks the object's attributes
     and downcasts the double arrays, leaving integer indices, masks and already-single arrays alone.
+    Names in ``skip`` are left untouched; see :data:`REFERENCE_ELEMENT_ARRAYS`.
     """
     if dtype == torch.float64:
         return
 
     for name, value in vars(obj).items():
+        if name in skip:
+            continue
         if hasattr(value, "dtype") and hasattr(value, "shape") and value.dtype == torch.float64:
             cast = value.astype(dtype) if hasattr(value, "astype") else value.to(dtype)
             setattr(obj, name, cast)
@@ -49,7 +55,9 @@ class Geometry(ABC):
             print(f"GL weights : {glweights}")
 
         # Extend the solution points to include -1 and 1
-        extension = torch.cat([torch.tensor([-1.0]), solutionPoints, torch.tensor([1.0])])
+        extension = torch.cat(
+            [torch.tensor([-1.0], dtype=torch.float64), solutionPoints, torch.tensor([1.0], dtype=torch.float64)]
+        )
         extension_sym = solutionPoints_sym.copy()
         extension_sym.insert(0, sympy.sympify("-1"))
         extension_sym.append(sympy.sympify("1"))
@@ -65,6 +73,6 @@ class Geometry(ABC):
         self.z_levels = {""}
 
     @abstractmethod
-    def to_single_block(self, a: NDArray) -> NDArray:
+    def to_single_block(self, a: Tensor) -> Tensor:
         """Convert an array of values over this grid (which be may organized as a list of elements)
         into a single block of data (2D or 3D)."""
