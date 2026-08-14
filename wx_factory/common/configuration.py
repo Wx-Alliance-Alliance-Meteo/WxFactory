@@ -119,8 +119,7 @@ class Configuration:
     gmres_restart: int
     grid_file: str
     grid_type: str
-    initial_condition: str
-    initial_conditions_file: str
+    initial_conditions: str
     krylov_mmax: int
     krylov_size: int
     lambda0: float

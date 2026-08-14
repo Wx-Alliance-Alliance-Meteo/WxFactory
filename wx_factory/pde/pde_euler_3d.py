@@ -107,7 +107,7 @@ class PDEEuler3D(PDE):
         # 'auto' (the default) derives this from the case number; 'on'/'off' force it (cartesian
         # grids reuse the small case numbers for dynamical bubbles, so they set it off).
         mode = getattr(config, "advection_only", "auto")
-        self.advection_only = {"on": True, "off": False}.get(mode, config.case_number <= 13)
+        self.advection_only = {"on": True, "off": False}.get(mode, config.case_number <= 13 and config.case_number >= 0)
 
         self.compute_forcings = compute_forcings
 

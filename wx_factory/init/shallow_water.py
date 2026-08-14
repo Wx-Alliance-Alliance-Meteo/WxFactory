@@ -2,6 +2,7 @@ import math
 
 import numpy
 import torch
+from xarray import Dataset
 
 from ..common import Configuration
 from ..common.definitions import day_in_secs, gravity
@@ -97,7 +98,7 @@ def height_vortex(geom, metric, param, step):
     return h, Omega
 
 
-def sw_from_ERA5(geom: CubedSphere2D, ds, t, levels, feature_map):
+def sw_from_ERA5(geom: CubedSphere2D, ds: Dataset, t, levels, feature_map):
     idx_geo_all = [feature_map[f"geopotential_h{z}"] for z in levels]
     idx_u_all = [feature_map[f"u_component_of_wind_h{z}"] for z in levels]
     idx_v_all = [feature_map[f"v_component_of_wind_h{z}"] for z in levels]
@@ -147,7 +148,7 @@ def sw_from_ERA5(geom: CubedSphere2D, ds, t, levels, feature_map):
 
 def sw_from_file(geom: CubedSphere2D, operators: DFROperators, config: Configuration):
     h_surface = InputManager.read_mountain(config.topography_file, geom)
-    h, u, v = InputManager.read_fields(config.initial_conditions_file, ["GZ", "UU", "VV"], geom)
+    h, u, v = InputManager.read_fields(config.initial_conditions, ["GZ", "UU", "VV"], geom)
     h[...] *= 10 / gravity
 
     num_solpts = geom.num_solpts

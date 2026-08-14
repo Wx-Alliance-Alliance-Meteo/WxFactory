@@ -1,11 +1,14 @@
 import math
 
 import torch
+import xarray as xr
 from torch import Tensor
 
 from ..common.configuration import Configuration
 from ..common.definitions import Rd, cpd, gravity, p0
 from ..geometry import CubedSphere3D, DFROperators, Metric3DTopo
+from ..output.input_manager import extract_available_levels
+from .vertical_interpolation import vertical_interp
 
 # =======================================================================
 #
@@ -920,3 +923,60 @@ def acoustic_wave(geom: CubedSphere3D, metric: Metric3DTopo):
     theta = t * (p0 / pressure) ** (Rd / cpd)
 
     return rho, u1_contra, u2_contra, w, theta
+
+
+def euler_from_era5(geom: CubedSphere3D, metric: Metric3DTopo, filename: str, time: str):
+
+    metric.build_metric()
+
+    ds = xr.open_zarr(filename, consolidated=True).isel(time=[0])
+    feature_map = {str(f): i for i, f in enumerate(ds["features"].values)}
+    levels = extract_available_levels(ds)
+    levels.reverse()
+
+    def get_feature_ids(name: str):
+        "For a given feature base name, get the list of all level IDs for that feature"
+        return [feature_map[f"{name}_h{l}"] for l in levels]
+
+    # Get raw ERA5 data
+    geo_era = ds["data"].isel(features=get_feature_ids("geopotential"))
+    u_wind_era = ds["data"].isel(features=get_feature_ids("u_component_of_wind"))
+    v_wind_era = ds["data"].isel(features=get_feature_ids("v_component_of_wind"))
+    w_wind_era = ds["data"].isel(features=get_feature_ids("vertical_velocity"))
+    temp_era = ds["data"].isel(features=get_feature_ids("temperature"))
+
+    target_lon = geom.context.to_host(geom.lon * 180 / math.pi).reshape(-1)
+    target_lat = geom.context.to_host(geom.lat * 180 / math.pi).reshape(-1)
+
+    shape = (len(levels),) + geom.lon.shape
+
+    def horizontal_interp(a: xr.DataArray):
+        "Interpolate horizontally to the (block) cubed-sphere grid points."
+        cs_lin = a.interp(longitude=("points", target_lon), latitude=("points", target_lat), method="linear").values
+        return geom.context.tensor(cs_lin.reshape(shape))
+
+    # Compute height from geopotential at every grid point
+    geo_cs = horizontal_interp(geo_era)
+    source_heights = geo_cs / gravity
+    target_heights = geom.to_single_block(geom.polar[2])
+
+    def era_to_cs(a: xr.DataArray):
+        """Convert an ERA 5 field to the current cubed-sphere (CS) grid
+        - Interpolate horizontally to the block-shape CS grid
+        - Interpolate vertically to the new grid levels
+        - Reshape the array into its final memory layout (by element)."""
+        return geom._to_new(vertical_interp(horizontal_interp(a), source_heights, target_heights, interp_type="cubic"))
+
+    u_wind_cs = era_to_cs(u_wind_era)
+    v_wind_cs = era_to_cs(v_wind_era)
+    w_wind_cs = era_to_cs(w_wind_era)
+    temp_cs = era_to_cs(temp_era)
+
+    # Compute state variables
+    H = Rd * temp_cs / gravity  # scale height
+    p = p0 * torch.exp(-geom.height_new / H)
+    rho = p / (Rd * temp_cs)
+    theta = temp_cs * (p0 / p) ** (Rd / cpd)
+    u1, u2, u3 = geom.wind2contra(u_wind_cs, v_wind_cs, w_wind_cs, metric)
+
+    return rho, u1, u2, u3, theta

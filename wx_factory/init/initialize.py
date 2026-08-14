@@ -22,6 +22,7 @@ from ..common.definitions import (
     p0,
 )
 from ..geometry import CubedSphere2D, CubedSphere3D, DFROperators, Metric2D, Metric3DTopo
+from ..output.input_manager import extract_available_levels
 from .dcmip import (
     acoustic_wave,
     dcmip_advection_deformation,
@@ -30,6 +31,7 @@ from .dcmip import (
     dcmip_gravity_wave,
     dcmip_schar_waves,
     dcmip_steady_state_mountain,
+    euler_from_era5,
 )
 from .shallow_water import (
     case_galewsky,
@@ -88,7 +90,11 @@ def initialize_euler(geom: CubedSphere3D, metric: Metric3DTopo, mtrx: DFROperato
 
     num_equations = 5
 
-    if param.case_number == 11:
+    if param.case_number < 0 and param.initial_conditions != "":
+        rho, u1_contra, u2_contra, w, potential_temperature = euler_from_era5(
+            geom, metric, param.initial_conditions, param.time_start
+        )
+    elif param.case_number == 11:
         num_equations = 9
         rho, u1_contra, u2_contra, w, potential_temperature, q1, q2, q3, q4 = dcmip_advection_deformation(
             geom, metric, mtrx, param
@@ -132,28 +138,6 @@ def initialize_euler(geom: CubedSphere3D, metric: Metric3DTopo, mtrx: DFROperato
     return Q, None
 
 
-def extract_available_levels(ds):
-    features = list(ds["features"].values)
-    feature_set = set(str(f) for f in features)
-
-    levels = []
-
-    for f in features:
-        name = str(f)
-
-        if name.startswith("geopotential_h"):
-            level = name.split("_h")[-1]
-
-            geo = f"geopotential_h{level}"
-            u = f"u_component_of_wind_h{level}"
-            v = f"v_component_of_wind_h{level}"
-
-            if geo in feature_set and u in feature_set and v in feature_set:
-                levels.append(int(level))
-
-    return sorted(set(levels))
-
-
 def initialize_sw(geom: CubedSphere2D, metric: Metric2D, mtrx: DFROperators, param: Configuration):
 
     dtype = torch.float64
@@ -181,7 +165,7 @@ def initialize_sw(geom: CubedSphere2D, metric: Metric2D, mtrx: DFROperators, par
     #   6 : Rossby-Haurvitz waves (shallow water)
     #   8 : Unstable jet (shallow water)
     if param.case_number == -2:
-        ds = xr.open_zarr(param.initial_condition, consolidated=True)
+        ds = xr.open_zarr(param.initial_conditions, consolidated=True)
         time_start = str(param.time_start)
         time_end = str(param.time_end)
 

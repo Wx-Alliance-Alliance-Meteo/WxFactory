@@ -39,11 +39,6 @@
                     }
                 },
                 {
-                    "name": "initial_condition",
-                    "type": "str",
-                    "default": ""
-                },
-                {
                     "name": "time_start",
                     "type": "str",
                     "default": ""
@@ -62,12 +57,16 @@
                     }
                 },
                 {
-                    "name": "initial_conditions_file",
+                    "name": "initial_conditions",
                     "type": "str",
-                    "dependency":{
+                    "dependency": {
                         "name": "case_number",
-                        "values": [-1]
-                    }
+                        "values": [
+                            -2,
+                            -1
+                        ]
+                    },
+                    "description": "File that contains initial conditions for the simulation. Can be in Zarr (ERA5) or FST format"
                 },
                 {
                     "name": "case_number",
