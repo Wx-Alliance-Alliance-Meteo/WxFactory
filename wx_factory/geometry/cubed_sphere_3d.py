@@ -234,10 +234,13 @@ class CubedSphere3D(CubedSphere):
         # Define the base coordinate.  x1 and x2 are fundamentally 1D arrays,
         # while x3 and eta are 3D arrays in support of coordinate mapping
 
-        x1_boundaries = torch.linspace(domain_x1[0], domain_x1[1], num_elements_x1 + 1)
-        x2_boundaries = torch.linspace(domain_x2[0], domain_x2[1], num_elements_x2 + 1)
-        x3_boundaries = torch.linspace(domain_x3[0], domain_x3[1], num_elements_x3 + 1)
-        eta_boundaries = torch.linspace(domain_eta[0], domain_eta[1], num_elements_x3 + 1)
+        # These element boundaries seed every coordinate array, and every metric term derived from
+        # them, so they must be built in the geometry's own precision rather than in torch's global
+        # default (which is single).
+        x1_boundaries = torch.linspace(domain_x1[0], domain_x1[1], num_elements_x1 + 1, dtype=self.dtype)
+        x2_boundaries = torch.linspace(domain_x2[0], domain_x2[1], num_elements_x2 + 1, dtype=self.dtype)
+        x3_boundaries = torch.linspace(domain_x3[0], domain_x3[1], num_elements_x3 + 1, dtype=self.dtype)
+        eta_boundaries = torch.linspace(domain_eta[0], domain_eta[1], num_elements_x3 + 1, dtype=self.dtype)
 
         offsets_x1 = x1_boundaries[:-1]
         ref_solpts_x1 = delta_x1 / delta_comp * (-minComp + self.solutionPoints)

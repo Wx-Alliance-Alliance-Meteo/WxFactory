@@ -54,6 +54,10 @@ class Context:
         # Every tensor the code creates goes through torch's default device.
         torch.set_default_device(self.torch_device)
 
+        # Keep single-precision matrix products in true single precision.
+        torch.backends.cuda.matmul.allow_tf32 = False
+        torch.set_float32_matmul_precision("highest")
+
         # Disable autograd bookkeeping unless WX_FACTORY_DIFFERENTIABLE requests it.
         if not _differentiable_requested() and not torch.is_inference_mode_enabled():
             self._inference_mode_guard = torch.inference_mode()

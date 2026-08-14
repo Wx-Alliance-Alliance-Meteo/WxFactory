@@ -108,10 +108,10 @@ class Metric3DTopo:
         # exchange code demands contravariant components, and dRd(...) is covariant.  We can perform the conversion
         # by constructing a (temporary) 2D metric in terms of X and Y only at the interfaces:
 
-        metric_2d_contra_itf_i = torch.zeros((2, 2) + geom.itf_i_shape_3d)
-        metric_2d_contra_itf_j = torch.zeros((2, 2) + geom.itf_j_shape_3d)
-        metric_2d_cov_itf_i = torch.zeros((2, 2) + geom.itf_i_shape_3d)
-        metric_2d_cov_itf_j = torch.zeros((2, 2) + geom.itf_j_shape_3d)
+        metric_2d_contra_itf_i = torch.zeros((2, 2) + geom.itf_i_shape_3d, dtype=dtype)
+        metric_2d_contra_itf_j = torch.zeros((2, 2) + geom.itf_j_shape_3d, dtype=dtype)
+        metric_2d_cov_itf_i = torch.zeros((2, 2) + geom.itf_i_shape_3d, dtype=dtype)
+        metric_2d_cov_itf_j = torch.zeros((2, 2) + geom.itf_j_shape_3d, dtype=dtype)
 
         for metric_contra, metric_cov, X, Y in zip(
             (metric_2d_contra_itf_i, metric_2d_contra_itf_j),
@@ -134,8 +134,8 @@ class Metric3DTopo:
         # extrapolation,
         # in order for the MPI exchange to occur with contiguous subarrays.
 
-        exch_itf_i = torch.zeros((3, geom.nk, geom.num_elements_x1 + 2, 2, geom.nj))
-        exch_itf_j = torch.zeros((3, geom.nk, geom.num_elements_x2 + 2, 2, geom.ni))
+        exch_itf_i = torch.zeros((3, geom.nk, geom.num_elements_x1 + 2, 2, geom.nj), dtype=dtype)
+        exch_itf_j = torch.zeros((3, geom.nk, geom.num_elements_x2 + 2, 2, geom.ni), dtype=dtype)
 
         # Perform extrapolation.  Extrapolation in i and j will be written to arrays for exchange, but k does not
         # require an exchange; we can average directly and will handle this afterwards
@@ -347,8 +347,8 @@ class Metric3DTopo:
             delsq = 1 + X**2 + Y**2  # δ², per Charron May 2022
             del4 = delsq**2
 
-            Hcov = torch.empty((3, 3) + X.shape) if with_cov else None
-            Hcontra = torch.empty((3, 3) + X.shape)
+            Hcov = torch.empty((3, 3) + X.shape, dtype=X.dtype) if with_cov else None
+            Hcontra = torch.empty((3, 3) + X.shape, dtype=X.dtype)
             rootG = torch.empty_like(X)
 
             if deep:
@@ -764,10 +764,10 @@ class Metric3DTopo:
             # The call to linalg.solve can require a lot of memory in temporary allocations. This is problematic
             # for very large simulations. Therefore, we split the calculation of christoffel symbols across
             # vertical levels, so that only a relatively small temporary array is used
-            space_christoffel = torch.empty((nk, nj, ni, 27))
+            space_christoffel = torch.empty((nk, nj, ni, 27), dtype=dtype)
             for k in range(nk):
-                c_rhs = torch.empty((nj, ni, 3, 3, 3))  # h(i,j,k)^(ab)_(,c)
-                c_lhs = torch.zeros((nj, ni, 3, 3, 3, 3, 3, 3))  # Γ(i,j,k)^d_{ef} for row (ab,c)
+                c_rhs = torch.empty((nj, ni, 3, 3, 3), dtype=dtype)  # h(i,j,k)^(ab)_(,c)
+                c_lhs = torch.zeros((nj, ni, 3, 3, 3, 3, 3, 3), dtype=dtype)  # Γ(i,j,k)^d_{ef} for row (ab,c)
 
                 if verbose and geom.context.comm.rank == 0:
                     print("Assembling linear operator for Γ")

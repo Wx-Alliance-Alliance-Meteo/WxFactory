@@ -8,6 +8,7 @@ from mpi4py import MPI
 from ..common import Configuration
 from ..context import Context
 from ..geometry import DFROperators, GeometryContext, resolve_geometry
+from ..geometry.geometry import cast_double_arrays
 from ..init.export_era5_all import export_era5_all_timesteps
 from ..init.init_state_vars import init_state_vars
 from ..integrators import Integrator, resolve as _resolve_integrator
@@ -106,10 +107,11 @@ class Simulation:
         # Mixed mode stores the model state and most runtime arrays in float32. Static spatial
         # coefficients are constructed in float64 before casting, and accuracy-sensitive solver
         # operations selectively retain or accumulate in float64.
-        if self.config.precision == "mixed":
-            self.context.real_dtype = torch.float32
-        else:
-            self.context.real_dtype = torch.float64
+        runtime_dtype = torch.float32 if self.config.precision == "mixed" else torch.float64
+
+        # Build the geometry, the metric terms and the initial state in double precision, then store
+        # them once in the working precision.
+        self.context.real_dtype = torch.float64
 
         self.geometry = resolve_geometry(GeometryContext.from_simulation(self))
         # Cubed-sphere geometries carry a process topology; a Cartesian grid has none.
@@ -118,8 +120,21 @@ class Simulation:
         self.step_hooks.update(
             resolve_step_hooks(StepHookContext(config=self.config, geometry=self.geometry), phase=PHASE_GEOMETRY)
         )
+        self.initial_state = init_state_vars(
+            self.geometry, DFROperators(self.geometry, self.context), self.config, self.step_hooks
+        )
+
+        self.context.real_dtype = runtime_dtype
+        if runtime_dtype != torch.float64:
+            self.geometry.dtype = runtime_dtype
+            cast_double_arrays(self.geometry, runtime_dtype)
+            cast_double_arrays(self.initial_state.metric, runtime_dtype)
+            if self.initial_state.topography is not None:
+                cast_double_arrays(self.initial_state.topography, runtime_dtype)
+            self.initial_state.Q = self.initial_state.Q.to(runtime_dtype)
+
+        # Rebuilt against the stored geometry so the runtime operators carry the working precision.
         self.operators_real = DFROperators(self.geometry, self.context)
-        self.initial_state = init_state_vars(self.geometry, self.operators_real, self.config, self.step_hooks)
 
         self.output = resolve_output(
             OutputContext(
