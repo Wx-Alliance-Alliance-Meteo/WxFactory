@@ -53,7 +53,7 @@ class OutputCubesphereNetcdf(OutputCubesphere):
         if config.time_start:
             self.start_time = numpy.datetime64(str(config.time_start).replace("t", "T"))
         else:
-            self.start_time = numpy.datetime64("1800-01-01T00:00:00")
+            self.start_time = numpy.datetime64("1980-01-01T00:00:00")
         self.dt = config.dt
 
     def _output_init(self):
@@ -113,7 +113,7 @@ class OutputCubesphereNetcdf(OutputCubesphere):
 
             # create time axis
             tme = self.ncfile.createVariable("time", numpy.float64, ("time",))
-            tme.units = "seconds since 1800-01-01 00:00:00"
+            tme.units = "seconds since 1980-01-01 00:00:00"
             tme.calendar = "standard"
 
             # create tiles axis
@@ -432,7 +432,7 @@ class OutputCubesphereNetcdf(OutputCubesphere):
         if self.rank == 0:
             time_val = self.start_time + numpy.timedelta64(int(step_id * self.dt), "s")
 
-            epoch = numpy.datetime64("1800-01-01T00:00:00")
+            epoch = numpy.datetime64("1980-01-01T00:00:00")
             seconds = (time_val - epoch) / numpy.timedelta64(1, "s")
 
             self.ncfile["time"][idx] = seconds
