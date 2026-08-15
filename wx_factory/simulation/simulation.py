@@ -9,7 +9,6 @@ from ..common import Configuration
 from ..context import Context
 from ..geometry import DFROperators, GeometryContext, resolve_geometry
 from ..geometry.geometry import cast_double_arrays
-from ..init.export_era5_all import export_era5_all_timesteps
 from ..init.init_state_vars import init_state_vars
 from ..integrators import Integrator, resolve as _resolve_integrator
 from ..output.input_manager import InputManager
@@ -120,9 +119,10 @@ class Simulation:
         self.step_hooks.update(
             resolve_step_hooks(StepHookContext(config=self.config, geometry=self.geometry), phase=PHASE_GEOMETRY)
         )
-        self.initial_state = init_state_vars(
-            self.geometry, DFROperators(self.geometry, self.context), self.config, self.step_hooks
-        )
+        operators_double = DFROperators(self.geometry, self.context)
+        self.initial_state = init_state_vars(self.geometry, operators_double, self.config, self.step_hooks)
+        # Preserve the pre-restart double state for logarithmic extrapolation.
+        q_ref_double = self.initial_state.Q.clone()
 
         self.context.real_dtype = runtime_dtype
         if runtime_dtype != torch.float64:
@@ -161,6 +161,8 @@ class Simulation:
                 ptopo=self.process_topo,
                 param=self.config,
                 fields_shape=self.initial_state.Q.shape,
+                q_ref=q_ref_double,
+                operators_double=operators_double,
             )
         )
 

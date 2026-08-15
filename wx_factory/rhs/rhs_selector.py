@@ -33,6 +33,9 @@ class RhsContext:
     param: Configuration
     fields_shape: tuple[int, ...]
     debug: bool = False
+    #: Double-precision reference state and operators for logarithmic extrapolation.
+    q_ref: object | None = None
+    operators_double: DFROperators | None = None
 
 
 _GENERIC_NO_PARTITION = (
@@ -113,7 +116,10 @@ def resolve_rhs(ctx: RhsContext) -> RhsBundle:
 
 
 def _euler_bundle(ctx: RhsContext, full) -> RhsBundle:
-    if ctx.param.advection_only:
+    if ctx.q_ref is not None:
+        full.set_log_extrapolation_reference(ctx.q_ref, ctx.operators_double)
+
+    if full.pde.advection_only:
         return RhsBundle(
             full=full,
             shape=ctx.fields_shape,

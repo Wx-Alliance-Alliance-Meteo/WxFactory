@@ -17,6 +17,9 @@ mid_i = numpy.s_[..., 1:-1, :]
 mid_j = numpy.s_[..., 1:-1, :, :]
 mid_k = numpy.s_[..., 1:-1, :, :, :]
 
+#: Positive variables extrapolated in logarithmic form.
+positive_vars = [idx_rho, idx_rho_theta]
+
 
 class RHSDirecFluxReconstruction(RHS):
     def allocate_arrays(self, q: Tensor) -> None:
@@ -88,6 +91,12 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
             debug,
         )
         self.extrap_3d = self.extrap_3d_py
+
+        # Use the original logarithmic extrapolation until a reference is configured.
+        self.extrap_ref = 1.0
+        self.extrap_ref_itf_x1 = 1.0
+        self.extrap_ref_itf_x2 = 1.0
+        self.extrap_ref_itf_x3 = 1.0
 
     def allocate_arrays(self, q):
         super().allocate_arrays(q)
@@ -162,16 +171,23 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
 
         self.extrap_3d(q, self.q_itf_x1, self.q_itf_x2, self.q_itf_x3)
 
-        self.log_rho_p = torch.log(q[idx_rho])
-        self.log_rho_theta = torch.log(q[idx_rho_theta])
+        # Extrapolate positive departures relative to the static reference in log space.
+        log_departure = torch.log(q[positive_vars] / self.extrap_ref)
+        self.q_itf_x1[positive_vars] = self.extrap_ref_itf_x1 * torch.exp(apply_op(log_departure, op_extrap_x))
+        self.q_itf_x2[positive_vars] = self.extrap_ref_itf_x2 * torch.exp(apply_op(log_departure, op_extrap_y))
+        self.q_itf_x3[positive_vars] = self.extrap_ref_itf_x3 * torch.exp(apply_op(log_departure, op_extrap_z))
 
-        # Preserve positivity by extrapolating density variables in logarithmic form.
-        self.q_itf_x1[idx_rho] = torch.exp(apply_op(self.log_rho_p, op_extrap_x))
-        self.q_itf_x1[idx_rho_theta] = torch.exp(apply_op(self.log_rho_theta, op_extrap_x))
-        self.q_itf_x2[idx_rho] = torch.exp(apply_op(self.log_rho_p, op_extrap_y))
-        self.q_itf_x2[idx_rho_theta] = torch.exp(apply_op(self.log_rho_theta, op_extrap_y))
-        self.q_itf_x3[idx_rho] = torch.exp(apply_op(self.log_rho_p, op_extrap_z))
-        self.q_itf_x3[idx_rho_theta] = torch.exp(apply_op(self.log_rho_theta, op_extrap_z))
+    def set_log_extrapolation_reference(self, q_ref: NDArray, ops_double: DFROperators) -> None:
+        """Configure static double-precision factors for logarithmic extrapolation.
+
+        Extrapolating ``log(q / q_ref)`` reduces rounding near the reference profile.
+        """
+        dtype = self.ops_real.extrap_x.dtype
+        self.extrap_ref = q_ref[positive_vars].to(dtype)
+        log_ref = torch.log(self.extrap_ref.to(torch.float64))
+        self.extrap_ref_itf_x1 = torch.exp(apply_op(log_ref, ops_double.extrap_x)).to(dtype)
+        self.extrap_ref_itf_x2 = torch.exp(apply_op(log_ref, ops_double.extrap_y)).to(dtype)
+        self.extrap_ref_itf_x3 = torch.exp(apply_op(log_ref, ops_double.extrap_z)).to(dtype)
 
     def pointwise_fluxes(self, q: Tensor) -> None:
         self.pde.pointwise_fluxes(
