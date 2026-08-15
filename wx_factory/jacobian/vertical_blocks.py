@@ -15,7 +15,6 @@ from ..common.definitions import (
     idx_rho_u2,
     idx_rho_u3,
 )
-from ..common.matmul import apply_op
 from .column_layout import (
     column_dims,
     horizontal_momentum_rows,
@@ -35,9 +34,6 @@ class ImplicitBaseState(NamedTuple):
     pressure: object
     q_itf_x3: object  # vertical traces, before ghost padding
     q_itf_full_x3: object  # vertical traces, padded with the reflected wall ghosts
-    wflux_pres_x3: object  # sqrt(G) h^{33} p, the vertical pressure flux of the rho u^3 row
-    wflux_pres_itf_x3: object
-    log_p: object
     pressure_itf_x3: object
 
 
@@ -49,9 +45,6 @@ def j1_prepare(rhsobj, q) -> ImplicitBaseState:
         pressure=rhsobj.pressure.copy(),
         q_itf_x3=rhsobj.q_itf_x3.copy(),
         q_itf_full_x3=rhsobj.q_itf_full_x3.copy(),
-        wflux_pres_x3=rhsobj.wflux_pres_x3.copy(),
-        wflux_pres_itf_x3=rhsobj.wflux_pres_itf_x3.copy(),
-        log_p=rhsobj.log_p.copy(),
         pressure_itf_x3=rhsobj.pressure_itf_x3.copy(),
     )
 
@@ -192,10 +185,6 @@ class _VerticalBlockAssembly:
         self.jac_wrt_below = self.jac_wrt_below + torch.where(keep, speed_term, no_term)
         self.jac_wrt_above = self.jac_wrt_above + torch.where(keep, no_term, speed_term)
 
-        self.below_wins = below_wins
-        self.d_speed = d_speed
-        self.q_jump = q_jump
-
     def _linearised_extrapolation(self, q):
         """Build extrapolation derivatives for each variable."""
         dims = self.dims
@@ -217,7 +206,6 @@ class _VerticalBlockAssembly:
     def assemble(self):
         """Return the three block diagonals of J1."""
         self._conservative_rows()
-        self._vertical_momentum_row()
         self._apply_metric_factor()
         return self._finish()
 
@@ -254,164 +242,36 @@ class _VerticalBlockAssembly:
 
         # Differentiate each reflected wall trace against its interior trace.
         num_elem_z = dims.num_elem_z
-        reflection = torch.ones(dims.num_var, dtype=self.dtype)
-        reflection[idx_rho_u3] = -1.0
         self.diag[:, 0] += torch.einsum(
             "o,cij,cjs->ciojs",
             self.corr_down,
-            self.jac_wrt_below[:, 0] * reflection + self.jac_wrt_above[:, 0],
+            self._wall_jacobian(0, reflect_below=True),
             self.extrap_down_lin[:, 0],
         )
         self.diag[:, num_elem_z - 1] += torch.einsum(
             "o,cij,cjs->ciojs",
             self.corr_up,
-            self.jac_wrt_below[:, num_elem_z] + self.jac_wrt_above[:, num_elem_z] * reflection,
+            self._wall_jacobian(num_elem_z, reflect_below=False),
             self.extrap_up_lin[:, num_elem_z - 1],
         )
 
-    def _vertical_momentum_row(self):
-        """Assemble the derivative of the well-balanced vertical-momentum row."""
-        dims = self.dims
-        num_elem_z = dims.num_elem_z
-        interior, elem_above, elem_below = self._element_slices()
+    def _wall_jacobian(self, itf: int, reflect_below: bool):
+        """Return the wall-flux Jacobian with respect to its interior trace."""
+        reflection = torch.ones(self.dims.num_var, dtype=self.dtype)
+        reflection[idx_rho_u3] = -1.0
+        below = self.jac_wrt_below[:, itf]
+        above = self.jac_wrt_above[:, itf]
+        matrix = (below * reflection + above) if reflect_below else (below + above * reflection)
 
-        self.lower[:, :, idx_rho_u3] = 0.0
-        self.diag[:, :, idx_rho_u3] = 0.0
-        self.upper[:, :, idx_rho_u3] = 0.0
-
-        rho_col = self.q_col[:, :, idx_rho, :]
-        rho_theta_col = self.q_col[:, :, idx_rho_theta, :]
-        w_col = self.q_col[:, :, idx_rho_u3, :] / rho_col
-
-        # --- Advective part, sqrt(G) rho (u^3)^2, in the element volume.
-        self.diag[:, :, idx_rho_u3, :, idx_rho_u3, :] += torch.einsum(
-            "os,ces->ceos", self.deriv_1d, self.sqrtG_col * 2.0 * w_col
+        matrix = matrix.clone()
+        # Reflection removes vertical-momentum advection at a rigid wall.
+        matrix[:, idx_rho_u3, :] = 0.0
+        # Keep the vertical pressure-flux derivative.
+        matrix[:, idx_rho_u3, idx_rho_theta] = 0.5 * (
+            self.sqrtG_below[:, itf] * self.flux_jac_itf[self.below][:, itf, idx_rho_u3, idx_rho_theta]
+            + self.sqrtG_above[:, itf] * self.flux_jac_itf[self.above][:, itf, idx_rho_u3, idx_rho_theta]
         )
-        self.diag[:, :, idx_rho_u3, :, idx_rho, :] += torch.einsum(
-            "os,ces->ceos", self.deriv_1d, -self.sqrtG_col * w_col**2
-        )
-
-        # --- Advective part at the interfaces: the same Rusanov flux, restricted to this row.
-        wadv_wrt_below = torch.zeros((dims.num_columns, num_elem_z + 1, dims.num_var), dtype=self.dtype)
-        wadv_wrt_above = torch.zeros((dims.num_columns, num_elem_z + 1, dims.num_var), dtype=self.dtype)
-        wadv_wrt_below[..., idx_rho_u3] = 0.5 * (
-            2.0 * self.sqrtG_below * self.w_below + self.rusanov_speed * self.sqrtG_below
-        )
-        wadv_wrt_below[..., idx_rho] = -0.5 * self.sqrtG_below * self.w_below**2
-        wadv_wrt_above[..., idx_rho_u3] = 0.5 * (
-            2.0 * self.sqrtG_above * self.w_above - self.rusanov_speed * self.sqrtG_below
-        )
-        wadv_wrt_above[..., idx_rho] = -0.5 * self.sqrtG_above * self.w_above**2
-
-        # The variation of lambda applies to this row too.
-        speed_term = (-0.5 * self.sqrtG_below * self.q_jump[..., idx_rho_u3])[..., None] * self.d_speed
-        no_term = torch.zeros_like(speed_term)
-        keep = self.below_wins[..., None]
-        wadv_wrt_below = wadv_wrt_below + torch.where(keep, speed_term, no_term)
-        wadv_wrt_above = wadv_wrt_above + torch.where(keep, no_term, speed_term)
-
-        self.lower[:, elem_above, idx_rho_u3] += torch.einsum(
-            "o,cej,cejs->ceojs", self.corr_down, wadv_wrt_below[:, interior], self.extrap_up_lin[:, elem_below]
-        )
-        self.diag[:, elem_above, idx_rho_u3] += torch.einsum(
-            "o,cej,cejs->ceojs", self.corr_down, wadv_wrt_above[:, interior], self.extrap_down_lin[:, elem_above]
-        )
-        self.diag[:, elem_below, idx_rho_u3] += torch.einsum(
-            "o,cej,cejs->ceojs", self.corr_up, wadv_wrt_below[:, interior], self.extrap_up_lin[:, elem_below]
-        )
-        self.upper[:, elem_below, idx_rho_u3] += torch.einsum(
-            "o,cej,cejs->ceojs", self.corr_up, wadv_wrt_above[:, interior], self.extrap_down_lin[:, elem_above]
-        )
-        # At the walls the reflected trace makes the advective flux, and its derivative, exactly zero.
-
-        # Pressure variation multiplying the base-state pressure operators.
-        wflux_pres_x3 = self.base.wflux_pres_x3
-        op_dz = self.base.ops.derivative_z
-        op_corr = self.base.ops.correction_DU
-        w_presa_base = apply_op(wflux_pres_x3, op_dz)
-        apply_op(self.base.wflux_pres_itf_x3, op_corr, out=w_presa_base, beta=1.0)
-        w_presb_base = apply_op(self.base.log_p, op_dz)
-        apply_op(torch.log(self.base.pressure_itf_x3), op_corr, out=w_presb_base, beta=1.0)
-        w_presb_base = w_presb_base * wflux_pres_x3
-
-        dp_drho_theta = heat_capacity_ratio * self.pressure_col / rho_theta_col
-        self.diag[:, :, idx_rho_u3, :, idx_rho_theta, :] += torch.einsum(
-            "os,ces->ceos",
-            self.eye_solpts,
-            scalar_to_columns(w_presa_base + w_presb_base, dims) * dp_drho_theta,
-        )
-
-        # Linearize the pressure-flux ratio for each face and trace.
-        sqrtG_h33_below = self.sqrtG_below * self.h33_itf_col[self.below]
-        sqrtG_h33_above = self.sqrtG_above * self.h33_itf_col[self.above]
-        dp_below = heat_capacity_ratio * self.p_below / self.rho_theta_below
-        dp_above = heat_capacity_ratio * self.p_above / self.rho_theta_above
-        down_wrt_below = 0.5 * sqrtG_h33_below / self.p_above * dp_below
-        down_wrt_above = -0.5 * sqrtG_h33_below / self.p_above * (self.p_below / self.p_above) * dp_above
-        up_wrt_above = 0.5 * sqrtG_h33_above / self.p_below * dp_above
-        up_wrt_below = -0.5 * sqrtG_h33_above / self.p_below * (self.p_above / self.p_below) * dp_below
-
-        pres_corr_down = self.pressure_col * self.corr_down
-        pres_corr_up = self.pressure_col * self.corr_up
-        self.lower[:, elem_above, idx_rho_u3, :, idx_rho_theta, :] += torch.einsum(
-            "ceo,ce,ces->ceos",
-            pres_corr_down[:, elem_above],
-            down_wrt_below[:, interior],
-            self.extrap_up_lin[:, elem_below, idx_rho_theta],
-        )
-        self.diag[:, elem_above, idx_rho_u3, :, idx_rho_theta, :] += torch.einsum(
-            "ceo,ce,ces->ceos",
-            pres_corr_down[:, elem_above],
-            down_wrt_above[:, interior],
-            self.extrap_down_lin[:, elem_above, idx_rho_theta],
-        )
-        self.diag[:, elem_below, idx_rho_u3, :, idx_rho_theta, :] += torch.einsum(
-            "ceo,ce,ces->ceos",
-            pres_corr_up[:, elem_below],
-            up_wrt_below[:, interior],
-            self.extrap_up_lin[:, elem_below, idx_rho_theta],
-        )
-        self.upper[:, elem_below, idx_rho_u3, :, idx_rho_theta, :] += torch.einsum(
-            "ceo,ce,ces->ceos",
-            pres_corr_up[:, elem_below],
-            up_wrt_above[:, interior],
-            self.extrap_down_lin[:, elem_above, idx_rho_theta],
-        )
-        # At a wall both traces are the same interior state, so the two coefficients simply add.
-        self.diag[:, 0, idx_rho_u3, :, idx_rho_theta, :] += torch.einsum(
-            "co,c,cs->cos",
-            pres_corr_down[:, 0],
-            down_wrt_below[:, 0] + down_wrt_above[:, 0],
-            self.extrap_down_lin[:, 0, idx_rho_theta],
-        )
-        self.diag[:, num_elem_z - 1, idx_rho_u3, :, idx_rho_theta, :] += torch.einsum(
-            "co,c,cs->cos",
-            pres_corr_up[:, num_elem_z - 1],
-            up_wrt_below[:, num_elem_z] + up_wrt_above[:, num_elem_z],
-            self.extrap_up_lin[:, num_elem_z - 1, idx_rho_theta],
-        )
-
-        # Pressure contribution through the perturbation of log(p).
-        pres_wflux = self.pressure_col * scalar_to_columns(wflux_pres_x3, dims)
-        self.diag[:, :, idx_rho_u3, :, idx_rho_theta, :] += torch.einsum(
-            "ceo,os,ces->ceos", pres_wflux, self.deriv_1d, heat_capacity_ratio / rho_theta_col
-        )
-        self.diag[:, :, idx_rho_u3, :, idx_rho_theta, :] += torch.einsum(
-            "ceo,o,ces->ceos",
-            pres_wflux,
-            self.corr_down,
-            heat_capacity_ratio
-            * self.extrap_down_lin[:, :, idx_rho_theta, :]
-            / self.q_itf_col[:, :, 0, idx_rho_theta][..., None],
-        )
-        self.diag[:, :, idx_rho_u3, :, idx_rho_theta, :] += torch.einsum(
-            "ceo,o,ces->ceos",
-            pres_wflux,
-            self.corr_up,
-            heat_capacity_ratio
-            * self.extrap_up_lin[:, :, idx_rho_theta, :]
-            / self.q_itf_col[:, :, 1, idx_rho_theta][..., None],
-        )
+        return matrix
 
     def _apply_metric_factor(self):
         """Apply the outer ``-1/sqrt(G)`` factor and add the filtered gravity term."""

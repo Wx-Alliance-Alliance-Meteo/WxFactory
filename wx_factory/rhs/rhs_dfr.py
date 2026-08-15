@@ -1,6 +1,6 @@
 import numpy
 import torch
-from torch import Tensor
+from numpy.typing import NDArray
 
 from ..common.definitions import (
     idx_rho,
@@ -10,7 +10,7 @@ from ..common.definitions import (
     idx_rho_u3,
 )
 from ..common.matmul import apply_op
-from ..geometry import CubedSphere, CubedSphere3D, DFROperators, Metric3DTopo
+from ..geometry import CubedSphere, DFROperators
 from ..rhs.rhs import RHS
 
 mid_i = numpy.s_[..., 1:-1, :]
@@ -22,7 +22,7 @@ positive_vars = [idx_rho, idx_rho_theta]
 
 
 class RHSDirecFluxReconstruction(RHS):
-    def allocate_arrays(self, q: Tensor) -> None:
+    def allocate_arrays(self, q: NDArray) -> None:
         super().allocate_arrays(q)
         if self.q_itf_x1 is None or self.q_itf_x1.dtype != q.dtype:
             itf_shape = q.shape[:4] + (2 * self.geom.num_solpts**2,)
@@ -30,7 +30,7 @@ class RHSDirecFluxReconstruction(RHS):
             self.q_itf_x2 = torch.empty_like(self.q_itf_x1)
             self.q_itf_x3 = torch.empty_like(self.q_itf_x1)
 
-    def solution_extrapolation(self, q: Tensor) -> None:
+    def solution_extrapolation(self, q: NDArray) -> None:
         op_extrap_x = self.ops.extrap_x
         op_extrap_z = self.ops.extrap_z
         op_extrap_y = self.ops.extrap_y
@@ -40,10 +40,10 @@ class RHSDirecFluxReconstruction(RHS):
         if hasattr(self.ops, "extrap_y"):
             self.q_itf_x2 = apply_op(q, op_extrap_y)
 
-    def pointwise_fluxes(self, q: Tensor) -> None:
+    def pointwise_fluxes(self, q: NDArray) -> None:
         self.pde.pointwise_fluxes(q, self.f_x1, self.f_x2, self.f_x3)
 
-    def flux_divergence_partial(self):
+    def flux_divergence_partial(self) -> NDArray:
         op_dx = self.ops.derivative_x
         op_dz = self.ops.derivative_z
 
@@ -64,17 +64,12 @@ class RHSDirecFluxReconstruction(RHS):
 
 
 class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
-    geom: CubedSphere3D
-    metric: Metric3DTopo
-
-    q_itf_s: Tensor
-
     def __init__(
         self,
         pde,
         geometry: CubedSphere,
         operators_real: DFROperators,
-        metric: Metric3DTopo,
+        metric,
         topography,
         process_topo,
         config,
@@ -90,9 +85,7 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
             config,
             debug,
         )
-        self.extrap_3d = self.extrap_3d_py
-
-        # Use the original logarithmic extrapolation until a reference is configured.
+        # Default logarithmic extrapolation reference.
         self.extrap_ref = 1.0
         self.extrap_ref_itf_x1 = 1.0
         self.extrap_ref_itf_x2 = 1.0
@@ -109,19 +102,6 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
 
         if self.f_itf_x1 is None or self.f_itf_x1.dtype != dtype:
             self.pressure = torch.zeros_like(q[0])
-            self.log_p = torch.zeros_like(q[0])
-
-            self.wflux_adv_x1 = torch.zeros_like(q[0])
-            self.wflux_pres_x1 = torch.zeros_like(q[0])
-            self.wflux_adv_x2 = torch.zeros_like(q[0])
-            self.wflux_pres_x2 = torch.zeros_like(q[0])
-            self.wflux_adv_x3 = torch.zeros_like(q[0])
-            self.wflux_pres_x3 = torch.zeros_like(q[0])
-
-            self.w_df1_dx1 = torch.zeros_like(q[0])
-            self.w_df2_dx2 = torch.zeros_like(q[0])
-            self.w_df3_dx3 = torch.zeros_like(q[0])
-
             self.forcing = torch.zeros_like(q)
 
             self.f_itf_x1 = torch.zeros_like(self.q_itf_x1)
@@ -132,14 +112,7 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
             self.pressure_itf_x2 = torch.zeros_like(self.f_itf_x2[0])
             self.pressure_itf_x3 = torch.zeros_like(self.f_itf_x3[0])
 
-            self.wflux_adv_itf_x1 = torch.zeros_like(self.f_itf_x1[0])
-            self.wflux_pres_itf_x1 = torch.zeros_like(self.f_itf_x1[0])
-            self.wflux_adv_itf_x2 = torch.zeros_like(self.f_itf_x2[0])
-            self.wflux_pres_itf_x2 = torch.zeros_like(self.f_itf_x2[0])
-            self.wflux_adv_itf_x3 = torch.zeros_like(self.f_itf_x3[0])
-            self.wflux_pres_itf_x3 = torch.zeros_like(self.f_itf_x3[0])
-
-            # Padding enters logarithms before every slot is filled.
+            # Pressure evaluation requires positive padding.
             self.q_itf_full_x1 = torch.ones(itf_i_shape, dtype=dtype)
             self.q_itf_full_x2 = torch.ones(itf_j_shape, dtype=dtype)
             self.q_itf_full_x3 = torch.ones(itf_k_shape, dtype=dtype)
@@ -152,36 +125,26 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
             self.pressure_itf_full_x2 = torch.zeros_like(self.q_itf_full_x2[0])
             self.pressure_itf_full_x3 = torch.zeros_like(self.q_itf_full_x3[0])
 
-            self.wflux_adv_itf_full_x1 = torch.zeros_like(self.q_itf_full_x1[0])
-            self.wflux_pres_itf_full_x1 = torch.zeros_like(self.q_itf_full_x1[0])
-            self.wflux_adv_itf_full_x2 = torch.zeros_like(self.q_itf_full_x2[0])
-            self.wflux_pres_itf_full_x2 = torch.zeros_like(self.q_itf_full_x2[0])
-            self.wflux_adv_itf_full_x3 = torch.zeros_like(self.q_itf_full_x3[0])
-            self.wflux_pres_itf_full_x3 = torch.zeros_like(self.q_itf_full_x3[0])
-
-    def extrap_3d_py(self, q: Tensor, itf_x1: Tensor, itf_x2: Tensor, itf_x3: Tensor) -> None:
+    def extrap_3d(self, q: NDArray, itf_x1: NDArray, itf_x2: NDArray, itf_x3: NDArray) -> None:
         itf_x1[...] = q @ self.ops.extrap_x
         itf_x2[...] = q @ self.ops.extrap_y
         itf_x3[...] = q @ self.ops.extrap_z
 
-    def solution_extrapolation(self, q: Tensor) -> None:
+    def solution_extrapolation(self, q: NDArray) -> None:
         op_extrap_x = self.ops.extrap_x
         op_extrap_z = self.ops.extrap_z
         op_extrap_y = self.ops.extrap_y
 
         self.extrap_3d(q, self.q_itf_x1, self.q_itf_x2, self.q_itf_x3)
 
-        # Extrapolate positive departures relative to the static reference in log space.
+        # Extrapolate positive variables relative to the reference in log space.
         log_departure = torch.log(q[positive_vars] / self.extrap_ref)
         self.q_itf_x1[positive_vars] = self.extrap_ref_itf_x1 * torch.exp(apply_op(log_departure, op_extrap_x))
         self.q_itf_x2[positive_vars] = self.extrap_ref_itf_x2 * torch.exp(apply_op(log_departure, op_extrap_y))
         self.q_itf_x3[positive_vars] = self.extrap_ref_itf_x3 * torch.exp(apply_op(log_departure, op_extrap_z))
 
     def set_log_extrapolation_reference(self, q_ref: NDArray, ops_double: DFROperators) -> None:
-        """Configure static double-precision factors for logarithmic extrapolation.
-
-        Extrapolating ``log(q / q_ref)`` reduces rounding near the reference profile.
-        """
+        """Precompute reference factors for logarithmic extrapolation."""
         dtype = self.ops_real.extrap_x.dtype
         self.extrap_ref = q_ref[positive_vars].to(dtype)
         log_ref = torch.log(self.extrap_ref.to(torch.float64))
@@ -189,20 +152,13 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
         self.extrap_ref_itf_x2 = torch.exp(apply_op(log_ref, ops_double.extrap_y)).to(dtype)
         self.extrap_ref_itf_x3 = torch.exp(apply_op(log_ref, ops_double.extrap_z)).to(dtype)
 
-    def pointwise_fluxes(self, q: Tensor) -> None:
+    def pointwise_fluxes(self, q: NDArray) -> None:
         self.pde.pointwise_fluxes(
             q,
             self.f_x1,
             self.f_x2,
             self.f_x3,
             self.pressure,
-            self.wflux_adv_x1,
-            self.wflux_adv_x2,
-            self.wflux_adv_x3,
-            self.wflux_pres_x1,
-            self.wflux_pres_x2,
-            self.wflux_pres_x3,
-            self.log_p,
         )
 
     def flux_divergence_partial(self):
@@ -215,19 +171,6 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
         apply_op(self.f_x2, op_dy, out=self.rhs, beta=1.0)
         apply_op(self.f_x3, op_dz, out=self.rhs, beta=1.0)
 
-        # Accumulate the split vertical-momentum terms.
-        apply_op(self.wflux_adv_x1, op_dx, out=self.w_df1_dx1, beta=0.0)
-        apply_op(self.wflux_adv_x2, op_dy, out=self.w_df1_dx1, beta=1.0)
-        apply_op(self.wflux_adv_x3, op_dz, out=self.w_df1_dx1, beta=1.0)
-
-        self.w_presa = apply_op(self.wflux_pres_x1, op_dx)
-        apply_op(self.wflux_pres_x2, op_dy, out=self.w_presa, beta=1.0)
-        apply_op(self.wflux_pres_x3, op_dz, out=self.w_presa, beta=1.0)
-
-        self.w_df1_dx1_presb = apply_op(self.log_p, op_dx)
-        self.w_df2_dx2_presb = apply_op(self.log_p, op_dy)
-        self.w_df3_dx3_presb = apply_op(self.log_p, op_dz)
-
     def flux_divergence(self):
         op_correction_WE = self.ops.correction_WE
         op_correction_SN = self.ops.correction_SN
@@ -237,32 +180,6 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
         apply_op(self.f_itf_x1, op_correction_WE, out=self.rhs, beta=1.0)
         apply_op(self.f_itf_x2, op_correction_SN, out=self.rhs, beta=1.0)
         apply_op(self.f_itf_x3, op_correction_DU, out=self.rhs, beta=1.0)
-
-        logp_bdy_i = torch.log(self.pressure_itf_x1)
-        logp_bdy_j = torch.log(self.pressure_itf_x2)
-        logp_bdy_k = torch.log(self.pressure_itf_x3)
-
-        # Correct the split vertical-momentum terms.
-        apply_op(self.wflux_adv_itf_x1, op_correction_WE, out=self.w_df1_dx1, beta=1.0)
-        apply_op(self.wflux_adv_itf_x2, op_correction_SN, out=self.w_df1_dx1, beta=1.0)
-        apply_op(self.wflux_adv_itf_x3, op_correction_DU, out=self.w_df1_dx1, beta=1.0)
-
-        apply_op(self.wflux_pres_itf_x1, op_correction_WE, out=self.w_presa, beta=1.0)
-        apply_op(self.wflux_pres_itf_x2, op_correction_SN, out=self.w_presa, beta=1.0)
-        apply_op(self.wflux_pres_itf_x3, op_correction_DU, out=self.w_presa, beta=1.0)
-
-        apply_op(logp_bdy_i, op_correction_WE, out=self.w_df1_dx1_presb, beta=1.0)
-        self.w_df1_dx1_presb *= self.wflux_pres_x1
-
-        apply_op(logp_bdy_j, op_correction_SN, out=self.w_df2_dx2_presb, beta=1.0)
-        self.w_df2_dx2_presb *= self.wflux_pres_x2
-
-        apply_op(logp_bdy_k, op_correction_DU, out=self.w_df3_dx3_presb, beta=1.0)
-        self.w_df3_dx3_presb *= self.wflux_pres_x3
-
-        self.rhs[idx_rho_u3] = self.w_df1_dx1 + self.pressure * (
-            self.w_presa + self.w_df1_dx1_presb + self.w_df2_dx2_presb + self.w_df3_dx3_presb
-        )
         self.rhs *= -self.metric.inv_sqrtG_new
 
     def start_communication(self):
@@ -317,12 +234,6 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
             self.pressure_itf_full_x1,
             self.pressure_itf_full_x2,
             self.pressure_itf_full_x3,
-            self.wflux_adv_itf_full_x1,
-            self.wflux_pres_itf_full_x1,
-            self.wflux_adv_itf_full_x2,
-            self.wflux_pres_itf_full_x2,
-            self.wflux_adv_itf_full_x3,
-            self.wflux_pres_itf_full_x3,
             self.metric,
         )
 
@@ -334,25 +245,18 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
         self.pressure_itf_x2[...] = self.pressure_itf_full_x2[mid_j]
         self.pressure_itf_x3[...] = self.pressure_itf_full_x3[mid_k]
 
-        self.wflux_adv_itf_x1[...] = self.wflux_adv_itf_full_x1[mid_i]
-        self.wflux_pres_itf_x1[...] = self.wflux_pres_itf_full_x1[mid_i]
-        self.wflux_adv_itf_x2[...] = self.wflux_adv_itf_full_x2[mid_j]
-        self.wflux_pres_itf_x2[...] = self.wflux_pres_itf_full_x2[mid_j]
-        self.wflux_adv_itf_x3[...] = self.wflux_adv_itf_full_x3[mid_k]
-        self.wflux_pres_itf_x3[...] = self.wflux_pres_itf_full_x3[mid_k]
-
-    def forcing_terms(self, q: Tensor) -> None:
+    def forcing_terms(self, q: NDArray) -> None:
         self.pde.forcing_terms(self.rhs, q, self.pressure, self.metric, self.ops, self.forcing)
 
         # Freeze the dynamical variables in tracer-only tests.
-        if self.config.advection_only:
+        if self.pde.advection_only:
             self.rhs[idx_rho] = 0.0
             self.rhs[idx_rho_u1] = 0.0
             self.rhs[idx_rho_u2] = 0.0
             self.rhs[idx_rho_u3] = 0.0
             self.rhs[idx_rho_theta] = 0.0
 
-    def implicit(self, q: Tensor) -> Tensor:
+    def implicit(self, q: NDArray) -> NDArray:
         """Return the column-local stiff partition.
 
         It contains the vertical mass, vertical-momentum and thermodynamic fluxes, plus gravity.
@@ -366,14 +270,13 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
 
         # Supply local horizontal traces; only the vertical Riemann flux is retained.
         itf_size = self.geom.itf_size
-        self.q_itf_w = self.q_itf_x1[..., 0, :itf_size].clone()
-        self.q_itf_e = self.q_itf_x1[..., -1, itf_size:].clone()
-        self.q_itf_s = self.q_itf_x2[..., 0, :, :itf_size].clone()
-        self.q_itf_n = self.q_itf_x2[..., -1, :, itf_size:].clone()
+        self.q_itf_w = self.q_itf_x1[..., 0, :itf_size].copy()
+        self.q_itf_e = self.q_itf_x1[..., -1, itf_size:].copy()
+        self.q_itf_s = self.q_itf_x2[..., 0, :, :itf_size].copy()
+        self.q_itf_n = self.q_itf_x2[..., -1, :, itf_size:].copy()
 
         self.pointwise_fluxes(q)
 
-        # The well-balanced vertical-momentum row is replaced below.
         op_dz = self.ops.derivative_z
         apply_op(self.f_x3, op_dz, out=self.rhs, beta=0.0)
 
@@ -381,20 +284,6 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
 
         op_corr = self.ops.correction_DU
         apply_op(self.f_itf_x3, op_corr, out=self.rhs, beta=1.0)
-
-        # Well-balanced vertical-momentum residual.
-        w_df3 = apply_op(self.wflux_adv_x3, op_dz)
-        apply_op(self.wflux_adv_itf_x3, op_corr, out=w_df3, beta=1.0)
-
-        w_presa = apply_op(self.wflux_pres_x3, op_dz)
-        apply_op(self.wflux_pres_itf_x3, op_corr, out=w_presa, beta=1.0)
-
-        logp_bdy_k = torch.log(self.pressure_itf_x3)
-        w_presb = apply_op(self.log_p, op_dz)
-        apply_op(logp_bdy_k, op_corr, out=w_presb, beta=1.0)
-        w_presb *= self.wflux_pres_x3
-
-        self.rhs[idx_rho_u3] = w_df3 + self.pressure * (w_presa + w_presb)
 
         self.rhs *= -self.metric.inv_sqrtG_new
 
@@ -412,9 +301,9 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
 
         self.pin_y_momentum()
 
-        return self.rhs.reshape(given_shape).clone()
+        return self.rhs.reshape(given_shape).copy()
 
-    def explicit(self, q: Tensor) -> Tensor:
+    def explicit(self, q: NDArray) -> NDArray:
         """Return the complementary partition f2.
 
         It includes horizontal fluxes and forcing, plus the vertical fluxes of horizontal momentum
@@ -434,12 +323,6 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
         # Horizontal volume derivatives.
         apply_op(self.f_x1, op_dx, out=self.rhs, beta=0.0)
         apply_op(self.f_x2, op_dy, out=self.rhs, beta=1.0)
-        apply_op(self.wflux_adv_x1, op_dx, out=self.w_df1_dx1, beta=0.0)
-        apply_op(self.wflux_adv_x2, op_dy, out=self.w_df1_dx1, beta=1.0)
-        self.w_presa = apply_op(self.wflux_pres_x1, op_dx)
-        apply_op(self.wflux_pres_x2, op_dy, out=self.w_presa, beta=1.0)
-        self.w_df1_dx1_presb = apply_op(self.log_p, op_dx)
-        self.w_df2_dx2_presb = apply_op(self.log_p, op_dy)
 
         self.end_communication()
         self.riemann_fluxes()
@@ -450,17 +333,6 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
         # Horizontal interface corrections.
         apply_op(self.f_itf_x1, op_corr_WE, out=self.rhs, beta=1.0)
         apply_op(self.f_itf_x2, op_corr_SN, out=self.rhs, beta=1.0)
-        apply_op(self.wflux_adv_itf_x1, op_corr_WE, out=self.w_df1_dx1, beta=1.0)
-        apply_op(self.wflux_adv_itf_x2, op_corr_SN, out=self.w_df1_dx1, beta=1.0)
-        apply_op(self.wflux_pres_itf_x1, op_corr_WE, out=self.w_presa, beta=1.0)
-        apply_op(self.wflux_pres_itf_x2, op_corr_SN, out=self.w_presa, beta=1.0)
-
-        logp_bdy_i = torch.log(self.pressure_itf_x1)
-        logp_bdy_j = torch.log(self.pressure_itf_x2)
-        apply_op(logp_bdy_i, op_corr_WE, out=self.w_df1_dx1_presb, beta=1.0)
-        self.w_df1_dx1_presb *= self.wflux_pres_x1
-        apply_op(logp_bdy_j, op_corr_SN, out=self.w_df2_dx2_presb, beta=1.0)
-        self.w_df2_dx2_presb *= self.wflux_pres_x2
 
         # Keep the vertical horizontal-momentum fluxes with their terrain pressure balance in f2.
         op_dz = self.ops.derivative_z
@@ -469,10 +341,6 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
             apply_op(self.f_x3[row], op_dz, out=self.rhs[row], beta=1.0)
             apply_op(self.f_itf_x3[row], op_corr_DU, out=self.rhs[row], beta=1.0)
 
-        # Well-balanced horizontal contribution to vertical momentum.
-        self.rhs[idx_rho_u3] = self.w_df1_dx1 + self.pressure * (
-            self.w_presa + self.w_df1_dx1_presb + self.w_df2_dx2_presb
-        )
         self.rhs *= -self.metric.inv_sqrtG_new
 
         # Remove gravity, which belongs to f1, from the full forcing.
@@ -486,9 +354,9 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
 
         self.pin_y_momentum()
 
-        return self.rhs.reshape(given_shape).clone()
+        return self.rhs.reshape(given_shape).copy()
 
-    def horizontal_flux_div(self, q: Tensor) -> Tensor:
+    def horizontal_flux_div(self, q: NDArray) -> NDArray:
         """Return the plain horizontal flux divergence and prepare J2 trace data."""
         given_shape = q.shape
         self.ops = self.operators_for(q)
@@ -511,9 +379,9 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
         apply_op(self.f_itf_x1, op_corr_WE, out=self.rhs, beta=1.0)
         apply_op(self.f_itf_x2, op_corr_SN, out=self.rhs, beta=1.0)
         self.rhs *= -self.metric.inv_sqrtG_new
-        return self.rhs.reshape(given_shape).clone()
+        return self.rhs.reshape(given_shape).copy()
 
-    def forcing_only(self, q: Tensor) -> Tensor:
+    def forcing_only(self, q: NDArray) -> NDArray:
         """Return the non-gravitational forcing in f2."""
         given_shape = q.shape
         self.ops = self.operators_for(q)
@@ -527,4 +395,4 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
             * self.metric.inv_sqrtG_new
             * ((self.metric.sqrtG_new * q[idx_rho]) @ self.ops.highfilter_k)
         )
-        return self.rhs.reshape(given_shape).clone()
+        return self.rhs.reshape(given_shape).copy()
