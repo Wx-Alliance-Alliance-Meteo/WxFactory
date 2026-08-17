@@ -53,13 +53,6 @@ def pmex(
 
     comm = context.comm
 
-    # Reject unreachable tolerance
-    tol_floor = 100.0 * float(torch.finfo(u.dtype).eps)
-    if tol < tol_floor:
-        raise ValueError(
-            f"PMEX tolerance {tol:.1e} is unreachable in {u.dtype} precision; use at least {tol_floor:.1e}."
-        )
-
     ppo, n = u.shape
     p = ppo - 1
 

@@ -7,7 +7,7 @@ from mpi4py import MPI
 
 from ..common import Configuration
 from ..context import Context
-from ..geometry import DFROperators, GeometryContext, resolve_geometry
+from ..geometry import DFROperators, GeometryContext, Metric3DTopo, resolve_geometry
 from ..geometry.geometry import cast_double_arrays
 from ..init.init_state_vars import init_state_vars
 from ..integrators import Integrator, resolve as _resolve_integrator
@@ -135,6 +135,9 @@ class Simulation:
 
         # Rebuilt against the stored geometry so the runtime operators carry the working precision.
         self.operators_real = DFROperators(self.geometry, self.context)
+        if isinstance(self.initial_state.metric, Metric3DTopo):
+            # Terrain ramping rebuilds this metric in the runtime precision.
+            self.initial_state.metric.matrix = self.operators_real
 
         self.output = resolve_output(
             OutputContext(

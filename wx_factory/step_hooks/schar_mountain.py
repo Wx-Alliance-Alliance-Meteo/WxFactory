@@ -87,6 +87,24 @@ class ScharMountainHook(step_hook.StepHook):
             raise ValueError
 
     def apply(self, ratio: float):
+        # Match cached terrain fields to the runtime geometry precision.
+        if self.zbot.dtype != self.geom.dtype:
+            for name in (
+                "zbot",
+                "zbot_itf_i",
+                "zbot_itf_j",
+                "zbot_new",
+                "zbot_itf_i_new",
+                "zbot_itf_j_new",
+                "large",
+                "large_itf_i",
+                "large_itf_j",
+                "large_new",
+                "large_itf_i_new",
+                "large_itf_j_new",
+            ):
+                setattr(self, name, getattr(self, name).to(dtype=self.geom.dtype))
+
         # Update the geometry object with the new bottom topography
         self.geom.apply_topography(
             self.zbot * ratio,
