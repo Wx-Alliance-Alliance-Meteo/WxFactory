@@ -73,6 +73,9 @@ def forcing_jvp(rhsobj, q, v, base=None):
         dF_drho_theta = (
             c11 * h11 + 2.0 * c12 * h12 + 2.0 * c13 * h13 + c22 * h22 + 2.0 * c23 * h23 + c33 * h33
         ) * dp_drho_theta
+        if direction == 2:
+            # The vertical pressure source belongs to the implicit partition.
+            dF_drho_theta = torch.zeros_like(dF_drho_theta)
 
         dF = (
             dF_drho * d_rho

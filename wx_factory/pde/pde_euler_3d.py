@@ -253,6 +253,10 @@ class PDEEuler3D(PDE):
             metric.h_contra_new[2, 2],
         )
 
+    def vertical_pressure_forcing(self, pressure: NDArray, metric: Metric3DTopo) -> NDArray:
+        """Return the vertical-momentum pressure metric source ``Gamma^3_jk h^jk p``."""
+        return metric.gamma3_h_contra_new * pressure
+
     def forcing_terms(self, rhs, q, pressure, metric, ops, forcing):
         # Add coriolis, metric terms and other forcings
 

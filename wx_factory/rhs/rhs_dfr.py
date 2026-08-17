@@ -295,6 +295,9 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
             * ((self.metric.sqrtG_new * q[idx_rho]) @ self.ops.highfilter_k)
         )
 
+        # Keep the vertical pressure flux and metric source in the same partition.
+        self.rhs[idx_rho_u3] -= self.pde.vertical_pressure_forcing(self.pressure, self.metric)
+
         # Keep the complete terrain pressure balance in f2; splitting it would couple f1 horizontally.
         self.rhs[idx_rho_u1] = 0.0
         self.rhs[idx_rho_u2] = 0.0
@@ -343,7 +346,7 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
 
         self.rhs *= -self.metric.inv_sqrtG_new
 
-        # Remove gravity, which belongs to f1, from the full forcing.
+        # Move the vertical gravity and pressure metric sources to f1.
         self.forcing_terms(q)
         self.rhs[idx_rho_u3] += (
             self.metric.inv_dzdeta_new
@@ -351,6 +354,7 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
             * self.metric.inv_sqrtG_new
             * ((self.metric.sqrtG_new * q[idx_rho]) @ self.ops.highfilter_k)
         )
+        self.rhs[idx_rho_u3] += self.pde.vertical_pressure_forcing(self.pressure, self.metric)
 
         self.pin_y_momentum()
 
@@ -382,7 +386,7 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
         return self.rhs.reshape(given_shape).copy()
 
     def forcing_only(self, q: NDArray) -> NDArray:
-        """Return the non-gravitational forcing in f2."""
+        """Return the forcing contribution assigned to f2."""
         given_shape = q.shape
         self.ops = self.operators_for(q)
         self.allocate_arrays(q)
@@ -395,4 +399,5 @@ class RHSDirecFluxReconstruction_mpi(RHSDirecFluxReconstruction):
             * self.metric.inv_sqrtG_new
             * ((self.metric.sqrtG_new * q[idx_rho]) @ self.ops.highfilter_k)
         )
+        self.rhs[idx_rho_u3] += self.pde.vertical_pressure_forcing(self.pressure, self.metric)
         return self.rhs.reshape(given_shape).copy()

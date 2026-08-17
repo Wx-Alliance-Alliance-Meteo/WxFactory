@@ -97,6 +97,7 @@ class _VerticalBlockAssembly:
         self.inv_sqrtG_col = scalar_to_columns(metric.inv_sqrtG_new, dims)
         self.inv_dzdeta_col = scalar_to_columns(metric.inv_dzdeta_new, dims)
         self.gravity_col = scalar_to_columns(metric.gravity_new, dims)
+        self.gamma3_h_contra_col = scalar_to_columns(metric.gamma3_h_contra_new, dims)
 
         # dF_3/dq at every volume solution point, shape (num_columns, num_elem_z, num_solpts, 5, 5).
         self.flux_jac_vol = flux_jacobian_matrix(
@@ -274,7 +275,7 @@ class _VerticalBlockAssembly:
         return matrix
 
     def _apply_metric_factor(self):
-        """Apply the outer ``-1/sqrt(G)`` factor and add the filtered gravity term."""
+        """Apply the outer ``-1/sqrt(G)`` factor, then add the source terms that sit outside it."""
         scale = (-self.inv_sqrtG_col)[:, :, None, :, None, None]
         self.lower *= scale
         self.diag *= scale
@@ -286,6 +287,12 @@ class _VerticalBlockAssembly:
             self.inv_dzdeta_col * self.gravity_col * self.inv_sqrtG_col,
             self.highfilter,
             self.sqrtG_col,
+        )
+
+        # The pressure metric source is local and contributes to the point diagonal.
+        dp_drho_theta = heat_capacity_ratio * self.pressure_col / self.q_col[:, :, idx_rho_theta, :]
+        self.diag[:, :, idx_rho_u3, :, idx_rho_theta, :] -= torch.einsum(
+            "ces,os->ceos", self.gamma3_h_contra_col * dp_drho_theta, self.eye_solpts
         )
 
     def _finish(self):

@@ -780,3 +780,15 @@ class Metric3DTopo:
         # Store metric terms in the working precision.
         cast_double_arrays(self, geom.dtype)
         self.inv_sqrtG_new = 1.0 / self.sqrtG_new
+
+        # Pressure coefficient of the vertical-momentum metric source.
+        c3 = self.christoffel[2]
+        h = self.h_contra_new
+        self.gamma3_h_contra_new = (
+            c3[3] * h[0, 0]
+            + 2.0 * c3[4] * h[0, 1]
+            + 2.0 * c3[5] * h[0, 2]
+            + c3[6] * h[1, 1]
+            + 2.0 * c3[7] * h[1, 2]
+            + c3[8] * h[2, 2]
+        )
