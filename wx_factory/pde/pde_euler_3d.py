@@ -101,10 +101,8 @@ class PDEEuler3D(PDE):
         self.num_solpts = geometry.num_solpts
 
         self.case_number = config.case_number
-        # DCMIP 1 transport cases prescribe the wind and freeze the Euler state.
-        # ``auto`` uses the case number; Cartesian bubble cases override it.
-        mode = getattr(config, "advection_only", "auto")
-        self.advection_only = {"on": True, "off": False}.get(mode, config.case_number <= 13)
+        # DCMIP transport configurations prescribe the wind and freeze Euler dynamics.
+        self.advection_only = bool(config.advection_only)
 
     def pointwise_fluxes(
         self,
