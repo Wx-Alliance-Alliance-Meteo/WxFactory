@@ -893,15 +893,15 @@ def dcmip_baroclinic_instability(
     eta_tropo = 0.2
     eta0 = 0.252
 
-    u0 = 35.0              # m/s
-    up = 1.0               # m/s
+    u0 = 35.0  # m/s
+    up = 1.0  # m/s
 
-    T0 = 288.0             # K
-    delta_T = 4.8e5        # K
-    gamma = 0.005          # K/m
+    T0 = 288.0  # K
+    delta_T = 4.8e5  # K
+    gamma = 0.005  # K/m
 
-    lambdac = math.pi / 9.0        # 20 degrees E
-    phic = 2.0 * math.pi / 9.0     # 40 degrees N
+    lambdac = math.pi / 9.0  # 20 degrees E
+    phic = 2.0 * math.pi / 9.0  # 40 degrees N
 
     eta_sfc = 1.0
 
@@ -929,25 +929,20 @@ def dcmip_baroclinic_instability(
         Horizontal-mean geopotential Phi_bar(eta).
         """
 
-        phi_mean = (
-            T0
-            * gravity
-            / gamma
-            * (1.0 - eta**exponent)
-        )
+        phi_mean = T0 * gravity / gamma * (1.0 - eta**exponent)
 
         # Eq. (127)
-        delta_phi = Rd * delta_T * (
-            (
-                torch.log(eta / eta_tropo)
-                + 137.0 / 60.0
+        delta_phi = (
+            Rd
+            * delta_T
+            * (
+                (torch.log(eta / eta_tropo) + 137.0 / 60.0) * eta_tropo**5
+                - 5.0 * eta_tropo**4 * eta
+                + 5.0 * eta_tropo**3 * eta**2
+                - (10.0 / 3.0) * eta_tropo**2 * eta**3
+                + (5.0 / 4.0) * eta_tropo * eta**4
+                - (1.0 / 5.0) * eta**5
             )
-            * eta_tropo**5
-            - 5.0 * eta_tropo**4 * eta
-            + 5.0 * eta_tropo**3 * eta**2
-            - (10.0 / 3.0) * eta_tropo**2 * eta**3
-            + (5.0 / 4.0) * eta_tropo * eta**4
-            - (1.0 / 5.0) * eta**5
         )
 
         # Eq. (125) below tropopause in pressure coordinate,
@@ -984,24 +979,11 @@ def dcmip_baroclinic_instability(
         sin_lat = torch.sin(lat)
         cos_lat = torch.cos(lat)
 
-        horizontal_1 = (
-            -2.0
-            * sin_lat**6
-            * (cos_lat**2 + 1.0 / 3.0)
-            + 10.0 / 63.0
-        )
+        horizontal_1 = -2.0 * sin_lat**6 * (cos_lat**2 + 1.0 / 3.0) + 10.0 / 63.0
 
-        horizontal_2 = (
-            (8.0 / 5.0)
-            * cos_lat**3
-            * (sin_lat**2 + 2.0 / 3.0)
-            - math.pi / 4.0
-        )
+        horizontal_2 = (8.0 / 5.0) * cos_lat**3 * (sin_lat**2 + 2.0 / 3.0) - math.pi / 4.0
 
-        phi_deviation = jet_factor * (
-            horizontal_1 * jet_factor
-            + horizontal_2 * a * omega
-        )
+        phi_deviation = jet_factor * (horizontal_1 * jet_factor + horizontal_2 * a * omega)
 
         return horiz_mean_geopotential(eta) + phi_deviation
 
@@ -1030,45 +1012,22 @@ def dcmip_baroclinic_instability(
         sin_lat = torch.sin(lat)
         cos_lat = torch.cos(lat)
 
-        horizontal_1 = (
-            -2.0
-            * sin_lat**6
-            * (cos_lat**2 + 1.0 / 3.0)
-            + 10.0 / 63.0
-        )
+        horizontal_1 = -2.0 * sin_lat**6 * (cos_lat**2 + 1.0 / 3.0) + 10.0 / 63.0
 
-        horizontal_2 = (
-            (8.0 / 5.0)
-            * cos_lat**3
-            * (sin_lat**2 + 2.0 / 3.0)
-            - math.pi / 4.0
-        )
+        horizontal_2 = (8.0 / 5.0) * cos_lat**3 * (sin_lat**2 + 2.0 / 3.0) - math.pi / 4.0
 
         # Eq. (120)
         factor = eta * math.pi * u0 / Rd
 
         t_deviation = (
-            0.75
-            * factor
-            * sin_eta
-            * cos_eta**0.5
-            * (
-                horizontal_1
-                * 2.0
-                * u0
-                * cos_eta**1.5
-                + horizontal_2 * a * omega
-            )
+            0.75 * factor * sin_eta * cos_eta**0.5 * (horizontal_1 * 2.0 * u0 * cos_eta**1.5 + horizontal_2 * a * omega)
         )
 
         # Eq. (121)
         t_lower = T0 * eta**exponent
 
         # Eq. (122)
-        t_upper = (
-            T0 * eta**exponent
-            + delta_T * (eta_tropo - eta)**5
-        )
+        t_upper = T0 * eta**exponent + delta_T * (eta_tropo - eta) ** 5
 
         t_mean = torch.where(
             eta < eta_tropo,
@@ -1111,34 +1070,22 @@ def dcmip_baroclinic_instability(
     # Evaluate the surface elevation on every geometry representation.
     # ------------------------------------------------------------------
 
-    zbot_new = surface_height(
-        geom.get_floor(geom.polar)
-    )
+    zbot_new = surface_height(geom.get_floor(geom.polar))
 
-    zbot_itf_i_new = surface_height(
-        geom.get_itf_i_floor(geom.polar_itf_i)
-    )
+    zbot_itf_i_new = surface_height(geom.get_itf_i_floor(geom.polar_itf_i))
 
-    zbot_itf_j_new = surface_height(
-        geom.get_itf_j_floor(geom.polar_itf_j)
-    )
+    zbot_itf_j_new = surface_height(geom.get_itf_j_floor(geom.polar_itf_j))
 
-    zbot = surface_height(
-        geom.coordVec_latlon[:, 0]
-    )
+    zbot = surface_height(geom.coordVec_latlon[:, 0])
 
-    zbot_itf_i = surface_height(
-        geom.coordVec_latlon_itf_i[:, 0]
-    )
+    zbot_itf_i = surface_height(geom.coordVec_latlon_itf_i[:, 0])
 
-    zbot_itf_j = surface_height(
-        geom.coordVec_latlon_itf_j[:, 0]
-    )
+    zbot_itf_j = surface_height(geom.coordVec_latlon_itf_j[:, 0])
 
     # There is no separate small-scale topographic component here.
     # Treat the whole balanced surface geopotential as the large-scale
     # surface when SLEVE-type coordinates are used.
-    
+
     geom.apply_topography(
         zbot,
         zbot_itf_i,
@@ -1206,9 +1153,7 @@ def dcmip_baroclinic_instability(
             # Eq. (245)
             eta_new = eta_val - f / df
 
-            error = torch.max(
-                torch.abs(eta_new - eta_val)
-            )
+            error = torch.max(torch.abs(eta_new - eta_val))
 
             eta_val = eta_new
 
@@ -1218,8 +1163,7 @@ def dcmip_baroclinic_instability(
 
         if not converged:
             raise ValueError(
-                "DCMIP 4-1: z -> eta Newton iteration did not converge. "
-                f"Maximum |delta eta| = {error.item():.6e}"
+                "DCMIP 4-1: z -> eta Newton iteration did not converge. " f"Maximum |delta eta| = {error.item():.6e}"
             )
 
         return eta_val
@@ -1245,10 +1189,7 @@ def dcmip_baroclinic_instability(
     # Therefore:
     #     (r_phys/R)^2 = (10*r_angle)^2
     #
-    acos_arg = (
-        sin_tmp
-        + cos_tmp * torch.cos(lon - lambdac)
-    )
+    acos_arg = sin_tmp + cos_tmp * torch.cos(lon - lambdac)
 
     acos_arg = torch.clamp(
         acos_arg,
@@ -1259,20 +1200,12 @@ def dcmip_baroclinic_instability(
     r_angle = torch.arccos(acos_arg)
 
     # Localized perturbation in Eq. (117)
-    u_perturb = up * torch.exp(
-        -(10.0 * r_angle) ** 2
-    )
+    u_perturb = up * torch.exp(-((10.0 * r_angle) ** 2))
 
     # Basic zonal jet
-    eta_v = (
-        eta - eta0
-    ) * 0.5 * math.pi
+    eta_v = (eta - eta0) * 0.5 * math.pi
 
-    u_wind = (
-        u0
-        * torch.cos(eta_v) ** 1.5
-        * torch.sin(2.0 * lat) ** 2
-    )
+    u_wind = u0 * torch.cos(eta_v) ** 1.5 * torch.sin(2.0 * lat) ** 2
 
     u = u_wind + u_perturb
 
@@ -1308,9 +1241,7 @@ def dcmip_baroclinic_instability(
     rho = p / (Rd * T)
 
     # Appendix F.5 Eq. (250)
-    theta = T * (
-        p_ref / p
-    ) ** (Rd / cpd)
+    theta = T * (p_ref / p) ** (Rd / cpd)
 
     return (
         rho,

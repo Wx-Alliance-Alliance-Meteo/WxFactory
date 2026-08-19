@@ -9,7 +9,6 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.ticker import MultipleLocator, MaxNLocator, FormatStrFormatter
 
-
 # ============================================================
 # User settings
 # ============================================================
@@ -125,6 +124,7 @@ DPI = 300
 # Thermodynamics
 # ============================================================
 
+
 def temperature_from_theta(theta, pressure):
     return theta * (pressure / P0) ** KAPPA
 
@@ -133,14 +133,13 @@ def temperature_from_theta(theta, pressure):
 # Time selection
 # ============================================================
 
+
 def select_time(raw_time, target_seconds):
 
     raw_time = np.asarray(raw_time, dtype=np.float64)
 
     if raw_time.ndim != 1:
-        raise ValueError(
-            f"time must be one-dimensional; got {raw_time.shape}"
-        )
+        raise ValueError(f"time must be one-dimensional; got {raw_time.shape}")
 
     if raw_time.size == 0:
         raise ValueError("No output times were found.")
@@ -157,9 +156,7 @@ def select_time(raw_time, target_seconds):
         dt = np.diff(elapsed_seconds)
 
         if np.any(dt < 0.0):
-            raise ValueError(
-                "NetCDF time coordinate is not monotonically increasing."
-            )
+            raise ValueError("NetCDF time coordinate is not monotonically increasing.")
 
     first_seconds = float(elapsed_seconds[0])
     last_seconds = float(elapsed_seconds[-1])
@@ -174,36 +171,22 @@ def select_time(raw_time, target_seconds):
             f"Last available time  : {last_seconds:.6f} s"
         )
 
-    difference = np.abs(
-        elapsed_seconds - target_seconds
-    )
+    difference = np.abs(elapsed_seconds - target_seconds)
 
-    itime = int(
-        np.argmin(difference)
-    )
+    itime = int(np.argmin(difference))
 
-    actual_seconds = float(
-        elapsed_seconds[itime]
-    )
+    actual_seconds = float(elapsed_seconds[itime])
 
-    difference_seconds = float(
-        difference[itime]
-    )
+    difference_seconds = float(difference[itime])
 
     if elapsed_seconds.size > 1:
 
-        output_dt = np.diff(
-            elapsed_seconds
-        )
+        output_dt = np.diff(elapsed_seconds)
 
-        output_dt = output_dt[
-            output_dt > 0.0
-        ]
+        output_dt = output_dt[output_dt > 0.0]
 
         if output_dt.size > 0:
-            typical_output_interval = float(
-                np.median(output_dt)
-            )
+            typical_output_interval = float(np.median(output_dt))
         else:
             typical_output_interval = np.nan
 
@@ -224,6 +207,7 @@ def select_time(raw_time, target_seconds):
 # Vertical interpolation
 # ============================================================
 
+
 def interpolate_to_pressure(
     field,
     pressure,
@@ -232,9 +216,7 @@ def interpolate_to_pressure(
 
     if field.shape != pressure.shape:
 
-        raise ValueError(
-            "field and pressure must have identical shapes."
-        )
+        raise ValueError("field and pressure must have identical shapes.")
 
     npanel, nz, ny, nx = field.shape
 
@@ -264,10 +246,7 @@ def interpolate_to_pressure(
                     i,
                 ]
 
-                valid = (
-                    np.isfinite(pcol)
-                    & np.isfinite(fcol)
-                )
+                valid = np.isfinite(pcol) & np.isfinite(fcol)
 
                 if np.count_nonzero(valid) < 2:
                     continue
@@ -297,10 +276,7 @@ def interpolate_to_pressure(
                 if p_unique.size < 2:
                     continue
 
-                if (
-                    target_pressure < p_unique[0]
-                    or target_pressure > p_unique[-1]
-                ):
+                if target_pressure < p_unique[0] or target_pressure > p_unique[-1]:
                     continue
 
                 result[
@@ -319,6 +295,7 @@ def interpolate_to_pressure(
 # ============================================================
 # Longitude handling
 # ============================================================
+
 
 def unwrap_longitude(lon):
 
@@ -341,6 +318,7 @@ def unwrap_longitude(lon):
 # Relative vorticity
 # ============================================================
 
+
 def relative_vorticity_panel(
     u,
     v,
@@ -359,13 +337,9 @@ def relative_vorticity_panel(
 
     for panel in range(npanel):
 
-        phi = np.deg2rad(
-            lat[panel]
-        )
+        phi = np.deg2rad(lat[panel])
 
-        lam = unwrap_longitude(
-            lon[panel]
-        )
+        lam = unwrap_longitude(lon[panel])
 
         up = np.asarray(
             u[panel],
@@ -387,26 +361,17 @@ def relative_vorticity_panel(
 
         ucos = up * cosphi
 
-        ducos_dj, ducos_di = np.gradient(
-            ucos
-        )
+        ducos_dj, ducos_di = np.gradient(ucos)
 
-        dlam_dj, dlam_di = np.gradient(
-            lam
-        )
+        dlam_dj, dlam_di = np.gradient(lam)
 
-        dphi_dj, dphi_di = np.gradient(
-            phi
-        )
+        dphi_dj, dphi_di = np.gradient(phi)
 
         # ----------------------------------------------------
         # Coordinate transformation
         # ----------------------------------------------------
 
-        determinant = (
-            dlam_di * dphi_dj
-            - dlam_dj * dphi_di
-        )
+        determinant = dlam_di * dphi_dj - dlam_dj * dphi_di
 
         determinant = np.where(
             np.abs(determinant) < 1.0e-14,
@@ -414,19 +379,11 @@ def relative_vorticity_panel(
             determinant,
         )
 
-        dv_dlambda = (
-            dv_di * dphi_dj
-            - dv_dj * dphi_di
-        ) / determinant
+        dv_dlambda = (dv_di * dphi_dj - dv_dj * dphi_di) / determinant
 
-        ducos_dphi = (
-            dlam_di * ducos_dj
-            - dlam_dj * ducos_di
-        ) / determinant
+        ducos_dphi = (dlam_di * ducos_dj - dlam_dj * ducos_di) / determinant
 
-        denominator = (
-            earth_radius * cosphi
-        )
+        denominator = earth_radius * cosphi
 
         denominator = np.where(
             np.abs(cosphi) < 1.0e-8,
@@ -434,12 +391,7 @@ def relative_vorticity_panel(
             denominator,
         )
 
-        zeta[
-            panel
-        ] = (
-            dv_dlambda
-            - ducos_dphi
-        ) / denominator
+        zeta[panel] = (dv_dlambda - ducos_dphi) / denominator
 
     return zeta
 
@@ -447,6 +399,7 @@ def relative_vorticity_panel(
 # ============================================================
 # Contour levels
 # ============================================================
+
 
 def make_levels(
     field,
@@ -456,38 +409,26 @@ def make_levels(
     symmetric=False,
 ):
 
-    finite = np.asarray(field)[
-        np.isfinite(field)
-    ]
+    finite = np.asarray(field)[np.isfinite(field)]
 
     if finite.size == 0:
-        raise ValueError(
-            "No finite values available."
-        )
+        raise ValueError("No finite values available.")
 
     if symmetric:
 
         if vmin is None and vmax is None:
 
-            vmax_abs = float(
-                np.nanmax(
-                    np.abs(finite)
-                )
-            )
+            vmax_abs = float(np.nanmax(np.abs(finite)))
 
         else:
 
             candidates = []
 
             if vmin is not None:
-                candidates.append(
-                    abs(vmin)
-                )
+                candidates.append(abs(vmin))
 
             if vmax is not None:
-                candidates.append(
-                    abs(vmax)
-                )
+                candidates.append(abs(vmax))
 
             vmax_abs = max(candidates)
 
@@ -501,22 +442,14 @@ def make_levels(
         )
 
     if vmin is None:
-        vmin = float(
-            np.nanmin(finite)
-        )
+        vmin = float(np.nanmin(finite))
 
     if vmax is None:
-        vmax = float(
-            np.nanmax(finite)
-        )
+        vmax = float(np.nanmax(finite))
 
     if vmin == vmax:
 
-        delta = (
-            abs(vmin) * 0.01
-            if vmin != 0.0
-            else 1.0
-        )
+        delta = abs(vmin) * 0.01 if vmin != 0.0 else 1.0
 
         vmin -= delta
         vmax += delta
@@ -544,6 +477,7 @@ def make_line_levels(
 # Clean colorbar ticks
 # ============================================================
 
+
 def make_colorbar_ticks(
     vmin,
     vmax,
@@ -560,15 +494,9 @@ def make_colorbar_ticks(
         vmax,
     )
 
-    tolerance = (
-        abs(vmax - vmin)
-        * 1.0e-10
-    )
+    tolerance = abs(vmax - vmin) * 1.0e-10
 
-    ticks = ticks[
-        (ticks >= vmin - tolerance)
-        & (ticks <= vmax + tolerance)
-    ]
+    ticks = ticks[(ticks >= vmin - tolerance) & (ticks <= vmax + tolerance)]
 
     return ticks
 
@@ -600,11 +528,7 @@ def add_horizontal_colorbar(
         ticks=ticks,
     )
 
-    cbar.ax.xaxis.set_major_formatter(
-        FormatStrFormatter(
-            tick_format
-        )
-    )
+    cbar.ax.xaxis.set_major_formatter(FormatStrFormatter(tick_format))
 
     cbar.set_label(
         label,
@@ -625,6 +549,7 @@ def add_horizontal_colorbar(
 # Cubed-sphere plotting
 # ============================================================
 
+
 def plot_cubesphere_field(
     ax,
     lon,
@@ -638,9 +563,7 @@ def plot_cubesphere_field(
 
     image = None
 
-    for panel in range(
-        field.shape[0]
-    ):
+    for panel in range(field.shape[0]):
 
         lon_panel = np.asarray(
             lon[panel],
@@ -657,9 +580,7 @@ def plot_cubesphere_field(
             dtype=np.float64,
         ).copy()
 
-        lon_panel = (
-            (lon_panel + 180.0) % 360.0
-        ) - 180.0
+        lon_panel = ((lon_panel + 180.0) % 360.0) - 180.0
 
         # ----------------------------------------------------
         # Mask longitude discontinuity
@@ -684,25 +605,16 @@ def plot_cubesphere_field(
             )
         )
 
-        seam[:, :-1] |= (
-            diff_x > 180.0
-        )
+        seam[:, :-1] |= diff_x > 180.0
 
-        seam[:, 1:] |= (
-            diff_x > 180.0
-        )
+        seam[:, 1:] |= diff_x > 180.0
 
-        seam[:-1, :] |= (
-            diff_y > 180.0
-        )
+        seam[:-1, :] |= diff_y > 180.0
 
-        seam[1:, :] |= (
-            diff_y > 180.0
-        )
+        seam[1:, :] |= diff_y > 180.0
 
         masked = np.ma.masked_where(
-            seam
-            | ~np.isfinite(field_panel),
+            seam | ~np.isfinite(field_panel),
             field_panel,
         )
 
@@ -716,10 +628,7 @@ def plot_cubesphere_field(
             antialiased=True,
         )
 
-        if (
-            draw_contours
-            and line_levels is not None
-        ):
+        if draw_contours and line_levels is not None:
 
             ax.contour(
                 lon_panel,
@@ -737,6 +646,7 @@ def plot_cubesphere_field(
 # ============================================================
 # Axis formatting
 # ============================================================
+
 
 def configure_axis(
     ax,
@@ -769,13 +679,9 @@ def configure_axis(
 
         ax.set_ylabel("")
 
-    ax.xaxis.set_major_locator(
-        MultipleLocator(60)
-    )
+    ax.xaxis.set_major_locator(MultipleLocator(60))
 
-    ax.yaxis.set_major_locator(
-        MultipleLocator(30)
-    )
+    ax.yaxis.set_major_locator(MultipleLocator(30))
 
     ax.tick_params(
         axis="both",
@@ -794,19 +700,16 @@ def configure_axis(
 # Main
 # ============================================================
 
+
 def main():
 
     # ========================================================
     # Read data
     # ========================================================
 
-    with netCDF4.Dataset(
-        INPUT_FILE
-    ) as ds:
+    with netCDF4.Dataset(INPUT_FILE) as ds:
 
-        time_var = ds.variables[
-            "time"
-        ]
+        time_var = ds.variables["time"]
 
         raw_time = np.asarray(
             time_var[:],
@@ -885,10 +788,7 @@ def main():
 
     if np.isfinite(output_dt):
 
-        print(
-            f"Typical output dt    : "
-            f"{output_dt:.6f} s"
-        )
+        print(f"Typical output dt    : " f"{output_dt:.6f} s")
 
     if not np.isclose(
         actual_seconds,
@@ -899,12 +799,8 @@ def main():
 
         print("")
         print("WARNING:")
-        print(
-            "Requested time is not available exactly."
-        )
-        print(
-            "Using the nearest available snapshot."
-        )
+        print("Requested time is not available exactly.")
+        print("Using the nearest available snapshot.")
 
     # ========================================================
     # Temperature
@@ -930,18 +826,14 @@ def main():
         axis=1,
     )[:, 0]
 
-    ps_hpa = (
-        ps / 100.0
-    )
+    ps_hpa = ps / 100.0
 
     # ========================================================
     # 850-hPa interpolation
     # ========================================================
 
     print("")
-    print(
-        "Interpolating temperature to 850 hPa..."
-    )
+    print("Interpolating temperature to 850 hPa...")
 
     t850 = interpolate_to_pressure(
         temperature,
@@ -949,9 +841,7 @@ def main():
         TARGET_PRESSURE,
     )
 
-    print(
-        "Interpolating U to 850 hPa..."
-    )
+    print("Interpolating U to 850 hPa...")
 
     u850 = interpolate_to_pressure(
         u,
@@ -959,9 +849,7 @@ def main():
         TARGET_PRESSURE,
     )
 
-    print(
-        "Interpolating V to 850 hPa..."
-    )
+    print("Interpolating V to 850 hPa...")
 
     v850 = interpolate_to_pressure(
         v,
@@ -973,9 +861,7 @@ def main():
     # Relative vorticity
     # ========================================================
 
-    print(
-        "Computing 850-hPa relative vorticity..."
-    )
+    print("Computing 850-hPa relative vorticity...")
 
     zeta850 = relative_vorticity_panel(
         u850,
@@ -985,9 +871,7 @@ def main():
         EARTH_RADIUS,
     )
 
-    zeta850_plot = (
-        zeta850 * 1.0e5
-    )
+    zeta850_plot = zeta850 * 1.0e5
 
     # ========================================================
     # Field diagnostics
@@ -997,17 +881,9 @@ def main():
     print("Field ranges")
     print("----------------------------------------------")
 
-    print(
-        f"Near-surface pressure : "
-        f"{np.nanmin(ps_hpa):.3f} to "
-        f"{np.nanmax(ps_hpa):.3f} hPa"
-    )
+    print(f"Near-surface pressure : " f"{np.nanmin(ps_hpa):.3f} to " f"{np.nanmax(ps_hpa):.3f} hPa")
 
-    print(
-        f"T850                  : "
-        f"{np.nanmin(t850):.3f} to "
-        f"{np.nanmax(t850):.3f} K"
-    )
+    print(f"T850                  : " f"{np.nanmin(t850):.3f} to " f"{np.nanmax(t850):.3f} K")
 
     print(
         f"zeta850               : "
@@ -1197,25 +1073,15 @@ def main():
         round(actual_seconds),
     ):
 
-        time_string = (
-            f"{int(round(actual_seconds)):06d}s"
-        )
+        time_string = f"{int(round(actual_seconds)):06d}s"
 
     else:
 
-        time_string = (
-            f"{actual_seconds:.3f}"
-            .replace(".", "p")
-            + "s"
-        )
+        time_string = f"{actual_seconds:.3f}".replace(".", "p") + "s"
 
-    png_file = (
-        f"{OUTPUT_PREFIX}_{time_string}.png"
-    )
+    png_file = f"{OUTPUT_PREFIX}_{time_string}.png"
 
-    pdf_file = (
-        f"{OUTPUT_PREFIX}_{time_string}.pdf"
-    )
+    pdf_file = f"{OUTPUT_PREFIX}_{time_string}.pdf"
 
     fig.savefig(
         png_file,
