@@ -32,6 +32,8 @@ from .dcmip import (
     dcmip_schar_waves,
     dcmip_steady_state_mountain,
     euler_from_era5,
+    dcmip_baroclinic_instability,
+    acoustic_wave,
 )
 from .shallow_water import (
     case_galewsky,
@@ -115,6 +117,8 @@ def initialize_euler(geom: CubedSphere3D, metric: Metric3DTopo, mtrx: DFROperato
         rho, u1_contra, u2_contra, w, potential_temperature = dcmip_schar_waves(geom, metric, mtrx, param, True)
     elif param.case_number == 31:
         rho, u1_contra, u2_contra, w, potential_temperature = dcmip_gravity_wave(geom, metric, mtrx, param)
+    elif param.case_number == 41:
+        rho, u1_contra, u2_contra, w, potential_temperature = dcmip_baroclinic_instability(geom, metric, mtrx, param)
     elif param.case_number == 77:
         rho, u1_contra, u2_contra, w, potential_temperature = acoustic_wave(geom, metric)
     else:

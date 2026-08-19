@@ -853,6 +853,474 @@ def dcmip_gravity_wave(geom: CubedSphere3D, metric: Metric3DTopo, mtrx: DFROpera
     return rho, u1_contra, u2_contra, u3_contra, theta
 
 
+# ==========================================================================================
+# TEST CASE 41 - Dry Baroclinic Instability
+# ==========================================================================================
+
+
+def dcmip_baroclinic_instability(
+    geom: CubedSphere3D,
+    metric: Metric3DTopo,
+    mtrx: DFROperators,
+    param: Configuration,
+):
+    """
+    DCMIP-2012 Test 4-1-x: Dry Baroclinic Instability.
+
+    The analytic initial condition is originally specified in the
+    pressure-based vertical coordinate
+
+        eta = p / ps,
+
+    with ps = p0 = 1000 hPa.
+
+    Since this model uses height as the vertical coordinate, eta is
+    obtained at each model point by solving
+
+        -g z + Phi(lon, lat, eta) = 0
+
+    with the Newton iteration prescribed in DCMIP Appendix F.5.
+
+    The basic state consists of two midlatitude zonal jets in balanced
+    hydrostatic/gradient-wind equilibrium. A localized 1 m/s zonal-wind
+    perturbation triggers the baroclinic instability.
+    """
+
+    # ------------------------------------------------------------------
+    # DCMIP constants
+    # ------------------------------------------------------------------
+
+    eta_tropo = 0.2
+    eta0 = 0.252
+
+    u0 = 35.0              # m/s
+    up = 1.0               # m/s
+
+    T0 = 288.0             # K
+    delta_T = 4.8e5        # K
+    gamma = 0.005          # K/m
+
+    lambdac = math.pi / 9.0        # 20 degrees E
+    phic = 2.0 * math.pi / 9.0     # 40 degrees N
+
+    eta_sfc = 1.0
+
+    # Use the model's physical/scaled constants.
+    # This is important for the small-planet versions 4-1-1,4-1-2 and 4-1-3:
+    #     a     = a_ref / X
+    #     Omega = Omega_ref * X
+    a = geom.earth_radius
+    omega = geom.rotation_speed
+
+    # p0 imported from common.definitions is assumed to be SI pressure
+    # (100000 Pa = 1000 hPa).
+    # Do NOT redefine p0 = 1000 here, since rho = p/(Rd*T) requires pressure in Pa.
+    p_ref = p0
+
+    exponent = Rd * gamma / gravity
+
+    # ==================================================================
+    # Horizontal-mean geopotential
+    # DCMIP equations (125)-(127)
+    # ==================================================================
+
+    def horiz_mean_geopotential(eta):
+        """
+        Horizontal-mean geopotential Phi_bar(eta).
+        """
+
+        phi_mean = (
+            T0
+            * gravity
+            / gamma
+            * (1.0 - eta**exponent)
+        )
+
+        # Eq. (127)
+        delta_phi = Rd * delta_T * (
+            (
+                torch.log(eta / eta_tropo)
+                + 137.0 / 60.0
+            )
+            * eta_tropo**5
+            - 5.0 * eta_tropo**4 * eta
+            + 5.0 * eta_tropo**3 * eta**2
+            - (10.0 / 3.0) * eta_tropo**2 * eta**3
+            + (5.0 / 4.0) * eta_tropo * eta**4
+            - (1.0 / 5.0) * eta**5
+        )
+
+        # Eq. (125) below tropopause in pressure coordinate,
+        # Eq. (126) above tropopause.
+        return torch.where(
+            eta < eta_tropo,
+            phi_mean - delta_phi,
+            phi_mean,
+        )
+
+    # ==================================================================
+    # Full 3-D geopotential
+    #
+    # DCMIP equation (124)
+    # ==================================================================
+
+    def geopotential(lon, lat, eta):
+        """
+        Full geopotential Phi(lon, lat, eta).
+
+        The DCMIP analytic expression has no explicit longitude
+        dependence, but lon is kept in the argument list for
+        consistency with the z -> eta inversion.
+        """
+
+        del lon  # longitude does not appear explicitly in Eq. (124)
+
+        eta_v = (eta - eta0) * 0.5 * math.pi
+
+        cos_eta = torch.cos(eta_v)
+
+        jet_factor = u0 * cos_eta**1.5
+
+        sin_lat = torch.sin(lat)
+        cos_lat = torch.cos(lat)
+
+        horizontal_1 = (
+            -2.0
+            * sin_lat**6
+            * (cos_lat**2 + 1.0 / 3.0)
+            + 10.0 / 63.0
+        )
+
+        horizontal_2 = (
+            (8.0 / 5.0)
+            * cos_lat**3
+            * (sin_lat**2 + 2.0 / 3.0)
+            - math.pi / 4.0
+        )
+
+        phi_deviation = jet_factor * (
+            horizontal_1 * jet_factor
+            + horizontal_2 * a * omega
+        )
+
+        return horiz_mean_geopotential(eta) + phi_deviation
+
+    # ==================================================================
+    # Temperature
+    # DCMIP equations (120)-(122)
+    # ==================================================================
+
+    def temperature(lon, lat, eta):
+        """
+        Return
+
+            T_total(lon,lat,eta), T_mean(eta)
+
+        where T_total is the temperature that must be used to
+        initialize rho and theta.
+        """
+
+        del lon  # Eq. (120) has no explicit longitude dependence
+
+        eta_v = (eta - eta0) * 0.5 * math.pi
+
+        sin_eta = torch.sin(eta_v)
+        cos_eta = torch.cos(eta_v)
+
+        sin_lat = torch.sin(lat)
+        cos_lat = torch.cos(lat)
+
+        horizontal_1 = (
+            -2.0
+            * sin_lat**6
+            * (cos_lat**2 + 1.0 / 3.0)
+            + 10.0 / 63.0
+        )
+
+        horizontal_2 = (
+            (8.0 / 5.0)
+            * cos_lat**3
+            * (sin_lat**2 + 2.0 / 3.0)
+            - math.pi / 4.0
+        )
+
+        # Eq. (120)
+        factor = eta * math.pi * u0 / Rd
+
+        t_deviation = (
+            0.75
+            * factor
+            * sin_eta
+            * cos_eta**0.5
+            * (
+                horizontal_1
+                * 2.0
+                * u0
+                * cos_eta**1.5
+                + horizontal_2 * a * omega
+            )
+        )
+
+        # Eq. (121)
+        t_lower = T0 * eta**exponent
+
+        # Eq. (122)
+        t_upper = (
+            T0 * eta**exponent
+            + delta_T * (eta_tropo - eta)**5
+        )
+
+        t_mean = torch.where(
+            eta < eta_tropo,
+            t_upper,
+            t_lower,
+        )
+
+        t_total = t_mean + t_deviation
+
+        return t_total, t_mean
+
+    # ==================================================================
+    # Surface geopotential / lower boundary
+    # DCMIP equation (128)
+    # ==================================================================
+    # This test DOES NOT have a flat lower boundary. Phi_s is obtained by evaluating Eq. (124) at eta = 1:
+    #     z_s = Phi_s / g
+    # The surface geopotential is necessary to balance the non-zero zonal wind at the surface.
+    # ==================================================================
+
+    def surface_height(latlon):
+        """
+        Surface elevation z_s = Phi_s / g.
+        """
+
+        lon_s = latlon[0]
+        lat_s = latlon[1]
+
+        eta_surface = torch.ones_like(lat_s) * eta_sfc
+
+        phi_surface = geopotential(
+            lon_s,
+            lat_s,
+            eta_surface,
+        )
+
+        return phi_surface / gravity
+
+    # ------------------------------------------------------------------
+    # Evaluate the surface elevation on every geometry representation.
+    # ------------------------------------------------------------------
+
+    zbot_new = surface_height(
+        geom.get_floor(geom.polar)
+    )
+
+    zbot_itf_i_new = surface_height(
+        geom.get_itf_i_floor(geom.polar_itf_i)
+    )
+
+    zbot_itf_j_new = surface_height(
+        geom.get_itf_j_floor(geom.polar_itf_j)
+    )
+
+    zbot = surface_height(
+        geom.coordVec_latlon[:, 0]
+    )
+
+    zbot_itf_i = surface_height(
+        geom.coordVec_latlon_itf_i[:, 0]
+    )
+
+    zbot_itf_j = surface_height(
+        geom.coordVec_latlon_itf_j[:, 0]
+    )
+
+    # There is no separate small-scale topographic component here.
+    # Treat the whole balanced surface geopotential as the large-scale
+    # surface when SLEVE-type coordinates are used.
+    
+    geom.apply_topography(
+        zbot,
+        zbot_itf_i,
+        zbot_itf_j,
+        zbot_new,
+        zbot_itf_i_new,
+        zbot_itf_j_new,
+    )
+
+    # IMPORTANT: The metric and physical heights must be rebuilt BEFORE solving z -> eta.
+    metric.build_metric()
+
+    # ------------------------------------------------------------------
+    # Coordinates in the element-wise layout used by the state vector
+    # ------------------------------------------------------------------
+
+    lon = geom.lon_new
+    lat = geom.lat_new
+    z = geom.height_new
+
+    # ==================================================================
+    # Convert height z -> eta
+    # DCMIP Appendix F.5, equations (245)-(247)
+    # ==================================================================
+
+    def eta_from_z(lon, lat, z):
+        """
+        Vectorized Newton solution of
+
+            F(eta) = -g*z + Phi(lon,lat,eta) = 0.
+
+        DCMIP specifies eta_0 = 1e-7 for every grid point.
+        """
+
+        eta_val = torch.full_like(
+            z,
+            1.0e-7,
+        )
+
+        convergence = 1.0e-14
+        max_iterations = 26
+
+        converged = False
+
+        for _ in range(max_iterations):
+
+            phi = geopotential(
+                lon,
+                lat,
+                eta_val,
+            )
+
+            temp, _ = temperature(
+                lon,
+                lat,
+                eta_val,
+            )
+
+            # Eq. (246)
+            f = -gravity * z + phi
+
+            # Eq. (247)
+            df = -(Rd / eta_val) * temp
+
+            # Eq. (245)
+            eta_new = eta_val - f / df
+
+            error = torch.max(
+                torch.abs(eta_new - eta_val)
+            )
+
+            eta_val = eta_new
+
+            if error.item() <= convergence:
+                converged = True
+                break
+
+        if not converged:
+            raise ValueError(
+                "DCMIP 4-1: z -> eta Newton iteration did not converge. "
+                f"Maximum |delta eta| = {error.item():.6e}"
+            )
+
+        return eta_val
+
+    eta = eta_from_z(
+        lon,
+        lat,
+        z,
+    )
+
+    # ==================================================================
+    # Velocity
+    # DCMIP equations (117)-(119)
+    # ==================================================================
+
+    sin_tmp = math.sin(phic) * torch.sin(lat)
+    cos_tmp = math.cos(phic) * torch.cos(lat)
+
+    # Great-circle angular distance.
+    # DCMIP:
+    #     r_phys = a * acos(...)
+    #     R      = a / 10
+    # Therefore:
+    #     (r_phys/R)^2 = (10*r_angle)^2
+    #
+    acos_arg = (
+        sin_tmp
+        + cos_tmp * torch.cos(lon - lambdac)
+    )
+
+    acos_arg = torch.clamp(
+        acos_arg,
+        -1.0,
+        1.0,
+    )
+
+    r_angle = torch.arccos(acos_arg)
+
+    # Localized perturbation in Eq. (117)
+    u_perturb = up * torch.exp(
+        -(10.0 * r_angle) ** 2
+    )
+
+    # Basic zonal jet
+    eta_v = (
+        eta - eta0
+    ) * 0.5 * math.pi
+
+    u_wind = (
+        u0
+        * torch.cos(eta_v) ** 1.5
+        * torch.sin(2.0 * lat) ** 2
+    )
+
+    u = u_wind + u_perturb
+
+    # Eq. (118)
+    v = torch.zeros_like(u)
+    w = torch.zeros_like(u)
+
+    # Convert physical zonal/meridional/vertical winds to the
+    # contravariant velocity components used by the state vector.
+    u1_contra, u2_contra, u3_contra = geom.wind2contra(
+        u,
+        v,
+        w,
+        metric,
+    )
+
+    # ==================================================================
+    # Thermodynamic state
+    # ==================================================================
+
+    # DCMIP:
+    #     p = eta * p0
+    # p_ref is in Pa, so p is also in Pa.
+    p = p_ref * eta
+
+    T, _ = temperature(
+        lon,
+        lat,
+        eta,
+    )
+
+    # Eq. (123) / Appendix F.5 Eq. (249)
+    rho = p / (Rd * T)
+
+    # Appendix F.5 Eq. (250)
+    theta = T * (
+        p_ref / p
+    ) ** (Rd / cpd)
+
+    return (
+        rho,
+        u1_contra,
+        u2_contra,
+        u3_contra,
+        theta,
+    )
+
+
 # =========================================================================
 # Test 77:  Acoustic Wave
 # =========================================================================
