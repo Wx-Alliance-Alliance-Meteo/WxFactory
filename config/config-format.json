@@ -282,6 +282,16 @@
                     "default": 1
                 },
                 {
+                    "name": "riemann_solver",
+                    "type": "str",
+                    "default": "rusanov",
+                    "selectables": [
+                        "rusanov",
+                        "ausm_plus_up"
+                    ],
+                    "description": "Riemann solver used for the 3-D Euler interface flux."
+                },
+                {
                     "name": "numer_christoffel",
                     "type": "bool",
                     "default": true,

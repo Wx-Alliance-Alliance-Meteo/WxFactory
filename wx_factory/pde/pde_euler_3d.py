@@ -6,7 +6,7 @@ from ..common import Configuration
 from ..common.definitions import Rd, cpd, cvd, idx_rho, idx_rho_theta, idx_rho_u1, idx_rho_u2, idx_rho_u3, p0
 from ..geometry import CubedSphere3D, Metric3DTopo
 from ..init.dcmip import dcmip_schar_damping
-from .fluxes import outward_faces, rusanov_3d
+from .fluxes import ausm_plus_up_3d, outward_faces, rusanov_3d
 from .pde import PDE
 
 
@@ -103,6 +103,7 @@ class PDEEuler3D(PDE):
         self.case_number = config.case_number
         # DCMIP transport configurations prescribe the wind and freeze Euler dynamics.
         self.advection_only = bool(config.advection_only)
+        self.riemann_solver = config.riemann_solver
 
     def pointwise_fluxes(
         self,
@@ -184,8 +185,15 @@ class PDEEuler3D(PDE):
                 if direction == 2:
                     w_itf_x3[face] = 0.0
 
+        if self.riemann_solver == "rusanov":
+            riemann_solver = rusanov_3d
+        elif self.riemann_solver == "ausm_plus_up":
+            riemann_solver = ausm_plus_up_3d
+        else:
+            raise ValueError(f"Unknown Riemann solver '{self.riemann_solver}'")
+
         for direction in range(3):
-            rusanov_3d(
+            riemann_solver(
                 direction,
                 velocity_itf[direction],
                 q_itf[direction],
