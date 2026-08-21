@@ -101,8 +101,9 @@ class PDEEuler3D(PDE):
         self.num_solpts = geometry.num_solpts
 
         self.case_number = config.case_number
-        # DCMIP transport configurations prescribe the wind and freeze Euler dynamics.
-        self.advection_only = bool(config.advection_only)
+        # DCMIP 1-1, 1-2 and 1-3 prescribe the wind and transport passive tracers.
+        # Restrict this override for those cases
+        self.advection_only = bool(config.advection_only) or config.case_number in (11, 12, 13)
         self.riemann_solver = config.riemann_solver
 
     def pointwise_fluxes(
