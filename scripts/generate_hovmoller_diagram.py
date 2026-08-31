@@ -164,11 +164,9 @@ def main(args):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="""Plot the potential temperature perturbation with a fixed latitude
+    parser = argparse.ArgumentParser(description="""Plot the potential temperature perturbation with a fixed latitude
     Call with "python PATH_TO_SCRIPT_DIR/generate_hovmoller_diagram.py PATH_TO_DATA.nc"
-    """
-    )
+    """)
 
     parser.add_argument("data_file", help="Path to the output file")
 
