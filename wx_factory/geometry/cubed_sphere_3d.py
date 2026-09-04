@@ -1089,6 +1089,32 @@ class CubedSphere3D(CubedSphere):
 
         return new
 
+    def to_old_floor(self, a: Tensor) -> Tensor:
+        """Convert floor array from new to old layout"""
+        if a.shape[-3:] != self.floor_shape:
+            raise ValueError(f"Unhandled shape {a.shape}, expected ... + {self.floor_shape}")
+
+        tmp_shape1 = a.shape[:-3] + (self.num_elements_x2, self.num_elements_x1, self.num_solpts, self.num_solpts)
+        end_shape = a.shape[:-3] + self.grid_shape_2d
+
+        return torch.swapaxes(a.reshape(tmp_shape1), -3, -2).reshape(end_shape)
+
+    def to_old_itf_i_floor(self, a: Tensor) -> Tensor:
+        """Convert itf-i array from new to old layout"""
+        if a.shape[-3:] != self.itf_i_floor_shape:
+            raise ValueError(f"Unhandled shape {a.shape}, expected ... + {self.itf_i_floor_shape}")
+
+        tmp_array = torch.moveaxis(a[..., 1:, : self.num_solpts], -1, -2)
+        return tmp_array.reshape(a.shape[:-3] + self.itf_i_shape_3d[1:])
+
+    def to_old_itf_j_floor(self, a: Tensor) -> Tensor:
+        """Convert itf-j array from new to old layout"""
+        if a.shape[-3:] != self.itf_j_floor_shape:
+            raise ValueError(f"Unhandled shape {a.shape}, expected ... + {self.itf_j_floor_shape}")
+
+        tmp_array = a[..., 1:, :, : self.num_solpts]
+        return tmp_array.reshape(a.shape[:-3] + self.itf_j_shape_3d[1:])
+
     def wind2contra_2d(self, u: float | Tensor, v: float | Tensor):
         """Convert wind fields from the spherical basis (zonal, meridional) to panel-appropriate contravariant winds,
         in two dimensions

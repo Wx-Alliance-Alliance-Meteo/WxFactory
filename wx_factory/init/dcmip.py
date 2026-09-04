@@ -7,7 +7,7 @@ from torch import Tensor
 from ..common.configuration import Configuration
 from ..common.definitions import Rd, cpd, gravity, p0
 from ..geometry import CubedSphere3D, DFROperators, Metric3DTopo
-from ..output.input_manager import extract_available_levels
+from ..output.input_manager import InputManager, extract_available_levels
 from .vertical_interpolation import vertical_interp
 
 # =======================================================================
@@ -729,7 +729,7 @@ def dcmip_schar_damping(
        the required Rayleigh damping.  This variable is in flux form (ρu1, ρu2, etc), so this
        function will calculate the required momentum fluxes.
     rho, u1, u2, u3 : Tensor
-       Input variables at the current timestemp
+       Input variables at the current timestep
     metric : Metric3DTopo
        3D metric, used to convert velocities between contravariant and geophysical winds
     geom : CubedSphere3D
@@ -1324,25 +1324,62 @@ def acoustic_wave(geom: CubedSphere3D, metric: Metric3DTopo):
     return rho, u1_contra, u2_contra, w, theta
 
 
-def euler_from_era5(geom: CubedSphere3D, metric: Metric3DTopo, filename: str, time: str):
+def euler_from_era5(geom: CubedSphere3D, metric: Metric3DTopo, filename: str, topography_filename: str, time: str):
+    """Initialize the Euler state from an ERA5 zarr dataset.
 
+    Reads geopotential, wind (u, v, w) and temperature at all available pressure
+    levels, interpolates them onto the cubed-sphere grid (horizontally, then
+    vertically to the model levels), and derives the state variables: density,
+    potential temperature and the contravariant wind components. The surface
+    topography is read from a separate file, extrapolated to the interface
+    points and applied to the geometry.
+
+    Parameters:
+    -----------
+    geom : CubedSphere3D
+        Geometry object, also used for the horizontal/vertical interpolation and
+        the velocity conversion
+    metric : Metric3DTopo
+        3D metric, used to convert velocities between contravariant and
+        geophysical winds
+    filename : str
+        Path to the ERA5 zarr store (a single year's directory)
+    topography_filename : str
+        Path to the surface topography file
+    time : str
+        Time to select. A bare date (e.g. "2020-07-01") selects the first
+        timestep of that day; a full timestamp (e.g. "2020-07-01T12:00:00")
+        selects a single timestep.
+
+    Returns:
+    --------
+    rho, u1, u2, u3, theta : Tensor
+        Density, contravariant wind components and potential temperature on the
+        cubed-sphere grid
+    """
     metric.build_metric()
 
-    ds = xr.open_zarr(filename, consolidated=True).isel(time=[0])
-    feature_map = {str(f): i for i, f in enumerate(ds["features"].values)}
+    ds = xr.open_zarr(filename, consolidated=True)
     levels = extract_available_levels(ds)
     levels.reverse()
 
-    def get_feature_ids(name: str):
-        "For a given feature base name, get the list of all level IDs for that feature"
-        return [feature_map[f"{name}_h{l}"] for l in levels]
+    def get_feature_names(name: str):
+        "For a given feature base name, get the list of feature names for all available levels"
+        return [f"{name}_h{l}" for l in levels]
 
-    # Get raw ERA5 data
-    geo_era = ds["data"].isel(features=get_feature_ids("geopotential"))
-    u_wind_era = ds["data"].isel(features=get_feature_ids("u_component_of_wind"))
-    v_wind_era = ds["data"].isel(features=get_feature_ids("v_component_of_wind"))
-    w_wind_era = ds["data"].isel(features=get_feature_ids("vertical_velocity"))
-    temp_era = ds["data"].isel(features=get_feature_ids("temperature"))
+    # Select the requested time.
+    # When a single timestep is selected xarray drops 'time' from the dimensions, so
+    # guard the size lookup.
+    data = ds["data"].sel(time=time)
+    if data.sizes.get("time", 1) > 1:
+        data = data.isel(time=0)
+
+    # Get raw ERA5 data, selecting features by name (order follows 'levels')
+    geo_era = data.sel(features=get_feature_names("geopotential"))
+    u_wind_era = data.sel(features=get_feature_names("u_component_of_wind"))
+    v_wind_era = data.sel(features=get_feature_names("v_component_of_wind"))
+    w_wind_era = data.sel(features=get_feature_names("vertical_velocity"))
+    temp_era = data.sel(features=get_feature_names("temperature"))
 
     target_lon = geom.context.to_host(geom.lon * 180 / math.pi).reshape(-1)
     target_lat = geom.context.to_host(geom.lat * 180 / math.pi).reshape(-1)
@@ -1377,5 +1414,60 @@ def euler_from_era5(geom: CubedSphere3D, metric: Metric3DTopo, filename: str, ti
     rho = p / (Rd * temp_cs)
     theta = temp_cs * (p0 / p) ** (Rd / cpd)
     u1, u2, u3 = geom.wind2contra(u_wind_cs, v_wind_cs, w_wind_cs, metric)
+
+    h_surface = InputManager.read_mountain(topography_filename, geom)
+
+    # Extrapolate surface height to interface points
+    num_solpts = geom.num_solpts
+    num_elem = geom.num_elements_horizontal
+    h_surface_itf_i = torch.zeros(geom.itf_i_floor_shape, dtype=h_surface.dtype)
+    h_surface_itf_j = torch.zeros(geom.itf_j_floor_shape, dtype=h_surface.dtype)
+
+    # Easier shape to work with
+    h_split = h_surface.reshape(h_surface.shape[:-1] + (num_solpts, num_solpts))
+    # print(f"itf shapes: {h_split.shape}, {h_surface_itf_i.shape}, {h_surface_itf_j.shape}", flush=True)
+
+    h_south = h_split[..., 0, :]
+    h_north = h_split[..., -1, :]
+    h_west = h_split[..., :, 0]
+    h_east = h_split[..., :, -1]
+
+    # Start transferring borders
+    transfer = geom.process_topology.start_exchange_scalars(
+        h_south[..., 0, :, :],
+        h_north[..., -1, :, :],
+        h_west[..., 0, :],
+        h_east[..., -1, :],
+        boundary_shape=(num_elem, num_solpts),
+    )
+
+    # Compute upper boundary (north, east)
+    # We just take the average
+    h_surface_itf_i[..., :, 1:-2, num_solpts:] = (h_west[..., :, 1:, :] + h_east[..., :, :-1, :]) * 0.5
+    h_surface_itf_j[..., 1:-2, :, num_solpts:] = (h_south[..., 1:, :, :] + h_north[..., :-1, :, :]) * 0.5
+
+    # Receive borders from neighbors
+    h_s, h_n, h_w, h_e = transfer.wait()
+
+    # Tile borders
+    h_surface_itf_i[..., :, 0, num_solpts:] = (h_w + h_west[..., 0, :]) * 0.5
+    h_surface_itf_i[..., :, -2, num_solpts:] = (h_east[..., -1, :] + h_e) * 0.5
+    h_surface_itf_j[..., 0, :, num_solpts:] = (h_s + h_south[..., 0, :, :]) * 0.5
+    h_surface_itf_j[..., -2, :, num_solpts:] = (h_north[..., -1, :, :] + h_n) * 0.5
+
+    # Copy to lower boundary (south, west)
+    h_surface_itf_i[..., :, 1:, :num_solpts] = h_surface_itf_i[..., :, :-1, num_solpts:]
+    h_surface_itf_j[..., 1:, :, :num_solpts] = h_surface_itf_j[..., :-1, :, num_solpts:]
+
+    # The first three arguments of apply_topography are the old (block) layout, so convert the
+    # new-layout fields above; the last three are already in the element-wise ("new") layout.
+    geom.apply_topography(
+        geom.to_old_floor(h_surface),
+        geom.to_old_itf_i_floor(h_surface_itf_i),
+        geom.to_old_itf_j_floor(h_surface_itf_j),
+        h_surface,
+        h_surface_itf_i,
+        h_surface_itf_j,
+    )
 
     return rho, u1, u2, u3, theta

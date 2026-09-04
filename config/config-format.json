@@ -64,17 +64,18 @@
                 },
                 {
                     "name": "topography_file",
-                    "type": "str",
+                    "type": "case-sensitive-str",
                     "dependency": {
                         "name": "case_number",
                         "values": [
+                            -2,
                             -1
                         ]
                     }
                 },
                 {
                     "name": "initial_conditions",
-                    "type": "str",
+                    "type": "case-sensitive-str",
                     "dependency": {
                         "name": "case_number",
                         "values": [

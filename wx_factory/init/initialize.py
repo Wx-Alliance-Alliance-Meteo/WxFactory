@@ -94,7 +94,7 @@ def initialize_euler(geom: CubedSphere3D, metric: Metric3DTopo, mtrx: DFROperato
 
     if param.case_number < 0 and param.initial_conditions != "":
         rho, u1_contra, u2_contra, w, potential_temperature = euler_from_era5(
-            geom, metric, param.initial_conditions, param.time_start
+            geom, metric, param.initial_conditions, param.topography_file, param.time_start
         )
     elif param.case_number == 11:
         num_equations = 9

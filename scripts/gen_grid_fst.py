@@ -48,40 +48,50 @@ def main(args):
     all_lats = all_lats_t.to(torch.float32).cpu().numpy() if all_lats_t is not None else None
     all_lons = all_lons_t.to(torch.float32).cpu().numpy() if all_lons_t is not None else None
 
-    def make_rec(data, ig, name="", etiket=""):
+    def make_rec(data, ip=0, name="", etiket=""):
         return fst_record(
             data_bits=32,
             pack_bits=32,
-            data_type=FstDataType.FST_TYPE_REAL_TURBOPACK,
+            data_type=FstDataType.FST_TYPE_REAL,
             data=data,
             dateo=0,
             datev=0,
             deet=0,
             npas=0,
-            ni=data.shape[0],
-            nj=data.shape[1],
+            ni=data.size,
+            nj=1,
             nk=1,
-            ip1=0,
-            ip2=0,
-            ip3=0,
-            ig1=ig,
+            ip1=ip,
+            ip2=ip,
+            ip3=ip,
+            ig1=900,
             ig2=0,
-            ig3=0,
+            ig3=14400,
             ig4=0,
             nomvar=name[:4],
             etiket=etiket[:12],
             typvar="X",
-            grtyp="Q",
+            grtyp="E",
         )
 
-    with SingleProcess() as s, Conditional(s), fst24_file(args.output_file, "R/W+XDF") as f:
+    split_name = args.output_file.strip().split(".")
+    base_name = split_name[0]
+    suffix = "" if len(split_name) < 2 else split_name[1]
+
+    filenames = [f"{base_name}_{i}" + f".{suffix}" if suffix != "" else "" for i in range(6)]
+
+    with SingleProcess() as s, Conditional(s):
         if all_lats is None or all_lons is None:
             raise ValueError("Process does not have lon/lat")
         for i in range(6):
-            f.write(make_rec(numpy.asfortranarray(all_lons[i].T), i, name=">>", etiket=f"PANEL{i}"), False)
-            f.write(make_rec(numpy.asfortranarray(all_lats[i].T), i, name="^^", etiket=f"PANEL{i}"), False)
+            with fst24_file(filenames[i], "R/W+XDF") as f:
+                f.write(make_rec(all_lons[i].T, ip=i, name=">>", etiket=f"PANEL{i}"), False)
+                rec = make_rec(all_lats[i].T, ip=i, name="^^", etiket=f"PANEL{i}")
+                rec.nj = rec.ni
+                rec.ni = 1
+                f.write(rec, False)
 
-    with SingleProcess() as s, Conditional(s), fst24_file(args.output_file, "R/O") as f:
+    with SingleProcess() as s, Conditional(s), fst24_file(filenames, "R/O") as f:
         numpy.set_printoptions(linewidth=160, precision=3)
         for rec in f.new_query():
             a = all_lons if rec.nomvar == ">>" else all_lats
@@ -91,12 +101,12 @@ def main(args):
             #     f"rec flags: \n{rec.data.flags}",
             #     flush=True,
             # )
-            diff = a[rec.ig1] - rec.data.T
+            diff = numpy.ravel(a[rec.ip1]) - numpy.ravel(rec.data)
             diff_norm = numpy.linalg.norm(diff)
             if diff_norm > 0.0:
                 print(
-                    f"Diff = {diff_norm:.2e}\n"  # nofmt
-                    f"ref = \n{a[rec.ig1]}\n"
+                    f"Diff {rec.nomvar}/{rec.etiket} = {diff_norm:.2e}\n"  # nofmt
+                    f"ref = \n{a[rec.ip1]}\n"
                     f"got \n{rec.data}\n"
                     f"diff: \n{diff}",
                     flush=True,

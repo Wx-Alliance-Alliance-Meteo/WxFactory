@@ -4,6 +4,7 @@ from . import angle24, config_hints
 from .configuration import Configuration
 from .configuration_schema import ConfigurationSchema, ConfigValueError, default_schema_path, load_default_schema
 from .grid_encoding import decode_ig4, make_ig4
+from .missing_module import MissingModule
 from .readfile import readfile
 
 main_project_dir = os.path.realpath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -14,6 +15,7 @@ __all__ = [
     "ConfigValueError",
     "Configuration",
     "ConfigurationSchema",
+    "MissingModule",
     "angle24",
     "config_hints",
     "decode_ig4",
