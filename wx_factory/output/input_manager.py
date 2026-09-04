@@ -133,7 +133,7 @@ class InputManager:
                     geometry.lambda0,
                     geometry.phi0,
                     geometry.alpha0,
-                    geometry.num_elements_horizontal,
+                    geometry.total_num_elements_horizontal,
                     geometry.num_solpts,
                 )
                 field_tmp = mountain_ref.interpolate(mountain_rec.data, cs_ref)
