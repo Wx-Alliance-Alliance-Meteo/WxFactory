@@ -138,6 +138,7 @@ class Configuration:
     precision: str
     preconditioner: str
     pytorch_device: str
+    riemann_solver: str
     save_state_freq: int
     schar_mountain_height: float
     schar_mountain_lattitude: float
