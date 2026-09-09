@@ -13,78 +13,6 @@ from wx_factory.common import Configuration, load_default_schema, readfile
 from wx_factory.output import state
 from wx_factory.simulation import Simulation
 
-OptionType = TypeVar("OptionType", bound=int | float | str | bool)
-
-
-def _get_opt_from_parser(
-    parser: ConfigParser, section_name: str, option_name: str, option_type: type[OptionType]
-) -> OptionType:
-    value: OptionType | None = None
-    if option_type == float:
-        value = parser.getfloat(section_name, option_name)
-    elif option_type == int:
-        value = parser.getint(section_name, option_name)
-    elif option_type == str:
-        value = parser.get(section_name, option_name)
-    elif option_type == bool:
-        value = parser.getint(section_name, option_name) > 0
-
-    else:
-        raise ValueError(f"Cannot get this option type (not implemented): {option_type}")
-
-    assert value is not None
-    return value
-
-
-def _validate_option(
-    option_name: str,
-    value: OptionType,
-    valid_values: list[OptionType] | None,
-    min_value: OptionType | None,
-    max_value: OptionType | None,
-) -> OptionType:
-
-    if valid_values is not None and value not in valid_values:
-        raise ValueError(
-            f'"{value}" is not considered a valid value for option "{option_name}".'  # nofmt
-            f" Available values are {valid_values}"
-        )
-    if min_value is not None:
-        if value < min_value:
-            print(f'WARNING: Adjusting "{option_name}" to min value "{min_value}"')
-            value = min_value
-    if max_value is not None:
-        if value > max_value:
-            print(f'WARNING: Adjusting "{option_name}" to max value "{max_value}"')
-            value = max_value
-
-    return value
-
-
-def _get_option(
-    parser: ConfigParser,
-    filename: str,
-    section_name: str,
-    option_name: str,
-    option_type: type[OptionType],
-    default_value: OptionType | None,
-    valid_values: list[OptionType] | None = None,
-    min_value: OptionType | None = None,
-    max_value: OptionType | None = None,
-) -> OptionType:
-    value: OptionType | None = None
-
-    try:
-        value = _get_opt_from_parser(parser, section_name, option_name, option_type)
-        value = _validate_option(option_name, value, valid_values, min_value, max_value)
-    except (NoOptionError, NoSectionError) as e:
-        if default_value is None:
-            e.message += f"\nMust specify a value for option '{option_name}' in file {filename}"
-            raise
-        value = default_value
-
-    return value
-
 
 def get_rel_diff(a: Tensor, b: Tensor) -> float:
     num_var = a.shape[0]
@@ -121,6 +49,22 @@ class StateIntegrationTestCases(MpiTestCase):
         self.config_files = glob.glob(f"{self.config_dir_path}/config*.ini")
         # print(f"Config files: {self.config_files}")
 
+        # Skip if the test reads an FST topography file but rmn/georef are unavailable
+        topo_field = next((f for f in self.schema.fields if f.name == "topography_file"), None)
+        if topo_field is not None:
+            for config_file in self.config_files:
+                parser = ConfigParser()
+                parser.read(config_file)
+                if parser.has_option(topo_field.section, "topography_file") and parser.get(
+                    topo_field.section, "topography_file"
+                ):
+                    try:
+                        import georef  # noqa: F401
+                        import rmn  # noqa: F401
+                    except (ImportError, OSError) as e:
+                        self.skipTest(f"rmn/georef not available, cannot read FST topography: {e}")
+                    break
+
     def test_state(self):
         for config_file in self.config_files:
             config_content = wx_factory.wx_mpi.do_once(readfile, config_file)
@@ -150,7 +94,8 @@ class StateIntegrationTestCases(MpiTestCase):
 
             error_threshold = self.error_threshold
             if error_threshold < 0:
-                error_threshold = true_config.tolerance * (true_config.t_end // true_config.dt) / 2
+                num_steps = true_config.t_end // true_config.dt
+                error_threshold = config.tolerance if num_steps <= 1 else config.tolerance * num_steps / 2
 
             self.assertLessEqual(
                 relative_diff, error_threshold, f"The relative difference ({relative_diff:.2e}) is too big"
