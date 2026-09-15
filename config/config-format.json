@@ -288,7 +288,8 @@
                     "default": "rusanov",
                     "selectables": [
                         "rusanov",
-                        "ausm_plus_up"
+                        "ausm_plus_up",
+                        "ausm_simplified"
                     ],
                     "description": "Riemann solver used for the 3-D Euler interface flux."
                 },

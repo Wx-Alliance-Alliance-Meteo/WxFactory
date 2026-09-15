@@ -6,7 +6,7 @@ from ..common import Configuration
 from ..common.definitions import Rd, cpd, cvd, idx_rho, idx_rho_theta, idx_rho_u1, idx_rho_u2, idx_rho_u3, p0
 from ..geometry import CubedSphere3D, Metric3DTopo
 from ..init.dcmip import dcmip_schar_damping
-from .fluxes import ausm_plus_up_3d, outward_faces, rusanov_3d
+from .fluxes import ausm_plus_up_3d, outward_faces, rusanov_3d, simplified_ausm_3d
 from .pde import PDE
 
 
@@ -104,6 +104,7 @@ class PDEEuler3D(PDE):
         # DCMIP 1-1, 1-2 and 1-3 prescribe the wind and transport passive tracers.
         # Restrict this override for those cases
         self.advection_only = bool(config.advection_only) or config.case_number in (11, 12, 13)
+
         self.riemann_solver = config.riemann_solver
 
     def pointwise_fluxes(
@@ -125,7 +126,11 @@ class PDEEuler3D(PDE):
         flux_x3[...] = self.metric.sqrtG_new * w * q
 
         # Pressure contribution.
-        pressure[...] = p0 * torch.exp((cpd / cvd) * torch.log((Rd / p0) * q[idx_rho_theta]))
+        if self.case_number == 651:
+            # Zero-gravity case: p = rho * R * T, with q[..., idx_rho_theta] = rho * T.
+            pressure[...] = Rd * q[idx_rho_theta]
+        else:
+            pressure[...] = p0 * torch.exp((cpd / cvd) * torch.log((Rd / p0) * q[idx_rho_theta]))
 
         # Reuse sqrt(G) p for all momentum fluxes.
         sqrtG_pressure = self.metric.sqrtG_new * pressure
@@ -177,7 +182,10 @@ class PDEEuler3D(PDE):
         w_itf_x3[wall_top] = -w_itf_x3[last_element]
 
         for pressure, q in zip(pressure_itf, q_itf):
-            pressure[...] = p0 * torch.exp((cpd / cvd) * torch.log(q[idx_rho_theta] * (Rd / p0)))
+            if self.case_number == 651:
+                pressure[...] = Rd * q[idx_rho_theta]
+            else:
+                pressure[...] = p0 * torch.exp((cpd / cvd) * torch.log(q[idx_rho_theta] * (Rd / p0)))
 
         # Clear unused outer halo faces.
         for direction in range(3):
@@ -190,6 +198,8 @@ class PDEEuler3D(PDE):
             riemann_solver = rusanov_3d
         elif self.riemann_solver == "ausm_plus_up":
             riemann_solver = ausm_plus_up_3d
+        elif self.riemann_solver == "ausm_simplified":
+            riemann_solver = simplified_ausm_3d
         else:
             raise ValueError(f"Unknown Riemann solver '{self.riemann_solver}'")
 

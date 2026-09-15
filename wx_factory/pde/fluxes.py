@@ -1,5 +1,4 @@
-"""Riemann solver for the interface fluxes of the 3D Euler equations."""
-
+"""Riemann solvers for the interface fluxes of the 3D Euler equations."""
 import torch
 from numpy.typing import NDArray
 
@@ -9,6 +8,7 @@ from ..common.definitions import (
     idx_rho_u1,
     idx_rho_u2,
     idx_rho_u3,
+    idx_rho_theta,
 )
 from ..geometry import Metric3DTopo
 
@@ -76,7 +76,6 @@ def rusanov_3d(
     # Advective flux.
     flux_l = sqrtG[left] * u_l * variables_itf[left]
     flux_r = sqrtG[right] * u_r * variables_itf[right]
-
     # Pressure acts only on momentum rows.
     sqrtG_pressure_l = sqrtG[left] * pressure_itf[left]
     sqrtG_pressure_r = sqrtG[right] * pressure_itf[right]
@@ -87,6 +86,11 @@ def rusanov_3d(
     # Store the same common flux on both traces.
     flux_itf[left] = 0.5 * (flux_l + flux_r - eig * sqrtG[left] * (variables_itf[right] - variables_itf[left]))
     flux_itf[right] = flux_itf[left]
+
+    print_fluxes = False
+    if print_fluxes == True: 
+        print("Rusanov flux_itf[left]:", flux_itf[left].min().item(), flux_itf[left].max().item())
+        print("Rusanov flux_itf[right]:", flux_itf[right].min().item(), flux_itf[right].max().item())
     
     
 def ausm_plus_up_3d(
@@ -141,7 +145,6 @@ def ausm_plus_up_3d(
 
     M_bar_sq = 0.5 * (M_l**2 + M_r**2)
     M_bar = torch.sqrt(torch.clamp(M_bar_sq, min=0.0))
-
     M_0_p = torch.minimum(torch.ones_like(M_bar), torch.maximum(M_bar, torch.full_like(M_bar, M_INF_P)))
     fa_p = M_0_p * (2.0 - M_0_p)
 
@@ -193,3 +196,123 @@ def ausm_plus_up_3d(
 
     # Same interface flux on both sides.
     flux_itf[right] = flux_itf[left]
+
+    print_fluxes = False
+    if print_fluxes == True: 
+        print("ASUM+ flux_itf[left]:", flux_itf[left].min().item(), flux_itf[left].max().item())
+        print("ASUM+ flux_itf[right]:", flux_itf[right].min().item(), flux_itf[right].max().item())
+
+
+def simplified_ausm_3d(
+    direction: int,
+    velocity_itf: NDArray,
+    variables_itf: NDArray,
+    pressure_itf: NDArray,
+    metric: Metric3DTopo,
+    advection_only: bool,
+    flux_itf: NDArray,
+    num_solpts: int,
+) -> None:
+    """Low-Mach_Number flux. Simplified AUSM scheme. Try to correct the O(M^2) order of physical pressure perturbations."""
+
+    if advection_only:
+            rusanov_3d(direction, velocity_itf, variables_itf, pressure_itf, metric, True, flux_itf, num_solpts)
+            return
+    
+    left, right = interface_slices(direction, num_solpts)
+
+    sqrtG = (metric.sqrtG_itf_i_new, metric.sqrtG_itf_j_new, metric.sqrtG_itf_k_new)[direction]
+    h_contra = (metric.h_contra_itf_i_new, metric.h_contra_itf_j_new, metric.h_contra_itf_k_new)[direction]
+
+
+    # Low-Mach cutoffs
+    M_INF_P = 0.1  # is this a bit too small? 
+    M_INF_U = 1.0e-12
+
+    rho_l = variables_itf[idx_rho][left]
+    rho_r = variables_itf[idx_rho][right]
+
+    # Velocity normal to the interface 
+    u_l = velocity_itf[left]
+    u_r = velocity_itf[right]
+
+    # Velocity components not perpendicular to the interface
+    u1_l = variables_itf[idx_rho_u1][left]/rho_l
+    u1_r = variables_itf[idx_rho_u1][right]/rho_r
+    u2_l = variables_itf[idx_rho_u2][left]/rho_l
+    u2_r = variables_itf[idx_rho_u2][right]/rho_r
+    u3_l = variables_itf[idx_rho_u3][left]/rho_l
+    u3_r = variables_itf[idx_rho_u3][right]/rho_r
+
+    p_l = pressure_itf[left]
+    p_r = pressure_itf[right]
+
+    theta_l = variables_itf[idx_rho_theta][left]/rho_l
+    theta_r = variables_itf[idx_rho_theta][right]/rho_r
+    
+    # Sound spped in the same unit as the speed of the wave 
+    a_l = torch.sqrt(h_contra[direction, direction][left] * heat_capacity_ratio * p_l / torch.clamp(rho_l, min=1.0e-12))
+    a_r = torch.sqrt(h_contra[direction, direction][right] * heat_capacity_ratio * p_r / torch.clamp(rho_r, min=1.0e-12))
+
+    # Evaluate the Mach cutoff pointwise on the scalar normal-speed traces.
+    M_half = torch.maximum(
+        torch.abs(u_l) / torch.clamp(a_l, min=1.0e-14),
+        torch.abs(u_r) / torch.clamp(a_r, min=1.0e-14),
+    )
+ 
+    THETA_P = torch.minimum(torch.ones_like(M_half), torch.maximum(torch.full_like(M_half, M_INF_P), M_half))
+    THETA_U = torch.minimum(torch.ones_like(M_half), torch.maximum(torch.full_like(M_half, M_INF_U), M_half))
+    p_bar = 0.5*(p_l+p_r)
+    a_bar = 0.5*(a_l+a_r)
+    # ============================================================
+    # Variables at the interface
+    # ============================================================
+    p_half  = 0.5 * (p_l + p_r) - 0.5 * p_bar * a_bar * THETA_U * (u_r - u_l)
+    # velocity perpendicular to the interface
+    u_half = 0.5 * (u_l + u_r) - 0.5/(THETA_P * p_bar * a_bar ) * (p_r - p_l)  
+    normal_speed = u_half
+
+    if direction == 0:
+        u1_half = u_half
+        u2_half = torch.where(normal_speed >= 0, u2_l, u2_r)
+        u3_half = torch.where(normal_speed >= 0, u3_l, u3_r)
+    elif direction == 1:
+        u1_half = torch.where(normal_speed >= 0, u1_l, u1_r)
+        u2_half = u_half
+        u3_half = torch.where(normal_speed >= 0, u3_l, u3_r)
+    elif direction == 2:
+        u1_half = torch.where(normal_speed >= 0, u1_l, u1_r)
+        u2_half = torch.where(normal_speed >= 0, u2_l, u2_r)
+        u3_half = u_half
+
+    rho_half = torch.where(normal_speed >= 0, rho_l, rho_r)
+    theta_half = torch.where(normal_speed >= 0, theta_l, theta_r)
+ 
+    # Reconstruct the half-state pointwise from the upwinded primitives.
+    variable_half = torch.empty_like(variables_itf[left])
+    variable_half[idx_rho] = rho_half
+    variable_half[idx_rho_u1] = rho_half * u1_half
+    variable_half[idx_rho_u2] = rho_half * u2_half
+    variable_half[idx_rho_u3] = rho_half * u3_half
+    variable_half[idx_rho_theta] = rho_half * theta_half
+
+    # ============================================================
+    # Numerical flux
+    # ============================================================
+    # Advective flux.
+    flux_itf[left] = sqrtG[left] * normal_speed * variable_half 
+
+    # Pressure acts only on momentum rows.
+    sqrtG_pressure_l = sqrtG[left] * p_half
+    #sqrtG_pressure_r = sqrtG[right] * p_half
+    for i, momentum_row in enumerate(MOMENTUM_ROWS):
+        flux_itf[left][momentum_row] += sqrtG_pressure_l * h_contra[direction, i][left]
+    
+    flux_itf[right] = flux_itf[left]
+
+    print_fluxes = False
+    if print_fluxes == True: 
+        print("Simplified ausm flux_itf[left]:", flux_itf[left].min().item(), flux_itf[left].max().item())
+        print("Simplified ausm flux_itf[right]:", flux_itf[right].min().item(), flux_itf[right].max().item())
+    
+
