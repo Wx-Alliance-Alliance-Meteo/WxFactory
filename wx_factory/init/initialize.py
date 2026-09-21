@@ -302,6 +302,67 @@ def initialize_cartesian3d(geom, param: Configuration) -> NDArray[numpy.float64]
         xc, zc, xr, zr = 0.0, 3000.0, 4000.0, 2000.0
         r = torch.sqrt(((x1 - xc) / xr) ** 2 + ((x3 - zc) / zr) ** 2)
         θ = θ + torch.where(r <= 1.0, -15.0 * (1.0 + torch.cos(torch.pi * r)) / 2.0, 0.0)
+    elif param.case_number == 666:
+        # hydrostatic equilibrium
+        T0      = 300.0                                      # temperature
+        H       = Rd * T0 / gravity                          # scale height
+        t = T0
+        pressure = p0 * torch.exp(-geom.X3 / H)
+        ρ = pressure / (Rd * t)
+        θ  = t * (p0 / pressure)**(Rd/cpd)
+    elif param.case_number == 651:
+        # Gresho Vortex
+        gamma = 1.4
+        Mmax = 0.1   # or 1.0e-2 if you want Mach 0.01
+        print(f"Mach number Mmax = {Mmax}")
+        # Center the vortex
+        xc, yc = 0.5, 0.5
+        x = geom.X1 - xc
+        y = geom.X3 - yc
+
+        r = torch.sqrt(x**2 + y**2)
+        phi = torch.atan2(y, x)
+
+        # Density
+        ρ = torch.ones_like(r)
+
+        # Tangential velocity profile
+        u_phi = torch.zeros_like(r)
+
+        m1 = r < 0.2
+        m2 = (r >= 0.2) & (r < 0.4)
+        m3 = r >= 0.4
+
+        u_phi[m1] = 5.0 * r[m1]
+        u_phi[m2] = 2.0 - 5.0 * r[m2]
+        u_phi[m3] = 0.0
+
+        # Cartesian velocities
+        uu = -u_phi * torch.sin(phi)
+        ww =  u_phi * torch.cos(phi)
+
+        # Background pressure chosen so that maximum Mach number is Mmax
+        p_base = 1.0 / (gamma * Mmax**2) - 0.5
+
+        # Pressure profile
+        p = torch.zeros_like(r)
+
+        p[m1] = p_base + 12.5 * r[m1]**2
+
+        p[m2] = (
+            p_base
+            + 4.0 * torch.log(5.0 * r[m2])
+            + 4.0
+            - 20.0 * r[m2]
+            + 12.5 * r[m2]**2
+        )
+
+        p[m3] = p_base + 4.0 * torch.log(torch.tensor(2.0, dtype=r.dtype, device=r.device)) - 2.0
+
+        # Temperature
+        θ = p / (Rd * ρ)
+     
+
 
     if param.case_number == 0:
         N_star, t0 = 0.01, 288.0
@@ -313,7 +374,8 @@ def initialize_cartesian3d(geom, param: Configuration) -> NDArray[numpy.float64]
     else:
         exner = 1.0 - gravity / (cpd * θ) * x3
 
-    ρ = p0 / (Rd * θ) * exner ** (cvd / Rd)
+    if param.case_number != 666:
+        ρ = p0 / (Rd * θ) * exner ** (cvd / Rd)
 
     Q = torch.zeros((5,) + geom.grid_shape_3d_new, dtype=x1.dtype)
     Q[idx_rho] = ρ
@@ -321,4 +383,21 @@ def initialize_cartesian3d(geom, param: Configuration) -> NDArray[numpy.float64]
     Q[idx_rho_u2] = 0.0  # y-invariant extrusion
     Q[idx_rho_u3] = ρ * ww
     Q[idx_rho_theta] = ρ * θ
+
+    ''' 
+    # Initial state debuggin for case 666: 
+    print("x1:", x1.min().item(), x1.max().item())
+    print("rho:", ρ.min().item(), ρ.max().item())
+    print("u:", uu.min().item(), uu.max().item())
+    print("theta:", θ.min().item(), θ.max().item())
+    dpdz=pressure*(-1/H)
+    rhograd = -ρ*gravity
+    print(f"IC uu: {(Q[idx_rho_u1] / Q[idx_rho]).min().item()}, {(Q[idx_rho_u1] / Q[idx_rho]).max().item()}")
+    print(f"IC vv: {(Q[idx_rho_u2] / Q[idx_rho]).min().item()}, {(Q[idx_rho_u2] / Q[idx_rho]).max().item()}")
+    print(f"IC ww: {(Q[idx_rho_u3] / Q[idx_rho]).min().item()}, {(Q[idx_rho_u3] / Q[idx_rho]).max().item()}")
+    print(f"IC theta: {(Q[idx_rho_theta] / Q[idx_rho]).min().item()}, {(Q[idx_rho_theta] / Q[idx_rho]).max().item()}")
+    print(f"IC rho: {Q[idx_rho].min().item()}, {Q[idx_rho].max().item()}")
+    print(f"IC check (dpdz - rhograd): {(dpdz - rhograd).min().item()}, {(dpdz - rhograd).max().item()}")
+    ''' 
+    
     return Q

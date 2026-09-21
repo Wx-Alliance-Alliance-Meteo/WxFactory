@@ -7,7 +7,7 @@ so any y-plane is representative; we take the middle one and plot it with :func:
 
 import torch
 
-from ..common.definitions import idx_rho, idx_rho_theta, idx_rho_u1, idx_rho_u3
+from ..common.definitions import idx_rho, idx_rho_theta, idx_rho_u1, idx_rho_u2, idx_rho_u3
 from ..common.graphx import image_field
 from .output_manager import OutputManager
 
@@ -22,10 +22,25 @@ class OutputCartesian(OutputManager):
 
         rho = q_xz[idx_rho]
         theta = q_xz[idx_rho_theta] / rho
+        u1 = q_xz[idx_rho_u1] / rho
+        u2 = q_xz[idx_rho_u2] / rho
+        u3 = q_xz[idx_rho_u3] / rho
+        speed = torch.sqrt(u1**2 + u3**2)
         w = q_xz[idx_rho_u3] / rho
 
         if self.config.case_number == 0:
             image_field(self.geometry, w, filename, -1, 1, 25, label="w (m/s)", colormap="bwr")
+        elif self.config.case_number == 651:
+            image_field(
+                self.geometry,
+                speed,
+                filename,
+                0.,
+                1.,
+                20,
+                label="|u| (m/s)",
+                colormap="plasma"
+            )
         elif self.config.case_number <= 2:
             image_field(self.geometry, theta, filename, 303.1, 303.7, 7)
         elif self.config.case_number == 3:
@@ -39,9 +54,10 @@ class OutputCartesian(OutputManager):
         rho = Q[idx_rho]
         theta = Q[idx_rho_theta] / rho
         u1 = Q[idx_rho_u1] / rho
+        u2 = Q[idx_rho_u2] / rho
         u3 = Q[idx_rho_u3] / rho
         if self.comm.rank == 0:
             print("==============================================", flush=True)
             print(f" Blockstats for timestep {step_id}", flush=True)
-            for name, f in (("rho", rho), ("u1", u1), ("u3", u3), ("theta", theta)):
+            for name, f in (("rho", rho), ("u1", u1), ("u2", u2), ("u3", u3), ("theta", theta)):
                 print(f"   {name:6s} min {float(torch.min(f)):+.6e}  max {float(torch.max(f)):+.6e}", flush=True)

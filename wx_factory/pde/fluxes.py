@@ -52,6 +52,7 @@ def rusanov_3d(
     u_l = velocity_itf[left]
     u_r = velocity_itf[right]
 
+    
     if advection_only:
         # Tracer-only mode excludes acoustic wave speeds.
         eig_l = torch.abs(u_l)
@@ -87,8 +88,12 @@ def rusanov_3d(
     flux_itf[left] = 0.5 * (flux_l + flux_r - eig * sqrtG[left] * (variables_itf[right] - variables_itf[left]))
     flux_itf[right] = flux_itf[left]
 
-    print_fluxes = False
+    print_fluxes = True
     if print_fluxes == True: 
+        print("Direction:", direction)
+        print("eigenvalue:", eig.min().item(), eig.max().item())
+        print("Flux_left,:", flux_l.min().item(), flux_l.max().item())
+        print("Flux_right,:", flux_r.min().item(), flux_r.max().item()) 
         print("Rusanov flux_itf[left]:", flux_itf[left].min().item(), flux_itf[left].max().item())
         print("Rusanov flux_itf[right]:", flux_itf[right].min().item(), flux_itf[right].max().item())
     
