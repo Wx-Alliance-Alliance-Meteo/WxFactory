@@ -374,7 +374,8 @@ def initialize_cartesian3d(geom, param: Configuration) -> NDArray[numpy.float64]
     else:
         exner = 1.0 - gravity / (cpd * θ) * x3
 
-    if param.case_number != 666:
+    if param.case_number != 666 and param.case_number != 651:
+        print("just make sure density is initialized correctly")
         ρ = p0 / (Rd * θ) * exner ** (cvd / Rd)
 
     Q = torch.zeros((5,) + geom.grid_shape_3d_new, dtype=x1.dtype)
