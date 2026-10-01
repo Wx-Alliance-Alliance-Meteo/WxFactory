@@ -232,6 +232,7 @@ def pmex(
                 curr_nrm = torch.sqrt(diff)
 
             # Happy breakdown
+            H[0:j, j - 1] = sol
             if curr_nrm < tol:
                 happy = True
                 break
@@ -240,7 +241,6 @@ def pmex(
             # acc scalar)
             V[j, :] /= float(curr_nrm)
             H[j, j - 1] = curr_nrm
-            H[0:j, j - 1] = sol
 
             krystep += 1
 
