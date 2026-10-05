@@ -50,7 +50,7 @@ class OutputCubesphereZarr(OutputCubesphere):
         if config.time_start:
             self.start_time = np.datetime64(str(config.time_start).replace("t", "T"))
         else:
-            self.start_time = np.datetime64("1800-01-01T00:00:00")
+            self.start_time = np.datetime64("1980-01-01T00:00:00")
         self.dt = config.dt
         self.num_steps = int(np.ceil(config.t_end / config.dt) + 1)
         self.current_time_index = 0
