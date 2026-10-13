@@ -1,27 +1,33 @@
-import zarr
-import xarray as xr
+#!/usr/bin/env python3
+
+import argparse
+
 import numcodecs
+import xarray as xr
+import zarr
 
-print("xarray:", xr.__version__)
-print("zarr:", zarr.__version__)
-print("numcodecs:", numcodecs.__version__)
 
-# Input and output Zarr stores
-input_zarr = "/fs/site7/eccc/mrd/rpna/cap003/datasets/era5_0.25deg_13level_lq/2020"
-output_zarr = "results/2020_small.zarr"
+def main():
+    parser = argparse.ArgumentParser(description="Copy one time slice into a small Zarr dataset.")
+    parser.add_argument(
+        "input_zarr", nargs="?", default="/fs/site7/eccc/mrd/rpna/cap003/datasets/era5_0.25deg_13level_lq/2020"
+    )
+    parser.add_argument("--output", default="results/2020_small.zarr")
+    parser.add_argument("--time-index", type=int, default=0)
+    args = parser.parse_args()
 
-# Open dataset
-ds = xr.open_zarr(input_zarr)
+    print("xarray:", xr.__version__)
+    print("zarr:", zarr.__version__)
+    print("numcodecs:", numcodecs.__version__)
+    with xr.open_zarr(args.input_zarr) as dataset:
+        subset = dataset.isel(time=slice(args.time_index, args.time_index + 1))
+        # Source chunk encodings may not fit the shortened time axis.
+        for variable in subset.variables:
+            subset[variable].encoding = {}
+        subset.to_zarr(args.output, mode="w")
+        print(subset)
+    print(f"Saved subset to {args.output}")
 
-# Option 1: Select a date range
-subset = ds.isel(time=slice(0, 1))
 
-# Remove inherited zarr encoding
-for var in subset.variables:
-    subset[var].encoding = {}
-
-# Save to new Zarr
-subset.to_zarr(output_zarr, mode="w")
-
-print(subset)
-print(f"Saved subset to {output_zarr}")
+if __name__ == "__main__":
+    main()

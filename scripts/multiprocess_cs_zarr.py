@@ -6,6 +6,7 @@ import multiprocessing as mp
 import os
 import shutil
 import subprocess
+from contextlib import ExitStack
 
 import xarray as xr
 
@@ -14,7 +15,9 @@ def run_job(config_file, mpi_ranks=6):
     cmd = ["mpirun", "-n", str(mpi_ranks), "./WxFactory", config_file]
 
     print(f"Starting: {' '.join(cmd)}")
-    result = subprocess.run(cmd)
+    environment = os.environ.copy()
+    environment["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+    result = subprocess.run(cmd, env=environment, check=False)
 
     if result.returncode != 0:
         raise RuntimeError(f"Job failed for {config_file}")
@@ -44,13 +47,11 @@ def merge_zarr(year, search_dir="results"):
         print(f"Removing existing {output_zarr}")
         shutil.rmtree(output_zarr)
 
-    datasets = [xr.open_zarr(f) for f in files]
-
-    combined = xr.concat(datasets, dim="time")
-    combined = combined.sortby("time")
-
-    print(f"Writing merged dataset to {output_zarr}")
-    combined.to_zarr(output_zarr, mode="w")
+    with ExitStack() as stack:
+        datasets = [stack.enter_context(xr.open_zarr(path)) for path in files]
+        combined = xr.concat(datasets, dim="time").sortby("time")
+        print(f"Writing merged dataset to {output_zarr}")
+        combined.to_zarr(output_zarr, mode="w")
 
     print("Merge complete.")
 

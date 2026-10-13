@@ -12,9 +12,10 @@
    | time_end              | lc-str  |         |                                  |   |
    | case_number           | int   | -1        |                                  |   |
    | bubble_rad            | float  | 0.0      |                                  |   |
+   | advection_only        | str_to_bool  | False  |                              | Whether the Euler dynamics are frozen and only passive advection is integrated. Cartesian grids are always fully dynamical.  |
    | depth_approx          | lc-str  | deep    | {deep, shallow}                  |   |
-   | topography_file       | lc-str  | [none]  |                                  |   |
-   | initial_conditions    | lc-str  | [none]  |                               |   |
+   | topography_file       | cs-str  | [none]  |                                  |   |
+   | initial_conditions    | cs-str  | [none]  |                                  | File that contains initial conditions for the simulation. Can be in Zarr (ERA5) or FST format  |
    | matsuno_wave_type     | lc-str  | [none]  |                                  |   |
    | matsuno_amp           | float  | [none]   |                                  |   |
    | bubble_theta          | float  | 0.0      |                                  |   |
@@ -32,15 +33,17 @@
    | krylov_mmax           | int   | 64        | [1, inf]                         | Largest Krylov subspace the exponential solver may build. The solver stores mmax+1 basis vectors of the full state, so this caps its memory; lowering it trades memory for more internal substeps.  |
    | verbose_solver        | int   | 0         |                                  |   |
    | gmres_restart         | int   | 20        | [1, inf]                         |   |
-   | splitting_integrator_1  | lc-str  |       |                                  |   |
-   | splitting_integrator_2  | lc-str  |       |                                  |   |
-   | os22_parameter        | float  | [none]   |                                  | Stage parameter p for the OS22 splitting coefficients [[(2p-1)/(2p-2), 1-p], [-1/(2p-2), p]]. Valid values satisfy p != 1.  |
+   | splitting_integrator_1  | lc-str  | epi2  |                                  | One-step integrator for the explicit RHS partition F2 in Lie, Strang and OS22 splitting.  |
+   | splitting_integrator_2  | lc-str  | ros2  |                                  | One-step integrator for the implicit RHS partition F1 in Lie, Strang and OS22 splitting.  |
+   | os22_parameter        | float  | 0.5      | [0.0, 0.5]                       | Stage parameter p for the OS22 splitting coefficients [[(2p-1)/(2p-2), 1-p], [-1/(2p-2), p]]. The supported range 0 <= p <= 0.5 gives nonnegative substeps.  |
 | | | | | |
  | **[Spatial_discretization]**  | **Type**  | **Default**  | **Valid range**   | **Description**  |
    | num_elements_vertical  | int  | 1         | [1, inf]                         |   |
-   | expfilter_apply       | str_to_bool  | False  |                              | Apply an exponential modal filter to the metric-weighted conservative state after each time step.  |
+   | expfilter_apply       | str_to_bool  | False  |                              | Apply an exponential modal filter to metric-weighted conservative quantities after each time step; Euler velocities are converted to conservative momentum for filtering.  |
    | num_solpts            | int   | [none]    | [1, inf]                         |   |
    | num_elements_horizontal  | int  | [none]  | [1, inf]                         |   |
+   | riemann_solver        | lc-str  | acoustic  | {acoustic}                     | Interface pressure and normal velocity for Euler momentum. Acoustic uses the unmodified physical impedance and star velocity for relative-curl interface lifting.  |
+   | jacobian              | lc-str  | analytic  | {finite_difference, analytic}  | Euler Jacobian action for exponential and implicit solvers: double finite differences or analytic active-branch linearization. Column solves use analytic vertical blocks in either mode.  |
    | expfilter_order       | int   | [none]    | [2, inf]                         | Positive even order of the exponential modal filter.  |
    | expfilter_cutoff      | float  | [none]   | [0.0, 1.0]                       | Normalized modal cutoff below which modes are left unchanged.  |
    | expfilter_strength    | float  | [none]   | [0.0, inf]                       | Strength alpha in the exponential modal-filter attenuation.  |
@@ -49,7 +52,6 @@
    | grid_file             | lc-str  |         |                                  |   |
    | lateral_boundary      | lc-str  | donor_cell  | {donor_cell, wall, periodic}  | Lateral (horizontal) boundary treatment. donor_cell exchanges traces with the neighbouring tile (the cubed sphere's inter-panel donor cell); wall reflects the tile's own boundary trace (solid wall); periodic wraps the tile to its opposite edge. The cubed sphere always uses donor_cell; wall/periodic are for cartesian grids.  |
    | discretization        | lc-str  | dg      | {dg}                             | Direct flux reconstruction / discontinuous Galerkin spatial discretization. No finite-volume RHS is currently available.  |
-   | advection_only        | lc-str  | auto    | {auto, on, off}                  | Whether the Euler dynamics are frozen and only passive advection is integrated. 'auto' derives it from the DCMIP case number (cases <= 13 are advection tests); 'on'/'off' force it. Cartesian grids are always fully dynamical.  |
    | grid_type             | lc-str  | [none]  | {cubed_sphere, cartesian3d}      |   |
    | lambda0               | angle24  | [none]  |                                 | Longitude in radians of the central point of panel 0  |
    | phi0                  | angle24  | [none]  |                                 | Latitude in radians of the central point of panel 0  |
@@ -76,7 +78,7 @@
    | output_dir            | cs-str  | results  |                                 | Directory where to store all the output  |
    | base_output_file      | cs-str  | out     |                                  | Name of file where to store the solution  |
    | store_total_time      | str_to_bool  | False  |                              | Whether to output total runtime in seconds to a file  |
-   | output_format         | lc-str  | netcdf  | {netcdf, fst}                    | Cubed-sphere output format. netcdf requires netCDF4; fst additionally requires the external rmn and georef packages. Cartesian output uses its image writer regardless of this setting.  |
+   | output_format         | lc-str  | netcdf  | {netcdf, fst, zarr}              | Cubed-sphere output format. netcdf requires netCDF4; fst additionally requires the external rmn and georef packages. Cartesian output uses its image writer regardless of this setting.  |
 | | | | | |
  | **[Post_processing]**  | **Type**  | **Default**  | **Valid range**          | **Description**  |
    | enable_schar_mountain  | str_to_bool  | False  |                             | Enable Schar wave mountains to grow (stabilisation issue)  |

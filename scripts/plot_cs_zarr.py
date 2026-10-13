@@ -2,22 +2,20 @@ import matplotlib
 
 matplotlib.use("Agg")
 
-import xarray as xr
-import matplotlib.pyplot as plt
-import numpy as np
 import argparse
+
+import matplotlib.pyplot as plt
+import xarray as xr
 
 
 def load_dataset(file):
-    ds = xr.open_zarr(file)
-    return ds
+    return xr.open_zarr(file)
 
 
 def get_h_equations(ds, z_level=0):
-    # equations dimension contains ["h", "U", "V", ...]
+
     h = ds["data"].sel(equations="h")
 
-    # select vertical level
     h = h.isel(z=z_level)
 
     return h
@@ -25,7 +23,6 @@ def get_h_equations(ds, z_level=0):
 
 def plot_faces(h, time_index, output):
 
-    # extract frame (time, faces, y, x)
     frame = h.isel(time=time_index)
 
     n_faces = frame.sizes["faces"]
@@ -47,6 +44,7 @@ def plot_faces(h, time_index, output):
     plt.suptitle(f"h at time index {time_index}")
 
     plt.savefig("results/" + output)
+    plt.close(fig)
     print(f"Saved: results/{output}")
 
 
@@ -60,10 +58,9 @@ def main():
 
     args = parser.parse_args()
 
-    ds = load_dataset(args.file)
-    h = get_h_equations(ds, args.z)
-
-    plot_faces(h, args.time_index, args.output)
+    with load_dataset(args.file) as dataset:
+        height = get_h_equations(dataset, args.z)
+        plot_faces(height, args.time_index, args.output)
 
 
 if __name__ == "__main__":

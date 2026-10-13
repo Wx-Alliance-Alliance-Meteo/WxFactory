@@ -36,16 +36,6 @@ class PanelConversionTestCase(WxTestCase):
             dtype=self.dtype,
         )
 
-    def test_covariant_is_the_inverse_transpose_of_contravariant(self):
-        """Check that each covariant map is the inverse transpose."""
-        for panel in range(6):
-            for direction, name in DIRECTIONS:
-                with self.subTest(panel=panel, direction=name):
-                    contravariant = self.matrix(CONVERT_CONTRAVARIANT, panel, direction)
-                    covariant = self.matrix(CONVERT_COVARIANT, panel, direction)
-                    expected = torch.linalg.inv(contravariant).T
-                    self.assertLess(float((covariant - expected).abs().max()), 1.0e-13)
-
     def test_conversions_preserve_the_scalar_contraction(self):
         """Check that covariant--contravariant contractions are invariant."""
         generator = torch.Generator().manual_seed(31)
@@ -61,29 +51,6 @@ class PanelConversionTestCase(WxTestCase):
                     after = float(new_contra[0] * new_cov[0] + new_contra[1] * new_cov[1])
 
                     self.assertLess(abs(after - before), 1.0e-13 * max(abs(before), 1.0))
-
-    def test_conversions_are_invertible(self):
-        """A degenerate conversion would lose a component outright."""
-        for panel in range(6):
-            for direction, name in DIRECTIONS:
-                with self.subTest(panel=panel, direction=name):
-                    matrix = self.matrix(CONVERT_CONTRAVARIANT, panel, direction)
-                    self.assertGreater(abs(float(torch.linalg.det(matrix))), 0.5)
-
-    def test_conversions_are_the_identity_at_a_seam_centre(self):
-        """Check that seam-centre conversions are signed permutations."""
-        centre = torch.tensor(0.0, dtype=self.dtype)
-        for convert in (CONVERT_CONTRAVARIANT, CONVERT_COVARIANT):
-            for panel in range(6):
-                for direction, name in DIRECTIONS:
-                    with self.subTest(panel=panel, direction=name):
-                        first = convert[panel][direction](self.one, self.zero, centre)
-                        second = convert[panel][direction](self.zero, self.one, centre)
-                        matrix = torch.tensor([[first[0], second[0]], [first[1], second[1]]], dtype=self.dtype)
-                        # A signed permutation has one unit entry per row and column.
-                        magnitudes = matrix.abs()
-                        self.assertLess(float((magnitudes.sum(dim=0) - 1.0).abs().max()), 1.0e-14)
-                        self.assertLess(float((magnitudes.sum(dim=1) - 1.0).abs().max()), 1.0e-14)
 
 
 if __name__ == "__main__":

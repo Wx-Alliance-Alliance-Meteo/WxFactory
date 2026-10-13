@@ -4,8 +4,6 @@ import functools
 
 import torch
 
-from .column_layout import columns_to_state, horizontal_momentum_rows, state_to_columns, stiff_variable_rows
-
 # Index letters shared by the einsum calls below:
 #   c = column, e = vertical element, i = block row, j = block column.
 
@@ -16,29 +14,6 @@ def blocks_matvec(lower, diag, upper, x_col):
     out[:, 1:] += torch.einsum("ceij,cej->cei", lower[:, 1:], x_col[:, :-1])
     out[:, :-1] += torch.einsum("ceij,cej->cei", upper[:, :-1], x_col[:, 1:])
     return out
-
-
-def horizontal_momentum_matvec(rhsobj, momentum_blocks, x):
-    """Apply the horizontal-momentum rows and return the result in grid layout."""
-    lower, diag, upper = momentum_blocks
-    rows = horizontal_momentum_rows(rhsobj.geom.num_solpts)
-    x_col = state_to_columns(rhsobj, x)
-
-    out = torch.einsum("ceij,cej->cei", diag, x_col)
-    out[:, 1:] += torch.einsum("ceij,cej->cei", lower[:, 1:], x_col[:, :-1])
-    out[:, :-1] += torch.einsum("ceij,cej->cei", upper[:, :-1], x_col[:, 1:])
-
-    full = torch.zeros_like(x_col)
-    full[..., rows] = out
-    return columns_to_state(rhsobj, full, x)
-
-
-def solve_stiff_columns(rhsobj, stiff_blocks, b_col, dt):
-    """Solve the stiff-variable subsystem in column layout."""
-    rows = stiff_variable_rows(rhsobj.geom.num_solpts, b_col.device)
-    x = b_col.clone()
-    x[..., rows] = block_thomas_solve(*stiff_blocks, b_col[..., rows], dt)
-    return x
 
 
 #: CUDA compute capabilities with strongly rate-limited FP64 arithmetic.
@@ -73,7 +48,6 @@ def block_thomas_solve(lower, diag, upper, b, dt):
     work_dtype = torch.float32 if refine else torch.float64
     identity = torch.eye(block_size, dtype=work_dtype).reshape(1, block_size, block_size)
 
-    # Blocks of M = I - (dt/2) J1, in the working precision of the factorization.
     def diag_block(e):
         return identity - half_dt * diag[:, e].astype(work_dtype)
 
@@ -91,7 +65,6 @@ def block_thomas_solve(lower, diag, upper, b, dt):
     factors[0] = torch.linalg.lu_factor(diag_block(0))
     reduced_rhs[0] = b[:, 0]
     for e in range(1, num_elem_z):
-        # One solve produces both the eliminated super-block and the eliminated right-hand side.
         augmented = torch.concatenate([super_block(e - 1), reduced_rhs[e - 1][..., None]], dim=-1)
         solved = torch.linalg.lu_solve(factors[e - 1][0], factors[e - 1][1], augmented)
         reduced_upper = solved[..., :block_size]
@@ -114,7 +87,6 @@ def block_thomas_solve(lower, diag, upper, b, dt):
             sol[e] = torch.linalg.lu_solve(factors[e][0], factors[e][1], rhs_e[..., None])[..., 0]
         return sol
 
-    # Back substitution, sweeping downward from the top element.
     top = num_elem_z - 1
     x = [None] * num_elem_z
     x[top] = torch.linalg.lu_solve(factors[top][0], factors[top][1], reduced_rhs[top][..., None])[..., 0]

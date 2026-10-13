@@ -1,14 +1,5 @@
 #!/usr/bin/env python3
-"""Publication-quality diagnostics for DCMIP-2012 test 3-1.
-
-The specification requests a longitude-height section of potential-
-temperature departure from the analytic base state and a line at z=5.5 km,
-both along the equator at t=3000 s. Vertical velocity is included as a useful
-non-hydrostatic companion diagnostic.
-
-Usage:
-    python scripts/plot_dcmip31.py -o results --label dcmip31 [--pdf] results/dcmip31_rosexp.nc
-"""
+"""DCMIP 3-1 equatorial gravity-wave sections and phase-speed diagnostics."""
 
 import argparse
 import math
@@ -37,7 +28,6 @@ PLANET_FACTOR = 125.0
 
 
 def equator_stencil(lat, lon):
-    """Build exact-equator interpolation stencils ordered by longitude."""
     stencils = []
     longitudes = []
     for panel in range(lat.shape[0]):
@@ -113,7 +103,6 @@ def close_periodic(field):
 
 
 def plot_initial_condition(longitude, elevation, theta_prime, output, label, pdf):
-    """Plot the prescribed perturbation before the dynamical adjustment."""
     mean_heights = numpy.mean(elevation[:, :-1], axis=1)
     level = int(numpy.argmin(numpy.abs(mean_heights - TARGET_HEIGHT)))
     maximum = float(numpy.nanmax(theta_prime))
@@ -172,7 +161,6 @@ def main():
         theta_prime = at_equator(numpy.asarray(dataset.variables["theta"][index]) - base, stencils).T
         initial_theta_prime = at_equator(numpy.asarray(dataset.variables["theta"][0]) - base, stencils).T
 
-    # Explicitly close the periodic longitude seam.
     longitude_closed = numpy.concatenate((equator_lon, [equator_lon[0] + 360.0]))
     elevation = close_periodic(elevation)
     theta_prime = close_periodic(theta_prime)

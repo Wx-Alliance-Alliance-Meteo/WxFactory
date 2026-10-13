@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 
-if [ ! $(which inkscape) ]; then
-    echo "Need to have inkscape available!"
-    exit -1
+set -e
+
+if ! command -v rsvg-convert >/dev/null; then
+    echo "Install rsvg-convert to build the presentation figures."
+    exit 1
 fi
 
-for file in *.svg; do
-    base=$(basename $file .svg)
-    inkscape ${base}.svg -o ${base}.eps --export-ignore-filters  --export-ps-level=3
+for file in "$(dirname "$0")"/*.svg; do
+    rsvg-convert --format=pdf --output="${file%.svg}.pdf" "$file"
 done
-

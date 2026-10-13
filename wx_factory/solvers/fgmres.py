@@ -6,7 +6,7 @@ from torch import Tensor
 
 from ..context import Context
 from .dense import solve_triangular
-from .global_operations import global_allreduce, global_dotprod, global_norm
+from .global_operations import global_allreduce, global_dotprod, global_inf_norm, global_norm
 
 __all__ = ["fgmres"]
 
@@ -32,18 +32,22 @@ def _ortho_1_sync_igs(Q: Tensor, R: Tensor, T: Tensor, K: Tensor, j: int, contex
     if j < 2:
         return -1.0
 
-    # Mixed precision: the basis Q is stored in the working precision, but the
-    # inner products and the R/T/K bookkeeping run in the accumulator precision (R's dtype, float64
-    # in single-precision runs) so that orthogonality is not lost to float32 round-off. Coefficients
-    # are cast back to Q's dtype only when they are applied to the float32 basis rows.
+    # Float64 inner products preserve orthogonality without promoting the full basis.
     acc = R.dtype
     qd = Q.dtype
 
-    # Accumulate the reduction operand in the higher precision.
-    local_tmp = Q[:j, :].to(acc) @ Q[j - 2 : j, :].to(acc).T
+    if Q.dtype == acc:
+        local_tmp = Q[:j, :] @ Q[j - 2 : j, :].T
+    else:
+        # Accumulate the small Gram matrix without a full float64 copy of the basis.
+        local_tmp = torch.zeros((j, 2), dtype=acc, device=Q.device)
+        chunk_size = 65536
+        for start in range(0, Q.shape[1], chunk_size):
+            basis = Q[:j, start : start + chunk_size].to(acc)
+            local_tmp += basis @ basis[j - 2 : j].T
 
     context.synchronize()
-    global_tmp = global_allreduce(local_tmp, context)  # Expensive step on multi-node execution
+    global_tmp = global_allreduce(local_tmp, context)
     small_tmp = global_tmp[: j - 2, 0]
 
     R[: j - 1, j - 1] = global_tmp[: j - 1, 1]
@@ -65,7 +69,7 @@ def _ortho_1_sync_igs(Q: Tensor, R: Tensor, T: Tensor, K: Tensor, j: int, contex
         K[: j - 1, j - 2] = (R[: j - 1, j - 1] - (R[: j - 1, 1 : j - 1] @ r3)) / norm
 
         Q[j - 2, :] -= Q[: j - 2, :].T @ small_tmp.to(qd)
-        Q[j - 1, :] -= Q[: j - 2, :].T @ R[: j - 2, j - 1].to(qd)  # Important here
+        Q[j - 1, :] -= Q[: j - 2, :].T @ R[: j - 2, j - 1].to(qd)
 
     else:
         K[: j - 1, j - 2] = R[: j - 1, j - 1] / norm
@@ -112,6 +116,7 @@ def fgmres(
     verbose: int = 0,
     prefix: str = "",
     context: Context | None = None,
+    krylov_dtype: torch.dtype | None = None,
 ) -> tuple[Tensor, float, float, int, int, list[tuple[float, float, float]]]:
     """
     Solve the given linear system (Ax = b) for x, using the FGMRES algorithm.
@@ -125,6 +130,7 @@ def fgmres(
     :param maxiter: Maximum number of *outer loop* iterations. If absent, it's going to be a very large number. Optional
     :param preconditioner: Operator [M^-1] that preconditions a given vector [v]. Computes the product (M^-1)*v. Optional
     :param hegedus: Whether to apply the Hegedüs trick (whatever that is). Optional
+    :param krylov_dtype: Basis storage dtype; defaults to the right-hand side dtype.
 
     :return: 1. The result [x]
     :return: 2. The relative residual |b - Ax| / |b|
@@ -143,19 +149,18 @@ def fgmres(
     niter = 0
 
     if preconditioner is None:
-        preconditioner = lambda x: x  # Set up a preconditioner that does nothing
+        preconditioner = lambda x: x
 
     num_dofs = len(b)
 
     if maxiter is None:
-        maxiter = num_dofs * 10  # Wild guess
+        maxiter = num_dofs * 10
 
     if x0 is None:
         x = torch.zeros_like(b)
     else:
         x = x0.clone()
 
-    # Check for early stop
     norm_b = global_norm(b, context=context)
     if norm_b == 0.0:
         return torch.zeros_like(b), 0.0, 0.0, 0, 0, [(0.0, time() - t_start, 0.0)]
@@ -165,7 +170,6 @@ def fgmres(
     Ax0 = A(x)
     residuals = []
 
-    # Rescale the initial approximation using the Hegedüs trick
     if hegedus:
         norm_Ax0_2 = global_dotprod(Ax0, Ax0, comm=comm)
         if norm_Ax0_2 != 0.0:
@@ -178,11 +182,8 @@ def fgmres(
 
     residuals.append(((norm_r / norm_b).item(), time() - t_start, 0.0))
 
-    # The Krylov basis follows the working precision of the right-hand side, which
-    # keeps its memory footprint low -- the dominant cost. The small orthogonalization/Hessenberg
-    # bookkeeping arrays are promoted to the accumulator precision (float64 when the working precision
-    # is float32) so that a single-precision solve does not lose orthogonality and break down.
-    dtype = b.dtype
+    # Keep the large basis in working precision; float64 bookkeeping protects orthogonality.
+    dtype = b.dtype if krylov_dtype is None else krylov_dtype
     acc_dtype = torch.float64 if "float32" in str(dtype) else dtype
 
     for outer in range(maxiter):
@@ -190,19 +191,18 @@ def fgmres(
         H = torch.zeros((restart + 2, restart + 2), dtype=acc_dtype)
         R = torch.zeros(
             (restart + 2, restart + 2), dtype=acc_dtype
-        )  # rhs of the MGS factorization (should be H.transposed?)
+        )
         T = torch.zeros((restart + 2, restart + 2), dtype=acc_dtype)
         K = torch.zeros((restart + 2, restart + 2), dtype=acc_dtype)
-        V = torch.zeros((restart + 2, num_dofs), dtype=dtype)  # row-major ordering (working precision)
-        Z = torch.zeros((restart + 1, num_dofs), dtype=dtype)  # row-major ordering (working precision)
-        Q = []  # Givens Rotations
+        V = torch.zeros((restart + 2, num_dofs), dtype=dtype)
+        Z = torch.zeros((restart + 1, num_dofs), dtype=dtype)
+        Q = []
 
         V[0, :] = r / norm_r
         Z[0, :] = preconditioner(V[0, :])
         V[1, :] = A(Z[0, :])
         v_norm = _ortho_1_sync_igs(V, R, T, K, 2, context)
 
-        # This is the RHS vector for the problem in the Krylov Space (accumulator precision)
         g = torch.zeros(num_dofs, dtype=acc_dtype)
         g[0] = norm_r
         for inner in range(restart):
@@ -216,25 +216,17 @@ def fgmres(
             H[inner, : inner + 2] = R[: inner + 2, inner + 1]
             Z[inner + 1, :] /= v_norm
 
-            # Apply previous Givens rotations to H
             if inner > 0:
                 _apply_givens(Q, H[inner, :], inner)
 
-            # Calculate and apply next complex-valued Givens Rotation
-            # ==> Note that if restart = num_dofs, then this is unnecessary
-            # for the last inner
-            #    iteration, when inner = num_dofs-1.
             if inner != num_dofs - 1 and H[inner, inner + 1] != 0:
                 [c, s, r] = rotg(float(H[inner, inner]), float(H[inner, inner + 1]))
 
                 Qblock = torch.tensor([[c, s], [-s.conjugate(), c]], dtype=acc_dtype)
                 Q.append(Qblock)
 
-                # Apply Givens Rotation to g,
-                #   the RHS for the linear system in the Krylov Subspace.
                 g[inner : inner + 2] = Qblock @ g[inner : inner + 2]
 
-                # Apply effect of Givens Rotation to H
                 H[inner, inner] = torch.dot(Qblock[0, :], H[inner, inner : inner + 2])
                 H[inner, inner + 1] = 0.0
 
@@ -248,11 +240,8 @@ def fgmres(
                 if norm_r < tol_relative:
                     break
 
-        # end inner loop, back to outer loop
 
-        # Find best update to x in Krylov Space V.
         y = solve_triangular(H[0 : inner + 1, 0 : inner + 1].T, g[0 : inner + 1])
-        # Project the correction back onto the (working-precision) preconditioned basis.
         update = torch.ravel(Z[: inner + 1, :].T @ y.astype(Z.dtype).reshape(-1, 1))
         x = x + update
         r = b - A(x)
@@ -263,19 +252,18 @@ def fgmres(
         if verbose > 0 and comm.rank == 0:
             print(f"{prefix}res: {norm_r / norm_b:.2e} (iter {niter})", flush=True)
 
-        # Has GMRES stagnated?
+        # All ranks must make the same stagnation decision.
         indices = x != 0
-        if indices.any():
-            change = torch.max(torch.abs(update[indices] / x[indices]))
-            if change < 1e-12:
-                # No change, halt
-                return x, norm_r.item(), norm_b.item(), niter, -1, residuals
+        local_change = torch.max(torch.abs(update[indices] / x[indices])) if indices.any() else x.new_tensor(0.0)
+        change = global_inf_norm(local_change, comm=comm)
+        if change < 1e-12:
+            return x, norm_r.item(), norm_b.item(), niter, -1, residuals
 
-        # test for convergence
         if norm_r < tol_relative:
             return x, norm_r.item(), norm_b.item(), niter, 0, residuals
 
-    # end outer loop
+        del V, Z
+
 
     flag = 0
     if norm_r >= tol_relative:

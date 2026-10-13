@@ -1,7 +1,6 @@
 import glob
 import os
-from configparser import ConfigParser, NoOptionError, NoSectionError
-from typing import TypeVar
+from configparser import ConfigParser
 
 import torch
 from mpi4py import MPI
@@ -14,11 +13,16 @@ from wx_factory.output import state
 from wx_factory.simulation import Simulation
 
 
-def get_rel_diff(a: Tensor, b: Tensor) -> float:
-    num_var = a.shape[0]
-    a_sizes = [torch.linalg.norm(a[i]).item() for i in range(num_var)]
-    norms = [torch.linalg.norm(b[i] - a[i]).item() / a_sizes[i] for i in range(num_var)]
-    return sum(norms) / len(norms)
+def component_errors(reference: Tensor, actual: Tensor, comm) -> list[float]:
+    """Global relative L2 error per equation; zero references use absolute L2."""
+    if not comm.allreduce(bool(torch.isfinite(actual).all() and torch.isfinite(reference).all()), op=MPI.LAND):
+        raise ValueError("Non-finite integration state")
+    errors = []
+    for expected, result in zip(reference, actual):
+        norm_squared = comm.allreduce(expected.double().square().sum().item(), op=MPI.SUM)
+        error_squared = comm.allreduce((result.double() - expected.double()).square().sum().item(), op=MPI.SUM)
+        errors.append((error_squared / norm_squared) ** 0.5 if norm_squared else error_squared**0.5)
+    return errors
 
 
 class StateIntegrationTestCases(MpiTestCase):
@@ -46,8 +50,8 @@ class StateIntegrationTestCases(MpiTestCase):
             )
 
         self.schema = load_default_schema()
-        self.config_files = glob.glob(f"{self.config_dir_path}/config*.ini")
-        # print(f"Config files: {self.config_files}")
+        self.config_files = sorted(glob.glob(f"{self.config_dir_path}/config*.ini"))
+        self.assertTrue(self.config_files, "No integration configurations found")
 
         # Skip if the test reads an FST topography file but rmn/georef are unavailable
         topo_field = next((f for f in self.schema.fields if f.name == "topography_file"), None)
@@ -87,16 +91,16 @@ class StateIntegrationTestCases(MpiTestCase):
                 f"Result shape {data.shape} is different from reference solution {true_data.shape}",
             )
 
-            relative_diff = get_rel_diff(true_data, data)
+            errors = component_errors(true_data, data, self.comm)
 
             if self.comm.rank == 0:
-                print(f"relative diff = {relative_diff:.2e}", flush=True)
+                print(f"L2 error by equation: {errors}", flush=True)
 
             error_threshold = self.error_threshold
             if error_threshold < 0:
                 num_steps = true_config.t_end // true_config.dt
                 error_threshold = config.tolerance if num_steps <= 1 else config.tolerance * num_steps / 2
 
-            self.assertLessEqual(
-                relative_diff, error_threshold, f"The relative difference ({relative_diff:.2e}) is too big"
-            )
+            for equation, error in enumerate(errors):
+                with self.subTest(config=config_file, equation=equation):
+                    self.assertLessEqual(error, error_threshold)

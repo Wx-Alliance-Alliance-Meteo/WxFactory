@@ -1,32 +1,26 @@
-from ..common.matmul import kron
-import numpy as np
-import xarray as xr
-from mpi4py import MPI
 import os
 import shutil
+
+import numpy as np
 import zarr
 from numpy.typing import NDArray
-import time
 
-
-from .output_cubesphere import OutputCubesphere
-from .diagnostic import potential_vorticity, relative_vorticity
 from ..common.definitions import (
+    Rd,
+    cpd,
+    cvd,
     idx_h,
     idx_hu1,
     idx_hu2,
-    idx_hu2,
     idx_rho,
-    idx_rho_u1,
-    idx_rho_u2,
-    idx_rho_u3,
     idx_rho_theta,
-    cpd,
-    cvd,
     p0,
-    Rd,
 )
+from ..common.euler_state import physical_winds
+from ..common.matmul import kron
 from ..geometry import CubedSphere2D
+from .diagnostic import potential_vorticity, relative_vorticity
+from .output_cubesphere import OutputCubesphere
 
 
 class OutputCubesphereZarr(OutputCubesphere):
@@ -46,6 +40,9 @@ class OutputCubesphereZarr(OutputCubesphere):
             self.equ = ["h", "U", "V", "RV", "PV"]
         elif self.config.equations == "euler":
             self.equ = ["U", "V", "W", "rho", "theta", "P"]
+            if config.case_number in (11, 12, 13):
+                count = 1 if config.case_number == 12 else 4
+                self.equ += [f"q{index}" for index in range(1, count + 1)]
         self.panel_id = self.process_topology.my_panel
         if config.time_start:
             self.start_time = np.datetime64(str(config.time_start).replace("t", "T"))
@@ -74,11 +71,9 @@ class OutputCubesphereZarr(OutputCubesphere):
         else:
             self.zcoord = np.arange(self.nz)
 
-        # --- set file name ---
         self.filename = f"{self.output_dir}/{config.base_output_file}.zarr"
         self.marker_path = None
 
-        # --- init ---
         if self.rank == 0:
             exists = os.path.exists(self.filename)
             if exists:
@@ -88,7 +83,6 @@ class OutputCubesphereZarr(OutputCubesphere):
             self.ds_zarr = zarr.open_group(self.filename, mode="r+")
         self.write_static_fields()
 
-    # --------------------------------------------------
     def _output_init(self, filename):
         times = np.array(
             [self.start_time + np.timedelta64(int(i * self.dt), "s") for i in range(self.num_steps)],
@@ -152,7 +146,6 @@ class OutputCubesphereZarr(OutputCubesphere):
             dtype=np.float64,
         )
 
-        # initialize empty variable array
         if self.config.equations == "euler":
 
             ds_zarr.create_array(
@@ -176,7 +169,6 @@ class OutputCubesphereZarr(OutputCubesphere):
                 dtype=np.float64,
             )
 
-    # --------------------------------------------------
     def __write_result__(self, Q, step_id):
 
         if self.config.equations == "shallow_water":
@@ -237,12 +229,9 @@ class OutputCubesphereZarr(OutputCubesphere):
         elif self.config.equations == "euler":
 
             rho = Q[idx_rho, ...]
-            u1 = Q[idx_rho_u1, ...] / rho
-            u2 = Q[idx_rho_u2, ...] / rho
-            u3 = Q[idx_rho_u3, ...] / rho
             theta = Q[idx_rho_theta, ...] / rho
 
-            u, v, w = self.geometry.contra2wind_3d(u1, u2, u3, self.metric)
+            u, v, w = physical_winds(Q, self.geometry, self.metric)
 
             p = p0 * (Q[idx_rho_theta] * Rd / p0) ** (cpd / cvd)
 
@@ -257,10 +246,12 @@ class OutputCubesphereZarr(OutputCubesphere):
             self.store_variable_zarr(self.geometry.to_single_block(theta), "theta", step_id)
 
             self.store_variable_zarr(self.geometry.to_single_block(p), "P", step_id)
+            if self.config.case_number in (11, 12, 13):
+                for index in range(5, Q.shape[0]):
+                    self.store_variable_zarr(self.geometry.to_single_block(Q[index] / rho), f"q{index - 4}", step_id)
 
             return
 
-    # --------------------------------------------------
     def __finalize__(self):
         return
 
@@ -308,15 +299,12 @@ class OutputCubesphereZarr(OutputCubesphere):
             self.ds_zarr["volume"][:] = self.context.to_host(volume)
 
     def _cell_volume(self) -> NDArray:
-        """Volume associated with each solution point.
+        """The reference-coordinate Jacobian already includes element scaling.
 
-        On the cubed sphere the elements are uniform in the computational coordinates, so the volume
-        of a solution point is sqrt(G) times its tensor-product Gauss-Legendre quadrature weight,
-        times the (constant) volume of a reference element. The solution points inside an element are
-        ordered with x1 varying fastest, then x2, then x3."""
+        Tensor-product quadrature weights use x1 fastest, then x2, then x3.
+        """
         geom = self.geometry
         w = geom.glweights
-        w3d = kron(w, kron(w, w))  # ordering: x3 slowest, x1 fastest
+        w3d = kron(w, kron(w, w))
 
-        elem_volume = geom.delta_x1 * geom.delta_x2 * geom.delta_x3 / 8.0
-        return self.metric.sqrtG_new * w3d * elem_volume
+        return self.metric.volume.volume_jacobian * w3d

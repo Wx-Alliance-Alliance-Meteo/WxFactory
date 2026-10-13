@@ -4,7 +4,7 @@ import numpy
 import torch
 
 from ..common import Configuration
-from ..geometry import CubedSphere3D, Metric3DTopo
+from ..geometry import CubedSphere3D, Metric5D
 from . import step_hook
 
 
@@ -15,7 +15,7 @@ class ScharMountainHook(step_hook.StepHook):
     Dm: float  # mountain radius (meters)
     Dxi: float  # Mountain wavelength (meters)
     geom: CubedSphere3D
-    metric: Metric3DTopo
+    metric: Metric5D
     step_to_completion: int
 
     step: int
@@ -45,9 +45,7 @@ class ScharMountainHook(step_hook.StepHook):
         self.build()
 
     def build(self):
-        """
-        ratio : % of the actual montain to apply and build
-        """
+        """Apply a fraction of the final mountain height."""
         self.zbot = self.build_topo_old(self.geom.coordVec_latlon)
         self.zbot_itf_i = self.build_topo_old(self.geom.coordVec_latlon_itf_i)
         self.zbot_itf_j = self.build_topo_old(self.geom.coordVec_latlon_itf_j)
@@ -87,7 +85,6 @@ class ScharMountainHook(step_hook.StepHook):
             raise ValueError
 
     def apply(self, ratio: float):
-        # Match cached terrain fields to the runtime geometry precision.
         if self.zbot.dtype != self.geom.dtype:
             for name in (
                 "zbot",
@@ -105,7 +102,6 @@ class ScharMountainHook(step_hook.StepHook):
             ):
                 setattr(self, name, getattr(self, name).to(dtype=self.geom.dtype))
 
-        # Update the geometry object with the new bottom topography
         self.geom.apply_topography(
             self.zbot * ratio,
             self.zbot_itf_i * ratio,
@@ -121,8 +117,9 @@ class ScharMountainHook(step_hook.StepHook):
             self.large_itf_j_new * ratio,
         )
 
-        # And regenerate the metric to take this new topography into account
+        self.metric.height_map.terrain_ratio = ratio
         self.metric.build_metric()
+        self.metric.to_runtime(self.geom.dtype)
 
     def process(self, Q: numpy.ndarray, t: float) -> numpy.ndarray:
         if self.step < self.step_to_completion:
@@ -142,12 +139,8 @@ class ScharMountainHook(step_hook.StepHook):
         return self.topo(latlon[0], latlon[1], large_scale_only)
 
     def topo(self, lon, lat, large_scale_only: bool = False):
-        """
-        The Schar mountain: a Gaussian envelope modulated by a short-wavelength ripple.
-
-        Since cos² x = (1 + cos 2x)/2, half of the envelope carries the whole mountain height with
-        none of the ripple. That half is the large-scale part h1 asked for by the SLEVE vertical
-        coordinate (Schar et al. 2002, eq. 27), the rest is the small-scale part h2.
+        """SLEVE uses half the Gaussian envelope as h1, leaving the zero-mean ripple in h2
+        (Schar et al. 2002, equation 27).
         """
         r = self.geom.earth_radius * torch.arccos(
             math.sin(self.phim) * torch.sin(lat) + math.cos(self.phim) * torch.cos(lat) * torch.cos(lon - self.lambdam)

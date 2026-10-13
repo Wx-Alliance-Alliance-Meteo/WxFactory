@@ -1,14 +1,5 @@
 #!/usr/bin/env python3
-"""Publication-quality plots and diagnostics for DCMIP-2012 test 1-2.
-
-The DCMIP document requests latitude-height sections of ``q1`` at longitude
-180 degrees after 12 and 24 hours, plus normalized error norms at 24 hours.
-Cubed-sphere nodes do not lie on that meridian, so the section is sampled in
-Cartesian unit-sphere coordinates rather than by combining a longitude band.
-
-Usage:
-    python scripts/plot_dcmip12.py -o results --label dcmip12 [--pdf] results/dcmip12.nc
-"""
+"""DCMIP 1-2 tracer sections at longitude 180 degrees and return-error norms."""
 
 import argparse
 from pathlib import Path
@@ -29,7 +20,6 @@ SNAPSHOT_HOURS = (0.0, 12.0, 24.0)
 
 
 def time_index(times, target):
-    """Index of the output nearest a requested time."""
     return int(numpy.argmin(numpy.abs(times - target)))
 
 
@@ -54,7 +44,6 @@ def integral(field, volume):
 
 
 def error_norms(q, q_exact, volume):
-    """Normalized l1, l2 and l-infinity error norms."""
     error = q - q_exact
     l1 = integral(numpy.abs(error), volume) / integral(numpy.abs(q_exact), volume)
     l2 = numpy.sqrt(integral(error**2, volume)) / numpy.sqrt(integral(q_exact**2, volume))
@@ -71,7 +60,6 @@ def unit_sphere(longitude, latitude):
 
 
 def meridian_stencil(lat, lon, longitude, latitudes, neighbours=4):
-    """Spherical inverse-distance stencil for one exact meridian."""
     tree = cKDTree(unit_sphere(lon.ravel(), lat.ravel()))
     target_lon = numpy.full_like(latitudes, longitude)
     distance, index = tree.query(unit_sphere(target_lon, latitudes), k=neighbours)
@@ -91,7 +79,6 @@ def sample_meridian(values, index, weight):
 
 
 def regular_section(field, elevations, native_latitudes, heights, plot_latitudes):
-    """Interpolate meridional profiles vertically and then across latitude."""
     vertical = numpy.empty((native_latitudes.size, heights.size))
     for column, (z_column, q_column) in enumerate(zip(elevations, field)):
         sample_height = numpy.clip(heights, z_column[0], z_column[-1])
@@ -104,26 +91,14 @@ def plot_latitude_height(data, output_dir, label, pdf):
     native_latitudes = numpy.linspace(-90.0, 90.0, 361)
     plot_latitudes = numpy.linspace(-90.0, 90.0, 721)
     heights = numpy.linspace(0.0, 12_000.0, 301)
-    index, weight = meridian_stencil(
-        data["lat2d"],
-        data["lon2d"],
-        SECTION_LONGITUDE,
-        native_latitudes,
-    )
+    index, weight = meridian_stencil(data["lat2d"], data["lon2d"], SECTION_LONGITUDE, native_latitudes)
 
     elevations = sample_meridian(data["elevation"], index, weight)
     initial_min = float(data["q1"][0].min())
     initial_max = float(data["q1"][0].max())
     levels = numpy.linspace(initial_min, initial_max, 22)
 
-    with plt.rc_context(
-        {
-            "font.family": "serif",
-            "font.size": 9,
-            "axes.linewidth": 0.7,
-            "savefig.dpi": 300,
-        }
-    ):
+    with plt.rc_context({"font.family": "serif", "font.size": 9, "axes.linewidth": 0.7, "savefig.dpi": 300}):
         fig, axes = plt.subplots(1, 2, figsize=(7.2, 3.25), constrained_layout=True, sharex=True, sharey=True)
         contour = None
         for ax, hour in zip(axes, (12.0, 24.0)):
@@ -131,13 +106,7 @@ def plot_latitude_height(data, output_dir, label, pdf):
             meridian = sample_meridian(snapshot, index, weight)
             image = regular_section(meridian, elevations, native_latitudes, heights, plot_latitudes)
             contour = ax.contourf(
-                plot_latitudes,
-                heights / 1000.0,
-                image,
-                levels=levels,
-                cmap="viridis",
-                extend="both",
-                antialiased=False,
+                plot_latitudes, heights / 1000.0, image, levels=levels, cmap="viridis", extend="both", antialiased=False
             )
             ax.text(
                 0.03,
@@ -169,7 +138,6 @@ def plot_latitude_height(data, output_dir, label, pdf):
 
 
 def report_error_norms(data):
-    """Report error at 24 h, when the exact solution is the initial state."""
     final = data["q1"][time_index(data["time"], 24.0 * HOUR)]
     l1, l2, linf = error_norms(final, data["q1"][0], data["volume"])
 
@@ -179,7 +147,7 @@ def report_error_norms(data):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Publication-quality plots for DCMIP-2012 test 1-2.")
+    parser = argparse.ArgumentParser(description="Plots for DCMIP-2012 test 1-2.")
     parser.add_argument("netcdf_file", help="NetCDF output file produced by WxFactory")
     parser.add_argument("-o", "--output-dir", default="results", help="where to write the figures")
     parser.add_argument("--label", default=None, help="tag used in figure names and titles")

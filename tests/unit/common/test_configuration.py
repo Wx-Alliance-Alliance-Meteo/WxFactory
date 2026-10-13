@@ -1,5 +1,6 @@
 import glob
 import os
+from tempfile import TemporaryDirectory
 
 from wx_factory.common.eval_expr import _math_constants
 
@@ -11,6 +12,7 @@ from wx_factory.common import (
     Configuration,
     ConfigurationSchema,
     ConfigValueError,
+    load_default_schema,
     readfile,
 )
 
@@ -19,8 +21,17 @@ config_test_dir = self_dir
 
 
 class ConfigurationTestCases(WxTestCase):
+    def test_default_schema_outside_source_directory(self):
+        previous = os.getcwd()
+        with TemporaryDirectory() as directory:
+            try:
+                os.chdir(directory)
+                self.assertTrue(load_default_schema().fields)
+            finally:
+                os.chdir(previous)
+
     def test_main_precision_option(self):
-        schema_file = os.path.join(config_test_dir, "../../../config/config-format.json")
+        schema_file = os.path.join(config_test_dir, "../../../wx_factory/common/config-format.json")
         schema = ConfigurationSchema(readfile(schema_file))
         precision = next(field for field in schema.fields if field.name == "precision")
 
@@ -63,7 +74,7 @@ class ConfigurationTestCases(WxTestCase):
 
         try:
             schema = ConfigurationSchema(readfile(schema_file))
-        except Exception:
+        except (OSError, ValueError):
             raise ValueError(f"Could not read and parse schema file {schema_file}")
         try:
             conf = Configuration(readfile(config_file), schema, load_post_config=False)

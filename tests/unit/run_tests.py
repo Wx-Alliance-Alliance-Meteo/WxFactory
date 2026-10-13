@@ -18,18 +18,28 @@ from tests.unit.common.test_config_hints import ConfigHintsTestCases
 from tests.unit.common.test_configuration import ConfigurationTestCases
 from tests.unit.common.test_panel_conversions import PanelConversionTestCase
 from tests.unit.common.test_sort_fields import SortFieldsByDependencyTestCases
+from tests.unit.common.test_tensor_math import SpatialContractionTestCase
+from tests.unit.geometry.test_cartesian_metric5d import CartesianEulerTestCase
 from tests.unit.geometry.test_exponential_filter import ExponentialFilterTestCase
 from tests.unit.geometry.test_geometry_registry import GeometryRegistryTestCases
-from tests.unit.geometry.test_horizontal_metric import HorizontalMetricTestCase
+from tests.unit.geometry.test_metric5d import Metric5DTestCase, TabulatedSurfaceTestCase
 from tests.unit.geometry.test_operator_identities import OperatorIdentityTestCase
+from tests.unit.integrators.test_epi import EpiTestCase
+from tests.unit.integrators.test_implicit import ImplicitIntegratorTestCase
+from tests.unit.integrators.test_splitting import SplittingTestCase
+from tests.unit.integrators.test_srerk import SrerkTestCase
+from tests.unit.jacobian.test_euler import EulerJacobianTestCase
+from tests.unit.jacobian.test_euler_partitions import EulerPartitionTestCase
 from tests.unit.jacobian.test_finite_difference import FiniteDifferenceJacobianTestCases
-from tests.unit.jacobian.test_partition_jacobians import PartitionJacobianTestCase
+from tests.unit.output.test_integration_comparison import IntegrationComparisonTestCase
 from tests.unit.output.test_output_registry import OutputRegistryTestCases
 from tests.unit.output.test_state import StateTestCases
 from tests.unit.precondition.test_preconditioner_registry import (
     PreconditionerRegistryTestCases,
 )
 from tests.unit.restart.test_restart import Euler2DRestartTestCase
+from tests.unit.rhs.test_euler import EulerTestCase
+from tests.unit.rhs.test_euler_operator import EulerOperatorTestCase
 from tests.unit.rhs.test_rhs_registry import (
     PartitionedIntegratorTestCases,
     RhsBundleTestCases,
@@ -40,7 +50,7 @@ from tests.unit.solvers.test_exponential_solver_registry import (
 )
 from tests.unit.solvers.test_fgmres import (
     FgmresEdgeCasesTestCases,
-    FgmresScipyTestCases,
+    FgmresTestCases,
 )
 from tests.unit.solvers.test_kiops_pmex_tolerance_cpu import (
     KiopsPmexToleranceCpuTestCases,
@@ -59,130 +69,46 @@ def add_test(suite: unittest.TestSuite, test: unittest.TestCase, test_re: re.Pat
 
 
 def load_tests(test_name: str):
-    """Create a test suite with cases we want to run."""
-
     test_re = re.compile(test_name, re.IGNORECASE)
     suite = unittest.TestSuite()
-
-    add_test(suite, FgmresEdgeCasesTestCases("test_fgmres_throw_when_b_is_smaller_or_equal_to_restart"), test_re)
-
-    add_test(suite, FgmresScipyTestCases("test_compare_implementation_to_scipy"), test_re)
-    add_test(suite, FgmresScipyTestCases("test_compare_implementation_to_scipy_and_residual"), test_re)
-
-    add_test(suite, KiopsPmexToleranceCpuTestCases("test_compare_kiops_pmex"), test_re)
-
-    add_test(suite, FiniteDifferenceJacobianTestCases("test_fd_matches_equations_10_and_14"), test_re)
-    add_test(suite, FiniteDifferenceJacobianTestCases("test_fd_preserves_working_precision"), test_re)
-    add_test(suite, FiniteDifferenceJacobianTestCases("test_fd_norm_uses_working_precision"), test_re)
-
-    add_test(suite, HorizontalMetricTestCase("test_forms_are_exact_inverses"), test_re)
-    add_test(suite, HorizontalMetricTestCase("test_both_forms_are_symmetric"), test_re)
-    add_test(suite, HorizontalMetricTestCase("test_both_forms_are_positive_definite"), test_re)
-    add_test(suite, HorizontalMetricTestCase("test_reduces_to_the_identity_at_a_panel_centre"), test_re)
-    add_test(suite, HorizontalMetricTestCase("test_off_diagonal_vanishes_only_on_the_axes"), test_re)
-
-    add_test(suite, ExponentialFilterTestCase("test_quadrature_weights_are_double_precision"), test_re)
-    add_test(suite, ExponentialFilterTestCase("test_lowest_mode_is_unfiltered"), test_re)
-    add_test(suite, ExponentialFilterTestCase("test_high_modes_are_attenuated"), test_re)
-    add_test(suite, ExponentialFilterTestCase("test_preserves_metric_weighted_integral"), test_re)
-    add_test(suite, ExponentialFilterTestCase("test_unweighted_filtering_would_not_conserve"), test_re)
-    add_test(suite, OperatorIdentityTestCase("test_derivative_annihilates_a_constant"), test_re)
-    add_test(suite, OperatorIdentityTestCase("test_extrapolation_reproduces_a_constant"), test_re)
-    add_test(suite, OperatorIdentityTestCase("test_single_precision_matmul_is_not_reduced"), test_re)
-
-    add_test(suite, PartitionJacobianTestCase("test_directional_derivative"), test_re)
-    add_test(suite, PartitionJacobianTestCase("test_finite_at_zero_vertical_velocity"), test_re)
-    add_test(suite, PartitionJacobianTestCase("test_rhs_partition_identity"), test_re)
-    add_test(suite, PartitionJacobianTestCase("test_j2_matches_explicit_directional_derivative"), test_re)
-    add_test(suite, PartitionJacobianTestCase("test_jacobian_partition_identity"), test_re)
-
-    add_test(suite, ExponentialSolverRegistryTestCases("test_builtin_solvers_are_registered"), test_re)
-    add_test(suite, ExponentialSolverRegistryTestCases("test_unknown_solver_lists_registered_names"), test_re)
-    add_test(suite, ExponentialSolverRegistryTestCases("test_duplicate_registration_raises"), test_re)
-    add_test(suite, ExponentialSolverRegistryTestCases("test_pmex_adapter_translates_common_request"), test_re)
-    add_test(suite, ExponentialSolverRegistryTestCases("test_pmex_ne_supplies_its_default_minimum"), test_re)
-    add_test(suite, ExponentialSolverRegistryTestCases("test_exode_rejects_multiple_output_times"), test_re)
-    add_test(
-        suite,
-        ExponentialSolverRegistryTestCases("test_rosexp2_resolves_configured_solver_during_construction"),
-        test_re,
-    )
-
-    # Requires the tests/data submodule to be initialized by the test setup.
-    add_test(suite, StateTestCases("test_save_load_works"), test_re)
-    add_test(suite, Euler2DRestartTestCase("test_gen_restart"), test_re)
-    add_test(suite, Euler2DRestartTestCase("test_read_restart"), test_re)
-
-    add_test(suite, ConfigurationTestCases("test_load_configuration_with_schema_default"), test_re)
-    add_test(suite, ConfigurationTestCases("test_load_configuration_with_valid_values"), test_re)
-    add_test(suite, ConfigurationTestCases("test_load_configuration_with_invalid_values"), test_re)
-    add_test(suite, ConfigurationTestCases("test_load_configuration_with_dependency"), test_re)
-    add_test(suite, ConfigurationTestCases("test_load_configuration_with_expression"), test_re)
-    add_test(suite, ConfigurationTestCases("test_main_precision_option"), test_re)
-
-    add_test(suite, PanelConversionTestCase("test_covariant_is_the_inverse_transpose_of_contravariant"), test_re)
-    add_test(suite, PanelConversionTestCase("test_conversions_preserve_the_scalar_contraction"), test_re)
-    add_test(suite, PanelConversionTestCase("test_conversions_are_invertible"), test_re)
-    add_test(suite, PanelConversionTestCase("test_conversions_are_the_identity_at_a_seam_centre"), test_re)
-
-    add_test(suite, ConfigHintsTestCases("test_type_hints_are_up_to_date"), test_re)
-
-    add_test(suite, SortFieldsByDependencyTestCases("test_no_dependencies_preserves_order"), test_re)
-    add_test(suite, SortFieldsByDependencyTestCases("test_dependent_field_placed_after_target"), test_re)
-    add_test(suite, SortFieldsByDependencyTestCases("test_multi_level_chain_is_ordered"), test_re)
-    add_test(suite, SortFieldsByDependencyTestCases("test_no_field_is_emitted_more_than_once"), test_re)
-    add_test(suite, SortFieldsByDependencyTestCases("test_unresolvable_dependency_is_kept_not_dropped"), test_re)
-    add_test(suite, SortFieldsByDependencyTestCases("test_dependency_cycle_does_not_hang_and_keeps_fields"), test_re)
-    add_test(suite, SortFieldsByDependencyTestCases("test_duplicate_name_raises"), test_re)
-
-    add_test(suite, Angle24TestCase("test_cyclic"), test_re)
-    add_test(suite, Angle24TestCase("test_rounding"), test_re)
-
-    add_test(suite, RhsBundleTestCases("test_full_and_shape_are_stored"), test_re)
-    add_test(suite, RhsBundleTestCases("test_missing_partitions_raise_when_called"), test_re)
-    add_test(suite, RhsBundleTestCases("test_provided_partitions_are_used"), test_re)
-    add_test(suite, RhsBundleTestCases("test_has_partition_reports_availability"), test_re)
-    add_test(suite, RhsBundleTestCases("test_reason_reaches_the_user"), test_re)
-    add_test(suite, RhsBundleTestCases("test_half_a_partition_is_rejected"), test_re)
-
-    add_test(suite, PartitionedIntegratorTestCases("test_registries_are_disjoint"), test_re)
-    add_test(suite, PartitionedIntegratorTestCases("test_known_partitioned_schemes"), test_re)
-    add_test(suite, PartitionedIntegratorTestCases("test_partitioned_scheme_without_partition_is_refused"), test_re)
-    add_test(suite, PartitionedIntegratorTestCases("test_unknown_scheme_lists_both_registries"), test_re)
-    add_test(suite, RhsRegistryTestCases("test_expected_combinations_are_registered"), test_re)
-    add_test(suite, RhsRegistryTestCases("test_unknown_discretization_raises"), test_re)
-    add_test(suite, RhsRegistryTestCases("test_unregistered_combination_raises_helpful_error"), test_re)
-    add_test(suite, RhsRegistryTestCases("test_resolve_dispatches_to_registered_factory"), test_re)
-    add_test(suite, RhsRegistryTestCases("test_duplicate_registration_raises"), test_re)
-
-    add_test(suite, PreconditionerRegistryTestCases("test_none_resolves_to_no_preconditioner"), test_re)
-    add_test(suite, PreconditionerRegistryTestCases("test_no_builtin_preconditioners"), test_re)
-    add_test(suite, PreconditionerRegistryTestCases("test_unknown_preconditioner_raises_helpful_error"), test_re)
-    add_test(suite, PreconditionerRegistryTestCases("test_resolve_dispatches_to_registered_factory"), test_re)
-    add_test(suite, PreconditionerRegistryTestCases("test_duplicate_registration_raises"), test_re)
-    add_test(suite, PreconditionerRegistryTestCases("test_base_prepare_is_a_noop"), test_re)
-
-    add_test(suite, GeometryRegistryTestCases("test_expected_combinations_are_registered"), test_re)
-    add_test(suite, GeometryRegistryTestCases("test_unregistered_combination_raises_helpful_error"), test_re)
-    add_test(suite, GeometryRegistryTestCases("test_resolve_dispatches_to_registered_factory"), test_re)
-    add_test(suite, GeometryRegistryTestCases("test_grid_file_forces_cubed_sphere_2d"), test_re)
-    add_test(suite, GeometryRegistryTestCases("test_duplicate_registration_raises"), test_re)
-
-    add_test(suite, OutputRegistryTestCases("test_expected_combinations_are_registered"), test_re)
-    add_test(suite, OutputRegistryTestCases("test_format_independent_family_uses_default_entry"), test_re)
-    add_test(suite, OutputRegistryTestCases("test_format_specific_dispatch"), test_re)
-    add_test(suite, OutputRegistryTestCases("test_unknown_combination_raises_helpful_error"), test_re)
-    add_test(suite, OutputRegistryTestCases("test_duplicate_registration_raises"), test_re)
-
-    add_test(suite, StepHookRegistryTestCases("test_builtin_hooks_registered_with_expected_phases"), test_re)
-    add_test(suite, StepHookRegistryTestCases("test_resolve_only_returns_requested_phase"), test_re)
-    add_test(suite, StepHookRegistryTestCases("test_schar_does_not_apply_to_non_cubesphere"), test_re)
-    add_test(suite, StepHookRegistryTestCases("test_dcmip_dispatches_on_case_number"), test_re)
-    add_test(suite, StepHookRegistryTestCases("test_no_hooks_when_nothing_applies"), test_re)
-    add_test(suite, StepHookRegistryTestCases("test_provider_returning_none_is_skipped"), test_re)
-    add_test(suite, StepHookRegistryTestCases("test_unknown_phase_raises"), test_re)
-    add_test(suite, StepHookRegistryTestCases("test_duplicate_registration_raises"), test_re)
-
+    for test_case in (
+        IntegrationComparisonTestCase,
+        SpatialContractionTestCase,
+        EulerJacobianTestCase,
+        EulerPartitionTestCase,
+        ImplicitIntegratorTestCase,
+        SrerkTestCase,
+        EpiTestCase,
+        SplittingTestCase,
+        EulerOperatorTestCase,
+        EulerTestCase,
+        Metric5DTestCase,
+        TabulatedSurfaceTestCase,
+        CartesianEulerTestCase,
+        FgmresEdgeCasesTestCases,
+        FgmresTestCases,
+        KiopsPmexToleranceCpuTestCases,
+        FiniteDifferenceJacobianTestCases,
+        ExponentialFilterTestCase,
+        OperatorIdentityTestCase,
+        ExponentialSolverRegistryTestCases,
+        StateTestCases,
+        Euler2DRestartTestCase,
+        ConfigurationTestCases,
+        PanelConversionTestCase,
+        ConfigHintsTestCases,
+        SortFieldsByDependencyTestCases,
+        Angle24TestCase,
+        RhsBundleTestCases,
+        PartitionedIntegratorTestCases,
+        RhsRegistryTestCases,
+        PreconditionerRegistryTestCases,
+        GeometryRegistryTestCases,
+        OutputRegistryTestCases,
+        StepHookRegistryTestCases,
+    ):
+        for name in unittest.defaultTestLoader.getTestCaseNames(test_case):
+            add_test(suite, test_case(name), test_re)
     return suite
 
 

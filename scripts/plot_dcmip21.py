@@ -1,19 +1,5 @@
 #!/usr/bin/env python3
-"""Publication-quality plots for DCMIP-2012 test 2-1.
-
-The DCMIP document recommends longitude-height sections at the equator at
-2400, 3600, and 7200 s.  Cubed-sphere nodes do not lie exactly on the
-equator, so this script brackets latitude zero on each equatorial panel and
-interpolates the model fields to it.  Treating a latitude band as a single
-line produces visible stripes and must be avoided.
-
-Both constant-height sections and counterparts on the native SLEVE levels
-are written.  The former are the primary inter-model comparison; the latter
-show the terrain-following coordinate deformation without vertical remapping.
-
-Usage:
-    python scripts/plot_dcmip21.py -o results --label dcmip21 [--pdf] results/dcmip21_rosexp.nc
-"""
+"""DCMIP 2-1 equatorial sections on native and constant-height levels."""
 
 import argparse
 from pathlib import Path
@@ -36,7 +22,6 @@ MOUNTAIN_LON = 45.0
 
 
 def time_indices(times, targets):
-    """Return the nearest output index for every requested time."""
     return [int(numpy.argmin(numpy.abs(times - target))) for target in targets]
 
 
@@ -91,7 +76,6 @@ def interpolate_equator(values, stencil):
 
 
 def regular_section(field, elevations, longitudes, topography, heights, plot_longitudes):
-    """Interpolate terrain-following profiles to a regular longitude-height grid."""
     vertical = numpy.empty((longitudes.size, heights.size))
     for column, (z_column, q_column) in enumerate(zip(elevations, field)):
         interpolator = PchipInterpolator(z_column, q_column, extrapolate=False)
@@ -144,7 +128,6 @@ def load_sections(filename):
 
 
 def nice_symmetric_limit(images):
-    """Choose a round shared limit that contains every plotted value."""
     values = numpy.concatenate([numpy.abs(numpy.ma.asarray(image).compressed()) for image in images])
     raw = float(numpy.max(values))
     if not numpy.isfinite(raw) or raw == 0.0:
@@ -161,12 +144,7 @@ def plot_sections(data, output_dir, label, field, symbol, units, filename, pdf):
     surfaces = []
     for snapshot in data[field]:
         image, surface = regular_section(
-            snapshot,
-            data["elevation"],
-            data["longitude"],
-            data["topography"],
-            heights,
-            plot_longitudes,
+            snapshot, data["elevation"], data["longitude"], data["topography"], heights, plot_longitudes
         )
         images.append(image)
         surfaces.append(surface)
@@ -187,34 +165,14 @@ def plot_sections(data, output_dir, label, field, symbol, units, filename, pdf):
             "savefig.dpi": 300,
         }
     ):
-        fig, axes = plt.subplots(
-            len(images),
-            1,
-            figsize=(7.2, 6.7),
-            sharex=True,
-            sharey=True,
-            constrained_layout=True,
-        )
+        fig, axes = plt.subplots(len(images), 1, figsize=(7.2, 6.7), sharex=True, sharey=True, constrained_layout=True)
 
         contour = None
         for ax, image, surface, time in zip(axes, images, surfaces, data["time"]):
             contour = ax.contourf(
-                plot_longitudes,
-                heights / 1000.0,
-                image,
-                levels=levels,
-                cmap="RdBu_r",
-                extend="both",
-                antialiased=False,
+                plot_longitudes, heights / 1000.0, image, levels=levels, cmap="RdBu_r", extend="both", antialiased=False
             )
-            ax.fill_between(
-                plot_longitudes,
-                0.0,
-                surface / 1000.0,
-                color="0.25",
-                linewidth=0.0,
-                zorder=5,
-            )
+            ax.fill_between(plot_longitudes, 0.0, surface / 1000.0, color="0.25", linewidth=0.0, zorder=5)
             ax.axvline(MOUNTAIN_LON, color="0.15", lw=0.55, ls=(0, (2, 2)), alpha=0.8)
             ax.text(
                 0.012,
@@ -273,24 +231,13 @@ def plot_native_sections(data, output_dir, label, field, symbol, units, filename
         }
     ):
         fig, axes = plt.subplots(
-            len(data["time"]),
-            1,
-            figsize=(7.2, 6.7),
-            sharex=True,
-            sharey=True,
-            constrained_layout=True,
+            len(data["time"]), 1, figsize=(7.2, 6.7), sharex=True, sharey=True, constrained_layout=True
         )
         contour = None
         for ax, snapshot, time in zip(axes, data[field], data["time"]):
             plot_field = periodic_interpolate(data["longitude"], snapshot, plot_longitude)
             contour = ax.contourf(
-                x,
-                plot_elevation / 1000.0,
-                plot_field,
-                levels=levels,
-                cmap="RdBu_r",
-                extend="both",
-                antialiased=False,
+                x, plot_elevation / 1000.0, plot_field, levels=levels, cmap="RdBu_r", extend="both", antialiased=False
             )
             ax.fill_between(plot_longitude, 0.0, surface / 1000.0, color="0.25", linewidth=0.0, zorder=5)
             ax.axvline(MOUNTAIN_LON, color="0.15", lw=0.55, ls=(0, (2, 2)), alpha=0.8)
@@ -324,7 +271,6 @@ def plot_native_sections(data, output_dir, label, field, symbol, units, filename
 
 
 def plot_topography(data, output_dir, label, pdf):
-    """Plot the exact-equator Schär mountain profile."""
     longitude = data["longitude"]
     topography = data["topography"]
     keep = (longitude >= MOUNTAIN_LON - 20.0) & (longitude <= MOUNTAIN_LON + 20.0)
@@ -351,7 +297,7 @@ def plot_topography(data, output_dir, label, pdf):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Publication-quality plots for DCMIP-2012 test 2-1.")
+    parser = argparse.ArgumentParser(description="Plots for DCMIP-2012 test 2-1.")
     parser.add_argument("netcdf_file", help="NetCDF output file produced by WxFactory")
     parser.add_argument("-o", "--output-dir", default="results", help="where to write the figures")
     parser.add_argument("--label", default=None, help="tag used in figure names and titles")

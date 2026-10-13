@@ -73,12 +73,15 @@ class InputManager:
             vector, config = load_state(save_file)
             config_str = config.config_content
             schema_str = config.schema.raw_string
+            s.return_value = config.state_representation
 
         config_str = comm.bcast(config_str)
         schema_str = comm.bcast(schema_str)
 
         schema = ConfigurationSchema(schema_str)
-        return Configuration(config_str, schema), vector
+        restored = Configuration(config_str, schema)
+        restored.state_representation = s.return_value
+        return restored, vector
 
     @staticmethod
     def read_grid_params(
@@ -128,7 +131,6 @@ class InputManager:
             total_points = 6 * num_points * num_points
             mountain_ref = georef.GeoRef.fromrecord(mountain_rec)
             if mountain_rec.ni * mountain_rec.nj * mountain_rec.nk != total_points or mountain_rec.grtyp != "Q":
-                # Not the same grid, need to interpolate
                 cs_ref = georef.CubedSphereRef(
                     geometry.lambda0,
                     geometry.phi0,

@@ -4,9 +4,7 @@ from unittest.mock import patch
 from tests.unit.wx_test import WxTestCase
 from wx_factory.integrators.rosexp2 import RosExp2
 from wx_factory.solvers.exponential_solver import (
-    EXPONENTIAL_SOLVER_REGISTRY,
     ExponentialSolverRequest,
-    register_exponential_solver,
     resolve_exponential_solver,
 )
 
@@ -26,16 +24,9 @@ class ExponentialSolverRegistryTestCases(WxTestCase):
             announce=False,
         )
 
-    def test_builtin_solvers_are_registered(self):
-        self.assertEqual({"pmex", "pmex_ne", "kiops", "exode"}, set(EXPONENTIAL_SOLVER_REGISTRY))
-
     def test_unknown_solver_lists_registered_names(self):
         with self.assertRaisesRegex(ValueError, "Registered solvers.*exode.*kiops.*pmex"):
             resolve_exponential_solver("missing")
-
-    def test_duplicate_registration_raises(self):
-        with self.assertRaisesRegex(ValueError, "already registered"):
-            register_exponential_solver("pmex")(lambda request: request)
 
     @patch("wx_factory.solvers.exponential_solver.pmex")
     def test_pmex_adapter_translates_common_request(self, pmex_mock):

@@ -158,7 +158,6 @@ def sw_from_file(geom: CubedSphere2D, operators: DFROperators, config: Configura
 
     # Easier shape to work with
     h_split = h_surface.reshape(h_surface.shape[:-1] + (num_solpts, num_solpts))
-    print(f"itf shapes: {h_split.shape}, {h_surface_itf_i.shape}, {h_surface_itf_j.shape}", flush=True)
 
     h_south = h_split[..., 0, :]
     h_north = h_split[..., -1, :]

@@ -7,7 +7,7 @@ from mpi4py import MPI
 
 from ..common import Configuration
 from ..context import Context
-from ..geometry import DFROperators, GeometryContext, Metric3DTopo, resolve_geometry
+from ..geometry import DFROperators, GeometryContext, Metric5D, resolve_geometry
 from ..geometry.geometry import cast_double_arrays
 from ..init.init_state_vars import init_state_vars
 from ..integrators import Integrator, resolve as _resolve_integrator
@@ -15,7 +15,7 @@ from ..output.input_manager import InputManager
 from ..output.registry import OutputContext, resolve_output
 from ..precondition import PreconditionerContext, resolve_preconditioner
 from ..rhs.rhs_selector import RhsContext, resolve_rhs
-from ..step_hooks import StepHook
+from ..step_hooks import ScharMountainHook, StepHook
 from ..step_hooks.registry import (
     PHASE_GEOMETRY,
     PHASE_STATE,
@@ -26,15 +26,7 @@ from ..wx_mpi import Conditional, SingleProcess
 
 
 class Simulation:
-    """Encapsulate parameters and structures needed to run a WxFactory simulation.
-
-    An object of this class is instantiated based on the content of a given config file. The
-    config is read and validated, then all required structures are initialized (geometry, metric terms,
-    initial state, etc.)
-
-    Once the object is created, it can be used to step through the given problem one at a time, or to run
-    it entirely.
-    """
+    """Initialize model structures from a configuration, then advance with step() or run()."""
 
     config: Configuration
     step_hooks: dict[type, StepHook]
@@ -67,6 +59,8 @@ class Simulation:
                 f"Need to provide either a Configuration or a config file name to create a Simulation\n"
                 f"(Gave a {type(config)})"
             )
+
+        self._validate_euler()
 
         if self.rank == 0 and not quiet:
             print(f"{self.config}", flush=True)
@@ -108,12 +102,9 @@ class Simulation:
         # operations selectively retain or accumulate in float64.
         runtime_dtype = torch.float32 if self.config.precision == "mixed" else torch.float64
 
-        # Build the geometry, the metric terms and the initial state in double precision, then store
-        # them once in the working precision.
         self.context.real_dtype = torch.float64
 
         self.geometry = resolve_geometry(GeometryContext.from_simulation(self))
-        # Cubed-sphere geometries carry a process topology; a Cartesian grid has none.
         self.process_topo = getattr(self.geometry, "process_topology", None)
         # Geometry-phase step hooks must exist before init_state_vars, which reads them.
         self.step_hooks.update(
@@ -121,24 +112,20 @@ class Simulation:
         )
         operators_double = DFROperators(self.geometry, self.context)
         self.initial_state = init_state_vars(self.geometry, operators_double, self.config, self.step_hooks)
-        # Preserve the pre-restart double state for logarithmic extrapolation.
-        q_ref_double = self.initial_state.Q.clone()
 
         self.context.real_dtype = runtime_dtype
         if runtime_dtype != torch.float64:
             self.geometry.dtype = runtime_dtype
             cast_double_arrays(self.geometry, runtime_dtype)
-            cast_double_arrays(self.initial_state.metric, runtime_dtype)
+            if isinstance(self.initial_state.metric, Metric5D):
+                self.initial_state.metric.to_runtime(runtime_dtype)
+            else:
+                cast_double_arrays(self.initial_state.metric, runtime_dtype)
             if self.initial_state.topography is not None:
                 cast_double_arrays(self.initial_state.topography, runtime_dtype)
             self.initial_state.Q = self.initial_state.Q.to(runtime_dtype)
 
-        # Rebuilt against the stored geometry so the runtime operators carry the working precision.
         self.operators_real = DFROperators(self.geometry, self.context)
-        if isinstance(self.initial_state.metric, Metric3DTopo):
-            # Terrain ramping rebuilds this metric in the runtime precision.
-            self.initial_state.metric.matrix = self.operators_real
-
         self.output = resolve_output(
             OutputContext(
                 config=self.config,
@@ -151,6 +138,11 @@ class Simulation:
             )
         )
         self.initial_state.Q, self.starting_step = self._determine_starting_state()
+        if isinstance(self.initial_state.metric, Metric5D) and self.config.enable_schar_mountain:
+            hook = self.step_hooks[ScharMountainHook]
+            if hook.step_to_completion > 0 and self.starting_step > 0:
+                hook.step = min(self.starting_step, hook.step_to_completion)
+                hook.apply(hook.step / hook.step_to_completion)
 
         self.Q = self.initial_state.Q.clone()
         self.step_id = self.starting_step
@@ -164,8 +156,6 @@ class Simulation:
                 ptopo=self.process_topo,
                 param=self.config,
                 fields_shape=self.initial_state.Q.shape,
-                q_ref=q_ref_double,
-                operators_double=operators_double,
             )
         )
 
@@ -207,8 +197,69 @@ class Simulation:
         self.integrator.sim_time = self.t
         self.num_steps = int(numpy.ceil(self.config.t_end / self.config.dt)) - self.starting_step
 
+    def _validate_euler(self):
+        """Validate Euler support before geometry construction and MPI exchanges."""
+        config = self.config
+        if config.equations != "euler":
+            return
+        if config.grid_type not in ("cubed_sphere", "cartesian3d") or config.grid_file:
+            raise ValueError("Euler momentum requires Euler equations on a cubed sphere or Cartesian slab")
+        cases = (
+            (1, 2, 3, 4, 651, 666)
+            if config.grid_type == "cartesian3d"
+            else (11, 12, 13, 20, 200, 201, 202, 21, 22, 31, 41, 77)
+        )
+        external_initialization = (
+            config.grid_type == "cubed_sphere" and config.case_number < 0 and config.initial_conditions
+        )
+        if config.case_number not in cases and not external_initialization:
+            raise ValueError(f"Euler initialization on {config.grid_type} supports cases {cases}")
+        if config.grid_type == "cartesian3d" and config.z0 != 0:
+            raise ValueError("The Cartesian slab currently requires z0 = 0")
+        prescribed_transport = config.grid_type == "cubed_sphere" and config.case_number in (11, 12, 13)
+        if config.advection_only != prescribed_transport:
+            raise ValueError("Euler advection_only must be enabled exactly for DCMIP cases 11, 12 and 13")
+        if config.enable_schar_mountain and config.case_number not in (21, 22):
+            raise ValueError("The Euler Schar mountain hook is supported for cases 21 and 22")
+        if config.time_integrator not in (
+            "epi2",
+            "epi3",
+            "epi4",
+            "epi5",
+            "epi6",
+            *(f"epi_stiff{order}" for order in range(2, 10)),
+            "euler1",
+            "tvdrk3",
+            "partrosexp2",
+            "bdf2",
+            "crank_nicolson",
+            "backward_euler",
+            "sdirk",
+            "srerk3",
+            "srerk4",
+            "srerk5",
+            "srerk6",
+            "srerk7",
+            "srerk8",
+            "srerk9",
+            "ros2",
+            "lie",
+            "strang",
+            "os22",
+            "strang_epi2_ros2",
+            "strang_ros2_epi2",
+        ):
+            raise ValueError(
+                "Euler currently supports epi2 through epi6, epi_stiff2 through epi_stiff9, euler1, tvdrk3, partrosexp2, bdf2, crank_nicolson, "
+                "backward_euler, sdirk, srerk3 through srerk9, ros2, lie, strang, os22, "
+                "strang_epi2_ros2 and strang_ros2_epi2"
+            )
+        if config.time_integrator == "ros2" and config.jacobian != "analytic":
+            raise ValueError("Standalone Euler ROS2 currently requires jacobian = analytic")
+        if config.grid_type == "cubed_sphere" and config.output_freq > 0 and config.output_format not in ("netcdf", "zarr"):
+            raise ValueError("Euler physical output currently supports netcdf and zarr")
+
     def step(self):
-        """Advance the simulation by one time step."""
         if self.t < self.config.t_end:
             if self.t + self.config.dt > self.config.t_end:
                 self.config.dt = self.config.t_end - self.t
@@ -226,14 +277,25 @@ class Simulation:
             if self.rank == 0:
                 print(f"Elapsed time for step: {self.integrator.latest_time:.3f} secs", flush=True)
 
-            # Check whether there are any NaNs in the solution
-            # TODO put this inside the `step` function of the integrator
             self._check_for_nan(self.Q)
 
             for hook_type in self.step_hooks:
-                self.Q = self.step_hooks[hook_type].process(self.Q, self.t)
+                hook = self.step_hooks[hook_type]
+                terrain_changed = isinstance(hook, ScharMountainHook) and hook.step < hook.step_to_completion
+                euler_terrain_changed = isinstance(self.initial_state.metric, Metric5D) and terrain_changed
+                if euler_terrain_changed:
+                    self.rhs.full.invalidate_geometry()
+                self.Q = hook.process(self.Q, self.t)
+                if euler_terrain_changed:
+                    self.rhs.full.refresh_geometry()
+                    previous_integrator = self.integrator
+                    self.integrator = _resolve_integrator(
+                        self.config.time_integrator, self.config, self.rhs, self.preconditioner, self.context
+                    )
+                    for name in ("sim_time", "num_completed_steps", "latest_time", "failure_flag", "output_manager"):
+                        setattr(self.integrator, name, getattr(previous_integrator, name))
 
-            self.output.step(self.Q, self.step_id)  # Perform any requested output
+            self.output.step(self.Q, self.step_id)
             sys.stdout.flush()
 
             if self.integrator.failure_flag == 0:
@@ -242,30 +304,26 @@ class Simulation:
         return False
 
     def run(self):
-        """Run the entire simulation step by step"""
         self.step_id = self.starting_step
         self.Q = self.initial_state.Q
 
         start_time = time()
 
         while self.step():
-            pass  # Step until everything is done
+            pass
 
         # print_times is a diagnostic of the instrumented DFR right-hand side; RhsAdvection2d has no
         # timing instrumentation and does not provide it.
         if self.rank == 0 and hasattr(self.rhs.full, "print_times"):
             self.rhs.full.print_times()
 
-        self.output.finalize(time() - start_time)  # Close any open output file
+        self.output.finalize(time() - start_time)
 
     def _make_context(self, context: Context | None) -> Context:
-        """Create the context object which will determine on what hardware (CPU/GPU) each part of the simulation will
-        be executed."""
         if context is not None:
             self.comm = context.comm
         else:
             context = Context(comm=self.comm, device_type=self.config.pytorch_device)
-        # Share this context with helpers and nested integrators.
         Context.set_default(context)
         return context
 
@@ -315,13 +373,17 @@ class Simulation:
         return self.initial_state.Q, 0
 
     def _create_time_integrator(self, name: str) -> Integrator:
-        """Create the appropriate time integrator object based on params"""
         if self.comm.rank == 0:
             print(f"Running with time integrator: {name}")
-        return _resolve_integrator(name, self.config, self.rhs, self.preconditioner, self.context)
+        method = _resolve_integrator(name, self.config, self.rhs, self.preconditioner, self.context)
+        from ..integrators.prescribed_transport import PrescribedTransportIntegrator
+        from ..rhs.rhs_prescribed_transport import RhsPrescribedTransport
+
+        if isinstance(self.rhs.full, RhsPrescribedTransport):
+            return PrescribedTransportIntegrator(self.config, method, self.rhs.full, context=self.context)
+        return method
 
     def _check_for_nan(self, Q):
-        """Raise an exception if there are NaNs in the input"""
         # Reduce on-device so we only transfer a single scalar to the host, and avoid
         # a full-state D2H PCIe copy of Q just to scan it for NaNs.
         has_nan = bool(torch.isnan(Q).any().item())

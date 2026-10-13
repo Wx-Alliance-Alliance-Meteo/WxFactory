@@ -3,17 +3,16 @@ from abc import ABC, abstractmethod
 from torch import Tensor
 
 from ..common import Configuration
-from ..geometry import Geometry, Metric2D, Metric3DTopo
+from ..geometry import Geometry, Metric2D
 
 
 class PDE(ABC):
-    """PDE groups a set of parameters and function used for the computation of a right-hand side (RHS)."""
 
     def __init__(
         self,
         geometry: Geometry,
         config: Configuration,
-        metric: Metric2D | Metric3DTopo,
+        metric: Metric2D,
         num_dim: int,
         num_var: int,
         num_elem: int,

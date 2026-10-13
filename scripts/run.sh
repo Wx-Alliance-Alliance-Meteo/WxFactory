@@ -1,18 +1,19 @@
 #!/usr/bin/env bash
 
-vars=$(env                      \
-        | grep -v "[']"         \
-        | grep -v '"'           \
-        | grep -v "^BASH_"      \
-        | grep -v "^CUDA_"      \
-        | grep "^[a-zA-Z0-9]"   \
-        | sed -e 's/=.*$//')
+mpi_exports=()
+while IFS='=' read -r variable value; do
+    case "$variable" in
+        BASH_*|CUDA_*) continue ;;
+    esac
+    case "$variable" in
+        [a-zA-Z0-9]*) ;;
+        *) continue ;;
+    esac
+    case "$value" in
+        *\'*|*\"*) continue ;;
+    esac
+    mpi_exports+=(-x "$variable")
+done < <(env)
 
-exports=""
-for v in $vars; do
-    exports="${exports} -x $v"
-done
-
-exports="${exports} -x LD_PRELOAD=libmpi.so"
-
-mpirun ${exports} $@
+mpi_exports+=(-x LD_PRELOAD=libmpi.so)
+exec mpirun "${mpi_exports[@]}" "$@"

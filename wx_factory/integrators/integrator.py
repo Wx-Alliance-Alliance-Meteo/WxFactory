@@ -58,6 +58,31 @@ class Integrator(ABC):
             context=self.context,
         )
 
+    def _implicit_state_and_rhs(self, state, rhs):
+        """Evaluate Euler Newton residuals in float64 to reduce cancellation."""
+        if hasattr(rhs, "double_precision_rhs"):
+            if state.is_cuda:
+                rhs.metric.offload_derivatives()
+            rhs = rhs.double_precision_rhs()
+            state = state.to(rhs.metric.volume.G_cov.dtype)
+        return state, rhs
+
+    def _newton_jacobian(self, rhs, dt, rhs_weight):
+        """Build I/dt - rhs_weight F' at each Newton iterate when available."""
+        if getattr(self.param, "jacobian", None) != "analytic" or not hasattr(rhs, "linearize"):
+            return None
+
+        def linearize(state):
+            action = rhs.linearize(state)
+
+            def matvec(vector):
+                vector = vector.to(state.dtype)
+                return vector / dt - rhs_weight * action(vector).reshape(vector.shape)
+
+            return matvec
+
+        return linearize
+
     @abstractmethod
     def __step__(self, Q: Tensor, dt: float) -> Tensor:
         pass
@@ -66,7 +91,6 @@ class Integrator(ABC):
         pass
 
     def step(self, Q: Tensor, dt: float) -> Tensor:
-        """Advance the system forward in time"""
         t0 = time()
 
         self.__prestep__(Q, dt)
@@ -74,7 +98,6 @@ class Integrator(ABC):
         if self.preconditioner is not None:
             self.preconditioner.prepare(dt, Q)
 
-        # The stepping itself
         result = self.__step__(Q, dt)
 
         t1 = time()

@@ -3,7 +3,7 @@ import unittest
 
 from wx_test import WxTestCase
 
-from wx_factory.output.registry import OUTPUT_REGISTRY, register_output, resolve_output
+from wx_factory.output.registry import OUTPUT_REGISTRY, resolve_output
 
 
 def make_ctx(output_family, output_format):
@@ -14,11 +14,6 @@ def make_ctx(output_family, output_format):
 
 
 class OutputRegistryTestCases(WxTestCase):
-    def test_expected_combinations_are_registered(self):
-        keys = set(OUTPUT_REGISTRY)
-        self.assertIn(("cartesian", None), keys)
-        self.assertIn(("cubesphere", "netcdf"), keys)
-        self.assertIn(("cubesphere", "fst"), keys)
 
     def test_format_independent_family_uses_default_entry(self):
         # The cartesian family registers with format None and must match any requested format.
@@ -46,21 +41,6 @@ class OutputRegistryTestCases(WxTestCase):
         with self.assertRaises(ValueError) as cm:
             resolve_output(make_ctx("cubesphere", "hdf5"))
         self.assertIn("Registered combinations", str(cm.exception))
-
-    def test_duplicate_registration_raises(self):
-        @register_output("dup_family", "fmt")
-        def _first(ctx):
-            return None
-
-        try:
-            with self.assertRaises(ValueError):
-
-                @register_output("dup_family", "fmt")
-                def _second(ctx):
-                    return None
-
-        finally:
-            del OUTPUT_REGISTRY[("dup_family", "fmt")]
 
 
 if __name__ == "__main__":

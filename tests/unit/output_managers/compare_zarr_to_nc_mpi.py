@@ -11,12 +11,13 @@ from mpi_test import MpiTestCase
 from wx_factory.context import Context
 from wx_factory.geometry import (
     Cartesian3D,
+    CartesianMetric5D,
     CubedSphere2D,
     CubedSphere3D,
     DFROperators,
     GeometryContext,
     Metric2D,
-    Metric3DTopo,
+    Metric5D,
     resolve_geometry,
 )
 from wx_factory.output import InputManager
@@ -54,11 +55,11 @@ class CompareZarrToNcTestCase(MpiTestCase):
 
         for f in files:
             if f.endswith("_nc.npy"):
-                key = f[:-7]  # remove "_nc.npy"
+                key = f[:-7]
                 nc_files[key] = os.path.join(self.state_dir, f)
 
             elif f.endswith("_zarr.npy"):
-                key = f[:-9]  # remove "_zarr.npy"
+                key = f[:-9]
                 zarr_files[key] = os.path.join(self.state_dir, f)
 
         common_keys = sorted(set(nc_files.keys()) & set(zarr_files.keys()))
@@ -126,11 +127,11 @@ class CompareZarrToNcTestCase(MpiTestCase):
         self.operators_real = DFROperators(self.geometry, self.context)
 
         if self.config.equations == "euler" and isinstance(self.geometry, Cartesian3D):
-            self.metric = Metric3DTopo(self.geometry, self.operators)
+            self.metric = CartesianMetric5D(self.geometry, self.config)
             self.metric.build_metric()
 
         elif self.config.equations == "euler" and isinstance(self.geometry, CubedSphere3D):
-            self.metric = Metric3DTopo(self.geometry, self.operators_real)
+            self.metric = Metric5D(self.geometry, self.config)
             if self.config.enable_schar_mountain:
                 self.step_hooks[ScharMountainHook].metric = self.metric
                 self.step_hooks[ScharMountainHook].apply(1 if self.config.schar_mountain_step == 0 else 0)
@@ -149,7 +150,6 @@ class CompareZarrToNcTestCase(MpiTestCase):
             num_dim,
         )
         if len(self.Q.shape) == 5:
-            # self.geometry.z_levels = self.Q.shape[1]
             self.geometry.z_levels = list(range(self.Q.shape[1]))
         else:
             self.geometry.z_levels = [0]
@@ -273,8 +273,6 @@ class CompareZarrToNcTestCase(MpiTestCase):
             raise
 
     def _make_context(self, context: Context | None) -> Context:
-        """Create the context object which will determine on what hardware (CPU/GPU) each part of the simulation will
-        be executed."""
         if context is not None:
             self.comm = context.comm
             return context

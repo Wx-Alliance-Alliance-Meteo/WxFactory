@@ -51,10 +51,9 @@ class Epi(Integrator):
 
         if order not in _COEFF_TABLES:
             raise ValueError(f"Unsupported order {order} for EPI method. Supported orders: {sorted(_COEFF_TABLES)}")
-        self.A = torch.tensor(_COEFF_TABLES[order])
+        self.A = torch.tensor(_COEFF_TABLES[order], dtype=torch.float64)
 
         k, self.n_prev = self.A.shape
-        # Limit max phi to 1 for EPI 2
         if order == 2:
             k -= 1
         self.max_phi = k + 1
@@ -77,7 +76,6 @@ class Epi(Integrator):
             self.previous_rhs = deque()
         self.dt = dt
 
-        # Initialize saved values using init_step method
         if len(self.previous_Q) < self.n_prev:
             self.previous_Q.appendleft(Q)
             self.previous_rhs.appendleft(self.rhs(Q))
@@ -87,27 +85,31 @@ class Epi(Integrator):
 
             return Q
 
-        # Regular EPI step
         rhs = self.rhs(Q)
+        linearization = None
+        if self.jac is None and getattr(self.param, "jacobian", "finite_difference") == "analytic":
+            linearization = self.rhs.linearize(Q)
 
         if self.jac is not None:
             matvec_handle = lambda v: self.jac(v, Q, dt)
+        elif linearization is not None:
+            matvec_handle = lambda v: dt * linearization(v)
         else:
             matvec_handle = FiniteDifferenceJacobian(dt, Q, self.rhs)
 
-        vec = torch.zeros((self.max_phi + 1, math.prod(rhs.shape)), dtype=Q.dtype)
+        vec = torch.zeros((self.max_phi + 1, math.prod(rhs.shape)), dtype=Q.dtype, device=Q.device)
         vec[1, :] = rhs.flatten()
         for i in range(self.n_prev):
             if self.jac is not None:
                 J_deltaQ = self.jac(self.previous_Q[i] - Q, Q, 1.0)
+            elif linearization is not None:
+                J_deltaQ = linearization(self.previous_Q[i] - Q)
             else:
                 J_deltaQ = fd_jacobian_matvec(self.previous_Q[i] - Q, 1.0, Q, rhs, self.rhs)
 
-            # R(y_{n-i})
             r = (self.previous_rhs[i] - rhs) - torch.reshape(J_deltaQ, Q.shape)
 
             for k, alpha in enumerate(self.A[:, i], start=2):
-                # v_k = Sum_{i=1}^{n_prev} A_{k,i} R(y_{n-i})
                 vec[k, :] += alpha * r.flatten()
 
         use_recycled_size = self.exponential_solver in ("pmex_ne", "kiops")
@@ -129,14 +131,12 @@ class Epi(Integrator):
         if use_recycled_size and result.final_krylov_size is not None:
             self.krylov_size = math.floor(0.7 * result.final_krylov_size + 0.3 * self.krylov_size)
 
-        # Save values for the next timestep
         if self.n_prev > 0:
             self.previous_Q.pop()
             self.previous_Q.appendleft(Q)
             self.previous_rhs.pop()
             self.previous_rhs.appendleft(rhs)
 
-        # Update solution
         return Q + torch.reshape(phiv, Q.shape) * dt
 
 

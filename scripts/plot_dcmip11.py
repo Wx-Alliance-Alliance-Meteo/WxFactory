@@ -1,20 +1,5 @@
 #!/usr/bin/env python3
-"""Plots and diagnostics for DCMIP-2012 test 1-1 (3D deformational flow).
-
-Takes the NetCDF file written by WxFactory and produces the figures and numbers that the DCMIP-2012
-Test Case Document (v1.7, section 1.1 and Appendix A) asks for:
-
-  * lat-lon cross sections of q1..q4 at 4900 m, at day 6 (maximum deformation) and day 12 (the flow
-    has reversed, so the exact solution is the initial condition again);
-  * longitude-height cross sections along the equator at day 12;
-  * the normalized l1, l2 and l_inf error norms at day 12, measured against the initial state;
-  * the mixing diagnostics l_r (real mixing), l_u (range-preserving unmixing) and l_o (overshooting)
-    at day 6, computed from the (q1, q2) pairs on the five levels near 4500-5300 m;
-  * the q1-q2 correlation scatter plots on those same five levels at day 6.
-
-Usage:
-    python3 scripts/plot_dcmip11.py -o results --label dcmip11 [--pdf] results/dcmip11.nc
-"""
+"""DCMIP 1-1 tracer sections, return-error norms, and mixing diagnostics."""
 
 import argparse
 from pathlib import Path
@@ -29,8 +14,6 @@ from matplotlib.ticker import MultipleLocator
 from scipy.interpolate import PchipInterpolator
 from scipy.spatial import cKDTree
 
-# The initial tracer distribution is bounded by these values, and q2 follows q1 along the curve
-# psi(chi) = 0.9 - 0.8 chi^2 (DCMIP eq. 173 and the definition of q2).
 CHI_MIN, CHI_MAX = 0.0, 1.0
 XI_MIN, XI_MAX = 0.1, 0.9
 
@@ -59,18 +42,10 @@ def load(filename):
             name: numpy.asarray([ds.variables[name][index] for index in indices]) for name in ("q1", "q2", "q3", "q4")
         }
 
-    return {
-        "time": time,
-        "lat2d": lat,
-        "lon2d": lon,
-        "elev": elev,
-        "volume": volume,
-        "tracers": tracers,
-    }
+    return {"time": time, "lat2d": lat, "lon2d": lon, "elev": elev, "volume": volume, "tracers": tracers}
 
 
 def time_index(time, target):
-    """Index of the output closest to `target` seconds."""
     return int(numpy.argmin(numpy.abs(time - target)))
 
 
@@ -95,12 +70,7 @@ def error_norms(q, q_exact, volume):
 
 
 def distance_to_curve(chi, xi):
-    """Normalized distance from each (chi, xi) pair to the initial correlation curve.
-
-    Follows DCMIP eqs. 169-172: the closest point on the parabola is found analytically as the root
-    of a cubic. The discriminant is negative over much of the range, so the cube root is taken in
-    the complex plane and only the real part is kept.
-    """
+    """Normalized distance to the initial correlation curve (DCMIP Eqs. 169--172)."""
     chi = numpy.asarray(chi, dtype=float)
     xi = numpy.asarray(xi, dtype=float)
 
@@ -135,15 +105,9 @@ def distance_to_curve(chi, xi):
 
 
 def classify(chi, xi):
-    """Split the (chi, xi) pairs into the three DCMIP mixing regions (Figure 1).
-
-    Mixing two parcels that sit on the (convex) initial curve produces a point on the straight line
-    between them, so everything physically reachable by mixing lies in the lens between the curve
-    and its chord: that is region A. Pairs that stay inside the bounds but leave that lens are
-    unmixed in a range-preserving way (region B). Pairs that leave the bounds have overshot.
-    """
+    """Classify tracer pairs into the DCMIP mixing regions (Figure 1)."""
     in_range = (chi >= CHI_MIN) & (chi <= CHI_MAX) & (xi >= XI_MIN) & (xi <= XI_MAX)
-    chord = 0.9 - 0.8 * chi  # the straight line joining the two ends of the curve
+    chord = 0.9 - 0.8 * chi
 
     real_mixing = in_range & (xi >= chord) & (xi <= psi(chi))
     unmixing = in_range & ~real_mixing
@@ -174,12 +138,7 @@ def unit_sphere(longitude, latitude):
 
 
 def spherical_resampler(lat, lon, shape=(361, 721), neighbours=4):
-    """Precompute seamless inverse-distance interpolation on the sphere.
-
-    Planar triangulation of longitude and latitude treats 0/360 as distant and
-    degenerates near the poles.  Neighbour lookup in Cartesian unit-sphere
-    coordinates has neither singularity.
-    """
+    """Use unit-sphere distances to avoid longitude seams and polar singularities."""
     plot_latitudes = numpy.linspace(-90.0, 90.0, shape[0])
     plot_longitudes = numpy.linspace(0.0, 360.0, shape[1])
     grid_lon, grid_lat = numpy.meshgrid(plot_longitudes, plot_latitudes)
@@ -192,21 +151,16 @@ def spherical_resampler(lat, lon, shape=(361, 721), neighbours=4):
 
 
 def apply_spherical_resampler(values, index, weight, shape):
-    """Apply a precomputed spherical interpolation stencil."""
     return numpy.sum(values.ravel()[index] * weight, axis=1).reshape(shape)
 
 
 def color_range(data, name):
-    """Colour limits taken from the initial state, so every time can be compared against it.
-
-    Keeping the scale fixed is also what makes the over- and undershoots visible: they saturate.
-    """
+    """Fix colour limits to the initial range so overshoots remain visible."""
     initial = data["tracers"][name][0]
     return float(initial.min()), float(initial.max())
 
 
 def tracer_label(name):
-    """Typeset tracer names consistently."""
     return rf"$q_{name[1:]}$"
 
 
@@ -217,14 +171,7 @@ def plot_lat_lon(data, day, level, outdir, label, pdf):
     height = data["elev"].mean(axis=(0, 2, 3))[iz]
     longitudes, latitudes, index, weight = spherical_resampler(data["lat2d"], data["lon2d"])
 
-    with plt.rc_context(
-        {
-            "font.family": "serif",
-            "font.size": 9,
-            "axes.linewidth": 0.7,
-            "savefig.dpi": 300,
-        }
-    ):
+    with plt.rc_context({"font.family": "serif", "font.size": 9, "axes.linewidth": 0.7, "savefig.dpi": 300}):
         fig, axes = plt.subplots(2, 2, figsize=(7.2, 5.5), constrained_layout=True, sharex=True, sharey=True)
         for ax, (name, field) in zip(axes.ravel(), data["tracers"].items()):
             q = field[it, :, iz]
@@ -233,13 +180,7 @@ def plot_lat_lon(data, day, level, outdir, label, pdf):
             boundaries = numpy.linspace(vmin, vmax, 22)
 
             contour = ax.contourf(
-                longitudes,
-                latitudes,
-                image,
-                levels=boundaries,
-                cmap="viridis",
-                extend="both",
-                antialiased=False,
+                longitudes, latitudes, image, levels=boundaries, cmap="viridis", extend="both", antialiased=False
             )
             colorbar = fig.colorbar(contour, ax=ax, shrink=0.9, pad=0.02)
             colorbar.set_label(tracer_label(name))
@@ -262,7 +203,6 @@ def plot_lat_lon(data, day, level, outdir, label, pdf):
 
 
 def equator_stencil(lat, lon):
-    """Interpolation stencils from the four equatorial panels to latitude zero."""
     stencil = []
     equator_lon = []
     for panel in range(lat.shape[0]):
@@ -308,7 +248,6 @@ def periodic_section(field, elevations, longitude, heights, plot_longitude):
 
 
 def plot_lon_height(data, day, outdir, label, pdf):
-    """Longitude-height section interpolated to the exact equator."""
     it = time_index(data["time"], day * DAY)
     longitude, stencil = equator_stencil(data["lat2d"], data["lon2d"])
     elevations = interpolate_equator(data["elev"], stencil)
@@ -359,14 +298,7 @@ def plot_correlation(data, day, outdir, label, pdf):
     levels = sorted({level_index(data["elev"], target) for target in MIXING_LEVELS})
 
     with plt.rc_context({"font.family": "serif", "font.size": 9, "axes.linewidth": 0.7, "savefig.dpi": 300}):
-        fig, axes = plt.subplots(
-            1,
-            len(levels),
-            figsize=(7.2, 2.25),
-            constrained_layout=True,
-            sharex=True,
-            sharey=True,
-        )
+        fig, axes = plt.subplots(1, len(levels), figsize=(7.2, 2.25), constrained_layout=True, sharex=True, sharey=True)
         axes = numpy.atleast_1d(axes)
         curve = numpy.linspace(CHI_MIN, CHI_MAX, 300)
         density = None
@@ -433,7 +365,7 @@ def report_mixing(data, day):
     mean_height = data["elev"].mean(axis=(0, 2, 3))
 
     levels = sorted({level_index(data["elev"], target) for target in MIXING_LEVELS})
-    # Index the vertical axis the same way everywhere, so the weights line up with the tracers.
+
     q1 = data["tracers"]["q1"][it][:, levels].ravel()
     q2 = data["tracers"]["q2"][it][:, levels].ravel()
     weight = data["volume"][:, levels].ravel()

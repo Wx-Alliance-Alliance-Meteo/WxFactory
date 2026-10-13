@@ -1,61 +1,59 @@
 #!/usr/bin/env python3
 
-import os
+import argparse
 import sys
+from pathlib import Path
 
-# We assume the script is in a subfolder of the main project
-main_gef_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..")
-sys.path.append(main_gef_dir)
+import torch
 
-from common.definitions import idx_2d_rho, idx_2d_rho_theta, idx_2d_rho_u, idx_2d_rho_w
-from common.graphx import image_field
-from geometry import Cartesian2D
-from main_gef import create_geometry
-from output.output_cartesian import output_step
-from output.state import load_state
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from wx_factory.common.graphx import image_field
+from wx_factory.output import load_state
+from wx_factory.simulation import Simulation
+
+
+def vertical_wind(filename, simulations):
+    state, config = load_state(filename, device=torch.device("cpu"))
+    if config.grid_type != "cartesian3d" or config.equations != "euler":
+        raise ValueError("State plotting supports Cartesian Euler slabs only")
+    simulation = simulations.get(config.config_content)
+    if simulation is None:
+        config.pytorch_device = "cpu"
+        config.output_freq = config.stat_freq = config.save_state_freq = 0
+        config.store_solver_stats = False
+        simulation = Simulation(config, quiet=True)
+        simulations[config.config_content] = simulation
+    geometry = simulation.geometry
+    if state.shape != simulation.Q.shape:
+        raise ValueError(f"Saved state shape {state.shape} does not match the configured grid {simulation.Q.shape}")
+    wind = simulation.initial_state.metric.physical_winds(state[1:4])[2]
+    block = geometry.to_single_block(wind)
+    wind_xz = block[:, block.shape[1] // 2, :]
+    return geometry, config.case_number, wind_xz
 
 
 def main(args):
+    simulations = {}
+    minimum, maximum = float("inf"), float("-inf")
+    for filename in args.input_states:
+        _, _, wind = vertical_wind(filename, simulations)
+        minimum = min(minimum, float(wind.min()))
+        maximum = max(maximum, float(wind.max()))
 
-    min_rho = 1.0e100
-    min_u = min_rho
-    min_w = min_rho
-    min_theta = min_rho
-    max_rho = -min_rho
-    max_u = -min_u
-    max_w = -min_w
-    max_theta = -min_theta
-    for s in args.input_states:
-        state, param = load_state(s)
-        min_rho = min(min_rho, state[idx_2d_rho].min())
-        max_rho = max(max_rho, state[idx_2d_rho].max())
-        min_u = min(min_u, (state[idx_2d_rho_u] / state[idx_2d_rho]).min())
-        max_u = max(max_u, (state[idx_2d_rho_u] / state[idx_2d_rho]).max())
-        min_w = min(min_w, (state[idx_2d_rho_w] / state[idx_2d_rho]).min())
-        max_w = max(max_w, (state[idx_2d_rho_w] / state[idx_2d_rho]).max())
-        min_theta = min(min_theta, (state[idx_2d_rho_theta] / state[idx_2d_rho]).min())
-        max_theta = max(max_theta, (state[idx_2d_rho_theta] / state[idx_2d_rho]).max())
+    if minimum == maximum:
+        minimum -= 1
+        maximum += 1
 
-    file_name = lambda var, id: f"{args.output_file}_{param.case_number}_{var}_{i:08d}"
-
-    for i, s in enumerate(args.input_states):
-        state, param = load_state(s)
-        geom = create_geometry(param, None)
-        if isinstance(geom, Cartesian2D):
-            # image_field(geom, state[idx_2d_rho], file_name('rho', i), min_rho, max_rho, 25, 'rho (units=?)')
-            # image_field(geom, state[idx_2d_rho_u] / state[idx_2d_rho], file_name('u', i), min_u, max_u, 25, 'u (m/s)')
-            image_field(geom, state[idx_2d_rho_w] / state[idx_2d_rho], file_name("w", i), min_w, max_w, 100, "w (m/s)")
-            # image_field(geom, state[idx_2d_rho_theta] / state[idx_2d_rho], file_name('theta', i), min_theta, max_theta, \
-            #             25, 'theta (units=?)')
-            output_step(state, geom, param, file_name("", i))
+    Path(args.output_file).parent.mkdir(parents=True, exist_ok=True)
+    for index, filename in enumerate(args.input_states):
+        geometry, case, wind = vertical_wind(filename, simulations)
+        output = f"{args.output_file}_{case}_w_{index:08d}"
+        image_field(geometry, wind, output, minimum, maximum, 100, "w (m/s)")
 
 
 if __name__ == "__main__":
-    import argparse
-
-    parser = argparse.ArgumentParser(description="Generate output file(s) from simulation states. ONLY 2D FOR NOW.")
-    parser.add_argument("input_states", nargs="+", type=str, help="File(s) containing state vectors")
-    parser.add_argument("-o", "--output-file", required=True, type=str, help="Name of the output file")
-
-    parsed_args = parser.parse_args()
-    main(parsed_args)
+    parser = argparse.ArgumentParser(description="Plot physical vertical wind from Cartesian Euler restart states.")
+    parser.add_argument("input_states", nargs="+", help="Files containing state vectors")
+    parser.add_argument("-o", "--output-file", required=True, help="Output filename prefix")
+    main(parser.parse_args())

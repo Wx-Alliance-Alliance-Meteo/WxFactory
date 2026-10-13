@@ -1,7 +1,4 @@
-"""Conservation tests for the metric-weighted exponential filter."""
-
 import os
-import types
 import unittest
 
 import torch
@@ -25,7 +22,6 @@ class ExponentialFilterTestCase(WxTestCase):
         self.filter_matrix = self.ops.make_filter_3d(geom=self.geom, **FILTER)
 
     def quadrature_weights(self):
-        """Return tensor-product element quadrature weights."""
         w = self.geom.glweights
         return torch.einsum("i,j,k->ijk", w, w, w).reshape(-1)
 
@@ -35,48 +31,45 @@ class ExponentialFilterTestCase(WxTestCase):
         return 1.0 + torch.rand(self.sim.Q.shape, generator=gen, dtype=torch.float64)
 
     def varying_metric(self, shape):
-        """Return a strongly varying synthetic metric."""
         gen = torch.Generator().manual_seed(7)
         sqrtG = 1.0 + 3.0 * torch.rand(shape, generator=gen, dtype=torch.float64)
-        return types.SimpleNamespace(sqrtG_new=sqrtG, inv_sqrtG_new=1.0 / sqrtG)
+        from copy import copy
 
-    def test_quadrature_weights_are_double_precision(self):
-        w = self.geom.glweights
-        self.assertEqual(w.dtype, torch.float64)
-        self.assertAlmostEqual(w.sum().item(), 2.0, delta=1.0e-15)
+        metric = copy(self.sim.initial_state.metric)
+        metric.volume = copy(metric.volume)
+        metric.volume.volume_jacobian = sqrtG
+        return metric
 
-    def test_lowest_mode_is_unfiltered(self):
+    def test_constant_and_highest_legendre_mode(self):
         constant = torch.ones((4, self.num_solpts**3), dtype=torch.float64)
         filtered = constant @ self.filter_matrix
         torch.testing.assert_close(filtered, constant, rtol=0.0, atol=1.0e-14)
 
-    def test_high_modes_are_attenuated(self):
-        identity = torch.eye(self.num_solpts**3, dtype=torch.float64)
-        self.assertGreater((self.filter_matrix - identity).abs().max().item(), 1.0e-3)
+        from numpy.polynomial.legendre import legval
+
+        coefficients = [0] * (self.num_solpts - 1) + [1]
+        mode = torch.from_numpy(legval(self.geom.solutionPoints.cpu().numpy(), coefficients))
+        for axis in range(3):
+            shape = [1, 1, 1]
+            shape[axis] = self.num_solpts
+            field = mode.reshape(shape).expand([self.num_solpts] * 3).flatten()
+            attenuation = torch.exp(torch.tensor(-FILTER["strength"], dtype=torch.float64))
+            torch.testing.assert_close(field @ self.filter_matrix, attenuation * field, rtol=1e-10, atol=1e-14)
 
     def test_preserves_metric_weighted_integral(self):
         state = self.rough_state()
         metric = self.varying_metric(state.shape[1:])
         weights = self.quadrature_weights()
 
-        before = ((metric.sqrtG_new * state) * weights).sum(dim=-1)
+        before = ((metric.volume.volume_jacobian * state) * weights).sum(dim=-1)
+        naive = state @ self.filter_matrix
+        naive_integral = ((metric.volume.volume_jacobian * naive) * weights).sum(dim=-1)
+        self.assertGreater((naive_integral[[0, 4]] - before[[0, 4]]).abs().max().item(), 1e-6)
         filtered = self.ops.apply_filter_3d(state, metric, self.filter_matrix)
-        after = ((metric.sqrtG_new * filtered) * weights).sum(dim=-1)
+        after = ((metric.volume.volume_jacobian * filtered) * weights).sum(dim=-1)
 
-        error = (after - before).abs().max().item() / before.abs().max().item()
+        error = (after[[0, 4]] - before[[0, 4]]).abs().max().item() / before[[0, 4]].abs().max().item()
         self.assertLess(error, 1.0e-13, f"filter changed the metric-weighted integral by {error:.3e}")
-
-    def test_unweighted_filtering_would_not_conserve(self):
-        state = self.rough_state()
-        metric = self.varying_metric(state.shape[1:])
-        weights = self.quadrature_weights()
-
-        before = ((metric.sqrtG_new * state) * weights).sum(dim=-1)
-        naive = state @ self.filter_matrix  # Filter the unweighted state.
-        after = ((metric.sqrtG_new * naive) * weights).sum(dim=-1)
-
-        error = (after - before).abs().max().item() / before.abs().max().item()
-        self.assertGreater(error, 1.0e-6, "sqrt(g) does not vary enough for this test to mean anything")
 
 
 if __name__ == "__main__":

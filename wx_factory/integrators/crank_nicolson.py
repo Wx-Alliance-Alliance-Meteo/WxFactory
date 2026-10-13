@@ -1,5 +1,3 @@
-import numpy
-
 from ..solvers import newton_krylov
 from .integrator import Integrator
 
@@ -9,30 +7,34 @@ class CrankNicolson(Integrator):
         super().__init__(param, context=context, preconditioner=preconditioner)
         self.rhs = rhs
         self.tol = param.tolerance
-
-    def CN_system(self, Q_plus, Q, dt, rhs):
-        return (Q_plus - Q) / dt - 0.5 * (rhs(Q_plus) + rhs(Q))
+        self.gmres_restart = param.gmres_restart
 
     def __step__(self, Q, dt):
-        def CN_fun(Q_plus):
-            return self.CN_system(Q_plus, Q, dt, self.rhs)
+        working, rhs = self._implicit_state_and_rhs(Q, self.rhs)
+        previous_rhs = rhs(working)
 
-        maxiter = None
+        def CN_fun(Q_plus):
+            return (Q_plus - working) / dt - 0.5 * (rhs(Q_plus) + previous_rhs)
+
+        maxiter = 100
         if self.preconditioner is not None:
             self.preconditioner.prepare(dt, Q)
             maxiter = 800
 
-        # Update solution
         newQ, _, _ = newton_krylov(
             CN_fun,
-            Q,
+            working,
             f_tol=self.tol,
-            restart=30,
+            restart=self.gmres_restart,
+            krylov_dtype=Q.dtype,
+            maxiter_linear=10,
             preconditioner=self.preconditioner,
             verbose=False,
             maxiter=maxiter,
+            context=self.context,
+            jacobian=self._newton_jacobian(rhs, dt, 0.5),
         )
-        return numpy.reshape(newQ, Q.shape)
+        return newQ.reshape(Q.shape).to(Q.dtype)
 
 
 REGISTRY = {

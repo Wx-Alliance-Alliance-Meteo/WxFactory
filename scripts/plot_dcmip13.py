@@ -1,14 +1,5 @@
 #!/usr/bin/env python3
-"""Publication-quality plots and diagnostics for DCMIP-2012 test 1-3.
-
-This test uses terrain-following vertical coordinates.  The script therefore
-keeps the native sloping levels and constant-height interpolation as separate
-diagnostics, extracts the equator exactly, and masks terrain rather than
-extrapolating tracer values through it.
-
-Usage:
-    python scripts/plot_dcmip13.py -o results --label gal_chen [--pdf] results/dcmip13.nc
-"""
+"""DCMIP 1-3 tracer maps and equatorial sections on native and constant-height levels."""
 
 import argparse
 from pathlib import Path
@@ -31,7 +22,6 @@ TRACERS = ("q1", "q2", "q3", "q4")
 
 
 def time_index(times, target):
-    """Index of the output nearest a requested time."""
     return int(numpy.argmin(numpy.abs(times - target)))
 
 
@@ -67,7 +57,6 @@ def integral(field, volume):
 
 
 def error_norms(q, q_exact, volume):
-    """Normalized l1, l2 and l-infinity error norms."""
     error = q - q_exact
     l1 = integral(numpy.abs(error), volume) / integral(numpy.abs(q_exact), volume)
     l2 = numpy.sqrt(integral(error**2, volume)) / numpy.sqrt(integral(q_exact**2, volume))
@@ -84,7 +73,6 @@ def unit_sphere(longitude, latitude):
 
 
 def spherical_resampler(lat, lon, shape=(361, 721), neighbours=4):
-    """Precompute seamless inverse-distance interpolation on the sphere."""
     plot_latitude = numpy.linspace(-90.0, 90.0, shape[0])
     plot_longitude = numpy.linspace(0.0, 360.0, shape[1])
     grid_lon, grid_lat = numpy.meshgrid(plot_longitude, plot_latitude)
@@ -96,12 +84,10 @@ def spherical_resampler(lat, lon, shape=(361, 721), neighbours=4):
 
 
 def apply_spherical_resampler(values, index, weight, shape):
-    """Apply a precomputed spherical interpolation stencil."""
     return numpy.sum(values.ravel()[index] * weight, axis=1).reshape(shape)
 
 
 def equator_stencil(lat, lon):
-    """Bracketing stencils from equatorial cubed-sphere panels to latitude zero."""
     stencil = []
     equator_lon = []
     for panel in range(lat.shape[0]):
@@ -141,7 +127,6 @@ def periodic_extend(longitude, values):
 
 
 def constant_height_section(field, elevation, longitude, topography, heights, plot_longitude):
-    """Interpolate terrain-following columns to constant geometric heights."""
     vertical = numpy.empty((longitude.size, heights.size))
     for column, (z_column, q_column) in enumerate(zip(elevation, field)):
         sample_height = numpy.clip(heights, z_column[0], z_column[-1])
@@ -157,13 +142,11 @@ def constant_height_section(field, elevation, longitude, topography, heights, pl
 
 
 def tracer_limits(data, name="q4"):
-    """Initial-state colour range shared by every time panel."""
     initial = data["tracers"][name][0]
     return float(initial.min()), float(initial.max())
 
 
 def save_figure(fig, path, pdf):
-    """Write the requested figure formats."""
     fig.savefig(path, bbox_inches="tight")
     if pdf:
         fig.savefig(path.with_suffix(".pdf"), bbox_inches="tight")
@@ -172,26 +155,14 @@ def save_figure(fig, path, pdf):
 
 
 def plot_topography(data, output_dir, label, pdf):
-    """True Schär-type surface elevation."""
     longitude, latitude, index, weight = spherical_resampler(data["lat2d"], data["lon2d"])
-    image = apply_spherical_resampler(
-        data["topography"],
-        index,
-        weight,
-        (latitude.size, longitude.size),
-    )
+    image = apply_spherical_resampler(data["topography"], index, weight, (latitude.size, longitude.size))
     levels = numpy.linspace(0.0, float(data["topography"].max()), 22)
 
     with plt.rc_context({"font.family": "serif", "font.size": 9, "savefig.dpi": 300}):
         fig, ax = plt.subplots(figsize=(7.2, 2.9), constrained_layout=True)
         contour = ax.contourf(
-            longitude,
-            latitude,
-            image,
-            levels=levels,
-            cmap="terrain",
-            extend="max",
-            antialiased=False,
+            longitude, latitude, image, levels=levels, cmap="terrain", extend="max", antialiased=False
         )
         colorbar = fig.colorbar(contour, ax=ax, pad=0.02)
         colorbar.set_label("Surface elevation (m)")
@@ -219,20 +190,9 @@ def plot_model_level_maps(data, output_dir, label, pdf):
             snapshot = data["tracers"]["q4"][time_index(data["time"], day * DAY)]
             for column, (level, nominal_height) in enumerate(selected_levels):
                 ax = axes[row, column]
-                image = apply_spherical_resampler(
-                    snapshot[:, level],
-                    index,
-                    weight,
-                    (plot_lat.size, plot_lon.size),
-                )
+                image = apply_spherical_resampler(snapshot[:, level], index, weight, (plot_lat.size, plot_lon.size))
                 contour = ax.contourf(
-                    plot_lon,
-                    plot_lat,
-                    image,
-                    levels=boundaries,
-                    cmap="viridis",
-                    extend="both",
-                    antialiased=False,
+                    plot_lon, plot_lat, image, levels=boundaries, cmap="viridis", extend="both", antialiased=False
                 )
                 if row == 0:
                     ax.set_title(f"Level {level + 1} ({nominal_height:.0f} m)", fontsize=8)
@@ -303,7 +263,6 @@ def plot_native_sections(data, output_dir, label, pdf):
 
 
 def plot_constant_height_sections(data, output_dir, label, pdf):
-    """Exact-equator q4 sections interpolated to geometric height."""
     longitude, stencil = equator_stencil(data["lat2d"], data["lon2d"])
     elevation = interpolate_equator(data["elevation"], stencil)
     topography = interpolate_equator(data["topography"], stencil)
@@ -317,12 +276,7 @@ def plot_constant_height_sections(data, output_dir, label, pdf):
         snapshot = data["tracers"]["q4"][time_index(data["time"], day * DAY)]
         equator_field = interpolate_equator(snapshot, stencil)
         image, surface = constant_height_section(
-            equator_field,
-            elevation,
-            longitude,
-            topography,
-            heights,
-            plot_longitude,
+            equator_field, elevation, longitude, topography, heights, plot_longitude
         )
         images.append(image)
         surfaces.append(surface)
@@ -362,7 +316,6 @@ def plot_constant_height_sections(data, output_dir, label, pdf):
 
 
 def report_error_norms(data, label):
-    """Error norms at day 12, where the exact solution is the initial state."""
     final_index = time_index(data["time"], 12.0 * DAY)
     print(f"\nNormalized error norms at day 12 ({label}, exact solution = initial state)")
     print(f"  {'tracer':>6}  {'l1':>12}  {'l2':>12}  {'l_inf':>12}")
@@ -373,7 +326,7 @@ def report_error_norms(data, label):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Publication-quality plots for DCMIP-2012 test 1-3.")
+    parser = argparse.ArgumentParser(description="Plots for DCMIP-2012 test 1-3.")
     parser.add_argument("netcdf_file", help="NetCDF output file produced by WxFactory")
     parser.add_argument("-o", "--output-dir", default="results", help="where to write the figures")
     parser.add_argument("--label", default=None, help="tag used in figure names and titles")

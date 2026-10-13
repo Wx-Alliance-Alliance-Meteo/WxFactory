@@ -7,13 +7,20 @@ name = "wxfactory"
 dynamic = ["version"]
 description = "A numerical weather prediction research framework"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
     "mpi4py",
     "numpy",
-    "scipy",
+    "scipy>=1.15",
     "torch",
     "sympy",
+    "packaging",
+    "netcdf4",
+    "matplotlib",
+    "xarray",
+    "dask",
+    "zarr>=3,<4",
+    "numcodecs",
 ]
 
 [project.scripts]
@@ -27,6 +34,9 @@ license-files = ["LICENSE"]
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["wx_factory*"]
+
+[tool.setuptools.package-data]
+"wx_factory.common" = ["config-format.json"]
 
 [tool.setuptools_scm]
 write_to = "wx_factory/_version.py"

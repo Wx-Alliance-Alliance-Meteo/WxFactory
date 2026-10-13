@@ -30,6 +30,12 @@ def fd_jacobian_matvec(
     fd_norm_q: float | None = None,
 ) -> numpy.ndarray:
     """Apply ``dt * J`` using the NITSOL finite-difference step."""
+    output_dtype = Q.dtype
+    if Q.dtype == torch.float32 and hasattr(rhs_handle, "jacobian_rhs"):
+        Q = Q.to(torch.float64)
+        rhs_handle = rhs_handle.jacobian_rhs
+        rhs = rhs_handle(Q)
+        fd_norm_q = None
     direction = vec.reshape(Q.shape)
     eps_machine = numpy.float64(torch.finfo(Q.dtype).eps)
     norm_q = fd_norm_q if fd_norm_q is not None else fd_norm(Q, MPI.COMM_WORLD)
@@ -41,7 +47,7 @@ def fd_jacobian_matvec(
 
     perturbed = Q + epsilon * direction
     rhs_difference = rhs_handle(perturbed) - rhs
-    jac = (rhs_difference * (dt / epsilon)).to(Q.dtype)
+    jac = (rhs_difference * (dt / epsilon)).to(output_dtype)
 
     return jac.flatten()
 
@@ -50,12 +56,16 @@ class FiniteDifferenceJacobian(LinearOperator):
     """Represent ``dt * J`` at a fixed state."""
 
     def __init__(self, dt: float, Q: NDArray, rhs_handle: Callable[[NDArray], NDArray]) -> None:
+        output_dtype = Q.dtype
+        if Q.dtype == torch.float32 and hasattr(rhs_handle, "jacobian_rhs"):
+            Q = Q.to(torch.float64)
+            rhs_handle = rhs_handle.jacobian_rhs
         rhs_result = rhs_handle(Q)
         # Q is fixed during a Krylov solve, so compute its norm once.
         fd_norm_q = fd_norm(Q, MPI.COMM_WORLD)
         super().__init__(
-            lambda vec: fd_jacobian_matvec(vec, dt, Q, rhs_result, rhs_handle, fd_norm_q=fd_norm_q),
-            Q.dtype,
+            lambda vec: fd_jacobian_matvec(vec, dt, Q, rhs_result, rhs_handle, fd_norm_q=fd_norm_q).to(output_dtype),
+            output_dtype,
             Q.shape,
         )
 

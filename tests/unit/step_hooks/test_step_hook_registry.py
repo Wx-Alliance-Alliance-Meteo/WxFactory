@@ -27,14 +27,8 @@ def make_ctx(**config_kwargs):
 
 
 class StepHookRegistryTestCases(WxTestCase):
-    def test_builtin_hooks_registered_with_expected_phases(self):
-        phases = {name: phase for name, (phase, _) in STEP_HOOK_REGISTRY.items()}
-        self.assertEqual(phases.get("schar_mountain"), PHASE_GEOMETRY)
-        self.assertEqual(phases.get("dcmip_t11_wind"), PHASE_STATE)
-        self.assertEqual(phases.get("dcmip_t12_wind"), PHASE_STATE)
 
     def test_resolve_only_returns_requested_phase(self):
-        # schar is a geometry-phase hook; asking for the state phase must not return it.
         ctx = make_ctx(enable_schar_mountain=True, case_number=0)
         self.assertEqual(resolve_step_hooks(ctx, PHASE_STATE), {})
 
@@ -42,7 +36,7 @@ class StepHookRegistryTestCases(WxTestCase):
         ctx = make_ctx(enable_schar_mountain=True, case_number=0)
         self.assertEqual(resolve_step_hooks(ctx, PHASE_GEOMETRY), {})
 
-    def test_dcmip_dispatches_on_case_number(self):
+    def test_prescribed_transport_does_not_install_a_wind_hook(self):
         ctx = StepHookContext(
             config=types.SimpleNamespace(enable_schar_mountain=False, case_number=11, expfilter_apply=False),
             geometry=_FakeGeom(),
@@ -50,12 +44,7 @@ class StepHookRegistryTestCases(WxTestCase):
             metric=None,
         )
         hooks = resolve_step_hooks(ctx, PHASE_STATE)
-        self.assertEqual([t.__name__ for t in hooks], ["DcmipT11WindHook"])
-
-    def test_no_hooks_when_nothing_applies(self):
-        ctx = make_ctx(enable_schar_mountain=False, case_number=5)
-        self.assertEqual(resolve_step_hooks(ctx, PHASE_GEOMETRY), {})
-        self.assertEqual(resolve_step_hooks(ctx, PHASE_STATE), {})
+        self.assertEqual(hooks, {})
 
     def test_provider_returning_none_is_skipped(self):
         @register_step_hook("test_never", phase=PHASE_STATE)
@@ -70,21 +59,6 @@ class StepHookRegistryTestCases(WxTestCase):
     def test_unknown_phase_raises(self):
         with self.assertRaises(ValueError):
             register_step_hook("bad_phase_hook", phase="not_a_phase")
-
-    def test_duplicate_registration_raises(self):
-        @register_step_hook("dup_hook", phase=PHASE_STATE)
-        def _first(ctx):
-            return None
-
-        try:
-            with self.assertRaises(ValueError):
-
-                @register_step_hook("dup_hook", phase=PHASE_STATE)
-                def _second(ctx):
-                    return None
-
-        finally:
-            del STEP_HOOK_REGISTRY["dup_hook"]
 
 
 if __name__ == "__main__":

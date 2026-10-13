@@ -5,7 +5,7 @@ from ..common.definitions import (
     idx_hu2,
 )
 from ..context import Context
-from ..geometry import CubedSphere, CubedSphere2D, DFROperators, Metric2D, Metric3DTopo
+from ..geometry import CubedSphere, CubedSphere2D, DFROperators, Metric2D, Metric5D
 from ..process_topology import ProcessTopology
 from ..wx_mpi import Conditional, SingleProcess
 from .output_cubesphere import OutputCubesphere
@@ -25,7 +25,7 @@ class OutputCubesphereFst(OutputCubesphere):
         geometry: CubedSphere,
         operators: DFROperators,
         context: Context,
-        metric: Metric2D | Metric3DTopo,
+        metric: Metric2D | Metric5D,
         topography,
         process_topology: ProcessTopology,
     ):
@@ -50,22 +50,16 @@ class OutputCubesphereFst(OutputCubesphere):
         self.file: rmn.fst24_file = None
         self.georef = None
 
-        to_host = self.context.to_host
-
         lon = self._get_writable(self.geometry.block_lon, num_dim=2)
-        lat = self._get_writable(self.geometry.block_lat, num_dim=2)
+        self._get_writable(self.geometry.block_lat, num_dim=2)
 
         with SingleProcess() as s, Conditional(s):
             self.file = rmn.fst24_file(self.filename, "RSF+R/W")
-
-            for r in self.file:
-                print(f"record: {r}")
 
             _, nj, ni = lon.shape[:3]
             self.ni = ni
             self.nj = nj * 6
             self.nk = 1  # TODO set proper nk
-            print(f" nijk: {self.ni}, {self.nj}, {self.nk}", flush=True)
 
             # If we pass the file when creating the georef, it will read the axes from it (if available)
             self.georef = georef.GeoRef(self.ni, self.nj, "Q", self.ig1, self.ig2, self.ig3, self.ig4, self.file)
@@ -107,15 +101,15 @@ class OutputCubesphereFst(OutputCubesphere):
 
         if isinstance(self.geometry, CubedSphere2D):
             h = get_field(Q[idx_h, ...])
-            u1 = get_field(Q[idx_hu1, ...] / Q[idx_h, ...])
-            u2 = get_field(Q[idx_hu2, ...] / Q[idx_h, ...])
+            get_field(Q[idx_hu1, ...] / Q[idx_h, ...])
+            get_field(Q[idx_hu2, ...] / Q[idx_h, ...])
 
             with SingleProcess() as s, Conditional(s):
                 h_rec = self._make_record("h", step_id, h)
                 self.file.write(h_rec, rewrite=0)
 
         else:
-            raise ValueError(f"Unknown grid type {type(self.geometry)}")
+            raise TypeError(f"Unknown grid type {type(self.geometry)}")
 
     def __finalize__(self):
         if self.file is not None:

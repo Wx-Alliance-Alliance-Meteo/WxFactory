@@ -14,7 +14,7 @@ The source documentation is maintained in this repository:
 
 ## Requirements
 
-Python 3.10 or later and an MPI implementation are required. WxFactory uses PyTorch for both CPU
+Python 3.11 or later and an MPI implementation are required. WxFactory uses PyTorch for both CPU
 and GPU execution.
 
 Necessary Python packages can be installed using:
@@ -42,8 +42,14 @@ If you have not installed the package and want to run straight from the source t
 # Cubed-sphere grid (requires a multiple of 6 processes):
 mpirun -n 6 wxfactory config/case6.ini
 
-# 2D Cartesian grid:
+# 3D Cartesian grid:
 wxfactory config/gaussian_bubble.ini
+```
+
+For example, to run DCMIP 2-1 on the GPU with six MPI processes:
+
+```bash
+mpirun -n 6 wxfactory config/dcmip21_EPI2.ini
 ```
 
 ## Profiling

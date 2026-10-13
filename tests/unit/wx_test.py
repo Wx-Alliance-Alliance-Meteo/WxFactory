@@ -55,7 +55,7 @@ class WxTestResult(unittest.TextTestResult):
     ) -> None:
         super().addExpectedFailure(test, err)
         if self.verbose:
-            self.stream.write("PASS ")
+            self.stream.write("EXPECTED FAILURE ")
 
     def addUnexpectedSuccess(self, test: unittest.TestCase) -> None:
         super().addUnexpectedSuccess(test)

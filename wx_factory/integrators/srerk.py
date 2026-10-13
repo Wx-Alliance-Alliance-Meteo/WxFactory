@@ -3,6 +3,7 @@ from collections.abc import Callable
 from itertools import combinations
 
 import numpy
+import torch
 
 from ..common.configuration import Configuration
 from ..jacobian import fd_jacobian_matvec
@@ -26,7 +27,6 @@ def alpha_coeff(c):
     return alpha
 
 
-# Computes nodes for SRERK methods with minimal error terms
 def opt_nodes(order: int):
     if order < 3:
         raise ValueError("Order should be at least 3")
@@ -38,7 +38,6 @@ def opt_nodes(order: int):
     )
 
     c = []
-    # Compute optimal nodes for each stage order starting at order 2
     for o in list(range(2, order - 2, 2)) + [order - 2]:
         p = numpy.polynomial.Polynomial([coeff(o, q) for q in range(o + 1)])
         c.append(p.roots())
@@ -82,7 +81,9 @@ class Srerk(Integrator):
 
         self.alpha = []
         for i in range(self.n_proj - 1):
-            self.alpha.append(alpha_coeff(self.c[i]))
+            self.alpha.append(
+                torch.as_tensor(alpha_coeff(self.c[i]), dtype=self.context.real_dtype, device=self.context.torch_device)
+            )
 
     def _solve_projection(self, tau_out, matvec_handle, vec):
         result = self.solve_exponential(
@@ -101,38 +102,37 @@ class Srerk(Integrator):
             self.krylov_size = math.floor(0.7 * result.final_krylov_size + 0.3 * self.krylov_size)
         return result.value
 
-    def __step__(self, Q: numpy.ndarray, dt: float):
+    def __step__(self, Q: torch.Tensor, dt: float):
         rhs = self.rhs(Q)
         if self.jac is not None:
             matvec_handle = lambda v: self.jac(v, Q, dt)
+            jacobian = lambda v: matvec_handle(v) / dt
+        elif getattr(self.param, "jacobian", None) == "analytic" and hasattr(self.rhs, "linearize"):
+            jacobian = self.rhs.linearize(Q)
+            matvec_handle = lambda v: dt * jacobian(v)
         else:
             matvec_handle = lambda v: fd_jacobian_matvec(v, dt, Q, rhs, self.rhs)
+            jacobian = lambda v: matvec_handle(v) / dt
 
-        # Initial projection
-        vec = numpy.zeros((2, rhs.size))
+        vec = Q.new_zeros((2, rhs.numel()))
         vec[1, :] = rhs.flatten()
-
         z = self._solve_projection(self.c[0], matvec_handle, vec)
 
-        # Loop over all the other projections
         for i_proj in range(1, self.n_proj):
-            for i in range(z.shape[0]):
-                z[i, :] = Q.flatten() + dt * z[i, :]
+            stages = z
+            for i in range(stages.shape[0]):
+                stages[i] = Q.flatten() + dt * stages[i]
+            remainders = torch.empty_like(stages)
+            for i in range(stages.shape[0]):
+                stage = stages[i].reshape(Q.shape)
+                remainders[i] = (self.rhs(stage) - rhs).flatten() - jacobian(stage - Q)
 
-            # Compute r(z_i)
-            rz = numpy.empty_like(z)
-            for i in range(z.shape[0]):
-                tmp_z = numpy.reshape(z[i, :], Q.shape)
-                rz[i, :] = (self.rhs(tmp_z) - rhs).flatten() - matvec_handle(tmp_z - Q) / dt
-
-            vec = numpy.zeros((z.shape[0] + 3, rhs.size))
+            vec = Q.new_zeros((stages.shape[0] + 3, rhs.numel()))
             vec[1, :] = rhs.flatten()
-            vec[3:, :] = self.alpha[i_proj - 1] @ rz
-
+            vec[3:, :] = self.alpha[i_proj - 1].to(Q) @ remainders
             z = self._solve_projection(self.c[i_proj], matvec_handle, vec)
 
-        # Update solution
-        return Q + dt * numpy.reshape(z, Q.shape)
+        return Q + dt * z.reshape(Q.shape)
 
 
 def _make_srerk_factory(order):

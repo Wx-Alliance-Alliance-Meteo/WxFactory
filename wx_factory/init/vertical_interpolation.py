@@ -140,9 +140,6 @@ if __name__ == "__main__":
     expected_cub = torch.tensor(
         [[[0.5, 0.0], [6.5, 12.5]], [[1.44, 3.24], [4.0, 8.41]], [[0.75, 2.5], [12.5, 16.0]]], dtype=torch.float64
     )
-    # print(f"Source levels: \n{source_levels}")
-    # print(f"Source field: \n{source_field}")
-    # print(f"dest levels: \n{dest_levels}")
 
     dest_field = vertical_interp(source_field, source_levels, dest_levels, "linear")
     diff_norm = (dest_field - expected_lin).norm()

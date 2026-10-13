@@ -1,11 +1,10 @@
 import math
 from collections import deque
 
-import numpy
 import torch
 
 from ..common.configuration import Configuration
-from ..jacobian import fd_jacobian_matvec
+from ..jacobian import FiniteDifferenceJacobian
 from ..solvers import ExponentialSolverRequest, resolve_exponential_solver
 from .epi import Epi
 from .integrator import Integrator
@@ -28,7 +27,7 @@ class EpiStiff(Integrator):
 
         if order < 2:
             raise ValueError("Unsupported order for EPI method")
-        self.A = alpha_coeff([-i for i in range(-1, 1 - order, -1)])
+        self.A = torch.as_tensor(alpha_coeff([-i for i in range(-1, 1 - order, -1)]), dtype=torch.float64)
 
         _, self.n_prev = self.A.shape
 
@@ -44,14 +43,13 @@ class EpiStiff(Integrator):
 
         self.init_substeps = init_substeps
 
-    def __step__(self, Q: numpy.ndarray, dt: float):
+    def __step__(self, Q: torch.Tensor, dt: float):
         # If dt changes, discard saved value and redo initialization
         if self.dt and abs(self.dt - dt) > 1e-10:
             self.previous_Q = deque()
             self.previous_rhs = deque()
         self.dt = dt
 
-        # Initialize saved values using init_step method
         if len(self.previous_Q) < self.n_prev:
             self.previous_Q.appendleft(Q)
             self.previous_rhs.appendleft(self.rhs(Q))
@@ -61,22 +59,24 @@ class EpiStiff(Integrator):
                 Q = self.init_method.step(Q, dt)
             return Q
 
-        # Regular EPI step
         rhs = self.rhs(Q)
 
-        def matvec_handle(v):
-            return fd_jacobian_matvec(v, dt, Q, rhs, self.rhs)
+        if getattr(self.param, "jacobian", "finite_difference") == "analytic":
+            action = self.rhs.linearize(Q)
+        else:
+            action = FiniteDifferenceJacobian(1.0, Q, self.rhs)
 
-        vec = torch.zeros((self.max_phi + 1, math.prod(rhs.shape)), dtype=Q.dtype)
+        def matvec_handle(vector):
+            return dt * action(vector)
+
+        vec = torch.zeros((self.max_phi + 1, math.prod(rhs.shape)), dtype=Q.dtype, device=Q.device)
         vec[1, :] = rhs.flatten()
         for i in range(self.n_prev):
-            J_deltaQ = fd_jacobian_matvec(self.previous_Q[i] - Q, 1.0, Q, rhs, self.rhs)
+            J_deltaQ = action(self.previous_Q[i] - Q)
 
-            # R(y_{n-i})
             r = (self.previous_rhs[i] - rhs) - J_deltaQ.reshape(Q.shape)
 
             for k, alpha in enumerate(self.A[:, i]):
-                # v_k = Sum_{i=1}^{n_prev} A_{k,i} R(y_{n-i})
                 vec[k + 3, :] += alpha * r.flatten()
 
         use_recycled_size = self.exponential_solver in ("pmex_ne", "kiops")
@@ -98,15 +98,13 @@ class EpiStiff(Integrator):
         if use_recycled_size and result.final_krylov_size is not None:
             self.krylov_size = math.floor(0.7 * result.final_krylov_size + 0.3 * self.krylov_size)
 
-        # Save values for the next timestep
         if self.n_prev > 0:
             self.previous_Q.pop()
             self.previous_Q.appendleft(Q)
             self.previous_rhs.pop()
             self.previous_rhs.appendleft(rhs)
 
-        # Update solution
-        return Q + numpy.reshape(phiv, Q.shape) * dt
+        return Q + torch.reshape(phiv, Q.shape) * dt
 
 
 def _make_epi_stiff_factory(order):

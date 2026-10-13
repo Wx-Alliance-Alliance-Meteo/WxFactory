@@ -23,7 +23,7 @@ from .configuration_schema import ConfigurationSchema
 
 # Repo root is three levels up: wx_factory/common/config_hints.py -> repo root
 _REPO_ROOT = Path(__file__).resolve().parents[2]
-SCHEMA_PATH = _REPO_ROOT / "config" / "config-format.json"
+SCHEMA_PATH = Path(__file__).with_name("config-format.json")
 CONFIG_PATH = _REPO_ROOT / "wx_factory" / "common" / "configuration.py"
 
 START_MARKER = "    # --- START type hints --- automatically generated (do not touch)"

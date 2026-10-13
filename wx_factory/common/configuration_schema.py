@@ -3,6 +3,7 @@ import json
 from collections import OrderedDict
 from collections.abc import Callable
 from configparser import ConfigParser, NoOptionError, NoSectionError
+from importlib.resources import files
 from typing import Any, TypeVar
 
 import numpy
@@ -50,7 +51,7 @@ _T = TypeVar("_T", str, dict, list)
 _Numerical = TypeVar("_Numerical", bound=int | float | angle24 | numpy.float32)
 
 
-default_schema_path = "config/config-format.json"
+default_schema_path = str(files(__package__).joinpath("config-format.json"))
 
 
 def needs_evaluation(attribute: _T, attribute_type: type[_T]) -> bool:
@@ -467,13 +468,10 @@ class ConfigurationSchema:
     def __str__(self):
         return self.to_string(markdown=False)
 
-    def type_hints(self):
-        return "\n".join(f"{f.name}: {f.typename()}" for f in self.fields)
-
 
 def load_default_schema() -> ConfigurationSchema:
 
-    with open(default_schema_path) as f:
+    with files(__package__).joinpath("config-format.json").open(encoding="utf-8") as f:
         schema_content = "\n".join(f.readlines())
 
     return ConfigurationSchema(schema_content)

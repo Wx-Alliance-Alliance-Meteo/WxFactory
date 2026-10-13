@@ -4,13 +4,18 @@ import torch
 from torch import Tensor
 
 from ..common import Configuration
-from ..common.definitions import idx_rho_u2
-from ..geometry import DFROperators, Geometry, Metric2D, Metric3DTopo
+from ..geometry import DFROperators, Geometry, Metric2D
 from ..pde import PDE
 from ..process_topology import ExchangeRequest, ProcessTopology
 
 
 class RHS(ABC):
+    """Staged flux RHS used by shallow water.
+
+    Volume flux calculations overlap the pending lateral MPI exchange.
+    Euler uses RhsEuler, whose momentum equation has separate pressure and curl terms.
+    """
+
     req_r: ExchangeRequest
     req_u: ExchangeRequest
     req_t: ExchangeRequest
@@ -22,7 +27,7 @@ class RHS(ABC):
         pde: PDE | None,
         geometry: Geometry,
         operators_real: DFROperators,
-        metric: Metric2D | Metric3DTopo,
+        metric: Metric2D,
         topography,
         process_topo: ProcessTopology,
         config: Configuration | None,
@@ -38,21 +43,16 @@ class RHS(ABC):
         self.context = geometry.context
         self.debug = debug
 
-        # Cache whether this geometry represents a y-invariant x-z slab.
-        self.y_invariant_slab = getattr(geometry, "is_y_invariant_slab", False)
-
         if pde is not None:
             self.num_dim = self.pde.num_dim
             self.num_var = self.pde.num_var
 
-        # Default value, when __call__ is not called
         self.ops = self.ops_real
 
         self.timestamps = []
         self.timings_real = []
         self.timings_complex = []
 
-        # Initially set all arrays to None, these will be allocated later
         self.f_x1 = None
         self.f_x2 = None
         self.f_x3 = None
@@ -71,11 +71,6 @@ class RHS(ABC):
 
         self.latest_time_complex = False
 
-    def clear_timings(self):
-        self.timestamps: list[float | torch.cuda.Event | None] = []
-        self.timings_real = []
-        self.timings_complex = []
-
     def retrieve_last_times(self, is_complex: bool):
         if is_complex:
             self.timings_complex.append(self.context.elapsed(self.timestamps))
@@ -84,13 +79,11 @@ class RHS(ABC):
 
     def __call__(self, q: Tensor) -> Tensor:
 
-        # Process timing
-        if len(self.timestamps) > 0:  # Process timing from previous steps
+        if len(self.timestamps) > 0:
             self.retrieve_last_times(self.latest_time_complex)
         else:
             self.timestamps = [None for _ in range(9)]
 
-        # Preserve array shape
         given_shape = q.shape
 
         self.ops = self.operators_for(q)
@@ -100,54 +93,37 @@ class RHS(ABC):
 
         self.timestamps[0] = self.context.timestamp(name="extrap")
 
-        # Extrapolate the solution to the boundaries of the element
         self.solution_extrapolation(q)
         self.timestamps[1] = self.context.timestamp(name="start comm")
 
         self.start_communication()
         self.timestamps[2] = self.context.timestamp(name="pointwise flux")
 
-        # Compute the pointwise fluxes
         self.pointwise_fluxes(q)
         self.timestamps[3] = self.context.timestamp(name="flux div 1")
 
-        # Compute the derivatives of the discontinuous fluxes
         self.flux_divergence_partial()
         self.timestamps[4] = self.context.timestamp(name="end comm")
 
         self.end_communication()
         self.timestamps[5] = self.context.timestamp(name="riemann")
 
-        # Compute the Riemann fluxes
         self.riemann_fluxes()
         self.timestamps[6] = self.context.timestamp(name="flux div 2")
 
-        # Complete the divergence operation
         self.flux_divergence()
         self.timestamps[7] = self.context.timestamp(name="forcing")
 
-        # Add forcing terms
         self.forcing_terms(q)
-        self.pin_y_momentum()
         self.timestamps[8] = self.context.timestamp()
 
-        # At this moment, a deep copy needs to be returned
-        # otherwise issues are encountered after. This needs to be fixed
+        # Later RHS evaluations reuse this buffer; callers need an independent state.
         return self.rhs.reshape(given_shape).clone()
-
-    def pin_y_momentum(self) -> None:
-        """Set the y-momentum tendency to zero for a y-invariant x-z slab.
-
-        Apply this to every partition so their sum remains the full right-hand side.
-        """
-        if self.y_invariant_slab:
-            self.rhs[idx_rho_u2] = 0.0
 
     def full(self, q: Tensor) -> Tensor:
         return self.__call__(q)
 
     def operators_for(self, q: Tensor) -> DFROperators:
-        """Return the real operator set."""
         return self.ops_real
 
     def allocate_arrays(self, q: Tensor):

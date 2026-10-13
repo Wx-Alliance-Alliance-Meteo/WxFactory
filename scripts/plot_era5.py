@@ -2,20 +2,19 @@ import matplotlib
 
 matplotlib.use("Agg")
 
-import xarray as xr
-import matplotlib.pyplot as plt
-import matplotlib.animation as animation
 import argparse
+
+import matplotlib.pyplot as plt
+import xarray as xr
+from matplotlib import animation
 
 
 def load_dataset(path):
     ds = xr.open_zarr(path, consolidated=True)
 
-    # Fix longitude
     ds = ds.assign_coords(longitude=(((ds.longitude + 180) % 360) - 180))
     ds = ds.sortby("longitude")
 
-    # Chunking
     ds = ds.chunk(
         {
             "time": 1,
@@ -28,7 +27,7 @@ def load_dataset(path):
 
 
 def get_variable(ds, level):
-    data_var = ds[list(ds.data_vars)[0]]
+    data_var = ds[next(iter(ds.data_vars))]
     z = data_var.sel(features=level) / 9.81
     return z
 
@@ -47,6 +46,7 @@ def save_image(z, time_index, output):
 
     plt.tight_layout()
     plt.savefig(output)
+    plt.close()
     print(f"Saved image: {output}")
 
 
@@ -63,74 +63,38 @@ def save_gif(z, output, max_frames):
         title.set_text(f"Time index: {i}")
         return [img]
 
-    ani = animation.FuncAnimation(
-        fig,
-        animate,
-        frames=min(max_frames, z.sizes["time"]),
-        interval=200,
-    )
+    ani = animation.FuncAnimation(fig, animate, frames=min(max_frames, z.sizes["time"]), interval=200)
 
     ani.save(output, writer="pillow", fps=5)
+    plt.close(fig)
     print(f"Saved GIF: {output}")
 
 
 def main():
     parser = argparse.ArgumentParser(description="ERA5 visualization tool")
 
-    parser.add_argument(
-        "--path",
-        required=True,
-        help="Path to Zarr dataset",
-    )
+    parser.add_argument("--path", required=True, help="Path to Zarr dataset")
 
-    parser.add_argument(
-        "--mode",
-        choices=["image", "gif"],
-        required=True,
-        help="Output type: image or gif",
-    )
+    parser.add_argument("--mode", choices=["image", "gif"], required=True, help="Output type: image or gif")
 
-    parser.add_argument(
-        "--level",
-        default="geopotential_h500",
-        help="Feature level (e.g., geopotential_h500)",
-    )
+    parser.add_argument("--level", default="geopotential_h500", help="Feature level (e.g., geopotential_h500)")
 
-    parser.add_argument(
-        "--time-index",
-        type=int,
-        default=0,
-        help="Time index for image mode",
-    )
+    parser.add_argument("--time-index", type=int, default=0, help="Time index for image mode")
 
-    parser.add_argument(
-        "--output",
-        default="ERA5",
-        help="Output file name",
-    )
+    parser.add_argument("--output", default="ERA5", help="Output file name")
 
-    parser.add_argument(
-        "--max-frames",
-        type=int,
-        default=100,
-        help="Maximum frames for GIF",
-    )
+    parser.add_argument("--max-frames", type=int, default=100, help="Maximum frames for GIF")
 
     args = parser.parse_args()
 
-    ds = load_dataset(args.path)
-    z = get_variable(ds, args.level)
-
-    if args.mode == "image":
-        output_file = "results/" + args.output + ".png"
-    elif args.mode == "gif":
-        output_file = "results/" + args.output + ".gif"
-
-    if args.mode == "image":
-        save_image(z, args.time_index, output_file)
-
-    elif args.mode == "gif":
-        save_gif(z, output_file, args.max_frames)
+    with load_dataset(args.path) as dataset:
+        height = get_variable(dataset, args.level)
+        suffix = ".png" if args.mode == "image" else ".gif"
+        output_file = "results/" + args.output + suffix
+        if args.mode == "image":
+            save_image(height, args.time_index, output_file)
+        else:
+            save_gif(height, output_file, args.max_frames)
 
 
 if __name__ == "__main__":

@@ -1,8 +1,5 @@
-import random
-
-import array_generator
 import torch
-from torch import Tensor
+from scipy.linalg import expm
 from wx_test import WxTestCase
 
 from wx_factory.context import Context
@@ -11,59 +8,41 @@ from wx_factory.solvers.pmex import pmex
 
 
 class KiopsPmexToleranceCpuTestCases(WxTestCase):
-    tolerance: float
-    rand: random.Random
+    def test_pmex_rejects_nonfinite_operator_action(self):
+        context = Context(self.comm, "cpu")
+        inputs = torch.tensor([[0.0, 0.0], [1.0, 2.0]], dtype=torch.float32)
+        with self.assertRaisesRegex(FloatingPointError, "non-finite"):
+            pmex(
+                torch.tensor([1.0]),
+                lambda vector: torch.full_like(vector, float("nan")) if self.comm.rank == 0 else vector,
+                inputs,
+                1.2e-5,
+                context=context,
+            )
 
-    def setUp(self) -> None:
-        super().setUp()
+    def test_phi_combination_against_independent_matrix_exponential(self):
+        context = Context(self.comm, "cpu")
+        generator = torch.Generator().manual_seed(62)
+        size = 24
+        matrix = -torch.diag(torch.linspace(0.0, 3.0, size, dtype=torch.float64))
+        matrix += 0.4 * torch.diag(torch.ones(size - 1, dtype=torch.float64), diagonal=1)
+        vectors = torch.randn((3, size), generator=generator, dtype=torch.float64)
 
-        self.cpu_context = Context(self.comm, "cpu")
-
-        seed: int = 5646459
-        initial_matrix_size: int = 64
-        rand_min: float = -1000.0
-        rand_max: float = 1000.0
-
-        self.show_debug_print = False
-
-        self.tolerance = 1e-7
-        self.rand = random.Random(seed)
-
-        [self.kiops_matrix, self.pmex_matrix] = array_generator.generate_matrices(
-            (initial_matrix_size, initial_matrix_size),
-            self.rand,
-            rand_min,
-            rand_max,
-            [self.cpu_context, self.cpu_context],
-        )
-
-    def test_compare_kiops_pmex(self):
-        def matvec_handle(v: Tensor) -> Tensor:
-            return v
-
-        w1, _ = kiops(
-            self.cpu_context.tensor([1.0]), matvec_handle, self.kiops_matrix, self.tolerance, context=self.cpu_context
-        )
-        w2, _ = pmex(
-            self.cpu_context.tensor([1.0]), matvec_handle, self.pmex_matrix, self.tolerance, context=self.cpu_context
-        )
-
-        shape = w1.shape
-
-        self.assertEqual(len(w1.shape), 2, "Kiops didn't return a matrix")
-        self.assertEqual(len(w2.shape), 2, "Pmex didn't return a matrix")
-
-        self.assertEqual(w2.shape, shape, "Both matrix should be the same size")
-
-        diff: float = torch.linalg.norm(w1 - w2).item()
-
-        w1_value: float = torch.linalg.norm(w1).item()
-        w2_value: float = torch.linalg.norm(w2).item()
-
-        abs_diff: float = abs(diff)
-
-        relative_diff_w1: float = abs(abs_diff / w1_value)
-        relative_diff_w2: float = abs(abs_diff / w2_value)
-
-        self.assertLessEqual(relative_diff_w1, self.tolerance, "Kiops didn't give a close result")
-        self.assertLessEqual(relative_diff_w2, self.tolerance, "Pmex didn't give a close result")
+        # exp([[A, b2, b1], [0, 0, 1], [0, 0, 0]]) gives
+        # exp(A)b0 + phi1(A)b1 + phi2(A)b2 without inverting A.
+        augmented = torch.zeros((size + 2, size + 2), dtype=torch.float64)
+        augmented[:size, :size] = matrix
+        augmented[:size, size:] = vectors[[2, 1]].T
+        augmented[size, size + 1] = 1
+        reference = torch.from_numpy(expm(augmented.numpy()))
+        expected = reference[:size, :size] @ vectors[0] + reference[:size, size + 1]
+        for solver in (kiops, pmex):
+            with self.subTest(solver=solver.__name__):
+                actual, _ = solver(
+                    torch.tensor([1.0], dtype=torch.float64),
+                    lambda vector: matrix @ vector,
+                    vectors,
+                    1e-10,
+                    context=context,
+                )
+                torch.testing.assert_close(actual[0], expected, rtol=1e-9, atol=1e-10)

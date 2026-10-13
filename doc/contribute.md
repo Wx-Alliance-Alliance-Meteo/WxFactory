@@ -6,13 +6,14 @@ The two branches that may be used by everyone are `main` and `dev`
 
 1. Create a new branch, starting from `main` or from `dev`, with a name that fits your project.
 2. During your work, commit frequently in your branch.
-3. Write tests to verify that your code works. Please include these tests in the commits (we have a directory just for that!)
+3. Add targeted tests for the failure modes introduced by your change. Prefer independent
+   references, analytic solutions, and conservation laws; see [testing guidance](../tests/readme.md).
 4. Open a pull request from your branch to the branch from which you started.
 
 ## Configuration options
 
 The available configuration options are described in a single place: the schema file
-`config/config-format.json`. To keep `config.<option>` autocompletion and static type checking
+`wx_factory/common/config-format.json`. To keep `config.<option>` autocompletion and static type checking
 working, `wx_factory/common/configuration.py` carries a block of generated type annotations.
 
 If you add, remove, or change the type of an option in the schema, regenerate that block:
@@ -27,7 +28,7 @@ and commit the change. A unit test (and the `checks` CI workflow) runs
 Regenerate the human-readable option table from the same schema after changing it:
 
 ```
-wxfactory config/case1.ini --config-options md > doc/config_options.md
+./WxFactory config/case1.ini --config-options md > doc/config_options.md
 ```
 
 The command requires a valid configuration path because it shares the normal command-line parser.
@@ -41,8 +42,11 @@ operations—including selected reductions, small bookkeeping matrices, and iter
 residuals—use `float64`. The `precision = double` mode retains `float64` throughout. Preserve the
 double-build/working-precision boundary when adding static derived spatial operators: it avoids
 baking construction roundoff into single-precision coefficients without increasing runtime
-storage. State-dependent fluxes, work arrays, and metrics rebuilt after a time-dependent geometry
-update normally remain in the configured working precision.
+storage. State-dependent fluxes and work arrays normally use the configured working precision.
+Euler metrics rebuilt during terrain initialization are constructed from retained double-precision
+coordinates and then cast to working precision. Finite-difference Jacobian probes and implicit
+Newton solves can use a promoted double-precision RHS; promotion does not recover precision
+already lost when static coefficients were cast.
 
 ## Extending WxFactory
 
@@ -56,9 +60,10 @@ do not need to edit a chain of `if`/`elif` tests scattered across the code.
 There are two registries, because there are two kinds of integrator:
 
 * **regular** schemes advance one right-hand side, `rhs.full`. They go in `REGISTRY` and run on
-  every configuration.
+  an unpartitioned RHS. A scheme can still impose its own requirements on history or Jacobians.
 * **partitioned** schemes advance `rhs.explicit` and `rhs.implicit` separately — `imex2`,
-  `partrosexp2`, `strang_epi2_ros2`, `strang_ros2_epi2`. They go in `PARTITIONED_REGISTRY`, and
+  `partrosexp2`, `lie`, `strang`, `os22`, `strang_epi2_ros2`, `strang_ros2_epi2`.
+  They go in `PARTITIONED_REGISTRY`, and
   they only run where that partition exists.
 
 Steps:
@@ -82,11 +87,12 @@ Steps:
    raises at import time if it does.
 3. Import the module in `wx_factory/integrators/__init__.py` and add it to the list of modules whose
    registries are merged.
-4. If the scheme needs its own configuration options, add them to `config/config-format.json` and
+4. If the scheme needs its own configuration options, add them to `wx_factory/common/config-format.json` and
    regenerate the type hints (see above). Gate them on the integrator name with a `dependency`
    block, as `os22_parameter` does, so they are only read — and only required — when that scheme is
-   selected. `time_integrator` itself has no `selectables` list: the registries are the authority,
-   and an unknown name produces an error listing what is available.
+   selected. `time_integrator` itself has no `selectables` list: registry resolution reports the
+   available names. Euler also has a supported-integrator check in
+   `Simulation._validate_euler`; update it after validating a new scheme with the Euler RHS.
 
 `resolve` refuses a partitioned scheme when the configuration provides no partition (shallow water,
 2D advection, and Euler with `advection_only = on`), and reports the reason the RHS gave. Generic
@@ -111,7 +117,7 @@ configuration schema.
            request.operator,
            request.vectors,
            tol=request.tolerance,
-           device=request.device,
+           context=request.context,
        )
        return ExponentialSolverResult(
            value=value,
@@ -127,15 +133,16 @@ configuration schema.
 4. Validate solver-specific limitations in the adapter. For example, an implementation that
    supports only one output time should reject a request containing several times with a clear
    error.
-5. Add registry, argument-translation, statistics, and capability tests under
-   `tests/unit/solvers/`.
+5. Test the adapter's numerical result against an independent reference and cover any
+   solver-specific limitations under `tests/unit/solvers/`.
 
 ### Add a new equation set / right-hand side
 
 The RHS depends on a pair: the equation set and the geometry it runs on. These are registered in
 `wx_factory/rhs/rhs_selector.py`.
 
-1. Add your `PDE` and `RHS` classes.
+1. Add a callable RHS class. A separate `PDE` class is useful for the staged shallow-water
+   path, but is not required by the Euler RHS.
 2. Register a factory for the `(equations, geometry class)` combination:
    ```python
    @register_rhs("my_equations", CubedSphere3D)
@@ -155,9 +162,10 @@ The RHS depends on a pair: the equation set and the geometry it runs on. These a
    (both, or neither — `RhsBundle` rejects half a partition) and drop `partition_reason`. Otherwise
    write one sentence saying why there is no partition: it is what the user sees when they select a
    partitioned integrator, so make it say what would have to change. The same bundle may answer
-   differently depending on its configuration — the Euler factories provide the partition normally
-   but withhold it under `advection_only`, which freezes the dynamics.
-3. Add `"my_equations"` to the `equations` option's `selectables` in `config/config-format.json`
+differently depending on its configuration — the Euler factories provide the partition normally
+   but withhold it for the prescribed-wind DCMIP cases 11--13. Euler validation requires
+   `advection_only` exactly for those cases; Cartesian Euler always advances the dynamics.
+3. Add `"my_equations"` to the `equations` option's `selectables` in `wx_factory/common/config-format.json`
    and regenerate the config type hints (see above).
 
 ### Add a new grid (geometry)
@@ -170,12 +178,12 @@ The geometry depends on a pair: the grid type and the equation set. These are re
    ```python
    @register_geometry("my_grid", "euler")
    def _build(ctx: GeometryContext) -> Geometry:
-       return MyGrid(ctx.num_elements_horizontal, ctx.num_solpts, ..., ctx.device)
+       return MyGrid(ctx.num_elements_horizontal, ctx.num_solpts, ..., ctx.context)
    ```
-   `ctx` (a `GeometryContext`) carries the config, device, MPI communicator, and the derived grid
+   `ctx` (a `GeometryContext`) carries the config, execution context, MPI communicator, and the derived grid
    sizes. If your grid needs a process topology (like the cubed sphere), create it in the factory;
    `Simulation` retrieves it back from `geometry.process_topology`.
-3. Add `"my_grid"` to the `grid_type` option's `selectables` in `config/config-format.json` and
+3. Add `"my_grid"` to the `grid_type` option's `selectables` in `wx_factory/common/config-format.json` and
    regenerate the config type hints.
 
 ### Add a new output format
@@ -188,12 +196,12 @@ option, and are registered in `wx_factory/output/registry.py`.
    ```python
    @register_output("cubesphere", "my_format")
    def _build(ctx: OutputContext) -> OutputManager:
-       return MyOutput(ctx.config, ctx.geometry, ctx.operators, ctx.device, ...)
+       return MyOutput(ctx.config, ctx.geometry, ctx.operators, ctx.context, ...)
    ```
    Register with `output_format=None` if the output does not depend on the format (as the
    Cartesian output does). A geometry advertises its family through the `output_family` class
    attribute.
-3. Add `"my_format"` to the `output_format` option's `selectables` in `config/config-format.json`
+3. Add `"my_format"` to the `output_format` option's `selectables` in `wx_factory/common/config-format.json`
    and regenerate the config type hints.
 
 ### Add a new step hook
@@ -229,8 +237,8 @@ were removed because they were broken); `preconditioner = none` means no precond
    def _build(ctx: PreconditionerContext) -> Preconditioner:
        return MyPreconditioner(ctx.rhs, ctx.geometry, ctx.config, ...)
    ```
-   `ctx` (a `PreconditionerContext`) carries the config, device, geometry, operators, the RHS
+   `ctx` (a `PreconditionerContext`) carries the config, execution context, geometry, operators, the RHS
    bundle, metric, topography, process topology, and the state-vector shape.
-3. Add `"my_precond"` to the `preconditioner` option's `selectables` in `config/config-format.json`
+3. Add `"my_precond"` to the `preconditioner` option's `selectables` in `wx_factory/common/config-format.json`
    and regenerate the config type hints. Linear-solver-based integrators will then receive it
    through `self.preconditioner` and call `prepare` / apply it automatically.

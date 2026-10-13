@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 
 import math
+from pathlib import Path
 
 import numpy
 import torch
 from mpi4py import MPI
-from rmn import FstDataType, fst24_file, fst_record
 
 from wx_factory.context import Context
 from wx_factory.geometry.registry import CubedSphere3D, GeometryContext, resolve_geometry
@@ -17,6 +17,8 @@ rank = MPI.COMM_WORLD.Get_rank()
 
 
 def main(args):
+    from rmn import FstDataType, fst24_file, fst_record
+
     if rank == 0:
         print(f"Generating grid from config file: {args.config_file}", flush=True)
 
@@ -74,11 +76,8 @@ def main(args):
             grtyp="E",
         )
 
-    split_name = args.output_file.strip().split(".")
-    base_name = split_name[0]
-    suffix = "" if len(split_name) < 2 else split_name[1]
-
-    filenames = [f"{base_name}_{i}" + f".{suffix}" if suffix != "" else "" for i in range(6)]
+    output_path = Path(args.output_file.strip())
+    filenames = [str(output_path.with_name(f"{output_path.stem}_{panel}{output_path.suffix}")) for panel in range(6)]
 
     with SingleProcess() as s, Conditional(s):
         if all_lats is None or all_lons is None:
@@ -95,17 +94,12 @@ def main(args):
         numpy.set_printoptions(linewidth=160, precision=3)
         for rec in f.new_query():
             a = all_lons if rec.nomvar == ">>" else all_lats
-            # print(
-            #     f"Shape = {rec.data.shape}, \n"  # nofmt
-            #     f"ref flags: \n{a[rec.ig1].flags}, \n"
-            #     f"rec flags: \n{rec.data.flags}",
-            #     flush=True,
-            # )
+
             diff = numpy.ravel(a[rec.ip1]) - numpy.ravel(rec.data)
             diff_norm = numpy.linalg.norm(diff)
             if diff_norm > 0.0:
                 print(
-                    f"Diff {rec.nomvar}/{rec.etiket} = {diff_norm:.2e}\n"  # nofmt
+                    f"Diff {rec.nomvar}/{rec.etiket} = {diff_norm:.2e}\n"
                     f"ref = \n{a[rec.ip1]}\n"
                     f"got \n{rec.data}\n"
                     f"diff: \n{diff}",

@@ -9,31 +9,27 @@ from ..common.definitions import (
     cpd,
     cvd,
     gravity,
+    heat_capacity_ratio,
     idx_h,
     idx_hu1,
     idx_hu2,
     idx_rho,
     idx_rho_theta,
-    idx_rho_u1,
-    idx_rho_u2,
-    idx_rho_u3,
     idx_u1,
     idx_u2,
     p0,
 )
-from ..geometry import CubedSphere2D, CubedSphere3D, DFROperators, Metric2D, Metric3DTopo
+from ..geometry import CubedSphere2D, CubedSphere3D, DFROperators, Metric2D, Metric5D
 from ..output.input_manager import extract_available_levels
 from .dcmip import (
     acoustic_wave,
     dcmip_advection_deformation,
     dcmip_advection_hadley,
     dcmip_advection_orography,
+    dcmip_baroclinic_instability,
     dcmip_gravity_wave,
     dcmip_schar_waves,
     dcmip_steady_state_mountain,
-    euler_from_era5,
-    dcmip_baroclinic_instability,
-    acoustic_wave,
 )
 from .shallow_water import (
     case_galewsky,
@@ -58,54 +54,23 @@ class Topo:
         self.hsurf_itf_j = hsurf_itf_j
 
 
-def initialize_euler(geom: CubedSphere3D, metric: Metric3DTopo, mtrx: DFROperators, param: Configuration):
+def initialize_euler(geom: CubedSphere3D, metric: Metric5D, mtrx: DFROperators, param: Configuration):
 
-    # -------------------------------------------------------------------------|
-    # case DCMIP 2012    | Pure advection                                     |
-    #                    | ---------------------------------------------------|
-    #                    | 11: 3D deformational flow                          |
-    #                    | 12: 3D Hadley-like meridional circulation          |
-    #                    | 13: 2D solid-body rotation of thin cloud-like      |
-    #                    |     tracer in the presence of orography            |
-    #                    | ---------------------------------------------------|
-    #                    | 20: Steady-state at rest in presence of orography. |
-    #                    | ---------------------------------------------------|
-    #                    | Gravity waves, Non-rotating small-planet           |
-    #                    | ---------------------------------------------------|
-    #                    | 21: Mountain waves over a Schaer-type mountain     |
-    #                    | 22: As 21 but with wind shear                      |
-    #                    | 31: Gravity wave along the equator                 |
-    #                    | ---------------------------------------------------|
-    #                    | Rotating planet: Hydro. to non-hydro. scales (X)   |
-    #                    | ---------------------------------------------------|
-    #                    | 41X: Dry Baroclinic Instability Small Planet       |
-    #                    | ---------------------------------------------------|
-    #                    | 43 : Moist Baroclinic Instability Simple physics   |
-    # --------------------|----------------------------------------------------|
-    # case DCMIP 2016    | 161: Baroclinic wave with Toy Terminal Chemistry   |
-    #                    | 162: Tropical cyclone                              |
-    #                    | 163: Supercell (Small Planet)                      |
-    # --------------------|----------------------------------------------------|
-    # DCMIP_2012: https://www.earthsystemcog.org/projects/dcmip-2012/         |
-    # DCMIP_2016: https://www.earthsystemcog.org/projects/dcmip-2016/         |
-    # -------------------------------------------------------------------------|
-
-    num_equations = 5
 
     if param.case_number < 0 and param.initial_conditions != "":
-        rho, u1_contra, u2_contra, w, potential_temperature = euler_from_era5(
+        from .euler import initialize_era5
+
+        initializer = initialize_era5
+        rho, u1_contra, u2_contra, w, potential_temperature = initializer(
             geom, metric, param.initial_conditions, param.topography_file, param.time_start
         )
     elif param.case_number == 11:
-        num_equations = 9
         rho, u1_contra, u2_contra, w, potential_temperature, q1, q2, q3, q4 = dcmip_advection_deformation(
             geom, metric, mtrx, param
         )
     elif param.case_number == 12:
-        num_equations = 6
         rho, u1_contra, u2_contra, w, potential_temperature, q1 = dcmip_advection_hadley(geom, metric, mtrx, param)
     elif param.case_number == 13:
-        num_equations = 9
         rho, u1_contra, u2_contra, w, potential_temperature, q1, q2, q3, q4 = dcmip_advection_orography(
             geom, metric, mtrx, param
         )
@@ -124,22 +89,13 @@ def initialize_euler(geom: CubedSphere3D, metric: Metric3DTopo, mtrx: DFROperato
     else:
         raise ValueError(f"Unknown case number {param.case_number}")
 
-    Q = torch.zeros((num_equations,) + rho.shape, dtype=rho.dtype)
+    from .euler import pack_euler_state
 
-    Q[idx_rho, ...] = rho
-    Q[idx_rho_u1, ...] = rho * u1_contra
-    Q[idx_rho_u2, ...] = rho * u2_contra
-    Q[idx_rho_u3, ...] = rho * w
-    Q[idx_rho_theta, ...] = rho * potential_temperature
-
+    state = pack_euler_state(rho, (u1_contra, u2_contra, w), potential_temperature, metric, param)
     if param.case_number in (11, 12, 13):
-        Q[5, ...] = rho * q1
-    if param.case_number in (11, 13):
-        Q[6, ...] = rho * q2
-        Q[7, ...] = rho * q3
-        Q[8, ...] = rho * q4
-
-    return Q, None
+        tracers = (q1,) if param.case_number == 12 else (q1, q2, q3, q4)
+        state = torch.cat((state, torch.stack([rho * tracer for tracer in tracers])))
+    return state, None
 
 
 def initialize_sw(geom: CubedSphere2D, metric: Metric2D, mtrx: DFROperators, param: Configuration):
@@ -147,7 +103,6 @@ def initialize_sw(geom: CubedSphere2D, metric: Metric2D, mtrx: DFROperators, par
     dtype = torch.float64
     dataset = None
 
-    # ni, nj = geom.lon.shape
     num_equations = 3
 
     base_shape = geom.lon.shape
@@ -161,13 +116,6 @@ def initialize_sw(geom: CubedSphere2D, metric: Metric2D, mtrx: DFROperators, par
     hsurf_itf_i = torch.zeros(itf_i_shape, dtype=dtype)
     hsurf_itf_j = torch.zeros(itf_j_shape, dtype=dtype)
 
-    # --- Shallow water
-    #   0 : deformation flow (passive advection only)
-    #   1 : cosine hill (passive advection only)
-    #   2 : zonal flow (shallow water)
-    #   5 : zonal flow over an isolated mountain (shallow water)
-    #   6 : Rossby-Haurvitz waves (shallow water)
-    #   8 : Unstable jet (shallow water)
     if param.case_number == -2:
         ds = xr.open_zarr(param.initial_conditions, consolidated=True)
         time_start = str(param.time_start)
@@ -178,7 +126,6 @@ def initialize_sw(geom: CubedSphere2D, metric: Metric2D, mtrx: DFROperators, par
         else:
             dataset = ds.isel(time=[0])
 
-        # To be removed depending on Paradise design choices
         if len(dataset.time) > 1 and dataset["time"].values[-1] == numpy.datetime64(
             str(param.time_end).replace("t", "T")
         ):
@@ -192,7 +139,6 @@ def initialize_sw(geom: CubedSphere2D, metric: Metric2D, mtrx: DFROperators, par
             NZ = len(levels) - 1
         else:
             NZ = 1
-        # For output_manager
         geom.z_levels = levels
 
         Q_shape = (num_equations, NZ)
@@ -239,14 +185,12 @@ def initialize_sw(geom: CubedSphere2D, metric: Metric2D, mtrx: DFROperators, par
     Q[idx_h, ...] = fluid_height
 
     if param.case_number in [0, 1]:
-        # advection only
         Q[idx_u1, ...] = u1_contra
         Q[idx_u2, ...] = u2_contra
     else:
         Q[idx_hu1, ...] = fluid_height * u1_contra
         Q[idx_hu2, ...] = fluid_height * u2_contra
 
-    # Store the initialized state and topography in the geometry's working precision.
     Q = Q.astype(geom.dtype)
 
     topo = None
@@ -262,7 +206,7 @@ def initialize_sw(geom: CubedSphere2D, metric: Metric2D, mtrx: DFROperators, par
     return Q, topo, dataset
 
 
-def initialize_cartesian3d(geom, param: Configuration) -> NDArray[numpy.float64]:
+def initialize_cartesian3d(geom, metric, param: Configuration) -> NDArray[numpy.float64]:
     """Initialize a problem on a flat 3D cartesian slab, from the same case numbers as the 2D grid.
 
     The 2D cartesian cases live in the (x, z) plane; here they are extruded uniformly in y (the flow
@@ -281,88 +225,55 @@ def initialize_cartesian3d(geom, param: Configuration) -> NDArray[numpy.float64]
     if param.case_number == 0:
         # Stratified background with a uniform wind (the step-mountain flow). The mountain topography
         # itself is a terrain-following-metric concern (update_topo) and is not applied here yet.
-        xc = (geom.X1.min() + geom.X1.max()) / 2.0  # noqa: F841 (kept for parity with the 2D setup)
+        xc = (geom.X1.min() + geom.X1.max()) / 2.0
     elif param.case_number == 1:
-        # Pill
         xc, zc, pert = 500.0, 260.0, 0.5
         r = (x1 - xc) ** 2 + (x3 - zc) ** 2
         θ = torch.where(r < param.bubble_rad**2, θ + pert, θ)
     elif param.case_number == 2:
-        # Gaussian bubble
         A, a, s, x0, z0 = 0.5, 50, 100, 500, 260
         r = torch.sqrt((x1 - x0) ** 2 + (x3 - z0) ** 2)
         θ = torch.where(r <= a, θ + A, θ + A * torch.exp(-(((r - a) / s) ** 2)))
     elif param.case_number == 3:
-        # Colliding bubbles: warm then cold
         for A, a, s, x0, z0 in ((0.5, 150, 50, 500, 300), (-0.15, 0, 50, 560, 640)):
             r = torch.sqrt((x1 - x0) ** 2 + (x3 - z0) ** 2)
             θ = torch.where(r <= a, θ + A, θ + A * torch.exp(-(((r - a) / s) ** 2)))
     elif param.case_number == 4:
-        # Density current (cold anomaly)
         xc, zc, xr, zr = 0.0, 3000.0, 4000.0, 2000.0
         r = torch.sqrt(((x1 - xc) / xr) ** 2 + ((x3 - zc) / zr) ** 2)
-        θ = θ + torch.where(r <= 1.0, -15.0 * (1.0 + torch.cos(torch.pi * r)) / 2.0, 0.0)
+        exner = 1.0 - gravity * x3 / (cpd * param.bubble_theta)
+        temperature_perturbation = torch.where(r <= 1.0, -15.0 * (1.0 + torch.cos(torch.pi * r)) / 2.0, 0.0)
+        # Straka prescribes a temperature anomaly at unchanged background pressure.
+        θ = θ + temperature_perturbation / exner
     elif param.case_number == 666:
-        # hydrostatic equilibrium
-        T0      = 300.0                                      # temperature
-        H       = Rd * T0 / gravity                          # scale height
+        T0      = 300.0
+        H       = Rd * T0 / gravity
         t = T0
         pressure = p0 * torch.exp(-geom.X3 / H)
         ρ = pressure / (Rd * t)
         θ  = t * (p0 / pressure)**(Rd/cpd)
     elif param.case_number == 651:
-        # Gresho Vortex
-        gamma = 1.4
-        Mmax = 0.1   # or 1.0e-2 if you want Mach 0.01
-        print(f"Mach number Mmax = {Mmax}")
-        # Center the vortex
-        xc, yc = 0.5, 0.5
-        x = geom.X1 - xc
-        y = geom.X3 - yc
+        max_mach = 0.1
+        x = x1 - 0.5
+        z = x3 - 0.5
+        radius = torch.sqrt(x**2 + z**2)
+        angle = torch.atan2(z, x)
+        inner = radius < 0.2
+        annulus = (radius >= 0.2) & (radius < 0.4)
+        tangential_velocity = torch.zeros_like(radius)
+        tangential_velocity[inner] = 5 * radius[inner]
+        tangential_velocity[annulus] = 2 - 5 * radius[annulus]
+        uu = -tangential_velocity * torch.sin(angle)
+        ww = tangential_velocity * torch.cos(angle)
+        ρ = torch.ones_like(radius)
 
-        r = torch.sqrt(x**2 + y**2)
-        phi = torch.atan2(y, x)
-
-        # Density
-        ρ = torch.ones_like(r)
-
-        # Tangential velocity profile
-        u_phi = torch.zeros_like(r)
-
-        m1 = r < 0.2
-        m2 = (r >= 0.2) & (r < 0.4)
-        m3 = r >= 0.4
-
-        u_phi[m1] = 5.0 * r[m1]
-        u_phi[m2] = 2.0 - 5.0 * r[m2]
-        u_phi[m3] = 0.0
-
-        # Cartesian velocities
-        uu = -u_phi * torch.sin(phi)
-        ww =  u_phi * torch.cos(phi)
-
-        # Background pressure chosen so that maximum Mach number is Mmax
-        p_base = 1.0 / (gamma * Mmax**2) - 0.5
-
-        # Pressure profile
-        p = torch.zeros_like(r)
-
-        p[m1] = p_base + 12.5 * r[m1]**2
-
-        p[m2] = (
-            p_base
-            + 4.0 * torch.log(5.0 * r[m2])
-            + 4.0
-            - 20.0 * r[m2]
-            + 12.5 * r[m2]**2
-        )
-
-        p[m3] = p_base + 4.0 * torch.log(torch.tensor(2.0, dtype=r.dtype, device=r.device)) - 2.0
-
-        # Temperature
-        θ = p / (Rd * ρ)
-     
-
+        # At r = 0.2 the speed is one, fixing the maximum Mach number.
+        base_pressure = 1 / (heat_capacity_ratio * max_mach**2) - 0.5
+        pressure = torch.full_like(radius, base_pressure + 4 * numpy.log(2) - 2)
+        pressure[inner] = base_pressure + 12.5 * radius[inner]**2
+        r = radius[annulus]
+        pressure[annulus] = base_pressure + 4 * torch.log(5 * r) + 4 - 20 * r + 12.5 * r**2
+        θ = p0 / (Rd * ρ) * (pressure / p0)**(1 / heat_capacity_ratio)
 
     if param.case_number == 0:
         N_star, t0 = 0.01, 288.0
@@ -371,34 +282,16 @@ def initialize_cartesian3d(geom, param: Configuration) -> NDArray[numpy.float64]
         exner = 1.0 - capc1 * (1.0 - torch.exp(-a00 * x3))
         θ = t0 * torch.exp(a00 * x3)
         uu = uu + 10.0
-    else:
+    elif param.case_number != 4:
         exner = 1.0 - gravity / (cpd * θ) * x3
 
     if param.case_number != 666 and param.case_number != 651:
-        print("just make sure density is initialized correctly")
         ρ = p0 / (Rd * θ) * exner ** (cvd / Rd)
 
     Q = torch.zeros((5,) + geom.grid_shape_3d_new, dtype=x1.dtype)
     Q[idx_rho] = ρ
-    Q[idx_rho_u1] = ρ * uu
-    Q[idx_rho_u2] = 0.0  # y-invariant extrusion
-    Q[idx_rho_u3] = ρ * ww
+    physical_momentum = torch.stack((ρ * uu, torch.zeros_like(ρ), ρ * ww))
+    Q[1:4] = metric.volume.covariant_from_physical(physical_momentum / ρ)
     Q[idx_rho_theta] = ρ * θ
 
-    ''' 
-    # Initial state debuggin for case 666: 
-    print("x1:", x1.min().item(), x1.max().item())
-    print("rho:", ρ.min().item(), ρ.max().item())
-    print("u:", uu.min().item(), uu.max().item())
-    print("theta:", θ.min().item(), θ.max().item())
-    dpdz=pressure*(-1/H)
-    rhograd = -ρ*gravity
-    print(f"IC uu: {(Q[idx_rho_u1] / Q[idx_rho]).min().item()}, {(Q[idx_rho_u1] / Q[idx_rho]).max().item()}")
-    print(f"IC vv: {(Q[idx_rho_u2] / Q[idx_rho]).min().item()}, {(Q[idx_rho_u2] / Q[idx_rho]).max().item()}")
-    print(f"IC ww: {(Q[idx_rho_u3] / Q[idx_rho]).min().item()}, {(Q[idx_rho_u3] / Q[idx_rho]).max().item()}")
-    print(f"IC theta: {(Q[idx_rho_theta] / Q[idx_rho]).min().item()}, {(Q[idx_rho_theta] / Q[idx_rho]).max().item()}")
-    print(f"IC rho: {Q[idx_rho].min().item()}, {Q[idx_rho].max().item()}")
-    print(f"IC check (dpdz - rhograd): {(dpdz - rhograd).min().item()}, {(dpdz - rhograd).max().item()}")
-    ''' 
-    
     return Q

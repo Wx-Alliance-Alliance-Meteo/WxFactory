@@ -14,7 +14,6 @@ __all__ = ["Configuration"]
 
 
 class Configuration:
-    """All the config options for WxFactory"""
 
     sections: dict[str, list[str]]
 
@@ -120,6 +119,7 @@ class Configuration:
     grid_file: str
     grid_type: str
     initial_conditions: str
+    jacobian: str
     krylov_mmax: int
     krylov_size: int
     lambda0: float
@@ -129,7 +129,6 @@ class Configuration:
     num_elements_horizontal: int
     num_elements_vertical: int
     num_solpts: int
-    numer_christoffel: bool
     os22_parameter: float
     output_dir: str
     output_format: str

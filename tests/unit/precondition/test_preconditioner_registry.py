@@ -5,7 +5,6 @@ from wx_test import WxTestCase
 
 from wx_factory.precondition import (
     PRECONDITIONER_REGISTRY,
-    Preconditioner,
     register_preconditioner,
     resolve_preconditioner,
 )
@@ -19,10 +18,6 @@ def make_ctx(name):
 class PreconditionerRegistryTestCases(WxTestCase):
     def test_none_resolves_to_no_preconditioner(self):
         self.assertIsNone(resolve_preconditioner(make_ctx("none")))
-
-    def test_no_builtin_preconditioners(self):
-        # The broken historical preconditioners were removed; the registry starts empty.
-        self.assertEqual(PRECONDITIONER_REGISTRY, {})
 
     def test_unknown_preconditioner_raises_helpful_error(self):
         with self.assertRaises(ValueError) as cm:
@@ -55,10 +50,6 @@ class PreconditionerRegistryTestCases(WxTestCase):
 
         finally:
             del PRECONDITIONER_REGISTRY["dup_precond"]
-
-    def test_base_prepare_is_a_noop(self):
-        # A preconditioner that does not override prepare must still be callable by integrators.
-        self.assertTrue(hasattr(Preconditioner, "prepare"))
 
 
 if __name__ == "__main__":

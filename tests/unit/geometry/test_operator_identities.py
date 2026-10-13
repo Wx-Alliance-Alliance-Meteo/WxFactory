@@ -1,18 +1,4 @@
-"""Consistency identities that the DFR operators must satisfy in every precision.
-
-Two relations underpin the referenced logarithms of Sect. "Vertical treatment of the
-hydrostatically balanced terms":
-
-  * the volume derivative plus its boundary correction annihilates a constant, which is what
-    makes evaluating ``ln(p/p0)`` instead of ``ln(p)`` exact;
-  * the extrapolation reproduces a constant, which is what makes rescaling ``rho_theta`` by
-    ``p0/Rd`` exact.
-
-Both hold to round-off in float64 and, because the extended differentiation matrix is
-skew-centrosymmetric and rounding is symmetric, exactly in float32. If a future change to the
-operator construction were to break either one, the pressure gradient would pick up a spurious
-term proportional to the reference constant, so they are asserted here rather than assumed.
-"""
+"""DFR must preserve constants in both working precisions."""
 
 import os
 import unittest

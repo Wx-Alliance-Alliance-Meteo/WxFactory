@@ -1,13 +1,5 @@
 #!/usr/bin/env python3
-"""Diagnostics and publication-quality plots for DCMIP-2012 test 2-0.
-
-The test-case document asks for day-6 native-level equatorial sections,
-day-3/day-6 maps at the lowest and approximately 500-hPa model levels, the
-500-hPa temperature field, and the time series of global-mean kinetic energy.
-
-Usage:
-    python scripts/plot_dcmip20.py -o results --label mountain [--pdf] results/dcmip20_mountain_rosexp.nc
-"""
+"""DCMIP 2-0 wind sections, maps, and global-mean kinetic energy."""
 
 import argparse
 import csv
@@ -35,7 +27,6 @@ def nearest_indices(values, targets):
 
 
 def equator_stencil(lat, lon):
-    """Return exact-equator interpolation stencils, ordered by longitude."""
     stencils = []
     longitudes = []
     for panel in range(lat.shape[0]):
@@ -114,7 +105,6 @@ def symmetric_limit(fields):
 
 
 def save_figure(fig, path, pdf):
-    """Write the requested figure formats."""
     fig.savefig(path, dpi=300)
     if pdf:
         fig.savefig(path.with_suffix(".pdf"), dpi=300)
@@ -122,10 +112,7 @@ def save_figure(fig, path, pdf):
 
 
 def plot_native_sections(dataset, index, lon, stencils, output, label, pdf):
-    fields = {
-        "U": (r"$u$ (m s$^{-1}$)", "dcmip20_u_equator"),
-        "W": (r"$w$ (m s$^{-1}$)", "dcmip20_w_equator"),
-    }
+    fields = {"U": (r"$u$ (m s$^{-1}$)", "dcmip20_u_equator"), "W": (r"$w$ (m s$^{-1}$)", "dcmip20_w_equator")}
     elevation = at_equator(numpy.asarray(dataset.variables["elev"][:]), stencils).T
     topography = at_equator(numpy.asarray(dataset.variables["topo"][:]), stencils)
 
@@ -157,12 +144,7 @@ def plot_native_sections(dataset, index, lon, stencils, output, label, pdf):
             ax.plot(longitude, level / 1000.0, color="black", alpha=0.28, linewidth=0.35)
         ax.fill_between(longitude, 0.0, topography / 1000.0, color="0.35", zorder=5)
 
-        ax.set(
-            xlim=(0, 360),
-            ylim=(0, 12),
-            xlabel="Longitude (degrees east)",
-            ylabel="Geometric height (km)",
-        )
+        ax.set(xlim=(0, 360), ylim=(0, 12), xlabel="Longitude (degrees east)", ylabel="Geometric height (km)")
         ax.xaxis.set_major_locator(MultipleLocator(45))
         ax.grid(alpha=0.18, linewidth=0.5)
         fig.colorbar(image, ax=ax, label=colour_label, pad=0.02)

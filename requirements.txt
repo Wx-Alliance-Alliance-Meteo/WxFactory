@@ -1,5 +1,5 @@
 numpy
-scipy
+scipy>=1.15
 sympy
 mpi4py
 torch
@@ -8,7 +8,8 @@ netcdf4
 matplotlib
 xarray
 dask
-zarr
+zarr>=3,<4
+numcodecs
 
 # GPU support requires a CUDA-enabled PyTorch build compatible with the system CUDA driver.
 # See https://pytorch.org/get-started/locally/ for the appropriate installation command.

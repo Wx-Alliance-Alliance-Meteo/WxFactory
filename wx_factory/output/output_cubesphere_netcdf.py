@@ -14,14 +14,12 @@ from ..common.definitions import (
     idx_hu2,
     idx_rho,
     idx_rho_theta,
-    idx_rho_u1,
-    idx_rho_u2,
-    idx_rho_u3,
     p0,
 )
+from ..common.euler_state import physical_winds
 from ..common.matmul import kron
 from ..context import Context
-from ..geometry import CubedSphere, CubedSphere2D, DFROperators, Metric2D, Metric3DTopo
+from ..geometry import CubedSphere, CubedSphere2D, DFROperators, Metric2D, Metric5D
 from ..process_topology import ProcessTopology
 from ..wx_mpi import Conditional, SingleProcess
 from .diagnostic import potential_vorticity, relative_vorticity
@@ -35,7 +33,7 @@ class OutputCubesphereNetcdf(OutputCubesphere):
         geometry: CubedSphere,
         operators: DFROperators,
         context: Context,
-        metric: Metric2D | Metric3DTopo,
+        metric: Metric2D | Metric5D,
         topo,
         process_topo: ProcessTopology,
     ):
@@ -62,10 +60,8 @@ class OutputCubesphereNetcdf(OutputCubesphere):
         # import here, so we don't need the module if not outputting
         import netCDF4
 
-        # creating the netcdf file(s)
         with SingleProcess(self.comm) as s, Conditional(s):
             self.ncfile = netCDF4.Dataset(self.filename, "w", format="NETCDF4")
-        # create dimensions
         side = self.process_topology.num_lines_per_panel
         if self.config.equations == "shallow_water":
             nj, ni = self.geometry.block_shape
@@ -83,7 +79,6 @@ class OutputCubesphereNetcdf(OutputCubesphere):
         grid_data2D = ("nfaces", "Xdim", "Ydim")
 
         if self.ncfile is not None:
-            # write general attributes
             self.ncfile.history = "Created " + time.ctime(time.time())
             self.ncfile.description = "WxFactory Model"
             self.ncfile.details = "Cubed-sphere coordinates, Gauss-Legendre collocated grid"
@@ -91,7 +86,7 @@ class OutputCubesphereNetcdf(OutputCubesphere):
             if hasattr(self.geometry, "earth_radius"):
                 self.ncfile.earth_radius = self.geometry.earth_radius
 
-            self.ncfile.createDimension("time", None)  # unlimited
+            self.ncfile.createDimension("time", None)
             nfaces = 6
             self.ncfile.createDimension("nfaces", nfaces)
             self.ncfile.createDimension("Ydim", ni)
@@ -110,25 +105,21 @@ class OutputCubesphereNetcdf(OutputCubesphere):
                     else:
                         zzz[:] = numpy.arange(self.nz)
 
-            # create time axis
             tme = self.ncfile.createVariable("time", numpy.float64, ("time",))
             tme.units = "seconds since 1800-01-01 00:00:00"
             tme.calendar = "standard"
 
-            # create tiles axis
             tile = self.ncfile.createVariable("nfaces", "i4", ("nfaces"))
             tile.grads_dim = "e"
             tile.standard_name = "tile"
             tile.long_name = "cubed-sphere tile"
             tile.axis = "e"
 
-            # create latitude axis
             yyy = self.ncfile.createVariable("Ydim", numpy.float64, ("Ydim"))
             yyy.long_name = "Ydim"
             yyy.axis = "Y"
             yyy.units = "radians_north"
 
-            # create longitude axis
             xxx = self.ncfile.createVariable("Xdim", numpy.float64, ("Xdim"))
             xxx.long_name = "Xdim"
             xxx.axis = "X"
@@ -141,7 +132,6 @@ class OutputCubesphereNetcdf(OutputCubesphere):
                 zzz.axis = "Z"
                 zzz.units = "m"
 
-            # create variable array
             lat = self.ncfile.createVariable("lats", numpy.float64, grid_data2D)
             lat.long_name = "latitude"
             lat.units = "degrees_north"
@@ -296,7 +286,6 @@ class OutputCubesphereNetcdf(OutputCubesphere):
             xxx[:] = panel_x
             yyy[:] = panel_y
             if self.config.equations == "euler":
-                # No gathering needed for vertical coords
                 # FIXME: With mapped coordinates, x3/height is a truly 3D coordinate
                 zzz[:] = to_host(self.geometry.x3[:, 0, 0])
 
@@ -320,18 +309,15 @@ class OutputCubesphereNetcdf(OutputCubesphere):
                     volume[i, :, :, :] = vols[i]
 
     def _cell_volume(self) -> NDArray:
-        """Volume associated with each solution point.
+        """The reference-coordinate Jacobian already includes element scaling.
 
-        On the cubed sphere the elements are uniform in the computational coordinates, so the volume
-        of a solution point is sqrt(G) times its tensor-product Gauss-Legendre quadrature weight,
-        times the (constant) volume of a reference element. The solution points inside an element are
-        ordered with x1 varying fastest, then x2, then x3."""
+        Tensor-product quadrature weights use x1 fastest, then x2, then x3.
+        """
         geom = self.geometry
         w = geom.glweights
-        w3d = kron(w, kron(w, w))  # ordering: x3 slowest, x1 fastest
+        w3d = kron(w, kron(w, w))
 
-        elem_volume = geom.delta_x1 * geom.delta_x2 * geom.delta_x3 / 8.0
-        return self.metric.sqrtG_new * w3d * elem_volume
+        return self.metric.volume.volume_jacobian * w3d
 
     def store_field_Zdim(self, field, name: str, time_idx: int, level_idx: int):
         fields = self._gather_field(field, self.num_dim)
@@ -353,7 +339,7 @@ class OutputCubesphereNetcdf(OutputCubesphere):
         else:
             idx = 0
 
-        if isinstance(geom, CubedSphere2D):  # Shallow water
+        if isinstance(geom, CubedSphere2D):
             if Q.ndim == 5:
                 for k in range(self.nz):
                     h = Q[idx_h, k, ...]
@@ -401,14 +387,11 @@ class OutputCubesphereNetcdf(OutputCubesphere):
                     self.store_field(geom.to_single_block(rv), "RV", idx)
                     self.store_field(geom.to_single_block(pv), "PV", idx)
 
-        elif getattr(geom, "is_3d_euler_grid", False):  # Euler equations
+        elif getattr(geom, "is_3d_euler_grid", False):
             rho = Q[idx_rho, ...]
-            u1 = Q[idx_rho_u1, ...] / rho
-            u2 = Q[idx_rho_u2, ...] / rho
-            u3 = Q[idx_rho_u3, ...] / rho
             theta = Q[idx_rho_theta, ...] / rho
 
-            u, v, w = geom.contra2wind_3d(u1, u2, u3, self.metric)
+            u, v, w = physical_winds(Q, geom, self.metric)
 
             self.store_field(geom.to_single_block(rho), "rho", idx)
             self.store_field(geom.to_single_block(u), "U", idx)
@@ -436,7 +419,6 @@ class OutputCubesphereNetcdf(OutputCubesphere):
             self.ncfile["time"][idx] = seconds
 
     def __finalize__(self):
-        """Finalise the output netCDF4 file."""
         if self.rank == 0 and self.ncfile is not None:
             self.ncfile.close()
 

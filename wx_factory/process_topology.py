@@ -18,86 +18,80 @@ EAST = 3
 # Covariant maps are inverse transposes of contravariant maps; see Appendix C of Gaudreault et al.
 # (2022). The vertical component is unchanged because ``x3`` is shared by all panels.
 CONVERT_CONTRAVARIANT: list[list[Callable[[Tensor, Tensor, Tensor], tuple[Tensor, Tensor]]]] = [
-    # Panel 0
     [
-        lambda a1, a2, coord: (a1 + 2.0 * coord / (1.0 + coord**2) * a2, a2),  # South neighbor
-        lambda a1, a2, coord: (a1 - 2.0 * coord / (1.0 + coord**2) * a2, a2),  # North neighbor
-        lambda a1, a2, coord: (a1, 2.0 * coord / (1.0 + coord**2) * a1 + a2),  # West neighbor
-        lambda a1, a2, coord: (a1, -2.0 * coord / (1.0 + coord**2) * a1 + a2),  # East neighbor
+        lambda a1, a2, coord: (a1 + 2.0 * coord / (1.0 + coord**2) * a2, a2),
+        lambda a1, a2, coord: (a1 - 2.0 * coord / (1.0 + coord**2) * a2, a2),
+        lambda a1, a2, coord: (a1, 2.0 * coord / (1.0 + coord**2) * a1 + a2),
+        lambda a1, a2, coord: (a1, -2.0 * coord / (1.0 + coord**2) * a1 + a2),
     ],
-    # Panel 1
     [
-        lambda a1, a2, coord: (a2, -a1 - 2.0 * coord / (1.0 + coord**2) * a2),  # South neighbor
-        lambda a1, a2, coord: (-a2, a1 - 2.0 * coord / (1.0 + coord**2) * a2),  # North neighbor
-        lambda a1, a2, coord: (a1, 2.0 * coord / (1.0 + coord**2) * a1 + a2),  # West neighbor
-        lambda a1, a2, coord: (a1, -2.0 * coord / (1.0 + coord**2) * a1 + a2),  # East neighbor
+        lambda a1, a2, coord: (a2, -a1 - 2.0 * coord / (1.0 + coord**2) * a2),
+        lambda a1, a2, coord: (-a2, a1 - 2.0 * coord / (1.0 + coord**2) * a2),
+        lambda a1, a2, coord: (a1, 2.0 * coord / (1.0 + coord**2) * a1 + a2),
+        lambda a1, a2, coord: (a1, -2.0 * coord / (1.0 + coord**2) * a1 + a2),
     ],
-    # Panel 2
     [
-        lambda a1, a2, coord: (-a1 - 2.0 * coord / (1.0 + coord**2) * a2, -a2),  # South neighbor
-        lambda a1, a2, coord: (-a1 + 2.0 * coord / (1.0 + coord**2) * a2, -a2),  # North neighbor
-        lambda a1, a2, coord: (a1, 2.0 * coord / (1.0 + coord**2) * a1 + a2),  # West neighbor
-        lambda a1, a2, coord: (a1, -2.0 * coord / (1.0 + coord**2) * a1 + a2),  # East neighbor
+        lambda a1, a2, coord: (-a1 - 2.0 * coord / (1.0 + coord**2) * a2, -a2),
+        lambda a1, a2, coord: (-a1 + 2.0 * coord / (1.0 + coord**2) * a2, -a2),
+        lambda a1, a2, coord: (a1, 2.0 * coord / (1.0 + coord**2) * a1 + a2),
+        lambda a1, a2, coord: (a1, -2.0 * coord / (1.0 + coord**2) * a1 + a2),
     ],
-    # Panel 3
     [
-        lambda a1, a2, coord: (-a2, a1 + 2.0 * coord / (1.0 + coord**2) * a2),  # South neighbor
-        lambda a1, a2, coord: (a2, -a1 + 2.0 * coord / (1.0 + coord**2) * a2),  # North neighbor
-        lambda a1, a2, coord: (a1, 2.0 * coord / (1.0 + coord**2) * a1 + a2),  # West neighbor
-        lambda a1, a2, coord: (a1, -2.0 * coord / (1.0 + coord**2) * a1 + a2),  # East neighbor
+        lambda a1, a2, coord: (-a2, a1 + 2.0 * coord / (1.0 + coord**2) * a2),
+        lambda a1, a2, coord: (a2, -a1 + 2.0 * coord / (1.0 + coord**2) * a2),
+        lambda a1, a2, coord: (a1, 2.0 * coord / (1.0 + coord**2) * a1 + a2),
+        lambda a1, a2, coord: (a1, -2.0 * coord / (1.0 + coord**2) * a1 + a2),
     ],
-    # Panel 4
     [
-        lambda a1, a2, coord: (a1 + 2.0 * coord / (1.0 + coord**2) * a2, a2),  # South neighbor
-        lambda a1, a2, coord: (-a1 + 2.0 * coord / (1.0 + coord**2) * a2, -a2),  # North neighbor
-        lambda a1, a2, coord: (-2.0 * coord / (1.0 + coord**2) * a1 - a2, a1),  # West neighbor
-        lambda a1, a2, coord: (-2.0 * coord / (1.0 + coord**2) * a1 + a2, -a1),  # East neighbor
+        lambda a1, a2, coord: (a1 + 2.0 * coord / (1.0 + coord**2) * a2, a2),
+        lambda a1, a2, coord: (-a1 + 2.0 * coord / (1.0 + coord**2) * a2, -a2),
+        lambda a1, a2, coord: (-2.0 * coord / (1.0 + coord**2) * a1 - a2, a1),
+        lambda a1, a2, coord: (-2.0 * coord / (1.0 + coord**2) * a1 + a2, -a1),
     ],
-    # Panel 5
     [
-        lambda a1, a2, coord: (-a1 - 2.0 * coord / (1.0 + coord**2) * a2, -a2),  # South neighbor
-        lambda a1, a2, coord: (a1 - 2.0 * coord / (1.0 + coord**2) * a2, a2),  # North neighbor
-        lambda a1, a2, coord: (2.0 * coord / (1.0 + coord**2) * a1 + a2, -a1),  # West neighbor
-        lambda a1, a2, coord: (2.0 * coord / (1.0 + coord**2) * a1 - a2, a1),  # East neighbor
+        lambda a1, a2, coord: (-a1 - 2.0 * coord / (1.0 + coord**2) * a2, -a2),
+        lambda a1, a2, coord: (a1 - 2.0 * coord / (1.0 + coord**2) * a2, a2),
+        lambda a1, a2, coord: (2.0 * coord / (1.0 + coord**2) * a1 + a2, -a1),
+        lambda a1, a2, coord: (2.0 * coord / (1.0 + coord**2) * a1 - a2, a1),
     ],
 ]
 
 CONVERT_COVARIANT: list[list[Callable[[Tensor, Tensor, Tensor], tuple[Tensor, Tensor]]]] = [
-    [  # Panel 0
-        lambda a1, a2, x: (a1, a2 - 2.0 * x / (1.0 + x**2) * a1),  # South neighbor
-        lambda a1, a2, x: (a1, a2 + 2.0 * x / (1.0 + x**2) * a1),  # North neighbor
-        lambda a1, a2, x: (a1 - 2.0 * x / (1.0 + x**2) * a2, a2),  # West neighbor
-        lambda a1, a2, x: (a1 + 2.0 * x / (1.0 + x**2) * a2, a2),  # East neighbor
+    [
+        lambda a1, a2, x: (a1, a2 - 2.0 * x / (1.0 + x**2) * a1),
+        lambda a1, a2, x: (a1, a2 + 2.0 * x / (1.0 + x**2) * a1),
+        lambda a1, a2, x: (a1 - 2.0 * x / (1.0 + x**2) * a2, a2),
+        lambda a1, a2, x: (a1 + 2.0 * x / (1.0 + x**2) * a2, a2),
     ],
-    [  # Panel 1
-        lambda a1, a2, x: (a2 - 2.0 * x / (1.0 + x**2) * a1, -a1),  # South neighbor
-        lambda a1, a2, x: (-a2 - 2.0 * x / (1.0 + x**2) * a1, a1),  # North neighbor
-        lambda a1, a2, x: (a1 - 2.0 * x / (1.0 + x**2) * a2, a2),  # West neighbor
-        lambda a1, a2, x: (a1 + 2.0 * x / (1.0 + x**2) * a2, a2),  # East neighbor
+    [
+        lambda a1, a2, x: (a2 - 2.0 * x / (1.0 + x**2) * a1, -a1),
+        lambda a1, a2, x: (-a2 - 2.0 * x / (1.0 + x**2) * a1, a1),
+        lambda a1, a2, x: (a1 - 2.0 * x / (1.0 + x**2) * a2, a2),
+        lambda a1, a2, x: (a1 + 2.0 * x / (1.0 + x**2) * a2, a2),
     ],
-    [  # Panel 2
-        lambda a1, a2, x: (-a1, -a2 + 2.0 * x / (1.0 + x**2) * a1),  # South neighbor
-        lambda a1, a2, x: (-a1, -a2 - 2.0 * x / (1.0 + x**2) * a1),  # North neighbor
-        lambda a1, a2, x: (a1 - 2.0 * x / (1.0 + x**2) * a2, a2),  # West neighbor
-        lambda a1, a2, x: (a1 + 2.0 * x / (1.0 + x**2) * a2, a2),  # East neighbor
+    [
+        lambda a1, a2, x: (-a1, -a2 + 2.0 * x / (1.0 + x**2) * a1),
+        lambda a1, a2, x: (-a1, -a2 - 2.0 * x / (1.0 + x**2) * a1),
+        lambda a1, a2, x: (a1 - 2.0 * x / (1.0 + x**2) * a2, a2),
+        lambda a1, a2, x: (a1 + 2.0 * x / (1.0 + x**2) * a2, a2),
     ],
-    [  # Panel 3
-        lambda a1, a2, x: (-a2 + 2.0 * x / (1.0 + x**2) * a1, a1),  # South neighbor
-        lambda a1, a2, x: (a2 + 2.0 * x / (1.0 + x**2) * a1, -a1),  # North neighbor
-        lambda a1, a2, x: (a1 - 2.0 * x / (1.0 + x**2) * a2, a2),  # West neighbor
-        lambda a1, a2, x: (a1 + 2.0 * x / (1.0 + x**2) * a2, a2),  # East neighbor
+    [
+        lambda a1, a2, x: (-a2 + 2.0 * x / (1.0 + x**2) * a1, a1),
+        lambda a1, a2, x: (a2 + 2.0 * x / (1.0 + x**2) * a1, -a1),
+        lambda a1, a2, x: (a1 - 2.0 * x / (1.0 + x**2) * a2, a2),
+        lambda a1, a2, x: (a1 + 2.0 * x / (1.0 + x**2) * a2, a2),
     ],
-    [  # Panel 4
-        lambda a1, a2, x: (a1, a2 - 2.0 * x / (1.0 + x**2) * a1),  # South neighbor
-        lambda a1, a2, x: (-a1, -a2 - 2.0 * x / (1.0 + x**2) * a1),  # North neighbor
-        lambda a1, a2, x: (-a2, a1 - 2.0 * x / (1.0 + x**2) * a2),  # West neighbor
-        lambda a1, a2, x: (a2, -a1 - 2.0 * x / (1.0 + x**2) * a2),  # East neighbor
+    [
+        lambda a1, a2, x: (a1, a2 - 2.0 * x / (1.0 + x**2) * a1),
+        lambda a1, a2, x: (-a1, -a2 - 2.0 * x / (1.0 + x**2) * a1),
+        lambda a1, a2, x: (-a2, a1 - 2.0 * x / (1.0 + x**2) * a2),
+        lambda a1, a2, x: (a2, -a1 - 2.0 * x / (1.0 + x**2) * a2),
     ],
-    [  # Panel 5
-        lambda a1, a2, x: (-a1, -a2 + 2.0 * x / (1.0 + x**2) * a1),  # South neighbor
-        lambda a1, a2, x: (a1, a2 + 2.0 * x / (1.0 + x**2) * a1),  # North neighbor
-        lambda a1, a2, x: (a2, -a1 + 2.0 * x / (1.0 + x**2) * a2),  # West neighbor
-        lambda a1, a2, x: (-a2, a1 + 2.0 * x / (1.0 + x**2) * a2),  # East neighbor
+    [
+        lambda a1, a2, x: (-a1, -a2 + 2.0 * x / (1.0 + x**2) * a1),
+        lambda a1, a2, x: (a1, a2 + 2.0 * x / (1.0 + x**2) * a1),
+        lambda a1, a2, x: (a2, -a1 + 2.0 * x / (1.0 + x**2) * a2),
+        lambda a1, a2, x: (-a2, a1 + 2.0 * x / (1.0 + x**2) * a2),
     ],
 ]
 
@@ -230,7 +224,6 @@ class ProcessTopology:
 
         neighbor_panels = all_neighbors[self.my_panel]
 
-        # --- Middle panel tile
         def convert_default(a1: Tensor, a2: Tensor, _: Tensor) -> tuple[Tensor, Tensor]:
             return (a1, a2)
 
@@ -252,40 +245,34 @@ class ProcessTopology:
         my_east = rank_from_location(self.my_panel, self.my_row, self.my_col + 1)
         self.flip = [False, False, False, False]
 
-        # --- North panel edge
         if self.my_row == self.num_lines_per_panel - 1:
             my_north = rank_from_location(neighbor_panels[NORTH], *edge_coords[self.my_panel][NORTH])
             self.convert_contra[NORTH] = CONVERT_CONTRAVARIANT[self.my_panel][NORTH]
             self.convert_cov[NORTH] = CONVERT_COVARIANT[self.my_panel][NORTH]
             self.flip[NORTH] = flips[self.my_panel][NORTH]
 
-        # --- South panel edge
         if self.my_row == 0:
             my_south = rank_from_location(neighbor_panels[SOUTH], *edge_coords[self.my_panel][SOUTH])
             self.convert_contra[SOUTH] = CONVERT_CONTRAVARIANT[self.my_panel][SOUTH]
             self.convert_cov[SOUTH] = CONVERT_COVARIANT[self.my_panel][SOUTH]
             self.flip[SOUTH] = flips[self.my_panel][SOUTH]
 
-        # --- West panel edge
         if self.my_col == 0:
             my_west = rank_from_location(neighbor_panels[WEST], *edge_coords[self.my_panel][WEST])
             self.convert_contra[WEST] = CONVERT_CONTRAVARIANT[self.my_panel][WEST]
             self.convert_cov[WEST] = CONVERT_COVARIANT[self.my_panel][WEST]
             self.flip[WEST] = flips[self.my_panel][WEST]
 
-        # --- East panel edge
         if self.my_col == self.num_lines_per_panel - 1:
             my_east = rank_from_location(neighbor_panels[EAST], *edge_coords[self.my_panel][EAST])
             self.convert_contra[EAST] = CONVERT_CONTRAVARIANT[self.my_panel][EAST]
             self.convert_cov[EAST] = CONVERT_COVARIANT[self.my_panel][EAST]
             self.flip[EAST] = flips[self.my_panel][EAST]
 
-        # Distributed Graph
         self.sources = [my_south, my_north, my_west, my_east]  # Must correspond to values of SOUTH, NORTH, WEST, EAST
         self.destinations = self.sources
         self.comm_dist_graph: MPI.Topocomm = self._comm.Create_dist_graph_adjacent(self.sources, self.destinations)
 
-        # Panel communicators
         self.panel_comm = self._comm.Split(self.my_panel, self._rank)
         self.panel_roots_comm = self._comm.Split(self.panel_comm.rank == 0, self._rank)
         if self.panel_comm.rank != 0:
@@ -309,7 +296,6 @@ class ProcessTopology:
         if not isinstance(flip_dim, tuple):
             flip_dim = (flip_dim,)
 
-        # Fill send buffer
         for i, data in enumerate([south, north, west, east]):
             send_buffer[i] = data.reshape(base_shape)
             if self.flip[i]:
@@ -355,10 +341,9 @@ class ProcessTopology:
 
         send_info = self.prepare_scalar_buffer(south, north, west, east, boundary_shape, flip_dim)
 
-        self.context.synchronize()  # When using GPU
+        self.context.synchronize()
 
         return self.initiate_transfers([send_info])[0]
-        # # Initiate MPI transfer
 
     def prepare_vector_buffer(
         self,
@@ -384,10 +369,10 @@ class ProcessTopology:
                 data[0].reshape(base_shape), data[1].reshape(base_shape), bd
             )
             if len(data) == 3:
-                send_buffer[i, 2] = data[2].reshape(base_shape)  # 3rd dimension if present
+                send_buffer[i, 2] = data[2].reshape(base_shape)
             if self.flip[i]:
                 flip_dim = flip_dim if isinstance(flip_dim, tuple) else (flip_dim,)
-                send_buffer[i] = torch.flip(send_buffer[i], flip_dim)  # Flip arrays, if needed
+                send_buffer[i] = torch.flip(send_buffer[i], flip_dim)
 
         return send_buffer, south[0].shape, True
 
@@ -433,7 +418,7 @@ class ProcessTopology:
         """
         send_info = self.prepare_vector_buffer(south, north, west, east, boundary_sn, boundary_we, flip_dim, covariant)
 
-        self.context.synchronize()  # When using GPU
+        self.context.synchronize()
 
         return self.initiate_transfers([send_info])[0]
 
@@ -446,8 +431,9 @@ class ProcessTopology:
         boundary_sn: Tensor,
         boundary_we: Tensor,
         flip_dim: int | tuple[int, ...] = -1,
+        covariant: bool = False,
     ):
-        convert = self.convert_contra
+        convert = self.convert_cov if covariant else self.convert_contra
         base_shape = get_base_shape(south[0].shape, boundary_sn.shape)
 
         if self.send_buffer is None or self.recv_buffer is None or self.send_buffer.nbytes < south.nbytes * 4:
@@ -468,13 +454,12 @@ class ProcessTopology:
             send_buffer[i, 0] = data[0].reshape(base_shape)
             send_buffer[i, 3:] = data[3:].reshape((data.shape[0] - 3,) + base_shape)
 
-            # Flip arrays, if needed
             if self.flip[i]:
                 send_buffer[i, :] = torch.flip(
                     send_buffer[i, :], flip_dim if isinstance(flip_dim, tuple) else (flip_dim,)
                 )
 
-        self.context.synchronize()  # When using GPU
+        self.context.synchronize()
 
         return self.initiate_transfers([(send_buffer, south[0].shape, True)], recv_buffer=recv_buffer)[0]
 
@@ -527,17 +512,15 @@ class ProcessTopology:
 
         panel_fields = self.panel_comm.gather(field, root=0)
 
-        if panel_fields is None:  # non-root PEs
+        if panel_fields is None:
             return None
 
         panel_fields = [torch.asarray(f, device=self.context.torch_device) for f in panel_fields]
 
         side = self.num_lines_per_panel
         if field.ndim == 1:
-            # When gathering a 1D array, put them all end-to-end
             panel_field = torch.concatenate(panel_fields[:side])
         else:
-            # When gathering 2D+ array, join the tiles in a square
             panel_field = torch.concatenate(
                 [torch.concatenate(panel_fields[i * side : (i + 1) * side], dim=num_dim - 1) for i in range(side)],
                 dim=num_dim - 2,
@@ -560,7 +543,6 @@ class ProcessTopology:
         """
         panel = self.gather_tiles_to_panel(field, num_dim)
 
-        # Only panel roots can go further
         if panel is None:
             return None
 
@@ -570,7 +552,6 @@ class ProcessTopology:
         self.context.synchronize()
         self.panel_roots_comm.Gather(panel, panels, root=0)
 
-        # Only the root of the entire cubesphere topology with continue
         if panels is None:
             return None
 
@@ -592,7 +573,6 @@ class ProcessTopology:
         """
         side = self.num_lines_per_panel
 
-        # Validate input field parameters
         with SingleProcess(self._comm) as s, Conditional(s):
             if field is None:
                 raise ValueError("No field on root process")
@@ -614,16 +594,13 @@ class ProcessTopology:
             # We need to create the receive buffer before doing the scatter, because some backends (pytorch) create
             # them on the wrong device otherwise
 
-            # First send type and size of each panel
             to_send = None if field is None else (field.shape[1:], field.dtype)
             panel_params = self.panel_roots_comm.bcast(to_send, root=0)
 
-            # Create the receive buffer + fill it
             panel = torch.empty(panel_params[0], dtype=panel_params[1])
             self.context.synchronize()
             self.panel_roots_comm.Scatter(field, panel, root=0)
 
-            # Tile == panel if we only have 1 proc per panel
             if self.size == 6:
                 return panel
 
@@ -692,10 +669,8 @@ class ExchangeRequest:
         self.shape = shape
         self.is_vector = is_vector
 
-        # Scalar data
         self.to_tuple: Callable[[Tensor], Tensor] = lambda a: a.reshape(self.shape)
 
-        # Vector data
         if self.is_vector:
             num_comp = self.recv_buffer.shape[1]
             self.to_tuple = lambda a: a.reshape((num_comp,) + self.shape)
@@ -711,21 +686,17 @@ class ExchangeRequest:
         t0 = time.time()
         num_tests = 0
 
-        # Wait until we have received from all neighbors (until timeout)
         if timeout < 0.0:
             self.request.Wait()
         else:
             while not self.request.Test():
                 wait_time = time.time() - t0
                 if wait_time >= timeout:
-                    # self.request.Cancel()
                     raise TimeoutError(f"Waited {wait_time:.4f} s (>={timeout:.1f}) for MPI request")
                 num_tests += 1
                 if num_tests > 10:
                     time.sleep(0.0005)
 
-        # t1 = time.time()
-        # print(f"Waited {num_tests:3d} times ({(t1 - t0)*1000:.2f} ms)", flush=True)
 
         return (
             self.to_tuple(self.recv_buffer[SOUTH]),

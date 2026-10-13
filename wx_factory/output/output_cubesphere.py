@@ -6,7 +6,7 @@ from numpy.typing import NDArray
 
 from ..common import Configuration
 from ..context import Context
-from ..geometry import CubedSphere, DFROperators, Metric2D, Metric3DTopo
+from ..geometry import CubedSphere, DFROperators, Metric2D, Metric5D
 from ..init.shallow_water import (
     height_case1,
     height_case2,
@@ -25,7 +25,7 @@ class OutputCubesphere(OutputManager):
         geometry: CubedSphere,
         operators: DFROperators,
         context: Context,
-        metric: Metric2D | Metric3DTopo,
+        metric: Metric2D | Metric5D,
         topography,
         process_topology: ProcessTopology,
     ):
@@ -140,7 +140,7 @@ class OutputCubesphere(OutputManager):
 
         panel_fields = panel_comm.gather(field, root=0)
 
-        if panel_fields is None:  # non-root PEs
+        if panel_fields is None:
             return None
 
         panel_fields = [torch.asarray(f, device=self.context.torch_device) for f in panel_fields]

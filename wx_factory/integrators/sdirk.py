@@ -11,48 +11,58 @@ class SDIRKLstable(Integrator):
         super().__init__(param, context=context, preconditioner=preconditioner)
         self.rhs = rhs_handle
         self.tol = param.tolerance
+        self.gmres_restart = param.gmres_restart
         self.sdirkparam = 1.0 + 1.0 / math.sqrt(2.0)
 
     def SDIRKLstable_system1(self, Q1, Q, dt, rhs):
         return (Q1 - Q) / dt - self.sdirkparam * rhs(Q1)
 
-    def SDIRKLstable_system2(self, Q2, Q, Q1, dt, rhs):
-        return (Q2 - Q) / dt - (1.0 - 2.0 * self.sdirkparam) * rhs(Q1) - self.sdirkparam * rhs(Q2)
 
     def __step__(self, Q, dt):
+        working, rhs = self._implicit_state_and_rhs(Q, self.rhs)
+
         def SDIRK_fun1(Q1):
-            return self.SDIRKLstable_system1(Q1, Q, dt, self.rhs)
+            return self.SDIRKLstable_system1(Q1, working, dt, rhs)
 
-        def SDIRK_fun2(Q2):
-            return self.SDIRKLstable_system2(Q2, Q, Q1, dt, self.rhs)
-
-        maxiter = None
+        maxiter = 100
         if self.preconditioner is not None:
             self.preconditioner.prepare(dt, Q)
             maxiter = 800
 
-        # Update solution
         Q1, _, _ = newton_krylov(
             SDIRK_fun1,
-            Q,
+            working,
             f_tol=self.tol,
-            restart=30,
+            restart=self.gmres_restart,
+            krylov_dtype=Q.dtype,
+            maxiter_linear=10,
             preconditioner=self.preconditioner,
             verbose=False,
             maxiter=maxiter,
+            context=self.context,
+            jacobian=self._newton_jacobian(rhs, dt, self.sdirkparam),
         )
+        first_rhs = rhs(Q1)
+
+        def SDIRK_fun2(Q2):
+            return (Q2 - working) / dt - (1 - 2 * self.sdirkparam) * first_rhs - self.sdirkparam * rhs(Q2)
+
         Q2, _, _ = newton_krylov(
             SDIRK_fun2,
-            Q,
+            working,
             f_tol=self.tol,
-            restart=30,
+            restart=self.gmres_restart,
+            krylov_dtype=Q.dtype,
+            maxiter_linear=10,
             preconditioner=self.preconditioner,
             verbose=False,
             maxiter=maxiter,
+            context=self.context,
+            jacobian=self._newton_jacobian(rhs, dt, self.sdirkparam),
         )
-        newQ = Q + dt * (0.5 * self.rhs(Q1) + 0.5 * self.rhs(Q2))
+        newQ = working + dt * (0.5 * first_rhs + 0.5 * rhs(Q2))
 
-        return newQ
+        return newQ.to(Q.dtype)
 
 
 REGISTRY = {

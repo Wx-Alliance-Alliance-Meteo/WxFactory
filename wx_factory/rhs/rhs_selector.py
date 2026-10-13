@@ -1,5 +1,3 @@
-"""Select RHS functions by equation set and geometry."""
-
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -11,31 +9,24 @@ from ..geometry import (
     DFROperators,
     Geometry,
     Metric2D,
-    Metric3DTopo,
+    Metric5D,
 )
 from ..init.initialize import Topo
-from ..pde import PDEEuler3D
 from ..process_topology import ProcessTopology
 from .rhs_advection2d import RhsAdvection2d
-from .rhs_dfr import RHSDirecFluxReconstruction_mpi
 from .rhs_sw import RhsShallowWater
 
 
 @dataclass
 class RhsContext:
-    """Inputs shared by RHS factories."""
-
     geom: Geometry
     operators_real: DFROperators
-    metric: Metric2D | Metric3DTopo | None
+    metric: Metric2D | Metric5D | None
     topo: Topo | None
     ptopo: ProcessTopology | None
     param: Configuration
     fields_shape: tuple[int, ...]
     debug: bool = False
-    #: Double-precision reference state and operators for logarithmic extrapolation.
-    q_ref: object | None = None
-    operators_double: DFROperators | None = None
 
 
 _GENERIC_NO_PARTITION = (
@@ -44,8 +35,6 @@ _GENERIC_NO_PARTITION = (
 
 
 def _unavailable_partition(reason: str) -> Callable:
-    """Create an unavailable partition that reports its reason."""
-
     def unavailable(_):
         raise NotImplementedError(f"No partitioned right-hand side: {reason}.")
 
@@ -75,19 +64,15 @@ class RhsBundle:
 
     @property
     def has_partition(self) -> bool:
-        """Return whether both RHS partitions are available."""
         return self.partition_reason is None
 
 
 RhsFactory = Callable[[RhsContext], RhsBundle]
 
-# Map each equation and geometry pair to its factory.
 RHS_REGISTRY: dict[tuple[str, type], RhsFactory] = {}
 
 
 def register_rhs(equations: str, geometry_class: type) -> Callable[[RhsFactory], RhsFactory]:
-    """Register a factory for a given (equations, geometry class) combination."""
-
     def decorator(factory: RhsFactory) -> RhsFactory:
         key = (equations, geometry_class)
         if key in RHS_REGISTRY:
@@ -99,7 +84,6 @@ def register_rhs(equations: str, geometry_class: type) -> Callable[[RhsFactory],
 
 
 def resolve_rhs(ctx: RhsContext) -> RhsBundle:
-    """Build the RhsBundle for the equations and geometry described by ``ctx``."""
     if ctx.param.discretization not in ("dfr", "dg"):
         raise ValueError(f"Unknown discretization {ctx.param.discretization}")
 
@@ -115,61 +99,38 @@ def resolve_rhs(ctx: RhsContext) -> RhsBundle:
     return factory(ctx)
 
 
-def _euler_bundle(ctx: RhsContext, full) -> RhsBundle:
-    if ctx.q_ref is not None:
-        full.set_log_extrapolation_reference(ctx.q_ref, ctx.operators_double)
-
-    if full.pde.advection_only:
-        return RhsBundle(
-            full=full,
-            shape=ctx.fields_shape,
-            partition_reason=(
-                "advection_only is on, which freezes the Euler dynamics and transports the tracers "
-                "with a prescribed wind, so there is no vertically-stiff partition to separate"
-            ),
-        )
-    return RhsBundle(full=full, shape=ctx.fields_shape, implicit=full.implicit, explicit=full.explicit)
-
-
 @register_rhs("euler", CubedSphere3D)
 def _euler_cubesphere(ctx: RhsContext) -> RhsBundle:
-    # Additional state variables are passive tracers.
-    pde = PDEEuler3D(ctx.geom, ctx.param, ctx.metric, num_var=ctx.fields_shape[0])
-    full = RHSDirecFluxReconstruction_mpi(
-        pde,
-        ctx.geom,
-        ctx.operators_real,
-        ctx.metric,
-        ctx.topo,
-        ctx.ptopo,
-        ctx.param,
-        debug=ctx.debug,
-    )
-    return _euler_bundle(ctx, full)
+    if ctx.param.advection_only:
+        from .rhs_prescribed_transport import RhsPrescribedTransport
+
+        full = RhsPrescribedTransport(ctx.geom, ctx.operators_real, ctx.metric, ctx.param, ctx.fields_shape[0] - 5)
+        return RhsBundle(full=full, shape=full.shape, partition_reason="prescribed-wind tracer transport")
+    return _euler_bundle(ctx)
 
 
-# Cartesian slabs use the 3D Euler RHS with an identity metric.
 @register_rhs("euler", Cartesian3D)
 def _euler_cartesian3d(ctx: RhsContext) -> RhsBundle:
-    pde = PDEEuler3D(ctx.geom, ctx.param, ctx.metric, num_var=ctx.fields_shape[0])
-    full = RHSDirecFluxReconstruction_mpi(
-        pde,
-        ctx.geom,
-        ctx.operators_real,
-        ctx.metric,
-        ctx.topo,
-        ctx.ptopo,
-        ctx.param,
-        debug=ctx.debug,
+    return _euler_bundle(ctx)
+
+
+def _euler_bundle(ctx: RhsContext) -> RhsBundle:
+    from .euler_partition import EulerRhsPartition
+    from .rhs_euler import RhsEuler
+
+    full = RhsEuler(ctx.geom, ctx.operators_real, ctx.metric, ctx.ptopo, ctx.param)
+    return RhsBundle(
+        full=full,
+        shape=ctx.fields_shape,
+        implicit=EulerRhsPartition(full, "implicit"),
+        explicit=EulerRhsPartition(full, "explicit"),
     )
-    return _euler_bundle(ctx, full)
 
 
 @register_rhs("shallow_water", CubedSphere2D)
 def _shallow_water_cubesphere(ctx: RhsContext) -> RhsBundle:
     reason: str
     if ctx.param.case_number <= 1 and ctx.param.case_number != -2:
-        # Advection tests.
         reason = "the partitioned right-hand side is not implemented for 2D advection"
         full = RhsAdvection2d(
             ctx.fields_shape,
@@ -181,7 +142,6 @@ def _shallow_water_cubesphere(ctx: RhsContext) -> RhsBundle:
             ctx.geom.num_elements_horizontal,
         )
     else:
-        # Shallow-water dynamics.
         reason = "the partitioned right-hand side is not implemented for the shallow-water equations"
         full = RhsShallowWater(
             ctx.geom,

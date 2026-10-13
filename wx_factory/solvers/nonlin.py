@@ -31,8 +31,14 @@ def newton_krylov(
     line_search="armijo",
     context: Context | None = None,
     eta0=1e-3,
+    jacobian=None,
+    krylov_dtype=None,
 ):
+    """Solve F(x)=0 using Newton iterations and a matrix-free Krylov solve.
 
+    jacobian(state) may return an analytic action at the current iterate.
+    krylov_dtype sets basis storage precision independently of the residual.
+    """
     if context is None:
         context = Context.get_default()
     t_start = time()
@@ -60,15 +66,20 @@ def newton_krylov(
     dx = torch.full_like(x, float("inf"))
     Fx = func(x)
     Fx_norm = global_norm(Fx, context=context)
+    if not math.isfinite(float(Fx_norm)):
+        raise ValueError("Non-finite initial Newton residual")
 
-    jacobian = KrylovJacobian(
-        x.copy(),
+    jacobian_factory = None if jacobian is None else lambda state: jacobian(state.reshape(x0.shape))
+    linearization = KrylovJacobian(
+        x.clone(),
         Fx,
         func,
         restart=restart,
         maxiter_linear=maxiter_linear,
         preconditioner=preconditioner,
         context=context,
+        jacobian_factory=jacobian_factory,
+        krylov_dtype=krylov_dtype,
     )
 
     if maxiter is None:
@@ -82,30 +93,28 @@ def newton_krylov(
 
     for n in range(maxiter):
         iteration += 1
-        f_norm = global_inf_norm(Fx)
-        x_norm = global_inf_norm(x)
+        f_norm = global_inf_norm(Fx, comm=context.comm)
+        x_norm = global_inf_norm(x, comm=context.comm)
 
-        dx_norm = global_inf_norm(dx)
+        dx_norm = global_inf_norm(dx, comm=context.comm)
 
         residuals.append((f_norm, time() - t_start, 0.0))
 
         if f0_norm is None:
             f0_norm = f_norm
 
-        if f_norm == 0:
-            terminated = True
-
-        terminated = (f_norm <= f_tol and f_norm / f_rtol <= f0_norm) and (
-            dx_norm <= x_tol and dx_norm / x_rtol <= x_norm
+        terminated = (
+            f_norm == 0
+            or (f_norm <= f_tol and f_norm / f_rtol <= f0_norm)
+            and (dx_norm <= x_tol and dx_norm / x_rtol <= x_norm)
         )
 
         if terminated:
             break
 
         tol = min(eta, eta * float(Fx_norm))
-        dx = -jacobian.solve(Fx, tol=tol)
+        dx = -linearization.solve(Fx, tol=tol)
 
-        # Line search, or Newton step
         if line_search:
             s, x, Fx, Fx_norm_new = _nonlin_line_search(func, x, Fx, dx, context, line_search)
         else:
@@ -114,9 +123,10 @@ def newton_krylov(
             Fx = func(x)
             Fx_norm_new = global_norm(Fx, context=context)
 
-        jacobian.update(x.copy(), Fx)
+        if not math.isfinite(float(Fx_norm_new)):
+            raise ValueError("Non-finite Newton residual")
+        linearization.update(x.clone(), Fx)
 
-        # Adjust forcing parameters for inexact methods
         eta_A = gamma * float(Fx_norm_new) ** 2 / float(Fx_norm) ** 2
         if gamma * eta**2 < eta_treshold:
             eta = min(eta_max, eta_A)
@@ -125,12 +135,11 @@ def newton_krylov(
 
         Fx_norm = Fx_norm_new
 
-        # Print status
         if verbose:
-            sys.stdout.write(f"{n:3d}:  |F(x)| = {global_inf_norm(Fx):.3e}; step {s}\n")
+            sys.stdout.write(f"{n:3d}:  |F(x)| = {global_inf_norm(Fx, comm=context.comm):.3e}; step {s}\n")
             sys.stdout.flush()
     else:
-        print("The maximum number of iterations allowed by the JFNK method has been reached.")
+        raise RuntimeError("Newton–Krylov did not converge within the maximum number of iterations")
 
     if terminated:
         print(f"A solution was found after {iteration - 1} steps of the JFNK method.")
@@ -188,8 +197,22 @@ def _nonlin_line_search(func, x, Fx, dx, context: Context, search_type="armijo",
 
 
 class KrylovJacobian:
-    def __init__(self, x, f, func, restart, maxiter_linear, preconditioner, context: Context):
+    def __init__(
+        self,
+        x,
+        f,
+        func,
+        restart,
+        maxiter_linear,
+        preconditioner,
+        context: Context,
+        jacobian_factory=None,
+        krylov_dtype=None,
+    ):
         self.func = func
+        self.jacobian_factory = jacobian_factory
+        self.krylov_dtype = krylov_dtype
+        self.action = None
         self.shape = (f.shape[0], x.shape[0])
         self.dtype = f.dtype
         self.context = context
@@ -204,11 +227,17 @@ class KrylovJacobian:
         self._update_diff_step()
 
     def _update_diff_step(self):
-        mx = global_inf_norm(self.x0)
-        mf = global_inf_norm(self.f0)
+        if self.jacobian_factory is not None:
+            return
+        mx = global_inf_norm(self.x0, comm=self.context.comm)
+        mf = global_inf_norm(self.f0, comm=self.context.comm)
         self.omega = self.rdiff * max(1, mx) / max(1, mf)
 
     def matvec(self, v):
+        if self.jacobian_factory is not None:
+            if self.action is None:
+                self.action = self.jacobian_factory(self.x0)
+            return self.action(v).flatten()
         nv = global_norm(v, context=self.context)
         if float(nv) == 0:
             return 0 * v
@@ -227,10 +256,12 @@ class KrylovJacobian:
             maxiter=self.maxiter_linear,
             preconditioner=self.preconditioner,
             context=self.context,
+            krylov_dtype=self.krylov_dtype,
         )
         return sol
 
     def update(self, x, f):
+        self.action = None
         self.x0 = x
         self.f0 = f
         self._update_diff_step()

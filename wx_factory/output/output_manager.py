@@ -5,6 +5,7 @@ import torch
 from numpy.typing import NDArray
 
 from ..common.configuration import Configuration
+from ..common.euler_state import state_representation
 from ..context import Context
 from ..geometry import DFROperators, Geometry
 from ..wx_mpi import Conditional, SingleProcess
@@ -66,7 +67,6 @@ class OutputManager:
 
         self.output_dir = s.return_value
 
-        # Choose a file name hash based on a certain set of parameters:
         state_params = (
             config.dt,
             geometry.total_num_elements_horizontal,
@@ -91,7 +91,16 @@ class OutputManager:
     def load_state_from_file(self, step_id, sh):
         global_state = None
         with SingleProcess(self.comm) as s, Conditional(s):
-            global_state, _ = load_state(self.state_file_name(step_id))
+            filename = self.state_file_name(step_id)
+            if self.config.equations == "euler" and not os.path.exists(filename):
+                previous_name = f"{self.output_dir}/state_vector_{self.config_hash:012x}_lamb.{step_id:08d}.npy"
+                if os.path.exists(previous_name):
+                    filename = previous_name
+            global_state, saved_config = load_state(filename)
+            s.return_value = state_representation(saved_config)
+
+        if s.return_value != state_representation(self.config):
+            raise ValueError("Restart momentum representation differs from this simulation")
 
         starting_state = self._distribute_field(global_state, self.num_dim + 1)
 
@@ -148,25 +157,22 @@ class OutputManager:
 
     def __write_result__(self, Q: NDArray, step_id: int):
         """Class-specific write implementation."""
-        # Not implemented by default
 
     def __blockstats__(self, Q: NDArray, step_id: int):
         """Class-specific blockstats implementation."""
-        # Not implemented by default
 
     def finalize(self, total_time: float) -> None:
         """
         Perform any necessary operation to properly finish outputting.
         """
-        if self.config.store_total_time:
-            if self.comm.rank == 0:
-                size = self.comm.size
-                method = str(self.config.time_integrator)
-                methodOrtho = str(self.config.exponential_solver)
-                caseNum = str(self.config.case_number)
-                totaltime_name = f"{self.output_dir}/runtime_{methodOrtho}_n{size}_{method}_c{caseNum}.txt"
-                with open(totaltime_name, "a") as gg:
-                    gg.write(f"{total_time}\n")
+        if self.config.store_total_time and self.comm.rank == 0:
+            size = self.comm.size
+            method = str(self.config.time_integrator)
+            methodOrtho = str(self.config.exponential_solver)
+            caseNum = str(self.config.case_number)
+            totaltime_name = f"{self.output_dir}/runtime_{methodOrtho}_n{size}_{method}_c{caseNum}.txt"
+            with open(totaltime_name, "a") as gg:
+                gg.write(f"{total_time}\n")
 
         if self.config.output_freq > 0:
             self.__finalize__()
@@ -188,4 +194,3 @@ class OutputManager:
 
     def __finalize__(self):
         """Class-specific finalization"""
-        # Not implemented by default

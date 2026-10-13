@@ -1,32 +1,32 @@
-"""Image output for the flat cartesian slab (Cartesian3D).
-
-A cartesian slab has no cube panels to assemble into a NetCDF file, so it is visualised directly as
-x-z contour plots (the classic 2D bubble/current pictures). The slab is a thin y-invariant 3D grid,
-so any y-plane is representative; we take the middle one and plot it with :func:`image_field`.
-"""
+"""The Cartesian slab is y-invariant, so a middle y-plane represents its x-z output."""
 
 import torch
 
-from ..common.definitions import idx_rho, idx_rho_theta, idx_rho_u1, idx_rho_u2, idx_rho_u3
+from ..common.definitions import idx_rho, idx_rho_theta
 from ..common.graphx import image_field
 from .output_manager import OutputManager
 
 
 class OutputCartesian(OutputManager):
+    def __init__(self, config, geometry, operators, context, metric=None):
+        super().__init__(config, geometry, operators, context)
+        self.metric = metric
+
+    def _physical_winds(self, Q):
+        return self.metric.physical_winds(Q[1:4])
+
     def __write_result__(self, Q, step_id):
         filename = f"{self.output_dir}/euler_cartesian_{self.config.case_number}_{step_id:08d}"
 
-        block = self.geometry.to_single_block(Q)  # (nvar, nk, nj, ni)
-        j = block.shape[2] // 2  # y-invariant slab: pick a representative y-plane
-        q_xz = block[:, :, j, :]  # (nvar, nk, ni)
+        block = self.geometry.to_single_block(Q)
+        j = block.shape[2] // 2
+        q_xz = block[:, :, j, :]
 
         rho = q_xz[idx_rho]
         theta = q_xz[idx_rho_theta] / rho
-        u1 = q_xz[idx_rho_u1] / rho
-        u2 = q_xz[idx_rho_u2] / rho
-        u3 = q_xz[idx_rho_u3] / rho
+        u1, _u2, u3 = (self.geometry.to_single_block(wind)[:, j, :] for wind in self._physical_winds(Q))
         speed = torch.sqrt(u1**2 + u3**2)
-        w = q_xz[idx_rho_u3] / rho
+        w = u3
 
         if self.config.case_number == 0:
             image_field(self.geometry, w, filename, -1, 1, 25, label="w (m/s)", colormap="bwr")
@@ -46,16 +46,17 @@ class OutputCartesian(OutputManager):
         elif self.config.case_number == 3:
             image_field(self.geometry, theta, filename, 303.0, 303.7, 8)
         elif self.config.case_number == 4:
-            image_field(self.geometry, theta, filename, 290.0, 300.0, 10)
+            background_theta = self.config.bubble_theta
+            # Roundoff at the background value must not trigger the over-range color.
+            theta = torch.where(torch.abs(theta - background_theta) < 1e-10, background_theta, theta)
+            image_field(self.geometry, theta, filename, background_theta - 18.0, background_theta, 19, label="θ (K)")
         else:
             image_field(self.geometry, theta, filename, float(theta.min()), float(theta.max()), 20)
 
     def __blockstats__(self, Q, step_id):
         rho = Q[idx_rho]
         theta = Q[idx_rho_theta] / rho
-        u1 = Q[idx_rho_u1] / rho
-        u2 = Q[idx_rho_u2] / rho
-        u3 = Q[idx_rho_u3] / rho
+        u1, u2, u3 = self._physical_winds(Q)
         if self.comm.rank == 0:
             print("==============================================", flush=True)
             print(f" Blockstats for timestep {step_id}", flush=True)

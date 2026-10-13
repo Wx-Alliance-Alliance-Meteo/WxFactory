@@ -107,7 +107,7 @@ def _cubesphere_fst(ctx: OutputContext) -> OutputManager:
 
 
 @register_output("cubesphere", "zarr")
-def _cubesphere_netcdf(ctx: "OutputContext") -> OutputManager:
+def _cubesphere_netcdf(ctx: OutputContext) -> OutputManager:
     return OutputCubesphereZarr(
         ctx.config,
         ctx.geometry,
@@ -122,4 +122,4 @@ def _cubesphere_netcdf(ctx: "OutputContext") -> OutputManager:
 @register_output("cartesian")
 def _cartesian_images(ctx: OutputContext) -> OutputManager:
     """Cartesian slabs are visualised as x-z images regardless of the requested output_format."""
-    return OutputCartesian(ctx.config, ctx.geometry, ctx.operators, ctx.context)
+    return OutputCartesian(ctx.config, ctx.geometry, ctx.operators, ctx.context, ctx.metric)

@@ -1,17 +1,6 @@
-"""Select which step hooks a simulation should run.
+"""Geometry hooks precede initial-state construction; state hooks need the metric and operators.
 
-A step hook post-processes the state after every time step (for example, imposing a prescribed wind
-field or a mountain topography). Unlike the geometry / RHS / output choices, hooks are not a single
-mutually-exclusive selection: zero or more may apply to a given configuration. Each hook registers a
-*provider* that inspects the configuration and returns a hook instance when it applies, or ``None``.
-
-Hooks are resolved in two phases, because they become buildable at different points of the setup:
-
-* ``geometry`` -- right after the geometry is built (only the geometry and config are available).
-  ``init_state_vars`` reads these hooks while building the initial state, so they must exist first.
-* ``state`` -- after the initial state exists (the metric and operators are then available).
-
-Add a hook by writing the hook class and registering a provider here; nothing else changes.
+Multiple providers may apply to the same configuration.
 """
 
 from __future__ import annotations
@@ -21,7 +10,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from ..geometry import CubedSphere3D
-from .dcmip import DcmipT11WindHook, DcmipT12WindHook, ExponentialFilterHook
+from .dcmip import ExponentialFilterHook
 from .schar_mountain import ScharMountainHook
 from .step_hook import StepHook
 
@@ -29,7 +18,6 @@ if TYPE_CHECKING:
     from ..common import Configuration
     from ..geometry import DFROperators, Geometry
 
-# The two points at which hooks can be resolved (see the module docstring).
 PHASE_GEOMETRY = "geometry"
 PHASE_STATE = "state"
 _PHASES = (PHASE_GEOMETRY, PHASE_STATE)
@@ -37,8 +25,7 @@ _PHASES = (PHASE_GEOMETRY, PHASE_STATE)
 
 @dataclass
 class StepHookContext:
-    """Everything a step-hook provider may need. ``operators`` and ``metric`` are only available in
-    the ``state`` phase (they are built from the initial state)."""
+    """The metric and operators are available only in the state phase."""
 
     config: Configuration
     geometry: Geometry
@@ -46,15 +33,12 @@ class StepHookContext:
     metric: object = None
 
 
-# A provider returns a hook instance if it applies to this configuration, otherwise None.
 StepHookProvider = Callable[["StepHookContext"], StepHook | None]
 
-# Maps a hook name to the (phase, provider) that builds it.
 STEP_HOOK_REGISTRY: dict[str, tuple[str, StepHookProvider]] = {}
 
 
 def register_step_hook(name: str, phase: str) -> Callable[[StepHookProvider], StepHookProvider]:
-    """Register a provider for a step hook, resolved during the given phase."""
     if phase not in _PHASES:
         raise ValueError(f"Unknown step-hook phase '{phase}'. Expected one of {_PHASES}")
 
@@ -68,9 +52,8 @@ def register_step_hook(name: str, phase: str) -> Callable[[StepHookProvider], St
 
 
 def resolve_step_hooks(ctx: StepHookContext, phase: str) -> dict[type[StepHook], StepHook]:
-    """Return the hooks (keyed by type) that apply to ``ctx`` for the given phase."""
     hooks: dict[type[StepHook], StepHook] = {}
-    for _name, (hook_phase, provider) in STEP_HOOK_REGISTRY.items():
+    for hook_phase, provider in STEP_HOOK_REGISTRY.values():
         if hook_phase != phase:
             continue
         hook = provider(ctx)
@@ -83,20 +66,6 @@ def resolve_step_hooks(ctx: StepHookContext, phase: str) -> dict[type[StepHook],
 def _schar_mountain(ctx: StepHookContext) -> StepHook | None:
     if ctx.config.enable_schar_mountain and isinstance(ctx.geometry, CubedSphere3D):
         return ScharMountainHook(ctx.config, ctx.geometry)
-    return None
-
-
-@register_step_hook("dcmip_t11_wind", phase=PHASE_STATE)
-def _dcmip_t11(ctx: StepHookContext) -> StepHook | None:
-    if ctx.config.case_number == 11:
-        return DcmipT11WindHook(ctx.geometry, ctx.metric, ctx.operators, ctx.config)
-    return None
-
-
-@register_step_hook("dcmip_t12_wind", phase=PHASE_STATE)
-def _dcmip_t12(ctx: StepHookContext) -> StepHook | None:
-    if ctx.config.case_number == 12:
-        return DcmipT12WindHook(ctx.geometry, ctx.metric, ctx.operators, ctx.config)
     return None
 
 
