@@ -58,6 +58,34 @@ class Metric5DTestCase(unittest.TestCase):
                     bool((torch.linalg.eigvalsh(fields.G_cov.movedim((0, 1), (-2, -1))) < 0).sum(dim=-1).eq(1).all())
                 )
 
+    def test_inverse_and_wind_conversion_with_small_vertical_jacobian(self):
+        for deep in (False, True):
+            for vertical_slope in (3.0, 2e-4):
+                with self.subTest(deep=deep, vertical_slope=vertical_slope):
+                    def terrain(points, vertical_slope=vertical_slope):
+                        return 0.3 + 0.2 * torch.sin(points[0]) + 0.1 * points[1] + vertical_slope * points[2]
+
+                    fields = evaluate_metric5d(
+                        self.points,
+                        terrain,
+                        radius=7.0,
+                        rotation_speed=0.08,
+                        frame=self.frame,
+                        scales=self.scales,
+                        deep=deep,
+                    )
+                    spatial = fields.G_cov[1:4, 1:4]
+                    inverse = fields.G_contra[1:4, 1:4]
+                    reference = torch.linalg.inv(spatial.movedim((0, 1), (-2, -1))).movedim((-2, -1), (0, 1))
+                    torch.testing.assert_close(inverse, reference, rtol=5e-10, atol=1e-12)
+                    product = torch.einsum("ij...,jk...->ik...", spatial, inverse)
+                    torch.testing.assert_close(
+                        product, torch.eye(3, dtype=torch.float64)[:, :, None].expand_as(product), rtol=0, atol=5e-10
+                    )
+                    physical = torch.tensor([[0.2, -0.1], [0.4, 0.3], [-0.2, 0.1]], dtype=torch.float64)
+                    recovered = fields.physical_velocity(fields.covariant_from_physical(physical))
+                    torch.testing.assert_close(recovered, physical, rtol=5e-10, atol=1e-12)
+
     def test_all_components_against_independent_embedded_line_element(self):
         # Differentiate the Cartesian embedding to obtain an independent metric.
         from wx_factory.common.definitions import gravity

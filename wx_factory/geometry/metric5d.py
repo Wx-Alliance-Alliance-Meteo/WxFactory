@@ -193,6 +193,24 @@ def _rotation_covector(x: Tensor, y: Tensor, frame: Tensor, rotation_speed: floa
     return rotation_covector, rotation_derivatives
 
 
+def _inverse_spatial_metric(x, y, secant2_x, secant2_y, delta_squared, radial_distance, height_gradient, scale):
+    """Return the terrain-following spatial inverse in reference coordinates."""
+    dz_dx1, dz_dx2, dz_dx3 = height_gradient
+    inverse = height_gradient.new_empty((3, 3) + height_gradient.shape[1:])
+    angular_factor = delta_squared / radial_distance**2
+    inverse[0, 0] = angular_factor / secant2_x
+    inverse[1, 1] = angular_factor / secant2_y
+    inverse[0, 1] = inverse[1, 0] = angular_factor * x * y / (secant2_x * secant2_y)
+    inverse[0, 2] = inverse[2, 0] = -(inverse[0, 0] * dz_dx1 + inverse[0, 1] * dz_dx2) / dz_dx3
+    inverse[1, 2] = inverse[2, 1] = -(inverse[1, 0] * dz_dx1 + inverse[1, 1] * dz_dx2) / dz_dx3
+    inverse[2, 2] = (
+        1 + inverse[0, 0] * dz_dx1**2 + 2 * inverse[0, 1] * dz_dx1 * dz_dx2 + inverse[1, 1] * dz_dx2**2
+    ) / dz_dx3**2
+    inverse /= scale[:, None]
+    inverse /= scale[None, :]
+    return inverse
+
+
 def evaluate_metric5d(
     coordinates: Tensor,
     height_map: Callable[[Tensor], Tensor],
@@ -258,7 +276,9 @@ def evaluate_metric5d(
     frame_covector_derivatives = frame_covector_derivatives * scale[:, None] * scale[None, :]
     reference_height_gradient = height_gradient * scale
     effective_geopotential_gradient = effective_geopotential_gradient * scale
-    inverse_spatial = torch.linalg.inv(spatial_metric.movedim((0, 1), (-2, -1))).movedim((-2, -1), (0, 1))
+    inverse_spatial = _inverse_spatial_metric(
+        x, y, secant2_x, secant2_y, delta_squared, radial_distance, height_gradient, scale
+    )
     raised_frame_covector = torch.einsum("ij...,j...->i...", inverse_spatial, frame_covector)
     frame_speed_squared = (frame_covector * raised_frame_covector).sum(dim=0)
     gravitational_geopotential = effective_geopotential
