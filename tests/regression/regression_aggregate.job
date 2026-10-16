@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+#
+# WxFactory regression suite — AGGREGATION job.
+#
+# Runs AFTER the case jobs via a PBS dependency, and produces the single shared
+# manifest / report / gallery for the whole run:
+#
+#   * manifest.json  — all configs (re-discovered; status re-hydrated from
+#                      each config's status.json, written by its case job)
+#   * report.html    — compare every config against the baseline (data L2,
+#                      SSIM, and walltime delta)
+#   * gallery        — publish one browsable entry under ~/public_html
+#
+# It does NOT re-run or re-plot (the case jobs already did that); it only
+# reads their per-config outputs from the shared REGRESSION_OUTPUT_ROOT.
+#
+# Variables (all passed by submit_regression.sh via ``qsub -v``):
+#   REGRESSION_OUTPUT_ROOT   shared output directory (results/regression/<run-id>)
+#   WX_ENV_SCRIPT            script that is SOURCED to set up the environment
+#                            (module load, python environment, env variables)
+#   WX_REPO_ROOT             the repo root (qsub runs this script from a temp
+#                            directory, so it cannot be derived from $0)
+#
+# The PBS dependency (depend=afterany:...) is passed on the qsub command line:
+#   qsub -W "depend=afterany:ID1:ID2:..." \
+#        -v "REGRESSION_OUTPUT_ROOT=<dir>,WX_ENV_SCRIPT=/path/to/env.sh,WX_REPO_ROOT=/path/to/wx_factory" \
+#        tests/regression/regression_aggregate.job
+# Do NOT submit this job directly — use tests/regression/submit_regression.sh.
+#
+#PBS -l select=1:ncpus=24:mpiprocs=24:ompthreads=1:mem=100G:vntype=gpu:ngpus=1
+#PBS -l walltime=1:0:0
+#PBS -N wx_regression_agg
+#PBS -j oe
+#PBS -o /dev/null
+
+# Log to results/regression/<jobid>.OU via an in-script redirect (#PBS -o
+# cannot use shell variables). Falls back to PBS_O_WORKDIR if WX_REPO_ROOT is
+# missing, so early failures are still visible.
+LOG_DIR="${WX_REPO_ROOT:-${PBS_O_WORKDIR:-.}}/results/regression"
+mkdir -p "${LOG_DIR}" 2>/dev/null || LOG_DIR="${PBS_O_WORKDIR:-.}/results/regression"
+mkdir -p "${LOG_DIR}"
+exec > "${LOG_DIR}/${PBS_JOBID}.OU" 2>&1
+
+# --- Validate the variables passed by submit_regression.sh (qsub -v) --------
+missing=()
+[[ -n "${WX_REPO_ROOT:-}" && -d "${WX_REPO_ROOT}" ]] || missing+=("WX_REPO_ROOT (repo root, must be a directory)")
+[[ -n "${REGRESSION_OUTPUT_ROOT:-}" ]] || missing+=("REGRESSION_OUTPUT_ROOT (shared output directory)")
+[[ -n "${WX_ENV_SCRIPT:-}" && -f "${WX_ENV_SCRIPT}" ]] || missing+=("WX_ENV_SCRIPT (environment script, must be a file)")
+if [[ ${#missing[@]} -gt 0 ]]; then
+    echo "ERROR: missing or invalid variable(s) — run via tests/regression/submit_regression.sh:" >&2
+    for m in "${missing[@]}"; do
+        echo "  - ${m}" >&2
+    done
+    exit 1
+fi
+REPO_ROOT="${WX_REPO_ROOT}"
+cd "${REPO_ROOT}"
+
+# Source the environment. TMPDIR is provided by the cluster.
+# shellcheck disable=SC1090
+. "${WX_ENV_SCRIPT}"
+
+echo "=== aggregation for ${REGRESSION_OUTPUT_ROOT} (job ${PBS_JOBID}) ==="
+
+# Manifest + compare + gallery; skip run + plot (the case jobs did that).
+python tests/regression/run_regression.py \
+    --output-root "${REGRESSION_OUTPUT_ROOT}" \
+    --skip-run --skip-plot
+status=$?
+
+echo "=== aggregation finished with exit code ${status} (job ${PBS_JOBID}) ==="
+exit ${status}

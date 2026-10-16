@@ -10,6 +10,7 @@ xarray
 dask
 zarr>=3,<4
 numcodecs
+scikit-image
 
 # GPU support requires a CUDA-enabled PyTorch build compatible with the system CUDA driver.
 # See https://pytorch.org/get-started/locally/ for the appropriate installation command.

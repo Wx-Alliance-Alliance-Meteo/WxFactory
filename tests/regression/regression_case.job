@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+#
+# WxFactory regression suite — generic CASE job.
+#
+# Runs an explicit list of configs into the shared output directory, doing
+# run + plot only. A separate aggregation job (which depends on all case jobs)
+# writes the single manifest / report / gallery. Per-config subdirs are keyed
+# by config name, so the parallel jobs never collide.
+#
+# Variables (all passed by submit_regression.sh via ``qsub -v``):
+#   REGRESSION_CASES         space-separated list of config/*.ini file names
+#   REGRESSION_OUTPUT_ROOT   shared output directory (results/regression/<run-id>)
+#   WX_ENV_SCRIPT            script that is SOURCED to set up the environment
+#                            (module load, python environment, env variables)
+#   WX_REPO_ROOT             the repo root (qsub runs this script from a temp
+#                            directory, so it cannot be derived from $0)
+#
+# The per-group resources (select / walltime / job name) are passed on the
+# qsub command line, so this file carries no resource directives.
+#
+# Submit with:  tests/regression/submit_regression.sh   (preferred)
+#   or standalone:
+#     qsub -l select=1:ncpus=24:mpiprocs=24:ompthreads=1:mem=100G:vntype=gpu:ngpus=1 \
+#          -l walltime=3:0:0 -N wx_regression_adhoc \
+#          -v "REGRESSION_CASES='case1.ini case2.ini',REGRESSION_OUTPUT_ROOT=results/regression/<run-id>,WX_ENV_SCRIPT=/path/to/env.sh,WX_REPO_ROOT=/path/to/wx_factory" \
+#          tests/regression/regression_case.job
+#
+#PBS -j oe
+#PBS -o /dev/null
+
+# Log to results/regression/<jobid>.OU via an in-script redirect (#PBS -o
+# cannot use shell variables). Falls back to PBS_O_WORKDIR if WX_REPO_ROOT is
+# missing, so early failures are still visible.
+LOG_DIR="${WX_REPO_ROOT:-${PBS_O_WORKDIR:-.}}/results/regression"
+mkdir -p "${LOG_DIR}" 2>/dev/null || LOG_DIR="${PBS_O_WORKDIR:-.}/results/regression"
+mkdir -p "${LOG_DIR}"
+exec > "${LOG_DIR}/${PBS_JOBID}.OU" 2>&1
+
+# --- Validate the variables passed by submit_regression.sh (qsub -v) --------
+missing=()
+[[ -n "${WX_REPO_ROOT:-}" && -d "${WX_REPO_ROOT}" ]] || missing+=("WX_REPO_ROOT (repo root, must be a directory)")
+[[ -n "${REGRESSION_CASES:-}" ]] || missing+=("REGRESSION_CASES (space-separated config file names)")
+[[ -n "${REGRESSION_OUTPUT_ROOT:-}" ]] || missing+=("REGRESSION_OUTPUT_ROOT (shared output directory)")
+[[ -n "${WX_ENV_SCRIPT:-}" && -f "${WX_ENV_SCRIPT}" ]] || missing+=("WX_ENV_SCRIPT (environment script, must be a file)")
+if [[ ${#missing[@]} -gt 0 ]]; then
+    echo "ERROR: missing or invalid variable(s) — run via tests/regression/submit_regression.sh:" >&2
+    for m in "${missing[@]}"; do
+        echo "  - ${m}" >&2
+    done
+    exit 1
+fi
+REPO_ROOT="${WX_REPO_ROOT}"
+cd "${REPO_ROOT}"
+
+# shellcheck disable=SC1090
+. "${WX_ENV_SCRIPT}"
+
+# Sanity check: confirm the right mpirun / python / GPUs are in use.
+echo "=== env check (job ${PBS_JOBID}) ==="
+which mpirun
+which python
+nvidia-smi -L || true
+echo "===================================="
+echo "=== cases: ${REGRESSION_CASES}"
+echo "=== output root: ${REGRESSION_OUTPUT_ROOT}"
+
+# Run + plot only: the shared manifest / report / gallery are written once by
+# the aggregation job (which depends on this one).
+read -r -a CASES <<< "${REGRESSION_CASES}"
+python tests/regression/run_regression.py \
+    --configs "${CASES[@]}" \
+    --output-root "${REGRESSION_OUTPUT_ROOT}" \
+    --no-manifest --skip-compare --skip-gallery
+status=$?
+
+echo "=== case regression finished with exit code ${status} (job ${PBS_JOBID}) ==="
+exit ${status}

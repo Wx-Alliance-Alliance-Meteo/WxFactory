@@ -21,6 +21,7 @@ dependencies = [
     "dask",
     "zarr>=3,<4",
     "numcodecs",
+    "scikit-image",
 ]
 
 [project.scripts]
