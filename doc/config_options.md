@@ -11,6 +11,7 @@
    | time_start            | lc-str  |         |                                  |   |
    | time_end              | lc-str  |         |                                  |   |
    | case_number           | int   | -1        |                                  |   |
+   | gresho_mach          | float | 0.1 | positive | Maximum Mach number for Gresho case 651 only; adjusts background pressure, leaving the velocity profile unchanged. |
    | bubble_rad            | float  | 0.0      |                                  |   |
    | advection_only        | str_to_bool  | False  |                              | Whether the Euler dynamics are frozen and only passive advection is integrated. Cartesian grids are always fully dynamical.  |
    | depth_approx          | lc-str  | deep    | {deep, shallow}                  |   |

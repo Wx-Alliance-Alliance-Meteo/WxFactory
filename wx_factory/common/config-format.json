@@ -91,6 +91,17 @@
                     "default": -1
                 },
                 {
+                    "name": "gresho_mach",
+                    "type": "float",
+                    "default": 0.1,
+                    "min": 0.0,
+                    "dependency": {
+                        "name": "case_number",
+                        "values": [651]
+                    },
+                    "description": "Maximum Mach number for the Gresho vortex (case 651)."
+                },
+                {
                     "name": "matsuno_wave_type",
                     "type": "str",
                     "dependency": {

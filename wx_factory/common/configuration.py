@@ -116,6 +116,7 @@ class Configuration:
     expfilter_strength: float
     exponential_solver: str
     gmres_restart: int
+    gresho_mach: float
     grid_file: str
     grid_type: str
     initial_conditions: str

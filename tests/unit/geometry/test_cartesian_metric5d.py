@@ -178,21 +178,34 @@ class CartesianEulerTestCase(unittest.TestCase):
 
         # Differentiate inside each smooth branch, away from the two break radii.
         from types import SimpleNamespace
-        radius = torch.tensor([0.1, 0.3, 0.45], dtype=torch.float64, requires_grad=True)
+        radius = torch.tensor([0.1, 0.2, 0.3, 0.45], dtype=torch.float64, requires_grad=True)
         geometry = SimpleNamespace(X1=0.5 + radius, X3=torch.full_like(radius, 0.5),
                                    grid_shape_3d_new=radius.shape,
                                    delta_x1=1.0, delta_x2=0.1, ztop=1.0, num_elements_x3=1)
         metric = CartesianMetric5D(geometry, config)
         metric.volume = metric.evaluate(geometry.X3)
-        state = initialize_cartesian3d(geometry, metric, config)
-        pressure = p0 * (Rd * state[4] / p0)**heat_capacity_ratio
-        gradient = torch.autograd.grad(pressure.sum(), radius)[0]
-        wind = metric.volume.physical_velocity(state[1:4])
-        torch.testing.assert_close(gradient, state[0] * wind[2]**2 / radius, atol=1e-12, rtol=1e-12)
-        expected = 1 / (heat_capacity_ratio * 0.1**2) - 0.5 + torch.tensor(
-            [0.125, 4 * math.log(1.5) + 4 - 6 + 1.125,
-             4 * math.log(2) - 2], dtype=pressure.dtype)
-        torch.testing.assert_close(pressure, expected, atol=1e-12, rtol=1e-12)
+        for mach in (0.01, 0.1, 0.5):
+            with self.subTest(mach=mach):
+                config = Configuration(
+                    readfile("config/gresho_vortex.ini").replace("gresho_mach = 0.1", f"gresho_mach = {mach}"),
+                    load_default_schema(),
+                )
+                state = initialize_cartesian3d(geometry, metric, config)
+                pressure = p0 * (Rd * state[4] / p0)**heat_capacity_ratio
+                gradient = torch.autograd.grad(pressure.sum(), radius)[0]
+                wind = metric.volume.physical_velocity(state[1:4])
+                torch.testing.assert_close(gradient, state[0] * wind[2]**2 / radius, atol=1e-11, rtol=1e-11)
+                sound_speed = torch.sqrt(heat_capacity_ratio * pressure / state[0])
+                maximum_mach = (torch.linalg.vector_norm(wind, dim=0) / sound_speed).max()
+                torch.testing.assert_close(maximum_mach, maximum_mach.new_tensor(mach), atol=1e-12, rtol=1e-12)
+                expected = 1 / (heat_capacity_ratio * mach**2) - 0.5 + torch.tensor(
+                    [0.125, 0.5, 4 * math.log(1.5) + 4 - 6 + 1.125,
+                     4 * math.log(2) - 2], dtype=pressure.dtype)
+                torch.testing.assert_close(pressure, expected, atol=1e-11, rtol=1e-11)
+        for invalid_mach in (0, -0.1, float("nan"), float("inf"), 2):
+            config.gresho_mach = invalid_mach
+            with self.subTest(invalid_mach=invalid_mach), self.assertRaisesRegex(ValueError, "gresho_mach"):
+                initialize_cartesian3d(geometry, metric, config)
 
     def test_analytic_jacobian_and_partition(self):
         rhs = self.sim.rhs.full

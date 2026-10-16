@@ -253,7 +253,9 @@ def initialize_cartesian3d(geom, metric, param: Configuration) -> NDArray[numpy.
         ρ = pressure / (Rd * t)
         θ  = t * (p0 / pressure)**(Rd/cpd)
     elif param.case_number == 651:
-        max_mach = 0.1
+        max_mach = param.gresho_mach
+        if not numpy.isfinite(max_mach) or max_mach <= 0:
+            raise ValueError("gresho_mach must be finite and positive")
         x = x1 - 0.5
         z = x3 - 0.5
         radius = torch.sqrt(x**2 + z**2)
@@ -269,6 +271,8 @@ def initialize_cartesian3d(geom, metric, param: Configuration) -> NDArray[numpy.
 
         # At r = 0.2 the speed is one, fixing the maximum Mach number.
         base_pressure = 1 / (heat_capacity_ratio * max_mach**2) - 0.5
+        if base_pressure <= 0:
+            raise ValueError("gresho_mach is too large to give positive pressure throughout the vortex")
         pressure = torch.full_like(radius, base_pressure + 4 * numpy.log(2) - 2)
         pressure[inner] = base_pressure + 12.5 * radius[inner]**2
         r = radius[annulus]
