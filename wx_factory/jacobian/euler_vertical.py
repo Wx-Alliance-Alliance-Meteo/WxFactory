@@ -5,7 +5,7 @@ import torch
 from ..common.definitions import heat_capacity_ratio
 from ..common.matmul import apply_op
 from ..pde.euler_interfaces import EulerInterfaceGeometry, pressure
-from .block_solve import block_thomas_solve, blocks_matvec
+from .block_solve import block_thomas_solve, blocks_matvec, cyclic_block_solve
 from .column_layout import (
     column_dims,
     columns_to_state,
@@ -76,8 +76,10 @@ class EulerVerticalLinearization:
         jacobian = face_columns(face_fields.volume_jacobian)[:, :-1, 1]
         normal_scale = torch.sqrt(inverse_spatial[2, 2])
         normal_row = inverse_spatial[2] / normal_scale
-        wall = torch.zeros_like(normal_scale, dtype=torch.bool)
-        wall[:, 0], wall[:, -1] = True, True
+        wall = None
+        if not rhs.periodic_vertical:
+            wall = torch.zeros_like(normal_scale, dtype=torch.bool)
+            wall[:, 0], wall[:, -1] = True, True
         geometry = EulerInterfaceGeometry(
             left=None,
             right=None,
@@ -104,11 +106,13 @@ class EulerVerticalLinearization:
         )
         left_matrix, right_matrix = self._interface_jacobians(interface, left, jacobian)
 
-        # The reflected ghost's v_3 depends on all three interior covariant velocities.
-        bottom = self._wall_reflection_matrix(inverse_faces[:, :, :, 0, 1])
-        top = self._wall_reflection_matrix(inverse_faces[:, :, :, -1, 0])
-        bottom_matrix = left_matrix[:, 0] @ bottom + right_matrix[:, 0]
-        top_matrix = left_matrix[:, -1] + right_matrix[:, -1] @ top
+        bottom_matrix = top_matrix = None
+        if not rhs.periodic_vertical:
+            # The reflected ghost's v_3 depends on all three interior covariant velocities.
+            bottom = self._wall_reflection_matrix(inverse_faces[:, :, :, 0, 1])
+            top = self._wall_reflection_matrix(inverse_faces[:, :, :, -1, 0])
+            bottom_matrix = left_matrix[:, 0] @ bottom + right_matrix[:, 0]
+            top_matrix = left_matrix[:, -1] + right_matrix[:, -1] @ top
         self.blocks = self._assemble_blocks(left_matrix, right_matrix, bottom_matrix, top_matrix)
 
     def _vertical_derivative(self, value, common):
@@ -160,8 +164,14 @@ class EulerVerticalLinearization:
         diagonal[:, 1:] += contribution(lifts[0][:, 1:], right[:, 1:-1], extrapolation[0][:, 1:])
         diagonal[:, :-1] += contribution(lifts[1][:, :-1], left[:, 1:-1], extrapolation[1][:, :-1])
         upper[:, :-1] += contribution(lifts[1][:, :-1], right[:, 1:-1], extrapolation[0][:, 1:])
-        diagonal[:, :1] += contribution(lifts[0][:, :1], bottom[:, None], extrapolation[0][:, :1])
-        diagonal[:, -1:] += contribution(lifts[1][:, -1:], top[:, None], extrapolation[1][:, -1:])
+        if self.rhs.periodic_vertical:
+            lower[:, :1] += contribution(lifts[0][:, :1], left[:, :1], extrapolation[1][:, -1:])
+            diagonal[:, :1] += contribution(lifts[0][:, :1], right[:, :1], extrapolation[0][:, :1])
+            diagonal[:, -1:] += contribution(lifts[1][:, -1:], left[:, -1:], extrapolation[1][:, -1:])
+            upper[:, -1:] += contribution(lifts[1][:, -1:], right[:, -1:], extrapolation[0][:, :1])
+        else:
+            diagonal[:, :1] += contribution(lifts[0][:, :1], bottom[:, None], extrapolation[0][:, :1])
+            diagonal[:, -1:] += contribution(lifts[1][:, -1:], top[:, None], extrapolation[1][:, -1:])
         shape = (state_columns.shape[0], dimensions.num_elem_z, 3 * dimensions.num_solpts, 5 * dimensions.num_solpts)
         return tuple(block.reshape(shape) for block in (lower, diagonal, upper))
 
@@ -235,7 +245,9 @@ class EulerVerticalLinearization:
         state = vector.reshape_as(self.state).to(self.state.dtype)
         columns = state_to_columns(self.rhs, state)
         result = torch.zeros_like(columns)
-        result[self.column_slice, :, self.rows] = blocks_matvec(*self.blocks, columns[self.column_slice])
+        result[self.column_slice, :, self.rows] = blocks_matvec(
+            *self.blocks, columns[self.column_slice], periodic=self.rhs.periodic_vertical
+        )
         return columns_to_state(self.rhs, result, state).flatten()
 
     def solve(self, vector, dt):
@@ -249,9 +261,12 @@ class EulerVerticalLinearization:
         columns = columns.clone()
         horizontal = columns.clone()
         horizontal[..., self.rows] = 0
-        right = columns[..., self.rows] + dt / 2 * blocks_matvec(*self.blocks, horizontal)
+        right = columns[..., self.rows] + dt / 2 * blocks_matvec(
+            *self.blocks, horizontal, periodic=self.rhs.periodic_vertical
+        )
         stiff = tuple(block[..., self.rows] for block in self.blocks)
-        columns[..., self.rows] = block_thomas_solve(*stiff, right, dt)
+        solve = cyclic_block_solve if self.rhs.periodic_vertical else block_thomas_solve
+        columns[..., self.rows] = solve(*stiff, right, dt)
         return columns
 
 

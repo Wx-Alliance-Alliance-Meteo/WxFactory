@@ -6,12 +6,34 @@ import torch
 from tests.unit.rhs.euler_frozen_fixture import frozen_problem
 from wx_factory.common.matmul import apply_op
 from wx_factory.geometry.metric5d import Metric5D
+from wx_factory.jacobian.block_solve import blocks_matvec, cyclic_block_solve
 from wx_factory.jacobian.euler_vertical import EulerVerticalLinearization
 from wx_factory.pde.euler_interfaces import pressure
 from wx_factory.rhs.euler_partition import EulerRhsPartition
 
 
 class EulerPartitionTestCase(unittest.TestCase):
+    def test_periodic_column_solve_matches_dense_system(self):
+        generator = torch.Generator().manual_seed(18)
+        for elements in (1, 2, 5):
+            for dtype in (torch.float32, torch.float64):
+                with self.subTest(elements=elements, dtype=dtype):
+                    blocks = [0.1 * torch.randn(2, elements, 3, 3, generator=generator, dtype=dtype) for _ in range(3)]
+                    lower, diagonal, upper = blocks
+                    matrix = torch.zeros(2, 3 * elements, 3 * elements, dtype=dtype)
+                    for e in range(elements):
+                        row = slice(3 * e, 3 * (e + 1))
+                        for neighbour, block in (((e - 1) % elements, lower), (e, diagonal), ((e + 1) % elements, upper)):
+                            matrix[:, row, 3 * neighbour : 3 * (neighbour + 1)] += block[:, e]
+                    forcing = torch.randn(2, elements, 3, generator=generator, dtype=dtype)
+                    torch.testing.assert_close(
+                        blocks_matvec(*blocks, forcing, periodic=True).flatten(1),
+                        (matrix @ forcing.flatten(1)[..., None])[..., 0],
+                    )
+                    expected = torch.linalg.solve(torch.eye(3 * elements, dtype=dtype) - 0.05 * matrix, forcing.flatten(1))
+                    actual = cyclic_block_solve(*blocks, forcing, 0.1)
+                    torch.testing.assert_close(actual.flatten(1), expected)
+
     def problem(self, nodes=3, vertical_elements=3):
         rhs, state, *_ = frozen_problem(
             elements=2, nodes=nodes, vertical_elements=vertical_elements, terrain_slope=0.2, speed=2

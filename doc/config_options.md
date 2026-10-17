@@ -52,6 +52,7 @@
  | **[Grid]**            | **Type**  | **Default**  | **Valid range**           | **Description**  |
    | grid_file             | lc-str  |         |                                  |   |
    | lateral_boundary      | lc-str  | donor_cell  | {donor_cell, wall, periodic}  | Lateral (horizontal) boundary treatment. donor_cell exchanges traces with the neighbouring tile (the cubed sphere's inter-panel donor cell); wall reflects the tile's own boundary trace (solid wall); periodic wraps the tile to its opposite edge. The cubed sphere always uses donor_cell; wall/periodic are for cartesian grids.  |
+   | vertical_boundary     | lc-str  | wall        | {wall, periodic}             | Vertical boundary treatment for the Euler equations: wall reflects the boundary trace; periodic connects the top and bottom boundaries.  |
    | discretization        | lc-str  | dg      | {dg}                             | Direct flux reconstruction / discontinuous Galerkin spatial discretization. No finite-volume RHS is currently available.  |
    | grid_type             | lc-str  | [none]  | {cubed_sphere, cartesian3d}      |   |
    | lambda0               | angle24  | [none]  |                                 | Longitude in radians of the central point of panel 0  |

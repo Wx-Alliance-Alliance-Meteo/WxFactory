@@ -19,15 +19,17 @@ from tests.unit.common.test_configuration import ConfigurationTestCases
 from tests.unit.common.test_panel_conversions import PanelConversionTestCase
 from tests.unit.common.test_sort_fields import SortFieldsByDependencyTestCases
 from tests.unit.common.test_tensor_math import SpatialContractionTestCase
-from tests.unit.geometry.test_cartesian_metric5d import CartesianEulerTestCase
-from tests.unit.geometry.test_exponential_filter import ExponentialFilterTestCase
+from tests.unit.geometry.test_cartesian_metric5d import CartesianMetric5DTestCase
+from tests.unit.geometry.test_exponential_filter import CartesianFilterTestCase, ExponentialFilterTestCase
 from tests.unit.geometry.test_geometry_registry import GeometryRegistryTestCases
 from tests.unit.geometry.test_metric5d import Metric5DTestCase, TabulatedSurfaceTestCase
 from tests.unit.geometry.test_operator_identities import OperatorIdentityTestCase
+from tests.unit.init.test_cartesian import CartesianInitializationTestCase
 from tests.unit.integrators.test_epi import EpiTestCase
 from tests.unit.integrators.test_implicit import ImplicitIntegratorTestCase
 from tests.unit.integrators.test_splitting import SplittingTestCase
 from tests.unit.integrators.test_srerk import SrerkTestCase
+from tests.unit.jacobian.test_cartesian_euler import CartesianEulerJacobianTestCase
 from tests.unit.jacobian.test_euler import EulerJacobianTestCase
 from tests.unit.jacobian.test_euler_partitions import EulerPartitionTestCase
 from tests.unit.jacobian.test_finite_difference import FiniteDifferenceJacobianTestCases
@@ -38,6 +40,7 @@ from tests.unit.precondition.test_preconditioner_registry import (
     PreconditionerRegistryTestCases,
 )
 from tests.unit.restart.test_restart import Euler2DRestartTestCase
+from tests.unit.rhs.test_cartesian_euler import CartesianEulerTestCase
 from tests.unit.rhs.test_euler import EulerTestCase
 from tests.unit.rhs.test_euler_operator import EulerOperatorTestCase
 from tests.unit.rhs.test_rhs_registry import (
@@ -85,6 +88,10 @@ def load_tests(test_name: str):
         Metric5DTestCase,
         TabulatedSurfaceTestCase,
         CartesianEulerTestCase,
+        CartesianMetric5DTestCase,
+        CartesianInitializationTestCase,
+        CartesianEulerJacobianTestCase,
+        CartesianFilterTestCase,
         FgmresEdgeCasesTestCases,
         FgmresTestCases,
         KiopsPmexToleranceCpuTestCases,

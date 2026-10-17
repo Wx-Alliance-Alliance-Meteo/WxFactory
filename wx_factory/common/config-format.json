@@ -408,6 +408,16 @@
                     "description": "Lateral (horizontal) boundary treatment. donor_cell exchanges traces with the neighbouring tile (the cubed sphere's inter-panel donor cell); wall reflects the tile's own boundary trace (solid wall); periodic wraps the tile to its opposite edge. The cubed sphere always uses donor_cell; wall/periodic are for cartesian grids."
                 },
                 {
+                    "name": "vertical_boundary",
+                    "type": "str",
+                    "selectables": [
+                        "wall",
+                        "periodic"
+                    ],
+                    "default": "wall",
+                    "description": "Vertical boundary treatment for the Euler equations: wall reflects the boundary trace; periodic connects the top and bottom boundaries."
+                },
+                {
                     "name": "discretization",
                     "type": "str",
                     "default": "dg",

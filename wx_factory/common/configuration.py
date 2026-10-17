@@ -161,6 +161,7 @@ class Configuration:
     topography_file: str
     verbose_precond: int
     verbose_solver: int
+    vertical_boundary: str
     vertical_coord: str
     x0: float
     x1: float

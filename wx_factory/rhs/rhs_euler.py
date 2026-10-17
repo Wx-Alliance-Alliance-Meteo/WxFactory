@@ -19,6 +19,7 @@ class RhsEuler:
         self.ptopo = process_topology
         self.config = config
         self.context = geometry.context
+        self.periodic_vertical = config.vertical_boundary == "periodic"
         if config.riemann_solver != "acoustic":
             raise ValueError(f"Unknown Euler interface solver '{config.riemann_solver}'")
         self.extrapolations = (operators.extrap_x, operators.extrap_y, operators.extrap_z)
@@ -123,18 +124,22 @@ class RhsEuler:
         for direction, face, received in neighbours:
             full_faces[direction][face] = received
 
-        self._reflect_vertical_walls(full_faces[2])
+        self._fill_vertical_boundaries(full_faces[2])
         return tuple(full_faces)
 
     def _vertical_faces(self, trace: Tensor) -> Tensor:
         face_state = trace.new_zeros((trace.shape[0],) + self.metric.faces[2].height.shape)
         face_state[[0, 4]] = 1
         face_state[self.mid_faces[2]] = trace
-        self._reflect_vertical_walls(face_state)
+        self._fill_vertical_boundaries(face_state)
         return face_state
 
-    def _reflect_vertical_walls(self, vertical: Tensor):
+    def _fill_vertical_boundaries(self, vertical: Tensor):
         width = self.geom.itf_size
+        if self.periodic_vertical:
+            vertical[..., 0, :, :, width:] = vertical[..., -2, :, :, width:]
+            vertical[..., -1, :, :, :width] = vertical[..., 1, :, :, :width]
+            return
         for ghost_face, interior_face in (
             (
                 (..., 0, slice(None), slice(None), slice(width, None)),
@@ -165,10 +170,14 @@ class RhsEuler:
                 normal_scale = torch.sqrt(inverse_spatial[direction, direction])
                 normal_row = inverse_spatial[direction] / normal_scale
                 wall = None
-                if direction == 2:
+                if direction == 2 and not self.periodic_vertical:
                     wall = torch.zeros_like(geopotential, dtype=torch.bool)
                     wall[0], wall[-1] = True, True
-                elif getattr(self.geom, "is_y_invariant_slab", False) and self.config.lateral_boundary == "wall":
+                elif (
+                    direction != 2
+                    and getattr(self.geom, "is_y_invariant_slab", False)
+                    and self.config.lateral_boundary == "wall"
+                ):
                     wall = torch.zeros_like(geopotential, dtype=torch.bool)
                     if direction == 0:
                         wall[:, :, 0], wall[:, :, -1] = True, True

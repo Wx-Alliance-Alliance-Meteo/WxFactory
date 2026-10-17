@@ -1,4 +1,4 @@
-"""Application and inversion of the block-tridiagonal vertical operator."""
+"""Application and inversion of the vertical column operator."""
 
 import functools
 
@@ -8,11 +8,14 @@ import torch
 #   c = column, e = vertical element, i = block row, j = block column.
 
 
-def blocks_matvec(lower, diag, upper, x_col):
-    """Apply the block-tridiagonal operator to a column-layout vector."""
+def blocks_matvec(lower, diag, upper, x_col, *, periodic=False):
+    """Apply the column blocks, including periodic end couplings when requested."""
     out = torch.einsum("ceij,cej->cei", diag, x_col)
     out[:, 1:] += torch.einsum("ceij,cej->cei", lower[:, 1:], x_col[:, :-1])
     out[:, :-1] += torch.einsum("ceij,cej->cei", upper[:, :-1], x_col[:, 1:])
+    if periodic:
+        out[:, 0] += torch.einsum("cij,cj->ci", lower[:, 0], x_col[:, -1])
+        out[:, -1] += torch.einsum("cij,cj->ci", upper[:, -1], x_col[:, 0])
     return out
 
 
@@ -57,7 +60,10 @@ def block_thomas_solve(lower, diag, upper, b, dt):
     def super_block(e):
         return (-half_dt) * upper[:, e].astype(work_dtype)
 
+    vector_rhs = b.ndim == 3
     b = b.astype(work_dtype)
+    if vector_rhs:
+        b = b[..., None]
 
     # Retain the LU factors for back substitution and iterative refinement.
     factors = [None] * num_elem_z
@@ -65,34 +71,34 @@ def block_thomas_solve(lower, diag, upper, b, dt):
     factors[0] = torch.linalg.lu_factor(diag_block(0))
     reduced_rhs[0] = b[:, 0]
     for e in range(1, num_elem_z):
-        augmented = torch.concatenate([super_block(e - 1), reduced_rhs[e - 1][..., None]], dim=-1)
+        augmented = torch.concatenate([super_block(e - 1), reduced_rhs[e - 1]], dim=-1)
         solved = torch.linalg.lu_solve(factors[e - 1][0], factors[e - 1][1], augmented)
         reduced_upper = solved[..., :block_size]
-        reduced_vec = solved[..., block_size]
+        reduced_vec = solved[..., block_size:]
         factors[e] = torch.linalg.lu_factor(diag_block(e) - sub_block(e) @ reduced_upper)
-        reduced_rhs[e] = b[:, e] - (sub_block(e) @ reduced_vec[..., None])[..., 0]
+        reduced_rhs[e] = b[:, e] - sub_block(e) @ reduced_vec
 
     def solve_with_factors(rhs):
         """Solve a new right-hand side with the existing factors."""
         forward = [None] * num_elem_z
         forward[0] = rhs[0]
         for e in range(1, num_elem_z):
-            eliminated = torch.linalg.lu_solve(factors[e - 1][0], factors[e - 1][1], forward[e - 1][..., None])[..., 0]
-            forward[e] = rhs[e] - (sub_block(e) @ eliminated[..., None])[..., 0]
+            eliminated = torch.linalg.lu_solve(factors[e - 1][0], factors[e - 1][1], forward[e - 1])
+            forward[e] = rhs[e] - sub_block(e) @ eliminated
         sol = [None] * num_elem_z
         top = num_elem_z - 1
-        sol[top] = torch.linalg.lu_solve(factors[top][0], factors[top][1], forward[top][..., None])[..., 0]
+        sol[top] = torch.linalg.lu_solve(factors[top][0], factors[top][1], forward[top])
         for e in range(num_elem_z - 2, -1, -1):
-            rhs_e = forward[e] - (super_block(e) @ sol[e + 1][..., None])[..., 0]
-            sol[e] = torch.linalg.lu_solve(factors[e][0], factors[e][1], rhs_e[..., None])[..., 0]
+            rhs_e = forward[e] - super_block(e) @ sol[e + 1]
+            sol[e] = torch.linalg.lu_solve(factors[e][0], factors[e][1], rhs_e)
         return sol
 
     top = num_elem_z - 1
     x = [None] * num_elem_z
-    x[top] = torch.linalg.lu_solve(factors[top][0], factors[top][1], reduced_rhs[top][..., None])[..., 0]
+    x[top] = torch.linalg.lu_solve(factors[top][0], factors[top][1], reduced_rhs[top])
     for e in range(num_elem_z - 2, -1, -1):
-        rhs_e = reduced_rhs[e] - (super_block(e) @ x[e + 1][..., None])[..., 0]
-        x[e] = torch.linalg.lu_solve(factors[e][0], factors[e][1], rhs_e[..., None])[..., 0]
+        rhs_e = reduced_rhs[e] - super_block(e) @ x[e + 1]
+        x[e] = torch.linalg.lu_solve(factors[e][0], factors[e][1], rhs_e)
 
     if refine:
         # Build the float64 residual element by element to limit peak memory.
@@ -102,13 +108,40 @@ def block_thomas_solve(lower, diag, upper, b, dt):
         for e in range(num_elem_z):
             residual[e] = (
                 b[:, e].astype(f64)
-                - ((identity64 - half_dt * diag[:, e].astype(f64)) @ x[e].astype(f64)[..., None])[..., 0]
+                - ((identity64 - half_dt * diag[:, e].astype(f64)) @ x[e].astype(f64))
             )
             if e > 0:
-                residual[e] += half_dt * (lower[:, e].astype(f64) @ x[e - 1].astype(f64)[..., None])[..., 0]
+                residual[e] += half_dt * (lower[:, e].astype(f64) @ x[e - 1].astype(f64))
             if e < num_elem_z - 1:
-                residual[e] += half_dt * (upper[:, e].astype(f64) @ x[e + 1].astype(f64)[..., None])[..., 0]
+                residual[e] += half_dt * (upper[:, e].astype(f64) @ x[e + 1].astype(f64))
         correction = solve_with_factors([residual[e].astype(work_dtype) for e in range(num_elem_z)])
         x = [x[e] + correction[e] for e in range(num_elem_z)]
 
-    return torch.stack(x, dim=1).astype(out_dtype)
+    result = torch.stack(x, dim=1).astype(out_dtype)
+    return result[..., 0] if vector_rhs else result
+
+
+def cyclic_block_solve(lower, diag, upper, b, dt):
+    """Solve periodic columns using a Woodbury correction to block Thomas.
+
+    The first lower block couples to the last element; the final upper block
+    couples to the first. The correction closes these two boundary block rows.
+    """
+    dtype = b.dtype
+    lower, diag, upper, b = (value.to(torch.float64) for value in (lower, diag, upper, b))
+    num_columns, num_elements, block_size = b.shape
+    identity = torch.eye(block_size, dtype=b.dtype, device=b.device)
+    right = b.new_zeros((num_columns, num_elements, block_size, 1 + 2 * block_size))
+    right[..., 0] = b
+    right[:, 0, :, 1 : 1 + block_size] = identity
+    right[:, -1, :, 1 + block_size :] = identity
+    solved = block_thomas_solve(lower, diag, upper, right, dt)
+    particular, response = solved[..., :1], solved[..., 1:]
+    bottom, top = -dt / 2 * lower[:, 0], -dt / 2 * upper[:, -1]
+
+    # Close both periodic ends through the two boundary block rows.
+    closure = torch.cat((bottom @ response[:, -1], top @ response[:, 0]), dim=1)
+    closure += torch.eye(2 * block_size, dtype=b.dtype, device=b.device)
+    boundary_rhs = torch.cat((bottom @ particular[:, -1], top @ particular[:, 0]), dim=1)
+    correction = torch.linalg.solve(closure, boundary_rhs)
+    return (particular - response @ correction[:, None])[..., 0].to(dtype)
