@@ -125,7 +125,7 @@ class EulerPartitionTestCase(unittest.TestCase):
         for function, derivative in ((rhs.implicit, action.implicit), (rhs.explicit, action.explicit)):
             actual = derivative(delta).reshape_as(state)
             errors = []
-            for epsilon in (2e-4, 1e-4, 5e-5):
+            for epsilon in (2e-2, 1e-2, 5e-3):
                 expected = (function(state + epsilon * delta) - function(state - epsilon * delta)) / (2 * epsilon)
                 errors.append((actual - expected).abs().max().item())
             self.assertLess(errors[-1] / actual.abs().max().item(), 2e-7)

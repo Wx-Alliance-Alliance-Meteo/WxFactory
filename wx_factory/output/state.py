@@ -71,11 +71,10 @@ def load_state(input_file_name: str, device: torch.device | None = None) -> tupl
             parser = ConfigParser()
             parser.read_string(config_content)
             changed = parser.remove_option("Test_case", "momentum_form") if parser.has_section("Test_case") else False
-            for old, new in (("lamb_jacobian", "jacobian"), ("lamb_riemann_solver", "riemann_solver")):
-                if parser.has_option("Spatial_discretization", old):
-                    parser.set("Spatial_discretization", new, parser.get("Spatial_discretization", old))
-                    parser.remove_option("Spatial_discretization", old)
-                    changed = True
+            if parser.has_option("Spatial_discretization", "lamb_jacobian"):
+                parser.set("Spatial_discretization", "jacobian", parser.get("Spatial_discretization", "lamb_jacobian"))
+                parser.remove_option("Spatial_discretization", "lamb_jacobian")
+                changed = True
             if changed:
                 content = StringIO()
                 parser.write(content)

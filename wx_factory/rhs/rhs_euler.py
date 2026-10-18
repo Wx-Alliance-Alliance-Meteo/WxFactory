@@ -23,8 +23,6 @@ class RhsEuler:
         self.periodic_vertical = config.vertical_boundary == "periodic"
         if not math.isfinite(config.riemann_mach_cutoff) or not 0 < config.riemann_mach_cutoff <= 1:
             raise ValueError("riemann_mach_cutoff must be finite and in (0, 1]")
-        if config.riemann_solver not in ("low_mach", "unscaled"):
-            raise ValueError(f"Unknown Euler interface solver '{config.riemann_solver}'")
         self.extrapolations = (operators.extrap_x, operators.extrap_y, operators.extrap_z)
         self.derivatives = (operators.derivative_x, operators.derivative_y, operators.derivative_z)
         self.corrections = (operators.correction_WE, operators.correction_SN, operators.correction_DU)
@@ -217,7 +215,6 @@ class RhsEuler:
                 return_velocity=True,
                 normal_geometry=(geometry.normal_scale, geometry.normal_row),
                 mach_cutoff=self.config.riemann_mach_cutoff,
-                low_mach=self.config.riemann_solver == "low_mach",
             )
             scalar_flux = state.new_zeros((2,) + state.shape[1:])
             scalar_state = torch.where(normal_velocity[None] >= 0, state[left][[0, 4]], state[right][[0, 4]])

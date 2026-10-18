@@ -73,11 +73,11 @@ def physical_mach_number(covariant: Tensor, inverse_spatial: Tensor, sound_speed
 
 
 def low_mach_scales(mach_left: Tensor, mach_right: Tensor, cutoff: float):
-    """Cap pressure dissipation at Mach one and floor the velocity correction."""
+    """Return the interface Mach number and velocity-jump pressure scaling."""
     interface_mach = torch.where(mach_left >= mach_right, mach_left, mach_right)
-    pressure_scale = torch.where(interface_mach < 1, interface_mach, torch.ones_like(interface_mach))
-    velocity_scale = torch.where(pressure_scale > cutoff, pressure_scale, torch.full_like(pressure_scale, cutoff))
-    return interface_mach, pressure_scale, velocity_scale
+    limited_mach = torch.clamp(interface_mach, min=cutoff, max=1.0)
+    pressure_scale = limited_mach * (2 - limited_mach)
+    return interface_mach, pressure_scale
 
 
 def acoustic_interface(
@@ -90,13 +90,12 @@ def acoustic_interface(
     wall: Tensor | None = None,
     return_velocity: bool = False,
     normal_geometry: tuple[Tensor, Tensor] | None = None,
-    mach_cutoff: float = 0.1,
-    low_mach: bool = True,
+    mach_cutoff: float = 0.3,
 ) -> tuple[Tensor, Tensor, Tensor] | tuple[Tensor, Tensor, Tensor, Tensor]:
     """Return common contravariant velocity u^d, pressure, and K+Phi_e.
 
-    With low_mach enabled, scale the arithmetic mean of rho*c using the full physical Mach number.
-    The velocity correction has a Mach floor to regularize stagnation. Pressure is
+    Reduce velocity-jump pressure dissipation using the
+    full physical Mach number. The pressure-jump velocity correction is unscaled. Pressure is
     an independent numerical traction; it need not match the EOS evaluated
     on upwind density and temperature. The common velocity supplies both
     kinetic energy and relative-curl traces, with upwind tangential components.
@@ -113,15 +112,10 @@ def acoustic_interface(
     sound_speed_left = torch.sqrt(heat_capacity_ratio * pressure_left / left[0])
     sound_speed_right = torch.sqrt(heat_capacity_ratio * pressure_right / right[0])
     impedance = (left[0] * sound_speed_left + right[0] * sound_speed_right) / 2
-    if low_mach:
-        mach_left = physical_mach_number(left[1:4], inverse_spatial, sound_speed_left)
-        mach_right = physical_mach_number(right[1:4], inverse_spatial, sound_speed_right)
-        _, pressure_scale, velocity_scale = low_mach_scales(mach_left, mach_right, mach_cutoff)
-    else:
-        pressure_scale = velocity_scale = 1.0
-    common_normal_wind = (normal_wind_left + normal_wind_right) / 2 - (pressure_right - pressure_left) / (
-        2 * velocity_scale * impedance
-    )
+    mach_left = physical_mach_number(left[1:4], inverse_spatial, sound_speed_left)
+    mach_right = physical_mach_number(right[1:4], inverse_spatial, sound_speed_right)
+    _, pressure_scale = low_mach_scales(mach_left, mach_right, mach_cutoff)
+    common_normal_wind = (normal_wind_left + normal_wind_right) / 2 - (pressure_right - pressure_left) / (2 * impedance)
     common_pressure = (pressure_left + pressure_right) / 2 - (
         pressure_scale * impedance * (normal_wind_right - normal_wind_left) / 2
     )

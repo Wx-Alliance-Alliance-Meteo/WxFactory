@@ -1,5 +1,7 @@
 import os
 import unittest
+from collections import deque
+from itertools import pairwise
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -96,6 +98,25 @@ class EpiTestCase(unittest.TestCase):
                 with self.subTest(method=kind.__name__, order=order):
                     self.assertLess(errors[1], errors[0])
                     self.assertGreater(errors[0] / errors[1], 4)
+
+    def test_stiff_multistep_order_with_exact_history(self):
+        initial = torch.tensor([0.3], dtype=torch.float64)
+        exact = initial / (1 - 0.8 * initial)
+        for order in range(3, 7):
+            errors = []
+            for steps in (8, 16, 32):
+                dt = 0.8 / steps
+                method = self.method(EpiStiff, order, QuadraticRhs())
+                # Exact history isolates the multistep formula from EPI2 startup error.
+                method.previous_Q = deque(initial / (1 + 0.3 * j * dt) for j in range(1, order - 1))
+                method.previous_rhs = deque(state.square() for state in method.previous_Q)
+                state = initial.clone()
+                for _ in range(steps):
+                    state = method.step(state, dt)
+                errors.append((state - exact).abs().max().item())
+            with self.subTest(order=order):
+                for coarse, fine in pairwise(errors):
+                    self.assertGreater(coarse / fine, 2 ** (order - 0.5))
 
     def test_prescribed_transport_internal_clock(self):
         from wx_factory.integrators.prescribed_transport import PrescribedTransportIntegrator

@@ -96,7 +96,6 @@ class EulerVerticalLinearization:
             geometry,
             2,
             mach_cutoff=rhs.config.riemann_mach_cutoff,
-            low_mach=rhs.config.riemann_solver == "low_mach",
         )
         self.pressure_gradient = self._vertical_derivative(
             pressure(self.state_columns[:, :, 4]), interface.common_pressure

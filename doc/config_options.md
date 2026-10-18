@@ -43,8 +43,7 @@
    | expfilter_apply       | str_to_bool  | False  |                              | Apply an exponential modal filter to metric-weighted conservative quantities after each time step; Euler velocities are converted to conservative momentum for filtering.  |
    | num_solpts            | int   | [none]    | [1, inf]                         |   |
    | num_elements_horizontal  | int  | [none]  | [1, inf]                         |   |
-   | riemann_solver        | lc-str  | unscaled  | {low_mach, unscaled}                     | Interface pressure and normal velocity for Euler momentum. low_mach uses Mach-scaled impedance and a common covariant velocity for relative-curl derivatives.  |
-   | riemann_mach_cutoff | float | 0.1 | (0, 1] | Mach floor for the pressure-jump correction to the Riemann velocity. Pressure dissipation uses the local Mach number without a floor. |
+   | riemann_mach_cutoff | float | 0.3 | (0, 1] | Mach floor in the velocity-jump pressure dissipation factor M0*(2-M0). The pressure-jump velocity correction is unscaled. |
    | jacobian              | lc-str  | analytic  | {finite_difference, analytic}  | Euler Jacobian action for exponential and implicit solvers: double finite differences or analytic active-branch linearization. Column solves use analytic vertical blocks in either mode.  |
    | expfilter_order       | int   | [none]    | [2, inf]                         | Positive even order of the exponential modal filter.  |
    | expfilter_cutoff      | float  | [none]   | [0.0, 1.0]                       | Normalized modal cutoff below which modes are left unchanged.  |
@@ -92,4 +91,4 @@
    | schar_mountain_length  | float  | [none]  |                                  | Mountain wavelength (meters)  |
    | schar_mountain_step   | int   | 0         | [0, inf]                         | Number of step of interpolation, 0 is instantaneous  |
 
-For Euler, `riemann_solver = unscaled` restores the original acoustic solver with both Mach scaling factors equal to one. `riemann_mach_cutoff` has no effect on this solver. The default is `unscaled`. Select `low_mach` explicitly to enable low-Mach scaling; this can substantially increase Krylov iterations and execution time.
+The Euler acoustic solver scales velocity-jump pressure dissipation by M0*(2-M0), where M0 is the interface Mach number limited to [riemann_mach_cutoff, 1]. The cutoff defaults to 0.3. The pressure-jump velocity correction remains unscaled.

@@ -25,8 +25,7 @@ def _mach_gradient(state, inverse_spatial, sound_speed, mach):
 class AcousticLinearization:
     """Cache an acoustic face state and apply its linearized interface solver."""
 
-    def __init__(self, left, right, geometry, direction, *, mach_cutoff=0.1, low_mach=True):
-        self.low_mach = low_mach
+    def __init__(self, left, right, geometry, direction, *, mach_cutoff=0.3):
         self.direction = direction
         self.inverse_spatial = geometry.inverse_spatial
         self.normal_scale = geometry.normal_scale
@@ -39,22 +38,16 @@ class AcousticLinearization:
         self.sound_speed_left = torch.sqrt(heat_capacity_ratio * self.pressure_left / left[0])
         self.sound_speed_right = torch.sqrt(heat_capacity_ratio * self.pressure_right / right[0])
         self.impedance = (left[0] * self.sound_speed_left + right[0] * self.sound_speed_right) / 2
-        if low_mach:
-            mach_left = physical_mach_number(left[1:4], self.inverse_spatial, self.sound_speed_left)
-            mach_right = physical_mach_number(right[1:4], self.inverse_spatial, self.sound_speed_right)
-            interface_mach, self.pressure_scale, self.velocity_scale = low_mach_scales(
-                mach_left, mach_right, mach_cutoff
-            )
-            self.mach_from_left = mach_left >= mach_right
-            mach_state = torch.where(self.mach_from_left[None], left, right)
-            mach_sound_speed = torch.where(self.mach_from_left, self.sound_speed_left, self.sound_speed_right)
-            self.mach_gradient = _mach_gradient(mach_state, self.inverse_spatial, mach_sound_speed, interface_mach)
-            self.pressure_scale_active = interface_mach < 1
-            self.velocity_scale_active = (interface_mach > mach_cutoff) & (interface_mach < 1)
-        else:
-            self.pressure_scale = self.velocity_scale = 1.0
+        mach_left = physical_mach_number(left[1:4], self.inverse_spatial, self.sound_speed_left)
+        mach_right = physical_mach_number(right[1:4], self.inverse_spatial, self.sound_speed_right)
+        interface_mach, self.pressure_scale = low_mach_scales(mach_left, mach_right, mach_cutoff)
+        self.mach_from_left = mach_left >= mach_right
+        mach_state = torch.where(self.mach_from_left[None], left, right)
+        mach_sound_speed = torch.where(self.mach_from_left, self.sound_speed_left, self.sound_speed_right)
+        self.mach_gradient = _mach_gradient(mach_state, self.inverse_spatial, mach_sound_speed, interface_mach)
+        self.pressure_scale_active = (interface_mach > mach_cutoff) & (interface_mach < 1)
+        self.pressure_scale_derivative = 2 * (1 - torch.clamp(interface_mach, min=mach_cutoff, max=1.0))
         self.pressure_impedance = self.pressure_scale * self.impedance
-        self.velocity_impedance = self.velocity_scale * self.impedance
         normal_velocity, self.common_pressure, _, self.common_covariant_velocity = acoustic_interface(
             left,
             right,
@@ -65,7 +58,6 @@ class AcousticLinearization:
             return_velocity=True,
             normal_geometry=(self.normal_scale, self.normal_row),
             mach_cutoff=mach_cutoff,
-            low_mach=low_mach,
         )
         self.normal_velocity = normal_velocity
         self.upwind = normal_velocity >= 0
@@ -82,20 +74,15 @@ class AcousticLinearization:
             self.sound_speed_left * (delta_left[0] + self.left[0] * delta_pressure_left / self.pressure_left)
             + self.sound_speed_right * (delta_right[0] + self.right[0] * delta_pressure_right / self.pressure_right)
         ) / 4
-        if self.low_mach:
-            mach_perturbation = torch.where(self.mach_from_left[None], delta_left, delta_right)
-            delta_mach = (self.mach_gradient * mach_perturbation).sum(dim=0)
-            delta_pressure_scale = torch.where(self.pressure_scale_active, delta_mach, torch.zeros_like(delta_mach))
-            delta_velocity_scale = torch.where(self.velocity_scale_active, delta_mach, torch.zeros_like(delta_mach))
-        else:
-            delta_pressure_scale = delta_velocity_scale = 0.0
-        delta_velocity_impedance = self.velocity_scale * delta_impedance + self.impedance * delta_velocity_scale
+        mach_perturbation = torch.where(self.mach_from_left[None], delta_left, delta_right)
+        delta_mach = (self.mach_gradient * mach_perturbation).sum(dim=0)
+        delta_pressure_scale = torch.where(
+            self.pressure_scale_active, self.pressure_scale_derivative * delta_mach, torch.zeros_like(delta_mach)
+        )
         delta_normal = (delta_normal_wind_left + delta_normal_wind_right) / 2 - (
             delta_pressure_right - delta_pressure_left
-        ) / (2 * self.velocity_impedance)
-        delta_normal += (
-            (self.pressure_right - self.pressure_left) * delta_velocity_impedance / (2 * self.velocity_impedance**2)
-        )
+        ) / (2 * self.impedance)
+        delta_normal += (self.pressure_right - self.pressure_left) * delta_impedance / (2 * self.impedance**2)
         if self.wall is not None:
             delta_normal = torch.where(self.wall, torch.zeros_like(delta_normal), delta_normal)
         delta_common_covariant_velocity = torch.where(self.upwind[None], delta_left[1:4], delta_right[1:4]).clone()
@@ -136,7 +123,6 @@ class EulerLinearization:
                 geometry,
                 direction,
                 mach_cutoff=rhs.config.riemann_mach_cutoff,
-                low_mach=rhs.config.riemann_solver == "low_mach",
             )
             for direction, (geometry, face) in enumerate(zip(rhs._static_interfaces(), faces))
         )

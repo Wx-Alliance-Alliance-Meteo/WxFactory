@@ -84,13 +84,15 @@ class EulerOperatorTestCase(unittest.TestCase):
         scalar = transverse_direction(profile, state)[2]
         left, right = profile @ rhs.ops.extrap_west, profile @ rhs.ops.extrap_east
         mean = (right + left.roll(-1, dims=0)) / 2
-        pressure_face = sound * mean
+        cutoff = rhs.config.riemann_mach_cutoff
+        pressure_scale = cutoff * (2 - cutoff)
         for sign in (-1, 1):
             direction = torch.zeros_like(state)
             direction[0] = scalar / sound
             direction[1] = sign * half_width * scalar
             direction[4] = scalar / sound
-            velocity_face = sign * mean - (left.roll(-1, dims=0) - right) / (2 * rhs.config.riemann_mach_cutoff)
+            velocity_face = sign * mean - (left.roll(-1, dims=0) - right) / 2
+            pressure_face = sound * (mean - pressure_scale * sign * (left.roll(-1, dims=0) - right) / 2)
             pressure_faces = torch.stack((pressure_face.roll(1, dims=0), pressure_face), dim=-1)
             velocity_faces = torch.stack((velocity_face.roll(1, dims=0), velocity_face), dim=-1)
             divergence = (sign * profile @ rhs.ops.diff_solpt_tr + velocity_faces @ rhs.ops.correction_tr) / half_width
