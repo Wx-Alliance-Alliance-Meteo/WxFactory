@@ -301,9 +301,10 @@
                 {
                     "name": "riemann_solver",
                     "type": "str",
-                    "default": "acoustic",
+                    "default": "unscaled",
                     "selectables": [
-                        "acoustic"
+                        "low_mach",
+                        "unscaled"
                     ],
                     "dependency": {
                         "name": "equations",
@@ -311,7 +312,16 @@
                             "euler"
                         ]
                     },
-                    "description": "Interface pressure and normal velocity for Euler momentum. Acoustic uses the unmodified physical impedance and star velocity for relative-curl interface lifting."
+                    "description": "Interface pressure and normal velocity for Euler momentum. low_mach uses Mach-scaled impedance; unscaled restores the original unscaled acoustic solver. Both use a common covariant velocity for relative-curl derivatives."
+                },
+                {
+                    "name": "riemann_mach_cutoff",
+                    "type": "float",
+                    "default": 0.1,
+                    "min": 0.0,
+                    "max": 1.0,
+                    "dependency": {"name": "equations", "values": ["euler"]},
+                    "description": "Positive Mach floor for the pressure-jump correction to the Riemann velocity. The pressure dissipation uses the local Mach number without a floor."
                 },
                 {
                     "name": "jacobian",

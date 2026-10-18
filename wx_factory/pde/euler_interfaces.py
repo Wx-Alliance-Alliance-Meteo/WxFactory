@@ -10,6 +10,7 @@ import torch
 from torch import Tensor
 
 from ..common.definitions import Rd, heat_capacity_ratio, p0
+from ..common.tensor_math import spatial_matrix_vector
 
 
 class EulerInterfaceGeometry(NamedTuple):
@@ -61,6 +62,24 @@ def principal_symbol(state: Tensor, inverse_spatial: Tensor, normal: Tensor) -> 
     return symbol
 
 
+def physical_mach_number(covariant: Tensor, inverse_spatial: Tensor, sound_speed: Tensor) -> Tensor:
+    """Return the coordinate-relative physical speed divided by sound speed."""
+    contravariant = spatial_matrix_vector(inverse_spatial, covariant)
+    mach_squared = (covariant * contravariant).sum(dim=0) / sound_speed.square()
+    moving = mach_squared > 0
+    # Keep the inactive square root finite so differentiation at rest gives zero.
+    safe_squared = torch.where(moving, mach_squared, torch.ones_like(mach_squared))
+    return torch.where(moving, torch.sqrt(safe_squared), torch.zeros_like(mach_squared))
+
+
+def low_mach_scales(mach_left: Tensor, mach_right: Tensor, cutoff: float):
+    """Cap pressure dissipation at Mach one and floor the velocity correction."""
+    interface_mach = torch.where(mach_left >= mach_right, mach_left, mach_right)
+    pressure_scale = torch.where(interface_mach < 1, interface_mach, torch.ones_like(interface_mach))
+    velocity_scale = torch.where(pressure_scale > cutoff, pressure_scale, torch.full_like(pressure_scale, cutoff))
+    return interface_mach, pressure_scale, velocity_scale
+
+
 def acoustic_interface(
     left: Tensor,
     right: Tensor,
@@ -71,14 +90,17 @@ def acoustic_interface(
     wall: Tensor | None = None,
     return_velocity: bool = False,
     normal_geometry: tuple[Tensor, Tensor] | None = None,
+    mach_cutoff: float = 0.1,
+    low_mach: bool = True,
 ) -> tuple[Tensor, Tensor, Tensor] | tuple[Tensor, Tensor, Tensor, Tensor]:
     """Return common contravariant velocity u^d, pressure, and K+Phi_e.
 
-    Use the arithmetic mean of rho*c as the acoustic impedance. Pressure is
+    With low_mach enabled, scale the arithmetic mean of rho*c using the full physical Mach number.
+    The velocity correction has a Mach floor to regularize stagnation. Pressure is
     an independent numerical traction; it need not match the EOS evaluated
     on upwind density and temperature. The common velocity supplies both
     kinetic energy and relative-curl traces, with upwind tangential components.
-    Supersonic same-sign states use upstream data. No positivity limiter is used.
+    The acoustic approximation is intended for low-Mach atmospheric flow.
     """
     pressure_left, pressure_right = pressure(left[4]), pressure(right[4])
     if normal_geometry is None:
@@ -91,17 +113,19 @@ def acoustic_interface(
     sound_speed_left = torch.sqrt(heat_capacity_ratio * pressure_left / left[0])
     sound_speed_right = torch.sqrt(heat_capacity_ratio * pressure_right / right[0])
     impedance = (left[0] * sound_speed_left + right[0] * sound_speed_right) / 2
-    common_normal_wind = (normal_wind_left + normal_wind_right) / 2 - (pressure_right - pressure_left) / (2 * impedance)
-    common_pressure = (pressure_left + pressure_right) / 2 - impedance * (normal_wind_right - normal_wind_left) / 2
+    if low_mach:
+        mach_left = physical_mach_number(left[1:4], inverse_spatial, sound_speed_left)
+        mach_right = physical_mach_number(right[1:4], inverse_spatial, sound_speed_right)
+        _, pressure_scale, velocity_scale = low_mach_scales(mach_left, mach_right, mach_cutoff)
+    else:
+        pressure_scale = velocity_scale = 1.0
+    common_normal_wind = (normal_wind_left + normal_wind_right) / 2 - (pressure_right - pressure_left) / (
+        2 * velocity_scale * impedance
+    )
+    common_pressure = (pressure_left + pressure_right) / 2 - (
+        pressure_scale * impedance * (normal_wind_right - normal_wind_left) / 2
+    )
 
-    supersonic_to_right = (normal_wind_left >= sound_speed_left) & (normal_wind_right >= sound_speed_right)
-    supersonic_to_left = (normal_wind_left <= -sound_speed_left) & (normal_wind_right <= -sound_speed_right)
-    common_normal_wind = torch.where(
-        supersonic_to_right, normal_wind_left, torch.where(supersonic_to_left, normal_wind_right, common_normal_wind)
-    )
-    common_pressure = torch.where(
-        supersonic_to_right, pressure_left, torch.where(supersonic_to_left, pressure_right, common_pressure)
-    )
     if wall is not None:
         common_normal_wind = torch.where(wall, torch.zeros_like(common_normal_wind), common_normal_wind)
 

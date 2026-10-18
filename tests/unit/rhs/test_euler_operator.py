@@ -73,34 +73,34 @@ class EulerOperatorTestCase(unittest.TestCase):
         expected = transverse_direction((matrix @ profile.flatten()).reshape_as(profile), state)[2]
         torch.testing.assert_close(action[2], expected, rtol=1e-9, atol=1e-10)
 
-    def test_assembled_acoustic_waves_match_upwind_characteristics_at_rest(self):
+    def test_linearized_acoustic_operator_at_rest(self):
         from wx_factory.common.definitions import heat_capacity_ratio
         from wx_factory.pde.euler_interfaces import pressure
 
         rhs, state, positions, _, _, half_width = frozen_problem(elements=6, speed=0.0)
+        state[4] = 1
         sound = torch.sqrt(heat_capacity_ratio * pressure(state[4, 0, 0, 0, 0])).item()
         profile = torch.sin(2 * torch.pi * positions / 4000.0)
         scalar = transverse_direction(profile, state)[2]
-        epsilon = 1e-2  # 1 cm/s waves avoid pressure-background subtraction noise.
+        left, right = profile @ rhs.ops.extrap_west, profile @ rhs.ops.extrap_east
+        mean = (right + left.roll(-1, dims=0)) / 2
+        pressure_face = sound * mean
         for sign in (-1, 1):
             direction = torch.zeros_like(state)
             direction[0] = scalar / sound
             direction[1] = sign * half_width * scalar
-            direction[4] = 300.0 * scalar / sound
-
-            def centered_action(step, direction=direction):
-                return (rhs(state + step * direction) - rhs(state - step * direction)) / (2 * step)
-
-            # Scalar upwinding switches at zero background normal speed: the
-            # centered quotient has an O(step) term. Extrapolate it away.
-            action = 2 * centered_action(epsilon / 2) - centered_action(epsilon)
-            matrix = upwind_shear_matrix(rhs, 6, sign * sound, half_width)
-            advected = transverse_direction((matrix @ profile.flatten()).reshape_as(profile), state)[2]
+            direction[4] = scalar / sound
+            velocity_face = sign * mean - (left.roll(-1, dims=0) - right) / (2 * rhs.config.riemann_mach_cutoff)
+            pressure_faces = torch.stack((pressure_face.roll(1, dims=0), pressure_face), dim=-1)
+            velocity_faces = torch.stack((velocity_face.roll(1, dims=0), velocity_face), dim=-1)
+            divergence = (sign * profile @ rhs.ops.diff_solpt_tr + velocity_faces @ rhs.ops.correction_tr) / half_width
+            gradient = sound * profile @ rhs.ops.diff_solpt_tr + pressure_faces @ rhs.ops.correction_tr
             expected = torch.zeros_like(state)
-            expected[0] = advected / sound
-            expected[1] = sign * half_width * advected
-            expected[4] = 300.0 * advected / sound
-            torch.testing.assert_close(action, expected, rtol=2e-7, atol=2e-7)
+            expected[0] = transverse_direction(-divergence, state)[2]
+            expected[1] = transverse_direction(-gradient, state)[2]
+            expected[4] = expected[0]
+            action = rhs.linearize(state)(direction).reshape_as(state)
+            torch.testing.assert_close(action, expected, rtol=2e-10, atol=2e-7)
 
     def test_lifted_shear_is_bounded_and_converges_in_exact_semidiscrete_solution(self):
         errors = []
@@ -132,6 +132,8 @@ class EulerOperatorTestCase(unittest.TestCase):
         # Three interior points plus endpoints reproduce the degree-four kinetic energy.
         # Periodic velocity traces are continuous, so the curl is also exact.
         rhs, state, _, points, _, _ = frozen_problem(elements=1, nodes=3, length=2.0, speed=0.0)
+        # Unit scalars give exactly constant log traces, isolating polynomial differentiation.
+        state[4] = 1
         _, y, x = torch.meshgrid(points, points, points, indexing="ij")
         velocity_x = 0.2 + 0.1 * y * y
         velocity_y = 0.3 + 0.05 * x * x

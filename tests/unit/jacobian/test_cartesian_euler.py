@@ -10,7 +10,7 @@ class CartesianEulerJacobianTestCase(CartesianTestCase):
         state[1:4] = self.random_like(state[1:4])
         direction = self.random_like(state)
         direction[[0, 4]] *= 0.01
-        epsilon = 1e-4
+        epsilon = 1e-5
         torch.testing.assert_close(rhs(state), rhs.implicit(state) + rhs.explicit(state), atol=1e-8, rtol=1e-10)
         partition = rhs.linearize_partitions(state)
         explicit, implicit = partition.explicit, partition.implicit
@@ -49,6 +49,10 @@ class CartesianEulerJacobianTestCase(CartesianTestCase):
                     expected = (function(state + epsilon * direction) - function(state - epsilon * direction)) / (
                         2 * epsilon
                     )
+                    half_step = (
+                        function(state + epsilon / 2 * direction) - function(state - epsilon / 2 * direction)
+                    ) / epsilon
+                    expected = (4 * half_step - expected) / 3
                     torch.testing.assert_close(derivative(direction).reshape_as(state), expected, atol=2e-6, rtol=2e-6)
                 solution = partition.solve(direction, 0.1, column_batch_size=2)
                 residual = solution - 0.05 * partition.implicit(solution).reshape_as(state) - direction

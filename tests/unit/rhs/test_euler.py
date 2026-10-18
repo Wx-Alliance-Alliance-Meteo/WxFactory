@@ -42,6 +42,30 @@ class EulerTestCase(unittest.TestCase):
             )
             self.assertEqual(normal.item(), 0.0)
 
+    def test_unscaled_acoustic_interface(self):
+        right = self.state.clone()
+        right[0] *= 1.03
+        right[1:4] += 0.7
+        right[4] *= 1.001
+        pressure_left, pressure_right = pressure(self.state[4]), pressure(right[4])
+        impedance = (
+            torch.sqrt(heat_capacity_ratio * pressure_left * self.state[0])
+            + torch.sqrt(heat_capacity_ratio * pressure_right * right[0])
+        ) / 2
+        for direction in range(3):
+            scale = torch.sqrt(self.inverse[direction, direction])
+            wind_left = (self.inverse[direction] @ self.state[1:4]) / scale
+            wind_right = (self.inverse[direction] @ right[1:4]) / scale
+            normal, traction, _ = acoustic_interface(
+                self.state, right, self.inverse, direction, self.state.new_tensor(0), low_mach=False
+            )
+            torch.testing.assert_close(
+                normal, scale * ((wind_left + wind_right) / 2 - (pressure_right - pressure_left) / (2 * impedance))
+            )
+            torch.testing.assert_close(
+                traction, (pressure_left + pressure_right) / 2 - impedance * (wind_right - wind_left) / 2
+            )
+
     def test_coordinate_acoustic_characteristics(self):
         right = self.state.clone()
         right[0] *= 1.03
@@ -51,6 +75,10 @@ class EulerTestCase(unittest.TestCase):
         sound_left = torch.sqrt(heat_capacity_ratio * pressure_left / self.state[0])
         sound_right = torch.sqrt(heat_capacity_ratio * pressure_right / right[0])
         impedance = (self.state[0] * sound_left + right[0] * sound_right) / 2
+        mach = max(
+            torch.sqrt(self.state[1:4] @ self.inverse @ self.state[1:4]) / sound_left,
+            torch.sqrt(right[1:4] @ self.inverse @ right[1:4]) / sound_right,
+        )
         for direction in range(3):
             covector = torch.zeros(3, dtype=self.state.dtype)
             covector[direction] = 1
@@ -70,13 +98,37 @@ class EulerTestCase(unittest.TestCase):
             velocity_common, pressure_common, _ = acoustic_interface(
                 self.state, right, self.inverse, direction, self.state.new_tensor(12.0)
             )
-            coefficient = torch.sqrt(self.inverse[direction, direction]) / impedance
+            normal_scale = torch.sqrt(self.inverse[direction, direction])
+            velocity_scale = max(mach, 0.1)
             torch.testing.assert_close(
-                velocity_common + coefficient * pressure_common, velocity_left + coefficient * pressure_left
+                velocity_common,
+                (velocity_left + velocity_right) / 2
+                - normal_scale * (pressure_right - pressure_left) / (2 * velocity_scale * impedance),
             )
             torch.testing.assert_close(
-                velocity_common - coefficient * pressure_common, velocity_right - coefficient * pressure_right
+                pressure_common,
+                (pressure_left + pressure_right) / 2
+                - mach * impedance * (velocity_right - velocity_left) / (2 * normal_scale),
             )
+
+    def test_low_mach_pressure_and_velocity_scaling(self):
+        from wx_factory.common.definitions import Rd, p0
+
+        inverse = torch.eye(3, dtype=torch.float64)
+        corrections = []
+        for mach in (1e-2, 1e-3, 1e-4):
+            pressure_left = 1 / (heat_capacity_ratio * mach**2)
+            left = torch.tensor([1.0, 0.8, 0.3, 0.0, 0.0], dtype=torch.float64)
+            right = torch.tensor([1.0, 1.2, -0.2, 0.0, 0.0], dtype=torch.float64)
+            left[4] = right[4] = p0 / Rd * (pressure_left / p0) ** (1 / heat_capacity_ratio)
+            _, common_pressure, _ = acoustic_interface(left, right, inverse, 0, left.new_tensor(0), mach_cutoff=1e-6)
+            pressure_correction = pressure(left[4]) - common_pressure
+            right[4] = p0 / Rd * ((pressure_left + 0.1) / p0) ** (1 / heat_capacity_ratio)
+            normal, _, _ = acoustic_interface(left, right, inverse, 0, left.new_tensor(0), mach_cutoff=1e-6)
+            corrections.append(torch.stack((pressure_correction, 1 - normal)))
+        # With unit velocity scale and c ~ 1/M, both dynamic corrections stay O(1).
+        for correction in corrections[1:]:
+            torch.testing.assert_close(correction, corrections[0], rtol=1e-5, atol=1e-8)
 
     def test_star_velocity_respects_metric_normal_tangent_and_energy(self):
         right = self.state.clone()
@@ -144,7 +196,7 @@ class EulerTestCase(unittest.TestCase):
                 content = config.config_content
                 if version == 2:
                     content = content.replace("jacobian = analytic", "lamb_jacobian = analytic")
-                    content = content.replace("riemann_solver = acoustic", "lamb_riemann_solver = acoustic")
+                    content = content.replace("riemann_solver = low_mach", "lamb_riemann_solver = low_mach")
                 saved.write(content.encode())
                 saved.flush()
                 if version == 1:
@@ -155,4 +207,4 @@ class EulerTestCase(unittest.TestCase):
                     torch.testing.assert_close(restored, self.state, rtol=0, atol=0)
                     self.assertEqual(metadata.state_representation, "relative_covariant")
                     self.assertEqual(metadata.jacobian, "analytic")
-                    self.assertEqual(metadata.riemann_solver, "acoustic")
+                    self.assertEqual(metadata.riemann_solver, "low_mach")

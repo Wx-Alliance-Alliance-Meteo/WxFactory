@@ -153,7 +153,7 @@ class EulerRhsTestCase(MpiTestCase):
         )
         self.metric = Metric5D(self.geom, self.config)
         self.metric.build_metric()
-        self.config.riemann_solver = "acoustic"
+        self.config.riemann_solver = "low_mach"
         self.ops = DFROperators(self.geom, self.context)
         self.rhs = RhsEuler(self.geom, self.ops, self.metric, self.topology, self.config)
         height = self.metric.volume.height

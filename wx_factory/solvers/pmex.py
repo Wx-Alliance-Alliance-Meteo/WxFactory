@@ -43,7 +43,7 @@ def pmex(
     :return: `stats[3]` - number of matrix exponentials
     :return: `stats[4]` - Error estimate
     :return: `stats[5]` - the Krylov size of the last substep
-    :return: `stats[6]` - number of communicated norm recomputations
+    :return: `stats[6]` - number of explicit residual-norm reductions
     """
     if context is None:
         context = Context.get_default()
@@ -182,21 +182,13 @@ def pmex(
 
             V[j, :] -= sol.to(u.dtype) @ V[0:j, :]
 
-            # Near breakdown, cancellation makes the Pythagorean norm unreliable.
-            raw_nrm_sq = global_vec[-1, 1]
-            sum_sqrd = (global_vec[0:j, 1] ** 2).sum()
-            diff = raw_nrm_sq - sum_sqrd
-            cancel_floor = 100.0 * float(torch.finfo(u.dtype).eps)
-
-            if diff <= cancel_floor * raw_nrm_sq:
-                local_sum = torch.sum(V[j, 0:n] * V[j, 0:n], dtype=acc)
-                global_sum_nrm = torch.empty_like(local_sum)
-                context.synchronize()
-                comm.Allreduce([local_sum, mpi_acc], [global_sum_nrm, mpi_acc])
-                curr_nrm = math.sqrt(global_sum_nrm + V[j, n : n + p].to(acc) @ V[j, n : n + p].to(acc))
-                reg_comm_nrm += 1
-            else:
-                curr_nrm = torch.sqrt(diff)
+            # Direct residual norms preserve basis normalization in working precision.
+            local_sum = torch.sum(V[j, 0:n] * V[j, 0:n], dtype=acc)
+            global_sum_nrm = torch.empty_like(local_sum)
+            context.synchronize()
+            comm.Allreduce([local_sum, mpi_acc], [global_sum_nrm, mpi_acc])
+            curr_nrm = math.sqrt(global_sum_nrm + V[j, n : n + p].to(acc) @ V[j, n : n + p].to(acc))
+            reg_comm_nrm += 1
 
             H[0:j, j - 1] = sol
             if curr_nrm < tol:
