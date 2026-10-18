@@ -27,7 +27,7 @@ class EpiStiff(Integrator):
 
         if order < 2:
             raise ValueError("Unsupported order for EPI method")
-        self.A = torch.as_tensor(alpha_coeff([-i for i in range(-1, 1 - order, -1)]), dtype=torch.float64)
+        self.A = torch.as_tensor(alpha_coeff(list(range(-1, 1 - order, -1))), dtype=torch.float64)
 
         _, self.n_prev = self.A.shape
 
