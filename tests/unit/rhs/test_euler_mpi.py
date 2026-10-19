@@ -6,7 +6,7 @@ from wx_factory.common import Configuration, load_default_schema, readfile
 from wx_factory.common.definitions import heat_capacity_ratio
 from wx_factory.geometry import CubedSphere3D, DFROperators, Metric5D
 from wx_factory.init.euler import pack_euler_state
-from wx_factory.pde.euler_interfaces import pressure
+from wx_factory.pde.euler_interfaces import low_mach_scales, physical_mach_number, pressure
 from wx_factory.process_topology import ProcessTopology
 from wx_factory.rhs.rhs_euler import RhsEuler
 from wx_factory.solvers.fgmres import fgmres
@@ -184,9 +184,12 @@ class EulerRhsTestCase(MpiTestCase):
             velocity_common = (velocity_left + velocity_right) / 2 - normal_scale * (pressure_right - pressure_left) / (
                 2 * impedance
             )
-            pressure_common = (pressure_left + pressure_right) / 2 - impedance * (velocity_right - velocity_left) / (
-                2 * normal_scale
-            )
+            mach_left = physical_mach_number(left[1:4], geometry.inverse_spatial, sound_left)
+            mach_right = physical_mach_number(right[1:4], geometry.inverse_spatial, sound_right)
+            _, pressure_scale = low_mach_scales(mach_left, mach_right, self.rhs.config.riemann_mach_cutoff)
+            pressure_common = (pressure_left + pressure_right) / 2 - pressure_scale * impedance * (
+                velocity_right - velocity_left
+            ) / (2 * normal_scale)
             if geometry.wall is not None:
                 velocity_common = torch.where(geometry.wall, torch.zeros_like(velocity_common), velocity_common)
             scalars = torch.where(velocity_common[None] >= 0, left[[0, 4]], right[[0, 4]])
