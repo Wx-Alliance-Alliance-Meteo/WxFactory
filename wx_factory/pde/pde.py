@@ -7,7 +7,6 @@ from ..geometry import Geometry, Metric2D
 
 
 class PDE(ABC):
-
     def __init__(
         self,
         geometry: Geometry,

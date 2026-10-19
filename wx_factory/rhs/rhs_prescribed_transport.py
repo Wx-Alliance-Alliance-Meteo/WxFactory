@@ -161,7 +161,9 @@ class RhsPrescribedTransport:
                 # Differentiate only the analytic wind formula; MPI transport remains explicit.
                 with torch.inference_mode(False):
                     value, tangent = torch.func.jvp(
-                        lambda time, fields=fields: self.wind(fields, time), (clock.clone(),), (torch.ones_like(clock).clone(),)
+                        lambda time, fields=fields: self.wind(fields, time),
+                        (clock.clone(),),
+                        (torch.ones_like(clock).clone(),),
                     )
                 values.append((value, tangent))
             else:

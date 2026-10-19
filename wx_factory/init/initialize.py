@@ -56,7 +56,6 @@ class Topo:
 
 def initialize_euler(geom: CubedSphere3D, metric: Metric5D, mtrx: DFROperators, param: Configuration):
 
-
     if param.case_number < 0 and param.initial_conditions != "":
         from .euler import initialize_era5
 
@@ -246,12 +245,12 @@ def initialize_cartesian3d(geom, metric, param: Configuration) -> NDArray[numpy.
         # Straka prescribes a temperature anomaly at unchanged background pressure.
         θ = θ + temperature_perturbation / exner
     elif param.case_number == 666:
-        T0      = 300.0
-        H       = Rd * T0 / gravity
+        T0 = 300.0
+        H = Rd * T0 / gravity
         t = T0
         pressure = p0 * torch.exp(-geom.X3 / H)
         ρ = pressure / (Rd * t)
-        θ  = t * (p0 / pressure)**(Rd/cpd)
+        θ = t * (p0 / pressure) ** (Rd / cpd)
     elif param.case_number == 651:
         max_mach = param.gresho_mach
         if not numpy.isfinite(max_mach) or max_mach <= 0:
@@ -274,10 +273,10 @@ def initialize_cartesian3d(geom, metric, param: Configuration) -> NDArray[numpy.
         if base_pressure <= 0:
             raise ValueError("gresho_mach is too large to give positive pressure throughout the vortex")
         pressure = torch.full_like(radius, base_pressure + 4 * numpy.log(2) - 2)
-        pressure[inner] = base_pressure + 12.5 * radius[inner]**2
+        pressure[inner] = base_pressure + 12.5 * radius[inner] ** 2
         r = radius[annulus]
         pressure[annulus] = base_pressure + 4 * torch.log(5 * r) + 4 - 20 * r + 12.5 * r**2
-        θ = p0 / (Rd * ρ) * (pressure / p0)**(1 / heat_capacity_ratio)
+        θ = p0 / (Rd * ρ) * (pressure / p0) ** (1 / heat_capacity_ratio)
 
     if param.case_number == 0:
         N_star, t0 = 0.01, 288.0

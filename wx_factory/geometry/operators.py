@@ -27,9 +27,7 @@ class DFROperators:
        * Correction matrices: `correction`, `correction_tr`.
     """
 
-    def __init__(
-        self, grd: Geometry, context: Context, dtype: torch.dtype | None = None
-    ):
+    def __init__(self, grd: Geometry, context: Context, dtype: torch.dtype | None = None):
         """Initialize the Direct Flux Reconstruction operators (matrices) based on input grid parameters.
 
         Parameters
@@ -50,7 +48,6 @@ class DFROperators:
         # Construct in float64 so Vandermonde inversion does not accumulate float32 roundoff.
         V = legvander(grd.solutionPoints, grd.num_solpts - 1).to(build_dtype)
         invV = torch.linalg.inv(V)
-
 
         # Note that extrap_neg and extrap_pos should be vectors, not a one-row matrix; numpy
         # treats the two differently.

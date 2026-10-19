@@ -256,7 +256,11 @@ class Simulation:
             )
         if config.time_integrator == "ros2" and config.jacobian != "analytic":
             raise ValueError("Standalone Euler ROS2 currently requires jacobian = analytic")
-        if config.grid_type == "cubed_sphere" and config.output_freq > 0 and config.output_format not in ("netcdf", "zarr"):
+        if (
+            config.grid_type == "cubed_sphere"
+            and config.output_freq > 0
+            and config.output_format not in ("netcdf", "zarr")
+        ):
             raise ValueError("Euler physical output currently supports netcdf and zarr")
 
     def step(self):

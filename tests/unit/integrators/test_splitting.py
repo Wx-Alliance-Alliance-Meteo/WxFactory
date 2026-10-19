@@ -171,9 +171,11 @@ class SplittingTestCase(unittest.TestCase):
     def test_ros2_solve_failure_reaches_the_wrapper(self):
         method = resolve("lie", self.config, self.bundle, None, self.context)
         failed = (torch.zeros_like(self.state), 1.0, 1.0, 1, 4, [])
-        with patch.object(LinearPartition, "linearize", return_value=lambda vector: vector), patch(
-            "wx_factory.integrators.ros2.fgmres", return_value=failed
-        ), self.assertRaises(RuntimeError):
+        with (
+            patch.object(LinearPartition, "linearize", return_value=lambda vector: vector),
+            patch("wx_factory.integrators.ros2.fgmres", return_value=failed),
+            self.assertRaises(RuntimeError),
+        ):
             method.step(self.state, 0.2)
         self.assertEqual(method.failure_flag, 4)
         self.assertEqual(method.scheme2.failure_flag, 4)

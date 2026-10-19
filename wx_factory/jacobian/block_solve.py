@@ -106,10 +106,7 @@ def block_thomas_solve(lower, diag, upper, b, dt):
         identity64 = torch.eye(block_size, dtype=f64).reshape(1, block_size, block_size)
         residual = [None] * num_elem_z
         for e in range(num_elem_z):
-            residual[e] = (
-                b[:, e].astype(f64)
-                - ((identity64 - half_dt * diag[:, e].astype(f64)) @ x[e].astype(f64))
-            )
+            residual[e] = b[:, e].astype(f64) - ((identity64 - half_dt * diag[:, e].astype(f64)) @ x[e].astype(f64))
             if e > 0:
                 residual[e] += half_dt * (lower[:, e].astype(f64) @ x[e - 1].astype(f64))
             if e < num_elem_z - 1:

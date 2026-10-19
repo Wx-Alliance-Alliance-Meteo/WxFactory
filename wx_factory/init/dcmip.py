@@ -54,7 +54,6 @@ def dcmip_T11_update_winds(geom, metric, mtrx, param, time=float(0)):
         - torch.exp((ptop - p) / (bs * ptop))
     )
 
-
     ud = (
         (omega0 * geom.earth_radius)
         / (bs * ptop)
@@ -70,9 +69,7 @@ def dcmip_T11_update_winds(geom, metric, mtrx, param, time=float(0)):
         + ud
     )
 
-
     v = k0 * torch.sin(2.0 * lonp) * torch.cos(lat) * math.cos(math.pi * time / tau)
-
 
     w = (
         -((Rd * T0) / (gravity * p))
@@ -105,16 +102,12 @@ def dcmip_T12_update_winds(geom, metric, mtrx, param, time=float(0)):
 
     p = p0 * torch.exp(-height / H)
 
-
     t = T0
-
 
     rho = p / (Rd * t)
     rho0 = p0 / (Rd * t)
 
-
     u = u0 * torch.cos(lat)
-
 
     v = (
         -(rho0 / rho)
@@ -158,7 +151,6 @@ def dcmip_advection_deformation(geom, metric, mtrx, param):
     phi0 = 0.0
     phi1 = 0.0
 
-
     # The surface is flat for this test (z_s = 0, so Phi_s = 0), but the metric is only
     # token-initialized by its constructor and must still be built explicitly.
     metric.build_metric()
@@ -169,19 +161,14 @@ def dcmip_advection_deformation(geom, metric, mtrx, param):
 
     p = p0 * torch.exp(-height / H)
 
-
     u1_contra, u2_contra, u3_contra = dcmip_T11_update_winds(geom, metric, mtrx, param, time=0)
-
 
     t = T0
 
-
     rho = p / (Rd * t)
-
 
     tv = t
     theta = tv * (p0 / p) ** (Rd / cpd)
-
 
     # Tracer 1 - Cosine Bells (DCMIP eq. 28-30)
 
@@ -222,21 +209,16 @@ def dcmip_advection_hadley(geom, metric, mtrx, param):
     z2 = 5000.0  # position of upper tracer bound (m), changed in v5
     z0 = 0.5 * (z1 + z2)
 
-
     p = p0 * torch.exp(-height / H)
-
 
     u1_contra, u2_contra, u3_contra = dcmip_T12_update_winds(geom, metric, mtrx, param, time=0)
 
-
     t = T0
-
 
     rho = p / (Rd * t)
 
     tv = t
     theta = tv * (p0 / p) ** (Rd / cpd)
-
 
     # Tracer 1 - Layer (DCMIP eq. 39): a cosine bell in the vertical, zero outside [z1, z2]
 
@@ -309,7 +291,6 @@ def dcmip_advection_orography(geom: CubedSphere3D, metric, mtrx, param):
 
         return torch.where(rm < Rm, bell * shape, 0.0)
 
-
     zbot_new = surface_height(geom.get_floor(geom.polar))
     zbot_itf_i_new = surface_height(geom.get_itf_i_floor(geom.polar_itf_i))
     zbot_itf_j_new = surface_height(geom.get_itf_j_floor(geom.polar_itf_j))
@@ -346,18 +327,15 @@ def dcmip_advection_orography(geom: CubedSphere3D, metric, mtrx, param):
     lat = geom.lat_new
     height = geom.height_new
 
-
     u = u0 * (torch.cos(lat) * math.cos(alpha) + torch.sin(lat) * torch.cos(lon) * math.sin(alpha))
     v = -u0 * torch.sin(lon) * math.sin(alpha)
     w = torch.zeros_like(u)
 
     u1_contra, u2_contra, u3_contra = geom.wind2contra(u, v, w, metric)
 
-
     p = p0 * torch.exp(-height / H)
     rho = p / (Rd * T0)
     theta = T0 * (p0 / p) ** (Rd / cpd)
-
 
     rp = torch.arccos(math.sin(phip) * torch.sin(lat) + math.cos(phip) * torch.cos(lat) * torch.cos(lon - lambdap))
     inside = rp < Rp
@@ -462,7 +440,6 @@ def dcmip_schar_waves(geom: CubedSphere3D, metric, mtrx: DFROperators, param: Co
     else:
         Cs = 0.0
 
-
     lat = geom.polar[1, ...]
     z_3d = geom.polar[2, ...]
 
@@ -475,20 +452,15 @@ def dcmip_schar_waves(geom: CubedSphere3D, metric, mtrx: DFROperators, param: Co
 
     p = Peq * torch.exp(-(Ueq**2) / (2 * Rd * T0) * torch.sin(lat) ** 2 - gravity * z_3d / (Rd * T))
 
-
     u = Ueq * torch.cos(lat) * (2 * T0 / T * Cs * z_3d + T / T0) ** 0.5
 
-
     v = torch.zeros_like(lat)
-
 
     w = torch.zeros_like(lat)
 
     u1_contra, u2_contra, u3_contra = geom.wind2contra(u, v, w, metric)
 
-
     rho = p / (Rd * T)
-
 
     theta = T * (p0 / p) ** (Rd / cpd)
 
@@ -561,13 +533,11 @@ def dcmip_gravity_wave(geom: CubedSphere3D, metric: Metric5D, mtrx: DFROperators
     w = torch.zeros_like(u)
     u1_contra, u2_contra, u3_contra = geom.wind2contra(u, v, w, metric)
 
-
     TS = bigG + (Teq - bigG) * torch.exp(
         -(u0 * N2 / (4.0 * gravity**2))
         * (u0 + 2.0 * geom.rotation_speed * geom.earth_radius)
         * (torch.cos(2.0 * geom.lat_new) - 1.0)
     )
-
 
     ps = (
         Peq
@@ -579,16 +549,13 @@ def dcmip_gravity_wave(geom: CubedSphere3D, metric: Metric5D, mtrx: DFROperators
         * (TS / Teq) ** inv_kappa
     )
 
-
     p = ps * ((bigG / TS) * torch.exp(-N2 * geom.height_new / gravity) + 1.0 - (bigG / TS)) ** inv_kappa
 
     t_mean = bigG * (1.0 - torch.exp(N2 * geom.height_new / gravity)) + TS * torch.exp(N2 * geom.height_new / gravity)
 
     theta_base = t_mean * (p0 / p) ** kappa
 
-
     rho = p / (Rd * t_mean)
-
 
     sin_tmp = torch.sin(geom.lat_new) * math.sin(phic)
     cos_tmp = torch.cos(geom.lat_new) * math.cos(phic)
@@ -634,7 +601,6 @@ def dcmip_baroclinic_instability(
     perturbation triggers the baroclinic instability.
     """
 
-
     eta_tropo = 0.2
     eta0 = 0.252
 
@@ -658,7 +624,6 @@ def dcmip_baroclinic_instability(
     p_ref = p0
 
     exponent = Rd * gamma / gravity
-
 
     def horiz_mean_geopotential(eta):
         """
@@ -689,7 +654,6 @@ def dcmip_baroclinic_instability(
             phi_mean,
         )
 
-
     def geopotential(lon, lat, eta):
         """
         Full geopotential Phi(lon, lat, eta).
@@ -717,7 +681,6 @@ def dcmip_baroclinic_instability(
         phi_deviation = jet_factor * (horizontal_1 * jet_factor + horizontal_2 * a * omega)
 
         return horiz_mean_geopotential(eta) + phi_deviation
-
 
     def temperature(lon, lat, eta):
         """
@@ -786,7 +749,6 @@ def dcmip_baroclinic_instability(
 
         return phi_surface / gravity
 
-
     zbot_new = surface_height(geom.get_floor(geom.polar))
 
     zbot_itf_i_new = surface_height(geom.get_itf_i_floor(geom.polar_itf_i))
@@ -819,19 +781,17 @@ def dcmip_baroclinic_instability(
             sin_lat = radial[2]
             cos_squared = (radial[0] ** 2 + radial[1] ** 2).clamp_min(1e-30)
             jet = u0 * math.cos((eta_sfc - eta0) * 0.5 * math.pi) ** 1.5
-            horizontal_1 = -2 * sin_lat ** 6 * (cos_squared + 1 / 3) + 10 / 63
-            horizontal_2 = 8 / 5 * cos_squared ** 1.5 * (sin_lat ** 2 + 2 / 3) - math.pi / 4
+            horizontal_1 = -2 * sin_lat**6 * (cos_squared + 1 / 3) + 10 / 63
+            horizontal_2 = 8 / 5 * cos_squared**1.5 * (sin_lat**2 + 2 / 3) - math.pi / 4
             mean = horiz_mean_geopotential(torch.full_like(sin_lat, eta_sfc))
             return (mean + jet * (horizontal_1 * jet + horizontal_2 * a * omega)) / gravity
 
         metric.height_map.radial_surface = radial_surface
     metric.build_metric()
 
-
     lon = geom.lon_new
     lat = geom.lat_new
     z = geom.height_new
-
 
     def eta_from_z(lon, lat, z):
         """
@@ -853,7 +813,6 @@ def dcmip_baroclinic_instability(
         converged = False
 
         for _ in range(max_iterations):
-
             phi = geopotential(
                 lon,
                 lat,
@@ -885,7 +844,7 @@ def dcmip_baroclinic_instability(
 
         if not converged:
             raise ValueError(
-                "DCMIP 4-1: z -> eta Newton iteration did not converge. " f"Maximum |delta eta| = {error.item():.6e}"
+                f"DCMIP 4-1: z -> eta Newton iteration did not converge. Maximum |delta eta| = {error.item():.6e}"
             )
 
         return eta_val
@@ -895,7 +854,6 @@ def dcmip_baroclinic_instability(
         lat,
         z,
     )
-
 
     sin_tmp = math.sin(phic) * torch.sin(lat)
     cos_tmp = math.cos(phic) * torch.cos(lat)
@@ -937,7 +895,6 @@ def dcmip_baroclinic_instability(
         metric,
     )
 
-
     p = p_ref * eta
 
     T, _ = temperature(
@@ -970,22 +927,17 @@ def acoustic_wave(geom: CubedSphere3D, metric: Metric5D):
     rc = re / 3
     ztop = 10000
 
-
     t = T0
-
 
     u = 0.0
 
-
     v = 0.0
-
 
     w = 0.0
 
     metric.build_metric()
 
     u1_contra, u2_contra = geom.wind2contra_2d(u, v)
-
 
     H = Rd * T0 / gravity
     p_mean = p0 * torch.exp(-geom.height_new / H)
@@ -998,9 +950,7 @@ def acoustic_wave(geom: CubedSphere3D, metric: Metric5D):
     p_perturb = f * g
     pressure = p_mean + p_perturb
 
-
     rho = pressure / (Rd * t)
-
 
     theta = t * (p0 / pressure) ** (Rd / cpd)
 

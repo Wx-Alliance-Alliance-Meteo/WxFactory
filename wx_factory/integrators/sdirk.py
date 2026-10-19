@@ -17,7 +17,6 @@ class SDIRKLstable(Integrator):
     def SDIRKLstable_system1(self, Q1, Q, dt, rhs):
         return (Q1 - Q) / dt - self.sdirkparam * rhs(Q1)
 
-
     def __step__(self, Q, dt):
         working, rhs = self._implicit_state_and_rhs(Q, self.rhs)
 

@@ -697,7 +697,6 @@ class ExchangeRequest:
                 if num_tests > 10:
                     time.sleep(0.0005)
 
-
         return (
             self.to_tuple(self.recv_buffer[SOUTH]),
             self.to_tuple(self.recv_buffer[NORTH]),

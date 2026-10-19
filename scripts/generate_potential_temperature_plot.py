@@ -73,7 +73,6 @@ def _closest_value_index(values, target):
 def main(args):
 
     with _read_data(args.data_file) as (theta, times, lons, lats, elevs):
-
         time_start_index = args.time_start_index
         time_start_value = args.time_start_value
         if time_start_index == -1:

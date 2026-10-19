@@ -110,7 +110,6 @@ def pmex(
 
     u_flip = nu * torch.flipud(u[1:, :])
 
-
     tau = tau_end
 
     if tau_end > 1:

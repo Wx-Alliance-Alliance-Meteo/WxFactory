@@ -17,7 +17,6 @@ def make_ctx(grid_type, equations, grid_file=""):
 
 
 class GeometryRegistryTestCases(WxTestCase):
-
     def test_unregistered_combination_raises_helpful_error(self):
         with self.assertRaises(ValueError) as cm:
             resolve_geometry(make_ctx("klein_bottle", "euler"))

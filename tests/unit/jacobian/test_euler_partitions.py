@@ -23,14 +23,20 @@ class EulerPartitionTestCase(unittest.TestCase):
                     matrix = torch.zeros(2, 3 * elements, 3 * elements, dtype=dtype)
                     for e in range(elements):
                         row = slice(3 * e, 3 * (e + 1))
-                        for neighbour, block in (((e - 1) % elements, lower), (e, diagonal), ((e + 1) % elements, upper)):
+                        for neighbour, block in (
+                            ((e - 1) % elements, lower),
+                            (e, diagonal),
+                            ((e + 1) % elements, upper),
+                        ):
                             matrix[:, row, 3 * neighbour : 3 * (neighbour + 1)] += block[:, e]
                     forcing = torch.randn(2, elements, 3, generator=generator, dtype=dtype)
                     torch.testing.assert_close(
                         blocks_matvec(*blocks, forcing, periodic=True).flatten(1),
                         (matrix @ forcing.flatten(1)[..., None])[..., 0],
                     )
-                    expected = torch.linalg.solve(torch.eye(3 * elements, dtype=dtype) - 0.05 * matrix, forcing.flatten(1))
+                    expected = torch.linalg.solve(
+                        torch.eye(3 * elements, dtype=dtype) - 0.05 * matrix, forcing.flatten(1)
+                    )
                     actual = cyclic_block_solve(*blocks, forcing, 0.1)
                     torch.testing.assert_close(actual.flatten(1), expected)
 

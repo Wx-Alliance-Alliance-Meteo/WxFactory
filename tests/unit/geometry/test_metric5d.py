@@ -62,6 +62,7 @@ class Metric5DTestCase(unittest.TestCase):
         for deep in (False, True):
             for vertical_slope in (3.0, 2e-4):
                 with self.subTest(deep=deep, vertical_slope=vertical_slope):
+
                     def terrain(points, vertical_slope=vertical_slope):
                         return 0.3 + 0.2 * torch.sin(points[0]) + 0.1 * points[1] + vertical_slope * points[2]
 

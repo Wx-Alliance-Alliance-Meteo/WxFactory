@@ -147,7 +147,6 @@ class CubedSphere3D(CubedSphere):
         self.num_elements_x3 = num_elements_x3
         self.num_elements = num_elements_x1 * num_elements_x2 * num_elements_x3
 
-
         delta_x1 = (domain_x1[1] - domain_x1[0]) / num_elements_x1
         delta_x2 = (domain_x2[1] - domain_x2[0]) / num_elements_x2
         delta_x3 = (domain_x3[1] - domain_x3[0]) / num_elements_x3
@@ -203,7 +202,6 @@ class CubedSphere3D(CubedSphere):
         self.floor_east_edge = numpy.s_[..., -1, num_solpts:]
         self.floor_south_edge = numpy.s_[..., 0, :, :num_solpts]
         self.floor_north_edge = numpy.s_[..., -1, :, num_solpts:]
-
 
         # Define the base coordinate.  x1 and x2 are fundamentally 1D arrays,
         # while x3 and eta are 3D arrays in support of coordinate mapping
@@ -546,7 +544,6 @@ class CubedSphere3D(CubedSphere):
         def height(eta: Tensor, h_large: Tensor, h_small: Tensor) -> Tensor:
             return ztop * eta + h_large * self._decay(eta, s1) + h_small * self._decay(eta, s2)
 
-
         self.x3[...] = height(self.eta, h1, h2)
         self.x3_itf_i[...] = height(self.eta_itf_i, h1_i, h2_i)
         self.x3_itf_j[...] = height(self.eta_itf_j, h1_j, h2_j)
@@ -639,7 +636,6 @@ class CubedSphere3D(CubedSphere):
         self.height = height
         self.height_new = self.x3_new
 
-
         def to_gnomonic(coord_num, z):
             gnom = torch.empty_like(coord_num)
             gnom[0] = torch.tan(coord_num[0])
@@ -663,7 +659,6 @@ class CubedSphere3D(CubedSphere):
         if diff_n > 1e-15:
             print(f"Large diff {diff_n:.2e}")
             raise ValueError
-
 
         def gnomonic_to_cartesian(gnom):
             cart = torch.empty_like(gnom)
@@ -713,7 +708,6 @@ class CubedSphere3D(CubedSphere):
         cart_itf_j = gnomonic_to_cartesian(self.gnomonic_itf_j)
         cart_itf_k = gnomonic_to_cartesian(self.gnomonic_itf_k)
 
-
         def cartesian_to_polar(cart, gnom):
             polar = torch.empty_like(cart)
             [polar[0, :], polar[1, :], _] = cart2sph(cart[0, :], cart[1, :], cart[2, :])
@@ -756,7 +750,6 @@ class CubedSphere3D(CubedSphere):
 
         lat_itf_i = coordVec_latlon_itf_i[1, 0, :, :].T
         lat_itf_j = coordVec_latlon_itf_j[1, 0, :, :]
-
 
         self.lon = lon
         self.lat = lat
@@ -1048,7 +1041,6 @@ class CubedSphere3D(CubedSphere):
         (u1_contra, u2_contra) : tuple
             Tuple of contravariant winds"""
 
-
         if self.deep:
             lambda_dot = u / ((self.earth_radius + self.gnomonic[2, ...]) * self.coslat_new)
             phi_dot = v / (self.earth_radius + self.gnomonic[2, ...])
@@ -1089,7 +1081,6 @@ class CubedSphere3D(CubedSphere):
             )
             / denom
         )
-
 
         u1_contra = (dx1dlon * lambda_dot + dx1dlat * phi_dot) * 2.0 / self.delta_x1
         u2_contra = (dx2dlon * lambda_dot + dx2dlat * phi_dot) * 2.0 / self.delta_x2

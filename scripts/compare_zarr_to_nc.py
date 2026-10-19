@@ -20,7 +20,6 @@ def compare_outputs(nc_file, zarr_store):
         success = nc_vars == zarr_vars
 
         for variable_name in ds_nc.variables:
-
             if variable_name not in zarr_vars:
                 print(f"ERROR: Variable '{variable_name}' missing from Zarr")
                 success = False
@@ -61,9 +60,8 @@ def compare_outputs(nc_file, zarr_store):
 
 
 if __name__ == "__main__":
-
     if len(sys.argv) != 3:
-        print("Usage:\n" "python scripts/compare_zarr_to_nc.py results/out.nc results/out.zarr")
+        print("Usage:\npython scripts/compare_zarr_to_nc.py results/out.nc results/out.zarr")
         sys.exit(1)
 
     nc_file = sys.argv[1]

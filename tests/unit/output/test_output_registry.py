@@ -14,7 +14,6 @@ def make_ctx(output_family, output_format):
 
 
 class OutputRegistryTestCases(WxTestCase):
-
     def test_format_independent_family_uses_default_entry(self):
         # The cartesian family registers with format None and must match any requested format.
         marker = object()

@@ -22,7 +22,6 @@ class DummyGeom:
 
 
 class RhsBundleTestCases(WxTestCase):
-
     def test_missing_partitions_raise_when_called(self):
         bundle = RhsBundle(full=lambda q: q, shape=(1,))
         with self.assertRaises(NotImplementedError):
@@ -46,7 +45,6 @@ class RhsBundleTestCases(WxTestCase):
 
 
 class RhsRegistryTestCases(WxTestCase):
-
     def test_unknown_discretization_raises(self):
         ctx = make_ctx("euler", Cartesian3D.__new__(Cartesian3D), discretization="finite_volume")
         with self.assertRaises(ValueError):
@@ -61,7 +59,6 @@ class RhsRegistryTestCases(WxTestCase):
 
 
 class PartitionedIntegratorTestCases(WxTestCase):
-
     def test_partitioned_scheme_without_partition_is_refused(self):
         reason = "the partitioned right-hand side is not implemented for these equations"
         bundle = RhsBundle(full=lambda q: q, shape=(1,), partition_reason=reason)

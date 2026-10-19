@@ -24,7 +24,6 @@ from .output_cubesphere import OutputCubesphere
 
 
 class OutputCubesphereZarr(OutputCubesphere):
-
     def __init__(
         self,
         config,
@@ -147,7 +146,6 @@ class OutputCubesphereZarr(OutputCubesphere):
         )
 
         if self.config.equations == "euler":
-
             ds_zarr.create_array(
                 "elev",
                 shape=(self.nfaces, self.nz, self.ny, self.nx),
@@ -199,7 +197,6 @@ class OutputCubesphereZarr(OutputCubesphere):
                     self.store_variable_zarr_Zdim(self.geometry.to_single_block(pv), "PV", step_id, k)
 
             else:
-
                 h = Q[idx_h, :, :]
 
                 if self.topo is not None:
@@ -227,7 +224,6 @@ class OutputCubesphereZarr(OutputCubesphere):
             return
 
         elif self.config.equations == "euler":
-
             rho = Q[idx_rho, ...]
             theta = Q[idx_rho_theta, ...] / rho
 

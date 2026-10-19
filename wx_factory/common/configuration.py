@@ -14,7 +14,6 @@ __all__ = ["Configuration"]
 
 
 class Configuration:
-
     sections: dict[str, list[str]]
 
     def __init__(self, cfg_file: str, schema: ConfigurationSchema, load_post_config: bool = True):

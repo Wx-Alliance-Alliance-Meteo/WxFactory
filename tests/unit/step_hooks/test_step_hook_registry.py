@@ -27,7 +27,6 @@ def make_ctx(**config_kwargs):
 
 
 class StepHookRegistryTestCases(WxTestCase):
-
     def test_resolve_only_returns_requested_phase(self):
         ctx = make_ctx(enable_schar_mountain=True, case_number=0)
         self.assertEqual(resolve_step_hooks(ctx, PHASE_STATE), {})

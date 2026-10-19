@@ -4,7 +4,6 @@ from . import step_hook
 
 
 class ExponentialFilterHook(step_hook.StepHook):
-
     def __init__(self, geom, metric, operators, config):
         self.metric = metric
         self.operators = operators

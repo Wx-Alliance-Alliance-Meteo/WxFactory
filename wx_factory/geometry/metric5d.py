@@ -421,9 +421,7 @@ class Metric5D:
                     )
                 assembled[field.name][..., start:stop].copy_(value)
             del collection, value
-        return Metric5DFields(
-            **{name: value.reshape(value.shape[:-1] + shape) for name, value in assembled.items()}
-        )
+        return Metric5DFields(**{name: value.reshape(value.shape[:-1] + shape) for name, value in assembled.items()})
 
     def to_runtime(self, dtype: torch.dtype) -> None:
         """Cast runtime fields; retain float64 geometry construction."""

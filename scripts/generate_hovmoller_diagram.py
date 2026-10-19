@@ -74,7 +74,6 @@ def _closest_value_index(values, target):
 
 def main(args):
     with _read_data(args.data_file) as (theta, times, lons, lats, elevs):
-
         height_index = args.height_index
         height_value = args.height_value
         if height_index == -1:
