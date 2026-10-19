@@ -74,7 +74,7 @@ def _ortho_1_sync_igs(Q: Tensor, R: Tensor, T: Tensor, K: Tensor, j: int, contex
     else:
         K[: j - 1, j - 2] = R[: j - 1, j - 1] / norm
 
-    inv_norm = 1.0 / float(norm)
+    inv_norm = 1.0 / float(norm) if norm > 0 else float("inf")
     Q[j - 2, :] *= inv_norm
     Q[j - 1, :] -= Q[j - 2, :] * float(R[j - 2, j - 1])
     Q[j - 1, :] *= inv_norm
@@ -189,9 +189,7 @@ def fgmres(
     for outer in range(maxiter):
         # NOTE: We are dealing with row-major matrices, but we store the transpose of H and V.
         H = torch.zeros((restart + 2, restart + 2), dtype=acc_dtype)
-        R = torch.zeros(
-            (restart + 2, restart + 2), dtype=acc_dtype
-        )
+        R = torch.zeros((restart + 2, restart + 2), dtype=acc_dtype)
         T = torch.zeros((restart + 2, restart + 2), dtype=acc_dtype)
         K = torch.zeros((restart + 2, restart + 2), dtype=acc_dtype)
         V = torch.zeros((restart + 2, num_dofs), dtype=dtype)
@@ -240,7 +238,6 @@ def fgmres(
                 if norm_r < tol_relative:
                     break
 
-
         y = solve_triangular(H[0 : inner + 1, 0 : inner + 1].T, g[0 : inner + 1])
         update = torch.ravel(Z[: inner + 1, :].T @ y.astype(Z.dtype).reshape(-1, 1))
         x = x + update
@@ -263,7 +260,6 @@ def fgmres(
             return x, norm_r.item(), norm_b.item(), niter, 0, residuals
 
         del V, Z
-
 
     flag = 0
     if norm_r >= tol_relative:
