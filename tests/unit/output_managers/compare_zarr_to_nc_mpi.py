@@ -20,6 +20,7 @@ from wx_factory.geometry import (
     Metric5D,
     resolve_geometry,
 )
+from wx_factory.geometry.geometry import cast_double_arrays
 from wx_factory.output import InputManager
 from wx_factory.output.registry import OutputContext, resolve_output
 from wx_factory.step_hooks import ScharMountainHook
@@ -105,16 +106,11 @@ class CompareZarrToNcTestCase(MpiTestCase):
 
         self.context = self._make_context(self.context)
 
-        if hasattr(self.config, "precision"):
-            if self.config.precision == "mixed":
-                self.context.real_dtype = torch.float32
-                self.context.complex_dtype = torch.complex64
-            else:
-                self.context.real_dtype = torch.float64
-                self.context.complex_dtype = torch.complex128
-        else:
-            self.context.real_dtype = torch.float64
-            self.context.complex_dtype = torch.complex128
+        # The 5D metric must be constructed in float64 (evaluate_metric5d requires
+        # float64 coordinates), so build the geometry and metric in double precision
+        # first, then cast to the runtime dtype -- mirroring Simulation.__init__.
+        self.context.real_dtype = torch.float64
+        self.context.complex_dtype = torch.complex128
 
         self.geometry = resolve_geometry(GeometryContext.from_simulation(self))
 
@@ -139,6 +135,18 @@ class CompareZarrToNcTestCase(MpiTestCase):
 
         elif self.config.equations == "shallow_water" and isinstance(self.geometry, CubedSphere2D):
             self.metric = Metric2D(self.geometry)
+
+        # Cast to the runtime dtype (float32 for mixed precision), as Simulation does.
+        if getattr(self.config, "precision", None) == "mixed":
+            runtime_dtype = torch.float32
+            self.context.real_dtype = runtime_dtype
+            self.context.complex_dtype = torch.complex64
+            self.geometry.dtype = runtime_dtype
+            cast_double_arrays(self.geometry, runtime_dtype)
+            if isinstance(self.metric, Metric5D):
+                self.metric.to_runtime(runtime_dtype)
+            elif self.metric is not None:
+                cast_double_arrays(self.metric, runtime_dtype)
 
         if self.comm.rank == 0:
             num_dim = len(global_state.shape) - 2
