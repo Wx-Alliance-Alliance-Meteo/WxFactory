@@ -268,6 +268,19 @@ class Metric5DTestCase(unittest.TestCase):
                 self.assertAlmostEqual(derivative.item(), first)
                 self.assertAlmostEqual(curvature.item(), second)
 
+    def test_mountain_ripple_resolves_high_frequency_near_centre(self):
+        with torch.inference_mode(False), torch.enable_grad():
+            for frequency in (32.0, 10008.0):
+                phase = torch.tensor([0.0, 1e-5, 1e-3, 0.004, 0.005, 0.01, 0.1, 1.0, 4.0], dtype=torch.float64)
+                angle = (phase / frequency).requires_grad_()
+                result = cosine_of_distance(torch.cos(angle), frequency)
+                derivative = torch.autograd.grad(result.sum(), angle, create_graph=True)[0]
+                curvature = torch.autograd.grad(derivative.sum(), angle)[0]
+                with self.subTest(frequency=frequency):
+                    torch.testing.assert_close(result, torch.cos(phase), rtol=2e-8, atol=2e-8)
+                    torch.testing.assert_close(derivative / frequency, -torch.sin(phase), rtol=2e-8, atol=2e-8)
+                    torch.testing.assert_close(curvature / frequency**2, -torch.cos(phase), rtol=2e-8, atol=2e-8)
+
     def test_rejects_folded_vertical_map(self):
         with self.assertRaisesRegex(ValueError, "orientation-preserving"):
             evaluate_metric5d(

@@ -18,16 +18,20 @@ def angular_distance_squared(cosine: Tensor) -> Tensor:
 
 def cosine_of_distance(cosine: Tensor, frequency: float) -> Tensor:
     """cos(frequency*acos(cosine)), regularized at the mountain centre."""
-    angle = torch.acos(torch.clamp(cosine, -1 + 1e-12, 1 - 1e-12))
     offset = cosine - 1
     squared = frequency**2
+    # The Taylor expansion requires both the angular distance and oscillation phase to be small.
+    near_centre = (offset.abs() < 1e-7) & (squared * offset.abs() < 1e-5)
+    # Keep the inactive acos derivative finite at the centre.
+    safe_cosine = torch.where(near_centre, torch.zeros_like(cosine), cosine)
+    angle = torch.acos(torch.clamp(safe_cosine, -1 + 1e-12, 1.0))
     centre = (
         1
         + squared * offset
         + squared * (squared - 1) * offset**2 / 6
         + squared * (squared - 1) * (squared - 4) * offset**3 / 90
     )
-    return torch.where(offset.abs() < 1e-7, centre, torch.cos(frequency * angle))
+    return torch.where(near_centre, centre, torch.cos(frequency * angle))
 
 
 class TerrainHeightMap:
