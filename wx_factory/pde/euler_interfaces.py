@@ -92,14 +92,12 @@ def acoustic_interface(
     normal_geometry: tuple[Tensor, Tensor] | None = None,
     mach_cutoff: float = 0.3,
 ) -> tuple[Tensor, Tensor, Tensor] | tuple[Tensor, Tensor, Tensor, Tensor]:
-    """Return common contravariant velocity u^d, pressure, and K+Phi_e.
+    """Return common u^d, pressure, and K+Phi_e for low-Mach flow.
 
-    Reduce velocity-jump pressure dissipation using the
-    full physical Mach number. The pressure-jump velocity correction is unscaled. Pressure is
-    an independent numerical traction; it need not match the EOS evaluated
-    on upwind density and temperature. The common velocity supplies both
-    kinetic energy and relative-curl traces, with upwind tangential components.
-    The acoustic approximation is intended for low-Mach atmospheric flow.
+    The normal velocity comes from acoustic matching; tangential velocity is
+    averaged. This common velocity supplies both energy and curl traces.
+    Pressure is an independent traction and need not satisfy the EOS with
+    the upwind scalars. Only the velocity-jump pressure correction is scaled.
     """
     pressure_left, pressure_right = pressure(left[4]), pressure(right[4])
     if normal_geometry is None:
@@ -123,10 +121,9 @@ def acoustic_interface(
     if wall is not None:
         common_normal_wind = torch.where(wall, torch.zeros_like(common_normal_wind), common_normal_wind)
 
-    upwind_covariant_velocity = torch.where(common_normal_wind[None] >= 0, left[1:4], right[1:4])
-    upwind_normal_wind = (normal_row * upwind_covariant_velocity).sum(dim=0)
-    common_covariant_velocity = upwind_covariant_velocity.clone()
-    common_covariant_velocity[direction] += (common_normal_wind - upwind_normal_wind) / normal_scale
+    common_covariant_velocity = (left[1:4] + right[1:4]) / 2
+    mean_normal_wind = (normal_row * common_covariant_velocity).sum(dim=0)
+    common_covariant_velocity[direction] += (common_normal_wind - mean_normal_wind) / normal_scale
     common_kinetic_energy = (
         torch.einsum("i...,ij...,j...->...", common_covariant_velocity, inverse_spatial, common_covariant_velocity) / 2
     )

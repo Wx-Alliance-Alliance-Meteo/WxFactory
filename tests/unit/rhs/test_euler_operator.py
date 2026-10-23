@@ -3,9 +3,9 @@ import unittest
 import torch
 
 from tests.unit.rhs.euler_frozen_fixture import (
+    central_shear_matrix,
     frozen_problem,
     transverse_direction,
-    upwind_shear_matrix,
 )
 
 
@@ -47,31 +47,25 @@ class EulerOperatorTestCase(unittest.TestCase):
         rhs.jacobian_rhs(working)
         self.assertIs(rhs._double_rhs, cached)
 
-    def test_assembled_transverse_symbol_matches_periodic_upwind_advection(self):
-        rhs, state, positions, _, _, half_width = frozen_problem(elements=6)
-        profile = torch.sin(2 * torch.pi * positions / 4000.0)
-        direction = transverse_direction(profile, state)
-        epsilon = 1e-2  # Central symmetry cancels quadratic K; avoid subtracting pressure roundoff.
-        action = (rhs(state + epsilon * direction) - rhs(state - epsilon * direction)) / (2 * epsilon)
-        matrix = upwind_shear_matrix(rhs, 6, 20.0, half_width)
-        expected = transverse_direction((matrix @ profile.flatten()).reshape_as(profile), state)[2]
-        torch.testing.assert_close(action[2], expected, rtol=1e-9, atol=1e-10)
-        for component in (0, 1, 3, 4):
-            torch.testing.assert_close(action[component], torch.zeros_like(action[component]), rtol=0, atol=1e-9)
-        changed = direction.clone()
-        changed[2, ..., -1, :] *= 2
-        changed_action = (rhs(state + epsilon * changed) - rhs(state - epsilon * changed)) / (2 * epsilon)
-        self.assertGreater((changed_action[2, ..., 0, :] - action[2, ..., 0, :]).abs().max().item(), 1e-5)
-
-    def test_reverse_transverse_transport_uses_the_right_neighbor(self):
-        rhs, state, positions, _, _, half_width = frozen_problem(elements=6, speed=-20.0)
-        profile = torch.cos(2 * torch.pi * positions / 4000.0)
-        direction = transverse_direction(profile, state)
-        epsilon = 1e-2
-        action = (rhs(state + epsilon * direction) - rhs(state - epsilon * direction)) / (2 * epsilon)
-        matrix = upwind_shear_matrix(rhs, 6, -20.0, half_width)
-        expected = transverse_direction((matrix @ profile.flatten()).reshape_as(profile), state)[2]
-        torch.testing.assert_close(action[2], expected, rtol=1e-9, atol=1e-10)
+    def test_assembled_transverse_symbol_matches_periodic_central_advection(self):
+        for speed in (-20.0, 20.0):
+            with self.subTest(speed=speed):
+                rhs, state, positions, _, _, half_width = frozen_problem(elements=6, speed=speed)
+                profile = torch.sin(2 * torch.pi * positions / 4000.0)
+                direction = transverse_direction(profile, state)
+                epsilon = 1e-2  # Avoid cancellation of the pressure contribution.
+                action = (rhs(state + epsilon * direction) - rhs(state - epsilon * direction)) / (2 * epsilon)
+                matrix = central_shear_matrix(rhs, 6, speed, half_width)
+                expected = transverse_direction((matrix @ profile.flatten()).reshape_as(profile), state)[2]
+                torch.testing.assert_close(action[2], expected, rtol=1e-9, atol=1e-10)
+                for component in (0, 1, 3, 4):
+                    torch.testing.assert_close(
+                        action[component], torch.zeros_like(action[component]), rtol=0, atol=1e-9
+                    )
+                changed = direction.clone()
+                changed[2, ..., -1, :] *= 2
+                changed_action = (rhs(state + epsilon * changed) - rhs(state - epsilon * changed)) / (2 * epsilon)
+                self.assertGreater((changed_action[2, ..., 0, :] - action[2, ..., 0, :]).abs().max().item(), 1e-5)
 
     def test_linearized_acoustic_operator_at_rest(self):
         from wx_factory.common.definitions import heat_capacity_ratio
@@ -119,12 +113,17 @@ class EulerOperatorTestCase(unittest.TestCase):
                 tendency = action(direction).reshape_as(state)[2]
                 columns.append(tendency.reshape(elements, -1, initial.shape[-1])[:, 0].flatten())
             matrix = torch.stack(columns, dim=1)
+            mass_weights = weights.repeat(elements)
+            weighted_matrix = mass_weights[:, None] * matrix
+            torch.testing.assert_close(
+                weighted_matrix + weighted_matrix.T, torch.zeros_like(matrix), atol=1e-12, rtol=0
+            )
             evolved = (torch.matrix_exp(300.0 * matrix) @ initial.flatten()).reshape_as(initial)
             reference = torch.sin(2 * torch.pi * (positions - 6000.0) / 4000.0)
             norm = lambda value, weights=weights, elements=elements: torch.sqrt(
                 (weights * value**2).sum() / (weights.sum() * elements)
             )
-            self.assertLessEqual(norm(evolved).item(), norm(initial).item() * (1 + 1e-10))
+            self.assertLessEqual(norm(evolved).item(), norm(initial).item() * (1 + 1e-8))
             errors.append(norm(evolved - reference).item())
         self.assertLess(errors[1], errors[0] / 4)
         self.assertLess(errors[2], errors[1] / 4)

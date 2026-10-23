@@ -128,17 +128,53 @@ class EulerTestCase(unittest.TestCase):
                     return_velocity=True,
                 )
                 torch.testing.assert_close((self.inverse @ star)[direction], normal)
-                upwind = self.state[1:4] if normal >= 0 else right[1:4]
+                mean_velocity = (self.state[1:4] + right[1:4]) / 2
                 # A correction along the normal covector preserves tangent projections.
                 tangent = [i for i in range(3) if i != direction]
-                torch.testing.assert_close(star[tangent], upwind[tangent])
+                torch.testing.assert_close(star[tangent], mean_velocity[tangent])
                 unit_normal = self.basis @ self.inverse[:, direction] / torch.sqrt(self.inverse[direction, direction])
-                physical_change = self.basis @ self.inverse @ (star - upwind)
+                physical_change = self.basis @ self.inverse @ (star - mean_velocity)
                 tangential_change = physical_change - unit_normal * (unit_normal @ physical_change)
                 torch.testing.assert_close(tangential_change, torch.zeros_like(tangential_change), atol=2e-14, rtol=0)
                 torch.testing.assert_close(energy, star @ self.inverse @ star / 2 + 12.0)
                 if wall:
                     self.assertEqual(normal.item(), 0.0)
+
+    def test_common_velocity_and_energy_are_smooth_at_zero_normal_flow(self):
+        from wx_factory.jacobian.euler import AcousticLinearization
+        from wx_factory.pde.euler_interfaces import EulerInterfaceGeometry
+
+        for direction in range(3):
+            scale = self.inverse[direction, direction].sqrt()
+            row = self.inverse[direction] / scale
+            left = self.state.clone()
+            left[1 + direction] -= (row @ left[1:4]) / scale
+            right = left.clone()
+            right[1:4] *= 2
+            geometry = EulerInterfaceGeometry(
+                None, None, self.inverse, left.new_tensor(0), left.new_tensor(1), scale, row, None
+            )
+            perturbation = torch.zeros_like(left)
+            perturbation[1 + direction] = 1 / scale
+            action = AcousticLinearization(left, right, geometry, direction)
+            _, _, delta_energy, delta_velocity, _ = action(perturbation, perturbation)
+            for epsilon in (1e-3, 1e-5):
+                traces = []
+                for sign in (-1, 1):
+                    traces.append(
+                        acoustic_interface(
+                            left + sign * epsilon * perturbation,
+                            right + sign * epsilon * perturbation,
+                            self.inverse,
+                            direction,
+                            left.new_tensor(0),
+                            return_velocity=True,
+                        )
+                    )
+                energy_derivative = (traces[1][2] - traces[0][2]) / (2 * epsilon)
+                velocity_derivative = (traces[1][3] - traces[0][3]) / (2 * epsilon)
+                torch.testing.assert_close(energy_derivative, delta_energy, atol=2e-9, rtol=1e-8)
+                torch.testing.assert_close(velocity_derivative, delta_velocity, atol=2e-9, rtol=1e-8)
 
     def test_deep_pressure_satisfies_hydrostatic_ode(self):
         with torch.inference_mode(False), torch.enable_grad():

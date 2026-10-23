@@ -85,7 +85,7 @@ class AcousticLinearization:
         delta_normal += (self.pressure_right - self.pressure_left) * delta_impedance / (2 * self.impedance**2)
         if self.wall is not None:
             delta_normal = torch.where(self.wall, torch.zeros_like(delta_normal), delta_normal)
-        delta_common_covariant_velocity = torch.where(self.upwind[None], delta_left[1:4], delta_right[1:4]).clone()
+        delta_common_covariant_velocity = (delta_left[1:4] + delta_right[1:4]) / 2
         delta_common_covariant_velocity[self.direction] += (
             delta_normal - (self.normal_row * delta_common_covariant_velocity).sum(dim=0)
         ) / self.normal_scale

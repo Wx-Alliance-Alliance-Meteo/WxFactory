@@ -80,13 +80,14 @@ def transverse_direction(profile, state):
     return direction
 
 
-def upwind_shear_matrix(rhs, elements, speed, half_width):
+def central_shear_matrix(rhs, elements, speed, half_width):
     """Independent one-dimensional periodic DFR advection matrix (column action)."""
     nodes = rhs.geom.num_solpts
     identity = torch.eye(elements * nodes, dtype=torch.float64)
     profiles = identity.reshape(elements * nodes, elements, nodes)
     west = profiles @ rhs.ops.extrap_west
     east = profiles @ rhs.ops.extrap_east
-    faces = torch.stack((east.roll(1, dims=1), east) if speed >= 0 else (west, west.roll(-1, dims=1)), dim=-1)
+    common = (east + west.roll(-1, dims=1)) / 2
+    faces = torch.stack((common.roll(1, dims=1), common), dim=-1)
     action = -speed / half_width * (profiles @ rhs.ops.diff_solpt_tr + faces @ rhs.ops.correction_tr)
     return action.reshape(elements * nodes, elements * nodes).T.contiguous()
