@@ -37,7 +37,7 @@ def init_state_vars(
 
     elif param.equations == "shallow_water" and isinstance(geom, CubedSphere2D):
         metric = Metric2D(geom)
-        Q, topo, dataset = initialize_sw(geom, metric, operators, param)
+        Q, topo, dataset = initialize_sw(geom, metric, param)
 
     else:
         raise ValueError(f"Unrecognized combination of equations ({param.equations} and geometry ({geom}))")

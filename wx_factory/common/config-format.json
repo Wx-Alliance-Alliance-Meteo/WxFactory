@@ -318,10 +318,11 @@
                     "dependency": {
                         "name": "equations",
                         "values": [
-                            "euler"
+                            "euler",
+                            "shallow_water"
                         ]
                     },
-                    "description": "Euler Jacobian action for exponential and implicit solvers: double finite differences or analytic active-branch linearization. Column solves use analytic vertical blocks in either mode."
+                    "description": "Jacobian action for exponential and implicit solvers: double finite differences or analytic linearization. Euler column solves use analytic vertical blocks in either mode."
                 },
                 {
                     "name": "expfilter_apply",

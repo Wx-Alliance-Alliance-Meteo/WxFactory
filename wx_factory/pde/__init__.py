@@ -1,1 +1,1 @@
-from .pde import PDE as PDE
+"""Pointwise physics and interface solvers."""

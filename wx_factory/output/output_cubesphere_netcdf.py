@@ -10,14 +10,13 @@ from ..common.definitions import (
     cpd,
     cvd,
     idx_h,
-    idx_hu1,
-    idx_hu2,
     idx_rho,
     idx_rho_theta,
     p0,
 )
 from ..common.euler_state import physical_winds
 from ..common.matmul import kron
+from ..common.shallow_water_state import contravariant_velocity
 from ..context import Context
 from ..geometry import CubedSphere, CubedSphere2D, DFROperators, Metric2D, Metric5D
 from ..process_topology import ProcessTopology
@@ -352,8 +351,7 @@ class OutputCubesphereNetcdf(OutputCubesphere):
                     self.store_field_Zdim(field_block, "h", idx, k)
 
                     if self.config.case_number >= 2 or self.config.case_number in [-1, -2]:
-                        u1 = Q[idx_hu1, k, ...] / h
-                        u2 = Q[idx_hu2, k, ...] / h
+                        u1, u2 = contravariant_velocity(Q[:, k], self.metric, self.config)
 
                         u, v = geom.contra2wind(u1, u2)
 
@@ -361,7 +359,7 @@ class OutputCubesphereNetcdf(OutputCubesphere):
                         self.store_field_Zdim(geom.to_single_block(v), "V", idx, k)
 
                         rv = relative_vorticity(u1, u2, self.metric, self.operators)
-                        pv = potential_vorticity(h, u1, u2, self.metric, self.operators)
+                        pv = potential_vorticity(Q[idx_h, k], u1, u2, self.metric, self.operators)
 
                         self.store_field_Zdim(geom.to_single_block(rv), "RV", idx, k)
                         self.store_field_Zdim(geom.to_single_block(pv), "PV", idx, k)
@@ -374,13 +372,12 @@ class OutputCubesphereNetcdf(OutputCubesphere):
                 self.store_field(geom.to_single_block(h), "h", idx)
 
                 if self.config.case_number >= 2 or self.config.case_number in [-1, -2]:
-                    u1 = Q[idx_hu1, :, :] / h
-                    u2 = Q[idx_hu2, :, :] / h
+                    u1, u2 = contravariant_velocity(Q, self.metric, self.config)
 
                     u, v = geom.contra2wind(u1, u2)
 
                     rv = relative_vorticity(u1, u2, self.metric, self.operators)
-                    pv = potential_vorticity(h, u1, u2, self.metric, self.operators)
+                    pv = potential_vorticity(Q[idx_h], u1, u2, self.metric, self.operators)
 
                     self.store_field(geom.to_single_block(u), "U", idx)
                     self.store_field(geom.to_single_block(v), "V", idx)

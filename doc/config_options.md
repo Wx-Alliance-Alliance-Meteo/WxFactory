@@ -44,7 +44,7 @@
    | num_solpts            | int   | [none]    | [1, inf]                         |   |
    | num_elements_horizontal  | int  | [none]  | [1, inf]                         |   |
    | riemann_mach_cutoff | float | 0.3 | (0, 1] | Mach floor in the velocity-jump pressure dissipation factor M0*(2-M0). The pressure-jump velocity correction is unscaled. |
-   | jacobian              | lc-str  | analytic  | {finite_difference, analytic}  | Euler Jacobian action for exponential and implicit solvers: double finite differences or analytic active-branch linearization. Column solves use analytic vertical blocks in either mode.  |
+   | jacobian              | lc-str  | analytic  | {finite_difference, analytic}  | Jacobian action for exponential and implicit solvers: double finite differences or analytic linearization. Euler column solves use analytic vertical blocks in either mode.  |
    | expfilter_order       | int   | [none]    | [2, inf]                         | Positive even order of the exponential modal filter.  |
    | expfilter_cutoff      | float  | [none]   | [0.0, 1.0]                       | Normalized modal cutoff below which modes are left unchanged.  |
    | expfilter_strength    | float  | [none]   | [0.0, inf]                       | Strength alpha in the exponential modal-filter attenuation.  |

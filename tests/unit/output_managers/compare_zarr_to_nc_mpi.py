@@ -143,7 +143,7 @@ class CompareZarrToNcTestCase(MpiTestCase):
             self.context.complex_dtype = torch.complex64
             self.geometry.dtype = runtime_dtype
             cast_double_arrays(self.geometry, runtime_dtype)
-            if isinstance(self.metric, Metric5D):
+            if hasattr(self.metric, "to_runtime"):
                 self.metric.to_runtime(runtime_dtype)
             elif self.metric is not None:
                 cast_double_arrays(self.metric, runtime_dtype)

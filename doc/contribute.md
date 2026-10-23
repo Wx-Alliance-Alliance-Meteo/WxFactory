@@ -141,8 +141,8 @@ configuration schema.
 The RHS depends on a pair: the equation set and the geometry it runs on. These are registered in
 `wx_factory/rhs/rhs_selector.py`.
 
-1. Add a callable RHS class. A separate `PDE` class is useful for the staged shallow-water
-   path, but is not required by the Euler RHS.
+1. Add a callable RHS class. Euler and shallow water use the Lamb form with relative covariant
+   velocity components. Provide `linearize(state)` when a direct analytic Jacobian action is available.
 2. Register a factory for the `(equations, geometry class)` combination:
    ```python
    @register_rhs("my_equations", CubedSphere3D)

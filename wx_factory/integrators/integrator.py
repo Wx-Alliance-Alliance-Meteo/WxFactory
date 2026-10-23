@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from time import time
 
+import torch
 from torch import Tensor
 
 from ..common import Configuration
@@ -59,12 +60,12 @@ class Integrator(ABC):
         )
 
     def _implicit_state_and_rhs(self, state, rhs):
-        """Evaluate Euler Newton residuals in float64 to reduce cancellation."""
+        """Evaluate implicit residuals in float64 to reduce cancellation."""
         if hasattr(rhs, "double_precision_rhs"):
-            if state.is_cuda:
+            if state.is_cuda and hasattr(rhs.metric, "offload_derivatives"):
                 rhs.metric.offload_derivatives()
             rhs = rhs.double_precision_rhs()
-            state = state.to(rhs.metric.volume.G_cov.dtype)
+            state = state.to(torch.float64)
         return state, rhs
 
     def _newton_jacobian(self, rhs, dt, rhs_weight):

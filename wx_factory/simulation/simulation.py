@@ -117,7 +117,7 @@ class Simulation:
         if runtime_dtype != torch.float64:
             self.geometry.dtype = runtime_dtype
             cast_double_arrays(self.geometry, runtime_dtype)
-            if isinstance(self.initial_state.metric, Metric5D):
+            if hasattr(self.initial_state.metric, "to_runtime"):
                 self.initial_state.metric.to_runtime(runtime_dtype)
             else:
                 cast_double_arrays(self.initial_state.metric, runtime_dtype)

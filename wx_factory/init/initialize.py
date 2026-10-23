@@ -11,8 +11,6 @@ from ..common.definitions import (
     gravity,
     heat_capacity_ratio,
     idx_h,
-    idx_hu1,
-    idx_hu2,
     idx_rho,
     idx_rho_theta,
     idx_u1,
@@ -46,10 +44,8 @@ from .shallow_water import (
 
 
 class Topo:
-    def __init__(self, hsurf, dzdx1, dzdx2, hsurf_itf_i, hsurf_itf_j):
+    def __init__(self, hsurf, hsurf_itf_i, hsurf_itf_j):
         self.hsurf = hsurf
-        self.dzdx1 = dzdx1
-        self.dzdx2 = dzdx2
         self.hsurf_itf_i = hsurf_itf_i
         self.hsurf_itf_j = hsurf_itf_j
 
@@ -97,7 +93,7 @@ def initialize_euler(geom: CubedSphere3D, metric: Metric5D, mtrx: DFROperators, 
     return state, None
 
 
-def initialize_sw(geom: CubedSphere2D, metric: Metric2D, mtrx: DFROperators, param: Configuration):
+def initialize_sw(geom: CubedSphere2D, metric: Metric2D, param: Configuration):
 
     dtype = torch.float64
     dataset = None
@@ -110,8 +106,6 @@ def initialize_sw(geom: CubedSphere2D, metric: Metric2D, mtrx: DFROperators, par
     Q_shape = (num_equations,)
 
     hsurf = torch.zeros(base_shape, dtype=dtype)
-    dzdx1 = torch.zeros(base_shape, dtype=dtype)
-    dzdx2 = torch.zeros(base_shape, dtype=dtype)
     hsurf_itf_i = torch.zeros(itf_i_shape, dtype=dtype)
     hsurf_itf_j = torch.zeros(itf_j_shape, dtype=dtype)
 
@@ -145,9 +139,7 @@ def initialize_sw(geom: CubedSphere2D, metric: Metric2D, mtrx: DFROperators, par
         u1_contra, u2_contra, fluid_height = sw_from_ERA5(geom, dataset, 0, levels, feature_map)
 
     elif param.case_number == -1:
-        u1_contra, u2_contra, fluid_height, hsurf, dzdx1, dzdx2, hsurf_itf_i, hsurf_itf_j = sw_from_file(
-            geom, mtrx, param
-        )
+        u1_contra, u2_contra, fluid_height, hsurf, hsurf_itf_i, hsurf_itf_j = sw_from_file(geom, param)
 
     elif param.case_number == 0:
         u1_contra, u2_contra, fluid_height = circular_vortex(geom, metric, param)
@@ -159,8 +151,8 @@ def initialize_sw(geom: CubedSphere2D, metric: Metric2D, mtrx: DFROperators, par
         u1_contra, u2_contra, fluid_height = williamson_case2(geom, metric, param)
 
     elif param.case_number == 5:
-        u1_contra, u2_contra, fluid_height, hsurf, dzdx1, dzdx2, hsurf_itf_i, hsurf_itf_j = williamson_case5(
-            geom, metric, mtrx, param
+        u1_contra, u2_contra, fluid_height, hsurf, hsurf_itf_i, hsurf_itf_j = williamson_case5(
+            geom, metric, param
         )
 
     elif param.case_number == 6:
@@ -173,8 +165,8 @@ def initialize_sw(geom: CubedSphere2D, metric: Metric2D, mtrx: DFROperators, par
         u1_contra, u2_contra, fluid_height = case_matsuno(geom, metric, param)
 
     elif param.case_number == 10:
-        u1_contra, u2_contra, fluid_height, hsurf, dzdx1, dzdx2, hsurf_itf_i, hsurf_itf_j = case_unsteady_zonal(
-            geom, metric, mtrx, param
+        u1_contra, u2_contra, fluid_height, hsurf, hsurf_itf_i, hsurf_itf_j = case_unsteady_zonal(
+            geom, metric, param
         )
 
     else:
@@ -183,12 +175,11 @@ def initialize_sw(geom: CubedSphere2D, metric: Metric2D, mtrx: DFROperators, par
     Q = torch.zeros(Q_shape + base_shape, dtype=dtype)
     Q[idx_h, ...] = fluid_height
 
-    if param.case_number in [0, 1]:
+    if param.case_number in [0, 1, -1]:
         Q[idx_u1, ...] = u1_contra
         Q[idx_u2, ...] = u2_contra
     else:
-        Q[idx_hu1, ...] = fluid_height * u1_contra
-        Q[idx_hu2, ...] = fluid_height * u2_contra
+        Q[1:3] = metric.volume.lower_velocity(torch.stack((u1_contra, u2_contra)))
 
     Q = Q.astype(geom.dtype)
 
@@ -196,8 +187,6 @@ def initialize_sw(geom: CubedSphere2D, metric: Metric2D, mtrx: DFROperators, par
     if param.case_number in [-1, -2, 5, 10]:
         topo = Topo(
             hsurf.astype(geom.dtype),
-            dzdx1.astype(geom.dtype),
-            dzdx2.astype(geom.dtype),
             hsurf_itf_i.astype(geom.dtype),
             hsurf_itf_j.astype(geom.dtype),
         )

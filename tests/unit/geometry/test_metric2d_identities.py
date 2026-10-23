@@ -22,23 +22,18 @@ class Metric2DIdentityTestCase(MpiTestCase):
 
     def test_volume_factor_matches_the_covariant_determinant(self):
         """Check sqrt(g) against the determinant of the covariant metric."""
-        determinant = self.metric.H_cov_11 * self.metric.H_cov_22 - self.metric.H_cov_12 * self.metric.H_cov_21
-        expected = torch.sqrt(determinant)
-
-        relative = float((self.metric.sqrtG - expected).abs().max() / expected.abs().max())
-        self.assertLess(relative, 1.0e-13)
+        for fields in (self.metric.volume, *self.metric.faces):
+            g = fields.covariant
+            determinant = g[0, 0] * g[1, 1] - g[0, 1] * g[1, 0]
+            expected = torch.sqrt(determinant)
+            torch.testing.assert_close(fields.volume_jacobian, expected, rtol=1e-13, atol=0)
 
     def test_metrics_are_inverses(self):
         """The covariant and contravariant forms must invert each other after rescaling."""
-        a = self.metric.H_cov_11 * self.metric.H_contra_11 + self.metric.H_cov_12 * self.metric.H_contra_21
-        b = self.metric.H_cov_11 * self.metric.H_contra_12 + self.metric.H_cov_12 * self.metric.H_contra_22
-        c = self.metric.H_cov_21 * self.metric.H_contra_11 + self.metric.H_cov_22 * self.metric.H_contra_21
-        d = self.metric.H_cov_21 * self.metric.H_contra_12 + self.metric.H_cov_22 * self.metric.H_contra_22
-
-        self.assertLess(float((a - 1.0).abs().max()), 1.0e-12)
-        self.assertLess(float(b.abs().max()), 1.0e-12)
-        self.assertLess(float(c.abs().max()), 1.0e-12)
-        self.assertLess(float((d - 1.0).abs().max()), 1.0e-12)
+        for fields in (self.metric.volume, *self.metric.faces):
+            product = torch.einsum("ij...,jk...->ik...", fields.covariant, fields.contravariant)
+            identity = torch.eye(2, dtype=product.dtype).reshape((2, 2) + (1,) * (product.ndim - 2))
+            torch.testing.assert_close(product, identity.expand_as(product), rtol=1e-12, atol=1e-12)
 
     def test_global_integral_recovers_the_area_of_the_sphere(self):
         """Integrating one over the cubed sphere recovers its area."""

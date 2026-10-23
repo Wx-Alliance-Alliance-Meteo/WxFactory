@@ -48,6 +48,7 @@ from tests.unit.rhs.test_rhs_registry import (
     RhsBundleTestCases,
     RhsRegistryTestCases,
 )
+from tests.unit.rhs.test_shallow_water import ShallowWaterInterfaceTestCase
 from tests.unit.solvers.test_exponential_solver_registry import (
     ExponentialSolverRegistryTestCases,
 )
@@ -85,6 +86,7 @@ def load_tests(test_name: str):
         SplittingTestCase,
         EulerOperatorTestCase,
         EulerTestCase,
+        ShallowWaterInterfaceTestCase,
         Metric5DTestCase,
         TabulatedSurfaceTestCase,
         CartesianEulerTestCase,

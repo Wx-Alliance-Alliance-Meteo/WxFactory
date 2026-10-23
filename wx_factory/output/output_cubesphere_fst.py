@@ -1,8 +1,6 @@
 from ..common import Configuration, angle24
 from ..common.definitions import (
     idx_h,
-    idx_hu1,
-    idx_hu2,
 )
 from ..context import Context
 from ..geometry import CubedSphere, CubedSphere2D, DFROperators, Metric2D, Metric5D
@@ -101,8 +99,6 @@ class OutputCubesphereFst(OutputCubesphere):
 
         if isinstance(self.geometry, CubedSphere2D):
             h = get_field(Q[idx_h, ...])
-            get_field(Q[idx_hu1, ...] / Q[idx_h, ...])
-            get_field(Q[idx_hu2, ...] / Q[idx_h, ...])
 
             with SingleProcess() as s, Conditional(s):
                 h_rec = self._make_record("h", step_id, h)

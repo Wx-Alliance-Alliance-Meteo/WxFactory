@@ -160,11 +160,11 @@ class CubedSphere2D(CubedSphere):
         # --- 1D element-counting arrays, for coordinate assignment
 
         # Element interior
-        offsets_x1 = domain_x1[0] + delta_x1 * torch.arange(num_elements_x1)
+        offsets_x1 = domain_x1[0] + delta_x1 * torch.arange(num_elements_x1, dtype=torch.float64)
         ref_solpts_x1 = delta_x1 / Δcomp * (-minComp + self.solutionPoints)
         self.x1 = torch.repeat_interleave(offsets_x1, num_solpts) + torch.tile(ref_solpts_x1, (num_elements_x1,))
 
-        offsets_x2 = domain_x2[0] + delta_x2 * torch.arange(num_elements_x2)
+        offsets_x2 = domain_x2[0] + delta_x2 * torch.arange(num_elements_x2, dtype=torch.float64)
         ref_solpts_x2 = delta_x2 / Δcomp * (-minComp + self.solutionPoints)
         self.x2 = torch.repeat_interleave(offsets_x2, num_solpts) + torch.tile(ref_solpts_x2, (num_elements_x2,))
 

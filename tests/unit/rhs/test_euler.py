@@ -190,7 +190,7 @@ class EulerTestCase(unittest.TestCase):
     def test_restart_records_runtime_state_representation(self):
         for filename, representation in (
             ("config/dcmip21.ini", "relative_covariant"),
-            ("config/case5.ini", "conservative"),
+            ("config/case5.ini", "relative_covariant"),
         ):
             config = Configuration(readfile(filename), load_default_schema())
             with tempfile.NamedTemporaryFile() as saved:

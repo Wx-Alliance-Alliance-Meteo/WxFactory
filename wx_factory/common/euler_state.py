@@ -4,5 +4,11 @@ def physical_winds(state, geometry, metric):
 
 
 def state_representation(config):
-    expected = "relative_covariant" if config.equations == "euler" else "conservative"
+    from .shallow_water_state import prescribed_wind
+
+    expected = (
+        "prescribed_velocity"
+        if config.equations == "shallow_water" and prescribed_wind(config)
+        else "relative_covariant"
+    )
     return getattr(config, "state_representation", expected)

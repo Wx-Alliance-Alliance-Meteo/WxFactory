@@ -5,6 +5,7 @@ from mpi4py import MPI
 from numpy.typing import NDArray
 
 from ..common import Configuration
+from ..common.shallow_water_state import contravariant_velocity, prescribed_wind
 from ..context import Context
 from ..geometry import CubedSphere, DFROperators, Metric2D, Metric5D
 from ..init.shallow_water import (
@@ -57,20 +58,18 @@ class OutputCubesphere(OutputManager):
         elif self.config.case_number == 10:
             h_anal = height_unsteady_zonal(self.geometry, self.metric, self.config)
 
-        if self.config.case_number > 1:
-            u1_contra = Q[1, :, :] / h
-            u2_contra = Q[2, :, :] / h
+        if not prescribed_wind(self.config):
+            u1_contra, u2_contra = contravariant_velocity(Q, self.metric, self.config)
 
-            if self.config.case_number >= 2:
-                energy = total_energy(h, u1_contra, u2_contra, self.topo, self.metric)
-                enstrophy = potential_enstrophy(
-                    h, u1_contra, u2_contra, self.geometry, self.metric, self.operators, self.config
-                )
+            energy = total_energy(h, u1_contra, u2_contra, self.topo, self.metric)
+            enstrophy = potential_enstrophy(
+                h, u1_contra, u2_contra, self.geometry, self.metric, self.operators, self.config
+            )
 
         if self.rank == 0:
             print("\n================================================================================================")
 
-        if self.config.case_number >= 2 and self.initial_mass is None:
+        if not prescribed_wind(self.config) and self.initial_mass is None:
             self.initial_mass = global_integral_2d(h, self.operators, self.metric, self.geometry.num_solpts, self.comm)
             self.initial_energy = global_integral_2d(
                 energy, self.operators, self.metric, self.geometry.num_solpts, self.comm
@@ -87,7 +86,7 @@ class OutputCubesphere(OutputManager):
         if self.rank == 0:
             print(f"Blockstats for timestep {step_id}")
 
-        if self.config.case_number <= 2 or self.config.case_number == 10:
+        if self.config.case_number in (0, 1, 2, 10):
             absol_err = global_integral_2d(
                 abs(h - h_anal), self.operators, self.metric, self.geometry.num_solpts, self.comm
             )
@@ -111,7 +110,7 @@ class OutputCubesphere(OutputManager):
             if self.rank == 0:
                 print(f"l1 = {l1} \t l2 = {l2} \t linf = {linf}")
 
-        if self.config.case_number >= 2:
+        if not prescribed_wind(self.config):
             int_mass = global_integral_2d(h, self.operators, self.metric, self.geometry.num_solpts, self.comm)
             int_energy = global_integral_2d(energy, self.operators, self.metric, self.geometry.num_solpts, self.comm)
             int_enstrophy = global_integral_2d(

@@ -87,7 +87,11 @@ class Epi(Integrator):
 
         rhs = self.rhs(Q)
         linearization = None
-        if self.jac is None and getattr(self.param, "jacobian", "finite_difference") == "analytic":
+        if (
+            self.jac is None
+            and getattr(self.param, "jacobian", "finite_difference") == "analytic"
+            and hasattr(self.rhs, "linearize")
+        ):
             linearization = self.rhs.linearize(Q)
 
         if self.jac is not None:

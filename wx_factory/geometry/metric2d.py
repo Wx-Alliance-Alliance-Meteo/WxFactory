@@ -1,156 +1,91 @@
-import numpy
+"""Horizontal geometry of the cubed sphere in element reference coordinates."""
+
+import math
+from dataclasses import dataclass
+
 import torch
+from torch import Tensor
 
-from .cubed_sphere_2d import CubedSphere2D
 
+@dataclass
+class HorizontalMetric:
+    """Spatial metric, area factor, and frame vorticity in element reference coordinates."""
 
-class Metric2D:
-    """Metric for a smooth, three-dimensional earthlike cubed-sphere with the shallow atmosphere approximation"""
+    covariant: Tensor
+    contravariant: Tensor
+    volume_jacobian: Tensor
+    frame_vorticity: Tensor
 
-    def __init__(self, geom: CubedSphere2D):
-        # 3D Jacobian, for the cubed-sphere mapping
-        # Note that with no topography, ∂z/∂η=1; the model top is included
-        # inside the geometry definition, and η=x3
-
-        self.sqrtG = geom.earth_radius**2 * (1.0 + geom.X**2) * (1.0 + geom.Y**2) / (geom.delta2 * geom.delta)
-        self.sqrtG_itf_i = (
-            geom.earth_radius**2
-            * (1.0 + geom.X_itf_i**2)
-            * (1.0 + geom.Y_itf_i**2)
-            / (geom.delta2_itf_i * geom.delta_itf_i)
-        )
-        self.sqrtG_itf_j = (
-            geom.earth_radius**2
-            * (1.0 + geom.X_itf_j**2)
-            * (1.0 + geom.Y_itf_j**2)
-            / (geom.delta2_itf_j * geom.delta_itf_j)
-        )
-
-        self.inv_sqrtG = 1.0 / self.sqrtG
-
-        # 2D contravariant metric. Put them in the same array
-        self.h_contra = torch.empty((2, 2) + geom.X.shape, dtype=geom.dtype)
-        self.H_contra_11 = self.h_contra[0, 0]
-        self.H_contra_12 = self.h_contra[0, 1]
-        self.H_contra_21 = self.h_contra[1, 0]
-        self.H_contra_22 = self.h_contra[1, 1]
-
-        self.H_contra_11[...] = geom.delta2 / (geom.earth_radius**2 * (1.0 + geom.X**2))
-        self.H_contra_12[...] = (
-            geom.delta2 * geom.X * geom.Y / (geom.earth_radius**2 * (1.0 + geom.X**2) * (1.0 + geom.Y**2))
-        )
-
-        self.H_contra_21[...] = self.H_contra_12.copy()
-        self.H_contra_22[...] = geom.delta2 / (geom.earth_radius**2 * (1.0 + geom.Y**2))
-
-        # Metric at interfaces
-        self.H_contra_11_itf_i = geom.delta2_itf_i / (geom.earth_radius**2 * (1.0 + geom.X_itf_i**2))
-        self.H_contra_12_itf_i = (
-            geom.delta2_itf_i
-            * geom.X_itf_i
-            * geom.Y_itf_i
-            / (geom.earth_radius**2 * (1.0 + geom.X_itf_i**2) * (1.0 + geom.Y_itf_i**2))
-        )
-
-        self.H_contra_21_itf_i = self.H_contra_12_itf_i.copy()
-
-        self.H_contra_12_itf_j = (
-            geom.delta2_itf_j
-            * geom.X_itf_j
-            * geom.Y_itf_j
-            / (geom.earth_radius**2 * (1.0 + geom.X_itf_j**2) * (1.0 + geom.Y_itf_j**2))
-        )
-
-        self.H_contra_22_itf_j = geom.delta2_itf_j / (geom.earth_radius**2 * (1.0 + geom.Y_itf_j**2))
-
-        # 2D covariant metric
-
-        fact = geom.earth_radius**2 / geom.delta**4
-        self.H_cov_11 = fact * (1 + geom.X**2) ** 2 * (1 + geom.Y**2)
-        self.H_cov_12 = -fact * geom.X * geom.Y * (1 + geom.X**2) * (1 + geom.Y**2)
-
-        self.H_cov_21 = self.H_cov_12.copy()
-        self.H_cov_22 = fact * (1 + geom.X**2) * (1 + geom.Y**2) ** 2
-
-        # Christoffel symbols
-
-        gridrot = (
-            numpy.sin(geom.lat_p)
-            - geom.X * numpy.cos(geom.lat_p) * numpy.sin(geom.angle_p)
-            + geom.Y * numpy.cos(geom.lat_p) * numpy.cos(geom.angle_p)
-        )
-
-        self.christoffel_1_01 = geom.rotation_speed * geom.X * geom.Y / geom.delta2 * gridrot
-
-        self.christoffel_1_02 = -geom.rotation_speed * (1.0 + geom.Y**2) / geom.delta2 * gridrot
-
-        self.christoffel_2_01 = geom.rotation_speed * (1.0 + geom.X**2) / geom.delta2 * gridrot
-
-        self.christoffel_2_02 = -geom.rotation_speed * geom.X * geom.Y / geom.delta2 * gridrot
-
-        self.christoffel_1_11 = 2 * geom.X * geom.Y**2 / geom.delta2
-
-        self.christoffel_1_12 = -(geom.Y + geom.Y**3) / geom.delta2
-        self.christoffel_1_21 = self.christoffel_1_12.copy()
-
-        self.christoffel_1_22 = 0
-
-        self.christoffel_2_11 = 0
-
-        self.christoffel_2_12 = -geom.X * (1.0 + geom.X**2) / geom.delta2
-        self.christoffel_2_21 = self.christoffel_2_12.copy()
-
-        self.christoffel_2_22 = 2.0 * geom.X**2 * geom.Y / geom.delta2
-
-        # Coriolis parameter
-        self.coriolis_f = (
-            2
-            * geom.rotation_speed
-            / geom.delta
-            * (
-                numpy.sin(geom.lat_p)
-                - geom.X * numpy.cos(geom.lat_p) * numpy.sin(geom.angle_p)
-                + geom.Y * numpy.cos(geom.lat_p) * numpy.cos(geom.angle_p)
+    def raise_velocity(self, velocity):
+        inverse = self.contravariant
+        return torch.stack(
+            (
+                inverse[0, 0] * velocity[0] + inverse[0, 1] * velocity[1],
+                inverse[1, 0] * velocity[0] + inverse[1, 1] * velocity[1],
             )
         )
 
-        # Now, apply the conversion to the reference element.  In geometric coordinates,
-        # x1 and x2 run from -pi/4 to pi/4 and x3 runs from 0 to htop, but inside each elemenet
-        # (from the perspective of the differentiation matrices) each coordinate runs from -1 to 1.
+    def lower_velocity(self, velocity):
+        metric = self.covariant
+        return torch.stack(
+            (
+                metric[0, 0] * velocity[0] + metric[0, 1] * velocity[1],
+                metric[1, 0] * velocity[0] + metric[1, 1] * velocity[1],
+            )
+        )
 
-        # Map the physical area measure to the reference element [-1, 1]^2.
-        self.sqrtG *= geom.delta_x1 * geom.delta_x2 / 4.0
-        self.sqrtG_itf_i *= geom.delta_x1 * geom.delta_x2 / 4.0
-        self.sqrtG_itf_j *= geom.delta_x1 * geom.delta_x2 / 4.0
+    def to(self, dtype):
+        return HorizontalMetric(
+            self.covariant.to(dtype),
+            self.contravariant.to(dtype),
+            self.volume_jacobian.to(dtype),
+            self.frame_vorticity.to(dtype),
+        )
 
-        self.inv_sqrtG = 1.0 / self.sqrtG
+    def at(self, indices):
+        return HorizontalMetric(
+            self.covariant[indices],
+            self.contravariant[indices],
+            self.volume_jacobian[indices],
+            self.frame_vorticity[indices],
+        )
 
-        self.H_cov_11 *= geom.delta_x1**2 / 4.0
-        self.H_cov_12 *= geom.delta_x1 * geom.delta_x2 / 4.0
-        self.H_cov_21 *= geom.delta_x2 * geom.delta_x1 / 4.0
-        self.H_cov_22 *= geom.delta_x2**2 / 4.0
 
-        self.H_contra_11 *= 4.0 / (geom.delta_x1**2)
-        self.H_contra_12 *= 4.0 / (geom.delta_x1 * geom.delta_x2)
+class Metric2D:
+    def __init__(self, geom):
+        self.volume = self.evaluate(geom, geom.X, geom.Y)
+        self.faces = (self.evaluate(geom, geom.X_itf_i, geom.Y_itf_i), self.evaluate(geom, geom.X_itf_j, geom.Y_itf_j))
+        self._set_views()
 
-        self.H_contra_21 *= 4.0 / (geom.delta_x1 * geom.delta_x2)
-        self.H_contra_22 *= 4.0 / (geom.delta_x2**2)
+    @staticmethod
+    def evaluate(geom, x, y):
+        delta2 = 1 + x.square() + y.square()
+        delta = torch.sqrt(delta2)
+        scale1, scale2 = geom.delta_x1 / 2, geom.delta_x2 / 2
+        factor = geom.earth_radius**2 / delta2.square()
+        g11 = factor * (1 + x.square()).square() * (1 + y.square()) * scale1**2
+        g12 = -factor * x * y * (1 + x.square()) * (1 + y.square()) * scale1 * scale2
+        g22 = factor * (1 + x.square()) * (1 + y.square()).square() * scale2**2
+        covariant = torch.stack((g11, g12, g12, g22)).reshape((2, 2) + x.shape)
+        determinant = g11 * g22 - g12.square()
+        inverse = torch.stack((g22, -g12, -g12, g11)).reshape((2, 2) + x.shape) / determinant
+        area = geom.earth_radius**2 * (1 + x.square()) * (1 + y.square()) / delta**3 * scale1 * scale2
+        sin_latitude = (
+            math.sin(geom.lat_p)
+            - x * math.cos(geom.lat_p) * math.sin(geom.angle_p)
+            + y * math.cos(geom.lat_p) * math.cos(geom.angle_p)
+        ) / delta
+        # The exterior derivative of the frame covector is f times the oriented area element.
+        frame_vorticity = 2 * geom.rotation_speed * sin_latitude * area
+        return HorizontalMetric(covariant, inverse, area, frame_vorticity)
 
-        self.H_contra_11_itf_i *= 4.0 / (geom.delta_x1**2)
-        self.H_contra_12_itf_i *= 4.0 / (geom.delta_x1 * geom.delta_x2)
+    def _set_views(self):
+        self.sqrtG = self.volume.volume_jacobian
+        self.sqrtG_itf_i, self.sqrtG_itf_j = (face.volume_jacobian for face in self.faces)
+        self.inv_sqrtG = self.sqrtG.reciprocal()
+        self.coriolis_f = self.volume.frame_vorticity / self.sqrtG
 
-        self.H_contra_21_itf_i *= 4.0 / (geom.delta_x1 * geom.delta_x2)
-
-        self.H_contra_12_itf_j *= 4.0 / (geom.delta_x1 * geom.delta_x2)
-
-        self.H_contra_22_itf_j *= 4.0 / (geom.delta_x2**2)
-
-        self.christoffel_1_11 *= 0.5 * geom.delta_x1
-        self.christoffel_1_12 *= 0.5 * geom.delta_x1
-        self.christoffel_1_21 *= 0.5 * geom.delta_x1
-        self.christoffel_1_22 *= 0.5 * geom.delta_x1
-
-        self.christoffel_2_11 *= 0.5 * geom.delta_x2
-        self.christoffel_2_12 *= 0.5 * geom.delta_x2
-        self.christoffel_2_21 *= 0.5 * geom.delta_x2
-        self.christoffel_2_22 *= 0.5 * geom.delta_x2
+    def to_runtime(self, dtype):
+        self.volume = self.volume.to(dtype)
+        self.faces = tuple(face.to(dtype) for face in self.faces)
+        self._set_views()

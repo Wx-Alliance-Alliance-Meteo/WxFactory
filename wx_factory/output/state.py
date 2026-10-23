@@ -8,7 +8,7 @@ from torch import Tensor
 from ..common import Configuration, ConfigurationSchema, load_default_schema
 from ..common.euler_state import state_representation
 
-_SAVE_VERSION_ID = 1
+_SAVE_VERSION_ID = 3
 _CONFIG_CONTENT_MARKER = "----- config_content ------\n"
 
 
@@ -18,14 +18,14 @@ def save_state(state: Tensor, param: Configuration, output_file_name: str) -> No
     Exact content:
         1. The array itself
         2. Version
-        3. State representation (version 3, Euler only)
+        3. State representation (version 3)
         4. Configuration schema (as a string)
         5. Separator
         6. Configuration content
     """
     with open(output_file_name, "wb+") as output_file:
         numpy.save(output_file, state.cpu().numpy())
-        version = 3 if param.equations == "euler" else _SAVE_VERSION_ID
+        version = _SAVE_VERSION_ID
         output_file.write(bytes(f"{version}\n", "utf-8"))
         if version == 3:
             output_file.write(bytes(f"{state_representation(param)}\n", "utf-8"))
@@ -51,7 +51,7 @@ def load_state(input_file_name: str, device: torch.device | None = None) -> tupl
         stored_form = input_file.readline().decode("utf-8").strip() if save_version in (2, 3) else "conservative"
         if save_version == 2 and stored_form == "lamb":
             stored_form = "relative_covariant"
-        if save_version > 3 or stored_form not in ("conservative", "relative_covariant"):
+        if save_version > 3 or stored_form not in ("conservative", "relative_covariant", "prescribed_velocity"):
             raise ValueError("Unsupported restart state representation")
 
         stored_schema = None
@@ -92,7 +92,7 @@ def load_state(input_file_name: str, device: torch.device | None = None) -> tupl
             raise ValueError(
                 "Legacy Euler restart contains conservative momentum; relative covariant velocity is required"
             )
-        if conf.equations == "shallow_water" and stored_form != "conservative":
-            raise ValueError("Shallow-water restart requires conservative variables")
+        if conf.equations == "shallow_water" and stored_form != state_representation(conf):
+            raise ValueError("Legacy shallow-water restart has a different velocity representation; convert it before restarting")
         conf.state_representation = stored_form
         return state, conf

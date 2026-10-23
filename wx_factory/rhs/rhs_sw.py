@@ -1,263 +1,155 @@
-import numpy
+"""Shallow-water DFR tendency for the state (H, v_1, v_2)."""
+
+from copy import copy
+
 import torch
-from numpy.typing import NDArray
 
-from ..common.definitions import gravity, idx_h, idx_hu1, idx_hu2
-from ..geometry import CubedSphere2D, DFROperators, Metric2D
-from ..init.initialize import Topo
-from ..process_topology import ProcessTopology
-from .rhs import RHS
+from ..common.definitions import gravity
+from ..pde.shallow_water_interfaces import GravityWaveInterface
 
 
-class RhsShallowWater(RHS):
-    def __init__(
-        self,
-        geom: CubedSphere2D,
-        operators_real: DFROperators,
-        metric: Metric2D,
-        topo: Topo | None,
-        ptopo: ProcessTopology,
-    ):
-        super().__init__(
-            pde=None,
-            geometry=geom,
-            operators_real=operators_real,
-            metric=metric,
-            topography=topo,
-            process_topo=ptopo,
-            config=None,
+class RhsShallowWater:
+    def __init__(self, geom, operators_real, metric, topo, ptopo, *, shape=None):
+        self.shape = (3,) + geom.grid_shape if shape is None else shape
+        self.geom = geom
+        self.ops = operators_real
+        self.metric = metric
+        self.topo = topo
+        self.ptopo = ptopo
+        self.context = geom.context
+        self.extrapolations = (self.ops.extrap_x, self.ops.extrap_y)
+        self.derivatives = (self.ops.derivative_x, self.ops.derivative_y)
+        self.corrections = (self.ops.correction_WE, self.ops.correction_SN)
+        width = geom.num_solpts
+        self.left = (
+            (..., slice(None, -1), slice(width, None)),
+            (..., slice(None, -1), slice(None), slice(width, None)),
         )
-        self.num_solpts = geom.num_solpts
-        self.num_elements_hori = geom.num_elements_horizontal
+        self.right = ((..., slice(1, None), slice(None, width)), (..., slice(1, None), slice(None), slice(None, width)))
+        self.interior = ((..., slice(1, -1), slice(None)), (..., slice(1, -1), slice(None), slice(None)))
+        self.face_metrics = tuple(fields.at(indices) for fields, indices in zip(metric.faces, self.left))
+        self.bottom = 0.0 if topo is None else topo.hsurf
+        self.face_bottom = (
+            (0.0, 0.0) if topo is None else (topo.hsurf_itf_i[self.left[0]], topo.hsurf_itf_j[self.left[1]])
+        )
 
-        self.var_itf_j = None
-        self.var_itf_i = None
-        self.u1 = None
-        self.u2 = None
-
-    def __call__(self, q):
-        if q.ndim == 5:
-            results = []
-            for k in range(q.shape[1]):
-                rhs_k = super().__call__(q[:, k])
-                results.append(rhs_k)
-            return torch.stack(results, dim=1)
-        else:
-            return super().__call__(q)
-
-    def allocate_arrays(self, q):
-        return
-
-    def solution_extrapolation(self, q: NDArray) -> None:
-        num_equations = q.shape[0]
-        itf_i_shape = (num_equations,) + self.geom.itf_i_shape
-        itf_j_shape = (num_equations,) + self.geom.itf_j_shape
-
-        # Prepare array for unpacked dynamical variables
-        Q_unpacked = q.copy()
-        if self.topo is not None:
-            Q_unpacked[idx_h] += self.topo.hsurf
-
-        # Interpolate to the element interface (middle elements only, halo remains 0)
-        self.var_itf_i = torch.zeros(itf_i_shape, dtype=q.dtype)
-        self.var_itf_i[:, :, 1:-1, :] = Q_unpacked @ self.ops.extrap_x
-
-        self.var_itf_j = torch.zeros(itf_j_shape, dtype=q.dtype)
-        self.var_itf_j[:, 1:-1, :, :] = Q_unpacked @ self.ops.extrap_y
-
-        # Unpack dynamical variables
-        Q_unpacked[idx_hu1] /= q[idx_h]
-        Q_unpacked[idx_hu2] /= q[idx_h]
-
-        self.u1 = Q_unpacked[idx_hu1]
-        self.u2 = Q_unpacked[idx_hu2]
-
-    def start_communication(self):
-
-        # Initiate transfers. The first and last row (column) of elements of each array is part of the halo.
-        # Each PE must thus send the second and second-to-last row (column) of elements.
-        # There is a separate function for sending vector data, since they must potentially be converted to the
-        # neighbor PE's coordinate system
-        self.request_u = self.ptopo.start_exchange_vectors(
-            south=(
-                (self.var_itf_j[idx_hu1, 1, :, : self.num_solpts]),
-                (self.var_itf_j[idx_hu2, 1, :, : self.num_solpts]),
-            ),
-            north=(
-                (self.var_itf_j[idx_hu1, -2, :, self.num_solpts :]),
-                (self.var_itf_j[idx_hu2, -2, :, self.num_solpts :]),
-            ),
-            west=(
-                (self.var_itf_i[idx_hu1, :, 1, : self.num_solpts]),
-                (self.var_itf_i[idx_hu2, :, 1, : self.num_solpts]),
-            ),
-            east=(
-                (self.var_itf_i[idx_hu1, :, -2, self.num_solpts :]),
-                (self.var_itf_i[idx_hu2, :, -2, self.num_solpts :]),
-            ),
+    def _start_exchange(self, state, *, perturbation=False):
+        values = state.clone()
+        if not perturbation:
+            values[0] += self.bottom
+        layers = state.shape[1:-3]
+        shapes = (self.geom.itf_i_shape, self.geom.itf_j_shape)
+        faces = []
+        for shape, extrapolation, interior in zip(shapes, self.extrapolations, self.interior):
+            face = state.new_zeros((3,) + layers + shape)
+            face[interior] = values @ extrapolation
+            faces.append(face)
+        width = self.geom.num_solpts
+        i, j = faces
+        boundaries = ((j[..., 1, :, :width], j[..., -2, :, width:]), (i[..., 1, :width], i[..., -2, width:]))
+        south, north = boundaries[0]
+        west, east = boundaries[1]
+        vector_request = self.ptopo.start_exchange_vectors(
+            south=tuple(south[1:3]),
+            north=tuple(north[1:3]),
+            west=tuple(west[1:3]),
+            east=tuple(east[1:3]),
             boundary_sn=self.geom.boundary_sn,
             boundary_we=self.geom.boundary_we,
+            covariant=True,
         )
-        self.request_h = self.ptopo.start_exchange_scalars(
-            south=self.var_itf_j[idx_h, 1, :, : self.num_solpts],
-            north=self.var_itf_j[idx_h, -2, :, self.num_solpts :],
-            west=self.var_itf_i[idx_h, :, 1, : self.num_solpts],
-            east=self.var_itf_i[idx_h, :, -2, self.num_solpts :],
-            boundary_shape=(self.num_elements_hori * self.num_solpts,),
+        scalar_request = self.ptopo.start_exchange_scalars(
+            south=south[0],
+            north=north[0],
+            west=west[0],
+            east=east[0],
+            boundary_shape=(self.geom.num_elements_horizontal * width,),
+        )
+        return faces, vector_request, scalar_request
+
+    def _finish_exchange(self, exchange):
+        faces, vector_request, scalar_request = exchange
+        width = self.geom.num_solpts
+        i, j = faces
+        destinations = (
+            (j, (..., 0, slice(None), slice(width, None))),
+            (j, (..., -1, slice(None), slice(None, width))),
+            (i, (..., 0, slice(width, None))),
+            (i, (..., -1, slice(None, width))),
+        )
+        vectors = vector_request.wait()
+        scalars = scalar_request.wait()
+        for (face, index), vector, scalar in zip(destinations, vectors, scalars):
+            face[0][index] = scalar
+            face[1][index], face[2][index] = vector
+        return faces
+
+    def _interfaces(self, faces):
+        return tuple(
+            GravityWaveInterface(face[left], face[right], fields, bottom, direction)
+            for direction, (face, left, right, fields, bottom) in enumerate(
+                zip(faces, self.left, self.right, self.face_metrics, self.face_bottom)
+            )
         )
 
-    def pointwise_fluxes(self, q):
-        self.f_x1 = torch.empty_like(q)
-        self.f_x2 = torch.empty_like(q)
-
-        self.f_x1[idx_h] = self.metric.sqrtG * q[idx_hu1]
-        self.f_x2[idx_h] = self.metric.sqrtG * q[idx_hu2]
-
-        hsquared = q[idx_h] ** 2
-        self.f_x1[idx_hu1] = self.metric.sqrtG * (
-            q[idx_hu1] * self.u1 + 0.5 * gravity * self.metric.H_contra_11 * hsquared
-        )
-        self.f_x2[idx_hu1] = self.metric.sqrtG * (
-            q[idx_hu1] * self.u2 + 0.5 * gravity * self.metric.H_contra_12 * hsquared
+    def _volume_terms(self, state, velocity):
+        energy = (state[1:3] * velocity).sum(dim=0) / 2 + gravity * (state[0] + self.bottom)
+        return tuple(
+            torch.stack((self.metric.sqrtG * state[0] * velocity[direction], energy, state[2 - direction]))
+            for direction in range(2)
         )
 
-        self.f_x1[idx_hu2] = self.metric.sqrtG * (
-            q[idx_hu2] * self.u1 + 0.5 * gravity * self.metric.H_contra_21 * hsquared
-        )
-        self.f_x2[idx_hu2] = self.metric.sqrtG * (
-            q[idx_hu2] * self.u2 + 0.5 * gravity * self.metric.H_contra_22 * hsquared
-        )
+    def _volume_derivatives(self, volume_terms):
+        return tuple(value @ operator for value, operator in zip(volume_terms, self.derivatives))
 
-    def flux_divergence_partial(self):
-        # Interior contribution to the derivatives, corrections for the boundaries will be added later
-        self.df1_dx1 = self.f_x1 @ self.ops.derivative_x
-        self.df2_dx2 = self.f_x2 @ self.ops.derivative_y
+    def _add_face_corrections(self, partial, common_values):
+        derivatives = []
+        for direction, (values, common) in enumerate(zip(partial, common_values)):
+            shape = (3,) + values.shape[1:-3] + (self.geom.itf_i_shape if direction == 0 else self.geom.itf_j_shape)
+            trace = values.new_zeros(shape)
+            selected = common[[0, 1, 3 - direction]]
+            trace[self.left[direction]] = selected
+            trace[self.right[direction]] = selected
+            derivatives.append(values + trace[self.interior[direction]] @ self.corrections[direction])
+        return derivatives
 
-    def end_communication(self):
-        # Finish transfers. We receive the halo, so it is stored in the first and last row/column of each array
-        (
+    def __call__(self, state):
+        given_shape = state.shape
+        if state.ndim == 1:
+            state = state.reshape(self.shape)
+        exchange = self._start_exchange(state)
+        velocity = self.metric.volume.raise_velocity(state[1:3])
+        partial = self._volume_derivatives(self._volume_terms(state, velocity))
+        interfaces = self._interfaces(self._finish_exchange(exchange))
+        dx, dy = self._add_face_corrections(partial, tuple(face.common_values() for face in interfaces))
+        absolute_curl = dx[2] - dy[2] + self.metric.volume.frame_vorticity
+        return torch.stack(
             (
-                self.var_itf_j[idx_hu1, 0, :, self.num_solpts :],
-                self.var_itf_j[idx_hu2, 0, :, self.num_solpts :],
-            ),  # South boundary
-            (
-                self.var_itf_j[idx_hu1, -1, :, : self.num_solpts],
-                self.var_itf_j[idx_hu2, -1, :, : self.num_solpts],
-            ),  # North boundary
-            (
-                self.var_itf_i[idx_hu1, :, 0, self.num_solpts :],
-                self.var_itf_i[idx_hu2, :, 0, self.num_solpts :],
-            ),  # West boundary
-            (
-                self.var_itf_i[idx_hu1, :, -1, : self.num_solpts],
-                self.var_itf_i[idx_hu2, :, -1, : self.num_solpts],
-            ),  # East boundary
-        ) = self.request_u.wait()
+                -(dx[0] + dy[0]) / self.metric.sqrtG,
+                -dx[1] + velocity[1] * absolute_curl,
+                -dy[1] - velocity[0] * absolute_curl,
+            )
+        ).reshape(given_shape)
 
-        (
-            self.var_itf_j[idx_h, 0, :, self.num_solpts :],  # South boundary
-            self.var_itf_j[idx_h, -1, :, : self.num_solpts],  # North boundary
-            self.var_itf_i[idx_h, :, 0, self.num_solpts :],  # West boundary
-            self.var_itf_i[idx_h, :, -1, : self.num_solpts],  # East boundary
-        ) = self.request_h.wait()
+    def linearize(self, state):
+        from ..jacobian.shallow_water import ShallowWaterLinearization
 
-        # Substract topo after extrapolation
-        if self.topo is not None:
-            self.var_itf_i[idx_h] -= self.topo.hsurf_itf_i
-            self.var_itf_j[idx_h] -= self.topo.hsurf_itf_j
+        return ShallowWaterLinearization(self, state.reshape(self.shape) if state.ndim == 1 else state)
 
-    def riemann_fluxes(self):
-        # West and east are defined relative to the elements, *not* to the interface itself.
-        # Therefore, a certain interface will be the western interface of its eastern element and vice-versa
-        #
-        #   western-elem   itf  eastern-elem
-        #   ________________|_____________________|
-        #                   |
-        #   west .  east -->|<-- west  .  east -->
-        #                   |
-        west = numpy.s_[..., 1:, : self.num_solpts]
-        east = numpy.s_[..., :-1, self.num_solpts :]
-        south = numpy.s_[..., 1:, :, : self.num_solpts]
-        north = numpy.s_[..., :-1, :, self.num_solpts :]
+    def double_precision_rhs(self):
+        if not hasattr(self, "_double_rhs"):
+            metric = copy(self.metric)
+            metric.to_runtime(torch.float64)
+            operators = copy(self.ops)
+            for name in ("extrap_x", "extrap_y", "derivative_x", "derivative_y", "correction_WE", "correction_SN"):
+                setattr(operators, name, getattr(operators, name).to(torch.float64))
+            topo = None if self.topo is None else copy(self.topo)
+            if topo is not None:
+                for name, value in vars(topo).items():
+                    if isinstance(value, torch.Tensor):
+                        setattr(topo, name, value.to(torch.float64))
+            self._double_rhs = RhsShallowWater(self.geom, operators, metric, topo, self.ptopo, shape=self.shape)
+        return self._double_rhs
 
-        a = torch.sqrt(gravity * self.var_itf_i[idx_h] * self.metric.H_contra_11_itf_i)
-        # Only the meaningful half of each halo interface column is filled by the neighbour exchange;
-        # the other half stays h = hu = 0, so the division there would be 0/0. Divide only the
-        # selected entries: torch.where evaluates both branches, and torch.divide has no `where=`.
-        denom = self.var_itf_i[idx_h] * a
-        mask = torch.real(a) > 0.0
-        m = torch.zeros_like(denom)
-        m[mask] = self.var_itf_i[idx_hu1][mask] / denom[mask]
-
-        mw2 = (m[west] - 1.0) * (m[west] - 1.0)
-        big_M = 0.25 * ((m[east] + 1.0) ** 2 - mw2)
-
-        self.flux_x1_itf = torch.zeros_like(self.var_itf_i)
-        # ------ Advection part
-        self.flux_x1_itf[east] = self.metric.sqrtG_itf_i[east] * torch.where(
-            torch.real(big_M) > 0.0, big_M * a[east] * self.var_itf_i[east], big_M * a[west] * self.var_itf_i[west]
-        )
-        # ------ Pressure part
-        p11 = self.metric.sqrtG_itf_i * (0.5 * gravity) * self.metric.H_contra_11_itf_i * self.var_itf_i[idx_h] ** 2
-        p21 = self.metric.sqrtG_itf_i * (0.5 * gravity) * self.metric.H_contra_21_itf_i * self.var_itf_i[idx_h] ** 2
-        self.flux_x1_itf[idx_hu1][east] += 0.5 * ((1.0 + m[east]) * p11[east] + (1.0 - m[west]) * p11[west])
-        self.flux_x1_itf[idx_hu2][east] += 0.5 * ((1.0 + m[east]) * p21[east] + (1.0 - m[west]) * p21[west])
-
-        # ------ Copy to west interface of eastern element
-        self.flux_x1_itf[west] = self.flux_x1_itf[east]
-
-        # Common AUSM fluxes
-        a = torch.sqrt(gravity * self.var_itf_j[idx_h] * self.metric.H_contra_22_itf_j)
-        # Same as above, for the south-north interfaces.
-        denom = self.var_itf_j[idx_h] * a
-        mask = torch.real(a) > 0.0
-        m = torch.zeros_like(denom)
-        m[mask] = self.var_itf_j[idx_hu2][mask] / denom[mask]
-
-        ms2 = (m[south] - 1.0) * (m[south] - 1.0)
-        big_M = 0.25 * ((m[north] + 1.0) ** 2 - ms2)
-
-        self.flux_x2_itf = torch.zeros_like(self.var_itf_j)
-        # ------ Advection part
-        self.flux_x2_itf[north] = self.metric.sqrtG_itf_j[north] * torch.where(
-            torch.real(big_M) > 0.0, big_M * a[north] * self.var_itf_j[north], big_M * a[south] * self.var_itf_j[south]
-        )
-        # ------ Pressure part
-        p12 = self.metric.sqrtG_itf_j * (0.5 * gravity) * self.metric.H_contra_12_itf_j * self.var_itf_j[idx_h] ** 2
-        p22 = self.metric.sqrtG_itf_j * (0.5 * gravity) * self.metric.H_contra_22_itf_j * self.var_itf_j[idx_h] ** 2
-        self.flux_x2_itf[idx_hu1][north] += 0.5 * ((1.0 + m[north]) * p12[north] + (1.0 - m[south]) * p12[south])
-        self.flux_x2_itf[idx_hu2][north] += 0.5 * ((1.0 + m[north]) * p22[north] + (1.0 - m[south]) * p22[south])
-        # ------ Copy to south interface of northern element
-        self.flux_x2_itf[south] = self.flux_x2_itf[north]
-
-    def flux_divergence(self):
-        self.df1_dx1[...] += self.flux_x1_itf[:, :, 1:-1, :] @ self.ops.correction_WE
-        self.df2_dx2[...] += self.flux_x2_itf[:, 1:-1, :, :] @ self.ops.correction_SN
-
-    def forcing_terms(self, q: NDArray):
-        if self.topo is None:
-            topo_dzdx1 = 0.0
-            topo_dzdx2 = 0.0
-
-        else:
-            topo_dzdx1 = self.topo.dzdx1
-            topo_dzdx2 = self.topo.dzdx2
-
-        # Add coriolis, metric and terms due to varying bottom topography
-        # Note: christoffel_1_22 and metric.christoffel_2_11 are zero
-        forcing = torch.zeros_like(q)
-        forcing[idx_hu1] = (
-            2.0 * (self.metric.christoffel_1_01 * q[idx_hu1] + self.metric.christoffel_1_02 * q[idx_hu2])
-            + self.metric.christoffel_1_11 * q[idx_hu1] * self.u1
-            + 2.0 * self.metric.christoffel_1_12 * q[idx_hu1] * self.u2
-            + gravity * q[idx_h] * (self.metric.H_contra_11 * topo_dzdx1 + self.metric.H_contra_12 * topo_dzdx2)
-        )
-        forcing[idx_hu2] = (
-            2.0 * (self.metric.christoffel_2_01 * q[idx_hu1] + self.metric.christoffel_2_02 * q[idx_hu2])
-            + 2.0 * self.metric.christoffel_2_12 * q[idx_hu1] * self.u2
-            + self.metric.christoffel_2_22 * q[idx_hu2] * self.u2
-            + gravity * q[idx_h] * (self.metric.H_contra_21 * topo_dzdx1 + self.metric.H_contra_22 * topo_dzdx2)
-        )
-
-        # Assemble the right-hand sides
-        self.rhs = self.metric.inv_sqrtG * (-self.df1_dx1 - self.df2_dx2) - forcing
+    def jacobian_rhs(self, state):
+        return self.double_precision_rhs()(state.to(torch.float64))

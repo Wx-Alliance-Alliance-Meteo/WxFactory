@@ -10,14 +10,13 @@ from ..common.definitions import (
     cpd,
     cvd,
     idx_h,
-    idx_hu1,
-    idx_hu2,
     idx_rho,
     idx_rho_theta,
     p0,
 )
 from ..common.euler_state import physical_winds
 from ..common.matmul import kron
+from ..common.shallow_water_state import contravariant_velocity
 from ..geometry import CubedSphere2D
 from .diagnostic import potential_vorticity, relative_vorticity
 from .output_cubesphere import OutputCubesphere
@@ -179,14 +178,13 @@ class OutputCubesphereZarr(OutputCubesphere):
 
                     self.store_variable_zarr_Zdim(self.geometry.to_single_block(h), "h", step_id, k)
 
-                    u1 = Q[idx_hu1, k, ...] / h
-                    u2 = Q[idx_hu2, k, ...] / h
+                    u1, u2 = contravariant_velocity(Q[:, k], self.metric, self.config)
 
                     u, v = self.geometry.contra2wind(u1, u2)
 
                     rv = relative_vorticity(u1, u2, self.metric, self.operators)
 
-                    pv = potential_vorticity(h, u1, u2, self.metric, self.operators)
+                    pv = potential_vorticity(Q[idx_h, k], u1, u2, self.metric, self.operators)
 
                     self.store_variable_zarr_Zdim(self.geometry.to_single_block(u), "U", step_id, k)
 
@@ -204,14 +202,13 @@ class OutputCubesphereZarr(OutputCubesphere):
 
                 self.store_variable_zarr(self.geometry.to_single_block(h), "h", step_id)
 
-                u1 = Q[idx_hu1, :, :] / h
-                u2 = Q[idx_hu2, :, :] / h
+                u1, u2 = contravariant_velocity(Q, self.metric, self.config)
 
                 u, v = self.geometry.contra2wind(u1, u2)
 
                 rv = relative_vorticity(u1, u2, self.metric, self.operators)
 
-                pv = potential_vorticity(h, u1, u2, self.metric, self.operators)
+                pv = potential_vorticity(Q[idx_h], u1, u2, self.metric, self.operators)
 
                 self.store_variable_zarr(self.geometry.to_single_block(u), "U", step_id)
 

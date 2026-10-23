@@ -12,8 +12,6 @@ kappa = Rd / cpd
 heat_capacity_ratio = cpd / cvd
 
 idx_h = 0
-idx_hu1 = 1
-idx_hu2 = 2
 idx_u1 = 1
 idx_u2 = 2
 

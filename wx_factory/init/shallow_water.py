@@ -6,7 +6,7 @@ from xarray import Dataset
 
 from ..common import Configuration
 from ..common.definitions import day_in_secs, gravity
-from ..geometry import CubedSphere2D, DFROperators
+from ..geometry import CubedSphere2D
 from ..init.matsuno import eval_field
 from ..output.input_manager import InputManager
 
@@ -146,7 +146,7 @@ def sw_from_ERA5(geom: CubedSphere2D, ds: Dataset, t, levels, feature_map):
     return u1_contra, u2_contra, fluid_height
 
 
-def sw_from_file(geom: CubedSphere2D, operators: DFROperators, config: Configuration):
+def sw_from_file(geom: CubedSphere2D, config: Configuration):
     h_surface = InputManager.read_mountain(config.topography_file, geom)
     h, u, v = InputManager.read_fields(config.initial_conditions, ["GZ", "UU", "VV"], geom)
     h[...] *= 10 / gravity
@@ -191,13 +191,9 @@ def sw_from_file(geom: CubedSphere2D, operators: DFROperators, config: Configura
     h_surface_itf_i[..., :, 1:, :num_solpts] = h_surface_itf_i[..., :, :-1, num_solpts:]
     h_surface_itf_j[..., 1:, :, :num_solpts] = h_surface_itf_j[..., :-1, :, num_solpts:]
 
-    # Compute mountain gradient
-    dzdx1 = h_surface @ operators.derivative_x + geom.middle_itf_i(h_surface_itf_i) @ operators.correction_WE
-    dzdx2 = h_surface @ operators.derivative_y + geom.middle_itf_j(h_surface_itf_j) @ operators.correction_SN
-
     u1, u2 = geom.wind2contra(u, v)
 
-    return u1, u2, h - h_surface, h_surface, dzdx1, dzdx2, h_surface_itf_i, h_surface_itf_j
+    return u1, u2, h - h_surface, h_surface, h_surface_itf_i, h_surface_itf_j
 
 
 def williamson_case1(geom, metric, param):
@@ -260,7 +256,7 @@ def height_case2(geom, metric, param):
     return h
 
 
-def williamson_case5(geom: CubedSphere2D, metric, mtrx: DFROperators, param):
+def williamson_case5(geom: CubedSphere2D, metric, param):
     if geom.context.comm.rank == 0:
         print(
             "--------------------------------------------\n"
@@ -316,12 +312,9 @@ def williamson_case5(geom: CubedSphere2D, metric, mtrx: DFROperators, param):
     hsurf_itf_j[geom.south_edge] = 0.0
     hsurf_itf_j[geom.north_edge] = 0.0
 
-    dzdx1 = hsurf @ mtrx.derivative_x + geom.middle_itf_i(hsurf_itf_i) @ mtrx.correction_WE
-    dzdx2 = hsurf @ mtrx.derivative_y + geom.middle_itf_j(hsurf_itf_j) @ mtrx.correction_SN
-
     h = h_star - hsurf
 
-    return u1, u2, h, hsurf, dzdx1, dzdx2, hsurf_itf_i, hsurf_itf_j
+    return u1, u2, h, hsurf, hsurf_itf_i, hsurf_itf_j
 
 
 def williamson_case6(geom: CubedSphere2D, metric, param):
@@ -495,7 +488,7 @@ def case_matsuno(geom, metric, param):
     return u1, u2, h
 
 
-def case_unsteady_zonal(geom, metric, mtrx, param):
+def case_unsteady_zonal(geom, metric, param):
     if geom.context.comm.rank == 0:
         print("--------------------------------------------")
         print("CASE 10, Läuter et al. (2005)               ")
@@ -518,11 +511,9 @@ def case_unsteady_zonal(geom, metric, mtrx, param):
 
     hsurf_itf_i = (0.5 * (geom.earth_radius * geom.rotation_speed * torch.sin(geom.lat_itf_i)) ** 2 + k2) / gravity
     hsurf_itf_j = (0.5 * (geom.earth_radius * geom.rotation_speed * torch.sin(geom.lat_itf_j)) ** 2 + k2) / gravity
-    dzdx1 = hsurf @ mtrx.derivative_x + geom.middle_itf_i(hsurf_itf_i) @ mtrx.correction_WE
-    dzdx2 = hsurf @ mtrx.derivative_y + geom.middle_itf_j(hsurf_itf_j) @ mtrx.correction_SN
 
     u1, u2 = geom.wind2contra(u, v)
-    return u1, u2, h, hsurf, dzdx1, dzdx2, hsurf_itf_i, hsurf_itf_j
+    return u1, u2, h, hsurf, hsurf_itf_i, hsurf_itf_j
 
 
 def height_unsteady_zonal(geom, metric, param):

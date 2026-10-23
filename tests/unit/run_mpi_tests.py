@@ -23,6 +23,7 @@ from tests.unit.restart.test_restart import (
 )
 from tests.unit.rhs.test_euler_mpi import EulerRhsTestCase
 from tests.unit.rhs.test_prescribed_transport_mpi import PrescribedTransportTestCase
+from tests.unit.rhs.test_shallow_water_mpi import ShallowWaterRhsTestCase
 from tests.unit.rhs.test_terrain_ramp_mpi import TerrainRampTestCase
 from tests.unit.solvers.test_exponential_mpi import ExponentialMpiTestCase
 
@@ -42,6 +43,9 @@ def load_tests(test_name: str):
     for name in unittest.defaultTestLoader.getTestCaseNames(EulerRhsTestCase):
         add_test(suite, EulerRhsTestCase(6, name, "cpu"), test_re)
         add_test(suite, EulerRhsTestCase(24, name, "cpu", optional=True), test_re)
+
+    for name in unittest.defaultTestLoader.getTestCaseNames(ShallowWaterRhsTestCase):
+        add_test(suite, ShallowWaterRhsTestCase(6, name, "cpu"), test_re)
 
     for name in unittest.defaultTestLoader.getTestCaseNames(PrescribedTransportTestCase):
         add_test(suite, PrescribedTransportTestCase(6, name, "cpu"), test_re)

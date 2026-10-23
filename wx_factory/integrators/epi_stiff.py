@@ -61,7 +61,7 @@ class EpiStiff(Integrator):
 
         rhs = self.rhs(Q)
 
-        if getattr(self.param, "jacobian", "finite_difference") == "analytic":
+        if getattr(self.param, "jacobian", "finite_difference") == "analytic" and hasattr(self.rhs, "linearize"):
             action = self.rhs.linearize(Q)
         else:
             action = FiniteDifferenceJacobian(1.0, Q, self.rhs)
