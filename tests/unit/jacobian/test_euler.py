@@ -8,13 +8,13 @@ from wx_factory.pde.euler_interfaces import EulerInterfaceGeometry, acoustic_int
 
 
 class EulerJacobianTestCase(unittest.TestCase):
-    def test_zero_normal_tie_uses_left_branch_and_wall_has_zero_tangent(self):
+    def test_zero_normal_flow_uses_central_tangent_and_left_scalar_branch(self):
         inverse = torch.eye(3, dtype=torch.float64)
         left = torch.tensor([1.0, 0.0, 2.0, 3.0, 300.0], dtype=torch.float64)
         right = left.clone()
-        right[2] = 5
+        right[0], right[2] = 1.3, 5
         delta_left = torch.tensor([0.1, 0.2, 0.3, 0.4, 0.5], dtype=torch.float64)
-        delta_right = -delta_left
+        delta_right = torch.tensor([0.2, -0.1, 0.6, -0.2, 0.3], dtype=torch.float64)
         for wall in (False, True):
             geometry = EulerInterfaceGeometry(
                 None,
@@ -28,8 +28,9 @@ class EulerJacobianTestCase(unittest.TestCase):
             )
             action = AcousticLinearization(left, right, geometry, 0)
             self.assertTrue(action.upwind)
-            _, _, _, star, _ = action(delta_left, delta_right)
-            torch.testing.assert_close(star[1:], delta_left[2:4], rtol=0, atol=0)
+            normal, _, _, star, flux = action(delta_left, delta_right)
+            torch.testing.assert_close(star[1:], (delta_left[2:4] + delta_right[2:4]) / 2, rtol=0, atol=0)
+            torch.testing.assert_close(flux, normal * left[[0, 4]], rtol=0, atol=0)
             if wall:
                 self.assertEqual(star[0].item(), 0.0)
                 self.assertEqual(action(delta_left, delta_right)[0].item(), 0.0)

@@ -28,19 +28,32 @@ class Metric5DTestCase(unittest.TestCase):
             deep=deep,
         )
 
-    def test_chunked_transport_metric_preserves_all_fields_and_shape(self):
+    def test_chunked_metric_preserves_all_fields_and_shape(self):
         from dataclasses import fields
 
         from wx_factory.geometry.metric5d import Metric5D, Metric5DFields
 
-        points = self.points.repeat(1, 8500).reshape(3, 2, 8500)
+        points = self.points.repeat(1, 5).reshape(3, 2, 5)
         metric = Metric5D.__new__(Metric5D)
-        metric.evaluate = self.metric
+        batch_sizes = []
+
+        def evaluate(batch):
+            batch_sizes.append(batch.shape[-1])
+            return self.metric(batch)
+
+        metric.evaluate = evaluate
         expected = self.metric(points)
-        actual = metric._evaluate_transport_metric(points)
-        for field in fields(Metric5DFields):
-            with self.subTest(field=field.name):
-                torch.testing.assert_close(getattr(actual, field.name), getattr(expected, field.name), rtol=0, atol=0)
+        for cpu_storage in (False, True):
+            batch_sizes.clear()
+            actual = metric._evaluate_in_chunks(points, cpu_storage=cpu_storage, chunk_size=4)
+            self.assertLessEqual(max(batch_sizes), 4)
+            for field in fields(Metric5DFields):
+                with self.subTest(field=field.name, cpu_storage=cpu_storage):
+                    torch.testing.assert_close(
+                        getattr(actual, field.name), getattr(expected, field.name), rtol=0, atol=0
+                    )
+            for name in ("frame_vorticity", "vertical_frame_gradient", "horizontal_frame_gradient"):
+                torch.testing.assert_close(getattr(actual, name), getattr(expected, name), rtol=0, atol=0)
 
     def test_full_inverse_determinant_and_spatial_basis(self):
         for deep in (False, True):

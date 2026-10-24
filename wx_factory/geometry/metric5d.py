@@ -70,6 +70,7 @@ class Metric5DFields:
 
     G_cov[A,B,...], G_contra[A,B,...], dG_cov[k,A,B,...]. The derivative
     index k=0,1,2 labels xi1,xi2,xi3, unlike the five-dimensional indices A,B.
+    Full derivatives may reside on the CPU while the metric fields remain on the GPU.
     """
 
     G_cov: Tensor
@@ -389,7 +390,7 @@ class Metric5D:
             # Keep completed fields off the shared GPU while constructing the next collection.
             collections = []
             for points in coordinates:
-                collections.append(self._evaluate_transport_metric(points))
+                collections.append(self._evaluate_in_chunks(points, cpu_storage=True))
             del coordinates
             for collection in collections:
                 # Tracer transport needs only the spatial blocks on the runtime device.
@@ -402,26 +403,33 @@ class Metric5D:
             self.volume, *face_fields = collections
             self.faces = tuple(face_fields)
         else:
-            self.volume = self.evaluate(coordinates[0])
-            self.faces = tuple(self.evaluate(points) for points in coordinates[1:])
+            self.volume = self._evaluate_in_chunks(coordinates[0])
+            self.faces = tuple(self._evaluate_in_chunks(points) for points in coordinates[1:])
 
-    def _evaluate_transport_metric(self, coordinates: Tensor) -> Metric5DFields:
-        # Bound the analytic construction workspace independently of the grid resolution.
+    def _evaluate_in_chunks(
+        self, coordinates: Tensor, *, cpu_storage: bool = False, chunk_size: int = 16384
+    ) -> Metric5DFields:
+        """Assemble analytic geometry with a bounded construction workspace."""
         shape = coordinates.shape[1:]
         points = coordinates.reshape(3, -1)
         assembled = {}
-        for start in range(0, points.shape[1], 16384):
-            stop = min(start + 16384, points.shape[1])
+        for start in range(0, points.shape[1], chunk_size):
+            stop = min(start + chunk_size, points.shape[1])
             collection = self.evaluate(points[:, start:stop])
             for field in fields(Metric5DFields):
                 value = getattr(collection, field.name)
                 if field.name not in assembled:
+                    # Only frame coefficients from the full derivative tensor are needed on the GPU.
+                    device = "cpu" if cpu_storage or field.name == "dG_cov" else value.device
                     assembled[field.name] = torch.empty(
-                        value.shape[:-1] + (points.shape[1],), dtype=value.dtype, device="cpu"
+                        value.shape[:-1] + (points.shape[1],), dtype=value.dtype, device=device
                     )
                 assembled[field.name][..., start:stop].copy_(value)
             del collection, value
-        return Metric5DFields(**{name: value.reshape(value.shape[:-1] + shape) for name, value in assembled.items()})
+        result = Metric5DFields(**{name: value.reshape(value.shape[:-1] + shape) for name, value in assembled.items()})
+        if result.dG_cov.device != result.G_cov.device:
+            result.cache_frame_derivatives()
+        return result
 
     def to_runtime(self, dtype: torch.dtype) -> None:
         """Cast runtime fields; retain float64 geometry construction."""
