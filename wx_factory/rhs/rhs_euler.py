@@ -7,7 +7,7 @@ import torch
 from torch import Tensor
 
 from ..common.matmul import apply_op
-from ..common.tensor_math import antisymmetric_velocity_contraction
+from ..common.tensor_math import antisymmetric_velocity_contraction, relative_covariant_curl
 from ..init.dcmip import dcmip_schar_damping_coeffs
 from ..pde.euler_interfaces import EulerInterfaceGeometry, acoustic_interface, interface_slices, pressure
 
@@ -279,14 +279,7 @@ class RhsEuler:
 
     def relative_covariant_curl(self, covariant: Tensor, velocity_traces: tuple[Tensor, ...]) -> Tensor:
         """Return v_{j,i} - v_{i,j} with leading spatial axes (i, j)."""
-        dv2_dx1, dv3_dx1, dv1_dx2, dv3_dx2, dv1_dx3, dv2_dx3 = self._curl_derivatives(covariant, velocity_traces)
-        curl_12 = dv2_dx1 - dv1_dx2
-        curl_13 = dv3_dx1 - dv1_dx3
-        curl_23 = dv3_dx2 - dv2_dx3
-        zero = torch.zeros_like(curl_12)
-        return torch.stack((zero, curl_12, curl_13, -curl_12, zero, curl_23, -curl_13, -curl_23, zero)).reshape(
-            (3, 3) + curl_12.shape
-        )
+        return relative_covariant_curl(self._curl_derivatives(covariant, velocity_traces))
 
     def linearize(self, state: Tensor):
         from ..jacobian.euler import EulerLinearization

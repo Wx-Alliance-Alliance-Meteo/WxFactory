@@ -12,8 +12,9 @@ class EulerJacobianTestCase(unittest.TestCase):
     def test_cpu_actions_do_not_load_compiler(self):
         rhs, state, *_ = frozen_problem(elements=2, nodes=2)
         reference = None
-        with patch(
-            "wx_factory.jacobian.euler._compiled_acoustic_action", side_effect=AssertionError("CPU compilation")
+        with (
+            patch("wx_factory.jacobian.euler._compiled_acoustic_action", side_effect=AssertionError("CPU compilation")),
+            patch("wx_factory.jacobian.euler._compiled_volume_actions", side_effect=AssertionError("CPU compilation")),
         ):
             for enabled in (False, True):
                 rhs.config.compile_jacobian = enabled

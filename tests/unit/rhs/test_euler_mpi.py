@@ -8,7 +8,7 @@ from wx_factory.common import Configuration, load_default_schema, readfile
 from wx_factory.common.definitions import heat_capacity_ratio
 from wx_factory.geometry import CubedSphere3D, DFROperators, Metric5D
 from wx_factory.init.euler import pack_euler_state
-from wx_factory.jacobian.euler import _compiled_acoustic_action
+from wx_factory.jacobian.euler import _compiled_acoustic_action, _compiled_volume_actions
 from wx_factory.pde.euler_interfaces import low_mach_scales, physical_mach_number, pressure
 from wx_factory.process_topology import ProcessTopology
 from wx_factory.rhs.rhs_euler import RhsEuler
@@ -23,17 +23,26 @@ class EulerRhsTestCase(MpiTestCase):
         vector[0], vector[4] = 0.01 * self.state[0] * profile, 0.01 * self.state[4] * profile
         vector[1:4] = self.metric.covariant_winds(0.2 * profile, -0.1 * profile, 0.05 * profile)
         references = None
-        with patch("wx_factory.jacobian.euler._compiled_acoustic_action", wraps=_compiled_acoustic_action) as compiler:
+        with (
+            patch("wx_factory.jacobian.euler._compiled_acoustic_action", wraps=_compiled_acoustic_action) as compiler,
+            patch(
+                "wx_factory.jacobian.euler._compiled_volume_actions", wraps=_compiled_volume_actions
+            ) as volume_compiler,
+        ):
             for enabled in (False, True):
                 self.config.compile_jacobian = enabled
                 before = compiler.call_count
+                volume_before = volume_compiler.call_count
                 full = self.rhs.linearize(self.state)(vector).clone()
                 self.assertEqual(compiler.call_count > before, enabled and self.device_name == "cuda")
+                self.assertEqual(volume_compiler.call_count > volume_before, enabled and self.device_name == "cuda")
+                volume_before = volume_compiler.call_count
                 before = compiler.call_count
                 partition = self.rhs.linearize_partitions(self.state)
                 implicit = partition.implicit(vector).clone()
                 self.assertEqual(compiler.call_count > before, enabled and self.device_name == "cuda")
                 explicit = partition.explicit(vector).clone()
+                self.assertEqual(volume_compiler.call_count, volume_before)
                 if references is None:
                     references = (full, implicit, explicit)
                 for actual, expected in zip((full, implicit, explicit), references):

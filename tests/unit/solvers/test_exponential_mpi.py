@@ -10,22 +10,25 @@ from wx_factory.solvers.pmex import pmex
 class ExponentialMpiTestCase(MpiTestCase):
     def test_distributed_phi_combination_against_dense_reference(self):
         size = 24
-        matrix = -torch.diag(torch.linspace(0.0, 3.0, size, dtype=torch.float64))
-        matrix += 0.4 * torch.diag(torch.ones(size - 1, dtype=torch.float64), diagonal=1)
+        matrix = -torch.diag(torch.linspace(0.0, 3.0, size, dtype=torch.float64, device="cpu"))
+        matrix += 0.4 * torch.diag(torch.ones(size - 1, dtype=torch.float64, device="cpu"), diagonal=1)
         generator = torch.Generator().manual_seed(62)
-        vectors = torch.randn((3, size), generator=generator, dtype=torch.float64)
+        vectors = torch.randn((3, size), generator=generator, dtype=torch.float64, device="cpu")
         # Unequal rank contributions exercise the global Krylov reductions.
         vectors[:, size // 2 :] *= 100
-        augmented = torch.zeros((size + 2, size + 2), dtype=torch.float64)
+        augmented = torch.zeros((size + 2, size + 2), dtype=torch.float64, device="cpu")
         augmented[:size, :size] = matrix
         augmented[:size, size:] = vectors[[2, 1]].T
         augmented[size, size + 1] = 1
         exponential = torch.from_numpy(expm(augmented.numpy()))
         reference = exponential[:size, :size] @ vectors[0] + exponential[:size, size + 1]
         local = slice(self.comm.rank * size // self.comm.size, (self.comm.rank + 1) * size // self.comm.size)
+        matrix = matrix.to(self.context.torch_device)
+        vectors = vectors.to(self.context.torch_device)
+        reference = reference.to(self.context.torch_device)
 
         def matvec(vector):
-            full = torch.from_numpy(numpy.concatenate(self.comm.allgather(vector.cpu().numpy())))
+            full = torch.from_numpy(numpy.concatenate(self.comm.allgather(vector.cpu().numpy()))).to(matrix.device)
             return matrix[local] @ full
 
         for solver in (kiops, pmex):

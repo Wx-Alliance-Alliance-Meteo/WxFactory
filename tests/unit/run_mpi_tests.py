@@ -72,6 +72,18 @@ def load_tests(test_name: str):
     add_test(suite, ShallowWaterRestartTestCase(24, "test_multisize", "cpu", optional=True), test_re)
     add_test(suite, Euler3DRestartTestCase(24, "test_multisize", "cpu", optional=True), test_re)
 
+    if "cuda" in device_names:
+        add_test(
+            suite,
+            EulerRhsTestCase(6, "test_compilation_switch_preserves_full_and_partitioned_actions", "cuda"),
+            test_re,
+        )
+        add_test(
+            suite,
+            ExponentialMpiTestCase(2, "test_distributed_phi_combination_against_dense_reference", "cuda"),
+            test_re,
+        )
+
     for dev in device_names:
         add_test(suite, ExchangeTest("vector2d_1d_shape1d", dev), test_re)
         add_test(suite, ExchangeTest("vector2d_1d_shape2d", dev), test_re)

@@ -156,7 +156,12 @@ def pmex(
             V[j, n : n + p - 1] = V[j - 1, n + 1 : n + p]
             V[j, -1] = 0.0
 
-            local_vec = (V[0 : j + 1, 0:n] @ V[j - 1 : j + 1, 0:n].T).to(acc)
+            # Two GEMVs avoid a slow two-column float64 GEMM on GPUs.
+            if V.is_cuda and V.dtype == torch.float64:
+                basis = V[0 : j + 1, 0:n]
+                local_vec = torch.stack((basis @ V[j - 1, 0:n], basis @ V[j, 0:n]), dim=1).to(acc)
+            else:
+                local_vec = (V[0 : j + 1, 0:n] @ V[j - 1 : j + 1, 0:n].T).to(acc)
             global_vec = torch.empty_like(local_vec)
 
             context.synchronize()

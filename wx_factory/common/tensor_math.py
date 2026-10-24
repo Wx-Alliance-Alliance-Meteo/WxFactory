@@ -29,3 +29,15 @@ def antisymmetric_velocity_contraction(tensor: Tensor, velocity: Tensor) -> Tens
             -velocity[0] * a13 - velocity[1] * a23,
         )
     )
+
+
+def relative_covariant_curl(derivatives: tuple[Tensor, ...]) -> Tensor:
+    """Return v_{j,i} - v_{i,j} from the six off-diagonal velocity derivatives."""
+    dv2_dx1, dv3_dx1, dv1_dx2, dv3_dx2, dv1_dx3, dv2_dx3 = derivatives
+    curl_12 = dv2_dx1 - dv1_dx2
+    curl_13 = dv3_dx1 - dv1_dx3
+    curl_23 = dv3_dx2 - dv2_dx3
+    zero = torch.zeros_like(curl_12)
+    return torch.stack((zero, curl_12, curl_13, -curl_12, zero, curl_23, -curl_13, -curl_23, zero)).reshape(
+        (3, 3) + curl_12.shape
+    )

@@ -4,7 +4,7 @@ Upwind branches are frozen at the base state, including
 the nonlinear RHS's left-state convention at zero normal velocity.
 """
 
-from functools import cache
+from functools import cache, partial
 from time import perf_counter
 
 import torch
@@ -12,7 +12,7 @@ from mpi4py import MPI
 
 from ..common.definitions import heat_capacity_ratio
 from ..common.matmul import apply_op
-from ..common.tensor_math import antisymmetric_velocity_contraction, spatial_matrix_vector
+from ..common.tensor_math import antisymmetric_velocity_contraction, relative_covariant_curl, spatial_matrix_vector
 from ..pde.euler_interfaces import acoustic_interface, low_mach_scales, physical_mach_number, pressure
 
 
@@ -26,22 +26,21 @@ def _mach_gradient(state, inverse_spatial, sound_speed, mach):
     )
 
 
-def _compile_acoustic_graph(graph, inputs, *, options):
+def _compile_jacobian_graph(graph, inputs, *, options, component):
     announce = MPI.COMM_WORLD.rank == 0
     if announce:
-        print("Compiling Euler interface Jacobian...", flush=True)
+        print(f"Compiling {component} Jacobian...", flush=True, end=' ')
     start = perf_counter()
     compiled = torch._inductor.compile(graph, inputs, options=options)
     if announce:
-        print(f"Euler interface Jacobian ready ({perf_counter() - start:.3f} s)", flush=True)
+        print(f"done. ({perf_counter() - start:.3f} s)", flush=True)
     return compiled
 
 
-@cache
-def _compiled_acoustic_action():
+def _compile_action(action, component):
     return torch.compile(
-        AcousticLinearization._apply,
-        backend=_compile_acoustic_graph,
+        action,
+        backend=partial(_compile_jacobian_graph, component=component),
         # Allow eager fallback when varied layouts exhaust the compiler cache.
         fullgraph=False,
         dynamic=False,
@@ -53,6 +52,36 @@ def _compiled_acoustic_action():
             "eager_numerics.division_rounding": True,
         },
     )
+
+
+@cache
+def _compiled_acoustic_action():
+    return _compile_action(AcousticLinearization._apply, "interface")
+
+
+@cache
+def _compiled_volume_actions():
+    return tuple(_compile_action(action, "volume") for action in (_prepare_volume, _scalar_flux, _add_vorticity))
+
+
+def _prepare_volume(inverse_spatial, delta_state, pressure, state, velocity):
+    delta_velocity = spatial_matrix_vector(inverse_spatial, delta_state[1:4])
+    delta_pressure = heat_capacity_ratio * pressure * delta_state[4] / state[4]
+    delta_energy = (velocity * delta_state[1:4]).sum(dim=0)
+    return delta_velocity, delta_pressure, delta_energy
+
+
+def _scalar_flux(jacobian, delta_velocity, scalars, velocity, delta_scalars):
+    return jacobian * (delta_velocity * scalars + velocity * delta_scalars)
+
+
+def _add_vorticity(result, delta_state, derivatives, velocity, base_curl, frame_curl, delta_velocity, damping):
+    result[1:4] += antisymmetric_velocity_contraction(relative_covariant_curl(derivatives), velocity)
+    result[1:4] += antisymmetric_velocity_contraction(base_curl, delta_velocity)
+    result[1:4] += antisymmetric_velocity_contraction(frame_curl, delta_velocity)
+    if damping is not None:
+        result[1:4] -= damping * delta_state[1:4]
+    return result
 
 
 class AcousticLinearization:
@@ -203,6 +232,10 @@ class EulerLinearization:
     def __call__(self, vector, *, explicit=False):
         rhs, fields, base_state = self.rhs, self.rhs.metric.volume, self.state
         delta_state = vector.reshape(base_state.shape).to(base_state.dtype)
+        compile_volume = delta_state.is_cuda and rhs.config.compile_jacobian and not explicit
+        scalar_flux = _scalar_flux
+        if compile_volume:
+            prepare_volume, scalar_flux, add_vorticity = _compiled_volume_actions()
         delta_scalars = delta_state[[0, 4]]
         relative_scalar_perturbation = delta_scalars / self.scalars
         traces = []
@@ -214,9 +247,14 @@ class EulerLinearization:
         # Consume the face arrays one direction at a time to limit peak memory.
         faces = list(rhs._faces_with_neighbours(tuple(traces)))
         del traces, trace, relative_scalar_perturbation
-        delta_contravariant_velocity = fields.raise_velocity(delta_state[1:4])
-        delta_pressure = heat_capacity_ratio * self.pressure * delta_state[4] / base_state[4]
-        delta_energy = (self.contravariant_velocity * delta_state[1:4]).sum(dim=0)
+        if compile_volume:
+            delta_contravariant_velocity, delta_pressure, delta_energy = prepare_volume(
+                fields.G_contra[1:4, 1:4], delta_state, self.pressure, base_state, self.contravariant_velocity
+            )
+        else:
+            delta_contravariant_velocity = fields.raise_velocity(delta_state[1:4])
+            delta_pressure = heat_capacity_ratio * self.pressure * delta_state[4] / base_state[4]
+            delta_energy = (self.contravariant_velocity * delta_state[1:4]).sum(dim=0)
         result = torch.zeros_like(delta_state)
         scalar_tendency = torch.zeros_like(delta_scalars)
         pressure_gradient, energy_gradient = [], []
@@ -231,9 +269,12 @@ class EulerLinearization:
                 scalar_trace = face.new_zeros((2,) + face.shape[1:])
                 face_flux = geometry.jacobian * face_flux
                 scalar_trace[left], scalar_trace[right] = face_flux, face_flux
-                flux = fields.volume_jacobian * (
-                    delta_contravariant_velocity[direction] * self.scalars
-                    + self.contravariant_velocity[direction] * delta_scalars
+                flux = scalar_flux(
+                    fields.volume_jacobian,
+                    delta_contravariant_velocity[direction],
+                    self.scalars,
+                    self.contravariant_velocity[direction],
+                    delta_scalars,
                 )
                 scalar_tendency -= (
                     apply_op(flux, rhs.derivatives[direction])
@@ -261,6 +302,19 @@ class EulerLinearization:
         pressure_acceleration = self.pressure_acceleration[:2] if explicit else self.pressure_acceleration
         result[momentum] -= pressure_acceleration * (delta_state[0] / base_state[0])
         del pressure_gradient, energy_gradient, delta_pressure, delta_energy
+        if compile_volume:
+            derivatives = rhs._curl_derivatives(delta_state[1:4], tuple(velocity_traces))
+            result = add_vorticity(
+                result,
+                delta_state,
+                derivatives,
+                self.contravariant_velocity,
+                self.base_relative_curl,
+                fields.frame_vorticity,
+                delta_contravariant_velocity,
+                None if rhs.damping is None else rhs.damping[0],
+            )
+            return result.reshape(self.shape).flatten()
         result[1:4] += rhs.relative_vorticity_tendency(
             delta_state[1:4], self.contravariant_velocity, tuple(velocity_traces), explicit=explicit
         )

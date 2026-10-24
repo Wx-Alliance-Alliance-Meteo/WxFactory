@@ -329,7 +329,7 @@
                     "type": "bool",
                     "default": true,
                     "dependency": {"name": "equations", "values": ["euler"]},
-                    "description": "Compile pointwise Euler interface Jacobian actions on GPU, including implicit-column assembly. CPU uses eager PyTorch. First use incurs compilation; disable for short runs or baseline comparisons."
+                    "description": "Compile pointwise Euler volume and interface Jacobian calculations on GPU, including interface actions during implicit-column assembly. CPU uses eager PyTorch. First use incurs compilation; disable for short runs or baseline comparisons."
                 },
                 {
                     "name": "expfilter_apply",
