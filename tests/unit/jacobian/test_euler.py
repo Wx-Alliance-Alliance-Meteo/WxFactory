@@ -89,6 +89,10 @@ class EulerJacobianTestCase(unittest.TestCase):
         direction[4] *= 10
         action = rhs.linearize(state)
         actual = action(direction).reshape_as(state)
+        saved = actual.clone()
+        action.explicit(-direction)
+        torch.testing.assert_close(action(direction).reshape_as(state), saved, rtol=0, atol=0)
+        torch.testing.assert_close(actual, saved, rtol=0, atol=0)
         errors = []
         for epsilon in (1.6e-3, 4e-4, 1e-4):
             expected = (rhs(state + epsilon * direction) - rhs(state - epsilon * direction)) / (2 * epsilon)

@@ -171,57 +171,56 @@ class EulerLinearization:
             trace[1:4] = apply_op(delta_state[1:4], operator)
             trace[[0, 4]] = base_trace[[0, 4]] * apply_op(relative_scalar_perturbation, operator)
             traces.append(trace)
-        faces = rhs._faces_with_neighbours(tuple(traces))
-        scalar_traces, pressure_traces, energy_traces, velocity_traces = [], [], [], []
-        for direction, (geometry, interface, face) in enumerate(zip(rhs._static_interfaces(), self.interfaces, faces)):
-            left, right = geometry.left, geometry.right
-            if explicit and direction == 2:
-                delta_covariant_velocity = interface(face[left], face[right], velocity_only=True)
-                trace = torch.zeros_like(face[1:4])
-                trace[left], trace[right] = delta_covariant_velocity, delta_covariant_velocity
-                velocity_traces.append(trace[rhs.mid_faces[direction]])
-                continue
-            _, delta_pressure, delta_kinetic_energy, delta_covariant_velocity, flux = interface(face[left], face[right])
-            flux = geometry.jacobian * flux
-            scalar_trace = face.new_zeros((2,) + face.shape[1:])
-            scalar_trace[left], scalar_trace[right] = flux, flux
-            scalar_traces.append(scalar_trace[rhs.mid_faces[direction]])
-            for value, template, output in (
-                (delta_pressure, face[0], pressure_traces),
-                (delta_kinetic_energy, face[0], energy_traces),
-                (delta_covariant_velocity, face[1:4], velocity_traces),
-            ):
-                trace = torch.zeros_like(template)
-                trace[left], trace[right] = value, value
-                output.append(trace[rhs.mid_faces[direction]])
+        # Consume the face arrays one direction at a time to limit peak memory.
+        faces = list(rhs._faces_with_neighbours(tuple(traces)))
+        del traces, trace, relative_scalar_perturbation
         delta_contravariant_velocity = fields.raise_velocity(delta_state[1:4])
         delta_pressure = heat_capacity_ratio * self.pressure * delta_state[4] / base_state[4]
         delta_energy = (self.contravariant_velocity * delta_state[1:4]).sum(dim=0)
         result = torch.zeros_like(delta_state)
         scalar_tendency = torch.zeros_like(delta_scalars)
         pressure_gradient, energy_gradient = [], []
-        for direction in range(2 if explicit else 3):
-            flux = fields.volume_jacobian * (
-                delta_contravariant_velocity[direction] * self.scalars
-                + self.contravariant_velocity[direction] * delta_scalars
-            )
-            scalar_tendency -= (
-                apply_op(flux, rhs.derivatives[direction])
-                + apply_op(scalar_traces[direction], rhs.corrections[direction])
-            ) / fields.volume_jacobian
-            pressure_gradient.append(
-                apply_op(delta_pressure, rhs.derivatives[direction])
-                + apply_op(pressure_traces[direction], rhs.corrections[direction])
-            )
-            energy_gradient.append(
-                apply_op(delta_energy, rhs.derivatives[direction])
-                + apply_op(energy_traces[direction], rhs.corrections[direction])
-            )
+        velocity_traces = []
+        for direction, (geometry, interface) in enumerate(zip(rhs._static_interfaces(), self.interfaces)):
+            face = faces[direction]
+            left, right = geometry.left, geometry.right
+            if explicit and direction == 2:
+                delta_covariant_velocity = interface(face[left], face[right], velocity_only=True)
+            else:
+                _, face_pressure, face_energy, delta_covariant_velocity, face_flux = interface(face[left], face[right])
+                scalar_trace = face.new_zeros((2,) + face.shape[1:])
+                face_flux = geometry.jacobian * face_flux
+                scalar_trace[left], scalar_trace[right] = face_flux, face_flux
+                flux = fields.volume_jacobian * (
+                    delta_contravariant_velocity[direction] * self.scalars
+                    + self.contravariant_velocity[direction] * delta_scalars
+                )
+                scalar_tendency -= (
+                    apply_op(flux, rhs.derivatives[direction])
+                    + apply_op(scalar_trace[rhs.mid_faces[direction]], rhs.corrections[direction])
+                ) / fields.volume_jacobian
+                for value, common, output in (
+                    (delta_pressure, face_pressure, pressure_gradient),
+                    (delta_energy, face_energy, energy_gradient),
+                ):
+                    trace = torch.zeros_like(face[0])
+                    trace[left], trace[right] = common, common
+                    output.append(
+                        apply_op(value, rhs.derivatives[direction])
+                        + apply_op(trace[rhs.mid_faces[direction]], rhs.corrections[direction])
+                    )
+                del scalar_trace, face_flux, flux, face_pressure, face_energy, trace, common, value, output
+            velocity_trace = torch.zeros_like(face[1:4])
+            velocity_trace[left], velocity_trace[right] = delta_covariant_velocity, delta_covariant_velocity
+            velocity_traces.append(velocity_trace[rhs.mid_faces[direction]])
+            faces[direction] = None
+            del face, delta_covariant_velocity, velocity_trace
         result[[0, 4]] = scalar_tendency
         momentum = slice(1, 3 if explicit else 4)
         result[momentum] = -torch.stack(pressure_gradient) / base_state[0] - torch.stack(energy_gradient)
         pressure_acceleration = self.pressure_acceleration[:2] if explicit else self.pressure_acceleration
         result[momentum] -= pressure_acceleration * (delta_state[0] / base_state[0])
+        del pressure_gradient, energy_gradient, delta_pressure, delta_energy
         result[1:4] += rhs.relative_vorticity_tendency(
             delta_state[1:4], self.contravariant_velocity, tuple(velocity_traces), explicit=explicit
         )
