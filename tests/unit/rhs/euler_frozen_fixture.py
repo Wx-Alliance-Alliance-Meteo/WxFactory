@@ -64,7 +64,7 @@ def frozen_problem(elements=24, nodes=4, length=80000.0, speed=20.0, vertical_el
             expand((vertical_elements + 2, 1, elements, 2 * nodes**2)),
         ),
     )
-    config = SimpleNamespace(case_number=0, riemann_mach_cutoff=0.3, vertical_boundary="wall")
+    config = SimpleNamespace(case_number=0, riemann_mach_cutoff=0.3, vertical_boundary="wall", compile_jacobian=True)
     rhs = RhsEuler(grid, operators, metric, PeriodicUnitExchange(), config)
     state = torch.zeros((5, vertical_elements, 1, elements, nodes**3), dtype=torch.float64)
     state[0], state[4] = 1.0, 300.0

@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch
 
 import torch
 
@@ -8,6 +9,19 @@ from wx_factory.pde.euler_interfaces import EulerInterfaceGeometry, acoustic_int
 
 
 class EulerJacobianTestCase(unittest.TestCase):
+    def test_cpu_actions_do_not_load_compiler(self):
+        rhs, state, *_ = frozen_problem(elements=2, nodes=2)
+        reference = None
+        with patch(
+            "wx_factory.jacobian.euler._compiled_acoustic_action", side_effect=AssertionError("CPU compilation")
+        ):
+            for enabled in (False, True):
+                rhs.config.compile_jacobian = enabled
+                actual = rhs.linearize(state)(state)
+                if reference is None:
+                    reference = actual.clone()
+                torch.testing.assert_close(actual, reference, rtol=0, atol=0)
+
     def test_zero_normal_flow_uses_central_tangent_and_left_scalar_branch(self):
         inverse = torch.eye(3, dtype=torch.float64)
         left = torch.tensor([1.0, 0.0, 2.0, 3.0, 300.0], dtype=torch.float64)

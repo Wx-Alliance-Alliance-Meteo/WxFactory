@@ -4,7 +4,11 @@ Upwind branches are frozen at the base state, including
 the nonlinear RHS's left-state convention at zero normal velocity.
 """
 
+from functools import cache
+from time import perf_counter
+
 import torch
+from mpi4py import MPI
 
 from ..common.definitions import heat_capacity_ratio
 from ..common.matmul import apply_op
@@ -22,11 +26,41 @@ def _mach_gradient(state, inverse_spatial, sound_speed, mach):
     )
 
 
+def _compile_acoustic_graph(graph, inputs, *, options):
+    announce = MPI.COMM_WORLD.rank == 0
+    if announce:
+        print("Compiling Euler interface Jacobian...", flush=True)
+    start = perf_counter()
+    compiled = torch._inductor.compile(graph, inputs, options=options)
+    if announce:
+        print(f"Euler interface Jacobian ready ({perf_counter() - start:.3f} s)", flush=True)
+    return compiled
+
+
+@cache
+def _compiled_acoustic_action():
+    return torch.compile(
+        AcousticLinearization._apply,
+        backend=_compile_acoustic_graph,
+        # Allow eager fallback when varied layouts exhaust the compiler cache.
+        fullgraph=False,
+        dynamic=False,
+        options={
+            # Avoid a compiler-worker pool in every MPI rank.
+            "compile_threads": 1,
+            # Preserve eager rounding for division and multiply-add operations.
+            "emulate_precision_casts": True,
+            "eager_numerics.division_rounding": True,
+        },
+    )
+
+
 class AcousticLinearization:
     """Cache an acoustic face state and apply its linearized interface solver."""
 
-    def __init__(self, left, right, geometry, direction, *, mach_cutoff=0.3):
+    def __init__(self, left, right, geometry, direction, *, mach_cutoff=0.3, compile_action=False):
         self.direction = direction
+        self.compile_action = compile_action
         self.inverse_spatial = geometry.inverse_spatial
         self.normal_scale = geometry.normal_scale
         self.normal_row = geometry.normal_row
@@ -65,6 +99,11 @@ class AcousticLinearization:
         self.common_contravariant_velocity = spatial_matrix_vector(self.inverse_spatial, self.common_covariant_velocity)
 
     def __call__(self, delta_left, delta_right, *, velocity_only=False):
+        if self.compile_action and delta_left.is_cuda:
+            return _compiled_acoustic_action()(self, delta_left, delta_right, velocity_only=velocity_only)
+        return self._apply(delta_left, delta_right, velocity_only=velocity_only)
+
+    def _apply(self, delta_left, delta_right, *, velocity_only=False):
         delta_pressure_left = heat_capacity_ratio * self.pressure_left * delta_left[4] / self.left[4]
         delta_pressure_right = heat_capacity_ratio * self.pressure_right * delta_right[4] / self.right[4]
         delta_normal_wind_left = (self.normal_row * delta_left[1:4]).sum(dim=0)
@@ -123,6 +162,7 @@ class EulerLinearization:
                 geometry,
                 direction,
                 mach_cutoff=rhs.config.riemann_mach_cutoff,
+                compile_action=rhs.config.compile_jacobian,
             )
             for direction, (geometry, face) in enumerate(zip(rhs._static_interfaces(), faces))
         )
