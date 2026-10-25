@@ -51,3 +51,39 @@ def apply_op(a, b, alpha: float = 1.0, beta: float = 0.0, out=None):
 
     result = _matmul(a, b, alpha=alpha, beta=beta)
     return result.reshape(*sh[:-1], -1)
+
+
+def _column_stencil(operator):
+    """Retain the exact nonzero coefficients and source indices for each output point."""
+    matrix = operator.cpu()
+    columns = [torch.nonzero(column, as_tuple=True)[0] for column in matrix.T]
+    width = max(len(rows) for rows in columns)
+    indices = torch.zeros((matrix.shape[1], width), dtype=torch.long, device="cpu")
+    weights = torch.zeros((matrix.shape[1], width), dtype=matrix.dtype, device="cpu")
+    for point, rows in enumerate(columns):
+        indices[point, : len(rows)] = rows
+        weights[point, : len(rows)] = matrix[rows, point]
+    return indices.to(operator.device), weights.to(operator.device)
+
+
+def sparse_dfr_derivative(volume, faces, indices, weights, face_indices, face_weights):
+    volume_derivative = (volume[..., indices] * weights).sum(dim=-1)
+    face_correction = (faces[..., face_indices] * face_weights).sum(dim=-1)
+    return volume_derivative + face_correction
+
+
+class DFRDerivative:
+    """Apply a volume derivative and its common-face correction."""
+
+    def __init__(self, volume_operator, face_operator, *, action):
+        self.volume_operator = volume_operator
+        self.face_operator = face_operator
+        self.action = action
+        self.indices, self.weights = _column_stencil(volume_operator)
+        self.face_indices, self.face_weights = _column_stencil(face_operator)
+
+    def dense(self, volume, faces):
+        return apply_op(volume, self.volume_operator) + apply_op(faces, self.face_operator)
+
+    def __call__(self, volume, faces):
+        return self.action(self, volume, faces)

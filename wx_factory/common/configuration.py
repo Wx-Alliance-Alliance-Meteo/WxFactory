@@ -102,7 +102,6 @@ class Configuration:
     bubble_rad: float
     bubble_theta: float
     case_number: int
-    compile_jacobian: bool
     depth_approx: str
     discretization: str
     dt: float

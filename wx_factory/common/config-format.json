@@ -325,13 +325,6 @@
                     "description": "Jacobian action for exponential and implicit solvers: double finite differences or analytic linearization. Euler column solves use analytic vertical blocks in either mode."
                 },
                 {
-                    "name": "compile_jacobian",
-                    "type": "bool",
-                    "default": true,
-                    "dependency": {"name": "equations", "values": ["euler"]},
-                    "description": "Compile pointwise Euler volume and interface Jacobian calculations on GPU, including interface actions during implicit-column assembly. CPU uses eager PyTorch. First use incurs compilation; disable for short runs or baseline comparisons."
-                },
-                {
                     "name": "expfilter_apply",
                     "type": "bool",
                     "default": false,

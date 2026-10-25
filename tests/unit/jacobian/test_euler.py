@@ -4,24 +4,33 @@ from unittest.mock import patch
 import torch
 
 from tests.unit.rhs.euler_frozen_fixture import frozen_problem
-from wx_factory.jacobian.euler import AcousticLinearization
+from wx_factory.jacobian.euler import AcousticLinearization, _apply_dfr_derivative
 from wx_factory.pde.euler_interfaces import EulerInterfaceGeometry, acoustic_interface
 
 
 class EulerJacobianTestCase(unittest.TestCase):
     def test_cpu_actions_do_not_load_compiler(self):
         rhs, state, *_ = frozen_problem(elements=2, nodes=2)
-        reference = None
         with (
             patch("wx_factory.jacobian.euler._compiled_acoustic_action", side_effect=AssertionError("CPU compilation")),
             patch("wx_factory.jacobian.euler._compiled_volume_actions", side_effect=AssertionError("CPU compilation")),
+            patch("wx_factory.jacobian.euler._compiled_dfr_derivative", side_effect=AssertionError("CPU compilation")),
         ):
-            for enabled in (False, True):
-                rhs.config.compile_jacobian = enabled
-                actual = rhs.linearize(state)(state)
-                if reference is None:
-                    reference = actual.clone()
-                torch.testing.assert_close(actual, reference, rtol=0, atol=0)
+            actual = rhs.linearize(state)(state)
+            self.assertTrue(torch.isfinite(actual).all())
+
+    def test_dfr_cache_follows_precision_promotion(self):
+        rhs, _, *_ = frozen_problem(elements=2, nodes=3)
+        rhs.derivatives = tuple(operator.float() for operator in rhs.derivatives)
+        rhs.corrections = tuple(operator.float() for operator in rhs.corrections)
+        original = rhs.dfr_derivatives(_apply_dfr_derivative)
+        promoted = rhs.double_precision_rhs()
+        for operator, previous in zip(promoted.dfr_derivatives(_apply_dfr_derivative), original):
+            self.assertIsNot(operator, previous)
+            self.assertEqual(operator.volume_operator.dtype, torch.float64)
+            self.assertEqual(operator.face_operator.dtype, torch.float64)
+            self.assertEqual(operator.weights.dtype, torch.float64)
+            self.assertEqual(operator.face_weights.dtype, torch.float64)
 
     def test_zero_normal_flow_uses_central_tangent_and_left_scalar_branch(self):
         inverse = torch.eye(3, dtype=torch.float64)

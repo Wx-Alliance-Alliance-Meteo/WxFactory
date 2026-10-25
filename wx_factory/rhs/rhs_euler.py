@@ -6,7 +6,7 @@ from copy import copy
 import torch
 from torch import Tensor
 
-from ..common.matmul import apply_op
+from ..common.matmul import DFRDerivative, apply_op
 from ..common.tensor_math import antisymmetric_velocity_contraction, relative_covariant_curl
 from ..init.dcmip import dcmip_schar_damping_coeffs
 from ..pde.euler_interfaces import EulerInterfaceGeometry, acoustic_interface, interface_slices, pressure
@@ -39,6 +39,16 @@ class RhsEuler:
             self.damping = (rate, metric.volume.lower_velocity(torch.stack(reference_contravariant)))
         self.diagnostics = {}
         self._interface_geometry = None
+        self._dfr_derivatives = None
+
+    def dfr_derivatives(self, action):
+        """Cache reference-element stencils independently of the evolving state."""
+        if self._dfr_derivatives is None:
+            self._dfr_derivatives = tuple(
+                DFRDerivative(derivative, correction, action=action)
+                for derivative, correction in zip(self.derivatives, self.corrections)
+            )
+        return self._dfr_derivatives
 
     def invalidate_geometry(self):
         """Release cached fields before rebuilding terrain on the shared GPU."""
@@ -81,6 +91,7 @@ class RhsEuler:
             if self.damping is not None:
                 rhs.damping = tuple(value.to(torch.float64) for value in self.damping)
             rhs.diagnostics = {}
+            rhs._dfr_derivatives = None
             rhs._interface_geometry = None
             self._double_rhs = rhs
         return self._double_rhs
@@ -238,15 +249,18 @@ class RhsEuler:
         self.diagnostics["interface_normal_winds"] = tuple(normal_velocities)
         return scalar_fluxes, pressure_traces, energy_traces, velocity_traces
 
-    def _curl_derivatives(self, covariant: Tensor, velocity_traces: tuple[Tensor, ...]):
+    def _curl_derivatives(self, covariant: Tensor, velocity_traces: tuple[Tensor, ...], derivative_operators=None):
         """Batch only the two off-diagonal velocity derivatives needed in each direction."""
         if velocity_traces is None:
             raise ValueError("DFR curl requires common velocity traces from the Riemann solver")
         selections = (slice(1, 3), slice(0, 3, 2), slice(0, 2))
         derivatives = []
         for direction, selection in enumerate(selections):
-            value = apply_op(covariant[selection], self.derivatives[direction])
-            value += apply_op(velocity_traces[direction][selection], self.corrections[direction])
+            if derivative_operators is None:
+                value = apply_op(covariant[selection], self.derivatives[direction])
+                value += apply_op(velocity_traces[direction][selection], self.corrections[direction])
+            else:
+                value = derivative_operators[direction](covariant[selection], velocity_traces[direction][selection])
             derivatives.append(value)
         return (
             derivatives[0][0],

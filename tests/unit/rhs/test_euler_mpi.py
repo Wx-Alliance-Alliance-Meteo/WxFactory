@@ -8,7 +8,7 @@ from wx_factory.common import Configuration, load_default_schema, readfile
 from wx_factory.common.definitions import heat_capacity_ratio
 from wx_factory.geometry import CubedSphere3D, DFROperators, Metric5D
 from wx_factory.init.euler import pack_euler_state
-from wx_factory.jacobian.euler import _compiled_acoustic_action, _compiled_volume_actions
+from wx_factory.jacobian.euler import _compiled_acoustic_action, _compiled_dfr_derivative, _compiled_volume_actions
 from wx_factory.pde.euler_interfaces import low_mach_scales, physical_mach_number, pressure
 from wx_factory.process_topology import ProcessTopology
 from wx_factory.rhs.rhs_euler import RhsEuler
@@ -16,37 +16,44 @@ from wx_factory.solvers.fgmres import fgmres
 
 
 class EulerRhsTestCase(MpiTestCase):
-    def test_compilation_switch_preserves_full_and_partitioned_actions(self):
+    def test_compiled_actions_match_eager_full_and_partitioned_actions(self):
         self.config.riemann_mach_cutoff = 0.001
         profile = torch.sin(self.geom.polar[0]) * torch.cos(self.geom.polar[1])
         vector = torch.zeros_like(self.state)
         vector[0], vector[4] = 0.01 * self.state[0] * profile, 0.01 * self.state[4] * profile
         vector[1:4] = self.metric.covariant_winds(0.2 * profile, -0.1 * profile, 0.05 * profile)
-        references = None
+        _compiled_acoustic_action.cache_clear()
+        _compiled_volume_actions.cache_clear()
+        _compiled_dfr_derivative.cache_clear()
+        with patch("wx_factory.jacobian.euler._compile_action", side_effect=lambda action, component: action):
+            full = self.rhs.linearize(self.state)(vector).clone()
+            partition = self.rhs.linearize_partitions(self.state)
+            references = (full, partition.implicit(vector).clone(), partition.explicit(vector).clone())
+        _compiled_acoustic_action.cache_clear()
+        _compiled_volume_actions.cache_clear()
+        _compiled_dfr_derivative.cache_clear()
         with (
             patch("wx_factory.jacobian.euler._compiled_acoustic_action", wraps=_compiled_acoustic_action) as compiler,
             patch(
                 "wx_factory.jacobian.euler._compiled_volume_actions", wraps=_compiled_volume_actions
             ) as volume_compiler,
+            patch("wx_factory.jacobian.euler._compiled_dfr_derivative", wraps=_compiled_dfr_derivative) as dfr_compiler,
         ):
-            for enabled in (False, True):
-                self.config.compile_jacobian = enabled
-                before = compiler.call_count
-                volume_before = volume_compiler.call_count
-                full = self.rhs.linearize(self.state)(vector).clone()
-                self.assertEqual(compiler.call_count > before, enabled and self.device_name == "cuda")
-                self.assertEqual(volume_compiler.call_count > volume_before, enabled and self.device_name == "cuda")
-                volume_before = volume_compiler.call_count
-                before = compiler.call_count
-                partition = self.rhs.linearize_partitions(self.state)
-                implicit = partition.implicit(vector).clone()
-                self.assertEqual(compiler.call_count > before, enabled and self.device_name == "cuda")
-                explicit = partition.explicit(vector).clone()
-                self.assertEqual(volume_compiler.call_count, volume_before)
-                if references is None:
-                    references = (full, implicit, explicit)
-                for actual, expected in zip((full, implicit, explicit), references):
-                    torch.testing.assert_close(actual, expected, rtol=2e-12, atol=2e-10)
+            full = self.rhs.linearize(self.state)(vector).clone()
+            self.assertEqual(compiler.called, self.device_name == "cuda")
+            self.assertEqual(volume_compiler.called, self.device_name == "cuda")
+            self.assertEqual(dfr_compiler.called, self.device_name == "cuda")
+            dfr_before = dfr_compiler.call_count
+            volume_before = volume_compiler.call_count
+            before = compiler.call_count
+            partition = self.rhs.linearize_partitions(self.state)
+            implicit = partition.implicit(vector).clone()
+            self.assertEqual(compiler.call_count > before, self.device_name == "cuda")
+            explicit = partition.explicit(vector).clone()
+            self.assertEqual(volume_compiler.call_count, volume_before)
+            self.assertEqual(dfr_compiler.call_count, dfr_before)
+            for actual, expected in zip((full, implicit, explicit), references):
+                torch.testing.assert_close(actual, expected, rtol=2e-12, atol=2e-10)
 
     def test_integration_comparison_includes_failures_on_other_ranks(self):
         from tests.integration.test_integration_state import component_errors

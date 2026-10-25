@@ -75,7 +75,7 @@ def load_tests(test_name: str):
     if "cuda" in device_names:
         add_test(
             suite,
-            EulerRhsTestCase(6, "test_compilation_switch_preserves_full_and_partitioned_actions", "cuda"),
+            EulerRhsTestCase(6, "test_compiled_actions_match_eager_full_and_partitioned_actions", "cuda"),
             test_re,
         )
         add_test(
