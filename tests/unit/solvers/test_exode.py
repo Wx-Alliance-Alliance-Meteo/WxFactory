@@ -8,9 +8,9 @@ import torch
 from mpi4py import MPI
 
 from wx_factory.integrators.butcher import METHODS
+from wx_factory.integrators.explicit_runge_kutta import global_rms_norm
 from wx_factory.solvers.exode import ExodeStartup, exode
 from wx_factory.solvers.exponential_solver import ExponentialSolverRequest, resolve_exponential_solver
-from wx_factory.solvers.global_operations import global_inf_norm
 
 
 class ExodeTestCase(unittest.TestCase):
@@ -43,12 +43,12 @@ class ExodeTestCase(unittest.TestCase):
         request = ExponentialSolverRequest(
             [time], lambda x: torch.zeros_like(x), vectors, 1e-8, 32, context, exode_controller="", announce=False
         )
-        with patch("wx_factory.integrators.explicit_runge_kutta.global_inf_norm", wraps=global_inf_norm) as norm:
+        with patch("wx_factory.integrators.explicit_runge_kutta.global_rms_norm", wraps=global_rms_norm) as norm:
             result = resolve_exponential_solver("exode")(request)
         expected = vectors[0] + time * vectors[1] + time**2 / 2 * vectors[2]
         torch.testing.assert_close(result.value, expected, rtol=2e-14, atol=2e-14)
         self.assertTrue(norm.called)
-        self.assertTrue(all(call.args[1] is context.comm for call in norm.call_args_list))
+        self.assertTrue(all(call.args[2] is context.comm for call in norm.call_args_list))
 
     def test_completed_solve_releases_operator_without_cyclic_collection(self):
         class Operator:
@@ -137,7 +137,7 @@ class ExodeTestCase(unittest.TestCase):
             controller=(0.25, 0.25, 0.25, 0.8),
         )
         with patch(
-            "wx_factory.integrators.explicit_runge_kutta.global_inf_norm",
+            "wx_factory.integrators.explicit_runge_kutta.global_rms_norm",
             side_effect=[0.2, 0.3, 2.0, 0.4],
         ):
             solver.step()

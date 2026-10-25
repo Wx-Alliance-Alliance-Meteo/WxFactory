@@ -78,11 +78,8 @@ def load_tests(test_name: str):
             EulerRhsTestCase(6, "test_compiled_actions_match_eager_full_and_partitioned_actions", "cuda"),
             test_re,
         )
-        add_test(
-            suite,
-            ExponentialMpiTestCase(2, "test_distributed_phi_combination_against_dense_reference", "cuda"),
-            test_re,
-        )
+        for name in unittest.defaultTestLoader.getTestCaseNames(ExponentialMpiTestCase):
+            add_test(suite, ExponentialMpiTestCase(2, name, "cuda"), test_re)
 
     for dev in device_names:
         add_test(suite, ExchangeTest("vector2d_1d_shape1d", dev), test_re)
@@ -122,9 +119,8 @@ def load_tests(test_name: str):
         add_test(suite, GatherScatterTest(6, "fail_not_cube", dev), test_re)
         add_test(suite, GatherScatterTest(6, "fail_wrong_num_dim", dev), test_re)
 
-    add_test(
-        suite, ExponentialMpiTestCase(2, "test_distributed_phi_combination_against_dense_reference", "cpu"), test_re
-    )
+    for name in unittest.defaultTestLoader.getTestCaseNames(ExponentialMpiTestCase):
+        add_test(suite, ExponentialMpiTestCase(2, name, "cpu"), test_re)
 
     add_test(suite, CompareZarrToNcTestCase(6, "test_compare_zarr_to_nc"), test_re)
 

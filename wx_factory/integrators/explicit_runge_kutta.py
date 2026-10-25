@@ -31,10 +31,16 @@ def _stage_state(state, combination, step):
 def _error_vectors(state, next_state, combination, step, rtol, atol):
     error = step * combination
     scale = atol + torch.maximum(state.abs(), next_state.abs()) * rtol
-    normalized = error / scale
-    # MPI.MAX does not consistently propagate NaNs across ranks.
-    normalized = torch.nan_to_num(normalized, nan=math.inf, posinf=math.inf, neginf=math.inf)
-    return error, normalized
+    # Square in float64 so the norm neither overflows nor underflows in single precision.
+    normalized = (error / scale).double()
+    return error, torch.sum(normalized * normalized)
+
+
+def global_rms_norm(local_sum_of_squares, local_size: int, comm: MPI.Comm) -> float:
+    """Root-mean-square norm from the local sums of squares of all PEs."""
+    totals = numpy.array([local_sum_of_squares.item(), local_size], dtype=numpy.float64)
+    comm.Allreduce(MPI.IN_PLACE, totals, op=MPI.SUM)
+    return math.sqrt(totals[0] / totals[1])
 
 
 def _compile_vector_graph(graph, inputs, *, options):
@@ -311,10 +317,10 @@ class RungeKutta:
                 self.K[self.n_stages, :] = self.fun(self.t + h, y_new)
 
             n_error_stages = self.n_stages + self.endpoint_error_stage
-            err_estimate, normalized_error = self._error_vectors(
+            err_estimate, error_sum_of_squares = self._error_vectors(
                 y, y_new, self.K[:n_error_stages].T @ self._E[:n_error_stages], step, self.rtol, self.atol
             )
-            error_norm = global_inf_norm(normalized_error, self.comm)
+            error_norm = global_rms_norm(error_sum_of_squares, self.n, self.comm)
 
             if error_norm < 1:
                 step_accepted = True

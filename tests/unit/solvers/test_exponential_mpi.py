@@ -1,3 +1,4 @@
+import math
 from unittest.mock import patch
 
 import numpy
@@ -6,12 +7,39 @@ from scipy.linalg import expm
 
 from tests.unit.mpi_test import MpiTestCase
 from wx_factory.integrators.butcher import METHODS
+from wx_factory.integrators.explicit_runge_kutta import _compiled_vector_operations, _error_vectors, global_rms_norm
 from wx_factory.solvers.exode import ExodeStartup, exode
 from wx_factory.solvers.kiops import kiops
 from wx_factory.solvers.pmex import PmexStartup, pmex
 
 
 class ExponentialMpiTestCase(MpiTestCase):
+    def test_distributed_rms_error_norm(self):
+        rank = self.comm.rank
+        cases = (
+            ([1e20] * (rank + 1), float(numpy.float32(1e20))),
+            ([1e-30] * (rank + 1), float(numpy.float32(1e-30))),
+            ([3.0, 4.0] if rank == 0 else [0.0, 0.0, 0.0], math.sqrt(5)),
+            ([] if rank == 0 else [2.0, 2.0, 2.0], 2.0),
+            ([1.0, 1.0] if rank == 0 else [math.nan], math.nan),
+            ([1.0, 1.0] if rank == 0 else [math.inf], math.inf),
+        )
+        error_vectors = _compiled_vector_operations()[1] if self.device_name == "cuda" else _error_vectors
+        for values, expected in cases:
+            with self.subTest(values=values):
+                vector = torch.tensor(values, dtype=torch.float32, device=self.context.torch_device)
+                state = torch.zeros_like(vector)
+                step = vector.new_tensor(1.0) if vector.is_cuda else 1.0
+                _, local_sum = error_vectors(state, state, vector, step, 0.0, 1.0)
+                self.assertEqual(local_sum.dtype, torch.float64)
+                actual = global_rms_norm(local_sum, vector.numel(), self.comm)
+                if math.isnan(expected):
+                    self.assertTrue(math.isnan(actual))
+                elif math.isinf(expected):
+                    self.assertEqual(actual, expected)
+                else:
+                    self.assertTrue(math.isclose(actual, expected, rel_tol=1e-12))
+
     def test_distributed_phi_combination_against_dense_reference(self):
         size = 24
         matrix = -torch.diag(torch.linspace(0.0, 3.0, size, dtype=torch.float64, device="cpu"))

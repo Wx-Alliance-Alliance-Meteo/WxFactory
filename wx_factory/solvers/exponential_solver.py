@@ -143,8 +143,8 @@ def _solve_exode(request: ExponentialSolverRequest, *, startup: ExodeStartup | N
     result = ExponentialSolverResult(value, stats, stats[0], stats[1], stats[3], None)
     if request.announce and request.context.comm.rank == 0:
         print(
-            f"EXODE converged at iteration {result.iterations} with {result.rejected_steps} rejected steps "
-            f"(local error {result.local_error:.2e})",
+            f"EXODE converged after {result.iterations} matrix-vector products "
+            f"with {result.rejected_steps} rejected steps (max local error {result.local_error:.2e})",
             flush=True,
         )
     return result
