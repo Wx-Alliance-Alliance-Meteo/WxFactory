@@ -1,5 +1,5 @@
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import ANY, patch
 
 from tests.unit.wx_test import WxTestCase
 from wx_factory.integrators.rosexp2 import RosExp2
@@ -7,6 +7,7 @@ from wx_factory.solvers.exponential_solver import (
     ExponentialSolverRequest,
     resolve_exponential_solver,
 )
+from wx_factory.solvers.pmex import PmexStartup
 
 
 class ExponentialSolverRegistryTestCases(WxTestCase):
@@ -32,7 +33,8 @@ class ExponentialSolverRegistryTestCases(WxTestCase):
     def test_pmex_adapter_translates_common_request(self, pmex_mock):
         pmex_mock.return_value = ("value", (2, 3, 11, 4, 5e-7, 19, 0))
 
-        result = resolve_exponential_solver("pmex")(self.request)
+        solve = resolve_exponential_solver("pmex")
+        result = solve(self.request)
 
         self.assertEqual("value", result.value)
         self.assertEqual(11, result.iterations)
@@ -47,7 +49,15 @@ class ExponentialSolverRegistryTestCases(WxTestCase):
             context=self.context,
             m_init=7,
             mmin=5,
+            startup=ANY,
         )
+
+        startup = pmex_mock.call_args.kwargs["startup"]
+        self.assertIsInstance(startup, PmexStartup)
+        solve(self.request)
+        self.assertIs(pmex_mock.call_args.kwargs["startup"], startup)
+        resolve_exponential_solver("pmex")(self.request)
+        self.assertIsNot(pmex_mock.call_args.kwargs["startup"], startup)
 
     @patch("wx_factory.solvers.exponential_solver.pmex")
     def test_pmex_ne_supplies_its_default_minimum(self, pmex_mock):

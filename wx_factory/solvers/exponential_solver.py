@@ -8,7 +8,7 @@ from typing import Any
 from ..context import Context
 from .exode import ExodeStartup, exode
 from .kiops import kiops
-from .pmex import pmex
+from .pmex import PmexStartup, pmex
 
 
 @dataclass(frozen=True)
@@ -62,7 +62,11 @@ def resolve_exponential_solver(name: str) -> ExponentialSolver:
 
     try:
         solver = EXPONENTIAL_SOLVER_REGISTRY[name]
-        return partial(solver, startup=ExodeStartup()) if name == "exode" else solver
+        if name == "exode":
+            return partial(solver, startup=ExodeStartup())
+        if name in ("pmex", "pmex_ne"):
+            return partial(solver, startup=PmexStartup())
+        return solver
     except KeyError as exc:
         raise ValueError(
             f"Exponential solver '{name}' is not registered. Registered solvers: {sorted(EXPONENTIAL_SOLVER_REGISTRY)}"
@@ -96,16 +100,16 @@ def _krylov_kwargs(request: ExponentialSolverRequest) -> dict[str, Any]:
 
 
 @register_exponential_solver("pmex")
-def _solve_pmex(request: ExponentialSolverRequest) -> ExponentialSolverResult:
-    value, stats = pmex(request.tau_out, request.operator, request.vectors, **_krylov_kwargs(request))
+def _solve_pmex(request: ExponentialSolverRequest, *, startup: PmexStartup | None = None) -> ExponentialSolverResult:
+    value, stats = pmex(request.tau_out, request.operator, request.vectors, startup=startup, **_krylov_kwargs(request))
     return _krylov_result(value, stats, request, "PMEX")
 
 
 @register_exponential_solver("pmex_ne")
-def _solve_pmex_ne(request: ExponentialSolverRequest) -> ExponentialSolverResult:
+def _solve_pmex_ne(request: ExponentialSolverRequest, *, startup: PmexStartup | None = None) -> ExponentialSolverResult:
     kwargs = _krylov_kwargs(request)
     kwargs.setdefault("mmin", 16)
-    value, stats = pmex(request.tau_out, request.operator, request.vectors, **kwargs)
+    value, stats = pmex(request.tau_out, request.operator, request.vectors, startup=startup, **kwargs)
     return _krylov_result(value, stats, request, "PMEX NE")
 
 

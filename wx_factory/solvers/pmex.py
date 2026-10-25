@@ -1,5 +1,6 @@
 import math
 from collections.abc import Callable
+from dataclasses import dataclass
 
 import torch
 from mpi4py import MPI
@@ -7,6 +8,14 @@ from torch import Tensor
 
 from ..context import Context
 from .dense import expm, solve_triangular
+
+
+@dataclass
+class PmexStartup:
+    """First accepted substep and Krylov dimension from the preceding successful solve."""
+
+    first_accepted: float | None = None
+    first_dimension: int | None = None
 
 
 def pmex(
@@ -21,6 +30,7 @@ def pmex(
     reuse_info: bool = True,
     task1: bool = False,
     context: Context | None = None,
+    startup: PmexStartup | None = None,
 ):
     """
     :param tau_out: Vector of `tau_out`
@@ -35,6 +45,7 @@ def pmex(
     :param task1: If true, divide the result by 1/tau_out. Optional
 
     :param context: Context to use for computing
+    :param startup: Optional per-solver history for the first substep and Krylov dimension
 
     :return: `w` - the linear combination of the ``φ`` functions evaluated at ``tA`` acting on the vectors from ``u``
     :return: `stats[0]` - number of substeps
@@ -58,7 +69,7 @@ def pmex(
 
     if p == 0:
         p = 1
-        u = torch.row_stack((u, torch.zeros(len(u), dtype=u.dtype)))
+        u = torch.row_stack((u, u.new_zeros((1, n))))
 
     step = 0
     krystep = 0
@@ -74,6 +85,9 @@ def pmex(
     reg_comm_nrm = 0
     numSteps = len(tau_out)
 
+    if startup is not None:
+        cached_dimension = startup.first_dimension
+        m_init = comm.allreduce(m_init if cached_dimension is None else cached_dimension, op=MPI.MAX)
     m = max(mmin, min(m_init, mmax))
 
     # Keep the large basis in working precision; float64 bookkeeping protects error estimates.
@@ -85,7 +99,6 @@ def pmex(
     M = torch.eye(mmax, dtype=acc)
     N = torch.zeros([mmax, mmax], dtype=acc)
 
-    # The MPI datatype for the reductions must match the precision of the buffer being reduced.
     mpi_real = MPI.FLOAT if u.dtype == torch.float32 else MPI.DOUBLE
     mpi_acc = MPI.DOUBLE if acc == torch.float64 else MPI.FLOAT
 
@@ -111,6 +124,13 @@ def pmex(
     u_flip = nu * torch.flipud(u[1:, :])
 
     tau = tau_end
+    if startup is not None:
+        first_step = startup.first_accepted
+        if first_step is not None and (not math.isfinite(first_step) or first_step <= 0):
+            raise ValueError("PMEX initial step must be positive and finite")
+        tau = comm.allreduce(min(float(tau_end), first_step) if first_step is not None else float(tau_end), op=MPI.MIN)
+    first_accepted = None
+    first_dimension = None
 
     if tau_end > 1:
         gamma = 0.2
@@ -136,11 +156,10 @@ def pmex(
             V[0, 0:n] = w[l, :]
 
             for k in range(p - 1):
-                i = p - k + 1
-                V[j, n + k] = (tau_now**i) / math.factorial(i) * mu
+                i = p - k - 1
+                V[j, n + k] = ((sgn * tau_now) ** i) / math.factorial(i) * mu
             V[j, n + p - 1] = mu
 
-            # Float64 accumulation avoids full-vector copies that can exhaust GPU memory.
             local_sum = torch.sum(V[0, 0:n] * V[0, 0:n], dtype=acc)
             global_sum_nrm = torch.empty_like(local_sum)
             context.synchronize()
@@ -265,12 +284,19 @@ def pmex(
 
                 m_opt = math.ceil(j + math.log(ohm / gamma) / math.log(kest))
                 m_opt = max(mmin, min(mmax, max(math.floor(3 / 4 * m), min(m_opt, math.ceil(4 / 3 * m)))))
+                if ohm <= delta:
+                    # Large reductions often need another basis expansion on the next substep.
+                    m_opt = max(m_opt, math.ceil(0.9 * m))
 
                 if j == mmax:
                     if ohm > delta:
                         m_new = j
                         tau_new = tau * (gamma_mmax / ohm) ** (1 / order)
                         tau_new = min(tau_end - tau_now, max(tau / 5, tau_new))
+                    elif m_opt < m and same_tau == tau:
+                        # The dimension prediction assumes an unchanged substep length.
+                        tau_new = same_tau
+                        m_new = m_opt
                     else:
                         tau_new = tau_opt
                         m_new = m
@@ -285,12 +311,9 @@ def pmex(
             reject += ireject
             step += 1
 
-            """
-         if first_accepted:
-            pmex.suggested_step = min(pmex.suggested_step, tau)
-            pmex.suggested_m    = min(pmex.suggested_m, m_opt)
-            first_accepted = False
-         """
+            if first_accepted is None:
+                first_accepted = float(tau)
+                first_dimension = j
 
             blownTs = 0
             nextT = tau_now + tau
@@ -331,6 +354,10 @@ def pmex(
     if task1 is True:
         for k in range(numSteps):
             w[k, :] = w[k, :] / tau_out[k]
+
+    if startup is not None:
+        startup.first_accepted = first_accepted
+        startup.first_dimension = first_dimension
 
     m_ret = m
 

@@ -8,7 +8,7 @@ from tests.unit.mpi_test import MpiTestCase
 from wx_factory.integrators.butcher import METHODS
 from wx_factory.solvers.exode import ExodeStartup, exode
 from wx_factory.solvers.kiops import kiops
-from wx_factory.solvers.pmex import pmex
+from wx_factory.solvers.pmex import PmexStartup, pmex
 
 
 class ExponentialMpiTestCase(MpiTestCase):
@@ -37,9 +37,19 @@ class ExponentialMpiTestCase(MpiTestCase):
 
         for solver in (kiops, pmex):
             with self.subTest(solver=solver.__name__):
+                startup = PmexStartup(0.1 * (self.comm.rank + 1), None if self.comm.rank == 0 else 15)
+                kwargs = {"startup": startup} if solver is pmex else {}
                 result, _ = solver(
-                    torch.tensor([1.0], dtype=torch.float64), matvec, vectors[:, local], 1e-10, context=self.context
+                    torch.tensor([1.0], dtype=torch.float64),
+                    matvec,
+                    vectors[:, local],
+                    1e-10,
+                    context=self.context,
+                    **kwargs,
                 )
+                if solver is pmex:
+                    self.assertAlmostEqual(startup.first_accepted, 0.1)
+                    self.assertEqual(startup.first_dimension, 15)
                 torch.testing.assert_close(result[0], reference[local], rtol=1e-9, atol=1e-9)
 
         method = METHODS["DP5(4)"]
