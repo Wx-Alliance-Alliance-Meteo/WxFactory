@@ -102,6 +102,7 @@ class Configuration:
     bubble_rad: float
     bubble_theta: float
     case_number: int
+    column_batch_size: int
     depth_approx: str
     discretization: str
     dt: float

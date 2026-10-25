@@ -224,6 +224,14 @@
                     "min": 1
                 },
                 {
+                    "name": "column_batch_size",
+                    "type": "int",
+                    "default": 2048,
+                    "min": 1,
+                    "dependency": {"name": "equations", "values": ["euler"]},
+                    "description": "Maximum vertical columns per batch when assembling Euler direct column solves on GPU. Larger batches reduce repeated assembly overhead and use more memory. CPU uses all columns."
+                },
+                {
                     "name": "splitting_integrator_1",
                     "type": "str",
                     "default": "epi2",

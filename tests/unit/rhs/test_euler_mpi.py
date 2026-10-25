@@ -9,6 +9,7 @@ from wx_factory.common.definitions import heat_capacity_ratio
 from wx_factory.geometry import CubedSphere3D, DFROperators, Metric5D
 from wx_factory.init.euler import pack_euler_state
 from wx_factory.jacobian.euler import _compiled_acoustic_action, _compiled_dfr_derivative, _compiled_volume_actions
+from wx_factory.jacobian.euler_vertical import EulerVerticalLinearization
 from wx_factory.pde.euler_interfaces import low_mach_scales, physical_mach_number, pressure
 from wx_factory.process_topology import ProcessTopology
 from wx_factory.rhs.rhs_euler import RhsEuler
@@ -54,6 +55,21 @@ class EulerRhsTestCase(MpiTestCase):
             self.assertEqual(dfr_compiler.call_count, dfr_before)
             for actual, expected in zip((full, implicit, explicit), references):
                 torch.testing.assert_close(actual, expected, rtol=2e-12, atol=2e-10)
+
+        if self.device_name == "cuda":
+            self.config.column_batch_size = 7
+            action = self.rhs.linearize_partitions(self.state)
+            reference = action.implicit.solve(vector, 0.1)
+            action = self.rhs.linearize_partitions(self.state)
+            action.release_explicit()
+            with patch(
+                "wx_factory.jacobian.euler_vertical.EulerVerticalLinearization", wraps=EulerVerticalLinearization
+            ) as assembly:
+                actual = action.solve(vector, 0.1)
+            torch.testing.assert_close(actual, reference, rtol=2e-12, atol=2e-11)
+            sizes = [call.kwargs["columns"].stop - call.kwargs["columns"].start for call in assembly.call_args_list]
+            self.assertGreater(len(sizes), 1)
+            self.assertLessEqual(max(sizes), self.config.column_batch_size)
 
     def test_integration_comparison_includes_failures_on_other_ranks(self):
         from tests.integration.test_integration_state import component_errors

@@ -34,6 +34,7 @@
    | krylov_mmax           | int   | 64        | [1, inf]                         | Largest Krylov subspace the exponential solver may build. The solver stores mmax+1 basis vectors of the full state, so this caps its memory; lowering it trades memory for more internal substeps.  |
    | verbose_solver        | int   | 0         |                                  |   |
    | gmres_restart         | int   | 20        | [1, inf]                         |   |
+   | column_batch_size | int | 2048 | [1, inf] | Maximum vertical columns per batch when assembling Euler direct column solves on GPU. Larger batches reduce repeated assembly overhead and use more memory. CPU uses all columns. |
    | splitting_integrator_1  | lc-str  | epi2  |                                  | One-step integrator for the explicit RHS partition F2 in Lie, Strang and OS22 splitting.  |
    | splitting_integrator_2  | lc-str  | ros2  |                                  | One-step integrator for the implicit RHS partition F1 in Lie, Strang and OS22 splitting.  |
    | os22_parameter        | float  | 0.5      | [0.0, 0.5]                       | Stage parameter p for the OS22 splitting coefficients [[(2p-1)/(2p-2), 1-p], [-1/(2p-2), p]]. The supported range 0 <= p <= 0.5 gives nonnegative substeps.  |

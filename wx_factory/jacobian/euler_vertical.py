@@ -301,7 +301,7 @@ class EulerPartitionLinearization:
             return self._implicit.solve(vector, dt)
         columns = state_to_columns(self.rhs, vector.reshape_as(self.state)).clone()
         if column_batch_size is None:
-            column_batch_size = 512 if vector.is_cuda else columns.shape[0]
+            column_batch_size = self.rhs.config.column_batch_size if vector.is_cuda else columns.shape[0]
         if column_batch_size < 1:
             raise ValueError("Column batch size must be positive")
         for start in range(0, columns.shape[0], column_batch_size):
