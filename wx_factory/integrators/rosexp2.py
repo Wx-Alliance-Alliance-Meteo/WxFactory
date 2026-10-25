@@ -51,6 +51,7 @@ class RosExp2(Integrator):
                 self.context,
                 exode_method=self.exode_method,
                 exode_controller=self.exode_controller,
+                initial_step=lambda: self._initial_exode_step(self.rhs_full, Q, dt),
             )
         )
         phiv = exponential_result.value

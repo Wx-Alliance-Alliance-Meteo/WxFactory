@@ -36,7 +36,7 @@ class PartRosExp2(Integrator):
         self.exode_method = param.exode_method
         self.exode_controller = param.exode_controller
 
-    def _apply_phi(self, J_exp: Callable, vec):
+    def _apply_phi(self, J_exp: Callable, vec, initial_step=None):
         """Evaluate phi_1(J_exp) @ vec with the configured exponential solver."""
         solver = self.exponential_solver
 
@@ -53,6 +53,7 @@ class PartRosExp2(Integrator):
                 krylov_mmin=16 if solver in ("pmex_ne", "kiops") else 10,
                 exode_method=self.exode_method,
                 exode_controller=self.exode_controller,
+                initial_step=initial_step,
             )
         )
 
@@ -87,7 +88,7 @@ class PartRosExp2(Integrator):
         vec[1, :] = f_exp
 
         tic = time()
-        phiv = self._apply_phi(J_exp, vec)
+        phiv = self._apply_phi(J_exp, vec, lambda: self._initial_exode_step(rhsobj, Q, dt))
         time_exp = time() - tic
 
         tic = time()

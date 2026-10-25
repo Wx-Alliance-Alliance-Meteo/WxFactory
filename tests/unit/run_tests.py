@@ -49,6 +49,7 @@ from tests.unit.rhs.test_rhs_registry import (
     RhsRegistryTestCases,
 )
 from tests.unit.rhs.test_shallow_water import ShallowWaterInterfaceTestCase
+from tests.unit.solvers.test_exode import ExodeTestCase
 from tests.unit.solvers.test_exponential_solver_registry import (
     ExponentialSolverRegistryTestCases,
 )
@@ -101,6 +102,7 @@ def load_tests(test_name: str):
         ExponentialFilterTestCase,
         OperatorIdentityTestCase,
         ExponentialSolverRegistryTestCases,
+        ExodeTestCase,
         StateTestCases,
         Euler2DRestartTestCase,
         ConfigurationTestCases,

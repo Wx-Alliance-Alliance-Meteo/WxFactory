@@ -2,10 +2,11 @@
 
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from functools import partial
 from typing import Any
 
 from ..context import Context
-from .exode import exode
+from .exode import ExodeStartup, exode
 from .kiops import kiops
 from .pmex import pmex
 
@@ -25,6 +26,7 @@ class ExponentialSolverRequest:
     exode_method: str = "BS3(2)"
     exode_controller: str = "deadbeat"
     announce: bool = True
+    initial_step: Callable[[], float] | None = None
 
 
 @dataclass(frozen=True)
@@ -59,7 +61,8 @@ def resolve_exponential_solver(name: str) -> ExponentialSolver:
     """Return the adapter registered as ``name``."""
 
     try:
-        return EXPONENTIAL_SOLVER_REGISTRY[name]
+        solver = EXPONENTIAL_SOLVER_REGISTRY[name]
+        return partial(solver, startup=ExodeStartup()) if name == "exode" else solver
     except KeyError as exc:
         raise ValueError(
             f"Exponential solver '{name}' is not registered. Registered solvers: {sorted(EXPONENTIAL_SOLVER_REGISTRY)}"
@@ -113,7 +116,7 @@ def _solve_kiops(request: ExponentialSolverRequest) -> ExponentialSolverResult:
 
 
 @register_exponential_solver("exode")
-def _solve_exode(request: ExponentialSolverRequest) -> ExponentialSolverResult:
+def _solve_exode(request: ExponentialSolverRequest, *, startup: ExodeStartup | None = None) -> ExponentialSolverResult:
     tau_out = request.tau_out
     if not isinstance(tau_out, (int, float)):
         if len(tau_out) != 1:
@@ -126,10 +129,12 @@ def _solve_exode(request: ExponentialSolverRequest) -> ExponentialSolverResult:
         request.vectors,
         method=request.exode_method,
         controller=request.exode_controller,
+        # The configured tolerance controls both terms of the local RK error test.
+        rtol=request.tolerance,
         atol=request.tolerance,
-        task1=False,
-        verbose=False,
         context=request.context,
+        startup=startup,
+        initial_step=request.initial_step,
     )
     result = ExponentialSolverResult(value, stats, stats[0], stats[1], stats[3], None)
     if request.announce and request.context.comm.rank == 0:

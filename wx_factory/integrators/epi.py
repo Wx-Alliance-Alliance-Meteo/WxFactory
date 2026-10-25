@@ -74,6 +74,7 @@ class Epi(Integrator):
         if self.dt and abs(self.dt - dt) > 1e-10:
             self.previous_Q = deque()
             self.previous_rhs = deque()
+            self.solve_exponential = resolve_exponential_solver(self.exponential_solver)
         self.dt = dt
 
         if len(self.previous_Q) < self.n_prev:
@@ -129,6 +130,7 @@ class Epi(Integrator):
                 krylov_mmin=16 if use_recycled_size else None,
                 exode_method=self.exode_method,
                 exode_controller=self.exode_controller,
+                initial_step=lambda: self._initial_exode_step(self.rhs, Q, dt),
             )
         )
         phiv = result.value

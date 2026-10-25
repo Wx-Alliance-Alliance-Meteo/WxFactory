@@ -85,7 +85,7 @@ class Srerk(Integrator):
                 torch.as_tensor(alpha_coeff(self.c[i]), dtype=self.context.real_dtype, device=self.context.torch_device)
             )
 
-    def _solve_projection(self, tau_out, matvec_handle, vec):
+    def _solve_projection(self, tau_out, matvec_handle, vec, initial_step=None):
         result = self.solve_exponential(
             ExponentialSolverRequest(
                 tau_out,
@@ -96,6 +96,9 @@ class Srerk(Integrator):
                 self.context,
                 krylov_minit=self.krylov_size,
                 krylov_mmin=16,
+                exode_method=self.param.exode_method,
+                exode_controller=self.param.exode_controller,
+                initial_step=initial_step,
             )
         )
         if result.final_krylov_size is not None:
@@ -116,7 +119,7 @@ class Srerk(Integrator):
 
         vec = Q.new_zeros((2, rhs.numel()))
         vec[1, :] = rhs.flatten()
-        z = self._solve_projection(self.c[0], matvec_handle, vec)
+        z = self._solve_projection(self.c[0], matvec_handle, vec, lambda: self._initial_exode_step(self.rhs, Q, dt))
 
         for i_proj in range(1, self.n_proj):
             stages = z
@@ -130,7 +133,9 @@ class Srerk(Integrator):
             vec = Q.new_zeros((stages.shape[0] + 3, rhs.numel()))
             vec[1, :] = rhs.flatten()
             vec[3:, :] = self.alpha[i_proj - 1].to(Q) @ remainders
-            z = self._solve_projection(self.c[i_proj], matvec_handle, vec)
+            z = self._solve_projection(
+                self.c[i_proj], matvec_handle, vec, lambda: self._initial_exode_step(self.rhs, Q, dt)
+            )
 
         return Q + dt * z.reshape(Q.shape)
 

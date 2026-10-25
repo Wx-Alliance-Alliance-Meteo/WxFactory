@@ -1,131 +1,86 @@
+"""Evaluate exponential and phi-function actions through an auxiliary ODE."""
+
 import math
+from collections.abc import Callable
+from dataclasses import dataclass
 
-import numpy
-import torch
+from mpi4py import MPI
 
-from wx_factory.context import Context
+from ..context import Context
+
+
+@dataclass
+class ExodeStartup:
+    """First accepted auxiliary step from the preceding successful solve."""
+
+    first_accepted: float | None = None
 
 
 def exode(
-    τ_out,
+    tau_out,
     A,
     u,
-    method="ARK3(2)4L[2]SA-ERK",
+    method="BS3(2)",
     controller="deadbeat",
     rtol=1e-3,
     atol=1e-6,
-    task1=False,
-    verbose: bool = False,
     context: Context | None = None,
+    startup: ExodeStartup | None = None,
+    initial_step: Callable[[], float] | None = None,
 ):
-    # Import here to resolve circular import
+    """Solve y' = A(y) + sum_j t**j/j! u[j+1], starting from u[0]."""
+    # The integrator package also imports the exponential solvers.
     from ..integrators.butcher import METHODS
 
-    if not hasattr(exode, "first_step"):
-        exode.first_step = τ_out  # TODO : use CFL condition ?
+    tau_out = float(tau_out)
+    if not math.isfinite(tau_out) or tau_out <= 0:
+        raise ValueError("EXODE requires a positive, finite output time")
+    method_name = method.upper()
+    if method_name not in METHODS:
+        raise ValueError(f"Unknown EXODE method {method!r}; choose from {', '.join(METHODS)}")
 
-    # TODO : implement dense output for output at intermediate values of τ_out
+    def rhs(time, state):
+        tendency = A(state)
+        for order, vector in enumerate(u[1:]):
+            tendency += time**order / math.factorial(order) * vector
+        return tendency
 
-    ppo, _n = u.shape
-    p = ppo - 1
-
-    if p == 0:
-        p = 1
-        # Add extra column of zeros
-        u = torch.row_stack((u, torch.zeros(len(u), dtype=u.dtype)))
-
-    y0 = u[0].copy()
-
-    def fun(t, x):
-        ret = A(x)
-        for j in range(p):
-            ret += t**j / math.factorial(j) * u[j + 1]
-        return ret
-
-    method = method.upper()
-
-    if method not in METHODS:
-        raise ValueError(f"`method` must be one of {METHODS}.")
-    else:
-        method = METHODS[method]
-
-    t0, tf = map(float, [0, 1.0])  # τ_out])
-
-    solver = method(
-        fun,
-        t0,
-        y0,
-        tf,
-        controller=controller,
-        first_step=exode.first_step,
+    comm = context.comm if context is not None else MPI.COMM_WORLD
+    first_step = startup.first_accepted if startup is not None else None
+    if first_step is None:
+        first_step = initial_step() if initial_step is not None else tau_out
+    if not math.isfinite(first_step) or first_step <= 0:
+        raise ValueError("EXODE initial step must be positive and finite")
+    first_step = comm.allreduce(min(first_step, tau_out), op=MPI.MIN)
+    solver = METHODS[method_name](
+        rhs,
+        0.0,
+        u[0].clone(),
+        tau_out,
+        controller=controller or None,
+        first_step=first_step,
         rtol=rtol,
         atol=atol,
         context=context,
     )
-
-    ts = [t0]
-
-    status = None
-    while status is None:
+    first_accepted = None
+    while solver.status == "running":
+        previous_time = solver.t
         solver.step()
+        if solver.status == "failed":
+            raise RuntimeError(f"EXODE integration failed at t={solver.t}")
+        if first_accepted is None:
+            first_accepted = solver.t - previous_time
 
-        if solver.status == "finished":
-            status = 0
-
-            """ TODO: put this in a better location. Computing eigenvalues will significantly delay the 
-         computation process. Only here for now to test eigenvalue of the 2D ADR problem. 
-
-         # Compute eigenvalues
-         matrix_size = y0.shape[0] 
-         MATRIX = numpy.zeros((matrix_size,matrix_size)) #numpy.empty([matrix_size,matrix_size])
-         for i in range(matrix_size):
-             vec = numpy.zeros(matrix_size) 
-             vec[i] = 1.
-             new_col = A(vec)
-             MATRIX[:,i] = new_col 
-         
-         # Compute eigenvalues
-         eigenvalues, eigenvectors = numpy.linalg.eig(MATRIX) #eigs(MATRIX, k=1)
-         eigenvalues_real = eigenvalues.real
-         eigenvalues_imag = eigenvalues.imag
-         
-         eig_file = "/home/siw001/gef/vicky/ADR_2D/eigenvalues/ADR_2D_eigenvalues_Nx_401_Nstep_50.csv"
-         with open(eig_file, "ab") as foutput:
-             foutput.write(b"\n")
-             numpy.savetxt(foutput, eigenvalues_real, delimiter=",")
-             numpy.savetxt(foutput, eigenvalues_imag, delimiter=",") 
-         
-         # Calculuate and save the eigenvalues to file. TODO: need better ways
-            #sys.stdout.write(str(eigenvalues[i].real) + " " )
-         #sys.stdout.write("\n")
-
-            #sys.stdout.write(str(eigenvalues[i].imag) + " " )
-         #sys.stdout.write("\n")
-         
-         """
-
-        elif solver.status == "failed":
-            status = -1
-            break
-
-        t = solver.t
-
-        ts.append(t)
-
-    ts = numpy.array(ts)
-
-    solution = solver.y
+    if startup is not None:
+        startup.first_accepted = first_accepted
     stats = (
         solver.nfev,
         solver.failed_steps,
         solver.nfev,
-        solver.error_estimation,
+        solver.estimate_error(),
         solver.error_norm_old,
         solver.h_previous,
         solver.h,
     )
-    # keep track of h_previous, use as first step for next iteration.
-
-    exode.first_step = numpy.median(numpy.diff(ts))
-
-    return solution, stats
+    return solver.y, stats

@@ -54,7 +54,13 @@ class SrerkTestCase(unittest.TestCase):
         with patch.dict(os.environ, {"WX_FACTORY_DIFFERENTIABLE": "1"}):
             self.context = Context(MPI.COMM_SELF, "cpu")
         self.config = SimpleNamespace(
-            tolerance=1e-12, verbose_solver=False, krylov_mmax=32, exponential_solver="pmex", jacobian="analytic"
+            tolerance=1e-12,
+            verbose_solver=False,
+            krylov_mmax=32,
+            exponential_solver="pmex",
+            jacobian="analytic",
+            exode_method="BS3(2)",
+            exode_controller="deadbeat",
         )
         self.state = torch.tensor([[0.3, 0.5], [0.7, 0.9]], dtype=torch.float64)
         self.matrix = torch.tensor(

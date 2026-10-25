@@ -92,6 +92,7 @@ class EpiStiff(Integrator):
                 krylov_mmin=16 if use_recycled_size else None,
                 exode_method=self.exode_method,
                 exode_controller=self.exode_controller,
+                initial_step=lambda: self._initial_exode_step(self.rhs, Q, dt),
             )
         )
         phiv = result.value

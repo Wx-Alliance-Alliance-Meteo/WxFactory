@@ -1,8 +1,12 @@
+from unittest.mock import patch
+
 import numpy
 import torch
 from scipy.linalg import expm
 
 from tests.unit.mpi_test import MpiTestCase
+from wx_factory.integrators.butcher import METHODS
+from wx_factory.solvers.exode import ExodeStartup, exode
 from wx_factory.solvers.kiops import kiops
 from wx_factory.solvers.pmex import pmex
 
@@ -37,3 +41,24 @@ class ExponentialMpiTestCase(MpiTestCase):
                     torch.tensor([1.0], dtype=torch.float64), matvec, vectors[:, local], 1e-10, context=self.context
                 )
                 torch.testing.assert_close(result[0], reference[local], rtol=1e-9, atol=1e-9)
+
+        method = METHODS["DP5(4)"]
+
+        def check_initial_step(*args, **kwargs):
+            steps = self.comm.allgather(kwargs["first_step"])
+            self.assertEqual(min(steps), max(steps))
+            return method(*args, **kwargs)
+
+        with patch.dict(METHODS, {"DP5(4)": check_initial_step}):
+            result, _ = exode(
+                1.0,
+                matvec,
+                vectors[:, local],
+                method="DP5(4)",
+                controller="H211B",
+                startup=ExodeStartup(0.1 * (self.comm.rank + 1)),
+                rtol=1e-11,
+                atol=1e-12,
+                context=self.context,
+            )
+        torch.testing.assert_close(result, reference[local], rtol=1e-9, atol=1e-9)

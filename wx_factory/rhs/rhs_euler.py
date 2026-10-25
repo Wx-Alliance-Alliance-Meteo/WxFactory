@@ -4,10 +4,12 @@ import math
 from copy import copy
 
 import torch
+from mpi4py import MPI
 from torch import Tensor
 
+from ..common.definitions import heat_capacity_ratio
 from ..common.matmul import DFRDerivative, apply_op
-from ..common.tensor_math import antisymmetric_velocity_contraction, relative_covariant_curl
+from ..common.tensor_math import antisymmetric_velocity_contraction, relative_covariant_curl, spatial_matrix_vector
 from ..init.dcmip import dcmip_schar_damping_coeffs
 from ..pde.euler_interfaces import EulerInterfaceGeometry, acoustic_interface, interface_slices, pressure
 
@@ -40,6 +42,30 @@ class RhsEuler:
         self.diagnostics = {}
         self._interface_geometry = None
         self._dfr_derivatives = None
+
+    def wave_rate(self, state: Tensor) -> float:
+        """Estimate the DFR wave rate in reference-element coordinates for RK startup."""
+        rates = [0.0] * 3
+        samples = [(state, self.metric.volume.G_contra[1:4, 1:4])]
+        samples.extend(
+            (trace, fields.G_contra[1:4, 1:4][interior])
+            for trace, fields, interior in zip(self._extrapolate(state), self.metric.faces, self.mid_faces)
+        )
+        for values, inverse in samples:
+            sound = (heat_capacity_ratio * pressure(values[4]) / values[0]).sqrt()
+            velocity = spatial_matrix_vector(inverse, values[1:4])
+            for direction in range(3):
+                speed = velocity[direction].abs() + sound * inverse[direction, direction].sqrt()
+                rates[direction] = max(rates[direction], speed.max().item())
+        comm = self.context.comm
+        rates = [comm.allreduce(rate, op=MPI.MAX) for rate in rates]
+        derivative = self.ops.diff_solpt
+        correction = self.ops.correction
+        extrapolation = torch.stack((self.ops.extrap_west, self.ops.extrap_east))
+        # The metric already includes reference-element scaling.
+        stencil_norm = (derivative.abs().sum(1) + correction.abs() @ extrapolation.abs().sum(1)).max().item()
+        damping = 0.0 if self.damping is None else comm.allreduce(self.damping[0].max().item(), op=MPI.MAX)
+        return stencil_norm * sum(rates) + damping
 
     def dfr_derivatives(self, action):
         """Cache reference-element stencils independently of the evolving state."""

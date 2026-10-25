@@ -46,6 +46,15 @@ class Integrator(ABC):
         self.failure_flag = 0
         self.num_completed_steps = 0
 
+    def _initial_exode_step(self, rhs, state, dt):
+        """Convert the physical wave rate to a first trial in auxiliary time."""
+        if not hasattr(rhs, "wave_rate"):
+            return 1.0
+        rate = rhs.wave_rate(state)
+        # Use RK4's stability radius for EXLRK4(3), and a unit startup scale otherwise.
+        radius = 2.785293563405282 if self.param.exode_method.upper() == "EXLRK4(3)" else 1.0
+        return min(1.0, 0.8 * radius / (dt * rate)) if rate > 0 else 1.0
+
     def _solve_linear(self, A, b, x0=None, tol=1e-8, restart=20, maxiter=None):
         return fgmres(
             A,
