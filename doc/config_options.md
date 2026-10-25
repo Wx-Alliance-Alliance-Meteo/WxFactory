@@ -94,4 +94,4 @@
 
 The Euler acoustic solver scales velocity-jump pressure dissipation by M0*(2-M0), where M0 is the interface Mach number limited to [riemann_mach_cutoff, 1]. The cutoff defaults to 0.3. The pressure-jump velocity correction remains unscaled.
 
-Euler Jacobian actions automatically use compiled PyTorch calculations on GPU and eager calculations on CPU. First use on GPU incurs compilation. DFR derivatives retain dense matrix products as a fallback when the compiler specialization cache is exhausted.
+Full and complementary Euler Jacobian actions automatically use compiled PyTorch calculations on GPU and eager calculations on CPU. First use on GPU incurs compilation. DFR derivatives retain dense matrix products as a fallback when the compiler specialization cache is exhausted.

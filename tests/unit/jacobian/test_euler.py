@@ -18,6 +18,8 @@ class EulerJacobianTestCase(unittest.TestCase):
         ):
             actual = rhs.linearize(state)(state)
             self.assertTrue(torch.isfinite(actual).all())
+            actual = rhs.linearize(state).explicit(state)
+            self.assertTrue(torch.isfinite(actual).all())
 
     def test_dfr_cache_follows_precision_promotion(self):
         rhs, _, *_ = frozen_problem(elements=2, nodes=3)

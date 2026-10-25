@@ -51,8 +51,8 @@ class EulerRhsTestCase(MpiTestCase):
             implicit = partition.implicit(vector).clone()
             self.assertEqual(compiler.call_count > before, self.device_name == "cuda")
             explicit = partition.explicit(vector).clone()
-            self.assertEqual(volume_compiler.call_count, volume_before)
-            self.assertEqual(dfr_compiler.call_count, dfr_before)
+            self.assertEqual(volume_compiler.call_count > volume_before, self.device_name == "cuda")
+            self.assertEqual(dfr_compiler.call_count > dfr_before, self.device_name == "cuda")
             for actual, expected in zip((full, implicit, explicit), references):
                 torch.testing.assert_close(actual, expected, rtol=2e-12, atol=2e-10)
 

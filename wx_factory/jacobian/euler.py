@@ -89,10 +89,39 @@ def _scalar_flux(jacobian, delta_velocity, scalars, velocity, delta_scalars):
     return jacobian * (delta_velocity * scalars + velocity * delta_scalars)
 
 
-def _add_vorticity(result, delta_state, derivatives, velocity, base_curl, frame_curl, delta_velocity, damping):
-    result[1:4] += antisymmetric_velocity_contraction(relative_covariant_curl(derivatives), velocity)
-    result[1:4] += antisymmetric_velocity_contraction(base_curl, delta_velocity)
-    result[1:4] += antisymmetric_velocity_contraction(frame_curl, delta_velocity)
+def _add_vorticity(
+    result,
+    delta_state,
+    derivatives,
+    velocity,
+    base_curl,
+    frame_curl,
+    delta_velocity,
+    damping,
+    *,
+    horizontal_v3_gradient=None,
+    horizontal_frame_gradient=None,
+):
+    """Add full or complementary vorticity terms to the momentum action."""
+    if horizontal_v3_gradient is None:
+        result[1:4] += antisymmetric_velocity_contraction(relative_covariant_curl(derivatives), velocity)
+    else:
+        dv2_dx1, dv3_dx1, dv1_dx2, dv3_dx2, dv1_dx3, dv2_dx3 = derivatives
+        curl_12 = dv2_dx1 - dv1_dx2
+        result[1:4] += torch.stack(
+            (
+                velocity[1] * curl_12 + velocity[2] * (dv3_dx1 - dv1_dx3),
+                -velocity[0] * curl_12 + velocity[2] * (dv3_dx2 - dv2_dx3),
+                -velocity[0] * dv3_dx1 - velocity[1] * dv3_dx2,
+            )
+        )
+    base_vorticity = antisymmetric_velocity_contraction(base_curl, delta_velocity)
+    frame_vorticity = antisymmetric_velocity_contraction(frame_curl, delta_velocity)
+    if horizontal_v3_gradient is not None:
+        base_vorticity[2] = -(delta_velocity[:2] * horizontal_v3_gradient).sum(dim=0)
+        frame_vorticity[2] = -(delta_velocity[:2] * horizontal_frame_gradient).sum(dim=0)
+    result[1:4] += base_vorticity
+    result[1:4] += frame_vorticity
     if damping is not None:
         result[1:4] -= damping * delta_state[1:4]
     return result
@@ -244,8 +273,8 @@ class EulerLinearization:
     def __call__(self, vector, *, explicit=False):
         rhs, fields, base_state = self.rhs, self.rhs.metric.volume, self.state
         delta_state = vector.reshape(base_state.shape).to(base_state.dtype)
-        compile_volume = delta_state.is_cuda and not explicit
-        prepare_volume, scalar_flux = _prepare_volume, _scalar_flux
+        compile_volume = delta_state.is_cuda
+        prepare_volume, scalar_flux, add_vorticity = _prepare_volume, _scalar_flux, _add_vorticity
         if compile_volume:
             prepare_volume, scalar_flux, add_vorticity = _compiled_volume_actions()
             derivative_operators = rhs.dfr_derivatives(_compiled_dfr_derivative())
@@ -319,31 +348,19 @@ class EulerLinearization:
         pressure_acceleration = self.pressure_acceleration[:2] if explicit else self.pressure_acceleration
         result[momentum] -= pressure_acceleration * (delta_state[0] / base_state[0])
         del pressure_gradient, energy_gradient, delta_pressure, delta_energy
-        if compile_volume:
-            derivatives = rhs._curl_derivatives(delta_state[1:4], tuple(velocity_traces), derivative_operators)
-            result = add_vorticity(
-                result,
-                delta_state,
-                derivatives,
-                self.contravariant_velocity,
-                self.base_relative_curl,
-                fields.frame_vorticity,
-                delta_contravariant_velocity,
-                None if rhs.damping is None else rhs.damping[0],
-            )
-            return result.reshape(self.shape).flatten()
-        result[1:4] += rhs.relative_vorticity_tendency(
-            delta_state[1:4], self.contravariant_velocity, tuple(velocity_traces), explicit=explicit
+        derivatives = rhs._curl_derivatives(
+            delta_state[1:4], tuple(velocity_traces), derivative_operators if compile_volume else None
         )
-        base_vorticity = antisymmetric_velocity_contraction(self.base_relative_curl, delta_contravariant_velocity)
-        frame_vorticity = antisymmetric_velocity_contraction(fields.frame_vorticity, delta_contravariant_velocity)
-        if explicit:
-            base_vorticity[2] = -(delta_contravariant_velocity[:2] * self.horizontal_vertical_velocity_gradient).sum(
-                dim=0
-            )
-            frame_vorticity[2] = -(delta_contravariant_velocity[:2] * fields.horizontal_frame_gradient).sum(dim=0)
-        result[1:4] += base_vorticity
-        result[1:4] += frame_vorticity
-        if rhs.damping is not None:
-            result[1:4] -= rhs.damping[0] * delta_state[1:4]
+        result = add_vorticity(
+            result,
+            delta_state,
+            derivatives,
+            self.contravariant_velocity,
+            self.base_relative_curl,
+            fields.frame_vorticity,
+            delta_contravariant_velocity,
+            None if rhs.damping is None else rhs.damping[0],
+            horizontal_v3_gradient=self.horizontal_vertical_velocity_gradient if explicit else None,
+            horizontal_frame_gradient=fields.horizontal_frame_gradient if explicit else None,
+        )
         return result.reshape(self.shape).flatten()
