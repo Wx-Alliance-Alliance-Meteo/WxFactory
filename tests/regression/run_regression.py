@@ -85,6 +85,17 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--register-run",
+        metavar="RUN_NAME",
+        default=None,
+        help=(
+            "register an in-progress run in the gallery (create a stub "
+            "report.html + .in_progress marker and refresh index.html), then "
+            "exit. Used by submit_regression.sh so a freshly launched run "
+            "appears in the gallery before the aggregation job fills it in."
+        ),
+    )
+    parser.add_argument(
         "--output-root",
         default=None,
         help="where to write this run (default: results/regression/<UTC>_<sha7>)",
@@ -283,6 +294,8 @@ def write_manifest(output_root: Path, infos, excluded, args, baseline) -> None:
                 "ranks": c.ranks,
                 "base_output_file": c.base_output_file,
                 "command": " ".join(runner.build_command(c, Path("config.ini"))),
+                "status": c.status,
+                "exit_code": c.exit_code,
             }
             for c in infos
         ],
@@ -346,6 +359,11 @@ def print_summary(infos, output_root: Path, baseline) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
+
+    # Register an in-progress run in the gallery and exit (no discovery needed).
+    if args.register_run:
+        gallery.register_run(args.register_run, Path(args.gallery_dir).expanduser() if args.gallery_dir else None)
+        return 0
 
     # --- Phase 1: discover (always) --------------------------------------- #
     all_infos = discover.discover(globs=args.configs)

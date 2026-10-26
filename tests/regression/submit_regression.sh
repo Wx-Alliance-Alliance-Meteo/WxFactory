@@ -65,9 +65,35 @@ fi
 CASE_JOB="${SCRIPT_DIR}/regression_case.job"
 AGGREGATE_JOB="${SCRIPT_DIR}/regression_aggregate.job"
 
+# --- Guard: do not launch if a regression run is already in flight ----------
+# We must not flood the cluster with a second full suite while the previous one is still running.
+# Every compute job is named wx_regression_*, so qstat is the source of truth (self-cleaning if a
+# job dies). A flock serializes the check-and-submit so two concurrent launches
+# cannot both pass the check. On a conflict we exit 1 so the CI job fails
+# (allow_failure keeps the pipeline green) — a red job means "this pipeline did
+# not generate results". Skipped for --dry-run.
+if [[ "${DRY_RUN}" -ne 1 ]]; then
+    LOCK_DIR="${REPO_ROOT}/results/regression"
+    mkdir -p "${LOCK_DIR}"
+    LOCK_FILE="${LOCK_DIR}/.launch.lock"
+    exec 200>"${LOCK_FILE}"
+    if ! flock -n 200; then
+        echo "ERROR: another regression launch is in progress (could not acquire ${LOCK_FILE})." >&2
+        exit 1
+    fi
+    if qstat -u "${USER}" 2>/dev/null | grep -q 'wx_regression_'; then
+        echo "ERROR: a regression run is already in flight (found wx_regression_* jobs in qstat)." >&2
+        echo "       Not launching a second one; the in-flight run will publish its own results." >&2
+        exit 1
+    fi
+fi
+
 # --- Shared run-id + output directory ---------------------------------------
 RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)_$(git rev-parse --short=7 HEAD 2>/dev/null || echo nogit)"
-OUTPUT_ROOT="results/regression/${RUN_ID}"
+# Base dir for the per-run output. Overridable via WX_REGRESSION_ROOT. The compute jobs receive the full
+# path via REGRESSION_OUTPUT_ROOT, so they write here automatically.
+REGRESSION_BASE="${WX_REGRESSION_ROOT:-results/regression}"
+OUTPUT_ROOT="${REGRESSION_BASE}/${RUN_ID}"
 
 # --- Job groups --------------------------------------------------------------
 # Each group: name, select spec, walltime, and its config file names.
@@ -142,6 +168,12 @@ if [[ "${DRY_RUN}" -eq 1 ]]; then
     exit 0
 fi
 
+# --- Register the run in the gallery (placeholder) ---------------------------
+# Create an "in progress" entry so the run is visible immediately; the
+# aggregation job's publish() later replaces the stub with the real report.
+# (Done after the dry-run exit so --dry-run does not create a real entry.)
+python tests/regression/run_regression.py --register-run "${RUN_ID}"
+
 # --- Submit the case jobs, capturing their IDs -------------------------------
 job_ids=()
 group_labels=()
@@ -184,9 +216,16 @@ echo "aggregation dependency: ${depend}"
 
 # --- Submit the aggregation job ---------------------------------------------
 # The dependency and shared variables are passed on the command line.
+# Forward the gallery dir to the aggregation job (it reads WX_REGRESSION_GALLERY
+# to know where to publish). Only passed when set, so the Python default applies
+# otherwise (an empty value would otherwise shadow the default).
+GALLERY_VAR=""
+if [[ -n "${WX_REGRESSION_GALLERY:-}" ]]; then
+    GALLERY_VAR=",WX_REGRESSION_GALLERY='${WX_REGRESSION_GALLERY}'"
+fi
 echo "submitting aggregation job (depends on ${#job_ids[@]} jobs) ..."
 agg_out="$(qsub -W "depend=${depend}" \
-    -v "REGRESSION_OUTPUT_ROOT=${OUTPUT_ROOT},WX_ENV_SCRIPT='${ENV_SCRIPT}',WX_REPO_ROOT=${REPO_ROOT}" \
+    -v "REGRESSION_OUTPUT_ROOT=${OUTPUT_ROOT},WX_ENV_SCRIPT='${ENV_SCRIPT}',WX_REPO_ROOT=${REPO_ROOT}${GALLERY_VAR}" \
     "${AGGREGATE_JOB}")"
 agg_id="$(echo "${agg_out}" | grep -oE '^[0-9]+' || true)"
 if [[ -z "${agg_id}" ]]; then
@@ -203,5 +242,5 @@ done
 echo "  ${AGGREGATE_JOB}: ${agg_id}  (runs after all of the above)"
 echo
 echo "Shared output:  ${OUTPUT_ROOT}"
-echo "Gallery (when done): ~/public_html/wx_factory_regression/${RUN_ID}"
+echo "Gallery (when done): ${WX_REGRESSION_GALLERY:-~/public_html/wx_factory/regression}/${RUN_ID}"
 echo "Track with:  qstat ${job_ids[*]} ${agg_id}"

@@ -17,6 +17,8 @@ served over HTTP from ``~/public_html``.
 from __future__ import annotations
 
 import html
+import json
+import os
 import shutil
 from pathlib import Path
 
@@ -29,7 +31,14 @@ from .regression_common import (
     time_sort_key,
 )
 
-DEFAULT_GALLERY_DIR = Path.home() / "public_html" / "wx_factory_regression"
+# The gallery root. Overridable via WX_REGRESSION_GALLERY. The
+# user symlinks ~/public_html/wx_factory/regression -> this dir to serve it.
+DEFAULT_GALLERY_DIR = Path(
+    os.environ.get(
+        "WX_REGRESSION_GALLERY",
+        str(Path.home() / "public_html" / "wx_factory" / "regression"),
+    )
+)
 
 
 def _copy_plots(output_root: Path, dest: Path) -> int:
@@ -59,10 +68,16 @@ def _copy_plots(output_root: Path, dest: Path) -> int:
 def _run_entries(gallery_dir: Path) -> list[Path]:
     """The run directories under the gallery, newest-first (by name).
 
-    Symlinks (e.g. the user-managed ``baseline`` pointer) are skipped so they
-    are not listed as their own run.
+    A run is listed if it has a ``report.html`` (finished) or an ``.in_progress``
+    marker (registered by ``register_run`` but not yet aggregated). Symlinks
+    (e.g. the user-managed ``baseline`` pointer) are skipped so they are not
+    listed as their own run.
     """
-    runs = [p for p in gallery_dir.iterdir() if p.is_dir() and not p.is_symlink() and (p / "report.html").is_file()]
+    runs = [
+        p
+        for p in gallery_dir.iterdir()
+        if p.is_dir() and not p.is_symlink() and ((p / "report.html").is_file() or (p / ".in_progress").is_file())
+    ]
     return sorted(runs, key=lambda p: p.name, reverse=True)
 
 
@@ -93,6 +108,27 @@ def _category_from_plots(png_names: list[str]) -> str:
         if name.startswith("dcmip"):
             return "dcmip"
     return "dcmip"
+
+
+def _load_manifest_statuses(run_dir: Path) -> dict[str, dict]:
+    """Read manifest.json from the gallery run dir and return {stem: {status, exit_code}}.
+
+    Returns an empty dict if the manifest is missing or unreadable (e.g. an
+    in-progress run that has not yet been aggregated).
+    """
+    manifest_path = run_dir / "manifest.json"
+    if not manifest_path.is_file():
+        return {}
+    try:
+        data = json.loads(manifest_path.read_text())
+    except (json.JSONDecodeError, OSError):
+        return {}
+    out: dict[str, dict] = {}
+    for cfg in data.get("configs", []):
+        stem = cfg.get("stem")
+        if stem:
+            out[stem] = {"status": cfg.get("status"), "exit_code": cfg.get("exit_code")}
+    return out
 
 
 def _config_thumbnails(run_dir: Path) -> list[tuple[str, str, dict[str, list[str]]]]:
@@ -157,7 +193,13 @@ def render_index(gallery_dir: Path) -> str:
         ".typerow .tlabel{flex:0 0 130px;font-size:12px;color:#555;padding-top:4px;}"
         "img{max-width:160px;border:1px solid #ccc;}"
         ".badge{background:#0a7a2b;color:#fff;border-radius:4px;padding:1px 6px;font-size:11px;}"
+        ".badge.inprogress{background:#b45309;}"
         ".count{color:#555;font-size:12px;font-weight:400;margin-left:8px;}"
+        ".inprogress-note{color:#b45309;font-size:13px;font-weight:600;margin:8px 0;}"
+        ".failed-section{background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:10px 14px;margin:10px 0;}"
+        ".failed-section h3{color:#b91c1c;font-size:14px;margin:0 0 6px 0;}"
+        ".failed-item{color:#991b1b;font-size:13px;margin:3px 0;}"
+        ".badge.failed{background:#b91c1c;}"
         "</style></head><body>"
     )
     parts.append("<h1>WxFactory regression gallery</h1>")
@@ -167,8 +209,11 @@ def render_index(gallery_dir: Path) -> str:
 
     for ri, run in enumerate(runs):
         is_baseline = run.name == baseline_name
+        in_progress = (run / ".in_progress").is_file()
         cls = "run baseline" if is_baseline else "run"
         badge = " <span class='badge'>baseline</span>" if is_baseline else ""
+        if in_progress:
+            badge += " <span class='badge inprogress'>in progress</span>"
 
         # Group this run's configs by category (DCMIP / SW / cartesian).
         by_category: dict[str, list[tuple[str, dict[str, list[str]]]]] = {}
@@ -177,17 +222,46 @@ def render_index(gallery_dir: Path) -> str:
         n_configs = sum(len(g) for g in by_category.values())
         n_figs = sum(len(names) for g in by_category.values() for _, by_type in g for names in by_type.values())
 
+        # Load manifest statuses to detect failed configs (which have no plots).
+        statuses = _load_manifest_statuses(run)
+        plotted_stems = {stem for group in by_category.values() for stem, _ in group}
+        failed_configs = [
+            (stem, info)
+            for stem, info in statuses.items()
+            if info.get("status") == "failed" and stem not in plotted_stems
+        ]
+        n_failed = len(failed_configs)
+        if n_failed:
+            n_configs += n_failed  # include failed configs in the total count
+
         # The newest run (and its categories) is expanded by default.
         run_open = " open" if ri == 0 else ""
-        parts.append(f"<details class='{cls}'{run_open}>")
+        if n_failed:
+            badge += f" <span class='badge failed'>{n_failed} failed</span>"
+
+        parts.append(f"<details class='{cls}'{run_open}")
         parts.append(
             f"<summary>{html.escape(run.name)}{badge}"
             f"<span class='count'>{n_configs} config(s), {n_figs} figure(s)</span></summary>"
         )
         parts.append("<div class='runbody'>")
-        parts.append(
-            f"<p class='meta reportlink'><a href='{html.escape(run.name)}/report.html'>full report &rarr;</a></p>"
-        )
+        if in_progress:
+            parts.append(
+                "<p class='inprogress-note'>Run in progress &mdash; results will appear here as the "
+                "compute jobs finish and the aggregation job publishes the report.</p>"
+            )
+        else:
+            parts.append(
+                f"<p class='meta reportlink'><a href='{html.escape(run.name)}/report.html'>full report &rarr;</a></p>"
+            )
+        if failed_configs:
+            parts.append("<div class='failed-section'>")
+            parts.append(f"<h3>&#9888; {n_failed} config(s) failed</h3>")
+            for stem, info in sorted(failed_configs):
+                exit_code = info.get("exit_code")
+                detail = f" (exit code {exit_code})" if exit_code is not None else ""
+                parts.append(f"<div class='failed-item'>{html.escape(stem)}{detail}</div>")
+            parts.append("</div>")
         for category in CATEGORY_ORDER:
             group = by_category.get(category)
             if not group:
@@ -234,6 +308,10 @@ def publish(output_root: Path, gallery_dir: Path | None = None) -> Path:
     count = _copy_plots(output_root, dest)
     log(f"Published {count} file(s) to {dest}")
 
+    # The run is finished: drop the in-progress marker (if present) BEFORE
+    # regenerating the index, so the index no longer badges it as in progress.
+    (dest / ".in_progress").unlink(missing_ok=True)
+
     # Refresh the index. (The 'baseline' symlink is user-managed and is left
     # untouched here; the index reads it to badge the baseline run.)
     index = gallery_dir / "index.html"
@@ -241,5 +319,37 @@ def publish(output_root: Path, gallery_dir: Path | None = None) -> Path:
     log(f"Regenerated {index}")
 
     log(f"Gallery: {gallery_dir}")
-    log(f"Public URL hint: http://<host>/wx_factory_regression/{output_root.name}/report.html")
+    log(f"Public URL hint: http://<host>/wx_factory/regression/{output_root.name}/report.html")
+    return dest
+
+
+def register_run(run_name: str, gallery_dir: Path | None = None) -> Path:
+    """Register a run that has been launched but not yet aggregated.
+
+    Creates ``<gallery-dir>/<run_name>/`` with a stub ``report.html`` and an
+    ``.in_progress`` marker, then regenerates ``index.html`` so the run appears
+    (empty, badged "in progress"). The aggregation job's ``publish()`` later
+    overwrites the stub with the real report/figures and removes the marker.
+    """
+    gallery_dir = gallery_dir or DEFAULT_GALLERY_DIR
+    dest = gallery_dir / run_name
+    dest.mkdir(parents=True, exist_ok=True)
+
+    (dest / ".in_progress").write_text("registered\n")
+    stub = (
+        "<!DOCTYPE html>\n<html><head><meta charset='utf-8'>"
+        f"<title>WxFactory regression &mdash; {html.escape(run_name)}</title></head>"
+        "<body style='font-family:system-ui,sans-serif;margin:24px;'>"
+        f"<h1>Run {html.escape(run_name)} is in progress</h1>"
+        "<p>The compute jobs have been submitted. This page will be replaced by the "
+        "full report once the aggregation job runs.</p>"
+        "<p><a href='../index.html'>&larr; back to the gallery index</a></p>"
+        "</body></html>"
+    )
+    (dest / "report.html").write_text(stub)
+
+    index = gallery_dir / "index.html"
+    index.write_text(render_index(gallery_dir))
+    log(f"Registered in-progress run {run_name} at {dest}")
+    log(f"Regenerated {index}")
     return dest
