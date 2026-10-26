@@ -3,7 +3,6 @@
 import torch
 
 from ..common.definitions import heat_capacity_ratio
-from ..common.matmul import apply_op
 from ..pde.euler_interfaces import EulerInterfaceGeometry, pressure
 from .block_solve import block_thomas_solve, blocks_matvec, cyclic_block_solve
 from .column_layout import (
@@ -19,11 +18,11 @@ from .euler import AcousticLinearization
 
 
 class EulerVerticalLinearization:
-    """Assemble the (rho, v_3, rho*theta) rows against all five variables.
+    """Assemble the density, vertical momentum, thermodynamic, and tracer rows.
 
     Column states have axes (column, element, variable, node). Before flattening,
     each block has axes (column, element, equation, output node, variable, input node).
-    The three equation rows are rho, v_3, and rho*theta.
+    Tracers follow the thermodynamic row; horizontal momentum remains explicit.
     """
 
     def __init__(self, rhs, state, *, columns=None):
@@ -34,9 +33,11 @@ class EulerVerticalLinearization:
         dimensions = column_dims(rhs, state)
         self.dimensions = dimensions
         self.column_slice = slice(None) if columns is None else columns
-        self.rows = stiff_variable_rows(dimensions.num_solpts, state.device)
+        self.rows = stiff_variable_rows(dimensions.num_solpts, state.device, dimensions.num_var)
+        self.equation_variables = [0, *range(3, dimensions.num_var)]
+        self.num_equations = len(self.equation_variables)
         self.state_columns = state_to_columns(rhs, state).reshape(
-            dimensions.num_columns, dimensions.num_elem_z, 5, dimensions.num_solpts
+            dimensions.num_columns, dimensions.num_elem_z, dimensions.num_var, dimensions.num_solpts
         )[self.column_slice]
         if columns is not None:
             self.state_columns = self.state_columns.clone()
@@ -61,8 +62,7 @@ class EulerVerticalLinearization:
             "ijces,cejs->ceis", self.inverse_spatial, self.state_columns[:, :, 1:4]
         )
 
-        state_trace = apply_op(state, rhs.extrapolations[2])
-        state_trace[[0, 4]] = torch.exp(apply_op(torch.log(state[[0, 4]]), rhs.extrapolations[2]))
+        state_trace = rhs._extrapolate_direction(state, rhs.extrapolations[2])
         self.state_trace = state_interface_to_columns(state_trace, dimensions)[self.column_slice].clone()
         faces = state_interface_to_columns(rhs._vertical_faces(state_trace), dimensions)[self.column_slice].clone()
         left = faces[:, :-1, 1].permute(2, 0, 1)
@@ -96,6 +96,7 @@ class EulerVerticalLinearization:
             geometry,
             2,
             mach_cutoff=rhs.config.riemann_mach_cutoff,
+            scalar_indices=rhs.scalar_indices,
         )
         self.pressure_gradient = self._vertical_derivative(
             pressure(self.state_columns[:, :, 4]), interface.common_pressure
@@ -130,20 +131,20 @@ class EulerVerticalLinearization:
 
     def _wall_reflection_matrix(self, inverse_spatial):
         result = (
-            torch.eye(5, dtype=self.state.dtype, device=self.state.device)
-            .expand(self.state_columns.shape[0], 5, 5)
+            torch.eye(self.dimensions.num_var, dtype=self.state.dtype, device=self.state.device)
+            .expand(self.state_columns.shape[0], self.dimensions.num_var, self.dimensions.num_var)
             .clone()
         )
         result[:, 3, 1:4] -= (2 * inverse_spatial[2] / inverse_spatial[2, 2]).T
         return result
 
     def _interface_jacobians(self, interface, left, jacobian):
-        """Differentiate (J flux_rho, J flux_theta, p*, K*, v_1*, v_2*) on each side."""
+        """Interface rows are metric-weighted scalar fluxes, p*, K*, v_1*, and v_2*."""
         matrices = []
         zero_perturbation = torch.zeros_like(left)
         for side in range(2):
             columns = []
-            for variable in range(5):
+            for variable in range(self.dimensions.num_var):
                 delta = torch.zeros_like(left)
                 delta[variable] = 1
                 _, delta_pressure, delta_kinetic_energy, delta_covariant_velocity, flux = (
@@ -164,6 +165,8 @@ class EulerVerticalLinearization:
         dimensions, state_columns = self.dimensions, self.state_columns
 
         def contribution(lift, interface, extrapolation):
+            if self.dimensions.num_var > 5:
+                return torch.einsum("ceioq,ceqj,cejks->ceioks", lift, interface, extrapolation)
             return torch.einsum("ceioq,ceqj,cejs->ceiojs", lift, interface, extrapolation)
 
         lower[:, 1:] += contribution(lifts[0][:, 1:], left[:, 1:-1], extrapolation[1][:, :-1])
@@ -178,19 +181,35 @@ class EulerVerticalLinearization:
         else:
             diagonal[:, :1] += contribution(lifts[0][:, :1], bottom[:, None], extrapolation[0][:, :1])
             diagonal[:, -1:] += contribution(lifts[1][:, -1:], top[:, None], extrapolation[1][:, -1:])
-        shape = (state_columns.shape[0], dimensions.num_elem_z, 3 * dimensions.num_solpts, 5 * dimensions.num_solpts)
+        shape = (
+            state_columns.shape[0],
+            dimensions.num_elem_z,
+            self.num_equations * dimensions.num_solpts,
+            dimensions.num_var * dimensions.num_solpts,
+        )
         return tuple(block.reshape(shape) for block in (lower, diagonal, upper))
 
     def _volume_blocks(self):
         dimensions, state_columns = self.dimensions, self.state_columns
-        shape = (state_columns.shape[0], dimensions.num_elem_z, 3, dimensions.num_solpts, 5, dimensions.num_solpts)
+        shape = (
+            state_columns.shape[0],
+            dimensions.num_elem_z,
+            self.num_equations,
+            dimensions.num_solpts,
+            dimensions.num_var,
+            dimensions.num_solpts,
+        )
         lower, diagonal, upper = (state_columns.new_zeros(shape) for _ in range(3))
         derivative = self.derivative
         identity = torch.eye(dimensions.num_solpts, dtype=state_columns.dtype, device=state_columns.device)
         rho = state_columns[:, :, 0]
 
-        for output, variable in ((0, 0), (2, 4)):
-            flux = state_columns.new_zeros((state_columns.shape[0], dimensions.num_elem_z, 5, dimensions.num_solpts))
+        for output, variable in enumerate(self.equation_variables):
+            if variable == 3:
+                continue
+            flux = state_columns.new_zeros(
+                (state_columns.shape[0], dimensions.num_elem_z, dimensions.num_var, dimensions.num_solpts)
+            )
             flux[:, :, variable] = self.contravariant_velocity[:, :, 2]
             for j in range(3):
                 flux[:, :, j + 1] += state_columns[:, :, variable] * self.inverse_spatial[2, j]
@@ -218,33 +237,53 @@ class EulerVerticalLinearization:
         return lower, diagonal, upper
 
     def _extrapolation_jacobians(self):
-        """Log extrapolation gives d(q_face)/dq_node = q_face * E / q_node."""
         state_columns = self.state_columns
         extrapolation = []
         for face in range(2):
-            matrix = self.extrapolation[face].expand_as(state_columns).clone()
-            for variable in (0, 4):
-                matrix[:, :, variable] *= self.state_trace[:, :, face, variable, None] / state_columns[:, :, variable]
+            diagonal = self.extrapolation[face].expand_as(state_columns).clone()
+            for variable in self.rhs.log_scalar_indices:
+                diagonal[:, :, variable] *= self.state_trace[:, :, face, variable, None] / state_columns[:, :, variable]
+            if self.dimensions.num_var == 5:
+                extrapolation.append(diagonal)
+                continue
+            count = self.dimensions.num_var
+            matrix = diagonal[:, :, :, None] * torch.eye(count, device=diagonal.device, dtype=diagonal.dtype)[..., None]
+            rho = state_columns[:, :, 0]
+            face_rho = self.state_trace[:, :, face, 0]
+            for variable in range(6, count):
+                mixing_ratio = state_columns[:, :, variable] / rho
+                face_mixing_ratio = self.state_trace[:, :, face, variable] / face_rho
+                tracer_derivative = face_rho[:, :, None] * self.extrapolation[face] / rho
+                matrix[:, :, variable, variable] = tracer_derivative
+                matrix[:, :, variable, 0] = face_mixing_ratio[:, :, None] * diagonal[:, :, 0]
+                matrix[:, :, variable, 0] -= mixing_ratio * tracer_derivative
             extrapolation.append(matrix)
-
         return extrapolation
 
     def _face_lifting_matrices(self):
-        """Map (J flux_rho, J flux_theta, p*, K*, v_1*, v_2*) to the three equation rows."""
         dimensions, state_columns = self.dimensions, self.state_columns
         rho = state_columns[:, :, 0]
+        num_scalars = len(self.rhs.scalar_indices)
         lifts = []
         for face in range(2):
-            lift = state_columns.new_zeros((state_columns.shape[0], dimensions.num_elem_z, 3, dimensions.num_solpts, 6))
+            lift = state_columns.new_zeros(
+                (
+                    state_columns.shape[0],
+                    dimensions.num_elem_z,
+                    self.num_equations,
+                    dimensions.num_solpts,
+                    num_scalars + 4,
+                )
+            )
             correction = self.correction[:, face]
-            lift[:, :, 0, :, 0] = -correction / self.jacobian
-            lift[:, :, 2, :, 1] = -correction / self.jacobian
-            lift[:, :, 1, :, 2] = -correction / rho
-            lift[:, :, 1, :, 3] = -correction
-            lift[:, :, 1, :, 4] = correction * self.contravariant_velocity[:, :, 0]
-            lift[:, :, 1, :, 5] = correction * self.contravariant_velocity[:, :, 1]
+            for scalar, variable in enumerate(self.rhs.scalar_indices):
+                output = self.equation_variables.index(variable)
+                lift[:, :, output, :, scalar] = -correction / self.jacobian
+            lift[:, :, 1, :, num_scalars] = -correction / rho
+            lift[:, :, 1, :, num_scalars + 1] = -correction
+            lift[:, :, 1, :, num_scalars + 2] = correction * self.contravariant_velocity[:, :, 0]
+            lift[:, :, 1, :, num_scalars + 3] = correction * self.contravariant_velocity[:, :, 1]
             lifts.append(lift)
-
         return lifts
 
     def __call__(self, vector):

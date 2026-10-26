@@ -11,6 +11,7 @@ from .cubed_sphere import CubedSphere
 from .geometry import cast_double_arrays
 from .metric5d import Metric5D
 from .sphere import cart2sph
+from .terrain_mapping import stretch_vertical_coordinate
 
 
 class CubedSphere3D(CubedSphere):
@@ -116,6 +117,9 @@ class CubedSphere3D(CubedSphere):
         self.ztop = ztop
 
         self.vertical_coord = param.vertical_coord
+        self.vertical_stretch = getattr(param, "vertical_stretch", 0.0)
+        if not math.isfinite(self.vertical_stretch) or not 0 <= self.vertical_stretch <= 20:
+            raise ValueError("vertical_stretch must be finite and in [0, 20]")
         self.sleve_gamma = None
         self._sleve_reported = False
         if self.vertical_coord == "sleve":
@@ -397,6 +401,10 @@ class CubedSphere3D(CubedSphere):
             raise AssertionError(f"Invalid Euler atmosphere depth approximation ({param.depth_approx})")
         self.earth_radius /= planet_scaling_factor
         self.rotation_speed *= planet_is_rotating / planet_scaling_factor
+        if param.case_number in (410, 411, 412, 413):
+            reduction = 10 ** (param.case_number - 410)
+            self.earth_radius /= reduction
+            self.rotation_speed *= reduction
 
         self.apply_topography(None, None, None, None, None, None)
 
@@ -542,6 +550,7 @@ class CubedSphere3D(CubedSphere):
         s2 = self.sleve_scale_small
 
         def height(eta: Tensor, h_large: Tensor, h_small: Tensor) -> Tensor:
+            eta = stretch_vertical_coordinate(eta, self.vertical_stretch)
             return ztop * eta + h_large * self._decay(eta, s1) + h_small * self._decay(eta, s2)
 
         self.x3[...] = height(self.eta, h1, h2)

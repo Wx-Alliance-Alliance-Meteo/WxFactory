@@ -77,8 +77,10 @@ def initialize_euler(geom: CubedSphere3D, metric: Metric5D, mtrx: DFROperators, 
         rho, u1_contra, u2_contra, w, potential_temperature = dcmip_schar_waves(geom, metric, mtrx, param, True)
     elif param.case_number == 31:
         rho, u1_contra, u2_contra, w, potential_temperature = dcmip_gravity_wave(geom, metric, mtrx, param)
-    elif param.case_number == 41:
-        rho, u1_contra, u2_contra, w, potential_temperature = dcmip_baroclinic_instability(geom, metric, mtrx, param)
+    elif param.case_number in (41, 410, 411, 412, 413):
+        rho, u1_contra, u2_contra, w, potential_temperature, q1, q2 = dcmip_baroclinic_instability(
+            geom, metric, mtrx, param
+        )
     elif param.case_number == 77:
         rho, u1_contra, u2_contra, w, potential_temperature = acoustic_wave(geom, metric)
     else:
@@ -90,6 +92,8 @@ def initialize_euler(geom: CubedSphere3D, metric: Metric5D, mtrx: DFROperators, 
     if param.case_number in (11, 12, 13):
         tracers = (q1,) if param.case_number == 12 else (q1, q2, q3, q4)
         state = torch.cat((state, torch.stack([rho * tracer for tracer in tracers])))
+    if param.case_number in (41, 410, 411, 412, 413):
+        state = torch.cat((state, torch.stack((rho * q1, rho * q2))))
     return state, None
 
 

@@ -13,6 +13,40 @@ from wx_factory.rhs.euler_partition import EulerRhsPartition
 
 
 class EulerPartitionTestCase(unittest.TestCase):
+    def test_tracer_actions_and_column_solves(self):
+        for periodic in (False, True):
+            with self.subTest(periodic=periodic):
+                rhs, state, delta = self.problem()
+                rhs.periodic_vertical = periodic
+                reference = rhs(state)
+                rhs.scalar_indices = [0, 4, 5, 6]
+                rhs.log_scalar_indices = [0, 4, 5]
+                profile = torch.linspace(0, 1, state[0].numel(), dtype=state.dtype).reshape_as(state[0])
+                state = torch.cat((state, torch.stack((state[4], state[0] * profile * 1e-6))))
+                delta = torch.cat((delta, torch.stack((delta[4], state[0] * (0.2 - profile) * 1e-6))))
+                torch.testing.assert_close(rhs(state)[:5], reference, rtol=2e-12, atol=2e-10)
+                full = rhs.linearize(state)
+                partitions = rhs.linearize_partitions(state)
+                torch.testing.assert_close(
+                    rhs(state), rhs.explicit(state) + rhs.implicit(state), rtol=2e-12, atol=2e-10
+                )
+                torch.testing.assert_close(rhs(state)[5], rhs(state)[4], rtol=2e-12, atol=2e-10)
+                for function, action in (
+                    (rhs, full),
+                    (rhs.explicit, partitions.explicit),
+                    (rhs.implicit, partitions.implicit),
+                ):
+                    epsilon = 1e-3
+                    expected = (function(state + epsilon * delta) - function(state - epsilon * delta)) / (2 * epsilon)
+                    actual = action(delta).reshape_as(state)
+                    for row in range(state.shape[0]):
+                        scale = max(actual[row].abs().max().item(), 1e-15)
+                        self.assertLess((actual[row] - expected[row]).abs().max().item() / scale, 2e-5)
+                solution = partitions.solve(delta, 0.1, column_batch_size=3)
+                residual = solution - 0.05 * partitions.implicit(solution).reshape_as(state) - delta
+                for row in range(state.shape[0]):
+                    self.assertLess(residual[row].abs().max().item(), 1e-10 * delta[row].abs().max().item())
+
     def test_periodic_column_solve_matches_dense_system(self):
         generator = torch.Generator().manual_seed(18)
         for elements in (1, 2, 5):

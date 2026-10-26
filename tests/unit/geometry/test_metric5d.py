@@ -1,3 +1,4 @@
+import math
 import unittest
 
 import torch
@@ -27,6 +28,33 @@ class Metric5DTestCase(unittest.TestCase):
             scales=self.scales if scales is None else scales,
             deep=deep,
         )
+
+    def test_stretched_vertical_metric_includes_reference_scaling_and_second_derivatives(self):
+        from wx_factory.geometry.terrain_mapping import stretch_vertical_coordinate
+
+        points = self.points.clone()
+        points[2] = torch.tensor([0.0, 1.0], dtype=points.dtype)
+        for stretch in (0.0, 2.8):
+            fields = evaluate_metric5d(
+                points,
+                lambda coordinates, stretch=stretch: 44000 * stretch_vertical_coordinate(coordinates[2], stretch),
+                radius=6371220,
+                rotation_speed=7.29212e-5,
+                frame=self.frame,
+                scales=self.scales,
+                deep=False,
+            )
+            slope = (
+                torch.ones_like(points[2])
+                if stretch == 0
+                else stretch * torch.exp(stretch * points[2]) / math.expm1(stretch)
+            )
+            expected = (44000 * slope * self.scales[2]).square()
+            torch.testing.assert_close(fields.G_cov[3, 3], expected, rtol=2e-14, atol=0)
+            torch.testing.assert_close(
+                fields.dG_cov[2, 3, 3], 2 * stretch * expected * self.scales[2], rtol=2e-14, atol=0
+            )
+            self.assertTrue(bool((fields.volume_jacobian > 0).all()))
 
     def test_chunked_metric_preserves_all_fields_and_shape(self):
         from dataclasses import fields

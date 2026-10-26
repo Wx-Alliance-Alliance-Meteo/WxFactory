@@ -1,4 +1,4 @@
-"""Euler RHS in Lamb form. The state is (rho, v_1, v_2, v_3, rho*theta), where v_i=G_ij*u^j."""
+"""Euler RHS in Lamb form."""
 
 import math
 from copy import copy
@@ -21,6 +21,11 @@ class RhsEuler:
         self.metric = metric
         self.ptopo = process_topology
         self.config = config
+        self.scalar_indices = [0, 4]
+        self.log_scalar_indices = [0, 4]
+        if config.case_number in (41, 410, 411, 412, 413):
+            self.scalar_indices += [5, 6]
+            self.log_scalar_indices += [5]
         self.context = geometry.context
         self.periodic_vertical = config.vertical_boundary == "periodic"
         if not math.isfinite(config.riemann_mach_cutoff) or not 0 < config.riemann_mach_cutoff <= 1:
@@ -123,14 +128,19 @@ class RhsEuler:
         return self._double_rhs
 
     def _extrapolate(self, state: Tensor) -> tuple[Tensor, ...]:
-        log_scalars = torch.log(state[[0, 4]])
-        traces = []
-        for operator in self.extrapolations:
-            trace = state.new_empty(state.shape[:-1] + (operator.shape[-1],))
-            trace[1:4] = apply_op(state[1:4], operator)
-            trace[[0, 4]] = torch.exp(apply_op(log_scalars, operator))
-            traces.append(trace)
-        return tuple(traces)
+        log_scalars = torch.log(state[self.log_scalar_indices])
+        return tuple(self._extrapolate_direction(state, operator, log_scalars) for operator in self.extrapolations)
+
+    def _extrapolate_direction(self, state, operator, log_scalars=None):
+        trace = state.new_empty(state.shape[:-1] + (operator.shape[-1],))
+        trace[1:4] = apply_op(state[1:4], operator)
+        if log_scalars is None:
+            log_scalars = torch.log(state[self.log_scalar_indices])
+        trace[self.log_scalar_indices] = torch.exp(apply_op(log_scalars, operator))
+        if state.shape[0] > 6:
+            # Potential vorticity can vanish, so its mixing ratio is extrapolated without a logarithm.
+            trace[6:] = trace[0] * apply_op(state[6:] / state[0], operator)
+        return trace
 
     def _faces_with_neighbours(self, traces: tuple[Tensor, ...]) -> tuple[Tensor, ...]:
         width = self.geom.itf_size
@@ -253,8 +263,10 @@ class RhsEuler:
                 normal_geometry=(geometry.normal_scale, geometry.normal_row),
                 mach_cutoff=self.config.riemann_mach_cutoff,
             )
-            scalar_flux = state.new_zeros((2,) + state.shape[1:])
-            scalar_state = torch.where(normal_velocity[None] >= 0, state[left][[0, 4]], state[right][[0, 4]])
+            scalar_flux = state.new_zeros((len(self.scalar_indices),) + state.shape[1:])
+            scalar_state = torch.where(
+                normal_velocity[None] >= 0, state[left][self.scalar_indices], state[right][self.scalar_indices]
+            )
             common_flux = geometry.jacobian * normal_velocity * scalar_state
             scalar_flux[left], scalar_flux[right] = common_flux, common_flux
             numerical_pressure, numerical_energy = torch.zeros_like(state[0]), torch.zeros_like(state[0])
@@ -331,8 +343,7 @@ class RhsEuler:
         given_shape = state.shape
         state = state.reshape((-1,) + self.metric.volume.height.shape)
         fields = self.metric.volume
-        trace = apply_op(state, self.extrapolations[2])
-        trace[[0, 4]] = torch.exp(apply_op(torch.log(state[[0, 4]]), self.extrapolations[2]))
+        trace = self._extrapolate_direction(state, self.extrapolations[2])
         faces = self._vertical_faces(trace)
         scalar_traces, pressure_traces, energy_traces, velocity_traces = self._interface_data((faces,), (2,))
         contravariant_velocity = fields.raise_velocity(state[1:4])
@@ -341,8 +352,8 @@ class RhsEuler:
             return apply_op(value, self.derivatives[2]) + apply_op(common, self.corrections[2])
 
         result = torch.zeros_like(state)
-        flux = fields.volume_jacobian * contravariant_velocity[2] * state[[0, 4]]
-        result[[0, 4]] = -derivative(flux, scalar_traces[0]) / fields.volume_jacobian
+        flux = fields.volume_jacobian * contravariant_velocity[2] * state[self.scalar_indices]
+        result[self.scalar_indices] = -derivative(flux, scalar_traces[0]) / fields.volume_jacobian
         energy = (state[1:4] * contravariant_velocity).sum(dim=0) / 2 + fields.geopotential
         result[3] = -derivative(pressure(state[4]), pressure_traces[0]) / state[0]
         result[3] -= derivative(energy, energy_traces[0])
@@ -371,7 +382,7 @@ class RhsEuler:
         thermodynamic_pressure = pressure(state[4])
         mechanical_energy = kinetic_energy + fields.geopotential
         result = torch.zeros_like(state)
-        scalars = state[[0, 4]]
+        scalars = state[self.scalar_indices]
         scalar_tendency = torch.zeros_like(scalars)
         pressure_gradient, energy_gradient = [], []
         for direction in range(2 if explicit else 3):
@@ -399,7 +410,7 @@ class RhsEuler:
         frame_vorticity = antisymmetric_velocity_contraction(fields.frame_vorticity, contravariant_velocity)
         if explicit:
             frame_vorticity[2] = -(contravariant_velocity[:2] * fields.horizontal_frame_gradient).sum(dim=0)
-        result[[0, 4]] = scalar_tendency
+        result[self.scalar_indices] = scalar_tendency
         result[1:4] = pressure_acceleration + energy_acceleration + relative_vorticity + frame_vorticity
         if self.damping is not None:
             rate, reference = self.damping

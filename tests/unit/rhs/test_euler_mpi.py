@@ -17,6 +17,44 @@ from wx_factory.solvers.fgmres import fgmres
 
 
 class EulerRhsTestCase(MpiTestCase):
+    def test_baroclinic_stretch_tracers_and_reduced_planet_scaling(self):
+        from wx_factory.init.initialize import initialize_euler
+
+        reference = None
+        for case in (410, 411, 412, 413):
+            config = Configuration(readfile(f"config/dcmip{case}.ini"), load_default_schema())
+            config.precision = "double"
+            geometry = CubedSphere3D(
+                1, 6, 5, self.topology.num_lines_per_panel, 0, 0, 0, config.ztop, self.topology, config
+            )
+            operators = DFROperators(geometry, self.context)
+            metric = Metric5D(geometry, config)
+            state, _ = initialize_euler(geometry, metric, operators, config)
+            scaling = 10 ** (case - 410)
+            self.assertAlmostEqual(geometry.earth_radius * scaling, 6371220)
+            self.assertAlmostEqual(geometry.rotation_speed / scaling, 7.29212e-5)
+            self.assertEqual(state.shape[0], 7)
+            self.assertTrue(bool(torch.isfinite(state).all()))
+            self.assertTrue(bool((state[6] >= 0).all()))
+            torch.testing.assert_close(state[5], state[4], rtol=0, atol=0)
+            torch.testing.assert_close(metric.volume.height, geometry.height_new, rtol=2e-14, atol=2e-10)
+            self.assertTrue(bool((metric.faces[2].volume_jacobian > 0).all()))
+            invariant = torch.stack((state[0], state[4], state[6] / scaling))
+            if reference is None:
+                reference = invariant
+            else:
+                torch.testing.assert_close(invariant, reference, rtol=3e-12, atol=2e-12)
+            rhs = RhsEuler(geometry, operators, metric, self.topology, config)
+            tendency = rhs(state)
+            torch.testing.assert_close(tendency[5], tendency[4], rtol=2e-12, atol=2e-10)
+            self.assertTrue(bool(torch.isfinite(tendency).all()))
+            weights = torch.einsum("k,j,i->kji", geometry.glweights, geometry.glweights, geometry.glweights).reshape(-1)
+            volume = metric.volume.volume_jacobian * weights
+            for variable in (0, 4, 5, 6):
+                integral = self.comm.allreduce((volume * tendency[variable]).sum().item(), op=MPI.SUM)
+                magnitude = self.comm.allreduce((volume * tendency[variable]).abs().sum().item(), op=MPI.SUM)
+                self.assertLess(abs(integral) / max(magnitude, 1), 2e-13)
+
     def test_compiled_actions_match_eager_full_and_partitioned_actions(self):
         self.config.riemann_mach_cutoff = 0.001
         profile = torch.sin(self.geom.polar[0]) * torch.cos(self.geom.polar[1])

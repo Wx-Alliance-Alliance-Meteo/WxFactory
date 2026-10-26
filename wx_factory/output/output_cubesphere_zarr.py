@@ -41,6 +41,8 @@ class OutputCubesphereZarr(OutputCubesphere):
             if config.case_number in (11, 12, 13):
                 count = 1 if config.case_number == 12 else 4
                 self.equ += [f"q{index}" for index in range(1, count + 1)]
+            elif config.case_number in (41, 410, 411, 412, 413):
+                self.equ += ["q1", "q2"]
         self.panel_id = self.process_topology.my_panel
         if config.time_start:
             self.start_time = np.datetime64(str(config.time_start).replace("t", "T"))
@@ -83,10 +85,13 @@ class OutputCubesphereZarr(OutputCubesphere):
 
     def _output_init(self, filename):
         times = np.array(
-            [self.start_time + np.timedelta64(int(i * self.dt), "s") for i in range(self.num_steps)],
+            [self.start_time + np.timedelta64(round(i * self.dt * 1e6), "us") for i in range(self.num_steps)],
             dtype="datetime64[ns]",
         )
         ds_zarr = zarr.open_group(filename, mode="w")
+        ds_zarr.attrs["case_number"] = self.config.case_number
+        ds_zarr.attrs["earth_radius"] = self.geometry.earth_radius
+        ds_zarr.attrs["rotation_speed"] = self.geometry.rotation_speed
         if self.nz != 1:
             for var in self.equ:
                 ds_zarr.create_array(
@@ -109,6 +114,10 @@ class OutputCubesphereZarr(OutputCubesphere):
                     chunks=(1, 1, self.ny, self.nx),
                     dtype=np.float64,
                 )
+
+        if self.config.case_number in (41, 410, 411, 412, 413):
+            ds_zarr["q1"].attrs.update(units="K", long_name="Advected potential temperature")
+            ds_zarr["q2"].attrs.update(units="K m2 kg-1 s-1", long_name="Advected absolute Ertel potential vorticity")
 
         ds_zarr.create_array(
             "time",
@@ -239,7 +248,7 @@ class OutputCubesphereZarr(OutputCubesphere):
             self.store_variable_zarr(self.geometry.to_single_block(theta), "theta", step_id)
 
             self.store_variable_zarr(self.geometry.to_single_block(p), "P", step_id)
-            if self.config.case_number in (11, 12, 13):
+            if self.config.case_number in (11, 12, 13, 41, 410, 411, 412, 413):
                 for index in range(5, Q.shape[0]):
                     self.store_variable_zarr(self.geometry.to_single_block(Q[index] / rho), f"q{index - 4}", step_id)
 

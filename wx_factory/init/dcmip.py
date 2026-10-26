@@ -909,13 +909,45 @@ def dcmip_baroclinic_instability(
     # Appendix F.5 Eq. (250)
     theta = T * (p_ref / p) ** (Rd / cpd)
 
-    return (
-        rho,
-        u1_contra,
-        u2_contra,
-        u3_contra,
-        theta,
+    # These PV derivatives use eta = p/p0, rather than the model's terrain-following coordinate.
+    sin_lat, cos_lat = torch.sin(lat), torch.cos(lat)
+    sine, cosine = torch.sin(eta_v), torch.cos(eta_v)
+    horizontal_1 = -2 * sin_lat**6 * (cos_lat**2 + 1 / 3) + 10 / 63
+    horizontal_2 = (8 / 5) * cos_lat**3 * (sin_lat**2 + 2 / 3) - math.pi / 4
+    d_horizontal_1 = -12 * sin_lat**5 * cos_lat * (cos_lat**2 + 1 / 3) + 4 * sin_lat**7 * cos_lat
+    d_horizontal_2 = -(24 / 5) * cos_lat**2 * sin_lat * (sin_lat**2 + 2 / 3) + (16 / 5) * cos_lat**4 * sin_lat
+    thermal_factor = 2 * u0 * cosine**1.5 * horizontal_1 + a * omega * horizontal_2
+    d_thermal_factor = -(3 * math.pi / 2) * u0 * cosine.sqrt() * sine * horizontal_1
+    amplitude = 3 * math.pi * u0 / (4 * Rd)
+    d_temperature_eta = T0 * exponent * eta ** (exponent - 1)
+    d_temperature_eta -= 5 * delta_T * (eta_tropo - eta).clamp_min(0) ** 4
+    d_temperature_eta += amplitude * (
+        (sine * cosine.sqrt() + eta * math.pi / 2 * (cosine**1.5 - sine.square() / (2 * cosine.sqrt())))
+        * thermal_factor
+        + eta * sine * cosine.sqrt() * d_thermal_factor
     )
+    d_theta_eta = eta ** (-Rd / cpd) * (d_temperature_eta - (Rd / cpd) * T / eta)
+    d_theta_lat = (
+        amplitude
+        * eta ** (1 - Rd / cpd)
+        * sine
+        * cosine.sqrt()
+        * (2 * u0 * cosine**1.5 * d_horizontal_1 + a * omega * d_horizontal_2)
+    )
+    d_wind_eta = -(3 * math.pi / 4) * u0 * torch.sin(2 * lat).square() * cosine.sqrt() * sine
+    relative_vorticity = -4 * u0 / a * cosine**1.5 * sin_lat * cos_lat * (2 - 5 * sin_lat.square())
+    distance_ratio = r_angle / (1 - acos_arg.square()).clamp_min(1e-24).sqrt()
+    distance_ratio = torch.where(acos_arg > 1 - 1e-12, torch.ones_like(distance_ratio), distance_ratio)
+    d_cosine_lat = math.sin(phic) * cos_lat - math.cos(phic) * sin_lat * torch.cos(lon - lambdac)
+    perturbation_vorticity = u_perturb / a * (torch.tan(lat) - 200 * distance_ratio * d_cosine_lat)
+    # The analytic DCMIP limits at the poles and antipode are zero.
+    regular = (cos_lat.abs() > 1e-12) & (acos_arg > -1 + 1e-12)
+    relative_vorticity += torch.where(regular, perturbation_vorticity, torch.zeros_like(perturbation_vorticity))
+    potential_vorticity = (
+        gravity / p_ref * (-d_wind_eta * d_theta_lat / a - (2 * omega * sin_lat + relative_vorticity) * d_theta_eta)
+    ).abs()
+
+    return rho, u1_contra, u2_contra, u3_contra, theta, theta, potential_vorticity
 
 
 def acoustic_wave(geom: CubedSphere3D, metric: Metric5D):

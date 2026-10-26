@@ -15,8 +15,6 @@ from matplotlib.ticker import FormatStrFormatter, MaxNLocator, MultipleLocator
 INPUT_FILE = "results/dcmip41.nc"
 
 TARGET_PRESSURE = 85000.0
-OUTPUT_PREFIX = "dcmip41"
-
 RD = 287.05
 CPD = 1005.46
 P0 = 100000.0
@@ -376,8 +374,10 @@ def main():
     output = Path(args.output_dir)
     output.mkdir(parents=True, exist_ok=True)
     label = args.label or Path(args.netcdf_file).stem
-    prefix = f"dcmip41_{label}"
     with netCDF4.Dataset(args.netcdf_file) as ds:
+        case = int(getattr(ds, "case_number", 41))
+        case_name = f"4-1-{case - 410}" if case in (410, 411, 412, 413) else "4-1"
+        prefix = label if args.label is None else f"dcmip{case}_{label}"
         radius = float(getattr(ds, "earth_radius", EARTH_RADIUS))
         scaling = args.planet_scaling if args.planet_scaling is not None else EARTH_RADIUS / radius
         if not np.isfinite(scaling) or scaling <= 0:
@@ -413,7 +413,7 @@ def main():
                 continue
             print(f"Reading {actual:g} s (small-planet day {actual * scaling / 86400:g})")
             stamp = f"{actual:.6f}".rstrip("0").rstrip(".").replace(".", "p") + "s"
-            title = f"DCMIP 4-1 — {label}, day {actual * scaling / 86400:g} (t={actual:g} s)"
+            title = f"DCMIP {case_name}, X={scaling:g}, {label}, day {actual * scaling / 86400:g} (t={actual:g} s)"
             pressure = read_field(ds, "P", index)
             theta = read_field(ds, "theta", index)
             u, v, w = [read_field(ds, name, index) for name in ("U", "V", "W")]

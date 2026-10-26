@@ -61,6 +61,7 @@
    | alpha0                | angle24  | [none]  |                                 | Rotation in radians of the central meridian of panel 0  |
    | ztop                  | float  | 0.0      |                                  |   |
    | vertical_coord        | lc-str  | gal_chen  | {gal_chen, sleve}              | Terrain-following vertical coordinate. gal_chen decays the terrain linearly with height; sleve (Schar et al. 2002) decays the large- and small-scale parts of the terrain at different rates, so that small-scale features vanish faster aloft  |
+   | vertical_stretch | float | 0.0 | [0, 20] | Dimensionless exponential vertical stretch: S(eta) = expm1(s eta)/expm1(s). Zero retains uniform spacing; positive values concentrate points near the surface. |
    | sleve_scale_large     | float  | 10000.0  |                                  | SLEVE decay scale height s1 of the large-scale topography (m)  |
    | sleve_scale_small     | float  | 2500.0   |                                  | SLEVE decay scale height s2 of the small-scale topography (m). Should be well below sleve_scale_large  |
    | x0                    | float  | [none]   |                                  |   |

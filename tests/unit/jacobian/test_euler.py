@@ -4,7 +4,7 @@ from unittest.mock import patch
 import torch
 
 from tests.unit.rhs.euler_frozen_fixture import frozen_problem
-from wx_factory.jacobian.euler import AcousticLinearization, _apply_dfr_derivative
+from wx_factory.jacobian.euler import AcousticLinearization, _apply_dfr_derivative, _compiled_dfr_derivative
 from wx_factory.pde.euler_interfaces import EulerInterfaceGeometry, acoustic_interface
 
 
@@ -20,6 +20,31 @@ class EulerJacobianTestCase(unittest.TestCase):
             self.assertTrue(torch.isfinite(actual).all())
             actual = rhs.linearize(state).explicit(state)
             self.assertTrue(torch.isfinite(actual).all())
+
+    def test_compiled_dfr_supports_multiple_layouts_without_changing_global_limit(self):
+        from wx_factory.common.matmul import DFRDerivative
+
+        graphs = []
+
+        def backend(graph, inputs):
+            graphs.append(graph)
+            return graph.forward
+
+        def compile_action(action, component):
+            return torch.compile(action, backend=backend, dynamic=False)
+
+        _compiled_dfr_derivative.cache_clear()
+        try:
+            with patch("wx_factory.jacobian.euler._compile_action", side_effect=compile_action):
+                derivative = DFRDerivative(torch.eye(3), torch.ones(2, 3), action=_compiled_dfr_derivative())
+            with torch._dynamo.config.patch(recompile_limit=8, fail_on_recompile_limit_hit=True):
+                for components in range(1, 13):
+                    volume, faces = torch.randn(components, 3), torch.randn(components, 2)
+                    torch.testing.assert_close(derivative(volume, faces), derivative.dense(volume, faces))
+                    self.assertEqual(torch._dynamo.config.recompile_limit, 8)
+            self.assertEqual(len(graphs), 12)
+        finally:
+            _compiled_dfr_derivative.cache_clear()
 
     def test_dfr_cache_follows_precision_promotion(self):
         rhs, _, *_ = frozen_problem(elements=2, nodes=3)

@@ -163,6 +163,7 @@ class Configuration:
     verbose_solver: int
     vertical_boundary: str
     vertical_coord: str
+    vertical_stretch: float
     x0: float
     x1: float
     y0: float

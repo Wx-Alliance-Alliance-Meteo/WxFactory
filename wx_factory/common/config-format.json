@@ -490,6 +490,20 @@
                     "description": "Terrain-following vertical coordinate. gal_chen decays the terrain linearly with height; sleve (Schar et al. 2002) decays the large- and small-scale parts of the terrain at different rates, so that small-scale features vanish faster aloft"
                 },
                 {
+                    "name": "vertical_stretch",
+                    "type": "float",
+                    "default": 0.0,
+                    "min": 0.0,
+                    "max": 20.0,
+                    "dependency": {
+                        "name": "grid_type",
+                        "values": [
+                            "cubed_sphere"
+                        ]
+                    },
+                    "description": "Exponential stretching of the computational vertical coordinate; zero gives uniform spacing."
+                },
+                {
                     "name": "sleve_scale_large",
                     "type": "float",
                     "default": 10000.0,

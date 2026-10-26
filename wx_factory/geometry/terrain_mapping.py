@@ -8,6 +8,12 @@ from torch import Tensor
 from .metric5d import unit_sphere_basis
 
 
+def stretch_vertical_coordinate(eta, stretch):
+    if stretch == 0:
+        return eta
+    return torch.expm1(stretch * eta) / math.expm1(stretch)
+
+
 def angular_distance_squared(cosine: Tensor) -> Tensor:
     """acos(cosine)^2 with its regular first two derivatives at the centre."""
     distance = torch.acos(torch.clamp(cosine, -1 + 1e-12, 1 - 1e-12)) ** 2
@@ -49,6 +55,7 @@ class TerrainHeightMap:
         self.ztop = geometry.ztop
         self.radius = geometry.earth_radius
         self.vertical_coord = geometry.vertical_coord
+        self.vertical_stretch = getattr(geometry, "vertical_stretch", 0.0)
         self.scale_large = geometry.sleve_scale_large
         self.scale_small = geometry.sleve_scale_small
         self.case = config.case_number
@@ -74,7 +81,7 @@ class TerrainHeightMap:
         return torch.sinh(ratio * (1 - eta)) / math.sinh(ratio)
 
     def __call__(self, coordinates: Tensor) -> Tensor:
-        eta = coordinates[2]
+        eta = stretch_vertical_coordinate(coordinates[2], self.vertical_stretch)
         if self.tabulated_surface is not None:
             return self.ztop * eta + self.tabulated_surface(coordinates) * self.decay(eta, self.scale_large)
         if self.radial_surface is not None:

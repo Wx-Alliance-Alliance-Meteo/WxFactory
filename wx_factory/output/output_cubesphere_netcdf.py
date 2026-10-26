@@ -84,6 +84,7 @@ class OutputCubesphereNetcdf(OutputCubesphere):
             self.ncfile.case_number = self.config.case_number
             if hasattr(self.geometry, "earth_radius"):
                 self.ncfile.earth_radius = self.geometry.earth_radius
+                self.ncfile.rotation_speed = self.geometry.rotation_speed
 
             self.ncfile.createDimension("time", None)
             nfaces = 6
@@ -246,6 +247,17 @@ class OutputCubesphereNetcdf(OutputCubesphere):
                 press.coordinates = "lons lats"
                 press.grid_mapping = "cubed_sphere"
 
+                if self.config.case_number in (41, 410, 411, 412, 413):
+                    for name, units, description in (
+                        ("q1", "K", "Advected potential temperature"),
+                        ("q2", "K m2 kg-1 s-1", "Advected absolute Ertel potential vorticity"),
+                    ):
+                        tracer = self.ncfile.createVariable(name, numpy.dtype("double").char, ("time",) + grid_data)
+                        tracer.long_name = description
+                        tracer.units = units
+                        tracer.coordinates = "lons lats"
+                        tracer.grid_mapping = "cubed_sphere"
+
                 if self.config.case_number in (11, 12, 13):
                     q1 = self.ncfile.createVariable("q1", numpy.dtype("double").char, ("time",) + grid_data)
                     q1.long_name = "q1"
@@ -397,6 +409,10 @@ class OutputCubesphereNetcdf(OutputCubesphere):
             self.store_field(geom.to_single_block(theta), "theta", idx)
             self.store_field(geom.to_single_block(p0 * (Q[idx_rho_theta] * Rd / p0) ** (cpd / cvd)), "P", idx)
 
+            if self.config.case_number in (41, 410, 411, 412, 413):
+                for i in (5, 6):
+                    self.store_field(geom.to_single_block(Q[i] / rho), f"q{i - 4}", idx)
+
             if self.config.case_number in (11, 12, 13):
                 self.store_field(geom.to_single_block(Q[5, ...] / rho), "q1", idx)
 
@@ -408,7 +424,7 @@ class OutputCubesphereNetcdf(OutputCubesphere):
             raise ValueError(f"Unknown class for geom: {geom}")
 
         if self.rank == 0:
-            time_val = self.start_time + numpy.timedelta64(int(step_id * self.dt), "s")
+            time_val = self.start_time + numpy.timedelta64(round(step_id * self.dt * 1e6), "us")
 
             epoch = numpy.datetime64("1800-01-01T00:00:00")
             seconds = (time_val - epoch) / numpy.timedelta64(1, "s")

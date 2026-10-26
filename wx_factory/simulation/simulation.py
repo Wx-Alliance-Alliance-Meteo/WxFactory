@@ -207,7 +207,7 @@ class Simulation:
         cases = (
             (1, 2, 3, 4, 651, 666)
             if config.grid_type == "cartesian3d"
-            else (11, 12, 13, 20, 200, 201, 202, 21, 22, 31, 41, 77)
+            else (11, 12, 13, 20, 200, 201, 202, 21, 22, 31, 41, 410, 411, 412, 413, 77)
         )
         external_initialization = (
             config.grid_type == "cubed_sphere" and config.case_number < 0 and config.initial_conditions

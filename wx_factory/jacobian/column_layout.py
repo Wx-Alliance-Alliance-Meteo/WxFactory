@@ -7,7 +7,7 @@ from typing import NamedTuple
 
 import torch
 
-from ..common.definitions import idx_rho, idx_rho_theta, idx_v3
+from ..common.definitions import idx_rho, idx_v3
 
 
 class ColumnDims(NamedTuple):
@@ -15,7 +15,7 @@ class ColumnDims(NamedTuple):
 
     num_solpts: int  # solution points along one element edge
     num_solpts_2d: int  # solution points on one horizontal slab of an element (num_solpts**2)
-    num_var: int  # prognostic variables (5 for the Euler equations)
+    num_var: int  # prognostic variables, including passive tracer densities
     num_elem_z: int  # vertical elements, i.e. block rows per column
     num_elem_y: int
     num_elem_x: int
@@ -67,12 +67,12 @@ def columns_to_state(rhs, columns, reference):
     return permuted.reshape(reference.shape)
 
 
-def stiff_variable_rows(num_solpts: int, device):
+def stiff_variable_rows(num_solpts: int, device, num_var=5):
     """Return the non-contiguous block rows retained by the stiff partition."""
     return torch.cat(
         (
             torch.arange(idx_rho * num_solpts, (idx_rho + 1) * num_solpts, device=device),
-            torch.arange(idx_v3 * num_solpts, (idx_rho_theta + 1) * num_solpts, device=device),
+            torch.arange(idx_v3 * num_solpts, num_var * num_solpts, device=device),
         )
     )
 
