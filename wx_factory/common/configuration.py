@@ -1,5 +1,7 @@
 import copy
+import warnings
 from configparser import ConfigParser
+from difflib import get_close_matches
 from typing import Self
 
 from .configuration_schema import (
@@ -16,7 +18,7 @@ __all__ = ["Configuration"]
 class Configuration:
     sections: dict[str, list[str]]
 
-    def __init__(self, cfg_file: str, schema: ConfigurationSchema, load_post_config: bool = True):
+    def __init__(self, cfg_file: str, schema: ConfigurationSchema):
 
         self.sections = {}
         self.schema = schema
@@ -27,9 +29,29 @@ class Configuration:
         self.depth_approx = None
 
         self.parser.read_string(self.config_content)
+        self._warn_unknown_options()
 
         for field in schema.fields:
             self._get_option(field)
+
+    def _warn_unknown_options(self):
+        known = {(field.section, self.parser.optionxform(field.name)) for field in self.schema.fields}
+        locations = {name: section for section, name in sorted(known)}
+        unknown = []
+        # Section proxies include inherited defaults; inspect explicit entries to avoid duplicate warnings.
+        sections = [(self.parser.default_section, self.parser.defaults()), *self.parser._sections.items()]
+        for section, options in sections:
+            for name in options:
+                if (section, name) in known or (section == self.parser.default_section and name in locations):
+                    continue
+                message = f"[{section}] {name}"
+                matches = get_close_matches(name, locations, n=1, cutoff=0.6)
+                if matches:
+                    match = matches[0]
+                    message += f"; did you mean [{locations[match]}] {match}?"
+                unknown.append(message)
+        if unknown:
+            warnings.warn("Unknown configuration options (ignored):\n  " + "\n  ".join(unknown), UserWarning, stacklevel=3)
 
     def __deepcopy__(self: Self, memo) -> Self:
         do_not_deepcopy = {}

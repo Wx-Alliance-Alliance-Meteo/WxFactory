@@ -245,7 +245,7 @@ class Metric5DTestCase(unittest.TestCase):
             torch.testing.assert_close(fields.geopotential, gravitational_potential - frame_energy)
             torch.testing.assert_close(fields.G_contra[4, 4], 2 * gravitational_potential)
 
-    def test_wind_roundtrip_energy_and_wall_reflection(self):
+    def test_wind_roundtrip_and_energy(self):
         velocity = self.points.new_tensor([[1.2, -2.3], [0.3, 0.4], [-0.7, 1.8]])
         for deep in (False, True):
             fields = self.metric(deep=deep)
@@ -253,13 +253,6 @@ class Metric5DTestCase(unittest.TestCase):
             torch.testing.assert_close(fields.physical_velocity(covariant), velocity)
             kinetic = (fields.raise_velocity(covariant) * covariant).sum(dim=0)
             torch.testing.assert_close(kinetic, (velocity * velocity).sum(dim=0))
-            for direction in range(3):
-                reflected = fields.reflect(covariant, direction)
-                torch.testing.assert_close(fields.reflect(reflected, direction), covariant)
-                torch.testing.assert_close(
-                    fields.raise_velocity(reflected)[direction], -fields.raise_velocity(covariant)[direction]
-                )
-                torch.testing.assert_close((fields.physical_velocity(reflected) ** 2).sum(dim=0), kinetic)
 
     def test_frame_vorticity_sign_no_work_and_shallow_limit(self):
         wind = self.points.new_tensor([[1.2, -2.3], [0.3, 0.4], [-0.7, 1.8]])

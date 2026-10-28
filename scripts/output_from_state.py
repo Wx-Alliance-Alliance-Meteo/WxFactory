@@ -21,7 +21,6 @@ def vertical_wind(filename, simulations):
     if simulation is None:
         config.pytorch_device = "cpu"
         config.output_freq = config.stat_freq = config.save_state_freq = 0
-        config.store_solver_stats = False
         simulation = Simulation(config, quiet=True)
         simulations[config.config_content] = simulation
     geometry = simulation.geometry

@@ -118,13 +118,6 @@ class Metric5DFields:
     def covariant_from_physical(self, physical: Tensor) -> Tensor:
         return torch.einsum("ai...,a...->i...", self.physical_basis, physical)
 
-    def reflect(self, relative_covariant: Tensor, direction: int) -> Tensor:
-        """Reflect across a constant-xi face, preserving its physical tangential wind."""
-        reflected = relative_covariant.clone()
-        velocity = self.raise_velocity(relative_covariant)
-        reflected[direction] -= 2 * velocity[direction] / self.G_contra[direction + 1, direction + 1]
-        return reflected
-
     def cache_frame_derivatives(self) -> None:
         """Keep the small frame coefficients on-device when the full dG tensor is offloaded."""
         derivatives = self.dG_cov[:, 0, 1:4]

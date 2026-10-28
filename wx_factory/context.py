@@ -3,12 +3,10 @@ information related to the execution environment.
 
 Now that the whole model is written directly against PyTorch there is a single device type. This
 object no longer abstracts an array module; it just holds the process's ``comm``, the torch device
-its tensors live on, the working floating-point precision, and a few host/device transfer and
-timing helpers.
+its tensors live on, the working floating-point precision, and a few host/device transfer helpers.
 """
 
 import os
-from time import perf_counter
 from typing import Any, Self
 
 import torch
@@ -86,31 +84,6 @@ class Context:
     def to_host(self, val: torch.Tensor, **kwargs) -> Any:
         """Copy a tensor back to the host as a NumPy array."""
         return val.cpu().numpy().copy()
-
-    def timestamp(self, **kwargs) -> float | torch.cuda.Event:
-        if self.torch_device.type == "cpu":
-            return perf_counter()
-        else:
-            event = torch.cuda.Event(enable_timing=True)
-            event.record()
-            return event
-
-    def elapsed(self, timestamps: list) -> list[float]:
-        """Return the elapsed time between each pair of timestamps, in milliseconds.
-        The last element is the total time between the first and last timestamps."""
-
-        if isinstance(timestamps[0], float):
-            intervals = [(timestamps[i + 1] - timestamps[i]) * 1000.0 for i in range(len(timestamps) - 1)]
-            intervals.append((timestamps[-1] - timestamps[0]) * 1000.0)
-        elif isinstance(timestamps[0], torch.cuda.Event):
-            intervals = []
-            timestamps[-1].synchronize()
-            intervals = [timestamps[i].elapsed_time(timestamps[i + 1]) for i in range(len(timestamps) - 1)]
-            intervals.append(timestamps[0].elapsed_time(timestamps[-1]))
-        else:
-            raise ValueError(f"Unknown timestamp type {type(timestamps[0])}")
-
-        return intervals
 
     @staticmethod
     def set_default(context: "Context") -> None:

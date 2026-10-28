@@ -44,24 +44,6 @@ def interface_slices(direction: int, num_solpts: int) -> tuple[tuple, tuple]:
     return left, right
 
 
-def principal_symbol(state: Tensor, inverse_spatial: Tensor, normal: Tensor) -> Tensor:
-    """Return the frozen principal symbol for Q=(rho,v_i,rho*theta).
-
-    The relative curl contributes to the principal part. ``normal`` is a
-    covector with the same trailing point dimensions as state.
-    """
-    contravariant_velocity = torch.einsum("ij...,j...->i...", inverse_spatial, state[1:4])
-    raised_normal = torch.einsum("ij...,j...->i...", inverse_spatial, normal)
-    normal_advection_speed = (normal * contravariant_velocity).sum(dim=0)
-    symbol = state.new_zeros((5, 5) + state.shape[1:])
-    for i in range(5):
-        symbol[i, i] = normal_advection_speed
-    symbol[0, 1:4] = state[0] * raised_normal
-    symbol[4, 1:4] = state[4] * raised_normal
-    symbol[1:4, 4] = (heat_capacity_ratio * pressure(state[4]) / (state[0] * state[4])) * normal
-    return symbol
-
-
 def physical_mach_number(covariant: Tensor, inverse_spatial: Tensor, sound_speed: Tensor) -> Tensor:
     """Return the coordinate-relative physical speed divided by sound speed."""
     contravariant = spatial_matrix_vector(inverse_spatial, covariant)

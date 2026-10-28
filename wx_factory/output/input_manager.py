@@ -15,7 +15,6 @@ from ..common import (
 )
 from ..geometry import CubedSphere2D, CubedSphere3D
 from ..wx_mpi import Conditional, SingleProcess, do_once
-from .state import load_state
 
 try:
     import rmn
@@ -63,25 +62,6 @@ class InputManager:
         if schema is None:
             schema = ConfigurationSchema(do_once(readfile, default_schema_path, comm=comm))
         return Configuration(do_once(readfile, config_file, comm=comm), schema)
-
-    @staticmethod
-    def read_config_from_save_file(save_file: str, comm: MPI.Comm) -> tuple[Configuration, Tensor]:
-        config_str = None
-        schema_str = None
-        vector = None
-        with SingleProcess(comm) as s, Conditional(s):
-            vector, config = load_state(save_file)
-            config_str = config.config_content
-            schema_str = config.schema.raw_string
-            s.return_value = config.state_representation
-
-        config_str = comm.bcast(config_str)
-        schema_str = comm.bcast(schema_str)
-
-        schema = ConfigurationSchema(schema_str)
-        restored = Configuration(config_str, schema)
-        restored.state_representation = s.return_value
-        return restored, vector
 
     @staticmethod
     def read_grid_params(

@@ -121,7 +121,6 @@ configuration schema.
        )
        return ExponentialSolverResult(
            value=value,
-           raw_stats=stats,
            iterations=stats.iterations,
            rejected_steps=stats.rejected_steps,
            local_error=stats.local_error,

@@ -1,5 +1,3 @@
-nbfaces = 6
-
 day_in_secs = 24.0 * 3600.0
 
 gravity = 9.80616  # Gravitational acceleration (m s^-2)

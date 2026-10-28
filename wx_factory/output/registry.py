@@ -107,7 +107,7 @@ def _cubesphere_fst(ctx: OutputContext) -> OutputManager:
 
 
 @register_output("cubesphere", "zarr")
-def _cubesphere_netcdf(ctx: OutputContext) -> OutputManager:
+def _cubesphere_zarr(ctx: OutputContext) -> OutputManager:
     return OutputCubesphereZarr(
         ctx.config,
         ctx.geometry,

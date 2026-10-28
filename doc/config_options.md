@@ -1,4 +1,7 @@
 # WxFactory configuration options
+
+Unknown options and options in the wrong section produce a warning, with a spelling suggestion when available. They remain ignored. Recognized options with inactive dependencies do not produce a warning.
+
 | | | | | |
 | - | - | - | - | - |
 | | | | | |

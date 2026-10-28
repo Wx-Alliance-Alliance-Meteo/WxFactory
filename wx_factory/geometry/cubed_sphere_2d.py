@@ -423,9 +423,7 @@ class CubedSphere2D(CubedSphere):
 
         self.lon = self.polar[0, ...]
         self.lat = self.polar[1, ...]
-        self.coslon = torch.cos(self.lon)
         self.coslat = torch.cos(self.lat)
-        self.sinlon = torch.sin(self.lon)
         self.sinlat = torch.sin(self.lat)
 
         self.block_lon = self.to_single_block(self.lon)
@@ -464,14 +462,6 @@ class CubedSphere2D(CubedSphere):
         tmp_shape = a.shape[:-3] + (self.num_elements_x2, self.num_elements_x1, self.num_solpts, self.num_solpts)
         new_shape = a.shape[:-3] + self.grid_shape_2d
         return torch.moveaxis(a.reshape(tmp_shape), -3, -2).reshape(new_shape)
-
-    def middle_itf_i(self, a):
-        """Extract the non-halo part of the given west-east interface array"""
-        return a[..., 1:-1, :]
-
-    def middle_itf_j(self, a):
-        """Extract the non-halo part of the given south-north interface array"""
-        return a[..., 1:-1, :, :]
 
     def _to_new_itf_i(self, a):
         """Convert input array (west and east interface) to new memory layout"""

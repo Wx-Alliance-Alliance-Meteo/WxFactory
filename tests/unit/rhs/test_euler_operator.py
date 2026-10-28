@@ -22,6 +22,24 @@ class EulerOperatorTestCase(unittest.TestCase):
         self.assertGreater(result[0].abs().max().item(), 0)
         torch.testing.assert_close(result[4], 300 * result[0], rtol=2e-10, atol=2e-11)
 
+    def test_terrain_wall_ghosts_preserve_tangential_velocity_and_energy(self):
+        rhs, state, *_ = frozen_problem(elements=2, nodes=3, vertical_elements=2, terrain_slope=0.4)
+        state[2], state[3] = 0.3, -0.7
+        faces = rhs._vertical_faces(rhs._extrapolate(state)[2])
+        width = rhs.geom.itf_size
+        for ghost, interior, ghost_half, interior_half in (
+            (0, 1, slice(width, None), slice(None, width)),
+            (-1, -2, slice(None, width), slice(width, None)),
+        ):
+            incoming = faces[1:4, interior, ..., interior_half]
+            reflected = faces[1:4, ghost, ..., ghost_half]
+            inverse = rhs.metric.faces[2].G_contra[1:4, 1:4, ghost, ..., ghost_half]
+            normal = (inverse[2] * incoming).sum(0)
+            torch.testing.assert_close((inverse[2] * reflected).sum(0), -normal)
+            torch.testing.assert_close(reflected[:2], incoming[:2])
+            energy = torch.einsum("ij...,i...,j...->...", inverse, incoming, incoming)
+            torch.testing.assert_close(torch.einsum("ij...,i...,j...->...", inverse, reflected, reflected), energy)
+
     def test_curl_requires_common_riemann_velocity_traces(self):
         rhs, state, _, _, _, _ = frozen_problem(elements=3)
         velocity = rhs.metric.volume.raise_velocity(state[1:4])

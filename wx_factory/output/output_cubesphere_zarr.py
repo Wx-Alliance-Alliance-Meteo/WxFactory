@@ -43,14 +43,12 @@ class OutputCubesphereZarr(OutputCubesphere):
                 self.equ += [f"q{index}" for index in range(1, count + 1)]
             elif config.case_number in (41, 410, 411, 412, 413):
                 self.equ += ["q1", "q2"]
-        self.panel_id = self.process_topology.my_panel
         if config.time_start:
             self.start_time = np.datetime64(str(config.time_start).replace("t", "T"))
         else:
             self.start_time = np.datetime64("1800-01-01T00:00:00")
         self.dt = config.dt
         self.num_steps = int(np.ceil(config.t_end / config.dt) + 1)
-        self.current_time_index = 0
         self.geometry = geometry
         if isinstance(self.geometry, CubedSphere2D):
             if len(self.geometry.z_levels) > 1:
@@ -72,7 +70,6 @@ class OutputCubesphereZarr(OutputCubesphere):
             self.zcoord = np.arange(self.nz)
 
         self.filename = f"{self.output_dir}/{config.base_output_file}.zarr"
-        self.marker_path = None
 
         if self.rank == 0:
             exists = os.path.exists(self.filename)

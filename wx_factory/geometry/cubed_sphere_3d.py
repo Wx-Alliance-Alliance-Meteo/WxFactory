@@ -775,8 +775,6 @@ class CubedSphere3D(CubedSphere):
         self.lon_itf_j = lon_itf_j
         self.lat_itf_j = lat_itf_j
 
-        self.coslon = torch.cos(lon)
-        self.sinlon = torch.sin(lon)
         self.coslat = torch.cos(lat)
         self.sinlat = torch.sin(lat)
 

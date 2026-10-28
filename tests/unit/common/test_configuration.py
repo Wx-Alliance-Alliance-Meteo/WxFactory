@@ -1,5 +1,8 @@
 import glob
 import os
+import warnings
+from configparser import ConfigParser
+from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from wx_factory.common.eval_expr import _math_constants
@@ -21,6 +24,61 @@ config_test_dir = self_dir
 
 
 class ConfigurationTestCases(WxTestCase):
+    def test_unknown_and_misplaced_options_are_reported_with_suggestions(self):
+        content = readfile(str(Path(__file__).resolve().parents[3] / "config/case5.ini"))
+        content = content.replace("[Test_case]", "[Test_case]\ninitial_condition = input.nc\nunrecognized_key = 1")
+        content = content.replace("[Grid]", "[Grid]\ndt = 7")
+        with self.assertWarns(UserWarning) as caught:
+            config = Configuration(content, load_default_schema())
+        message = str(caught.warning)
+        self.assertIn("[Test_case] initial_condition; did you mean [Test_case] initial_conditions?", message)
+        self.assertIn("[Test_case] unrecognized_key", message)
+        self.assertIn("[Grid] dt; did you mean [Time_integration] dt?", message)
+        self.assertEqual(config.dt, 1800)
+        self.assertFalse(hasattr(config, "initial_condition"))
+
+    def test_unknown_option_is_reported_before_a_required_value_fails(self):
+        content = readfile(str(Path(__file__).resolve().parents[3] / "config/case5.ini"))
+        content = content.replace("dt = 1800", "dtt = 1800")
+        with (
+            self.assertWarnsRegex(UserWarning, r"dtt; did you mean \[Time_integration\] dt"),
+            self.assertRaises(ConfigValueError),
+        ):
+            Configuration(content, load_default_schema())
+
+    def test_inactive_options_and_case_insensitive_names_are_recognized(self):
+        content = readfile(str(Path(__file__).resolve().parents[3] / "config/case5.ini"))
+        content = content.replace("[Test_case]", "[Test_case]\nINITIAL_CONDITIONS = input.nc")
+        content = content.replace("dt = 1800", "DT = 1800")
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            config = Configuration(content, load_default_schema())
+        self.assertEqual(caught, [])
+        self.assertEqual(config.dt, 1800)
+        self.assertFalse(hasattr(config, "initial_conditions"))
+
+    def test_default_options_are_checked_without_inherited_duplicates(self):
+        content = readfile(str(Path(__file__).resolve().parents[3] / "config/case5.ini"))
+        content = "[DEFAULT]\ntolerance = 1e-6\nmisspelled_option = 1\n" + content
+        content = content.replace("tolerance = 1e-7\n", "")
+        with self.assertWarns(UserWarning) as caught:
+            config = Configuration(content, load_default_schema())
+        self.assertEqual(str(caught.warning).count("misspelled_option"), 1)
+        self.assertNotIn("tolerance", str(caught.warning))
+        self.assertEqual(config.tolerance, 1e-6)
+
+    def test_era5_examples_load_the_configured_initial_conditions(self):
+        config_dir = Path(__file__).resolve().parents[3] / "config"
+        for name in ("ERA5_2_CS.ini", *(f"ERA5_CS_2020{month:02d}.ini" for month in range(1, 5))):
+            with self.subTest(config=name):
+                content = readfile(str(config_dir / name))
+                parser = ConfigParser()
+                parser.read_string(content)
+                expected = parser.get("Test_case", "initial_conditions")
+                field = next(field for field in load_default_schema().fields if field.name == "initial_conditions")
+                self.assertTrue(expected)
+                self.assertEqual(field.read(parser), expected)
+
     def test_default_schema_outside_source_directory(self):
         previous = os.getcwd()
         with TemporaryDirectory() as directory:
@@ -50,7 +108,7 @@ class ConfigurationTestCases(WxTestCase):
             configuration_str = "\n".join(f.readlines())
 
         schema = ConfigurationSchema(schema_str)
-        conf = Configuration(configuration_str, schema, load_post_config=False)
+        conf = Configuration(configuration_str, schema)
         self.assertEqual(conf.size, 1)
         self.assertEqual(conf.time, 0.0)
         self.assertEqual(conf.end_time, 2.0)
@@ -77,7 +135,7 @@ class ConfigurationTestCases(WxTestCase):
         except (OSError, ValueError):
             raise ValueError(f"Could not read and parse schema file {schema_file}")
         try:
-            conf = Configuration(readfile(config_file), schema, load_post_config=False)
+            conf = Configuration(readfile(config_file), schema)
         except Exception as e:
             raise ValueError(f"Could not read and parse configuration file {config_file}") from e
 
@@ -101,7 +159,7 @@ class ConfigurationTestCases(WxTestCase):
             print(f"testing config file {conf_file}")
             content = readfile(conf_file)
             try:
-                Configuration(content, schema, load_post_config=False)
+                Configuration(content, schema)
                 self.fail("Should have failed!")
             except ConfigValueError as e:
                 print(e)
@@ -116,14 +174,14 @@ class ConfigurationTestCases(WxTestCase):
             configuration_str = "\n".join(f.readlines())
 
         schema = ConfigurationSchema(schema_str)
-        conf = Configuration(configuration_str, schema, load_post_config=False)
+        conf = Configuration(configuration_str, schema)
         self.assertEqual(conf.x, 1)
         self.assertEqual(conf.y, 2)
 
         with open(os.path.join(config_test_dir, "config-3.2.ini")) as f:
             configuration_str = "\n".join(f.readlines())
 
-        conf = Configuration(configuration_str, schema, load_post_config=False)
+        conf = Configuration(configuration_str, schema)
         self.assertEqual(conf.x, 5)
         self.assertFalse(hasattr(conf, "y"))
 
@@ -137,7 +195,7 @@ class ConfigurationTestCases(WxTestCase):
             configuration_str = "\n".join(f.readlines())
 
         schema = ConfigurationSchema(schema_str)
-        conf = Configuration(configuration_str, schema, load_post_config=False)
+        conf = Configuration(configuration_str, schema)
         self.assertEqual(conf.x, _math_constants["pi"])
         self.assertEqual(conf.x2, _math_constants["pi"])
         self.assertEqual(conf.y, _math_constants["pi"] + 1)

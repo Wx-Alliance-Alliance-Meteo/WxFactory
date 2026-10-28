@@ -296,7 +296,7 @@ class Simulation:
                     self.integrator = _resolve_integrator(
                         self.config.time_integrator, self.config, self.rhs, self.preconditioner, self.context
                     )
-                    for name in ("sim_time", "num_completed_steps", "latest_time", "failure_flag", "output_manager"):
+                    for name in ("sim_time", "latest_time", "failure_flag", "output_manager"):
                         setattr(self.integrator, name, getattr(previous_integrator, name))
 
             self.output.step(self.Q, self.step_id)

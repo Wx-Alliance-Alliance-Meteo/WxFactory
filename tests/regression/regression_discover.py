@@ -58,13 +58,6 @@ class ConfigInfo:
         return self.grid_type == "cartesian3d"
 
 
-def _to_int(value: str, default: int = 0) -> int:
-    try:
-        return int(float(value))
-    except (TypeError, ValueError):
-        return default
-
-
 def classify(path: Path) -> ConfigInfo:
     """Read one config file and build its :class:`ConfigInfo`."""
     cfg = read_config(path)

@@ -50,7 +50,7 @@ class Cartesian3D(Geometry):
             num_elements_x2=1,  # a 2D (x, z) problem is a thin slab: a single empty element in y
         )
         _flatten(sphere, x_extent, y_extent)
-        _build_physical_coords(sphere, x_extent, y_extent)
+        _build_physical_coords(sphere, x_extent)
         object.__setattr__(self, "_scaffold", sphere)
 
     def __getattr__(self, name):
@@ -62,26 +62,22 @@ class Cartesian3D(Geometry):
         return self._scaffold.to_single_block(a)
 
 
-def _build_physical_coords(g, x_extent, y_extent):
+def _build_physical_coords(g, x_extent):
     """Initial conditions and output need Cartesian metres instead of scaffold panel angles."""
     ns = g.num_solpts
     x0, x1 = (0.0, 1.0) if x_extent is None else x_extent
-    y0, y1 = (0.0, 1.0) if y_extent is None else y_extent
     dx = (x1 - x0) / g.num_elements_x1
-    dy = (y1 - y0) / g.num_elements_x2
     dz = g.ztop / g.num_elements_x3
 
     node = 0.5 * (1.0 + g.solutionPoints)
     xe = x0 + (torch.arange(g.num_elements_x1)[:, None] + node[None, :]) * dx
-    ye = y0 + (torch.arange(g.num_elements_x2)[:, None] + node[None, :]) * dy
     ze = (torch.arange(g.num_elements_x3)[:, None] + node[None, :]) * dz
 
     # ns**3 solution points within an element are ordered (k, j, i) -> flat index
     idx = torch.arange(ns**3)
-    i_idx, j_idx, k_idx = idx % ns, (idx // ns) % ns, idx // ns**2
-    ne3, _, ne1 = g.num_elements_x3, g.num_elements_x2, g.num_elements_x1
+    i_idx, k_idx = idx % ns, idx // ns**2
+    ne3, ne1 = g.num_elements_x3, g.num_elements_x1
     g.X1 = torch.broadcast_to(xe[:, i_idx][None, None, :, :], g.grid_shape_3d_new).copy()
-    g.X2 = torch.broadcast_to(ye[:, j_idx][None, :, None, :], g.grid_shape_3d_new).copy()
     g.X3 = torch.broadcast_to(ze[:, k_idx][:, None, None, :], g.grid_shape_3d_new).copy()
 
     # Any y-plane represents the invariant slab for x-z output.

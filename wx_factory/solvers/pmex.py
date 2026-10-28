@@ -27,7 +27,6 @@ def pmex(
     m_init: int = 10,
     mmin: int = 10,
     mmax: int = 128,
-    reuse_info: bool = True,
     task1: bool = False,
     context: Context | None = None,
     startup: PmexStartup | None = None,
@@ -41,7 +40,6 @@ def pmex(
     :param delta: ?. Optional
     :param m_init: ?. Optional
     :param mmax: Max size of the krylov space. Optional
-    :param reuse_info: ?. Optional
     :param task1: If true, divide the result by 1/tau_out. Optional
 
     :param context: Context to use for computing

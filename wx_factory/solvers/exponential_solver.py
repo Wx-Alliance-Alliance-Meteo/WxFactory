@@ -34,7 +34,6 @@ class ExponentialSolverResult:
     """Normalized result returned by every registered exponential solver."""
 
     value: Any
-    raw_stats: tuple
     iterations: int
     rejected_steps: int
     local_error: float | None
@@ -74,7 +73,7 @@ def resolve_exponential_solver(name: str) -> ExponentialSolver:
 
 
 def _krylov_result(value, stats, request: ExponentialSolverRequest, label: str) -> ExponentialSolverResult:
-    result = ExponentialSolverResult(value, stats, stats[2], stats[1], stats[4], stats[5])
+    result = ExponentialSolverResult(value, stats[2], stats[1], stats[4], stats[5])
     if request.announce and request.context.comm.rank == 0:
         print(
             f"{label} converged at iteration {result.iterations} "
@@ -140,7 +139,7 @@ def _solve_exode(request: ExponentialSolverRequest, *, startup: ExodeStartup | N
         startup=startup,
         initial_step=request.initial_step,
     )
-    result = ExponentialSolverResult(value, stats, stats[0], stats[1], stats[3], None)
+    result = ExponentialSolverResult(value, stats[0], stats[1], stats[3], None)
     if request.announce and request.context.comm.rank == 0:
         print(
             f"EXODE converged after {result.iterations} matrix-vector products "

@@ -44,7 +44,6 @@ class Integrator(ABC):
         self.verbose_solver = param.verbose_solver
         self.sim_time = -1.0
         self.failure_flag = 0
-        self.num_completed_steps = 0
 
     def _initial_exode_step(self, rhs, state, dt):
         """Convert the physical wave rate to a first trial in auxiliary time."""
@@ -114,6 +113,5 @@ class Integrator(ABC):
         self.latest_time = t1 - t0
 
         self.sim_time += dt
-        self.num_completed_steps += 1
 
         return result

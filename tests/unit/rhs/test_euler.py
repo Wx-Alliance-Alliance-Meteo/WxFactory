@@ -7,7 +7,25 @@ from wx_factory.common import Configuration, load_default_schema, readfile
 from wx_factory.common.definitions import Rd, gravity, heat_capacity_ratio
 from wx_factory.init.euler import deep_rest_pressure
 from wx_factory.output.state import load_state, save_state
-from wx_factory.pde.euler_interfaces import acoustic_interface, pressure, principal_symbol
+from wx_factory.pde.euler_interfaces import acoustic_interface, pressure
+
+
+def principal_symbol(state: torch.Tensor, inverse_spatial: torch.Tensor, normal: torch.Tensor) -> torch.Tensor:
+    """Return the frozen principal symbol for Q=(rho,v_i,rho*theta).
+
+    The relative curl contributes to the principal part. ``normal`` is a
+    covector with the same trailing point dimensions as state.
+    """
+    contravariant_velocity = torch.einsum("ij...,j...->i...", inverse_spatial, state[1:4])
+    raised_normal = torch.einsum("ij...,j...->i...", inverse_spatial, normal)
+    normal_advection_speed = (normal * contravariant_velocity).sum(dim=0)
+    symbol = state.new_zeros((5, 5) + state.shape[1:])
+    for i in range(5):
+        symbol[i, i] = normal_advection_speed
+    symbol[0, 1:4] = state[0] * raised_normal
+    symbol[4, 1:4] = state[4] * raised_normal
+    symbol[1:4, 4] = (heat_capacity_ratio * pressure(state[4]) / (state[0] * state[4])) * normal
+    return symbol
 
 
 class EulerTestCase(unittest.TestCase):

@@ -102,7 +102,6 @@ class RungeKutta:
         self._validate_butcher_tableau()
 
         self.comm = context.comm if context is not None else MPI.COMM_WORLD
-        self.t_old = None
         self.t = t0
         self._fun, self.y = fun, y0
         self.t_bound = t_bound
@@ -154,9 +153,7 @@ class RungeKutta:
         )
         self.endpoint_error_stage = 1 if self.E[self.n_stages] else 0
         self.h_previous = None
-        self.y_old = None
         self.failed_steps = 0
-        self.num_of_steps = 0
 
     def fun(self, t: float, y):
         self.nfev += 1
@@ -273,18 +270,15 @@ class RungeKutta:
             raise RuntimeError("Attempt to step on a failed or finished solver")
 
         if self.n == 0 or self.t == self.t_bound:
-            self.t_old = self.t
             self.t = self.t_bound
             self.status = "finished"
         else:
-            t = self.t
             success = self._step_impl()
 
             if not success:
                 self.status = "failed"
                 _logger.error(f"Integration failed at t={self.t}")
             else:
-                self.t_old = t
                 if self.t - self.t_bound >= 0:
                     self.status = "finished"
 
@@ -330,7 +324,6 @@ class RungeKutta:
                     factor = min(1, factor)
 
                 next_step = h * limiter(factor, 2)
-                self.num_of_steps += 1
 
             else:
                 step_rejected = True
@@ -341,12 +334,10 @@ class RungeKutta:
                     self.standard_sc = True
 
                 self.failed_steps += 1
-                self.num_of_steps += 1
 
         if not self.endpoint_error_stage:
             self.K[self.n_stages] = self.fun(t_new, y_new)
 
-        self.y_old = y
         self.h_previous = h
         self.h = next_step
         self.f = self.K[self.n_stages].clone()
