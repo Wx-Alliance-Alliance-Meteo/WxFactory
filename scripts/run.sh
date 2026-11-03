@@ -15,5 +15,5 @@ while IFS='=' read -r variable value; do
     mpi_exports+=(-x "$variable")
 done < <(env)
 
-mpi_exports+=(-x LD_PRELOAD=libmpi.so)
+# mpi_exports+=(-x LD_PRELOAD=libmpi.so)
 exec mpirun "${mpi_exports[@]}" "$@"
