@@ -258,7 +258,9 @@ def pmex(
                 old_ohm = ohm
                 ohm = tau_end * err / (tau * tol)
 
-                order = math.log(err / err_half) / math.log(2)
+                # Before the error is asymptotic, halving tau barely changes it and the estimated order can
+                # approach zero or turn negative, so tau ** (1 / order) overflows. The order is at least one.
+                order = max(1.0, math.log(err / err_half) / math.log(2))
 
                 if m != old_m and tau == old_tau and ireject >= 1:
                     kest = max(1.1, (ohm / old_ohm) ** (1 / (old_m - m)))
