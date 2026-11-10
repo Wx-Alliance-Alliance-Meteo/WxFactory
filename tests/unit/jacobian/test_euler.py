@@ -3,7 +3,7 @@ from unittest.mock import patch
 
 import torch
 
-from tests.unit.rhs.euler_frozen_fixture import frozen_problem
+from tests.unit.rhs.euler_frozen_fixture import frozen_problem, terrain_aliasing_problem
 from wx_factory.jacobian.euler import (
     AcousticLinearization,
     _aligned_compiled_input,
@@ -14,6 +14,16 @@ from wx_factory.pde.euler_interfaces import EulerInterfaceGeometry, acoustic_int
 
 
 class EulerJacobianTestCase(unittest.TestCase):
+    def test_pressure_work_trace_derivative_over_variable_terrain(self):
+        rhs, state, *_ = terrain_aliasing_problem()
+        vector = 0.01 * torch.randn(state.shape, dtype=state.dtype, generator=torch.Generator().manual_seed(3))
+        analytic = rhs.linearize(state)(vector).reshape_as(state)
+        epsilon = 1e-4
+        reference = (rhs(state + epsilon * vector) - rhs(state - epsilon * vector)) / (2 * epsilon)
+        for row in range(state.shape[0]):
+            scale = analytic[row].abs().max().item()
+            torch.testing.assert_close(analytic[row], reference[row], rtol=0, atol=3e-6 * scale)
+
     def test_input_alignment_preserves_cpu_and_differentiable_inputs(self):
         devices = ["cpu", "cuda"] if torch.cuda.is_available() else ["cpu"]
         with torch.inference_mode(False), torch.enable_grad():

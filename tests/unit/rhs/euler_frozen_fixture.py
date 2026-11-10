@@ -91,3 +91,31 @@ def central_shear_matrix(rhs, elements, speed, half_width):
     faces = torch.stack((common.roll(1, dims=1), common), dim=-1)
     action = -speed / half_width * (profiles @ rhs.ops.diff_solpt_tr + faces @ rhs.ops.correction_tr)
     return action.reshape(elements * nodes, elements * nodes).T.contiguous()
+
+
+def terrain_aliasing_problem():
+    """Periodic shear metric with an unresolved product of slope and vertical velocity."""
+    rhs, state, _, x, weights, _ = frozen_problem(elements=2, nodes=5, length=4, speed=0)
+    for direction, metric_fields in enumerate((rhs.metric.volume, *rhs.metric.faces)):
+        slope = (
+            torch.ones_like(metric_fields.height)
+            if direction == 1
+            else x.pow(4).repeat(metric_fields.height.shape[-1] // 5).expand_as(metric_fields.height)
+        )
+        covariant, inverse = metric_fields.G_cov[1:4, 1:4], metric_fields.G_contra[1:4, 1:4]
+        covariant.zero_()
+        inverse.zero_()
+        covariant[0, 0] = 1 + slope.square()
+        covariant[1, 1] = covariant[2, 2] = 1
+        covariant[0, 2] = covariant[2, 0] = slope
+        inverse[0, 0] = inverse[1, 1] = 1
+        inverse[2, 2] = 1 + slope.square()
+        inverse[0, 2] = inverse[2, 0] = -slope
+        metric_fields.volume_jacobian.fill_(1)
+    mode = (35 * x**4 - 30 * x.square() + 3) / 8
+    alias = (x**4 * mode) @ rhs.ops.extrap_east - mode @ rhs.ops.extrap_east
+    normal_speed = -alias / 2
+    sign = state.new_tensor([1, -1]).reshape(1, 1, 2, 1)
+    state[3] = sign * mode.repeat(25)
+    state[1] = x.pow(4).repeat(25) * state[3] + normal_speed * sign
+    return rhs, state, weights, normal_speed

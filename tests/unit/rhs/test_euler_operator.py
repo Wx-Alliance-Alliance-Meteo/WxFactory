@@ -6,11 +6,33 @@ import torch
 from tests.unit.rhs.euler_frozen_fixture import (
     central_shear_matrix,
     frozen_problem,
+    terrain_aliasing_problem,
     transverse_direction,
 )
 
 
 class EulerOperatorTestCase(unittest.TestCase):
+    def test_horizontal_pressure_penalty_dissipates_energy_over_terrain(self):
+        from wx_factory.common.definitions import heat_capacity_ratio
+        from wx_factory.common.matmul import apply_op
+        from wx_factory.pde.euler_interfaces import pressure
+
+        rhs, state, weights, speed = terrain_aliasing_problem()
+        faces = rhs._faces_with_neighbours(rhs._extrapolate(state))
+        pressure_trace = rhs._interface_data(faces)[1][0]
+        penalty = pressure_trace - pressure(state[4]).flatten()[0]
+        acceleration = -apply_op(penalty, rhs.corrections[0]) / state[0]
+        volume_weights = torch.einsum("k,j,i->kji", weights, weights, weights).flatten()
+        volume = rhs.metric.volume
+        power = (
+            volume_weights * volume.volume_jacobian * state[0] * volume.raise_velocity(state[1:4])[0] * acceleration
+        ).sum()
+        sound = (heat_capacity_ratio * pressure(state[4]).flatten()[0]).sqrt()
+        cutoff = rhs.config.riemann_mach_cutoff
+        # Two periodic interfaces of area four, each with a normal jump of twice speed.
+        expected = -16 * cutoff * (2 - cutoff) * sound * speed.square()
+        torch.testing.assert_close(power, expected, rtol=2e-12, atol=1e-10)
+
     def test_cached_indices_match_list_indexing_for_five_and_seven_variables(self):
         for case in (0, 410):
             with self.subTest(case=case):

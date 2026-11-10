@@ -135,7 +135,27 @@ class RhsEuler:
 
     def _extrapolate(self, state: Tensor) -> tuple[Tensor, ...]:
         log_scalars = torch.log(state[self.log_scalar_index])
-        return tuple(self._extrapolate_direction(state, operator, log_scalars) for operator in self.extrapolations)
+        traces = tuple(self._extrapolate_direction(state, operator, log_scalars) for operator in self.extrapolations)
+        self._match_pressure_work(state[1:4], traces)
+        return traces
+
+    def _match_pressure_work(self, covariant: Tensor, traces: tuple[Tensor, ...]):
+        """Give the horizontal velocity traces the normal wind that face pressure does work against.
+
+        In the discrete kinetic energy, the pressure lifting works against R(J u^a) / J_f. Over terrain the traced
+        covariant velocity has a different normal wind, which makes the Riemann pressure dissipation and the face
+        mass flux sign-indefinite. Shifting v_a changes the velocity along grad xi^a only, so the tangential
+        components are kept. Linear in the velocity: the Jacobian applies it to perturbations.
+        """
+        volume = self.metric.volume
+        weighted_velocity = volume.volume_jacobian * volume.raise_velocity(covariant)
+        for direction in range(2):
+            fields, interior, trace = self.metric.faces[direction], self.mid_faces[direction], traces[direction]
+            work_velocity = apply_op(weighted_velocity[direction], self.extrapolations[direction])
+            work_velocity = work_velocity / fields.volume_jacobian[interior]
+            inverse_row = fields.G_contra[direction + 1, 1:4][interior]
+            traced_velocity = (inverse_row * trace[1:4]).sum(dim=0)
+            trace[1 + direction] += (work_velocity - traced_velocity) / inverse_row[direction]
 
     def _extrapolate_direction(self, state, operator, log_scalars=None):
         trace = state.new_empty(state.shape[:-1] + (operator.shape[-1],))

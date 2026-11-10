@@ -311,6 +311,7 @@ class EulerLinearization:
                 trace[6:] = trace[0] * base_trace[6:] / base_trace[0]
                 trace[6:] += base_trace[0] * apply_op(delta_mixing_ratio, operator)
             traces.append(trace)
+        rhs._match_pressure_work(delta_state[1:4], traces)
         # Consume the face arrays one direction at a time to limit peak memory.
         faces = list(rhs._faces_with_neighbours(tuple(traces)))
         del traces, trace, relative_scalar_perturbation
