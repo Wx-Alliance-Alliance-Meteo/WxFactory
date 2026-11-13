@@ -119,6 +119,12 @@ class EulerVerticalLinearization:
         self.vertical_frame_gradient = torch.stack(
             [volume_columns(fields.vertical_frame_gradient[a]) for a in range(2)], dim=2
         )
+        rho = self.state_columns[:, :, 0]
+        self.theta = self.state_columns[:, :, 4] / rho
+        self.theta_gradient = self._vertical_derivative(self.theta, interface.upwind_theta)
+        mass_flux = self.jacobian * self.contravariant_velocity[:, :, 2] * rho
+        face_mass_flux = jacobian * interface.normal_velocity * interface.upwind_scalars[0]
+        self.mass_tendency = -self._vertical_derivative(mass_flux, face_mass_flux) / self.jacobian
         left_matrix, right_matrix = self._interface_jacobians(interface, left, jacobian)
 
         bottom_matrix = top_matrix = None
@@ -147,7 +153,7 @@ class EulerVerticalLinearization:
         return result
 
     def _interface_jacobians(self, interface, left, jacobian):
-        """Interface rows are metric-weighted scalar fluxes, p*, K*, v_1*, and v_2*."""
+        """Interface rows: metric-weighted scalar fluxes, p*, K*, v_1*, v_2*, and theta*."""
         matrices = []
         zero_perturbation = torch.zeros_like(left)
         for side in range(2):
@@ -155,11 +161,16 @@ class EulerVerticalLinearization:
             for variable in range(self.dimensions.num_var):
                 delta = torch.zeros_like(left)
                 delta[variable] = 1
-                _, delta_pressure, delta_kinetic_energy, delta_covariant_velocity, flux = (
-                    interface(delta, zero_perturbation) if side == 0 else interface(zero_perturbation, delta)
-                )
+                deltas = (delta, zero_perturbation) if side == 0 else (zero_perturbation, delta)
+                _, delta_pressure, delta_kinetic_energy, delta_covariant_velocity, flux = interface(*deltas)
                 values = torch.cat(
-                    (jacobian * flux, delta_pressure[None], delta_kinetic_energy[None], delta_covariant_velocity[:2]),
+                    (
+                        jacobian * flux,
+                        delta_pressure[None],
+                        delta_kinetic_energy[None],
+                        delta_covariant_velocity[:2],
+                        interface.delta_upwind_theta(*deltas)[None],
+                    ),
                     dim=0,
                 )
                 columns.append(values.permute(1, 2, 0))
@@ -189,6 +200,10 @@ class EulerVerticalLinearization:
         else:
             diagonal[:, :1] += contribution(lifts[0][:, :1], bottom[:, None], extrapolation[0][:, :1])
             diagonal[:, -1:] += contribution(lifts[1][:, -1:], top[:, None], extrapolation[1][:, -1:])
+        # Include the mass-tendency contribution from every column block.
+        rho_theta = self.equation_variables.index(4)
+        for block in (lower, diagonal, upper):
+            block[:, :, rho_theta] += self.theta[:, :, :, None, None] * block[:, :, 0]
         shape = (
             state_columns.shape[0],
             dimensions.num_elem_z,
@@ -213,7 +228,7 @@ class EulerVerticalLinearization:
         rho = state_columns[:, :, 0]
 
         for output, variable in enumerate(self.equation_variables):
-            if variable == 3:
+            if variable in (3, 4):
                 continue
             flux = state_columns.new_zeros(
                 (state_columns.shape[0], dimensions.num_elem_z, dimensions.num_var, dimensions.num_solpts)
@@ -242,7 +257,23 @@ class EulerVerticalLinearization:
             )
             diagonal[:, :, 1, :, j + 1] += identity * local_velocity_derivative[:, :, :, None]
 
+        self._add_theta_advection(diagonal[:, :, self.equation_variables.index(4)])
         return lower, diagonal, upper
+
+    def _add_theta_advection(self, row):
+        """Add local product variations and the volume derivative of delta theta.
+
+        The theta * delta(rho_t) term is assembled from the mass row separately.
+        """
+        identity = torch.eye(self.dimensions.num_solpts, dtype=row.dtype, device=row.device)
+        rho, theta = self.state_columns[:, :, 0], self.theta
+        velocity = self.contravariant_velocity[:, :, 2]
+        advection = (rho * velocity)[:, :, :, None] * self.derivative / rho[:, :, None, :]
+        row[:, :, :, 4] += identity * (self.mass_tendency / rho)[:, :, :, None] - advection
+        row[:, :, :, 0] -= identity * (self.mass_tendency * theta / rho + self.theta_gradient * velocity)[:, :, :, None]
+        row[:, :, :, 0] += advection * theta[:, :, None, :]
+        for j in range(3):
+            row[:, :, :, j + 1] -= identity * (self.theta_gradient * rho * self.inverse_spatial[2, j])[:, :, :, None]
 
     def _extrapolation_jacobians(self):
         state_columns = self.state_columns
@@ -280,17 +311,21 @@ class EulerVerticalLinearization:
                     dimensions.num_elem_z,
                     self.num_equations,
                     dimensions.num_solpts,
-                    num_scalars + 4,
+                    num_scalars + 5,
                 )
             )
             correction = self.correction[:, face]
             for scalar, variable in enumerate(self.rhs.scalar_indices):
-                output = self.equation_variables.index(variable)
-                lift[:, :, output, :, scalar] = -correction / self.jacobian
+                # The thermal row receives its mass-flux contribution from the mass row.
+                if variable != 4:
+                    output = self.equation_variables.index(variable)
+                    lift[:, :, output, :, scalar] = -correction / self.jacobian
             lift[:, :, 1, :, num_scalars] = -correction / rho
             lift[:, :, 1, :, num_scalars + 1] = -correction
             lift[:, :, 1, :, num_scalars + 2] = correction * self.contravariant_velocity[:, :, 0]
             lift[:, :, 1, :, num_scalars + 3] = correction * self.contravariant_velocity[:, :, 1]
+            rho_theta = self.equation_variables.index(4)
+            lift[:, :, rho_theta, :, num_scalars + 4] = -correction * rho * self.contravariant_velocity[:, :, 2]
             lifts.append(lift)
         return lifts
 

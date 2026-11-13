@@ -1,6 +1,7 @@
 import torch
 
 from tests.unit.cartesian_fixture import CartesianTestCase, cartesian_config, cartesian_simulation
+from wx_factory.jacobian.euler_vertical import EulerVerticalLinearization
 
 
 class CartesianEulerJacobianTestCase(CartesianTestCase):
@@ -57,3 +58,22 @@ class CartesianEulerJacobianTestCase(CartesianTestCase):
                 solution = partition.solve(direction, 0.1, column_batch_size=2)
                 residual = solution - 0.05 * partition.implicit(solution).reshape_as(state) - direction
                 torch.testing.assert_close(residual, torch.zeros_like(residual), atol=2e-11, rtol=0)
+
+    def test_resting_stratified_column_has_no_growing_mode(self):
+        config = cartesian_config(666)
+        config.z1 = 10000
+        config.num_elements_horizontal = 1
+        sim = cartesian_simulation(config)
+        linearization = EulerVerticalLinearization(sim.rhs.full, sim.Q)
+        lower, diagonal, upper = (block[..., linearization.rows] for block in linearization.blocks)
+        columns, elements, size, _ = diagonal.shape
+        matrix = torch.zeros((columns, elements * size, elements * size), dtype=diagonal.dtype)
+        for e in range(elements):
+            rows = slice(e * size, (e + 1) * size)
+            matrix[:, rows, rows] = diagonal[:, e]
+            if e > 0:
+                matrix[:, rows, (e - 1) * size : e * size] = lower[:, e]
+            if e < elements - 1:
+                matrix[:, rows, (e + 1) * size : (e + 2) * size] = upper[:, e]
+        # Check the full column spectrum, including modes that alternate between nodes.
+        self.assertLess(torch.linalg.eigvals(matrix).real.max().item(), 1e-10)

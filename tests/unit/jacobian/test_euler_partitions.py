@@ -37,7 +37,6 @@ class EulerPartitionTestCase(unittest.TestCase):
                 torch.testing.assert_close(
                     rhs(state), rhs.explicit(state) + rhs.implicit(state), rtol=2e-12, atol=2e-10
                 )
-                torch.testing.assert_close(rhs(state)[5], rhs(state)[4], rtol=2e-12, atol=2e-10)
                 for function, action in (
                     (rhs, full),
                     (rhs.explicit, partitions.explicit),
@@ -125,7 +124,7 @@ class EulerPartitionTestCase(unittest.TestCase):
     def test_full_rhs_and_partitions_match_component_equations(self):
         rhs, state, _ = self.problem(nodes=5)
         fields = rhs.metric.volume
-        scalar_faces, pressure_faces, energy_faces, velocity_faces = rhs._interface_data(
+        scalar_faces, pressure_faces, energy_faces, velocity_faces, theta_faces = rhs._interface_data(
             rhs._faces_with_neighbours(rhs._extrapolate(state))
         )
 
@@ -152,9 +151,12 @@ class EulerPartitionTestCase(unittest.TestCase):
         for i in range(3):
             flux = fields.volume_jacobian * state[[0, 4]] * velocity[i]
             tendency = -derivative(flux, scalar_faces[i], i) / fields.volume_jacobian
-            full[[0, 4]] += tendency
             if i == 2:
+                theta = state[4] / state[0]
+                theta_gradient = derivative(theta, theta_faces[2], 2)
+                tendency[1] = theta * tendency[0] - state[0] * velocity[2] * theta_gradient
                 implicit[[0, 4]] = tendency
+            full[[0, 4]] += tendency
             full[i + 1] = -pressure_gradient[i] / state[0] - energy_gradient[i] + curl[i]
             full[i + 1] += sum(velocity[j] * fields.frame_vorticity[i, j] for j in range(3))
         rate, reference = rhs.damping

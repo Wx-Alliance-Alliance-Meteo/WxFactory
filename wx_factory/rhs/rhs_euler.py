@@ -27,6 +27,7 @@ class RhsEuler:
         if config.case_number in (41, 410, 411, 412, 413):
             self.scalar_indices += [5, 6]
             self.log_scalar_indices += [5]
+        self.rho_theta_position = self.scalar_indices.index(4)
         # Reuse device indices instead of uploading Python lists on each action.
         self.scalar_index = torch.tensor(self.scalar_indices, dtype=torch.long, device=metric.volume.height.device)
         self.log_scalar_index = torch.tensor(
@@ -276,7 +277,7 @@ class RhsEuler:
 
     def _interface_data(self, full_faces: tuple[Tensor, ...], directions=(0, 1, 2)):
         scalar_fluxes, pressure_traces, energy_traces = [], [], []
-        jumps, normal_velocities, velocity_traces = [], [], []
+        jumps, normal_velocities, velocity_traces, theta_traces = [], [], [], []
         for direction, state in zip(directions, full_faces):
             geometry = self._static_interfaces()[direction]
             left, right = geometry.left, geometry.right
@@ -297,6 +298,9 @@ class RhsEuler:
             )
             common_flux = geometry.jacobian * normal_velocity * scalar_state
             scalar_flux[left], scalar_flux[right] = common_flux, common_flux
+            theta_trace = torch.zeros_like(state[0])
+            theta_trace[left] = theta_trace[right] = scalar_state[self.rho_theta_position] / scalar_state[0]
+            theta_traces.append(theta_trace[self.mid_faces[direction]])
             numerical_pressure, numerical_energy = torch.zeros_like(state[0]), torch.zeros_like(state[0])
             common_velocity_trace = torch.zeros_like(state[1:4])
             common_velocity_trace[left], common_velocity_trace[right] = (
@@ -313,7 +317,16 @@ class RhsEuler:
             normal_velocities.append(normal_velocity / geometry.normal_scale)
         self.diagnostics["interface_pressure_jumps"] = tuple(jumps)
         self.diagnostics["interface_normal_winds"] = tuple(normal_velocities)
-        return scalar_fluxes, pressure_traces, energy_traces, velocity_traces
+        return scalar_fluxes, pressure_traces, energy_traces, velocity_traces, theta_traces
+
+    def _vertical_rho_theta_tendency(self, state, vertical_velocity, mass_tendency, theta_trace):
+        """Use theta * rho_t - rho * u^3 * D_3(theta) for vertical thermodynamic transport.
+
+        Direct theta advection avoids the discrete product-rule error between scalar flux divergences.
+        """
+        theta = state[4] / state[0]
+        theta_gradient = apply_op(theta, self.derivatives[2]) + apply_op(theta_trace, self.corrections[2])
+        return theta * mass_tendency - state[0] * vertical_velocity * theta_gradient
 
     def _curl_derivatives(self, covariant: Tensor, velocity_traces: tuple[Tensor, ...], derivative_operators=None):
         """Batch only the two off-diagonal velocity derivatives needed in each direction."""
@@ -373,7 +386,9 @@ class RhsEuler:
         fields = self.metric.volume
         trace = self._extrapolate_direction(state, self.extrapolations[2])
         faces = self._vertical_faces(trace)
-        scalar_traces, pressure_traces, energy_traces, velocity_traces = self._interface_data((faces,), (2,))
+        scalar_traces, pressure_traces, energy_traces, velocity_traces, theta_traces = self._interface_data(
+            (faces,), (2,)
+        )
         contravariant_velocity = fields.raise_velocity(state[1:4])
 
         def derivative(value, common):
@@ -381,7 +396,11 @@ class RhsEuler:
 
         result = torch.zeros_like(state)
         flux = fields.volume_jacobian * contravariant_velocity[2] * state[self.scalar_index]
-        result[self.scalar_index] = -derivative(flux, scalar_traces[0]) / fields.volume_jacobian
+        scalar_tendency = -derivative(flux, scalar_traces[0]) / fields.volume_jacobian
+        scalar_tendency[self.rho_theta_position] = self._vertical_rho_theta_tendency(
+            state, contravariant_velocity[2], scalar_tendency[0], theta_traces[0]
+        )
+        result[self.scalar_index] = scalar_tendency
         energy = (state[1:4] * contravariant_velocity).sum(dim=0) / 2 + fields.geopotential
         result[3] = -derivative(pressure(state[4]), pressure_traces[0]) / state[0]
         result[3] -= derivative(energy, energy_traces[0])
@@ -404,7 +423,7 @@ class RhsEuler:
         fields = self.metric.volume
         traces = self._extrapolate(state)
         full_faces = self._faces_with_neighbours(traces)
-        scalar_fluxes, pressure_traces, energy_traces, velocity_traces = self._interface_data(full_faces)
+        scalar_fluxes, pressure_traces, energy_traces, velocity_traces, theta_traces = self._interface_data(full_faces)
         contravariant_velocity = fields.raise_velocity(state[1:4])
         kinetic_energy = (state[1:4] * contravariant_velocity).sum(dim=0) / 2
         thermodynamic_pressure = pressure(state[4])
@@ -415,10 +434,15 @@ class RhsEuler:
         pressure_gradient, energy_gradient = [], []
         for direction in range(2 if explicit else 3):
             volume_flux = fields.volume_jacobian * contravariant_velocity[direction] * scalars
-            scalar_tendency -= (
-                apply_op(volume_flux, self.derivatives[direction])
-                + apply_op(scalar_fluxes[direction], self.corrections[direction])
-            ) / fields.volume_jacobian
+            divergence = apply_op(volume_flux, self.derivatives[direction]) + apply_op(
+                scalar_fluxes[direction], self.corrections[direction]
+            )
+            scalar_change = -divergence / fields.volume_jacobian
+            if direction == 2:
+                scalar_change[self.rho_theta_position] = self._vertical_rho_theta_tendency(
+                    state, contravariant_velocity[2], scalar_change[0], theta_traces[2]
+                )
+            scalar_tendency += scalar_change
             pressure_gradient.append(
                 apply_op(thermodynamic_pressure, self.derivatives[direction])
                 + apply_op(pressure_traces[direction], self.corrections[direction])

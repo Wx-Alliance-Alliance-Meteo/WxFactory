@@ -137,6 +137,13 @@ def _add_vorticity(
     return result
 
 
+def _common_trace(template, geometry, common):
+    """Assign the common interface value to both element faces."""
+    trace = torch.zeros_like(template)
+    trace[geometry.left], trace[geometry.right] = common, common
+    return trace
+
+
 class AcousticLinearization:
     """Cache an acoustic face state and apply its linearized interface solver."""
 
@@ -183,12 +190,19 @@ class AcousticLinearization:
         self.normal_velocity = normal_velocity
         self.upwind = normal_velocity >= 0
         self.upwind_scalars = torch.where(self.upwind[None], left[self.scalar_index], right[self.scalar_index])
+        self.rho_theta_position = self.scalar_indices.index(4)
+        self.upwind_theta = self.upwind_scalars[self.rho_theta_position] / self.upwind_scalars[0]
         self.common_contravariant_velocity = spatial_matrix_vector(self.inverse_spatial, self.common_covariant_velocity)
 
     def __call__(self, delta_left, delta_right, *, velocity_only=False):
         if delta_left.is_cuda:
             return _compiled_acoustic_action()(self, delta_left, delta_right, velocity_only=velocity_only)
         return self._apply(delta_left, delta_right, velocity_only=velocity_only)
+
+    def delta_upwind_theta(self, delta_left, delta_right):
+        """Linearize the potential-temperature trace with the upwind side held fixed."""
+        delta = torch.where(self.upwind[None], delta_left[self.scalar_index], delta_right[self.scalar_index])
+        return (delta[self.rho_theta_position] - self.upwind_theta * delta[0]) / self.upwind_scalars[0]
 
     def _apply(self, delta_left, delta_right, *, velocity_only=False):
         delta_pressure_left = heat_capacity_ratio * self.pressure_left * delta_left[4] / self.left[4]
@@ -276,6 +290,34 @@ class EulerLinearization:
         self.base_relative_curl = rhs.relative_covariant_curl(self.state[1:4], self.common_velocity_traces)
         self.horizontal_vertical_velocity_gradient = None
 
+        vertical, geometry = self.interfaces[2], rhs._static_interfaces()[2]
+        face_mass_flux = _common_trace(
+            faces[2][0], geometry, geometry.jacobian * vertical.normal_velocity * vertical.upwind_scalars[0]
+        )[rhs.mid_faces[2]]
+        mass_flux = fields.volume_jacobian * self.contravariant_velocity[2] * self.state[0]
+        self.vertical_mass_tendency = (
+            -(apply_op(mass_flux, rhs.derivatives[2]) + apply_op(face_mass_flux, rhs.corrections[2]))
+            / fields.volume_jacobian
+        )
+        self.theta = self.state[4] / self.state[0]
+        theta_trace = _common_trace(faces[2][0], geometry, vertical.upwind_theta)[rhs.mid_faces[2]]
+        self.vertical_theta_gradient = apply_op(self.theta, rhs.derivatives[2]) + apply_op(
+            theta_trace, rhs.corrections[2]
+        )
+
+    def _vertical_rho_theta(
+        self, delta_state, delta_mass_tendency, delta_vertical_velocity, delta_theta_trace, derivative
+    ):
+        """Linearize RhsEuler._vertical_rho_theta_tendency."""
+        rho, theta, velocity = self.state[0], self.theta, self.contravariant_velocity[2]
+        delta_theta = (delta_state[4] - theta * delta_state[0]) / rho
+        return (
+            delta_theta * self.vertical_mass_tendency
+            + theta * delta_mass_tendency
+            - (delta_state[0] * velocity + rho * delta_vertical_velocity) * self.vertical_theta_gradient
+            - rho * velocity * derivative(2, delta_theta, delta_theta_trace)
+        )
+
     def explicit(self, vector):
         """Apply the complementary Jacobian directly, with its DFR curl terms."""
         if self.horizontal_vertical_velocity_gradient is None:
@@ -296,6 +338,12 @@ class EulerLinearization:
         if compile_volume:
             prepare_volume, scalar_flux, add_vorticity = _compiled_volume_actions()
             derivative_operators = rhs.dfr_derivatives(_compiled_dfr_derivative())
+
+        def derivative(direction, value, common):
+            if compile_volume:
+                return derivative_operators[direction](value, common)
+            return apply_op(value, rhs.derivatives[direction]) + apply_op(common, rhs.corrections[direction])
+
         delta_scalars = delta_state[rhs.scalar_index]
         relative_scalar_perturbation = delta_state[rhs.log_scalar_index] / base_state[rhs.log_scalar_index]
         traces = []
@@ -339,30 +387,39 @@ class EulerLinearization:
                     self.contravariant_velocity[direction],
                     delta_scalars,
                 )
-                if compile_volume:
-                    scalar_tendency -= (
-                        derivative_operators[direction](flux, scalar_trace[rhs.mid_faces[direction]])
-                        / fields.volume_jacobian
+                scalar_change = (
+                    -derivative(direction, flux, scalar_trace[rhs.mid_faces[direction]]) / fields.volume_jacobian
+                )
+                if direction == 2:
+                    delta_theta_trace = _common_trace(
+                        face[0], geometry, interface.delta_upwind_theta(face[left], face[right])
                     )
-                else:
-                    scalar_tendency -= (
-                        apply_op(flux, rhs.derivatives[direction])
-                        + apply_op(scalar_trace[rhs.mid_faces[direction]], rhs.corrections[direction])
-                    ) / fields.volume_jacobian
+                    scalar_change[rhs.rho_theta_position] = self._vertical_rho_theta(
+                        delta_state,
+                        scalar_change[0],
+                        delta_contravariant_velocity[2],
+                        delta_theta_trace[rhs.mid_faces[2]],
+                        derivative,
+                    )
+                scalar_tendency += scalar_change
                 for value, common, output in (
                     (delta_pressure, face_pressure, pressure_gradient),
                     (delta_energy, face_energy, energy_gradient),
                 ):
-                    trace = torch.zeros_like(face[0])
-                    trace[left], trace[right] = common, common
-                    if compile_volume:
-                        output.append(derivative_operators[direction](value, trace[rhs.mid_faces[direction]]))
-                    else:
-                        output.append(
-                            apply_op(value, rhs.derivatives[direction])
-                            + apply_op(trace[rhs.mid_faces[direction]], rhs.corrections[direction])
-                        )
-                del scalar_trace, face_flux, flux, face_pressure, face_energy, trace, common, value, output
+                    trace = _common_trace(face[0], geometry, common)
+                    output.append(derivative(direction, value, trace[rhs.mid_faces[direction]]))
+                del (
+                    scalar_trace,
+                    scalar_change,
+                    face_flux,
+                    flux,
+                    face_pressure,
+                    face_energy,
+                    trace,
+                    common,
+                    value,
+                    output,
+                )
             velocity_trace = torch.zeros_like(face[1:4])
             velocity_trace[left], velocity_trace[right] = delta_covariant_velocity, delta_covariant_velocity
             velocity_traces.append(velocity_trace[rhs.mid_faces[direction]])

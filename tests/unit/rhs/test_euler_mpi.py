@@ -46,11 +46,10 @@ class EulerRhsTestCase(MpiTestCase):
                 torch.testing.assert_close(invariant, reference, rtol=3e-12, atol=2e-12)
             rhs = RhsEuler(geometry, operators, metric, self.topology, config)
             tendency = rhs(state)
-            torch.testing.assert_close(tendency[5], tendency[4], rtol=2e-12, atol=2e-10)
             self.assertTrue(bool(torch.isfinite(tendency).all()))
             weights = torch.einsum("k,j,i->kji", geometry.glweights, geometry.glweights, geometry.glweights).reshape(-1)
             volume = metric.volume.volume_jacobian * weights
-            for variable in (0, 4, 5, 6):
+            for variable in (0, 5, 6):
                 integral = self.comm.allreduce((volume * tendency[variable]).sum().item(), op=MPI.SUM)
                 magnitude = self.comm.allreduce((volume * tendency[variable]).abs().sum().item(), op=MPI.SUM)
                 self.assertLess(abs(integral) / max(magnitude, 1), 2e-13)
@@ -270,7 +269,7 @@ class EulerRhsTestCase(MpiTestCase):
 
     def test_common_scalar_flux_from_coordinate_characteristics(self):
         traces = self.rhs._faces_with_neighbours(self.rhs._extrapolate(self.state))
-        scalar_fluxes, pressure_traces, _, _ = self.rhs._interface_data(traces)
+        scalar_fluxes, pressure_traces, *_ = self.rhs._interface_data(traces)
         for direction, (geometry, face) in enumerate(zip(self.rhs._static_interfaces(), traces)):
             left, right = face[geometry.left], face[geometry.right]
             pressure_left, pressure_right = pressure(left[4]), pressure(right[4])
