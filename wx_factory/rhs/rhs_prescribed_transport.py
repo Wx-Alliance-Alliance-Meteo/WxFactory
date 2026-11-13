@@ -23,7 +23,6 @@ class RhsPrescribedTransport:
         self.ops = operators
         self.metric = metric
         self.config = config
-        self.num_tracers = num_tracers
         self.shape = (num_tracers + 1,) + geometry.grid_shape_3d_new
         self.period = 86400.0 if config.case_number == 12 else 12 * 86400.0
         self.time = 0.0

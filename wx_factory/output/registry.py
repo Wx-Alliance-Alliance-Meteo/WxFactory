@@ -33,7 +33,7 @@ class OutputContext:
     """Everything an output factory may need to build its output manager.
 
     A single context object is passed to every factory so they all share one signature, like the
-    other registries. Some fields (metric, topography, dataset, process topology) are only used by
+    other registries. Some fields (metric, topography, process topology) are only used by
     the cubed-sphere output managers."""
 
     config: Configuration
@@ -42,7 +42,6 @@ class OutputContext:
     operators: DFROperators
     metric: object = None
     topography: object = None
-    dataset: object = None
     ptopo: object = None
 
 

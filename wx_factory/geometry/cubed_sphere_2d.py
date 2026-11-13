@@ -311,24 +311,12 @@ class CubedSphere2D(CubedSphere):
         Y_itf_j = self._to_new_itf_j(Y_block_itf_j)
 
         delta2 = 1.0 + X**2 + Y**2
-        delta = torch.sqrt(delta2)
-
-        delta2_itf_i = 1.0 + X_itf_i**2 + Y_itf_i**2
-        delta_itf_i = torch.sqrt(delta2_itf_i)
-
-        delta2_itf_j = 1.0 + X_itf_j**2 + Y_itf_j**2
-        delta_itf_j = torch.sqrt(delta2_itf_j)
 
         self.X_block = X_block
         self.Y_block = Y_block
         self.X = X
         self.Y = Y
         self.delta2 = delta2
-        self.delta = delta
-        self.delta2_itf_i = delta2_itf_i
-        self.delta_itf_i = delta_itf_i
-        self.delta2_itf_j = delta2_itf_j
-        self.delta_itf_j = delta_itf_j
 
         ## Other coordinate vectors:
         # * gnonomic coordinates (X, Y, Z)

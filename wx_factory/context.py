@@ -34,7 +34,6 @@ class Context:
 
     def __init__(self, comm: MPI.Comm, device_type: str = "cuda") -> None:
         self.comm = comm
-        self.torch = torch
 
         # Putting the model on a GPU is entirely a matter of where the tensors live. Ranks of a node
         # are spread over the available devices.

@@ -149,7 +149,6 @@ class CubedSphere3D(CubedSphere):
         self.num_elements_x1 = num_elements_x1
         self.num_elements_x2 = num_elements_x2
         self.num_elements_x3 = num_elements_x3
-        self.num_elements = num_elements_x1 * num_elements_x2 * num_elements_x3
 
         delta_x1 = (domain_x1[1] - domain_x1[0]) / num_elements_x1
         delta_x2 = (domain_x2[1] - domain_x2[0]) / num_elements_x2
@@ -158,7 +157,6 @@ class CubedSphere3D(CubedSphere):
 
         self.delta_x1 = delta_x1
         self.delta_x2 = delta_x2
-        self.delta_x3 = delta_x3
         self.delta_eta = delta_eta
 
         minComp = min(self.extension)

@@ -26,7 +26,6 @@ class RhsContext:
     ptopo: ProcessTopology | None
     param: Configuration
     fields_shape: tuple[int, ...]
-    debug: bool = False
 
 
 _GENERIC_NO_PARTITION = (

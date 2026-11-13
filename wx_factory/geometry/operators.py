@@ -64,8 +64,6 @@ class DFROperators:
         self.extrap_down = extrap_neg
         self.extrap_up = extrap_pos
 
-        V = legvander(grd.solutionPoints, grd.num_solpts - 1).to(build_dtype)
-        invV = torch.linalg.inv(V)
         diff = diffmat(grd.extension_sym)
         self.diff_ext = torch.asarray(diff).to(build_dtype)
 
