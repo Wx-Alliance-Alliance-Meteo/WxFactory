@@ -254,7 +254,7 @@ class EulerLinearization:
         fields = rhs.metric.volume
         self.contravariant_velocity = fields.raise_velocity(self.state[1:4])
         self.pressure = pressure(self.state[4])
-        self.traces = rhs._extrapolate(self.state)
+        self.traces = rhs._extrapolate(self.state, self.contravariant_velocity)
         faces = rhs._faces_with_neighbours(self.traces)
         self.interfaces = tuple(
             AcousticLinearization(
@@ -344,6 +344,9 @@ class EulerLinearization:
                 return derivative_operators[direction](value, common)
             return apply_op(value, rhs.derivatives[direction]) + apply_op(common, rhs.corrections[direction])
 
+        delta_contravariant_velocity, delta_pressure, delta_energy = prepare_volume(
+            fields.G_contra[1:4, 1:4], delta_state, self.pressure, base_state, self.contravariant_velocity
+        )
         delta_scalars = delta_state[rhs.scalar_index]
         relative_scalar_perturbation = delta_state[rhs.log_scalar_index] / base_state[rhs.log_scalar_index]
         traces = []
@@ -359,13 +362,10 @@ class EulerLinearization:
                 trace[6:] = trace[0] * base_trace[6:] / base_trace[0]
                 trace[6:] += base_trace[0] * apply_op(delta_mixing_ratio, operator)
             traces.append(trace)
-        rhs._match_pressure_work(delta_state[1:4], traces)
+        rhs._match_pressure_work(delta_contravariant_velocity, traces)
         # Consume the face arrays one direction at a time to limit peak memory.
         faces = list(rhs._faces_with_neighbours(tuple(traces)))
         del traces, trace, relative_scalar_perturbation
-        delta_contravariant_velocity, delta_pressure, delta_energy = prepare_volume(
-            fields.G_contra[1:4, 1:4], delta_state, self.pressure, base_state, self.contravariant_velocity
-        )
         result = torch.zeros_like(delta_state)
         scalar_tendency = torch.zeros_like(delta_scalars)
         pressure_gradient, energy_gradient = [], []

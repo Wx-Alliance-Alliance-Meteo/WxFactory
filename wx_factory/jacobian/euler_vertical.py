@@ -70,6 +70,7 @@ class EulerVerticalLinearization:
         )
 
         state_trace = rhs._extrapolate_direction(state, rhs.extrapolations[2])
+        rhs._match_pressure_work(fields.raise_velocity(state[1:4]), (state_trace,), (2,))
         self.state_trace = state_interface_to_columns(state_trace, dimensions)[self.column_slice].clone()
         faces = state_interface_to_columns(rhs._vertical_faces(state_trace), dimensions)[self.column_slice].clone()
         left = faces[:, :-1, 1].permute(2, 0, 1)
@@ -80,9 +81,11 @@ class EulerVerticalLinearization:
         )
         inverse_spatial = inverse_faces[:, :, :, :-1, 1]
         geopotential = face_columns(face_fields.geopotential)[:, :-1, 1]
-        jacobian = face_columns(face_fields.volume_jacobian)[:, :-1, 1]
+        face_jacobian = face_columns(face_fields.volume_jacobian)
+        jacobian = face_jacobian[:, :-1, 1]
         normal_scale = torch.sqrt(inverse_spatial[2, 2])
         normal_row = inverse_spatial[2] / normal_scale
+        self.velocity_coupling = self._pressure_work_coupling(face_jacobian[:, 1:-1], inverse_faces[2, :, :, 1:-1])
         wall = None
         if not rhs.periodic_vertical:
             wall = torch.zeros_like(normal_scale, dtype=torch.bool)
@@ -143,6 +146,20 @@ class EulerVerticalLinearization:
             + self.correction[:, 1] * common[:, 1:, None]
         )
 
+    def _pressure_work_coupling(self, face_jacobian, face_inverse_row):
+        """Linearize the pressure-work correction to the extrapolated face v_3.
+
+        Return derivatives with respect to nodal v_j, with axes (column, element, j, node),
+        for the negative and positive faces. The corrected face u^3 equals R(J u^3) / J_f.
+        """
+        coupling = []
+        weighted_row = self.jacobian[:, :, None] * self.inverse_spatial[2].movedim(0, 2)
+        for face in range(2):
+            face_row = face_inverse_row[..., face].movedim(0, 2)[..., None]
+            work_row = weighted_row / face_jacobian[:, :, face, None, None]
+            coupling.append(self.extrapolation[face] * (work_row - face_row) / face_row[:, :, 2:3])
+        return coupling
+
     def _wall_reflection_matrix(self, inverse_spatial):
         result = (
             torch.eye(self.dimensions.num_var, dtype=self.state.dtype, device=self.state.device)
@@ -183,23 +200,31 @@ class EulerVerticalLinearization:
         lifts = self._face_lifting_matrices()
         dimensions, state_columns = self.dimensions, self.state_columns
 
-        def contribution(lift, interface, extrapolation):
+        def accumulate(block, lift, interface, face, elements):
+            """Accumulate the interface contribution from the selected source elements and face."""
+            extrapolated, coupling = extrapolation[face][:, elements], self.velocity_coupling[face][:, elements]
+            lifted = torch.einsum("ceioq,ceqj->ceioj", lift, interface)
             if self.dimensions.num_var > 5:
-                return torch.einsum("ceioq,ceqj,cejks->ceioks", lift, interface, extrapolation)
-            return torch.einsum("ceioq,ceqj,cejs->ceiojs", lift, interface, extrapolation)
+                block += torch.einsum("ceioj,cejks->ceioks", lifted, extrapolated)
+            else:
+                block.addcmul_(lifted[..., None], extrapolated[:, :, None, None])
+            # Pressure-work matching couples face v_3 to all three nodal velocity components.
+            block[:, :, :, :, 1:4].addcmul_(lifted[..., 3, None, None], coupling[:, :, None, None])
 
-        lower[:, 1:] += contribution(lifts[0][:, 1:], left[:, 1:-1], extrapolation[1][:, :-1])
-        diagonal[:, 1:] += contribution(lifts[0][:, 1:], right[:, 1:-1], extrapolation[0][:, 1:])
-        diagonal[:, :-1] += contribution(lifts[1][:, :-1], left[:, 1:-1], extrapolation[1][:, :-1])
-        upper[:, :-1] += contribution(lifts[1][:, :-1], right[:, 1:-1], extrapolation[0][:, 1:])
+        below, above = slice(None, -1), slice(1, None)
+        accumulate(lower[:, 1:], lifts[0][:, 1:], left[:, 1:-1], 1, below)
+        accumulate(diagonal[:, 1:], lifts[0][:, 1:], right[:, 1:-1], 0, above)
+        accumulate(diagonal[:, :-1], lifts[1][:, :-1], left[:, 1:-1], 1, below)
+        accumulate(upper[:, :-1], lifts[1][:, :-1], right[:, 1:-1], 0, above)
+        first, last = slice(None, 1), slice(-1, None)
         if self.rhs.periodic_vertical:
-            lower[:, :1] += contribution(lifts[0][:, :1], left[:, :1], extrapolation[1][:, -1:])
-            diagonal[:, :1] += contribution(lifts[0][:, :1], right[:, :1], extrapolation[0][:, :1])
-            diagonal[:, -1:] += contribution(lifts[1][:, -1:], left[:, -1:], extrapolation[1][:, -1:])
-            upper[:, -1:] += contribution(lifts[1][:, -1:], right[:, -1:], extrapolation[0][:, :1])
+            accumulate(lower[:, :1], lifts[0][:, :1], left[:, :1], 1, last)
+            accumulate(diagonal[:, :1], lifts[0][:, :1], right[:, :1], 0, first)
+            accumulate(diagonal[:, -1:], lifts[1][:, -1:], left[:, -1:], 1, last)
+            accumulate(upper[:, -1:], lifts[1][:, -1:], right[:, -1:], 0, first)
         else:
-            diagonal[:, :1] += contribution(lifts[0][:, :1], bottom[:, None], extrapolation[0][:, :1])
-            diagonal[:, -1:] += contribution(lifts[1][:, -1:], top[:, None], extrapolation[1][:, -1:])
+            accumulate(diagonal[:, :1], lifts[0][:, :1], bottom[:, None], 0, first)
+            accumulate(diagonal[:, -1:], lifts[1][:, -1:], top[:, None], 1, last)
         # Include the mass-tendency contribution from every column block.
         rho_theta = self.equation_variables.index(4)
         for block in (lower, diagonal, upper):

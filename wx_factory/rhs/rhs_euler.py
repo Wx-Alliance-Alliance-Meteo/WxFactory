@@ -134,25 +134,26 @@ class RhsEuler:
             self._double_rhs = rhs
         return self._double_rhs
 
-    def _extrapolate(self, state: Tensor) -> tuple[Tensor, ...]:
+    def _extrapolate(self, state: Tensor, contravariant: Tensor | None = None) -> tuple[Tensor, ...]:
+        if contravariant is None:
+            contravariant = self.metric.volume.raise_velocity(state[1:4])
         log_scalars = torch.log(state[self.log_scalar_index])
         traces = tuple(self._extrapolate_direction(state, operator, log_scalars) for operator in self.extrapolations)
-        self._match_pressure_work(state[1:4], traces)
+        self._match_pressure_work(contravariant, traces)
         return traces
 
-    def _match_pressure_work(self, covariant: Tensor, traces: tuple[Tensor, ...]):
-        """Give the horizontal velocity traces the normal wind that face pressure does work against.
+    def _match_pressure_work(self, contravariant: Tensor, traces: tuple[Tensor, ...], directions=(0, 1, 2)):
+        """Match each face velocity to the discrete pressure work.
 
-        In the discrete kinetic energy, the pressure lifting works against R(J u^a) / J_f. Over terrain the traced
-        covariant velocity has a different normal wind, which makes the Riemann pressure dissipation and the face
-        mass flux sign-indefinite. Shifting v_a changes the velocity along grad xi^a only, so the tangential
-        components are kept. Linear in the velocity: the Jacobian applies it to perturbations.
+        Pressure lifting works against R(J u^m) / J_f, where R extrapolates to the face.
+        Matching this contravariant component makes the velocity-jump pressure penalty dissipative.
+        Shifting only v_m preserves tangential velocity. The correction is linear in velocity,
+        so the Jacobian applies the same operation to perturbations.
         """
-        volume = self.metric.volume
-        weighted_velocity = volume.volume_jacobian * volume.raise_velocity(covariant)
-        for direction in range(2):
-            fields, interior, trace = self.metric.faces[direction], self.mid_faces[direction], traces[direction]
-            work_velocity = apply_op(weighted_velocity[direction], self.extrapolations[direction])
+        volume_jacobian = self.metric.volume.volume_jacobian
+        for direction, trace in zip(directions, traces):
+            fields, interior = self.metric.faces[direction], self.mid_faces[direction]
+            work_velocity = apply_op(volume_jacobian * contravariant[direction], self.extrapolations[direction])
             work_velocity = work_velocity / fields.volume_jacobian[interior]
             inverse_row = fields.G_contra[direction + 1, 1:4][interior]
             traced_velocity = (inverse_row * trace[1:4]).sum(dim=0)
@@ -384,12 +385,13 @@ class RhsEuler:
         given_shape = state.shape
         state = state.reshape((-1,) + self.metric.volume.height.shape)
         fields = self.metric.volume
+        contravariant_velocity = fields.raise_velocity(state[1:4])
         trace = self._extrapolate_direction(state, self.extrapolations[2])
+        self._match_pressure_work(contravariant_velocity, (trace,), (2,))
         faces = self._vertical_faces(trace)
         scalar_traces, pressure_traces, energy_traces, velocity_traces, theta_traces = self._interface_data(
             (faces,), (2,)
         )
-        contravariant_velocity = fields.raise_velocity(state[1:4])
 
         def derivative(value, common):
             return apply_op(value, self.derivatives[2]) + apply_op(common, self.corrections[2])
@@ -421,10 +423,10 @@ class RhsEuler:
         given_shape = state.shape
         state = state.reshape((-1,) + self.metric.volume.height.shape)
         fields = self.metric.volume
-        traces = self._extrapolate(state)
+        contravariant_velocity = fields.raise_velocity(state[1:4])
+        traces = self._extrapolate(state, contravariant_velocity)
         full_faces = self._faces_with_neighbours(traces)
         scalar_fluxes, pressure_traces, energy_traces, velocity_traces, theta_traces = self._interface_data(full_faces)
-        contravariant_velocity = fields.raise_velocity(state[1:4])
         kinetic_energy = (state[1:4] * contravariant_velocity).sum(dim=0) / 2
         thermodynamic_pressure = pressure(state[4])
         mechanical_energy = kinetic_energy + fields.geopotential
