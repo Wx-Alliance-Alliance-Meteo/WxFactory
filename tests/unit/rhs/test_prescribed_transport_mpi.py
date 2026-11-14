@@ -50,9 +50,7 @@ class PrescribedTransportTestCase(MpiTestCase):
                 winds = rhs.wind(rhs.metric.volume, clock)
                 if case in (11, 12):
                     function = dcmip_T11_update_winds if case == 11 else dcmip_T12_update_winds
-                    reference = torch.stack(
-                        function(sim.geometry, rhs.metric, sim.operators_real, sim.config, time=clock * rhs.period)
-                    )
+                    reference = torch.stack(function(sim.geometry, rhs.metric, sim.config, time=clock * rhs.period))
                     torch.testing.assert_close(winds, reference, atol=2e-12, rtol=2e-12)
                 augmented = torch.cat((state[5:], torch.full_like(state[:1], clock)))
                 torch.manual_seed(31 + self.comm.rank)

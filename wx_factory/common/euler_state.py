@@ -1,4 +1,4 @@
-def physical_winds(state, geometry, metric):
+def physical_winds(state, metric):
     """Return relative eastward, northward, and vertical winds in m/s."""
     return metric.physical_winds(state[1:4])
 

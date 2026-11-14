@@ -51,7 +51,9 @@ class Configuration:
                     message += f"; did you mean [{locations[match]}] {match}?"
                 unknown.append(message)
         if unknown:
-            warnings.warn("Unknown configuration options (ignored):\n  " + "\n  ".join(unknown), UserWarning, stacklevel=3)
+            warnings.warn(
+                "Unknown configuration options (ignored):\n  " + "\n  ".join(unknown), UserWarning, stacklevel=3
+            )
 
     def __deepcopy__(self: Self, memo) -> Self:
         do_not_deepcopy = {}

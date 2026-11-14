@@ -93,6 +93,8 @@ def load_state(input_file_name: str, device: torch.device | None = None) -> tupl
                 "Legacy Euler restart contains conservative momentum; relative covariant velocity is required"
             )
         if conf.equations == "shallow_water" and stored_form != state_representation(conf):
-            raise ValueError("Legacy shallow-water restart has a different velocity representation; convert it before restarting")
+            raise ValueError(
+                "Legacy shallow-water restart has a different velocity representation; convert it before restarting"
+            )
         conf.state_representation = stored_form
         return state, conf

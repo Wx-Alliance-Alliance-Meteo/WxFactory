@@ -400,7 +400,7 @@ class OutputCubesphereNetcdf(OutputCubesphere):
             rho = Q[idx_rho, ...]
             theta = Q[idx_rho_theta, ...] / rho
 
-            u, v, w = physical_winds(Q, geom, self.metric)
+            u, v, w = physical_winds(Q, self.metric)
 
             self.store_field(geom.to_single_block(rho), "rho", idx)
             self.store_field(geom.to_single_block(u), "U", idx)

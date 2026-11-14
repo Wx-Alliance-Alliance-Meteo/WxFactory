@@ -130,7 +130,8 @@ def main():
             out_file = f"prof_{rank:04d}.out"
             pr.dump_stats(out_file)
 
-    except (Exception, KeyboardInterrupt, SystemExit) as e:
+    # Catch all failures so rank 0 can finalize output.
+    except (Exception, KeyboardInterrupt, SystemExit) as e:  # noqa: BLE001
         try:
             if rank == 0:
                 sim.output.finalize(0.0)
@@ -138,8 +139,9 @@ def main():
             pass
         finally:
             sys.stdout.flush()
+            # Preserve the original exception if output finalization also fails.
             if args and args.show_every_crash:
-                raise e
+                raise e  # noqa: TRY201
 
             if isinstance(e, KeyboardInterrupt):
                 if rank == 0:
@@ -149,7 +151,7 @@ def main():
             if rank == 0:
                 if not isinstance(e, SystemExit):
                     print("There was an error while running WxFactory. Only rank 0 is printing the traceback:")
-                raise e
+                raise e  # noqa: TRY201
 
             raise SystemExit
 

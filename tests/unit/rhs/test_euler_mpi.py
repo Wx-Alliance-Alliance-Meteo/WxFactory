@@ -29,7 +29,7 @@ class EulerRhsTestCase(MpiTestCase):
             )
             operators = DFROperators(geometry, self.context)
             metric = Metric5D(geometry, config)
-            state, _ = initialize_euler(geometry, metric, operators, config)
+            state, _ = initialize_euler(geometry, metric, config)
             scaling = 10 ** (case - 410)
             self.assertAlmostEqual(geometry.earth_radius * scaling, 6371220)
             self.assertAlmostEqual(geometry.rotation_speed / scaling, 7.29212e-5)

@@ -26,7 +26,7 @@ def eval_u_prime(lat):
     return u_max / e_n * u_p
 
 
-def solid_body_rotation(geom: CubedSphere2D, metric, param):
+def solid_body_rotation(geom: CubedSphere2D, param):
     if param.case_number == 5:
         u0 = 20.0
     else:
@@ -39,7 +39,7 @@ def solid_body_rotation(geom: CubedSphere2D, metric, param):
     return u1, u2
 
 
-def circular_vortex(geom, metric, param):
+def circular_vortex(geom, param):
     if geom.context.comm.rank == 0:
         print("--------------------------------------------------------------")
         print("CASE 0 (Tracer): Circular vortex, Nair and Machenhauer,2002   ")
@@ -49,7 +49,7 @@ def circular_vortex(geom, metric, param):
     lon_center = math.pi - 0.8
     lat_center = math.pi / 4.8
 
-    h, Omega = height_vortex(geom, metric, param, 0)
+    h, Omega = height_vortex(geom, param, 0)
 
     u = (
         geom.earth_radius
@@ -62,7 +62,7 @@ def circular_vortex(geom, metric, param):
     return u1, u2, h
 
 
-def height_vortex(geom, metric, param, step):
+def height_vortex(geom, param, step):
 
     step_time = step * param.dt
 
@@ -196,7 +196,7 @@ def sw_from_file(geom: CubedSphere2D, config: Configuration):
     return u1, u2, h - h_surface, h_surface, h_surface_itf_i, h_surface_itf_j
 
 
-def williamson_case1(geom, metric, param):
+def williamson_case1(geom, param):
     if geom.context.comm.rank == 0:
         print(
             "---------------------------------------------------------------\n"
@@ -204,14 +204,14 @@ def williamson_case1(geom, metric, param):
             "---------------------------------------------------------------"
         )
 
-    u1, u2 = solid_body_rotation(geom, metric, param)
+    u1, u2 = solid_body_rotation(geom, param)
 
-    h = height_case1(geom, metric, param, 0)
+    h = height_case1(geom, param, 0)
 
     return u1, u2, h
 
 
-def height_case1(geom: CubedSphere2D, metric, param, step):
+def height_case1(geom: CubedSphere2D, param, step):
     # Initialize gaussian bell
     step_time = step * param.dt
 
@@ -234,21 +234,21 @@ def height_case1(geom: CubedSphere2D, metric, param, step):
     return 0.5 * h0 * (1.0 + torch.cos(math.pi * dist / radius)) * (dist <= radius)
 
 
-def williamson_case2(geom, metric, param):
+def williamson_case2(geom, param):
     if geom.context.comm.rank == 0:
         print("--------------------------------------------")
         print("WILLIAMSON CASE 2, Williamson et al. (1992) ")
         print("Steady state nonlinear geostrophic flow     ")
         print("--------------------------------------------")
 
-    u1, u2 = solid_body_rotation(geom, metric, param)
+    u1, u2 = solid_body_rotation(geom, param)
 
     # Global Steady State Nonlinear Zonal Geostrophic Flow
-    h = height_case2(geom, metric, param)
+    h = height_case2(geom)
     return u1, u2, h
 
 
-def height_case2(geom, metric, param):
+def height_case2(geom):
     gh0 = 29400.0
     u0 = 2.0 * math.pi * geom.earth_radius / (12.0 * day_in_secs)
 
@@ -256,7 +256,7 @@ def height_case2(geom, metric, param):
     return h
 
 
-def williamson_case5(geom: CubedSphere2D, metric, param):
+def williamson_case5(geom: CubedSphere2D, param):
     if geom.context.comm.rank == 0:
         print(
             "--------------------------------------------\n"
@@ -268,7 +268,7 @@ def williamson_case5(geom: CubedSphere2D, metric, param):
     u0 = 20.0  # Max wind (m/s)
     h0 = 5960.0  # Mean height (m)
 
-    u1, u2 = solid_body_rotation(geom, metric, param)
+    u1, u2 = solid_body_rotation(geom, param)
 
     h_star = (
         gravity * h0 - (geom.earth_radius * geom.rotation_speed * u0 + 0.5 * u0**2) * (geom.sinlat) ** 2
@@ -317,7 +317,7 @@ def williamson_case5(geom: CubedSphere2D, metric, param):
     return u1, u2, h, hsurf, hsurf_itf_i, hsurf_itf_j
 
 
-def williamson_case6(geom: CubedSphere2D, metric, param):
+def williamson_case6(geom: CubedSphere2D):
     if geom.context.comm.rank == 0:
         print(
             "--------------------------------------------\n"
@@ -369,7 +369,7 @@ def williamson_case6(geom: CubedSphere2D, metric, param):
     return u1, u2, h
 
 
-def case_galewsky(geom, metric, param):
+def case_galewsky(geom):
     if geom.context.comm.rank == 0:
         print("--------------------------------------------")
         print("CASE 8, Galewsky et al. (2004)              ")
@@ -443,7 +443,7 @@ def case_galewsky(geom, metric, param):
     return u1, u2, h
 
 
-def case_matsuno(geom, metric, param):
+def case_matsuno(geom, param):
     wave_type = {"rossby": "Rossby", "eig": "EIG", "wig": "WIG"}[param.matsuno_wave_type.lower()]
     if geom.context.comm.rank == 0:
         print("--------------------------------------------")
@@ -488,7 +488,7 @@ def case_matsuno(geom, metric, param):
     return u1, u2, h
 
 
-def case_unsteady_zonal(geom, metric, param):
+def case_unsteady_zonal(geom):
     if geom.context.comm.rank == 0:
         print("--------------------------------------------")
         print("CASE 10, Läuter et al. (2005)               ")
@@ -504,7 +504,7 @@ def case_unsteady_zonal(geom, metric, param):
     v = torch.zeros_like(geom.lat)
 
     # Geopotential heights
-    h = height_unsteady_zonal(geom, metric, param)
+    h = height_unsteady_zonal(geom)
 
     hs = 0.5 * (geom.earth_radius * geom.rotation_speed * torch.sin(geom.lat)) ** 2 + k2
     hsurf = hs / gravity
@@ -516,7 +516,7 @@ def case_unsteady_zonal(geom, metric, param):
     return u1, u2, h, hsurf, hsurf_itf_i, hsurf_itf_j
 
 
-def height_unsteady_zonal(geom, metric, param):
+def height_unsteady_zonal(geom):
 
     u0 = 2.0 * math.pi * geom.earth_radius / (12.0 * 24.0 * 3600.0)
 

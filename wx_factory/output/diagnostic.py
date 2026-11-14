@@ -30,13 +30,6 @@ def potential_vorticity(
     return (rv + metric.coriolis_f) / h
 
 
-def absolute_vorticity(u1_contra: NDArray, u2_contra: NDArray, metric: Metric2D, mtrx: DFROperators):
-
-    rv = relative_vorticity(u1_contra, u2_contra, metric, mtrx)
-
-    return rv + metric.coriolis_f
-
-
 def total_energy(h, u1_contra, u2_contra, topo, metric):
     u1_dual, u2_dual = metric.volume.lower_velocity(torch.stack((u1_contra, u2_contra)))
 
@@ -53,7 +46,7 @@ def total_energy(h, u1_contra, u2_contra, topo, metric):
     return kinetic + potential
 
 
-def potential_enstrophy(h, u1_contra, u2_contra, geom, metric, mtrx, param):
+def potential_enstrophy(h, u1_contra, u2_contra, metric, mtrx):
     rv = relative_vorticity(u1_contra, u2_contra, metric, mtrx)
     return (rv + metric.coriolis_f) ** 2 / (2 * h)
 

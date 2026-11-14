@@ -79,7 +79,7 @@ class Metric5DSeamTestCase(MpiTestCase):
         ops = DFROperators(self.geom, self.context)
         self.assertFalse(hasattr(ops, "highfilter"))
         self.assertFalse(hasattr(ops, "highfilter_k"))
-        dcmip_steady_state_mountain(self.geom, self.metric, ops, self.config)
+        dcmip_steady_state_mountain(self.geom, self.metric, self.config)
         torch.testing.assert_close(self.metric.volume.height, self.geom.height_new, atol=1e-9, rtol=2e-13)
 
     def test_static_rebuild_is_bitwise_identical(self):

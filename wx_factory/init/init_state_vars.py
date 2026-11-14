@@ -32,7 +32,7 @@ def init_state_vars(
         if param.enable_schar_mountain:
             step_hooks[ScharMountainHook].metric = metric
             step_hooks[ScharMountainHook].apply(1 if param.schar_mountain_step == 0 else 0)
-        Q, topo = initialize_euler(geom, metric, operators, param)
+        Q, topo = initialize_euler(geom, metric, param)
 
     elif param.equations == "shallow_water" and isinstance(geom, CubedSphere2D):
         metric = Metric2D(geom)

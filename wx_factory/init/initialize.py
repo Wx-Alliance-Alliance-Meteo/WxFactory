@@ -17,7 +17,7 @@ from ..common.definitions import (
     idx_u2,
     p0,
 )
-from ..geometry import CubedSphere2D, CubedSphere3D, DFROperators, Metric2D, Metric5D
+from ..geometry import CubedSphere2D, CubedSphere3D, Metric2D, Metric5D
 from ..output.input_manager import extract_available_levels
 from .dcmip import (
     acoustic_wave,
@@ -50,7 +50,7 @@ class Topo:
         self.hsurf_itf_j = hsurf_itf_j
 
 
-def initialize_euler(geom: CubedSphere3D, metric: Metric5D, mtrx: DFROperators, param: Configuration):
+def initialize_euler(geom: CubedSphere3D, metric: Metric5D, param: Configuration):
 
     if param.case_number < 0 and param.initial_conditions != "":
         from .euler import initialize_era5
@@ -61,26 +61,24 @@ def initialize_euler(geom: CubedSphere3D, metric: Metric5D, mtrx: DFROperators, 
         )
     elif param.case_number == 11:
         rho, u1_contra, u2_contra, w, potential_temperature, q1, q2, q3, q4 = dcmip_advection_deformation(
-            geom, metric, mtrx, param
+            geom, metric, param
         )
     elif param.case_number == 12:
-        rho, u1_contra, u2_contra, w, potential_temperature, q1 = dcmip_advection_hadley(geom, metric, mtrx, param)
+        rho, u1_contra, u2_contra, w, potential_temperature, q1 = dcmip_advection_hadley(geom, metric, param)
     elif param.case_number == 13:
         rho, u1_contra, u2_contra, w, potential_temperature, q1, q2, q3, q4 = dcmip_advection_orography(
-            geom, metric, mtrx, param
+            geom, metric, param
         )
     elif param.case_number in (20, 200, 201, 202):
-        rho, u1_contra, u2_contra, w, potential_temperature = dcmip_steady_state_mountain(geom, metric, mtrx, param)
+        rho, u1_contra, u2_contra, w, potential_temperature = dcmip_steady_state_mountain(geom, metric, param)
     elif param.case_number == 21:
-        rho, u1_contra, u2_contra, w, potential_temperature = dcmip_schar_waves(geom, metric, mtrx, param, False)
+        rho, u1_contra, u2_contra, w, potential_temperature = dcmip_schar_waves(geom, metric, shear=False)
     elif param.case_number == 22:
-        rho, u1_contra, u2_contra, w, potential_temperature = dcmip_schar_waves(geom, metric, mtrx, param, True)
+        rho, u1_contra, u2_contra, w, potential_temperature = dcmip_schar_waves(geom, metric, shear=True)
     elif param.case_number == 31:
-        rho, u1_contra, u2_contra, w, potential_temperature = dcmip_gravity_wave(geom, metric, mtrx, param)
+        rho, u1_contra, u2_contra, w, potential_temperature = dcmip_gravity_wave(geom, metric)
     elif param.case_number in (41, 410, 411, 412, 413):
-        rho, u1_contra, u2_contra, w, potential_temperature, q1, q2 = dcmip_baroclinic_instability(
-            geom, metric, mtrx, param
-        )
+        rho, u1_contra, u2_contra, w, potential_temperature, q1, q2 = dcmip_baroclinic_instability(geom, metric)
     elif param.case_number == 77:
         rho, u1_contra, u2_contra, w, potential_temperature = acoustic_wave(geom, metric)
     else:
@@ -146,32 +144,28 @@ def initialize_sw(geom: CubedSphere2D, metric: Metric2D, param: Configuration):
         u1_contra, u2_contra, fluid_height, hsurf, hsurf_itf_i, hsurf_itf_j = sw_from_file(geom, param)
 
     elif param.case_number == 0:
-        u1_contra, u2_contra, fluid_height = circular_vortex(geom, metric, param)
+        u1_contra, u2_contra, fluid_height = circular_vortex(geom, param)
 
     elif param.case_number == 1:
-        u1_contra, u2_contra, fluid_height = williamson_case1(geom, metric, param)
+        u1_contra, u2_contra, fluid_height = williamson_case1(geom, param)
 
     elif param.case_number == 2:
-        u1_contra, u2_contra, fluid_height = williamson_case2(geom, metric, param)
+        u1_contra, u2_contra, fluid_height = williamson_case2(geom, param)
 
     elif param.case_number == 5:
-        u1_contra, u2_contra, fluid_height, hsurf, hsurf_itf_i, hsurf_itf_j = williamson_case5(
-            geom, metric, param
-        )
+        u1_contra, u2_contra, fluid_height, hsurf, hsurf_itf_i, hsurf_itf_j = williamson_case5(geom, param)
 
     elif param.case_number == 6:
-        u1_contra, u2_contra, fluid_height = williamson_case6(geom, metric, param)
+        u1_contra, u2_contra, fluid_height = williamson_case6(geom)
 
     elif param.case_number == 8:
-        u1_contra, u2_contra, fluid_height = case_galewsky(geom, metric, param)
+        u1_contra, u2_contra, fluid_height = case_galewsky(geom)
 
     elif param.case_number == 9:
-        u1_contra, u2_contra, fluid_height = case_matsuno(geom, metric, param)
+        u1_contra, u2_contra, fluid_height = case_matsuno(geom, param)
 
     elif param.case_number == 10:
-        u1_contra, u2_contra, fluid_height, hsurf, hsurf_itf_i, hsurf_itf_j = case_unsteady_zonal(
-            geom, metric, param
-        )
+        u1_contra, u2_contra, fluid_height, hsurf, hsurf_itf_i, hsurf_itf_j = case_unsteady_zonal(geom)
 
     else:
         raise ValueError(f"Unknown case number {param.case_number} for Shallow Water equations")

@@ -2,9 +2,8 @@ import math
 
 import torch
 
-from ..common.configuration import Configuration
 from ..common.definitions import Rd, cpd, gravity, p0
-from ..geometry import CubedSphere3D, DFROperators, Metric5D
+from ..geometry import CubedSphere3D, Metric5D
 
 
 def dcmip_prescribed_rho_theta(geom):
@@ -19,7 +18,7 @@ def dcmip_prescribed_rho_theta(geom):
     return rho, rho * theta
 
 
-def dcmip_T11_update_winds(geom, metric, mtrx, param, time=float(0)):
+def dcmip_T11_update_winds(geom, metric, param, time=float(0)):
     """
     Test 11 - Deformational Advection
 
@@ -85,7 +84,7 @@ def dcmip_T11_update_winds(geom, metric, mtrx, param, time=float(0)):
     return u1_contra, u2_contra, u3_contra
 
 
-def dcmip_T12_update_winds(geom, metric, mtrx, param, time=float(0)):
+def dcmip_T12_update_winds(geom, metric, param, time=float(0)):
     """
     Test 12 - 3D Hadley-like flow
     The velocities are time dependent and therefore must be updated in the dynamical core.
@@ -135,7 +134,7 @@ def dcmip_T12_update_winds(geom, metric, mtrx, param, time=float(0)):
     return u1_contra, u2_contra, u3_contra
 
 
-def dcmip_advection_deformation(geom, metric, mtrx, param):
+def dcmip_advection_deformation(geom, metric, param):
     """
     Test 11 - Deformational Advection
 
@@ -161,7 +160,7 @@ def dcmip_advection_deformation(geom, metric, mtrx, param):
 
     p = p0 * torch.exp(-height / H)
 
-    u1_contra, u2_contra, u3_contra = dcmip_T11_update_winds(geom, metric, mtrx, param, time=0)
+    u1_contra, u2_contra, u3_contra = dcmip_T11_update_winds(geom, metric, param, time=0)
 
     t = T0
 
@@ -197,7 +196,7 @@ def dcmip_advection_deformation(geom, metric, mtrx, param):
     return rho, u1_contra, u2_contra, u3_contra, theta, q1, q2, q3, q4
 
 
-def dcmip_advection_hadley(geom, metric, mtrx, param):
+def dcmip_advection_hadley(geom, metric, param):
     """Test 12 - 3D Hadley-like flow"""
     metric.build_metric()
 
@@ -211,7 +210,7 @@ def dcmip_advection_hadley(geom, metric, mtrx, param):
 
     p = p0 * torch.exp(-height / H)
 
-    u1_contra, u2_contra, u3_contra = dcmip_T12_update_winds(geom, metric, mtrx, param, time=0)
+    u1_contra, u2_contra, u3_contra = dcmip_T12_update_winds(geom, metric, param, time=0)
 
     t = T0
 
@@ -231,7 +230,7 @@ def dcmip_advection_hadley(geom, metric, mtrx, param):
     return rho, u1_contra, u2_contra, u3_contra, theta, q1
 
 
-def dcmip_advection_orography(geom: CubedSphere3D, metric, mtrx, param):
+def dcmip_advection_orography(geom: CubedSphere3D, metric, param):
     """
     Test 13 - Horizontal advection of thin cloud-like tracers in the presence of orography
 
@@ -358,7 +357,7 @@ def dcmip_advection_orography(geom: CubedSphere3D, metric, mtrx, param):
     return rho, u1_contra, u2_contra, u3_contra, theta, q1, q2, q3, q4
 
 
-def dcmip_steady_state_mountain(geom: CubedSphere3D, metric, mtrx, param):
+def dcmip_steady_state_mountain(geom: CubedSphere3D, metric, param):
     """DCMIP-2012 test 2-0: the flat control and mountain use the same hydrostatic profile."""
     T0 = 300.0
     gamma = 0.0065
@@ -424,7 +423,7 @@ def dcmip_steady_state_mountain(geom: CubedSphere3D, metric, mtrx, param):
     return rho, zero, zero, zero, theta
 
 
-def dcmip_schar_waves(geom: CubedSphere3D, metric, mtrx: DFROperators, param: Configuration, shear=False):
+def dcmip_schar_waves(geom: CubedSphere3D, metric, shear=False):
     """
     Tests 2-1 and 2-2:  Non-hydrostatic Mountain Waves over a Schaer-type Mountain
     """
@@ -499,7 +498,7 @@ def dcmip_schar_damping_coeffs(metric: Metric5D, geom: CubedSphere3D, shear: boo
     return rate, u1ref, u2ref, u3ref
 
 
-def dcmip_gravity_wave(geom: CubedSphere3D, metric: Metric5D, mtrx: DFROperators, param: Configuration):
+def dcmip_gravity_wave(geom: CubedSphere3D, metric: Metric5D):
     """DCMIP-2012 test 3-1: non-hydrostatic gravity wave.
 
     A localized potential-temperature perturbation is superposed on a
@@ -576,8 +575,6 @@ def dcmip_gravity_wave(geom: CubedSphere3D, metric: Metric5D, mtrx: DFROperators
 def dcmip_baroclinic_instability(
     geom: CubedSphere3D,
     metric: Metric5D,
-    mtrx: DFROperators,
-    param: Configuration,
 ):
     """
     DCMIP-2012 Test 4-1-x: Dry Baroclinic Instability.

@@ -50,21 +50,19 @@ class OutputCubesphere(OutputManager):
         h = Q[0, :, :]
 
         if self.config.case_number == 0:
-            h_anal, _ = height_vortex(self.geometry, self.metric, self.config, step_id)
+            h_anal, _ = height_vortex(self.geometry, self.config, step_id)
         elif self.config.case_number == 1:
-            h_anal = height_case1(self.geometry, self.metric, self.config, step_id)
+            h_anal = height_case1(self.geometry, self.config, step_id)
         elif self.config.case_number == 2:
-            h_anal = height_case2(self.geometry, self.metric, self.config)
+            h_anal = height_case2(self.geometry)
         elif self.config.case_number == 10:
-            h_anal = height_unsteady_zonal(self.geometry, self.metric, self.config)
+            h_anal = height_unsteady_zonal(self.geometry)
 
         if not prescribed_wind(self.config):
             u1_contra, u2_contra = contravariant_velocity(Q, self.metric, self.config)
 
             energy = total_energy(h, u1_contra, u2_contra, self.topo, self.metric)
-            enstrophy = potential_enstrophy(
-                h, u1_contra, u2_contra, self.geometry, self.metric, self.operators, self.config
-            )
+            enstrophy = potential_enstrophy(h, u1_contra, u2_contra, self.metric, self.operators)
 
         if self.rank == 0:
             print("\n================================================================================================")

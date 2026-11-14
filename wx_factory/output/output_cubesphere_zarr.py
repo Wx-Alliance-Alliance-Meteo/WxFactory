@@ -230,7 +230,7 @@ class OutputCubesphereZarr(OutputCubesphere):
             rho = Q[idx_rho, ...]
             theta = Q[idx_rho_theta, ...] / rho
 
-            u, v, w = physical_winds(Q, self.geometry, self.metric)
+            u, v, w = physical_winds(Q, self.metric)
 
             p = p0 * (Q[idx_rho_theta] * Rd / p0) ** (cpd / cvd)
 
