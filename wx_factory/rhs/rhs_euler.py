@@ -12,7 +12,13 @@ from ..common.definitions import heat_capacity_ratio
 from ..common.matmul import DFRDerivative, apply_op
 from ..common.tensor_math import antisymmetric_velocity_contraction, relative_covariant_curl, spatial_matrix_vector
 from ..init.dcmip import dcmip_schar_damping_coeffs
-from ..pde.euler_interfaces import EulerInterfaceGeometry, acoustic_interface, interface_slices, pressure
+from ..pde.euler_interfaces import (
+    EulerInterfaceGeometry,
+    acoustic_interface,
+    interface_slices,
+    interface_trace,
+    pressure,
+)
 
 
 class RhsEuler:
@@ -293,27 +299,15 @@ class RhsEuler:
                 normal_geometry=(geometry.normal_scale, geometry.normal_row),
                 mach_cutoff=self.config.riemann_mach_cutoff,
             )
-            scalar_flux = state.new_zeros((len(self.scalar_indices),) + state.shape[1:])
             scalar_state = torch.where(
                 normal_velocity[None] >= 0, state[left][self.scalar_index], state[right][self.scalar_index]
             )
             common_flux = geometry.jacobian * normal_velocity * scalar_state
-            scalar_flux[left], scalar_flux[right] = common_flux, common_flux
-            theta_trace = torch.zeros_like(state[0])
-            theta_trace[left] = theta_trace[right] = scalar_state[self.rho_theta_position] / scalar_state[0]
-            theta_traces.append(theta_trace[self.mid_faces[direction]])
-            numerical_pressure, numerical_energy = torch.zeros_like(state[0]), torch.zeros_like(state[0])
-            common_velocity_trace = torch.zeros_like(state[1:4])
-            common_velocity_trace[left], common_velocity_trace[right] = (
-                common_covariant_velocity,
-                common_covariant_velocity,
-            )
-            velocity_traces.append(common_velocity_trace[self.mid_faces[direction]])
-            numerical_pressure[left], numerical_pressure[right] = common_pressure, common_pressure
-            numerical_energy[left], numerical_energy[right] = common_energy, common_energy
-            scalar_fluxes.append(scalar_flux[self.mid_faces[direction]])
-            pressure_traces.append(numerical_pressure[self.mid_faces[direction]])
-            energy_traces.append(numerical_energy[self.mid_faces[direction]])
+            scalar_fluxes.append(interface_trace(common_flux, direction))
+            theta_traces.append(interface_trace(scalar_state[self.rho_theta_position] / scalar_state[0], direction))
+            pressure_traces.append(interface_trace(common_pressure, direction))
+            energy_traces.append(interface_trace(common_energy, direction))
+            velocity_traces.append(interface_trace(common_covariant_velocity, direction))
             jumps.append(pressure(state[right][4]) - pressure(state[left][4]))
             normal_velocities.append(normal_velocity / geometry.normal_scale)
         self.diagnostics["interface_pressure_jumps"] = tuple(jumps)

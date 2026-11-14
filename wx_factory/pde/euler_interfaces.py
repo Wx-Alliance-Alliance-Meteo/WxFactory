@@ -44,6 +44,16 @@ def interface_slices(direction: int, num_solpts: int) -> tuple[tuple, tuple]:
     return left, right
 
 
+def interface_trace(common: Tensor, direction: int) -> Tensor:
+    """Return element face traces from common interface values.
+
+    Element e uses interfaces e and e + 1 on its negative and positive faces.
+    """
+    axis = -2 - direction
+    elements = common.shape[axis] - 1
+    return torch.cat((common.narrow(axis, 0, elements), common.narrow(axis, 1, elements)), dim=-1)
+
+
 def physical_mach_number(covariant: Tensor, inverse_spatial: Tensor, sound_speed: Tensor) -> Tensor:
     """Return the coordinate-relative physical speed divided by sound speed."""
     contravariant = spatial_matrix_vector(inverse_spatial, covariant)

@@ -13,7 +13,7 @@ from mpi4py import MPI
 from ..common.definitions import heat_capacity_ratio
 from ..common.matmul import apply_op, sparse_dfr_derivative
 from ..common.tensor_math import antisymmetric_velocity_contraction, relative_covariant_curl, spatial_matrix_vector
-from ..pde.euler_interfaces import acoustic_interface, low_mach_scales, physical_mach_number, pressure
+from ..pde.euler_interfaces import acoustic_interface, interface_trace, low_mach_scales, physical_mach_number, pressure
 
 
 def _mach_gradient(state, inverse_spatial, sound_speed, mach):
@@ -69,7 +69,8 @@ def _compiled_acoustic_action():
 
 @cache
 def _compiled_volume_actions():
-    return tuple(_compile_action(action, "volume") for action in (_prepare_volume, _scalar_flux, _add_vorticity))
+    actions = (_prepare_volume, _scalar_flux, _vertical_rho_theta, _momentum_action)
+    return tuple(_compile_action(action, "volume") for action in actions)
 
 
 @cache
@@ -99,9 +100,36 @@ def _scalar_flux(jacobian, delta_velocity, scalars, velocity, delta_scalars):
     return jacobian * (delta_velocity * scalars + velocity * delta_scalars)
 
 
-def _add_vorticity(
+def _vertical_rho_theta(
+    operator,
+    delta_state,
+    delta_theta_trace,
+    delta_mass_tendency,
+    delta_velocity,
+    *,
+    rho,
+    theta,
+    velocity,
+    mass_tendency,
+    theta_gradient,
+):
+    """Linearize the vertical thermodynamic tendency with its common theta trace."""
+    delta_theta = (delta_state[4] - theta * delta_state[0]) / rho
+    return (
+        delta_theta * mass_tendency
+        + theta * delta_mass_tendency
+        - (delta_state[0] * velocity + rho * delta_velocity) * theta_gradient
+        - rho * velocity * _apply_dfr_derivative(operator, delta_theta, delta_theta_trace)
+    )
+
+
+def _momentum_action(
     result,
     delta_state,
+    rho,
+    pressure_gradients,
+    energy_gradients,
+    pressure_acceleration,
     derivatives,
     velocity,
     base_curl,
@@ -112,7 +140,10 @@ def _add_vorticity(
     horizontal_v3_gradient=None,
     horizontal_frame_gradient=None,
 ):
-    """Add full or complementary vorticity terms to the momentum action."""
+    """Assemble the full or complementary momentum Jacobian action."""
+    momentum = slice(1, 1 + len(pressure_gradients))
+    result[momentum] = -torch.stack(pressure_gradients) / rho - torch.stack(energy_gradients)
+    result[momentum] -= pressure_acceleration * (delta_state[0] / rho)
     if horizontal_v3_gradient is None:
         result[1:4] += antisymmetric_velocity_contraction(relative_covariant_curl(derivatives), velocity)
     else:
@@ -135,13 +166,6 @@ def _add_vorticity(
     if damping is not None:
         result[1:4] -= damping * delta_state[1:4]
     return result
-
-
-def _common_trace(template, geometry, common):
-    """Assign the common interface value to both element faces."""
-    trace = torch.zeros_like(template)
-    trace[geometry.left], trace[geometry.right] = common, common
-    return trace
 
 
 class AcousticLinearization:
@@ -271,19 +295,11 @@ class EulerLinearization:
         # RHS evaluations overwrite diagnostics; keep separate linearization data.
         gradient = []
         common_velocity_traces = []
-        for direction, (geometry, interface, face) in enumerate(zip(rhs._static_interfaces(), self.interfaces, faces)):
-            left, right = geometry.left, geometry.right
-            pressure_trace = torch.zeros_like(face[0])
-            pressure_trace[left], pressure_trace[right] = interface.common_pressure, interface.common_pressure
-            velocity_trace = torch.zeros_like(face[1:4])
-            velocity_trace[left], velocity_trace[right] = (
-                interface.common_covariant_velocity,
-                interface.common_covariant_velocity,
-            )
-            common_velocity_traces.append(velocity_trace[rhs.mid_faces[direction]])
+        for direction, interface in enumerate(self.interfaces):
+            common_velocity_traces.append(interface_trace(interface.common_covariant_velocity, direction))
             gradient.append(
                 apply_op(self.pressure, rhs.derivatives[direction])
-                + apply_op(pressure_trace[rhs.mid_faces[direction]], rhs.corrections[direction])
+                + apply_op(interface_trace(interface.common_pressure, direction), rhs.corrections[direction])
             )
         self.pressure_acceleration = -torch.stack(gradient) / self.state[0]
         self.common_velocity_traces = tuple(common_velocity_traces)
@@ -291,31 +307,16 @@ class EulerLinearization:
         self.horizontal_vertical_velocity_gradient = None
 
         vertical, geometry = self.interfaces[2], rhs._static_interfaces()[2]
-        face_mass_flux = _common_trace(
-            faces[2][0], geometry, geometry.jacobian * vertical.normal_velocity * vertical.upwind_scalars[0]
-        )[rhs.mid_faces[2]]
+        face_mass_flux = interface_trace(geometry.jacobian * vertical.normal_velocity * vertical.upwind_scalars[0], 2)
         mass_flux = fields.volume_jacobian * self.contravariant_velocity[2] * self.state[0]
         self.vertical_mass_tendency = (
             -(apply_op(mass_flux, rhs.derivatives[2]) + apply_op(face_mass_flux, rhs.corrections[2]))
             / fields.volume_jacobian
         )
         self.theta = self.state[4] / self.state[0]
-        theta_trace = _common_trace(faces[2][0], geometry, vertical.upwind_theta)[rhs.mid_faces[2]]
+        theta_trace = interface_trace(vertical.upwind_theta, 2)
         self.vertical_theta_gradient = apply_op(self.theta, rhs.derivatives[2]) + apply_op(
             theta_trace, rhs.corrections[2]
-        )
-
-    def _vertical_rho_theta(
-        self, delta_state, delta_mass_tendency, delta_vertical_velocity, delta_theta_trace, derivative
-    ):
-        """Linearize RhsEuler._vertical_rho_theta_tendency."""
-        rho, theta, velocity = self.state[0], self.theta, self.contravariant_velocity[2]
-        delta_theta = (delta_state[4] - theta * delta_state[0]) / rho
-        return (
-            delta_theta * self.vertical_mass_tendency
-            + theta * delta_mass_tendency
-            - (delta_state[0] * velocity + rho * delta_vertical_velocity) * self.vertical_theta_gradient
-            - rho * velocity * derivative(2, delta_theta, delta_theta_trace)
         )
 
     def explicit(self, vector):
@@ -333,16 +334,20 @@ class EulerLinearization:
     def __call__(self, vector, *, explicit=False):
         rhs, fields, base_state = self.rhs, self.rhs.metric.volume, self.state
         delta_state = _aligned_compiled_input(vector.reshape(base_state.shape).to(base_state.dtype))
-        compile_volume = delta_state.is_cuda
-        prepare_volume, scalar_flux, add_vorticity = _prepare_volume, _scalar_flux, _add_vorticity
-        if compile_volume:
-            prepare_volume, scalar_flux, add_vorticity = _compiled_volume_actions()
+        if delta_state.is_cuda:
+            prepare_volume, scalar_flux, vertical_rho_theta, momentum_action = _compiled_volume_actions()
             derivative_operators = rhs.dfr_derivatives(_compiled_dfr_derivative())
+        else:
+            prepare_volume, scalar_flux, vertical_rho_theta, momentum_action = (
+                _prepare_volume,
+                _scalar_flux,
+                _vertical_rho_theta,
+                _momentum_action,
+            )
+            derivative_operators = rhs.dfr_derivatives(_apply_dfr_derivative)
 
         def derivative(direction, value, common):
-            if compile_volume:
-                return derivative_operators[direction](value, common)
-            return apply_op(value, rhs.derivatives[direction]) + apply_op(common, rhs.corrections[direction])
+            return derivative_operators[direction](value, common)
 
         delta_contravariant_velocity, delta_pressure, delta_energy = prepare_volume(
             fields.G_contra[1:4, 1:4], delta_state, self.pressure, base_state, self.contravariant_velocity
@@ -377,9 +382,6 @@ class EulerLinearization:
                 delta_covariant_velocity = interface(face[left], face[right], velocity_only=True)
             else:
                 _, face_pressure, face_energy, delta_covariant_velocity, face_flux = interface(face[left], face[right])
-                scalar_trace = face.new_zeros((len(rhs.scalar_indices),) + face.shape[1:])
-                face_flux = geometry.jacobian * face_flux
-                scalar_trace[left], scalar_trace[right] = face_flux, face_flux
                 flux = scalar_flux(
                     fields.volume_jacobian,
                     delta_contravariant_velocity[direction],
@@ -387,56 +389,40 @@ class EulerLinearization:
                     self.contravariant_velocity[direction],
                     delta_scalars,
                 )
-                scalar_change = (
-                    -derivative(direction, flux, scalar_trace[rhs.mid_faces[direction]]) / fields.volume_jacobian
-                )
+                scalar_trace = interface_trace(geometry.jacobian * face_flux, direction)
+                scalar_change = -derivative(direction, flux, scalar_trace) / fields.volume_jacobian
                 if direction == 2:
-                    delta_theta_trace = _common_trace(
-                        face[0], geometry, interface.delta_upwind_theta(face[left], face[right])
-                    )
-                    scalar_change[rhs.rho_theta_position] = self._vertical_rho_theta(
+                    scalar_change[rhs.rho_theta_position] = vertical_rho_theta(
+                        derivative_operators[2],
                         delta_state,
+                        interface_trace(interface.delta_upwind_theta(face[left], face[right]), 2),
                         scalar_change[0],
                         delta_contravariant_velocity[2],
-                        delta_theta_trace[rhs.mid_faces[2]],
-                        derivative,
+                        rho=base_state[0],
+                        theta=self.theta,
+                        velocity=self.contravariant_velocity[2],
+                        mass_tendency=self.vertical_mass_tendency,
+                        theta_gradient=self.vertical_theta_gradient,
                     )
                 scalar_tendency += scalar_change
-                for value, common, output in (
-                    (delta_pressure, face_pressure, pressure_gradient),
-                    (delta_energy, face_energy, energy_gradient),
-                ):
-                    trace = _common_trace(face[0], geometry, common)
-                    output.append(derivative(direction, value, trace[rhs.mid_faces[direction]]))
-                del (
-                    scalar_trace,
-                    scalar_change,
-                    face_flux,
-                    flux,
-                    face_pressure,
-                    face_energy,
-                    trace,
-                    common,
-                    value,
-                    output,
+                pressure_gradient.append(
+                    derivative(direction, delta_pressure, interface_trace(face_pressure, direction))
                 )
-            velocity_trace = torch.zeros_like(face[1:4])
-            velocity_trace[left], velocity_trace[right] = delta_covariant_velocity, delta_covariant_velocity
-            velocity_traces.append(velocity_trace[rhs.mid_faces[direction]])
+                energy_gradient.append(derivative(direction, delta_energy, interface_trace(face_energy, direction)))
+                del scalar_trace, scalar_change, face_flux, flux, face_pressure, face_energy
+            velocity_traces.append(interface_trace(delta_covariant_velocity, direction))
             faces[direction] = None
-            del face, delta_covariant_velocity, velocity_trace
+            del face, delta_covariant_velocity
         result[rhs.scalar_index] = scalar_tendency
-        momentum = slice(1, 3 if explicit else 4)
-        result[momentum] = -torch.stack(pressure_gradient) / base_state[0] - torch.stack(energy_gradient)
-        pressure_acceleration = self.pressure_acceleration[:2] if explicit else self.pressure_acceleration
-        result[momentum] -= pressure_acceleration * (delta_state[0] / base_state[0])
-        del pressure_gradient, energy_gradient, delta_pressure, delta_energy
-        derivatives = rhs._curl_derivatives(
-            delta_state[1:4], tuple(velocity_traces), derivative_operators if compile_volume else None
-        )
-        result = add_vorticity(
+        del delta_pressure, delta_energy
+        derivatives = rhs._curl_derivatives(delta_state[1:4], tuple(velocity_traces), derivative_operators)
+        result = momentum_action(
             result,
             delta_state,
+            base_state[0],
+            tuple(pressure_gradient),
+            tuple(energy_gradient),
+            self.pressure_acceleration[:2] if explicit else self.pressure_acceleration,
             derivatives,
             self.contravariant_velocity,
             self.base_relative_curl,
