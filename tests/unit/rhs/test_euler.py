@@ -1,5 +1,6 @@
 import tempfile
 import unittest
+from types import SimpleNamespace
 
 import torch
 
@@ -34,6 +35,34 @@ class EulerTestCase(unittest.TestCase):
         basis = torch.tensor([[2.0, 0.3, 0.1], [0.0, 1.5, 0.2], [0.0, 0.0, 0.8]], dtype=torch.float64)
         self.basis = basis
         self.inverse = torch.linalg.inv(basis.T @ basis)
+
+    def test_schar_sheared_background_balance_and_sponge(self):
+        from wx_factory.common.definitions import cpd, p0
+        from wx_factory.init.dcmip import dcmip_schar_background, dcmip_schar_damping_coeffs, dcmip_schar_waves
+
+        latitude = torch.tensor([0.0, 0.4, 0.8], dtype=torch.float64, requires_grad=True)
+        height = torch.tensor([0.0, 15000.0, 30000.0], dtype=torch.float64, requires_grad=True)
+        geometry = SimpleNamespace(
+            polar=torch.stack((torch.zeros_like(latitude), latitude, height)),
+            ztop=30000.0,
+            wind2contra=lambda u, v, w, metric: (u, v, w),
+        )
+        metric = SimpleNamespace(build_metric=lambda: None)
+        rho, u, v, w, theta = dcmip_schar_waves(geometry, metric, shear=True)
+        temperature = theta * (pressure(rho * theta) / p0) ** (Rd / cpd)
+        torch.testing.assert_close(temperature, 300 * (1 - 2.5e-4 * 20**2 / gravity * latitude.sin() ** 2))
+        log_pressure = pressure(rho * theta).log()
+        dp_dz, dp_dlat = torch.autograd.grad(log_pressure.sum(), (height, latitude))
+        torch.testing.assert_close(dp_dz, -gravity / (Rd * temperature))
+        torch.testing.assert_close(Rd * temperature * dp_dlat, -(u**2) * latitude.tan(), atol=1e-11, rtol=1e-12)
+        rate, *reference = dcmip_schar_damping_coeffs(metric, geometry, shear=True)
+        torch.testing.assert_close(torch.stack(reference), torch.stack((u, v, w)))
+        torch.testing.assert_close(rate, rate.new_tensor([0.0, 0.0, 1 / 25]))
+        _, equatorial_wind = dcmip_schar_background(torch.zeros_like(height), height, shear=True)
+        torch.testing.assert_close(equatorial_wind[[0, -1]], height.new_tensor([20.0, 80.0]))
+        unsheared_temperature, unsheared_wind = dcmip_schar_background(latitude, height)
+        torch.testing.assert_close(unsheared_temperature, torch.full_like(latitude, 300.0))
+        torch.testing.assert_close(unsheared_wind, 20 * latitude.cos())
 
     def test_complete_principal_symbol_wave_speeds(self):
         normal = self.state.new_tensor([0.4, -0.7, 0.2])

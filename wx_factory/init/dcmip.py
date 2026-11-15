@@ -423,79 +423,43 @@ def dcmip_steady_state_mountain(geom: CubedSphere3D, metric, param):
     return rho, zero, zero, zero, theta
 
 
+def dcmip_schar_background(latitude, height, shear=False):
+    """Return background temperature and zonal wind for DCMIP 2-1 and 2-2."""
+    temperature_equator, wind_equator = 300.0, 20.0
+    shear_rate = 2.5e-4 if shear else 0.0
+    temperature = temperature_equator * (1 - shear_rate * wind_equator**2 / gravity * torch.sin(latitude) ** 2)
+    wind = (
+        wind_equator
+        * torch.cos(latitude)
+        * (2 * temperature_equator / temperature * shear_rate * height + temperature / temperature_equator).sqrt()
+    )
+    return temperature, wind
+
+
 def dcmip_schar_waves(geom: CubedSphere3D, metric, shear=False):
-    """
-    Tests 2-1 and 2-2:  Non-hydrostatic Mountain Waves over a Schaer-type Mountain
-    """
-
+    """Initialize the hydrostatic mountain-wave background for DCMIP 2-1 or 2-2."""
     metric.build_metric()
-
-    T0 = 300.0
-    Ueq = 20.0
-    Peq = 100000.0
-
-    if shear:
-        Cs = 2.5e-4  # Wind shear rate (1/m), for shear case
-    else:
-        Cs = 0.0
-
-    lat = geom.polar[1, ...]
-    z_3d = geom.polar[2, ...]
-
-    if Ueq != 0:
-        T = T0 * (1 - Cs * Ueq**2 / gravity * torch.sin(lat) ** 2)
-    else:
-        T = T0 * torch.ones_like(lat)
-
-    # The prescribed shallow-atmosphere profile also adjusts in deep-atmosphere runs.
-
-    p = Peq * torch.exp(-(Ueq**2) / (2 * Rd * T0) * torch.sin(lat) ** 2 - gravity * z_3d / (Rd * T))
-
-    u = Ueq * torch.cos(lat) * (2 * T0 / T * Cs * z_3d + T / T0) ** 0.5
-
-    v = torch.zeros_like(lat)
-
-    w = torch.zeros_like(lat)
-
-    u1_contra, u2_contra, u3_contra = geom.wind2contra(u, v, w, metric)
-
-    rho = p / (Rd * T)
-
-    theta = T * (p0 / p) ** (Rd / cpd)
-
-    return rho, u1_contra, u2_contra, u3_contra, theta
+    latitude, height = geom.polar[1], geom.polar[2]
+    temperature, zonal_wind = dcmip_schar_background(latitude, height, shear)
+    pressure = p0 * torch.exp(
+        -(20.0**2) / (2 * Rd * 300.0) * torch.sin(latitude) ** 2 - gravity * height / (Rd * temperature)
+    )
+    zero = torch.zeros_like(latitude)
+    u1, u2, u3 = geom.wind2contra(zonal_wind, zero, zero, metric)
+    density = pressure / (Rd * temperature)
+    theta = temperature * (p0 / pressure) ** (Rd / cpd)
+    return density, u1, u2, u3, theta
 
 
 def dcmip_schar_damping_coeffs(metric: Metric5D, geom: CubedSphere3D, shear: bool):
-    """Geometry-dependent (rate, u1ref, u2ref, u3ref) are shared by damping and its Jacobian."""
-    T0 = 300.0
-    Ueq = 20.0
-    Zh = 20000.0
-    tau0 = 25.0
-
-    if shear:
-        Cs = 2.5e-4  # Wind shear rate (1/m), for shear case
-    else:
-        Cs = 0.0
-
-    lat = geom.polar[1, ...]
-    z_3d = geom.polar[2, ...]
-
-    rate = torch.sin(torch.pi / 2 * (z_3d - Zh) / (geom.ztop - Zh)) ** 2 / tau0
-    rate[z_3d <= Zh] = 0.0
-
-    if Ueq != 0:
-        Tref = T0 * (1 - Cs * Ueq**2 / gravity * torch.sin(lat) ** 2)
-    else:
-        Tref = T0
-
-    uref = Ueq * torch.cos(lat) * (2 * T0 / Tref * Cs * z_3d + Tref / T0) ** 0.5
-    vref = 0.0
-    wref = 0.0
-
-    u1ref, u2ref, u3ref = geom.wind2contra(uref, vref, wref, metric)
-
-    return rate, u1ref, u2ref, u3ref
+    """Return the sponge rate and background contravariant velocity."""
+    latitude, height = geom.polar[1], geom.polar[2]
+    rate = torch.sin(torch.pi / 2 * (height - 20000.0) / (geom.ztop - 20000.0)) ** 2 / 25.0
+    rate[height <= 20000.0] = 0.0
+    _, zonal_wind = dcmip_schar_background(latitude, height, shear)
+    zero = torch.zeros_like(latitude)
+    reference = geom.wind2contra(zonal_wind, zero, zero, metric)
+    return rate, *reference
 
 
 def dcmip_gravity_wave(geom: CubedSphere3D, metric: Metric5D):

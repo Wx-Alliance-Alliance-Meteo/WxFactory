@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""DCMIP 2-1 equatorial sections on native and constant-height levels."""
+"""DCMIP 2-1 and 2-2 equatorial sections and perturbation diagnostics."""
 
 import argparse
+import json
 from pathlib import Path
 
 import matplotlib
@@ -17,12 +18,25 @@ from scipy.interpolate import PchipInterpolator
 # 287.0 instead leaves a false ~0.052 K perturbation in the initial state.
 RD = 287.05
 TEQ = 300.0
+GRAVITY = 9.80616
+UEQ = 20.0
 SNAPSHOTS = (2400.0, 3600.0, 7200.0)
 MOUNTAIN_LON = 45.0
 
 
 def time_indices(times, targets):
+    if not len(times) or any(target < times[0] or target > times[-1] for target in targets):
+        raise ValueError("Requested snapshots are outside the available output times; select them with --times")
     return [int(numpy.argmin(numpy.abs(times - target))) for target in targets]
+
+
+def background_fields(latitude, height, case):
+    """Return background temperature and zonal wind at the native nodes."""
+    latitude = numpy.deg2rad(latitude)
+    shear = 2.5e-4 if case == 22 else 0.0
+    temperature = TEQ * (1 - shear * UEQ**2 / GRAVITY * numpy.sin(latitude) ** 2)
+    wind = UEQ * numpy.cos(latitude) * numpy.sqrt(2 * TEQ / temperature * shear * height + temperature / TEQ)
+    return temperature, wind
 
 
 def equator_stencil(lat, lon):
@@ -94,36 +108,50 @@ def regular_section(field, elevations, longitudes, topography, heights, plot_lon
     return image, surface
 
 
-def load_sections(filename):
-    """Read coordinates and only the three snapshots used in the figures."""
+def load_sections(filename, case=None, snapshots=SNAPSHOTS):
+    """Read the requested snapshots and interpolate perturbations to the equator."""
     with netCDF4.Dataset(filename) as dataset:
+        stored_case = int(getattr(dataset, "case_number", case or 21))
+        if case is not None and stored_case != case:
+            raise ValueError(f"Requested case {case} but the file contains case {stored_case}")
+        case = stored_case
+        if case not in (21, 22):
+            raise ValueError(f"Expected DCMIP case 21 or 22, got {case}")
         times_all = numpy.asarray(dataset.variables["time"][:])
-        indices = time_indices(times_all, SNAPSHOTS)
+        indices = time_indices(times_all, snapshots)
         times = times_all[indices]
 
         lat = numpy.asarray(dataset.variables["lats"][:])
         lon = numpy.asarray(dataset.variables["lons"][:])
         equator_lon, stencil = equator_stencil(lat, lon)
 
-        elevations = interpolate_equator(numpy.asarray(dataset.variables["elev"][:]), stencil)
+        native_elevations = numpy.asarray(dataset.variables["elev"][:])
+        # Subtract the latitude-dependent background before interpolation to avoid a false perturbation.
+        temperature_ref, wind_ref = background_fields(lat[:, None], native_elevations, case)
+        elevations = interpolate_equator(native_elevations, stencil)
         topography = interpolate_equator(numpy.asarray(dataset.variables["topo"][:]), stencil)
 
         tprime = []
         vertical_velocity = []
+        uprime = []
         for index in indices:
             pressure = numpy.asarray(dataset.variables["P"][index])
             density = numpy.asarray(dataset.variables["rho"][index])
             w = numpy.asarray(dataset.variables["W"][index])
-            tprime.append(interpolate_equator(pressure / (RD * density) - TEQ, stencil))
+            tprime.append(interpolate_equator(pressure / (RD * density) - temperature_ref, stencil))
+            uprime.append(interpolate_equator(numpy.asarray(dataset.variables["U"][index]) - wind_ref, stencil))
             vertical_velocity.append(interpolate_equator(w, stencil))
 
     return {
+        "case_number": case,
+        "case_label": f"2-{case % 10}",
         "time": times,
         "longitude": equator_lon,
         "elevation": elevations,
         "topography": topography,
         "tprime": numpy.asarray(tprime),
         "w": numpy.asarray(vertical_velocity),
+        "uprime": numpy.asarray(uprime),
     }
 
 
@@ -167,6 +195,7 @@ def plot_sections(data, output_dir, label, field, symbol, units, filename, pdf):
     ):
         fig, axes = plt.subplots(len(images), 1, figsize=(7.2, 6.7), sharex=True, sharey=True, constrained_layout=True)
 
+        axes = numpy.atleast_1d(axes)
         contour = None
         for ax, image, surface, time in zip(axes, images, surfaces, data["time"]):
             contour = ax.contourf(
@@ -194,7 +223,9 @@ def plot_sections(data, output_dir, label, field, symbol, units, filename, pdf):
         colorbar = fig.colorbar(contour, ax=axes, location="right", shrink=0.96, pad=0.02)
         colorbar.set_label(f"{symbol} ({units})")
         colorbar.set_ticks(numpy.linspace(-limit, limit, 9))
-        fig.suptitle(f"DCMIP 2-1: {symbol} at the equator, constant-height levels — {label}", fontsize=10)
+        fig.suptitle(
+            f"DCMIP {data['case_label']}: {symbol} at the equator, constant-height levels — {label}", fontsize=10
+        )
 
         path = output_dir / filename.format(label=label)
         fig.savefig(path, bbox_inches="tight")
@@ -233,6 +264,7 @@ def plot_native_sections(data, output_dir, label, field, symbol, units, filename
         fig, axes = plt.subplots(
             len(data["time"]), 1, figsize=(7.2, 6.7), sharex=True, sharey=True, constrained_layout=True
         )
+        axes = numpy.atleast_1d(axes)
         contour = None
         for ax, snapshot, time in zip(axes, data[field], data["time"]):
             plot_field = periodic_interpolate(data["longitude"], snapshot, plot_longitude)
@@ -260,7 +292,7 @@ def plot_native_sections(data, output_dir, label, field, symbol, units, filename
         colorbar = fig.colorbar(contour, ax=axes, location="right", shrink=0.96, pad=0.02)
         colorbar.set_label(f"{symbol} ({units})")
         colorbar.set_ticks(numpy.linspace(-limit, limit, 9))
-        fig.suptitle(f"DCMIP 2-1: {symbol} at the equator, native SLEVE levels — {label}", fontsize=10)
+        fig.suptitle(f"DCMIP {data['case_label']}: {symbol} at the equator, native model levels — {label}", fontsize=10)
 
         path = output_dir / filename.format(label=label)
         fig.savefig(path, bbox_inches="tight")
@@ -285,10 +317,10 @@ def plot_topography(data, output_dir, label, pdf):
         ax.axvline(MOUNTAIN_LON, color="0.15", lw=0.55, ls=(0, (2, 2)))
         ax.set(xlim=(25.0, 65.0), ylim=(0.0, None), xlabel="Longitude (degrees east)", ylabel="Height (m)")
         ax.xaxis.set_major_locator(MultipleLocator(5.0))
-        ax.set_title(f"DCMIP 2-1: Schär mountain at the equator — {label}", fontsize=10)
+        ax.set_title(f"DCMIP {data['case_label']}: Schär mountain at the equator — {label}", fontsize=10)
         ax.spines[["top", "right"]].set_visible(False)
 
-        path = output_dir / f"dcmip21_{label}_topography.png"
+        path = output_dir / f"dcmip{data['case_number']}_{label}_topography.png"
         fig.savefig(path, bbox_inches="tight")
         if pdf:
             fig.savefig(path.with_suffix(".pdf"), bbox_inches="tight")
@@ -296,12 +328,16 @@ def plot_topography(data, output_dir, label, pdf):
     return (path, path.with_suffix(".pdf")) if pdf else (path,)
 
 
-def main():
-    parser = argparse.ArgumentParser(description="Plots for DCMIP-2012 test 2-1.")
+def main(default_case=None):
+    parser = argparse.ArgumentParser(description="Plots and diagnostics for DCMIP-2012 tests 2-1 and 2-2.")
     parser.add_argument("netcdf_file", help="NetCDF output file produced by WxFactory")
     parser.add_argument("-o", "--output-dir", default="results", help="where to write the figures")
     parser.add_argument("--label", default=None, help="tag used in figure names and titles")
     parser.add_argument("--pdf", action="store_true", help="also write PDF figures")
+    parser.add_argument(
+        "--case", type=int, choices=(21, 22), default=default_case, help="case for files without metadata"
+    )
+    parser.add_argument("--times", type=float, nargs="+", default=SNAPSHOTS, help="snapshot times in seconds")
     args = parser.parse_args()
 
     source = Path(args.netcdf_file)
@@ -309,7 +345,8 @@ def main():
     output_dir.mkdir(parents=True, exist_ok=True)
     label = args.label or source.stem
 
-    data = load_sections(source)
+    data = load_sections(source, args.case, args.times)
+    prefix = f"dcmip{data['case_number']}"
     print(f"Read {source}; selected output times: {', '.join(f'{time:g}' for time in data['time'])} s")
 
     figure_pairs = [
@@ -321,7 +358,7 @@ def main():
             field="tprime",
             symbol=r"Temperature perturbation $T^\prime$",
             units="K",
-            filename="dcmip21_{label}_tprime.png",
+            filename=prefix + "_{label}_tprime.png",
             pdf=args.pdf,
         ),
         plot_native_sections(
@@ -331,7 +368,7 @@ def main():
             field="tprime",
             symbol=r"Temperature perturbation $T^\prime$",
             units="K",
-            filename="dcmip21_{label}_tprime_native.png",
+            filename=prefix + "_{label}_tprime_native.png",
             pdf=args.pdf,
         ),
         plot_sections(
@@ -341,7 +378,7 @@ def main():
             field="w",
             symbol=r"Vertical velocity $w$",
             units=r"m s$^{-1}$",
-            filename="dcmip21_{label}_w.png",
+            filename=prefix + "_{label}_w.png",
             pdf=args.pdf,
         ),
         plot_native_sections(
@@ -351,11 +388,49 @@ def main():
             field="w",
             symbol=r"Vertical velocity $w$",
             units=r"m s$^{-1}$",
-            filename="dcmip21_{label}_w_native.png",
+            filename=prefix + "_{label}_w_native.png",
             pdf=args.pdf,
         ),
     ]
-    written = [path for pair in figure_pairs for path in pair]
+    for plotter, suffix in ((plot_sections, ""), (plot_native_sections, "_native")):
+        figure_pairs.append(
+            plotter(
+                data,
+                output_dir,
+                label,
+                field="uprime",
+                symbol=r"Zonal wind perturbation $u^\prime$",
+                units=r"m s$^{-1}$",
+                filename=prefix + "_{label}_uprime" + suffix + ".png",
+                pdf=args.pdf,
+            )
+        )
+    diagnostics = []
+    for index, time in enumerate(data["time"]):
+        snapshot = {"time_seconds": float(time)}
+        for field in ("tprime", "w", "uprime"):
+            values = numpy.ma.masked_invalid(data[field][index])
+            if values.count() != values.size:
+                raise ValueError(f"Non-finite {field} at t={time:g} s")
+            snapshot[field] = {
+                "min": float(values.min()),
+                "max": float(values.max()),
+                "rms": float(numpy.sqrt(numpy.mean(values**2))),
+            }
+        diagnostics.append(snapshot)
+    diagnostics_path = output_dir / f"{prefix}_{label}_diagnostics.json"
+    diagnostics_path.write_text(
+        json.dumps(
+            {
+                "case_number": data["case_number"],
+                "sampling": "equatorial native nodes; unweighted RMS",
+                "snapshots": diagnostics,
+            },
+            indent=2,
+        )
+        + "\n"
+    )
+    written = [path for pair in figure_pairs for path in pair] + [diagnostics_path]
 
     print("Figures written:")
     for path in written:

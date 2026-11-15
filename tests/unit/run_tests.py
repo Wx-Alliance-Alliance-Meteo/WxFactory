@@ -34,6 +34,7 @@ from tests.unit.jacobian.test_euler import EulerJacobianTestCase
 from tests.unit.jacobian.test_euler_partitions import EulerPartitionTestCase
 from tests.unit.jacobian.test_finite_difference import FiniteDifferenceJacobianTestCases
 from tests.unit.output.test_integration_comparison import IntegrationComparisonTestCase
+from tests.unit.output.test_mountain_wave_plots import MountainWavePlotTestCase
 from tests.unit.output.test_output_registry import OutputRegistryTestCases
 from tests.unit.output.test_state import StateTestCases
 from tests.unit.precondition.test_preconditioner_registry import (
@@ -78,6 +79,7 @@ def load_tests(test_name: str):
     suite = unittest.TestSuite()
     for test_case in (
         IntegrationComparisonTestCase,
+        MountainWavePlotTestCase,
         SpatialContractionTestCase,
         EulerJacobianTestCase,
         EulerPartitionTestCase,
