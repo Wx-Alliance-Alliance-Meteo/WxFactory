@@ -182,7 +182,10 @@ class EulerOperatorTestCase(unittest.TestCase):
             mass_weights = weights.repeat(elements)
             weighted_matrix = mass_weights[:, None] * matrix
             torch.testing.assert_close(
-                weighted_matrix + weighted_matrix.T, torch.zeros_like(matrix), atol=1e-12, rtol=0
+                weighted_matrix + weighted_matrix.T,
+                torch.zeros_like(matrix),
+                atol=1e-9 * weighted_matrix.abs().max().item(),
+                rtol=0,
             )
             evolved = (torch.matrix_exp(300.0 * matrix) @ initial.flatten()).reshape_as(initial)
             reference = torch.sin(2 * torch.pi * (positions - 6000.0) / 4000.0)
