@@ -956,22 +956,12 @@ class Metric3DTopo:
                 if verbose and geom.device.comm.rank == 0:
                     print("Solving linear operator for Γ")
 
-                try:
-                    # This call does not work with numpy 2.x
-                    # The explicit loop (in the except clause) is fine with numpy, but extremely slow with cupy.
-                    # That's why we do this call, an only do the explicit loop if it fails.
-                    # TODO Find a better way to handle this. It's probably doable with numpy 2.x with a single call...
-                    space_christoffel[k, ...] = xp.linalg.solve(
-                        c_lhs.reshape(nj, ni, 27, 27), c_rhs.reshape(nj, ni, 27)
-                    )
-                except ValueError:
-                    lhs_tmp = c_lhs.reshape(nj, ni, 27, 27)
-                    rhs_tmp = c_rhs.reshape(nj, ni, 27)
-                    # space_christoffel = xp.empty_like(rhs_tmp)
-                    # for k in range(nk):
-                    for j in range(nj):
-                        for i in range(ni):
-                            space_christoffel[k, j, i, ...] = xp.linalg.solve(lhs_tmp[j, i], rhs_tmp[j, i])
+                # NumPy 2.x only treats b as a (M,) vector when b is exactly 1-D; otherwise it is a
+                # stack of (M, K) matrices.  Adding an explicit K=1 axis makes the call valid in both
+                # 1.x and 2.x (and in CuPy), so a single batched solve replaces the old per-point loop.
+                space_christoffel[k, ...] = xp.linalg.solve(
+                    c_lhs.reshape(nj, ni, 27, 27), c_rhs.reshape(nj, ni, 27, 1)
+                ).squeeze(-1)
 
             space_christoffel.shape = (nk, nj, ni, 3, 3, 3)
             space_christoffel = space_christoffel.transpose((3, 4, 5, 0, 1, 2))
