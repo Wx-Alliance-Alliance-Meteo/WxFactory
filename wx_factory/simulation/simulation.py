@@ -143,7 +143,6 @@ class Simulation:
             self.process_topo,
             self.config,
             self.initial_Q.shape,
-            self.device,
         )
 
         self.integrator = self._create_time_integrator(self.config.time_integrator)

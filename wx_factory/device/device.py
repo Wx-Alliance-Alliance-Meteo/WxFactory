@@ -240,7 +240,9 @@ class CudaDevice(Device):
 
     def to_host(self, val, **kwargs):
         """Copy given array to the host."""
-        return val.get(**kwargs)
+        if isinstance(val, self.cupy.ndarray):
+            return val.get(**kwargs)
+        return val
 
     def timestamp(self, **kwargs):
         debug = True

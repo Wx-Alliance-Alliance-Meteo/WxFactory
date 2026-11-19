@@ -3,9 +3,11 @@ from typing import Callable, Optional, Tuple
 
 from mpi4py import MPI
 from numpy.typing import NDArray
+import numpy as np
 
 from device import Device, CudaDevice
 from wx_mpi import SingleProcess, Conditional, split_nodes
+
 
 ExchangedVector = Tuple[NDArray, ...] | NDArray
 
@@ -564,7 +566,32 @@ class ProcessTopology:
         if self.panel_comm.size == 1:
             return field
 
-        panel_fields = self.panel_comm.gather(field, root=0)
+        def gather(field):
+            # MPI_Gather uses a 32-bit int for the size of the data to be sent, which can be a problem for large arrays.
+            # To avoid this, we split the data into chunks if it is too large.
+            MAX_SIZE = 2**31 // (field.itemsize * self.panel_comm.size)  # 1GB per MPI_Gather call
+            lin_field = xp.ravel(field)
+            # if self.panel_comm.rank == 0:
+            #     print(f"Num chunks: {lin_field.size // MAX_SIZE} "
+            #           f"(max size: {MAX_SIZE}, or {MAX_SIZE * field.itemsize / (1024.0 * 1024.0):.1f} MB, "
+            #           f"total size: {lin_field.size * field.itemsize * self.panel_comm.size/ (1024.0 * 1024.0):.1f} MB,"
+            #           f" total num elem {MAX_SIZE * self.panel_comm.size})",
+            #           flush=True)
+            if lin_field.size > MAX_SIZE:
+                chunks = [lin_field[i : i + MAX_SIZE] for i in range(0, lin_field.size, MAX_SIZE)]
+                gathered_chunks = [self.panel_comm.gather(chunk, root=0) for chunk in chunks]
+                if self.panel_comm.rank == 0:
+                    # print(f'Num chunks: {len(chunks)}', flush=True)
+                    res = [xp.concatenate([chunk[i] for chunk in gathered_chunks]).reshape(field.shape)
+                           for i in range(self.panel_comm.size)]
+                    return res
+                else:
+                    return None
+            else:
+                # print(f'Num chunks: 1', flush=True)
+                return self.panel_comm.gather(field, root=0)
+
+        panel_fields = gather(field)
 
         if panel_fields is None:  # non-root PEs
             return None
@@ -601,16 +628,16 @@ class ProcessTopology:
         if panel is None:
             return None
 
-        panels = None
+        panels: NDArray | None = None
         if self.panel_roots_comm.rank == 0:
-            panels = self.device.xp.empty((6,) + panel.shape, dtype=panel.dtype)
+            panels = np.empty((6,) + panel.shape, dtype=panel.dtype)
         self.panel_roots_comm.Gather(panel, panels, root=0)
 
         # Only the root of the entire cubesphere topology with continue
-        if self.panel_roots_comm.rank != 0:
+        if panels is None:
             return None
 
-        return self.device.xp.stack(panels)
+        return np.stack(panels)
 
     def distribute_cube(self, field: Optional[NDArray], num_dim: int):
         """Split the given single array into its component tiles (according to this topology) and send
