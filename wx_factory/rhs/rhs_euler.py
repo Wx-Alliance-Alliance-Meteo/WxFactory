@@ -314,14 +314,18 @@ class RhsEuler:
         self.diagnostics["interface_normal_winds"] = tuple(normal_velocities)
         return scalar_fluxes, pressure_traces, energy_traces, velocity_traces, theta_traces
 
-    def _vertical_rho_theta_tendency(self, state, vertical_velocity, mass_tendency, theta_trace):
-        """Use theta * rho_t - rho * u^3 * D_3(theta) for vertical thermodynamic transport.
+    def _vertical_rho_theta_tendency(self, state, vertical_velocity, mass_tendency, theta_trace, mass_flux_trace):
+        """Advect theta within each element and apply a face-mass-flux penalty.
 
-        Direct theta advection avoids the discrete product-rule error between scalar flux divergences.
+        Direct theta advection avoids subtracting scalar flux divergences via a discrete product rule.
+        Weighting the upwind correction by the common mass flux makes it vanish at zero face wind.
         """
         theta = state[4] / state[0]
-        theta_gradient = apply_op(theta, self.derivatives[2]) + apply_op(theta_trace, self.corrections[2])
-        return theta * mass_tendency - state[0] * vertical_velocity * theta_gradient
+        element_trace = apply_op(theta, self.extrapolations[2])
+        theta_gradient = apply_op(theta, self.derivatives[2]) + apply_op(element_trace, self.corrections[2])
+        penalty = apply_op(mass_flux_trace * (theta_trace - element_trace), self.corrections[2])
+        volume_jacobian = self.metric.volume.volume_jacobian
+        return theta * mass_tendency - state[0] * vertical_velocity * theta_gradient - penalty / volume_jacobian
 
     def _curl_derivatives(self, covariant: Tensor, velocity_traces: tuple[Tensor, ...], derivative_operators=None):
         """Batch only the two off-diagonal velocity derivatives needed in each direction."""
@@ -394,7 +398,7 @@ class RhsEuler:
         flux = fields.volume_jacobian * contravariant_velocity[2] * state[self.scalar_index]
         scalar_tendency = -derivative(flux, scalar_traces[0]) / fields.volume_jacobian
         scalar_tendency[self.rho_theta_position] = self._vertical_rho_theta_tendency(
-            state, contravariant_velocity[2], scalar_tendency[0], theta_traces[0]
+            state, contravariant_velocity[2], scalar_tendency[0], theta_traces[0], scalar_traces[0][0]
         )
         result[self.scalar_index] = scalar_tendency
         energy = (state[1:4] * contravariant_velocity).sum(dim=0) / 2 + fields.geopotential
@@ -436,7 +440,7 @@ class RhsEuler:
             scalar_change = -divergence / fields.volume_jacobian
             if direction == 2:
                 scalar_change[self.rho_theta_position] = self._vertical_rho_theta_tendency(
-                    state, contravariant_velocity[2], scalar_change[0], theta_traces[2]
+                    state, contravariant_velocity[2], scalar_change[0], theta_traces[2], scalar_fluxes[2][0]
                 )
             scalar_tendency += scalar_change
             pressure_gradient.append(

@@ -103,23 +103,30 @@ def _scalar_flux(jacobian, delta_velocity, scalars, velocity, delta_scalars):
 def _vertical_rho_theta(
     operator,
     delta_state,
+    delta_theta,
+    delta_element_trace,
     delta_theta_trace,
     delta_mass_tendency,
     delta_velocity,
+    delta_mass_flux_trace,
     *,
     rho,
     theta,
     velocity,
     mass_tendency,
     theta_gradient,
+    mass_flux_trace,
+    theta_jump,
+    volume_jacobian,
 ):
-    """Linearize the vertical thermodynamic tendency with its common theta trace."""
-    delta_theta = (delta_state[4] - theta * delta_state[0]) / rho
+    """Linearize vertical theta advection and its face-mass-flux penalty."""
+    delta_penalty = delta_mass_flux_trace * theta_jump + mass_flux_trace * (delta_theta_trace - delta_element_trace)
     return (
         delta_theta * mass_tendency
         + theta * delta_mass_tendency
         - (delta_state[0] * velocity + rho * delta_velocity) * theta_gradient
-        - rho * velocity * _apply_dfr_derivative(operator, delta_theta, delta_theta_trace)
+        - rho * velocity * _apply_dfr_derivative(operator, delta_theta, delta_element_trace)
+        - _apply_dfr_derivative(operator, torch.zeros_like(delta_theta), delta_penalty) / volume_jacobian
     )
 
 
@@ -314,10 +321,12 @@ class EulerLinearization:
             / fields.volume_jacobian
         )
         self.theta = self.state[4] / self.state[0]
-        theta_trace = interface_trace(vertical.upwind_theta, 2)
+        element_trace = apply_op(self.theta, rhs.extrapolations[2])
         self.vertical_theta_gradient = apply_op(self.theta, rhs.derivatives[2]) + apply_op(
-            theta_trace, rhs.corrections[2]
+            element_trace, rhs.corrections[2]
         )
+        self.vertical_face_mass_flux = face_mass_flux
+        self.vertical_theta_jump = interface_trace(vertical.upwind_theta, 2) - element_trace
 
     def explicit(self, vector):
         """Apply the complementary Jacobian directly, with its DFR curl terms."""
@@ -392,17 +401,26 @@ class EulerLinearization:
                 scalar_trace = interface_trace(geometry.jacobian * face_flux, direction)
                 scalar_change = -derivative(direction, flux, scalar_trace) / fields.volume_jacobian
                 if direction == 2:
+                    delta_theta = (delta_state[4] - self.theta * delta_state[0]) / base_state[0]
+                    # Extrapolate before the compiled helper, which then holds no matrix product.
+                    delta_element_trace = apply_op(delta_theta, rhs.extrapolations[2])
                     scalar_change[rhs.rho_theta_position] = vertical_rho_theta(
                         derivative_operators[2],
                         delta_state,
+                        delta_theta,
+                        delta_element_trace,
                         interface_trace(interface.delta_upwind_theta(face[left], face[right]), 2),
                         scalar_change[0],
                         delta_contravariant_velocity[2],
+                        scalar_trace[0],
                         rho=base_state[0],
                         theta=self.theta,
                         velocity=self.contravariant_velocity[2],
                         mass_tendency=self.vertical_mass_tendency,
                         theta_gradient=self.vertical_theta_gradient,
+                        mass_flux_trace=self.vertical_face_mass_flux,
+                        theta_jump=self.vertical_theta_jump,
+                        volume_jacobian=fields.volume_jacobian,
                     )
                 scalar_tendency += scalar_change
                 pressure_gradient.append(

@@ -49,7 +49,7 @@ class EulerRhsTestCase(MpiTestCase):
             self.assertTrue(bool(torch.isfinite(tendency).all()))
             weights = torch.einsum("k,j,i->kji", geometry.glweights, geometry.glweights, geometry.glweights).reshape(-1)
             volume = metric.volume.volume_jacobian * weights
-            for variable in (0, 5, 6):
+            for variable in (0, 4, 5, 6):
                 integral = self.comm.allreduce((volume * tendency[variable]).sum().item(), op=MPI.SUM)
                 magnitude = self.comm.allreduce((volume * tendency[variable]).abs().sum().item(), op=MPI.SUM)
                 self.assertLess(abs(integral) / max(magnitude, 1), 2e-13)

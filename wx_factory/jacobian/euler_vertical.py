@@ -124,10 +124,19 @@ class EulerVerticalLinearization:
         )
         rho = self.state_columns[:, :, 0]
         self.theta = self.state_columns[:, :, 4] / rho
-        self.theta_gradient = self._vertical_derivative(self.theta, interface.upwind_theta)
+        # Using the element's own endpoint traces recovers the interpolant derivative.
+        self.interpolant_derivative = self.derivative + sum(
+            self.correction[:, face, None] * self.extrapolation[face] for face in range(2)
+        )
+        self.theta_gradient = torch.einsum("os,ces->ceo", self.interpolant_derivative, self.theta)
         mass_flux = self.jacobian * self.contravariant_velocity[:, :, 2] * rho
         face_mass_flux = jacobian * interface.normal_velocity * interface.upwind_scalars[0]
         self.mass_tendency = -self._vertical_derivative(mass_flux, face_mass_flux) / self.jacobian
+        self.face_mass_flux = (face_mass_flux[:, :-1], face_mass_flux[:, 1:])
+        self.theta_jump = tuple(
+            upwind - torch.einsum("s,ces->ce", self.extrapolation[face], self.theta)
+            for face, upwind in enumerate((interface.upwind_theta[:, :-1], interface.upwind_theta[:, 1:]))
+        )
         left_matrix, right_matrix = self._interface_jacobians(interface, left, jacobian)
 
         bottom_matrix = top_matrix = None
@@ -286,14 +295,24 @@ class EulerVerticalLinearization:
         return lower, diagonal, upper
 
     def _add_theta_advection(self, row):
-        """Add local product variations and the volume derivative of delta theta.
+        """Add local product variations and the local delta theta advection terms.
 
-        The theta * delta(rho_t) term is assembled from the mass row separately.
+        Advection includes the interpolant derivative and the penalty's own-trace contribution.
+        The theta * delta(rho_t) term is assembled separately from the mass row.
         """
         identity = torch.eye(self.dimensions.num_solpts, dtype=row.dtype, device=row.device)
         rho, theta = self.state_columns[:, :, 0], self.theta
         velocity = self.contravariant_velocity[:, :, 2]
-        advection = (rho * velocity)[:, :, :, None] * self.derivative / rho[:, :, None, :]
+        own_trace_penalty = (
+            sum(
+                self.correction[:, face, None] * self.extrapolation[face] * self.face_mass_flux[face][:, :, None, None]
+                for face in range(2)
+            )
+            / self.jacobian[:, :, :, None]
+        )
+        advection = ((rho * velocity)[:, :, :, None] * self.interpolant_derivative - own_trace_penalty) / rho[
+            :, :, None, :
+        ]
         row[:, :, :, 4] += identity * (self.mass_tendency / rho)[:, :, :, None] - advection
         row[:, :, :, 0] -= identity * (self.mass_tendency * theta / rho + self.theta_gradient * velocity)[:, :, :, None]
         row[:, :, :, 0] += advection * theta[:, :, None, :]
@@ -349,8 +368,12 @@ class EulerVerticalLinearization:
             lift[:, :, 1, :, num_scalars + 1] = -correction
             lift[:, :, 1, :, num_scalars + 2] = correction * self.contravariant_velocity[:, :, 0]
             lift[:, :, 1, :, num_scalars + 3] = correction * self.contravariant_velocity[:, :, 1]
+            # Vary both the mass flux and common theta in F_rho * (theta_star - theta_h).
             rho_theta = self.equation_variables.index(4)
-            lift[:, :, rho_theta, :, num_scalars + 4] = -correction * rho * self.contravariant_velocity[:, :, 2]
+            lift[:, :, rho_theta, :, 0] = -correction * self.theta_jump[face][:, :, None] / self.jacobian
+            lift[:, :, rho_theta, :, num_scalars + 4] = (
+                -correction * self.face_mass_flux[face][:, :, None] / self.jacobian
+            )
             lifts.append(lift)
         return lifts
 

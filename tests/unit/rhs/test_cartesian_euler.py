@@ -34,9 +34,9 @@ class CartesianEulerTestCase(CartesianTestCase):
         value = rhs(state)
         weights = self.sim.geometry.glweights
         volume_weights = torch.einsum("k,j,i->kji", weights, weights, weights).flatten()
-        total = (value[0] * rhs.metric.volume.volume_jacobian * volume_weights).sum()
+        total = (value[[0, 4]] * rhs.metric.volume.volume_jacobian * volume_weights).sum(dim=(1, 2, 3, 4))
         torch.testing.assert_close(total, torch.zeros_like(total), atol=1e-6, rtol=0)
-        # Advective vertical transport preserves spatially uniform potential temperature.
+        # The product-rule vertical transport preserves spatially uniform potential temperature.
         state[4] = 300 * state[0]
         value = rhs(state)
         torch.testing.assert_close(value[4], 300 * value[0], atol=1e-9, rtol=1e-12)
@@ -79,11 +79,11 @@ class CartesianEulerTestCase(CartesianTestCase):
             return sim.geometry._to_new(rotated)
 
         value = rhs(state)
-        # Vertical-only advective thermodynamic transport singles out the vertical axis.
+        # The product-rule thermodynamic transport is vertical only, which singles out the vertical axis.
         torch.testing.assert_close(rhs(rotate(state))[:4], rotate(value)[:4], atol=2e-10, rtol=2e-10)
         weights = sim.geometry.glweights
         weights = torch.einsum("k,j,i->kji", weights, weights, weights).flatten()
-        total = (value[0] * rhs.metric.volume.volume_jacobian * weights).sum()
+        total = (value[[0, 4]] * rhs.metric.volume.volume_jacobian * weights).sum(dim=(1, 2, 3, 4))
         torch.testing.assert_close(total, torch.zeros_like(total), atol=1e-11, rtol=0)
 
         # A vertical contact crosses the periodic boundary even with lateral walls.

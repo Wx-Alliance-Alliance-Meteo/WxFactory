@@ -7,6 +7,7 @@ its tensors live on, the working floating-point precision, and a few host/device
 """
 
 import os
+import warnings
 from typing import Any, Self
 
 import torch
@@ -54,6 +55,8 @@ class Context:
         # Keep single-precision matrix products in true single precision.
         torch.backends.cuda.matmul.allow_tf32 = False
         torch.set_float32_matmul_precision("highest")
+        # Suppress the compiler's suggestion to enable TF32, which is disabled for accuracy.
+        warnings.filterwarnings("ignore", message="TensorFloat32 tensor cores for float32 matrix multiplication")
 
         # Disable autograd bookkeeping unless WX_FACTORY_DIFFERENTIABLE requests it.
         if not _differentiable_requested() and not torch.is_inference_mode_enabled():

@@ -153,8 +153,10 @@ class EulerPartitionTestCase(unittest.TestCase):
             tendency = -derivative(flux, scalar_faces[i], i) / fields.volume_jacobian
             if i == 2:
                 theta = state[4] / state[0]
-                theta_gradient = derivative(theta, theta_faces[2], 2)
-                tendency[1] = theta * tendency[0] - state[0] * velocity[2] * theta_gradient
+                element_trace = apply_op(theta, rhs.extrapolations[2])
+                penalty = apply_op(scalar_faces[2][0] * (theta_faces[2] - element_trace), rhs.corrections[2])
+                tendency[1] = theta * tendency[0] - state[0] * velocity[2] * derivative(theta, element_trace, 2)
+                tendency[1] -= penalty / fields.volume_jacobian
                 implicit[[0, 4]] = tendency
             full[[0, 4]] += tendency
             full[i + 1] = -pressure_gradient[i] / state[0] - energy_gradient[i] + curl[i]
