@@ -2,6 +2,7 @@
 
 import math
 from copy import copy
+from functools import cache
 
 import numpy
 import torch
@@ -19,6 +20,30 @@ from ..pde.euler_interfaces import (
     interface_trace,
     pressure,
 )
+
+
+def _reflect_vertical_walls(vertical: Tensor, width: int, bottom_coeff: Tensor, top_coeff: Tensor) -> None:
+    """Fill wall ghost faces by reflecting the normal velocity."""
+    bottom = vertical[..., 1, :, :, :width]
+    bottom_v3 = bottom[3] - (bottom_coeff[0] * bottom[1] + bottom_coeff[1] * bottom[2] + bottom_coeff[2] * bottom[3])
+    vertical[..., 0, :, :, width:] = torch.cat((bottom[:3], bottom_v3.unsqueeze(0), bottom[4:]), dim=0)
+    top = vertical[..., -2, :, :, width:]
+    top_v3 = top[3] - (top_coeff[0] * top[1] + top_coeff[1] * top[2] + top_coeff[2] * top[3])
+    vertical[..., -1, :, :, :width] = torch.cat((top[:3], top_v3.unsqueeze(0), top[4:]), dim=0)
+
+
+@cache
+def _compiled_reflect_vertical_walls():
+    return torch.compile(
+        _reflect_vertical_walls,
+        fullgraph=False,
+        dynamic=False,
+        options={
+            "compile_threads": 1,
+            "emulate_precision_casts": True,
+            "eager_numerics.division_rounding": True,
+        },
+    )
 
 
 class RhsEuler:
@@ -60,6 +85,7 @@ class RhsEuler:
         self.diagnostics = {}
         self._interface_geometry = None
         self._dfr_derivatives = None
+        self._vertical_wall_coeffs = None
 
     def wave_rate(self, state: Tensor) -> float:
         """Estimate the DFR wave rate in reference-element coordinates for RK startup."""
@@ -97,6 +123,7 @@ class RhsEuler:
     def invalidate_geometry(self):
         """Release cached fields before rebuilding terrain on the shared GPU."""
         self._interface_geometry = None
+        self._vertical_wall_coeffs = None
         if hasattr(self, "_double_rhs"):
             del self._double_rhs
         self.damping = None
@@ -137,6 +164,7 @@ class RhsEuler:
             rhs.diagnostics = {}
             rhs._dfr_derivatives = None
             rhs._interface_geometry = None
+            rhs._vertical_wall_coeffs = None
             self._double_rhs = rhs
         return self._double_rhs
 
@@ -191,10 +219,8 @@ class RhsEuler:
         )
         full_faces = []
         for fields, trace, interior in zip(self.metric.faces, traces, self.mid_faces):
-            face_state = trace.new_zeros((trace.shape[0],) + fields.height.shape)
-            # Only unused outer faces retain these values; used traces are filled below.
-            face_state[0].fill_(1)
-            face_state[4].fill_(1)
+            # Unused outer halo slots are never read by interface_slices.
+            face_state = trace.new_empty((trace.shape[0],) + fields.height.shape)
             face_state[interior] = trace
             full_faces.append(face_state)
         south, north, west, east = request.wait()
@@ -211,12 +237,24 @@ class RhsEuler:
         return tuple(full_faces)
 
     def _vertical_faces(self, trace: Tensor) -> Tensor:
-        face_state = trace.new_zeros((trace.shape[0],) + self.metric.faces[2].height.shape)
-        face_state[0].fill_(1)
-        face_state[4].fill_(1)
+        face_state = trace.new_empty((trace.shape[0],) + self.metric.faces[2].height.shape)
         face_state[self.mid_faces[2]] = trace
         self._fill_vertical_boundaries(face_state)
         return face_state
+
+    def _get_vertical_wall_coeffs(self) -> tuple[Tensor, Tensor]:
+        """Cache the metric factors that reverse the normal wind at each wall."""
+        if self._vertical_wall_coeffs is None:
+            width = self.geom.itf_size
+            coeffs = []
+            for ghost_face in (
+                (..., 0, slice(None), slice(None), slice(width, None)),
+                (..., -1, slice(None), slice(None), slice(None, width)),
+            ):
+                inverse_spatial = self.metric.faces[2].G_contra[1:4, 1:4][ghost_face]
+                coeffs.append(2 * inverse_spatial[2] / inverse_spatial[2, 2])
+            self._vertical_wall_coeffs = tuple(coeffs)
+        return self._vertical_wall_coeffs
 
     def _fill_vertical_boundaries(self, vertical: Tensor):
         width = self.geom.itf_size
@@ -224,23 +262,11 @@ class RhsEuler:
             vertical[..., 0, :, :, width:] = vertical[..., -2, :, :, width:]
             vertical[..., -1, :, :, :width] = vertical[..., 1, :, :, :width]
             return
-        for ghost_face, interior_face in (
-            (
-                (..., 0, slice(None), slice(None), slice(width, None)),
-                (..., 1, slice(None), slice(None), slice(None, width)),
-            ),
-            (
-                (..., -1, slice(None), slice(None), slice(None, width)),
-                (..., -2, slice(None), slice(None), slice(width, None)),
-            ),
-        ):
-            vertical[ghost_face] = vertical[interior_face]
-            covariant_velocity = vertical[1:4][ghost_face]
-            inverse_spatial = self.metric.faces[2].G_contra[1:4, 1:4][ghost_face]
-            contravariant_normal_velocity = (inverse_spatial[2] * covariant_velocity).sum(dim=0)
-            reflected = covariant_velocity.clone()
-            reflected[2] -= 2 * contravariant_normal_velocity / inverse_spatial[2, 2]
-            vertical[1:4][ghost_face] = reflected
+        bottom_coeff, top_coeff = self._get_vertical_wall_coeffs()
+        if vertical.is_cuda:
+            _compiled_reflect_vertical_walls()(vertical, width, bottom_coeff, top_coeff)
+        else:
+            _reflect_vertical_walls(vertical, width, bottom_coeff, top_coeff)
 
     def _static_interfaces(self) -> tuple[EulerInterfaceGeometry, ...]:
         """Cache face coefficients for this static geometry and precision."""

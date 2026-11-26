@@ -6,6 +6,7 @@ object no longer abstracts an array module; it just holds the process's ``comm``
 its tensors live on, the working floating-point precision, and a few host/device transfer helpers.
 """
 
+import logging
 import os
 import warnings
 from typing import Any, Self
@@ -57,6 +58,8 @@ class Context:
         torch.set_float32_matmul_precision("highest")
         # Suppress the compiler's suggestion to enable TF32, which is disabled for accuracy.
         warnings.filterwarnings("ignore", message="TensorFloat32 tensor cores for float32 matrix multiplication")
+        # Ranks sharing a node race to populate the same Triton cache directory; losing os.replace is benign.
+        logging.getLogger("torch._inductor.triton_bundler").setLevel(logging.ERROR)
 
         # Disable autograd bookkeeping unless WX_FACTORY_DIFFERENTIABLE requests it.
         if not _differentiable_requested() and not torch.is_inference_mode_enabled():

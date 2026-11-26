@@ -11,6 +11,10 @@ from .dense import expm, solve_triangular
 from .global_operations import host_allreduce, to_device
 
 
+def _local_squared_norm(vec: Tensor, acc: torch.dtype) -> Tensor:
+    return torch.sum(vec * vec, dtype=acc)
+
+
 @dataclass
 class PmexStartup:
     """First accepted substep and Krylov dimension from the preceding successful solve."""
@@ -158,7 +162,7 @@ def pmex(
                 V_aug[j, k] = ((sgn * tau_now) ** i) / math.factorial(i) * mu
             V_aug[j, p - 1] = mu
 
-            global_sum_nrm = host_allreduce(torch.sum(V[0] * V[0], dtype=acc), comm)
+            global_sum_nrm = host_allreduce(_local_squared_norm(V[0], acc), comm)
             beta = math.sqrt(global_sum_nrm + V_aug[j].to(acc) @ V_aug[j].to(acc))
 
             V[j] /= beta
@@ -167,20 +171,25 @@ def pmex(
         while j < m:
             j = j + 1
 
-            augmented = to_device(V_aug[j - 1], device)
-            V[j] = A(V[j - 1]) + augmented @ u_flip
+            Av = A(V[j - 1])
+            if p == 1:
+                # Use a scaled add when the augmentation has only one weight.
+                torch.add(Av, u_flip[0], alpha=float(V_aug[j - 1, 0]), out=V[j])
+            else:
+                augmented = to_device(V_aug[j - 1], device)
+                torch.add(Av, augmented @ u_flip, out=V[j])
             V_aug[j, : p - 1] = V_aug[j - 1, 1:p]
             V_aug[j, -1] = 0.0
 
-            # Two GEMVs avoid a slow two-column float64 GEMM on GPUs.
-            if V.is_cuda and V.dtype == torch.float64:
-                basis = V[0 : j + 1]
+            # On CUDA, two matrix-vector products are faster for float64 and short float32 bases.
+            if V.is_cuda and (V.dtype == torch.float64 or j <= 8):
+                basis = V[0:j]
                 local_vec = torch.stack((basis @ V[j - 1], basis @ V[j]), dim=1).to(acc)
             else:
-                local_vec = (V[0 : j + 1] @ V[j - 1 : j + 1].T).to(acc)
+                local_vec = (V[0:j] @ V[j - 1 : j + 1].T).to(acc)
             global_vec = host_allreduce(local_vec, comm)
 
-            global_vec += (V_aug[0 : j + 1] @ V_aug[j - 1 : j + 1].T).to(acc)
+            global_vec += (V_aug[0:j] @ V_aug[j - 1 : j + 1].T).to(acc)
 
             # Two Gauss-Seidel projections reduce loss of orthogonality.
             if j > 1:
@@ -199,11 +208,11 @@ def pmex(
                 sol = solve_triangular(M[0:j, 0:j], rhs, lower=True, unit_diagonal=True, check_finite=False)
 
             projection = sol.to(u.dtype)
-            V[j] -= to_device(projection, device) @ V[0:j]
+            torch.addmv(V[j], V[0:j].T, to_device(projection, device), beta=1.0, alpha=-1.0, out=V[j])
             V_aug[j] -= projection @ V_aug[0:j]
 
             # Direct residual norms preserve basis normalization in working precision.
-            global_sum_nrm = host_allreduce(torch.sum(V[j] * V[j], dtype=acc), comm)
+            global_sum_nrm = host_allreduce(_local_squared_norm(V[j], acc), comm)
             curr_nrm = math.sqrt(global_sum_nrm + V_aug[j].to(acc) @ V_aug[j].to(acc))
             reg_comm_nrm += 1
 

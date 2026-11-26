@@ -121,7 +121,10 @@ class Epi(Integrator):
         if self.jac is not None:
             matvec_handle = lambda v: self.jac(v, Q, dt)
         elif linearization is not None:
-            matvec_handle = lambda v: dt * linearization(v)
+            if getattr(linearization, "supports_scale", False):
+                matvec_handle = lambda v: linearization(v, scale=dt)
+            else:
+                matvec_handle = lambda v: dt * linearization(v)
         else:
             matvec_handle = FiniteDifferenceJacobian(dt, Q, self.rhs)
 

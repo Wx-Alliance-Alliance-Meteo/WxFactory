@@ -280,6 +280,7 @@ class ProcessTopology:
 
         self.send_buffer = None
         self.recv_buffer = None
+        self._euler_3d_packers: dict[tuple[bool, tuple[int, ...], tuple[int, ...]], Callable] = {}
 
     def prepare_scalar_buffer(
         self,
@@ -422,6 +423,50 @@ class ProcessTopology:
 
         return self.initiate_transfers([send_info])[0]
 
+    def _get_euler_3d_packer(
+        self, covariant: bool, flip_axes: tuple[int, ...], base_shape: tuple[int, ...]
+    ) -> Callable:
+        """Reuse the CUDA packer for a fixed velocity convention, face ordering, and boundary shape."""
+        key = (covariant, flip_axes, base_shape)
+        packer = self._euler_3d_packers.get(key)
+        if packer is None:
+            convert = tuple(self.convert_cov if covariant else self.convert_contra)
+            flips = tuple(self.flip)
+
+            def _pack(south, north, west, east, boundary_sn, boundary_we):
+                tail_shape = (south.shape[0] - 3,) + base_shape
+                sides = []
+                for i, (data, bd) in enumerate(
+                    ((south, boundary_sn), (north, boundary_sn), (west, boundary_we), (east, boundary_we))
+                ):
+                    v1, v2 = convert[i](data[1].reshape(base_shape), data[2].reshape(base_shape), bd)
+                    side = torch.cat(
+                        (
+                            data[0].reshape((1,) + base_shape),
+                            v1.unsqueeze(0),
+                            v2.unsqueeze(0),
+                            data[3:].reshape(tail_shape),
+                        ),
+                        dim=0,
+                    )
+                    if flips[i]:
+                        side = torch.flip(side, flip_axes)
+                    sides.append(side)
+                return torch.stack(sides, dim=0)
+
+            packer = torch.compile(
+                _pack,
+                fullgraph=False,
+                dynamic=False,
+                options={
+                    "compile_threads": 1,
+                    "emulate_precision_casts": True,
+                    "eager_numerics.division_rounding": True,
+                },
+            )
+            self._euler_3d_packers[key] = packer
+        return packer
+
     def start_exchange_euler_3d(
         self,
         south: Tensor,
@@ -433,33 +478,43 @@ class ProcessTopology:
         flip_dim: int | tuple[int, ...] = -1,
         covariant: bool = False,
     ):
-        convert = self.convert_cov if covariant else self.convert_contra
         base_shape = get_base_shape(south[0].shape, boundary_sn.shape)
-
-        if self.send_buffer is None or self.recv_buffer is None or self.send_buffer.nbytes < south.nbytes * 4:
-            self.send_buffer = torch.empty(4 * south.nbytes, dtype=torch.uint8)
-            self.recv_buffer = torch.empty_like(self.send_buffer)
-
         buffer_shape = (4, south.shape[0]) + base_shape
         num_elem = math.prod(buffer_shape)
-        send_buffer = torch.ravel(self.send_buffer).view(dtype=south.dtype)[:num_elem].reshape(buffer_shape)
-        recv_buffer = torch.ravel(self.recv_buffer).view(dtype=south.dtype)[:num_elem].reshape(buffer_shape)
 
-        inputs = [south, north, west, east]
-        boundaries = [boundary_sn, boundary_sn, boundary_we, boundary_we]
-        for i, (data, bd) in enumerate(zip(inputs, boundaries)):
-            send_buffer[i, 1], send_buffer[i, 2] = convert[i](
-                data[1].reshape(base_shape), data[2].reshape(base_shape), bd
-            )
-            send_buffer[i, 0] = data[0].reshape(base_shape)
-            send_buffer[i, 3:] = data[3:].reshape((data.shape[0] - 3,) + base_shape)
+        if (
+            self.send_buffer is None
+            or self.recv_buffer is None
+            or self.send_buffer.dtype != south.dtype
+            or self.send_buffer.device != south.device
+            or self.send_buffer.numel() < num_elem
+        ):
+            self.send_buffer = torch.empty(num_elem, dtype=south.dtype, device=south.device)
+            self.recv_buffer = torch.empty_like(self.send_buffer)
 
-            if self.flip[i]:
-                send_buffer[i, :] = torch.flip(
-                    send_buffer[i, :], flip_dim if isinstance(flip_dim, tuple) else (flip_dim,)
+        send_buffer = self.send_buffer[:num_elem].reshape(buffer_shape)
+        recv_buffer = self.recv_buffer[:num_elem].reshape(buffer_shape)
+
+        flip_axes = flip_dim if isinstance(flip_dim, tuple) else (flip_dim,)
+        if south.is_cuda:
+            packer = self._get_euler_3d_packer(covariant, flip_axes, base_shape)
+            packed = packer(south, north, west, east, boundary_sn, boundary_we)
+            send_buffer.copy_(packed)
+            # Only the current stream writes send_buffer; avoid stalling unrelated device streams.
+            torch.cuda.current_stream(south.device).synchronize()
+        else:
+            convert = self.convert_cov if covariant else self.convert_contra
+            inputs = [south, north, west, east]
+            boundaries = [boundary_sn, boundary_sn, boundary_we, boundary_we]
+            for i, (data, bd) in enumerate(zip(inputs, boundaries)):
+                send_buffer[i, 1], send_buffer[i, 2] = convert[i](
+                    data[1].reshape(base_shape), data[2].reshape(base_shape), bd
                 )
+                send_buffer[i, 0] = data[0].reshape(base_shape)
+                send_buffer[i, 3:] = data[3:].reshape((data.shape[0] - 3,) + base_shape)
 
-        self.context.synchronize()
+                if self.flip[i]:
+                    send_buffer[i, :] = torch.flip(send_buffer[i, :], flip_axes)
 
         return self.initiate_transfers([(send_buffer, south[0].shape, True)], recv_buffer=recv_buffer)[0]
 
@@ -675,20 +730,20 @@ class ExchangeRequest:
             num_comp = self.recv_buffer.shape[1]
             self.to_tuple = lambda a: a.reshape((num_comp,) + self.shape)
 
-    def wait(self, timeout=10.0) -> tuple[Tensor, Tensor, Tensor, Tensor]:
+    def wait(self, timeout: float | None = None) -> tuple[Tensor, Tensor, Tensor, Tensor]:
         """Wait for the exchange started when creating this object to be done.
 
-        :param timeout: How long we should wait for the request to complete before throwing an error
-        :type timeout: float
+        :param timeout: Optional maximum wait time in seconds. When ``None`` or negative, block
+            directly in ``MPI_Wait`` to avoid polling/sleep latency on multi-node runs.
+        :type timeout: float | None
         :return: The received data as a tuple of 4, in the same shape as the data that were sent
         :raise TimeoutError: If we wait for longer than the specified timeout
         """
-        t0 = time.time()
-        num_tests = 0
-
-        if timeout < 0.0:
+        if timeout is None or timeout < 0.0:
             self.request.Wait()
         else:
+            t0 = time.time()
+            num_tests = 0
             while not self.request.Test():
                 wait_time = time.time() - t0
                 if wait_time >= timeout:
