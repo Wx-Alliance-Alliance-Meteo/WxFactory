@@ -1,4 +1,5 @@
 import matplotlib.pyplot
+import matplotlib.ticker
 import numpy
 from torch import Tensor
 
@@ -12,6 +13,7 @@ def image_field(
     n: int,
     label: str = "K",
     colormap: str = "jet",
+    tick_format: str | None = None,
 ):
     domain_width = geom.x1 - geom.x0
     domain_height = geom.z1 - geom.z0
@@ -43,6 +45,11 @@ def image_field(
 
     cbar = fig.colorbar(cmap, ax=ax, orientation="vertical")
     cbar.set_label(label)
+    if tick_format is not None:
+        # Plain decimal ticks: values near 1 would otherwise get a "+1" offset
+        # with tiny residual digits.
+        cbar.formatter = matplotlib.ticker.FuncFormatter(lambda value, _: tick_format % value)
+        cbar.update_ticks()
 
     fig.savefig(filename, dpi=150)
     matplotlib.pyplot.close(fig)

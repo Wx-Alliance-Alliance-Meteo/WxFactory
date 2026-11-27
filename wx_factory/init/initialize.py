@@ -239,7 +239,7 @@ def initialize_cartesian3d(geom, metric, param: Configuration) -> NDArray[numpy.
         ρ = pressure / (Rd * t)
         θ = t * (p0 / pressure) ** (Rd / cpd)
     elif param.case_number == 555:
-        mach = 0.01
+        mach = 0.4
         x_center = 0.5 * (param.x0 + param.x1)
         z_center = 0.5 * (param.z0 + param.z1)
         xt = x1 - x_center
