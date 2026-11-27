@@ -30,6 +30,8 @@ class OutputCartesian(OutputManager):
 
         if self.config.case_number == 0:
             image_field(self.geometry, w, filename, -1, 1, 25, label="w (m/s)", colormap="bwr")
+        elif self.config.case_number == 555:
+            image_field(self.geometry, speed, filename, 0.0, 2.7, 20, label="|u| (m/s)", colormap="plasma")
         elif self.config.case_number == 651:
             image_field(self.geometry, speed, filename, 0.0, 1.0, 20, label="|u| (m/s)", colormap="plasma")
         elif self.config.case_number <= 2:

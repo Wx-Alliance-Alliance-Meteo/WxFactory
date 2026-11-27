@@ -238,6 +238,21 @@ def initialize_cartesian3d(geom, metric, param: Configuration) -> NDArray[numpy.
         pressure = p0 * torch.exp(-geom.X3 / H)
         ρ = pressure / (Rd * t)
         θ = t * (p0 / pressure) ** (Rd / cpd)
+    elif param.case_number == 555:
+        mach = 0.01
+        x_center = 0.5 * (param.x0 + param.x1)
+        z_center = 0.5 * (param.z0 + param.z1)
+        xt = x1 - x_center
+        zt = x3 - z_center
+        gamma = heat_capacity_ratio
+        R = 1.5
+        S = 13.5
+        f = (1.0 - xt**2 - zt**2) / (2.0 * R**2)
+        ρ = (1.0 - (S**2 * mach**2 * (gamma - 1.0) * torch.exp(2.0 * f)) / (8.0 * torch.pi**2)) ** (1.0 / (gamma - 1.0))
+        uu = (S * zt * torch.exp(f)) / (2.0 * torch.pi * R)
+        ww = 1.0 - (S * xt * torch.exp(f)) / (2.0 * torch.pi * R)
+        pressure = (ρ**gamma) / (gamma * mach**2)
+        θ = p0 / (Rd * ρ) * (pressure / p0) ** (1.0 / gamma)
     elif param.case_number == 651:
         max_mach = param.gresho_mach
         if not numpy.isfinite(max_mach) or max_mach <= 0:
@@ -275,7 +290,7 @@ def initialize_cartesian3d(geom, metric, param: Configuration) -> NDArray[numpy.
     elif param.case_number != 4:
         exner = 1.0 - gravity / (cpd * θ) * x3
 
-    if param.case_number != 666 and param.case_number != 651:
+    if param.case_number not in (555, 651, 666):
         ρ = p0 / (Rd * θ) * exner ** (cvd / Rd)
 
     Q = torch.zeros((5,) + geom.grid_shape_3d_new, dtype=x1.dtype)

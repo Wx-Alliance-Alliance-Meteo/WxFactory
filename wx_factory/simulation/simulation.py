@@ -205,7 +205,7 @@ class Simulation:
         if config.grid_type not in ("cubed_sphere", "cartesian3d") or config.grid_file:
             raise ValueError("Euler momentum requires Euler equations on a cubed sphere or Cartesian slab")
         cases = (
-            (1, 2, 3, 4, 651, 666)
+            (1, 2, 3, 4, 555, 651, 666)
             if config.grid_type == "cartesian3d"
             else (11, 12, 13, 20, 200, 201, 202, 21, 22, 31, 41, 410, 411, 412, 413, 77)
         )

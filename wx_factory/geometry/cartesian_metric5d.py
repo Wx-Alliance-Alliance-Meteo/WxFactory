@@ -11,7 +11,7 @@ from .metric5d import Metric5D, Metric5DFields
 class CartesianMetric5D(Metric5D):
     def __init__(self, geometry, config):
         self.geometry = geometry
-        self.gravity = 0 if config.case_number == 651 else gravity
+        self.gravity = 0 if config.case_number in (555, 651) else gravity
         self.scales = (
             geometry.delta_x1 / 2,
             geometry.delta_x2 / 2,
