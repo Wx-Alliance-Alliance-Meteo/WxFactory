@@ -243,6 +243,15 @@ def kiops(
         else:
             # Local truncation error estimation
             err = torch.abs(beta * nrm * F[j - 1, j])
+            err_host = float(context.to_host(err))
+
+            if not (math.isfinite(err_host) and bool(torch.isfinite(F).all().item())):
+                if not bool(torch.isfinite(H[: j + 1, : j + 1]).all().item()):
+                    raise FloatingPointError("KIOPS Hessenberg matrix contains non-finite entries")
+                # expm(tau * H) overflowed at this substep size; reject and shrink tau.
+                omega = math.inf
+                tau_new = tau / 5
+                m_new = m
 
             # In single precision err can underflow to (near) zero once the current Krylov space
             # resolves the substep to machine accuracy. The controller below would then set omega = 0
@@ -250,7 +259,7 @@ def kiops(
             # fully resolved, so accept it and hold the step size / Krylov size, exactly as for a
             # happy breakdown. In double precision this underflow does not occur, so this branch never
             # triggers there.
-            if not context.to_host(err) > tiny_err:
+            elif err_host <= tiny_err:
                 omega = 0.0
                 err = 0.0
                 tau_new = min(tau_end - (tau_now + tau), tau)
@@ -263,7 +272,7 @@ def kiops(
                 omega = context.to_host(omega)
 
                 # Estimate order
-                if m == oldm and tau != oldtau and ireject >= 1:
+                if m == oldm and tau != oldtau and ireject >= 1 and math.isfinite(oldomega):
                     order = max(1.0, math.log(omega / oldomega) / context.to_host(torch.log(tau / oldtau)))
                     orderold = False
                 elif orderold or ireject == 0:
@@ -273,7 +282,7 @@ def kiops(
                     orderold = True
 
                 # Estimate k
-                if m != oldm and tau == oldtau and ireject >= 1:
+                if m != oldm and tau == oldtau and ireject >= 1 and math.isfinite(oldomega):
                     kest = max(1.1, (omega / oldomega) ** (1 / (oldm - m)))
                     kestold = False
                 elif kestold or ireject == 0:
